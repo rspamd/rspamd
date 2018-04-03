@@ -2868,22 +2868,24 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 			}
 		}
 		else {
-			if (hstat.s.count > 0) {
-
-				cur_len = (strlen (dh->name) + 1) * (hstat.s.count);
-				headers_len += cur_len;
-				if (headers_len > 70 && i > 0 && i < ctx->common.hlist->len - 1) {
-					rspamd_printf_gstring (hdr, "  ");
-					headers_len = cur_len;
-				}
-
-				for (j = 0; j < hstat.s.count; j++) {
-					rspamd_printf_gstring (hdr, "%s:", dh->name);
-				}
-			}
-
 			if (g_hash_table_lookup (task->raw_headers, dh->name)) {
-				rspamd_dkim_canonize_header (&ctx->common, task, dh->name, dh->count,
+				if (hstat.s.count > 0) {
+
+					cur_len = (strlen (dh->name) + 1) * (hstat.s.count);
+					headers_len += cur_len;
+					if (headers_len > 70 && i > 0 && i < ctx->common.hlist->len - 1) {
+						rspamd_printf_gstring (hdr, "  ");
+						headers_len = cur_len;
+					}
+
+					for (j = 0; j < hstat.s.count; j++) {
+						rspamd_printf_gstring (hdr, "%s:", dh->name);
+					}
+				}
+
+
+				rspamd_dkim_canonize_header (&ctx->common, task,
+						dh->name, dh->count,
 						NULL, NULL);
 			}
 		}
