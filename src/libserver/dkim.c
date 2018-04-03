@@ -101,6 +101,7 @@ struct rspamd_dkim_common_ctx {
 	gint header_canon_type;
 	gint body_canon_type;
 	GPtrArray *hlist;
+	GHashTable *htable; /* header -> count mapping */
 	EVP_MD_CTX *headers_hash;
 	EVP_MD_CTX *body_hash;
 	enum rspamd_dkim_type type;
@@ -426,7 +427,6 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 	guint count = 0;
 	struct rspamd_dkim_header *new;
 	gpointer found;
-	GHashTable *htb;
 
 	p = param;
 	while (p <= end) {
@@ -445,7 +445,7 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 
 	c = param;
 	p = param;
-	htb = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	ctx->htable = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 
 	while (p <= end) {
 		if ((p == end || *p == ':') && p - c > 0) {
@@ -467,7 +467,7 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 
 			g_ptr_array_add (ctx->hlist, new);
 
-			if ((found = g_hash_table_lookup (htb, h)) != NULL) {
+			if ((found = g_hash_table_lookup (ctx->htable, h)) != NULL) {
 				count = GPOINTER_TO_UINT (found);
 				new->count = count;
 				count ++;
@@ -477,7 +477,7 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 				count = new->count + 1;
 			}
 
-			g_hash_table_insert (htb, h, GUINT_TO_POINTER (count));
+			g_hash_table_insert (ctx->htable, h, GUINT_TO_POINTER (count));
 
 			c = p + 1;
 			p++;
@@ -486,8 +486,6 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 			p++;
 		}
 	}
-
-	g_hash_table_unref (htb);
 
 	if (!ctx->hlist) {
 		g_set_error (err,
@@ -505,10 +503,13 @@ rspamd_dkim_parse_hdrlist_common (struct rspamd_dkim_common_ctx *ctx,
 				"invalid dkim header list, from header is missing");
 			return FALSE;
 		}
-		/* Reverse list */
+
 		rspamd_mempool_add_destructor (ctx->pool,
 			(rspamd_mempool_destruct_t)rspamd_dkim_hlist_free,
 			ctx->hlist);
+		rspamd_mempool_add_destructor (ctx->pool,
+				(rspamd_mempool_destruct_t)g_hash_table_unref,
+				ctx->htable);
 	}
 
 	return TRUE;
@@ -2800,6 +2801,8 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 
 	/* Now canonize headers */
 	for (i = 0; i < ctx->common.hlist->len; i++) {
+		guint count;
+
 		dh = g_ptr_array_index (ctx->common.hlist, i);
 
 		if (g_hash_table_lookup (task->raw_headers, dh->name)) {
@@ -2810,8 +2813,14 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 		headers_len += (strlen (dh->name) + 1) * (dh->count + 1);
 
 		/* We allow oversigning if dh->count > number of headers with this name */
-		for (j = 0; j < dh->count + 1; j++) {
-			rspamd_printf_gstring (hdr, "%s:", dh->name);
+		count = GPOINTER_TO_INT (g_hash_table_lookup (ctx->common.htable, dh->name));
+
+		if (count > 0) {
+			for (j = 0; j < count; j++) {
+				rspamd_printf_gstring (hdr, "%s:", dh->name);
+			}
+
+			g_hash_table_remove (ctx->common.htable, dh->name);
 		}
 
 		if (headers_len > 60 && i < ctx->common.hlist->len - 1) {
