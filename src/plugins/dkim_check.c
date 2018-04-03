@@ -50,10 +50,10 @@
 #define DEFAULT_MAX_SIGS 5
 
 static const gchar default_sign_headers[] = ""
-		"from:sender:reply-to:subject:date:message-id:"
-		"to:cc:mime-version:content-type:content-transfer-encoding:"
+		"(o)from:(o)sender:(o)reply-to:(o)subject:(o)date:(o)message-id:"
+		"(o)to:(o)cc:(o)mime-version:(o)content-type:(o)content-transfer-encoding:"
 		"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
-		"in-reply-to:references:list-id:list-owner:list-unsubscribe:"
+		"(o)in-reply-to:(o)references:list-id:list-owner:list-unsubscribe:"
 		"list-subscribe:list-post";
 
 struct dkim_ctx {
