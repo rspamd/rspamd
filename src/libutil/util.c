@@ -2770,36 +2770,12 @@ rspamd_gmtime (gint64 ts, struct tm *dest)
 	dest->tm_zone = "GMT";
 }
 
-#ifdef HAVE_SANE_TZSET
-extern char *tzname[2];
-extern long timezone;
-extern int daylight;
-
-void rspamd_localtime (gint64 ts, struct tm *dest)
-{
-	static gint64 last_tzcheck = 0;
-	static const guint tz_check_interval = 120;
-
-	if (ts - last_tzcheck > tz_check_interval) {
-		tzset ();
-		last_tzcheck = ts;
-	}
-
-	ts -= timezone;
-	rspamd_gmtime (ts, dest);
-	dest->tm_zone = daylight ? (tzname[1] ? tzname[1] : tzname[0]) : tzname[0];
-#if !defined(__sun)
-	dest->tm_gmtoff = -timezone;
-#endif
-}
-
-#else
-void rspamd_localtime (gint64 ts, struct tm *dest)
+void
+rspamd_localtime (gint64 ts, struct tm *dest)
 {
 	time_t t = ts;
 	localtime_r (&t, dest);
 }
-#endif
 
 gboolean
 rspamd_fstring_gzip (rspamd_fstring_t **in)
