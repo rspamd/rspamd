@@ -225,7 +225,7 @@ void
 rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars)
 {
 	const gchar *old_path, *additional_path = NULL;
-	const ucl_object_t *opts;
+	const ucl_object_t *opts = NULL;
 	const gchar *pluginsdir = RSPAMD_PLUGINSDIR,
 			*rulesdir = RSPAMD_RULESDIR,
 			*lualibdir = RSPAMD_LUALIBDIR,
@@ -341,13 +341,33 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 	lua_getfield (L, -1, "cpath");
 	old_path = luaL_checkstring (L, -1);
 
+	additional_path = NULL;
 
-	rspamd_snprintf (path_buf, sizeof (path_buf),
-					"%s/?%s;"
-					"%s",
-			libdir,
-			OS_SO_SUFFIX,
-			old_path);
+	if (opts != NULL) {
+		opts = ucl_object_lookup (opts, "lua_cpath");
+		if (opts != NULL && ucl_object_type (opts) == UCL_STRING) {
+			additional_path = ucl_object_tostring (opts);
+		}
+	}
+
+	if (additional_path) {
+		rspamd_snprintf (path_buf, sizeof (path_buf),
+				"%s/?%s;"
+				"%s;"
+				"%s",
+				libdir,
+				OS_SO_SUFFIX,
+				additional_path,
+				old_path);
+	}
+	else {
+		rspamd_snprintf (path_buf, sizeof (path_buf),
+				"%s/?%s;"
+				"%s",
+				libdir,
+				OS_SO_SUFFIX,
+				old_path);
+	}
 	lua_pop (L, 1);
 	lua_pushstring (L, path_buf);
 	lua_setfield (L, -2, "cpath");
