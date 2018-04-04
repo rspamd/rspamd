@@ -112,6 +112,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_GREYLISTED (1 << 26)
 #define RSPAMD_TASK_FLAG_OWN_POOL (1 << 27)
 #define RSPAMD_TASK_FLAG_MILTER (1 << 28)
+#define RSPAMD_TASK_FLAG_SSL (1 << 29)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))

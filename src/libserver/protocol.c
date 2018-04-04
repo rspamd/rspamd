@@ -450,6 +450,13 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					debug_task ("read Milter header, value: %V", hv);
 				}
 				break;
+			case 't':
+			case 'T':
+				IF_HEADER (TLS_CIPHER_HEADER) {
+					task->flags |= RSPAMD_TASK_FLAG_SSL;
+					debug_task ("read TLS cipher header, value: %V", hv);
+				}
+				break;
 			default:
 				debug_task ("unknown header: %V", hn);
 				break;
