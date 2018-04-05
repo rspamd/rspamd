@@ -22,7 +22,7 @@ limitations under the License.
 local exports = {}
 local lpeg = require 'lpeg'
 local rspamd_util = require "rspamd_util"
-
+local fun = require "fun"
 
 local split_grammar = {}
 local function rspamd_str_split(s, sep)
@@ -437,5 +437,42 @@ exports.fold_header = function(task, name, value, stop_chars)
 
   return rspamd_util.fold_header(name, value, how, stop_chars)
 end
+
+--[[[
+-- @function lua_util.override_defaults(defaults, override)
+-- Overrides values from defaults with override
+--]]
+local function override_defaults(def, override)
+  -- Corner cases
+  if not override or type(override) ~= 'table' then
+    return def
+  end
+  if not def or type(def) ~= 'table' then
+    return override
+  end
+
+  local res = {}
+  fun.each(function(k, v)
+    if type(v) == 'table' then
+      if def[k] and type(def[k]) == 'table' then
+        -- Recursively override elements
+        res[k] = override_defaults(def[k], v)
+      else
+        res[k] = v
+      end
+    else
+      res[k] = v
+    end
+    end, override)
+  fun.each(function(k, v)
+    if not res[k] then
+      res[k] = v
+    end
+  end, def)
+
+  return res
+end
+
+exports.override_defaults = override_defaults
 
 return exports
