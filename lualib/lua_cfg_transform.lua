@@ -15,28 +15,7 @@ limitations under the License.
 ]]--
 
 local logger = require "rspamd_logger"
-
-local function override_defaults(def, override)
-  if not override then
-    return def
-  end
-  if not def then
-    return override
-  end
-  for k,v in pairs(override) do
-    if def[k] then
-      if type(v) == 'table' then
-        def[k] = override_defaults(def[k], v)
-      else
-        def[k] = v
-      end
-    else
-      def[k] = v
-    end
-  end
-
-  return def
-end
+local lua_util = require "lua_util"
 
 local function is_implicit(t)
   local mt = getmetatable(t)
@@ -134,7 +113,7 @@ local function group_transform(cfg, k, v)
   if not cfg.group then cfg.group = {} end
 
   if cfg.group[k] then
-    cfg.group[k] = override_defaults(cfg.group[k], new_group)
+    cfg.group[k] = lua_util.override_defaults(cfg.group[k], new_group)
   else
     cfg.group[k] = new_group
   end
@@ -148,7 +127,7 @@ local function symbol_transform(cfg, k, v)
     if gr.symbols and gr.symbols[k] then
       -- We override group symbol with ungrouped symbol
       logger.infox("overriding group symbol %s in the group %s", k, gr_n)
-      gr.symbols[k] = override_defaults(gr.symbols[k], v)
+      gr.symbols[k] = lua_util.override_defaults(gr.symbols[k], v)
       return
     end
   end
@@ -196,7 +175,7 @@ end
 
 local function convert_metric(cfg, metric)
   if metric.actions then
-    cfg.actions = override_defaults(cfg.actions, metric.actions)
+    cfg.actions = lua_util.override_defaults(cfg.actions, metric.actions)
     logger.infox("overriding actions from the legacy metric settings")
   end
   if metric.unknown_weight then

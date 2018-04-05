@@ -383,20 +383,6 @@ local penalty_weights = {
   0
 }
 
-local function override_defaults(def, override)
-  for k,v in pairs(override) do
-    if def[k] then
-      if type(v) == 'table' then
-        override_defaults(def[k], v)
-      else
-        def[k] = v
-      end
-    else
-      def[k] = v
-    end
-  end
-end
-
 local function get_threshold()
   local actions = rspamd_config:get_all_actions()
 
@@ -409,7 +395,7 @@ end
 
 return function (args, cfg)
   opts = default_opts
-  override_defaults(opts, getopt.getopt(args, 'i:'))
+  opts = lua_util.override_defaults(opts, getopt.getopt(args, 'i:'))
   local threshold,reject_score = get_threshold()
   local logs = rescore_utility.get_all_logs(cfg["logdir"])
 

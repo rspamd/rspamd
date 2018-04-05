@@ -975,24 +975,9 @@ else
     end
     return copy
   end
-  local function override_defaults(def, override)
-    for k,v in pairs(override) do
-      if def[k] then
-        if type(v) == 'table' then
-          override_defaults(def[k], v)
-        else
-          def[k] = v
-        end
-      else
-        def[k] = v
-      end
-    end
-  end
   for k,r in pairs(rules) do
-    local def_rules = deepcopy(default_options)
+    local def_rules = lua_util.override_defaults(default_options, r)
     def_rules['redis'] = redis_params
-    -- Override defaults
-    override_defaults(def_rules, r)
 
     if not def_rules.prefix then
       def_rules.prefix = k
