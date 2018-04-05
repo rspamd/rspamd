@@ -286,14 +286,21 @@
 
 				<div class="widget-box">
 					<div class="widget-title">
-						<div class="buttons pull-right">
+						<form role="form" class="form-inline pull-right buttons">
+							<div class="form-group widget-title-form">
+								<label for="selSymOrder">Symbols order:</label>
+								<select id="selSymOrder" class="form-control">
+									<option value="score" selected>Score</option>
+									<option value="name">Name</option>
+								</select>
+							</div>
 							<button class="btn btn-danger btn-sm" id="resetHistory">
 								<i class="glyphicon glyphicon-remove-circle"></i> Reset
 							</button>
 							<button class="btn btn-info btn-sm" id="updateHistory">
 								<i class="glyphicon glyphicon-refresh"></i> Update
 							</button>
-						</div>
+						</form>
 						<span class="icon"><i class="glyphicon glyphicon-eye-open"></i></span>
 						<h5>History</h5>
 					</div>

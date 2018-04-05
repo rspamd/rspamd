@@ -160,6 +160,13 @@ input.action-scores {
     padding-right: 20px;
 }
 
+#selSymOrder {
+    height: auto;
+}
+.widget-title-form label {
+    font-weight: normal;
+}
+
 .btn-upload-trigger {
 	position:relative;
 	z-index:1;
@@ -281,8 +288,7 @@ td.maps-cell {
 	margin:0 0 0 36px;
 	}
 .widget-title .buttons {
-	float:left;
-	margin:2px 2px 0 0;
+	padding:2px 2px 0 0;
 	}
 .widget-title .label {
 	padding:3px 5px 2px;
