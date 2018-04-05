@@ -138,7 +138,8 @@ local bucket_update_script = [[
 ]]
 local bucket_update_id
 
-local message_func = function(_, limit_type, _)
+-- message_func(task, limit_type, prefix, bucket)
+local message_func = function(_, limit_type, _, _)
   return string.format('Ratelimit "%s" exceeded', limit_type)
 end
 
@@ -353,13 +354,16 @@ local function ratelimit_cb(task)
       local prefix = gen_rate_key(task, k, bucket)
 
       if prefix then
-        prefixes[prefix] = bucket
+        prefixes[prefix] = {
+          bucket = bucket,
+          name = k,
+        }
         nprefixes = nprefixes + 1
       end
     end
   end
 
-  local function gen_check_cb(prefix, bucket)
+  local function gen_check_cb(prefix, bucket, lim_name)
     return function(err, data)
       if err then
         rspamd_logger.errx('cannot check limit %s: %s %s', prefix, err, data)
@@ -369,10 +373,10 @@ local function ratelimit_cb(task)
           task:insert_result(settings.info_symbol, 1.0, prefix)
         end
         rspamd_logger.infox(task,
-                'ratelimit "%s" exceeded, (%s / %s)',
-                prefix, bucket[2], bucket[1])
+                'ratelimit "%s(%s)" exceeded, (%s / %s)',
+                lim_name, prefix, bucket[2], bucket[1])
         task:set_pre_result('soft reject',
-                message_func(task, prefix, bucket))
+                message_func(task, lim_name, prefix, bucket))
       end
     end
   end
@@ -384,13 +388,14 @@ local function ratelimit_cb(task)
     now = lua_util.round(now * 1000.0) -- Get milliseconds
     -- Now call check script for all defined prefixes
 
-    for pr,bucket in pairs(prefixes) do
+    for pr,value in pairs(prefixes) do
+      local bucket = value.bucket
       local rate = (1.0 / bucket[1]) / 1000.0 -- Leak rate in messages/ms
       rspamd_logger.debugm(N, task, "check limit %s (%s/%s)",
           pr, bucket[2], bucket[1])
       lua_redis.exec_redis_script(bucket_check_id,
               {task = task, is_write = true},
-              gen_check_cb(pr, bucket),
+              gen_check_cb(pr, bucket, value.name),
               {pr, tostring(now), tostring(rate), tostring(bucket[2]),
                   tostring(settings.expire)})
     end
@@ -407,6 +412,7 @@ local function ratelimit_update_cb(task)
     if action == 'soft reject' then
       -- Already rate limited/greylisted, do nothing
       rspamd_logger.debugm(N, task, 'already soft rejected, do not update')
+      return
     elseif action == 'no action' then
       is_spam = false
     end
@@ -421,6 +427,7 @@ local function ratelimit_update_cb(task)
 
     -- Update each bucket
     for k, v in pairs(prefixes) do
+      local bucket = v.bucket
       local function update_bucket_cb(err, _)
         if err then
           rspamd_logger.errx(task, 'cannot update rate bucket %s: %s',
@@ -430,7 +437,7 @@ local function ratelimit_update_cb(task)
       local now = rspamd_util.get_time()
       now = lua_util.round(now * 1000.0) -- Get milliseconds
       rspamd_logger.debugm(N, task, "update limit %s (%s/%s)",
-              k, v[2], v[1])
+              k, bucket[2], bucket[1])
       lua_redis.exec_redis_script(bucket_update_id,
               {task = task, is_write = true},
               update_bucket_cb,
