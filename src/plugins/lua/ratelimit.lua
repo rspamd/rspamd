@@ -489,7 +489,7 @@ if opts then
 
   local enabled_limits = fun.totable(fun.map(function(t)
     return t
-  end, settings))
+  end, settings.limits))
   rspamd_logger.infox(rspamd_config,
           'enabled rate buckets: [%1]', table.concat(enabled_limits, ','))
 
