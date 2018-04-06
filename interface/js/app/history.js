@@ -615,7 +615,7 @@ function($, _, Humanize) {
             e.preventDefault();
             interface.getHistory(rspamd, tables, neighbours, checked_server);
         });
-        $("#selSymOrder").change(function() {
+        $("#selSymOrder").unbind().change(function() {
             interface.getHistory(rspamd, tables, neighbours, checked_server);
         });
 
