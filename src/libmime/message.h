@@ -103,6 +103,7 @@ struct rspamd_mime_text_part {
 	guint empty_lines;
 	guint capital_letters;
 	guint numeric_characters;
+	guint ucs_len;
 };
 
 enum rspamd_received_type {
