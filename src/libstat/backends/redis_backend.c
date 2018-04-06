@@ -745,7 +745,7 @@ rspamd_redis_stat_learns (redisAsyncContext *c, gpointer r, gpointer priv)
 			rspamd_strtoul (reply->str, reply->len, &num);
 		}
 
-		obj = (ucl_object_t *)ucl_object_lookup (cbdata->cur, "revision");
+		obj = (ucl_object_t *) ucl_object_lookup (cbdata->cur, "revision");
 		if (obj) {
 			obj->value.iv += num;
 		}
@@ -852,17 +852,26 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 							else {
 								learned_key = "learns_ham";
 							}
+							redisAsyncCommand (cbdata->redis,
+									rspamd_redis_stat_learns,
+									cbdata,
+									"HGET %s %s",
+									k, learned_key);
+							cbdata->inflight += 1;
 						}
-
-						redisAsyncCommand (cbdata->redis, rspamd_redis_stat_key,
-								cbdata,
-								"HLEN %s",
-								k);
-						redisAsyncCommand (cbdata->redis, rspamd_redis_stat_learns,
-								cbdata,
-								"HGET %s %s",
-								k, learned_key);
-						cbdata->inflight += 2;
+						else {
+							redisAsyncCommand (cbdata->redis,
+									rspamd_redis_stat_key,
+									cbdata,
+									"HLEN %s",
+									k);
+							redisAsyncCommand (cbdata->redis,
+									rspamd_redis_stat_learns,
+									cbdata,
+									"HGET %s %s",
+									k, learned_key);
+							cbdata->inflight += 2;
+						}
 					}
 				}
 			}
