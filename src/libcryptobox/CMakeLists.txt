@@ -72,7 +72,7 @@ IF("${ARCH}" STREQUAL "x86_64")
 #endif
 
 #ifndef __clang__
-#if __GNUC__ <= 5 && __GNUC_MINOR__ <= 0
+#if __GNUC__ < 6
 #error Broken due to compiler bug
 #endif
 #endif
