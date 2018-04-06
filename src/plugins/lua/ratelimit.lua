@@ -29,8 +29,6 @@ local settings = {
   bounce_senders = { 'postmaster', 'mailer-daemon', '', 'null', 'fetchmail-daemon', 'mdaemon' },
 -- Do not check ratelimits for these recipients
   whitelisted_rcpts = { 'postmaster', 'mailer-daemon' },
-  whitelisted_ip = {},
-  whitelisted_user = {},
   prefix = 'RL',
   ham_factor_rate = 1.01,
   spam_factor_rate = 0.99,
@@ -514,7 +512,7 @@ if opts then
   else
     -- Stupid default...
     settings.whitelisted_rcpts = lua_maps.rspamd_map_add_from_ucl(
-        opts.whitelisted_rcpts, 'set', 'Ratelimit whitelisted rcpts')
+        settings.whitelisted_rcpts, 'set', 'Ratelimit whitelisted rcpts')
   end
 
   if opts['whitelisted_ip'] then
