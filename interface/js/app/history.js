@@ -116,6 +116,18 @@ function($, _, Humanize) {
     function process_history_v2(data) {
         var items = [];
 
+        function getSelector(id) {
+            var e = document.getElementById(id);
+            return e.options[e.selectedIndex].value;
+        }
+        var compare = (getSelector("selSymOrder") === "score")
+            ? function (e1, e2) {
+                return Math.abs(e1.score) < Math.abs(e2.score);
+            }
+            : function (e1, e2) {
+                return e1.name.localeCompare(e2.name);
+            };
+
         $.each(data.rows,
           function (i, item) {
 
@@ -141,9 +153,7 @@ function($, _, Humanize) {
                 map(function(key) {
                     return item.symbols[key];
                 }).
-                sort(function(e1, e2) {
-                    return Math.abs(e1.score) < Math.abs(e2.score);
-                }).
+                sort(compare).
                 map(function(e) { return e.str; }).
                 join("<br>\n");
             item.time = {
@@ -603,6 +613,9 @@ function($, _, Humanize) {
         $('#updateHistory').off('click');
         $('#updateHistory').on('click', function (e) {
             e.preventDefault();
+            interface.getHistory(rspamd, tables, neighbours, checked_server);
+        });
+        $("#selSymOrder").unbind().change(function() {
             interface.getHistory(rspamd, tables, neighbours, checked_server);
         });
 
