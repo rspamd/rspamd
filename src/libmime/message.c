@@ -85,107 +85,105 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 				stem = sb_stemmer_new (part->language, "UTF_8");
 
 				if (stem == NULL) {
-					msg_debug_task ("<%s> cannot create lemmatizer for %s language",
+					msg_debug_task (
+							"<%s> cannot create lemmatizer for %s language",
 							task->message_id, part->language);
-				}
-				else {
+				} else {
 					g_hash_table_insert (stemmers, g_strdup (part->language),
 							stem);
 				}
 			}
 		}
 #endif
-	}
 
-	for (i = 0; i < part->normalized_words->len; i ++) {
-		guint64 h;
 
-		w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
-		r = NULL;
+		for (i = 0; i < part->normalized_words->len; i++) {
+			guint64 h;
+
+			w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
+			r = NULL;
 #ifdef WITH_SNOWBALL
-		if (stem) {
-			r = sb_stemmer_stem (stem, w->begin, w->len);
-		}
+			if (stem) {
+				r = sb_stemmer_stem (stem, w->begin, w->len);
+			}
 #endif
 
-		if (w->len > 0 && (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT)) {
-			avg_len = avg_len + (w->len - avg_len) / (double)i;
+			if (w->len > 0 && (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT)) {
+				avg_len = avg_len + (w->len - avg_len) / (double) i;
 
-			if (r != NULL) {
-				nlen = strlen (r);
-				nlen = MIN (nlen, w->len);
-				temp_word = rspamd_mempool_alloc (task->task_pool, nlen);
-				memcpy (temp_word, r, nlen);
+				if (r != NULL) {
+					nlen = strlen (r);
+					nlen = MIN (nlen, w->len);
+					temp_word = rspamd_mempool_alloc (task->task_pool, nlen);
+					memcpy (temp_word, r, nlen);
 
-				if (IS_PART_UTF (part)) {
-					rspamd_str_lc_utf8 (temp_word, nlen);
+					if (IS_PART_UTF (part)) {
+						rspamd_str_lc_utf8 (temp_word, nlen);
+					} else {
+						rspamd_str_lc (temp_word, nlen);
+					}
+
+					w->begin = temp_word;
+					w->len = nlen;
+				} else {
+					temp_word = rspamd_mempool_alloc (task->task_pool, w->len);
+					memcpy (temp_word, w->begin, w->len);
+
+					if (IS_PART_UTF (part)) {
+						rspamd_str_lc_utf8 (temp_word, w->len);
+					} else {
+						rspamd_str_lc (temp_word, w->len);
+					}
+
+					w->begin = temp_word;
 				}
-				else {
-					rspamd_str_lc (temp_word, nlen);
-				}
-
-				w->begin = temp_word;
-				w->len = nlen;
 			}
-			else {
-				temp_word = rspamd_mempool_alloc (task->task_pool, w->len);
-				memcpy (temp_word, w->begin, w->len);
 
-				if (IS_PART_UTF (part)) {
-					rspamd_str_lc_utf8 (temp_word, w->len);
+			if (w->len > 0) {
+				/*
+				 * We use static hash seed if we would want to use that in shingles
+				 * computation in future
+				 */
+				h = rspamd_cryptobox_fast_hash_specific (
+						RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT,
+						w->begin, w->len, words_hash_seed);
+				g_array_append_val (part->normalized_hashes, h);
+				total_len += w->len;
+
+				if (w->len <= 3) {
+					short_len++;
 				}
-				else {
-					rspamd_str_lc (temp_word, w->len);
-				}
-
-				w->begin = temp_word;
-			}
-		}
-
-		if (w->len > 0) {
-			/*
-			 * We use static hash seed if we would want to use that in shingles
-			 * computation in future
-			 */
-			h = rspamd_cryptobox_fast_hash_specific (
-					RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT,
-					w->begin, w->len, words_hash_seed);
-			g_array_append_val (part->normalized_hashes, h);
-			total_len += w->len;
-
-			if (w->len <= 3) {
-				short_len ++;
 			}
 		}
-	}
 
-	if (part->normalized_words && part->normalized_words->len) {
-		gdouble *avg_len_p, *short_len_p;
+		if (part->normalized_words && part->normalized_words->len) {
+			gdouble *avg_len_p, *short_len_p;
 
-		avg_len_p = rspamd_mempool_get_variable (task->task_pool,
-				RSPAMD_MEMPOOL_AVG_WORDS_LEN);
+			avg_len_p = rspamd_mempool_get_variable (task->task_pool,
+					RSPAMD_MEMPOOL_AVG_WORDS_LEN);
 
-		if (avg_len_p == NULL) {
-			avg_len_p = rspamd_mempool_alloc (task->task_pool, sizeof (double));
-			*avg_len_p = total_len;
-			rspamd_mempool_set_variable (task->task_pool,
-					RSPAMD_MEMPOOL_AVG_WORDS_LEN, avg_len_p, NULL);
-		}
-		else {
-			*avg_len_p += total_len;
-		}
+			if (avg_len_p == NULL) {
+				avg_len_p = rspamd_mempool_alloc (task->task_pool,
+						sizeof (double));
+				*avg_len_p = total_len;
+				rspamd_mempool_set_variable (task->task_pool,
+						RSPAMD_MEMPOOL_AVG_WORDS_LEN, avg_len_p, NULL);
+			} else {
+				*avg_len_p += total_len;
+			}
 
-		short_len_p = rspamd_mempool_get_variable (task->task_pool,
-				RSPAMD_MEMPOOL_SHORT_WORDS_CNT);
+			short_len_p = rspamd_mempool_get_variable (task->task_pool,
+					RSPAMD_MEMPOOL_SHORT_WORDS_CNT);
 
-		if (short_len_p == NULL) {
-			short_len_p = rspamd_mempool_alloc (task->task_pool, sizeof (double));
-			*short_len_p = short_len;
-			rspamd_mempool_set_variable (task->task_pool,
-					RSPAMD_MEMPOOL_SHORT_WORDS_CNT, avg_len_p, NULL);
-		}
-		else {
-			*short_len_p += short_len;
+			if (short_len_p == NULL) {
+				short_len_p = rspamd_mempool_alloc (task->task_pool,
+						sizeof (double));
+				*short_len_p = short_len;
+				rspamd_mempool_set_variable (task->task_pool,
+						RSPAMD_MEMPOOL_SHORT_WORDS_CNT, avg_len_p, NULL);
+			} else {
+				*short_len_p += short_len;
+			}
 		}
 	}
 }
@@ -212,6 +210,7 @@ rspamd_mime_part_create_words (struct rspamd_task *task,
 				part->exceptions, FALSE,
 				NULL);
 	}
+
 	if (part->normalized_words) {
 		part->normalized_hashes = g_array_sized_new (FALSE, FALSE,
 				sizeof (guint64), part->normalized_words->len);
