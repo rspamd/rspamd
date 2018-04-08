@@ -29,7 +29,7 @@ local settings = {
   interval = 60, -- one iteration step per minute
   count = 1000, -- check up to 1000 keys on each iteration
   epsilon_common = 0.01, -- eliminate common if spam to ham rate is equal to this epsilon
-  common_ttl_divisor = 10, -- how should we discriminate common elements
+  common_ttl = 10 * 86400, -- TTL of discriminated common elements
   significant_factor = 3.0 / 4.0, -- which tokens should we update
   classifiers = {},
   cluster_nodes = 0,
@@ -143,7 +143,7 @@ end
   -- Fill template
 template.count = settings.count
 template.threshold = settings.threshold
-template.common_ttl_divisor = settings.common_ttl_divisor
+template.common_ttl = settings.common_ttl
 template.epsilon_common = settings.epsilon_common
 template.significant_factor = settings.significant_factor
 
@@ -162,6 +162,7 @@ local expiry_script = [[
   local keys = ret[2]
   local nelts = 0
   local extended = 0
+  local common = 0
   local discriminated = 0
   local tokens = {}
   local sum, sum_squares = 0, 0
@@ -202,16 +203,19 @@ local expiry_script = [[
       end
     end
     if total == 0 or math.abs(ham - spam) <= total * ${epsilon_common} then
-      discriminated = discriminated + 1
-      redis.call('EXPIRE', key, math.floor(tonumber(ttl) / ${common_ttl_divisor}))
+      common = common + 1
+      if tonumber(ttl) > ${common_ttl} then
+        discriminated = discriminated + 1
+        redis.call('EXPIRE', key, ${common_ttl})
+      end
     end
   end
 
-  return {next, nelts, extended, discriminated, mean, stddev}
+  return {next, nelts, extended, discriminated, mean, stddev, common}
 ]]
 
 local cur = 0
-local c_data = {0,0,0,0,0};
+local c_data = {0,0,0,0,0,0};
 
 local function expire_step(cls, ev_base, worker)
   local function redis_step_cb(err, data)
@@ -231,13 +235,13 @@ local function expire_step(cls, ev_base, worker)
         end
       end
 
-      logger.infox(rspamd_config, 'executed expiry step for bayes: %s items checked, %s extended, %s discriminated, %s mean, %s std',
-          data[1], data[2], data[3], data[4], data[5])
+      logger.infox(rspamd_config, 'executed expiry step for bayes: %s items checked, %s extended, %s common (%s discriminated), %s mean, %s std',
+          data[1], data[2], data[6], data[3], data[4], data[5])
 
       if cur == 0 then
-        logger.infox(rspamd_config, 'executed final expiry step for bayes, totals: %s items checked, %s extended, %s discriminated, %s mean, %s cv',
-            c_data[1], c_data[2], c_data[3], math.floor(.5 + c_data[4] / c_data[1]), math.floor(.5 + math.sqrt(c_data[5] / c_data[1])))
-        c_data = {0,0,0,0,0};
+        logger.infox(rspamd_config, 'executed final expiry step for bayes, totals: %s items checked, %s extended, %s common (%s discriminated), %s mean, %s cv',
+            c_data[1], c_data[2], c_data[6], c_data[3], math.floor(.5 + c_data[4] / c_data[1]), math.floor(.5 + math.sqrt(c_data[5] / c_data[1])))
+        c_data = {0,0,0,0,0,0};
       end
     end
   end
