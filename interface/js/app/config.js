@@ -58,7 +58,8 @@ function($) {
     // @get maps id
     function getMaps(rspamd) {
         var items = [];
-        $('#listMaps').closest('.widget-box').hide();
+        var $listmaps = $('#listMaps')
+        $listmaps.closest('.widget-box').hide();
         $.ajax({
             dataType: 'json',
             url: 'maps',
@@ -70,45 +71,31 @@ function($) {
                 rspamd.alertMessage('alert-modal alert-error', data.statusText);
             },
             success: function (data) {
-                $('#listMaps').empty();
+                $listmaps.empty();
                 $('#modalBody').empty();
+                $tbody = $('<tbody>');
 
                 $.each(data, function (i, item) {
-                    var caption;
-                    var label;
-                    getMapById(rspamd, item);
                     if ((item.editable === false || rspamd.read_only)) {
-                        caption = 'View';
-                        label = '<span class="label label-default">Read</span>';
+                        var label = '<span class="label label-default">Read</span>';
                     } else {
-                        caption = 'Edit';
-                        label = '<span class="label label-default">Read</span>&nbsp;<span class="label label-success">Write</span>';
+                        var label = '<span class="label label-default">Read</span>&nbsp;<span class="label label-success">Write</span>';
                     }
-                    items.push('<tr>' +
-                        '<td class="col-md-2 maps-cell">' + label + '</td>' +
-                        '<td>' +
-                        '<span class="map-link" ' +
-                        'data-source="#' + item.map + '" ' +
-                        'data-editable="' + item.editable + '" ' +
-                        'data-target="#modalDialog" ' +
-                        'data-title="' + item.uri +
-                        '" data-toggle="modal">' + item.uri + '</span>' +
-                        '</td>' +
-                        '<td>' +
-                        item.description +
-                        '</td>' +
-                        '</tr>');
+                    var $tr = $("<tr>");
+                    $('<td class="col-md-2 maps-cell">' + label + '</td>').appendTo($tr);
+                    $span = $('<span class="map-link" data-toggle="modal" data-target="#modalDialog">' + item.uri + '</span>').data("item",item);
+                    $span.wrap("<td>").parent().appendTo($tr);
+                    $('<td>' + item.description + '</td>').appendTo($tr);
+                    $tr.appendTo($tbody);
                 });
-                $('<tbody/>', {
-                    html: items.join('')
-                }).appendTo('#listMaps');
-                $('#listMaps').closest('.widget-box').show();
+                $tbody.appendTo($listmaps);
+                $listmaps.closest('.widget-box').show();
             }
         });
     }
     // @get map by id
     function getMapById(rspamd, item) {
-        $.ajax({
+        return $.ajax({
             dataType: 'text',
             url: 'getmap',
             jsonp: false,
@@ -124,7 +111,8 @@ function($) {
                 if ((item.editable === false || rspamd.read_only)) {
                     disabled = 'disabled="disabled"';
                 }
-
+                
+                $("#"+item.map).remove();
                 $('<form class="form-horizontal form-map" method="post" action="savemap" data-type="map" id="' +
                     item.map + '" style="display:none">' +
                     '<textarea class="list-textarea"' + disabled + '>' + text +
@@ -248,21 +236,20 @@ function($) {
     interface.setup = function(rspamd) {
         // Modal form for maps
         $(document).on('click', '[data-toggle="modal"]', function () {
-            var source = $(this).data('source');
-            var editable = $(this).data('editable');
-            var title = $(this).data('title');
-            $('#modalTitle').html(title);
-            $('#modalBody ' + source).first().show();
-            var target = $(this).data('target');
-            $(target + ' .progress').hide();
-            $(target).modal(show = true, backdrop = true, keyboard = show);
-            if (editable === false) {
-                $('#modalSave').hide();
-                $('#modalSaveAll').hide();
-            } else {
-                $('#modalSave').show();
-                $('#modalSaveAll').show();
-            }
+            var item = $(this).data('item');
+            getMapById(rspamd, item).done(function() {
+                $('#modalTitle').html(item.uri);
+                $('#' + item.map).first().show();
+                $('#modalDialog .progress').hide();
+                $('#modalDialog').modal(show = true, backdrop = true, keyboard = show);
+                if (item.editable === false) {
+                    $('#modalSave').hide();
+                    $('#modalSaveAll').hide();
+                } else {
+                    $('#modalSave').show();
+                    $('#modalSaveAll').show();
+                }
+            });
             return false;
         });
         // close modal without saving
@@ -272,16 +259,12 @@ function($) {
         // @save forms from modal
         $('#modalSave').on('click', function () {
             var form = $('#modalBody').children().filter(':visible');
-            // var map = $(form).data('map');
-            // var type = $(form).data('type');
             var action = $(form).attr('action');
             var id = $(form).attr('id');
             saveMap(rspamd, action, id);
         });
         $('#modalSaveAll').on('click', function () {
             var form = $('#modalBody').children().filter(':visible');
-            // var map = $(form).data('map');
-            // var type = $(form).data('type');
             var action = $(form).attr('action');
             var id = $(form).attr('id');
             var data = $('#' + id).find('textarea').val();
