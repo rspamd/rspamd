@@ -48,7 +48,7 @@ static GOptionEntry entries[] = {
 		{"logdir", 'l', 0, G_OPTION_ARG_FILENAME, &logdir,
 				"Logs directory",                               NULL},
 		{"output", 'o', 0, G_OPTION_ARG_FILENAME, &output,
-				"Scores output locaiton",                       NULL},
+				"Scores output location",                       NULL},
 		{"diff",   'd', 0, G_OPTION_ARG_NONE,     &score_diff,
 				"Print score diff",                             NULL},
 		{"config", 'c', 0, G_OPTION_ARG_STRING, &config,
