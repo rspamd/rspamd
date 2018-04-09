@@ -42,7 +42,7 @@ local function gen_lua_squeeze_function(order)
             if first then
               table.remove(ret, 1)
 
-              local second = ret[2]
+              local second = ret[1]
 
               if type(second) == 'number' then
                 table.remove(ret, 1)
