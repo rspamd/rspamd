@@ -42,20 +42,41 @@ local function gen_lua_squeeze_function(order)
             if first then
               table.remove(ret, 1)
 
-              if type(ret[1]) == 'table' then
-                task:insert_result(sym, 1.0, ret[1])
+              local second = ret[2]
+
+              if type(second) == 'number' then
+                table.remove(ret, 1)
+                if second ~= 0 then
+                  if type(ret[1]) == 'table' then
+                    task:insert_result(sym, second, ret[1])
+                  else
+                    task:insert_result(sym, second, ret)
+                  end
+                end
               else
-                task:insert_result(sym, 1.0, ret)
+                if type(ret[1]) == 'table' then
+                  task:insert_result(sym, 1.0, ret[1])
+                else
+                  task:insert_result(sym, 1.0, ret)
+                end
               end
             end
           elseif type(first) == 'number' then
             table.remove(ret, 1)
 
             if first ~= 0 then
-              task:insert_result(sym, first, ret)
+              if type(ret[1]) == 'table' then
+                task:insert_result(sym, first, ret[1])
+              else
+                task:insert_result(sym, first, ret)
+              end
             end
           else
-            task:insert_result(sym, 1.0, ret)
+            if type(ret[1]) == 'table' then
+              task:insert_result(sym, 1.0, ret[1])
+            else
+              task:insert_result(sym, 1.0, ret)
+            end
           end
         end
       else
