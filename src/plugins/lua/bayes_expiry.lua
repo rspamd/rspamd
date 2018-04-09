@@ -31,19 +31,19 @@ local settings = {
   epsilon_common = 0.01, -- eliminate common if spam to ham rate is equal to this epsilon
   common_ttl = 10 * 86400, -- TTL of discriminated common elements
   significant_factor = 3.0 / 4.0, -- which tokens should we update
+  lazy = false, -- enable lazy expiration mode
   classifiers = {},
   cluster_nodes = 0,
 }
 
-local template = {
-
-}
+local template = {}
 
 local function check_redis_classifier(cls, cfg)
   -- Skip old classifiers
   if cls.new_schema then
     local symbol_spam, symbol_ham
     local expiry = (cls.expiry or cls.expire)
+    if cls.lazy then settings.lazy = cls.lazy end
     -- Load symbols from statfiles
     local statfiles = cls.statfile
     for _,stf in ipairs(statfiles) do
@@ -146,6 +146,7 @@ template.threshold = settings.threshold
 template.common_ttl = settings.common_ttl
 template.epsilon_common = settings.epsilon_common
 template.significant_factor = settings.significant_factor
+template.lazy = settings.lazy
 
 for k,v in pairs(template) do
   template[k] = tostring(v)
@@ -161,9 +162,12 @@ local expiry_script = [[
   local next = ret[1]
   local keys = ret[2]
   local nelts = 0
+  local significant = 0
   local extended = 0
   local common = 0
   local discriminated = 0
+  local infrequent = 0
+  local ttls_set = 0
   local tokens = {}
   local sum, sum_squares = 0, 0
 
@@ -192,30 +196,43 @@ local expiry_script = [[
   end
 
   for key,token in pairs(tokens) do
-    local ham, spam, ttl = token[1], token[2], token[3]
+    local ham, spam, ttl = token[1], token[2], tonumber(token[3])
     local threshold = mean
     local total = spam + ham
 
     if total >= threshold and total > 0 then
       if ham / total > ${significant_factor} or spam / total > ${significant_factor} then
-        redis.call('EXPIRE', key, math.floor(KEYS[2]))
-        extended = extended + 1
+        significant = significant + 1
+        if ${lazy} then
+          if ttl ~= -1 then
+            redis.call('PERSIST', key)
+            extended = extended + 1
+          end
+        else
+          redis.call('EXPIRE', key, math.floor(KEYS[2]))
+          extended = extended + 1
+        end
       end
-    end
-    if total == 0 or math.abs(ham - spam) <= total * ${epsilon_common} then
+    elseif total == 0 or math.abs(ham - spam) <= total * ${epsilon_common} then
       common = common + 1
-      if tonumber(ttl) > ${common_ttl} then
+      if ttl > ${common_ttl} then
         discriminated = discriminated + 1
         redis.call('EXPIRE', key, ${common_ttl})
+      end
+    else
+      infrequent = infrequent + 1
+      if ${lazy} and ttl == -1 then
+        redis.call('EXPIRE', key, math.floor(KEYS[2]))
+        ttls_set = ttls_set + 1
       end
     end
   end
 
-  return {next, nelts, extended, discriminated, mean, stddev, common}
+  return {next, nelts, extended, discriminated, mean, stddev, common, significant, infrequent, ttls_set}
 ]]
 
 local cur = 0
-local c_data = {0,0,0,0,0,0};
+local c_data = {0,0,0,0,0,0,0,0,0};
 
 local function expire_step(cls, ev_base, worker)
   local function redis_step_cb(err, data)
@@ -235,13 +252,22 @@ local function expire_step(cls, ev_base, worker)
         end
       end
 
-      logger.infox(rspamd_config, 'executed expiry step for bayes: %s items checked, %s extended, %s common (%s discriminated), %s mean, %s std',
-          data[1], data[2], data[6], data[3], data[4], data[5])
-
+      local function log_stat(cycle)
+        logger.infox(rspamd_config, 'finished expiry %s%s: %s items checked, %s significant (%s %s), %s common (%s discriminated), %s infrequent%s, %s mean, %s std',
+            cycle and 'cycle' or 'step',
+            settings.lazy and ' (lazy)' or '',
+            c_data[1], c_data[7], c_data[2],
+            settings.lazy and 'made persistent' or 'extended',
+            c_data[6], c_data[3], data[8],
+            settings.lazy and ' (' .. data[9] .. ' ttls set)' or '',
+            cycle and math.floor(.5 + c_data[4] / c_data[1]) or data[4],
+            cycle and math.floor(.5 + math.sqrt(c_data[5] / c_data[1])) or data[5]
+        )
+      end
+      log_stat(false)
       if cur == 0 then
-        logger.infox(rspamd_config, 'executed final expiry step for bayes, totals: %s items checked, %s extended, %s common (%s discriminated), %s mean, %s cv',
-            c_data[1], c_data[2], c_data[6], c_data[3], math.floor(.5 + c_data[4] / c_data[1]), math.floor(.5 + math.sqrt(c_data[5] / c_data[1])))
-        c_data = {0,0,0,0,0,0};
+        log_stat(true)
+        c_data = {0,0,0,0,0,0,0,0,0};
       end
     end
   end
