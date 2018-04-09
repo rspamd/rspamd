@@ -393,7 +393,11 @@ rspamd_config.URL_IN_SUBJECT = {
 
     if urls then
       for _,u in ipairs(urls) do
-        if u:is_subject() then
+        local flags = u:get_flags()
+        if flags.subject then
+          if flags.schemaless then
+            return true,0.1,u:get_host()
+          end
           local subject = task:get_subject()
 
           if subject then
