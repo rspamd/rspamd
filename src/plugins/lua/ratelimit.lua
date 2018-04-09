@@ -389,8 +389,8 @@ local function ratelimit_cb(task)
     for pr,value in pairs(prefixes) do
       local bucket = value.bucket
       local rate = (1.0 / bucket[1]) / 1000.0 -- Leak rate in messages/ms
-      rspamd_logger.debugm(N, task, "check limit %s (%s/%s)",
-          pr, bucket[2], bucket[1])
+      rspamd_logger.debugm(N, task, "check limit %s:%s (%s/%s)",
+          value.name, pr, bucket[2], bucket[1])
       lua_redis.exec_redis_script(bucket_check_id,
               {task = task, is_write = true},
               gen_check_cb(pr, bucket, value.name),
@@ -434,8 +434,8 @@ local function ratelimit_update_cb(task)
       end
       local now = rspamd_util.get_time()
       now = lua_util.round(now * 1000.0) -- Get milliseconds
-      rspamd_logger.debugm(N, task, "update limit %s (%s/%s)",
-              k, bucket[2], bucket[1])
+      rspamd_logger.debugm(N, task, "update limit %s:%s (%s/%s)",
+              v.name, k, bucket[2], bucket[1])
       lua_redis.exec_redis_script(bucket_update_id,
               {task = task, is_write = true},
               update_bucket_cb,
