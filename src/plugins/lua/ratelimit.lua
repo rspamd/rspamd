@@ -74,11 +74,13 @@ local bucket_check_script = [[
     local rate = tonumber(KEYS[3])
     local dyn = tonumber(redis.call('HGET', KEYS[1], 'dr')) / 10000.0
     rate = rate * dyn
-    redis.call('HINCRBYFLOAT', KEYS[1], 'b', -((now - last) * rate))
+    local leaked = ((now - last) * rate)
+    burst = burst - leaked
+    redis.call('HINCRBYFLOAT', KEYS[1], 'b', -(leaked))
    end
    local dyn = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
 
-   if tonumber(burst) * tonumber(dyn) > tonumber(KEYS[4]) then
+   if burst * dyn > tonumber(KEYS[4]) then
     return 1
    end
   else
