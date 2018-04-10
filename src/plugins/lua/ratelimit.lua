@@ -64,7 +64,7 @@ local bucket_check_script = [[
     redis.call('HSET', KEYS[1], 'dr', '10000')
     redis.call('HSET', KEYS[1], 'db', '10000')
     redis.call('EXPIRE', KEYS[1], KEYS[5])
-    return 0
+    return {0, 0, 1, 1}
   end
 
   last = tonumber(last)
@@ -376,8 +376,7 @@ local function ratelimit_cb(task)
     return function(err, data)
       if err then
         rspamd_logger.errx('cannot check limit %s: %s %s', prefix, err, data)
-      end
-      if data and data[1] and data[1] == 1 then
+      elseif type(data) == 'table' and data[1] and data[1] == 1 then
         if settings.info_symbol then
           task:insert_result(settings.info_symbol, 1.0, prefix)
         end
