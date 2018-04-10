@@ -154,7 +154,7 @@ local lua_redis = require "lua_redis"
 local fun = require "fun"
 local lua_maps = require "lua_maps"
 local lua_util = require "lua_util"
-
+local rspamd_hash = require "rspamd_cryptobox_hash"
 
 
 local function load_scripts(cfg, ev_base)
@@ -292,7 +292,7 @@ local keywords = {
 }
 
 local function gen_rate_key(task, rtype, bucket)
-  local key_t = {settings.prefix, tostring(lua_util.round(100000.0 / bucket[1]))}
+  local key_t = {tostring(lua_util.round(100000.0 / bucket[1]))}
   local key_keywords = lua_util.str_split(rtype, '_')
   local have_user = false
 
@@ -358,9 +358,12 @@ local function ratelimit_cb(task)
       local prefix = gen_rate_key(task, k, bucket)
 
       if prefix then
+        local hash = settings.prefix ..
+                string.sub(rspamd_hash.create(prefix):base32(), 1, 24)
         prefixes[prefix] = {
           bucket = bucket,
           name = k,
+          hash = hash
         }
         nprefixes = nprefixes + 1
       end
@@ -395,12 +398,12 @@ local function ratelimit_cb(task)
     for pr,value in pairs(prefixes) do
       local bucket = value.bucket
       local rate = (1.0 / bucket[1]) / 1000.0 -- Leak rate in messages/ms
-      rspamd_logger.debugm(N, task, "check limit %s:%s (%s/%s)",
-          value.name, pr, bucket[2], bucket[1])
+      rspamd_logger.debugm(N, task, "check limit %s:%s -> %s (%s/%s)",
+          value.name, pr, value.hash, bucket[2], bucket[1])
       lua_redis.exec_redis_script(bucket_check_id,
               {task = task, is_write = true},
               gen_check_cb(pr, bucket, value.name),
-              {pr, tostring(now), tostring(rate), tostring(bucket[2]),
+              {pr.hash, tostring(now), tostring(rate), tostring(bucket[2]),
                   tostring(settings.expire)})
     end
   end
@@ -438,8 +441,8 @@ local function ratelimit_update_cb(task)
                   k, err)
         else
           rspamd_logger.debugm(N, task,
-                  "updated limit %s:%s (%s/%s), burst: %s, dyn_rate: %s, dyn_burst: %s",
-                  v.name, k, bucket[2], bucket[1], data[1], data[2], data[3])
+                  "updated limit %s:%s -> %s (%s/%s), burst: %s, dyn_rate: %s, dyn_burst: %s",
+                  v.name, k, v.hash, bucket[2], bucket[1], data[1], data[2], data[3])
         end
       end
       local now = rspamd_util.get_time()
@@ -448,7 +451,7 @@ local function ratelimit_update_cb(task)
       lua_redis.exec_redis_script(bucket_update_id,
               {task = task, is_write = true},
               update_bucket_cb,
-              {k, tostring(now), tostring(mult_rate), tostring(mult_burst),
+              {v.hash, tostring(now), tostring(mult_rate), tostring(mult_burst),
                tostring(settings.max_rate_mult), tostring(settings.max_bucket_mult),
                tostring(settings.expire)})
     end
