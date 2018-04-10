@@ -89,7 +89,7 @@ local bucket_check_script = [[
     redis.call('HSET', KEYS[1], 'b', '0')
   end
 
-  return {0, burst, dynr, dynb}
+  return {0, burst, tostring(dynr), tostring(dynb)}
 ]]
 local bucket_check_id
 
@@ -138,7 +138,7 @@ local bucket_update_script = [[
   redis.call('HSET', KEYS[1], 'l', KEYS[2])
   redis.call('EXPIRE', KEYS[1], KEYS[7])
 
-  return {burst, dr, db}
+  return {burst, tostring(dr), tostring(db)}
 ]]
 local bucket_update_id
 
