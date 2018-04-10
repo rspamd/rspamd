@@ -111,6 +111,7 @@ kayak.com
 kickstarter.com
 kijiji.ca
 kotaku.com
+letsencrypt.org
 libero.it
 lifehacker.com
 likes.com
