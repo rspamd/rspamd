@@ -403,9 +403,9 @@ local function ratelimit_cb(task)
       rspamd_logger.debugm(N, task, "check limit %s:%s -> %s (%s/%s)",
           value.name, pr, value.hash, bucket[2], bucket[1])
       lua_redis.exec_redis_script(bucket_check_id,
-              {task = task, is_write = true},
+              {key = value.hash, task = task, is_write = true},
               gen_check_cb(pr, bucket, value.name),
-              {pr.hash, tostring(now), tostring(rate), tostring(bucket[2]),
+              {value.hash, tostring(now), tostring(rate), tostring(bucket[2]),
                   tostring(settings.expire)})
     end
   end
@@ -451,7 +451,7 @@ local function ratelimit_update_cb(task)
       now = lua_util.round(now * 1000.0) -- Get milliseconds
 
       lua_redis.exec_redis_script(bucket_update_id,
-              {task = task, is_write = true},
+              {key = v.hash, task = task, is_write = true},
               update_bucket_cb,
               {v.hash, tostring(now), tostring(mult_rate), tostring(mult_burst),
                tostring(settings.max_rate_mult), tostring(settings.max_bucket_mult),
