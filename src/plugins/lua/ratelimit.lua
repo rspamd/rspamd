@@ -358,8 +358,10 @@ local function ratelimit_cb(task)
       local prefix = gen_rate_key(task, k, bucket)
 
       if prefix then
+        local hash_len = 24
+        if hash_len > #prefix then hash_len = #prefix end
         local hash = settings.prefix ..
-                string.sub(rspamd_hash.create(prefix):base32(), 1, 24)
+                string.sub(rspamd_hash.create(prefix):base32(), 1, hash_len)
         prefixes[prefix] = {
           bucket = bucket,
           name = k,
