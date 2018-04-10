@@ -56,6 +56,7 @@ local settings = {
 local bucket_check_script = [[
   local last = redis.call('HGET', KEYS[1], 'l')
   local now = tonumber(KEYS[2])
+  local dynr, dynb = 0, 0
   if not last then
     -- New bucket
     redis.call('HSET', KEYS[1], 'l', KEYS[2])
@@ -72,22 +73,23 @@ local bucket_check_script = [[
   if burst > 0 then
    if last < tonumber(KEYS[2]) then
     local rate = tonumber(KEYS[3])
-    local dyn = tonumber(redis.call('HGET', KEYS[1], 'dr')) / 10000.0
-    rate = rate * dyn
+    dynr = tonumber(redis.call('HGET', KEYS[1], 'dr')) / 10000.0
+    rate = rate * dynr
     local leaked = ((now - last) * rate)
     burst = burst - leaked
     redis.call('HINCRBYFLOAT', KEYS[1], 'b', -(leaked))
    end
-   local dyn = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
+   dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
 
-   if burst * dyn > tonumber(KEYS[4]) then
-    return 1
+   if burst * dynb > tonumber(KEYS[4]) then
+    return {1, burst, dynr, dynb}
    end
   else
+    burst = 0
     redis.call('HSET', KEYS[1], 'b', '0')
   end
 
-  return 0
+  return {0, burst, dynr, dynb}
 ]]
 local bucket_check_id
 
@@ -115,7 +117,7 @@ local bucket_update_script = [[
     redis.call('HSET', KEYS[1], 'dr', '10000')
     redis.call('HSET', KEYS[1], 'db', '10000')
     redis.call('EXPIRE', KEYS[1], KEYS[7])
-    return
+    return {1, 1, 1}
   end
 
   local burst = tonumber(redis.call('HGET', KEYS[1], 'b'))
@@ -135,6 +137,8 @@ local bucket_update_script = [[
   redis.call('HINCRBYFLOAT', KEYS[1], 'b', 1)
   redis.call('HSET', KEYS[1], 'l', KEYS[2])
   redis.call('EXPIRE', KEYS[1], KEYS[7])
+
+  return {burst, dr, db}
 ]]
 local bucket_update_id
 
@@ -368,13 +372,13 @@ local function ratelimit_cb(task)
       if err then
         rspamd_logger.errx('cannot check limit %s: %s %s', prefix, err, data)
       end
-      if data and data == 1 then
+      if data and data[1] and data[1] == 1 then
         if settings.info_symbol then
           task:insert_result(settings.info_symbol, 1.0, prefix)
         end
         rspamd_logger.infox(task,
-                'ratelimit "%s(%s)" exceeded, (%s / %s)',
-                lim_name, prefix, bucket[2], bucket[1])
+                'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
+                lim_name, prefix, bucket[2], bucket[1], data[2], data[3], data[4])
         task:set_pre_result('soft reject',
                 message_func(task, lim_name, prefix, bucket))
       end
@@ -428,16 +432,19 @@ local function ratelimit_update_cb(task)
     -- Update each bucket
     for k, v in pairs(prefixes) do
       local bucket = v.bucket
-      local function update_bucket_cb(err, _)
+      local function update_bucket_cb(err, data)
         if err then
           rspamd_logger.errx(task, 'cannot update rate bucket %s: %s',
-              k, err)
+                  k, err)
+        else
+          rspamd_logger.debugm(N, task,
+                  "updated limit %s:%s (%s/%s), burst: %s, dyn_rate: %s, dyn_burst: %s",
+                  v.name, k, bucket[2], bucket[1], data[1], data[2], data[3])
         end
       end
       local now = rspamd_util.get_time()
       now = lua_util.round(now * 1000.0) -- Get milliseconds
-      rspamd_logger.debugm(N, task, "update limit %s:%s (%s/%s)",
-              v.name, k, bucket[2], bucket[1])
+
       lua_redis.exec_redis_script(bucket_update_id,
               {task = task, is_write = true},
               update_bucket_cb,
