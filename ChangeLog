@@ -1,3 +1,44 @@
+1.7.3: 10 Apr 2018
+	* [CritFix] Plug bad memory leak in protocol reply
+	* [Feature] Add avx2 codec for base64
+	* [Feature] Add method to receive all URL flags from Lua API
+	* [Feature] Allow to fold headers on stop characters
+	* [Feature] Allow to set lua_cpath from options
+	* [Feature] Allow to specify custom rejection message in milter
+	* [Feature] Deal with unnormalised Unicode obfuscation
+	* [Feature] Do not detect language twice for relative parts
+	* [Feature] Implement oversigning feature
+	* [Feature] Implement silent logging level to minimize noise in logs
+	* [Feature] Improve URL_IN_SUBJECT rule
+	* [Feature] Use hashing to reduce redis attack surface
+	* [Fix] Add oversigning for the most important headers
+	* [Fix] add 'rewrite subject' to History dropdown
+	* [Fix] Another fix in folding algorithm
+	* [Fix] Do not call multimap addr for parts of addr if filter is presented
+	* [Fix] Do not clean hostname on generic reset
+	* [Fix] Do not create pid file in no-fork mode
+	* [Fix] Fix fold_after case to preserve multiple spaces
+	* [Fix] Fix folding and folding tests
+	* [Fix] Fix hostname usage in milter mode
+	* [Fix] Fix lua RSA verify and its tests
+	* [Fix] Fix metadata exporter send_mail backend (#2124)
+	* [Fix] Fix processing of '\v' in libucl
+	* [Fix] Fix shemaless URLs detection
+	* [Fix] Fix support of multiple headers in sign_header
+	* [Fix] Fix usage of util.parse_mail_address
+	* [Fix] Fix weights of dynamic squeezed rules
+	* [Fix] Leak from bucket before checking the burst
+	* [Fix] Stop using own localtime as DST could be messy in many cases
+	* [Fix] Treat unnormalised URLs as obscured
+	* [Rework] Restore leaky bucket model in ratelimit plugin
+	* [WebUI] Add messages total to throughput summary
+	* [WebUI] Add symbols order selector to history
+	* [WebUI] Config: Load list on demand
+	* [WebUI] Fix modalBody for maps that appear more than once
+	* [WebUI] History: Fix Tooltips on paging, filtering and sorting
+	* [WebUI] Remove a previously-attached event handler
+	* [WebUI] Update D3 to v5.0.0 and jQuery to v3.3.1
+
 1.7.2: 23 Mar 2018
 	* [Feature] Store emails in Clickhouse
 	* [Feature] Support single quotes in config
