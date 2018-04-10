@@ -12,7 +12,7 @@ rspamc --help
 
 # DESCRIPTION
 
-`rspamc` is a simple client for checking messages using rspamd or for learning rspamd by messages.
+`rspamc` is a simple rspamd client, primarily for classifying or learning messages.
 `rspamc` supports the following commands:
 
 * Scan commands:
@@ -29,12 +29,11 @@ rspamc --help
 	* `add_symbol`: add or modify symbol settings in rspamd
 	* `add_action`: add or modify action settings
 
-Control commands that modifies rspamd state are considered as privileged and basically requires a password
-to be specified with `-P` option (see **OPTIONS**, below, for details). 
-This depends on a controller's settings and is discussed in `rspamd-workers` page.
+Control commands that modify rspamd state are considered privileged and require a password to be specified with the `-P` option (see **OPTIONS**, below, for details).  
+This depends on a controller's settings and is discussed in the `rspamd-workers` page (see **SEE ALSO**, below, for details).
 
 `Input files` may be either regular file(s) or a directory to scan. If no files are specified `rspamc` reads
-from the standard input. Controller commands usually does not accept any input, however learn* and fuzzy* commands
+from the standard input. Controller commands usually do not accept any input, however learn* and fuzzy* commands
 requires input. 
 
 # OPTIONS
@@ -67,7 +66,7 @@ requires input.
 :	Emulate that message was received from specified authenticated user
 
 -d *user@domain*, \--deliver=*user@domain*
-:	Emulate that message is delivered to specified user (for LDA/statistics)
+:	Emulate that message was delivered to specified user (for LDA/statistics)
 
 -F *user@domain*, \--from=*user@domain*
 :	Emulate that message has specified SMTP FROM address
@@ -164,7 +163,7 @@ Add custom action's weight:
     
 # SEE ALSO
 
-Rspamd documentation and source codes may be downloaded from
+Rspamd documentation and source code may be downloaded from
 <https://rspamd.com/>.
 
 [rspamd-workers]: https://rspamd.com/doc/workers/
