@@ -1,6 +1,6 @@
 --[[
-Copyright (c) 2016, Vsevolod Stakhov <vsevolod@highsecure.ru>
-Copyright (c) 2016, Andrew Lewis <nerf@judo.za.org>
+Copyright (c) 2017, Christian Rößner <c@roessner-network-solutions.com>
+Copyright (c) 2017-2018, Vsevolod Stakhov <vsevolod@highsecure.ru>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ local rspamd_logger = require "rspamd_logger"
 local redis_params
 local use_redis = false;
 local M = 'spamtrap'
-local lutil = require "lua_util"
 
 local settings = {
   symbol = 'SPAMTRAP',
@@ -63,18 +62,7 @@ local function spamtrap_cb(task)
 
     if settings['action'] then
       rspamd_logger.infox(task, 'spamtrap found: <%s>', rcpt)
-      if settings.smtp_message then
-        task:set_pre_result(settings['action'],
-          lutil.template(settings.smtp_message, {rcpt = rcpt}))
-      else
-        local smtp_message = 'unknown error'
-        if settings.action == 'no action' then
-          smtp_message = 'message accepted'
-        elseif settings.action == 'reject' then
-          smtp_message = 'message rejected'
-        end
-        task:set_pre_result(settings['action'], smtp_message)
-      end
+      task:set_pre_result(settings['action'])
     end
   end
 
