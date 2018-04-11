@@ -257,6 +257,22 @@ return function(cfg)
         end
       end
     end
+
+    local actions_set = {}
+    for _,d in ipairs(actions_defs) do
+      actions_set[d] = true
+    end
+
+    -- Now check actions section for garbadge
+    actions_set['unknown_weight'] = true
+    actions_set['grow_factor'] = true
+    actions_set['subject'] = true
+
+    for k,v in pairs(cfg.actions) do
+      if not actions_set[k] then
+        logger.warnx('unknown element in actions section: %s', k)
+      end
+    end
   end
 
   if not cfg.group then
