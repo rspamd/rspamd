@@ -287,5 +287,13 @@ return function(cfg)
     cfg.dkim.sign_headers = table.concat(cfg.dkim.sign_headers, ':')
   end
 
+  -- Try to find some obvious issues with configuration
+  for k,v in pairs(cfg) do
+    if type(v) == 'table' and v[k] and type (v[k]) == 'table' then
+      logger.errx('nested section: %s { %s { ... } }, it is likely a configuration error',
+              k, k)
+    end
+  end
+
   return ret, cfg
 end
