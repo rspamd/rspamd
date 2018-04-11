@@ -74,6 +74,30 @@ local function readline_default(greet, def_value)
   return reply
 end
 
+local function readline_expire()
+  local expire = '100d'
+  repeat
+    expire = readline_default("Expire time for new tokens [" .. expire .. "]: ",
+      expire)
+    expire = lua_util.parse_time_interval(expire)
+
+    if not expire then
+      expire = '100d'
+    elseif expire > 2147483647 then
+      printf("The maximum possible value is 2147483647 (about 68y)")
+      expire = '68y'
+    elseif expire < -1 then
+      printf("The value must be a non-negative integer or -1")
+      expire = -1
+    elseif expire ~= math.floor(expire) then
+      printf("The value must be an integer")
+      expire = math.floor(expire)
+    else
+      return expire
+    end
+  until false
+end
+
 local function print_changes(changes)
   local function print_change(k, c, where)
     printf('File: %s, changes list:', highlight(local_conf .. '/'
@@ -337,10 +361,7 @@ local function check_redis_classifier(cls, changes)
 
   local function try_convert(update_config)
     if ask_yes_no("Do you wish to convert data to the new schema?", true) then
-      local expire = readline_default("Expire time for new tokens  [default: 100d]: ",
-        '100d')
-      expire = lua_util.parse_time_interval(expire)
-
+      local expire = readline_expire()
       if not lua_stat_tools.convert_bayes_schema(parsed_redis, symbol_spam,
           symbol_ham, expire) then
         printf("Conversion failed")
@@ -460,10 +481,7 @@ local function setup_statistic(cfg, changes)
     local parsed_redis = {}
     if lua_redis.try_load_redis_servers(redis_params, nil, parsed_redis) then
       printf('You have %d sqlite classifiers', #sqlite_configs)
-      local expire = readline_default("Expire time for new tokens  [default: 100d]: ",
-        '100d')
-      expire = lua_util.parse_time_interval(expire)
-
+      local expire = readline_expire()
 
       local reset_previous = ask_yes_no("Reset previous data?")
       if ask_yes_no('Do you wish to convert them to Redis?', true) then
