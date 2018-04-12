@@ -547,7 +547,7 @@ dkim_module_config (struct rspamd_config *cfg)
 							"dkim", RSPAMD_SYMBOL_FLAG_IGNORE, 1, 1);
 					rspamd_config_add_symbol (cfg,
 							"DKIM_TRACE", 0.0, "DKIM trace symbol",
-							"dkim", RSPAMD_SYMBOL_FLAG_IGNORE, 1, 1);
+							"policies", RSPAMD_SYMBOL_FLAG_IGNORE, 1, 1);
 
 				}
 				else {
