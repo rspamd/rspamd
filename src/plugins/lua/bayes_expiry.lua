@@ -158,6 +158,7 @@ end
 -- [3] = cursor
 -- returns new cursor
 local expiry_script = [[
+  local expire = math.floor(KEYS[2])
   local ret = redis.call('SCAN', KEYS[3], 'MATCH', KEYS[1], 'COUNT', '${count}')
   local next = ret[1]
   local keys = ret[2]
@@ -203,13 +204,13 @@ local expiry_script = [[
     if total >= threshold and total > 0 then
       if ham / total > ${significant_factor} or spam / total > ${significant_factor} then
         significant = significant + 1
-        if ${lazy} then
+        if ${lazy} or expire < 0 then
           if ttl ~= -1 then
             redis.call('PERSIST', key)
             extended = extended + 1
           end
         else
-          redis.call('EXPIRE', key, math.floor(KEYS[2]))
+          redis.call('EXPIRE', key, expire)
           extended = extended + 1
         end
       end
@@ -221,8 +222,13 @@ local expiry_script = [[
       end
     else
       infrequent = infrequent + 1
-      if ${lazy} and ttl == -1 then
-        redis.call('EXPIRE', key, math.floor(KEYS[2]))
+      if expire < 0 then
+        if ttl ~= -1 then
+          redis.call('PERSIST', key)
+          ttls_set = ttls_set + 1
+        end
+      elseif ttl == -1 or ttl > expire then
+        redis.call('EXPIRE', key, expire)
         ttls_set = ttls_set + 1
       end
     end
@@ -253,13 +259,13 @@ local function expire_step(cls, ev_base, worker)
       end
 
       local function log_stat(cycle)
-        logger.infox(rspamd_config, 'finished expiry %s%s: %s items checked, %s significant (%s %s), %s common (%s discriminated), %s infrequent%s, %s mean, %s std',
+        logger.infox(rspamd_config, 'finished expiry %s%s: %s items checked, %s significant (%s %s), %s common (%s discriminated), %s infrequent (%s %s), %s mean, %s std',
             cycle and 'cycle' or 'step',
             settings.lazy and ' (lazy)' or '',
             c_data[1], c_data[7], c_data[2],
-            settings.lazy and 'made persistent' or 'extended',
-            c_data[6], c_data[3], data[8],
-            settings.lazy and ' (' .. data[9] .. ' ttls set)' or '',
+            (settings.lazy or cls.expiry < 0) and 'made persistent' or 'extended',
+            c_data[6], c_data[3], data[8], data[9],
+            (cls.expiry < 0) and 'made persistent' or 'ttls set',
             cycle and math.floor(.5 + c_data[4] / c_data[1]) or data[4],
             cycle and math.floor(.5 + math.sqrt(c_data[5] / c_data[1])) or data[5]
         )
