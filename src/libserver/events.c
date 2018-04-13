@@ -137,7 +137,7 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 
 	if (session == NULL) {
 		msg_err ("session is NULL");
-		g_abort ();
+		abort ();
 
 		/* Not reached */
 		return NULL;
