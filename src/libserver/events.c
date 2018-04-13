@@ -127,37 +127,40 @@ rspamd_session_create (rspamd_mempool_t * pool, session_finalizer_t fin,
 	return new;
 }
 
-void
+struct rspamd_async_event *
 rspamd_session_add_event (struct rspamd_async_session *session,
 	event_finalizer_t fin,
 	void *user_data,
 	GQuark subsystem)
 {
-	struct rspamd_async_event *new;
+	struct rspamd_async_event *new_event;
 
 	if (session == NULL) {
 		msg_err ("session is NULL");
-		return;
+		g_abort ();
+
+		/* Not reached */
+		return NULL;
 	}
 
-	new = rspamd_mempool_alloc (session->pool,
+	new_event = rspamd_mempool_alloc (session->pool,
 			sizeof (struct rspamd_async_event));
-	new->fin = fin;
-	new->user_data = user_data;
-	new->subsystem = subsystem;
+	new_event->fin = fin;
+	new_event->user_data = user_data;
+	new_event->subsystem = subsystem;
 
 	if (RSPAMD_SESSION_IS_WATCHING (session)) {
-		new->w = session->cur_watcher;
-		new->w->remain ++;
+		new_event->w = session->cur_watcher;
+		new_event->w->remain ++;
 		msg_debug_session ("added event: %p, pending %d events, "
 				"subsystem: %s, watcher: %d",
 				user_data,
 				g_hash_table_size (session->events),
 				g_quark_to_string (subsystem),
-				new->w->id);
+				new_event->w->id);
 	}
 	else {
-		new->w = NULL;
+		new_event->w = NULL;
 		msg_debug_session ("added event: %p, pending %d events, "
 				"subsystem: %s, no watcher!",
 				user_data,
@@ -165,7 +168,9 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 				g_quark_to_string (subsystem));
 	}
 
-	g_hash_table_insert (session->events, new, new);
+	g_hash_table_insert (session->events, new_event, new_event);
+
+	return new_event;
 }
 
 static inline void
