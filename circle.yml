@@ -3,7 +3,7 @@ dependencies:
       - sudo apt-get update -qq || true
       - sudo apt-get install -qq cmake gcc lcov libevent-dev libglib2.0-dev libgmime-2.6-dev libluajit-5.1-dev liblua5.1-0-dev libmagic-dev libpcre3-dev libsqlite3-dev libssl-dev luarocks make python-dev ragel redis-server libgd-dev libfann-dev opendkim-tools
       - gem install coveralls-lcov
-      - sudo pip install demjson psutil robotframework
+      - sudo pip install demjson psutil==5.4.3 robotframework
       - cd .. && wget http://download.redis.io/redis-stable.tar.gz && tar xvzf redis-stable.tar.gz && cd redis-stable && make -j`nproc` && sudo cp src/redis-cli /usr/bin/
       - sudo luarocks install luacheck
 
