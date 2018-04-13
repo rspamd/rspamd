@@ -6,6 +6,7 @@ aliexpress.com /^(?:(?:[0-9]{14,15}|[a-z]{4}UTT_[0-9]{5,6}_(?:[0-9]{8}_)?)[$])?[
 beeline.ru /^<[A-z0-9+]{18}>$/
 noreply.esphere.ru
 noreply.etprf.ru
+rkn.gov.ru
 garant.ru
 is-zakupki.com
 mirtesen.ru
