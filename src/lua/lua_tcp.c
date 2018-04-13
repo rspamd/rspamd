@@ -188,6 +188,7 @@ struct lua_tcp_dtor {
 struct lua_tcp_cbdata {
 	lua_State *L;
 	struct rspamd_async_session *session;
+	struct rspamd_async_event *async_ev;
 	struct event_base *ev_base;
 	struct timeval tv;
 	rspamd_inet_addr_t *addr;
@@ -314,7 +315,7 @@ lua_check_tcp (lua_State *L, gint pos)
 static void
 lua_tcp_maybe_free (struct lua_tcp_cbdata *cbd)
 {
-	if (cbd->session) {
+	if (cbd->async_ev) {
 		rspamd_session_watcher_pop (cbd->session, cbd->w);
 		rspamd_session_remove_event (cbd->session, lua_tcp_fin, cbd);
 	}
@@ -803,6 +804,19 @@ lua_tcp_plan_handler_event (struct lua_tcp_cbdata *cbd, gboolean can_read,
 	}
 }
 
+static void
+lua_tcp_register_event (struct lua_tcp_cbdata *cbd)
+{
+	if (cbd->session) {
+		cbd->async_ev = rspamd_session_add_event (cbd->session,
+				(event_finalizer_t) lua_tcp_fin,
+				cbd,
+				g_quark_from_static_string ("lua tcp"));
+		cbd->w = rspamd_session_get_watcher (cbd->session);
+		rspamd_session_watcher_push (cbd->session);
+	}
+}
+
 static gboolean
 lua_tcp_make_connection (struct lua_tcp_cbdata *cbd)
 {
@@ -937,7 +951,7 @@ lua_tcp_request (lua_State *L)
 	struct event_base *ev_base;
 	struct lua_tcp_cbdata *cbd;
 	struct rspamd_dns_resolver *resolver;
-	struct rspamd_async_session *session;
+	struct rspamd_async_session *session = NULL;
 	struct rspamd_task *task = NULL;
 	struct rspamd_config *cfg;
 	struct iovec *iov = NULL;
@@ -1206,12 +1220,6 @@ lua_tcp_request (lua_State *L)
 
 	if (session) {
 		cbd->session = session;
-		rspamd_session_add_event (session,
-				(event_finalizer_t)lua_tcp_fin,
-				cbd,
-				g_quark_from_static_string ("lua tcp"));
-		cbd->w = rspamd_session_get_watcher (session);
-		rspamd_session_watcher_push (session);
 	}
 
 	if (rspamd_parse_inet_address (&cbd->addr, host, 0)) {
@@ -1223,6 +1231,9 @@ lua_tcp_request (lua_State *L)
 
 			return 1;
 		}
+		else {
+			lua_tcp_register_event (cbd);
+		}
 	}
 	else {
 		if (task == NULL) {
@@ -1230,6 +1241,11 @@ lua_tcp_request (lua_State *L)
 					RDNS_REQUEST_A, host)) {
 				lua_tcp_push_error (cbd, TRUE, "cannot resolve host: %s", host);
 				REF_RELEASE (cbd);
+				lua_pushboolean (L, FALSE);
+				return 1;
+			}
+			else {
+				lua_tcp_register_event (cbd);
 			}
 		}
 		else {
@@ -1237,6 +1253,11 @@ lua_tcp_request (lua_State *L)
 					RDNS_REQUEST_A, host)) {
 				lua_tcp_push_error (cbd, TRUE, "cannot resolve host: %s", host);
 				REF_RELEASE (cbd);
+				lua_pushboolean (L, FALSE);
+				return 1;
+			}
+			else {
+				lua_tcp_register_event (cbd);
 			}
 		}
 	}
