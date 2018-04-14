@@ -259,16 +259,27 @@ local function expire_step(cls, ev_base, worker)
       end
 
       local function log_stat(cycle)
+        local mode = settings.lazy and ' (lazy)' or ''
+        local significant_action = (settings.lazy or cls.expiry < 0) and 'made persistent' or 'extended'
+        local infrequent_action = (cls.expiry < 0) and 'made persistent' or 'ttls set'
+
+        local d = cycle and {
+            'cycle', mode, c_data[1],
+            c_data[7], c_data[2], significant_action,
+            c_data[6], c_data[3],
+            c_data[8], c_data[9], infrequent_action,
+            math.floor(.5 + c_data[4] / c_data[1]),
+            math.floor(.5 + math.sqrt(c_data[5] / c_data[1]))
+        } or {
+            'step', mode, data[1],
+            data[7], data[2], significant_action,
+            data[6], data[3],
+            data[8], data[9], infrequent_action,
+            data[4],
+            data[5]
+        }
         logger.infox(rspamd_config, 'finished expiry %s%s: %s items checked, %s significant (%s %s), %s common (%s discriminated), %s infrequent (%s %s), %s mean, %s std',
-            cycle and 'cycle' or 'step',
-            settings.lazy and ' (lazy)' or '',
-            c_data[1], c_data[7], c_data[2],
-            (settings.lazy or cls.expiry < 0) and 'made persistent' or 'extended',
-            c_data[6], c_data[3], data[8], data[9],
-            (cls.expiry < 0) and 'made persistent' or 'ttls set',
-            cycle and math.floor(.5 + c_data[4] / c_data[1]) or data[4],
-            cycle and math.floor(.5 + math.sqrt(c_data[5] / c_data[1])) or data[5]
-        )
+            unpack(d))
       end
       log_stat(false)
       if cur == 0 then
