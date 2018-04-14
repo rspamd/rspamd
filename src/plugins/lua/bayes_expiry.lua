@@ -279,7 +279,7 @@ local function expire_step(cls, ev_base, worker)
             data[5]
         }
         logger.infox(rspamd_config, 'finished expiry %s%s: %s items checked, %s significant (%s %s), %s common (%s discriminated), %s infrequent (%s %s), %s mean, %s std',
-            unpack(d))
+            lutil.unpack(d))
       end
       log_stat(false)
       if cur == 0 then
