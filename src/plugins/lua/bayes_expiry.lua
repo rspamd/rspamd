@@ -239,12 +239,14 @@ local expiry_script = [[
 
 local cur = 0
 local c_data = {0,0,0,0,0,0,0,0,0};
+local step = 0
 
 local function expire_step(cls, ev_base, worker)
   local function redis_step_cb(err, data)
     if err then
       logger.errx(rspamd_config, 'cannot perform expiry step: %s', err)
     elseif type(data) == 'table' then
+      step = step + 1
       for k,v in pairs(data) do data[k] = tonumber(v) end
       cur = table.remove(data, 1)
 
@@ -264,14 +266,14 @@ local function expire_step(cls, ev_base, worker)
         local infrequent_action = (cls.expiry < 0) and 'made persistent' or 'ttls set'
 
         local d = cycle and {
-            'cycle', mode, c_data[1],
+            'cycle in ' .. step .. ' steps', mode, c_data[1],
             c_data[7], c_data[2], significant_action,
             c_data[6], c_data[3],
             c_data[8], c_data[9], infrequent_action,
             math.floor(.5 + c_data[4] / c_data[1]),
             math.floor(.5 + math.sqrt(c_data[5] / c_data[1]))
         } or {
-            'step', mode, data[1],
+            'step ' .. step, mode, data[1],
             data[7], data[2], significant_action,
             data[6], data[3],
             data[8], data[9], infrequent_action,
@@ -285,6 +287,7 @@ local function expire_step(cls, ev_base, worker)
       if cur == 0 then
         log_stat(true)
         c_data = {0,0,0,0,0,0,0,0,0};
+        step = 0
       end
     end
   end
