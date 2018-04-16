@@ -55,6 +55,7 @@ local default_settings = {
 }
 
 local exports = {}
+local local_hostname = rspamd_util.get_hostname()
 
 local function gen_auth_results(task, settings)
   local table = table
@@ -77,9 +78,9 @@ local function gen_auth_results(task, settings)
     symbols = {}
   }
 
-  local hostname = rspamd_util.get_hostname()
-  if hostname then
-    table.insert(hdr_parts, hostname)
+
+  if local_hostname then
+    table.insert(hdr_parts, local_hostname)
   end
 
   for auth_type, symbols in pairs(auth_types) do
