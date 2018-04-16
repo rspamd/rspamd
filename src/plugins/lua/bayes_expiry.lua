@@ -201,7 +201,13 @@ local expiry_script = [[
     local threshold = mean
     local total = spam + ham
 
-    if total >= threshold and total > 0 then
+    if total == 0 or math.abs(ham - spam) <= total * ${epsilon_common} then
+      common = common + 1
+      if ttl > ${common_ttl} then
+        discriminated = discriminated + 1
+        redis.call('EXPIRE', key, ${common_ttl})
+      end
+    elseif total >= threshold and total > 0 then
       if ham / total > ${significant_factor} or spam / total > ${significant_factor} then
         significant = significant + 1
         if ${lazy} or expire < 0 then
@@ -213,12 +219,6 @@ local expiry_script = [[
           redis.call('EXPIRE', key, expire)
           extended = extended + 1
         end
-      end
-    elseif total == 0 or math.abs(ham - spam) <= total * ${epsilon_common} then
-      common = common + 1
-      if ttl > ${common_ttl} then
-        discriminated = discriminated + 1
-        redis.call('EXPIRE', key, ${common_ttl})
       end
     else
       infrequent = infrequent + 1
