@@ -508,6 +508,12 @@ spawn_worker_type (struct rspamd_main *rspamd_main, struct event_base *ev_base,
 {
 	gint i;
 
+	if (cf->count < 0) {
+		msg_info_main ("skip spawning of worker %s: disabled in configuration",
+			cf->worker->name);
+
+		return;
+	}
 	if (cf->worker->flags & RSPAMD_WORKER_UNIQUE) {
 		if (cf->count > 1) {
 			msg_warn_main (

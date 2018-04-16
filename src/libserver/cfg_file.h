@@ -198,7 +198,7 @@ struct rspamd_worker_conf {
 	struct worker_s *worker;                        /**< pointer to worker type								*/
 	GQuark type;                                    /**< type of worker										*/
 	struct rspamd_worker_bind_conf *bind_conf;      /**< bind configuration									*/
-	guint16 count;                                  /**< number of workers									*/
+	gint16 count;                                   /**< number of workers									*/
 	GList *listen_socks;                            /**< listening sockets descriptors						*/
 	guint32 rlimit_nofile;                          /**< max files limit									*/
 	guint32 rlimit_maxcore;                         /**< maximum core file size								*/
