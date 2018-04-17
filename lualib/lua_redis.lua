@@ -69,7 +69,7 @@ local function try_load_redis_servers(options, rspamd_config, result)
         upstreams_write = upstream_list.create(options['write_servers'],
           default_port)
       end
-    else
+    elseif not options['read_servers'] then
       upstreams_write = upstreams_read
     end
   end
@@ -106,10 +106,11 @@ local function try_load_redis_servers(options, rspamd_config, result)
     result['password'] = options['password']
   end
 
-  if upstreams_write and upstreams_read then
+  if upstreams_read then
     result.read_servers = upstreams_read
-    result.write_servers = upstreams_write
-
+    if upstreams_write then
+      result.write_servers = upstreams_write
+    end
     return true
   end
 
