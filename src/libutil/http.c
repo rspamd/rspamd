@@ -3780,12 +3780,9 @@ rspamd_http_normalize_path_inplace (gchar *path, guint len, guint *nlen)
 				if (((o > path && *(o - 1) != '/') || (o == path)) && slash) {
 					/* Preserve one slash */
 					*o++ = '/';
-					slash = p;
-				}
-				else {
-					slash = NULL;
 				}
 
+				slash = p;
 				dot = NULL;
 				/* Ignore last slash */
 				state = st_normal;
@@ -3797,7 +3794,7 @@ rspamd_http_normalize_path_inplace (gchar *path, guint len, guint *nlen)
 			else {
 				/* We have something like .some or /.some */
 				if (dot && p > dot) {
-					if (slash == dot - 1) {
+					if (slash == dot - 1 && (o > path && *(o - 1) != '/')) {
 						/* /.blah */
 						memmove (o, slash, p - slash);
 						o += p - slash;
