@@ -290,11 +290,13 @@ rspamd_radix_test_func (void)
 	diff = (ts2 - ts1);
 
 	msg_notice ("Added %hz elements in %.0f ticks", nelts, diff);
+	diff = 0;
 
-	ts1 = rspamd_get_ticks (TRUE);
 	for (lc = 0; lc < lookup_cycles && all_good; lc ++) {
 		for (i = 0; i < nelts / lookup_divisor; i ++) {
 			check = ottery_rand_range (nelts - 1);
+
+			ts1 = rspamd_get_ticks (TRUE);
 
 			if (radix_find_compressed (comp_tree, addrs[check].addr6,
 					sizeof (addrs[check].addr6))
@@ -308,6 +310,9 @@ rspamd_radix_test_func (void)
 						ipbuf,
 						addrs[check].mask6);
 			}
+
+			ts2 = rspamd_get_ticks (TRUE);
+			diff += ts2 - ts1;
 		}
 	}
 #if 1
@@ -324,8 +329,6 @@ rspamd_radix_test_func (void)
 #endif
 
 	g_assert (all_good);
-	ts2 = rspamd_get_ticks (TRUE);
-	diff = (ts2 - ts1);
 
 	msg_notice ("Checked %hz elements in %.0f ticks",
 			nelts * lookup_cycles / lookup_divisor, diff);
