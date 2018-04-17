@@ -180,7 +180,7 @@ local function gen_auth_results(task, settings)
       table.insert(hdr,'smtp.mailfrom=' .. smtp_from[1]['addr'])
     end
 
-    table.insert(hdr_parts, table.concat(hdr,' ')
+    table.insert(hdr_parts, table.concat(hdr,' '))
   end
 
   if #hdr_parts > 0 then
