@@ -3780,9 +3780,12 @@ rspamd_http_normalize_path_inplace (gchar *path, guint len, guint *nlen)
 				if (((o > path && *(o - 1) != '/') || (o == path)) && slash) {
 					/* Preserve one slash */
 					*o++ = '/';
+					slash = p;
+				}
+				else {
+					slash = NULL;
 				}
 
-				slash = p;
 				dot = NULL;
 				/* Ignore last slash */
 				state = st_normal;
