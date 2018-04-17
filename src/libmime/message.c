@@ -1136,8 +1136,7 @@ rspamd_message_parse (struct rspamd_task *task)
 		p2 = g_ptr_array_index (task->text_parts, 1);
 
 		/* First of all check parent object */
-		if (p1->mime_part->parent_part &&
-				p1->mime_part->parent_part == p2->mime_part->parent_part) {
+		if (p1->mime_part->parent_part) {
 			rspamd_ftok_t srch;
 
 			srch.begin = "alternative";

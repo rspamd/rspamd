@@ -891,6 +891,10 @@ rspamd_language_detector_process_ngramm_full (struct rspamd_task *task,
 		PTR_ARRAY_FOREACH (chain->languages, i, elt) {
 			cand = g_hash_table_lookup (candidates, elt->elt->name);
 			prob = elt->prob;
+
+			if (prob < chain->mean) {
+				continue;
+			}
 #ifdef NGRAMMS_DEBUG
 			msg_err ("gramm: %s, lang: %s, prob: %.3f", chain->utf,
 					elt->elt->name, log2 (elt->prob));
