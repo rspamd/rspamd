@@ -240,7 +240,7 @@ rspamd_radix_test_func (void)
 
 	pool = rspamd_mempool_new (65536, "btrie");
 	btrie = btrie_init (pool);
-	msg_info ("btrie performance (%z elts)", nelts);
+	msg_notice ("btrie performance (%z elts)", nelts);
 
 	ts1 = rspamd_get_ticks (TRUE);
 	for (i = 0; i < nelts; i ++) {
@@ -248,9 +248,9 @@ rspamd_radix_test_func (void)
 				addrs[i].mask6, GSIZE_TO_POINTER (i + 1));
 	}
 	ts2 = rspamd_get_ticks (TRUE);
-	diff = (ts2 - ts1) * 1000.0;
+	diff = (ts2 - ts1);
 
-	msg_info ("Added %hz elements in %.0f ticks", nelts, diff);
+	msg_notice ("Added %hz elements in %.0f ticks", nelts, diff);
 
 	ts1 = rspamd_get_ticks (TRUE);
 	for (lc = 0; lc < lookup_cycles && all_good; lc ++) {
@@ -264,7 +264,7 @@ rspamd_radix_test_func (void)
 				all_good = FALSE;
 
 				inet_ntop(AF_INET6, addrs[check].addr6, ipbuf, sizeof(ipbuf));
-				msg_info("BAD btrie: {\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
+				msg_notice("BAD btrie: {\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
 						ipbuf,
 						addrs[check].mask6);
 				all_good = FALSE;
@@ -273,12 +273,12 @@ rspamd_radix_test_func (void)
 	}
 	g_assert (all_good);
 	ts2 = rspamd_get_ticks (TRUE);
-	diff = (ts2 - ts1) * 1000.0;
+	diff = (ts2 - ts1);
 
-	msg_info ("Checked %hz elements in %.0f ticks",
+	msg_notice ("Checked %hz elements in %.0f ticks",
 			nelts * lookup_cycles / lookup_divisor, diff);
 
-	msg_info ("new radix performance (%z elts)", nelts);
+	msg_notice ("new radix performance (%z elts)", nelts);
 	ts1 = rspamd_get_ticks (TRUE);
 
 	for (i = 0; i < nelts; i ++) {
@@ -287,9 +287,9 @@ rspamd_radix_test_func (void)
 	}
 
 	ts2 = rspamd_get_ticks (TRUE);
-	diff = (ts2 - ts1) * 1000.0;
+	diff = (ts2 - ts1);
 
-	msg_info ("Added %hz elements in %.0f ticks", nelts, diff);
+	msg_notice ("Added %hz elements in %.0f ticks", nelts, diff);
 
 	ts1 = rspamd_get_ticks (TRUE);
 	for (lc = 0; lc < lookup_cycles && all_good; lc ++) {
@@ -304,7 +304,7 @@ rspamd_radix_test_func (void)
 				all_good = FALSE;
 
 				inet_ntop(AF_INET6, addrs[check].addr6, ipbuf, sizeof(ipbuf));
-				msg_info("BAD: {\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
+				msg_notice("BAD: {\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
 						ipbuf,
 						addrs[check].mask6);
 			}
@@ -316,7 +316,7 @@ rspamd_radix_test_func (void)
 			/* Used to write bad random vector */
 			char ipbuf[INET6_ADDRSTRLEN + 1];
 			inet_ntop(AF_INET6, addrs[i].addr6, ipbuf, sizeof(ipbuf));
-			msg_info("{\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
+			msg_notice("{\"%s\", NULL, \"%ud\", 0, 0, 0, 0},",
 					ipbuf,
 					addrs[i].mask6);
 		}
@@ -325,9 +325,9 @@ rspamd_radix_test_func (void)
 
 	g_assert (all_good);
 	ts2 = rspamd_get_ticks (TRUE);
-	diff = (ts2 - ts1) * 1000.0;
+	diff = (ts2 - ts1);
 
-	msg_info ("Checked %hz elements in %.0f ticks",
+	msg_notice ("Checked %hz elements in %.0f ticks",
 			nelts * lookup_cycles / lookup_divisor, diff);
 	radix_destroy_compressed (comp_tree);
 
