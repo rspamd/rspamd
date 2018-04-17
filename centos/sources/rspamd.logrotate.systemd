@@ -1,0 +1,11 @@
+/var/log/rspamd/*log {
+    daily
+    rotate 10
+    missingok
+    notifempty
+    compress
+    sharedscripts
+    postrotate
+        export `systemctl -p MainPID show rspamd.service`; if [ -n "$MainPID" ]; then kill -USR1 $MainPID; fi
+    endscript
+}

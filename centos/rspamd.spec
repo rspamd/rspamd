@@ -47,8 +47,10 @@ Requires(post): chkconfig
 Requires(preun): chkconfig, initscripts
 Requires(postun): initscripts
 Source1:        %{name}.init
-%endif
 Source2:        %{name}.logrotate
+%else
+Source2:        %{name}.logrotate.systemd
+%endif
 
 Source0:        https://rspamd.com/downloads/%{name}-%{version}.tar.xz
 Source3:	80-rspamd.preset
