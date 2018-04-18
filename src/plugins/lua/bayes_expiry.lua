@@ -166,7 +166,7 @@ local expiry_script = [[
   local lock = redis.call('GET', lock_key)
 
   if lock then
-    if lock ~= ${hostname} then
+    if lock ~= '${hostname}' then
       return 'locked by ' .. lock
     end
   end
