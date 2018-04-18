@@ -81,6 +81,7 @@ local function check_redis_classifier(cls, cfg)
         end
       end
     end
+    if redis_params['read_servers'] ~= redis_params['write_servers'] then return end
 
     table.insert(settings.classifiers, {
       symbol_spam = symbol_spam,
