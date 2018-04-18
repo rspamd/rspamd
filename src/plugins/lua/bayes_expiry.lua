@@ -163,7 +163,9 @@ end
 -- returns new cursor
 local expiry_script = [[
   local expire = math.floor(KEYS[2])
-  local lock_key = redis.sha1hex(KEYS[1]) .. '_lock' -- Check locking
+  local pattern_sha1 = redis.sha1hex(KEYS[1])
+
+  local lock_key = pattern_sha1 .. '_lock' -- Check locking
   local lock = redis.call('GET', lock_key)
 
   if lock then
@@ -175,13 +177,14 @@ local expiry_script = [[
   redis.replicate_commands()
   redis.call('SETEX', lock_key, ${expire_step}, '${hostname}')
 
-  local cursor_key = redis.sha1hex(KEYS[1]) .. '_cursor'
-  local cursor = redis.call('GET', cursor_key)
+  local cursor_key = pattern_sha1 .. '_cursor'
+  local cursor = tonumber(redis.call('GET', cursor_key) or 0)
 
-  if not cursor then
-    cursor = 0
-  else
-    cursor = tonumber(cursor)
+  local step = 1
+  local step_key = pattern_sha1 .. '_step'
+  if cursor > 0 then
+    step = redis.call('GET', step_key)
+    step = step and (tonumber(step) + 1) or 1
   end
 
   local ret = redis.call('SCAN', cursor, 'MATCH', KEYS[1], 'COUNT', '${count}')
@@ -259,23 +262,22 @@ local expiry_script = [[
   end
 
   redis.call('SETEX', cursor_key, ${expire_step} * 10, tostring(next))
+  redis.call('SETEX', step_key, ${expire_step} * 10, tostring(step))
   redis.call('DEL', lock_key)
 
-  return {next, nelts, extended, discriminated, mean, stddev, common, significant, infrequent, ttls_set}
+  return {next, step, nelts, extended, discriminated, mean, stddev, common, significant, infrequent, ttls_set}
 ]]
 
-local cur = 0
 local c_data = {0,0,0,0,0,0,0,0,0};
-local step = 0
 
 local function expire_step(cls, ev_base, worker)
   local function redis_step_cb(err, data)
     if err then
       logger.errx(rspamd_config, 'cannot perform expiry step: %s', err)
     elseif type(data) == 'table' then
-      step = step + 1
       for k,v in pairs(data) do data[k] = tonumber(v) end
-      cur = table.remove(data, 1)
+      local cur = table.remove(data, 1)
+      local step = table.remove(data, 1)
 
       for k,v in pairs(data) do
         if k == 4 then
@@ -315,7 +317,6 @@ local function expire_step(cls, ev_base, worker)
       if cur == 0 then
         log_stat(true)
         c_data = {0,0,0,0,0,0,0,0,0};
-        step = 0
       end
     elseif type(data) == 'string' then
       logger.infox(rspamd_config, 'skip expiry step: %s', data)
