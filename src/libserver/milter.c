@@ -790,7 +790,10 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 	end = priv->parser.buf->str + priv->parser.buf->len;
 
 	while (p < end) {
-		msg_debug_milter("offset: %d, state: %d", (gint)(p - (const guchar *)priv->parser.buf->str), priv->parser.state);
+		msg_debug_milter("offset: %d, state: %d",
+				(gint)(p - (const guchar *)priv->parser.buf->str),
+				priv->parser.state);
+
 		switch (priv->parser.state) {
 		case st_len_1:
 			/* The first length byte in big endian order */
@@ -908,6 +911,7 @@ rspamd_milter_consume_input (struct rspamd_milter_session *session,
 	if (p == end) {
 		priv->parser.buf->len = 0;
 		priv->parser.pos = 0;
+		priv->parser.cmd_start = 0;
 	}
 
 	if (priv->out_chain) {
