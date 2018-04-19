@@ -94,11 +94,21 @@ sub rspamd_scan {
 
             if ( $block->{'add_headers'} ) {
               while ( my ( $h, $v ) = each( %{ $block->{'add_headers'} } ) ) {
-                if ( $headers eq "" ) {
-                  $headers .= "$h: $v";
+                if (ref($v) eq 'HASH') {
+                  if ($headers eq "") {
+                    $headers .= "$h: $v->{value}";
+                  }
+                  else {
+                    $headers .= "\\e$h: $v->{value}";
+                  }
                 }
                 else {
-                  $headers .= "\\e$h: $v";
+                  if ($headers eq "") {
+                    $headers .= "$h: $v";
+                  }
+                  else {
+                    $headers .= "\\e$h: $v";
+                  }
                 }
               }
             }
