@@ -205,9 +205,7 @@ sub rspamd_scan {
         if ( scalar(@rcpts) > 0 ) {
 
           # XXX: Anyevent cannot parse headers with multiple values
-          foreach (@rcpts) {
-            $headers->{Rcpt} = $_;
-          }
+          $headers->{Rcpt} = join(',', @rcpts);
         }
         if ($ip) {
           $headers->{IP} = $ip;
