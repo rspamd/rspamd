@@ -32,6 +32,7 @@ local function try_load_redis_servers(options, rspamd_config, result)
   local default_timeout = 1.0
   local default_expand_keys = false
   local upstream_list = require "rspamd_upstream_list"
+  local read_only = true
 
   -- Try to get read servers:
   local upstreams_read, upstreams_write
@@ -51,6 +52,7 @@ local function try_load_redis_servers(options, rspamd_config, result)
     else
       upstreams_read = upstream_list.create(options['servers'], default_port)
     end
+    read_only = false
   elseif options['server'] then
     if rspamd_config then
       upstreams_read = upstream_list.create(rspamd_config,
@@ -58,18 +60,20 @@ local function try_load_redis_servers(options, rspamd_config, result)
     else
       upstreams_read = upstream_list.create(options['server'], default_port)
     end
+    read_only = false
   end
 
   if upstreams_read then
     if options['write_servers'] then
       if rspamd_config then
         upstreams_write = upstream_list.create(rspamd_config,
-          options['write_servers'], default_port)
+                options['write_servers'], default_port)
       else
         upstreams_write = upstream_list.create(options['write_servers'],
-          default_port)
+                default_port)
       end
-    elseif not options['read_servers'] then
+      read_only = false
+    elseif not read_only then
       upstreams_write = upstreams_read
     end
   end
@@ -104,6 +108,12 @@ local function try_load_redis_servers(options, rspamd_config, result)
   end
   if options['password'] and not result['password'] then
     result['password'] = options['password']
+  end
+
+  if read_only and not result.write_servers then
+    result.read_only = true
+  elseif result.write_servers then
+    result.read_only = false
   end
 
   if upstreams_read then

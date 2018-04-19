@@ -81,7 +81,12 @@ local function check_redis_classifier(cls, cfg)
         end
       end
     end
-    if redis_params['read_servers'] ~= redis_params['write_servers'] then return end
+
+    if redis_params['read_only'] then
+      logger.infox(rspamd_config, 'disable expiry for classifier %s: read only redis configuration',
+          symbol_spam)
+      return
+    end
 
     table.insert(settings.classifiers, {
       symbol_spam = symbol_spam,
