@@ -316,19 +316,39 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			case 'r':
 			case 'R':
 				IF_HEADER (RCPT_HEADER) {
-					addr = rspamd_email_address_from_smtp (hv->str, hv->len);
+					const gchar *p, *end;
+					gsize cur_len;
 
-					if (addr) {
-						if (task->rcpt_envelope == NULL) {
-							task->rcpt_envelope = g_ptr_array_sized_new (2);
+					p = hv->str;
+					end = p + hv->len;
+
+					while (p < end) {
+						cur_len = rspamd_memcspn (p, ",", end - p);
+
+						if (cur_len > 0) {
+							addr = rspamd_email_address_from_smtp (p, cur_len);
+
+							if (addr) {
+								if (task->rcpt_envelope == NULL) {
+									task->rcpt_envelope = g_ptr_array_sized_new (
+											2);
+								}
+
+								g_ptr_array_add (task->rcpt_envelope, addr);
+							} else {
+								msg_err_protocol ("bad rcpt header: '%T'",
+										&h->value);
+								task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+							}
+
+							p += cur_len;
 						}
 
-						g_ptr_array_add (task->rcpt_envelope, addr);
+						while (p < end && *p == ',') {
+							p ++;
+						}
 					}
-					else {
-						msg_err_protocol ("bad rcpt header: '%T'", &h->value);
-						task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
-					}
+
 					msg_debug_protocol ("read rcpt header, value: %V", hv);
 				}
 				else {
