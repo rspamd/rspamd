@@ -266,8 +266,8 @@ local expiry_script = [[
     end
   end
 
-  redis.call('SETEX', cursor_key, ${expire_step} * 10, tostring(next))
-  redis.call('SETEX', step_key, ${expire_step} * 10, tostring(step))
+  redis.call('SET', cursor_key, tostring(next))
+  redis.call('SET', step_key, tostring(step))
   redis.call('DEL', lock_key)
 
   return {next, step, nelts, extended, discriminated, mean, stddev, common, significant, infrequent, ttls_set}
