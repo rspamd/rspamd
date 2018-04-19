@@ -192,6 +192,7 @@ sub rspamd_scan {
         my $from;
         my @rcpts;
         my $ip;
+        my $user;
 
         foreach my $elt (@envelope) {
           if ( $elt =~ /^P\s[^<]*(<[^>]*>).*$/ ) {
@@ -200,8 +201,13 @@ sub rspamd_scan {
           elsif ( $elt =~ /^R\s[^<]*(<[^>]*>).*$/ ) {
             push @rcpts, $1;
           }
-          elsif ( $elt =~ /^S .*\[(.+)\]/ ) {
-            $ip = $1;
+          elsif ( $elt =~ /^S (?:<([^>]+)>)?\s*S.*\[(.+)\]/ ) {
+            if ($1) {
+              $user = $1;
+            }
+            if ($2) {
+              $ip = $2;
+            }
           }
         }
 
@@ -219,6 +225,10 @@ sub rspamd_scan {
         }
         if ($ip) {
           $headers->{IP} = $ip;
+        }
+
+        if ($user) {
+          $headers->{User} = $user;
         }
 
         http_post(
