@@ -308,10 +308,22 @@ Junk changes / total junk hits : %6d/%-6d (%7.3f%%)
             print "Correlations report:\n";
 
             while (my ($cs, $hits) = each %{$r->{corr}}) {
-              my $corr_prob = $hits / $total;
-              my $sym_prob = $r->{hits} / $total;
-              printf "Probability of %s when %s fires: %.3f\n", $s, $cs,
-                ($corr_prob / $sym_prob);
+              my $corr_prob = $r->{'hits'} / $total;
+              my $merged_hits = 0;
+              if($r->{symbols_met_spam}->{$cs}) {
+                $merged_hits += $r->{symbols_met_spam}->{$cs};
+              }
+              if($r->{symbols_met_junk}->{$cs}) {
+                $merged_hits += $r->{symbols_met_junk}->{$cs};
+              }
+              if($r->{symbols_met_ham}->{$cs}) {
+                $merged_hits += $r->{symbols_met_ham}->{$cs};
+              }
+
+              if ($merged_hits > 0) {
+                printf "Probability of %s when %s fires: %.3f\n", $cs, $s,
+                  (($merged_hits / $total) / $corr_prob);
+              }
             }
 
             print "Related symbols report:\n";
