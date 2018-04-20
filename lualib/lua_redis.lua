@@ -812,6 +812,7 @@ local function load_script_taskless(script, cfg, ev_base)
           "uploaded redis script to %s with id %s, sha: %s",
             opt.upstream:get_addr(), script.id, data)
         script.sha = data -- We assume that sha is the same on all servers
+        script.fatal_error = nil
       end
       script.in_flight = script.in_flight - 1
 
@@ -851,7 +852,16 @@ local function add_redis_script(script, redis_params)
 
   -- Register on load function
   rspamd_config:add_on_load(function(cfg, ev_base, worker)
-    load_redis_script(new_script, cfg, ev_base, worker)
+    local mult = 0.0
+    rspamd_config:add_periodic(ev_base, 0.0, function()
+      if not new_script.sha then
+        load_redis_script(new_script, cfg, ev_base, worker)
+        mult = mult + 1
+        return 1.0 * mult -- Check one more time in one second
+      end
+
+      return false
+    end, false)
   end)
 
   table.insert(redis_scripts, new_script)
