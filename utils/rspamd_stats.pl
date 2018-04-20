@@ -12,6 +12,8 @@ use strict;
 my @symbols_search;
 my @symbols_exclude;
 my @symbols_bidirectional;
+my @symbols_groups;
+my %groups;
 my $reject_score = 15.0;
 my $junk_score = 6.0;
 my $diff_alpha = 0.1;
@@ -41,6 +43,7 @@ GetOptions(
   "symbol|s=s@"           => \@symbols_search,
   "symbol-bidir|S=s@"     => \@symbols_bidirectional,
   "exclude|X=s@"          => \@symbols_exclude,
+  "group|g=s@"            => \@symbols_groups,
   "log|l=s"               => \$log_file,
   "alpha-score|alpha|a=f" => \$diff_alpha,
   "correlations|c"        => \$correlations,
@@ -91,6 +94,18 @@ foreach my $s (@symbols_bidirectional) {
     ham  => "${s}_HAM",
   };
   push @symbols_search, $s unless grep /^$s$/, @symbols_search;
+}
+
+# Deal with groups
+my $group_id = 0;
+foreach my $g (@symbols_groups) {
+  my @symbols = split /,/,$g;
+  my $group_name = "group$group_id";
+
+  foreach my $s (@symbols) {
+    $groups{$s} = $group_name;
+    push @symbols_search, $s unless grep /^$s$/, @symbols_search;
+  }
 }
 
 @symbols_search = '.*'
@@ -507,6 +522,11 @@ sub ProcessLog {
             next if $orig_name !~ /^$s/;
 
             push @sym_names, $sym_name;
+
+            if ($groups{$s}) {
+              # Replace with group
+              $sym_name = $groups{$s};
+            }
 
             if (!$sym_res{$sym_name}) {
               $sym_res{$sym_name} = {
