@@ -13,6 +13,7 @@ my @symbols_search;
 my @symbols_exclude;
 my @symbols_bidirectional;
 my @symbols_groups;
+my @symbols_ignored;
 my %groups;
 my $reject_score = 15.0;
 my $junk_score = 6.0;
@@ -43,6 +44,7 @@ GetOptions(
   "symbol|s=s@"           => \@symbols_search,
   "symbol-bidir|S=s@"     => \@symbols_bidirectional,
   "exclude|X=s@"          => \@symbols_exclude,
+  "ignore=s@"             => \@symbols_ignored,
   "group|g=s@"            => \@symbols_groups,
   "log|l=s"               => \$log_file,
   "alpha-score|alpha|a=f" => \$diff_alpha,
@@ -164,6 +166,18 @@ else {
 }
 
 exit;
+
+sub IsIgnored {
+  my ($sym) = @_;
+
+  foreach my $ex (@symbols_ignored) {
+    if ($sym =~ /^$ex$/) {
+      return 1;
+    }
+  }
+
+  return 0;
+}
 
 sub GenRelated {
   my ($htb, $target_sym) = @_;
@@ -390,12 +404,20 @@ Messages scanned: $total";
 }
 
 sub ProcessRelated {
-  my ($symbols, $target) = @_;
+  my ($symbols, $target, $source) = @_;
 
   foreach my $s (@{$symbols}) {
     $s =~ /^([^\(]+)(\(([^\)]+)\))?/;
     my $sym_name = $1;
     my $sym_score = 0;
+
+    if ($groups{$sym_name}) {
+      $sym_name = $groups{$sym_name};
+    }
+
+    next if ($source eq $sym_name);
+
+    next if IsIgnored($sym_name);
 
     if ($2) {
       $sym_score = $3 * 1.0;
@@ -521,12 +543,12 @@ sub ProcessLog {
 
             next if $orig_name !~ /^$s/;
 
-            push @sym_names, $sym_name;
-
             if ($groups{$s}) {
               # Replace with group
               $sym_name = $groups{$s};
             }
+
+            push @sym_names, $sym_name;
 
             if (!$sym_res{$sym_name}) {
               $sym_res{$sym_name} = {
@@ -554,19 +576,19 @@ sub ProcessLog {
               $is_spam = 1;
               $r->{spam_hits} ++;
               if ($correlations) {
-                ProcessRelated(\@symbols, $r->{symbols_met_spam});
+                ProcessRelated(\@symbols, $r->{symbols_met_spam}, $sym_name);
               }
             }
             elsif ($score >= $junk_score) {
               $is_junk = 1;
               $r->{junk_hits} ++;
               if ($correlations) {
-                ProcessRelated(\@symbols, $r->{symbols_met_junk});
+                ProcessRelated(\@symbols, $r->{symbols_met_junk}, $sym_name);
               }
             }
             else {
               if ($correlations) {
-                ProcessRelated(\@symbols, $r->{symbols_met_ham});
+                ProcessRelated(\@symbols, $r->{symbols_met_ham}, $sym_name);
               }
             }
 
@@ -596,6 +618,7 @@ sub ProcessLog {
 
       if ($correlations) {
         foreach my $sym (@sym_names) {
+          next if IsIgnored($sym);
           my $r = $sym_res{$sym};
 
           foreach my $corr_sym (@sym_names) {
