@@ -6,7 +6,7 @@
        notifempty
        missingok
        postrotate
-          service rspamd reopenlog >/dev/null 2>&1 || true
+          if [ -f /bin/systemctl ] ; then systemctl --signal USR1 kill rspamd.service ; else service rspamd reopenlog >/dev/null 2>&1 ; fi || true
        endscript
 }
 
