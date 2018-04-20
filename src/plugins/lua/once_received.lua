@@ -29,12 +29,21 @@ local symbol_strict = nil
 local bad_hosts = {}
 local good_hosts = {}
 local whitelist = nil
+
 local rspamd_logger = require "rspamd_logger"
+local fun = require "fun"
+
 local check_local = false
 local check_authed = false
 
 local function check_quantity_received (task)
   local recvh = task:get_received_headers()
+
+  local nreceived = fun.reduce(function(acc, rcvd)
+    return acc + 1
+  end, 0, fun.filter(function(h)
+    return not h['artificial']
+  end, recvh))
 
   local function recv_dns_cb(_, to_resolve, results, err)
     if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
@@ -44,7 +53,7 @@ local function check_quantity_received (task)
     task:inc_dns_req()
 
     if not results then
-      if recvh and #recvh <= 1 then
+      if nreceived <= 1 then
         task:insert_result(symbol, 1)
         task:insert_result(symbol_strict, 1)
         -- Check for MUAs
@@ -66,12 +75,14 @@ local function check_quantity_received (task)
         end
       end
 
-      task:insert_result(symbol, 1)
-      for _,h in ipairs(bad_hosts) do
-        if string.find(results[1], h) then
+      if nreceived <= 1 then
+        task:insert_result(symbol, 1)
+        for _,h in ipairs(bad_hosts) do
+          if string.find(results[1], h) then
 
-          task:insert_result(symbol_strict, 1, h)
-          return
+            task:insert_result(symbol_strict, 1, h)
+            return
+          end
         end
       end
     end
@@ -101,7 +112,7 @@ local function check_quantity_received (task)
     return
   end
 
-  if recvh and #recvh <= 1 then
+  if nreceived <= 1 then
     local ret = true
     local r = recvh[1]
 
