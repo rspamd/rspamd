@@ -220,8 +220,8 @@ local expiry_script = [[
   local tokens = {}
 
   -- Expiry step statistics counters
-  local nelts, extended, discriminated, sum, sum_squares, common, significant, infrequent, ttls_set =
-    0,0,0,0,0,0,0,0,0
+  local nelts, extended, discriminated, sum, sum_squares, common, significant, infrequent, infrequent_ttls_set, insignificant, insignificant_ttls_set =
+    0,0,0,0,0,0,0,0,0,0,0
 
   for _,key in ipairs(keys) do
     local values = redis.call('HMGET', key, 'H', 'S')
@@ -251,6 +251,19 @@ local expiry_script = [[
     local threshold = mean
     local total = spam + ham
 
+    local function set_ttl()
+      if expire < 0 then
+        if ttl ~= -1 then
+          redis.call('PERSIST', key)
+          return 1
+        end
+      elseif ttl == -1 or ttl > expire then
+        redis.call('EXPIRE', key, expire)
+        return 1
+      end
+      return 0
+    end
+
     if total == 0 or math.abs(ham - spam) <= total * ${epsilon_common} then
       common = common + 1
       if ttl > ${common_ttl} then
@@ -269,24 +282,19 @@ local expiry_script = [[
           redis.call('EXPIRE', key, expire)
           extended = extended + 1
         end
+      else
+        insignificant = insignificant + 1
+        insignificant_ttls_set = insignificant_ttls_set + set_ttl()
       end
     else
       infrequent = infrequent + 1
-      if expire < 0 then
-        if ttl ~= -1 then
-          redis.call('PERSIST', key)
-          ttls_set = ttls_set + 1
-        end
-      elseif ttl == -1 or ttl > expire then
-        redis.call('EXPIRE', key, expire)
-        ttls_set = ttls_set + 1
-      end
+      infrequent_ttls_set = infrequent_ttls_set + set_ttl()
     end
   end
 
   -- Expiry cycle statistics counters
   local c = {nelts = 0, extended = 0, discriminated = 0, sum = 0, sum_squares = 0,
-    common = 0, significant = 0, infrequent = 0, ttls_set = 0}
+    common = 0, significant = 0, infrequent = 0, infrequent_ttls_set = 0, insignificant = 0, insignificant_ttls_set = 0}
 
   local counters_key = pattern_sha1 .. '_counters'
 
@@ -302,7 +310,9 @@ local expiry_script = [[
   c.common = c.common + common
   c.significant = c.significant + significant
   c.infrequent = c.infrequent + infrequent
-  c.ttls_set = c.ttls_set + ttls_set
+  c.infrequent_ttls_set = c.infrequent_ttls_set + infrequent_ttls_set
+  c.insignificant = c.insignificant + insignificant
+  c.insignificant_ttls_set = c.insignificant_ttls_set + insignificant_ttls_set
 
   redis.call('HMSET', counters_key, unpack_function(hash2list(c)))
   redis.call('SET', cursor_key, tostring(next))
@@ -311,8 +321,8 @@ local expiry_script = [[
 
   return {
     next, step,
-    {nelts, extended, discriminated, mean, stddev, common, significant, infrequent, ttls_set},
-    {c.nelts, c.extended, c.discriminated, c.sum, c.sum_squares, c.common, c.significant, c.infrequent, c.ttls_set}
+    {nelts, extended, discriminated, mean, stddev, common, significant, infrequent, infrequent_ttls_set, insignificant, insignificant_ttls_set},
+    {c.nelts, c.extended, c.discriminated, c.sum, c.sum_squares, c.common, c.significant, c.infrequent, c.infrequent_ttls_set, c.insignificant, c.insignificant_ttls_set}
   }
 ]]
 
@@ -341,6 +351,7 @@ local function expire_step(cls, ev_base, worker)
         local d = cycle and {
           'cycle in ' .. step .. ' steps', mode, c_data[1],
           c_data[7], c_data[2], significant_action,
+          c_data[10], c_data[11], infrequent_action,
           c_data[6], c_data[3],
           c_data[8], c_data[9], infrequent_action,
           c_mean,
@@ -348,13 +359,14 @@ local function expire_step(cls, ev_base, worker)
         } or {
           'step ' .. step, mode, data[1],
           data[7], data[2], significant_action,
+          data[10], data[11], infrequent_action,
           data[6], data[3],
           data[8], data[9], infrequent_action,
           data[4],
           data[5]
         }
         logger.infox(rspamd_config,
-                [[finished expiry %s%s: %s items checked, %s significant (%s %s), %s common (%s discriminated), %s infrequent (%s %s), %s mean, %s std]],
+                [[finished expiry %s%s: %s items checked, %s significant (%s %s), %s insignificant(%s %s), %s common (%s discriminated), %s infrequent (%s %s), %s mean, %s std]],
                 lutil.unpack(d))
       end
       log_stat(false)
