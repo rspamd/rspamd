@@ -130,6 +130,8 @@ struct rspamd_fuzzy_storage_ctx {
 	gdouble sync_timeout;
 	radix_compressed_t *update_ips;
 	radix_compressed_t *master_ips;
+	radix_compressed_t *blocked_ips;
+
 	struct rspamd_cryptobox_keypair *sync_keypair;
 	struct rspamd_cryptobox_pubkey *master_key;
 	struct timeval master_io_tv;
@@ -137,6 +139,8 @@ struct rspamd_fuzzy_storage_ctx {
 	GPtrArray *mirrors;
 	const ucl_object_t *update_map;
 	const ucl_object_t *masters_map;
+	const ucl_object_t *blocked_map;
+
 	GHashTable *master_flags;
 	guint keypair_cache_size;
 	gint peer_fd;
@@ -225,19 +229,30 @@ struct fuzzy_master_update_session {
 static void rspamd_fuzzy_write_reply (struct fuzzy_session *session);
 
 static gboolean
-rspamd_fuzzy_check_client (struct fuzzy_session *session)
+rspamd_fuzzy_check_client (struct fuzzy_session *session, gboolean is_write)
 {
-	if (session->ctx->update_ips != NULL) {
+	if (session->ctx->blocked_ips != NULL) {
 		if (radix_find_compressed_addr (session->ctx->update_ips,
-				session->addr) == RADIX_NO_VALUE) {
+				session->addr) != RADIX_NO_VALUE) {
 			return FALSE;
-		}
-		else {
-			return TRUE;
 		}
 	}
 
-	return FALSE;
+	if (is_write) {
+		if (session->ctx->update_ips != NULL) {
+			if (radix_find_compressed_addr (session->ctx->update_ips,
+					session->addr) == RADIX_NO_VALUE) {
+				return FALSE;
+			} else {
+				return TRUE;
+			}
+		}
+
+		return FALSE;
+	}
+
+	/* Non write */
+	return TRUE;
 }
 
 static void
@@ -852,16 +867,22 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	}
 
 	if (cmd->cmd == FUZZY_CHECK) {
-		if (G_UNLIKELY (session->ctx->collection_mode)) {
-			result.v1.prob = 0;
-			result.v1.value = 500;
-			result.v1.flag = 0;
-			rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
+		if (rspamd_fuzzy_check_client (session, FALSE)) {
+			if (G_UNLIKELY (session->ctx->collection_mode)) {
+				result.v1.prob = 0;
+				result.v1.value = 500;
+				result.v1.flag = 0;
+				rspamd_fuzzy_make_reply (cmd, &result, session, encrypted,
+						is_shingle);
+			} else {
+				REF_RETAIN (session);
+				rspamd_fuzzy_backend_check (session->ctx->backend, cmd,
+						rspamd_fuzzy_check_callback, session);
+			}
 		}
 		else {
-			REF_RETAIN (session);
-			rspamd_fuzzy_backend_check (session->ctx->backend, cmd,
-					rspamd_fuzzy_check_callback, session);
+			result.v1.value = 403;
+			result.v1.prob = 0.0;
 		}
 	}
 	else if (cmd->cmd == FUZZY_STAT) {
@@ -879,7 +900,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		}
 	}
 	else {
-		if (rspamd_fuzzy_check_client (session)) {
+		if (rspamd_fuzzy_check_client (session, TRUE)) {
 			/* Check whitelist */
 			if (session->ctx->skip_hashes && cmd->cmd == FUZZY_WRITE) {
 				rspamd_encode_hex_buf (cmd->digest, sizeof (cmd->digest),
@@ -2506,6 +2527,15 @@ init_fuzzy (struct rspamd_config *cfg)
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
+			"blocked",
+			rspamd_rcl_parse_struct_ucl,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, blocked_map),
+			0,
+			"Block requests from specific networks");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
 			"master_key",
 			rspamd_rcl_parse_struct_pubkey,
 			ctx,
@@ -2830,11 +2860,13 @@ start_fuzzy (struct rspamd_worker *worker)
 				"Allow fuzzy updates from specified addresses",
 				&ctx->update_ips, NULL);
 	}
+
 	if (ctx->masters_map != NULL) {
 		rspamd_config_radix_from_ucl (worker->srv->cfg, ctx->masters_map,
 				"Allow fuzzy master/slave updates from specified addresses",
 				&ctx->master_ips, NULL);
 	}
+
 	if (ctx->skip_map != NULL) {
 		struct rspamd_map *m;
 
@@ -2847,6 +2879,12 @@ start_fuzzy (struct rspamd_worker *worker)
 		else {
 			m->active_http = TRUE;
 		}
+	}
+
+	if (ctx->blocked_map != NULL) {
+		rspamd_config_radix_from_ucl (worker->srv->cfg, ctx->blocked_map,
+				"Block fuzzy requests from the specific IPs",
+				&ctx->blocked_ips, NULL);
 	}
 
 	/* Maps events */
