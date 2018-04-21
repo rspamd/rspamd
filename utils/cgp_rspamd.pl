@@ -201,7 +201,7 @@ sub rspamd_scan {
           elsif ( $elt =~ /^R\s[^<]*(<[^>]*>).*$/ ) {
             push @rcpts, $1;
           }
-          elsif ( $elt =~ /^S (?:<([^>]+)>)?\s*S.*\[(.+)\]/ ) {
+          elsif ( $elt =~ /^S (?:<([^>]+)> )?(?:SMTP|HTTPU?|AIRSYNC|XIMSS) \[([0-9a-f.:]+)\]/ ) {
             if ($1) {
               $user = $1;
             }
