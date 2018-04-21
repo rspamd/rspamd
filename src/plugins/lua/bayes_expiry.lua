@@ -167,6 +167,34 @@ end
 -- [3] = cursor
 -- returns new cursor
 local expiry_script = [[
+  local unpack_function = table.unpack or unpack
+
+  local hash2list = function (hash)
+    local res = {}
+    for k, v in pairs(hash) do
+      table.insert(res, k)
+      table.insert(res, v)
+    end
+    return res
+  end
+
+  local function list2hash(list)
+    local res = {}
+    local k
+    for i, v in ipairs(list) do
+      if i % 2 == 1 then
+        k = v
+      else
+        res[k] = v
+      end
+    end
+    if not k then
+      return
+    else
+      return res
+    end
+  end
+
   local expire = math.floor(KEYS[2])
   local pattern_sha1 = redis.sha1hex(KEYS[1])
 
@@ -195,15 +223,11 @@ local expiry_script = [[
   local ret = redis.call('SCAN', cursor, 'MATCH', KEYS[1], 'COUNT', '${count}')
   local next = ret[1]
   local keys = ret[2]
-  local nelts = 0
-  local significant = 0
-  local extended = 0
-  local common = 0
-  local discriminated = 0
-  local infrequent = 0
-  local ttls_set = 0
   local tokens = {}
-  local sum, sum_squares = 0, 0
+
+  -- Expiry step statistics counters
+  local nelts, extended, discriminated, sum, sum_squares, common, significant, infrequent, ttls_set =
+    0,0,0,0,0,0,0,0,0
 
   for _,key in ipairs(keys) do
     local values = redis.call('HMGET', key, 'H', 'S')
@@ -266,46 +290,68 @@ local expiry_script = [[
     end
   end
 
+  -- Expiry cycle statistics counters
+  local c = {nelts = 0, extended = 0, discriminated = 0, sum = 0, sum_squares = 0,
+    common = 0, significant = 0, infrequent = 0, ttls_set = 0}
+
+  local counters_key = pattern_sha1 .. '_counters'
+
+  if cursor ~= 0 then
+    local counters = list2hash(redis.call('HGETALL', counters_key))
+    if counters then c = counters end
+  end
+
+  c.nelts = c.nelts + nelts
+  c.extended = c.extended + extended
+  c.discriminated = c.discriminated + discriminated
+  c.sum = c.sum + sum
+  c.sum_squares = c.sum_squares + sum_squares
+  c.common = c.common + common
+  c.significant = c.significant + significant
+  c.infrequent = c.infrequent + infrequent
+  c.ttls_set = c.ttls_set + ttls_set
+
+  redis.call('HMSET', counters_key, unpack_function(hash2list(c)))
   redis.call('SET', cursor_key, tostring(next))
   redis.call('SET', step_key, tostring(step))
   redis.call('DEL', lock_key)
 
-  return {next, step, nelts, extended, discriminated, mean, stddev, common, significant, infrequent, ttls_set}
+  return {
+    next, step,
+    {nelts, extended, discriminated, mean, stddev, common, significant, infrequent, ttls_set},
+    {c.nelts, c.extended, c.discriminated, c.sum, c.sum_squares, c.common, c.significant, c.infrequent, c.ttls_set}
+  }
 ]]
 
-local c_data = {0,0,0,0,0,0,0,0,0};
-
 local function expire_step(cls, ev_base, worker)
-  local function redis_step_cb(err, data)
+  local function redis_step_cb(err, args)
     if err then
       logger.errx(rspamd_config, 'cannot perform expiry step: %s', err)
-    elseif type(data) == 'table' then
-      for k,v in pairs(data) do data[k] = tonumber(v) end
-      local cur = table.remove(data, 1)
-      local step = table.remove(data, 1)
-
-      for k,v in pairs(data) do
-        if k == 4 then
-          c_data[k] = c_data[k] + v * data[1]
-        elseif k == 5 then
-          c_data[k] = c_data[k] + v * v * data[1]
-        else
-          c_data[k] = c_data[k] + v
-        end
-      end
+    elseif type(args) == 'table' then
+      local cur = tonumber(args[1])
+      local step = args[2]
+      local data = args[3]
+      local c_data = args[4]
 
       local function log_stat(cycle)
         local mode = settings.lazy and ' (lazy)' or ''
         local significant_action = (settings.lazy or cls.expiry < 0) and 'made persistent' or 'extended'
         local infrequent_action = (cls.expiry < 0) and 'made persistent' or 'ttls set'
 
+        local c_mean, c_stddev = 0, 0
+        if cycle and c_data[1] ~= 0 then
+          c_mean = c_data[4] / c_data[1]
+          c_stddev = math.floor(.5 + math.sqrt(c_data[5] / c_data[1] - c_mean * c_mean))
+          c_mean = math.floor(.5 + c_mean)
+        end
+
         local d = cycle and {
           'cycle in ' .. step .. ' steps', mode, c_data[1],
           c_data[7], c_data[2], significant_action,
           c_data[6], c_data[3],
           c_data[8], c_data[9], infrequent_action,
-          math.floor(.5 + c_data[4] / c_data[1]),
-          math.floor(.5 + math.sqrt(c_data[5] / c_data[1]))
+          c_mean,
+          c_stddev
         } or {
           'step ' .. step, mode, data[1],
           data[7], data[2], significant_action,
@@ -321,10 +367,9 @@ local function expire_step(cls, ev_base, worker)
       log_stat(false)
       if cur == 0 then
         log_stat(true)
-        c_data = {0,0,0,0,0,0,0,0,0};
       end
-    elseif type(data) == 'string' then
-      logger.infox(rspamd_config, 'skip expiry step: %s', data)
+    elseif type(args) == 'string' then
+      logger.infox(rspamd_config, 'skip expiry step: %s', args)
     end
   end
   lredis.exec_redis_script(cls.script,
