@@ -178,20 +178,14 @@ local expiry_script = [[
     return res
   end
 
-  local function list2hash(list)
-    local res = {}
+  local function merge_list(table, list)
     local k
     for i, v in ipairs(list) do
       if i % 2 == 1 then
         k = v
       else
-        res[k] = v
+        table[k] = v
       end
-    end
-    if not k then
-      return
-    else
-      return res
     end
   end
 
@@ -297,8 +291,7 @@ local expiry_script = [[
   local counters_key = pattern_sha1 .. '_counters'
 
   if cursor ~= 0 then
-    local counters = list2hash(redis.call('HGETALL', counters_key))
-    if counters then c = counters end
+    merge_list(c, redis.call('HGETALL', counters_key))
   end
 
   c.nelts = c.nelts + nelts
