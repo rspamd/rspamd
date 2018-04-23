@@ -17,6 +17,7 @@
 #include "logger.h"
 #include "rspamd.h"
 #include "map.h"
+#include "map_helpers.h"
 #include "ottery.h"
 #include "unix-std.h"
 
@@ -90,7 +91,7 @@ struct rspamd_logger_s {
 	pid_t pid;
 	guint32 repeats;
 	GQuark process_type;
-	radix_compressed_t *debug_ip;
+	struct rspamd_radix_map_helper *debug_ip;
 	guint64 last_line_cksum;
 	gchar *saved_message;
 	gchar *saved_function;
@@ -462,7 +463,7 @@ rspamd_set_logger (struct rspamd_config *cfg,
 	if (cfg->debug_ip_map != NULL) {
 		/* Try to add it as map first of all */
 		if (logger->debug_ip) {
-			radix_destroy_compressed (logger->debug_ip);
+			rspamd_map_helper_destroy_radix (logger->debug_ip);
 		}
 
 		logger->debug_ip = NULL;
@@ -472,7 +473,7 @@ rspamd_set_logger (struct rspamd_config *cfg,
 				&logger->debug_ip, NULL);
 	}
 	else if (logger->debug_ip) {
-		radix_destroy_compressed (logger->debug_ip);
+		rspamd_map_helper_destroy_radix (logger->debug_ip);
 		logger->debug_ip = NULL;
 	}
 
@@ -1179,8 +1180,8 @@ rspamd_conditional_debug (rspamd_logger_t *rspamd_log,
 	if (rspamd_logger_need_log (rspamd_log, G_LOG_LEVEL_DEBUG, mod_id) ||
 		rspamd_log->is_debug) {
 		if (rspamd_log->debug_ip && addr != NULL) {
-			if (radix_find_compressed_addr (rspamd_log->debug_ip, addr)
-				== RADIX_NO_VALUE) {
+			if (rspamd_match_radix_map_addr (rspamd_log->debug_ip,
+					addr) == NULL) {
 				return;
 			}
 		}
@@ -1214,8 +1215,8 @@ rspamd_conditional_debug_fast (rspamd_logger_t *rspamd_log,
 	if (rspamd_logger_need_log (rspamd_log, G_LOG_LEVEL_DEBUG, mod_id) ||
 			rspamd_log->is_debug) {
 		if (rspamd_log->debug_ip && addr != NULL) {
-			if (radix_find_compressed_addr (rspamd_log->debug_ip, addr)
-					== RADIX_NO_VALUE) {
+			if (rspamd_match_radix_map_addr (rspamd_log->debug_ip, addr)
+					== NULL) {
 				return;
 			}
 		}

@@ -17,6 +17,7 @@
 #include "libserver/dynamic_cfg.h"
 #include "libutil/rrd.h"
 #include "libutil/map.h"
+#include "libutil/map_helpers.h"
 #include "libutil/map_private.h"
 #include "libutil/http_private.h"
 #include "libstat/stat_api.h"
@@ -157,7 +158,7 @@ struct rspamd_controller_worker_ctx {
 	gchar *ssl_key;
 	/* A map of secure IP */
 	const ucl_object_t *secure_ip;
-	radix_compressed_t *secure_map;
+	struct rspamd_radix_map_helper *secure_map;
 
 	/* Static files dir */
 	gchar *static_files_dir;
@@ -436,8 +437,7 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 				(hdr->begin + hdr->len) - comma)) {
 			/* We have addr now, so check if it is still trusted */
 			if (ctx->secure_map &&
-					radix_find_compressed_addr (ctx->secure_map,
-							addr) != RADIX_NO_VALUE) {
+					rspamd_match_radix_map_addr (ctx->secure_map, addr) != NULL) {
 				/* rspamd_inet_address_to_string is not reentrant */
 				rspamd_strlcpy (ip_buf, rspamd_inet_address_to_string (addr),
 						sizeof (ip_buf));
@@ -466,8 +466,7 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 			if (rspamd_parse_inet_address (&addr, hdr->begin, hdr->len)) {
 				/* We have addr now, so check if it is still trusted */
 				if (ctx->secure_map &&
-						radix_find_compressed_addr (ctx->secure_map,
-								addr) != RADIX_NO_VALUE) {
+						rspamd_match_radix_map_addr (ctx->secure_map, addr) != NULL) {
 					/* rspamd_inet_address_to_string is not reentrant */
 					rspamd_strlcpy (ip_buf, rspamd_inet_address_to_string (addr),
 							sizeof (ip_buf));
@@ -526,8 +525,8 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 		}
 	}
 	else if (ctx->secure_map
-			&& radix_find_compressed_addr (ctx->secure_map, session->from_addr)
-					!= RADIX_NO_VALUE) {
+			&& rspamd_match_radix_map_addr (ctx->secure_map, session->from_addr)
+					!= NULL) {
 		ret = rspamd_controller_check_forwarded (session, msg, ctx);
 
 		if (ret == 1) {
