@@ -375,4 +375,16 @@ rspamd_str_has_8bit (const guchar *beg, gsize len)
 gboolean rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool,
 		gchar *start, guint *len);
 
+/**
+ * Escapes special characters when reading plain data to be processed in pcre
+ * @param pattern pattern to process
+ * @param slen source length
+ * @param dst_len destination length pointer (can be NULL)
+ * @param allow_glob allow glob expressions to be translated into pcre
+ * @return newly allocated zero terminated escaped pattern
+ */
+gchar *
+rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
+		gsize *dst_len, gboolean allow_glob);
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */

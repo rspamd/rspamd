@@ -2093,3 +2093,120 @@ rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
 	return FALSE;
 #endif
 }
+
+gchar *
+rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
+		gsize *dst_len, gboolean allow_glob)
+{
+	const gchar *p, *end = pattern + slen;
+	gchar *res, *d, t;
+	gsize len;
+	static const gchar hexdigests[16] = "0123456789abcdef";
+
+	len = slen;
+	p = pattern;
+
+	/* [-[\]{}()*+?.,\\^$|#\s] need to be escaped */
+	while (p < end) {
+		t = *p ++;
+
+		switch (t) {
+		case '[':
+		case ']':
+		case '-':
+		case '\\':
+		case '{':
+		case '}':
+		case '(':
+		case ')':
+		case '*':
+		case '+':
+		case '?':
+		case '.':
+		case ',':
+		case '^':
+		case '$':
+		case '|':
+		case '#':
+			len ++;
+			break;
+		default:
+			if (g_ascii_isspace (t)) {
+				len ++;
+			}
+			else if (!g_ascii_isprint (t)) {
+				/* \\xHH -> 4 symbols */
+				len += 3;
+			}
+			break;
+		}
+	}
+
+	if (slen == len) {
+		if (dst_len) {
+			*dst_len = slen;
+		}
+
+		return g_strdup (pattern);
+	}
+
+	res = g_malloc (len + 1);
+	p = pattern;
+	d = res;
+
+	while (p < end) {
+		t = *p ++;
+
+		switch (t) {
+		case '[':
+		case ']':
+		case '-':
+		case '\\':
+		case '{':
+		case '}':
+		case '(':
+		case ')':
+		case '.':
+		case ',':
+		case '^':
+		case '$':
+		case '|':
+		case '#':
+			*d++ = '\\';
+			break;
+		case '*':
+		case '?':
+		case '+':
+			if (allow_glob) {
+				/* Treat * as .* and ? as .? */
+				*d++ = '.';
+			}
+			else {
+				*d++ = '\\';
+			}
+			break;
+		default:
+			if (g_ascii_isspace (t)) {
+				*d++ = '\\';
+			}
+			else if (!g_ascii_isgraph (t)) {
+				*d++ = '\\';
+				*d++ = 'x';
+				*d++ = hexdigests[((t >> 4) & 0xF)];
+				*d++ = hexdigests[((t) & 0xF)];
+				continue; /* To avoid *d++ = t; */
+			}
+			break;
+		}
+
+		*d++ = t;
+	}
+
+	*d = '\0';
+
+	if (dst_len) {
+		*dst_len = d - res;
+	}
+
+	return res;
+}
