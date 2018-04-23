@@ -33,6 +33,7 @@
 #include "config.h"
 #include "libmime/message.h"
 #include "libutil/map.h"
+#include "libutil/map_helpers.h"
 #include "libmime/images.h"
 #include "libserver/worker_util.h"
 #include "fuzzy_wire.h"
@@ -88,7 +89,7 @@ struct fuzzy_rule {
 	gboolean fuzzy_images;
 	gboolean short_text_direct_hash;
 	gint learn_condition_cb;
-	GHashTable *skip_map;
+	struct rspamd_hash_map_helper *skip_map;
 };
 
 struct fuzzy_ctx {
@@ -425,6 +426,9 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 		rspamd_map_add_from_ucl (cfg, value,
 			"Fuzzy hashes whitelist", rspamd_kv_list_read, rspamd_kv_list_fin,
 			(void **)&rule->skip_map);
+		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+				(rspamd_mempool_destruct_t)rspamd_map_helper_destroy_radix,
+				rule->skip_map);
 	}
 	else {
 		rule->skip_map = NULL;
@@ -1911,7 +1915,7 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 			rspamd_encode_hex_buf (cmd->digest, sizeof (cmd->digest),
 				hexbuf, sizeof (hexbuf) - 1);
 			hexbuf[sizeof (hexbuf) - 1] = '\0';
-			if (g_hash_table_lookup (session->rule->skip_map, hexbuf)) {
+			if (rspamd_match_hash_map (session->rule->skip_map, hexbuf)) {
 				return;
 			}
 		}

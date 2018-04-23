@@ -35,9 +35,11 @@
 #include "config.h"
 #include "libmime/message.h"
 #include "libutil/map.h"
+#include "libutil/map_helpers.h"
 #include "rspamd.h"
-#include "surbl.h"
 #include "utlist.h"
+#include "multipattern.h"
+#include "monitored.h"
 #include "libserver/html.h"
 #include "libutil/http_private.h"
 #include "unix-std.h"
@@ -61,6 +63,71 @@
         __VA_ARGS__)
 
 INIT_LOG_MODULE(surbl)
+
+#define DEFAULT_SURBL_WEIGHT 10
+#define DEFAULT_REDIRECTOR_READ_TIMEOUT 5.0
+#define DEFAULT_SURBL_SYMBOL "SURBL_DNS"
+#define SURBL_OPTION_NOIP (1 << 0)
+#define SURBL_OPTION_RESOLVEIP (1 << 1)
+#define SURBL_OPTION_CHECKIMAGES (1 << 2)
+#define MAX_LEVELS 10
+
+struct surbl_ctx {
+	struct module_ctx ctx;
+	guint16 weight;
+	gdouble read_timeout;
+	gboolean use_tags;
+	GList *suffixes;
+	gchar *metric;
+	const gchar *redirector_symbol;
+	GHashTable **exceptions;
+	struct rspamd_hash_map_helper *whitelist;
+	void *redirector_map_data;
+	GHashTable *redirector_tlds;
+	guint use_redirector;
+	guint max_redirected_urls;
+	gint redirector_cbid;
+	struct upstream_list *redirectors;
+	rspamd_mempool_t *surbl_pool;
+};
+
+struct suffix_item {
+	guint64 magic;
+	const gchar *monitored_domain;
+	const gchar *suffix;
+	const gchar *symbol;
+	guint32 options;
+	GArray *bits;
+	GHashTable *ips;
+	struct rspamd_monitored *m;
+	gint callback_id;
+	gint url_process_cbref;
+};
+
+struct dns_param {
+	struct rspamd_url *url;
+	struct rspamd_task *task;
+	gchar *host_resolve;
+	struct suffix_item *suffix;
+	struct rspamd_async_watcher *w;
+};
+
+struct redirector_param {
+	struct rspamd_url *url;
+	struct rspamd_task *task;
+	struct upstream *redirector;
+	struct rspamd_http_connection *conn;
+	GHashTable *tree;
+	struct suffix_item *suffix;
+	struct rspamd_async_watcher *w;
+	gint sock;
+	guint redirector_requests;
+};
+
+struct surbl_bit_item {
+	guint32 bit;
+	gchar *symbol;
+};
 
 #define SURBL_REDIRECTOR_CALLBACK "SURBL_REDIRECTOR_CALLBACK"
 
@@ -304,10 +371,9 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 	surbl_module_ctx->surbl_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	surbl_module_ctx->redirectors = NULL;
-	surbl_module_ctx->whitelist = g_hash_table_new (rspamd_strcase_hash,
-			rspamd_strcase_equal);
+	surbl_module_ctx->whitelist = NULL;
 	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_destroy,
+			(rspamd_mempool_destruct_t) rspamd_map_helper_destroy_hash,
 			surbl_module_ctx->whitelist);
 	surbl_module_ctx->exceptions = rspamd_mempool_alloc0 (
 			surbl_module_ctx->surbl_pool, MAX_LEVELS * sizeof (GHashTable *));
@@ -901,7 +967,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	if ((value =
 			rspamd_config_get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
 		rspamd_map_add_from_ucl (cfg, value,
-				"SURBL whitelist", rspamd_hosts_read, rspamd_hosts_fin,
+				"SURBL whitelist", rspamd_kv_list_read, rspamd_kv_list_fin,
 				(void **)&surbl_module_ctx->whitelist);
 	}
 
@@ -979,15 +1045,14 @@ surbl_module_reconfig (struct rspamd_config *cfg)
 	surbl_module_ctx->surbl_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	surbl_module_ctx->redirectors = NULL;
-	surbl_module_ctx->whitelist = g_hash_table_new (rspamd_strcase_hash,
-			rspamd_strcase_equal);
+	surbl_module_ctx->whitelist = NULL;
 	/* Zero exceptions hashes */
 	surbl_module_ctx->exceptions = rspamd_mempool_alloc0 (
 		surbl_module_ctx->surbl_pool,
 		MAX_LEVELS * sizeof (GHashTable *));
 	/* Register destructors */
 	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-		(rspamd_mempool_destruct_t) g_hash_table_destroy,
+		(rspamd_mempool_destruct_t) rspamd_map_helper_destroy_hash,
 		surbl_module_ctx->whitelist);
 	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
 		(rspamd_mempool_destruct_t) g_hash_table_destroy,
@@ -1136,7 +1201,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 	url->surbllen = r;
 
 	if (!forced &&
-			g_hash_table_lookup (surbl_module_ctx->whitelist, result) != NULL) {
+			rspamd_match_hash_map (surbl_module_ctx->whitelist, result) != NULL) {
 		msg_debug_pool ("url %s is whitelisted", result);
 		g_set_error (err, SURBL_ERROR,
 				WHITELIST_ERROR,

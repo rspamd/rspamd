@@ -566,6 +566,10 @@ rspamd_map_helper_new_hash (struct rspamd_map *map)
 void
 rspamd_map_helper_destroy_hash (struct rspamd_hash_map_helper *r)
 {
+	if (r == NULL) {
+		return;
+	}
+
 	kh_destroy (rspamd_map_hash, r->htb);
 	rspamd_mempool_delete (r->pool);
 }
@@ -596,6 +600,10 @@ rspamd_map_helper_new_radix (struct rspamd_map *map)
 void
 rspamd_map_helper_destroy_radix (struct rspamd_radix_map_helper *r)
 {
+	if (r == NULL) {
+		return;
+	}
+
 	kh_destroy (rspamd_map_hash, r->htb);
 	rspamd_mempool_delete (r->pool);
 }
@@ -627,6 +635,10 @@ rspamd_map_helper_destroy_regexp (struct rspamd_regexp_map_helper *re_map)
 {
 	rspamd_regexp_t *re;
 	guint i;
+
+	if (!re_map) {
+		return;
+	}
 
 	for (i = 0; i < re_map->regexps->len; i ++) {
 		re = g_ptr_array_index (re_map->regexps, i);
@@ -1094,6 +1106,10 @@ rspamd_match_hash_map (struct rspamd_hash_map_helper *map, const gchar *in)
 	khiter_t k;
 	struct rspamd_map_helper_value *val;
 
+	if (map == NULL) {
+		return NULL;
+	}
+
 	k = kh_get (rspamd_map_hash, map->htb, in);
 
 	if (k != kh_end (map->htb)) {
@@ -1112,6 +1128,10 @@ rspamd_match_radix_map (struct rspamd_radix_map_helper *map,
 {
 	struct rspamd_map_helper_value *val;
 
+	if (map == NULL) {
+		return NULL;
+	}
+
 	val = (struct rspamd_map_helper_value *)radix_find_compressed (map->trie,
 			in, inlen);
 
@@ -1129,6 +1149,10 @@ rspamd_match_radix_map_addr (struct rspamd_radix_map_helper *map,
 		const rspamd_inet_addr_t *addr)
 {
 	struct rspamd_map_helper_value *val;
+
+	if (map == NULL) {
+		return NULL;
+	}
 
 	val = (struct rspamd_map_helper_value *)radix_find_compressed_addr (map->trie, addr);
 
