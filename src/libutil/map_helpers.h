@@ -46,15 +46,6 @@ gchar * rspamd_radix_read (
 		gboolean final);
 void rspamd_radix_fin (struct map_cb_data *data);
 
-/**
- * Host list is an ordinal list of hosts or domains
- */
-gchar * rspamd_hosts_read (
-		gchar *chunk,
-		gint len,
-		struct map_cb_data *data,
-		gboolean final);
-void rspamd_hosts_fin (struct map_cb_data *data);
 
 /**
  * Kv list is an ordinal list of keys and values separated by whitespace
@@ -107,7 +98,7 @@ rspamd_parse_kv_list (
  * @param len
  * @return
  */
-gpointer rspamd_match_regexp_map_single (struct rspamd_regexp_map *map,
+gconstpointer rspamd_match_regexp_map_single (struct rspamd_regexp_map_helper *map,
 		const gchar *in, gsize len);
 
 /**
@@ -118,7 +109,27 @@ gpointer rspamd_match_regexp_map_single (struct rspamd_regexp_map *map,
  * @param len
  * @return
  */
-gpointer rspamd_match_regexp_map_all (struct rspamd_regexp_map *map,
+gconstpointer rspamd_match_regexp_map_all (struct rspamd_regexp_map_helper *map,
 		const gchar *in, gsize len);
+
+/**
+ * Find value matching specific key in a hash map
+ * @param map
+ * @param in
+ * @param len
+ * @return
+ */
+gconstpointer rspamd_match_hash_map (struct rspamd_hash_map_helper *map,
+		const gchar *in);
+
+/**
+ * Find value matching specific key in a hash map
+ * @param map
+ * @param in raw ip address
+ * @param inlen ip address length (4 for IPv4 and 16 for IPv6)
+ * @return
+ */
+gconstpointer rspamd_match_radix_map (struct rspamd_radix_map_helper *map,
+		const guchar *in, gsize inlen);
 
 #endif
