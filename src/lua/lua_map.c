@@ -547,6 +547,21 @@ lua_config_add_map (lua_State *L)
 				return 1;
 			}
 		}
+		else if (strcmp (type, "glob") == 0) {
+			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
+			map->data.re_map = NULL;
+			map->type = RSPAMD_LUA_MAP_REGEXP;
+
+			if ((m = rspamd_map_add_from_ucl (cfg, map_obj, description,
+					rspamd_glob_list_read_single,
+					rspamd_regexp_list_fin,
+					(void **) &map->data.re_map)) == NULL) {
+				lua_pushnil (L);
+				ucl_object_unref (map_obj);
+
+				return 1;
+			}
+		}
 		else {
 			ret = luaL_error (L, "invalid arguments: unknown type '%s'", type);
 			ucl_object_unref (map_obj);

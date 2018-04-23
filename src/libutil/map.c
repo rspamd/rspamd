@@ -2825,6 +2825,48 @@ rspamd_re_map_insert_helper (gpointer st, gconstpointer key, gconstpointer value
 }
 
 static void
+rspamd_glob_map_insert_helper (gpointer st, gconstpointer key, gconstpointer value)
+{
+	struct rspamd_regexp_map *re_map = st;
+	struct rspamd_map *map;
+	rspamd_regexp_t *re;
+	gchar *escaped;
+	GError *err = NULL;
+	gint pcre_flags;
+	gsize escaped_len;
+
+	map = re_map->map;
+	escaped = rspamd_str_regexp_escape (key, strlen (key), &escaped_len, TRUE);
+	re = rspamd_regexp_new (escaped, NULL, &err);
+	g_free (escaped);
+
+	if (re == NULL) {
+		msg_err_map ("cannot parse regexp %s: %e", key, err);
+
+		if (err) {
+			g_error_free (err);
+		}
+
+		return;
+	}
+
+	pcre_flags = rspamd_regexp_get_pcre_flags (re);
+
+#ifndef WITH_PCRE2
+	if (pcre_flags & PCRE_FLAG(UTF8)) {
+		re_map->map_flags |= RSPAMD_REGEXP_FLAG_UTF;
+	}
+#else
+	if (pcre_flags & PCRE_FLAG(UTF)) {
+		re_map->map_flags |= RSPAMD_REGEXP_FLAG_UTF;
+	}
+#endif
+
+	g_ptr_array_add (re_map->regexps, re);
+	g_ptr_array_add (re_map->values, g_strdup (value));
+}
+
+static void
 rspamd_re_map_finalize (struct rspamd_regexp_map *re_map)
 {
 #ifdef WITH_HYPERSCAN
@@ -2934,6 +2976,29 @@ rspamd_regexp_list_read_single (
 			len,
 			data,
 			rspamd_re_map_insert_helper,
+			hash_fill,
+			final);
+}
+
+gchar *
+rspamd_glob_list_read_single (
+		gchar *chunk,
+		gint len,
+		struct map_cb_data *data,
+		gboolean final)
+{
+	struct rspamd_regexp_map *re_map;
+
+	if (data->cur_data == NULL) {
+		re_map = rspamd_regexp_map_create (data->map, 0);
+		data->cur_data = re_map;
+	}
+
+	return rspamd_parse_kv_list (
+			chunk,
+			len,
+			data,
+			rspamd_glob_map_insert_helper,
 			hash_fill,
 			final);
 }
