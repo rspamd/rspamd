@@ -9,6 +9,7 @@ SET(LIBRSPAMDUTILSRC
 								${CMAKE_CURRENT_SOURCE_DIR}/http.c
 								${CMAKE_CURRENT_SOURCE_DIR}/logger.c
 								${CMAKE_CURRENT_SOURCE_DIR}/map.c
+								${CMAKE_CURRENT_SOURCE_DIR}/map_helpers.c
 								${CMAKE_CURRENT_SOURCE_DIR}/mem_pool.c
 								${CMAKE_CURRENT_SOURCE_DIR}/printf.c
 								${CMAKE_CURRENT_SOURCE_DIR}/radix.c

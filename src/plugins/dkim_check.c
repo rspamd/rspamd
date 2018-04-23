@@ -35,6 +35,7 @@
 #include "libserver/dkim.h"
 #include "libutil/hash.h"
 #include "libutil/map.h"
+#include "libutil/map_helpers.h"
 #include "rspamd.h"
 #include "utlist.h"
 #include "lua/lua_common.h"
@@ -65,8 +66,8 @@ struct dkim_ctx {
 	const gchar *symbol_permfail;
 
 	rspamd_mempool_t *dkim_pool;
-	radix_compressed_t *whitelist_ip;
-	GHashTable *dkim_domains;
+	struct rspamd_radix_map_helper *whitelist_ip;
+	struct rspamd_hash_map_helper *dkim_domains;
 	guint strict_multiplier;
 	guint time_jitter;
 	rspamd_lru_hash_t *dkim_hash;
@@ -311,7 +312,7 @@ dkim_module_config (struct rspamd_config *cfg)
 	}
 
 	lua_pop (cfg->lua_state, 1); /* Remove global function */
-	dkim_module_ctx->whitelist_ip = radix_create_compressed ();
+	dkim_module_ctx->whitelist_ip = NULL;
 
 	if ((value =
 			rspamd_config_get_module_opt (cfg, "options", "check_local")) != NULL) {
@@ -399,6 +400,10 @@ dkim_module_config (struct rspamd_config *cfg)
 
 		rspamd_config_radix_from_ucl (cfg, value, "DKIM whitelist",
 				&dkim_module_ctx->whitelist_ip, NULL);
+		rspamd_mempool_add_destructor (dkim_module_ctx->dkim_pool,
+				(rspamd_mempool_destruct_t)rspamd_map_helper_destroy_radix,
+				dkim_module_ctx->whitelist_ip);
+
 	}
 
 	if ((value =
@@ -410,6 +415,9 @@ dkim_module_config (struct rspamd_config *cfg)
 				ucl_object_tostring (value));
 		}
 		else {
+			rspamd_mempool_add_destructor (dkim_module_ctx->dkim_pool,
+					(rspamd_mempool_destruct_t)rspamd_map_helper_destroy_hash,
+					dkim_module_ctx->dkim_domains);
 			got_trusted = TRUE;
 		}
 	}
@@ -423,6 +431,9 @@ dkim_module_config (struct rspamd_config *cfg)
 					ucl_object_tostring (value));
 		}
 		else {
+			rspamd_mempool_add_destructor (dkim_module_ctx->dkim_pool,
+					(rspamd_mempool_destruct_t)rspamd_map_helper_destroy_hash,
+					dkim_module_ctx->dkim_domains);
 			got_trusted = TRUE;
 		}
 	}
@@ -797,11 +808,6 @@ dkim_module_reconfig (struct rspamd_config *cfg)
 
 	saved_ctx = dkim_module_ctx->ctx;
 	rspamd_mempool_delete (dkim_module_ctx->dkim_pool);
-	radix_destroy_compressed (dkim_module_ctx->whitelist_ip);
-
-	if (dkim_module_ctx->dkim_domains) {
-		g_hash_table_destroy (dkim_module_ctx->dkim_domains);
-	}
 
 	if (dkim_module_ctx->dkim_hash) {
 		rspamd_lru_hash_destroy (dkim_module_ctx->dkim_hash);
@@ -864,7 +870,7 @@ dkim_module_check (struct dkim_check_result *res)
 			if (dkim_module_ctx->dkim_domains != NULL) {
 				/* Perform strict check */
 				if ((strict_value =
-						g_hash_table_lookup (dkim_module_ctx->dkim_domains,
+						rspamd_match_hash_map (dkim_module_ctx->dkim_domains,
 								rspamd_dkim_get_domain (cur->ctx))) != NULL) {
 					if (!dkim_module_parse_strict (strict_value, &cur->mult_allow,
 							&cur->mult_deny)) {
@@ -1020,8 +1026,8 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 		return;
 	}
 	/* Check whitelist */
-	if (radix_find_compressed_addr (dkim_module_ctx->whitelist_ip,
-			task->from_addr) != RADIX_NO_VALUE) {
+	if (rspamd_match_radix_map_addr (dkim_module_ctx->whitelist_ip,
+			task->from_addr) != NULL) {
 		msg_info_task ("skip DKIM checks for whitelisted address");
 		return;
 	}
@@ -1085,7 +1091,7 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 
 				if (dkim_module_ctx->trusted_only &&
 						(dkim_module_ctx->dkim_domains == NULL ||
-								g_hash_table_lookup (dkim_module_ctx->dkim_domains,
+								rspamd_match_hash_map (dkim_module_ctx->dkim_domains,
 										rspamd_dkim_get_domain (ctx)) == NULL)) {
 					msg_debug_task ("skip dkim check for %s domain",
 							rspamd_dkim_get_domain (ctx));

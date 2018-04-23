@@ -17,22 +17,23 @@
  * Rspamd fuzzy storage server
  */
 
-#include <libserver/rspamd_control.h>
-#include <src/libutil/map_private.h>
 #include "config.h"
 #include "util.h"
 #include "rspamd.h"
 #include "map.h"
+#include "map_helpers.h"
 #include "fuzzy_wire.h"
 #include "fuzzy_backend.h"
 #include "ottery.h"
+#include "ref.h"
+#include "xxhash.h"
 #include "libserver/worker_util.h"
 #include "libserver/rspamd_control.h"
 #include "libcryptobox/cryptobox.h"
 #include "libcryptobox/keypairs_cache.h"
 #include "libcryptobox/keypair.h"
-#include "ref.h"
-#include "xxhash.h"
+#include "libserver/rspamd_control.h"
+#include "libutil/map_private.h"
 #include "libutil/hash.h"
 #include "libutil/http_private.h"
 #include "unix-std.h"
@@ -128,9 +129,9 @@ struct rspamd_fuzzy_storage_ctx {
 	char *hashfile;
 	gdouble expire;
 	gdouble sync_timeout;
-	radix_compressed_t *update_ips;
-	radix_compressed_t *master_ips;
-	radix_compressed_t *blocked_ips;
+	struct rspamd_radix_map_helper *update_ips;
+	struct rspamd_radix_map_helper *master_ips;
+	struct rspamd_radix_map_helper *blocked_ips;
 
 	struct rspamd_cryptobox_keypair *sync_keypair;
 	struct rspamd_cryptobox_pubkey *master_key;
@@ -232,18 +233,19 @@ static gboolean
 rspamd_fuzzy_check_client (struct fuzzy_session *session, gboolean is_write)
 {
 	if (session->ctx->blocked_ips != NULL) {
-		if (radix_find_compressed_addr (session->ctx->update_ips,
-				session->addr) != RADIX_NO_VALUE) {
+		if (rspamd_match_radix_map_addr (session->ctx->blocked_ips,
+				session->addr) != NULL) {
 			return FALSE;
 		}
 	}
 
 	if (is_write) {
 		if (session->ctx->update_ips != NULL) {
-			if (radix_find_compressed_addr (session->ctx->update_ips,
-					session->addr) == RADIX_NO_VALUE) {
+			if (rspamd_match_radix_map_addr (session->ctx->update_ips,
+					session->addr) == NULL) {
 				return FALSE;
-			} else {
+			}
+			else {
 				return TRUE;
 			}
 		}
@@ -1737,7 +1739,7 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 
 		return;
 	}
-	else if (radix_find_compressed_addr (ctx->master_ips, addr) == RADIX_NO_VALUE) {
+	else if (rspamd_match_radix_map_addr (ctx->master_ips, addr) == NULL) {
 		msg_err ("deny update request from %s",
 				rspamd_inet_address_to_string (addr));
 		rspamd_inet_address_free (addr);

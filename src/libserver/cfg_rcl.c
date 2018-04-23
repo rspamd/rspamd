@@ -3197,22 +3197,6 @@ rspamd_rcl_parse_struct_ucl (rspamd_mempool_t *pool,
 	return TRUE;
 }
 
-gboolean
-rspamd_rcl_parse_struct_iplist (rspamd_mempool_t *pool,
-		const ucl_object_t *obj,
-		gpointer ud,
-		struct rspamd_rcl_section *section,
-		GError **err)
-{
-	struct rspamd_rcl_struct_parser *pd = ud;
-	radix_compressed_t **target;
-
-	target = (radix_compressed_t **)(((gchar *)pd->user_struct) + pd->offset);
-
-	return rspamd_config_radix_from_ucl (pd->cfg, obj,
-			ucl_object_key (obj), target, err);
-}
-
 
 gboolean
 rspamd_rcl_parse_struct_boolean (rspamd_mempool_t *pool,

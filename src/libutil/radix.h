@@ -71,6 +71,8 @@ void radix_destroy_compressed (radix_compressed_t *tree);
  */
 radix_compressed_t *radix_create_compressed (void);
 
+radix_compressed_t *radix_create_compressed_with_pool (rspamd_mempool_t *pool);
+
 /**
  * Insert list of ip addresses and masks to the radix tree
  * @param list string line of addresses

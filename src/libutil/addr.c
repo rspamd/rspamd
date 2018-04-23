@@ -16,6 +16,7 @@
 #include "config.h"
 #include "addr.h"
 #include "util.h"
+#include "map_helpers.h"
 #include "logger.h"
 #include "cryptobox.h"
 #include "unix-std.h"
@@ -28,7 +29,7 @@
 #include <grp.h>
 #endif
 
-static radix_compressed_t *local_addrs;
+static struct rspamd_radix_map_helper *local_addrs;
 
 enum {
 	RSPAMD_IPV6_UNDEFINED = 0,
@@ -1732,7 +1733,7 @@ rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr,
 		}
 
 		if (check_laddrs && local_addrs) {
-			if (radix_find_compressed_addr (local_addrs, addr) != RADIX_NO_VALUE) {
+			if (rspamd_match_radix_map_addr (local_addrs, addr) != NULL) {
 				return TRUE;
 			}
 		}
@@ -1741,7 +1742,7 @@ rspamd_inet_address_is_local (const rspamd_inet_addr_t *addr,
 	return FALSE;
 }
 
-radix_compressed_t **
+struct rspamd_radix_map_helper **
 rspamd_inet_library_init (void)
 {
 	return &local_addrs;
@@ -1751,7 +1752,7 @@ void
 rspamd_inet_library_destroy (void)
 {
 	if (local_addrs != NULL) {
-		radix_destroy_compressed (local_addrs);
+		rspamd_map_helper_destroy_radix (local_addrs);
 	}
 }
 

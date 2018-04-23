@@ -104,10 +104,10 @@ struct rspamd_lua_map {
 	guint flags;
 
 	union {
-		struct radix_tree_compressed *radix;
-		GHashTable *hash;
+		struct rspamd_radix_map_helper *radix;
+		struct rspamd_hash_map_helper *hash;
+		struct rspamd_regexp_map_helper *re_map;
 		struct lua_map_callback_data *cbdata;
-		struct rspamd_regexp_map *re_map;
 	} data;
 };
 

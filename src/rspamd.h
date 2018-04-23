@@ -314,9 +314,11 @@ struct zstd_dictionary {
 	guint id;
 };
 
+struct rspamd_radix_map_helper;
+
 struct rspamd_external_libs_ctx {
 	magic_t libmagic;
-	radix_compressed_t **local_addrs;
+	struct rspamd_radix_map_helper **local_addrs;
 	struct rspamd_cryptobox_library_ctx *crypto_ctx;
 	struct ottery_config *ottery_cfg;
 	SSL_CTX *ssl_ctx;
