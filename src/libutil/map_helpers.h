@@ -117,7 +117,7 @@ gconstpointer rspamd_match_regexp_map_single (struct rspamd_regexp_map_helper *m
  * @param len
  * @return
  */
-gconstpointer rspamd_match_regexp_map_all (struct rspamd_regexp_map_helper *map,
+GPtrArray* rspamd_match_regexp_map_all (struct rspamd_regexp_map_helper *map,
 		const gchar *in, gsize len);
 
 /**

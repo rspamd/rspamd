@@ -16,6 +16,7 @@
 
 #include "lua_common.h"
 #include "libutil/map.h"
+#include "libutil/map_helpers.h"
 #include "libutil/map_private.h"
 #include "contrib/libucl/lua_ucl.h"
 
@@ -279,8 +280,8 @@ lua_config_add_hash_map (lua_State *L)
 		map->type = RSPAMD_LUA_MAP_SET;
 
 		if ((m = rspamd_map_add (cfg, map_line, description,
-				rspamd_hosts_read,
-				rspamd_hosts_fin,
+				rspamd_kv_list_read,
+				rspamd_kv_list_fin,
 				(void **)&map->data.hash)) == NULL) {
 			msg_warn_config ("invalid set map %s", map_line);
 			lua_pushnil (L);
@@ -478,8 +479,8 @@ lua_config_add_map (lua_State *L)
 			map->type = RSPAMD_LUA_MAP_SET;
 
 			if ((m = rspamd_map_add_from_ucl (cfg, map_obj, description,
-					rspamd_hosts_read,
-					rspamd_hosts_fin,
+					rspamd_kv_list_read,
+					rspamd_kv_list_fin,
 					(void **)&map->data.hash)) == NULL) {
 				lua_pushnil (L);
 				ucl_object_unref (map_obj);
@@ -608,7 +609,7 @@ static gint
 lua_map_get_key (lua_State * L)
 {
 	struct rspamd_lua_map *map = lua_check_map (L, 1);
-	radix_compressed_t *radix;
+	struct rspamd_radix_map_helper *radix;
 	struct rspamd_lua_ip *addr = NULL;
 	const gchar *key, *value = NULL;
 	gpointer ud;
@@ -652,11 +653,11 @@ lua_map_get_key (lua_State * L)
 			}
 
 			if (radix) {
-				guintptr p = 0;
+				gconstpointer p = NULL;
 
 				if (addr != NULL) {
-					if ((p = radix_find_compressed_addr (radix, addr->addr))
-							!=  RADIX_NO_VALUE) {
+					if ((p = rspamd_match_radix_map_addr (radix, addr->addr))
+							!=  NULL) {
 						ret = TRUE;
 					}
 					else {
@@ -664,8 +665,8 @@ lua_map_get_key (lua_State * L)
 					}
 				}
 				else if (key_num != 0) {
-					if ((p = radix_find_compressed (radix,
-							(guint8 *)&key_num, sizeof (key_num))) != RADIX_NO_VALUE) {
+					if ((p = rspamd_match_radix_map (radix,
+							(guint8 *)&key_num, sizeof (key_num))) != NULL) {
 						ret = TRUE;
 					}
 					else {
@@ -685,7 +686,7 @@ lua_map_get_key (lua_State * L)
 			key = lua_map_process_string_key (L, 2, &len);
 
 			if (key && map->data.hash) {
-				ret = g_hash_table_lookup (map->data.hash, key) != NULL;
+				ret = rspamd_match_hash_map (map->data.hash, key) != NULL;
 			}
 		}
 		else if (map->type == RSPAMD_LUA_MAP_REGEXP) {
@@ -731,7 +732,7 @@ lua_map_get_key (lua_State * L)
 			key = lua_map_process_string_key (L, 2, &len);
 
 			if (key && map->data.hash) {
-				value = g_hash_table_lookup (map->data.hash, key);
+				value = rspamd_match_hash_map (map->data.hash, key);
 			}
 
 			if (value) {

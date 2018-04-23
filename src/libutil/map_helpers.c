@@ -1020,7 +1020,7 @@ rspamd_match_hs_multiple_handler (unsigned int id, unsigned long long from,
 }
 #endif
 
-gconstpointer
+GPtrArray*
 rspamd_match_regexp_map_all (struct rspamd_regexp_map_helper *map,
 		const gchar *in, gsize len)
 {
