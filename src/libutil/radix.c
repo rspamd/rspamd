@@ -40,8 +40,9 @@ INIT_LOG_MODULE(radix)
 
 struct radix_tree_compressed {
 	rspamd_mempool_t *pool;
-	size_t size;
 	struct btrie *tree;
+	size_t size;
+	gboolean own_pool;
 };
 
 uintptr_t
@@ -116,7 +117,7 @@ radix_create_compressed (void)
 {
 	radix_compressed_t *tree;
 
-	tree = g_malloc0 (sizeof (*tree));
+	tree = g_malloc (sizeof (*tree));
 	if (tree == NULL) {
 		return NULL;
 	}
@@ -124,6 +125,21 @@ radix_create_compressed (void)
 	tree->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	tree->size = 0;
 	tree->tree = btrie_init (tree->pool);
+	tree->own_pool = TRUE;
+
+	return tree;
+}
+
+radix_compressed_t *
+radix_create_compressed_with_pool (rspamd_mempool_t *pool)
+{
+	radix_compressed_t *tree;
+
+	tree = rspamd_mempool_alloc (pool, sizeof (*tree));
+	tree->pool = pool;
+	tree->size = 0;
+	tree->tree = btrie_init (tree->pool);
+	tree->own_pool = FALSE;
 
 	return tree;
 }
@@ -132,8 +148,10 @@ void
 radix_destroy_compressed (radix_compressed_t *tree)
 {
 	if (tree) {
-		rspamd_mempool_delete (tree->pool);
-		g_free (tree);
+		if (tree->own_pool) {
+			rspamd_mempool_delete (tree->pool);
+			g_free (tree);
+		}
 	}
 }
 
