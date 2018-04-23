@@ -19,6 +19,7 @@
 
 #include "config.h"
 #include "map.h"
+#include "addr.h"
 
 /**
  * @file map_helpers.h
@@ -32,6 +33,13 @@
 struct rspamd_radix_map_helper;
 struct rspamd_hash_map_helper;
 struct rspamd_regexp_map_helper;
+struct rspamd_map_helper_value;
+
+enum rspamd_regexp_map_flags {
+	RSPAMD_REGEXP_MAP_FLAG_UTF = (1u << 0),
+	RSPAMD_REGEXP_MAP_FLAG_MULTIPLE = (1u << 1),
+	RSPAMD_REGEXP_MAP_FLAG_GLOB = (1u << 2),
+};
 
 typedef void (*insert_func) (gpointer st, gconstpointer key,
 		gconstpointer value);
@@ -131,5 +139,68 @@ gconstpointer rspamd_match_hash_map (struct rspamd_hash_map_helper *map,
  */
 gconstpointer rspamd_match_radix_map (struct rspamd_radix_map_helper *map,
 		const guchar *in, gsize inlen);
+
+gconstpointer rspamd_match_radix_map_addr (struct rspamd_radix_map_helper *map,
+		const rspamd_inet_addr_t *addr);
+
+/**
+ * Creates radix map helper
+ * @param map
+ * @return
+ */
+struct rspamd_radix_map_helper *rspamd_map_helper_new_radix (struct rspamd_map *map);
+/**
+ * Inserts new value into radix map
+ * @param st
+ * @param key
+ * @param value
+ */
+void rspamd_map_helper_insert_radix (gpointer st, gconstpointer key, gconstpointer value);
+/**
+ * Destroys radix map helper
+ * @param r
+ */
+void rspamd_map_helper_destroy_radix (struct rspamd_radix_map_helper *r);
+
+
+/**
+ * Creates hash map helper
+ * @param map
+ * @return
+ */
+struct rspamd_hash_map_helper *rspamd_map_helper_new_hash (struct rspamd_map *map);
+/**
+ * Inserts a new value into a hash map
+ * @param st
+ * @param key
+ * @param value
+ */
+void rspamd_map_helper_insert_hash (gpointer st, gconstpointer key, gconstpointer value);
+/**
+ * Destroys hash map helper
+ * @param r
+ */
+void rspamd_map_helper_destroy_hash (struct rspamd_hash_map_helper *r);
+
+/**
+ * Create new regexp map
+ * @param map
+ * @param flags
+ * @return
+ */
+struct rspamd_regexp_map_helper * rspamd_map_helper_new_regexp (struct rspamd_map *map,
+		enum rspamd_regexp_map_flags flags);
+/**
+ * Inserts a new regexp into regexp map
+ * @param st
+ * @param key
+ * @param value
+ */
+void rspamd_map_helper_insert_re (gpointer st, gconstpointer key, gconstpointer value);
+/**
+ * Destroy regexp map
+ * @param re_map
+ */
+void rspamd_map_helper_destroy_regexp (struct rspamd_regexp_map_helper *re_map);
 
 #endif

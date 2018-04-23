@@ -21,6 +21,7 @@
 #include "filter.h"
 #include "lua/lua_common.h"
 #include "map.h"
+#include "map_helpers.h"
 #include "map_private.h"
 #include "dynamic_cfg.h"
 #include "utlist.h"
@@ -1768,7 +1769,7 @@ gboolean
 rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 		const ucl_object_t *obj,
 		const gchar *description,
-		radix_compressed_t **target,
+		struct rspamd_radix_map_helper **target,
 		GError **err)
 {
 	ucl_type_t type;
@@ -1796,12 +1797,8 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 			}
 			else {
 				/* Just a list */
-				if (!radix_add_generic_iplist (str, target, TRUE)) {
-					g_set_error (err, g_quark_from_static_string ("rspamd-config"),
-							EINVAL, "bad map definition %s for %s", str,
-							ucl_object_key (obj));
-					return FALSE;
-				}
+				*target = rspamd_map_helper_new_radix (NULL);
+				rspamd_map_helper_insert_radix (*target, str, "");
 			}
 			break;
 		case UCL_OBJECT:
@@ -1821,19 +1818,11 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 			while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
 				str = ucl_object_tostring (cur);
 
-				if (str == NULL || !radix_add_generic_iplist (str, target, TRUE)) {
-					g_set_error (err, g_quark_from_static_string ("rspamd-config"),
-							EINVAL, "bad map element %s for %s", str,
-							ucl_object_key (obj));
-
-					if (*target) {
-						radix_destroy_compressed (*target);
-					}
-
-					ucl_object_iterate_free (it);
-
-					return FALSE;
+				if (!*target) {
+					*target = rspamd_map_helper_new_radix (NULL);
 				}
+
+				rspamd_map_helper_insert_radix (*target, str, "");
 			}
 
 			ucl_object_iterate_free (it);

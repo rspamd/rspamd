@@ -637,10 +637,11 @@ const gchar * rspamd_action_to_str_alt (enum rspamd_action_type action);
  * @param err error pointer
  * @return
  */
+struct rspamd_radix_map_helper;
 gboolean rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 		const ucl_object_t *obj,
 		const gchar *description,
-		radix_compressed_t **target,
+		struct rspamd_radix_map_helper **target,
 		GError **err);
 
 #define msg_err_config(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
