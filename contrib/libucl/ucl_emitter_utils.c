@@ -138,7 +138,7 @@ ucl_elt_string_write_json (const char *str, size_t size,
 				break;
 			default:
 				/* Emit unicode unknown character */
-				func->ucl_emitter_append_len ("\\uFFFD", 5, func->ud);
+				func->ucl_emitter_append_len ("\\uFFFD", 6, func->ud);
 				break;
 			}
 			len = 0;
