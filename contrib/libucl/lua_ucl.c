@@ -800,9 +800,9 @@ lua_ucl_parser_parse_string (lua_State *L)
 }
 
 struct _rspamd_lua_text {
-	const gchar *start;
-	guint len;
-	guint flags;
+	const char *start;
+	unsigned int len;
+	unsigned int flags;
 };
 
 /***
