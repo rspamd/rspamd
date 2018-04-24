@@ -297,7 +297,7 @@ ucl_object_push_lua (lua_State *L, const ucl_object_t *obj, bool allow_array)
 static ucl_object_t *
 ucl_object_lua_fromtable (lua_State *L, int idx, ucl_string_flags_t flags)
 {
-	ucl_object_t *obj, *top = NULL;
+	ucl_object_t *obj, *top = NULL, *cur;
 	size_t keylen;
 	const char *k;
 	bool is_array = true, is_implicit = false, found_mt = false;
@@ -407,6 +407,13 @@ ucl_object_lua_fromtable (lua_State *L, int idx, ucl_string_flags_t flags)
 
 			if (obj != NULL) {
 				ucl_object_insert_key (top, obj, k, keylen, true);
+
+				DL_FOREACH (obj, cur) {
+					if (cur->keylen == 0) {
+						cur->keylen = keylen;
+						cur->key = k;
+					}
+				}
 			}
 			lua_pop (L, 2);
 		}
