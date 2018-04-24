@@ -1797,7 +1797,10 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 			}
 			else {
 				/* Just a list */
-				*target = rspamd_map_helper_new_radix (NULL);
+				if (!*target) {
+					*target = rspamd_map_helper_new_radix (NULL);
+				}
+
 				rspamd_map_helper_insert_radix_resolve (*target, str, "");
 			}
 			break;
