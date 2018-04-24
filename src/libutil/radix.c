@@ -197,8 +197,9 @@ rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
 			cur++;
 			continue;
 		}
+
 		/* Extract ipnet */
-		ipnet = *cur;
+		ipnet = g_strstrip (*cur);
 		token = strsep (&ipnet, "/");
 
 		if (ipnet != NULL) {

@@ -76,14 +76,14 @@ struct rspamd_regexp_map_helper {
 	while (g_ascii_isspace (*c) && p > c) { c ++; } \
 	key = g_malloc (p - c + 1); \
 	rspamd_strlcpy (key, c, p - c + 1); \
-	key = g_strchomp (key); \
+	key = g_strstrip (key); \
 } while (0)
 
 #define MAP_STORE_VALUE do { \
 	while (g_ascii_isspace (*c) && p > c) { c ++; } \
 	value = g_malloc (p - c + 1); \
 	rspamd_strlcpy (value, c, p - c + 1); \
-	value = g_strchomp (value); \
+	value = g_strstrip (value); \
 } while (0)
 
 gchar *
