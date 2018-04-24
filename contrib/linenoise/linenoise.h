@@ -66,6 +66,9 @@ void linenoiseClearScreen(void);
 void linenoiseSetMultiLine(int ml);
 void linenoisePrintKeyCodes(void);
 
+/* Rspamd specific */
+int linenoiseGetColumns(int ifd, int ofd);
+
 #ifdef __cplusplus
 }
 #endif
