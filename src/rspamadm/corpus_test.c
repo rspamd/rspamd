@@ -34,9 +34,8 @@ struct rspamadm_command corpus_test_command = {
 	.run = rspamadm_corpus_test
 };
 
-// TODO add -nparellel and -o options
 static GOptionEntry entries[] = {
-		{"ham", 'a', 0, G_OPTION_ARG_FILENAME, &ham_directory,
+		{"ham", 'h', 0, G_OPTION_ARG_FILENAME, &ham_directory,
 				"Ham directory", NULL},
 		{"spam", 's', 0, G_OPTION_ARG_FILENAME, &spam_directory,
 				"Spam directory", NULL},
@@ -50,16 +49,16 @@ static GOptionEntry entries[] = {
 };
 
 static const char *
-rspamadm_corpus_test_help (gboolean full_help) 
+rspamadm_corpus_test_help (gboolean full_help)
 {
 	const char *help_str;
 
 	if (full_help) {
 		help_str = "Create logs files from email corpus\n\n"
-				"Usage: rspamadm corpus_test [-a <ham_directory>]"
+				"Usage: rspamadm corpus_test [-h <ham_directory>]"
 				" [-s <spam_directory>]\n"
 				"Where option are:\n\n"
-				"-a: path to ham directory\n"
+				"-h: path to ham directory\n"
 				"-s: path to spam directory\n"
 				"-n: maximum parallel connections\n"
 				"-o: log output file\n"
@@ -75,7 +74,7 @@ rspamadm_corpus_test_help (gboolean full_help)
 }
 
 static void
-rspamadm_corpus_test (gint argc, gchar **argv) 
+rspamadm_corpus_test (gint argc, gchar **argv)
 {
 	GOptionContext *context;
 	GError *error = NULL;
@@ -85,15 +84,15 @@ rspamadm_corpus_test (gint argc, gchar **argv)
 	context = g_option_context_new (
 				"corpus_test - create logs files from email corpus");
 
-	g_option_context_set_summary (context, 
+	g_option_context_set_summary (context,
 			"Summary:\n Rspamd administration utility version "
 						RVERSION
 						"\n Release id: "
 						RID);
-	
+
 	g_option_context_add_main_entries (context, entries, NULL);
 	g_option_context_set_ignore_unknown_options (context, TRUE);
-	
+
 	if (!g_option_context_parse (context, &argc, &argv, &error)) {
 		rspamd_fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
@@ -102,7 +101,6 @@ rspamadm_corpus_test (gint argc, gchar **argv)
 
 	L = rspamd_lua_init ();
 	rspamd_lua_set_path(L, NULL, ucl_vars);
-
 
 	obj = ucl_object_typed_new (UCL_OBJECT);
 	ucl_object_insert_key (obj, ucl_object_fromstring (ham_directory),
