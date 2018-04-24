@@ -99,7 +99,7 @@ struct fuzzy_ctx {
 	struct rspamd_config *cfg;
 	const gchar *default_symbol;
 	guint32 min_hash_len;
-	radix_compressed_t *whitelist;
+	struct rspamd_radix_map_helper *whitelist;
 	struct rspamd_keypair_cache *keypairs_cache;
 	gdouble text_multiplier;
 	guint32 min_bytes;
@@ -2854,8 +2854,8 @@ fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 
 	/* Check whitelist */
 	if (fuzzy_module_ctx->whitelist) {
-		if (radix_find_compressed_addr (fuzzy_module_ctx->whitelist,
-				task->from_addr) != RADIX_NO_VALUE) {
+		if (rspamd_match_radix_map_addr (fuzzy_module_ctx->whitelist,
+				task->from_addr) != NULL) {
 			msg_info_task ("<%s>, address %s is whitelisted, skip fuzzy check",
 				task->message_id,
 				rspamd_inet_address_to_string (task->from_addr));
