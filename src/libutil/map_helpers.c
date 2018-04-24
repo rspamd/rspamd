@@ -444,6 +444,34 @@ rspamd_map_helper_insert_radix (gpointer st, gconstpointer key, gconstpointer va
 }
 
 void
+rspamd_map_helper_insert_radix_resolve (gpointer st, gconstpointer key, gconstpointer value)
+{
+	struct rspamd_radix_map_helper *r = (struct rspamd_radix_map_helper *)st;
+	struct rspamd_map_helper_value *val;
+	gsize vlen;
+	khiter_t k;
+	gconstpointer nk;
+	gint res;
+
+	vlen = strlen (value);
+	val = rspamd_mempool_alloc0 (r->pool, sizeof (*val) +
+			vlen + 1);
+	memcpy (val->value, value, vlen);
+
+	k = kh_get (rspamd_map_hash, r->htb, key);
+
+	if (k == kh_end (r->htb)) {
+		nk = rspamd_mempool_strdup (r->pool, key);
+		k = kh_put (rspamd_map_hash, r->htb, nk, &res);
+	}
+
+	nk = kh_key (r->htb, k);
+	val->key = nk;
+	kh_value (r->htb, k) = val;
+	rspamd_radix_add_iplist (key, ",", r->trie, val, TRUE);
+}
+
+void
 rspamd_map_helper_insert_hash (gpointer st, gconstpointer key, gconstpointer value)
 {
 	struct rspamd_hash_map_helper *ht = st;

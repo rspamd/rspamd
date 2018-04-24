@@ -157,6 +157,14 @@ struct rspamd_radix_map_helper *rspamd_map_helper_new_radix (struct rspamd_map *
  */
 void rspamd_map_helper_insert_radix (gpointer st, gconstpointer key, gconstpointer value);
 /**
+ * Inserts new value into radix map performing synchronous resolving
+ * @param st
+ * @param key
+ * @param value
+ */
+void rspamd_map_helper_insert_radix_resolve (gpointer st, gconstpointer key,
+		gconstpointer value);
+/**
  * Destroys radix map helper
  * @param r
  */

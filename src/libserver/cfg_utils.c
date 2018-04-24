@@ -1798,7 +1798,7 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 			else {
 				/* Just a list */
 				*target = rspamd_map_helper_new_radix (NULL);
-				rspamd_map_helper_insert_radix (*target, str, "");
+				rspamd_map_helper_insert_radix_resolve (*target, str, "");
 			}
 			break;
 		case UCL_OBJECT:
@@ -1822,7 +1822,7 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 					*target = rspamd_map_helper_new_radix (NULL);
 				}
 
-				rspamd_map_helper_insert_radix (*target, str, "");
+				rspamd_map_helper_insert_radix_resolve (*target, str, "");
 			}
 
 			ucl_object_iterate_free (it);
