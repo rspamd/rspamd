@@ -1535,8 +1535,15 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	d = decoded;
 
 	if (no_prefix) {
-		memcpy (d, "http://", sizeof ("http://") - 1);
-		d += sizeof ("http://") - 1;
+		if (s[0] == '/' && (len > 2 && s[1] == '/')) {
+			/* //bla case */
+			memcpy (d, "http:", sizeof ("http:") - 1);
+			d += sizeof ("http:") - 1;
+		}
+		else {
+			memcpy (d, "http://", sizeof ("http://") - 1);
+			d += sizeof ("http://") - 1;
+		}
 	}
 
 	/* We also need to remove all internal newlines and encode unsafe characters */
