@@ -2112,7 +2112,7 @@ rspamd_fuzzy_storage_stat (struct rspamd_main *rspamd_main,
 	gchar tmppath[PATH_MAX];
 
 	memset (&rep, 0, sizeof (rep));
-	rep.type = RSPAMD_CONTROL_RELOAD;
+	rep.type = RSPAMD_CONTROL_FUZZY_STAT;
 
 	rspamd_snprintf (tmppath, sizeof (tmppath), "%s%c%s-XXXXXXXXXX",
 			rspamd_main->cfg->temp_dir, G_DIR_SEPARATOR, "fuzzy-stat");
