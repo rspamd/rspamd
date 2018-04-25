@@ -2232,3 +2232,12 @@ rspamd_map_get_traverse_function (struct rspamd_map *map)
 
 	return NULL;
 }
+
+void
+rspamd_map_traverse (struct rspamd_map *map, rspamd_map_traverse_cb cb,
+		gpointer cbdata, gboolean reset_hits)
+{
+	if (*map->user_data && map->traverse_function) {
+		map->traverse_function (*map->user_data, cb, cbdata, reset_hits);
+	}
+}

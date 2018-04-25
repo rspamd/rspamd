@@ -25,7 +25,8 @@ typedef void (*map_fin_cb_t)(struct map_cb_data *data);
 
 typedef gboolean (*rspamd_map_traverse_cb)(gconstpointer key,
 		gconstpointer value, gsize hits, gpointer ud);
-typedef void (*rspamd_map_traverse_function)(rspamd_map_traverse_cb cb,
+typedef void (*rspamd_map_traverse_function)(void *data,
+		rspamd_map_traverse_cb cb,
 		gpointer cbdata, gboolean reset_hits);
 
 /**
@@ -88,5 +89,16 @@ void rspamd_map_remove_all (struct rspamd_config *cfg);
  * @return
  */
 rspamd_map_traverse_function rspamd_map_get_traverse_function (struct rspamd_map *map);
+
+/**
+ * Perform map traverse
+ * @param map
+ * @param cb
+ * @param cbdata
+ * @param reset_hits
+ * @return
+ */
+void rspamd_map_traverse (struct rspamd_map *map, rspamd_map_traverse_cb cb,
+		gpointer cbdata, gboolean reset_hits);
 
 #endif

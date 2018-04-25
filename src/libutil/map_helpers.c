@@ -568,6 +568,26 @@ rspamd_map_helper_insert_re (gpointer st, gconstpointer key, gconstpointer value
 	g_ptr_array_add (re_map->values, val);
 }
 
+static void
+rspamd_map_helper_traverse_regexp (void *data,
+		rspamd_map_traverse_cb cb,
+		gpointer cbdata,
+		gboolean reset_hits)
+{
+	gconstpointer k;
+	struct rspamd_map_helper_value *val;
+	struct rspamd_regexp_map_helper *re_map = data;
+
+	kh_foreach (re_map->htb, k, val, {
+		if (!cb (k, val->value, val->hits, cbdata)) {
+			break;
+		}
+
+		if (reset_hits) {
+			val->hits = 0;
+		}
+	});
+}
 
 struct rspamd_hash_map_helper *
 rspamd_map_helper_new_hash (struct rspamd_map *map)
@@ -602,6 +622,27 @@ rspamd_map_helper_destroy_hash (struct rspamd_hash_map_helper *r)
 	rspamd_mempool_delete (r->pool);
 }
 
+static void
+rspamd_map_helper_traverse_hash (void *data,
+		rspamd_map_traverse_cb cb,
+		gpointer cbdata,
+		gboolean reset_hits)
+{
+	gconstpointer k;
+	struct rspamd_map_helper_value *val;
+	struct rspamd_hash_map_helper *ht = data;
+
+	kh_foreach (ht->htb, k, val, {
+		if (!cb (k, val->value, val->hits, cbdata)) {
+			break;
+		}
+
+		if (reset_hits) {
+			val->hits = 0;
+		}
+	});
+}
+
 struct rspamd_radix_map_helper *
 rspamd_map_helper_new_radix (struct rspamd_map *map)
 {
@@ -634,6 +675,27 @@ rspamd_map_helper_destroy_radix (struct rspamd_radix_map_helper *r)
 
 	kh_destroy (rspamd_map_hash, r->htb);
 	rspamd_mempool_delete (r->pool);
+}
+
+static void
+rspamd_map_helper_traverse_radix (void *data,
+		rspamd_map_traverse_cb cb,
+		gpointer cbdata,
+		gboolean reset_hits)
+{
+	gconstpointer k;
+	struct rspamd_map_helper_value *val;
+	struct rspamd_radix_map_helper *r = data;
+
+	kh_foreach (r->htb, k, val, {
+		if (!cb (k, val->value, val->hits, cbdata)) {
+			break;
+		}
+
+		if (reset_hits) {
+			val->hits = 0;
+		}
+	});
 }
 
 struct rspamd_regexp_map_helper *
@@ -732,6 +794,7 @@ rspamd_kv_list_fin (struct map_cb_data *data)
 	if (data->cur_data) {
 		htb = (struct rspamd_hash_map_helper *)data->cur_data;
 		msg_info_map ("read hash of %d elements", kh_size (htb->htb));
+		data->map->traverse_function = rspamd_map_helper_traverse_hash;
 	}
 }
 
@@ -774,6 +837,7 @@ rspamd_radix_fin (struct map_cb_data *data)
 		r = (struct rspamd_radix_map_helper *)data->cur_data;
 		msg_info_map ("read radix trie of %z elements: %s",
 				radix_get_size (r->trie), radix_get_info (r->trie));
+		data->map->traverse_function = rspamd_map_helper_traverse_radix;
 	}
 }
 
@@ -951,6 +1015,7 @@ rspamd_regexp_list_fin (struct map_cb_data *data)
 		rspamd_re_map_finalize (re_map);
 		msg_info_map ("read regexp list of %ud elements",
 				re_map->regexps->len);
+		data->map->traverse_function = rspamd_map_helper_traverse_regexp;
 	}
 }
 
