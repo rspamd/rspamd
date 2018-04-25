@@ -32,6 +32,7 @@
 #include "libserver/spf.h"
 #include "libutil/hash.h"
 #include "libutil/map.h"
+#include "libutil/map_helpers.h"
 #include "rspamd.h"
 #include "libserver/mempool_vars_internal.h"
 
@@ -55,7 +56,7 @@ struct spf_ctx {
 	const gchar *symbol_permfail;
 
 	rspamd_mempool_t *spf_pool;
-	radix_compressed_t *whitelist_ip;
+	struct rspamd_radix_map_helper *whitelist_ip;
 	rspamd_lru_hash_t *spf_hash;
 
 	gboolean check_local;
@@ -198,7 +199,7 @@ spf_module_config (struct rspamd_config *cfg)
 		return TRUE;
 	}
 
-	spf_module_ctx->whitelist_ip = radix_create_compressed ();
+	spf_module_ctx->whitelist_ip = NULL;
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "options", "check_local")) != NULL) {
@@ -333,7 +334,7 @@ spf_module_reconfig (struct rspamd_config *cfg)
 	saved_ctx = spf_module_ctx->ctx;
 	rspamd_mempool_delete (spf_module_ctx->spf_pool);
 	rspamd_lru_hash_destroy (spf_module_ctx->spf_hash);
-	radix_destroy_compressed (spf_module_ctx->whitelist_ip);
+	rspamd_map_helper_destroy_radix (spf_module_ctx->whitelist_ip);
 	memset (spf_module_ctx, 0, sizeof (*spf_module_ctx));
 	spf_module_ctx->ctx = saved_ctx;
 	spf_module_ctx->spf_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
@@ -572,8 +573,8 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 				dmarc_checks, NULL);
 	}
 
-	if (radix_find_compressed_addr (spf_module_ctx->whitelist_ip,
-			task->from_addr) != RADIX_NO_VALUE) {
+	if (rspamd_match_radix_map_addr (spf_module_ctx->whitelist_ip,
+			task->from_addr) != NULL) {
 		return;
 	}
 
