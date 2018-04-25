@@ -23,6 +23,11 @@ typedef gchar * (*map_cb_t)(gchar *chunk, gint len,
 	struct map_cb_data *data, gboolean final);
 typedef void (*map_fin_cb_t)(struct map_cb_data *data);
 
+typedef gboolean (*rspamd_map_traverse_cb)(gconstpointer key,
+		gconstpointer value, gsize hits, gpointer ud);
+typedef void (*rspamd_map_traverse_function)(rspamd_map_traverse_cb cb,
+		gpointer cbdata, gboolean reset_hits);
+
 /**
  * Common map object
  */
@@ -76,5 +81,12 @@ void rspamd_map_watch (struct rspamd_config *cfg, struct event_base *ev_base,
  * Remove all maps watched (remove events)
  */
 void rspamd_map_remove_all (struct rspamd_config *cfg);
+
+/**
+ * Get traverse function for specific map
+ * @param map
+ * @return
+ */
+rspamd_map_traverse_function rspamd_map_get_traverse_function (struct rspamd_map *map);
 
 #endif

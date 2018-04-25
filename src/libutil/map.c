@@ -2222,3 +2222,13 @@ err:
 
 	return NULL;
 }
+
+rspamd_map_traverse_function
+rspamd_map_get_traverse_function (struct rspamd_map *map)
+{
+	if (map) {
+		return map->traverse_function;
+	}
+
+	return NULL;
+}

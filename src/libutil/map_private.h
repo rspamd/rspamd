@@ -114,18 +114,19 @@ struct rspamd_map {
 	gchar *name;
 	guint32 id;
 	gboolean scheduled_check;
+	rspamd_map_dtor dtor;
+	gpointer dtor_data;
+	rspamd_map_traverse_function traverse_function;
 	/* Should we check HTTP or just load cached data */
-	gboolean active_http;
 	struct timeval tv;
 	gdouble poll_timeout;
 	time_t next_check;
+	gboolean active_http;
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	gint *locked;
 	/* Shared cache data */
 	struct rspamd_map_cachepoint *cache;
 	gchar tag[MEMPOOL_UID_LEN];
-	rspamd_map_dtor dtor;
-	gpointer dtor_data;
 };
 
 enum rspamd_map_http_stage {
