@@ -85,6 +85,15 @@ LUA_FUNCTION_DEF (map, set_callback);
  */
 LUA_FUNCTION_DEF (map, get_uri);
 
+/***
+ * @method map:get_stats(reset)
+ * Get statistics for specific map. It returns table in form:
+ *  [key] => [nhits]
+ * @param {boolean} reset reset stats if true
+ * @return {table} map's stat
+ */
+LUA_FUNCTION_DEF (map, get_stats);
+
 static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF (map, get_key),
 	LUA_INTERFACE_DEF (map, is_signed),
@@ -93,6 +102,7 @@ static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF (map, set_sign_key),
 	LUA_INTERFACE_DEF (map, set_callback),
 	LUA_INTERFACE_DEF (map, get_uri),
+	LUA_INTERFACE_DEF (map, get_stats),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -592,6 +602,61 @@ lua_config_add_map (lua_State *L)
 	}
 
 	ucl_object_unref (map_obj);
+
+	return 1;
+}
+
+gint
+lua_config_get_maps (lua_State*L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	struct rspamd_lua_map *map, **pmap;
+	struct rspamd_map *m;
+	gint i = 1;
+	GList *cur;
+
+	if (cfg) {
+		lua_newtable (L);
+		cur = g_list_first (cfg->maps);
+
+		while (cur) {
+			m = cur->data;
+
+			if (m->lua_map) {
+				map = m->lua_map;
+			}
+			else {
+				/* Implement heuristic */
+				map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
+
+				if (m->read_callback == rspamd_radix_read) {
+					map->type = RSPAMD_LUA_MAP_RADIX;
+					map->data.radix = *m->user_data;
+				}
+				else if (m->read_callback == rspamd_kv_list_read) {
+					map->type = RSPAMD_LUA_MAP_HASH;
+					map->data.hash = *m->user_data;
+				}
+				else {
+					map->type = RSPAMD_LUA_MAP_UNKNOWN;
+				}
+
+				map->map = m;
+				m->lua_map = map;
+			}
+
+			pmap = lua_newuserdata (L, sizeof (*pmap));
+			*pmap = map;
+			rspamd_lua_setclass (L, "rspamd{map}", -1);
+			lua_rawseti (L, -2, i);
+
+			cur = g_list_next (cur);
+			i ++;
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }
