@@ -178,6 +178,12 @@ end
 rspamd_config:add_map('http://example.com/map', "settings map", process_map)
  */
 /***
+* @method rspamd_config:get_maps()
+* Get all maps defined as an array of rspamd{map} objects
+ *
+* @return {table|rspamd{map}}
+*/
+/***
  * @method rspamd_config:get_classifier(name)
  * Returns classifier config.
  * @param {string} name name of classifier (e.g. `bayes`)
@@ -686,6 +692,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, add_hash_map),
 	LUA_INTERFACE_DEF (config, add_kv_map),
 	LUA_INTERFACE_DEF (config, add_map),
+	LUA_INTERFACE_DEF (config, get_maps),
 	LUA_INTERFACE_DEF (config, get_classifier),
 	LUA_INTERFACE_DEF (config, register_symbol),
 	LUA_INTERFACE_DEF (config, register_symbols),

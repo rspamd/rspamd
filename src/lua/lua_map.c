@@ -138,6 +138,7 @@ lua_config_add_radix_map (lua_State *L)
 		}
 
 		map->map = m;
+		m->lua_map = map;
 		pmap = lua_newuserdata (L, sizeof (void *));
 		*pmap = map;
 		rspamd_lua_setclass (L, "rspamd{map}", -1);
@@ -195,6 +196,7 @@ lua_config_radix_from_config (lua_State *L)
 			ucl_object_unref (fake_obj);
 			pmap = lua_newuserdata (L, sizeof (void *));
 			map->map = m;
+			m->lua_map = map;
 			*pmap = map;
 			rspamd_lua_setclass (L, "rspamd{map}", -1);
 		}
@@ -253,6 +255,7 @@ lua_config_radix_from_ucl (lua_State *L)
 		ucl_object_unref (fake_obj);
 		pmap = lua_newuserdata (L, sizeof (void *));
 		map->map = m;
+		m->lua_map = map;
 		*pmap = map;
 		rspamd_lua_setclass (L, "rspamd{map}", -1);
 
@@ -289,6 +292,7 @@ lua_config_add_hash_map (lua_State *L)
 		}
 
 		map->map = m;
+		m->lua_map = map;
 		pmap = lua_newuserdata (L, sizeof (void *));
 		*pmap = map;
 		rspamd_lua_setclass (L, "rspamd{map}", -1);
@@ -327,6 +331,7 @@ lua_config_add_kv_map (lua_State *L)
 		}
 
 		map->map = m;
+		m->lua_map = map;
 		pmap = lua_newuserdata (L, sizeof (void *));
 		*pmap = map;
 		rspamd_lua_setclass (L, "rspamd{map}", -1);
@@ -472,6 +477,7 @@ lua_config_add_map (lua_State *L)
 
 				return 1;
 			}
+			m->lua_map = map;
 		}
 		else if (strcmp (type, "set") == 0) {
 			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
@@ -487,6 +493,7 @@ lua_config_add_map (lua_State *L)
 
 				return 1;
 			}
+			m->lua_map = map;
 		}
 		else if (strcmp (type, "map") == 0 || strcmp (type, "hash") == 0) {
 			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
@@ -502,6 +509,7 @@ lua_config_add_map (lua_State *L)
 
 				return 1;
 			}
+			m->lua_map = map;
 		}
 		else if (strcmp (type, "radix") == 0) {
 			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
@@ -517,6 +525,7 @@ lua_config_add_map (lua_State *L)
 
 				return 1;
 			}
+			m->lua_map = map;
 		}
 		else if (strcmp (type, "regexp") == 0) {
 			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
@@ -532,6 +541,7 @@ lua_config_add_map (lua_State *L)
 
 				return 1;
 			}
+			m->lua_map = map;
 		}
 		else if (strcmp (type, "regexp_multi") == 0) {
 			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
@@ -547,6 +557,7 @@ lua_config_add_map (lua_State *L)
 
 				return 1;
 			}
+			m->lua_map = map;
 		}
 		else if (strcmp (type, "glob") == 0) {
 			map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*map));
@@ -562,6 +573,7 @@ lua_config_add_map (lua_State *L)
 
 				return 1;
 			}
+			m->lua_map = map;
 		}
 		else {
 			ret = luaL_error (L, "invalid arguments: unknown type '%s'", type);

@@ -25,5 +25,6 @@ LUA_PUBLIC_FUNCTION_DEF (config, add_map);
 LUA_PUBLIC_FUNCTION_DEF (config, add_hash_map);
 LUA_PUBLIC_FUNCTION_DEF (config, add_kv_map);
 LUA_PUBLIC_FUNCTION_DEF (config, add_map);
+LUA_PUBLIC_FUNCTION_DEF (config, get_maps);
 
 #endif /* SRC_LUA_LUA_MAP_H_ */

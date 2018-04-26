@@ -248,7 +248,6 @@ void rspamd_lua_add_preload (lua_State *L, const gchar *name, lua_CFunction func
 
 void luaopen_task (lua_State *L);
 void luaopen_config (lua_State *L);
-void luaopen_metric (lua_State *L);
 void luaopen_map (lua_State *L);
 void luaopen_trie (lua_State * L);
 void luaopen_textpart (lua_State *L);
