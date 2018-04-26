@@ -795,6 +795,7 @@ rspamd_kv_list_fin (struct map_cb_data *data)
 		htb = (struct rspamd_hash_map_helper *)data->cur_data;
 		msg_info_map ("read hash of %d elements", kh_size (htb->htb));
 		data->map->traverse_function = rspamd_map_helper_traverse_hash;
+		data->map->nelts = kh_size (htb->htb);
 	}
 }
 
@@ -838,6 +839,7 @@ rspamd_radix_fin (struct map_cb_data *data)
 		msg_info_map ("read radix trie of %z elements: %s",
 				radix_get_size (r->trie), radix_get_info (r->trie));
 		data->map->traverse_function = rspamd_map_helper_traverse_radix;
+		data->map->nelts = kh_size (r->htb);
 	}
 }
 
@@ -1016,6 +1018,7 @@ rspamd_regexp_list_fin (struct map_cb_data *data)
 		msg_info_map ("read regexp list of %ud elements",
 				re_map->regexps->len);
 		data->map->traverse_function = rspamd_map_helper_traverse_regexp;
+		data->map->nelts = kh_size (re_map->htb);
 	}
 }
 
