@@ -831,6 +831,43 @@ lua_map_get_key (lua_State * L)
 	return 1;
 }
 
+static gboolean
+lua_map_traverse_cb (gconstpointer key,
+		gconstpointer value, gsize hits, gpointer ud)
+{
+	lua_State *L = (lua_State *)ud;
+
+	lua_pushstring (L, key);
+	lua_pushnumber (L, hits);
+	lua_settable (L, -3);
+
+	return TRUE;
+}
+
+static gint
+lua_map_get_stats (lua_State * L)
+{
+	struct rspamd_lua_map *map = lua_check_map (L, 1);
+	gboolean do_reset = FALSE;
+
+	if (map != NULL) {
+		if (lua_isboolean (L, 2)) {
+			do_reset = lua_toboolean (L, 2);
+		}
+
+		lua_createtable (L, 0, map->map->nelts);
+
+		if (map->map->traverse_function) {
+			rspamd_map_traverse (map->map, lua_map_traverse_cb, L, do_reset);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
 static int
 lua_map_is_signed (lua_State *L)
 {
