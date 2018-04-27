@@ -455,3 +455,12 @@ rspamd_session_get_watcher (struct rspamd_async_session *session)
 		return NULL;
 	}
 }
+
+
+rspamd_mempool_t *
+rspamd_session_mempool (struct rspamd_async_session *session)
+{
+	g_assert (session != NULL);
+
+	return session->pool;
+}

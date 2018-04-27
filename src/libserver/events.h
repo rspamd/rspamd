@@ -73,6 +73,13 @@ gboolean rspamd_session_destroy (struct rspamd_async_session *session);
 void rspamd_session_cleanup (struct rspamd_async_session *session);
 
 /**
+ * Returns mempool associated with async session
+ * @param session
+ * @return
+ */
+rspamd_mempool_t * rspamd_session_mempool (struct rspamd_async_session *session);
+
+/**
  * Check session for events pending and call fin callback if no events are pending
  * @param session session object
  * @return TRUE if session has pending events

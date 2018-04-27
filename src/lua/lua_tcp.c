@@ -826,7 +826,18 @@ lua_tcp_make_connection (struct lua_tcp_cbdata *cbd)
 	fd = rspamd_inet_address_connect (cbd->addr, SOCK_STREAM, TRUE);
 
 	if (fd == -1) {
-		msg_info ("cannot connect to %s", rspamd_inet_address_to_string (cbd->addr));
+		if (cbd->session) {
+			rspamd_mempool_t *pool = rspamd_session_mempool (cbd->session);
+			msg_info_pool ("cannot connect to %s: %s",
+					rspamd_inet_address_to_string (cbd->addr),
+					strerror (errno));
+		}
+		else {
+			msg_info ("cannot connect to %s: %s",
+					rspamd_inet_address_to_string (cbd->addr),
+					strerror (errno));
+		}
+
 		return FALSE;
 	}
 
