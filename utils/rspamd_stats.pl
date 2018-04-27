@@ -723,6 +723,11 @@ sub log_time_format {
     elsif ( /^\w{3} (?:\s?\d|\d\d) \d\d:\d\d:\d\d\ \S+ newsyslog\[\d+\]: logfile turned over$/ ) {
       next;
     }
+    # Skip journalctl messages
+    # -- Logs begin at Mon 2018-01-15 11:16:24 MSK, end at Fri 2018-04-27 09:10:30 MSK. --
+    elsif ( /^-- Logs begin at \w{3} \d{4}-\d\d-\d\d \d\d:\d\d:\d\d [A-Z]{3}, end at \w{3} \d{4}-\d\d-\d\d \d\d:\d\d:\d\d [A-Z]{3}\. --$/ ) {
+      next;
+    }
     else {
       print "Unknown log format\n";
       exit 1;
