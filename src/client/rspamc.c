@@ -41,6 +41,7 @@ static gchar *local_addr = NULL;
 static gchar *execute = NULL;
 static gchar *sort = NULL;
 static gchar **http_headers = NULL;
+static gchar **exclude_patterns = NULL;
 static gint weight = 0;
 static gint flag = 0;
 static gchar *fuzzy_symbol = NULL;
@@ -65,6 +66,7 @@ static gboolean skip_attachments = FALSE;
 static gchar *key = NULL;
 static gchar *user_agent = "rspamc";
 static GList *children;
+static GPatternSpec **exclude_compiled = NULL;
 
 #define ADD_CLIENT_HEADER(o, n, v) do { \
     struct rspamd_http_client_header *nh; \
@@ -136,6 +138,8 @@ static GOptionEntry entries[] =
 	   "Write mime body of message with headers instead of just a scan's result", NULL },
 	{"header", 0, 0, G_OPTION_ARG_STRING_ARRAY, &http_headers,
 		"Add custom HTTP header to query (can be repeated)", NULL},
+	{"exclude", 0, 0, G_OPTION_ARG_STRING_ARRAY, &exclude_patterns,
+		"Exclude specific glob patterns in file names (can be repeated)", NULL},
 	{"sort", 0, 0, G_OPTION_ARG_STRING, &sort,
 		"Sort output in a specific order (name, weight, time)", NULL},
 	{ "empty", 'E', 0, G_OPTION_ARG_NONE, &empty_input,
@@ -1698,12 +1702,13 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 	const gchar *name, GQueue *attrs)
 {
 	DIR *d;
+	GPatternSpec **ex;
 	struct dirent *pentry;
-	gint cur_req = 0;
+	gint cur_req = 0, r;
 	gchar fpath[PATH_MAX];
 	FILE *in;
 	struct stat st;
-	gboolean is_reg, is_dir;
+	gboolean is_reg, is_dir, skip;
 
 	d = opendir (name);
 
@@ -1714,9 +1719,25 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 				continue;
 			}
 
-			rspamd_snprintf (fpath, sizeof (fpath), "%s%c%s",
+			r = rspamd_snprintf (fpath, sizeof (fpath), "%s%c%s",
 					name, G_DIR_SEPARATOR,
 					pentry->d_name);
+
+			/* Check exclude */
+			ex = exclude_compiled;
+			skip = FALSE;
+			while (ex != NULL && *ex != NULL) {
+				if (g_pattern_match (*ex, r, fpath, NULL)) {
+					skip = TRUE;
+					break;
+				}
+
+				ex ++;
+			}
+
+			if (skip) {
+				continue;
+			}
 
 			is_reg = FALSE;
 			is_dir = FALSE;
@@ -1787,7 +1808,7 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
-	gint i, start_argc, cur_req = 0, res, ret;
+	gint i, start_argc, cur_req = 0, res, ret, npatterns;
 	GQueue *kwattrs;
 	GList *cur;
 	GPid cld;
@@ -1796,6 +1817,7 @@ main (gint argc, gchar **argv, gchar **env)
 	struct event_base *ev_base;
 	struct stat st;
 	struct sigaction sigpipe_act;
+	gchar **exclude_pattern;
 
 	kwattrs = g_queue_new ();
 
@@ -1806,6 +1828,28 @@ main (gint argc, gchar **argv, gchar **env)
 	if (print_commands) {
 		print_commands_list ();
 		exit (EXIT_SUCCESS);
+	}
+
+	/* Deal with exclude patterns */
+	exclude_pattern = exclude_patterns;
+	npatterns = 0;
+
+	while (exclude_pattern && *exclude_pattern) {
+		npatterns ++;
+	}
+
+	if (npatterns > 0) {
+		exclude_compiled = g_malloc0 (sizeof (*exclude_compiled) * (npatterns + 1));
+
+		for (i = 0; i < npatterns; i ++) {
+			exclude_compiled[i] = g_pattern_spec_new (exclude_patterns[i]);
+
+			if (exclude_compiled[i] == NULL) {
+				rspamd_fprintf (stderr, "Invalid glob pattern: %s\n",
+						exclude_patterns[i]);
+				exit (EXIT_FAILURE);
+			}
+		}
 	}
 
 	rspamd_init_libs ();
@@ -1947,6 +1991,10 @@ main (gint argc, gchar **argv, gchar **env)
 
 	if (children != NULL) {
 		g_list_free (children);
+	}
+
+	for (i = 0; i < npatterns; i ++) {
+		g_pattern_spec_free (exclude_compiled[i]);
 	}
 
 	return ret;
