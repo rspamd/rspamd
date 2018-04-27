@@ -497,7 +497,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				}
 				break;
 			default:
-				msg_debug_protocol ("unknown header: %V", hn);
+				msg_debug_protocol ("generic header: %V", hn);
 				break;
 			}
 

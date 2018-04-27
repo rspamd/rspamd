@@ -82,5 +82,6 @@
 #define MILTER_HEADER "Milter"
 #define FILENAME_HEADER "Filename"
 #define CERT_ISSUER_HEADER "TLS-Cert-Issuer"
+#define MAILER_HEADER "Mailer"
 
 #endif //RSPAMD_PROTOCOL_INTERNAL_H

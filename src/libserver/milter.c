@@ -1349,6 +1349,11 @@ rspamd_milter_macro_http (struct rspamd_milter_session *session,
 				found->begin, found->len);
 	}
 
+	IF_MACRO("{rcpt_mailer}") {
+		rspamd_http_message_add_header_len (msg, MAILER_HEADER,
+				found->begin, found->len);
+	}
+
 	if (milter_ctx->client_ca_name) {
 		IF_MACRO ("{cert_issuer}") {
 			rspamd_http_message_add_header_len (msg, CERT_ISSUER_HEADER,
