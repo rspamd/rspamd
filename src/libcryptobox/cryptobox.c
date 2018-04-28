@@ -1477,78 +1477,31 @@ void rspamd_cryptobox_hash (guchar *out,
 	rspamd_cryptobox_hash_final (&st, out);
 }
 
-/* MUST be 64 bytes at maximum */
-struct rspamd_cryptobox_fast_hash_state_real {
-	guint64 h;  /* current hash value */
-	guint64 pos; /* pos in bytes in the buf */
-	guint64 buf;
-};
+G_STATIC_ASSERT (sizeof (t1ha_context_t) ==
+		sizeof (rspamd_cryptobox_fast_hash_state_t));
 
 void
 rspamd_cryptobox_fast_hash_init (rspamd_cryptobox_fast_hash_state_t *st,
 		guint64 seed)
 {
-	struct rspamd_cryptobox_fast_hash_state_real *rst =
-			(struct rspamd_cryptobox_fast_hash_state_real *)st;
-
-	memset (rst, 0, sizeof (*rst));
-	rst->h = seed;
+	t1ha_context_t *rst = (t1ha_context_t *)st;
+	t1ha2_init (rst, seed, 0);
 }
 
 void
 rspamd_cryptobox_fast_hash_update (rspamd_cryptobox_fast_hash_state_t *st,
 		const void *data, gsize len)
 {
-	struct rspamd_cryptobox_fast_hash_state_real *rst =
-			(struct rspamd_cryptobox_fast_hash_state_real *)st;
-	const guchar *d = data;
-	guint leftover;
-	guint64 n;
-
-	leftover = rst->pos;
-
-	if (leftover > 0 && len + leftover >= 8) {
-		n = sizeof (rst->buf) - leftover;
-		memcpy (((guchar *)&rst->buf) + leftover, d, n);
-		d += n;
-		len -= n;
-		rst->h = mum_hash_step (rst->h, rst->buf);
-		rst->buf = 0;
-		rst->pos = 0;
-	}
-
-	while (len > 8) {
-#ifdef _MUM_UNALIGNED_ACCESS
-		rst->h = mum_hash_step (rst->h, *(guint64 *)d);
-#else
-		memcpy (&n, d, sizeof (n));
-		rst->h = mum_hash_step (rst->h, n);
-#endif
-		len -= 8;
-		d += 8;
-	}
-
-	if (len > 0 && rst->pos + len <= 8) {
-		memcpy (((guchar *)&rst->buf) + rst->pos, d, len);
-		rst->pos += len;
-	}
+	t1ha_context_t *rst = (t1ha_context_t *)st;
+	t1ha2_update (rst, data, len);
 }
 
 guint64
 rspamd_cryptobox_fast_hash_final (rspamd_cryptobox_fast_hash_state_t *st)
 {
-	struct rspamd_cryptobox_fast_hash_state_real *rst =
-			(struct rspamd_cryptobox_fast_hash_state_real *)st;
-	guint leftover;
+	t1ha_context_t *rst = (t1ha_context_t *)st;
 
-	leftover = rst->pos;
-
-	if (leftover > 0) {
-		memset (((guchar *)&rst->buf) + leftover, 0, sizeof (rst->buf) - leftover);
-		rst->h = mum_hash_step (rst->h, rst->buf);
-	}
-
-	return mum_hash_finish (rst->h);
+	return t1ha2_final (rst, NULL);
 }
 
 /**
@@ -1558,18 +1511,14 @@ static inline guint64
 rspamd_cryptobox_fast_hash_machdep (const void *data,
 		gsize len, guint64 seed)
 {
-#if defined(__LP64__) || defined(_LP64)
-	return t1ha (data, len, seed);
-#else
-	return t1ha32 (data, len, seed);
-#endif
+	return t1ha0 (data, len, seed);
 }
 
 static inline guint64
 rspamd_cryptobox_fast_hash_indep (const void *data,
 		gsize len, guint64 seed)
 {
-	return t1ha (data, len, seed);
+	return t1ha2_atonce (data, len, seed);
 }
 
 guint64
@@ -1593,7 +1542,7 @@ rspamd_cryptobox_fast_hash_specific (
 	case RSPAMD_CRYPTOBOX_MUMHASH:
 		return mum_hash (data, len, seed);
 	case RSPAMD_CRYPTOBOX_T1HA:
-		return t1ha (data, len, seed);
+		return t1ha2_atonce (data, len, seed);
 	case RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT:
 		return rspamd_cryptobox_fast_hash_indep (data, len, seed);
 	case RSPAMD_CRYPTOBOX_HASHFAST:

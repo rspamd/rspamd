@@ -344,7 +344,7 @@ void rspamd_cryptobox_hash (guchar *out,
 
 /* Non crypto hash IUF interface */
 typedef struct RSPAMD_ALIGNED(32) rspamd_cryptobox_fast_hash_state_s  {
-	unsigned char opaque[64];
+	unsigned char opaque[64 + sizeof (size_t) + sizeof (uint64_t)];
 } rspamd_cryptobox_fast_hash_state_t;
 
 /**
