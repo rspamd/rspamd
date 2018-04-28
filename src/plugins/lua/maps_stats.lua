@@ -29,6 +29,7 @@ maps_stats {
 end
 
 local redis_params
+local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local lua_redis = require "lua_redis"
 local N = "maps_stats"
@@ -89,6 +90,10 @@ local function process_map(map, ev_base, _)
       end
     end
   end
+end
+
+if not lua_util.check_experimental(N) then
+  return
 end
 
 local opts = rspamd_config:get_all_opt(N)
