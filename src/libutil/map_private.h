@@ -119,6 +119,7 @@ struct rspamd_map {
 	rspamd_map_traverse_function traverse_function;
 	gpointer lua_map;
 	gsize nelts;
+	guint64 digest;
 	/* Should we check HTTP or just load cached data */
 	struct timeval tv;
 	gdouble poll_timeout;

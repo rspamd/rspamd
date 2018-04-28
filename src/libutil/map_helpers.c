@@ -19,6 +19,7 @@
 #include "khash.h"
 #include "radix.h"
 #include "rspamd.h"
+#include "cryptobox.h"
 
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
@@ -29,6 +30,8 @@
 #include <pcre2.h>
 #endif
 
+
+static const guint64 map_hash_seed = 0xdeadbabeULL;
 static const gchar *hash_fill = "1";
 
 struct rspamd_map_helper_value {
@@ -45,11 +48,13 @@ struct rspamd_radix_map_helper {
 	rspamd_mempool_t *pool;
 	khash_t(rspamd_map_hash) *htb;
 	radix_compressed_t *trie;
+	rspamd_cryptobox_fast_hash_state_t hst;
 };
 
 struct rspamd_hash_map_helper {
 	rspamd_mempool_t *pool;
 	khash_t(rspamd_map_hash) *htb;
+	rspamd_cryptobox_fast_hash_state_t hst;
 };
 
 struct rspamd_regexp_map_helper {
@@ -58,6 +63,7 @@ struct rspamd_regexp_map_helper {
 	GPtrArray *regexps;
 	GPtrArray *values;
 	khash_t(rspamd_map_hash) *htb;
+	rspamd_cryptobox_fast_hash_state_t hst;
 	enum rspamd_regexp_map_flags map_flags;
 #ifdef WITH_HYPERSCAN
 	hs_database_t *hs_db;
@@ -441,6 +447,7 @@ rspamd_map_helper_insert_radix (gpointer st, gconstpointer key, gconstpointer va
 	val->key = nk;
 	kh_value (r->htb, k) = val;
 	rspamd_radix_add_iplist (key, ",", r->trie, val, FALSE);
+	rspamd_cryptobox_fast_hash_update (&r->hst, nk, strlen (nk));
 }
 
 void
@@ -469,6 +476,7 @@ rspamd_map_helper_insert_radix_resolve (gpointer st, gconstpointer key, gconstpo
 	val->key = nk;
 	kh_value (r->htb, k) = val;
 	rspamd_radix_add_iplist (key, ",", r->trie, val, TRUE);
+	rspamd_cryptobox_fast_hash_update (&r->hst, nk, strlen (nk));
 }
 
 void
@@ -496,6 +504,7 @@ rspamd_map_helper_insert_hash (gpointer st, gconstpointer key, gconstpointer val
 	nk = kh_key (ht->htb, k);
 	val->key = nk;
 	kh_value (ht->htb, k) = val;
+	rspamd_cryptobox_fast_hash_update (&ht->hst, nk, strlen (nk));
 }
 
 void
@@ -551,6 +560,7 @@ rspamd_map_helper_insert_re (gpointer st, gconstpointer key, gconstpointer value
 	nk = kh_key (re_map->htb, k);
 	val->key = nk;
 	kh_value (re_map->htb, k) = val;
+	rspamd_cryptobox_fast_hash_update (&re_map->hst, nk, strlen (nk));
 
 	pcre_flags = rspamd_regexp_get_pcre_flags (re);
 
@@ -607,6 +617,7 @@ rspamd_map_helper_new_hash (struct rspamd_map *map)
 	htb = rspamd_mempool_alloc0 (pool, sizeof (*htb));
 	htb->htb = kh_init (rspamd_map_hash);
 	htb->pool = pool;
+	rspamd_cryptobox_fast_hash_init (&htb->hst, map_hash_seed);
 
 	return htb;
 }
@@ -662,6 +673,7 @@ rspamd_map_helper_new_radix (struct rspamd_map *map)
 	r->trie = radix_create_compressed_with_pool (pool);
 	r->htb = kh_init (rspamd_map_hash);
 	r->pool = pool;
+	rspamd_cryptobox_fast_hash_init (&r->hst, map_hash_seed);
 
 	return r;
 }
@@ -715,6 +727,7 @@ rspamd_map_helper_new_regexp (struct rspamd_map *map,
 	re_map->map = map;
 	re_map->map_flags = flags;
 	re_map->htb = kh_init (rspamd_map_hash);
+	rspamd_cryptobox_fast_hash_init (&re_map->hst, map_hash_seed);
 
 	return re_map;
 }
@@ -796,6 +809,7 @@ rspamd_kv_list_fin (struct map_cb_data *data)
 		msg_info_map ("read hash of %d elements", kh_size (htb->htb));
 		data->map->traverse_function = rspamd_map_helper_traverse_hash;
 		data->map->nelts = kh_size (htb->htb);
+		data->map->digest = rspamd_cryptobox_fast_hash_final (&htb->hst);
 	}
 }
 
@@ -840,6 +854,7 @@ rspamd_radix_fin (struct map_cb_data *data)
 				radix_get_size (r->trie), radix_get_info (r->trie));
 		data->map->traverse_function = rspamd_map_helper_traverse_radix;
 		data->map->nelts = kh_size (r->htb);
+		data->map->digest = rspamd_cryptobox_fast_hash_final (&r->hst);
 	}
 }
 
@@ -1019,6 +1034,7 @@ rspamd_regexp_list_fin (struct map_cb_data *data)
 				re_map->regexps->len);
 		data->map->traverse_function = rspamd_map_helper_traverse_regexp;
 		data->map->nelts = kh_size (re_map->htb);
+		data->map->digest = rspamd_cryptobox_fast_hash_final (&re_map->hst);
 	}
 }
 
