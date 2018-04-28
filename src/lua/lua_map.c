@@ -94,6 +94,20 @@ LUA_FUNCTION_DEF (map, get_uri);
  */
 LUA_FUNCTION_DEF (map, get_stats);
 
+/***
+ * @method map:get_data_digest()
+ * Get data digest for specific map
+ * @return {string} 64 bit number represented as string (due to Lua limitations)
+ */
+LUA_FUNCTION_DEF (map, get_data_digest);
+
+/***
+ * @method map:get_nelts()
+ * Get number of elements for specific map
+ * @return {number} number of elements in the map
+ */
+LUA_FUNCTION_DEF (map, get_nelts);
+
 static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF (map, get_key),
 	LUA_INTERFACE_DEF (map, is_signed),
@@ -103,6 +117,8 @@ static const struct luaL_reg maplib_m[] = {
 	LUA_INTERFACE_DEF (map, set_callback),
 	LUA_INTERFACE_DEF (map, get_uri),
 	LUA_INTERFACE_DEF (map, get_stats),
+	LUA_INTERFACE_DEF (map, get_data_digest),
+	LUA_INTERFACE_DEF (map, get_nelts),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -860,6 +876,38 @@ lua_map_get_stats (lua_State * L)
 		if (map->map->traverse_function) {
 			rspamd_map_traverse (map->map, lua_map_traverse_cb, L, do_reset);
 		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_map_get_data_digest (lua_State * L)
+{
+	struct rspamd_lua_map *map = lua_check_map (L, 1);
+	gchar numbuf[64];
+
+	if (map != NULL) {
+		rspamd_snprintf (numbuf, sizeof (numbuf), "%uL", map->map->digest);
+		lua_pushstring (L, numbuf);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_map_get_nelts (lua_State * L)
+{
+	struct rspamd_lua_map *map = lua_check_map (L, 1);
+
+	if (map != NULL) {
+		lua_pushnumber (L, map->map->nelts);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
