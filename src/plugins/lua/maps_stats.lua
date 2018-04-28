@@ -83,7 +83,9 @@ local function process_map(map, ev_base, _)
     if ret and conn then
       local stats = map:get_stats(true)
       for k,s in pairs(stats) do
-        conn:add_cmd('ZINCRBY', {key, tostring(s), k})
+        if s > 0 then
+          conn:add_cmd('ZINCRBY', {key, tostring(s), k})
+        end
       end
     end
   end
