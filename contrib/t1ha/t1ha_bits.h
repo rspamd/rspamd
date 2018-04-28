@@ -94,13 +94,6 @@
 
 #if __GNUC_PREREQ(4, 4) || defined(__clang__)
 
-#if defined(__ia32__) || defined(__e2k__)
-#include <x86intrin.h>
-#endif
-
-#if defined(__ia32__)
-#include <cpuid.h>
-#endif
 
 #if defined(__e2k__)
 #include <e2kbuiltin.h>

@@ -43,6 +43,7 @@
 
 #include "t1ha_bits.h"
 
+
 #if T1HA0_AESNI_AVAILABLE
 
 #pragma GCC push_options
@@ -57,6 +58,15 @@
 #define __AES__
 #endif
 #include <immintrin.h>
+#if defined(__ia32__) || defined(__e2k__)
+#include <x86intrin.h>
+#endif
+
+#if defined(__ia32__)
+#include <cpuid.h>
+#endif
+
+uint64_t T1HA_IA32AES_NAME(const void *data, size_t len, uint64_t seed) __attribute__((target("aes")));
 
 uint64_t T1HA_IA32AES_NAME(const void *data, size_t len, uint64_t seed) {
   uint64_t a = seed;

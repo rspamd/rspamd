@@ -44,6 +44,14 @@
 #include "config.h"
 #include "t1ha_bits.h"
 
+#if defined(__ia32__) || defined(__e2k__)
+#include <x86intrin.h>
+#endif
+
+#if defined(__ia32__)
+#include <cpuid.h>
+#endif
+
 static __always_inline uint32_t tail32_le(const void *v, size_t tail) {
   const uint8_t *p = (const uint8_t *)v;
 #ifdef can_read_underside
