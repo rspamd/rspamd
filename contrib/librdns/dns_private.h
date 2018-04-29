@@ -24,6 +24,7 @@
 #ifndef DNS_PRIVATE_H_
 #define DNS_PRIVATE_H_
 
+#include "config.h"
 #include "uthash.h"
 #include "utlist.h"
 #include "rdns.h"
