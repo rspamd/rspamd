@@ -2766,8 +2766,8 @@ rspamd_gmtime (gint64 ts, struct tm *dest)
 	dest->tm_sec = remsecs % 60;
 #if !defined(__sun)
 	dest->tm_gmtoff = 0;
-#endif
 	dest->tm_zone = "GMT";
+#endif
 }
 
 void
