@@ -393,10 +393,12 @@ local function fprot_check(task, rule)
             })
           else
             rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
+            task:insert_result(rule['symbol_fail'], 0.0, 'retransmits exceed')
             upstream:fail()
           end
         else
           rspamd_logger.errx(task, 'failed to scan: %s', err)
+          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan')
           upstream:fail()
         end
       else
@@ -776,6 +778,7 @@ local av_types = {
 
 local function add_antivirus_rule(sym, opts)
   if not opts['type'] then
+    rspamd_logger.errx(rspamd_config, 'unknown type for AV rule %s', sym)
     return nil
   end
 
@@ -793,6 +796,7 @@ local function add_antivirus_rule(sym, opts)
 
   local rule = cfg.configure(opts)
   rule.type = opts.type
+  rule.symbol_fail = opts.symbol_fail
 
 
   if not rule then
