@@ -71,6 +71,8 @@ local settings = {
     ['x-virus'] = {
       header = 'X-Virus',
       remove = 1,
+      status_clean = nil,
+      status_infected = nil,
       symbols = {}, -- needs config
     },
     ['x-spamd-bar'] = {
@@ -344,7 +346,13 @@ local function milter_headers(task)
       end
     end
     if #virii > 0 then
-      add_header('x-virus', table.concat(virii, ','))
+      local virusstatus = table.concat(virii, ',')
+      if settings.routines['x-virus'].status_infected then
+        virusstatus = settings.routines['x-virus'].status_infected .. ', ' .. virusstatus
+      end
+      add_header('x-virus', virusstatus)
+    elseif settings.routines['x-virus'].status_clean then
+      add_header('x-virus', settings.routines['x-virus'].status_clean)
     end
   end
 
