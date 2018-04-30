@@ -75,6 +75,13 @@ local settings = {
       status_infected = nil,
       symbols = {}, -- needs config
     },
+    ['x-virus-status'] = {
+      header = 'X-Virus-Status',
+      remove = 1,
+      clean = 'Clean',
+      infected = 'Infected',
+      symbols = {}, -- needs config
+    },
     ['x-spamd-bar'] = {
       header = 'X-Spamd-Bar',
       positive = '+',
@@ -353,6 +360,39 @@ local function milter_headers(task)
       add_header('x-virus', virusstatus)
     elseif settings.routines['x-virus'].status_clean then
       add_header('x-virus', settings.routines['x-virus'].status_clean)
+    end
+  end
+
+  routines['x-virus-status'] = function()
+    if skip_wanted('x-virus-status') then return end
+    if not common.symbols_hash then
+      if not common.symbols then
+        common.symbols = task:get_symbols_all()
+      end
+      local h = {}
+      for _, s in ipairs(common.symbols) do
+        h[s.name] = s
+      end
+      common.symbols_hash = h
+    end
+    if settings.routines['x-virus-status'].remove then
+      remove[settings.routines['x-virus-status'].header] = settings.routines['x-virus-status'].remove
+    end
+    local virus_found = false
+    local virusstatus
+    for _, sym in ipairs(settings.routines['x-virus-status'].symbols) do
+      local s = common.symbols_hash[sym]
+      if s then
+        virus_found = true
+        virusstatus = settings.routines['x-virus-status'].infected
+        break
+      end
+    end
+    if not virus_found then
+      virusstatus = settings.routines['x-virus-status'].clean
+    end
+    if virusstatus then
+      add_header('x-virus-status', virusstatus)
     end
   end
 
