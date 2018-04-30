@@ -81,9 +81,10 @@ LUA_FUNCTION_DEF (task, get_ev_base);
  */
 LUA_FUNCTION_DEF (task, get_worker);
 /***
- * @method task:insert_result(symbol, weight[, option1, ...])
+ * @method task:insert_result([enforce_symbol,]symbol, weight[, option1, ...])
  * Insert specific symbol to the tasks scanning results assigning the initial
  * weight to it.
+ * @param {boolean} enforce_symbol if represented and true, then insert symbol even if it is not registered in the metric
  * @param {string} symbol symbol to insert
  * @param {number} weight initial weight (this weight is multiplied by the metric weight)
  * @param {string} options list of optional options attached to a symbol inserted

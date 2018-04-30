@@ -49,6 +49,12 @@ struct rspamd_metric_result {
  */
 struct rspamd_metric_result * rspamd_create_metric_result (struct rspamd_task *task);
 
+enum rspamd_symbol_insert_flags {
+	RSPAMD_SYMBOL_INSERT_DEFAULT = 0,
+	RSPAMD_SYMBOL_INSERT_SINGLE = (1 << 0),
+	RSPAMD_SYMBOL_INSERT_ENFORCE = (1 << 1),
+};
+
 /**
  * Insert a result to task
  * @param task worker's task that present message from user
@@ -57,23 +63,16 @@ struct rspamd_metric_result * rspamd_create_metric_result (struct rspamd_task *t
  * @param flag numeric weight for symbol
  * @param opts list of symbol's options
  */
-struct rspamd_symbol_result* rspamd_task_insert_result (struct rspamd_task *task,
+struct rspamd_symbol_result* rspamd_task_insert_result_full (struct rspamd_task *task,
 	const gchar *symbol,
 	double flag,
-	const gchar *opts);
+	const gchar *opts,
+	enum rspamd_symbol_insert_flags flags);
 
-/**
- * Insert a single result to task
- * @param task worker's task that present message from user
- * @param metric_name metric's name to which we need to insert result
- * @param symbol symbol to insert
- * @param flag numeric weight for symbol
- * @param opts list of symbol's options
- */
-struct rspamd_symbol_result* rspamd_task_insert_result_single (struct rspamd_task *task,
-	const gchar *symbol,
-	double flag,
-	const gchar *opts);
+#define rspamd_task_insert_result_single(task, symbol, flag, opts) \
+	rspamd_task_insert_result_full (task, symbol, flag, opts, RSPAMD_SYMBOL_INSERT_SINGLE)
+#define rspamd_task_insert_result(task, symbol, flag, opts) \
+	rspamd_task_insert_result_full (task, symbol, flag, opts, RSPAMD_SYMBOL_INSERT_DEFAULT)
 
 
 /**

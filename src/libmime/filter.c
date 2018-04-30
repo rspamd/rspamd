@@ -23,8 +23,6 @@
 #include "contrib/uthash/utlist.h"
 
 
-#define COMMON_PART_FACTOR 95
-
 struct rspamd_metric_result *
 rspamd_create_metric_result (struct rspamd_task *task)
 {
@@ -38,7 +36,7 @@ rspamd_create_metric_result (struct rspamd_task *task)
 	}
 
 	metric_res = rspamd_mempool_alloc (task->task_pool,
-					sizeof (struct rspamd_metric_result));
+			sizeof (struct rspamd_metric_result));
 	metric_res->symbols = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
 	rspamd_mempool_add_destructor (task->task_pool,
@@ -68,7 +66,7 @@ rspamd_check_group_score (struct rspamd_task *task,
 	if (gr != NULL && group_score && gr->max_score > 0.0 && w > 0.0) {
 		if (*group_score >= gr->max_score && w > 0) {
 			msg_info_task ("maximum group score %.2f for group %s has been reached,"
-					" ignoring symbol %s with weight %.2f", gr->max_score,
+						   " ignoring symbol %s with weight %.2f", gr->max_score,
 					gr->name, symbol, w);
 			return NAN;
 		}
@@ -82,10 +80,10 @@ rspamd_check_group_score (struct rspamd_task *task,
 
 static struct rspamd_symbol_result *
 insert_metric_result (struct rspamd_task *task,
-	const gchar *symbol,
-	double flag,
-	const gchar *opt,
-	gboolean single)
+		const gchar *symbol,
+		double flag,
+		const gchar *opt,
+		enum rspamd_symbol_insert_flags flags)
 {
 	struct rspamd_metric_result *metric_res;
 	struct rspamd_symbol_result *s = NULL;
@@ -94,6 +92,7 @@ insert_metric_result (struct rspamd_task *task,
 	struct rspamd_symbols_group *gr = NULL;
 	const ucl_object_t *mobj, *sobj;
 	gint max_shots;
+	gboolean single = !!(flags & RSPAMD_SYMBOL_INSERT_SINGLE);
 
 	metric_res = rspamd_create_metric_result (task);
 
@@ -105,7 +104,12 @@ insert_metric_result (struct rspamd_task *task,
 
 	sdef = g_hash_table_lookup (task->cfg->symbols, symbol);
 	if (sdef == NULL) {
-		w = 0.0;
+		if (flags & RSPAMD_SYMBOL_INSERT_ENFORCE) {
+			w = 1.0 * flag; /* Enforce static weight to 1.0 */
+		}
+		else {
+			w = 0.0;
+		}
 	}
 	else {
 		w = (*sdef->weight_ptr) * flag;
@@ -248,18 +252,18 @@ insert_metric_result (struct rspamd_task *task,
 	return s;
 }
 
-static struct rspamd_symbol_result *
-insert_result_common (struct rspamd_task *task,
-	const gchar *symbol,
-	double flag,
-	const gchar *opt,
-	gboolean single)
+struct rspamd_symbol_result *
+rspamd_task_insert_result_full (struct rspamd_task *task,
+		const gchar *symbol,
+		double flag,
+		const gchar *opt,
+		enum rspamd_symbol_insert_flags flags)
 {
 	struct rspamd_symbol_result *s = NULL;
 
 	if (task->processed_stages & (RSPAMD_TASK_STAGE_IDEMPOTENT >> 1)) {
 		msg_err_task ("cannot insert symbol %s on idempotent phase",
-			symbol);
+				symbol);
 
 		return NULL;
 	}
@@ -269,7 +273,7 @@ insert_result_common (struct rspamd_task *task,
 			symbol,
 			flag,
 			opt,
-			single);
+			flags);
 
 	/* Process cache item */
 	if (task->cfg->cache) {
@@ -277,27 +281,6 @@ insert_result_common (struct rspamd_task *task,
 	}
 
 	return s;
-}
-
-/* Insert result that may be increased on next insertions */
-struct rspamd_symbol_result *
-rspamd_task_insert_result (struct rspamd_task *task,
-	const gchar *symbol,
-	double flag,
-	const gchar *opt)
-{
-	return insert_result_common (task, symbol, flag, opt,
-			FALSE);
-}
-
-/* Insert result as a single option */
-struct rspamd_symbol_result *
-rspamd_task_insert_result_single (struct rspamd_task *task,
-	const gchar *symbol,
-	double flag,
-	const gchar *opt)
-{
-	return insert_result_common (task, symbol, flag, opt, TRUE);
 }
 
 gboolean
