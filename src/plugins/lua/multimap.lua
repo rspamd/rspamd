@@ -505,22 +505,25 @@ local function multimap_callback(task, rule)
           return
         end
         local _,symbol,score = parse_ret(r, result)
-        if symbol and r['symbols_set'] then
-          if not r['symbols_set'][symbol] then
-            rspamd_logger.infox(task, 'symbol %s is not registered for map %s, ' ..
-              'replace it with just %s',
-              symbol, r['symbol'], r['symbol'])
-            symbol = r['symbol']
+        local forced = false
+        if symbol then
+          if r['symbols_set'] then
+            if not r['symbols_set'][symbol] then
+              rspamd_logger.infox(task, 'symbol %s is not registered for map %s, ' ..
+                  'replace it with just %s',
+                  symbol, r['symbol'], r['symbol'])
+              symbol = r['symbol']
+            end
+          else
+            forced = true
           end
-        else
-          symbol = r['symbol']
         end
 
         local opt = value_types[r['type']].get_value(value)
         if opt then
-          task:insert_result(symbol, score, opt)
+          task:insert_result(forced, symbol, score, opt)
         else
-          task:insert_result(symbol, score)
+          task:insert_result(forced, symbol, score)
         end
 
         if pre_filter then
