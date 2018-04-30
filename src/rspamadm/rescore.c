@@ -83,10 +83,13 @@ rspamadm_rescore_help (gboolean full_help) {
 		help_str = "Estimate optimal symbol weights from log files\n\n"
 				"Usage: rspamadm rescore -l <log_directory>\n"
 				"Where options are:\n\n"
-				"-l: path to logs directory\n"
-				"-o: scores output file location\n"
-				"-d: print scores diff\n"
-				"-i: max iterations for perceptron\n";
+				"-l: Logs of directory\n"
+				"-o: Scores output location\n"
+				"-d: Print score diff\n"
+				"-c: Config file to use\n"
+				"--threads: No of threads to use\n"
+				"--verbose: Enable verbose\n"
+				"-i: Max iterations for perceptron [Default: 500]\n";
 	} else {
 		help_str = "Estimate optimal symbol weights from log files";
 	}
