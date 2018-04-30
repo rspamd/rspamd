@@ -517,6 +517,8 @@ local function multimap_callback(task, rule)
           else
             forced = true
           end
+        else
+          symbol = r['symbol']
         end
 
         local opt = value_types[r['type']].get_value(value)
