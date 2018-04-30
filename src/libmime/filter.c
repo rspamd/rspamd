@@ -81,13 +81,13 @@ rspamd_check_group_score (struct rspamd_task *task,
 static struct rspamd_symbol_result *
 insert_metric_result (struct rspamd_task *task,
 		const gchar *symbol,
-		double flag,
+		double weight,
 		const gchar *opt,
 		enum rspamd_symbol_insert_flags flags)
 {
 	struct rspamd_metric_result *metric_res;
 	struct rspamd_symbol_result *s = NULL;
-	gdouble w, *gr_score = NULL, next_gf = 1.0, diff;
+	gdouble final_score, *gr_score = NULL, next_gf = 1.0, diff;
 	struct rspamd_symbol *sdef;
 	struct rspamd_symbols_group *gr = NULL;
 	const ucl_object_t *mobj, *sobj;
@@ -96,23 +96,23 @@ insert_metric_result (struct rspamd_task *task,
 
 	metric_res = rspamd_create_metric_result (task);
 
-	if (!isfinite (flag)) {
+	if (!isfinite (weight)) {
 		msg_warn_task ("detected %s score for symbol %s, replace it with zero",
-				isnan (flag) ? "NaN" : "infinity", symbol);
-		flag = 0.0;
+				isnan (weight) ? "NaN" : "infinity", symbol);
+		weight = 0.0;
 	}
 
 	sdef = g_hash_table_lookup (task->cfg->symbols, symbol);
 	if (sdef == NULL) {
 		if (flags & RSPAMD_SYMBOL_INSERT_ENFORCE) {
-			w = 1.0 * flag; /* Enforce static weight to 1.0 */
+			final_score = 1.0 * weight; /* Enforce static weight to 1.0 */
 		}
 		else {
-			w = 0.0;
+			final_score = 0.0;
 		}
 	}
 	else {
-		w = (*sdef->weight_ptr) * flag;
+		final_score = (*sdef->weight_ptr) * weight;
 		gr = sdef->gr;
 
 		if (gr != NULL) {
@@ -133,8 +133,8 @@ insert_metric_result (struct rspamd_task *task,
 		sobj = ucl_object_lookup (mobj, symbol);
 		if (sobj != NULL && ucl_object_todouble_safe (sobj, &corr)) {
 			msg_debug ("settings: changed weight of symbol %s from %.2f to %.2f",
-					symbol, w, corr);
-			w = corr * flag;
+					symbol, final_score, corr);
+			final_score = corr * weight;
 		}
 	}
 
@@ -167,12 +167,12 @@ insert_metric_result (struct rspamd_task *task,
 
 		/* Adjust diff */
 		if (!single) {
-			diff = w;
+			diff = final_score;
 		}
 		else {
-			if (fabs (s->score) < fabs (w) && signbit (s->score) == signbit (w)) {
+			if (fabs (s->score) < fabs (final_score) && signbit (s->score) == signbit (final_score)) {
 				/* Replace less significant weight with a more significant one */
-				diff = w - s->score;
+				diff = final_score - s->score;
 			}
 			else {
 				diff = 0;
@@ -200,7 +200,7 @@ insert_metric_result (struct rspamd_task *task,
 				}
 
 				if (single) {
-					s->score = w;
+					s->score = final_score;
 				}
 				else {
 					s->score += diff;
@@ -212,11 +212,11 @@ insert_metric_result (struct rspamd_task *task,
 		s = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_symbol_result));
 
 		/* Handle grow factor */
-		if (metric_res->grow_factor && w > 0) {
-			w *= metric_res->grow_factor;
+		if (metric_res->grow_factor && final_score > 0) {
+			final_score *= metric_res->grow_factor;
 			next_gf *= task->cfg->grow_factor;
 		}
-		else if (w > 0) {
+		else if (final_score > 0) {
 			next_gf = task->cfg->grow_factor;
 		}
 
@@ -224,15 +224,15 @@ insert_metric_result (struct rspamd_task *task,
 		s->sym = sdef;
 		s->nshots = 1;
 
-		w = rspamd_check_group_score (task, symbol, gr, gr_score, w);
+		final_score = rspamd_check_group_score (task, symbol, gr, gr_score, final_score);
 
-		if (!isnan (w)) {
-			metric_res->score += w;
+		if (!isnan (final_score)) {
+			metric_res->score += final_score;
 			metric_res->grow_factor = next_gf;
-			s->score = w;
+			s->score = final_score;
 
 			if (gr_score) {
-				*gr_score += w;
+				*gr_score += final_score;
 			}
 
 		}
@@ -247,7 +247,7 @@ insert_metric_result (struct rspamd_task *task,
 	msg_debug_task ("symbol %s, score %.2f, factor: %f",
 			symbol,
 			s->score,
-			w);
+			final_score);
 
 	return s;
 }
@@ -255,7 +255,7 @@ insert_metric_result (struct rspamd_task *task,
 struct rspamd_symbol_result *
 rspamd_task_insert_result_full (struct rspamd_task *task,
 		const gchar *symbol,
-		double flag,
+		double weight,
 		const gchar *opt,
 		enum rspamd_symbol_insert_flags flags)
 {
@@ -271,7 +271,7 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 	/* Insert symbol to default metric */
 	s = insert_metric_result (task,
 			symbol,
-			flag,
+			weight,
 			opt,
 			flags);
 

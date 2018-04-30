@@ -60,12 +60,12 @@ enum rspamd_symbol_insert_flags {
  * @param task worker's task that present message from user
  * @param metric_name metric's name to which we need to insert result
  * @param symbol symbol to insert
- * @param flag numeric weight for symbol
+ * @param weight numeric weight for symbol
  * @param opts list of symbol's options
  */
 struct rspamd_symbol_result* rspamd_task_insert_result_full (struct rspamd_task *task,
 	const gchar *symbol,
-	double flag,
+	double weight,
 	const gchar *opts,
 	enum rspamd_symbol_insert_flags flags);
 
