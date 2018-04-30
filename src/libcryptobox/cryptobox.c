@@ -1511,7 +1511,7 @@ static inline guint64
 rspamd_cryptobox_fast_hash_machdep (const void *data,
 		gsize len, guint64 seed)
 {
-	return t1ha0 (data, len, seed);
+	return t1ha2_atonce (data, len, seed);
 }
 
 static inline guint64
