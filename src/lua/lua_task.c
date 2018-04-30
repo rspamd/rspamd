@@ -1247,20 +1247,32 @@ lua_task_insert_result (lua_State * L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *symbol_name, *param;
-	double flag;
+	double weight;
 	struct rspamd_symbol_result *s;
-	gint i, top;
+	enum rspamd_symbol_insert_flags flags = RSPAMD_SYMBOL_INSERT_DEFAULT;
+	gint i, top, args_start;
 
 	if (task != NULL) {
-		symbol_name =
-			rspamd_mempool_strdup (task->task_pool, luaL_checkstring (L, 2));
-		flag = luaL_checknumber (L, 3);
+		if (lua_isboolean (L, 2)) {
+			args_start = 3;
+
+			if (lua_toboolean (L, 2)) {
+				flags |= RSPAMD_SYMBOL_INSERT_ENFORCE;
+			}
+		}
+		else {
+			args_start = 2;
+		}
+
+		symbol_name = rspamd_mempool_strdup (task->task_pool,
+				luaL_checkstring (L, args_start));
+		weight = luaL_checknumber (L, args_start + 1);
 		top = lua_gettop (L);
-		s = rspamd_task_insert_result (task, symbol_name, flag, NULL);
+		s = rspamd_task_insert_result_full (task, symbol_name, weight, NULL, flags);
 
 		/* Get additional options */
 		if (s) {
-			for (i = 4; i <= top; i++) {
+			for (i = args_start + 2; i <= top; i++) {
 				if (lua_type (L, i) == LUA_TSTRING) {
 					param = luaL_checkstring (L, i);
 					rspamd_task_add_result_option (task, s, param);
