@@ -846,7 +846,7 @@ if opts and type(opts) == 'table' then
       if not cb then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
       else
-        rspamd_config:register_symbol({
+        local id = rspamd_config:register_symbol({
           type = 'normal',
           name = m['symbol'],
           callback = cb,
@@ -854,7 +854,7 @@ if opts and type(opts) == 'table' then
         rspamd_config:register_symbol({
           type = 'virtual',
           name = m['symbol_fail'],
-          parent = m['symbol'],
+          parent = id,
           score = 0.0,
         })
         has_valid = true
@@ -876,7 +876,7 @@ if opts and type(opts) == 'table' then
               rspamd_config:register_symbol({
                 type = 'virtual',
                 name = sym,
-                parent = m['symbol']
+                parent = id
               })
             end
           end
