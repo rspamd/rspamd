@@ -24,17 +24,17 @@ CLAMAV HIT
   Run Dummy Clam  ${PORT_CLAM}  1
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}
   Check Rspamc  ${result}  CLAM_VIRUS (1.00)[Eicar-Test-Signature]
-  Should Not Contain  ${result.stdout}  FPROT_
+  Should Not Contain  ${result.stdout}  CLAMAV_FAIL
 
 CLAMAV CACHE HIT
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}
   Check Rspamc  ${result}  CLAM_VIRUS (1.00)[Eicar-Test-Signature]
-  Should Not Contain  ${result.stdout}  FPROT_
+  Should Not Contain  ${result.stdout}  CLAMAV_FAIL
 
 CLAMAV CACHE MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
   Check Rspamc  ${result}  CLAM_VIRUS  inverse=1
-  Should Not Contain  ${result.stdout}  FPROT_
+  Should Not Contain  ${result.stdout}  CLAMAV_FAIL
 
 FPROT MISS
   Run Dummy Fprot  ${PORT_FPROT}
@@ -63,7 +63,7 @@ FPROT CACHE HIT
 
 FPROT CACHE MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}
-  Check Rspamc  ${result}  FPROT_  inverse=1
+  Check Rspamc  ${result}  FPROT_VIRUS  inverse=1
 
 *** Keywords ***
 Antivirus Setup
