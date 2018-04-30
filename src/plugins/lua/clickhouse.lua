@@ -48,6 +48,7 @@ local settings = {
   dkim_reject_symbols = {'R_DKIM_REJECT'},
   dmarc_allow_symbols = {'DMARC_POLICY_ALLOW'},
   dmarc_reject_symbols = {'DMARC_POLICY_REJECT', 'DMARC_POLICY_QUARANTINE'},
+  stop_symbols = {},
   table = 'rspamd',
   attachments_table = 'rspamd_attachments',
   urls_table = 'rspamd_urls',
@@ -408,6 +409,14 @@ end
 
 local function clickhouse_collect(task)
   if not settings.allow_local and rspamd_lua_utils.is_rspamc_or_controller(task) then return end
+
+  for _,sym in ipairs(settings.stop_symbols) do
+    if task:has_symbol(sym) then
+      rspamd_logger.debugm(N, task, 'skip collection as symbol %s has fired', sym)
+      return
+    end
+  end
+
   local from_domain = ''
   local from_user = ''
   if task:has_from('smtp') then
