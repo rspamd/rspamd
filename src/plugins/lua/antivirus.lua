@@ -471,10 +471,12 @@ local function clamav_check(task, rule)
             })
           else
             rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
+            task:insert_result(rule['symbol_fail'], 0.0, 'retransmits exceed')
             upstream:fail()
           end
         else
           rspamd_logger.errx(task, 'failed to scan: %s', err)
+          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan')
           upstream:fail()
         end
       else
@@ -496,6 +498,7 @@ local function clamav_check(task, rule)
             cached = vname
           else
             rspamd_logger.errx(task, 'unhandled response: %s', data)
+            task:insert_result(rule['symbol_fail'], 0.0, 'unhandled response')
           end
         end
         if cached then
@@ -549,10 +552,12 @@ local function sophos_check(task, rule)
             })
           else
             rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
+            task:insert_result(rule['symbol_fail'], 0.0, 'retransmits exceed')
             upstream:fail()
           end
         else
           rspamd_logger.errx(task, 'failed to scan: %s', err)
+          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan')
           upstream:fail()
         end
       else
@@ -586,6 +591,7 @@ local function sophos_check(task, rule)
             conn:add_read(sophos_callback)
           else
             rspamd_logger.errx(task, 'unhandled response: %s', data)
+            task:insert_result(rule['symbol_fail'], 0.0, 'unhandled response')
           end
         end
       end
@@ -712,9 +718,11 @@ local function savapi_check(task, rule)
           else
             rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
             upstream:fail()
+            task:insert_result(rule['symbol_fail'], 0.0, 'retransmits exceed')
           end
         else
           rspamd_logger.errx(task, 'failed to scan: %s', err)
+          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan')
           upstream:fail()
         end
       else
@@ -774,6 +782,10 @@ local function add_antivirus_rule(sym, opts)
   if not opts['symbol'] then opts['symbol'] = sym end
   local cfg = av_types[opts['type']]
 
+  if not opts['symbol_fail'] then
+    opts['symbol_fail'] = string.upper(opts['type']) .. '_FAIL'
+  end
+
   if not cfg then
     rspamd_logger.errx(rspamd_config, 'unknown antivirus type: %s',
       opts['type'])
@@ -830,10 +842,16 @@ if opts and type(opts) == 'table' then
       if not cb then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
       else
-        local id = rspamd_config:register_symbol({
+        rspamd_config:register_symbol({
           type = 'normal',
           name = m['symbol'],
           callback = cb,
+        })
+        rspamd_config:register_symbol({
+          type = 'virtual',
+          name = m['symbol_fail'],
+          parent = m['symbol'],
+          score = 0.0,
         })
         has_valid = true
         if type(m['patterns']) == 'table' then
@@ -844,7 +862,7 @@ if opts and type(opts) == 'table' then
                   rspamd_config:register_symbol({
                     type = 'virtual',
                     name = sym,
-                    parent = id
+                    parent = m['symbol']
                   })
                 end
               end
@@ -854,7 +872,7 @@ if opts and type(opts) == 'table' then
               rspamd_config:register_symbol({
                 type = 'virtual',
                 name = sym,
-                parent = id
+                parent = m['symbol']
               })
             end
           end
