@@ -48,6 +48,7 @@ rostelecom.ru
 sberbank.ru
 sportmaster.ru
 squarespace.com
+subscribe.ru
 superjob.ru
 twitter.com
 uber.com
@@ -56,6 +57,7 @@ ups.com
 usps.com
 verizonwireless.com
 vk.com
+vkrugudruzei.ru
 westernunion.com
 whatsapp.com
 zendesk.com
