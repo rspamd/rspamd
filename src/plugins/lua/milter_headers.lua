@@ -73,6 +73,8 @@ local settings = {
       remove = 1,
       status_clean = nil,
       status_infected = nil,
+      status_fail = nil,
+      symbols_fail = {},
       symbols = {}, -- needs config
     },
     ['x-spamd-bar'] = {
@@ -339,10 +341,12 @@ local function milter_headers(task)
     local virii = {}
     for _, sym in ipairs(settings.routines['x-virus'].symbols) do
       local s = common.symbols_hash[sym]
-      if ((s or E).options or E)[1] then
-        table.insert(virii, table.concat(s.options, ','))
-      elseif s then
-        table.insert(virii, 'unknown')
+      if s then
+        if (s.options or E)[1] then
+          table.insert(virii, table.concat(s.options, ','))
+        elseif s then
+          table.insert(virii, 'unknown')
+        end
       end
     end
     if #virii > 0 then
@@ -351,8 +355,28 @@ local function milter_headers(task)
         virusstatus = settings.routines['x-virus'].status_infected .. ', ' .. virusstatus
       end
       add_header('x-virus', virusstatus)
-    elseif settings.routines['x-virus'].status_clean then
-      add_header('x-virus', settings.routines['x-virus'].status_clean)
+    else
+      local failed = false
+      local fail_reason = 'unknown'
+      for _, sym in ipairs(settings.routines['x-virus'].symbols_fail) do
+        local s = common.symbols_hash[sym]
+        if s then
+          failed = true
+          if (s.options or E)[1] then
+            fail_reason = table.concat(s.options, ',')
+          end
+        end
+      end
+      if not failed then
+        if settings.routines['x-virus'].status_clean then
+          add_header('x-virus', settings.routines['x-virus'].status_clean)
+        end
+      else
+        if settings.routines['x-virus'].status_clean then
+          add_header('x-virus', string.format('%s(%s)',
+              settings.routines['x-virus'].status_fail, fail_reason))
+        end
+      end
     end
   end
 
