@@ -63,6 +63,7 @@ diply.com
 discovercard.com
 disqus.com
 dropbox.com
+drweb.com
 ebay.ca
 ebay.com
 ebay.com.au
@@ -106,6 +107,7 @@ indeed.com
 indiatimes.com
 infusionsoft.com
 instagram.com
+intel.com
 irctc.co.in
 kayak.com
 kickstarter.com
@@ -116,6 +118,7 @@ libero.it
 lifehacker.com
 likes.com
 linkedin.com
+linux.com
 list-manage.com
 mackeeper.com
 mailchimp.com
@@ -127,6 +130,7 @@ messenger.com
 microsoft.com
 microsoftonline.com
 moikrug.ru
+mts.ru
 neobux.com
 netflix.com
 newegg.com
@@ -140,6 +144,7 @@ ok.ru
 olx.ua
 overstock.com
 ozon.ru
+ozon.travel
 pandora.com
 paypal.ca
 paypal.cn
@@ -169,6 +174,7 @@ slideshare.net
 so-net.ne.jp
 southwest.com
 spotify.com
+springer.com
 squarespace.com
 steampowered.com
 stumbleupon.com
@@ -179,6 +185,7 @@ taleo.net
 taobao.com
 target.com
 taringa.net
+tele2.ru
 thekitchn.com
 tokopedia.com
 trello.com
@@ -196,6 +203,9 @@ verizonwireless.com
 vimeo.com
 vine.co
 vk.com
+vmware.com
+vtb24.ru
+wahoofitness.com
 walmart.com
 wav.tv
 wellsfargo.com
@@ -203,6 +213,7 @@ whatsapp.com
 wikia.com
 wikimedia.org
 wikipedia.org
+wildberries.ru
 wix.com
 wordpress.com
 wordpress.org
@@ -217,3 +228,4 @@ zendesk.com
 zippyshare.com
 zomato.com
 zulily.com
+zwift.com
