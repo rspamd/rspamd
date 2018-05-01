@@ -1,3 +1,42 @@
+1.7.4: 01 May 2018
+	* [Conf] Major stock config updates:
+		- Workers are now specified in a new format worker "type" { ... }
+		- Enable fuzzy worker to simplify local fuzzy storages configuration
+		- Bind all workers to localhost by default to avoid security flaws
+	* [Conf] Make more sane fuzzy_check default settings
+	* [CritFix] Fix ucl escape for bad symbols
+	* [Feature] Add failure symbol for AV module
+	* [Feature] Add lazy expiration mode for new classifier schema
+	* [Feature] Add preliminary version of maps stats plugin
+	* [Feature] Allow to block fuzzy requests from specific networks
+	* [Feature] Allow to change `expire` of live statistics
+	* [Feature] Distinguish AV failure from clean result
+	* [Feature] Further improvements of language detector by using khash
+	* [Feature] Further optimization of the lang_detection
+	* [Feature] Implement cluster-aware bayes expiry
+	* [Feature] Implement exclude patterns in rspamc
+	* [Feature] Implement glob maps in addition to regexp maps
+	* [Feature] Implement map statistics function for lua API
+	* [Feature] Implement stop symbols for Clickhouse collection
+	* [Feature] Support recipients separated by commas
+	* [Feature] Try harder to upload scripts to the Redis server
+	* [Feature] Upgrade t1ha distribution
+	* [Feature] use_domain_sign_inbound
+	* [Feature] Use scores from maps if `symbols_set` is not defined
+	* [Fix] Add resolving version of radix map helper
+	* [Fix] Check URL before adding implicit prefix
+	* [Fix] Do not check pid/state when using PRNG
+	* [Fix] Fix CentOS logrotate script for systemd
+	* [Fix] Fix slash + dot in urls
+	* [Fix] Fix systemd version of the logrotate script
+	* [Fix] Propagate key when import implicit array from Lua
+	* [Fix] Strip spaces from map keys and values
+	* [Fix] Try to fix a specific case when processing milter protocol
+	* [Fix] Try to fix crash when a tcp connection cannot be set
+	* [Fix] Typo use_domain_local --> use_domain_sign_local
+	* [Fix] Various fixes to once_received module
+	* [Project] Store hits counters for map elements
+
 1.7.3: 10 Apr 2018
 	* [CritFix] Plug bad memory leak in protocol reply
 	* [Feature] Add avx2 codec for base64
