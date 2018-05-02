@@ -410,8 +410,8 @@ ucl_object_lua_fromtable (lua_State *L, int idx, ucl_string_flags_t flags)
 
 				DL_FOREACH (obj, cur) {
 					if (cur->keylen == 0) {
-						cur->keylen = keylen;
-						cur->key = k;
+						cur->keylen = obj->keylen;
+						cur->key = obj->key;
 					}
 				}
 			}
