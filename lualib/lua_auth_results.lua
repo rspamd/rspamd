@@ -78,8 +78,10 @@ local function gen_auth_results(task, settings)
     symbols = {}
   }
 
-
-  if local_hostname then
+  local mta_hostname = task:get_request_header('MTA-Tag')
+  if mta_hostname then
+    table.insert(hdr_parts, tostring(mta_hostname))
+  else
     table.insert(hdr_parts, local_hostname)
   end
 
