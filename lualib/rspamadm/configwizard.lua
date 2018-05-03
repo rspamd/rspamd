@@ -439,7 +439,13 @@ return ttl
     local r,ver = get_version(conn)
     if not r then return false end
     if ver ~= 2 then
-      printf("You are using an old schema for %s/%s", symbol_ham, symbol_spam)
+      if not ver then
+        printf('Key "%s_version" has not been found in Redis for %s/%s',
+            symbol_ham)
+      else
+        printf("You are using an old schema version: %s for %s/%s",
+            ver, symbol_ham, symbol_spam)
+      end
       try_convert(true)
     else
       printf("You have configured an old schema for %s/%s but your data has new layout",
