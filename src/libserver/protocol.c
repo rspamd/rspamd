@@ -789,7 +789,7 @@ rspamd_emails_tree_ucl (GHashTable *input, struct rspamd_task *task)
 
 /* Write new subject */
 static const gchar *
-make_rewritten_subject (struct rspamd_task *task)
+rspamd_protocol_rewrite_subject (struct rspamd_task *task)
 {
 	GString *subj_buf;
 	gchar *res;
@@ -816,19 +816,36 @@ make_rewritten_subject (struct rspamd_task *task)
 	subj_buf = g_string_sized_new (strlen (c) + slen);
 
 	while (*p) {
-		if (*p == '%' && *(p + 1) == 's') {
-			g_string_append_len (subj_buf, c, p - c);
+		if (*p == '%') {
+			switch (p[1]) {
+			case 's':
+				g_string_append_len (subj_buf, c, p - c);
 
-			if (s) {
-				g_string_append_len (subj_buf, s, slen);
+				if (s) {
+					g_string_append_len (subj_buf, s, slen);
+				}
+				c = p + 2;
+				p += 2;
+				break;
+			case 'd':
+				g_string_append_len (subj_buf, c, p - c);
+				rspamd_printf_gstring (subj_buf, "%.2f", task->result->score);
+				c = p + 2;
+				p += 2;
+				break;
+			case '%':
+				g_string_append_len (subj_buf, c, p - c);
+				g_string_append_c (subj_buf, '%');
+				c = p + 2;
+				p += 2;
+			default:
+				p ++; /* Just % something unknown */
+				break;
 			}
-
-			p += 2;
-			c = p;
-			continue;
 		}
-
-		p ++;
+		else {
+			p++;
+		}
 	}
 
 	if (p > c) {
@@ -936,7 +953,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 			"action", 0, false);
 
 	if (action == METRIC_ACTION_REWRITE_SUBJECT) {
-		subject = make_rewritten_subject (task);
+		subject = rspamd_protocol_rewrite_subject (task);
 
 		if (subject) {
 			ucl_object_insert_key (obj, ucl_object_fromstring (subject),

@@ -82,6 +82,7 @@ struct rspamd_regexp_cache {
 
 static struct rspamd_regexp_cache *global_re_cache = NULL;
 static gboolean can_jit = FALSE;
+static gboolean check_jit = TRUE;
 
 #ifdef WITH_PCRE2
 static pcre2_compile_context *pcre2_ctx = NULL;
@@ -330,7 +331,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 	gint regexp_flags = 0, rspamd_flags = 0, err_code, ncaptures;
 	gboolean strict_flags = FALSE;
 
-	rspamd_regexp_library_init ();
+	rspamd_regexp_library_init (NULL);
 
 	if (flags == NULL) {
 		/* We need to parse pattern and detect flags set */
@@ -963,7 +964,7 @@ rspamd_regexp_cache_query (struct rspamd_regexp_cache* cache,
 	regexp_id_t id;
 
 	if (cache == NULL) {
-		rspamd_regexp_library_init ();
+		rspamd_regexp_library_init (NULL);
 		cache = global_re_cache;
 	}
 
@@ -984,7 +985,7 @@ rspamd_regexp_cache_create (struct rspamd_regexp_cache *cache,
 	rspamd_regexp_t *res;
 
 	if (cache == NULL) {
-		rspamd_regexp_library_init ();
+		rspamd_regexp_library_init (NULL);
 		cache = global_re_cache;
 	}
 
@@ -1013,7 +1014,7 @@ void rspamd_regexp_cache_insert (struct rspamd_regexp_cache* cache,
 	g_assert (pattern != NULL);
 
 	if (cache == NULL) {
-		rspamd_regexp_library_init ();
+		rspamd_regexp_library_init (NULL);
 		cache = global_re_cache;
 	}
 
@@ -1048,57 +1049,64 @@ rspamd_regexp_cache_destroy (struct rspamd_regexp_cache *cache)
 }
 
 void
-rspamd_regexp_library_init (void)
+rspamd_regexp_library_init (struct rspamd_config *cfg)
 {
+	if (cfg) {
+		if (cfg->disable_pcre_jit) {
+			can_jit = FALSE;
+			check_jit = FALSE;
+		}
+	}
+
 	if (global_re_cache == NULL) {
 		global_re_cache = rspamd_regexp_cache_new ();
 #ifdef HAVE_PCRE_JIT
 		gint jit, rc;
 		gchar *str;
 
+		if (check_jit) {
 #ifdef WITH_PCRE2
-		pcre2_ctx = pcre2_compile_context_create (NULL);
-		pcre2_set_newline (pcre2_ctx, PCRE_FLAG(NEWLINE_ANY));
+			pcre2_ctx = pcre2_compile_context_create (NULL);
+			pcre2_set_newline (pcre2_ctx, PCRE_FLAG(NEWLINE_ANY));
 #endif
 #ifndef WITH_PCRE2
-		rc = pcre_config (PCRE_CONFIG_JIT, &jit);
+			rc = pcre_config (PCRE_CONFIG_JIT, &jit);
 #else
-		rc = pcre2_config (PCRE2_CONFIG_JIT, &jit);
+			rc = pcre2_config (PCRE2_CONFIG_JIT, &jit);
 #endif
 
-		if (rc == 0 && jit == 1) {
+			if (rc == 0 && jit == 1) {
 #ifndef WITH_PCRE2
 #ifdef PCRE_CONFIG_JITTARGET
-			pcre_config (PCRE_CONFIG_JITTARGET, &str);
-			msg_info ("pcre is compiled with JIT for %s", str);
+				pcre_config (PCRE_CONFIG_JITTARGET, &str);
+				msg_info ("pcre is compiled with JIT for %s", str);
 #else
-			msg_info ("pcre is compiled with JIT for unknown target");
+				msg_info ("pcre is compiled with JIT for unknown target");
 #endif
 #else
-			rc = pcre2_config (PCRE2_CONFIG_JITTARGET, NULL);
+				rc = pcre2_config (PCRE2_CONFIG_JITTARGET, NULL);
 
-			if (rc > 0) {
-				str = g_alloca (rc);
-				pcre2_config (PCRE2_CONFIG_JITTARGET, str);
-				msg_info ("pcre2 is compiled with JIT for %s", str);
-			}
-			else {
-				msg_info ("pcre2 is compiled with JIT for unknown");
-			}
+				if (rc > 0) {
+					str = g_alloca (rc);
+					pcre2_config (PCRE2_CONFIG_JITTARGET, str);
+					msg_info ("pcre2 is compiled with JIT for %s", str);
+				}
+				else {
+					msg_info ("pcre2 is compiled with JIT for unknown");
+				}
 
 #endif /* WITH_PCRE2 */
 
-			if (getenv ("VALGRIND") == NULL) {
-				can_jit = TRUE;
+				if (getenv ("VALGRIND") == NULL) {
+					can_jit = TRUE;
+				} else {
+					msg_info ("disabling PCRE jit as it does not play well with valgrind");
+					can_jit = FALSE;
+				}
+			} else {
+				msg_info ("pcre is compiled without JIT support, so many optimizations"
+						  " are impossible");
 			}
-			else {
-				msg_info ("disabling PCRE jit as it does not play well with valgrind");
-				can_jit = FALSE;
-			}
-		}
-		else {
-			msg_info ("pcre is compiled without JIT support, so many optimizations"
-					" are impossible");
 		}
 #else
 		msg_info ("pcre is too old and has no JIT support, so many optimizations"

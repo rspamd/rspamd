@@ -34,6 +34,8 @@
 #define RSPAMD_REGEXP_FLAG_PCRE_ONLY (1 << 4)
 #define RSPAMD_REGEXP_FLAG_DISABLE_JIT (1 << 5)
 
+struct rspamd_config;
+
 typedef struct rspamd_regexp_s rspamd_regexp_t;
 struct rspamd_regexp_cache;
 struct rspamd_re_capture {
@@ -250,7 +252,7 @@ gint rspamd_regexp_cmp (gconstpointer a, gconstpointer b);
 /**
  * Initialize superglobal regexp cache and library
  */
-void rspamd_regexp_library_init (void);
+void rspamd_regexp_library_init (struct rspamd_config *cfg);
 
 /**
  * Cleanup internal library structures

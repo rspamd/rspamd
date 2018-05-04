@@ -685,7 +685,7 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 		cfg->default_max_shots = 1;
 	}
 
-	rspamd_regexp_library_init ();
+	rspamd_regexp_library_init (cfg);
 	rspamd_multipattern_library_init (cfg->hs_cache_dir);
 
 #ifdef WITH_HYPERSCAN

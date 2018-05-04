@@ -310,6 +310,7 @@ struct rspamd_config {
 	gboolean ignore_received;                       /**< Ignore data from the first received header			*/
 	gboolean enable_sessions_cache;                 /**< Enable session cache for debug						*/
 	gboolean enable_experimental;                   /**< Enable experimental plugins						*/
+	gboolean disable_pcre_jit;                      /**< Disable pcre JIT						*/
 
 	gsize max_diff;                                 /**< maximum diff size for text parts					*/
 	gsize max_cores_size;                           /**< maximum size occupied by rspamd core files			*/
