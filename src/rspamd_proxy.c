@@ -1438,6 +1438,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 		}
 		else {
 			if (session->fname) {
+				msg->flags &= ~RSPAMD_HTTP_FLAG_SHMEM;
 				rspamd_http_message_set_body (msg, session->map, session->map_len);
 			}
 
@@ -1868,6 +1869,7 @@ retry:
 		}
 		else {
 			if (session->fname) {
+				msg->flags &= ~RSPAMD_HTTP_FLAG_SHMEM;
 				rspamd_http_message_set_body (msg,
 						session->map, session->map_len);
 			}
