@@ -1399,8 +1399,6 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 			continue;
 		}
 
-		msg->method = HTTP_GET;
-
 		if (msg->url->len == 0) {
 			msg->url = rspamd_fstring_append (msg->url, "/check", strlen ("/check"));
 		}
@@ -1432,6 +1430,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 				rspamd_http_message_add_header (msg, "File", session->fname);
 			}
 
+			msg->method = HTTP_GET;
 			rspamd_http_connection_write_message_shared (bk_conn->backend_conn,
 					msg, NULL, NULL, bk_conn,
 					bk_conn->backend_sock,
@@ -1441,6 +1440,8 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 			if (session->fname) {
 				rspamd_http_message_set_body (msg, session->map, session->map_len);
 			}
+
+			msg->method = HTTP_POST;
 
 			if (m->compress) {
 				proxy_request_compress (msg);
@@ -1857,6 +1858,8 @@ retry:
 				rspamd_http_message_add_header (msg, "File", session->fname);
 			}
 
+			msg->method = HTTP_GET;
+
 			rspamd_http_connection_write_message_shared (
 					session->master_conn->backend_conn,
 					msg, NULL, NULL, session->master_conn,
@@ -1868,6 +1871,8 @@ retry:
 				rspamd_http_message_set_body (msg,
 						session->map, session->map_len);
 			}
+
+			msg->method = HTTP_POST;
 
 			if (backend->compress) {
 				proxy_request_compress (msg);
