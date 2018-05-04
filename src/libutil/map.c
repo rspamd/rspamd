@@ -1977,6 +1977,35 @@ rspamd_map_calculate_hash (struct rspamd_map *map)
 	g_free (cksum_encoded);
 }
 
+static gboolean
+rspamd_map_add_static_string (struct rspamd_config *cfg,
+		const ucl_object_t *elt,
+		GString *target)
+{
+	gsize sz;
+	const gchar *dline;
+
+	if (ucl_object_type (elt) != UCL_STRING) {
+		msg_err_config ("map has static backend but `data` is "
+						"not string like: %s",
+				ucl_object_type_to_string (elt->type));
+		return FALSE;
+	}
+
+	/* Otherwise, we copy data to the backend */
+	dline = ucl_object_tolstring (elt, &sz);
+
+	if (sz == 0) {
+		msg_err_config ("map has static backend but empty no data");
+		return FALSE;
+	}
+
+	g_string_append_len (target, dline, sz);
+	g_string_append_c (target, '\n');
+
+	return TRUE;
+}
+
 struct rspamd_map *
 rspamd_map_add (struct rspamd_config *cfg,
 	const gchar *map_line,
@@ -2039,8 +2068,6 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 	const ucl_object_t *cur, *elt;
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
-	gsize sz;
-	const gchar *dline;
 	guint i;
 
 	g_assert (obj != NULL);
@@ -2183,25 +2210,49 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 
 		PTR_ARRAY_FOREACH (map->backends, i, bk) {
 			if (bk->protocol == MAP_PROTO_STATIC) {
+				GString *map_data;
 				/* We need data field in ucl */
 				elt = ucl_object_lookup (obj, "data");
 
-				if (elt == NULL || ucl_object_type (elt) != UCL_STRING) {
+				if (elt == NULL) {
 					msg_err_config ("map has static backend but no `data` field");
 					goto err;
 				}
 
-				/* Otherwise, we copy data to the backend */
-				dline = ucl_object_tolstring (elt, &sz);
 
-				if (sz == 0) {
-					msg_err_config ("map has static backend but empty `data` field");
-					goto err;
+				if (ucl_object_type (elt) == UCL_STRING) {
+					map_data = g_string_sized_new (32);
+
+					if (rspamd_map_add_static_string (cfg, elt, map_data)) {
+						bk->data.sd->data = map_data->str;
+						bk->data.sd->len = map_data->len;
+						g_string_free (map_data, FALSE);
+					}
+					else {
+						g_string_free (map_data, TRUE);
+						msg_err_config ("map has static backend with invalid `data` field");
+						goto err;
+					}
 				}
+				else if (ucl_object_type (elt) == UCL_ARRAY) {
+					map_data = g_string_sized_new (32);
+					it = ucl_object_iterate_new (elt);
 
-				bk->data.sd->data = g_malloc (sz);
-				bk->data.sd->len = sz;
-				memcpy (bk->data.sd->data, dline, sz);
+					while ((cur = ucl_object_iterate_safe (it, true))) {
+						if (!rspamd_map_add_static_string (cfg, cur, map_data)) {
+							g_string_free (map_data, TRUE);
+							msg_err_config ("map has static backend with invalid "
+											"`data` field");
+							ucl_object_iterate_free (it);
+							goto err;
+						}
+					}
+
+					ucl_object_iterate_free (it);
+					bk->data.sd->data = map_data->str;
+					bk->data.sd->len = map_data->len;
+					g_string_free (map_data, FALSE);
+				}
 			}
 		}
 	}
