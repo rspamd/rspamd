@@ -233,7 +233,7 @@ end
 
 local keywords = {
   ['ip'] = {
-    get_value = function(task)
+    ['get_value'] = function(task)
       local ip = task:get_ip()
       if ip and ip:is_valid() then return tostring(ip) end
       return nil

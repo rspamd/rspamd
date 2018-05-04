@@ -75,7 +75,7 @@ rspamd_config:register_symbol{
   parent = rcvd_cb_id,
   type = 'virtual',
   description = 'Two received',
-  group = 'header',
+  group = 'headers',
 }
 rspamd_config:register_symbol{
   name = 'RCVD_COUNT_THREE',
