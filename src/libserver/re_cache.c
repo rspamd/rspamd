@@ -880,26 +880,34 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			for (i = 0; i < task->text_parts->len; i++) {
 				part = g_ptr_array_index (task->text_parts, i);
 
-				/* Skip empty parts */
-				if (IS_PART_EMPTY (part)) {
-					lenvec[i] = 0;
-					scvec[i] = (guchar *) "";
-					continue;
-				}
-
-				/* Check raw flags */
-				if (!IS_PART_UTF (part)) {
-					raw = TRUE;
-				}
 				/* Select data for regexp */
 				if (re_class->type == RSPAMD_RE_RAWMIME) {
-					in = part->raw.begin;
-					len = part->raw.len;
+					if (part->raw.len == 0) {
+						len = 0;
+						in = "";
+					}
+					else {
+						in = part->raw.begin;
+						len = part->raw.len;
+					}
+
 					raw = TRUE;
 				}
 				else {
-					in = part->content->data;
-					len = part->content->len;
+					/* Skip empty parts */
+					if (IS_PART_EMPTY (part)) {
+						len = 0;
+						in = "";
+					}
+					else {
+						/* Check raw flags */
+						if (!IS_PART_UTF (part)) {
+							raw = TRUE;
+						}
+
+						in = part->content->data;
+						len = part->content->len;
+					}
 				}
 
 				scvec[i] = (guchar *) in;
