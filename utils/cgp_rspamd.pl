@@ -209,6 +209,12 @@ sub rspamd_scan {
               $ip = $2;
             }
           }
+          elsif ( $elt =~ /^S (?:<([^>]+)> )?(?:DSN|GROUP|LIST|PBX|PIPE|RULE) \[0\.0\.0\.0\]/ ) {
+            if ($1) {
+              $user = $1;
+            }
+            $ip = '127.2.4.7';
+          }
         }
 
         my $headers = {};
