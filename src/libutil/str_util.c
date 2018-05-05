@@ -2062,8 +2062,11 @@ rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
 			src + end, nsym - end, &uc_err);
 
 	if (!U_SUCCESS (uc_err)) {
-		msg_warn_pool_check ("cannot normalise URL: %s",
-				u_errorName (uc_err));
+		if (uc_err != U_BUFFER_OVERFLOW_ERROR) {
+			msg_warn_pool_check ("cannot normalise URL: %s",
+					u_errorName (uc_err));
+		}
+
 		goto out;
 	}
 
@@ -2077,7 +2080,8 @@ rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
 	}
 
 	*len = nsym;
-	out:
+
+out:
 
 	if (src) {
 		g_free (src);
