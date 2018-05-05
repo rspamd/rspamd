@@ -176,7 +176,7 @@ enum ucl_character_type {
 
 struct ucl_macro {
 	char *name;
-	union {
+	union _ucl_macro {
 		ucl_macro_handler handler;
 		ucl_context_macro_handler context_handler;
 	} h;
@@ -201,6 +201,7 @@ struct ucl_chunk {
 	unsigned priority;
 	enum ucl_duplicate_strategy strategy;
 	enum ucl_parse_type parse_type;
+	struct ucl_parser_special_handler *special_handler;
 	struct ucl_chunk *next;
 };
 
@@ -239,6 +240,7 @@ struct ucl_parser {
 	struct ucl_stack *stack;
 	struct ucl_chunk *chunks;
 	struct ucl_pubkey *keys;
+    struct ucl_parser_special_handler *special_handlers;
 	struct ucl_variable *variables;
 	ucl_variable_handler var_handler;
 	void *var_data;
@@ -618,5 +620,11 @@ bool ucl_parser_process_object_element (struct ucl_parser *parser,
 bool ucl_parse_msgpack (struct ucl_parser *parser);
 
 bool ucl_parse_csexp (struct ucl_parser *parser);
+
+/**
+ * Free ucl chunk
+ * @param chunk
+ */
+void ucl_chunk_free (struct ucl_chunk *chunk);
 
 #endif /* UCL_INTERNAL_H_ */
