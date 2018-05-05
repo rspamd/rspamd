@@ -154,7 +154,7 @@ static void
 rspamd_regexp_post_process (rspamd_regexp_t *r)
 {
 	if (global_re_cache == NULL) {
-		rspamd_regexp_library_init ();
+		rspamd_regexp_library_init (NULL);
 	}
 #if defined(WITH_PCRE2)
 	gsize jsz;
