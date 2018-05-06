@@ -744,7 +744,10 @@ if opts['reporting'] == true then
         for k in pairs(reporting_addr) do
           table.insert(tmp_addr, k)
         end
-        local encoded = rspamd_util.encode_base64(table.concat({xmlf('header'), xmlf('entries'), xmlf('footer')}), 78)
+        local encoded = rspamd_util.encode_base64(table.concat(
+                {xmlf('header'),
+                 xmlf('entries'),
+                 xmlf('footer')}), 78)
         local function mail_cb(err, data, conn)
           local function no_error(merr, mdata, wantcode)
             wantcode = wantcode or '2'
