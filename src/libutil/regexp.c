@@ -60,10 +60,6 @@ struct rspamd_regexp_s {
 	pcre2_match_context *mcontext;
 	pcre2_match_context *raw_mcontext;
 #endif
-#ifdef HAVE_PCRE_JIT
-	PCRE_JIT_T *jstack;
-	PCRE_JIT_T *raw_jstack;
-#endif
 	regexp_id_t id;
 	ref_entry_t ref;
 	gpointer ud;
@@ -78,6 +74,9 @@ struct rspamd_regexp_s {
 
 struct rspamd_regexp_cache {
 	GHashTable *tbl;
+#ifdef HAVE_PCRE_JIT
+	PCRE_JIT_T *jstack;
+#endif
 };
 
 static struct rspamd_regexp_cache *global_re_cache = NULL;
@@ -126,11 +125,6 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 				pcre2_match_context_free (re->mcontext);
 			}
 #endif
-#ifdef HAVE_PCRE_JIT
-			if (re->raw_jstack) {
-				PCRE_JIT_STACK_FREE (re->raw_jstack);
-			}
-#endif
 			PCRE_FREE (re->raw_re);
 		}
 		if (re->re) {
@@ -143,11 +137,6 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 #else
 			if (re->raw_mcontext) {
 				pcre2_match_context_free (re->raw_mcontext);
-			}
-#endif
-#ifdef HAVE_PCRE_JIT
-			if (re->jstack) {
-				PCRE_JIT_STACK_FREE (re->jstack);
 			}
 #endif
 			PCRE_FREE (re->re);
@@ -164,6 +153,9 @@ rspamd_regexp_dtor (rspamd_regexp_t *re)
 static void
 rspamd_regexp_post_process (rspamd_regexp_t *r)
 {
+	if (global_re_cache == NULL) {
+		rspamd_regexp_library_init (NULL);
+	}
 #if defined(WITH_PCRE2)
 	gsize jsz;
 	guint jit_flags = PCRE2_JIT_COMPLETE;
@@ -184,17 +176,14 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 		r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 	}
 	else {
-		if (pcre2_pattern_info (r->re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0) {
-			r->jstack = pcre2_jit_stack_create (32 * 1024, 512 * 1024, NULL);
-		}
-		else {
+		if (!(pcre2_pattern_info (r->re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0)) {
 			msg_err ("jit compilation of %s is not supported", r->pattern);
 			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 		}
 	}
 
-	if (r->jstack && !(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
-		pcre2_jit_stack_assign (r->mcontext, NULL, r->jstack);
+	if (!(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
+		pcre2_jit_stack_assign (r->mcontext, NULL, global_re_cache->jstack);
 	}
 
 	if (r->re != r->raw_re) {
@@ -203,19 +192,12 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 		}
 
-		if (pcre2_pattern_info (r->raw_re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0) {
-			r->raw_jstack = pcre2_jit_stack_create (32 * 1024, 512 * 1024, NULL);
-		}
-		else {
+		if (!(pcre2_pattern_info (r->raw_re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0)) {
 			msg_debug ("jit compilation of raw %s is not supported", r->pattern);
 		}
-
-		if (r->raw_jstack && !(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
-			pcre2_jit_stack_assign (r->raw_mcontext, NULL, r->raw_jstack);
+		else if (!(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
+			pcre2_jit_stack_assign (r->raw_mcontext, NULL, global_re_cache->jstack);
 		}
-	}
-	else {
-		r->raw_jstack = r->jstack;
 	}
 #endif
 
@@ -268,12 +250,10 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 
 			if (n != 0 || jit != 1) {
 				msg_debug ("jit compilation of %s is not supported", r->pattern);
-				r->jstack = NULL;
 				r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 			}
 			else {
-				r->jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
-				pcre_assign_jit_stack (r->extra, NULL, r->jstack);
+				pcre_assign_jit_stack (r->extra, NULL, global_re_cache->jstack);
 			}
 		}
 #endif
@@ -290,22 +270,18 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 
 		if (can_jit) {
 
-			if (r->raw_re == r->re) {
-				r->raw_jstack = r->jstack;
-			}
-			else {
+			if (r->raw_re != r->re) {
 				jit = 0;
 				n = pcre_fullinfo (r->raw_re, r->raw_extra,
 						PCRE_INFO_JIT, &jit);
 
 				if (n != 0 || jit != 1) {
 					msg_debug ("jit compilation of %s is not supported", r->pattern);
-					r->raw_jstack = NULL;
 					r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 				}
 				else {
-					r->raw_jstack = pcre_jit_stack_alloc (32 * 1024, 512 * 1024);
-					pcre_assign_jit_stack (r->raw_extra, NULL, r->raw_jstack);
+					pcre_assign_jit_stack (r->raw_extra, NULL,
+							global_re_cache->jstack);
 				}
 			}
 		}
@@ -575,7 +551,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		r = re->raw_re;
 		ext = re->raw_extra;
 #if defined(HAVE_PCRE_JIT) && defined(HAVE_PCRE_JIT_FAST) && !defined(DISABLE_JIT_FAST)
-		st = re->raw_jstack;
+		st = global_re_cache->jstack;
 #endif
 	}
 	else {
@@ -583,7 +559,7 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 		ext = re->extra;
 #if defined(HAVE_PCRE_JIT) && defined(HAVE_PCRE_JIT_FAST) && !defined(DISABLE_JIT_FAST)
 		if (g_utf8_validate (mt, remain, NULL)) {
-			st = re->jstack;
+			st = global_re_cache->jstack;
 		}
 		else {
 			msg_err ("bad utf8 input for JIT re");
@@ -950,7 +926,13 @@ rspamd_regexp_cache_new (void)
 	ncache = g_malloc0 (sizeof (*ncache));
 	ncache->tbl = g_hash_table_new_full (rspamd_regexp_hash, rspamd_regexp_equal,
 			NULL, (GDestroyNotify)rspamd_regexp_unref);
-
+#ifdef HAVE_PCRE_JIT
+#ifdef WITH_PCRE2
+	ncache->jstack = pcre2_jit_stack_create (32 * 1024, 1024 * 1024, NULL);
+#else
+	ncache->jstack = pcre_jit_stack_alloc (32 * 1024, 1024 * 1024);
+#endif
+#endif
 	return ncache;
 }
 
@@ -1045,6 +1027,17 @@ rspamd_regexp_cache_destroy (struct rspamd_regexp_cache *cache)
 {
 	if (cache != NULL) {
 		g_hash_table_destroy (cache->tbl);
+#ifdef HAVE_PCRE_JIT
+#ifdef WITH_PCRE2
+		if (cache->jstack) {
+			pcre2_jit_stack_free (cache->jstack);
+		}
+#else
+		if (cache->jstack) {
+			pcre_jit_stack_free (cache->jstack);
+		}
+#endif
+#endif
 	}
 }
 

@@ -1278,6 +1278,34 @@ UCL_EXTERN bool ucl_parser_pubkey_add (struct ucl_parser *parser,
 UCL_EXTERN bool ucl_parser_set_filevars (struct ucl_parser *parser, const char *filename,
 		bool need_expand);
 
+/**
+ * Defines special handler for certain types of data (identified by magic)
+ */
+typedef bool (*ucl_parser_special_handler_t) (struct ucl_parser *parser,
+		const unsigned char *source, size_t source_len,
+		unsigned char **destination, size_t *dest_len,
+		void *user_data);
+
+/**
+ * Special handler structure
+ */
+struct ucl_parser_special_handler {
+	unsigned char *magic;
+	size_t magic_len;
+	ucl_parser_special_handler_t handler;
+	void (*free_function) (unsigned char *data, size_t len, void *user_data);
+	void *user_data;
+	struct ucl_parser_special_handler *next; /* Used internally */
+};
+
+/**
+ * Add special handler for a parser
+ * @param parser parser structure
+ * @param handler handler structure
+ */
+UCL_EXTERN void ucl_parser_add_special_handler (struct ucl_parser *parser,
+		struct ucl_parser_special_handler *handler);
+
 /** @} */
 
 /**

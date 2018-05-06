@@ -2726,6 +2726,7 @@ ucl_parser_add_chunk_full (struct ucl_parser *parser, const unsigned char *data,
 		enum ucl_parse_type parse_type)
 {
 	struct ucl_chunk *chunk;
+	struct ucl_parser_special_handler *special_handler;
 
 	if (parser == NULL) {
 		return false;
@@ -2741,6 +2742,28 @@ ucl_parser_add_chunk_full (struct ucl_parser *parser, const unsigned char *data,
 		if (chunk == NULL) {
 			ucl_create_err (&parser->err, "cannot allocate chunk structure");
 			return false;
+		}
+
+		memset (chunk, 0, sizeof (*chunk));
+
+		LL_FOREACH (parser->special_handlers, special_handler) {
+			if (len >= special_handler->magic_len &&
+					memcmp (data, special_handler->magic, special_handler->magic_len) == 0) {
+				unsigned char *ndata = NULL;
+				size_t nlen = 0;
+
+				if (!special_handler->handler (parser, data, len, &ndata, &nlen,
+						special_handler->user_data)) {
+					ucl_create_err (&parser->err, "call for external handler failed");
+					return false;
+				}
+
+				data = ndata;
+				len = nlen;
+				chunk->special_handler = special_handler;
+
+				break;
+			}
 		}
 
 		if (parse_type == UCL_PARSE_AUTO && len > 0) {
@@ -2832,7 +2855,7 @@ ucl_parser_add_chunk (struct ucl_parser *parser, const unsigned char *data,
 
 bool
 ucl_parser_insert_chunk (struct ucl_parser *parser, const unsigned char *data,
-                size_t len)
+		size_t len)
 {
 	if (parser == NULL || parser->top_obj == NULL) {
 		return false;
@@ -2854,7 +2877,7 @@ ucl_parser_insert_chunk (struct ucl_parser *parser, const unsigned char *data,
 	chunk = parser->chunks;
 	if (chunk != NULL) {
 		parser->chunks = chunk->next;
-		UCL_FREE (sizeof (struct ucl_chunk), chunk);
+		ucl_chunk_free (chunk);
 		parser->recursion --;
 	}
 
@@ -2936,7 +2959,8 @@ bool ucl_parser_chunk_skip (struct ucl_parser *parser)
 	return false;
 }
 
-ucl_object_t* ucl_parser_get_current_stack_object (struct ucl_parser *parser, unsigned int depth)
+ucl_object_t*
+ucl_parser_get_current_stack_object (struct ucl_parser *parser, unsigned int depth)
 {
 	ucl_object_t *obj;
 
