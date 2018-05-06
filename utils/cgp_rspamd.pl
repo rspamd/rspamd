@@ -33,10 +33,21 @@ GetOptions(
 pod2usage(1) if $help;
 pod2usage( -exitval => 0, -verbose => 2 ) if $man;
 
+my $main_domain = cgp_main_domain();
 my $scanned = 0;
 
 # Turn off bufferization as required by CGP
 $| = 1;
+
+sub cgp_main_domain {
+  if ( open(my $fh, 'Settings/Main.settings') ) {
+    while (<$fh>) {
+      if ( /^\s+DomainName\s+=\s+([^;]+);/ ) {
+        return $1;
+      }
+    }
+  }
+}
 
 sub cgp_string {
   my ($in) = @_;
@@ -232,9 +243,11 @@ sub rspamd_scan {
         if ($ip) {
           $headers->{IP} = $ip;
         }
-
         if ($user) {
           $headers->{User} = $user;
+        }
+        if ($main_domain) {
+          $headers->{'MTA-Tag'} = $main_domain;
         }
 
         http_post(
