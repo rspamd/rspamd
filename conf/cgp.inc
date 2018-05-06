@@ -2,10 +2,6 @@ arc {
     sign_networks = [127.2.4.7];
 }
 
-dkim {
-    sign_networks = [127.2.4.7];
-}
-
 dkim_signing {
     sign_networks = [127.2.4.7];
 }
