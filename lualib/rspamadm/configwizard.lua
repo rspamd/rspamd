@@ -505,7 +505,7 @@ local function setup_statistic(cfg, changes)
               return false
             end
           else
-            rspamd_logger.messagex('cannot find %s and %s, skip conversation',
+            rspamd_logger.messagex('cannot find %s and %s, skip conversion',
                 cls.db_spam, cls.db_ham)
           end
 
