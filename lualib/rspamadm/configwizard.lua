@@ -469,6 +469,9 @@ return ttl
       printf("You have configured new schema for %s/%s but your DB has old data",
         symbol_spam, symbol_ham)
       try_convert(false)
+    else
+      printf("You have configured new schema for %s/%s and your DB already has new layout (v. %s). DB conversion is not needed.",
+        symbol_spam, symbol_ham, ver)
     end
   end
 end
