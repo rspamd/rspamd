@@ -53,22 +53,28 @@ local options = {
   servers = '', -- list of servers
   lower_bound = 10, -- minimum number of messages to be scored
   metric = 'default',
+  old_shard = false,
   min_score = nil,
   max_score = nil,
   score_divisor = 1,
 }
 
 local function ip_score_hash_key(asn, country, ipnet, ip)
-  -- We use the most common attribute as hashing key
-  if country then
-    return country
-  elseif asn then
-    return asn
-  elseif ipnet then
-    return ipnet
-  else
-    return ip:to_string()
+  if options.old_shard then
+    if country then
+      return country
+    elseif asn then
+      return asn
+    elseif ipnet then
+      return ipnet
+    else
+      return ip:to_string()
+    end
   end
+
+  -- Better sharding
+  return string.format('%s:%s:%s:%s', asn, country, ipnet,
+      ip:to_string())
 end
 
 local function ip_score_get_task_vars(task)
