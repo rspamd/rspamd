@@ -217,13 +217,13 @@
 #define T1HA_API
 #endif /* T1HA_API */
 
-#if defined(_MSC_VER) && defined(__ia32__)
+#if defined(_MSC_VER)
 #define T1HA_ALIGN_PREFIX __declspec(align(32)) /* required only for SIMD */
 #else
 #define T1HA_ALIGN_PREFIX
 #endif /* _MSC_VER */
 
-#if defined(__GNUC__) && defined(__ia32__)
+#if defined(__GNUC__)
 #define T1HA_ALIGN_SUFFIX                                                      \
   __attribute__((aligned(32))) /* required only for SIMD */
 #else
