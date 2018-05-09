@@ -182,11 +182,15 @@ local function get_general_metadata(task)
       return 'unknown'
     end
   end
+
   r.header_from = process_header('from')
   r.header_to = process_header('to')
   r.header_subject = process_header('subject')
   r.header_date = process_header('date')
   r.message_id = task:get_message_id()
+  local hname = task:get_hostname() or 'unknown'
+  r.hostname = hname
+
   return r
 end
 
