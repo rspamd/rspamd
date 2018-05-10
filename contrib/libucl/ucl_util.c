@@ -2208,14 +2208,23 @@ ucl_object_fromstring_common (const char *str, size_t len, enum ucl_string_flags
 		obj->type = UCL_STRING;
 		if (flags & UCL_STRING_ESCAPE) {
 			for (p = start, escaped_len = 0; p < end; p ++, escaped_len ++) {
-				if (ucl_test_character (*p, UCL_CHARACTER_JSON_UNSAFE)) {
-					escaped_len ++;
+				if (ucl_test_character (*p, UCL_CHARACTER_JSON_UNSAFE | UCL_CHARACTER_WHITESPACE_UNSAFE)) {
+					switch (*p) {
+					case '\v':
+						escaped_len += 5;
+						break;
+					case ' ':
+						break;
+					default:
+						escaped_len ++;
+						break;
+					}
 				}
 			}
 			dst = malloc (escaped_len + 1);
 			if (dst != NULL) {
 				for (p = start, d = dst; p < end; p ++, d ++) {
-					if (ucl_test_character (*p, UCL_CHARACTER_JSON_UNSAFE)) {
+					if (ucl_test_character (*p, UCL_CHARACTER_JSON_UNSAFE | UCL_CHARACTER_WHITESPACE_UNSAFE)) {
 						switch (*p) {
 						case '\n':
 							*d++ = '\\';
@@ -2237,9 +2246,20 @@ ucl_object_fromstring_common (const char *str, size_t len, enum ucl_string_flags
 							*d++ = '\\';
 							*d = 'f';
 							break;
+						case '\v':
+							*d++ = '\\';
+							*d++ = 'u';
+							*d++ = '0';
+							*d++ = '0';
+							*d++ = '0';
+							*d   = 'B';
+							break;
 						case '\\':
 							*d++ = '\\';
 							*d = '\\';
+							break;
+						case ' ':
+							*d = ' ';
 							break;
 						case '"':
 							*d++ = '\\';
