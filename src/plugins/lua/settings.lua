@@ -28,6 +28,7 @@ local lua_squeeze = require "lua_squeeze_rules"
 local redis_params
 
 local settings = {}
+local N = "settings"
 local settings_ids = {}
 local settings_initialized = false
 local max_pri = 0
@@ -665,7 +666,7 @@ local function gen_redis_callback(handler, id)
     end
 
     if not key then
-      rspamd_logger.errx(rspamd_config, 'Cannot execute handler number %s', id)
+      rspamd_logger.debugm(N, task, 'handler number %s returned nil', id)
       return
     end
 
