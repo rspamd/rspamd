@@ -19,40 +19,40 @@ limitations under the License.
 local reconf = config['regexp']
 
 reconf['PRECEDENCE_BULK'] = {
-    re = 'Precedence=/bulk/Hi',
-    score = 0.0,
-    description = "Message marked as bulk",
-    group = 'upstream_spam_filters'
+  re = 'Precedence=/bulk/Hi',
+  score = 0.0,
+  description = "Message marked as bulk",
+  group = 'upstream_spam_filters'
 }
 
 reconf['MICROSOFT_SPAM'] = {
-    -- https://technet.microsoft.com/en-us/library/dn205071(v=exchg.150).aspx
-    re = 'X-Forefront-Antispam-Report=/SFV:SPM/H',
-    score = 4,
-    description = "Microsoft says the message is spam",
-    group = 'upstream_spam_filters'
+  -- https://technet.microsoft.com/en-us/library/dn205071(v=exchg.150).aspx
+  re = 'X-Forefront-Antispam-Report=/SFV:SPM/H',
+  score = 4,
+  description = "Microsoft says the message is spam",
+  group = 'upstream_spam_filters'
 }
 
 reconf['AOL_SPAM'] = {
-    re = 'X-AOL-Global-Disposition=/^S/H',
-    score = 5,
-    description = "AOL says this message is spam",
-    group = 'upstream_spam_filters'
+  re = 'X-AOL-Global-Disposition=/^S/H',
+  score = 5,
+  description = "AOL says this message is spam",
+  group = 'upstream_spam_filters'
 }
 
 reconf['SPAM_FLAG'] = {
-    re = string.format('%s || %s || %s',
-        'X-Spam-Flag=/^(?:yes|true)/Hi',
-        'X-Spam=/^(?:yes|true)/Hi',
-        'X-Spam-Status=/^(?:yes|true)/Hi'),
-    score = 5,
-    description = "Message was already marked as spam",
-    group = 'upstream_spam_filters'
+  re = string.format('%s || %s || %s',
+      'X-Spam-Flag=/^(?:yes|true)/Hi',
+      'X-Spam=/^(?:yes|true)/Hi',
+      'X-Spam-Status=/^(?:yes|true)/Hi'),
+  score = 5,
+  description = "Message was already marked as spam",
+  group = 'upstream_spam_filters'
 }
 
 reconf['UNITEDINTERNET_SPAM'] = {
-    re = 'X-UI-Out-Filterresults=/^junk:/H',
-    score = 5,
-    description = "United Internet says this message is spam",
-    group = 'upstream_spam_filters'
+  re = 'X-UI-Out-Filterresults=/^junk:/H',
+  score = 5,
+  description = "United Internet says this message is spam",
+  group = 'upstream_spam_filters'
 }
