@@ -462,6 +462,10 @@ local function clamav_check(task, rule)
         if err == 'IO timeout' then
           if retransmits > 0 then
             retransmits = retransmits - 1
+            -- Select a different upstream!
+            upstream = rule.upstreams:get_upstream_round_robin()
+            addr = upstream:get_addr()
+
             tcp.request({
               task = task,
               host = addr:to_string(),
