@@ -41,7 +41,10 @@ reconf['AOL_SPAM'] = {
 }
 
 reconf['SPAM_FLAG'] = {
-    re = string.format('%s || %s', 'X-Spam-Flag=/^(?:yes|true)/Hi', 'X-Spam=/^yes$/Hi'),
+    re = string.format('%s || %s || %s',
+        'X-Spam-Flag=/^(?:yes|true)/Hi',
+        'X-Spam=/^(?:yes|true)/Hi',
+        'X-Spam-Status=/^(?:yes|true)/Hi'),
     score = 5,
     description = "Message was already marked as spam",
     group = 'upstream_spam_filters'
