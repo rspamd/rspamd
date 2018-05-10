@@ -29,7 +29,7 @@ local settings = {
   key_prefix = 'rr',
   message = 'Message is reply to one we originated',
   symbol = 'REPLY',
-  score = -2, -- Default score
+  score = -4, -- Default score
   use_auth = true,
   use_local = true,
 }
@@ -37,6 +37,7 @@ local settings = {
 local rspamd_logger = require 'rspamd_logger'
 local hash = require 'rspamd_cryptobox_hash'
 local lua_util = require 'lua_util'
+local lua_redis = require 'lua_redis'
 local N = "replies"
 
 local function make_key(goop)
@@ -58,7 +59,9 @@ local function replies_check(task)
       task:insert_result(settings['symbol'], 1.0)
       if settings['action'] ~= nil then
         local ip_addr = task:get_ip()
-        if (settings.use_auth and task:get_user()) or (settings.use_local and ip_addr and ip_addr:is_local()) then
+        if (settings.use_auth and
+            task:get_user()) or
+            (settings.use_local and ip_addr and ip_addr:is_local()) then
           rspamd_logger.infox(task, "not forcing action for local network or authorized user");
         else
           task:set_pre_result(settings['action'], settings['message'])
@@ -74,7 +77,7 @@ local function replies_check(task)
   -- Create hash of in-reply-to and query redis
   local key = make_key(irt)
 
-  local ret = rspamd_redis_make_request(task,
+  local ret = lua_redis.redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
     false, -- is write
@@ -110,8 +113,8 @@ local function replies_set(task)
   end
   -- Create hash of message-id and store to redis
   local key = make_key(msg_id)
-  rspamd_logger.infox(task, 'storing message-id for replies check')
-  local ret = rspamd_redis_make_request(task,
+  rspamd_logger.debugm(N, task, 'storing message-id for replies check')
+  local ret = lua_redis.redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key
     true, -- is write
@@ -130,7 +133,7 @@ if not (opts and type(opts) == 'table') then
   return
 end
 if opts then
-  redis_params = rspamd_parse_redis_server('replies')
+  redis_params = lua_redis.parse_redis_server('replies')
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
     lua_util.disable_module(N, "redis")
@@ -139,19 +142,22 @@ if opts then
       name = 'REPLIES_SET',
       type = 'idempotent',
       callback = replies_set,
-      priority = 5
+      priority = 5,
+      group = "replies",
     })
     local id = rspamd_config:register_symbol({
       name = 'REPLIES_CHECK',
       type = 'prefilter,nostat',
       callback = replies_check,
-      priority = 10
+      priority = 10,
+      group = "replies"
     })
     rspamd_config:register_symbol({
       name = settings['symbol'],
       parent = id,
       type = 'virtual',
       score = settings.score,
+      group = "replies",
     })
   end
 
