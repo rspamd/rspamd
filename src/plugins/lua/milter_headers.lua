@@ -180,13 +180,39 @@ local function milter_headers(task)
 
   local function add_header(name, value, stop_chars, order)
     if order then
-      add[settings.routines[name].header] = {
-        order = order,
-        value = lua_util.fold_header(task, name, value, stop_chars)
-      }
+      if not add[settings.routines[name].header] then
+        add[settings.routines[name].header] = {
+          order = order,
+          value = lua_util.fold_header(task, name, value, stop_chars)
+        }
+      else
+        if not add[settings.routines[name].header][1] then
+          -- Convert to a table
+          add[settings.routines[name].header] = {
+            [1] = add[settings.routines[name].header]
+          }
+        end
+
+        table.insert(add[settings.routines[name].header], {
+          order = order,
+          value = lua_util.fold_header(task, name, value, stop_chars)
+        })
+      end
     else
-      add[settings.routines[name].header] = lua_util.fold_header(task, name,
-              value, stop_chars)
+      if not add[settings.routines[name].header] then
+        add[settings.routines[name].header] = lua_util.fold_header(task, name,
+            value, stop_chars)
+      else
+        if not add[settings.routines[name].header][1] then
+          -- Convert to a table
+          add[settings.routines[name].header] = {
+            [1] = add[settings.routines[name].header]
+          }
+        end
+
+        table.insert(add[settings.routines[name].header],
+            lua_util.fold_header(task, name, value, stop_chars))
+      end
     end
   end
 
