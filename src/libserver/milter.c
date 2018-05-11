@@ -1581,7 +1581,11 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 			it = NULL;
 
 			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
-				LL_FOREACH (cur, cur_elt) {
+				ucl_object_iter_t *elt_it;
+
+				elt_it = ucl_object_iterate_new (cur);
+
+				while ((cur_elt = ucl_object_iterate_safe (elt_it, true)) != NULL) {
 					if (ucl_object_type (cur_elt) == UCL_STRING) {
 						hname = g_string_new (ucl_object_key (cur));
 						hvalue = g_string_new (ucl_object_tostring (cur_elt));
@@ -1626,6 +1630,8 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 						}
 					}
 				}
+
+				ucl_object_iterate_free (elt_it);
 			}
 		}
 
