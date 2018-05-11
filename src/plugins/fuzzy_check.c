@@ -36,6 +36,7 @@
 #include "libutil/map_helpers.h"
 #include "libmime/images.h"
 #include "libserver/worker_util.h"
+#include "libserver/mempool_vars_internal.h"
 #include "fuzzy_wire.h"
 #include "utlist.h"
 #include "ottery.h"
@@ -1884,33 +1885,10 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 		is_fuzzy = TRUE;
 	}
 
-	if (is_fuzzy) {
-		msg_info_task (
-				"found fuzzy hash(%s) %*xs (%*xs requested) with weight: "
-						"%.2f, probability %.2f, in list: %s:%d%s",
-				type,
-				(gint) sizeof (rep->digest), rep->digest,
-				(gint) sizeof (cmd->digest), cmd->digest,
-				nval,
-				(gdouble) rep->v1.prob,
-				symbol,
-				rep->v1.flag,
-				map == NULL ? "(unknown)" : "");
-	}
-	else {
-		msg_info_task (
-				"found exact fuzzy hash(%s) %*xs with weight: "
-						"%.2f, probability %.2f, in list: %s:%d%s",
-				type,
-				(gint) sizeof (rep->digest), rep->digest,
-				nval,
-				(gdouble) rep->v1.prob,
-				symbol,
-				rep->v1.flag,
-				map == NULL ? "(unknown)" : "");
-	}
-
 	if (map != NULL || !session->rule->skip_unknown) {
+		GList *fuzzy_var;
+		rspamd_fstring_t *hex_result;
+
 		if (session->rule->skip_map) {
 			rspamd_encode_hex_buf (cmd->digest, sizeof (cmd->digest),
 				hexbuf, sizeof (hexbuf) - 1);
@@ -1919,15 +1897,66 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 				return;
 			}
 		}
+
+		rspamd_encode_hex_buf (rep->digest, sizeof (rep->digest),
+				hexbuf, sizeof (hexbuf) - 1);
+		hexbuf[sizeof (hexbuf) - 1] = '\0';
+
+		if (is_fuzzy) {
+			msg_info_task (
+					"found fuzzy hash(%s) %s (%*xs requested) with weight: "
+					"%.2f, probability %.2f, in list: %s:%d%s",
+					type,
+					hexbuf,
+					(gint) sizeof (cmd->digest), cmd->digest,
+					nval,
+					(gdouble) rep->v1.prob,
+					symbol,
+					rep->v1.flag,
+					map == NULL ? "(unknown)" : "");
+		}
+		else {
+			msg_info_task (
+					"found exact fuzzy hash(%s) %s with weight: "
+					"%.2f, probability %.2f, in list: %s:%d%s",
+					type,
+					hexbuf,
+					nval,
+					(gdouble) rep->v1.prob,
+					symbol,
+					rep->v1.flag,
+					map == NULL ? "(unknown)" : "");
+		}
+
 		rspamd_snprintf (buf,
 				sizeof (buf),
-				"%d:%*xs:%.2f:%s",
+				"%d:%*s:%.2f:%s",
 				rep->v1.flag,
-				(gint)MIN(rspamd_fuzzy_hash_len, sizeof (rep->digest)), rep->digest,
+				(gint)MIN(rspamd_fuzzy_hash_len * 2, sizeof (rep->digest) * 2), hexbuf,
 				rep->v1.prob,
 				type);
 		res->option = rspamd_mempool_strdup (task->task_pool, buf);
 		g_ptr_array_add (session->results, res);
+
+		/* Store hex string in pool variable */
+		hex_result = rspamd_mempool_alloc (task->task_pool,
+				sizeof (rspamd_fstring_t) + sizeof (hexbuf));
+		memcpy (hex_result->str, hexbuf, sizeof (hexbuf));
+		hex_result->len = sizeof (hexbuf) - 1;
+		hex_result->allocated = (gsize)-1;
+		fuzzy_var = rspamd_mempool_get_variable (task->task_pool,
+				RSPAMD_MEMPOOL_FUZZY_RESULT);
+
+		if (fuzzy_var == NULL) {
+			fuzzy_var = g_list_prepend (NULL, hex_result);
+			rspamd_mempool_set_variable (task->task_pool,
+					RSPAMD_MEMPOOL_FUZZY_RESULT, fuzzy_var,
+					(rspamd_mempool_destruct_t)g_list_free);
+		}
+		else {
+			/* Not very efficient, but we don't really use it intensively */
+			fuzzy_var = g_list_append (fuzzy_var, hex_result);
+		}
 	}
 }
 

@@ -36,5 +36,6 @@
 #define RSPAMD_MEMPOOL_ARC_SIGN_KEY "arc_key"
 #define RSPAMD_MEMPOOL_ARC_SIGN_SELECTOR "arc_selector"
 #define RSPAMD_MEMPOOL_STAT_SIGNATURE "stat_signature"
+#define RSPAMD_MEMPOOL_FUZZY_RESULT "fuzzy_hashes"
 
 #endif
