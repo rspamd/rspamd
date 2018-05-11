@@ -2166,7 +2166,7 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 		/* Error state */
 		msg_err_task ("got error on IO with server %s(%s), on %s, %d, %s",
 			rspamd_upstream_name (session->server),
-			rspamd_inet_address_to_string (session->addr),
+				rspamd_inet_address_to_string_pretty (session->addr),
 			session->state == 1 ? "read" : "write",
 			errno,
 			strerror (errno));
@@ -2207,7 +2207,7 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 	if (session->retransmits >= fuzzy_module_ctx->retransmits) {
 		msg_err_task ("got IO timeout with server %s(%s), after %d retransmits",
 				rspamd_upstream_name (session->server),
-				rspamd_inet_address_to_string (session->addr),
+				rspamd_inet_address_to_string_pretty (session->addr),
 				session->retransmits);
 		rspamd_upstream_fail (session->server);
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
@@ -2412,7 +2412,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 	else if (ret == return_error) {
 		msg_err_task ("got error in IO with server %s(%s), %d, %s",
 				rspamd_upstream_name (session->server),
-				rspamd_inet_address_to_string (session->addr),
+				rspamd_inet_address_to_string_pretty (session->addr),
 				errno, strerror (errno));
 		rspamd_upstream_fail (session->server);
 	}
@@ -2515,7 +2515,7 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 		msg_err_task_check ("got IO timeout with server %s(%s), "
 				"after %d retransmits",
 				rspamd_upstream_name (session->server),
-				rspamd_inet_address_to_string (session->addr),
+				rspamd_inet_address_to_string_pretty (session->addr),
 				session->retransmits);
 
 		if (session->session) {
@@ -2830,7 +2830,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 		if ((sock = rspamd_inet_address_connect (addr, SOCK_DGRAM, TRUE)) == -1) {
 			msg_warn_task ("cannot connect to %s(%s), %d, %s",
 				rspamd_upstream_name (selected),
-				rspamd_inet_address_to_string (addr),
+					rspamd_inet_address_to_string_pretty (addr),
 				errno,
 				strerror (errno));
 			rspamd_upstream_fail (selected);
