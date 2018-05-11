@@ -87,7 +87,8 @@ LUA_FUNCTION_DEF (mempool, set_bucket);
  * - `int`: unpack a single integer
  * - `int64`: unpack 64-bits integer
  * - `boolean`: unpack boolean
- * - `bucket`: bucket of numbers represented as a table
+ * - `bucket`: bucket of numbers represented as a Lua table
+ * - `fstrings`: list of rspamd_fstring_t (GList) represented as a Lua table
  * @param {string} name variable's name to get
  * @param {string} type list of types to be extracted
  * @return {variable list} list of variables extracted (but **not** a table)
@@ -465,6 +466,25 @@ lua_mempool_get_variable (lua_State *L)
 
 						pv += sizeof (struct lua_numbers_bucket) +
 								bucket->nelts * sizeof (gdouble);
+					}
+					else if (len == sizeof ("fstrings") - 1 &&
+							 g_ascii_strncasecmp (pt, "fstrings", len) == 0) {
+						GList *cur;
+						rspamd_fstring_t *fstr;
+
+						cur = (GList *)pv;
+						lua_newtable (L);
+
+						i = 1;
+						while (cur != NULL) {
+							fstr = cur->data;
+							lua_pushlstring (L, fstr->str, fstr->len);
+							lua_rawseti (L, -1, i);
+							i ++;
+							cur = g_list_next (cur);
+						}
+
+						pv += sizeof (GList *);
 					}
 					else {
 						msg_err ("unknown type for get_variable: %s", pt);
