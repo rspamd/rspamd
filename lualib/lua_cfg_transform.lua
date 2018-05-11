@@ -241,7 +241,8 @@ return function(cfg)
     logger.errx('no actions defined')
   else
     -- Perform sanity check for actions
-    local actions_defs = {'greylist', 'add header', 'add_header',
+    local actions_defs = {'no action', 'no_action', -- In case if that's added
+                          'greylist', 'add header', 'add_header',
                           'rewrite subject', 'rewrite_subject', 'reject'}
 
     if not cfg.actions['no action'] and not cfg.actions['no_action'] and
