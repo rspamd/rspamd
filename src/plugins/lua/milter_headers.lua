@@ -128,6 +128,9 @@ local settings = {
       header = 'X-Stat-Signature',
       remove = 1,
     },
+    ['fuzzy-hashes'] = {
+      header = 'X-Rspamd-Fuzzy',
+    },
   },
 }
 
@@ -342,7 +345,10 @@ local function milter_headers(task)
   end
 
   routines['spam-header'] = function()
-    spam_header('spam-header', settings.routines['spam-header'].header, settings.routines['spam-header'].value, settings.routines['spam-header'].remove)
+    spam_header('spam-header',
+        settings.routines['spam-header'].header,
+        settings.routines['spam-header'].value,
+        settings.routines['spam-header'].remove)
   end
 
   routines['remove-spam-flag'] = function()
@@ -456,6 +462,16 @@ local function milter_headers(task)
     local res = task:get_mempool():get_variable("stat_signature")
     if res then
       add[settings.routines['stat-signature'].header] = res
+    end
+  end
+
+  routines['fuzzy-hashes'] = function()
+    local res = task:get_mempool():get_variable("fuzzy_hashes", "fstrings")
+
+    if res and #res > 0 then
+      for _,h in ipairs(res) do
+        add_header(add[settings.routines['fuzzy-hashes'].header], h)
+      end
     end
   end
 
