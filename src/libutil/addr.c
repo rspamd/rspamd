@@ -112,14 +112,15 @@ rspamd_inet_addr_create (gint af)
 
 	addr = g_malloc0 (sizeof (rspamd_inet_addr_t));
 
+	addr->af = af;
+
 	if (af == AF_UNIX) {
 		addr->u.un = g_malloc0 (sizeof (*addr->u.un));
 		addr->slen = sizeof (addr->u.un->addr);
 	}
-
-	addr->af = af;
-
-	rspamd_ip_validate_af (addr);
+	else {
+		rspamd_ip_validate_af (addr);
+	}
 
 	return addr;
 }
