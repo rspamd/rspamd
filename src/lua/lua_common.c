@@ -1198,18 +1198,10 @@ rspamd_lua_check_udata_common (lua_State *L, gint pos, const gchar *classname,
 {
 	void *p = lua_touserdata (L, pos);
 	GString *err_msg;
+	guint i, top = lua_gettop (L);
 
 	if (p == NULL) {
-		if (fatal) {
-			err_msg = g_string_sized_new (100);
-			rspamd_printf_gstring (err_msg, "expected %s at %d, but got %s; trace: ",
-					classname, pos, lua_typename (L, lua_type (L, pos)));
-			rspamd_lua_traceback_string (L, err_msg);
-			msg_err ("lua typecheck error: %v", err_msg);
-			g_string_free (err_msg, TRUE);
-		}
-
-		return NULL;
+		goto err;
 	}
 	else {
 		/* Match class */
@@ -1217,43 +1209,65 @@ rspamd_lua_check_udata_common (lua_State *L, gint pos, const gchar *classname,
 			luaL_getmetatable (L, classname);
 
 			if (!lua_rawequal (L, -1, -2)) {
-				p = NULL;
+				goto err;
+			}
+		}
+		else {
+			goto err;
+		}
+	}
+
+	lua_settop (L, top);
+
+	return p;
+
+err:
+	if (fatal) {
+		const gchar *actual_classname = NULL;
+
+		if (lua_getmetatable (L, pos)) {
+			lua_pushstring (L, "__index");
+			lua_gettable (L, -3);
+			lua_pushstring (L, "class");
+			lua_gettable (L, -2);
+			actual_classname = lua_tostring (L, -1);
+		}
+		else {
+			actual_classname = lua_typename (L, lua_type (L, -1));
+		}
+
+		err_msg = g_string_sized_new (100);
+		rspamd_printf_gstring (err_msg, "expected %s at %d, but userdata has "
+										"%s metatable; trace: ",
+				classname, pos, actual_classname);
+		rspamd_lua_traceback_string (L, err_msg);
+		rspamd_printf_gstring (err_msg, " stack(%d): ", top);
+
+		for (i = 1; i <= MIN (top, 10); i ++) {
+			if (lua_type (L, i) == LUA_TUSERDATA) {
+				lua_getmetatable (L, i);
 				lua_pushstring (L, "__index");
 				lua_gettable (L, -3);
 				lua_pushstring (L, "class");
 				lua_gettable (L, -2);
 
-				if (fatal) {
-					err_msg = g_string_sized_new (100);
-					rspamd_printf_gstring (err_msg, "expected %s at %d, but userdata has "
-							"classname: %s; trace: ",
-							classname, pos, lua_tostring (L, -1));
-					rspamd_lua_traceback_string (L, err_msg);
-					msg_err ("lua typecheck error: %v", err_msg);
-					g_string_free (err_msg, TRUE);
-				}
-
-				lua_pop (L, 2); /* __index -> classname */
+				rspamd_printf_gstring (err_msg, "[%d: ud=%s] ", i,
+						lua_tostring (L, -1));
+				lua_pop (L, 3);
 			}
-
-			lua_pop (L, 2);
-		}
-		else {
-			p = NULL;
-
-			if (fatal) {
-				err_msg = g_string_sized_new (100);
-				rspamd_printf_gstring (err_msg, "expected %s at %d, but userdata has "
-						"no metatable; trace: ",
-						classname, pos);
-				rspamd_lua_traceback_string (L, err_msg);
-				msg_err ("lua typecheck error: %v", err_msg);
-				g_string_free (err_msg, TRUE);
+			else {
+				rspamd_printf_gstring (err_msg, "[%d: %s] ", i,
+						lua_typename (L, lua_type (L, i)));
 			}
 		}
+
+		msg_err ("lua type error: %v", err_msg);
+		g_string_free (err_msg, TRUE);
 	}
 
-	return p;
+	lua_settop (L, top);
+
+	return NULL;
 }
 
 void *
