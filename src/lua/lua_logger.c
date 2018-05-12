@@ -405,7 +405,7 @@ lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len)
 
 		r = rspamd_snprintf (d, remain + 1, "[%d] = ", i);
 		MOVE_BUF(d, remain, r);
-		r = lua_logger_out_type (L, -1, d, remain);
+		r = lua_logger_out_type (L, lua_gettop (L), d, remain);
 		MOVE_BUF(d, remain, r);
 
 		first = FALSE;
