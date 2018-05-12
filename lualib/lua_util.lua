@@ -476,14 +476,21 @@ end
 exports.override_defaults = override_defaults
 
 --[[[
--- @function lua_util.extract_specific_urls(task, limit)
+-- @function lua_util.extract_specific_urls(task, limit, [need_emails[, filter[, prefix])
 -- Apply heuristic in extracting of urls from task, this function
 -- tries its best to extract specific number of urls from a task based on
 -- their characteristics
 --]]
-exports.extract_specific_urls = function(task, lim, need_emails)
+exports.extract_specific_urls = function(task, lim, need_emails, filter, prefix)
   local fun = require "fun"
-  local cache_key = string.format('sp_urls_%d%s', lim, need_emails)
+  local cache_key
+
+  if prefix then
+    cache_key = prefix
+  else
+    cache_key = string.format('sp_urls_%d%s', lim, need_emails)
+  end
+
 
   local cached = task:cache_get(cache_key)
 
@@ -493,8 +500,9 @@ exports.extract_specific_urls = function(task, lim, need_emails)
 
   local urls = task:get_urls(need_emails)
 
-
   if not urls then return {} end
+
+  if filter then urls = fun.totable(fun.filter(filter, urls)) end
 
   if #urls <= lim then
     task:cache_set(cache_key, urls)
