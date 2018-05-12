@@ -482,7 +482,6 @@ exports.override_defaults = override_defaults
 -- their characteristics
 --]]
 exports.extract_specific_urls = function(task, lim, need_emails, filter, prefix)
-  local fun = require "fun"
   local cache_key
 
   if prefix then
@@ -559,8 +558,8 @@ exports.extract_specific_urls = function(task, lim, need_emails, filter, prefix)
   if neslds <= lim then
     -- We can get urls based on their eslds
     while lim > 0 do
-      for _,urls in pairs(eslds) do
-        table.insert(res, table.remove(urls))
+      for _,lurls in pairs(eslds) do
+        table.insert(res, table.remove(lurls))
         lim = lim - 1
       end
     end
@@ -571,8 +570,8 @@ exports.extract_specific_urls = function(task, lim, need_emails, filter, prefix)
 
   if ntlds <= lim then
     while lim > 0 do
-      for _,urls in pairs(tlds) do
-        table.insert(res, table.remove(urls))
+      for _,lurls in pairs(tlds) do
+        table.insert(res, table.remove(lurls))
         lim = lim - 1
       end
     end
@@ -588,7 +587,7 @@ exports.extract_specific_urls = function(task, lim, need_emails, filter, prefix)
     return #tlds[t1] < #tlds[t2]
   end)
 
-  local ntlds = #tlds_keys
+  ntlds = #tlds_keys
   for i=1,ntlds / 2 do
     local tld1 = tlds[tlds_keys[i]]
     local tld2 = tlds[tlds_keys[ntlds - i]]
