@@ -550,10 +550,10 @@ ucl_object_lua_import_escape (lua_State *L, int idx)
 	t = lua_type (L, idx);
 	switch (t) {
 	case LUA_TTABLE:
-		obj = ucl_object_lua_fromtable (L, idx, UCL_STRING_ESCAPE);
+		obj = ucl_object_lua_fromtable (L, idx, UCL_STRING_RAW);
 		break;
 	default:
-		obj = ucl_object_lua_fromelt (L, idx, UCL_STRING_ESCAPE);
+		obj = ucl_object_lua_fromelt (L, idx, UCL_STRING_RAW);
 		break;
 	}
 
