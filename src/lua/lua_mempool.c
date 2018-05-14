@@ -479,7 +479,7 @@ lua_mempool_get_variable (lua_State *L)
 						while (cur != NULL) {
 							fstr = cur->data;
 							lua_pushlstring (L, fstr->str, fstr->len);
-							lua_rawseti (L, -1, i);
+							lua_rawseti (L, -2, i);
 							i ++;
 							cur = g_list_next (cur);
 						}
