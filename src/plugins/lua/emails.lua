@@ -246,11 +246,13 @@ if #rules > 0 then
 
     if rule.returncodes then
       for k,_ in pairs(rule.returncodes) do
-        rspamd_config:register_symbol({
-          name = k,
-          parent = id,
-          type = 'virtual'
-        })
+        if k ~= rule['symbol'] then
+          rspamd_config:register_symbol({
+            name = k,
+            parent = id,
+            type = 'virtual'
+          })
+        end
       end
     end
   end
