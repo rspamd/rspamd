@@ -81,6 +81,7 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 			sizeof (struct rspamd_worker_bind_conf));
 
 	cnf->cnt = 1024;
+	cnf->bind_line = str;
 
 	if (g_ascii_strncasecmp (str, "systemd:", sizeof ("systemd:") - 1) == 0) {
 		/* The actual socket will be passed by systemd environment */

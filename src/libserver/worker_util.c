@@ -618,7 +618,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		event_reinit (rspamd_main->ev_base);
 		event_base_free (rspamd_main->ev_base);
 
-		/* Drop privilleges */
+		/* Drop privileges */
 		rspamd_worker_drop_priv (rspamd_main);
 		/* Set limits */
 		rspamd_worker_set_limits (rspamd_main, cf);
@@ -628,7 +628,13 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		rlim.rlim_max = rlim.rlim_cur;
 		setrlimit (RLIMIT_STACK, &rlim);
 
-		setproctitle ("%s process", cf->worker->name);
+		if (cf->bind_conf) {
+			setproctitle ("%s process (%s)", cf->worker->name,
+					cf->bind_conf->bind_line);
+		}
+		else {
+			setproctitle ("%s process", cf->worker->name);
+		}
 
 		if (rspamd_main->pfh) {
 			rspamd_pidfile_close (rspamd_main->pfh);
@@ -648,7 +654,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		wrk->start_time = rspamd_get_calendar_ticks ();
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-# if (GLIB_MINOR_VERSION > 20)
+		# if (GLIB_MINOR_VERSION > 20)
 		/* Ugly hack for old glib */
 		if (!g_thread_get_initialized ()) {
 			g_thread_init (NULL);
@@ -657,8 +663,15 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		g_thread_init (NULL);
 # endif
 #endif
-		msg_info_main ("starting %s process %P (%d)", cf->worker->name,
-				getpid (), index);
+		if (cf->bind_conf) {
+			msg_info_main ("starting %s process %P (%d); listen on: %s",
+					cf->worker->name,
+					getpid (), index, cf->bind_conf->bind_line);
+		}
+		else {
+			msg_info_main ("starting %s process %P (%d)", cf->worker->name,
+					getpid (), index);
+		}
 		/* Close parent part of socketpair */
 		close (wrk->control_pipe[0]);
 		close (wrk->srv_pipe[0]);
