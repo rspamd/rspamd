@@ -182,39 +182,39 @@ local function milter_headers(task)
   local routines, common, add, remove = {}, {}, {}, {}
 
   local function add_header(name, value, stop_chars, order)
+    local hname = settings.routines[name].header
     if order then
-      if not add[settings.routines[name].header] then
-        add[settings.routines[name].header] = {
+      if not add[hname] then
+        add[hname] = {
           order = order,
-          value = lua_util.fold_header(task, name, value, stop_chars)
+          value = lua_util.fold_header(task, hname, value, stop_chars)
         }
       else
-        if not add[settings.routines[name].header][1] then
+        if not add[hname][1] then
           -- Convert to a table
-          add[settings.routines[name].header] = {
-            [1] = add[settings.routines[name].header]
+          add[hname] = {
+            [1] = add[hname]
           }
         end
 
-        table.insert(add[settings.routines[name].header], {
+        table.insert(add[hname], {
           order = order,
-          value = lua_util.fold_header(task, name, value, stop_chars)
+          value = lua_util.fold_header(task, hname, value, stop_chars)
         })
       end
     else
-      if not add[settings.routines[name].header] then
-        add[settings.routines[name].header] = lua_util.fold_header(task, name,
-            value, stop_chars)
+      if not add[hname] then
+        add[hname] = lua_util.fold_header(task, hname, value, stop_chars)
       else
-        if not add[settings.routines[name].header][1] then
+        if not add[hname][1] then
           -- Convert to a table
-          add[settings.routines[name].header] = {
-            [1] = add[settings.routines[name].header]
+          add[hname] = {
+            [1] = add[hname]
           }
         end
 
-        table.insert(add[settings.routines[name].header],
-            lua_util.fold_header(task, name, value, stop_chars))
+        table.insert(add[hname],
+            lua_util.fold_header(task, hname, value, stop_chars))
       end
     end
   end
@@ -470,7 +470,7 @@ local function milter_headers(task)
 
     if res and #res > 0 then
       for _,h in ipairs(res) do
-        add_header(add[settings.routines['fuzzy-hashes'].header], h)
+        add_header('fuzzy-hashes', h)
       end
     end
   end
