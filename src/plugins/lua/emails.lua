@@ -55,24 +55,52 @@ local function check_email_rule(task, rule, addr)
         logger.errx(task, 'Error querying DNS: %1', err)
       elseif results then
         local expected_found = false
+        local symbol = rule['symbol']
+
+        local function check_ip(ip)
+          for _,result in ipairs(results) do
+            local ipstr = result:to_string()
+            if ipstr == ip then
+              return true
+            end
+          end
+
+          return false
+        end
 
         if rule['expect_ip'] then
-          for _,result in pairs(results) do
-            local ipstr = result:to_string()
-
-            if ipstr == rule['expect_ip'] then
-              expected_found = true
-            end
+          if check_ip(rule['expect_ip']) then
+            expected_found = true
           end
         else
           expected_found = true -- Accept any result
         end
 
+        if rule['returncodes'] then
+          for k,codes in pairs(rule['returncodes']) do
+            if type(codes) == 'table' then
+              for _,code in ipairs(codes) do
+                if check_ip(code) then
+                  expected_found = true
+                  symbol = k
+                  break
+                end
+              end
+            else
+              if check_ip(codes) then
+                expected_found = true
+                symbol = k
+                break
+              end
+            end
+          end
+        end
+
         if expected_found then
           if rule['hash'] then
-            task:insert_result(rule['symbol'], 1.0, {email, to_resolve})
+            task:insert_result(symbol, 1.0, {email, to_resolve})
           else
-            task:insert_result(rule['symbol'], 1.0, email)
+            task:insert_result(symbol, 1.0, email)
           end
         end
 
@@ -211,10 +239,20 @@ end
 if #rules > 0 then
   for _,rule in ipairs(rules) do
     local cb = gen_check_emails(rule)
-    rspamd_config:register_symbol({
+    local id = rspamd_config:register_symbol({
       name = rule['symbol'],
       callback = cb,
     })
+
+    if rule.returncodes then
+      for k,_ in pairs(rule.returncodes) do
+        rspamd_config:register_symbol({
+          name = k,
+          parent = id,
+          type = 'virtual'
+        })
+      end
+    end
   end
 else
   rspamd_lua_utils.disable_module(N, "conf")
