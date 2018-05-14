@@ -58,81 +58,89 @@ static __inline uint64_t final_weak_avalanche(uint64_t a, uint64_t b) {
   return mux64(rot64(a + b, 17), prime_4) + mix64(a ^ b, prime_0);
 }
 
+/* TODO C++ template in the next version */
+#define T1HA1_BODY(ENDIANNES, ALIGNESS, DOCOPY)                                \
+  if (unlikely(len > 32)) {                                                    \
+    uint64_t c = rot64(len, 17) + seed;                                        \
+    uint64_t d = len ^ rot64(seed, 17);                                        \
+    const void *detent = (const uint8_t *)data + len - 31;                     \
+    do {                                                                       \
+      const uint64_t *v = (const uint64_t *)data;                              \
+      if (DOCOPY)                                                              \
+        memcpy((void *)(v = align), data, 32);                                 \
+                                                                               \
+      const uint64_t w0 = fetch64_##ENDIANNES##_##ALIGNESS(v + 0);             \
+      const uint64_t w1 = fetch64_##ENDIANNES##_##ALIGNESS(v + 1);             \
+      const uint64_t w2 = fetch64_##ENDIANNES##_##ALIGNESS(v + 2);             \
+      const uint64_t w3 = fetch64_##ENDIANNES##_##ALIGNESS(v + 3);             \
+                                                                               \
+      const uint64_t d02 = w0 ^ rot64(w2 + d, 17);                             \
+      const uint64_t c13 = w1 ^ rot64(w3 + c, 17);                             \
+      c += a ^ rot64(w0, 41);                                                  \
+      d -= b ^ rot64(w1, 31);                                                  \
+      a ^= prime_1 * (d02 + w3);                                               \
+      b ^= prime_0 * (c13 + w2);                                               \
+      data = (const uint64_t *)data + 4;                                       \
+    } while (likely(data < detent));                                           \
+                                                                               \
+    a ^= prime_6 * (rot64(c, 17) + d);                                         \
+    b ^= prime_5 * (c + rot64(d, 17));                                         \
+    len &= 31;                                                                 \
+  }                                                                            \
+                                                                               \
+  const uint64_t *v = (const uint64_t *)data;                                  \
+  if (unlikely(need_copy4align) && len > 8)                                    \
+    memcpy((void *)(v = align), data, len);                                    \
+                                                                               \
+  switch (len) {                                                               \
+  default:                                                                     \
+    b += mux64(fetch64_##ENDIANNES##_##ALIGNESS(v++), prime_4);                \
+  /* fall through */                                                           \
+  case 24:                                                                     \
+  case 23:                                                                     \
+  case 22:                                                                     \
+  case 21:                                                                     \
+  case 20:                                                                     \
+  case 19:                                                                     \
+  case 18:                                                                     \
+  case 17:                                                                     \
+    a += mux64(fetch64_##ENDIANNES##_##ALIGNESS(v++), prime_3);                \
+  /* fall through */                                                           \
+  case 16:                                                                     \
+  case 15:                                                                     \
+  case 14:                                                                     \
+  case 13:                                                                     \
+  case 12:                                                                     \
+  case 11:                                                                     \
+  case 10:                                                                     \
+  case 9:                                                                      \
+    b += mux64(fetch64_##ENDIANNES##_##ALIGNESS(v++), prime_2);                \
+  /* fall through */                                                           \
+  case 8:                                                                      \
+  case 7:                                                                      \
+  case 6:                                                                      \
+  case 5:                                                                      \
+  case 4:                                                                      \
+  case 3:                                                                      \
+  case 2:                                                                      \
+  case 1:                                                                      \
+    a += mux64(tail64_##ENDIANNES##_##ALIGNESS(v, len), prime_1);              \
+  /* fall through */                                                           \
+  case 0:                                                                      \
+    return final_weak_avalanche(a, b);                                         \
+  }
+
 uint64_t t1ha1_le(const void *data, size_t len, uint64_t seed) {
   uint64_t a = seed;
   uint64_t b = len;
 
-  const int need_align = (((uintptr_t)data) & 7) != 0 && !UNALIGNED_OK;
+  const bool need_copy4align =
+      (((uintptr_t)data) & (ALIGMENT_64 - 1)) != 0 && !UNALIGNED_OK;
   uint64_t align[4];
-
-  if (unlikely(len > 32)) {
-    uint64_t c = rot64(len, 17) + seed;
-    uint64_t d = len ^ rot64(seed, 17);
-    const void *detent = (const uint8_t *)data + len - 31;
-    do {
-      const uint64_t *v = (const uint64_t *)data;
-      if (unlikely(need_align))
-        v = (const uint64_t *)memcpy(&align, unaligned(v), 32);
-
-      uint64_t w0 = fetch64_le(v + 0);
-      uint64_t w1 = fetch64_le(v + 1);
-      uint64_t w2 = fetch64_le(v + 2);
-      uint64_t w3 = fetch64_le(v + 3);
-
-      uint64_t d02 = w0 ^ rot64(w2 + d, 17);
-      uint64_t c13 = w1 ^ rot64(w3 + c, 17);
-      c += a ^ rot64(w0, 41);
-      d -= b ^ rot64(w1, 31);
-      a ^= prime_1 * (d02 + w3);
-      b ^= prime_0 * (c13 + w2);
-      data = (const uint64_t *)data + 4;
-    } while (likely(data < detent));
-
-    a ^= prime_6 * (rot64(c, 17) + d);
-    b ^= prime_5 * (c + rot64(d, 17));
-    len &= 31;
-  }
-
-  const uint64_t *v = (const uint64_t *)data;
-  if (unlikely(need_align) && len > 8)
-    v = (const uint64_t *)memcpy(&align, unaligned(v), len);
-
-  switch (len) {
-  default:
-    b += mux64(fetch64_le(v++), prime_4);
-  /* fall through */
-  case 24:
-  case 23:
-  case 22:
-  case 21:
-  case 20:
-  case 19:
-  case 18:
-  case 17:
-    a += mux64(fetch64_le(v++), prime_3);
-  /* fall through */
-  case 16:
-  case 15:
-  case 14:
-  case 13:
-  case 12:
-  case 11:
-  case 10:
-  case 9:
-    b += mux64(fetch64_le(v++), prime_2);
-  /* fall through */
-  case 8:
-  case 7:
-  case 6:
-  case 5:
-  case 4:
-  case 3:
-  case 2:
-  case 1:
-    a += mux64(tail64_le(v, len), prime_1);
-  /* fall through */
-  case 0:
-    return final_weak_avalanche(a, b);
+  if (need_copy4align) {
+    T1HA1_BODY(le, aligned, true);
+  } else {
+    T1HA1_BODY(le, unaligned, false);
   }
 }
 
@@ -140,76 +148,12 @@ uint64_t t1ha1_be(const void *data, size_t len, uint64_t seed) {
   uint64_t a = seed;
   uint64_t b = len;
 
-  const int need_align = (((uintptr_t)data) & 7) != 0 && !UNALIGNED_OK;
+  const bool need_copy4align =
+      (((uintptr_t)data) & (ALIGMENT_64 - 1)) != 0 && !UNALIGNED_OK;
   uint64_t align[4];
-
-  if (unlikely(len > 32)) {
-    uint64_t c = rot64(len, 17) + seed;
-    uint64_t d = len ^ rot64(seed, 17);
-    const void *detent = (const uint8_t *)data + len - 31;
-    do {
-      const uint64_t *v = (const uint64_t *)data;
-      if (unlikely(need_align))
-        v = (const uint64_t *)memcpy(&align, unaligned(v), 32);
-
-      uint64_t w0 = fetch64_be(v + 0);
-      uint64_t w1 = fetch64_be(v + 1);
-      uint64_t w2 = fetch64_be(v + 2);
-      uint64_t w3 = fetch64_be(v + 3);
-
-      uint64_t d02 = w0 ^ rot64(w2 + d, 17);
-      uint64_t c13 = w1 ^ rot64(w3 + c, 17);
-      c += a ^ rot64(w0, 41);
-      d -= b ^ rot64(w1, 31);
-      a ^= prime_1 * (d02 + w3);
-      b ^= prime_0 * (c13 + w2);
-      data = (const uint64_t *)data + 4;
-    } while (likely(data < detent));
-
-    a ^= prime_6 * (rot64(c, 17) + d);
-    b ^= prime_5 * (c + rot64(d, 17));
-    len &= 31;
-  }
-
-  const uint64_t *v = (const uint64_t *)data;
-  if (unlikely(need_align) && len > 8)
-    v = (const uint64_t *)memcpy(&align, unaligned(v), len);
-
-  switch (len) {
-  default:
-    b += mux64(fetch64_be(v++), prime_4);
-  /* fall through */
-  case 24:
-  case 23:
-  case 22:
-  case 21:
-  case 20:
-  case 19:
-  case 18:
-  case 17:
-    a += mux64(fetch64_be(v++), prime_3);
-  /* fall through */
-  case 16:
-  case 15:
-  case 14:
-  case 13:
-  case 12:
-  case 11:
-  case 10:
-  case 9:
-    b += mux64(fetch64_be(v++), prime_2);
-  /* fall through */
-  case 8:
-  case 7:
-  case 6:
-  case 5:
-  case 4:
-  case 3:
-  case 2:
-  case 1:
-    a += mux64(tail64_be(v, len), prime_1);
-  /* fall through */
-  case 0:
-    return final_weak_avalanche(a, b);
+  if (need_copy4align) {
+    T1HA1_BODY(be, aligned, true);
+  } else {
+    T1HA1_BODY(be, unaligned, false);
   }
 }

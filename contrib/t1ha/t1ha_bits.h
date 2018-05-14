@@ -86,6 +86,14 @@
 #define PAGESIZE 4096
 #endif /* PAGESIZE */
 
+#define ALIGMENT_16 2
+#define ALIGMENT_32 4
+#if UINTPTR_MAX > 0xffffFFFFul || ULONG_MAX > 0xffffFFFFul
+#define ALIGMENT_64 8
+#else
+#define ALIGMENT_64 4
+#endif
+
 /***************************************************************************/
 
 #ifndef __has_builtin
@@ -160,10 +168,8 @@ static __maybe_unused __always_inline void e2k_add64carry_last(unsigned carry,
   e2k_add64carry_last(carry, base, addend, sum)
 #endif /* __iset__ >= 5 */
 
-#if 0 /* LY: unreasonable, because alignment is required :( */
-#define fetch64_be(ptr) ((uint64_t)__builtin_e2k_ld_64s_be(ptr))
-#define fetch32_be(ptr) ((uint32_t)__builtin_e2k_ld_32u_be(ptr))
-#endif
+#define fetch64_be_aligned(ptr) ((uint64_t)__builtin_e2k_ld_64s_be(ptr))
+#define fetch32_be_aligned(ptr) ((uint32_t)__builtin_e2k_ld_32u_be(ptr))
 
 #endif /* __e2k__ Elbrus */
 
@@ -337,86 +343,174 @@ static __always_inline uint16_t bswap16(uint16_t v) { return v << 8 | v >> 8; }
 #endif
 #endif /* bswap16 */
 
-#ifndef unaligned
-#if defined(__LCC__)
-#pragma diag_suppress wrong_entity_for_attribute
-#define unaligned(ptr) ((const char __attribute__((packed, aligned(1))) *)(ptr))
-#elif defined(__clang__)
-#pragma clang diagnostic ignored "-Wignored-attributes"
-#define unaligned(ptr) ((const char __attribute__((packed, aligned(1))) *)(ptr))
-#elif defined(__GNUC__)
-#pragma GCC diagnostic ignored "-Wpacked"
-#define unaligned(ptr) ((const char __attribute__((packed, aligned(1))) *)(ptr))
+#if defined(__GNUC__) || (__has_attribute(packed) && __has_attribute(aligned))
+typedef struct {
+  uint8_t unaligned_8;
+  uint16_t unaligned_16;
+  uint32_t unaligned_32;
+  uint64_t unaligned_64;
+} __attribute__((packed, aligned(1))) t1ha_unaligned_proxy;
+#define read_unaligned(ptr, bits)                                              \
+  (((const t1ha_unaligned_proxy *)((const uint8_t *)(ptr)-offsetof(            \
+        t1ha_unaligned_proxy, unaligned_##bits)))                              \
+       ->unaligned_##bits)
+#define read_aligned(ptr, bits)                                                \
+  (*(const __attribute__((aligned(ALIGMENT_##bits))) uint##bits##_t *)(ptr))
 #elif defined(_MSC_VER)
 #pragma warning(                                                               \
     disable : 4235) /* nonstandard extension used: '__unaligned'               \
                      * keyword not supported on this architecture */
-#define unaligned(ptr) ((const char __unaligned *)(ptr))
+#define read_unaligned(ptr, bits) (*(const __unaligned uint##bits##_t *)(ptr))
+#define read_aligned(ptr, bits)                                                \
+  (*(const __declspec(align(ALIGMENT_##bits)) uint##bits##_t *)(ptr))
 #else
-#define unaligned(ptr) ((const char *)(ptr))
+#error FIXME
+#define read_unaligned(ptr, bits)                                              \
+  (*(const uint##bits##_ *)((const char *)(ptr)))
+#define read_aligned(ptr, bits) (*(const uint##bits##_t *)(ptr))
+#endif /* read_unaligned */
+
+#if 0
+#ifndef DECLARE_UNALIGNED_PTR
+#if defined(__LCC__)
+#pragma diag_suppress wrong_entity_for_attribute
+#define DECLARE_UNALIGNED_PTR(ptr) char __attribute__((packed)) * ptr
+#elif defined(__clang__)
+#pragma clang diagnostic ignored "-Wignored-attributes"
+#define DECLARE_UNALIGNED_PTR(ptr) char __attribute__((packed)) * ptr
+#elif defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wpacked"
+#define DECLARE_UNALIGNED_PTR(ptr) char __attribute__((packed)) * ptr
+#elif defined(_MSC_VER)
+#pragma warning(                                                               \
+    disable : 4235) /* nonstandard extension used: '__unaligned'               \
+                     * keyword not supported on this architecture */
+#define DECLARE_UNALIGNED_PTR(ptr) char __unaligned *ptr
+#else
+#define DECLARE_UNALIGNED_PTR(ptr) char *ptr
 #endif
-#endif /* unaligned */
+#endif /* cast_unaligned */
+
+#ifndef cast_unaligned
+#if defined(__LCC__)
+#pragma diag_suppress wrong_entity_for_attribute
+#define cast_unaligned(ptr) ((const char __attribute__((packed)) *)(ptr))
+#elif defined(__clang__)
+#pragma clang diagnostic ignored "-Wignored-attributes"
+#define cast_unaligned(ptr) ((const char __attribute__((packed)) *)(ptr))
+#elif defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wpacked"
+#define cast_unaligned(ptr) ((const char __attribute__((packed)) *)(ptr))
+#elif defined(_MSC_VER)
+#pragma warning(                                                               \
+    disable : 4235) /* nonstandard extension used: '__unaligned'               \
+                     * keyword not supported on this architecture */
+#define cast_unaligned(ptr) ((const char __unaligned *)(ptr))
+#else
+#define cast_unaligned(ptr) ((const char *)(ptr))
+#endif
+#endif /* cast_unaligned */
+
+#ifndef cast_aligned
+#if defined(__LCC__)
+#pragma diag_suppress wrong_entity_for_attribute
+#define cast_aligned(type, ptr)                                                \
+  ((const type __attribute__((aligned(sizeof(type)))) *)(ptr))
+#elif defined(__clang__)
+#pragma clang diagnostic ignored "-Wignored-attributes"
+#define cast_aligned(type, ptr)                                                \
+  ((const type __attribute__((aligned(sizeof(type)))) *)(ptr))
+#elif defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wpacked"
+#define cast_aligned(type, ptr)                                                \
+  ((const type __attribute__((aligned(sizeof(type)))) *)(ptr))
+#elif defined(_MSC_VER)
+#define cast_aligned(type, ptr)                                                \
+  ((const type __declspec((align(sizeof(type)))) *)(ptr))
+#else
+#define cast_aligned(type, ptr) ((const type *)(ptr))
+#endif
+#endif /* cast_aligned */
+#endif /* 0 */
 
 /***************************************************************************/
 
-#ifndef fetch64_le
-static __always_inline uint64_t fetch64_le(const void *v) {
+/*---------------------------------------------------------- Little Endian */
+
+#ifndef fetch64_le_aligned
+static __always_inline uint64_t fetch64_le_aligned(const void *v) {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-  return *(const uint64_t *)v;
+  return read_aligned(v, 64);
 #else
-  return bswap64(*(const uint64_t *)v);
+  return bswap64(read_aligned(v, 64));
 #endif
 }
-#endif /* fetch64_le */
+#endif /* fetch64_le_aligned */
 
-#ifndef fetch32_le
-static __always_inline uint32_t fetch32_le(const void *v) {
+#ifndef fetch64_le_unaligned
+static __always_inline uint64_t fetch64_le_unaligned(const void *v) {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-  return *(const uint32_t *)v;
+  return read_unaligned(v, 64);
 #else
-  return bswap32(*(const uint32_t *)v);
+  return bswap64(read_unaligned(v, 64));
 #endif
 }
-#endif /* fetch32_le */
+#endif /* fetch64_le_unaligned */
 
-#ifndef fetch16_le
-static __always_inline uint16_t fetch16_le(const void *v) {
+#ifndef fetch32_le_aligned
+static __always_inline uint32_t fetch32_le_aligned(const void *v) {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-  return *(const uint16_t *)v;
+  return read_aligned(v, 32);
 #else
-  return bswap16(*(const uint16_t *)v);
+  return bswap32(read_aligned(v, 32));
 #endif
 }
-#endif /* fetch16_le */
+#endif /* fetch32_le_aligned */
 
-#if T1HA_USE_FAST_ONESHOT_READ && UNALIGNED_OK && defined(PAGESIZE) &&         \
-    !defined(__SANITIZE_ADDRESS__) && !defined(__sun)
-#define can_read_underside(ptr, size)                                          \
-  ((size) <= sizeof(uintptr_t) && ((PAGESIZE - (size)) & (uintptr_t)(ptr)) != 0)
-#endif /* can_fast_read */
+#ifndef fetch32_le_unaligned
+static __always_inline uint32_t fetch32_le_unaligned(const void *v) {
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  return read_unaligned(v, 32);
+#else
+  return bswap32(read_unaligned(v, 32));
+#endif
+}
+#endif /* fetch32_le_unaligned */
 
-static __always_inline uint64_t tail64_le(const void *v, size_t tail) {
-  const uint8_t *p = (const uint8_t *)v;
-#ifdef can_read_underside
-  /* On some systems (e.g. x86) we can perform a 'oneshot' read, which
-   * is little bit faster. Thanks Marcin Żukowski <marcin.zukowski@gmail.com>
-   * for the reminder. */
-  const unsigned offset = (8 - tail) & 7;
-  const unsigned shift = offset << 3;
-  if (likely(can_read_underside(p, 8))) {
-    p -= offset;
-    return fetch64_le(p) >> shift;
-  }
-  return fetch64_le(p) & ((~UINT64_C(0)) >> shift);
+#ifndef fetch16_le_aligned
+static __always_inline uint16_t fetch16_le_aligned(const void *v) {
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  return read_aligned(v, 16);
+#else
+  return bswap16(read_aligned(v, 16));
+#endif
+}
+#endif /* fetch16_le_aligned */
+
+#ifndef fetch16_le_unaligned
+static __always_inline uint16_t fetch16_le_unaligned(const void *v) {
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  return read_unaligned(v, 16);
+#else
+  return bswap16(read_unaligned(v, 16));
+#endif
+}
+#endif /* fetch16_le_unaligned */
+
+static __always_inline uint64_t tail64_le_aligned(const void *v, size_t tail) {
+  const uint8_t *const p = (const uint8_t *)v;
+#if T1HA_USE_FAST_ONESHOT_READ && !defined(__SANITIZE_ADDRESS__)
+  /* We can perform a 'oneshot' read, which is little bit faster. */
+  const unsigned shift = ((8 - tail) & 7) << 3;
+  return fetch64_le_aligned(p) & ((~UINT64_C(0)) >> shift);
 #endif /* 'oneshot' read */
 
   uint64_t r = 0;
   switch (tail & 7) {
-#if UNALIGNED_OK && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-  /* For most CPUs this code is better when not needed
-   * copying for alignment or byte reordering. */
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  /* For most CPUs this code is better when not needed byte reordering. */
   case 0:
-    return fetch64_le(p);
+    return fetch64_le_aligned(p);
   case 7:
     r = (uint64_t)p[6] << 8;
   /* fall through */
@@ -429,12 +523,96 @@ static __always_inline uint64_t tail64_le(const void *v, size_t tail) {
     r <<= 32;
   /* fall through */
   case 4:
-    return r + fetch32_le(p);
+    return r + fetch32_le_aligned(p);
   case 3:
     r = (uint64_t)p[2] << 16;
   /* fall through */
   case 2:
-    return r + fetch16_le(p);
+    return r + fetch16_le_aligned(p);
+  case 1:
+    return p[0];
+#else
+  case 0:
+    r = p[7] << 8;
+  /* fall through */
+  case 7:
+    r += p[6];
+    r <<= 8;
+  /* fall through */
+  case 6:
+    r += p[5];
+    r <<= 8;
+  /* fall through */
+  case 5:
+    r += p[4];
+    r <<= 8;
+  /* fall through */
+  case 4:
+    r += p[3];
+    r <<= 8;
+  /* fall through */
+  case 3:
+    r += p[2];
+    r <<= 8;
+  /* fall through */
+  case 2:
+    r += p[1];
+    r <<= 8;
+  /* fall through */
+  case 1:
+    return r + p[0];
+#endif
+  }
+  unreachable();
+}
+
+#if T1HA_USE_FAST_ONESHOT_READ && UNALIGNED_OK && defined(PAGESIZE) &&         \
+    !defined(__SANITIZE_ADDRESS__) && !defined(__sun)
+#define can_read_underside(ptr, size)                                          \
+  ((size) <= sizeof(uintptr_t) && ((PAGESIZE - (size)) & (uintptr_t)(ptr)) != 0)
+#endif /* can_fast_read */
+
+static __always_inline uint64_t tail64_le_unaligned(const void *v,
+                                                    size_t tail) {
+  const uint8_t *p = (const uint8_t *)v;
+#ifdef can_read_underside
+  /* On some systems (e.g. x86) we can perform a 'oneshot' read, which
+   * is little bit faster. Thanks Marcin Żukowski <marcin.zukowski@gmail.com>
+   * for the reminder. */
+  const unsigned offset = (8 - tail) & 7;
+  const unsigned shift = offset << 3;
+  if (likely(can_read_underside(p, 8))) {
+    p -= offset;
+    return fetch64_le_unaligned(p) >> shift;
+  }
+  return fetch64_le_unaligned(p) & ((~UINT64_C(0)) >> shift);
+#endif /* 'oneshot' read */
+
+  uint64_t r = 0;
+  switch (tail & 7) {
+#if UNALIGNED_OK && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  /* For most CPUs this code is better when not needed
+   * copying for alignment or byte reordering. */
+  case 0:
+    return fetch64_le_unaligned(p);
+  case 7:
+    r = (uint64_t)p[6] << 8;
+  /* fall through */
+  case 6:
+    r += p[5];
+    r <<= 8;
+  /* fall through */
+  case 5:
+    r += p[4];
+    r <<= 32;
+  /* fall through */
+  case 4:
+    return r + fetch32_le_unaligned(p);
+  case 3:
+    r = (uint64_t)p[2] << 16;
+  /* fall through */
+  case 2:
+    return r + fetch16_le_unaligned(p);
   case 1:
     return p[0];
 #else
@@ -474,38 +652,134 @@ static __always_inline uint64_t tail64_le(const void *v, size_t tail) {
   unreachable();
 }
 
-#ifndef fetch64_be
-static __maybe_unused __always_inline uint64_t fetch64_be(const void *v) {
+/*------------------------------------------------------------- Big Endian */
+
+#ifndef fetch64_be_aligned
+static __maybe_unused __always_inline uint64_t
+fetch64_be_aligned(const void *v) {
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-  return *(const uint64_t *)v;
+  return read_aligned(v, 64);
 #else
-  return bswap64(*(const uint64_t *)v);
+  return bswap64(read_aligned(v, 64));
 #endif
 }
-#endif /* fetch64_be */
+#endif /* fetch64_be_aligned */
 
-#ifndef fetch32_be
-static __maybe_unused __always_inline uint32_t fetch32_be(const void *v) {
+#ifndef fetch64_be_unaligned
+static __maybe_unused __always_inline uint64_t
+fetch64_be_unaligned(const void *v) {
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-  return *(const uint32_t *)v;
+  return read_unaligned(v, 64);
 #else
-  return bswap32(*(const uint32_t *)v);
+  return bswap64(read_unaligned(v, 64));
 #endif
 }
-#endif /* fetch32_be */
+#endif /* fetch64_be_unaligned */
 
-#ifndef fetch16_be
-static __maybe_unused __always_inline uint16_t fetch16_be(const void *v) {
+#ifndef fetch32_be_aligned
+static __maybe_unused __always_inline uint32_t
+fetch32_be_aligned(const void *v) {
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-  return *(const uint16_t *)v;
+  return read_aligned(v, 32);
 #else
-  return bswap16(*(const uint16_t *)v);
+  return bswap32(read_aligned(v, 32));
 #endif
 }
-#endif /* fetch16_be */
+#endif /* fetch32_be_aligned */
 
-static __maybe_unused __always_inline uint64_t tail64_be(const void *v,
-                                                         size_t tail) {
+#ifndef fetch32_be_unaligned
+static __maybe_unused __always_inline uint32_t
+fetch32_be_unaligned(const void *v) {
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+  return read_unaligned(v, 32);
+#else
+  return bswap32(read_unaligned(v, 32));
+#endif
+}
+#endif /* fetch32_be_unaligned */
+
+#ifndef fetch16_be_aligned
+static __maybe_unused __always_inline uint16_t
+fetch16_be_aligned(const void *v) {
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+  return read_aligned(v, 16);
+#else
+  return bswap16(read_aligned(v, 16));
+#endif
+}
+#endif /* fetch16_be_aligned */
+
+#ifndef fetch16_be_unaligned
+static __maybe_unused __always_inline uint16_t
+fetch16_be_unaligned(const void *v) {
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+  return read_unaligned(v, 16);
+#else
+  return bswap16(read_unaligned(v, 16));
+#endif
+}
+#endif /* fetch16_be_unaligned */
+
+static __maybe_unused __always_inline uint64_t tail64_be_aligned(const void *v,
+                                                                 size_t tail) {
+  const uint8_t *const p = (const uint8_t *)v;
+#if T1HA_USE_FAST_ONESHOT_READ && !defined(__SANITIZE_ADDRESS__)
+  /* We can perform a 'oneshot' read, which is little bit faster. */
+  const unsigned shift = ((8 - tail) & 7) << 3;
+  return fetch64_be_aligned(p) >> shift;
+#endif /* 'oneshot' read */
+
+  switch (tail & 7) {
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+  /* For most CPUs this code is better when not byte reordering. */
+  case 1:
+    return p[0];
+  case 2:
+    return fetch16_be_aligned(p);
+  case 3:
+    return (uint32_t)fetch16_be_aligned(p) << 8 | p[2];
+  case 4:
+    return fetch32_be_aligned(p);
+  case 5:
+    return (uint64_t)fetch32_be_aligned(p) << 8 | p[4];
+  case 6:
+    return (uint64_t)fetch32_be_aligned(p) << 16 | fetch16_be_aligned(p + 4);
+  case 7:
+    return (uint64_t)fetch32_be_aligned(p) << 24 |
+           (uint32_t)fetch16_be_aligned(p + 4) << 8 | p[6];
+  case 0:
+    return fetch64_be(p);
+#else
+  case 1:
+    return p[0];
+  case 2:
+    return p[1] | (uint32_t)p[0] << 8;
+  case 3:
+    return p[2] | (uint32_t)p[1] << 8 | (uint32_t)p[0] << 16;
+  case 4:
+    return p[3] | (uint32_t)p[2] << 8 | (uint32_t)p[1] << 16 |
+           (uint32_t)p[0] << 24;
+  case 5:
+    return p[4] | (uint32_t)p[3] << 8 | (uint32_t)p[2] << 16 |
+           (uint32_t)p[1] << 24 | (uint64_t)p[0] << 32;
+  case 6:
+    return p[5] | (uint32_t)p[4] << 8 | (uint32_t)p[3] << 16 |
+           (uint32_t)p[2] << 24 | (uint64_t)p[1] << 32 | (uint64_t)p[0] << 40;
+  case 7:
+    return p[6] | (uint32_t)p[5] << 8 | (uint32_t)p[4] << 16 |
+           (uint32_t)p[3] << 24 | (uint64_t)p[2] << 32 | (uint64_t)p[1] << 40 |
+           (uint64_t)p[0] << 48;
+  case 0:
+    return p[7] | (uint32_t)p[6] << 8 | (uint32_t)p[5] << 16 |
+           (uint32_t)p[4] << 24 | (uint64_t)p[3] << 32 | (uint64_t)p[2] << 40 |
+           (uint64_t)p[1] << 48 | (uint64_t)p[0] << 56;
+#endif
+  }
+  unreachable();
+}
+
+static __maybe_unused __always_inline uint64_t
+tail64_be_unaligned(const void *v, size_t tail) {
   const uint8_t *p = (const uint8_t *)v;
 #ifdef can_read_underside
   /* On some systems we can perform a 'oneshot' read, which is little bit
@@ -515,9 +789,9 @@ static __maybe_unused __always_inline uint64_t tail64_be(const void *v,
   const unsigned shift = offset << 3;
   if (likely(can_read_underside(p, 8))) {
     p -= offset;
-    return fetch64_be(p) & ((~UINT64_C(0)) >> shift);
+    return fetch64_be_unaligned(p) & ((~UINT64_C(0)) >> shift);
   }
-  return fetch64_be(p) >> shift;
+  return fetch64_be_unaligned(p) >> shift;
 #endif /* 'oneshot' read */
 
   switch (tail & 7) {
@@ -527,20 +801,21 @@ static __maybe_unused __always_inline uint64_t tail64_be(const void *v,
   case 1:
     return p[0];
   case 2:
-    return fetch16_be(p);
+    return fetch16_be_unaligned(p);
   case 3:
-    return (uint32_t)fetch16_be(p) << 8 | p[2];
+    return (uint32_t)fetch16_be_unaligned(p) << 8 | p[2];
   case 4:
     return fetch32_be(p);
   case 5:
-    return (uint64_t)fetch32_be(p) << 8 | p[4];
+    return (uint64_t)fetch32_be_unaligned(p) << 8 | p[4];
   case 6:
-    return (uint64_t)fetch32_be(p) << 16 | fetch16_be(p + 4);
+    return (uint64_t)fetch32_be_unaligned(p) << 16 |
+           fetch16_be_unaligned(p + 4);
   case 7:
-    return (uint64_t)fetch32_be(p) << 24 | (uint32_t)fetch16_be(p + 4) << 8 |
-           p[6];
+    return (uint64_t)fetch32_be_unaligned(p) << 24 |
+           (uint32_t)fetch16_be_unaligned(p + 4) << 8 | p[6];
   case 0:
-    return fetch64_be(p);
+    return fetch64_be_unaligned(p);
 #else
   /* For most CPUs this code is better than a
    * copying for alignment and/or byte reordering. */
