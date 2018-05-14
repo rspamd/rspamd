@@ -208,7 +208,7 @@ uint64_t t1ha2_atonce(const void *data, size_t length, uint64_t seed) {
   init_ab(&state, seed, length);
 
   const bool need_copy4align =
-      (((uintptr_t)data) & (ALIGMENT_64 - 1)) != 0 && !UNALIGNED_OK;
+      (((uintptr_t)data) & (ALIGNMENT_64 - 1)) != 0 && !UNALIGNED_OK;
   if (need_copy4align) {
     uint64_t buffer4align[4];
     if (unlikely(length > 32)) {
@@ -237,7 +237,7 @@ uint64_t t1ha2_atonce128(uint64_t *__restrict extra_result,
   init_cd(&state, seed, length);
 
   const bool need_copy4align =
-      (((uintptr_t)data) & (ALIGMENT_64 - 1)) != 0 && !UNALIGNED_OK;
+      (((uintptr_t)data) & (ALIGNMENT_64 - 1)) != 0 && !UNALIGNED_OK;
   if (need_copy4align) {
     uint64_t buffer4align[4];
     if (unlikely(length > 32)) {
@@ -284,7 +284,7 @@ void t1ha2_update(t1ha_context_t *__restrict ctx, const void *__restrict data,
 
   if (length >= 32) {
     const bool need_copy4align =
-        (((uintptr_t)data) & (ALIGMENT_64 - 1)) != 0 && !UNALIGNED_OK;
+        (((uintptr_t)data) & (ALIGNMENT_64 - 1)) != 0 && !UNALIGNED_OK;
     if (need_copy4align) {
       T1HA2_LOOP(le, aligned, ctx->buffer.u64, &ctx->state, data, length);
     } else {

@@ -86,18 +86,34 @@
 #define PAGESIZE 4096
 #endif /* PAGESIZE */
 
-#define ALIGMENT_16 2
-#define ALIGMENT_32 4
+#define ALIGNMENT_16 2
+#define ALIGNMENT_32 4
 #if UINTPTR_MAX > 0xffffFFFFul || ULONG_MAX > 0xffffFFFFul
-#define ALIGMENT_64 8
+#define ALIGNMENT_64 8
 #else
-#define ALIGMENT_64 4
+#define ALIGNMENT_64 4
 #endif
 
 /***************************************************************************/
 
 #ifndef __has_builtin
 #define __has_builtin(x) (0)
+#endif
+
+#ifndef __has_warning
+#define __has_warning(x) (0)
+#endif
+
+#ifndef __has_feature
+#define __has_feature(x) (0)
+#endif
+
+#ifndef __has_extension
+#define __has_extension(x) (0)
+#endif
+
+#if __has_feature(address_sanitizer)
+#define __SANITIZE_ADDRESS__ 1
 #endif
 
 #if __GNUC_PREREQ(4, 4) || defined(__clang__)
@@ -343,95 +359,93 @@ static __always_inline uint16_t bswap16(uint16_t v) { return v << 8 | v >> 8; }
 #endif
 #endif /* bswap16 */
 
-#if defined(__GNUC__) || (__has_attribute(packed) && __has_attribute(aligned))
+#ifndef read_unaligned
+#if defined(__GNUC__) || __has_attribute(packed)
 typedef struct {
   uint8_t unaligned_8;
   uint16_t unaligned_16;
   uint32_t unaligned_32;
   uint64_t unaligned_64;
-} __attribute__((packed, aligned(1))) t1ha_unaligned_proxy;
+} __attribute__((packed)) t1ha_unaligned_proxy;
 #define read_unaligned(ptr, bits)                                              \
   (((const t1ha_unaligned_proxy *)((const uint8_t *)(ptr)-offsetof(            \
         t1ha_unaligned_proxy, unaligned_##bits)))                              \
        ->unaligned_##bits)
-#define read_aligned(ptr, bits)                                                \
-  (*(const __attribute__((aligned(ALIGMENT_##bits))) uint##bits##_t *)(ptr))
 #elif defined(_MSC_VER)
 #pragma warning(                                                               \
     disable : 4235) /* nonstandard extension used: '__unaligned'               \
                      * keyword not supported on this architecture */
 #define read_unaligned(ptr, bits) (*(const __unaligned uint##bits##_t *)(ptr))
-#define read_aligned(ptr, bits)                                                \
-  (*(const __declspec(align(ALIGMENT_##bits)) uint##bits##_t *)(ptr))
 #else
-#error FIXME
+#pragma pack(push, 1)
+typedef struct {
+  uint8_t unaligned_8;
+  uint16_t unaligned_16;
+  uint32_t unaligned_32;
+  uint64_t unaligned_64;
+} t1ha_unaligned_proxy;
+#pragma pack(pop)
 #define read_unaligned(ptr, bits)                                              \
-  (*(const uint##bits##_ *)((const char *)(ptr)))
-#define read_aligned(ptr, bits) (*(const uint##bits##_t *)(ptr))
+  (((const t1ha_unaligned_proxy *)((const uint8_t *)(ptr)-offsetof(            \
+        t1ha_unaligned_proxy, unaligned_##bits)))                              \
+       ->unaligned_##bits)
+#endif
 #endif /* read_unaligned */
 
-#if 0
-#ifndef DECLARE_UNALIGNED_PTR
-#if defined(__LCC__)
-#pragma diag_suppress wrong_entity_for_attribute
-#define DECLARE_UNALIGNED_PTR(ptr) char __attribute__((packed)) * ptr
-#elif defined(__clang__)
-#pragma clang diagnostic ignored "-Wignored-attributes"
-#define DECLARE_UNALIGNED_PTR(ptr) char __attribute__((packed)) * ptr
-#elif defined(__GNUC__)
-#pragma GCC diagnostic ignored "-Wpacked"
-#define DECLARE_UNALIGNED_PTR(ptr) char __attribute__((packed)) * ptr
-#elif defined(_MSC_VER)
-#pragma warning(                                                               \
-    disable : 4235) /* nonstandard extension used: '__unaligned'               \
-                     * keyword not supported on this architecture */
-#define DECLARE_UNALIGNED_PTR(ptr) char __unaligned *ptr
-#else
-#define DECLARE_UNALIGNED_PTR(ptr) char *ptr
-#endif
-#endif /* cast_unaligned */
+#ifndef read_aligned
+#if __has_builtin(assume_aligned)
+#define read_aligned(ptr, bits)                                                \
+  (*(const uint##bits##_t *)__builtin_assume_aligned(ptr, ALIGNMENT_##bits))
+#elif __has_attribute(aligned) && !defined(__clang__)
+#define read_aligned(ptr, bits)                                                \
+  (*(const uint##bits##_t __attribute__((aligned(ALIGNMENT_##bits))) *)(ptr))
+#elif __has_attribute(assume_aligned)
 
-#ifndef cast_unaligned
-#if defined(__LCC__)
-#pragma diag_suppress wrong_entity_for_attribute
-#define cast_unaligned(ptr) ((const char __attribute__((packed)) *)(ptr))
-#elif defined(__clang__)
-#pragma clang diagnostic ignored "-Wignored-attributes"
-#define cast_unaligned(ptr) ((const char __attribute__((packed)) *)(ptr))
-#elif defined(__GNUC__)
-#pragma GCC diagnostic ignored "-Wpacked"
-#define cast_unaligned(ptr) ((const char __attribute__((packed)) *)(ptr))
-#elif defined(_MSC_VER)
-#pragma warning(                                                               \
-    disable : 4235) /* nonstandard extension used: '__unaligned'               \
-                     * keyword not supported on this architecture */
-#define cast_unaligned(ptr) ((const char __unaligned *)(ptr))
-#else
-#define cast_unaligned(ptr) ((const char *)(ptr))
-#endif
-#endif /* cast_unaligned */
+static __always_inline const
+    uint16_t *__attribute__((assume_aligned(ALIGNMENT_16)))
+    cast_aligned_16(const void *ptr) {
+  return (const uint16_t *)ptr;
+}
+static __always_inline const
+    uint32_t *__attribute__((assume_aligned(ALIGNMENT_32)))
+    cast_aligned_32(const void *ptr) {
+  return (const uint32_t *)ptr;
+}
+static __always_inline const
+    uint64_t *__attribute__((assume_aligned(ALIGNMENT_64)))
+    cast_aligned_64(const void *ptr) {
+  return (const uint64_t *)ptr;
+}
 
-#ifndef cast_aligned
-#if defined(__LCC__)
-#pragma diag_suppress wrong_entity_for_attribute
-#define cast_aligned(type, ptr)                                                \
-  ((const type __attribute__((aligned(sizeof(type)))) *)(ptr))
-#elif defined(__clang__)
-#pragma clang diagnostic ignored "-Wignored-attributes"
-#define cast_aligned(type, ptr)                                                \
-  ((const type __attribute__((aligned(sizeof(type)))) *)(ptr))
-#elif defined(__GNUC__)
-#pragma GCC diagnostic ignored "-Wpacked"
-#define cast_aligned(type, ptr)                                                \
-  ((const type __attribute__((aligned(sizeof(type)))) *)(ptr))
+#define read_aligned(ptr, bits) (*cast_aligned_##bits(ptr))
+
 #elif defined(_MSC_VER)
-#define cast_aligned(type, ptr)                                                \
-  ((const type __declspec((align(sizeof(type)))) *)(ptr))
+#define read_aligned(ptr, bits)                                                \
+  (*(const __declspec(align(ALIGNMENT_##bits)) uint##bits##_t *)(ptr))
 #else
-#define cast_aligned(type, ptr) ((const type *)(ptr))
+#define read_aligned(ptr, bits) (*(const uint##bits##_t *)(ptr))
 #endif
-#endif /* cast_aligned */
-#endif /* 0 */
+#endif /* read_aligned */
+
+#if __has_warning("-Wconstant-logical-operand")
+#if defined(__clang__)
+#pragma clang diagnostic ignored "-Wconstant-logical-operand"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wconstant-logical-operand"
+#else
+#pragma warning disable "constant-logical-operand"
+#endif
+#endif /* -Wconstant-logical-operand */
+
+#if __has_warning("-Wtautological-pointer-compare")
+#if defined(__clang__)
+#pragma clang diagnostic ignored "-Wtautological-pointer-compare"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wtautological-pointer-compare"
+#else
+#pragma warning disable "tautological-pointer-compare"
+#endif
+#endif /* -Wtautological-pointer-compare */
 
 /***************************************************************************/
 

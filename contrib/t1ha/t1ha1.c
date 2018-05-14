@@ -135,7 +135,7 @@ uint64_t t1ha1_le(const void *data, size_t len, uint64_t seed) {
   uint64_t b = len;
 
   const bool need_copy4align =
-      (((uintptr_t)data) & (ALIGMENT_64 - 1)) != 0 && !UNALIGNED_OK;
+      (((uintptr_t)data) & (ALIGNMENT_64 - 1)) != 0 && !UNALIGNED_OK;
   uint64_t align[4];
   if (need_copy4align) {
     T1HA1_BODY(le, aligned, true);
@@ -149,7 +149,7 @@ uint64_t t1ha1_be(const void *data, size_t len, uint64_t seed) {
   uint64_t b = len;
 
   const bool need_copy4align =
-      (((uintptr_t)data) & (ALIGMENT_64 - 1)) != 0 && !UNALIGNED_OK;
+      (((uintptr_t)data) & (ALIGNMENT_64 - 1)) != 0 && !UNALIGNED_OK;
   uint64_t align[4];
   if (need_copy4align) {
     T1HA1_BODY(be, aligned, true);
