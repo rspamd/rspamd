@@ -1595,6 +1595,10 @@ lua_config_register_symbol (lua_State * L)
 			return luaL_error (L, "invalid arguments");
 		}
 
+		if (!no_squeeze) {
+			no_squeeze = cfg->disable_lua_squeeze;
+		}
+
 		if (nshots == 0) {
 			nshots = cfg->default_max_shots;
 		}
@@ -1894,18 +1898,20 @@ lua_config_register_dependency (lua_State * L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *parent = NULL, *child = NULL;
 	gint child_id;
-	gboolean skip_squeeze = FALSE;
+	gboolean skip_squeeze;
 
 	if (cfg == NULL) {
 		lua_error (L);
 		return 0;
 	}
 
+	skip_squeeze = cfg->disable_lua_squeeze;
+
 	if (lua_type (L, 2) == LUA_TNUMBER) {
 		child_id = luaL_checknumber (L, 2);
 		parent = luaL_checkstring (L, 3);
 
-		if (lua_isboolean (L, 4)) {
+		if (!skip_squeeze && lua_isboolean (L, 4)) {
 			skip_squeeze = lua_toboolean (L, 4);
 		}
 
@@ -1925,7 +1931,7 @@ lua_config_register_dependency (lua_State * L)
 		child = luaL_checkstring (L,2);
 		parent = luaL_checkstring (L, 3);
 
-		if (lua_isboolean (L, 4)) {
+		if (!skip_squeeze && lua_isboolean (L, 4)) {
 			skip_squeeze = lua_toboolean (L, 4);
 		}
 
@@ -2246,6 +2252,8 @@ lua_config_newindex (lua_State *L)
 	name = luaL_checkstring (L, 2);
 
 	if (cfg != NULL && name != NULL && lua_gettop (L) == 3) {
+		no_squeeze = cfg->disable_lua_squeeze;
+
 		if (lua_type (L, 3) == LUA_TFUNCTION) {
 			/* Normal symbol from just a function */
 			lua_pushvalue (L, 3);
@@ -2266,6 +2274,7 @@ lua_config_newindex (lua_State *L)
 			const char *type_str, *group = NULL, *description = NULL;
 			guint flags = 0;
 
+			no_squeeze = cfg->disable_lua_squeeze;
 			/*
 			 * Table can have the following attributes:
 			 * "callback" - should be a callback function
@@ -2332,13 +2341,15 @@ lua_config_newindex (lua_State *L)
 			}
 			lua_pop (L, 1);
 
-			lua_pushstring (L, "no_squeeze");
-			lua_gettable (L, -2);
+			if (!no_squeeze) {
+				lua_pushstring (L, "no_squeeze");
+				lua_gettable (L, -2);
 
-			if (lua_toboolean (L, -1)) {
-				no_squeeze = TRUE;
+				if (lua_toboolean (L, -1)) {
+					no_squeeze = TRUE;
+				}
+				lua_pop (L, 1);
 			}
-			lua_pop (L, 1);
 
 			id = rspamd_register_symbol_fromlua (L,
 					cfg,
