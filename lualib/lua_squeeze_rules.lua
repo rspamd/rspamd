@@ -32,50 +32,58 @@ local function gen_lua_squeeze_function(order)
     local symbols_disabled = task:cache_get('squeezed_disable')
     for _,data in ipairs(squeezed_rules[order]) do
       if not symbols_disabled or not symbols_disabled[data[2]] then
-        local ret = {data[1](task)}
+        local function real_call()
+          return {data[1](task)}
+        end
 
-        if #ret ~= 0 then
-          local first = ret[1]
-          local sym = data[2]
-          -- Function has returned something, so it is rule, not a plugin
-          if type(first) == 'boolean' then
-            if first then
-              table.remove(ret, 1)
+        local status, ret = pcall(real_call)
 
-              local second = ret[1]
-
-              if type(second) == 'number' then
+        if not status then
+          logger.errx(task, 'error in squeezed rule %s: %s', data[2], ret)
+        else
+          if #ret ~= 0 then
+            local first = ret[1]
+            local sym = data[2]
+            -- Function has returned something, so it is rule, not a plugin
+            if type(first) == 'boolean' then
+              if first then
                 table.remove(ret, 1)
-                if second ~= 0 then
+
+                local second = ret[1]
+
+                if type(second) == 'number' then
+                  table.remove(ret, 1)
+                  if second ~= 0 then
+                    if type(ret[1]) == 'table' then
+                      task:insert_result(sym, second, ret[1])
+                    else
+                      task:insert_result(sym, second, ret)
+                    end
+                  end
+                else
                   if type(ret[1]) == 'table' then
-                    task:insert_result(sym, second, ret[1])
+                    task:insert_result(sym, 1.0, ret[1])
                   else
-                    task:insert_result(sym, second, ret)
+                    task:insert_result(sym, 1.0, ret)
                   end
                 end
-              else
+              end
+            elseif type(first) == 'number' then
+              table.remove(ret, 1)
+
+              if first ~= 0 then
                 if type(ret[1]) == 'table' then
-                  task:insert_result(sym, 1.0, ret[1])
+                  task:insert_result(sym, first, ret[1])
                 else
-                  task:insert_result(sym, 1.0, ret)
+                  task:insert_result(sym, first, ret)
                 end
               end
-            end
-          elseif type(first) == 'number' then
-            table.remove(ret, 1)
-
-            if first ~= 0 then
-              if type(ret[1]) == 'table' then
-                task:insert_result(sym, first, ret[1])
-              else
-                task:insert_result(sym, first, ret)
-              end
-            end
-          else
-            if type(ret[1]) == 'table' then
-              task:insert_result(sym, 1.0, ret[1])
             else
-              task:insert_result(sym, 1.0, ret)
+              if type(ret[1]) == 'table' then
+                task:insert_result(sym, 1.0, ret[1])
+              else
+                task:insert_result(sym, 1.0, ret)
+              end
             end
           end
         end
