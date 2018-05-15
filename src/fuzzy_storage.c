@@ -2666,12 +2666,17 @@ fuzzy_peer_rep (struct rspamd_worker *worker,
 		rspamd_socket_nonblocking (rep_fd);
 	}
 
+	msg_info ("got peer fd reply from the main process");
+
 	/* Start listening */
 	cur = worker->cf->listen_socks;
 	while (cur) {
 		ls = cur->data;
 
 		if (ls->fd != -1) {
+			msg_info ("start listening on %s",
+					rspamd_inet_address_to_string_pretty (ls->addr));
+
 			if (ls->type == RSPAMD_WORKER_SOCKET_UDP) {
 				accept_events = g_malloc0 (sizeof (struct event) * 2);
 				event_set (&accept_events[0], ls->fd, EV_READ | EV_PERSIST,
