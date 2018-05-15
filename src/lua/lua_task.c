@@ -3053,6 +3053,8 @@ lua_push_symbol_result (lua_State *L,
 	struct rspamd_metric_result *metric_res;
 	struct rspamd_symbol_result *s = NULL;
 	struct rspamd_symbol_option *opt;
+	struct rspamd_symbols_group *sym_group;
+	guint i;
 	gint j = 1, e = 4;
 
 	if (!symbol_result) {
@@ -3088,6 +3090,16 @@ lua_push_symbol_result (lua_State *L,
 		if (s->sym && s->sym->gr) {
 			lua_pushstring (L, "group");
 			lua_pushstring (L, s->sym->gr->name);
+			lua_settable (L, -3);
+
+			lua_pushstring (L, "groups");
+			lua_createtable (L, s->sym->groups->len, 0);
+
+			PTR_ARRAY_FOREACH (s->sym->groups, i, sym_group) {
+				lua_pushstring (L, sym_group->name);
+				lua_rawseti (L, -2, i + 1);
+			}
+
 			lua_settable (L, -3);
 		}
 		else {

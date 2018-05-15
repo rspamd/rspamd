@@ -305,6 +305,22 @@ regexp_module_config (struct rspamd_config *cfg)
 
 				rspamd_config_add_symbol (cfg, cur_item->symbol,
 						score, description, group, flags, priority, nshots);
+
+				elt = ucl_object_lookup (value, "groups");
+
+				if (elt) {
+					ucl_object_iter_t gr_it;
+					const ucl_object_t *cur_gr;
+
+					gr_it = ucl_object_iterate_new (elt);
+
+					while ((cur_gr = ucl_object_iterate_safe (gr_it, true)) != NULL) {
+						rspamd_config_add_symbol_group (cfg, cur_item->symbol,
+								ucl_object_tostring (cur_gr));
+					}
+
+					ucl_object_iterate_free (gr_it);
+				}
 			}
 		}
 		else {

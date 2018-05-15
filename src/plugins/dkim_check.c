@@ -559,7 +559,8 @@ dkim_module_config (struct rspamd_config *cfg)
 					rspamd_config_add_symbol (cfg,
 							"DKIM_TRACE", 0.0, "DKIM trace symbol",
 							"policies", RSPAMD_SYMBOL_FLAG_IGNORE, 1, 1);
-
+					rspamd_config_add_symbol_group (cfg, "DKIM_SIGN", "dkim");
+					rspamd_config_add_symbol_group (cfg, "DKIM_TRACE", "dkim");
 				}
 				else {
 					msg_err_config ("lua script must return "

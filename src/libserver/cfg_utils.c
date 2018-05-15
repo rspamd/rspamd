@@ -1470,6 +1470,9 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 	sym_def->priority = priority;
 	sym_def->flags = flags;
 	sym_def->nshots = nshots;
+	sym_def->groups = g_ptr_array_sized_new (1);
+	rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_ptr_array_free_hard,
+			sym_def->groups);
 
 	if (description) {
 		sym_def->description = rspamd_mempool_strdup (cfg->cfg_pool, description);
@@ -1502,30 +1505,49 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 
 gboolean
 rspamd_config_add_symbol (struct rspamd_config *cfg,
-		const gchar *symbol,
-		gdouble score, const gchar *description, const gchar *group,
-		guint flags, guint priority, gint nshots)
+						  const gchar *symbol,
+						  gdouble score, const gchar *description,
+						  const gchar *group,
+						  guint flags, guint priority, gint nshots)
 {
 	struct rspamd_symbol *sym_def;
+	struct rspamd_symbols_group *sym_group;
+	guint i;
+
 	g_assert (cfg != NULL);
 	g_assert (symbol != NULL);
-	struct rspamd_symbols_group *sym_group;
 
 	sym_def = g_hash_table_lookup (cfg->symbols, symbol);
 
 	if (sym_def != NULL) {
-		if (sym_def->flags & RSPAMD_SYMBOL_FLAG_UNGROUPPED && group != NULL) {
-			/* Non-empty group has a priority over non-groupped one */
-			sym_group = g_hash_table_lookup (cfg->groups, group);
+		if (group != NULL) {
+			gboolean has_group = FALSE;
 
-			if (sym_group == NULL) {
-				/* Create new group */
-				sym_group = rspamd_config_new_group (cfg, group);
+			PTR_ARRAY_FOREACH (sym_def->groups, i, sym_group) {
+				if (g_ascii_strcasecmp (sym_group->name, group) == 0) {
+					/* Group is already here */
+					has_group = TRUE;
+					break;
+				}
 			}
 
-			sym_def->gr = sym_group;
-			g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
-			sym_def->flags &= ~(RSPAMD_SYMBOL_FLAG_UNGROUPPED);
+			if (!has_group) {
+				/* Non-empty group has a priority over non-groupped one */
+				sym_group = g_hash_table_lookup (cfg->groups, group);
+
+				if (sym_group == NULL) {
+					/* Create new group */
+					sym_group = rspamd_config_new_group (cfg, group);
+				}
+
+				if (!sym_def->gr) {
+					sym_def->gr = sym_group;
+				}
+
+				g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
+				sym_def->flags &= ~(RSPAMD_SYMBOL_FLAG_UNGROUPPED);
+				g_ptr_array_add (sym_def->groups, sym_group);
+			}
 		}
 
 		if (sym_def->priority > priority) {
@@ -1591,6 +1613,57 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 
 	return TRUE;
 }
+
+gboolean
+rspamd_config_add_symbol_group (struct rspamd_config *cfg,
+								const gchar *symbol,
+								const gchar *group)
+{
+	struct rspamd_symbol *sym_def;
+	struct rspamd_symbols_group *sym_group;
+	guint i;
+
+	g_assert (cfg != NULL);
+	g_assert (symbol != NULL);
+	g_assert (group != NULL);
+
+	sym_def = g_hash_table_lookup (cfg->symbols, symbol);
+
+	if (sym_def != NULL) {
+		gboolean has_group = FALSE;
+
+		PTR_ARRAY_FOREACH (sym_def->groups, i, sym_group) {
+			if (g_ascii_strcasecmp (sym_group->name, group) == 0) {
+				/* Group is already here */
+				has_group = TRUE;
+				break;
+			}
+		}
+
+		if (!has_group) {
+			/* Non-empty group has a priority over non-groupped one */
+			sym_group = g_hash_table_lookup (cfg->groups, group);
+
+			if (sym_group == NULL) {
+				/* Create new group */
+				sym_group = rspamd_config_new_group (cfg, group);
+			}
+
+			if (!sym_def->gr) {
+				sym_def->gr = sym_group;
+			}
+
+			g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
+			sym_def->flags &= ~(RSPAMD_SYMBOL_FLAG_UNGROUPPED);
+			g_ptr_array_add (sym_def->groups, sym_group);
+
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 
 gboolean
 rspamd_config_is_module_enabled (struct rspamd_config *cfg,

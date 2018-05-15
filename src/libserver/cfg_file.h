@@ -123,8 +123,8 @@ struct rspamd_symbol {
 	gdouble *weight_ptr;
 	gdouble score;
 	guint priority;
-	struct rspamd_symbols_group *gr;
-	GList *groups;
+	struct rspamd_symbols_group *gr; /* Main group */
+	GPtrArray *groups; /* Other groups */
 	guint flags;
 	gint nshots;
 };
@@ -585,10 +585,24 @@ gboolean rspamd_init_filters (struct rspamd_config *cfg, bool reconfig);
  * @return TRUE if symbol has been inserted or FALSE if symbol already exists with higher priority
  */
 gboolean rspamd_config_add_symbol (struct rspamd_config *cfg,
-		const gchar *symbol, gdouble score, const gchar *description,
-		const gchar *group, guint flags,
-		guint priority,
-		gint nshots);
+								   const gchar *symbol,
+								   gdouble score,
+								   const gchar *description,
+								   const gchar *group,
+								   guint flags,
+								   guint priority,
+								   gint nshots);
+
+/**
+ * Adds new group for a symbol
+ * @param cfg
+ * @param symbol
+ * @param group
+ * @return
+ */
+gboolean rspamd_config_add_symbol_group (struct rspamd_config *cfg,
+										 const gchar *symbol,
+										 const gchar *group);
 
 /**
  * Sets action score for a specified metric with the specified priority

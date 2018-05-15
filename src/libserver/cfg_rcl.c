@@ -438,6 +438,22 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 				description, NULL, flags, priority, nshots);
 	}
 
+	elt = ucl_object_lookup (obj, "groups");
+
+	if (elt) {
+		ucl_object_iter_t gr_it;
+		const ucl_object_t *cur_gr;
+
+		gr_it = ucl_object_iterate_new (elt);
+
+		while ((cur_gr = ucl_object_iterate_safe (gr_it, true)) != NULL) {
+			rspamd_config_add_symbol_group (cfg, key,
+					ucl_object_tostring (cur_gr));
+		}
+
+		ucl_object_iterate_free (gr_it);
+	}
+
 	return TRUE;
 }
 
@@ -1423,7 +1439,7 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 	struct rspamd_rcl_section *section,
 	GError **err)
 {
-	const ucl_object_t *val;
+	const ucl_object_t *val, *elt;
 	struct rspamd_expression *expr;
 	struct rspamd_config *cfg = ud;
 	struct rspamd_composite *composite;
@@ -1500,6 +1516,22 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 		rspamd_config_add_symbol (cfg, composite_name, score,
 				description, group, FALSE, FALSE,
 				1);
+
+		elt = ucl_object_lookup (obj, "groups");
+
+		if (elt) {
+			ucl_object_iter_t gr_it;
+			const ucl_object_t *cur_gr;
+
+			gr_it = ucl_object_iterate_new (elt);
+
+			while ((cur_gr = ucl_object_iterate_safe (gr_it, true)) != NULL) {
+				rspamd_config_add_symbol_group (cfg, key,
+						ucl_object_tostring (cur_gr));
+			}
+
+			ucl_object_iterate_free (gr_it);
+		}
 	}
 
 	val = ucl_object_lookup (obj, "policy");

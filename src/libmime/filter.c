@@ -92,6 +92,7 @@ insert_metric_result (struct rspamd_task *task,
 	struct rspamd_symbols_group *gr = NULL;
 	const ucl_object_t *mobj, *sobj;
 	gint max_shots;
+	guint i;
 	gboolean single = !!(flags & RSPAMD_SYMBOL_INSERT_SINGLE);
 
 	metric_res = rspamd_create_metric_result (task);
@@ -113,9 +114,8 @@ insert_metric_result (struct rspamd_task *task,
 	}
 	else {
 		final_score = (*sdef->weight_ptr) * weight;
-		gr = sdef->gr;
 
-		if (gr != NULL) {
+		PTR_ARRAY_FOREACH (sdef->groups, i, gr) {
 			gr_score = g_hash_table_lookup (metric_res->sym_groups, gr);
 
 			if (gr_score == NULL) {

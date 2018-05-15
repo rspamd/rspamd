@@ -1641,6 +1641,23 @@ lua_config_register_symbol (lua_State * L)
 			rspamd_config_add_symbol (cfg, name,
 					score, description, group, flags,
 					(guint) priority, nshots);
+
+			lua_pushstring (L, "groups");
+			lua_gettable (L, 2);
+
+			if (lua_istable (L, -1)) {
+				for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+					if (lua_isstring (L, -1)) {
+						rspamd_config_add_symbol_group (cfg, name,
+								lua_tostring (L, -1));
+					}
+					else {
+						return luaL_error (L, "invalid groups element");
+					}
+				}
+			}
+
+			lua_pop (L, 1);
 		}
 	}
 	else {
@@ -1997,6 +2014,25 @@ lua_config_set_metric_symbol (lua_State * L)
 
 		rspamd_config_add_symbol (cfg, name,
 				weight, description, group, flags, (guint) priority, nshots);
+
+
+		if (lua_type (L, 2) == LUA_TTABLE) {
+			lua_pushstring (L, "groups");
+			lua_gettable (L, 2);
+
+			if (lua_istable (L, -1)) {
+				for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+					if (lua_isstring (L, -1)) {
+						rspamd_config_add_symbol_group (cfg, name,
+								lua_tostring (L, -1));
+					} else {
+						return luaL_error (L, "invalid groups element");
+					}
+				}
+			}
+
+			lua_pop (L, 1);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments, rspamd_config expected");
@@ -2011,6 +2047,8 @@ lua_config_get_metric_symbol (lua_State * L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *sym_name = luaL_checkstring (L, 2);
 	struct rspamd_symbol *sym_def;
+	struct rspamd_symbols_group *sym_group;
+	guint i;
 
 	if (cfg && sym_name) {
 		sym_def = g_hash_table_lookup (cfg->symbols, sym_name);
@@ -2035,6 +2073,16 @@ lua_config_get_metric_symbol (lua_State * L)
 				lua_pushstring (L, sym_def->gr->name);
 				lua_settable (L, -3);
 			}
+
+			lua_pushstring (L, "groups");
+			lua_createtable (L, sym_def->groups->len, 0);
+
+			PTR_ARRAY_FOREACH (sym_def->groups, i, sym_group) {
+				lua_pushstring (L, sym_group->name);
+				lua_rawseti (L, -2, i + 1);
+			}
+
+			lua_settable (L, -3);
 		}
 	}
 	else {
@@ -2376,6 +2424,23 @@ lua_config_newindex (lua_State *L)
 					 */
 					rspamd_config_add_symbol (cfg, name, score,
 							description, group, flags, 0, nshots);
+
+					lua_pushstring (L, "groups");
+					lua_gettable (L, -2);
+
+					if (lua_istable (L, -1)) {
+						for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+							if (lua_isstring (L, -1)) {
+								rspamd_config_add_symbol_group (cfg, name,
+										lua_tostring (L, -1));
+							}
+							else {
+								return luaL_error (L, "invalid groups element");
+							}
+						}
+					}
+
+					lua_pop (L, 1);
 				}
 				else {
 					lua_pop (L, 1);
