@@ -30,9 +30,9 @@ enum rspamd_content_type_flags {
 	RSPAMD_CONTENT_TYPE_MISSING = 1 << 5,
 };
 
-#define IS_CT_MULTIPART(ct) ((ct)->flags & RSPAMD_CONTENT_TYPE_MULTIPART)
-#define IS_CT_TEXT(ct) ((ct)->flags & RSPAMD_CONTENT_TYPE_TEXT)
-#define IS_CT_MESSAGE(ct) (((ct)->flags & RSPAMD_CONTENT_TYPE_MESSAGE))
+#define IS_CT_MULTIPART(ct) ((ct) && ((ct)->flags & RSPAMD_CONTENT_TYPE_MULTIPART))
+#define IS_CT_TEXT(ct) ((ct) && ((ct)->flags & RSPAMD_CONTENT_TYPE_TEXT))
+#define IS_CT_MESSAGE(ct) ((ct) &&((ct)->flags & RSPAMD_CONTENT_TYPE_MESSAGE))
 
 struct rspamd_content_type_param {
 	rspamd_ftok_t name;

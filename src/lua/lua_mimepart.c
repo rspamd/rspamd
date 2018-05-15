@@ -326,6 +326,7 @@ LUA_FUNCTION_DEF (mimepart, get_image);
  * @return {bool} true if a part is an archive
  */
 LUA_FUNCTION_DEF (mimepart, is_archive);
+
 /***
  * @method mime_part:get_archive()
  * Returns rspamd_archive structure associated with this part. This structure has
@@ -340,6 +341,19 @@ LUA_FUNCTION_DEF (mimepart, is_archive);
  * @return {rspamd_archive} archive structure or nil if a part is not an archive
  */
 LUA_FUNCTION_DEF (mimepart, get_archive);
+/***
+ * @method mime_part:is_multipart()
+ * Returns true if mime part is a multipart part
+ * @return {bool} true if a part is is a multipart part
+ */
+LUA_FUNCTION_DEF (mimepart, is_multipart);
+/***
+ * @method mime_part:get_children()
+ * Returns rspamd_mimepart table of part's childer. Returns nil if mime part is not multipart
+ * or a message part.
+ * @return {rspamd_mimepart} table of children
+ */
+LUA_FUNCTION_DEF (mimepart, get_children);
 /***
  * @method mime_part:is_text()
  * Returns true if mime part is a text part
@@ -393,6 +407,8 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_image),
 	LUA_INTERFACE_DEF (mimepart, is_archive),
 	LUA_INTERFACE_DEF (mimepart, get_archive),
+	LUA_INTERFACE_DEF (mimepart, is_multipart),
+	LUA_INTERFACE_DEF (mimepart, get_children),
 	LUA_INTERFACE_DEF (mimepart, is_text),
 	LUA_INTERFACE_DEF (mimepart, is_broken),
 	LUA_INTERFACE_DEF (mimepart, get_text),
@@ -1081,6 +1097,20 @@ lua_mimepart_is_archive (lua_State * L)
 }
 
 static gint
+lua_mimepart_is_multipart (lua_State * L)
+{
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, IS_CT_MULTIPART (part->ct) ? true : false);
+
+	return 1;
+}
+
+static gint
 lua_mimepart_is_text (lua_State * L)
 {
 	struct rspamd_mime_part *part = lua_check_mimepart (L);
@@ -1157,6 +1187,35 @@ lua_mimepart_get_archive (lua_State * L)
 
 	return 1;
 }
+
+static gint
+lua_mimepart_get_children (lua_State * L)
+{
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+	struct rspamd_mime_part **pcur, *cur;
+	guint i;
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (!IS_CT_MULTIPART (part->ct) || part->specific.mp.children == NULL) {
+		lua_pushnil (L);
+	}
+	else {
+		lua_createtable (L, part->specific.mp.children->len, 0);
+
+		PTR_ARRAY_FOREACH (part->specific.mp.children, i, cur) {
+			pcur = lua_newuserdata (L, sizeof (*pcur));
+			*pcur = cur;
+			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
+			lua_rawseti (L, -2, i + 1);
+		}
+	}
+
+	return 1;
+}
+
 
 static gint
 lua_mimepart_get_text (lua_State * L)
