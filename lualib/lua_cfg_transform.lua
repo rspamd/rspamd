@@ -159,16 +159,6 @@ local function test_groups(groups)
       else
         logger.infox('group %s has no symbols', gr_name)
       end
-
-    else
-      for sn,_ in pairs(gr.symbols) do
-        if all_symbols[sn] then
-          logger.errx('symbol %s has registered in multiple groups: %s and %s',
-              sn, all_symbols[sn], gr_name)
-        else
-          all_symbols[sn] = gr_name
-        end
-      end
     end
   end
 end
