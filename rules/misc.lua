@@ -639,3 +639,100 @@ rspamd_config.R_BAD_CTE_7BIT = {
   description = 'Detects bad content-transfer-encoding for text parts',
   group = 'headers'
 }
+
+
+local check_encrypted_name = rspamd_config:register_symbol{
+  name = 'BOGUS_ENCRYPTED_AND_TEXT',
+  callback = function(task)
+    local parts = task:get_parts() or {}
+    local seen_encrypted, seen_text
+    local opts = {}
+
+    local function check_part(part)
+      if part:is_multipart() then
+        local children = part:get_children() or {}
+
+        for _,cld in ipairs(children) do
+          if cld:is_multipart() then
+            check_part(cld)
+          elseif cld:is_text() then
+            seen_text = true
+          else
+            local type,subtype,attrs = cld:get_type_full()
+
+            if type:lower() == 'application' then
+              if string.find(subtype:lower(), 'pkcs7%-mime') then
+                -- S/MIME encrypted part
+                seen_encrypted = true
+                table.insert(opts, 'smime part')
+                task:insert_result('ENCRYPTED_SMIME', 1.0)
+              elseif string.find(subtype:lower(), 'pkcs7%-signature') then
+                task:insert_result('SIGNED_SMIME', 1.0)
+              elseif string.find(subtype:lower(), 'pgp%-encrypted') then
+                -- PGP/GnuPG encrypted part
+                seen_encrypted = true
+                table.insert(opts, 'pgp part')
+                task:insert_result('ENCRYPTED_PGP', 1.0)
+              elseif string.find(subtype:lower(), 'pgp%-signature') then
+                task:insert_result('SIGNED_PGP', 1.0)
+              end
+            end
+          end
+        end
+      end
+    end
+
+    for _,part in ipairs(parts) do
+      check_part(part)
+    end
+
+    if seen_text and seen_encrypted then
+      return true, 1.0, opts
+    end
+
+    return false
+  end,
+  score = 10.0,
+  description = 'Bogus mix of encrypted and text/html payloads',
+  group = 'mime_types'
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = check_encrypted_name,
+  name = 'ENCRYPTED_PGP',
+  description = 'Message is encrypted with pgp',
+  group = 'mime_types',
+  score = -0.5,
+  one_shot = true
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = check_encrypted_name,
+  name = 'ENCRYPTED_SMIME',
+  description = 'Message is encrypted with smime',
+  group = 'mime_types',
+  score = -0.5,
+  one_shot = true
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = check_encrypted_name,
+  name = 'SIGNED_PGP',
+  description = 'Message is signed with pgp',
+  group = 'mime_types',
+  score = -2.0,
+  one_shot = true
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = check_encrypted_name,
+  name = 'SIGNED_SMIME',
+  description = 'Message is signed with smime',
+  group = 'mime_types',
+  score = -2.0,
+  one_shot = true
+}
