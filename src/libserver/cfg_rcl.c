@@ -2071,12 +2071,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 			0,
 			"Disable Lua rules squeezing");
 	rspamd_rcl_add_default_handler (sub,
-			"all_filters",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, check_all_filters),
-			0,
-			"Always check all filters");
-	rspamd_rcl_add_default_handler (sub,
 			"min_word_len",
 			rspamd_rcl_parse_struct_integer,
 			G_STRUCT_OFFSET (struct rspamd_config, min_word_len),
