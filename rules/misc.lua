@@ -658,7 +658,7 @@ local check_encrypted_name = rspamd_config:register_symbol{
           elseif cld:is_text() then
             seen_text = true
           else
-            local type,subtype,attrs = cld:get_type_full()
+            local type,subtype,_ = cld:get_type_full()
 
             if type:lower() == 'application' then
               if string.find(subtype:lower(), 'pkcs7%-mime') then
