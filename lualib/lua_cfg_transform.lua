@@ -148,7 +148,6 @@ local function symbol_transform(cfg, k, v)
 end
 
 local function test_groups(groups)
-  local all_symbols = {}
   for gr_name, gr in pairs(groups) do
     if not gr.symbols then
       local cnt = 0
