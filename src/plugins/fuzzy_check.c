@@ -2013,9 +2013,8 @@ fuzzy_check_try_read (struct fuzzy_client_session *session)
 				}
 			}
 			else if (rep->v1.value == 403) {
-				msg_info_task (
-						"fuzzy check error for %d: forbidden",
-						rep->v1.flag);
+				rspamd_task_insert_result (task, "FUZZY_BLOCKED", 0.0,
+						session->rule->name);
 			}
 			else if (rep->v1.value == 401) {
 				if (cmd->cmd != FUZZY_CHECK) {
