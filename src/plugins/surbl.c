@@ -1416,16 +1416,17 @@ surbl_dns_callback (struct rdns_reply *reply, gpointer arg)
 	struct rdns_reply_entry *elt;
 
 	task = param->task;
-	/* If we have result from DNS server, this url exists in SURBL, so increase score */
 	if (reply->code == RDNS_RC_NOERROR && reply->entries) {
 		msg_debug_surbl ("<%s> domain [%s] is in surbl %s",
 				param->task->message_id,
 			param->host_resolve, param->suffix->suffix);
-		elt = reply->entries;
-		if (elt->type == RDNS_REQUEST_A) {
-			process_dns_results (param->task, param->suffix,
-				param->host_resolve, (guint32)elt->content.a.addr.s_addr,
-				param->url);
+
+		DL_FOREACH (reply->entries, elt) {
+			if (elt->type == RDNS_REQUEST_A) {
+				process_dns_results (param->task, param->suffix,
+						param->host_resolve, (guint32) elt->content.a.addr.s_addr,
+						param->url);
+			}
 		}
 	}
 	else {
