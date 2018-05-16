@@ -1430,6 +1430,7 @@ rspamd_dkim_parse_key (rspamd_dkim_context_t *ctx, const gchar *txt,
 
 	if (alglen == 0 || alg == NULL) {
 		alg = "rsa"; /* Implicit */
+		alglen = 3;
 	}
 
 	if (alglen == 8 && rspamd_lc_cmp (alg, "ecdsa256", alglen) == 0) {
@@ -1445,6 +1446,7 @@ rspamd_dkim_parse_key (rspamd_dkim_context_t *ctx, const gchar *txt,
 		if (alglen != 3 || rspamd_lc_cmp (alg, "rsa", alglen) != 0) {
 			msg_info_dkim ("invalid key algorithm: %*s", (gint)alglen, alg);
 		}
+
 		return rspamd_dkim_make_key (ctx, c, klen,
 				RSPAMD_DKIM_KEY_RSA, err);
 	}
