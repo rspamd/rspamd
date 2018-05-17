@@ -697,6 +697,20 @@ lua_map_process_string_key (lua_State *L, gint pos, gsize *len)
 	return NULL;
 }
 
+static inline void
+lua_push_map_str_elt (lua_State *L, const gchar *value, gint len)
+{
+	if (len == 0 || value[0] == '\0') {
+		lua_pushstring (L, "1"); /* Compatibility */
+	}
+	else if (len == -1) {
+		lua_pushstring (L, value); /* Zero terminated */
+	}
+	else {
+		lua_pushlstring (L, value, len);
+	}
+}
+
 /* Radix and hash table functions */
 static gint
 lua_map_get_key (lua_State * L)
@@ -771,7 +785,7 @@ lua_map_get_key (lua_State * L)
 			}
 
 			if (ret) {
-				lua_pushstring (L, value);
+				lua_push_map_str_elt (L, value, -1);
 				return 1;
 			}
 		}
@@ -790,7 +804,7 @@ lua_map_get_key (lua_State * L)
 						len);
 
 				if (value) {
-					lua_pushstring (L, value);
+					lua_push_map_str_elt (L, value, -1);
 					return 1;
 				}
 			}
@@ -810,7 +824,7 @@ lua_map_get_key (lua_State * L)
 					lua_createtable (L, ar->len, 0);
 
 					PTR_ARRAY_FOREACH (ar, i, val) {
-						lua_pushstring (L, val);
+						lua_push_map_str_elt (L, val, -1);
 						lua_rawseti (L, -2, i + 1);
 					}
 
@@ -829,7 +843,7 @@ lua_map_get_key (lua_State * L)
 			}
 
 			if (value) {
-				lua_pushstring (L, value);
+				lua_push_map_str_elt (L, value, -1);
 				return 1;
 			}
 		}
