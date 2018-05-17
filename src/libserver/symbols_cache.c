@@ -2088,7 +2088,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 		for (i = 0; i < cache->items_by_id->len; i ++) {
 			item = g_ptr_array_index (cache->items_by_id, i);
 			item->st->total_hits += item->st->hits;
-			item->st->hits = 0;
+			g_atomic_int_set (&item->st->hits, 0);
 
 			if (item->last_count > 0 && cbdata->w->index == 0) {
 				/* Calculate frequency */
