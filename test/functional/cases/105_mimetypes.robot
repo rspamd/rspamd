@@ -37,6 +37,14 @@ Rar4
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/rar4.eml
   Check Rspamc  ${result}  MIME_BAD_EXTENSION \\(\\d+\\.\\d+\\)\\[exe\\]\\n  re=1
 
+Cloaked Archive Extension
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/f.zip.gz.eml
+  Check Rspamc  ${result}  MIME_ARCHIVE_IN_ARCHIVE \\(\\d+\\.\\d+\\)\\[\\.zip\\.gz\\]\\n  re=1
+
+Multipart Archive Extension
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/f.zip.001.eml
+  Should Not Contain  ${result.stdout}  MIME_ARCHIVE_IN_ARCHIVE
+
 *** Keywords ***
 MIMETypes Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/mime_types.conf
