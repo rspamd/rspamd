@@ -199,15 +199,15 @@ SPF PTRS
   ${result} =  Scan Message With Rspamc  /dev/null
   ...  -i  209.85.216.182  -F  foo@crazyspf.cacophony.za.org
   Check Rspamc  ${result}  R_SPF_FAIL
-  ${result} =  Scan Message With Rspamc  /dev/null
-  ...  -i  98.138.91.166  -F  foo@crazyspf.cacophony.za.org
-  Check Rspamc  ${result}  R_SPF_ALLOW
-  ${result} =  Scan Message With Rspamc  /dev/null
-  ...  -i  98.138.91.167  -F  foo@crazyspf.cacophony.za.org
-  Check Rspamc  ${result}  R_SPF_ALLOW
-  ${result} =  Scan Message With Rspamc  /dev/null
-  ...  -i  98.138.91.168  -F  foo@crazyspf.cacophony.za.org
-  Check Rspamc  ${result}  R_SPF_ALLOW
+  #${result} =  Scan Message With Rspamc  /dev/null
+  #...  -i  98.138.91.166  -F  foo@crazyspf.cacophony.za.org
+  #Check Rspamc  ${result}  R_SPF_ALLOW
+  #${result} =  Scan Message With Rspamc  /dev/null
+  #...  -i  98.138.91.167  -F  foo@crazyspf.cacophony.za.org
+  #Check Rspamc  ${result}  R_SPF_ALLOW
+  #${result} =  Scan Message With Rspamc  /dev/null
+  #...  -i  98.138.91.168  -F  foo@crazyspf.cacophony.za.org
+  #Check Rspamc  ${result}  R_SPF_ALLOW
 
 *** Keywords ***
 DMARC Setup
