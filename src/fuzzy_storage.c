@@ -167,7 +167,7 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_worker *worker;
 	struct rspamd_http_connection_router *collection_rt;
 	const ucl_object_t *skip_map;
-	GHashTable *skip_hashes;
+	struct rspamd_hash_map_helper *skip_hashes;
 	guchar cookie[COOKIE_SIZE];
 };
 
@@ -911,7 +911,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 					hexbuf, sizeof (hexbuf) - 1);
 				hexbuf[sizeof (hexbuf) - 1] = '\0';
 
-				if (g_hash_table_lookup (session->ctx->skip_hashes, hexbuf)) {
+				if (rspamd_match_hash_map (session->ctx->skip_hashes, hexbuf)) {
 					result.v1.value = 401;
 					result.v1.prob = 0.0;
 
