@@ -331,7 +331,7 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 }
 
 /**
- * Set counter for a symbol
+ * Set counter for a symbol using moving average
  */
 static double
 rspamd_set_counter (struct counter_data *cd, gdouble value)
@@ -350,6 +350,30 @@ rspamd_set_counter (struct counter_data *cd, gdouble value)
 
 	return cd->mean;
 }
+
+/**
+ * Set counter for a symbol using exponential moving average
+ */
+static double
+rspamd_set_counter_ema (struct counter_data *cd, gdouble value, gdouble alpha)
+{
+	gdouble diff, incr;
+
+	/* Cumulative moving average using per-process counter data */
+	if (cd->number == 0) {
+		cd->mean = 0;
+		cd->stddev = 0;
+	}
+
+	diff = value - cd->mean;
+	incr = diff * alpha;
+	cd->mean += incr;
+	cd->stddev = (1 - alpha) * (cd->stddev + diff * incr);
+	cd->number ++;
+
+	return cd->mean;
+}
+
 
 static void
 rspamd_symbols_cache_resort (struct symbols_cache *cache)
@@ -2046,11 +2070,12 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 	struct cache_item *item, *parent;
 	guint i;
 	gdouble cur_ticks;
+	static const double decay_rate = 0.7;
 
 	cache = cbdata->cache;
 	/* Plan new event */
 	tm = rspamd_time_jitter (cache->reload_time, 0);
-	cur_ticks = rspamd_get_ticks (TRUE);
+	cur_ticks = rspamd_get_ticks (FALSE);
 	msg_debug_cache ("resort symbols cache, next reload in %.2f seconds", tm);
 	g_assert (cache != NULL);
 	evtimer_set (&cbdata->resort_ev, rspamd_symbols_cache_resort_cb, cbdata);
@@ -2071,8 +2096,8 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 
 				cur_value = (item->st->total_hits - item->last_count) /
 						(cur_ticks - cbdata->last_resort);
-				rspamd_set_counter (&item->st->frequency_counter,
-						cur_value);
+				rspamd_set_counter_ema (&item->st->frequency_counter,
+						cur_value, decay_rate);
 				item->st->avg_frequency = item->st->frequency_counter.mean;
 				item->st->stddev_frequency = item->st->frequency_counter.stddev;
 
@@ -2111,8 +2136,8 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 			if (item->cd->number > 0) {
 				if (item->type & (SYMBOL_TYPE_CALLBACK|SYMBOL_TYPE_NORMAL)) {
 					item->st->avg_time = item->cd->mean;
-					rspamd_set_counter (&item->st->time_counter,
-							item->st->avg_time);
+					rspamd_set_counter_ema (&item->st->time_counter,
+							item->st->avg_time, decay_rate);
 					item->st->avg_time = item->st->time_counter.mean;
 					memset (item->cd, 0, sizeof (*item->cd));
 				}
