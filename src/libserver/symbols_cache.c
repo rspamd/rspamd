@@ -1270,7 +1270,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 	struct rspamd_task **ptask;
 	lua_State *L;
 	gboolean check = TRUE;
-	const gdouble slow_diff_limit = 1e7;
+	const gdouble slow_diff_limit = 0.1;
 
 	if (item->func) {
 
@@ -1309,9 +1309,9 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 					rspamd_symbols_cache_watcher_cb,
 					item);
 			msg_debug_task ("execute %s, %d", item->symbol, item->id);
-			t1 = rspamd_get_ticks (TRUE);
+			t1 = rspamd_get_ticks (FALSE);
 			item->func (task, item->user_data);
-			t2 = rspamd_get_ticks (TRUE);
+			t2 = rspamd_get_ticks (FALSE);
 			diff = (t2 - t1);
 
 			if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {
@@ -1323,8 +1323,8 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 			}
 
 			if (diff > slow_diff_limit && !(item->type & SYMBOL_TYPE_SQUEEZED)) {
-				msg_info_task ("slow rule: %s: %.0f ticks", item->symbol,
-						diff);
+				msg_info_task ("slow rule: %s: %.2f ms", item->symbol,
+						diff * 1000);
 			}
 
 			if (rspamd_worker_is_scanner (task->worker)) {
