@@ -527,6 +527,8 @@ rspamd_fuzzy_updates_cb (gboolean success, void *ud)
 			}
 		}
 
+		msg_info ("successfully updated fuzzy storage: %d updates processed",
+				ctx->updates_pending->len);
 		/* Clear updates */
 		ctx->updates_pending->len = 0;
 		rspamd_fuzzy_backend_version (ctx->backend, source,
