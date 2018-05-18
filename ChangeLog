@@ -1,3 +1,38 @@
+1.7.5: 18 May 2018
+	* [Conf] Add MSBL proposed return codes
+	* [Conf] Add additional groups for policies
+	* [CritFix] Do not use volatile Lua strings as UCL keys
+	* [Feature] Add ability to add fuzzy hashes to headers
+	* [Feature] Add function to extract most meaningful urls
+	* [Feature] Add rule to block mixed text and encrypted parts
+	* [Feature] Allow multiple groups for symbols
+	* [Feature] Allow to disable lua squeezing logic
+	* [Feature] Allow to get multipart children in Lua
+	* [Feature] Allow to insert multiple headers from milter headers
+	* [Feature] Allow to print scores in subject and further extensions
+	* [Feature] Be more error-prone in squeezed rules
+	* [Feature] Support multiple return codes in emails module
+	* [Feature] Use EMA for calculating averages
+	* [Feature] Use common jit cache for all regexps
+	* [Feature] support for CommuniGate Pro self-generated messages
+	* [Fix] Allow to have multiple values for headers as arrays
+	* [Fix] Do not open sockets for disabled workers
+	* [Fix] Fix AuthservId
+	* [Fix] Fix base64 folding in Lua API
+	* [Fix] Fix build on non-x86 platforms
+	* [Fix] Fix cached maps logic
+	* [Fix] Fix compatibility with old maps query logic
+	* [Fix] Fix crash if skip_map is used
+	* [Fix] Fix importing static maps from UCL
+	* [Fix] Fix parsing of unix sockets
+	* [Fix] Fix raw_mime regexp on HTML part with no text content
+	* [Fix] Fix tables logging
+	* [Fix] Fix vertical tab handling in libucl
+	* [Fix] Try to fix frequency counters
+	* [Fix] Use better sharding for ip_score
+	* [Fix] Use multiple results from SURBL DNS reply
+	* [Fix] When doing AV scan select a different server for retransmit
+
 1.7.4: 01 May 2018
 	* [Conf] Major stock config updates:
 		- Workers are now specified in a new format worker "type" { ... }
