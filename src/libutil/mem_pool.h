@@ -21,7 +21,7 @@ struct f_str_s;
 
 #define MEMPOOL_TAG_LEN 20
 #define MEMPOOL_UID_LEN 20
-#define MEM_ALIGNMENT   8
+#define MEM_ALIGNMENT   16
 #define align_ptr(p, a)                                                   \
     (guint8 *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
 
