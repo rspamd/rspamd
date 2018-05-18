@@ -312,7 +312,7 @@ guint rspamd_cryptobox_mac_bytes (enum rspamd_cryptobox_mode mode);
 guint rspamd_cryptobox_signature_bytes (enum rspamd_cryptobox_mode mode);
 
 /* Hash IUF interface */
-typedef struct RSPAMD_ALIGNED(32) rspamd_cryptobox_hash_state_s  {
+typedef struct RSPAMD_ALIGNED(16) rspamd_cryptobox_hash_state_s  {
 	unsigned char opaque[256];
 } rspamd_cryptobox_hash_state_t;
 
@@ -343,7 +343,7 @@ void rspamd_cryptobox_hash (guchar *out,
 		gsize keylen);
 
 /* Non crypto hash IUF interface */
-typedef struct RSPAMD_ALIGNED(32) rspamd_cryptobox_fast_hash_state_s  {
+typedef struct RSPAMD_ALIGNED(16) rspamd_cryptobox_fast_hash_state_s  {
 	unsigned char opaque[64 + sizeof (size_t) + sizeof (uint64_t)];
 } rspamd_cryptobox_fast_hash_state_t;
 
