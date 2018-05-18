@@ -415,7 +415,7 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 	struct delayed_cache_dependency *ddep;
 	struct delayed_cache_condition *dcond;
 	GList *cur;
-	guint i, j;
+	gint i, j;
 	gint id;
 
 	rspamd_symbols_cache_resort (cache);
@@ -504,6 +504,16 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 			}
 			else {
 				msg_err_cache ("cannot find dependency on symbol %s", dep->sym);
+			}
+		}
+
+		/* Reversed loop to make removal safe */
+		for (j = it->deps->len - 1; j >= 0; j --) {
+			dep = g_ptr_array_index (it->deps, j);
+
+			if (dep->item == NULL) {
+				/* Remove useless dep */
+				g_ptr_array_remove_index (it->deps, j);
 			}
 		}
 	}
