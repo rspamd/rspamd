@@ -287,5 +287,22 @@ gboolean rspamd_keypair_decrypt (struct rspamd_cryptobox_keypair *kp,
 								 guchar **out, gsize *outlen,
 								 GError **err);
 
+/**
+ * Encrypts data usign specific keypair.
+ * This method actually generates ephemeral local keypair, use public key from
+ * the remote keypair and encrypts data
+ * @param kp keypair
+ * @param in raw input
+ * @param inlen input length
+ * @param out output (allocated internally using g_malloc)
+ * @param outlen output size
+ * @param err pointer to error
+ * @return TRUE if encryption has been completed, out must be freed in this case
+ */
+gboolean rspamd_keypair_encrypt (struct rspamd_cryptobox_keypair *kp,
+								 const guchar *in, gsize inlen,
+								 guchar **out, gsize *outlen,
+								 GError **err);
+
 
 #endif /* SRC_LIBCRYPTOBOX_KEYPAIR_H_ */
