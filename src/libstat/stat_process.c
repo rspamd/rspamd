@@ -81,6 +81,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 	gchar tmpbuf[128];
 	lua_State *L = task->cfg->lua_state;
 	const gchar *headers_hash;
+	struct rspamd_mime_header *hdr;
 
 	ar = g_array_sized_new (FALSE, FALSE, sizeof (elt), 16);
 	elt.flags = RSPAMD_STAT_TOKEN_FLAG_META;
@@ -183,6 +184,19 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 		g_array_append_val (ar, elt);
 	}
 
+	/* Use more precise headers order */
+	cur = g_list_first (task->headers_order->head);
+	while (cur) {
+		hdr = cur->data;
+
+		if (hdr->name && hdr->type != RSPAMD_HEADER_RECEIVED) {
+			elt.begin = hdr->name;
+			elt.len = strlen (hdr->name);
+			g_array_append_val (ar, elt);
+		}
+
+		cur = g_list_next (cur);
+	}
 
 	/* Use metatokens plugin from Lua */
 	lua_getglobal (L, "rspamd_plugins");
