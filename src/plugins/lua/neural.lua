@@ -290,7 +290,7 @@ local function ann_scores_filter(task)
       end
 
       local symscore = string.format('%.3f', score)
-      rspamd_logger.infox(task, 'ann score: %s', symscore)
+      rspamd_logger.infox(task, '%s ann score: %s', rule.name, symscore)
 
       if score > 0 then
         local result = score
