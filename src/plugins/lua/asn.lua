@@ -60,18 +60,19 @@ local function asn_check(task)
 
   local asn_check_func = {}
   function asn_check_func.rspamd(ip)
+    local dnsbl = options['provider_info']['ip' .. ip:get_version()]
+    local req_name = rspamd_logger.slog("%1.%2",
+        table.concat(ip:inversed_str_octets(), '.'), dnsbl)
     local function rspamd_dns_cb(_, _, results, dns_err)
       if dns_err and (dns_err ~= 'requested record is not found' and dns_err ~= 'no records with this name') then
-        rspamd_logger.errx(task, 'error querying dns: %s', dns_err)
+        rspamd_logger.errx(task, 'error querying dns (%s): %s', req_name, dns_err)
       end
       if not (results and results[1]) then return end
       local parts = rspamd_re:split(results[1])
       -- "15169 | 8.8.8.0/24 | US | arin |" for 8.8.8.8
       asn_set(parts[1], parts[2], parts[3])
     end
-    local dnsbl = options['provider_info']['ip' .. ip:get_version()]
-    local req_name = rspamd_logger.slog("%1.%2",
-        table.concat(ip:inversed_str_octets(), '.'), dnsbl)
+
     task:get_resolver():resolve_txt(task:get_session(), task:get_mempool(),
         req_name, rspamd_dns_cb)
   end
