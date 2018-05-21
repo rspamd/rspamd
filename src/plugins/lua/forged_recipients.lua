@@ -39,7 +39,8 @@ local function check_forged_headers(task)
   if not mime_rcpt then
     return
   elseif #mime_rcpt == 0 then
-    task:insert_result(symbol_rcpt, score)
+    local sra = smtp_rcpt[1].addr .. (#smtp_rcpt > 1 and ' ...' or '')
+    task:insert_result(symbol_rcpt, score, '', sra)
     return
   end
   -- Find pair for each smtp recipient recipient in To or Cc headers
@@ -67,7 +68,9 @@ local function check_forged_headers(task)
       end
     end
     if not res then
-      task:insert_result(symbol_rcpt, score)
+      local mra = mime_rcpt[1].addr .. (#mime_rcpt > 1 and ' ..' or '')
+      local sra = smtp_rcpt[1].addr .. (#smtp_rcpt > 1 and ' ...' or '')
+      task:insert_result(symbol_rcpt, score, mra, sra)
       break
     end
   end
@@ -76,7 +79,7 @@ local function check_forged_headers(task)
     local mime_from = task:get_from(2)
     if not mime_from or not mime_from[1] or
       not (string.lower(mime_from[1]['addr']) == string.lower(smtp_from[1]['addr'])) then
-      task:insert_result(symbol_sender, 1)
+      task:insert_result(symbol_sender, 1, ((mime_from or E)[1] or E).addr or '', smtp_from[1].addr)
     end
   end
 end

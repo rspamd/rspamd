@@ -83,6 +83,7 @@
 
 #include "cryptobox.h"
 #include "zlib.h"
+#include "contrib/uthash/utlist.h"
 
 /* Check log messages intensity once per minute */
 #define CHECK_TIME 60
@@ -418,6 +419,12 @@ out:
 	return (-1);
 }
 
+static int
+rspamd_prefer_v4_hack (const struct addrinfo *a1, const struct addrinfo *a2)
+{
+	return a1->ai_addr->sa_family - a2->ai_addr->sa_family;
+}
+
 /**
  * Make a universal socket
  * @param credits host, ip or path to unix socket
@@ -480,6 +487,7 @@ rspamd_socket (const gchar *credits, guint16 port,
 
 		rspamd_snprintf (portbuf, sizeof (portbuf), "%d", (int)port);
 		if ((r = getaddrinfo (credits, portbuf, &hints, &res)) == 0) {
+			LL_SORT2 (res, rspamd_prefer_v4_hack, ai_next);
 			r = rspamd_inet_socket_create (type, res, is_server, async, NULL);
 			freeaddrinfo (res);
 			return r;
@@ -572,7 +580,9 @@ rspamd_sockets_list (const gchar *credits, guint16 port,
 
 			rspamd_snprintf (portbuf, sizeof (portbuf), "%d", (int)port);
 			if ((r = getaddrinfo (credits, portbuf, &hints, &res)) == 0) {
-				fd = rspamd_inet_socket_create (type, res, is_server, async, &result);
+				LL_SORT2 (res, rspamd_prefer_v4_hack, ai_next);
+				fd = rspamd_inet_socket_create (type, res, is_server, async,
+						&result);
 				freeaddrinfo (res);
 
 				if (result == NULL) {

@@ -28,6 +28,8 @@ enum rspamd_cryptobox_keypair_type {
 	RSPAMD_KEYPAIR_SIGN
 };
 
+extern const guchar encrypted_magic[7];
+
 /**
  * Opaque structure for the full (public + private) keypair
  */
@@ -269,6 +271,38 @@ gboolean rspamd_keypair_verify (struct rspamd_cryptobox_pubkey *pk,
  */
 gboolean rspamd_pubkey_equal (const struct rspamd_cryptobox_pubkey *k1,
 		const struct rspamd_cryptobox_pubkey *k2);
+
+/**
+ * Decrypts data using keypair and a pubkey stored in in, in must start from
+ * `encrypted_magic` constant
+ * @param kp keypair
+ * @param in raw input
+ * @param inlen input length
+ * @param out output (allocated internally using g_malloc)
+ * @param outlen output size
+ * @return TRUE if decryption is completed, out must be freed in this case
+ */
+gboolean rspamd_keypair_decrypt (struct rspamd_cryptobox_keypair *kp,
+								 const guchar *in, gsize inlen,
+								 guchar **out, gsize *outlen,
+								 GError **err);
+
+/**
+ * Encrypts data usign specific keypair.
+ * This method actually generates ephemeral local keypair, use public key from
+ * the remote keypair and encrypts data
+ * @param kp keypair
+ * @param in raw input
+ * @param inlen input length
+ * @param out output (allocated internally using g_malloc)
+ * @param outlen output size
+ * @param err pointer to error
+ * @return TRUE if encryption has been completed, out must be freed in this case
+ */
+gboolean rspamd_keypair_encrypt (struct rspamd_cryptobox_keypair *kp,
+								 const guchar *in, gsize inlen,
+								 guchar **out, gsize *outlen,
+								 GError **err);
 
 
 #endif /* SRC_LIBCRYPTOBOX_KEYPAIR_H_ */

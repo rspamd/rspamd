@@ -1290,7 +1290,7 @@ typedef bool (*ucl_parser_special_handler_t) (struct ucl_parser *parser,
  * Special handler structure
  */
 struct ucl_parser_special_handler {
-	unsigned char *magic;
+	const unsigned char *magic;
 	size_t magic_len;
 	ucl_parser_special_handler_t handler;
 	void (*free_function) (unsigned char *data, size_t len, void *user_data);

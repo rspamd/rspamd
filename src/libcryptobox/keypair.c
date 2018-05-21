@@ -19,6 +19,9 @@
 #include "libcryptobox/keypair_private.h"
 #include "libutil/str_util.h"
 #include "libutil/printf.h"
+#include "contrib/libottery/ottery.h"
+
+const guchar encrypted_magic[7] = {'r', 'u', 'c', 'l', 'e', 'v', '1'};
 
 static GQuark
 rspamd_keypair_quark (void)
@@ -907,4 +910,120 @@ rspamd_pubkey_equal (const struct rspamd_cryptobox_pubkey *k1,
 	}
 
 	return FALSE;
+}
+
+gboolean
+rspamd_keypair_decrypt (struct rspamd_cryptobox_keypair *kp,
+						const guchar *in, gsize inlen,
+						guchar **out, gsize *outlen,
+						GError **err)
+{
+	const guchar *nonce, *mac, *data, *pubkey;
+
+	g_assert (kp != NULL);
+	g_assert (in != NULL);
+
+	if (kp->type != RSPAMD_KEYPAIR_KEX) {
+		g_set_error (err, rspamd_keypair_quark (), EINVAL,
+				"invalid keypair type");
+
+		return FALSE;
+	}
+
+	if (inlen < sizeof (encrypted_magic) + rspamd_cryptobox_pk_bytes (kp->alg) +
+				rspamd_cryptobox_mac_bytes (kp->alg) +
+				rspamd_cryptobox_nonce_bytes (kp->alg)) {
+		g_set_error (err, rspamd_keypair_quark (), E2BIG, "invalid size: too small");
+
+		return FALSE;
+	}
+
+	if (memcmp (in, encrypted_magic, sizeof (encrypted_magic)) != 0) {
+		g_set_error (err, rspamd_keypair_quark (), EINVAL,
+				"invalid magic");
+
+		return FALSE;
+	}
+
+	/* Set pointers */
+	pubkey = in + sizeof (encrypted_magic);
+	mac = pubkey + rspamd_cryptobox_pk_bytes (kp->alg);
+	nonce = mac + rspamd_cryptobox_mac_bytes (kp->alg);
+	data = nonce + rspamd_cryptobox_nonce_bytes (kp->alg);
+
+	if (data - in >= inlen) {
+		g_set_error (err, rspamd_keypair_quark (), E2BIG, "invalid size: too small");
+
+		return FALSE;
+	}
+
+	inlen -= data - in;
+
+	/* Allocate memory for output */
+	*out = g_malloc (inlen);
+	memcpy (*out, data, inlen);
+
+	if (!rspamd_cryptobox_decrypt_inplace (*out, inlen, nonce, pubkey,
+			rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_SK, NULL),
+			mac, kp->alg)) {
+		g_set_error (err, rspamd_keypair_quark (), EPERM, "verification failed");
+		g_free (*out);
+
+		return FALSE;
+	}
+
+	if (outlen) {
+		*outlen = inlen;
+	}
+
+	return TRUE;
+}
+gboolean
+rspamd_keypair_encrypt (struct rspamd_cryptobox_keypair *kp,
+						const guchar *in, gsize inlen,
+						guchar **out, gsize *outlen,
+						GError **err)
+{
+	guchar *nonce, *mac, *data, *pubkey;
+	struct rspamd_cryptobox_keypair *local;
+	gsize olen;
+
+	g_assert (kp != NULL);
+	g_assert (in != NULL);
+
+	if (kp->type != RSPAMD_KEYPAIR_KEX) {
+		g_set_error (err, rspamd_keypair_quark (), EINVAL,
+				"invalid keypair type");
+
+		return FALSE;
+	}
+
+	local = rspamd_keypair_new (kp->type, kp->alg);
+
+	olen = inlen + sizeof (encrypted_magic) +
+			rspamd_cryptobox_pk_bytes (kp->alg) +
+			rspamd_cryptobox_mac_bytes (kp->alg) +
+			rspamd_cryptobox_nonce_bytes (kp->alg);
+	*out = g_malloc (olen);
+	memcpy (*out, encrypted_magic, sizeof (encrypted_magic));
+	pubkey = *out + sizeof (encrypted_magic);
+	mac = pubkey + rspamd_cryptobox_pk_bytes (kp->alg);
+	nonce = mac + rspamd_cryptobox_mac_bytes (kp->alg);
+	data = nonce + rspamd_cryptobox_nonce_bytes (kp->alg);
+
+	ottery_rand_bytes (nonce, rspamd_cryptobox_nonce_bytes (kp->alg));
+	memcpy (data, in, inlen);
+	memcpy (pubkey, rspamd_keypair_component (kp,
+			RSPAMD_KEYPAIR_COMPONENT_PK, NULL),
+			rspamd_cryptobox_pk_bytes (kp->alg));
+	rspamd_cryptobox_encrypt_inplace (data, inlen, nonce, pubkey,
+			rspamd_keypair_component (local, RSPAMD_KEYPAIR_COMPONENT_SK, NULL),
+			mac, kp->alg);
+	rspamd_keypair_unref (local);
+
+	if (outlen) {
+		*outlen = olen;
+	}
+
+	return TRUE;
 }

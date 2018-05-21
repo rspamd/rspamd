@@ -3624,6 +3624,32 @@ rspamd_rcl_maybe_apply_lua_transform (struct rspamd_config *cfg)
 	lua_settop (L, 0);
 }
 
+static bool
+rspamd_rcl_decrypt_handler(struct ucl_parser *parser,
+						   const unsigned char *source, size_t source_len,
+						   unsigned char **destination, size_t *dest_len,
+						   void *user_data)
+{
+	GError *err = NULL;
+	struct rspamd_cryptobox_keypair *kp = (struct rspamd_cryptobox_keypair *)user_data;
+
+	if (!rspamd_keypair_decrypt (kp, source, source_len,
+			destination, dest_len, &err)) {
+		msg_err ("cannot decrypt file: %e", err);
+		g_error_free (err);
+
+		return false;
+	}
+
+	return true;
+}
+
+static void
+rspamd_rcl_decrypt_free (unsigned char *data, size_t len, void *user_data)
+{
+	g_free (data);
+}
+
 gboolean
 rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	const gchar *convert_to, rspamd_rcl_section_fin_t logger_fin,
@@ -3638,6 +3664,8 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	const ucl_object_t *logger_obj;
 	rspamd_cryptobox_hash_state_t hs;
 	unsigned char cksumbuf[rspamd_cryptobox_HASHBYTES];
+	gchar keypair_path[PATH_MAX];
+	struct rspamd_cryptobox_keypair *decrypt_keypair = NULL;
 	struct ucl_emitter_functions f;
 
 	if (stat (filename, &st) == -1) {
@@ -3659,10 +3687,62 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 
 	close (fd);
 
+	/* Try to load keyfile if available */
+	rspamd_snprintf (keypair_path, sizeof (keypair_path), "%s.key",
+			filename);
+	if (stat (keypair_path, &st) == -1 &&
+		(fd = open (keypair_path, O_RDONLY)) != -1) {
+		struct ucl_parser *kp_parser;
+
+		kp_parser = ucl_parser_new (0);
+
+		if (ucl_parser_add_fd (kp_parser, fd)) {
+			ucl_object_t *kp_obj;
+
+			kp_obj = ucl_parser_get_object (kp_parser);
+
+			g_assert (kp_obj != NULL);
+			decrypt_keypair = rspamd_keypair_from_ucl (kp_obj);
+
+			if (decrypt_keypair == NULL) {
+				msg_err_config_forced ("cannot load keypair from %s: invalid keypair",
+						keypair_path);
+			}
+			else {
+				/* Add decryption support to UCL */
+				rspamd_mempool_add_destructor (cfg->cfg_pool,
+						(rspamd_mempool_destruct_t)rspamd_keypair_unref,
+						decrypt_keypair);
+			}
+
+			ucl_object_unref (kp_obj);
+		}
+		else {
+			msg_err_config_forced ("cannot load keypair from %s: %s",
+					keypair_path, ucl_parser_get_error (kp_parser));
+		}
+
+		ucl_parser_free (kp_parser);
+	}
+
 	rspamd_cryptobox_hash_init (&hs, NULL, 0);
 	parser = ucl_parser_new (UCL_PARSER_SAVE_COMMENTS);
 	rspamd_ucl_add_conf_variables (parser, vars);
 	rspamd_ucl_add_conf_macros (parser, cfg);
+
+	if (decrypt_keypair) {
+		struct ucl_parser_special_handler *decrypt_handler;
+
+		decrypt_handler = rspamd_mempool_alloc0 (cfg->cfg_pool,
+				sizeof (*decrypt_handler));
+		decrypt_handler->user_data = decrypt_keypair;
+		decrypt_handler->magic = encrypted_magic;
+		decrypt_handler->magic_len = sizeof (encrypted_magic);
+		decrypt_handler->handler = rspamd_rcl_decrypt_handler;
+		decrypt_handler->free_function = rspamd_rcl_decrypt_free;
+
+		ucl_parser_add_special_handler (parser, decrypt_handler);
+	}
 
 	if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
 		msg_err_config_forced ("ucl parser error: %s", ucl_parser_get_error (parser));
