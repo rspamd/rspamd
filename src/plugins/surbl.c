@@ -696,7 +696,6 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 			/* Mutually exclusive options */
 			msg_err_config ("options noip and resolve_ip are "
 					"mutually exclusive for suffix %s", new_suffix->suffix);
-			ucl_object_unref (ropts);
 
 			continue;
 		}
@@ -845,8 +844,6 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 				RSPAMD_MONITORED_DEFAULT, ropts);
 		surbl_module_ctx->suffixes = g_list_prepend (surbl_module_ctx->suffixes,
 				new_suffix);
-
-		ucl_object_unref (ropts);
 	}
 
 	return nrules;
