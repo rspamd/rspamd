@@ -236,7 +236,9 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "minWidth": 100
+                    "minWidth": 100,
+                    "maxWidth": 200,
+                    "word-wrap": "break-word"
                 }
             }, {
                 "name": "rcpt_mime",
@@ -244,7 +246,9 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "minWidth": 100
+                    "minWidth": 100,
+                    "maxWidth": 200,
+                    "word-wrap": "break-word"
                 }
             }, {
                 "name": "subject",
@@ -312,7 +316,9 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "minWidth": 100
+                    "minWidth": 100,
+                    "maxWidth": 130,
+                    "word-wrap": "break-word"
                 }
             }];
     }
