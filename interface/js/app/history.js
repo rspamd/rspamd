@@ -171,7 +171,7 @@ function($, _, Humanize) {
                 "value": scan_time
             };
             item.id = item['message-id'];
-            if (JSON.stringify(item.rcpt_smtp) !== JSON.stringify(item.rcpt_mime)) {
+            if ($(item.rcpt_mime).not(item.rcpt_smtp).length !== 0 || $(item.rcpt_smtp).not(item.rcpt_mime).length !== 0) {
                 item.rcpt_mime = "[" + item.rcpt_smtp.join(",&#8203;") + "] " + item.rcpt_mime.join(",&#8203;");
             } else {
                 item.rcpt_mime = item.rcpt_mime.join(",&#8203;");
