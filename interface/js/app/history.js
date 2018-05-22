@@ -171,7 +171,14 @@ function($, _, Humanize) {
                 "value": scan_time
             };
             item.id = item['message-id'];
-            item.rcpt_mime = item.rcpt_mime.join(",&#8203;");
+            if (JSON.stringify(item.rcpt_smtp) !== JSON.stringify(item.rcpt_mime)) {
+                item.rcpt_mime = "[" + item.rcpt_smtp.join(",&#8203;") + "] " + item.rcpt_mime.join(",&#8203;");
+            } else {
+                item.rcpt_mime = item.rcpt_mime.join(",&#8203;");
+            }
+            if (item.sender_mime !== item.sender_smtp) {
+                item.sender_mime = "[" + item.sender_smtp + "] " + item.sender_mime;
+            }
             items.push(item);
         });
 
@@ -225,7 +232,7 @@ function($, _, Humanize) {
                 }
             }, {
                 "name": "sender_mime",
-                "title": "From",
+                "title": "[Envelope From] From",
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
@@ -233,7 +240,7 @@ function($, _, Humanize) {
                 }
             }, {
                 "name": "rcpt_mime",
-                "title": "To",
+                "title": "[Envelope To] To",
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
