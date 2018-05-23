@@ -502,7 +502,7 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/"
 		"${CMAKE_SOURCE_DIR}/contrib/librdns"
 		"${CMAKE_SOURCE_DIR}/contrib/aho-corasick"
 		"${CMAKE_SOURCE_DIR}/contrib/lc-btrie"
-		"${CMAKE_SOURCE_DIR}/contrib/lpeg"
+		"${CMAKE_SOURCE_DIR}/contrib/lua-lpeg"
 		"${CMAKE_BINARY_DIR}/src" #Stored in the binary dir
 		"${CMAKE_BINARY_DIR}/src/libcryptobox")
 
@@ -1240,7 +1240,7 @@ ENDIF()
 ADD_SUBDIRECTORY(contrib/libucl)
 ADD_SUBDIRECTORY(contrib/librdns)
 ADD_SUBDIRECTORY(contrib/aho-corasick)
-ADD_SUBDIRECTORY(contrib/lpeg)
+ADD_SUBDIRECTORY(contrib/lua-lpeg)
 ADD_SUBDIRECTORY(contrib/linenoise)
 ADD_SUBDIRECTORY(contrib/t1ha)
 
@@ -1261,11 +1261,11 @@ ENDIF()
 
 IF(ENABLE_TORCH MATCHES "ON")
 	IF(WITH_LUAJIT)
-		ADD_SUBDIRECTORY(contrib/torch/paths)
-		ADD_SUBDIRECTORY(contrib/torch/torch7)
-		ADD_SUBDIRECTORY(contrib/torch/nn)
-		ADD_SUBDIRECTORY(contrib/torch/optim)
-		ADD_SUBDIRECTORY(contrib/torch/decisiontree)
+		ADD_SUBDIRECTORY(contrib/lua-torch/paths)
+		ADD_SUBDIRECTORY(contrib/lua-torch/torch7)
+		ADD_SUBDIRECTORY(contrib/lua-torch/nn)
+		ADD_SUBDIRECTORY(contrib/lua-torch/optim)
+		ADD_SUBDIRECTORY(contrib/lua-torch/decisiontree)
 		SET(WITH_TORCH 1)
 	ELSE()
 		MESSAGE(FATAL_ERROR "Cannot enable torch without luajit")
@@ -1361,7 +1361,7 @@ INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${LUALIBDIR})
 INSTALL(FILES "contrib/lua-argparse/argparse.lua" DESTINATION ${LUALIBDIR})
 
 IF(ENABLE_TORCH MATCHES "ON")
-	INSTALL(FILES "contrib/moses/moses.lua" DESTINATION ${LUALIBDIR})
+	INSTALL(FILES "contrib/lua-moses/moses.lua" DESTINATION ${LUALIBDIR})
 ENDIF()
 
 # systemd unit
