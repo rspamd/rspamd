@@ -1358,6 +1358,7 @@ ENDFOREACH(LUA_LIB)
 
 # Install lua fun library
 INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${LUALIBDIR})
+INSTALL(FILES "contrib/lua-argparse/argparse.lua" DESTINATION ${LUALIBDIR})
 
 IF(ENABLE_TORCH MATCHES "ON")
 	INSTALL(FILES "contrib/moses/moses.lua" DESTINATION ${LUALIBDIR})
