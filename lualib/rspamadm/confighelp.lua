@@ -7,8 +7,8 @@ local known_attrs = {
   default = 1,
 }
 
-local getopt = require "rspamadm/getopt"
-local ansicolors = require "rspamadm/ansicolors"
+local getopt = require "getopt"
+local ansicolors = require "ansicolors"
 
 local function maybe_print_color(key)
   if not opts['no-color'] then

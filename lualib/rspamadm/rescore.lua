@@ -3,11 +3,11 @@ local nn = require "nn"
 local lua_util = require "lua_util"
 local ucl = require "ucl"
 local logger = require "rspamd_logger"
-local getopt = require "rspamadm/getopt"
+local getopt = require "getopt"
 local optim = require "optim"
 local rspamd_util = require "rspamd_util"
 
-local rescore_utility = require "rspamadm/rescore_utility"
+local rescore_utility = require "rescore_utility"
 
 local opts
 local ignore_symbols = {
@@ -473,8 +473,8 @@ return function (args, cfg)
                      "NAME", "HITS", "HAM", "HAM%", "SPAM", "SPAM%", "S/O", "OVER%"))
       for _, symbol_stats in pairs(t) do
           logger.message(
-              string.format("%-40s %6d %6d %6.2f %6d %6.2f %6.2f %6.2f", 
-                  symbol_stats.name, 
+              string.format("%-40s %6d %6d %6.2f %6d %6.2f %6.2f %6.2f",
+                  symbol_stats.name,
                   symbol_stats.no_of_hits,
                   symbol_stats.ham_hits,
                   lua_util.round(symbol_stats.ham_percent,2),
@@ -503,7 +503,7 @@ return function (args, cfg)
           -- Calculate percentage of rules with no hits
           local nhpct = lua_util.round((#symbols_no_hits/total_symbols)*100,2)
           logger.message(
-              string.format('\nFound %s (%-.2f%%) symbols out of %s with no hits in corpus:', 
+              string.format('\nFound %s (%-.2f%%) symbols out of %s with no hits in corpus:',
                             #symbols_no_hits, nhpct, total_symbols
               )
           )

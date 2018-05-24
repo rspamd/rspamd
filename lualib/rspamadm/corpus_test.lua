@@ -1,7 +1,7 @@
 local rspamd_logger = require "rspamd_logger"
 local ucl = require "ucl"
 local lua_util = require "lua_util"
-local getopt = require "rspamadm/getopt"
+local getopt = require "getopt"
 
 local HAM = "HAM"
 local SPAM = "SPAM"

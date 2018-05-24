@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
-local ansicolors = require "rspamadm/ansicolors"
+local ansicolors = require "ansicolors"
 local local_conf = rspamd_paths['CONFDIR']
 local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
@@ -23,7 +23,7 @@ local lua_stat_tools = require "lua_stat"
 local lua_redis = require "lua_redis"
 local ucl = require "ucl"
 
-local plugins_stat = require "rspamadm/plugins_stats"
+local plugins_stat = require "plugins_stats"
 
 local rspamd_logo = [[
   ____                                     _
