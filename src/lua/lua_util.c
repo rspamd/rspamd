@@ -626,7 +626,8 @@ lua_util_load_rspamd_config (lua_State *L)
 	cfg_name = luaL_checkstring (L, 1);
 
 	if (cfg_name) {
-		cfg = rspamd_config_new ();
+		cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_SKIP_LUA);
+		cfg->lua_state = L;
 
 		if (rspamd_config_read (cfg, cfg_name, NULL, NULL, NULL, NULL)) {
 			msg_err_config ("cannot load config from %s", cfg_name);
@@ -655,7 +656,8 @@ lua_util_config_from_ucl (lua_State *L)
 
 	if (obj) {
 		cfg = g_malloc0 (sizeof (struct rspamd_config));
-		cfg = rspamd_config_new ();
+		cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_SKIP_LUA);
+		cfg->lua_state = L;
 
 		cfg->rcl_obj = obj;
 		cfg->cache = rspamd_symbols_cache_new (cfg);

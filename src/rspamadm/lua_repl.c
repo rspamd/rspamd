@@ -47,8 +47,10 @@ static const char *default_history_file = ".rspamd_repl.hist";
 #endif
 #define MULTILINE_PROMPT "... "
 
-static void rspamadm_lua (gint argc, gchar **argv);
-static const char *rspamadm_lua_help (gboolean full_help);
+static void rspamadm_lua (gint argc, gchar **argv,
+		const struct rspamadm_command *cmd);
+static const char *rspamadm_lua_help (gboolean full_help,
+									  const struct rspamadm_command *cmd);
 
 struct rspamadm_command lua_command = {
 		.name = "lua",
@@ -121,7 +123,7 @@ static GOptionEntry entries[] = {
 };
 
 static const char *
-rspamadm_lua_help (gboolean full_help)
+rspamadm_lua_help (gboolean full_help, const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -658,7 +660,7 @@ rspamadm_lua_handle_exec (struct rspamd_http_connection_entry *conn_ent,
 }
 
 static void
-rspamadm_lua (gint argc, gchar **argv)
+rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;
@@ -688,9 +690,6 @@ rspamadm_lua (gint argc, gchar **argv)
 			batch = 1;
 		}
 	}
-
-	L = rspamd_lua_init ();
-	rspamd_lua_set_path (L, NULL, ucl_vars);
 
 	if (paths) {
 		for (elt = paths; *elt != NULL; elt ++) {

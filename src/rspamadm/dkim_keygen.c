@@ -27,8 +27,10 @@ static gchar *selector = NULL;
 static gchar *domain = NULL;
 static guint bits = 1024;
 
-static void rspamadm_dkim_keygen (gint argc, gchar **argv);
-static const char *rspamadm_dkim_keygen_help (gboolean full_help);
+static void rspamadm_dkim_keygen (gint argc, gchar **argv,
+								  const struct rspamadm_command *cmd);
+static const char *rspamadm_dkim_keygen_help (gboolean full_help,
+											  const struct rspamadm_command *cmd);
 static void rspamadm_dkim_keygen_lua_subrs (gpointer pL);
 
 struct rspamadm_command dkim_keygen_command = {
@@ -52,7 +54,7 @@ static GOptionEntry entries[] = {
 };
 
 static const char *
-rspamadm_dkim_keygen_help (gboolean full_help)
+rspamadm_dkim_keygen_help (gboolean full_help, const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -221,7 +223,7 @@ rspamadm_dkim_keygen_lua_subrs (gpointer pL)
 }
 
 static void
-rspamadm_dkim_keygen (gint argc, gchar **argv)
+rspamadm_dkim_keygen (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;

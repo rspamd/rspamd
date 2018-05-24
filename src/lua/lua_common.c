@@ -587,9 +587,6 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 		cur = g_list_next (cur);
 	}
 
-	/* Assign state */
-	cfg->lua_state = L;
-
 	return TRUE;
 }
 

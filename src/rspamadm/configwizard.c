@@ -28,8 +28,10 @@ extern struct rspamd_main *rspamd_main;
 extern module_t *modules[];
 extern worker_t *workers[];
 
-static void rspamadm_configwizard (gint argc, gchar **argv);
-static const char *rspamadm_configwizard_help (gboolean full_help);
+static void rspamadm_configwizard (gint argc, gchar **argv,
+								   const struct rspamadm_command *cmd);
+static const char *rspamadm_configwizard_help (gboolean full_help,
+											   const struct rspamadm_command *cmd);
 
 struct rspamadm_command configwizard_command = {
 		.name = "configwizard",
@@ -46,7 +48,7 @@ static GOptionEntry entries[] = {
 };
 
 static const char *
-rspamadm_configwizard_help (gboolean full_help)
+rspamadm_configwizard_help (gboolean full_help, const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -83,7 +85,8 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 }
 
 static void
-rspamadm_configwizard (gint argc, gchar **argv)
+rspamadm_configwizard (gint argc, gchar **argv,
+					   const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;

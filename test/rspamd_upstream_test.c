@@ -64,7 +64,7 @@ rspamd_upstream_test_func (void)
 	struct timeval tv;
 	rspamd_inet_addr_t *addr, *next_addr, *paddr;
 
-	cfg = rspamd_config_new ();
+	cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_SKIP_LUA);
 	cfg->dns_retransmits = 2;
 	cfg->dns_timeout = 0.5;
 	cfg->upstream_max_errors = 1;

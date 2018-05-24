@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "rspamadm.h"
+#include "libutil/util.h"
 
 extern struct rspamadm_command pw_command;
 extern struct rspamadm_command keypair_command;
@@ -55,23 +56,33 @@ const struct rspamadm_command *commands[] = {
 
 
 const struct rspamadm_command *
-rspamadm_search_command (const gchar *name)
+rspamadm_search_command (const gchar *name, GPtrArray *all_commands)
 {
-	const struct rspamadm_command *ret = NULL;
+	const struct rspamadm_command *ret = NULL, *cmd;
 	guint i;
 
 	if (name == NULL) {
 		name = "help";
 	}
 
-	for (i = 0; i < G_N_ELEMENTS (commands); i ++) {
-		if (commands[i] != NULL) {
-			if (strcmp (name, commands[i]->name) == 0) {
-				ret = commands[i];
+	PTR_ARRAY_FOREACH (all_commands, i, cmd) {
+			if (strcmp (name, cmd->name) == 0) {
+				ret = cmd;
 				break;
 			}
-		}
 	}
 
 	return ret;
+}
+
+void
+rspamadm_fill_internal_commands (GPtrArray *dest)
+{
+	guint i;
+
+	for (i = 0; i < G_N_ELEMENTS (commands); i ++) {
+		if (commands[i]) {
+			g_ptr_array_add (dest, (gpointer)commands[i]);
+		}
+	}
 }

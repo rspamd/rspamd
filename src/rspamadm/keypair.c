@@ -25,8 +25,10 @@ static gboolean openssl = FALSE;
 static gboolean ucl = FALSE;
 static gboolean sign = FALSE;
 
-static void rspamadm_keypair (gint argc, gchar **argv);
-static const char *rspamadm_keypair_help (gboolean full_help);
+static void rspamadm_keypair (gint argc, gchar **argv,
+							  const struct rspamadm_command *cmd);
+static const char *rspamadm_keypair_help (gboolean full_help,
+										  const struct rspamadm_command *cmd);
 
 struct rspamadm_command keypair_command = {
 		.name = "keypair",
@@ -51,7 +53,7 @@ static GOptionEntry entries[] = {
 };
 
 static const char *
-rspamadm_keypair_help (gboolean full_help)
+rspamadm_keypair_help (gboolean full_help, const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -74,7 +76,7 @@ rspamadm_keypair_help (gboolean full_help)
 }
 
 static void
-rspamadm_keypair (gint argc, gchar **argv)
+rspamadm_keypair (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;

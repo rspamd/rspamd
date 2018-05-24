@@ -22,8 +22,10 @@ static gchar *target = NULL;
 static gchar **sources = NULL;
 static gboolean quiet;
 
-static void rspamadm_fuzzy_merge (gint argc, gchar **argv);
-static const char *rspamadm_fuzzy_merge_help (gboolean full_help);
+static void rspamadm_fuzzy_merge (gint argc, gchar **argv,
+								  const struct rspamadm_command *cmd);
+static const char *rspamadm_fuzzy_merge_help (gboolean full_help,
+											  const struct rspamadm_command *cmd);
 
 struct rspamadm_command fuzzy_merge_command = {
 		.name = "fuzzy_merge",
@@ -157,7 +159,7 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[STMAX] = {
 };
 
 static const char *
-rspamadm_fuzzy_merge_help (gboolean full_help)
+rspamadm_fuzzy_merge_help (gboolean full_help, const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -218,7 +220,7 @@ rspamadm_op_equal (gconstpointer a, gconstpointer b)
 }
 
 static void
-rspamadm_fuzzy_merge (gint argc, gchar **argv)
+rspamadm_fuzzy_merge (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;

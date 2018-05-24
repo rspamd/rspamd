@@ -18,12 +18,6 @@
 #include "rspamadm.h"
 #include "lua/lua_common.h"
 
-#if !defined(WITH_TORCH) || !defined(WITH_LUAJIT)
-#define HAS_TORCH false
-#else
-#define HAS_TORCH true
-#endif
-
 static gchar *logdir = NULL;
 static gchar *output = "new.scores";
 static gboolean score_diff = false;  /* Print score diff flag */
@@ -33,9 +27,11 @@ extern struct rspamd_main *rspamd_main;
 extern module_t *modules[];
 extern worker_t *workers[];
 
-static void rspamadm_rescore (gint argc, gchar **argv);
+static void rspamadm_rescore (gint argc, gchar **argv,
+							  const struct rspamadm_command *cmd);
 
-static const char *rspamadm_rescore_help (gboolean full_help);
+static const char *rspamadm_rescore_help (gboolean full_help,
+										  const struct rspamadm_command *cmd);
 
 struct rspamadm_command rescore_command = {
 		.name = "rescore",
@@ -75,8 +71,8 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 }
 
 static const char *
-rspamadm_rescore_help (gboolean full_help) {
-
+rspamadm_rescore_help (gboolean full_help, const struct rspamadm_command *cmd)
+{
 	const char *help_str;
 
 	if (full_help) {
@@ -95,15 +91,20 @@ rspamadm_rescore_help (gboolean full_help) {
 }
 
 static void
-rspamadm_rescore (gint argc, gchar **argv) {
-
+rspamadm_rescore (gint argc, gchar **argv, const struct rspamadm_command *cmd)
+{
 	GOptionContext *context;
 	GError *error = NULL;
-	lua_State *L;
 	struct rspamd_config *cfg = rspamd_main->cfg, **pcfg;
 	gboolean ret = TRUE;
 	worker_t **pworker;
 	const gchar *confdir;
+
+#ifndef WITH_TORCH
+	rspamd_fprintf (stderr, "Torch is not enabled. "
+				"Use -DENABLE_TORCH=ON option while running cmake.\n");
+	exit (EXIT_FAILURE);
+#endif
 
 	context = g_option_context_new (
 			"rescore - estimate optimal symbol weights from log files");
@@ -120,12 +121,6 @@ rspamadm_rescore (gint argc, gchar **argv) {
 	if (!g_option_context_parse (context, &argc, &argv, &error)) {
 		rspamd_fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
-		exit (EXIT_FAILURE);
-	}
-
-	if (!HAS_TORCH) {
-		rspamd_fprintf (stderr, "Torch is not enabled. "
-				"Use -DENABLE_TORCH=ON option while running cmake.\n");
 		exit (EXIT_FAILURE);
 	}
 
@@ -176,8 +171,6 @@ rspamadm_rescore (gint argc, gchar **argv) {
 	}
 
 	if (ret) {
-		L = cfg->lua_state;
-		rspamd_lua_set_path (L, cfg->rcl_obj, ucl_vars);
 		ucl_object_insert_key (cfg->rcl_obj, ucl_object_fromstring (cfg->cfg_name),
 				"config_path", 0, false);
 		ucl_object_insert_key (cfg->rcl_obj, ucl_object_fromstring (logdir),

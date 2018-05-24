@@ -39,8 +39,10 @@ static gchar *editor = NULL;
 static gboolean edit = FALSE;
 enum rspamd_cryptobox_mode mode = RSPAMD_CRYPTOBOX_MODE_25519;
 
-static void rspamadm_signtool (gint argc, gchar **argv);
-static const char *rspamadm_signtool_help (gboolean full_help);
+static void rspamadm_signtool (gint argc, gchar **argv,
+							   const struct rspamadm_command *cmd);
+static const char *rspamadm_signtool_help (gboolean full_help,
+										   const struct rspamadm_command *cmd);
 
 struct rspamadm_command signtool_command = {
 		.name = "signtool",
@@ -75,7 +77,8 @@ static GOptionEntry entries[] = {
 };
 
 static const char *
-rspamadm_signtool_help (gboolean full_help)
+rspamadm_signtool_help (gboolean full_help,
+						const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -462,7 +465,7 @@ rspamadm_verify_file (const gchar *fname, const guchar *pk)
 
 
 static void
-rspamadm_signtool (gint argc, gchar **argv)
+rspamadm_signtool (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;

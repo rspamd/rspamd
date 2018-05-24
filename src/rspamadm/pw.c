@@ -21,8 +21,10 @@
 #include "rspamadm.h"
 #include "unix-std.h"
 
-static void rspamadm_pw (gint argc, gchar **argv);
-static const char *rspamadm_pw_help (gboolean full_help);
+static void rspamadm_pw (gint argc, gchar **argv,
+						 const struct rspamadm_command *cmd);
+static const char *rspamadm_pw_help (gboolean full_help,
+									 const struct rspamadm_command *cmd);
 static void rspamadm_pw_lua_subrs (gpointer pL);
 
 static gboolean do_encrypt = FALSE;
@@ -57,7 +59,7 @@ static GOptionEntry entries[] = {
 };
 
 static const char *
-rspamadm_pw_help (gboolean full_help)
+rspamadm_pw_help (gboolean full_help, const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -354,7 +356,7 @@ rspamadm_alg_list (void)
 }
 
 static void
-rspamadm_pw (gint argc, gchar **argv)
+rspamadm_pw (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;

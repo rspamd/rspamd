@@ -313,6 +313,7 @@ struct rspamd_config {
 	gboolean enable_experimental;                   /**< Enable experimental plugins						*/
 	gboolean disable_pcre_jit;                      /**< Disable pcre JIT									*/
 	gboolean disable_lua_squeeze;                   /**< Disable lua rules squeezing						*/
+	gboolean own_lua_state;                         /**< True if we have created lua_state internally		*/
 
 	gsize max_diff;                                 /**< maximum diff size for text parts					*/
 	gsize max_cores_size;                           /**< maximum size occupied by rspamd core files			*/
@@ -445,11 +446,16 @@ struct rspamd_config {
 gboolean rspamd_parse_bind_line (struct rspamd_config *cfg,
 	struct rspamd_worker_conf *cf, const gchar *str);
 
+
+enum rspamd_config_init_flags {
+	RSPAMD_CONFIG_INIT_DEFAULT = 0,
+	RSPAMD_CONFIG_INIT_SKIP_LUA = (1 << 0)
+};
 /**
  * Init default values
  * @param cfg config file
  */
-struct rspamd_config *rspamd_config_new (void);
+struct rspamd_config *rspamd_config_new (enum rspamd_config_init_flags flags);
 
 /**
  * Free memory used by config structure

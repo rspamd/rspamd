@@ -26,8 +26,10 @@ static gboolean orphans = FALSE;
 static gboolean partial = FALSE;
 static gboolean luapat = FALSE;
 
-static void rspamadm_grep (gint argc, gchar **argv);
-static const char *rspamadm_grep_help (gboolean full_help);
+static void rspamadm_grep (gint argc, gchar **argv,
+						   const struct rspamadm_command *cmd);
+static const char *rspamadm_grep_help (gboolean full_help,
+									   const struct rspamadm_command *cmd);
 
 struct rspamadm_command grep_command = {
 		.name = "grep",
@@ -57,7 +59,7 @@ static GOptionEntry entries[] = {
 
 
 static const char *
-rspamadm_grep_help (gboolean full_help)
+rspamadm_grep_help (gboolean full_help, const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -81,7 +83,7 @@ rspamadm_grep_help (gboolean full_help)
 }
 
 static void
-rspamadm_grep (gint argc, gchar **argv)
+rspamadm_grep (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;

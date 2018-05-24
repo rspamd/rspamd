@@ -114,7 +114,7 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 }
 
 struct rspamd_config *
-rspamd_config_new (void)
+rspamd_config_new (enum rspamd_config_init_flags flags)
 {
 	struct rspamd_config *cfg;
 
@@ -172,7 +172,11 @@ rspamd_config_new (void)
 	cfg->min_word_len = DEFAULT_MIN_WORD;
 	cfg->max_word_len = DEFAULT_MAX_WORD;
 
-	cfg->lua_state = rspamd_lua_init ();
+	if (!(flags & RSPAMD_CONFIG_INIT_SKIP_LUA)) {
+		cfg->lua_state = rspamd_lua_init ();
+		cfg->own_lua_state = TRUE;
+	}
+
 	cfg->cache = rspamd_symbols_cache_new (cfg);
 	cfg->ups_ctx = rspamd_upstreams_library_init ();
 	cfg->re_cache = rspamd_re_cache_new ();
@@ -251,7 +255,10 @@ rspamd_config_free (struct rspamd_config *cfg)
 	rspamd_re_cache_unref (cfg->re_cache);
 	rspamd_upstreams_library_unref (cfg->ups_ctx);
 	rspamd_mempool_delete (cfg->cfg_pool);
-	lua_close (cfg->lua_state);
+
+	if (cfg->lua_state && cfg->own_lua_state) {
+		lua_close (cfg->lua_state);
+	}
 	REF_RELEASE (cfg->libs_ctx);
 
 	DL_FOREACH_SAFE (cfg->log_pipes, lp, ltmp) {

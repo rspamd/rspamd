@@ -24,8 +24,10 @@ static gchar *output_location = "results.log";
 static gint connections = 10;
 static gdouble timeout = 60.0;
 
-static void rspamadm_corpus_test (gint argc, gchar **argv);
-static const char *rspamadm_corpus_test_help (gboolean full_help);
+static void rspamadm_corpus_test (gint argc, gchar **argv,
+								  const struct rspamadm_command *cmd);
+static const char *rspamadm_corpus_test_help (gboolean full_help,
+											  const struct rspamadm_command *cmd);
 
 struct rspamadm_command corpus_test_command = {
 	.name = "corpus_test",
@@ -49,7 +51,7 @@ static GOptionEntry entries[] = {
 };
 
 static const char *
-rspamadm_corpus_test_help (gboolean full_help)
+rspamadm_corpus_test_help (gboolean full_help, const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -74,7 +76,7 @@ rspamadm_corpus_test_help (gboolean full_help)
 }
 
 static void
-rspamadm_corpus_test (gint argc, gchar **argv)
+rspamadm_corpus_test (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;
