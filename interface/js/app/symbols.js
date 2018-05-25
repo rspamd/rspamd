@@ -97,7 +97,7 @@ function($) {
                 var label_class = '';
                 if (item.weight < 0) {
                     label_class = 'scorebar-ham';
-                } else {
+                } else if (item.weight > 0) {
                     label_class = 'scorebar-spam';
                 }
                 item.weight = '<input class="form-control input-sm mb-disabled ' + label_class +
