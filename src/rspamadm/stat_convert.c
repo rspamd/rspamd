@@ -253,6 +253,5 @@ rspamadm_statconvert (gint argc, gchar **argv, const struct rspamadm_command *cm
 			obj,
 			"stat_convert");
 
-	lua_close (L);
 	ucl_object_unref (obj);
 }

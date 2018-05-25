@@ -407,7 +407,6 @@ main (gint argc, gchar **argv, gchar **env)
 
 	rspamd_log_close (rspamd_main->logger);
 	REF_RELEASE (rspamd_main->cfg);
-	lua_close (L);
 	g_free (rspamd_main);
 	g_ptr_array_free (all_commands, TRUE);
 

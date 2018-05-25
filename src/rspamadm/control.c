@@ -262,6 +262,5 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 
 	rspamd_http_connection_unref (conn);
 	rspamd_inet_address_free (addr);
-	lua_close (L);
 	close (sock);
 }

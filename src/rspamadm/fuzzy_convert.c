@@ -137,6 +137,5 @@ rspamadm_fuzzyconvert (gint argc, gchar **argv, const struct rspamadm_command *c
 			obj,
 			"fuzzy_convert");
 
-	lua_close (L);
 	ucl_object_unref (obj);
 }

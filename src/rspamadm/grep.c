@@ -153,6 +153,5 @@ rspamadm_grep (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 			obj,
 			"grep");
 
-	lua_close (L);
 	ucl_object_unref (obj);
 }

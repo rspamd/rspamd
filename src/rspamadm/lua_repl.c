@@ -666,7 +666,6 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 	GError *error = NULL;
 	gchar **elt;
 	guint i;
-	lua_State *L;
 
 	context = g_option_context_new ("lua - run lua interpreter");
 	g_option_context_set_summary (context,

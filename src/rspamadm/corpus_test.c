@@ -122,6 +122,5 @@ rspamadm_corpus_test (gint argc, gchar **argv, const struct rspamadm_command *cm
 			obj,
 			"corpus_test");
 
-	lua_close (L);
 	ucl_object_unref (obj);
 }
