@@ -389,7 +389,19 @@ main (gint argc, gchar **argv, gchar **env)
 		/* Try fuzz search */
 		rspamd_fprintf (stderr, "Suggested commands:\n");
 		PTR_ARRAY_FOREACH (all_commands, i, cmd) {
-			if (rspamd_strings_levenshtein_distance (cmd->name, 0, cmd_name, 0, 1) == 1) {
+			gsize clen, inplen;
+
+			clen = strlen (cmd->name);
+			inplen = strlen (cmd_name);
+
+			if (rspamd_strings_levenshtein_distance (cmd->name, clen,
+					cmd_name, inplen, 1) == 1) {
+				rspamd_fprintf (stderr, "%s\n", cmd->name);
+			}
+			else if ((clen > inplen &&
+					  rspamd_substring_search (cmd->name, clen, cmd_name, inplen) != -1) ||
+					 (inplen > clen &&
+					  rspamd_substring_search (cmd_name, inplen, cmd->name, clen) != -1)) {
 				rspamd_fprintf (stderr, "%s\n", cmd->name);
 			}
 		}
