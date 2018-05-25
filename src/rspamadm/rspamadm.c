@@ -384,7 +384,16 @@ main (gint argc, gchar **argv, gchar **env)
 	cmd = rspamadm_search_command (cmd_name, all_commands);
 
 	if (cmd == NULL) {
-		fprintf (stderr, "Invalid command name: %s\n", cmd_name);
+		rspamd_fprintf (stderr, "Invalid command name: %s\n", cmd_name);
+
+		/* Try fuzz search */
+		rspamd_fprintf (stderr, "Suggested commands:\n");
+		PTR_ARRAY_FOREACH (all_commands, i, cmd) {
+			if (rspamd_strings_levenshtein_distance (cmd->name, 0, cmd_name, 0, 1) == 1) {
+				rspamd_fprintf (stderr, "%s\n", cmd->name);
+			}
+		}
+
 		exit (EXIT_FAILURE);
 	}
 
