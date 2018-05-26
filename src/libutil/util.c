@@ -80,7 +80,7 @@
 #endif
 #endif
 #include <math.h> /* for pow */
-#include <glob.h>
+#include <glob.h> /* in fact, we require this file ultimately */
 
 #include "cryptobox.h"
 #include "zlib.h"
@@ -2858,6 +2858,7 @@ rspamd_glob_dir (const gchar *full_path, const gchar *pattern,
 	const gchar *path;
 	static gchar pathbuf[PATH_MAX]; /* Static to help recursion */
 	guint i;
+	gint rc;
 	static const guint rec_lim = 16;
 	struct stat st;
 
@@ -2870,12 +2871,20 @@ rspamd_glob_dir (const gchar *full_path, const gchar *pattern,
 
 	memset (&globbuf, 0, sizeof (globbuf));
 
-	if (glob (full_path, 0, NULL, &globbuf) != 0) {
-		g_set_error (err, g_quark_from_static_string ("glob"), errno,
-				"glob %s failed: %s", full_path, strerror (errno));
-		globfree (&globbuf);
+	if ((rc = glob (full_path, 0, NULL, &globbuf)) != 0) {
 
-		return FALSE;
+		if (rc != GLOB_NOMATCH) {
+			g_set_error (err, g_quark_from_static_string ("glob"), errno,
+					"glob %s failed: %s", full_path, strerror (errno));
+			globfree (&globbuf);
+
+			return FALSE;
+		}
+		else {
+			globfree (&globbuf);
+
+			return TRUE;
+		}
 	}
 
 	for (i = 0; i < globbuf.gl_pathc; i ++) {

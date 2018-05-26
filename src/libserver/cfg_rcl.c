@@ -34,10 +34,6 @@
 #include <syslog.h>
 #endif
 
-#ifdef HAVE_GLOB_H
-#include <glob.h>
-#endif
-
 #include <math.h>
 
 struct rspamd_rcl_default_handler_data {
@@ -1047,9 +1043,8 @@ rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 {
 	struct stat st;
 	struct script_module *cur_mod;
-	glob_t globbuf;
-	gchar *pattern, *ext_pos;
-	size_t len;
+	GPtrArray *paths;
+	gchar *fname, *ext_pos;
 	guint i;
 
 	if (stat (path, &st) == -1) {
@@ -1064,52 +1059,39 @@ rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 
 	/* Handle directory */
 	if (S_ISDIR (st.st_mode)) {
-		globbuf.gl_offs = 0;
-		len = strlen (path) + sizeof ("*.lua");
-		pattern = g_malloc (len);
-		rspamd_snprintf (pattern, len, "%s%s", path, "*.lua");
+		paths = rspamd_glob_path (path, "*.lua", TRUE, err);
 
-		if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
-			for (i = 0; i < globbuf.gl_pathc; i++) {
-				cur_mod =
-					rspamd_mempool_alloc (cfg->cfg_pool,
-						sizeof (struct script_module));
-				cur_mod->path = rspamd_mempool_strdup (cfg->cfg_pool,
-						globbuf.gl_pathv[i]);
-				cur_mod->name = g_path_get_basename (cur_mod->path);
-				rspamd_mempool_add_destructor (cfg->cfg_pool, g_free,
-						cur_mod->name);
-				ext_pos = strstr (cur_mod->name, ".lua");
-
-				if (ext_pos != NULL) {
-					*ext_pos = '\0';
-				}
-
-				if (cfg->script_modules == NULL) {
-					cfg->script_modules = g_list_append (cfg->script_modules,
-							cur_mod);
-					rspamd_mempool_add_destructor (cfg->cfg_pool,
-							(rspamd_mempool_destruct_t)g_list_free,
-							cfg->script_modules);
-				}
-				else {
-					cfg->script_modules = g_list_append (cfg->script_modules,
-							cur_mod);
-				}
-			}
-			globfree (&globbuf);
-			g_free (pattern);
-		}
-		else {
-			g_set_error (err,
-				CFG_RCL_ERROR,
-				errno,
-				"glob failed for %s, %s",
-				pattern,
-				strerror (errno));
-			g_free (pattern);
+		if (!paths) {
 			return FALSE;
 		}
+
+		PTR_ARRAY_FOREACH (paths, i, fname) {
+			cur_mod =
+					rspamd_mempool_alloc (cfg->cfg_pool,
+							sizeof (struct script_module));
+			cur_mod->path = rspamd_mempool_strdup (cfg->cfg_pool, fname);
+			cur_mod->name = g_path_get_basename (cur_mod->path);
+			rspamd_mempool_add_destructor (cfg->cfg_pool, g_free,
+					cur_mod->name);
+			ext_pos = strstr (cur_mod->name, ".lua");
+
+			if (ext_pos != NULL) {
+				*ext_pos = '\0';
+			}
+
+			if (cfg->script_modules == NULL) {
+				cfg->script_modules = g_list_append (cfg->script_modules,
+						cur_mod);
+				rspamd_mempool_add_destructor (cfg->cfg_pool,
+						(rspamd_mempool_destruct_t) g_list_free,
+						cfg->script_modules);
+			} else {
+				cfg->script_modules = g_list_append (cfg->script_modules,
+						cur_mod);
+			}
+		}
+
+		g_ptr_array_free (paths, TRUE);
 	}
 	else {
 		/* Handle single file */
