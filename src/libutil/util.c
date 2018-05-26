@@ -80,6 +80,7 @@
 #endif
 #endif
 #include <math.h> /* for pow */
+#include <glob.h>
 
 #include "cryptobox.h"
 #include "zlib.h"
@@ -2846,4 +2847,91 @@ rspamd_fstring_gzip (rspamd_fstring_t **in)
 	*in = comp;
 
 	return TRUE;
+}
+
+static gboolean
+rspamd_glob_dir (const gchar *full_path, const gchar *pattern,
+				 gboolean recursive, guint rec_len,
+				 GPtrArray *res, GError **err)
+{
+	glob_t globbuf;
+	const gchar *path;
+	static gchar pathbuf[PATH_MAX]; /* Static to help recursion */
+	guint i;
+	static const guint rec_lim = 16;
+	struct stat st;
+
+	if (rec_len > rec_lim) {
+		g_set_error (err, g_quark_from_static_string ("glob"), EOVERFLOW,
+				"maximum nesting is reached: %d", rec_lim);
+
+		return FALSE;
+	}
+
+	memset (&globbuf, 0, sizeof (globbuf));
+
+	if (glob (full_path, 0, NULL, &globbuf) != 0) {
+		g_set_error (err, g_quark_from_static_string ("glob"), errno,
+				"glob %s failed: %s", full_path, strerror (errno));
+		globfree (&globbuf);
+
+		return FALSE;
+	}
+
+	for (i = 0; i < globbuf.gl_pathc; i ++) {
+		path = globbuf.gl_pathv[i];
+
+		if (stat (path, &st) == -1) {
+			if (errno == EPERM || errno == EACCES || errno == ELOOP) {
+				/* Silently ignore */
+				continue;
+			}
+
+			g_set_error (err, g_quark_from_static_string ("glob"), errno,
+					"stat %s failed: %s", path, strerror (errno));
+			globfree (&globbuf);
+
+			return FALSE;
+		}
+
+		if (S_ISREG (st.st_mode)) {
+			g_ptr_array_add (res, g_strdup (path));
+		}
+		else if (recursive && S_ISDIR (st.st_mode)) {
+			rspamd_snprintf (pathbuf, sizeof (pathbuf), "%s%c%s",
+					path, G_DIR_SEPARATOR, pattern);
+
+			if (!rspamd_glob_dir (full_path, pattern, recursive, rec_len + 1,
+					res, err)) {
+				globfree (&globbuf);
+
+				return FALSE;
+			}
+		}
+	}
+
+	globfree (&globbuf);
+
+	return TRUE;
+}
+
+GPtrArray *
+rspamd_glob_path (const gchar *dir,
+				  const gchar *pattern,
+				  gboolean recursive,
+				  GError **err)
+{
+	gchar path[PATH_MAX];
+	GPtrArray *res;
+
+	res = g_ptr_array_new_full (32, (GDestroyNotify)g_free);
+	rspamd_snprintf (path, sizeof (path), "%s%c%s", dir, G_DIR_SEPARATOR, pattern);
+
+	if (!rspamd_glob_dir (path, pattern, recursive, 0, res, err)) {
+		g_ptr_array_free (res, TRUE);
+
+		return NULL;
+	}
+
+	return res;
 }
