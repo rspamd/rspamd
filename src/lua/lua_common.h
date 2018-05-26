@@ -298,6 +298,10 @@ void rspamd_lua_dumpstack (lua_State *L);
 void rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj,
 		GHashTable *vars);
 
+/* Set some lua globals */
+void rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L,
+							 GHashTable *vars);
+
 struct memory_pool_s * rspamd_lua_check_mempool (lua_State * L, gint pos);
 struct rspamd_config * lua_check_config (lua_State * L, gint pos);
 struct rspamd_async_session* lua_check_session (lua_State * L, gint pos);
