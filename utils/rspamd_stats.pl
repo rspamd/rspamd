@@ -460,7 +460,6 @@ sub ProcessRelated {
 
 sub ProcessLog {
   my ( $ts_format, @line ) = &log_time_format($rspamd_log);
-  my $is_syslog = defined $ts_format && $ts_format eq 'syslog';
 
   while() {
     last if eof $rspamd_log;
@@ -474,10 +473,15 @@ sub ProcessLog {
 
     if (/^.*rspamd_task_write_log.*$/) {
       &spinner;
-      my $ts =
-        ($is_syslog)
-        ? syslog2iso( join ' ', ( split /\s+/ )[ 0 .. 2 ] )
-        : join ' ', ( split /\s+/ )[ 0 .. 1 ];
+      my $ts;
+      if ( $ts_format eq 'syslog' ) {
+        $ts = syslog2iso( join ' ', ( split /\s+/ )[ 0 .. 2 ] );
+      } elsif ( $ts_format eq 'syslog5424' ) {
+        /^([0-9-]+)T([0-9:]+)/;
+        $ts = "$1 $2";
+      } else {
+        $ts = join ' ', ( split /\s+/ )[ 0 .. 1 ];
+      }
 
       next if ( $ts lt $startTime );
       next if ( defined $endTime && $ts gt $endTime );
@@ -715,6 +719,12 @@ sub log_time_format {
     # Aug  8 00:02:50 hostname rspamd[66986]
     elsif (/^\w{3} (?:\s?\d|\d\d) \d\d:\d\d:\d\d \S+ rspamd\[\d+\]/) {
       $format = 'syslog';
+      last;
+    }
+
+    # 2018-04-16T06:25:46.012590+02:00 rspamd rspamd[12968]
+    elsif(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[-+]\d{2}:\d{2}) \S+ rspamd\[\d+\]/) {
+      $format = 'syslog5424';
       last;
     }
 
