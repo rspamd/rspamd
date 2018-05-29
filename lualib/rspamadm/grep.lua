@@ -22,15 +22,17 @@ local parser = argparse()
     :name "rspamadm grep"
     :description "Search for patterns in rspamd logs"
     :help_description_margin(30)
-parser:option "-s --string"
-      :description('Plain string to search (case-insensitive)')
-      :argname "<str>"
+parser:mutex(
+    parser:option "-s --string"
+          :description('Plain string to search (case-insensitive)')
+          :argname "<str>",
+    parser:option "-p --pattern"
+          :description('Pattern to search for (regex)')
+          :argname "<re>"
+)
 parser:flag "-l --lua"
       :description('Use Lua patterns in string search')
-parser:option "-p --pattern"
-      :description('Pattern to search for (regex)')
-      :args(1)
-      :argname "<re>"
+
 parser:argument "input":args "*"
       :description('Process specified inputs')
       :default("stdin")

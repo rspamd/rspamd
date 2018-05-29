@@ -9,7 +9,6 @@ SET(RSPAMADMSRC rspamadm.c
         control.c
         confighelp.c
         configwizard.c
-        corpus_test.c
         stat_convert.c
         signtool.c
         lua_repl.c
