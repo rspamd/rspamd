@@ -43,7 +43,6 @@ struct rspamadm_command {
 	rspamadm_help_func help;
 	rspamadm_run_func run;
 	rspamadm_lua_exports_func lua_subrs;
-	gint cbref;
 	gpointer command_data; /* Opaque data */
 };
 
@@ -53,6 +52,7 @@ extern struct rspamadm_command help_command;
 const struct rspamadm_command *rspamadm_search_command (const gchar *name,
 		GPtrArray *all_commands);
 void rspamadm_fill_internal_commands (GPtrArray *dest);
+void rspamadm_fill_lua_commands (lua_State *L, GPtrArray *dest);
 
 gboolean rspamadm_execute_lua_ucl_subr (gpointer L, gint argc, gchar **argv,
 										const ucl_object_t *res,

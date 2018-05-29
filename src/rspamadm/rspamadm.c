@@ -149,13 +149,25 @@ rspamadm_help (gint argc, gchar **argv, const struct rspamadm_command *command)
 
 		PTR_ARRAY_FOREACH (all_commands, i, cmd) {
 			if (!(cmd->flags & RSPAMADM_FLAG_NOHELP)) {
-				printf ("  %-18s %-60s\n", cmd->name,
-						cmd->help (FALSE, cmd));
+				if (!(cmd->flags & RSPAMADM_FLAG_LUA)) {
+					printf ("  %-18s %-60s\n", cmd->name,
+							cmd->help (FALSE, cmd));
+				}
+				else {
+					/* Just call lua subr */
+					(void)cmd->help (FALSE, cmd);
+				}
 			}
 		}
 	}
 	else {
-		printf ("%s\n", cmd->help (TRUE, cmd));
+		if (!(cmd->flags & RSPAMADM_FLAG_LUA)) {
+			printf ("%s\n", cmd->help (TRUE, cmd));
+		}
+		else {
+			/* Just call lua subr */
+			(void)cmd->help (TRUE, cmd);
+		}
 	}
 }
 
@@ -193,25 +205,12 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 	gint err_idx, i, ret;
 	GString *tb;
 	gchar str[PATH_MAX];
-	const struct rspamadm_command **cmd;
 
 	g_assert (script_name != NULL);
 	g_assert (res != NULL);
 	g_assert (L != NULL);
 
 	/* Init internal rspamadm routines */
-	lua_newtable (L);
-	cmd = commands;
-
-	while (*cmd) {
-		if ((*cmd)->lua_subrs != NULL) {
-			(*cmd)->lua_subrs (L);
-		}
-
-		cmd ++;
-	}
-
-	lua_setglobal (L, "rspamadm");
 
 	rspamd_snprintf (str, sizeof (str), "return require \"%s.%s\"", "rspamadm",
 			script_name);
@@ -359,6 +358,22 @@ main (gint argc, gchar **argv, gchar **env)
 
 	L = cfg->lua_state;
 	rspamd_lua_set_path (L, NULL, ucl_vars);
+	rspamd_lua_set_globals (cfg, L, ucl_vars);
+
+	/* Init rspamadm global */
+	lua_newtable (L);
+
+	PTR_ARRAY_FOREACH (all_commands, i, cmd) {
+		if (cmd->lua_subrs != NULL) {
+			cmd->lua_subrs (L);
+		}
+
+		cmd ++;
+	}
+
+	lua_setglobal (L, "rspamadm");
+
+	rspamadm_fill_lua_commands (L, all_commands);
 
 	g_strfreev (nargv);
 

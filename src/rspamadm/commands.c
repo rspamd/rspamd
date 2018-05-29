@@ -15,6 +15,8 @@
  */
 #include "rspamadm.h"
 #include "libutil/util.h"
+#include "libutil/logger.h"
+#include "lua/lua_common.h"
 
 extern struct rspamadm_command pw_command;
 extern struct rspamadm_command keypair_command;
@@ -83,6 +85,177 @@ rspamadm_fill_internal_commands (GPtrArray *dest)
 	for (i = 0; i < G_N_ELEMENTS (commands); i ++) {
 		if (commands[i]) {
 			g_ptr_array_add (dest, (gpointer)commands[i]);
+		}
+	}
+}
+
+static void
+rspamadm_lua_command_run (gint argc, gchar **argv,
+						  const struct rspamadm_command *cmd)
+{
+	gint table_idx = GPOINTER_TO_INT (cmd->command_data);
+	gint i, err_idx, ret;
+	GString *tb;
+
+	lua_rawgeti (L, LUA_REGISTRYINDEX, table_idx);
+
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	/* Function */
+	lua_pushstring (L, "handler");
+	lua_gettable (L, -1);
+
+	/* Args */
+	lua_createtable (L, argc + 1, 0);
+
+	for (i = 0; i < argc; i ++) {
+		lua_pushstring (L, argv[i]);
+		lua_rawseti (L, -2, i); /* Starting from zero ! */
+	}
+
+	if ((ret = lua_pcall (L, 2, 0, err_idx)) != 0) {
+		tb = lua_touserdata (L, -1);
+		msg_err ("call to rspamadm lua script %s failed (%d): %v", cmd->name,
+				ret, tb);
+
+		if (tb) {
+			g_string_free (tb, TRUE);
+		}
+
+		lua_settop (L, 0);
+
+		exit (EXIT_FAILURE);
+	}
+
+	lua_settop (L, 0);
+}
+
+static const gchar *
+rspamadm_lua_command_help (gboolean full_help,
+						  const struct rspamadm_command *cmd)
+{
+	gint table_idx = GPOINTER_TO_INT (cmd->command_data);
+	gint err_idx, ret;
+	GString *tb;
+
+	lua_rawgeti (L, LUA_REGISTRYINDEX, table_idx);
+
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	/* Function */
+	lua_pushstring (L, "handler");
+	lua_gettable (L, -1);
+
+	/* Args */
+	lua_createtable (L, 2, 0);
+	lua_pushstring (L, cmd->name);
+	lua_rawseti (L, -2, 0); /* Starting from zero ! */
+
+	if (full_help) {
+		lua_pushstring (L, "--help");
+		lua_rawseti (L, -2, 1);
+	}
+	else {
+		lua_pushstring (L, "--usage");
+		lua_rawseti (L, -2, 1);
+	}
+
+	if ((ret = lua_pcall (L, 2, 0, err_idx)) != 0) {
+		tb = lua_touserdata (L, -1);
+		msg_err ("call to rspamadm lua script %s failed (%d): %v", cmd->name,
+				ret, tb);
+
+		if (tb) {
+			g_string_free (tb, TRUE);
+		}
+
+		lua_settop (L, 0);
+
+		exit (EXIT_FAILURE);
+	}
+
+	lua_settop (L, 0);
+
+	return NULL; /* Must be handled in rspamadm itself */
+}
+
+void
+rspamadm_fill_lua_commands (lua_State *L, GPtrArray *dest)
+{
+	gint i;
+
+	GPtrArray *lua_paths;
+	GError *err = NULL;
+	const gchar *lualibdir = RSPAMD_LUALIBDIR, *path;
+	struct rspamadm_command *lua_cmd;
+
+	if (g_hash_table_lookup (ucl_vars, "LUALIBDIR")) {
+		lualibdir = g_hash_table_lookup (ucl_vars, "LUALIBDIR");
+	}
+
+	if ((lua_paths = rspamd_glob_path (lualibdir, "*.lua", FALSE, &err)) == NULL) {
+		msg_err ("cannot glob files in %s/*.lua: %e", lualibdir, err);
+		g_error_free (err);
+
+		return;
+	}
+
+	PTR_ARRAY_FOREACH (lua_paths, i, path) {
+		if (luaL_dofile (L, path) != 0) {
+			msg_err ("cannot execute lua script %s: %s",
+					path, lua_tostring (L, -1));
+			continue;
+		} else {
+			if (lua_type (L, -1) == LUA_TTABLE) {
+				lua_pushstring (L, "handler");
+				lua_gettable (L, -2);
+			}
+			else {
+				continue; /* Something goes wrong, huh */
+			}
+
+			if (lua_type (L, -1) != LUA_TFUNCTION) {
+				msg_err ("rspamadm script %s does not have 'handler' field with type "
+						 "function",
+						path);
+				continue;
+			}
+
+			/* Pop handler */
+			lua_pop (L, 1);
+			lua_cmd = g_malloc0 (sizeof (*lua_cmd));
+
+			lua_pushstring (L, "name");
+			lua_gettable (L, -2);
+
+			if (lua_type (L, -1) == LUA_TSTRING) {
+				lua_cmd->name = g_strdup (lua_tostring (L, -1));
+			}
+			else {
+				goffset ext_pos;
+				gchar *name;
+
+				name = g_path_get_basename (path);
+				/* Remove .lua */
+				ext_pos = rspamd_substring_search (path, strlen (path), ".lua", 4);
+
+				if (ext_pos != -1) {
+					name[ext_pos] = '\0';
+				}
+
+				lua_cmd->name = name;
+			}
+
+			lua_pop (L, 1);
+
+			lua_pushvalue (L, -1);
+			/* Reference table itself */
+			lua_cmd->command_data = GINT_TO_POINTER (luaL_ref (L, LUA_REGISTRYINDEX));
+			lua_cmd->flags |= RSPAMADM_FLAG_LUA;
+			lua_cmd->run = rspamadm_lua_command_run;
+			lua_cmd->help = rspamadm_lua_command_help;
 		}
 	}
 }
