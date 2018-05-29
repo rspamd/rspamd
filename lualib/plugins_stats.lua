@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
-local ansicolors = require "rspamadm/ansicolors"
+local ansicolors = require "ansicolors"
 
 local function printf(fmt, ...)
   print(string.format(fmt, ...))

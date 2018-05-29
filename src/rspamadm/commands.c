@@ -190,13 +190,17 @@ rspamadm_fill_lua_commands (lua_State *L, GPtrArray *dest)
 	GError *err = NULL;
 	const gchar *lualibdir = RSPAMD_LUALIBDIR, *path;
 	struct rspamadm_command *lua_cmd;
+	gchar search_dir[PATH_MAX];
 
 	if (g_hash_table_lookup (ucl_vars, "LUALIBDIR")) {
 		lualibdir = g_hash_table_lookup (ucl_vars, "LUALIBDIR");
 	}
 
-	if ((lua_paths = rspamd_glob_path (lualibdir, "*.lua", FALSE, &err)) == NULL) {
-		msg_err ("cannot glob files in %s/*.lua: %e", lualibdir, err);
+	rspamd_snprintf (search_dir, sizeof (search_dir), "%s%crspamadm%c",
+			lualibdir, G_DIR_SEPARATOR, G_DIR_SEPARATOR);
+
+	if ((lua_paths = rspamd_glob_path (search_dir, "*.lua", FALSE, &err)) == NULL) {
+		msg_err ("cannot glob files in %s/*.lua: %e", search_dir, err);
 		g_error_free (err);
 
 		return;

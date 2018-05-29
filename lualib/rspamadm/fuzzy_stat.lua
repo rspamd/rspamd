@@ -143,7 +143,7 @@ local function print_result(r)
   return print_num(r)
 end
 
-local getopt = require "rspamadm/getopt"
+local getopt = require "getopt"
 
 return function(args, res)
   local res_ips = {}
