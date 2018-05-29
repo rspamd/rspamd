@@ -74,16 +74,16 @@ local function encoded_json_to_log(result)
   -- Returns table containing score, action, list of symbols
 
   local filtered_result = {}
-  local parser = ucl.parser()
+  local ucl_parser = ucl.parser()
 
-  local is_good, err = parser:parse_string(result)
+  local is_good, err = ucl_parser:parse_string(result)
 
   if not is_good then
     rspamd_logger.errx("Parser error: %1", err)
     return nil
   end
 
-  result = parser:get_object()
+  result = ucl_parser:get_object()
 
   filtered_result.score = result.score
   if not result.action then

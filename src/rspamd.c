@@ -874,8 +874,7 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 
-	if (!rspamd_config_read (cfg, cfg->cfg_name, NULL,
-		config_logger, rspamd_main, ucl_vars)) {
+	if (!rspamd_config_read (cfg, cfg->cfg_name, config_logger, rspamd_main, ucl_vars)) {
 		return FALSE;
 	}
 

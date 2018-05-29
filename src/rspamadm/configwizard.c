@@ -132,8 +132,7 @@ rspamadm_configwizard (gint argc, gchar **argv,
 	cfg->compiled_workers = workers;
 	cfg->cfg_name = config;
 
-	if (!rspamd_config_read (cfg, cfg->cfg_name, NULL,
-			config_logger, rspamd_main, ucl_vars)) {
+	if (!rspamd_config_read (cfg, cfg->cfg_name, config_logger, rspamd_main, ucl_vars)) {
 		ret = FALSE;
 	}
 	else {

@@ -3229,7 +3229,7 @@ rspamd_rcl_section_free (gpointer p)
  * it is changed, then rcl_obj is imported from lua. Old config is dereferenced.
  * @param cfg
  */
-static void
+void
 rspamd_rcl_maybe_apply_lua_transform (struct rspamd_config *cfg)
 {
 	lua_State *L = cfg->lua_state;
@@ -3318,37 +3318,56 @@ rspamd_rcl_decrypt_free (unsigned char *data, size_t len, void *user_data)
 	g_free (data);
 }
 
+void
+rspamd_config_calculate_cksum (struct rspamd_config *cfg)
+{
+	rspamd_cryptobox_hash_state_t hs;
+	unsigned char cksumbuf[rspamd_cryptobox_HASHBYTES];
+	struct ucl_emitter_functions f;
+
+	/* Calculate checksum */
+	rspamd_cryptobox_hash_init (&hs, NULL, 0);
+	f.ucl_emitter_append_character = rspamd_rcl_emitter_append_c;
+	f.ucl_emitter_append_double = rspamd_rcl_emitter_append_double;
+	f.ucl_emitter_append_int = rspamd_rcl_emitter_append_int;
+	f.ucl_emitter_append_len = rspamd_rcl_emitter_append_len;
+	f.ucl_emitter_free_func = NULL;
+	f.ud = &hs;
+	ucl_object_emit_full (cfg->rcl_obj, UCL_EMIT_MSGPACK,
+			&f, cfg->config_comments);
+	rspamd_cryptobox_hash_final (&hs, cksumbuf);
+	cfg->checksum = rspamd_encode_base32 (cksumbuf, sizeof (cksumbuf));
+	/* Also change the tag of cfg pool to be equal to the checksum */
+	rspamd_strlcpy (cfg->cfg_pool->tag.uid, cfg->checksum,
+			MIN (sizeof (cfg->cfg_pool->tag.uid), strlen (cfg->checksum)));
+}
+
 gboolean
-rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
-	const gchar *convert_to, rspamd_rcl_section_fin_t logger_fin,
-	gpointer logger_ud, GHashTable *vars)
+rspamd_config_parse_ucl (struct rspamd_config *cfg, const gchar *filename,
+					GHashTable *vars, GError **err)
 {
 	struct stat st;
 	gint fd;
-	gchar *data;
-	GError *err = NULL;
-	struct rspamd_rcl_section *top, *logger_section;
 	struct ucl_parser *parser;
-	const ucl_object_t *logger_obj;
-	rspamd_cryptobox_hash_state_t hs;
-	unsigned char cksumbuf[rspamd_cryptobox_HASHBYTES];
 	gchar keypair_path[PATH_MAX];
 	struct rspamd_cryptobox_keypair *decrypt_keypair = NULL;
-	struct ucl_emitter_functions f;
+	gchar *data;
 
 	if (stat (filename, &st) == -1) {
-		msg_err_config_forced ("cannot stat %s: %s", filename, strerror (errno));
+		g_set_error (err, cfg_rcl_error_quark (), errno,
+				"cannot stat %s: %s", filename, strerror (errno));
 		return FALSE;
 	}
 	if ((fd = open (filename, O_RDONLY)) == -1) {
-		msg_err_config_forced ("cannot open %s: %s", filename, strerror (errno));
+		g_set_error (err, cfg_rcl_error_quark (), errno,
+				"cannot open %s: %s", filename, strerror (errno));
 		return FALSE;
 
 	}
 	/* Now mmap this file to simplify reading process */
-	if ((data =
-		mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-		msg_err_config_forced ("cannot mmap %s: %s", filename, strerror (errno));
+	if ((data = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+		g_set_error (err, cfg_rcl_error_quark (), errno,
+				"cannot mmap %s: %s", filename, strerror (errno));
 		close (fd);
 		return FALSE;
 	}
@@ -3393,7 +3412,6 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 		ucl_parser_free (kp_parser);
 	}
 
-	rspamd_cryptobox_hash_init (&hs, NULL, 0);
 	parser = ucl_parser_new (UCL_PARSER_SAVE_COMMENTS);
 	rspamd_ucl_add_conf_variables (parser, vars);
 	rspamd_ucl_add_conf_macros (parser, cfg);
@@ -3423,6 +3441,25 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	cfg->rcl_obj = ucl_parser_get_object (parser);
 	cfg->config_comments = ucl_object_ref (ucl_parser_get_comments (parser));
 	ucl_parser_free (parser);
+
+	return TRUE;
+}
+
+gboolean
+rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
+					rspamd_rcl_section_fin_t logger_fin,
+					gpointer logger_ud, GHashTable *vars)
+{
+	GError *err = NULL;
+	struct rspamd_rcl_section *top, *logger_section;
+	const ucl_object_t *logger_obj;
+
+	if (!rspamd_config_parse_ucl (cfg, filename, vars, &err)) {
+		msg_err_config_forced ("failed to load config: %e", err);
+		g_error_free (err);
+
+		return FALSE;
+	}
 
 	top = rspamd_rcl_config_init (cfg);
 	rspamd_lua_set_path (cfg->lua_state, cfg->rcl_obj, vars);
@@ -3459,28 +3496,13 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	/* Transform config if needed */
 	rspamd_rcl_maybe_apply_lua_transform (cfg);
 
-	/* Calculate checksum */
-	f.ucl_emitter_append_character = rspamd_rcl_emitter_append_c;
-	f.ucl_emitter_append_double = rspamd_rcl_emitter_append_double;
-	f.ucl_emitter_append_int = rspamd_rcl_emitter_append_int;
-	f.ucl_emitter_append_len = rspamd_rcl_emitter_append_len;
-	f.ucl_emitter_free_func = NULL;
-	f.ud = &hs;
-	ucl_object_emit_full (cfg->rcl_obj, UCL_EMIT_MSGPACK,
-			&f, cfg->config_comments);
-	rspamd_cryptobox_hash_final (&hs, cksumbuf);
-	cfg->checksum = rspamd_encode_base32 (cksumbuf, sizeof (cksumbuf));
-	/* Also change the tag of cfg pool to be equal to the checksum */
-	rspamd_strlcpy (cfg->cfg_pool->tag.uid, cfg->checksum,
-			MIN (sizeof (cfg->cfg_pool->tag.uid), strlen (cfg->checksum)));
-
-
 	if (!rspamd_rcl_parse (top, cfg, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
 		msg_err_config ("rcl parse error: %e", err);
 		g_error_free (err);
 		return FALSE;
 	}
 
+	rspamd_config_calculate_cksum (cfg);
 	cfg->lang_det = rspamd_language_detector_init (cfg);
 
 	return TRUE;
