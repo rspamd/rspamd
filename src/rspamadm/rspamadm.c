@@ -71,7 +71,7 @@ rspamadm_error (void)
 static void
 rspamadm_version (void)
 {
-	printf ("Rspamadm %s\n", RVERSION);
+	rspamd_printf ("Rspamadm %s\n", RVERSION);
 }
 
 static void
@@ -80,7 +80,7 @@ rspamadm_usage (GOptionContext *context)
 	gchar *help_str;
 
 	help_str = g_option_context_get_help (context, TRUE, NULL);
-	printf ("%s", help_str);
+	rspamd_printf ("%s", help_str);
 }
 
 static void
@@ -89,16 +89,14 @@ rspamadm_commands (GPtrArray *all_commands)
 	const struct rspamadm_command *cmd;
 	guint i;
 
-	printf ("Rspamadm %s\n", RVERSION);
-	printf ("Usage: rspamadm [global_options] command [command_options]\n");
-	printf ("\nAvailable commands:\n");
+	rspamd_printf ("Rspamadm %s\n", RVERSION);
+	rspamd_printf ("Usage: rspamadm [global_options] command [command_options]\n");
+	rspamd_printf ("\nAvailable commands:\n");
 
 	PTR_ARRAY_FOREACH (all_commands, i, cmd) {
 		if (!(cmd->flags & RSPAMADM_FLAG_NOHELP)) {
-			printf ("  %-18s %-60s\n", cmd->name, cmd->help (FALSE, cmd));
+			rspamd_printf ("  %-18s %-60s\n", cmd->name, cmd->help (FALSE, cmd));
 		}
-
-		cmd ++;
 	}
 }
 
@@ -125,15 +123,15 @@ rspamadm_help (gint argc, gchar **argv, const struct rspamadm_command *command)
 	const struct rspamadm_command *cmd;
 	GPtrArray *all_commands = (GPtrArray *)command->command_data;
 
-	printf ("Rspamadm %s\n", RVERSION);
-	printf ("Usage: rspamadm [global_options] command [command_options]\n\n");
+	rspamd_printf ("Rspamadm %s\n", RVERSION);
+	rspamd_printf ("Usage: rspamadm [global_options] command [command_options]\n\n");
 
 	if (argc <= 1) {
 		cmd_name = "help";
 	}
 	else {
 		cmd_name = argv[1];
-		printf ("Showing help for %s command\n\n", cmd_name);
+		rspamd_printf ("Showing help for %s command\n\n", cmd_name);
 	}
 
 	cmd = rspamadm_search_command (cmd_name, all_commands);
@@ -145,7 +143,7 @@ rspamadm_help (gint argc, gchar **argv, const struct rspamadm_command *command)
 
 	if (strcmp (cmd_name, "help") == 0) {
 		guint i;
-		printf ("Available commands:\n");
+		rspamd_printf ("Available commands:\n");
 
 		PTR_ARRAY_FOREACH (all_commands, i, cmd) {
 			if (!(cmd->flags & RSPAMADM_FLAG_NOHELP)) {
@@ -162,7 +160,7 @@ rspamadm_help (gint argc, gchar **argv, const struct rspamadm_command *command)
 	}
 	else {
 		if (!(cmd->flags & RSPAMADM_FLAG_LUA)) {
-			printf ("%s\n", cmd->help (TRUE, cmd));
+			rspamd_printf ("%s\n", cmd->help (TRUE, cmd));
 		}
 		else {
 			/* Just call lua subr */
@@ -271,6 +269,15 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 	return TRUE;
 }
 
+static gint
+rspamdadm_commands_sort_func (gconstpointer a, gconstpointer b)
+{
+	const struct rspamadm_command *cmda = *((struct rspamadm_command const **)a),
+			*cmdb = *((struct rspamadm_command const **)b);
+
+	return strcmp (cmda->name, cmdb->name);
+}
+
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
@@ -374,6 +381,7 @@ main (gint argc, gchar **argv, gchar **env)
 	lua_setglobal (L, "rspamadm");
 
 	rspamadm_fill_lua_commands (L, all_commands);
+	g_ptr_array_sort (all_commands, rspamdadm_commands_sort_func);
 
 	g_strfreev (nargv);
 

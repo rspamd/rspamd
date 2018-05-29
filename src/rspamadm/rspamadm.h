@@ -35,7 +35,7 @@ typedef void (*rspamadm_run_func) (gint argc, gchar **argv,
 typedef void (*rspamadm_lua_exports_func) (gpointer lua_state);
 
 #define RSPAMADM_FLAG_NOHELP (1 << 0)
-#define RSPAMADM_FLAG_LUA (1 << 0)
+#define RSPAMADM_FLAG_LUA (1 << 1)
 
 struct rspamadm_command {
 	const gchar *name;

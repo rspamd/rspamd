@@ -27,7 +27,6 @@ extern struct rspamadm_command control_command;
 extern struct rspamadm_command confighelp_command;
 extern struct rspamadm_command statconvert_command;
 extern struct rspamadm_command fuzzyconvert_command;
-extern struct rspamadm_command grep_command;
 extern struct rspamadm_command signtool_command;
 extern struct rspamadm_command lua_command;
 extern struct rspamadm_command dkim_keygen_command;
@@ -46,7 +45,6 @@ const struct rspamadm_command *commands[] = {
 	&confighelp_command,
 	&statconvert_command,
 	&fuzzyconvert_command,
-	&grep_command,
 	&signtool_command,
 	&lua_command,
 	&dkim_keygen_command,
@@ -97,14 +95,13 @@ rspamadm_lua_command_run (gint argc, gchar **argv,
 	gint i, err_idx, ret;
 	GString *tb;
 
-	lua_rawgeti (L, LUA_REGISTRYINDEX, table_idx);
-
 	lua_pushcfunction (L, &rspamd_lua_traceback);
 	err_idx = lua_gettop (L);
 
 	/* Function */
+	lua_rawgeti (L, LUA_REGISTRYINDEX, table_idx);
 	lua_pushstring (L, "handler");
-	lua_gettable (L, -1);
+	lua_gettable (L, -2);
 
 	/* Args */
 	lua_createtable (L, argc + 1, 0);
@@ -114,7 +111,7 @@ rspamadm_lua_command_run (gint argc, gchar **argv,
 		lua_rawseti (L, -2, i); /* Starting from zero ! */
 	}
 
-	if ((ret = lua_pcall (L, 2, 0, err_idx)) != 0) {
+	if ((ret = lua_pcall (L, 1, 0, err_idx)) != 0) {
 		tb = lua_touserdata (L, -1);
 		msg_err ("call to rspamadm lua script %s failed (%d): %v", cmd->name,
 				ret, tb);
@@ -139,41 +136,48 @@ rspamadm_lua_command_help (gboolean full_help,
 	gint err_idx, ret;
 	GString *tb;
 
-	lua_rawgeti (L, LUA_REGISTRYINDEX, table_idx);
-
-	lua_pushcfunction (L, &rspamd_lua_traceback);
-	err_idx = lua_gettop (L);
-
-	/* Function */
-	lua_pushstring (L, "handler");
-	lua_gettable (L, -1);
-
-	/* Args */
-	lua_createtable (L, 2, 0);
-	lua_pushstring (L, cmd->name);
-	lua_rawseti (L, -2, 0); /* Starting from zero ! */
-
 	if (full_help) {
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+
+		lua_rawgeti (L, LUA_REGISTRYINDEX, table_idx);
+		/* Function */
+		lua_pushstring (L, "handler");
+		lua_gettable (L, -2);
+
+		/* Args */
+		lua_createtable (L, 2, 0);
+		lua_pushstring (L, cmd->name);
+		lua_rawseti (L, -2, 0); /* Starting from zero ! */
+
 		lua_pushstring (L, "--help");
 		lua_rawseti (L, -2, 1);
+
+		if ((ret = lua_pcall (L, 1, 0, err_idx)) != 0) {
+			tb = lua_touserdata (L, -1);
+			msg_err ("call to rspamadm lua script %s failed (%d): %v", cmd->name,
+					ret, tb);
+
+			if (tb) {
+				g_string_free (tb, TRUE);
+			}
+
+			lua_settop (L, 0);
+
+			exit (EXIT_FAILURE);
+		}
 	}
 	else {
-		lua_pushstring (L, "--usage");
-		lua_rawseti (L, -2, 1);
-	}
+		lua_rawgeti (L, LUA_REGISTRYINDEX, table_idx);
+		lua_pushstring (L, "description");
+		lua_gettable (L, -2);
 
-	if ((ret = lua_pcall (L, 2, 0, err_idx)) != 0) {
-		tb = lua_touserdata (L, -1);
-		msg_err ("call to rspamadm lua script %s failed (%d): %v", cmd->name,
-				ret, tb);
-
-		if (tb) {
-			g_string_free (tb, TRUE);
+		if (lua_isstring (L, -1)) {
+			printf ("  %-18s %-60s\n", cmd->name, lua_tostring (L, -1));
 		}
-
-		lua_settop (L, 0);
-
-		exit (EXIT_FAILURE);
+		else {
+			printf ("  %-18s %-60s\n", cmd->name, "no description available");
+		}
 	}
 
 	lua_settop (L, 0);
@@ -217,6 +221,8 @@ rspamadm_fill_lua_commands (lua_State *L, GPtrArray *dest)
 				lua_gettable (L, -2);
 			}
 			else {
+				msg_err ("bad return type in %s: %s", path,
+						lua_typename (L, lua_type (L, -1)));
 				continue; /* Something goes wrong, huh */
 			}
 
@@ -260,6 +266,8 @@ rspamadm_fill_lua_commands (lua_State *L, GPtrArray *dest)
 			lua_cmd->flags |= RSPAMADM_FLAG_LUA;
 			lua_cmd->run = rspamadm_lua_command_run;
 			lua_cmd->help = rspamadm_lua_command_help;
+
+			g_ptr_array_add (dest, lua_cmd);
 		}
 	}
 }

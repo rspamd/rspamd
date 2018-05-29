@@ -166,6 +166,6 @@ end
 
 return {
   handler = handler,
-  description = parser.description,
+  description = 'Search for patterns in rspamd logs',
   name = 'grep'
 }
