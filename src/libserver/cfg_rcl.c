@@ -3495,6 +3495,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 
 	/* Transform config if needed */
 	rspamd_rcl_maybe_apply_lua_transform (cfg);
+	rspamd_config_calculate_cksum (cfg);
 
 	if (!rspamd_rcl_parse (top, cfg, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
 		msg_err_config ("rcl parse error: %e", err);
@@ -3502,7 +3503,6 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 		return FALSE;
 	}
 
-	rspamd_config_calculate_cksum (cfg);
 	cfg->lang_det = rspamd_language_detector_init (cfg);
 
 	return TRUE;

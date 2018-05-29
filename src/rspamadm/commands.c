@@ -219,8 +219,6 @@ rspamadm_fill_lua_commands (lua_State *L, GPtrArray *dest)
 				lua_gettable (L, -2);
 			}
 			else {
-				msg_err ("bad return type in %s: %s", path,
-						lua_typename (L, lua_type (L, -1)));
 				continue; /* Something goes wrong, huh */
 			}
 
