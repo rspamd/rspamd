@@ -239,11 +239,15 @@ function($) {
                   },
                   components: {
                     filtering: FooTable.groupFilter
+                  },
+                  "on": {
+                    "ready.ft.table": function () {
+                        if (rspamd.read_only) {
+                            $(".mb-disabled").attr('disabled', true);
+                        }
+                    }
                   }
                 });
-                if (rspamd.read_only) {
-                    $( ".mb-disabled" ).attr('disabled', true);
-                }
             },
             error: function (data) {
                 rspamd.alertMessage('alert-modal alert-error', data.statusText);
