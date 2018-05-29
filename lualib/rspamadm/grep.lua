@@ -20,7 +20,7 @@ local argparse = require "argparse"
 -- Define command line options
 local parser = argparse()
     :name "rspamadm grep"
-    :description "rspamadm grep - search for patterns in rspamd logs"
+    :description "Search for patterns in rspamd logs"
     :help_description_margin(30)
 parser:option "-s --string"
       :description('Plain string to search (case-insensitive)')
@@ -166,6 +166,6 @@ end
 
 return {
   handler = handler,
-  description = 'Search for patterns in rspamd logs',
+  description = parser._description,
   name = 'grep'
 }
