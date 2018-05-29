@@ -488,26 +488,15 @@ function Option:_get_label_lines()
       return {table.concat(self._aliases, ", ")}
    end
 
-   local longest_alias_length = -1
-
-   for _, alias in ipairs(self._aliases) do
-      longest_alias_length = math.max(longest_alias_length, #alias)
-   end
-
    local argument_list_repr = table.concat(argument_list, " ")
    local lines = {}
 
    for i, alias in ipairs(self._aliases) do
-      local line = (" "):rep(longest_alias_length - #alias) .. alias .. " " .. argument_list_repr
-
-      if i ~= #self._aliases then
-         line = line .. ","
-      end
-
+      local line = alias .. " " .. argument_list_repr
       table.insert(lines, line)
    end
 
-   return lines
+   return {table.concat(lines, ", ")}
 end
 
 function Command:_get_label_lines()
