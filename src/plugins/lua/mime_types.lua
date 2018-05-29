@@ -344,7 +344,7 @@ local full_extensions_map = {
   {"group", "text/x-ms-group"},
   {"gsm", "audio/x-gsm"},
   {"gtar", "application/x-gtar"},
-  {"gz", "application/x-gzip"},
+  {"gz", {"application/gzip", "application/x-gzip"}},
   {"h", "text/plain"},
   {"hdf", "application/x-hdf"},
   {"hdml", "text/x-hdml"},
@@ -798,6 +798,7 @@ local full_extensions_map = {
   {"xwd", "image/x-xwindowdump"},
   {"z", "application/x-compress"},
   {"zip", {"application/zip", "application/x-zip-compressed", "application/octet-stream"}},
+  {"zlib", "application/zlib"},
 }
 
 local function check_mime_type(task)
