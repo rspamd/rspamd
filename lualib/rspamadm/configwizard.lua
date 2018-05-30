@@ -621,7 +621,7 @@ return {
 
     _r,err = rspamd_config:parse_rcl({'logging', 'worker'})
     if not _r then
-      logger.errx('cannot process %s: %s', opts['config'], err)
+      rspamd_logger.errx('cannot process %s: %s', opts['config'], err)
       os.exit(1)
     end
 
