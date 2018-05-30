@@ -680,6 +680,14 @@ LUA_FUNCTION_DEF (config, has_torch);
  */
 LUA_FUNCTION_DEF (config, experimental_enabled);
 
+/***
+ * @method rspamd_config:load_ucl(filename)
+ * Loads config from the UCL file (but does not perform parsing using rcl)
+ * @param {string} filename file to load
+ * @return true or false + error message
+ */
+LUA_FUNCTION_DEF (config, load_ucl);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
@@ -737,6 +745,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_cpu_flags),
 	LUA_INTERFACE_DEF (config, has_torch),
 	LUA_INTERFACE_DEF (config, experimental_enabled),
+	LUA_INTERFACE_DEF (config, load_ucl),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -3212,6 +3221,72 @@ lua_config_experimental_enabled (lua_State *L)
 	return 1;
 }
 
+#define IDX_TO_HASH(idx) do { \
+	lua_pushstring (L, (idx)); \
+	lua_gettable (L, -2); \
+	if (lua_isstring (L, -1)) { \
+		g_hash_table_insert (paths, (idx), g_strdup (lua_tostring (L, -1))); \
+	} \
+	lua_pop (L, 1); \
+} while(0)
+
+static gint
+lua_config_load_ucl (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *filename;
+	GHashTable *paths = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
+			NULL, g_free);
+	GError *err = NULL;
+
+	if (cfg) {
+		if (lua_isstring (L, 2)) {
+			filename = lua_tostring (L, 2);
+		}
+		else {
+			filename = RSPAMD_CONFDIR "/rspamd.conf";
+		}
+
+		/* Convert rspamd_paths */
+		lua_getglobal (L, "rspamd_paths");
+
+		if (lua_istable (L, -1)) {
+			IDX_TO_HASH(RSPAMD_CONFDIR_INDEX);
+			IDX_TO_HASH(RSPAMD_RUNDIR_INDEX);
+			IDX_TO_HASH(RSPAMD_DBDIR_INDEX);
+			IDX_TO_HASH(RSPAMD_LOGDIR_INDEX);
+			IDX_TO_HASH(RSPAMD_WWWDIR_INDEX);
+			IDX_TO_HASH(RSPAMD_PLUGINSDIR_INDEX);
+			IDX_TO_HASH(RSPAMD_RULESDIR_INDEX);
+			IDX_TO_HASH(RSPAMD_LUALIBDIR_INDEX);
+			IDX_TO_HASH(RSPAMD_PREFIX_INDEX);
+		}
+
+		lua_pop (L, 1);
+
+		if (!rspamd_config_parse_ucl (cfg, filename, paths, &err)) {
+			lua_pushboolean (L, false);
+			lua_pushfstring (L, "failed to load config: %s", err->message);
+			g_error_free (err);
+			g_hash_table_unref (paths);
+
+			return 2;
+		}
+
+		rspamd_rcl_maybe_apply_lua_transform (cfg);
+		rspamd_config_calculate_cksum (cfg);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	g_hash_table_unref (paths);
+	lua_pushboolean (L, true);
+
+	return 1;
+}
+
+#undef IDX_TO_HASH
 
 static gint
 lua_monitored_alive (lua_State *L)

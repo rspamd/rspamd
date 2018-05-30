@@ -404,5 +404,17 @@ void rspamd_lua_add_ref_dtor (lua_State *L, rspamd_mempool_t *pool,
 gboolean rspamd_lua_require_function (lua_State *L, const gchar *modname,
 		const gchar *funcname);
 
+/* Paths defs */
+#define RSPAMD_CONFDIR_INDEX "CONFDIR"
+#define RSPAMD_RUNDIR_INDEX "RUNDIR"
+#define RSPAMD_DBDIR_INDEX "DBDIR"
+#define RSPAMD_LOGDIR_INDEX "LOGDIR"
+#define RSPAMD_PLUGINSDIR_INDEX "PLUGINSDIR"
+#define RSPAMD_RULESDIR_INDEX "RULESDIR"
+#define RSPAMD_LUALIBDIR_INDEX "LUALIBDIR"
+#define RSPAMD_WWWDIR_INDEX "WWWDIR"
+#define RSPAMD_PREFIX_INDEX "PREFIX"
+#define RSPAMD_VERSION_INDEX "VERSION"
+
 #endif /* WITH_LUA */
 #endif /* RSPAMD_LUA_H */

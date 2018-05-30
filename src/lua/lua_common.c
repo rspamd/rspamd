@@ -375,17 +375,6 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 	lua_pop (L, 1);
 }
 
-#define RSPAMD_CONFDIR_INDEX "CONFDIR"
-#define RSPAMD_RUNDIR_INDEX "RUNDIR"
-#define RSPAMD_DBDIR_INDEX "DBDIR"
-#define RSPAMD_LOGDIR_INDEX "LOGDIR"
-#define RSPAMD_PLUGINSDIR_INDEX "PLUGINSDIR"
-#define RSPAMD_RULESDIR_INDEX "RULESDIR"
-#define RSPAMD_LUALIBDIR_INDEX "LUALIBDIR"
-#define RSPAMD_WWWDIR_INDEX "WWWDIR"
-#define RSPAMD_PREFIX_INDEX "PREFIX"
-#define RSPAMD_VERSION_INDEX "VERSION"
-
 static gint
 rspamd_lua_cmp_version_components (const gchar *comp1, const gchar *comp2)
 {
