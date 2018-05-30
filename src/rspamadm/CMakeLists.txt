@@ -8,7 +8,6 @@ SET(RSPAMADMSRC rspamadm.c
         configdump.c
         control.c
         confighelp.c
-        configwizard.c
         stat_convert.c
         signtool.c
         lua_repl.c
