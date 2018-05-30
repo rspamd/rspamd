@@ -242,7 +242,7 @@ function($, _, Humanize) {
                 }
             }, {
                 "name": "rcpt_mime",
-                "title": "[Envelope To] To",
+                "title": "[Envelope To] To/Cc/Bcc",
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
