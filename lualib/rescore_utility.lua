@@ -78,13 +78,13 @@ function utility.get_all_logs(dirs)
 end
 
 function utility.get_all_symbol_scores(conf, ignore_symbols)
-  local counters = conf:get_symbols_counters()
+  local symbols = conf:get_symbols_scores()
 
-  return fun.tomap(fun.map(function(elt)
-    return elt['symbol'],elt['weight']
-  end, fun.filter(function(elt)
-    return not ignore_symbols[elt['symbol']]
-  end, counters)))
+  return fun.tomap(fun.map(function(name, elt)
+    return name,elt['score']
+  end, fun.filter(function(name, elt)
+    return not ignore_symbols[name]
+  end, symbols)))
 end
 
 function utility.generate_statistics_from_logs(logs, threshold)

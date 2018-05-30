@@ -546,6 +546,13 @@ LUA_FUNCTION_DEF (config, get_symbols_cksum);
 LUA_FUNCTION_DEF (config, get_symbols_counters);
 
 /***
+ * @method rspamd_config:get_symbols_scores()
+ * Returns table of all scores defined in config
+ * @return {table|tables} all symbols indexed by name
+ */
+LUA_FUNCTION_DEF (config, get_symbols_scores);
+
+/***
  * @method rspamd_config:get_symbol_callback(name)
  * Returns callback function for the specified symbol if it is a lua registered callback
  * @return {function} callback function or nil
@@ -742,6 +749,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_symbols_count),
 	LUA_INTERFACE_DEF (config, get_symbols_cksum),
 	LUA_INTERFACE_DEF (config, get_symbols_counters),
+	LUA_INTERFACE_DEF (config, get_symbols_scores),
 	LUA_INTERFACE_DEF (config, get_symbol_callback),
 	LUA_INTERFACE_DEF (config, set_symbol_callback),
 	LUA_INTERFACE_DEF (config, get_symbol_stat),
@@ -2882,6 +2890,44 @@ lua_config_get_symbols_counters (lua_State *L)
 
 	return 1;
 }
+static void
+lua_metric_symbol_inserter (gpointer k, gpointer v, gpointer ud)
+{
+	lua_State *L = (lua_State *) ud;
+	const gchar *sym = k;
+	struct rspamd_symbol *s = (struct rspamd_symbol *) v;
+
+	lua_pushstring (L, sym);
+
+	lua_createtable (L, 0, 3); /* TODO: add more if needed */
+	lua_pushstring (L, "score");
+	lua_pushnumber (L, s->score);
+	lua_settable (L, -3);
+	lua_pushstring (L, "description");
+	lua_pushstring (L, s->description);
+	lua_settable (L, -3);
+
+	lua_settable (L, -3);
+}
+
+static gint
+lua_config_get_symbols_scores (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+
+	if (cfg != NULL) {
+		lua_createtable (L, 0, g_hash_table_size (cfg->symbols));
+		g_hash_table_foreach (cfg->symbols,
+				lua_metric_symbol_inserter,
+				L);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
 
 static gint
 lua_config_get_symbol_callback (lua_State *L)
@@ -3334,7 +3380,6 @@ lua_config_parse_rcl (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	rspamd_config_post_load (cfg, RSPAMD_CONFIG_INIT_SYMCACHE);
 	g_hash_table_unref (excluded);
 	rspamd_rcl_section_free (top);
 	lua_pushboolean (L, true);
