@@ -134,7 +134,8 @@ struct rspamd_rcl_section *rspamd_rcl_add_section_doc (
  * Init common sections known to rspamd
  * @return top section
  */
-struct rspamd_rcl_section * rspamd_rcl_config_init (struct rspamd_config *cfg);
+struct rspamd_rcl_section * rspamd_rcl_config_init (struct rspamd_config *cfg,
+		GHashTable *skip_sections);
 
 /**
  * Get a section specified by path, it understand paths separated by '/' character
@@ -467,6 +468,7 @@ gboolean rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
  * @param cfg
  */
 void rspamd_rcl_maybe_apply_lua_transform (struct rspamd_config *cfg);
+void rspamd_rcl_section_free (gpointer p);
 
 void rspamd_config_calculate_cksum (struct rspamd_config *cfg);
 

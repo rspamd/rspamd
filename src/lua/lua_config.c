@@ -688,6 +688,14 @@ LUA_FUNCTION_DEF (config, experimental_enabled);
  */
 LUA_FUNCTION_DEF (config, load_ucl);
 
+/***
+ * @method rspamd_config:parce_rcl([skip_sections])
+ * Parses RCL using loaded ucl file
+ * @param {table|string} sections to skip
+ * @return true or false + error message
+ */
+LUA_FUNCTION_DEF (config, parse_rcl);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
@@ -746,6 +754,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, has_torch),
 	LUA_INTERFACE_DEF (config, experimental_enabled),
 	LUA_INTERFACE_DEF (config, load_ucl),
+	LUA_INTERFACE_DEF (config, parse_rcl),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -3221,11 +3230,11 @@ lua_config_experimental_enabled (lua_State *L)
 	return 1;
 }
 
-#define IDX_TO_HASH(idx) do { \
+#define LUA_TABLE_TO_HASH(htb, idx) do { \
 	lua_pushstring (L, (idx)); \
 	lua_gettable (L, -2); \
 	if (lua_isstring (L, -1)) { \
-		g_hash_table_insert (paths, (idx), g_strdup (lua_tostring (L, -1))); \
+		g_hash_table_insert ((htb), (idx), g_strdup (lua_tostring (L, -1))); \
 	} \
 	lua_pop (L, 1); \
 } while(0)
@@ -3251,15 +3260,15 @@ lua_config_load_ucl (lua_State *L)
 		lua_getglobal (L, "rspamd_paths");
 
 		if (lua_istable (L, -1)) {
-			IDX_TO_HASH(RSPAMD_CONFDIR_INDEX);
-			IDX_TO_HASH(RSPAMD_RUNDIR_INDEX);
-			IDX_TO_HASH(RSPAMD_DBDIR_INDEX);
-			IDX_TO_HASH(RSPAMD_LOGDIR_INDEX);
-			IDX_TO_HASH(RSPAMD_WWWDIR_INDEX);
-			IDX_TO_HASH(RSPAMD_PLUGINSDIR_INDEX);
-			IDX_TO_HASH(RSPAMD_RULESDIR_INDEX);
-			IDX_TO_HASH(RSPAMD_LUALIBDIR_INDEX);
-			IDX_TO_HASH(RSPAMD_PREFIX_INDEX);
+			LUA_TABLE_TO_HASH(paths, RSPAMD_CONFDIR_INDEX);
+			LUA_TABLE_TO_HASH(paths, RSPAMD_RUNDIR_INDEX);
+			LUA_TABLE_TO_HASH(paths, RSPAMD_DBDIR_INDEX);
+			LUA_TABLE_TO_HASH(paths, RSPAMD_LOGDIR_INDEX);
+			LUA_TABLE_TO_HASH(paths, RSPAMD_WWWDIR_INDEX);
+			LUA_TABLE_TO_HASH(paths, RSPAMD_PLUGINSDIR_INDEX);
+			LUA_TABLE_TO_HASH(paths, RSPAMD_RULESDIR_INDEX);
+			LUA_TABLE_TO_HASH(paths, RSPAMD_LUALIBDIR_INDEX);
+			LUA_TABLE_TO_HASH(paths, RSPAMD_PREFIX_INDEX);
 		}
 
 		lua_pop (L, 1);
@@ -3287,6 +3296,51 @@ lua_config_load_ucl (lua_State *L)
 }
 
 #undef IDX_TO_HASH
+
+static gint
+lua_config_parse_rcl (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	GHashTable *excluded = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
+			g_free, NULL);
+	GError *err = NULL;
+	struct rspamd_rcl_section *top;
+
+	if (cfg) {
+		if (lua_istable (L, 2)) {
+			lua_pushvalue (L, 2);
+
+			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+				g_hash_table_insert (excluded, g_strdup (lua_tostring (L, -1)),
+						GINT_TO_POINTER (-1));
+			}
+
+			lua_pop (L, 1);
+		}
+
+		top = rspamd_rcl_config_init (cfg, excluded);
+
+		if (!rspamd_rcl_parse (top, cfg, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
+			lua_pushboolean (L, false);
+			lua_pushfstring (L, "failed to load config: %s", err->message);
+			g_error_free (err);
+			g_hash_table_unref (excluded);
+			rspamd_rcl_section_free (top);
+
+			return 2;
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	rspamd_config_post_load (cfg, RSPAMD_CONFIG_INIT_SYMCACHE);
+	g_hash_table_unref (excluded);
+	rspamd_rcl_section_free (top);
+	lua_pushboolean (L, true);
+
+	return 1;
+}
 
 static gint
 lua_monitored_alive (lua_State *L)
