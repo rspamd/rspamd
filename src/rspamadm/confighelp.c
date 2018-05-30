@@ -231,7 +231,7 @@ rspamadm_confighelp (gint argc, gchar **argv, const struct rspamadm_command *cmd
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 
-	rspamd_rcl_config_init (cfg);
+	rspamd_rcl_config_init (cfg, NULL);
 	lua_pushboolean (cfg->lua_state, true);
 	lua_setglobal (cfg->lua_state, "confighelp");
 	rspamd_rcl_add_lua_plugins_path (cfg, plugins_path, NULL);

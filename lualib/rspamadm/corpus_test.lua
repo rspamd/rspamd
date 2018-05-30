@@ -17,6 +17,7 @@ parser:option "-S --spam"
 parser:option "-n --conns"
       :description("Number of parallel connections")
       :argname("<N>")
+      :convert(tonumber)
       :default(10)
 parser:option "-o --output"
       :description("Output file")
@@ -25,6 +26,7 @@ parser:option "-o --output"
 parser:option "-t --timeout"
       :description("Timeout for client connections")
       :argname("<sec>")
+      :convert(tonumber)
       :default(60)
 parser:option "-c --connect"
       :description("Connect to specific host")

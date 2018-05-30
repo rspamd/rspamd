@@ -38,7 +38,6 @@ parser:argument "input":args "*"
       :default("stdin")
 parser:flag "-S --sensitive"
       :description('Enable case-sensitivity in string search')
-      :default("false")
 parser:flag "-o --orphans"
       :description('Print orphaned logs')
 parser:flag "-P --partial"

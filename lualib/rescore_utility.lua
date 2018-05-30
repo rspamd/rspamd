@@ -47,20 +47,30 @@ function utility.read_log_file(file)
   return lines
 end
 
-function utility.get_all_logs(dir_path)
+function utility.get_all_logs(dirs)
   -- Reads all log files in the directory and returns a list of logs.
 
-  if dir_path:sub(#dir_path, #dir_path) == "/" then
-    dir_path = dir_path:sub(1, #dir_path -1)
+  if type(dirs) == 'string' then
+    dirs = {dirs}
   end
 
-  local files = rspamd_util.glob(dir_path .. "/*.log")
   local all_logs = {}
 
-  for _, file in pairs(files) do
-    local logs = utility.read_log_file(file)
-    for _, log_line in pairs(logs) do
-      all_logs[#all_logs + 1] = log_line
+  for _,dir in ipairs(dirs) do
+    if dir:sub(-1, -1) == "/" then
+      dir = dir:sub(1, -2)
+      local files = rspamd_util.glob(dir .. "/*.log")
+      for _, file in pairs(files) do
+        local logs = utility.read_log_file(file)
+        for _, log_line in pairs(logs) do
+          table.insert(all_logs, log_line)
+        end
+      end
+    else
+      local logs = utility.read_log_file(dir)
+      for _, log_line in pairs(logs) do
+        table.insert(all_logs, log_line)
+      end
     end
   end
 
@@ -160,8 +170,8 @@ function utility.generate_statistics_from_logs(logs, threshold)
       end
 
       -- Find slowest message
-      if (tonumber(log[#log-1]) > tonumber(file_stats.slowest)) then
-          file_stats.slowest = tostring(tonumber(log[#log-1]))
+      if ((tonumber(log[#log-1]) or 0) > file_stats.slowest) then
+          file_stats.slowest = tonumber(log[#log-1])
           file_stats.slowest_file = log[#log]
       end
     end
