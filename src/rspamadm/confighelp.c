@@ -69,7 +69,7 @@ rspamadm_confighelp_help (gboolean full_help, const struct rspamadm_command *cmd
 				"-j: output pretty formatted JSON\n"
 				"-k: search by keyword in doc string\n"
 				"-P: use specific Lua plugins path\n"
-				"--no-color: show colored output\n"
+				"--no-color: disable coloured output\n"
 				"--short: show only option names\n"
 				"--no-examples: do not show examples (impied by --short)\n"
 				"--help: shows available options and commands";
