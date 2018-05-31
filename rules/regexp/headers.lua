@@ -589,8 +589,16 @@ reconf['YANDEX_RU_MAILER'] = {
 -- Detect 1C v8.2 and v8.3 mailers
 reconf['MAILER_1C_8'] = {
     re = 'X-Mailer=/^1C:Enterprise 8\\.[23]$/H',
-    score = 0,
+    score = 0.0,
     description = 'Sent with 1C:Enterprise 8',
+    group = 'header'
+}
+
+-- Detect rogue 'strongmail' MTA with IPv4 and '(-)' in Received line
+reconf['STRONGMAIL'] = {
+    re = [[Received=/^from\s+strongmail\s+\(\[\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\]\) by \S+ \(-\); /mH]],
+    score = 6.0,
+    description = 'Sent via rogue "strongmail" MTA',
     group = 'header'
 }
 
