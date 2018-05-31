@@ -46,6 +46,7 @@ local settings = {
   failover = false,
   import_kibana = false,
   use_https = false,
+  use_gzip = true,
   allow_local = false,
 }
 
@@ -106,6 +107,7 @@ local function elastic_send_data(task)
     body = bulk_json,
     task = task,
     method = 'post',
+    gzip = settings.use_gzip,
     callback = http_index_data_callback
   })
 
@@ -305,6 +307,7 @@ local function initial_setup(cfg, ev_base, worker)
           },
           body = table.concat(tbl, "\n"),
           method = 'post',
+          gzip = settings.use_gzip,
           callback = kibana_template_callback
         })
       else
@@ -341,6 +344,7 @@ local function initial_setup(cfg, ev_base, worker)
       headers = {
         ['Content-Type'] = 'application/json',
       },
+      gzip = settings.use_gzip,
       body = ucl.to_format(template, 'json-compact'),
       method = 'put',
     })
@@ -366,6 +370,7 @@ local function initial_setup(cfg, ev_base, worker)
           headers = {
             ['Content-Type'] = 'application/json',
           },
+          gzip = settings.use_gzip,
           callback = http_template_put_callback,
         })
       else
