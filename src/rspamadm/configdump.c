@@ -278,6 +278,7 @@ rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd
 		(void) g_quark_from_static_string ((*pworker)->name);
 		pworker++;
 	}
+
 	cfg->cache = rspamd_symbols_cache_new (cfg);
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;

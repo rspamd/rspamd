@@ -625,6 +625,11 @@ return {
       os.exit(1)
     end
 
+    if not rspamd_config:init_modules() then
+      rspamd_logger.errx('cannot init modules when parsing %s', opts['config'])
+      os.exit(1)
+    end
+
     if #args > 0 then
       interactive_start = false
 

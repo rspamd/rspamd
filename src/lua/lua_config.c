@@ -696,12 +696,19 @@ LUA_FUNCTION_DEF (config, experimental_enabled);
 LUA_FUNCTION_DEF (config, load_ucl);
 
 /***
- * @method rspamd_config:parce_rcl([skip_sections])
+ * @method rspamd_config:parse_rcl([skip_sections])
  * Parses RCL using loaded ucl file
  * @param {table|string} sections to skip
  * @return true or false + error message
  */
 LUA_FUNCTION_DEF (config, parse_rcl);
+
+/***
+ * @method rspamd_config:init_modules()
+ * Initialize lua and internal modules
+ * @return true or false
+ */
+LUA_FUNCTION_DEF (config, init_modules);
 
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
@@ -763,6 +770,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, experimental_enabled),
 	LUA_INTERFACE_DEF (config, load_ucl),
 	LUA_INTERFACE_DEF (config, parse_rcl),
+	LUA_INTERFACE_DEF (config, init_modules),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -3383,6 +3391,22 @@ lua_config_parse_rcl (lua_State *L)
 	g_hash_table_unref (excluded);
 	rspamd_rcl_section_free (top);
 	lua_pushboolean (L, true);
+
+	return 1;
+}
+
+static gint
+lua_config_init_modules (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+
+	if (cfg != NULL) {
+		rspamd_lua_post_load_config (cfg);
+		lua_pushboolean (L, rspamd_init_filters (cfg, FALSE));
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }

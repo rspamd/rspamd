@@ -33,6 +33,10 @@ GHashTable *ucl_vars = NULL;
 struct rspamd_main *rspamd_main = NULL;
 lua_State *L = NULL;
 
+/* Defined in modules.c */
+extern module_t *modules[];
+extern worker_t *workers[];
+
 static void rspamadm_help (gint argc, gchar **argv, const struct rspamadm_command *);
 static const char* rspamadm_help_help (gboolean full_help, const struct rspamadm_command *);
 
@@ -291,6 +295,7 @@ main (gint argc, gchar **argv, gchar **env)
 	const struct rspamadm_command *cmd;
 	GPtrArray *all_commands = g_ptr_array_new (); /* Discovered during check */
 	gint i, nargc, targc;
+	worker_t **pworker;
 
 	ucl_vars = g_hash_table_new_full (rspamd_strcase_hash,
 		rspamd_strcase_equal, g_free, g_free);
@@ -324,6 +329,16 @@ main (gint argc, gchar **argv, gchar **env)
 	g_set_printerr_handler (rspamd_glib_printerr_function);
 	rspamd_config_post_load (cfg,
 			RSPAMD_CONFIG_INIT_LIBS|RSPAMD_CONFIG_INIT_URL|RSPAMD_CONFIG_INIT_NO_TLD);
+
+	pworker = &workers[0];
+	while (*pworker) {
+		/* Init string quarks */
+		(void) g_quark_from_static_string ((*pworker)->name);
+		pworker++;
+	}
+
+	cfg->compiled_modules = modules;
+	cfg->compiled_workers = workers;
 
 	gperf_profiler_init (cfg, "rspamadm");
 	setproctitle ("rspamdadm");
