@@ -70,7 +70,7 @@ enum btrie_result btrie_add_prefix(struct btrie *btrie,
 const void *btrie_lookup(const struct btrie *btrie, const btrie_oct_t *pfx,
 		unsigned len);
 
-const char *btrie_stats(const struct btrie *btrie);
+const char *btrie_stats(const struct btrie *btrie, guint duplicates);
 
 #ifndef NO_MASTER_DUMP
 typedef void btrie_walk_cb_t(const btrie_oct_t *prefix, unsigned len,

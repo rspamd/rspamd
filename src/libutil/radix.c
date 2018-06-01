@@ -42,6 +42,7 @@ struct radix_tree_compressed {
 	rspamd_mempool_t *pool;
 	struct btrie *tree;
 	size_t size;
+	guint duplicates;
 	gboolean own_pool;
 };
 
@@ -68,6 +69,7 @@ radix_insert_compressed (radix_compressed_t * tree,
 	gsize masklen,
 	uintptr_t value)
 {
+	static const guint max_duplicates = 32;
 	guint keybits = keylen * NBBY;
 	uintptr_t old;
 	gchar ip_str[INET6_ADDRSTRLEN + 1];
@@ -85,23 +87,29 @@ radix_insert_compressed (radix_compressed_t * tree,
 			(gconstpointer)value);
 
 	if (ret != BTRIE_OKAY) {
-		memset (ip_str, 0, sizeof (ip_str));
+		tree->duplicates++;
 
-		if (keybits == 32) {
-			msg_err_radix ("cannot insert %p, key: %s/%d, duplicate value",
-					(gpointer)value,
-					inet_ntop (AF_INET, key, ip_str, sizeof (ip_str) - 1),
-					(gint)(keybits - masklen));
+		if (tree->duplicates == max_duplicates) {
+			msg_err_radix ("maximum duplicates limit reached: %d, "
+				  "suppress further errors", max_duplicates);
 		}
-		else if (keybits == 128) {
-			msg_err_radix ("cannot insert %p, key: [%s]/%d, duplicate value",
-					(gpointer)value,
-					inet_ntop (AF_INET6, key, ip_str, sizeof (ip_str) - 1),
-					(gint)(keybits - masklen));
-		}
-		else {
-			msg_err_radix ("cannot insert %p with mask %z, key: %*xs, duplicate value",
-				(gpointer)value, keybits - masklen, (int)keylen, key);
+		else if (tree->duplicates < max_duplicates) {
+			memset (ip_str, 0, sizeof (ip_str));
+
+			if (keybits == 32) {
+				msg_err_radix ("cannot insert %p, key: %s/%d, duplicate value",
+						(gpointer) value,
+						inet_ntop (AF_INET, key, ip_str, sizeof (ip_str) - 1),
+						(gint) (keybits - masklen));
+			} else if (keybits == 128) {
+				msg_err_radix ("cannot insert %p, key: [%s]/%d, duplicate value",
+						(gpointer) value,
+						inet_ntop (AF_INET6, key, ip_str, sizeof (ip_str) - 1),
+						(gint) (keybits - masklen));
+			} else {
+				msg_err_radix ("cannot insert %p with mask %z, key: %*xs, duplicate value",
+						(gpointer) value, keybits - masklen, (int) keylen, key);
+			}
 		}
 	}
 	else {
@@ -124,6 +132,7 @@ radix_create_compressed (void)
 
 	tree->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	tree->size = 0;
+	tree->duplicates = 0;
 	tree->tree = btrie_init (tree->pool);
 	tree->own_pool = TRUE;
 
@@ -138,6 +147,7 @@ radix_create_compressed_with_pool (rspamd_mempool_t *pool)
 	tree = rspamd_mempool_alloc (pool, sizeof (*tree));
 	tree->pool = pool;
 	tree->size = 0;
+	tree->duplicates = 0;
 	tree->tree = btrie_init (tree->pool);
 	tree->own_pool = FALSE;
 
@@ -393,5 +403,5 @@ radix_get_info (radix_compressed_t *tree)
 		return NULL;
 	}
 
-	return btrie_stats (tree->tree);
+	return btrie_stats (tree->tree, tree->duplicates);
 }
