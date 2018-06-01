@@ -269,7 +269,7 @@ rspamadm_fill_lua_commands (lua_State *L, GPtrArray *dest)
 						rspamd_lua_table_size (L, -1),
 						g_free);
 
-				for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 2)) {
+				for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
 					if (lua_isstring (L, -1)) {
 						g_ptr_array_add (lua_cmd->aliases,
 								g_strdup (lua_tostring (L, -1)));
