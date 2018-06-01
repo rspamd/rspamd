@@ -43,6 +43,7 @@ struct rspamadm_command {
 	rspamadm_help_func help;
 	rspamadm_run_func run;
 	rspamadm_lua_exports_func lua_subrs;
+	GPtrArray *aliases;
 	gpointer command_data; /* Opaque data */
 };
 

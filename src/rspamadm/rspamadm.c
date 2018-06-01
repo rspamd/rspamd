@@ -282,6 +282,28 @@ rspamdadm_commands_sort_func (gconstpointer a, gconstpointer b)
 	return strcmp (cmda->name, cmdb->name);
 }
 
+static gboolean
+rspamadm_command_maybe_match_name (const gchar *cmd, const gchar *input)
+{
+	gsize clen, inplen;
+
+	clen = strlen (cmd);
+	inplen = strlen (input);
+
+	if (rspamd_strings_levenshtein_distance (cmd, clen,
+			input, inplen, 1) == 1) {
+		return TRUE;
+	}
+	else if ((clen > inplen &&
+			  rspamd_substring_search (cmd, clen, input, inplen) != -1) ||
+			 (inplen > clen &&
+			  rspamd_substring_search (input, inplen, cmd, clen) != -1)) {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
@@ -427,20 +449,18 @@ main (gint argc, gchar **argv, gchar **env)
 		/* Try fuzz search */
 		rspamd_fprintf (stderr, "Suggested commands:\n");
 		PTR_ARRAY_FOREACH (all_commands, i, cmd) {
-			gsize clen, inplen;
+			guint j;
+			const gchar *alias;
 
-			clen = strlen (cmd->name);
-			inplen = strlen (cmd_name);
-
-			if (rspamd_strings_levenshtein_distance (cmd->name, clen,
-					cmd_name, inplen, 1) == 1) {
+			if (rspamadm_command_maybe_match_name (cmd->name, cmd_name)) {
 				rspamd_fprintf (stderr, "%s\n", cmd->name);
 			}
-			else if ((clen > inplen &&
-					  rspamd_substring_search (cmd->name, clen, cmd_name, inplen) != -1) ||
-					 (inplen > clen &&
-					  rspamd_substring_search (cmd_name, inplen, cmd->name, clen) != -1)) {
-				rspamd_fprintf (stderr, "%s\n", cmd->name);
+			else {
+				PTR_ARRAY_FOREACH (cmd->aliases, j, alias) {
+					if (rspamadm_command_maybe_match_name (alias, cmd_name)) {
+						rspamd_fprintf (stderr, "%s\n", alias);
+					}
+				}
 			}
 		}
 

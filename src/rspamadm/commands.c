@@ -53,7 +53,8 @@ const struct rspamadm_command *
 rspamadm_search_command (const gchar *name, GPtrArray *all_commands)
 {
 	const struct rspamadm_command *ret = NULL, *cmd;
-	guint i;
+	const gchar *alias;
+	guint i, j;
 
 	if (name == NULL) {
 		name = "help";
@@ -64,6 +65,13 @@ rspamadm_search_command (const gchar *name, GPtrArray *all_commands)
 				ret = cmd;
 				break;
 			}
+
+		PTR_ARRAY_FOREACH (cmd->aliases, j, alias) {
+			if (strcmp (name, alias) == 0) {
+				ret = cmd;
+				break;
+			}
+		}
 	}
 
 	return ret;
@@ -208,6 +216,7 @@ rspamadm_fill_lua_commands (lua_State *L, GPtrArray *dest)
 		if (luaL_dofile (L, path) != 0) {
 			msg_err ("cannot execute lua script %s: %s",
 					path, lua_tostring (L, -1));
+			lua_settop (L, 0);
 			continue;
 		} else {
 			if (lua_type (L, -1) == LUA_TTABLE) {
@@ -252,6 +261,24 @@ rspamadm_fill_lua_commands (lua_State *L, GPtrArray *dest)
 
 			lua_pop (L, 1);
 
+			lua_pushstring (L, "aliases");
+			lua_gettable (L, -2);
+
+			if (lua_type (L, -1) == LUA_TTABLE) {
+				lua_cmd->aliases = g_ptr_array_new_full (
+						rspamd_lua_table_size (L, -1),
+						g_free);
+
+				for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 2)) {
+					if (lua_isstring (L, -1)) {
+						g_ptr_array_add (lua_cmd->aliases,
+								g_strdup (lua_tostring (L, -1)));
+					}
+				}
+			}
+
+			lua_pop (L, 1);
+
 			lua_pushvalue (L, -1);
 			/* Reference table itself */
 			lua_cmd->command_data = GINT_TO_POINTER (luaL_ref (L, LUA_REGISTRYINDEX));
@@ -259,7 +286,10 @@ rspamadm_fill_lua_commands (lua_State *L, GPtrArray *dest)
 			lua_cmd->run = rspamadm_lua_command_run;
 			lua_cmd->help = rspamadm_lua_command_help;
 
+
 			g_ptr_array_add (dest, lua_cmd);
 		}
+
+		lua_settop (L, 0);
 	}
 }
