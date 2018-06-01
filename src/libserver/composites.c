@@ -266,7 +266,7 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 			t = *beg;
 
 			if (t == '~') {
-				nrd->action &= ~RSPAMD_COMPOSITE_REMOVE_WEIGHT;
+				nrd->action &= ~RSPAMD_COMPOSITE_REMOVE_SYMBOL;
 			}
 			else if (t == '-') {
 				nrd->action &= ~(RSPAMD_COMPOSITE_REMOVE_WEIGHT|
