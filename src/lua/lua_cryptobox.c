@@ -42,6 +42,7 @@ LUA_FUNCTION_DEF (cryptobox_pubkey,	 gc);
 LUA_FUNCTION_DEF (cryptobox_keypair,	 load);
 LUA_FUNCTION_DEF (cryptobox_keypair,	 create);
 LUA_FUNCTION_DEF (cryptobox_keypair,	 gc);
+LUA_FUNCTION_DEF (cryptobox_keypair,	 totable);
 LUA_FUNCTION_DEF (cryptobox_signature, create);
 LUA_FUNCTION_DEF (cryptobox_signature, load);
 LUA_FUNCTION_DEF (cryptobox_signature, save);
@@ -101,6 +102,7 @@ static const struct luaL_reg cryptoboxkeypairlib_f[] = {
 
 static const struct luaL_reg cryptoboxkeypairlib_m[] = {
 	{"__tostring", rspamd_lua_class_tostring},
+	{"totable", lua_cryptobox_keypair_totable},
 	{"__gc", lua_cryptobox_keypair_gc},
 	{NULL, NULL}
 };
@@ -457,6 +459,36 @@ lua_cryptobox_keypair_gc (lua_State *L)
 	}
 
 	return 0;
+}
+
+/***
+ * @method keypair:totable([hex=false]])
+ * Converts keypair to table (not very safe due to memory leftovers)
+ */
+static gint
+lua_cryptobox_keypair_totable (lua_State *L)
+{
+	struct rspamd_cryptobox_keypair *kp = lua_check_cryptobox_keypair (L, 1);
+	ucl_object_t *obj;
+	gboolean hex = FALSE;
+	gint ret = 1;
+
+	if (kp != NULL) {
+
+		if (lua_isboolean (L, 2)) {
+			hex = lua_toboolean (L, 2);
+		}
+
+		obj = rspamd_keypair_to_ucl (kp, hex);
+
+		ret = ucl_object_push_lua (L, obj, true);
+		ucl_object_unref (obj);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return ret;
 }
 
 /***
