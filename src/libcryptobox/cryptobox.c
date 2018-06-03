@@ -560,6 +560,10 @@ rspamd_cryptobox_sign (guchar *sig, gsize *siglen_p,
 				&diglen, kinv, rp, lk) == 1);
 		g_assert (diglen <= sizeof (rspamd_signature_t));
 
+		if (siglen_p) {
+			*siglen_p = diglen;
+		}
+
 		EC_KEY_free (lk);
 		EVP_MD_CTX_destroy (sha_ctx);
 		BN_free (bn_sec);
