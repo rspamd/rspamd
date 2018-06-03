@@ -27,6 +27,9 @@
  */
 
 #include "lua_common.h"
+#include "libcryptobox/cryptobox.h"
+#include "libcryptobox/keypair.h"
+#include "libcryptobox/keypair_private.h"
 #include "unix-std.h"
 
 struct rspamd_lua_cryptobox_hash {
@@ -43,6 +46,8 @@ LUA_FUNCTION_DEF (cryptobox_keypair,	 load);
 LUA_FUNCTION_DEF (cryptobox_keypair,	 create);
 LUA_FUNCTION_DEF (cryptobox_keypair,	 gc);
 LUA_FUNCTION_DEF (cryptobox_keypair,	 totable);
+LUA_FUNCTION_DEF (cryptobox_keypair,	 get_type);
+LUA_FUNCTION_DEF (cryptobox_keypair,	 get_alg);
 LUA_FUNCTION_DEF (cryptobox_signature, create);
 LUA_FUNCTION_DEF (cryptobox_signature, load);
 LUA_FUNCTION_DEF (cryptobox_signature, save);
@@ -103,6 +108,10 @@ static const struct luaL_reg cryptoboxkeypairlib_f[] = {
 static const struct luaL_reg cryptoboxkeypairlib_m[] = {
 	{"__tostring", rspamd_lua_class_tostring},
 	{"totable", lua_cryptobox_keypair_totable},
+	{"get_type", lua_cryptobox_keypair_get_type},
+	{"get_alg", lua_cryptobox_keypair_get_alg},
+	{"type", lua_cryptobox_keypair_get_type},
+	{"alg", lua_cryptobox_keypair_get_alg},
 	{"__gc", lua_cryptobox_keypair_gc},
 	{NULL, NULL}
 };
@@ -489,6 +498,55 @@ lua_cryptobox_keypair_totable (lua_State *L)
 	}
 
 	return ret;
+}
+/***
+ * @method keypair:type()
+ * Returns type of keypair as a string: 'encryption' or 'sign'
+ * @return {string} type of keypair as a string
+ */
+static gint
+lua_cryptobox_keypair_get_type (lua_State *L)
+{
+	struct rspamd_cryptobox_keypair *kp = lua_check_cryptobox_keypair (L, 1);
+
+	if (kp) {
+		if (kp->type == RSPAMD_KEYPAIR_KEX) {
+			lua_pushstring (L, "encryption");
+		}
+		else {
+			lua_pushstring (L, "sign");
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @method keypair:alg()
+ * Returns algorithm of keypair as a string: 'encryption' or 'sign'
+ * @return {string} type of keypair as a string
+ */
+static gint
+lua_cryptobox_keypair_get_alg (lua_State *L)
+{
+	struct rspamd_cryptobox_keypair *kp = lua_check_cryptobox_keypair (L, 1);
+
+	if (kp) {
+		if (kp->alg == RSPAMD_CRYPTOBOX_MODE_25519) {
+			lua_pushstring (L, "curve25519");
+		}
+		else {
+			lua_pushstring (L, "nist");
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 /***
@@ -1331,7 +1389,7 @@ lua_cryptobox_sign_memory (lua_State *L)
 	}
 
 
-	if (!kp || !data) {
+	if (!kp || !data || kp->type == RSPAMD_KEYPAIR_KEX) {
 		return luaL_error (L, "invalid arguments");
 	}
 
