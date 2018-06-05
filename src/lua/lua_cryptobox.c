@@ -48,6 +48,7 @@ LUA_FUNCTION_DEF (cryptobox_keypair,	 gc);
 LUA_FUNCTION_DEF (cryptobox_keypair,	 totable);
 LUA_FUNCTION_DEF (cryptobox_keypair,	 get_type);
 LUA_FUNCTION_DEF (cryptobox_keypair,	 get_alg);
+LUA_FUNCTION_DEF (cryptobox_keypair,	 get_pk);
 LUA_FUNCTION_DEF (cryptobox_signature, create);
 LUA_FUNCTION_DEF (cryptobox_signature, load);
 LUA_FUNCTION_DEF (cryptobox_signature, save);
@@ -112,6 +113,8 @@ static const struct luaL_reg cryptoboxkeypairlib_m[] = {
 	{"get_alg", lua_cryptobox_keypair_get_alg},
 	{"type", lua_cryptobox_keypair_get_type},
 	{"alg", lua_cryptobox_keypair_get_alg},
+	{"pk", lua_cryptobox_keypair_get_pk},
+	{"pubkey", lua_cryptobox_keypair_get_pk},
 	{"__gc", lua_cryptobox_keypair_gc},
 	{NULL, NULL}
 };
@@ -541,6 +544,38 @@ lua_cryptobox_keypair_get_alg (lua_State *L)
 		else {
 			lua_pushstring (L, "nist");
 		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @method keypair:pk()
+ * Returns pubkey for a specific keypair
+ * @return {rspamd_pubkey} pubkey for a keypair
+ */
+static gint
+lua_cryptobox_keypair_get_pk (lua_State *L)
+{
+	struct rspamd_cryptobox_keypair *kp = lua_check_cryptobox_keypair (L, 1);
+	struct rspamd_cryptobox_pubkey *pk, **ppk;
+	const guchar *data;
+	guint dlen;
+
+	if (kp) {
+		data = rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_PK, &dlen);
+		pk = rspamd_pubkey_from_bin (data, dlen, kp->type, kp->alg);
+
+		if (pk == NULL) {
+			return luaL_error (L, "invalid keypair");
+		}
+
+		ppk = lua_newuserdata (L, sizeof (*ppk));
+		*ppk = pk;
+		rspamd_lua_setclass (L, "rspamd{cryptobox_pubkey}", -1);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
