@@ -150,7 +150,7 @@ rspamd_map_check_sig_pk_mem (const guchar *sig,
 		ret = FALSE;
 	}
 
-	if (ret && !rspamd_cryptobox_verify (sig, input, inlen,
+	if (ret && !rspamd_cryptobox_verify (sig, siglen, input, inlen,
 			rspamd_pubkey_get_pk (pk, NULL), RSPAMD_CRYPTOBOX_MODE_25519)) {
 		msg_err_map ("can't verify signature for %s: incorrect signature", map->name);
 

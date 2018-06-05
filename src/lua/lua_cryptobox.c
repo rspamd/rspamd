@@ -585,7 +585,7 @@ lua_cryptobox_keypair_get_pk (lua_State *L)
 }
 
 /***
- * @function rspamd_cryptobox_signature.load(file)
+ * @function rspamd_cryptobox_signature.load(file, [alg = 'curve25519'])
  * Loads signature from raw file
  * @param {string} file filename to load
  * @return {cryptobox_signature} new signature
@@ -598,6 +598,7 @@ lua_cryptobox_signature_load (lua_State *L)
 	gpointer data;
 	int fd;
 	struct stat st;
+	enum rspamd_cryptobox_mode alg = RSPAMD_CRYPTOBOX_MODE_25519;
 
 	filename = luaL_checkstring (L, 1);
 	if (filename != NULL) {
@@ -608,7 +609,6 @@ lua_cryptobox_signature_load (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
-			sig = g_malloc (sizeof (rspamd_fstring_t));
 			if (fstat (fd, &st) == -1 ||
 				(data =
 				mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0))
@@ -617,8 +617,20 @@ lua_cryptobox_signature_load (lua_State *L)
 				lua_pushnil (L);
 			}
 			else {
-				if (st.st_size == rspamd_cryptobox_signature_bytes (
-						RSPAMD_CRYPTOBOX_MODE_25519)) {
+				if (lua_isstring (L, 2)) {
+					const gchar *str = lua_tostring (L, 2);
+
+					if (strcmp (str, "nist") == 0 || strcmp (str, "openssl") == 0) {
+						alg = RSPAMD_CRYPTOBOX_MODE_NIST;
+					}
+					else if (strcmp (str, "curve25519") == 0 || strcmp (str, "default") == 0) {
+						alg = RSPAMD_CRYPTOBOX_MODE_25519;
+					}
+					else {
+						return luaL_error (L, "invalid keypair algorithm: %s", str);
+					}
+				}
+				if (st.st_size > 0) {
 					sig = rspamd_fstring_new_init (data, st.st_size);
 					psig = lua_newuserdata (L, sizeof (rspamd_fstring_t *));
 					rspamd_lua_setclass (L, "rspamd{cryptobox_signature}", -1);
@@ -627,7 +639,7 @@ lua_cryptobox_signature_load (lua_State *L)
 				else {
 					msg_err ("size of %s mismatches: %d while %d is expected",
 							filename, (int)st.st_size,
-							rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
+							rspamd_cryptobox_signature_bytes (alg));
 					lua_pushnil (L);
 				}
 
@@ -1289,7 +1301,7 @@ lua_cryptobox_hash_gc (lua_State *L)
 }
 
 /***
- * @function rspamd_cryptobox.verify_memory(pk, sig, data)
+ * @function rspamd_cryptobox.verify_memory(pk, sig, data, [alg = 'curve25519'])
  * Check memory using specified cryptobox key and signature
  * @param {pubkey} pk public key to verify
  * @param {sig} signature to check
@@ -1303,6 +1315,7 @@ lua_cryptobox_verify_memory (lua_State *L)
 	rspamd_fstring_t *signature;
 	struct rspamd_lua_text *t;
 	const gchar *data;
+	enum rspamd_cryptobox_mode alg = RSPAMD_CRYPTOBOX_MODE_25519;
 	gsize len;
 	gint ret;
 
@@ -1323,9 +1336,23 @@ lua_cryptobox_verify_memory (lua_State *L)
 		data = luaL_checklstring (L, 3, &len);
 	}
 
+	if (lua_isstring (L, 4)) {
+		const gchar *str = lua_tostring (L, 4);
+
+		if (strcmp (str, "nist") == 0 || strcmp (str, "openssl") == 0) {
+			alg = RSPAMD_CRYPTOBOX_MODE_NIST;
+		}
+		else if (strcmp (str, "curve25519") == 0 || strcmp (str, "default") == 0) {
+			alg = RSPAMD_CRYPTOBOX_MODE_25519;
+		}
+		else {
+			return luaL_error (L, "invalid algorithm: %s", str);
+		}
+	}
+
 	if (pk != NULL && signature != NULL && data != NULL) {
-		ret = rspamd_cryptobox_verify (signature->str, data, len,
-				rspamd_pubkey_get_pk (pk, NULL), RSPAMD_CRYPTOBOX_MODE_25519);
+		ret = rspamd_cryptobox_verify (signature->str, signature->len, data, len,
+				rspamd_pubkey_get_pk (pk, NULL), alg);
 
 		if (ret) {
 			lua_pushboolean (L, 1);
@@ -1342,7 +1369,7 @@ lua_cryptobox_verify_memory (lua_State *L)
 }
 
 /***
- * @function rspamd_cryptobox.verify_file(pk, sig, file)
+ * @function rspamd_cryptobox.verify_file(pk, sig, file, [alg = 'curve25519'])
  * Check file using specified cryptobox key and signature
  * @param {pubkey} pk public key to verify
  * @param {sig} signature to check
@@ -1356,6 +1383,7 @@ lua_cryptobox_verify_file (lua_State *L)
 	struct rspamd_cryptobox_pubkey *pk;
 	rspamd_fstring_t *signature;
 	guchar *map = NULL;
+	enum rspamd_cryptobox_mode alg = RSPAMD_CRYPTOBOX_MODE_25519;
 	gsize len;
 	gint ret;
 
@@ -1363,11 +1391,26 @@ lua_cryptobox_verify_file (lua_State *L)
 	signature = lua_check_cryptobox_sign (L, 2);
 	fname = luaL_checkstring (L, 3);
 
+	if (lua_isstring (L, 4)) {
+		const gchar *str = lua_tostring (L, 4);
+
+		if (strcmp (str, "nist") == 0 || strcmp (str, "openssl") == 0) {
+			alg = RSPAMD_CRYPTOBOX_MODE_NIST;
+		}
+		else if (strcmp (str, "curve25519") == 0 || strcmp (str, "default") == 0) {
+			alg = RSPAMD_CRYPTOBOX_MODE_25519;
+		}
+		else {
+			return luaL_error (L, "invalid algorithm: %s", str);
+		}
+	}
+
 	map = rspamd_file_xmap (fname, PROT_READ, &len, TRUE);
 
 	if (map != NULL && pk != NULL && signature != NULL) {
-		ret = rspamd_cryptobox_verify (signature->str, map, len,
-				rspamd_pubkey_get_pk (pk, NULL), RSPAMD_CRYPTOBOX_MODE_25519);
+		ret = rspamd_cryptobox_verify (signature->str, signature->len,
+				map, len,
+				rspamd_pubkey_get_pk (pk, NULL), alg);
 
 		if (ret) {
 			lua_pushboolean (L, 1);

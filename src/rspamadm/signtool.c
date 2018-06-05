@@ -447,7 +447,8 @@ rspamadm_verify_file (const gchar *fname, const guchar *pk)
 		exit (errno);
 	}
 
-	ret = rspamd_cryptobox_verify (map_sig, map, st.st_size, pk, mode);
+	ret = rspamd_cryptobox_verify (map_sig, st_sig.st_size,
+			map, st.st_size, pk, mode);
 	munmap (map, st.st_size);
 	munmap (map_sig, st_sig.st_size);
 

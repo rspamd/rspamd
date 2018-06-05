@@ -576,6 +576,7 @@ rspamd_cryptobox_sign (guchar *sig, gsize *siglen_p,
 
 bool
 rspamd_cryptobox_verify (const guchar *sig,
+		gsize siglen,
 		const guchar *m,
 		gsize mlen,
 		const rspamd_pk_t pk,
@@ -584,6 +585,7 @@ rspamd_cryptobox_verify (const guchar *sig,
 	bool ret = false;
 
 	if (G_LIKELY (mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
+		g_assert (siglen == rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
 		ret = ed25519_verify (sig, m, mlen, pk);
 	}
 	else {
@@ -612,8 +614,7 @@ rspamd_cryptobox_verify (const guchar *sig,
 		g_assert (EC_KEY_set_public_key (lk, ec_pub) == 1);
 
 		/* ECDSA */
-		ret = ECDSA_verify (0, h, sizeof (h), sig,
-				rspamd_cryptobox_signature_bytes (mode), lk) == 1;
+		ret = ECDSA_verify (0, h, sizeof (h), sig, siglen, lk) == 1;
 
 		EC_KEY_free (lk);
 		EVP_MD_CTX_destroy (sha_ctx);

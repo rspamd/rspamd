@@ -214,6 +214,7 @@ void rspamd_cryptobox_sign (guchar *sig, gsize *siglen_p,
  * @return true if signature is valid, false otherwise
  */
 bool rspamd_cryptobox_verify (const guchar *sig,
+		gsize siglen,
 		const guchar *m,
 		gsize mlen,
 		const rspamd_pk_t pk,
