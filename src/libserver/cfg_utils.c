@@ -1112,12 +1112,15 @@ rspamd_include_map_handler (const guchar *data, gsize len,
 #define RSPAMD_VERSION_MINOR_MACRO "VERSION_MINOR"
 #define RSPAMD_VERSION_PATCH_MACRO "VERSION_PATCH"
 #define RSPAMD_BRANCH_VERSION_MACRO "BRANCH_VERSION"
+#define RSPAMD_HOSTNAME_MACRO "HOSTNAME"
 
 void
 rspamd_ucl_add_conf_variables (struct ucl_parser *parser, GHashTable *vars)
 {
 	GHashTableIter it;
 	gpointer k, v;
+	gchar *hostbuf;
+	gsize hostlen;
 
 	ucl_parser_register_variable (parser,
 			RSPAMD_CONFDIR_MACRO,
@@ -1158,6 +1161,23 @@ rspamd_ucl_add_conf_variables (struct ucl_parser *parser, GHashTable *vars)
 	ucl_parser_register_variable (parser, "HAS_TORCH",
 			"no");
 #endif
+
+	hostlen = sysconf (_SC_HOST_NAME_MAX);
+
+	if (hostlen <= 0) {
+		hostlen = 256;
+	}
+	else {
+		hostlen ++;
+	}
+
+	hostbuf = g_alloca (hostlen);
+	memset (hostbuf, 0, hostlen);
+	gethostname (hostbuf, hostlen - 1);
+
+	/* UCL copies variables, so it is safe to pass an ephemeral buffer here */
+	ucl_parser_register_variable (parser, RSPAMD_HOSTNAME_MACRO,
+			hostbuf);
 
 	if (vars != NULL) {
 		g_hash_table_iter_init (&it, vars);
