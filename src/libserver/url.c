@@ -1016,7 +1016,8 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 
 					while (tmp < last) {
 						if (!g_ascii_isdigit (*tmp)) {
-							if (*tmp == '/' || *tmp == '#' || *tmp == '?') {
+							if (*tmp == '/' || *tmp == '#' || *tmp == '?' ||
+									is_url_end (*tmp)) {
 								/* Port + something */
 								st = parse_port;
 								c = slash;
