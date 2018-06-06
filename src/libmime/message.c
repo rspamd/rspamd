@@ -907,13 +907,10 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 gboolean
 rspamd_message_parse (struct rspamd_task *task)
 {
-	struct rspamd_mime_text_part *p1, *p2;
 	struct received_header *recv, *trecv;
 	const gchar *p;
 	gsize len;
 	guint i;
-	gdouble diff, *pdiff;
-	guint tw, *ptw, dw;
 	GError *err = NULL;
 	rspamd_cryptobox_hash_state_t st;
 	guchar digest_out[rspamd_cryptobox_HASHBYTES];
@@ -1015,16 +1012,6 @@ rspamd_message_parse (struct rspamd_task *task)
 	if (task->queue_id == NULL) {
 		task->queue_id = "undef";
 	}
-
-	for (i = 0; i < task->parts->len; i ++) {
-		struct rspamd_mime_part *part;
-
-		part = g_ptr_array_index (task->parts, i);
-		rspamd_message_process_text_part (task, part);
-	}
-
-	rspamd_images_process (task);
-	rspamd_archives_process (task);
 
 	if (task->received->len > 0) {
 		gboolean need_recv_correction = FALSE;
@@ -1130,6 +1117,50 @@ rspamd_message_parse (struct rspamd_task *task)
 				rspamd_url_task_subject_callback, task);
 	}
 
+	for (i = 0; i < task->parts->len; i ++) {
+		struct rspamd_mime_part *part;
+
+		part = g_ptr_array_index (task->parts, i);
+		rspamd_cryptobox_hash_update (&st, part->digest, sizeof (part->digest));
+	}
+
+	rspamd_cryptobox_hash_final (&st, digest_out);
+	memcpy (task->digest, digest_out, sizeof (task->digest));
+
+	if (task->queue_id) {
+		msg_info_task ("loaded message; id: <%s>; queue-id: <%s>; size: %z; "
+				"checksum: <%*xs>",
+				task->message_id, task->queue_id, task->msg.len,
+				(gint)sizeof (task->digest), task->digest);
+	}
+	else {
+		msg_info_task ("loaded message; id: <%s>; size: %z; "
+				"checksum: <%*xs>",
+				task->message_id, task->msg.len,
+				(gint)sizeof (task->digest), task->digest);
+	}
+
+	return TRUE;
+}
+
+void
+rspamd_message_process (struct rspamd_task *task)
+{
+	guint i;
+	struct rspamd_mime_text_part *p1, *p2;
+	gdouble diff, *pdiff;
+	guint tw, *ptw, dw;
+
+	for (i = 0; i < task->parts->len; i ++) {
+		struct rspamd_mime_part *part;
+
+		part = g_ptr_array_index (task->parts, i);
+		rspamd_message_process_text_part (task, part);
+	}
+
+	rspamd_images_process (task);
+	rspamd_archives_process (task);
+
 	/* Calculate distance for 2-parts messages */
 	if (task->text_parts->len == 2) {
 		p1 = g_ptr_array_index (task->text_parts, 0);
@@ -1144,7 +1175,7 @@ rspamd_message_parse (struct rspamd_task *task)
 
 			if (rspamd_ftok_cmp (&p1->mime_part->parent_part->ct->subtype, &srch) == 0) {
 				if (!IS_PART_EMPTY (p1) && !IS_PART_EMPTY (p2) &&
-						p1->normalized_hashes && p2->normalized_hashes) {
+					p1->normalized_hashes && p2->normalized_hashes) {
 					/*
 					 * We also detect language on one part and propagate it to
 					 * another one
@@ -1219,13 +1250,6 @@ rspamd_message_parse (struct rspamd_task *task)
 		}
 	}
 
-	for (i = 0; i < task->parts->len; i ++) {
-		struct rspamd_mime_part *part;
-
-		part = g_ptr_array_index (task->parts, i);
-		rspamd_cryptobox_hash_update (&st, part->digest, sizeof (part->digest));
-	}
-
 	/* Calculate average words length and number of short words */
 	struct rspamd_mime_text_part *text_part;
 	gdouble *var;
@@ -1258,24 +1282,6 @@ rspamd_message_parse (struct rspamd_task *task)
 			*var /= (double)total_words;
 		}
 	}
-
-	rspamd_cryptobox_hash_final (&st, digest_out);
-	memcpy (task->digest, digest_out, sizeof (task->digest));
-
-	if (task->queue_id) {
-		msg_info_task ("loaded message; id: <%s>; queue-id: <%s>; size: %z; "
-				"checksum: <%*xs>",
-				task->message_id, task->queue_id, task->msg.len,
-				(gint)sizeof (task->digest), task->digest);
-	}
-	else {
-		msg_info_task ("loaded message; id: <%s>; size: %z; "
-				"checksum: <%*xs>",
-				task->message_id, task->msg.len,
-				(gint)sizeof (task->digest), task->digest);
-	}
-
-	return TRUE;
 }
 
 

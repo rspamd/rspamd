@@ -1096,8 +1096,9 @@ lua_task_process_message (lua_State *L)
 
 	if (task != NULL) {
 		if (task->msg.len > 0) {
-			if (rspamd_message_parse (task) == 0) {
+			if (rspamd_message_parse (task)) {
 				lua_pushboolean (L, TRUE);
+				rspamd_message_process (task);
 			}
 			else {
 				lua_pushboolean (L, FALSE);

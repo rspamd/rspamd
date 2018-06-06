@@ -3019,6 +3019,8 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 					"Message processing error");
 			return;
 		}
+
+		rspamd_message_process (task);
 	}
 
 	PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {

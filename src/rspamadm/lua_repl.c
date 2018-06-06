@@ -390,6 +390,7 @@ rspamadm_lua_message_handler (lua_State *L, gint argc, gchar **argv)
 				continue;
 			}
 
+			rspamd_message_process (task);
 			lua_pushcfunction (L, &rspamd_lua_traceback);
 			err_idx = lua_gettop (L);
 
