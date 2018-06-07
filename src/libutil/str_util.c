@@ -1261,7 +1261,7 @@ rspamd_substring_preprocess_kmp (const gchar *pat, gsize len, goffset *fsm,
 		i++;
 		j++;
 
-		if (f(pat[i], pat[j])) {
+		if (i < len && j < len && f(pat[i], pat[j])) {
 			fsm[i] = fsm[j];
 		}
 		else {
