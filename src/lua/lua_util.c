@@ -22,6 +22,7 @@
 #include "linenoise.h"
 #include <math.h>
 #include <glob.h>
+#include <zlib.h>
 
 #include "unicode/uspoof.h"
 
@@ -356,6 +357,24 @@ LUA_FUNCTION_DEF (util, zstd_compress);
 LUA_FUNCTION_DEF (util, zstd_decompress);
 
 /***
+ * @function util.gzip_decompress(data)
+ * Decompresses input using gzip algorithm
+ *
+ * @param {string/rspamd_text} data compressed data
+ * @return {error,rspamd_text} pair of error + decompressed text
+ */
+LUA_FUNCTION_DEF (util, gzip_decompress);
+
+/***
+ * @function util.gzip_compress(data)
+ * Compresses input using gzip compression
+ *
+ * @param {string/rspamd_text} data input data
+ * @return {rspamd_text} compressed data
+ */
+LUA_FUNCTION_DEF (util, gzip_compress);
+
+/***
  * @function util.normalize_prob(prob, [bias = 0.5])
  * Normalize probabilities using polynom
  *
@@ -558,6 +577,8 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, random_hex),
 	LUA_INTERFACE_DEF (util, zstd_compress),
 	LUA_INTERFACE_DEF (util, zstd_decompress),
+	LUA_INTERFACE_DEF (util, gzip_compress),
+	LUA_INTERFACE_DEF (util, gzip_decompress),
 	LUA_INTERFACE_DEF (util, normalize_prob),
 	LUA_INTERFACE_DEF (util, caseless_hash),
 	LUA_INTERFACE_DEF (util, caseless_hash_fast),
@@ -1944,6 +1965,172 @@ lua_util_zstd_decompress (lua_State *L)
 
 	return 2;
 }
+
+static gint
+lua_util_gzip_compress (lua_State *L)
+{
+	struct rspamd_lua_text *t = NULL, *res, tmp;
+	gsize sz;
+	z_stream strm;
+	gint rc;
+	guchar *p;
+	gsize remain;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		t = &tmp;
+		t->start = lua_tolstring (L, 1, &sz);
+		t->len = sz;
+	}
+	else {
+		t = lua_check_text (L, 1);
+	}
+
+	if (t == NULL || t->start == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+
+
+	memset (&strm, 0, sizeof (strm));
+	rc = deflateInit2 (&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+			MAX_WBITS + 16, MAX_MEM_LEVEL - 1, Z_DEFAULT_STRATEGY);
+
+	if (rc != Z_OK) {
+		return luaL_error (L, "cannot init zlib: %s", zError (rc));
+	}
+
+	sz = deflateBound (&strm, t->len);
+
+	strm.avail_in = t->len;
+	strm.next_in = (guchar *)t->start;
+
+	res = lua_newuserdata (L, sizeof (*res));
+	res->start = g_malloc (sz);
+	res->flags = RSPAMD_TEXT_FLAG_OWN;
+	rspamd_lua_setclass (L, "rspamd{text}", -1);
+
+	p = (guchar *)res->start;
+	remain = sz;
+
+	while (strm.avail_in != 0) {
+		strm.avail_out = remain;
+		strm.next_out = p;
+
+		rc = deflate (&strm, Z_FINISH);
+
+		if (rc != Z_OK && rc != Z_BUF_ERROR) {
+			if (rc == Z_STREAM_END) {
+				break;
+			}
+			else {
+				msg_err ("cannot compress data: %s", zError (rc));
+				lua_pop (L, 1); /* Text will be freed here */
+				lua_pushnil (L);
+				deflateEnd (&strm);
+
+				return 1;
+			}
+		}
+
+		res->len = strm.total_out;
+
+		if (strm.avail_out == 0 && strm.avail_in != 0) {
+			/* Need to allocate more */
+			remain = res->len;
+			res->start = g_realloc ((gpointer)res->start, strm.avail_in + sz);
+			sz = strm.avail_in + sz;
+			p = (guchar *)res->start + remain;
+			remain = sz - remain;
+		}
+	}
+
+	deflateEnd (&strm);
+	res->len = strm.total_out;
+
+	return 1;
+}
+
+
+static gint
+lua_util_gzip_decompress (lua_State *L)
+{
+	struct rspamd_lua_text *t = NULL, *res, tmp;
+	gsize sz;
+	z_stream strm;
+	gint rc;
+	guchar *p;
+	gsize remain;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		t = &tmp;
+		t->start = lua_tolstring (L, 1, &sz);
+		t->len = sz;
+	}
+	else {
+		t = lua_check_text (L, 1);
+	}
+
+	if (t == NULL || t->start == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	memset (&strm, 0, sizeof (strm));
+	/* windowBits +16 to decode gzip, zlib 1.2.0.4+ */
+	rc = inflateInit2 (&strm, MAX_WBITS + 16);
+
+	if (rc != Z_OK) {
+		return luaL_error (L, "cannot init zlib");
+	}
+
+	strm.avail_in = t->len;
+	strm.next_in = (guchar *)t->start;
+
+	res = lua_newuserdata (L, sizeof (*res));
+	res->start = g_malloc (sz);
+	res->flags = RSPAMD_TEXT_FLAG_OWN;
+	rspamd_lua_setclass (L, "rspamd{text}", -1);
+
+	p = (guchar *)res->start;
+	remain = sz;
+
+	while (strm.avail_in != 0) {
+		strm.avail_out = remain;
+		strm.next_out = p;
+
+		rc = inflate (&strm, Z_FINISH);
+
+		if (rc != Z_OK && rc != Z_BUF_ERROR) {
+			if (rc == Z_STREAM_END) {
+				break;
+			}
+			else {
+				msg_err ("cannot decompress data: %s", zError (rc));
+				lua_pop (L, 1); /* Text will be freed here */
+				lua_pushnil (L);
+				inflateEnd (&strm);
+
+				return 1;
+			}
+		}
+
+		res->len = strm.total_out;
+
+		if (strm.avail_out == 0 && strm.avail_in != 0) {
+			/* Need to allocate more */
+			remain = res->len;
+			res->start = g_realloc ((gpointer)res->start, strm.avail_in + sz);
+			sz = strm.avail_in + sz;
+			p = (guchar *)res->start + remain;
+			remain = sz - remain;
+		}
+	}
+
+	inflateEnd (&strm);
+	res->len = strm.total_out;
+
+	return 2;
+}
+
 
 static gint
 lua_util_normalize_prob (lua_State *L)
