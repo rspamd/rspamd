@@ -324,6 +324,18 @@ void rdns_resolver_register_plugin (struct rdns_resolver *resolver,
 		struct rdns_plugin *plugin);
 
 /**
+ * Add a fake reply for a specified name
+ * @param resolver
+ * @param type
+ * @param name
+ * @param reply
+ */
+void rdns_resolver_set_fake_reply (struct rdns_resolver *resolver,
+								   const char *name,
+								   enum dns_rcode rcode,
+								   struct rdns_reply_entry *reply);
+
+/**
  * Init DNS resolver
  * @param resolver
  * @return

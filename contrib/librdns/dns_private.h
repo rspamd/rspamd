@@ -56,6 +56,15 @@ struct rdns_server {
 	upstream_entry_t up;
 };
 
+enum rdns_request_state {
+	RDNS_REQUEST_NEW = 0,
+	RDNS_REQUEST_REGISTERED = 1,
+	RDNS_REQUEST_WAIT_SEND,
+	RDNS_REQUEST_WAIT_REPLY,
+	RDNS_REQUEST_REPLIED,
+	RDNS_REQUEST_FAKE,
+};
+
 struct rdns_request {
 	struct rdns_resolver *resolver;
 	struct rdns_async_context *async;
@@ -69,14 +78,7 @@ struct rdns_request {
 	int id;
 	struct rdns_request_name *requested_names;
 	unsigned int qcount;
-
-	enum {
-		RDNS_REQUEST_NEW = 0,
-		RDNS_REQUEST_REGISTERED = 1,
-		RDNS_REQUEST_WAIT_SEND,
-		RDNS_REQUEST_WAIT_REPLY,
-		RDNS_REQUEST_REPLIED
-	} state;
+	enum rdns_request_state state;
 
 	uint8_t *packet;
 	off_t pos;
@@ -109,6 +111,13 @@ struct rdns_io_channel {
 	ref_entry_t ref;
 };
 
+struct rdns_fake_reply {
+	char *request;
+	enum dns_rcode rcode;
+	struct rdns_reply_entry *result;
+	UT_hash_handle hh;
+};
+
 
 struct rdns_resolver {
 	struct rdns_server *servers;
@@ -117,6 +126,7 @@ struct rdns_resolver {
 	void *periodic; /** periodic event for resolver */
 	struct rdns_upstream_context *ups;
 	struct rdns_plugin *curve_plugin;
+	struct rdns_fake_reply *fake_elts;
 
 	rdns_log_function logger;
 	void *log_data;
