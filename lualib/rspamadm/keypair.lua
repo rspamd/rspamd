@@ -31,6 +31,7 @@ local parser = argparse()
     :command_target("command")
     :require_command(false)
 
+-- Generate subcommand
 local generate = parser:command "generate gen g"
                        :description "Creates a new keypair"
 generate:flag "-s --sign"
@@ -48,6 +49,8 @@ generate:mutex(
             :default(true)
 )
 
+-- Sign subcommand
+
 local sign = parser:command "sign sig s"
                    :description "Signs a file using keypair"
 sign:option "-k --keypair"
@@ -61,6 +64,8 @@ sign:argument "file"
     :description "File to sign"
     :argname "<file>"
     :args "*"
+
+-- Verify subcommand
 
 local verify = parser:command "verify ver v"
                      :description "Verifies a file using keypair or a public key"
@@ -85,6 +90,8 @@ verify:option "-s --suffix"
       :description "Suffix for signature"
       :argname "<suffix>"
       :default("sig")
+
+-- Encrypt subcommand
 
 local encrypt = parser:command "encrypt crypt enc e"
                       :description "Encrypts a file using keypair (or a pubkey)"
@@ -112,7 +119,26 @@ encrypt:flag "-r --rm"
 encrypt:flag "-f --force"
        :description "Remove destination file if it exists"
 
--- Default command is generate, so duplicate options
+-- Decrypt subcommand
+
+local decrypt = parser:command "decrypt dec d"
+                      :description "Decrypts a file using keypair"
+decrypt:option "-k --keypair"
+       :description "Get pubkey from the keypair file"
+       :argname "<file>"
+decrypt:flag "-S --keep-suffix"
+       :description "Preserve suffix for decrypted file (overwrite encrypted)"
+decrypt:argument "file"
+       :description "File to encrypt"
+       :argname "<file>"
+       :args "*"
+decrypt:flag "-f --force"
+       :description "Remove destination file if it exists (implied with -S)"
+decrypt:flag "-r --rm"
+       :description "Remove encrypted file"
+
+-- Default command is generate, so duplicate options to be compatible
+
 parser:flag "-s --sign"
         :description "Generates a sign keypair instead of the encryption one"
 parser:flag "-n --nist"
@@ -366,6 +392,71 @@ local function encrypt_handler(opts)
   end
 end
 
+local function decrypt_handler(opts)
+  if opts.file then
+    if type(opts.file) == 'string' then
+      opts.file = {opts.file}
+    end
+  else
+    parser:error('no files to decrypt')
+  end
+  if not opts.keypair then
+    parser:error("no keypair specified")
+  end
+
+  local ucl_parser = ucl.parser()
+  local res,err = ucl_parser:parse_file(opts.keypair)
+
+  if not res then
+    fatal(string.format('cannot load %s: %s', opts.keypair, err))
+  end
+
+  local kp = rspamd_keypair.load(ucl_parser:get_object())
+
+  if not kp then
+    fatal("cannot load keypair: " .. opts.keypair)
+  end
+
+  for _,fname in ipairs(opts.file) do
+    local decrypted = rspamd_crypto.decrypt_file(kp, fname)
+
+    if not decrypted then
+      fatal(string.format("cannot decrypt %s\n", fname))
+    end
+
+    local out
+    if not opts['keep-suffix'] then
+      -- Strip the last suffix
+      out = fname:match("^(.+)%..+$")
+    else
+      out = fname
+    end
+
+    local removed = false
+
+    if rspamd_util.file_exists(out) then
+      if (opts.force or opts['keep-suffix'])
+          or ask_yes_no(string.format('File %s already exists, overwrite?', out), true) then
+        os.remove(out)
+        removed = true
+      else
+        os.exit(1)
+      end
+    end
+
+    if opts.rm then
+      os.remove(fname)
+      removed = true
+    end
+
+    if removed then
+      io.write(string.format('decrypted %s (removed) -> %s\n', fname, out))
+    else
+      io.write(string.format('decrypted %s -> %s\n', fname, out))
+    end
+  end
+end
+
 local function handler(args)
   local opts = parser:parse(args)
 
@@ -379,8 +470,10 @@ local function handler(args)
     verify_handler(opts)
   elseif command == 'encrypt' then
     encrypt_handler(opts)
+  elseif command == 'decrypt' then
+    decrypt_handler(opts)
   else
-    parser:error('command %s is not yet implemented', command)
+    parser:error('command %s is not implemented', command)
   end
 end
 
