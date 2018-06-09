@@ -1530,23 +1530,40 @@ lua_cryptobox_sign_file (lua_State *L)
 }
 
 /***
- * @function rspamd_cryptobox.encrypt_memory(kp, data)
- * Encrypt data using specified keypair
- * @param {keypair} kp keypair to use
+ * @function rspamd_cryptobox.encrypt_memory(kp, data[, nist=false])
+ * Encrypt data using specified keypair/pubkey
+ * @param {keypair|string} kp keypair or pubkey in base32 to use
  * @param {string|text} data
  * @return {rspamd_text} encrypted text
  */
 static gint
 lua_cryptobox_encrypt_memory (lua_State *L)
 {
-	struct rspamd_cryptobox_keypair *kp;
+	struct rspamd_cryptobox_keypair *kp = NULL;
+	struct rspamd_cryptobox_pubkey *pk = NULL;
 	const gchar *data;
-	guchar *out;
+	guchar *out = NULL;
 	struct rspamd_lua_text *t, *res;
-	gsize len = 0, outlen;
+	gsize len = 0, outlen = 0;
 	GError *err = NULL;
 
-	kp = lua_check_cryptobox_keypair (L, 1);
+	if (lua_type (L, 1) == LUA_TUSERDATA) {
+		if (rspamd_lua_check_udata (L, 1, "rspamd{cryptobox_keypair}")) {
+			kp = lua_check_cryptobox_keypair (L, 1);
+		}
+		else if (rspamd_lua_check_udata (L, 1, "rspamd{cryptobox_pubkey}")) {
+			pk = lua_check_cryptobox_pubkey (L, 1);
+		}
+	}
+	else if (lua_type (L, 1) == LUA_TSTRING) {
+		const gchar *b32;
+		gsize blen;
+
+		b32 = lua_tolstring (L, 1, &blen);
+		pk = rspamd_pubkey_from_base32 (b32, blen, RSPAMD_KEYPAIR_KEX,
+				lua_toboolean (L, 3) ?
+				RSPAMD_CRYPTOBOX_MODE_NIST : RSPAMD_CRYPTOBOX_MODE_25519);
+	}
 
 	if (lua_isuserdata (L, 2)) {
 		t = lua_check_text (L, 2);
@@ -1563,15 +1580,25 @@ lua_cryptobox_encrypt_memory (lua_State *L)
 	}
 
 
-	if (!kp || !data) {
+	if (!(kp || pk) || !data) {
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (!rspamd_keypair_encrypt (kp, data, len, &out, &outlen, &err)) {
-		gint ret = luaL_error (L, "cannot encrypt data: %s", err->message);
-		g_error_free (err);
+	if (kp) {
+		if (!rspamd_keypair_encrypt (kp, data, len, &out, &outlen, &err)) {
+			gint ret = luaL_error (L, "cannot encrypt data: %s", err->message);
+			g_error_free (err);
 
-		return ret;
+			return ret;
+		}
+	}
+	else if (pk) {
+		if (!rspamd_pubkey_encrypt (pk, data, len, &out, &outlen, &err)) {
+			gint ret = luaL_error (L, "cannot encrypt data: %s", err->message);
+			g_error_free (err);
+
+			return ret;
+		}
 	}
 
 	res = lua_newuserdata (L, sizeof (*res));
@@ -1584,39 +1611,68 @@ lua_cryptobox_encrypt_memory (lua_State *L)
 }
 
 /***
- * @function rspamd_cryptobox.encrypt_file(kp, filename)
- * Encrypt data using specified keypair
- * @param {keypair} kp keypair to use
+ * @function rspamd_cryptobox.encrypt_file(kp|pk_string, filename[, nist=false])
+ * Encrypt data using specified keypair/pubkey
+ * @param {keypair|string} kp keypair or pubkey in base32 to use
  * @param {string} filename
  * @return {rspamd_text} encrypted text
  */
 static gint
 lua_cryptobox_encrypt_file (lua_State *L)
 {
-	struct rspamd_cryptobox_keypair *kp;
+	struct rspamd_cryptobox_keypair *kp = NULL;
+	struct rspamd_cryptobox_pubkey *pk = NULL;
 	const gchar *filename;
 	gchar *data;
-	guchar *out;
+	guchar *out = NULL;
 	struct rspamd_lua_text *res;
-	gsize len = 0, outlen;
+	gsize len = 0, outlen = 0;
 	GError *err = NULL;
 
-	kp = lua_check_cryptobox_keypair (L, 1);
+	if (lua_type (L, 1) == LUA_TUSERDATA) {
+		if (rspamd_lua_check_udata (L, 1, "rspamd{cryptobox_keypair}")) {
+			kp = lua_check_cryptobox_keypair (L, 1);
+		}
+		else if (rspamd_lua_check_udata (L, 1, "rspamd{cryptobox_pubkey}")) {
+			pk = lua_check_cryptobox_pubkey (L, 1);
+		}
+	}
+	else if (lua_type (L, 1) == LUA_TSTRING) {
+		const gchar *b32;
+		gsize blen;
+
+		b32 = lua_tolstring (L, 1, &blen);
+		pk = rspamd_pubkey_from_base32 (b32, blen, RSPAMD_KEYPAIR_KEX,
+				lua_toboolean (L, 3) ?
+				RSPAMD_CRYPTOBOX_MODE_NIST : RSPAMD_CRYPTOBOX_MODE_25519);
+	}
+
 	filename = luaL_checkstring (L, 2);
 	data = rspamd_file_xmap (filename, PROT_READ, &len, TRUE);
 
-
-	if (!kp || !data) {
+	if (!(kp || pk) || !data) {
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (!rspamd_keypair_encrypt (kp, data, len, &out, &outlen, &err)) {
-		gint ret = luaL_error (L, "cannot encrypt file %s: %s", filename,
-				err->message);
-		g_error_free (err);
-		munmap (data, len);
+	if (kp) {
+		if (!rspamd_keypair_encrypt (kp, data, len, &out, &outlen, &err)) {
+			gint ret = luaL_error (L, "cannot encrypt file %s: %s", filename,
+					err->message);
+			g_error_free (err);
+			munmap (data, len);
 
-		return ret;
+			return ret;
+		}
+	}
+	else if (pk) {
+		if (!rspamd_pubkey_encrypt (pk, data, len, &out, &outlen, &err)) {
+			gint ret = luaL_error (L, "cannot encrypt file %s: %s", filename,
+					err->message);
+			g_error_free (err);
+			munmap (data, len);
+
+			return ret;
+		}
 	}
 
 	res = lua_newuserdata (L, sizeof (*res));
@@ -1630,7 +1686,7 @@ lua_cryptobox_encrypt_file (lua_State *L)
 }
 
 /***
- * @function rspamd_cryptobox.decrypt_memory(kp, data)
+ * @function rspamd_cryptobox.decrypt_memory(kp, data[, nist = false])
  * Encrypt data using specified keypair
  * @param {keypair} kp keypair to use
  * @param {string} data
