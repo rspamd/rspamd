@@ -19,6 +19,7 @@ local rspamd_keypair = require "rspamd_cryptobox_keypair"
 local rspamd_pubkey = require "rspamd_cryptobox_pubkey"
 local rspamd_signature = require "rspamd_cryptobox_signature"
 local rspamd_crypto = require "rspamd_cryptobox"
+local rspamd_util = require "rspamd_util"
 local ucl = require "ucl"
 local logger = require "rspamd_logger"
 
@@ -85,6 +86,32 @@ verify:option "-s --suffix"
       :argname "<suffix>"
       :default("sig")
 
+local encrypt = parser:command "encrypt crypt enc e"
+                      :description "Encrypts a file using keypair (or a pubkey)"
+encrypt:mutex(
+    encrypt:option "-p --pubkey"
+           :description "Load pubkey from the specified file"
+           :argname "<file>",
+    encrypt:option "-P --pubstring"
+           :description "Load pubkey from the base32 encoded string"
+           :argname "<base32>",
+    encrypt:option "-k --keypair"
+           :description "Get pubkey from the keypair file"
+           :argname "<file>"
+)
+encrypt:option "-s --suffix"
+       :description "Suffix for encrypted file"
+       :argname "<suffix>"
+       :default("enc")
+encrypt:argument "file"
+       :description "File to encrypt"
+       :argname "<file>"
+       :args "*"
+encrypt:flag "-r --rm"
+       :description "Remove unencrypted file"
+encrypt:flag "-f --force"
+       :description "Remove destination file if it exists"
+
 -- Default command is generate, so duplicate options
 parser:flag "-s --sign"
         :description "Generates a sign keypair instead of the encryption one"
@@ -104,6 +131,26 @@ parser:option "-o --output"
 local function fatal(...)
   logger.errx(...)
   os.exit(1)
+end
+
+local function ask_yes_no(greet, default)
+  local def_str
+  if default then
+    greet = greet .. "[Y/n]: "
+    def_str = "yes"
+  else
+    greet = greet .. "[y/N]: "
+    def_str = "no"
+  end
+
+  local reply = rspamd_util.readline(greet)
+
+  if not reply then os.exit(0) end
+  if #reply == 0 then reply = def_str end
+  reply = reply:lower()
+  if reply == 'y' or reply == 'yes' then return true end
+
+  return false
 end
 
 local function generate_handler(opts)
@@ -245,6 +292,80 @@ local function verify_handler(opts)
   end
 end
 
+local function encrypt_handler(opts)
+  if opts.file then
+    if type(opts.file) == 'string' then
+      opts.file = {opts.file}
+    end
+  else
+    parser:error('no files to sign')
+  end
+
+  local pk
+  local alg = 'curve25519'
+
+  if opts.keypair then
+    local ucl_parser = ucl.parser()
+    local res,err = ucl_parser:parse_file(opts.keypair)
+
+    if not res then
+      fatal(string.format('cannot load %s: %s', opts.keypair, err))
+    end
+
+    local kp = rspamd_keypair.load(ucl_parser:get_object())
+
+    if not kp then
+      fatal("cannot load keypair: " .. opts.keypair)
+    end
+
+    pk = kp:pk()
+    alg = kp:alg()
+  elseif opts.pubkey then
+    if opts.nist then alg = 'nist' end
+    pk = rspamd_pubkey.load(opts.pubkey, 'sign', alg)
+  elseif opts.pubstr then
+    if opts.nist then alg = 'nist' end
+    pk = rspamd_pubkey.create(opts.pubstr, 'sign', alg)
+  end
+
+  if not pk then
+    fatal("cannot load keypair: " .. opts.keypair)
+  end
+
+  for _,fname in ipairs(opts.file) do
+    local enc = rspamd_crypto.encrypt_file(pk, fname, alg)
+
+    if not enc then
+      fatal(string.format("cannot encrypt %s\n", fname))
+    end
+
+    local out
+    if opts.suffix and #opts.suffix > 0 then
+      out = string.format('%s.%s', fname, opts.suffix)
+    else
+      out = string.format('%s', fname)
+    end
+
+    if rspamd_util.file_exists(out) then
+      if opts.force or ask_yes_no(string.format('File %s already exists, overwrite?',
+          out), true) then
+        os.remove(out)
+      else
+        os.exit(1)
+      end
+    end
+
+    enc:save_in_file(out)
+
+    if opts.rm then
+      os.remove(fname)
+      io.write(string.format('encrypted %s (deleted) -> %s\n', fname, out))
+    else
+      io.write(string.format('encrypted %s -> %s\n', fname, out))
+    end
+  end
+end
+
 local function handler(args)
   local opts = parser:parse(args)
 
@@ -256,6 +377,8 @@ local function handler(args)
     sign_handler(opts)
   elseif command == 'verify' then
     verify_handler(opts)
+  elseif command == 'encrypt' then
+    encrypt_handler(opts)
   else
     parser:error('command %s is not yet implemented', command)
   end

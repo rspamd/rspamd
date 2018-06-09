@@ -1548,10 +1548,10 @@ lua_cryptobox_encrypt_memory (lua_State *L)
 	GError *err = NULL;
 
 	if (lua_type (L, 1) == LUA_TUSERDATA) {
-		if (rspamd_lua_check_udata (L, 1, "rspamd{cryptobox_keypair}")) {
+		if (rspamd_lua_check_udata_maybe (L, 1, "rspamd{cryptobox_keypair}")) {
 			kp = lua_check_cryptobox_keypair (L, 1);
 		}
-		else if (rspamd_lua_check_udata (L, 1, "rspamd{cryptobox_pubkey}")) {
+		else if (rspamd_lua_check_udata_maybe (L, 1, "rspamd{cryptobox_pubkey}")) {
 			pk = lua_check_cryptobox_pubkey (L, 1);
 		}
 	}
@@ -1630,10 +1630,10 @@ lua_cryptobox_encrypt_file (lua_State *L)
 	GError *err = NULL;
 
 	if (lua_type (L, 1) == LUA_TUSERDATA) {
-		if (rspamd_lua_check_udata (L, 1, "rspamd{cryptobox_keypair}")) {
+		if (rspamd_lua_check_udata_maybe (L, 1, "rspamd{cryptobox_keypair}")) {
 			kp = lua_check_cryptobox_keypair (L, 1);
 		}
-		else if (rspamd_lua_check_udata (L, 1, "rspamd{cryptobox_pubkey}")) {
+		else if (rspamd_lua_check_udata_maybe (L, 1, "rspamd{cryptobox_pubkey}")) {
 			pk = lua_check_cryptobox_pubkey (L, 1);
 		}
 	}
