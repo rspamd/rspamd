@@ -31,9 +31,14 @@ static gboolean show_help = FALSE;
 static gboolean show_version = FALSE;
 GHashTable *ucl_vars = NULL;
 struct rspamd_main *rspamd_main = NULL;
+lua_State *L = NULL;
 
-static void rspamadm_help (gint argc, gchar **argv);
-static const char* rspamadm_help_help (gboolean full_help);
+/* Defined in modules.c */
+extern module_t *modules[];
+extern worker_t *workers[];
+
+static void rspamadm_help (gint argc, gchar **argv, const struct rspamadm_command *);
+static const char* rspamadm_help_help (gboolean full_help, const struct rspamadm_command *);
 
 struct rspamadm_command help_command = {
 	.name = "help",
@@ -70,7 +75,7 @@ rspamadm_error (void)
 static void
 rspamadm_version (void)
 {
-	printf ("Rspamadm %s\n", RVERSION);
+	rspamd_printf ("Rspamadm %s\n", RVERSION);
 }
 
 static void
@@ -79,30 +84,28 @@ rspamadm_usage (GOptionContext *context)
 	gchar *help_str;
 
 	help_str = g_option_context_get_help (context, TRUE, NULL);
-	printf ("%s", help_str);
+	rspamd_printf ("%s", help_str);
 }
 
 static void
-rspamadm_commands (void)
+rspamadm_commands (GPtrArray *all_commands)
 {
-	const struct rspamadm_command **cmd;
+	const struct rspamadm_command *cmd;
+	guint i;
 
-	printf ("Rspamadm %s\n", RVERSION);
-	printf ("Usage: rspamadm [global_options] command [command_options]\n");
-	printf ("\nAvailable commands:\n");
+	rspamd_printf ("Rspamadm %s\n", RVERSION);
+	rspamd_printf ("Usage: rspamadm [global_options] command [command_options]\n");
+	rspamd_printf ("\nAvailable commands:\n");
 
-	cmd = commands;
-
-	while (*cmd) {
-		if (!((*cmd)->flags & RSPAMADM_FLAG_NOHELP)) {
-			printf ("  %-18s %-60s\n", (*cmd)->name, (*cmd)->help (FALSE));
+	PTR_ARRAY_FOREACH (all_commands, i, cmd) {
+		if (!(cmd->flags & RSPAMADM_FLAG_NOHELP)) {
+			rspamd_printf ("  %-18s %-60s\n", cmd->name, cmd->help (FALSE, cmd));
 		}
-		cmd ++;
 	}
 }
 
 static const char *
-rspamadm_help_help (gboolean full_help)
+rspamadm_help_help (gboolean full_help, const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -118,23 +121,24 @@ rspamadm_help_help (gboolean full_help)
 }
 
 static void
-rspamadm_help (gint argc, gchar **argv)
+rspamadm_help (gint argc, gchar **argv, const struct rspamadm_command *command)
 {
 	const gchar *cmd_name;
-	const struct rspamadm_command *cmd, **cmd_list;
+	const struct rspamadm_command *cmd;
+	GPtrArray *all_commands = (GPtrArray *)command->command_data;
 
-	printf ("Rspamadm %s\n", RVERSION);
-	printf ("Usage: rspamadm [global_options] command [command_options]\n\n");
+	rspamd_printf ("Rspamadm %s\n", RVERSION);
+	rspamd_printf ("Usage: rspamadm [global_options] command [command_options]\n\n");
 
 	if (argc <= 1) {
 		cmd_name = "help";
 	}
 	else {
 		cmd_name = argv[1];
-		printf ("Showing help for %s command\n\n", cmd_name);
+		rspamd_printf ("Showing help for %s command\n\n", cmd_name);
 	}
 
-	cmd = rspamadm_search_command (cmd_name);
+	cmd = rspamadm_search_command (cmd_name, all_commands);
 
 	if (cmd == NULL) {
 		fprintf (stderr, "Invalid command name: %s\n", cmd_name);
@@ -142,20 +146,30 @@ rspamadm_help (gint argc, gchar **argv)
 	}
 
 	if (strcmp (cmd_name, "help") == 0) {
-		printf ("Available commands:\n");
+		guint i;
+		rspamd_printf ("Available commands:\n");
 
-		cmd_list = commands;
-
-		while (*cmd_list) {
-			if (!((*cmd_list)->flags & RSPAMADM_FLAG_NOHELP)) {
-				printf ("  %-18s %-60s\n", (*cmd_list)->name,
-						(*cmd_list)->help (FALSE));
+		PTR_ARRAY_FOREACH (all_commands, i, cmd) {
+			if (!(cmd->flags & RSPAMADM_FLAG_NOHELP)) {
+				if (!(cmd->flags & RSPAMADM_FLAG_LUA)) {
+					printf ("  %-18s %-60s\n", cmd->name,
+							cmd->help (FALSE, cmd));
+				}
+				else {
+					/* Just call lua subr */
+					(void)cmd->help (FALSE, cmd);
+				}
 			}
-			cmd_list++;
 		}
 	}
 	else {
-		printf ("%s\n", cmd->help (TRUE));
+		if (!(cmd->flags & RSPAMADM_FLAG_LUA)) {
+			rspamd_printf ("%s\n", cmd->help (TRUE, cmd));
+		}
+		else {
+			/* Just call lua subr */
+			(void)cmd->help (TRUE, cmd);
+		}
 	}
 }
 
@@ -193,25 +207,12 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 	gint err_idx, i, ret;
 	GString *tb;
 	gchar str[PATH_MAX];
-	const struct rspamadm_command **cmd;
 
 	g_assert (script_name != NULL);
 	g_assert (res != NULL);
 	g_assert (L != NULL);
 
 	/* Init internal rspamadm routines */
-	lua_newtable (L);
-	cmd = commands;
-
-	while (*cmd) {
-		if ((*cmd)->lua_subrs != NULL) {
-			(*cmd)->lua_subrs (L);
-		}
-
-		cmd ++;
-	}
-
-	lua_setglobal (L, "rspamadm");
 
 	rspamd_snprintf (str, sizeof (str), "return require \"%s.%s\"", "rspamadm",
 			script_name);
@@ -222,6 +223,11 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 		return FALSE;
 	}
 	else {
+		if (lua_type (L, -1) == LUA_TTABLE) {
+			lua_pushstring (L, "handler");
+			lua_gettable (L, -2);
+		}
+
 		if (lua_type (L, -1) != LUA_TFUNCTION) {
 			msg_err ("lua script must return "
 					"function and not %s",
@@ -267,6 +273,37 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 	return TRUE;
 }
 
+static gint
+rspamdadm_commands_sort_func (gconstpointer a, gconstpointer b)
+{
+	const struct rspamadm_command *cmda = *((struct rspamadm_command const **)a),
+			*cmdb = *((struct rspamadm_command const **)b);
+
+	return strcmp (cmda->name, cmdb->name);
+}
+
+static gboolean
+rspamadm_command_maybe_match_name (const gchar *cmd, const gchar *input)
+{
+	gsize clen, inplen;
+
+	clen = strlen (cmd);
+	inplen = strlen (input);
+
+	if (rspamd_strings_levenshtein_distance (cmd, clen,
+			input, inplen, 1) == 1) {
+		return TRUE;
+	}
+	else if ((clen > inplen &&
+			  rspamd_substring_search (cmd, clen, input, inplen) != -1) ||
+			 (inplen > clen &&
+			  rspamd_substring_search (input, inplen, cmd, clen) != -1)) {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
@@ -278,12 +315,14 @@ main (gint argc, gchar **argv, gchar **env)
 	gchar **nargv, **targv;
 	const gchar *cmd_name;
 	const struct rspamadm_command *cmd;
+	GPtrArray *all_commands = g_ptr_array_new (); /* Discovered during check */
 	gint i, nargc, targc;
+	worker_t **pworker;
 
 	ucl_vars = g_hash_table_new_full (rspamd_strcase_hash,
 		rspamd_strcase_equal, g_free, g_free);
 	process_quark = g_quark_from_static_string ("rspamadm");
-	cfg = rspamd_config_new ();
+	cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT);
 	cfg->libs_ctx = rspamd_init_libs ();
 	rspamd_main = g_malloc0 (sizeof (*rspamd_main));
 	rspamd_main->cfg = cfg;
@@ -291,6 +330,8 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->type = process_quark;
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 			"rspamadm");
+	rspamadm_fill_internal_commands (all_commands);
+	help_command.command_data = all_commands;
 
 	/* Setup logger */
 	if (verbose) {
@@ -310,6 +351,16 @@ main (gint argc, gchar **argv, gchar **env)
 	g_set_printerr_handler (rspamd_glib_printerr_function);
 	rspamd_config_post_load (cfg,
 			RSPAMD_CONFIG_INIT_LIBS|RSPAMD_CONFIG_INIT_URL|RSPAMD_CONFIG_INIT_NO_TLD);
+
+	pworker = &workers[0];
+	while (*pworker) {
+		/* Init string quarks */
+		(void) g_quark_from_static_string ((*pworker)->name);
+		pworker++;
+	}
+
+	cfg->compiled_modules = modules;
+	cfg->compiled_workers = workers;
 
 	gperf_profiler_init (cfg, "rspamadm");
 	setproctitle ("rspamdadm");
@@ -349,6 +400,26 @@ main (gint argc, gchar **argv, gchar **env)
 		exit (1);
 	}
 
+	L = cfg->lua_state;
+	rspamd_lua_set_path (L, NULL, ucl_vars);
+	rspamd_lua_set_globals (cfg, L, ucl_vars);
+
+	/* Init rspamadm global */
+	lua_newtable (L);
+
+	PTR_ARRAY_FOREACH (all_commands, i, cmd) {
+		if (cmd->lua_subrs != NULL) {
+			cmd->lua_subrs (L);
+		}
+
+		cmd ++;
+	}
+
+	lua_setglobal (L, "rspamadm");
+
+	rspamadm_fill_lua_commands (L, all_commands);
+	g_ptr_array_sort (all_commands, rspamdadm_commands_sort_func);
+
 	g_strfreev (nargv);
 
 	if (show_version) {
@@ -360,7 +431,7 @@ main (gint argc, gchar **argv, gchar **env)
 		exit (EXIT_SUCCESS);
 	}
 	if (list_commands) {
-		rspamadm_commands ();
+		rspamadm_commands (all_commands);
 		exit (EXIT_SUCCESS);
 	}
 
@@ -370,10 +441,29 @@ main (gint argc, gchar **argv, gchar **env)
 		cmd_name = "help";
 	}
 
-	cmd = rspamadm_search_command (cmd_name);
+	cmd = rspamadm_search_command (cmd_name, all_commands);
 
 	if (cmd == NULL) {
-		fprintf (stderr, "Invalid command name: %s\n", cmd_name);
+		rspamd_fprintf (stderr, "Invalid command name: %s\n", cmd_name);
+
+		/* Try fuzz search */
+		rspamd_fprintf (stderr, "Suggested commands:\n");
+		PTR_ARRAY_FOREACH (all_commands, i, cmd) {
+			guint j;
+			const gchar *alias;
+
+			if (rspamadm_command_maybe_match_name (cmd->name, cmd_name)) {
+				rspamd_fprintf (stderr, "%s\n", cmd->name);
+			}
+			else {
+				PTR_ARRAY_FOREACH (cmd->aliases, j, alias) {
+					if (rspamadm_command_maybe_match_name (alias, cmd_name)) {
+						rspamd_fprintf (stderr, "%s\n", alias);
+					}
+				}
+			}
+		}
+
 		exit (EXIT_FAILURE);
 	}
 
@@ -387,16 +477,17 @@ main (gint argc, gchar **argv, gchar **env)
 
 		targc = argc - nargc;
 		targv = nargv;
-		cmd->run (targc, targv);
+		cmd->run (targc, targv, cmd);
 		g_strfreev (nargv);
 	}
 	else {
-		cmd->run (0, NULL);
+		cmd->run (0, NULL, cmd);
 	}
 
 	rspamd_log_close (rspamd_main->logger);
 	REF_RELEASE (rspamd_main->cfg);
 	g_free (rspamd_main);
+	g_ptr_array_free (all_commands, TRUE);
 
 	return 0;
 }

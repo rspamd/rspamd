@@ -37,8 +37,10 @@ static gchar *redis_db = NULL;
 static gchar *redis_password = NULL;
 static gboolean reset_previous = FALSE;
 
-static void rspamadm_statconvert (gint argc, gchar **argv);
-static const char *rspamadm_statconvert_help (gboolean full_help);
+static void rspamadm_statconvert (gint argc, gchar **argv,
+								  const struct rspamadm_command *cmd);
+static const char *rspamadm_statconvert_help (gboolean full_help,
+											  const struct rspamadm_command *cmd);
 
 struct rspamadm_command statconvert_command = {
 		.name = "statconvert",
@@ -77,7 +79,7 @@ static GOptionEntry entries[] = {
 
 
 static const char *
-rspamadm_statconvert_help (gboolean full_help)
+rspamadm_statconvert_help (gboolean full_help, const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -107,7 +109,7 @@ rspamadm_statconvert_help (gboolean full_help)
 }
 
 static void
-rspamadm_statconvert (gint argc, gchar **argv)
+rspamadm_statconvert (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;
@@ -251,6 +253,5 @@ rspamadm_statconvert (gint argc, gchar **argv)
 			obj,
 			"stat_convert");
 
-	lua_close (L);
 	ucl_object_unref (obj);
 }

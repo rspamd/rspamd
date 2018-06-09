@@ -190,13 +190,8 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 		hdr = cur->data;
 
 		if (hdr->name && hdr->type != RSPAMD_HEADER_RECEIVED) {
-			/* We assume that headers count is not more than 10^10 */
-			gsize nlen = strlen (hdr->name) + 1 + 10;
-			gchar *hdrbuf = rspamd_mempool_alloc (task->task_pool, nlen);
-			nlen = rspamd_snprintf (hdrbuf, nlen, "%s:%d", hdr->name, hdr->order);
-			rspamd_str_lc (hdrbuf, nlen);
-			elt.begin = hdrbuf;
-			elt.len = nlen;
+			elt.begin = hdr->name;
+			elt.len = strlen (hdr->name);
 			g_array_append_val (ar, elt);
 		}
 

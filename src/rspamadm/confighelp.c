@@ -30,9 +30,11 @@ extern struct rspamd_main *rspamd_main;
 extern module_t *modules[];
 extern worker_t *workers[];
 
-static void rspamadm_confighelp (gint argc, gchar **argv);
+static void rspamadm_confighelp (gint argc, gchar **argv,
+								 const struct rspamadm_command *cmd);
 
-static const char *rspamadm_confighelp_help (gboolean full_help);
+static const char *rspamadm_confighelp_help (gboolean full_help,
+											 const struct rspamadm_command *cmd);
 
 struct rspamadm_command confighelp_command = {
 		.name = "confighelp",
@@ -55,7 +57,7 @@ static GOptionEntry entries[] = {
 };
 
 static const char *
-rspamadm_confighelp_help (gboolean full_help)
+rspamadm_confighelp_help (gboolean full_help, const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -67,7 +69,7 @@ rspamadm_confighelp_help (gboolean full_help)
 				"-j: output pretty formatted JSON\n"
 				"-k: search by keyword in doc string\n"
 				"-P: use specific Lua plugins path\n"
-				"--no-color: show colored output\n"
+				"--no-color: disable coloured output\n"
 				"--short: show only option names\n"
 				"--no-examples: do not show examples (impied by --short)\n"
 				"--help: shows available options and commands";
@@ -189,7 +191,7 @@ rspamadm_confighelp_search_word (const ucl_object_t *obj, const gchar *str)
 }
 
 static void
-rspamadm_confighelp (gint argc, gchar **argv)
+rspamadm_confighelp (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 {
 	struct rspamd_config *cfg;
 	ucl_object_t *doc_obj;
@@ -224,11 +226,12 @@ rspamadm_confighelp (gint argc, gchar **argv)
 		pworker++;
 	}
 
-	cfg = rspamd_config_new ();
+	cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_SKIP_LUA);
+	cfg->lua_state = L;
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 
-	rspamd_rcl_config_init (cfg);
+	rspamd_rcl_config_init (cfg, NULL);
 	lua_pushboolean (cfg->lua_state, true);
 	lua_setglobal (cfg->lua_state, "confighelp");
 	rspamd_rcl_add_lua_plugins_path (cfg, plugins_path, NULL);

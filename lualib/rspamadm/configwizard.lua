@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
-local ansicolors = require "rspamadm/ansicolors"
+local ansicolors = require "ansicolors"
 local local_conf = rspamd_paths['CONFDIR']
 local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
@@ -22,8 +22,9 @@ local lua_util = require "lua_util"
 local lua_stat_tools = require "lua_stat"
 local lua_redis = require "lua_redis"
 local ucl = require "ucl"
+local argparse = require "argparse"
 
-local plugins_stat = require "rspamadm/plugins_stats"
+local plugins_stat = require "plugins_stats"
 
 local rspamd_logo = [[
   ____                                     _
@@ -33,6 +34,19 @@ local rspamd_logo = [[
  |_| \_\|___/| .__/  \__,_||_| |_| |_| \__,_|
              |_|
 ]]
+
+local parser = argparse()
+    :name "rspamadm configwizard"
+    :description "Perform guided configuration for Rspamd daemon"
+    :help_description_margin(32)
+parser:option "-c --config"
+      :description "Path to config file"
+      :argname("<file>")
+      :default(rspamd_paths["CONFDIR"] .. "/" .. "rspamd.conf")
+parser:argument "checks"
+      :description "Checks to do (or 'list')"
+      :argname("<checks>")
+      :args "*"
 
 local redis_params
 
@@ -578,109 +592,135 @@ end
 
 
 
-return function(args, cfg)
-  local changes = {
-    l = {}, -- local changes
-    o = {}, -- override changes
-  }
+return {
+  handler = function(cmd_args)
+    local changes = {
+      l = {}, -- local changes
+      o = {}, -- override changes
+    }
 
-  local interactive_start = true
-  local checks = {}
-  local all_checks = {
-    'controller',
-    'redis',
-    'dkim',
-    'statistic',
-  }
+    local interactive_start = true
+    local checks = {}
+    local all_checks = {
+      'controller',
+      'redis',
+      'dkim',
+      'statistic',
+    }
 
-  if #args > 0 then
-    interactive_start = false
+    local opts = parser:parse(cmd_args)
+    local args = opts['checks'] or {}
 
-    for _,arg in ipairs(args) do
-      if arg == 'all' then
-        checks = all_checks
-      elseif arg == 'list' then
-        printf(highlight(rspamd_logo))
-        printf('Available modules')
-        for _,c in ipairs(all_checks) do
-          printf('- %s', c)
+    local _r,err = rspamd_config:load_ucl(opts['config'])
+    local cfg = rspamd_config:get_ucl()
+
+    if not _r then
+      rspamd_logger.errx('cannot parse %s: %s', opts['config'], err)
+      os.exit(1)
+    end
+
+    _r,err = rspamd_config:parse_rcl({'logging', 'worker'})
+    if not _r then
+      rspamd_logger.errx('cannot process %s: %s', opts['config'], err)
+      os.exit(1)
+    end
+
+    if not rspamd_config:init_modules() then
+      rspamd_logger.errx('cannot init modules when parsing %s', opts['config'])
+      os.exit(1)
+    end
+
+    if #args > 0 then
+      interactive_start = false
+
+      for _,arg in ipairs(args) do
+        if arg == 'all' then
+          checks = all_checks
+        elseif arg == 'list' then
+          printf(highlight(rspamd_logo))
+          printf('Available modules')
+          for _,c in ipairs(all_checks) do
+            printf('- %s', c)
+          end
+          return
+        else
+          table.insert(checks, arg)
         end
-        return
-      else
-        table.insert(checks, arg)
       end
-    end
-  else
-    checks = all_checks
-  end
-
-  local function has_check(check)
-    for _,c in ipairs(checks) do
-      if c == check then
-        return true
-      end
+    else
+      checks = all_checks
     end
 
-    return false
-  end
-
-  rspamd_util.umask('022')
-  if interactive_start then
-    printf(highlight(rspamd_logo))
-    printf("Welcome to the configuration tool")
-    printf("We use %s configuration file, writing results to %s",
-      highlight(cfg.config_path), highlight(local_conf))
-    plugins_stat(nil, nil)
-  end
-
-  if not interactive_start or
-      ask_yes_no("Do you wish to continue?", true) then
-
-    if has_check('controller') then
-      local controller = find_worker(cfg, 'controller')
-      if controller then
-        setup_controller(controller, changes)
+    local function has_check(check)
+      for _,c in ipairs(checks) do
+        if c == check then
+          return true
+        end
       end
+
+      return false
     end
 
-    if has_check('redis') then
-      if not cfg.redis or (not cfg.redis.servers and not cfg.redis.read_servers) then
-        setup_redis(cfg, changes)
+    rspamd_util.umask('022')
+    if interactive_start then
+      printf(highlight(rspamd_logo))
+      printf("Welcome to the configuration tool")
+      printf("We use %s configuration file, writing results to %s",
+          highlight(opts['config']), highlight(local_conf))
+      plugins_stat(nil, nil)
+    end
+
+    if not interactive_start or
+        ask_yes_no("Do you wish to continue?", true) then
+
+      if has_check('controller') then
+        local controller = find_worker(cfg, 'controller')
+        if controller then
+          setup_controller(controller, changes)
+        end
+      end
+
+      if has_check('redis') then
+        if not cfg.redis or (not cfg.redis.servers and not cfg.redis.read_servers) then
+          setup_redis(cfg, changes)
+        else
+          redis_params = cfg.redis
+        end
       else
         redis_params = cfg.redis
       end
-    else
-      redis_params = cfg.redis
-    end
 
-    if has_check('dkim') then
-      if cfg.dkim_signing and not cfg.dkim_signing.domain then
-        if ask_yes_no('Do you want to setup dkim signing feature?') then
-          setup_dkim_signing(cfg, changes)
+      if has_check('dkim') then
+        if cfg.dkim_signing and not cfg.dkim_signing.domain then
+          if ask_yes_no('Do you want to setup dkim signing feature?') then
+            setup_dkim_signing(cfg, changes)
+          end
         end
       end
-    end
 
-    if has_check('statistic') or has_check('statistics') then
-      setup_statistic(cfg, changes)
-    end
-
-    local nchanges = 0
-    for _,_ in pairs(changes.l) do nchanges = nchanges + 1 end
-    for _,_ in pairs(changes.o) do nchanges = nchanges + 1 end
-
-    if nchanges > 0 then
-      print_changes(changes)
-      if ask_yes_no("Apply changes?", true) then
-        apply_changes(changes)
-        printf("%d changes applied, the wizard is finished now", nchanges)
-        printf("*** Please reload the Rspamd configuration ***")
-      else
-        printf("No changes applied, the wizard is finished now")
+      if has_check('statistic') or has_check('statistics') then
+        setup_statistic(cfg, changes)
       end
-    else
-      printf("No changes found, the wizard is finished now")
+
+      local nchanges = 0
+      for _,_ in pairs(changes.l) do nchanges = nchanges + 1 end
+      for _,_ in pairs(changes.o) do nchanges = nchanges + 1 end
+
+      if nchanges > 0 then
+        print_changes(changes)
+        if ask_yes_no("Apply changes?", true) then
+          apply_changes(changes)
+          printf("%d changes applied, the wizard is finished now", nchanges)
+          printf("*** Please reload the Rspamd configuration ***")
+        else
+          printf("No changes applied, the wizard is finished now")
+        end
+      else
+        printf("No changes found, the wizard is finished now")
+      end
     end
-  end
-end
+  end,
+  name = 'configwizard',
+  description = parser._description,
+}
 

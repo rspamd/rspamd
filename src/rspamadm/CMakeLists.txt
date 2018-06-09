@@ -1,21 +1,16 @@
 SET(RSPAMADMSRC rspamadm.c
         commands.c
         pw.c
-        keypair.c
         configtest.c
         fuzzy_convert.c
         fuzzy_merge.c
-        grep.c
         configdump.c
         control.c
         confighelp.c
-        configwizard.c
-        corpus_test.c
         stat_convert.c
         signtool.c
         lua_repl.c
         dkim_keygen.c
-        rescore.c
         ${CMAKE_BINARY_DIR}/src/workers.c
         ${CMAKE_BINARY_DIR}/src/modules.c
         ${CMAKE_SOURCE_DIR}/src/controller.c

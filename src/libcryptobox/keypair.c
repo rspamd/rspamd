@@ -881,7 +881,7 @@ rspamd_keypair_verify (struct rspamd_cryptobox_pubkey *pk,
 		return FALSE;
 	}
 
-	if (!rspamd_cryptobox_verify (sig, data, len,
+	if (!rspamd_cryptobox_verify (sig, siglen, data, len,
 			rspamd_cryptobox_pubkey_pk (pk, &pklen), pk->alg)) {
 		g_set_error (err, rspamd_keypair_quark (), EPERM,
 				"signature verification failed");

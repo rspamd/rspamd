@@ -738,6 +738,12 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 				RSPAMD_TASK_STAGE_PRE_FILTERS);
 		break;
 
+	case RSPAMD_TASK_STAGE_PROCESS_MESSAGE:
+		if (!(task->flags & RSPAMD_TASK_FLAG_SKIP_PROCESS)) {
+			rspamd_message_process (task);
+		}
+		break;
+
 	case RSPAMD_TASK_STAGE_FILTERS:
 		rspamd_symbols_cache_process_symbols (task, task->cfg->cache,
 				RSPAMD_TASK_STAGE_FILTERS);

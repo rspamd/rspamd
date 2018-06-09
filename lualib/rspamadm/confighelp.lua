@@ -1,4 +1,4 @@
-local opts = {}
+local opts
 local known_attrs = {
   data = 1,
   example = 1,
@@ -6,9 +6,19 @@ local known_attrs = {
   required = 1,
   default = 1,
 }
+local argparse = require "argparse"
+local ansicolors = require "ansicolors"
 
-local getopt = require "rspamadm/getopt"
-local ansicolors = require "rspamadm/ansicolors"
+local parser = argparse()
+    :name "rspamadm confighelp"
+    :description "Shows help for the specified configuration options"
+    :help_description_margin(32)
+parser:flag "--no-color"
+    :description "Disable coloured output"
+parser:flag "--short"
+    :description "Show only option names"
+parser:flag "--no-examples"
+    :description "Do not show examples (impied by --short)"
 
 local function maybe_print_color(key)
   if not opts['no-color'] then
@@ -100,7 +110,7 @@ local function print_help(key, value, tabs)
 end
 
 return function(args, res)
-  opts = getopt.getopt(args, '')
+  opts = parser:parse(args)
 
   local sorted = sort_values(res)
 

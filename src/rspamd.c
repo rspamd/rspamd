@@ -276,7 +276,7 @@ reread_config (struct rspamd_main *rspamd_main)
 	gchar *cfg_file;
 
 	rspamd_symbols_cache_save (rspamd_main->cfg->cache);
-	tmp_cfg = rspamd_config_new ();
+	tmp_cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT);
 	g_hash_table_unref (tmp_cfg->c_modules);
 	tmp_cfg->c_modules = g_hash_table_ref (rspamd_main->cfg->c_modules);
 	tmp_cfg->libs_ctx = rspamd_main->cfg->libs_ctx;
@@ -874,8 +874,7 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 
-	if (!rspamd_config_read (cfg, cfg->cfg_name, NULL,
-		config_logger, rspamd_main, ucl_vars)) {
+	if (!rspamd_config_read (cfg, cfg->cfg_name, config_logger, rspamd_main, ucl_vars)) {
 		return FALSE;
 	}
 
@@ -1180,7 +1179,7 @@ main (gint argc, gchar **argv, gchar **env)
 			"main");
 	rspamd_main->stat = rspamd_mempool_alloc0_shared (rspamd_main->server_pool,
 			sizeof (struct rspamd_stat));
-	rspamd_main->cfg = rspamd_config_new ();
+	rspamd_main->cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT);
 	rspamd_main->spairs = g_hash_table_new_full (rspamd_spair_hash,
 			rspamd_spair_equal, g_free, rspamd_spair_close);
 	rspamd_main->start_mtx = rspamd_mempool_get_mutex (rspamd_main->server_pool);

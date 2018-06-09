@@ -298,6 +298,10 @@ void rspamd_lua_dumpstack (lua_State *L);
 void rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj,
 		GHashTable *vars);
 
+/* Set some lua globals */
+void rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L,
+							 GHashTable *vars);
+
 struct memory_pool_s * rspamd_lua_check_mempool (lua_State * L, gint pos);
 struct rspamd_config * lua_check_config (lua_State * L, gint pos);
 struct rspamd_async_session* lua_check_session (lua_State * L, gint pos);
@@ -399,6 +403,18 @@ void rspamd_lua_add_ref_dtor (lua_State *L, rspamd_mempool_t *pool,
  */
 gboolean rspamd_lua_require_function (lua_State *L, const gchar *modname,
 		const gchar *funcname);
+
+/* Paths defs */
+#define RSPAMD_CONFDIR_INDEX "CONFDIR"
+#define RSPAMD_RUNDIR_INDEX "RUNDIR"
+#define RSPAMD_DBDIR_INDEX "DBDIR"
+#define RSPAMD_LOGDIR_INDEX "LOGDIR"
+#define RSPAMD_PLUGINSDIR_INDEX "PLUGINSDIR"
+#define RSPAMD_RULESDIR_INDEX "RULESDIR"
+#define RSPAMD_LUALIBDIR_INDEX "LUALIBDIR"
+#define RSPAMD_WWWDIR_INDEX "WWWDIR"
+#define RSPAMD_PREFIX_INDEX "PREFIX"
+#define RSPAMD_VERSION_INDEX "VERSION"
 
 #endif /* WITH_LUA */
 #endif /* RSPAMD_LUA_H */

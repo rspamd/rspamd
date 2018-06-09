@@ -1012,13 +1012,46 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 				break;
 			case parse_port_password:
 				if (g_ascii_isdigit (t)) {
-					/* XXX: that breaks urls with passwords starting with number */
-					st = parse_port;
-					c = slash;
-					p--;
-					SET_U (u, UF_HOST);
-					p++;
-					c = p;
+					const gchar *tmp = p;
+
+					while (tmp < last) {
+						if (!g_ascii_isdigit (*tmp)) {
+							if (*tmp == '/' || *tmp == '#' || *tmp == '?' ||
+									is_url_end (*tmp) || g_ascii_isspace (*tmp)) {
+								/* Port + something */
+								st = parse_port;
+								c = slash;
+								p--;
+								SET_U (u, UF_HOST);
+								p++;
+								c = p;
+								break;
+							}
+							else {
+								/* Not a port, bad character at the end */
+								break;
+							}
+						}
+						tmp ++;
+					}
+
+					if (tmp == last) {
+						/* Host + port only */
+						st = parse_port;
+						c = slash;
+						p--;
+						SET_U (u, UF_HOST);
+						p++;
+						c = p;
+					}
+
+					if (st != parse_port) {
+						/* Fallback to user:password */
+						p = slash;
+						c = slash;
+						user_seen = TRUE;
+						st = parse_user;
+					}
 				}
 				else {
 					/* Rewind back */

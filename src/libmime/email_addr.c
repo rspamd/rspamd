@@ -203,10 +203,12 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 	struct rspamd_email_address addr;
 	const gchar *p = hdr, *end = hdr + len, *c = hdr, *t;
 	GString *ns;
+	gint obraces, ebraces;
 	enum {
 		parse_name = 0,
 		parse_quoted,
 		parse_addr,
+		skip_comment,
 		skip_spaces
 	} state = parse_name, next_state = parse_name;
 
@@ -290,6 +292,23 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 			else if (*p == '@') {
 				seen_at = TRUE;
 			}
+			else if (*p == '(') {
+				if (p > c) {
+					t = p - 1;
+
+					while (t > c && g_ascii_isspace (*t)) {
+						t --;
+					}
+
+					g_string_append_len (ns, c, t - c + 1);
+				}
+
+				c = p;
+				obraces = 1;
+				ebraces = 0;
+				state = skip_comment;
+				next_state = parse_name;
+			}
 			p ++;
 			break;
 		case parse_quoted:
@@ -331,6 +350,12 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 			else if (*p == '@') {
 				seen_at = TRUE;
 			}
+			else if (*p == '(') {
+				obraces = 1;
+				ebraces = 0;
+				state = skip_comment;
+				next_state = parse_addr;
+			}
 			p ++;
 			break;
 		case skip_spaces:
@@ -341,6 +366,33 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 			else {
 				p ++;
 			}
+			break;
+		case skip_comment:
+			if (*p == '(') {
+				obraces ++;
+			}
+			else if (*p == ')') {
+				ebraces --;
+			}
+
+			if (obraces == ebraces) {
+				if (next_state == parse_name) {
+					/* Include comment in name */
+					if (p > c) {
+						t = p - 1;
+
+						while (t > c && g_ascii_isspace (*t)) {
+							t --;
+						}
+
+						g_string_append_len (ns, c, t - c + 1);
+					}
+
+					c = p;
+				}
+				state = next_state;
+			}
+			p ++;
 			break;
 		}
 	}
@@ -396,7 +448,8 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 		}
 		break;
 	case parse_quoted:
-		/* Unfinished quoted string */
+	case skip_comment:
+		/* Unfinished quoted string or a comment */
 		break;
 	default:
 		/* Do nothing */

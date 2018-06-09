@@ -24,8 +24,10 @@ static gchar *redis_db = NULL;
 static gchar *redis_password = NULL;
 static int64_t fuzzy_expiry = 0;
 
-static void rspamadm_fuzzyconvert (gint argc, gchar **argv);
-static const char *rspamadm_fuzzyconvert_help (gboolean full_help);
+static void rspamadm_fuzzyconvert (gint argc, gchar **argv,
+								   const struct rspamadm_command *cmd);
+static const char *rspamadm_fuzzyconvert_help (gboolean full_help,
+											   const struct rspamadm_command *cmd);
 
 struct rspamadm_command fuzzyconvert_command = {
 		.name = "fuzzyconvert",
@@ -51,7 +53,7 @@ static GOptionEntry entries[] = {
 
 
 static const char *
-rspamadm_fuzzyconvert_help (gboolean full_help)
+rspamadm_fuzzyconvert_help (gboolean full_help, const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -72,7 +74,7 @@ rspamadm_fuzzyconvert_help (gboolean full_help)
 }
 
 static void
-rspamadm_fuzzyconvert (gint argc, gchar **argv)
+rspamadm_fuzzyconvert (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;
@@ -135,6 +137,5 @@ rspamadm_fuzzyconvert (gint argc, gchar **argv)
 			obj,
 			"fuzzy_convert");
 
-	lua_close (L);
 	ucl_object_unref (obj);
 }

@@ -344,7 +344,7 @@ local full_extensions_map = {
   {"group", "text/x-ms-group"},
   {"gsm", "audio/x-gsm"},
   {"gtar", "application/x-gtar"},
-  {"gz", "application/x-gzip"},
+  {"gz", {"application/gzip", "application/x-gzip"}},
   {"h", "text/plain"},
   {"hdf", "application/x-hdf"},
   {"hdml", "text/x-hdml"},
@@ -773,7 +773,7 @@ local full_extensions_map = {
   {"xls", {"application/vnd.ms-excel", "application/vnd.ms-office", "application/x-excel", "application/octet-stream"}},
   {"xlsb", "application/vnd.ms-excel.sheet.binary.macroEnabled.12"},
   {"xlsm", "application/vnd.ms-excel.sheet.macroEnabled.12"},
-  {"xlsx", {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream"}},
+  {"xlsx", {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel.12", "application/octet-stream"}},
   {"xlt", "application/vnd.ms-excel"},
   {"xltm", "application/vnd.ms-excel.template.macroEnabled.12"},
   {"xltx", "application/vnd.openxmlformats-officedocument.spreadsheetml.template"},
@@ -798,6 +798,7 @@ local full_extensions_map = {
   {"xwd", "image/x-xwindowdump"},
   {"z", "application/x-compress"},
   {"zip", {"application/zip", "application/x-zip-compressed", "application/octet-stream"}},
+  {"zlib", "application/zlib"},
 }
 
 local function check_mime_type(task)

@@ -19,10 +19,10 @@ ENDMACRO()
 
 MACRO(ADD_TORCH_PACKAGE package src luasrc)
   INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
-  INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/contrib/torch/torch7/lib/TH)
-  INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/contrib/torch/torch7/lib/luaT)
-  INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR}/contrib/torch/torch7/lib/TH)
-  INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR}/contrib/torch/torch7/lib/luaT)
+  INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/contrib/lua-torch/torch7/lib/TH)
+  INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/contrib/lua-torch/torch7/lib/luaT)
+  INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR}/contrib/lua-torch/torch7/lib/TH)
+  INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR}/contrib/lua-torch/torch7/lib/luaT)
   INCLUDE_DIRECTORIES(${Torch_LUA_INCLUDE_DIR})
 
  ### C/C++ sources

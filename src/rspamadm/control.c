@@ -31,8 +31,10 @@ static gboolean ucl = TRUE;
 static gboolean compact = FALSE;
 static gdouble timeout = 1.0;
 
-static void rspamadm_control (gint argc, gchar **argv);
-static const char *rspamadm_control_help (gboolean full_help);
+static void rspamadm_control (gint argc, gchar **argv,
+							  const struct rspamadm_command *cmd);
+static const char *rspamadm_control_help (gboolean full_help,
+										  const struct rspamadm_command *cmd);
 
 struct rspamadm_command control_command = {
 		.name = "control",
@@ -64,7 +66,7 @@ static GOptionEntry entries[] = {
 };
 
 static const char *
-rspamadm_control_help (gboolean full_help)
+rspamadm_control_help (gboolean full_help, const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -158,7 +160,7 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 }
 
 static void
-rspamadm_control (gint argc, gchar **argv)
+rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;
@@ -260,6 +262,5 @@ rspamadm_control (gint argc, gchar **argv)
 
 	rspamd_http_connection_unref (conn);
 	rspamd_inet_address_free (addr);
-	lua_close (L);
 	close (sock);
 }

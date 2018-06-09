@@ -58,21 +58,21 @@ static __inline uint64_t final_weak_avalanche(uint64_t a, uint64_t b) {
   return mux64(rot64(a + b, 17), prime_4) + mix64(a ^ b, prime_0);
 }
 
-/* TODO C++ template in the next version */
-#define T1HA1_BODY(ENDIANNES, ALIGNESS, DOCOPY)                                \
+/* TODO: C++ template in the next version */
+#define T1HA1_BODY(ENDIANNES, ALIGNESS)                                        \
+  const uint64_t *v = (const uint64_t *)data;                                  \
   if (unlikely(len > 32)) {                                                    \
     uint64_t c = rot64(len, 17) + seed;                                        \
     uint64_t d = len ^ rot64(seed, 17);                                        \
-    const void *detent = (const uint8_t *)data + len - 31;                     \
+    const uint64_t *detent =                                                   \
+        (const uint64_t *)((const uint8_t *)data + len - 31);                  \
     do {                                                                       \
-      const uint64_t *v = (const uint64_t *)data;                              \
-      if (DOCOPY)                                                              \
-        memcpy((void *)(v = align), data, 32);                                 \
-                                                                               \
       const uint64_t w0 = fetch64_##ENDIANNES##_##ALIGNESS(v + 0);             \
       const uint64_t w1 = fetch64_##ENDIANNES##_##ALIGNESS(v + 1);             \
       const uint64_t w2 = fetch64_##ENDIANNES##_##ALIGNESS(v + 2);             \
       const uint64_t w3 = fetch64_##ENDIANNES##_##ALIGNESS(v + 3);             \
+      v += 4;                                                                  \
+      prefetch(v);                                                             \
                                                                                \
       const uint64_t d02 = w0 ^ rot64(w2 + d, 17);                             \
       const uint64_t c13 = w1 ^ rot64(w3 + c, 17);                             \
@@ -80,17 +80,12 @@ static __inline uint64_t final_weak_avalanche(uint64_t a, uint64_t b) {
       d -= b ^ rot64(w1, 31);                                                  \
       a ^= prime_1 * (d02 + w3);                                               \
       b ^= prime_0 * (c13 + w2);                                               \
-      data = (const uint64_t *)data + 4;                                       \
-    } while (likely(data < detent));                                           \
+    } while (likely(v < detent));                                              \
                                                                                \
     a ^= prime_6 * (rot64(c, 17) + d);                                         \
     b ^= prime_5 * (c + rot64(d, 17));                                         \
     len &= 31;                                                                 \
   }                                                                            \
-                                                                               \
-  const uint64_t *v = (const uint64_t *)data;                                  \
-  if (unlikely(need_copy4align) && len > 8)                                    \
-    memcpy((void *)(v = align), data, len);                                    \
                                                                                \
   switch (len) {                                                               \
   default:                                                                     \
@@ -134,26 +129,30 @@ uint64_t t1ha1_le(const void *data, size_t len, uint64_t seed) {
   uint64_t a = seed;
   uint64_t b = len;
 
-  const bool need_copy4align =
-      (((uintptr_t)data) & (ALIGNMENT_64 - 1)) != 0 && !UNALIGNED_OK;
-  uint64_t align[4];
-  if (need_copy4align) {
-    T1HA1_BODY(le, aligned, true);
+#if T1HA_CONFIG_UNALIGNED_ACCESS == T1HA_CONFIG_UNALIGNED_ACCESS__EFFICIENT
+  T1HA1_BODY(le, unaligned);
+#else
+  const bool misaligned = (((uintptr_t)data) & (ALIGNMENT_64 - 1)) != 0;
+  if (misaligned) {
+    T1HA1_BODY(le, unaligned);
   } else {
-    T1HA1_BODY(le, unaligned, false);
+    T1HA1_BODY(le, aligned);
   }
+#endif
 }
 
 uint64_t t1ha1_be(const void *data, size_t len, uint64_t seed) {
   uint64_t a = seed;
   uint64_t b = len;
 
-  const bool need_copy4align =
-      (((uintptr_t)data) & (ALIGNMENT_64 - 1)) != 0 && !UNALIGNED_OK;
-  uint64_t align[4];
-  if (need_copy4align) {
-    T1HA1_BODY(be, aligned, true);
+#if T1HA_CONFIG_UNALIGNED_ACCESS == T1HA_CONFIG_UNALIGNED_ACCESS__EFFICIENT
+  T1HA1_BODY(be, unaligned);
+#else
+  const bool misaligned = (((uintptr_t)data) & (ALIGNMENT_64 - 1)) != 0;
+  if (misaligned) {
+    T1HA1_BODY(be, unaligned);
   } else {
-    T1HA1_BODY(be, unaligned, false);
+    T1HA1_BODY(be, aligned);
   }
+#endif
 }

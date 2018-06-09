@@ -40,7 +40,7 @@ struct rspamd_cryptobox_segment {
 #define rspamd_cryptobox_HASHSTATEBYTES 256
 #define rspamd_cryptobox_MAX_SIGSKBYTES 64
 #define rspamd_cryptobox_MAX_SIGPKBYTES 32
-#define rspamd_cryptobox_MAX_SIGBYTES 64
+#define rspamd_cryptobox_MAX_SIGBYTES 72
 
 #define CPUID_AVX2 0x1
 #define CPUID_AVX 0x2
@@ -214,6 +214,7 @@ void rspamd_cryptobox_sign (guchar *sig, gsize *siglen_p,
  * @return true if signature is valid, false otherwise
  */
 bool rspamd_cryptobox_verify (const guchar *sig,
+		gsize siglen,
 		const guchar *m,
 		gsize mlen,
 		const rspamd_pk_t pk,

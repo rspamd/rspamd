@@ -143,6 +143,12 @@ struct received_header {
 gboolean rspamd_message_parse (struct rspamd_task *task);
 
 /**
+ * Process content in task (e.g. HTML parsing)
+ * @param task
+ */
+void rspamd_message_process (struct rspamd_task *task);
+
+/**
  * Get an array of header's values with specified header's name using raw headers
  * @param task worker task structure
  * @param field header's name

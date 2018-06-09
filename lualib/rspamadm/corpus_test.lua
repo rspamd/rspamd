@@ -1,19 +1,50 @@
 local rspamd_logger = require "rspamd_logger"
 local ucl = require "ucl"
 local lua_util = require "lua_util"
-local getopt = require "rspamadm/getopt"
+local argparse = require "argparse"
+
+local parser = argparse()
+    :name "rspamadm corpus_test"
+    :description "Create logs files from email corpus"
+    :help_description_margin(32)
+
+parser:option "-H --ham"
+      :description("Ham directory")
+      :argname("<dir>")
+parser:option "-S --spam"
+      :description("Spam directory")
+      :argname("<dir>")
+parser:option "-n --conns"
+      :description("Number of parallel connections")
+      :argname("<N>")
+      :convert(tonumber)
+      :default(10)
+parser:option "-o --output"
+      :description("Output file")
+      :argname("<file>")
+      :default('results.log')
+parser:option "-t --timeout"
+      :description("Timeout for client connections")
+      :argname("<sec>")
+      :convert(tonumber)
+      :default(60)
+parser:option "-c --connect"
+      :description("Connect to specific host")
+      :argname("<host>")
+      :default('localhost:11334')
+parser:option "-r --rspamc"
+      :description("Use specific rspamc path")
+      :argname("<path>")
+      :default('rspamc')
 
 local HAM = "HAM"
 local SPAM = "SPAM"
 local opts
-local default_opts = {
-  connect = 'localhost:11334',
-}
 
 local function scan_email(n_parallel, path, timeout)
 
-  local rspamc_command = string.format("rspamc --connect %s -j --compact -n %s -t %.3f %s",
-      opts.connect, n_parallel, timeout, path)
+  local rspamc_command = string.format("%s --connect %s -j --compact -n %s -t %.3f %s",
+      opts.rspamc, opts.connect, n_parallel, timeout, path)
   local result = assert(io.popen(rspamc_command))
   result = result:read("*all")
   return result
@@ -24,7 +55,8 @@ local function write_results(results, file)
   local f = io.open(file, 'w')
 
   for _, result in pairs(results) do
-    local log_line = string.format("%s %.2f %s", result.type, result.score, result.action)
+    local log_line = string.format("%s %.2f %s",
+        result.type, result.score, result.action)
 
     for _, sym in pairs(result.symbols) do
       log_line = log_line .. " " .. sym
@@ -44,16 +76,16 @@ local function encoded_json_to_log(result)
   -- Returns table containing score, action, list of symbols
 
   local filtered_result = {}
-  local parser = ucl.parser()
+  local ucl_parser = ucl.parser()
 
-  local is_good, err = parser:parse_string(result)
+  local is_good, err = ucl_parser:parse_string(result)
 
   if not is_good then
     rspamd_logger.errx("Parser error: %1", err)
     return nil
   end
 
-  result = parser:get_object()
+  result = ucl_parser:get_object()
 
   filtered_result.score = result.score
   if not result.action then
@@ -96,13 +128,12 @@ local function scan_results_to_logs(results, actual_email_type)
   return logs
 end
 
-return function(args, res)
-  opts = default_opts
-  opts = lua_util.override_defaults(opts, getopt.getopt(args, ''))
-  local ham_directory = res['ham_directory']
-  local spam_directory = res['spam_directory']
-  local connections = res["connections"]
-  local output = res["output_location"]
+local function handler(args)
+  opts = parser:parse(args)
+  local ham_directory = opts['ham_directory']
+  local spam_directory = opts['spam_directory']
+  local connections = opts["connections"]
+  local output = opts["output"]
 
   local results = {}
 
@@ -112,7 +143,7 @@ return function(args, res)
 
   if ham_directory then
     rspamd_logger.messagex("Scanning ham corpus...")
-    local ham_results = scan_email(connections, ham_directory, res["timeout"])
+    local ham_results = scan_email(connections, ham_directory, opts["timeout"])
     ham_results = scan_results_to_logs(ham_results, HAM)
 
     no_of_ham = #ham_results
@@ -124,7 +155,7 @@ return function(args, res)
 
   if spam_directory then
     rspamd_logger.messagex("Scanning spam corpus...")
-    local spam_results = scan_email(connections, spam_directory, res.timeout)
+    local spam_results = scan_email(connections, spam_directory, opts.timeout)
     spam_results = scan_results_to_logs(spam_results, SPAM)
 
     no_of_spam = #spam_results
@@ -145,3 +176,10 @@ return function(args, res)
   rspamd_logger.messagex("No of spam: %s", no_of_spam)
   rspamd_logger.messagex("Messages/sec: %s", (total_msgs / elapsed_time))
 end
+
+
+return {
+  name = 'corpus_test',
+  handler = handler,
+  description = parser._description
+}

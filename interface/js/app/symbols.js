@@ -97,7 +97,7 @@ function($) {
                 var label_class = '';
                 if (item.weight < 0) {
                     label_class = 'scorebar-ham';
-                } else {
+                } else if (item.weight > 0) {
                     label_class = 'scorebar-spam';
                 }
                 item.weight = '<input class="form-control input-sm mb-disabled ' + label_class +
@@ -239,11 +239,15 @@ function($) {
                   },
                   components: {
                     filtering: FooTable.groupFilter
+                  },
+                  "on": {
+                    "ready.ft.table": function () {
+                        if (rspamd.read_only) {
+                            $(".mb-disabled").attr('disabled', true);
+                        }
+                    }
                   }
                 });
-                if (rspamd.read_only) {
-                    $( ".mb-disabled" ).attr('disabled', true);
-                }
             },
             error: function (data) {
                 rspamd.alertMessage('alert-modal alert-error', data.statusText);

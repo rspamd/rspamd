@@ -34,10 +34,6 @@
 #include <syslog.h>
 #endif
 
-#ifdef HAVE_GLOB_H
-#include <glob.h>
-#endif
-
 #include <math.h>
 
 struct rspamd_rcl_default_handler_data {
@@ -627,320 +623,6 @@ rspamd_rcl_worker_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	return TRUE;
 }
 
-#define RSPAMD_CONFDIR_INDEX "CONFDIR"
-#define RSPAMD_RUNDIR_INDEX "RUNDIR"
-#define RSPAMD_DBDIR_INDEX "DBDIR"
-#define RSPAMD_LOGDIR_INDEX "LOGDIR"
-#define RSPAMD_PLUGINSDIR_INDEX "PLUGINSDIR"
-#define RSPAMD_RULESDIR_INDEX "RULESDIR"
-#define RSPAMD_LUALIBDIR_INDEX "LUALIBDIR"
-#define RSPAMD_WWWDIR_INDEX "WWWDIR"
-#define RSPAMD_PREFIX_INDEX "PREFIX"
-#define RSPAMD_VERSION_INDEX "VERSION"
-
-static gint
-rspamd_rcl_cmp_components (const gchar *comp1, const gchar *comp2)
-{
-	guint v1, v2;
-
-	v1 = strtoul (comp1, NULL, 10);
-	v2 = strtoul (comp2, NULL, 10);
-
-	return v1 - v2;
-}
-
-static int
-rspamd_rcl_lua_version_cmp (lua_State *L)
-{
-	const gchar *ver;
-	gchar **components;
-	gint ret = 0;
-
-	if (lua_type (L, 2) == LUA_TSTRING) {
-		ver = lua_tostring (L, 2);
-
-		components = g_strsplit_set (ver, ".-_", -1);
-
-		if (!components) {
-			return luaL_error (L, "invalid arguments to 'cmp': %s", ver);
-		}
-
-		if (components[0]) {
-			ret = rspamd_rcl_cmp_components (components[0], RSPAMD_VERSION_MAJOR);
-		}
-
-		if (ret) {
-			goto set;
-		}
-
-		if (components[1]) {
-			ret = rspamd_rcl_cmp_components (components[1], RSPAMD_VERSION_MINOR);
-		}
-
-		if (ret) {
-			goto set;
-		}
-
-		if (components[2]) {
-			ret = rspamd_rcl_cmp_components (components[2], RSPAMD_VERSION_PATCH);
-		}
-
-		/*
-		 * XXX: we don't compare git releases assuming that it is meaningless
-		 */
-	}
-	else {
-		return luaL_error (L, "invalid arguments to 'cmp'");
-	}
-
-set:
-	g_strfreev (components);
-	lua_pushnumber (L, ret);
-
-	return 1;
-}
-
-static int
-rspamd_rcl_lua_version_numeric (lua_State *L)
-{
-	static gint64 version_num = RSPAMD_VERSION_NUM;
-	const gchar *type;
-
-	if (lua_gettop (L) >= 2 && lua_type (L, 1) == LUA_TSTRING) {
-		type = lua_tostring (L, 1);
-		if (g_ascii_strcasecmp (type, "short") == 0) {
-			version_num = RSPAMD_VERSION_MAJOR_NUM * 1000 +
-					RSPAMD_VERSION_MINOR_NUM * 100 + RSPAMD_VERSION_PATCH_NUM * 10;
-		}
-		else if (g_ascii_strcasecmp (type, "main") == 0) {
-			version_num = RSPAMD_VERSION_MAJOR_NUM * 1000 +
-						RSPAMD_VERSION_MINOR_NUM * 100;
-		}
-		else if (g_ascii_strcasecmp (type, "major") == 0) {
-			version_num = RSPAMD_VERSION_MAJOR_NUM;
-		}
-		else if (g_ascii_strcasecmp (type, "minor") == 0) {
-			version_num = RSPAMD_VERSION_MINOR_NUM;
-		}
-		else if (g_ascii_strcasecmp (type, "patch") == 0) {
-			version_num = RSPAMD_VERSION_PATCH_NUM;
-		}
-	}
-
-	lua_pushnumber (L, version_num);
-
-	return 1;
-}
-
-static int
-rspamd_rcl_lua_version (lua_State *L)
-{
-	const gchar *result = NULL, *type;
-
-	if (lua_gettop (L) == 0) {
-		result = RVERSION;
-	}
-	else if (lua_gettop (L) >= 1 && lua_type (L, 1) == LUA_TSTRING) {
-		/* We got something like string */
-		type = lua_tostring (L, 1);
-
-		if (g_ascii_strcasecmp (type, "short") == 0) {
-			result = RSPAMD_VERSION_MAJOR
-					"." RSPAMD_VERSION_MINOR
-					"." RSPAMD_VERSION_PATCH;
-		}
-		else if (g_ascii_strcasecmp (type, "main") == 0) {
-			result = RSPAMD_VERSION_MAJOR "." RSPAMD_VERSION_MINOR;
-		}
-		else if (g_ascii_strcasecmp (type, "major") == 0) {
-			result = RSPAMD_VERSION_MAJOR;
-		}
-		else if (g_ascii_strcasecmp (type, "minor") == 0) {
-			result = RSPAMD_VERSION_MINOR;
-		}
-		else if (g_ascii_strcasecmp (type, "patch") == 0) {
-			result = RSPAMD_VERSION_PATCH;
-		}
-		else if (g_ascii_strcasecmp (type, "id") == 0) {
-			result = RID;
-		}
-		else if (g_ascii_strcasecmp (type, "num") == 0) {
-			return rspamd_rcl_lua_version_numeric (L);
-		}
-		else if (g_ascii_strcasecmp (type, "cmp") == 0) {
-			return rspamd_rcl_lua_version_cmp (L);
-		}
-	}
-
-	lua_pushstring (L, result);
-
-	return 1;
-}
-
-static void
-rspamd_rcl_set_lua_globals (struct rspamd_config *cfg, lua_State *L,
-		GHashTable *vars)
-{
-	struct rspamd_config **pcfg;
-
-	/* First check for global variable 'config' */
-	lua_getglobal (L, "config");
-	if (lua_isnil (L, -1)) {
-		/* Assign global table to set up attributes */
-		lua_newtable (L);
-		lua_setglobal (L, "config");
-	}
-
-	lua_getglobal (L, "metrics");
-	if (lua_isnil (L, -1)) {
-		lua_newtable (L);
-		lua_setglobal (L, "metrics");
-	}
-
-	lua_getglobal (L, "composites");
-	if (lua_isnil (L, -1)) {
-		lua_newtable (L);
-		lua_setglobal (L, "composites");
-	}
-
-	lua_getglobal (L, "rspamd_classifiers");
-	if (lua_isnil (L, -1)) {
-		lua_newtable (L);
-		lua_setglobal (L, "rspamd_classifiers");
-	}
-
-	lua_getglobal (L, "classifiers");
-	if (lua_isnil (L, -1)) {
-		lua_newtable (L);
-		lua_setglobal (L, "classifiers");
-	}
-
-	lua_getglobal (L, "rspamd_version");
-	if (lua_isnil (L, -1)) {
-		lua_pushcfunction (L, rspamd_rcl_lua_version);
-		lua_setglobal (L, "rspamd_version");
-	}
-
-	pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
-	rspamd_lua_setclass (L, "rspamd{config}", -1);
-	*pcfg = cfg;
-	lua_setglobal (L, "rspamd_config");
-
-	/* Clear stack from globals */
-	lua_pop (L, 4);
-
-	rspamd_lua_set_path (L, cfg->rcl_obj, vars);
-
-	/* Set known paths as rspamd_paths global */
-	lua_getglobal (L, "rspamd_paths");
-	if (lua_isnil (L, -1)) {
-		const gchar *confdir = RSPAMD_CONFDIR, *rundir = RSPAMD_RUNDIR,
-				*dbdir = RSPAMD_DBDIR, *logdir = RSPAMD_LOGDIR,
-				*wwwdir = RSPAMD_WWWDIR, *pluginsdir = RSPAMD_PLUGINSDIR,
-				*rulesdir = RSPAMD_RULESDIR, *lualibdir = RSPAMD_LUALIBDIR,
-				*prefix = RSPAMD_PREFIX;
-		const gchar *t;
-
-		/* Try environment */
-		t = getenv ("PLUGINSDIR");
-		if (t) {
-			pluginsdir = t;
-		}
-
-		t = getenv ("RULESDIR");
-		if (t) {
-			rulesdir = t;
-		}
-
-		t = getenv ("DBDIR");
-		if (t) {
-			dbdir = t;
-		}
-
-		t = getenv ("RUNDIR");
-		if (t) {
-			rundir = t;
-		}
-
-		t = getenv ("LUALIBDIR");
-		if (t) {
-			lualibdir = t;
-		}
-
-		t = getenv ("LOGDIR");
-		if (t) {
-			logdir = t;
-		}
-
-		t = getenv ("WWWDIR");
-		if (t) {
-			wwwdir = t;
-		}
-
-		t = getenv ("CONFDIR");
-		if (t) {
-			confdir = t;
-		}
-
-
-		if (vars) {
-			t = g_hash_table_lookup (vars, "PLUGINSDIR");
-			if (t) {
-				pluginsdir = t;
-			}
-
-			t = g_hash_table_lookup (vars, "RULESDIR");
-			if (t) {
-				rulesdir = t;
-			}
-
-			t = g_hash_table_lookup (vars, "LUALIBDIR");
-			if (t) {
-				lualibdir = t;
-			}
-
-			t = g_hash_table_lookup (vars, "RUNDIR");
-			if (t) {
-				rundir = t;
-			}
-
-			t = g_hash_table_lookup (vars, "WWWDIR");
-			if (t) {
-				wwwdir = t;
-			}
-
-			t = g_hash_table_lookup (vars, "CONFDIR");
-			if (t) {
-				confdir = t;
-			}
-
-			t = g_hash_table_lookup (vars, "DBDIR");
-			if (t) {
-				dbdir = t;
-			}
-
-			t = g_hash_table_lookup (vars, "LOGDIR");
-			if (t) {
-				logdir = t;
-			}
-		}
-
-		lua_createtable (L, 0, 9);
-
-		rspamd_lua_table_set (L, RSPAMD_CONFDIR_INDEX, confdir);
-		rspamd_lua_table_set (L, RSPAMD_RUNDIR_INDEX, rundir);
-		rspamd_lua_table_set (L, RSPAMD_DBDIR_INDEX, dbdir);
-		rspamd_lua_table_set (L, RSPAMD_LOGDIR_INDEX, logdir);
-		rspamd_lua_table_set (L, RSPAMD_WWWDIR_INDEX, wwwdir);
-		rspamd_lua_table_set (L, RSPAMD_PLUGINSDIR_INDEX, pluginsdir);
-		rspamd_lua_table_set (L, RSPAMD_RULESDIR_INDEX, rulesdir);
-		rspamd_lua_table_set (L, RSPAMD_LUALIBDIR_INDEX, lualibdir);
-		rspamd_lua_table_set (L, RSPAMD_PREFIX_INDEX, prefix);
-
-		lua_setglobal (L, "rspamd_paths");
-	}
-}
-
 static gboolean
 rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		const gchar *key, gpointer ud,
@@ -1047,9 +729,8 @@ rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 {
 	struct stat st;
 	struct script_module *cur_mod;
-	glob_t globbuf;
-	gchar *pattern, *ext_pos;
-	size_t len;
+	GPtrArray *paths;
+	gchar *fname, *ext_pos;
 	guint i;
 
 	if (stat (path, &st) == -1) {
@@ -1064,52 +745,39 @@ rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 
 	/* Handle directory */
 	if (S_ISDIR (st.st_mode)) {
-		globbuf.gl_offs = 0;
-		len = strlen (path) + sizeof ("*.lua");
-		pattern = g_malloc (len);
-		rspamd_snprintf (pattern, len, "%s%s", path, "*.lua");
+		paths = rspamd_glob_path (path, "*.lua", TRUE, err);
 
-		if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
-			for (i = 0; i < globbuf.gl_pathc; i++) {
-				cur_mod =
-					rspamd_mempool_alloc (cfg->cfg_pool,
-						sizeof (struct script_module));
-				cur_mod->path = rspamd_mempool_strdup (cfg->cfg_pool,
-						globbuf.gl_pathv[i]);
-				cur_mod->name = g_path_get_basename (cur_mod->path);
-				rspamd_mempool_add_destructor (cfg->cfg_pool, g_free,
-						cur_mod->name);
-				ext_pos = strstr (cur_mod->name, ".lua");
-
-				if (ext_pos != NULL) {
-					*ext_pos = '\0';
-				}
-
-				if (cfg->script_modules == NULL) {
-					cfg->script_modules = g_list_append (cfg->script_modules,
-							cur_mod);
-					rspamd_mempool_add_destructor (cfg->cfg_pool,
-							(rspamd_mempool_destruct_t)g_list_free,
-							cfg->script_modules);
-				}
-				else {
-					cfg->script_modules = g_list_append (cfg->script_modules,
-							cur_mod);
-				}
-			}
-			globfree (&globbuf);
-			g_free (pattern);
-		}
-		else {
-			g_set_error (err,
-				CFG_RCL_ERROR,
-				errno,
-				"glob failed for %s, %s",
-				pattern,
-				strerror (errno));
-			g_free (pattern);
+		if (!paths) {
 			return FALSE;
 		}
+
+		PTR_ARRAY_FOREACH (paths, i, fname) {
+			cur_mod =
+					rspamd_mempool_alloc (cfg->cfg_pool,
+							sizeof (struct script_module));
+			cur_mod->path = rspamd_mempool_strdup (cfg->cfg_pool, fname);
+			cur_mod->name = g_path_get_basename (cur_mod->path);
+			rspamd_mempool_add_destructor (cfg->cfg_pool, g_free,
+					cur_mod->name);
+			ext_pos = strstr (cur_mod->name, ".lua");
+
+			if (ext_pos != NULL) {
+				*ext_pos = '\0';
+			}
+
+			if (cfg->script_modules == NULL) {
+				cfg->script_modules = g_list_append (cfg->script_modules,
+						cur_mod);
+				rspamd_mempool_add_destructor (cfg->cfg_pool,
+						(rspamd_mempool_destruct_t) g_list_free,
+						cfg->script_modules);
+			} else {
+				cfg->script_modules = g_list_append (cfg->script_modules,
+						cur_mod);
+			}
+		}
+
+		g_ptr_array_free (paths, TRUE);
 	}
 	else {
 		/* Handle single file */
@@ -1762,7 +1430,7 @@ rspamd_rcl_add_default_handler (struct rspamd_rcl_section *section,
 }
 
 struct rspamd_rcl_section *
-rspamd_rcl_config_init (struct rspamd_config *cfg)
+rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 {
 	struct rspamd_rcl_section *new = NULL, *sub, *ssub;
 
@@ -1775,770 +1443,788 @@ rspamd_rcl_config_init (struct rspamd_config *cfg)
 	/**
 	 * Logging section
 	 */
-	sub = rspamd_rcl_add_section_doc (&new,
-			"logging", NULL,
-			rspamd_rcl_logging_handler,
-			UCL_OBJECT,
-			FALSE,
-			TRUE,
-			cfg->doc_strings,
-			"Configure rspamd logging");
-	/* Default handlers */
-	rspamd_rcl_add_default_handler (sub,
-			"log_buffer",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, log_buf_size),
-			RSPAMD_CL_FLAG_INT_32,
-			"Size of log buffer in bytes (for file logging)");
-	rspamd_rcl_add_default_handler (sub,
-			"log_urls",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, log_urls),
-			0,
-			"Write each URL found in a message to the log file");
-	rspamd_rcl_add_default_handler (sub,
-			"debug_ip",
-			rspamd_rcl_parse_struct_ucl,
-			G_STRUCT_OFFSET (struct rspamd_config, debug_ip_map),
-			0,
-			"Enable debugging log for the specified IP addresses");
-	rspamd_rcl_add_default_handler (sub,
-			"debug_symbols",
-			rspamd_rcl_parse_struct_string_list,
-			G_STRUCT_OFFSET (struct rspamd_config, debug_symbols),
-			0,
-			"Enable debug for the specified symbols");
-	rspamd_rcl_add_default_handler (sub,
-			"debug_modules",
-			rspamd_rcl_parse_struct_string_list,
-			G_STRUCT_OFFSET (struct rspamd_config, debug_modules),
-			RSPAMD_CL_FLAG_STRING_LIST_HASH,
-			"Enable debugging for the specified modules");
-	rspamd_rcl_add_default_handler (sub,
-			"log_format",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, log_format_str),
-			0,
-			"Specify format string for the task logging output "
-					"(https://rspamd.com/doc/configuration/logging.html "
-					"for details)");
-	rspamd_rcl_add_default_handler (sub,
-			"encryption_key",
-			rspamd_rcl_parse_struct_pubkey,
-			G_STRUCT_OFFSET (struct rspamd_config, log_encryption_key),
-			0,
-			"Encrypt sensitive information in logs using this pubkey");
-	rspamd_rcl_add_default_handler (sub,
-			"error_elts",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, log_error_elts),
-			RSPAMD_CL_FLAG_UINT,
-			"Size of circular buffer for last errors (10 by default)");
-	rspamd_rcl_add_default_handler (sub,
-			"error_maxlen",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, log_error_elt_maxlen),
-			RSPAMD_CL_FLAG_UINT,
-			"Size of each element in error log buffer (1000 by default)");
+	if (!(skip_sections && g_hash_table_lookup (skip_sections, "logging"))) {
+		sub = rspamd_rcl_add_section_doc (&new,
+				"logging", NULL,
+				rspamd_rcl_logging_handler,
+				UCL_OBJECT,
+				FALSE,
+				TRUE,
+				cfg->doc_strings,
+				"Configure rspamd logging");
+		/* Default handlers */
+		rspamd_rcl_add_default_handler (sub,
+				"log_buffer",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, log_buf_size),
+				RSPAMD_CL_FLAG_INT_32,
+				"Size of log buffer in bytes (for file logging)");
+		rspamd_rcl_add_default_handler (sub,
+				"log_urls",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, log_urls),
+				0,
+				"Write each URL found in a message to the log file");
+		rspamd_rcl_add_default_handler (sub,
+				"debug_ip",
+				rspamd_rcl_parse_struct_ucl,
+				G_STRUCT_OFFSET (struct rspamd_config, debug_ip_map),
+				0,
+				"Enable debugging log for the specified IP addresses");
+		rspamd_rcl_add_default_handler (sub,
+				"debug_symbols",
+				rspamd_rcl_parse_struct_string_list,
+				G_STRUCT_OFFSET (struct rspamd_config, debug_symbols),
+				0,
+				"Enable debug for the specified symbols");
+		rspamd_rcl_add_default_handler (sub,
+				"debug_modules",
+				rspamd_rcl_parse_struct_string_list,
+				G_STRUCT_OFFSET (struct rspamd_config, debug_modules),
+				RSPAMD_CL_FLAG_STRING_LIST_HASH,
+				"Enable debugging for the specified modules");
+		rspamd_rcl_add_default_handler (sub,
+				"log_format",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, log_format_str),
+				0,
+				"Specify format string for the task logging output "
+				"(https://rspamd.com/doc/configuration/logging.html "
+				"for details)");
+		rspamd_rcl_add_default_handler (sub,
+				"encryption_key",
+				rspamd_rcl_parse_struct_pubkey,
+				G_STRUCT_OFFSET (struct rspamd_config, log_encryption_key),
+				0,
+				"Encrypt sensitive information in logs using this pubkey");
+		rspamd_rcl_add_default_handler (sub,
+				"error_elts",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, log_error_elts),
+				RSPAMD_CL_FLAG_UINT,
+				"Size of circular buffer for last errors (10 by default)");
+		rspamd_rcl_add_default_handler (sub,
+				"error_maxlen",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, log_error_elt_maxlen),
+				RSPAMD_CL_FLAG_UINT,
+				"Size of each element in error log buffer (1000 by default)");
 
-	/* Documentation only options, handled in log_handler to map flags */
-	rspamd_rcl_add_doc_by_path (cfg,
-			"logging",
-			"Enable colored output (for console logging)",
-			"log_color",
-			UCL_BOOLEAN,
-			NULL,
-			0,
-			NULL,
-			0);
-	rspamd_rcl_add_doc_by_path (cfg,
-			"logging",
-			"Enable systemd compatible logging",
-			"systemd",
-			UCL_BOOLEAN,
-			NULL,
-			0,
-			NULL,
-			0);
-	rspamd_rcl_add_doc_by_path (cfg,
-			"logging",
-			"Write statistics of regexp processing to log (useful for hyperscan)",
-			"log_re_cache",
-			UCL_BOOLEAN,
-			NULL,
-			0,
-			NULL,
-			0);
-	rspamd_rcl_add_doc_by_path (cfg,
-			"logging",
-			"Use microseconds resolution for timestamps",
-			"log_usec",
-			UCL_BOOLEAN,
-			NULL,
-			0,
-			NULL,
-			0);
-	/**
-	 * Options section
-	 */
-	sub = rspamd_rcl_add_section_doc (&new,
-			"options", NULL,
-			rspamd_rcl_options_handler,
-			UCL_OBJECT,
-			FALSE,
-			TRUE,
-			cfg->doc_strings,
-			"Global rspamd options");
-	rspamd_rcl_add_default_handler (sub,
-			"cache_file",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, cache_filename),
-			RSPAMD_CL_FLAG_STRING_PATH,
-			"Path to the cache file");
-	rspamd_rcl_add_default_handler (sub,
-			"cache_reload",
-			rspamd_rcl_parse_struct_time,
-			G_STRUCT_OFFSET (struct rspamd_config, cache_reload_time),
-			RSPAMD_CL_FLAG_TIME_FLOAT,
-			"How often cache reload should be performed");
-	/* Old DNS configuration */
-	rspamd_rcl_add_default_handler (sub,
-			"dns_nameserver",
-			rspamd_rcl_parse_struct_ucl,
-			G_STRUCT_OFFSET (struct rspamd_config, nameservers),
-			0,
-			"Legacy option for DNS servers used");
-	rspamd_rcl_add_default_handler (sub,
-			"dns_timeout",
-			rspamd_rcl_parse_struct_time,
-			G_STRUCT_OFFSET (struct rspamd_config, dns_timeout),
-			RSPAMD_CL_FLAG_TIME_FLOAT,
-			"Legacy option for DNS request timeout");
-	rspamd_rcl_add_default_handler (sub,
-			"dns_retransmits",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, dns_retransmits),
-			RSPAMD_CL_FLAG_INT_32,
-			"Legacy option for DNS retransmits count");
-	rspamd_rcl_add_default_handler (sub,
-			"dns_sockets",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
-			RSPAMD_CL_FLAG_INT_32,
-			"Legacy option for DNS sockets per server count");
-	rspamd_rcl_add_default_handler (sub,
-			"dns_max_requests",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, dns_max_requests),
-			RSPAMD_CL_FLAG_INT_32,
-			"Legacy option for DNS maximum requests per task count");
-	rspamd_rcl_add_default_handler (sub,
-			"classify_headers",
-			rspamd_rcl_parse_struct_string_list,
-			G_STRUCT_OFFSET (struct rspamd_config, classify_headers),
-			0,
-			"List of headers used for classifiers");
-	rspamd_rcl_add_default_handler (sub,
-			"control_socket",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, control_socket_path),
-			0,
-			"Path to the control socket");
-	rspamd_rcl_add_default_handler (sub,
-			"explicit_modules",
-			rspamd_rcl_parse_struct_string_list,
-			G_STRUCT_OFFSET (struct rspamd_config, explicit_modules),
-			RSPAMD_CL_FLAG_STRING_LIST_HASH,
-			"Always load these modules even if they are not configured explicitly");
-	rspamd_rcl_add_default_handler (sub,
-			"allow_raw_input",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, allow_raw_input),
-			0,
-			"Allow non MIME input for rspamd");
-	rspamd_rcl_add_default_handler (sub,
-			"raw_mode",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, raw_mode),
-			0,
-			"Don't try to convert all messages to utf8");
-	rspamd_rcl_add_default_handler (sub,
-			"one_shot",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, one_shot_mode),
-			0,
-			"Add all symbols only once per message");
-	rspamd_rcl_add_default_handler (sub,
-			"check_attachements",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, check_text_attachements),
-			0,
-			"Treat text attachments as normal text parts");
-	rspamd_rcl_add_default_handler (sub,
-			"check_attachments",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, check_text_attachements),
-			0,
-			"Treat text attachments as normal text parts");
-	rspamd_rcl_add_default_handler (sub,
-			"tempdir",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, temp_dir),
-			RSPAMD_CL_FLAG_STRING_PATH,
-			"Directory for temporary files");
-	rspamd_rcl_add_default_handler (sub,
-			"pidfile",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, pid_file),
-			RSPAMD_CL_FLAG_STRING_PATH,
-			"Path to the pid file");
-	rspamd_rcl_add_default_handler (sub,
-			"filters",
-			rspamd_rcl_parse_struct_string_list,
-			G_STRUCT_OFFSET (struct rspamd_config, filters),
-			0,
-			"List of internal filters enabled");
-	rspamd_rcl_add_default_handler (sub,
-			"max_diff",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, max_diff),
-			RSPAMD_CL_FLAG_INT_SIZE,
-			"Legacy option, do not use");
-	rspamd_rcl_add_default_handler (sub,
-			"map_watch_interval",
-			rspamd_rcl_parse_struct_time,
-			G_STRUCT_OFFSET (struct rspamd_config, map_timeout),
-			RSPAMD_CL_FLAG_TIME_FLOAT,
-			"Interval for checking maps");
-	rspamd_rcl_add_default_handler (sub,
-			"map_file_watch_multiplier",
-			rspamd_rcl_parse_struct_double,
-			G_STRUCT_OFFSET (struct rspamd_config, map_file_watch_multiplier),
-			0,
-			"Multiplier for map watch interval when map is file");
-	rspamd_rcl_add_default_handler (sub,
-			"monitoring_watch_interval",
-			rspamd_rcl_parse_struct_time,
-			G_STRUCT_OFFSET (struct rspamd_config, monitored_interval),
-			RSPAMD_CL_FLAG_TIME_FLOAT,
-			"Interval for checking monitored instances");
-	rspamd_rcl_add_default_handler (sub,
-			"disable_monitoring",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, disable_monitored),
-			0,
-			"Disable monitoring completely");
-	rspamd_rcl_add_default_handler (sub,
-			"dynamic_conf",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, dynamic_conf),
-			0,
-			"Path to the dynamic configuration");
-	rspamd_rcl_add_default_handler (sub,
-			"rrd",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, rrd_file),
-			RSPAMD_CL_FLAG_STRING_PATH,
-			"Path to RRD file");
-	rspamd_rcl_add_default_handler (sub,
-			"history_file",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, history_file),
-			RSPAMD_CL_FLAG_STRING_PATH,
-			"Path to history file");
-	rspamd_rcl_add_default_handler (sub,
-			"check_all_filters",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, check_all_filters),
-			0,
-			"Always check all filters");
-	rspamd_rcl_add_default_handler (sub,
-			"enable_experimental",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, enable_experimental),
-			0,
-			"Enable experimental plugins");
-	rspamd_rcl_add_default_handler (sub,
-			"disable_pcre_jit",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, disable_pcre_jit),
-			0,
-			"Disable PCRE JIT");
-	rspamd_rcl_add_default_handler (sub,
-			"disable_lua_squeeze",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, disable_lua_squeeze),
-			0,
-			"Disable Lua rules squeezing");
-	rspamd_rcl_add_default_handler (sub,
-			"min_word_len",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, min_word_len),
-			RSPAMD_CL_FLAG_UINT,
-			"Minimum length of the word to be considered in statistics/fuzzy");
-	rspamd_rcl_add_default_handler (sub,
-			"max_word_len",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, max_word_len),
-			RSPAMD_CL_FLAG_UINT,
-			"Maximum length of the word to be considered in statistics/fuzzy");
-	rspamd_rcl_add_default_handler (sub,
-			"words_decay",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, words_decay),
-			RSPAMD_CL_FLAG_UINT,
-			"Start skipping words at this amount");
-	rspamd_rcl_add_default_handler (sub,
-			"url_tld",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, tld_file),
-			RSPAMD_CL_FLAG_STRING_PATH,
-			"Path to the TLD file for urls detector");
-	rspamd_rcl_add_default_handler (sub,
-			"tld",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, tld_file),
-			RSPAMD_CL_FLAG_STRING_PATH,
-			"Path to the TLD file for urls detector");
-	rspamd_rcl_add_default_handler (sub,
-			"hs_cache_dir",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, hs_cache_dir),
-			RSPAMD_CL_FLAG_STRING_PATH,
-			"Path directory where rspamd would save hyperscan cache");
-	rspamd_rcl_add_default_handler (sub,
-			"history_rows",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, history_rows),
-			RSPAMD_CL_FLAG_UINT,
-			"Number of records in the history file");
-	rspamd_rcl_add_default_handler (sub,
-			"disable_hyperscan",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, disable_hyperscan),
-			0,
-			"Disable hyperscan optimizations for regular expressions");
-	rspamd_rcl_add_default_handler (sub,
-			"vectorized_hyperscan",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, vectorized_hyperscan),
-			0,
-			"Use hyperscan in vectorized mode (experimental)");
-	rspamd_rcl_add_default_handler (sub,
-			"cores_dir",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, cores_dir),
-			RSPAMD_CL_FLAG_STRING_PATH,
-			"Path to the directory where rspamd core files are intended to be dumped");
-	rspamd_rcl_add_default_handler (sub,
-			"max_cores_size",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, max_cores_size),
-			RSPAMD_CL_FLAG_INT_SIZE,
-			"Limit of joint size of all files in `cores_dir`");
-	rspamd_rcl_add_default_handler (sub,
-			"max_cores_count",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, max_cores_count),
-			RSPAMD_CL_FLAG_INT_SIZE,
-			"Limit of files count in `cores_dir`");
-	rspamd_rcl_add_default_handler (sub,
-			"local_addrs",
-			rspamd_rcl_parse_struct_ucl,
-			G_STRUCT_OFFSET (struct rspamd_config, local_addrs),
-			0,
-			"Use the specified addresses as local ones");
-	rspamd_rcl_add_default_handler (sub,
-			"local_networks",
-			rspamd_rcl_parse_struct_ucl,
-			G_STRUCT_OFFSET (struct rspamd_config, local_addrs),
-			0,
-			"Use the specified addresses as local ones (alias for `local_addrs`)");
-	rspamd_rcl_add_default_handler (sub,
-			"trusted_keys",
-			rspamd_rcl_parse_struct_string_list,
-			G_STRUCT_OFFSET (struct rspamd_config, trusted_keys),
-			RSPAMD_CL_FLAG_STRING_LIST_HASH,
-			"List of trusted public keys used for signatures in base32 encoding");
-	rspamd_rcl_add_default_handler (sub,
-			"enable_shutdown_workaround",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, enable_shutdown_workaround),
-			0,
-			"Enable workaround for legacy clients");
-	rspamd_rcl_add_default_handler (sub,
-			"ignore_received",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, ignore_received),
-			0,
-			"Ignore data from the first received header");
-	rspamd_rcl_add_default_handler (sub,
-			"ssl_ca_path",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, ssl_ca_path),
-			RSPAMD_CL_FLAG_STRING_PATH,
-			"Path to ssl CA file");
-	rspamd_rcl_add_default_handler (sub,
-			"ssl_ciphers",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, ssl_ciphers),
-			0,
-			"List of ssl ciphers (e.g. HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4)");
-	rspamd_rcl_add_default_handler (sub,
-			"magic_file",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, magic_file),
-			0,
-			"Path to a custom libmagic file");
-	rspamd_rcl_add_default_handler (sub,
-			"max_message",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, max_message),
-			RSPAMD_CL_FLAG_INT_SIZE,
-			"Maximum size of the message to be scanned (50Mb by default)");
-	rspamd_rcl_add_default_handler (sub,
-			"max_pic",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, max_pic_size),
-			RSPAMD_CL_FLAG_INT_SIZE,
-			"Maximum size of the picture to be normalized (1Mb by default)");
-	rspamd_rcl_add_default_handler (sub,
-			"images_cache",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, max_pic_size),
-			RSPAMD_CL_FLAG_INT_SIZE,
-			"Size of DCT data cache for images (256 elements by default)");
-	rspamd_rcl_add_default_handler (sub,
-			"zstd_input_dictionary",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, zstd_input_dictionary),
-			RSPAMD_CL_FLAG_STRING_PATH,
-			"Dictionary for zstd inbound protocol compression");
-	rspamd_rcl_add_default_handler (sub,
-			"zstd_output_dictionary",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, zstd_output_dictionary),
-			RSPAMD_CL_FLAG_STRING_PATH,
-			"Dictionary for outbound zstd compression");
-	rspamd_rcl_add_default_handler (sub,
-			"compat_messages",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, compat_messages),
-			0,
-			"Use pre 1.4 style of messages in the protocol");
-	rspamd_rcl_add_default_handler (sub,
-			"max_shots",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, default_max_shots),
-			0,
-			"Maximum number of hits per a single symbol (default: 100)");
-	rspamd_rcl_add_default_handler (sub,
-			"sessions_cache",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, enable_sessions_cache),
-			0,
-			"Enable sessions cache to debug dangling sessions");
-	rspamd_rcl_add_default_handler (sub,
-			"max_sessions_cache",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, max_sessions_cache),
-			0,
-			"Maximum number of sessions in cache before warning (default: 100)");
+		/* Documentation only options, handled in log_handler to map flags */
+		rspamd_rcl_add_doc_by_path (cfg,
+				"logging",
+				"Enable colored output (for console logging)",
+				"log_color",
+				UCL_BOOLEAN,
+				NULL,
+				0,
+				NULL,
+				0);
+		rspamd_rcl_add_doc_by_path (cfg,
+				"logging",
+				"Enable systemd compatible logging",
+				"systemd",
+				UCL_BOOLEAN,
+				NULL,
+				0,
+				NULL,
+				0);
+		rspamd_rcl_add_doc_by_path (cfg,
+				"logging",
+				"Write statistics of regexp processing to log (useful for hyperscan)",
+				"log_re_cache",
+				UCL_BOOLEAN,
+				NULL,
+				0,
+				NULL,
+				0);
+		rspamd_rcl_add_doc_by_path (cfg,
+				"logging",
+				"Use microseconds resolution for timestamps",
+				"log_usec",
+				UCL_BOOLEAN,
+				NULL,
+				0,
+				NULL,
+				0);
+	}
+	if (!(skip_sections && g_hash_table_lookup (skip_sections, "options"))) {
+		/**
+		 * Options section
+		 */
+		sub = rspamd_rcl_add_section_doc (&new,
+				"options", NULL,
+				rspamd_rcl_options_handler,
+				UCL_OBJECT,
+				FALSE,
+				TRUE,
+				cfg->doc_strings,
+				"Global rspamd options");
+		rspamd_rcl_add_default_handler (sub,
+				"cache_file",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, cache_filename),
+				RSPAMD_CL_FLAG_STRING_PATH,
+				"Path to the cache file");
+		rspamd_rcl_add_default_handler (sub,
+				"cache_reload",
+				rspamd_rcl_parse_struct_time,
+				G_STRUCT_OFFSET (struct rspamd_config, cache_reload_time),
+				RSPAMD_CL_FLAG_TIME_FLOAT,
+				"How often cache reload should be performed");
+		/* Old DNS configuration */
+		rspamd_rcl_add_default_handler (sub,
+				"dns_nameserver",
+				rspamd_rcl_parse_struct_ucl,
+				G_STRUCT_OFFSET (struct rspamd_config, nameservers),
+				0,
+				"Legacy option for DNS servers used");
+		rspamd_rcl_add_default_handler (sub,
+				"dns_timeout",
+				rspamd_rcl_parse_struct_time,
+				G_STRUCT_OFFSET (struct rspamd_config, dns_timeout),
+				RSPAMD_CL_FLAG_TIME_FLOAT,
+				"Legacy option for DNS request timeout");
+		rspamd_rcl_add_default_handler (sub,
+				"dns_retransmits",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, dns_retransmits),
+				RSPAMD_CL_FLAG_INT_32,
+				"Legacy option for DNS retransmits count");
+		rspamd_rcl_add_default_handler (sub,
+				"dns_sockets",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
+				RSPAMD_CL_FLAG_INT_32,
+				"Legacy option for DNS sockets per server count");
+		rspamd_rcl_add_default_handler (sub,
+				"dns_max_requests",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, dns_max_requests),
+				RSPAMD_CL_FLAG_INT_32,
+				"Legacy option for DNS maximum requests per task count");
+		rspamd_rcl_add_default_handler (sub,
+				"classify_headers",
+				rspamd_rcl_parse_struct_string_list,
+				G_STRUCT_OFFSET (struct rspamd_config, classify_headers),
+				0,
+				"List of headers used for classifiers");
+		rspamd_rcl_add_default_handler (sub,
+				"control_socket",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, control_socket_path),
+				0,
+				"Path to the control socket");
+		rspamd_rcl_add_default_handler (sub,
+				"explicit_modules",
+				rspamd_rcl_parse_struct_string_list,
+				G_STRUCT_OFFSET (struct rspamd_config, explicit_modules),
+				RSPAMD_CL_FLAG_STRING_LIST_HASH,
+				"Always load these modules even if they are not configured explicitly");
+		rspamd_rcl_add_default_handler (sub,
+				"allow_raw_input",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, allow_raw_input),
+				0,
+				"Allow non MIME input for rspamd");
+		rspamd_rcl_add_default_handler (sub,
+				"raw_mode",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, raw_mode),
+				0,
+				"Don't try to convert all messages to utf8");
+		rspamd_rcl_add_default_handler (sub,
+				"one_shot",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, one_shot_mode),
+				0,
+				"Add all symbols only once per message");
+		rspamd_rcl_add_default_handler (sub,
+				"check_attachements",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, check_text_attachements),
+				0,
+				"Treat text attachments as normal text parts");
+		rspamd_rcl_add_default_handler (sub,
+				"check_attachments",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, check_text_attachements),
+				0,
+				"Treat text attachments as normal text parts");
+		rspamd_rcl_add_default_handler (sub,
+				"tempdir",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, temp_dir),
+				RSPAMD_CL_FLAG_STRING_PATH,
+				"Directory for temporary files");
+		rspamd_rcl_add_default_handler (sub,
+				"pidfile",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, pid_file),
+				RSPAMD_CL_FLAG_STRING_PATH,
+				"Path to the pid file");
+		rspamd_rcl_add_default_handler (sub,
+				"filters",
+				rspamd_rcl_parse_struct_string_list,
+				G_STRUCT_OFFSET (struct rspamd_config, filters),
+				0,
+				"List of internal filters enabled");
+		rspamd_rcl_add_default_handler (sub,
+				"max_diff",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, max_diff),
+				RSPAMD_CL_FLAG_INT_SIZE,
+				"Legacy option, do not use");
+		rspamd_rcl_add_default_handler (sub,
+				"map_watch_interval",
+				rspamd_rcl_parse_struct_time,
+				G_STRUCT_OFFSET (struct rspamd_config, map_timeout),
+				RSPAMD_CL_FLAG_TIME_FLOAT,
+				"Interval for checking maps");
+		rspamd_rcl_add_default_handler (sub,
+				"map_file_watch_multiplier",
+				rspamd_rcl_parse_struct_double,
+				G_STRUCT_OFFSET (struct rspamd_config, map_file_watch_multiplier),
+				0,
+				"Multiplier for map watch interval when map is file");
+		rspamd_rcl_add_default_handler (sub,
+				"monitoring_watch_interval",
+				rspamd_rcl_parse_struct_time,
+				G_STRUCT_OFFSET (struct rspamd_config, monitored_interval),
+				RSPAMD_CL_FLAG_TIME_FLOAT,
+				"Interval for checking monitored instances");
+		rspamd_rcl_add_default_handler (sub,
+				"disable_monitoring",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, disable_monitored),
+				0,
+				"Disable monitoring completely");
+		rspamd_rcl_add_default_handler (sub,
+				"dynamic_conf",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, dynamic_conf),
+				0,
+				"Path to the dynamic configuration");
+		rspamd_rcl_add_default_handler (sub,
+				"rrd",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, rrd_file),
+				RSPAMD_CL_FLAG_STRING_PATH,
+				"Path to RRD file");
+		rspamd_rcl_add_default_handler (sub,
+				"history_file",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, history_file),
+				RSPAMD_CL_FLAG_STRING_PATH,
+				"Path to history file");
+		rspamd_rcl_add_default_handler (sub,
+				"check_all_filters",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, check_all_filters),
+				0,
+				"Always check all filters");
+		rspamd_rcl_add_default_handler (sub,
+				"enable_experimental",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, enable_experimental),
+				0,
+				"Enable experimental plugins");
+		rspamd_rcl_add_default_handler (sub,
+				"disable_pcre_jit",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, disable_pcre_jit),
+				0,
+				"Disable PCRE JIT");
+		rspamd_rcl_add_default_handler (sub,
+				"disable_lua_squeeze",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, disable_lua_squeeze),
+				0,
+				"Disable Lua rules squeezing");
+		rspamd_rcl_add_default_handler (sub,
+				"min_word_len",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, min_word_len),
+				RSPAMD_CL_FLAG_UINT,
+				"Minimum length of the word to be considered in statistics/fuzzy");
+		rspamd_rcl_add_default_handler (sub,
+				"max_word_len",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, max_word_len),
+				RSPAMD_CL_FLAG_UINT,
+				"Maximum length of the word to be considered in statistics/fuzzy");
+		rspamd_rcl_add_default_handler (sub,
+				"words_decay",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, words_decay),
+				RSPAMD_CL_FLAG_UINT,
+				"Start skipping words at this amount");
+		rspamd_rcl_add_default_handler (sub,
+				"url_tld",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, tld_file),
+				RSPAMD_CL_FLAG_STRING_PATH,
+				"Path to the TLD file for urls detector");
+		rspamd_rcl_add_default_handler (sub,
+				"tld",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, tld_file),
+				RSPAMD_CL_FLAG_STRING_PATH,
+				"Path to the TLD file for urls detector");
+		rspamd_rcl_add_default_handler (sub,
+				"hs_cache_dir",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, hs_cache_dir),
+				RSPAMD_CL_FLAG_STRING_PATH,
+				"Path directory where rspamd would save hyperscan cache");
+		rspamd_rcl_add_default_handler (sub,
+				"history_rows",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, history_rows),
+				RSPAMD_CL_FLAG_UINT,
+				"Number of records in the history file");
+		rspamd_rcl_add_default_handler (sub,
+				"disable_hyperscan",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, disable_hyperscan),
+				0,
+				"Disable hyperscan optimizations for regular expressions");
+		rspamd_rcl_add_default_handler (sub,
+				"vectorized_hyperscan",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, vectorized_hyperscan),
+				0,
+				"Use hyperscan in vectorized mode (experimental)");
+		rspamd_rcl_add_default_handler (sub,
+				"cores_dir",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, cores_dir),
+				RSPAMD_CL_FLAG_STRING_PATH,
+				"Path to the directory where rspamd core files are intended to be dumped");
+		rspamd_rcl_add_default_handler (sub,
+				"max_cores_size",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, max_cores_size),
+				RSPAMD_CL_FLAG_INT_SIZE,
+				"Limit of joint size of all files in `cores_dir`");
+		rspamd_rcl_add_default_handler (sub,
+				"max_cores_count",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, max_cores_count),
+				RSPAMD_CL_FLAG_INT_SIZE,
+				"Limit of files count in `cores_dir`");
+		rspamd_rcl_add_default_handler (sub,
+				"local_addrs",
+				rspamd_rcl_parse_struct_ucl,
+				G_STRUCT_OFFSET (struct rspamd_config, local_addrs),
+				0,
+				"Use the specified addresses as local ones");
+		rspamd_rcl_add_default_handler (sub,
+				"local_networks",
+				rspamd_rcl_parse_struct_ucl,
+				G_STRUCT_OFFSET (struct rspamd_config, local_addrs),
+				0,
+				"Use the specified addresses as local ones (alias for `local_addrs`)");
+		rspamd_rcl_add_default_handler (sub,
+				"trusted_keys",
+				rspamd_rcl_parse_struct_string_list,
+				G_STRUCT_OFFSET (struct rspamd_config, trusted_keys),
+				RSPAMD_CL_FLAG_STRING_LIST_HASH,
+				"List of trusted public keys used for signatures in base32 encoding");
+		rspamd_rcl_add_default_handler (sub,
+				"enable_shutdown_workaround",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, enable_shutdown_workaround),
+				0,
+				"Enable workaround for legacy clients");
+		rspamd_rcl_add_default_handler (sub,
+				"ignore_received",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, ignore_received),
+				0,
+				"Ignore data from the first received header");
+		rspamd_rcl_add_default_handler (sub,
+				"ssl_ca_path",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, ssl_ca_path),
+				RSPAMD_CL_FLAG_STRING_PATH,
+				"Path to ssl CA file");
+		rspamd_rcl_add_default_handler (sub,
+				"ssl_ciphers",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, ssl_ciphers),
+				0,
+				"List of ssl ciphers (e.g. HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4)");
+		rspamd_rcl_add_default_handler (sub,
+				"magic_file",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, magic_file),
+				0,
+				"Path to a custom libmagic file");
+		rspamd_rcl_add_default_handler (sub,
+				"max_message",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, max_message),
+				RSPAMD_CL_FLAG_INT_SIZE,
+				"Maximum size of the message to be scanned (50Mb by default)");
+		rspamd_rcl_add_default_handler (sub,
+				"max_pic",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, max_pic_size),
+				RSPAMD_CL_FLAG_INT_SIZE,
+				"Maximum size of the picture to be normalized (1Mb by default)");
+		rspamd_rcl_add_default_handler (sub,
+				"images_cache",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, max_pic_size),
+				RSPAMD_CL_FLAG_INT_SIZE,
+				"Size of DCT data cache for images (256 elements by default)");
+		rspamd_rcl_add_default_handler (sub,
+				"zstd_input_dictionary",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, zstd_input_dictionary),
+				RSPAMD_CL_FLAG_STRING_PATH,
+				"Dictionary for zstd inbound protocol compression");
+		rspamd_rcl_add_default_handler (sub,
+				"zstd_output_dictionary",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, zstd_output_dictionary),
+				RSPAMD_CL_FLAG_STRING_PATH,
+				"Dictionary for outbound zstd compression");
+		rspamd_rcl_add_default_handler (sub,
+				"compat_messages",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, compat_messages),
+				0,
+				"Use pre 1.4 style of messages in the protocol");
+		rspamd_rcl_add_default_handler (sub,
+				"max_shots",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, default_max_shots),
+				0,
+				"Maximum number of hits per a single symbol (default: 100)");
+		rspamd_rcl_add_default_handler (sub,
+				"sessions_cache",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, enable_sessions_cache),
+				0,
+				"Enable sessions cache to debug dangling sessions");
+		rspamd_rcl_add_default_handler (sub,
+				"max_sessions_cache",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, max_sessions_cache),
+				0,
+				"Maximum number of sessions in cache before warning (default: 100)");
 
-	/* Neighbours configuration */
-	rspamd_rcl_add_section_doc (&sub->subsections, "neighbours", "name",
-			rspamd_rcl_neighbours_handler,
-			UCL_OBJECT, FALSE, TRUE,
-			cfg->doc_strings,
-			"List of members of Rspamd cluster");
+		/* Neighbours configuration */
+		rspamd_rcl_add_section_doc (&sub->subsections, "neighbours", "name",
+				rspamd_rcl_neighbours_handler,
+				UCL_OBJECT, FALSE, TRUE,
+				cfg->doc_strings,
+				"List of members of Rspamd cluster");
 
-	/* New DNS configuration */
-	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "dns", NULL, NULL,
-			UCL_OBJECT, FALSE, TRUE,
-			cfg->doc_strings,
-			"Options for DNS resolver");
-	rspamd_rcl_add_default_handler (ssub,
-			"nameserver",
-			rspamd_rcl_parse_struct_ucl,
-			G_STRUCT_OFFSET (struct rspamd_config, nameservers),
-			0,
-			"List of DNS servers");
-	rspamd_rcl_add_default_handler (ssub,
-			"server",
-			rspamd_rcl_parse_struct_ucl,
-			G_STRUCT_OFFSET (struct rspamd_config, nameservers),
-			0,
-			"List of DNS servers");
-	rspamd_rcl_add_default_handler (ssub,
-			"timeout",
-			rspamd_rcl_parse_struct_time,
-			G_STRUCT_OFFSET (struct rspamd_config, dns_timeout),
-			RSPAMD_CL_FLAG_TIME_FLOAT,
-			"DNS request timeout");
-	rspamd_rcl_add_default_handler (ssub,
-			"retransmits",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, dns_retransmits),
-			RSPAMD_CL_FLAG_INT_32,
-			"DNS request retransmits");
-	rspamd_rcl_add_default_handler (ssub,
-			"sockets",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
-			RSPAMD_CL_FLAG_INT_32,
-			"Number of sockets per DNS server");
-	rspamd_rcl_add_default_handler (ssub,
-			"connections",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
-			RSPAMD_CL_FLAG_INT_32,
-			"Number of sockets per DNS server");
-	rspamd_rcl_add_default_handler (ssub,
-			"enable_dnssec",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_config, enable_dnssec),
-			0,
-			"Enable DNSSEC support in Rspamd");
+		/* New DNS configuration */
+		ssub = rspamd_rcl_add_section_doc (&sub->subsections, "dns", NULL, NULL,
+				UCL_OBJECT, FALSE, TRUE,
+				cfg->doc_strings,
+				"Options for DNS resolver");
+		rspamd_rcl_add_default_handler (ssub,
+				"nameserver",
+				rspamd_rcl_parse_struct_ucl,
+				G_STRUCT_OFFSET (struct rspamd_config, nameservers),
+				0,
+				"List of DNS servers");
+		rspamd_rcl_add_default_handler (ssub,
+				"server",
+				rspamd_rcl_parse_struct_ucl,
+				G_STRUCT_OFFSET (struct rspamd_config, nameservers),
+				0,
+				"List of DNS servers");
+		rspamd_rcl_add_default_handler (ssub,
+				"timeout",
+				rspamd_rcl_parse_struct_time,
+				G_STRUCT_OFFSET (struct rspamd_config, dns_timeout),
+				RSPAMD_CL_FLAG_TIME_FLOAT,
+				"DNS request timeout");
+		rspamd_rcl_add_default_handler (ssub,
+				"retransmits",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, dns_retransmits),
+				RSPAMD_CL_FLAG_INT_32,
+				"DNS request retransmits");
+		rspamd_rcl_add_default_handler (ssub,
+				"sockets",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
+				RSPAMD_CL_FLAG_INT_32,
+				"Number of sockets per DNS server");
+		rspamd_rcl_add_default_handler (ssub,
+				"connections",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, dns_io_per_server),
+				RSPAMD_CL_FLAG_INT_32,
+				"Number of sockets per DNS server");
+		rspamd_rcl_add_default_handler (ssub,
+				"enable_dnssec",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, enable_dnssec),
+				0,
+				"Enable DNSSEC support in Rspamd");
 
 
-	/* New upstreams configuration */
-	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "upstream", NULL, NULL,
-			UCL_OBJECT, FALSE, TRUE,
-			cfg->doc_strings,
-			"Upstreams configuration parameters");
-	rspamd_rcl_add_default_handler (ssub,
-			"max_errors",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_config, upstream_max_errors),
-			RSPAMD_CL_FLAG_UINT,
-			"Maximum number of errors during `error_time` to consider upstream down");
-	rspamd_rcl_add_default_handler (ssub,
-			"error_time",
-			rspamd_rcl_parse_struct_time,
-			G_STRUCT_OFFSET (struct rspamd_config, upstream_error_time),
-			RSPAMD_CL_FLAG_TIME_FLOAT,
-			"Time frame to check errors");
-	rspamd_rcl_add_default_handler (ssub,
-			"revive_time",
-			rspamd_rcl_parse_struct_time,
-			G_STRUCT_OFFSET (struct rspamd_config, upstream_revive_time),
-			RSPAMD_CL_FLAG_TIME_FLOAT,
-			"Time before attempting to recover upstream after an error");
+		/* New upstreams configuration */
+		ssub = rspamd_rcl_add_section_doc (&sub->subsections, "upstream", NULL, NULL,
+				UCL_OBJECT, FALSE, TRUE,
+				cfg->doc_strings,
+				"Upstreams configuration parameters");
+		rspamd_rcl_add_default_handler (ssub,
+				"max_errors",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, upstream_max_errors),
+				RSPAMD_CL_FLAG_UINT,
+				"Maximum number of errors during `error_time` to consider upstream down");
+		rspamd_rcl_add_default_handler (ssub,
+				"error_time",
+				rspamd_rcl_parse_struct_time,
+				G_STRUCT_OFFSET (struct rspamd_config, upstream_error_time),
+				RSPAMD_CL_FLAG_TIME_FLOAT,
+				"Time frame to check errors");
+		rspamd_rcl_add_default_handler (ssub,
+				"revive_time",
+				rspamd_rcl_parse_struct_time,
+				G_STRUCT_OFFSET (struct rspamd_config, upstream_revive_time),
+				RSPAMD_CL_FLAG_TIME_FLOAT,
+				"Time before attempting to recover upstream after an error");
+	}
 
-	/**
-	 * Symbols and actions sections
-	 */
-	sub = rspamd_rcl_add_section_doc (&new,
-			"actions", NULL,
-			rspamd_rcl_actions_handler,
-			UCL_OBJECT,
-			FALSE,
-			TRUE,
-			cfg->doc_strings,
-			"Actions configuration");
-	rspamd_rcl_add_default_handler (sub,
-			"unknown_weight",
-			rspamd_rcl_parse_struct_double,
-			G_STRUCT_OFFSET (struct rspamd_config, unknown_weight),
-			0,
-			"Accept unknown symbols with the specified weight");
-	rspamd_rcl_add_default_handler (sub,
-			"grow_factor",
-			rspamd_rcl_parse_struct_double,
-			G_STRUCT_OFFSET (struct rspamd_config, grow_factor),
-			0,
-			"Multiply the subsequent symbols by this number "
-					"(does not affect symbols with score less or "
-					"equal to zero)");
-	rspamd_rcl_add_default_handler (sub,
-			"subject",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_config, subject),
-			0,
-			"Rewrite subject with this value");
+	if (!(skip_sections && g_hash_table_lookup (skip_sections, "actions"))) {
+		/**
+		 * Symbols and actions sections
+		 */
+		sub = rspamd_rcl_add_section_doc (&new,
+				"actions", NULL,
+				rspamd_rcl_actions_handler,
+				UCL_OBJECT,
+				FALSE,
+				TRUE,
+				cfg->doc_strings,
+				"Actions configuration");
+		rspamd_rcl_add_default_handler (sub,
+				"unknown_weight",
+				rspamd_rcl_parse_struct_double,
+				G_STRUCT_OFFSET (struct rspamd_config, unknown_weight),
+				0,
+				"Accept unknown symbols with the specified weight");
+		rspamd_rcl_add_default_handler (sub,
+				"grow_factor",
+				rspamd_rcl_parse_struct_double,
+				G_STRUCT_OFFSET (struct rspamd_config, grow_factor),
+				0,
+				"Multiply the subsequent symbols by this number "
+				"(does not affect symbols with score less or "
+				"equal to zero)");
+		rspamd_rcl_add_default_handler (sub,
+				"subject",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, subject),
+				0,
+				"Rewrite subject with this value");
+	}
 
-	sub = rspamd_rcl_add_section_doc (&new,
-			"group", "name",
-			rspamd_rcl_group_handler,
-			UCL_OBJECT,
-			FALSE,
-			TRUE,
-			cfg->doc_strings,
-			"Symbol groups configuration");
-	ssub = rspamd_rcl_add_section_doc (&sub->subsections, "symbols", "name",
-			rspamd_rcl_symbol_handler,
-			UCL_OBJECT, FALSE, TRUE,
-			cfg->doc_strings,
-			"Symbols configuration");
+	if (!(skip_sections && g_hash_table_lookup (skip_sections, "group"))) {
+		sub = rspamd_rcl_add_section_doc (&new,
+				"group", "name",
+				rspamd_rcl_group_handler,
+				UCL_OBJECT,
+				FALSE,
+				TRUE,
+				cfg->doc_strings,
+				"Symbol groups configuration");
+		ssub = rspamd_rcl_add_section_doc (&sub->subsections, "symbols", "name",
+				rspamd_rcl_symbol_handler,
+				UCL_OBJECT, FALSE, TRUE,
+				cfg->doc_strings,
+				"Symbols configuration");
 
-	/* Group part */
-	rspamd_rcl_add_default_handler (sub,
-			"disabled",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_symbols_group, disabled),
-			0,
-			"Disable symbols group");
-	rspamd_rcl_add_default_handler (sub,
-			"enabled",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_symbols_group, disabled),
-			RSPAMD_CL_FLAG_BOOLEAN_INVERSE,
-			"Enable or disable symbols group");
-	rspamd_rcl_add_default_handler (sub,
-			"max_score",
-			rspamd_rcl_parse_struct_double,
-			G_STRUCT_OFFSET (struct rspamd_symbols_group, max_score),
-			0,
-			"Maximum score that could be reached by this symbols group");
+		/* Group part */
+		rspamd_rcl_add_default_handler (sub,
+				"disabled",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_symbols_group, disabled),
+				0,
+				"Disable symbols group");
+		rspamd_rcl_add_default_handler (sub,
+				"enabled",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_symbols_group, disabled),
+				RSPAMD_CL_FLAG_BOOLEAN_INVERSE,
+				"Enable or disable symbols group");
+		rspamd_rcl_add_default_handler (sub,
+				"max_score",
+				rspamd_rcl_parse_struct_double,
+				G_STRUCT_OFFSET (struct rspamd_symbols_group, max_score),
+				0,
+				"Maximum score that could be reached by this symbols group");
+	}
 
-	/**
-	 * Worker section
-	 */
-	sub = rspamd_rcl_add_section_doc (&new,
-			"worker", "type",
-			rspamd_rcl_worker_handler,
-			UCL_OBJECT,
-			FALSE,
-			TRUE,
-			cfg->doc_strings,
-			"Workers common options");
-	rspamd_rcl_add_default_handler (sub,
-			"count",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_worker_conf, count),
-			RSPAMD_CL_FLAG_INT_16,
-			"Number of workers to spawn");
-	rspamd_rcl_add_default_handler (sub,
-			"max_files",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_worker_conf, rlimit_nofile),
-			RSPAMD_CL_FLAG_INT_32,
-			"Maximum number of opened files per worker");
-	rspamd_rcl_add_default_handler (sub,
-			"max_core",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_worker_conf, rlimit_maxcore),
-			RSPAMD_CL_FLAG_INT_32,
-			"Max size of core file in bytes");
-	rspamd_rcl_add_default_handler (sub,
-			"enabled",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_worker_conf, enabled),
-			0,
-			"Enable or disable a worker (true by default)");
+	if (!(skip_sections && g_hash_table_lookup (skip_sections, "worker"))) {
+		/**
+		 * Worker section
+		 */
+		sub = rspamd_rcl_add_section_doc (&new,
+				"worker", "type",
+				rspamd_rcl_worker_handler,
+				UCL_OBJECT,
+				FALSE,
+				TRUE,
+				cfg->doc_strings,
+				"Workers common options");
+		rspamd_rcl_add_default_handler (sub,
+				"count",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_worker_conf, count),
+				RSPAMD_CL_FLAG_INT_16,
+				"Number of workers to spawn");
+		rspamd_rcl_add_default_handler (sub,
+				"max_files",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_worker_conf, rlimit_nofile),
+				RSPAMD_CL_FLAG_INT_32,
+				"Maximum number of opened files per worker");
+		rspamd_rcl_add_default_handler (sub,
+				"max_core",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_worker_conf, rlimit_maxcore),
+				RSPAMD_CL_FLAG_INT_32,
+				"Max size of core file in bytes");
+		rspamd_rcl_add_default_handler (sub,
+				"enabled",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_worker_conf, enabled),
+				0,
+				"Enable or disable a worker (true by default)");
+	}
 
-	/**
-	 * Modules handler
-	 */
-	sub = rspamd_rcl_add_section_doc (&new,
-			"modules", NULL,
-			rspamd_rcl_modules_handler,
-			UCL_OBJECT,
-			FALSE,
-			FALSE,
-			cfg->doc_strings,
-			"Lua plugins to load");
+	if (!(skip_sections && g_hash_table_lookup (skip_sections, "modules"))) {
+		/**
+		 * Modules handler
+		 */
+		sub = rspamd_rcl_add_section_doc (&new,
+				"modules", NULL,
+				rspamd_rcl_modules_handler,
+				UCL_OBJECT,
+				FALSE,
+				FALSE,
+				cfg->doc_strings,
+				"Lua plugins to load");
+	}
 
-	/**
-	 * Classifiers handler
-	 */
-	sub = rspamd_rcl_add_section_doc (&new,
-			"classifier", "type",
-			rspamd_rcl_classifier_handler,
-			UCL_OBJECT,
-			FALSE,
-			TRUE,
-			cfg->doc_strings,
-			"CLassifier options");
-	/* Default classifier is 'bayes' for now */
-	sub->default_key = "bayes";
+	if (!(skip_sections && g_hash_table_lookup (skip_sections, "classifier"))) {
+		/**
+		 * Classifiers handler
+		 */
+		sub = rspamd_rcl_add_section_doc (&new,
+				"classifier", "type",
+				rspamd_rcl_classifier_handler,
+				UCL_OBJECT,
+				FALSE,
+				TRUE,
+				cfg->doc_strings,
+				"CLassifier options");
+		/* Default classifier is 'bayes' for now */
+		sub->default_key = "bayes";
 
-	rspamd_rcl_add_default_handler (sub,
-			"min_tokens",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_classifier_config, min_tokens),
-			RSPAMD_CL_FLAG_INT_32,
-			"Minimum count of tokens (words) to be considered for statistics");
-	rspamd_rcl_add_default_handler (sub,
-			"max_tokens",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_classifier_config, max_tokens),
-			RSPAMD_CL_FLAG_INT_32,
-			"Maximum count of tokens (words) to be considered for statistics");
-	rspamd_rcl_add_default_handler (sub,
-			"min_learns",
-			rspamd_rcl_parse_struct_integer,
-			G_STRUCT_OFFSET (struct rspamd_classifier_config, min_learns),
-			RSPAMD_CL_FLAG_UINT,
-			"Minimum number of learns for each statfile to use this classifier");
-	rspamd_rcl_add_default_handler (sub,
-			"backend",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_classifier_config, backend),
-			0,
-			"Statfiles engine");
-	rspamd_rcl_add_default_handler (sub,
-			"name",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_classifier_config, name),
-			0,
-			"Name of classifier");
+		rspamd_rcl_add_default_handler (sub,
+				"min_tokens",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_classifier_config, min_tokens),
+				RSPAMD_CL_FLAG_INT_32,
+				"Minimum count of tokens (words) to be considered for statistics");
+		rspamd_rcl_add_default_handler (sub,
+				"max_tokens",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_classifier_config, max_tokens),
+				RSPAMD_CL_FLAG_INT_32,
+				"Maximum count of tokens (words) to be considered for statistics");
+		rspamd_rcl_add_default_handler (sub,
+				"min_learns",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_classifier_config, min_learns),
+				RSPAMD_CL_FLAG_UINT,
+				"Minimum number of learns for each statfile to use this classifier");
+		rspamd_rcl_add_default_handler (sub,
+				"backend",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_classifier_config, backend),
+				0,
+				"Statfiles engine");
+		rspamd_rcl_add_default_handler (sub,
+				"name",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_classifier_config, name),
+				0,
+				"Name of classifier");
 
-	/*
-	 * Statfile defaults
-	 */
-	ssub = rspamd_rcl_add_section_doc (&sub->subsections,
-			"statfile", "symbol",
-			rspamd_rcl_statfile_handler,
-			UCL_OBJECT,
-			TRUE,
-			TRUE,
-			sub->doc_ref,
-			"Statfiles options");
-	rspamd_rcl_add_default_handler (ssub,
-			"label",
-			rspamd_rcl_parse_struct_string,
-			G_STRUCT_OFFSET (struct rspamd_statfile_config, label),
-			0,
-			"Statfile unique label");
-	rspamd_rcl_add_default_handler (ssub,
-			"spam",
-			rspamd_rcl_parse_struct_boolean,
-			G_STRUCT_OFFSET (struct rspamd_statfile_config, is_spam),
-			0,
-			"Sets if this statfile contains spam samples");
+		/*
+		 * Statfile defaults
+		 */
+		ssub = rspamd_rcl_add_section_doc (&sub->subsections,
+				"statfile", "symbol",
+				rspamd_rcl_statfile_handler,
+				UCL_OBJECT,
+				TRUE,
+				TRUE,
+				sub->doc_ref,
+				"Statfiles options");
+		rspamd_rcl_add_default_handler (ssub,
+				"label",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_statfile_config, label),
+				0,
+				"Statfile unique label");
+		rspamd_rcl_add_default_handler (ssub,
+				"spam",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_statfile_config, is_spam),
+				0,
+				"Sets if this statfile contains spam samples");
+	}
 
-	/**
-	 * Composites handlers
-	 */
-	sub = rspamd_rcl_add_section_doc (&new,
-			"composite", "name",
-			rspamd_rcl_composite_handler,
-			UCL_OBJECT,
-			FALSE,
-			TRUE,
-			cfg->doc_strings,
-			"Rspamd composite symbols");
-	sub = rspamd_rcl_add_section_doc (&new,
-			"composites", NULL,
-			rspamd_rcl_composites_handler,
-			UCL_OBJECT,
-			FALSE,
-			TRUE,
-			cfg->doc_strings,
-			"Rspamd composite symbols");
+	if (!(skip_sections && g_hash_table_lookup (skip_sections, "composite"))) {
+		/**
+		 * Composites handlers
+		 */
+		sub = rspamd_rcl_add_section_doc (&new,
+				"composite", "name",
+				rspamd_rcl_composite_handler,
+				UCL_OBJECT,
+				FALSE,
+				TRUE,
+				cfg->doc_strings,
+				"Rspamd composite symbols");
+		sub = rspamd_rcl_add_section_doc (&new,
+				"composites", NULL,
+				rspamd_rcl_composites_handler,
+				UCL_OBJECT,
+				FALSE,
+				TRUE,
+				cfg->doc_strings,
+				"Rspamd composite symbols");
+	}
 
-	/**
-	 * Lua handler
-	 */
-	sub = rspamd_rcl_add_section_doc (&new,
-			"lua", NULL,
-			rspamd_rcl_lua_handler,
-			UCL_STRING,
-			FALSE,
-			TRUE,
-			cfg->doc_strings,
-			"Lua files to load");
+	if (!(skip_sections && g_hash_table_lookup (skip_sections, "lua"))) {
+		/**
+		 * Lua handler
+		 */
+		sub = rspamd_rcl_add_section_doc (&new,
+				"lua", NULL,
+				rspamd_rcl_lua_handler,
+				UCL_STRING,
+				FALSE,
+				TRUE,
+				cfg->doc_strings,
+				"Lua files to load");
+	}
 
 	return new;
 }
@@ -3518,7 +3204,7 @@ rspamd_rcl_emitter_append_double (double elt, void *ud)
 	return 0;
 }
 
-static void
+void
 rspamd_rcl_section_free (gpointer p)
 {
 	struct rspamd_rcl_section *top = p, *cur, *tmp;
@@ -3561,7 +3247,7 @@ rspamd_rcl_section_free (gpointer p)
  * it is changed, then rcl_obj is imported from lua. Old config is dereferenced.
  * @param cfg
  */
-static void
+void
 rspamd_rcl_maybe_apply_lua_transform (struct rspamd_config *cfg)
 {
 	lua_State *L = cfg->lua_state;
@@ -3650,37 +3336,56 @@ rspamd_rcl_decrypt_free (unsigned char *data, size_t len, void *user_data)
 	g_free (data);
 }
 
+void
+rspamd_config_calculate_cksum (struct rspamd_config *cfg)
+{
+	rspamd_cryptobox_hash_state_t hs;
+	unsigned char cksumbuf[rspamd_cryptobox_HASHBYTES];
+	struct ucl_emitter_functions f;
+
+	/* Calculate checksum */
+	rspamd_cryptobox_hash_init (&hs, NULL, 0);
+	f.ucl_emitter_append_character = rspamd_rcl_emitter_append_c;
+	f.ucl_emitter_append_double = rspamd_rcl_emitter_append_double;
+	f.ucl_emitter_append_int = rspamd_rcl_emitter_append_int;
+	f.ucl_emitter_append_len = rspamd_rcl_emitter_append_len;
+	f.ucl_emitter_free_func = NULL;
+	f.ud = &hs;
+	ucl_object_emit_full (cfg->rcl_obj, UCL_EMIT_MSGPACK,
+			&f, cfg->config_comments);
+	rspamd_cryptobox_hash_final (&hs, cksumbuf);
+	cfg->checksum = rspamd_encode_base32 (cksumbuf, sizeof (cksumbuf));
+	/* Also change the tag of cfg pool to be equal to the checksum */
+	rspamd_strlcpy (cfg->cfg_pool->tag.uid, cfg->checksum,
+			MIN (sizeof (cfg->cfg_pool->tag.uid), strlen (cfg->checksum)));
+}
+
 gboolean
-rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
-	const gchar *convert_to, rspamd_rcl_section_fin_t logger_fin,
-	gpointer logger_ud, GHashTable *vars)
+rspamd_config_parse_ucl (struct rspamd_config *cfg, const gchar *filename,
+					GHashTable *vars, GError **err)
 {
 	struct stat st;
 	gint fd;
-	gchar *data;
-	GError *err = NULL;
-	struct rspamd_rcl_section *top, *logger_section;
 	struct ucl_parser *parser;
-	const ucl_object_t *logger_obj;
-	rspamd_cryptobox_hash_state_t hs;
-	unsigned char cksumbuf[rspamd_cryptobox_HASHBYTES];
 	gchar keypair_path[PATH_MAX];
 	struct rspamd_cryptobox_keypair *decrypt_keypair = NULL;
-	struct ucl_emitter_functions f;
+	gchar *data;
 
 	if (stat (filename, &st) == -1) {
-		msg_err_config_forced ("cannot stat %s: %s", filename, strerror (errno));
+		g_set_error (err, cfg_rcl_error_quark (), errno,
+				"cannot stat %s: %s", filename, strerror (errno));
 		return FALSE;
 	}
 	if ((fd = open (filename, O_RDONLY)) == -1) {
-		msg_err_config_forced ("cannot open %s: %s", filename, strerror (errno));
+		g_set_error (err, cfg_rcl_error_quark (), errno,
+				"cannot open %s: %s", filename, strerror (errno));
 		return FALSE;
 
 	}
 	/* Now mmap this file to simplify reading process */
-	if ((data =
-		mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-		msg_err_config_forced ("cannot mmap %s: %s", filename, strerror (errno));
+	if ((data = mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+		g_set_error (err, cfg_rcl_error_quark (), errno,
+				"cannot mmap %s: %s", filename, strerror (errno));
 		close (fd);
 		return FALSE;
 	}
@@ -3725,7 +3430,6 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 		ucl_parser_free (kp_parser);
 	}
 
-	rspamd_cryptobox_hash_init (&hs, NULL, 0);
 	parser = ucl_parser_new (UCL_PARSER_SAVE_COMMENTS);
 	rspamd_ucl_add_conf_variables (parser, vars);
 	rspamd_ucl_add_conf_macros (parser, cfg);
@@ -3756,9 +3460,28 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	cfg->config_comments = ucl_object_ref (ucl_parser_get_comments (parser));
 	ucl_parser_free (parser);
 
-	top = rspamd_rcl_config_init (cfg);
+	return TRUE;
+}
+
+gboolean
+rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
+					rspamd_rcl_section_fin_t logger_fin,
+					gpointer logger_ud, GHashTable *vars)
+{
+	GError *err = NULL;
+	struct rspamd_rcl_section *top, *logger_section;
+	const ucl_object_t *logger_obj;
+
+	if (!rspamd_config_parse_ucl (cfg, filename, vars, &err)) {
+		msg_err_config_forced ("failed to load config: %e", err);
+		g_error_free (err);
+
+		return FALSE;
+	}
+
+	top = rspamd_rcl_config_init (cfg, NULL);
 	rspamd_lua_set_path (cfg->lua_state, cfg->rcl_obj, vars);
-	rspamd_rcl_set_lua_globals (cfg, cfg->lua_state, vars);
+	rspamd_lua_set_globals (cfg, cfg->lua_state, vars);
 	rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_rcl_section_free, top);
 	err = NULL;
 
@@ -3790,22 +3513,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 
 	/* Transform config if needed */
 	rspamd_rcl_maybe_apply_lua_transform (cfg);
-
-	/* Calculate checksum */
-	f.ucl_emitter_append_character = rspamd_rcl_emitter_append_c;
-	f.ucl_emitter_append_double = rspamd_rcl_emitter_append_double;
-	f.ucl_emitter_append_int = rspamd_rcl_emitter_append_int;
-	f.ucl_emitter_append_len = rspamd_rcl_emitter_append_len;
-	f.ucl_emitter_free_func = NULL;
-	f.ud = &hs;
-	ucl_object_emit_full (cfg->rcl_obj, UCL_EMIT_MSGPACK,
-			&f, cfg->config_comments);
-	rspamd_cryptobox_hash_final (&hs, cksumbuf);
-	cfg->checksum = rspamd_encode_base32 (cksumbuf, sizeof (cksumbuf));
-	/* Also change the tag of cfg pool to be equal to the checksum */
-	rspamd_strlcpy (cfg->cfg_pool->tag.uid, cfg->checksum,
-			MIN (sizeof (cfg->cfg_pool->tag.uid), strlen (cfg->checksum)));
-
+	rspamd_config_calculate_cksum (cfg);
 
 	if (!rspamd_rcl_parse (top, cfg, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
 		msg_err_config ("rcl parse error: %e", err);

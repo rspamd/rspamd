@@ -377,8 +377,16 @@ local function ratelimit_cb(task)
       if err then
         rspamd_logger.errx('cannot check limit %s: %s %s', prefix, err, data)
       elseif type(data) == 'table' and data[1] and data[1] == 1 then
-        if settings.info_symbol then
-          task:insert_result(settings.info_symbol, 1.0, prefix)
+        -- set symbol only and do NOT soft reject
+        if settings.symbol then
+          task:insert_result(settings.symbol, 0.0, lim_name .. "(" .. prefix .. ")")
+          rspamd_logger.infox(task,
+                  'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
+                  lim_name, prefix, bucket[2], bucket[1], data[2], data[3], data[4])
+          return
+        -- set INFO symbol and soft reject
+        elseif settings.info_symbol then
+          task:insert_result(settings.info_symbol, 1.0, lim_name .. "(" .. prefix .. ")") 
         end
         rspamd_logger.infox(task,
                 'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',

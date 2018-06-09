@@ -11,7 +11,7 @@ function utility.get_all_symbols(logs, ignore_symbols)
 
   for _, line in pairs(logs) do
     line = lua_util.rspamd_str_split(line, " ")
-    for i=4,(#line-2) do
+    for i=4,(#line-1) do
       line[i] = line[i]:gsub("%s+", "")
       if not symbols_set[line[i]] then
         symbols_set[line[i]] = true
@@ -35,49 +35,69 @@ end
 function utility.read_log_file(file)
 
   local lines = {}
+  local messages = {}
 
-  file = assert(io.open(file, "r"))
+  local fd = assert(io.open(file, "r"))
+  local fname = string.gsub(file, "(.*/)(.*)", "%2")
 
-  for line in file:lines() do
-    lines[#lines + 1] = line
-  end
+  for line in fd:lines() do
+    local start,stop = string.find(line, fname .. ':')
 
-  io.close(file)
-
-  return lines
+    if start and stop then
+      table.insert(lines, string.sub(line, 1, start))
+      table.insert(messages, string.sub(line, stop + 1, -1))
+    end
 end
 
-function utility.get_all_logs(dir_path)
+  io.close(fd)
+
+  return lines,messages
+end
+
+function utility.get_all_logs(dirs)
   -- Reads all log files in the directory and returns a list of logs.
 
-  if dir_path:sub(#dir_path, #dir_path) == "/" then
-    dir_path = dir_path:sub(1, #dir_path -1)
+  if type(dirs) == 'string' then
+    dirs = {dirs}
   end
 
-  local files = rspamd_util.glob(dir_path .. "/*.log")
   local all_logs = {}
+  local all_messages = {}
 
-  for _, file in pairs(files) do
-    local logs = utility.read_log_file(file)
-    for _, log_line in pairs(logs) do
-      all_logs[#all_logs + 1] = log_line
+  for _,dir in ipairs(dirs) do
+    if dir:sub(-1, -1) == "/" then
+      dir = dir:sub(1, -2)
+      local files = rspamd_util.glob(dir .. "/*.log")
+      for _, file in pairs(files) do
+        local logs,messages = utility.read_log_file(file)
+        for i=1,#logs do
+          table.insert(all_logs, logs[i])
+          table.insert(all_messages, messages[i])
+        end
+      end
+    else
+      local logs,messages = utility.read_log_file(dir)
+      for i=1,#logs do
+        table.insert(all_logs, logs[i])
+        table.insert(all_messages, messages[i])
+      end
     end
   end
 
-  return all_logs
+  return all_logs,all_messages
 end
 
 function utility.get_all_symbol_scores(conf, ignore_symbols)
-  local counters = conf:get_symbols_counters()
+  local symbols = conf:get_symbols_scores()
 
-  return fun.tomap(fun.map(function(elt)
-    return elt['symbol'],elt['weight']
-  end, fun.filter(function(elt)
-    return not ignore_symbols[elt['symbol']]
-  end, counters)))
+  return fun.tomap(fun.map(function(name, elt)
+    return name,elt['score']
+  end, fun.filter(function(name, elt)
+    return not ignore_symbols[name]
+  end, symbols)))
 end
 
-function utility.generate_statistics_from_logs(logs, threshold)
+function utility.generate_statistics_from_logs(logs, messages, threshold)
 
   -- Returns file_stats table and list of symbol_stats table.
 
@@ -110,9 +130,10 @@ function utility.generate_statistics_from_logs(logs, threshold)
   local no_of_spam = 0
   local no_of_ham = 0
 
-  for _, log in pairs(logs) do
+  for i, log in ipairs(logs) do
     log = lua_util.rspamd_str_trim(log)
     log = lua_util.rspamd_str_split(log, " ")
+    local message = messages[i]
 
     local is_spam = (log[1] == "SPAM")
     local score = tonumber(log[2])
@@ -129,40 +150,38 @@ function utility.generate_statistics_from_logs(logs, threshold)
       true_positives = true_positives + 1
     elseif is_spam and (score < threshold) then
       false_negatives = false_negatives + 1
-      table.insert(all_fns, log[#log])
+      table.insert(all_fns, message)
     elseif not is_spam and (score >= threshold) then
       false_positives = false_positives + 1
-      table.insert(all_fps, log[#log])
+      table.insert(all_fps, message)
     else
       true_negatives = true_negatives + 1
     end
 
-    for i=4, (#log-2) do
-      if all_symbols_stats[log[i]] == nil then
-        all_symbols_stats[log[i]] = {
-          name = log[i],
+    for j=4, (#log-1) do
+      if all_symbols_stats[log[j]] == nil then
+        all_symbols_stats[log[j]] = {
+          name = message,
           no_of_hits = 0,
           spam_hits = 0,
           ham_hits = 0,
           spam_overall = 0
         }
       end
+      local sym = log[j]
 
-      all_symbols_stats[log[i]].no_of_hits =
-      all_symbols_stats[log[i]].no_of_hits + 1
+      all_symbols_stats[sym].no_of_hits = all_symbols_stats[sym].no_of_hits + 1
 
       if is_spam then
-        all_symbols_stats[log[i]].spam_hits =
-        all_symbols_stats[log[i]].spam_hits + 1
+        all_symbols_stats[sym].spam_hits = all_symbols_stats[sym].spam_hits + 1
       else
-        all_symbols_stats[log[i]].ham_hits =
-        all_symbols_stats[log[i]].ham_hits + 1
+        all_symbols_stats[sym].ham_hits = all_symbols_stats[sym].ham_hits + 1
       end
 
       -- Find slowest message
-      if (tonumber(log[#log-1]) > tonumber(file_stats.slowest)) then
-          file_stats.slowest = tostring(tonumber(log[#log-1]))
-          file_stats.slowest_file = log[#log]
+      if ((tonumber(log[#log]) or 0) > file_stats.slowest) then
+          file_stats.slowest = tonumber(log[#log])
+          file_stats.slowest_file = message
       end
     end
   end

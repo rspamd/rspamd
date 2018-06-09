@@ -75,8 +75,12 @@ local function phishing_cb(task)
           for _,d in ipairs(elt) do
             if not d['path'] then
               found_path = true
+            end
+
+            if query and d['query'] and query == d['query'] then
               found_query = true
-              break
+            elseif not d['query'] then
+              found_query = true
             end
           end
         end
@@ -101,7 +105,10 @@ local function phishing_cb(task)
             task:insert_result(phish_symbol, 1.0, args)
           else
             -- Host + path match
-            task:insert_result(phish_symbol, 0.3, args)
+            if path then
+              task:insert_result(phish_symbol, 0.3, args)
+            end
+            -- No path, no symbol
           end
         else
           if url:is_phished() then

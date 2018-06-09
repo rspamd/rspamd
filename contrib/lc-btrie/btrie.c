@@ -1485,7 +1485,7 @@ static size_t count_free(const struct btrie *btrie)
 #endif /* not NDEBUG */
 
 const char *
-btrie_stats(const struct btrie *btrie)
+btrie_stats(const struct btrie *btrie, guint duplicates)
 {
 	static char buf[128];
 	size_t n_nodes = btrie->n_lc_nodes + btrie->n_tbm_nodes;
@@ -1530,8 +1530,10 @@ btrie_stats(const struct btrie *btrie)
 			, average_depth, (long unsigned)stats.max_depth);
 #else
 	snprintf(buf, sizeof(buf),
-			"ents=%lu tbm=%lu lc=%lu mem=%.0fk free=%lu waste=%lu"
-			,(long unsigned)btrie->n_entries, (long unsigned)btrie->n_tbm_nodes,
+			"ents=%lu dup=%u tbm=%lu lc=%lu mem=%.0fk free=%lu waste=%lu",
+			(long unsigned)btrie->n_entries,
+			duplicates,
+			(long unsigned)btrie->n_tbm_nodes,
 			(long unsigned)btrie->n_lc_nodes, (double)btrie->alloc_total / 1024,
 			(long unsigned)alloc_free, (long unsigned)btrie->alloc_waste
 			);

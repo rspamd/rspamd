@@ -2037,7 +2037,7 @@ rspamd_symbols_cache_counters (struct symbols_cache * cache)
 	top = ucl_object_typed_new (UCL_ARRAY);
 	cbd.top = top;
 	cbd.cache = cache;
-	g_ptr_array_foreach (cache->items_by_order->d,
+	g_ptr_array_foreach (cache->items_by_id,
 			rspamd_symbols_cache_counters_cb, &cbd);
 
 	return top;

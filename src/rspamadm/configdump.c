@@ -33,8 +33,8 @@ extern struct rspamd_main *rspamd_main;
 extern module_t *modules[];
 extern worker_t *workers[];
 
-static void rspamadm_configdump (gint argc, gchar **argv);
-static const char *rspamadm_configdump_help (gboolean full_help);
+static void rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *);
+static const char *rspamadm_configdump_help (gboolean full_help, const struct rspamadm_command *);
 
 struct rspamadm_command configdump_command = {
 		.name = "configdump",
@@ -61,7 +61,7 @@ static GOptionEntry entries[] = {
 };
 
 static const char *
-rspamadm_configdump_help (gboolean full_help)
+rspamadm_configdump_help (gboolean full_help, const struct rspamadm_command *cmd)
 {
 	const char *help_str;
 
@@ -237,7 +237,7 @@ rspamadm_dump_section_obj (struct rspamd_config *cfg,
 }
 
 static void
-rspamadm_configdump (gint argc, gchar **argv)
+rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;
@@ -278,13 +278,13 @@ rspamadm_configdump (gint argc, gchar **argv)
 		(void) g_quark_from_static_string ((*pworker)->name);
 		pworker++;
 	}
+
 	cfg->cache = rspamd_symbols_cache_new (cfg);
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 	cfg->cfg_name = config;
 
-	if (!rspamd_config_read (cfg, cfg->cfg_name, NULL,
-			config_logger, rspamd_main, ucl_vars)) {
+	if (!rspamd_config_read (cfg, cfg->cfg_name, config_logger, rspamd_main, ucl_vars)) {
 		ret = FALSE;
 	}
 	else {

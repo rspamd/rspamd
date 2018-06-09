@@ -1,6 +1,27 @@
 local util = require "rspamd_util"
 local opts = {}
 
+local argparse = require "argparse"
+local parser = argparse()
+    :name "rspamadm confighelp"
+    :description "Shows help for the specified configuration options"
+    :help_description_margin(32)
+parser:flag "--no-ips"
+      :description "No IPs stats"
+parser:flag "--no-keys"
+      :description "No keys stats"
+parser:flag "--short"
+      :description "Short output mode"
+parser:flag "-n --number"
+      :description "Disable numbers humanization"
+parser:option "-s --sort"
+      :description "Sort order"
+      :convert {
+        matched = "matched",
+        errors = "errors",
+        ip = "ip"
+      }
+
 local function add_data(target, src)
   for k,v in pairs(src) do
     if k ~= 'ips' then
@@ -143,13 +164,11 @@ local function print_result(r)
   return print_num(r)
 end
 
-local getopt = require "rspamadm/getopt"
-
 return function(args, res)
   local res_ips = {}
   local res_databases = {}
   local wrk = res['workers']
-  opts = getopt.getopt(args, '')
+  opts = parser:parse(args)
 
   if wrk then
     for _,pr in pairs(wrk) do

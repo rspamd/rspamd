@@ -171,7 +171,14 @@ function($, _, Humanize) {
                 "value": scan_time
             };
             item.id = item['message-id'];
-            item.rcpt_mime = item.rcpt_mime.join(",&#8203;");
+            if ($(item.rcpt_mime).not(item.rcpt_smtp).length !== 0 || $(item.rcpt_smtp).not(item.rcpt_mime).length !== 0) {
+                item.rcpt_mime = "[" + item.rcpt_smtp.join(",&#8203;") + "] " + item.rcpt_mime.join(",&#8203;");
+            } else {
+                item.rcpt_mime = item.rcpt_mime.join(",&#8203;");
+            }
+            if (item.sender_mime !== item.sender_smtp) {
+                item.sender_mime = "[" + item.sender_smtp + "] " + item.sender_mime;
+            }
             items.push(item);
         });
 
@@ -225,19 +232,23 @@ function($, _, Humanize) {
                 }
             }, {
                 "name": "sender_mime",
-                "title": "From",
+                "title": "[Envelope From] From",
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "minWidth": 100
+                    "minWidth": 100,
+                    "maxWidth": 200,
+                    "word-wrap": "break-word"
                 }
             }, {
                 "name": "rcpt_mime",
-                "title": "To",
+                "title": "[Envelope To] To/Cc/Bcc",
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "minWidth": 100
+                    "minWidth": 100,
+                    "maxWidth": 200,
+                    "word-wrap": "break-word"
                 }
             }, {
                 "name": "subject",
@@ -305,7 +316,9 @@ function($, _, Humanize) {
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
-                    "minWidth": 100
+                    "minWidth": 100,
+                    "maxWidth": 130,
+                    "word-wrap": "break-word"
                 }
             }];
     }

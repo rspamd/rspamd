@@ -134,7 +134,8 @@ struct rspamd_rcl_section *rspamd_rcl_add_section_doc (
  * Init common sections known to rspamd
  * @return top section
  */
-struct rspamd_rcl_section * rspamd_rcl_config_init (struct rspamd_config *cfg);
+struct rspamd_rcl_section * rspamd_rcl_config_init (struct rspamd_config *cfg,
+		GHashTable *skip_sections);
 
 /**
  * Get a section specified by path, it understand paths separated by '/' character
@@ -446,11 +447,41 @@ gboolean rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 		const gchar *path,
 		GError **err);
 
+
+/**
+ * Calls for an external lua function to apply potential config transformations
+ * if needed. This function can change the cfg->rcl_obj.
+ *
+ * Example of transformation function:
+ *
+ * function(obj)
+ *   if obj.something == 'foo' then
+ *     obj.something = "bla"
+ *     return true, obj
+ *   end
+ *
+ *   return false, nil
+ * end
+ *
+ * If function returns 'false' then rcl_obj is not touched. Otherwise,
+ * it is changed, then rcl_obj is imported from lua. Old config is dereferenced.
+ * @param cfg
+ */
+void rspamd_rcl_maybe_apply_lua_transform (struct rspamd_config *cfg);
+void rspamd_rcl_section_free (gpointer p);
+
+void rspamd_config_calculate_cksum (struct rspamd_config *cfg);
+
 /*
  * Read configuration file
  */
+gboolean rspamd_config_parse_ucl (struct rspamd_config *cfg,
+								  const gchar *filename,
+								  GHashTable *vars,
+								  GError **err);
 gboolean rspamd_config_read (struct rspamd_config *cfg,
-		const gchar *filename, const gchar *convert_to,
-		rspamd_rcl_section_fin_t logger_fin, gpointer logger_ud,
-		GHashTable *vars);
+							 const gchar *filename,
+							 rspamd_rcl_section_fin_t logger_fin,
+							 gpointer logger_ud,
+							 GHashTable *vars);
 #endif /* CFG_RCL_H_ */

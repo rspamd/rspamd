@@ -866,9 +866,8 @@ rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
 		const gchar *s2, gsize s2len,
 		guint replace_cost)
 {
-	guint x, y, lastdiag, olddiag;
-	gchar c1, c2;
-	guint *column;
+	gchar c1, c2, last_c2, last_c1;
+	static GArray *current_row = NULL, *prev_row = NULL, *transp_row = NULL;
 	gint eq;
 	static const guint max_cmp = 8192;
 	gint ret;
@@ -885,31 +884,79 @@ rspamd_strings_levenshtein_distance (const gchar *s1, gsize s1len,
 
 	if (MAX(s1len, s2len) > max_cmp) {
 		/* Cannot compare too many characters */
-		return 0;
+		return max_cmp;
 	}
 
-	column = g_malloc0 ((s1len + 1) * sizeof (guint));
+	if (s1len > s2len) {
+		/* Exchange s1 and s2 */
+		const gchar *tmp;
+		gsize tmplen;
 
-	for (y = 1; y <= s1len; y++) {
-		column[y] = y;
+		tmp = s2;
+		s2 = s1;
+		s1 = tmp;
+
+		tmplen = s2len;
+		s2len = s1len;
+		s1len = tmplen;
 	}
 
-	for (x = 1; x <= s2len; x++) {
-		column[0] = x;
+	/* Adjust static space */
+	if (current_row == NULL) {
+		current_row = g_array_sized_new (FALSE, FALSE, sizeof (gint), s1len + 1);
+		prev_row = g_array_sized_new (FALSE, FALSE, sizeof (gint), s1len + 1);
+		transp_row = g_array_sized_new (FALSE, FALSE, sizeof (gint), s1len + 1);
+		g_array_set_size (current_row, s1len + 1);
+		g_array_set_size (prev_row, s1len + 1);
+		g_array_set_size (transp_row, s1len + 1);
+	}
+	else if (current_row->len < s1len + 1) {
+		g_array_set_size (current_row, s1len + 1);
+		g_array_set_size (prev_row, s1len + 1);
+		g_array_set_size (transp_row, s1len + 1);
+	}
 
-		for (y = 1, lastdiag = x - 1; y <= s1len; y++) {
-			olddiag = column[y];
-			c1 = s1[y - 1];
-			c2 = s2[x - 1];
-			eq = (c1 == c2) ? 0 : replace_cost;
-			column[y] = MIN3 (column[y] + 1, column[y - 1] + 1,
-					lastdiag + (eq));
-			lastdiag = olddiag;
+	memset (current_row->data, 0, (s1len + 1) * sizeof (gint));
+	memset (transp_row->data, 0, (s1len + 1) * sizeof (gint));
+
+	for (gint i = 0; i <= s1len; i++) {
+		g_array_index (prev_row, gint, i) = i;
+	}
+
+	last_c2 = '\0';
+
+	for (gint i = 1; i <= s2len; i++) {
+		c2 = s2[i - 1];
+		g_array_index (current_row, gint, 0) = i;
+		last_c1 = '\0';
+
+		for (gint j = 1; j <= s1len; j++) {
+			c1 = s1[j - 1];
+			eq = c1 == c2 ? 0 : replace_cost;
+			ret = MIN3 (g_array_index (current_row, gint, j - 1) + 1, /* Insert */
+					g_array_index (prev_row, gint, j) + 1, /* Remove */
+					g_array_index (prev_row, gint, j - 1) + eq /* Replace */);
+
+			/* Take reordering into account */
+			if (c1 == last_c2 && c2 == last_c1 && j >= 2) {
+				ret = MIN (ret, g_array_index (transp_row, gint, j - 2) + eq);
+			}
+
+			g_array_index (current_row, gint, j) = ret;
+			last_c1 = c1;
 		}
+
+		last_c2 = c2;
+
+		/* Exchange pointers */
+		GArray *tmp;
+		tmp = transp_row;
+		transp_row = prev_row;
+		prev_row = current_row;
+		current_row = tmp;
 	}
 
-	ret = column[s1len];
-	g_free (column);
+	ret = g_array_index (prev_row, gint, s1len);
 
 	return ret;
 }
@@ -1214,7 +1261,7 @@ rspamd_substring_preprocess_kmp (const gchar *pat, gsize len, goffset *fsm,
 		i++;
 		j++;
 
-		if (f(pat[i], pat[j])) {
+		if (i < len && j < len && f(pat[i], pat[j])) {
 			fsm[i] = fsm[j];
 		}
 		else {

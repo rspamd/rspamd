@@ -1096,8 +1096,9 @@ lua_task_process_message (lua_State *L)
 
 	if (task != NULL) {
 		if (task->msg.len > 0) {
-			if (rspamd_message_parse (task) == 0) {
+			if (rspamd_message_parse (task)) {
 				lua_pushboolean (L, TRUE);
+				rspamd_message_process (task);
 			}
 			else {
 				lua_pushboolean (L, FALSE);
@@ -3606,6 +3607,7 @@ lua_task_set_flag (lua_State *L)
 		LUA_TASK_SET_FLAG (flag, "broken_headers",
 				RSPAMD_TASK_FLAG_BROKEN_HEADERS, set);
 		LUA_TASK_SET_FLAG (flag, "greylisted", RSPAMD_TASK_FLAG_GREYLISTED, set);
+		LUA_TASK_SET_FLAG (flag, "skip_process", RSPAMD_TASK_FLAG_SKIP_PROCESS, set);
 
 		if (!found) {
 			msg_warn_task ("unknown flag requested: %s", flag);
@@ -3636,6 +3638,8 @@ lua_task_has_flag (lua_State *L)
 		LUA_TASK_GET_FLAG (flag, "greylisted", RSPAMD_TASK_FLAG_GREYLISTED);
 		LUA_TASK_GET_FLAG (flag, "broken_headers",
 				RSPAMD_TASK_FLAG_BROKEN_HEADERS);
+		LUA_TASK_GET_FLAG (flag, "skip_process",
+				RSPAMD_TASK_FLAG_SKIP_PROCESS);
 		LUA_TASK_GET_FLAG (flag, "milter",
 				RSPAMD_TASK_FLAG_MILTER);
 
@@ -3702,6 +3706,10 @@ lua_task_get_flags (lua_State *L)
 					break;
 				case RSPAMD_TASK_FLAG_GREYLISTED:
 					lua_pushstring (L, "greylisted");
+					lua_rawseti (L, -2, idx++);
+					break;
+				case RSPAMD_TASK_FLAG_SKIP_PROCESS:
+					lua_pushstring (L, "skip_process");
 					lua_rawseti (L, -2, idx++);
 					break;
 				case RSPAMD_TASK_FLAG_MILTER:

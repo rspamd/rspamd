@@ -27,6 +27,9 @@
  */
 
 #include "lua_common.h"
+#include "libcryptobox/cryptobox.h"
+#include "libcryptobox/keypair.h"
+#include "libcryptobox/keypair_private.h"
 #include "unix-std.h"
 
 struct rspamd_lua_cryptobox_hash {
@@ -42,6 +45,10 @@ LUA_FUNCTION_DEF (cryptobox_pubkey,	 gc);
 LUA_FUNCTION_DEF (cryptobox_keypair,	 load);
 LUA_FUNCTION_DEF (cryptobox_keypair,	 create);
 LUA_FUNCTION_DEF (cryptobox_keypair,	 gc);
+LUA_FUNCTION_DEF (cryptobox_keypair,	 totable);
+LUA_FUNCTION_DEF (cryptobox_keypair,	 get_type);
+LUA_FUNCTION_DEF (cryptobox_keypair,	 get_alg);
+LUA_FUNCTION_DEF (cryptobox_keypair,	 get_pk);
 LUA_FUNCTION_DEF (cryptobox_signature, create);
 LUA_FUNCTION_DEF (cryptobox_signature, load);
 LUA_FUNCTION_DEF (cryptobox_signature, save);
@@ -60,16 +67,24 @@ LUA_FUNCTION_DEF (cryptobox_hash, base32);
 LUA_FUNCTION_DEF (cryptobox_hash, base64);
 LUA_FUNCTION_DEF (cryptobox_hash, bin);
 LUA_FUNCTION_DEF (cryptobox_hash, gc);
-LUA_FUNCTION_DEF (cryptobox,			 verify_memory);
-LUA_FUNCTION_DEF (cryptobox,			 verify_file);
-LUA_FUNCTION_DEF (cryptobox,			 sign_file);
-LUA_FUNCTION_DEF (cryptobox,			 sign_memory);
+LUA_FUNCTION_DEF (cryptobox, verify_memory);
+LUA_FUNCTION_DEF (cryptobox, verify_file);
+LUA_FUNCTION_DEF (cryptobox, sign_file);
+LUA_FUNCTION_DEF (cryptobox, sign_memory);
+LUA_FUNCTION_DEF (cryptobox, encrypt_memory);
+LUA_FUNCTION_DEF (cryptobox, encrypt_file);
+LUA_FUNCTION_DEF (cryptobox, decrypt_memory);
+LUA_FUNCTION_DEF (cryptobox, decrypt_file);
 
 static const struct luaL_reg cryptoboxlib_f[] = {
 	LUA_INTERFACE_DEF (cryptobox, verify_memory),
 	LUA_INTERFACE_DEF (cryptobox, verify_file),
 	LUA_INTERFACE_DEF (cryptobox, sign_memory),
 	LUA_INTERFACE_DEF (cryptobox, sign_file),
+	LUA_INTERFACE_DEF (cryptobox, encrypt_memory),
+	LUA_INTERFACE_DEF (cryptobox, encrypt_file),
+	LUA_INTERFACE_DEF (cryptobox, decrypt_memory),
+	LUA_INTERFACE_DEF (cryptobox, decrypt_file),
 	{NULL, NULL}
 };
 
@@ -93,6 +108,13 @@ static const struct luaL_reg cryptoboxkeypairlib_f[] = {
 
 static const struct luaL_reg cryptoboxkeypairlib_m[] = {
 	{"__tostring", rspamd_lua_class_tostring},
+	{"totable", lua_cryptobox_keypair_totable},
+	{"get_type", lua_cryptobox_keypair_get_type},
+	{"get_alg", lua_cryptobox_keypair_get_alg},
+	{"type", lua_cryptobox_keypair_get_type},
+	{"alg", lua_cryptobox_keypair_get_alg},
+	{"pk", lua_cryptobox_keypair_get_pk},
+	{"pubkey", lua_cryptobox_keypair_get_pk},
 	{"__gc", lua_cryptobox_keypair_gc},
 	{NULL, NULL}
 };
@@ -320,64 +342,13 @@ lua_cryptobox_pubkey_gc (lua_State *L)
 }
 
 /***
- * @function rspamd_cryptobox_keypair.load(file)
- * Loads public key from UCL file
+ * @function rspamd_cryptobox_keypair.load(file|table)
+ * Loads public key from UCL file or directly from Lua
  * @param {string} file filename to load
  * @return {cryptobox_keypair} new keypair
  */
 static gint
 lua_cryptobox_keypair_load (lua_State *L)
-{
-	struct rspamd_cryptobox_keypair *kp, **pkp;
-	const gchar *filename;
-	struct ucl_parser *parser;
-	ucl_object_t *obj;
-
-	filename = luaL_checkstring (L, 1);
-	if (filename != NULL) {
-		parser = ucl_parser_new (0);
-
-		if (!ucl_parser_add_file (parser, filename)) {
-			msg_err ("cannot open keypair from file: %s, %s",
-				filename,
-				ucl_parser_get_error (parser));
-			ucl_parser_free (parser);
-			lua_pushnil (L);
-		}
-		else {
-			obj = ucl_parser_get_object (parser);
-			kp = rspamd_keypair_from_ucl (obj);
-			ucl_parser_free (parser);
-
-			if (kp == NULL) {
-				msg_err ("cannot open keypair from file: %s",
-						filename);
-				ucl_object_unref (obj);
-				lua_pushnil (L);
-			}
-			else {
-				pkp = lua_newuserdata (L, sizeof (gpointer));
-				*pkp = kp;
-				rspamd_lua_setclass (L, "rspamd{cryptobox_keypair}", -1);
-				ucl_object_unref (obj);
-			}
-		}
-	}
-	else {
-		return luaL_error (L, "bad input arguments");
-	}
-
-	return 1;
-}
-
-/***
- * @function rspamd_cryptobox_keypair.create(ucl_data)
- * Loads public key from UCL data
- * @param {string} ucl_data ucl to load
- * @return {cryptobox_keypair} new keypair
- */
-static gint
-lua_cryptobox_keypair_create (lua_State *L)
 {
 	struct rspamd_cryptobox_keypair *kp, **pkp;
 	const gchar *buf;
@@ -439,6 +410,57 @@ lua_cryptobox_keypair_create (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function rspamd_cryptobox_keypair.create([type='encryption'[, alg='curve25519']])
+ * Generates new keypair
+ * @param {string} type type of keypair: 'encryption' (default) or 'sign'
+ * @param {string} alg algorithm of keypair: 'curve25519' (default) or 'nist'
+ * @return {cryptobox_keypair} new keypair
+ */
+static gint
+lua_cryptobox_keypair_create (lua_State *L)
+{
+	struct rspamd_cryptobox_keypair *kp, **pkp;
+	enum rspamd_cryptobox_keypair_type type = RSPAMD_KEYPAIR_KEX;
+	enum rspamd_cryptobox_mode alg = RSPAMD_CRYPTOBOX_MODE_25519;
+
+	if (lua_isstring (L, 1)) {
+		const gchar *str = lua_tostring (L, 1);
+
+		if (strcmp (str, "sign") == 0) {
+			type = RSPAMD_KEYPAIR_SIGN;
+		}
+		else if (strcmp (str, "encryption") == 0) {
+			type = RSPAMD_KEYPAIR_KEX;
+		}
+		else {
+			return luaL_error (L, "invalid keypair type: %s", str);
+		}
+	}
+
+	if (lua_isstring (L, 2)) {
+		const gchar *str = lua_tostring (L, 2);
+
+		if (strcmp (str, "nist") == 0 || strcmp (str, "openssl") == 0) {
+			alg = RSPAMD_CRYPTOBOX_MODE_NIST;
+		}
+		else if (strcmp (str, "curve25519") == 0 || strcmp (str, "default") == 0) {
+			alg = RSPAMD_CRYPTOBOX_MODE_25519;
+		}
+		else {
+			return luaL_error (L, "invalid keypair algorithm: %s", str);
+		}
+	}
+
+	kp = rspamd_keypair_new (type, alg);
+
+	pkp = lua_newuserdata (L, sizeof (gpointer));
+	*pkp = kp;
+	rspamd_lua_setclass (L, "rspamd{cryptobox_keypair}", -1);
+
+	return 1;
+}
+
 static gint
 lua_cryptobox_keypair_gc (lua_State *L)
 {
@@ -452,7 +474,118 @@ lua_cryptobox_keypair_gc (lua_State *L)
 }
 
 /***
- * @function rspamd_cryptobox_signature.load(file)
+ * @method keypair:totable([hex=false]])
+ * Converts keypair to table (not very safe due to memory leftovers)
+ */
+static gint
+lua_cryptobox_keypair_totable (lua_State *L)
+{
+	struct rspamd_cryptobox_keypair *kp = lua_check_cryptobox_keypair (L, 1);
+	ucl_object_t *obj;
+	gboolean hex = FALSE;
+	gint ret = 1;
+
+	if (kp != NULL) {
+
+		if (lua_isboolean (L, 2)) {
+			hex = lua_toboolean (L, 2);
+		}
+
+		obj = rspamd_keypair_to_ucl (kp, hex);
+
+		ret = ucl_object_push_lua (L, obj, true);
+		ucl_object_unref (obj);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return ret;
+}
+/***
+ * @method keypair:type()
+ * Returns type of keypair as a string: 'encryption' or 'sign'
+ * @return {string} type of keypair as a string
+ */
+static gint
+lua_cryptobox_keypair_get_type (lua_State *L)
+{
+	struct rspamd_cryptobox_keypair *kp = lua_check_cryptobox_keypair (L, 1);
+
+	if (kp) {
+		if (kp->type == RSPAMD_KEYPAIR_KEX) {
+			lua_pushstring (L, "encryption");
+		}
+		else {
+			lua_pushstring (L, "sign");
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @method keypair:alg()
+ * Returns algorithm of keypair as a string: 'encryption' or 'sign'
+ * @return {string} type of keypair as a string
+ */
+static gint
+lua_cryptobox_keypair_get_alg (lua_State *L)
+{
+	struct rspamd_cryptobox_keypair *kp = lua_check_cryptobox_keypair (L, 1);
+
+	if (kp) {
+		if (kp->alg == RSPAMD_CRYPTOBOX_MODE_25519) {
+			lua_pushstring (L, "curve25519");
+		}
+		else {
+			lua_pushstring (L, "nist");
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @method keypair:pk()
+ * Returns pubkey for a specific keypair
+ * @return {rspamd_pubkey} pubkey for a keypair
+ */
+static gint
+lua_cryptobox_keypair_get_pk (lua_State *L)
+{
+	struct rspamd_cryptobox_keypair *kp = lua_check_cryptobox_keypair (L, 1);
+	struct rspamd_cryptobox_pubkey *pk, **ppk;
+	const guchar *data;
+	guint dlen;
+
+	if (kp) {
+		data = rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_PK, &dlen);
+		pk = rspamd_pubkey_from_bin (data, dlen, kp->type, kp->alg);
+
+		if (pk == NULL) {
+			return luaL_error (L, "invalid keypair");
+		}
+
+		ppk = lua_newuserdata (L, sizeof (*ppk));
+		*ppk = pk;
+		rspamd_lua_setclass (L, "rspamd{cryptobox_pubkey}", -1);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @function rspamd_cryptobox_signature.load(file, [alg = 'curve25519'])
  * Loads signature from raw file
  * @param {string} file filename to load
  * @return {cryptobox_signature} new signature
@@ -465,6 +598,7 @@ lua_cryptobox_signature_load (lua_State *L)
 	gpointer data;
 	int fd;
 	struct stat st;
+	enum rspamd_cryptobox_mode alg = RSPAMD_CRYPTOBOX_MODE_25519;
 
 	filename = luaL_checkstring (L, 1);
 	if (filename != NULL) {
@@ -475,7 +609,6 @@ lua_cryptobox_signature_load (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
-			sig = g_malloc (sizeof (rspamd_fstring_t));
 			if (fstat (fd, &st) == -1 ||
 				(data =
 				mmap (NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0))
@@ -484,8 +617,20 @@ lua_cryptobox_signature_load (lua_State *L)
 				lua_pushnil (L);
 			}
 			else {
-				if (st.st_size == rspamd_cryptobox_signature_bytes (
-						RSPAMD_CRYPTOBOX_MODE_25519)) {
+				if (lua_isstring (L, 2)) {
+					const gchar *str = lua_tostring (L, 2);
+
+					if (strcmp (str, "nist") == 0 || strcmp (str, "openssl") == 0) {
+						alg = RSPAMD_CRYPTOBOX_MODE_NIST;
+					}
+					else if (strcmp (str, "curve25519") == 0 || strcmp (str, "default") == 0) {
+						alg = RSPAMD_CRYPTOBOX_MODE_25519;
+					}
+					else {
+						return luaL_error (L, "invalid keypair algorithm: %s", str);
+					}
+				}
+				if (st.st_size > 0) {
 					sig = rspamd_fstring_new_init (data, st.st_size);
 					psig = lua_newuserdata (L, sizeof (rspamd_fstring_t *));
 					rspamd_lua_setclass (L, "rspamd{cryptobox_signature}", -1);
@@ -494,7 +639,7 @@ lua_cryptobox_signature_load (lua_State *L)
 				else {
 					msg_err ("size of %s mismatches: %d while %d is expected",
 							filename, (int)st.st_size,
-							rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
+							rspamd_cryptobox_signature_bytes (alg));
 					lua_pushnil (L);
 				}
 
@@ -1156,7 +1301,7 @@ lua_cryptobox_hash_gc (lua_State *L)
 }
 
 /***
- * @function rspamd_cryptobox.verify_memory(pk, sig, data)
+ * @function rspamd_cryptobox.verify_memory(pk, sig, data, [alg = 'curve25519'])
  * Check memory using specified cryptobox key and signature
  * @param {pubkey} pk public key to verify
  * @param {sig} signature to check
@@ -1170,6 +1315,7 @@ lua_cryptobox_verify_memory (lua_State *L)
 	rspamd_fstring_t *signature;
 	struct rspamd_lua_text *t;
 	const gchar *data;
+	enum rspamd_cryptobox_mode alg = RSPAMD_CRYPTOBOX_MODE_25519;
 	gsize len;
 	gint ret;
 
@@ -1190,9 +1336,23 @@ lua_cryptobox_verify_memory (lua_State *L)
 		data = luaL_checklstring (L, 3, &len);
 	}
 
+	if (lua_isstring (L, 4)) {
+		const gchar *str = lua_tostring (L, 4);
+
+		if (strcmp (str, "nist") == 0 || strcmp (str, "openssl") == 0) {
+			alg = RSPAMD_CRYPTOBOX_MODE_NIST;
+		}
+		else if (strcmp (str, "curve25519") == 0 || strcmp (str, "default") == 0) {
+			alg = RSPAMD_CRYPTOBOX_MODE_25519;
+		}
+		else {
+			return luaL_error (L, "invalid algorithm: %s", str);
+		}
+	}
+
 	if (pk != NULL && signature != NULL && data != NULL) {
-		ret = rspamd_cryptobox_verify (signature->str, data, len,
-				rspamd_pubkey_get_pk (pk, NULL), RSPAMD_CRYPTOBOX_MODE_25519);
+		ret = rspamd_cryptobox_verify (signature->str, signature->len, data, len,
+				rspamd_pubkey_get_pk (pk, NULL), alg);
 
 		if (ret) {
 			lua_pushboolean (L, 1);
@@ -1209,7 +1369,7 @@ lua_cryptobox_verify_memory (lua_State *L)
 }
 
 /***
- * @function rspamd_cryptobox.verify_file(pk, sig, file)
+ * @function rspamd_cryptobox.verify_file(pk, sig, file, [alg = 'curve25519'])
  * Check file using specified cryptobox key and signature
  * @param {pubkey} pk public key to verify
  * @param {sig} signature to check
@@ -1223,6 +1383,7 @@ lua_cryptobox_verify_file (lua_State *L)
 	struct rspamd_cryptobox_pubkey *pk;
 	rspamd_fstring_t *signature;
 	guchar *map = NULL;
+	enum rspamd_cryptobox_mode alg = RSPAMD_CRYPTOBOX_MODE_25519;
 	gsize len;
 	gint ret;
 
@@ -1230,11 +1391,26 @@ lua_cryptobox_verify_file (lua_State *L)
 	signature = lua_check_cryptobox_sign (L, 2);
 	fname = luaL_checkstring (L, 3);
 
+	if (lua_isstring (L, 4)) {
+		const gchar *str = lua_tostring (L, 4);
+
+		if (strcmp (str, "nist") == 0 || strcmp (str, "openssl") == 0) {
+			alg = RSPAMD_CRYPTOBOX_MODE_NIST;
+		}
+		else if (strcmp (str, "curve25519") == 0 || strcmp (str, "default") == 0) {
+			alg = RSPAMD_CRYPTOBOX_MODE_25519;
+		}
+		else {
+			return luaL_error (L, "invalid algorithm: %s", str);
+		}
+	}
+
 	map = rspamd_file_xmap (fname, PROT_READ, &len, TRUE);
 
 	if (map != NULL && pk != NULL && signature != NULL) {
-		ret = rspamd_cryptobox_verify (signature->str, map, len,
-				rspamd_pubkey_get_pk (pk, NULL), RSPAMD_CRYPTOBOX_MODE_25519);
+		ret = rspamd_cryptobox_verify (signature->str, signature->len,
+				map, len,
+				rspamd_pubkey_get_pk (pk, NULL), alg);
 
 		if (ret) {
 			lua_pushboolean (L, 1);
@@ -1291,7 +1467,7 @@ lua_cryptobox_sign_memory (lua_State *L)
 	}
 
 
-	if (!kp || !data) {
+	if (!kp || !data || kp->type == RSPAMD_KEYPAIR_KEX) {
 		return luaL_error (L, "invalid arguments");
 	}
 
@@ -1351,6 +1527,207 @@ lua_cryptobox_sign_file (lua_State *L)
 	}
 
 	return 1;
+}
+
+/***
+ * @function rspamd_cryptobox.encrypt_memory(kp, data)
+ * Encrypt data using specified keypair
+ * @param {keypair} kp keypair to use
+ * @param {string|text} data
+ * @return {rspamd_text} encrypted text
+ */
+static gint
+lua_cryptobox_encrypt_memory (lua_State *L)
+{
+	struct rspamd_cryptobox_keypair *kp;
+	const gchar *data;
+	guchar *out;
+	struct rspamd_lua_text *t, *res;
+	gsize len = 0, outlen;
+	GError *err = NULL;
+
+	kp = lua_check_cryptobox_keypair (L, 1);
+
+	if (lua_isuserdata (L, 2)) {
+		t = lua_check_text (L, 2);
+
+		if (!t) {
+			return luaL_error (L, "invalid arguments");
+		}
+
+		data = t->start;
+		len = t->len;
+	}
+	else {
+		data = luaL_checklstring (L, 2, &len);
+	}
+
+
+	if (!kp || !data) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (!rspamd_keypair_encrypt (kp, data, len, &out, &outlen, &err)) {
+		gint ret = luaL_error (L, "cannot encrypt data: %s", err->message);
+		g_error_free (err);
+
+		return ret;
+	}
+
+	res = lua_newuserdata (L, sizeof (*res));
+	res->flags = RSPAMD_TEXT_FLAG_OWN;
+	res->start = out;
+	res->len = outlen;
+	rspamd_lua_setclass (L, "rspamd{text}", -1);
+
+	return 1;
+}
+
+/***
+ * @function rspamd_cryptobox.encrypt_file(kp, filename)
+ * Encrypt data using specified keypair
+ * @param {keypair} kp keypair to use
+ * @param {string} filename
+ * @return {rspamd_text} encrypted text
+ */
+static gint
+lua_cryptobox_encrypt_file (lua_State *L)
+{
+	struct rspamd_cryptobox_keypair *kp;
+	const gchar *filename;
+	gchar *data;
+	guchar *out;
+	struct rspamd_lua_text *res;
+	gsize len = 0, outlen;
+	GError *err = NULL;
+
+	kp = lua_check_cryptobox_keypair (L, 1);
+	filename = luaL_checkstring (L, 2);
+	data = rspamd_file_xmap (filename, PROT_READ, &len, TRUE);
+
+
+	if (!kp || !data) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (!rspamd_keypair_encrypt (kp, data, len, &out, &outlen, &err)) {
+		gint ret = luaL_error (L, "cannot encrypt file %s: %s", filename,
+				err->message);
+		g_error_free (err);
+		munmap (data, len);
+
+		return ret;
+	}
+
+	res = lua_newuserdata (L, sizeof (*res));
+	res->flags = RSPAMD_TEXT_FLAG_OWN;
+	res->start = out;
+	res->len = outlen;
+	rspamd_lua_setclass (L, "rspamd{text}", -1);
+	munmap (data, len);
+
+	return 1;
+}
+
+/***
+ * @function rspamd_cryptobox.decrypt_memory(kp, data)
+ * Encrypt data using specified keypair
+ * @param {keypair} kp keypair to use
+ * @param {string} data
+ * @return status,{rspamd_text}|error status is boolean variable followed by either unencrypted data or an error message
+ */
+static gint
+lua_cryptobox_decrypt_memory (lua_State *L)
+{
+	struct rspamd_cryptobox_keypair *kp;
+	const gchar *data;
+	guchar *out;
+	struct rspamd_lua_text *t, *res;
+	gsize len = 0, outlen;
+	GError *err = NULL;
+
+	kp = lua_check_cryptobox_keypair (L, 1);
+
+	if (lua_isuserdata (L, 2)) {
+		t = lua_check_text (L, 2);
+
+		if (!t) {
+			return luaL_error (L, "invalid arguments");
+		}
+
+		data = t->start;
+		len = t->len;
+	}
+	else {
+		data = luaL_checklstring (L, 2, &len);
+	}
+
+
+	if (!kp || !data) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (!rspamd_keypair_decrypt (kp, data, len, &out, &outlen, &err)) {
+		lua_pushboolean (L, false);
+		lua_pushstring (L, err->message);
+		g_error_free (err);
+	}
+	else {
+		lua_pushboolean (L, true);
+		res = lua_newuserdata (L, sizeof (*res));
+		res->flags = RSPAMD_TEXT_FLAG_OWN;
+		res->start = out;
+		res->len = outlen;
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+	}
+
+	return 2;
+}
+
+/***
+ * @function rspamd_cryptobox.decrypt_file(kp, filename)
+ * Encrypt data using specified keypair
+ * @param {keypair} kp keypair to use
+ * @param {string} filename
+ * @return status,{rspamd_text}|error status is boolean variable followed by either unencrypted data or an error message
+ */
+static gint
+lua_cryptobox_decrypt_file (lua_State *L)
+{
+	struct rspamd_cryptobox_keypair *kp;
+	const gchar *filename;
+	gchar *data;
+	guchar *out;
+	struct rspamd_lua_text *res;
+	gsize len = 0, outlen;
+	GError *err = NULL;
+
+	kp = lua_check_cryptobox_keypair (L, 1);
+	filename = luaL_checkstring (L, 2);
+	data = rspamd_file_xmap (filename, PROT_READ, &len, TRUE);
+
+
+	if (!kp || !data) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (!rspamd_keypair_decrypt (kp, data, len, &out, &outlen, &err)) {
+		lua_pushboolean (L, false);
+		lua_pushstring (L, err->message);
+		g_error_free (err);
+	}
+	else {
+		lua_pushboolean (L, true);
+		res = lua_newuserdata (L, sizeof (*res));
+		res->flags = RSPAMD_TEXT_FLAG_OWN;
+		res->start = out;
+		res->len = outlen;
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+	}
+
+	munmap (data, len);
+
+	return 2;
 }
 
 static gint

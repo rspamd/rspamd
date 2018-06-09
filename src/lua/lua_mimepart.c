@@ -264,10 +264,16 @@ end
 LUA_FUNCTION_DEF (mimepart, get_header_full);
 /***
  * @method mime_part:get_content()
- * Get the raw content of part
+ * Get the parsed content of part
  * @return {text} opaque text object (zero-copy if not casted to lua string)
  */
 LUA_FUNCTION_DEF (mimepart, get_content);
+/***
+ * @method mime_part:get_raw_content()
+ * Get the raw content of part
+ * @return {text} opaque text object (zero-copy if not casted to lua string)
+ */
+LUA_FUNCTION_DEF (mimepart, get_raw_content);
 /***
  * @method mime_part:get_length()
  * Get length of the content of the part
@@ -395,6 +401,7 @@ LUA_FUNCTION_DEF (mimepart, headers_foreach);
 
 static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_content),
+	LUA_INTERFACE_DEF (mimepart, get_raw_content),
 	LUA_INTERFACE_DEF (mimepart, get_length),
 	LUA_INTERFACE_DEF (mimepart, get_type),
 	LUA_INTERFACE_DEF (mimepart, get_type_full),
@@ -912,6 +919,26 @@ lua_mimepart_get_content (lua_State * L)
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
 	t->start = part->parsed_data.begin;
 	t->len = part->parsed_data.len;
+	t->flags = 0;
+
+	return 1;
+}
+
+static gint
+lua_mimepart_get_raw_content (lua_State * L)
+{
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+	struct rspamd_lua_text *t;
+
+	if (part == NULL) {
+		lua_pushnil (L);
+		return 1;
+	}
+
+	t = lua_newuserdata (L, sizeof (*t));
+	rspamd_lua_setclass (L, "rspamd{text}", -1);
+	t->start = part->raw_data.begin;
+	t->len = part->raw_data.len;
 	t->flags = 0;
 
 	return 1;
