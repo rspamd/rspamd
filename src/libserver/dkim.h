@@ -120,6 +120,24 @@ enum rspamd_dkim_type {
 	RSPAMD_DKIM_ARC_SEAL
 };
 
+/* Signature methods */
+enum rspamd_sign_type {
+	DKIM_SIGN_UNKNOWN = -2,
+	DKIM_SIGN_RSASHA1 = 0,
+	DKIM_SIGN_RSASHA256,
+	DKIM_SIGN_RSASHA512,
+	DKIM_SIGN_ECDSASHA256,
+	DKIM_SIGN_ECDSASHA512,
+	DKIM_SIGN_EDDSASHA256,
+};
+
+enum rspamd_dkim_key_type {
+	RSPAMD_DKIM_KEY_RSA = 0,
+	RSPAMD_DKIM_KEY_ECDSA,
+	RSPAMD_DKIM_KEY_EDDSA
+};
+
+
 /* Err MUST be freed if it is not NULL, key is allocated by slice allocator */
 typedef void (*dkim_key_handler_f)(rspamd_dkim_key_t *key, gsize keylen,
 	rspamd_dkim_context_t *ctx, gpointer ud, GError *err);
@@ -206,6 +224,28 @@ void rspamd_dkim_sign_key_unref (rspamd_dkim_sign_key_t *k);
 const gchar* rspamd_dkim_get_domain (rspamd_dkim_context_t *ctx);
 const gchar* rspamd_dkim_get_dns_key (rspamd_dkim_context_t *ctx);
 guint rspamd_dkim_key_get_ttl (rspamd_dkim_key_t *k);
+
+/**
+ * Create DKIM public key from a raw data
+ * @param keydata
+ * @param keylen
+ * @param type
+ * @param err
+ * @return
+ */
+rspamd_dkim_key_t * rspamd_dkim_make_key (const gchar *keydata, guint keylen,
+										  enum rspamd_dkim_key_type type,
+										  GError **err);
+
+/**
+ * Parse DKIM public key from a TXT record
+ * @param txt
+ * @param keylen
+ * @param err
+ * @return
+ */
+rspamd_dkim_key_t * rspamd_dkim_parse_key (const gchar *txt, gsize *keylen,
+										   GError **err);
 
 /**
  * Canonocalise header using relaxed algorithm

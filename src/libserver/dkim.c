@@ -58,23 +58,6 @@ enum rspamd_dkim_param_type {
 	DKIM_PARAM_IGNORE
 };
 
-/* Signature methods */
-enum rspamd_sign_type {
-	DKIM_SIGN_UNKNOWN = -2,
-	DKIM_SIGN_RSASHA1 = 0,
-	DKIM_SIGN_RSASHA256,
-	DKIM_SIGN_RSASHA512,
-	DKIM_SIGN_ECDSASHA256,
-	DKIM_SIGN_ECDSASHA512,
-	DKIM_SIGN_EDDSASHA256,
-};
-
-enum rspamd_dkim_key_type {
-	RSPAMD_DKIM_KEY_RSA = 0,
-	RSPAMD_DKIM_KEY_ECDSA,
-	RSPAMD_DKIM_KEY_EDDSA
-};
-
 #define RSPAMD_DKIM_MAX_ARC_IDX 10
 
 #define msg_err_dkim(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
@@ -1222,8 +1205,8 @@ struct rspamd_dkim_key_cbdata {
 	gpointer ud;
 };
 
-static rspamd_dkim_key_t *
-rspamd_dkim_make_key (rspamd_dkim_context_t *ctx, const gchar *keydata,
+rspamd_dkim_key_t *
+rspamd_dkim_make_key (const gchar *keydata,
 		guint keylen, enum rspamd_dkim_key_type type, GError **err)
 {
 	rspamd_dkim_key_t *key = NULL;
@@ -1372,9 +1355,8 @@ rspamd_dkim_sign_key_free (rspamd_dkim_sign_key_t *key)
 	g_free (key);
 }
 
-static rspamd_dkim_key_t *
-rspamd_dkim_parse_key (rspamd_dkim_context_t *ctx, const gchar *txt,
-		gsize *keylen, GError **err)
+rspamd_dkim_key_t *
+rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 {
 	const gchar *c, *p, *end, *key = NULL, *alg = "rsa";
 	enum {
@@ -1468,20 +1450,16 @@ rspamd_dkim_parse_key (rspamd_dkim_context_t *ctx, const gchar *txt,
 	}
 
 	if (alglen == 8 && rspamd_lc_cmp (alg, "ecdsa256", alglen) == 0) {
-		return rspamd_dkim_make_key (ctx, c, klen,
+		return rspamd_dkim_make_key (c, klen,
 				RSPAMD_DKIM_KEY_ECDSA, err);
 	}
 	else if (alglen == 7 && rspamd_lc_cmp (alg, "ed25519", alglen) == 0) {
-		return rspamd_dkim_make_key (ctx, c, klen,
+		return rspamd_dkim_make_key (c, klen,
 				RSPAMD_DKIM_KEY_EDDSA, err);
 	}
 	else {
 		/* We assume RSA default in all cases */
-		if (alglen != 3 || rspamd_lc_cmp (alg, "rsa", alglen) != 0) {
-			msg_info_dkim ("invalid key algorithm: %*s", (gint)alglen, alg);
-		}
-
-		return rspamd_dkim_make_key (ctx, c, klen,
+		return rspamd_dkim_make_key (c, klen,
 				RSPAMD_DKIM_KEY_RSA, err);
 	}
 
@@ -1525,7 +1503,7 @@ rspamd_dkim_dns_cb (struct rdns_reply *reply, gpointer arg)
 					g_error_free (err);
 					err = NULL;
 				}
-				key = rspamd_dkim_parse_key (cbdata->ctx, elt->content.txt.data,
+				key = rspamd_dkim_parse_key (elt->content.txt.data,
 						&keylen,
 						&err);
 				if (key) {
