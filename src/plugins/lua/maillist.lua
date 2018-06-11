@@ -221,7 +221,7 @@ end
 local function check_ml_cgp(task)
   local header = task:get_header('X-Listserver')
 
-  if not header or header ~= 'CommuniGate Pro LIST' then
+  if not header or string.sub(header, 0, 20) ~= 'CommuniGate Pro LIST' then
     return false
   end
 
