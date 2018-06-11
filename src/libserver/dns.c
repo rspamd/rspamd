@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <contrib/librdns/rdns.h>
 #include "config.h"
 #include "dns.h"
 #include "rspamd.h"
@@ -245,6 +246,198 @@ rspamd_dns_resolv_conf_on_server (struct rdns_resolver *resolver,
 			NULL);
 }
 
+static void
+rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
+								struct rspamd_dns_resolver *dns_resolver,
+								const ucl_object_t *dns_section)
+{
+	const ucl_object_t *fake_replies, *cur;
+	ucl_object_iter_t it;
+
+	/* Process fake replies */
+	fake_replies = ucl_object_lookup (dns_section, "fake_replies");
+
+	if (fake_replies && ucl_object_type (fake_replies) == UCL_ARRAY) {
+		it = ucl_object_iterate_new (fake_replies);
+
+		while ((cur = ucl_object_iterate_safe (it, true))) {
+			const ucl_object_t *type_obj, *name_obj, *code_obj, *replies_obj;
+			enum rdns_request_type rtype = RDNS_REQUEST_A;
+			enum dns_rcode rcode = RDNS_RC_NOERROR;
+			struct rdns_reply_entry *replies = NULL;
+			const gchar *name = NULL;
+
+			if (ucl_object_type (cur) != UCL_OBJECT) {
+				continue;
+			}
+
+			name_obj = ucl_object_lookup (cur, "name");
+			if (name_obj == NULL ||
+				(name = ucl_object_tostring (name_obj)) == NULL) {
+				msg_err_config ("no name for fake dns reply");
+				continue;
+			}
+
+			type_obj = ucl_object_lookup (cur, "type");
+			if (type_obj) {
+				rtype = rdns_type_fromstr (ucl_object_tostring (type_obj));
+
+				if (rtype == RDNS_REQUEST_INVALID) {
+					msg_err_config ("invalid type for %s: %s", name,
+							ucl_object_tostring (type_obj));
+					continue;
+				}
+			}
+
+			code_obj = ucl_object_lookup_any (cur, "code", "rcode", NULL);
+			if (code_obj) {
+				rcode = rdns_rcode_fromstr (ucl_object_tostring (code_obj));
+
+				if (rcode == RDNS_RC_INVALID) {
+					msg_err_config ("invalid rcode for %s: %s", name,
+							ucl_object_tostring (code_obj));
+					continue;
+				}
+			}
+
+			if (rcode == RDNS_RC_NOERROR) {
+				/* We want replies to be set for this rcode */
+				replies_obj = ucl_object_lookup (cur, "replies");
+
+				if (replies_obj == NULL || ucl_object_type (replies_obj) != UCL_ARRAY) {
+					msg_err_config ("invalid replies for fake DNS record %s", name);
+					continue;
+				}
+
+				ucl_object_iter_t rep_it;
+				const ucl_object_t *rep_obj;
+
+				rep_it = ucl_object_iterate_new (replies_obj);
+
+				while ((rep_obj = ucl_object_iterate_safe (rep_it, true))) {
+					const gchar *str_rep = ucl_object_tostring (rep_obj);
+					struct rdns_reply_entry *rep;
+					gchar **svec;
+
+					if (str_rep == NULL) {
+						msg_err_config ("invalid reply element for fake DNS record %s",
+								name);
+						continue;
+					}
+
+					rep = calloc (1, sizeof (*rep));
+					g_assert (rep != NULL);
+
+					rep->type = rtype;
+					rep->ttl = 0;
+
+					switch (rtype) {
+					case RDNS_REQUEST_A:
+						if (inet_pton (AF_INET, str_rep, &rep->content.a.addr) != 1) {
+							msg_err_config ("invalid A reply element for fake "
+											"DNS record %s: %s",
+									name, str_rep);
+							free (rep);
+						}
+						else {
+							DL_APPEND (replies, rep);
+						}
+						break;
+					case RDNS_REQUEST_NS:
+						rep->content.ns.name = strdup (str_rep);
+						break;
+					case RDNS_REQUEST_PTR:
+						rep->content.ptr.name = strdup (str_rep);
+						break;
+					case RDNS_REQUEST_MX:
+						svec = g_strsplit_set (str_rep, " :", -1);
+
+						if (svec && svec[0] && svec[1]) {
+							rep->content.mx.name = strdup (svec[0]);
+							rep->content.mx.priority = strtoul (svec[1], NULL, 10);
+							DL_APPEND (replies, rep);
+						}
+						else {
+							msg_err_config ("invalid MX reply element for fake "
+											"DNS record %s: %s",
+									name, str_rep);
+							free (rep);
+						}
+
+						g_strfreev (svec);
+						break;
+					case RDNS_REQUEST_TXT:
+						rep->content.txt.data = strdup (str_rep);
+						break;
+					case RDNS_REQUEST_SOA:
+						svec = g_strsplit_set (str_rep, " :", -1);
+
+						/* 7 elements */
+						if (svec && svec[0] && svec[1] && svec[2] &&
+								svec[3] && svec[4] && svec[5] && svec[6]) {
+							rep->content.soa.mname = strdup (svec[0]);
+							rep->content.soa.admin = strdup (svec[1]);
+							rep->content.soa.serial = strtoul (svec[2], NULL, 10);
+							rep->content.soa.refresh = strtol (svec[3], NULL, 10);
+							rep->content.soa.retry = strtol (svec[4], NULL, 10);
+							rep->content.soa.expire = strtol (svec[5], NULL, 10);
+							rep->content.soa.minimum = strtoul (svec[6], NULL, 10);
+							DL_APPEND (replies, rep);
+						}
+						else {
+							msg_err_config ("invalid MX reply element for fake "
+											"DNS record %s: %s",
+									name, str_rep);
+							free (rep);
+						}
+
+						g_strfreev (svec);
+						break;
+					case RDNS_REQUEST_AAAA:
+						if (inet_pton (AF_INET6, str_rep, &rep->content.aaa.addr) != 1) {
+							msg_err_config ("invalid AAAA reply element for fake "
+											"DNS record %s: %s",
+									name, str_rep);
+							free (rep);
+						}
+						else {
+							DL_APPEND (replies, rep);
+						}
+					case RDNS_REQUEST_SRV:
+					default:
+						msg_err_config ("invalid or unsupported reply element "
+										"for fake DNS record %s: %s",
+								name, str_rep);
+						free (rep);
+						break;
+					}
+				}
+
+				ucl_object_iterate_free (rep_it);
+
+				if (replies) {
+					rdns_resolver_set_fake_reply (dns_resolver->r,
+							name, rtype, rcode, replies);
+				}
+			}
+			else {
+				/* This entry returns some non valid code, no replies are possible */
+				replies_obj = ucl_object_lookup (cur, "replies");
+
+				if (replies_obj) {
+					msg_warn_config ("replies are set for non-successful return "
+					  "code for %s, they will be ignored", name);
+				}
+
+				rdns_resolver_set_fake_reply (dns_resolver->r,
+						name, rtype, rcode, NULL);
+			}
+		}
+
+		ucl_object_iterate_free (it);
+	}
+}
+
 struct rspamd_dns_resolver *
 dns_resolver_init (rspamd_logger_t *logger,
 	struct event_base *ev_base,
@@ -315,6 +508,21 @@ dns_resolver_init (rspamd_logger_t *logger,
 		rdns_resolver_set_upstream_lib (dns_resolver->r, &rspamd_ups_ctx,
 				dns_resolver->ups);
 		cfg->dns_resolver = dns_resolver;
+
+		if (cfg->rcl_obj) {
+			/* Configure additional options */
+			const ucl_object_t *opts_section, *dns_section;
+
+			opts_section = ucl_object_lookup (cfg->rcl_obj, "options");
+
+			if (opts_section) {
+				dns_section = ucl_object_lookup (opts_section, "dns");
+
+				if (dns_section) {
+					rspamd_dns_resolver_config_ucl (cfg, dns_resolver, dns_section);
+				}
+			}
+		}
 	}
 
 	rdns_resolver_set_logger (dns_resolver->r, rspamd_rnds_log_bridge, logger);
