@@ -255,7 +255,8 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 	ucl_object_iter_t it;
 
 	/* Process fake replies */
-	fake_replies = ucl_object_lookup (dns_section, "fake_replies");
+	fake_replies = ucl_object_lookup_any (dns_section, "fake_records",
+			"fake_replies", NULL);
 
 	if (fake_replies && ucl_object_type (fake_replies) == UCL_ARRAY) {
 		it = ucl_object_iterate_new (fake_replies);
@@ -345,9 +346,11 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 						break;
 					case RDNS_REQUEST_NS:
 						rep->content.ns.name = strdup (str_rep);
+						DL_APPEND (replies, rep);
 						break;
 					case RDNS_REQUEST_PTR:
 						rep->content.ptr.name = strdup (str_rep);
+						DL_APPEND (replies, rep);
 						break;
 					case RDNS_REQUEST_MX:
 						svec = g_strsplit_set (str_rep, " :", -1);
@@ -368,6 +371,7 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 						break;
 					case RDNS_REQUEST_TXT:
 						rep->content.txt.data = strdup (str_rep);
+						DL_APPEND (replies, rep);
 						break;
 					case RDNS_REQUEST_SOA:
 						svec = g_strsplit_set (str_rep, " :", -1);
@@ -416,8 +420,13 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 				ucl_object_iterate_free (rep_it);
 
 				if (replies) {
+					msg_info_config ("added fake record: %s", name);
 					rdns_resolver_set_fake_reply (dns_resolver->r,
 							name, rtype, rcode, replies);
+				}
+				else {
+					msg_warn_config ("record %s has no replies, not adding",
+							name);
 				}
 			}
 			else {
