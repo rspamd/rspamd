@@ -286,7 +286,7 @@ rdns_type_fromstr (const char *str)
 		}
 	}
 
-	return -1;
+	return RDNS_REQUEST_INVALID;
 }
 
 enum dns_rcode
@@ -334,7 +334,7 @@ rdns_rcode_fromstr (const char *str)
 		}
 	}
 
-	return -1;
+	return RDNS_RC_INVALID;
 }
 
 uint16_t

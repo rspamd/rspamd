@@ -45,6 +45,7 @@ struct rdns_io_channel;
 typedef void (*dns_callback_type) (struct rdns_reply *reply, void *arg);
 
 enum rdns_request_type {
+	RDNS_REQUEST_INVALID = -1,
 	RDNS_REQUEST_A = 1,
 	RDNS_REQUEST_NS = 2,
 	RDNS_REQUEST_SOA = 6,
@@ -111,6 +112,7 @@ struct rdns_reply_entry {
 
 
 enum dns_rcode {
+	RDNS_RC_INVALID = -1,
 	RDNS_RC_NOERROR	= 0,
 	RDNS_RC_FORMERR	= 1,
 	RDNS_RC_SERVFAIL	= 2,
