@@ -414,7 +414,7 @@ LUA_FUNCTION_DEF (util, readpassphrase);
 /***
  * @function util.file_exists(file)
  * Checks if a specified file exists and is available for reading
- * @return {boolean} true if file exists
+ * @return {boolean,string} true if file exists + string error if not
  */
 LUA_FUNCTION_DEF (util, file_exists);
 
@@ -2399,15 +2399,24 @@ static gint
 lua_util_file_exists (lua_State *L)
 {
 	const gchar *fname = luaL_checkstring (L, 1);
+	gint serrno;
 
 	if (fname) {
-		lua_pushboolean (L, access (fname, R_OK) != -1);
+		if (access (fname, R_OK) == -1) {
+			serrno = errno;
+			lua_pushboolean (L, false);
+			lua_pushstring (L, strerror (serrno));
+		}
+		else {
+			lua_pushboolean (L, true);
+			lua_pushnil (L);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 1;
+	return 2;
 }
 
 static gint
