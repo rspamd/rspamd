@@ -334,6 +334,7 @@ void rdns_resolver_register_plugin (struct rdns_resolver *resolver,
  */
 void rdns_resolver_set_fake_reply (struct rdns_resolver *resolver,
 								   const char *name,
+								   enum rdns_request_type type,
 								   enum dns_rcode rcode,
 								   struct rdns_reply_entry *reply);
 
