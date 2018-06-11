@@ -261,6 +261,17 @@ goffset rspamd_dkim_canonize_header_relaxed_str (const gchar *hname,
 		gsize outlen);
 
 /**
+ * Checks public and private keys for match
+ * @param pk
+ * @param sk
+ * @param err
+ * @return
+ */
+gboolean rspamd_dkim_match_keys (rspamd_dkim_key_t *pk,
+								 rspamd_dkim_sign_key_t *sk,
+								 GError **err);
+
+/**
  * Free DKIM key
  * @param key
  */

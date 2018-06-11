@@ -618,7 +618,8 @@ lua_dkim_sign_handler (lua_State *L)
 	GError *err = NULL;
 	GString *hdr;
 	const gchar *selector = NULL, *domain = NULL, *key = NULL, *rawkey = NULL,
-			*headers = NULL, *sign_type_str = NULL, *arc_cv = NULL;
+			*headers = NULL, *sign_type_str = NULL, *arc_cv = NULL,
+			*pubkey = NULL;
 	rspamd_dkim_sign_context_t *ctx;
 	rspamd_dkim_sign_key_t *dkim_key;
 	gsize rawlen = 0, keylen = 0;
@@ -633,11 +634,11 @@ lua_dkim_sign_handler (lua_State *L)
 	 */
 	if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 			"key=V;rawkey=V;*domain=S;*selector=S;no_cache=B;headers=S;"
-					"sign_type=S;arc_idx=I;arc_cv=S;expire=I",
+					"sign_type=S;arc_idx=I;arc_cv=S;expire=I;pubkey=S",
 			&keylen, &key, &rawlen, &rawkey, &domain,
 			&selector, &no_cache, &headers,
-			&sign_type_str, &arc_idx, &arc_cv, &expire)) {
-		msg_err_task ("invalid return value from sign condition: %e",
+			&sign_type_str, &arc_idx, &arc_cv, &expire, &pubkey)) {
+		msg_err_task ("cannot parse table arguments: %e",
 				err);
 		g_error_free (err);
 
@@ -763,6 +764,31 @@ lua_dkim_sign_handler (lua_State *L)
 			lua_settop (L, 0);
 			return luaL_error (L, "unknown sign type: %s",
 					sign_type_str);
+		}
+	}
+
+	if (pubkey != NULL) {
+		/* Also check if private and public keys match */
+		rspamd_dkim_key_t *pk;
+		gsize keylen = strlen (pubkey);
+
+		pk = rspamd_dkim_parse_key (pubkey, &keylen, NULL);
+
+		if (pk == NULL) {
+			msg_warn_task ("cannot parse pubkey from string: %s",
+					pubkey);
+		}
+		else {
+			GError *te = NULL;
+
+			/* We have parsed the key, so try to check keys */
+			if (!rspamd_dkim_match_keys (pk, dkim_key, &te)) {
+				msg_warn_task ("public key for %s/%s does not match private key: %e",
+						domain, selector, te);
+				g_error_free (te);
+
+				/* TODO: add fatal failure possibility */
+			}
 		}
 	}
 

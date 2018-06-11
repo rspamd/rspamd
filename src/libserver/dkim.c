@@ -2997,3 +2997,39 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 
 	return hdr;
 }
+
+gboolean
+rspamd_dkim_match_keys (rspamd_dkim_key_t *pk,
+								 rspamd_dkim_sign_key_t *sk,
+								 GError **err)
+{
+	const BIGNUM *n1, *n2;
+
+	if (pk == NULL || sk == NULL) {
+		g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
+				"missing public or private key");
+		return FALSE;
+	}
+
+	if (pk->type != RSPAMD_DKIM_KEY_RSA) {
+		g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
+				"pubkey is not RSA key");
+		return FALSE;
+	}
+
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	RSA_get0_key (pk->key.key_rsa, &n1, NULL, NULL);
+	n2 = RSA_get0_key (sk->key_rsa, &n2, NULL, NULL);
+#else
+	n1 = pk->key.key_rsa->n;
+	n2 = sk->key_rsa->n;
+#endif
+
+	if (BN_cmp (n1, n2) != 0) {
+		g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYHASHMISMATCH,
+				"pubkey does not match private key");
+		return FALSE;
+	}
+
+	return TRUE;
+}
