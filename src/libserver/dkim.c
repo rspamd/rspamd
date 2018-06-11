@@ -1176,7 +1176,8 @@ rspamd_create_dkim_context (const gchar *sig,
 		md_alg = EVP_sha1 ();
 	}
 	else if (ctx->sig_alg == DKIM_SIGN_RSASHA256 ||
-			ctx->sig_alg == DKIM_SIGN_ECDSASHA256) {
+			ctx->sig_alg == DKIM_SIGN_ECDSASHA256 ||
+			ctx->sig_alg == DKIM_SIGN_EDDSASHA256) {
 		md_alg = EVP_sha256 ();
 	}
 	else if (ctx->sig_alg == DKIM_SIGN_RSASHA512 ||
