@@ -521,6 +521,9 @@ rdns_process_retransmit (int fd, void *arg)
 	}
 }
 
+#define align_ptr(p, a)                                                   \
+    (guint8 *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
+
 struct rdns_request*
 rdns_make_request_full (
 		struct rdns_resolver *resolver,
@@ -541,6 +544,8 @@ rdns_make_request_full (
 	const char *cur_name, *last_name = NULL;
 	struct rdns_compression_entry *comp = NULL;
 	struct rdns_fake_reply *fake_rep = NULL;
+	char fake_buf[MAX_FAKE_NAME + sizeof (struct rdns_fake_reply_idx) + 16];
+	struct rdns_fake_reply_idx *idx;
 
 	if (resolver == NULL || !resolver->initialized) {
 		return NULL;
@@ -578,26 +583,35 @@ rdns_make_request_full (
 	for (i = 0; i < queries * 2; i += 2) {
 		cur = i / 2;
 		cur_name = va_arg (args, const char *);
-
-		if (last_name == NULL) {
-			HASH_FIND_STR (resolver->fake_elts, cur_name, fake_rep);
-
-			if (fake_rep) {
-				/* We actually treat it as a short-circuit */
-				req->reply = rdns_make_reply (req, fake_rep->rcode);
-				req->reply->entries = fake_rep->result;
-				req->state = RDNS_REQUEST_FAKE;
-			}
-		}
+		type = va_arg (args, int);
 
 		if (cur_name != NULL) {
-			last_name = cur_name;
 			clen = strlen (cur_name);
+
 			if (clen == 0) {
 				rdns_info ("got empty name to resolve");
 				rdns_request_free (req);
 				return NULL;
 			}
+
+			if (last_name == NULL && queries == 1 && clen < MAX_FAKE_NAME) {
+				/* We allocate structure in the static space */
+				idx = (struct rdns_fake_reply_idx *)align_ptr (fake_buf, 16);
+				idx->rcode = type;
+				idx->len = clen;
+				memcpy (idx->request, cur_name, clen);
+				HASH_FIND (hh, resolver->fake_elts, idx, sizeof (*idx) + clen,
+						fake_rep);
+
+				if (fake_rep) {
+					/* We actually treat it as a short-circuit */
+					req->reply = rdns_make_reply (req, idx->rcode);
+					req->reply->entries = fake_rep->result;
+					req->state = RDNS_REQUEST_FAKE;
+				}
+			}
+
+			last_name = cur_name;
 			tlen += clen;
 		}
 		else if (last_name == NULL) {
@@ -606,17 +620,22 @@ rdns_make_request_full (
 			return NULL;
 		}
 
-		if (req->state != RDNS_REQUEST_FAKE &&
-			!rdns_format_dns_name (resolver, last_name, clen,
-				&req->requested_names[cur].name, &olen)) {
-			rdns_request_free (req);
-			return NULL;
+		if (req->state != RDNS_REQUEST_FAKE) {
+			if (!rdns_format_dns_name (resolver, last_name, clen,
+					&req->requested_names[cur].name, &olen)) {
+				rdns_request_free (req);
+				return NULL;
+			}
+
+			req->requested_names[cur].len = olen;
+		}
+		else {
+			req->requested_names[cur].len = clen;
 		}
 
-		type = va_arg (args, int);
 		req->requested_names[cur].type = type;
-		req->requested_names[cur].len = olen;
 	}
+
 	va_end (args);
 
 	if (req->state != RDNS_REQUEST_FAKE) {
@@ -928,31 +947,30 @@ void rdns_resolver_set_fake_reply (struct rdns_resolver *resolver,
 								   struct rdns_reply_entry *reply)
 {
 	struct rdns_fake_reply *fake_rep;
+	struct rdns_fake_reply_idx *srch;
+	unsigned len = strlen (name);
 
-	HASH_FIND_STR (resolver->fake_elts, name, fake_rep);
+	assert (len < MAX_FAKE_NAME);
+	srch = malloc (sizeof (*srch) + len);
+	srch->len = len;
+	srch->rcode = rcode;
+	memcpy (srch->request, name, len);
+
+	HASH_FIND (hh, resolver->fake_elts, srch, len + sizeof (*srch), fake_rep);
 
 	if (fake_rep) {
 		/* Append reply to the existing list */
-		fake_rep->rcode = rcode;
 		DL_APPEND (fake_rep->result, reply);
 	}
 	else {
-		fake_rep = calloc (1, sizeof (*fake_rep));
+		fake_rep = calloc (1, sizeof (*fake_rep) + len);
 
 		if (fake_rep == NULL) {
 			abort ();
 		}
 
-		fake_rep->request = strdup (name);
-
-		if (fake_rep->request == NULL) {
-			abort ();
-		}
-
-		fake_rep->rcode = rcode;
+		memcpy (&fake_rep->key, srch, sizeof (*srch) + len);
 		DL_APPEND (fake_rep->result, reply);
-
-		HASH_ADD_KEYPTR (hh, resolver->fake_elts, fake_rep->request,
-				strlen (fake_rep->request), fake_rep);
+		HASH_ADD (hh, resolver->fake_elts, key, sizeof (*srch) + len, fake_rep);
 	}
 }

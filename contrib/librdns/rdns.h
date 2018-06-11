@@ -221,6 +221,8 @@ struct rdns_request_name {
 	unsigned int len;
 };
 
+#define MAX_FAKE_NAME 1000
+
 /*
  * RDNS API
  */
@@ -327,7 +329,7 @@ void rdns_resolver_register_plugin (struct rdns_resolver *resolver,
  * Add a fake reply for a specified name
  * @param resolver
  * @param type
- * @param name
+ * @param name (must not be larger than MAX_FAKE_NAME)
  * @param reply
  */
 void rdns_resolver_set_fake_reply (struct rdns_resolver *resolver,

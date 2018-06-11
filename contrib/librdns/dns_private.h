@@ -111,11 +111,16 @@ struct rdns_io_channel {
 	ref_entry_t ref;
 };
 
-struct rdns_fake_reply {
-	char *request;
+struct rdns_fake_reply_idx {
 	enum dns_rcode rcode;
+	unsigned len;
+	char request[0];
+};
+
+struct rdns_fake_reply {
 	struct rdns_reply_entry *result;
 	UT_hash_handle hh;
+	struct rdns_fake_reply_idx key;
 };
 
 
