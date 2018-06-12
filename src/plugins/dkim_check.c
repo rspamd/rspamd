@@ -623,7 +623,7 @@ lua_dkim_sign_handler (lua_State *L)
 	rspamd_dkim_sign_context_t *ctx;
 	rspamd_dkim_sign_key_t *dkim_key;
 	gsize rawlen = 0, keylen = 0;
-	gboolean no_cache = FALSE;
+	gboolean no_cache = FALSE, strict_pubkey_check = FALSE;
 
 	luaL_argcheck (L, lua_type (L, 2) == LUA_TTABLE, 2, "'table' expected");
 	/*
@@ -634,10 +634,12 @@ lua_dkim_sign_handler (lua_State *L)
 	 */
 	if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 			"key=V;rawkey=V;*domain=S;*selector=S;no_cache=B;headers=S;"
-					"sign_type=S;arc_idx=I;arc_cv=S;expire=I;pubkey=S",
+			"sign_type=S;arc_idx=I;arc_cv=S;expire=I;pubkey=S;"
+			"strict_pubkey_check=B",
 			&keylen, &key, &rawlen, &rawkey, &domain,
 			&selector, &no_cache, &headers,
-			&sign_type_str, &arc_idx, &arc_cv, &expire, &pubkey)) {
+			&sign_type_str, &arc_idx, &arc_cv, &expire, &pubkey,
+			&strict_pubkey_check)) {
 		msg_err_task ("cannot parse table arguments: %e",
 				err);
 		g_error_free (err);
@@ -775,20 +777,42 @@ lua_dkim_sign_handler (lua_State *L)
 		pk = rspamd_dkim_parse_key (pubkey, &keylen, NULL);
 
 		if (pk == NULL) {
-			msg_warn_task ("cannot parse pubkey from string: %s",
-					pubkey);
+			if (strict_pubkey_check) {
+				msg_err_task ("cannot parse pubkey from string: %s, skip signing",
+						pubkey);
+				lua_pushboolean (L, FALSE);
+
+				return 1;
+			}
+			else {
+				msg_warn_task ("cannot parse pubkey from string: %s",
+						pubkey);
+			}
 		}
 		else {
 			GError *te = NULL;
 
 			/* We have parsed the key, so try to check keys */
 			if (!rspamd_dkim_match_keys (pk, dkim_key, &te)) {
-				msg_warn_task ("public key for %s/%s does not match private key: %e",
-						domain, selector, te);
-				g_error_free (te);
+				if (strict_pubkey_check) {
+					msg_err_task ("public key for %s/%s does not match private "
+								  "key: %e, skip signing",
+							domain, selector, te);
+					g_error_free (te);
+					lua_pushboolean (L, FALSE);
+					rspamd_dkim_key_unref (pk);
 
-				/* TODO: add fatal failure possibility */
+					return 1;
+				}
+				else {
+					msg_warn_task ("public key for %s/%s does not match private "
+								   "key: %e",
+							domain, selector, te);
+					g_error_free (te);
+				}
 			}
+
+			rspamd_dkim_key_unref (pk);
 		}
 	}
 
