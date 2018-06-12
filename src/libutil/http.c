@@ -1183,7 +1183,13 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 							http_errno_description (priv->parser.http_errno));
 				}
 
-				conn->error_handler (conn, err);
+				if (!conn->finished) {
+					conn->error_handler (conn, err);
+				}
+				else {
+					msg_err ("got error after HTTP request is finished: %e", err);
+				}
+
 				g_error_free (err);
 
 				REF_RELEASE (pbuf);
@@ -1234,7 +1240,14 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 				err = g_error_new (HTTP_ERROR, priv->parser.http_errno,
 						"HTTP parser error: %s",
 						http_errno_description (priv->parser.http_errno));
-				conn->error_handler (conn, err);
+
+				if (!conn->finished) {
+					conn->error_handler (conn, err);
+				}
+				else {
+					msg_err ("got error after HTTP request is finished: %e", err);
+				}
+
 				g_error_free (err);
 
 				REF_RELEASE (pbuf);
