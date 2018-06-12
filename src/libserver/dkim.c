@@ -3019,7 +3019,7 @@ rspamd_dkim_match_keys (rspamd_dkim_key_t *pk,
 
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 	RSA_get0_key (pk->key.key_rsa, &n1, NULL, NULL);
-	n2 = RSA_get0_key (sk->key_rsa, &n2, NULL, NULL);
+	RSA_get0_key (sk->key_rsa, &n2, NULL, NULL);
 #else
 	n1 = pk->key.key_rsa->n;
 	n2 = sk->key_rsa->n;
