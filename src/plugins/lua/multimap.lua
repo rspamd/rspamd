@@ -93,6 +93,9 @@ local function apply_hostname_filter(task, filter, hostname, r)
   if filter == 'tld' then
     local tld = util.get_tld(hostname)
     return tld
+  elseif filter == 'top' then
+    local tld = util.get_tld(hostname)
+    return tld:match('[^.]*$') or tld
   else
     if not r['re_filter'] then
       local pat = string.match(filter, 'tld:regexp:(.+)')
@@ -123,6 +126,9 @@ local function apply_url_filter(task, filter, url, r)
 
   if filter == 'tld' then
     return url:get_tld()
+  elseif filter == 'top' then
+    local tld = url:get_tld()
+    return tld:match('[^.]*$') or tld
   elseif filter == 'full' then
     return url:get_text()
   elseif filter == 'is_phished' then

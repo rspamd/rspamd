@@ -133,6 +133,14 @@ MAP - HOSTNAME MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  rspamd.com
   Check Rspamc  ${result}  HOSTNAME_MAP  inverse=1
 
+MAP - TOP
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  example.com.au
+  Check Rspamc  ${result}  HOSTNAME_TOP_MAP
+
+MAP - TOP MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  example.com.bg
+  Check Rspamc  ${result}  HOSTNAME_TOP_MAP  inverse=1
+
 MAP - CDB - HOSTNAME
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  127.0.0.1  --hostname  example.com
   Check Rspamc  ${result}  CDB_HOSTNAME
