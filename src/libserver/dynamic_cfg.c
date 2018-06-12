@@ -152,7 +152,6 @@ json_config_read_cb (gchar * chunk,
 	if (data->cur_data == NULL) {
 		jb = g_malloc0 (sizeof (*jb));
 		jb->cfg = pd->cfg;
-		jb->buf = pd->buf;
 		data->cur_data = jb;
 	}
 	else {
@@ -161,7 +160,7 @@ json_config_read_cb (gchar * chunk,
 
 	if (jb->buf == NULL) {
 		/* Allocate memory for buffer */
-		jb->buf = g_string_sized_new (BUFSIZ);
+		jb->buf = g_string_sized_new (MAX (len, BUFSIZ));
 	}
 
 	g_string_append_len (jb->buf, chunk, len);
@@ -179,6 +178,10 @@ json_config_fin_cb (struct map_cb_data *data)
 	if (data->prev_data) {
 		jb = data->prev_data;
 		/* Clean prev data */
+		if (jb->buf) {
+			g_string_free (jb->buf, TRUE);
+		}
+
 		g_free (jb);
 	}
 
@@ -190,6 +193,7 @@ json_config_fin_cb (struct map_cb_data *data)
 		msg_err ("no data read");
 		return;
 	}
+
 	if (jb->buf == NULL) {
 		msg_err ("no data read");
 		return;

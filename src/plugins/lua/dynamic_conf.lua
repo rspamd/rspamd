@@ -319,10 +319,15 @@ local function add_dynamic_action(_, act, score)
   return add
 end
 
-if redis_params then
-  rspamd_plugins["dynamic_conf"] = {
-    add_symbol = add_dynamic_symbol,
-    add_action = add_dynamic_action,
-  }
-  lua_util.disable_module(N, "redis")
+if section then
+  if redis_params then
+    rspamd_plugins["dynamic_conf"] = {
+      add_symbol = add_dynamic_symbol,
+      add_action = add_dynamic_action,
+    }
+  else
+    lua_util.disable_module(N, "redis")
+  end
+else
+  lua_util.disable_module(N, "config")
 end
