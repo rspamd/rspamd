@@ -344,9 +344,13 @@ rspamd_map_cache_cb (gint fd, short what, gpointer ud)
 
 	if (cache_cbd->gen != cache_cbd->data->gen) {
 		/* We have another update, so this cache element is obviously expired */
-		/* Important: we do not set cache availability to zero here */
+		/*
+		 * Important!: we do not set cache availability to zero here, as there
+		 * might be fresh cache
+		 */
+		msg_info_map ("cached data is now expired (gen mismatch %L != %L) for %s",
+				cache_cbd->gen, cache_cbd->data->gen, map->name);
 		MAP_RELEASE (cache_cbd->shm, "rspamd_http_map_cached_cbdata");
-		msg_info_map ("cached data is now expired (gen mismatch) for %s", map->name);
 		event_del (&cache_cbd->timeout);
 		g_free (cache_cbd);
 	}
@@ -447,6 +451,9 @@ http_map_finish (struct rspamd_http_connection *conn,
 			cbd->periodic->need_modify = TRUE;
 			/* Reset the whole chain */
 			cbd->periodic->cur_backend = 0;
+			/* Reset cache, old cached data will be cleaned on timeout */
+			g_atomic_int_set (&map->cache->available, 0);
+
 			rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
 			MAP_RELEASE (cbd, "http_callback_data");
 
