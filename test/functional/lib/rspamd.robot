@@ -108,6 +108,22 @@ Run Redis
   ${redis_log} =  Get File  ${TMPDIR}/redis.log
   Log  ${redis_log}
 
+Run Nginx
+  ${template} =  Get File  ${TESTDIR}/configs/nginx.conf
+  ${config} =  Replace Variables  ${template}
+  Create File  ${TMPDIR}/nginx.conf  ${config}
+  Log  ${config}
+  ${result} =  Run Process  nginx  -c  ${TMPDIR}/nginx.conf
+  Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
+  Should Be Equal As Integers  ${result.rc}  0
+  Wait Until Keyword Succeeds  30 sec  1 sec  Check Pidfile  ${TMPDIR}/nginx.pid
+  Wait Until Keyword Succeeds  30 sec  1 sec  TCP Connect  ${NGINX_ADDR}  ${NGINX_PORT}
+  ${NGINX_PID} =  Get File  ${TMPDIR}/nginx.pid
+  Run Keyword If  '${NGINX_SCOPE}' == 'Test'  Set Test Variable  ${NGINX_PID}
+  ...  ELSE IF  '${NGINX_SCOPE}' == 'Suite'  Set Suite Variable  ${NGINX_PID}
+  ${nginx_log} =  Get File  ${TMPDIR}/nginx.log
+  Log  ${nginx_log}
+
 Run Rspamc
   [Arguments]  @{args}
   ${result} =  Run Process  ${RSPAMC}  -t  60  @{args}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
@@ -158,5 +174,5 @@ Sync Fuzzy Storage
   ...  ELSE  Run Process  ${RSPAMADM}  control  -s  @{vargs}[0]/rspamd.sock  fuzzy_sync
   Log  ${result.stdout}
   Run Keyword If  $len == 0  Follow Rspamd Log
-  ...  ELSE  Custom Follow Rspamd Log  @{vargs}[0]/rspamd.log  @{vargs}[1]  @{vargs}[2]  @{vargs}[3] 
+  ...  ELSE  Custom Follow Rspamd Log  @{vargs}[0]/rspamd.log  @{vargs}[1]  @{vargs}[2]  @{vargs}[3]
   Sleep  0.1s  Try give fuzzy storage time to sync
