@@ -114,6 +114,8 @@ function($, _, Humanize) {
     }
 
     function process_history_v2(data) {
+        // Display no more than rcpt_lim recipients
+        const rcpt_lim = 3;
         var items = [];
 
         function getSelector(id) {
@@ -130,6 +132,26 @@ function($, _, Humanize) {
 
         $.each(data.rows,
           function (i, item) {
+            function more(p) {
+                const l = item[p].length;
+                return (l > rcpt_lim) ? " … (" + l + ")" : "";
+            }
+            function format_rcpt(smtp, mime) {
+                var full = shrt = "";
+                if (smtp) {
+                    full = "[" + item.rcpt_smtp.join(", ") + "] ";
+                    shrt = "[" + item.rcpt_smtp.slice(0,rcpt_lim).join(",&#8203;") + more("rcpt_smtp")  + "]";
+                    if (mime) {
+                        full += " ";
+                        shrt += " ";
+                    }
+                }
+                if (mime) {
+                    full += item.rcpt_mime.join(", ");
+                    shrt += item.rcpt_mime.slice(0,rcpt_lim).join(",&#8203;") + more("rcpt_mime");
+                }
+                return {full: full, shrt: shrt};
+            }
 
             preprocess_item(item);
             Object.keys(item.symbols).map(function(key) {
@@ -171,11 +193,18 @@ function($, _, Humanize) {
                 "value": scan_time
             };
             item.id = item['message-id'];
-            if ($(item.rcpt_mime).not(item.rcpt_smtp).length !== 0 || $(item.rcpt_smtp).not(item.rcpt_mime).length !== 0) {
-                item.rcpt_mime = "[" + item.rcpt_smtp.join(",&#8203;") + "] " + item.rcpt_mime.join(",&#8203;");
+
+            var rcpt = {};
+            if (!item.rcpt_mime.length) {
+                rcpt = format_rcpt(true, false);
+            } else if ($(item.rcpt_mime).not(item.rcpt_smtp).length !== 0 || $(item.rcpt_smtp).not(item.rcpt_mime).length !== 0) {
+                rcpt = format_rcpt(true, true);
             } else {
-                item.rcpt_mime = item.rcpt_mime.join(",&#8203;");
+                rcpt = format_rcpt(false, true);
             }
+            item.rcpt_mime_short = rcpt.shrt;
+            item.rcpt_mime = rcpt.full;
+
             if (item.sender_mime !== item.sender_smtp) {
                 item.sender_mime = "[" + item.sender_smtp + "] " + item.sender_mime;
             }
@@ -241,13 +270,21 @@ function($, _, Humanize) {
                     "word-wrap": "break-word"
                 }
             }, {
-                "name": "rcpt_mime",
+                "name": "rcpt_mime_short",
                 "title": "[Envelope To] To/Cc/Bcc",
                 "breakpoints": "xs sm md",
                 "style": {
                     "font-size": "11px",
                     "minWidth": 100,
                     "maxWidth": 200,
+                    "word-wrap": "break-word"
+                }
+            }, {
+                "name": "rcpt_mime",
+                "title": "[Envelope To] To/Cc/Bcc",
+                "breakpoints": "all",
+                "style": {
+                    "font-size": "11px",
                     "word-wrap": "break-word"
                 }
             }, {
