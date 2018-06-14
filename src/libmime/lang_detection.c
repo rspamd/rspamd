@@ -188,6 +188,7 @@ struct rspamd_lang_detector {
 	UConverter *uchar_converter;
 	gsize short_text_limit;
 	gsize total_occurencies; /* number of all languages found */
+	ref_entry_t ref;
 };
 
 static void
@@ -622,6 +623,32 @@ rspamd_language_detector_process_chain (struct rspamd_config *cfg,
 	}
 }
 
+static void
+rspamd_language_detector_dtor (struct rspamd_lang_detector *d)
+{
+	if (d) {
+		if (d->uchar_converter) {
+			ucnv_close (d->uchar_converter);
+		}
+
+		if (d->unicode_scripts) {
+			g_hash_table_unref (d->unicode_scripts);
+		}
+
+		if (d->unigramms) {
+			kh_destroy (rspamd_unigram_hash, d->unigramms);
+		}
+
+		if (d->trigramms) {
+			kh_destroy (rspamd_trigram_hash, d->trigramms);
+		}
+
+		if (d->languages) {
+			g_ptr_array_free (d->languages, TRUE);
+		}
+	}
+}
+
 struct rspamd_lang_detector*
 rspamd_language_detector_init (struct rspamd_config *cfg)
 {
@@ -702,6 +729,12 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 			(gint)g_hash_table_size (ret->unicode_scripts),
 			(gint)kh_size (ret->unigramms),
 			(gint)kh_size (ret->trigramms));
+
+	REF_INIT_RETAIN (ret, rspamd_language_detector_dtor);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_language_detector_unref,
+			ret);
+
 end:
 	if (gl.gl_pathc > 0) {
 		globfree (&gl);
@@ -1398,4 +1431,19 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 			(end_ticks - start_ticks));
 
 	return result;
+}
+
+
+struct rspamd_lang_detector*
+rspamd_language_detector_ref (struct rspamd_lang_detector* d)
+{
+	REF_RETAIN (d);
+
+	return d;
+}
+
+void
+rspamd_language_detector_unref (struct rspamd_lang_detector* d)
+{
+	REF_RELEASE (d);
 }

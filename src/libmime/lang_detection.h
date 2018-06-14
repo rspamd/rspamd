@@ -37,6 +37,10 @@ struct rspamd_lang_detector_res {
  * @return
  */
 struct rspamd_lang_detector* rspamd_language_detector_init (struct rspamd_config *cfg);
+
+struct rspamd_lang_detector* rspamd_language_detector_ref (struct rspamd_lang_detector* d);
+void rspamd_language_detector_unref (struct rspamd_lang_detector* d);
+
 /**
  * Convert string from utf8 to ucs32
  * @param d
