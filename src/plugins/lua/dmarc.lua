@@ -37,7 +37,7 @@ local no_reporting_domains
 local statefile = string.format('%s/%s', rspamd_paths['DBDIR'], 'dmarc_reports_last_sent')
 local VAR_NAME = 'dmarc_reports_last_sent'
 local INTERVAL = 86400
-local pool = mempool.create()
+local pool
 
 local report_settings = {
   helo = 'rspamd',
@@ -608,6 +608,7 @@ if opts['reporting'] == true then
     rspamd_config:add_on_load(function(cfg, ev_base, worker)
       if not worker:is_primary_controller() then return end
       local rresolver = rspamd_resolver.init(ev_base, rspamd_config)
+      pool = mempool.create()
       rspamd_config:register_finish_script(function ()
         local stamp = pool:get_variable(VAR_NAME, 'double')
         if not stamp then
@@ -621,6 +622,7 @@ if opts['reporting'] == true then
         end
         assert(f:write(pool:get_variable(VAR_NAME, 'double')))
         assert(f:close())
+        pool:destroy()
       end)
       local get_reporting_domain, reporting_domain, report_start, report_end, report_id, want_period, report_key
       local reporting_addr = {}
