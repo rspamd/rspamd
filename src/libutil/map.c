@@ -47,15 +47,6 @@ static void rspamd_map_periodic_callback (gint fd, short what, void *ud);
 static void rspamd_map_schedule_periodic (struct rspamd_map *map, gboolean locked,
 		gboolean initial, gboolean errored);
 
-struct rspamd_http_map_cached_cbdata {
-	struct event timeout;
-	struct rspamd_storage_shmem *shm;
-	struct rspamd_map *map;
-	struct http_map_data *data;
-	guint64 gen;
-	time_t last_checked;
-};
-
 guint rspamd_map_log_id = (guint)-1;
 RSPAMD_CONSTRUCTOR(rspamd_map_log_init)
 {
@@ -285,8 +276,8 @@ free_http_cbdata_common (struct http_callback_data *cbd, gboolean plan_new)
 static void
 free_http_cbdata (struct http_callback_data *cbd)
 {
-	cbd->map->dtor = NULL;
-	cbd->map->dtor_data = NULL;
+	cbd->map->tmp_dtor = NULL;
+	cbd->map->tmp_dtor_data = NULL;
 
 	free_http_cbdata_common (cbd, TRUE);
 }
@@ -365,6 +356,7 @@ rspamd_map_cache_cb (gint fd, short what, gpointer ud)
 		event_add (&cache_cbd->timeout, &tv);
 	}
 	else {
+		map->cur_cache_cbd = NULL;
 		g_atomic_int_set (&map->cache->available, 0);
 		MAP_RELEASE (cache_cbd->shm, "rspamd_http_map_cached_cbdata");
 		msg_info_map ("cached data is now expired for %s", map->name);
@@ -453,6 +445,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 			cbd->periodic->cur_backend = 0;
 			/* Reset cache, old cached data will be cleaned on timeout */
 			g_atomic_int_set (&map->cache->available, 0);
+			map->cur_cache_cbd = NULL;
 
 			rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
 			MAP_RELEASE (cbd, "http_callback_data");
@@ -677,6 +670,7 @@ read_data:
 				cache_cbd);
 		event_base_set (cbd->ev_base, &cache_cbd->timeout);
 		event_add (&cache_cbd->timeout, &tv);
+		map->cur_cache_cbd = cache_cbd;
 
 		if (map->next_check) {
 			rspamd_http_date_format (next_check_date, sizeof (next_check_date),
@@ -1396,8 +1390,8 @@ check:
 			MAP_RETAIN (cbd, "http_callback_data");
 		}
 
-		map->dtor = free_http_cbdata_dtor;
-		map->dtor_data = cbd;
+		map->tmp_dtor = free_http_cbdata_dtor;
+		map->tmp_dtor_data = cbd;
 	}
 	else {
 		msg_warn_map ("cannot load map: DNS resolver is not initialized");
@@ -1663,6 +1657,7 @@ rspamd_map_remove_all (struct rspamd_config *cfg)
 	struct rspamd_map *map;
 	GList *cur;
 	struct rspamd_map_backend *bk;
+	struct map_cb_data cbdata;
 	guint i;
 
 	for (cur = cfg->maps; cur != NULL; cur = g_list_next (cur)) {
@@ -1674,11 +1669,27 @@ rspamd_map_remove_all (struct rspamd_config *cfg)
 		}
 
 		if (g_atomic_int_compare_and_exchange (&map->cache->available, 1, 0)) {
+			if (map->cur_cache_cbd) {
+				MAP_RELEASE (map->cur_cache_cbd->shm, "rspamd_http_map_cached_cbdata");
+				event_del (&map->cur_cache_cbd->timeout);
+				g_free (map->cur_cache_cbd);
+				map->cur_cache_cbd = NULL;
+			}
+
 			unlink (map->cache->shmem_name);
 		}
 
+		if (map->tmp_dtor) {
+			map->tmp_dtor (map->tmp_dtor_data);
+		}
+
 		if (map->dtor) {
-			map->dtor (map->dtor_data);
+			cbdata.prev_data = NULL;
+			cbdata.map = map;
+			cbdata.cur_data = *map->user_data;
+
+			map->dtor (&cbdata);
+			*map->user_data = NULL;
 		}
 	}
 
@@ -2015,11 +2026,12 @@ rspamd_map_add_static_string (struct rspamd_config *cfg,
 
 struct rspamd_map *
 rspamd_map_add (struct rspamd_config *cfg,
-	const gchar *map_line,
-	const gchar *description,
-	map_cb_t read_callback,
-	map_fin_cb_t fin_callback,
-	void **user_data)
+				const gchar *map_line,
+				const gchar *description,
+				map_cb_t read_callback,
+				map_fin_cb_t fin_callback,
+				map_dtor_t dtor,
+				void **user_data)
 {
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
@@ -2032,6 +2044,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 	map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_map));
 	map->read_callback = read_callback;
 	map->fin_callback = fin_callback;
+	map->dtor = dtor;
 	map->user_data = user_data;
 	map->cfg = cfg;
 	map->id = rspamd_random_uint64_fast ();
@@ -2065,11 +2078,12 @@ rspamd_map_add (struct rspamd_config *cfg,
 
 struct rspamd_map*
 rspamd_map_add_from_ucl (struct rspamd_config *cfg,
-	const ucl_object_t *obj,
-	const gchar *description,
-	map_cb_t read_callback,
-	map_fin_cb_t fin_callback,
-	void **user_data)
+						 const ucl_object_t *obj,
+						 const gchar *description,
+						 map_cb_t read_callback,
+						 map_fin_cb_t fin_callback,
+						 map_dtor_t dtor,
+						 void **user_data)
 {
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur, *elt;
@@ -2082,12 +2096,13 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 	if (ucl_object_type (obj) == UCL_STRING) {
 		/* Just a plain string */
 		return rspamd_map_add (cfg, ucl_object_tostring (obj), description,
-				read_callback, fin_callback, user_data);
+				read_callback, fin_callback, dtor, user_data);
 	}
 
 	map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_map));
 	map->read_callback = read_callback;
 	map->fin_callback = fin_callback;
+	map->dtor = dtor;
 	map->user_data = user_data;
 	map->cfg = cfg;
 	map->id = rspamd_random_uint64_fast ();

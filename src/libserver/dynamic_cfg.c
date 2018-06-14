@@ -222,6 +222,22 @@ json_config_fin_cb (struct map_cb_data *data)
 	jb->cfg->current_dynamic_conf = top;
 }
 
+static void
+json_config_dtor_cb (struct map_cb_data *data)
+{
+	struct config_json_buf *jb;
+
+	if (data->cur_data) {
+		jb = data->cur_data;
+		/* Clean prev data */
+		if (jb->buf) {
+			g_string_free (jb->buf, TRUE);
+		}
+
+		g_free (jb);
+	}
+}
+
 /**
  * Init dynamic configuration using map logic and specific configuration
  * @param cfg config file
@@ -244,8 +260,13 @@ init_dynamic_config (struct rspamd_config *cfg)
 	*pjb = jb;
 	cfg->current_dynamic_conf = ucl_object_typed_new (UCL_ARRAY);
 
-	if (!rspamd_map_add (cfg, cfg->dynamic_conf, "Dynamic configuration map",
-		json_config_read_cb, json_config_fin_cb, (void **)pjb)) {
+	if (!rspamd_map_add (cfg,
+			cfg->dynamic_conf,
+			"Dynamic configuration map",
+			json_config_read_cb,
+			json_config_fin_cb,
+			json_config_dtor_cb,
+			(void **)pjb)) {
 		msg_err ("cannot add map for configuration %s", cfg->dynamic_conf);
 	}
 }

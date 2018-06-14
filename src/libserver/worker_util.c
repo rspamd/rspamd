@@ -342,7 +342,6 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 {
 	GList *cur;
 	struct event *events;
-	struct rspamd_map *map;
 
 	/* Remove all events */
 	cur = worker->accept_events;
@@ -383,15 +382,7 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 #endif
 
 	/* Cleanup maps */
-	for (cur = worker->srv->cfg->maps; cur != NULL; cur = g_list_next (cur)) {
-		map = cur->data;
-
-		if (map->dtor) {
-			map->dtor (map->dtor_data);
-		}
-
-		map->dtor = NULL;
-	}
+	rspamd_map_remove_all (worker->srv->cfg);
 }
 
 static rspamd_fstring_t *

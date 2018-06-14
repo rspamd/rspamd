@@ -22,6 +22,7 @@ struct map_cb_data;
 typedef gchar * (*map_cb_t)(gchar *chunk, gint len,
 	struct map_cb_data *data, gboolean final);
 typedef void (*map_fin_cb_t)(struct map_cb_data *data);
+typedef void (*map_dtor_t)(struct map_cb_data *data);
 
 typedef gboolean (*rspamd_map_traverse_cb)(gconstpointer key,
 		gconstpointer value, gsize hits, gpointer ud);
@@ -56,21 +57,23 @@ gboolean rspamd_map_is_map (const gchar *map_line);
  * Add map from line
  */
 struct rspamd_map* rspamd_map_add (struct rspamd_config *cfg,
-	const gchar *map_line,
-	const gchar *description,
-	map_cb_t read_callback,
-	map_fin_cb_t fin_callback,
-	void **user_data);
+								   const gchar *map_line,
+								   const gchar *description,
+								   map_cb_t read_callback,
+								   map_fin_cb_t fin_callback,
+								   map_dtor_t dtor,
+								   void **user_data);
 
 /**
  * Add map from ucl
  */
 struct rspamd_map* rspamd_map_add_from_ucl (struct rspamd_config *cfg,
-	const ucl_object_t *obj,
-	const gchar *description,
-	map_cb_t read_callback,
-	map_fin_cb_t fin_callback,
-	void **user_data);
+											const ucl_object_t *obj,
+											const gchar *description,
+											map_cb_t read_callback,
+											map_fin_cb_t fin_callback,
+											map_dtor_t dtor,
+											void **user_data);
 
 /**
  * Start watching of maps by adding events to libevent event loop

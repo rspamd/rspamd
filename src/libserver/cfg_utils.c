@@ -56,6 +56,7 @@ static gchar * rspamd_ucl_read_cb (gchar * chunk,
 	struct map_cb_data *data,
 	gboolean final);
 static void rspamd_ucl_fin_cb (struct map_cb_data *data);
+static void rspamd_ucl_dtor_cb (struct map_cb_data *data);
 
 guint rspamd_config_log_id = (guint)-1;
 RSPAMD_CONSTRUCTOR(rspamd_config_log_init)
@@ -1083,7 +1084,8 @@ rspamd_include_map_handler (const guchar *data, gsize len,
 			   "ucl include",
 			   rspamd_ucl_read_cb,
 			   rspamd_ucl_fin_cb,
-			   (void **)pcbdata);
+			   rspamd_ucl_dtor_cb,
+			   (void **)pcbdata) != NULL;
 }
 
 /*
@@ -1361,6 +1363,19 @@ rspamd_ucl_fin_cb (struct map_cb_data *data)
 					cur->key, cur->keylen, false);
 		}
 		ucl_object_unref (obj);
+	}
+}
+
+static void
+rspamd_ucl_dtor_cb (struct map_cb_data *data)
+{
+	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data;
+
+	if (cbdata != NULL) {
+		if (cbdata->buf != NULL) {
+			g_string_free (cbdata->buf, TRUE);
+		}
+		g_free (cbdata);
 	}
 }
 
@@ -1888,7 +1903,10 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 
 			if (rspamd_map_is_map (str)) {
 				if (rspamd_map_add_from_ucl (cfg, cur_elt,
-						description, rspamd_radix_read, rspamd_radix_fin,
+						description,
+						rspamd_radix_read,
+						rspamd_radix_fin,
+						rspamd_radix_dtor,
 						(void **)target) == NULL) {
 					g_set_error (err, g_quark_from_static_string ("rspamd-config"),
 							EINVAL, "bad map definition %s for %s", str,
@@ -1908,7 +1926,10 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 		case UCL_OBJECT:
 			/* Should be a map description */
 			if (rspamd_map_add_from_ucl (cfg, cur_elt,
-					description, rspamd_radix_read, rspamd_radix_fin,
+					description,
+					rspamd_radix_read,
+					rspamd_radix_fin,
+					rspamd_radix_dtor,
 					(void **)target) == NULL) {
 				g_set_error (err, g_quark_from_static_string ("rspamd-config"),
 						EINVAL, "bad map object for %s", ucl_object_key (obj));

@@ -813,6 +813,17 @@ rspamd_kv_list_fin (struct map_cb_data *data)
 	}
 }
 
+void
+rspamd_kv_list_dtor (struct map_cb_data *data)
+{
+	struct rspamd_hash_map_helper *htb;
+
+	if (data->cur_data) {
+		htb = (struct rspamd_hash_map_helper *)data->cur_data;
+		rspamd_map_helper_destroy_hash (htb);
+	}
+}
+
 gchar *
 rspamd_radix_read (
 		gchar * chunk,
@@ -855,6 +866,17 @@ rspamd_radix_fin (struct map_cb_data *data)
 		data->map->traverse_function = rspamd_map_helper_traverse_radix;
 		data->map->nelts = kh_size (r->htb);
 		data->map->digest = rspamd_cryptobox_fast_hash_final (&r->hst);
+	}
+}
+
+void
+rspamd_radix_dtor (struct map_cb_data *data)
+{
+	struct rspamd_radix_map_helper *r;
+
+	if (data->cur_data) {
+		r = (struct rspamd_radix_map_helper *)data->cur_data;
+		rspamd_map_helper_destroy_radix (r);
 	}
 }
 
@@ -1035,6 +1057,13 @@ rspamd_regexp_list_fin (struct map_cb_data *data)
 		data->map->traverse_function = rspamd_map_helper_traverse_regexp;
 		data->map->nelts = kh_size (re_map->htb);
 		data->map->digest = rspamd_cryptobox_fast_hash_final (&re_map->hst);
+	}
+}
+void
+rspamd_regexp_list_dtor (struct map_cb_data *data)
+{
+	if (data->cur_data) {
+		rspamd_map_helper_destroy_regexp (data->cur_data);
 	}
 }
 

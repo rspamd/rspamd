@@ -409,8 +409,11 @@ dkim_module_config (struct rspamd_config *cfg)
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "domains")) != NULL) {
 		if (!rspamd_map_add_from_ucl (cfg, value,
-			"DKIM domains", rspamd_kv_list_read, rspamd_kv_list_fin,
-			(void **)&dkim_module_ctx->dkim_domains)) {
+				"DKIM domains",
+				rspamd_kv_list_read,
+				rspamd_kv_list_fin,
+				rspamd_kv_list_dtor,
+				(void **)&dkim_module_ctx->dkim_domains)) {
 			msg_warn_config ("cannot load dkim domains list from %s",
 				ucl_object_tostring (value));
 		}
@@ -425,7 +428,10 @@ dkim_module_config (struct rspamd_config *cfg)
 	if (!got_trusted && (value =
 			rspamd_config_get_module_opt (cfg, "dkim", "trusted_domains")) != NULL) {
 		if (!rspamd_map_add_from_ucl (cfg, value,
-				"DKIM domains", rspamd_kv_list_read, rspamd_kv_list_fin,
+				"DKIM domains",
+				rspamd_kv_list_read,
+				rspamd_kv_list_fin,
+				rspamd_kv_list_dtor,
 				(void **)&dkim_module_ctx->dkim_domains)) {
 			msg_warn_config ("cannot load dkim domains list from %s",
 					ucl_object_tostring (value));

@@ -23,7 +23,7 @@
 #include "map.h"
 #include "ref.h"
 
-typedef void (*rspamd_map_dtor) (gpointer p);
+typedef void (*rspamd_map_tmp_dtor) (gpointer p);
 extern guint rspamd_map_log_id;
 #define msg_err_map(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
 		"map", map->tag, \
@@ -95,6 +95,15 @@ struct rspamd_map_backend {
 	ref_entry_t ref;
 };
 
+struct rspamd_http_map_cached_cbdata {
+	struct event timeout;
+	struct rspamd_storage_shmem *shm;
+	struct rspamd_map *map;
+	struct http_map_data *data;
+	guint64 gen;
+	time_t last_checked;
+};
+
 struct rspamd_map_cachepoint {
 	gint available;
 	gsize len;
@@ -108,14 +117,15 @@ struct rspamd_map {
 	GPtrArray *backends;
 	map_cb_t read_callback;
 	map_fin_cb_t fin_callback;
+	map_dtor_t dtor;
 	void **user_data;
 	struct event_base *ev_base;
 	gchar *description;
 	gchar *name;
 	guint32 id;
 	gboolean scheduled_check;
-	rspamd_map_dtor dtor;
-	gpointer dtor_data;
+	rspamd_map_tmp_dtor tmp_dtor;
+	gpointer tmp_dtor_data;
 	rspamd_map_traverse_function traverse_function;
 	gpointer lua_map;
 	gsize nelts;
@@ -129,6 +139,8 @@ struct rspamd_map {
 	gint *locked;
 	/* Shared cache data */
 	struct rspamd_map_cachepoint *cache;
+	/* Non-shared for cache owner, used to cleanup cache */
+	struct rspamd_http_map_cached_cbdata *cur_cache_cbd;
 	gchar tag[MEMPOOL_UID_LEN];
 };
 

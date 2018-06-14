@@ -270,6 +270,23 @@ fin_exceptions_list (struct map_cb_data *data)
 }
 
 static void
+dtor_exceptions_list (struct map_cb_data *data)
+{
+	GHashTable **t;
+	gint i;
+
+	if (data->cur_data) {
+		t = data->cur_data;
+		for (i = 0; i < MAX_LEVELS; i++) {
+			if (t[i] != NULL) {
+				g_hash_table_destroy (t[i]);
+			}
+			t[i] = NULL;
+		}
+	}
+}
+
+static void
 redirector_insert (gpointer st, gconstpointer key, gconstpointer value)
 {
 	GHashTable *tld_hash = st;
@@ -359,6 +376,18 @@ fin_redirectors_list (struct map_cb_data *data)
 
 	tld_hash = data->cur_data;
 	surbl_module_ctx->redirector_tlds = tld_hash;
+}
+
+void
+dtor_redirectors_list (struct map_cb_data *data)
+{
+	GHashTable *tld_hash;
+
+	if (data->cur_data) {
+		tld_hash = data->cur_data;
+
+		g_hash_table_unref (tld_hash);
+	}
 }
 
 gint
@@ -946,8 +975,11 @@ surbl_module_config (struct rspamd_config *cfg)
 		rspamd_config_get_module_opt (cfg, "surbl",
 		"redirector_hosts_map")) != NULL) {
 		if (!rspamd_map_add_from_ucl (cfg, value,
-			"SURBL redirectors list", read_redirectors_list, fin_redirectors_list,
-			(void **)&surbl_module_ctx->redirector_map_data)) {
+				"SURBL redirectors list",
+				read_redirectors_list,
+				fin_redirectors_list,
+				dtor_redirectors_list,
+				(void **)&surbl_module_ctx->redirector_map_data)) {
 
 			msg_warn_config ("bad redirectors map definition: %s",
 					ucl_obj_tostring (value));
@@ -958,13 +990,18 @@ surbl_module_config (struct rspamd_config *cfg)
 		rspamd_config_get_module_opt (cfg, "surbl", "exceptions")) != NULL) {
 		rspamd_map_add_from_ucl (cfg, value,
 				"SURBL exceptions list",
-				read_exceptions_list, fin_exceptions_list,
+				read_exceptions_list,
+				fin_exceptions_list,
+				dtor_exceptions_list,
 				(void **)&surbl_module_ctx->exceptions);
 	}
 	if ((value =
 			rspamd_config_get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
 		rspamd_map_add_from_ucl (cfg, value,
-				"SURBL whitelist", rspamd_kv_list_read, rspamd_kv_list_fin,
+				"SURBL whitelist",
+				rspamd_kv_list_read,
+				rspamd_kv_list_fin,
+				rspamd_kv_list_dtor,
 				(void **)&surbl_module_ctx->whitelist);
 	}
 
