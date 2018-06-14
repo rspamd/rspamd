@@ -1752,9 +1752,7 @@ rspamd_inet_library_init (void)
 void
 rspamd_inet_library_destroy (void)
 {
-	if (local_addrs != NULL) {
-		rspamd_map_helper_destroy_radix (local_addrs);
-	}
+	/* Ugly: local_addrs will actually be freed by config object */
 }
 
 gsize

@@ -277,11 +277,13 @@ lua_config_radix_from_ucl (lua_State *L)
 			msg_err_config ("invalid radix map static");
 			lua_pushnil (L);
 			ucl_object_unref (fake_obj);
+			ucl_object_unref (obj);
 
 			return 1;
 		}
 
 		ucl_object_unref (fake_obj);
+		ucl_object_unref (obj);
 		pmap = lua_newuserdata (L, sizeof (void *));
 		map->map = m;
 		m->lua_map = map;

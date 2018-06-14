@@ -1913,6 +1913,8 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 							ucl_object_key (obj));
 					return FALSE;
 				}
+
+				return TRUE;
 			}
 			else {
 				/* Just a list */
@@ -1935,6 +1937,8 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 						EINVAL, "bad map object for %s", ucl_object_key (obj));
 				return FALSE;
 			}
+
+			return TRUE;
 			break;
 		case UCL_ARRAY:
 			/* List of IP addresses */
@@ -1960,6 +1964,11 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 			return FALSE;
 		}
 	}
+
+	/* Destroy on cfg cleanup */
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_map_helper_destroy_radix,
+			*target);
 
 	return TRUE;
 }
