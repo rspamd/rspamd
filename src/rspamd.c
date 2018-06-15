@@ -1188,7 +1188,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->start_mtx = rspamd_mempool_get_mutex (rspamd_main->server_pool);
 
 #ifndef HAVE_SETPROCTITLE
-	init_title (argc, argv, env);
+	init_title (rspamd_main, argc, argv, env);
 #endif
 
 	rspamd_main->cfg->libs_ctx = rspamd_init_libs ();

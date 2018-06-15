@@ -852,13 +852,29 @@ setproctitle (const gchar *fmt, ...)
 #endif
 }
 
+#if !(defined(DARWIN) || defined(SOLARIS) || defined(__APPLE__))
+static void
+rspamd_title_dtor (gpointer d)
+{
+	gchar **env = (gchar **)d;
+	guint i;
+
+	for (i = 0; env[i] != NULL; i++) {
+		g_free (env[i]);
+	}
+
+	g_free (env);
+}
+#endif
+
 /*
    It has to be _init function, because __attribute__((constructor))
    functions gets called without arguments.
  */
 
 gint
-init_title (gint argc, gchar *argv[], gchar *envp[])
+init_title (struct rspamd_main *rspamd_main,
+		gint argc, gchar *argv[], gchar *envp[])
 {
 #if defined(DARWIN) || defined(SOLARIS) || defined(__APPLE__)
 	/* XXX: try to handle these OSes too */
@@ -868,45 +884,46 @@ init_title (gint argc, gchar *argv[], gchar *envp[])
 	gint i;
 
 	for (i = 0; i < argc; ++i) {
-		if (!begin_of_buffer)
+		if (!begin_of_buffer) {
 			begin_of_buffer = argv[i];
-		if (!end_of_buffer || end_of_buffer + 1 == argv[i])
+		}
+		if (!end_of_buffer || end_of_buffer + 1 == argv[i]) {
 			end_of_buffer = argv[i] + strlen (argv[i]);
+		}
 	}
 
 	for (i = 0; envp[i]; ++i) {
-		if (!begin_of_buffer)
+		if (!begin_of_buffer) {
 			begin_of_buffer = envp[i];
-		if (!end_of_buffer || end_of_buffer + 1 == envp[i])
+		}
+		if (!end_of_buffer || end_of_buffer + 1 == envp[i]) {
 			end_of_buffer = envp[i] + strlen (envp[i]);
+		}
 	}
 
-	if (!end_of_buffer)
+	if (!end_of_buffer) {
 		return 0;
+	}
 
 	gchar **new_environ = g_malloc ((i + 1) * sizeof (envp[0]));
 
-	if (!new_environ)
-		return 0;
-
 	for (i = 0; envp[i]; ++i) {
-		if (!(new_environ[i] = g_strdup (envp[i])))
-			goto cleanup_enomem;
+		new_environ[i] = g_strdup (envp[i]);
 	}
-	new_environ[i] = 0;
+
+	new_environ[i] = NULL;
 
 	if (program_invocation_name) {
 		title_progname_full = g_strdup (program_invocation_name);
 
-		if (!title_progname_full)
-			goto cleanup_enomem;
-
 		gchar *p = strrchr (title_progname_full, '/');
 
-		if (p)
+		if (p) {
 			title_progname = p + 1;
-		else
+		}
+		else {
 			title_progname = title_progname_full;
+		}
 
 		program_invocation_name = title_progname_full;
 		program_invocation_short_name = title_progname;
@@ -916,13 +933,9 @@ init_title (gint argc, gchar *argv[], gchar *envp[])
 	title_buffer = begin_of_buffer;
 	title_buffer_size = end_of_buffer - begin_of_buffer;
 
-	return 0;
+	rspamd_mempool_add_destructor (rspamd_main->server_pool,
+			rspamd_title_dtor, new_environ);
 
-cleanup_enomem:
-	for (--i; i >= 0; --i) {
-		g_free (new_environ[i]);
-	}
-	g_free (new_environ);
 	return 0;
 #endif
 }

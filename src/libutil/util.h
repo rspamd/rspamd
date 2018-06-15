@@ -116,7 +116,7 @@ void rspamd_pass_signal (GHashTable *, gint );
 /*
  * Process title utility functions
  */
-gint init_title (gint argc, gchar *argv[], gchar *envp[]);
+gint init_title (struct rspamd_main *, gint argc, gchar *argv[], gchar *envp[]);
 gint setproctitle (const gchar *fmt, ...);
 #endif
 
