@@ -2406,11 +2406,11 @@ ucl_object_insert_key_common (ucl_object_t *top, ucl_object_t *elt,
 			}
 			else {
 				/* Just make a list of scalars */
-				DL_APPEND (found, elt);
+				DL_CONCAT (found, elt);
 			}
 		}
 		else {
-			DL_APPEND (found, elt);
+			DL_CONCAT (found, elt);
 		}
 	}
 
