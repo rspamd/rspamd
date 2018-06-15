@@ -753,11 +753,17 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 			nowait ? "with no result available" :
 					(WTERMSIG (res) == SIGKILL ? "hardly" : "softly"));
 	if (w->srv_pipe[0] != -1) {
+		/* Ugly workaround */
+		if (w->tmp_data) {
+			g_free (w->tmp_data);
+		}
 		event_del (&w->srv_ev);
 	}
+
 	if (w->finish_actions) {
 		g_ptr_array_free (w->finish_actions, TRUE);
 	}
+
 	REF_RELEASE (w->cf);
 	g_free (w);
 
@@ -1059,6 +1065,10 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 			}
 
 			if (cur->srv_pipe[0] != -1) {
+				/* Ugly workaround */
+				if (cur->tmp_data) {
+					g_free (cur->tmp_data);
+				}
 				event_del (&cur->srv_ev);
 			}
 

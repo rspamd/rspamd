@@ -835,6 +835,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 			rdata->rep.id = cmd.id;
 			rdata->rep.type = cmd.type;
 			rdata->fd = -1;
+			worker->tmp_data = rdata;
 
 			if (msg.msg_controllen >= CMSG_LEN (sizeof (int))) {
 				rfd = *(int *) CMSG_DATA(CMSG_FIRSTHDR (&msg));
@@ -921,6 +922,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 	else if (what == EV_WRITE) {
 		rdata = ud;
 		worker = rdata->worker;
+		worker->tmp_data = NULL; /* Avoid race */
 		srv = rdata->srv;
 
 		memset (&msg, 0, sizeof (msg));
@@ -967,6 +969,7 @@ rspamd_srv_start_watching (struct rspamd_main *srv,
 {
 	g_assert (worker != NULL);
 
+	worker->tmp_data = NULL;
 	event_set (&worker->srv_ev, worker->srv_pipe[0], EV_READ | EV_PERSIST,
 			rspamd_srv_handler, worker);
 	event_base_set (ev_base, &worker->srv_ev);

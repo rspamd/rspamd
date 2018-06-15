@@ -86,6 +86,7 @@ struct rspamd_worker {
 	                                     main process. [0] - main, [1] - worker			*/
 	struct event srv_ev;            /**< used by main for read workers' requests		*/
 	gpointer control_data;          /**< used by control protocol to handle commands	*/
+	gpointer tmp_data;              /**< used to avoid race condition to deal with control messages */
 	GPtrArray *finish_actions;      /**< called when worker is terminated				*/
 };
 
