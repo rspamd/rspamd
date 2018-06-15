@@ -609,6 +609,7 @@ rspamd_monitored_ctx_destroy (struct rspamd_monitored_ctx *ctx)
 	}
 
 	g_ptr_array_free (ctx->elts, TRUE);
+	g_hash_table_unref (ctx->helts);
 	g_free (ctx);
 }
 
