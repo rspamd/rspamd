@@ -1,3 +1,56 @@
+1.7.6: 15 Jun 2018
+	* [CritFix] Fix multiple neural networks support
+	* [Feature] Add decryption function to keypair command
+	* [Feature] Add gzip compression for HTTP requests in elastic module
+	* [Feature] Add gzip methods to lua util
+	* [Feature] Add maps based on Top Level Domains
+	* [Feature] Add pubkey checks for dkim_signing
+	* [Feature] Add support of fake DNS records
+	* [Feature] Add tool to encrypt files
+	* [Feature] Allow to add symbols using settings directly
+	* [Feature] Allow to match private and public keys for DKIM signatures
+	* [Feature] Allow to set task flags via settings
+	* [Feature] Allow to specify fake DNS address from the config
+	* [Feature] Implement signatures verification using rspamadm keypair
+	* [Feature] Implement signing using `rspamadm keypair`
+	* [Feature] Improve error reporting for DKIM key access issues
+	* [Feature] Provide $HOSTNAME variable in UCL
+	* [Feature] Rework levenshtein distance computation
+	* [Feature] Split message parsing and processing
+	* [Feature] Support ED25519 DKIM signatures
+	* [Feature] Support encrypted configs in UCL
+	* [Feature] Suppress duplicate warning on very large radix tries
+	* [Feature] Use OSB to combine header names
+	* [Fix] Cleanup maps data on shutdown
+	* [Fix] Fix '~' behaviour in composites
+	* [Fix] Fix HTTP maps updates
+	* [Fix] Fix NIST signatures
+	* [Fix] Fix RFC822 comments when processing a mime address
+	* [Fix] Fix double free
+	* [Fix] Fix dynamic settings application
+	* [Fix] Fix for CommuniGate Pro maillist
+	* [Fix] Fix keypair creation method to actually create keypair...
+	* [Fix] Fix matching patterns with no paths
+	* [Fix] Fix memory leak in parsing comments
+	* [Fix] Fix parsing of urls with numeric password
+	* [Fix] Fix plugins intialisation in configwizard
+	* [Fix] Fix potential crash on reload
+	* [Fix] Fix potential race condition for a finished HTTP connections
+	* [Fix] Fix race-condition leak on processes reload
+	* [Fix] Fix signing in openssl mode
+	* [Fix] Free language detector structures
+	* [Fix] Relax alignment requirements
+	* [Fix] Send DMARC reports compressed
+	* [Fix] Try to fix leak in dmarc module
+	* [Fix] Try to plug memory leak in metric exporter
+	* [Project] Convert rspamadm subcommands to Lua
+	* [WebUI] Display smtp sender/recipient in history
+	* [WebUI] Fix elements disabling in "Symbols" tab
+	* [WebUI] Limit recipients list in history column to 3
+	* [WebUI] Match envelope and mime addresses following in arbitrary order
+	* [WebUI] Update column header
+	* [WebUI] Wrap addresses in history
+
 1.7.5: 18 May 2018
 	* [Conf] Add MSBL proposed return codes
 	* [Conf] Add additional groups for policies
