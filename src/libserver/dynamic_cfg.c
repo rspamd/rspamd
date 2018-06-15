@@ -259,6 +259,9 @@ init_dynamic_config (struct rspamd_config *cfg)
 	jb->cfg = cfg;
 	*pjb = jb;
 	cfg->current_dynamic_conf = ucl_object_typed_new (UCL_ARRAY);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)ucl_object_unref,
+			cfg->current_dynamic_conf);
 
 	if (!rspamd_map_add (cfg,
 			cfg->dynamic_conf,
