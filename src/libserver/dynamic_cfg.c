@@ -262,6 +262,9 @@ init_dynamic_config (struct rspamd_config *cfg)
 	rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t)ucl_object_unref,
 			cfg->current_dynamic_conf);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)g_free,
+			pjb);
 
 	if (!rspamd_map_add (cfg,
 			cfg->dynamic_conf,

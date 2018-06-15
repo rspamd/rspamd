@@ -1498,6 +1498,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_log_close (rspamd_main->logger);
 	REF_RELEASE (rspamd_main->cfg);
 	g_hash_table_unref (rspamd_main->spairs);
+	g_hash_table_unref (rspamd_main->workers);
 	rspamd_mempool_delete (rspamd_main->server_pool);
 
 	if (!skip_pid) {
@@ -1506,6 +1507,10 @@ main (gint argc, gchar **argv, gchar **env)
 
 	g_free (rspamd_main);
 	event_base_free (ev_base);
+
+	if (control_addr) {
+		rspamd_inet_address_free (control_addr);
+	}
 
 	return (res);
 }

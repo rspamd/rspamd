@@ -1450,9 +1450,8 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 			mod = *pmod;
 
 			if (rspamd_check_module (cfg, mod)) {
-				mod_ctx = g_malloc0 (sizeof (struct module_ctx));
-
 				if (mod->module_init_func (cfg, &mod_ctx) == 0) {
+					g_assert (mod_ctx != NULL);
 					g_hash_table_insert (cfg->c_modules,
 							(gpointer) mod->name,
 							mod_ctx);
