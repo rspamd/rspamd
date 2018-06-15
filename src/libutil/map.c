@@ -1841,6 +1841,8 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 			if (bk->data.sd->data) {
 				g_free (bk->data.sd->data);
 			}
+
+			g_free (bk->data.sd);
 		}
 		break;
 	case MAP_PROTO_HTTP:
@@ -2292,6 +2294,12 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 	return map;
 
 err:
+
+	if (map) {
+		PTR_ARRAY_FOREACH (map->backends, i, bk) {
+			MAP_RELEASE (bk, "rspamd_map_backend");
+		}
+	}
 
 	return NULL;
 }
