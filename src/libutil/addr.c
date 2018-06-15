@@ -349,7 +349,6 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target, const char *src)
 	bool has_group = false;
 
 	tokens = g_strsplit_set (src, " ,", -1);
-
 	addr = rspamd_inet_addr_create (AF_UNIX);
 
 	rspamd_strlcpy (addr->u.un->addr.sun_path, tokens[0],
@@ -422,6 +421,7 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target, const char *src)
 	}
 
 	g_free (pwbuf);
+	g_strfreev (tokens);
 
 	if (target) {
 		rspamd_ip_validate_af (addr);
@@ -435,6 +435,7 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target, const char *src)
 
 err:
 
+	g_strfreev (tokens);
 	g_free (pwbuf);
 	rspamd_inet_address_free (addr);
 	return FALSE;
