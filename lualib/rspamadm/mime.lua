@@ -159,6 +159,8 @@ local function extract_handler(opts)
 end
 
 local function stat_handler(opts)
+  load_config(opts)
+  rspamd_url.init(rspamd_config:get_tld_path())
   local task = load_task(opts)
 
   if opts.meta then
