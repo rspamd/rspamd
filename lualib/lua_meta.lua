@@ -380,6 +380,23 @@ local function rspamd_gen_metatokens(task)
 end
 
 exports.rspamd_gen_metatokens = rspamd_gen_metatokens
+exports.gen_metatokens = rspamd_gen_metatokens
+
+local function rspamd_gen_metatokens_table(task)
+  local metatokens = {}
+
+  for _,mt in ipairs(metafunctions) do
+    local ct = mt.cb(task)
+    for i,tok in ipairs(ct) do
+      metatokens[mt.desc[i]] = tok
+    end
+  end
+
+  return metatokens
+end
+
+exports.rspamd_gen_metatokens_table = rspamd_gen_metatokens_table
+exports.gen_metatokens_table = rspamd_gen_metatokens_table
 
 local function rspamd_count_metatokens()
   local ipairs = ipairs
@@ -392,5 +409,6 @@ local function rspamd_count_metatokens()
 end
 
 exports.rspamd_count_metatokens = rspamd_count_metatokens
+exports.count_metatokens = rspamd_count_metatokens
 
 return exports
