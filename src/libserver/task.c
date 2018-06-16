@@ -263,7 +263,10 @@ rspamd_task_free (struct rspamd_task *task)
 		}
 
 		ucl_object_unref (task->messages);
-		rspamd_re_cache_runtime_destroy (task->re_rt);
+
+		if (task->re_rt) {
+			rspamd_re_cache_runtime_destroy (task->re_rt);
+		}
 
 		if (task->http_conn != NULL) {
 			rspamd_http_connection_reset (task->http_conn);
