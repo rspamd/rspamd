@@ -653,6 +653,11 @@ rspamd_config_parse_log_format (struct rspamd_config *cfg)
 	return TRUE;
 }
 
+static void
+rspamd_urls_config_dtor (gpointer _unused)
+{
+	rspamd_url_deinit ();
+}
 
 /*
  * Perform post load actions
@@ -751,6 +756,9 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 		else {
 			rspamd_url_init (cfg->tld_file);
 		}
+
+		rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_urls_config_dtor,
+				NULL);
 	}
 
 	init_dynamic_config (cfg);

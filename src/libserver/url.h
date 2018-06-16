@@ -91,7 +91,7 @@ enum rspamd_url_protocol {
  * @param cfg
  */
 void rspamd_url_init (const gchar *tld_file);
-
+void rspamd_url_deinit (void);
 /*
  * Parse urls inside text
  * @param pool memory pool

@@ -475,42 +475,56 @@ rspamd_url_add_static_matchers (struct url_match_scanner *sc)
 }
 
 void
+rspamd_url_deinit (void)
+{
+	if (url_scanner != NULL) {
+		rspamd_multipattern_destroy (url_scanner->search_trie);
+		g_array_free (url_scanner->matchers, TRUE);
+		g_free (url_scanner);
+
+		url_scanner = NULL;
+	}
+}
+
+void
 rspamd_url_init (const gchar *tld_file)
 {
 	GError *err = NULL;
 
-	if (url_scanner == NULL) {
-		url_scanner = g_malloc (sizeof (struct url_match_scanner));
-
-		if (tld_file) {
-			/* Reserve larger multipattern */
-			url_scanner->matchers = g_array_sized_new (FALSE, TRUE,
-					sizeof (struct url_matcher), 13000);
-			url_scanner->search_trie = rspamd_multipattern_create_sized (13000,
-				RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE);
-		}
-		else {
-			url_scanner->matchers = g_array_sized_new (FALSE, TRUE,
-					sizeof (struct url_matcher), 128);
-			url_scanner->search_trie = rspamd_multipattern_create_sized (128,
-					RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE);
-		}
-
-		rspamd_url_add_static_matchers (url_scanner);
-
-		if (tld_file != NULL) {
-			rspamd_url_parse_tld_file (tld_file, url_scanner);
-		}
-
-		if (!rspamd_multipattern_compile (url_scanner->search_trie, &err)) {
-			msg_err ("cannot compile tld patterns, url matching will be "
-					"broken completely: %e", err);
-			g_error_free (err);
-		}
-
-		msg_debug ("initialized trie of %ud elements",
-				url_scanner->matchers->len);
+	if (url_scanner != NULL) {
+		rspamd_url_deinit ();
 	}
+
+	url_scanner = g_malloc (sizeof (struct url_match_scanner));
+
+	if (tld_file) {
+		/* Reserve larger multipattern */
+		url_scanner->matchers = g_array_sized_new (FALSE, TRUE,
+				sizeof (struct url_matcher), 13000);
+		url_scanner->search_trie = rspamd_multipattern_create_sized (13000,
+				RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE);
+	}
+	else {
+		url_scanner->matchers = g_array_sized_new (FALSE, TRUE,
+				sizeof (struct url_matcher), 128);
+		url_scanner->search_trie = rspamd_multipattern_create_sized (128,
+				RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE);
+	}
+
+	rspamd_url_add_static_matchers (url_scanner);
+
+	if (tld_file != NULL) {
+		rspamd_url_parse_tld_file (tld_file, url_scanner);
+	}
+
+	if (!rspamd_multipattern_compile (url_scanner->search_trie, &err)) {
+		msg_err ("cannot compile tld patterns, url matching will be "
+				 "broken completely: %e", err);
+		g_error_free (err);
+	}
+
+	msg_debug ("initialized trie of %ud elements",
+			url_scanner->matchers->len);
 }
 
 #define SET_U(u, field) do {                                                \
