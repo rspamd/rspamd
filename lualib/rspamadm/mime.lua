@@ -15,10 +15,13 @@ limitations under the License.
 ]]--
 
 local argparse = require "argparse"
-local rspamd_util = require "rspamd_util"
+--local rspamd_util = require "rspamd_util"
 local rspamd_task = require "rspamd_task"
 local rspamd_logger = require "rspamd_logger"
 local lua_meta = require "lua_meta"
+local rspamd_url = require "rspamd_url"
+local lua_util = require "lua_util"
+local ucl = require "ucl"
 
 -- Define command line options
 local parser = argparse()
@@ -27,6 +30,11 @@ local parser = argparse()
     :help_description_margin(30)
     :command_target("command")
     :require_command(true)
+
+parser:option "-c --config"
+      :description "Path to config file"
+      :argname("<file>")
+      :default(rspamd_paths["CONFDIR"] .. "/" .. "rspamd.conf")
 
 -- Extract subcommand
 local extract = parser:command "extract ex e"
@@ -55,11 +63,11 @@ extract:option "-o --output"
        :default "content"
 
 local stat = parser:command "stat st s"
-                      :description "Extracts statistical data from MIME messages"
+                    :description "Extracts statistical data from MIME messages"
 stat:argument "file"
-       :description "File to process"
-       :argname "<file>"
-       :args "1"
+    :description "File to process"
+    :argname "<file>"
+    :args "1"
 stat:mutex(
     stat:flag "-m --meta"
         :description "Lua metatokens",
@@ -69,7 +77,47 @@ stat:mutex(
         :description "Fuzzy hashes"
 )
 
-local function extract_handler(opts)
+local urls = parser:command "urls url u"
+                   :description "Extracts URLs from MIME messages"
+urls:argument "file"
+    :description "File to process"
+    :argname "<file>"
+    :args "1"
+urls:mutex(
+    urls:flag "-t --tld"
+        :description "Get TLDs only",
+    urls:flag "-H --host"
+        :description "Get hosts only",
+    urls:flag "-j --json"
+        :description "Full JSON output"
+
+)
+urls:flag "-u --unique"
+    :description "Print only unique urls"
+urls:flag "-s --sort"
+    :description "Sort output"
+urls:flag "-c --count"
+    :description "Print count of each printed element"
+urls:flag "-r --reverse"
+    :description "Reverse sort order"
+
+
+local function load_config(opts)
+  local _r,err = rspamd_config:load_ucl(opts['config'])
+
+  if not _r then
+    rspamd_logger.errx('cannot parse %s: %s', opts['config'], err)
+    os.exit(1)
+  end
+
+  _r,err = rspamd_config:parse_rcl({'logging', 'worker'})
+  if not _r then
+    rspamd_logger.errx('cannot process %s: %s', opts['config'], err)
+    os.exit(1)
+  end
+end
+
+local function load_task(opts)
   if not opts.file then
     parser:error('no file specified')
   end
@@ -85,6 +133,12 @@ local function extract_handler(opts)
     parser:error(string.format('cannot read message from %s: %s', opts.file,
         'failed to parse'))
   end
+
+  return task
+end
+
+local function extract_handler(opts)
+  local task = load_task(opts)
 
   if opts.text or opts.html then
     local tp = task:get_text_parts() or {}
@@ -105,27 +159,134 @@ local function extract_handler(opts)
 end
 
 local function stat_handler(opts)
-  if not opts.file then
-    parser:error('no file specified')
-  end
-
-  local res,task = rspamd_task.load_from_file(opts.file)
-
-  if not res then
-    parser:error(string.format('cannot read message from %s: %s', opts.file,
-        task))
-  end
-
-  if not task:process_message() then
-    parser:error(string.format('cannot read message from %s: %s', opts.file,
-        'failed to parse'))
-  end
+  local task = load_task(opts)
 
   if opts.meta then
     local mt = lua_meta.gen_metatokens_table(task)
     for k,v in pairs(mt) do
       rspamd_logger.messagex('%s = %s', k, v)
     end
+  end
+
+  task:destroy() -- No automatic dtor
+end
+
+local function urls_handler(opts)
+  load_config(opts)
+  rspamd_url.init(rspamd_config:get_tld_path())
+  local task = load_task(opts)
+  local elts = {}
+
+  local function process_url(u)
+    local s
+    if opts.tld then
+      s = u:get_tld()
+    elseif opts.host then
+      s = u:get_host()
+    elseif opts.json then
+      s = u:get_text()
+    else
+      s = u:get_text()
+    end
+
+    if opts.unique then
+      if elts[s] then
+        elts[s].count = elts[s].count + 1
+      else
+        elts[s] = {
+          count = 1,
+          url = u
+        }
+      end
+    else
+      if opts.json then
+        table.insert(elts, u)
+      else
+        table.insert(elts, s)
+      end
+    end
+  end
+
+  for _,u in ipairs(task:get_urls(true)) do
+    process_url(u)
+  end
+
+  local json_elts = {}
+
+  local function process_elt(s, u)
+    if opts.unique then
+      -- s is string, u is {url = url, count = count }
+      if not opts.json then
+        if opts.count then
+          rspamd_logger.messagex('%s : %s', s, u.count)
+        else
+          rspamd_logger.messagex('%s', s)
+        end
+      else
+        local tb = u.url:to_table()
+        tb.count = u.count
+        table.insert(json_elts, tb)
+      end
+    else
+      -- s is index, u is url or string
+      if opts.json then
+        local tb = u:to_table()
+        table.insert(json_elts, tb)
+      else
+        rspamd_logger.messagex('%s', u)
+      end
+    end
+  end
+
+  if opts.sort then
+    local sfunc
+    if opts.unique then
+      sfunc = function(t, a, b)
+        if t[a].count ~= t[b].count then
+          if opts.reverse then
+            return t[a].count > t[b].count
+          else
+            return t[a].count < t[b].count
+          end
+        else
+          -- Sort lexicography
+          if opts.reverse then
+            return a > b
+          else
+            return a < b
+          end
+        end
+      end
+    else
+      sfunc = function(t, a, b)
+        local va, vb
+        if opts.json then
+          va = t[a]:get_text()
+          vb = t[b]:get_text()
+        else
+          va = t[a]
+          vb = t[b]
+        end
+        if opts.reverse then
+          return va > vb
+        else
+          return va < vb
+        end
+      end
+    end
+
+
+    for s,u in lua_util.spairs(elts, sfunc) do
+      process_elt(s, u)
+    end
+  else
+    for s,u in pairs(elts) do
+      process_elt(s, u)
+    end
+  end
+
+  if opts.json then
+    rspamd_logger.messagex('%s', ucl.to_format(json_elts, 'json'))
   end
 
   task:destroy() -- No automatic dtor
@@ -140,6 +301,8 @@ local function handler(args)
     extract_handler(opts)
   elseif command == 'stat' then
     stat_handler(opts)
+  elseif command == 'urls' then
+    urls_handler(opts)
   else
     parser:error('command %s is not implemented', command)
   end
