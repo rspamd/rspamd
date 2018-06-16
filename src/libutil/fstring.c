@@ -16,8 +16,17 @@
 #include "fstring.h"
 #include "str_util.h"
 
+
 #ifdef WITH_JEMALLOC
 #include <jemalloc/jemalloc.h>
+#if (JEMALLOC_VERSION_MAJOR == 3 && JEMALLOC_VERSION_MINOR >= 6) || (JEMALLOC_VERSION_MAJOR > 3)
+#define HAVE_MALLOC_SIZE 1
+#define sys_alloc_size(sz) nallocx(sz, 0)
+#endif
+#elif defined(__APPLE__)
+#include <malloc/malloc.h>
+#define HAVE_MALLOC_SIZE 1
+#define sys_alloc_size(sz) malloc_good_size(sz)
 #endif
 
 static const gsize default_initial_size = 16;
@@ -70,7 +79,7 @@ rspamd_fstring_new_init (const gchar *init, gsize len)
 		g_error ("%s: failed to allocate %"G_GSIZE_FORMAT" bytes",
 				G_STRLOC, real_size + sizeof (*s));
 
-		return NULL;
+		abort ();
 	}
 
 	s->len = len;
@@ -113,15 +122,15 @@ rspamd_fstring_free (rspamd_fstring_t *str)
 inline gsize
 rspamd_fstring_suggest_size (gsize len, gsize allocated, gsize needed_len)
 {
-	gsize newlen;
+	gsize newlen, optlen = 0;
 
 	newlen = MAX (len + needed_len, 1 + allocated * 3 / 2);
 
-#ifdef WITH_JEMALLOC
-	newlen = nallocx (newlen + sizeof (rspamd_fstring_t), 0);
+#ifdef HAVE_MALLOC_SIZE
+	optlen = sys_alloc_size (newlen + sizeof (rspamd_fstring_t));
 #endif
 
-	return newlen;
+	return MAX (newlen, optlen);
 }
 
 rspamd_fstring_t *
@@ -139,8 +148,7 @@ rspamd_fstring_grow (rspamd_fstring_t *str, gsize needed_len)
 		free (str);
 		g_error ("%s: failed to re-allocate %"G_GSIZE_FORMAT" bytes",
 				G_STRLOC, newlen + sizeof (*str));
-
-		return NULL;
+		abort ();
 	}
 
 	str = nptr;
