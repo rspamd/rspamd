@@ -22,6 +22,7 @@
 #include "libmime/smtp_parsers.h"
 #include "libserver/mempool_vars_internal.h"
 #include <math.h>
+#include <src/libserver/task.h>
 
 /***
  * @module rspamd_task
@@ -44,7 +45,18 @@ end
  */
 
 /* Task methods */
+/***
+ * @function rspamd_task.load_from_file(filename[, cfg])
+ * Loads a message from specific file
+ * @return {boolean},{rspamd_task|error} status + new task or error message
+ */
+LUA_FUNCTION_DEF (task, load_from_file);
+
 LUA_FUNCTION_DEF (task, get_message);
+/***
+ * @method task:process_message()
+ * Parses message
+ */
 LUA_FUNCTION_DEF (task, process_message);
 /***
  * @method task:get_cfg()
@@ -853,6 +865,7 @@ LUA_FUNCTION_DEF (task, disable_action);
 LUA_FUNCTION_DEF (task, get_newlines_type);
 
 static const struct luaL_reg tasklib_f[] = {
+	LUA_INTERFACE_DEF (task, load_from_file),
 	{NULL, NULL}
 };
 
@@ -1000,6 +1013,7 @@ static const struct luaL_reg textlib_m[] = {
 	LUA_INTERFACE_DEF (text, ptr),
 	LUA_INTERFACE_DEF (text, take_ownership),
 	LUA_INTERFACE_DEF (text, save_in_file),
+	{"write", lua_text_save_in_file},
 	{"__len", lua_text_len},
 	{"__tostring", lua_text_str},
 	{"__gc", lua_text_gc},
@@ -1166,6 +1180,69 @@ static int
 lua_task_get_message (lua_State * L)
 {
 	return luaL_error (L, "task:get_message is no longer supported");
+}
+
+static void
+lua_task_unmap_dtor (gpointer p)
+{
+	struct rspamd_task *task = (struct rspamd_task *)p;
+
+	if (task->msg.begin) {
+		munmap ((gpointer)task->msg.begin, task->msg.len);
+	}
+}
+
+static int
+lua_task_load_from_file (lua_State * L)
+{
+	struct rspamd_task *task = NULL, **ptask;
+	const gchar *fname = luaL_checkstring (L, 1), *err = NULL;
+	struct rspamd_config *cfg = NULL;
+	gboolean res = FALSE;
+	gpointer map;
+	gsize sz;
+
+	if (fname) {
+
+		if (lua_type (L, 2) == LUA_TUSERDATA) {
+			cfg = rspamd_lua_check_udata_maybe (L, 2, "rspamd{config}");
+		}
+
+		map = rspamd_file_xmap (fname, PROT_READ, &sz, TRUE);
+
+		if (!map) {
+			err = strerror (errno);
+		}
+		else {
+			task = rspamd_task_new (NULL, cfg, NULL, NULL);
+			task->msg.begin = map;
+			task->msg.len = sz;
+			rspamd_mempool_add_destructor (task->task_pool,
+					lua_task_unmap_dtor, task);
+			res = TRUE;
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, res);
+
+	if (res) {
+		ptask = lua_newuserdata (L, sizeof (*ptask));
+		*ptask = task;
+		rspamd_lua_setclass (L, "rspamd{task}", -1);
+	}
+	else {
+		if (err) {
+			lua_pushstring (L, err);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+
+	return 2;
 }
 
 static int
@@ -4765,33 +4842,47 @@ static gint
 lua_text_save_in_file (lua_State *L)
 {
 	struct rspamd_lua_text *t = lua_check_text (L, 1);
-	const gchar *fname = luaL_checkstring (L, 2);
+	const gchar *fname = NULL;
 	guint mode = 00644;
 	gint fd;
 
-	if (t != NULL && fname != NULL) {
+	if (t != NULL) {
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			fname = luaL_checkstring (L, 2);
+		}
 		if (lua_type (L, 3) == LUA_TNUMBER) {
 			mode = lua_tonumber (L, 3);
 		}
 
-		fd = rspamd_file_xopen (fname, O_CREAT | O_WRONLY | O_EXCL, mode, 0);
+		if (fname) {
+			fd = rspamd_file_xopen (fname, O_CREAT | O_WRONLY | O_EXCL, mode, 0);
 
-		if (fd == -1) {
-			lua_pushboolean (L, false);
-			lua_pushstring (L, strerror (errno));
+			if (fd == -1) {
+				lua_pushboolean (L, false);
+				lua_pushstring (L, strerror (errno));
 
-			return 2;
+				return 2;
+			}
+		}
+		else {
+			fd = STDOUT_FILENO;
 		}
 
 		if (write (fd, t->start, t->len) == -1) {
-			close (fd);
+			if (fd != STDOUT_FILENO) {
+				close (fd);
+			}
+
 			lua_pushboolean (L, false);
 			lua_pushstring (L, strerror (errno));
 
 			return 2;
 		}
 
-		close (fd);
+		if (fd != STDOUT_FILENO) {
+			close (fd);
+		}
+
 		lua_pushboolean (L, true);
 	}
 	else {
