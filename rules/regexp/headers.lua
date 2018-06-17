@@ -62,6 +62,13 @@ reconf['R_NO_SPACE_IN_FROM'] = {
   group = 'header'
 }
 
+reconf['TO_WRAPPED_IN_SPACES'] = {
+  re = [[To=/<\s[-.\w]+\@[-.\w]+\s>/X]],
+  score = 2.0,
+  description = 'To address is wrapped in spaces inside angle brackets (e.g. display-name < local-part@domain >)',
+  group = 'header'
+}
+
 -- Detects missing Subject header
 reconf['MISSING_SUBJECT'] = {
   re = '!raw_header_exists(Subject)',
