@@ -1900,6 +1900,9 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 	const ucl_object_t *cur, *cur_elt;
 	const gchar *str;
 
+	/* Cleanup */
+	*target = NULL;
+
 	LL_FOREACH (obj, cur_elt) {
 		type = ucl_object_type (cur_elt);
 

@@ -289,8 +289,9 @@ reread_config (struct rspamd_main *rspamd_main)
 	rspamd_main->cfg = tmp_cfg;
 
 	if (!load_rspamd_config (rspamd_main, tmp_cfg, TRUE,
-			RSPAMD_CONFIG_INIT_VALIDATE|RSPAMD_CONFIG_INIT_SYMCACHE,
-			TRUE)) {
+				RSPAMD_CONFIG_INIT_VALIDATE|RSPAMD_CONFIG_INIT_SYMCACHE|
+				RSPAMD_CONFIG_INIT_LIBS|RSPAMD_CONFIG_INIT_URL,
+				TRUE)) {
 		rspamd_main->cfg = old_cfg;
 		rspamd_log_close_priv (rspamd_main->logger,
 					rspamd_main->workers_uid,

@@ -2189,6 +2189,19 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 			magic_load (ctx->libmagic, cfg->magic_file);
 		}
 
+		rspamd_free_zstd_dictionary (ctx->in_dict);
+		rspamd_free_zstd_dictionary (ctx->out_dict);
+
+		if (ctx->out_zstream) {
+			ZSTD_freeCStream (ctx->out_zstream);
+			ctx->out_zstream = NULL;
+		}
+
+		if (ctx->in_zstream) {
+			ZSTD_freeDStream (ctx->in_zstream);
+			ctx->in_zstream = NULL;
+		}
+
 		if (cfg->zstd_input_dictionary) {
 			ctx->in_dict = rspamd_open_zstd_dictionary (
 					cfg->zstd_input_dictionary);
