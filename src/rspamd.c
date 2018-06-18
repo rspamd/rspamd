@@ -1242,6 +1242,7 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	type = g_quark_from_static_string ("main");
+	rspamd_set_crash_handler (rspamd_main);
 
 	/* First set logger to console logger */
 	rspamd_main->cfg->log_type = RSPAMD_LOG_CONSOLE;

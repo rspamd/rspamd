@@ -188,6 +188,11 @@ struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,
 		struct rspamd_worker_conf *, guint idx, struct event_base *ev_base);
 
 /**
+ * Sets crash signals handlers if compiled with libunwind
+ */
+void rspamd_set_crash_handler (struct rspamd_main *);
+
+/**
  * Initialise the main monitoring worker
  * @param worker
  * @param ev_base

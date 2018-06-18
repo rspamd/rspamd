@@ -64,6 +64,7 @@ OPTION(ENABLE_COVERAGE     "Build rspamd with code coverage options [default: OF
 OPTION(ENABLE_FULL_DEBUG   "Build rspamd with all possible debug [default: OFF]" OFF)
 OPTION(ENABLE_UTILS        "Build rspamd internal utils [default: OFF]" OFF)
 OPTION(ENABLE_TORCH        "Install torch7 with Rspamd [default: ON]" ON)
+OPTION(ENABLE_LIBUNWIND    "Use libunwind to print crash traces [default: OFF]" OFF)
 
 INCLUDE(FindArch.cmake)
 TARGET_ARCHITECTURE(ARCH)
@@ -630,6 +631,12 @@ IF(ENABLE_JEMALLOC MATCHES "ON")
 	SET(WITH_JEMALLOC "1")
 	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "-lpthread")
 ENDIF()
+
+IF(ENABLE_LIBUNWIND MATCHES "ON")
+	ProcessPackage(LIBUNWIND LIBRARY unwind INCLUDE libunwind.h INCLUDE_SUFFIXES include/libunwind
+			ROOT ${LIBUNWIND_ROOT_DIR} MODULES libunwind)
+	SET(WITH_LIBUNWIND "1")
+ENDIF()
 ProcessPackage(GTHREAD2 LIBRARY gthread-2.0 INCLUDE glib.h
 	INCLUDE_SUFFIXES include/glib include/glib-2.0
 	ROOT ${GLIB_ROOT_DIR} MODULES gthread-2.0>=2.28)
@@ -984,6 +991,7 @@ LIST(APPEND CMAKE_REQUIRED_INCLUDES "${LIBSSL_INCLUDE}")
 CHECK_SYMBOL_EXISTS(SSL_set_tlsext_host_name "openssl/ssl.h" HAVE_SSL_TLSEXT_HOSTNAME)
 CHECK_SYMBOL_EXISTS(dirfd "sys/types.h;unistd.h;dirent.h" HAVE_DIRFD)
 CHECK_SYMBOL_EXISTS(fpathconf "sys/types.h;unistd.h" HAVE_FPATHCONF)
+CHECK_SYMBOL_EXISTS(sigaltstack "signal.h" HAVE_SIGALTSTACK)
 
 IF(ENABLE_PCRE2 MATCHES "ON")
 	IF(HAVE_PCRE_JIT)
