@@ -69,6 +69,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 
 	new_task = g_malloc0 (sizeof (struct rspamd_task));
 	new_task->worker = worker;
+	new_task->lang_det = lang_det;
 
 	if (cfg) {
 		new_task->cfg = cfg;
@@ -79,6 +80,10 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 		}
 
 		new_task->re_rt = rspamd_re_cache_runtime_new (cfg->re_cache);
+
+		if (new_task->lang_det == NULL && cfg->lang_det != NULL) {
+			new_task->lang_det = cfg->lang_det;
+		}
 	}
 
 	gettimeofday (&new_task->tv, NULL);
@@ -86,7 +91,6 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 	new_task->time_virtual = rspamd_get_virtual_ticks ();
 	new_task->time_real_finish = NAN;
 	new_task->time_virtual_finish = NAN;
-	new_task->lang_det = lang_det;
 
 	if (pool == NULL) {
 		new_task->task_pool =

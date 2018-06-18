@@ -3449,9 +3449,11 @@ rspamd_config_parse_ucl (struct rspamd_config *cfg, const gchar *filename,
 	}
 
 	if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
-		msg_err_config_forced ("ucl parser error: %s", ucl_parser_get_error (parser));
+		g_set_error (err, cfg_rcl_error_quark (), errno,
+				"ucl parser error: %s", ucl_parser_get_error (parser));
 		ucl_parser_free (parser);
 		munmap (data, st.st_size);
+
 		return FALSE;
 	}
 
@@ -3517,7 +3519,11 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 
 	if (!rspamd_rcl_parse (top, cfg, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
 		msg_err_config ("rcl parse error: %e", err);
-		g_error_free (err);
+
+		if (err) {
+			g_error_free (err);
+		}
+
 		return FALSE;
 	}
 
