@@ -275,6 +275,7 @@ rspamd_dkim_parse_signalg (rspamd_dkim_context_t * ctx,
 	gsize len,
 	GError **err)
 {
+	/* XXX: ugly size comparison, improve this code style some day */
 	if (len == 8) {
 		if (memcmp (param, "rsa-sha1", len) == 0) {
 			ctx->sig_alg = DKIM_SIGN_RSASHA1;
@@ -291,7 +292,7 @@ rspamd_dkim_parse_signalg (rspamd_dkim_context_t * ctx,
 			return TRUE;
 		}
 	}
-	else if (len == sizeof ("ecdsa256-sha256") - 1) {
+	else if (len == 15) {
 		if (memcmp (param, "ecdsa256-sha256", len) == 0) {
 			ctx->sig_alg = DKIM_SIGN_ECDSASHA256;
 			return TRUE;
@@ -301,8 +302,8 @@ rspamd_dkim_parse_signalg (rspamd_dkim_context_t * ctx,
 			return TRUE;
 		}
 	}
-	else if (len == sizeof ("ed25519") - 1) {
-		if (memcmp (param, "ed25519", len) == 0) {
+	else if (len == 14) {
+		if (memcmp (param, "ed25519-sha256", len) == 0) {
 			ctx->sig_alg = DKIM_SIGN_EDDSASHA256;
 			return TRUE;
 		}
