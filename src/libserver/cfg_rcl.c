@@ -213,7 +213,8 @@ rspamd_rcl_logging_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		else if (g_ascii_strcasecmp (log_level, "info") == 0) {
 			cfg->log_level = G_LOG_LEVEL_INFO | G_LOG_LEVEL_MESSAGE;
 		}
-		else if (g_ascii_strcasecmp (log_level, "message") == 0) {
+		else if (g_ascii_strcasecmp (log_level, "message") == 0 ||
+				g_ascii_strcasecmp (log_level, "notice") == 0) {
 			cfg->log_level =  G_LOG_LEVEL_MESSAGE;
 		}
 		else if (g_ascii_strcasecmp (log_level, "silent") == 0) {
