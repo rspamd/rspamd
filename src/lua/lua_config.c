@@ -17,6 +17,7 @@
 #include "libmime/message.h"
 #include "libutil/expression.h"
 #include "libserver/composites.h"
+#include "libmime/lang_detection.h"
 #include "lua/lua_map.h"
 #include "utlist.h"
 #include <math.h>
@@ -711,6 +712,15 @@ LUA_FUNCTION_DEF (config, parse_rcl);
 LUA_FUNCTION_DEF (config, init_modules);
 
 /***
+ * @method rspamd_config:init_subsystem(str)
+ * Initialize config subsystem from a comma separated list:
+ * - `modules` - init modules
+ * - `langdet` - language detector
+ * - TODO: add more
+ */
+LUA_FUNCTION_DEF (config, init_subsystem);
+
+/***
  * @method rspamd_config:get_tld_path()
  * Returns path to TLD file
  * @return {string} path to tld file
@@ -778,6 +788,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, load_ucl),
 	LUA_INTERFACE_DEF (config, parse_rcl),
 	LUA_INTERFACE_DEF (config, init_modules),
+	LUA_INTERFACE_DEF (config, init_subsystem),
 	LUA_INTERFACE_DEF (config, get_tld_path),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
@@ -3417,6 +3428,35 @@ lua_config_init_modules (lua_State *L)
 	}
 
 	return 1;
+}
+
+static gint
+lua_config_init_subsystem (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *subsystem = luaL_checkstring (L, 2);
+	gchar **parts;
+	guint nparts, i;
+
+	if (cfg != NULL && subsystem != NULL) {
+		parts = g_strsplit_set (subsystem, ";,", -1);
+		nparts = g_strv_length (parts);
+
+		for (i = 0; i < nparts; i ++) {
+			if (strcmp (parts[i], "filters") == 0) {
+				rspamd_lua_post_load_config (cfg);
+				rspamd_init_filters (cfg, FALSE);
+			}
+			else if (strcmp (parts[i], "langdet") == 0) {
+				cfg->lang_det = rspamd_language_detector_init (cfg);
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
 }
 
 static gint
