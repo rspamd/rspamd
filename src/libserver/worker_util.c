@@ -983,19 +983,44 @@ rspamd_print_crash (ucontext_t *uap)
 }
 #endif
 
+static struct rspamd_main *saved_main = NULL;
+static gboolean
+rspamd_crash_propagate (gpointer key, gpointer value, gpointer unused)
+{
+	struct rspamd_worker *w = value;
+
+	/* Kill children softly */
+	kill (w->pid, SIGTERM);
+
+	return TRUE;
+}
+
 static void
 rspamd_crash_sig_handler (int sig, siginfo_t *info, void *ctx)
 {
 	struct sigaction sa;
 	ucontext_t *uap = ctx;
+	pid_t pid;
 
+	pid = getpid ();
 	msg_err ("caught fatal signal %d(%s), "
 			 "pid: %P, trace: ",
-			sig, strsignal (sig), getpid ());
+			sig, strsignal (sig), pid);
 	(void)uap;
 #ifdef WITH_LIBUNWIND
 	rspamd_print_crash (uap);
 #endif
+
+	if (saved_main) {
+		if (pid == saved_main->pid) {
+			/*
+			 * Main process has crashed, propagate crash further to trigger
+			 * monitoring alerts and mass panic
+			 */
+			g_hash_table_foreach_remove (saved_main->workers,
+					rspamd_crash_propagate, NULL);
+		}
+	}
 
 	/*
 	 * Invoke signal with the default handler
@@ -1004,12 +1029,12 @@ rspamd_crash_sig_handler (int sig, siginfo_t *info, void *ctx)
 	sa.sa_handler = SIG_DFL;
 	sa.sa_flags = 0;
 	sigaction (sig, &sa, NULL);
-	kill (getpid (), sig);
+	kill (pid, sig);
 }
 #endif
 
 void
-rspamd_set_crash_handler (struct rspamd_main *main)
+rspamd_set_crash_handler (struct rspamd_main *rspamd_main)
 {
 #ifdef HAVE_SA_SIGINFO
 	struct sigaction sa;
@@ -1022,14 +1047,14 @@ rspamd_set_crash_handler (struct rspamd_main *main)
 	ss.ss_sp = g_malloc0 (ss.ss_size);
 	sigaltstack (&ss, NULL);
 #endif
-
-	sigemptyset(&sa.sa_mask);
+	saved_main = rspamd_main;
+	sigemptyset (&sa.sa_mask);
 	sa.sa_sigaction = &rspamd_crash_sig_handler;
 	sa.sa_flags = SA_RESTART | SA_SIGINFO | SA_ONSTACK;
-	sigaction(SIGSEGV, &sa, NULL);
-	sigaction(SIGBUS, &sa, NULL);
-	sigaction(SIGABRT, &sa, NULL);
-	sigaction(SIGFPE, &sa, NULL);
-	sigaction(SIGSYS, &sa, NULL);
+	sigaction (SIGSEGV, &sa, NULL);
+	sigaction (SIGBUS, &sa, NULL);
+	sigaction (SIGABRT, &sa, NULL);
+	sigaction (SIGFPE, &sa, NULL);
+	sigaction (SIGSYS, &sa, NULL);
 #endif
 }

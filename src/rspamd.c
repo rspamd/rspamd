@@ -1182,7 +1182,7 @@ main (gint argc, gchar **argv, gchar **env)
 	struct event term_ev, int_ev, cld_ev, hup_ev, usr1_ev, control_ev;
 	struct timeval term_tv;
 	struct rspamd_main *rspamd_main;
-	gboolean skip_pid = FALSE;
+	gboolean skip_pid = FALSE, valgrind_mode = FALSE;
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
 	g_thread_init (NULL);
@@ -1197,6 +1197,10 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->spairs = g_hash_table_new_full (rspamd_spair_hash,
 			rspamd_spair_equal, g_free, rspamd_spair_close);
 	rspamd_main->start_mtx = rspamd_mempool_get_mutex (rspamd_main->server_pool);
+
+	if (getenv ("VALGRIND") != NULL) {
+		valgrind_mode = TRUE;
+	}
 
 #ifndef HAVE_SETPROCTITLE
 	init_title (rspamd_main, argc, argv, env);
@@ -1242,7 +1246,6 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	type = g_quark_from_static_string ("main");
-	rspamd_set_crash_handler (rspamd_main);
 
 	/* First set logger to console logger */
 	rspamd_main->cfg->log_type = RSPAMD_LOG_CONSOLE;
@@ -1362,6 +1365,10 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->pid = getpid ();
 	rspamd_main->type = type;
 
+	if (!valgrind_mode) {
+		rspamd_set_crash_handler (rspamd_main);
+	}
+
 	/* Ignore SIGPIPE as we handle write errors manually */
 	sigemptyset (&sigpipe_act.sa_mask);
 	sigaddset (&sigpipe_act.sa_mask, SIGPIPE);
@@ -1476,7 +1483,7 @@ main (gint argc, gchar **argv, gchar **env)
 		close (control_fd);
 	}
 
-	if (getenv ("VALGRIND") != NULL) {
+	if (valgrind_mode) {
 		/* Special case if we are likely running with valgrind */
 		term_attempts = TERMINATION_ATTEMPTS * 10;
 	}
