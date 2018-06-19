@@ -21,8 +21,9 @@
 #include "unix-std.h"
 #include "libmime/smtp_parsers.h"
 #include "libserver/mempool_vars_internal.h"
+#include "libserver/task.h"
+#include "libstat/stat_api.h"
 #include <math.h>
-#include <src/libserver/task.h>
 
 /***
  * @module rspamd_task
@@ -864,6 +865,25 @@ LUA_FUNCTION_DEF (task, disable_action);
  */
 LUA_FUNCTION_DEF (task, get_newlines_type);
 
+/***
+ * @method task:get_stat_tokens()
+ * Returns list of tables the statistical tokens:
+ * - `data`: 64 bit number encoded as a string
+ * - `t1`: the first token (if any)
+ * - `t2`: the second token (if any)
+ * - `win`: window index
+ * - `flag`: table of strings:
+ *    - `text`: text token
+ *    - `meta`: meta token
+ *    - `lua`: lua meta token
+ *    - `exception`: exception
+ *    - `subject`: subject token
+ *    - `unigram`: unigram token
+ *
+ * @return {table of tables}
+ */
+LUA_FUNCTION_DEF (task, get_stat_tokens);
+
 static const struct luaL_reg tasklib_f[] = {
 	LUA_INTERFACE_DEF (task, load_from_file),
 	{NULL, NULL}
@@ -959,6 +979,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, headers_foreach),
 	LUA_INTERFACE_DEF (task, disable_action),
 	LUA_INTERFACE_DEF (task, get_newlines_type),
+	LUA_INTERFACE_DEF (task, get_stat_tokens),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -4383,6 +4404,112 @@ lua_task_get_newlines_type (lua_State *L)
 		default:
 			lua_pushstring (L, "crlf");
 			break;
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static void
+lua_push_stat_token (lua_State *L, rspamd_token_t *tok)
+{
+	gchar numbuf[64];
+
+	/* Table values
+	 * - `data`: 64 bit number encoded as a string
+	 * - `t1`: the first token (if any)
+	 * - `t2`: the second token (if any)
+	 * - `win`: window index
+	 * - `flag`: table of strings:
+	 *    - `text`: text token
+	 *    - `meta`: meta token
+	 *    - `lua`: lua meta token
+	 *    - `exception`: exception
+	 *    - `subject`: subject token
+	 *    - `unigram`: unigram token
+	 */
+	lua_createtable (L, 0, 5);
+
+	rspamd_snprintf (numbuf, sizeof (numbuf), "%uL", tok->data);
+	lua_pushstring (L, "data");
+	lua_pushstring (L, numbuf);
+	lua_settable (L, -3);
+
+	if (tok->t1) {
+		lua_pushstring (L, "t1");
+		lua_pushlstring (L, tok->t1->begin, tok->t1->len);
+		lua_settable (L, -3);
+	}
+
+	if (tok->t2) {
+		lua_pushstring (L, "t2");
+		lua_pushlstring (L, tok->t2->begin, tok->t2->len);
+		lua_settable (L, -3);
+	}
+
+	lua_pushstring (L, "win");
+	lua_pushnumber (L, tok->window_idx);
+	lua_settable (L, -3);
+
+	lua_pushstring (L, "flags");
+	lua_createtable (L, 0, 5);
+
+	/* Flags */
+	{
+		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
+			lua_pushstring (L, "text");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_META) {
+			lua_pushstring (L, "meta");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_LUA_META) {
+			lua_pushstring (L, "lua");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_EXCEPTION) {
+			lua_pushstring (L, "exception");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_SUBJECT) {
+			lua_pushstring (L, "subject");
+			lua_pushboolean (L, true);
+			lua_settable (L, -3);
+		}
+	}
+	lua_settable (L, -3);
+}
+
+static gint
+lua_task_get_stat_tokens (lua_State *L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+	guint i;
+	rspamd_token_t *tok;
+
+	if (task) {
+		if (!task->tokens) {
+			rspamd_stat_process_tokenize (NULL, task);
+		}
+
+		if (!task->tokens) {
+			lua_pushnil (L);
+		}
+		else {
+			lua_createtable (L, task->tokens->len, 0);
+
+			PTR_ARRAY_FOREACH (task->tokens, i, tok) {
+				lua_push_stat_token (L, tok);
+				lua_rawseti (L, -2, i + 1);
+			}
 		}
 	}
 	else {
