@@ -39,6 +39,8 @@ typedef struct rspamd_stat_token_s {
 	guint flags;
 } rspamd_stat_token_t;
 
+struct rspamd_stat_ctx;
+
 /**
  * The results of statistics processing:
  * - error
@@ -61,6 +63,14 @@ void rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base);
  * Finalize statistics
  */
 void rspamd_stat_close (void);
+
+/**
+ * Tokenize task
+ * @param st_ctx
+ * @param task
+ */
+void rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
+							  struct rspamd_task *task);
 
 /**
  * Classify the task specified and insert symbols if needed

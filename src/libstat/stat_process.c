@@ -307,7 +307,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 /*
  * Tokenize task using the tokenizer specified
  */
-static void
+void
 rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task)
 {
@@ -321,6 +321,12 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	gdouble *pdiff;
 	guchar hout[rspamd_cryptobox_HASHBYTES];
 	gchar *b32_hout;
+
+	if (st_ctx == NULL) {
+		st_ctx = rspamd_stat_get_ctx ();
+	}
+
+	g_assert (st_ctx != NULL);
 
 	for (i = 0; i < task->text_parts->len; i++) {
 		part = g_ptr_array_index (task->text_parts, i);
@@ -409,7 +415,10 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 	struct rspamd_statfile *st;
 	gpointer bk_run;
 
-	rspamd_stat_process_tokenize (st_ctx, task);
+	if (task->tokens == NULL) {
+		rspamd_stat_process_tokenize (st_ctx, task);
+	}
+
 	task->stat_runtimes = g_ptr_array_sized_new (st_ctx->statfiles->len);
 	g_ptr_array_set_size (task->stat_runtimes, st_ctx->statfiles->len);
 	rspamd_mempool_add_destructor (task->task_pool,
