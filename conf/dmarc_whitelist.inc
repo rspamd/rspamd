@@ -56,6 +56,7 @@ uber.com
 ulmart.ru
 ups.com
 usps.com
+utair.ru
 verizonwireless.com
 vk.com
 vkrugudruzei.ru
