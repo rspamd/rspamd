@@ -79,7 +79,10 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 			new_task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
 		}
 
-		new_task->re_rt = rspamd_re_cache_runtime_new (cfg->re_cache);
+
+		if (cfg->re_cache) {
+			new_task->re_rt = rspamd_re_cache_runtime_new (cfg->re_cache);
+		}
 
 		if (new_task->lang_det == NULL && cfg->lang_det != NULL) {
 			new_task->lang_det = cfg->lang_det;

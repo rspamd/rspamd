@@ -1226,7 +1226,12 @@ lua_task_load_from_file (lua_State * L)
 	if (fname) {
 
 		if (lua_type (L, 2) == LUA_TUSERDATA) {
-			cfg = rspamd_lua_check_udata_maybe (L, 2, "rspamd{config}");
+			gpointer p;
+			p = rspamd_lua_check_udata_maybe (L, 2, "rspamd{config}");
+
+			if (p) {
+				cfg = *(struct rspamd_config **)p;
+			}
 		}
 
 		map = rspamd_file_xmap (fname, PROT_READ, &sz, TRUE);
