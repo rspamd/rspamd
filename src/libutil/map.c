@@ -1058,7 +1058,7 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	gdouble timeout;
 	struct map_periodic_cbdata *cbd;
 
-	if (map->scheduled_check) {
+	if (map->scheduled_check || (map->wrk && map->wrk->wanna_die)) {
 		/* Do not schedule check if some check is already scheduled */
 		return;
 	}
@@ -1583,45 +1583,49 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 		return;
 	}
 
-	bk = g_ptr_array_index (cbd->map->backends, cbd->cur_backend);
-	g_assert (bk != NULL);
+	if (!(cbd->map->wrk && cbd->map->wrk->wanna_die)) {
+		bk = g_ptr_array_index (cbd->map->backends, cbd->cur_backend);
+		g_assert (bk != NULL);
 
-	if (cbd->need_modify) {
-		/* Load data from the next backend */
-		switch (bk->protocol) {
-		case MAP_PROTO_HTTP:
-		case MAP_PROTO_HTTPS:
-			rspamd_map_http_read_callback (fd, what, cbd);
-			break;
-		case MAP_PROTO_FILE:
-			rspamd_map_file_read_callback (fd, what, cbd);
-			break;
-		case MAP_PROTO_STATIC:
-			rspamd_map_static_read_callback (fd, what, cbd);
-			break;
-		}
-	}
-	else {
-		/* Check the next backend */
-		switch (bk->protocol) {
-		case MAP_PROTO_HTTP:
-		case MAP_PROTO_HTTPS:
-			rspamd_map_http_check_callback (fd, what, cbd);
-			break;
-		case MAP_PROTO_FILE:
-			rspamd_map_file_check_callback (fd, what, cbd);
-			break;
-		case MAP_PROTO_STATIC:
-			rspamd_map_static_check_callback (fd, what, cbd);
-			break;
+		if (cbd->need_modify) {
+			/* Load data from the next backend */
+			switch (bk->protocol) {
+			case MAP_PROTO_HTTP:
+			case MAP_PROTO_HTTPS:
+				rspamd_map_http_read_callback (fd, what, cbd);
+				break;
+			case MAP_PROTO_FILE:
+				rspamd_map_file_read_callback (fd, what, cbd);
+				break;
+			case MAP_PROTO_STATIC:
+				rspamd_map_static_read_callback (fd, what, cbd);
+				break;
+			}
+		} else {
+			/* Check the next backend */
+			switch (bk->protocol) {
+			case MAP_PROTO_HTTP:
+			case MAP_PROTO_HTTPS:
+				rspamd_map_http_check_callback (fd, what, cbd);
+				break;
+			case MAP_PROTO_FILE:
+				rspamd_map_file_check_callback (fd, what, cbd);
+				break;
+			case MAP_PROTO_STATIC:
+				rspamd_map_static_check_callback (fd, what, cbd);
+				break;
+			}
 		}
 	}
 }
 
 /* Start watching event for all maps */
 void
-rspamd_map_watch (struct rspamd_config *cfg, struct event_base *ev_base,
-		struct rspamd_dns_resolver *resolver, gboolean active_http)
+rspamd_map_watch (struct rspamd_config *cfg,
+				  struct event_base *ev_base,
+				  struct rspamd_dns_resolver *resolver,
+				  struct rspamd_worker *worker,
+				  gboolean active_http)
 {
 	GList *cur = cfg->maps;
 	struct rspamd_map *map;
@@ -1631,6 +1635,7 @@ rspamd_map_watch (struct rspamd_config *cfg, struct event_base *ev_base,
 		map = cur->data;
 		map->ev_base = ev_base;
 		map->r = resolver;
+		map->wrk = worker;
 
 		if (active_http) {
 			map->active_http = active_http;
@@ -1905,9 +1910,9 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 		if (access (bk->uri, R_OK) == -1) {
 			if (errno != ENOENT) {
 				msg_err_config ("cannot open file '%s': %s", bk->uri, strerror (errno));
-				return NULL;
-
+				goto err;
 			}
+
 			msg_info_config (
 					"map '%s' is not found, but it can be loaded automatically later",
 					bk->uri);
@@ -1928,7 +1933,7 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 		else {
 			if (!(up.field_set & 1 << UF_HOST)) {
 				msg_err_config ("cannot parse HTTP url: %s: no host", bk->uri);
-				return NULL;
+				goto err;
 			}
 
 			tok.begin = bk->uri + up.field_data[UF_HOST].off;
@@ -1956,7 +1961,8 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 		}
 
 		bk->data.hd = hdata;
-	}else if (bk->protocol == MAP_PROTO_STATIC) {
+	}
+	else if (bk->protocol == MAP_PROTO_STATIC) {
 		sdata = g_malloc0 (sizeof (*sdata));
 		bk->data.sd = sdata;
 	}

@@ -3802,10 +3802,12 @@ start_controller_worker (struct rspamd_worker *worker)
 			rspamd_worker_init_monitored (worker, ctx->ev_base, ctx->resolver);
 		}
 
-		rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, TRUE);
+		rspamd_map_watch (worker->srv->cfg, ctx->ev_base,
+				ctx->resolver, worker, TRUE);
 	}
 	else {
-		rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, FALSE);
+		rspamd_map_watch (worker->srv->cfg, ctx->ev_base,
+				ctx->resolver, worker, FALSE);
 	}
 
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base, worker);

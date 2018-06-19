@@ -230,14 +230,18 @@ read_exceptions_list (gchar * chunk,
 	if (data->cur_data == NULL) {
 		t = data->prev_data;
 
-		for (i = 0; i < MAX_LEVELS; i++) {
-			if (t[i] != NULL) {
-				g_hash_table_destroy (t[i]);
+		if (t) {
+			for (i = 0; i < MAX_LEVELS; i++) {
+				if (t[i] != NULL) {
+					g_hash_table_destroy (t[i]);
+				}
+				t[i] = NULL;
 			}
-			t[i] = NULL;
+
+			g_free (t);
 		}
 
-		data->cur_data = data->prev_data;
+		data->cur_data = g_malloc0 (MAX_LEVELS * sizeof (GHashTable *));
 	}
 
 	return rspamd_parse_kv_list (
@@ -283,6 +287,8 @@ dtor_exceptions_list (struct map_cb_data *data)
 			}
 			t[i] = NULL;
 		}
+
+		g_free (t);
 	}
 }
 
@@ -397,15 +403,12 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
-	surbl_module_ctx->surbl_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+	surbl_module_ctx->surbl_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+			NULL);
 
 	surbl_module_ctx->redirectors = NULL;
 	surbl_module_ctx->whitelist = NULL;
-	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-			(rspamd_mempool_destruct_t) rspamd_map_helper_destroy_hash,
-			surbl_module_ctx->whitelist);
-	surbl_module_ctx->exceptions = rspamd_mempool_alloc0 (
-			surbl_module_ctx->surbl_pool, MAX_LEVELS * sizeof (GHashTable *));
+	surbl_module_ctx->exceptions = NULL;
 	surbl_module_ctx->redirector_cbid = -1;
 
 
@@ -1081,16 +1084,7 @@ surbl_module_reconfig (struct rspamd_config *cfg)
 	surbl_module_ctx->redirectors = NULL;
 	surbl_module_ctx->whitelist = NULL;
 	/* Zero exceptions hashes */
-	surbl_module_ctx->exceptions = rspamd_mempool_alloc0 (
-		surbl_module_ctx->surbl_pool,
-		MAX_LEVELS * sizeof (GHashTable *));
-	/* Register destructors */
-	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-		(rspamd_mempool_destruct_t) rspamd_map_helper_destroy_hash,
-		surbl_module_ctx->whitelist);
-	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-		(rspamd_mempool_destruct_t) g_hash_table_destroy,
-		surbl_module_ctx->redirector_tlds);
+	surbl_module_ctx->exceptions = NULL;
 
 	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
 		(rspamd_mempool_destruct_t) g_list_free,
@@ -1178,7 +1172,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 		/* Not a numeric url */
 		result = rspamd_mempool_alloc (pool, len);
 		/* Now we should try to check for exceptions */
-		if (!forced) {
+		if (!forced && surbl_module_ctx->exceptions) {
 			for (i = MAX_LEVELS - 1; i >= 0; i--) {
 				t = surbl_module_ctx->exceptions[i];
 				if (t != NULL && dots_num >= i + 1) {

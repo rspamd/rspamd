@@ -386,9 +386,6 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 
 	g_hash_table_unref (worker->signal_events);
 #endif
-
-	/* Cleanup maps */
-	rspamd_map_remove_all (worker->srv->cfg);
 }
 
 static rspamd_fstring_t *

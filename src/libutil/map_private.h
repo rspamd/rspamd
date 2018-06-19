@@ -120,6 +120,7 @@ struct rspamd_map {
 	map_dtor_t dtor;
 	void **user_data;
 	struct event_base *ev_base;
+	struct rspamd_worker *wrk;
 	gchar *description;
 	gchar *name;
 	guint32 id;

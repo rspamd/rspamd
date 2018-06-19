@@ -970,7 +970,6 @@ rspamd_hup_handler (gint signo, short what, gpointer arg)
 			RVERSION
 			" is restarting");
 	g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
-	rspamd_map_remove_all (rspamd_main->cfg);
 	rspamd_log_close_priv (rspamd_main->logger,
 				rspamd_main->workers_uid,
 				rspamd_main->workers_gid);
