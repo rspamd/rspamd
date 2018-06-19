@@ -161,6 +161,7 @@ end
 local function stat_handler(opts)
   load_config(opts)
   rspamd_url.init(rspamd_config:get_tld_path())
+  rspamd_config:init_subsystem('langdet,stat') -- Needed to gen stat tokens
   local task = load_task(opts)
 
   if opts.meta then

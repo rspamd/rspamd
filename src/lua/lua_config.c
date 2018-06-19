@@ -3450,6 +3450,12 @@ lua_config_init_subsystem (lua_State *L)
 			else if (strcmp (parts[i], "langdet") == 0) {
 				cfg->lang_det = rspamd_language_detector_init (cfg);
 			}
+			else if (strcmp (parts[i], "stat") == 0) {
+				rspamd_stat_init (cfg, NULL);
+			}
+			else {
+				return luaL_error (L, "invalid param: %s", parts[i]);
+			}
 		}
 	}
 	else {

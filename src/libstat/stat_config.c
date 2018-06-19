@@ -475,17 +475,23 @@ rspamd_stat_ctx_register_async (rspamd_stat_async_handler handler,
 	elt->ud = d;
 	elt->timeout = timeout;
 	/* Enabled by default */
-	elt->enabled = TRUE;
 
-	event_set (&elt->timer_ev, -1, EV_TIMEOUT, rspamd_async_elt_on_timer, elt);
-	event_base_set (st_ctx->ev_base, &elt->timer_ev);
-	/*
-	 * First we set timeval to zero as we want cb to be executed as
-	 * fast as possible
-	 */
-	elt->tv.tv_sec = 0;
-	elt->tv.tv_usec = 0;
-	event_add (&elt->timer_ev, &elt->tv);
+
+	if (st_ctx->ev_base) {
+		elt->enabled = TRUE;
+		event_set (&elt->timer_ev, -1, EV_TIMEOUT, rspamd_async_elt_on_timer, elt);
+		event_base_set (st_ctx->ev_base, &elt->timer_ev);
+		/*
+		 * First we set timeval to zero as we want cb to be executed as
+		 * fast as possible
+		 */
+		elt->tv.tv_sec = 0;
+		elt->tv.tv_usec = 0;
+		event_add (&elt->timer_ev, &elt->tv);
+	}
+	else {
+		elt->enabled = FALSE;
+	}
 
 	g_queue_push_tail (st_ctx->async_elts, elt);
 
