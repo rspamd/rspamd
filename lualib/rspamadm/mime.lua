@@ -129,7 +129,7 @@ local function load_task(opts, fname)
     parser:error('no file specified')
   end
 
-  local res,task = rspamd_task.load_from_file(fname)
+  local res,task = rspamd_task.load_from_file(fname, rspamd_config)
 
   if not res then
     parser:error(string.format('cannot read message from %s: %s', fname,
@@ -155,7 +155,7 @@ local function maybe_print_fname(opts, fname)
 end
 
 local function extract_handler(opts)
-  for i,fname in ipairs(opts.file) do
+  for _,fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
 
     maybe_print_fname(opts, fname)
@@ -193,6 +193,11 @@ local function stat_handler(opts)
       for k,v in pairs(mt) do
         rspamd_logger.messagex('%s = %s', k, v)
       end
+    elseif opts.bayes then
+      local bt = task:get_stat_tokens()
+      for _,t in ipairs(bt) do
+        rspamd_logger.messagex('%s', t)
+      end
     end
 
     task:destroy() -- No automatic dtor
@@ -210,8 +215,6 @@ local function urls_handler(opts)
   if opts.json then rspamd_logger.messagex('[') end
 
   for i,fname in ipairs(opts.file) do
-    local task = load_task(opts, fname)
-
     maybe_print_fname(opts, fname)
     if opts.json then rspamd_logger.messagex('{"file":"%s",', fname) end
     local task = load_task(opts)
