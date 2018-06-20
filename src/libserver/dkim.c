@@ -1439,6 +1439,8 @@ rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 				DKIM_ERROR,
 				DKIM_SIGERROR_KEYFAIL,
 				"key is missing");
+
+		return NULL;
 	}
 
 	if (alglen == 0 || alg == NULL) {
