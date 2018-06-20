@@ -46,6 +46,7 @@ paypal.com
 pch.com
 pinterest.com
 rostelecom.ru
+rt.ru
 sberbank.ru
 sportmaster.ru
 squarespace.com
