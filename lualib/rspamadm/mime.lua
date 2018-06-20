@@ -34,8 +34,18 @@ local parser = argparse()
 
 parser:option "-c --config"
       :description "Path to config file"
-      :argname("<file>")
+      :argname("<cfg>")
       :default(rspamd_paths["CONFDIR"] .. "/" .. "rspamd.conf")
+parser:mutex(
+    parser:flag "-j --json"
+          :description "JSON output",
+    parser:flag "-U --ucl"
+          :description "UCL output"
+)
+parser:flag "-C --compact"
+      :description "Use compactl format"
+parser:flag "--no-file"
+      :description "Do not print filename"
 
 -- Extract subcommand
 local extract = parser:command "extract ex e"
@@ -62,8 +72,7 @@ extract:option "-o --output"
           decoded_utf = "raw_utf"
        }
        :default "content"
-extract:flag "--no-file"
-    :description "Do not print filename"
+
 
 local stat = parser:command "stat st s"
                     :description "Extracts statistical data from MIME messages"
@@ -79,8 +88,6 @@ stat:mutex(
     stat:flag "-F --fuzzy"
         :description "Fuzzy hashes"
 )
-stat:flag "--no-file"
-    :description "Do not print filename"
 
 local urls = parser:command "urls url u"
                    :description "Extracts URLs from MIME messages"
@@ -92,22 +99,17 @@ urls:mutex(
     urls:flag "-t --tld"
         :description "Get TLDs only",
     urls:flag "-H --host"
-        :description "Get hosts only",
-    urls:flag "-j --json"
-        :description "Full JSON output"
-
+        :description "Get hosts only"
 )
+
 urls:flag "-u --unique"
     :description "Print only unique urls"
 urls:flag "-s --sort"
     :description "Sort output"
-urls:flag "-c --count"
+urls:flag "--count"
     :description "Print count of each printed element"
 urls:flag "-r --reverse"
     :description "Reverse sort order"
-urls:flag "--no-file"
-    :description "Do not print filename"
-
 
 local function load_config(opts)
   local _r,err = rspamd_config:load_ucl(opts['config'])
@@ -154,11 +156,38 @@ local function maybe_print_fname(opts, fname)
   end
 end
 
+-- Print elements in form
+-- filename -> table of elements
+local function print_elts(elts, opts, func)
+  local fun = require "fun"
+
+  if opts.json or opts.ucl then
+    local fmt = 'json'
+    if opts.compact then fmt = 'json-compact' end
+    if opts.ucl then fmt = 'ucl' end
+    io.write(ucl.to_format(elts, fmt))
+  else
+    fun.each(function(fname, elt)
+
+      if not opts.json and not opts.ucl then
+        if func then
+          elt = fun.map(func, elt)
+        end
+        maybe_print_fname(opts, fname)
+        fun.each(function(e)
+          io.write(e)
+          io.write("\n")
+        end, elt)
+      end
+    end, elts)
+  end
+end
+
 local function extract_handler(opts)
+  local out_elts = {}
   for _,fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
-
-    maybe_print_fname(opts, fname)
+    out_elts[fname] = {}
 
     if opts.text or opts.html then
       local tp = task:get_text_parts() or {}
@@ -166,58 +195,67 @@ local function extract_handler(opts)
       for _,part in ipairs(tp) do
         local how = opts.output
         if opts.text and not part:is_html() then
-          part:get_content(how):write()
-          io.write('\n')
+          table.insert(out_elts[fname], tostring(part:get_content(how)))
         elseif opts.html and part:is_html() then
-          part:get_content(how):write()
-          io.write('\n')
+          table.insert(out_elts[fname], tostring(part:get_content(how)))
         end
       end
     end
 
+    table.insert(out_elts[fname], "")
+
     task:destroy() -- No automatic dtor
   end
+
+  print_elts(out_elts, opts)
 end
 
 local function stat_handler(opts)
+  local fun = require "fun"
+  local out_elts = {}
+
   load_config(opts)
   rspamd_url.init(rspamd_config:get_tld_path())
   rspamd_config:init_subsystem('langdet,stat') -- Needed to gen stat tokens
 
-  for i,fname in ipairs(opts.file) do
-    local task = load_task(opts, fname)
+  local process_func
 
-    maybe_print_fname(opts, fname)
+  for _,fname in ipairs(opts.file) do
+    local task = load_task(opts, fname)
+    out_elts[fname] = {}
+
     if opts.meta then
       local mt = lua_meta.gen_metatokens_table(task)
-      for k,v in pairs(mt) do
-        rspamd_logger.messagex('%s = %s', k, v)
+      out_elts[fname] = mt
+      process_func = function(k, v)
+        return string.format("%s = %s", k, v)
       end
     elseif opts.bayes then
       local bt = task:get_stat_tokens()
-      for _,t in ipairs(bt) do
-        rspamd_logger.messagex('%s', t)
+      out_elts[fname] = bt
+      process_func = function(e)
+        return string.format('%s (%d): "%s"+"%s", [%s]', e.data, e.win, e.t1 or "",
+            e.t2 or "", table.concat(fun.totable(
+                fun.map(function(k) return k end, e.flags)), ","))
       end
     end
 
     task:destroy() -- No automatic dtor
-
-    if i > 1 then
-      rspamd_logger.messagex('')
-    end
   end
+
+  print_elts(out_elts, opts, process_func)
 end
 
 local function urls_handler(opts)
   load_config(opts)
   rspamd_url.init(rspamd_config:get_tld_path())
+  local out_elts = {}
 
   if opts.json then rspamd_logger.messagex('[') end
 
-  for i,fname in ipairs(opts.file) do
-    maybe_print_fname(opts, fname)
-    if opts.json then rspamd_logger.messagex('{"file":"%s",', fname) end
-    local task = load_task(opts)
+  for _,fname in ipairs(opts.file) do
+    out_elts[fname] = {}
+    local task = load_task(opts, fname)
     local elts = {}
 
     local function process_url(u)
@@ -226,8 +264,6 @@ local function urls_handler(opts)
         s = u:get_tld()
       elseif opts.host then
         s = u:get_host()
-      elseif opts.json then
-        s = u:get_text()
       else
         s = u:get_text()
       end
@@ -238,7 +274,7 @@ local function urls_handler(opts)
         else
           elts[s] = {
             count = 1,
-            url = u
+            url = u:to_table()
           }
         end
       else
@@ -261,22 +297,21 @@ local function urls_handler(opts)
         -- s is string, u is {url = url, count = count }
         if not opts.json then
           if opts.count then
-            rspamd_logger.messagex('%s : %s', s, u.count)
+            table.insert(json_elts, string.format('%s : %s', s, u.count))
           else
-            rspamd_logger.messagex('%s', s)
+            table.insert(json_elts, s)
           end
         else
-          local tb = u.url:to_table()
+          local tb = u.url
           tb.count = u.count
           table.insert(json_elts, tb)
         end
       else
         -- s is index, u is url or string
         if opts.json then
-          local tb = u:to_table()
-          table.insert(json_elts, tb)
+          table.insert(json_elts, u)
         else
-          rspamd_logger.messagex('%s', u)
+          table.insert(json_elts, u)
         end
       end
     end
@@ -328,21 +363,12 @@ local function urls_handler(opts)
       end
     end
 
-    if opts.json then
-      rspamd_logger.messagex('"urls": %s', ucl.to_format(json_elts, 'json'))
-    end
-
-    if opts.json then
-      if i == #opts.file then
-        rspamd_logger.messagex('}')
-      else
-        rspamd_logger.messagex('},')
-      end
-    end
+    out_elts[fname] = json_elts
 
     task:destroy() -- No automatic dtor
   end
-  if opts.json then rspamd_logger.messagex(']') end
+
+  print_elts(out_elts, opts)
 end
 
 local function handler(args)
