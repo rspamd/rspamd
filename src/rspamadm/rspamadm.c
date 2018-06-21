@@ -99,7 +99,12 @@ rspamadm_commands (GPtrArray *all_commands)
 
 	PTR_ARRAY_FOREACH (all_commands, i, cmd) {
 		if (!(cmd->flags & RSPAMADM_FLAG_NOHELP)) {
-			rspamd_printf ("  %-18s %-60s\n", cmd->name, cmd->help (FALSE, cmd));
+			if (cmd->flags & RSPAMADM_FLAG_LUA) {
+				(void)cmd->help (FALSE, cmd);
+			}
+			else {
+				printf ("  %-18s %-60s\n", cmd->name, cmd->help (FALSE, cmd));
+			}
 		}
 	}
 }
