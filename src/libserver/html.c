@@ -1969,7 +1969,6 @@ rspamd_html_process_font_size (const gchar *line, guint len, guint *fs,
 {
 	const gchar *p = line, *end = line + len;
 	gchar *err = NULL, numbuf[64];
-	guint numlen = 0;
 	gdouble sz = 0;
 
 	while (p < end && g_ascii_isspace (*p)) {
@@ -1977,9 +1976,7 @@ rspamd_html_process_font_size (const gchar *line, guint len, guint *fs,
 		len --;
 	}
 
-	numlen = rspamd_memspn (p, "0123456789.-", len);
-
-	rspamd_strlcpy (numbuf, p, MIN (sizeof (numbuf), numlen + 1));
+	rspamd_strlcpy (numbuf, p, MIN (sizeof (numbuf), len + 1));
 	sz = strtod (numbuf, &err);
 
 	/* Now check leftover */
