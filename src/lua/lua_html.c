@@ -92,6 +92,7 @@ LUA_FUNCTION_DEF (html, get_images);
  * `color` - a triplet (r g b) for font color
  * `bgcolor` - a triplet (r g b) for background color
  * `style` - rspamd{text} with the full style description
+ * `font_size` - font size
  * @return {table} table of blocks in html part
  */
 LUA_FUNCTION_DEF (html, get_blocks);
@@ -318,7 +319,7 @@ lua_html_push_block (lua_State *L, struct html_block *bl)
 	struct rspamd_lua_text *t;
 	struct html_tag **ptag;
 
-	lua_createtable (L, 0, 5);
+	lua_createtable (L, 0, 6);
 
 	if (bl->tag) {
 		lua_pushstring (L, "tag");
@@ -363,6 +364,10 @@ lua_html_push_block (lua_State *L, struct html_block *bl)
 
 	lua_pushstring (L, "visible");
 	lua_pushboolean (L, bl->visible);
+	lua_settable (L, -3);
+
+	lua_pushstring (L, "font_size");
+	lua_pushnumber (L, bl->font_size);
 	lua_settable (L, -3);
 }
 
