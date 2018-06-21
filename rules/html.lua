@@ -302,7 +302,7 @@ rspamd_config:register_symbol{
   parent = vis_check_id,
   name = 'ZERO_FONT',
   description = 'Zero sized font used',
-  score = 10.0, -- Reached if more than 5 elements have zero size
+  score = 1.0, -- Reached if more than 5 elements have zero size
   one_shot = true,
   group = 'html'
 }
@@ -312,7 +312,7 @@ rspamd_config:register_symbol{
   parent = vis_check_id,
   name = 'MANY_INVISIBLE_PARTS',
   description = 'Many parts are visually hidden',
-  score = 6.0, -- Reached if more than 10 elements are hidden
+  score = 1.0, -- Reached if more than 10 elements are hidden
   one_shot = true,
   group = 'html'
 }
