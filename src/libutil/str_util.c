@@ -1738,16 +1738,42 @@ decode:
 
 #define BITOP(a,b,op) \
 		((a)[(gsize)(b)/(8*sizeof *(a))] op (gsize)1<<((gsize)(b)%(8*sizeof *(a))))
+
+
 gsize
 rspamd_memcspn (const gchar *s, const gchar *e, gsize len)
 {
 	gsize byteset[32 / sizeof(gsize)];
 	const gchar *p = s, *end = s + len;
 
+	if (!e[1]) {
+		for (; *p != *e; p++);
+		return p - s;
+	}
+
 	memset (byteset, 0, sizeof byteset);
 
 	for (; *e && BITOP (byteset, *(guchar *)e, |=); e++);
 	for (; p < end && !BITOP (byteset, *(guchar *)p, &); p++);
+
+	return p - s;
+}
+
+gsize
+rspamd_memspn (const gchar *s, const gchar *e, gsize len)
+{
+	gsize byteset[32 / sizeof(gsize)];
+	const gchar *p = s, *end = s + len;
+
+	if (!e[1]) {
+		for (; *p == *e; p++);
+		return p - s;
+	}
+
+	memset (byteset, 0, sizeof byteset);
+
+	for (; *e && BITOP (byteset, *(guchar *)e, |=); e++);
+	for (; p < end && BITOP (byteset, *(guchar *)p, &); p++);
 
 	return p - s;
 }
