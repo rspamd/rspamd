@@ -422,6 +422,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 			fuzzy_module_ctx->fuzzy_pool);
 	rule->learn_condition_cb = -1;
 	rule->alg = RSPAMD_SHINGLES_OLD;
+	rule->skip_map = NULL;
 
 	if ((value = ucl_object_lookup (obj, "skip_hashes")) != NULL) {
 		rspamd_map_add_from_ucl (cfg, value,
@@ -430,12 +431,6 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 				rspamd_kv_list_fin,
 				rspamd_kv_list_dtor,
 				(void **)&rule->skip_map);
-		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
-				(rspamd_mempool_destruct_t)rspamd_map_helper_destroy_radix,
-				rule->skip_map);
-	}
-	else {
-		rule->skip_map = NULL;
 	}
 
 	if ((value = ucl_object_lookup (obj, "mime_types")) != NULL) {
