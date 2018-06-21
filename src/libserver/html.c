@@ -1147,6 +1147,29 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_STYLE);
 		}
 	}
+	else if (tag->id == Tag_FONT) {
+		if (len == 5){
+			if (g_ascii_strncasecmp (p, "color", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_COLOR);
+			}
+			else if (g_ascii_strncasecmp (p, "style", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_STYLE);
+			}
+			else if (g_ascii_strncasecmp (p, "class", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_CLASS);
+			}
+		}
+		else if (len == 7) {
+			if (g_ascii_strncasecmp (p, "bgcolor", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_BGCOLOR);
+			}
+		}
+		else if (len == 4) {
+			if (g_ascii_strncasecmp (p, "size", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_SIZE);
+			}
+		}
+	}
 	else if (tag->flags & FL_BLOCK) {
 		if (len == 5){
 			if (g_ascii_strncasecmp (p, "color", len) == 0) {
@@ -1941,6 +1964,114 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 }
 
 static void
+rspamd_html_process_font_size (const gchar *line, guint len, guint *fs,
+							   gboolean is_css)
+{
+	const gchar *p = line, *end = line + len;
+	gchar *err = NULL, numbuf[64];
+	guint numlen = 0;
+	gdouble sz = 0;
+
+	while (p < end && g_ascii_isspace (*p)) {
+		p ++;
+		len --;
+	}
+
+	numlen = rspamd_memspn (p, "0123456789.-", len);
+
+	rspamd_strlcpy (numbuf, p, MIN (sizeof (numbuf), numlen + 1));
+	sz = strtod (numbuf, &err);
+
+	/* Now check leftover */
+	if (sz < 0) {
+		sz = 0;
+	}
+
+	if (err && *err != '\0') {
+		const gchar *e = err;
+
+		/* Skip spaces */
+		while (*e && g_ascii_isspace (*e)) {
+			e ++;
+		}
+
+		/* Lowercase */
+		rspamd_str_lc ((gchar *)e, strlen (e));
+
+		if (memcmp (e, "px", 2) == 0) {
+			sz = (guint)sz; /* Round to number */
+		}
+		else if (memcmp (e, "em", 2) == 0) {
+			/* EM is 16 px, so multiply and round */
+			sz = (guint)(sz * 16.0);
+		}
+		else if (*e == '%') {
+			/* Percentages from 16 px */
+			sz = (guint)(sz / 100.0 * 16.0);
+		}
+
+		else if (memcmp (e, "vw", 2) == 0) {
+			/*
+			 * Vewport width in percentages:
+			 * we assume 1% of viewport width as 8px
+			 */
+			sz = (guint)(sz * 8.0);
+		}
+		else if (memcmp (e, "vh", 2) == 0) {
+			/*
+			 * Vewport height in percentages
+			 * we assume 1% of viewport width as 6px
+			 */
+			sz = (guint)(sz * 6.0);
+		}
+		else {
+			/* Failsafe - garbadge */
+			if (is_css) {
+				/*
+				 * In css mode we usually ignore sizes, but let's treat
+				 * small sizes specially
+				 */
+				if (sz < 1) {
+					sz = 0;
+				}
+				else {
+					sz = 1; /* Ignore */
+				}
+			}
+			else {
+				/* In non-css mode we have to check legacy size */
+				sz = sz * 16;
+			}
+		}
+	}
+	else {
+		/* Failsafe naked number */
+		if (is_css) {
+			/*
+			 * In css mode we usually ignore sizes, but let's treat
+			 * small sizes specially
+			 */
+			if (sz < 1) {
+				sz = 0;
+			}
+			else {
+				sz = 1; /* Ignore */
+			}
+		}
+		else {
+			/* In non-css mode we have to check legacy size */
+			sz = sz * 16;
+		}
+	}
+
+	if (sz > 32) {
+		sz = 32;
+	}
+
+	*fs = sz;
+}
+
+static void
 rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 		struct html_content *hc, const gchar *style, guint len)
 {
@@ -2009,6 +2140,16 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 							msg_debug_html ("tag is not visible");
 						}
 					}
+					else if (klen == 9 && g_ascii_strncasecmp (key, "font-size", 9) == 0) {
+						rspamd_html_process_font_size (c, p - c,
+								&bl->font_size, TRUE);
+						msg_debug_html ("got font size: %u", bl->font_size);
+
+						if (bl->font_size < 3) {
+							bl->visible = FALSE;
+							msg_debug_html ("tag is not visible");
+						}
+					}
 				}
 
 				key = NULL;
@@ -2049,38 +2190,57 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	bl = rspamd_mempool_alloc0 (pool, sizeof (*bl));
 	bl->tag = tag;
 	bl->visible = TRUE;
+	bl->font_size = (guint)-1;
 
 	while (cur) {
 		comp = cur->data;
 
-		if (comp->type == RSPAMD_HTML_COMPONENT_COLOR && comp->len > 0) {
-			fstr.begin = (gchar *)comp->start;
-			fstr.len = comp->len;
-			rspamd_html_process_color (comp->start, comp->len, &bl->font_color);
-			msg_debug_html ("got color: %xd", bl->font_color.d.val);
-		}
-		else if (comp->type == RSPAMD_HTML_COMPONENT_BGCOLOR && comp->len > 0) {
-			fstr.begin = (gchar *)comp->start;
-			fstr.len = comp->len;
-			rspamd_html_process_color (comp->start, comp->len, &bl->background_color);
-			msg_debug_html ("got color: %xd", bl->font_color.d.val);
+		if (comp->len > 0) {
+			switch (comp->type) {
+			case RSPAMD_HTML_COMPONENT_COLOR:
+				fstr.begin = (gchar *) comp->start;
+				fstr.len = comp->len;
+				rspamd_html_process_color (comp->start, comp->len,
+						&bl->font_color);
+				msg_debug_html ("got color: %xd", bl->font_color.d.val);
+				break;
+			case RSPAMD_HTML_COMPONENT_BGCOLOR:
+				fstr.begin = (gchar *) comp->start;
+				fstr.len = comp->len;
+				rspamd_html_process_color (comp->start, comp->len,
+						&bl->background_color);
+				msg_debug_html ("got color: %xd", bl->font_color.d.val);
 
-			if (tag->id == Tag_BODY) {
-				/* Set global background color */
-				memcpy (&hc->bgcolor, &bl->background_color, sizeof (hc->bgcolor));
+				if (tag->id == Tag_BODY) {
+					/* Set global background color */
+					memcpy (&hc->bgcolor, &bl->background_color,
+							sizeof (hc->bgcolor));
+				}
+				break;
+			case RSPAMD_HTML_COMPONENT_STYLE:
+				bl->style.len = comp->len;
+				bl->style.start = comp->start;
+				msg_debug_html ("got style: %*s", (gint) bl->style.len,
+						bl->style.start);
+				rspamd_html_process_style (pool, bl, hc, comp->start, comp->len);
+				break;
+			case RSPAMD_HTML_COMPONENT_CLASS:
+				fstr.begin = (gchar *) comp->start;
+				fstr.len = comp->len;
+				bl->class = rspamd_mempool_ftokdup (pool, &fstr);
+				msg_debug_html ("got class: %s", bl->class);
+				break;
+			case RSPAMD_HTML_COMPONENT_SIZE:
+				fstr.begin = (gchar *) comp->start;
+				fstr.len = comp->len;
+				rspamd_html_process_color (comp->start, comp->len,
+						&bl->font_color);
+				msg_debug_html ("got color: %xd", bl->font_color.d.val);
+				break;
+			default:
+				/* NYI */
+				break;
 			}
-		}
-		else if (comp->type == RSPAMD_HTML_COMPONENT_STYLE && comp->len > 0) {
-			bl->style.len = comp->len;
-			bl->style.start =  comp->start;
-			msg_debug_html ("got style: %*s", (gint)bl->style.len, bl->style.start);
-			rspamd_html_process_style (pool, bl, hc, comp->start, comp->len);
-		}
-		else if (comp->type == RSPAMD_HTML_COMPONENT_CLASS && comp->len > 0) {
-			fstr.begin = (gchar *)comp->start;
-			fstr.len = comp->len;
-			bl->class = rspamd_mempool_ftokdup (pool, &fstr);
-			msg_debug_html ("got class: %s", bl->class);
 		}
 
 		cur = g_list_next (cur);
@@ -2102,6 +2262,7 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 			}
 		}
 	}
+
 	if (!bl->font_color.valid) {
 		/* Try to propagate background color from parent nodes */
 		for (parent = tag->parent; parent != NULL; parent = parent->parent) {
@@ -2119,6 +2280,22 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		}
 	}
 
+	/* Propagate font size */
+	if (bl->font_size == (guint)-1) {
+		for (parent = tag->parent; parent != NULL; parent = parent->parent) {
+			parent_tag = parent->data;
+
+			if (parent_tag && (parent_tag->flags & FL_BLOCK) && parent_tag->extra) {
+				bl_parent = parent_tag->extra;
+
+				if (bl_parent->font_size != (guint)-1) {
+					bl->font_size = bl_parent->font_size;
+					break;
+				}
+			}
+		}
+	}
+
 	/* Set bgcolor to the html bgcolor and font color to black as a last resort */
 	if (!bl->font_color.valid) {
 		bl->font_color.d.val = 0;
@@ -2127,6 +2304,9 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	}
 	if (!bl->background_color.valid) {
 		memcpy (&bl->background_color, &hc->bgcolor, sizeof (hc->bgcolor));
+	}
+	if (bl->font_size == (guint)-1) {
+		bl->font_size = 16; /* Default for browsers */
 	}
 
 	if (hc->blocks == NULL) {
