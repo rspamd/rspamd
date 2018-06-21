@@ -1747,7 +1747,7 @@ rspamd_memcspn (const gchar *s, const gchar *e, gsize len)
 	const gchar *p = s, *end = s + len;
 
 	if (!e[1]) {
-		for (; *p != *e; p++);
+		for (; p < end && *p != *e; p++);
 		return p - s;
 	}
 
@@ -1766,7 +1766,7 @@ rspamd_memspn (const gchar *s, const gchar *e, gsize len)
 	const gchar *p = s, *end = s + len;
 
 	if (!e[1]) {
-		for (; *p == *e; p++);
+		for (; p < end && *p == *e; p++);
 		return p - s;
 	}
 
