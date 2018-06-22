@@ -15,6 +15,10 @@
 #include <malloc/malloc.h>
 #endif
 
+#ifdef __linux__
+#include <malloc.h>
+#endif
+
 /* Torch Error Handling */
 static void defaultErrorHandlerFunction(const char *msg, void *data)
 {
