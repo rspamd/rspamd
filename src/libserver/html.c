@@ -1963,6 +1963,106 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 	}
 }
 
+/*
+ * Target is used for in and out if this function returns TRUE
+ */
+static gboolean
+rspamd_html_process_css_size (const gchar *suffix, gsize len,
+		gdouble *tgt)
+{
+	gdouble sz = *tgt;
+	gboolean ret = FALSE;
+
+	if (len >= 2) {
+		if (memcmp (suffix, "px", 2) == 0) {
+			sz = (guint) sz; /* Round to number */
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "em", 2) == 0) {
+			/* EM is 16 px, so multiply and round */
+			sz = (guint) (sz * 16.0);
+			ret = TRUE;
+		}
+		else if (len >= 3 && memcmp (suffix, "rem", 3) == 0) {
+			/* equal to EM in our case */
+			sz = (guint) (sz * 16.0);
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "ex", 2) == 0) {
+			/*
+			 * Represents the x-height of the element's font.
+			 * On fonts with the "x" letter, this is generally the height
+			 * of lowercase letters in the font; 1ex = 0.5em in many fonts.
+			 */
+			sz = (guint) (sz * 8.0);
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "vw", 2) == 0) {
+			/*
+			 * Vewport width in percentages:
+			 * we assume 1% of viewport width as 8px
+			 */
+			sz = (guint) (sz * 8.0);
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "vh", 2) == 0) {
+			/*
+			 * Vewport height in percentages
+			 * we assume 1% of viewport width as 6px
+			 */
+			sz = (guint) (sz * 6.0);
+			ret = TRUE;
+		}
+		else if (len >= 4 && memcmp (suffix, "vmax", 4) == 0) {
+			/*
+			 * Vewport width in percentages
+			 * we assume 1% of viewport width as 6px
+			 */
+			sz = (guint) (sz * 8.0);
+			ret = TRUE;
+		}
+		else if (len >= 4 && memcmp (suffix, "vmin", 4) == 0) {
+			/*
+			 * Vewport height in percentages
+			 * we assume 1% of viewport width as 6px
+			 */
+			sz = (guint) (sz * 6.0);
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "pt", 2) == 0) {
+			sz = (guint) (sz * 96.0 / 72.0); /* One point. 1pt = 1/72nd of 1in */
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "cm", 2) == 0) {
+			sz = (guint) (sz * 96.0 / 2.54); /* 96px/2.54 */
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "mm", 2) == 0) {
+			sz = (guint) (sz * 9.6 / 2.54); /* 9.6px/2.54 */
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "in", 2) == 0) {
+			sz = (guint) (sz * 96.0); /* 96px */
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "pc", 2) == 0) {
+			sz = (guint) (sz * 96.0 / 6.0); /* 1pc = 12pt = 1/6th of 1in. */
+			ret = TRUE;
+		}
+	}
+	else if (suffix[0] == '%') {
+		/* Percentages from 16 px */
+		sz = (guint)(sz / 100.0 * 16.0);
+		ret = TRUE;
+	}
+
+	if (ret) {
+		*tgt = sz;
+	}
+
+	return ret;
+}
+
 static void
 rspamd_html_process_font_size (const gchar *line, guint len, guint *fs,
 							   gboolean is_css)
@@ -1970,6 +2070,7 @@ rspamd_html_process_font_size (const gchar *line, guint len, guint *fs,
 	const gchar *p = line, *end = line + len;
 	gchar *err = NULL, numbuf[64];
 	gdouble sz = 0;
+	gboolean failsafe = FALSE;
 
 	while (p < end && g_ascii_isspace (*p)) {
 		p ++;
@@ -1986,6 +2087,7 @@ rspamd_html_process_font_size (const gchar *line, guint len, guint *fs,
 
 	if (err && *err != '\0') {
 		const gchar *e = err;
+		gsize slen;
 
 		/* Skip spaces */
 		while (*e && g_ascii_isspace (*e)) {
@@ -1993,56 +2095,19 @@ rspamd_html_process_font_size (const gchar *line, guint len, guint *fs,
 		}
 
 		/* Lowercase */
-		rspamd_str_lc ((gchar *)e, strlen (e));
+		slen = strlen (e);
+		rspamd_str_lc ((gchar *)e, slen);
 
-		if (memcmp (e, "px", 2) == 0) {
-			sz = (guint)sz; /* Round to number */
-		}
-		else if (memcmp (e, "em", 2) == 0) {
-			/* EM is 16 px, so multiply and round */
-			sz = (guint)(sz * 16.0);
-		}
-		else if (*e == '%') {
-			/* Percentages from 16 px */
-			sz = (guint)(sz / 100.0 * 16.0);
-		}
-
-		else if (memcmp (e, "vw", 2) == 0) {
-			/*
-			 * Vewport width in percentages:
-			 * we assume 1% of viewport width as 8px
-			 */
-			sz = (guint)(sz * 8.0);
-		}
-		else if (memcmp (e, "vh", 2) == 0) {
-			/*
-			 * Vewport height in percentages
-			 * we assume 1% of viewport width as 6px
-			 */
-			sz = (guint)(sz * 6.0);
-		}
-		else {
-			/* Failsafe - garbadge */
-			if (is_css) {
-				/*
-				 * In css mode we usually ignore sizes, but let's treat
-				 * small sizes specially
-				 */
-				if (sz < 1) {
-					sz = 0;
-				}
-				else {
-					sz = 1; /* Ignore */
-				}
-			}
-			else {
-				/* In non-css mode we have to check legacy size */
-				sz = sz * 16;
-			}
+		if (!rspamd_html_process_css_size (e, slen, &sz)) {
+			failsafe = TRUE;
 		}
 	}
 	else {
 		/* Failsafe naked number */
+		failsafe = TRUE;
+	}
+
+	if (failsafe) {
 		if (is_css) {
 			/*
 			 * In css mode we usually ignore sizes, but let's treat
@@ -2050,14 +2115,12 @@ rspamd_html_process_font_size (const gchar *line, guint len, guint *fs,
 			 */
 			if (sz < 1) {
 				sz = 0;
+			} else {
+				sz = 16; /* Ignore */
 			}
-			else {
-				sz = 1; /* Ignore */
-			}
-		}
-		else {
+		} else {
 			/* In non-css mode we have to check legacy size */
-			sz = sz * 16;
+			sz = sz >= 1 ? sz * 16 : 16;
 		}
 	}
 
