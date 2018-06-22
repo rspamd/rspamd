@@ -3309,11 +3309,13 @@ lua_task_get_symbols (lua_State *L)
 
 			while (g_hash_table_iter_next (&it, &k, &v)) {
 				s = v;
-				lua_pushstring (L, k);
-				lua_rawseti (L, -3, i);
-				lua_pushnumber (L, s->score);
-				lua_rawseti (L, -2, i);
-				i ++;
+				if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
+					lua_pushstring (L, k);
+					lua_rawseti (L, -3, i);
+					lua_pushnumber (L, s->score);
+					lua_rawseti (L, -2, i);
+					i++;
+				}
 			}
 		}
 		else {
@@ -3384,14 +3386,17 @@ lua_task_get_symbols_numeric (lua_State *L)
 			g_hash_table_iter_init (&it, mres->symbols);
 
 			while (g_hash_table_iter_next (&it, &k, &v)) {
-				id = rspamd_symbols_cache_find_symbol (task->cfg->cache,
-						k);
 				s = v;
-				lua_pushnumber (L, id);
-				lua_rawseti (L, -3, i);
-				lua_pushnumber (L, s->score);
-				lua_rawseti (L, -2, i);
-				i ++;
+
+				if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
+					id = rspamd_symbols_cache_find_symbol (task->cfg->cache,
+							k);
+					lua_pushnumber (L, id);
+					lua_rawseti (L, -3, i);
+					lua_pushnumber (L, s->score);
+					lua_rawseti (L, -2, i);
+					i++;
+				}
 			}
 		}
 		else {

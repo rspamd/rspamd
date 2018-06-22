@@ -19,6 +19,11 @@ struct rspamd_symbol_option {
 	struct rspamd_symbol_option *prev, *next;
 };
 
+enum rspamd_symbol_result_flags {
+	RSPAMD_SYMBOL_RESULT_NORMAL = 0,
+	RSPAMD_SYMBOL_RESULT_IGNORED = (1 << 0)
+};
+
 /**
  * Rspamd symbol
  */
@@ -29,6 +34,7 @@ struct rspamd_symbol_result {
 	const gchar *name;
 	struct rspamd_symbol *sym;						/**< symbol configuration					*/
 	guint nshots;
+	enum rspamd_symbol_result_flags flags;
 };
 
 /**

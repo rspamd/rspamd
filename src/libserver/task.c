@@ -1087,7 +1087,11 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 			sorted_symbols = g_ptr_array_sized_new (g_hash_table_size (mres->symbols));
 
 			while (g_hash_table_iter_next (&it, &k, &v)) {
-				g_ptr_array_add (sorted_symbols, v);
+				sym = v;
+
+				if (!(sym->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
+					g_ptr_array_add (sorted_symbols, v);
+				}
 			}
 
 			g_ptr_array_sort (sorted_symbols, rspamd_task_compare_log_sym);

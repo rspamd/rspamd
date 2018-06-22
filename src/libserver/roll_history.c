@@ -77,6 +77,10 @@ roll_history_symbols_callback (gpointer key, gpointer value, void *user_data)
 	struct rspamd_symbol_result *s = value;
 	guint wr;
 
+	if (s->flags & RSPAMD_SYMBOL_RESULT_IGNORED) {
+		return;
+	}
+
 	if (cb->remain > 0) {
 		wr = rspamd_snprintf (cb->pos, cb->remain, "%s, ", s->name);
 		cb->pos += wr;

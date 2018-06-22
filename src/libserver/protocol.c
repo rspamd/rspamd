@@ -970,8 +970,10 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 
 	while (g_hash_table_iter_next (&hiter, &h, &v)) {
 		sym = (struct rspamd_symbol_result *)v;
-		sobj = rspamd_metric_symbol_ucl (task, sym);
-		ucl_object_insert_key (obj, sobj, h, 0, false);
+		if (!(sym->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
+			sobj = rspamd_metric_symbol_ucl (task, sym);
+			ucl_object_insert_key (obj, sobj, h, 0, false);
+		}
 	}
 
 	if (task->cmd == CMD_CHECK_V2) {

@@ -424,7 +424,7 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 
 	if (has_valid_op) {
 		if (want_remove_symbol || want_forced) {
-			g_hash_table_remove (cd->metric_res->symbols, key);
+			rd->ms->flags |= RSPAMD_SYMBOL_RESULT_IGNORED;
 			msg_debug_composites ("remove symbol %s", key);
 		}
 
