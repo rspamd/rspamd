@@ -130,12 +130,17 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 					sym, cd->composite->sym);
 
 			if (isclr (cd->checked, ncomp->id * 2)) {
+				struct rspamd_composite *saved;
+
 				msg_debug_composites ("composite dependency %s for %s is not checked",
 						sym, cd->composite->sym);
 				/* Set checked for this symbol to avoid cyclic references */
 				setbit (cd->checked, cd->composite->id * 2);
+				saved = cd->composite;
+				cd->composite = ncomp;
 				rc = rspamd_process_expression (ncomp->expr,
 						RSPAMD_EXPRESSION_FLAG_NOOPT, cd);
+				cd->composite = saved;
 				clrbit (cd->checked, cd->composite->id * 2);
 
 				if (rc != 0) {
