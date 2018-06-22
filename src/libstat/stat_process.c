@@ -528,12 +528,12 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 	 * Do not classify a message if some class is missing
 	 */
 	if (!(task->flags & RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS)) {
-		msg_warn_task ("skip statistics as SPAM class is missing");
+		msg_info_task ("skip statistics as SPAM class is missing");
 
 		return;
 	}
 	if (!(task->flags & RSPAMD_TASK_FLAG_HAS_HAM_TOKENS)) {
-		msg_warn_task ("skip statistics as HAM class is missing");
+		msg_info_task ("skip statistics as HAM class is missing");
 
 		return;
 	}

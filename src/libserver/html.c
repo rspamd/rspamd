@@ -2077,12 +2077,20 @@ rspamd_html_process_font_size (const gchar *line, guint len, guint *fs,
 		len --;
 	}
 
-	rspamd_strlcpy (numbuf, p, MIN (sizeof (numbuf), len + 1));
-	sz = strtod (numbuf, &err);
+	if (g_ascii_isdigit (*p)) {
+		rspamd_strlcpy (numbuf, p, MIN (sizeof (numbuf), len + 1));
+		sz = strtod (numbuf, &err);
 
-	/* Now check leftover */
-	if (sz < 0) {
-		sz = 0;
+		/* Now check leftover */
+		if (sz < 0) {
+			sz = 0;
+		}
+	}
+	else {
+		/* Ignore the rest */
+		failsafe = TRUE;
+		sz = is_css ? 16 : 1;
+		/* TODO: add textual fonts descriptions */
 	}
 
 	if (err && *err != '\0') {

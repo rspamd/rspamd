@@ -1941,7 +1941,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 
 		/* Reset spamc legacy */
 		if (msg->method >= HTTP_SYMBOLS) {
-			msg->method = HTTP_GET;
+			msg->method = HTTP_POST;
 
 			if (msg->flags & RSPAMD_HTTP_FLAG_SPAMC) {
 				session->legacy_support = LEGACY_SUPPORT_SPAMC;
