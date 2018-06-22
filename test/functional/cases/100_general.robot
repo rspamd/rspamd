@@ -6,7 +6,7 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/trivial.conf
+${CONFIG}       ${TESTDIR}/configs/plugins.conf
 ${GTUBE}        ${TESTDIR}/messages/gtube.eml
 ${RSPAMD_SCOPE}  Suite
 
