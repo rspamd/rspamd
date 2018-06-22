@@ -69,6 +69,7 @@ static rspamd_expression_atom_t * rspamd_composite_expr_parse (const gchar *line
 static gdouble rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom);
 static gint rspamd_composite_expr_priority (rspamd_expression_atom_t *atom);
 static void rspamd_composite_expr_destroy (rspamd_expression_atom_t *atom);
+static void composites_foreach_callback (gpointer key, gpointer value, void *data);
 
 const struct rspamd_atom_subr composite_expr_subr = {
 	.parse = rspamd_composite_expr_parse,
@@ -136,19 +137,14 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 						sym, cd->composite->sym);
 				/* Set checked for this symbol to avoid cyclic references */
 				setbit (cd->checked, cd->composite->id * 2);
-				saved = cd->composite;
-				cd->composite = ncomp;
-				rc = rspamd_process_expression (ncomp->expr,
-						RSPAMD_EXPRESSION_FLAG_NOOPT, cd);
+				saved = cd->composite; /* Save the current composite */
+				composites_foreach_callback ((gpointer)ncomp->sym, ncomp, cd);
+
+				/* Restore state */
 				cd->composite = saved;
 				clrbit (cd->checked, cd->composite->id * 2);
 
-				if (rc != 0) {
-					setbit (cd->checked, ncomp->id * 2 + 1);
-					ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
-				}
-
-				setbit (cd->checked, ncomp->id * 2);
+				ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
 			}
 			else {
 				/*
