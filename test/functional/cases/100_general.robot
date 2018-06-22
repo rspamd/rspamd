@@ -46,3 +46,9 @@ EMAILS DETECTION 1
   Check Rspamc  ${result}  "jim@example.net"
   Should Contain  ${result.stdout}  "bob@example.net"
   Should Contain  ${result.stdout}  "rupert@example.net"
+
+EMAILS DETECTION ZEROFONT
+  ${result} =  Scan File  ${LOCAL_ADDR}  ${PORT_NORMAL}  ${TESTDIR}/messages/zerofont.eml
+  Follow Rspamd Log
+  Should Contain  ${result}  MANY_INVISIBLE_PARTS
+  Should Contain  ${result}  ZERO_FONT
