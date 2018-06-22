@@ -9,6 +9,7 @@ Variables       ${TESTDIR}/lib/vars.py
 ${CONFIG}       ${TESTDIR}/configs/plugins.conf
 ${GTUBE}        ${TESTDIR}/messages/gtube.eml
 ${RSPAMD_SCOPE}  Suite
+${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
 GTUBE
