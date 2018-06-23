@@ -2421,68 +2421,61 @@ rspamd_html_propagate_style (struct html_content *hc,
 	struct html_block *bl_parent;
 	gboolean push_block = FALSE;
 
-	if (tag->flags & FL_CLOSING) {
-		/* Just remove block element from the queue if any */
-		if (blocks->length > 0) {
-			g_queue_pop_tail (blocks);
+
+	/* Propagate from the parent if needed */
+	bl_parent = g_queue_peek_tail (blocks);
+
+	if (bl_parent) {
+		if (!bl->background_color.valid) {
+			/* Try to propagate background color from parent nodes */
+			if (bl_parent->background_color.valid) {
+				memcpy (&bl->background_color, &bl_parent->background_color,
+						sizeof (bl->background_color));
+			}
+		}
+		else {
+			push_block = TRUE;
+		}
+
+		if (!bl->font_color.valid) {
+			/* Try to propagate background color from parent nodes */
+			if (bl_parent->font_color.valid) {
+				memcpy (&bl->font_color, &bl_parent->font_color,
+						sizeof (bl->font_color));
+			}
+		}
+		else {
+			push_block = TRUE;
+		}
+
+		/* Propagate font size */
+		if (bl->font_size == (guint)-1) {
+			if (bl_parent->font_size != (guint)-1) {
+				bl->font_size = bl_parent->font_size;
+			}
+		}
+		else {
+			push_block = TRUE;
 		}
 	}
-	else {
-		/* Propagate from the parent if needed */
-		bl_parent = g_queue_peek_tail (blocks);
 
-		if (bl_parent) {
-			if (!bl->background_color.valid) {
-				/* Try to propagate background color from parent nodes */
-				if (bl_parent->background_color.valid) {
-					memcpy (&bl->background_color, &bl_parent->background_color,
-							sizeof (bl->background_color));
-				}
-			}
-			else {
-				push_block = TRUE;
-			}
+	/* Set bgcolor to the html bgcolor and font color to black as a last resort */
+	if (!bl->font_color.valid) {
+		bl->font_color.d.val = 0;
+		bl->font_color.d.comp.alpha = 255;
+		bl->font_color.valid = TRUE;
+	}
 
-			if (!bl->font_color.valid) {
-				/* Try to propagate background color from parent nodes */
-				if (bl_parent->font_color.valid) {
-					memcpy (&bl->font_color, &bl_parent->font_color,
-							sizeof (bl->font_color));
-				}
-			}
-			else {
-				push_block = TRUE;
-			}
+	if (!bl->background_color.valid) {
+		memcpy (&bl->background_color, &hc->bgcolor, sizeof (hc->bgcolor));
+	}
 
-			/* Propagate font size */
-			if (bl->font_size == (guint)-1) {
-				if (bl_parent->font_size != (guint)-1) {
-					bl->font_size = bl_parent->font_size;
-				}
-			}
-			else {
-				push_block = TRUE;
-			}
+	if (bl->font_size == (guint)-1) {
+		bl->font_size = 16; /* Default for browsers */
+	}
 
-			/* Set bgcolor to the html bgcolor and font color to black as a last resort */
-			if (!bl->font_color.valid) {
-				bl->font_color.d.val = 0;
-				bl->font_color.d.comp.alpha = 255;
-				bl->font_color.valid = TRUE;
-			}
-
-			if (!bl->background_color.valid) {
-				memcpy (&bl->background_color, &hc->bgcolor, sizeof (hc->bgcolor));
-			}
-
-			if (bl->font_size == (guint)-1) {
-				bl->font_size = 16; /* Default for browsers */
-			}
-		}
-
-		if (push_block && !(tag->flags & FL_CLOSED)) {
-			g_queue_push_tail (blocks, bl);
-		}
+	if (push_block && !(tag->flags & FL_CLOSED)) {
+		g_queue_push_tail (blocks, bl);
 	}
 }
 
@@ -2850,11 +2843,6 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 					content_tag = cur_tag;
 				}
 
-				if ((cur_tag->flags & FL_BLOCK) && cur_tag->extra) {
-					rspamd_html_propagate_style (hc, cur_tag,
-							cur_tag->extra, styles_blocks);
-				}
-
 				/* Handle newlines */
 				if (cur_tag->id == Tag_BR || cur_tag->id == Tag_HR) {
 					if (dest->len > 0 && dest->data[dest->len - 1] != '\n') {
@@ -2949,15 +2937,27 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				if (cur_tag->id == Tag_IMG && !(cur_tag->flags & FL_CLOSING)) {
 					rspamd_html_process_img_tag (pool, cur_tag, hc);
 				}
-				else if (!(cur_tag->flags & FL_CLOSING) &&
-						(cur_tag->flags & FL_BLOCK)) {
+				else if (cur_tag->flags & FL_BLOCK) {
 					struct html_block *bl;
 
-					rspamd_html_process_block_tag (pool, cur_tag, hc);
-					bl = cur_tag->extra;
+					if (cur_tag->flags & FL_CLOSING) {
+						/* Just remove block element from the queue if any */
+						if (styles_blocks->length > 0) {
+							g_queue_pop_tail (styles_blocks);
+						}
+					}
+					else {
+						rspamd_html_process_block_tag (pool, cur_tag, hc);
+						bl = cur_tag->extra;
 
-					if (bl && !bl->visible) {
-						state = content_ignore;
+						if (bl && !bl->visible) {
+							state = content_ignore;
+						}
+
+						if (bl) {
+							rspamd_html_propagate_style (hc, cur_tag,
+									cur_tag->extra, styles_blocks);
+						}
 					}
 				}
 			}
