@@ -100,7 +100,7 @@ context("HTML processing", function()
 
   </body>
 </html>
-      ]], 'content heada headb\r\ndata1 data2\r\n'},
+      ]], 'content\r\nheada headb\r\ndata1 data2\r\n'},
       {[[
 <html lang="en">
   <head>
