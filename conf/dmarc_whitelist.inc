@@ -46,6 +46,7 @@ paypal.com
 pch.com
 pinterest.com
 rostelecom.ru
+rt.ru
 sberbank.ru
 sportmaster.ru
 squarespace.com
@@ -56,9 +57,11 @@ uber.com
 ulmart.ru
 ups.com
 usps.com
+utair.ru
 verizonwireless.com
 vk.com
 vkrugudruzei.ru
+webex.com
 westernunion.com
 whatsapp.com
 zendesk.com
