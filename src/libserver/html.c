@@ -2248,11 +2248,9 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		struct html_content *hc)
 {
 	struct html_tag_component *comp;
-	struct html_block *bl, *bl_parent;
+	struct html_block *bl;
 	rspamd_ftok_t fstr;
 	GList *cur;
-	GNode *parent;
-	struct html_tag *parent_tag;
 
 	cur = tag->params->head;
 	bl = rspamd_mempool_alloc0 (pool, sizeof (*bl));
@@ -2312,69 +2310,6 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		}
 
 		cur = g_list_next (cur);
-	}
-
-	if (!bl->background_color.valid) {
-		/* Try to propagate background color from parent nodes */
-		for (parent = tag->parent; parent != NULL; parent = parent->parent) {
-			parent_tag = parent->data;
-
-			if (parent_tag && (parent_tag->flags & FL_BLOCK) && parent_tag->extra) {
-				bl_parent = parent_tag->extra;
-
-				if (bl_parent->background_color.valid) {
-					memcpy (&bl->background_color, &bl_parent->background_color,
-							sizeof (bl->background_color));
-					break;
-				}
-			}
-		}
-	}
-
-	if (!bl->font_color.valid) {
-		/* Try to propagate background color from parent nodes */
-		for (parent = tag->parent; parent != NULL; parent = parent->parent) {
-			parent_tag = parent->data;
-
-			if (parent_tag && (parent_tag->flags & FL_BLOCK) && parent_tag->extra) {
-				bl_parent = parent_tag->extra;
-
-				if (bl_parent->font_color.valid) {
-					memcpy (&bl->font_color, &bl_parent->font_color,
-							sizeof (bl->font_color));
-					break;
-				}
-			}
-		}
-	}
-
-	/* Propagate font size */
-	if (bl->font_size == (guint)-1) {
-		for (parent = tag->parent; parent != NULL; parent = parent->parent) {
-			parent_tag = parent->data;
-
-			if (parent_tag && (parent_tag->flags & FL_BLOCK) && parent_tag->extra) {
-				bl_parent = parent_tag->extra;
-
-				if (bl_parent->font_size != (guint)-1) {
-					bl->font_size = bl_parent->font_size;
-					break;
-				}
-			}
-		}
-	}
-
-	/* Set bgcolor to the html bgcolor and font color to black as a last resort */
-	if (!bl->font_color.valid) {
-		bl->font_color.d.val = 0;
-		bl->font_color.d.comp.alpha = 255;
-		bl->font_color.valid = TRUE;
-	}
-	if (!bl->background_color.valid) {
-		memcpy (&bl->background_color, &hc->bgcolor, sizeof (hc->bgcolor));
-	}
-	if (bl->font_size == (guint)-1) {
-		bl->font_size = 16; /* Default for browsers */
 	}
 
 	if (hc->blocks == NULL) {
@@ -2457,6 +2392,100 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 	}
 }
 
+static gboolean
+rspamd_html_propagate_lengths (GNode *node, gpointer _unused)
+{
+	GNode *child;
+	struct html_tag *tag = node->data, *cld_tag;
+
+	if (tag) {
+		child = node->children;
+
+		/* Summarize content length from children */
+		while (child) {
+			cld_tag = child->data;
+			tag->content_length += cld_tag->content_length;
+			child = child->next;
+		}
+	}
+
+	return FALSE;
+}
+
+static void
+rspamd_html_propagate_style (struct html_content *hc,
+							 struct html_tag *tag,
+							 struct html_block *bl,
+							 GQueue *blocks)
+{
+	struct html_block *bl_parent;
+	gboolean push_block = FALSE;
+
+	if (tag->flags & FL_CLOSING) {
+		/* Just remove block element from the queue if any */
+		if (blocks->length > 0) {
+			g_queue_pop_tail (blocks);
+		}
+	}
+	else {
+		/* Propagate from the parent if needed */
+		bl_parent = g_queue_peek_tail (blocks);
+
+		if (bl_parent) {
+			if (!bl->background_color.valid) {
+				/* Try to propagate background color from parent nodes */
+				if (bl_parent->background_color.valid) {
+					memcpy (&bl->background_color, &bl_parent->background_color,
+							sizeof (bl->background_color));
+				}
+			}
+			else {
+				push_block = TRUE;
+			}
+
+			if (!bl->font_color.valid) {
+				/* Try to propagate background color from parent nodes */
+				if (bl_parent->font_color.valid) {
+					memcpy (&bl->font_color, &bl_parent->font_color,
+							sizeof (bl->font_color));
+				}
+			}
+			else {
+				push_block = TRUE;
+			}
+
+			/* Propagate font size */
+			if (bl->font_size == (guint)-1) {
+				if (bl_parent->font_size != (guint)-1) {
+					bl->font_size = bl_parent->font_size;
+				}
+			}
+			else {
+				push_block = TRUE;
+			}
+
+			/* Set bgcolor to the html bgcolor and font color to black as a last resort */
+			if (!bl->font_color.valid) {
+				bl->font_color.d.val = 0;
+				bl->font_color.d.comp.alpha = 255;
+				bl->font_color.valid = TRUE;
+			}
+
+			if (!bl->background_color.valid) {
+				memcpy (&bl->background_color, &hc->bgcolor, sizeof (hc->bgcolor));
+			}
+
+			if (bl->font_size == (guint)-1) {
+				bl->font_size = 16; /* Default for browsers */
+			}
+		}
+
+		if (push_block && !(tag->flags & FL_CLOSED)) {
+			g_queue_push_tail (blocks, bl);
+		}
+	}
+}
+
 GByteArray*
 rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 		GByteArray *in, GList **exceptions, GHashTable *urls,  GHashTable *emails)
@@ -2472,6 +2501,8 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 	gint substate = 0, len, href_offset = -1;
 	struct html_tag *cur_tag = NULL, *content_tag = NULL;
 	struct rspamd_url *url = NULL, *turl;
+	GQueue *styles_blocks;
+
 	enum {
 		parse_start = 0,
 		tag_begin,
@@ -2504,6 +2535,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 	hc->bgcolor.valid = TRUE;
 
 	dest = g_byte_array_sized_new (in->len / 3 * 2);
+	styles_blocks = g_queue_new ();
 
 	p = in->data;
 	c = p;
@@ -2816,6 +2848,11 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 
 				if (!(cur_tag->flags & (FL_CLOSED|FL_CLOSING))) {
 					content_tag = cur_tag;
+				}
+
+				if ((cur_tag->flags & FL_BLOCK) && cur_tag->extra) {
+					rspamd_html_propagate_style (hc, cur_tag,
+							cur_tag->extra, styles_blocks);
 				}
 
 				/* Handle newlines */
