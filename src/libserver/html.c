@@ -2647,6 +2647,13 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				p ++;
 			}
 			else {
+				if (content_tag) {
+					if (content_tag->content == NULL) {
+						content_tag->content = c;
+					}
+
+					content_tag->content_length += p - c;
+				}
 				state = tag_begin;
 			}
 			break;
@@ -2928,6 +2935,13 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 			break;
 		}
 	}
+
+	if (hc->html_tags) {
+		g_node_traverse (hc->html_tags, G_POST_ORDER, G_TRAVERSE_ALL, -1,
+				rspamd_html_propagate_lengths, NULL);
+	}
+
+	g_queue_free (styles_blocks);
 
 	return dest;
 }

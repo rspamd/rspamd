@@ -95,9 +95,9 @@ struct html_block {
 struct html_tag {
 	gint id;
 	gint flags;
-	gsize content_length;
-	const gchar *content;
+	guint content_length;
 	struct html_tag_component name;
+	const gchar *content;
 	GQueue *params;
 	gpointer extra; /** Additional data associated with tag (e.g. image) */
 	GNode *parent;
