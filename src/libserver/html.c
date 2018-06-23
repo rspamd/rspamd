@@ -1135,7 +1135,8 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_HREF);
 		}
 	}
-	else if (tag->id == Tag_IMG) {
+
+	if (tag->id == Tag_IMG) {
 		/* Check width and height if presented */
 		if (len == 5 && g_ascii_strncasecmp (p, "width", len) == 0) {
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_WIDTH);
@@ -2850,10 +2851,10 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 					}
 					save_space = FALSE;
 				}
-				else if ((cur_tag->flags & (FL_CLOSED|FL_CLOSING)) &&
-						(cur_tag->id == Tag_P ||
+
+				if ((cur_tag->id == Tag_P ||
 						cur_tag->id == Tag_TR ||
-						cur_tag->id == Tag_DIV) && balanced) {
+						cur_tag->id == Tag_DIV)) {
 					if (dest->len > 0 && dest->data[dest->len - 1] != '\n') {
 						g_byte_array_append (dest, "\r\n", 2);
 					}
