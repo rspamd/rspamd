@@ -15,8 +15,12 @@
 #include <malloc/malloc.h>
 #endif
 
-#ifdef __linux__
+#if defined(__linux__)
 #include <malloc.h>
+#endif
+
+#if defined(__FreeBSD__)
+#include <malloc_np.h>
 #endif
 
 /* Torch Error Handling */
