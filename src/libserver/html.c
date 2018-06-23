@@ -1164,6 +1164,9 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 			if (g_ascii_strncasecmp (p, "bgcolor", len) == 0) {
 				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_BGCOLOR);
 			}
+			else if (g_ascii_strncasecmp (p, "opacity", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_OPACITY);
+			}
 		}
 		else if (len == 4) {
 			if (g_ascii_strncasecmp (p, "size", len) == 0) {
@@ -2152,6 +2155,7 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 		skip_spaces,
 	} state = skip_spaces, next_state = read_key;
 	guint klen = 0;
+	gdouble opacity = 1.0;
 
 	p = style;
 	c = p;
@@ -2209,15 +2213,28 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 							msg_debug_html ("tag is not visible");
 						}
 					}
-					else if (klen == 9 && g_ascii_strncasecmp (key, "font-size", 9) == 0) {
+					else if (klen == 9 &&
+							 g_ascii_strncasecmp (key, "font-size", 9) == 0) {
 						rspamd_html_process_font_size (c, p - c,
 								&bl->font_size, TRUE);
 						msg_debug_html ("got font size: %u", bl->font_size);
+					}
+					else if (klen == 7 &&
+							 g_ascii_strncasecmp (key, "opacity", 7) == 0) {
+						gchar numbuf[64];
 
-						if (bl->font_size < 3) {
-							bl->visible = FALSE;
-							msg_debug_html ("tag is not visible");
+						rspamd_strlcpy (numbuf, c,
+								MIN (sizeof (numbuf), p - c + 1));
+						opacity = strtod (numbuf, NULL);
+
+						if (opacity > 1) {
+							opacity = 1;
 						}
+						else if (opacity < 0) {
+							opacity = 0;
+						}
+
+						bl->font_color.d.comp.alpha = (guint8)(opacity * 255.0);
 					}
 				}
 
@@ -2252,12 +2269,15 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	struct html_block *bl;
 	rspamd_ftok_t fstr;
 	GList *cur;
+	gdouble opacity = 1.0;
+	gchar numbuf[64];
 
 	cur = tag->params->head;
 	bl = rspamd_mempool_alloc0 (pool, sizeof (*bl));
 	bl->tag = tag;
 	bl->visible = TRUE;
 	bl->font_size = (guint)-1;
+	bl->font_color.d.comp.alpha = 255;
 
 	while (cur) {
 		comp = cur->data;
@@ -2303,6 +2323,20 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				rspamd_html_process_color (comp->start, comp->len,
 						&bl->font_color);
 				msg_debug_html ("got color: %xd", bl->font_color.d.val);
+				break;
+			case RSPAMD_HTML_COMPONENT_OPACITY:
+				rspamd_strlcpy (numbuf, comp->start,
+						MIN (sizeof (numbuf), comp->len + 1));
+				opacity = strtod (numbuf, NULL);
+
+				if (opacity > 1) {
+					opacity = 1;
+				}
+				else if (opacity < 0) {
+					opacity = 0;
+				}
+
+				bl->font_color.d.comp.alpha = (guint8)(opacity * 255.0);
 				break;
 			default:
 				/* NYI */
@@ -2462,8 +2496,10 @@ rspamd_html_propagate_style (struct html_content *hc,
 
 	/* Set bgcolor to the html bgcolor and font color to black as a last resort */
 	if (!bl->font_color.valid) {
-		bl->font_color.d.val = 0;
-		bl->font_color.d.comp.alpha = 255;
+		/* Don't touch opacity as it can be set separately */
+		bl->font_color.d.comp.r = 0;
+		bl->font_color.d.comp.g = 0;
+		bl->font_color.d.comp.b = 0;
 		bl->font_color.valid = TRUE;
 	}
 
@@ -2951,13 +2987,21 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						rspamd_html_process_block_tag (pool, cur_tag, hc);
 						bl = cur_tag->extra;
 
-						if (bl && !bl->visible) {
-							state = content_ignore;
-						}
-
 						if (bl) {
 							rspamd_html_propagate_style (hc, cur_tag,
 									cur_tag->extra, styles_blocks);
+
+							/* Check visibility */
+							if (bl->font_size < 3 ||
+								bl->font_color.d.comp.alpha < 10) {
+
+								bl->visible = FALSE;
+								msg_debug_html ("tag is not visible");
+							}
+
+							if (!bl->visible) {
+								state = content_ignore;
+							}
 						}
 					}
 				}
