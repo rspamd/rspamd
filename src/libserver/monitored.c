@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
+#include <contrib/librdns/rdns.h>
 #include "rdns.h"
 #include "mem_pool.h"
 #include "cfg_file.h"
 #include "cryptobox.h"
 #include "logger.h"
+#include "contrib/uthash/utlist.h"
 
 static const gdouble default_monitoring_interval = 60.0;
 static const guint default_max_errors = 3;
@@ -272,6 +274,8 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 {
 	struct rspamd_dns_monitored_conf *conf = arg;
 	struct rspamd_monitored *m;
+	struct rdns_reply_entry *cur;
+	gboolean is_special_reply = FALSE;
 	gdouble lat;
 
 	m = conf->m;
@@ -297,11 +301,30 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 					rspamd_monitored_propagate_success (m, lat);
 				}
 				else {
-					msg_info_mon ("DNS reply returned '%s' for %s while '%s' "
-							"was expected",
-							rdns_strerror (reply->code),
-							m->url,
-							rdns_strerror (conf->expected_code));
+					LL_FOREACH (reply->entries, cur) {
+						if (cur->type == RDNS_REQUEST_A) {
+							if ((guint32)cur->content.a.addr.s_addr ==
+								INADDR_LOOPBACK) {
+								is_special_reply = TRUE;
+							}
+						}
+					}
+
+					if (is_special_reply) {
+						msg_info_mon ("DNS query blocked on %s "
+									  "(127.0.0.1 returned), "
+									  "possibly due to high volume",
+								m->url);
+					}
+					else {
+						msg_info_mon ("DNS reply returned '%s' for %s while '%s' "
+									  "was expected "
+									  "(likely DNS spoofing or BL internal issues)",
+								rdns_strerror (reply->code),
+								m->url,
+								rdns_strerror (conf->expected_code));
+					}
+
 					rspamd_monitored_propagate_error (m, "invalid return");
 				}
 			}
