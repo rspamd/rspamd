@@ -1164,9 +1164,6 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 			if (g_ascii_strncasecmp (p, "bgcolor", len) == 0) {
 				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_BGCOLOR);
 			}
-			else if (g_ascii_strncasecmp (p, "opacity", len) == 0) {
-				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_OPACITY);
-			}
 		}
 		else if (len == 4) {
 			if (g_ascii_strncasecmp (p, "size", len) == 0) {
@@ -2323,20 +2320,6 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				rspamd_html_process_color (comp->start, comp->len,
 						&bl->font_color);
 				msg_debug_html ("got color: %xd", bl->font_color.d.val);
-				break;
-			case RSPAMD_HTML_COMPONENT_OPACITY:
-				rspamd_strlcpy (numbuf, comp->start,
-						MIN (sizeof (numbuf), comp->len + 1));
-				opacity = strtod (numbuf, NULL);
-
-				if (opacity > 1) {
-					opacity = 1;
-				}
-				else if (opacity < 0) {
-					opacity = 0;
-				}
-
-				bl->font_color.d.comp.alpha = (guint8)(opacity * 255.0);
 				break;
 			default:
 				/* NYI */
