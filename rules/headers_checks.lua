@@ -223,6 +223,7 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
             if (to and to[1] and to[1].addr:lower() == rt[1].addr:lower()) then
                 -- Ignore this for mailing-lists and automatic submissions
                 if (not (task:get_header('List-Unsubscribe') or
+                         task:get_header('X-To-Get-Off-This-List') or
                          task:get_header('X-List') or
                          task:get_header('Auto-Submitted'))) 
                 then
