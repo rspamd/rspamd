@@ -1,0 +1,132 @@
+references:
+  - &defaults
+    docker:
+      - image: circleci/ruby:latest
+
+  - &workspace_root
+    ~/
+
+  - &capture_coverage_data
+    run:
+      name: Capturing coverage data
+      command: |
+        set -e
+        sudo apt-get install -qq lcov
+        gem install coveralls-lcov
+        lcov --no-external -b ../project -d ../project -c --output-file coverage.${CIRCLE_JOB}.info
+
+  - &restore_coverage_data
+    restore_cache:
+      keys:
+        - coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
+
+  - &merge_and_upload_coverage_data
+    run:
+      name: Merging and uploading coverage data
+      command: |
+        set -e
+        if [ -f ~/project/coverage.rspamd-test.info ] && [ -f ~/project/coverage.functional.info ]; then
+            sudo apt-get install -qq lcov
+            lcov -a ~/project/coverage.rspamd-test.info -t rspamd-test -a ~/project/coverage.functional.info -t functional -o coverage.info
+            gem install coveralls-lcov
+            if [ ! -z $COVERALLS_REPO_TOKEN ]; then coveralls-lcov -t ${COVERALLS_REPO_TOKEN} coverage.info || true; fi
+        fi
+
+version: 2
+jobs:
+  build:
+    <<: *defaults
+    steps:
+      - checkout
+
+      - run: sudo apt-get update -qq || true
+      - run: sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel
+
+      - run: mkdir ../build ; mkdir ../install ; cd ../build
+      - run: cmake ../project -DDBDIR=/nana -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=../install -DENABLE_HIREDIS=ON
+
+      - run: make install -j`nproc`
+
+      - persist_to_workspace:
+          root: *workspace_root
+          paths:
+            - project
+            - build
+            - install
+
+  rspamd-test:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: *workspace_root
+
+      - run: sudo apt-get update -qq || true
+      - run: sudo apt-get install -qq cmake libluajit-5.1-dev libmagic-dev
+
+      - run: cd ../build
+      - run: make rspamd-test -j`nproc`
+      - run: set +e; test/rspamd-test -p /rspamd/lua; echo "export RETURN_CODE=$?" >> $BASH_ENV
+
+      - *capture_coverage_data
+
+      # Share coverage data between jobs
+      - save_cache:
+          key: coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
+          paths:
+            - coverage.rspamd-test.info
+      - *restore_coverage_data
+
+      - *merge_and_upload_coverage_data
+
+      - run: (exit $RETURN_CODE)
+
+  functional:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: *workspace_root
+
+      - run: sudo apt-get update -qq || true
+      - run: sudo apt-get install -qq libluajit-5.1-dev libpcre3-dev luarocks opendkim-tools python-pip redis-server
+
+      - run: sudo pip install demjson psutil robotframework
+      - run: sudo luarocks install luacheck
+
+      - run: cd ../build
+      - run: set +e; RSPAMD_INSTALLROOT=../install sudo -E robot -x xunit.xml --exclude isbroken ../project/test/functional/cases; echo "export RETURN_CODE=$?" >> $BASH_ENV
+
+      - *capture_coverage_data
+
+      # Share coverage data between jobs
+      - save_cache:
+          key: coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
+          paths:
+            - coverage.functional.info
+      - *restore_coverage_data
+
+      - *merge_and_upload_coverage_data
+
+      - store_artifacts:
+          path: output.xml
+      - store_artifacts:
+          path: log.html
+      - store_artifacts:
+          path: report.html
+
+      - run: mkdir -p test-results; mv xunit.xml test-results
+      - store_test_results:
+          path: test-results
+
+      - run: (exit $RETURN_CODE)
+
+workflows:
+  version: 2
+  build-and-test:
+    jobs:
+      - build
+      - rspamd-test:
+          requires:
+            - build
+      - functional:
+          requires:
+            - build
