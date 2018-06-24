@@ -2233,6 +2233,15 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 
 						bl->font_color.d.comp.alpha = (guint8)(opacity * 255.0);
 					}
+					else if (klen == 10 &&
+							 g_ascii_strncasecmp (key, "visibility", 10) == 0) {
+						if (p - c >= 6 && rspamd_substring_search_caseless (c,
+								p - c,
+								"hidden", 6) != -1) {
+							bl->visible = FALSE;
+							msg_debug_html ("tag is not visible");
+						}
+					}
 				}
 
 				key = NULL;
@@ -2266,8 +2275,6 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 	struct html_block *bl;
 	rspamd_ftok_t fstr;
 	GList *cur;
-	gdouble opacity = 1.0;
-	gchar numbuf[64];
 
 	cur = tag->params->head;
 	bl = rspamd_mempool_alloc0 (pool, sizeof (*bl));
