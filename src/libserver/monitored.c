@@ -304,7 +304,7 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 					LL_FOREACH (reply->entries, cur) {
 						if (cur->type == RDNS_REQUEST_A) {
 							if ((guint32)cur->content.a.addr.s_addr ==
-								INADDR_LOOPBACK) {
+									htonl (INADDR_LOOPBACK)) {
 								is_special_reply = TRUE;
 							}
 						}
