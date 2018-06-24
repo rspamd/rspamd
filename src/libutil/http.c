@@ -850,7 +850,8 @@ rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 
 	if (!rspamd_cryptobox_decrypt_nm_inplace (m, dec_len, nonce,
 			nm, m - rspamd_cryptobox_mac_bytes (mode), mode)) {
-		msg_err ("cannot verify encrypted message");
+		msg_err ("cannot verify encrypted message, first bytes of the input: %*xs",
+				(gint)MIN(msg->body_buf.len, 64), msg->body_buf.begin);
 		return -1;
 	}
 
@@ -3934,5 +3935,26 @@ rspamd_http_normalize_path_inplace (gchar *path, guint len, guint *nlen)
 
 	if (nlen) {
 		*nlen = (o - path);
+	}
+}
+
+void
+rspamd_http_connection_disable_encryption (struct rspamd_http_connection *conn)
+{
+	struct rspamd_http_connection_private *priv;
+
+	priv = conn->priv;
+
+	if (priv) {
+		if (priv->local_key) {
+			rspamd_keypair_unref (priv->local_key);
+		}
+		if (priv->peer_key) {
+			rspamd_pubkey_unref (priv->peer_key);
+		}
+
+		priv->local_key = NULL;
+		priv->peer_key = NULL;
+		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 	}
 }

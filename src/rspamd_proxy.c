@@ -1499,10 +1499,10 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 	struct rspamd_proxy_session *session;
 
 	session = bk_conn->s;
-	msg_info_session ("abnormally closing connection from backend: %s, error: %s,"
+	msg_info_session ("abnormally closing connection from backend: %s, error: %e,"
 			" retries left: %d",
 		rspamd_inet_address_to_string (rspamd_upstream_addr (session->master_conn->up)),
-		err->message,
+		err,
 		session->ctx->max_retries - session->retries);
 	session->retries ++;
 	rspamd_upstream_fail (bk_conn->up);
