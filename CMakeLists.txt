@@ -673,7 +673,7 @@ ProcessPackage(LIBZ LIBRARY z INCLUDE zlib.h INCLUDE_SUFFIXES include/zlib
 
 IF(ENABLE_HYPERSCAN MATCHES "ON")
 	ProcessPackage(HYPERSCAN LIBRARY hs INCLUDE hs.h INCLUDE_SUFFIXES
-			include/hyperscan include/hs
+			hs include/hs
 			ROOT ${HYPERSCAN_ROOT_DIR} MODULES hs)
 	SET(WITH_HYPERSCAN 1)
 ENDIF()
