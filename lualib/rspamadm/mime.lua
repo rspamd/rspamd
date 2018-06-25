@@ -72,6 +72,8 @@ extract:option "-o --output"
           decoded_utf = "raw_utf"
        }
        :default "content"
+extract:flag "-w --words"
+       :description "Extracts words"
 
 
 local stat = parser:command "stat st s"
@@ -185,9 +187,19 @@ end
 
 local function extract_handler(opts)
   local out_elts = {}
+
+  if opts.words then
+    -- Enable stemming
+    rspamd_config:init_subsystem('langdet')
+  end
+
   for _,fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     out_elts[fname] = {}
+
+    if not opts.text and not opts.html then
+      parser:error('please select html or text part to be extracted')
+    end
 
     if opts.text or opts.html then
       local tp = task:get_text_parts() or {}
@@ -195,9 +207,17 @@ local function extract_handler(opts)
       for _,part in ipairs(tp) do
         local how = opts.output
         if opts.text and not part:is_html() then
-          table.insert(out_elts[fname], tostring(part:get_content(how)))
+          if opts.words then
+            table.insert(out_elts[fname], table.concat(part:get_words(), ' '))
+          else
+            table.insert(out_elts[fname], tostring(part:get_content(how)))
+          end
         elseif opts.html and part:is_html() then
-          table.insert(out_elts[fname], tostring(part:get_content(how)))
+          if opts.words then
+            table.insert(out_elts[fname], table.concat(part:get_words(), ' '))
+          else
+            table.insert(out_elts[fname], tostring(part:get_content(how)))
+          end
         end
       end
     end
