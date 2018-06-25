@@ -1629,11 +1629,14 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 }
 
 static struct rspamd_url *
-rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
+rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag,
+		struct html_content *hc)
 {
 	struct html_tag_component *comp;
 	GList *cur;
 	struct rspamd_url *url;
+	const gchar *start;
+	gsize len;
 
 	cur = tag->params->head;
 
@@ -1641,7 +1644,40 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
 		comp = cur->data;
 
 		if (comp->type == RSPAMD_HTML_COMPONENT_HREF && comp->len > 0) {
-			url = rspamd_html_process_url (pool, comp->start, comp->len, comp);
+			start = comp->start;
+			len = comp->len;
+
+			/* Check base url */
+			if (hc && hc->base_url && comp->len > 0) {
+				/*
+				 * Relative url canot start from the following:
+				 * schema://
+				 * slash
+				 */
+
+				if (comp->start[0] != '/' &&
+					rspamd_substring_search (start, len, "://", 3) == -1) {
+					/* Assume relative url */
+					gchar *buf;
+					gboolean need_slash = FALSE;
+
+					len += hc->base_url->urllen;
+
+					if (hc->base_url->string[hc->base_url->urllen - 1] != '/') {
+						need_slash = TRUE;
+						len ++;
+					}
+
+					buf = rspamd_mempool_alloc (pool, len + 1);
+					rspamd_snprintf (buf, len + 1, "%*s%s%*s",
+							hc->base_url->urllen, hc->base_url->string,
+							need_slash ? "/" : "",
+							(gint)len, start);
+					start = buf;
+				}
+			}
+
+			url = rspamd_html_process_url (pool, start, len, comp);
 
 			if (url && tag->extra == NULL) {
 				tag->extra = url;
@@ -2889,7 +2925,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 
 				if (cur_tag->id == Tag_A || cur_tag->id == Tag_IFRAME) {
 					if (!(cur_tag->flags & (FL_CLOSING))) {
-						url = rspamd_html_process_url_tag (pool, cur_tag);
+						url = rspamd_html_process_url_tag (pool, cur_tag, hc);
 
 						if (url != NULL) {
 
@@ -2958,7 +2994,28 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 					}
 				}
 				else if (cur_tag->id == Tag_LINK) {
-					url = rspamd_html_process_url_tag (pool, cur_tag);
+					url = rspamd_html_process_url_tag (pool, cur_tag, hc);
+				}
+				else if (cur_tag->id == Tag_BASE && !(cur_tag->flags & (FL_CLOSING))) {
+					struct html_tag *prev_tag = NULL;
+
+					if (cur_level && cur_level->parent) {
+						prev_tag = cur_level->parent->data;
+					}
+
+					/*
+					 * Base is allowed only within head tag but we slightly
+					 * relax that
+					 */
+					if (!prev_tag || prev_tag->id == Tag_HEAD ||
+						prev_tag->id == Tag_HTML) {
+						url = rspamd_html_process_url_tag (pool, cur_tag, hc);
+
+						if (url != NULL) {
+							/* We have a base tag available */
+							hc->base_url = url;
+						}
+					}
 				}
 
 				if (cur_tag->id == Tag_IMG && !(cur_tag->flags & FL_CLOSING)) {

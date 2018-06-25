@@ -107,6 +107,7 @@ struct html_tag {
 struct rspamd_task;
 
 struct html_content {
+	struct rspamd_url *base_url;
 	GNode *html_tags;
 	gint flags;
 	guint total_tags;
