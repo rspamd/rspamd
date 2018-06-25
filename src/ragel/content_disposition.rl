@@ -1,6 +1,5 @@
 %%{
   machine content_disposition;
-  include smtp_whitespace "smtp_whitespace.rl";
 
   # https://tools.ietf.org/html/rfc2045#section-5.1
 

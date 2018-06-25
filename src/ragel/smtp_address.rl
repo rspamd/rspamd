@@ -1,9 +1,6 @@
 %%{
   machine smtp_address;
 
-  include smtp_ip "smtp_ip.rl";
-  include smtp_whitespace "smtp_whitespace.rl";
-
   # SMTP address spec
   # Obtained from: https://tools.ietf.org/html/rfc5321#section-4.1.2
 
