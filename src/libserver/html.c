@@ -1514,7 +1514,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 
 	/* Strip spaces from the url */
 	/* Head spaces */
-	while ( p < start + len && g_ascii_isspace (*p)) {
+	while (p < start + len && g_ascii_isspace (*p)) {
 		p ++;
 		start ++;
 		len --;
@@ -1648,19 +1648,21 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 			len = comp->len;
 
 			/* Check base url */
-			if (hc && hc->base_url && comp->len > 0) {
+			if (hc && hc->base_url && comp->len > 2) {
 				/*
 				 * Relative url canot start from the following:
 				 * schema://
 				 * slash
 				 */
+				gchar *buf;
+				gsize orig_len;
 
-				if (comp->start[0] != '/' &&
-					rspamd_substring_search (start, len, "://", 3) == -1) {
+				if (rspamd_substring_search (start, len, "://", 3) == -1) {
 					/* Assume relative url */
-					gchar *buf;
+
 					gboolean need_slash = FALSE;
 
+					orig_len = len;
 					len += hc->base_url->urllen;
 
 					if (hc->base_url->string[hc->base_url->urllen - 1] != '/') {
@@ -1672,7 +1674,19 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 					rspamd_snprintf (buf, len + 1, "%*s%s%*s",
 							hc->base_url->urllen, hc->base_url->string,
 							need_slash ? "/" : "",
-							(gint)len, start);
+							(gint)orig_len, start);
+					start = buf;
+				}
+				else if (start[0] == '/' && start[1] != '/') {
+					/* Relative to the hostname */
+					orig_len = len;
+					len += hc->base_url->hostlen + hc->base_url->protocollen +
+							3 /* for :// */;
+					buf = rspamd_mempool_alloc (pool, len + 1);
+					rspamd_snprintf (buf, len + 1, "%*s://%*s/%*s",
+							hc->base_url->protocollen, hc->base_url->protocol,
+							hc->base_url->hostlen, hc->base_url->host,
+							(gint)orig_len, start);
 					start = buf;
 				}
 			}
