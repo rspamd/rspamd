@@ -55,12 +55,10 @@ extract:argument "file"
        :argname "<file>"
        :args "+"
 
-extract:mutex(
-    extract:flag "-t --text"
-           :description "Extracts plain text data from a message",
-    extract:flag "-H --html"
-           :description "Extracts htm data from a message"
-)
+extract:flag "-t --text"
+       :description "Extracts plain text data from a message"
+extract:flag "-H --html"
+       :description "Extracts htm data from a message"
 extract:option "-o --output"
        :description "Output format ('raw', 'content', 'oneline', 'decoded', 'decoded_utf')"
        :argname("<type>")
@@ -74,6 +72,8 @@ extract:option "-o --output"
        :default "content"
 extract:flag "-w --words"
        :description "Extracts words"
+extract:flag "-p --part"
+       :description "Show part info"
 
 
 local stat = parser:command "stat st s"
@@ -193,12 +193,43 @@ local function extract_handler(opts)
     rspamd_config:init_subsystem('langdet')
   end
 
+  local function maybe_print_part_info(part, out)
+    local fun = require "fun"
+    if opts.part then
+      local t = 'plain text'
+      if part:is_html() then
+        t = 'html'
+      end
+
+      if not opts.json and not opts.ucl then
+        table.insert(out,
+            rspamd_logger.slog('Part: %s: %s, language: %s, size: %s (%s raw), words: %s',
+            part:get_mimepart():get_digest():sub(1,8),
+            t,
+            part:get_language(),
+            part:get_length(), part:get_raw_length(),
+            part:get_words_count()))
+        table.insert(out,
+            rspamd_logger.slog('Stats: %s',
+            fun.foldl(function(acc, k, v)
+              if acc ~= '' then
+                return string.format('%s, %s:%s', acc, k, v)
+              else
+                return string.format('%s:%s', k,v)
+              end
+            end, '', part:get_stats())))
+        table.insert(out, '\n')
+      end
+    end
+  end
+
   for _,fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     out_elts[fname] = {}
 
     if not opts.text and not opts.html then
-      parser:error('please select html or text part to be extracted')
+      opts.text = true
+      opts.html = true
     end
 
     if opts.text or opts.html then
@@ -207,12 +238,14 @@ local function extract_handler(opts)
       for _,part in ipairs(tp) do
         local how = opts.output
         if opts.text and not part:is_html() then
+          maybe_print_part_info(part, out_elts[fname])
           if opts.words then
             table.insert(out_elts[fname], table.concat(part:get_words(), ' '))
           else
             table.insert(out_elts[fname], tostring(part:get_content(how)))
           end
         elseif opts.html and part:is_html() then
+          maybe_print_part_info(part, out_elts[fname])
           if opts.words then
             table.insert(out_elts[fname], table.concat(part:get_words(), ' '))
           else
