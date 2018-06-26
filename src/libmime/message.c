@@ -607,7 +607,7 @@ rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part
 		g_assert (rspamd_multipattern_compile (gtube_matcher, NULL));
 	}
 
-	if (part->content && part->content->len > sizeof (gtube_pattern_reject) &&
+	if (part->content && part->content->len >= sizeof (gtube_pattern_reject) &&
 			part->content->len <= max_check_size) {
 		if ((ret = rspamd_multipattern_lookup (gtube_matcher, part->content->data,
 				part->content->len,
