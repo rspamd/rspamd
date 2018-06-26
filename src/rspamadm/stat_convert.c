@@ -251,7 +251,8 @@ rspamadm_statconvert (gint argc, gchar **argv, const struct rspamadm_command *cm
 			argc,
 			argv,
 			obj,
-			"stat_convert");
+			"stat_convert",
+			TRUE);
 
 	ucl_object_unref (obj);
 }

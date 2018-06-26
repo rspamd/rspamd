@@ -110,7 +110,8 @@ rspamadm_confighelp_show (struct rspamd_config *cfg, gint argc, gchar **argv,
 				argc,
 				argv,
 				obj,
-				"confighelp");
+				"confighelp",
+				TRUE);
 
 		rspamd_fstring_free (out);
 		return;
