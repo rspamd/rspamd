@@ -74,6 +74,8 @@ extract:flag "-w --words"
        :description "Extracts words"
 extract:flag "-p --part"
        :description "Show part info"
+extract:flag "-s --structure"
+       :description "Show structure info (e.g. HTML tags)"
 
 
 local stat = parser:command "stat st s"
@@ -187,6 +189,7 @@ end
 
 local function extract_handler(opts)
   local out_elts = {}
+  local process_func
 
   if opts.words then
     -- Enable stemming
@@ -249,7 +252,30 @@ local function extract_handler(opts)
           if opts.words then
             table.insert(out_elts[fname], table.concat(part:get_words(), ' '))
           else
-            table.insert(out_elts[fname], tostring(part:get_content(how)))
+            if opts.structure then
+              local hc = part:get_html()
+              local res = {}
+              process_func = function(k, v)
+                return rspamd_logger.slog("%s = %s", k, v)
+              end
+
+              hc:foreach_tag('any', function(tag)
+                local elt = {}
+                local ex = tag:get_extra()
+                elt.tag = tag:get_type()
+                if ex then
+                  elt.extra = ex
+                end
+                local content = tag:get_content()
+                if content then
+                  elt.content = content
+                end
+                table.insert(res, elt)
+              end)
+              out_elts[fname] = res
+            else
+              table.insert(out_elts[fname], tostring(part:get_content(how)))
+            end
           end
         end
       end
@@ -260,7 +286,7 @@ local function extract_handler(opts)
     task:destroy() -- No automatic dtor
   end
 
-  print_elts(out_elts, opts)
+  print_elts(out_elts, opts, process_func)
 end
 
 local function stat_handler(opts)

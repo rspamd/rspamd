@@ -492,7 +492,7 @@ lua_html_foreach_tag (lua_State *L)
 		lua_pop (L, 1);
 	}
 
-	if (hc && g_hash_table_size (ud.tags) > 0 && lua_isfunction (L, 3)) {
+	if (hc && (ud.any || g_hash_table_size (ud.tags) > 0) && lua_isfunction (L, 3)) {
 		if (hc->html_tags) {
 
 			lua_pushvalue (L, 3);
