@@ -154,7 +154,6 @@ Run Rspamd
   Wait Until Keyword Succeeds  30 sec  1 sec  Check Pidfile  ${tmpdir}/rspamd.pid
   ${rspamd_pid} =  Get File  ${tmpdir}/rspamd.pid
   Set To Dictionary  ${d}  RSPAMD_LOGPOS=${rspamd_logpos}  RSPAMD_PID=${rspamd_pid}  TMPDIR=${tmpdir}
-  Sleep  1s  Give a moment to read maps
   [Return]  &{d}
 
 Scan Message With Rspamc
