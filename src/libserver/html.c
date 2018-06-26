@@ -1893,6 +1893,7 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 		p ++;
 		rspamd_strlcpy (hexbuf, p, MIN ((gint)sizeof(hexbuf), end - p + 1));
 		cl->d.val = strtoul (hexbuf, NULL, 16);
+		cl->d.comp.alpha = 255;
 		cl->valid = TRUE;
 	}
 	else if (len > 4 && rspamd_lc_cmp (p, "rgb", 3) == 0) {
@@ -1902,9 +1903,10 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 			num1,
 			num2,
 			num3,
+			num4,
 			skip_spaces
 		} state = skip_spaces, next_state = obrace;
-		gulong r = 0, g = 0, b = 0;
+		gulong r = 0, g = 0, b = 0, opacity = 255;
 		const gchar *c;
 		gboolean valid = FALSE;
 
@@ -1973,6 +1975,40 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 					}
 
 					valid = TRUE;
+					p ++;
+					state = skip_spaces;
+					next_state = num4;
+				}
+				else if (*p == ')') {
+					if (!rspamd_strtoul (c, p - c, &b)) {
+						goto stop;
+					}
+
+					valid = TRUE;
+					goto stop;
+				}
+				else if (!g_ascii_isdigit (*p)) {
+					goto stop;
+				}
+				else {
+					p ++;
+				}
+				break;
+			case num4:
+				if (*p == ',') {
+					if (!rspamd_strtoul (c, p - c, &opacity)) {
+						goto stop;
+					}
+
+					valid = TRUE;
+					goto stop;
+				}
+				else if (*p == ')') {
+					if (!rspamd_strtoul (c, p - c, &opacity)) {
+						goto stop;
+					}
+
+					valid = TRUE;
 					goto stop;
 				}
 				else if (!g_ascii_isdigit (*p)) {
@@ -1997,7 +2033,10 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 		stop:
 
 		if (valid) {
-			cl->d.val = b + (g << 8) + (r << 16);
+			cl->d.comp.r = r;
+			cl->d.comp.g = g;
+			cl->d.comp.b = b;
+			cl->d.comp.alpha = opacity;
 			cl->valid = TRUE;
 		}
 	}
@@ -2010,6 +2049,7 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 
 		if (el != NULL) {
 			memcpy (cl, el, sizeof (*cl));
+			cl->d.comp.alpha = 255; /* Non transparent */
 		}
 	}
 }
