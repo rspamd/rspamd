@@ -850,7 +850,11 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 			ret = FALSE;
 		}
 
-		return rspamd_symbols_cache_validate (cfg->cache, cfg, FALSE) && ret;
+		ret = rspamd_symbols_cache_validate (cfg->cache, cfg, FALSE) && ret;
+	}
+
+	if (opts & RSPAMD_CONFIG_INIT_PRELOAD_MAPS) {
+		rspamd_map_preload (cfg);
 	}
 
 	return ret;

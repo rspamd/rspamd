@@ -846,7 +846,8 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 			return FALSE;
 		}
 		else {
-			msg_info_map ("%s: map file is not found",
+			msg_info_map ("%s: map file is not found; "
+						  "it will be read automatically if created",
 					data->filename);
 			return TRUE;
 		}
@@ -1003,6 +1004,9 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 		/* Empty map */
 		map->read_callback (NULL, 0, &periodic->cbdata, TRUE);
 	}
+
+	/* Also update at the read time */
+	memcpy (&data->st, &st, sizeof (struct stat));
 
 	return TRUE;
 }
@@ -1724,6 +1728,73 @@ rspamd_map_watch (struct rspamd_config *cfg,
 		}
 
 		rspamd_map_schedule_periodic (map, FALSE, TRUE, FALSE);
+
+		cur = g_list_next (cur);
+	}
+}
+
+void
+rspamd_map_preload (struct rspamd_config *cfg)
+{
+	GList *cur = cfg->maps;
+	struct rspamd_map *map;
+	struct rspamd_map_backend *bk;
+	guint i;
+	gboolean map_ok;
+
+	/* First of all do synced read of data */
+	while (cur) {
+		map = cur->data;
+		map_ok = TRUE;
+
+		PTR_ARRAY_FOREACH (map->backends, i, bk) {
+			if (!(bk->protocol == MAP_PROTO_FILE ||
+				  bk->protocol == MAP_PROTO_STATIC)) {
+				map_ok = FALSE;
+				break;
+			}
+		}
+
+		if (map_ok) {
+			struct map_periodic_cbdata fake_cbd;
+			gboolean succeed = TRUE;
+
+			memset (&fake_cbd, 0, sizeof (fake_cbd));
+
+			PTR_ARRAY_FOREACH (map->backends, i, bk) {
+				fake_cbd.cbdata.state = 0;
+				fake_cbd.cbdata.prev_data = *map->user_data;
+				fake_cbd.cbdata.cur_data = NULL;
+				fake_cbd.cbdata.map = map;
+				fake_cbd.map = map;
+				fake_cbd.cur_backend = i;
+
+				if (bk->protocol == MAP_PROTO_FILE) {
+					if (!read_map_file (map, bk->data.fd, bk, &fake_cbd)) {
+						succeed = FALSE;
+						break;
+					}
+				}
+				else if (bk->protocol == MAP_PROTO_STATIC) {
+					if (!read_map_static (map, bk->data.sd, bk, &fake_cbd)) {
+						succeed = FALSE;
+						break;
+					}
+				}
+				else {
+					g_assert_not_reached ();
+				}
+			}
+
+			if (succeed) {
+				map->fin_callback (&fake_cbd.cbdata);
+
+				if (fake_cbd.cbdata.cur_data) {
+					*map->user_data = fake_cbd.cbdata.cur_data;
+				}
+			}
+
+		}
 
 		cur = g_list_next (cur);
 	}

@@ -85,6 +85,12 @@ void rspamd_map_watch (struct rspamd_config *cfg,
 					   gboolean active_http);
 
 /**
+ * Preloads maps where all backends are file
+ * @param cfg
+ */
+void rspamd_map_preload (struct rspamd_config *cfg);
+
+/**
  * Remove all maps watched (remove events)
  */
 void rspamd_map_remove_all (struct rspamd_config *cfg);

@@ -305,6 +305,7 @@ reread_config (struct rspamd_main *rspamd_main)
 		REF_RELEASE (tmp_cfg);
 	}
 	else {
+		rspamd_map_preload (rspamd_main->cfg);
 		msg_info_main ("replacing config");
 		REF_RELEASE (old_cfg);
 		msg_info_main ("config has been reread successfully");
