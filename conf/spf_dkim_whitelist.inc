@@ -186,6 +186,7 @@ taleo.net
 taobao.com
 target.com
 taringa.net
+taxi.yandex.ru
 tele2.ru
 thekitchn.com
 tokopedia.com
