@@ -3025,7 +3025,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						prev_tag->id == Tag_HTML) {
 						url = rspamd_html_process_url_tag (pool, cur_tag, hc);
 
-						if (url != NULL) {
+						if (url != NULL && hc->base_url == NULL) {
 							/* We have a base tag available */
 							hc->base_url = url;
 						}
