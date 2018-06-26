@@ -827,8 +827,9 @@ static gboolean
 read_map_file (struct rspamd_map *map, struct file_map_data *data,
 		struct rspamd_map_backend *bk, struct map_periodic_cbdata *periodic)
 {
-	guchar *bytes;
+	gchar *bytes;
 	gsize len;
+	struct stat st;
 
 	if (map->read_callback == NULL || map->fin_callback == NULL) {
 		msg_err_map ("%s: bad callback for reading map file",
@@ -836,7 +837,7 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 		return FALSE;
 	}
 
-	if (access (data->filename, R_OK) == -1) {
+	if (stat (data->filename, &st) == -1) {
 		/* File does not exist, skipping */
 		if (errno != ENOENT) {
 			msg_err_map ("%s: map file is unavailable for reading: %s",
@@ -851,23 +852,34 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 		}
 	}
 
-	bytes = rspamd_file_xmap (data->filename, PROT_READ, &len, TRUE);
-
-	if (bytes == NULL) {
-		msg_err_map ("can't open map %s: %s", data->filename, strerror (errno));
-		return FALSE;
-	}
+	len = st.st_size;
 
 	if (bk->is_signed) {
+		bytes = rspamd_file_xmap (data->filename, PROT_READ, &len, TRUE);
+
+		if (bytes == NULL) {
+			msg_err_map ("can't open map %s: %s", data->filename, strerror (errno));
+			return FALSE;
+		}
+
 		if (!rspamd_map_check_file_sig (data->filename, map, bk, bytes, len)) {
 			munmap (bytes, len);
 
 			return FALSE;
 		}
+
+		munmap (bytes, len);
 	}
 
 	if (len > 0) {
 		if (bk->is_compressed) {
+			bytes = rspamd_file_xmap (data->filename, PROT_READ, &len, TRUE);
+
+			if (bytes == NULL) {
+				msg_err_map ("can't open map %s: %s", data->filename, strerror (errno));
+				return FALSE;
+			}
+
 			ZSTD_DStream *zstream;
 			ZSTD_inBuffer zin;
 			ZSTD_outBuffer zout;
@@ -918,18 +930,79 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 					len, zout.pos);
 			map->read_callback (out, zout.pos, &periodic->cbdata, TRUE);
 			g_free (out);
+
+			munmap (bytes, len);
 		}
 		else {
-			msg_info_map ("%s: read map dat, %z bytes", data->filename,
-					len);
-			map->read_callback (bytes, len, &periodic->cbdata, TRUE);
+			/* Perform buffered read: fail-safe */
+			gint fd;
+			gssize r, avail;
+			gsize buflen = 1024 * 1024;
+			gchar *pos;
+
+			fd = rspamd_file_xopen (data->filename, O_RDONLY, 0, TRUE);
+
+			if (fd == -1) {
+				msg_err_map ("can't open map for buffered reading %s: %s",
+						data->filename, strerror (errno));
+				return FALSE;
+			}
+
+			buflen = MIN (len, buflen);
+			bytes = g_malloc (buflen);
+			avail = buflen;
+			pos = bytes;
+
+			while ((r = read (fd, pos, avail)) > 0) {
+				gchar *end = bytes + (pos - bytes) + r;
+				msg_info_map ("%s: read map chunk, %z bytes", data->filename,
+						r);
+				pos = map->read_callback (bytes, end - bytes,
+						&periodic->cbdata, r == len);
+
+				if (pos && pos > bytes && pos < end) {
+					guint remain = end - pos;
+
+					memmove (bytes, pos, remain);
+					pos = bytes + remain;
+					/* Need to preserve the remain */
+					avail = ((gssize)buflen) - remain;
+
+					if (avail <= 0) {
+						/* Try realloc, too large element */
+						g_assert (buflen >= remain);
+						bytes = g_realloc (bytes, buflen * 2);
+
+						pos = bytes + remain; /* Adjust */
+						avail += buflen;
+						buflen *= 2;
+					}
+				}
+				else {
+					avail = buflen;
+					pos = bytes;
+				}
+
+				len -= r;
+			}
+
+			if (r == -1) {
+				msg_err_map ("can't read from map %s: %s",
+						data->filename, strerror (errno));
+				close (fd);
+				g_free (bytes);
+
+				return FALSE;
+			}
+
+			close (fd);
+			g_free (bytes);
 		}
 	}
 	else {
+		/* Empty map */
 		map->read_callback (NULL, 0, &periodic->cbdata, TRUE);
 	}
-
-	munmap (bytes, len);
 
 	return TRUE;
 }
