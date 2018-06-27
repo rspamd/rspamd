@@ -44,7 +44,7 @@ reconf['DATA_URI_OBFU'] = {
 }
 
 reconf['INTRODUCTION'] = {
-  re = '/\\b(?:my name is\\b|(?:i am|this is)\\s+(?:mr|mrs|ms|miss|master|sir|prof(?:essor)?|d(?:octo)?r|rev(?:erend)?)(?:\\.|\\b))/{sa_body}i',
+  re = '/\\b(?:my name is\\b|(?:i am|this is)\\s+(?:mr|mrs|ms|miss|master|sir|barrister|prof(?:essor)?|d(?:octo)?r|rev(?:erend)?)(?:\\.|\\b))/{sa_body}i',
   description = "Sender introduces themselves",
   score = 2.0,
   one_shot = true,
