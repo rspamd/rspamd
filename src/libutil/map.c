@@ -1812,11 +1812,6 @@ rspamd_map_remove_all (struct rspamd_config *cfg)
 	for (cur = cfg->maps; cur != NULL; cur = g_list_next (cur)) {
 		map = cur->data;
 
-		for (i = 0; i < map->backends->len; i ++) {
-			bk = g_ptr_array_index (map->backends, i);
-			MAP_RELEASE (bk, "rspamd_map_backend");
-		}
-
 		if (g_atomic_int_compare_and_exchange (&map->cache->available, 1, 0)) {
 			if (map->cur_cache_cbd) {
 				MAP_RELEASE (map->cur_cache_cbd->shm, "rspamd_http_map_cached_cbdata");
@@ -1839,6 +1834,11 @@ rspamd_map_remove_all (struct rspamd_config *cfg)
 
 			map->dtor (&cbdata);
 			*map->user_data = NULL;
+		}
+
+		for (i = 0; i < map->backends->len; i ++) {
+			bk = g_ptr_array_index (map->backends, i);
+			MAP_RELEASE (bk, "rspamd_map_backend");
 		}
 	}
 
