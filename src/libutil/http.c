@@ -1740,11 +1740,6 @@ rspamd_http_detach_shared (struct rspamd_http_message *msg)
 {
 	rspamd_fstring_t *cpy_str;
 
-	if (msg->body_buf.c.shared.shm_fd != -1) {
-		close (msg->body_buf.c.shared.shm_fd);
-		msg->body_buf.c.shared.shm_fd = -1;
-	}
-
 	cpy_str = rspamd_fstring_new_init (msg->body_buf.begin, msg->body_buf.len);
 	rspamd_http_message_set_body_from_fstring_steal (msg, cpy_str);
 }
