@@ -1760,13 +1760,13 @@ rspamd_map_preload (struct rspamd_config *cfg)
 			gboolean succeed = TRUE;
 
 			memset (&fake_cbd, 0, sizeof (fake_cbd));
+			fake_cbd.cbdata.state = 0;
+			fake_cbd.cbdata.prev_data = *map->user_data;
+			fake_cbd.cbdata.cur_data = NULL;
+			fake_cbd.cbdata.map = map;
+			fake_cbd.map = map;
 
 			PTR_ARRAY_FOREACH (map->backends, i, bk) {
-				fake_cbd.cbdata.state = 0;
-				fake_cbd.cbdata.prev_data = *map->user_data;
-				fake_cbd.cbdata.cur_data = NULL;
-				fake_cbd.cbdata.map = map;
-				fake_cbd.map = map;
 				fake_cbd.cur_backend = i;
 
 				if (bk->protocol == MAP_PROTO_FILE) {
@@ -1792,6 +1792,9 @@ rspamd_map_preload (struct rspamd_config *cfg)
 				if (fake_cbd.cbdata.cur_data) {
 					*map->user_data = fake_cbd.cbdata.cur_data;
 				}
+			}
+			else {
+				msg_info_map ("preload of %s failed", map->name);
 			}
 
 		}
