@@ -306,7 +306,6 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 
 	gperf_profiler_init (worker->srv->cfg, name);
 
-	worker->srv->pid = getpid ();
 	worker->signal_events = g_hash_table_new_full (g_direct_hash, g_direct_equal,
 			NULL, rspamd_sigh_free);
 
