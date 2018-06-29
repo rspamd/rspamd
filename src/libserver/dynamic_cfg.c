@@ -175,7 +175,7 @@ json_config_fin_cb (struct map_cb_data *data)
 	ucl_object_t *top;
 	struct ucl_parser *parser;
 
-	if (data->prev_data) {
+	if (data->cur_data && data->prev_data) {
 		jb = data->prev_data;
 		/* Clean prev data */
 		if (jb->buf) {
@@ -190,7 +190,6 @@ json_config_fin_cb (struct map_cb_data *data)
 		jb = data->cur_data;
 	}
 	else {
-		msg_err ("no data read");
 		return;
 	}
 
