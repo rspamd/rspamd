@@ -25,6 +25,7 @@
  */
 struct RSPAMD_ALIGNED(32) rspamd_cryptobox_nm {
 	guchar RSPAMD_ALIGNED(32) nm[rspamd_cryptobox_MAX_NMBYTES];
+	guint64 sk_id; /* Used to store secret key id */
 	ref_entry_t ref;
 };
 

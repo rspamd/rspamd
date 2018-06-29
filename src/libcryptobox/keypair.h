@@ -139,7 +139,8 @@ enum rspamd_cryptobox_mode rspamd_pubkey_alg (struct rspamd_cryptobox_pubkey *p)
  * @param p
  * @return
  */
-const guchar * rspamd_pubkey_get_nm (struct rspamd_cryptobox_pubkey *p);
+const guchar * rspamd_pubkey_get_nm (struct rspamd_cryptobox_pubkey *p,
+									 struct rspamd_cryptobox_keypair *kp);
 
 /**
  * Calculate and store nm value for the specified local key (performs ECDH)

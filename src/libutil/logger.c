@@ -584,7 +584,7 @@ rspamd_log_encrypt_message (const gchar *begin, const gchar *end,
 	mac = p;
 	p += rspamd_cryptobox_mac_bytes (RSPAMD_CRYPTOBOX_MODE_25519);
 	memcpy (p, begin, end - begin);
-	comp = rspamd_pubkey_get_nm (rspamd_log->pk);
+	comp = rspamd_pubkey_get_nm (rspamd_log->pk, rspamd_log->keypair);
 	g_assert (comp != NULL);
 	rspamd_cryptobox_encrypt_nm_inplace (p, end - begin, nonce, comp, mac,
 			RSPAMD_CRYPTOBOX_MODE_25519);

@@ -1214,7 +1214,8 @@ fuzzy_encrypt_cmd (struct fuzzy_rule *rule,
 	rspamd_keypair_cache_process (fuzzy_module_ctx->keypairs_cache,
 			rule->local_key, rule->peer_key);
 	rspamd_cryptobox_encrypt_nm_inplace (data, datalen,
-			hdr->nonce, rspamd_pubkey_get_nm (rule->peer_key), hdr->mac,
+			hdr->nonce, rspamd_pubkey_get_nm (rule->peer_key, rule->local_key),
+			hdr->mac,
 			rspamd_pubkey_alg (rule->peer_key));
 }
 
@@ -1769,7 +1770,7 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 		if (!rspamd_cryptobox_decrypt_nm_inplace ((guchar *)&encrep.rep,
 				sizeof (encrep.rep),
 				encrep.hdr.nonce,
-				rspamd_pubkey_get_nm (rule->peer_key),
+				rspamd_pubkey_get_nm (rule->peer_key, rule->local_key),
 				encrep.hdr.mac,
 				rspamd_pubkey_alg (rule->peer_key))) {
 			msg_info ("cannot decrypt reply");

@@ -1060,7 +1060,7 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
 
 	/* Now decrypt request */
 	if (!rspamd_cryptobox_decrypt_nm_inplace (payload, payload_len, hdr->nonce,
-			rspamd_pubkey_get_nm (rk),
+			rspamd_pubkey_get_nm (rk, key->key),
 			hdr->mac, RSPAMD_CRYPTOBOX_MODE_25519)) {
 		msg_err ("decryption failed");
 		rspamd_pubkey_unref (rk);
@@ -1068,7 +1068,7 @@ rspamd_fuzzy_decrypt_command (struct fuzzy_session *s)
 		return FALSE;
 	}
 
-	memcpy (s->nm, rspamd_pubkey_get_nm (rk), sizeof (s->nm));
+	memcpy (s->nm, rspamd_pubkey_get_nm (rk, key->key), sizeof (s->nm));
 	rspamd_pubkey_unref (rk);
 
 	return TRUE;

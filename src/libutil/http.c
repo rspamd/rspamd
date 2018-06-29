@@ -844,7 +844,7 @@ rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 	dec_len = msg->body_buf.len - rspamd_cryptobox_nonce_bytes (mode) -
 			rspamd_cryptobox_mac_bytes (mode);
 
-	if ((nm = rspamd_pubkey_get_nm (peer_key)) == NULL) {
+	if ((nm = rspamd_pubkey_get_nm (peer_key, priv->local_key)) == NULL) {
 		nm = rspamd_pubkey_calculate_nm (peer_key, priv->local_key);
 	}
 
@@ -1703,7 +1703,7 @@ rspamd_http_connection_encrypt_message (
 
 	cnt = i;
 
-	if ((nm = rspamd_pubkey_get_nm (peer_key)) == NULL) {
+	if ((nm = rspamd_pubkey_get_nm (peer_key, priv->local_key)) == NULL) {
 		nm = rspamd_pubkey_calculate_nm (peer_key, priv->local_key);
 	}
 
