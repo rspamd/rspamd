@@ -30,6 +30,7 @@ override_dh_auto_configure:
 		-DENABLE_HIREDIS=ON \
 		-DENABLE_LUAJIT=ON \
 		-DENABLE_TORCH=ON \
+		-DENABLE_LIBUNWIND=ON \
 		-DWANT_SYSTEMD_UNITS=ON
 
 override_dh_makeshlibs:
