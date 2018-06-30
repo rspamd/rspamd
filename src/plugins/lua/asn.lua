@@ -78,7 +78,7 @@ local function asn_check(task)
   end
 
   local ip = task:get_from_ip()
-  if not (ip and ip:is_valid()) then return end
+  if not (ip and ip:is_valid()) or ip:is_local() then return end
   asn_check_func[options['provider_type']](ip)
 end
 
