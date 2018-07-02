@@ -1684,7 +1684,7 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 							3 /* for :// */;
 					buf = rspamd_mempool_alloc (pool, len + 1);
 					rspamd_snprintf (buf, len + 1, "%*s://%*s/%*s",
-							hc->base_url->protocollen, hc->base_url->protocol,
+							hc->base_url->protocollen, hc->base_url->string,
 							hc->base_url->hostlen, hc->base_url->host,
 							(gint)orig_len, start);
 					start = buf;
