@@ -115,7 +115,7 @@ function($, _, Humanize) {
 
     function process_history_v2(data) {
         // Display no more than rcpt_lim recipients
-        const rcpt_lim = 3;
+        var rcpt_lim = 3;
         var items = [];
 
         function getSelector(id) {
@@ -133,7 +133,7 @@ function($, _, Humanize) {
         $.each(data.rows,
           function (i, item) {
             function more(p) {
-                const l = item[p].length;
+                var l = item[p].length;
                 return (l > rcpt_lim) ? " … (" + l + ")" : "";
             }
             function format_rcpt(smtp, mime) {
@@ -556,7 +556,7 @@ function($, _, Humanize) {
         if (checked_server === "All SERVERS") {
             rspamd.queryNeighbours("history", function (req_data) {
                 function differentVersions() {
-                    const dv = neighbours_data.some(function (e) {
+                    var dv = neighbours_data.some(function (e) {
                         return e.version !== neighbours_data[0].version;
                     });
                     if (dv) {

@@ -165,7 +165,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
         }
 
         function alertMessage(alertClass, alertText) {
-            const a = $('<div class="alert ' + alertClass + ' alert-dismissible fade in show">' +
+            var a = $('<div class="alert ' + alertClass + ' alert-dismissible fade in show">' +
                 '<button type="button" class="close" data-dismiss="alert" title="Dismiss">&times;</button>' +
                 '<strong>' + alertText + '</strong>');
             $('.notification-area').append(a);

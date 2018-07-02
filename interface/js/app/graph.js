@@ -175,7 +175,7 @@ function($, D3Evolution, unused) {
             // Autoranging
             var scaleFactor = 1;
             var unit = "msg/s";
-            const yMax = d3.max(d3.merge(data), function (d) { return d.y; });
+            var yMax = d3.max(d3.merge(data), function (d) { return d.y; });
             if (yMax < 1) {
                 scaleFactor = 60;
                 unit = "msg/min";
