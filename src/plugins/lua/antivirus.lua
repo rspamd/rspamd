@@ -33,6 +33,8 @@ antivirus {
   clamav {
     # If set force this action if any virus is found (default unset: no action is forced)
     # action = "reject";
+    # If set, then rejection message is set to this value (mention single quotes)
+    # message = '${SCANNER}: virus found: "${VIRUS}"';
     # if `true` only messages with non-image attachments will be checked (default true)
     attachments_only = true;
     # If `max_size` is set, messages > n bytes in size are not scanned
@@ -63,6 +65,8 @@ antivirus {
 ]])
   return
 end
+
+local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
 local function match_patterns(default_sym, found, patterns)
   if type(patterns) ~= 'table' then return default_sym end
@@ -113,7 +117,10 @@ local function yield_result(task, rule, vname)
       vname = table.concat(vname, '; ')
     end
     task:set_pre_result(rule['action'],
-        string.format('%s: virus found: "%s"', rule['type'], vname))
+        lua_util.template(rule.message or 'Rejected', {
+          SCANNER = rule['type'],
+          VIRUS = vname,
+        }))
   end
 end
 
@@ -125,6 +132,7 @@ local function clamav_config(opts)
     timeout = 15.0,
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
+    message = default_message,
   }
 
   for k,v in pairs(opts) do
@@ -162,6 +170,7 @@ local function fprot_config(opts)
     log_clean = false,
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
+    message = default_message,
   }
 
   for k,v in pairs(opts) do
@@ -199,6 +208,7 @@ local function sophos_config(opts)
     log_clean = false,
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
+    message = default_message,
   }
 
   for k,v in pairs(opts) do
@@ -237,6 +247,7 @@ local function savapi_config(opts)
     timeout = 15.0,
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
+    message = default_message,
   }
 
   for k,v in pairs(opts) do
