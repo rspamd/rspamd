@@ -428,7 +428,7 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 }
 
 void
-rspamd_upstream_fail (struct upstream *up)
+rspamd_upstream_fail (struct upstream *up, gboolean addr_failure)
 {
 	gdouble error_rate, max_error_rate;
 	gdouble sec_last, sec_cur;
@@ -476,10 +476,12 @@ rspamd_upstream_fail (struct upstream *up)
 			}
 		}
 
-		/* Also increase count of errors for this specific address */
-		if (up->addrs.addr) {
-			addr_elt = g_ptr_array_index (up->addrs.addr, up->addrs.cur);
-			addr_elt->errors ++;
+		if (addr_failure) {
+			/* Also increase count of errors for this specific address */
+			if (up->addrs.addr) {
+				addr_elt = g_ptr_array_index (up->addrs.addr, up->addrs.cur);
+				addr_elt->errors++;
+			}
 		}
 
 		RSPAMD_UPSTREAM_UNLOCK (up->lock);

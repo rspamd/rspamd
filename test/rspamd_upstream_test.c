@@ -103,7 +103,7 @@ rspamd_upstream_test_func (void)
 	next_addr = rspamd_upstream_addr (up);
 	g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET6);
 	/* Test errors with IPv6 */
-	rspamd_upstream_fail (up);
+	rspamd_upstream_fail (up, TRUE);
 	/* Now we should have merely IPv4 addresses in rotation */
 	addr = rspamd_upstream_addr (up);
 	for (i = 0; i < 256; i++) {
@@ -166,7 +166,7 @@ rspamd_upstream_test_func (void)
 
 	up = rspamd_upstream_get (ls, RSPAMD_UPSTREAM_MASTER_SLAVE, NULL, 0);
 	for (i = 0; i < 100; i ++) {
-		rspamd_upstream_fail (up);
+		rspamd_upstream_fail (up, TRUE);
 	}
 	g_assert (rspamd_upstreams_alive (ls) == 2);
 

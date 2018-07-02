@@ -1308,7 +1308,7 @@ proxy_backend_mirror_error_handler (struct rspamd_http_connection *conn, GError 
 		bk_conn->err = rspamd_mempool_strdup (session->pool, err->message);
 	}
 
-	rspamd_upstream_fail (bk_conn->up);
+	rspamd_upstream_fail (bk_conn->up, FALSE);
 
 	proxy_backend_close_connection (bk_conn);
 	REF_RELEASE (bk_conn->s);
@@ -1384,7 +1384,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 
 		if (bk_conn->backend_sock == -1) {
 			msg_err_session ("cannot connect upstream for %s", m->name);
-			rspamd_upstream_fail (bk_conn->up);
+			rspamd_upstream_fail (bk_conn->up, TRUE);
 			continue;
 		}
 
@@ -1505,7 +1505,7 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 		err,
 		session->ctx->max_retries - session->retries);
 	session->retries ++;
-	rspamd_upstream_fail (bk_conn->up);
+	rspamd_upstream_fail (bk_conn->up, FALSE);
 	proxy_backend_close_connection (session->master_conn);
 
 	if (session->ctx->max_retries &&
@@ -1810,7 +1810,7 @@ retry:
 					host ? hostbuf : "default",
 							rspamd_inet_address_to_string (rspamd_upstream_addr (
 									session->master_conn->up)));
-			rspamd_upstream_fail (session->master_conn->up);
+			rspamd_upstream_fail (session->master_conn->up, TRUE);
 			session->retries ++;
 			goto retry;
 		}

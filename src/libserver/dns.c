@@ -593,7 +593,7 @@ rspamd_dns_upstream_fail (struct rdns_upstream_elt *elt,
 {
 	struct upstream *up = elt->lib_data;
 
-	rspamd_upstream_fail (up);
+	rspamd_upstream_fail (up, FALSE);
 }
 
 static unsigned int

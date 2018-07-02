@@ -467,7 +467,7 @@ rspamd_fuzzy_redis_shingles_callback (redisAsyncContext *c, gpointer r,
 			msg_err_redis_session ("error getting shingles: %s", c->errstr);
 		}
 
-		rspamd_upstream_fail (session->up);
+		rspamd_upstream_fail (session->up, FALSE);
 	}
 
 	rspamd_fuzzy_redis_session_dtor (session, FALSE);
@@ -606,7 +606,7 @@ rspamd_fuzzy_redis_check_callback (redisAsyncContext *c, gpointer r,
 			msg_err_redis_session ("error getting hashes: %s", c->errstr);
 		}
 
-		rspamd_upstream_fail (session->up);
+		rspamd_upstream_fail (session->up, FALSE);
 	}
 
 	rspamd_fuzzy_redis_session_dtor (session, FALSE);
@@ -674,7 +674,7 @@ rspamd_fuzzy_backend_check_redis (struct rspamd_fuzzy_backend *bk,
 			rspamd_inet_address_get_port (addr));
 
 	if (session->ctx == NULL) {
-		rspamd_upstream_fail (up);
+		rspamd_upstream_fail (up, TRUE);
 		rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 		if (cb) {
@@ -744,7 +744,7 @@ rspamd_fuzzy_redis_count_callback (redisAsyncContext *c, gpointer r,
 			msg_err_redis_session ("error getting count: %s", c->errstr);
 		}
 
-		rspamd_upstream_fail (session->up);
+		rspamd_upstream_fail (session->up, FALSE);
 	}
 
 	rspamd_fuzzy_redis_session_dtor (session, FALSE);
@@ -798,7 +798,7 @@ rspamd_fuzzy_backend_count_redis (struct rspamd_fuzzy_backend *bk,
 			rspamd_inet_address_get_port (addr));
 
 	if (session->ctx == NULL) {
-		rspamd_upstream_fail (up);
+		rspamd_upstream_fail (up, TRUE);
 		rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 		if (cb) {
@@ -866,7 +866,7 @@ rspamd_fuzzy_redis_version_callback (redisAsyncContext *c, gpointer r,
 			msg_err_redis_session ("error getting version: %s", c->errstr);
 		}
 
-		rspamd_upstream_fail (session->up);
+		rspamd_upstream_fail (session->up, FALSE);
 	}
 
 	rspamd_fuzzy_redis_session_dtor (session, FALSE);
@@ -921,7 +921,7 @@ rspamd_fuzzy_backend_version_redis (struct rspamd_fuzzy_backend *bk,
 			rspamd_inet_address_get_port (addr));
 
 	if (session->ctx == NULL) {
-		rspamd_upstream_fail (up);
+		rspamd_upstream_fail (up, FALSE);
 		rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 		if (cb) {
@@ -1272,7 +1272,7 @@ rspamd_fuzzy_redis_update_callback (redisAsyncContext *c, gpointer r,
 			msg_err_redis_session ("error sending update to redis: %s", c->errstr);
 		}
 
-		rspamd_upstream_fail (session->up);
+		rspamd_upstream_fail (session->up, FALSE);
 	}
 
 	rspamd_fuzzy_redis_session_dtor (session, FALSE);
@@ -1382,7 +1382,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 			rspamd_inet_address_get_port (addr));
 
 	if (session->ctx == NULL) {
-		rspamd_upstream_fail (up);
+		rspamd_upstream_fail (up, TRUE);
 		rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 		if (cb) {

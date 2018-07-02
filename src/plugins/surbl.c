@@ -1539,7 +1539,7 @@ surbl_redirector_error (struct rspamd_http_connection *conn,
 	msg_err_surbl ("connection with http server %s terminated incorrectly: %e",
 		rspamd_inet_address_to_string (rspamd_upstream_addr (param->redirector)),
 		err);
-	rspamd_upstream_fail (param->redirector);
+	rspamd_upstream_fail (param->redirector, FALSE);
 	rspamd_session_remove_event (param->task->s, free_redirector_session,
 			param);
 }

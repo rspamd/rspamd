@@ -909,7 +909,8 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 		else {
 			msg_err ("cannot get keys to gather stat: unknown error");
 		}
-		rspamd_upstream_fail (cbdata->selected);
+
+		rspamd_upstream_fail (cbdata->selected, FALSE);
 		rspamd_redis_async_cbdata_cleanup (cbdata);
 	}
 }
@@ -1031,7 +1032,7 @@ rspamd_redis_timeout (gint fd, short what, gpointer d)
 	msg_err_task_check ("connection to redis server %s timed out",
 			rspamd_upstream_name (rt->selected));
 
-	rspamd_upstream_fail (rt->selected);
+	rspamd_upstream_fail (rt->selected, FALSE);
 
 	if (rt->redis) {
 		redis = rt->redis;
@@ -1091,7 +1092,7 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 	else {
 		msg_err_task ("error getting reply from redis server %s: %s",
 				rspamd_upstream_name (rt->selected), c->errstr);
-		rspamd_upstream_fail (rt->selected);
+		rspamd_upstream_fail (rt->selected, FALSE);
 
 		if (!rt->err) {
 			g_set_error (&rt->err, rspamd_redis_stat_quark (), c->err,
@@ -1178,7 +1179,7 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 				rspamd_upstream_name (rt->selected), c->errstr);
 
 		if (rt->redis) {
-			rspamd_upstream_fail (rt->selected);
+			rspamd_upstream_fail (rt->selected, FALSE);
 		}
 
 		if (!rt->err) {
@@ -1210,7 +1211,7 @@ rspamd_redis_learned (redisAsyncContext *c, gpointer r, gpointer priv)
 				rspamd_upstream_name (rt->selected), c->errstr);
 
 		if (rt->redis) {
-			rspamd_upstream_fail (rt->selected);
+			rspamd_upstream_fail (rt->selected, FALSE);
 		}
 
 		if (!rt->err) {

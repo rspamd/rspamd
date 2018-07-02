@@ -452,7 +452,7 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 
 	if (conn->sock == -1) {
 		msg_err ("cannot connect upstream for %s", m->name);
-		rspamd_upstream_fail (conn->up);
+		rspamd_upstream_fail (conn->up, TRUE);
 		return;
 	}
 
