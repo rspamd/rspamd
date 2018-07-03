@@ -559,8 +559,10 @@ exports.extract_specific_urls = function(task, lim, need_emails, filter, prefix)
     -- We can get urls based on their eslds
     while lim > 0 do
       for _,lurls in pairs(eslds) do
-        table.insert(res, table.remove(lurls))
-        lim = lim - 1
+        if #lurls > 0 then
+          table.insert(res, table.remove(lurls))
+          lim = lim - 1
+        end
       end
     end
 
@@ -571,8 +573,10 @@ exports.extract_specific_urls = function(task, lim, need_emails, filter, prefix)
   if ntlds <= lim then
     while lim > 0 do
       for _,lurls in pairs(tlds) do
-        table.insert(res, table.remove(lurls))
-        lim = lim - 1
+        if #lurls > 0 then
+          table.insert(res, table.remove(lurls))
+          lim = lim - 1
+        end
       end
     end
 
