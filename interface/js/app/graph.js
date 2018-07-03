@@ -212,7 +212,7 @@ define(["jquery", "d3evolution", "footable"],
             if (checked_server === "All SERVERS") {
                 rspamd.queryNeighbours("graph", function (req_data) {
                     var neighbours_data = req_data
-                        .filter(function (d) { return d.status }) // filter out unavailable neighbours
+                        .filter(function (d) { return d.status; }) // filter out unavailable neighbours
                         .map(function (d){ return d.data; });
 
                     if (neighbours_data.length > 1) {

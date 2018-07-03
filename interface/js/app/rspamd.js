@@ -351,7 +351,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             });
         }
         $.ajax(req_params);
-    }
+    };
 
     interface.queryNeighbours = function(req_url, on_success, on_error, method, headers, params, req_data) {
         $.ajax({

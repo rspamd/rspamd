@@ -24,8 +24,8 @@
 
 define(["jquery", "footable"],
     function($) {
-        var interface = {}
-        var ft = {}
+        var interface = {};
+        var ft = {};
 
         function saveSymbols(rspamd, action, id, is_cluster) {
             var inputs = $("#" + id + " :input[data-role=\"numerictextbox\"]");
@@ -90,7 +90,7 @@ define(["jquery", "footable"],
                     if (item.weight > max) {
                         max = item.weight * 2;
                     }
-                    item.group = group.group
+                    item.group = group.group;
                     if (item.weight < min) {
                         min = item.weight * 2;
                     }
@@ -105,23 +105,23 @@ define(["jquery", "footable"],
                     min + "\" max=\"" +
                     max + "\" step=\"" + decimalStep(item.weight) +
                     "\" tabindex=\"1\" value=\"" + Number(item.weight).toFixed(3) +
-                    "\" id=\"_sym_" + item.symbol + "\"></input>"
+                    "\" id=\"_sym_" + item.symbol + "\"></input>";
                     if (!item.time) {
                         item.time = 0;
                     }
-                    item.time = Number(item.time).toFixed(2) + "s"
+                    item.time = Number(item.time).toFixed(2) + "s";
                     if (!item.frequency) {
                         item.frequency = 0;
                     }
                     freqs.push(item.frequency);
-                    item.frequency = Number(item.frequency).toFixed(2)
+                    item.frequency = Number(item.frequency).toFixed(2);
                     if (!(item.group in lookup)) {
                         lookup[item.group] = 1;
                         distinct_groups.push(item.group);
                     }
                     item.save = "<button type=\"button\" data-save=\"local\" class=\"btn btn-primary btn-sm mb-disabled\">Save</button>" +
                 "&nbsp;<button data-save=\"cluster\" type=\"button\" class=\"btn btn-primary btn-sm mb-disabled\">Save in cluster</button>";
-                    items.push(item)
+                    items.push(item);
                 });
             });
 
@@ -150,7 +150,7 @@ define(["jquery", "footable"],
                     item.frequency = item.frequency.toFixed(2);
                 }
             });
-            return [items, distinct_groups]
+            return [items, distinct_groups];
         }
         // @get symbols into modal form
         interface.getSymbols = function(rspamd, tables, checked_server) {
@@ -219,7 +219,7 @@ define(["jquery", "footable"],
                             {"name":"symbol","title":"Symbol","style":{"font-size":"11px"}},
                             {"name":"description","title":"Description","breakpoints":"xs sm","style":{"font-size":"11px"}},
                             {"name":"weight","title":"Score","style":{"font-size":"11px"}},
-                            {"name":"frequency","title":"Frequency","breakpoints":"xs sm","style":{"font-size":"11px"},"sortValue": function(value){return Number(value).toFixed(2)}},
+                            {"name":"frequency","title":"Frequency","breakpoints":"xs sm","style":{"font-size":"11px"},"sortValue": function(value){return Number(value).toFixed(2);}},
                             {"name":"time","title":"Avg. time","breakpoints":"xs sm","style":{"font-size":"11px"}},
                             {"name":"save","title":"Save","style":{"font-size":"11px"}},
                         ],
@@ -255,7 +255,7 @@ define(["jquery", "footable"],
             });
             $(document).on("click", "#symbolsTable :button", function(event){
                 var value = $(this).data("save");
-                if (!value) return
+                if (!value) return;
                 saveSymbols(rspamd, "./savesymbols", "symbolsTable", value == "cluster");
             });
         };

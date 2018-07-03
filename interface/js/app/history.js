@@ -46,7 +46,7 @@ define(["jquery", "footable", "humanize"],
         };
 
         escape_HTML_array = function (arr) {
-            arr.forEach(function (d, i) { arr[i] = EscapeHTML(d) });
+            arr.forEach(function (d, i) { arr[i] = EscapeHTML(d); });
         };
 
         function unix_time_format(tm) {
@@ -233,7 +233,7 @@ define(["jquery", "footable", "humanize"],
                     }
                 };
 
-                items.push(item)
+                items.push(item);
             });
 
             return items;
@@ -551,7 +551,7 @@ define(["jquery", "footable", "humanize"],
                         "title": description
                     });
                 });
-            }
+            };
 
             if (checked_server === "All SERVERS") {
                 rspamd.queryNeighbours("history", function (req_data) {
@@ -567,7 +567,7 @@ define(["jquery", "footable", "humanize"],
                     }
 
                     var neighbours_data = req_data
-                        .filter(function (d) { return d.status }) // filter out unavailable neighbours
+                        .filter(function (d) { return d.status; }) // filter out unavailable neighbours
                         .map(function (d){ return d.data; });
                     if (neighbours_data.length && !differentVersions()) {
                         var data = {};
@@ -766,7 +766,7 @@ define(["jquery", "footable", "humanize"],
                 rspamd.queryNeighbours("errors", function (req_data) {
                     var neighbours_data = req_data
                         .filter(function (d) {
-                            return d.status
+                            return d.status;
                         }) // filter out unavailable neighbours
                         .map(function (d) {
                             return d.data;

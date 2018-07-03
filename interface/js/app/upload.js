@@ -24,7 +24,7 @@
 
 define(["jquery"],
     function($) {
-        var interface = {}
+        var interface = {};
 
         function cleanTextUpload(source) {
             $("#" + source + "TextSource").val("");

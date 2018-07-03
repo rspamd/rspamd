@@ -24,7 +24,7 @@
 
 define(["jquery"],
     function($) {
-        var interface = {}
+        var interface = {};
 
         function save_map_success(rspamd) {
             rspamd.alertMessage("alert-modal alert-success", "Map data successfully saved");
@@ -51,14 +51,14 @@ define(["jquery"],
                 error: function (data) {
                     save_map_error(rspamd, "local", null, null, data.statusText);
                 },
-                success: function() {save_map_success(rspamd)},
+                success: function() {save_map_success(rspamd);},
             });
         }
 
         // @get maps id
         function getMaps(rspamd) {
             var items = [];
-            var $listmaps = $("#listMaps")
+            var $listmaps = $("#listMaps");
             $listmaps.closest(".widget-box").hide();
             $.ajax({
                 dataType: "json",
@@ -275,7 +275,7 @@ define(["jquery"],
                     dataType: "text",
                 });
             });
-        }
+        };
 
         interface.getActions = getActions;
         interface.getMaps = getMaps;
