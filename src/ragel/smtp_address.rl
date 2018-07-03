@@ -14,6 +14,7 @@
   address_literal  = "[" ( IPv4_address_literal |
                     IPv6_address_literal |
                     General_address_literal ) >Domain_addr_start %Domain_addr_end "]";
+  non_conformant_address_literal = IPv4_address_literal >Domain_addr_start %Domain_addr_end;
 
 
   sub_domain     = Let_dig Ldh_str?;
