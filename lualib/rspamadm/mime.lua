@@ -317,6 +317,22 @@ local function stat_handler(opts)
             e.t2 or "", table.concat(fun.totable(
                 fun.map(function(k) return k end, e.flags)), ","))
       end
+    elseif opts.fuzzy then
+      local parts = task:get_parts() or {}
+      out_elts[fname] = {}
+      process_func = function(e)
+        return string.format('part: %s(%s): %s', e.type, e.file or "", e.digest)
+      end
+      for _,part in ipairs(parts) do
+        if not part:is_multipart() then
+          table.insert(out_elts[fname], {
+            digest = part:get_digest(),
+            file = part:get_filename(),
+            type = string.format('%s/%s', part:get_type())
+          })
+
+        end
+      end
     end
 
     task:destroy() -- No automatic dtor
