@@ -27,17 +27,17 @@ document.title = window.location.hostname +
     " - Rspamd Web Interface";
 
 define("d3.global", ["d3"], function(_) {
-  d3 = _;
+    d3 = _;
 });
 
 // Load main UI
 require(["domReady"],
-function(domReady) {
-    domReady(function () {
-        require(["jquery", "d3", "app/rspamd"],
-            function ($, d3, rspamd) {
-                rspamd.setup();
-                rspamd.connect();
-            });
+    function(domReady) {
+        domReady(function () {
+            require(["jquery", "d3", "app/rspamd"],
+                function ($, d3, rspamd) {
+                    rspamd.setup();
+                    rspamd.connect();
+                });
+        });
     });
-});
