@@ -32,6 +32,7 @@ hh.ru
 instagram.com
 linkedin.com
 livejournal.com
+lufthansa-group.com
 mackeeper.com
 megafon.ru
 mercadolibre.com.ar
