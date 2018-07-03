@@ -22,25 +22,25 @@
  THE SOFTWARE.
  */
 
-define(['jquery', 'footable', 'humanize'],
+define(["jquery", "footable", "humanize"],
 function($, _, Humanize) {
     var interface = {};
     var ft = {};
     var htmlEscapes = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;',
-      '/': '&#x2F;',
-      '`': '&#x60;',
-      '=': '&#x3D;'
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;",
+      "/": "&#x2F;",
+      "`": "&#x60;",
+      "=": "&#x3D;"
     };
     var htmlEscaper = /[&<>"'\/`=]/g;
     var symbolDescriptions = {};
 
     EscapeHTML = function(string) {
-      return ('' + string).replace(htmlEscaper, function(match) {
+      return ("" + string).replace(htmlEscaper, function(match) {
         return htmlEscapes[match];
       });
     };
@@ -84,11 +84,11 @@ function($, _, Humanize) {
             }
         }
 
-        if (item.action === 'clean' || item.action === 'no action') {
+        if (item.action === "clean" || item.action === "no action") {
             item.action = "<div style='font-size:11px' class='label label-success'>" + item.action + "</div>";
-        } else if (item.action === 'rewrite subject' || item.action === 'add header' || item.action === 'probable spam') {
+        } else if (item.action === "rewrite subject" || item.action === "add header" || item.action === "probable spam") {
             item.action = "<div style='font-size:11px' class='label label-warning'>" + item.action + "</div>";
-        } else if (item.action === 'spam' || item.action === 'reject') {
+        } else if (item.action === "spam" || item.action === "reject") {
             item.action = "<div style='font-size:11px' class='label label-danger'>" + item.action + "</div>";
         } else {
             item.action = "<div style='font-size:11px' class='label label-info'>" + item.action + "</div>";
@@ -158,16 +158,16 @@ function($, _, Humanize) {
                 var sym = item.symbols[key];
 
                 if (sym.description) {
-	                var str = '<strong><abbr data-sym-key="' + key + '">' + sym.name + '</abbr></strong>' + "(" + sym.score + ")";
+	                var str = "<strong><abbr data-sym-key=\"" + key + "\">" + sym.name + "</abbr></strong>" + "(" + sym.score + ")";
 
 	                // Store description for tooltip
 	                symbolDescriptions[key] = sym.description;
                 } else {
-	                var str = '<strong>' + sym.name + '</strong>' + "(" + sym.score + ")";
+	                var str = "<strong>" + sym.name + "</strong>" + "(" + sym.score + ")";
                 }
 
                if (sym.options) {
-                   str += '[' + sym.options.join(",") + "]";
+                   str += "[" + sym.options.join(",") + "]";
                }
                item.symbols[key].str = str;
             });
@@ -184,7 +184,7 @@ function($, _, Humanize) {
                     "sortValue": item.unix_time
                 }
             };
-            var scan_time = item.time_real.toFixed(3) + ' / ' +
+            var scan_time = item.time_real.toFixed(3) + " / " +
                 item.time_virtual.toFixed(3);
             item.scan_time = {
                 "options": {
@@ -192,7 +192,7 @@ function($, _, Humanize) {
                 },
                 "value": scan_time
             };
-            item.id = item['message-id'];
+            item.id = item["message-id"];
 
             var rcpt = {};
             if (!item.rcpt_mime.length) {
@@ -487,52 +487,52 @@ function($, _, Humanize) {
         FooTable.actionFilter = FooTable.Filtering.extend({
         construct : function(instance) {
             this._super(instance);
-            this.actions = [ 'reject', 'add header', 'greylist',
-                    'no action', 'soft reject', 'rewrite subject' ];
-            this.def = 'Any action';
+            this.actions = [ "reject", "add header", "greylist",
+                    "no action", "soft reject", "rewrite subject" ];
+            this.def = "Any action";
             this.$action = null;
         },
         $create : function() {
             this._super();
-            var self = this, $form_grp = $('<div/>', {
-                'class' : 'form-group'
-            }).append($('<label/>', {
-                'class' : 'sr-only',
-                text : 'Action'
+            var self = this, $form_grp = $("<div/>", {
+                "class" : "form-group"
+            }).append($("<label/>", {
+                "class" : "sr-only",
+                text : "Action"
             })).prependTo(self.$form);
 
-            self.$action = $('<select/>', {
-                'class' : 'form-control'
-            }).on('change', {
+            self.$action = $("<select/>", {
+                "class" : "form-control"
+            }).on("change", {
                 self : self
             }, self._onStatusDropdownChanged).append(
-                    $('<option/>', {
+                    $("<option/>", {
                         text : self.def
                     })).appendTo($form_grp);
 
             $.each(self.actions, function(i, action) {
-                self.$action.append($('<option/>').text(action));
+                self.$action.append($("<option/>").text(action));
             });
         },
         _onStatusDropdownChanged : function(e) {
             var self = e.data.self, selected = $(this).val();
             if (selected !== self.def) {
                 if(selected === "reject"){
-		  self.addFilter('action', 'reject -soft', [ 'action' ]);
+		  self.addFilter("action", "reject -soft", [ "action" ]);
                 } else {
-		  self.addFilter('action', selected, [ 'action' ]);
+		  self.addFilter("action", selected, [ "action" ]);
 		}
             } else {
-                self.removeFilter('action');
+                self.removeFilter("action");
             }
             self.filter();
         },
         draw : function() {
             this._super();
-            var action = this.find('action');
+            var action = this.find("action");
             if (action instanceof FooTable.Filter) {
-                if(action.query.val() === 'reject -soft'){
-                    this.$action.val('reject');
+                if(action.query.val() === "reject -soft"){
+                    this.$action.val("reject");
                 } else {
                     this.$action.val(action.query.val());
                 }
@@ -545,7 +545,7 @@ function($, _, Humanize) {
         var drawTooltips = function() {
             // Update symbol description tooltips
             $.each(symbolDescriptions, function (key, description) {
-                $('abbr[data-sym-key=' + key + ']').tooltip({
+                $("abbr[data-sym-key=" + key + "]").tooltip({
                     "placement": "bottom",
                     "html": true,
                     "title": description
@@ -560,8 +560,8 @@ function($, _, Humanize) {
                         return e.version !== neighbours_data[0].version;
                     });
                     if (dv) {
-                        rspamd.alertMessage('alert-error',
-                            'Neighbours history backend versions do not match. Cannot display history.');
+                        rspamd.alertMessage("alert-error",
+                            "Neighbours history backend versions do not match. Cannot display history.");
                         return true;
                     }
                 }
@@ -620,14 +620,14 @@ function($, _, Humanize) {
         }
         else {
             $.ajax({
-                dataType: 'json',
-                url: neighbours[checked_server].url + 'history',
+                dataType: "json",
+                url: neighbours[checked_server].url + "history",
                 jsonp: false,
                 beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', rspamd.getPassword());
+                    xhr.setRequestHeader("Password", rspamd.getPassword());
                 },
                 error: function () {
-                    rspamd.alertMessage('alert-error', 'Cannot receive history');
+                    rspamd.alertMessage("alert-error", "Cannot receive history");
                 },
                 success: function (data) {
                     var items = process_history_data(data);
@@ -660,8 +660,8 @@ function($, _, Humanize) {
                 }
             });
         }
-        $('#updateHistory').off('click');
-        $('#updateHistory').on('click', function (e) {
+        $("#updateHistory").off("click");
+        $("#updateHistory").on("click", function (e) {
             e.preventDefault();
             interface.getHistory(rspamd, tables, neighbours, checked_server);
         });
@@ -670,8 +670,8 @@ function($, _, Humanize) {
         });
 
         // @reset history log
-        $('#resetHistory').off('click');
-        $('#resetHistory').on('click', function (e) {
+        $("#resetHistory").off("click");
+        $("#resetHistory").on("click", function (e) {
             e.preventDefault();
             if (!confirm("Are you sure you want to reset history log?")) {
                 return;
@@ -692,19 +692,19 @@ function($, _, Humanize) {
             }
             else {
                 $.ajax({
-                    dataType: 'json',
-                    type: 'GET',
+                    dataType: "json",
+                    type: "GET",
                     jsonp: false,
-                    url: neighbours[checked_server].url + 'historyreset',
+                    url: neighbours[checked_server].url + "historyreset",
                     beforeSend: function (xhr) {
-                        xhr.setRequestHeader('Password', rspamd.getPassword());
+                        xhr.setRequestHeader("Password", rspamd.getPassword());
                     },
                     success: function () {
                         interface.getHistory(rspamd, tables, neighbours, checked_server);
                         interface.getErrors(rspamd, tables, neighbours, checked_server);
                     },
                     error: function (data) {
-                        rspamd.alertMessage('alert-modal alert-error', data.statusText);
+                        rspamd.alertMessage("alert-modal alert-error", data.statusText);
                     }
                 });
             }
@@ -749,14 +749,14 @@ function($, _, Humanize) {
 
         if (checked_server !== "All SERVERS") {
             $.ajax({
-                dataType: 'json',
-                url: neighbours[checked_server].url + 'errors',
+                dataType: "json",
+                url: neighbours[checked_server].url + "errors",
                 jsonp: false,
                 beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', rspamd.getPassword());
+                    xhr.setRequestHeader("Password", rspamd.getPassword());
                 },
                 error: function () {
-                    rspamd.alertMessage('alert-error', 'Cannot receive errors');
+                    rspamd.alertMessage("alert-error", "Cannot receive errors");
                 },
                 success: function (data) {
                     drawErrorsTable(data);
@@ -774,8 +774,8 @@ function($, _, Humanize) {
                 drawErrorsTable([].concat.apply([], neighbours_data));
             });
         }
-        $('#updateErrors').off('click');
-        $('#updateErrors').on('click', function (e) {
+        $("#updateErrors").off("click");
+        $("#updateErrors").on("click", function (e) {
             e.preventDefault();
             interface.getErrors(rspamd, tables, neighbours, checked_server);
         });

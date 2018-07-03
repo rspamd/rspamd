@@ -22,7 +22,7 @@
  THE SOFTWARE.
  */
 
-define(['jquery', 'd3pie', 'humanize'],
+define(["jquery", "d3pie", "humanize"],
 function($, d3pie, Humanize) {
     // @ ms to date
     function msToTime(seconds) {
@@ -33,27 +33,27 @@ function($, d3pie, Humanize) {
             minutes = seconds % 31536000 % 2628000 % 86400 % 3600 / 60 >> 0;
             if (years > 0) {
             if (months > 0) {
-                out = years + 'yr ' + months + 'mth';
+                out = years + "yr " + months + "mth";
             } else {
-                out = years + 'yr ' + days + 'd';
+                out = years + "yr " + days + "d";
             }
             } else if (months > 0) {
-            out = months + 'mth ' + days + 'd';
+            out = months + "mth " + days + "d";
             } else if (days > 0) {
-            out = days + 'd ' + hours + 'hr';
+            out = days + "d " + hours + "hr";
             } else if (hours > 0) {
-            out = hours + 'hr ' + minutes + 'min';
+            out = hours + "hr " + minutes + "min";
             } else {
-            out = minutes + 'min';
+            out = minutes + "min";
             }
             return out;
     }
 
     function displayStatWidgets(checked_server) {
-        var widgets = $('#statWidgets');
+        var widgets = $("#statWidgets");
         $(widgets).empty().hide();
 
-        var servers = JSON.parse(sessionStorage.getItem('Credentials'));
+        var servers = JSON.parse(sessionStorage.getItem("Credentials"));
         var data = {};
 
         if (servers && servers[checked_server]) {
@@ -62,32 +62,32 @@ function($, d3pie, Humanize) {
         var stat_w = [];
 
         $.each(data, function (i, item) {
-            var widget = '';
-            if (i == 'auth') {}
-            else if (i == 'error') {}
-            else if (i == 'version') {
-                widget = '<div class="left"><strong>' + item + '</strong>' +
-                    i + '</div>';
+            var widget = "";
+            if (i == "auth") {}
+            else if (i == "error") {}
+            else if (i == "version") {
+                widget = "<div class=\"left\"><strong>" + item + "</strong>" +
+                    i + "</div>";
                 $(widget).appendTo(widgets);
-            } else if (i == 'uptime') {
-                widget = '<div class="right"><strong>' + msToTime(item) +
-                    '</strong>' + i + '</div>';
+            } else if (i == "uptime") {
+                widget = "<div class=\"right\"><strong>" + msToTime(item) +
+                    "</strong>" + i + "</div>";
                 $(widget).appendTo(widgets);
             } else {
-                var titleAtt = Humanize.intComma(item) + ' ' + i;
-                widget = '<li class="stat-box"><div class="widget" title="' + titleAtt + '"><strong>' +
-                    Humanize.compactInteger(item) + '</strong>' + i + '</div></li>';
-                if (i == 'scanned') {
+                var titleAtt = Humanize.intComma(item) + " " + i;
+                widget = "<li class=\"stat-box\"><div class=\"widget\" title=\"" + titleAtt + "\"><strong>" +
+                    Humanize.compactInteger(item) + "</strong>" + i + "</div></li>";
+                if (i == "scanned") {
                     stat_w[0] = widget;
-                } else if (i == 'clean') {
+                } else if (i == "clean") {
                     stat_w[1] = widget;
-                } else if (i == 'greylist') {
+                } else if (i == "greylist") {
                     stat_w[2] = widget;
-                } else if (i == 'probable') {
+                } else if (i == "probable") {
                     stat_w[3] = widget;
-                } else if (i == 'reject') {
+                } else if (i == "reject") {
                     stat_w[4] = widget;
-                } else if (i == 'learned') {
+                } else if (i == "learned") {
                     stat_w[5] = widget;
                 }
             }
@@ -95,15 +95,15 @@ function($, d3pie, Humanize) {
         $.each(stat_w, function (i, item) {
             $(item).appendTo(widgets);
         });
-        $('#statWidgets .left,#statWidgets .right').wrapAll('<li class="stat-box pull-right"><div class="widget"></div></li>');
-        $('#statWidgets').find('li.pull-right').appendTo('#statWidgets');
+        $("#statWidgets .left,#statWidgets .right").wrapAll("<li class=\"stat-box pull-right\"><div class=\"widget\"></div></li>");
+        $("#statWidgets").find("li.pull-right").appendTo("#statWidgets");
 
         $("#clusterTable tbody").empty();
         $("#selSrv").empty();
         $.each(servers, function (key, val) {
             var glyph_status;
             var short_id;
-            if (!('config_id' in val.data)) {
+            if (!("config_id" in val.data)) {
                 val.data.config_id = "";
             }
             if (val.status) {
@@ -115,29 +115,29 @@ function($, d3pie, Humanize) {
                 short_id = "???";
             }
 
-            $('#clusterTable tbody').append('<tr>' +
-                '<td class="col1" title="Radio"><input type="radio" class="form-control radio" name="clusterName" value="' + key + '"></td>' +
-                '<td class="col2" title="SNAme">' + key + '</td>' +
-                '<td class="col3" title="SHost">' + val.host + '</td>' +
-                '<td class="col4" title="SStatus"><span class="icon"><i class="' + glyph_status + '"></i></span></td>' +
-                '<td class="col5" title="short_id">' + short_id + '</td></tr>');
+            $("#clusterTable tbody").append("<tr>" +
+                "<td class=\"col1\" title=\"Radio\"><input type=\"radio\" class=\"form-control radio\" name=\"clusterName\" value=\"" + key + "\"></td>" +
+                "<td class=\"col2\" title=\"SNAme\">" + key + "</td>" +
+                "<td class=\"col3\" title=\"SHost\">" + val.host + "</td>" +
+                "<td class=\"col4\" title=\"SStatus\"><span class=\"icon\"><i class=\"" + glyph_status + "\"></i></span></td>" +
+                "<td class=\"col5\" title=\"short_id\">" + short_id + "</td></tr>");
 
-            $("#selSrv").append( $('<option value="' + key + '">' + key + '</option>'));
+            $("#selSrv").append( $("<option value=\"" + key + "\">" + key + "</option>"));
 
             if (checked_server == key) {
-                $('#clusterTable tbody [value="' + key + '"]').prop("checked", true);
-                $('#selSrv [value="' + key + '"]').prop("selected", true);
+                $("#clusterTable tbody [value=\"" + key + "\"]").prop("checked", true);
+                $("#selSrv [value=\"" + key + "\"]").prop("selected", true);
             }
             else if (!val.status) {
-                $('#clusterTable tbody [value="' + key + '"]').prop("disabled", true);
-                $('#selSrv [value="' + key + '"]').prop("disabled", true);
+                $("#clusterTable tbody [value=\"" + key + "\"]").prop("disabled", true);
+                $("#selSrv [value=\"" + key + "\"]").prop("disabled", true);
             }
         });
         $(widgets).show();
     }
 
      function getChart(rspamd, pie, checked_server) {
-        var creds = JSON.parse(sessionStorage.getItem('Credentials'));
+        var creds = JSON.parse(sessionStorage.getItem("Credentials"));
         if (creds && creds[checked_server]) {
             var data = creds[checked_server].data;
             var new_data = [ {
@@ -192,7 +192,7 @@ function($, d3pie, Humanize) {
                 for(var e in neighbours_status) {
                     if(neighbours_status[e].status === true) {
                         // Remove alert status
-                        localStorage.removeItem(e + '_alerted');
+                        localStorage.removeItem(e + "_alerted");
                         neighbours_sum.clean += neighbours_status[e].data.clean;
                         neighbours_sum.probable += neighbours_status[e].data.probable;
                         neighbours_sum.greylist += neighbours_status[e].data.greylist;
@@ -221,12 +221,12 @@ function($, d3pie, Humanize) {
                 graphs.chart = getChart(rspamd, graphs.chart, checked_server);
             },
             function (serv, jqXHR, textStatus, errorThrown) {
-                var alert_status = serv.name + '_alerted';
+                var alert_status = serv.name + "_alerted";
 
                 if (!(alert_status in sessionStorage)) {
                     sessionStorage.setItem(alert_status, true);
-                    rspamd.alertMessage('alert-error', 'Cannot receive stats data from: ' +
-                        serv.name + ', error: ' + errorThrown);
+                    rspamd.alertMessage("alert-error", "Cannot receive stats data from: " +
+                        serv.name + ", error: " + errorThrown);
                 }
             });
         },

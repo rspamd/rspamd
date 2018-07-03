@@ -22,34 +22,34 @@
  THE SOFTWARE.
  */
 
-define(['jquery'],
+define(["jquery"],
 function($) {
     var interface = {}
 
     function save_map_success(rspamd) {
-        rspamd.alertMessage('alert-modal alert-success', 'Map data successfully saved');
-        $('#modalDialog').modal('hide');
+        rspamd.alertMessage("alert-modal alert-success", "Map data successfully saved");
+        $("#modalDialog").modal("hide");
     }
     function save_map_error(rspamd, serv, jqXHR, textStatus, errorThrown) {
-        rspamd.alertMessage('alert-modal alert-error', 'Save map error on ' +
-                serv.name + ': ' + errorThrown);
+        rspamd.alertMessage("alert-modal alert-error", "Save map error on " +
+                serv.name + ": " + errorThrown);
     }
      // @upload map from modal
     function saveMap(rspamd, action, id) {
-        var data = $('#' + id).find('textarea').val();
+        var data = $("#" + id).find("textarea").val();
         $.ajax({
             data: data,
-            dataType: 'text',
-            type: 'POST',
+            dataType: "text",
+            type: "POST",
             jsonp: false,
             url: action,
             beforeSend: function (xhr) {
-                xhr.setRequestHeader('Password', rspamd.getPassword());
-                xhr.setRequestHeader('Map', id);
-                xhr.setRequestHeader('Debug', true);
+                xhr.setRequestHeader("Password", rspamd.getPassword());
+                xhr.setRequestHeader("Map", id);
+                xhr.setRequestHeader("Debug", true);
             },
             error: function (data) {
-                save_map_error(rspamd, 'local', null, null, data.statusText);
+                save_map_error(rspamd, "local", null, null, data.statusText);
             },
             success: function() {save_map_success(rspamd)},
         });
@@ -58,73 +58,73 @@ function($) {
     // @get maps id
     function getMaps(rspamd) {
         var items = [];
-        var $listmaps = $('#listMaps')
-        $listmaps.closest('.widget-box').hide();
+        var $listmaps = $("#listMaps")
+        $listmaps.closest(".widget-box").hide();
         $.ajax({
-            dataType: 'json',
-            url: 'maps',
+            dataType: "json",
+            url: "maps",
             jsonp: false,
             beforeSend: function (xhr) {
-                xhr.setRequestHeader('Password', rspamd.getPassword());
+                xhr.setRequestHeader("Password", rspamd.getPassword());
             },
             error: function (data) {
-                rspamd.alertMessage('alert-modal alert-error', data.statusText);
+                rspamd.alertMessage("alert-modal alert-error", data.statusText);
             },
             success: function (data) {
                 $listmaps.empty();
-                $('#modalBody').empty();
-                $tbody = $('<tbody>');
+                $("#modalBody").empty();
+                $tbody = $("<tbody>");
 
                 $.each(data, function (i, item) {
                     if ((item.editable === false || rspamd.read_only)) {
-                        var label = '<span class="label label-default">Read</span>';
+                        var label = "<span class=\"label label-default\">Read</span>";
                     } else {
-                        var label = '<span class="label label-default">Read</span>&nbsp;<span class="label label-success">Write</span>';
+                        var label = "<span class=\"label label-default\">Read</span>&nbsp;<span class=\"label label-success\">Write</span>";
                     }
                     var $tr = $("<tr>");
-                    $('<td class="col-md-2 maps-cell">' + label + '</td>').appendTo($tr);
-                    $span = $('<span class="map-link" data-toggle="modal" data-target="#modalDialog">' + item.uri + '</span>').data("item",item);
+                    $("<td class=\"col-md-2 maps-cell\">" + label + "</td>").appendTo($tr);
+                    $span = $("<span class=\"map-link\" data-toggle=\"modal\" data-target=\"#modalDialog\">" + item.uri + "</span>").data("item",item);
                     $span.wrap("<td>").parent().appendTo($tr);
-                    $('<td>' + item.description + '</td>').appendTo($tr);
+                    $("<td>" + item.description + "</td>").appendTo($tr);
                     $tr.appendTo($tbody);
                 });
                 $tbody.appendTo($listmaps);
-                $listmaps.closest('.widget-box').show();
+                $listmaps.closest(".widget-box").show();
             }
         });
     }
     // @get map by id
     function getMapById(rspamd, item) {
         return $.ajax({
-            dataType: 'text',
-            url: 'getmap',
+            dataType: "text",
+            url: "getmap",
             jsonp: false,
             beforeSend: function (xhr) {
-                xhr.setRequestHeader('Password', rspamd.getPassword());
-                xhr.setRequestHeader('Map', item.map);
+                xhr.setRequestHeader("Password", rspamd.getPassword());
+                xhr.setRequestHeader("Map", item.map);
             },
             error: function () {
-                rspamd.alertMessage('alert-error', 'Cannot receive maps data');
+                rspamd.alertMessage("alert-error", "Cannot receive maps data");
             },
             success: function (text) {
-                var disabled = '';
+                var disabled = "";
                 if ((item.editable === false || rspamd.read_only)) {
-                    disabled = 'disabled="disabled"';
+                    disabled = "disabled=\"disabled\"";
                 }
                 
                 $("#"+item.map).remove();
-                $('<form class="form-horizontal form-map" method="post" action="savemap" data-type="map" id="' +
-                    item.map + '" style="display:none">' +
-                    '<textarea class="list-textarea"' + disabled + '>' + text +
-                    '</textarea>' +
-                    '</form').appendTo('#modalBody');
+                $("<form class=\"form-horizontal form-map\" method=\"post\" action=\"savemap\" data-type=\"map\" id=\"" +
+                    item.map + "\" style=\"display:none\">" +
+                    "<textarea class=\"list-textarea\"" + disabled + ">" + text +
+                    "</textarea>" +
+                    "</form").appendTo("#modalBody");
             }
         });
     }
 
     function loadActionsFromForm() {
         var values = [];
-        var inputs = $('#actionsForm :input[data-id="action"]');
+        var inputs = $("#actionsForm :input[data-id=\"action\"]");
         // Rspamd order: [spam, rewrite_subject, probable_spam, greylist]
         values[0] = parseFloat(inputs[3].value);
         values[1] = parseFloat(inputs[2].value);
@@ -136,43 +136,43 @@ function($) {
 
     function getActions(rspamd) {
         $.ajax({
-            dataType: 'json',
-            type: 'GET',
-            url: 'actions',
+            dataType: "json",
+            type: "GET",
+            url: "actions",
             jsonp: false,
             beforeSend: function (xhr) {
-                xhr.setRequestHeader('Password', rspamd.getPassword());
+                xhr.setRequestHeader("Password", rspamd.getPassword());
             },
             success: function (data) {
                 // Order of sliders greylist -> probable spam -> rewrite subject -> spam
-                $('#actionsBody').empty();
-                $('#actionsForm').empty();
+                $("#actionsBody").empty();
+                $("#actionsForm").empty();
                 var items = [];
                 $.each(data, function (i, item) {
                     var idx = -1;
                     var label;
-                    if (item.action === 'add header') {
-                        label = 'Probably Spam';
+                    if (item.action === "add header") {
+                        label = "Probably Spam";
                         idx = 1;
-                    } else if (item.action === 'greylist') {
-                        label = 'Greylist';
+                    } else if (item.action === "greylist") {
+                        label = "Greylist";
                         idx = 0;
-                    } else if (item.action === 'rewrite subject') {
-                        label = 'Rewrite subject';
+                    } else if (item.action === "rewrite subject") {
+                        label = "Rewrite subject";
                         idx = 2;
-                    } else if (item.action === 'reject') {
-                        label = 'Spam';
+                    } else if (item.action === "reject") {
+                        label = "Spam";
                         idx = 3;
                     }
                     if (idx >= 0) {
                         items.push({
                             idx: idx,
-                            html: '<div class="form-group">' +
-                                '<label class="control-label col-sm-2">' + label + '</label>' +
-                                '<div class="controls slider-controls col-sm-10">' +
-                                '<input class="action-scores form-control" data-id="action" type="number" value="' + item.value + '">' +
-                                '</div>' +
-                                '</div>'
+                            html: "<div class=\"form-group\">" +
+                                "<label class=\"control-label col-sm-2\">" + label + "</label>" +
+                                "<div class=\"controls slider-controls col-sm-10\">" +
+                                "<input class=\"action-scores form-control\" data-id=\"action\" type=\"number\" value=\"" + item.value + "\">" +
+                                "</div>" +
+                                "</div>"
                         });
                     }
                 });
@@ -181,19 +181,19 @@ function($) {
                     return a.idx - b.idx;
                 });
 
-                $('#actionsBody').html('<form id="actionsForm"><fieldset id="actionsFormField">' +
+                $("#actionsBody").html("<form id=\"actionsForm\"><fieldset id=\"actionsFormField\">" +
                     items.map(function (e) {
                         return e.html;
-                    }).join('') +
-                    '<br><div class="form-group">' +
-                    '<div class="btn-group">' +
-                    '<button class="btn btn-primary" type="button" id="saveActionsBtn">Save actions</button>' +
-                    '<button class="btn btn-primary" type="button" id="saveActionsClusterBtn">Save cluster</button>' +
-                    '</div></div></fieldset></form>');
+                    }).join("") +
+                    "<br><div class=\"form-group\">" +
+                    "<div class=\"btn-group\">" +
+                    "<button class=\"btn btn-primary\" type=\"button\" id=\"saveActionsBtn\">Save actions</button>" +
+                    "<button class=\"btn btn-primary\" type=\"button\" id=\"saveActionsClusterBtn\">Save cluster</button>" +
+                    "</div></div></fieldset></form>");
                 if (rspamd.read_only) {
-                    $('#saveActionsClusterBtn').attr('disabled', true);
-                    $('#saveActionsBtn').attr('disabled', true);
-                    $('#actionsFormField').attr('disabled', true);
+                    $("#saveActionsClusterBtn").attr("disabled", true);
+                    $("#saveActionsBtn").attr("disabled", true);
+                    $("#actionsFormField").attr("disabled", true);
                 }
 
                 function saveActions(callback) {
@@ -222,10 +222,10 @@ function($) {
                     }
                 }
 
-                $('#saveActionsBtn').on('click', function() {
+                $("#saveActionsBtn").on("click", function() {
                     saveActions(rspamd.queryLocal);
                 });
-                $('#saveActionsClusterBtn').on('click', function() {
+                $("#saveActionsClusterBtn").on("click", function() {
                     saveActions(rspamd.queryNeighbours);
                 });
             },
@@ -235,39 +235,39 @@ function($) {
     // @upload edited actions
     interface.setup = function(rspamd) {
         // Modal form for maps
-        $(document).on('click', '[data-toggle="modal"]', function () {
-            var item = $(this).data('item');
+        $(document).on("click", "[data-toggle=\"modal\"]", function () {
+            var item = $(this).data("item");
             getMapById(rspamd, item).done(function() {
-                $('#modalTitle').html(item.uri);
-                $('#' + item.map).first().show();
-                $('#modalDialog .progress').hide();
-                $('#modalDialog').modal(show = true, backdrop = true, keyboard = show);
+                $("#modalTitle").html(item.uri);
+                $("#" + item.map).first().show();
+                $("#modalDialog .progress").hide();
+                $("#modalDialog").modal(show = true, backdrop = true, keyboard = show);
                 if (item.editable === false) {
-                    $('#modalSave').hide();
-                    $('#modalSaveAll').hide();
+                    $("#modalSave").hide();
+                    $("#modalSaveAll").hide();
                 } else {
-                    $('#modalSave').show();
-                    $('#modalSaveAll').show();
+                    $("#modalSave").show();
+                    $("#modalSaveAll").show();
                 }
             });
             return false;
         });
         // close modal without saving
-        $('[data-dismiss="modal"]').on('click', function () {
-            $('#modalBody form').hide();
+        $("[data-dismiss=\"modal\"]").on("click", function () {
+            $("#modalBody form").hide();
         });
         // @save forms from modal
-        $('#modalSave').on('click', function () {
-            var form = $('#modalBody').children().filter(':visible');
-            var action = $(form).attr('action');
-            var id = $(form).attr('id');
+        $("#modalSave").on("click", function () {
+            var form = $("#modalBody").children().filter(":visible");
+            var action = $(form).attr("action");
+            var id = $(form).attr("id");
             saveMap(rspamd, action, id);
         });
-        $('#modalSaveAll').on('click', function () {
-            var form = $('#modalBody').children().filter(':visible');
-            var action = $(form).attr('action');
-            var id = $(form).attr('id');
-            var data = $('#' + id).find('textarea').val();
+        $("#modalSaveAll").on("click", function () {
+            var form = $("#modalBody").children().filter(":visible");
+            var action = $(form).attr("action");
+            var id = $(form).attr("id");
+            var data = $("#" + id).find("textarea").val();
             rspamd.queryNeighbours(action, save_map_success, save_map_error, "POST", {
                 "Map": id,
             }, {

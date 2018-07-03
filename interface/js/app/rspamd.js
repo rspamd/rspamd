@@ -22,8 +22,8 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE.
  */
-define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
-    'app/symbols', 'app/history', 'app/upload'],
+define(["jquery", "d3pie", "visibility", "app/stats", "app/graph", "app/config",
+    "app/symbols", "app/history", "app/upload"],
     function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         tab_symbols, tab_history, tab_upload) {
         // begin
@@ -76,13 +76,13 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
         }
 
         function tabClick(tab_id) {
-            if ($(tab_id).attr('disabled')) return;
-            $(tab_id).attr('disabled', true);
+            if ($(tab_id).attr("disabled")) return;
+            $(tab_id).attr("disabled", true);
 
             stopTimers();
 
             if (tab_id === "#refresh") {
-                tab_id = "#" + $('.navbar-nav .active > a' ).attr('id');
+                tab_id = "#" + $(".navbar-nav .active > a" ).attr("id");
             }
 
             switch (tab_id) {
@@ -120,35 +120,35 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
             }
 
             setTimeout(function () {
-                $(tab_id).removeAttr('disabled');
-                $('#refresh').removeAttr('disabled');
+                $(tab_id).removeAttr("disabled");
+                $("#refresh").removeAttr("disabled");
             }, 1000);
         }
 
         // @return password
         function getPassword() {
-          return sessionStorage.getItem('Password');
+          return sessionStorage.getItem("Password");
         }
 
         // @save credentials
         function saveCredentials(password) {
-          sessionStorage.setItem('Password', password);
+          sessionStorage.setItem("Password", password);
         }
 
         // @clean credentials
         function cleanCredentials() {
             sessionStorage.clear();
-            $('#statWidgets').empty();
-            $('#listMaps').empty();
-            $('#modalBody').empty();
-            $('#historyLog tbody').remove();
-            $('#errorsLog tbody').remove();
-            $('#symbolsTable tbody').remove();
-            password = '';
+            $("#statWidgets").empty();
+            $("#listMaps").empty();
+            $("#modalBody").empty();
+            $("#historyLog tbody").remove();
+            $("#errorsLog tbody").remove();
+            $("#symbolsTable tbody").remove();
+            password = "";
         }
 
         function isLogged() {
-            if (sessionStorage.getItem('Credentials') !== null) {
+            if (sessionStorage.getItem("Credentials") !== null) {
                 return true;
             }
             return false;
@@ -156,23 +156,23 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
 
         function displayUI() {
             // @toggle auth and main
-            var disconnect = $('#navBar .pull-right');
-            $('#mainUI').show();
-            $('#progress').show();
+            var disconnect = $("#navBar .pull-right");
+            $("#mainUI").show();
+            $("#progress").show();
             $(disconnect).show();
             tabClick("#refresh");
-            $('#progress').hide();
+            $("#progress").hide();
         }
 
         function alertMessage(alertClass, alertText) {
-            var a = $('<div class="alert ' + alertClass + ' alert-dismissible fade in show">' +
-                '<button type="button" class="close" data-dismiss="alert" title="Dismiss">&times;</button>' +
-                '<strong>' + alertText + '</strong>');
-            $('.notification-area').append(a);
+            var a = $("<div class=\"alert " + alertClass + " alert-dismissible fade in show\">" +
+                "<button type=\"button\" class=\"close\" data-dismiss=\"alert\" title=\"Dismiss\">&times;</button>" +
+                "<strong>" + alertText + "</strong>");
+            $(".notification-area").append(a);
 
             setTimeout(function () {
                 $(a).fadeTo(500, 0).slideUp(500, function () {
-                    $(this).alert('close');
+                    $(this).alert("close");
                 });
             }, 5000);
         }
@@ -190,40 +190,40 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
             });
 
             $(document).ajaxStart(function () {
-                $('#navBar').addClass('loading');
+                $("#navBar").addClass("loading");
             });
             $(document).ajaxComplete(function () {
                 setTimeout(function () {
-                    $('#navBar').removeClass('loading');
+                    $("#navBar").removeClass("loading");
                 }, 1000);
             });
 
 	    $.ajax({
-                type: 'GET',
-                url: 'stat',
+                type: "GET",
+                url: "stat",
                 success: function () {
-                    saveCredentials({}, 'nopassword');
-                    var dialog = $('#connectDialog');
-                    var backdrop = $('#backDrop');
+                    saveCredentials({}, "nopassword");
+                    var dialog = $("#connectDialog");
+                    var backdrop = $("#backDrop");
                     $(dialog).hide();
                     $(backdrop).hide();
                     displayUI();
                 },
             });
 
-            $('a[data-toggle="tab"]').on('click', function (e) {
+            $("a[data-toggle=\"tab\"]").on("click", function (e) {
                 var tab_id = "#" + $(e.target).attr("id");
                 tabClick(tab_id);
             });
 
             $("#selSrv").change(function () {
                 checked_server = this.value;
-                $('#selSrv [value="' + checked_server + '"]').prop("checked", true);
+                $("#selSrv [value=\"" + checked_server + "\"]").prop("checked", true);
                 tabClick("#" + $("#navBar ul li.active > a").attr("id"));
             });
 
             // Radio buttons
-            $(document).on('click', 'input:radio[name="clusterName"]', function () {
+            $(document).on("click", "input:radio[name=\"clusterName\"]", function () {
                 if (!this.disabled) {
                     checked_server = this.value;
                     tabClick("#status_nav");
@@ -238,65 +238,65 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
 
         interface.connect = function() {
             if (isLogged()) {
-                var data = JSON.parse(sessionStorage.getItem('Credentials'));
+                var data = JSON.parse(sessionStorage.getItem("Credentials"));
 
                 if (data && data[checked_server].read_only) {
                     interface.read_only = true;
-                    $('#learning_nav').hide();
-                    $('#resetHistory').attr('disabled', true);
-                    $('#errors-history').hide();
+                    $("#learning_nav").hide();
+                    $("#resetHistory").attr("disabled", true);
+                    $("#errors-history").hide();
                 }
                 else {
                     interface.read_only = false;
-                    $('#learning_nav').show();
-                    $('#resetHistory').removeAttr('disabled', true);
+                    $("#learning_nav").show();
+                    $("#resetHistory").removeAttr("disabled", true);
                 }
                 displayUI();
                 return;
             }
 
-            var ui = $('#mainUI');
-            var dialog = $('#connectDialog');
-            var backdrop = $('#backDrop');
+            var ui = $("#mainUI");
+            var dialog = $("#connectDialog");
+            var backdrop = $("#backDrop");
             $(ui).hide();
             $(dialog).show();
             $(backdrop).show();
-            $('#connectPassword').focus();
-            $('#connectForm').off('submit');
+            $("#connectPassword").focus();
+            $("#connectForm").off("submit");
 
-            $('#connectForm').on('submit', function (e) {
+            $("#connectForm").on("submit", function (e) {
                 e.preventDefault();
-                var password = $('#connectPassword').val();
+                var password = $("#connectPassword").val();
                 if (!/^[\u0000-\u007f]*$/.test(password)) {
-                    alertMessage('alert-modal alert-error', 'Invalid characters in the password');
-                    $('#connectPassword').focus();
+                    alertMessage("alert-modal alert-error", "Invalid characters in the password");
+                    $("#connectPassword").focus();
                     return;
                 }
 
                 $.ajax({
                     global: false,
                     jsonp: false,
-                    dataType: 'json',
-                    type: 'GET',
-                    url: 'auth',
+                    dataType: "json",
+                    type: "GET",
+                    url: "auth",
                     beforeSend: function (xhr) {
-                        xhr.setRequestHeader('Password', password);
+                        xhr.setRequestHeader("Password", password);
                     },
                     success: function (data) {
-                        $('#connectPassword').val('');
-                        if (data.auth === 'failed') {
+                        $("#connectPassword").val("");
+                        if (data.auth === "failed") {
                             // Is actually never returned by Rspamd
                         } else {
                             if (data.read_only) {
                                 interface.read_only = true;
-                                $('#learning_nav').hide();
-                                $('#resetHistory').attr('disabled', true);
-                                $('#errors-history').hide();
+                                $("#learning_nav").hide();
+                                $("#resetHistory").attr("disabled", true);
+                                $("#errors-history").hide();
                             }
                             else {
                                 interface.read_only = false;
-                                $('#learning_nav').show();
-                                $('#resetHistory').removeAttr('disabled', true);
+                                $("#learning_nav").show();
+                                $("#resetHistory").removeAttr("disabled", true);
                             }
 
                             saveCredentials(password);
@@ -306,9 +306,9 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                         }
                     },
                     error: function (data) {
-                        interface.alertMessage('alert-modal alert-error', data.statusText);
-                        $('#connectPassword').val('');
-                        $('#connectPassword').focus();
+                        interface.alertMessage("alert-modal alert-error", data.statusText);
+                        $("#connectPassword").val("");
+                        $("#connectPassword").focus();
                     }
                 });
             });
@@ -333,15 +333,15 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                         on_success(data);
                     }
                     else {
-                        alertMessage('alert-success', 'Data saved');
+                        alertMessage("alert-success", "Data saved");
                     }
                 },
                 error: function(jqXHR, textStatus, errorThrown) {
                     if (on_error) {
-                        on_error('local', jqXHR, textStatus, errorThrown);
+                        on_error("local", jqXHR, textStatus, errorThrown);
                     }
                     else {
-                         alertMessage('alert-error', 'Cannot receive data: ' + errorThrown);
+                         alertMessage("alert-error", "Cannot receive data: " + errorThrown);
                     }
                 }
             };
@@ -386,7 +386,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                     });
                     $.each(neighbours_status, function (ind) {
                         "use strict";
-                        method = typeof method !== 'undefined' ? method : "GET";
+                        method = typeof method !== "undefined" ? method : "GET";
                         var req_params = {
                             type: method,
                             jsonp: false,
@@ -415,7 +415,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                                         on_success(neighbours_status);
                                     }
                                     else {
-                                        alertMessage('alert-success', 'Request completed');
+                                        alertMessage("alert-success", "Request completed");
                                     }
                                 }
                             },
@@ -427,8 +427,8 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                                             jqXHR, textStatus, errorThrown);
                                 }
                                 else {
-                                    alertMessage('alert-error', 'Cannot receive data from ' +
-                                       neighbours_status[ind].host + ': ' + errorThrown);
+                                    alertMessage("alert-error", "Cannot receive data from " +
+                                       neighbours_status[ind].host + ": " + errorThrown);
                                 }
                                 if (neighbours_status.every(
                                         function (elt) {return elt.checked;})) {
@@ -436,7 +436,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                                         on_success(neighbours_status);
                                     }
                                     else {
-                                        alertMessage('alert-success', 'Request completed');
+                                        alertMessage("alert-success", "Request completed");
                                     }
                                 }
                             }
@@ -451,7 +451,7 @@ define(['jquery', 'd3pie', 'visibility', 'app/stats', 'app/graph', 'app/config',
                     });
                 },
                 error: function () {
-                    interface.alertMessage('alert-error', 'Cannot receive neighbours data');
+                    interface.alertMessage("alert-error", "Cannot receive neighbours data");
                 },
             });
         };

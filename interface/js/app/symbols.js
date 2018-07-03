@@ -22,29 +22,29 @@
  THE SOFTWARE.
  */
 
-define(['jquery', 'footable'],
+define(["jquery", "footable"],
 function($) {
     var interface = {}
     var ft = {}
 
     function saveSymbols(rspamd, action, id, is_cluster) {
-        var inputs = $('#' + id + ' :input[data-role="numerictextbox"]');
+        var inputs = $("#" + id + " :input[data-role=\"numerictextbox\"]");
         var url = action;
         var values = [];
         $(inputs).each(function () {
             values.push({
-                name: $(this).attr('id').substring(5),
+                name: $(this).attr("id").substring(5),
                 value: parseFloat($(this).val())
             });
         });
 
         if (is_cluster) {
             rspamd.queryNeighbours(url, function () {
-                rspamd.alertMessage('alert-modal alert-success', 'Symbols successfully saved');
+                rspamd.alertMessage("alert-modal alert-success", "Symbols successfully saved");
             }, function (serv, qXHR, textStatus, errorThrown) {
-                rspamd.alertMessage('alert-modal alert-error',
-                        'Save symbols error on ' +
-                        serv.name + ': ' + errorThrown);
+                rspamd.alertMessage("alert-modal alert-error",
+                        "Save symbols error on " +
+                        serv.name + ": " + errorThrown);
             }, "POST", {}, {
                 data: JSON.stringify(values),
                 dataType: "json",
@@ -53,24 +53,24 @@ function($) {
         else {
             $.ajax({
                 data: JSON.stringify(values),
-                dataType: 'json',
-                type: 'POST',
+                dataType: "json",
+                type: "POST",
                 url: url,
                 jsonp: false,
                 beforeSend: function (xhr) {
-                    xhr.setRequestHeader('Password', rspamd.getPassword());
+                    xhr.setRequestHeader("Password", rspamd.getPassword());
                 },
                 success: function () {
-                    rspamd.alertMessage('alert-modal alert-success', 'Symbols successfully saved');
+                    rspamd.alertMessage("alert-modal alert-success", "Symbols successfully saved");
                 },
                 error: function (data) {
-                    rspamd.alertMessage('alert-modal alert-error', data.statusText);
+                    rspamd.alertMessage("alert-modal alert-error", data.statusText);
                 }
             });
         }
     }
     function decimalStep(number) {
-        var digits = ((+number).toFixed(20)).replace(/^-?\d*\.?|0+$/g, '').length;
+        var digits = ((+number).toFixed(20)).replace(/^-?\d*\.?|0+$/g, "").length;
         if (digits === 0 || digits > 4) {
             return 0.1;
         } else {
@@ -94,22 +94,22 @@ function($) {
                 if (item.weight < min) {
                     min = item.weight * 2;
                 }
-                var label_class = '';
+                var label_class = "";
                 if (item.weight < 0) {
-                    label_class = 'scorebar-ham';
+                    label_class = "scorebar-ham";
                 } else if (item.weight > 0) {
-                    label_class = 'scorebar-spam';
+                    label_class = "scorebar-spam";
                 }
-                item.weight = '<input class="form-control input-sm mb-disabled ' + label_class +
-                    '" data-role="numerictextbox" autocomplete="off" "type="number" class="input" min="' +
-                    min + '" max="' +
-                    max + '" step="' + decimalStep(item.weight) +
-                    '" tabindex="1" value="' + Number(item.weight).toFixed(3) +
-                    '" id="_sym_' + item.symbol + '"></input>'
+                item.weight = "<input class=\"form-control input-sm mb-disabled " + label_class +
+                    "\" data-role=\"numerictextbox\" autocomplete=\"off\" \"type=\"number\" class=\"input\" min=\"" +
+                    min + "\" max=\"" +
+                    max + "\" step=\"" + decimalStep(item.weight) +
+                    "\" tabindex=\"1\" value=\"" + Number(item.weight).toFixed(3) +
+                    "\" id=\"_sym_" + item.symbol + "\"></input>"
                 if (!item.time) {
                     item.time = 0;
                 }
-                item.time = Number(item.time).toFixed(2) + 's'
+                item.time = Number(item.time).toFixed(2) + "s"
                 if (!item.frequency) {
                     item.frequency = 0;
                 }
@@ -119,8 +119,8 @@ function($) {
                   lookup[item.group] = 1;
                   distinct_groups.push(item.group);
                 }
-                item.save = '<button type="button" data-save="local" class="btn btn-primary btn-sm mb-disabled">Save</button>' +
-                '&nbsp;<button data-save="cluster" type="button" class="btn btn-primary btn-sm mb-disabled">Save in cluster</button>';
+                item.save = "<button type=\"button\" data-save=\"local\" class=\"btn btn-primary btn-sm mb-disabled\">Save</button>" +
+                "&nbsp;<button data-save=\"cluster\" type=\"button\" class=\"btn btn-primary btn-sm mb-disabled\">Save in cluster</button>";
                 items.push(item)
             });
         });
@@ -144,7 +144,7 @@ function($) {
             item.frequency = Number(item.frequency) * mult;
 
             if (exp > 0) {
-                item.frequency = item.frequency.toFixed(2) + 'e-' + exp;
+                item.frequency = item.frequency.toFixed(2) + "e-" + exp;
             }
             else {
                 item.frequency = item.frequency.toFixed(2);
@@ -156,12 +156,12 @@ function($) {
     interface.getSymbols = function(rspamd, tables, checked_server) {
 
         $.ajax({
-            dataType: 'json',
-            type: 'GET',
-            url: 'symbols',
+            dataType: "json",
+            type: "GET",
+            url: "symbols",
             jsonp: false,
             beforeSend: function (xhr) {
-                xhr.setRequestHeader('Password', rspamd.getPassword());
+                xhr.setRequestHeader("Password", rspamd.getPassword());
             },
             success: function (data) {
                 var items = process_symbols_data(data);
@@ -169,43 +169,43 @@ function($) {
                   construct : function(instance) {
                       this._super(instance);
                       this.groups = items[1];
-                      this.def = 'Any group';
+                      this.def = "Any group";
                       this.$group = null;
                   },
                   $create : function() {
                       this._super();
-                      var self = this, $form_grp = $('<div/>', {
-                          'class' : 'form-group'
-                      }).append($('<label/>', {
-                          'class' : 'sr-only',
-                          text : 'Group'
+                      var self = this, $form_grp = $("<div/>", {
+                          "class" : "form-group"
+                      }).append($("<label/>", {
+                          "class" : "sr-only",
+                          text : "Group"
                       })).prependTo(self.$form);
 
-                      self.$group = $('<select/>', {
-                          'class' : 'form-control'
-                      }).on('change', {
+                      self.$group = $("<select/>", {
+                          "class" : "form-control"
+                      }).on("change", {
                           self : self
                       }, self._onStatusDropdownChanged).append(
-                              $('<option/>', {
+                              $("<option/>", {
                                   text : self.def
                               })).appendTo($form_grp);
 
                       $.each(self.groups, function(i, group) {
-                          self.$group.append($('<option/>').text(group));
+                          self.$group.append($("<option/>").text(group));
                       });
                   },
                   _onStatusDropdownChanged : function(e) {
                       var self = e.data.self, selected = $(this).val();
                       if (selected !== self.def) {
-                          self.addFilter('group', selected, [ 'group' ]);
+                          self.addFilter("group", selected, [ "group" ]);
                       } else {
-                          self.removeFilter('group');
+                          self.removeFilter("group");
                       }
                       self.filter();
                   },
                   draw : function() {
                       this._super();
-                      var group = this.find('group');
+                      var group = this.find("group");
                       if (group instanceof FooTable.Filter) {
                           this.$group.val(group.query.val());
                       } else {
@@ -243,40 +243,40 @@ function($) {
                   "on": {
                     "ready.ft.table": function () {
                         if (rspamd.read_only) {
-                            $(".mb-disabled").attr('disabled', true);
+                            $(".mb-disabled").attr("disabled", true);
                         }
                     }
                   }
                 });
             },
             error: function (data) {
-                rspamd.alertMessage('alert-modal alert-error', data.statusText);
+                rspamd.alertMessage("alert-modal alert-error", data.statusText);
             }
         });
         $(document).on("click", "#symbolsTable :button", function(event){
-          var value = $(this).data('save');
+          var value = $(this).data("save");
           if (!value) return
-          saveSymbols(rspamd, "./savesymbols", "symbolsTable", value == 'cluster');
+          saveSymbols(rspamd, "./savesymbols", "symbolsTable", value == "cluster");
         });
     };
 
     interface.setup = function(rspamd, tables) {
-        $('#updateSymbols').on('click', function (e) {
+        $("#updateSymbols").on("click", function (e) {
           e.preventDefault();
           $.ajax({
-              dataType: 'json',
-              type: 'GET',
+              dataType: "json",
+              type: "GET",
               jsonp: false,
-              url: 'symbols',
+              url: "symbols",
               beforeSend: function (xhr) {
-                  xhr.setRequestHeader('Password', rspamd.getPassword());
+                  xhr.setRequestHeader("Password", rspamd.getPassword());
               },
               success: function (data) {
                 var items = process_symbols_data(data)[0];
                 ft.symbols.rows.load(items);
               },
               error: function (data) {
-                  rspamd.alertMessage('alert-modal alert-error', data.statusText);
+                  rspamd.alertMessage("alert-modal alert-error", data.statusText);
               }
           });
         });

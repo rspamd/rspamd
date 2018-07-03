@@ -23,7 +23,7 @@
  THE SOFTWARE.
  */
 
-define(['jquery', 'd3evolution', 'footable'],
+define(["jquery", "d3evolution", "footable"],
 function($, D3Evolution, unused) {
     var rrd_pie_config = {
         header: {},
@@ -148,9 +148,9 @@ function($, D3Evolution, unused) {
             };
         }, []);
 
-        document.getElementById('rrd-total-value').innerHTML = total_messages;
+        document.getElementById("rrd-total-value").innerHTML = total_messages;
 
-        $('#rrd-table').footable({
+        $("#rrd-table").footable({
             sorting: {
                 enabled: true
             },
@@ -219,8 +219,8 @@ function($, D3Evolution, unused) {
                     neighbours_data.reduce(function (res, curr) {
                         if ((curr[0][0].x !== res[0][0].x) ||
                             (curr[0][curr[0].length - 1].x !== res[0][res[0].length - 1].x)) {
-                            rspamd.alertMessage('alert-error',
-                                'Neighbours time extents do not match. Check if time is synchronized on all servers.');
+                            rspamd.alertMessage("alert-error",
+                                "Neighbours time extents do not match. Check if time is synchronized on all servers.");
                             updateWidgets();
                             return;
                         }
@@ -244,12 +244,12 @@ function($, D3Evolution, unused) {
                 }
             },
             function (serv, jqXHR, textStatus, errorThrown) {
-                var alert_status = serv.name + '_alerted';
+                var alert_status = serv.name + "_alerted";
 
                 if (!(alert_status in sessionStorage)) {
                     sessionStorage.setItem(alert_status, true);
-                    rspamd.alertMessage('alert-error', 'Cannot receive RRD data from: ' +
-                        serv.name + ', error: ' + errorThrown);
+                    rspamd.alertMessage("alert-error", "Cannot receive RRD data from: " +
+                        serv.name + ", error: " + errorThrown);
                 }
             }, "GET", {}, {}, {
                 type: type
@@ -258,22 +258,22 @@ function($, D3Evolution, unused) {
         }
 
         $.ajax({
-            dataType: 'json',
-            type: 'GET',
-            url: neighbours[checked_server].url + 'graph',
+            dataType: "json",
+            type: "GET",
+            url: neighbours[checked_server].url + "graph",
             jsonp: false,
             data: {
                 "type": type
             },
             beforeSend: function (xhr) {
-                xhr.setRequestHeader('Password', rspamd.getPassword());
+                xhr.setRequestHeader("Password", rspamd.getPassword());
             },
             success: function (data) {
                 updateWidgets(data);
             },
             error: function (jqXHR, textStatus, errorThrown) {
-                rspamd.alertMessage('alert-error', 'Cannot receive throughput data: ' +
-                    textStatus + ' ' + jqXHR.status + ' ' + errorThrown);
+                rspamd.alertMessage("alert-error", "Cannot receive throughput data: " +
+                    textStatus + " " + jqXHR.status + " " + errorThrown);
             }
         });
     };
