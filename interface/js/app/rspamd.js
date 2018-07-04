@@ -198,7 +198,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             }, 1000);
         });
 
-	    $.ajax({
+        $.ajax({
             type: "GET",
             url: "stat",
             success: function () {

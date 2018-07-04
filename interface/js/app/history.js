@@ -69,7 +69,7 @@ define(["jquery", "footable", "humanize"],
                         }
                         sym.name = EscapeHTML(key);
                         if (sym.description) {
-	                        sym.description = EscapeHTML(sym.description);
+                            sym.description = EscapeHTML(sym.description);
                         }
 
                         if (sym.options) {
@@ -158,12 +158,12 @@ define(["jquery", "footable", "humanize"],
                         var sym = item.symbols[key];
 
                         if (sym.description) {
-	                var str = "<strong><abbr data-sym-key=\"" + key + "\">" + sym.name + "</abbr></strong>" + "(" + sym.score + ")";
+                    var str = "<strong><abbr data-sym-key=\"" + key + "\">" + sym.name + "</abbr></strong>" + "(" + sym.score + ")";
 
-	                // Store description for tooltip
-	                symbolDescriptions[key] = sym.description;
+                    // Store description for tooltip
+                    symbolDescriptions[key] = sym.description;
                         } else {
-	                var str = "<strong>" + sym.name + "</strong>" + "(" + sym.score + ")";
+                    var str = "<strong>" + sym.name + "</strong>" + "(" + sym.score + ")";
                         }
 
                         if (sym.options) {
@@ -518,9 +518,9 @@ define(["jquery", "footable", "humanize"],
                     var self = e.data.self, selected = $(this).val();
                     if (selected !== self.def) {
                         if(selected === "reject"){
-		  self.addFilter("action", "reject -soft", [ "action" ]);
+          self.addFilter("action", "reject -soft", [ "action" ]);
                         } else {
-		  self.addFilter("action", selected, [ "action" ]);
+          self.addFilter("action", selected, [ "action" ]);
                         }
                     } else {
                         self.removeFilter("action");
@@ -604,10 +604,10 @@ define(["jquery", "footable", "humanize"],
                                 "filtering": FooTable.actionFilter
                             },
                             "on": {
-	                    "ready.ft.table": drawTooltips,
-	                    "after.ft.sorting": drawTooltips,
-	                    "after.ft.paging": drawTooltips,
-	                    "after.ft.filtering": drawTooltips
+                            "ready.ft.table": drawTooltips,
+                            "after.ft.sorting": drawTooltips,
+                            "after.ft.paging": drawTooltips,
+                            "after.ft.filtering": drawTooltips
                             }
                         });
                     } else {
@@ -651,10 +651,10 @@ define(["jquery", "footable", "humanize"],
                                 "filtering": FooTable.actionFilter
                             },
                             "on": {
-	                    "ready.ft.table": drawTooltips,
-	                    "after.ft.sorting": drawTooltips,
-	                    "after.ft.paging": drawTooltips,
-	                    "after.ft.filtering": drawTooltips
+                        "ready.ft.table": drawTooltips,
+                        "after.ft.sorting": drawTooltips,
+                        "after.ft.paging": drawTooltips,
+                        "after.ft.filtering": drawTooltips
                             }
                         });
                     }
