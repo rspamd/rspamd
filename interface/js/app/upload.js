@@ -192,7 +192,7 @@ define(["jquery"],
                 var headers = {};
                 data = $("#" + source + "TextSource").val();
                 if (source == "fuzzy") {
-                //To access the proper
+                // To access the proper
                     headers.flag = $("#fuzzyFlagText").val();
                     headers.weight = $("#fuzzyWeightText").val();
                 } else {

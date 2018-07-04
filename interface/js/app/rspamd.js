@@ -29,7 +29,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     // begin
     var graphs = {};
     var tables = {};
-    var neighbours = []; //list of clusters
+    var neighbours = []; // list of clusters
     var checked_server = "All SERVERS";
     var interface = {
         read_only: false,
@@ -405,9 +405,9 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                             neighbours_status[ind].checked = true;
 
                             if (jQuery.isEmptyObject(data)) {
-                                neighbours_status[ind].status = false; //serv does not work
+                                neighbours_status[ind].status = false; // serv does not work
                             } else {
-                                neighbours_status[ind].status = true; //serv does not work
+                                neighbours_status[ind].status = true; // serv does not work
                                 neighbours_status[ind].data = data;
                             }
                             if (neighbours_status.every(function (elt) { return elt.checked; })) {
@@ -440,7 +440,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                                 }
                             }
                         }
-                        //error display
+                        // error display
                     };
                     if (params) {
                         $.each(params, function(k, v) {
@@ -492,7 +492,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                         "pieOuterRadius": "85%"
                     },
                     "data": {
-                        //"sortOrder": "value-desc",
+                        // "sortOrder": "value-desc",
                         "content": data.filter(function (elt) {
                             return elt.value > 0;
                         })
