@@ -906,6 +906,8 @@ lua_textpart_get_fuzzy_hashes (lua_State * L)
 		/* TODO: add short text support */
 
 		/* Calculate direct hash */
+		rspamd_cryptobox_hash_init (&st, key, rspamd_cryptobox_HASHKEYBYTES);
+
 		for (i = 0; i < part->normalized_words->len; i ++) {
 			word = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
 			rspamd_cryptobox_hash_update (&st, word->begin, word->len);
@@ -915,7 +917,7 @@ lua_textpart_get_fuzzy_hashes (lua_State * L)
 
 		rspamd_encode_hex_buf (digest, sizeof (digest), hexdigest,
 				sizeof (hexdigest));
-		lua_pushstring (L, hexdigest);
+		lua_pushlstring (L, hexdigest, sizeof (hexdigest) - 1);
 
 		sgl = rspamd_shingles_from_text (part->normalized_words, key,
 				pool, lua_shingles_filter, part, RSPAMD_SHINGLES_MUMHASH);

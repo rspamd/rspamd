@@ -325,12 +325,22 @@ local function stat_handler(opts)
       end
       for _,part in ipairs(parts) do
         if not part:is_multipart() then
-          table.insert(out_elts[fname], {
-            digest = part:get_digest(),
-            file = part:get_filename(),
-            type = string.format('%s/%s', part:get_type())
-          })
+          local text = part:get_text()
 
+          if text then
+            local digest,shingles = text:get_fuzzy_hashes(task:get_mempool())
+            table.insert(out_elts[fname], {
+              digest = digest,
+              shingles = rspamd_logger.slog('%s', shingles),
+              type = string.format('%s/%s', part:get_type())
+            })
+          else
+            table.insert(out_elts[fname], {
+              digest = part:get_digest(),
+              file = part:get_filename(),
+              type = string.format('%s/%s', part:get_type())
+            })
+          end
         end
       end
     end
