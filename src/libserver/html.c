@@ -2582,13 +2582,22 @@ rspamd_html_propagate_style (struct html_content *hc,
 		bl->font_color.d.comp.b = 0;
 		bl->font_color.valid = TRUE;
 	}
+	else {
+		push_block = TRUE;
+	}
 
 	if (!bl->background_color.valid) {
 		memcpy (&bl->background_color, &hc->bgcolor, sizeof (hc->bgcolor));
 	}
+	else {
+		push_block = TRUE;
+	}
 
 	if (bl->font_size == (guint)-1) {
 		bl->font_size = 16; /* Default for browsers */
+	}
+	else {
+		push_block = TRUE;
 	}
 
 	if (push_block && !(tag->flags & FL_CLOSED)) {
