@@ -487,8 +487,8 @@ define(["jquery", "footable", "humanize"],
             FooTable.actionFilter = FooTable.Filtering.extend({
                 construct : function(instance) {
                     this._super(instance);
-                    this.actions = [ "reject", "add header", "greylist",
-                        "no action", "soft reject", "rewrite subject" ];
+                    this.actions = ["reject", "add header", "greylist",
+                        "no action", "soft reject", "rewrite subject"];
                     this.def = "Any action";
                     this.$action = null;
                 },
@@ -518,9 +518,9 @@ define(["jquery", "footable", "humanize"],
                     var self = e.data.self, selected = $(this).val();
                     if (selected !== self.def) {
                         if(selected === "reject"){
-          self.addFilter("action", "reject -soft", [ "action" ]);
+          self.addFilter("action", "reject -soft", ["action"]);
                         } else {
-          self.addFilter("action", selected, [ "action" ]);
+          self.addFilter("action", selected, ["action"]);
                         }
                     } else {
                         self.removeFilter("action");

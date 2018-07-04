@@ -140,7 +140,7 @@ define(["jquery", "d3pie", "humanize"],
             var creds = JSON.parse(sessionStorage.getItem("Credentials"));
             if (creds && creds[checked_server]) {
                 var data = creds[checked_server].data;
-                var new_data = [ {
+                var new_data = [{
                     "color" : "#66CC00",
                     "label" : "Clean",
                     "data" : data.clean,
@@ -165,7 +165,7 @@ define(["jquery", "d3pie", "humanize"],
                     "label" : "Rejected",
                     "data" : data.reject,
                     "value" : data.reject
-                } ];
+                }];
 
                 return rspamd.drawPie(pie, "chart", new_data);
             }

@@ -197,7 +197,7 @@ define(["jquery", "footable"],
                         _onStatusDropdownChanged : function(e) {
                             var self = e.data.self, selected = $(this).val();
                             if (selected !== self.def) {
-                                self.addFilter("group", selected, [ "group" ]);
+                                self.addFilter("group", selected, ["group"]);
                             } else {
                                 self.removeFilter("group");
                             }
