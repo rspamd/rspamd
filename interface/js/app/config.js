@@ -51,7 +51,7 @@ define(["jquery"],
                 error: function (data) {
                     save_map_error(rspamd, "local", null, null, data.statusText);
                 },
-                success: function() {save_map_success(rspamd);},
+                success: function() { save_map_success(rspamd); },
             });
         }
 
