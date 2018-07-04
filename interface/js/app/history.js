@@ -517,7 +517,7 @@ define(["jquery", "footable", "humanize"],
                 _onStatusDropdownChanged : function(e) {
                     var self = e.data.self, selected = $(this).val();
                     if (selected !== self.def) {
-                        if(selected === "reject"){
+                        if (selected === "reject") {
                             self.addFilter("action", "reject -soft", ["action"]);
                         } else {
                             self.addFilter("action", selected, ["action"]);
@@ -531,7 +531,7 @@ define(["jquery", "footable", "humanize"],
                     this._super();
                     var action = this.find("action");
                     if (action instanceof FooTable.Filter) {
-                        if(action.query.val() === "reject -soft"){
+                        if (action.query.val() === "reject -soft") {
                             this.$action.val("reject");
                         } else {
                             this.$action.val(action.query.val());
@@ -568,7 +568,7 @@ define(["jquery", "footable", "humanize"],
 
                     var neighbours_data = req_data
                         .filter(function (d) { return d.status; }) // filter out unavailable neighbours
-                        .map(function (d){ return d.data; });
+                        .map(function (d) { return d.data; });
                     if (neighbours_data.length && !differentVersions()) {
                         var data = {};
                         if (neighbours_data[0].version) {

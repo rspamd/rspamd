@@ -219,7 +219,7 @@ define(["jquery", "footable"],
                             {"name":"symbol", "title":"Symbol", "style":{"font-size":"11px"}},
                             {"name":"description", "title":"Description", "breakpoints":"xs sm", "style":{"font-size":"11px"}},
                             {"name":"weight", "title":"Score", "style":{"font-size":"11px"}},
-                            {"name":"frequency", "title":"Frequency", "breakpoints":"xs sm", "style":{"font-size":"11px"}, "sortValue": function(value){return Number(value).toFixed(2);}},
+                            {"name":"frequency", "title":"Frequency", "breakpoints":"xs sm", "style":{"font-size":"11px"}, "sortValue": function(value) {return Number(value).toFixed(2);}},
                             {"name":"time", "title":"Avg. time", "breakpoints":"xs sm", "style":{"font-size":"11px"}},
                             {"name":"save", "title":"Save", "style":{"font-size":"11px"}},
                         ],
@@ -253,7 +253,7 @@ define(["jquery", "footable"],
                     rspamd.alertMessage("alert-modal alert-error", data.statusText);
                 }
             });
-            $(document).on("click", "#symbolsTable :button", function(event){
+            $(document).on("click", "#symbolsTable :button", function(event) {
                 var value = $(this).data("save");
                 if (!value) return;
                 saveSymbols(rspamd, "./savesymbols", "symbolsTable", value == "cluster");

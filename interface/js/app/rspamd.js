@@ -322,7 +322,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 xhr.setRequestHeader("Password", getPassword());
 
                 if (headers) {
-                    $.each(headers, function(hname, hvalue){
+                    $.each(headers, function(hname, hvalue) {
                         xhr.setRequestHeader(hname, hvalue);
                     });
                 }
@@ -395,7 +395,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                             xhr.setRequestHeader("Password", getPassword());
 
                             if (headers) {
-                                $.each(headers, function(hname, hvalue){
+                                $.each(headers, function(hname, hvalue) {
                                     xhr.setRequestHeader(hname, hvalue);
                                 });
                             }
