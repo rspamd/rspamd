@@ -18,6 +18,8 @@
 #include "libmime/message.h"
 #include "libmime/lang_detection.h"
 #include "libstat/stat_api.h"
+#include "libcryptobox/cryptobox.h"
+#include "libutil/shingles.h"
 
 /* Textpart methods */
 /***
@@ -169,6 +171,17 @@ LUA_FUNCTION_DEF (textpart, get_language);
  */
 LUA_FUNCTION_DEF (textpart, get_languages);
 /***
+ * @method text_part:get_fuzzy_hashes(mempool)
+ * @param {rspamd_mempool} mempool - memory pool (usually task pool)
+ * Returns direct hash + array of shingles being calculated as following:
+ * - [1] - fuzzy digest as a string
+ * - [2..33] - fuzzy hashes as the following tables:
+ *   - [1] - 64 bit integer represented as a string
+ *   - [2..4] - strings used to generate this hash
+ * @return {string,array|tables} fuzzy hashes calculated
+ */
+LUA_FUNCTION_DEF (textpart, get_fuzzy_hashes);
+/***
  * @method text_part:get_mimepart()
  * Returns the mime part object corresponding to this text part
  * @return {mimepart} mimepart object
@@ -195,6 +208,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, get_languages),
 	LUA_INTERFACE_DEF (textpart, get_mimepart),
 	LUA_INTERFACE_DEF (textpart, get_stats),
+	LUA_INTERFACE_DEF (textpart, get_fuzzy_hashes),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -825,6 +839,120 @@ lua_textpart_get_languages (lua_State * L)
 	}
 
 	return 1;
+}
+
+struct lua_shingle_data {
+	guint64 hash;
+	rspamd_ftok_t t1;
+	rspamd_ftok_t t2;
+	rspamd_ftok_t t3;
+};
+
+#define STORE_TOKEN(i, t) do { \
+    if ((i) < part->normalized_words->len) { \
+        word = &g_array_index (part->normalized_words, rspamd_stat_token_t, (i)); \
+        sd->t.begin = word->begin; \
+        sd->t.len = word->len; \
+    } \
+    }while (0)
+
+static guint64
+lua_shingles_filter (guint64 *input, gsize count,
+					 gint shno, const guchar *key, gpointer ud)
+{
+	guint64 minimal = G_MAXUINT64;
+	gsize i, min_idx = 0;
+	struct lua_shingle_data *sd;
+	rspamd_stat_token_t *word;
+	struct rspamd_mime_text_part *part = (struct rspamd_mime_text_part *)ud;
+
+	for (i = 0; i < count; i ++) {
+		if (minimal > input[i]) {
+			minimal = input[i];
+			min_idx = i;
+		}
+	}
+
+	sd = g_malloc0 (sizeof (*sd));
+	sd->hash = minimal;
+
+
+	STORE_TOKEN (min_idx, t1);
+	STORE_TOKEN (min_idx + 1, t2);
+	STORE_TOKEN (min_idx + 2, t3);
+
+	return GPOINTER_TO_SIZE (sd);
+}
+
+#undef STORE_TOKEN
+
+static gint
+lua_textpart_get_fuzzy_hashes (lua_State * L)
+{
+	struct rspamd_mime_text_part *part = lua_check_textpart (L);
+	rspamd_mempool_t *pool = rspamd_lua_check_mempool (L, 2);
+	guchar key[rspamd_cryptobox_HASHBYTES], digest[rspamd_cryptobox_HASHBYTES],
+			hexdigest[rspamd_cryptobox_HASHBYTES * 2 + 1], numbuf[64];
+	struct rspamd_shingle *sgl;
+	guint i;
+	struct lua_shingle_data *sd;
+	rspamd_cryptobox_hash_state_t st;
+	rspamd_stat_token_t *word;
+
+	if (part && pool) {
+		/* TODO: add keys and algorithms support */
+		rspamd_cryptobox_hash (key, "rspamd", strlen ("rspamd"), NULL, 0);
+
+		/* TODO: add short text support */
+
+		/* Calculate direct hash */
+		for (i = 0; i < part->normalized_words->len; i ++) {
+			word = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
+			rspamd_cryptobox_hash_update (&st, word->begin, word->len);
+		}
+
+		rspamd_cryptobox_hash_final (&st, digest);
+
+		rspamd_encode_hex_buf (digest, sizeof (digest), hexdigest,
+				sizeof (hexdigest));
+		lua_pushstring (L, hexdigest);
+
+		sgl = rspamd_shingles_from_text (part->normalized_words, key,
+				pool, lua_shingles_filter, part, RSPAMD_SHINGLES_MUMHASH);
+
+		if (sgl == NULL) {
+			lua_pushnil (L);
+		}
+		else {
+			lua_createtable (L, G_N_ELEMENTS (sgl->hashes), 0);
+
+			for (i = 0; i < G_N_ELEMENTS (sgl->hashes); i ++) {
+				sd = GSIZE_TO_POINTER (sgl->hashes[i]);
+
+				lua_createtable (L, 4, 0);
+				rspamd_snprintf (numbuf, sizeof (numbuf), "%uL", sd->hash);
+				lua_pushstring (L, numbuf);
+				lua_rawseti (L, -2, 1);
+
+				/* Tokens */
+				lua_pushlstring (L, sd->t1.begin, sd->t1.len);
+				lua_rawseti (L, -2, 2);
+
+				lua_pushlstring (L, sd->t2.begin, sd->t2.len);
+				lua_rawseti (L, -2, 3);
+
+				lua_pushlstring (L, sd->t3.begin, sd->t3.len);
+				lua_rawseti (L, -2, 4);
+
+				lua_rawseti (L, -2, i + 1); /* Store table */
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 2;
 }
 
 static gint
