@@ -83,7 +83,7 @@ define(["jquery"],
                         }
                         var $tr = $("<tr>");
                         $("<td class=\"col-md-2 maps-cell\">" + label + "</td>").appendTo($tr);
-                        $span = $("<span class=\"map-link\" data-toggle=\"modal\" data-target=\"#modalDialog\">" + item.uri + "</span>").data("item",item);
+                        $span = $("<span class=\"map-link\" data-toggle=\"modal\" data-target=\"#modalDialog\">" + item.uri + "</span>").data("item", item);
                         $span.wrap("<td>").parent().appendTo($tr);
                         $("<td>" + item.description + "</td>").appendTo($tr);
                         $tr.appendTo($tbody);

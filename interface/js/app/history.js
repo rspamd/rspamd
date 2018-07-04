@@ -140,7 +140,7 @@ define(["jquery", "footable", "humanize"],
                         var full = shrt = "";
                         if (smtp) {
                             full = "[" + item.rcpt_smtp.join(", ") + "] ";
-                            shrt = "[" + item.rcpt_smtp.slice(0,rcpt_lim).join(",&#8203;") + more("rcpt_smtp")  + "]";
+                            shrt = "[" + item.rcpt_smtp.slice(0, rcpt_lim).join(",&#8203;") + more("rcpt_smtp")  + "]";
                             if (mime) {
                                 full += " ";
                                 shrt += " ";
@@ -148,7 +148,7 @@ define(["jquery", "footable", "humanize"],
                         }
                         if (mime) {
                             full += item.rcpt_mime.join(", ");
-                            shrt += item.rcpt_mime.slice(0,rcpt_lim).join(",&#8203;") + more("rcpt_mime");
+                            shrt += item.rcpt_mime.slice(0, rcpt_lim).join(",&#8203;") + more("rcpt_mime");
                         }
                         return {full: full, shrt: shrt};
                     }
@@ -720,12 +720,12 @@ define(["jquery", "footable", "humanize"],
             });
             ft.errors = FooTable.init("#errorsLog", {
                 "columns": [
-                    {"sorted": true,"direction": "DESC","name":"ts","title":"Time","style":{"font-size":"11px","width":300,"maxWidth":300}},
-                    {"name":"type","title":"Worker type","breakpoints":"xs sm","style":{"font-size":"11px","width":150,"maxWidth":150}},
-                    {"name":"pid","title":"PID","breakpoints":"xs sm","style":{"font-size":"11px","width":110,"maxWidth":110}},
-                    {"name":"module","title":"Module","style":{"font-size":"11px"}},
-                    {"name":"id","title":"Internal ID","style":{"font-size":"11px"}},
-                    {"name":"message","title":"Message","breakpoints":"xs sm","style":{"font-size":"11px"}},
+                    {"sorted": true, "direction": "DESC", "name":"ts", "title":"Time", "style":{"font-size":"11px", "width":300, "maxWidth":300}},
+                    {"name":"type", "title":"Worker type", "breakpoints":"xs sm", "style":{"font-size":"11px", "width":150, "maxWidth":150}},
+                    {"name":"pid", "title":"PID", "breakpoints":"xs sm", "style":{"font-size":"11px", "width":110, "maxWidth":110}},
+                    {"name":"module", "title":"Module", "style":{"font-size":"11px"}},
+                    {"name":"id", "title":"Internal ID", "style":{"font-size":"11px"}},
+                    {"name":"message", "title":"Message", "breakpoints":"xs sm", "style":{"font-size":"11px"}},
                 ],
                 "rows": data,
                 "paging": {
