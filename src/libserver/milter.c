@@ -1807,6 +1807,9 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 			/* TODO: be more flexible about SMTP messages */
 			rspamd_milter_send_action (session, RSPAMD_MILTER_QUARANTINE,
 					RSPAMD_MILTER_QUARANTINE_MESSAGE);
+
+			/* Quarantine also requires accept action, all hail Sendmail */
+			rspamd_milter_send_action (session, RSPAMD_MILTER_ACCEPT);
 		}
 		else {
 			rcode = rspamd_fstring_new_init (RSPAMD_MILTER_RCODE_REJECT,
