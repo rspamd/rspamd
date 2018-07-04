@@ -111,7 +111,7 @@ define(["jquery"],
                     if ((item.editable === false || rspamd.read_only)) {
                         disabled = "disabled=\"disabled\"";
                     }
-                
+
                     $("#"+item.map).remove();
                     $("<form class=\"form-horizontal form-map\" method=\"post\" action=\"savemap\" data-type=\"map\" id=\"" +
                     item.map + "\" style=\"display:none\">" +
