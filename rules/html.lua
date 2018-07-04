@@ -172,6 +172,7 @@ local vis_check_id = rspamd_config:register_symbol{
   name = 'HTML_VISIBLE_CHECKS',
   type = 'callback',
   callback = function(task)
+    --local logger = require "rspamd_logger"
     local tp = task:get_text_parts() -- get text parts in a message
     local ret = false
     local diff = 0.0
@@ -180,13 +181,15 @@ local vis_check_id = rspamd_config:register_symbol{
     local zero_size_blocks = 0
     local arg
 
+    local normal_len = 0
+    local transp_len = 0
+
     for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
+      normal_len = normal_len + p:get_length()
       if p:is_html() and p:get_html() then -- if the current part is html part
-        local normal_len = p:get_length()
-        local transp_len = 0
         local hc = p:get_html() -- we get HTML context
 
-        hc:foreach_tag({'font', 'span', 'div', 'p'}, function(tag)
+        hc:foreach_tag({'font', 'span', 'div', 'p', 'td'}, function(tag)
           local bl = tag:get_extra()
           if bl then
             if not bl['visible'] then
@@ -202,17 +205,25 @@ local vis_check_id = rspamd_config:register_symbol{
               local color = bl['color']
               local bgcolor = bl['bgcolor']
               -- Should use visual approach here some day
-              local diff_r = math.abs(color[1] - bgcolor[1]) / 255.0
-              local diff_g = math.abs(color[2] - bgcolor[2]) / 255.0
-              local diff_b = math.abs(color[3] - bgcolor[3]) / 255.0
-              diff = (diff_r + diff_g + diff_b) / 3.0
+              local diff_r = math.abs(color[1] - bgcolor[1])
+              local diff_g = math.abs(color[2] - bgcolor[2])
+              local diff_b = math.abs(color[3] - bgcolor[3])
+              local r_avg = (color[1] + bgcolor[1]) / 2.0
+              -- Square
+              diff_r = diff_r * diff_r
+              diff_g = diff_g * diff_g
+              diff_b = diff_b * diff_b
+
+              diff = math.sqrt(2*diff_r + 4*diff_g + 3 * diff_b +
+                  (r_avg * (diff_r - diff_b) / 256.0))
+              diff = diff / 256.0
 
               if diff < 0.1 then
                 ret = true
+                local content_len = #(tag:get_content() or {})
                 invisible_blocks = invisible_blocks + 1 -- This block is invisible
-                transp_len = (tag:get_content_length()) *
-                  (0.1 - diff) * 5.0
-                normal_len = normal_len - tag:get_content_length()
+                transp_len = transp_len + content_len * (0.1 - diff) * 10.0
+                normal_len = normal_len - content_len
                 local tr = transp_len / (normal_len + transp_len)
                 if tr > transp_rate then
                   transp_rate = tr
@@ -232,6 +243,8 @@ local vis_check_id = rspamd_config:register_symbol{
     end
 
     if ret then
+      transp_rate = transp_len / (normal_len + transp_len)
+
       if transp_rate > 0.1 then
         if transp_rate > 0.5 or transp_rate ~= transp_rate then
           transp_rate = 0.5
