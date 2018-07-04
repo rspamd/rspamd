@@ -217,7 +217,7 @@ parse_flags (struct fuzzy_rule *rule,
 		}
 		if (sym != NULL) {
 			map =
-				rspamd_mempool_alloc (fuzzy_module_ctx->fuzzy_pool,
+				rspamd_mempool_alloc (cfg->cfg_pool,
 					sizeof (struct fuzzy_mapping));
 			map->symbol = sym;
 			elt = ucl_object_lookup (val, "flag");
@@ -257,7 +257,7 @@ parse_flags (struct fuzzy_rule *rule,
 
 
 static GPtrArray *
-parse_mime_types (const gchar *str)
+parse_mime_types (struct rspamd_config *cfg, const gchar *str)
 {
 	gchar **strvec, *p;
 	gint num, i;
@@ -272,24 +272,24 @@ parse_mime_types (const gchar *str)
 		g_strstrip (strvec[i]);
 
 		if ((p = strchr (strvec[i], '/')) != NULL) {
-			type = rspamd_mempool_alloc (fuzzy_module_ctx->fuzzy_pool,
+			type = rspamd_mempool_alloc (cfg->cfg_pool,
 					sizeof (struct fuzzy_mime_type));
 			type->type_re = rspamd_regexp_from_glob (strvec[i], p - strvec[i],
 					NULL);
 			type->subtype_re = rspamd_regexp_from_glob (p + 1, 0, NULL);
-			rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+			rspamd_mempool_add_destructor (cfg->cfg_pool,
 						(rspamd_mempool_destruct_t)rspamd_regexp_unref,
 						type->type_re);
-			rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+			rspamd_mempool_add_destructor (cfg->cfg_pool,
 					(rspamd_mempool_destruct_t)rspamd_regexp_unref,
 					type->subtype_re);
 			g_ptr_array_add (res, type);
 		}
 		else {
-			type = rspamd_mempool_alloc (fuzzy_module_ctx->fuzzy_pool,
+			type = rspamd_mempool_alloc (cfg->cfg_pool,
 							sizeof (struct fuzzy_mime_type));
 			type->type_re = rspamd_regexp_from_glob (strvec[i], 0, NULL);
-			rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+			rspamd_mempool_add_destructor (cfg->cfg_pool,
 					(rspamd_mempool_destruct_t)rspamd_regexp_unref,
 					type->type_re);
 			type->subtype_re = NULL;
@@ -303,7 +303,7 @@ parse_mime_types (const gchar *str)
 }
 
 static GPtrArray *
-parse_fuzzy_headers (const gchar *str)
+parse_fuzzy_headers (struct rspamd_config *cfg, const gchar *str)
 {
 	gchar **strvec;
 	gint num, i;
@@ -316,7 +316,7 @@ parse_fuzzy_headers (const gchar *str)
 	for (i = 0; i < num; i++) {
 		g_strstrip (strvec[i]);
 		g_ptr_array_add (res, rspamd_mempool_strdup (
-				fuzzy_module_ctx->fuzzy_pool, strvec[i]));
+				cfg->cfg_pool, strvec[i]));
 	}
 
 	g_strfreev (strvec);
@@ -419,7 +419,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 	}
 
 	rule = fuzzy_rule_new (fuzzy_module_ctx->default_symbol,
-			fuzzy_module_ctx->fuzzy_pool);
+			cfg->cfg_pool);
 	rule->learn_condition_cb = -1;
 	rule->alg = RSPAMD_SHINGLES_OLD;
 	rule->skip_map = NULL;
@@ -441,7 +441,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 			guint i;
 			gpointer ptr;
 
-			tmp = parse_mime_types (ucl_obj_tostring (cur));
+			tmp = parse_mime_types (cfg, ucl_obj_tostring (cur));
 
 			if (tmp) {
 				if (rule->mime_types) {
@@ -458,7 +458,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 		}
 
 		if (rule->mime_types) {
-			rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+			rspamd_mempool_add_destructor (cfg->cfg_pool,
 						rspamd_ptr_array_free_hard, rule->mime_types);
 		}
 	}
@@ -471,7 +471,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 			guint i;
 			gpointer ptr;
 
-			tmp = parse_fuzzy_headers (ucl_obj_tostring (cur));
+			tmp = parse_fuzzy_headers (cfg, ucl_obj_tostring (cur));
 
 			if (tmp) {
 				if (rule->fuzzy_headers) {
@@ -488,11 +488,11 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 		}
 	}
 	else {
-		rule->fuzzy_headers = parse_fuzzy_headers (default_headers);
+		rule->fuzzy_headers = parse_fuzzy_headers (cfg, default_headers);
 	}
 
 	if (rule->fuzzy_headers != NULL) {
-		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
 				(rspamd_mempool_destruct_t) rspamd_ptr_array_free_hard,
 				rule->fuzzy_headers);
 	}
@@ -578,7 +578,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 	if ((value = ucl_object_lookup (obj, "servers")) != NULL) {
 		rule->servers = rspamd_upstreams_create (cfg->ups_ctx);
 
-		rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool,
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
 				(rspamd_mempool_destruct_t)rspamd_upstreams_destroy,
 				rule->servers);
 		if (!rspamd_upstreams_from_ucl (rule->servers, value, DEFAULT_PORT, NULL)) {
@@ -687,7 +687,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 				rule->algorithm_str);
 	}
 
-	rspamd_mempool_add_destructor (fuzzy_module_ctx->fuzzy_pool, fuzzy_free_rule,
+	rspamd_mempool_add_destructor (cfg->cfg_pool, fuzzy_free_rule,
 			rule);
 
 	return 0;
