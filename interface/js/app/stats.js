@@ -206,7 +206,7 @@ define(["jquery", "d3pie", "humanize"],
                     }
                     neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
                     var to_Credentials = {};
-                    to_Credentials["All SERVERS"] = { name: "All SERVERS",
+                    to_Credentials["All SERVERS"] = {name: "All SERVERS",
                         url: "",
                         host: "",
                         checked: true,
