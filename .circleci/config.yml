@@ -119,11 +119,29 @@ jobs:
 
       - run: (exit $RETURN_CODE)
 
+  eslint:
+    docker:
+      - image: circleci/node:latest
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+          - v1-dependencies-{{ checksum "package.json" }}
+          # fallback to using the latest cache if no exact match is found
+          - v1-dependencies-
+      - run: npm install
+      - save_cache:
+          paths:
+            - node_modules
+          key: v1-dependencies-{{ checksum "package.json" }}
+      - run: ./node_modules/.bin/eslint ./
+
 workflows:
   version: 2
   build-and-test:
     jobs:
       - build
+      - eslint
       - rspamd-test:
           requires:
             - build
