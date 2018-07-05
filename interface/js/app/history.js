@@ -673,7 +673,7 @@ define(["jquery", "footable", "humanize"],
             $("#resetHistory").off("click");
             $("#resetHistory").on("click", function (e) {
                 e.preventDefault();
-                if (!confirm("Are you sure you want to reset history log?")) {
+                if (!confirm("Are you sure you want to reset history log?")) { // eslint-disable-line no-alert
                     return;
                 }
                 if (ft.history) {
