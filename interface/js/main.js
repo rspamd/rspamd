@@ -10,7 +10,6 @@ requirejs.config({
         d3evolution: "d3evolution.min",
         d3pie: "d3pie.min",
         footable: "footable.min",
-        bootstrap: "bootstrap.min",
     },
     shim: {
         d3: {exports: "d3"},
