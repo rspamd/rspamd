@@ -1144,7 +1144,6 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 			}
 			else {
 				/* Get key */
-
 				cur->ctx = ctx;
 
 				if (dkim_module_ctx->trusted_only &&
@@ -1179,6 +1178,7 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 
 			if (res == NULL) {
 				res = cur;
+				res->first = res;
 				res->prev = res;
 				res->w = rspamd_session_get_watcher (task->s);
 			}
