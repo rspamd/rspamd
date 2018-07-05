@@ -1276,9 +1276,11 @@ rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 					remain ++;
 				}
 				else {
-					msg_debug_task ("watcher for %d, unblocked item %d",
+					msg_debug_task ("watcher for %d(%s), unblocked item %d(%s)",
 							item->id,
-							it->id);
+							item->symbol,
+							it->id,
+							it->symbol);
 					rspamd_symbols_cache_check_symbol (task, cache, it,
 							checkpoint,
 							NULL);
@@ -1287,7 +1289,8 @@ rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 		}
 	}
 
-	msg_debug_task ("finished watcher for %d, %ud symbols waiting", item->id,
+	msg_debug_task ("finished watcher for %d(%s), %ud symbols waiting",
+			item->id, item->symbol,
 			remain);
 }
 
@@ -1419,8 +1422,8 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 
 			if (dep->item == NULL) {
 				/* Assume invalid deps as done */
-				msg_debug_task ("symbol %s has invalid dependencies from %s",
-						item->symbol, dep->sym);
+				msg_debug_task ("symbol %d(%s) has invalid dependencies on %d(%s)",
+						item->id, item->symbol, dep->id, dep->sym);
 				continue;
 			}
 
@@ -1449,8 +1452,9 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 							}
 
 							ret = FALSE;
-							msg_debug_task ("delayed dependency %d for symbol %d",
-									dep->id, item->id);
+							msg_debug_task ("delayed dependency %d(%s) for "
+											"symbol %d(%s)",
+									dep->id, dep->sym, item->id, item->symbol);
 						}
 						else if (!rspamd_symbols_cache_check_symbol (task, cache,
 								dep->item,
@@ -1458,29 +1462,39 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 								NULL)) {
 							/* Now started, but has events pending */
 							ret = FALSE;
-							msg_debug_task ("started check of %d symbol as dep for "
-											"%d",
-									dep->id, item->id);
+							msg_debug_task ("started check of %d(%s) symbol "
+											"as dep for "
+											"%d(%s)",
+									dep->id, dep->sym, item->id, item->symbol);
 						}
 						else {
-							msg_debug_task ("dependency %d for symbol %d is "
+							msg_debug_task ("dependency %d(%s) for symbol %d(%s) is "
 									"already processed",
-									dep->id, item->id);
+									dep->id, dep->sym, item->id, item->symbol);
 						}
 					}
 					else {
+						msg_debug_task ("dependency %d(%s) for symbol %d(%s) "
+										"cannot be started now",
+								dep->id, dep->sym,
+								item->id, item->symbol);
 						ret = FALSE;
 					}
 				}
 				else {
 					/* Started but not finished */
+					msg_debug_task ("dependency %d(%s) for symbol %d(%s) is "
+									"still executing",
+							dep->id, dep->sym,
+							item->id, item->symbol);
 					ret = FALSE;
 				}
 			}
 			else {
-				msg_debug_task ("dependency %d for symbol %d is already "
+				msg_debug_task ("dependency %d(%s) for symbol %d(%s) is already "
 						"checked",
-						dep->id, item->id);
+						dep->id, dep->sym,
+						item->id, item->symbol);
 			}
 		}
 	}
@@ -1759,9 +1773,9 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 					guint j;
 					struct cache_item *tmp_it;
 
-					msg_debug_task ("blocked execution of %d unless deps are "
+					msg_debug_task ("blocked execution of %d(%s) unless deps are "
 							"resolved",
-							item->id);
+							item->id, item->symbol);
 
 					PTR_ARRAY_FOREACH (checkpoint->waitq, j, tmp_it) {
 						if (item->id == tmp_it->id) {
