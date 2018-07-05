@@ -189,8 +189,8 @@ define(["jquery", "d3pie", "humanize"],
                         config_id: ""
                     };
                     var status_count = 0;
-                    for(var e in neighbours_status) {
-                        if(neighbours_status[e].status === true) {
+                    for (var e in neighbours_status) {
+                        if (neighbours_status[e].status === true) {
                         // Remove alert status
                             localStorage.removeItem(e + "_alerted");
                             neighbours_sum.clean += neighbours_status[e].data.clean;
