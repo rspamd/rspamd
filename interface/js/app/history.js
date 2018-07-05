@@ -610,11 +610,9 @@ define(["jquery", "footable", "humanize"],
                                 "after.ft.filtering": drawTooltips
                             }
                         });
-                    } else {
-                        if (ft.history) {
-                            ft.history.destroy();
-                            ft.history = undefined;
-                        }
+                    } else if (ft.history) {
+                        ft.history.destroy();
+                        ft.history = undefined;
                     }
                 });
             }
