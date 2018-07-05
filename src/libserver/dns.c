@@ -21,6 +21,7 @@
 #include "utlist.h"
 #include "uthash.h"
 #include "rdns_event.h"
+#include "unix-std.h"
 
 static struct rdns_upstream_elt* rspamd_dns_select_upstream (const char *name,
 		size_t len, void *ups_data);
@@ -240,6 +241,34 @@ rspamd_dns_resolv_conf_on_server (struct rdns_resolver *resolver,
 		int priority, unsigned int io_cnt, void *ud)
 {
 	struct rspamd_dns_resolver *dns_resolver = ud;
+	struct rspamd_config *cfg;
+	rspamd_inet_addr_t *addr;
+	gint test_fd;
+
+	cfg = dns_resolver->cfg;
+
+	msg_info_config ("parsed nameserver %s from resolv.conf", name);
+
+	/* Try to open a connection */
+	if (!rspamd_parse_inet_address (&addr, name, strlen (name))) {
+		msg_warn_config ("cannot parse nameserver address %s", name);
+
+		return FALSE;
+	}
+
+	rspamd_inet_address_set_port (addr, port);
+	test_fd = rspamd_inet_address_connect (addr, SOCK_DGRAM, TRUE);
+
+	if (test_fd == -1) {
+		msg_warn_config ("cannot open connection to nameserver at address %s: %s",
+				name, strerror (errno));
+		rspamd_inet_address_free (addr);
+
+		return FALSE;
+	}
+
+	rspamd_inet_address_free (addr);
+	close (test_fd);
 
 	return rspamd_upstreams_add_upstream (dns_resolver->ups, name, port,
 			RSPAMD_UPSTREAM_PARSE_NAMESERVER,

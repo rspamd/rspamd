@@ -548,11 +548,19 @@ rdns_make_request_full (
 	struct rdns_fake_reply_idx *idx;
 
 	if (resolver == NULL || !resolver->initialized) {
+		if (resolver == NULL) {
+			return NULL;
+		}
+
+		rdns_err ("resolver is uninitialized");
+
 		return NULL;
 	}
 
 	req = malloc (sizeof (struct rdns_request));
 	if (req == NULL) {
+		rdns_err ("failed to allocate memory for request: %s",
+				strerror (errno));
 		return NULL;
 	}
 
@@ -569,6 +577,9 @@ rdns_make_request_full (
 
 	if (req->requested_names == NULL) {
 		free (req);
+		rdns_err ("failed to allocate memory for request data: %s",
+				strerror (errno));
+
 		return NULL;
 	}
 
@@ -589,7 +600,7 @@ rdns_make_request_full (
 			clen = strlen (cur_name);
 
 			if (clen == 0) {
-				rdns_info ("got empty name to resolve");
+				rdns_warn ("got empty name to resolve");
 				rdns_request_free (req);
 				return NULL;
 			}
@@ -615,7 +626,7 @@ rdns_make_request_full (
 			tlen += clen;
 		}
 		else if (last_name == NULL) {
-			rdns_info ("got NULL as the first name to resolve");
+			rdns_err ("got NULL as the first name to resolve");
 			rdns_request_free (req);
 			return NULL;
 		}
@@ -623,6 +634,7 @@ rdns_make_request_full (
 		if (req->state != RDNS_REQUEST_FAKE) {
 			if (!rdns_format_dns_name (resolver, last_name, clen,
 					&req->requested_names[cur].name, &olen)) {
+				rdns_err ("cannot format %s", last_name);
 				rdns_request_free (req);
 				return NULL;
 			}
@@ -648,12 +660,14 @@ rdns_make_request_full (
 			type = req->requested_names[i].type;
 			if (queries > 1) {
 				if (!rdns_add_rr (req, cur_name, clen, type, &comp)) {
+					rdns_err ("cannot add rr", cur_name);
 					REF_RELEASE (req);
 					rnds_compression_free (comp);
 					return NULL;
 				}
 			} else {
 				if (!rdns_add_rr (req, cur_name, clen, type, NULL)) {
+					rdns_err ("cannot add rr", cur_name);
 					REF_RELEASE (req);
 					rnds_compression_free (comp);
 					return NULL;
@@ -711,6 +725,7 @@ rdns_make_request_full (
 		r = rdns_send_request (req, req->io->sock, true);
 
 		if (r == -1) {
+			rdns_info ("cannot send DNS request");
 			REF_RELEASE (req);
 			return NULL;
 		}
@@ -730,10 +745,12 @@ rdns_resolver_init (struct rdns_resolver *resolver)
 	struct rdns_io_channel *ioc;
 
 	if (!resolver->async_binded) {
+		rdns_err ("no async backend specified");
 		return false;
 	}
 
 	if (resolver->servers == NULL) {
+		rdns_err ("no DNS servers defined");
 		return false;
 	}
 
@@ -743,13 +760,16 @@ rdns_resolver_init (struct rdns_resolver *resolver)
 		for (i = 0; i < serv->io_cnt; i ++) {
 			ioc = calloc (1, sizeof (struct rdns_io_channel));
 			if (ioc == NULL) {
-				rdns_err ("cannot allocate memory for the resolver");
+				rdns_err ("cannot allocate memory for the resolver IO channels");
 				return false;
 			}
+
 			ioc->sock = rdns_make_client_socket (serv->name, serv->port, SOCK_DGRAM);
-			ioc->active = true;
+
 			if (ioc->sock == -1) {
-				rdns_err ("cannot open socket to %s:%d %s", serv->name, serv->port, strerror (errno));
+				ioc->active = false;
+				rdns_err ("cannot open socket to %s:%d %s",
+						serv->name, serv->port, strerror (errno));
 				free (ioc);
 				return false;
 			}

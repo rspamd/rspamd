@@ -559,7 +559,7 @@ rdns_resolver_conf_process_line (struct rdns_resolver *resolver,
 	}
 	/* XXX: skip unknown resolv.conf lines */
 
-	return true;
+	return false;
 }
 
 bool
@@ -569,6 +569,7 @@ rdns_resolver_parse_resolv_conf_cb (struct rdns_resolver *resolver,
 	FILE *in;
 	char buf[BUFSIZ];
 	char *p;
+	bool processed = false;
 
 	in = fopen (path, "r");
 
@@ -588,16 +589,14 @@ rdns_resolver_parse_resolv_conf_cb (struct rdns_resolver *resolver,
 			*p-- = '\0';
 		}
 
-		if (!rdns_resolver_conf_process_line (resolver, buf, cb, ud)) {
-			rdns_warn ("rdns_resolver_parse_resolv_conf: cannot parse line: %s", buf);
-			fclose (in);
-			return false;
+		if (rdns_resolver_conf_process_line (resolver, buf, cb, ud)) {
+			processed = true;
 		}
 	}
 
 	fclose (in);
 
-	return true;
+	return processed;
 }
 
 bool
