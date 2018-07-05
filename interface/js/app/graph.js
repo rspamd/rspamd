@@ -156,11 +156,11 @@ define(["jquery", "d3evolution", "footable"],
                 },
                 columns: [
                     {name: "label", title: "Action"},
-                    {name: "value", title: "Messages",         defaultContent: ""},
-                    {name: "min",   title: "Minimum, " + unit, defaultContent: ""},
-                    {name: "avg",   title: "Average, " + unit, defaultContent: ""},
-                    {name: "max",   title: "Maximum, " + unit, defaultContent: ""},
-                    {name: "last",  title: "Last, " + unit},
+                    {name: "value", title: "Messages", defaultContent: ""},
+                    {name: "min", title: "Minimum, " + unit, defaultContent: ""},
+                    {name: "avg", title: "Average, " + unit, defaultContent: ""},
+                    {name: "max", title: "Maximum, " + unit, defaultContent: ""},
+                    {name: "last", title: "Last, " + unit},
                 ],
                 rows: rows
             });

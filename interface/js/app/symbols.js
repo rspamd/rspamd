@@ -137,7 +137,7 @@ define(["jquery", "footable"],
             if (avg_freq > 0.0) {
                 while (mult * avg_freq < 1.0) {
                     mult *= 10;
-                    exp ++;
+                    exp++;
                 }
             }
             $.each(items, function (i, item) {

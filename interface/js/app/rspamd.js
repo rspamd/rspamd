@@ -82,7 +82,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         stopTimers();
 
         if (tab_id === "#refresh") {
-            tab_id = "#" + $(".navbar-nav .active > a" ).attr("id");
+            tab_id = "#" + $(".navbar-nav .active > a").attr("id");
         }
 
         switch (tab_id) {
@@ -370,7 +370,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                             url: window.location.href
                         }
                     };
-                }   else {
+                } else {
                     neighbours = data;
                 }
                 var neighbours_status = [];

@@ -122,7 +122,7 @@ define(["jquery", "d3pie", "humanize"],
                 "<td class=\"col4\" title=\"SStatus\"><span class=\"icon\"><i class=\"" + glyph_status + "\"></i></span></td>" +
                 "<td class=\"col5\" title=\"short_id\">" + short_id + "</td></tr>");
 
-                $("#selSrv").append( $("<option value=\"" + key + "\">" + key + "</option>"));
+                $("#selSrv").append($("<option value=\"" + key + "\">" + key + "</option>"));
 
                 if (checked_server == key) {
                     $("#clusterTable tbody [value=\"" + key + "\"]").prop("checked", true);

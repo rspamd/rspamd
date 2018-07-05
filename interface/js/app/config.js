@@ -112,7 +112,7 @@ define(["jquery"],
                         disabled = "disabled=\"disabled\"";
                     }
 
-                    $("#"+item.map).remove();
+                    $("#" + item.map).remove();
                     $("<form class=\"form-horizontal form-map\" method=\"post\" action=\"savemap\" data-type=\"map\" id=\"" +
                     item.map + "\" style=\"display:none\">" +
                     "<textarea class=\"list-textarea\"" + disabled + ">" + text +
