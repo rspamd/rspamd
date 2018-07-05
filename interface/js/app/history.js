@@ -171,13 +171,13 @@ define(["jquery", "footable", "humanize"],
                         }
                         item.symbols[key].str = str;
                     });
-                    item.symbols = Object.keys(item.symbols).
-                        map(function(key) {
+                    item.symbols = Object.keys(item.symbols)
+                        .map(function(key) {
                             return item.symbols[key];
-                        }).
-                        sort(compare).
-                        map(function(e) { return e.str; }).
-                        join("<br>\n");
+                        })
+                        .sort(compare)
+                        .map(function(e) { return e.str; })
+                        .join("<br>\n");
                     item.time = {
                         "value": unix_time_format(item.unix_time),
                         "options": {
