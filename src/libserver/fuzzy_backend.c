@@ -182,12 +182,15 @@ rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
 
 			if (cmd->cmd == FUZZY_WRITE) {
 				rspamd_fuzzy_backend_sqlite_add (sq, ptr);
+				nupdates ++;
+			}
+			else if (cmd->cmd == FUZZY_DEL) {
+				rspamd_fuzzy_backend_sqlite_del (sq, ptr);
+				nupdates ++;
 			}
 			else {
-				rspamd_fuzzy_backend_sqlite_del (sq, ptr);
+				/* Do nothing for expire, this backend should no longer be used */
 			}
-
-			nupdates ++;
 		}
 
 		if (rspamd_fuzzy_backend_sqlite_finish_update (sq, src,
