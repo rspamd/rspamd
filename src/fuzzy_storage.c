@@ -17,6 +17,7 @@
  * Rspamd fuzzy storage server
  */
 
+#include <src/libserver/fuzzy_wire.h>
 #include "config.h"
 #include "util.h"
 #include "rspamd.h"
@@ -772,6 +773,7 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 	struct fuzzy_session *session = ud;
 	gboolean encrypted = FALSE, is_shingle = FALSE;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
+	const struct rspamd_shingle *shingle = NULL;
 
 	switch (session->cmd_type) {
 	case CMD_NORMAL:
@@ -779,6 +781,7 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 		break;
 	case CMD_SHINGLE:
 		cmd = &session->cmd.shingle.basic;
+		shingle = &session->cmd.shingle.sgl;
 		is_shingle = TRUE;
 		break;
 	case CMD_ENCRYPTED_NORMAL:
@@ -787,12 +790,59 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 		break;
 	case CMD_ENCRYPTED_SHINGLE:
 		cmd = &session->cmd.enc_shingle.cmd.basic;
+		shingle = &session->cmd.enc_shingle.cmd.sgl;
 		encrypted = TRUE;
 		is_shingle = TRUE;
 		break;
 	}
 
 	rspamd_fuzzy_make_reply (cmd, result, session, encrypted, is_shingle);
+
+	/* Refresh hash if found with strong confidence */
+	if (result->v1.prob > 0.9) {
+		struct fuzzy_peer_cmd up_cmd;
+		struct fuzzy_peer_request *up_req;
+
+		if (session->worker->index == 0 || session->ctx->peer_fd == -1) {
+			/* Just add to the queue */
+			memset (&up_cmd, 0, sizeof (up_cmd));
+			up_cmd.is_shingle = is_shingle;
+			memcpy (up_cmd.cmd.normal.digest, result->digest,
+					sizeof (up_cmd.cmd.normal.digest));
+			up_cmd.cmd.normal.flag = result->v1.flag;
+			up_cmd.cmd.normal.cmd = FUZZY_REFRESH;
+			up_cmd.cmd.normal.shingles_count = cmd->shingles_count;
+
+			if (is_shingle && shingle) {
+				memcpy (&up_cmd.cmd.shingle.sgl, shingle,
+						sizeof (up_cmd.cmd.shingle.sgl));
+			}
+
+			g_array_append_val (session->ctx->updates_pending, up_cmd);
+		}
+		else {
+			/* We need to send request to the peer */
+			up_req = g_malloc0 (sizeof (*up_req));
+			up_req->cmd.is_shingle = is_shingle;
+
+			memcpy (up_req->cmd.cmd.normal.digest, result->digest,
+					sizeof (up_req->cmd.cmd.normal.digest));
+			up_req->cmd.cmd.normal.flag = result->v1.flag;
+			up_req->cmd.cmd.normal.cmd = FUZZY_REFRESH;
+			up_req->cmd.cmd.normal.shingles_count = cmd->shingles_count;
+
+			if (is_shingle && shingle) {
+				memcpy (&up_req->cmd.cmd.shingle.sgl, shingle,
+						sizeof (up_req->cmd.cmd.shingle.sgl));
+			}
+
+			event_set (&up_req->io_ev, session->ctx->peer_fd, EV_WRITE,
+					fuzzy_peer_send_io, up_req);
+			event_base_set (session->ctx->ev_base, &up_req->io_ev);
+			event_add (&up_req->io_ev, NULL);
+		}
+	}
+
 	REF_RELEASE (session);
 }
 

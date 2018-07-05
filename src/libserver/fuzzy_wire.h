@@ -14,7 +14,9 @@
 #define FUZZY_WRITE 1
 #define FUZZY_DEL 2
 #define FUZZY_STAT 3
-
+#define FUZZY_CLIENT_MAX 3
+/* Internal commands */
+#define FUZZY_REFRESH 100
 
 /**
  * The epoch of the fuzzy client
