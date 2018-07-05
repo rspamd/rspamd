@@ -267,7 +267,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         $("#connectForm").on("submit", function (e) {
             e.preventDefault();
             var password = $("#connectPassword").val();
-            if (!/^[\u0000-\u007f]*$/.test(password)) {
+            if (!(/^[\u0020-\u007e]*$/).test(password)) {
                 alertMessage("alert-modal alert-error", "Invalid characters in the password");
                 $("#connectPassword").focus();
                 return;
