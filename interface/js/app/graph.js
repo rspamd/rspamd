@@ -124,7 +124,7 @@ define(["jquery", "d3evolution", "footable"],
 
                 return {
                     label: graph_options.legend.entries[i].label,
-                    value: value ^ 0,
+                    value: value ^ 0, // eslint-disable-line no-bitwise
                     min: +yExtents[0].toFixed(6),
                     avg: +avg.toFixed(6),
                     max: +yExtents[1].toFixed(6),
