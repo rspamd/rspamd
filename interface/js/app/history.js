@@ -36,7 +36,7 @@ define(["jquery", "footable", "humanize"],
             "`": "&#x60;",
             "=": "&#x3D;"
         };
-        var htmlEscaper = /[&<>"'\/`=]/g;
+        var htmlEscaper = /[&<>"'/`=]/g;
         var symbolDescriptions = {};
 
         EscapeHTML = function(string) {
