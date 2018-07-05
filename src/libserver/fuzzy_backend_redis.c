@@ -1157,6 +1157,40 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 			return FALSE;
 		}
 	}
+	else if (cmd->cmd == FUZZY_REFRESH) {
+		/*
+		 * Issue refresh command by just EXPIRE command
+		 * EXPIRE <key> <expire>
+		 * Where <key> is <prefix> || <digest>
+		 */
+
+		klen = strlen (session->backend->redis_object) +
+			   sizeof (cmd->digest) + 1;
+
+		/* EXPIRE */
+		key = g_string_sized_new (klen);
+		g_string_append (key, session->backend->redis_object);
+		g_string_append_len (key, cmd->digest, sizeof (cmd->digest));
+		value = g_string_sized_new (30);
+		rspamd_printf_gstring (value, "%d",
+				(gint)rspamd_fuzzy_backend_get_expire (bk));
+		session->argv[cur_shift] = g_strdup ("EXPIRE");
+		session->argv_lens[cur_shift++] = sizeof ("EXPIRE") - 1;
+		session->argv[cur_shift] = key->str;
+		session->argv_lens[cur_shift++] = key->len;
+		session->argv[cur_shift] = value->str;
+		session->argv_lens[cur_shift++] = value->len;
+		g_string_free (key, FALSE);
+		g_string_free (value, FALSE);
+
+		if (redisAsyncCommandArgv (session->ctx, NULL, NULL,
+				3,
+				(const gchar **)&session->argv[cur_shift - 3],
+				&session->argv_lens[cur_shift - 3]) != REDIS_OK) {
+
+			return FALSE;
+		}
+	}
 	else {
 		g_assert_not_reached ();
 	}
@@ -1225,6 +1259,47 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 						2,
 						(const gchar **)&session->argv[cur_shift - 2],
 						&session->argv_lens[cur_shift - 2]) != REDIS_OK) {
+
+					return FALSE;
+				}
+			}
+		}
+		else if (cmd->cmd == FUZZY_REFRESH) {
+			klen = strlen (session->backend->redis_object) +
+				   64 + 1;
+
+			for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+				guchar *hval;
+				/*
+				 * For each command with shingles we additionally emit 32 commands:
+				 * EXPIRE <prefix>_<number>_<value> <expire>
+				 */
+
+				/* Expire */
+				key = g_string_sized_new (klen);
+				rspamd_printf_gstring (key, "%s_%d_%uL",
+						session->backend->redis_object,
+						i,
+						io_cmd->cmd.shingle.sgl.hashes[i]);
+				value = g_string_sized_new (30);
+				rspamd_printf_gstring (value, "%d",
+						(gint)rspamd_fuzzy_backend_get_expire (bk));
+				hval = g_malloc (sizeof (io_cmd->cmd.shingle.basic.digest));
+				memcpy (hval, io_cmd->cmd.shingle.basic.digest,
+						sizeof (io_cmd->cmd.shingle.basic.digest));
+				session->argv[cur_shift] = g_strdup ("EXPIRE");
+				session->argv_lens[cur_shift++] = sizeof ("EXPIRE") - 1;
+				session->argv[cur_shift] = key->str;
+				session->argv_lens[cur_shift++] = key->len;
+				session->argv[cur_shift] = value->str;
+				session->argv_lens[cur_shift++] = value->len;
+				g_string_free (key, FALSE);
+				g_string_free (value, FALSE);
+
+				if (redisAsyncCommandArgv (session->ctx, NULL, NULL,
+						3,
+						(const gchar **)&session->argv[cur_shift - 3],
+						&session->argv_lens[cur_shift - 3]) != REDIS_OK) {
 
 					return FALSE;
 				}
@@ -1351,6 +1426,15 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 			if (io_cmd->is_shingle) {
 				ncommands += RSPAMD_SHINGLE_SIZE;
 				nargs += RSPAMD_SHINGLE_SIZE * 2;
+			}
+		}
+		else if (cmd->cmd == FUZZY_REFRESH) {
+			ncommands += 1;
+			nargs += 3;
+
+			if (io_cmd->is_shingle) {
+				ncommands += RSPAMD_SHINGLE_SIZE;
+				nargs += RSPAMD_SHINGLE_SIZE * 3;
 			}
 		}
 	}
