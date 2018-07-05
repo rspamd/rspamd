@@ -134,7 +134,7 @@ jobs:
           paths:
             - node_modules
           key: v1-dependencies-{{ checksum "package.json" }}
-      - run: ./node_modules/.bin/eslint ./
+      - run: ./node_modules/.bin/eslint -v && ./node_modules/.bin/eslint ./
 
 workflows:
   version: 2
