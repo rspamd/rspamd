@@ -24,7 +24,7 @@
  */
 
 define(["jquery", "d3evolution", "footable"],
-    function($, D3Evolution, unused) {
+    function ($, D3Evolution, unused) {
         var rrd_pie_config = {
             header: {},
             size: {
@@ -95,7 +95,7 @@ define(["jquery", "d3evolution", "footable"],
                 interpolate: getSelector("selInterpolate"),
                 convert:     getSelector("selConvert"),
             }));
-            $("#selYScale").change(function() {
+            $("#selYScale").change(function () {
                 graph.yScale(this.value);
             });
             $("#selConvert").change(function () {
@@ -169,7 +169,7 @@ define(["jquery", "d3evolution", "footable"],
         var interface = {};
         var prevUnit = "msg/s";
 
-        interface.draw = function(rspamd, graphs, neighbours, checked_server, type) {
+        interface.draw = function (rspamd, graphs, neighbours, checked_server, type) {
 
             function updateWidgets(data) {
             // Autoranging
@@ -278,7 +278,7 @@ define(["jquery", "d3evolution", "footable"],
             });
         };
 
-        interface.setup = function() {
+        interface.setup = function () {
         // Handling mouse events on overlapping elements
             $("#rrd-pie").mouseover(function () {
                 $("#rrd-pie").css("z-index", "200");

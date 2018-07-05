@@ -23,7 +23,7 @@
  */
 
 define(["jquery", "footable"],
-    function($) {
+    function ($) {
         var interface = {};
         var ft = {};
 
@@ -126,9 +126,9 @@ define(["jquery", "footable"],
             });
 
             // For better mean calculations
-            var avg_freq = freqs.sort(function(a, b) {
+            var avg_freq = freqs.sort(function (a, b) {
                 return Number(a) < Number(b);
-            }).reduce(function(f1, acc) {
+            }).reduce(function (f1, acc) {
                 return f1 + acc;
             }) / (freqs.length != 0 ? freqs.length : 1.0);
             var mult = 1.0;
@@ -153,7 +153,7 @@ define(["jquery", "footable"],
             return [items, distinct_groups];
         }
         // @get symbols into modal form
-        interface.getSymbols = function(rspamd, tables, checked_server) {
+        interface.getSymbols = function (rspamd, tables, checked_server) {
 
             $.ajax({
                 dataType: "json",
@@ -166,13 +166,13 @@ define(["jquery", "footable"],
                 success: function (data) {
                     var items = process_symbols_data(data);
                     FooTable.groupFilter = FooTable.Filtering.extend({
-                        construct : function(instance) {
+                        construct : function (instance) {
                             this._super(instance);
                             this.groups = items[1];
                             this.def = "Any group";
                             this.$group = null;
                         },
-                        $create : function() {
+                        $create : function () {
                             this._super();
                             var self = this, $form_grp = $("<div/>", {
                                 "class" : "form-group"
@@ -190,11 +190,11 @@ define(["jquery", "footable"],
                                     text : self.def
                                 })).appendTo($form_grp);
 
-                            $.each(self.groups, function(i, group) {
+                            $.each(self.groups, function (i, group) {
                                 self.$group.append($("<option/>").text(group));
                             });
                         },
-                        _onStatusDropdownChanged : function(e) {
+                        _onStatusDropdownChanged : function (e) {
                             var self = e.data.self, selected = $(this).val();
                             if (selected !== self.def) {
                                 self.addFilter("group", selected, ["group"]);
@@ -203,7 +203,7 @@ define(["jquery", "footable"],
                             }
                             self.filter();
                         },
-                        draw : function() {
+                        draw : function () {
                             this._super();
                             var group = this.find("group");
                             if (group instanceof FooTable.Filter) {
@@ -219,7 +219,7 @@ define(["jquery", "footable"],
                             {"name":"symbol", "title":"Symbol", "style":{"font-size":"11px"}},
                             {"name":"description", "title":"Description", "breakpoints":"xs sm", "style":{"font-size":"11px"}},
                             {"name":"weight", "title":"Score", "style":{"font-size":"11px"}},
-                            {"name":"frequency", "title":"Frequency", "breakpoints":"xs sm", "style":{"font-size":"11px"}, "sortValue": function(value) { return Number(value).toFixed(2); }},
+                            {"name":"frequency", "title":"Frequency", "breakpoints":"xs sm", "style":{"font-size":"11px"}, "sortValue": function (value) { return Number(value).toFixed(2); }},
                             {"name":"time", "title":"Avg. time", "breakpoints":"xs sm", "style":{"font-size":"11px"}},
                             {"name":"save", "title":"Save", "style":{"font-size":"11px"}},
                         ],
@@ -253,14 +253,14 @@ define(["jquery", "footable"],
                     rspamd.alertMessage("alert-modal alert-error", data.statusText);
                 }
             });
-            $(document).on("click", "#symbolsTable :button", function(event) {
+            $(document).on("click", "#symbolsTable :button", function (event) {
                 var value = $(this).data("save");
                 if (!value) return;
                 saveSymbols(rspamd, "./savesymbols", "symbolsTable", value == "cluster");
             });
         };
 
-        interface.setup = function(rspamd, tables) {
+        interface.setup = function (rspamd, tables) {
             $("#updateSymbols").on("click", function (e) {
                 e.preventDefault();
                 $.ajax({

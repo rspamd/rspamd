@@ -23,7 +23,7 @@
  */
 
 define(["jquery", "footable", "humanize"],
-    function($, _, Humanize) {
+    function ($, _, Humanize) {
         var interface = {};
         var ft = {};
         var htmlEscapes = {
@@ -39,8 +39,8 @@ define(["jquery", "footable", "humanize"],
         var htmlEscaper = /[&<>"'/`=]/g;
         var symbolDescriptions = {};
 
-        EscapeHTML = function(string) {
-            return ("" + string).replace(htmlEscaper, function(match) {
+        EscapeHTML = function (string) {
+            return ("" + string).replace(htmlEscaper, function (match) {
                 return htmlEscapes[match];
             });
         };
@@ -62,7 +62,7 @@ define(["jquery", "footable", "humanize"],
                     escape_HTML_array(item[prop]);
                     break;
                 case "symbols":
-                    Object.keys(item.symbols).map(function(key) {
+                    Object.keys(item.symbols).map(function (key) {
                         var sym = item.symbols[key];
                         if (!sym.name) {
                             sym.name = key;
@@ -154,7 +154,7 @@ define(["jquery", "footable", "humanize"],
                     }
 
                     preprocess_item(item);
-                    Object.keys(item.symbols).map(function(key) {
+                    Object.keys(item.symbols).map(function (key) {
                         var sym = item.symbols[key];
 
                         if (sym.description) {
@@ -172,11 +172,11 @@ define(["jquery", "footable", "humanize"],
                         item.symbols[key].str = str;
                     });
                     item.symbols = Object.keys(item.symbols)
-                        .map(function(key) {
+                        .map(function (key) {
                             return item.symbols[key];
                         })
                         .sort(compare)
-                        .map(function(e) { return e.str; })
+                        .map(function (e) { return e.str; })
                         .join("<br>\n");
                     item.time = {
                         "value": unix_time_format(item.unix_time),
@@ -310,7 +310,7 @@ define(["jquery", "footable", "humanize"],
                     "font-size": "11px",
                     "maxWidth": 110
                 },
-                "sortValue": function(val) { return Number(val.options.sortValue); }
+                "sortValue": function (val) { return Number(val.options.sortValue); }
             }, {
                 "name": "symbols",
                 "title": "Symbols",
@@ -337,7 +337,7 @@ define(["jquery", "footable", "humanize"],
                     "font-size": "11px",
                     "maxWidth": 72
                 },
-                "sortValue": function(val) { return Number(val.options.sortValue); }
+                "sortValue": function (val) { return Number(val.options.sortValue); }
             }, {
                 "sorted": true,
                 "direction": "DESC",
@@ -346,7 +346,7 @@ define(["jquery", "footable", "humanize"],
                 "style": {
                     "font-size": "11px"
                 },
-                "sortValue": function(val) { return Number(val.options.sortValue); }
+                "sortValue": function (val) { return Number(val.options.sortValue); }
             }, {
                 "name": "user",
                 "title": "Authenticated user",
@@ -397,7 +397,7 @@ define(["jquery", "footable", "humanize"],
                     "font-size": "11px",
                     "maxWidth": 110
                 },
-                "sortValue": function(val) { return Number(val.options.sortValue); }
+                "sortValue": function (val) { return Number(val.options.sortValue); }
             }, {
                 "name": "symbols",
                 "title": "Symbols",
@@ -425,7 +425,7 @@ define(["jquery", "footable", "humanize"],
                     "font-size": "11px",
                     "maxWidth": 80
                 },
-                "sortValue": function(val) { return Number(val.options.sortValue); }
+                "sortValue": function (val) { return Number(val.options.sortValue); }
             }, {
                 "sorted": true,
                 "direction": "DESC",
@@ -434,7 +434,7 @@ define(["jquery", "footable", "humanize"],
                 "style": {
                     "font-size": "11px"
                 },
-                "sortValue": function(val) { return Number(val.options.sortValue); }
+                "sortValue": function (val) { return Number(val.options.sortValue); }
             }, {
                 "name": "user",
                 "title": "Authenticated user",
@@ -485,14 +485,14 @@ define(["jquery", "footable", "humanize"],
 
         interface.getHistory = function (rspamd, tables, neighbours, checked_server) {
             FooTable.actionFilter = FooTable.Filtering.extend({
-                construct : function(instance) {
+                construct : function (instance) {
                     this._super(instance);
                     this.actions = ["reject", "add header", "greylist",
                         "no action", "soft reject", "rewrite subject"];
                     this.def = "Any action";
                     this.$action = null;
                 },
-                $create : function() {
+                $create : function () {
                     this._super();
                     var self = this, $form_grp = $("<div/>", {
                         "class" : "form-group"
@@ -510,11 +510,11 @@ define(["jquery", "footable", "humanize"],
                             text : self.def
                         })).appendTo($form_grp);
 
-                    $.each(self.actions, function(i, action) {
+                    $.each(self.actions, function (i, action) {
                         self.$action.append($("<option/>").text(action));
                     });
                 },
-                _onStatusDropdownChanged : function(e) {
+                _onStatusDropdownChanged : function (e) {
                     var self = e.data.self, selected = $(this).val();
                     if (selected !== self.def) {
                         if (selected === "reject") {
@@ -527,7 +527,7 @@ define(["jquery", "footable", "humanize"],
                     }
                     self.filter();
                 },
-                draw : function() {
+                draw : function () {
                     this._super();
                     var action = this.find("action");
                     if (action instanceof FooTable.Filter) {
@@ -542,7 +542,7 @@ define(["jquery", "footable", "humanize"],
                 }
             });
 
-            var drawTooltips = function() {
+            var drawTooltips = function () {
             // Update symbol description tooltips
                 $.each(symbolDescriptions, function (key, description) {
                     $("abbr[data-sym-key=" + key + "]").tooltip({
@@ -663,7 +663,7 @@ define(["jquery", "footable", "humanize"],
                 e.preventDefault();
                 interface.getHistory(rspamd, tables, neighbours, checked_server);
             });
-            $("#selSymOrder").unbind().change(function() {
+            $("#selSymOrder").unbind().change(function () {
                 interface.getHistory(rspamd, tables, neighbours, checked_server);
             });
 
@@ -742,7 +742,7 @@ define(["jquery", "footable", "humanize"],
             });
         }
 
-        interface.getErrors = function(rspamd, tables, neighbours, checked_server) {
+        interface.getErrors = function (rspamd, tables, neighbours, checked_server) {
             if (rspamd.read_only) return;
 
             if (checked_server !== "All SERVERS") {
@@ -779,7 +779,7 @@ define(["jquery", "footable", "humanize"],
             });
         };
 
-        interface.setup = function(rspamd, tables) {
+        interface.setup = function (rspamd, tables) {
         };
         return interface;
     });

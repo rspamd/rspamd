@@ -179,7 +179,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
 
     // Public functions
     interface.alertMessage = alertMessage;
-    interface.setup = function() {
+    interface.setup = function () {
         $("#selData").change(function () {
             selData = this.value;
             tabClick("#throughput_nav");
@@ -236,7 +236,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         selData = tab_graph.setup();
     };
 
-    interface.connect = function() {
+    interface.connect = function () {
         if (isLogged()) {
             var data = JSON.parse(sessionStorage.getItem("Credentials"));
 
@@ -314,7 +314,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         });
     };
 
-    interface.queryLocal = function(req_url, on_success, on_error, method, headers, params) {
+    interface.queryLocal = function (req_url, on_success, on_error, method, headers, params) {
         var req_params = {
             type: method,
             jsonp: false,
@@ -322,7 +322,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 xhr.setRequestHeader("Password", getPassword());
 
                 if (headers) {
-                    $.each(headers, function(hname, hvalue) {
+                    $.each(headers, function (hname, hvalue) {
                         xhr.setRequestHeader(hname, hvalue);
                     });
                 }
@@ -336,7 +336,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                     alertMessage("alert-success", "Data saved");
                 }
             },
-            error: function(jqXHR, textStatus, errorThrown) {
+            error: function (jqXHR, textStatus, errorThrown) {
                 if (on_error) {
                     on_error("local", jqXHR, textStatus, errorThrown);
                 }
@@ -346,14 +346,14 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             }
         };
         if (params) {
-            $.each(params, function(k, v) {
+            $.each(params, function (k, v) {
                 req_params[k] = v;
             });
         }
         $.ajax(req_params);
     };
 
-    interface.queryNeighbours = function(req_url, on_success, on_error, method, headers, params, req_data) {
+    interface.queryNeighbours = function (req_url, on_success, on_error, method, headers, params, req_data) {
         $.ajax({
             dataType: "json",
             type: "GET",
@@ -395,7 +395,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                             xhr.setRequestHeader("Password", getPassword());
 
                             if (headers) {
-                                $.each(headers, function(hname, hvalue) {
+                                $.each(headers, function (hname, hvalue) {
                                     xhr.setRequestHeader(hname, hvalue);
                                 });
                             }
@@ -419,7 +419,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                                 }
                             }
                         },
-                        error: function(jqXHR, textStatus, errorThrown) {
+                        error: function (jqXHR, textStatus, errorThrown) {
                             neighbours_status[ind].status = false;
                             neighbours_status[ind].checked = true;
                             if (on_error) {
@@ -443,7 +443,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                         // error display
                     };
                     if (params) {
-                        $.each(params, function(k, v) {
+                        $.each(params, function (k, v) {
                             req_params[k] = v;
                         });
                     }
@@ -456,7 +456,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         });
     };
 
-    interface.drawPie = function(obj, id, data, conf) {
+    interface.drawPie = function (obj, id, data, conf) {
         if (obj) {
             obj.updateProp("data.content",
                 data.filter(function (elt) {

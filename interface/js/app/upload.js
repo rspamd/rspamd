@@ -23,7 +23,7 @@
  */
 
 define(["jquery"],
-    function($) {
+    function ($) {
         var interface = {};
 
         function cleanTextUpload(source) {
@@ -169,7 +169,7 @@ define(["jquery"],
             });
         }
 
-        interface.setup = function(rspamd) {
+        interface.setup = function (rspamd) {
             $("textarea").change(function () {
                 if ($(this).val().length !== "") {
                     $(this).closest("form").find("button").removeAttr("disabled").removeClass("disabled");
