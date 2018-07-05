@@ -1191,6 +1191,9 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 			return FALSE;
 		}
 	}
+	else if (cmd->cmd == FUZZY_DUP) {
+		/* Ignore */
+	}
 	else {
 		g_assert_not_reached ();
 	}
@@ -1304,6 +1307,9 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 					return FALSE;
 				}
 			}
+		}
+		else if (cmd->cmd == FUZZY_DUP) {
+			/* Ignore */
 		}
 		else {
 			g_assert_not_reached ();
