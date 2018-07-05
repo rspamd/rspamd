@@ -36,6 +36,8 @@ local function gen_lua_squeeze_function(order)
           return {data[1](task)}
         end
 
+        -- Too expensive to call :(
+        --logger.debugm(SN, task, 'call for: %s', data[2])
         local status, ret = pcall(real_call)
 
         if not status then
@@ -256,7 +258,8 @@ exports.squeeze_init = function()
   -- and create squeezed rules
   for k,v in pairs(squeezed_symbols) do
     local parent_symbol = get_ordered_symbol_name(v.order)
-    logger.debugm(SN, rspamd_config, 'added squeezed rule: %s (%s)', k, parent_symbol)
+    logger.debugm(SN, rspamd_config, 'added squeezed rule: %s (%s): %s',
+        k, parent_symbol, v)
     rspamd_config:register_symbol{
       type = 'virtual',
       name = k,

@@ -85,7 +85,8 @@ struct dkim_check_result {
 	rspamd_dkim_key_t *key;
 	struct rspamd_task *task;
 	gint res;
-	gint mult_allow, mult_deny;
+	gdouble mult_allow;
+	gdouble mult_deny;
 	struct rspamd_async_watcher *w;
 	struct dkim_check_result *next, *prev, *first;
 };
@@ -888,17 +889,27 @@ dkim_module_reconfig (struct rspamd_config *cfg)
  * Parse strict value for domain in format: 'reject_multiplier:deny_multiplier'
  */
 static gboolean
-dkim_module_parse_strict (const gchar *value, gint *allow, gint *deny)
+dkim_module_parse_strict (const gchar *value, gdouble *allow, gdouble *deny)
 {
 	const gchar *colon;
-	gulong val;
+	gchar *err = NULL;
+	gdouble val;
+	gchar numbuf[64];
 
 	colon = strchr (value, ':');
 	if (colon) {
-		if (rspamd_strtoul (value, colon - value, &val)) {
+		rspamd_strlcpy (numbuf, value,
+				MIN (sizeof (numbuf), (colon - value) + 1));
+		val = strtod (numbuf, &err);
+
+		if (err == NULL || *err == '\0') {
 			*deny = val;
 			colon++;
-			if (rspamd_strtoul (colon, strlen (colon), &val)) {
+			rspamd_strlcpy (numbuf, colon, sizeof (numbuf));
+			err = NULL;
+			val = strtod (numbuf, &err);
+
+			if (err == NULL || *err == '\0') {
 				*allow = val;
 				return TRUE;
 			}
@@ -952,7 +963,7 @@ dkim_module_check (struct dkim_check_result *res)
 	if (all_done) {
 		DL_FOREACH (first, cur) {
 			const gchar *symbol = NULL, *trace = NULL;
-			int symbol_weight = 1;
+			gdouble symbol_weight = 1.0;
 
 			if (cur->ctx == NULL) {
 				continue;
@@ -1103,19 +1114,9 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 				continue;
 			}
 
-			if (res == NULL) {
-				res = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
-				res->prev = res;
-				res->w = rspamd_session_get_watcher (task->s);
-				cur = res;
-			}
-			else {
-				cur = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
-			}
-
+			cur = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cur));
 			cur->first = res;
 			cur->res = -1;
-			cur->w = res->w;
 			cur->task = task;
 			cur->mult_allow = 1.0;
 			cur->mult_deny = 1.0;
@@ -1167,14 +1168,22 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 							dkim_module_key_dtor, cur->key);
 				}
 				else {
-					rspamd_get_dkim_key (ctx,
+					if (!rspamd_get_dkim_key (ctx,
 							task,
 							dkim_module_key_handler,
-							cur);
+							cur)) {
+						continue;
+					}
 				}
 			}
 
-			if (res != cur) {
+			if (res == NULL) {
+				res = cur;
+				res->prev = res;
+				res->w = rspamd_session_get_watcher (task->s);
+			}
+			else {
+				cur->w = res->w;
 				DL_APPEND (res, cur);
 			}
 
