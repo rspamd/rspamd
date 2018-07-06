@@ -23,7 +23,7 @@
  */
 
 define(["jquery", "footable", "humanize"],
-    function($, _, Humanize) {
+    function ($, _, Humanize) {
         var interface = {};
         var ft = {};
         var htmlEscapes = {
@@ -36,11 +36,11 @@ define(["jquery", "footable", "humanize"],
             "`": "&#x60;",
             "=": "&#x3D;"
         };
-        var htmlEscaper = /[&<>"'\/`=]/g;
+        var htmlEscaper = /[&<>"'/`=]/g;
         var symbolDescriptions = {};
 
-        EscapeHTML = function(string) {
-            return ("" + string).replace(htmlEscaper, function(match) {
+        EscapeHTML = function (string) {
+            return ("" + string).replace(htmlEscaper, function (match) {
                 return htmlEscapes[match];
             });
         };
@@ -62,7 +62,7 @@ define(["jquery", "footable", "humanize"],
                     escape_HTML_array(item[prop]);
                     break;
                 case "symbols":
-                    Object.keys(item.symbols).map(function(key) {
+                    Object.keys(item.symbols).map(function (key) {
                         var sym = item.symbols[key];
                         if (!sym.name) {
                             sym.name = key;
@@ -102,10 +102,10 @@ define(["jquery", "footable", "humanize"],
             }
 
             item.score = {
-                "options": {
-                    "sortValue": item.score
+                options: {
+                    sortValue: item.score
                 },
-                "value": score_content
+                value: score_content
             };
 
             if (item.user == null) {
@@ -140,7 +140,7 @@ define(["jquery", "footable", "humanize"],
                         var full = shrt = "";
                         if (smtp) {
                             full = "[" + item.rcpt_smtp.join(", ") + "] ";
-                            shrt = "[" + item.rcpt_smtp.slice(0, rcpt_lim).join(",&#8203;") + more("rcpt_smtp")  + "]";
+                            shrt = "[" + item.rcpt_smtp.slice(0, rcpt_lim).join(",&#8203;") + more("rcpt_smtp") + "]";
                             if (mime) {
                                 full += " ";
                                 shrt += " ";
@@ -154,16 +154,16 @@ define(["jquery", "footable", "humanize"],
                     }
 
                     preprocess_item(item);
-                    Object.keys(item.symbols).map(function(key) {
+                    Object.keys(item.symbols).map(function (key) {
                         var sym = item.symbols[key];
 
                         if (sym.description) {
-                            var str = "<strong><abbr data-sym-key=\"" + key + "\">" + sym.name + "</abbr></strong>" + "(" + sym.score + ")";
+                            var str = "<strong><abbr data-sym-key=\"" + key + "\">" + sym.name + "</abbr></strong>(" + sym.score + ")";
 
                             // Store description for tooltip
                             symbolDescriptions[key] = sym.description;
                         } else {
-                            var str = "<strong>" + sym.name + "</strong>" + "(" + sym.score + ")";
+                            var str = "<strong>" + sym.name + "</strong>(" + sym.score + ")";
                         }
 
                         if (sym.options) {
@@ -171,26 +171,26 @@ define(["jquery", "footable", "humanize"],
                         }
                         item.symbols[key].str = str;
                     });
-                    item.symbols = Object.keys(item.symbols).
-                        map(function(key) {
+                    item.symbols = Object.keys(item.symbols)
+                        .map(function (key) {
                             return item.symbols[key];
-                        }).
-                        sort(compare).
-                        map(function(e) { return e.str; }).
-                        join("<br>\n");
+                        })
+                        .sort(compare)
+                        .map(function (e) { return e.str; })
+                        .join("<br>\n");
                     item.time = {
-                        "value": unix_time_format(item.unix_time),
-                        "options": {
-                            "sortValue": item.unix_time
+                        value: unix_time_format(item.unix_time),
+                        options: {
+                            sortValue: item.unix_time
                         }
                     };
                     var scan_time = item.time_real.toFixed(3) + " / " +
                 item.time_virtual.toFixed(3);
                     item.scan_time = {
-                        "options": {
-                            "sortValue": item.time_real
+                        options: {
+                            sortValue: item.time_real
                         },
-                        "value": scan_time
+                        value: scan_time
                     };
                     item.id = item["message-id"];
 
@@ -221,15 +221,15 @@ define(["jquery", "footable", "humanize"],
                 item.time = unix_time_format(item.unix_time);
                 preprocess_item(item);
                 item.scan_time = {
-                    "options": {
-                        "sortValue": item.scan_time
+                    options: {
+                        sortValue: item.scan_time
                     },
-                    "value": item.scan_time
+                    value: item.scan_time
                 };
                 item.time = {
-                    "value": unix_time_format(item.unix_time),
-                    "options": {
-                        "sortValue": item.unix_time
+                    value: unix_time_format(item.unix_time),
+                    options: {
+                        sortValue: item.unix_time
                     }
                 };
 
@@ -241,9 +241,9 @@ define(["jquery", "footable", "humanize"],
 
         function columns_v2() {
             return [{
-                "name": "id",
-                "title": "ID",
-                "style": {
+                name: "id",
+                title: "ID",
+                style: {
                     "font-size": "11px",
                     "minWidth": 130,
                     "overflow": "hidden",
@@ -252,106 +252,106 @@ define(["jquery", "footable", "humanize"],
                     "whiteSpace": "normal"
                 }
             }, {
-                "name": "ip",
-                "title": "IP address",
-                "breakpoints": "xs sm md",
-                "style": {
+                name: "ip",
+                title: "IP address",
+                breakpoints: "xs sm md",
+                style: {
                     "font-size": "11px",
                     "minWidth": 88
                 }
             }, {
-                "name": "sender_mime",
-                "title": "[Envelope From] From",
-                "breakpoints": "xs sm md",
-                "style": {
+                name: "sender_mime",
+                title: "[Envelope From] From",
+                breakpoints: "xs sm md",
+                style: {
                     "font-size": "11px",
                     "minWidth": 100,
                     "maxWidth": 200,
                     "word-wrap": "break-word"
                 }
             }, {
-                "name": "rcpt_mime_short",
-                "title": "[Envelope To] To/Cc/Bcc",
-                "breakpoints": "xs sm md",
-                "style": {
+                name: "rcpt_mime_short",
+                title: "[Envelope To] To/Cc/Bcc",
+                breakpoints: "xs sm md",
+                style: {
                     "font-size": "11px",
                     "minWidth": 100,
                     "maxWidth": 200,
                     "word-wrap": "break-word"
                 }
             }, {
-                "name": "rcpt_mime",
-                "title": "[Envelope To] To/Cc/Bcc",
-                "breakpoints": "all",
-                "style": {
+                name: "rcpt_mime",
+                title: "[Envelope To] To/Cc/Bcc",
+                breakpoints: "all",
+                style: {
                     "font-size": "11px",
                     "word-wrap": "break-word"
                 }
             }, {
-                "name": "subject",
-                "title": "Subject",
-                "breakpoints": "xs sm md",
-                "style": {
+                name: "subject",
+                title: "Subject",
+                breakpoints: "xs sm md",
+                style: {
                     "font-size": "11px",
                     "word-break": "break-all",
                     "minWidth": 150
                 }
             }, {
-                "name": "action",
-                "title": "Action",
-                "style": {
+                name: "action",
+                title: "Action",
+                style: {
                     "font-size": "11px",
                     "minwidth": 82
                 }
             }, {
-                "name": "score",
-                "title": "Score",
-                "style": {
+                name: "score",
+                title: "Score",
+                style: {
                     "font-size": "11px",
                     "maxWidth": 110
                 },
-                "sortValue": function(val) { return Number(val.options.sortValue); }
+                sortValue: function (val) { return Number(val.options.sortValue); }
             }, {
-                "name": "symbols",
-                "title": "Symbols",
-                "breakpoints": "all",
-                "style": {
+                name: "symbols",
+                title: "Symbols",
+                breakpoints: "all",
+                style: {
                     "font-size": "11px",
                     "width": 550,
                     "maxWidth": 550
                 }
             }, {
-                "name": "size",
-                "title": "Msg size",
-                "breakpoints": "xs sm md",
-                "style": {
+                name: "size",
+                title: "Msg size",
+                breakpoints: "xs sm md",
+                style: {
                     "font-size": "11px",
                     "minwidth": 50,
                 },
-                "formatter": Humanize.compactInteger
+                formatter: Humanize.compactInteger
             }, {
-                "name": "scan_time",
-                "title": "Scan time",
-                "breakpoints": "xs sm md",
-                "style": {
+                name: "scan_time",
+                title: "Scan time",
+                breakpoints: "xs sm md",
+                style: {
                     "font-size": "11px",
                     "maxWidth": 72
                 },
-                "sortValue": function(val) { return Number(val.options.sortValue); }
+                sortValue: function (val) { return Number(val.options.sortValue); }
             }, {
-                "sorted": true,
-                "direction": "DESC",
-                "name": "time",
-                "title": "Time",
-                "style": {
+                sorted: true,
+                direction: "DESC",
+                name: "time",
+                title: "Time",
+                style: {
                     "font-size": "11px"
                 },
-                "sortValue": function(val) { return Number(val.options.sortValue); }
+                sortValue: function (val) { return Number(val.options.sortValue); }
             }, {
-                "name": "user",
-                "title": "Authenticated user",
-                "breakpoints": "xs sm md",
-                "style": {
+                name: "user",
+                title: "Authenticated user",
+                breakpoints: "xs sm md",
+                style: {
                     "font-size": "11px",
                     "minWidth": 100,
                     "maxWidth": 130,
@@ -362,9 +362,9 @@ define(["jquery", "footable", "humanize"],
 
         function columns_legacy() {
             return [{
-                "name": "id",
-                "title": "ID",
-                "style": {
+                name: "id",
+                title: "ID",
+                style: {
                     "font-size": "11px",
                     "width": 300,
                     "maxWidth": 300,
@@ -374,72 +374,72 @@ define(["jquery", "footable", "humanize"],
                     "whiteSpace": "nowrap"
                 }
             }, {
-                "name": "ip",
-                "title": "IP address",
-                "breakpoints": "xs sm",
-                "style": {
+                name: "ip",
+                title: "IP address",
+                breakpoints: "xs sm",
+                style: {
                     "font-size": "11px",
                     "width": 150,
                     "maxWidth": 150
                 }
             }, {
-                "name": "action",
-                "title": "Action",
-                "style": {
+                name: "action",
+                title: "Action",
+                style: {
                     "font-size": "11px",
                     "width": 110,
                     "maxWidth": 110
                 }
             }, {
-                "name": "score",
-                "title": "Score",
-                "style": {
+                name: "score",
+                title: "Score",
+                style: {
                     "font-size": "11px",
                     "maxWidth": 110
                 },
-                "sortValue": function(val) { return Number(val.options.sortValue); }
+                sortValue: function (val) { return Number(val.options.sortValue); }
             }, {
-                "name": "symbols",
-                "title": "Symbols",
-                "breakpoints": "all",
-                "style": {
+                name: "symbols",
+                title: "Symbols",
+                breakpoints: "all",
+                style: {
                     "font-size": "11px",
                     "width": 550,
                     "maxWidth": 550
                 }
             }, {
-                "name": "size",
-                "title": "Message size",
-                "breakpoints": "xs sm",
-                "style": {
+                name: "size",
+                title: "Message size",
+                breakpoints: "xs sm",
+                style: {
                     "font-size": "11px",
                     "width": 120,
                     "maxWidth": 120
                 },
-                "formatter": Humanize.compactInteger
+                formatter: Humanize.compactInteger
             }, {
-                "name": "scan_time",
-                "title": "Scan time",
-                "breakpoints": "xs sm",
-                "style": {
+                name: "scan_time",
+                title: "Scan time",
+                breakpoints: "xs sm",
+                style: {
                     "font-size": "11px",
                     "maxWidth": 80
                 },
-                "sortValue": function(val) { return Number(val.options.sortValue); }
+                sortValue: function (val) { return Number(val.options.sortValue); }
             }, {
-                "sorted": true,
-                "direction": "DESC",
-                "name": "time",
-                "title": "Time",
-                "style": {
+                sorted: true,
+                direction: "DESC",
+                name: "time",
+                title: "Time",
+                style: {
                     "font-size": "11px"
                 },
-                "sortValue": function(val) { return Number(val.options.sortValue); }
+                sortValue: function (val) { return Number(val.options.sortValue); }
             }, {
-                "name": "user",
-                "title": "Authenticated user",
-                "breakpoints": "xs sm",
-                "style": {
+                name: "user",
+                title: "Authenticated user",
+                breakpoints: "xs sm",
+                style: {
                     "font-size": "11px",
                     "width": 200,
                     "maxWidth": 200
@@ -448,13 +448,13 @@ define(["jquery", "footable", "humanize"],
         }
 
         var process_functions = {
-            "2": process_history_v2,
-            "legacy": process_history_legacy
+            2: process_history_v2,
+            legacy: process_history_legacy
         };
 
         var columns = {
-            "2": columns_v2,
-            "legacy": columns_legacy
+            2: columns_v2,
+            legacy: columns_legacy
         };
 
         function process_history_data(data) {
@@ -485,24 +485,24 @@ define(["jquery", "footable", "humanize"],
 
         interface.getHistory = function (rspamd, tables, neighbours, checked_server) {
             FooTable.actionFilter = FooTable.Filtering.extend({
-                construct : function(instance) {
+                construct : function (instance) {
                     this._super(instance);
                     this.actions = ["reject", "add header", "greylist",
                         "no action", "soft reject", "rewrite subject"];
                     this.def = "Any action";
                     this.$action = null;
                 },
-                $create : function() {
+                $create : function () {
                     this._super();
                     var self = this, $form_grp = $("<div/>", {
-                        "class" : "form-group"
+                        class : "form-group"
                     }).append($("<label/>", {
-                        "class" : "sr-only",
+                        class : "sr-only",
                         text : "Action"
                     })).prependTo(self.$form);
 
                     self.$action = $("<select/>", {
-                        "class" : "form-control"
+                        class : "form-control"
                     }).on("change", {
                         self : self
                     }, self._onStatusDropdownChanged).append(
@@ -510,11 +510,11 @@ define(["jquery", "footable", "humanize"],
                             text : self.def
                         })).appendTo($form_grp);
 
-                    $.each(self.actions, function(i, action) {
+                    $.each(self.actions, function (i, action) {
                         self.$action.append($("<option/>").text(action));
                     });
                 },
-                _onStatusDropdownChanged : function(e) {
+                _onStatusDropdownChanged : function (e) {
                     var self = e.data.self, selected = $(this).val();
                     if (selected !== self.def) {
                         if (selected === "reject") {
@@ -527,7 +527,7 @@ define(["jquery", "footable", "humanize"],
                     }
                     self.filter();
                 },
-                draw : function() {
+                draw : function () {
                     this._super();
                     var action = this.find("action");
                     if (action instanceof FooTable.Filter) {
@@ -542,13 +542,13 @@ define(["jquery", "footable", "humanize"],
                 }
             });
 
-            var drawTooltips = function() {
+            var drawTooltips = function () {
             // Update symbol description tooltips
                 $.each(symbolDescriptions, function (key, description) {
                     $("abbr[data-sym-key=" + key + "]").tooltip({
-                        "placement": "bottom",
-                        "html": true,
-                        "title": description
+                        placement: "bottom",
+                        html: true,
+                        title: description
                     });
                 });
             };
@@ -585,36 +585,34 @@ define(["jquery", "footable", "humanize"],
 
                         var items = process_history_data(data);
                         ft.history = FooTable.init("#historyTable", {
-                            "columns": get_history_columns(data),
-                            "rows": items,
-                            "paging": {
-                                "enabled": true,
-                                "limit": 5,
-                                "size": 25
+                            columns: get_history_columns(data),
+                            rows: items,
+                            paging: {
+                                enabled: true,
+                                limit: 5,
+                                size: 25
                             },
-                            "filtering": {
-                                "enabled": true,
-                                "position": "left",
-                                "connectors": false
+                            filtering: {
+                                enabled: true,
+                                position: "left",
+                                connectors: false
                             },
-                            "sorting": {
-                                "enabled": true
+                            sorting: {
+                                enabled: true
                             },
-                            "components": {
-                                "filtering": FooTable.actionFilter
+                            components: {
+                                filtering: FooTable.actionFilter
                             },
-                            "on": {
+                            on: {
                                 "ready.ft.table": drawTooltips,
                                 "after.ft.sorting": drawTooltips,
                                 "after.ft.paging": drawTooltips,
                                 "after.ft.filtering": drawTooltips
                             }
                         });
-                    } else {
-                        if (ft.history) {
-                            ft.history.destroy();
-                            ft.history = undefined;
-                        }
+                    } else if (ft.history) {
+                        ft.history.destroy();
+                        ft.history = undefined;
                     }
                 });
             }
@@ -632,25 +630,25 @@ define(["jquery", "footable", "humanize"],
                     success: function (data) {
                         var items = process_history_data(data);
                         ft.history = FooTable.init("#historyTable", {
-                            "columns": get_history_columns(data),
-                            "rows": items,
-                            "paging": {
-                                "enabled": true,
-                                "limit": 5,
-                                "size": 25
+                            columns: get_history_columns(data),
+                            rows: items,
+                            paging: {
+                                enabled: true,
+                                limit: 5,
+                                size: 25
                             },
-                            "filtering": {
-                                "enabled": true,
-                                "position": "left",
-                                "connectors": false
+                            filtering: {
+                                enabled: true,
+                                position: "left",
+                                connectors: false
                             },
-                            "sorting": {
-                                "enabled": true
+                            sorting: {
+                                enabled: true
                             },
-                            "components": {
-                                "filtering": FooTable.actionFilter
+                            components: {
+                                filtering: FooTable.actionFilter
                             },
-                            "on": {
+                            on: {
                                 "ready.ft.table": drawTooltips,
                                 "after.ft.sorting": drawTooltips,
                                 "after.ft.paging": drawTooltips,
@@ -665,7 +663,7 @@ define(["jquery", "footable", "humanize"],
                 e.preventDefault();
                 interface.getHistory(rspamd, tables, neighbours, checked_server);
             });
-            $("#selSymOrder").unbind().change(function() {
+            $("#selSymOrder").unbind().change(function () {
                 interface.getHistory(rspamd, tables, neighbours, checked_server);
             });
 
@@ -673,7 +671,7 @@ define(["jquery", "footable", "humanize"],
             $("#resetHistory").off("click");
             $("#resetHistory").on("click", function (e) {
                 e.preventDefault();
-                if (!confirm("Are you sure you want to reset history log?")) {
+                if (!confirm("Are you sure you want to reset history log?")) { // eslint-disable-line no-alert
                     return;
                 }
                 if (ft.history) {
@@ -685,7 +683,7 @@ define(["jquery", "footable", "humanize"],
                     ft.errors = undefined;
                 }
                 if (checked_server === "All SERVERS") {
-                    rspamd.queryNeighbours("errors", function (data) {
+                    rspamd.queryNeighbours("errors", function () {
                         interface.getHistory(rspamd, tables, neighbours, checked_server);
                         interface.getErrors(rspamd, tables, neighbours, checked_server);
                     });
@@ -719,32 +717,32 @@ define(["jquery", "footable", "humanize"],
                 );
             });
             ft.errors = FooTable.init("#errorsLog", {
-                "columns": [
-                    {"sorted": true, "direction": "DESC", "name":"ts", "title":"Time", "style":{"font-size":"11px", "width":300, "maxWidth":300}},
-                    {"name":"type", "title":"Worker type", "breakpoints":"xs sm", "style":{"font-size":"11px", "width":150, "maxWidth":150}},
-                    {"name":"pid", "title":"PID", "breakpoints":"xs sm", "style":{"font-size":"11px", "width":110, "maxWidth":110}},
-                    {"name":"module", "title":"Module", "style":{"font-size":"11px"}},
-                    {"name":"id", "title":"Internal ID", "style":{"font-size":"11px"}},
-                    {"name":"message", "title":"Message", "breakpoints":"xs sm", "style":{"font-size":"11px"}},
+                columns: [
+                    {sorted: true, direction: "DESC", name:"ts", title:"Time", style:{"font-size":"11px", "width":300, "maxWidth":300}},
+                    {name:"type", title:"Worker type", breakpoints:"xs sm", style:{"font-size":"11px", "width":150, "maxWidth":150}},
+                    {name:"pid", title:"PID", breakpoints:"xs sm", style:{"font-size":"11px", "width":110, "maxWidth":110}},
+                    {name:"module", title:"Module", style:{"font-size":"11px"}},
+                    {name:"id", title:"Internal ID", style:{"font-size":"11px"}},
+                    {name:"message", title:"Message", breakpoints:"xs sm", style:{"font-size":"11px"}},
                 ],
-                "rows": data,
-                "paging": {
-                    "enabled": true,
-                    "limit": 5,
-                    "size": 25
+                rows: data,
+                paging: {
+                    enabled: true,
+                    limit: 5,
+                    size: 25
                 },
-                "filtering": {
-                    "enabled": true,
-                    "position": "left",
-                    "connectors": false
+                filtering: {
+                    enabled: true,
+                    position: "left",
+                    connectors: false
                 },
-                "sorting": {
-                    "enabled": true
+                sorting: {
+                    enabled: true
                 }
             });
         }
 
-        interface.getErrors = function(rspamd, tables, neighbours, checked_server) {
+        interface.getErrors = function (rspamd, tables, neighbours, checked_server) {
             if (rspamd.read_only) return;
 
             if (checked_server !== "All SERVERS") {
@@ -781,7 +779,6 @@ define(["jquery", "footable", "humanize"],
             });
         };
 
-        interface.setup = function(rspamd, tables) {
-        };
+        interface.setup = function () {};
         return interface;
     });

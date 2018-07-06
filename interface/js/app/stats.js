@@ -23,14 +23,16 @@
  */
 
 define(["jquery", "d3pie", "humanize"],
-    function($, d3pie, Humanize) {
+    function ($, d3pie, Humanize) {
     // @ ms to date
         function msToTime(seconds) {
+            /* eslint-disable no-bitwise */
             years = seconds / 31536000 >> 0; // 3600*24*365
             months = seconds % 31536000 / 2628000 >> 0; // 3600*24*365/12
             days = seconds % 31536000 % 2628000 / 86400 >> 0; // 24*3600
             hours = seconds % 31536000 % 2628000 % 86400 / 3600 >> 0;
             minutes = seconds % 31536000 % 2628000 % 86400 % 3600 / 60 >> 0;
+            /* eslint-enable no-bitwise */
             if (years > 0) {
                 if (months > 0) {
                     out = years + "yr " + months + "mth";
@@ -122,7 +124,7 @@ define(["jquery", "d3pie", "humanize"],
                 "<td class=\"col4\" title=\"SStatus\"><span class=\"icon\"><i class=\"" + glyph_status + "\"></i></span></td>" +
                 "<td class=\"col5\" title=\"short_id\">" + short_id + "</td></tr>");
 
-                $("#selSrv").append( $("<option value=\"" + key + "\">" + key + "</option>"));
+                $("#selSrv").append($("<option value=\"" + key + "\">" + key + "</option>"));
 
                 if (checked_server == key) {
                     $("#clusterTable tbody [value=\"" + key + "\"]").prop("checked", true);
@@ -141,30 +143,30 @@ define(["jquery", "d3pie", "humanize"],
             if (creds && creds[checked_server]) {
                 var data = creds[checked_server].data;
                 var new_data = [{
-                    "color" : "#66CC00",
-                    "label" : "Clean",
-                    "data" : data.clean,
-                    "value" : data.clean
+                    color : "#66CC00",
+                    label : "Clean",
+                    data : data.clean,
+                    value : data.clean
                 }, {
-                    "color" : "#BF8040",
-                    "label" : "Temporarily rejected",
-                    "data" : data.soft_reject,
-                    "value" : data.soft_reject
+                    color : "#BF8040",
+                    label : "Temporarily rejected",
+                    data : data.soft_reject,
+                    value : data.soft_reject
                 }, {
-                    "color" : "#FFAD00",
-                    "label" : "Probable spam",
-                    "data" : data.probable,
-                    "value" : data.probable
+                    color : "#FFAD00",
+                    label : "Probable spam",
+                    data : data.probable,
+                    value : data.probable
                 }, {
-                    "color" : "#436EEE",
-                    "label" : "Greylisted",
-                    "data" : data.greylist,
-                    "value" : data.greylist
+                    color : "#436EEE",
+                    label : "Greylisted",
+                    data : data.greylist,
+                    value : data.greylist
                 }, {
-                    "color" : "#FF0000",
-                    "label" : "Rejected",
-                    "data" : data.reject,
-                    "value" : data.reject
+                    color : "#FF0000",
+                    label : "Rejected",
+                    data : data.reject,
+                    value : data.reject
                 }];
 
                 return rspamd.drawPie(pie, "chart", new_data);
@@ -172,8 +174,8 @@ define(["jquery", "d3pie", "humanize"],
         }
         // Public API
         var interface = {
-            statWidgets: function(rspamd, graphs, checked_server) {
-                rspamd.queryNeighbours("/auth", function(neighbours_status) {
+            statWidgets: function (rspamd, graphs, checked_server) {
+                rspamd.queryNeighbours("/auth", function (neighbours_status) {
                     var neighbours_sum = {
                         version: neighbours_status[0].data.version,
                         auth: "ok",
@@ -189,8 +191,8 @@ define(["jquery", "d3pie", "humanize"],
                         config_id: ""
                     };
                     var status_count = 0;
-                    for(var e in neighbours_status) {
-                        if(neighbours_status[e].status === true) {
+                    for (var e in neighbours_status) {
+                        if (neighbours_status[e].status === true) {
                         // Remove alert status
                             localStorage.removeItem(e + "_alerted");
                             neighbours_sum.clean += neighbours_status[e].data.clean;
@@ -206,7 +208,8 @@ define(["jquery", "d3pie", "humanize"],
                     }
                     neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
                     var to_Credentials = {};
-                    to_Credentials["All SERVERS"] = {name: "All SERVERS",
+                    to_Credentials["All SERVERS"] = {
+                        name: "All SERVERS",
                         url: "",
                         host: "",
                         checked: true,

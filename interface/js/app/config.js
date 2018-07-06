@@ -23,7 +23,7 @@
  */
 
 define(["jquery"],
-    function($) {
+    function ($) {
         var interface = {};
 
         function save_map_success(rspamd) {
@@ -51,13 +51,12 @@ define(["jquery"],
                 error: function (data) {
                     save_map_error(rspamd, "local", null, null, data.statusText);
                 },
-                success: function() { save_map_success(rspamd); },
+                success: function () { save_map_success(rspamd); },
             });
         }
 
         // @get maps id
         function getMaps(rspamd) {
-            var items = [];
             var $listmaps = $("#listMaps");
             $listmaps.closest(".widget-box").hide();
             $.ajax({
@@ -112,7 +111,7 @@ define(["jquery"],
                         disabled = "disabled=\"disabled\"";
                     }
 
-                    $("#"+item.map).remove();
+                    $("#" + item.map).remove();
                     $("<form class=\"form-horizontal form-map\" method=\"post\" action=\"savemap\" data-type=\"map\" id=\"" +
                     item.map + "\" style=\"display:none\">" +
                     "<textarea class=\"list-textarea\"" + disabled + ">" + text +
@@ -222,10 +221,10 @@ define(["jquery"],
                         }
                     }
 
-                    $("#saveActionsBtn").on("click", function() {
+                    $("#saveActionsBtn").on("click", function () {
                         saveActions(rspamd.queryLocal);
                     });
-                    $("#saveActionsClusterBtn").on("click", function() {
+                    $("#saveActionsClusterBtn").on("click", function () {
                         saveActions(rspamd.queryNeighbours);
                     });
                 },
@@ -233,11 +232,11 @@ define(["jquery"],
         }
 
         // @upload edited actions
-        interface.setup = function(rspamd) {
+        interface.setup = function (rspamd) {
         // Modal form for maps
             $(document).on("click", "[data-toggle=\"modal\"]", function () {
                 var item = $(this).data("item");
-                getMapById(rspamd, item).done(function() {
+                getMapById(rspamd, item).done(function () {
                     $("#modalTitle").html(item.uri);
                     $("#" + item.map).first().show();
                     $("#modalDialog .progress").hide();
@@ -269,7 +268,7 @@ define(["jquery"],
                 var id = $(form).attr("id");
                 var data = $("#" + id).find("textarea").val();
                 rspamd.queryNeighbours(action, save_map_success, save_map_error, "POST", {
-                    "Map": id,
+                    Map: id,
                 }, {
                     data: data,
                     dataType: "text",

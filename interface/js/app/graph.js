@@ -24,7 +24,7 @@
  */
 
 define(["jquery", "d3evolution", "footable"],
-    function($, D3Evolution, unused) {
+    function ($, D3Evolution) {
         var rrd_pie_config = {
             header: {},
             size: {
@@ -95,7 +95,7 @@ define(["jquery", "d3evolution", "footable"],
                 interpolate: getSelector("selInterpolate"),
                 convert:     getSelector("selConvert"),
             }));
-            $("#selYScale").change(function() {
+            $("#selYScale").change(function () {
                 graph.yScale(this.value);
             });
             $("#selConvert").change(function () {
@@ -124,7 +124,7 @@ define(["jquery", "d3evolution", "footable"],
 
                 return {
                     label: graph_options.legend.entries[i].label,
-                    value: value ^ 0,
+                    value: value ^ 0, // eslint-disable-line no-bitwise
                     min: +yExtents[0].toFixed(6),
                     avg: +avg.toFixed(6),
                     max: +yExtents[1].toFixed(6),
@@ -156,11 +156,11 @@ define(["jquery", "d3evolution", "footable"],
                 },
                 columns: [
                     {name: "label", title: "Action"},
-                    {name: "value", title: "Messages",         defaultContent: ""},
-                    {name: "min",   title: "Minimum, " + unit, defaultContent: ""},
-                    {name: "avg",   title: "Average, " + unit, defaultContent: ""},
-                    {name: "max",   title: "Maximum, " + unit, defaultContent: ""},
-                    {name: "last",  title: "Last, " + unit},
+                    {name: "value", title: "Messages", defaultContent: ""},
+                    {name: "min", title: "Minimum, " + unit, defaultContent: ""},
+                    {name: "avg", title: "Average, " + unit, defaultContent: ""},
+                    {name: "max", title: "Maximum, " + unit, defaultContent: ""},
+                    {name: "last", title: "Last, " + unit},
                 ],
                 rows: rows
             });
@@ -169,7 +169,7 @@ define(["jquery", "d3evolution", "footable"],
         var interface = {};
         var prevUnit = "msg/s";
 
-        interface.draw = function(rspamd, graphs, neighbours, checked_server, type) {
+        interface.draw = function (rspamd, graphs, neighbours, checked_server, type) {
 
             function updateWidgets(data) {
             // Autoranging
@@ -263,7 +263,7 @@ define(["jquery", "d3evolution", "footable"],
                 url: neighbours[checked_server].url + "graph",
                 jsonp: false,
                 data: {
-                    "type": type
+                    type: type
                 },
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader("Password", rspamd.getPassword());
@@ -278,7 +278,7 @@ define(["jquery", "d3evolution", "footable"],
             });
         };
 
-        interface.setup = function() {
+        interface.setup = function () {
         // Handling mouse events on overlapping elements
             $("#rrd-pie").mouseover(function () {
                 $("#rrd-pie").css("z-index", "200");

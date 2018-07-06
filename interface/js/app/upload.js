@@ -23,7 +23,7 @@
  */
 
 define(["jquery"],
-    function($) {
+    function ($) {
         var interface = {};
 
         function cleanTextUpload(source) {
@@ -140,8 +140,8 @@ define(["jquery"],
                         // Show tooltips
                         $.each(sym_desc, function (k, v) {
                             $("#" + k).tooltip({
-                                "placement": "bottom",
-                                "title": v
+                                placement: "bottom",
+                                title: v
                             });
                         });
                         $("html, body").animate({
@@ -169,7 +169,7 @@ define(["jquery"],
             });
         }
 
-        interface.setup = function(rspamd) {
+        interface.setup = function (rspamd) {
             $("textarea").change(function () {
                 if ($(this).val().length !== "") {
                     $(this).closest("form").find("button").removeAttr("disabled").removeClass("disabled");

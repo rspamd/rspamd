@@ -82,7 +82,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         stopTimers();
 
         if (tab_id === "#refresh") {
-            tab_id = "#" + $(".navbar-nav .active > a" ).attr("id");
+            tab_id = "#" + $(".navbar-nav .active > a").attr("id");
         }
 
         switch (tab_id) {
@@ -179,7 +179,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
 
     // Public functions
     interface.alertMessage = alertMessage;
-    interface.setup = function() {
+    interface.setup = function () {
         $("#selData").change(function () {
             selData = this.value;
             tabClick("#throughput_nav");
@@ -236,7 +236,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         selData = tab_graph.setup();
     };
 
-    interface.connect = function() {
+    interface.connect = function () {
         if (isLogged()) {
             var data = JSON.parse(sessionStorage.getItem("Credentials"));
 
@@ -267,7 +267,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         $("#connectForm").on("submit", function (e) {
             e.preventDefault();
             var password = $("#connectPassword").val();
-            if (!/^[\u0000-\u007f]*$/.test(password)) {
+            if (!(/^[\u0020-\u007e]*$/).test(password)) {
                 alertMessage("alert-modal alert-error", "Invalid characters in the password");
                 $("#connectPassword").focus();
                 return;
@@ -314,7 +314,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         });
     };
 
-    interface.queryLocal = function(req_url, on_success, on_error, method, headers, params) {
+    interface.queryLocal = function (req_url, on_success, on_error, method, headers, params) {
         var req_params = {
             type: method,
             jsonp: false,
@@ -322,7 +322,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 xhr.setRequestHeader("Password", getPassword());
 
                 if (headers) {
-                    $.each(headers, function(hname, hvalue) {
+                    $.each(headers, function (hname, hvalue) {
                         xhr.setRequestHeader(hname, hvalue);
                     });
                 }
@@ -336,7 +336,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                     alertMessage("alert-success", "Data saved");
                 }
             },
-            error: function(jqXHR, textStatus, errorThrown) {
+            error: function (jqXHR, textStatus, errorThrown) {
                 if (on_error) {
                     on_error("local", jqXHR, textStatus, errorThrown);
                 }
@@ -346,14 +346,14 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             }
         };
         if (params) {
-            $.each(params, function(k, v) {
+            $.each(params, function (k, v) {
                 req_params[k] = v;
             });
         }
         $.ajax(req_params);
     };
 
-    interface.queryNeighbours = function(req_url, on_success, on_error, method, headers, params, req_data) {
+    interface.queryNeighbours = function (req_url, on_success, on_error, method, headers, params, req_data) {
         $.ajax({
             dataType: "json",
             type: "GET",
@@ -370,7 +370,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                             url: window.location.href
                         }
                     };
-                }   else {
+                } else {
                     neighbours = data;
                 }
                 var neighbours_status = [];
@@ -395,7 +395,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                             xhr.setRequestHeader("Password", getPassword());
 
                             if (headers) {
-                                $.each(headers, function(hname, hvalue) {
+                                $.each(headers, function (hname, hvalue) {
                                     xhr.setRequestHeader(hname, hvalue);
                                 });
                             }
@@ -419,7 +419,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                                 }
                             }
                         },
-                        error: function(jqXHR, textStatus, errorThrown) {
+                        error: function (jqXHR, textStatus, errorThrown) {
                             neighbours_status[ind].status = false;
                             neighbours_status[ind].checked = true;
                             if (on_error) {
@@ -443,7 +443,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                         // error display
                     };
                     if (params) {
-                        $.each(params, function(k, v) {
+                        $.each(params, function (k, v) {
                             req_params[k] = v;
                         });
                     }
@@ -456,7 +456,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         });
     };
 
-    interface.drawPie = function(obj, id, data, conf) {
+    interface.drawPie = function (obj, id, data, conf) {
         if (obj) {
             obj.updateProp("data.content",
                 data.filter(function (elt) {
@@ -466,79 +466,79 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         } else {
             obj = new d3pie(id,
                 $.extend({}, {
-                    "header": {
-                        "title": {
-                            "text": "Rspamd filter stats",
-                            "fontSize": 24,
-                            "font": "open sans"
+                    header: {
+                        title: {
+                            text: "Rspamd filter stats",
+                            fontSize: 24,
+                            font: "open sans"
                         },
-                        "subtitle": {
-                            "color": "#999999",
-                            "fontSize": 12,
-                            "font": "open sans"
+                        subtitle: {
+                            color: "#999999",
+                            fontSize: 12,
+                            font: "open sans"
                         },
-                        "titleSubtitlePadding": 9
+                        titleSubtitlePadding: 9
                     },
-                    "footer": {
-                        "color": "#999999",
-                        "fontSize": 10,
-                        "font": "open sans",
-                        "location": "bottom-left"
+                    footer: {
+                        color: "#999999",
+                        fontSize: 10,
+                        font: "open sans",
+                        location: "bottom-left"
                     },
-                    "size": {
-                        "canvasWidth": 600,
-                        "canvasHeight": 400,
-                        "pieInnerRadius": "20%",
-                        "pieOuterRadius": "85%"
+                    size: {
+                        canvasWidth: 600,
+                        canvasHeight: 400,
+                        pieInnerRadius: "20%",
+                        pieOuterRadius: "85%"
                     },
-                    "data": {
+                    data: {
                         // "sortOrder": "value-desc",
-                        "content": data.filter(function (elt) {
+                        content: data.filter(function (elt) {
                             return elt.value > 0;
                         })
                     },
-                    "labels": {
-                        "outer": {
-                            "hideWhenLessThanPercentage": 1,
-                            "pieDistance": 30
+                    labels: {
+                        outer: {
+                            hideWhenLessThanPercentage: 1,
+                            pieDistance: 30
                         },
-                        "inner": {
-                            "hideWhenLessThanPercentage": 4
+                        inner: {
+                            hideWhenLessThanPercentage: 4
                         },
-                        "mainLabel": {
-                            "fontSize": 14
+                        mainLabel: {
+                            fontSize: 14
                         },
-                        "percentage": {
-                            "color": "#eeeeee",
-                            "fontSize": 14,
-                            "decimalPlaces": 0
+                        percentage: {
+                            color: "#eeeeee",
+                            fontSize: 14,
+                            decimalPlaces: 0
                         },
-                        "lines": {
-                            "enabled": true
+                        lines: {
+                            enabled: true
                         },
-                        "truncation": {
-                            "enabled": true
+                        truncation: {
+                            enabled: true
                         }
                     },
-                    "tooltips": {
-                        "enabled": true,
-                        "type": "placeholder",
-                        "string": "{label}: {value} ({percentage}%)"
+                    tooltips: {
+                        enabled: true,
+                        type: "placeholder",
+                        string: "{label}: {value} ({percentage}%)"
                     },
-                    "effects": {
-                        "pullOutSegmentOnClick": {
-                            "effect": "back",
-                            "speed": 400,
-                            "size": 8
+                    effects: {
+                        pullOutSegmentOnClick: {
+                            effect: "back",
+                            speed: 400,
+                            size: 8
                         },
-                        "load": {
-                            "effect": "none"
+                        load: {
+                            effect: "none"
                         }
                     },
-                    "misc": {
-                        "gradient": {
-                            "enabled": true,
-                            "percentage": 100
+                    misc: {
+                        gradient: {
+                            enabled: true,
+                            percentage: 100
                         }
                     }
                 }, conf));

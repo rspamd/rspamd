@@ -10,7 +10,6 @@ requirejs.config({
         d3evolution: "d3evolution.min",
         d3pie: "d3pie.min",
         footable: "footable.min",
-        bootstrap: "bootstrap.min",
     },
     shim: {
         d3: {exports: "d3"},
@@ -26,13 +25,13 @@ document.title = window.location.hostname +
     (window.location.pathname !== "/" ? window.location.pathname : "") +
     " - Rspamd Web Interface";
 
-define("d3.global", ["d3"], function(_) {
+define("d3.global", ["d3"], function (_) {
     d3 = _;
 });
 
 // Load main UI
 require(["domReady"],
-    function(domReady) {
+    function (domReady) {
         domReady(function () {
             require(["jquery", "d3", "app/rspamd"],
                 function ($, d3, rspamd) {
