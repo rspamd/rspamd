@@ -183,6 +183,7 @@ cort.as
 cortas.elpais.com
 cot.ag
 cowurl.com
+cp.bitrix.ru
 cr.am
 createurl.com
 crks.me
