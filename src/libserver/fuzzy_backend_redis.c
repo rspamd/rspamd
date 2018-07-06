@@ -60,6 +60,13 @@ struct rspamd_fuzzy_backend_redis {
 	ref_entry_t ref;
 };
 
+enum rspamd_fuzzy_redis_command {
+	RSPAMD_FUZZY_REDIS_COMMAND_COUNT,
+	RSPAMD_FUZZY_REDIS_COMMAND_VERSION,
+	RSPAMD_FUZZY_REDIS_COMMAND_UPDATES,
+	RSPAMD_FUZZY_REDIS_COMMAND_CHECK
+};
+
 struct rspamd_fuzzy_redis_session {
 	struct rspamd_fuzzy_backend_redis *backend;
 	redisAsyncContext *ctx;
@@ -69,13 +76,13 @@ struct rspamd_fuzzy_redis_session {
 	float prob;
 	gboolean shingles_checked;
 
-	enum {
-		RSPAMD_FUZZY_REDIS_COMMAND_COUNT,
-		RSPAMD_FUZZY_REDIS_COMMAND_VERSION,
-		RSPAMD_FUZZY_REDIS_COMMAND_UPDATES,
-		RSPAMD_FUZZY_REDIS_COMMAND_CHECK
-	} command;
+	enum rspamd_fuzzy_redis_command command;
 	guint nargs;
+
+	guint nadded;
+	guint ndeleted;
+	guint nextended;
+	guint nignored;
 
 	union {
 		rspamd_fuzzy_check_cb cb_check;
@@ -1335,18 +1342,23 @@ rspamd_fuzzy_redis_update_callback (redisAsyncContext *c, gpointer r,
 		if (reply->type == REDIS_REPLY_ARRAY) {
 			/* TODO: check all replies somehow */
 			if (session->callback.cb_update) {
-				session->callback.cb_update (TRUE, session->cbdata);
+				session->callback.cb_update (TRUE,
+						session->nadded,
+						session->ndeleted,
+						session->nextended,
+						session->nignored,
+						session->cbdata);
 			}
 		}
 		else {
 			if (session->callback.cb_update) {
-				session->callback.cb_update (FALSE, session->cbdata);
+				session->callback.cb_update (FALSE, 0, 0, 0, 0, session->cbdata);
 			}
 		}
 	}
 	else {
 		if (session->callback.cb_update) {
-			session->callback.cb_update (FALSE, session->cbdata);
+			session->callback.cb_update (FALSE, 0, 0, 0, 0, session->cbdata);
 		}
 
 		if (c->errstr) {
@@ -1418,6 +1430,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 		if (cmd->cmd == FUZZY_WRITE) {
 			ncommands += 5;
 			nargs += 17;
+			session->nadded ++;
 
 			if (io_cmd->is_shingle) {
 				ncommands += RSPAMD_SHINGLE_SIZE;
@@ -1428,6 +1441,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 		else if (cmd->cmd == FUZZY_DEL) {
 			ncommands += 2;
 			nargs += 4;
+			session->ndeleted ++;
 
 			if (io_cmd->is_shingle) {
 				ncommands += RSPAMD_SHINGLE_SIZE;
@@ -1437,11 +1451,15 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 		else if (cmd->cmd == FUZZY_REFRESH) {
 			ncommands += 1;
 			nargs += 3;
+			session->nextended ++;
 
 			if (io_cmd->is_shingle) {
 				ncommands += RSPAMD_SHINGLE_SIZE;
 				nargs += RSPAMD_SHINGLE_SIZE * 3;
 			}
+		}
+		else {
+			session->nignored ++;
 		}
 	}
 
@@ -1476,7 +1494,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 		rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
 		if (cb) {
-			cb (FALSE, ud);
+			cb (FALSE, 0, 0, 0, 0, ud);
 		}
 	}
 	else {
@@ -1490,7 +1508,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 				session->argv_lens) != REDIS_OK) {
 
 			if (cb) {
-				cb (FALSE, ud);
+				cb (FALSE, 0, 0, 0, 0, ud);
 			}
 			rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
@@ -1506,7 +1524,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 			if (!rspamd_fuzzy_update_append_command (bk, session, io_cmd,
 					&cur_shift)) {
 				if (cb) {
-					cb (FALSE, ud);
+					cb (FALSE, 0, 0, 0, 0, ud);
 				}
 				rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
@@ -1529,7 +1547,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 				&session->argv_lens[cur_shift - 2]) != REDIS_OK) {
 
 			if (cb) {
-				cb (FALSE, ud);
+				cb (FALSE, 0, 0, 0, 0, ud);
 			}
 			rspamd_fuzzy_redis_session_dtor (session, TRUE);
 
@@ -1547,7 +1565,7 @@ rspamd_fuzzy_backend_update_redis (struct rspamd_fuzzy_backend *bk,
 				&session->argv_lens[cur_shift]) != REDIS_OK) {
 
 			if (cb) {
-				cb (FALSE, ud);
+				cb (FALSE, 0, 0, 0, 0, ud);
 			}
 			rspamd_fuzzy_redis_session_dtor (session, TRUE);
 

@@ -506,7 +506,12 @@ rspamd_fuzzy_stat_callback (gint fd, gshort what, gpointer ud)
 }
 
 static void
-rspamd_fuzzy_updates_cb (gboolean success, void *ud)
+rspamd_fuzzy_updates_cb (gboolean success,
+						 guint nadded,
+						 guint ndeleted,
+						 guint nextended,
+						 guint nignored,
+						 void *ud)
 {
 	struct rspamd_updates_cbdata *cbdata = ud;
 	struct rspamd_fuzzy_mirror *m;
@@ -528,8 +533,10 @@ rspamd_fuzzy_updates_cb (gboolean success, void *ud)
 			}
 		}
 
-		msg_info ("successfully updated fuzzy storage: %d updates processed",
-				ctx->updates_pending->len);
+		msg_info ("successfully updated fuzzy storage: %d updates in queue; "
+			"%d added, %d deleted, %d extended, %d duplicates",
+				ctx->updates_pending->len,
+				nadded, ndeleted, nextended, nignored);
 		/* Clear updates */
 		ctx->updates_pending->len = 0;
 		rspamd_fuzzy_backend_version (ctx->backend, source,

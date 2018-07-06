@@ -166,7 +166,7 @@ rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
 	struct fuzzy_peer_cmd *io_cmd;
 	struct rspamd_fuzzy_cmd *cmd;
 	gpointer ptr;
-	guint nupdates = 0;
+	guint nupdates = 0, nadded = 0, ndeleted = 0, nextended = 0, nignored = 0;
 
 	if (rspamd_fuzzy_backend_sqlite_prepare_update (sq, src)) {
 		for (i = 0; i < updates->len; i ++) {
@@ -183,14 +183,21 @@ rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
 
 			if (cmd->cmd == FUZZY_WRITE) {
 				rspamd_fuzzy_backend_sqlite_add (sq, ptr);
+				nadded ++;
 				nupdates ++;
 			}
 			else if (cmd->cmd == FUZZY_DEL) {
 				rspamd_fuzzy_backend_sqlite_del (sq, ptr);
+				ndeleted ++;
 				nupdates ++;
 			}
 			else {
-				/* Do nothing for expire, this backend should no longer be used */
+				if (cmd->cmd == FUZZY_REFRESH) {
+					nextended ++;
+				}
+				else {
+					nignored ++;
+				}
 			}
 		}
 
@@ -201,7 +208,7 @@ rspamd_fuzzy_backend_update_sqlite (struct rspamd_fuzzy_backend *bk,
 	}
 
 	if (cb) {
-		cb (success, ud);
+		cb (success, nadded, ndeleted, nextended, nignored, ud);
 	}
 }
 
@@ -437,7 +444,7 @@ rspamd_fuzzy_backend_process_updates (struct rspamd_fuzzy_backend *bk,
 		bk->subr->update (bk, updates, src, cb, ud, bk->subr_ud);
 	}
 	else if (cb) {
-		cb (TRUE, ud);
+		cb (TRUE, 0, 0, 0, 0, ud);
 	}
 }
 
