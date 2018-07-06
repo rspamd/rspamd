@@ -24,7 +24,7 @@
  */
 
 define(["jquery", "d3evolution", "footable"],
-    function ($, D3Evolution, unused) {
+    function ($, D3Evolution) {
         var rrd_pie_config = {
             header: {},
             size: {

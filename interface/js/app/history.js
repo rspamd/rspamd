@@ -683,7 +683,7 @@ define(["jquery", "footable", "humanize"],
                     ft.errors = undefined;
                 }
                 if (checked_server === "All SERVERS") {
-                    rspamd.queryNeighbours("errors", function (data) {
+                    rspamd.queryNeighbours("errors", function () {
                         interface.getHistory(rspamd, tables, neighbours, checked_server);
                         interface.getErrors(rspamd, tables, neighbours, checked_server);
                     });
@@ -779,7 +779,6 @@ define(["jquery", "footable", "humanize"],
             });
         };
 
-        interface.setup = function (rspamd, tables) {
-        };
+        interface.setup = function () {};
         return interface;
     });

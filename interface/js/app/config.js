@@ -57,7 +57,6 @@ define(["jquery"],
 
         // @get maps id
         function getMaps(rspamd) {
-            var items = [];
             var $listmaps = $("#listMaps");
             $listmaps.closest(".widget-box").hide();
             $.ajax({

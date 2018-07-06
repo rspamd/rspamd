@@ -153,7 +153,7 @@ define(["jquery", "footable"],
             return [items, distinct_groups];
         }
         // @get symbols into modal form
-        interface.getSymbols = function (rspamd, tables, checked_server) {
+        interface.getSymbols = function (rspamd) {
 
             $.ajax({
                 dataType: "json",
@@ -253,14 +253,14 @@ define(["jquery", "footable"],
                     rspamd.alertMessage("alert-modal alert-error", data.statusText);
                 }
             });
-            $(document).on("click", "#symbolsTable :button", function (event) {
+            $(document).on("click", "#symbolsTable :button", function () {
                 var value = $(this).data("save");
                 if (!value) return;
                 saveSymbols(rspamd, "./savesymbols", "symbolsTable", value == "cluster");
             });
         };
 
-        interface.setup = function (rspamd, tables) {
+        interface.setup = function (rspamd) {
             $("#updateSymbols").on("click", function (e) {
                 e.preventDefault();
                 $.ajax({
