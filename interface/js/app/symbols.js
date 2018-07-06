@@ -175,14 +175,14 @@ define(["jquery", "footable"],
                         $create : function () {
                             this._super();
                             var self = this, $form_grp = $("<div/>", {
-                                "class" : "form-group"
+                                class : "form-group"
                             }).append($("<label/>", {
-                                "class" : "sr-only",
+                                class : "sr-only",
                                 text : "Group"
                             })).prependTo(self.$form);
 
                             self.$group = $("<select/>", {
-                                "class" : "form-control"
+                                class : "form-control"
                             }).on("change", {
                                 self : self
                             }, self._onStatusDropdownChanged).append(
@@ -214,33 +214,33 @@ define(["jquery", "footable"],
                         }
                     });
                     ft.symbols = FooTable.init("#symbolsTable", {
-                        "columns": [
-                            {"sorted": true, "direction": "ASC", "name":"group", "title":"Group", "style":{"font-size":"11px"}},
-                            {"name":"symbol", "title":"Symbol", "style":{"font-size":"11px"}},
-                            {"name":"description", "title":"Description", "breakpoints":"xs sm", "style":{"font-size":"11px"}},
-                            {"name":"weight", "title":"Score", "style":{"font-size":"11px"}},
-                            {"name":"frequency", "title":"Frequency", "breakpoints":"xs sm", "style":{"font-size":"11px"}, "sortValue": function (value) { return Number(value).toFixed(2); }},
-                            {"name":"time", "title":"Avg. time", "breakpoints":"xs sm", "style":{"font-size":"11px"}},
-                            {"name":"save", "title":"Save", "style":{"font-size":"11px"}},
+                        columns: [
+                            {sorted: true, direction: "ASC", name:"group", title:"Group", style:{"font-size":"11px"}},
+                            {name:"symbol", title:"Symbol", style:{"font-size":"11px"}},
+                            {name:"description", title:"Description", breakpoints:"xs sm", style:{"font-size":"11px"}},
+                            {name:"weight", title:"Score", style:{"font-size":"11px"}},
+                            {name:"frequency", title:"Frequency", breakpoints:"xs sm", style:{"font-size":"11px"}, sortValue: function (value) { return Number(value).toFixed(2); }},
+                            {name:"time", title:"Avg. time", breakpoints:"xs sm", style:{"font-size":"11px"}},
+                            {name:"save", title:"Save", style:{"font-size":"11px"}},
                         ],
-                        "rows": items[0],
-                        "paging": {
-                            "enabled": true,
-                            "limit": 5,
-                            "size": 25
+                        rows: items[0],
+                        paging: {
+                            enabled: true,
+                            limit: 5,
+                            size: 25
                         },
-                        "filtering": {
-                            "enabled": true,
-                            "position": "left",
-                            "connectors": false
+                        filtering: {
+                            enabled: true,
+                            position: "left",
+                            connectors: false
                         },
-                        "sorting": {
-                            "enabled": true
+                        sorting: {
+                            enabled: true
                         },
                         components: {
                             filtering: FooTable.groupFilter
                         },
-                        "on": {
+                        on: {
                             "ready.ft.table": function () {
                                 if (rspamd.read_only) {
                                     $(".mb-disabled").attr("disabled", true);

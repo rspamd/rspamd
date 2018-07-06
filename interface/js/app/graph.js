@@ -263,7 +263,7 @@ define(["jquery", "d3evolution", "footable"],
                 url: neighbours[checked_server].url + "graph",
                 jsonp: false,
                 data: {
-                    "type": type
+                    type: type
                 },
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader("Password", rspamd.getPassword());

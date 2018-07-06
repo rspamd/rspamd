@@ -269,7 +269,7 @@ define(["jquery"],
                 var id = $(form).attr("id");
                 var data = $("#" + id).find("textarea").val();
                 rspamd.queryNeighbours(action, save_map_success, save_map_error, "POST", {
-                    "Map": id,
+                    Map: id,
                 }, {
                     data: data,
                     dataType: "text",

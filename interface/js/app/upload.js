@@ -140,8 +140,8 @@ define(["jquery"],
                         // Show tooltips
                         $.each(sym_desc, function (k, v) {
                             $("#" + k).tooltip({
-                                "placement": "bottom",
-                                "title": v
+                                placement: "bottom",
+                                title: v
                             });
                         });
                         $("html, body").animate({

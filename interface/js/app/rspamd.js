@@ -466,79 +466,79 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         } else {
             obj = new d3pie(id,
                 $.extend({}, {
-                    "header": {
-                        "title": {
-                            "text": "Rspamd filter stats",
-                            "fontSize": 24,
-                            "font": "open sans"
+                    header: {
+                        title: {
+                            text: "Rspamd filter stats",
+                            fontSize: 24,
+                            font: "open sans"
                         },
-                        "subtitle": {
-                            "color": "#999999",
-                            "fontSize": 12,
-                            "font": "open sans"
+                        subtitle: {
+                            color: "#999999",
+                            fontSize: 12,
+                            font: "open sans"
                         },
-                        "titleSubtitlePadding": 9
+                        titleSubtitlePadding: 9
                     },
-                    "footer": {
-                        "color": "#999999",
-                        "fontSize": 10,
-                        "font": "open sans",
-                        "location": "bottom-left"
+                    footer: {
+                        color: "#999999",
+                        fontSize: 10,
+                        font: "open sans",
+                        location: "bottom-left"
                     },
-                    "size": {
-                        "canvasWidth": 600,
-                        "canvasHeight": 400,
-                        "pieInnerRadius": "20%",
-                        "pieOuterRadius": "85%"
+                    size: {
+                        canvasWidth: 600,
+                        canvasHeight: 400,
+                        pieInnerRadius: "20%",
+                        pieOuterRadius: "85%"
                     },
-                    "data": {
+                    data: {
                         // "sortOrder": "value-desc",
-                        "content": data.filter(function (elt) {
+                        content: data.filter(function (elt) {
                             return elt.value > 0;
                         })
                     },
-                    "labels": {
-                        "outer": {
-                            "hideWhenLessThanPercentage": 1,
-                            "pieDistance": 30
+                    labels: {
+                        outer: {
+                            hideWhenLessThanPercentage: 1,
+                            pieDistance: 30
                         },
-                        "inner": {
-                            "hideWhenLessThanPercentage": 4
+                        inner: {
+                            hideWhenLessThanPercentage: 4
                         },
-                        "mainLabel": {
-                            "fontSize": 14
+                        mainLabel: {
+                            fontSize: 14
                         },
-                        "percentage": {
-                            "color": "#eeeeee",
-                            "fontSize": 14,
-                            "decimalPlaces": 0
+                        percentage: {
+                            color: "#eeeeee",
+                            fontSize: 14,
+                            decimalPlaces: 0
                         },
-                        "lines": {
-                            "enabled": true
+                        lines: {
+                            enabled: true
                         },
-                        "truncation": {
-                            "enabled": true
+                        truncation: {
+                            enabled: true
                         }
                     },
-                    "tooltips": {
-                        "enabled": true,
-                        "type": "placeholder",
-                        "string": "{label}: {value} ({percentage}%)"
+                    tooltips: {
+                        enabled: true,
+                        type: "placeholder",
+                        string: "{label}: {value} ({percentage}%)"
                     },
-                    "effects": {
-                        "pullOutSegmentOnClick": {
-                            "effect": "back",
-                            "speed": 400,
-                            "size": 8
+                    effects: {
+                        pullOutSegmentOnClick: {
+                            effect: "back",
+                            speed: 400,
+                            size: 8
                         },
-                        "load": {
-                            "effect": "none"
+                        load: {
+                            effect: "none"
                         }
                     },
-                    "misc": {
-                        "gradient": {
-                            "enabled": true,
-                            "percentage": 100
+                    misc: {
+                        gradient: {
+                            enabled: true,
+                            percentage: 100
                         }
                     }
                 }, conf));

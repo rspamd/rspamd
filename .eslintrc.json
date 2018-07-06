@@ -34,7 +34,7 @@
         "prefer-arrow-callback": "off",
         "prefer-destructuring": "off",
         "prefer-template": "off",
-        // "quote-props" : ["error", "consistent-as-needed"],
+        "quote-props" : ["error", "consistent-as-needed"],
         "require-jsdoc": "off",
         "space-before-function-paren": ["error", {
             "anonymous": "always",
@@ -84,7 +84,6 @@
         "no-use-before-define": "off",
         "one-var-declaration-per-line": "off",
         "prefer-spread": "off",
-        "quote-props": "off",
         "sort-keys": "off",
         "sort-vars": "off",
         "strict": "off"
