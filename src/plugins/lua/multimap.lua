@@ -895,8 +895,8 @@ local function add_multimap_rule(key, newrule)
   else
     if type(newrule['map']) == 'string' then
       local map = urls[newrule['map']]
-      if map and map['type'] == newrule['type']
-        and map['regexp'] == newrule['regexp'] then
+      if map and map['regexp'] == newrule['regexp'] and
+          map['glob'] == newrule['glob'] then
         if newrule['type'] == 'ip' then
           newrule['radix'] = map['map']
         else
