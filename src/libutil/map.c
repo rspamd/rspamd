@@ -820,6 +820,80 @@ err:
 	return 0;
 }
 
+static gboolean
+read_map_file_chunks (struct rspamd_map *map, struct map_cb_data *cbdata,
+		const gchar *fname, gsize len, goffset off)
+{
+	gint fd;
+	gssize r, avail;
+	gsize buflen = 1024 * 1024;
+	gchar *pos, *bytes;
+
+	fd = rspamd_file_xopen (fname, O_RDONLY, 0, TRUE);
+
+	if (fd == -1) {
+		msg_err_map ("can't open map for buffered reading %s: %s",
+				fname, strerror (errno));
+		return FALSE;
+	}
+
+	if (lseek (fd, off, SEEK_SET) == -1) {
+		msg_err_map ("can't seek in map to pos %d for buffered reading %s: %s",
+				(gint)off, fname, strerror (errno));
+		return FALSE;
+	}
+
+	buflen = MIN (len, buflen);
+	bytes = g_malloc (buflen);
+	avail = buflen;
+	pos = bytes;
+
+	while ((r = read (fd, pos, avail)) > 0) {
+		gchar *end = bytes + (pos - bytes) + r;
+		msg_info_map ("%s: read map chunk, %z bytes", fname,
+				r);
+		pos = map->read_callback (bytes, end - bytes, cbdata, r == len);
+
+		if (pos && pos > bytes && pos < end) {
+			guint remain = end - pos;
+
+			memmove (bytes, pos, remain);
+			pos = bytes + remain;
+			/* Need to preserve the remain */
+			avail = ((gssize)buflen) - remain;
+
+			if (avail <= 0) {
+				/* Try realloc, too large element */
+				g_assert (buflen >= remain);
+				bytes = g_realloc (bytes, buflen * 2);
+
+				pos = bytes + remain; /* Adjust */
+				avail += buflen;
+				buflen *= 2;
+			}
+		}
+		else {
+			avail = buflen;
+			pos = bytes;
+		}
+
+		len -= r;
+	}
+
+	if (r == -1) {
+		msg_err_map ("can't read from map %s: %s", fname, strerror (errno));
+		close (fd);
+		g_free (bytes);
+
+		return FALSE;
+	}
+
+	close (fd);
+	g_free (bytes);
+
+	return TRUE;
+}
+
 /**
  * Callback for reading data from file
  */
@@ -936,68 +1010,10 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 		}
 		else {
 			/* Perform buffered read: fail-safe */
-			gint fd;
-			gssize r, avail;
-			gsize buflen = 1024 * 1024;
-			gchar *pos;
-
-			fd = rspamd_file_xopen (data->filename, O_RDONLY, 0, TRUE);
-
-			if (fd == -1) {
-				msg_err_map ("can't open map for buffered reading %s: %s",
-						data->filename, strerror (errno));
+			if (!read_map_file_chunks (map, &periodic->cbdata, data->filename,
+					len, 0)) {
 				return FALSE;
 			}
-
-			buflen = MIN (len, buflen);
-			bytes = g_malloc (buflen);
-			avail = buflen;
-			pos = bytes;
-
-			while ((r = read (fd, pos, avail)) > 0) {
-				gchar *end = bytes + (pos - bytes) + r;
-				msg_info_map ("%s: read map chunk, %z bytes", data->filename,
-						r);
-				pos = map->read_callback (bytes, end - bytes,
-						&periodic->cbdata, r == len);
-
-				if (pos && pos > bytes && pos < end) {
-					guint remain = end - pos;
-
-					memmove (bytes, pos, remain);
-					pos = bytes + remain;
-					/* Need to preserve the remain */
-					avail = ((gssize)buflen) - remain;
-
-					if (avail <= 0) {
-						/* Try realloc, too large element */
-						g_assert (buflen >= remain);
-						bytes = g_realloc (bytes, buflen * 2);
-
-						pos = bytes + remain; /* Adjust */
-						avail += buflen;
-						buflen *= 2;
-					}
-				}
-				else {
-					avail = buflen;
-					pos = bytes;
-				}
-
-				len -= r;
-			}
-
-			if (r == -1) {
-				msg_err_map ("can't read from map %s: %s",
-						data->filename, strerror (errno));
-				close (fd);
-				g_free (bytes);
-
-				return FALSE;
-			}
-
-			close (fd);
-			g_free (bytes);
 		}
 	}
 	else {

@@ -165,6 +165,16 @@ struct map_periodic_cbdata {
 	ref_entry_t ref;
 };
 
+static const gchar rspamd_http_cached_magic[] =
+		{'r', 'm', 'c', 'd', '1', '0', '0', '0'};
+
+struct rspamd_http_cached_data {
+	guchar magic[sizeof (rspamd_http_cached_magic)];
+	goffset data_off;
+	gulong mtime;
+	gulong next_check;
+};
+
 struct http_callback_data {
 	struct event_base *ev_base;
 	struct rspamd_http_connection *conn;
