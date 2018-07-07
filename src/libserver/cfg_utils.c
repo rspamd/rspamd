@@ -198,6 +198,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 #endif
 	cfg->default_max_shots = DEFAULT_MAX_SHOTS;
 	cfg->max_sessions_cache = DEFAULT_MAX_SESSIONS;
+	cfg->maps_cache_dir = rspamd_mempool_strdup (cfg->cfg_pool, RSPAMD_DBDIR);
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 

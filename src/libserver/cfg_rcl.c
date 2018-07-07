@@ -1689,6 +1689,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				0,
 				"Multiplier for map watch interval when map is file");
 		rspamd_rcl_add_default_handler (sub,
+				"maps_cache_dir",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, maps_cache_dir),
+				0,
+				"Directory to save maps cached data (default: $DBDIR)");
+		rspamd_rcl_add_default_handler (sub,
 				"monitoring_watch_interval",
 				rspamd_rcl_parse_struct_time,
 				G_STRUCT_OFFSET (struct rspamd_config, monitored_interval),

@@ -40,12 +40,23 @@
 #define MAP_RELEASE(x, t) REF_RELEASE(x)
 #endif
 
-static void free_http_cbdata_common (struct http_callback_data *cbd, gboolean plan_new);
+static void free_http_cbdata_common (struct http_callback_data *cbd,
+									 gboolean plan_new);
 static void free_http_cbdata_dtor (gpointer p);
 static void free_http_cbdata (struct http_callback_data *cbd);
 static void rspamd_map_periodic_callback (gint fd, short what, void *ud);
 static void rspamd_map_schedule_periodic (struct rspamd_map *map, gboolean locked,
-		gboolean initial, gboolean errored);
+										  gboolean initial, gboolean errored);
+static gboolean read_map_file_chunks (struct rspamd_map *map,
+									  struct map_cb_data *cbdata,
+									  const gchar *fname,
+									  gsize len,
+									  goffset off);
+static gboolean rspamd_map_save_http_cached_file (struct rspamd_map *map,
+												  struct rspamd_map_backend *bk,
+												  struct http_map_data *htdata,
+												  const guchar *data,
+												  gsize len);
 
 guint rspamd_map_log_id = (guint)-1;
 RSPAMD_CONSTRUCTOR(rspamd_map_log_init)
@@ -735,6 +746,7 @@ read_data:
 					rspamd_inet_address_to_string_pretty (cbd->addr),
 					dlen, zout.pos, next_check_date);
 			map->read_callback (out, zout.pos, &cbd->periodic->cbdata, TRUE);
+			rspamd_map_save_http_cached_file (map, bk, cbd->data, out, zout.pos);
 			g_free (out);
 		}
 		else {
@@ -742,6 +754,7 @@ read_data:
 					cbd->bk->uri,
 					rspamd_inet_address_to_string_pretty (cbd->addr),
 					dlen, next_check_date);
+			rspamd_map_save_http_cached_file (map, bk, cbd->data, in, cbd->data_len);
 			map->read_callback (in, cbd->data_len, &cbd->periodic->cbdata, TRUE);
 		}
 
@@ -1363,6 +1376,168 @@ rspamd_map_read_cached (struct rspamd_map *map, struct rspamd_map_backend *bk,
 	return TRUE;
 }
 
+static gboolean
+rspamd_map_has_http_cached_file (struct rspamd_map *map,
+								 struct rspamd_map_backend *bk)
+{
+	gchar path[PATH_MAX];
+	guchar digest[rspamd_cryptobox_HASHBYTES];
+	struct rspamd_config *cfg = map->cfg;
+	struct stat st;
+
+	if (cfg->maps_cache_dir == NULL || cfg->maps_cache_dir[0] == '\0') {
+		return FALSE;
+	}
+
+	rspamd_cryptobox_hash (digest, bk->uri, strlen (bk->uri), NULL, 0);
+	rspamd_snprintf (path, sizeof (path), "%s%c%*xs.map", cfg->maps_cache_dir,
+			G_DIR_SEPARATOR, 20, digest);
+
+	if (stat (path, &st) != -1 && st.st_size >
+								  sizeof (struct rspamd_http_file_data)) {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static gboolean
+rspamd_map_save_http_cached_file (struct rspamd_map *map,
+								  struct rspamd_map_backend *bk,
+								  struct http_map_data *htdata,
+								  const guchar *data,
+								  gsize len)
+{
+	gchar path[PATH_MAX];
+	guchar digest[rspamd_cryptobox_HASHBYTES];
+	struct rspamd_config *cfg = map->cfg;
+	gint fd;
+	struct rspamd_http_file_data header;
+
+	if (cfg->maps_cache_dir == NULL || cfg->maps_cache_dir[0] == '\0') {
+		return FALSE;
+	}
+
+	rspamd_cryptobox_hash (digest, bk->uri, strlen (bk->uri), NULL, 0);
+	rspamd_snprintf (path, sizeof (path), "%s%c%*xs.map", cfg->maps_cache_dir,
+			G_DIR_SEPARATOR, 20, digest);
+
+	fd = rspamd_file_xopen (path, O_WRONLY | O_TRUNC | O_CREAT,
+			00600, FALSE);
+
+	if (fd == -1) {
+		return FALSE;
+	}
+
+	if (!rspamd_file_lock (fd, FALSE)) {
+		msg_err_map ("cannot lock file %s: %s", path, strerror (errno));
+		close (fd);
+
+		return FALSE;
+	}
+
+	memcpy (header.magic, rspamd_http_file_magic, sizeof (rspamd_http_file_magic));
+	header.mtime = htdata->last_modified;
+	header.next_check = map->next_check;
+	header.data_off = sizeof (header);
+
+	if (write (fd, &header, sizeof (header)) != sizeof (header)) {
+		msg_err_map ("cannot write file %s: %s", path, strerror (errno));
+		rspamd_file_unlock (fd, FALSE);
+		close (fd);
+
+		return FALSE;
+	}
+
+	/* Now write the rest */
+	if (write (fd, data, len) != len) {
+		msg_err_map ("cannot write file %s: %s", path, strerror (errno));
+		rspamd_file_unlock (fd, FALSE);
+		close (fd);
+
+		return FALSE;
+	}
+
+	rspamd_file_unlock (fd, FALSE);
+	close (fd);
+
+	msg_info_map ("saved data from %s in %s, %uz bytes", bk->uri, path, len);
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_map_read_http_cached_file (struct rspamd_map *map,
+								  struct rspamd_map_backend *bk,
+								  struct http_map_data *htdata,
+								  struct map_cb_data *cbdata)
+{
+	gchar path[PATH_MAX];
+	guchar digest[rspamd_cryptobox_HASHBYTES];
+	struct rspamd_config *cfg = map->cfg;
+	gint fd;
+	struct stat st;
+	struct rspamd_http_file_data header;
+
+	if (cfg->maps_cache_dir == NULL || cfg->maps_cache_dir[0] == '\0') {
+		return FALSE;
+	}
+
+	rspamd_cryptobox_hash (digest, bk->uri, strlen (bk->uri), NULL, 0);
+	rspamd_snprintf (path, sizeof (path), "%s%c%*xs.map", cfg->maps_cache_dir,
+			G_DIR_SEPARATOR, 20, digest);
+
+	fd = rspamd_file_xopen (path, O_RDONLY, 00600, FALSE);
+
+	if (fd == -1) {
+		return FALSE;
+	}
+
+	if (!rspamd_file_lock (fd, FALSE)) {
+		msg_err_map ("cannot lock file %s: %s", path, strerror (errno));
+		close (fd);
+
+		return FALSE;
+	}
+
+	(void)fstat (fd, &st);
+
+	if (read (fd, &header, sizeof (header)) != sizeof (header)) {
+		msg_err_map ("cannot read file %s: %s", path, strerror (errno));
+		rspamd_file_unlock (fd, FALSE);
+		close (fd);
+
+		return FALSE;
+	}
+
+	if (memcmp (header.magic, rspamd_http_file_magic,
+			sizeof (rspamd_http_file_magic)) != 0) {
+		msg_err_map ("invalid magic in file %s: %s", path, strerror (errno));
+		rspamd_file_unlock (fd, FALSE);
+		close (fd);
+
+		return FALSE;
+	}
+
+	rspamd_file_unlock (fd, FALSE);
+	close (fd);
+
+	map->next_check = header.next_check;
+	htdata->last_modified = header.mtime;
+
+	/* Now read file data */
+	/* Perform buffered read: fail-safe */
+	if (!read_map_file_chunks (map, cbdata, path,
+			st.st_size - header.data_off, header.data_off)) {
+		return FALSE;
+	}
+
+	msg_info_map ("read cached data for %s from %s, %uz bytes", bk->uri, path,
+			st.st_size - header.data_off);
+
+	return TRUE;
+}
+
 /**
  * Async HTTP callback
  */
@@ -1766,6 +1941,17 @@ rspamd_map_preload (struct rspamd_config *cfg)
 		PTR_ARRAY_FOREACH (map->backends, i, bk) {
 			if (!(bk->protocol == MAP_PROTO_FILE ||
 				  bk->protocol == MAP_PROTO_STATIC)) {
+
+				if (bk->protocol == MAP_PROTO_HTTP ||
+						bk->protocol == MAP_PROTO_HTTPS) {
+					if (!rspamd_map_has_http_cached_file (map, bk)) {
+						map_ok = FALSE;
+						break;
+					}
+					else {
+						continue; /* We are yet fine */
+					}
+				}
 				map_ok = FALSE;
 				break;
 			}
@@ -1793,6 +1979,14 @@ rspamd_map_preload (struct rspamd_config *cfg)
 				}
 				else if (bk->protocol == MAP_PROTO_STATIC) {
 					if (!read_map_static (map, bk->data.sd, bk, &fake_cbd)) {
+						succeed = FALSE;
+						break;
+					}
+				}
+				else if (bk->protocol == MAP_PROTO_HTTP ||
+						 bk->protocol == MAP_PROTO_HTTPS) {
+					if (!rspamd_map_read_http_cached_file (map, bk, bk->data.hd,
+							&fake_cbd.cbdata)) {
 						succeed = FALSE;
 						break;
 					}
