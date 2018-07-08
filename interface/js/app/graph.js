@@ -23,6 +23,8 @@
  THE SOFTWARE.
  */
 
+/* global d3:false */
+
 define(["jquery", "d3evolution", "footable"],
     function ($, D3Evolution) {
         var rrd_pie_config = {
@@ -205,7 +207,7 @@ define(["jquery", "d3evolution", "footable"],
                 drawRrdTable(rrd_summary, unit);
             }
 
-            if (graphs.graph === undefined) {
+            if (!graphs.graph) {
                 graphs.graph = initGraph();
             }
 

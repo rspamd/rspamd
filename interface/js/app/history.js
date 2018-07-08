@@ -22,6 +22,8 @@
  THE SOFTWARE.
  */
 
+/* global FooTable:false */
+
 define(["jquery", "footable", "humanize"],
     function ($, _, Humanize) {
         var interface = {};
@@ -39,13 +41,13 @@ define(["jquery", "footable", "humanize"],
         var htmlEscaper = /[&<>"'/`=]/g;
         var symbolDescriptions = {};
 
-        EscapeHTML = function (string) {
+        var EscapeHTML = function (string) {
             return ("" + string).replace(htmlEscaper, function (match) {
                 return htmlEscapes[match];
             });
         };
 
-        escape_HTML_array = function (arr) {
+        var escape_HTML_array = function (arr) {
             arr.forEach(function (d, i) { arr[i] = EscapeHTML(d); });
         };
 
@@ -137,7 +139,8 @@ define(["jquery", "footable", "humanize"],
                         return (l > rcpt_lim) ? " … (" + l + ")" : "";
                     }
                     function format_rcpt(smtp, mime) {
-                        var full = shrt = "";
+                        var full = "";
+                        var shrt = "";
                         if (smtp) {
                             full = "[" + item.rcpt_smtp.join(", ") + "] ";
                             shrt = "[" + item.rcpt_smtp.slice(0, rcpt_lim).join(",&#8203;") + more("rcpt_smtp") + "]";
@@ -612,7 +615,7 @@ define(["jquery", "footable", "humanize"],
                         });
                     } else if (ft.history) {
                         ft.history.destroy();
-                        ft.history = undefined;
+                        delete ft.history;
                     }
                 });
             }
@@ -676,11 +679,11 @@ define(["jquery", "footable", "humanize"],
                 }
                 if (ft.history) {
                     ft.history.destroy();
-                    ft.history = undefined;
+                    delete ft.history;
                 }
                 if (ft.errors) {
                     ft.errors.destroy();
-                    ft.errors = undefined;
+                    delete ft.errors;
                 }
                 if (checked_server === "All SERVERS") {
                     rspamd.queryNeighbours("errors", function () {

@@ -22,6 +22,8 @@
  THE SOFTWARE.
  */
 
+/* global $span:true, $tbody:true */
+
 define(["jquery"],
     function ($) {
         var interface = {};
@@ -240,7 +242,7 @@ define(["jquery"],
                     $("#modalTitle").html(item.uri);
                     $("#" + item.map).first().show();
                     $("#modalDialog .progress").hide();
-                    $("#modalDialog").modal(show = true, backdrop = true, keyboard = show);
+                    $("#modalDialog").modal({backdrop: true, keyboard: "show", show: true});
                     if (item.editable === false) {
                         $("#modalSave").hide();
                         $("#modalSaveAll").hide();
