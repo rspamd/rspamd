@@ -23,6 +23,8 @@
  THE SOFTWARE.
  */
 
+/* global d3:false */
+
 define(["jquery", "d3evolution", "footable"],
     function ($, D3Evolution) {
         var rrd_pie_config = {

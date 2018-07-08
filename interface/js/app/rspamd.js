@@ -22,6 +22,9 @@
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE.
  */
+
+/* global jQuery:false, Visibility:false */
+
 define(["jquery", "d3pie", "visibility", "app/stats", "app/graph", "app/config",
     "app/symbols", "app/history", "app/upload"],
 function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,

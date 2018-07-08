@@ -1,3 +1,5 @@
+/* global d3:false, require:false, requirejs:false */ // eslint-disable-line no-unused-vars
+
 requirejs.config({
     baseUrl: "js/lib",
     paths: {
@@ -26,7 +28,7 @@ document.title = window.location.hostname +
     " - Rspamd Web Interface";
 
 define("d3.global", ["d3"], function (_) {
-    d3 = _;
+    d3 = _; // eslint-disable-line no-global-assign
 });
 
 // Load main UI

@@ -3,6 +3,9 @@
         "browser": true
     },
     "extends": "eslint:all",
+    "globals": {
+        "define": false
+    },
     "rules": {
         "array-bracket-newline": ["error", "consistent"],
         "camelcase": "off",
@@ -76,7 +79,6 @@
         "no-param-reassign": "off",
         "no-redeclare": "off",
         "no-shadow": "off",
-        "no-undef": "off",
         "no-underscore-dangle": "off",
         "no-use-before-define": "off",
         "one-var-declaration-per-line": "off",

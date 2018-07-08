@@ -22,6 +22,8 @@
  THE SOFTWARE.
  */
 
+/* global FooTable:false */
+
 define(["jquery", "footable", "humanize"],
     function ($, _, Humanize) {
         var interface = {};
