@@ -144,7 +144,6 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         $("#historyLog tbody").remove();
         $("#errorsLog tbody").remove();
         $("#symbolsTable tbody").remove();
-        password = "";
     }
 
     function isLogged() {
