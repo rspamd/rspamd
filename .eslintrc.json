@@ -72,7 +72,6 @@
         "no-implicit-coercion": "off",
         "no-inline-comments": "off",
         "no-loop-func": "off",
-        "no-multi-assign": "off",
         "no-negated-condition": "off",
         "no-param-reassign": "off",
         "no-redeclare": "off",

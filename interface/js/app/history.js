@@ -137,7 +137,8 @@ define(["jquery", "footable", "humanize"],
                         return (l > rcpt_lim) ? " … (" + l + ")" : "";
                     }
                     function format_rcpt(smtp, mime) {
-                        var full = shrt = "";
+                        var full = "";
+                        var shrt = "";
                         if (smtp) {
                             full = "[" + item.rcpt_smtp.join(", ") + "] ";
                             shrt = "[" + item.rcpt_smtp.slice(0, rcpt_lim).join(",&#8203;") + more("rcpt_smtp") + "]";
