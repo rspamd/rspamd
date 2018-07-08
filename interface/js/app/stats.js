@@ -27,12 +27,13 @@ define(["jquery", "d3pie", "humanize"],
     // @ ms to date
         function msToTime(seconds) {
             /* eslint-disable no-bitwise */
-            years = seconds / 31536000 >> 0; // 3600*24*365
-            months = seconds % 31536000 / 2628000 >> 0; // 3600*24*365/12
-            days = seconds % 31536000 % 2628000 / 86400 >> 0; // 24*3600
-            hours = seconds % 31536000 % 2628000 % 86400 / 3600 >> 0;
-            minutes = seconds % 31536000 % 2628000 % 86400 % 3600 / 60 >> 0;
+            var years = seconds / 31536000 >> 0; // 3600*24*365
+            var months = seconds % 31536000 / 2628000 >> 0; // 3600*24*365/12
+            var days = seconds % 31536000 % 2628000 / 86400 >> 0; // 24*3600
+            var hours = seconds % 31536000 % 2628000 % 86400 / 3600 >> 0;
+            var minutes = seconds % 31536000 % 2628000 % 86400 % 3600 / 60 >> 0;
             /* eslint-enable no-bitwise */
+            var out;
             if (years > 0) {
                 if (months > 0) {
                     out = years + "yr " + months + "mth";

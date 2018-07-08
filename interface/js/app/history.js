@@ -39,13 +39,13 @@ define(["jquery", "footable", "humanize"],
         var htmlEscaper = /[&<>"'/`=]/g;
         var symbolDescriptions = {};
 
-        EscapeHTML = function (string) {
+        var EscapeHTML = function (string) {
             return ("" + string).replace(htmlEscaper, function (match) {
                 return htmlEscapes[match];
             });
         };
 
-        escape_HTML_array = function (arr) {
+        var escape_HTML_array = function (arr) {
             arr.forEach(function (d, i) { arr[i] = EscapeHTML(d); });
         };
 
