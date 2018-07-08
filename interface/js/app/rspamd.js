@@ -47,27 +47,27 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     function disconnect() {
         if (graphs.chart) {
             graphs.chart.destroy();
-            graphs.chart = undefined;
+            delete graphs.chart;
         }
         if (graphs.rrd_pie) {
             graphs.rrd_pie.destroy();
-            graphs.rrd_pie = undefined;
+            delete graphs.rrd_pie;
         }
         if (graphs.graph) {
             graphs.graph.destroy();
-            graphs.graph = undefined;
+            delete graphs.graph;
         }
         if (tables.history) {
             tables.history.destroy();
-            tables.history = undefined;
+            delete tables.history;
         }
         if (tables.errors) {
             tables.errors.destroy();
-            tables.errors = undefined;
+            delete tables.errors;
         }
         if (tables.symbols) {
             tables.symbols.destroy();
-            tables.symbols = undefined;
+            delete tables.symbols;
         }
 
         stopTimers();

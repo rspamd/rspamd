@@ -78,7 +78,6 @@
         "no-redeclare": "off",
         "no-shadow": "off",
         "no-undef": "off",
-        "no-undefined": "off",
         "no-underscore-dangle": "off",
         "no-use-before-define": "off",
         "one-var-declaration-per-line": "off",

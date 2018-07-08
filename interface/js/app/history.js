@@ -612,7 +612,7 @@ define(["jquery", "footable", "humanize"],
                         });
                     } else if (ft.history) {
                         ft.history.destroy();
-                        ft.history = undefined;
+                        delete ft.history;
                     }
                 });
             }
@@ -676,11 +676,11 @@ define(["jquery", "footable", "humanize"],
                 }
                 if (ft.history) {
                     ft.history.destroy();
-                    ft.history = undefined;
+                    delete ft.history;
                 }
                 if (ft.errors) {
                     ft.errors.destroy();
-                    ft.errors = undefined;
+                    delete ft.errors;
                 }
                 if (checked_server === "All SERVERS") {
                     rspamd.queryNeighbours("errors", function () {

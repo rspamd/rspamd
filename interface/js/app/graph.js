@@ -205,7 +205,7 @@ define(["jquery", "d3evolution", "footable"],
                 drawRrdTable(rrd_summary, unit);
             }
 
-            if (graphs.graph === undefined) {
+            if (!graphs.graph) {
                 graphs.graph = initGraph();
             }
 
