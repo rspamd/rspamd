@@ -81,7 +81,7 @@ local bucket_check_script = [[
    end
    dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
 
-   if burst * dynb > tonumber(KEYS[4]) then
+   if (burst + 1) * dynb > tonumber(KEYS[4]) then
     return {1, burst, dynr, dynb}
    end
   else
@@ -386,7 +386,7 @@ local function ratelimit_cb(task)
           return
         -- set INFO symbol and soft reject
         elseif settings.info_symbol then
-          task:insert_result(settings.info_symbol, 1.0, lim_name .. "(" .. prefix .. ")") 
+          task:insert_result(settings.info_symbol, 1.0, lim_name .. "(" .. prefix .. ")")
         end
         rspamd_logger.infox(task,
                 'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
