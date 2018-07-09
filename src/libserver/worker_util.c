@@ -50,6 +50,10 @@
 #define UNWIND_BACKTRACE_DEPTH 256
 #endif
 
+#ifdef HAVE_UCONTEXT_H
+#include <ucontext.h>
+#endif
+
 static void rspamd_worker_ignore_signal (int signo);
 /**
  * Return worker's control structure by its type

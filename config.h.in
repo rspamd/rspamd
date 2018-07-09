@@ -119,6 +119,7 @@
 #cmakedefine HAVE_TANHL          1
 #cmakedefine HAVE_TERMIOS_H      1
 #cmakedefine HAVE_TIME_H         1
+#cmakedefine HAVE_UCONTEXT_H     1
 #cmakedefine HAVE_UNISTD_H       1
 #cmakedefine HAVE_VFORK          1
 #cmakedefine HAVE_WAIT4          1
