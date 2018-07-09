@@ -126,7 +126,7 @@ rspamd_decimal_digits32 (guint32 val)
 	unsigned long r = 0;
 	_BitScanReverse (&r, val | 1);
 	tmp = (r + 1) * 1233 >> 12;
-#elif defined(__GNUC__) && (__GNUC__ >= 30)
+#elif defined(__GNUC__) && (__GNUC__ >= 3)
 	tmp = (32 - __builtin_clz (val | 1U)) * 1233 >> 12;
 
 #else /* Software version */
@@ -189,7 +189,7 @@ rspamd_decimal_digits64 (guint64 val)
 	_BitScanReverse64 (&r, val | 1);
 	tmp = (r + 1) * 1233 >> 12;
 #endif
-#elif defined(__GNUC__) && (__GNUC__ >= 30)
+#elif defined(__GNUC__) && (__GNUC__ >= 3)
 	tmp = (64 - __builtin_clzll (val | 1ULL)) * 1233 >> 12;
 #else /* Software version */
 	static const unsigned debruijn_tbl[32] = { 0,  9,  1, 10, 13, 21,  2, 29,
@@ -225,6 +225,14 @@ rspamd_decimal_digits64 (guint64 val)
 
 	return tmp - (val < powers_of_10[tmp]) + 1;
 }
+
+/*
+ * Idea from https://github.com/miloyip/itoa-benchmark:
+ * Uses lookup table (LUT) of digit pairs for division/modulo of 100.
+ *
+ * Mentioned in:
+ * https://www.slideshare.net/andreialexandrescu1/three-optimization-tips-for-c-15708507
+ */
 
 static const char int_lookup_table[200] = {
 		'0','0','0','1','0','2','0','3','0','4',
