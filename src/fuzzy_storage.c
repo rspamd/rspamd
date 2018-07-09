@@ -781,6 +781,7 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 	gboolean encrypted = FALSE, is_shingle = FALSE;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
 	const struct rspamd_shingle *shingle = NULL;
+	struct rspamd_shingle sgl_cpy;
 
 	switch (session->cmd_type) {
 	case CMD_NORMAL:
@@ -788,7 +789,8 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 		break;
 	case CMD_SHINGLE:
 		cmd = &session->cmd.shingle.basic;
-		shingle = &session->cmd.shingle.sgl;
+		memcpy (&sgl_cpy, &session->cmd.shingle.sgl, sizeof (sgl_cpy));
+		shingle = &sgl_cpy;
 		is_shingle = TRUE;
 		break;
 	case CMD_ENCRYPTED_NORMAL:
@@ -797,7 +799,8 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 		break;
 	case CMD_ENCRYPTED_SHINGLE:
 		cmd = &session->cmd.enc_shingle.cmd.basic;
-		shingle = &session->cmd.enc_shingle.cmd.sgl;
+		memcpy (&sgl_cpy,  &session->cmd.enc_shingle.cmd.sgl, sizeof (sgl_cpy));
+		shingle = &sgl_cpy;
 		encrypted = TRUE;
 		is_shingle = TRUE;
 		break;
