@@ -79,17 +79,18 @@ local bucket_check_script = [[
     burst = burst - leaked
     redis.call('HINCRBYFLOAT', KEYS[1], 'b', -(leaked))
    end
-   dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
-
-   if (burst + 1) * dynb > tonumber(KEYS[4]) then
-    return {1, burst, dynr, dynb}
-   end
   else
-    burst = 0
-    redis.call('HSET', KEYS[1], 'b', '0')
+   burst = 0
+   redis.call('HSET', KEYS[1], 'b', '0')
   end
 
-  return {0, burst, tostring(dynr), tostring(dynb)}
+  dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
+
+  if (burst + 1) * dynb > tonumber(KEYS[4]) then
+   return {1, tostring(burst), tostring(dynr), tostring(dynb)}
+  end
+
+  return {0, tostring(burst), tostring(dynr), tostring(dynb)}
 ]]
 local bucket_check_id
 
@@ -138,7 +139,7 @@ local bucket_update_script = [[
   redis.call('HSET', KEYS[1], 'l', KEYS[2])
   redis.call('EXPIRE', KEYS[1], KEYS[7])
 
-  return {burst, tostring(dr), tostring(db)}
+  return {tostring(burst), tostring(dr), tostring(db)}
 ]]
 local bucket_update_id
 
@@ -381,16 +382,20 @@ local function ratelimit_cb(task)
         if settings.symbol then
           task:insert_result(settings.symbol, 0.0, lim_name .. "(" .. prefix .. ")")
           rspamd_logger.infox(task,
-                  'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
-                  lim_name, prefix, bucket[2], bucket[1], data[2], data[3], data[4])
+              'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
+              lim_name, prefix,
+              bucket[2], bucket[1],
+              data[2], data[3], data[4])
           return
         -- set INFO symbol and soft reject
         elseif settings.info_symbol then
           task:insert_result(settings.info_symbol, 1.0, lim_name .. "(" .. prefix .. ")")
         end
         rspamd_logger.infox(task,
-                'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
-                lim_name, prefix, bucket[2], bucket[1], data[2], data[3], data[4])
+            'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
+            lim_name, prefix,
+            bucket[2], bucket[1],
+            data[2], data[3], data[4])
         task:set_pre_result('soft reject',
                 message_func(task, lim_name, prefix, bucket))
       end
@@ -450,8 +455,10 @@ local function ratelimit_update_cb(task)
                   k, err)
         else
           rspamd_logger.debugm(N, task,
-                  "updated limit %s:%s -> %s (%s/%s), burst: %s, dyn_rate: %s, dyn_burst: %s",
-                  v.name, k, v.hash, bucket[2], bucket[1], data[1], data[2], data[3])
+              "updated limit %s:%s -> %s (%s/%s), burst: %s, dyn_rate: %s, dyn_burst: %s",
+              v.name, k, v.hash,
+              bucket[2], bucket[1],
+              data[1], data[2], data[3])
         end
       end
       local now = rspamd_util.get_time()
