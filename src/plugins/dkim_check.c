@@ -128,7 +128,6 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 	if (dkim_module_ctx == NULL) {
 		dkim_module_ctx = g_malloc0 (sizeof (struct dkim_ctx));
 
-		dkim_module_ctx->dkim_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "dkim");
 		dkim_module_ctx->sign_headers = default_sign_headers;
 		dkim_module_ctx->sign_condition_ref = -1;
 		dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;
@@ -401,10 +400,6 @@ dkim_module_config (struct rspamd_config *cfg)
 
 		rspamd_config_radix_from_ucl (cfg, value, "DKIM whitelist",
 				&dkim_module_ctx->whitelist_ip, NULL);
-		rspamd_mempool_add_destructor (dkim_module_ctx->dkim_pool,
-				(rspamd_mempool_destruct_t)rspamd_map_helper_destroy_radix,
-				dkim_module_ctx->whitelist_ip);
-
 	}
 
 	if ((value =
@@ -419,9 +414,6 @@ dkim_module_config (struct rspamd_config *cfg)
 				ucl_object_tostring (value));
 		}
 		else {
-			rspamd_mempool_add_destructor (dkim_module_ctx->dkim_pool,
-					(rspamd_mempool_destruct_t)rspamd_map_helper_destroy_hash,
-					dkim_module_ctx->dkim_domains);
 			got_trusted = TRUE;
 		}
 	}
@@ -438,9 +430,6 @@ dkim_module_config (struct rspamd_config *cfg)
 					ucl_object_tostring (value));
 		}
 		else {
-			rspamd_mempool_add_destructor (dkim_module_ctx->dkim_pool,
-					(rspamd_mempool_destruct_t)rspamd_map_helper_destroy_hash,
-					dkim_module_ctx->dkim_domains);
 			got_trusted = TRUE;
 		}
 	}
@@ -540,7 +529,7 @@ dkim_module_config (struct rspamd_config *cfg)
 					dkim_module_ctx->sign_condition_ref = luaL_ref (cfg->lua_state,
 							LUA_REGISTRYINDEX);
 					rspamd_lua_add_ref_dtor (cfg->lua_state,
-							dkim_module_ctx->dkim_pool,
+							cfg->cfg_pool,
 							dkim_module_ctx->sign_condition_ref);
 
 					rspamd_symbols_cache_add_symbol (cfg->cache,
@@ -865,7 +854,6 @@ dkim_module_reconfig (struct rspamd_config *cfg)
 	struct module_ctx saved_ctx;
 
 	saved_ctx = dkim_module_ctx->ctx;
-	rspamd_mempool_delete (dkim_module_ctx->dkim_pool);
 
 	if (dkim_module_ctx->dkim_hash) {
 		rspamd_lru_hash_destroy (dkim_module_ctx->dkim_hash);
@@ -877,7 +865,6 @@ dkim_module_reconfig (struct rspamd_config *cfg)
 
 	memset (dkim_module_ctx, 0, sizeof (*dkim_module_ctx));
 	dkim_module_ctx->ctx = saved_ctx;
-	dkim_module_ctx->dkim_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "dkim");
 	dkim_module_ctx->sign_headers = default_sign_headers;
 	dkim_module_ctx->sign_condition_ref = -1;
 	dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;

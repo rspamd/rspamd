@@ -88,7 +88,6 @@ struct surbl_ctx {
 	guint max_redirected_urls;
 	gint redirector_cbid;
 	struct upstream_list *redirectors;
-	rspamd_mempool_t *surbl_pool;
 };
 
 struct suffix_item {
@@ -403,8 +402,6 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
-	surbl_module_ctx->surbl_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-			NULL);
 
 	surbl_module_ctx->redirectors = NULL;
 	surbl_module_ctx->whitelist = NULL;
@@ -639,15 +636,15 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 			continue;
 		}
 
-		new_suffix = rspamd_mempool_alloc0 (surbl_module_ctx->surbl_pool,
+		new_suffix = rspamd_mempool_alloc0 (cfg->cfg_pool,
 				sizeof (struct suffix_item));
 		new_suffix->magic = rspamd_surbl_cb_magic;
 		new_suffix->suffix = rspamd_mempool_strdup (
-				surbl_module_ctx->surbl_pool, ucl_obj_tostring (cur));
+				cfg->cfg_pool, ucl_obj_tostring (cur));
 		new_suffix->options = 0;
 		new_suffix->bits = g_array_new (FALSE, FALSE,
 				sizeof (struct surbl_bit_item));
-		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
 				(rspamd_mempool_destruct_t )rspamd_array_free_hard,
 				new_suffix->bits);
 
@@ -655,7 +652,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 		if (cur == NULL) {
 			if (ucl_object_key (value)) {
 				new_suffix->symbol = rspamd_mempool_strdup (
-						surbl_module_ctx->surbl_pool,
+						cfg->cfg_pool,
 						ucl_object_key (value));
 			}
 			else {
@@ -663,12 +660,12 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 						"surbl rule for suffix %s lacks symbol, using %s as symbol",
 						new_suffix->suffix, DEFAULT_SURBL_SYMBOL);
 				new_suffix->symbol = rspamd_mempool_strdup (
-						surbl_module_ctx->surbl_pool, DEFAULT_SURBL_SYMBOL);
+						cfg->cfg_pool, DEFAULT_SURBL_SYMBOL);
 			}
 		}
 		else {
 			new_suffix->symbol = rspamd_mempool_strdup (
-					surbl_module_ctx->surbl_pool, ucl_obj_tostring (cur));
+					cfg->cfg_pool, ucl_obj_tostring (cur));
 		}
 
 		cur = ucl_object_lookup (cur_rule, "options");
@@ -712,7 +709,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 		ucl_object_insert_key (ropts,
 				ucl_object_fromstring ("nxdomain"),
 				"rcode", 0, false);
-		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
 				(rspamd_mempool_destruct_t )ucl_object_unref,
 				ropts);
 
@@ -751,11 +748,11 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 					gchar* p;
 					bit = ucl_obj_toint (cur_bit);
 					new_bit = rspamd_mempool_alloc (
-							surbl_module_ctx->surbl_pool,
+							cfg->cfg_pool,
 							sizeof(struct surbl_bit_item));
 					new_bit->bit = bit;
 					new_bit->symbol = rspamd_mempool_strdup (
-							surbl_module_ctx->surbl_pool,
+							cfg->cfg_pool,
 							ucl_object_key (cur_bit));
 					/* Convert to uppercase */
 					p = new_bit->symbol;
@@ -779,7 +776,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 			guint32 bit;
 
 			new_suffix->ips = g_hash_table_new (g_int_hash, g_int_equal);
-			rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+			rspamd_mempool_add_destructor (cfg->cfg_pool,
 					(rspamd_mempool_destruct_t )g_hash_table_unref,
 					new_suffix->ips);
 
@@ -788,7 +785,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 					gchar* p;
 					ip_val = ucl_obj_tostring (cur_bit);
 					new_bit = rspamd_mempool_alloc (
-							surbl_module_ctx->surbl_pool,
+							cfg->cfg_pool,
 							sizeof(struct surbl_bit_item));
 					if (inet_pton (AF_INET, ip_val, &bit) != 1) {
 						msg_err_config ("cannot parse ip %s: %s", ip_val,
@@ -797,7 +794,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 					}
 					new_bit->bit = bit;
 					new_bit->symbol = rspamd_mempool_strdup (
-							surbl_module_ctx->surbl_pool,
+							cfg->cfg_pool,
 							ucl_object_key (cur_bit));
 					/* Convert to uppercase */
 					p = new_bit->symbol;
@@ -925,7 +922,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl", "redirector")) != NULL) {
 		surbl_module_ctx->redirectors = rspamd_upstreams_create (cfg->ups_ctx);
-		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
 				(rspamd_mempool_destruct_t)rspamd_upstreams_destroy,
 				surbl_module_ctx->redirectors);
 		LL_FOREACH (value, cur)
@@ -1044,7 +1041,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	}
 
 	if (surbl_module_ctx->suffixes != NULL) {
-		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t) g_list_free,
 			surbl_module_ctx->suffixes);
 	}
@@ -1074,19 +1071,15 @@ surbl_module_config (struct rspamd_config *cfg)
 gint
 surbl_module_reconfig (struct rspamd_config *cfg)
 {
-	/* Delete pool and objects */
-	rspamd_mempool_delete (surbl_module_ctx->surbl_pool);
 	/* Reinit module */
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
-	surbl_module_ctx->surbl_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
-
 	surbl_module_ctx->redirectors = NULL;
 	surbl_module_ctx->whitelist = NULL;
 	/* Zero exceptions hashes */
 	surbl_module_ctx->exceptions = NULL;
 
-	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
 		(rspamd_mempool_destruct_t) g_list_free,
 		surbl_module_ctx->suffixes);
 

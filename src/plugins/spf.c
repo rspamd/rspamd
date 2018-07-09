@@ -55,7 +55,6 @@ struct spf_ctx {
 	const gchar *symbol_na;
 	const gchar *symbol_permfail;
 
-	rspamd_mempool_t *spf_pool;
 	struct rspamd_radix_map_helper *whitelist_ip;
 	rspamd_lru_hash_t *spf_hash;
 
@@ -85,9 +84,7 @@ gint
 spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	if (spf_module_ctx == NULL) {
-		spf_module_ctx = g_malloc (sizeof (struct spf_ctx));
-
-		spf_module_ctx->spf_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+		spf_module_ctx = g_malloc0 (sizeof (struct spf_ctx));
 	}
 
 	*ctx = (struct module_ctx *)spf_module_ctx;
@@ -332,13 +329,10 @@ spf_module_reconfig (struct rspamd_config *cfg)
 	struct module_ctx saved_ctx;
 
 	saved_ctx = spf_module_ctx->ctx;
-	rspamd_mempool_delete (spf_module_ctx->spf_pool);
 	rspamd_lru_hash_destroy (spf_module_ctx->spf_hash);
 	rspamd_map_helper_destroy_radix (spf_module_ctx->whitelist_ip);
 	memset (spf_module_ctx, 0, sizeof (*spf_module_ctx));
 	spf_module_ctx->ctx = saved_ctx;
-	spf_module_ctx->spf_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
-
 	return spf_module_config (cfg);
 }
 

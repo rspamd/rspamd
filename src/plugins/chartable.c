@@ -88,8 +88,6 @@ chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
 	if (chartable_module_ctx == NULL) {
 		chartable_module_ctx = g_malloc (sizeof (struct chartable_ctx));
-
-		chartable_module_ctx->chartable_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 		chartable_module_ctx->max_word_len = 10;
 	}
 
@@ -164,9 +162,6 @@ chartable_module_config (struct rspamd_config *cfg)
 gint
 chartable_module_reconfig (struct rspamd_config *cfg)
 {
-	rspamd_mempool_delete (chartable_module_ctx->chartable_pool);
-	chartable_module_ctx->chartable_pool = rspamd_mempool_new (1024, NULL);
-
 	return chartable_module_config (cfg);
 }
 
