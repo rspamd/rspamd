@@ -319,6 +319,7 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
 {
 	gint r, top;
 	const gchar *str = NULL;
+	gboolean converted_to_str = FALSE;
 
 	top = lua_gettop (L);
 
@@ -348,6 +349,10 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
 		}
 
 		str = lua_tostring (L, -1);
+
+		if (str) {
+			converted_to_str = TRUE;
+		}
 	}
 	else {
 		lua_pushstring (L, "class");
@@ -362,7 +367,14 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len)
 		str = lua_tostring (L, -1);
 	}
 
-	r = rspamd_snprintf (outbuf, len + 1, "%s(%p)", str, lua_touserdata (L, pos));
+	if (converted_to_str) {
+		r = rspamd_snprintf (outbuf, len + 1, "%s", str);
+	}
+	else {
+		/* Print raw pointer */
+		r = rspamd_snprintf (outbuf, len + 1, "%s(%p)", str, lua_touserdata (L, pos));
+	}
+
 	lua_settop (L, top);
 
 	return r;
