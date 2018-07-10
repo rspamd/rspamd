@@ -261,6 +261,8 @@ rspamd_sqlite3_wait (rspamd_mempool_t *pool, const gchar *lock)
 			}
 		}
 
+		close (fd);
+
 		if (nanosleep (&sleep_ts, NULL) == -1 && errno != EINTR) {
 			msg_err_pool_check ("cannot sleep open lock file %s: %s", lock,
 					strerror (errno));
@@ -357,8 +359,6 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 		g_assert (rspamd_file_lock (lock_fd, FALSE));
 		has_lock = TRUE;
 	}
-
-	sqlite3_enable_shared_cache (1);
 
 	if ((rc = sqlite3_open_v2 (path, &sqlite,
 			flags, NULL)) != SQLITE_OK) {
