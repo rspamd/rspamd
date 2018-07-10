@@ -46,8 +46,6 @@ OPTION(ENABLE_GPERF_TOOLS  "Enable google perftools [default: OFF]"             
 OPTION(ENABLE_STATIC       "Enable static compiling [default: OFF]"             OFF)
 OPTION(ENABLE_LUAJIT       "Link with libluajit [default: ON]"                  ON)
 OPTION(ENABLE_DB           "Find and link with DB library [default: OFF]"       OFF)
-OPTION(ENABLE_SQLITE       "Find and link with sqlite3 library [default: OFF]"  OFF)
-OPTION(ENABLE_HIREDIS      "Find and link with external redis library [default: ON]"  ON)
 OPTION(ENABLE_URL_INCLUDE  "Enable urls in ucl includes (requires libcurl or libfetch) [default: OFF]" OFF)
 OPTION(NO_SHARED           "Build internal libs static [default: ON]"          ON)
 OPTION(INSTALL_EXAMPLES    "Install examples [default: OFF]"                    OFF)

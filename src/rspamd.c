@@ -58,6 +58,8 @@
 #include <openssl/evp.h>
 #endif
 
+#include "sqlite3.h"
+
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
 
@@ -1314,6 +1316,8 @@ main (gint argc, gchar **argv, gchar **env)
 		return res ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
 
+	sqlite3_initialize ();
+
 	/* Load config */
 	if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, TRUE,
 			RSPAMD_CONFIG_LOAD_ALL, FALSE)) {
@@ -1526,6 +1530,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	g_free (rspamd_main);
 	event_base_free (ev_base);
+	sqlite3_shutdown ();
 
 	if (control_addr) {
 		rspamd_inet_address_free (control_addr);
