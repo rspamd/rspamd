@@ -43,7 +43,7 @@ jobs:
       - run: sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel
 
       - run: mkdir ../build ; mkdir ../install ; cd ../build
-      - run: cmake ../project -DDBDIR=/nana -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=../install -DENABLE_HIREDIS=ON
+      - run: cmake ../project -DDBDIR=/nana -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=../install
 
       - run: make install -j`nproc`
 
