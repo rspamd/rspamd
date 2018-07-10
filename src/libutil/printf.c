@@ -371,7 +371,7 @@ rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
 			*--p = _hex[(guint32) (ui64 & 0xf)];
 		} while (ui64 >>= 4);
 
-		len = (temp + sizeof (temp)) - p + 1;
+		len = (temp + sizeof (temp)) - p;
 	}
 	else { /* hexadecimal == 2 */
 		p = temp + sizeof(temp);
@@ -379,13 +379,17 @@ rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
 			*--p = _HEX[(guint32) (ui64 & 0xf)];
 		} while (ui64 >>= 4);
 
-		len = (temp + sizeof (temp)) - p + 1;
+		len = (temp + sizeof (temp)) - p;
 	}
 
 	/* zero or space padding */
 
-	while (width > 0 && buf < last) {
-		*buf++ = zero;
+	if (len < width) {
+		width -= len;
+
+		while (width-- > 0 && buf < last) {
+			*buf++ = zero;
+		}
 	}
 
 	/* number safe copy */
