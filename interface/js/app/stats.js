@@ -104,18 +104,14 @@ define(["jquery", "d3pie", "humanize"],
             $("#clusterTable tbody").empty();
             $("#selSrv").empty();
             $.each(servers, function (key, val) {
-                var glyph_status;
-                var short_id;
+                var glyph_status = "glyphicon glyphicon-remove-circle";
+                var short_id = "???";
                 if (!("config_id" in val.data)) {
                     val.data.config_id = "";
                 }
                 if (val.status) {
                     glyph_status = "glyphicon glyphicon-ok-circle";
                     short_id = val.data.config_id.substring(0, 8);
-                }
-                else {
-                    glyph_status = "glyphicon glyphicon-remove-circle";
-                    short_id = "???";
                 }
 
                 $("#clusterTable tbody").append("<tr>" +
