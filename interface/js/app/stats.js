@@ -66,13 +66,13 @@ define(["jquery", "d3pie", "humanize"],
 
             $.each(data, function (i, item) {
                 var widget = "";
-                if (i == "auth") {}
-                else if (i == "error") {}
-                else if (i == "version") {
+                if (i === "auth") {}
+                else if (i === "error") {}
+                else if (i === "version") {
                     widget = "<div class=\"left\"><strong>" + item + "</strong>" +
                     i + "</div>";
                     $(widget).appendTo(widgets);
-                } else if (i == "uptime") {
+                } else if (i === "uptime") {
                     widget = "<div class=\"right\"><strong>" + msToTime(item) +
                     "</strong>" + i + "</div>";
                     $(widget).appendTo(widgets);
@@ -80,17 +80,17 @@ define(["jquery", "d3pie", "humanize"],
                     var titleAtt = Humanize.intComma(item) + " " + i;
                     widget = "<li class=\"stat-box\"><div class=\"widget\" title=\"" + titleAtt + "\"><strong>" +
                     Humanize.compactInteger(item) + "</strong>" + i + "</div></li>";
-                    if (i == "scanned") {
+                    if (i === "scanned") {
                         stat_w[0] = widget;
-                    } else if (i == "clean") {
+                    } else if (i === "clean") {
                         stat_w[1] = widget;
-                    } else if (i == "greylist") {
+                    } else if (i === "greylist") {
                         stat_w[2] = widget;
-                    } else if (i == "probable") {
+                    } else if (i === "probable") {
                         stat_w[3] = widget;
-                    } else if (i == "reject") {
+                    } else if (i === "reject") {
                         stat_w[4] = widget;
-                    } else if (i == "learned") {
+                    } else if (i === "learned") {
                         stat_w[5] = widget;
                     }
                 }
@@ -104,18 +104,14 @@ define(["jquery", "d3pie", "humanize"],
             $("#clusterTable tbody").empty();
             $("#selSrv").empty();
             $.each(servers, function (key, val) {
-                var glyph_status;
-                var short_id;
+                var glyph_status = "glyphicon glyphicon-remove-circle";
+                var short_id = "???";
                 if (!("config_id" in val.data)) {
                     val.data.config_id = "";
                 }
                 if (val.status) {
                     glyph_status = "glyphicon glyphicon-ok-circle";
                     short_id = val.data.config_id.substring(0, 8);
-                }
-                else {
-                    glyph_status = "glyphicon glyphicon-remove-circle";
-                    short_id = "???";
                 }
 
                 $("#clusterTable tbody").append("<tr>" +
@@ -127,7 +123,7 @@ define(["jquery", "d3pie", "humanize"],
 
                 $("#selSrv").append($("<option value=\"" + key + "\">" + key + "</option>"));
 
-                if (checked_server == key) {
+                if (checked_server === key) {
                     $("#clusterTable tbody [value=\"" + key + "\"]").prop("checked", true);
                     $("#selSrv [value=\"" + key + "\"]").prop("selected", true);
                 }

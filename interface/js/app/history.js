@@ -42,7 +42,7 @@ define(["jquery", "footable", "humanize"],
         var symbolDescriptions = {};
 
         var EscapeHTML = function (string) {
-            return ("" + string).replace(htmlEscaper, function (match) {
+            return (String(string)).replace(htmlEscaper, function (match) {
                 return htmlEscapes[match];
             });
         };
@@ -80,7 +80,7 @@ define(["jquery", "footable", "humanize"],
                     });
                     break;
                 default:
-                    if (typeof (item[prop]) == "string") {
+                    if (typeof (item[prop]) === "string") {
                         item[prop] = EscapeHTML(item[prop]);
                     }
                 }
@@ -109,10 +109,6 @@ define(["jquery", "footable", "humanize"],
                 },
                 value: score_content
             };
-
-            if (item.user == null) {
-                item.user = "none";
-            }
         }
 
         function process_history_v2(data) {
@@ -158,15 +154,16 @@ define(["jquery", "footable", "humanize"],
 
                     preprocess_item(item);
                     Object.keys(item.symbols).map(function (key) {
+                        var str;
                         var sym = item.symbols[key];
 
                         if (sym.description) {
-                            var str = "<strong><abbr data-sym-key=\"" + key + "\">" + sym.name + "</abbr></strong>(" + sym.score + ")";
+                            str = "<strong><abbr data-sym-key=\"" + key + "\">" + sym.name + "</abbr></strong>(" + sym.score + ")";
 
                             // Store description for tooltip
                             symbolDescriptions[key] = sym.description;
                         } else {
-                            var str = "<strong>" + sym.name + "</strong>(" + sym.score + ")";
+                            str = "<strong>" + sym.name + "</strong>(" + sym.score + ")";
                         }
 
                         if (sym.options) {
