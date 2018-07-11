@@ -77,10 +77,11 @@ define(["jquery"],
                     $tbody = $("<tbody>");
 
                     $.each(data, function (i, item) {
+                        var label;
                         if ((item.editable === false || rspamd.read_only)) {
-                            var label = "<span class=\"label label-default\">Read</span>";
+                            label = "<span class=\"label label-default\">Read</span>";
                         } else {
-                            var label = "<span class=\"label label-default\">Read</span>&nbsp;<span class=\"label label-success\">Write</span>";
+                            label = "<span class=\"label label-default\">Read</span>&nbsp;<span class=\"label label-success\">Write</span>";
                         }
                         var $tr = $("<tr>");
                         $("<td class=\"col-md-2 maps-cell\">" + label + "</td>").appendTo($tr);

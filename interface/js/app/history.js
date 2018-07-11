@@ -158,15 +158,16 @@ define(["jquery", "footable", "humanize"],
 
                     preprocess_item(item);
                     Object.keys(item.symbols).map(function (key) {
+                        var str;
                         var sym = item.symbols[key];
 
                         if (sym.description) {
-                            var str = "<strong><abbr data-sym-key=\"" + key + "\">" + sym.name + "</abbr></strong>(" + sym.score + ")";
+                            str = "<strong><abbr data-sym-key=\"" + key + "\">" + sym.name + "</abbr></strong>(" + sym.score + ")";
 
                             // Store description for tooltip
                             symbolDescriptions[key] = sym.description;
                         } else {
-                            var str = "<strong>" + sym.name + "</strong>(" + sym.score + ")";
+                            str = "<strong>" + sym.name + "</strong>(" + sym.score + ")";
                         }
 
                         if (sym.options) {
