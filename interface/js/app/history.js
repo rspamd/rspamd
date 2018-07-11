@@ -109,10 +109,6 @@ define(["jquery", "footable", "humanize"],
                 },
                 value: score_content
             };
-
-            if (item.user == null) {
-                item.user = "none";
-            }
         }
 
         function process_history_v2(data) {
