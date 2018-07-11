@@ -72,7 +72,6 @@
         "no-empty": "off",
         "no-empty-function": "off",
         "no-eq-null": "off",
-        "no-implicit-coercion": "off",
         "no-inline-comments": "off",
         "no-loop-func": "off",
         "no-negated-condition": "off",

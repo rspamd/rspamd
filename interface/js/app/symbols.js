@@ -72,7 +72,7 @@ define(["jquery", "footable"],
             }
         }
         function decimalStep(number) {
-            var digits = ((+number).toFixed(20)).replace(/^-?\d*\.?|0+$/g, "").length;
+            var digits = ((Number(number)).toFixed(20)).replace(/^-?\d*\.?|0+$/g, "").length;
             if (digits === 0 || digits > 4) {
                 return 0.1;
             } else {

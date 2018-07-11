@@ -121,16 +121,16 @@ define(["jquery", "d3evolution", "footable"],
             // Time intervals that don't have data are excluded from average calculation as d3.mean()ignores nulls
                 var avg = d3.mean(curr, function (d) { return d.y; });
                 // To find an integral on the whole time interval we need to convert nulls to zeroes
-                var value = d3.mean(curr, function (d) { return +d.y; }) * timeInterval / scaleFactor;
+                var value = d3.mean(curr, function (d) { return Number(d.y); }) * timeInterval / scaleFactor;
                 var yExtents = d3.extent(curr, function (d) { return d.y; });
 
                 return {
                     label: graph_options.legend.entries[i].label,
                     value: value ^ 0, // eslint-disable-line no-bitwise
-                    min: +yExtents[0].toFixed(6),
-                    avg: +avg.toFixed(6),
-                    max: +yExtents[1].toFixed(6),
-                    last: +curr[curr.length - 1].y.toFixed(6),
+                    min: Number(yExtents[0].toFixed(6)),
+                    avg: Number(avg.toFixed(6)),
+                    max: Number(yExtents[1].toFixed(6)),
+                    last: Number(curr[curr.length - 1].y.toFixed(6)),
                     color: graph_options.legend.entries[i].color,
                 };
             }, []);
