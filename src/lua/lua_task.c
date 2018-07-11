@@ -24,6 +24,7 @@
 #include "libserver/task.h"
 #include "libstat/stat_api.h"
 #include <math.h>
+#include <src/libserver/task.h>
 
 /***
  * @module rspamd_task
@@ -144,6 +145,14 @@ local function cb(task)
 end
  */
 LUA_FUNCTION_DEF (task, set_pre_result);
+
+/***
+ * @method task:has_pre_result()
+ * Returns true if task has some pre-result being set
+ *
+ * @return {boolean} true if task has some pre-result being set
+ */
+LUA_FUNCTION_DEF (task, has_pre_result);
 /***
  * @method task:append_message(message)
  * Adds a message to scanning output.
@@ -902,6 +911,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, insert_result),
 	LUA_INTERFACE_DEF (task, adjust_result),
 	LUA_INTERFACE_DEF (task, set_pre_result),
+	LUA_INTERFACE_DEF (task, has_pre_result),
 	LUA_INTERFACE_DEF (task, append_message),
 	LUA_INTERFACE_DEF (task, has_urls),
 	LUA_INTERFACE_DEF (task, get_urls),
@@ -1522,6 +1532,21 @@ lua_task_set_pre_result (lua_State * L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_task_has_pre_result (lua_State * L)
+{
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task) {
+		lua_pushboolean (L, task->pre_result.action != METRIC_ACTION_MAX);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 static gint
