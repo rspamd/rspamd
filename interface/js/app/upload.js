@@ -37,7 +37,7 @@ define(["jquery"],
                 url = "learnspam";
             } else if (source === "ham") {
                 url = "learnham";
-            } else if (source == "fuzzy") {
+            } else if (source === "fuzzy") {
                 url = "fuzzyadd";
             } else if (source === "scan") {
                 url = "scan";
@@ -120,7 +120,7 @@ define(["jquery"],
                         var nsym = 0;
 
                         $.each(data.symbols, function (i, item) {
-                            if (typeof item == "object") {
+                            if (typeof item === "object") {
                                 var sym_id = "sym_" + nsym;
                                 if (item.description) {
                                     sym_desc[sym_id] = item.description;
@@ -191,7 +191,7 @@ define(["jquery"],
                 var data;
                 var headers = {};
                 data = $("#" + source + "TextSource").val();
-                if (source == "fuzzy") {
+                if (source === "fuzzy") {
                 // To access the proper
                     headers.flag = $("#fuzzyFlagText").val();
                     headers.weight = $("#fuzzyWeightText").val();
@@ -199,7 +199,7 @@ define(["jquery"],
                     data = $("#" + source + "TextSource").val();
                 }
                 if (data.length > 0) {
-                    if (source == "scan") {
+                    if (source === "scan") {
                         scanText(rspamd, data);
                     } else {
                         uploadText(rspamd, data, source, headers);

@@ -132,7 +132,7 @@ define(["jquery", "footable"],
                 return Number(a) < Number(b);
             }).reduce(function (f1, acc) {
                 return f1 + acc;
-            }) / (freqs.length != 0 ? freqs.length : 1.0);
+            }) / (freqs.length !== 0 ? freqs.length : 1.0);
             var mult = 1.0;
             var exp = 0.0;
 
@@ -258,7 +258,7 @@ define(["jquery", "footable"],
             $(document).on("click", "#symbolsTable :button", function () {
                 var value = $(this).data("save");
                 if (!value) return;
-                saveSymbols(rspamd, "./savesymbols", "symbolsTable", value == "cluster");
+                saveSymbols(rspamd, "./savesymbols", "symbolsTable", value === "cluster");
             });
         };
 

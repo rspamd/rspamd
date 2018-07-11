@@ -189,7 +189,7 @@ define(["jquery", "d3evolution", "footable"],
                 }
 
                 graphs.graph.data(data);
-                if (unit != prevUnit) {
+                if (unit !== prevUnit) {
                     graphs.graph.yAxisLabel("Message rate, " + unit);
                     prevUnit = unit;
                 }

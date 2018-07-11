@@ -80,7 +80,7 @@ define(["jquery", "footable", "humanize"],
                     });
                     break;
                 default:
-                    if (typeof (item[prop]) == "string") {
+                    if (typeof (item[prop]) === "string") {
                         item[prop] = EscapeHTML(item[prop]);
                     }
                 }
