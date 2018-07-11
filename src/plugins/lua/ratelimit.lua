@@ -402,6 +402,9 @@ local function ratelimit_cb(task)
     end
   end
 
+  -- Don't do anything if pre-result has been already set
+  if task:has_pre_result() then return end
+
   if nprefixes > 0 then
     -- Save prefixes to the cache to allow update
     task:cache_set('ratelimit_prefixes', prefixes)
@@ -570,7 +573,7 @@ if opts then
     local s = {
       type = 'prefilter,nostat',
       name = 'RATELIMIT_CHECK',
-      priority = 4,
+      priority = 7,
       callback = ratelimit_cb,
       flags = 'empty',
     }

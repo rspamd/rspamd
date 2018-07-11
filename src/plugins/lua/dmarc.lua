@@ -198,6 +198,8 @@ local function dmarc_callback(task)
   local function maybe_force_action(disposition)
     local force_action = dmarc_actions[disposition]
     if force_action then
+      -- Don't do anything if pre-result has been already set
+      if task:has_pre_result() then return end
       task:set_pre_result(force_action, 'Action set by DMARC')
     end
   end
