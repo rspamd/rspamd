@@ -24,7 +24,8 @@
 
 define(["jquery", "d3pie", "humanize"],
     function ($, d3pie, Humanize) {
-    // @ ms to date
+        "use strict";
+        // @ ms to date
         function msToTime(seconds) {
             /* eslint-disable no-bitwise */
             var years = seconds / 31536000 >> 0; // 3600*24*365
@@ -170,7 +171,7 @@ define(["jquery", "d3pie", "humanize"],
             }
         }
         // Public API
-        var interface = {
+        var ui = {
             statWidgets: function (rspamd, graphs, checked_server) {
                 rspamd.queryNeighbours("/auth", function (neighbours_status) {
                     var neighbours_sum = {
@@ -232,6 +233,6 @@ define(["jquery", "d3pie", "humanize"],
             },
         };
 
-        return interface;
+        return ui;
     }
 );

@@ -29,12 +29,13 @@ define(["jquery", "d3pie", "visibility", "app/stats", "app/graph", "app/config",
     "app/symbols", "app/history", "app/upload"],
 function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     tab_symbols, tab_history, tab_upload) {
+    "use strict";
     // begin
     var graphs = {};
     var tables = {};
     var neighbours = []; // list of clusters
     var checked_server = "All SERVERS";
-    var interface = {
+    var ui = {
         read_only: false,
     };
 
@@ -75,7 +76,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
 
         stopTimers();
         cleanCredentials();
-        interface.connect();
+        ui.connect();
     }
 
     function tabClick(tab_id) {
@@ -90,32 +91,32 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
 
         switch (tab_id) {
         case "#status_nav":
-            tab_stat.statWidgets(interface, graphs, checked_server);
+            tab_stat.statWidgets(ui, graphs, checked_server);
             timer_id.status = Visibility.every(10000, function () {
-                tab_stat.statWidgets(interface, graphs, checked_server);
+                tab_stat.statWidgets(ui, graphs, checked_server);
             });
             break;
         case "#throughput_nav":
-            tab_graph.draw(interface, graphs, neighbours, checked_server, selData);
+            tab_graph.draw(ui, graphs, neighbours, checked_server, selData);
 
             var autoRefresh = {
                 hourly: 60000,
                 daily: 300000
             };
             timer_id.throughput = Visibility.every(autoRefresh[selData] || 3600000, function () {
-                tab_graph.draw(interface, graphs, neighbours, checked_server, selData);
+                tab_graph.draw(ui, graphs, neighbours, checked_server, selData);
             });
             break;
         case "#configuration_nav":
-            tab_config.getActions(interface);
-            tab_config.getMaps(interface);
+            tab_config.getActions(ui);
+            tab_config.getMaps(ui);
             break;
         case "#symbols_nav":
-            tab_symbols.getSymbols(interface, tables, checked_server);
+            tab_symbols.getSymbols(ui, tables, checked_server);
             break;
         case "#history_nav":
-            tab_history.getHistory(interface, tables, neighbours, checked_server);
-            tab_history.getErrors(interface, tables, neighbours, checked_server);
+            tab_history.getHistory(ui, tables, neighbours, checked_server);
+            tab_history.getErrors(ui, tables, neighbours, checked_server);
             break;
         case "#disconnect":
             disconnect();
@@ -180,8 +181,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     }
 
     // Public functions
-    interface.alertMessage = alertMessage;
-    interface.setup = function () {
+    ui.alertMessage = alertMessage;
+    ui.setup = function () {
         $("#selData").change(function () {
             selData = this.value;
             tabClick("#throughput_nav");
@@ -231,25 +232,25 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 tabClick("#status_nav");
             }
         });
-        tab_config.setup(interface);
-        tab_symbols.setup(interface, tables);
-        tab_history.setup(interface, tables);
-        tab_upload.setup(interface);
+        tab_config.setup(ui);
+        tab_symbols.setup(ui, tables);
+        tab_history.setup(ui, tables);
+        tab_upload.setup(ui);
         selData = tab_graph.setup();
     };
 
-    interface.connect = function () {
+    ui.connect = function () {
         if (isLogged()) {
             var data = JSON.parse(sessionStorage.getItem("Credentials"));
 
             if (data && data[checked_server].read_only) {
-                interface.read_only = true;
+                ui.read_only = true;
                 $("#learning_nav").hide();
                 $("#resetHistory").attr("disabled", true);
                 $("#errors-history").hide();
             }
             else {
-                interface.read_only = false;
+                ui.read_only = false;
                 $("#learning_nav").show();
                 $("#resetHistory").removeAttr("disabled", true);
             }
@@ -257,10 +258,9 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             return;
         }
 
-        var ui = $("#mainUI");
         var dialog = $("#connectDialog");
         var backdrop = $("#backDrop");
-        $(ui).hide();
+        $("#mainUI").hide();
         $(dialog).show();
         $(backdrop).show();
         $("#connectPassword").focus();
@@ -290,13 +290,13 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                         // Is actually never returned by Rspamd
                     } else {
                         if (data.read_only) {
-                            interface.read_only = true;
+                            ui.read_only = true;
                             $("#learning_nav").hide();
                             $("#resetHistory").attr("disabled", true);
                             $("#errors-history").hide();
                         }
                         else {
-                            interface.read_only = false;
+                            ui.read_only = false;
                             $("#learning_nav").show();
                             $("#resetHistory").removeAttr("disabled", true);
                         }
@@ -308,7 +308,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                     }
                 },
                 error: function (data) {
-                    interface.alertMessage("alert-modal alert-error", data.statusText);
+                    ui.alertMessage("alert-modal alert-error", data.statusText);
                     $("#connectPassword").val("");
                     $("#connectPassword").focus();
                 }
@@ -316,7 +316,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         });
     };
 
-    interface.queryLocal = function (req_url, on_success, on_error, method, headers, params) {
+    ui.queryLocal = function (req_url, on_success, on_error, method, headers, params) {
         var req_params = {
             type: method,
             jsonp: false,
@@ -355,7 +355,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         $.ajax(req_params);
     };
 
-    interface.queryNeighbours = function (req_url, on_success, on_error, method, headers, params, req_data) {
+    ui.queryNeighbours = function (req_url, on_success, on_error, method, headers, params, req_data) {
         $.ajax({
             dataType: "json",
             type: "GET",
@@ -387,7 +387,6 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                     });
                 });
                 $.each(neighbours_status, function (ind) {
-                    "use strict";
                     method = typeof method !== "undefined" ? method : "GET";
                     var req_params = {
                         type: method,
@@ -453,12 +452,12 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 });
             },
             error: function () {
-                interface.alertMessage("alert-error", "Cannot receive neighbours data");
+                ui.alertMessage("alert-error", "Cannot receive neighbours data");
             },
         });
     };
 
-    interface.drawPie = function (obj, id, data, conf) {
+    ui.drawPie = function (obj, id, data, conf) {
         if (obj) {
             obj.updateProp("data.content",
                 data.filter(function (elt) {
@@ -548,7 +547,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         return obj;
     };
 
-    interface.getPassword = getPassword;
+    ui.getPassword = getPassword;
 
-    return interface;
+    return ui;
 });

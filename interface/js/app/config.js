@@ -22,11 +22,10 @@
  THE SOFTWARE.
  */
 
-/* global $span:true, $tbody:true */
-
 define(["jquery"],
     function ($) {
-        var interface = {};
+        "use strict";
+        var ui = {};
 
         function save_map_success(rspamd) {
             rspamd.alertMessage("alert-modal alert-success", "Map data successfully saved");
@@ -74,7 +73,7 @@ define(["jquery"],
                 success: function (data) {
                     $listmaps.empty();
                     $("#modalBody").empty();
-                    $tbody = $("<tbody>");
+                    var $tbody = $("<tbody>");
 
                     $.each(data, function (i, item) {
                         var label;
@@ -85,7 +84,7 @@ define(["jquery"],
                         }
                         var $tr = $("<tr>");
                         $("<td class=\"col-md-2 maps-cell\">" + label + "</td>").appendTo($tr);
-                        $span = $("<span class=\"map-link\" data-toggle=\"modal\" data-target=\"#modalDialog\">" + item.uri + "</span>").data("item", item);
+                        var $span = $("<span class=\"map-link\" data-toggle=\"modal\" data-target=\"#modalDialog\">" + item.uri + "</span>").data("item", item);
                         $span.wrap("<td>").parent().appendTo($tr);
                         $("<td>" + item.description + "</td>").appendTo($tr);
                         $tr.appendTo($tbody);
@@ -235,7 +234,7 @@ define(["jquery"],
         }
 
         // @upload edited actions
-        interface.setup = function (rspamd) {
+        ui.setup = function (rspamd) {
         // Modal form for maps
             $(document).on("click", "[data-toggle=\"modal\"]", function () {
                 var item = $(this).data("item");
@@ -279,8 +278,8 @@ define(["jquery"],
             });
         };
 
-        interface.getActions = getActions;
-        interface.getMaps = getMaps;
+        ui.getActions = getActions;
+        ui.getMaps = getMaps;
 
-        return interface;
+        return ui;
     });

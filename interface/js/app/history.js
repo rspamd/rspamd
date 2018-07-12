@@ -26,7 +26,8 @@
 
 define(["jquery", "footable", "humanize"],
     function ($, _, Humanize) {
-        var interface = {};
+        "use strict";
+        var ui = {};
         var ft = {};
         var htmlEscapes = {
             "&": "&amp;",
@@ -483,7 +484,7 @@ define(["jquery", "footable", "humanize"],
             return func();
         }
 
-        interface.getHistory = function (rspamd, tables, neighbours, checked_server) {
+        ui.getHistory = function (rspamd, tables, neighbours, checked_server) {
             FooTable.actionFilter = FooTable.Filtering.extend({
                 construct : function (instance) {
                     this._super(instance);
@@ -661,10 +662,10 @@ define(["jquery", "footable", "humanize"],
             $("#updateHistory").off("click");
             $("#updateHistory").on("click", function (e) {
                 e.preventDefault();
-                interface.getHistory(rspamd, tables, neighbours, checked_server);
+                ui.getHistory(rspamd, tables, neighbours, checked_server);
             });
             $("#selSymOrder").unbind().change(function () {
-                interface.getHistory(rspamd, tables, neighbours, checked_server);
+                ui.getHistory(rspamd, tables, neighbours, checked_server);
             });
 
             // @reset history log
@@ -684,8 +685,8 @@ define(["jquery", "footable", "humanize"],
                 }
                 if (checked_server === "All SERVERS") {
                     rspamd.queryNeighbours("errors", function () {
-                        interface.getHistory(rspamd, tables, neighbours, checked_server);
-                        interface.getErrors(rspamd, tables, neighbours, checked_server);
+                        ui.getHistory(rspamd, tables, neighbours, checked_server);
+                        ui.getErrors(rspamd, tables, neighbours, checked_server);
                     });
                 }
                 else {
@@ -698,8 +699,8 @@ define(["jquery", "footable", "humanize"],
                             xhr.setRequestHeader("Password", rspamd.getPassword());
                         },
                         success: function () {
-                            interface.getHistory(rspamd, tables, neighbours, checked_server);
-                            interface.getErrors(rspamd, tables, neighbours, checked_server);
+                            ui.getHistory(rspamd, tables, neighbours, checked_server);
+                            ui.getErrors(rspamd, tables, neighbours, checked_server);
                         },
                         error: function (data) {
                             rspamd.alertMessage("alert-modal alert-error", data.statusText);
@@ -742,7 +743,7 @@ define(["jquery", "footable", "humanize"],
             });
         }
 
-        interface.getErrors = function (rspamd, tables, neighbours, checked_server) {
+        ui.getErrors = function (rspamd, tables, neighbours, checked_server) {
             if (rspamd.read_only) return;
 
             if (checked_server !== "All SERVERS") {
@@ -775,10 +776,10 @@ define(["jquery", "footable", "humanize"],
             $("#updateErrors").off("click");
             $("#updateErrors").on("click", function (e) {
                 e.preventDefault();
-                interface.getErrors(rspamd, tables, neighbours, checked_server);
+                ui.getErrors(rspamd, tables, neighbours, checked_server);
             });
         };
 
-        interface.setup = function () {};
-        return interface;
+        ui.setup = function () {};
+        return ui;
     });

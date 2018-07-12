@@ -71,6 +71,7 @@
         "no-empty": "off",
         "no-empty-function": "off",
         "no-inline-comments": "off",
+        "no-invalid-this": "off",
         "no-loop-func": "off",
         "no-negated-condition": "off",
         "no-param-reassign": "off",
@@ -80,7 +81,6 @@
         "one-var-declaration-per-line": "off",
         "prefer-spread": "off",
         "sort-keys": "off",
-        "sort-vars": "off",
-        "strict": "off"
+        "sort-vars": "off"
     }
 }
