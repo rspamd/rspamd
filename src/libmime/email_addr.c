@@ -372,7 +372,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 				obraces ++;
 			}
 			else if (*p == ')') {
-				ebraces --;
+				ebraces ++;
 			}
 
 			if (obraces == ebraces) {
