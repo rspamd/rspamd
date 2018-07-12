@@ -1,3 +1,44 @@
+1.7.8: 12 Jul 2018
+  * [Feature] Add more extended statistics about fuzzy updates
+  * [Feature] Add more non-conformant Received headers support
+  * [Feature] Add preliminary function to get fuzzy hashes from text in Lua
+  * [Feature] Allow to configure AV module rejection message
+  * [Feature] Implement fuzzy hashes extraction in mime tool
+  * [Feature] Improve WHITE_ON_WHITE rule
+  * [Feature] Improve integer -> string conversion
+  * [Feature] Reuse maps in multimap module more aggressively
+  * [Fix] Avoid race condition in skip map as pool lifetime is not enough
+  * [Fix] Eliminate all specific C plugins pools
+  * [Fix] Fix DKIM check rule if DNS is unavailable
+  * [Fix] Fix build where ucontext is defined in ucontext.h
+  * [Fix] Fix crash in base url handling
+  * [Fix] Fix descriptors leak in sqlite3 locking code
+  * [Fix] Fix messages quarantine
+  * [Fix] Fix padded numbers printing
+  * [Fix] Fix race condition on maps reinit
+  * [Fix] Fix regexp functions when no data is passed
+  * [Fix] Fix specific urls extraction
+  * [Fix] Fix styles propagation
+  * [Fix] Improve resetting of the limit buckets
+  * [Fix] Initialize sqlite3 properly
+  * [Fix] Work with broken resolvers in resolv.conf
+  * [Project] Implement HTTP maps caching
+  * [Project] Refresh fuzzy hashes when matched
+  * [Project] Add logic to deduplicate fuzzy updates queue
+  * [WebUI] Add missed declarations
+  * [WebUI] Avoid using "undefined" property
+  * [WebUI] Do not accept passwords containing control characters
+  * [WebUI] Do not redeclare variables
+  * [WebUI] Enable strict mode,
+  * [WebUI] Fix variable assignment
+  * [WebUI] Initialize variables at declaration
+  * [WebUI] Remove duplicated path from RequireJS config
+  * [WebUI] Remove unused block
+  * [WebUI] Remove unused variable
+  * [WebUI] Remove unused variables
+  * [WebUI] Use self-explanatory notation
+  * [WebUI] Use type-safe equality operators
+
 1.7.7: 02 Jul 2018
   * [CritFix] Check NM part of pubkey to match it with rotating keypairs
   * [CritFix] Do not overwrite PID of the main process
