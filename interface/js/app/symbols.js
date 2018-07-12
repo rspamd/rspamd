@@ -26,8 +26,9 @@
 
 define(["jquery", "footable"],
     function ($) {
-        var interface = {};
+        "use strict";
         var ft = {};
+        var ui = {};
 
         function saveSymbols(rspamd, action, id, is_cluster) {
             var inputs = $("#" + id + " :input[data-role=\"numerictextbox\"]");
@@ -155,7 +156,7 @@ define(["jquery", "footable"],
             return [items, distinct_groups];
         }
         // @get symbols into modal form
-        interface.getSymbols = function (rspamd) {
+        ui.getSymbols = function (rspamd) {
 
             $.ajax({
                 dataType: "json",
@@ -262,7 +263,7 @@ define(["jquery", "footable"],
             });
         };
 
-        interface.setup = function (rspamd) {
+        ui.setup = function (rspamd) {
             $("#updateSymbols").on("click", function (e) {
                 e.preventDefault();
                 $.ajax({
@@ -284,5 +285,5 @@ define(["jquery", "footable"],
             });
         };
 
-        return interface;
+        return ui;
     });

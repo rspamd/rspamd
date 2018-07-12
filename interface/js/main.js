@@ -27,13 +27,14 @@ document.title = window.location.hostname +
     (window.location.pathname !== "/" ? window.location.pathname : "") +
     " - Rspamd Web Interface";
 
-define("d3.global", ["d3"], function (_) {
+define("d3.global", ["d3"], function (_) { // eslint-disable-line strict
     d3 = _; // eslint-disable-line no-global-assign
 });
 
 // Load main UI
 require(["domReady"],
     function (domReady) {
+        "use strict";
         domReady(function () {
             require(["jquery", "d3", "app/rspamd"],
                 function ($, d3, rspamd) {

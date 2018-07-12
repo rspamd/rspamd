@@ -24,7 +24,8 @@
 
 define(["jquery"],
     function ($) {
-        var interface = {};
+        "use strict";
+        var ui = {};
 
         function cleanTextUpload(source) {
             $("#" + source + "TextSource").val("");
@@ -169,7 +170,7 @@ define(["jquery"],
             });
         }
 
-        interface.setup = function (rspamd) {
+        ui.setup = function (rspamd) {
             $("textarea").change(function () {
                 if ($(this).val().length !== "") {
                     $(this).closest("form").find("button").removeAttr("disabled").removeClass("disabled");
@@ -210,5 +211,5 @@ define(["jquery"],
         };
 
 
-        return interface;
+        return ui;
     });
