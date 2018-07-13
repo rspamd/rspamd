@@ -86,8 +86,8 @@ define(["jquery", "footable"],
             var freqs = [];
             var distinct_groups = [];
 
-            $.each(data, function (i, group) {
-                $.each(group.rules, function (i, item) {
+            data.forEach(function (group) {
+                group.rules.forEach(function (item) {
                     var max = 20;
                     var min = -20;
                     if (item.weight > max) {
