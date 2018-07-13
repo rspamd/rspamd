@@ -453,17 +453,18 @@ local function ratelimit_cb(task)
           rspamd_logger.infox(task,
               'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
               lim_name, prefix,
-              bucket[2], bucket[1],
+              bucket.burst, bucket.rate,
               data[2], data[3], data[4])
           return
         -- set INFO symbol and soft reject
         elseif settings.info_symbol then
-          task:insert_result(settings.info_symbol, 1.0, lim_name .. "(" .. prefix .. ")")
+          task:insert_result(settings.info_symbol, 1.0,
+              lim_name .. "(" .. prefix .. ")")
         end
         rspamd_logger.infox(task,
             'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
             lim_name, prefix,
-            bucket[2], bucket[1],
+            bucket.burst, bucket.rate,
             data[2], data[3], data[4])
         task:set_pre_result('soft reject',
                 message_func(task, lim_name, prefix, bucket))
@@ -485,11 +486,11 @@ local function ratelimit_cb(task)
       local bucket = value.bucket
       local rate = (bucket[1]) / 1000.0 -- Leak rate in messages/ms
       rspamd_logger.debugm(N, task, "check limit %s:%s -> %s (%s/%s)",
-          value.name, pr, value.hash, bucket[2], bucket[1])
+          value.name, pr, value.hash, bucket.burst, bucket.rate)
       lua_redis.exec_redis_script(bucket_check_id,
               {key = value.hash, task = task, is_write = true},
               gen_check_cb(pr, bucket, value.name),
-              {value.hash, tostring(now), tostring(rate), tostring(bucket[2]),
+              {value.hash, tostring(now), tostring(rate), tostring(bucket.burst),
                   tostring(settings.expire)})
     end
   end
@@ -510,14 +511,6 @@ local function ratelimit_update_cb(task)
       is_spam = false
     end
 
-    local mult_burst = settings.ham_factor_burst
-    local mult_rate = settings.ham_factor_burst
-
-    if is_spam then
-      mult_burst = settings.spam_factor_burst
-      mult_rate = settings.spam_factor_rate
-    end
-
     -- Update each bucket
     for k, v in pairs(prefixes) do
       local bucket = v.bucket
@@ -529,12 +522,19 @@ local function ratelimit_update_cb(task)
           rspamd_logger.debugm(N, task,
               "updated limit %s:%s -> %s (%s/%s), burst: %s, dyn_rate: %s, dyn_burst: %s",
               v.name, k, v.hash,
-              bucket[2], bucket[1],
+              bucket.burst, bucket.rate,
               data[1], data[2], data[3])
         end
       end
       local now = rspamd_util.get_time()
       now = lua_util.round(now * 1000.0) -- Get milliseconds
+      local mult_burst = bucket.ham_factor_burst or 1.0
+      local mult_rate = bucket.ham_factor_burst or 1.0
+
+      if is_spam then
+        mult_burst = bucket.spam_factor_burst or 1.0
+        mult_rate = bucket.spam_factor_rate or 1.0
+      end
 
       lua_redis.exec_redis_script(bucket_update_id,
               {key = v.hash, task = task, is_write = true},
