@@ -263,9 +263,50 @@ local function arc_callback(task)
     end
   end
 
-  -- Now we can verify all signatures
+  --[[
+  1.  Collect all ARC Sets currently attached to the message.  If there
+       are none, the Chain Validation Status is "none" and the algorithm
+       stops here.  The maximum number of ARC Sets that can be attached
+       to a message is 50.  If more than the maximum number exist the
+       Chain Validation Status is "fail" and the algorithm stops here.
+       In the following algorithm, the maximum ARC instance value is
+       referred to as "N".
+
+   2.  If the Chain Validation Status of the highest instance value ARC
+       Set is "fail", then the Chain Validation status is "fail" and the
+       algorithm stops here.
+
+   3.  Validate the structure of the Authenticated Received Chain.  A
+       valid ARC has the following conditions:
+
+       1.  Each ARC Set MUST contain exactly one each of the three ARC
+           header fields (AAR, AMS, and AS).
+
+       2.  The instance values of the ARC Sets MUST form a continuous
+           sequence from 1..N with no gaps or repetition.
+
+       3.  The "cv" value for all ARC-Seal header fields must be non-
+           failing.  For instance values > 1, the value must be "pass".
+           For instance value = 1, the value must be "none".
+
+       *  If any of these conditions are not met, the Chain Validation
+          Status is "fail" and the algorithm stops here.
+
+   4.  Validate the AMS with the greatest instance value (most recent).
+       If validation fails, then the Chain Validation Status is "fail"
+       and the algorithm stops here.
+
+   5 - 7. Optional, not implemented
+   8.  Validate each AS beginning with the greatest instance value and
+       proceeding in decreasing order to the AS with the instance value
+       of 1.  If any AS fails to validate, the Chain Validation Status
+       is "fail" and the algorithm stops here.
+   9.  If the algorithm reaches this step, then the Chain Validation
+       Status is "pass", and the algorithm is complete.
+  ]]--
+
   local processed = 0
-  local sig = cbdata.sigs[#cbdata.sigs]
+  local sig = cbdata.sigs[#cbdata.sigs] -- last AMS
   local ret,err = dkim_verify(task, sig.header, arc_signature_cb, 'arc-sign')
 
   if not ret then
