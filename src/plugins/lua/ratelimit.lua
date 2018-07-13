@@ -613,22 +613,23 @@ if opts then
       'Ratelimit whitelist user map')
   end
 
+  settings.custom_keywords = {}
   if opts['custom_keywords'] then
-    local ret, res_or_err = pcall(dofile(opts['custom_keywords']))
+    local ret, res_or_err = pcall(loadfile(opts['custom_keywords']))
 
     if ret then
       opts['custom_keywords'] = {}
       if type(res_or_err) == 'table' then
         for k,hdl in pairs(res_or_err) do
-          opts['custom_keywords'][k] = hdl
+          settings['custom_keywords'][k] = hdl
         end
       elseif type(res_or_err) == 'function' then
-        opts['custom_keywords']['custom'] = res_or_err
+        settings['custom_keywords']['custom'] = res_or_err
       end
     else
       rspamd_logger.errx(rspamd_config, 'cannot execute %s: %s',
           opts['custom_keywords'], res_or_err)
-      opts['custom_keywords'] = {}
+      settings['custom_keywords'] = {}
     end
   end
 
