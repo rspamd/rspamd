@@ -267,7 +267,7 @@ local function parse_limit(name, data)
 
   -- Filter valid
   return fun.totable(fun.filter(function(val)
-    return type(val.bucket) == 'number' and type(val.rate) == 'number'
+    return type(val.burst) == 'number' and type(val.rate) == 'number'
   end, buckets))
 end
 
@@ -337,7 +337,7 @@ local keywords = {
 }
 
 local function gen_rate_key(task, rtype, bucket)
-  local key_t = {tostring(lua_util.round(100000.0 / bucket[1]))}
+  local key_t = {tostring(lua_util.round(100000.0 / bucket.burst))}
   local key_keywords = lua_util.str_split(rtype, '_')
   local have_user = false
 
@@ -442,6 +442,18 @@ local function ratelimit_cb(task)
     nprefixes = nprefixes + limit_to_prefixes(task, k, v, prefixes)
   end
 
+  for k, hdl in pairs(settings.custom_keywords or E) do
+    local ret, redis_key, bucket = pcall(hdl(task))
+
+    if ret then
+      prefixes[redis_key] = make_prefix(redis_key, k, bucket)
+      nprefixes = nprefixes + 1
+    else
+      rspamd_logger.errx(task, 'cannot call handler for %s: %s',
+          k, redis_key)
+    end
+  end
+
   local function gen_check_cb(prefix, bucket, lim_name)
     return function(err, data)
       if err then
@@ -484,7 +496,7 @@ local function ratelimit_cb(task)
 
     for pr,value in pairs(prefixes) do
       local bucket = value.bucket
-      local rate = (bucket[1]) / 1000.0 -- Leak rate in messages/ms
+      local rate = (bucket.rate) / 1000.0 -- Leak rate in messages/ms
       rspamd_logger.debugm(N, task, "check limit %s:%s -> %s (%s/%s)",
           value.name, pr, value.hash, bucket.burst, bucket.rate)
       lua_redis.exec_redis_script(bucket_check_id,
@@ -500,16 +512,13 @@ local function ratelimit_update_cb(task)
   local prefixes = task:cache_get('ratelimit_prefixes')
 
   if prefixes then
-    local action = task:get_metric_action()
-    local is_spam = true
-
-    if action == 'soft reject' then
+    if task:has_pre_result() then
       -- Already rate limited/greylisted, do nothing
-      rspamd_logger.debugm(N, task, 'already soft rejected, do not update')
+      rspamd_logger.debugm(N, task, 'pre-action has been set, do not update')
       return
-    elseif action == 'no action' then
-      is_spam = false
     end
+
+    local is_spam = not (task:get_metric_action() == 'no action')
 
     -- Update each bucket
     for k, v in pairs(prefixes) do
@@ -605,7 +614,22 @@ if opts then
   end
 
   if opts['custom_keywords'] then
-    settings.custom_keywords = dofile(opts['custom_keywords'])
+    local ret, res_or_err = pcall(dofile(opts['custom_keywords']))
+
+    if ret then
+      opts['custom_keywords'] = {}
+      if type(res_or_err) == 'table' then
+        for k,hdl in pairs(res_or_err) do
+          opts['custom_keywords'][k] = hdl
+        end
+      elseif type(res_or_err) == 'function' then
+        opts['custom_keywords']['custom'] = res_or_err
+      end
+    else
+      rspamd_logger.errx(rspamd_config, 'cannot execute %s: %s',
+          opts['custom_keywords'], res_or_err)
+      opts['custom_keywords'] = {}
+    end
   end
 
   if opts['message_func'] then
