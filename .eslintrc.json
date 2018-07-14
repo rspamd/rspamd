@@ -75,7 +75,6 @@
         "no-loop-func": "off",
         "no-negated-condition": "off",
         "no-param-reassign": "off",
-        "no-shadow": "off",
         "no-underscore-dangle": "off",
         "no-use-before-define": "off",
         "one-var-declaration-per-line": "off",

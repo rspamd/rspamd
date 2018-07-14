@@ -56,9 +56,9 @@ define(["jquery"],
                         xhr.setRequestHeader(name, value);
                     });
                 },
-                success: function (data) {
+                success: function (json) {
                     cleanTextUpload(source);
-                    if (data.success) {
+                    if (json.success) {
                         rspamd.alertMessage("alert-success", "Data successfully uploaded");
                     }
                 },
@@ -89,38 +89,37 @@ define(["jquery"],
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader("Password", rspamd.getPassword());
                 },
-                success: function (input) {
-                    var data = input;
-                    if (data.action) {
+                success: function (json) {
+                    if (json.action) {
                         rspamd.alertMessage("alert-success", "Data successfully scanned");
                         var action = "";
 
-                        if (data.action === "clean" || "no action") {
+                        if (json.action === "clean" || "no action") {
                             action = "label-success";
                         }
-                        else if (data.action === "rewrite subject" || "add header" || "probable spam") {
+                        else if (json.action === "rewrite subject" || "add header" || "probable spam") {
                             action = "label-warning";
                         }
-                        else if (data.action === "spam") {
+                        else if (json.action === "spam") {
                             action = "label-danger";
                         }
 
                         var score = "";
-                        if (data.score <= data.required_score) {
+                        if (json.score <= json.required_score) {
                             score = "label-success";
                         }
-                        else if (data.score >= data.required_score) {
+                        else if (json.score >= json.required_score) {
                             score = "label-danger";
                         }
                         $("<tbody id=\"tmpBody\"><tr>" +
-                            "<td><span class=\"label " + action + "\">" + data.action + "</span></td>" +
-                            "<td><span class=\"label " + score + "\">" + data.score.toFixed(2) + "/" + data.required_score.toFixed(2) + "</span></td>" +
+                            "<td><span class=\"label " + action + "\">" + json.action + "</span></td>" +
+                            "<td><span class=\"label " + score + "\">" + json.score.toFixed(2) + "/" + json.required_score.toFixed(2) + "</span></td>" +
                             "</tr></tbody>")
                             .insertAfter("#scanOutput thead");
                         var sym_desc = {};
                         var nsym = 0;
 
-                        $.each(data.symbols, function (i, item) {
+                        $.each(json.symbols, function (i, item) {
                             if (typeof item === "object") {
                                 var sym_id = "sym_" + nsym;
                                 if (item.description) {

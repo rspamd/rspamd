@@ -159,10 +159,10 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
 
     function displayUI() {
         // @toggle auth and main
-        var disconnect = $("#navBar .pull-right");
+        var buttons = $("#navBar .pull-right");
         $("#mainUI").show();
         $("#progress").show();
-        $(disconnect).show();
+        $(buttons).show();
         tabClick("#refresh");
         $("#progress").hide();
     }
@@ -284,12 +284,12 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader("Password", password);
                 },
-                success: function (data) {
+                success: function (json) {
                     $("#connectPassword").val("");
-                    if (data.auth === "failed") {
+                    if (json.auth === "failed") {
                         // Is actually never returned by Rspamd
                     } else {
-                        if (data.read_only) {
+                        if (json.read_only) {
                             ui.read_only = true;
                             $("#learning_nav").hide();
                             $("#resetHistory").attr("disabled", true);
@@ -307,8 +307,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                         displayUI();
                     }
                 },
-                error: function (data) {
-                    ui.alertMessage("alert-modal alert-error", data.statusText);
+                error: function (jqXHR) {
+                    ui.alertMessage("alert-modal alert-error", jqXHR.statusText);
                     $("#connectPassword").val("");
                     $("#connectPassword").focus();
                 }
@@ -402,14 +402,14 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                             }
                         },
                         url: neighbours_status[ind].url + req_url,
-                        success: function (data) {
+                        success: function (json) {
                             neighbours_status[ind].checked = true;
 
-                            if (jQuery.isEmptyObject(data)) {
+                            if (jQuery.isEmptyObject(json)) {
                                 neighbours_status[ind].status = false; // serv does not work
                             } else {
                                 neighbours_status[ind].status = true; // serv does not work
-                                neighbours_status[ind].data = data;
+                                neighbours_status[ind].data = json;
                             }
                             if (neighbours_status.every(function (elt) { return elt.checked; })) {
                                 if (on_success) {
