@@ -447,7 +447,9 @@ local function ratelimit_cb(task)
 
     if ret then
       local bucket = parse_limit(k, bd)
-      prefixes[redis_key] = make_prefix(redis_key, k, bucket)
+      if bucket[1] then
+        prefixes[redis_key] = make_prefix(redis_key, k, bucket[1])
+      end
       nprefixes = nprefixes + 1
     else
       rspamd_logger.errx(task, 'cannot call handler for %s: %s',
@@ -664,14 +666,6 @@ if opts then
       name = 'RATELIMIT_UPDATE',
       callback = ratelimit_update_cb,
     }
-
-    if settings.custom_keywords then
-      for _, v in pairs(settings.custom_keywords) do
-        if type(v) == 'table' and type(v['init']) == 'function' then
-          v['init']()
-        end
-      end
-    end
   end
 end
 
