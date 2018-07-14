@@ -443,9 +443,10 @@ local function ratelimit_cb(task)
   end
 
   for k, hdl in pairs(settings.custom_keywords or E) do
-    local ret, redis_key, bucket = pcall(hdl(task))
+    local ret, redis_key, bd = pcall(hdl, task)
 
     if ret then
+      local bucket = parse_limit(k, bd)
       prefixes[redis_key] = make_prefix(redis_key, k, bucket)
       nprefixes = nprefixes + 1
     else
