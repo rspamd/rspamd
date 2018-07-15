@@ -52,8 +52,7 @@ define(["jquery", "footable"],
                     data: JSON.stringify(values),
                     dataType: "json",
                 });
-            }
-            else {
+            } else {
                 $.ajax({
                     data: JSON.stringify(values),
                     dataType: "json",
@@ -74,11 +73,7 @@ define(["jquery", "footable"],
         }
         function decimalStep(number) {
             var digits = ((Number(number)).toFixed(20)).replace(/^-?\d*\.?|0+$/g, "").length;
-            if (digits === 0 || digits > 4) {
-                return 0.1;
-            } else {
-                return 1.0 / (Math.pow(10, digits));
-            }
+            return (digits === 0 || digits > 4) ? 0.1 : 1.0 / (Math.pow(10, digits));
         }
         function process_symbols_data(data) {
             var items = [];
@@ -148,8 +143,7 @@ define(["jquery", "footable"],
 
                 if (exp > 0) {
                     item.frequency = item.frequency.toFixed(2) + "e-" + exp;
-                }
-                else {
+                } else {
                     item.frequency = item.frequency.toFixed(2);
                 }
             });

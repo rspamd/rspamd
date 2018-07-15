@@ -578,8 +578,7 @@ define(["jquery", "footable", "humanize"],
                                     return e.rows;
                                 }));
                             data.version = neighbours_data[0].version;
-                        }
-                        else {
+                        } else {
                         // Legacy version
                             data = [].concat.apply([], neighbours_data);
                         }
@@ -616,8 +615,7 @@ define(["jquery", "footable", "humanize"],
                         delete ft.history;
                     }
                 });
-            }
-            else {
+            } else {
                 $.ajax({
                     dataType: "json",
                     url: neighbours[checked_server].url + "history",
@@ -688,8 +686,7 @@ define(["jquery", "footable", "humanize"],
                         ui.getHistory(rspamd, tables, neighbours, checked_server);
                         ui.getErrors(rspamd, tables, neighbours, checked_server);
                     });
-                }
-                else {
+                } else {
                     $.ajax({
                         dataType: "json",
                         type: "GET",

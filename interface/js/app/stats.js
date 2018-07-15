@@ -126,8 +126,7 @@ define(["jquery", "d3pie", "humanize"],
                 if (checked_server === key) {
                     $("#clusterTable tbody [value=\"" + key + "\"]").prop("checked", true);
                     $("#selSrv [value=\"" + key + "\"]").prop("selected", true);
-                }
-                else if (!val.status) {
+                } else if (!val.status) {
                     $("#clusterTable tbody [value=\"" + key + "\"]").prop("disabled", true);
                     $("#selSrv [value=\"" + key + "\"]").prop("disabled", true);
                 }
