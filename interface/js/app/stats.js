@@ -67,9 +67,8 @@ define(["jquery", "d3pie", "humanize"],
 
             $.each(data, function (i, item) {
                 var widget = "";
-                if (i === "auth") {}
-                else if (i === "error") {}
-                else if (i === "version") {
+                if (i === "auth" || i === "error") { return true; } // Skip to the next iteration
+                if (i === "version") {
                     widget = "<div class=\"left\"><strong>" + item + "</strong>" +
                     i + "</div>";
                     $(widget).appendTo(widgets);

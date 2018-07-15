@@ -49,8 +49,8 @@ define(["jquery"],
                     xhr.setRequestHeader("Map", id);
                     xhr.setRequestHeader("Debug", true);
                 },
-                error: function (data) {
-                    save_map_error(rspamd, "local", null, null, data.statusText);
+                error: function (jqXHR) {
+                    save_map_error(rspamd, "local", null, null, jqXHR.statusText);
                 },
                 success: function () { save_map_success(rspamd); },
             });

@@ -42,6 +42,16 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     var timer_id = [];
     var selData; // Graph's dataset selector state
 
+    function cleanCredentials() {
+        sessionStorage.clear();
+        $("#statWidgets").empty();
+        $("#listMaps").empty();
+        $("#modalBody").empty();
+        $("#historyLog tbody").remove();
+        $("#errorsLog tbody").remove();
+        $("#symbolsTable tbody").remove();
+    }
+
     function stopTimers() {
         for (var key in timer_id) {
             Visibility.stop(timer_id[key]);
@@ -79,7 +89,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         ui.connect();
     }
 
-    function tabClick(tab_id) {
+    function tabClick(id) {
+        var tab_id = id;
         if ($(tab_id).attr("disabled")) return;
         $(tab_id).attr("disabled", true);
 
@@ -139,17 +150,6 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         sessionStorage.setItem("Password", password);
     }
 
-    // @clean credentials
-    function cleanCredentials() {
-        sessionStorage.clear();
-        $("#statWidgets").empty();
-        $("#listMaps").empty();
-        $("#modalBody").empty();
-        $("#historyLog tbody").remove();
-        $("#errorsLog tbody").remove();
-        $("#symbolsTable tbody").remove();
-    }
-
     function isLogged() {
         if (sessionStorage.getItem("Credentials") !== null) {
             return true;
@@ -159,10 +159,10 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
 
     function displayUI() {
         // @toggle auth and main
-        var disconnect = $("#navBar .pull-right");
+        var buttons = $("#navBar .pull-right");
         $("#mainUI").show();
         $("#progress").show();
-        $(disconnect).show();
+        $(buttons).show();
         tabClick("#refresh");
         $("#progress").hide();
     }
@@ -234,7 +234,6 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         });
         tab_config.setup(ui);
         tab_symbols.setup(ui, tables);
-        tab_history.setup(ui, tables);
         tab_upload.setup(ui);
         selData = tab_graph.setup();
     };
@@ -284,12 +283,12 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 beforeSend: function (xhr) {
                     xhr.setRequestHeader("Password", password);
                 },
-                success: function (data) {
+                success: function (json) {
                     $("#connectPassword").val("");
-                    if (data.auth === "failed") {
+                    if (json.auth === "failed") {
                         // Is actually never returned by Rspamd
                     } else {
-                        if (data.read_only) {
+                        if (json.read_only) {
                             ui.read_only = true;
                             $("#learning_nav").hide();
                             $("#resetHistory").attr("disabled", true);
@@ -307,8 +306,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                         displayUI();
                     }
                 },
-                error: function (data) {
-                    ui.alertMessage("alert-modal alert-error", data.statusText);
+                error: function (jqXHR) {
+                    ui.alertMessage("alert-modal alert-error", jqXHR.statusText);
                     $("#connectPassword").val("");
                     $("#connectPassword").focus();
                 }
@@ -387,9 +386,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                     });
                 });
                 $.each(neighbours_status, function (ind) {
-                    method = typeof method !== "undefined" ? method : "GET";
                     var req_params = {
-                        type: method,
+                        type: typeof method !== "undefined" ? method : "GET",
                         jsonp: false,
                         data: req_data,
                         beforeSend: function (xhr) {
@@ -402,14 +400,14 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                             }
                         },
                         url: neighbours_status[ind].url + req_url,
-                        success: function (data) {
+                        success: function (json) {
                             neighbours_status[ind].checked = true;
 
-                            if (jQuery.isEmptyObject(data)) {
+                            if (jQuery.isEmptyObject(json)) {
                                 neighbours_status[ind].status = false; // serv does not work
                             } else {
                                 neighbours_status[ind].status = true; // serv does not work
-                                neighbours_status[ind].data = data;
+                                neighbours_status[ind].data = json;
                             }
                             if (neighbours_status.every(function (elt) { return elt.checked; })) {
                                 if (on_success) {
@@ -457,7 +455,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         });
     };
 
-    ui.drawPie = function (obj, id, data, conf) {
+    ui.drawPie = function (object, id, data, conf) {
+        var obj = object;
         if (obj) {
             obj.updateProp("data.content",
                 data.filter(function (elt) {
