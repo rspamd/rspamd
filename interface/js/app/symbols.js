@@ -52,8 +52,7 @@ define(["jquery", "footable"],
                     data: JSON.stringify(values),
                     dataType: "json",
                 });
-            }
-            else {
+            } else {
                 $.ajax({
                     data: JSON.stringify(values),
                     dataType: "json",
@@ -148,8 +147,7 @@ define(["jquery", "footable"],
 
                 if (exp > 0) {
                     item.frequency = item.frequency.toFixed(2) + "e-" + exp;
-                }
-                else {
+                } else {
                     item.frequency = item.frequency.toFixed(2);
                 }
             });

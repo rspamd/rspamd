@@ -247,8 +247,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 $("#learning_nav").hide();
                 $("#resetHistory").attr("disabled", true);
                 $("#errors-history").hide();
-            }
-            else {
+            } else {
                 ui.read_only = false;
                 $("#learning_nav").show();
                 $("#resetHistory").removeAttr("disabled", true);
@@ -293,8 +292,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                             $("#learning_nav").hide();
                             $("#resetHistory").attr("disabled", true);
                             $("#errors-history").hide();
-                        }
-                        else {
+                        } else {
                             ui.read_only = false;
                             $("#learning_nav").show();
                             $("#resetHistory").removeAttr("disabled", true);
@@ -332,16 +330,14 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             success: function (data) {
                 if (on_success) {
                     on_success(data);
-                }
-                else {
+                } else {
                     alertMessage("alert-success", "Data saved");
                 }
             },
             error: function (jqXHR, textStatus, errorThrown) {
                 if (on_error) {
                     on_error("local", jqXHR, textStatus, errorThrown);
-                }
-                else {
+                } else {
                     alertMessage("alert-error", "Cannot receive data: " + errorThrown);
                 }
             }
@@ -412,8 +408,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                             if (neighbours_status.every(function (elt) { return elt.checked; })) {
                                 if (on_success) {
                                     on_success(neighbours_status);
-                                }
-                                else {
+                                } else {
                                     alertMessage("alert-success", "Request completed");
                                 }
                             }
@@ -424,8 +419,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                             if (on_error) {
                                 on_error(neighbours_status[ind],
                                     jqXHR, textStatus, errorThrown);
-                            }
-                            else {
+                            } else {
                                 alertMessage("alert-error", "Cannot receive data from " +
                                        neighbours_status[ind].host + ": " + errorThrown);
                             }
@@ -433,8 +427,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                                 function (elt) { return elt.checked; })) {
                                 if (on_success) {
                                     on_success(neighbours_status);
-                                }
-                                else {
+                                } else {
                                     alertMessage("alert-success", "Request completed");
                                 }
                             }

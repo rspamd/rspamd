@@ -241,8 +241,7 @@ define(["jquery", "d3evolution", "footable"],
                             });
                             updateWidgets(data);
                         });
-                    }
-                    else {
+                    } else {
                         updateWidgets(neighbours_data[0]);
                     }
                 },

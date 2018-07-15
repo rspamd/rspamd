@@ -8,6 +8,7 @@
     },
     "rules": {
         "array-bracket-newline": ["error", "consistent"],
+        "brace-style": ["error", "1tbs", { "allowSingleLine": true }],
         "camelcase": "off",
         "capitalized-comments": "off",
         "comma-dangle": ["error", "only-multiline"],
@@ -49,7 +50,6 @@
         // Temporarily disabled rules
         "array-callback-return": "off",
         "array-element-newline": "off",
-        "brace-style": "off",
         "callback-return": "off",
         "consistent-return": "off",
         "consistent-this": "off",

@@ -96,19 +96,16 @@ define(["jquery"],
 
                         if (json.action === "clean" || "no action") {
                             action = "label-success";
-                        }
-                        else if (json.action === "rewrite subject" || "add header" || "probable spam") {
+                        } else if (json.action === "rewrite subject" || "add header" || "probable spam") {
                             action = "label-warning";
-                        }
-                        else if (json.action === "spam") {
+                        } else if (json.action === "spam") {
                             action = "label-danger";
                         }
 
                         var score = "";
                         if (json.score <= json.required_score) {
                             score = "label-success";
-                        }
-                        else if (json.score >= json.required_score) {
+                        } else if (json.score >= json.required_score) {
                             score = "label-danger";
                         }
                         $("<tbody id=\"tmpBody\"><tr>" +
