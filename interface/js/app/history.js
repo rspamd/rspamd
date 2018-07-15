@@ -780,6 +780,5 @@ define(["jquery", "footable", "humanize"],
             });
         };
 
-        ui.setup = function () {};
         return ui;
     });

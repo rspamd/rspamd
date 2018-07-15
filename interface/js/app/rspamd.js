@@ -234,7 +234,6 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         });
         tab_config.setup(ui);
         tab_symbols.setup(ui, tables);
-        tab_history.setup(ui, tables);
         tab_upload.setup(ui);
         selData = tab_graph.setup();
     };
