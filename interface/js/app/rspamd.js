@@ -79,7 +79,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         ui.connect();
     }
 
-    function tabClick(tab_id) {
+    function tabClick(id) {
+        var tab_id = id;
         if ($(tab_id).attr("disabled")) return;
         $(tab_id).attr("disabled", true);
 
@@ -387,9 +388,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                     });
                 });
                 $.each(neighbours_status, function (ind) {
-                    method = typeof method !== "undefined" ? method : "GET";
                     var req_params = {
-                        type: method,
+                        type: typeof method !== "undefined" ? method : "GET",
                         jsonp: false,
                         data: req_data,
                         beforeSend: function (xhr) {
@@ -457,7 +457,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         });
     };
 
-    ui.drawPie = function (obj, id, data, conf) {
+    ui.drawPie = function (object, id, data, conf) {
+        var obj = object;
         if (obj) {
             obj.updateProp("data.content",
                 data.filter(function (elt) {

@@ -49,7 +49,6 @@
         // Temporarily disabled rules
         "array-callback-return": "off",
         "array-element-newline": "off",
-        "block-scoped-var": "off",
         "brace-style": "off",
         "callback-return": "off",
         "consistent-return": "off",
@@ -74,7 +73,6 @@
         "no-invalid-this": "off",
         "no-loop-func": "off",
         "no-negated-condition": "off",
-        "no-param-reassign": "off",
         "no-underscore-dangle": "off",
         "no-use-before-define": "off",
         "one-var-declaration-per-line": "off",
