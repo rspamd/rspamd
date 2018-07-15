@@ -74,7 +74,6 @@
         "no-loop-func": "off",
         "no-negated-condition": "off",
         "no-underscore-dangle": "off",
-        "no-use-before-define": "off",
         "one-var-declaration-per-line": "off",
         "prefer-spread": "off",
         "sort-keys": "off",

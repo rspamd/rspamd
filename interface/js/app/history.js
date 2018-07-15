@@ -556,7 +556,7 @@ define(["jquery", "footable", "humanize"],
 
             if (checked_server === "All SERVERS") {
                 rspamd.queryNeighbours("history", function (req_data) {
-                    function differentVersions() {
+                    function differentVersions(neighbours_data) {
                         var dv = neighbours_data.some(function (e) {
                             return e.version !== neighbours_data[0].version;
                         });
@@ -570,7 +570,7 @@ define(["jquery", "footable", "humanize"],
                     var neighbours_data = req_data
                         .filter(function (d) { return d.status; }) // filter out unavailable neighbours
                         .map(function (d) { return d.data; });
-                    if (neighbours_data.length && !differentVersions()) {
+                    if (neighbours_data.length && !differentVersions(neighbours_data)) {
                         var data = {};
                         if (neighbours_data[0].version) {
                             data.rows = [].concat.apply([], neighbours_data

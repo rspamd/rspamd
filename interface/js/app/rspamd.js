@@ -42,6 +42,16 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     var timer_id = [];
     var selData; // Graph's dataset selector state
 
+    function cleanCredentials() {
+        sessionStorage.clear();
+        $("#statWidgets").empty();
+        $("#listMaps").empty();
+        $("#modalBody").empty();
+        $("#historyLog tbody").remove();
+        $("#errorsLog tbody").remove();
+        $("#symbolsTable tbody").remove();
+    }
+
     function stopTimers() {
         for (var key in timer_id) {
             Visibility.stop(timer_id[key]);
@@ -138,17 +148,6 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     // @save credentials
     function saveCredentials(password) {
         sessionStorage.setItem("Password", password);
-    }
-
-    // @clean credentials
-    function cleanCredentials() {
-        sessionStorage.clear();
-        $("#statWidgets").empty();
-        $("#listMaps").empty();
-        $("#modalBody").empty();
-        $("#historyLog tbody").remove();
-        $("#errorsLog tbody").remove();
-        $("#symbolsTable tbody").remove();
     }
 
     function isLogged() {
