@@ -67,7 +67,6 @@
         "max-statements-per-line": "off",
         "new-cap": "off",
         "no-else-return": "off",
-        "no-empty": "off",
         "no-inline-comments": "off",
         "no-invalid-this": "off",
         "no-negated-condition": "off",
