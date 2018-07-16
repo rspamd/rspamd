@@ -127,7 +127,6 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_config *cfg;
 	/* END OF COMMON PART */
 	struct fuzzy_global_stat stat;
-	char *hashfile;
 	gdouble expire;
 	gdouble sync_timeout;
 	struct rspamd_radix_map_helper *update_ips;
@@ -155,6 +154,7 @@ struct rspamd_fuzzy_storage_ctx {
 	GHashTable *keys;
 	gboolean encrypted_only;
 	gboolean collection_mode;
+	gboolean read_only;
 	struct rspamd_cryptobox_keypair *collection_keypair;
 	struct rspamd_cryptobox_pubkey *collection_sign_key;
 	gchar *collection_id_file;
@@ -241,6 +241,10 @@ rspamd_fuzzy_check_client (struct fuzzy_session *session, gboolean is_write)
 	}
 
 	if (is_write) {
+		if (session->ctx->read_only) {
+			return FALSE;
+		}
+
 		if (session->ctx->update_ips != NULL) {
 			if (rspamd_match_radix_map_addr (session->ctx->update_ips,
 					session->addr) == NULL) {
@@ -809,7 +813,7 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 	rspamd_fuzzy_make_reply (cmd, result, session, encrypted, is_shingle);
 
 	/* Refresh hash if found with strong confidence */
-	if (result->v1.prob > 0.9) {
+	if (result->v1.prob > 0.9 && !session->ctx->read_only) {
 		struct fuzzy_peer_cmd up_cmd;
 		struct fuzzy_peer_request *up_req;
 
@@ -2468,42 +2472,6 @@ init_fuzzy (struct rspamd_config *cfg)
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
-			"hashfile",
-			rspamd_rcl_parse_struct_string,
-			ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile),
-			0,
-			"Path to fuzzy database");
-
-	rspamd_rcl_register_worker_option (cfg,
-			type,
-			"hash_file",
-			rspamd_rcl_parse_struct_string,
-			ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile),
-			0,
-			"Path to fuzzy database (alias for hashfile)");
-
-	rspamd_rcl_register_worker_option (cfg,
-			type,
-			"file",
-			rspamd_rcl_parse_struct_string,
-			ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile),
-			0,
-			"Path to fuzzy database (alias for hashfile)");
-
-	rspamd_rcl_register_worker_option (cfg,
-			type,
-			"database",
-			rspamd_rcl_parse_struct_string,
-			ctx,
-			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, hashfile),
-			0,
-			"Path to fuzzy database (alias for hashfile)");
-
-	rspamd_rcl_register_worker_option (cfg,
-			type,
 			"sync",
 			rspamd_rcl_parse_struct_time,
 			ctx,
@@ -2561,6 +2529,15 @@ init_fuzzy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, encrypted_only),
 			0,
 			"Allow encrypted requests only (and forbid all unknown keys or plaintext requests)");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"read_only",
+			rspamd_rcl_parse_struct_boolean,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, read_only),
+			0,
+			"Work in read only mode");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
