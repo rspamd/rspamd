@@ -1279,7 +1279,6 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 				   64 + 1;
 
 			for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
-				guchar *hval;
 				/*
 				 * For each command with shingles we additionally emit 32 commands:
 				 * EXPIRE <prefix>_<number>_<value> <expire>
@@ -1294,9 +1293,6 @@ rspamd_fuzzy_update_append_command (struct rspamd_fuzzy_backend *bk,
 				value = g_string_sized_new (30);
 				rspamd_printf_gstring (value, "%d",
 						(gint)rspamd_fuzzy_backend_get_expire (bk));
-				hval = g_malloc (sizeof (io_cmd->cmd.shingle.basic.digest));
-				memcpy (hval, io_cmd->cmd.shingle.basic.digest,
-						sizeof (io_cmd->cmd.shingle.basic.digest));
 				session->argv[cur_shift] = g_strdup ("EXPIRE");
 				session->argv_lens[cur_shift++] = sizeof ("EXPIRE") - 1;
 				session->argv[cur_shift] = key->str;
