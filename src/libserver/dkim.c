@@ -3020,7 +3020,7 @@ rspamd_dkim_match_keys (rspamd_dkim_key_t *pk,
 		return FALSE;
 	}
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
 	RSA_get0_key (pk->key.key_rsa, &n1, NULL, NULL);
 	RSA_get0_key (sk->key_rsa, &n2, NULL, NULL);
 #else
