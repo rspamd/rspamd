@@ -1318,11 +1318,6 @@ rspamd_milter_macro_http (struct rspamd_milter_session *session,
 		}
 	}
 
-	IF_MACRO("{daemon_name}") {
-		rspamd_http_message_add_header_len (msg, MTA_TAG_HEADER,
-				found->begin, found->len);
-	}
-
 	IF_MACRO("{v}") {
 		rspamd_http_message_add_header_len (msg, USER_AGENT_HEADER,
 				found->begin, found->len);
