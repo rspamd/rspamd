@@ -291,7 +291,15 @@ function check_header_delimiter_tab(task, header_name)
 end
  */
 LUA_FUNCTION_DEF (task, get_header_full);
-
+/***
+ * @method task:get_header_count(name[, case_sensitive])
+ * Lightweight version if you need just a header's count
+ *  * By default headers are searched in caseless matter.
+ * @param {string} name name of header to get
+ * @param {boolean} case_sensitive case sensitiveness flag to search for a header
+ * @return {number} number of header's occurrencies or 0 if not found
+ */
+LUA_FUNCTION_DEF (task, get_header_count);
 /***
  * @method task:get_raw_headers()
  * Get all undecoded headers of a message as a string
@@ -931,6 +939,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_header),
 	LUA_INTERFACE_DEF (task, get_header_raw),
 	LUA_INTERFACE_DEF (task, get_header_full),
+	LUA_INTERFACE_DEF (task, get_header_count),
 	LUA_INTERFACE_DEF (task, get_raw_headers),
 	LUA_INTERFACE_DEF (task, get_received_headers),
 	LUA_INTERFACE_DEF (task, get_queue_id),
@@ -1896,13 +1905,15 @@ lua_task_set_request_header (lua_State *L)
 	return 0;
 }
 
+
+
 gint
 rspamd_lua_push_header (lua_State *L, struct rspamd_mime_header *rh,
-		gboolean full, gboolean raw)
+						enum rspamd_lua_task_header_type how)
 {
-	const gchar *val;
 
-	if (full) {
+	switch (how) {
+	case RSPAMD_TASK_HEADER_PUSH_FULL:
 		/* Create new associated table for a header */
 		lua_createtable (L, 0, 7);
 		rspamd_lua_table_set (L, "name",	 rh->name);
@@ -1925,21 +1936,27 @@ rspamd_lua_push_header (lua_State *L, struct rspamd_mime_header *rh,
 		lua_pushstring (L, "order");
 		lua_pushnumber (L, rh->order);
 		lua_settable (L, -3);
-	}
-	else {
-		if (!raw) {
-			val = rh->decoded;
-		}
-		else {
-			val = rh->value;
-		}
-
-		if (val) {
-			lua_pushstring (L, val);
+		break;
+	case RSPAMD_TASK_HEADER_PUSH_RAW:
+		if (rh->value) {
+			lua_pushstring (L, rh->value);
 		}
 		else {
 			lua_pushnil (L);
 		}
+		break;
+	case RSPAMD_TASK_HEADER_PUSH_SIMPLE:
+		if (rh->decoded) {
+			lua_pushstring (L, rh->decoded);
+		}
+		else {
+			lua_pushnil (L);
+		}
+		break;
+	case RSPAMD_TASK_HEADER_PUSH_COUNT:
+	default:
+		g_assert_not_reached ();
+		break;
 	}
 
 	return 1;
@@ -1947,39 +1964,45 @@ rspamd_lua_push_header (lua_State *L, struct rspamd_mime_header *rh,
 
 gint
 rspamd_lua_push_header_array (lua_State * L,
-		GPtrArray *ar,
-		gboolean full,
-		gboolean raw)
+							  GPtrArray *ar,
+							  enum rspamd_lua_task_header_type how)
 {
 
 	struct rspamd_mime_header *rh;
 	guint i;
 
-
 	if (ar == NULL || ar->len == 0) {
-		lua_pushnil (L);
+		if (how == RSPAMD_TASK_HEADER_PUSH_COUNT) {
+			lua_pushnumber (L, 0);
+		}
+		else {
+			lua_pushnil (L);
+		}
+
 		return 1;
 	}
 
-	if (full) {
+	if (how == RSPAMD_TASK_HEADER_PUSH_FULL) {
 		lua_createtable (L, ar->len, 0);
-	}
-
-	PTR_ARRAY_FOREACH (ar, i, rh) {
-		if (full) {
-			rspamd_lua_push_header (L, rh, full, raw);
+		PTR_ARRAY_FOREACH (ar, i, rh) {
+			rspamd_lua_push_header (L, rh, how);
 			lua_rawseti (L, -2, i + 1);
 		}
-		else {
-			return rspamd_lua_push_header (L, rh, full, raw);
-		}
+	}
+	else if (how == RSPAMD_TASK_HEADER_PUSH_COUNT) {
+		lua_pushnumber (L, ar->len);
+	}
+	else {
+		rh = g_ptr_array_index (ar, 0);
+
+		return rspamd_lua_push_header (L, rh, how);
 	}
 
 	return 1;
 }
 
 static gint
-lua_task_get_header_common (lua_State *L, gboolean full, gboolean raw)
+lua_task_get_header_common (lua_State *L, enum rspamd_lua_task_header_type how)
 {
 	gboolean strong = FALSE;
 	struct rspamd_task *task = lua_check_task (L, 1);
@@ -1995,7 +2018,7 @@ lua_task_get_header_common (lua_State *L, gboolean full, gboolean raw)
 
 		ar = rspamd_message_get_header_array (task, name, strong);
 
-		return rspamd_lua_push_header_array (L, ar, full, raw);
+		return rspamd_lua_push_header_array (L, ar, how);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -2005,19 +2028,25 @@ lua_task_get_header_common (lua_State *L, gboolean full, gboolean raw)
 static gint
 lua_task_get_header_full (lua_State * L)
 {
-	return lua_task_get_header_common (L, TRUE, TRUE);
+	return lua_task_get_header_common (L, RSPAMD_TASK_HEADER_PUSH_FULL);
 }
 
 static gint
 lua_task_get_header (lua_State * L)
 {
-	return lua_task_get_header_common (L, FALSE, FALSE);
+	return lua_task_get_header_common (L, RSPAMD_TASK_HEADER_PUSH_SIMPLE);
 }
 
 static gint
 lua_task_get_header_raw (lua_State * L)
 {
-	return lua_task_get_header_common (L, FALSE, TRUE);
+	return lua_task_get_header_common (L, RSPAMD_TASK_HEADER_PUSH_RAW);
+}
+
+static gint
+lua_task_get_header_count (lua_State * L)
+{
+	return lua_task_get_header_common (L, RSPAMD_TASK_HEADER_PUSH_COUNT);
 }
 
 static gint
@@ -4668,7 +4697,7 @@ static gint
 lua_task_headers_foreach (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
-	gboolean full = FALSE, raw = FALSE;
+	enum rspamd_lua_task_header_type how = RSPAMD_TASK_HEADER_PUSH_SIMPLE;
 	struct rspamd_lua_regexp *re = NULL;
 	GList *cur;
 	struct rspamd_mime_header *hdr;
@@ -4679,8 +4708,8 @@ lua_task_headers_foreach (lua_State *L)
 			lua_pushstring (L, "full");
 			lua_gettable (L, 3);
 
-			if (lua_isboolean (L, -1)) {
-				full = lua_toboolean (L, -1);
+			if (lua_isboolean (L, -1) && lua_toboolean (L, -1)) {
+				how = RSPAMD_TASK_HEADER_PUSH_FULL;
 			}
 
 			lua_pop (L, 1);
@@ -4688,8 +4717,8 @@ lua_task_headers_foreach (lua_State *L)
 			lua_pushstring (L, "raw");
 			lua_gettable (L, 3);
 
-			if (lua_isboolean (L, -1)) {
-				raw = lua_toboolean (L, -1);
+			if (lua_isboolean (L, -1) && lua_toboolean (L, -1)) {
+				how = RSPAMD_TASK_HEADER_PUSH_RAW;
 			}
 
 			lua_pop (L, 1);
@@ -4722,7 +4751,7 @@ lua_task_headers_foreach (lua_State *L)
 				old_top = lua_gettop (L);
 				lua_pushvalue (L, 2);
 				lua_pushstring (L, hdr->name);
-				rspamd_lua_push_header (L, hdr, full, raw);
+				rspamd_lua_push_header (L, hdr, how);
 
 				if (lua_pcall (L, 2, LUA_MULTRET, 0) != 0) {
 					msg_err ("call to header_foreach failed: %s",

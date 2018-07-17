@@ -208,18 +208,22 @@ struct rspamd_lua_ip * lua_check_ip (lua_State * L, gint pos);
 
 struct rspamd_lua_text * lua_check_text (lua_State * L, gint pos);
 
+enum rspamd_lua_task_header_type {
+	RSPAMD_TASK_HEADER_PUSH_SIMPLE = 0,
+	RSPAMD_TASK_HEADER_PUSH_RAW,
+	RSPAMD_TASK_HEADER_PUSH_FULL,
+	RSPAMD_TASK_HEADER_PUSH_COUNT,
+};
 
 gint rspamd_lua_push_header (lua_State *L,
-		struct rspamd_mime_header *h,
-		gboolean full,
-		gboolean raw);
+							 struct rspamd_mime_header *h,
+							 enum rspamd_lua_task_header_type how);
 /**
  * Push specific header to lua
  */
 gint rspamd_lua_push_header_array (lua_State *L,
-		GPtrArray *hdrs,
-		gboolean full,
-		gboolean raw);
+								   GPtrArray *hdrs,
+								   enum rspamd_lua_task_header_type how);
 
 /**
  * Check for task at the specified position

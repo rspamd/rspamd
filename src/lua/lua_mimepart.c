@@ -277,6 +277,15 @@ end
  */
 LUA_FUNCTION_DEF (mimepart, get_header_full);
 /***
+ * @method mimepart:get_header_count(name[, case_sensitive])
+ * Lightweight version if you need just a header's count
+ *  * By default headers are searched in caseless matter.
+ * @param {string} name name of header to get
+ * @param {boolean} case_sensitive case sensitiveness flag to search for a header
+ * @return {number} number of header's occurrencies or 0 if not found
+ */
+LUA_FUNCTION_DEF (mimepart, get_header_count);
+/***
  * @method mime_part:get_content()
  * Get the parsed content of part
  * @return {text} opaque text object (zero-copy if not casted to lua string)
@@ -424,6 +433,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_header),
 	LUA_INTERFACE_DEF (mimepart, get_header_raw),
 	LUA_INTERFACE_DEF (mimepart, get_header_full),
+	LUA_INTERFACE_DEF (mimepart, get_header_count),
 	LUA_INTERFACE_DEF (mimepart, is_image),
 	LUA_INTERFACE_DEF (mimepart, get_image),
 	LUA_INTERFACE_DEF (mimepart, is_archive),
@@ -1186,7 +1196,7 @@ lua_mimepart_get_filename (lua_State * L)
 }
 
 static gint
-lua_mimepart_get_header_common (lua_State *L, gboolean full, gboolean raw)
+lua_mimepart_get_header_common (lua_State *L, enum rspamd_lua_task_header_type how)
 {
 	struct rspamd_mime_part *part = lua_check_mimepart (L);
 	const gchar *name;
@@ -1199,7 +1209,7 @@ lua_mimepart_get_header_common (lua_State *L, gboolean full, gboolean raw)
 		ar = rspamd_message_get_header_from_hash (part->raw_headers, NULL,
 				name, FALSE);
 
-		return rspamd_lua_push_header_array (L, ar, full, raw);
+		return rspamd_lua_push_header_array (L, ar, how);
 	}
 
 	lua_pushnil (L);
@@ -1210,19 +1220,25 @@ lua_mimepart_get_header_common (lua_State *L, gboolean full, gboolean raw)
 static gint
 lua_mimepart_get_header_full (lua_State * L)
 {
-	return lua_mimepart_get_header_common (L, TRUE, TRUE);
+	return lua_mimepart_get_header_common (L, RSPAMD_TASK_HEADER_PUSH_FULL);
 }
 
 static gint
 lua_mimepart_get_header (lua_State * L)
 {
-	return lua_mimepart_get_header_common (L, FALSE, FALSE);
+	return lua_mimepart_get_header_common (L, RSPAMD_TASK_HEADER_PUSH_SIMPLE);
 }
 
 static gint
 lua_mimepart_get_header_raw (lua_State * L)
 {
-	return lua_mimepart_get_header_common (L, FALSE, TRUE);
+	return lua_mimepart_get_header_common (L, RSPAMD_TASK_HEADER_PUSH_RAW);
+}
+
+static gint
+lua_mimepart_get_header_count (lua_State * L)
+{
+	return lua_mimepart_get_header_common (L, RSPAMD_TASK_HEADER_PUSH_COUNT);
 }
 
 static gint
@@ -1418,7 +1434,7 @@ static gint
 lua_mimepart_headers_foreach (lua_State *L)
 {
 	struct rspamd_mime_part *part = lua_check_mimepart (L);
-	gboolean full = FALSE, raw = FALSE;
+	enum rspamd_lua_task_header_type how = RSPAMD_TASK_HEADER_PUSH_SIMPLE;
 	struct rspamd_lua_regexp *re = NULL;
 	GList *cur;
 	struct rspamd_mime_header *hdr;
@@ -1429,8 +1445,8 @@ lua_mimepart_headers_foreach (lua_State *L)
 			lua_pushstring (L, "full");
 			lua_gettable (L, 3);
 
-			if (lua_isboolean (L, -1)) {
-				full = lua_toboolean (L, -1);
+			if (lua_isboolean (L, -1) && lua_toboolean (L, -1)) {
+				how = RSPAMD_TASK_HEADER_PUSH_FULL;
 			}
 
 			lua_pop (L, 1);
@@ -1438,8 +1454,8 @@ lua_mimepart_headers_foreach (lua_State *L)
 			lua_pushstring (L, "raw");
 			lua_gettable (L, 3);
 
-			if (lua_isboolean (L, -1)) {
-				raw = lua_toboolean (L, -1);
+			if (lua_isboolean (L, -1) && lua_toboolean (L, -1)) {
+				how = RSPAMD_TASK_HEADER_PUSH_RAW;
 			}
 
 			lua_pop (L, 1);
@@ -1472,7 +1488,7 @@ lua_mimepart_headers_foreach (lua_State *L)
 				old_top = lua_gettop (L);
 				lua_pushvalue (L, 2);
 				lua_pushstring (L, hdr->name);
-				rspamd_lua_push_header (L, hdr, full, raw);
+				rspamd_lua_push_header (L, hdr, how);
 
 				if (lua_pcall (L, 2, LUA_MULTRET, 0) != 0) {
 					msg_err ("call to header_foreach failed: %s",
