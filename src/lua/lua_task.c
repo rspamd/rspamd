@@ -453,6 +453,11 @@ LUA_FUNCTION_DEF (task, set_from);
  * @return {string} username or nil
  */
 LUA_FUNCTION_DEF (task, get_user);
+/***
+ * @method task:set_user([username])
+ * Sets or resets (if username is not specified) authenticated user name for this task.
+ * @return {string} the previously set username or nil
+ */
 LUA_FUNCTION_DEF (task, set_user);
 /***
  * @method task:get_from_ip()
@@ -2910,16 +2915,38 @@ lua_task_set_user (lua_State *L)
 	const gchar *new_user;
 
 	if (task) {
-		new_user = luaL_checkstring (L, 2);
-		if (new_user) {
+
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			new_user = lua_tostring (L, 2);
+
+			if (task->user) {
+				/* Push old user */
+				lua_pushstring (L, task->user);
+			}
+			else {
+				lua_pushnil (L);
+			}
+
 			task->user = rspamd_mempool_strdup (task->task_pool, new_user);
+		}
+		else {
+			/* Reset user */
+			if (task->user) {
+				/* Push old user */
+				lua_pushstring (L, task->user);
+			}
+			else {
+				lua_pushnil (L);
+			}
+
+			task->user = NULL;
 		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 0;
+	return 1;
 }
 
 static gint
