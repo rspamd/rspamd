@@ -563,6 +563,27 @@ rspamd_config.MISSING_FROM = {
   group = 'headers',
   description = 'Missing From: header'
 }
+
+rspamd_config.MULTIPLE_FROM = {
+  callback = function(task)
+    local from = task:get_from('mime')
+    if from and from[1] then
+      if #from > 1 then
+        return true,1.0,table.concat(
+            fun.totable(
+                fun.map(function(a) return a.addr end,
+                    fun.filter(function(a) return a.addr and a.addr ~= '' end,
+                        from))),
+            ',')
+      end
+    end
+    return false
+  end,
+  score = 9.0,
+  group = 'headers',
+  description = 'Multiple addresses in From'
+}
+
 rspamd_config.MV_CASE = {
   callback = function (task)
     local mv = task:get_header('Mime-Version', true)
