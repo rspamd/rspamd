@@ -3463,7 +3463,7 @@ static int
 lua_csession_send_string (lua_State *L)
 {
 	struct rspamd_http_connection_entry *c = lua_check_controller_entry (L, 1);
-	const gchar *str = lua_tostring (L, 3);
+	const gchar *str = lua_tostring (L, 2);
 
 	if (c) {
 		rspamd_controller_send_string (c, str);

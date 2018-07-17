@@ -449,7 +449,14 @@ rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
 	msg->date = time (NULL);
 	msg->code = 200;
 	msg->status = rspamd_fstring_new_init ("OK", 2);
-	reply = rspamd_fstring_new_init (str, strlen (str));
+
+	if (str) {
+		reply = rspamd_fstring_new_init (str, strlen (str));
+	}
+	else {
+		reply = rspamd_fstring_new_init ("null", 4);
+	}
+
 	rspamd_http_message_set_body_from_fstring_steal (msg,
 			rspamd_controller_maybe_compress (entry, reply, msg));
 	rspamd_http_connection_reset (entry->conn);
