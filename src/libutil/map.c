@@ -1922,7 +1922,8 @@ rspamd_map_watch (struct rspamd_config *cfg,
 
 			if (map->poll_timeout >= cfg->map_timeout &&
 					cfg->map_file_watch_multiplier < 1.0) {
-				map->poll_timeout = map->poll_timeout * cfg->map_file_watch_multiplier;
+				map->poll_timeout =
+						map->poll_timeout * cfg->map_file_watch_multiplier;
 			}
 		}
 
@@ -2290,7 +2291,7 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 		goto err;
 	}
 
-	if (!bk->is_fallback && bk->protocol != MAP_PROTO_FILE) {
+	if (bk->is_fallback && bk->protocol != MAP_PROTO_FILE) {
 		msg_err_config ("fallback backend must be file for %s", bk->uri);
 
 		goto err;
