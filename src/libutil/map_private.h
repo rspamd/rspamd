@@ -88,6 +88,7 @@ struct rspamd_map_backend {
 	enum fetch_proto protocol;
 	gboolean is_signed;
 	gboolean is_compressed;
+	gboolean is_fallback;
 	guint32 id;
 	struct rspamd_cryptobox_pubkey *trusted_pubkey;
 	union rspamd_map_backend_data data;
@@ -115,6 +116,7 @@ struct rspamd_map {
 	struct rspamd_dns_resolver *r;
 	struct rspamd_config *cfg;
 	GPtrArray *backends;
+	struct rspamd_map_backend *fallback_backend;
 	map_cb_t read_callback;
 	map_fin_cb_t fin_callback;
 	map_dtor_t dtor;

@@ -1945,7 +1945,10 @@ rspamd_map_preload (struct rspamd_config *cfg)
 				if (bk->protocol == MAP_PROTO_HTTP ||
 						bk->protocol == MAP_PROTO_HTTPS) {
 					if (!rspamd_map_has_http_cached_file (map, bk)) {
-						map_ok = FALSE;
+
+						if (!map->fallback_backend) {
+							map_ok = FALSE;
+						}
 						break;
 					}
 					else {
@@ -1987,8 +1990,22 @@ rspamd_map_preload (struct rspamd_config *cfg)
 						 bk->protocol == MAP_PROTO_HTTPS) {
 					if (!rspamd_map_read_http_cached_file (map, bk, bk->data.hd,
 							&fake_cbd.cbdata)) {
-						succeed = FALSE;
-						break;
+
+						if (map->fallback_backend) {
+							/* Try fallback */
+							g_assert (map->fallback_backend->protocol ==
+									  MAP_PROTO_FILE);
+							if (!read_map_file (map,
+									map->fallback_backend->data.fd,
+									map->fallback_backend, &fake_cbd)) {
+								succeed = FALSE;
+								break;
+							}
+						}
+						else {
+							succeed = FALSE;
+							break;
+						}
 					}
 				}
 				else {
@@ -2053,6 +2070,10 @@ rspamd_map_remove_all (struct rspamd_config *cfg)
 			bk = g_ptr_array_index (map->backends, i);
 			MAP_RELEASE (bk, "rspamd_map_backend");
 		}
+
+		if (map->fallback_backend) {
+			MAP_RELEASE (map->fallback_backend, "rspamd_map_backend");
+		}
 	}
 
 	g_list_free (cfg->maps);
@@ -2070,6 +2091,7 @@ rspamd_map_check_proto (struct rspamd_config *cfg,
 
 	end = pos + strlen (pos);
 
+	/* Static check */
 	if (g_ascii_strcasecmp (pos, "static") == 0) {
 		bk->protocol = MAP_PROTO_STATIC;
 		bk->uri = g_strdup (pos);
@@ -2084,46 +2106,53 @@ rspamd_map_check_proto (struct rspamd_config *cfg,
 		return pos + 4;
 	}
 
-	if (g_ascii_strncasecmp (pos, "sign+", sizeof ("sign+") - 1) == 0) {
-		bk->is_signed = TRUE;
-		pos += sizeof ("sign+") - 1;
-	}
-
-	if (g_ascii_strncasecmp (pos, "key=", sizeof ("key=") - 1) == 0) {
-		pos += sizeof ("key=") - 1;
-		end_key = memchr (pos, '+', end - pos);
-
-		if (end_key != NULL) {
-			bk->trusted_pubkey = rspamd_pubkey_from_base32 (pos, end_key - pos,
-					RSPAMD_KEYPAIR_SIGN, RSPAMD_CRYPTOBOX_MODE_25519);
-
-			if (bk->trusted_pubkey == NULL) {
-				msg_err_config ("cannot read pubkey from map: %s",
-						map_line);
-				return NULL;
-			}
-			pos = end_key + 1;
+	for (;;) {
+		if (g_ascii_strncasecmp (pos, "sign+", sizeof ("sign+") - 1) == 0) {
+			bk->is_signed = TRUE;
+			pos += sizeof ("sign+") - 1;
 		}
-		else if (end - pos > 64) {
-			/* Try hex encoding */
-			bk->trusted_pubkey = rspamd_pubkey_from_hex (pos, 64,
-					RSPAMD_KEYPAIR_SIGN, RSPAMD_CRYPTOBOX_MODE_25519);
+		else if (g_ascii_strncasecmp (pos, "fallback+", sizeof ("fallback+") - 1) == 0) {
+			bk->is_fallback = TRUE;
+			pos += sizeof ("fallback+") - 1;
+		}
+		else if (g_ascii_strncasecmp (pos, "key=", sizeof ("key=") - 1) == 0) {
+			pos += sizeof ("key=") - 1;
+			end_key = memchr (pos, '+', end - pos);
 
-			if (bk->trusted_pubkey == NULL) {
+			if (end_key != NULL) {
+				bk->trusted_pubkey = rspamd_pubkey_from_base32 (pos, end_key - pos,
+						RSPAMD_KEYPAIR_SIGN, RSPAMD_CRYPTOBOX_MODE_25519);
+
+				if (bk->trusted_pubkey == NULL) {
+					msg_err_config ("cannot read pubkey from map: %s",
+							map_line);
+					return NULL;
+				}
+				pos = end_key + 1;
+			} else if (end - pos > 64) {
+				/* Try hex encoding */
+				bk->trusted_pubkey = rspamd_pubkey_from_hex (pos, 64,
+						RSPAMD_KEYPAIR_SIGN, RSPAMD_CRYPTOBOX_MODE_25519);
+
+				if (bk->trusted_pubkey == NULL) {
+					msg_err_config ("cannot read pubkey from map: %s",
+							map_line);
+					return NULL;
+				}
+				pos += 64;
+			} else {
 				msg_err_config ("cannot read pubkey from map: %s",
 						map_line);
 				return NULL;
 			}
-			pos += 64;
+
+			if (*pos == '+' || *pos == ':') {
+				pos++;
+			}
 		}
 		else {
-			msg_err_config ("cannot read pubkey from map: %s",
-					map_line);
-			return NULL;
-		}
-
-		if (*pos == '+' || *pos == ':') {
-			pos ++;
+			/* No known flags */
+			break;
 		}
 	}
 
@@ -2156,7 +2185,6 @@ rspamd_map_check_proto (struct rspamd_config *cfg,
 		return NULL;
 	}
 
-
 	return pos;
 }
 
@@ -2171,6 +2199,9 @@ rspamd_map_is_map (const gchar *map_line)
 		ret = TRUE;
 	}
 	else if (g_ascii_strncasecmp (map_line, "sign+", sizeof ("sign+") - 1) == 0) {
+		ret = TRUE;
+	}
+	else if (g_ascii_strncasecmp (map_line, "fallback+", sizeof ("fallback+") - 1) == 0) {
 		ret = TRUE;
 	}
 	else if (g_ascii_strncasecmp (map_line, "file://", sizeof ("file://") - 1) == 0) {
@@ -2244,6 +2275,12 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 	REF_INIT_RETAIN (bk, rspamd_map_backend_dtor);
 
 	if (!rspamd_map_check_proto (cfg, map_line, bk)) {
+		goto err;
+	}
+
+	if (!bk->is_fallback && bk->protocol != MAP_PROTO_FILE) {
+		msg_err_config ("fallback backend must be file for %s", bk->uri);
+
 		goto err;
 	}
 
@@ -2406,6 +2443,13 @@ rspamd_map_add (struct rspamd_config *cfg,
 		return NULL;
 	}
 
+	if (bk->is_fallback) {
+		msg_err_config ("cannot add map with fallback only backend: %s", bk->uri);
+		REF_RELEASE (bk);
+
+		return NULL;
+	}
+
 	map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_map));
 	map->read_callback = read_callback;
 	map->fin_callback = fin_callback;
@@ -2439,6 +2483,22 @@ rspamd_map_add (struct rspamd_config *cfg,
 	cfg->maps = g_list_prepend (cfg->maps, map);
 
 	return map;
+}
+
+static inline void
+rspamd_map_add_backend (struct rspamd_map *map, struct rspamd_map_backend *bk)
+{
+	if (bk->is_fallback) {
+		if (map->fallback_backend) {
+			msg_warn_map ("redefining fallback backend from %s to %s",
+					map->fallback_backend->uri, bk->uri);
+		}
+
+		map->fallback_backend = bk;
+	}
+	else {
+		g_ptr_array_add (map->backends, bk);
+	}
 }
 
 struct rspamd_map*
