@@ -2491,10 +2491,6 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 				bk = rspamd_map_parse_backend (cfg, ucl_object_tostring (cur));
 
 				if (bk != NULL) {
-					if (bk->protocol == MAP_PROTO_FILE) {
-						map->poll_timeout = (map->poll_timeout *
-								cfg->map_file_watch_multiplier);
-					}
 					g_ptr_array_add (map->backends, bk);
 
 					if (!map->name) {
@@ -2548,9 +2544,6 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 					bk = rspamd_map_parse_backend (cfg, ucl_object_tostring (cur));
 
 					if (bk != NULL) {
-						if (bk->protocol == MAP_PROTO_FILE) {
-							map->poll_timeout = (map->poll_timeout * cfg->map_file_watch_multiplier);
-						}
 						g_ptr_array_add (map->backends, bk);
 
 						if (!map->name) {
@@ -2578,9 +2571,6 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 			bk = rspamd_map_parse_backend (cfg, ucl_object_tostring (elt));
 
 			if (bk != NULL) {
-				if (bk->protocol == MAP_PROTO_FILE) {
-					map->poll_timeout = (map->poll_timeout * cfg->map_file_watch_multiplier);
-				}
 				g_ptr_array_add (map->backends, bk);
 
 				if (!map->name) {
@@ -2594,59 +2584,69 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 			msg_err_config ("map has no urls to be loaded: no valid backends");
 			goto err;
 		}
-
-		PTR_ARRAY_FOREACH (map->backends, i, bk) {
-			if (bk->protocol == MAP_PROTO_STATIC) {
-				GString *map_data;
-				/* We need data field in ucl */
-				elt = ucl_object_lookup (obj, "data");
-
-				if (elt == NULL) {
-					msg_err_config ("map has static backend but no `data` field");
-					goto err;
-				}
-
-
-				if (ucl_object_type (elt) == UCL_STRING) {
-					map_data = g_string_sized_new (32);
-
-					if (rspamd_map_add_static_string (cfg, elt, map_data)) {
-						bk->data.sd->data = map_data->str;
-						bk->data.sd->len = map_data->len;
-						g_string_free (map_data, FALSE);
-					}
-					else {
-						g_string_free (map_data, TRUE);
-						msg_err_config ("map has static backend with invalid `data` field");
-						goto err;
-					}
-				}
-				else if (ucl_object_type (elt) == UCL_ARRAY) {
-					map_data = g_string_sized_new (32);
-					it = ucl_object_iterate_new (elt);
-
-					while ((cur = ucl_object_iterate_safe (it, true))) {
-						if (!rspamd_map_add_static_string (cfg, cur, map_data)) {
-							g_string_free (map_data, TRUE);
-							msg_err_config ("map has static backend with invalid "
-											"`data` field");
-							ucl_object_iterate_free (it);
-							goto err;
-						}
-					}
-
-					ucl_object_iterate_free (it);
-					bk->data.sd->data = map_data->str;
-					bk->data.sd->len = map_data->len;
-					g_string_free (map_data, FALSE);
-				}
-			}
-		}
 	}
 	else {
 		msg_err_config ("map has invalid type for value: %s",
 				ucl_object_type_to_string (ucl_object_type (obj)));
 		goto err;
+	}
+
+	gboolean all_local = TRUE;
+
+	PTR_ARRAY_FOREACH (map->backends, i, bk) {
+		if (bk->protocol == MAP_PROTO_STATIC) {
+			GString *map_data;
+			/* We need data field in ucl */
+			elt = ucl_object_lookup (obj, "data");
+
+			if (elt == NULL) {
+				msg_err_config ("map has static backend but no `data` field");
+				goto err;
+			}
+
+
+			if (ucl_object_type (elt) == UCL_STRING) {
+				map_data = g_string_sized_new (32);
+
+				if (rspamd_map_add_static_string (cfg, elt, map_data)) {
+					bk->data.sd->data = map_data->str;
+					bk->data.sd->len = map_data->len;
+					g_string_free (map_data, FALSE);
+				}
+				else {
+					g_string_free (map_data, TRUE);
+					msg_err_config ("map has static backend with invalid `data` field");
+					goto err;
+				}
+			}
+			else if (ucl_object_type (elt) == UCL_ARRAY) {
+				map_data = g_string_sized_new (32);
+				it = ucl_object_iterate_new (elt);
+
+				while ((cur = ucl_object_iterate_safe (it, true))) {
+					if (!rspamd_map_add_static_string (cfg, cur, map_data)) {
+						g_string_free (map_data, TRUE);
+						msg_err_config ("map has static backend with invalid "
+										"`data` field");
+						ucl_object_iterate_free (it);
+						goto err;
+					}
+				}
+
+				ucl_object_iterate_free (it);
+				bk->data.sd->data = map_data->str;
+				bk->data.sd->len = map_data->len;
+				g_string_free (map_data, FALSE);
+			}
+		}
+		else if (bk->protocol != MAP_PROTO_FILE) {
+			all_local = FALSE;
+		}
+	}
+
+	if (all_local) {
+		map->poll_timeout = (map->poll_timeout *
+							 cfg->map_file_watch_multiplier);
 	}
 
 	rspamd_map_calculate_hash (map);
