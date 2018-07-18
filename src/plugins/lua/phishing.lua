@@ -228,25 +228,38 @@ local function phishing_map(mapname, phishmap, id)
     else
       xd[1] = opts[mapname]
     end
+
+    local found_maps = {}
+
     for _,d in ipairs(xd) do
       local s = string.find(d, ':[^:]+$')
       if s then
         local sym = string.sub(d, s + 1, -1)
         local map = string.sub(d, 1, s - 1)
-        rspamd_config:register_virtual_symbol(sym, 1, id)
-        local rmap = rspamd_config:add_map ({
-          type = 'set',
-          url = map,
-          description = 'Phishing ' .. mapname .. ' map',
-        })
-        if rmap then
-          local rule = {symbol = sym, map = rmap}
-          table.insert(phishmap, rule)
+
+        if found_maps[sym] then
+          table.insert(found_maps[sym], map)
         else
-          rspamd_logger.infox(rspamd_config, 'cannot add map: ' .. map .. ' for symbol: ' .. sym)
+          found_maps[sym] = {map}
         end
       else
         rspamd_logger.infox(rspamd_config, mapname .. ' option must be in format <map>:<symbol>')
+      end
+    end
+
+    for sym,urls in pairs(found_maps) do
+      local rmap = rspamd_config:add_map ({
+        type = 'set',
+        url = urls,
+        description = 'Phishing ' .. mapname .. ' map',
+      })
+      if rmap then
+        rspamd_config:register_virtual_symbol(sym, 1, id)
+        local rule = {symbol = sym, map = rmap}
+        table.insert(phishmap, rule)
+      else
+        rspamd_logger.infox(rspamd_config, 'cannot add map: %s for symbol: %s',
+            table.concat(urls, ";"), sym)
       end
     end
   end
