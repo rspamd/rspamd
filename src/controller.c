@@ -1351,7 +1351,7 @@ rspamd_controller_handle_legacy_history (
 	struct roll_history_row *row, *copied_rows;
 	guint i, rows_proc, row_num;
 	struct tm tm;
-	gchar timebuf[32];
+	gchar timebuf[32], **syms;
 	ucl_object_t *top, *obj;
 
 	top = ucl_object_typed_new (UCL_ARRAY);
@@ -1405,15 +1405,34 @@ rspamd_controller_handle_legacy_history (
 						ucl_object_fromdouble (0.0), "required_score", 0, false);
 			}
 
-			ucl_object_insert_key (obj, ucl_object_fromstring (
-					row->symbols),		  "symbols",		0, false);
-			ucl_object_insert_key (obj,	   ucl_object_fromint (
-					row->len),			  "size",			0, false);
-			ucl_object_insert_key (obj,	   ucl_object_fromdouble (
-					row->scan_time),	  "scan_time",		0, false);
+			syms = g_strsplit_set (row->symbols, ",", -1);
+
+			if (syms) {
+				guint nelts = g_strv_length (syms);
+				ucl_object_t *syms_obj = ucl_object_typed_new (UCL_OBJECT);
+				ucl_object_reserve (syms_obj, nelts);
+
+				for (guint j = 0; j < nelts; j++) {
+					ucl_object_t *cur = ucl_object_typed_new (UCL_OBJECT);
+
+					ucl_object_insert_key (cur, ucl_object_fromdouble (0.0),
+							"score", 0, false);
+					ucl_object_insert_key (syms_obj, cur, syms[j], 0, true);
+				}
+
+				ucl_object_insert_key (obj, syms_obj, "symbols", 0, false);
+				g_strfreev (syms);
+			}
+
+			ucl_object_insert_key (obj, ucl_object_fromint (row->len),
+					"size", 0, false);
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (row->scan_time),
+					"scan_time", 0, false);
+
 			if (row->user[0] != '\0') {
-				ucl_object_insert_key (obj, ucl_object_fromstring (
-						row->user), "user", 0, false);
+				ucl_object_insert_key (obj, ucl_object_fromstring (row->user),
+						"user", 0, false);
 			}
 			if (row->from_addr[0] != '\0') {
 				ucl_object_insert_key (obj, ucl_object_fromstring (
