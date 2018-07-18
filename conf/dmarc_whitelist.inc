@@ -40,6 +40,7 @@ megafon.ru
 mercadolibre.com.ar
 mercadolivre.com.br
 messenger.com
+mos.ru
 mvideo.ru
 neobux.com
 netflix.com

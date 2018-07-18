@@ -130,6 +130,7 @@ messenger.com
 microsoft.com
 microsoftonline.com
 moikrug.ru
+mos.ru
 mts.ru
 neobux.com
 netflix.com
