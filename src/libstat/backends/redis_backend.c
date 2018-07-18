@@ -1677,6 +1677,9 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 		else {
 			learned_key = "learns_ham";
 		}
+
+		redisAsyncCommand (rt->redis, NULL, NULL, "HSET %s version 2",
+				rt->redis_object_expanded);
 	}
 
 	addr = rspamd_upstream_addr (up);
