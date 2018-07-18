@@ -1405,7 +1405,7 @@ rspamd_controller_handle_legacy_history (
 						ucl_object_fromdouble (0.0), "required_score", 0, false);
 			}
 
-			syms = g_strsplit_set (row->symbols, ",", -1);
+			syms = g_strsplit_set (row->symbols, ", ", -1);
 
 			if (syms) {
 				guint nelts = g_strv_length (syms);
@@ -1413,6 +1413,13 @@ rspamd_controller_handle_legacy_history (
 				ucl_object_reserve (syms_obj, nelts);
 
 				for (guint j = 0; j < nelts; j++) {
+					g_strstrip (syms[j]);
+
+					if (strlen (syms[j]) == 0) {
+						/* Empty garbadge */
+						continue;
+					}
+
 					ucl_object_t *cur = ucl_object_typed_new (UCL_OBJECT);
 
 					ucl_object_insert_key (cur, ucl_object_fromdouble (0.0),
