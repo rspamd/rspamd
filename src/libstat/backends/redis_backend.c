@@ -25,6 +25,12 @@
 #include "adapters/libevent.h"
 #include "ref.h"
 
+#define msg_debug_stat_redis(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_stat_redis_log_id, "stat_redis", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
+INIT_LOG_MODULE(stat_redis)
 
 #define REDIS_CTX(p) (struct redis_stat_ctx *)(p)
 #define REDIS_RUNTIME(p) (struct redis_stat_runtime *)(p)
@@ -1084,7 +1090,7 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 			}
 
 			rt->learned = val;
-			msg_debug_task ("connected to redis server, tokens learned for %s: %uL",
+			msg_debug_stat_redis ("connected to redis server, tokens learned for %s: %uL",
 					rt->redis_object_expanded, rt->learned);
 			rspamd_upstream_ok (rt->selected);
 		}
@@ -1169,7 +1175,7 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 						rspamd_redis_type_to_string (reply->type));
 			}
 
-			msg_debug_task_check ("received tokens for %s: %d processed, %d found",
+			msg_debug_stat_redis ("received tokens for %s: %d processed, %d found",
 					rt->redis_object_expanded, processed, found);
 			rspamd_upstream_ok (rt->selected);
 		}
