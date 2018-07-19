@@ -1683,9 +1683,6 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 		else {
 			learned_key = "learns_ham";
 		}
-
-		redisAsyncCommand (rt->redis, NULL, NULL, "HSET %s version 2",
-				rt->redis_object_expanded);
 	}
 
 	addr = rspamd_upstream_addr (up);
@@ -1709,6 +1706,11 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	 */
 	redisAsyncCommand (rt->redis, NULL, NULL, "SADD %s_keys %s",
 			rt->stcf->symbol, rt->redis_object_expanded);
+
+	if (rt->ctx->new_schema) {
+		redisAsyncCommand (rt->redis, NULL, NULL, "HSET %s version 2",
+				rt->redis_object_expanded);
+	}
 
 	if (rt->stcf->clcf->flags & RSPAMD_FLAG_CLASSIFIER_INTEGER) {
 		redis_cmd = "HINCRBY";
