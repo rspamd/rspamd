@@ -43,11 +43,15 @@ local settings = {
   kibana_file = rspamd_paths['PLUGINSDIR'] ..'/elastic/kibana.json',
   key_prefix = 'elastic-',
   expire = 3600,
+  timeout = 5.0,
   failover = false,
   import_kibana = false,
   use_https = false,
   use_gzip = true,
   allow_local = false,
+  user = nil,
+  password = nil,
+  no_ssl_verify = false,
 }
 
 local function read_file(path)
@@ -108,7 +112,11 @@ local function elastic_send_data(task)
     task = task,
     method = 'post',
     gzip = settings.use_gzip,
-    callback = http_index_data_callback
+    no_ssl_verify = settings.no_ssl_verify,
+    user = settings.user,
+    password = settings.password,
+    callback = http_index_data_callback,
+    timeout = settings.timeout,
   })
 
 end
@@ -253,7 +261,11 @@ local function check_elastic_server(cfg, ev_base, _)
     ev_base = ev_base,
     config = cfg,
     method = 'get',
-    callback = http_callback
+    callback = http_callback,
+    no_ssl_verify = settings.no_ssl_verify,
+    user = settings.user,
+    password = settings.password,
+    timeout = settings.timeout,
   })
 end
 
@@ -308,7 +320,11 @@ local function initial_setup(cfg, ev_base, worker)
           body = table.concat(tbl, "\n"),
           method = 'post',
           gzip = settings.use_gzip,
-          callback = kibana_template_callback
+          callback = kibana_template_callback,
+          no_ssl_verify = settings.no_ssl_verify,
+          user = settings.user,
+          password = settings.password,
+          timeout = settings.timeout,
         })
       else
         rspamd_logger.infox(rspamd_config, 'kibana template file %s not found', settings['kibana_file'])
@@ -347,6 +363,10 @@ local function initial_setup(cfg, ev_base, worker)
       gzip = settings.use_gzip,
       body = ucl.to_format(template, 'json-compact'),
       method = 'put',
+      no_ssl_verify = settings.no_ssl_verify,
+      user = settings.user,
+      password = settings.password,
+      timeout = settings.timeout,
     })
     -- create template mappings if not exist
     local template_url = connect_prefix .. ip_addr ..'/_template/rspamd'
@@ -372,6 +392,10 @@ local function initial_setup(cfg, ev_base, worker)
           },
           gzip = settings.use_gzip,
           callback = http_template_put_callback,
+          no_ssl_verify = settings.no_ssl_verify,
+          user = settings.user,
+          password = settings.password,
+          timeout = settings.timeout,
         })
       else
         push_kibana_template()
@@ -383,7 +407,11 @@ local function initial_setup(cfg, ev_base, worker)
       ev_base = ev_base,
       config = cfg,
       method = 'head',
-      callback = http_template_exist_callback
+      callback = http_template_exist_callback,
+      no_ssl_verify = settings.no_ssl_verify,
+      user = settings.user,
+      password = settings.password,
+      timeout = settings.timeout,
     })
 
   end

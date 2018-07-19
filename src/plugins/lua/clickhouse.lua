@@ -63,6 +63,9 @@ local settings = {
   use_https = false,
   use_gzip = true,
   allow_local = false,
+  user = nil,
+  password = nil,
+  no_ssl_verify = false,
 }
 
 local clickhouse_schema = {
@@ -304,6 +307,9 @@ local function clickhouse_send_data(task)
       gzip = settings.use_gzip,
       mime_type = 'text/plain',
       timeout = settings['timeout'],
+      no_ssl_verify = settings.no_ssl_verify,
+      user = settings.user,
+      password = settings.password,
     }) then
      rspamd_logger.errx(task, "cannot send data to clickhouse server %s: cannot make request",
         settings['server'])
@@ -318,6 +324,9 @@ local function clickhouse_send_data(task)
       callback = gen_http_cb('attachments data', #attachment_rows),
       mime_type = 'text/plain',
       timeout = settings['timeout'],
+      no_ssl_verify = settings.no_ssl_verify,
+      user = settings.user,
+      password = settings.password,
     }) then
       rspamd_logger.errx(task, "cannot send attachments to clickhouse server %s: cannot make request",
         settings['server'])
@@ -332,6 +341,9 @@ local function clickhouse_send_data(task)
       callback = gen_http_cb('urls data', #urls_rows),
       mime_type = 'text/plain',
       timeout = settings['timeout'],
+      no_ssl_verify = settings.no_ssl_verify,
+      user = settings.user,
+      password = settings.password,
     }) then
       rspamd_logger.errx(task, "cannot send urls to clickhouse server %s: cannot make request",
         settings['server'])
@@ -346,6 +358,9 @@ local function clickhouse_send_data(task)
       callback = gen_http_cb('emails data', #emails_rows),
       mime_type = 'text/plain',
       timeout = settings['timeout'],
+      no_ssl_verify = settings.no_ssl_verify,
+      user = settings.user,
+      password = settings.password,
     }) then
       rspamd_logger.errx(task, "cannot send emails to clickhouse server %s: cannot make request",
           settings['server'])
@@ -360,6 +375,9 @@ local function clickhouse_send_data(task)
       callback = gen_http_cb('asn data', #asn_rows),
       mime_type = 'text/plain',
       timeout = settings['timeout'],
+      no_ssl_verify = settings.no_ssl_verify,
+      user = settings.user,
+      password = settings.password,
     }) then
       rspamd_logger.errx(task, "cannot send asn info to clickhouse server %s: cannot make request",
         settings['server'])
@@ -375,6 +393,9 @@ local function clickhouse_send_data(task)
       callback = gen_http_cb('symbols data', #symbols_rows),
       mime_type = 'text/plain',
       timeout = settings['timeout'],
+      no_ssl_verify = settings.no_ssl_verify,
+      user = settings.user,
+      password = settings.password,
     }) then
       rspamd_logger.errx(task, "cannot send symbols info to clickhouse server %s: cannot make request",
         settings['server'])
@@ -391,6 +412,9 @@ local function clickhouse_send_data(task)
         callback = gen_http_cb('domain specific data ('..k..')', #specific),
         mime_type = 'text/plain',
         timeout = settings['timeout'],
+        no_ssl_verify = settings.no_ssl_verify,
+        user = settings.user,
+        password = settings.password,
       }) then
         rspamd_logger.errx(task, "cannot send data for domain %s to clickhouse server %s: cannot make request",
           k, settings['server'])
@@ -784,6 +808,9 @@ if opts then
                 callback = http_cb,
                 mime_type = 'text/plain',
                 timeout = settings['timeout'],
+                no_ssl_verify = settings.no_ssl_verify,
+                user = settings.user,
+                password = settings.password,
               }) then
                 rspamd_logger.errx(rspamd_config, "cannot create table %s in clickhouse server %s: cannot make request",
                     elt, ip_addr)
