@@ -632,6 +632,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 			sign = 1;
 			hex = 0;
 			b32 = 0;
+			b64 = 0;
 			bytes = 0;
 			humanize = 0;
 			frac_width = 0;
