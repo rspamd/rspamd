@@ -400,7 +400,7 @@ local function phishtank_json_cb(string)
 
   if not res then
     valid = false
-    rspamd_logger.warnx(phishtank_hash, 'cannot parse openphish map: ' .. err)
+    rspamd_logger.warnx(phishtank_hash, 'cannot parse phishtank map: ' .. err)
   else
     local obj = parser:get_object()
 
