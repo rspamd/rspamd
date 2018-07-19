@@ -323,6 +323,7 @@ struct rspamd_external_libs_ctx {
 	struct rspamd_cryptobox_library_ctx *crypto_ctx;
 	struct ottery_config *ottery_cfg;
 	SSL_CTX *ssl_ctx;
+	SSL_CTX *ssl_ctx_noverify;
 	struct zstd_dictionary *in_dict;
 	struct zstd_dictionary *out_dict;
 	void *out_zstream;

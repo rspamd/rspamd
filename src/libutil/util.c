@@ -2094,6 +2094,9 @@ rspamd_init_libs (void)
 #endif
 
 	SSL_CTX_set_options (ctx->ssl_ctx, ssl_options);
+	ctx->ssl_ctx_noverify = SSL_CTX_new (SSLv23_method ());
+	SSL_CTX_set_verify (ctx->ssl_ctx_noverify, SSL_VERIFY_NONE, NULL);
+	SSL_CTX_set_options (ctx->ssl_ctx_noverify, ssl_options);
 #endif
 	rspamd_random_seed_fast ();
 
@@ -2308,6 +2311,7 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 		EVP_cleanup ();
 		ERR_free_strings ();
 		SSL_CTX_free (ctx->ssl_ctx);
+		SSL_CTX_free (ctx->ssl_ctx_noverify);
 #endif
 		rspamd_inet_library_destroy ();
 		rspamd_free_zstd_dictionary (ctx->in_dict);

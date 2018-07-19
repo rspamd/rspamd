@@ -248,7 +248,8 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 				RSPAMD_HTTP_CLIENT_SIMPLE,
 				RSPAMD_HTTP_CLIENT,
 				NULL,
-				cbd->cfg->libs_ctx->ssl_ctx);
+				(cbd->flags & RSPAMD_LUA_HTTP_FLAG_NOVERIFY) ?
+				cbd->cfg->libs_ctx->ssl_ctx_noverify : cbd->cfg->libs_ctx->ssl_ctx);
 	}
 	else {
 		cbd->conn = rspamd_http_connection_new (NULL,
