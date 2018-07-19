@@ -70,7 +70,7 @@ define(["jquery", "footable", "humanize"],
                         if (!sym.name) {
                             sym.name = key;
                         }
-                        sym.name = EscapeHTML(key);
+                        sym.name = EscapeHTML(sym.name);
                         if (sym.description) {
                             sym.description = EscapeHTML(sym.description);
                         }
@@ -218,6 +218,10 @@ define(["jquery", "footable", "humanize"],
         function process_history_legacy(data) {
             var items = [];
 
+            var compare = function (e1, e2) {
+                return e1.name.localeCompare(e2.name);
+            };
+
             $.each(data, function (i, item) {
                 item.time = unix_time_format(item.unix_time);
                 preprocess_item(item);
@@ -227,6 +231,13 @@ define(["jquery", "footable", "humanize"],
                     },
                     value: item.scan_time
                 };
+                item.symbols = Object.keys(item.symbols)
+                    .map(function (key) {
+                        return item.symbols[key];
+                    })
+                    .sort(compare)
+                    .map(function (e) { return e.name; })
+                    .join(", ");
                 item.time = {
                     value: unix_time_format(item.unix_time),
                     options: {
