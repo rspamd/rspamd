@@ -597,7 +597,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 	glong written = 0, wr, slen;
 	gint64 i64;
 	guint64 ui64;
-	guint width, sign, hex, humanize, bytes, frac_width, b32;
+	guint width, sign, hex, humanize, bytes, frac_width, b32, b64;
 	rspamd_fstring_t *v;
 	rspamd_ftok_t *tok;
 	GString *gs;
@@ -667,6 +667,11 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 					continue;
 				case 'b':
 					b32 = 1;
+					sign = 0;
+					fmt++;
+					continue;
+				case 'B':
+					b64 = 1;
 					sign = 0;
 					fmt++;
 					continue;
@@ -844,6 +849,30 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 					fmt++;
 					buf_start = fmt;
 
+				}
+				else if (G_UNLIKELY (b64)) {
+					gchar *b64buf;
+					gsize olen = 0;
+
+					if (G_UNLIKELY (slen == -1)) {
+						if (G_LIKELY (width != 0)) {
+							slen = width;
+						}
+						else {
+							/* NULL terminated string */
+							slen = strlen (p);
+						}
+					}
+
+					b64buf = rspamd_encode_base64 (p, slen, 0, &olen);
+
+					if (b64buf) {
+						RSPAMD_PRINTF_APPEND (b64buf, olen);
+						g_free (b64buf);
+					}
+					else {
+						RSPAMD_PRINTF_APPEND ("(NULL)", sizeof ("(NULL)") - 1);
+					}
 				}
 				else {
 					if (slen == -1) {
