@@ -129,6 +129,8 @@ define(["jquery", "footable", "humanize"],
                     return e1.name.localeCompare(e2.name);
                 };
 
+            $("#selSymOrder, label[for='selSymOrder']").show();
+
             $.each(data.rows,
                 function (i, item) {
                     function more(p) {
@@ -221,6 +223,8 @@ define(["jquery", "footable", "humanize"],
             var compare = function (e1, e2) {
                 return e1.name.localeCompare(e2.name);
             };
+
+            $("#selSymOrder, label[for='selSymOrder']").hide();
 
             $.each(data, function (i, item) {
                 item.time = unix_time_format(item.unix_time);
