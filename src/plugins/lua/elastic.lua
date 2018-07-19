@@ -89,9 +89,9 @@ local function elastic_send_data(task)
         h:update(bulk_json)
         local key = settings['key_prefix'] ..es_index..":".. h:base32():sub(1, 20)
         local data = util.zstd_compress(bulk_json)
-        local function redis_set_cb(err)
-          if err ~=nil then
-            rspamd_logger.errx(task, 'redis_set_cb received error: %1', err)
+        local function redis_set_cb(rerr)
+          if rerr ~=nil then
+            rspamd_logger.errx(task, 'redis_set_cb received error: %1', rerr)
           end
         end
         rspamd_redis.make_request(task,
@@ -285,10 +285,10 @@ local function initial_setup(cfg, ev_base, worker)
       local kibana_mappings = read_file(settings['kibana_file'])
       if kibana_mappings then
         local parser = ucl.parser()
-        local res,err = parser:parse_string(kibana_mappings)
+        local res,parser_err = parser:parse_string(kibana_mappings)
         if not res then
           rspamd_logger.infox(rspamd_config, 'kibana template cannot be parsed: %s',
-              err)
+              parser_err)
           enabled = false
 
           return
