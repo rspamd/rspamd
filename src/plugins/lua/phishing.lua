@@ -325,7 +325,7 @@ local function generic_service_plain_cb(string)
 
   generic_service_data = new_data
   rspamd_logger.infox(generic_service_hash, "parsed %s elements from %s feed",
-    nelts, opts['generic_service_name'])
+    nelts, generic_service_name)
   pool:destroy()
 end
 
@@ -442,6 +442,9 @@ if opts then
     end
     if opts['generic_service_url'] then
       generic_service_map = opts['generic_service_url']
+    end
+    if opts['generic_service_name'] then
+      generic_service_name = opts['generic_service_name']
     end
 
     if opts['generic_service_enabled'] then
