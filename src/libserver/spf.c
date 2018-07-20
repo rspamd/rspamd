@@ -584,6 +584,10 @@ spf_process_txt_record (struct spf_record *rec, struct spf_resolved_element *res
 		LL_FOREACH (reply->entries, elt) {
 			if (start_spf_parse (rec, resolved, elt->content.txt.data)) {
 				ret = TRUE;
+				rspamd_mempool_set_variable (rec->task->task_pool,
+						RSPAMD_MEMPOOL_SPF_RECORD,
+						rspamd_mempool_strdup (rec->task->task_pool,
+								elt->content.txt.data), NULL);
 				break;
 			}
 		}
@@ -2023,6 +2027,7 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 	if (resolved) {
 		if (!spf_process_txt_record (rec, resolved, reply)) {
 			resolved = g_ptr_array_index(rec->resolved, 0);
+
 			if (rec->resolved->len > 1) {
 				addr = g_ptr_array_index(resolved->elts, 0);
 				if ((reply->code == RDNS_RC_NOREC || reply->code == RDNS_RC_NXDOMAIN)
