@@ -576,6 +576,10 @@ spf_process_txt_record (struct spf_record *rec, struct spf_resolved_element *res
 		if (strncmp (elt->content.txt.data, "v=spf1", sizeof ("v=spf1") - 1)
 				== 0) {
 			selected = elt;
+			rspamd_mempool_set_variable (rec->task->task_pool,
+					RSPAMD_MEMPOOL_SPF_RECORD,
+					rspamd_mempool_strdup (rec->task->task_pool,
+							elt->content.txt.data), NULL);
 			break;
 		}
 	}
