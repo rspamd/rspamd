@@ -561,7 +561,7 @@ local function spf_reputation_filter(task, rule)
 
   local function tokens_cb(err, token, values)
     if values then
-      local score = generic_reputation_calc(token, rule, values)
+      local score = generic_reputation_calc(values, rule, 1.0)
 
       if math.abs(score) > 1e-3 then
         -- TODO: add description
