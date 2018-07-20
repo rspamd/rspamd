@@ -343,6 +343,8 @@ local function ip_reputation_init(rule)
       'map',
       'IP score whitelisted ASNs/countries')
   end
+
+  return true
 end
 
 local function ip_reputation_filter(task, rule)
@@ -731,7 +733,15 @@ local function reputation_dns_get_token(task, rule, token, continuation_cb)
 end
 
 local function reputation_redis_init(rule, cfg, ev_base, worker)
-  if not redis_params then
+  local our_redis_params = {}
+
+  if not lua_redis.try_load_redis_servers(rule.backend.config,
+      rspamd_config, our_redis_params) then
+    our_redis_params = redis_params
+  end
+  if not our_redis_params then
+    rspamd_logger.errx(rspamd_config, 'cannot init redis for reputation rule: %s',
+        rule)
     return false
   end
   -- Init scripts for buckets
@@ -762,7 +772,7 @@ end
   return result
 ]])
   rule.backend.script_get = lua_redis.add_redis_script(table.concat(redis_script_tbl, '\n'),
-      redis_params)
+      our_redis_params)
 
   redis_script_tbl = {}
   local redis_set_script_tpl = [[
@@ -799,7 +809,7 @@ redis.call('HSET', key, 'last', now)
   end
 
   rule.backend.script_set = lua_redis.add_redis_script(table.concat(redis_script_tbl, '\n'),
-      redis_params)
+      our_redis_params)
 
   return true
 end
@@ -817,6 +827,8 @@ local function reputation_redis_get_token(task, rule, token, continuation_cb)
             values[data[i]] = ndata
           end
         end
+        rspamd_logger.debugm(N, task, 'got values for key %s -> %s',
+            key, values)
         continuation_cb(nil, key, values)
       else
         rspamd_logger.errx(task, 'invalid type while getting reputation keys %s: %s',
@@ -829,6 +841,8 @@ local function reputation_redis_get_token(task, rule, token, continuation_cb)
         key, err)
       continuation_cb(err, key, nil)
     else
+      rspamd_logger.errx(task, 'got error while getting reputation keys %s: %s',
+          key, "unknown error")
       continuation_cb("unknown error", key, nil)
     end
   end
@@ -865,6 +879,8 @@ local function reputation_redis_set_token(task, rule, token, values, continuatio
     table.insert(args, k)
     table.insert(args, v)
   end
+  rspamd_logger.debugm(N, task, 'set values for key %s -> %s',
+      key, values)
   local ret = lua_redis.exec_redis_script(rule.backend.script_set,
       {task = task, is_write = true},
       redis_set_cb,
@@ -1031,7 +1047,7 @@ local function parse_rule(name, tbl)
   if rule.config.whitelisted_ip then
     rule.config.whitelisted_ip_map = lua_maps.rspamd_map_add_from_ucl(rule.whitelisted_ip,
       'radix',
-      'Reputation whiteliist for ' .. name)
+      'Reputation whitelist for ' .. name)
   end
 
   local symbol = name
@@ -1052,6 +1068,8 @@ local function parse_rule(name, tbl)
     if rule.selector.init then
       if not rule.selector.init(rule, cfg, ev_base, worker) then
         rule.enabled = false
+        rspamd_logger.errx(rspamd_config, 'Cannot init selector %s (backend %s) for symbol %s',
+            sel_type, bk_type, rule.symbol)
       else
         rule.enabled = true
       end
@@ -1059,9 +1077,16 @@ local function parse_rule(name, tbl)
     if rule.backend.init then
       if not rule.backend.init(rule, cfg, ev_base, worker) then
         rule.enabled = false
+        rspamd_logger.errx(rspamd_config, 'Cannot init backend (%s) for rule %s for symbol %s',
+            bk_type, sel_type, rule.symbol)
       else
         rule.enabled = true
       end
+    end
+
+    if rule.enabled then
+      rspamd_logger.infox(rspamd_config, 'Enable %s (%s backend) rule for symbol %s',
+          sel_type, bk_type, rule.symbol)
     end
   end)
 
@@ -1096,11 +1121,9 @@ local function parse_rule(name, tbl)
     }
   end
 
-  rspamd_logger.infox('Enable %s(%s backend) rule for symbol %s',
-      sel_type, bk_type, rule.symbol)
 end
 
-redis_params = rspamd_parse_redis_server('reputation')
+redis_params = lua_redis.parse_redis_server('reputation')
 local opts = rspamd_config:get_all_opt("reputation")
 
 -- Initialization part
