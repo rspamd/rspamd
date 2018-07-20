@@ -554,6 +554,11 @@ local function spf_reputation_filter(task, rule)
   -- Don't care about bad/missing spf
   if not spf_record or not spf_allow then return end
 
+  local cr = require "rspamd_cryptobox_hash"
+  local hkey = cr.create(spf_record):base32():sub(1, 32)
+
+  rspamd_logger.debugm(N, task, 'check spf record %s -> %s', spf_record, hkey)
+
   local function tokens_cb(err, token, values)
     if values then
       local score = generic_reputation_calc(token, rule, values)
@@ -565,7 +570,7 @@ local function spf_reputation_filter(task, rule)
     end
   end
 
-  rule.backend.get_token(task, rule, spf_record, tokens_cb)
+  rule.backend.get_token(task, rule, hkey, tokens_cb)
 end
 
 local function spf_reputation_idempotent(task, rule)
@@ -588,7 +593,12 @@ local function spf_reputation_idempotent(task, rule)
   end
 
   if need_set then
-    rule.backend.set_token(task, rule, spf_record, token)
+    local cr = require "rspamd_cryptobox_hash"
+    local hkey = cr.create(spf_record):base32():sub(1, 32)
+
+    rspamd_logger.debugm(N, task, 'set spf record %s -> %s = %s',
+        spf_record, hkey, token)
+    rule.backend.set_token(task, rule, hkey, token)
   end
 end
 
