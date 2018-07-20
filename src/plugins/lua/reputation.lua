@@ -543,10 +543,86 @@ local ip_selector = {
   idempotent = ip_reputation_idempotent -- used to set scores
 }
 
+-- SPF Selector functions
+
+local function spf_reputation_filter(task, rule)
+  local spf_record = task:get_mempool():get_variable('spf_record')
+  local spf_allow = task:has_symbol('R_SPF_ALLOW')
+
+  -- Don't care about bad/missing spf
+  if not spf_record or not spf_allow then return end
+
+  local function tokens_cb(err, token, values)
+    if values then
+      local score = generic_reputation_calc(token, rule, values)
+
+      if math.abs(score) > 1e-3 then
+        -- TODO: add description
+        task:insert_result(rule.symbol, score)
+      end
+    end
+  end
+
+  rule.backend.get_token(task, rule, spf_record, tokens_cb)
+end
+
+local function spf_reputation_idempotent(task, rule)
+  local action = task:get_metric_action()
+  local spf_record = task:get_mempool():get_variable('spf_record')
+  local spf_allow = task:has_symbol('R_SPF_ALLOW')
+  local token = {
+  }
+  local cfg = rule.selector.config
+  local need_set = false
+
+  if not spf_record or not spf_allow then return end
+
+  -- TODO: take metric score into consideration
+  local k = cfg.keys_map[action]
+
+  if k then
+    token[k] = 1.0
+    need_set = true
+  end
+
+  if need_set then
+    rule.backend.set_token(task, rule, spf_record, token)
+  end
+end
+
+
+local spf_selector = {
+  config = {
+    -- keys map between actions and hash elements in bucket,
+    -- h is for ham,
+    -- s is for spam,
+    -- p is for probable spam
+    keys_map = {
+      ['reject'] = 's',
+      ['add header'] = 'p',
+      ['rewrite subject'] = 'p',
+      ['no action'] = 'h'
+    },
+    symbol = 'SPF_SCORE', -- symbol to be inserted
+    lower_bound = 10, -- minimum number of messages to be scored
+    min_score = nil,
+    max_score = nil,
+    outbound = true,
+    inbound = true,
+    max_accept_adjustment = 2.0, -- How to adjust accepted DKIM score
+    max_reject_adjustment = 3.0 -- How to adjust rejected DKIM score
+  },
+  dependencies = {"R_SPF_ALLOW"},
+  filter = spf_reputation_filter, -- used to get scores
+  idempotent = spf_reputation_idempotent -- used to set scores
+}
+
+
 local selectors = {
   ip = ip_selector,
   url = url_selector,
-  dkim = dkim_selector
+  dkim = dkim_selector,
+  spf = spf_selector
 }
 
 local function reputation_dns_init(rule, _, _, _)
