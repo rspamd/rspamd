@@ -198,7 +198,7 @@ local function extract_handler(opts)
     rspamd_config:init_subsystem('langdet')
   end
 
-  local function maybe_print_part_info(part, out)
+  local function maybe_print_text_part_info(part, out)
     local fun = require "fun"
     if opts.part then
       local t = 'plain text'
@@ -228,6 +228,22 @@ local function extract_handler(opts)
     end
   end
 
+  local function maybe_print_mime_part_info(part, out)
+    local fun = require "fun"
+    if opts.part then
+
+      if not opts.json and not opts.ucl then
+        table.insert(out,
+            rspamd_logger.slog('Mime Part: %s: %s/%s, filename: %s, size: %s',
+                part:get_digest():sub(1,8),
+                ({part:get_type()})[1],
+                ({part:get_type()})[2],
+                part:get_filename(),
+                part:get_length()))
+      end
+    end
+  end
+
   for _,fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     out_elts[fname] = {}
@@ -238,19 +254,22 @@ local function extract_handler(opts)
     end
 
     if opts.text or opts.html then
-      local tp = task:get_text_parts() or {}
+      local mp = task:get_parts() or {}
 
-      for _,part in ipairs(tp) do
+      for _,mime_part in ipairs(mp) do
         local how = opts.output
-        if opts.text and not part:is_html() then
-          maybe_print_part_info(part, out_elts[fname])
+        local part
+        if mime_part:is_text() then part = mime_part:get_text() end
+
+        if part and opts.text and not part:is_html() then
+          maybe_print_text_part_info(part, out_elts[fname])
           if opts.words then
             table.insert(out_elts[fname], table.concat(part:get_words(), ' '))
           else
             table.insert(out_elts[fname], tostring(part:get_content(how)))
           end
-        elseif opts.html and part:is_html() then
-          maybe_print_part_info(part, out_elts[fname])
+        elseif part and opts.html and part:is_html() then
+          maybe_print_text_part_info(part, out_elts[fname])
           if opts.words then
             table.insert(out_elts[fname], table.concat(part:get_words(), ' '))
           else
@@ -279,6 +298,10 @@ local function extract_handler(opts)
               table.insert(out_elts[fname], tostring(part:get_content(how)))
             end
           end
+        end
+
+        if not part then
+          maybe_print_mime_part_info(mime_part, out_elts[fname])
         end
       end
     end
@@ -343,13 +366,17 @@ local function stat_handler(opts)
             table.insert(out_elts[fname], {
               digest = digest,
               shingles = shingles,
-              type = string.format('%s/%s', part:get_type())
+              type = string.format('%s/%s',
+                  ({part:get_type()})[1],
+                  ({part:get_type()})[2])
             })
           else
             table.insert(out_elts[fname], {
               digest = part:get_digest(),
               file = part:get_filename(),
-              type = string.format('%s/%s', part:get_type())
+              type = string.format('%s/%s',
+                  ({part:get_type()})[1],
+                  ({part:get_type()})[2])
             })
           end
         end
