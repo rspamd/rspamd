@@ -696,29 +696,21 @@ define(["jquery", "footable", "humanize"],
                     ft.errors.destroy();
                     delete ft.errors;
                 }
-                if (checked_server === "All SERVERS") {
-                    rspamd.queryNeighbours("errors", function () {
-                        ui.getHistory(rspamd, tables, neighbours, checked_server);
-                        ui.getErrors(rspamd, tables, neighbours, checked_server);
-                    });
-                } else {
-                    $.ajax({
-                        dataType: "json",
-                        type: "GET",
-                        jsonp: false,
-                        url: neighbours[checked_server].url + "historyreset",
-                        beforeSend: function (xhr) {
-                            xhr.setRequestHeader("Password", rspamd.getPassword());
-                        },
-                        success: function () {
+
+                (function (callback) {
+                    callback("historyreset",
+                        function () {
                             ui.getHistory(rspamd, tables, neighbours, checked_server);
                             ui.getErrors(rspamd, tables, neighbours, checked_server);
                         },
-                        error: function (data) {
-                            rspamd.alertMessage("alert-modal alert-error", data.statusText);
-                        }
-                    });
-                }
+                        function (serv, jqXHR, textStatus, errorThrown) {
+                            var serv_name = (typeof serv === "string") ? serv : serv.name;
+                            rspamd.alertMessage("alert-error",
+                                "Cannot reset history log on " + serv_name + ": " + errorThrown);
+                        },
+                        "GET", {}, {}
+                    );
+                }((checked_server === "All SERVERS") ? rspamd.queryNeighbours : rspamd.queryLocal));
             });
         };
 
