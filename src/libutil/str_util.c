@@ -1455,6 +1455,10 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 				p++;
 				state = got_lf;
 			}
+			else if (g_ascii_isspace (*p)) {
+				/* We have \r<space>*, allow to stay in this state */
+				p ++;
+			}
 			else {
 				p++;
 				state = skip_char;
@@ -1470,6 +1474,10 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 			}
 			else if (*p == '\r') {
 				state = got_linebreak;
+			}
+			else if (g_ascii_isspace (*p)) {
+				/* We have \n<space>*, allow to stay in this state */
+				p ++;
 			}
 			else {
 				p++;
@@ -1487,6 +1495,10 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 				p++;
 				state = got_linebreak_lf;
 			}
+			else if (g_ascii_isspace (*p)) {
+				/* We have <linebreak><space>*, allow to stay in this state */
+				p ++;
+			}
 			else {
 				p++;
 				state = skip_char;
@@ -1501,6 +1513,10 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 			else if (*p == '\n') {
 				state = got_linebreak_lf;
 				p++;
+			}
+			else if (g_ascii_isspace (*p)) {
+				/* We have \r\n<space>*, allow to keep in this state */
+				p ++;
 			}
 			else {
 				p++;
