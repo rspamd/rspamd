@@ -507,7 +507,7 @@ local headers_unique = {
   ['Content-Type'] = 1.0,
   ['Content-Transfer-Encoding'] = 1.0,
   -- https://tools.ietf.org/html/rfc5322#section-3.6
-  ['Date'] = 1.0,
+  ['Date'] = 0.1,
   ['From'] = 1.0,
   ['Sender'] = 1.0,
   ['Reply-To'] = 1.0,
