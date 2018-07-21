@@ -229,7 +229,6 @@ local function extract_handler(opts)
   end
 
   local function maybe_print_mime_part_info(part, out)
-    local fun = require "fun"
     if opts.part then
 
       if not opts.json and not opts.ucl then
