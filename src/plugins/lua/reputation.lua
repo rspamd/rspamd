@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2017, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2017-2018, Vsevolod Stakhov <vsevolod@highsecure.ru>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -53,6 +53,21 @@ local function generic_reputation_calc(token, rule, mult)
       (probable_samples / total_samples) * 0.5
 
   return score
+end
+
+local function add_symbol_score(task, rule, mult, params)
+  if not params then params = {tostring(mult)};
+
+  end
+  if rule.cfg.split_symbols then
+    if mult >= 0 then
+      task:insert_result(rule.symbol .. '_SPAM', mult, params)
+    else
+      task:insert_result(rule.symbol .. '_HAM', mult, params)
+    end
+  else
+    task:insert_result(rule.symbol, mult, params)
+  end
 end
 
 -- DKIM Selector functions
@@ -116,9 +131,9 @@ local function dkim_reputation_filter(task, rule)
       -- Set local reputation symbol
       if rep_accepted > 0 or rep_rejected > 0 then
         if rep_accepted > rep_rejected then
-          task:insert_result(rule.symbol, -(rep_accepted - rep_rejected))
+          add_symbol_score(task, rule, -(rep_accepted - rep_rejected))
         else
-          task:insert_result(rule.symbol, (rep_rejected - rep_accepted))
+          add_symbol_score(task, rule, (rep_rejected - rep_accepted))
         end
 
         -- Store results for future DKIM results adjustments
@@ -271,7 +286,7 @@ local function url_reputation_filter(task, rule)
 
         if math.abs(score) > 1e-3 then
           -- TODO: add description
-          task:insert_result(rule.symbol, score)
+          add_symbol_score(task, rule, score)
         end
       end
     end
@@ -404,7 +419,7 @@ local function ip_reputation_filter(task, rule)
     end
 
     if math.abs(score) > 0.001 then
-      task:insert_result(rule.symbol, score, table.concat(description_t, ', '))
+      add_symbol_score(task, rule, score, table.concat(description_t, ', '))
     end
   end
 
@@ -565,7 +580,7 @@ local function spf_reputation_filter(task, rule)
 
       if math.abs(score) > 1e-3 then
         -- TODO: add description
-        task:insert_result(rule.symbol, score)
+        add_symbol_score(task, rule, score)
       end
     end
   end
@@ -1101,11 +1116,24 @@ local function parse_rule(name, tbl)
   end)
 
   -- We now generate symbol for checking
-  rspamd_config:register_symbol{
+  local id = rspamd_config:register_symbol{
     name = symbol,
     type = 'normal',
     callback = callback_gen(reputation_filter_cb, rule),
   }
+
+  if rule.config.split_symbols then
+    rspamd_config:register_symbol{
+      name = symbol .. '_HAM',
+      type = 'virtual',
+      parent = id,
+    }
+    rspamd_config:register_symbol{
+      name = symbol .. '_SPAM',
+      type = 'virtual',
+      parent = id,
+    }
+  end
 
   if rule.selector.dependencies then
     fun.each(function(d)
