@@ -41,35 +41,22 @@ define(["jquery", "footable"],
                 });
             });
 
-            if (is_cluster) {
-                rspamd.queryNeighbours(url, function () {
-                    rspamd.alertMessage("alert-modal alert-success", "Symbols successfully saved");
-                }, function (serv, qXHR, textStatus, errorThrown) {
-                    rspamd.alertMessage("alert-modal alert-error",
-                        "Save symbols error on " +
-                        serv.name + ": " + errorThrown);
-                }, "POST", {}, {
-                    data: JSON.stringify(values),
-                    dataType: "json",
-                });
-            } else {
-                $.ajax({
-                    data: JSON.stringify(values),
-                    dataType: "json",
-                    type: "POST",
-                    url: url,
-                    jsonp: false,
-                    beforeSend: function (xhr) {
-                        xhr.setRequestHeader("Password", rspamd.getPassword());
-                    },
-                    success: function () {
+            (function (callback) {
+                callback(url,
+                    function () {
                         rspamd.alertMessage("alert-modal alert-success", "Symbols successfully saved");
                     },
-                    error: function (data) {
-                        rspamd.alertMessage("alert-modal alert-error", data.statusText);
+                    function (serv, jqXHR, textStatus, errorThrown) {
+                        var serv_name = (typeof serv === "string") ? serv : serv.name;
+                        rspamd.alertMessage("alert-modal alert-error",
+                            "Save symbols error on " + serv_name + ": " + errorThrown);
+                    },
+                    "POST", {}, {
+                        data: JSON.stringify(values),
+                        dataType: "json",
                     }
-                });
-            }
+                );
+            }((is_cluster) ? rspamd.queryNeighbours : rspamd.queryLocal));
         }
         function decimalStep(number) {
             var digits = ((Number(number)).toFixed(20)).replace(/^-?\d*\.?|0+$/g, "").length;
