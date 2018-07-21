@@ -250,11 +250,13 @@ define(["jquery", "footable"],
                     rspamd.alertMessage("alert-modal alert-error", data.statusText);
                 }
             });
-            $(document).on("click", "#symbolsTable :button", function () {
-                var value = $(this).data("save");
-                if (!value) return;
-                saveSymbols(rspamd, "./savesymbols", "symbolsTable", value === "cluster");
-            });
+            $("#symbolsTable")
+                .off("click", ":button")
+                .on("click", ":button", function () {
+                    var value = $(this).data("save");
+                    if (!value) return;
+                    saveSymbols(rspamd, "./savesymbols", "symbolsTable", value === "cluster");
+                });
         };
 
         ui.setup = function (rspamd) {
