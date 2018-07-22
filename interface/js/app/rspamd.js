@@ -313,10 +313,11 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         });
     };
 
-    ui.queryLocal = function (req_url, on_success, on_error, method, headers, params) {
+    ui.queryLocal = function (req_url, on_success, on_error, method, headers, params, req_data) {
         var req_params = {
             type: method,
             jsonp: false,
+            data: req_data,
             beforeSend: function (xhr) {
                 xhr.setRequestHeader("Password", getPassword());
 
