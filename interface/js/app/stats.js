@@ -220,7 +220,7 @@ define(["jquery", "d3pie", "humanize"],
                     graphs.chart = getChart(rspamd, graphs.chart, checked_server);
                 },
                 function (serv, jqXHR, textStatus, errorThrown) {
-                    var alert_status = serv.name + "_alerted";
+                    var alert_status = "alerted_stats_" + serv.name;
 
                     if (!(alert_status in sessionStorage)) {
                         sessionStorage.setItem(alert_status, true);
