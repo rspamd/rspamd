@@ -402,15 +402,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                             if (jQuery.isEmptyObject(json)) {
                                 neighbours_status[ind].status = false; // serv does not work
                             } else {
-                                neighbours_status[ind].status = true; // serv does not work
+                                neighbours_status[ind].status = true; // serv works
                                 neighbours_status[ind].data = json;
-                            }
-                            if (neighbours_status.every(function (elt) { return elt.checked; })) {
-                                if (on_success) {
-                                    on_success(neighbours_status);
-                                } else {
-                                    alertMessage("alert-success", "Request completed");
-                                }
                             }
                         },
                         error: function (jqXHR, textStatus, errorThrown) {
@@ -423,16 +416,20 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                                 alertMessage("alert-error", "Cannot receive data from " +
                                        neighbours_status[ind].host + ": " + errorThrown);
                             }
-                            if (neighbours_status.every(
-                                function (elt) { return elt.checked; })) {
-                                if (on_success) {
-                                    on_success(neighbours_status);
+                        },
+                        complete: function () {
+                            if (neighbours_status.every(function (elt) { return elt.checked; })) {
+                                if (neighbours_status.some(function (elt) { return elt.status; })) {
+                                    if (on_success) {
+                                        on_success(neighbours_status);
+                                    } else {
+                                        alertMessage("alert-success", "Request completed");
+                                    }
                                 } else {
-                                    alertMessage("alert-success", "Request completed");
+                                    alertMessage("alert-error", "Request failed");
                                 }
                             }
                         }
-                        // error display
                     };
                     if (params) {
                         $.each(params, function (k, v) {
