@@ -123,6 +123,8 @@ struct cache_item {
 	gint parent;
 	/* Priority */
 	gint priority;
+	/* Topological order */
+	guint order;
 	gint id;
 	gint frequency_peaks;
 
@@ -280,6 +282,12 @@ prefilters_cmp (const void *p1, const void *p2, gpointer ud)
 	return 0;
 }
 
+#define TSORT_MARK_PERM(it) (it)->order |= (1u << 31)
+#define TSORT_MARK_TEMP(it) (it)->order |= (1u << 30)
+#define TSORT_IS_MARKED_PERM(it) ((it)->order & (1u << 31))
+#define TSORT_IS_MARKED_TEMP(it) ((it)->order & (1u << 30))
+#define TSORT_UNMASK(it) ((it)->order & ~((1u << 31) | (1u << 30)))
+
 static gint
 cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 {
@@ -289,35 +297,35 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 	double w1, w2;
 	double weight1, weight2;
 	double f1 = 0, f2 = 0, t1, t2, avg_freq, avg_weight;
+	guint o1 = TSORT_UNMASK (i1), o2 = TSORT_UNMASK (i2);
 
-	if (i1->deps->len != 0 || i2->deps->len != 0) {
-		/* TODO: handle complex dependencies */
-		w1 = 1.0;
-		w2 = 1.0;
 
-		if (i1->deps->len != 0) {
-			w1 = 1.0 / (i1->deps->len);
+	if (o1 == o2) {
+		/* Heurstic */
+		if (i1->priority == i2->priority) {
+			avg_freq = ((gdouble) cache->total_hits / cache->used_items);
+			avg_weight = (cache->total_weight / cache->used_items);
+			f1 = (double) i1->st->total_hits / avg_freq;
+			f2 = (double) i2->st->total_hits / avg_freq;
+			weight1 = fabs (i1->st->weight) / avg_weight;
+			weight2 = fabs (i2->st->weight) / avg_weight;
+			t1 = i1->st->avg_time;
+			t2 = i2->st->avg_time;
+			w1 = SCORE_FUN (weight1, f1, t1);
+			w2 = SCORE_FUN (weight2, f2, t2);
+		} else {
+			/* Strict sorting */
+			w1 = abs (i1->priority);
+			w2 = abs (i2->priority);
 		}
-		if (i2->deps->len != 0) {
-			w2 = 1.0 / (i2->deps->len);
-		}
-	}
-	else if (i1->priority == i2->priority) {
-		avg_freq = ((gdouble)cache->total_hits / cache->used_items);
-		avg_weight = (cache->total_weight / cache->used_items);
-		f1 = (double)i1->st->total_hits / avg_freq;
-		f2 = (double)i2->st->total_hits / avg_freq;
-		weight1 = fabs (i1->st->weight) / avg_weight;
-		weight2 = fabs (i2->st->weight) / avg_weight;
-		t1 = i1->st->avg_time;
-		t2 = i2->st->avg_time;
-		w1 = SCORE_FUN (weight1, f1, t1);
-		w2 = SCORE_FUN (weight2, f2, t2);
 	}
 	else {
-		/* Strict sorting */
-		w1 = abs (i1->priority);
-		w2 = abs (i2->priority);
+		/*
+		 * Topological ordering is reverse, deps has HIGHER order than top level
+		 * elements. Hence, we swap w1 and w2 here.
+		 */
+		w1 = o2;
+		w2 = o1;
 	}
 
 	if (w2 > w1) {
@@ -374,6 +382,40 @@ rspamd_set_counter_ema (struct counter_data *cd, gdouble value, gdouble alpha)
 	return cd->mean;
 }
 
+static void
+rspamd_symbols_cache_tsort_visit (struct symbols_cache *cache,
+								  struct cache_item *it,
+								  guint cur_order)
+{
+	struct cache_dependency *dep;
+	guint i;
+
+	if (TSORT_IS_MARKED_PERM (it)) {
+		if (cur_order > TSORT_UNMASK (it)) {
+			/* Need to recalculate the whole chain */
+			it->order = cur_order; /* That also removes all masking */
+		}
+		else {
+			/* We are fine, stop DFS */
+			return;
+		}
+	}
+	else if (TSORT_IS_MARKED_TEMP (it)) {
+		msg_err_cache ("cyclic dependencies found when checking '%s'!",
+				it->symbol);
+		return;
+	}
+
+	TSORT_MARK_TEMP (it);
+
+	PTR_ARRAY_FOREACH (it->deps, i, dep) {
+		rspamd_symbols_cache_tsort_visit (cache, dep->item, cur_order + 1);
+	}
+
+	it->order |= cur_order;
+
+	TSORT_MARK_PERM (it);
+}
 
 static void
 rspamd_symbols_cache_resort (struct symbols_cache *cache)
@@ -392,12 +434,31 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 		if (!(it->type & (SYMBOL_TYPE_PREFILTER|
 				SYMBOL_TYPE_POSTFILTER|
 				SYMBOL_TYPE_COMPOSITE))) {
+			it->order = 0;
 			g_ptr_array_add (ord->d, it);
 		}
 	}
 
-	cache->total_hits = total_hits;
+	/* Topological sort, intended to be O(N) but my implementation
+	 * is not linear (semi-linear usually) as I want to make it as
+	 * simple as possible.
+	 * On each stage it does DFS for unseen nodes. In theory, that
+	 * can be more complicated than linear - O(N^2) for specially
+	 * crafted data. But I don't care.
+	 */
+	PTR_ARRAY_FOREACH (ord->d, i, it) {
+		if (it->order == 0) {
+			rspamd_symbols_cache_tsort_visit (cache, it, 1);
+		}
+	}
+
+	/*
+	 * Now we have all sorted and can do some heuristical sort, keeping
+	 * topological order invariant
+	 */
 	g_ptr_array_sort_with_data (ord->d, cache_logic_cmp, cache);
+	cache->total_hits = total_hits;
+
 
 	if (cache->items_by_order) {
 		REF_RELEASE (cache->items_by_order);
@@ -2182,7 +2243,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 	}
 
 	cbdata->last_resort = cur_ticks;
-	rspamd_symbols_cache_resort (cache);
+	/* We don't do actual sorting due to topological guarantees */
 }
 
 void
