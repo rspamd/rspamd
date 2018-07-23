@@ -479,8 +479,6 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 	gint i, j;
 	gint id;
 
-	rspamd_symbols_cache_resort (cache);
-
 	cur = cache->delayed_deps;
 	while (cur) {
 		ddep = cur->data;
@@ -582,6 +580,8 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 	g_ptr_array_sort_with_data (cache->prefilters, prefilters_cmp, cache);
 	g_ptr_array_sort_with_data (cache->postfilters, postfilters_cmp, cache);
 	g_ptr_array_sort_with_data (cache->idempotent, postfilters_cmp, cache);
+
+	rspamd_symbols_cache_resort (cache);
 }
 
 static gboolean
