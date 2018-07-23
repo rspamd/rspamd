@@ -43,6 +43,7 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_NOSTAT = (1 << 11), /* Skip as statistical symbol */
 	SYMBOL_TYPE_IDEMPOTENT = (1 << 12), /* Symbol cannot change metric */
 	SYMBOL_TYPE_SQUEEZED = (1 << 13), /* Symbol is squeezed inside Lua */
+	SYMBOL_TYPE_TRIVIAL = (1 << 14), /* Symbol is trivial */
 };
 
 /**

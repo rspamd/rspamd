@@ -205,6 +205,7 @@ LUA_FUNCTION_DEF (config, get_classifier);
  *     + `empty` if symbol can be called for empty messages
  *     + `skip` if symbol should be skipped now
  *     + `nostat` if symbol should be excluded from stat tokens
+ *     + `trivial` symbol is trivial (e.g. no network requests)
  * - `parent`: id of parent symbol (useful for virtual symbols)
  *
  * @return {number} id of symbol registered
@@ -1567,6 +1568,9 @@ lua_parse_symbol_flags (const gchar *str)
 		}
 		if (strstr (str, "squeezed") != NULL) {
 			ret |= SYMBOL_TYPE_SQUEEZED;
+		}
+		if (strstr (str, "trivial") != NULL) {
+			ret |= SYMBOL_TYPE_TRIVIAL;
 		}
 	}
 
