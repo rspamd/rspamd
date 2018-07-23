@@ -506,6 +506,22 @@ dkim_module_config (struct rspamd_config *cfg)
 			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
 			cb_id);
 
+		rspamd_symbols_cache_add_symbol (cfg->cache,
+				"DKIM_TRACE",
+				0,
+				NULL, NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_NOSTAT,
+				cb_id);
+		rspamd_config_add_symbol (cfg,
+				"DKIM_TRACE",
+				0.0,
+				"DKIM trace symbol",
+				"policies",
+				RSPAMD_SYMBOL_FLAG_IGNORE,
+				1,
+				1);
+		rspamd_config_add_symbol_group (cfg, "DKIM_TRACE", "dkim");
+
 		msg_info_config ("init internal dkim module");
 #ifndef HAVE_OPENSSL
 		msg_warn_config (
@@ -552,11 +568,8 @@ dkim_module_config (struct rspamd_config *cfg)
 					rspamd_config_add_symbol (cfg,
 							"DKIM_SIGN", 0.0, "DKIM signature fake symbol",
 							"dkim", RSPAMD_SYMBOL_FLAG_IGNORE, 1, 1);
-					rspamd_config_add_symbol (cfg,
-							"DKIM_TRACE", 0.0, "DKIM trace symbol",
-							"policies", RSPAMD_SYMBOL_FLAG_IGNORE, 1, 1);
+
 					rspamd_config_add_symbol_group (cfg, "DKIM_SIGN", "dkim");
-					rspamd_config_add_symbol_group (cfg, "DKIM_TRACE", "dkim");
 				}
 				else {
 					msg_err_config ("lua script must return "
