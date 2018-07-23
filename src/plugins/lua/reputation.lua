@@ -59,7 +59,7 @@ local function add_symbol_score(task, rule, mult, params)
   if not params then params = {tostring(mult)};
 
   end
-  if rule.cfg.split_symbols then
+  if rule.config.split_symbols then
     if mult >= 0 then
       task:insert_result(rule.symbol .. '_SPAM', mult, params)
     else
@@ -182,7 +182,7 @@ local function dkim_reputation_postfilter(task, rule)
   local accept_adjustment = task:get_mempool():get_variable("dkim_reputation_accept")
 
   if sym_accepted and accept_adjustment then
-    local final_adjustment = rule.cfg.max_accept_adjustment *
+    local final_adjustment = rule.config.max_accept_adjustment *
         rspamd_util.tanh(tonumber(accept_adjustment))
     task:adjust_result('R_DKIM_ALLOW', sym_accepted.score * final_adjustment)
   end
@@ -191,7 +191,7 @@ local function dkim_reputation_postfilter(task, rule)
   local reject_adjustment = task:get_mempool():get_variable("dkim_reputation_reject")
 
   if sym_rejected and reject_adjustment then
-    local final_adjustment = rule.cfg.max_reject_adjustment *
+    local final_adjustment = rule.config.max_reject_adjustment *
         rspamd_util.tanh(tonumber(reject_adjustment))
     task:adjust_result('R_DKIM_REJECT', sym_rejected.score * final_adjustment)
   end
