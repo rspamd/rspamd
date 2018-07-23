@@ -73,23 +73,24 @@ end
 -- DKIM Selector functions
 local gr
 local function gen_dkim_queries(task, rule)
-  local dkim_trace = task:get_symbol('DKIM_TRACE')
+  local dkim_trace = (task:get_symbol('DKIM_TRACE') or E)[1]
   local lpeg = require 'lpeg'
   local ret = {}
 
   if not gr then
     local semicolon = lpeg.P(':')
-    local domain = lpeg.C((1 - semicolon)^0)
+    local domain = lpeg.C((1 - semicolon)^1)
     local res = lpeg.S'+-?~'
 
     local function res_to_label(ch)
       if ch == '+' then return 'a'
       elseif ch == '-' then return 'r'
-        else return 'u'
       end
+
+      return 'u'
     end
 
-    gr = domain * semicolon * lpeg.C(res / res_to_label)
+    gr = domain * semicolon * (lpeg.C(res^1) / res_to_label)
   end
 
   if dkim_trace and dkim_trace.options then
@@ -111,6 +112,8 @@ local function dkim_reputation_filter(task, rule)
   local nchecked = 0
   local rep_accepted = 0.0
   local rep_rejected = 0.0
+
+  rspamd_logger.debugm(N, task, 'dkim reputation tokens: %s', requests)
 
   local function tokens_cb(err, token, values)
     nchecked = nchecked + 1
