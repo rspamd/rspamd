@@ -22,6 +22,20 @@
 #include <math.h>
 #include "contrib/uthash/utlist.h"
 
+static void
+rspamd_metric_result_dtor (gpointer d)
+{
+	struct rspamd_metric_result *r = (struct rspamd_metric_result *)d;
+	struct rspamd_symbol_result sres;
+
+	kh_foreach_value (r->symbols, sres, {
+		if (sres.options) {
+			kh_destroy (rspamd_options_hash, sres.options);
+		}
+	});
+	kh_destroy (rspamd_symbols_hash, r->symbols);
+	kh_destroy (rspamd_symbols_group_hash, r->sym_groups);
+}
 
 struct rspamd_metric_result *
 rspamd_create_metric_result (struct rspamd_task *task)
@@ -37,21 +51,18 @@ rspamd_create_metric_result (struct rspamd_task *task)
 
 	metric_res = rspamd_mempool_alloc (task->task_pool,
 			sizeof (struct rspamd_metric_result));
-	metric_res->symbols = g_hash_table_new (rspamd_str_hash,
-			rspamd_str_equal);
-	rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_unref,
-			metric_res->symbols);
-	metric_res->sym_groups = g_hash_table_new (g_direct_hash, g_direct_equal);
-	rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_unref,
-			metric_res->sym_groups);
+	metric_res->symbols = kh_init (rspamd_symbols_hash);
+	metric_res->sym_groups = kh_init (rspamd_symbols_group_hash);
 	metric_res->grow_factor = 0;
 	metric_res->score = 0;
 
 	for (i = 0; i < METRIC_ACTION_MAX; i++) {
 		metric_res->actions_limits[i] = task->cfg->actions[i].score;
 	}
+
+	rspamd_mempool_add_destructor (task->task_pool,
+			rspamd_metric_result_dtor,
+			metric_res);
 
 	return metric_res;
 }
@@ -91,8 +102,9 @@ insert_metric_result (struct rspamd_task *task,
 	struct rspamd_symbol *sdef;
 	struct rspamd_symbols_group *gr = NULL;
 	const ucl_object_t *mobj, *sobj;
-	gint max_shots;
+	gint max_shots, ret;
 	guint i;
+	khiter_t k;
 	gboolean single = !!(flags & RSPAMD_SYMBOL_INSERT_SINGLE);
 
 	metric_res = rspamd_create_metric_result (task);
@@ -116,12 +128,16 @@ insert_metric_result (struct rspamd_task *task,
 		final_score = (*sdef->weight_ptr) * weight;
 
 		PTR_ARRAY_FOREACH (sdef->groups, i, gr) {
-			gr_score = g_hash_table_lookup (metric_res->sym_groups, gr);
+			k = kh_get (rspamd_symbols_group_hash,
+					metric_res->sym_groups, GPOINTER_TO_INT (gr));
 
-			if (gr_score == NULL) {
-				gr_score = rspamd_mempool_alloc (task->task_pool, sizeof (gdouble));
-				*gr_score = 0;
-				g_hash_table_insert (metric_res->sym_groups, gr, gr_score);
+			if (k == kh_end (metric_res->sym_groups)) {
+				k = kh_put (rspamd_symbols_group_hash, metric_res->sym_groups,
+						GPOINTER_TO_INT (gr), &ret);
+				kh_value (metric_res->sym_groups, k) = 0;
+			}
+			else {
+				gr_score = &kh_value (metric_res->sym_groups, k);
 			}
 		}
 	}
@@ -139,7 +155,9 @@ insert_metric_result (struct rspamd_task *task,
 	}
 
 	/* Add metric score */
-	if ((s = g_hash_table_lookup (metric_res->symbols, symbol)) != NULL) {
+	k = kh_get (rspamd_symbols_hash, metric_res->symbols, symbol);
+	if (k != kh_end (metric_res->symbols)) {
+		s = &kh_value (metric_res->symbols, k);
 		if (single) {
 			max_shots = 1;
 		}
@@ -157,8 +175,16 @@ insert_metric_result (struct rspamd_task *task,
 		}
 
 		/* Now check for the duplicate options */
-		if (opt && s->options && g_hash_table_lookup (s->options, opt)) {
-			single = TRUE;
+		if (opt && s->options) {
+			k = kh_get (rspamd_options_hash, s->options, opt);
+
+			if (k == kh_end (s->options)) {
+				single = TRUE;
+			}
+			else {
+				s->nshots ++;
+				rspamd_task_add_result_option (task, s, opt);
+			}
 		}
 		else {
 			s->nshots ++;
@@ -170,7 +196,8 @@ insert_metric_result (struct rspamd_task *task,
 			diff = final_score;
 		}
 		else {
-			if (fabs (s->score) < fabs (final_score) && signbit (s->score) == signbit (final_score)) {
+			if (fabs (s->score) < fabs (final_score) &&
+				signbit (s->score) == signbit (final_score)) {
 				/* Replace less significant weight with a more significant one */
 				diff = final_score - s->score;
 			}
@@ -209,7 +236,10 @@ insert_metric_result (struct rspamd_task *task,
 		}
 	}
 	else {
-		s = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_symbol_result));
+		k = kh_put (rspamd_symbols_hash, metric_res->symbols,
+				symbol, &ret);
+		s = &kh_value (metric_res->symbols, k);
+		memset (s, 0, sizeof (*s));
 
 		/* Handle grow factor */
 		if (metric_res->grow_factor && final_score > 0) {
@@ -241,7 +271,6 @@ insert_metric_result (struct rspamd_task *task,
 		}
 
 		rspamd_task_add_result_option (task, s, opt);
-		g_hash_table_insert (metric_res->symbols, (gpointer) symbol, s);
 	}
 
 	msg_debug_task ("symbol %s, score %.2f, factor: %f",
@@ -289,33 +318,34 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 {
 	struct rspamd_symbol_option *opt;
 	gboolean ret = FALSE;
+	khiter_t k;
+	gint r;
 
 	if (s && val) {
 		if (s->options && !(s->sym &&
 				(s->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM)) &&
-				g_hash_table_size (s->options) < task->cfg->default_max_shots) {
+				kh_size (s->options) < task->cfg->default_max_shots) {
 			/* Append new options */
-			if (!g_hash_table_lookup (s->options, val)) {
-				opt = rspamd_mempool_alloc (task->task_pool, sizeof (*opt));
+			k = kh_get (rspamd_options_hash, s->options, val);
+
+			if (k == kh_end (s->options)) {
+				k = kh_put (rspamd_options_hash, s->options, val, &r);
+
+				opt = &kh_value (s->options, k);
 				opt->option = rspamd_mempool_strdup (task->task_pool, val);
 				DL_APPEND (s->opts_head, opt);
 
-				g_hash_table_insert (s->options, opt->option, opt);
 				ret = TRUE;
 			}
 		}
 		else {
-			s->options = g_hash_table_new (rspamd_strcase_hash,
-					rspamd_strcase_equal);
-			rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t)g_hash_table_unref,
-					s->options);
-			opt = rspamd_mempool_alloc (task->task_pool, sizeof (*opt));
+			s->options = kh_init (rspamd_options_hash);
+			k = kh_put (rspamd_options_hash, s->options, val, &r);
+
+			opt = &kh_value (s->options, k);
 			opt->option = rspamd_mempool_strdup (task->task_pool, val);
-			s->opts_head = NULL;
 			DL_APPEND (s->opts_head, opt);
 
-			g_hash_table_insert (s->options, opt->option, opt);
 			ret = TRUE;
 		}
 	}

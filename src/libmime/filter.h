@@ -9,6 +9,7 @@
 #include "config.h"
 #include "symbols_cache.h"
 #include "task.h"
+#include "khash.h"
 
 struct rspamd_task;
 struct rspamd_settings;
@@ -27,12 +28,18 @@ enum rspamd_symbol_result_flags {
 /**
  * Rspamd symbol
  */
+KHASH_INIT (rspamd_options_hash,
+		const char *,
+		struct rspamd_symbol_option,
+		true,
+		rspamd_str_hash,
+		rspamd_str_equal);
 struct rspamd_symbol_result {
-	double score;                                   /**< symbol's score							*/
-	GHashTable *options;                            /**< list of symbol's options				*/
+	double score;                                  /**< symbol's score							*/
+	khash_t(rspamd_options_hash) *options;         /**< list of symbol's options				*/
 	struct rspamd_symbol_option *opts_head;        /**< head of linked list of options			*/
 	const gchar *name;
-	struct rspamd_symbol *sym;						/**< symbol configuration					*/
+	struct rspamd_symbol *sym;                     /**< symbol configuration					*/
 	guint nshots;
 	enum rspamd_symbol_result_flags flags;
 };
@@ -40,11 +47,18 @@ struct rspamd_symbol_result {
 /**
  * Result of metric processing
  */
+KHASH_INIT (rspamd_symbols_hash,
+		const char *,
+		struct rspamd_symbol_result,
+		true,
+		rspamd_str_hash,
+		rspamd_str_equal);
+KHASH_MAP_INIT_INT (rspamd_symbols_group_hash, double);
 struct rspamd_metric_result {
 	double score;                                   /**< total score							*/
 	double grow_factor;								/**< current grow factor					*/
-	GHashTable *symbols;                            /**< symbols of metric						*/
-	GHashTable *sym_groups;							/**< groups of symbols						*/
+	khash_t(rspamd_symbols_hash) *symbols;			/**< symbols of metric						*/
+	khash_t(rspamd_symbols_group_hash) *sym_groups; /**< groups of symbols						*/
 	gdouble actions_limits[METRIC_ACTION_MAX];		/**< set of actions for this metric			*/
 };
 
