@@ -1045,9 +1045,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 	static gchar scorebuf[32];
 	rspamd_ftok_t res = {.begin = NULL, .len = 0};
 	struct rspamd_metric_result *mres;
-	GHashTableIter it;
 	gboolean first = TRUE;
-	gpointer k, v;
 	rspamd_fstring_t *symbuf;
 	struct rspamd_symbol_result *sym;
 	GPtrArray *sorted_symbols;
@@ -1083,16 +1081,13 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 			break;
 		case RSPAMD_LOG_SYMBOLS:
 			symbuf = rspamd_fstring_sized_new (128);
-			g_hash_table_iter_init (&it, mres->symbols);
-			sorted_symbols = g_ptr_array_sized_new (g_hash_table_size (mres->symbols));
+			sorted_symbols = g_ptr_array_sized_new (kh_size (mres->symbols));
 
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				sym = v;
-
+			kh_foreach_value_ptr (mres->symbols, sym, {
 				if (!(sym->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
-					g_ptr_array_add (sorted_symbols, v);
+					g_ptr_array_add (sorted_symbols, (gpointer)sym);
 				}
-			}
+			});
 
 			g_ptr_array_sort (sorted_symbols, rspamd_task_compare_log_sym);
 

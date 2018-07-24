@@ -120,7 +120,7 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 	struct rspamd_composite *ncomp;
 	struct rspamd_task *task = cd->task;
 
-	if ((ms = g_hash_table_lookup (cd->metric_res->symbols, sym)) == NULL) {
+	if ((ms = rspamd_task_find_symbol_result (cd->task, sym)) == NULL) {
 		msg_debug_composites ("not found symbol %s in composite %s", sym,
 				cd->composite->sym);
 		if ((ncomp =
@@ -144,14 +144,14 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 				cd->composite = saved;
 				clrbit (cd->checked, cd->composite->id * 2);
 
-				ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
+				ms = rspamd_task_find_symbol_result (cd->task, sym);
 			}
 			else {
 				/*
 				 * XXX: in case of cyclic references this would return 0
 				 */
 				if (isset (cd->checked, ncomp->id * 2 + 1)) {
-					ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
+					ms = rspamd_task_find_symbol_result (cd->task, sym);
 				}
 			}
 		}
@@ -190,7 +190,7 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 	if (isset (cd->checked, cd->composite->id * 2)) {
 		/* We have already checked this composite, so just return its value */
 		if (isset (cd->checked, cd->composite->id * 2 + 1)) {
-			ms = g_hash_table_lookup (cd->metric_res->symbols, sym);
+			ms = rspamd_task_find_symbol_result (cd->task, sym);
 		}
 
 		if (ms) {
@@ -334,7 +334,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 			clrbit (cd->checked, comp->id * 2 + 1);
 		}
 		else {
-			if (g_hash_table_lookup (cd->metric_res->symbols, key) != NULL) {
+			if (rspamd_task_find_symbol_result (cd->task, key) != NULL) {
 				/* Already set, no need to check */
 				msg_debug_composites ("composite %s is already in metric "
 						"in composites bitfield", cd->composite->sym);

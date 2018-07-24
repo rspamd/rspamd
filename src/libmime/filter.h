@@ -30,7 +30,7 @@ enum rspamd_symbol_result_flags {
  */
 KHASH_INIT (rspamd_options_hash,
 		const char *,
-		struct rspamd_symbol_option,
+		struct rspamd_symbol_option *,
 		true,
 		rspamd_str_hash,
 		rspamd_str_equal);

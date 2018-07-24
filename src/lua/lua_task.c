@@ -1446,7 +1446,7 @@ lua_task_adjust_result (lua_State * L)
 		metric_res = task->result;
 
 		if (metric_res) {
-			s = g_hash_table_lookup (metric_res->symbols, symbol_name);
+			s = rspamd_task_find_symbol_result (task, symbol_name);
 		}
 		else {
 			return luaL_error (L, "no metric result");
@@ -3246,7 +3246,7 @@ lua_push_symbol_result (lua_State *L,
 		metric_res = task->result;
 
 		if (metric_res) {
-			s = g_hash_table_lookup (metric_res->symbols, symbol);
+			s = rspamd_task_find_symbol_result (task, symbol);
 		}
 	}
 	else {
@@ -3295,7 +3295,7 @@ lua_push_symbol_result (lua_State *L,
 
 		if (s->options) {
 			lua_pushstring (L, "options");
-			lua_createtable (L, g_hash_table_size (s->options), 0);
+			lua_createtable (L, kh_size (s->options), 0);
 
 			DL_FOREACH (s->opts_head, opt) {
 				lua_pushstring (L, (const char*)opt->option);
@@ -3349,18 +3349,12 @@ lua_task_has_symbol (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *symbol;
-	struct rspamd_metric_result *mres;
 	gboolean found = FALSE;
 
 	symbol = luaL_checkstring (L, 2);
 
 	if (task && symbol) {
-		mres = task->result;
-
-		if (mres) {
-			found = g_hash_table_lookup (mres->symbols, symbol) != NULL;
-		}
-
+		found = (rspamd_task_find_symbol_result (task, symbol) != NULL);
 		lua_pushboolean (L, found);
 	}
 	else {
@@ -3376,28 +3370,24 @@ lua_task_get_symbols (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_metric_result *mres;
 	gint i = 1;
-	GHashTableIter it;
-	gpointer k, v;
 	struct rspamd_symbol_result *s;
 
 	if (task) {
 		mres = task->result;
 
 		if (mres) {
-			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
-			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
-			g_hash_table_iter_init (&it, mres->symbols);
+			lua_createtable (L, kh_size (mres->symbols), 0);
+			lua_createtable (L, kh_size (mres->symbols), 0);
 
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				s = v;
+			kh_foreach_value_ptr (mres->symbols, s, {
 				if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
-					lua_pushstring (L, k);
+					lua_pushstring (L, s->name);
 					lua_rawseti (L, -3, i);
 					lua_pushnumber (L, s->score);
 					lua_rawseti (L, -2, i);
 					i++;
 				}
-			}
+			});
 		}
 		else {
 			lua_createtable (L, 0, 0);
@@ -3416,8 +3406,7 @@ lua_task_get_symbols_all (lua_State *L)
 {
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_metric_result *mres;
-	GHashTableIter it;
-	gpointer k, v;
+	struct rspamd_symbol_result *s;
 	gboolean found = FALSE;
 	gint i = 1;
 
@@ -3426,13 +3415,12 @@ lua_task_get_symbols_all (lua_State *L)
 
 		if (mres) {
 			found = TRUE;
-			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
-			g_hash_table_iter_init (&it, mres->symbols);
+			lua_createtable (L, kh_size (mres->symbols), 0);
 
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				lua_push_symbol_result (L, task, k, v, FALSE, TRUE);
+			kh_foreach_value_ptr (mres->symbols, s, {
+				lua_push_symbol_result (L, task, s->name, s, FALSE, TRUE);
 				lua_rawseti (L, -2, i++);
-			}
+			});
 		}
 	}
 	else {
@@ -3453,32 +3441,28 @@ lua_task_get_symbols_numeric (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_metric_result *mres;
 	gint i = 1, id;
-	GHashTableIter it;
-	gpointer k, v;
 	struct rspamd_symbol_result *s;
 
 	if (task) {
 		mres = task->result;
 
 		if (mres) {
-			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
-			lua_createtable (L, g_hash_table_size (mres->symbols), 0);
+			lua_createtable (L, kh_size (mres->symbols), 0);
+			lua_createtable (L, kh_size (mres->symbols), 0);
 
-			g_hash_table_iter_init (&it, mres->symbols);
+			lua_createtable (L, kh_size (mres->symbols), 0);
 
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				s = v;
-
+			kh_foreach_value_ptr (mres->symbols, s, {
 				if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
 					id = rspamd_symbols_cache_find_symbol (task->cfg->cache,
-							k);
+							s->name);
 					lua_pushnumber (L, id);
 					lua_rawseti (L, -3, i);
 					lua_pushnumber (L, s->score);
 					lua_rawseti (L, -2, i);
 					i++;
 				}
-			}
+			});
 		}
 		else {
 			lua_createtable (L, 0, 0);
@@ -3502,7 +3486,6 @@ struct tokens_foreach_cbdata {
 static void
 tokens_foreach_cb (gint id, const gchar *sym, gint flags, gpointer ud)
 {
-	struct rspamd_metric_result *mres;
 	struct tokens_foreach_cbdata *cbd = ud;
 	struct rspamd_symbol_result *s;
 
@@ -3510,9 +3493,7 @@ tokens_foreach_cb (gint id, const gchar *sym, gint flags, gpointer ud)
 		return;
 	}
 
-	mres = cbd->task->result;
-
-	if (mres && (s = g_hash_table_lookup (mres->symbols, sym)) != NULL) {
+	if ((s = rspamd_task_find_symbol_result (cbd->task, sym)) != NULL) {
 		if (cbd->normalize) {
 			lua_pushnumber (cbd->L, tanh (s->score));
 		}

@@ -106,6 +106,7 @@ insert_metric_result (struct rspamd_task *task,
 	guint i;
 	khiter_t k;
 	gboolean single = !!(flags & RSPAMD_SYMBOL_INSERT_SINGLE);
+	gchar *sym_cpy;
 
 	metric_res = rspamd_create_metric_result (task);
 
@@ -236,8 +237,9 @@ insert_metric_result (struct rspamd_task *task,
 		}
 	}
 	else {
+		sym_cpy = rspamd_mempool_strdup (task->task_pool, symbol);
 		k = kh_put (rspamd_symbols_hash, metric_res->symbols,
-				symbol, &ret);
+				sym_cpy, &ret);
 		s = &kh_value (metric_res->symbols, k);
 		memset (s, 0, sizeof (*s));
 
@@ -250,7 +252,7 @@ insert_metric_result (struct rspamd_task *task,
 			next_gf = task->cfg->grow_factor;
 		}
 
-		s->name = symbol;
+		s->name = sym_cpy;
 		s->sym = sdef;
 		s->nshots = 1;
 
@@ -318,6 +320,7 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 {
 	struct rspamd_symbol_option *opt;
 	gboolean ret = FALSE;
+	gchar *opt_cpy;
 	khiter_t k;
 	gint r;
 
@@ -329,10 +332,12 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 			k = kh_get (rspamd_options_hash, s->options, val);
 
 			if (k == kh_end (s->options)) {
-				k = kh_put (rspamd_options_hash, s->options, val, &r);
+				opt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*opt));
+				opt_cpy = rspamd_mempool_strdup (task->task_pool, val);
+				k = kh_put (rspamd_options_hash, s->options, opt_cpy, &r);
 
-				opt = &kh_value (s->options, k);
-				opt->option = rspamd_mempool_strdup (task->task_pool, val);
+				kh_value (s->options, k) = opt;
+				opt->option = opt_cpy;
 				DL_APPEND (s->opts_head, opt);
 
 				ret = TRUE;
@@ -340,10 +345,12 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 		}
 		else {
 			s->options = kh_init (rspamd_options_hash);
-			k = kh_put (rspamd_options_hash, s->options, val, &r);
+			opt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*opt));
+			opt_cpy = rspamd_mempool_strdup (task->task_pool, val);
+			k = kh_put (rspamd_options_hash, s->options, opt_cpy, &r);
 
-			opt = &kh_value (s->options, k);
-			opt->option = rspamd_mempool_strdup (task->task_pool, val);
+			kh_value (s->options, k) = opt;
+			opt->option = opt_cpy;
 			DL_APPEND (s->opts_head, opt);
 
 			ret = TRUE;

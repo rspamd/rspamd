@@ -912,12 +912,10 @@ static ucl_object_t *
 rspamd_metric_result_ucl (struct rspamd_task *task,
 	struct rspamd_metric_result *mres, ucl_object_t *top)
 {
-	GHashTableIter hiter;
 	struct rspamd_symbol_result *sym;
 	gboolean is_spam;
 	enum rspamd_action_type action = METRIC_ACTION_NOACTION;
 	ucl_object_t *obj = NULL, *sobj;
-	gpointer h, v;
 	const gchar *subject;
 
 	action = rspamd_check_action_metric (task, mres);
@@ -966,15 +964,12 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 		obj = ucl_object_typed_new (UCL_OBJECT);
 	}
 
-	g_hash_table_iter_init (&hiter, mres->symbols);
-
-	while (g_hash_table_iter_next (&hiter, &h, &v)) {
-		sym = (struct rspamd_symbol_result *)v;
+	kh_foreach_value_ptr (mres->symbols, sym, {
 		if (!(sym->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
 			sobj = rspamd_metric_symbol_ucl (task, sym);
-			ucl_object_insert_key (obj, sobj, h, 0, false);
+			ucl_object_insert_key (obj, sobj, sym->name, 0, false);
 		}
-	}
+	});
 
 	if (task->cmd == CMD_CHECK_V2) {
 		ucl_object_insert_key (top, obj, "symbols", 0, false);
@@ -1405,8 +1400,6 @@ rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 	struct rspamd_protocol_log_message_sum *ls;
 	lua_State *L = task->cfg->lua_state;
 	struct rspamd_metric_result *mres;
-	GHashTableIter it;
-	gpointer k, v;
 	struct rspamd_symbol_result *sym;
 	gint id, i;
 	guint32 *sid, n = 0, nextra = 0;
@@ -1551,7 +1544,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 				mres = task->result;
 
 				if (mres) {
-					n = g_hash_table_size (mres->symbols);
+					n = kh_size (mres->symbols);
 					sz = sizeof (*ls) +
 							sizeof (struct rspamd_protocol_log_symbol_result) *
 							(n + nextra);
@@ -1574,13 +1567,11 @@ rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 					ls->nresults = n;
 					ls->nextra = nextra;
 
-					g_hash_table_iter_init (&it, mres->symbols);
 					i = 0;
 
-					while (g_hash_table_iter_next (&it, &k, &v)) {
+					kh_foreach_value_ptr (mres->symbols, sym, {
 						id = rspamd_symbols_cache_find_symbol (task->cfg->cache,
-								k);
-						sym = v;
+								sym->name);
 
 						if (id >= 0) {
 							ls->results[i].id = id;
@@ -1592,7 +1583,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 						}
 
 						i ++;
-					}
+					});
 
 					memcpy (&ls->results[n], extra->data, nextra * sizeof (er));
 				}
