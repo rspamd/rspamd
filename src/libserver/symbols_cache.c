@@ -320,12 +320,8 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 		}
 	}
 	else {
-		/*
-		 * Topological ordering is reverse, deps has HIGHER order than top level
-		 * elements. Hence, we swap w1 and w2 here.
-		 */
-		w1 = o2;
-		w2 = o1;
+		w1 = o1;
+		w2 = o2;
 	}
 
 	if (w2 > w1) {
@@ -407,12 +403,14 @@ rspamd_symbols_cache_tsort_visit (struct symbols_cache *cache,
 	}
 
 	TSORT_MARK_TEMP (it);
+	msg_debug_cache ("visiting node: %s (%d)", it->symbol, cur_order);
 
 	PTR_ARRAY_FOREACH (it->deps, i, dep) {
+		msg_debug_cache ("visiting dep: %s (%d)", dep->item->symbol, cur_order + 1);
 		rspamd_symbols_cache_tsort_visit (cache, dep->item, cur_order + 1);
 	}
 
-	it->order |= cur_order;
+	it->order = cur_order;
 
 	TSORT_MARK_PERM (it);
 }
@@ -434,8 +432,10 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 		if (!(it->type & (SYMBOL_TYPE_PREFILTER|
 				SYMBOL_TYPE_POSTFILTER|
 				SYMBOL_TYPE_COMPOSITE))) {
-			it->order = 0;
-			g_ptr_array_add (ord->d, it);
+			if (it->parent == -1 && it->func) {
+				it->order = 0;
+				g_ptr_array_add (ord->d, it);
+			}
 		}
 	}
 
@@ -458,7 +458,6 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 	 */
 	g_ptr_array_sort_with_data (ord->d, cache_logic_cmp, cache);
 	cache->total_hits = total_hits;
-
 
 	if (cache->items_by_order) {
 		REF_RELEASE (cache->items_by_order);
