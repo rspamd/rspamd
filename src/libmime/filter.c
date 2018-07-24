@@ -22,11 +22,16 @@
 #include <math.h>
 #include "contrib/uthash/utlist.h"
 
+/* Average symbols count to optimize hash allocation */
+static struct rspamd_counter_data symbols_count;
+
 static void
 rspamd_metric_result_dtor (gpointer d)
 {
 	struct rspamd_metric_result *r = (struct rspamd_metric_result *)d;
 	struct rspamd_symbol_result sres;
+
+	rspamd_set_counter_ema (&symbols_count, kh_size (r->symbols), 0.5);
 
 	kh_foreach_value (r->symbols, sres, {
 		if (sres.options) {
@@ -55,6 +60,16 @@ rspamd_create_metric_result (struct rspamd_task *task)
 	metric_res->sym_groups = kh_init (rspamd_symbols_group_hash);
 	metric_res->grow_factor = 0;
 	metric_res->score = 0;
+
+	/* Optimize allocation */
+	kh_resize (rspamd_symbols_group_hash, metric_res->sym_groups, 4);
+
+	if (symbols_count.mean > 4) {
+		kh_resize (rspamd_symbols_hash, metric_res->symbols, symbols_count.mean);
+	}
+	else {
+		kh_resize (rspamd_symbols_hash, metric_res->symbols, 4);
+	}
 
 	for (i = 0; i < METRIC_ACTION_MAX; i++) {
 		metric_res->actions_limits[i] = task->cfg->actions[i].score;
