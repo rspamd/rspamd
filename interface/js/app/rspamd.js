@@ -327,7 +327,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                     });
                 }
             },
-            url: req_url,
+            url: neighbours[checked_server].url + req_url,
             success: function (data) {
                 if (on_success) {
                     on_success(data);
@@ -337,7 +337,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             },
             error: function (jqXHR, textStatus, errorThrown) {
                 if (on_error) {
-                    on_error("local", jqXHR, textStatus, errorThrown);
+                    on_error(checked_server, jqXHR, textStatus, errorThrown);
                 } else {
                     alertMessage("alert-error", "Cannot receive data: " + errorThrown);
                 }
