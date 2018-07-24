@@ -85,19 +85,13 @@ struct symbols_cache {
 	gint peak_cb;
 };
 
-struct counter_data {
-	gdouble mean;
-	gdouble stddev;
-	guint64 number;
-};
-
 struct item_stat {
-	struct counter_data time_counter;
+	struct rspamd_counter_data time_counter;
 	gdouble avg_time;
 	gdouble weight;
 	guint hits;
 	guint64 total_hits;
-	struct counter_data frequency_counter;
+	struct rspamd_counter_data frequency_counter;
 	gdouble avg_frequency;
 	gdouble stddev_frequency;
 };
@@ -109,7 +103,7 @@ struct cache_item {
 	guint64 last_count;
 
 	/* Per process counter */
-	struct counter_data *cd;
+	struct rspamd_counter_data *cd;
 	gchar *symbol;
 	enum rspamd_symbol_type type;
 
@@ -336,50 +330,6 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 	}
 
 	return 0;
-}
-
-/**
- * Set counter for a symbol using moving average
- */
-static double
-rspamd_set_counter (struct counter_data *cd, gdouble value)
-{
-	gdouble cerr;
-
-	/* Cumulative moving average using per-process counter data */
-	if (cd->number == 0) {
-		cd->mean = 0;
-		cd->stddev = 0;
-	}
-
-	cd->mean += (value - cd->mean) / (gdouble)(++cd->number);
-	cerr = (value - cd->mean) * (value - cd->mean);
-	cd->stddev += (cerr - cd->stddev) / (gdouble)(cd->number);
-
-	return cd->mean;
-}
-
-/**
- * Set counter for a symbol using exponential moving average
- */
-static double
-rspamd_set_counter_ema (struct counter_data *cd, gdouble value, gdouble alpha)
-{
-	gdouble diff, incr;
-
-	/* Cumulative moving average using per-process counter data */
-	if (cd->number == 0) {
-		cd->mean = 0;
-		cd->stddev = 0;
-	}
-
-	diff = value - cd->mean;
-	incr = diff * alpha;
-	cd->mean += incr;
-	cd->stddev = (1 - alpha) * (cd->stddev + diff * incr);
-	cd->number ++;
-
-	return cd->mean;
 }
 
 static void
@@ -874,7 +824,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	 * save or accumulate
 	 */
 	item->cd = rspamd_mempool_alloc0 (cache->static_pool,
-			sizeof (struct counter_data));
+			sizeof (struct rspamd_counter_data));
 	item->func = func;
 	item->user_data = user_data;
 	item->priority = priority;

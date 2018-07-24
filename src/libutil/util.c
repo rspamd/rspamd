@@ -2974,3 +2974,43 @@ rspamd_glob_path (const gchar *dir,
 
 	return res;
 }
+
+double
+rspamd_set_counter (struct rspamd_counter_data *cd, gdouble value)
+{
+	gdouble cerr;
+
+	/* Cumulative moving average using per-process counter data */
+	if (cd->number == 0) {
+		cd->mean = 0;
+		cd->stddev = 0;
+	}
+
+	cd->mean += (value - cd->mean) / (gdouble)(++cd->number);
+	cerr = (value - cd->mean) * (value - cd->mean);
+	cd->stddev += (cerr - cd->stddev) / (gdouble)(cd->number);
+
+	return cd->mean;
+}
+
+double
+rspamd_set_counter_ema (struct rspamd_counter_data *cd,
+		gdouble value,
+		gdouble alpha)
+{
+	gdouble diff, incr;
+
+	/* Cumulative moving average using per-process counter data */
+	if (cd->number == 0) {
+		cd->mean = 0;
+		cd->stddev = 0;
+	}
+
+	diff = value - cd->mean;
+	incr = diff * alpha;
+	cd->mean += incr;
+	cd->stddev = (1 - alpha) * (cd->stddev + diff * incr);
+	cd->number ++;
+
+	return cd->mean;
+}
