@@ -58,6 +58,7 @@ struct rspamd_symbols_cache_header {
 
 struct symbols_cache_order {
 	GPtrArray *d;
+	guint id;
 	ref_entry_t ref;
 };
 
@@ -78,6 +79,7 @@ struct symbols_cache {
 	guint used_items;
 	guint stats_symbols_count;
 	guint64 total_hits;
+	guint id;
 	struct rspamd_config *cfg;
 	gdouble reload_time;
 	gint peak_cb;
@@ -231,12 +233,14 @@ rspamd_symbols_cache_order_unref (gpointer p)
 }
 
 static struct symbols_cache_order *
-rspamd_symbols_cache_order_new (gsize nelts)
+rspamd_symbols_cache_order_new (struct symbols_cache *cache,
+		gsize nelts)
 {
 	struct symbols_cache_order *ord;
 
 	ord = g_malloc0 (sizeof (*ord));
 	ord->d = g_ptr_array_sized_new (nelts);
+	ord->id = cache->id;
 	REF_INIT_RETAIN (ord, rspamd_symbols_cache_order_dtor);
 
 	return ord;
@@ -423,7 +427,7 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 	guint64 total_hits = 0;
 	struct cache_item *it;
 
-	ord = rspamd_symbols_cache_order_new (cache->used_items);
+	ord = rspamd_symbols_cache_order_new (cache, cache->used_items);
 
 	for (i = 0; i < cache->used_items; i ++) {
 		it = g_ptr_array_index (cache->items_by_id, i);
@@ -884,6 +888,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	item->id = cache->used_items;
 	item->parent = parent;
 	cache->used_items ++;
+	cache->id ++;
 
 	if (!(item->type &
 			(SYMBOL_TYPE_IDEMPOTENT|SYMBOL_TYPE_NOSTAT|SYMBOL_TYPE_CLASSIFIER))) {
@@ -956,6 +961,7 @@ rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id,
 	}
 
 	item->condition_cb = cbref;
+	cache->id ++;
 
 	msg_debug_cache ("adding condition at lua ref %d to %s (%d)",
 			cbref, item->symbol, item->id);
@@ -999,6 +1005,7 @@ rspamd_symbols_cache_add_condition_delayed (struct symbols_cache *cache,
 	ncond->sym = g_strdup (sym);
 	ncond->cbref = cbref;
 	ncond->L = L;
+	cache->id ++;
 
 	cache->delayed_conditions = g_list_prepend (cache->delayed_conditions, ncond);
 
@@ -1096,6 +1103,7 @@ rspamd_symbols_cache_new (struct rspamd_config *cfg)
 	cache->cfg = cfg;
 	cache->cksum = 0xdeadbabe;
 	cache->peak_cb = -1;
+	cache->id = rspamd_random_uint64_fast ();
 
 	return cache;
 }
@@ -1584,19 +1592,14 @@ rspamd_symbols_cache_make_checkpoint (struct rspamd_task *task,
 		struct symbols_cache *cache)
 {
 	struct cache_savepoint *checkpoint;
-	guint nitems;
 
-	nitems = cache->items_by_id->len - cache->postfilters->len -
-			cache->prefilters->len - cache->composites->len -
-			cache->idempotent->len;
-
-	if (nitems != cache->items_by_order->d->len) {
+	if (cache->items_by_order->id != cache->id) {
 		/*
 		 * Cache has been modified, need to resort it
 		 */
 		msg_info_cache ("symbols cache has been modified since last check:"
-				" old items: %ud, new items: %ud",
-				cache->items_by_order->d->len, nitems);
+				" old id: %ud, new id: %ud",
+				cache->items_by_order->id, cache->id);
 		rspamd_symbols_cache_resort (cache);
 	}
 
