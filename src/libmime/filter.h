@@ -105,6 +105,25 @@ gboolean rspamd_task_add_result_option (struct rspamd_task *task,
 		struct rspamd_symbol_result *s, const gchar *opt);
 
 /**
+ * Finds symbol result
+ * @param task
+ * @param sym
+ * @return
+ */
+struct rspamd_symbol_result* rspamd_task_find_symbol_result (
+		struct rspamd_task *task, const char *sym);
+
+/**
+ * Compatibility function to iterate on symbols hash
+ * @param task
+ * @param func
+ * @param ud
+ */
+void rspamd_task_symbol_result_foreach (struct rspamd_task *task,
+										GHFunc func,
+										gpointer ud);
+
+/**
  * Default consolidation function for metric, it get all symbols and multiply symbol
  * weight by some factor that is specified in config. Default factor is 1.
  * @param task worker's task that present message from user
