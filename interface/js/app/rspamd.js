@@ -180,6 +180,64 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         }, 5000);
     }
 
+    function queryServer(neighbours_status, ind, req_url, on_success, on_error, method, headers, params, req_data) {
+        var req_params = {
+            type: typeof method !== "undefined" ? method : "GET",
+            jsonp: false,
+            data: req_data,
+            beforeSend: function (xhr) {
+                xhr.setRequestHeader("Password", getPassword());
+
+                if (headers) {
+                    $.each(headers, function (hname, hvalue) {
+                        xhr.setRequestHeader(hname, hvalue);
+                    });
+                }
+            },
+            url: neighbours_status[ind].url + req_url,
+            success: function (json) {
+                neighbours_status[ind].checked = true;
+
+                if (jQuery.isEmptyObject(json)) {
+                    neighbours_status[ind].status = false; // serv does not work
+                } else {
+                    neighbours_status[ind].status = true; // serv works
+                    neighbours_status[ind].data = json;
+                }
+            },
+            error: function (jqXHR, textStatus, errorThrown) {
+                neighbours_status[ind].status = false;
+                neighbours_status[ind].checked = true;
+                if (on_error) {
+                    on_error(neighbours_status[ind],
+                        jqXHR, textStatus, errorThrown);
+                } else {
+                    alertMessage("alert-error", "Cannot receive data from " +
+                           neighbours_status[ind].host + ": " + errorThrown);
+                }
+            },
+            complete: function () {
+                if (neighbours_status.every(function (elt) { return elt.checked; })) {
+                    if (neighbours_status.some(function (elt) { return elt.status; })) {
+                        if (on_success) {
+                            on_success(neighbours_status);
+                        } else {
+                            alertMessage("alert-success", "Request completed");
+                        }
+                    } else {
+                        alertMessage("alert-error", "Request failed");
+                    }
+                }
+            }
+        };
+        if (params) {
+            $.each(params, function (k, v) {
+                req_params[k] = v;
+            });
+        }
+        $.ajax(req_params);
+    }
+
     // Public functions
     ui.alertMessage = alertMessage;
     ui.setup = function () {
@@ -313,139 +371,6 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         });
     };
 
-    ui.queryLocal = function (req_url, on_success, on_error, method, headers, params, req_data) {
-        var req_params = {
-            type: method,
-            jsonp: false,
-            data: req_data,
-            beforeSend: function (xhr) {
-                xhr.setRequestHeader("Password", getPassword());
-
-                if (headers) {
-                    $.each(headers, function (hname, hvalue) {
-                        xhr.setRequestHeader(hname, hvalue);
-                    });
-                }
-            },
-            url: neighbours[checked_server].url + req_url,
-            success: function (data) {
-                if (on_success) {
-                    on_success(data);
-                } else {
-                    alertMessage("alert-success", "Data saved");
-                }
-            },
-            error: function (jqXHR, textStatus, errorThrown) {
-                if (on_error) {
-                    on_error(checked_server, jqXHR, textStatus, errorThrown);
-                } else {
-                    alertMessage("alert-error", "Cannot receive data: " + errorThrown);
-                }
-            }
-        };
-        if (params) {
-            $.each(params, function (k, v) {
-                req_params[k] = v;
-            });
-        }
-        $.ajax(req_params);
-    };
-
-    ui.queryNeighbours = function (req_url, on_success, on_error, method, headers, params, req_data) {
-        $.ajax({
-            dataType: "json",
-            type: "GET",
-            url: "neighbours",
-            jsonp: false,
-            beforeSend: function (xhr) {
-                xhr.setRequestHeader("Password", getPassword());
-            },
-            success: function (data) {
-                if (jQuery.isEmptyObject(data)) {
-                    neighbours = {
-                        local:  {
-                            host: window.location.host,
-                            url: window.location.href
-                        }
-                    };
-                } else {
-                    neighbours = data;
-                }
-                var neighbours_status = [];
-                $.each(neighbours, function (ind) {
-                    neighbours_status.push({
-                        name: ind,
-                        url: neighbours[ind].url,
-                        host: neighbours[ind].host,
-                        checked: false,
-                        data: {},
-                        status: false,
-                    });
-                });
-                $.each(neighbours_status, function (ind) {
-                    var req_params = {
-                        type: typeof method !== "undefined" ? method : "GET",
-                        jsonp: false,
-                        data: req_data,
-                        beforeSend: function (xhr) {
-                            xhr.setRequestHeader("Password", getPassword());
-
-                            if (headers) {
-                                $.each(headers, function (hname, hvalue) {
-                                    xhr.setRequestHeader(hname, hvalue);
-                                });
-                            }
-                        },
-                        url: neighbours_status[ind].url + req_url,
-                        success: function (json) {
-                            neighbours_status[ind].checked = true;
-
-                            if (jQuery.isEmptyObject(json)) {
-                                neighbours_status[ind].status = false; // serv does not work
-                            } else {
-                                neighbours_status[ind].status = true; // serv works
-                                neighbours_status[ind].data = json;
-                            }
-                        },
-                        error: function (jqXHR, textStatus, errorThrown) {
-                            neighbours_status[ind].status = false;
-                            neighbours_status[ind].checked = true;
-                            if (on_error) {
-                                on_error(neighbours_status[ind],
-                                    jqXHR, textStatus, errorThrown);
-                            } else {
-                                alertMessage("alert-error", "Cannot receive data from " +
-                                       neighbours_status[ind].host + ": " + errorThrown);
-                            }
-                        },
-                        complete: function () {
-                            if (neighbours_status.every(function (elt) { return elt.checked; })) {
-                                if (neighbours_status.some(function (elt) { return elt.status; })) {
-                                    if (on_success) {
-                                        on_success(neighbours_status);
-                                    } else {
-                                        alertMessage("alert-success", "Request completed");
-                                    }
-                                } else {
-                                    alertMessage("alert-error", "Request failed");
-                                }
-                            }
-                        }
-                    };
-                    if (params) {
-                        $.each(params, function (k, v) {
-                            req_params[k] = v;
-                        });
-                    }
-                    $.ajax(req_params);
-                });
-            },
-            error: function () {
-                ui.alertMessage("alert-error", "Cannot receive neighbours data");
-            },
-        });
-    };
-
     ui.drawPie = function (object, id, data, conf) {
         var obj = object;
         if (obj) {
@@ -538,6 +463,61 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     };
 
     ui.getPassword = getPassword;
+
+    ui.query = function (req_url, on_success, on_error, method, headers, params, req_data, is_cluster) {
+        if (checked_server === "All SERVERS" || is_cluster) {
+            $.ajax({
+                dataType: "json",
+                type: "GET",
+                url: "neighbours",
+                jsonp: false,
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader("Password", getPassword());
+                },
+                success: function (data) {
+                    if (jQuery.isEmptyObject(data)) {
+                        neighbours = {
+                            local:  {
+                                host: window.location.host,
+                                url: window.location.href
+                            }
+                        };
+                    } else {
+                        neighbours = data;
+                    }
+                    var neighbours_status = [];
+                    $.each(neighbours, function (ind) {
+                        neighbours_status.push({
+                            name: ind,
+                            url: neighbours[ind].url,
+                            host: neighbours[ind].host,
+                            checked: false,
+                            data: {},
+                            status: false,
+                        });
+                    });
+                    $.each(neighbours_status, function (ind) {
+                        queryServer(neighbours_status, ind, req_url, on_success, on_error, method, headers, params, req_data);
+                    });
+                },
+                error: function () {
+                    ui.alertMessage("alert-error", "Cannot receive neighbours data");
+                },
+            });
+        } else {
+            var neighbours_status = [];
+            neighbours_status[0] = {
+                name: checked_server,
+                url: neighbours[checked_server].url,
+                host: neighbours[checked_server].host,
+                checked: false,
+                data: {},
+                status: false,
+            };
+
+            queryServer(neighbours_status, 0, req_url, on_success, on_error, method, headers, params, req_data);
+        }
+    };
 
     return ui;
 });

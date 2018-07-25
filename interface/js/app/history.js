@@ -570,7 +570,7 @@ define(["jquery", "footable", "humanize"],
             };
 
             if (checked_server === "All SERVERS") {
-                rspamd.queryNeighbours("history", function (req_data) {
+                rspamd.query("history", function (req_data) {
                     function differentVersions(neighbours_data) {
                         var dv = neighbours_data.some(function (e) {
                             return e.version !== neighbours_data[0].version;
@@ -697,20 +697,18 @@ define(["jquery", "footable", "humanize"],
                     delete ft.errors;
                 }
 
-                (function (callback) {
-                    callback("historyreset",
-                        function () {
-                            ui.getHistory(rspamd, tables, neighbours, checked_server);
-                            ui.getErrors(rspamd, tables, neighbours, checked_server);
-                        },
-                        function (serv, jqXHR, textStatus, errorThrown) {
-                            var serv_name = (typeof serv === "string") ? serv : serv.name;
-                            rspamd.alertMessage("alert-error",
-                                "Cannot reset history log on " + serv_name + ": " + errorThrown);
-                        },
-                        "GET", {}, {}
-                    );
-                }((checked_server === "All SERVERS") ? rspamd.queryNeighbours : rspamd.queryLocal));
+                rspamd.query("historyreset",
+                    function () {
+                        ui.getHistory(rspamd, tables, neighbours, checked_server);
+                        ui.getErrors(rspamd, tables, neighbours, checked_server);
+                    },
+                    function (serv, jqXHR, textStatus, errorThrown) {
+                        var serv_name = (typeof serv === "string") ? serv : serv.name;
+                        rspamd.alertMessage("alert-error",
+                            "Cannot reset history log on " + serv_name + ": " + errorThrown);
+                    },
+                    "GET", {}, {}
+                );
             });
         };
 
@@ -766,7 +764,7 @@ define(["jquery", "footable", "humanize"],
                     }
                 });
             } else {
-                rspamd.queryNeighbours("errors", function (req_data) {
+                rspamd.query("errors", function (req_data) {
                     var neighbours_data = req_data
                         .filter(function (d) {
                             return d.status;

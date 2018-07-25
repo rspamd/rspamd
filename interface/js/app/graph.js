@@ -212,58 +212,51 @@ define(["jquery", "d3evolution", "footable"],
                 graphs.graph = initGraph();
             }
 
-            (function (callback) {
-                callback("graph",
-                    function (req_data) {
-                        if (checked_server !== "All SERVERS") {
-                            updateWidgets(req_data);
-                            return;
-                        }
+            rspamd.query("graph",
+                function (req_data) {
+                    var neighbours_data = req_data
+                        .filter(function (d) { return d.status; }) // filter out unavailable neighbours
+                        .map(function (d) { return d.data; });
 
-                        var neighbours_data = req_data
-                            .filter(function (d) { return d.status; }) // filter out unavailable neighbours
-                            .map(function (d) { return d.data; });
+                    if (neighbours_data.length > 1) {
+                        neighbours_data.reduce(function (res, curr) {
+                            if ((curr[0][0].x !== res[0][0].x) ||
+                            (curr[0][curr[0].length - 1].x !== res[0][res[0].length - 1].x)) {
+                                rspamd.alertMessage("alert-error",
+                                    "Neighbours time extents do not match. Check if time is synchronized on all servers.");
+                                updateWidgets();
+                                return;
+                            }
 
-                        if (neighbours_data.length > 1) {
-                            neighbours_data.reduce(function (res, curr) {
-                                if ((curr[0][0].x !== res[0][0].x) ||
-                                (curr[0][curr[0].length - 1].x !== res[0][res[0].length - 1].x)) {
-                                    rspamd.alertMessage("alert-error",
-                                        "Neighbours time extents do not match. Check if time is synchronized on all servers.");
-                                    updateWidgets();
-                                    return;
-                                }
-
-                                var data = [];
-                                curr.forEach(function (action, j) {
-                                    data.push(
-                                        action.map(function (d, i) {
-                                            return {
-                                                x: d.x,
-                                                y: ((res[j][i].y === null) ? d.y : res[j][i].y + d.y)
-                                            };
-                                        })
-                                    );
-                                });
-                                updateWidgets(data);
+                            var data = [];
+                            curr.forEach(function (action, j) {
+                                data.push(
+                                    action.map(function (d, i) {
+                                        return {
+                                            x: d.x,
+                                            y: ((res[j][i].y === null) ? d.y : res[j][i].y + d.y)
+                                        };
+                                    })
+                                );
                             });
-                        } else {
-                            updateWidgets(neighbours_data[0]);
-                        }
-                    },
-                    function (serv, jqXHR, textStatus, errorThrown) {
-                        var serv_name = (typeof serv === "string") ? serv : serv.name;
-                        var alert_status = "alerted_graph_" + serv_name;
+                            updateWidgets(data);
+                        });
+                    } else {
+                        updateWidgets(neighbours_data[0]);
+                    }
+                },
+                function (serv, jqXHR, textStatus, errorThrown) {
+                    var serv_name = (typeof serv === "string") ? serv : serv.name;
+                    var alert_status = "alerted_graph_" + serv_name;
 
-                        if (!(alert_status in sessionStorage)) {
-                            sessionStorage.setItem(alert_status, true);
-                            rspamd.alertMessage("alert-error", "Cannot receive throughput data from " +
-                            serv_name + ", error: " + errorThrown);
-                        }
-                    },
-                    "GET", {}, {}, {type: type}
-                );
-            }((checked_server === "All SERVERS") ? rspamd.queryNeighbours : rspamd.queryLocal));
+                    if (!(alert_status in sessionStorage)) {
+                        sessionStorage.setItem(alert_status, true);
+                        rspamd.alertMessage("alert-error", "Cannot receive throughput data from " +
+                        serv_name + ", error: " + errorThrown);
+                    }
+                },
+                "GET", {}, {}, {type: type}
+            );
         };
 
         ui.setup = function () {
