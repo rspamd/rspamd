@@ -197,7 +197,7 @@ define(["jquery"],
                         $("#actionsFormField").attr("disabled", true);
                     }
 
-                    function saveActions(callback) {
+                    function saveActions(is_cluster) {
                         var elts = loadActionsFromForm();
                         // String to array for comparison
                         var eltsArray = JSON.parse(loadActionsFromForm());
@@ -214,20 +214,20 @@ define(["jquery"],
                         (eltsArray[1] === null || eltsArray[2] < eltsArray[1]) &&
                         (eltsArray[0] === null || eltsArray[1] < eltsArray[0])
                         ) {
-                            callback("saveactions", null, null, "POST", {}, {
+                            rspamd.query("saveactions", null, null, "POST", {}, {
                                 data: elts,
                                 dataType: "json"
-                            });
+                            }, {}, is_cluster);
                         } else {
                             rspamd.alertMessage("alert-modal alert-error", "Incorrect order of metric actions threshold");
                         }
                     }
 
                     $("#saveActionsBtn").on("click", function () {
-                        saveActions(rspamd.queryLocal);
+                        saveActions();
                     });
                     $("#saveActionsClusterBtn").on("click", function () {
-                        saveActions(rspamd.queryNeighbours);
+                        saveActions(true);
                     });
                 },
             });
@@ -269,7 +269,7 @@ define(["jquery"],
                 var action = $(form).attr("action");
                 var id = $(form).attr("id");
                 var data = $("#" + id).find("textarea").val();
-                rspamd.queryNeighbours(action, save_map_success, save_map_error, "POST", {
+                rspamd.query(action, save_map_success, save_map_error, "POST", {
                     Map: id,
                 }, {
                     data: data,

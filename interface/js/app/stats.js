@@ -171,7 +171,7 @@ define(["jquery", "d3pie", "humanize"],
         // Public API
         var ui = {
             statWidgets: function (rspamd, graphs, checked_server) {
-                rspamd.queryNeighbours("/auth", function (neighbours_status) {
+                rspamd.query("/auth", function (neighbours_status) {
                     var neighbours_sum = {
                         version: neighbours_status[0].data.version,
                         auth: "ok",
@@ -227,7 +227,7 @@ define(["jquery", "d3pie", "humanize"],
                         rspamd.alertMessage("alert-error", "Cannot receive stats data from: " +
                         serv.name + ", error: " + errorThrown);
                     }
-                });
+                }, "GET", {}, {}, {}, true);
             },
         };
 

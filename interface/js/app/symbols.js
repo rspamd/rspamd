@@ -41,22 +41,20 @@ define(["jquery", "footable"],
                 });
             });
 
-            (function (callback) {
-                callback(url,
-                    function () {
-                        rspamd.alertMessage("alert-modal alert-success", "Symbols successfully saved");
-                    },
-                    function (serv, jqXHR, textStatus, errorThrown) {
-                        var serv_name = (typeof serv === "string") ? serv : serv.name;
-                        rspamd.alertMessage("alert-modal alert-error",
-                            "Save symbols error on " + serv_name + ": " + errorThrown);
-                    },
-                    "POST", {}, {
-                        data: JSON.stringify(values),
-                        dataType: "json",
-                    }
-                );
-            }((is_cluster) ? rspamd.queryNeighbours : rspamd.queryLocal));
+            rspamd.query(url,
+                function () {
+                    rspamd.alertMessage("alert-modal alert-success", "Symbols successfully saved");
+                },
+                function (serv, jqXHR, textStatus, errorThrown) {
+                    var serv_name = (typeof serv === "string") ? serv : serv.name;
+                    rspamd.alertMessage("alert-modal alert-error",
+                        "Save symbols error on " + serv_name + ": " + errorThrown);
+                },
+                "POST", {}, {
+                    data: JSON.stringify(values),
+                    dataType: "json",
+                }, {}, is_cluster
+            );
         }
         function decimalStep(number) {
             var digits = ((Number(number)).toFixed(20)).replace(/^-?\d*\.?|0+$/g, "").length;
