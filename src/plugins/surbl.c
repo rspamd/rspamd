@@ -240,6 +240,7 @@ read_exceptions_list (gchar * chunk,
 			g_free (t);
 		}
 
+		data->prev_data = NULL;
 		data->cur_data = g_malloc0 (MAX_LEVELS * sizeof (GHashTable *));
 	}
 
