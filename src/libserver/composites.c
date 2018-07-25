@@ -57,7 +57,7 @@ enum rspamd_composite_action {
 };
 
 struct symbol_remove_data {
-	struct rspamd_symbol_result *ms;
+	const gchar *sym;
 	struct rspamd_composite *comp;
 	GNode *parent;
 	guint action;
@@ -244,7 +244,7 @@ rspamd_composite_expr_process (gpointer input, rspamd_expression_atom_t *atom)
 		rd = g_hash_table_lookup (cd->symbols_to_remove, ms->name);
 
 		nrd = rspamd_mempool_alloc (cd->task->task_pool, sizeof (*nrd));
-		nrd->ms = ms;
+		nrd->sym = ms->name;
 
 		/* By default remove symbols */
 		switch (cd->composite->policy) {
@@ -369,6 +369,7 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 	struct composites_data *cd = data;
 	struct rspamd_task *task;
 	struct symbol_remove_data *rd = value, *cur;
+	struct rspamd_symbol_result *ms;
 	gboolean skip = FALSE, has_valid_op = FALSE,
 			want_remove_score = TRUE, want_remove_symbol = TRUE,
 			want_forced = FALSE;
@@ -422,17 +423,19 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 		}
 	}
 
-	if (has_valid_op && !(rd->ms->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
+	ms = rspamd_task_find_symbol_result (task, rd->sym);
+
+	if (has_valid_op && ms && !(ms->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
 
 		if (want_remove_score || want_forced) {
 			msg_debug_composites ("remove symbol weight for %s (was %.2f)",
-					key, rd->ms->score);
-			cd->metric_res->score -= rd->ms->score;
-			rd->ms->score = 0.0;
+					key, ms->score);
+			cd->metric_res->score -= ms->score;
+			ms->score = 0.0;
 		}
 
 		if (want_remove_symbol || want_forced) {
-			rd->ms->flags |= RSPAMD_SYMBOL_RESULT_IGNORED;
+			ms->flags |= RSPAMD_SYMBOL_RESULT_IGNORED;
 			msg_debug_composites ("remove symbol %s", key);
 		}
 	}
