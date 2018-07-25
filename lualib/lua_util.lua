@@ -25,15 +25,33 @@ local rspamd_util = require "rspamd_util"
 local fun = require "fun"
 
 local split_grammar = {}
-local function rspamd_str_split(s, sep)
-  local gr = split_grammar[sep]
+local spaces_split_grammar
+local space = lpeg.S' \t\n\v\f\r'
+local nospace = 1 - space
+local ptrim = space^0 * lpeg.C((space^0 * nospace^1)^0)
+local match = lpeg.match
 
-  if not gr then
-    local _sep = lpeg.P(sep)
-    local elem = lpeg.C((1 - _sep)^0)
-    local p = lpeg.Ct(elem * (_sep * elem)^0)
-    gr = p
-    split_grammar[sep] = gr
+local function rspamd_str_split(s, sep)
+  local gr
+  if not sep then
+    if not spaces_split_grammar then
+      local _sep = space
+      local elem = lpeg.C((1 - _sep)^0)
+      local p = lpeg.Ct(elem * (_sep * elem)^0)
+      spaces_split_grammar = p
+    end
+
+    gr = spaces_split_grammar
+  else
+    gr = split_grammar[sep]
+
+    if not gr then
+      local _sep = lpeg.P(sep)
+      local elem = lpeg.C((1 - _sep)^0)
+      local p = lpeg.Ct(elem * (_sep * elem)^0)
+      gr = p
+      split_grammar[sep] = gr
+    end
   end
 
   return gr:match(s)
@@ -50,10 +68,6 @@ end
 exports.rspamd_str_split = rspamd_str_split
 exports.str_split = rspamd_str_split
 
-local space = lpeg.S' \t\n\v\f\r'
-local nospace = 1 - space
-local ptrim = space^0 * lpeg.C((space^0 * nospace^1)^0)
-local match = lpeg.match
 exports.rspamd_str_trim = function(s)
   return match(ptrim, s)
 end
