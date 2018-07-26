@@ -856,18 +856,18 @@ local function get_last_removal_ago()
     f:close()
   end
 
-  write_file, err = io.open(ts_file, 'w')
-  if err then
-    rspamd_logger.errx(rspamd_config, 'Failed to open %s, will not perform retention: %s', ts_file, err)
-    return nil
-  end
-
   local current_ts = os.time()
 
   if last_ts == nil or (last_ts + settings.retention.period) <= current_ts then
+    write_file, err = io.open(ts_file, 'w')
+    if err then
+      rspamd_logger.errx(rspamd_config, 'Failed to open %s, will not perform retention: %s', ts_file, err)
+      return nil
+    end
+
     local res
     res, err = write_file:write(tostring(current_ts))
-    if err then
+    if err or res == nil then
       rspamd_logger.errx(rspamd_config, 'Failed to write %s, will not perform retention: %s', ts_file, err)
       return nil
     end
