@@ -30,7 +30,7 @@ define(["jquery", "footable"],
         var ft = {};
         var ui = {};
 
-        function saveSymbols(rspamd, action, id, is_cluster) {
+        function saveSymbols(rspamd, action, id, server) {
             var inputs = $("#" + id + " :input[data-role=\"numerictextbox\"]");
             var url = action;
             var values = [];
@@ -53,7 +53,7 @@ define(["jquery", "footable"],
                 "POST", {}, {
                     data: JSON.stringify(values),
                     dataType: "json",
-                }, {}, is_cluster
+                }, {}, server
             );
         }
         function decimalStep(number) {
@@ -103,7 +103,7 @@ define(["jquery", "footable"],
                         distinct_groups.push(item.group);
                     }
                     item.save = "<button type=\"button\" data-save=\"local\" class=\"btn btn-primary btn-sm mb-disabled\">Save</button>" +
-                "&nbsp;<button data-save=\"cluster\" type=\"button\" class=\"btn btn-primary btn-sm mb-disabled\">Save in cluster</button>";
+                "&nbsp;<button data-save=\"All SERVERS\" type=\"button\" class=\"btn btn-primary btn-sm mb-disabled\">Save in cluster</button>";
                     items.push(item);
                 });
             });
@@ -240,7 +240,7 @@ define(["jquery", "footable"],
                 .on("click", ":button", function () {
                     var value = $(this).data("save");
                     if (!value) return;
-                    saveSymbols(rspamd, "./savesymbols", "symbolsTable", value === "cluster");
+                    saveSymbols(rspamd, "./savesymbols", "symbolsTable", value);
                 });
         };
 

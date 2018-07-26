@@ -197,7 +197,7 @@ define(["jquery"],
                         $("#actionsFormField").attr("disabled", true);
                     }
 
-                    function saveActions(is_cluster) {
+                    function saveActions(server) {
                         var elts = loadActionsFromForm();
                         // String to array for comparison
                         var eltsArray = JSON.parse(loadActionsFromForm());
@@ -217,7 +217,7 @@ define(["jquery"],
                             rspamd.query("saveactions", null, null, "POST", {}, {
                                 data: elts,
                                 dataType: "json"
-                            }, {}, is_cluster);
+                            }, {}, server);
                         } else {
                             rspamd.alertMessage("alert-modal alert-error", "Incorrect order of metric actions threshold");
                         }
@@ -227,7 +227,7 @@ define(["jquery"],
                         saveActions();
                     });
                     $("#saveActionsClusterBtn").on("click", function () {
-                        saveActions(true);
+                        saveActions("All SERVERS");
                     });
                 },
             });
