@@ -755,7 +755,7 @@ local function mk_remove_http_cb(upstream, params, ok_cb)
     if code ~= 200 or err_message then
       if not err_message then err_message = data end
       local ip_addr = upstream:get_addr():to_string(true)
-      rspamd_logger.errx(rspamd_config, "request failed on clickhouse server %s: %s",
+      rspamd_logger.errx(params.ev_base, "request failed on clickhouse server %s: %s",
               ip_addr, err_message)
       upstream:fail()
     else
@@ -770,7 +770,7 @@ local function mk_remove_http_cb(upstream, params, ok_cb)
 end
 
 local function clickhouse_request(upstream, ok_cb, params)
-  rspamd_logger.infox(rspamd_config, "clickhouse_request: %s", params.body) -- TODO: make debugm
+  rspamd_logger.debugm(N, rspamd_config, "clickhouse_request: %s", params.body)
 
   params.callback = mk_remove_http_cb(upstream, params, ok_cb)
   params.gzip = settings.use_gzip
@@ -814,7 +814,7 @@ end
 local function parse_clickhouse_response(ev_base, cfg, data)
   rspamd_logger.debugm(N, ev_base, "got clickhouse response: %s", data)
   if data == nil then
-    -- clickhouse returned no data: exiting
+    -- clickhouse returned no data (i.e. empty resultset): exiting
     return
   end
   local function parse_string(s)
