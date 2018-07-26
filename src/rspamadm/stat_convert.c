@@ -224,11 +224,11 @@ rspamadm_statconvert (gint argc, gchar **argv, const struct rspamadm_command *cm
 		ucl_object_insert_key (obj, redis, "redis", 0, false);
 
 		ucl_object_insert_key (redis, ucl_object_fromstring (redis_host),
-				"host", 0, false);
+				"servers", 0, false);
 
 		if (redis_db) {
 			ucl_object_insert_key (redis, ucl_object_fromstring (redis_db),
-					"db", 0, false);
+					"dbname", 0, false);
 		}
 
 		if (redis_password) {
