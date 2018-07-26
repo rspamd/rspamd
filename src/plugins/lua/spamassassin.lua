@@ -700,7 +700,7 @@ local function process_sa_conf(f)
     (function ()
     l = lua_util.rspamd_str_trim(l)
     -- Replace bla=~/re/ with bla =~ /re/ (#2372)
-    l = l:gsub('([^%s])%s*=~%s*([^%s])', '%1 =~ %2')
+    l = l:gsub('([^%s])%s*[=!]~%s*([^%s])', '%1 =~ %2')
 
     if string.len(l) == 0 or string.sub(l, 1, 1) == '#' then
       return
