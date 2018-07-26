@@ -255,6 +255,7 @@ insert_metric_result (struct rspamd_task *task,
 		sym_cpy = rspamd_mempool_strdup (task->task_pool, symbol);
 		k = kh_put (rspamd_symbols_hash, metric_res->symbols,
 				sym_cpy, &ret);
+		g_assert (ret > 0);
 		s = &kh_value (metric_res->symbols, k);
 		memset (s, 0, sizeof (*s));
 

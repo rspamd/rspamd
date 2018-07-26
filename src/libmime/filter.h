@@ -28,12 +28,8 @@ enum rspamd_symbol_result_flags {
 /**
  * Rspamd symbol
  */
-KHASH_INIT (rspamd_options_hash,
-		const char *,
-		struct rspamd_symbol_option *,
-		true,
-		rspamd_str_hash,
-		rspamd_str_equal);
+KHASH_MAP_INIT_STR (rspamd_options_hash, struct rspamd_symbol_option *);
+
 struct rspamd_symbol_result {
 	double score;                                  /**< symbol's score							*/
 	khash_t(rspamd_options_hash) *options;         /**< list of symbol's options				*/
@@ -47,13 +43,9 @@ struct rspamd_symbol_result {
 /**
  * Result of metric processing
  */
-KHASH_INIT (rspamd_symbols_hash,
-		const char *,
-		struct rspamd_symbol_result,
-		true,
-		rspamd_str_hash,
-		rspamd_str_equal);
+KHASH_MAP_INIT_STR (rspamd_symbols_hash, struct rspamd_symbol_result);
 KHASH_MAP_INIT_INT (rspamd_symbols_group_hash, double);
+
 struct rspamd_metric_result {
 	double score;                                   /**< total score							*/
 	double grow_factor;								/**< current grow factor					*/
