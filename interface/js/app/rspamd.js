@@ -464,8 +464,9 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
 
     ui.getPassword = getPassword;
 
-    ui.query = function (req_url, on_success, on_error, method, headers, params, req_data, is_cluster) {
-        if (checked_server === "All SERVERS" || is_cluster) {
+    ui.query = function (req_url, on_success, on_error, method, headers, params, req_data, server) {
+        var srv = (server) ? server : checked_server;
+        if (srv === "All SERVERS") {
             $.ajax({
                 dataType: "json",
                 type: "GET",
@@ -507,9 +508,9 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         } else {
             var neighbours_status = [];
             neighbours_status[0] = {
-                name: checked_server,
-                url: neighbours[checked_server].url,
-                host: neighbours[checked_server].host,
+                name: srv,
+                url: (srv === "local") ? "" : neighbours[srv].url,
+                host: (srv === "local") ? "local" : neighbours[srv].host,
                 checked: false,
                 data: {},
                 status: false,

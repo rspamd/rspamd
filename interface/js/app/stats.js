@@ -227,7 +227,7 @@ define(["jquery", "d3pie", "humanize"],
                         rspamd.alertMessage("alert-error", "Cannot receive stats data from: " +
                         serv.name + ", error: " + errorThrown);
                     }
-                }, "GET", {}, {}, {}, true);
+                }, "GET", {}, {}, {}, "All SERVERS");
             },
         };
 
