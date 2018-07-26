@@ -144,16 +144,12 @@ insert_metric_result (struct rspamd_task *task,
 		final_score = (*sdef->weight_ptr) * weight;
 
 		PTR_ARRAY_FOREACH (sdef->groups, i, gr) {
-			k = kh_get (rspamd_symbols_group_hash,
-					metric_res->sym_groups, GPOINTER_TO_INT (gr));
+			k = kh_get (rspamd_symbols_group_hash, metric_res->sym_groups, gr);
 
 			if (k == kh_end (metric_res->sym_groups)) {
 				k = kh_put (rspamd_symbols_group_hash, metric_res->sym_groups,
-						GPOINTER_TO_INT (gr), &ret);
+						gr, &ret);
 				kh_value (metric_res->sym_groups, k) = 0;
-			}
-			else {
-				gr_score = &kh_value (metric_res->sym_groups, k);
 			}
 		}
 	}
@@ -232,20 +228,39 @@ insert_metric_result (struct rspamd_task *task,
 				next_gf = task->cfg->grow_factor;
 			}
 
-			diff = rspamd_check_group_score (task, symbol, gr, gr_score, diff);
+			if (sdef) {
+				PTR_ARRAY_FOREACH (sdef->groups, i, gr) {
+					gdouble cur_diff;
+
+					k = kh_get (rspamd_symbols_group_hash,
+							metric_res->sym_groups, gr);
+					g_assert (k != kh_end (metric_res->sym_groups));
+					gr_score = &kh_value (metric_res->sym_groups, k);
+					cur_diff = rspamd_check_group_score (task, symbol, gr,
+							gr_score, diff);
+
+					if (isnan (cur_diff)) {
+						/* Limit reached, do not add result */
+						diff = NAN;
+						break;
+					} else if (gr_score) {
+						*gr_score += cur_diff;
+
+						if (cur_diff < diff) {
+							/* Reduce */
+							diff = cur_diff;
+						}
+					}
+				}
+			}
 
 			if (!isnan (diff)) {
 				metric_res->score += diff;
 				metric_res->grow_factor = next_gf;
 
-				if (gr_score) {
-					*gr_score += diff;
-				}
-
 				if (single) {
 					s->score = final_score;
-				}
-				else {
+				} else {
 					s->score += diff;
 				}
 			}
@@ -272,17 +287,36 @@ insert_metric_result (struct rspamd_task *task,
 		s->sym = sdef;
 		s->nshots = 1;
 
-		final_score = rspamd_check_group_score (task, symbol, gr, gr_score, final_score);
+		if (sdef) {
+			/* Check group limits */
+			PTR_ARRAY_FOREACH (sdef->groups, i, gr) {
+				gdouble cur_score;
+
+				k = kh_get (rspamd_symbols_group_hash, metric_res->sym_groups, gr);
+				g_assert (k != kh_end (metric_res->sym_groups));
+				gr_score = &kh_value (metric_res->sym_groups, k);
+				cur_score = rspamd_check_group_score (task, symbol, gr,
+						gr_score, final_score);
+
+				if (isnan (cur_score)) {
+					/* Limit reached, do not add result */
+					final_score = NAN;
+					break;
+				} else if (gr_score) {
+					*gr_score += cur_score;
+
+					if (cur_score < final_score) {
+						/* Reduce */
+						final_score = cur_score;
+					}
+				}
+			}
+		}
 
 		if (!isnan (final_score)) {
 			metric_res->score += final_score;
 			metric_res->grow_factor = next_gf;
 			s->score = final_score;
-
-			if (gr_score) {
-				*gr_score += final_score;
-			}
-
 		}
 		else {
 			s->score = 0;
