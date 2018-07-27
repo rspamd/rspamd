@@ -259,19 +259,6 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             }, 1000);
         });
 
-        $.ajax({
-            type: "GET",
-            url: "stat",
-            success: function () {
-                saveCredentials({}, "nopassword");
-                var dialog = $("#connectDialog");
-                var backdrop = $("#backDrop");
-                $(dialog).hide();
-                $(backdrop).hide();
-                displayUI();
-            },
-        });
-
         $("a[data-toggle=\"tab\"]").on("click", function (e) {
             var tab_id = "#" + $(e.target).attr("id");
             tabClick(tab_id);
