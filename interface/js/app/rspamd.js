@@ -119,7 +119,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             });
             break;
         case "#configuration_nav":
-            tab_config.getActions(ui);
+            tab_config.getActions(ui, checked_server);
             tab_config.getMaps(ui);
             break;
         case "#symbols_nav":
@@ -257,19 +257,6 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             setTimeout(function () {
                 $("#navBar").removeClass("loading");
             }, 1000);
-        });
-
-        $.ajax({
-            type: "GET",
-            url: "stat",
-            success: function () {
-                saveCredentials({}, "nopassword");
-                var dialog = $("#connectDialog");
-                var backdrop = $("#backDrop");
-                $(dialog).hide();
-                $(backdrop).hide();
-                displayUI();
-            },
         });
 
         $("a[data-toggle=\"tab\"]").on("click", function (e) {
