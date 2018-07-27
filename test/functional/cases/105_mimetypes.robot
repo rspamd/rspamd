@@ -45,6 +45,10 @@ Multipart Archive Extension
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/f.zip.001.eml
   Should Not Contain  ${result.stdout}  MIME_ARCHIVE_IN_ARCHIVE
 
+Empty text part should not be treat as html
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/empty-plain-text.eml
+  Should Not Contain  ${result.stdout}  FORGED_OUTLOOK_HTML
+
 *** Keywords ***
 MIMETypes Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/mime_types.conf
