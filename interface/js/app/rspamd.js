@@ -119,7 +119,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             });
             break;
         case "#configuration_nav":
-            tab_config.getActions(ui);
+            tab_config.getActions(ui, checked_server);
             tab_config.getMaps(ui);
             break;
         case "#symbols_nav":

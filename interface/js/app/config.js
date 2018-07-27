@@ -135,29 +135,21 @@ define(["jquery"],
             return JSON.stringify(values);
         }
 
-        function getActions(rspamd) {
-            $.ajax({
-                dataType: "json",
-                type: "GET",
-                url: "actions",
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader("Password", rspamd.getPassword());
-                },
-                success: function (data) {
-                // Order of sliders greylist -> probable spam -> rewrite subject -> spam
+        ui.getActions = function getActions(rspamd, checked_server) {
+            rspamd.query("actions",
+                function (data) {
                     $("#actionsBody").empty();
                     $("#actionsForm").empty();
                     var items = [];
-                    $.each(data, function (i, item) {
+                    $.each(data[0].data, function (i, item) {
                         var idx = -1;
                         var label;
-                        if (item.action === "add header") {
-                            label = "Probably Spam";
-                            idx = 1;
-                        } else if (item.action === "greylist") {
+                        if (item.action === "greylist") {
                             label = "Greylist";
                             idx = 0;
+                        } else if (item.action === "add header") {
+                            label = "Probably Spam";
+                            idx = 1;
                         } else if (item.action === "rewrite subject") {
                             label = "Rewrite subject";
                             idx = 2;
@@ -230,8 +222,9 @@ define(["jquery"],
                         saveActions("All SERVERS");
                     });
                 },
-            });
-        }
+                null, "GET", {}, {}, {}, (checked_server === "All SERVERS") ? "local" : checked_server
+            );
+        };
 
         // @upload edited actions
         ui.setup = function (rspamd) {
@@ -278,7 +271,6 @@ define(["jquery"],
             });
         };
 
-        ui.getActions = getActions;
         ui.getMaps = getMaps;
 
         return ui;
