@@ -413,6 +413,7 @@ local function multimap_callback(task, rule)
             table.insert(srch, nip)
         end
       end
+
       table.insert(srch, 1, r['redis_key'])
       ret = rspamd_redis_make_request(task,
         redis_params, -- connect params
@@ -759,6 +760,7 @@ local function multimap_callback(task, rule)
     url = function()
       if task:has_urls() then
         local msg_urls = task:get_urls()
+
         for _,url in ipairs(msg_urls) do
           match_url(rule, url)
         end
@@ -1095,6 +1097,8 @@ if opts and type(opts) == 'table' then
       if not rule then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "'..k..'"')
       else
+        rspamd_logger.infox(rspamd_config, 'added multimap rule: %s (%s)',
+            k, rule.type)
         table.insert(rules, rule)
       end
     end

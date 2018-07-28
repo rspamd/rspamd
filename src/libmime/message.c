@@ -676,11 +676,13 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 			RSPAMD_FTOK_ASSIGN (&xhtml_tok, "<html");
 
 			if (mime_part->parsed_data.len >= xhtml_tok.len &&
-					rspamd_lc_cmp (mime_part->parsed_data.begin, xhtml_tok.begin, xhtml_tok.len)) {
+					rspamd_lc_cmp (mime_part->parsed_data.begin,
+							xhtml_tok.begin, xhtml_tok.len) == 0) {
 				found_html = TRUE;
 			}
 			else if (mime_part->parsed_data.len >= html_tok.len &&
-					rspamd_lc_cmp (mime_part->parsed_data.begin, html_tok.begin, html_tok.len)) {
+					rspamd_lc_cmp (mime_part->parsed_data.begin,
+							html_tok.begin, html_tok.len) == 0) {
 				found_html = TRUE;
 			}
 			else {
