@@ -30,6 +30,11 @@ define(["jquery", "footable"],
         var ft = {};
         var ui = {};
 
+        function getSelector(id) {
+            var e = document.getElementById(id);
+            return e.options[e.selectedIndex].value;
+        }
+
         function saveSymbols(rspamd, action, id, server) {
             var inputs = $("#" + id + " :input[data-role=\"numerictextbox\"]");
             var url = action;
@@ -65,6 +70,7 @@ define(["jquery", "footable"],
             var lookup = {};
             var freqs = [];
             var distinct_groups = [];
+            var selected_server = getSelector("selSrv");
 
             data.forEach(function (group) {
                 group.rules.forEach(function (item) {
@@ -102,8 +108,13 @@ define(["jquery", "footable"],
                         lookup[item.group] = 1;
                         distinct_groups.push(item.group);
                     }
-                    item.save = "<button type=\"button\" data-save=\"local\" class=\"btn btn-primary btn-sm mb-disabled\">Save</button>" +
-                "&nbsp;<button data-save=\"All SERVERS\" type=\"button\" class=\"btn btn-primary btn-sm mb-disabled\">Save in cluster</button>";
+                    item.save =
+                        "<button data-save=\"" + selected_server +
+                        "\" title=\"Save changes to the selected server\" " +
+                        "type=\"button\" class=\"btn btn-primary btn-sm mb-disabled\">Save</button>&nbsp;" +
+                        "<button data-save=\"All SERVERS" +
+                        "\" title=\"Save changes to all servers\" " +
+                        "type=\"button\" class=\"btn btn-primary btn-sm mb-disabled\">Save in cluster</button>";
                     items.push(item);
                 });
             });
@@ -135,17 +146,10 @@ define(["jquery", "footable"],
             return [items, distinct_groups];
         }
         // @get symbols into modal form
-        ui.getSymbols = function (rspamd) {
-
-            $.ajax({
-                dataType: "json",
-                type: "GET",
-                url: "symbols",
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader("Password", rspamd.getPassword());
-                },
-                success: function (data) {
+        ui.getSymbols = function (rspamd, checked_server) {
+            rspamd.query("symbols",
+                function (json) {
+                    var data = json[0].data;
                     var items = process_symbols_data(data);
                     FooTable.groupFilter = FooTable.Filtering.extend({
                         construct : function (instance) {
@@ -231,10 +235,11 @@ define(["jquery", "footable"],
                         }
                     });
                 },
-                error: function (data) {
+                function (data) {
                     rspamd.alertMessage("alert-modal alert-error", data.statusText);
-                }
-            });
+                },
+                "GET", {}, {}, {}, (checked_server === "All SERVERS") ? "local" : checked_server
+            );
             $("#symbolsTable")
                 .off("click", ":button")
                 .on("click", ":button", function () {
@@ -247,22 +252,17 @@ define(["jquery", "footable"],
         ui.setup = function (rspamd) {
             $("#updateSymbols").on("click", function (e) {
                 e.preventDefault();
-                $.ajax({
-                    dataType: "json",
-                    type: "GET",
-                    jsonp: false,
-                    url: "symbols",
-                    beforeSend: function (xhr) {
-                        xhr.setRequestHeader("Password", rspamd.getPassword());
-                    },
-                    success: function (data) {
-                        var items = process_symbols_data(data)[0];
+                var checked_server = getSelector("selSrv");
+                rspamd.query("symbols",
+                    function (data) {
+                        var items = process_symbols_data(data[0].data)[0];
                         ft.symbols.rows.load(items);
                     },
-                    error: function (data) {
+                    function (data) {
                         rspamd.alertMessage("alert-modal alert-error", data.statusText);
-                    }
-                });
+                    },
+                    "GET", {}, {}, {}, (checked_server === "All SERVERS") ? "local" : checked_server
+                );
             });
         };
 
