@@ -136,8 +136,8 @@ define(["jquery"],
         }
 
         ui.getActions = function getActions(rspamd, checked_server) {
-            rspamd.query("actions",
-                function (data) {
+            rspamd.query("actions", {
+                success: function (data) {
                     $("#actionsBody").empty();
                     $("#actionsForm").empty();
                     var items = [];
@@ -206,10 +206,14 @@ define(["jquery"],
                         (eltsArray[1] === null || eltsArray[2] < eltsArray[1]) &&
                         (eltsArray[0] === null || eltsArray[1] < eltsArray[0])
                         ) {
-                            rspamd.query("saveactions", null, null, "POST", {}, {
-                                data: elts,
-                                dataType: "json"
-                            }, {}, server);
+                            rspamd.query("saveactions", {
+                                method: "POST",
+                                params: {
+                                    data: elts,
+                                    dataType: "json"
+                                },
+                                server: server
+                            });
                         } else {
                             rspamd.alertMessage("alert-modal alert-error", "Incorrect order of metric actions threshold");
                         }
@@ -222,8 +226,8 @@ define(["jquery"],
                         saveActions("All SERVERS");
                     });
                 },
-                null, "GET", {}, {}, {}, (checked_server === "All SERVERS") ? "local" : checked_server
-            );
+                server: (checked_server === "All SERVERS") ? "local" : checked_server
+            });
         };
 
         // @upload edited actions
@@ -262,11 +266,17 @@ define(["jquery"],
                 var action = $(form).attr("action");
                 var id = $(form).attr("id");
                 var data = $("#" + id).find("textarea").val();
-                rspamd.query(action, save_map_success, save_map_error, "POST", {
-                    Map: id,
-                }, {
-                    data: data,
-                    dataType: "text",
+                rspamd.query(action, {
+                    success: save_map_success,
+                    error: save_map_error,
+                    method: "POST",
+                    headers: {
+                        Map: id,
+                    },
+                    params:{
+                        data: data,
+                        dataType: "text",
+                    }
                 });
             });
         };

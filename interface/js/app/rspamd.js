@@ -180,16 +180,15 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         }, 5000);
     }
 
-    function queryServer(neighbours_status, ind, req_url, on_success, on_error, method, headers, params, req_data) {
+    function queryServer(neighbours_status, ind, req_url, o) {
         var req_params = {
-            type: typeof method !== "undefined" ? method : "GET",
             jsonp: false,
-            data: req_data,
+            data: o.data,
             beforeSend: function (xhr) {
                 xhr.setRequestHeader("Password", getPassword());
 
-                if (headers) {
-                    $.each(headers, function (hname, hvalue) {
+                if (o.headers) {
+                    $.each(o.headers, function (hname, hvalue) {
                         xhr.setRequestHeader(hname, hvalue);
                     });
                 }
@@ -208,8 +207,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             error: function (jqXHR, textStatus, errorThrown) {
                 neighbours_status[ind].status = false;
                 neighbours_status[ind].checked = true;
-                if (on_error) {
-                    on_error(neighbours_status[ind],
+                if (o.error) {
+                    o.error(neighbours_status[ind],
                         jqXHR, textStatus, errorThrown);
                 } else {
                     alertMessage("alert-error", "Cannot receive data from " +
@@ -219,8 +218,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             complete: function () {
                 if (neighbours_status.every(function (elt) { return elt.checked; })) {
                     if (neighbours_status.some(function (elt) { return elt.status; })) {
-                        if (on_success) {
-                            on_success(neighbours_status);
+                        if (o.success) {
+                            o.success(neighbours_status);
                         } else {
                             alertMessage("alert-success", "Request completed");
                         }
@@ -230,8 +229,11 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 }
             }
         };
-        if (params) {
-            $.each(params, function (k, v) {
+        if (o.method) {
+            req_params.method = o.method;
+        }
+        if (o.params) {
+            $.each(o.params, function (k, v) {
                 req_params[k] = v;
             });
         }
@@ -451,9 +453,32 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
 
     ui.getPassword = getPassword;
 
-    ui.query = function (req_url, on_success, on_error, method, headers, params, req_data, server) {
-        var srv = (server) ? server : checked_server;
-        if (srv === "All SERVERS") {
+    /**
+     * @param {string} url - A string containing the URL to which the request is sent
+     * @param {Object} [options] - A set of key/value pairs that configure the Ajax request. All settings are optional.
+     *
+     * @param {Object|string|Array} [options.data] - Data to be sent to the server.
+     * @param {Function} [options.error] - A function to be called if the request fails.
+     * @param {Object} [options.headers] - An object of additional header key/value pairs to send along with requests
+     *     using the XMLHttpRequest transport.
+     * @param {string} [options.method] - The HTTP method to use for the request.
+     * @param {Object} [options.params] - An object of additional jQuery.ajax() settings key/value pairs.
+     * @param {string} [options.server] - A server to which send the request.
+     * @param {Function} [options.success] - A function to be called if the request succeeds.
+     *
+     * @returns {undefined}
+     */
+    ui.query = function (url, options) {
+        // Force options to be an object
+        var o = options || {};
+        Object.keys(o).forEach(function (option) {
+            if (["data", "error", "headers", "method", "params", "server", "success"].indexOf(option) < 0) {
+                throw new Error("Unknown option: " + option);
+            }
+        });
+
+        o.server = o.server || checked_server;
+        if (o.server === "All SERVERS") {
             $.ajax({
                 dataType: "json",
                 type: "GET",
@@ -485,7 +510,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                         });
                     });
                     $.each(neighbours_status, function (ind) {
-                        queryServer(neighbours_status, ind, req_url, on_success, on_error, method, headers, params, req_data);
+                        queryServer(neighbours_status, ind, url, o);
                     });
                 },
                 error: function () {
@@ -495,15 +520,14 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         } else {
             var neighbours_status = [];
             neighbours_status[0] = {
-                name: srv,
-                url: (srv === "local") ? "" : neighbours[srv].url,
-                host: (srv === "local") ? "local" : neighbours[srv].host,
+                name: o.server,
+                url: (o.server === "local") ? "" : neighbours[o.server].url,
+                host: (o.server === "local") ? "local" : neighbours[o.server].host,
                 checked: false,
                 data: {},
                 status: false,
             };
-
-            queryServer(neighbours_status, 0, req_url, on_success, on_error, method, headers, params, req_data);
+            queryServer(neighbours_status, 0, url, o);
         }
     };
 

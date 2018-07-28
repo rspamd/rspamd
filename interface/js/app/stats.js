@@ -171,63 +171,66 @@ define(["jquery", "d3pie", "humanize"],
         // Public API
         var ui = {
             statWidgets: function (rspamd, graphs, checked_server) {
-                rspamd.query("/auth", function (neighbours_status) {
-                    var neighbours_sum = {
-                        version: neighbours_status[0].data.version,
-                        auth: "ok",
-                        uptime: 0,
-                        clean: 0,
-                        probable: 0,
-                        greylist: 0,
-                        reject: 0,
-                        soft_reject: 0,
-                        scanned: 0,
-                        learned: 0,
-                        read_only: neighbours_status[0].data.read_only,
-                        config_id: ""
-                    };
-                    var status_count = 0;
-                    for (var e in neighbours_status) {
-                        if (neighbours_status[e].status === true) {
-                        // Remove alert status
-                            localStorage.removeItem(e + "_alerted");
-                            neighbours_sum.clean += neighbours_status[e].data.clean;
-                            neighbours_sum.probable += neighbours_status[e].data.probable;
-                            neighbours_sum.greylist += neighbours_status[e].data.greylist;
-                            neighbours_sum.reject += neighbours_status[e].data.reject;
-                            neighbours_sum.soft_reject += neighbours_status[e].data.soft_reject;
-                            neighbours_sum.scanned += neighbours_status[e].data.scanned;
-                            neighbours_sum.learned += neighbours_status[e].data.learned;
-                            neighbours_sum.uptime += neighbours_status[e].data.uptime;
-                            status_count++;
+                rspamd.query("/auth", {
+                    success: function (neighbours_status) {
+                        var neighbours_sum = {
+                            version: neighbours_status[0].data.version,
+                            auth: "ok",
+                            uptime: 0,
+                            clean: 0,
+                            probable: 0,
+                            greylist: 0,
+                            reject: 0,
+                            soft_reject: 0,
+                            scanned: 0,
+                            learned: 0,
+                            read_only: neighbours_status[0].data.read_only,
+                            config_id: ""
+                        };
+                        var status_count = 0;
+                        for (var e in neighbours_status) {
+                            if (neighbours_status[e].status === true) {
+                            // Remove alert status
+                                localStorage.removeItem(e + "_alerted");
+                                neighbours_sum.clean += neighbours_status[e].data.clean;
+                                neighbours_sum.probable += neighbours_status[e].data.probable;
+                                neighbours_sum.greylist += neighbours_status[e].data.greylist;
+                                neighbours_sum.reject += neighbours_status[e].data.reject;
+                                neighbours_sum.soft_reject += neighbours_status[e].data.soft_reject;
+                                neighbours_sum.scanned += neighbours_status[e].data.scanned;
+                                neighbours_sum.learned += neighbours_status[e].data.learned;
+                                neighbours_sum.uptime += neighbours_status[e].data.uptime;
+                                status_count++;
+                            }
                         }
-                    }
-                    neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
-                    var to_Credentials = {};
-                    to_Credentials["All SERVERS"] = {
-                        name: "All SERVERS",
-                        url: "",
-                        host: "",
-                        checked: true,
-                        data: neighbours_sum,
-                        status: true
-                    };
-                    neighbours_status.forEach(function (elmt) {
-                        to_Credentials[elmt.name] = elmt;
-                    });
-                    sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
-                    displayStatWidgets(checked_server);
-                    graphs.chart = getChart(rspamd, graphs.chart, checked_server);
-                },
-                function (serv, jqXHR, textStatus, errorThrown) {
-                    var alert_status = "alerted_stats_" + serv.name;
+                        neighbours_sum.uptime = Math.floor(neighbours_sum.uptime / status_count);
+                        var to_Credentials = {};
+                        to_Credentials["All SERVERS"] = {
+                            name: "All SERVERS",
+                            url: "",
+                            host: "",
+                            checked: true,
+                            data: neighbours_sum,
+                            status: true
+                        };
+                        neighbours_status.forEach(function (elmt) {
+                            to_Credentials[elmt.name] = elmt;
+                        });
+                        sessionStorage.setItem("Credentials", JSON.stringify(to_Credentials));
+                        displayStatWidgets(checked_server);
+                        graphs.chart = getChart(rspamd, graphs.chart, checked_server);
+                    },
+                    error: function (serv, jqXHR, textStatus, errorThrown) {
+                        var alert_status = "alerted_stats_" + serv.name;
 
-                    if (!(alert_status in sessionStorage)) {
-                        sessionStorage.setItem(alert_status, true);
-                        rspamd.alertMessage("alert-error", "Cannot receive stats data from: " +
-                        serv.name + ", error: " + errorThrown);
-                    }
-                }, "GET", {}, {}, {}, "All SERVERS");
+                        if (!(alert_status in sessionStorage)) {
+                            sessionStorage.setItem(alert_status, true);
+                            rspamd.alertMessage("alert-error", "Cannot receive stats data from: " +
+                            serv.name + ", error: " + errorThrown);
+                        }
+                    },
+                    server: "All SERVERS"
+                });
             },
         };
 

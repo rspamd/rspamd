@@ -570,64 +570,66 @@ define(["jquery", "footable", "humanize"],
             };
 
             if (checked_server === "All SERVERS") {
-                rspamd.query("history", function (req_data) {
-                    function differentVersions(neighbours_data) {
-                        var dv = neighbours_data.some(function (e) {
-                            return e.version !== neighbours_data[0].version;
-                        });
-                        if (dv) {
-                            rspamd.alertMessage("alert-error",
-                                "Neighbours history backend versions do not match. Cannot display history.");
-                            return true;
-                        }
-                    }
-
-                    var neighbours_data = req_data
-                        .filter(function (d) { return d.status; }) // filter out unavailable neighbours
-                        .map(function (d) { return d.data; });
-                    if (neighbours_data.length && !differentVersions(neighbours_data)) {
-                        var data = {};
-                        if (neighbours_data[0].version) {
-                            data.rows = [].concat.apply([], neighbours_data
-                                .map(function (e) {
-                                    return e.rows;
-                                }));
-                            data.version = neighbours_data[0].version;
-                        } else {
-                        // Legacy version
-                            data = [].concat.apply([], neighbours_data);
-                        }
-
-                        var items = process_history_data(data);
-                        ft.history = FooTable.init("#historyTable", {
-                            columns: get_history_columns(data),
-                            rows: items,
-                            paging: {
-                                enabled: true,
-                                limit: 5,
-                                size: 25
-                            },
-                            filtering: {
-                                enabled: true,
-                                position: "left",
-                                connectors: false
-                            },
-                            sorting: {
-                                enabled: true
-                            },
-                            components: {
-                                filtering: FooTable.actionFilter
-                            },
-                            on: {
-                                "ready.ft.table": drawTooltips,
-                                "after.ft.sorting": drawTooltips,
-                                "after.ft.paging": drawTooltips,
-                                "after.ft.filtering": drawTooltips
+                rspamd.query("history", {
+                    success: function (req_data) {
+                        function differentVersions(neighbours_data) {
+                            var dv = neighbours_data.some(function (e) {
+                                return e.version !== neighbours_data[0].version;
+                            });
+                            if (dv) {
+                                rspamd.alertMessage("alert-error",
+                                    "Neighbours history backend versions do not match. Cannot display history.");
+                                return true;
                             }
-                        });
-                    } else if (ft.history) {
-                        ft.history.destroy();
-                        delete ft.history;
+                        }
+
+                        var neighbours_data = req_data
+                            .filter(function (d) { return d.status; }) // filter out unavailable neighbours
+                            .map(function (d) { return d.data; });
+                        if (neighbours_data.length && !differentVersions(neighbours_data)) {
+                            var data = {};
+                            if (neighbours_data[0].version) {
+                                data.rows = [].concat.apply([], neighbours_data
+                                    .map(function (e) {
+                                        return e.rows;
+                                    }));
+                                data.version = neighbours_data[0].version;
+                            } else {
+                            // Legacy version
+                                data = [].concat.apply([], neighbours_data);
+                            }
+
+                            var items = process_history_data(data);
+                            ft.history = FooTable.init("#historyTable", {
+                                columns: get_history_columns(data),
+                                rows: items,
+                                paging: {
+                                    enabled: true,
+                                    limit: 5,
+                                    size: 25
+                                },
+                                filtering: {
+                                    enabled: true,
+                                    position: "left",
+                                    connectors: false
+                                },
+                                sorting: {
+                                    enabled: true
+                                },
+                                components: {
+                                    filtering: FooTable.actionFilter
+                                },
+                                on: {
+                                    "ready.ft.table": drawTooltips,
+                                    "after.ft.sorting": drawTooltips,
+                                    "after.ft.paging": drawTooltips,
+                                    "after.ft.filtering": drawTooltips
+                                }
+                            });
+                        } else if (ft.history) {
+                            ft.history.destroy();
+                            delete ft.history;
+                        }
                     }
                 });
             } else {
@@ -697,18 +699,17 @@ define(["jquery", "footable", "humanize"],
                     delete ft.errors;
                 }
 
-                rspamd.query("historyreset",
-                    function () {
+                rspamd.query("historyreset", {
+                    success: function () {
                         ui.getHistory(rspamd, tables, neighbours, checked_server);
                         ui.getErrors(rspamd, tables, neighbours, checked_server);
                     },
-                    function (serv, jqXHR, textStatus, errorThrown) {
+                    error: function (serv, jqXHR, textStatus, errorThrown) {
                         var serv_name = (typeof serv === "string") ? serv : serv.name;
                         rspamd.alertMessage("alert-error",
                             "Cannot reset history log on " + serv_name + ": " + errorThrown);
-                    },
-                    "GET", {}, {}
-                );
+                    }
+                });
             });
         };
 
@@ -764,15 +765,17 @@ define(["jquery", "footable", "humanize"],
                     }
                 });
             } else {
-                rspamd.query("errors", function (req_data) {
-                    var neighbours_data = req_data
-                        .filter(function (d) {
-                            return d.status;
-                        }) // filter out unavailable neighbours
-                        .map(function (d) {
-                            return d.data;
-                        });
-                    drawErrorsTable([].concat.apply([], neighbours_data));
+                rspamd.query("errors", {
+                    success: function (req_data) {
+                        var neighbours_data = req_data
+                            .filter(function (d) {
+                                return d.status;
+                            }) // filter out unavailable neighbours
+                            .map(function (d) {
+                                return d.data;
+                            });
+                        drawErrorsTable([].concat.apply([], neighbours_data));
+                    }
                 });
             }
             $("#updateErrors").off("click");
