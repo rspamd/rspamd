@@ -1388,10 +1388,7 @@ rspamd_substring_search_caseless (const gchar *in, gsize inlen,
 				rspamd_substring_casecmp_func);
 	}
 	else if (inlen == srchlen) {
-		return rspamd_lc_cmp (srch, in, srchlen) == 0;
-	}
-	else {
-		return (-1);
+		return rspamd_lc_cmp (srch, in, srchlen) == 0 ? 0 : (-1);
 	}
 
 	return (-1);
