@@ -141,7 +141,7 @@ static GOptionEntry entries[] =
 	{"exclude", 0, 0, G_OPTION_ARG_STRING_ARRAY, &exclude_patterns,
 		"Exclude specific glob patterns in file names (can be repeated)", NULL},
 	{"sort", 0, 0, G_OPTION_ARG_STRING, &sort,
-		"Sort output in a specific order (name, weight, time)", NULL},
+		"Sort output in a specific order (name, weight, frequency, hits)", NULL},
 	{ "empty", 'E', 0, G_OPTION_ARG_NONE, &empty_input,
 	   "Allow empty input instead of reading from stdin", NULL },
 	{ "fuzzy-symbol", 'S', 0, G_OPTION_ARG_STRING, &fuzzy_symbol,
