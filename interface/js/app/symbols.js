@@ -135,17 +135,10 @@ define(["jquery", "footable"],
             return [items, distinct_groups];
         }
         // @get symbols into modal form
-        ui.getSymbols = function (rspamd) {
-
-            $.ajax({
-                dataType: "json",
-                type: "GET",
-                url: "symbols",
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader("Password", rspamd.getPassword());
-                },
-                success: function (data) {
+        ui.getSymbols = function (rspamd, checked_server) {
+            rspamd.query("symbols",
+                function (json) {
+                    var data = json[0].data;
                     var items = process_symbols_data(data);
                     FooTable.groupFilter = FooTable.Filtering.extend({
                         construct : function (instance) {
@@ -231,10 +224,11 @@ define(["jquery", "footable"],
                         }
                     });
                 },
-                error: function (data) {
+                function (data) {
                     rspamd.alertMessage("alert-modal alert-error", data.statusText);
-                }
-            });
+                },
+                "GET", {}, {}, {}, (checked_server === "All SERVERS") ? "local" : checked_server
+            );
             $("#symbolsTable")
                 .off("click", ":button")
                 .on("click", ":button", function () {
@@ -245,24 +239,24 @@ define(["jquery", "footable"],
         };
 
         ui.setup = function (rspamd) {
+            function getSelector(id) {
+                var e = document.getElementById(id);
+                return e.options[e.selectedIndex].value;
+            }
+
             $("#updateSymbols").on("click", function (e) {
                 e.preventDefault();
-                $.ajax({
-                    dataType: "json",
-                    type: "GET",
-                    jsonp: false,
-                    url: "symbols",
-                    beforeSend: function (xhr) {
-                        xhr.setRequestHeader("Password", rspamd.getPassword());
-                    },
-                    success: function (data) {
-                        var items = process_symbols_data(data)[0];
+                var checked_server = getSelector("selSrv");
+                rspamd.query("symbols",
+                    function (data) {
+                        var items = process_symbols_data(data[0].data)[0];
                         ft.symbols.rows.load(items);
                     },
-                    error: function (data) {
+                    function (data) {
                         rspamd.alertMessage("alert-modal alert-error", data.statusText);
-                    }
-                });
+                    },
+                    "GET", {}, {}, {}, (checked_server === "All SERVERS") ? "local" : checked_server
+                );
             });
         };
 
