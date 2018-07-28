@@ -30,6 +30,11 @@ define(["jquery", "footable"],
         var ft = {};
         var ui = {};
 
+        function getSelector(id) {
+            var e = document.getElementById(id);
+            return e.options[e.selectedIndex].value;
+        }
+
         function saveSymbols(rspamd, action, id, server) {
             var inputs = $("#" + id + " :input[data-role=\"numerictextbox\"]");
             var url = action;
@@ -65,6 +70,7 @@ define(["jquery", "footable"],
             var lookup = {};
             var freqs = [];
             var distinct_groups = [];
+            var selected_server = getSelector("selSrv");
 
             data.forEach(function (group) {
                 group.rules.forEach(function (item) {
@@ -102,8 +108,13 @@ define(["jquery", "footable"],
                         lookup[item.group] = 1;
                         distinct_groups.push(item.group);
                     }
-                    item.save = "<button type=\"button\" data-save=\"local\" class=\"btn btn-primary btn-sm mb-disabled\">Save</button>" +
-                "&nbsp;<button data-save=\"All SERVERS\" type=\"button\" class=\"btn btn-primary btn-sm mb-disabled\">Save in cluster</button>";
+                    item.save =
+                        "<button data-save=\"" + selected_server +
+                        "\" title=\"Save changes to the selected server\" " +
+                        "type=\"button\" class=\"btn btn-primary btn-sm mb-disabled\">Save</button>&nbsp;" +
+                        "<button data-save=\"All SERVERS" +
+                        "\" title=\"Save changes to all servers\" " +
+                        "type=\"button\" class=\"btn btn-primary btn-sm mb-disabled\">Save in cluster</button>";
                     items.push(item);
                 });
             });
@@ -239,11 +250,6 @@ define(["jquery", "footable"],
         };
 
         ui.setup = function (rspamd) {
-            function getSelector(id) {
-                var e = document.getElementById(id);
-                return e.options[e.selectedIndex].value;
-            }
-
             $("#updateSymbols").on("click", function (e) {
                 e.preventDefault();
                 var checked_server = getSelector("selSrv");
