@@ -46,20 +46,22 @@ define(["jquery", "footable"],
                 });
             });
 
-            rspamd.query(url,
-                function () {
+            rspamd.query(url, {
+                success: function () {
                     rspamd.alertMessage("alert-modal alert-success", "Symbols successfully saved");
                 },
-                function (serv, jqXHR, textStatus, errorThrown) {
+                error: function (serv, jqXHR, textStatus, errorThrown) {
                     var serv_name = (typeof serv === "string") ? serv : serv.name;
                     rspamd.alertMessage("alert-modal alert-error",
                         "Save symbols error on " + serv_name + ": " + errorThrown);
                 },
-                "POST", {}, {
+                method: "POST",
+                params: {
                     data: JSON.stringify(values),
                     dataType: "json",
-                }, {}, server
-            );
+                },
+                server: server
+            });
         }
         function decimalStep(number) {
             var digits = ((Number(number)).toFixed(20)).replace(/^-?\d*\.?|0+$/g, "").length;
@@ -147,8 +149,8 @@ define(["jquery", "footable"],
         }
         // @get symbols into modal form
         ui.getSymbols = function (rspamd, checked_server) {
-            rspamd.query("symbols",
-                function (json) {
+            rspamd.query("symbols", {
+                success: function (json) {
                     var data = json[0].data;
                     var items = process_symbols_data(data);
                     FooTable.groupFilter = FooTable.Filtering.extend({
@@ -235,11 +237,11 @@ define(["jquery", "footable"],
                         }
                     });
                 },
-                function (data) {
+                error: function (data) {
                     rspamd.alertMessage("alert-modal alert-error", data.statusText);
                 },
-                "GET", {}, {}, {}, (checked_server === "All SERVERS") ? "local" : checked_server
-            );
+                server: (checked_server === "All SERVERS") ? "local" : checked_server
+            });
             $("#symbolsTable")
                 .off("click", ":button")
                 .on("click", ":button", function () {
@@ -253,16 +255,16 @@ define(["jquery", "footable"],
             $("#updateSymbols").on("click", function (e) {
                 e.preventDefault();
                 var checked_server = getSelector("selSrv");
-                rspamd.query("symbols",
-                    function (data) {
+                rspamd.query("symbols", {
+                    success: function (data) {
                         var items = process_symbols_data(data[0].data)[0];
                         ft.symbols.rows.load(items);
                     },
-                    function (data) {
+                    error: function (data) {
                         rspamd.alertMessage("alert-modal alert-error", data.statusText);
                     },
-                    "GET", {}, {}, {}, (checked_server === "All SERVERS") ? "local" : checked_server
-                );
+                    server: (checked_server === "All SERVERS") ? "local" : checked_server
+                });
             });
         };
 

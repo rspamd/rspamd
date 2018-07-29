@@ -212,8 +212,8 @@ define(["jquery", "d3evolution", "footable"],
                 graphs.graph = initGraph();
             }
 
-            rspamd.query("graph",
-                function (req_data) {
+            rspamd.query("graph", {
+                success: function (req_data) {
                     var neighbours_data = req_data
                         .filter(function (d) { return d.status; }) // filter out unavailable neighbours
                         .map(function (d) { return d.data; });
@@ -245,7 +245,7 @@ define(["jquery", "d3evolution", "footable"],
                         updateWidgets(neighbours_data[0]);
                     }
                 },
-                function (serv, jqXHR, textStatus, errorThrown) {
+                error: function (serv, jqXHR, textStatus, errorThrown) {
                     var serv_name = (typeof serv === "string") ? serv : serv.name;
                     var alert_status = "alerted_graph_" + serv_name;
 
@@ -255,8 +255,8 @@ define(["jquery", "d3evolution", "footable"],
                         serv_name + ", error: " + errorThrown);
                     }
                 },
-                "GET", {}, {}, {type: type}
-            );
+                data: {type: type}
+            });
         };
 
         ui.setup = function () {
