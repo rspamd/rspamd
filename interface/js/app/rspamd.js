@@ -207,12 +207,21 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             error: function (jqXHR, textStatus, errorThrown) {
                 neighbours_status[ind].status = false;
                 neighbours_status[ind].checked = true;
+                function errorMessage() {
+                    alertMessage("alert-error", neighbours_status[ind].name + " > " +
+                        ((o.errorMessage) ? o.errorMessage : "Request failed") + ": " + errorThrown);
+                }
                 if (o.error) {
                     o.error(neighbours_status[ind],
                         jqXHR, textStatus, errorThrown);
+                } else if (o.errorOnceId) {
+                    var alert_status = o.errorOnceId + neighbours_status[ind].name;
+                    if (!(alert_status in sessionStorage)) {
+                        sessionStorage.setItem(alert_status, true);
+                        errorMessage();
+                    }
                 } else {
-                    alertMessage("alert-error", neighbours_status[ind].name + " > " +
-                        ((o.errorMessage) ? o.errorMessage : "Request failed") + ": " + errorThrown);
+                    errorMessage();
                 }
             },
             complete: function () {
@@ -460,6 +469,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
      * @param {Object|string|Array} [options.data] - Data to be sent to the server.
      * @param {Function} [options.error] - A function to be called if the request fails.
      * @param {string} [options.errorMessage] - Text to display in the alert message if the request fails.
+     * @param {string} [options.errorOnceId] - A prefix of the alert ID to be added to the session storage. If the
+     *     parameter is set, the error for each server will be displayed only once per session.
      * @param {Object} [options.headers] - An object of additional header key/value pairs to send along with requests
      *     using the XMLHttpRequest transport.
      * @param {string} [options.method] - The HTTP method to use for the request.
@@ -473,7 +484,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         // Force options to be an object
         var o = options || {};
         Object.keys(o).forEach(function (option) {
-            if (["data", "error", "errorMessage", "headers", "method", "params", "server", "success"].indexOf(option) < 0) {
+            if (["data", "error", "errorMessage", "errorOnceId", "headers", "method", "params", "server", "success"]
+                .indexOf(option) < 0) {
                 throw new Error("Unknown option: " + option);
             }
         });

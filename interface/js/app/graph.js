@@ -245,16 +245,8 @@ define(["jquery", "d3evolution", "footable"],
                         updateWidgets(neighbours_data[0]);
                     }
                 },
-                error: function (serv, jqXHR, textStatus, errorThrown) {
-                    var serv_name = (typeof serv === "string") ? serv : serv.name;
-                    var alert_status = "alerted_graph_" + serv_name;
-
-                    if (!(alert_status in sessionStorage)) {
-                        sessionStorage.setItem(alert_status, true);
-                        rspamd.alertMessage("alert-error", "Cannot receive throughput data from " +
-                        serv_name + ", error: " + errorThrown);
-                    }
-                },
+                errorMessage: "Cannot receive throughput data",
+                errorOnceId: "alerted_graph_",
                 data: {type: type}
             });
         };

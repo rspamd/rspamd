@@ -220,15 +220,8 @@ define(["jquery", "d3pie", "humanize"],
                         displayStatWidgets(checked_server);
                         graphs.chart = getChart(rspamd, graphs.chart, checked_server);
                     },
-                    error: function (serv, jqXHR, textStatus, errorThrown) {
-                        var alert_status = "alerted_stats_" + serv.name;
-
-                        if (!(alert_status in sessionStorage)) {
-                            sessionStorage.setItem(alert_status, true);
-                            rspamd.alertMessage("alert-error", "Cannot receive stats data from: " +
-                            serv.name + ", error: " + errorThrown);
-                        }
-                    },
+                    errorMessage: "Cannot receive stats data",
+                    errorOnceId: "alerted_stats_",
                     server: "All SERVERS"
                 });
             },
