@@ -3172,6 +3172,7 @@ rspamd_controller_store_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 {
 	struct rspamd_stat *stat;
 	ucl_object_t *top, *sub;
+	struct ucl_emitter_functions *efuncs;
 	gint i, fd;
 
 	g_assert (ctx->saved_stats_path != NULL);
@@ -3217,12 +3218,14 @@ rspamd_controller_store_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 			"control_connections", 0, false);
 
 
+	efuncs = ucl_object_emit_fd_funcs (fd);
 	ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT,
-			ucl_object_emit_fd_funcs (fd), NULL);
+			efuncs, NULL);
 
 	ucl_object_unref (top);
 	rspamd_file_unlock (fd, FALSE);
 	close (fd);
+	ucl_object_emit_funcs_free (efuncs);
 }
 
 static void
