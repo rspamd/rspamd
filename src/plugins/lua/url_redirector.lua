@@ -275,7 +275,7 @@ if opts then
     lua_util.disable_module(N, "redis")
   else
     if rspamd_plugins.surbl then
-      rspamd_plugins.surbl.register_redirect(url_redirector_handler)
+      rspamd_plugins.surbl.register_redirect(rspamd_config, url_redirector_handler)
     else
       rspamd_logger.infox(rspamd_config, 'surbl module is not enabled, disabling module')
       lua_util.disable_module(N, "fail")
