@@ -65,7 +65,6 @@ struct dkim_ctx {
 	const gchar *symbol_na;
 	const gchar *symbol_permfail;
 
-	rspamd_mempool_t *dkim_pool;
 	struct rspamd_radix_map_helper *whitelist_ip;
 	struct rspamd_hash_map_helper *dkim_domains;
 	guint strict_multiplier;
@@ -471,6 +470,13 @@ dkim_module_config (struct rspamd_config *cfg)
 			sign_cache_size,
 			g_free,
 			(GDestroyNotify)rspamd_dkim_sign_key_unref);
+
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_lru_hash_destroy,
+			dkim_module_ctx->dkim_hash);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_lru_hash_destroy,
+			dkim_module_ctx->dkim_sign_hash);
 
 	if (dkim_module_ctx->trusted_only && !got_trusted) {
 		msg_err_config (
