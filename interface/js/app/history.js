@@ -704,11 +704,7 @@ define(["jquery", "footable", "humanize"],
                         ui.getHistory(rspamd, tables, neighbours, checked_server);
                         ui.getErrors(rspamd, tables, neighbours, checked_server);
                     },
-                    error: function (serv, jqXHR, textStatus, errorThrown) {
-                        var serv_name = (typeof serv === "string") ? serv : serv.name;
-                        rspamd.alertMessage("alert-error",
-                            "Cannot reset history log on " + serv_name + ": " + errorThrown);
-                    }
+                    errorMessage: "Cannot reset history log"
                 });
             });
         };
@@ -757,12 +753,10 @@ define(["jquery", "footable", "humanize"],
                     beforeSend: function (xhr) {
                         xhr.setRequestHeader("Password", rspamd.getPassword());
                     },
-                    error: function () {
-                        rspamd.alertMessage("alert-error", "Cannot receive errors");
-                    },
                     success: function (data) {
                         drawErrorsTable(data);
-                    }
+                    },
+                    errorMessage: "Cannot receive errors"
                 });
             } else {
                 rspamd.query("errors", {

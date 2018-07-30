@@ -271,9 +271,7 @@ define(["jquery"],
                     success: function () {
                         save_map_success(rspamd);
                     },
-                    error: function (serv, jqXHR, textStatus, errorThrown) {
-                        save_map_error(rspamd, serv, jqXHR, textStatus, errorThrown);
-                    },
+                    errorMessage: "Save map error",
                     method: "POST",
                     headers: {
                         Map: id,

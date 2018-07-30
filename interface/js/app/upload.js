@@ -148,10 +148,7 @@ define(["jquery"],
                         rspamd.alertMessage("alert-error", "Cannot scan data");
                     }
                 },
-                error: function (jqXHR, textStatus, errorThrown) {
-                    rspamd.alertMessage("alert-error", "Cannot upload data: " +
-                    textStatus + ", " + errorThrown);
-                },
+                errorMessage: "Cannot upload data",
                 statusCode: {
                     404: function () {
                         rspamd.alertMessage("alert-error", "Cannot upload data, no server found");

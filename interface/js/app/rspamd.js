@@ -211,8 +211,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                     o.error(neighbours_status[ind],
                         jqXHR, textStatus, errorThrown);
                 } else {
-                    alertMessage("alert-error", "Cannot receive data from " +
-                           neighbours_status[ind].host + ": " + errorThrown);
+                    alertMessage("alert-error", neighbours_status[ind].name + " > " +
+                        ((o.errorMessage) ? o.errorMessage : "Request failed") + ": " + errorThrown);
                 }
             },
             complete: function () {
@@ -459,6 +459,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
      *
      * @param {Object|string|Array} [options.data] - Data to be sent to the server.
      * @param {Function} [options.error] - A function to be called if the request fails.
+     * @param {string} [options.errorMessage] - Text to display in the alert message if the request fails.
      * @param {Object} [options.headers] - An object of additional header key/value pairs to send along with requests
      *     using the XMLHttpRequest transport.
      * @param {string} [options.method] - The HTTP method to use for the request.
@@ -472,7 +473,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         // Force options to be an object
         var o = options || {};
         Object.keys(o).forEach(function (option) {
-            if (["data", "error", "headers", "method", "params", "server", "success"].indexOf(option) < 0) {
+            if (["data", "error", "errorMessage", "headers", "method", "params", "server", "success"].indexOf(option) < 0) {
                 throw new Error("Unknown option: " + option);
             }
         });
