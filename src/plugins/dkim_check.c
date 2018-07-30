@@ -91,8 +91,6 @@ struct dkim_check_result {
 	struct dkim_check_result *next, *prev, *first;
 };
 
-static struct dkim_ctx *dkim_module_ctx = NULL;
-
 static void dkim_symbol_callback (struct rspamd_task *task, void *unused);
 static void dkim_sign_callback (struct rspamd_task *task, void *unused);
 
@@ -115,6 +113,13 @@ module_t dkim_module = {
 		(guint)-1,
 };
 
+static inline struct dkim_ctx *
+dkim_get_context (struct rspamd_config *cfg)
+{
+	return (struct dkim_ctx *)g_ptr_array_index (cfg->c_modules,
+			dkim_module.ctx_offset);
+}
+
 static void
 dkim_module_key_dtor (gpointer k)
 {
@@ -126,13 +131,13 @@ dkim_module_key_dtor (gpointer k)
 gint
 dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
-	if (dkim_module_ctx == NULL) {
-		dkim_module_ctx = g_malloc0 (sizeof (struct dkim_ctx));
+	struct dkim_ctx *dkim_module_ctx;
 
-		dkim_module_ctx->sign_headers = default_sign_headers;
-		dkim_module_ctx->sign_condition_ref = -1;
-		dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;
-	}
+	dkim_module_ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
+			sizeof (*dkim_module_ctx));
+	dkim_module_ctx->sign_headers = default_sign_headers;
+	dkim_module_ctx->sign_condition_ref = -1;
+	dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;
 
 	*ctx = (struct module_ctx *)dkim_module_ctx;
 
@@ -291,6 +296,7 @@ dkim_module_config (struct rspamd_config *cfg)
 	gint res = TRUE, cb_id = -1;
 	guint cache_size, sign_cache_size;
 	gboolean got_trusted = FALSE;
+	struct dkim_ctx *dkim_module_ctx = dkim_get_context (cfg);
 
 	/* Register global methods */
 	lua_getglobal (cfg->lua_state, "rspamd_plugins");
@@ -594,6 +600,7 @@ dkim_module_load_key_format (lua_State *L, struct rspamd_task *task,
 			hex_hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
 	rspamd_dkim_sign_key_t *ret;
 	GError *err = NULL;
+	struct dkim_ctx *dkim_module_ctx = dkim_get_context (task->cfg);
 
 	memset (hex_hash, 0, sizeof (hex_hash));
 	rspamd_cryptobox_hash (h, key, keylen, NULL, 0);
@@ -634,6 +641,7 @@ lua_dkim_sign_handler (lua_State *L)
 	rspamd_dkim_sign_key_t *dkim_key;
 	gsize rawlen = 0, keylen = 0;
 	gboolean no_cache = FALSE, strict_pubkey_check = FALSE;
+	struct dkim_ctx *dkim_module_ctx;
 
 	luaL_argcheck (L, lua_type (L, 2) == LUA_TTABLE, 2, "'table' expected");
 	/*
@@ -657,6 +665,8 @@ lua_dkim_sign_handler (lua_State *L)
 		lua_pushboolean (L, FALSE);
 		return 1;
 	}
+
+	dkim_module_ctx = dkim_get_context (task->cfg);
 
 	if (headers == NULL) {
 		headers = dkim_module_ctx->sign_headers;
@@ -865,24 +875,6 @@ lua_dkim_sign_handler (lua_State *L)
 gint
 dkim_module_reconfig (struct rspamd_config *cfg)
 {
-	struct module_ctx saved_ctx;
-
-	saved_ctx = dkim_module_ctx->ctx;
-
-	if (dkim_module_ctx->dkim_hash) {
-		rspamd_lru_hash_destroy (dkim_module_ctx->dkim_hash);
-	}
-
-	if (dkim_module_ctx->dkim_sign_hash) {
-		rspamd_lru_hash_destroy (dkim_module_ctx->dkim_sign_hash);
-	}
-
-	memset (dkim_module_ctx, 0, sizeof (*dkim_module_ctx));
-	dkim_module_ctx->ctx = saved_ctx;
-	dkim_module_ctx->sign_headers = default_sign_headers;
-	dkim_module_ctx->sign_condition_ref = -1;
-	dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;
-
 	return dkim_module_config (cfg);
 }
 
@@ -925,6 +917,7 @@ dkim_module_check (struct dkim_check_result *res)
 	gboolean all_done = TRUE;
 	const gchar *strict_value;
 	struct dkim_check_result *first, *cur = NULL;
+	struct dkim_ctx *dkim_module_ctx = dkim_get_context (res->task->cfg);
 
 	first = res->first;
 
@@ -1021,8 +1014,10 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 {
 	struct dkim_check_result *res = ud;
 	struct rspamd_task *task;
+	struct dkim_ctx *dkim_module_ctx;
 
 	task = res->task;
+	dkim_module_ctx = dkim_get_context (task->cfg);
 
 	if (key != NULL) {
 		/*
@@ -1070,6 +1065,7 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	struct rspamd_mime_header *rh;
 	struct dkim_check_result *res = NULL, *cur;
 	guint checked = 0, i, *dmarc_checks;
+	struct dkim_ctx *dkim_module_ctx = dkim_get_context (task->cfg);
 
 	/* Allow dmarc */
 	dmarc_checks = rspamd_mempool_get_variable (task->task_pool,
@@ -1230,6 +1226,7 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 	enum rspamd_dkim_type sign_type = RSPAMD_DKIM_NORMAL;
 	guchar h[rspamd_cryptobox_HASHBYTES],
 		hex_hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	struct dkim_ctx *dkim_module_ctx = dkim_get_context (task->cfg);
 
 	if (dkim_module_ctx->sign_condition_ref != -1) {
 		sign = FALSE;
@@ -1529,8 +1526,10 @@ dkim_module_lua_on_key (rspamd_dkim_key_t *key,
 	struct rspamd_dkim_lua_verify_cbdata *cbd = ud;
 	struct rspamd_task *task;
 	gint ret;
+	struct dkim_ctx *dkim_module_ctx;
 
 	task = cbd->task;
+	dkim_module_ctx = dkim_get_context (task->cfg);
 
 	if (key != NULL) {
 		/*
@@ -1586,6 +1585,7 @@ lua_dkim_verify_handler (lua_State *L)
 	GError *err = NULL;
 	const gchar *type_str = NULL;
 	enum rspamd_dkim_type type = RSPAMD_DKIM_NORMAL;
+	struct dkim_ctx *dkim_module_ctx;
 
 	if (task && sig && lua_isfunction (L, 3)) {
 		if (lua_isstring (L, 4)) {
@@ -1608,6 +1608,8 @@ lua_dkim_verify_handler (lua_State *L)
 				}
 			}
 		}
+
+		dkim_module_ctx = dkim_get_context (task->cfg);
 
 		ctx = rspamd_create_dkim_context (sig,
 				task->task_pool,
