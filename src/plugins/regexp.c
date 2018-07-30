@@ -39,8 +39,6 @@ struct regexp_ctx {
 	gsize max_size;
 };
 
-static struct regexp_ctx *regexp_module_ctx = NULL;
-
 static void process_regexp_item (struct rspamd_task *task, void *user_data);
 
 
@@ -50,13 +48,22 @@ gint regexp_module_config (struct rspamd_config *cfg);
 gint regexp_module_reconfig (struct rspamd_config *cfg);
 
 module_t regexp_module = {
-	"regexp",
-	regexp_module_init,
-	regexp_module_config,
-	regexp_module_reconfig,
-	NULL,
-	RSPAMD_MODULE_VER
+		"regexp",
+		regexp_module_init,
+		regexp_module_config,
+		regexp_module_reconfig,
+		NULL,
+		RSPAMD_MODULE_VER,
+		(guint)-1,
 };
+
+
+static inline struct regexp_ctx *
+regexp_get_context (struct rspamd_config *cfg)
+{
+	return (struct regexp_ctx *)g_ptr_array_index (cfg->c_modules,
+			regexp_module.ctx_offset);
+}
 
 /* Process regexp expression */
 static gboolean
@@ -90,9 +97,10 @@ read_regexp_expression (rspamd_mempool_t * pool,
 gint
 regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
-	if (regexp_module_ctx == NULL) {
-		regexp_module_ctx = g_malloc0 (sizeof (struct regexp_ctx));
-	}
+	struct regexp_ctx *regexp_module_ctx;
+
+	regexp_module_ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
+			sizeof (*regexp_module_ctx));
 
 	*ctx = (struct module_ctx *)regexp_module_ctx;
 
@@ -122,6 +130,7 @@ regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 gint
 regexp_module_config (struct rspamd_config *cfg)
 {
+	struct regexp_ctx *regexp_module_ctx = regexp_get_context (cfg);
 	struct regexp_module_item *cur_item = NULL;
 	const ucl_object_t *sec, *value, *elt;
 	ucl_object_iter_t it = NULL;
@@ -336,12 +345,6 @@ regexp_module_config (struct rspamd_config *cfg)
 gint
 regexp_module_reconfig (struct rspamd_config *cfg)
 {
-	struct module_ctx saved_ctx;
-
-	saved_ctx = regexp_module_ctx->ctx;
-	memset (regexp_module_ctx, 0, sizeof (*regexp_module_ctx));
-	regexp_module_ctx->ctx = saved_ctx;
-
 	return regexp_module_config (cfg);
 }
 

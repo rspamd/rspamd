@@ -188,12 +188,13 @@ static gint fuzzy_lua_learn_handler (lua_State *L);
 static gint fuzzy_lua_unlearn_handler (lua_State *L);
 
 module_t fuzzy_check_module = {
-	"fuzzy_check",
-	fuzzy_check_module_init,
-	fuzzy_check_module_config,
-	fuzzy_check_module_reconfig,
-	fuzzy_attach_controller,
-	RSPAMD_MODULE_VER
+		"fuzzy_check",
+		fuzzy_check_module_init,
+		fuzzy_check_module_config,
+		fuzzy_check_module_reconfig,
+		fuzzy_attach_controller,
+		RSPAMD_MODULE_VER,
+		(guint)-1,
 };
 
 static void

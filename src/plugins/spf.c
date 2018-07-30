@@ -62,13 +62,6 @@ struct spf_ctx {
 	gboolean check_authed;
 };
 
-static inline struct spf_ctx *
-spf_get_context (struct rspamd_config *cfg)
-{
-	return (struct spf_ctx *)g_hash_table_lookup (cfg->c_modules, "spf");
-}
-
-
 static void spf_symbol_callback (struct rspamd_task *task, void *unused);
 
 /* Initialization */
@@ -77,13 +70,22 @@ gint spf_module_config (struct rspamd_config *cfg);
 gint spf_module_reconfig (struct rspamd_config *cfg);
 
 module_t spf_module = {
-	"spf",
-	spf_module_init,
-	spf_module_config,
-	spf_module_reconfig,
-	NULL,
-	RSPAMD_MODULE_VER
+		"spf",
+		spf_module_init,
+		spf_module_config,
+		spf_module_reconfig,
+		NULL,
+		RSPAMD_MODULE_VER,
+		(guint)-1,
 };
+
+static inline struct spf_ctx *
+spf_get_context (struct rspamd_config *cfg)
+{
+	return (struct spf_ctx *)g_ptr_array_index (cfg->c_modules,
+			spf_module.ctx_offset);
+}
+
 
 gint
 spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)

@@ -106,12 +106,13 @@ gint dkim_module_config (struct rspamd_config *cfg);
 gint dkim_module_reconfig (struct rspamd_config *cfg);
 
 module_t dkim_module = {
-	"dkim",
-	dkim_module_init,
-	dkim_module_config,
-	dkim_module_reconfig,
-	NULL,
-	RSPAMD_MODULE_VER
+		"dkim",
+		dkim_module_init,
+		dkim_module_config,
+		dkim_module_reconfig,
+		NULL,
+		RSPAMD_MODULE_VER,
+		(guint)-1,
 };
 
 static void

@@ -191,6 +191,7 @@ typedef struct module_s {
 	guint module_version;
 	guint64 rspamd_version;
 	const gchar *rspamd_features;
+	guint ctx_offset;
 } module_t;
 
 enum rspamd_worker_socket_type {

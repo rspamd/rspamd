@@ -134,7 +134,6 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->max_diff = 20480;
 
 	rspamd_config_init_metric (cfg);
-	cfg->c_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->composite_symbols =
 		g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->classifiers_symbols = g_hash_table_new (rspamd_str_hash,
@@ -199,6 +198,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->default_max_shots = DEFAULT_MAX_SHOTS;
 	cfg->max_sessions_cache = DEFAULT_MAX_SESSIONS;
 	cfg->maps_cache_dir = rspamd_mempool_strdup (cfg->cfg_pool, RSPAMD_DBDIR);
+	cfg->c_modules = g_ptr_array_new ();
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 
@@ -239,7 +239,6 @@ rspamd_config_free (struct rspamd_config *cfg)
 	ucl_object_unref (cfg->config_comments);
 	ucl_object_unref (cfg->doc_strings);
 	ucl_object_unref (cfg->neighbours);
-	g_hash_table_unref (cfg->c_modules);
 	g_hash_table_remove_all (cfg->composite_symbols);
 	g_hash_table_unref (cfg->composite_symbols);
 	g_hash_table_remove_all (cfg->cfg_params);
@@ -257,6 +256,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 	rspamd_re_cache_unref (cfg->re_cache);
 	rspamd_upstreams_library_unref (cfg->ups_ctx);
 	rspamd_mempool_delete (cfg->cfg_pool);
+	g_ptr_array_free (cfg->c_modules, TRUE);
 
 	if (cfg->lua_state && cfg->own_lua_state) {
 		lua_close (cfg->lua_state);
@@ -1455,21 +1455,19 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 {
 	GList *cur;
 	module_t *mod, **pmod;
-	struct module_ctx *mod_ctx;
+	guint i = 0;
+	struct module_ctx *mod_ctx, *cur_ctx;
 
 	/* Init all compiled modules */
-	if (!reconfig) {
-		for (pmod = cfg->compiled_modules; pmod != NULL && *pmod != NULL; pmod ++) {
-			mod = *pmod;
 
-			if (rspamd_check_module (cfg, mod)) {
-				if (mod->module_init_func (cfg, &mod_ctx) == 0) {
-					g_assert (mod_ctx != NULL);
-					g_hash_table_insert (cfg->c_modules,
-							(gpointer) mod->name,
-							mod_ctx);
-					mod_ctx->mod = mod;
-				}
+	for (pmod = cfg->compiled_modules; pmod != NULL && *pmod != NULL; pmod ++) {
+		mod = *pmod;
+		if (rspamd_check_module (cfg, mod)) {
+			if (mod->module_init_func (cfg, &mod_ctx) == 0) {
+				g_assert (mod_ctx != NULL);
+				g_ptr_array_add (cfg->c_modules, mod_ctx);
+				mod_ctx->mod = mod;
+				mod->ctx_offset = i ++;
 			}
 		}
 	}
@@ -1479,7 +1477,14 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 
 	while (cur) {
 		/* Perform modules configuring */
-		mod_ctx = g_hash_table_lookup (cfg->c_modules, cur->data);
+		mod_ctx = NULL;
+		PTR_ARRAY_FOREACH (cfg->c_modules, i, cur_ctx) {
+			if (g_ascii_strcasecmp (cur_ctx->mod->name,
+					(const gchar *)cur->data) == 0) {
+				mod_ctx = cur_ctx;
+				break;
+			}
+		}
 
 		if (mod_ctx) {
 			mod = mod_ctx->mod;
@@ -1728,9 +1733,14 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 	GList *cur;
 	struct rspamd_symbols_group *gr;
 	lua_State *L = cfg->lua_state;
+	struct module_ctx *cur_ctx;
+	guint i;
 
-	if (g_hash_table_lookup (cfg->c_modules, module_name)) {
-		is_c = TRUE;
+	PTR_ARRAY_FOREACH (cfg->c_modules, i, cur_ctx) {
+		if (g_ascii_strcasecmp (cur_ctx->mod->name, module_name) == 0) {
+			is_c = TRUE;
+			break;
+		}
 	}
 
 	if (g_hash_table_lookup (cfg->explicit_modules, module_name) != NULL) {

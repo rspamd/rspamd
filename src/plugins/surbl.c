@@ -159,25 +159,27 @@ surbl_error_quark (void)
 	return g_quark_from_static_string ("surbl-error-quark");
 }
 
-static inline struct surbl_ctx *
-surbl_get_context (struct rspamd_config *cfg)
-{
-	return (struct surbl_ctx *)g_hash_table_lookup (cfg->c_modules, "surbl");
-}
-
 /* Initialization */
 gint surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
 gint surbl_module_config (struct rspamd_config *cfg);
 gint surbl_module_reconfig (struct rspamd_config *cfg);
 
 module_t surbl_module = {
-	"surbl",
-	surbl_module_init,
-	surbl_module_config,
-	surbl_module_reconfig,
-	NULL,
-	RSPAMD_MODULE_VER
+		"surbl",
+		surbl_module_init,
+		surbl_module_config,
+		surbl_module_reconfig,
+		NULL,
+		RSPAMD_MODULE_VER,
+		(guint)-1,
 };
+
+static inline struct surbl_ctx *
+surbl_get_context (struct rspamd_config *cfg)
+{
+	return (struct surbl_ctx *)g_ptr_array_index (cfg->c_modules,
+			surbl_module.ctx_offset);
+}
 
 static void
 exceptions_free_value (gpointer v)

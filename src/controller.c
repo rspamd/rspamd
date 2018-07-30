@@ -3633,6 +3633,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	struct module_ctx *mctx;
 	GHashTableIter iter;
 	gpointer key, value;
+	guint i;
 	struct rspamd_keypair_cache *cache;
 	struct timeval stv;
 	const guint save_stats_interval = 60 * 1000; /* 1 minute */
@@ -3792,9 +3793,7 @@ start_controller_worker (struct rspamd_worker *worker)
 		rspamd_http_router_set_key (ctx->http, ctx->key);
 	}
 
-	g_hash_table_iter_init (&iter, ctx->cfg->c_modules);
-	while (g_hash_table_iter_next (&iter, &key, &value)) {
-		mctx = value;
+	PTR_ARRAY_FOREACH (ctx->cfg->c_modules, i, mctx) {
 		if (mctx->mod->module_attach_controller_func != NULL) {
 			mctx->mod->module_attach_controller_func (mctx,
 					ctx->custom_commands);

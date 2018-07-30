@@ -61,12 +61,13 @@ gint chartable_module_config (struct rspamd_config *cfg);
 gint chartable_module_reconfig (struct rspamd_config *cfg);
 
 module_t chartable_module = {
-	"chartable",
-	chartable_module_init,
-	chartable_module_config,
-	chartable_module_reconfig,
-	NULL,
-	RSPAMD_MODULE_VER
+		"chartable",
+		chartable_module_init,
+		chartable_module_config,
+		chartable_module_reconfig,
+		NULL,
+		RSPAMD_MODULE_VER,
+		(guint)-1,
 };
 
 struct chartable_ctx {

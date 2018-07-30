@@ -352,7 +352,7 @@ struct rspamd_config {
 	ucl_object_t *rcl_obj;                          /**< rcl object											*/
 	ucl_object_t *config_comments;                  /**< comments saved from the config						*/
 	ucl_object_t *doc_strings;                      /**< documentation strings for config options			*/
-	GHashTable * c_modules;                         /**< hash of c modules indexed by module name			*/
+	GPtrArray *c_modules;                           /**< list of C modules			*/
 	GHashTable * composite_symbols;                 /**< hash of composite symbols indexed by its name		*/
 	GList *classifiers;                             /**< list of all classifiers defined                    */
 	GList *statfiles;                               /**< list of all statfiles in config file order         */

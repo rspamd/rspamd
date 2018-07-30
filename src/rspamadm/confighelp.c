@@ -202,7 +202,7 @@ rspamadm_confighelp (gint argc, gchar **argv, const struct rspamadm_command *cmd
 	module_t *mod, **pmod;
 	worker_t **pworker;
 	struct module_ctx *mod_ctx;
-	gint i = 1, ret = 0, processed_args = 0;
+	gint i, ret = 0, processed_args = 0;
 
 	context = g_option_context_new (
 			"confighelp - displays help for the configuration options");
@@ -238,16 +238,19 @@ rspamadm_confighelp (gint argc, gchar **argv, const struct rspamadm_command *cmd
 	rspamd_rcl_add_lua_plugins_path (cfg, plugins_path, NULL);
 
 	/* Init modules to get documentation strings */
+	i = 0;
 	for (pmod = cfg->compiled_modules; pmod != NULL && *pmod != NULL; pmod++) {
 		mod = *pmod;
 		mod_ctx = g_malloc0 (sizeof (struct module_ctx));
 
 		if (mod->module_init_func (cfg, &mod_ctx) == 0) {
-			g_hash_table_insert (cfg->c_modules,
-					(gpointer) mod->name,
-					mod_ctx);
+			g_ptr_array_add (cfg->c_modules, mod_ctx);
+			mod_ctx->mod = mod;
+			mod->ctx_offset = i++;
 			mod_ctx->mod = mod;
 		}
+
+
 	}
 	/* Also init all workers */
 	for (pworker = cfg->compiled_workers; *pworker != NULL; pworker ++) {

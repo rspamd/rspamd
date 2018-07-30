@@ -279,8 +279,6 @@ reread_config (struct rspamd_main *rspamd_main)
 
 	rspamd_symbols_cache_save (rspamd_main->cfg->cache);
 	tmp_cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT);
-	g_hash_table_unref (tmp_cfg->c_modules);
-	tmp_cfg->c_modules = g_hash_table_ref (rspamd_main->cfg->c_modules);
 	tmp_cfg->libs_ctx = rspamd_main->cfg->libs_ctx;
 	REF_RETAIN (tmp_cfg->libs_ctx);
 	cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
