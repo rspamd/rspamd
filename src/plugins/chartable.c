@@ -76,21 +76,26 @@ struct chartable_ctx {
 	const gchar *url_symbol;
 	double threshold;
 	guint max_word_len;
-
-	rspamd_mempool_t *chartable_pool;
 };
 
-static struct chartable_ctx *chartable_module_ctx = NULL;
+static inline struct chartable_ctx *
+chartable_get_context (struct rspamd_config *cfg)
+{
+	return (struct chartable_ctx *)g_ptr_array_index (cfg->c_modules,
+			chartable_module.ctx_offset);
+}
+
 static void chartable_symbol_callback (struct rspamd_task *task, void *unused);
 static void chartable_url_symbol_callback (struct rspamd_task *task, void *unused);
 
 gint
 chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
-	if (chartable_module_ctx == NULL) {
-		chartable_module_ctx = g_malloc (sizeof (struct chartable_ctx));
-		chartable_module_ctx->max_word_len = 10;
-	}
+	struct chartable_ctx *chartable_module_ctx;
+
+	chartable_module_ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
+			sizeof (*chartable_module_ctx));
+	chartable_module_ctx->max_word_len = 10;
 
 	*ctx = (struct module_ctx *)chartable_module_ctx;
 
@@ -103,6 +108,7 @@ chartable_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t *value;
 	gint res = TRUE;
+	struct chartable_ctx *chartable_module_ctx = chartable_get_context (cfg);
 
 	if (!rspamd_config_is_module_enabled (cfg, "chartable")) {
 		return TRUE;
@@ -343,9 +349,10 @@ rspamd_can_alias_latin (gint ch)
 
 static gdouble
 rspamd_chartable_process_word_utf (struct rspamd_task *task,
-		rspamd_stat_token_t *w,
-		gboolean is_url,
-		guint *ncap)
+								   rspamd_stat_token_t *w,
+								   gboolean is_url,
+								   guint *ncap,
+								   struct chartable_ctx *chartable_module_ctx)
 {
 	const gchar *p, *end;
 	gdouble badness = 0.0;
@@ -461,8 +468,9 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 
 static gdouble
 rspamd_chartable_process_word_ascii (struct rspamd_task *task,
-		rspamd_stat_token_t *w,
-		gboolean is_url)
+									 rspamd_stat_token_t *w,
+									 gboolean is_url,
+									 struct chartable_ctx *chartable_module_ctx)
 {
 	const guchar *p, *end;
 	gdouble badness = 0.0;
@@ -545,7 +553,8 @@ rspamd_chartable_process_word_ascii (struct rspamd_task *task,
 
 static void
 rspamd_chartable_process_part (struct rspamd_task *task,
-		struct rspamd_mime_text_part *part)
+							   struct rspamd_mime_text_part *part,
+							   struct chartable_ctx *chartable_module_ctx)
 {
 	rspamd_stat_token_t *w;
 	guint i, ncap = 0;
@@ -563,10 +572,11 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 
 			if (IS_PART_UTF (part)) {
 				cur_score += rspamd_chartable_process_word_utf (task, w, FALSE,
-						&ncap);
+						&ncap, chartable_module_ctx);
 			}
 			else {
-				cur_score += rspamd_chartable_process_word_ascii (task, w, FALSE);
+				cur_score += rspamd_chartable_process_word_ascii (task, w,
+						FALSE, chartable_module_ctx);
 			}
 		}
 	}
@@ -596,10 +606,11 @@ chartable_symbol_callback (struct rspamd_task *task, void *unused)
 {
 	guint i;
 	struct rspamd_mime_text_part *part;
+	struct chartable_ctx *chartable_module_ctx = chartable_get_context (task->cfg);
 
 	for (i = 0; i < task->text_parts->len; i ++) {
 		part = g_ptr_array_index (task->text_parts, i);
-		rspamd_chartable_process_part (task, part);
+		rspamd_chartable_process_part (task, part, chartable_module_ctx);
 	}
 
 	if (task->subject != NULL) {
@@ -619,7 +630,7 @@ chartable_symbol_callback (struct rspamd_task *task, void *unused)
 			for (i = 0; i < words->len; i++) {
 				w = &g_array_index (words, rspamd_stat_token_t, i);
 				cur_score += rspamd_chartable_process_word_utf (task, w, FALSE,
-						NULL);
+						NULL, chartable_module_ctx);
 			}
 
 			cur_score /= (gdouble)words->len;
@@ -649,6 +660,7 @@ chartable_url_symbol_callback (struct rspamd_task *task, void *unused)
 	gpointer k, v;
 	rspamd_stat_token_t w;
 	gdouble cur_score = 0.0;
+	struct chartable_ctx *chartable_module_ctx = chartable_get_context (task->cfg);
 
 	g_hash_table_iter_init (&it, task->urls);
 
@@ -665,10 +677,12 @@ chartable_url_symbol_callback (struct rspamd_task *task, void *unused)
 			w.len = u->hostlen;
 
 			if (g_utf8_validate (w.begin, w.len, NULL)) {
-				cur_score += rspamd_chartable_process_word_utf (task, &w, TRUE, NULL);
+				cur_score += rspamd_chartable_process_word_utf (task, &w,
+						TRUE, NULL, chartable_module_ctx);
 			}
 			else {
-				cur_score += rspamd_chartable_process_word_ascii (task, &w, TRUE);
+				cur_score += rspamd_chartable_process_word_ascii (task, &w,
+						TRUE, chartable_module_ctx);
 			}
 		}
 	}
@@ -688,10 +702,12 @@ chartable_url_symbol_callback (struct rspamd_task *task, void *unused)
 			w.len = u->hostlen;
 
 			if (g_utf8_validate (w.begin, w.len, NULL)) {
-				cur_score += rspamd_chartable_process_word_utf (task, &w, TRUE, NULL);
+				cur_score += rspamd_chartable_process_word_utf (task, &w,
+						TRUE, NULL, chartable_module_ctx);
 			}
 			else {
-				cur_score += rspamd_chartable_process_word_ascii (task, &w, TRUE);
+				cur_score += rspamd_chartable_process_word_ascii (task, &w,
+						TRUE, chartable_module_ctx);
 			}
 		}
 	}
