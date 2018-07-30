@@ -58,6 +58,7 @@
 #define RSPAMD_FUZZY_PLUGIN_VERSION RSPAMD_FUZZY_VERSION
 
 static const gint rspamd_fuzzy_hash_len = 5;
+struct fuzzy_ctx;
 
 struct fuzzy_mapping {
 	guint64 fuzzy_flag;
@@ -91,6 +92,7 @@ struct fuzzy_rule {
 	gboolean short_text_direct_hash;
 	gint learn_condition_cb;
 	struct rspamd_hash_map_helper *skip_map;
+	struct fuzzy_ctx *ctx;
 };
 
 struct fuzzy_ctx {
@@ -172,7 +174,7 @@ struct fuzzy_cmd_io {
 	struct iovec io;
 };
 
-static struct fuzzy_ctx *fuzzy_module_ctx = NULL;
+
 static const char *default_headers = "Subject,Content-Type,Reply-To,X-Mailer";
 
 static void fuzzy_symbol_callback (struct rspamd_task *task, void *unused);
@@ -197,11 +199,18 @@ module_t fuzzy_check_module = {
 		(guint)-1,
 };
 
+static inline struct fuzzy_ctx *
+fuzzy_get_context (struct rspamd_config *cfg)
+{
+	return (struct fuzzy_ctx *)g_ptr_array_index (cfg->c_modules,
+			fuzzy_check_module.ctx_offset);
+}
+
 static void
 parse_flags (struct fuzzy_rule *rule,
-	struct rspamd_config *cfg,
-	const ucl_object_t *val,
-	gint cb_id)
+			 struct rspamd_config *cfg,
+			 const ucl_object_t *val,
+			 gint cb_id)
 {
 	const ucl_object_t *elt;
 	struct fuzzy_mapping *map;
@@ -413,6 +422,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 	struct fuzzy_rule *rule;
 	ucl_object_iter_t it = NULL;
 	const char *k = NULL, *key_str = NULL, *shingles_key_str = NULL, *lua_script;
+	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (cfg);
 
 	if (obj->type != UCL_OBJECT) {
 		msg_err_config ("invalid rule definition");
@@ -421,6 +431,7 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	rule = fuzzy_rule_new (fuzzy_module_ctx->default_symbol,
 			cfg->cfg_pool);
+	rule->ctx = fuzzy_module_ctx;
 	rule->learn_condition_cb = -1;
 	rule->alg = RSPAMD_SHINGLES_OLD;
 	rule->skip_map = NULL;
@@ -697,16 +708,26 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 gint
 fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
-	if (fuzzy_module_ctx == NULL) {
-		fuzzy_module_ctx = g_malloc0 (sizeof (struct fuzzy_ctx));
+	struct fuzzy_ctx *fuzzy_module_ctx;
 
-		fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
-		/* TODO: this should match rules count actually */
-		fuzzy_module_ctx->keypairs_cache = rspamd_keypair_cache_new (32);
-		fuzzy_module_ctx->fuzzy_rules = g_ptr_array_new ();
-	}
+	fuzzy_module_ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
+			sizeof (struct fuzzy_ctx));
 
+	fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+	/* TODO: this should match rules count actually */
+	fuzzy_module_ctx->keypairs_cache = rspamd_keypair_cache_new (32);
+	fuzzy_module_ctx->fuzzy_rules = g_ptr_array_new ();
 	fuzzy_module_ctx->cfg = cfg;
+
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_mempool_delete,
+			fuzzy_module_ctx->fuzzy_pool);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_keypair_cache_destroy,
+			fuzzy_module_ctx->keypairs_cache);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard,
+			fuzzy_module_ctx->fuzzy_rules);
 
 	*ctx = (struct module_ctx *)fuzzy_module_ctx;
 
@@ -977,6 +998,7 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 	ucl_object_iter_t it;
 	gint res = TRUE, cb_id, nrules = 0;
 	lua_State *L = cfg->lua_state;
+	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (cfg);
 
 	if (!rspamd_config_is_module_enabled (cfg, "fuzzy_check")) {
 		return TRUE;
@@ -1149,19 +1171,6 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 gint
 fuzzy_check_module_reconfig (struct rspamd_config *cfg)
 {
-	struct module_ctx saved_ctx;
-
-	saved_ctx = fuzzy_module_ctx->ctx;
-	rspamd_mempool_delete (fuzzy_module_ctx->fuzzy_pool);
-	rspamd_keypair_cache_destroy (fuzzy_module_ctx->keypairs_cache);
-	g_ptr_array_free (fuzzy_module_ctx->fuzzy_rules, TRUE);
-	memset (fuzzy_module_ctx, 0, sizeof (*fuzzy_module_ctx));
-	fuzzy_module_ctx->ctx = saved_ctx;
-	fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
-	fuzzy_module_ctx->cfg = cfg;
-	fuzzy_module_ctx->fuzzy_rules = g_ptr_array_new ();
-	fuzzy_module_ctx->keypairs_cache = rspamd_keypair_cache_new (32);
-
 	return fuzzy_check_module_config (cfg);
 }
 
@@ -1212,7 +1221,7 @@ fuzzy_encrypt_cmd (struct fuzzy_rule *rule,
 	memcpy (hdr->pubkey, pk, MIN (pklen, sizeof (hdr->pubkey)));
 	pk = rspamd_pubkey_get_pk (rule->peer_key, &pklen);
 	memcpy (hdr->key_id, pk, MIN (sizeof (hdr->key_id), pklen));
-	rspamd_keypair_cache_process (fuzzy_module_ctx->keypairs_cache,
+	rspamd_keypair_cache_process (rule->ctx->keypairs_cache,
 			rule->local_key, rule->peer_key);
 	rspamd_cryptobox_encrypt_nm_inplace (data, datalen,
 			hdr->nonce, rspamd_pubkey_get_nm (rule->peer_key, rule->local_key),
@@ -1765,7 +1774,7 @@ fuzzy_process_reply (guchar **pos, gint *r, GPtrArray *req,
 		*r -= required_size;
 
 		/* Try to decrypt reply */
-		rspamd_keypair_cache_process (fuzzy_module_ctx->keypairs_cache,
+		rspamd_keypair_cache_process (rule->ctx->keypairs_cache,
 				rule->local_key, rule->peer_key);
 
 		if (!rspamd_cryptobox_decrypt_nm_inplace ((guchar *)&encrep.rep,
@@ -2203,7 +2212,7 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 		}
 	}
 
-	if (session->retransmits >= fuzzy_module_ctx->retransmits) {
+	if (session->retransmits >= session->rule->ctx->retransmits) {
 		msg_err_task ("got IO timeout with server %s(%s), after %d retransmits",
 				rspamd_upstream_name (session->server),
 				rspamd_inet_address_to_string_pretty (session->addr),
@@ -2509,7 +2518,7 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 
 	task = session->task;
 
-	if (session->retransmits >= fuzzy_module_ctx->retransmits) {
+	if (session->retransmits >= session->rule->ctx->retransmits) {
 		rspamd_upstream_fail (session->server, FALSE);
 		msg_err_task_check ("got IO timeout with server %s(%s), "
 				"after %d retransmits",
@@ -2582,7 +2591,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 		min_bytes = rule->min_bytes;
 	}
 	else {
-		min_bytes = fuzzy_module_ctx->min_bytes;
+		min_bytes = rule->ctx->min_bytes;
 	}
 
 	if (c == FUZZY_STAT) {
@@ -2606,7 +2615,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 			}
 
 			/* Check length of part */
-			fac = fuzzy_module_ctx->text_multiplier * part->content->len;
+			fac = rule->ctx->text_multiplier * part->content->len;
 			if ((double)min_bytes > fac) {
 				if (!rule->short_text_direct_hash) {
 					msg_info_task (
@@ -2616,7 +2625,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 							task->message_id, min_bytes,
 							fac,
 							part->content->len,
-							fuzzy_module_ctx->text_multiplier);
+							rule->ctx->text_multiplier);
 					continue;
 				}
 				else {
@@ -2627,7 +2636,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 							task->message_id, min_bytes,
 							fac,
 							part->content->len,
-							fuzzy_module_ctx->text_multiplier);
+							rule->ctx->text_multiplier);
 					short_text = TRUE;
 				}
 			}
@@ -2639,15 +2648,15 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 				continue;
 			}
 
-			if (fuzzy_module_ctx->min_hash_len != 0 &&
+			if (rule->ctx->min_hash_len != 0 &&
 					part->normalized_words->len <
-							fuzzy_module_ctx->min_hash_len) {
+							rule->ctx->min_hash_len) {
 				if (!rule->short_text_direct_hash) {
 					msg_info_task (
 							"<%s>, part hash is shorter than %d symbols, "
 									"skip fuzzy check",
 							task->message_id,
-							fuzzy_module_ctx->min_hash_len);
+							rule->ctx->min_hash_len);
 					continue;
 				}
 				else {
@@ -2655,7 +2664,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 							"<%s>, part hash is shorter than %d symbols, "
 									"use direct hash",
 							task->message_id,
-							fuzzy_module_ctx->min_hash_len);
+							rule->ctx->min_hash_len);
 					short_text = TRUE;
 				}
 			}
@@ -2703,10 +2712,10 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 					 * - min bytes
 					 */
 
-					if ((fuzzy_module_ctx->min_height == 0 ||
-							image->height >= fuzzy_module_ctx->min_height) &&
-						(fuzzy_module_ctx->min_width == 0 ||
-							image->width >= fuzzy_module_ctx->min_width) &&
+					if ((rule->ctx->min_height == 0 ||
+							image->height >= rule->ctx->min_height) &&
+						(rule->ctx->min_width == 0 ||
+							image->width >= rule->ctx->min_width) &&
 						(min_bytes == 0 ||
 								mime_part->parsed_data.len >= min_bytes)) {
 						io = fuzzy_cmd_from_data_part (rule, c, flag, value,
@@ -2840,7 +2849,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 			session =
 				rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (struct fuzzy_client_session));
-			msec_to_tv (fuzzy_module_ctx->io_timeout, &session->tv);
+			msec_to_tv (rule->ctx->io_timeout, &session->tv);
 			session->state = 0;
 			session->commands = commands;
 			session->task = task;
@@ -2875,6 +2884,7 @@ fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 	struct fuzzy_rule *rule;
 	guint i;
 	GPtrArray *commands;
+	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
 
 	if (!fuzzy_module_ctx->enabled) {
 		return;
@@ -2906,6 +2916,7 @@ fuzzy_stat_command (struct rspamd_task *task)
 	struct fuzzy_rule *rule;
 	guint i;
 	GPtrArray *commands;
+	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
 
 	if (!fuzzy_module_ctx->enabled) {
 		return;
@@ -2933,6 +2944,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 	struct rspamd_controller_session *session = entry->ud;
 	gint sock;
 	gint ret = -1;
+	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
 
 	/* Get upstream */
 
@@ -2995,6 +3007,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	GString *tb;
 	lua_State *L;
 	gint r, *saved, rules = 0, err_idx;
+	struct fuzzy_ctx *fuzzy_module_ctx;
 
 	/* Prepare task */
 	task = rspamd_task_new (session->wrk, session->cfg, NULL, session->lang_det);
@@ -3002,6 +3015,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	task->ev_base = conn_ent->rt->ev_base;
 	saved = rspamd_mempool_alloc0 (session->pool, sizeof (gint));
 	err = rspamd_mempool_alloc0 (session->pool, sizeof (GError *));
+	fuzzy_module_ctx = fuzzy_get_context (ctx->cfg);
 
 	if (!is_hash) {
 		/* Allocate message from string */
@@ -3190,6 +3204,7 @@ fuzzy_controller_handler (struct rspamd_http_connection_entry *conn_ent,
 {
 	const rspamd_ftok_t *arg;
 	glong value = 1, flag = 0, send_flags = 0;
+	struct fuzzy_ctx *fuzzy_module_ctx = (struct fuzzy_ctx *)ctx;
 
 	if (!fuzzy_module_ctx->enabled) {
 		msg_err ("fuzzy_check module is not enabled");
@@ -3310,7 +3325,7 @@ fuzzy_check_send_lua_learn (struct fuzzy_rule *rule,
 				rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (struct fuzzy_learn_session));
 
-			msec_to_tv (fuzzy_module_ctx->io_timeout, &s->tv);
+			msec_to_tv (rule->ctx->io_timeout, &s->tv);
 			s->task = task;
 			s->addr = addr;
 			s->commands = commands;
@@ -3353,6 +3368,7 @@ fuzzy_check_lua_process_learn (struct rspamd_task *task,
 	GError **err;
 	GPtrArray *commands;
 	gint *saved, rules = 0;
+	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
 
 	saved = rspamd_mempool_alloc0 (task->task_pool, sizeof (gint));
 	err = rspamd_mempool_alloc0 (task->task_pool, sizeof (GError *));
@@ -3419,6 +3435,7 @@ fuzzy_lua_learn_handler (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	guint flag = 0, weight = 1.0, send_flags = 0;
 	const gchar *symbol;
+	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
 
 	if (task) {
 		if (lua_type (L, 2) == LUA_TNUMBER) {
@@ -3496,6 +3513,7 @@ fuzzy_lua_unlearn_handler (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	guint flag = 0, weight = 1.0, send_flags = 0;
 	const gchar *symbol;
+	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
 
 	if (task) {
 		if (lua_type (L, 2) == LUA_TNUMBER) {
