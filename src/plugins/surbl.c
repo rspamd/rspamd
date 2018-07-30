@@ -1958,7 +1958,7 @@ surbl_register_redirect_handler (lua_State *L)
 		luaL_unref (L, LUA_REGISTRYINDEX, surbl_module_ctx->redirector_cbid);
 	}
 
-	lua_pushvalue (L, 1);
+	lua_pushvalue (L, 2);
 
 	if (lua_type (L, -1) == LUA_TFUNCTION) {
 		surbl_module_ctx->redirector_cbid = luaL_ref (L, LUA_REGISTRYINDEX);
