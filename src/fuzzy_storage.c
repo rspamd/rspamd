@@ -550,8 +550,8 @@ rspamd_fuzzy_updates_cb (gboolean success,
 		}
 
 		msg_info ("successfully updated fuzzy storage: %d updates in queue; "
-			"%d pending currently; "
-			"%d added, %d deleted, %d extended, %d duplicates",
+				  "%d pending currently; "
+				  "%d added, %d deleted, %d extended, %d duplicates",
 				cbdata->updates_pending->len,
 				ctx->updates_pending->len,
 				nadded, ndeleted, nextended, nignored);
@@ -562,7 +562,7 @@ rspamd_fuzzy_updates_cb (gboolean success,
 	else {
 		if (++ctx->updates_failed > ctx->updates_maxfail) {
 			msg_err ("cannot commit update transaction to fuzzy backend, discard "
-					"%ud updates after %d retries",
+					 "%ud updates after %d retries",
 					cbdata->updates_pending->len,
 					ctx->updates_maxfail);
 			ctx->updates_failed = 0;
@@ -609,7 +609,7 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
 		cbdata->updates_pending = ctx->updates_pending;
 		ctx->updates_pending = g_array_sized_new (FALSE, FALSE,
 				sizeof (struct fuzzy_peer_cmd),
-				MAX (ctx->updates_pending->len, 1024));
+				MAX (cbdata->updates_pending->len, 1024));
 		cbdata->source = g_strdup (source);
 		rspamd_fuzzy_backend_process_updates (ctx->backend,
 				cbdata->updates_pending,

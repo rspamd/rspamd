@@ -2272,7 +2272,8 @@ lua_config_add_composite (lua_State * L)
 					msg_warn_config ("composite %s is redefined", name);
 					new = FALSE;
 				}
-				composite = rspamd_mempool_alloc (cfg->cfg_pool,
+
+				composite = rspamd_mempool_alloc0 (cfg->cfg_pool,
 						sizeof (struct rspamd_composite));
 				composite->expr = expr;
 				composite->id = g_hash_table_size (cfg->composite_symbols);
