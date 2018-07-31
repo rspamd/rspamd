@@ -505,7 +505,7 @@ exports.override_defaults = override_defaults
 -- their characteristics
 --]]
 -- exports.extract_specific_urls = function(params_or_task, limit, need_emails, filter, prefix)
-exports.extract_specific_urls = function(params_or_task, limit, need_emails, filter, prefix)
+exports.extract_specific_urls = function(params_or_task, lim, need_emails, filter, prefix)
   local default_params = {
     limit = 9999,
     esld_limit = 9999,
@@ -515,20 +515,20 @@ exports.extract_specific_urls = function(params_or_task, limit, need_emails, fil
   }
 
   local params
-  if type(params_or_task) == 'table' and type(limit) == 'nil' then
+  if type(params_or_task) == 'table' and type(lim) == 'nil' then
     params = params_or_task
   else
     -- Deprecated call
     params = {
       task = params_or_task,
-      limit = limit,
+      limit = lim,
       need_emails = need_emails,
       filter = filter,
       prefix = prefix
     }
   end
   for k,v in pairs(default_params) do
-    if not params[k] then params[k] = default_params[k] end
+    if not params[k] then params[k] = v end
   end
 
 
