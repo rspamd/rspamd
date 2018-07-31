@@ -5,6 +5,8 @@ context("Lua util - extract_specific_urls", function()
   local url   = require "rspamd_url"
   local logger = require "rspamd_logger"
   local ffi = require "ffi"
+  local rspamd_util = require "rspamd_util"
+  local rspamd_task = require "rspamd_task"
 
   ffi.cdef[[
   void rspamd_url_init (const char *tld_file);
@@ -64,8 +66,24 @@ context("Lua util - extract_specific_urls", function()
       esld_limit = 2,
       need_emails = true,
       prefix = 'p'
+    },
+    {
+      input  = {"abc@a.google.com", "b.google.com", "c.google.com", "a.net", "bb.net", "a.bb.net", "b.bb.net"},
+      expect = {"abc@a.google.com", "a.bb.net", "b.google.com", "a.net", "bb.net", "abc@a.google.com"},
+      filter = nil,
+      limit = 9999,
+      esld_limit = 2,
+      need_emails = true,
+      prefix = 'p'
     }
   }
+
+  local function prepare_actual_result(actual)
+    return fun.totable(fun.map(
+      function(u) return u:get_raw():gsub('^%w+://', '') end,
+      actual
+    ))
+  end
 
   local pool = mpool.create()
 
@@ -73,10 +91,10 @@ context("Lua util - extract_specific_urls", function()
 
     local function prepare_url_list(c)
       return fun.totable(fun.map(
-        function (u) return url.create(pool, u) end,
-        c.input or url_list
-      ))
-    end
+    function (u) return url.create(pool, u) end,
+    c.input or url_list
+    ))
+  end
 
     test("extract_specific_urls, backward compatibility case #" .. i, function()
       task_object.urls = prepare_url_list(c)
@@ -86,10 +104,7 @@ context("Lua util - extract_specific_urls", function()
       end
       local actual = util.extract_specific_urls(task_object, c.limit, c.need_emails, c.filter, c.prefix)
 
-      local actual_result = fun.totable(fun.map(
-        function(u) return u:get_host() end,
-        actual
-      ))
+      local actual_result = prepare_actual_result(actual)
 
       --[[
         local s = logger.slog("%1 =?= %2", c.expect, actual_result)
@@ -111,10 +126,7 @@ context("Lua util - extract_specific_urls", function()
         prefix = c.prefix,
       })
 
-      local actual_result = fun.totable(fun.map(
-        function(u) return u:get_host() end,
-        actual
-      ))
+      local actual_result = prepare_actual_result(actual)
 
       --[[
         local s = logger.slog("case[%1] %2 =?= %3", i, c.expect, actual_result)
@@ -124,4 +136,91 @@ context("Lua util - extract_specific_urls", function()
 
     end)
   end
+
+--[[ ******************* kinda functional *************************************** ]]
+  local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
+  local tld_file = string.format('%s/%s', test_dir, "test_tld.dat")
+
+  local config = {
+    options = {
+      filters = {'spf', 'dkim', 'regexp'},
+      url_tld = tld_file,
+      dns = {
+        nameserver = {'8.8.8.8'}
+      },
+    },
+    logging = {
+      type = 'console',
+      level = 'debug'
+    },
+    metric = {
+      name = 'default',
+      actions = {
+        reject = 100500,
+      },
+      unknown_weight = 1
+    }
+  }
+
+  test("extract_specific_urls - from email", function()
+    local cfg = rspamd_util.config_from_ucl(config, "INIT_URL,INIT_LIBS,INIT_SYMCACHE,INIT_VALIDATE,INIT_PRELOAD_MAPS")
+    assert_not_nil(cfg)
+
+    local msg = [[
+From: <>
+To: <nobody@example.com>
+Subject: test
+Content-Type: multipart/alternative;
+    boundary="_000_6be055295eab48a5af7ad4022f33e2d0_"
+
+--_000_6be055295eab48a5af7ad4022f33e2d0_
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: base64
+
+Hello world
+
+
+--_000_6be055295eab48a5af7ad4022f33e2d0_
+Content-Type: text/html; charset="utf-8"
+
+<html><body>
+<a href="http://example.net">http://example.net</a>
+<a href="http://example1.net">http://example1.net</a>
+<a href="http://example2.net">http://example2.net</a>
+<a href="http://example3.net">http://example3.net</a>
+<a href="http://example4.net">http://example4.net</a>
+<a href="http://domain1.com">http://domain1.com</a>
+<a href="http://domain2.com">http://domain2.com</a>
+<a href="http://domain3.com">http://domain3.com</a>
+<a href="http://domain4.com">http://domain4.com</a>
+<a href="http://domain5.com">http://domain5.com</a>
+<a href="http://domain.com">http://example.net/</a>
+</html>
+]]
+    local expect = {"example.net", "domain.com"}
+    local res,task = rspamd_task.load_from_string(msg, rspamd_config)
+
+    if not res then
+      assert_true(false, "failed to load message")
+    end
+
+    if not task:process_message() then
+      assert_true(false, "failed to process message")
+    end
+
+    local actual = util.extract_specific_urls({
+      task = task,
+      limit = 2,
+      esld_limit = 2,
+    })
+
+    local actual_result = prepare_actual_result(actual)
+
+    --[[
+      local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
+      print(s) --]]
+
+    assert_equal("domain.com", actual_result[1], "checking that first url is the one with highest suspiciousness level")
+
+  end)
 end)

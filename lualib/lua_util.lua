@@ -595,7 +595,7 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
         else
           if u:get_user() then
             table.insert(res, u)
-          elseif u:is_subject() then
+          elseif u:is_subject() or u:is_phished() then
             table.insert(res, u)
           end
         end
