@@ -835,9 +835,13 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 		task->result = mres;
 		task->pre_result.action = act;
 		task->pre_result.str = "Gtube pattern";
-		ucl_object_insert_key (task->messages,
-				ucl_object_fromstring ("Gtube pattern"), "smtp_message", 0,
-				false);
+
+		if (ucl_object_lookup (task->messages, "smtp_message") == NULL) {
+			ucl_object_replace_key (task->messages,
+					ucl_object_fromstring ("Gtube pattern"), "smtp_message", 0,
+					false);
+		}
+
 		rspamd_task_insert_result (task, GTUBE_SYMBOL, 0, NULL);
 
 		return;

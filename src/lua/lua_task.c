@@ -1519,7 +1519,7 @@ lua_task_set_pre_result (lua_State * L)
 				action_str = rspamd_mempool_strdup (task->task_pool,
 						luaL_checkstring (L, 3));
 				task->pre_result.str = action_str;
-				ucl_object_insert_key (task->messages,
+				ucl_object_replace_key (task->messages,
 						ucl_object_fromstring (action_str), "smtp_message", 0,
 						false);
 			}
