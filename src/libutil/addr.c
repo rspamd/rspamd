@@ -493,7 +493,7 @@ gboolean
 rspamd_parse_inet_address_ip6 (const guchar *text, gsize len, gpointer target)
 {
 	guchar t, *zero = NULL, *s, *d,  *addr = target;
-	const guchar *p, *digit = NULL;
+	const guchar *p, *digit = NULL, *percent;
 	gsize len4 = 0;
 	guint n = 8, nibbles = 0, word = 0;
 
@@ -511,6 +511,11 @@ rspamd_parse_inet_address_ip6 (const guchar *text, gsize len, gpointer target)
 	}
 	else {
 		p = text;
+	}
+
+	/* Check IPv6 scope */
+	if ((percent = memchr (p, '%', len)) != NULL && percent > p) {
+		len = percent - p; /* Ignore scope */
 	}
 
 	for (/* void */; len; len--) {

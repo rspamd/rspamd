@@ -2,7 +2,7 @@
 
 context("Inet addr check functions", function()
   local ffi = require("ffi")
-  
+
   ffi.cdef[[
   typedef struct rspamd_inet_addr_s rspamd_inet_addr_t;
   bool rspamd_parse_inet_address (rspamd_inet_addr_t **target,
@@ -16,6 +16,8 @@ context("Inet addr check functions", function()
     {'256.1.1.1', false},
     {'/tmp/socket', true},
     {'./socket', true},
+    {'[fe80::f919:8b26:ff93:3092%5]', true},
+    {'[fe80::f919:8b26:ff93:3092]', true},
   }
 
   for i,c in ipairs(cases) do
