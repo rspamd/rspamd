@@ -50,11 +50,7 @@ define(["jquery", "footable"],
                 success: function () {
                     rspamd.alertMessage("alert-modal alert-success", "Symbols successfully saved");
                 },
-                error: function (serv, jqXHR, textStatus, errorThrown) {
-                    var serv_name = (typeof serv === "string") ? serv : serv.name;
-                    rspamd.alertMessage("alert-modal alert-error",
-                        "Save symbols error on " + serv_name + ": " + errorThrown);
-                },
+                errorMessage: "Save symbols error",
                 method: "POST",
                 params: {
                     data: JSON.stringify(values),
@@ -237,9 +233,6 @@ define(["jquery", "footable"],
                         }
                     });
                 },
-                error: function (data) {
-                    rspamd.alertMessage("alert-modal alert-error", data.statusText);
-                },
                 server: (checked_server === "All SERVERS") ? "local" : checked_server
             });
             $("#symbolsTable")
@@ -259,9 +252,6 @@ define(["jquery", "footable"],
                     success: function (data) {
                         var items = process_symbols_data(data[0].data)[0];
                         ft.symbols.rows.load(items);
-                    },
-                    error: function (data) {
-                        rspamd.alertMessage("alert-modal alert-error", data.statusText);
                     },
                     server: (checked_server === "All SERVERS") ? "local" : checked_server
                 });
