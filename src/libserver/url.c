@@ -1652,7 +1652,7 @@ rspamd_url_parse (struct rspamd_url *uri, gchar *uristring, gsize len,
 		memcpy (uri->string + u.field_data[UF_SCHEMA].len, "://", 3);
 		rspamd_strlcpy (uri->string + u.field_data[UF_SCHEMA].len + 3,
 			p + u.field_data[UF_SCHEMA].len + 1,
-				len - 1 - u.field_data[UF_SCHEMA].len);
+				len - 2 - u.field_data[UF_SCHEMA].len);
 		/* Compensate slashes added */
 		for (i = UF_SCHEMA + 1; i < UF_MAX; i++) {
 			if (u.field_set & (1 << i)) {
