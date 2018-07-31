@@ -1307,7 +1307,7 @@ lua_task_load_from_string (lua_State * L)
 {
 	struct rspamd_task *task = NULL, **ptask;
 	const gchar *str_message = luaL_checkstring (L, 1), *err = NULL;
-	gsize message_len = lua_strlen(L, 1);
+	gsize message_len = lua_strlen (L, 1);
 	struct rspamd_config *cfg = NULL;
 	gboolean res = FALSE;
 

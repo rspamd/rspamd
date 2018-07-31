@@ -666,7 +666,7 @@ lua_util_load_rspamd_config (lua_State *L)
 }
 
 static gint
-parse_config_options(const char *str_options)
+parse_config_options (const char *str_options)
 {
 	gint ret = 0;
 	gchar **vec;
