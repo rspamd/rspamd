@@ -53,6 +53,12 @@ end
  * @return {boolean},{rspamd_task|error} status + new task or error message
  */
 LUA_FUNCTION_DEF (task, load_from_file);
+/***
+ * @function rspamd_task.load_from_string(message[, cfg])
+ * Loads a message from specific file
+ * @return {boolean},{rspamd_task|error} status + new task or error message
+ */
+LUA_FUNCTION_DEF (task, load_from_string);
 
 LUA_FUNCTION_DEF (task, get_message);
 /***
@@ -908,6 +914,7 @@ LUA_FUNCTION_DEF (task, get_stat_tokens);
 
 static const struct luaL_reg tasklib_f[] = {
 	LUA_INTERFACE_DEF (task, load_from_file),
+	LUA_INTERFACE_DEF (task, load_from_string),
 	{NULL, NULL}
 };
 
@@ -1237,7 +1244,7 @@ lua_task_unmap_dtor (gpointer p)
 	}
 }
 
-static int
+static gint
 lua_task_load_from_file (lua_State * L)
 {
 	struct rspamd_task *task = NULL, **ptask;
@@ -1271,6 +1278,56 @@ lua_task_load_from_file (lua_State * L)
 					lua_task_unmap_dtor, task);
 			res = TRUE;
 		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, res);
+
+	if (res) {
+		ptask = lua_newuserdata (L, sizeof (*ptask));
+		*ptask = task;
+		rspamd_lua_setclass (L, "rspamd{task}", -1);
+	}
+	else {
+		if (err) {
+			lua_pushstring (L, err);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+
+	return 2;
+}
+
+static gint
+lua_task_load_from_string (lua_State * L)
+{
+	struct rspamd_task *task = NULL, **ptask;
+	const gchar *str_message = luaL_checkstring (L, 1), *err = NULL;
+	gsize message_len = lua_strlen (L, 1);
+	struct rspamd_config *cfg = NULL;
+	gboolean res = FALSE;
+
+	if (str_message) {
+
+		if (lua_type (L, 2) == LUA_TUSERDATA) {
+			gpointer p;
+			p = rspamd_lua_check_udata_maybe (L, 2, "rspamd{config}");
+
+			if (p) {
+				cfg = *(struct rspamd_config **)p;
+			}
+		}
+
+		task = rspamd_task_new (NULL, cfg, NULL, NULL);
+		task->msg.begin = str_message;
+		task->msg.len   = message_len;
+		rspamd_mempool_add_destructor (task->task_pool,
+									   lua_task_unmap_dtor, task);
+		res = TRUE;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

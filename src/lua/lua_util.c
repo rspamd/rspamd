@@ -45,7 +45,7 @@ LUA_FUNCTION_DEF (util, create_event_base);
  */
 LUA_FUNCTION_DEF (util, load_rspamd_config);
 /***
- * @function util.config_from_ucl(any)
+ * @function util.config_from_ucl(any, string)
  * Load rspamd config from ucl reperesented by any lua table
  * @return {confg} new configuration object suitable for access
  */
@@ -666,17 +666,67 @@ lua_util_load_rspamd_config (lua_State *L)
 }
 
 static gint
+parse_config_options (const char *str_options)
+{
+	gint ret = 0;
+	gchar **vec;
+	const gchar *str;
+	guint i, l;
+
+	vec = g_strsplit_set (str_options, ",;", -1);
+	if (vec) {
+		l = g_strv_length (vec);
+		for (i = 0; i < l; i ++) {
+			str = vec[i];
+
+			if (g_ascii_strcasecmp (str, "INIT_URL") == 0) {
+				ret |= RSPAMD_CONFIG_INIT_URL;
+			} else if (g_ascii_strcasecmp (str, "INIT_LIBS") == 0) {
+				ret |= RSPAMD_CONFIG_INIT_LIBS;
+			} else if (g_ascii_strcasecmp (str, "INIT_SYMCACHE") == 0) {
+				ret |= RSPAMD_CONFIG_INIT_SYMCACHE;
+			} else if (g_ascii_strcasecmp (str, "INIT_VALIDATE") == 0) {
+				ret |= RSPAMD_CONFIG_INIT_VALIDATE;
+			} else if (g_ascii_strcasecmp (str, "INIT_NO_TLD") == 0) {
+				ret |= RSPAMD_CONFIG_INIT_NO_TLD;
+			} else if (g_ascii_strcasecmp (str, "INIT_PRELOAD_MAPS") == 0) {
+				ret |= RSPAMD_CONFIG_INIT_PRELOAD_MAPS;
+			} else {
+				msg_warn ("bad type: %s", str);
+			}
+		}
+
+		g_strfreev (vec);
+	}
+
+	return ret;
+}
+
+static gint
 lua_util_config_from_ucl (lua_State *L)
 {
-	struct rspamd_config *cfg, **pcfg;
+	struct rspamd_config *cfg = NULL, **pcfg;
 	struct rspamd_rcl_section *top;
 	GError *err = NULL;
 	ucl_object_t *obj;
+	const char *str_options = NULL;
+	gint int_options = 0;
+
 
 	obj = ucl_object_lua_import (L, 1);
+	if (lua_gettop (L) == 2) {
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			str_options = lua_tostring (L, 2);
+			int_options = parse_config_options(str_options);
+		}
+		else {
+			msg_err_config ("config_from_ucl: second parameter is expected to be string");
+			ucl_object_unref (obj);
+			lua_pushnil (L);
+		}
+	}
 
 	if (obj) {
-		cfg = g_malloc0 (sizeof (struct rspamd_config));
 		cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_SKIP_LUA);
 		cfg->lua_state = L;
 
@@ -690,7 +740,7 @@ lua_util_config_from_ucl (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
-			rspamd_config_post_load (cfg, 0);
+			rspamd_config_post_load (cfg, int_options);
 			pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
 			rspamd_lua_setclass (L, "rspamd{config}", -1);
 			*pcfg = cfg;
