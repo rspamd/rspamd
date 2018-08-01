@@ -5,7 +5,14 @@ From: Sender <sender@example.net>
 To: Recipient <recipient@example.net>
 Precedence: junk
 MIME-Version: 1.0
-Content-Type: text/plain; charset=us-ascii
+Content-Type: multipart/mixed;
+ boundary="--==_mimepart_5b60ba5e43e33_7d8f3fa857ebe62053695f";
+ charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+----==_mimepart_5b60ba5e43e33_7d8f3fa857ebe62053695f
+Content-Type: text/plain;
+ charset=UTF-8
 Content-Transfer-Encoding: 7bit
 
 This is the GTUBE, the
@@ -23,3 +30,27 @@ characters (in upper case and with no white spaces and line breaks):
 XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X
 
 You should send this test mail from an account outside of your network.
+
+----==_mimepart_5b60ba5e43e33_7d8f3fa857ebe62053695f
+Content-Type: text/plain;
+ charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X
+
+----==_mimepart_5b60ba5e43e33_7d8f3fa857ebe62053695f
+Content-Type: text/html;
+ charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+<html>
+XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X
+XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X
+XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X
+XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X
+XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X
+XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X
+XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X
+</html>
+
+----==_mimepart_5b60ba5e43e33_7d8f3fa857ebe62053695f--
