@@ -181,6 +181,9 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     }
 
     function queryServer(neighbours_status, ind, req_url, o) {
+        neighbours_status[ind].checked = false;
+        neighbours_status[ind].data = {};
+        neighbours_status[ind].status = false;
         var req_params = {
             jsonp: false,
             data: o.data,
@@ -196,16 +199,12 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             url: neighbours_status[ind].url + req_url,
             success: function (json) {
                 neighbours_status[ind].checked = true;
-
-                if (jQuery.isEmptyObject(json)) {
-                    neighbours_status[ind].status = false; // serv does not work
-                } else {
-                    neighbours_status[ind].status = true; // serv works
+                if (!jQuery.isEmptyObject(json) || req_url === "neighbours") {
+                    neighbours_status[ind].status = true;
                     neighbours_status[ind].data = json;
                 }
             },
             error: function (jqXHR, textStatus, errorThrown) {
-                neighbours_status[ind].status = false;
                 neighbours_status[ind].checked = true;
                 function errorMessage() {
                     alertMessage("alert-error", neighbours_status[ind].name + " > " +
@@ -490,17 +489,16 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             }
         });
 
+        var neighbours_status = [{
+            name: "local",
+            host: "local",
+            url: "",
+        }];
         o.server = o.server || checked_server;
         if (o.server === "All SERVERS") {
-            $.ajax({
-                dataType: "json",
-                type: "GET",
-                url: "neighbours",
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader("Password", getPassword());
-                },
-                success: function (data) {
+            queryServer(neighbours_status, 0, "neighbours", {
+                success: function (json) {
+                    var data = json[0].data;
                     if (jQuery.isEmptyObject(data)) {
                         neighbours = {
                             local:  {
@@ -511,35 +509,28 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                     } else {
                         neighbours = data;
                     }
-                    var neighbours_status = [];
+                    neighbours_status = [];
                     $.each(neighbours, function (ind) {
                         neighbours_status.push({
                             name: ind,
-                            url: neighbours[ind].url,
                             host: neighbours[ind].host,
-                            checked: false,
-                            data: {},
-                            status: false,
+                            url: neighbours[ind].url,
                         });
                     });
                     $.each(neighbours_status, function (ind) {
                         queryServer(neighbours_status, ind, url, o);
                     });
                 },
-                error: function () {
-                    ui.alertMessage("alert-error", "Cannot receive neighbours data");
-                },
+                errorMessage: "Cannot receive neighbours data"
             });
         } else {
-            var neighbours_status = [];
-            neighbours_status[0] = {
-                name: o.server,
-                url: (o.server === "local") ? "" : neighbours[o.server].url,
-                host: (o.server === "local") ? "local" : neighbours[o.server].host,
-                checked: false,
-                data: {},
-                status: false,
-            };
+            if (o.server !== "local") {
+                neighbours_status = [{
+                    name: o.server,
+                    host:  neighbours[o.server].host,
+                    url: neighbours[o.server].url,
+                }];
+            }
             queryServer(neighbours_status, 0, url, o);
         }
     };
