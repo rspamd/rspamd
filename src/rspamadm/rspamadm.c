@@ -61,7 +61,7 @@ static GOptionEntry entries[] = {
 			"Redefine UCL variable", NULL},
 	{"help", 'h', 0, G_OPTION_ARG_NONE, &show_help,
 			"Show help", NULL},
-	{"version", 'v', 0, G_OPTION_ARG_NONE, &show_version,
+	{"version", 'V', 0, G_OPTION_ARG_NONE, &show_version,
 			"Show version", NULL},
 	{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
@@ -346,6 +346,42 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamadm_fill_internal_commands (all_commands);
 	help_command.command_data = all_commands;
 
+	/* Now read options and store everything till the first non-dash argument */
+	nargv = g_malloc0 (sizeof (gchar *) * (argc + 1));
+	nargv[0] = g_strdup (argv[0]);
+
+	for (i = 1, nargc = 1; i < argc; i ++) {
+		if (argv[i] && argv[i][0] == '-') {
+			/* Copy to nargv */
+			nargv[nargc] = g_strdup (argv[i]);
+			nargc ++;
+		}
+		else {
+			break;
+		}
+	}
+
+	context = g_option_context_new ("command - rspamd administration utility");
+	og = g_option_group_new ("global", "global options", "global options",
+			NULL, NULL);
+	g_option_context_set_help_enabled (context, FALSE);
+	g_option_group_add_entries (og, entries);
+	g_option_context_set_summary (context,
+			"Summary:\n  Rspamd administration utility version "
+			RVERSION
+			"\n  Release id: "
+			RID);
+	g_option_context_set_main_group (context, og);
+
+	targv = nargv;
+	targc = nargc;
+
+	if (!g_option_context_parse (context, &targc, &targv, &error)) {
+		fprintf (stderr, "option parsing failed: %s\n", error->message);
+		g_error_free (error);
+		exit (1);
+	}
+
 	/* Setup logger */
 	if (verbose) {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
@@ -377,41 +413,6 @@ main (gint argc, gchar **argv, gchar **env)
 
 	gperf_profiler_init (cfg, "rspamadm");
 	setproctitle ("rspamdadm");
-
-	/* Now read options and store everything till the first non-dash argument */
-	nargv = g_malloc0 (sizeof (gchar *) * (argc + 1));
-	nargv[0] = g_strdup (argv[0]);
-
-	for (i = 1, nargc = 1; i < argc; i ++) {
-		if (argv[i] && argv[i][0] == '-') {
-			/* Copy to nargv */
-			nargv[nargc] = g_strdup (argv[i]);
-			nargc ++;
-		}
-		else {
-			break;
-		}
-	}
-
-	context = g_option_context_new ("command - rspamd administration utility");
-	og = g_option_group_new ("global", "global options", "global options",
-			NULL, NULL);
-	g_option_context_set_help_enabled (context, FALSE);
-	g_option_group_add_entries (og, entries);
-	g_option_context_set_summary (context,
-			"Summary:\n  Rspamd administration utility version "
-					RVERSION
-					"\n  Release id: "
-					RID);
-	g_option_context_set_main_group (context, og);
-
-	targv = nargv;
-	targc = nargc;
-	if (!g_option_context_parse (context, &targc, &targv, &error)) {
-		fprintf (stderr, "option parsing failed: %s\n", error->message);
-		g_error_free (error);
-		exit (1);
-	}
 
 	L = cfg->lua_state;
 	rspamd_lua_set_path (L, NULL, ucl_vars);
