@@ -1,3 +1,51 @@
+1.7.9: 01 Aug 2018
+  * [CritFix] Fix caseless comparison of equal length strings
+  * [Feature] Add HTTP basic auth support to elastic and clickhouse plugins
+  * [Feature] Add SPF selector to reputation
+  * [Feature] Add support of the fallback backends for HTTP maps
+  * [Feature] Allow to print full mime structure when extracting mime data
+  * [Feature] Allow to split symbols in reputation plugin
+  * [Feature] Check attachments only on AV scanners in attachments_only mode
+  * [Feature] Disable all SSL checks if ssl_no_verify flag is set
+  * [Feature] Implement parsing of scoped IPv6 addresses
+  * [Feature] Improve `rspamc counters` output
+  * [Fix] Add sanity checks when expanding SPF macros
+  * [Fix] Allow to parse SA rules with no spaces around =~ (dirty hack)
+  * [Fix] Avoid one extra byte writing
+  * [Fix] Deal with direct hash table
+  * [Fix] Detect empty text part as text, not HTML
+  * [Fix] Do not reduce map watch timeout for mixed http/file maps
+  * [Fix] Fix HTML part detection heuristic
+  * [Fix] Fix double free in redirectors cleanup
+  * [Fix] Fix legacy history handling in the controller
+  * [Fix] Fix messages insertion
+  * [Fix] Fix sending string method
+  * [Fix] Fix statconver command line arguments
+  * [Fix] Fixed argument checking for being null
+  * [Fix] Fixed issues reported by luacheck
+  * [Fix] Freeze updates queue when do actual storage update
+  * [Fix] HTTP map hash is per-backend and not per-map
+  * [Fix] Plug memory leak in fuzzy updates
+  * [Fix] Prefer 'MTA-Name' when producing authentication results
+  * [Fix] Replace bad unicode sequences instead of stopping on them
+  * [Fix] Set classifier version on learning
+  * [Project] Reworked ratelimits
+  * [Project] Apply topological sorting for symbols in Rspamd
+  * [Project] Remove global contexts from C modules
+  * [Project] Move performance critical hash tables to khash
+  * [WebUI] Avoid unused indexes
+  * [WebUI] Do not execute `on_success` callback
+  * [WebUI] Fix history reset for "All SERVERS" (#2346)
+  * [WebUI] Fix query URL for selected server
+  * [WebUI] Fix symbols display in legacy history,
+  * [WebUI] Hide symbols order selector for legacy history
+  * [WebUI] Refactor query functions into one
+  * [WebUI] Remove previously-attached event handlers
+  * [WebUI] Save symbols to the selected server
+  * [WebUI] Unify arguments of query functions
+  * [WebUI] Use common query functions to get graph data
+  * [WebUI] Use common query functions to save symbols
+
 1.7.8: 12 Jul 2018
   * [Feature] Add more extended statistics about fuzzy updates
   * [Feature] Add more non-conformant Received headers support
