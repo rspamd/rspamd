@@ -1992,7 +1992,7 @@ lua_config_register_dependency (lua_State * L)
 			skip_squeeze = lua_toboolean (L, 4);
 		}
 
-		if (child != NULL && child != NULL) {
+		if (child != NULL && parent != NULL) {
 
 			if (skip_squeeze || !rspamd_lua_squeeze_dependency (L, cfg, child, parent)) {
 				rspamd_symbols_cache_add_delayed_dependency (cfg->cache, child,
