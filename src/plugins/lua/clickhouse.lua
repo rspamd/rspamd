@@ -832,7 +832,7 @@ local function parse_clickhouse_response(ev_base, cfg, data)
   for _, plain_row in pairs(ch_rows) do
     if plain_row and plain_row:len() > 1 then
       local parsed_row = parse_string(plain_row)
-      do_remove_partition(rspamd_config, cfg, parsed_row.table, parsed_row.partition_id)
+      do_remove_partition(rspamd_config, cfg, parsed_row.table, parsed_row.partition)
     end
   end
 end
@@ -890,7 +890,7 @@ local function clickhouse_remove_old_partitions(cfg, ev_base)
   local upstream = settings.upstream:get_upstream_round_robin()
   local ip_addr = upstream:get_addr():to_string(true)
 
-  local partition_to_remove_sql = "SELECT distinct partition_id, table FROM system.parts WHERE table in ('${tables}') and max_date < toDate(now() - interval ${month} month);"
+  local partition_to_remove_sql = "SELECT distinct partition, table FROM system.parts WHERE table in ('${tables}') and max_date <= toDate(now() - interval ${month} month);"
 
   local table_names = {}
   for table_name,_ in pairs(clickhouse_schema) do
