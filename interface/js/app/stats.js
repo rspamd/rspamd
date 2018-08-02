@@ -171,7 +171,7 @@ define(["jquery", "d3pie", "humanize"],
         // Public API
         var ui = {
             statWidgets: function (rspamd, graphs, checked_server) {
-                rspamd.query("/auth", {
+                rspamd.query("auth", {
                     success: function (neighbours_status) {
                         var neighbours_sum = {
                             version: neighbours_status[0].data.version,
