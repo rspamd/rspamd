@@ -123,7 +123,7 @@ define(["jquery", "footable", "humanize"],
             }
             var compare = (getSelector("selSymOrder") === "score")
                 ? function (e1, e2) {
-                    return Math.abs(e1.score) < Math.abs(e2.score);
+                    return Math.abs(e2.score) - Math.abs(e1.score);
                 }
                 : function (e1, e2) {
                     return e1.name.localeCompare(e2.name);
