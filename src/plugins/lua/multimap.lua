@@ -1124,20 +1124,11 @@ if opts and type(opts) == 'table' then
     end
     if rule['score'] then
       -- Register metric symbol
-      local description = 'multimap symbol'
-      local group = N
-      if rule['description'] then
-        description = rule['description']
-      end
-      if rule['group'] then
-        group = rule['group']
-      end
-      rspamd_config:set_metric_symbol({
-          name = rule['symbol'],
-          score = rule['score'],
-          description = description,
-          group = group
-      })
+      rule.name = rule.symbol
+      rule.description = rule.description or 'multimap symbol'
+      rule.group = rule.group or N
+
+      rspamd_config:set_metric_symbol(rule)
     end
   end,
   fun.filter(function(r) return not r['prefilter'] end, rules))
