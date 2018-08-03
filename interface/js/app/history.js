@@ -569,81 +569,34 @@ define(["jquery", "footable", "humanize"],
                 });
             };
 
-            if (checked_server === "All SERVERS") {
-                rspamd.query("history", {
-                    success: function (req_data) {
-                        function differentVersions(neighbours_data) {
-                            var dv = neighbours_data.some(function (e) {
-                                return e.version !== neighbours_data[0].version;
-                            });
-                            if (dv) {
-                                rspamd.alertMessage("alert-error",
-                                    "Neighbours history backend versions do not match. Cannot display history.");
-                                return true;
-                            }
-                        }
-
-                        var neighbours_data = req_data
-                            .filter(function (d) { return d.status; }) // filter out unavailable neighbours
-                            .map(function (d) { return d.data; });
-                        if (neighbours_data.length && !differentVersions(neighbours_data)) {
-                            var data = {};
-                            if (neighbours_data[0].version) {
-                                data.rows = [].concat.apply([], neighbours_data
-                                    .map(function (e) {
-                                        return e.rows;
-                                    }));
-                                data.version = neighbours_data[0].version;
-                            } else {
-                            // Legacy version
-                                data = [].concat.apply([], neighbours_data);
-                            }
-
-                            var items = process_history_data(data);
-                            ft.history = FooTable.init("#historyTable", {
-                                columns: get_history_columns(data),
-                                rows: items,
-                                paging: {
-                                    enabled: true,
-                                    limit: 5,
-                                    size: 25
-                                },
-                                filtering: {
-                                    enabled: true,
-                                    position: "left",
-                                    connectors: false
-                                },
-                                sorting: {
-                                    enabled: true
-                                },
-                                components: {
-                                    filtering: FooTable.actionFilter
-                                },
-                                on: {
-                                    "ready.ft.table": drawTooltips,
-                                    "after.ft.sorting": drawTooltips,
-                                    "after.ft.paging": drawTooltips,
-                                    "after.ft.filtering": drawTooltips
-                                }
-                            });
-                        } else if (ft.history) {
-                            ft.history.destroy();
-                            delete ft.history;
+            rspamd.query("history", {
+                success: function (req_data) {
+                    function differentVersions(neighbours_data) {
+                        var dv = neighbours_data.some(function (e) {
+                            return e.version !== neighbours_data[0].version;
+                        });
+                        if (dv) {
+                            rspamd.alertMessage("alert-error",
+                                "Neighbours history backend versions do not match. Cannot display history.");
+                            return true;
                         }
                     }
-                });
-            } else {
-                $.ajax({
-                    dataType: "json",
-                    url: neighbours[checked_server].url + "history",
-                    jsonp: false,
-                    beforeSend: function (xhr) {
-                        xhr.setRequestHeader("Password", rspamd.getPassword());
-                    },
-                    error: function () {
-                        rspamd.alertMessage("alert-error", "Cannot receive history");
-                    },
-                    success: function (data) {
+
+                    var neighbours_data = req_data
+                        .filter(function (d) { return d.status; }) // filter out unavailable neighbours
+                        .map(function (d) { return d.data; });
+                    if (neighbours_data.length && !differentVersions(neighbours_data)) {
+                        var data = {};
+                        if (neighbours_data[0].version) {
+                            data.rows = [].concat.apply([], neighbours_data
+                                .map(function (e) {
+                                    return e.rows;
+                                }));
+                            data.version = neighbours_data[0].version;
+                        } else {
+                        // Legacy version
+                            data = [].concat.apply([], neighbours_data);
+                        }
                         var items = process_history_data(data);
                         ft.history = FooTable.init("#historyTable", {
                             columns: get_history_columns(data),
@@ -671,9 +624,14 @@ define(["jquery", "footable", "humanize"],
                                 "after.ft.filtering": drawTooltips
                             }
                         });
+                    } else if (ft.history) {
+                        ft.history.destroy();
+                        delete ft.history;
                     }
-                });
-            }
+                },
+                errorMessage: "Cannot receive history",
+            });
+
             $("#updateHistory").off("click");
             $("#updateHistory").on("click", function (e) {
                 e.preventDefault();
@@ -745,33 +703,19 @@ define(["jquery", "footable", "humanize"],
         ui.getErrors = function (rspamd, tables, neighbours, checked_server) {
             if (rspamd.read_only) return;
 
-            if (checked_server !== "All SERVERS") {
-                $.ajax({
-                    dataType: "json",
-                    url: neighbours[checked_server].url + "errors",
-                    jsonp: false,
-                    beforeSend: function (xhr) {
-                        xhr.setRequestHeader("Password", rspamd.getPassword());
-                    },
-                    success: function (data) {
-                        drawErrorsTable(data);
-                    },
-                    errorMessage: "Cannot receive errors"
-                });
-            } else {
-                rspamd.query("errors", {
-                    success: function (req_data) {
-                        var neighbours_data = req_data
-                            .filter(function (d) {
-                                return d.status;
-                            }) // filter out unavailable neighbours
-                            .map(function (d) {
-                                return d.data;
-                            });
-                        drawErrorsTable([].concat.apply([], neighbours_data));
-                    }
-                });
-            }
+            rspamd.query("errors", {
+                success: function (req_data) {
+                    var neighbours_data = req_data
+                        .filter(function (d) {
+                            return d.status;
+                        }) // filter out unavailable neighbours
+                        .map(function (d) {
+                            return d.data;
+                        });
+                    drawErrorsTable([].concat.apply([], neighbours_data));
+                }
+            });
+
             $("#updateErrors").off("click");
             $("#updateErrors").on("click", function (e) {
                 e.preventDefault();
