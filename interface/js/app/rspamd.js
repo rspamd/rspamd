@@ -208,7 +208,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 neighbours_status[ind].checked = true;
                 function errorMessage() {
                     alertMessage("alert-error", neighbours_status[ind].name + " > " +
-                        ((o.errorMessage) ? o.errorMessage : "Request failed") + ": " + errorThrown);
+                        (o.errorMessage ? o.errorMessage : "Request failed") +
+                        (errorThrown ? (": " + errorThrown) : ""));
                 }
                 if (o.error) {
                     o.error(neighbours_status[ind],
