@@ -254,8 +254,10 @@ exports.insert = function (upstream, settings, params, query, rows,
       connect_prefix = 'https://'
     end
     local ip_addr = upstream:get_addr():to_string(true)
-    http_params.url = string.format('%s%s/?query=%s', connect_prefix,
-        ip_addr, escape_spaces(query))
+    http_params.url = string.format('%s%s/?query=%s%%20FORMAT%%20TabSeparated',
+        connect_prefix,
+        ip_addr,
+        escape_spaces(query))
   end
 
   rspamd_logger.debugm(N, http_params.log_obj, "clickhouse select request: %s", params.body)
