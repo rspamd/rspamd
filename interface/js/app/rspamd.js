@@ -120,7 +120,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             break;
         case "#configuration_nav":
             tab_config.getActions(ui, checked_server);
-            tab_config.getMaps(ui);
+            tab_config.getMaps(ui, checked_server);
             break;
         case "#symbols_nav":
             tab_symbols.getSymbols(ui, checked_server);
