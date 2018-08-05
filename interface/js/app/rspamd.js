@@ -120,7 +120,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             break;
         case "#configuration_nav":
             tab_config.getActions(ui, checked_server);
-            tab_config.getMaps(ui);
+            tab_config.getMaps(ui, checked_server);
             break;
         case "#symbols_nav":
             tab_symbols.getSymbols(ui, checked_server);
@@ -199,16 +199,15 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             url: neighbours_status[ind].url + req_url,
             success: function (json) {
                 neighbours_status[ind].checked = true;
-                if (!jQuery.isEmptyObject(json) || req_url === "neighbours") {
-                    neighbours_status[ind].status = true;
-                    neighbours_status[ind].data = json;
-                }
+                neighbours_status[ind].status = true;
+                neighbours_status[ind].data = json;
             },
             error: function (jqXHR, textStatus, errorThrown) {
                 neighbours_status[ind].checked = true;
                 function errorMessage() {
                     alertMessage("alert-error", neighbours_status[ind].name + " > " +
-                        ((o.errorMessage) ? o.errorMessage : "Request failed") + ": " + errorThrown);
+                        (o.errorMessage ? o.errorMessage : "Request failed") +
+                        (errorThrown ? (": " + errorThrown) : ""));
                 }
                 if (o.error) {
                     o.error(neighbours_status[ind],
@@ -287,7 +286,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 tabClick("#status_nav");
             }
         });
-        tab_config.setup(ui);
+        tab_config.setup(ui, checked_server);
         tab_symbols.setup(ui);
         tab_upload.setup(ui);
         selData = tab_graph.setup();

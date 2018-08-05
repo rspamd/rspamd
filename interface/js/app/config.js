@@ -57,73 +57,6 @@ define(["jquery"],
             });
         }
 
-        // @get maps id
-        function getMaps(rspamd) {
-            var $listmaps = $("#listMaps");
-            $listmaps.closest(".widget-box").hide();
-            $.ajax({
-                dataType: "json",
-                url: "maps",
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader("Password", rspamd.getPassword());
-                },
-                error: function (data) {
-                    rspamd.alertMessage("alert-modal alert-error", data.statusText);
-                },
-                success: function (data) {
-                    $listmaps.empty();
-                    $("#modalBody").empty();
-                    var $tbody = $("<tbody>");
-
-                    $.each(data, function (i, item) {
-                        var label;
-                        if ((item.editable === false || rspamd.read_only)) {
-                            label = "<span class=\"label label-default\">Read</span>";
-                        } else {
-                            label = "<span class=\"label label-default\">Read</span>&nbsp;<span class=\"label label-success\">Write</span>";
-                        }
-                        var $tr = $("<tr>");
-                        $("<td class=\"col-md-2 maps-cell\">" + label + "</td>").appendTo($tr);
-                        var $span = $("<span class=\"map-link\" data-toggle=\"modal\" data-target=\"#modalDialog\">" + item.uri + "</span>").data("item", item);
-                        $span.wrap("<td>").parent().appendTo($tr);
-                        $("<td>" + item.description + "</td>").appendTo($tr);
-                        $tr.appendTo($tbody);
-                    });
-                    $tbody.appendTo($listmaps);
-                    $listmaps.closest(".widget-box").show();
-                }
-            });
-        }
-        // @get map by id
-        function getMapById(rspamd, item) {
-            return $.ajax({
-                dataType: "text",
-                url: "getmap",
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader("Password", rspamd.getPassword());
-                    xhr.setRequestHeader("Map", item.map);
-                },
-                error: function () {
-                    rspamd.alertMessage("alert-error", "Cannot receive maps data");
-                },
-                success: function (text) {
-                    var disabled = "";
-                    if ((item.editable === false || rspamd.read_only)) {
-                        disabled = "disabled=\"disabled\"";
-                    }
-
-                    $("#" + item.map).remove();
-                    $("<form class=\"form-horizontal form-map\" method=\"post\" action=\"savemap\" data-type=\"map\" id=\"" +
-                    item.map + "\" style=\"display:none\">" +
-                    "<textarea class=\"list-textarea\"" + disabled + ">" + text +
-                    "</textarea>" +
-                    "</form").appendTo("#modalBody");
-                }
-            });
-        }
-
         function loadActionsFromForm() {
             var values = [];
             var inputs = $("#actionsForm :input[data-id=\"action\"]");
@@ -231,23 +164,74 @@ define(["jquery"],
             });
         };
 
+        ui.getMaps = function (rspamd, checked_server) {
+            var $listmaps = $("#listMaps");
+            $listmaps.closest(".widget-box").hide();
+            rspamd.query("maps", {
+                success: function (json) {
+                    var data = json[0].data;
+                    $listmaps.empty();
+                    $("#modalBody").empty();
+                    var $tbody = $("<tbody>");
+
+                    $.each(data, function (i, item) {
+                        var label;
+                        if ((item.editable === false || rspamd.read_only)) {
+                            label = "<span class=\"label label-default\">Read</span>";
+                        } else {
+                            label = "<span class=\"label label-default\">Read</span>&nbsp;<span class=\"label label-success\">Write</span>";
+                        }
+                        var $tr = $("<tr>");
+                        $("<td class=\"col-md-2 maps-cell\">" + label + "</td>").appendTo($tr);
+                        var $span = $("<span class=\"map-link\" data-toggle=\"modal\" data-target=\"#modalDialog\">" + item.uri + "</span>").data("item", item);
+                        $span.wrap("<td>").parent().appendTo($tr);
+                        $("<td>" + item.description + "</td>").appendTo($tr);
+                        $tr.appendTo($tbody);
+                    });
+                    $tbody.appendTo($listmaps);
+                    $listmaps.closest(".widget-box").show();
+                },
+                server: (checked_server === "All SERVERS") ? "local" : checked_server
+            });
+        };
+
         // @upload edited actions
-        ui.setup = function (rspamd) {
+        ui.setup = function (rspamd, checked_server) {
         // Modal form for maps
             $(document).on("click", "[data-toggle=\"modal\"]", function () {
                 var item = $(this).data("item");
-                getMapById(rspamd, item).done(function () {
-                    $("#modalTitle").html(item.uri);
-                    $("#" + item.map).first().show();
-                    $("#modalDialog .progress").hide();
-                    $("#modalDialog").modal({backdrop: true, keyboard: "show", show: true});
-                    if (item.editable === false) {
-                        $("#modalSave").hide();
-                        $("#modalSaveAll").hide();
-                    } else {
-                        $("#modalSave").show();
-                        $("#modalSaveAll").show();
-                    }
+                rspamd.query("getmap", {
+                    headers: {
+                        Map: item.map
+                    },
+                    success: function (data) {
+                        var disabled = "";
+                        var text = data[0].data;
+                        if ((item.editable === false || rspamd.read_only)) {
+                            disabled = "disabled=\"disabled\"";
+                        }
+
+                        $("#" + item.map).remove();
+                        $("<form id=\"" + item.map + "\" class=\"form-horizontal form-map\" style=\"display:none\"" +
+                        " data-type=\"map\" action=\"savemap\" method=\"post\">" +
+                        "<textarea class=\"list-textarea\"" + disabled + ">" + text +
+                        "</textarea>" +
+                        "</form>").appendTo("#modalBody");
+
+                        $("#modalTitle").html(item.uri);
+                        $("#" + item.map).first().show();
+                        $("#modalDialog .progress").hide();
+                        $("#modalDialog").modal({backdrop: true, keyboard: "show", show: true});
+                        if (item.editable === false) {
+                            $("#modalSave").hide();
+                            $("#modalSaveAll").hide();
+                        } else {
+                            $("#modalSave").show();
+                            $("#modalSaveAll").show();
+                        }
+                    },
+                    errorMessage: "Cannot receive maps data",
+                    server: (checked_server === "All SERVERS") ? "local" : checked_server
                 });
                 return false;
             });
@@ -283,8 +267,6 @@ define(["jquery"],
                 });
             });
         };
-
-        ui.getMaps = getMaps;
 
         return ui;
     });
