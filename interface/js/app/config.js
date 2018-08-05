@@ -57,35 +57,6 @@ define(["jquery"],
             });
         }
 
-        // @get map by id
-        function getMapById(rspamd, item) {
-            return $.ajax({
-                dataType: "text",
-                url: "getmap",
-                jsonp: false,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader("Password", rspamd.getPassword());
-                    xhr.setRequestHeader("Map", item.map);
-                },
-                error: function () {
-                    rspamd.alertMessage("alert-error", "Cannot receive maps data");
-                },
-                success: function (text) {
-                    var disabled = "";
-                    if ((item.editable === false || rspamd.read_only)) {
-                        disabled = "disabled=\"disabled\"";
-                    }
-
-                    $("#" + item.map).remove();
-                    $("<form class=\"form-horizontal form-map\" method=\"post\" action=\"savemap\" data-type=\"map\" id=\"" +
-                    item.map + "\" style=\"display:none\">" +
-                    "<textarea class=\"list-textarea\"" + disabled + ">" + text +
-                    "</textarea>" +
-                    "</form").appendTo("#modalBody");
-                }
-            });
-        }
-
         function loadActionsFromForm() {
             var values = [];
             var inputs = $("#actionsForm :input[data-id=\"action\"]");
@@ -225,22 +196,42 @@ define(["jquery"],
         };
 
         // @upload edited actions
-        ui.setup = function (rspamd) {
+        ui.setup = function (rspamd, checked_server) {
         // Modal form for maps
             $(document).on("click", "[data-toggle=\"modal\"]", function () {
                 var item = $(this).data("item");
-                getMapById(rspamd, item).done(function () {
-                    $("#modalTitle").html(item.uri);
-                    $("#" + item.map).first().show();
-                    $("#modalDialog .progress").hide();
-                    $("#modalDialog").modal({backdrop: true, keyboard: "show", show: true});
-                    if (item.editable === false) {
-                        $("#modalSave").hide();
-                        $("#modalSaveAll").hide();
-                    } else {
-                        $("#modalSave").show();
-                        $("#modalSaveAll").show();
-                    }
+                rspamd.query("getmap", {
+                    headers: {
+                        Map: item.map
+                    },
+                    success: function (data) {
+                        var disabled = "";
+                        var text = data[0].data;
+                        if ((item.editable === false || rspamd.read_only)) {
+                            disabled = "disabled=\"disabled\"";
+                        }
+
+                        $("#" + item.map).remove();
+                        $("<form id=\"" + item.map + "\" class=\"form-horizontal form-map\" style=\"display:none\"" +
+                        " data-type=\"map\" action=\"savemap\" method=\"post\">" +
+                        "<textarea class=\"list-textarea\"" + disabled + ">" + text +
+                        "</textarea>" +
+                        "</form>").appendTo("#modalBody");
+
+                        $("#modalTitle").html(item.uri);
+                        $("#" + item.map).first().show();
+                        $("#modalDialog .progress").hide();
+                        $("#modalDialog").modal({backdrop: true, keyboard: "show", show: true});
+                        if (item.editable === false) {
+                            $("#modalSave").hide();
+                            $("#modalSaveAll").hide();
+                        } else {
+                            $("#modalSave").show();
+                            $("#modalSaveAll").show();
+                        }
+                    },
+                    errorMessage: "Cannot receive maps data",
+                    server: (checked_server === "All SERVERS") ? "local" : checked_server
                 });
                 return false;
             });
