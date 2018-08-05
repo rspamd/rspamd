@@ -199,10 +199,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             url: neighbours_status[ind].url + req_url,
             success: function (json) {
                 neighbours_status[ind].checked = true;
-                if (!jQuery.isEmptyObject(json) || req_url === "neighbours") {
-                    neighbours_status[ind].status = true;
-                    neighbours_status[ind].data = json;
-                }
+                neighbours_status[ind].status = true;
+                neighbours_status[ind].data = json;
             },
             error: function (jqXHR, textStatus, errorThrown) {
                 neighbours_status[ind].checked = true;
