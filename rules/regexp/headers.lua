@@ -276,7 +276,7 @@ local subj_encoded_qp = 'Subject=/\\=\\?\\S+\\?Q\\?/iX'
 reconf['SUBJ_EXCESS_QP'] = {
   re = string.format('%s & !%s', subj_encoded_qp, subj_needs_mime),
   score = 1.2,
-  description = 'Subect is unnecessarily encoded in quoted-printable',
+  description = 'Subject is unnecessarily encoded in quoted-printable',
   group = 'excessqp'
 }
 
