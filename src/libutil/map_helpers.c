@@ -150,7 +150,7 @@ rspamd_parse_kv_list (
 		case map_read_key:
 			/* read key */
 			/* Check here comments, eol and end of buffer */
-			if (*p == '#') {
+			if (*p == '#' && (p == c || *(p - 1) != '\\')) {
 				if (p - c > 0) {
 					/* Store a single key */
 					MAP_STORE_KEY;
