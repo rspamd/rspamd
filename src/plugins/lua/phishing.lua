@@ -32,15 +32,14 @@ local strict_domains = {}
 local redirector_domains = {}
 local generic_service_map = nil
 local openphish_map = 'https://www.openphish.com/feed.txt'
-local phishtank_map = 'http://data.phishtank.com/data/online-valid.json'
+local phishtank_suffix = 'phishtank.rspamd.com'
 -- Not enabled by default as their feed is quite large
 local openphish_premium = false
+local phishtank_enabled = false
 local generic_service_hash
 local openphish_hash
-local phishtank_hash
 local generic_service_data = {}
 local openphish_data = {}
-local phishtank_data = {}
 local rspamd_logger = require "rspamd_logger"
 local util = require "rspamd_util"
 local opts = rspamd_config:get_all_opt(N)
@@ -125,6 +124,45 @@ local function phishing_cb(task)
     end
   end
 
+  local function check_phishing_dns(dns_suffix, url, phish_symbol)
+    local function compose_dns_query(elts)
+      local cr = require "rspamd_cryptobox_hash"
+      local h = cr.create()
+      for _,elt in ipairs(elts) do h:update(elt) end
+      return string.format("%s.%s", h:base32():sub(1, 32), dns_suffix)
+    end
+    local r = task:get_resolver()
+    local host = url:get_host()
+    local path = url:get_path()
+    local query = url:get_query()
+
+    if host and path then
+      local function host_host_path_cb(_, _, results, err)
+        if not err and results then
+          task:insert_result(phish_symbol, 0.3, results)
+        end
+      end
+      r:resolve_a({
+        task = task,
+        name = compose_dns_query({host, path}),
+        callback = host_host_path_cb})
+
+
+      if query then
+        local function host_host_path_query_cb(_, _, results, err)
+          if not err and results then
+            task:insert_result(phish_symbol, 1.0, results)
+          end
+        end
+        r:resolve_a({
+          task = task,
+          name = compose_dns_query({host, path, query}),
+          callback = host_host_path_query_cb})
+      end
+
+    end
+  end
+
   local urls = task:get_urls()
 
   if urls then
@@ -137,8 +175,8 @@ local function phishing_cb(task)
         check_phishing_map(openphish_data, url, openphish_symbol)
       end
 
-      if phishtank_hash then
-        check_phishing_map(phishtank_data, url, phishtank_symbol)
+      if phishtank_enabled then
+        check_phishing_dns(phishtank_suffix, url, phishtank_symbol)
       end
 
       if url:is_phished() and not url:is_redirected() then
@@ -388,42 +426,6 @@ local function openphish_plain_cb(string)
   pool:destroy()
 end
 
-local function phishtank_json_cb(string)
-  local ucl = require "ucl"
-  local nelts = 0
-  local new_data = {}
-  local valid = true
-  local parser = ucl.parser()
-  local res,err = parser:parse_string(string)
-  local rspamd_mempool = require "rspamd_mempool"
-  local pool = rspamd_mempool.create()
-
-  if not res then
-    valid = false
-    rspamd_logger.warnx(phishtank_hash, 'cannot parse phishtank map: ' .. err)
-  else
-    local obj = parser:get_object()
-
-    for _,elt in ipairs(obj) do
-      if elt['url'] then
-        if insert_url_from_string(pool, new_data, elt['url'],
-          elt['phish_detail_url']) then
-          nelts = nelts + 1
-        end
-      end
-    end
-  end
-
-  if valid then
-    phishtank_data = new_data
-    rspamd_logger.infox(phishtank_hash, "parsed %s elements from phishtank feed",
-      nelts)
-  end
-
-
-  pool:destroy()
-end
-
 if opts then
   local id
   if opts['symbol'] then
@@ -485,20 +487,11 @@ if opts then
       end
     end
 
-    if opts['phishtank_map'] then
-      phishtank_map = opts['phishtank_map']
-    end
-    if opts['phishtank_url'] then
-      phishtank_map = opts['phishtank_url']
-    end
-
     if opts['phishtank_enabled'] then
-      phishtank_hash = rspamd_config:add_map({
-          type = 'callback',
-          url = phishtank_map,
-          callback = phishtank_json_cb,
-          description = 'Phishtank feed (see https://www.phishtank.com for details)'
-        })
+      phishtank_enabled = true
+      if opts['phishtank_suffix'] then
+        phishtank_suffix = opts['phishtank_suffix']
+      end
     end
 
     rspamd_config:register_symbol({
