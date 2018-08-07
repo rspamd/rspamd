@@ -65,7 +65,6 @@ struct dkim_ctx {
 	const gchar *symbol_na;
 	const gchar *symbol_permfail;
 
-	rspamd_mempool_t *dkim_pool;
 	struct rspamd_radix_map_helper *whitelist_ip;
 	struct rspamd_hash_map_helper *dkim_domains;
 	guint strict_multiplier;
@@ -85,12 +84,11 @@ struct dkim_check_result {
 	rspamd_dkim_key_t *key;
 	struct rspamd_task *task;
 	gint res;
-	gint mult_allow, mult_deny;
+	gdouble mult_allow;
+	gdouble mult_deny;
 	struct rspamd_async_watcher *w;
 	struct dkim_check_result *next, *prev, *first;
 };
-
-static struct dkim_ctx *dkim_module_ctx = NULL;
 
 static void dkim_symbol_callback (struct rspamd_task *task, void *unused);
 static void dkim_sign_callback (struct rspamd_task *task, void *unused);
@@ -105,13 +103,21 @@ gint dkim_module_config (struct rspamd_config *cfg);
 gint dkim_module_reconfig (struct rspamd_config *cfg);
 
 module_t dkim_module = {
-	"dkim",
-	dkim_module_init,
-	dkim_module_config,
-	dkim_module_reconfig,
-	NULL,
-	RSPAMD_MODULE_VER
+		"dkim",
+		dkim_module_init,
+		dkim_module_config,
+		dkim_module_reconfig,
+		NULL,
+		RSPAMD_MODULE_VER,
+		(guint)-1,
 };
+
+static inline struct dkim_ctx *
+dkim_get_context (struct rspamd_config *cfg)
+{
+	return (struct dkim_ctx *)g_ptr_array_index (cfg->c_modules,
+			dkim_module.ctx_offset);
+}
 
 static void
 dkim_module_key_dtor (gpointer k)
@@ -124,14 +130,13 @@ dkim_module_key_dtor (gpointer k)
 gint
 dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
-	if (dkim_module_ctx == NULL) {
-		dkim_module_ctx = g_malloc0 (sizeof (struct dkim_ctx));
+	struct dkim_ctx *dkim_module_ctx;
 
-		dkim_module_ctx->dkim_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "dkim");
-		dkim_module_ctx->sign_headers = default_sign_headers;
-		dkim_module_ctx->sign_condition_ref = -1;
-		dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;
-	}
+	dkim_module_ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
+			sizeof (*dkim_module_ctx));
+	dkim_module_ctx->sign_headers = default_sign_headers;
+	dkim_module_ctx->sign_condition_ref = -1;
+	dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;
 
 	*ctx = (struct module_ctx *)dkim_module_ctx;
 
@@ -290,6 +295,7 @@ dkim_module_config (struct rspamd_config *cfg)
 	gint res = TRUE, cb_id = -1;
 	guint cache_size, sign_cache_size;
 	gboolean got_trusted = FALSE;
+	struct dkim_ctx *dkim_module_ctx = dkim_get_context (cfg);
 
 	/* Register global methods */
 	lua_getglobal (cfg->lua_state, "rspamd_plugins");
@@ -400,24 +406,20 @@ dkim_module_config (struct rspamd_config *cfg)
 
 		rspamd_config_radix_from_ucl (cfg, value, "DKIM whitelist",
 				&dkim_module_ctx->whitelist_ip, NULL);
-		rspamd_mempool_add_destructor (dkim_module_ctx->dkim_pool,
-				(rspamd_mempool_destruct_t)rspamd_map_helper_destroy_radix,
-				dkim_module_ctx->whitelist_ip);
-
 	}
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "dkim", "domains")) != NULL) {
 		if (!rspamd_map_add_from_ucl (cfg, value,
-			"DKIM domains", rspamd_kv_list_read, rspamd_kv_list_fin,
-			(void **)&dkim_module_ctx->dkim_domains)) {
+				"DKIM domains",
+				rspamd_kv_list_read,
+				rspamd_kv_list_fin,
+				rspamd_kv_list_dtor,
+				(void **)&dkim_module_ctx->dkim_domains)) {
 			msg_warn_config ("cannot load dkim domains list from %s",
 				ucl_object_tostring (value));
 		}
 		else {
-			rspamd_mempool_add_destructor (dkim_module_ctx->dkim_pool,
-					(rspamd_mempool_destruct_t)rspamd_map_helper_destroy_hash,
-					dkim_module_ctx->dkim_domains);
 			got_trusted = TRUE;
 		}
 	}
@@ -425,15 +427,15 @@ dkim_module_config (struct rspamd_config *cfg)
 	if (!got_trusted && (value =
 			rspamd_config_get_module_opt (cfg, "dkim", "trusted_domains")) != NULL) {
 		if (!rspamd_map_add_from_ucl (cfg, value,
-				"DKIM domains", rspamd_kv_list_read, rspamd_kv_list_fin,
+				"DKIM domains",
+				rspamd_kv_list_read,
+				rspamd_kv_list_fin,
+				rspamd_kv_list_dtor,
 				(void **)&dkim_module_ctx->dkim_domains)) {
 			msg_warn_config ("cannot load dkim domains list from %s",
 					ucl_object_tostring (value));
 		}
 		else {
-			rspamd_mempool_add_destructor (dkim_module_ctx->dkim_pool,
-					(rspamd_mempool_destruct_t)rspamd_map_helper_destroy_hash,
-					dkim_module_ctx->dkim_domains);
 			got_trusted = TRUE;
 		}
 	}
@@ -468,6 +470,13 @@ dkim_module_config (struct rspamd_config *cfg)
 			sign_cache_size,
 			g_free,
 			(GDestroyNotify)rspamd_dkim_sign_key_unref);
+
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_lru_hash_destroy,
+			dkim_module_ctx->dkim_hash);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_lru_hash_destroy,
+			dkim_module_ctx->dkim_sign_hash);
 
 	if (dkim_module_ctx->trusted_only && !got_trusted) {
 		msg_err_config (
@@ -510,6 +519,22 @@ dkim_module_config (struct rspamd_config *cfg)
 			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
 			cb_id);
 
+		rspamd_symbols_cache_add_symbol (cfg->cache,
+				"DKIM_TRACE",
+				0,
+				NULL, NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_NOSTAT,
+				cb_id);
+		rspamd_config_add_symbol (cfg,
+				"DKIM_TRACE",
+				0.0,
+				"DKIM trace symbol",
+				"policies",
+				RSPAMD_SYMBOL_FLAG_IGNORE,
+				1,
+				1);
+		rspamd_config_add_symbol_group (cfg, "DKIM_TRACE", "dkim");
+
 		msg_info_config ("init internal dkim module");
 #ifndef HAVE_OPENSSL
 		msg_warn_config (
@@ -533,7 +558,7 @@ dkim_module_config (struct rspamd_config *cfg)
 					dkim_module_ctx->sign_condition_ref = luaL_ref (cfg->lua_state,
 							LUA_REGISTRYINDEX);
 					rspamd_lua_add_ref_dtor (cfg->lua_state,
-							dkim_module_ctx->dkim_pool,
+							cfg->cfg_pool,
 							dkim_module_ctx->sign_condition_ref);
 
 					rspamd_symbols_cache_add_symbol (cfg->cache,
@@ -556,11 +581,8 @@ dkim_module_config (struct rspamd_config *cfg)
 					rspamd_config_add_symbol (cfg,
 							"DKIM_SIGN", 0.0, "DKIM signature fake symbol",
 							"dkim", RSPAMD_SYMBOL_FLAG_IGNORE, 1, 1);
-					rspamd_config_add_symbol (cfg,
-							"DKIM_TRACE", 0.0, "DKIM trace symbol",
-							"policies", RSPAMD_SYMBOL_FLAG_IGNORE, 1, 1);
+
 					rspamd_config_add_symbol_group (cfg, "DKIM_SIGN", "dkim");
-					rspamd_config_add_symbol_group (cfg, "DKIM_TRACE", "dkim");
 				}
 				else {
 					msg_err_config ("lua script must return "
@@ -584,6 +606,7 @@ dkim_module_load_key_format (lua_State *L, struct rspamd_task *task,
 			hex_hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
 	rspamd_dkim_sign_key_t *ret;
 	GError *err = NULL;
+	struct dkim_ctx *dkim_module_ctx = dkim_get_context (task->cfg);
 
 	memset (hex_hash, 0, sizeof (hex_hash));
 	rspamd_cryptobox_hash (h, key, keylen, NULL, 0);
@@ -618,11 +641,13 @@ lua_dkim_sign_handler (lua_State *L)
 	GError *err = NULL;
 	GString *hdr;
 	const gchar *selector = NULL, *domain = NULL, *key = NULL, *rawkey = NULL,
-			*headers = NULL, *sign_type_str = NULL, *arc_cv = NULL;
+			*headers = NULL, *sign_type_str = NULL, *arc_cv = NULL,
+			*pubkey = NULL;
 	rspamd_dkim_sign_context_t *ctx;
 	rspamd_dkim_sign_key_t *dkim_key;
 	gsize rawlen = 0, keylen = 0;
-	gboolean no_cache = FALSE;
+	gboolean no_cache = FALSE, strict_pubkey_check = FALSE;
+	struct dkim_ctx *dkim_module_ctx;
 
 	luaL_argcheck (L, lua_type (L, 2) == LUA_TTABLE, 2, "'table' expected");
 	/*
@@ -633,17 +658,21 @@ lua_dkim_sign_handler (lua_State *L)
 	 */
 	if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 			"key=V;rawkey=V;*domain=S;*selector=S;no_cache=B;headers=S;"
-					"sign_type=S;arc_idx=I;arc_cv=S;expire=I",
+			"sign_type=S;arc_idx=I;arc_cv=S;expire=I;pubkey=S;"
+			"strict_pubkey_check=B",
 			&keylen, &key, &rawlen, &rawkey, &domain,
 			&selector, &no_cache, &headers,
-			&sign_type_str, &arc_idx, &arc_cv, &expire)) {
-		msg_err_task ("invalid return value from sign condition: %e",
+			&sign_type_str, &arc_idx, &arc_cv, &expire, &pubkey,
+			&strict_pubkey_check)) {
+		msg_err_task ("cannot parse table arguments: %e",
 				err);
 		g_error_free (err);
 
 		lua_pushboolean (L, FALSE);
 		return 1;
 	}
+
+	dkim_module_ctx = dkim_get_context (task->cfg);
 
 	if (headers == NULL) {
 		headers = dkim_module_ctx->sign_headers;
@@ -766,6 +795,53 @@ lua_dkim_sign_handler (lua_State *L)
 		}
 	}
 
+	if (pubkey != NULL) {
+		/* Also check if private and public keys match */
+		rspamd_dkim_key_t *pk;
+		gsize keylen = strlen (pubkey);
+
+		pk = rspamd_dkim_parse_key (pubkey, &keylen, NULL);
+
+		if (pk == NULL) {
+			if (strict_pubkey_check) {
+				msg_err_task ("cannot parse pubkey from string: %s, skip signing",
+						pubkey);
+				lua_pushboolean (L, FALSE);
+
+				return 1;
+			}
+			else {
+				msg_warn_task ("cannot parse pubkey from string: %s",
+						pubkey);
+			}
+		}
+		else {
+			GError *te = NULL;
+
+			/* We have parsed the key, so try to check keys */
+			if (!rspamd_dkim_match_keys (pk, dkim_key, &te)) {
+				if (strict_pubkey_check) {
+					msg_err_task ("public key for %s/%s does not match private "
+								  "key: %e, skip signing",
+							domain, selector, te);
+					g_error_free (te);
+					lua_pushboolean (L, FALSE);
+					rspamd_dkim_key_unref (pk);
+
+					return 1;
+				}
+				else {
+					msg_warn_task ("public key for %s/%s does not match private "
+								   "key: %e",
+							domain, selector, te);
+					g_error_free (te);
+				}
+			}
+
+			rspamd_dkim_key_unref (pk);
+		}
+	}
+
 	ctx = rspamd_create_dkim_sign_context (task, dkim_key,
 			DKIM_CANON_RELAXED, DKIM_CANON_RELAXED,
 			headers, sign_type, &err);
@@ -805,26 +881,6 @@ lua_dkim_sign_handler (lua_State *L)
 gint
 dkim_module_reconfig (struct rspamd_config *cfg)
 {
-	struct module_ctx saved_ctx;
-
-	saved_ctx = dkim_module_ctx->ctx;
-	rspamd_mempool_delete (dkim_module_ctx->dkim_pool);
-
-	if (dkim_module_ctx->dkim_hash) {
-		rspamd_lru_hash_destroy (dkim_module_ctx->dkim_hash);
-	}
-
-	if (dkim_module_ctx->dkim_sign_hash) {
-		rspamd_lru_hash_destroy (dkim_module_ctx->dkim_sign_hash);
-	}
-
-	memset (dkim_module_ctx, 0, sizeof (*dkim_module_ctx));
-	dkim_module_ctx->ctx = saved_ctx;
-	dkim_module_ctx->dkim_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "dkim");
-	dkim_module_ctx->sign_headers = default_sign_headers;
-	dkim_module_ctx->sign_condition_ref = -1;
-	dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;
-
 	return dkim_module_config (cfg);
 }
 
@@ -832,17 +888,27 @@ dkim_module_reconfig (struct rspamd_config *cfg)
  * Parse strict value for domain in format: 'reject_multiplier:deny_multiplier'
  */
 static gboolean
-dkim_module_parse_strict (const gchar *value, gint *allow, gint *deny)
+dkim_module_parse_strict (const gchar *value, gdouble *allow, gdouble *deny)
 {
 	const gchar *colon;
-	gulong val;
+	gchar *err = NULL;
+	gdouble val;
+	gchar numbuf[64];
 
 	colon = strchr (value, ':');
 	if (colon) {
-		if (rspamd_strtoul (value, colon - value, &val)) {
+		rspamd_strlcpy (numbuf, value,
+				MIN (sizeof (numbuf), (colon - value) + 1));
+		val = strtod (numbuf, &err);
+
+		if (err == NULL || *err == '\0') {
 			*deny = val;
 			colon++;
-			if (rspamd_strtoul (colon, strlen (colon), &val)) {
+			rspamd_strlcpy (numbuf, colon, sizeof (numbuf));
+			err = NULL;
+			val = strtod (numbuf, &err);
+
+			if (err == NULL || *err == '\0') {
 				*allow = val;
 				return TRUE;
 			}
@@ -857,6 +923,7 @@ dkim_module_check (struct dkim_check_result *res)
 	gboolean all_done = TRUE;
 	const gchar *strict_value;
 	struct dkim_check_result *first, *cur = NULL;
+	struct dkim_ctx *dkim_module_ctx = dkim_get_context (res->task->cfg);
 
 	first = res->first;
 
@@ -896,7 +963,7 @@ dkim_module_check (struct dkim_check_result *res)
 	if (all_done) {
 		DL_FOREACH (first, cur) {
 			const gchar *symbol = NULL, *trace = NULL;
-			int symbol_weight = 1;
+			gdouble symbol_weight = 1.0;
 
 			if (cur->ctx == NULL) {
 				continue;
@@ -953,8 +1020,10 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 {
 	struct dkim_check_result *res = ud;
 	struct rspamd_task *task;
+	struct dkim_ctx *dkim_module_ctx;
 
 	task = res->task;
+	dkim_module_ctx = dkim_get_context (task->cfg);
 
 	if (key != NULL) {
 		/*
@@ -1002,6 +1071,7 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	struct rspamd_mime_header *rh;
 	struct dkim_check_result *res = NULL, *cur;
 	guint checked = 0, i, *dmarc_checks;
+	struct dkim_ctx *dkim_module_ctx = dkim_get_context (task->cfg);
 
 	/* Allow dmarc */
 	dmarc_checks = rspamd_mempool_get_variable (task->task_pool,
@@ -1047,19 +1117,9 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 				continue;
 			}
 
-			if (res == NULL) {
-				res = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
-				res->prev = res;
-				res->w = rspamd_session_get_watcher (task->s);
-				cur = res;
-			}
-			else {
-				cur = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
-			}
-
+			cur = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cur));
 			cur->first = res;
 			cur->res = -1;
-			cur->w = res->w;
 			cur->task = task;
 			cur->mult_allow = 1.0;
 			cur->mult_deny = 1.0;
@@ -1087,7 +1147,6 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 			}
 			else {
 				/* Get key */
-
 				cur->ctx = ctx;
 
 				if (dkim_module_ctx->trusted_only &&
@@ -1111,14 +1170,23 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 							dkim_module_key_dtor, cur->key);
 				}
 				else {
-					rspamd_get_dkim_key (ctx,
+					if (!rspamd_get_dkim_key (ctx,
 							task,
 							dkim_module_key_handler,
-							cur);
+							cur)) {
+						continue;
+					}
 				}
 			}
 
-			if (res != cur) {
+			if (res == NULL) {
+				res = cur;
+				res->first = res;
+				res->prev = res;
+				res->w = rspamd_session_get_watcher (task->s);
+			}
+			else {
+				cur->w = res->w;
 				DL_APPEND (res, cur);
 			}
 
@@ -1164,6 +1232,7 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 	enum rspamd_dkim_type sign_type = RSPAMD_DKIM_NORMAL;
 	guchar h[rspamd_cryptobox_HASHBYTES],
 		hex_hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	struct dkim_ctx *dkim_module_ctx = dkim_get_context (task->cfg);
 
 	if (dkim_module_ctx->sign_condition_ref != -1) {
 		sign = FALSE;
@@ -1463,8 +1532,10 @@ dkim_module_lua_on_key (rspamd_dkim_key_t *key,
 	struct rspamd_dkim_lua_verify_cbdata *cbd = ud;
 	struct rspamd_task *task;
 	gint ret;
+	struct dkim_ctx *dkim_module_ctx;
 
 	task = cbd->task;
+	dkim_module_ctx = dkim_get_context (task->cfg);
 
 	if (key != NULL) {
 		/*
@@ -1520,6 +1591,7 @@ lua_dkim_verify_handler (lua_State *L)
 	GError *err = NULL;
 	const gchar *type_str = NULL;
 	enum rspamd_dkim_type type = RSPAMD_DKIM_NORMAL;
+	struct dkim_ctx *dkim_module_ctx;
 
 	if (task && sig && lua_isfunction (L, 3)) {
 		if (lua_isstring (L, 4)) {
@@ -1542,6 +1614,8 @@ lua_dkim_verify_handler (lua_State *L)
 				}
 			}
 		}
+
+		dkim_module_ctx = dkim_get_context (task->cfg);
 
 		ctx = rspamd_create_dkim_context (sig,
 				task->task_pool,

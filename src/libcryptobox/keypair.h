@@ -139,7 +139,8 @@ enum rspamd_cryptobox_mode rspamd_pubkey_alg (struct rspamd_cryptobox_pubkey *p)
  * @param p
  * @return
  */
-const guchar * rspamd_pubkey_get_nm (struct rspamd_cryptobox_pubkey *p);
+const guchar * rspamd_pubkey_get_nm (struct rspamd_cryptobox_pubkey *p,
+									 struct rspamd_cryptobox_keypair *kp);
 
 /**
  * Calculate and store nm value for the specified local key (performs ECDH)
@@ -303,6 +304,21 @@ gboolean rspamd_keypair_encrypt (struct rspamd_cryptobox_keypair *kp,
 								 const guchar *in, gsize inlen,
 								 guchar **out, gsize *outlen,
 								 GError **err);
-
+/**
+ * Encrypts data usign specific pubkey (must have KEX type).
+ * This method actually generates ephemeral local keypair, use public key from
+ * the remote keypair and encrypts data
+ * @param kp keypair
+ * @param in raw input
+ * @param inlen input length
+ * @param out output (allocated internally using g_malloc)
+ * @param outlen output size
+ * @param err pointer to error
+ * @return TRUE if encryption has been completed, out must be freed in this case
+ */
+gboolean rspamd_pubkey_encrypt (struct rspamd_cryptobox_pubkey *pk,
+								 const guchar *in, gsize inlen,
+								 guchar **out, gsize *outlen,
+								 GError **err);
 
 #endif /* SRC_LIBCRYPTOBOX_KEYPAIR_H_ */

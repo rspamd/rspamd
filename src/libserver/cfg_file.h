@@ -352,7 +352,7 @@ struct rspamd_config {
 	ucl_object_t *rcl_obj;                          /**< rcl object											*/
 	ucl_object_t *config_comments;                  /**< comments saved from the config						*/
 	ucl_object_t *doc_strings;                      /**< documentation strings for config options			*/
-	GHashTable * c_modules;                         /**< hash of c modules indexed by module name			*/
+	GPtrArray *c_modules;                           /**< list of C modules			*/
 	GHashTable * composite_symbols;                 /**< hash of composite symbols indexed by its name		*/
 	GList *classifiers;                             /**< list of all classifiers defined                    */
 	GList *statfiles;                               /**< list of all statfiles in config file order         */
@@ -368,7 +368,8 @@ struct rspamd_config {
 
 	GList *maps;                                    /**< maps active										*/
 	gdouble map_timeout;                            /**< maps watch timeout									*/
-	gdouble map_file_watch_multiplier;              /**< multiplier for watch timeout when maps are files */
+	gdouble map_file_watch_multiplier;              /**< multiplier for watch timeout when maps are files	*/
+	gchar *maps_cache_dir;                          /**< where to save HTTP cached data						*/
 
 	gdouble monitored_interval;                     /**< interval between monitored checks					*/
 	gboolean disable_monitored;                     /**< disable monitoring completely						*/
@@ -487,10 +488,15 @@ enum rspamd_post_load_options {
 	RSPAMD_CONFIG_INIT_LIBS = 1 << 1,
 	RSPAMD_CONFIG_INIT_SYMCACHE = 1 << 2,
 	RSPAMD_CONFIG_INIT_VALIDATE = 1 << 3,
-	RSPAMD_CONFIG_INIT_NO_TLD = 1 << 4
+	RSPAMD_CONFIG_INIT_NO_TLD = 1 << 4,
+	RSPAMD_CONFIG_INIT_PRELOAD_MAPS = 1 << 5,
 };
 
-#define RSPAMD_CONFIG_LOAD_ALL (RSPAMD_CONFIG_INIT_URL|RSPAMD_CONFIG_INIT_LIBS|RSPAMD_CONFIG_INIT_SYMCACHE|RSPAMD_CONFIG_INIT_VALIDATE)
+#define RSPAMD_CONFIG_LOAD_ALL (RSPAMD_CONFIG_INIT_URL| \
+		RSPAMD_CONFIG_INIT_LIBS| \
+		RSPAMD_CONFIG_INIT_SYMCACHE| \
+		RSPAMD_CONFIG_INIT_VALIDATE| \
+		RSPAMD_CONFIG_INIT_PRELOAD_MAPS)
 
 /**
  * Do post load actions for config

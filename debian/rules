@@ -27,9 +27,9 @@ override_dh_auto_configure:
 		-DENABLE_FULL_DEBUG=OFF \
 		-DENABLE_GD=OFF \
 		-DENABLE_PCRE2=OFF \
-		-DENABLE_HIREDIS=ON \
 		-DENABLE_LUAJIT=ON \
 		-DENABLE_TORCH=ON \
+		-DENABLE_LIBUNWIND=ON \
 		-DWANT_SYSTEMD_UNITS=ON
 
 override_dh_makeshlibs:

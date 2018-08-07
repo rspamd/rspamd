@@ -225,6 +225,10 @@
     }
   }
 
+  include smtp_whitespace "smtp_whitespace.rl";
+  include smtp_ip "smtp_ip.rl";
+  include smtp_date "smtp_date.rl";
+  include smtp_address"smtp_address.rl";
   include smtp_received "smtp_received.rl";
 
   main := Received;

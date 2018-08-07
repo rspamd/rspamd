@@ -9,6 +9,7 @@
 #include "config.h"
 #include "symbols_cache.h"
 #include "task.h"
+#include "khash.h"
 
 struct rspamd_task;
 struct rspamd_settings;
@@ -19,26 +20,49 @@ struct rspamd_symbol_option {
 	struct rspamd_symbol_option *prev, *next;
 };
 
+enum rspamd_symbol_result_flags {
+	RSPAMD_SYMBOL_RESULT_NORMAL = 0,
+	RSPAMD_SYMBOL_RESULT_IGNORED = (1 << 0)
+};
+
 /**
  * Rspamd symbol
  */
+
+KHASH_MAP_INIT_STR (rspamd_options_hash, struct rspamd_symbol_option *);
 struct rspamd_symbol_result {
-	double score;                                   /**< symbol's score							*/
-	GHashTable *options;                            /**< list of symbol's options				*/
+	double score;                                  /**< symbol's score							*/
+	khash_t(rspamd_options_hash) *options;         /**< list of symbol's options				*/
 	struct rspamd_symbol_option *opts_head;        /**< head of linked list of options			*/
 	const gchar *name;
-	struct rspamd_symbol *sym;						/**< symbol configuration					*/
+	struct rspamd_symbol *sym;                     /**< symbol configuration					*/
 	guint nshots;
+	enum rspamd_symbol_result_flags flags;
 };
 
 /**
  * Result of metric processing
  */
+KHASH_MAP_INIT_STR (rspamd_symbols_hash, struct rspamd_symbol_result);
+#if UINTPTR_MAX <= UINT_MAX
+/* 32 bit */
+#define rspamd_ptr_hash_func(key) (khint32_t)(((uintptr_t)(key))>>1)
+#else
+/* likely 64 bit */
+#define rspamd_ptr_hash_func(key) (khint32_t)(((uintptr_t)(key))>>3)
+#endif
+#define rspamd_ptr_equal_func(a, b) ((a) == (b))
+KHASH_INIT (rspamd_symbols_group_hash,
+		void *,
+		double,
+		1,
+		rspamd_ptr_hash_func,
+		rspamd_ptr_equal_func);
 struct rspamd_metric_result {
 	double score;                                   /**< total score							*/
 	double grow_factor;								/**< current grow factor					*/
-	GHashTable *symbols;                            /**< symbols of metric						*/
-	GHashTable *sym_groups;							/**< groups of symbols						*/
+	khash_t(rspamd_symbols_hash) *symbols;			/**< symbols of metric						*/
+	khash_t(rspamd_symbols_group_hash) *sym_groups; /**< groups of symbols						*/
 	gdouble actions_limits[METRIC_ACTION_MAX];		/**< set of actions for this metric			*/
 };
 
@@ -83,6 +107,25 @@ struct rspamd_symbol_result* rspamd_task_insert_result_full (struct rspamd_task 
  */
 gboolean rspamd_task_add_result_option (struct rspamd_task *task,
 		struct rspamd_symbol_result *s, const gchar *opt);
+
+/**
+ * Finds symbol result
+ * @param task
+ * @param sym
+ * @return
+ */
+struct rspamd_symbol_result* rspamd_task_find_symbol_result (
+		struct rspamd_task *task, const char *sym);
+
+/**
+ * Compatibility function to iterate on symbols hash
+ * @param task
+ * @param func
+ * @param ud
+ */
+void rspamd_task_symbol_result_foreach (struct rspamd_task *task,
+										GHFunc func,
+										gpointer ud);
 
 /**
  * Default consolidation function for metric, it get all symbols and multiply symbol

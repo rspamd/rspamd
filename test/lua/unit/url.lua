@@ -95,6 +95,9 @@ context("URL check functions", function()
     {"http://twitter.com#test", true, {
       host = 'twitter.com', fragment = 'test'
     }},
+    {"http:www.twitter.com#test", true, {
+      host = 'www.twitter.com', fragment = 'test'
+    }},
   }
 
   -- Some cases from https://code.google.com/p/google-url/source/browse/trunk/src/url_canon_unittest.cc

@@ -249,6 +249,9 @@ local function greylist_set(task)
   local action = task:get_metric_action('default')
   local ip = task:get_ip()
 
+  -- Don't do anything if pre-result has been already set
+  if task:has_pre_result() then return end
+
   if settings.greylist_min_score then
     local score = task:get_metric_score('default')[1]
     if score < settings.greylist_min_score then

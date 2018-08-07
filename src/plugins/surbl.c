@@ -82,13 +82,11 @@ struct surbl_ctx {
 	const gchar *redirector_symbol;
 	GHashTable **exceptions;
 	struct rspamd_hash_map_helper *whitelist;
-	void *redirector_map_data;
 	GHashTable *redirector_tlds;
 	guint use_redirector;
 	guint max_redirected_urls;
 	gint redirector_cbid;
 	struct upstream_list *redirectors;
-	rspamd_mempool_t *surbl_pool;
 };
 
 struct suffix_item {
@@ -110,12 +108,14 @@ struct dns_param {
 	gchar *host_resolve;
 	struct suffix_item *suffix;
 	struct rspamd_async_watcher *w;
+	struct surbl_module_ctx *ctx;
 };
 
 struct redirector_param {
 	struct rspamd_url *url;
 	struct rspamd_task *task;
 	struct upstream *redirector;
+	struct surbl_ctx *ctx;
 	struct rspamd_http_connection *conn;
 	GHashTable *tree;
 	struct suffix_item *suffix;
@@ -131,7 +131,6 @@ struct surbl_bit_item {
 
 #define SURBL_REDIRECTOR_CALLBACK "SURBL_REDIRECTOR_CALLBACK"
 
-static struct surbl_ctx *surbl_module_ctx = NULL;
 static const guint64 rspamd_surbl_cb_magic = 0xe09b8536f80de0d1ULL;
 static const gchar *rspamd_surbl_default_monitored = "facebook.com";
 static const guint default_max_redirected_urls = 10;
@@ -166,13 +165,21 @@ gint surbl_module_config (struct rspamd_config *cfg);
 gint surbl_module_reconfig (struct rspamd_config *cfg);
 
 module_t surbl_module = {
-	"surbl",
-	surbl_module_init,
-	surbl_module_config,
-	surbl_module_reconfig,
-	NULL,
-	RSPAMD_MODULE_VER
+		"surbl",
+		surbl_module_init,
+		surbl_module_config,
+		surbl_module_reconfig,
+		NULL,
+		RSPAMD_MODULE_VER,
+		(guint)-1,
 };
+
+static inline struct surbl_ctx *
+surbl_get_context (struct rspamd_config *cfg)
+{
+	return (struct surbl_ctx *)g_ptr_array_index (cfg->c_modules,
+			surbl_module.ctx_offset);
+}
 
 static void
 exceptions_free_value (gpointer v)
@@ -230,14 +237,19 @@ read_exceptions_list (gchar * chunk,
 	if (data->cur_data == NULL) {
 		t = data->prev_data;
 
-		for (i = 0; i < MAX_LEVELS; i++) {
-			if (t[i] != NULL) {
-				g_hash_table_destroy (t[i]);
+		if (t) {
+			for (i = 0; i < MAX_LEVELS; i++) {
+				if (t[i] != NULL) {
+					g_hash_table_destroy (t[i]);
+				}
+				t[i] = NULL;
 			}
-			t[i] = NULL;
+
+			g_free (t);
 		}
 
-		data->cur_data = data->prev_data;
+		data->prev_data = NULL;
+		data->cur_data = g_malloc0 (MAX_LEVELS * sizeof (GHashTable *));
 	}
 
 	return rspamd_parse_kv_list (
@@ -266,6 +278,25 @@ fin_exceptions_list (struct map_cb_data *data)
 						i, g_hash_table_size (t[i]));
 			}
 		}
+	}
+}
+
+static void
+dtor_exceptions_list (struct map_cb_data *data)
+{
+	GHashTable **t;
+	gint i;
+
+	if (data->cur_data) {
+		t = data->cur_data;
+		for (i = 0; i < MAX_LEVELS; i++) {
+			if (t[i] != NULL) {
+				g_hash_table_destroy (t[i]);
+			}
+			t[i] = NULL;
+		}
+
+		g_free (t);
 	}
 }
 
@@ -356,27 +387,34 @@ fin_redirectors_list (struct map_cb_data *data)
 
 		g_hash_table_unref (tld_hash);
 	}
+}
 
-	tld_hash = data->cur_data;
-	surbl_module_ctx->redirector_tlds = tld_hash;
+void
+dtor_redirectors_list (struct map_cb_data *data)
+{
+	GHashTable *tld_hash;
+
+	if (data->cur_data) {
+		tld_hash = data->cur_data;
+
+		g_hash_table_unref (tld_hash);
+	}
 }
 
 gint
 surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
-	surbl_module_ctx = g_malloc0 (sizeof (struct surbl_ctx));
+	struct surbl_ctx *surbl_module_ctx;
+
+	surbl_module_ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
+			sizeof (struct surbl_ctx));
 
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
-	surbl_module_ctx->surbl_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 
 	surbl_module_ctx->redirectors = NULL;
 	surbl_module_ctx->whitelist = NULL;
-	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-			(rspamd_mempool_destruct_t) rspamd_map_helper_destroy_hash,
-			surbl_module_ctx->whitelist);
-	surbl_module_ctx->exceptions = rspamd_mempool_alloc0 (
-			surbl_module_ctx->surbl_pool, MAX_LEVELS * sizeof (GHashTable *));
+	surbl_module_ctx->exceptions = NULL;
 	surbl_module_ctx->redirector_cbid = -1;
 
 
@@ -589,6 +627,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 	const gchar* ip_val, *monitored_domain = NULL;
 	struct surbl_bit_item* new_bit;
 	ucl_object_t *ropts;
+	struct surbl_ctx *surbl_module_ctx = surbl_get_context (cfg);
 
 	LL_FOREACH(value, cur_rule) {
 		monitored_domain = NULL;
@@ -607,15 +646,15 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 			continue;
 		}
 
-		new_suffix = rspamd_mempool_alloc0 (surbl_module_ctx->surbl_pool,
+		new_suffix = rspamd_mempool_alloc0 (cfg->cfg_pool,
 				sizeof (struct suffix_item));
 		new_suffix->magic = rspamd_surbl_cb_magic;
 		new_suffix->suffix = rspamd_mempool_strdup (
-				surbl_module_ctx->surbl_pool, ucl_obj_tostring (cur));
+				cfg->cfg_pool, ucl_obj_tostring (cur));
 		new_suffix->options = 0;
 		new_suffix->bits = g_array_new (FALSE, FALSE,
 				sizeof (struct surbl_bit_item));
-		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
 				(rspamd_mempool_destruct_t )rspamd_array_free_hard,
 				new_suffix->bits);
 
@@ -623,7 +662,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 		if (cur == NULL) {
 			if (ucl_object_key (value)) {
 				new_suffix->symbol = rspamd_mempool_strdup (
-						surbl_module_ctx->surbl_pool,
+						cfg->cfg_pool,
 						ucl_object_key (value));
 			}
 			else {
@@ -631,12 +670,12 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 						"surbl rule for suffix %s lacks symbol, using %s as symbol",
 						new_suffix->suffix, DEFAULT_SURBL_SYMBOL);
 				new_suffix->symbol = rspamd_mempool_strdup (
-						surbl_module_ctx->surbl_pool, DEFAULT_SURBL_SYMBOL);
+						cfg->cfg_pool, DEFAULT_SURBL_SYMBOL);
 			}
 		}
 		else {
 			new_suffix->symbol = rspamd_mempool_strdup (
-					surbl_module_ctx->surbl_pool, ucl_obj_tostring (cur));
+					cfg->cfg_pool, ucl_obj_tostring (cur));
 		}
 
 		cur = ucl_object_lookup (cur_rule, "options");
@@ -680,7 +719,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 		ucl_object_insert_key (ropts,
 				ucl_object_fromstring ("nxdomain"),
 				"rcode", 0, false);
-		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
 				(rspamd_mempool_destruct_t )ucl_object_unref,
 				ropts);
 
@@ -719,11 +758,11 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 					gchar* p;
 					bit = ucl_obj_toint (cur_bit);
 					new_bit = rspamd_mempool_alloc (
-							surbl_module_ctx->surbl_pool,
+							cfg->cfg_pool,
 							sizeof(struct surbl_bit_item));
 					new_bit->bit = bit;
 					new_bit->symbol = rspamd_mempool_strdup (
-							surbl_module_ctx->surbl_pool,
+							cfg->cfg_pool,
 							ucl_object_key (cur_bit));
 					/* Convert to uppercase */
 					p = new_bit->symbol;
@@ -747,7 +786,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 			guint32 bit;
 
 			new_suffix->ips = g_hash_table_new (g_int_hash, g_int_equal);
-			rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+			rspamd_mempool_add_destructor (cfg->cfg_pool,
 					(rspamd_mempool_destruct_t )g_hash_table_unref,
 					new_suffix->ips);
 
@@ -756,7 +795,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 					gchar* p;
 					ip_val = ucl_obj_tostring (cur_bit);
 					new_bit = rspamd_mempool_alloc (
-							surbl_module_ctx->surbl_pool,
+							cfg->cfg_pool,
 							sizeof(struct surbl_bit_item));
 					if (inet_pton (AF_INET, ip_val, &bit) != 1) {
 						msg_err_config ("cannot parse ip %s: %s", ip_val,
@@ -765,7 +804,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 					}
 					new_bit->bit = bit;
 					new_bit->symbol = rspamd_mempool_strdup (
-							surbl_module_ctx->surbl_pool,
+							cfg->cfg_pool,
 							ucl_object_key (cur_bit));
 					/* Convert to uppercase */
 					p = new_bit->symbol;
@@ -858,6 +897,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	const gchar *redir_val;
 	gint nrules = 0;
 	lua_State *L;
+	struct surbl_ctx *surbl_module_ctx = surbl_get_context (cfg);
 
 	if (!rspamd_config_is_module_enabled (cfg, "surbl")) {
 		return TRUE;
@@ -893,7 +933,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl", "redirector")) != NULL) {
 		surbl_module_ctx->redirectors = rspamd_upstreams_create (cfg->ups_ctx);
-		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
 				(rspamd_mempool_destruct_t)rspamd_upstreams_destroy,
 				surbl_module_ctx->redirectors);
 		LL_FOREACH (value, cur)
@@ -946,8 +986,11 @@ surbl_module_config (struct rspamd_config *cfg)
 		rspamd_config_get_module_opt (cfg, "surbl",
 		"redirector_hosts_map")) != NULL) {
 		if (!rspamd_map_add_from_ucl (cfg, value,
-			"SURBL redirectors list", read_redirectors_list, fin_redirectors_list,
-			(void **)&surbl_module_ctx->redirector_map_data)) {
+				"SURBL redirectors list",
+				read_redirectors_list,
+				fin_redirectors_list,
+				dtor_redirectors_list,
+				(void **)&surbl_module_ctx->redirector_tlds)) {
 
 			msg_warn_config ("bad redirectors map definition: %s",
 					ucl_obj_tostring (value));
@@ -958,13 +1001,18 @@ surbl_module_config (struct rspamd_config *cfg)
 		rspamd_config_get_module_opt (cfg, "surbl", "exceptions")) != NULL) {
 		rspamd_map_add_from_ucl (cfg, value,
 				"SURBL exceptions list",
-				read_exceptions_list, fin_exceptions_list,
+				read_exceptions_list,
+				fin_exceptions_list,
+				dtor_exceptions_list,
 				(void **)&surbl_module_ctx->exceptions);
 	}
 	if ((value =
 			rspamd_config_get_module_opt (cfg, "surbl", "whitelist")) != NULL) {
 		rspamd_map_add_from_ucl (cfg, value,
-				"SURBL whitelist", rspamd_kv_list_read, rspamd_kv_list_fin,
+				"SURBL whitelist",
+				rspamd_kv_list_read,
+				rspamd_kv_list_fin,
+				rspamd_kv_list_dtor,
 				(void **)&surbl_module_ctx->whitelist);
 	}
 
@@ -1004,7 +1052,7 @@ surbl_module_config (struct rspamd_config *cfg)
 	}
 
 	if (surbl_module_ctx->suffixes != NULL) {
-		rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t) g_list_free,
 			surbl_module_ctx->suffixes);
 	}
@@ -1034,28 +1082,17 @@ surbl_module_config (struct rspamd_config *cfg)
 gint
 surbl_module_reconfig (struct rspamd_config *cfg)
 {
-	/* Delete pool and objects */
-	rspamd_mempool_delete (surbl_module_ctx->surbl_pool);
+	struct surbl_ctx *surbl_module_ctx = surbl_get_context (cfg);
+
 	/* Reinit module */
 	surbl_module_ctx->use_redirector = 0;
 	surbl_module_ctx->suffixes = NULL;
-	surbl_module_ctx->surbl_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
-
 	surbl_module_ctx->redirectors = NULL;
 	surbl_module_ctx->whitelist = NULL;
 	/* Zero exceptions hashes */
-	surbl_module_ctx->exceptions = rspamd_mempool_alloc0 (
-		surbl_module_ctx->surbl_pool,
-		MAX_LEVELS * sizeof (GHashTable *));
-	/* Register destructors */
-	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-		(rspamd_mempool_destruct_t) rspamd_map_helper_destroy_hash,
-		surbl_module_ctx->whitelist);
-	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
-		(rspamd_mempool_destruct_t) g_hash_table_destroy,
-		surbl_module_ctx->redirector_tlds);
+	surbl_module_ctx->exceptions = NULL;
 
-	rspamd_mempool_add_destructor (surbl_module_ctx->surbl_pool,
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
 		(rspamd_mempool_destruct_t) g_list_free,
 		surbl_module_ctx->suffixes);
 
@@ -1067,14 +1104,15 @@ surbl_module_reconfig (struct rspamd_config *cfg)
 
 static gchar *
 format_surbl_request (rspamd_mempool_t * pool,
-	rspamd_ftok_t * hostname,
-	struct suffix_item *suffix,
-	gboolean append_suffix,
-	GError ** err,
-	gboolean forced,
-	GHashTable *tree,
-	struct rspamd_url *url,
-	lua_State *L)
+					  rspamd_ftok_t * hostname,
+					  struct suffix_item *suffix,
+					  gboolean append_suffix,
+					  GError ** err,
+					  gboolean forced,
+					  GHashTable *tree,
+					  struct rspamd_url *url,
+					  lua_State *L,
+					  struct surbl_ctx *surbl_module_ctx)
 {
 	GHashTable *t;
 	gchar *result = NULL;
@@ -1083,6 +1121,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 	gsize slen, len;
 	gboolean found_exception = FALSE;
 	rspamd_ftok_t f;
+
 
 	if (G_LIKELY (suffix != NULL)) {
 		slen = strlen (suffix->suffix);
@@ -1141,7 +1180,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 		/* Not a numeric url */
 		result = rspamd_mempool_alloc (pool, len);
 		/* Now we should try to check for exceptions */
-		if (!forced) {
+		if (!forced && surbl_module_ctx->exceptions) {
 			for (i = MAX_LEVELS - 1; i >= 0; i--) {
 				t = surbl_module_ctx->exceptions[i];
 				if (t != NULL && dots_num >= i + 1) {
@@ -1255,12 +1294,15 @@ format_surbl_request (rspamd_mempool_t * pool,
 
 static void
 make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
-	struct suffix_item *suffix, gboolean forced, GHashTable *tree)
+					 struct suffix_item *suffix,
+					 gboolean forced, GHashTable *tree,
+					 struct surbl_ctx *surbl_module_ctx)
 {
 	gchar *surbl_req;
 	rspamd_ftok_t f;
 	GError *err = NULL;
 	struct dns_param *param;
+
 
 	f.begin = url->host;
 	f.len = url->hostlen;
@@ -1270,8 +1312,16 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 		 * We need to get url real TLD, resolve it with no suffix and then
 		 * check against surbl using reverse octets printing
 		 */
-		surbl_req = format_surbl_request (task->task_pool, &f, suffix, FALSE,
-				&err, forced, tree, url, task->cfg->lua_state);
+		surbl_req = format_surbl_request (task->task_pool,
+				&f,
+				suffix,
+				FALSE,
+				&err,
+				forced,
+				tree,
+				url,
+				task->cfg->lua_state,
+				surbl_module_ctx);
 
 		if (surbl_req == NULL) {
 			if (err != NULL) {
@@ -1313,7 +1363,8 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 			forced,
 			tree,
 			url,
-			task->cfg->lua_state)) != NULL) {
+			task->cfg->lua_state,
+			surbl_module_ctx)) != NULL) {
 		param =
 			rspamd_mempool_alloc (task->task_pool, sizeof (struct dns_param));
 		param->url = url;
@@ -1508,7 +1559,7 @@ surbl_redirector_error (struct rspamd_http_connection *conn,
 	msg_err_surbl ("connection with http server %s terminated incorrectly: %e",
 		rspamd_inet_address_to_string (rspamd_upstream_addr (param->redirector)),
 		err);
-	rspamd_upstream_fail (param->redirector);
+	rspamd_upstream_fail (param->redirector, FALSE);
 	rspamd_session_remove_event (param->task->s, free_redirector_session,
 			param);
 }
@@ -1585,6 +1636,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 	struct timeval *timeout;
 	struct upstream *selected;
 	struct rspamd_http_message *msg;
+	struct surbl_ctx *surbl_module_ctx = surbl_get_context (task->cfg);
 
 	selected = rspamd_upstream_get (surbl_module_ctx->redirectors,
 			RSPAMD_UPSTREAM_ROUND_ROBIN, url->host, url->hostlen);
@@ -1613,6 +1665,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 			RSPAMD_HTTP_CLIENT,
 			NULL,
 			NULL);
+	param->ctx = surbl_module_ctx;
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	msg->url = rspamd_fstring_assign (msg->url, url->string, url->urllen);
 	param->sock = s;
@@ -1680,8 +1733,11 @@ surbl_tree_redirector_callback (gpointer key, gpointer value, void *data)
 	rspamd_ftok_t srch;
 	gboolean found = FALSE;
 	gchar *found_tld;
+	struct surbl_ctx *surbl_module_ctx;
 
 	task = param->task;
+	surbl_module_ctx = param->ctx;
+
 	msg_debug_surbl ("check url redirection %*s", url->urllen, url->string);
 
 	if (url->hostlen <= 0) {
@@ -1764,12 +1820,15 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 	struct redirector_param *param = data;
 	struct rspamd_url *url = value;
 	struct rspamd_task *task;
+	struct surbl_ctx *surbl_module_ctx;
 
 	if (url->hostlen <= 0) {
 		return;
 	}
 
 	task = param->task;
+	surbl_module_ctx = param->ctx;
+
 	msg_debug_surbl ("check url %*s", url->urllen, url->string);
 
 	if (surbl_module_ctx->use_tags && surbl_test_tags (param->task, param, url)) {
@@ -1782,7 +1841,7 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 	}
 
 	make_surbl_requests (url, param->task, param->suffix, FALSE,
-			param->tree);
+			param->tree, surbl_module_ctx);
 }
 
 static void
@@ -1794,6 +1853,7 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 	struct rspamd_mime_text_part *part;
 	struct html_image *img;
 	struct rspamd_url *url;
+	struct surbl_ctx *surbl_module_ctx = surbl_get_context (task->cfg);
 
 	if (!rspamd_monitored_alive (suffix->m)) {
 		msg_info_surbl ("disable surbl %s as it is reported to be offline",
@@ -1805,6 +1865,7 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 	param->task = task;
 	param->suffix = suffix;
 	param->tree = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
+	param->ctx = surbl_module_ctx;
 	rspamd_mempool_add_destructor (task->task_pool,
 		(rspamd_mempool_destruct_t)g_hash_table_unref,
 		param->tree);
@@ -1844,6 +1905,7 @@ surbl_test_redirector (struct rspamd_task *task, void *user_data)
 	struct rspamd_mime_text_part *part;
 	struct html_image *img;
 	struct rspamd_url *url;
+	struct surbl_ctx *surbl_module_ctx = surbl_get_context (task->cfg);
 
 	if (!surbl_module_ctx->use_redirector || !surbl_module_ctx->redirector_tlds) {
 		return;
@@ -1853,6 +1915,7 @@ surbl_test_redirector (struct rspamd_task *task, void *user_data)
 	param->task = task;
 	param->suffix = NULL;
 	param->redirector_requests = 0;
+	param->ctx = surbl_module_ctx;
 	g_hash_table_foreach (task->urls, surbl_tree_redirector_callback, param);
 
 	/* We also need to check and process img URLs */
@@ -1882,11 +1945,20 @@ surbl_test_redirector (struct rspamd_task *task, void *user_data)
 static gint
 surbl_register_redirect_handler (lua_State *L)
 {
+	struct surbl_ctx *surbl_module_ctx;
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+
+	if (!cfg) {
+		return luaL_error (L, "config is now required as the first parameter");
+	}
+
+	surbl_module_ctx = surbl_get_context (cfg);
+
 	if (surbl_module_ctx->redirector_cbid != -1) {
 		luaL_unref (L, LUA_REGISTRYINDEX, surbl_module_ctx->redirector_cbid);
 	}
 
-	lua_pushvalue (L, 1);
+	lua_pushvalue (L, 2);
 
 	if (lua_type (L, -1) == LUA_TFUNCTION) {
 		surbl_module_ctx->redirector_cbid = luaL_ref (L, LUA_REGISTRYINDEX);
@@ -1912,9 +1984,11 @@ surbl_is_redirector_handler (lua_State *L)
 	rspamd_ftok_t srch;
 	gboolean found = FALSE;
 	gchar *found_tld, *url_cpy;
+	struct surbl_ctx *surbl_module_ctx;
 
 	task = lua_check_task (L, 1);
 	url = luaL_checklstring (L, 2, &len);
+	surbl_module_ctx = surbl_get_context (task->cfg);
 
 	if (task && url) {
 		url_cpy = rspamd_mempool_alloc (task->task_pool, len);

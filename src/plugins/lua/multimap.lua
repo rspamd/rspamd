@@ -93,6 +93,9 @@ local function apply_hostname_filter(task, filter, hostname, r)
   if filter == 'tld' then
     local tld = util.get_tld(hostname)
     return tld
+  elseif filter == 'top' then
+    local tld = util.get_tld(hostname)
+    return tld:match('[^.]*$') or tld
   else
     if not r['re_filter'] then
       local pat = string.match(filter, 'tld:regexp:(.+)')
@@ -123,6 +126,9 @@ local function apply_url_filter(task, filter, url, r)
 
   if filter == 'tld' then
     return url:get_tld()
+  elseif filter == 'top' then
+    local tld = url:get_tld()
+    return tld:match('[^.]*$') or tld
   elseif filter == 'full' then
     return url:get_text()
   elseif filter == 'is_phished' then
@@ -407,6 +413,7 @@ local function multimap_callback(task, rule)
             table.insert(srch, nip)
         end
       end
+
       table.insert(srch, 1, r['redis_key'])
       ret = rspamd_redis_make_request(task,
         redis_params, -- connect params
@@ -753,6 +760,7 @@ local function multimap_callback(task, rule)
     url = function()
       if task:has_urls() then
         local msg_urls = task:get_urls()
+
         for _,url in ipairs(msg_urls) do
           match_url(rule, url)
         end
@@ -889,8 +897,8 @@ local function add_multimap_rule(key, newrule)
   else
     if type(newrule['map']) == 'string' then
       local map = urls[newrule['map']]
-      if map and map['type'] == newrule['type']
-        and map['regexp'] == newrule['regexp'] then
+      if map and map['regexp'] == newrule['regexp'] and
+          map['glob'] == newrule['glob'] then
         if newrule['type'] == 'ip' then
           newrule['radix'] = map['map']
         else
@@ -1089,6 +1097,8 @@ if opts and type(opts) == 'table' then
       if not rule then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "'..k..'"')
       else
+        rspamd_logger.infox(rspamd_config, 'added multimap rule: %s (%s)',
+            k, rule.type)
         table.insert(rules, rule)
       end
     end
@@ -1114,20 +1124,11 @@ if opts and type(opts) == 'table' then
     end
     if rule['score'] then
       -- Register metric symbol
-      local description = 'multimap symbol'
-      local group = N
-      if rule['description'] then
-        description = rule['description']
-      end
-      if rule['group'] then
-        group = rule['group']
-      end
-      rspamd_config:set_metric_symbol({
-          name = rule['symbol'],
-          score = rule['score'],
-          description = description,
-          group = group
-      })
+      rule.name = rule.symbol
+      rule.description = rule.description or 'multimap symbol'
+      rule.group = rule.group or N
+
+      rspamd_config:set_metric_symbol(rule)
     end
   end,
   fun.filter(function(r) return not r['prefilter'] end, rules))

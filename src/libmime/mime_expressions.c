@@ -1407,7 +1407,7 @@ match_smtp_data (struct rspamd_task *task,
 	const gchar *what, gsize len)
 {
 	rspamd_regexp_t *re;
-	gint r;
+	gint r = 0;
 
 	if (arg->type == EXPRESSION_ARGUMENT_REGEXP) {
 		/* This is a regexp */
@@ -1418,7 +1418,9 @@ match_smtp_data (struct rspamd_task *task,
 		}
 
 
-		r = rspamd_regexp_search (re, what, len, NULL, NULL, FALSE, NULL);
+		if (len > 0) {
+			r = rspamd_regexp_search (re, what, len, NULL, NULL, FALSE, NULL);
+		}
 
 		return r;
 	}
@@ -1598,9 +1600,12 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 				DL_FOREACH (found, cur) {
 					if (arg_pattern->type == EXPRESSION_ARGUMENT_REGEXP) {
 						re = arg_pattern->data;
-						r = rspamd_regexp_search (re,
-								cur->value.begin, cur->value.len,
-								NULL, NULL, FALSE, NULL);
+
+						if (cur->value.len > 0) {
+							r = rspamd_regexp_search (re,
+									cur->value.begin, cur->value.len,
+									NULL, NULL, FALSE, NULL);
+						}
 
 						if (r) {
 							return TRUE;
@@ -1694,7 +1699,7 @@ rspamd_content_type_check (struct rspamd_task *task,
 	rspamd_regexp_t *re;
 	struct expression_argument *arg1, *arg_pattern;
 	struct rspamd_content_type *ct;
-	gint r;
+	gint r = 0;
 	guint i;
 	gboolean recursive = FALSE;
 	struct rspamd_mime_part *cur_part;
@@ -1736,8 +1741,11 @@ rspamd_content_type_check (struct rspamd_task *task,
 
 		if (arg_pattern->type == EXPRESSION_ARGUMENT_REGEXP) {
 			re = arg_pattern->data;
-			r = rspamd_regexp_search (re, param_data->begin, param_data->len,
-					NULL, NULL, FALSE, NULL);
+
+			if (param_data->len > 0) {
+				r = rspamd_regexp_search (re, param_data->begin, param_data->len,
+						NULL, NULL, FALSE, NULL);
+			}
 
 			if (r) {
 				return TRUE;
@@ -1792,8 +1800,11 @@ compare_subtype (struct rspamd_task *task, struct rspamd_content_type *ct,
 	}
 	if (subtype->type == EXPRESSION_ARGUMENT_REGEXP) {
 		re = subtype->data;
-		r = rspamd_regexp_search (re, ct->subtype.begin, ct->subtype.len,
-				NULL, NULL, FALSE, NULL);
+
+		if (ct->subtype.len > 0) {
+			r = rspamd_regexp_search (re, ct->subtype.begin, ct->subtype.len,
+					NULL, NULL, FALSE, NULL);
+		}
 	}
 	else {
 		srch.begin = subtype->data;
@@ -1837,7 +1848,7 @@ common_has_content_part (struct rspamd_task * task,
 	struct rspamd_mime_part *part;
 	struct rspamd_content_type *ct;
 	rspamd_ftok_t srch;
-	gint r;
+	gint r = 0;
 	guint i;
 
 	for (i = 0; i < task->parts->len; i ++) {
@@ -1851,8 +1862,11 @@ common_has_content_part (struct rspamd_task * task,
 		if (param_type->type == EXPRESSION_ARGUMENT_REGEXP) {
 			re = param_type->data;
 
-			r = rspamd_regexp_search (re, ct->type.begin, ct->type.len,
-					NULL, NULL, FALSE, NULL);
+			if (ct->type.len > 0) {
+				r = rspamd_regexp_search (re, ct->type.begin, ct->type.len,
+						NULL, NULL, FALSE, NULL);
+			}
+
 			/* Also check subtype and length of the part */
 			if (r && param_subtype) {
 				r = compare_len (part, min_len, max_len) &&

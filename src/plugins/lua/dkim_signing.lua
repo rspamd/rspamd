@@ -32,7 +32,9 @@ local settings = {
   allow_hdrfrom_mismatch_sign_networks = false,
   allow_hdrfrom_multiple = false,
   allow_username_mismatch = false,
+  allow_pubkey_mismatch = true,
   auth_only = true,
+  check_pubkey = false,
   domain = {},
   path = string.format('%s/%s/%s', rspamd_paths['DBDIR'], 'dkim', '$domain.$selector.key'),
   sign_local = true,
@@ -56,6 +58,41 @@ local function dkim_signing_cb(task)
     return
   end
 
+  local function do_sign()
+    if settings.check_pubkey then
+      local resolve_name = p.selector .. "._domainkey." .. p.domain
+      task:get_resolver():resolve_txt({
+        task = task,
+        name = resolve_name,
+        callback = function(_, _, results, err)
+          task:inc_dns_req()
+          if not err and results and results[1] then
+            p.pubkey = results[1]
+            p.strict_pubkey_check = not settings.allow_pubkey_mismatch
+          elseif not settings.allow_pubkey_mismatch then
+            rspamd_logger.errx('public key for domain %s/%s is not found: %s, skip signing',
+                p.domain, p.selector, err)
+            return
+          else
+            rspamd_logger.infox('public key for domain %s/%s is not found: %s',
+                p.domain, p.selector, err)
+          end
+
+          local sret, _ = sign_func(task, p)
+          if sret then
+            task:insert_result(settings.symbol, 1.0)
+          end
+        end,
+        forced = true
+      })
+    else
+      local sret, _ = sign_func(task, p)
+      if sret then
+        task:insert_result(settings.symbol, 1.0)
+      end
+    end
+  end
+
   if settings.use_redis then
     local function try_redis_key(selector)
       p.key = nil
@@ -68,11 +105,8 @@ local function dkim_signing_cb(task)
         elseif type(data) ~= 'string' then
           rspamd_logger.debugm(N, task, "missing DKIM key for %s", rk)
         else
-        p.rawkey = data
-        local sret, _ = sign_func(task, p)
-        if sret then
-          task:insert_result(settings.symbol, 1.0)
-        end
+          p.rawkey = data
+          do_sign()
         end
       end
       local rret = rspamd_redis_make_request(task,
@@ -117,12 +151,17 @@ local function dkim_signing_cb(task)
   else
     if (p.key and p.selector) then
       p.key = lutil.template(p.key, {domain = p.domain, selector = p.selector})
-      if not rspamd_util.file_exists(p.key) then
-        rspamd_logger.debugm(N, task, 'file %s does not exists', p.key)
+      local exists,err = rspamd_util.file_exists(p.key)
+      if not exists then
+        if err and err == 'No such file or directory' then
+          rspamd_logger.debugm(N, task, 'cannot read key from %s: %s', p.key, err)
+        else
+          rspamd_logger.warnx(N, task, 'cannot read key from %s: %s', p.key, err)
+        end
         return false
       end
-      local sret, _ = sign_func(task, p)
-      return sret
+
+      do_sign()
     else
       rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
       return false

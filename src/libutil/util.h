@@ -116,7 +116,7 @@ void rspamd_pass_signal (GHashTable *, gint );
 /*
  * Process title utility functions
  */
-gint init_title (gint argc, gchar *argv[], gchar *envp[]);
+gint init_title (struct rspamd_main *, gint argc, gchar *argv[], gchar *envp[]);
 gint setproctitle (const gchar *fmt, ...);
 #endif
 
@@ -510,5 +510,31 @@ GPtrArray *rspamd_glob_path (const gchar *dir,
 							 const gchar *pattern,
 							 gboolean recursive,
 							 GError **err);
+
+struct rspamd_counter_data {
+	gdouble mean;
+	gdouble stddev;
+	guint64 number;
+};
+
+/**
+ * Sets counter's data using exponential moving average
+ * @param cd counter
+ * @param value new counter value
+ * @param alpha decay coefficient (0..1)
+ * @return new counter value
+ */
+double rspamd_set_counter_ema (struct rspamd_counter_data *cd,
+							   gdouble value,
+							   gdouble alpha);
+
+/**
+ * Sets counter's data using flat moving average
+ * @param cd counter
+ * @param value new counter value
+ * @return new counter value
+ */
+double rspamd_set_counter (struct rspamd_counter_data *cd,
+						   gdouble value);
 
 #endif

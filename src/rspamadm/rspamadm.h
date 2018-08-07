@@ -57,6 +57,7 @@ void rspamadm_fill_lua_commands (lua_State *L, GPtrArray *dest);
 
 gboolean rspamadm_execute_lua_ucl_subr (gpointer L, gint argc, gchar **argv,
 										const ucl_object_t *res,
-										const gchar *script_name);
+										const gchar *script_name,
+										gboolean rspamadm_subcommand);
 
 #endif

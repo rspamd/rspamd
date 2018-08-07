@@ -11,7 +11,7 @@
 # Description:       Rspamd spam filtering daemon process
 ### END INIT INFO
 #
-# chkconfig:   - 85 15 
+# chkconfig:   - 85 15
 # description:  rspamd is a spam filtering system
 # processname: rspamd
 # config:      /etc/rspamd/rspamd.conf
@@ -58,11 +58,22 @@ stop() {
         if [ "$CONSOLETYPE" != "serial" ]; then
            echo -en "\\033[16G"
         fi
-        while rh_status_q
-        do
+        STOPTIMEOUT=30
+        while [ $STOPTIMEOUT -gt 0 ]; do
+            rh_status_q || break
+            sleep 1
+            let STOPTIMEOUT=${STOPTIMEOUT}-1
+        done
+        if [ $STOPTIMEOUT -eq 0 ]; then
+          echo "Timeout error occurred trying to stop Rspamd. Forcefully stop the remaining processes."
+          killproc $prog -KILL
+          # Sleep forever after SIGKILL being sent (e.g. UNINT SLEEP)
+          while rh_status_q
+          do
             sleep 1
             echo -n $"."
-        done
+          done
+        fi
         rm -f $lockfile
     fi
     echo

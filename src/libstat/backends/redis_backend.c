@@ -25,6 +25,12 @@
 #include "adapters/libevent.h"
 #include "ref.h"
 
+#define msg_debug_stat_redis(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_stat_redis_log_id, "stat_redis", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
+INIT_LOG_MODULE(stat_redis)
 
 #define REDIS_CTX(p) (struct redis_stat_ctx *)(p)
 #define REDIS_RUNTIME(p) (struct redis_stat_runtime *)(p)
@@ -909,7 +915,8 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 		else {
 			msg_err ("cannot get keys to gather stat: unknown error");
 		}
-		rspamd_upstream_fail (cbdata->selected);
+
+		rspamd_upstream_fail (cbdata->selected, FALSE);
 		rspamd_redis_async_cbdata_cleanup (cbdata);
 	}
 }
@@ -1031,7 +1038,7 @@ rspamd_redis_timeout (gint fd, short what, gpointer d)
 	msg_err_task_check ("connection to redis server %s timed out",
 			rspamd_upstream_name (rt->selected));
 
-	rspamd_upstream_fail (rt->selected);
+	rspamd_upstream_fail (rt->selected, FALSE);
 
 	if (rt->redis) {
 		redis = rt->redis;
@@ -1083,7 +1090,7 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 			}
 
 			rt->learned = val;
-			msg_debug_task ("connected to redis server, tokens learned for %s: %uL",
+			msg_debug_stat_redis ("connected to redis server, tokens learned for %s: %uL",
 					rt->redis_object_expanded, rt->learned);
 			rspamd_upstream_ok (rt->selected);
 		}
@@ -1091,7 +1098,7 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 	else {
 		msg_err_task ("error getting reply from redis server %s: %s",
 				rspamd_upstream_name (rt->selected), c->errstr);
-		rspamd_upstream_fail (rt->selected);
+		rspamd_upstream_fail (rt->selected, FALSE);
 
 		if (!rt->err) {
 			g_set_error (&rt->err, rspamd_redis_stat_quark (), c->err,
@@ -1168,7 +1175,7 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 						rspamd_redis_type_to_string (reply->type));
 			}
 
-			msg_debug_task_check ("received tokens for %s: %d processed, %d found",
+			msg_debug_stat_redis ("received tokens for %s: %d processed, %d found",
 					rt->redis_object_expanded, processed, found);
 			rspamd_upstream_ok (rt->selected);
 		}
@@ -1178,7 +1185,7 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 				rspamd_upstream_name (rt->selected), c->errstr);
 
 		if (rt->redis) {
-			rspamd_upstream_fail (rt->selected);
+			rspamd_upstream_fail (rt->selected, FALSE);
 		}
 
 		if (!rt->err) {
@@ -1210,7 +1217,7 @@ rspamd_redis_learned (redisAsyncContext *c, gpointer r, gpointer priv)
 				rspamd_upstream_name (rt->selected), c->errstr);
 
 		if (rt->redis) {
-			rspamd_upstream_fail (rt->selected);
+			rspamd_upstream_fail (rt->selected, FALSE);
 		}
 
 		if (!rt->err) {
@@ -1699,6 +1706,11 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	 */
 	redisAsyncCommand (rt->redis, NULL, NULL, "SADD %s_keys %s",
 			rt->stcf->symbol, rt->redis_object_expanded);
+
+	if (rt->ctx->new_schema) {
+		redisAsyncCommand (rt->redis, NULL, NULL, "HSET %s version 2",
+				rt->redis_object_expanded);
+	}
 
 	if (rt->stcf->clcf->flags & RSPAMD_FLAG_CLASSIFIER_INTEGER) {
 		redis_cmd = "HINCRBY";

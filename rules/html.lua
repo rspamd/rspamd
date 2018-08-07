@@ -168,38 +168,62 @@ rspamd_config.R_SUSPICIOUS_IMAGES = {
   description = 'Message contains many suspicious messages'
 }
 
-rspamd_config.R_WHITE_ON_WHITE = {
+local vis_check_id = rspamd_config:register_symbol{
+  name = 'HTML_VISIBLE_CHECKS',
+  type = 'callback',
   callback = function(task)
+    --local logger = require "rspamd_logger"
     local tp = task:get_text_parts() -- get text parts in a message
     local ret = false
     local diff = 0.0
     local transp_rate = 0
+    local invisible_blocks = 0
+    local zero_size_blocks = 0
     local arg
 
+    local normal_len = 0
+    local transp_len = 0
+
     for _,p in ipairs(tp) do -- iterate over text parts array using `ipairs`
+      normal_len = normal_len + p:get_length()
       if p:is_html() and p:get_html() then -- if the current part is html part
-        local normal_len = p:get_length()
-        local transp_len = 0
         local hc = p:get_html() -- we get HTML context
 
-        hc:foreach_tag({'font', 'span', 'div', 'p'}, function(tag)
+        hc:foreach_tag({'font', 'span', 'div', 'p', 'td'}, function(tag)
           local bl = tag:get_extra()
           if bl then
+            if not bl['visible'] then
+              invisible_blocks = invisible_blocks + 1
+            end
+
+            if bl['font_size'] and bl['font_size'] == 0 then
+              zero_size_blocks = zero_size_blocks + 1
+            end
+
             if bl['bgcolor'] and bl['color'] and bl['visible'] then
 
               local color = bl['color']
               local bgcolor = bl['bgcolor']
               -- Should use visual approach here some day
-              local diff_r = math.abs(color[1] - bgcolor[1]) / 255.0
-              local diff_g = math.abs(color[2] - bgcolor[2]) / 255.0
-              local diff_b = math.abs(color[3] - bgcolor[3]) / 255.0
-              diff = (diff_r + diff_g + diff_b) / 3.0
+              local diff_r = math.abs(color[1] - bgcolor[1])
+              local diff_g = math.abs(color[2] - bgcolor[2])
+              local diff_b = math.abs(color[3] - bgcolor[3])
+              local r_avg = (color[1] + bgcolor[1]) / 2.0
+              -- Square
+              diff_r = diff_r * diff_r
+              diff_g = diff_g * diff_g
+              diff_b = diff_b * diff_b
+
+              diff = math.sqrt(2*diff_r + 4*diff_g + 3 * diff_b +
+                  (r_avg * (diff_r - diff_b) / 256.0))
+              diff = diff / 256.0
 
               if diff < 0.1 then
                 ret = true
-                transp_len = (tag:get_content_length()) *
-                  (0.1 - diff) * 5.0
-                normal_len = normal_len - tag:get_content_length()
+                local content_len = #(tag:get_content() or {})
+                invisible_blocks = invisible_blocks + 1 -- This block is invisible
+                transp_len = transp_len + content_len * (0.1 - diff) * 10.0
+                normal_len = normal_len - content_len
                 local tr = transp_len / (normal_len + transp_len)
                 if tr > transp_rate then
                   transp_rate = tr
@@ -219,21 +243,91 @@ rspamd_config.R_WHITE_ON_WHITE = {
     end
 
     if ret then
+      transp_rate = transp_len / (normal_len + transp_len)
+
       if transp_rate > 0.1 then
         if transp_rate > 0.5 or transp_rate ~= transp_rate then
           transp_rate = 0.5
         end
-        return true,(transp_rate * 2.0),arg
+
+        task:insert_result('R_WHITE_ON_WHITE', (transp_rate * 2.0), arg)
       end
     end
 
-    return false
-  end,
+    if invisible_blocks > 0 then
+      if invisible_blocks > 10 then
+        invisible_blocks = 10
+      end
+      local rates = { -- From 1 to 10
+        0.05,
+        0.1,
+        0.2,
+        0.3,
+        0.4,
+        0.5,
+        0.6,
+        0.7,
+        0.8,
+        1.0,
+      }
+      task:insert_result('MANY_INVISIBLE_PARTS', rates[invisible_blocks],
+          tostring(invisible_blocks))
+    end
 
+    if zero_size_blocks > 0 then
+      if zero_size_blocks > 5 then
+        if zero_size_blocks > 10 then
+          -- Full score
+          task:insert_result('ZERO_FONT', 1.0,
+              tostring(zero_size_blocks))
+        else
+          zero_size_blocks = 5
+        end
+      end
+
+      if zero_size_blocks <= 5 then
+        local rates = { -- From 1 to 5
+          0.1,
+          0.2,
+          0.2,
+          0.3,
+          0.5,
+        }
+        task:insert_result('ZERO_FONT', rates[zero_size_blocks],
+            tostring(zero_size_blocks))
+      end
+    end
+  end,
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = vis_check_id,
+  name = 'R_WHITE_ON_WHITE',
+  description = 'Message contains low contrast text',
   score = 4.0,
   group = 'html',
   one_shot = true,
-  description = 'Message contains low contrast text'
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = vis_check_id,
+  name = 'ZERO_FONT',
+  description = 'Zero sized font used',
+  score = 1.0, -- Reached if more than 5 elements have zero size
+  one_shot = true,
+  group = 'html'
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  parent = vis_check_id,
+  name = 'MANY_INVISIBLE_PARTS',
+  description = 'Many parts are visually hidden',
+  score = 1.0, -- Reached if more than 10 elements are hidden
+  one_shot = true,
+  group = 'html'
 }
 
 rspamd_config.EXT_CSS = {

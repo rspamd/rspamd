@@ -1,0 +1,14 @@
+Return-Path: test@test.com
+From: TEST <test@test.com>
+MIME-Version: 1.0
+X-Priority: 1 (Highest)
+X-MSMail-Priority: High
+X-Mailer: Microsoft Outlook 16.0
+Importance: High
+Date: Mon, 23 Jul 2018 16:24:13 +0200
+Message-ID: <d9946a191e0c97733a86424c48e65eca@test.com>
+Subject: Test Subject
+To: Me <me@me.me>
+Content-Type: text/plain; charset="UTF-8"
+
+

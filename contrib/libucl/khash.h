@@ -576,6 +576,13 @@ static kh_inline khint_t __ac_Wang_hash(khint_t key)
 		code;												\
 	} }
 
+#define kh_foreach_value_ptr(h, pvvar, code) { khint_t __i;		\
+	for (__i = kh_begin(h); __i != kh_end(h); ++__i) {		\
+		if (!kh_exist(h,__i)) continue;						\
+		(pvvar) = &kh_val(h,__i);							\
+		code;												\
+	} }
+
 /* More conenient interfaces */
 
 /*! @function

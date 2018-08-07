@@ -45,29 +45,31 @@ local function convert_bayes_schema(redis_params,  symbol_spam, symbol_ham, expi
   -- KEYS[2]: hash key ('S' or 'H')
   -- KEYS[3]: expire
   local lua_script = [[
+redis.replicate_commands()
 local keys = redis.call('SMEMBERS', KEYS[1]..'_keys')
 local nconverted = 0
-
 for _,k in ipairs(keys) do
-  local elts = redis.call('HGETALL', k)
+  local cursor = redis.call('HSCAN', k, 0)
   local neutral_prefix = string.gsub(k, KEYS[1], 'RS')
-  local real_key
-
-  for i,v in ipairs(elts) do
-
-    if i % 2 ~= 0 then
-      real_key = v
-    else
-      local nkey = string.format('%s_%s', neutral_prefix, real_key)
-      redis.call('HSET', nkey, KEYS[2], v)
-      if KEYS[3] and tonumber(KEYS[3]) > 0 then
-        redis.call('EXPIRE', nkey, KEYS[3])
+  local elts
+  while cursor[1] ~= "0" do
+    elts = cursor[2]
+    cursor = redis.call('HSCAN', k, cursor[1])
+    local real_key
+    for i,v in ipairs(elts) do
+      if i % 2 ~= 0 then
+        real_key = v
+      else
+        local nkey = string.format('%s_%s', neutral_prefix, real_key)
+        redis.call('HSET', nkey, KEYS[2], v)
+        if KEYS[3] and tonumber(KEYS[3]) > 0 then
+          redis.call('EXPIRE', nkey, KEYS[3])
+        end
+        nconverted = nconverted + 1
       end
-      nconverted = nconverted + 1
     end
   end
 end
-
 return nconverted
 ]]
 

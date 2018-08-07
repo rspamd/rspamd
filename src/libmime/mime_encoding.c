@@ -82,7 +82,7 @@ rspamd_mime_get_converter_cached (const gchar *enc, UErrorCode *err)
 		if (conv != NULL) {
 			ucnv_setToUCallBack (conv,
 					UCNV_TO_U_CALLBACK_SUBSTITUTE,
-					UCNV_SUB_STOP_ON_ILLEGAL,
+					NULL,
 					NULL,
 					NULL,
 					err);

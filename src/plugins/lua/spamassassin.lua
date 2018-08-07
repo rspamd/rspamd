@@ -152,10 +152,6 @@ local function replace_symbol(s)
   return rspamd_symbol, true
 end
 
-local function trim(s)
-  return s:match "^%s*(.-)%s*$"
-end
-
 local ffi
 if type(jit) == 'table' then
   ffi = require("ffi")
@@ -702,7 +698,9 @@ local function process_sa_conf(f)
   local if_nested = 0
   for l in f:lines() do
     (function ()
-    l = trim(l)
+    l = lua_util.rspamd_str_trim(l)
+    -- Replace bla=~/re/ with bla =~ /re/ (#2372)
+    l = l:gsub('([^%s])%s*([=!]~)%s*([^%s])', '%1 %2 %3')
 
     if string.len(l) == 0 or string.sub(l, 1, 1) == '#' then
       return
@@ -1568,7 +1566,7 @@ local function post_process()
           else
             local rspamd_symbol, replaced_symbol = replace_symbol(a)
             if replaced_symbol then
-              external_deps[a] = {rspamd_symbol}
+              external_deps[a] = {[rspamd_symbol] = true}
             else
               external_deps[a] = {}
             end

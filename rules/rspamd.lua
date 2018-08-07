@@ -23,6 +23,7 @@ rspamd_maps = {} -- Global maps
 
 local local_conf = rspamd_paths['CONFDIR']
 local local_rules = rspamd_paths['RULESDIR']
+local rspamd_util = require "rspamd_util"
 
 dofile(local_rules .. '/regexp/headers.lua')
 dofile(local_rules .. '/regexp/misc.lua')
@@ -36,26 +37,16 @@ dofile(local_rules .. '/http_headers.lua')
 dofile(local_rules .. '/forwarding.lua')
 dofile(local_rules .. '/mid.lua')
 
-local function file_exists(filename)
-  local file = io.open(filename)
-  if file then
-    io.close(file)
-    return true
-  else
-    return false
-  end
-end
-
-if file_exists(local_conf .. '/rspamd.local.lua') then
+if rspamd_util.file_exists(local_conf .. '/rspamd.local.lua') then
   dofile(local_conf .. '/rspamd.local.lua')
 else
   -- Legacy lua/rspamd.local.lua
-  if file_exists(local_conf .. '/lua/rspamd.local.lua') then
+  if rspamd_util.file_exists(local_conf .. '/lua/rspamd.local.lua') then
     dofile(local_conf .. '/lua/rspamd.local.lua')
   end
 end
 
-if file_exists(local_rules .. '/rspamd.classifiers.lua') then
+if rspamd_util.file_exists(local_rules .. '/rspamd.classifiers.lua') then
   dofile(local_rules .. '/rspamd.classifiers.lua')
 end
 

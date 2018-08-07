@@ -444,12 +444,19 @@ rspamd_pubkey_from_bin (const guchar *raw,
 
 
 const guchar *
-rspamd_pubkey_get_nm (struct rspamd_cryptobox_pubkey *p)
+rspamd_pubkey_get_nm (struct rspamd_cryptobox_pubkey *p,
+		struct rspamd_cryptobox_keypair *kp)
 {
 	g_assert (p != NULL);
 
 	if (p->nm) {
-		return p->nm->nm;
+		if (memcmp (kp->id, (const guchar *)&p->nm->sk_id, sizeof (guint64)) == 0) {
+			return p->nm->nm;
+		}
+
+		/* Wrong ID, need to recalculate */
+		REF_RELEASE (p->nm);
+		p->nm = NULL;
 	}
 
 	return NULL;
@@ -468,6 +475,7 @@ rspamd_pubkey_calculate_nm (struct rspamd_cryptobox_pubkey *p,
 			abort ();
 		}
 
+		memcpy (&p->nm->sk_id, kp->id, sizeof (guint64));
 		REF_INIT_RETAIN (p->nm, rspamd_cryptobox_nm_dtor);
 	}
 
@@ -978,6 +986,7 @@ rspamd_keypair_decrypt (struct rspamd_cryptobox_keypair *kp,
 
 	return TRUE;
 }
+
 gboolean
 rspamd_keypair_encrypt (struct rspamd_cryptobox_keypair *kp,
 						const guchar *in, gsize inlen,
@@ -1019,6 +1028,55 @@ rspamd_keypair_encrypt (struct rspamd_cryptobox_keypair *kp,
 	rspamd_cryptobox_encrypt_inplace (data, inlen, nonce, pubkey,
 			rspamd_keypair_component (local, RSPAMD_KEYPAIR_COMPONENT_SK, NULL),
 			mac, kp->alg);
+	rspamd_keypair_unref (local);
+
+	if (outlen) {
+		*outlen = olen;
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_pubkey_encrypt (struct rspamd_cryptobox_pubkey *pk,
+						const guchar *in, gsize inlen,
+						guchar **out, gsize *outlen,
+						GError **err)
+{
+	guchar *nonce, *mac, *data, *pubkey;
+	struct rspamd_cryptobox_keypair *local;
+	gsize olen;
+
+	g_assert (pk != NULL);
+	g_assert (in != NULL);
+
+	if (pk->type != RSPAMD_KEYPAIR_KEX) {
+		g_set_error (err, rspamd_keypair_quark (), EINVAL,
+				"invalid pubkey type");
+
+		return FALSE;
+	}
+
+	local = rspamd_keypair_new (pk->type, pk->alg);
+
+	olen = inlen + sizeof (encrypted_magic) +
+		   rspamd_cryptobox_pk_bytes (pk->alg) +
+		   rspamd_cryptobox_mac_bytes (pk->alg) +
+		   rspamd_cryptobox_nonce_bytes (pk->alg);
+	*out = g_malloc (olen);
+	memcpy (*out, encrypted_magic, sizeof (encrypted_magic));
+	pubkey = *out + sizeof (encrypted_magic);
+	mac = pubkey + rspamd_cryptobox_pk_bytes (pk->alg);
+	nonce = mac + rspamd_cryptobox_mac_bytes (pk->alg);
+	data = nonce + rspamd_cryptobox_nonce_bytes (pk->alg);
+
+	ottery_rand_bytes (nonce, rspamd_cryptobox_nonce_bytes (pk->alg));
+	memcpy (data, in, inlen);
+	memcpy (pubkey, rspamd_pubkey_get_pk (pk, NULL),
+			rspamd_cryptobox_pk_bytes (pk->alg));
+	rspamd_cryptobox_encrypt_inplace (data, inlen, nonce, pubkey,
+			rspamd_keypair_component (local, RSPAMD_KEYPAIR_COMPONENT_SK, NULL),
+			mac, pk->alg);
 	rspamd_keypair_unref (local);
 
 	if (outlen) {

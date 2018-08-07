@@ -3,6 +3,7 @@
 
 4chan.org
 adp.com
+advice.hmrc.gov.uk
 airbnb.com
 airtel.in
 alibaba.com
@@ -29,9 +30,11 @@ force.com
 garant.ru
 gosuslugi.ru
 hh.ru
+hmrc.gov.uk
 instagram.com
 linkedin.com
 livejournal.com
+lufthansa-group.com
 mackeeper.com
 megafon.ru
 mercadolibre.com.ar
@@ -46,6 +49,7 @@ paypal.com
 pch.com
 pinterest.com
 rostelecom.ru
+rt.ru
 sberbank.ru
 sportmaster.ru
 squarespace.com
@@ -56,6 +60,7 @@ uber.com
 ulmart.ru
 ups.com
 usps.com
+utair.ru
 verizonwireless.com
 vk.com
 vkrugudruzei.ru

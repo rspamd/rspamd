@@ -55,15 +55,12 @@ struct spf_ctx {
 	const gchar *symbol_na;
 	const gchar *symbol_permfail;
 
-	rspamd_mempool_t *spf_pool;
 	struct rspamd_radix_map_helper *whitelist_ip;
 	rspamd_lru_hash_t *spf_hash;
 
 	gboolean check_local;
 	gboolean check_authed;
 };
-
-static struct spf_ctx *spf_module_ctx = NULL;
 
 static void spf_symbol_callback (struct rspamd_task *task, void *unused);
 
@@ -73,23 +70,30 @@ gint spf_module_config (struct rspamd_config *cfg);
 gint spf_module_reconfig (struct rspamd_config *cfg);
 
 module_t spf_module = {
-	"spf",
-	spf_module_init,
-	spf_module_config,
-	spf_module_reconfig,
-	NULL,
-	RSPAMD_MODULE_VER
+		"spf",
+		spf_module_init,
+		spf_module_config,
+		spf_module_reconfig,
+		NULL,
+		RSPAMD_MODULE_VER,
+		(guint)-1,
 };
+
+static inline struct spf_ctx *
+spf_get_context (struct rspamd_config *cfg)
+{
+	return (struct spf_ctx *)g_ptr_array_index (cfg->c_modules,
+			spf_module.ctx_offset);
+}
+
 
 gint
 spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
-	if (spf_module_ctx == NULL) {
-		spf_module_ctx = g_malloc (sizeof (struct spf_ctx));
+	struct spf_ctx *spf_module_ctx;
 
-		spf_module_ctx->spf_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
-	}
-
+	spf_module_ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
+			sizeof (*spf_module_ctx));
 	*ctx = (struct module_ctx *)spf_module_ctx;
 
 	rspamd_rcl_add_doc_by_path (cfg,
@@ -194,6 +198,7 @@ spf_module_config (struct rspamd_config *cfg)
 	const ucl_object_t *value;
 	gint res = TRUE, cb_id;
 	guint cache_size;
+	struct spf_ctx *spf_module_ctx = spf_get_context (cfg);
 
 	if (!rspamd_config_is_module_enabled (cfg, "spf")) {
 		return TRUE;
@@ -323,22 +328,19 @@ spf_module_config (struct rspamd_config *cfg)
 
 	msg_info_config ("init internal spf module");
 
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_lru_hash_destroy,
+			spf_module_ctx->spf_hash);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_map_helper_destroy_radix,
+			spf_module_ctx->whitelist_ip);
+
 	return res;
 }
 
 gint
 spf_module_reconfig (struct rspamd_config *cfg)
 {
-	struct module_ctx saved_ctx;
-
-	saved_ctx = spf_module_ctx->ctx;
-	rspamd_mempool_delete (spf_module_ctx->spf_pool);
-	rspamd_lru_hash_destroy (spf_module_ctx->spf_hash);
-	rspamd_map_helper_destroy_radix (spf_module_ctx->whitelist_ip);
-	memset (spf_module_ctx, 0, sizeof (*spf_module_ctx));
-	spf_module_ctx->ctx = saved_ctx;
-	spf_module_ctx->spf_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
-
 	return spf_module_config (cfg);
 }
 
@@ -351,6 +353,7 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 	gchar *spf_result;
 	guint af, mask, bmask, addrlen;
 	const gchar *spf_message, *spf_symbol;
+	struct spf_ctx *spf_module_ctx = spf_get_context (task->cfg);
 
 	if (task->from_addr == NULL) {
 		return FALSE;
@@ -497,6 +500,7 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 {
 	struct spf_resolved *l;
 	struct rspamd_async_watcher *w = ud;
+	struct spf_ctx *spf_module_ctx = spf_get_context (task->cfg);
 
 	if (record && record->na) {
 		rspamd_task_insert_result (task,
@@ -556,6 +560,7 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 	struct spf_resolved *l;
 	struct rspamd_async_watcher *w;
 	gint *dmarc_checks;
+	struct spf_ctx *spf_module_ctx = spf_get_context (task->cfg);
 
 	/* Allow dmarc */
 	dmarc_checks = rspamd_mempool_get_variable (task->task_pool,

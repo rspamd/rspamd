@@ -508,12 +508,22 @@ sub ProcessLog {
 
       next if ( $skip != 0 );
 
-      $timeStamp{'end'} = $ts;
-      $timeStamp{'start'} //= $timeStamp{'end'};
-      $scanTime{'min'} = $scan_time
-        if ( !exists $scanTime{'min'} || $scanTime{'min'} > $scan_time );
-      $scanTime{'max'} = $scan_time
-        if ( $scanTime{'max'} < $scan_time );
+      if (defined($timeStamp{'end'})) {
+        $timeStamp{'end'} = $ts if ( $ts gt $timeStamp{'end'} );
+      }
+      else {
+        $timeStamp{'end'} = $ts;
+      }
+
+      if (defined($timeStamp{'start'})) {
+        $timeStamp{'start'} = $ts if ( $ts lt $timeStamp{'start'} );
+      }
+      else {
+        $timeStamp{'start'} = $ts;
+      }
+
+      $scanTime{'min'} = $scan_time if ( !exists $scanTime{'min'} || $scanTime{'min'} > $scan_time );
+      $scanTime{'max'} = $scan_time if ( $scanTime{'max'} < $scan_time );
       $scanTime{'total'} += $scan_time;
 
       $action{$act}++;

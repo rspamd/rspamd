@@ -69,13 +69,12 @@ struct lua_http_cbdata {
 	rspamd_inet_addr_t *addr;
 	gchar *mime_type;
 	gchar *host;
+	gchar *auth;
 	const gchar *url;
 	gsize max_size;
 	gint flags;
 	gint fd;
 	gint cbref;
-	gint bodyref;
-	gboolean gzip;
 };
 
 static const int default_http_timeout = 5000;
@@ -121,6 +120,10 @@ lua_http_fin (gpointer arg)
 
 	if (cbd->host) {
 		g_free (cbd->host);
+	}
+
+	if (cbd->auth) {
+		g_free (cbd->auth);
 	}
 
 	if (cbd->local_kp) {
@@ -245,7 +248,8 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 				RSPAMD_HTTP_CLIENT_SIMPLE,
 				RSPAMD_HTTP_CLIENT,
 				NULL,
-				cbd->cfg->libs_ctx->ssl_ctx);
+				(cbd->flags & RSPAMD_LUA_HTTP_FLAG_NOVERIFY) ?
+				cbd->cfg->libs_ctx->ssl_ctx_noverify : cbd->cfg->libs_ctx->ssl_ctx);
 	}
 	else {
 		cbd->conn = rspamd_http_connection_new (NULL,
@@ -272,6 +276,11 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 
 		if (cbd->max_size) {
 			rspamd_http_connection_set_max_size (cbd->conn, cbd->max_size);
+		}
+
+		if (cbd->auth) {
+			rspamd_http_message_add_header (cbd->msg, "Authorization",
+					cbd->auth);
 		}
 
 		rspamd_http_connection_write_message (cbd->conn, cbd->msg,
@@ -381,6 +390,7 @@ lua_http_request (lua_State *L)
 	gdouble timeout = default_http_timeout;
 	gint flags = 0;
 	gchar *mime_type = NULL;
+	gchar *auth = NULL;
 	gsize max_size = 0;
 	gboolean gzip = FALSE;
 
@@ -616,6 +626,38 @@ lua_http_request (lua_State *L)
 		}
 
 		lua_pop (L, 1);
+
+		lua_pushstring (L, "user");
+		lua_gettable (L, 1);
+
+		if (lua_type (L, -1) == LUA_TSTRING) {
+			const gchar *user = lua_tostring (L, -1);
+
+			lua_pushstring (L, "password");
+			lua_gettable (L, 1);
+
+			if (lua_type (L, -1) == LUA_TSTRING) {
+				const gchar *password = lua_tostring (L, -1);
+				gchar *tmpbuf;
+				gsize tlen;
+
+				tlen = strlen (user) + strlen (password) + 1;
+				tmpbuf = g_malloc (tlen + 1);
+				rspamd_snprintf (tmpbuf, tlen + 1, "%s:%s", user, password);
+				tlen *= 2;
+				tlen += sizeof ("Basic ") - 1;
+				auth = g_malloc (tlen + 1);
+				rspamd_snprintf (auth, tlen + 1, "Basic %Bs", tmpbuf);
+				g_free (tmpbuf);
+			}
+			else {
+				msg_warn ("HTTP user must have password, disabling auth");
+			}
+
+			lua_pop (L, 1); /* password */
+		}
+
+		lua_pop (L, 1); /* username */
 	}
 	else {
 		msg_err ("http request has bad params");
@@ -638,6 +680,7 @@ lua_http_request (lua_State *L)
 	cbd->flags = flags;
 	cbd->max_size = max_size;
 	cbd->url = url;
+	cbd->auth = auth;
 
 	if (msg->host) {
 		cbd->host = rspamd_fstring_cstr (msg->host);
@@ -651,11 +694,6 @@ lua_http_request (lua_State *L)
 		}
 
 		rspamd_http_message_set_body_from_fstring_steal (msg, body);
-	}
-
-	if (gzip) {
-		cbd->gzip = TRUE;
-		/* TODO: Add client support for gzip */
 	}
 
 	if (session) {

@@ -844,13 +844,14 @@ rspamd_http_decrypt_message (struct rspamd_http_connection *conn,
 	dec_len = msg->body_buf.len - rspamd_cryptobox_nonce_bytes (mode) -
 			rspamd_cryptobox_mac_bytes (mode);
 
-	if ((nm = rspamd_pubkey_get_nm (peer_key)) == NULL) {
+	if ((nm = rspamd_pubkey_get_nm (peer_key, priv->local_key)) == NULL) {
 		nm = rspamd_pubkey_calculate_nm (peer_key, priv->local_key);
 	}
 
 	if (!rspamd_cryptobox_decrypt_nm_inplace (m, dec_len, nonce,
 			nm, m - rspamd_cryptobox_mac_bytes (mode), mode)) {
-		msg_err ("cannot verify encrypted message");
+		msg_err ("cannot verify encrypted message, first bytes of the input: %*xs",
+				(gint)MIN(msg->body_buf.len, 64), msg->body_buf.begin);
 		return -1;
 	}
 
@@ -1183,7 +1184,13 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 							http_errno_description (priv->parser.http_errno));
 				}
 
-				conn->error_handler (conn, err);
+				if (!conn->finished) {
+					conn->error_handler (conn, err);
+				}
+				else {
+					msg_err ("got error after HTTP request is finished: %e", err);
+				}
+
 				g_error_free (err);
 
 				REF_RELEASE (pbuf);
@@ -1234,7 +1241,14 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 				err = g_error_new (HTTP_ERROR, priv->parser.http_errno,
 						"HTTP parser error: %s",
 						http_errno_description (priv->parser.http_errno));
-				conn->error_handler (conn, err);
+
+				if (!conn->finished) {
+					conn->error_handler (conn, err);
+				}
+				else {
+					msg_err ("got error after HTTP request is finished: %e", err);
+				}
+
 				g_error_free (err);
 
 				REF_RELEASE (pbuf);
@@ -1689,7 +1703,7 @@ rspamd_http_connection_encrypt_message (
 
 	cnt = i;
 
-	if ((nm = rspamd_pubkey_get_nm (peer_key)) == NULL) {
+	if ((nm = rspamd_pubkey_get_nm (peer_key, priv->local_key)) == NULL) {
 		nm = rspamd_pubkey_calculate_nm (peer_key, priv->local_key);
 	}
 
@@ -1725,11 +1739,6 @@ static void
 rspamd_http_detach_shared (struct rspamd_http_message *msg)
 {
 	rspamd_fstring_t *cpy_str;
-
-	if (msg->body_buf.c.shared.shm_fd != -1) {
-		close (msg->body_buf.c.shared.shm_fd);
-		msg->body_buf.c.shared.shm_fd = -1;
-	}
 
 	cpy_str = rspamd_fstring_new_init (msg->body_buf.begin, msg->body_buf.len);
 	rspamd_http_message_set_body_from_fstring_steal (msg, cpy_str);
@@ -3921,5 +3930,26 @@ rspamd_http_normalize_path_inplace (gchar *path, guint len, guint *nlen)
 
 	if (nlen) {
 		*nlen = (o - path);
+	}
+}
+
+void
+rspamd_http_connection_disable_encryption (struct rspamd_http_connection *conn)
+{
+	struct rspamd_http_connection_private *priv;
+
+	priv = conn->priv;
+
+	if (priv) {
+		if (priv->local_key) {
+			rspamd_keypair_unref (priv->local_key);
+		}
+		if (priv->peer_key) {
+			rspamd_pubkey_unref (priv->peer_key);
+		}
+
+		priv->local_key = NULL;
+		priv->peer_key = NULL;
+		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 	}
 }

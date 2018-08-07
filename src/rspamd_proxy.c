@@ -1308,7 +1308,7 @@ proxy_backend_mirror_error_handler (struct rspamd_http_connection *conn, GError 
 		bk_conn->err = rspamd_mempool_strdup (session->pool, err->message);
 	}
 
-	rspamd_upstream_fail (bk_conn->up);
+	rspamd_upstream_fail (bk_conn->up, FALSE);
 
 	proxy_backend_close_connection (bk_conn);
 	REF_RELEASE (bk_conn->s);
@@ -1384,7 +1384,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 
 		if (bk_conn->backend_sock == -1) {
 			msg_err_session ("cannot connect upstream for %s", m->name);
-			rspamd_upstream_fail (bk_conn->up);
+			rspamd_upstream_fail (bk_conn->up, TRUE);
 			continue;
 		}
 
@@ -1499,13 +1499,13 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 	struct rspamd_proxy_session *session;
 
 	session = bk_conn->s;
-	msg_info_session ("abnormally closing connection from backend: %s, error: %s,"
+	msg_info_session ("abnormally closing connection from backend: %s, error: %e,"
 			" retries left: %d",
 		rspamd_inet_address_to_string (rspamd_upstream_addr (session->master_conn->up)),
-		err->message,
+		err,
 		session->ctx->max_retries - session->retries);
 	session->retries ++;
-	rspamd_upstream_fail (bk_conn->up);
+	rspamd_upstream_fail (bk_conn->up, FALSE);
 	proxy_backend_close_connection (session->master_conn);
 
 	if (session->ctx->max_retries &&
@@ -1810,7 +1810,7 @@ retry:
 					host ? hostbuf : "default",
 							rspamd_inet_address_to_string (rspamd_upstream_addr (
 									session->master_conn->up)));
-			rspamd_upstream_fail (session->master_conn->up);
+			rspamd_upstream_fail (session->master_conn->up, TRUE);
 			session->retries ++;
 			goto retry;
 		}
@@ -1941,7 +1941,7 @@ proxy_client_finish_handler (struct rspamd_http_connection *conn,
 
 		/* Reset spamc legacy */
 		if (msg->method >= HTTP_SYMBOLS) {
-			msg->method = HTTP_GET;
+			msg->method = HTTP_POST;
 
 			if (msg->flags & RSPAMD_HTTP_FLAG_SPAMC) {
 				session->legacy_support = LEGACY_SUPPORT_SPAMC;
@@ -2165,7 +2165,7 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 			ctx->ev_base,
 			worker->srv->cfg);
 	double_to_tv (ctx->timeout, &ctx->io_tv);
-	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, 0);
+	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, worker, 0);
 
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);

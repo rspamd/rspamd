@@ -152,7 +152,6 @@ json_config_read_cb (gchar * chunk,
 	if (data->cur_data == NULL) {
 		jb = g_malloc0 (sizeof (*jb));
 		jb->cfg = pd->cfg;
-		jb->buf = pd->buf;
 		data->cur_data = jb;
 	}
 	else {
@@ -161,7 +160,7 @@ json_config_read_cb (gchar * chunk,
 
 	if (jb->buf == NULL) {
 		/* Allocate memory for buffer */
-		jb->buf = g_string_sized_new (BUFSIZ);
+		jb->buf = g_string_sized_new (MAX (len, BUFSIZ));
 	}
 
 	g_string_append_len (jb->buf, chunk, len);
@@ -176,9 +175,13 @@ json_config_fin_cb (struct map_cb_data *data)
 	ucl_object_t *top;
 	struct ucl_parser *parser;
 
-	if (data->prev_data) {
+	if (data->cur_data && data->prev_data) {
 		jb = data->prev_data;
 		/* Clean prev data */
+		if (jb->buf) {
+			g_string_free (jb->buf, TRUE);
+		}
+
 		g_free (jb);
 	}
 
@@ -187,9 +190,9 @@ json_config_fin_cb (struct map_cb_data *data)
 		jb = data->cur_data;
 	}
 	else {
-		msg_err ("no data read");
 		return;
 	}
+
 	if (jb->buf == NULL) {
 		msg_err ("no data read");
 		return;
@@ -218,6 +221,26 @@ json_config_fin_cb (struct map_cb_data *data)
 	jb->cfg->current_dynamic_conf = top;
 }
 
+static void
+json_config_dtor_cb (struct map_cb_data *data)
+{
+	struct config_json_buf *jb;
+
+	if (data->cur_data) {
+		jb = data->cur_data;
+		/* Clean prev data */
+		if (jb->buf) {
+			g_string_free (jb->buf, TRUE);
+		}
+
+		if (jb->cfg && jb->cfg->current_dynamic_conf) {
+			ucl_object_unref (jb->cfg->current_dynamic_conf);
+		}
+
+		g_free (jb);
+	}
+}
+
 /**
  * Init dynamic configuration using map logic and specific configuration
  * @param cfg config file
@@ -239,9 +262,17 @@ init_dynamic_config (struct rspamd_config *cfg)
 	jb->cfg = cfg;
 	*pjb = jb;
 	cfg->current_dynamic_conf = ucl_object_typed_new (UCL_ARRAY);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)g_free,
+			pjb);
 
-	if (!rspamd_map_add (cfg, cfg->dynamic_conf, "Dynamic configuration map",
-		json_config_read_cb, json_config_fin_cb, (void **)pjb)) {
+	if (!rspamd_map_add (cfg,
+			cfg->dynamic_conf,
+			"Dynamic configuration map",
+			json_config_read_cb,
+			json_config_fin_cb,
+			json_config_dtor_cb,
+			(void **)pjb)) {
 		msg_err ("cannot add map for configuration %s", cfg->dynamic_conf);
 	}
 }

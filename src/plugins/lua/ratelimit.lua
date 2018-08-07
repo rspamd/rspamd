@@ -79,17 +79,18 @@ local bucket_check_script = [[
     burst = burst - leaked
     redis.call('HINCRBYFLOAT', KEYS[1], 'b', -(leaked))
    end
-   dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
-
-   if burst * dynb > tonumber(KEYS[4]) then
-    return {1, burst, dynr, dynb}
-   end
   else
-    burst = 0
-    redis.call('HSET', KEYS[1], 'b', '0')
+   burst = 0
+   redis.call('HSET', KEYS[1], 'b', '0')
   end
 
-  return {0, burst, tostring(dynr), tostring(dynb)}
+  dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
+
+  if (burst + 1) * dynb > tonumber(KEYS[4]) then
+   return {1, tostring(burst), tostring(dynr), tostring(dynb)}
+  end
+
+  return {0, tostring(burst), tostring(dynr), tostring(dynb)}
 ]]
 local bucket_check_id
 
@@ -138,7 +139,7 @@ local bucket_update_script = [[
   redis.call('HSET', KEYS[1], 'l', KEYS[2])
   redis.call('EXPIRE', KEYS[1], KEYS[7])
 
-  return {burst, tostring(dr), tostring(db)}
+  return {tostring(burst), tostring(dr), tostring(db)}
 ]]
 local bucket_update_id
 
@@ -226,6 +227,50 @@ local function parse_string_limit(lim, no_error)
   return nil
 end
 
+local function parse_limit(name, data)
+  local buckets = {}
+  if type(data) == 'table' then
+    -- 3 cases here:
+    --  * old limit in format [burst, rate]
+    --  * vector of strings in Andrew's string format
+    --  * proper bucket table
+    if #data == 2 and tonumber(data[1]) and tonumber(data[2]) then
+      -- Old style ratelimit
+      rspamd_logger.warnx(rspamd_config, 'old style ratelimit for %s', name)
+      if tonumber(data[1]) > 0 and tonumber(data[2]) > 0 then
+        table.insert(buckets, {
+          burst = data[1],
+          rate = data[2]
+        })
+      elseif data[1] ~= 0 then
+        rspamd_logger.warnx(rspamd_config, 'invalid numbers for %s', name)
+      else
+        rspamd_logger.infox(rspamd_config, 'disable limit %s, burst is zero', name)
+      end
+    else
+      -- Recursively map parse_limit and flatten the list
+      fun.each(function(l)
+        -- Flatten list
+        for _,b in ipairs(l) do table.insert(buckets, b) end
+      end, fun.map(function(d) return parse_limit(d, name) end, data))
+    end
+  elseif type(data) == 'string' then
+    local rep_rate, burst = parse_string_limit(data)
+
+    if rep_rate and burst then
+      table.insert(buckets, {
+        burst = burst,
+        rate = 1.0 / rep_rate -- reciprocal
+      })
+    end
+  end
+
+  -- Filter valid
+  return fun.totable(fun.filter(function(val)
+    return type(val.burst) == 'number' and type(val.rate) == 'number'
+  end, buckets))
+end
+
 --- Check whether this addr is bounce
 local function check_bounce(from)
   return fun.any(function(b) return b == from end, settings.bounce_senders)
@@ -292,7 +337,7 @@ local keywords = {
 }
 
 local function gen_rate_key(task, rtype, bucket)
-  local key_t = {tostring(lua_util.round(100000.0 / bucket[1]))}
+  local key_t = {tostring(lua_util.round(100000.0 / bucket.burst))}
   local key_keywords = lua_util.str_split(rtype, '_')
   local have_user = false
 
@@ -313,6 +358,46 @@ local function gen_rate_key(task, rtype, bucket)
   end
 
   return table.concat(key_t, ":")
+end
+
+local function make_prefix(redis_key, name, bucket)
+  local hash_len = 24
+  if hash_len > #redis_key then hash_len = #redis_key end
+  local hash = settings.prefix ..
+      string.sub(rspamd_hash.create(redis_key):base32(), 1, hash_len)
+  -- Fill defaults
+  if not bucket.spam_factor_rate then
+    bucket.spam_factor_rate = settings.spam_factor_rate
+  end
+  if not bucket.ham_factor_rate then
+    bucket.ham_factor_rate = settings.ham_factor_rate
+  end
+  if not bucket.spam_factor_burst then
+    bucket.spam_factor_burst = settings.spam_factor_burst
+  end
+  if not bucket.ham_factor_burst then
+    bucket.ham_factor_burst = settings.ham_factor_burst
+  end
+
+  return {
+    bucket = bucket,
+    name = name,
+    hash = hash
+  }
+end
+
+local function limit_to_prefixes(task, k, v, prefixes)
+  local n = 0
+  for _,bucket in ipairs(v) do
+    local prefix = gen_rate_key(task, k, bucket)
+
+    if prefix then
+      prefixes[prefix] = make_prefix(prefix, k, bucket)
+      n = n + 1
+    end
+  end
+
+  return n
 end
 
 local function ratelimit_cb(task)
@@ -354,21 +439,21 @@ local function ratelimit_cb(task)
   local nprefixes = 0
 
   for k,v in pairs(settings.limits) do
-    for _,bucket in ipairs(v) do
-      local prefix = gen_rate_key(task, k, bucket)
+    nprefixes = nprefixes + limit_to_prefixes(task, k, v, prefixes)
+  end
 
-      if prefix then
-        local hash_len = 24
-        if hash_len > #prefix then hash_len = #prefix end
-        local hash = settings.prefix ..
-                string.sub(rspamd_hash.create(prefix):base32(), 1, hash_len)
-        prefixes[prefix] = {
-          bucket = bucket,
-          name = k,
-          hash = hash
-        }
-        nprefixes = nprefixes + 1
+  for k, hdl in pairs(settings.custom_keywords or E) do
+    local ret, redis_key, bd = pcall(hdl, task)
+
+    if ret then
+      local bucket = parse_limit(k, bd)
+      if bucket[1] then
+        prefixes[redis_key] = make_prefix(redis_key, k, bucket[1])
       end
+      nprefixes = nprefixes + 1
+    else
+      rspamd_logger.errx(task, 'cannot call handler for %s: %s',
+          k, redis_key)
     end
   end
 
@@ -381,21 +466,29 @@ local function ratelimit_cb(task)
         if settings.symbol then
           task:insert_result(settings.symbol, 0.0, lim_name .. "(" .. prefix .. ")")
           rspamd_logger.infox(task,
-                  'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
-                  lim_name, prefix, bucket[2], bucket[1], data[2], data[3], data[4])
+              'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
+              lim_name, prefix,
+              bucket.burst, bucket.rate,
+              data[2], data[3], data[4])
           return
         -- set INFO symbol and soft reject
         elseif settings.info_symbol then
-          task:insert_result(settings.info_symbol, 1.0, lim_name .. "(" .. prefix .. ")") 
+          task:insert_result(settings.info_symbol, 1.0,
+              lim_name .. "(" .. prefix .. ")")
         end
         rspamd_logger.infox(task,
-                'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
-                lim_name, prefix, bucket[2], bucket[1], data[2], data[3], data[4])
+            'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
+            lim_name, prefix,
+            bucket.burst, bucket.rate,
+            data[2], data[3], data[4])
         task:set_pre_result('soft reject',
                 message_func(task, lim_name, prefix, bucket))
       end
     end
   end
+
+  -- Don't do anything if pre-result has been already set
+  if task:has_pre_result() then return end
 
   if nprefixes > 0 then
     -- Save prefixes to the cache to allow update
@@ -406,13 +499,13 @@ local function ratelimit_cb(task)
 
     for pr,value in pairs(prefixes) do
       local bucket = value.bucket
-      local rate = (1.0 / bucket[1]) / 1000.0 -- Leak rate in messages/ms
+      local rate = (bucket.rate) / 1000.0 -- Leak rate in messages/ms
       rspamd_logger.debugm(N, task, "check limit %s:%s -> %s (%s/%s)",
-          value.name, pr, value.hash, bucket[2], bucket[1])
+          value.name, pr, value.hash, bucket.burst, bucket.rate)
       lua_redis.exec_redis_script(bucket_check_id,
               {key = value.hash, task = task, is_write = true},
               gen_check_cb(pr, bucket, value.name),
-              {value.hash, tostring(now), tostring(rate), tostring(bucket[2]),
+              {value.hash, tostring(now), tostring(rate), tostring(bucket.burst),
                   tostring(settings.expire)})
     end
   end
@@ -422,24 +515,13 @@ local function ratelimit_update_cb(task)
   local prefixes = task:cache_get('ratelimit_prefixes')
 
   if prefixes then
-    local action = task:get_metric_action()
-    local is_spam = true
-
-    if action == 'soft reject' then
+    if task:has_pre_result() then
       -- Already rate limited/greylisted, do nothing
-      rspamd_logger.debugm(N, task, 'already soft rejected, do not update')
+      rspamd_logger.debugm(N, task, 'pre-action has been set, do not update')
       return
-    elseif action == 'no action' then
-      is_spam = false
     end
 
-    local mult_burst = settings.ham_factor_burst
-    local mult_rate = settings.ham_factor_burst
-
-    if is_spam then
-      mult_burst = settings.spam_factor_burst
-      mult_rate = settings.spam_factor_rate
-    end
+    local is_spam = not (task:get_metric_action() == 'no action')
 
     -- Update each bucket
     for k, v in pairs(prefixes) do
@@ -450,12 +532,21 @@ local function ratelimit_update_cb(task)
                   k, err)
         else
           rspamd_logger.debugm(N, task,
-                  "updated limit %s:%s -> %s (%s/%s), burst: %s, dyn_rate: %s, dyn_burst: %s",
-                  v.name, k, v.hash, bucket[2], bucket[1], data[1], data[2], data[3])
+              "updated limit %s:%s -> %s (%s/%s), burst: %s, dyn_rate: %s, dyn_burst: %s",
+              v.name, k, v.hash,
+              bucket.burst, bucket.rate,
+              data[1], data[2], data[3])
         end
       end
       local now = rspamd_util.get_time()
       now = lua_util.round(now * 1000.0) -- Get milliseconds
+      local mult_burst = bucket.ham_factor_burst or 1.0
+      local mult_rate = bucket.ham_factor_burst or 1.0
+
+      if is_spam then
+        mult_burst = bucket.spam_factor_burst or 1.0
+        mult_rate = bucket.spam_factor_rate or 1.0
+      end
 
       lua_redis.exec_redis_script(bucket_update_id,
               {key = v.hash, task = task, is_write = true},
@@ -479,31 +570,10 @@ if opts then
   if opts['rates'] and type(opts['rates']) == 'table' then
     -- new way of setting limits
     fun.each(function(t, lim)
-      if type(lim) == 'table' then
-        settings.limits[t] = {}
-        if #lim == 2 and tonumber(lim[1]) and tonumber(lim[2]) then
-          -- Old style ratelimit
-          rspamd_logger.warnx(rspamd_config, 'old style ratelimit for %s', t)
-          if tonumber(lim[1]) > 0 and tonumber(lim[2]) > 0 then
-            table.insert(settings.limits[t], {1.0/lim[2], lim[1]})
-          elseif lim[1] ~= 0 then
-            rspamd_logger.warnx(rspamd_config, 'invalid numbers for %s', t)
-          else
-            rspamd_logger.infox(rspamd_config, 'disable limit %s, burst is zero', t)
-          end
-        else
-          fun.each(function(l)
-            local plim, size = parse_string_limit(l)
-            if plim then
-              table.insert(settings.limits[t], {plim, size})
-            end
-          end, lim)
-        end
-      elseif type(lim) == 'string' then
-        local plim, size = parse_string_limit(lim)
-        if plim then
-          settings.limits[t] = { {plim, size} }
-        end
+      local buckets = parse_limit(t, lim)
+
+      if buckets and #buckets > 0 then
+        settings.limits[t] = buckets
       end
     end, opts['rates'])
   end
@@ -546,8 +616,24 @@ if opts then
       'Ratelimit whitelist user map')
   end
 
+  settings.custom_keywords = {}
   if opts['custom_keywords'] then
-    settings.custom_keywords = dofile(opts['custom_keywords'])
+    local ret, res_or_err = pcall(loadfile(opts['custom_keywords']))
+
+    if ret then
+      opts['custom_keywords'] = {}
+      if type(res_or_err) == 'table' then
+        for k,hdl in pairs(res_or_err) do
+          settings['custom_keywords'][k] = hdl
+        end
+      elseif type(res_or_err) == 'function' then
+        settings['custom_keywords']['custom'] = res_or_err
+      end
+    else
+      rspamd_logger.errx(rspamd_config, 'cannot execute %s: %s',
+          opts['custom_keywords'], res_or_err)
+      settings['custom_keywords'] = {}
+    end
   end
 
   if opts['message_func'] then
@@ -563,7 +649,7 @@ if opts then
     local s = {
       type = 'prefilter,nostat',
       name = 'RATELIMIT_CHECK',
-      priority = 4,
+      priority = 7,
       callback = ratelimit_cb,
       flags = 'empty',
     }
@@ -580,14 +666,6 @@ if opts then
       name = 'RATELIMIT_UPDATE',
       callback = ratelimit_update_cb,
     }
-
-    if settings.custom_keywords then
-      for _, v in pairs(settings.custom_keywords) do
-        if type(v) == 'table' and type(v['init']) == 'function' then
-          v['init']()
-        end
-      end
-    end
   end
 end
 

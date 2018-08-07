@@ -11,8 +11,8 @@ PROJECT(rspamd C)
 ENABLE_LANGUAGE(ASM)
 
 SET(RSPAMD_VERSION_MAJOR 1)
-SET(RSPAMD_VERSION_MINOR 7)
-SET(RSPAMD_VERSION_PATCH 6)
+SET(RSPAMD_VERSION_MINOR 8)
+SET(RSPAMD_VERSION_PATCH 0)
 
 # Keep two digits all the time
 SET(RSPAMD_VERSION_MAJOR_NUM ${RSPAMD_VERSION_MAJOR}0)
@@ -46,8 +46,6 @@ OPTION(ENABLE_GPERF_TOOLS  "Enable google perftools [default: OFF]"             
 OPTION(ENABLE_STATIC       "Enable static compiling [default: OFF]"             OFF)
 OPTION(ENABLE_LUAJIT       "Link with libluajit [default: ON]"                  ON)
 OPTION(ENABLE_DB           "Find and link with DB library [default: OFF]"       OFF)
-OPTION(ENABLE_SQLITE       "Find and link with sqlite3 library [default: OFF]"  OFF)
-OPTION(ENABLE_HIREDIS      "Find and link with external redis library [default: ON]"  ON)
 OPTION(ENABLE_URL_INCLUDE  "Enable urls in ucl includes (requires libcurl or libfetch) [default: OFF]" OFF)
 OPTION(NO_SHARED           "Build internal libs static [default: ON]"          ON)
 OPTION(INSTALL_EXAMPLES    "Install examples [default: OFF]"                    OFF)
@@ -64,6 +62,7 @@ OPTION(ENABLE_COVERAGE     "Build rspamd with code coverage options [default: OF
 OPTION(ENABLE_FULL_DEBUG   "Build rspamd with all possible debug [default: OFF]" OFF)
 OPTION(ENABLE_UTILS        "Build rspamd internal utils [default: OFF]" OFF)
 OPTION(ENABLE_TORCH        "Install torch7 with Rspamd [default: ON]" ON)
+OPTION(ENABLE_LIBUNWIND    "Use libunwind to print crash traces [default: OFF]" OFF)
 
 INCLUDE(FindArch.cmake)
 TARGET_ARCHITECTURE(ARCH)
@@ -534,6 +533,9 @@ IF(CMAKE_SYSTEM_NAME MATCHES "^.*BSD$|DragonFly")
 		CHECK_FUNCTION_EXISTS(pidfile_open HAVE_PIDFILE)
 		CHECK_FUNCTION_EXISTS(pidfile_fileno HAVE_PIDFILE_FILENO)
 	ENDIF()
+	IF(CMAKE_SYSTEM_NAME MATCHES "^NetBSD$")
+		LIST(APPEND CMAKE_REQUIRED_LIBRARIES rt)
+	ENDIF()
 	SET(POE_LOOP "Loop::Kqueue")
 	SET(TAR "gtar")
 ENDIF()
@@ -630,6 +632,12 @@ IF(ENABLE_JEMALLOC MATCHES "ON")
 	SET(WITH_JEMALLOC "1")
 	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "-lpthread")
 ENDIF()
+
+IF(ENABLE_LIBUNWIND MATCHES "ON")
+	ProcessPackage(LIBUNWIND LIBRARY unwind INCLUDE libunwind.h INCLUDE_SUFFIXES include/libunwind
+			ROOT ${LIBUNWIND_ROOT_DIR} MODULES libunwind)
+	SET(WITH_LIBUNWIND "1")
+ENDIF()
 ProcessPackage(GTHREAD2 LIBRARY gthread-2.0 INCLUDE glib.h
 	INCLUDE_SUFFIXES include/glib include/glib-2.0
 	ROOT ${GLIB_ROOT_DIR} MODULES gthread-2.0>=2.28)
@@ -666,8 +674,8 @@ ProcessPackage(LIBZ LIBRARY z INCLUDE zlib.h INCLUDE_SUFFIXES include/zlib
 
 IF(ENABLE_HYPERSCAN MATCHES "ON")
 	ProcessPackage(HYPERSCAN LIBRARY hs INCLUDE hs.h INCLUDE_SUFFIXES
-			include/hyperscan include/hs
-			ROOT ${HYPERSCAN_ROOT_DIR} MODULES hs)
+			hs include/hs
+			ROOT ${HYPERSCAN_ROOT_DIR} MODULES libhs)
 	SET(WITH_HYPERSCAN 1)
 ENDIF()
 IF (ENABLE_FANN MATCHES "ON")
@@ -712,7 +720,7 @@ IF(ENABLE_GPERF_TOOLS MATCHES "ON")
 ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
 
 IF (ENABLE_HYPERSCAN MATCHES "ON")
-	IF(${HYPERSCAN_LIBRARY} MATCHES ".*[.]a$")
+	IF(${HYPERSCAN_LIBRARY} MATCHES ".*[.]a$" OR STATIC_HYPERSCAN)
 		ENABLE_LANGUAGE(CXX)
 		SET(USE_CXX_LINKER 1)
 	ENDIF()
@@ -899,6 +907,7 @@ CHECK_INCLUDE_FILES(cpuid.h HAVE_CPUID_H)
 CHECK_INCLUDE_FILES(dirent.h HAVE_DIRENT_H)
 CHECK_INCLUDE_FILES(stropts.h HAVE_STROPS_H)
 CHECK_INCLUDE_FILES(sys/ioctl.h HAVE_SYS_IOCTL_H)
+CHECK_INCLUDE_FILES(ucontext.h HAVE_UCONTEXT_H)
 
 # Check platform API
 CHECK_FUNCTION_EXISTS(setproctitle HAVE_SETPROCTITLE)
@@ -984,6 +993,7 @@ LIST(APPEND CMAKE_REQUIRED_INCLUDES "${LIBSSL_INCLUDE}")
 CHECK_SYMBOL_EXISTS(SSL_set_tlsext_host_name "openssl/ssl.h" HAVE_SSL_TLSEXT_HOSTNAME)
 CHECK_SYMBOL_EXISTS(dirfd "sys/types.h;unistd.h;dirent.h" HAVE_DIRFD)
 CHECK_SYMBOL_EXISTS(fpathconf "sys/types.h;unistd.h" HAVE_FPATHCONF)
+CHECK_SYMBOL_EXISTS(sigaltstack "signal.h" HAVE_SIGALTSTACK)
 
 IF(ENABLE_PCRE2 MATCHES "ON")
 	IF(HAVE_PCRE_JIT)
@@ -1247,9 +1257,7 @@ ADD_SUBDIRECTORY(contrib/t1ha)
 IF (ENABLE_SNOWBALL MATCHES "ON")
 	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES stemmer)
 ENDIF()
-IF(ENABLE_HIREDIS MATCHES "ON")
-	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-hiredis)
-ENDIF()
+LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-hiredis)
 IF(ENABLE_HYPERSCAN MATCHES "OFF")
 	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-actrie)
 ENDIF()

@@ -438,6 +438,8 @@ void rspamd_http_message_free (struct rspamd_http_message *msg);
 void rspamd_http_connection_set_max_size (struct rspamd_http_connection *conn,
 		gsize sz);
 
+void rspamd_http_connection_disable_encryption (struct rspamd_http_connection *conn);
+
 /**
  * Increase refcount for shared file (if any) to prevent early memory unlinking
  * @param msg

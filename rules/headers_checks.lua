@@ -217,14 +217,15 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
         elseif from[1].domain and rt[1].domain then
           if (util.strequal_caseless(from[1].domain, rt[1].domain)) then
             task:insert_result('REPLYTO_DOM_EQ_FROM_DOM', 1.0)
-          else 
+          else
             -- See if Reply-To matches the To address
             local to = task:get_recipients(2)
             if (to and to[1] and to[1].addr:lower() == rt[1].addr:lower()) then
                 -- Ignore this for mailing-lists and automatic submissions
                 if (not (task:get_header('List-Unsubscribe') or
+                         task:get_header('X-To-Get-Off-This-List') or
                          task:get_header('X-List') or
-                         task:get_header('Auto-Submitted'))) 
+                         task:get_header('Auto-Submitted')))
                 then
                    task:insert_result('REPLYTO_EQ_TO_ADDR', 1.0)
                 end
@@ -503,44 +504,48 @@ rspamd_config.HEADER_FORGED_MDN = {
 }
 
 local headers_unique = {
-  'Content-Type',
-  'Content-Transfer-Encoding',
+  ['Content-Type'] = 1.0,
+  ['Content-Transfer-Encoding'] = 1.0,
   -- https://tools.ietf.org/html/rfc5322#section-3.6
-  'Date',
-  'From',
-  'Sender',
-  'Reply-To',
-  'To',
-  'Cc',
-  'Bcc',
-  'Message-ID',
-  'In-Reply-To',
-  'References',
-  'Subject'
+  ['Date'] = 0.1,
+  ['From'] = 1.0,
+  ['Sender'] = 1.0,
+  ['Reply-To'] = 1.0,
+  ['To'] = 0.2,
+  ['Cc'] = 0.1,
+  ['Bcc'] = 0.1,
+  ['Message-ID'] = 0.7,
+  ['In-Reply-To'] = 0.7,
+  ['References'] = 0.3,
+  ['Subject'] = 0.7
 }
 
 rspamd_config.MULTIPLE_UNIQUE_HEADERS = {
   callback = function(task)
     local res = 0
+    local max_mult = 0.0
     local res_tbl = {}
 
-    for _,hdr in ipairs(headers_unique) do
-      local h = task:get_header_full(hdr)
+    for hdr,mult in pairs(headers_unique) do
+      local hc = task:get_header_count(hdr)
 
-      if h and #h > 1 then
+      if hc > 1 then
         res = res + 1
         table.insert(res_tbl, hdr)
+        if max_mult < mult then
+          max_mult = mult
+        end
       end
     end
 
     if res > 0 then
-      return true,res,table.concat(res_tbl, ',')
+      return true,max_mult,table.concat(res_tbl, ',')
     end
 
     return false
   end,
 
-  score = 5.0,
+  score = 7.0,
   group = 'headers',
   one_shot = true,
   description = 'Repeated unique headers'
@@ -558,6 +563,27 @@ rspamd_config.MISSING_FROM = {
   group = 'headers',
   description = 'Missing From: header'
 }
+
+rspamd_config.MULTIPLE_FROM = {
+  callback = function(task)
+    local from = task:get_from('mime')
+    if from and from[1] then
+      if #from > 1 then
+        return true,1.0,table.concat(
+            fun.totable(
+                fun.map(function(a) return a.addr end,
+                    fun.filter(function(a) return a.addr and a.addr ~= '' end,
+                        from))),
+            ',')
+      end
+    end
+    return false
+  end,
+  score = 9.0,
+  group = 'headers',
+  description = 'Multiple addresses in From'
+}
+
 rspamd_config.MV_CASE = {
   callback = function (task)
     local mv = task:get_header('Mime-Version', true)

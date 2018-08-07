@@ -307,7 +307,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 /*
  * Tokenize task using the tokenizer specified
  */
-static void
+void
 rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task)
 {
@@ -321,6 +321,12 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	gdouble *pdiff;
 	guchar hout[rspamd_cryptobox_HASHBYTES];
 	gchar *b32_hout;
+
+	if (st_ctx == NULL) {
+		st_ctx = rspamd_stat_get_ctx ();
+	}
+
+	g_assert (st_ctx != NULL);
 
 	for (i = 0; i < task->text_parts->len; i++) {
 		part = g_ptr_array_index (task->text_parts, i);
@@ -409,7 +415,10 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 	struct rspamd_statfile *st;
 	gpointer bk_run;
 
-	rspamd_stat_process_tokenize (st_ctx, task);
+	if (task->tokens == NULL) {
+		rspamd_stat_process_tokenize (st_ctx, task);
+	}
+
 	task->stat_runtimes = g_ptr_array_sized_new (st_ctx->statfiles->len);
 	g_ptr_array_set_size (task->stat_runtimes, st_ctx->statfiles->len);
 	rspamd_mempool_add_destructor (task->task_pool,
@@ -519,12 +528,12 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 	 * Do not classify a message if some class is missing
 	 */
 	if (!(task->flags & RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS)) {
-		msg_warn_task ("skip statistics as SPAM class is missing");
+		msg_info_task ("skip statistics as SPAM class is missing");
 
 		return;
 	}
 	if (!(task->flags & RSPAMD_TASK_FLAG_HAS_HAM_TOKENS)) {
-		msg_warn_task ("skip statistics as HAM class is missing");
+		msg_info_task ("skip statistics as HAM class is missing");
 
 		return;
 	}
@@ -1084,7 +1093,7 @@ rspamd_stat_has_classifier_symbols (struct rspamd_task *task,
 		id = g_array_index (cl->statfiles_ids, gint, i);
 		st = g_ptr_array_index (st_ctx->statfiles, id);
 
-		if (g_hash_table_lookup (mres->symbols, st->stcf->symbol)) {
+		if (rspamd_task_find_symbol_result (task, st->stcf->symbol)) {
 			if (is_spam == !!st->stcf->is_spam) {
 				msg_debug_task ("do not autolearn %s as symbol %s is already "
 						"added", is_spam ? "spam" : "ham", st->stcf->symbol);

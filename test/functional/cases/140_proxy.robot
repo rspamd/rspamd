@@ -23,13 +23,13 @@ SPAMC
   ${result} =  Spamc  ${LOCAL_ADDR}  ${PORT_PROXY}  ${MESSAGE}
   Custom Follow Rspamd Log  ${PROXY_TMPDIR}/rspamd.log  ${PROXY_LOGPOS}  PROXY_LOGPOS  Suite
   Custom Follow Rspamd Log  ${SLAVE_TMPDIR}/rspamd.log  ${SLAVE_LOGPOS}  SLAVE_LOGPOS  Suite
-  Should Contain  ${result}  SIMPLE_TEST
+  Should Contain  ${result}  SPAMD/1.1 0 EX_OK
 
 RSPAMC Legacy Protocol
   ${result} =  Rspamc  ${LOCAL_ADDR}  ${PORT_PROXY}  ${MESSAGE}
   Custom Follow Rspamd Log  ${PROXY_TMPDIR}/rspamd.log  ${PROXY_LOGPOS}  PROXY_LOGPOS  Suite
   Custom Follow Rspamd Log  ${SLAVE_TMPDIR}/rspamd.log  ${SLAVE_LOGPOS}  SLAVE_LOGPOS  Suite
-  Should Contain  ${result}  SIMPLE_TEST
+  Should Contain  ${result}  RSPAMD/1.3 0 EX_OK
 
 *** Keywords ***
 Proxy Setup

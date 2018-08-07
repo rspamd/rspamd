@@ -18,21 +18,24 @@ local rspamd_logger = require 'rspamd_logger'
 local rspamd_http = require "rspamd_http"
 local rspamd_lua_utils = require "lua_util"
 local upstream_list = require "rspamd_upstream_list"
+local lua_util = require "lua_util"
+local lua_clickhouse = require "lua_clickhouse"
+local fun = require "fun"
+
 local N = "clickhouse"
 
 if confighelp then
   return
 end
 
-local E = {}
-
-local rows = {}
+local main_rows = {}
 local attachment_rows = {}
 local urls_rows = {}
 local emails_rows = {}
-local specific_rows = {}
+--local specific_rows = {}
 local asn_rows = {}
 local symbols_rows = {}
+local custom_rows = {}
 local nrows = 0
 local connect_prefix = 'http://'
 
@@ -63,10 +66,20 @@ local settings = {
   use_https = false,
   use_gzip = true,
   allow_local = false,
+  user = nil,
+  password = nil,
+  no_ssl_verify = false,
+  custom_rules = {},
+  retention = {
+    enable = false,
+    method = 'detach',
+    period_months = 3,
+    run_every = '7d',
+  }
 }
 
 local clickhouse_schema = {
-rspamd = [[
+table = [[
 CREATE TABLE IF NOT EXISTS ${table}
 (
     Date Date,
@@ -94,7 +107,7 @@ CREATE TABLE IF NOT EXISTS ${table}
 ) ENGINE = MergeTree(Date, (TS, From), 8192)
 ]],
 
-  attachments = [[
+attachments_table = [[
 CREATE TABLE IF NOT EXISTS ${attachments_table} (
     Date Date,
     Digest FixedString(32),
@@ -105,7 +118,7 @@ CREATE TABLE IF NOT EXISTS ${attachments_table} (
 ) ENGINE = MergeTree(Date, Digest, 8192)
 ]],
 
-  urls = [[
+urls_table = [[
 CREATE TABLE IF NOT EXISTS ${urls_table} (
     Date Date,
     Digest FixedString(32),
@@ -114,7 +127,7 @@ CREATE TABLE IF NOT EXISTS ${urls_table} (
 ) ENGINE = MergeTree(Date, Digest, 8192)
 ]],
 
-  emails = [[
+emails_table = [[
 CREATE TABLE IF NOT EXISTS ${emails_table} (
     Date Date,
     Digest FixedString(32),
@@ -122,7 +135,7 @@ CREATE TABLE IF NOT EXISTS ${emails_table} (
 ) ENGINE = MergeTree(Date, Digest, 8192)
 ]],
 
-  asn = [[
+asn_table = [[
 CREATE TABLE IF NOT EXISTS ${asn_table} (
     Date Date,
     Digest FixedString(32),
@@ -132,7 +145,7 @@ CREATE TABLE IF NOT EXISTS ${asn_table} (
 ) ENGINE = MergeTree(Date, Digest, 8192)
 ]],
 
-  symbols = [[
+symbols_table = [[
 CREATE TABLE IF NOT EXISTS ${symbols_table} (
     Date Date,
     Digest FixedString(32),
@@ -168,7 +181,7 @@ local function clickhouse_main_row(tname)
     'ListId',
     'Digest'
   }
-  local elt = string.format('INSERT INTO %s (%s) VALUES ',
+  local elt = string.format('INSERT INTO %s (%s) ',
     tname, table.concat(fields, ','))
 
   return elt
@@ -183,7 +196,7 @@ local function clickhouse_attachments_row(tname)
     'Attachments.Length',
     'Attachments.Digest',
   }
-  local elt = string.format('INSERT INTO %s (%s) VALUES ',
+  local elt = string.format('INSERT INTO %s (%s) ',
     tname, table.concat(attachement_fields, ','))
   return elt
 end
@@ -195,7 +208,7 @@ local function clickhouse_urls_row(tname)
     'Urls.Tld',
     'Urls.Url',
   }
-  local elt = string.format('INSERT INTO %s (%s) VALUES ',
+  local elt = string.format('INSERT INTO %s (%s) ',
     tname, table.concat(urls_fields, ','))
   return elt
 end
@@ -206,7 +219,7 @@ local function clickhouse_emails_row(tname)
     'Digest',
     'Emails',
   }
-  local elt = string.format('INSERT INTO %s (%s) VALUES ',
+  local elt = string.format('INSERT INTO %s (%s) ',
       tname, table.concat(emails_fields, ','))
   return elt
 end
@@ -219,7 +232,7 @@ local function clickhouse_symbols_row(tname)
     'Symbols.Scores',
     'Symbols.Options',
   }
-  local elt = string.format('INSERT INTO %s (%s) VALUES ',
+  local elt = string.format('INSERT INTO %s (%s) ',
     tname, table.concat(symbols_fields, ','))
   return elt
 end
@@ -232,33 +245,13 @@ local function clickhouse_asn_row(tname)
     'Country',
     'IPNet',
   }
-  local elt = string.format('INSERT INTO %s (%s) VALUES ',
+  local elt = string.format('INSERT INTO %s (%s) ',
     tname, table.concat(asn_fields, ','))
   return elt
 end
 
-local function clickhouse_first_row()
-  table.insert(rows, clickhouse_main_row(settings['table']))
-  if settings['attachments_table'] then
-    table.insert(attachment_rows,
-      clickhouse_attachments_row(settings['attachments_table']))
-  end
-  if settings['urls_table'] then
-    table.insert(urls_rows,
-      clickhouse_urls_row(settings['urls_table']))
-  end
-  if settings['emails_table'] then
-    table.insert(emails_rows,
-        clickhouse_emails_row(settings['emails_table']))
-  end
-  if settings['asn_table'] then
-    table.insert(asn_rows,
-      clickhouse_asn_row(settings['asn_table']))
-  end
-  if settings.enable_symbols and settings['symbols_table'] then
-    table.insert(symbols_rows,
-      clickhouse_symbols_row(settings['symbols_table']))
-  end
+local function today(ts)
+  return os.date('%Y-%m-%d', ts)
 end
 
 local function clickhouse_check_symbol(task, symbols, need_score)
@@ -280,130 +273,71 @@ local function clickhouse_send_data(task)
   local upstream = settings.upstream:get_upstream_round_robin()
   local ip_addr = upstream:get_addr():to_string(true)
 
-  local function gen_http_cb(what, how_many)
-    return function (err_message, code, data, _)
-      if code ~= 200 or err_message then
-        if not err_message then err_message = data end
-        rspamd_logger.errx(task, "cannot send %s data to clickhouse server %s: %s",
-            what, ip_addr, err_message)
-        upstream:fail()
-      else
-        rspamd_logger.infox(task, "sent %s rows of %s to clickhouse server %s",
-            how_many - 1, what, ip_addr)
-        upstream:ok()
-      end
+  local function gen_success_cb(what, how_many)
+    return function (_, _)
+      rspamd_logger.infox(task, "sent %s rows of %s to clickhouse server %s",
+          how_many, what, ip_addr)
+      upstream:ok()
     end
   end
 
-  local body = table.concat(rows, ' ')
-  if not rspamd_http.request({
-      task = task,
-      url = connect_prefix .. ip_addr,
-      body = body,
-      callback = gen_http_cb('generic data', #rows),
-      gzip = settings.use_gzip,
-      mime_type = 'text/plain',
-      timeout = settings['timeout'],
-    }) then
-     rspamd_logger.errx(task, "cannot send data to clickhouse server %s: cannot make request",
-        settings['server'])
+  local function gen_fail_cb(what, how_many)
+    return function (_, err)
+      rspamd_logger.errx(task, "cannot send %s rows of %s data to clickhouse server %s: %s",
+          how_many, what, ip_addr, err)
+      upstream:fail()
+    end
   end
+
+  local function send_data(what, tbl, query)
+    local ch_params = {
+      task = task,
+    }
+
+    local ret = lua_clickhouse.insert(upstream, settings, ch_params,
+        query, tbl,
+        gen_success_cb(what, #tbl),
+        gen_fail_cb(what, #tbl))
+    if not ret then
+      rspamd_logger.errx(task, "cannot send %s rows of %s data to clickhouse server %s: %s",
+          #tbl, what, ip_addr, 'cannot make HTTP request')
+    end
+  end
+
+  send_data('generic data', main_rows,
+      clickhouse_main_row(settings['table']))
+
 
   if #attachment_rows > 1 then
-    body = table.concat(attachment_rows, ' ')
-    if not rspamd_http.request({
-      task = task,
-      url = connect_prefix .. ip_addr,
-      body = body,
-      callback = gen_http_cb('attachments data', #attachment_rows),
-      mime_type = 'text/plain',
-      timeout = settings['timeout'],
-    }) then
-      rspamd_logger.errx(task, "cannot send attachments to clickhouse server %s: cannot make request",
-        settings['server'])
-    end
+    send_data('attachments data', attachment_rows,
+        clickhouse_attachments_row(settings.attachments_table))
   end
+
   if #urls_rows > 1 then
-    body = table.concat(urls_rows, ' ')
-    if not rspamd_http.request({
-      task = task,
-      url = connect_prefix .. ip_addr,
-      body = body,
-      callback = gen_http_cb('urls data', #urls_rows),
-      mime_type = 'text/plain',
-      timeout = settings['timeout'],
-    }) then
-      rspamd_logger.errx(task, "cannot send urls to clickhouse server %s: cannot make request",
-        settings['server'])
-    end
+    send_data('urls data', urls_rows,
+        clickhouse_urls_row(settings.urls_table))
   end
+
   if #emails_rows > 1 then
-    body = table.concat(emails_rows, ' ')
-    if not rspamd_http.request({
-      task = task,
-      url = connect_prefix .. ip_addr,
-      body = body,
-      callback = gen_http_cb('emails data', #emails_rows),
-      mime_type = 'text/plain',
-      timeout = settings['timeout'],
-    }) then
-      rspamd_logger.errx(task, "cannot send emails to clickhouse server %s: cannot make request",
-          settings['server'])
-    end
+    send_data('emails data', emails_rows,
+        clickhouse_emails_row(settings.emails_table))
   end
+
   if #asn_rows > 1 then
-    body = table.concat(asn_rows, ' ')
-    if not rspamd_http.request({
-      task = task,
-      url = connect_prefix .. ip_addr,
-      body = body,
-      callback = gen_http_cb('asn data', #asn_rows),
-      mime_type = 'text/plain',
-      timeout = settings['timeout'],
-    }) then
-      rspamd_logger.errx(task, "cannot send asn info to clickhouse server %s: cannot make request",
-        settings['server'])
-    end
+    send_data('asn data', asn_rows,
+        clickhouse_asn_row(settings.asn_table))
   end
 
   if #symbols_rows > 1 then
-    body = table.concat(symbols_rows, ' ')
-    if not rspamd_http.request({
-      task = task,
-      url = connect_prefix .. ip_addr,
-      body = body,
-      callback = gen_http_cb('symbols data', #symbols_rows),
-      mime_type = 'text/plain',
-      timeout = settings['timeout'],
-    }) then
-      rspamd_logger.errx(task, "cannot send symbols info to clickhouse server %s: cannot make request",
-        settings['server'])
-    end
+    send_data('symbols data', symbols_rows,
+        clickhouse_symbols_row(settings.symbols_table))
   end
 
-  for k,specific in pairs(specific_rows) do
-    if #specific > 1 then
-      body = table.concat(specific, ' ')
-      if not rspamd_http.request({
-        task = task,
-        url = connect_prefix .. ip_addr,
-        body = body,
-        callback = gen_http_cb('domain specific data ('..k..')', #specific),
-        mime_type = 'text/plain',
-        timeout = settings['timeout'],
-      }) then
-        rspamd_logger.errx(task, "cannot send data for domain %s to clickhouse server %s: cannot make request",
-          k, settings['server'])
-      end
+  for k,crows in pairs(custom_rows) do
+    if #crows > 1 then
+      send_data('custom data ('..k..')', settings.custom_rules[k].first_row(),
+          crows)
     end
-  end
-end
-
-local function clickhouse_quote(str)
-  if str then
-    return str:gsub('[\'\\]', '\\%1'):lower()
-  else
-    return ''
   end
 end
 
@@ -553,16 +487,34 @@ local function clickhouse_collect(task)
     gmt = false
   })
 
-  local elt = string.format("(today(),%d,'%s','%s','%s',%.2f,%d,%d,'%s','%s','%s','%s','%s','%s',%d,'%s','%s','%s','%s','%s','%s','%s')",
-        timestamp,
-        clickhouse_quote(from_domain), clickhouse_quote(mime_domain), ip_str, score,
-        nrcpts, task:get_size(), whitelist, bayes, fuzzy, fann,
-        dkim, dmarc, nurls, task:get_metric_action('default'),
-        clickhouse_quote(from_user), clickhouse_quote(mime_user),
-        clickhouse_quote(rcpt_user), clickhouse_quote(rcpt_domain),
-        clickhouse_quote(list_id), task:get_digest())
-  table.insert(rows, elt)
+  local action = task:get_metric_action('default')
 
+  table.insert(main_rows, {
+    today(timestamp),
+    timestamp,
+    from_domain,
+    mime_domain,
+    ip_str,
+    score,
+    nrcpts,
+    task:get_size(),
+    whitelist,
+    bayes,
+    fuzzy,
+    fann,
+    dkim,
+    dmarc,
+    nurls,
+    action,
+    from_user,
+    mime_user,
+    rcpt_user,
+    rcpt_domain,
+    list_id,
+    task:get_digest()
+  })
+
+--[[ TODO: has been broken
   if settings['from_map'] and dkim == 'allow' then
     -- Use dkim
     local das = task:get_symbol(settings['dkim_allow_symbols'][1])
@@ -570,16 +522,14 @@ local function clickhouse_collect(task)
       for _,dkim_domain in ipairs(das[1]['options']) do
         local specific = settings.from_map:get_key(dkim_domain)
         if specific then
-          if not specific_rows[specific] then
-            local first = clickhouse_main_row(specific)
-            specific_rows[specific] = {first}
-          end
+          specific_rows[specific] = {}
           table.insert(specific_rows[specific], elt)
         end
       end
     end
 
   end
+--]]
 
   -- Attachments step
   local attachments_fnames = {}
@@ -590,23 +540,24 @@ local function clickhouse_collect(task)
     local fname = part:get_filename()
 
     if fname then
-      table.insert(attachments_fnames, string.format("'%s'", clickhouse_quote(fname)))
+      table.insert(attachments_fnames, fname)
       local type, subtype = part:get_type()
-      table.insert(attachments_ctypes, string.format("'%s/%s'",
-        clickhouse_quote(type), clickhouse_quote(subtype)))
-      table.insert(attachments_lengths, string.format("%s", tostring(part:get_length())))
-      table.insert(attachments_digests, string.format("'%s'", string.sub(part:get_digest(), 1, 16)))
+      table.insert(attachments_ctypes, string.format("%s/%s",
+          type, subtype))
+      table.insert(attachments_lengths, part:get_length())
+      table.insert(attachments_digests, string.sub(part:get_digest(), 1, 16))
     end
   end
 
   if #attachments_fnames > 0 then
-    elt = string.format("(today(),'%s',[%s],[%s],[%s],[%s])",
+    table.insert(attachment_rows, {
+      today(timestamp),
       task:get_digest(),
-      table.concat(attachments_fnames, ','),
-      table.concat(attachments_ctypes, ','),
-      table.concat(attachments_lengths, ','),
-      table.concat(attachments_digests, ','))
-    table.insert(attachment_rows, elt)
+      attachments_fnames,
+      attachments_ctypes,
+      attachments_lengths,
+      attachments_digests,
+    })
   end
 
   -- Urls step
@@ -614,40 +565,39 @@ local function clickhouse_collect(task)
   local urls_urls = {}
   if task:has_urls(false) then
     for _,u in ipairs(task:get_urls(false)) do
-      table.insert(urls_tlds, string.format("'%s'", clickhouse_quote(u:get_tld())))
+      table.insert(urls_tlds, u:get_tld())
       if settings['full_urls'] then
-        table.insert(urls_urls, string.format("'%s'",
-          clickhouse_quote(u:get_text())))
+        table.insert(urls_urls, u:get_text())
       else
-        table.insert(urls_urls, string.format("'%s'",
-          clickhouse_quote(u:get_host())))
+        table.insert(urls_urls, u:get_host())
       end
     end
   end
 
   if #urls_tlds > 0 then
-    elt = string.format("(today(),'%s',[%s],[%s])",
+    table.insert(urls_rows, {
+      today(timestamp),
       task:get_digest(),
-      table.concat(urls_tlds, ','),
-      table.concat(urls_urls, ','))
-    table.insert(urls_rows, elt)
+      urls_tlds,
+      urls_urls
+    })
   end
 
   -- Emails step
   local emails = {}
   if task:has_urls(true) then
     for _,u in ipairs(task:get_emails()) do
-      table.insert(emails, string.format("'%s'", clickhouse_quote(
-          string.format('%s@%s', u:get_user(), u:get_host())
-      )))
+      table.insert(emails,
+          string.format('%s@%s', u:get_user(), u:get_host()))
     end
   end
 
   if #emails > 0 then
-    elt = string.format("(today(),'%s',[%s])",
-        task:get_digest(),
-        table.concat(emails, ','))
-    table.insert(emails_rows, elt)
+    table.insert(emails_rows, {
+      today(timestamp),
+      task:get_digest(),
+      emails,
+    })
   end
 
   -- ASN information
@@ -666,10 +616,13 @@ local function clickhouse_collect(task)
     if ret then
       ipnet = ret
     end
-    elt = string.format("(today(),'%s','%s','%s','%s')",
+    table.insert(asn_rows, {
+      today(timestamp),
       task:get_digest(),
-      clickhouse_quote(asn), clickhouse_quote(country), clickhouse_quote(ipnet))
-    table.insert(asn_rows, elt)
+      asn,
+      country,
+      ipnet
+    })
   end
 
   -- Symbols info
@@ -680,47 +633,219 @@ local function clickhouse_collect(task)
     local options_tab = {}
 
     for _,s in ipairs(symbols) do
-      table.insert(syms_tab, string.format("'%s'",
-        clickhouse_quote(s.name or '')))
-      table.insert(scores_tab, string.format('%.3f', s.score))
+      table.insert(syms_tab, s.name or '')
+      table.insert(scores_tab, s.score)
 
       if s.options then
-        table.insert(options_tab, string.format("'%s'",
-          clickhouse_quote(table.concat(s.options, ','))))
+        table.insert(options_tab, table.concat(s.options, ','))
       else
         table.insert(options_tab, "''");
       end
     end
 
-    elt = string.format("(today(),'%s',[%s],[%s],[%s])",
-      task:get_digest(),
-      table.concat(syms_tab, ','),
-      table.concat(scores_tab, ','),
-      table.concat(options_tab, ','))
+    table.insert(symbols_rows, {
+      today(timestamp),
+      syms_tab,
+      scores_tab,
+      options_tab
+    })
+  end
 
-    table.insert(symbols_rows, elt)
+  -- Custom data
+  for k,rule in pairs(settings.custom_rules) do
+    if not custom_rows[k] then custom_rows[k] = {} end
+    table.insert(custom_rows[k], rule.get_row(task))
   end
 
   nrows = nrows + 1
+  rspamd_logger.debugm(N, task, "add clickhouse row %s / %s", nrows, settings.limit)
 
   if nrows > settings['limit'] then
     clickhouse_send_data(task)
     nrows = 0
-    rows = {}
+    main_rows = {}
     attachment_rows = {}
     urls_rows = {}
     emails_rows = {}
-    specific_rows = {}
     asn_rows = {}
     symbols_rows = {}
-    clickhouse_first_row()
+    custom_rows = {}
   end
+end
+
+local function do_remove_partition(ev_base, cfg, table_name, partition_id)
+  rspamd_logger.debugm(N, rspamd_config, "removing partition %s.%s", table_name, partition_id)
+  local upstream = settings.upstream:get_upstream_round_robin()
+  local remove_partition_sql = "ALTER TABLE ${table_name} ${remove_method} PARTITION ${partition_id}"
+  local remove_method = (settings.retention.method == 'drop') and 'DROP' or 'DETACH'
+  local sql_params = {
+    ['table_name']     = table_name,
+    ['remove_method']  = remove_method,
+    ['partition_id']   = partition_id
+  }
+
+  local sql = rspamd_lua_utils.template(remove_partition_sql, sql_params)
+
+  local ch_params = {
+    body = sql,
+    ev_base = ev_base,
+    cfg = cfg,
+  }
+
+  local ret = lua_clickhouse.select(upstream, settings, ch_params, sql,
+      function(_, rows)
+        rspamd_logger.infox(rspamd_config,
+            'detached partition %s:%s on server %s', table_name, partition_id,
+            settings['server'])
+      end,
+      function(_, err)
+        rspamd_logger.errx(rspamd_config,
+            "cannot detach partition %s:%s from server %s: %s",
+            table_name, partition_id,
+            settings['server'], err)
+      end)
+
+  if not ret then
+    rspamd_logger.errx(rspamd_config,
+        "cannot detach partition %s:%s from server %s: cannot make request",
+        table_name, partition_id,
+        settings['server'])
+  end
+end
+
+--[[
+  nil   - file is not writable, do not perform removal
+  0     - it's time to perform removal
+  <int> - how many seconds wait until next run
+]]
+local function get_last_removal_ago()
+  local ts_file = string.format('%s/%s', rspamd_paths['DBDIR'], 'clickhouse_retention_run')
+  local f, err = io.open(ts_file, 'r')
+  local write_file
+  local last_ts
+
+  if err then
+    rspamd_logger.debugm(N, rspamd_config, 'Failed to open %s: %s', ts_file, err)
+  else
+    last_ts = tonumber(f:read('*number'))
+    f:close()
+  end
+
+  local current_ts = os.time()
+
+  if last_ts == nil or (last_ts + settings.retention.period) <= current_ts then
+    write_file, err = io.open(ts_file, 'w')
+    if err then
+      rspamd_logger.errx(rspamd_config, 'Failed to open %s, will not perform retention: %s', ts_file, err)
+      return nil
+    end
+
+    local res
+    res, err = write_file:write(tostring(current_ts))
+    if err or res == nil then
+      rspamd_logger.errx(rspamd_config, 'Failed to write %s, will not perform retention: %s', ts_file, err)
+      return nil
+    end
+    write_file:close()
+    return 0
+  end
+
+  return (last_ts + settings.retention.period) - current_ts
+end
+
+local function clickhouse_remove_old_partitions(cfg, ev_base)
+  local last_time_ago = get_last_removal_ago()
+  if last_time_ago == nil then
+    rspamd_logger.errx(rspamd_config, "Failed to get last run time. Disabling retention")
+    return false
+  elseif last_time_ago ~= 0 then
+    return last_time_ago
+  end
+
+  local upstream = settings.upstream:get_upstream_round_robin()
+  local partition_to_remove_sql = "SELECT distinct partition, table FROM system.parts WHERE table in ('${tables}') and max_date <= toDate(now() - interval ${month} month);"
+
+  local table_names = {}
+  for table_name,_ in pairs(clickhouse_schema) do
+    table.insert(table_names, settings[table_name])
+  end
+  local tables = table.concat(table_names, "', '")
+  local sql_params = {
+    tables = tables,
+    month  = settings.retention.period_months,
+  }
+  local sql = rspamd_lua_utils.template(partition_to_remove_sql, sql_params)
+
+
+  local ch_params = {
+    ev_base = ev_base,
+    config = cfg,
+  }
+  local ret = lua_clickhouse.select(upstream, settings, ch_params, sql,
+      function(_, rows)
+        fun.each(function(row)
+          do_remove_partition(ev_base, cfg, row.table, row.partition)
+        end, rows)
+      end,
+      function(_, err)
+        rspamd_logger.errx(rspamd_config,
+            "cannot send data to clickhouse server %s: %s",
+            settings['server'], err)
+      end)
+  if not ret then
+    rspamd_logger.errx(rspamd_config, "cannot send data to clickhouse server %s: cannot make request",
+            settings['server'])
+  end
+
+  -- settings.retention.period is added on initialisation, see below
+  return settings.retention.period
 end
 
 local opts = rspamd_config:get_all_opt('clickhouse')
 if opts then
     for k,v in pairs(opts) do
-      settings[k] = v
+      if k == 'custom_rules' then
+        if not v[1] then
+          v = {v}
+        end
+
+        for i,rule in ipairs(v) do
+          if rule.schema and rule.first_row and rule.get_row then
+            local first_row, get_row
+            local loadstring = loadstring or load
+            local ret, res_or_err = pcall(loadstring(rule.first_row))
+
+            if not ret or type(res_or_err) ~= 'function' then
+              rspamd_logger.errx(rspamd_config, 'invalid first_row (%s) - must be a function',
+                  res_or_err)
+            else
+              first_row = res_or_err
+            end
+
+            ret, res_or_err = pcall(loadstring(rule.get_row))
+
+            if not ret or type(res_or_err) ~= 'function' then
+              rspamd_logger.errx(rspamd_config, 'invalid get_row (%s) - must be a function',
+                  res_or_err)
+            else
+              get_row = res_or_err
+            end
+
+            if first_row and get_row then
+              local name = rule.name or tostring(i)
+              settings.custom_rules[name] = {
+                schema = rule.schema,
+                first_row = first_row,
+                get_row = get_row,
+              }
+            end
+          else
+            rspamd_logger.errx(rspamd_config, 'custom rule has no required attributes: schema, first_row and get_row')
+          end
+        end
+      else
+        settings[k] = v
+      end
     end
 
     if not settings['server'] and not settings['servers'] then
@@ -737,13 +862,12 @@ if opts then
         settings['server'] or settings['servers'], 8123)
 
       if not settings.upstream then
-        rspamd_logger.errx('cannot parse clickhouse address: %s',
+        rspamd_logger.errx(rspamd_config, 'cannot parse clickhouse address: %s',
             settings['server'] or settings['servers'])
         rspamd_lua_utils.disable_module(N, "config")
         return
       end
 
-      clickhouse_first_row()
       rspamd_config:register_symbol({
         name = 'CLICKHOUSE_COLLECT',
         type = 'idempotent',
@@ -784,6 +908,9 @@ if opts then
                 callback = http_cb,
                 mime_type = 'text/plain',
                 timeout = settings['timeout'],
+                no_ssl_verify = settings.no_ssl_verify,
+                user = settings.user,
+                password = settings.password,
               }) then
                 rspamd_logger.errx(rspamd_config, "cannot create table %s in clickhouse server %s: cannot make request",
                     elt, ip_addr)
@@ -793,6 +920,36 @@ if opts then
             for tab,sql in pairs(clickhouse_schema) do
               send_req(tab, rspamd_lua_utils.template(sql, settings))
             end
+
+            for k,rule in pairs(settings.custom_rules) do
+              if rule.schema then
+                send_req(k, rspamd_lua_utils.template(rule.schema, settings))
+              end
+            end
+          end
+
+          if settings.retention.enable and settings.retention.method ~= 'drop' and settings.retention.method ~= 'detach' then
+            rspamd_logger.errx(rspamd_config, "retention.method should be either 'drop' or 'detach' (now: %s). Disabling retention",
+                    settings.retention.method)
+            settings.retention.enable = false
+          end
+          if settings.retention.enable and settings.retention.period_months < 1 or settings.retention.period_months > 1000 then
+            rspamd_logger.errx(rspamd_config, "please, set retention.period_months between 1 and 1000 (now: %s). Disabling retention",
+                    settings.retention.period_months)
+            settings.retention.enable = false
+          end
+          local period = lua_util.parse_time_interval(settings.retention.run_every)
+          if settings.retention.enable and period == nil then
+            rspamd_logger.errx(rspamd_config, "invalid value for retention.run_every (%s). Disabling retention",
+                    settings.retention.run_every)
+            settings.retention.enable = false
+          end
+
+          if settings.retention.enable then
+            settings.retention.period = period
+            rspamd_logger.infox(rspamd_config, "retention will be performed each %s seconds for %s month with method %s",
+                    period, settings.retention.period_months, settings.retention.method)
+            rspamd_config:add_periodic(ev_base, 0, clickhouse_remove_old_partitions, false)
           end
         end
       end)

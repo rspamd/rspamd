@@ -58,6 +58,7 @@ struct rspamd_symbols_cache_header {
 
 struct symbols_cache_order {
 	GPtrArray *d;
+	guint id;
 	ref_entry_t ref;
 };
 
@@ -78,24 +79,19 @@ struct symbols_cache {
 	guint used_items;
 	guint stats_symbols_count;
 	guint64 total_hits;
+	guint id;
 	struct rspamd_config *cfg;
 	gdouble reload_time;
 	gint peak_cb;
 };
 
-struct counter_data {
-	gdouble mean;
-	gdouble stddev;
-	guint64 number;
-};
-
 struct item_stat {
-	struct counter_data time_counter;
+	struct rspamd_counter_data time_counter;
 	gdouble avg_time;
 	gdouble weight;
 	guint hits;
 	guint64 total_hits;
-	struct counter_data frequency_counter;
+	struct rspamd_counter_data frequency_counter;
 	gdouble avg_frequency;
 	gdouble stddev_frequency;
 };
@@ -107,7 +103,7 @@ struct cache_item {
 	guint64 last_count;
 
 	/* Per process counter */
-	struct counter_data *cd;
+	struct rspamd_counter_data *cd;
 	gchar *symbol;
 	enum rspamd_symbol_type type;
 
@@ -123,6 +119,8 @@ struct cache_item {
 	gint parent;
 	/* Priority */
 	gint priority;
+	/* Topological order */
+	guint order;
 	gint id;
 	gint frequency_peaks;
 
@@ -229,12 +227,14 @@ rspamd_symbols_cache_order_unref (gpointer p)
 }
 
 static struct symbols_cache_order *
-rspamd_symbols_cache_order_new (gsize nelts)
+rspamd_symbols_cache_order_new (struct symbols_cache *cache,
+		gsize nelts)
 {
 	struct symbols_cache_order *ord;
 
 	ord = g_malloc0 (sizeof (*ord));
 	ord->d = g_ptr_array_sized_new (nelts);
+	ord->id = cache->id;
 	REF_INIT_RETAIN (ord, rspamd_symbols_cache_order_dtor);
 
 	return ord;
@@ -280,6 +280,12 @@ prefilters_cmp (const void *p1, const void *p2, gpointer ud)
 	return 0;
 }
 
+#define TSORT_MARK_PERM(it) (it)->order |= (1u << 31)
+#define TSORT_MARK_TEMP(it) (it)->order |= (1u << 30)
+#define TSORT_IS_MARKED_PERM(it) ((it)->order & (1u << 31))
+#define TSORT_IS_MARKED_TEMP(it) ((it)->order & (1u << 30))
+#define TSORT_UNMASK(it) ((it)->order & ~((1u << 31) | (1u << 30)))
+
 static gint
 cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 {
@@ -289,35 +295,31 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 	double w1, w2;
 	double weight1, weight2;
 	double f1 = 0, f2 = 0, t1, t2, avg_freq, avg_weight;
+	guint o1 = TSORT_UNMASK (i1), o2 = TSORT_UNMASK (i2);
 
-	if (i1->deps->len != 0 || i2->deps->len != 0) {
-		/* TODO: handle complex dependencies */
-		w1 = 1.0;
-		w2 = 1.0;
 
-		if (i1->deps->len != 0) {
-			w1 = 1.0 / (i1->deps->len);
+	if (o1 == o2) {
+		/* Heurstic */
+		if (i1->priority == i2->priority) {
+			avg_freq = ((gdouble) cache->total_hits / cache->used_items);
+			avg_weight = (cache->total_weight / cache->used_items);
+			f1 = (double) i1->st->total_hits / avg_freq;
+			f2 = (double) i2->st->total_hits / avg_freq;
+			weight1 = fabs (i1->st->weight) / avg_weight;
+			weight2 = fabs (i2->st->weight) / avg_weight;
+			t1 = i1->st->avg_time;
+			t2 = i2->st->avg_time;
+			w1 = SCORE_FUN (weight1, f1, t1);
+			w2 = SCORE_FUN (weight2, f2, t2);
+		} else {
+			/* Strict sorting */
+			w1 = abs (i1->priority);
+			w2 = abs (i2->priority);
 		}
-		if (i2->deps->len != 0) {
-			w2 = 1.0 / (i2->deps->len);
-		}
-	}
-	else if (i1->priority == i2->priority) {
-		avg_freq = ((gdouble)cache->total_hits / cache->used_items);
-		avg_weight = (cache->total_weight / cache->used_items);
-		f1 = (double)i1->st->total_hits / avg_freq;
-		f2 = (double)i2->st->total_hits / avg_freq;
-		weight1 = fabs (i1->st->weight) / avg_weight;
-		weight2 = fabs (i2->st->weight) / avg_weight;
-		t1 = i1->st->avg_time;
-		t2 = i2->st->avg_time;
-		w1 = SCORE_FUN (weight1, f1, t1);
-		w2 = SCORE_FUN (weight2, f2, t2);
 	}
 	else {
-		/* Strict sorting */
-		w1 = abs (i1->priority);
-		w2 = abs (i2->priority);
+		w1 = o1;
+		w2 = o2;
 	}
 
 	if (w2 > w1) {
@@ -330,50 +332,42 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 	return 0;
 }
 
-/**
- * Set counter for a symbol using moving average
- */
-static double
-rspamd_set_counter (struct counter_data *cd, gdouble value)
+static void
+rspamd_symbols_cache_tsort_visit (struct symbols_cache *cache,
+								  struct cache_item *it,
+								  guint cur_order)
 {
-	gdouble cerr;
+	struct cache_dependency *dep;
+	guint i;
 
-	/* Cumulative moving average using per-process counter data */
-	if (cd->number == 0) {
-		cd->mean = 0;
-		cd->stddev = 0;
+	if (TSORT_IS_MARKED_PERM (it)) {
+		if (cur_order > TSORT_UNMASK (it)) {
+			/* Need to recalculate the whole chain */
+			it->order = cur_order; /* That also removes all masking */
+		}
+		else {
+			/* We are fine, stop DFS */
+			return;
+		}
+	}
+	else if (TSORT_IS_MARKED_TEMP (it)) {
+		msg_err_cache ("cyclic dependencies found when checking '%s'!",
+				it->symbol);
+		return;
 	}
 
-	cd->mean += (value - cd->mean) / (gdouble)(++cd->number);
-	cerr = (value - cd->mean) * (value - cd->mean);
-	cd->stddev += (cerr - cd->stddev) / (gdouble)(cd->number);
+	TSORT_MARK_TEMP (it);
+	msg_debug_cache ("visiting node: %s (%d)", it->symbol, cur_order);
 
-	return cd->mean;
-}
-
-/**
- * Set counter for a symbol using exponential moving average
- */
-static double
-rspamd_set_counter_ema (struct counter_data *cd, gdouble value, gdouble alpha)
-{
-	gdouble diff, incr;
-
-	/* Cumulative moving average using per-process counter data */
-	if (cd->number == 0) {
-		cd->mean = 0;
-		cd->stddev = 0;
+	PTR_ARRAY_FOREACH (it->deps, i, dep) {
+		msg_debug_cache ("visiting dep: %s (%d)", dep->item->symbol, cur_order + 1);
+		rspamd_symbols_cache_tsort_visit (cache, dep->item, cur_order + 1);
 	}
 
-	diff = value - cd->mean;
-	incr = diff * alpha;
-	cd->mean += incr;
-	cd->stddev = (1 - alpha) * (cd->stddev + diff * incr);
-	cd->number ++;
+	it->order = cur_order;
 
-	return cd->mean;
+	TSORT_MARK_PERM (it);
 }
-
 
 static void
 rspamd_symbols_cache_resort (struct symbols_cache *cache)
@@ -383,7 +377,7 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 	guint64 total_hits = 0;
 	struct cache_item *it;
 
-	ord = rspamd_symbols_cache_order_new (cache->used_items);
+	ord = rspamd_symbols_cache_order_new (cache, cache->used_items);
 
 	for (i = 0; i < cache->used_items; i ++) {
 		it = g_ptr_array_index (cache->items_by_id, i);
@@ -392,12 +386,32 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 		if (!(it->type & (SYMBOL_TYPE_PREFILTER|
 				SYMBOL_TYPE_POSTFILTER|
 				SYMBOL_TYPE_COMPOSITE))) {
-			g_ptr_array_add (ord->d, it);
+			if (it->parent == -1 && it->func) {
+				it->order = 0;
+				g_ptr_array_add (ord->d, it);
+			}
 		}
 	}
 
-	cache->total_hits = total_hits;
+	/* Topological sort, intended to be O(N) but my implementation
+	 * is not linear (semi-linear usually) as I want to make it as
+	 * simple as possible.
+	 * On each stage it does DFS for unseen nodes. In theory, that
+	 * can be more complicated than linear - O(N^2) for specially
+	 * crafted data. But I don't care.
+	 */
+	PTR_ARRAY_FOREACH (ord->d, i, it) {
+		if (it->order == 0) {
+			rspamd_symbols_cache_tsort_visit (cache, it, 1);
+		}
+	}
+
+	/*
+	 * Now we have all sorted and can do some heuristical sort, keeping
+	 * topological order invariant
+	 */
 	g_ptr_array_sort_with_data (ord->d, cache_logic_cmp, cache);
+	cache->total_hits = total_hits;
 
 	if (cache->items_by_order) {
 		REF_RELEASE (cache->items_by_order);
@@ -417,8 +431,6 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 	GList *cur;
 	gint i, j;
 	gint id;
-
-	rspamd_symbols_cache_resort (cache);
 
 	cur = cache->delayed_deps;
 	while (cur) {
@@ -521,6 +533,8 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 	g_ptr_array_sort_with_data (cache->prefilters, prefilters_cmp, cache);
 	g_ptr_array_sort_with_data (cache->postfilters, postfilters_cmp, cache);
 	g_ptr_array_sort_with_data (cache->idempotent, postfilters_cmp, cache);
+
+	rspamd_symbols_cache_resort (cache);
 }
 
 static gboolean
@@ -810,7 +824,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	 * save or accumulate
 	 */
 	item->cd = rspamd_mempool_alloc0 (cache->static_pool,
-			sizeof (struct counter_data));
+			sizeof (struct rspamd_counter_data));
 	item->func = func;
 	item->user_data = user_data;
 	item->priority = priority;
@@ -824,6 +838,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	item->id = cache->used_items;
 	item->parent = parent;
 	cache->used_items ++;
+	cache->id ++;
 
 	if (!(item->type &
 			(SYMBOL_TYPE_IDEMPOTENT|SYMBOL_TYPE_NOSTAT|SYMBOL_TYPE_CLASSIFIER))) {
@@ -896,6 +911,7 @@ rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id,
 	}
 
 	item->condition_cb = cbref;
+	cache->id ++;
 
 	msg_debug_cache ("adding condition at lua ref %d to %s (%d)",
 			cbref, item->symbol, item->id);
@@ -939,6 +955,7 @@ rspamd_symbols_cache_add_condition_delayed (struct symbols_cache *cache,
 	ncond->sym = g_strdup (sym);
 	ncond->cbref = cbref;
 	ncond->L = L;
+	cache->id ++;
 
 	cache->delayed_conditions = g_list_prepend (cache->delayed_conditions, ncond);
 
@@ -1036,6 +1053,7 @@ rspamd_symbols_cache_new (struct rspamd_config *cfg)
 	cache->cfg = cfg;
 	cache->cksum = 0xdeadbabe;
 	cache->peak_cb = -1;
+	cache->id = rspamd_random_uint64_fast ();
 
 	return cache;
 }
@@ -1276,9 +1294,11 @@ rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 					remain ++;
 				}
 				else {
-					msg_debug_task ("watcher for %d, unblocked item %d",
+					msg_debug_task ("watcher for %d(%s), unblocked item %d(%s)",
 							item->id,
-							it->id);
+							item->symbol,
+							it->id,
+							it->symbol);
 					rspamd_symbols_cache_check_symbol (task, cache, it,
 							checkpoint,
 							NULL);
@@ -1287,7 +1307,8 @@ rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 		}
 	}
 
-	msg_debug_task ("finished watcher for %d, %ud symbols waiting", item->id,
+	msg_debug_task ("finished watcher for %d(%s), %ud symbols waiting",
+			item->id, item->symbol,
 			remain);
 }
 
@@ -1419,8 +1440,8 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 
 			if (dep->item == NULL) {
 				/* Assume invalid deps as done */
-				msg_debug_task ("symbol %s has invalid dependencies from %s",
-						item->symbol, dep->sym);
+				msg_debug_task ("symbol %d(%s) has invalid dependencies on %d(%s)",
+						item->id, item->symbol, dep->id, dep->sym);
 				continue;
 			}
 
@@ -1449,8 +1470,9 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 							}
 
 							ret = FALSE;
-							msg_debug_task ("delayed dependency %d for symbol %d",
-									dep->id, item->id);
+							msg_debug_task ("delayed dependency %d(%s) for "
+											"symbol %d(%s)",
+									dep->id, dep->sym, item->id, item->symbol);
 						}
 						else if (!rspamd_symbols_cache_check_symbol (task, cache,
 								dep->item,
@@ -1458,29 +1480,39 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 								NULL)) {
 							/* Now started, but has events pending */
 							ret = FALSE;
-							msg_debug_task ("started check of %d symbol as dep for "
-											"%d",
-									dep->id, item->id);
+							msg_debug_task ("started check of %d(%s) symbol "
+											"as dep for "
+											"%d(%s)",
+									dep->id, dep->sym, item->id, item->symbol);
 						}
 						else {
-							msg_debug_task ("dependency %d for symbol %d is "
+							msg_debug_task ("dependency %d(%s) for symbol %d(%s) is "
 									"already processed",
-									dep->id, item->id);
+									dep->id, dep->sym, item->id, item->symbol);
 						}
 					}
 					else {
+						msg_debug_task ("dependency %d(%s) for symbol %d(%s) "
+										"cannot be started now",
+								dep->id, dep->sym,
+								item->id, item->symbol);
 						ret = FALSE;
 					}
 				}
 				else {
 					/* Started but not finished */
+					msg_debug_task ("dependency %d(%s) for symbol %d(%s) is "
+									"still executing",
+							dep->id, dep->sym,
+							item->id, item->symbol);
 					ret = FALSE;
 				}
 			}
 			else {
-				msg_debug_task ("dependency %d for symbol %d is already "
+				msg_debug_task ("dependency %d(%s) for symbol %d(%s) is already "
 						"checked",
-						dep->id, item->id);
+						dep->id, dep->sym,
+						item->id, item->symbol);
 			}
 		}
 	}
@@ -1510,19 +1542,14 @@ rspamd_symbols_cache_make_checkpoint (struct rspamd_task *task,
 		struct symbols_cache *cache)
 {
 	struct cache_savepoint *checkpoint;
-	guint nitems;
 
-	nitems = cache->items_by_id->len - cache->postfilters->len -
-			cache->prefilters->len - cache->composites->len -
-			cache->idempotent->len;
-
-	if (nitems != cache->items_by_order->d->len) {
+	if (cache->items_by_order->id != cache->id) {
 		/*
 		 * Cache has been modified, need to resort it
 		 */
 		msg_info_cache ("symbols cache has been modified since last check:"
-				" old items: %ud, new items: %ud",
-				cache->items_by_order->d->len, nitems);
+				" old id: %ud, new id: %ud",
+				cache->items_by_order->id, cache->id);
 		rspamd_symbols_cache_resort (cache);
 	}
 
@@ -1759,9 +1786,9 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 					guint j;
 					struct cache_item *tmp_it;
 
-					msg_debug_task ("blocked execution of %d unless deps are "
+					msg_debug_task ("blocked execution of %d(%s) unless deps are "
 							"resolved",
-							item->id);
+							item->id, item->symbol);
 
 					PTR_ARRAY_FOREACH (checkpoint->waitq, j, tmp_it) {
 						if (item->id == tmp_it->id) {
@@ -2168,7 +2195,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 	}
 
 	cbdata->last_resort = cur_ticks;
-	rspamd_symbols_cache_resort (cache);
+	/* We don't do actual sorting due to topological guarantees */
 }
 
 void

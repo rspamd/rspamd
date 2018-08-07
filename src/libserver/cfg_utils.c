@@ -56,6 +56,7 @@ static gchar * rspamd_ucl_read_cb (gchar * chunk,
 	struct map_cb_data *data,
 	gboolean final);
 static void rspamd_ucl_fin_cb (struct map_cb_data *data);
+static void rspamd_ucl_dtor_cb (struct map_cb_data *data);
 
 guint rspamd_config_log_id = (guint)-1;
 RSPAMD_CONSTRUCTOR(rspamd_config_log_init)
@@ -133,7 +134,6 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->max_diff = 20480;
 
 	rspamd_config_init_metric (cfg);
-	cfg->c_modules = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->composite_symbols =
 		g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->classifiers_symbols = g_hash_table_new (rspamd_str_hash,
@@ -197,6 +197,8 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 #endif
 	cfg->default_max_shots = DEFAULT_MAX_SHOTS;
 	cfg->max_sessions_cache = DEFAULT_MAX_SESSIONS;
+	cfg->maps_cache_dir = rspamd_mempool_strdup (cfg->cfg_pool, RSPAMD_DBDIR);
+	cfg->c_modules = g_ptr_array_new ();
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 
@@ -237,7 +239,6 @@ rspamd_config_free (struct rspamd_config *cfg)
 	ucl_object_unref (cfg->config_comments);
 	ucl_object_unref (cfg->doc_strings);
 	ucl_object_unref (cfg->neighbours);
-	g_hash_table_unref (cfg->c_modules);
 	g_hash_table_remove_all (cfg->composite_symbols);
 	g_hash_table_unref (cfg->composite_symbols);
 	g_hash_table_remove_all (cfg->cfg_params);
@@ -255,6 +256,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 	rspamd_re_cache_unref (cfg->re_cache);
 	rspamd_upstreams_library_unref (cfg->ups_ctx);
 	rspamd_mempool_delete (cfg->cfg_pool);
+	g_ptr_array_free (cfg->c_modules, TRUE);
 
 	if (cfg->lua_state && cfg->own_lua_state) {
 		lua_close (cfg->lua_state);
@@ -652,6 +654,11 @@ rspamd_config_parse_log_format (struct rspamd_config *cfg)
 	return TRUE;
 }
 
+static void
+rspamd_urls_config_dtor (gpointer _unused)
+{
+	rspamd_url_deinit ();
+}
 
 /*
  * Perform post load actions
@@ -750,6 +757,9 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 		else {
 			rspamd_url_init (cfg->tld_file);
 		}
+
+		rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_urls_config_dtor,
+				NULL);
 	}
 
 	init_dynamic_config (cfg);
@@ -841,7 +851,11 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 			ret = FALSE;
 		}
 
-		return rspamd_symbols_cache_validate (cfg->cache, cfg, FALSE) && ret;
+		ret = rspamd_symbols_cache_validate (cfg->cache, cfg, FALSE) && ret;
+	}
+
+	if (opts & RSPAMD_CONFIG_INIT_PRELOAD_MAPS) {
+		rspamd_map_preload (cfg);
 	}
 
 	return ret;
@@ -1083,7 +1097,8 @@ rspamd_include_map_handler (const guchar *data, gsize len,
 			   "ucl include",
 			   rspamd_ucl_read_cb,
 			   rspamd_ucl_fin_cb,
-			   (void **)pcbdata);
+			   rspamd_ucl_dtor_cb,
+			   (void **)pcbdata) != NULL;
 }
 
 /*
@@ -1364,6 +1379,19 @@ rspamd_ucl_fin_cb (struct map_cb_data *data)
 	}
 }
 
+static void
+rspamd_ucl_dtor_cb (struct map_cb_data *data)
+{
+	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data;
+
+	if (cbdata != NULL) {
+		if (cbdata->buf != NULL) {
+			g_string_free (cbdata->buf, TRUE);
+		}
+		g_free (cbdata);
+	}
+}
+
 gboolean
 rspamd_check_module (struct rspamd_config *cfg, module_t *mod)
 {
@@ -1427,22 +1455,19 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 {
 	GList *cur;
 	module_t *mod, **pmod;
-	struct module_ctx *mod_ctx;
+	guint i = 0;
+	struct module_ctx *mod_ctx, *cur_ctx;
 
 	/* Init all compiled modules */
-	if (!reconfig) {
-		for (pmod = cfg->compiled_modules; pmod != NULL && *pmod != NULL; pmod ++) {
-			mod = *pmod;
 
-			if (rspamd_check_module (cfg, mod)) {
-				mod_ctx = g_malloc0 (sizeof (struct module_ctx));
-
-				if (mod->module_init_func (cfg, &mod_ctx) == 0) {
-					g_hash_table_insert (cfg->c_modules,
-							(gpointer) mod->name,
-							mod_ctx);
-					mod_ctx->mod = mod;
-				}
+	for (pmod = cfg->compiled_modules; pmod != NULL && *pmod != NULL; pmod ++) {
+		mod = *pmod;
+		if (rspamd_check_module (cfg, mod)) {
+			if (mod->module_init_func (cfg, &mod_ctx) == 0) {
+				g_assert (mod_ctx != NULL);
+				g_ptr_array_add (cfg->c_modules, mod_ctx);
+				mod_ctx->mod = mod;
+				mod->ctx_offset = i ++;
 			}
 		}
 	}
@@ -1452,7 +1477,14 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 
 	while (cur) {
 		/* Perform modules configuring */
-		mod_ctx = g_hash_table_lookup (cfg->c_modules, cur->data);
+		mod_ctx = NULL;
+		PTR_ARRAY_FOREACH (cfg->c_modules, i, cur_ctx) {
+			if (g_ascii_strcasecmp (cur_ctx->mod->name,
+					(const gchar *)cur->data) == 0) {
+				mod_ctx = cur_ctx;
+				break;
+			}
+		}
 
 		if (mod_ctx) {
 			mod = mod_ctx->mod;
@@ -1701,9 +1733,14 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 	GList *cur;
 	struct rspamd_symbols_group *gr;
 	lua_State *L = cfg->lua_state;
+	struct module_ctx *cur_ctx;
+	guint i;
 
-	if (g_hash_table_lookup (cfg->c_modules, module_name)) {
-		is_c = TRUE;
+	PTR_ARRAY_FOREACH (cfg->c_modules, i, cur_ctx) {
+		if (g_ascii_strcasecmp (cur_ctx->mod->name, module_name) == 0) {
+			is_c = TRUE;
+			break;
+		}
 	}
 
 	if (g_hash_table_lookup (cfg->explicit_modules, module_name) != NULL) {
@@ -1878,6 +1915,9 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 	const ucl_object_t *cur, *cur_elt;
 	const gchar *str;
 
+	/* Cleanup */
+	*target = NULL;
+
 	LL_FOREACH (obj, cur_elt) {
 		type = ucl_object_type (cur_elt);
 
@@ -1888,13 +1928,18 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 
 			if (rspamd_map_is_map (str)) {
 				if (rspamd_map_add_from_ucl (cfg, cur_elt,
-						description, rspamd_radix_read, rspamd_radix_fin,
+						description,
+						rspamd_radix_read,
+						rspamd_radix_fin,
+						rspamd_radix_dtor,
 						(void **)target) == NULL) {
 					g_set_error (err, g_quark_from_static_string ("rspamd-config"),
 							EINVAL, "bad map definition %s for %s", str,
 							ucl_object_key (obj));
 					return FALSE;
 				}
+
+				return TRUE;
 			}
 			else {
 				/* Just a list */
@@ -1908,12 +1953,17 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 		case UCL_OBJECT:
 			/* Should be a map description */
 			if (rspamd_map_add_from_ucl (cfg, cur_elt,
-					description, rspamd_radix_read, rspamd_radix_fin,
+					description,
+					rspamd_radix_read,
+					rspamd_radix_fin,
+					rspamd_radix_dtor,
 					(void **)target) == NULL) {
 				g_set_error (err, g_quark_from_static_string ("rspamd-config"),
 						EINVAL, "bad map object for %s", ucl_object_key (obj));
 				return FALSE;
 			}
+
+			return TRUE;
 			break;
 		case UCL_ARRAY:
 			/* List of IP addresses */
@@ -1939,6 +1989,11 @@ rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 			return FALSE;
 		}
 	}
+
+	/* Destroy on cfg cleanup */
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_map_helper_destroy_radix,
+			*target);
 
 	return TRUE;
 }

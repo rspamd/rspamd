@@ -33,7 +33,8 @@ enum html_component_type {
 	RSPAMD_HTML_COMPONENT_STYLE,
 	RSPAMD_HTML_COMPONENT_CLASS,
 	RSPAMD_HTML_COMPONENT_WIDTH,
-	RSPAMD_HTML_COMPONENT_HEIGHT
+	RSPAMD_HTML_COMPONENT_HEIGHT,
+	RSPAMD_HTML_COMPONENT_SIZE,
 };
 
 struct html_tag_component {
@@ -94,9 +95,9 @@ struct html_block {
 struct html_tag {
 	gint id;
 	gint flags;
-	gsize content_length;
-	const gchar *content;
+	guint content_length;
 	struct html_tag_component name;
+	const gchar *content;
 	GQueue *params;
 	gpointer extra; /** Additional data associated with tag (e.g. image) */
 	GNode *parent;
@@ -106,6 +107,7 @@ struct html_tag {
 struct rspamd_task;
 
 struct html_content {
+	struct rspamd_url *base_url;
 	GNode *html_tags;
 	gint flags;
 	guint total_tags;

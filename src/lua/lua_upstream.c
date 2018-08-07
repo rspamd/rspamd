@@ -124,9 +124,15 @@ static gint
 lua_upstream_fail (lua_State *L)
 {
 	struct upstream *up = lua_check_upstream (L);
+	gboolean fail_addr = FALSE;
 
 	if (up) {
-		rspamd_upstream_fail (up);
+
+		if (lua_isboolean (L, 2)) {
+			fail_addr = lua_toboolean (L, 2);
+		}
+
+		rspamd_upstream_fail (up, fail_addr);
 	}
 
 	return 0;

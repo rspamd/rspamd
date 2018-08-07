@@ -1351,7 +1351,7 @@ rspamd_controller_handle_legacy_history (
 	struct roll_history_row *row, *copied_rows;
 	guint i, rows_proc, row_num;
 	struct tm tm;
-	gchar timebuf[32];
+	gchar timebuf[32], **syms;
 	ucl_object_t *top, *obj;
 
 	top = ucl_object_typed_new (UCL_ARRAY);
@@ -1405,15 +1405,41 @@ rspamd_controller_handle_legacy_history (
 						ucl_object_fromdouble (0.0), "required_score", 0, false);
 			}
 
-			ucl_object_insert_key (obj, ucl_object_fromstring (
-					row->symbols),		  "symbols",		0, false);
-			ucl_object_insert_key (obj,	   ucl_object_fromint (
-					row->len),			  "size",			0, false);
-			ucl_object_insert_key (obj,	   ucl_object_fromdouble (
-					row->scan_time),	  "scan_time",		0, false);
+			syms = g_strsplit_set (row->symbols, ", ", -1);
+
+			if (syms) {
+				guint nelts = g_strv_length (syms);
+				ucl_object_t *syms_obj = ucl_object_typed_new (UCL_OBJECT);
+				ucl_object_reserve (syms_obj, nelts);
+
+				for (guint j = 0; j < nelts; j++) {
+					g_strstrip (syms[j]);
+
+					if (strlen (syms[j]) == 0) {
+						/* Empty garbadge */
+						continue;
+					}
+
+					ucl_object_t *cur = ucl_object_typed_new (UCL_OBJECT);
+
+					ucl_object_insert_key (cur, ucl_object_fromdouble (0.0),
+							"score", 0, false);
+					ucl_object_insert_key (syms_obj, cur, syms[j], 0, true);
+				}
+
+				ucl_object_insert_key (obj, syms_obj, "symbols", 0, false);
+				g_strfreev (syms);
+			}
+
+			ucl_object_insert_key (obj, ucl_object_fromint (row->len),
+					"size", 0, false);
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (row->scan_time),
+					"scan_time", 0, false);
+
 			if (row->user[0] != '\0') {
-				ucl_object_insert_key (obj, ucl_object_fromstring (
-						row->user), "user", 0, false);
+				ucl_object_insert_key (obj, ucl_object_fromstring (row->user),
+						"user", 0, false);
 			}
 			if (row->from_addr[0] != '\0') {
 				ucl_object_insert_key (obj, ucl_object_fromstring (
@@ -3146,6 +3172,7 @@ rspamd_controller_store_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 {
 	struct rspamd_stat *stat;
 	ucl_object_t *top, *sub;
+	struct ucl_emitter_functions *efuncs;
 	gint i, fd;
 
 	g_assert (ctx->saved_stats_path != NULL);
@@ -3191,12 +3218,14 @@ rspamd_controller_store_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 			"control_connections", 0, false);
 
 
+	efuncs = ucl_object_emit_fd_funcs (fd);
 	ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT,
-			ucl_object_emit_fd_funcs (fd), NULL);
+			efuncs, NULL);
 
 	ucl_object_unref (top);
 	rspamd_file_unlock (fd, FALSE);
 	close (fd);
+	ucl_object_emit_funcs_free (efuncs);
 }
 
 static void
@@ -3463,7 +3492,7 @@ static int
 lua_csession_send_string (lua_State *L)
 {
 	struct rspamd_http_connection_entry *c = lua_check_controller_entry (L, 1);
-	const gchar *str = lua_tostring (L, 3);
+	const gchar *str = lua_tostring (L, 2);
 
 	if (c) {
 		rspamd_controller_send_string (c, str);
@@ -3604,6 +3633,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	struct module_ctx *mctx;
 	GHashTableIter iter;
 	gpointer key, value;
+	guint i;
 	struct rspamd_keypair_cache *cache;
 	struct timeval stv;
 	const guint save_stats_interval = 60 * 1000; /* 1 minute */
@@ -3763,9 +3793,7 @@ start_controller_worker (struct rspamd_worker *worker)
 		rspamd_http_router_set_key (ctx->http, ctx->key);
 	}
 
-	g_hash_table_iter_init (&iter, ctx->cfg->c_modules);
-	while (g_hash_table_iter_next (&iter, &key, &value)) {
-		mctx = value;
+	PTR_ARRAY_FOREACH (ctx->cfg->c_modules, i, mctx) {
 		if (mctx->mod->module_attach_controller_func != NULL) {
 			mctx->mod->module_attach_controller_func (mctx,
 					ctx->custom_commands);
@@ -3802,10 +3830,12 @@ start_controller_worker (struct rspamd_worker *worker)
 			rspamd_worker_init_monitored (worker, ctx->ev_base, ctx->resolver);
 		}
 
-		rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, TRUE);
+		rspamd_map_watch (worker->srv->cfg, ctx->ev_base,
+				ctx->resolver, worker, TRUE);
 	}
 	else {
-		rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, FALSE);
+		rspamd_map_watch (worker->srv->cfg, ctx->ev_base,
+				ctx->resolver, worker, FALSE);
 	}
 
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base, worker);

@@ -58,6 +58,8 @@
 #include <openssl/evp.h>
 #endif
 
+#include "sqlite3.h"
+
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
 
@@ -277,8 +279,6 @@ reread_config (struct rspamd_main *rspamd_main)
 
 	rspamd_symbols_cache_save (rspamd_main->cfg->cache);
 	tmp_cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT);
-	g_hash_table_unref (tmp_cfg->c_modules);
-	tmp_cfg->c_modules = g_hash_table_ref (rspamd_main->cfg->c_modules);
 	tmp_cfg->libs_ctx = rspamd_main->cfg->libs_ctx;
 	REF_RETAIN (tmp_cfg->libs_ctx);
 	cfg_file = rspamd_mempool_strdup (tmp_cfg->cfg_pool,
@@ -289,8 +289,9 @@ reread_config (struct rspamd_main *rspamd_main)
 	rspamd_main->cfg = tmp_cfg;
 
 	if (!load_rspamd_config (rspamd_main, tmp_cfg, TRUE,
-			RSPAMD_CONFIG_INIT_VALIDATE|RSPAMD_CONFIG_INIT_SYMCACHE,
-			TRUE)) {
+				RSPAMD_CONFIG_INIT_VALIDATE|RSPAMD_CONFIG_INIT_SYMCACHE|
+				RSPAMD_CONFIG_INIT_LIBS|RSPAMD_CONFIG_INIT_URL,
+				TRUE)) {
 		rspamd_main->cfg = old_cfg;
 		rspamd_log_close_priv (rspamd_main->logger,
 					rspamd_main->workers_uid,
@@ -307,6 +308,7 @@ reread_config (struct rspamd_main *rspamd_main)
 		msg_info_main ("replacing config");
 		REF_RELEASE (old_cfg);
 		msg_info_main ("config has been reread successfully");
+		rspamd_map_preload (rspamd_main->cfg);
 	}
 }
 
@@ -361,12 +363,15 @@ create_listen_socket (GPtrArray *addrs, guint cnt,
 	g_ptr_array_sort (addrs, rspamd_inet_address_compare_ptr);
 	for (i = 0; i < cnt; i ++) {
 
+		/*
+		 * Copy address to avoid reload issues
+		 */
 		if (listen_type & RSPAMD_WORKER_SOCKET_TCP) {
 			fd = rspamd_inet_address_listen (g_ptr_array_index (addrs, i),
 					SOCK_STREAM, TRUE);
 			if (fd != -1) {
 				ls = g_malloc0 (sizeof (*ls));
-				ls->addr = g_ptr_array_index (addrs, i);
+				ls->addr = rspamd_inet_address_copy (g_ptr_array_index (addrs, i));
 				ls->fd = fd;
 				ls->type = RSPAMD_WORKER_SOCKET_TCP;
 				result = g_list_prepend (result, ls);
@@ -377,7 +382,7 @@ create_listen_socket (GPtrArray *addrs, guint cnt,
 					SOCK_DGRAM, TRUE);
 			if (fd != -1) {
 				ls = g_malloc0 (sizeof (*ls));
-				ls->addr = g_ptr_array_index (addrs, i);
+				ls->addr = rspamd_inet_address_copy (g_ptr_array_index (addrs, i));
 				ls->fd = fd;
 				ls->type = RSPAMD_WORKER_SOCKET_UDP;
 				result = g_list_prepend (result, ls);
@@ -750,11 +755,17 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 			nowait ? "with no result available" :
 					(WTERMSIG (res) == SIGKILL ? "hardly" : "softly"));
 	if (w->srv_pipe[0] != -1) {
+		/* Ugly workaround */
+		if (w->tmp_data) {
+			g_free (w->tmp_data);
+		}
 		event_del (&w->srv_ev);
 	}
+
 	if (w->finish_actions) {
 		g_ptr_array_free (w->finish_actions, TRUE);
 	}
+
 	REF_RELEASE (w->cf);
 	g_free (w);
 
@@ -960,7 +971,6 @@ rspamd_hup_handler (gint signo, short what, gpointer arg)
 			RVERSION
 			" is restarting");
 	g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
-	rspamd_map_remove_all (rspamd_main->cfg);
 	rspamd_log_close_priv (rspamd_main->logger,
 				rspamd_main->workers_uid,
 				rspamd_main->workers_gid);
@@ -1056,6 +1066,10 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 			}
 
 			if (cur->srv_pipe[0] != -1) {
+				/* Ugly workaround */
+				if (cur->tmp_data) {
+					g_free (cur->tmp_data);
+				}
 				event_del (&cur->srv_ev);
 			}
 
@@ -1168,7 +1182,7 @@ main (gint argc, gchar **argv, gchar **env)
 	struct event term_ev, int_ev, cld_ev, hup_ev, usr1_ev, control_ev;
 	struct timeval term_tv;
 	struct rspamd_main *rspamd_main;
-	gboolean skip_pid = FALSE;
+	gboolean skip_pid = FALSE, valgrind_mode = FALSE;
 
 #if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
 	g_thread_init (NULL);
@@ -1184,8 +1198,12 @@ main (gint argc, gchar **argv, gchar **env)
 			rspamd_spair_equal, g_free, rspamd_spair_close);
 	rspamd_main->start_mtx = rspamd_mempool_get_mutex (rspamd_main->server_pool);
 
+	if (getenv ("VALGRIND") != NULL) {
+		valgrind_mode = TRUE;
+	}
+
 #ifndef HAVE_SETPROCTITLE
-	init_title (argc, argv, env);
+	init_title (rspamd_main, argc, argv, env);
 #endif
 
 	rspamd_main->cfg->libs_ctx = rspamd_init_libs ();
@@ -1296,6 +1314,8 @@ main (gint argc, gchar **argv, gchar **env)
 		return res ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
 
+	sqlite3_initialize ();
+
 	/* Load config */
 	if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, TRUE,
 			RSPAMD_CONFIG_LOAD_ALL, FALSE)) {
@@ -1346,6 +1366,10 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Write info */
 	rspamd_main->pid = getpid ();
 	rspamd_main->type = type;
+
+	if (!valgrind_mode) {
+		rspamd_set_crash_handler (rspamd_main);
+	}
 
 	/* Ignore SIGPIPE as we handle write errors manually */
 	sigemptyset (&sigpipe_act.sa_mask);
@@ -1461,7 +1485,7 @@ main (gint argc, gchar **argv, gchar **env)
 		close (control_fd);
 	}
 
-	if (getenv ("VALGRIND") != NULL) {
+	if (valgrind_mode) {
 		/* Special case if we are likely running with valgrind */
 		term_attempts = TERMINATION_ATTEMPTS * 10;
 	}
@@ -1495,6 +1519,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_log_close (rspamd_main->logger);
 	REF_RELEASE (rspamd_main->cfg);
 	g_hash_table_unref (rspamd_main->spairs);
+	g_hash_table_unref (rspamd_main->workers);
 	rspamd_mempool_delete (rspamd_main->server_pool);
 
 	if (!skip_pid) {
@@ -1503,6 +1528,11 @@ main (gint argc, gchar **argv, gchar **env)
 
 	g_free (rspamd_main);
 	event_base_free (ev_base);
+	sqlite3_shutdown ();
+
+	if (control_addr) {
+		rspamd_inet_address_free (control_addr);
+	}
 
 	return (res);
 }

@@ -406,21 +406,10 @@ end
 
 return ver
 ]]
-    conn:add_cmd('EVAL', {lua_script, '1', symbol_ham})
-    local _,ver_ham = conn:exec()
+    conn:add_cmd('EVAL', {lua_script, '1', 'RS'})
+    local _,ver = conn:exec()
 
-    conn:add_cmd('EVAL', {lua_script, '1', symbol_spam})
-    local _,ver_spam = conn:exec()
-
-    -- If one of the classes is missing we still can convert the other one
-    if ver_ham == 0 and ver_spam == 0 and ver_ham ~= ver_spam then
-      printf("Current statistics versions do not match: %s -> %s, %s -> %s",
-          symbol_ham, ver_ham, symbol_spam, ver_spam)
-      printf("Cannot convert statistics")
-      return false
-    end
-
-    return true,tonumber(ver_ham)
+    return true,tonumber(ver)
   end
 
   local function check_expire(conn)
@@ -454,8 +443,8 @@ return ttl
     if not r then return false end
     if ver ~= 2 then
       if not ver then
-        printf('Key "%s_version" has not been found in Redis for %s/%s',
-            symbol_ham)
+        printf('Key "RS_version" has not been found in Redis for %s/%s',
+            symbol_ham, symbol_spam)
       else
         printf("You are using an old schema version: %s for %s/%s",
             ver, symbol_ham, symbol_spam)

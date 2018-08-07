@@ -135,6 +135,9 @@ local function whitelist_cb(symbol, rule, task)
 
             if tld then
               found, mult = find_domain(tld)
+              if not found then
+                found, mult = find_domain(val)
+              end
             end
           end
         end, dkim_opts)

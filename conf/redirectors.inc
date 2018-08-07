@@ -183,6 +183,7 @@ cort.as
 cortas.elpais.com
 cot.ag
 cowurl.com
+cp.bitrix.ru
 cr.am
 createurl.com
 crks.me
@@ -418,6 +419,7 @@ linkde.info
 linkee.com
 link.hhut.ru
 linkl.ru
+link.mail.e.glavbukh-mail.ru
 link.rengo.ru
 link.sendsay.ru
 linkslash.ca

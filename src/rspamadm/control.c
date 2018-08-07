@@ -137,7 +137,8 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 						cbdata->argc,
 						cbdata->argv,
 						obj,
-						"fuzzy_stat");
+						"fuzzy_stat",
+						TRUE);
 
 				rspamd_fstring_free (out);
 				ucl_object_unref (obj);

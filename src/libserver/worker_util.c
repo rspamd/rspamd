@@ -44,6 +44,16 @@
 #endif
 #include "zlib.h"
 
+#ifdef WITH_LIBUNWIND
+#define UNW_LOCAL_ONLY 1
+#include <libunwind.h>
+#define UNWIND_BACKTRACE_DEPTH 256
+#endif
+
+#ifdef HAVE_UCONTEXT_H
+#include <ucontext.h>
+#endif
+
 static void rspamd_worker_ignore_signal (int signo);
 /**
  * Return worker's control structure by its type
@@ -300,7 +310,6 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 
 	gperf_profiler_init (worker->srv->cfg, name);
 
-	worker->srv->pid = getpid ();
 	worker->signal_events = g_hash_table_new_full (g_direct_hash, g_direct_equal,
 			NULL, rspamd_sigh_free);
 
@@ -342,7 +351,6 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 {
 	GList *cur;
 	struct event *events;
-	struct rspamd_map *map;
 
 	/* Remove all events */
 	cur = worker->accept_events;
@@ -381,17 +389,6 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 
 	g_hash_table_unref (worker->signal_events);
 #endif
-
-	/* Cleanup maps */
-	for (cur = worker->srv->cfg->maps; cur != NULL; cur = g_list_next (cur)) {
-		map = cur->data;
-
-		if (map->dtor) {
-			map->dtor (map->dtor_data);
-		}
-
-		map->dtor = NULL;
-	}
 }
 
 static rspamd_fstring_t *
@@ -452,7 +449,14 @@ rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
 	msg->date = time (NULL);
 	msg->code = 200;
 	msg->status = rspamd_fstring_new_init ("OK", 2);
-	reply = rspamd_fstring_new_init (str, strlen (str));
+
+	if (str) {
+		reply = rspamd_fstring_new_init (str, strlen (str));
+	}
+	else {
+		reply = rspamd_fstring_new_init ("null", 4);
+	}
+
 	rspamd_http_message_set_body_from_fstring_steal (msg,
 			rspamd_controller_maybe_compress (entry, reply, msg));
 	rspamd_http_connection_reset (entry->conn);
@@ -933,4 +937,131 @@ rspamd_worker_init_monitored (struct rspamd_worker *worker,
 	rspamd_monitored_ctx_config (worker->srv->cfg->monitored_ctx,
 			worker->srv->cfg, ev_base, resolver->r,
 			rspamd_worker_monitored_on_change, worker);
+}
+
+#ifdef HAVE_SA_SIGINFO
+
+#ifdef WITH_LIBUNWIND
+static void
+rspamd_print_crash (ucontext_t *uap)
+{
+	unw_cursor_t cursor;
+	unw_word_t ip, off;
+	guint level;
+	gint ret;
+
+	if ((ret = unw_init_local (&cursor, uap)) != 0) {
+		msg_err ("unw_init_local: %d", ret);
+
+		return;
+	}
+
+	level = 0;
+	ret = 0;
+
+	for (;;) {
+		char name[128];
+
+		if (level >= UNWIND_BACKTRACE_DEPTH) {
+			break;
+		}
+
+		unw_get_reg (&cursor, UNW_REG_IP, &ip);
+		ret = unw_get_proc_name(&cursor, name, sizeof (name), &off);
+
+		if (ret == 0) {
+			msg_err ("%d: %p: %s()+0x%xl",
+				level, ip, name, (uintptr_t)off);
+		} else {
+			msg_err ("%d: %p: <unknown>", level, ip);
+		}
+
+		level++;
+		ret = unw_step (&cursor);
+
+		if (ret <= 0) {
+			break;
+		}
+	}
+
+	if (ret < 0) {
+		msg_err ("unw_step_ptr: %d", ret);
+	}
+}
+#endif
+
+static struct rspamd_main *saved_main = NULL;
+static gboolean
+rspamd_crash_propagate (gpointer key, gpointer value, gpointer unused)
+{
+	struct rspamd_worker *w = value;
+
+	/* Kill children softly */
+	kill (w->pid, SIGTERM);
+
+	return TRUE;
+}
+
+static void
+rspamd_crash_sig_handler (int sig, siginfo_t *info, void *ctx)
+{
+	struct sigaction sa;
+	ucontext_t *uap = ctx;
+	pid_t pid;
+
+	pid = getpid ();
+	msg_err ("caught fatal signal %d(%s), "
+			 "pid: %P, trace: ",
+			sig, strsignal (sig), pid);
+	(void)uap;
+#ifdef WITH_LIBUNWIND
+	rspamd_print_crash (uap);
+#endif
+
+	if (saved_main) {
+		if (pid == saved_main->pid) {
+			/*
+			 * Main process has crashed, propagate crash further to trigger
+			 * monitoring alerts and mass panic
+			 */
+			g_hash_table_foreach_remove (saved_main->workers,
+					rspamd_crash_propagate, NULL);
+		}
+	}
+
+	/*
+	 * Invoke signal with the default handler
+	 */
+	sigemptyset (&sa.sa_mask);
+	sa.sa_handler = SIG_DFL;
+	sa.sa_flags = 0;
+	sigaction (sig, &sa, NULL);
+	kill (pid, sig);
+}
+#endif
+
+void
+rspamd_set_crash_handler (struct rspamd_main *rspamd_main)
+{
+#ifdef HAVE_SA_SIGINFO
+	struct sigaction sa;
+
+#ifdef HAVE_SIGALTSTACK
+	stack_t ss;
+
+	/* Allocate special stack, NOT freed at the end so far */
+	ss.ss_size = MAX (SIGSTKSZ, 8192 * 4);
+	ss.ss_sp = g_malloc0 (ss.ss_size);
+	sigaltstack (&ss, NULL);
+#endif
+	saved_main = rspamd_main;
+	sigemptyset (&sa.sa_mask);
+	sa.sa_sigaction = &rspamd_crash_sig_handler;
+	sa.sa_flags = SA_RESTART | SA_SIGINFO | SA_ONSTACK;
+	sigaction (SIGSEGV, &sa, NULL);
+	sigaction (SIGBUS, &sa, NULL);
+	sigaction (SIGABRT, &sa, NULL);
+	sigaction (SIGFPE, &sa, NULL);
+	sigaction (SIGSYS, &sa, NULL);
+#endif
 }

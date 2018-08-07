@@ -24,6 +24,14 @@
 
 #ifdef WITH_JEMALLOC
 #include <jemalloc/jemalloc.h>
+#if (JEMALLOC_VERSION_MAJOR == 3 && JEMALLOC_VERSION_MINOR >= 6) || (JEMALLOC_VERSION_MAJOR > 3)
+#define HAVE_MALLOC_SIZE 1
+#define sys_alloc_size(sz) nallocx(sz, 0)
+#endif
+#elif defined(__APPLE__)
+#include <malloc/malloc.h>
+#define HAVE_MALLOC_SIZE 1
+#define sys_alloc_size(sz) malloc_good_size(sz)
 #endif
 
 #ifdef HAVE_SCHED_YIELD
@@ -159,7 +167,8 @@ static struct _pool_chain *
 rspamd_mempool_chain_new (gsize size, enum rspamd_mempool_chain_type pool_type)
 {
 	struct _pool_chain *chain;
-	gsize total_size = size + sizeof (struct _pool_chain);
+	gsize total_size = size + sizeof (struct _pool_chain) + MEM_ALIGNMENT,
+			optimal_size = 0;
 	gpointer map;
 
 	g_return_val_if_fail (size > 0, NULL);
@@ -173,8 +182,8 @@ rspamd_mempool_chain_new (gsize size, enum rspamd_mempool_chain_type pool_type)
 				-1,
 				0);
 		if (map == MAP_FAILED) {
-			msg_err ("cannot allocate %z bytes of shared memory, aborting", size +
-					sizeof (struct _pool_chain));
+			g_error ("%s: failed to allocate %"G_GSIZE_FORMAT" bytes",
+					G_STRLOC, total_size);
 			abort ();
 		}
 		chain = map;
@@ -206,10 +215,18 @@ rspamd_mempool_chain_new (gsize size, enum rspamd_mempool_chain_type pool_type)
 		g_atomic_int_add (&mem_pool_stat->bytes_allocated, total_size);
 	}
 	else {
-#ifdef WITH_JEMALLOC
-		total_size = nallocx (total_size, 0);
+#ifdef HAVE_MALLOC_SIZE
+		optimal_size = sys_alloc_size (total_size);
 #endif
-		map = g_malloc (total_size);
+		total_size = MAX (total_size, optimal_size);
+		map = malloc (total_size);
+
+		if (map == NULL) {
+			g_error ("%s: failed to allocate %"G_GSIZE_FORMAT" bytes",
+					G_STRLOC, total_size);
+			abort ();
+		}
+
 		chain = map;
 		chain->begin = ((guint8 *) chain) + sizeof (struct _pool_chain);
 		g_atomic_int_add (&mem_pool_stat->bytes_allocated, total_size);
@@ -418,7 +435,7 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 			/* Allocate new chain element */
 			if (pool->elt_len >= size + MEM_ALIGNMENT) {
 				pool->entry->elts[pool->entry->cur_elts].fragmentation += size;
-				new = rspamd_mempool_chain_new (pool->elt_len + MEM_ALIGNMENT,
+				new = rspamd_mempool_chain_new (pool->elt_len,
 						pool_type);
 			}
 			else {
@@ -426,13 +443,12 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 				g_atomic_int_add (&mem_pool_stat->fragmented_size,
 						free);
 				pool->entry->elts[pool->entry->cur_elts].fragmentation += free;
-				new = rspamd_mempool_chain_new (
-						size + pool->elt_len + MEM_ALIGNMENT, pool_type);
+				new = rspamd_mempool_chain_new (size + pool->elt_len, pool_type);
 			}
 
 			/* Connect to pool subsystem */
 			rspamd_mempool_append_chain (pool, new, pool_type);
-			/* No need to align again */
+			/* No need to align again, aligned by rspamd_mempool_chain_new */
 			tmp = new->pos;
 			new->pos = tmp + size;
 			POOL_MTX_UNLOCK ();
@@ -697,7 +713,7 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 					munmap ((void *)cur, len);
 				}
 				else {
-					g_free (cur);
+					free (cur); /* Not g_free as we use system allocator */
 				}
 			}
 
@@ -738,7 +754,7 @@ rspamd_mempool_cleanup_tmp (rspamd_mempool_t * pool)
 					-((gint)cur->len));
 			g_atomic_int_add (&mem_pool_stat->chunks_allocated, -1);
 
-			g_free (cur);
+			free (cur);
 		}
 
 		g_ptr_array_free (pool->pools[RSPAMD_MEMPOOL_TMP], TRUE);

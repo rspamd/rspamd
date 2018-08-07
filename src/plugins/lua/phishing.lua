@@ -23,19 +23,23 @@ end
 --
 local N = 'phishing'
 local symbol = 'PHISHED_URL'
+local generic_service_symbol = 'PHISHED_GENERIC_SERVICE'
 local openphish_symbol = 'PHISHED_OPENPHISH'
 local phishtank_symbol = 'PHISHED_PHISHTANK'
+local generic_service_name = 'generic service'
 local domains = nil
 local strict_domains = {}
 local redirector_domains = {}
+local generic_service_map = nil
 local openphish_map = 'https://www.openphish.com/feed.txt'
-local phishtank_map = 'http://data.phishtank.com/data/online-valid.json'
+local phishtank_suffix = 'phishtank.rspamd.com'
 -- Not enabled by default as their feed is quite large
 local openphish_premium = false
+local phishtank_enabled = false
+local generic_service_hash
 local openphish_hash
-local phishtank_hash
+local generic_service_data = {}
 local openphish_data = {}
-local phishtank_data = {}
 local rspamd_logger = require "rspamd_logger"
 local util = require "rspamd_util"
 local opts = rspamd_config:get_all_opt(N)
@@ -120,16 +124,59 @@ local function phishing_cb(task)
     end
   end
 
+  local function check_phishing_dns(dns_suffix, url, phish_symbol)
+    local function compose_dns_query(elts)
+      local cr = require "rspamd_cryptobox_hash"
+      local h = cr.create()
+      for _,elt in ipairs(elts) do h:update(elt) end
+      return string.format("%s.%s", h:base32():sub(1, 32), dns_suffix)
+    end
+    local r = task:get_resolver()
+    local host = url:get_host()
+    local path = url:get_path()
+    local query = url:get_query()
+
+    if host and path then
+      local function host_host_path_cb(_, _, results, err)
+        if not err and results then
+          task:insert_result(phish_symbol, 0.3, results)
+        end
+      end
+      r:resolve_a({
+        task = task,
+        name = compose_dns_query({host, path}),
+        callback = host_host_path_cb})
+
+
+      if query then
+        local function host_host_path_query_cb(_, _, results, err)
+          if not err and results then
+            task:insert_result(phish_symbol, 1.0, results)
+          end
+        end
+        r:resolve_a({
+          task = task,
+          name = compose_dns_query({host, path, query}),
+          callback = host_host_path_query_cb})
+      end
+
+    end
+  end
+
   local urls = task:get_urls()
 
   if urls then
     for _,url in ipairs(urls) do
+      if generic_service_hash then
+        check_phishing_map(generic_service_data, url, generic_service_symbol)
+      end
+
       if openphish_hash then
         check_phishing_map(openphish_data, url, openphish_symbol)
       end
 
-      if phishtank_hash then
-        check_phishing_map(phishtank_data, url, phishtank_symbol)
+      if phishtank_enabled then
+        check_phishing_dns(phishtank_suffix, url, phishtank_symbol)
       end
 
       if url:is_phished() and not url:is_redirected() then
@@ -228,25 +275,38 @@ local function phishing_map(mapname, phishmap, id)
     else
       xd[1] = opts[mapname]
     end
+
+    local found_maps = {}
+
     for _,d in ipairs(xd) do
       local s = string.find(d, ':[^:]+$')
       if s then
         local sym = string.sub(d, s + 1, -1)
         local map = string.sub(d, 1, s - 1)
-        rspamd_config:register_virtual_symbol(sym, 1, id)
-        local rmap = rspamd_config:add_map ({
-          type = 'set',
-          url = map,
-          description = 'Phishing ' .. mapname .. ' map',
-        })
-        if rmap then
-          local rule = {symbol = sym, map = rmap}
-          table.insert(phishmap, rule)
+
+        if found_maps[sym] then
+          table.insert(found_maps[sym], map)
         else
-          rspamd_logger.infox(rspamd_config, 'cannot add map: ' .. map .. ' for symbol: ' .. sym)
+          found_maps[sym] = {map}
         end
       else
         rspamd_logger.infox(rspamd_config, mapname .. ' option must be in format <map>:<symbol>')
+      end
+    end
+
+    for sym,urls in pairs(found_maps) do
+      local rmap = rspamd_config:add_map ({
+        type = 'set',
+        url = urls,
+        description = 'Phishing ' .. mapname .. ' map',
+      })
+      if rmap then
+        rspamd_config:register_virtual_symbol(sym, 1, id)
+        local rule = {symbol = sym, map = rmap}
+        table.insert(phishmap, rule)
+      else
+        rspamd_logger.infox(rspamd_config, 'cannot add map: %s for symbol: %s',
+            table.concat(urls, ";"), sym)
       end
     end
   end
@@ -285,6 +345,26 @@ local function insert_url_from_string(pool, tbl, str, data)
   end
 
   return false
+end
+
+local function generic_service_plain_cb(string)
+  local nelts = 0
+  local new_data = {}
+  local rspamd_mempool = require "rspamd_mempool"
+  local pool = rspamd_mempool.create()
+
+  local function generic_service_elt_parser(cap)
+    if insert_url_from_string(pool, new_data, cap, nil) then
+      nelts = nelts + 1
+    end
+  end
+
+  rspamd_str_split_fun(string, '\n', generic_service_elt_parser)
+
+  generic_service_data = new_data
+  rspamd_logger.infox(generic_service_hash, "parsed %s elements from %s feed",
+    nelts, generic_service_name)
+  pool:destroy()
 end
 
 local function openphish_json_cb(string)
@@ -346,42 +426,6 @@ local function openphish_plain_cb(string)
   pool:destroy()
 end
 
-local function phishtank_json_cb(string)
-  local ucl = require "ucl"
-  local nelts = 0
-  local new_data = {}
-  local valid = true
-  local parser = ucl.parser()
-  local res,err = parser:parse_string(string)
-  local rspamd_mempool = require "rspamd_mempool"
-  local pool = rspamd_mempool.create()
-
-  if not res then
-    valid = false
-    rspamd_logger.warnx(phishtank_hash, 'cannot parse openphish map: ' .. err)
-  else
-    local obj = parser:get_object()
-
-    for _,elt in ipairs(obj) do
-      if elt['url'] then
-        if insert_url_from_string(pool, new_data, elt['url'],
-          elt['phish_detail_url']) then
-          nelts = nelts + 1
-        end
-      end
-    end
-  end
-
-  if valid then
-    phishtank_data = new_data
-    rspamd_logger.infox(phishtank_hash, "parsed %s elements from phishtank feed",
-      nelts)
-  end
-
-
-  pool:destroy()
-end
-
 if opts then
   local id
   if opts['symbol'] then
@@ -391,6 +435,28 @@ if opts then
       name = symbol,
       callback = phishing_cb
     })
+
+    if opts['generic_service_symbol'] then
+      generic_service_symbol = opts['generic_service_symbol']
+    end
+    if opts['generic_service_map'] then
+      generic_service_map = opts['generic_service_map']
+    end
+    if opts['generic_service_url'] then
+      generic_service_map = opts['generic_service_url']
+    end
+    if opts['generic_service_name'] then
+      generic_service_name = opts['generic_service_name']
+    end
+
+    if opts['generic_service_enabled'] then
+      generic_service_hash = rspamd_config:add_map({
+          type = 'callback',
+          url = generic_service_map,
+          callback = generic_service_plain_cb,
+          description = 'Generic feed'
+        })
+    end
 
     if opts['openphish_map'] then
       openphish_map = opts['openphish_map']
@@ -421,21 +487,18 @@ if opts then
       end
     end
 
-    if opts['phishtank_map'] then
-      phishtank_map = opts['phishtank_map']
-    end
-    if opts['phishtank_url'] then
-      phishtank_map = opts['phishtank_url']
+    if opts['phishtank_enabled'] then
+      phishtank_enabled = true
+      if opts['phishtank_suffix'] then
+        phishtank_suffix = opts['phishtank_suffix']
+      end
     end
 
-    if opts['phishtank_enabled'] then
-      phishtank_hash = rspamd_config:add_map({
-          type = 'callback',
-          url = phishtank_map,
-          callback = phishtank_json_cb,
-          description = 'Phishtank feed (see https://www.phishtank.com for details)'
-        })
-    end
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      parent = id,
+      name = generic_service_symbol,
+    })
 
     rspamd_config:register_symbol({
       type = 'virtual',

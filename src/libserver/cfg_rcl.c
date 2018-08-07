@@ -213,7 +213,8 @@ rspamd_rcl_logging_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		else if (g_ascii_strcasecmp (log_level, "info") == 0) {
 			cfg->log_level = G_LOG_LEVEL_INFO | G_LOG_LEVEL_MESSAGE;
 		}
-		else if (g_ascii_strcasecmp (log_level, "message") == 0) {
+		else if (g_ascii_strcasecmp (log_level, "message") == 0 ||
+				g_ascii_strcasecmp (log_level, "notice") == 0) {
 			cfg->log_level =  G_LOG_LEVEL_MESSAGE;
 		}
 		else if (g_ascii_strcasecmp (log_level, "silent") == 0) {
@@ -1687,6 +1688,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				G_STRUCT_OFFSET (struct rspamd_config, map_file_watch_multiplier),
 				0,
 				"Multiplier for map watch interval when map is file");
+		rspamd_rcl_add_default_handler (sub,
+				"maps_cache_dir",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, maps_cache_dir),
+				0,
+				"Directory to save maps cached data (default: $DBDIR)");
 		rspamd_rcl_add_default_handler (sub,
 				"monitoring_watch_interval",
 				rspamd_rcl_parse_struct_time,
@@ -3449,9 +3456,11 @@ rspamd_config_parse_ucl (struct rspamd_config *cfg, const gchar *filename,
 	}
 
 	if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
-		msg_err_config_forced ("ucl parser error: %s", ucl_parser_get_error (parser));
+		g_set_error (err, cfg_rcl_error_quark (), errno,
+				"ucl parser error: %s", ucl_parser_get_error (parser));
 		ucl_parser_free (parser);
 		munmap (data, st.st_size);
+
 		return FALSE;
 	}
 
@@ -3517,7 +3526,11 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 
 	if (!rspamd_rcl_parse (top, cfg, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
 		msg_err_config ("rcl parse error: %e", err);
-		g_error_free (err);
+
+		if (err) {
+			g_error_free (err);
+		}
+
 		return FALSE;
 	}
 

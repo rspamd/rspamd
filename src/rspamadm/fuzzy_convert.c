@@ -135,7 +135,8 @@ rspamadm_fuzzyconvert (gint argc, gchar **argv, const struct rspamadm_command *c
 			argc,
 			argv,
 			obj,
-			"fuzzy_convert");
+			"fuzzy_convert",
+			TRUE);
 
 	ucl_object_unref (obj);
 }

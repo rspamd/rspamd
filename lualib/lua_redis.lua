@@ -110,9 +110,9 @@ local function try_load_redis_servers(options, rspamd_config, result)
     result['password'] = options['password']
   end
 
-  if read_only and not result.write_servers then
+  if read_only and not upstreams_write then
     result.read_only = true
-  elseif result.write_servers then
+  elseif upstreams_write then
     result.read_only = false
   end
 

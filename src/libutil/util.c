@@ -852,13 +852,29 @@ setproctitle (const gchar *fmt, ...)
 #endif
 }
 
+#if !(defined(DARWIN) || defined(SOLARIS) || defined(__APPLE__))
+static void
+rspamd_title_dtor (gpointer d)
+{
+	gchar **env = (gchar **)d;
+	guint i;
+
+	for (i = 0; env[i] != NULL; i++) {
+		g_free (env[i]);
+	}
+
+	g_free (env);
+}
+#endif
+
 /*
    It has to be _init function, because __attribute__((constructor))
    functions gets called without arguments.
  */
 
 gint
-init_title (gint argc, gchar *argv[], gchar *envp[])
+init_title (struct rspamd_main *rspamd_main,
+		gint argc, gchar *argv[], gchar *envp[])
 {
 #if defined(DARWIN) || defined(SOLARIS) || defined(__APPLE__)
 	/* XXX: try to handle these OSes too */
@@ -868,45 +884,46 @@ init_title (gint argc, gchar *argv[], gchar *envp[])
 	gint i;
 
 	for (i = 0; i < argc; ++i) {
-		if (!begin_of_buffer)
+		if (!begin_of_buffer) {
 			begin_of_buffer = argv[i];
-		if (!end_of_buffer || end_of_buffer + 1 == argv[i])
+		}
+		if (!end_of_buffer || end_of_buffer + 1 == argv[i]) {
 			end_of_buffer = argv[i] + strlen (argv[i]);
+		}
 	}
 
 	for (i = 0; envp[i]; ++i) {
-		if (!begin_of_buffer)
+		if (!begin_of_buffer) {
 			begin_of_buffer = envp[i];
-		if (!end_of_buffer || end_of_buffer + 1 == envp[i])
+		}
+		if (!end_of_buffer || end_of_buffer + 1 == envp[i]) {
 			end_of_buffer = envp[i] + strlen (envp[i]);
+		}
 	}
 
-	if (!end_of_buffer)
+	if (!end_of_buffer) {
 		return 0;
+	}
 
 	gchar **new_environ = g_malloc ((i + 1) * sizeof (envp[0]));
 
-	if (!new_environ)
-		return 0;
-
 	for (i = 0; envp[i]; ++i) {
-		if (!(new_environ[i] = g_strdup (envp[i])))
-			goto cleanup_enomem;
+		new_environ[i] = g_strdup (envp[i]);
 	}
-	new_environ[i] = 0;
+
+	new_environ[i] = NULL;
 
 	if (program_invocation_name) {
 		title_progname_full = g_strdup (program_invocation_name);
 
-		if (!title_progname_full)
-			goto cleanup_enomem;
-
 		gchar *p = strrchr (title_progname_full, '/');
 
-		if (p)
+		if (p) {
 			title_progname = p + 1;
-		else
+		}
+		else {
 			title_progname = title_progname_full;
+		}
 
 		program_invocation_name = title_progname_full;
 		program_invocation_short_name = title_progname;
@@ -916,13 +933,9 @@ init_title (gint argc, gchar *argv[], gchar *envp[])
 	title_buffer = begin_of_buffer;
 	title_buffer_size = end_of_buffer - begin_of_buffer;
 
-	return 0;
+	rspamd_mempool_add_destructor (rspamd_main->server_pool,
+			rspamd_title_dtor, new_environ);
 
-cleanup_enomem:
-	for (--i; i >= 0; --i) {
-		g_free (new_environ[i]);
-	}
-	g_free (new_environ);
 	return 0;
 #endif
 }
@@ -2081,6 +2094,9 @@ rspamd_init_libs (void)
 #endif
 
 	SSL_CTX_set_options (ctx->ssl_ctx, ssl_options);
+	ctx->ssl_ctx_noverify = SSL_CTX_new (SSLv23_method ());
+	SSL_CTX_set_verify (ctx->ssl_ctx_noverify, SSL_VERIFY_NONE, NULL);
+	SSL_CTX_set_options (ctx->ssl_ctx_noverify, ssl_options);
 #endif
 	rspamd_random_seed_fast ();
 
@@ -2174,6 +2190,19 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 
 		if (ctx->libmagic) {
 			magic_load (ctx->libmagic, cfg->magic_file);
+		}
+
+		rspamd_free_zstd_dictionary (ctx->in_dict);
+		rspamd_free_zstd_dictionary (ctx->out_dict);
+
+		if (ctx->out_zstream) {
+			ZSTD_freeCStream (ctx->out_zstream);
+			ctx->out_zstream = NULL;
+		}
+
+		if (ctx->in_zstream) {
+			ZSTD_freeDStream (ctx->in_zstream);
+			ctx->in_zstream = NULL;
 		}
 
 		if (cfg->zstd_input_dictionary) {
@@ -2282,6 +2311,7 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 		EVP_cleanup ();
 		ERR_free_strings ();
 		SSL_CTX_free (ctx->ssl_ctx);
+		SSL_CTX_free (ctx->ssl_ctx_noverify);
 #endif
 		rspamd_inet_library_destroy ();
 		rspamd_free_zstd_dictionary (ctx->in_dict);
@@ -2943,4 +2973,44 @@ rspamd_glob_path (const gchar *dir,
 	}
 
 	return res;
+}
+
+double
+rspamd_set_counter (struct rspamd_counter_data *cd, gdouble value)
+{
+	gdouble cerr;
+
+	/* Cumulative moving average using per-process counter data */
+	if (cd->number == 0) {
+		cd->mean = 0;
+		cd->stddev = 0;
+	}
+
+	cd->mean += (value - cd->mean) / (gdouble)(++cd->number);
+	cerr = (value - cd->mean) * (value - cd->mean);
+	cd->stddev += (cerr - cd->stddev) / (gdouble)(cd->number);
+
+	return cd->mean;
+}
+
+double
+rspamd_set_counter_ema (struct rspamd_counter_data *cd,
+		gdouble value,
+		gdouble alpha)
+{
+	gdouble diff, incr;
+
+	/* Cumulative moving average using per-process counter data */
+	if (cd->number == 0) {
+		cd->mean = 0;
+		cd->stddev = 0;
+	}
+
+	diff = value - cd->mean;
+	incr = diff * alpha;
+	cd->mean += incr;
+	cd->stddev = (1 - alpha) * (cd->stddev + diff * incr);
+	cd->number ++;
+
+	return cd->mean;
 }

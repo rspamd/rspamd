@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <src/libserver/html.h>
 #include "lua_common.h"
 #include "message.h"
 #include "html.h"
@@ -92,6 +93,7 @@ LUA_FUNCTION_DEF (html, get_images);
  * `color` - a triplet (r g b) for font color
  * `bgcolor` - a triplet (r g b) for background color
  * `style` - rspamd{text} with the full style description
+ * `font_size` - font size
  * @return {table} table of blocks in html part
  */
 LUA_FUNCTION_DEF (html, get_blocks);
@@ -316,38 +318,39 @@ static void
 lua_html_push_block (lua_State *L, struct html_block *bl)
 {
 	struct rspamd_lua_text *t;
-	struct html_tag **ptag;
 
-	lua_createtable (L, 0, 5);
+	lua_createtable (L, 0, 6);
 
 	if (bl->tag) {
 		lua_pushstring (L, "tag");
-		ptag = lua_newuserdata (L, sizeof (gpointer));
-		*ptag = bl->tag;
-		rspamd_lua_setclass (L, "rspamd{html_tag}", -1);
+		lua_pushlstring (L, bl->tag->name.start, bl->tag->name.len);
 		lua_settable (L, -3);
 	}
 
 	if (bl->font_color.valid) {
 		lua_pushstring (L, "color");
-		lua_newtable (L);
+		lua_createtable (L, 4, 0);
 		lua_pushnumber (L, bl->font_color.d.comp.r);
 		lua_rawseti (L, -2, 1);
 		lua_pushnumber (L, bl->font_color.d.comp.g);
 		lua_rawseti (L, -2, 2);
 		lua_pushnumber (L, bl->font_color.d.comp.b);
 		lua_rawseti (L, -2, 3);
+		lua_pushnumber (L, bl->font_color.d.comp.alpha);
+		lua_rawseti (L, -2, 4);
 		lua_settable (L, -3);
 	}
 	if (bl->background_color.valid) {
 		lua_pushstring (L, "bgcolor");
-		lua_newtable (L);
+		lua_createtable (L, 4, 0);
 		lua_pushnumber (L, bl->background_color.d.comp.r);
 		lua_rawseti (L, -2, 1);
 		lua_pushnumber (L, bl->background_color.d.comp.g);
 		lua_rawseti (L, -2, 2);
 		lua_pushnumber (L, bl->background_color.d.comp.b);
 		lua_rawseti (L, -2, 3);
+		lua_pushnumber (L, bl->background_color.d.comp.alpha);
+		lua_rawseti (L, -2, 4);
 		lua_settable (L, -3);
 	}
 
@@ -363,6 +366,10 @@ lua_html_push_block (lua_State *L, struct html_block *bl)
 
 	lua_pushstring (L, "visible");
 	lua_pushboolean (L, bl->visible);
+	lua_settable (L, -3);
+
+	lua_pushstring (L, "font_size");
+	lua_pushnumber (L, bl->font_size);
 	lua_settable (L, -3);
 }
 
@@ -485,7 +492,7 @@ lua_html_foreach_tag (lua_State *L)
 		lua_pop (L, 1);
 	}
 
-	if (hc && g_hash_table_size (ud.tags) > 0 && lua_isfunction (L, 3)) {
+	if (hc && (ud.any || g_hash_table_size (ud.tags) > 0) && lua_isfunction (L, 3)) {
 		if (hc->html_tags) {
 
 			lua_pushvalue (L, 3);

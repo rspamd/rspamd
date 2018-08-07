@@ -1135,7 +1135,8 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_HREF);
 		}
 	}
-	else if (tag->id == Tag_IMG) {
+
+	if (tag->id == Tag_IMG) {
 		/* Check width and height if presented */
 		if (len == 5 && g_ascii_strncasecmp (p, "width", len) == 0) {
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_WIDTH);
@@ -1145,6 +1146,29 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 		}
 		else if (g_ascii_strncasecmp (p, "style", len) == 0) {
 			NEW_COMPONENT (RSPAMD_HTML_COMPONENT_STYLE);
+		}
+	}
+	else if (tag->id == Tag_FONT) {
+		if (len == 5){
+			if (g_ascii_strncasecmp (p, "color", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_COLOR);
+			}
+			else if (g_ascii_strncasecmp (p, "style", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_STYLE);
+			}
+			else if (g_ascii_strncasecmp (p, "class", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_CLASS);
+			}
+		}
+		else if (len == 7) {
+			if (g_ascii_strncasecmp (p, "bgcolor", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_BGCOLOR);
+			}
+		}
+		else if (len == 4) {
+			if (g_ascii_strncasecmp (p, "size", len) == 0) {
+				NEW_COMPONENT (RSPAMD_HTML_COMPONENT_SIZE);
+			}
 		}
 	}
 	else if (tag->flags & FL_BLOCK) {
@@ -1490,7 +1514,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 
 	/* Strip spaces from the url */
 	/* Head spaces */
-	while ( p < start + len && g_ascii_isspace (*p)) {
+	while (p < start + len && g_ascii_isspace (*p)) {
 		p ++;
 		start ++;
 		len --;
@@ -1605,11 +1629,14 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 }
 
 static struct rspamd_url *
-rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
+rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag,
+		struct html_content *hc)
 {
 	struct html_tag_component *comp;
 	GList *cur;
 	struct rspamd_url *url;
+	const gchar *start;
+	gsize len;
 
 	cur = tag->params->head;
 
@@ -1617,7 +1644,54 @@ rspamd_html_process_url_tag (rspamd_mempool_t *pool, struct html_tag *tag)
 		comp = cur->data;
 
 		if (comp->type == RSPAMD_HTML_COMPONENT_HREF && comp->len > 0) {
-			url = rspamd_html_process_url (pool, comp->start, comp->len, comp);
+			start = comp->start;
+			len = comp->len;
+
+			/* Check base url */
+			if (hc && hc->base_url && comp->len > 2) {
+				/*
+				 * Relative url canot start from the following:
+				 * schema://
+				 * slash
+				 */
+				gchar *buf;
+				gsize orig_len;
+
+				if (rspamd_substring_search (start, len, "://", 3) == -1) {
+					/* Assume relative url */
+
+					gboolean need_slash = FALSE;
+
+					orig_len = len;
+					len += hc->base_url->urllen;
+
+					if (hc->base_url->string[hc->base_url->urllen - 1] != '/') {
+						need_slash = TRUE;
+						len ++;
+					}
+
+					buf = rspamd_mempool_alloc (pool, len + 1);
+					rspamd_snprintf (buf, len + 1, "%*s%s%*s",
+							hc->base_url->urllen, hc->base_url->string,
+							need_slash ? "/" : "",
+							(gint)orig_len, start);
+					start = buf;
+				}
+				else if (start[0] == '/' && start[1] != '/') {
+					/* Relative to the hostname */
+					orig_len = len;
+					len += hc->base_url->hostlen + hc->base_url->protocollen +
+							3 /* for :// */;
+					buf = rspamd_mempool_alloc (pool, len + 1);
+					rspamd_snprintf (buf, len + 1, "%*s://%*s/%*s",
+							hc->base_url->protocollen, hc->base_url->string,
+							hc->base_url->hostlen, hc->base_url->host,
+							(gint)orig_len, start);
+					start = buf;
+				}
+			}
+
+			url = rspamd_html_process_url (pool, start, len, comp);
 
 			if (url && tag->extra == NULL) {
 				tag->extra = url;
@@ -1819,6 +1893,7 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 		p ++;
 		rspamd_strlcpy (hexbuf, p, MIN ((gint)sizeof(hexbuf), end - p + 1));
 		cl->d.val = strtoul (hexbuf, NULL, 16);
+		cl->d.comp.alpha = 255;
 		cl->valid = TRUE;
 	}
 	else if (len > 4 && rspamd_lc_cmp (p, "rgb", 3) == 0) {
@@ -1828,9 +1903,10 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 			num1,
 			num2,
 			num3,
+			num4,
 			skip_spaces
 		} state = skip_spaces, next_state = obrace;
-		gulong r = 0, g = 0, b = 0;
+		gulong r = 0, g = 0, b = 0, opacity = 255;
 		const gchar *c;
 		gboolean valid = FALSE;
 
@@ -1899,6 +1975,40 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 					}
 
 					valid = TRUE;
+					p ++;
+					state = skip_spaces;
+					next_state = num4;
+				}
+				else if (*p == ')') {
+					if (!rspamd_strtoul (c, p - c, &b)) {
+						goto stop;
+					}
+
+					valid = TRUE;
+					goto stop;
+				}
+				else if (!g_ascii_isdigit (*p)) {
+					goto stop;
+				}
+				else {
+					p ++;
+				}
+				break;
+			case num4:
+				if (*p == ',') {
+					if (!rspamd_strtoul (c, p - c, &opacity)) {
+						goto stop;
+					}
+
+					valid = TRUE;
+					goto stop;
+				}
+				else if (*p == ')') {
+					if (!rspamd_strtoul (c, p - c, &opacity)) {
+						goto stop;
+					}
+
+					valid = TRUE;
 					goto stop;
 				}
 				else if (!g_ascii_isdigit (*p)) {
@@ -1923,7 +2033,10 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 		stop:
 
 		if (valid) {
-			cl->d.val = b + (g << 8) + (r << 16);
+			cl->d.comp.r = r;
+			cl->d.comp.g = g;
+			cl->d.comp.b = b;
+			cl->d.comp.alpha = opacity;
 			cl->valid = TRUE;
 		}
 	}
@@ -1936,8 +2049,185 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 
 		if (el != NULL) {
 			memcpy (cl, el, sizeof (*cl));
+			cl->d.comp.alpha = 255; /* Non transparent */
 		}
 	}
+}
+
+/*
+ * Target is used for in and out if this function returns TRUE
+ */
+static gboolean
+rspamd_html_process_css_size (const gchar *suffix, gsize len,
+		gdouble *tgt)
+{
+	gdouble sz = *tgt;
+	gboolean ret = FALSE;
+
+	if (len >= 2) {
+		if (memcmp (suffix, "px", 2) == 0) {
+			sz = (guint) sz; /* Round to number */
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "em", 2) == 0) {
+			/* EM is 16 px, so multiply and round */
+			sz = (guint) (sz * 16.0);
+			ret = TRUE;
+		}
+		else if (len >= 3 && memcmp (suffix, "rem", 3) == 0) {
+			/* equal to EM in our case */
+			sz = (guint) (sz * 16.0);
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "ex", 2) == 0) {
+			/*
+			 * Represents the x-height of the element's font.
+			 * On fonts with the "x" letter, this is generally the height
+			 * of lowercase letters in the font; 1ex = 0.5em in many fonts.
+			 */
+			sz = (guint) (sz * 8.0);
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "vw", 2) == 0) {
+			/*
+			 * Vewport width in percentages:
+			 * we assume 1% of viewport width as 8px
+			 */
+			sz = (guint) (sz * 8.0);
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "vh", 2) == 0) {
+			/*
+			 * Vewport height in percentages
+			 * we assume 1% of viewport width as 6px
+			 */
+			sz = (guint) (sz * 6.0);
+			ret = TRUE;
+		}
+		else if (len >= 4 && memcmp (suffix, "vmax", 4) == 0) {
+			/*
+			 * Vewport width in percentages
+			 * we assume 1% of viewport width as 6px
+			 */
+			sz = (guint) (sz * 8.0);
+			ret = TRUE;
+		}
+		else if (len >= 4 && memcmp (suffix, "vmin", 4) == 0) {
+			/*
+			 * Vewport height in percentages
+			 * we assume 1% of viewport width as 6px
+			 */
+			sz = (guint) (sz * 6.0);
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "pt", 2) == 0) {
+			sz = (guint) (sz * 96.0 / 72.0); /* One point. 1pt = 1/72nd of 1in */
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "cm", 2) == 0) {
+			sz = (guint) (sz * 96.0 / 2.54); /* 96px/2.54 */
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "mm", 2) == 0) {
+			sz = (guint) (sz * 9.6 / 2.54); /* 9.6px/2.54 */
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "in", 2) == 0) {
+			sz = (guint) (sz * 96.0); /* 96px */
+			ret = TRUE;
+		}
+		else if (memcmp (suffix, "pc", 2) == 0) {
+			sz = (guint) (sz * 96.0 / 6.0); /* 1pc = 12pt = 1/6th of 1in. */
+			ret = TRUE;
+		}
+	}
+	else if (suffix[0] == '%') {
+		/* Percentages from 16 px */
+		sz = (guint)(sz / 100.0 * 16.0);
+		ret = TRUE;
+	}
+
+	if (ret) {
+		*tgt = sz;
+	}
+
+	return ret;
+}
+
+static void
+rspamd_html_process_font_size (const gchar *line, guint len, guint *fs,
+							   gboolean is_css)
+{
+	const gchar *p = line, *end = line + len;
+	gchar *err = NULL, numbuf[64];
+	gdouble sz = 0;
+	gboolean failsafe = FALSE;
+
+	while (p < end && g_ascii_isspace (*p)) {
+		p ++;
+		len --;
+	}
+
+	if (g_ascii_isdigit (*p)) {
+		rspamd_strlcpy (numbuf, p, MIN (sizeof (numbuf), len + 1));
+		sz = strtod (numbuf, &err);
+
+		/* Now check leftover */
+		if (sz < 0) {
+			sz = 0;
+		}
+	}
+	else {
+		/* Ignore the rest */
+		failsafe = TRUE;
+		sz = is_css ? 16 : 1;
+		/* TODO: add textual fonts descriptions */
+	}
+
+	if (err && *err != '\0') {
+		const gchar *e = err;
+		gsize slen;
+
+		/* Skip spaces */
+		while (*e && g_ascii_isspace (*e)) {
+			e ++;
+		}
+
+		/* Lowercase */
+		slen = strlen (e);
+		rspamd_str_lc ((gchar *)e, slen);
+
+		if (!rspamd_html_process_css_size (e, slen, &sz)) {
+			failsafe = TRUE;
+		}
+	}
+	else {
+		/* Failsafe naked number */
+		failsafe = TRUE;
+	}
+
+	if (failsafe) {
+		if (is_css) {
+			/*
+			 * In css mode we usually ignore sizes, but let's treat
+			 * small sizes specially
+			 */
+			if (sz < 1) {
+				sz = 0;
+			} else {
+				sz = 16; /* Ignore */
+			}
+		} else {
+			/* In non-css mode we have to check legacy size */
+			sz = sz >= 1 ? sz * 16 : 16;
+		}
+	}
+
+	if (sz > 32) {
+		sz = 32;
+	}
+
+	*fs = sz;
 }
 
 static void
@@ -1952,6 +2242,7 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 		skip_spaces,
 	} state = skip_spaces, next_state = read_key;
 	guint klen = 0;
+	gdouble opacity = 1.0;
 
 	p = style;
 	c = p;
@@ -2009,6 +2300,38 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 							msg_debug_html ("tag is not visible");
 						}
 					}
+					else if (klen == 9 &&
+							 g_ascii_strncasecmp (key, "font-size", 9) == 0) {
+						rspamd_html_process_font_size (c, p - c,
+								&bl->font_size, TRUE);
+						msg_debug_html ("got font size: %u", bl->font_size);
+					}
+					else if (klen == 7 &&
+							 g_ascii_strncasecmp (key, "opacity", 7) == 0) {
+						gchar numbuf[64];
+
+						rspamd_strlcpy (numbuf, c,
+								MIN (sizeof (numbuf), p - c + 1));
+						opacity = strtod (numbuf, NULL);
+
+						if (opacity > 1) {
+							opacity = 1;
+						}
+						else if (opacity < 0) {
+							opacity = 0;
+						}
+
+						bl->font_color.d.comp.alpha = (guint8)(opacity * 255.0);
+					}
+					else if (klen == 10 &&
+							 g_ascii_strncasecmp (key, "visibility", 10) == 0) {
+						if (p - c >= 6 && rspamd_substring_search_caseless (c,
+								p - c,
+								"hidden", 6) != -1) {
+							bl->visible = FALSE;
+							msg_debug_html ("tag is not visible");
+						}
+					}
 				}
 
 				key = NULL;
@@ -2039,94 +2362,69 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		struct html_content *hc)
 {
 	struct html_tag_component *comp;
-	struct html_block *bl, *bl_parent;
+	struct html_block *bl;
 	rspamd_ftok_t fstr;
 	GList *cur;
-	GNode *parent;
-	struct html_tag *parent_tag;
 
 	cur = tag->params->head;
 	bl = rspamd_mempool_alloc0 (pool, sizeof (*bl));
 	bl->tag = tag;
 	bl->visible = TRUE;
+	bl->font_size = (guint)-1;
+	bl->font_color.d.comp.alpha = 255;
 
 	while (cur) {
 		comp = cur->data;
 
-		if (comp->type == RSPAMD_HTML_COMPONENT_COLOR && comp->len > 0) {
-			fstr.begin = (gchar *)comp->start;
-			fstr.len = comp->len;
-			rspamd_html_process_color (comp->start, comp->len, &bl->font_color);
-			msg_debug_html ("got color: %xd", bl->font_color.d.val);
-		}
-		else if (comp->type == RSPAMD_HTML_COMPONENT_BGCOLOR && comp->len > 0) {
-			fstr.begin = (gchar *)comp->start;
-			fstr.len = comp->len;
-			rspamd_html_process_color (comp->start, comp->len, &bl->background_color);
-			msg_debug_html ("got color: %xd", bl->font_color.d.val);
+		if (comp->len > 0) {
+			switch (comp->type) {
+			case RSPAMD_HTML_COMPONENT_COLOR:
+				fstr.begin = (gchar *) comp->start;
+				fstr.len = comp->len;
+				rspamd_html_process_color (comp->start, comp->len,
+						&bl->font_color);
+				msg_debug_html ("got color: %xd", bl->font_color.d.val);
+				break;
+			case RSPAMD_HTML_COMPONENT_BGCOLOR:
+				fstr.begin = (gchar *) comp->start;
+				fstr.len = comp->len;
+				rspamd_html_process_color (comp->start, comp->len,
+						&bl->background_color);
+				msg_debug_html ("got color: %xd", bl->font_color.d.val);
 
-			if (tag->id == Tag_BODY) {
-				/* Set global background color */
-				memcpy (&hc->bgcolor, &bl->background_color, sizeof (hc->bgcolor));
+				if (tag->id == Tag_BODY) {
+					/* Set global background color */
+					memcpy (&hc->bgcolor, &bl->background_color,
+							sizeof (hc->bgcolor));
+				}
+				break;
+			case RSPAMD_HTML_COMPONENT_STYLE:
+				bl->style.len = comp->len;
+				bl->style.start = comp->start;
+				msg_debug_html ("got style: %*s", (gint) bl->style.len,
+						bl->style.start);
+				rspamd_html_process_style (pool, bl, hc, comp->start, comp->len);
+				break;
+			case RSPAMD_HTML_COMPONENT_CLASS:
+				fstr.begin = (gchar *) comp->start;
+				fstr.len = comp->len;
+				bl->class = rspamd_mempool_ftokdup (pool, &fstr);
+				msg_debug_html ("got class: %s", bl->class);
+				break;
+			case RSPAMD_HTML_COMPONENT_SIZE:
+				fstr.begin = (gchar *) comp->start;
+				fstr.len = comp->len;
+				rspamd_html_process_color (comp->start, comp->len,
+						&bl->font_color);
+				msg_debug_html ("got color: %xd", bl->font_color.d.val);
+				break;
+			default:
+				/* NYI */
+				break;
 			}
-		}
-		else if (comp->type == RSPAMD_HTML_COMPONENT_STYLE && comp->len > 0) {
-			bl->style.len = comp->len;
-			bl->style.start =  comp->start;
-			msg_debug_html ("got style: %*s", (gint)bl->style.len, bl->style.start);
-			rspamd_html_process_style (pool, bl, hc, comp->start, comp->len);
-		}
-		else if (comp->type == RSPAMD_HTML_COMPONENT_CLASS && comp->len > 0) {
-			fstr.begin = (gchar *)comp->start;
-			fstr.len = comp->len;
-			bl->class = rspamd_mempool_ftokdup (pool, &fstr);
-			msg_debug_html ("got class: %s", bl->class);
 		}
 
 		cur = g_list_next (cur);
-	}
-
-	if (!bl->background_color.valid) {
-		/* Try to propagate background color from parent nodes */
-		for (parent = tag->parent; parent != NULL; parent = parent->parent) {
-			parent_tag = parent->data;
-
-			if (parent_tag && (parent_tag->flags & FL_BLOCK) && parent_tag->extra) {
-				bl_parent = parent_tag->extra;
-
-				if (bl_parent->background_color.valid) {
-					memcpy (&bl->background_color, &bl_parent->background_color,
-							sizeof (bl->background_color));
-					break;
-				}
-			}
-		}
-	}
-	if (!bl->font_color.valid) {
-		/* Try to propagate background color from parent nodes */
-		for (parent = tag->parent; parent != NULL; parent = parent->parent) {
-			parent_tag = parent->data;
-
-			if (parent_tag && (parent_tag->flags & FL_BLOCK) && parent_tag->extra) {
-				bl_parent = parent_tag->extra;
-
-				if (bl_parent->font_color.valid) {
-					memcpy (&bl->font_color, &bl_parent->font_color,
-							sizeof (bl->font_color));
-					break;
-				}
-			}
-		}
-	}
-
-	/* Set bgcolor to the html bgcolor and font color to black as a last resort */
-	if (!bl->font_color.valid) {
-		bl->font_color.d.val = 0;
-		bl->font_color.d.comp.alpha = 255;
-		bl->font_color.valid = TRUE;
-	}
-	if (!bl->background_color.valid) {
-		memcpy (&bl->background_color, &hc->bgcolor, sizeof (hc->bgcolor));
 	}
 
 	if (hc->blocks == NULL) {
@@ -2209,6 +2507,104 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 	}
 }
 
+static gboolean
+rspamd_html_propagate_lengths (GNode *node, gpointer _unused)
+{
+	GNode *child;
+	struct html_tag *tag = node->data, *cld_tag;
+
+	if (tag) {
+		child = node->children;
+
+		/* Summarize content length from children */
+		while (child) {
+			cld_tag = child->data;
+			tag->content_length += cld_tag->content_length;
+			child = child->next;
+		}
+	}
+
+	return FALSE;
+}
+
+static void
+rspamd_html_propagate_style (struct html_content *hc,
+							 struct html_tag *tag,
+							 struct html_block *bl,
+							 GQueue *blocks)
+{
+	struct html_block *bl_parent;
+	gboolean push_block = FALSE;
+
+
+	/* Propagate from the parent if needed */
+	bl_parent = g_queue_peek_tail (blocks);
+
+	if (bl_parent) {
+		if (!bl->background_color.valid) {
+			/* Try to propagate background color from parent nodes */
+			if (bl_parent->background_color.valid) {
+				memcpy (&bl->background_color, &bl_parent->background_color,
+						sizeof (bl->background_color));
+			}
+		}
+		else {
+			push_block = TRUE;
+		}
+
+		if (!bl->font_color.valid) {
+			/* Try to propagate background color from parent nodes */
+			if (bl_parent->font_color.valid) {
+				memcpy (&bl->font_color, &bl_parent->font_color,
+						sizeof (bl->font_color));
+			}
+		}
+		else {
+			push_block = TRUE;
+		}
+
+		/* Propagate font size */
+		if (bl->font_size == (guint)-1) {
+			if (bl_parent->font_size != (guint)-1) {
+				bl->font_size = bl_parent->font_size;
+			}
+		}
+		else {
+			push_block = TRUE;
+		}
+	}
+
+	/* Set bgcolor to the html bgcolor and font color to black as a last resort */
+	if (!bl->font_color.valid) {
+		/* Don't touch opacity as it can be set separately */
+		bl->font_color.d.comp.r = 0;
+		bl->font_color.d.comp.g = 0;
+		bl->font_color.d.comp.b = 0;
+		bl->font_color.valid = TRUE;
+	}
+	else {
+		push_block = TRUE;
+	}
+
+	if (!bl->background_color.valid) {
+		memcpy (&bl->background_color, &hc->bgcolor, sizeof (hc->bgcolor));
+	}
+	else {
+		push_block = TRUE;
+	}
+
+	if (bl->font_size == (guint)-1) {
+		bl->font_size = 16; /* Default for browsers */
+	}
+	else {
+		push_block = TRUE;
+	}
+
+	if (push_block && !(tag->flags & FL_CLOSED)) {
+		g_queue_push_tail (blocks, bl);
+	}
+}
+
 GByteArray*
 rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 		GByteArray *in, GList **exceptions, GHashTable *urls,  GHashTable *emails)
@@ -2224,6 +2620,8 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 	gint substate = 0, len, href_offset = -1;
 	struct html_tag *cur_tag = NULL, *content_tag = NULL;
 	struct rspamd_url *url = NULL, *turl;
+	GQueue *styles_blocks;
+
 	enum {
 		parse_start = 0,
 		tag_begin,
@@ -2256,6 +2654,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 	hc->bgcolor.valid = TRUE;
 
 	dest = g_byte_array_sized_new (in->len / 3 * 2);
+	styles_blocks = g_queue_new ();
 
 	p = in->data;
 	c = p;
@@ -2399,6 +2798,13 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				p ++;
 			}
 			else {
+				if (content_tag) {
+					if (content_tag->content == NULL) {
+						content_tag->content = c;
+					}
+
+					content_tag->content_length += p - c;
+				}
 				state = tag_begin;
 			}
 			break;
@@ -2570,10 +2976,10 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 					}
 					save_space = FALSE;
 				}
-				else if ((cur_tag->flags & (FL_CLOSED|FL_CLOSING)) &&
-						(cur_tag->id == Tag_P ||
+
+				if ((cur_tag->id == Tag_P ||
 						cur_tag->id == Tag_TR ||
-						cur_tag->id == Tag_DIV) && balanced) {
+						cur_tag->id == Tag_DIV)) {
 					if (dest->len > 0 && dest->data[dest->len - 1] != '\n') {
 						g_byte_array_append (dest, "\r\n", 2);
 					}
@@ -2582,7 +2988,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 
 				if (cur_tag->id == Tag_A || cur_tag->id == Tag_IFRAME) {
 					if (!(cur_tag->flags & (FL_CLOSING))) {
-						url = rspamd_html_process_url_tag (pool, cur_tag);
+						url = rspamd_html_process_url_tag (pool, cur_tag, hc);
 
 						if (url != NULL) {
 
@@ -2651,21 +3057,62 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 					}
 				}
 				else if (cur_tag->id == Tag_LINK) {
-					url = rspamd_html_process_url_tag (pool, cur_tag);
+					url = rspamd_html_process_url_tag (pool, cur_tag, hc);
+				}
+				else if (cur_tag->id == Tag_BASE && !(cur_tag->flags & (FL_CLOSING))) {
+					struct html_tag *prev_tag = NULL;
+
+					if (cur_level && cur_level->parent) {
+						prev_tag = cur_level->parent->data;
+					}
+
+					/*
+					 * Base is allowed only within head tag but we slightly
+					 * relax that
+					 */
+					if (!prev_tag || prev_tag->id == Tag_HEAD ||
+						prev_tag->id == Tag_HTML) {
+						url = rspamd_html_process_url_tag (pool, cur_tag, hc);
+
+						if (url != NULL && hc->base_url == NULL) {
+							/* We have a base tag available */
+							hc->base_url = url;
+						}
+					}
 				}
 
 				if (cur_tag->id == Tag_IMG && !(cur_tag->flags & FL_CLOSING)) {
 					rspamd_html_process_img_tag (pool, cur_tag, hc);
 				}
-				else if (!(cur_tag->flags & FL_CLOSING) &&
-						(cur_tag->flags & FL_BLOCK)) {
+				else if (cur_tag->flags & FL_BLOCK) {
 					struct html_block *bl;
 
-					rspamd_html_process_block_tag (pool, cur_tag, hc);
-					bl = cur_tag->extra;
+					if (cur_tag->flags & FL_CLOSING) {
+						/* Just remove block element from the queue if any */
+						if (styles_blocks->length > 0) {
+							g_queue_pop_tail (styles_blocks);
+						}
+					}
+					else {
+						rspamd_html_process_block_tag (pool, cur_tag, hc);
+						bl = cur_tag->extra;
 
-					if (bl && !bl->visible) {
-						state = content_ignore;
+						if (bl) {
+							rspamd_html_propagate_style (hc, cur_tag,
+									cur_tag->extra, styles_blocks);
+
+							/* Check visibility */
+							if (bl->font_size < 3 ||
+								bl->font_color.d.comp.alpha < 10) {
+
+								bl->visible = FALSE;
+								msg_debug_html ("tag is not visible");
+							}
+
+							if (!bl->visible) {
+								state = content_ignore;
+							}
+						}
 					}
 				}
 			}
@@ -2680,6 +3127,13 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 			break;
 		}
 	}
+
+	if (hc->html_tags) {
+		g_node_traverse (hc->html_tags, G_POST_ORDER, G_TRAVERSE_ALL, -1,
+				rspamd_html_propagate_lengths, NULL);
+	}
+
+	g_queue_free (styles_blocks);
 
 	return dest;
 }

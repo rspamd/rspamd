@@ -55,6 +55,24 @@ local function apply_settings(task, to_apply)
       task:set_flag(fl)
     end
   end
+
+  if to_apply.symbols then
+    -- Add symbols, specified in the settings
+    if #to_apply.symbols > 0 then
+      fun.each(function(val)
+        task:insert_result(val, 1.0)
+      end,
+          fun.filter(function(elt) return type(elt) == 'string' end,
+              to_apply.symbols))
+    else
+      -- Object like symbols
+      fun.each(function(k, val)
+        task:insert_result(k, val.score or 1.0, val.options or {})
+      end,
+          fun.filter(function(_, elt) return type(elt) == 'table' end,
+              to_apply.symbols))
+    end
+  end
 end
 
 -- Checks for overridden settings within query params and returns 'true' if

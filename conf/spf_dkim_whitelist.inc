@@ -176,6 +176,7 @@ southwest.com
 spotify.com
 springer.com
 squarespace.com
+stalker.com
 steampowered.com
 stumbleupon.com
 surveymonkey.com
@@ -185,6 +186,7 @@ taleo.net
 taobao.com
 target.com
 taringa.net
+taxi.yandex.ru
 tele2.ru
 thekitchn.com
 tokopedia.com

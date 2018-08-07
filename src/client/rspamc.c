@@ -141,7 +141,7 @@ static GOptionEntry entries[] =
 	{"exclude", 0, 0, G_OPTION_ARG_STRING_ARRAY, &exclude_patterns,
 		"Exclude specific glob patterns in file names (can be repeated)", NULL},
 	{"sort", 0, 0, G_OPTION_ARG_STRING, &sort,
-		"Sort output in a specific order (name, weight, time)", NULL},
+		"Sort output in a specific order (name, weight, frequency, hits)", NULL},
 	{ "empty", 'E', 0, G_OPTION_ARG_NONE, &empty_input,
 	   "Allow empty input instead of reading from stdin", NULL },
 	{ "fuzzy-symbol", 'S', 0, G_OPTION_ARG_STRING, &fuzzy_symbol,
@@ -990,6 +990,15 @@ rspamc_counters_sort (const ucl_object_t **o1, const ucl_object_t **o2)
 					order2 = ucl_object_todouble (elt2) * 1000000;
 				}
 			}
+			else if (g_ascii_strcasecmp (args[0], "hits") == 0) {
+				elt1 = ucl_object_lookup (*o1, "hits");
+				elt2 = ucl_object_lookup (*o2, "hits");
+
+				if (elt1 && elt2) {
+					order1 = ucl_object_toint (elt1);
+					order2 = ucl_object_toint (elt2);
+				}
+			}
 
 			g_strfreev (args);
 		}
@@ -1001,9 +1010,9 @@ rspamc_counters_sort (const ucl_object_t **o1, const ucl_object_t **o2)
 static void
 rspamc_counters_output (FILE *out, ucl_object_t *obj)
 {
-	const ucl_object_t *cur, *sym, *weight, *freq, *freq_dev, *tim;
+	const ucl_object_t *cur, *sym, *weight, *freq, *freq_dev, *nhits;
 	ucl_object_iter_t iter = NULL;
-	gchar fmt_buf[64], dash_buf[82];
+	gchar fmt_buf[64], dash_buf[82], sym_buf[82];
 	gint l, max_len = INT_MIN, i;
 	static const gint dashes = 44;
 
@@ -1038,14 +1047,14 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 	if (tty) {
 		printf ("\033[1m");
 	}
-	printf (fmt_buf, "Pri", "Symbol", "Weight", "Frequency", "Time");
+	printf (fmt_buf, "Pri", "Symbol", "Weight", "Frequency", "Hits");
 	printf (" %s \n", dash_buf);
-	printf (fmt_buf, "", "", "", "hits/sec", "usec");
+	printf (fmt_buf, "", "", "", "hits/min", "");
 	if (tty) {
 		printf ("\033[0m");
 	}
 	rspamd_snprintf (fmt_buf, sizeof (fmt_buf),
-		"| %%3d | %%%ds | %%7.1f | %%6.3f(%%5.3f) | %%7.4f |\n", max_len);
+		"| %%3d | %%%ds | %%7.1f | %%6.3f(%%5.3f) | %%7ju |\n", max_len);
 
 	iter = NULL;
 	i = 0;
@@ -1055,15 +1064,26 @@ rspamc_counters_output (FILE *out, ucl_object_t *obj)
 		weight = ucl_object_lookup (cur, "weight");
 		freq = ucl_object_lookup (cur, "frequency");
 		freq_dev = ucl_object_lookup (cur, "frequency_stddev");
-		tim = ucl_object_lookup (cur, "time");
+		nhits = ucl_object_lookup (cur, "hits");
 
-		if (sym && weight && freq && tim) {
+		if (sym && weight && freq && nhits) {
+			const gchar *sym_name;
+
+			if (sym->len > max_len) {
+				rspamd_snprintf (sym_buf, sizeof (sym_buf), "%*s...",
+						(max_len - 3), ucl_object_tostring (sym));
+				sym_name = sym_buf;
+			}
+			else {
+				sym_name = ucl_object_tostring (sym);
+			}
+
 			printf (fmt_buf, i,
-				ucl_object_tostring (sym),
-				ucl_object_todouble (weight),
-				ucl_object_todouble (freq),
-				ucl_object_todouble (freq_dev),
-				ucl_object_todouble (tim));
+					sym_name,
+					ucl_object_todouble (weight),
+					ucl_object_todouble (freq) * 60.0,
+					ucl_object_todouble (freq_dev) * 60.0,
+					(uintmax_t)ucl_object_toint (nhits));
 		}
 		i++;
 	}

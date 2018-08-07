@@ -576,6 +576,10 @@ spf_process_txt_record (struct spf_record *rec, struct spf_resolved_element *res
 		if (strncmp (elt->content.txt.data, "v=spf1", sizeof ("v=spf1") - 1)
 				== 0) {
 			selected = elt;
+			rspamd_mempool_set_variable (rec->task->task_pool,
+					RSPAMD_MEMPOOL_SPF_RECORD,
+					rspamd_mempool_strdup (rec->task->task_pool,
+							elt->content.txt.data), NULL);
 			break;
 		}
 	}
@@ -584,6 +588,10 @@ spf_process_txt_record (struct spf_record *rec, struct spf_resolved_element *res
 		LL_FOREACH (reply->entries, elt) {
 			if (start_spf_parse (rec, resolved, elt->content.txt.data)) {
 				ret = TRUE;
+				rspamd_mempool_set_variable (rec->task->task_pool,
+						RSPAMD_MEMPOOL_SPF_RECORD,
+						rspamd_mempool_strdup (rec->task->task_pool,
+								elt->content.txt.data), NULL);
 				break;
 			}
 		}
@@ -1579,7 +1587,7 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 			break;
 
 		default:
-			assert (0);
+			g_assert_not_reached ();
 		}
 	}
 
@@ -1649,35 +1657,71 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 			/* Read macro name */
 			switch (g_ascii_tolower (*p)) {
 			case 'i':
-				macro_len = rspamd_strlcpy (ip_buf,
-						rspamd_inet_address_to_string (task->from_addr),
-						sizeof (ip_buf));
-				macro_value = ip_buf;
-				break;
-			case 's':
-				macro_len = strlen (rec->sender);
-				macro_value = rec->sender;
-				break;
-			case 'l':
-				macro_len = strlen (rec->local_part);
-				macro_value = rec->local_part;
-				break;
-			case 'o':
-				macro_len = strlen (rec->sender_domain);
-				macro_value = rec->sender_domain;
-				break;
-			case 'd':
-				macro_len = strlen (resolved->cur_domain);
-				macro_value = resolved->cur_domain;
-				break;
-			case 'v':
-				if (rspamd_inet_address_get_af (task->from_addr) == AF_INET) {
-					macro_len = sizeof ("in-addr") - 1;
-					macro_value = "in-addr";
+				if (task->from_addr) {
+					macro_len = rspamd_strlcpy (ip_buf,
+							rspamd_inet_address_to_string (task->from_addr),
+							sizeof (ip_buf));
+					macro_value = ip_buf;
 				}
 				else {
-					macro_len = sizeof ("ip6") - 1;
-					macro_value = "ip6";
+					macro_len = rspamd_snprintf (ip_buf, sizeof (ip_buf),
+							"127.0.0.1");
+					macro_value = ip_buf;
+				}
+				break;
+			case 's':
+				if (rec->sender) {
+					macro_len = strlen (rec->sender);
+					macro_value = rec->sender;
+				}
+				else {
+					macro_len = sizeof ("unknown") - 1;
+					macro_value = "unknown";
+				}
+				break;
+			case 'l':
+				if (rec->local_part) {
+					macro_len = strlen (rec->local_part);
+					macro_value = rec->local_part;
+				}
+				else {
+					macro_len = sizeof ("unknown") - 1;
+					macro_value = "unknown";
+				}
+				break;
+			case 'o':
+				if (rec->sender_domain) {
+					macro_len = strlen (rec->sender_domain);
+					macro_value = rec->sender_domain;
+				}
+				else {
+					macro_len = sizeof ("unknown") - 1;
+					macro_value = "unknown";
+				}
+				break;
+			case 'd':
+				if (resolved && resolved->cur_domain) {
+					macro_len = strlen (resolved->cur_domain);
+					macro_value = resolved->cur_domain;
+				}
+				else {
+					macro_len = sizeof ("unknown") - 1;
+					macro_value = "unknown";
+				}
+				break;
+			case 'v':
+				if (task->from_addr) {
+					if (rspamd_inet_address_get_af (task->from_addr) == AF_INET) {
+						macro_len = sizeof ("in-addr") - 1;
+						macro_value = "in-addr";
+					} else {
+						macro_len = sizeof ("ip6") - 1;
+						macro_value = "ip6";
+					}
+				}
+				else {
+					macro_len = sizeof ("in-addr") - 1;
+					macro_value = "in-addr";
 				}
 				break;
 			case 'h':
@@ -1692,10 +1736,12 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 						macro_value = task->helo;
 					}
 				}
+				else {
+					macro_len = sizeof ("unknown") - 1;
+					macro_value = "unknown";
+				}
 				break;
 			default:
-				macro_len = 0;
-				macro_value = NULL;
 				msg_info_spf (
 						"<%s>: spf error for domain %s: unknown or "
 								"unsupported spf macro %c in %s",
@@ -2023,6 +2069,7 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 	if (resolved) {
 		if (!spf_process_txt_record (rec, resolved, reply)) {
 			resolved = g_ptr_array_index(rec->resolved, 0);
+
 			if (rec->resolved->len > 1) {
 				addr = g_ptr_array_index(resolved->elts, 0);
 				if ((reply->code == RDNS_RC_NOREC || reply->code == RDNS_RC_NXDOMAIN)

@@ -17,6 +17,7 @@
 #include "libmime/message.h"
 #include "libutil/expression.h"
 #include "libserver/composites.h"
+#include "libmime/lang_detection.h"
 #include "lua/lua_map.h"
 #include "utlist.h"
 #include <math.h>
@@ -204,6 +205,7 @@ LUA_FUNCTION_DEF (config, get_classifier);
  *     + `empty` if symbol can be called for empty messages
  *     + `skip` if symbol should be skipped now
  *     + `nostat` if symbol should be excluded from stat tokens
+ *     + `trivial` symbol is trivial (e.g. no network requests)
  * - `parent`: id of parent symbol (useful for virtual symbols)
  *
  * @return {number} id of symbol registered
@@ -710,6 +712,22 @@ LUA_FUNCTION_DEF (config, parse_rcl);
  */
 LUA_FUNCTION_DEF (config, init_modules);
 
+/***
+ * @method rspamd_config:init_subsystem(str)
+ * Initialize config subsystem from a comma separated list:
+ * - `modules` - init modules
+ * - `langdet` - language detector
+ * - TODO: add more
+ */
+LUA_FUNCTION_DEF (config, init_subsystem);
+
+/***
+ * @method rspamd_config:get_tld_path()
+ * Returns path to TLD file
+ * @return {string} path to tld file
+ */
+LUA_FUNCTION_DEF (config, get_tld_path);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
@@ -771,6 +789,8 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, load_ucl),
 	LUA_INTERFACE_DEF (config, parse_rcl),
 	LUA_INTERFACE_DEF (config, init_modules),
+	LUA_INTERFACE_DEF (config, init_subsystem),
+	LUA_INTERFACE_DEF (config, get_tld_path),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -1549,6 +1569,9 @@ lua_parse_symbol_flags (const gchar *str)
 		if (strstr (str, "squeezed") != NULL) {
 			ret |= SYMBOL_TYPE_SQUEEZED;
 		}
+		if (strstr (str, "trivial") != NULL) {
+			ret |= SYMBOL_TYPE_TRIVIAL;
+		}
 	}
 
 	return ret;
@@ -1969,7 +1992,7 @@ lua_config_register_dependency (lua_State * L)
 			skip_squeeze = lua_toboolean (L, 4);
 		}
 
-		if (child != NULL && child != NULL) {
+		if (child != NULL && parent != NULL) {
 
 			if (skip_squeeze || !rspamd_lua_squeeze_dependency (L, cfg, child, parent)) {
 				rspamd_symbols_cache_add_delayed_dependency (cfg->cache, child,
@@ -2249,7 +2272,8 @@ lua_config_add_composite (lua_State * L)
 					msg_warn_config ("composite %s is redefined", name);
 					new = FALSE;
 				}
-				composite = rspamd_mempool_alloc (cfg->cfg_pool,
+
+				composite = rspamd_mempool_alloc0 (cfg->cfg_pool,
 						sizeof (struct rspamd_composite));
 				composite->expr = expr;
 				composite->id = g_hash_table_size (cfg->composite_symbols);
@@ -3403,6 +3427,56 @@ lua_config_init_modules (lua_State *L)
 	if (cfg != NULL) {
 		rspamd_lua_post_load_config (cfg);
 		lua_pushboolean (L, rspamd_init_filters (cfg, FALSE));
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_config_init_subsystem (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *subsystem = luaL_checkstring (L, 2);
+	gchar **parts;
+	guint nparts, i;
+
+	if (cfg != NULL && subsystem != NULL) {
+		parts = g_strsplit_set (subsystem, ";,", -1);
+		nparts = g_strv_length (parts);
+
+		for (i = 0; i < nparts; i ++) {
+			if (strcmp (parts[i], "filters") == 0) {
+				rspamd_lua_post_load_config (cfg);
+				rspamd_init_filters (cfg, FALSE);
+			}
+			else if (strcmp (parts[i], "langdet") == 0) {
+				cfg->lang_det = rspamd_language_detector_init (cfg);
+			}
+			else if (strcmp (parts[i], "stat") == 0) {
+				rspamd_stat_init (cfg, NULL);
+			}
+			else {
+				return luaL_error (L, "invalid param: %s", parts[i]);
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+static gint
+lua_config_get_tld_path (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+
+	if (cfg != NULL) {
+		lua_pushstring (L, cfg->tld_file);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

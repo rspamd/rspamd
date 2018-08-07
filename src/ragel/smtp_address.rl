@@ -1,9 +1,6 @@
 %%{
   machine smtp_address;
 
-  include smtp_ip "smtp_ip.rl";
-  include smtp_whitespace "smtp_whitespace.rl";
-
   # SMTP address spec
   # Obtained from: https://tools.ietf.org/html/rfc5321#section-4.1.2
 
@@ -17,6 +14,7 @@
   address_literal  = "[" ( IPv4_address_literal |
                     IPv6_address_literal |
                     General_address_literal ) >Domain_addr_start %Domain_addr_end "]";
+  non_conformant_address_literal = IPv4_address_literal >Domain_addr_start %Domain_addr_end;
 
 
   sub_domain     = Let_dig Ldh_str?;

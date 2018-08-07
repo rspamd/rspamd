@@ -26,7 +26,7 @@ local util = require "rspamd_util"
 local tcp = require "rspamd_tcp"
 local lua_util = require "lua_util"
 
-local pool = mempool.create()
+local pool
 local settings = {
   interval = 120,
   timeout = 15,
@@ -125,7 +125,6 @@ local function graphite_push(kwargs)
   tcp.request({
     ev_base = kwargs['ev_base'],
     config = rspamd_config,
-    pool = pool,
     host = settings['host'],
     port = settings['port'],
     timeout = settings['timeout'],
@@ -176,6 +175,7 @@ rspamd_config:add_on_load(function (_, ev_base, worker)
   -- Exit unless we're the first 'controller' worker
   if not worker:is_primary_controller() then return end
   -- Persist mempool variable to statefile on shutdown
+  pool = mempool.create()
   rspamd_config:register_finish_script(function ()
     local stamp = pool:get_variable(VAR_NAME, 'double')
     if not stamp then
@@ -191,6 +191,7 @@ rspamd_config:add_on_load(function (_, ev_base, worker)
       f:write(pool:get_variable(VAR_NAME, 'double'))
       f:close()
     end
+    pool:destroy()
   end)
   -- Push metrics to backend
   local function push_metrics(time)

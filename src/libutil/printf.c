@@ -105,77 +105,294 @@ rspamd_humanize_number (gchar *buf, gchar *last, gint64 num, gboolean bytes)
 }
 
 
+static inline unsigned
+rspamd_decimal_digits32 (guint32 val)
+{
+	static const guint32 powers_of_10[] = {
+			0,
+			10,
+			100,
+			1000,
+			10000,
+			100000,
+			1000000,
+			10000000,
+			100000000,
+			1000000000
+	};
+	unsigned tmp;
+
+#if defined(_MSC_VER)
+	unsigned long r = 0;
+	_BitScanReverse (&r, val | 1);
+	tmp = (r + 1) * 1233 >> 12;
+#elif defined(__GNUC__) && (__GNUC__ >= 3)
+	tmp = (32 - __builtin_clz (val | 1U)) * 1233 >> 12;
+
+#else /* Software version */
+	static const unsigned debruijn_tbl[32] = { 0,  9,  1, 10, 13, 21,  2, 29,
+											   11, 14, 16, 18, 22, 25,  3, 30,
+											   8, 12, 20, 28, 15, 17, 24,  7,
+											   19, 27, 23,  6, 26,  5,  4, 31 };
+	guint32 v = val | 1;
+
+	v |= v >> 1;
+	v |= v >> 2;
+	v |= v >> 4;
+	v |= v >> 8;
+	v |= v >> 16;
+	tmp = (1 + debruijn_tbl[(v * 0x07C4ACDDU) >> 27]) * 1233 >> 12;
+#endif
+	return tmp - (val < powers_of_10[tmp]) + 1;
+}
+
+static inline unsigned
+rspamd_decimal_digits64 (guint64 val)
+{
+	static const guint64 powers_of_10[] = {
+			0,
+			10ULL,
+			100ULL,
+			1000ULL,
+			10000ULL,
+			100000ULL,
+			1000000ULL,
+			10000000ULL,
+			100000000ULL,
+			1000000000ULL,
+			10000000000ULL,
+			100000000000ULL,
+			1000000000000ULL,
+			10000000000000ULL,
+			100000000000000ULL,
+			1000000000000000ULL,
+			10000000000000000ULL,
+			100000000000000000ULL,
+			1000000000000000000ULL,
+			10000000000000000000ULL
+	};
+	unsigned tmp;
+
+#if defined(_MSC_VER)
+#if _M_IX86
+	unsigned long r = 0;
+	guint64 m = val | 1;
+	if (_BitScanReverse (&r, m >> 32)) {
+		r += 32;
+	}
+	else {
+		_BitScanReverse (&r, m & 0xFFFFFFFF);
+	}
+	tmp = (r + 1) * 1233 >> 12;
+#else
+	unsigned long r = 0;
+	_BitScanReverse64 (&r, val | 1);
+	tmp = (r + 1) * 1233 >> 12;
+#endif
+#elif defined(__GNUC__) && (__GNUC__ >= 3)
+	tmp = (64 - __builtin_clzll (val | 1ULL)) * 1233 >> 12;
+#else /* Software version */
+	static const unsigned debruijn_tbl[32] = { 0,  9,  1, 10, 13, 21,  2, 29,
+											   11, 14, 16, 18, 22, 25,  3, 30,
+											   8, 12, 20, 28, 15, 17, 24,  7,
+											   19, 27, 23,  6, 26,  5,  4, 31 };
+	guint32 v = val >> 32;
+
+	if (v) {
+		v |= 1;
+		v |= v >> 1;
+		v |= v >> 2;
+		v |= v >> 4;
+		v |= v >> 8;
+		v |= v >> 16;
+		tmp = 32 + debruijn_tbl[(v * 0x07C4ACDDU) >> 27];
+	}
+	else {
+		v = val & 0xFFFFFFFF;
+		v |= 1;
+		v |= v >> 1;
+		v |= v >> 2;
+		v |= v >> 4;
+		v |= v >> 8;
+		v |= v >> 16;
+
+		tmp = debruijn_tbl[(v * 0x07C4ACDDU) >> 27];
+	}
+
+
+	tmp = (tmp + 1) * 1233 >> 12;
+#endif
+
+	return tmp - (val < powers_of_10[tmp]) + 1;
+}
+
+/*
+ * Idea from https://github.com/miloyip/itoa-benchmark:
+ * Uses lookup table (LUT) of digit pairs for division/modulo of 100.
+ *
+ * Mentioned in:
+ * https://www.slideshare.net/andreialexandrescu1/three-optimization-tips-for-c-15708507
+ */
+
+static const char int_lookup_table[200] = {
+		'0','0','0','1','0','2','0','3','0','4',
+		'0','5','0','6','0','7','0','8','0','9',
+		'1','0','1','1','1','2','1','3','1','4',
+		'1','5','1','6','1','7','1','8','1','9',
+		'2','0','2','1','2','2','2','3','2','4',
+		'2','5','2','6','2','7','2','8','2','9',
+		'3','0','3','1','3','2','3','3','3','4',
+		'3','5','3','6','3','7','3','8','3','9',
+		'4','0','4','1','4','2','4','3','4','4',
+		'4','5','4','6','4','7','4','8','4','9',
+		'5','0','5','1','5','2','5','3','5','4',
+		'5','5','5','6','5','7','5','8','5','9',
+		'6','0','6','1','6','2','6','3','6','4',
+		'6','5','6','6','6','7','6','8','6','9',
+		'7','0','7','1','7','2','7','3','7','4',
+		'7','5','7','6','7','7','7','8','7','9',
+		'8','0','8','1','8','2','8','3','8','4',
+		'8','5','8','6','8','7','8','8','8','9',
+		'9','0','9','1','9','2','9','3','9','4',
+		'9','5','9','6','9','7','9','8','9','9'
+};
+
+static inline guint
+rspamd_uint32_print (guint32 in, gchar *out)
+{
+	guint ndigits = rspamd_decimal_digits32 (in);
+	gchar *p;
+
+	p = out + ndigits - 1;
+
+	while (in >= 100) {
+		unsigned idx = (in % 100) * 2;
+
+		/* Do two digits at once */
+		*p-- = int_lookup_table[idx + 1];
+		*p-- = int_lookup_table[idx];
+
+		in /= 100;
+	}
+
+	if (in < 10) {
+		*p = ((char)in) + '0';
+	}
+	else {
+		unsigned idx = in * 2;
+
+		*p-- = int_lookup_table[idx + 1];
+		*p = int_lookup_table[idx];
+	}
+
+	return ndigits;
+}
+
+static inline guint
+rspamd_uint64_print (guint64 in, gchar *out)
+{
+	guint ndigits = rspamd_decimal_digits64 (in);
+	guint32 v32;
+	gchar *p;
+
+	p = out + ndigits - 1;
+
+	while (in >= 100000000) {
+		v32 = (guint32)(in % 100000000);
+		guint32 a, b, a1, a2, b1, b2;
+
+		/* Initial spill */
+		a = v32 / 10000;
+		b = v32 % 10000;
+		a1 = (a / 100) * 2;
+		a2 = (a % 100) * 2;
+		b1 = (b / 100) * 2;
+		b2 = (b % 100) * 2;
+
+		/* Fill 8 digits at once */
+		*p-- = int_lookup_table[b2 + 1];
+		*p-- = int_lookup_table[b2];
+		*p-- = int_lookup_table[b1 + 1];
+		*p-- = int_lookup_table[b1];
+		*p-- = int_lookup_table[a2 + 1];
+		*p-- = int_lookup_table[a2];
+		*p-- = int_lookup_table[a1 + 1];
+		*p-- = int_lookup_table[a1];
+
+		in /= 100000000;
+	}
+
+	/* Remaining 32 bit */
+	v32 = (guint32)in;
+
+	while (v32 >= 100) {
+		unsigned idx = (v32 % 100) << 1;
+
+		/* Do 2 digits at once */
+		*p-- = int_lookup_table[idx + 1];
+		*p-- = int_lookup_table[idx];
+
+		v32 /= 100;
+	}
+
+	if (v32 < 10) {
+		*p = ((char)v32) + '0';
+	}
+	else {
+		unsigned idx = v32 * 2;
+
+		*p-- = int_lookup_table[idx + 1];
+		*p = int_lookup_table[idx];
+	}
+
+	return ndigits;
+}
+
 static gchar *
 rspamd_sprintf_num (gchar *buf, gchar *last, guint64 ui64, gchar zero,
-	guint hexadecimal, guint width)
+					  guint hexadecimal, guint width)
 {
 	gchar *p, temp[sizeof ("18446744073709551615")];
 	size_t len;
-	guint32 ui32;
-
-	p = temp + sizeof(temp);
 
 	if (hexadecimal == 0) {
+		p = temp;
 
-		if (ui64 <= G_MAXUINT32) {
-
-			/*
-			 * To divide 64-bit numbers and to find remainders
-			 * on the x86 platform gcc and icc call the libc functions
-			 * [u]divdi3() and [u]moddi3(), they call another function
-			 * in its turn.  On FreeBSD it is the qdivrem() function,
-			 * its source code is about 170 lines of the code.
-			 * The glibc counterpart is about 150 lines of the code.
-			 *
-			 * For 32-bit numbers and some divisors gcc and icc use
-			 * a inlined multiplication and shifts.  For example,
-			 * guint "i32 / 10" is compiled to
-			 *
-			 *	 (i32 * 0xCCCCCCCD) >> 35
-			 */
-
-			ui32 = (guint32) ui64;
-
-			do {
-				*--p = (gchar) (ui32 % 10 + '0');
-			} while (ui32 /= 10);
-
-		} else {
-			do {
-				*--p = (gchar) (ui64 % 10 + '0');
-			} while (ui64 /= 10);
+		if (ui64 < G_MAXUINT32) {
+			len = rspamd_uint32_print ((guint32)ui64, temp);
 		}
-
-	} else if (hexadecimal == 1) {
-
+		else {
+			len = rspamd_uint64_print (ui64, temp);
+		}
+	}
+	else if (hexadecimal == 1) {
+		p = temp + sizeof(temp);
 		do {
-
-			/* the "(guint32)" cast disables the BCC's warning */
 			*--p = _hex[(guint32) (ui64 & 0xf)];
-
 		} while (ui64 >>= 4);
 
-	} else { /* hexadecimal == 2 */
-
+		len = (temp + sizeof (temp)) - p;
+	}
+	else { /* hexadecimal == 2 */
+		p = temp + sizeof(temp);
 		do {
-
-			/* the "(guint32)" cast disables the BCC's warning */
 			*--p = _HEX[(guint32) (ui64 & 0xf)];
-
 		} while (ui64 >>= 4);
+
+		len = (temp + sizeof (temp)) - p;
 	}
 
 	/* zero or space padding */
 
-	len = (temp + sizeof (temp)) - p;
+	if (len < width) {
+		width -= len;
 
-	while (len++ < width && buf < last) {
-		*buf++ = zero;
+		while (width-- > 0 && buf < last) {
+			*buf++ = zero;
+		}
 	}
 
 	/* number safe copy */
-
-	len = (temp + sizeof (temp)) - p;
 
 	if (buf + len > last) {
 		len = last - buf;
@@ -380,7 +597,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 	glong written = 0, wr, slen;
 	gint64 i64;
 	guint64 ui64;
-	guint width, sign, hex, humanize, bytes, frac_width, b32;
+	guint width, sign, hex, humanize, bytes, frac_width, b32, b64;
 	rspamd_fstring_t *v;
 	rspamd_ftok_t *tok;
 	GString *gs;
@@ -415,6 +632,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 			sign = 1;
 			hex = 0;
 			b32 = 0;
+			b64 = 0;
 			bytes = 0;
 			humanize = 0;
 			frac_width = 0;
@@ -450,6 +668,11 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 					continue;
 				case 'b':
 					b32 = 1;
+					sign = 0;
+					fmt++;
+					continue;
+				case 'B':
+					b64 = 1;
 					sign = 0;
 					fmt++;
 					continue;
@@ -627,6 +850,30 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 					fmt++;
 					buf_start = fmt;
 
+				}
+				else if (G_UNLIKELY (b64)) {
+					gchar *b64buf;
+					gsize olen = 0;
+
+					if (G_UNLIKELY (slen == -1)) {
+						if (G_LIKELY (width != 0)) {
+							slen = width;
+						}
+						else {
+							/* NULL terminated string */
+							slen = strlen (p);
+						}
+					}
+
+					b64buf = rspamd_encode_base64 (p, slen, 0, &olen);
+
+					if (b64buf) {
+						RSPAMD_PRINTF_APPEND (b64buf, olen);
+						g_free (b64buf);
+					}
+					else {
+						RSPAMD_PRINTF_APPEND ("(NULL)", sizeof ("(NULL)") - 1);
+					}
 				}
 				else {
 					if (slen == -1) {

@@ -16,7 +16,7 @@ License:        ASL 2.0
 URL:            https://rspamd.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 BuildRequires:  glib2-devel,libevent-devel,openssl-devel,pcre-devel
-BuildRequires:  cmake,gmime-devel,file-devel,ragel
+BuildRequires:  cmake,gmime-devel,file-devel,ragel,libunwind-devel
 %if 0%{?el6}
 BuildRequires:	perl
 %else
@@ -81,11 +81,10 @@ lua.
         -DCMAKE_SKIP_INSTALL_RPATH=ON \
 %endif
 %if 0%{?fedora_version} >= 22 || 0%{?suse_version} >= 1320
-		-DENABLE_LUAJIT=ON \
+        -DENABLE_LUAJIT=ON \
 %else
-		-DENABLE_LUAJIT=OFF \
+        -DENABLE_LUAJIT=OFF \
 %endif
-		-DENABLE_HIREDIS=ON \
         -DLOGDIR=%{_localstatedir}/log/rspamd \
         -DEXAMPLESDIR=%{_datadir}/examples/rspamd \
         -DPLUGINSDIR=%{_datadir}/rspamd \
@@ -94,7 +93,8 @@ lua.
         -DNO_SHARED=ON \
         -DDEBIAN_BUILD=1 \
         -DRSPAMD_GROUP=%{rspamd_group} \
-        -DRSPAMD_USER=%{rspamd_user}
+        -DRSPAMD_USER=%{rspamd_user} \
+        -DENABLE_LIBUNWIND=ON
 
 %{__make} %{?jobs:-j%jobs}
 

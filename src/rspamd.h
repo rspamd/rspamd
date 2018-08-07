@@ -86,6 +86,7 @@ struct rspamd_worker {
 	                                     main process. [0] - main, [1] - worker			*/
 	struct event srv_ev;            /**< used by main for read workers' requests		*/
 	gpointer control_data;          /**< used by control protocol to handle commands	*/
+	gpointer tmp_data;              /**< used to avoid race condition to deal with control messages */
 	GPtrArray *finish_actions;      /**< called when worker is terminated				*/
 };
 
@@ -190,6 +191,7 @@ typedef struct module_s {
 	guint module_version;
 	guint64 rspamd_version;
 	const gchar *rspamd_features;
+	guint ctx_offset;
 } module_t;
 
 enum rspamd_worker_socket_type {
@@ -322,6 +324,7 @@ struct rspamd_external_libs_ctx {
 	struct rspamd_cryptobox_library_ctx *crypto_ctx;
 	struct ottery_config *ottery_cfg;
 	SSL_CTX *ssl_ctx;
+	SSL_CTX *ssl_ctx_noverify;
 	struct zstd_dictionary *in_dict;
 	struct zstd_dictionary *out_dict;
 	void *out_zstream;

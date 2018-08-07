@@ -1,8 +1,6 @@
 %%{
   machine smtp_date;
 
-  include smtp_whitespace "smtp_whitespace.rl";
-
   # SMTP date spec
   # Obtained from: http://tools.ietf.org/html/rfc5322#section_3.3
 

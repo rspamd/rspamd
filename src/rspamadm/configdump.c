@@ -308,7 +308,8 @@ rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd
 					argc,
 					argv,
 					cfg->rcl_obj,
-					"plugins_stats");
+					"plugins_stats",
+					FALSE);
 
 			lua_close (L);
 

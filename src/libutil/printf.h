@@ -42,6 +42,7 @@
  *	%s						    null-terminated string
  *	%xs                         hex encoded string
  *	%bs                         base32 encoded string
+ *	%Bs							base64 encoded string
  *	%*s					        length and string
  *	%Z						    '\0'
  *	%N						    '\n'

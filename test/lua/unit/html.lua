@@ -21,7 +21,7 @@ context("HTML processing", function()
     <b>stuff</p>?
   </body>
 </html>
-      ]], "Hello, world! test data\r\nstuff?"},
+      ]], "Hello, world! test\r\ndata\r\nstuff\r\n?"},
       {[[
 <?xml version="1.0" encoding="iso-8859-1"?>
  <!DOCTYPE html
@@ -100,7 +100,7 @@ context("HTML processing", function()
 
   </body>
 </html>
-      ]], 'content heada headb\r\ndata1 data2\r\n'},
+      ]], 'content\r\nheada headb\r\ndata1 data2\r\n'},
       {[[
 <html lang="en">
   <head>

@@ -69,6 +69,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 
 	new_task = g_malloc0 (sizeof (struct rspamd_task));
 	new_task->worker = worker;
+	new_task->lang_det = lang_det;
 
 	if (cfg) {
 		new_task->cfg = cfg;
@@ -78,7 +79,14 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 			new_task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
 		}
 
-		new_task->re_rt = rspamd_re_cache_runtime_new (cfg->re_cache);
+
+		if (cfg->re_cache) {
+			new_task->re_rt = rspamd_re_cache_runtime_new (cfg->re_cache);
+		}
+
+		if (new_task->lang_det == NULL && cfg->lang_det != NULL) {
+			new_task->lang_det = cfg->lang_det;
+		}
 	}
 
 	gettimeofday (&new_task->tv, NULL);
@@ -86,7 +94,6 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 	new_task->time_virtual = rspamd_get_virtual_ticks ();
 	new_task->time_real_finish = NAN;
 	new_task->time_virtual_finish = NAN;
-	new_task->lang_det = lang_det;
 
 	if (pool == NULL) {
 		new_task->task_pool =
@@ -263,7 +270,10 @@ rspamd_task_free (struct rspamd_task *task)
 		}
 
 		ucl_object_unref (task->messages);
-		rspamd_re_cache_runtime_destroy (task->re_rt);
+
+		if (task->re_rt) {
+			rspamd_re_cache_runtime_destroy (task->re_rt);
+		}
 
 		if (task->http_conn != NULL) {
 			rspamd_http_connection_reset (task->http_conn);
@@ -1035,9 +1045,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 	static gchar scorebuf[32];
 	rspamd_ftok_t res = {.begin = NULL, .len = 0};
 	struct rspamd_metric_result *mres;
-	GHashTableIter it;
 	gboolean first = TRUE;
-	gpointer k, v;
 	rspamd_fstring_t *symbuf;
 	struct rspamd_symbol_result *sym;
 	GPtrArray *sorted_symbols;
@@ -1073,12 +1081,13 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 			break;
 		case RSPAMD_LOG_SYMBOLS:
 			symbuf = rspamd_fstring_sized_new (128);
-			g_hash_table_iter_init (&it, mres->symbols);
-			sorted_symbols = g_ptr_array_sized_new (g_hash_table_size (mres->symbols));
+			sorted_symbols = g_ptr_array_sized_new (kh_size (mres->symbols));
 
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				g_ptr_array_add (sorted_symbols, v);
-			}
+			kh_foreach_value_ptr (mres->symbols, sym, {
+				if (!(sym->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
+					g_ptr_array_add (sorted_symbols, (gpointer)sym);
+				}
+			});
 
 			g_ptr_array_sort (sorted_symbols, rspamd_task_compare_log_sym);
 

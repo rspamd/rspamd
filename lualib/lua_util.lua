@@ -25,15 +25,33 @@ local rspamd_util = require "rspamd_util"
 local fun = require "fun"
 
 local split_grammar = {}
-local function rspamd_str_split(s, sep)
-  local gr = split_grammar[sep]
+local spaces_split_grammar
+local space = lpeg.S' \t\n\v\f\r'
+local nospace = 1 - space
+local ptrim = space^0 * lpeg.C((space^0 * nospace^1)^0)
+local match = lpeg.match
 
-  if not gr then
-    local _sep = lpeg.P(sep)
-    local elem = lpeg.C((1 - _sep)^0)
-    local p = lpeg.Ct(elem * (_sep * elem)^0)
-    gr = p
-    split_grammar[sep] = gr
+local function rspamd_str_split(s, sep)
+  local gr
+  if not sep then
+    if not spaces_split_grammar then
+      local _sep = space
+      local elem = lpeg.C((1 - _sep)^0)
+      local p = lpeg.Ct(elem * (_sep * elem)^0)
+      spaces_split_grammar = p
+    end
+
+    gr = spaces_split_grammar
+  else
+    gr = split_grammar[sep]
+
+    if not gr then
+      local _sep = lpeg.P(sep)
+      local elem = lpeg.C((1 - _sep)^0)
+      local p = lpeg.Ct(elem * (_sep * elem)^0)
+      gr = p
+      split_grammar[sep] = gr
+    end
   end
 
   return gr:match(s)
@@ -50,10 +68,6 @@ end
 exports.rspamd_str_split = rspamd_str_split
 exports.str_split = rspamd_str_split
 
-local space = lpeg.S' \t\n\v\f\r'
-local nospace = 1 - space
-local ptrim = space^0 * lpeg.C((space^0 * nospace^1)^0)
-local match = lpeg.match
 exports.rspamd_str_trim = function(s)
   return match(ptrim, s)
 end
@@ -476,36 +490,71 @@ end
 exports.override_defaults = override_defaults
 
 --[[[
--- @function lua_util.extract_specific_urls(task, limit, [need_emails[, filter[, prefix])
+-- @function lua_util.extract_specific_urls(params)
+-- params: {
+- - task
+- - limit <int> (default = 9999)
+- - esld_limit <int> (default = 9999) n domains per eSLD (effective second level domain)
+                                      works only if number of unique eSLD less than `limit`
+- - need_emails <bool> (default = false)
+- - filter <callback> (default = nil)
+- - prefix <string> cache prefix (default = nil)
+-- }
 -- Apply heuristic in extracting of urls from task, this function
 -- tries its best to extract specific number of urls from a task based on
 -- their characteristics
 --]]
-exports.extract_specific_urls = function(task, lim, need_emails, filter, prefix)
-  local cache_key
+-- exports.extract_specific_urls = function(params_or_task, limit, need_emails, filter, prefix)
+exports.extract_specific_urls = function(params_or_task, lim, need_emails, filter, prefix)
+  local default_params = {
+    limit = 9999,
+    esld_limit = 9999,
+    need_emails = false,
+    filter = nil,
+    prefix = nil
+  }
 
-  if prefix then
-    cache_key = prefix
+  local params
+  if type(params_or_task) == 'table' and type(lim) == 'nil' then
+    params = params_or_task
   else
-    cache_key = string.format('sp_urls_%d%s', lim, need_emails)
+    -- Deprecated call
+    params = {
+      task = params_or_task,
+      limit = lim,
+      need_emails = need_emails,
+      filter = filter,
+      prefix = prefix
+    }
+  end
+  for k,v in pairs(default_params) do
+    if not params[k] then params[k] = v end
   end
 
 
-  local cached = task:cache_get(cache_key)
+  local cache_key
+
+  if params.prefix then
+    cache_key = params.prefix
+  else
+    cache_key = string.format('sp_urls_%d%s', params.limit, params.need_emails)
+  end
+
+
+  local cached = params.task:cache_get(cache_key)
 
   if cached then
     return cached
   end
 
-  local urls = task:get_urls(need_emails)
+  local urls = params.task:get_urls(params.need_emails)
 
   if not urls then return {} end
 
-  if filter then urls = fun.totable(fun.filter(filter, urls)) end
+  if params.filter then urls = fun.totable(fun.filter(params.filter, urls)) end
 
-  if #urls <= lim then
-    task:cache_set(cache_key, urls)
-
+  if #urls <= params.limit and #urls <= params.esld_limit then
+    params.task:cache_set(cache_key, urls)
     return urls
   end
 
@@ -524,7 +573,9 @@ exports.extract_specific_urls = function(task, lim, need_emails, filter, prefix)
         eslds[esld] = {u}
         neslds = neslds + 1
       else
-        table.insert(eslds[esld], u)
+        if #eslds[esld] < params.esld_limit then
+          table.insert(eslds[esld], u)
+        end
       end
 
       local parts = rspamd_str_split(esld, '.')
@@ -544,7 +595,7 @@ exports.extract_specific_urls = function(task, lim, need_emails, filter, prefix)
         else
           if u:get_user() then
             table.insert(res, u)
-          elseif u:is_subject() then
+          elseif u:is_subject() or u:is_phished() then
             table.insert(res, u)
           end
         end
@@ -552,31 +603,40 @@ exports.extract_specific_urls = function(task, lim, need_emails, filter, prefix)
     end
   end
 
-  lim = lim - #res
-  if lim <= 0 then lim = 1 end
+  local limit = params.limit
+  limit = limit - #res
+  if limit <= 0 then limit = 1 end
 
-  if neslds <= lim then
+  if neslds <= limit then
     -- We can get urls based on their eslds
-    while lim > 0 do
-      for _,lurls in pairs(eslds) do
-        table.insert(res, table.remove(lurls))
-        lim = lim - 1
-      end
-    end
+    repeat
+      local item_found = false
 
-    task:cache_set(cache_key, urls)
+      for _,lurls in pairs(eslds) do
+        if #lurls > 0 then
+          table.insert(res, table.remove(lurls))
+          limit = limit - 1
+          item_found = true
+        end
+      end
+
+    until limit <= 0 or not item_found
+
+    params.task:cache_set(cache_key, urls)
     return res
   end
 
-  if ntlds <= lim then
-    while lim > 0 do
+  if ntlds <= limit then
+    while limit > 0 do
       for _,lurls in pairs(tlds) do
-        table.insert(res, table.remove(lurls))
-        lim = lim - 1
+        if #lurls > 0 then
+          table.insert(res, table.remove(lurls))
+          limit = limit - 1
+        end
       end
     end
 
-    task:cache_set(cache_key, urls)
+    params.task:cache_set(cache_key, urls)
     return res
   end
 
@@ -593,14 +653,14 @@ exports.extract_specific_urls = function(task, lim, need_emails, filter, prefix)
     local tld2 = tlds[tlds_keys[ntlds - i]]
     table.insert(res, table.remove(tld1))
     table.insert(res, table.remove(tld2))
-    lim = lim - 2
+    limit = limit - 2
 
-    if lim <= 0 then
+    if limit <= 0 then
       break
     end
   end
 
-  task:cache_set(cache_key, urls)
+  params.task:cache_set(cache_key, urls)
   return res
 end
 

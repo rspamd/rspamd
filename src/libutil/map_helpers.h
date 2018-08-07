@@ -53,7 +53,7 @@ gchar * rspamd_radix_read (
 		struct map_cb_data *data,
 		gboolean final);
 void rspamd_radix_fin (struct map_cb_data *data);
-
+void rspamd_radix_dtor (struct map_cb_data *data);
 
 /**
  * Kv list is an ordinal list of keys and values separated by whitespace
@@ -64,6 +64,7 @@ gchar * rspamd_kv_list_read (
 		struct map_cb_data *data,
 		gboolean final);
 void rspamd_kv_list_fin (struct map_cb_data *data);
+void rspamd_kv_list_dtor (struct map_cb_data *data);
 
 /**
  * Regexp list is a list of regular expressions
@@ -85,6 +86,7 @@ gchar * rspamd_glob_list_read_single (
 		struct map_cb_data *data,
 		gboolean final);
 void rspamd_regexp_list_fin (struct map_cb_data *data);
+void rspamd_regexp_list_dtor (struct map_cb_data *data);
 
 /**
  * FSM for lists parsing (support comments, blank lines and partial replies)

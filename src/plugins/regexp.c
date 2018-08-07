@@ -36,11 +36,8 @@ struct regexp_module_item {
 
 struct regexp_ctx {
 	struct module_ctx ctx;
-	rspamd_mempool_t *regexp_pool;
 	gsize max_size;
 };
-
-static struct regexp_ctx *regexp_module_ctx = NULL;
 
 static void process_regexp_item (struct rspamd_task *task, void *user_data);
 
@@ -51,13 +48,22 @@ gint regexp_module_config (struct rspamd_config *cfg);
 gint regexp_module_reconfig (struct rspamd_config *cfg);
 
 module_t regexp_module = {
-	"regexp",
-	regexp_module_init,
-	regexp_module_config,
-	regexp_module_reconfig,
-	NULL,
-	RSPAMD_MODULE_VER
+		"regexp",
+		regexp_module_init,
+		regexp_module_config,
+		regexp_module_reconfig,
+		NULL,
+		RSPAMD_MODULE_VER,
+		(guint)-1,
 };
+
+
+static inline struct regexp_ctx *
+regexp_get_context (struct rspamd_config *cfg)
+{
+	return (struct regexp_ctx *)g_ptr_array_index (cfg->c_modules,
+			regexp_module.ctx_offset);
+}
 
 /* Process regexp expression */
 static gboolean
@@ -91,10 +97,10 @@ read_regexp_expression (rspamd_mempool_t * pool,
 gint
 regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
-	if (regexp_module_ctx == NULL) {
-		regexp_module_ctx = g_malloc (sizeof (struct regexp_ctx));
-		regexp_module_ctx->regexp_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
-	}
+	struct regexp_ctx *regexp_module_ctx;
+
+	regexp_module_ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
+			sizeof (*regexp_module_ctx));
 
 	*ctx = (struct module_ctx *)regexp_module_ctx;
 
@@ -124,6 +130,7 @@ regexp_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 gint
 regexp_module_config (struct rspamd_config *cfg)
 {
+	struct regexp_ctx *regexp_module_ctx = regexp_get_context (cfg);
 	struct regexp_module_item *cur_item = NULL;
 	const ucl_object_t *sec, *value, *elt;
 	ucl_object_iter_t it = NULL;
@@ -152,12 +159,12 @@ regexp_module_config (struct rspamd_config *cfg)
 			msg_warn_config ("regexp module is now single threaded, max_threads is ignored");
 		}
 		else if (value->type == UCL_STRING) {
-			cur_item = rspamd_mempool_alloc0 (regexp_module_ctx->regexp_pool,
+			cur_item = rspamd_mempool_alloc0 (cfg->cfg_pool,
 					sizeof (struct regexp_module_item));
 			cur_item->symbol = ucl_object_key (value);
 			cur_item->magic = rspamd_regexp_cb_magic;
 
-			if (!read_regexp_expression (regexp_module_ctx->regexp_pool,
+			if (!read_regexp_expression (cfg->cfg_pool,
 				cur_item, ucl_object_key (value),
 				ucl_obj_tostring (value), cfg)) {
 				res = FALSE;
@@ -174,7 +181,7 @@ regexp_module_config (struct rspamd_config *cfg)
 		}
 		else if (value->type == UCL_USERDATA) {
 			/* Just a lua function */
-			cur_item = rspamd_mempool_alloc0 (regexp_module_ctx->regexp_pool,
+			cur_item = rspamd_mempool_alloc0 (cfg->cfg_pool,
 					sizeof (struct regexp_module_item));
 			cur_item->magic = rspamd_regexp_cb_magic;
 			cur_item->symbol = ucl_object_key (value);
@@ -203,12 +210,12 @@ regexp_module_config (struct rspamd_config *cfg)
 				elt = ucl_object_lookup_any (value, "regexp", "re", NULL);
 
 				if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
-					cur_item = rspamd_mempool_alloc0 (regexp_module_ctx->regexp_pool,
+					cur_item = rspamd_mempool_alloc0 (cfg->cfg_pool,
 							sizeof (struct regexp_module_item));
 					cur_item->symbol = ucl_object_key (value);
 					cur_item->magic = rspamd_regexp_cb_magic;
 
-					if (!read_regexp_expression (regexp_module_ctx->regexp_pool,
+					if (!read_regexp_expression (cfg->cfg_pool,
 							cur_item, ucl_object_key (value),
 							ucl_obj_tostring (elt), cfg)) {
 						res = FALSE;
@@ -228,7 +235,7 @@ regexp_module_config (struct rspamd_config *cfg)
 				is_lua = TRUE;
 				nlua ++;
 				cur_item = rspamd_mempool_alloc0 (
-						regexp_module_ctx->regexp_pool,
+						cfg->cfg_pool,
 						sizeof (struct regexp_module_item));
 				cur_item->magic = rspamd_regexp_cb_magic;
 				cur_item->symbol = ucl_object_key (value);
@@ -338,14 +345,6 @@ regexp_module_config (struct rspamd_config *cfg)
 gint
 regexp_module_reconfig (struct rspamd_config *cfg)
 {
-	struct module_ctx saved_ctx;
-
-	saved_ctx = regexp_module_ctx->ctx;
-	rspamd_mempool_delete (regexp_module_ctx->regexp_pool);
-	memset (regexp_module_ctx, 0, sizeof (*regexp_module_ctx));
-	regexp_module_ctx->ctx = saved_ctx;
-	regexp_module_ctx->regexp_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
-
 	return regexp_module_config (cfg);
 }
 

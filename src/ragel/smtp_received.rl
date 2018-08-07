@@ -1,10 +1,6 @@
 %%{
   machine smtp_received;
 
-  include smtp_whitespace "smtp_whitespace.rl";
-  include smtp_ip "smtp_ip.rl";
-  include smtp_date "smtp_date.rl";
-  include smtp_address"smtp_address.rl";
 
   # http://tools.ietf.org/html/rfc5321#section-4.4
 
@@ -21,7 +17,8 @@
                    Attdl_Protocol;
 
   TCP_info       = address_literal >Real_IP_Start %Real_IP_End |
-                  ( Domain >Real_Domain_Start %Real_Domain_End FWS address_literal >Real_IP_Start %Real_IP_End );
+                  ( Domain >Real_Domain_Start %Real_Domain_End FWS address_literal >Real_IP_Start %Real_IP_End ) |
+                  ( non_conformant_address_literal >Real_IP_Start %Real_IP_End );
   Extended_Domain  = Domain >Real_Domain_Start %Real_Domain_End | # Used to be a real domain
                   ( Domain >Reported_Domain_Start %Reported_Domain_End FWS "(" TCP_info ")" ) | # Here domain is something specified by remote side
                   ( address_literal >Real_Domain_Start %Real_Domain_End FWS "(" TCP_info ")" ) |

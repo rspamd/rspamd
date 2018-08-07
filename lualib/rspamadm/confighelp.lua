@@ -13,6 +13,8 @@ local parser = argparse()
     :name "rspamadm confighelp"
     :description "Shows help for the specified configuration options"
     :help_description_margin(32)
+parser:argument "path":args "*"
+      :description('Optional config paths')
 parser:flag "--no-color"
     :description "Disable coloured output"
 parser:flag "--short"

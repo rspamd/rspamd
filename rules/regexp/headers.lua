@@ -62,6 +62,13 @@ reconf['R_NO_SPACE_IN_FROM'] = {
   group = 'header'
 }
 
+reconf['TO_WRAPPED_IN_SPACES'] = {
+  re = [[To=/<\s[-.\w]+\@[-.\w]+\s>/X]],
+  score = 2.0,
+  description = 'To address is wrapped in spaces inside angle brackets (e.g. display-name < local-part@domain >)',
+  group = 'header'
+}
+
 -- Detects missing Subject header
 reconf['MISSING_SUBJECT'] = {
   re = '!raw_header_exists(Subject)',
@@ -269,7 +276,7 @@ local subj_encoded_qp = 'Subject=/\\=\\?\\S+\\?Q\\?/iX'
 reconf['SUBJ_EXCESS_QP'] = {
   re = string.format('%s & !%s', subj_encoded_qp, subj_needs_mime),
   score = 1.2,
-  description = 'Subect is unnecessarily encoded in quoted-printable',
+  description = 'Subject is unnecessarily encoded in quoted-printable',
   group = 'excessqp'
 }
 

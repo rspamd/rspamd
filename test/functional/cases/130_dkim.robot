@@ -22,3 +22,11 @@ DKIM Self Verify
   Run Keyword If  ${RAN_SIGNTEST} == 0  Fail  "Sign test was not run"
   ${result} =  Scan Message With Rspamc  ${SIGNED_MESSAGE}
   Check Rspamc  ${result}  R_DKIM_ALLOW
+
+DKIM Verify ED25519 PASS
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/ed25519.eml
+  Check Rspamc  ${result}  R_DKIM_ALLOW
+
+DKIM Verify ED25519 REJECT
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/ed25519-broken.eml
+  Check Rspamc  ${result}  R_DKIM_REJECT

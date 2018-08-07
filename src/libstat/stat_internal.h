@@ -51,15 +51,6 @@ struct rspamd_statfile {
 	gpointer bkcf;
 };
 
-typedef struct token_node_s {
-	guint64 data;
-	guint window_idx;
-	guint flags;
-	rspamd_stat_token_t *t1;
-	rspamd_stat_token_t *t2;
-	gdouble values[];
-} rspamd_token_t;
-
 struct rspamd_stat_async_elt;
 
 typedef void (*rspamd_stat_async_handler)(struct rspamd_stat_async_elt *elt,

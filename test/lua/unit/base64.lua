@@ -114,9 +114,12 @@ vehemence of any carnal pleasure.]]
       assert_equal(cmp, 0, "fuzz test failed for length: " .. tostring(l))
     end
   end)
+
+  local speed_iters = 10000
+
   test("Base64 test reference vectors 1K", function()
     local t1 = ffi.C.rspamd_get_ticks()
-    local res = ffi.C.base64_test(true, 1000000, 1024)
+    local res = ffi.C.base64_test(true, speed_iters, 1024)
     local t2 = ffi.C.rspamd_get_ticks()
 
     print("Reference base64 (1K): " .. tostring(t2 - t1) .. " sec")
@@ -124,7 +127,7 @@ vehemence of any carnal pleasure.]]
   end)
   test("Base64 test optimized vectors 1K", function()
     local t1 = ffi.C.rspamd_get_ticks()
-    local res = ffi.C.base64_test(false, 1000000, 1024)
+    local res = ffi.C.base64_test(false, speed_iters, 1024)
     local t2 = ffi.C.rspamd_get_ticks()
 
     print("Optimized base64 (1K): " .. tostring(t2 - t1) .. " sec")
@@ -132,7 +135,7 @@ vehemence of any carnal pleasure.]]
   end)
     test("Base64 test reference vectors 512", function()
     local t1 = ffi.C.rspamd_get_ticks()
-    local res = ffi.C.base64_test(true, 1000000, 512)
+    local res = ffi.C.base64_test(true, speed_iters, 512)
     local t2 = ffi.C.rspamd_get_ticks()
 
     print("Reference base64 (512): " .. tostring(t2 - t1) .. " sec")
@@ -140,7 +143,7 @@ vehemence of any carnal pleasure.]]
   end)
   test("Base64 test optimized vectors 512", function()
     local t1 = ffi.C.rspamd_get_ticks()
-    local res = ffi.C.base64_test(false, 1000000, 512)
+    local res = ffi.C.base64_test(false, speed_iters, 512)
     local t2 = ffi.C.rspamd_get_ticks()
 
     print("Optimized base64 (512): " .. tostring(t2 - t1) .. " sec")
@@ -148,7 +151,7 @@ vehemence of any carnal pleasure.]]
   end)
     test("Base64 test reference vectors 10K", function()
     local t1 = ffi.C.rspamd_get_ticks()
-    local res = ffi.C.base64_test(true, 100000, 10240)
+    local res = ffi.C.base64_test(true, speed_iters / 100, 10240)
     local t2 = ffi.C.rspamd_get_ticks()
 
     print("Reference base64 (10K): " .. tostring(t2 - t1) .. " sec")
@@ -156,7 +159,7 @@ vehemence of any carnal pleasure.]]
   end)
   test("Base64 test optimized vectors 10K", function()
     local t1 = ffi.C.rspamd_get_ticks()
-    local res = ffi.C.base64_test(false, 100000, 10240)
+    local res = ffi.C.base64_test(false, speed_iters / 100, 10240)
     local t2 = ffi.C.rspamd_get_ticks()
 
     print("Optimized base64 (10K): " .. tostring(t2 - t1) .. " sec")
