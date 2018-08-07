@@ -982,7 +982,10 @@ void rdns_resolver_set_fake_reply (struct rdns_resolver *resolver,
 	if (fake_rep) {
 		/* Append reply to the existing list */
 		fake_rep->rcode = rcode;
-		DL_APPEND (fake_rep->result, reply);
+
+		if (reply) {
+			DL_APPEND (fake_rep->result, reply);
+		}
 	}
 	else {
 		fake_rep = calloc (1, sizeof (*fake_rep) + len);
@@ -992,7 +995,11 @@ void rdns_resolver_set_fake_reply (struct rdns_resolver *resolver,
 		}
 
 		memcpy (&fake_rep->key, srch, sizeof (*srch) + len);
-		DL_APPEND (fake_rep->result, reply);
+
+		if (reply) {
+			DL_APPEND (fake_rep->result, reply);
+		}
+
 		HASH_ADD (hh, resolver->fake_elts, key, sizeof (*srch) + len, fake_rep);
 	}
 }
