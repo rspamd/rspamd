@@ -553,6 +553,35 @@ lua_http_request (lua_State *L)
 			if (t) {
 				body = rspamd_fstring_new_init (t->start, t->len);
 			}
+			else {
+				return luaL_error (L, "invalid body argument");
+			}
+		}
+		else if (lua_type (L, -1) == LUA_TTABLE) {
+			body = rspamd_fstring_new ();
+
+			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+				if (lua_type (L, -1) == LUA_TSTRING) {
+					lua_body = lua_tolstring (L, -1, &bodylen);
+					body = rspamd_fstring_append (body, lua_body, bodylen);
+				}
+				else if (lua_type (L, -1) == LUA_TUSERDATA) {
+					t = lua_check_text (L, -1);
+
+					if (t) {
+						body = rspamd_fstring_append (body, t->start, t->len);
+					}
+					else {
+						return luaL_error (L, "invalid body argument");
+					}
+				}
+				else {
+					return luaL_error (L, "invalid body argument");
+				}
+			}
+		}
+		else {
+			return luaL_error (L, "invalid body argument");
 		}
 		lua_pop (L, 1);
 
