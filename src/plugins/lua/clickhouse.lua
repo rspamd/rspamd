@@ -488,6 +488,7 @@ local function clickhouse_collect(task)
   })
 
   local action = task:get_metric_action('default')
+  local digest = task:get_digest()
 
   table.insert(main_rows, {
     today(timestamp),
@@ -552,7 +553,7 @@ local function clickhouse_collect(task)
   if #attachments_fnames > 0 then
     table.insert(attachment_rows, {
       today(timestamp),
-      task:get_digest(),
+      digest,
       attachments_fnames,
       attachments_ctypes,
       attachments_lengths,
@@ -577,7 +578,7 @@ local function clickhouse_collect(task)
   if #urls_tlds > 0 then
     table.insert(urls_rows, {
       today(timestamp),
-      task:get_digest(),
+      digest,
       urls_tlds,
       urls_urls
     })
@@ -595,7 +596,7 @@ local function clickhouse_collect(task)
   if #emails > 0 then
     table.insert(emails_rows, {
       today(timestamp),
-      task:get_digest(),
+      digest,
       emails,
     })
   end
@@ -618,7 +619,7 @@ local function clickhouse_collect(task)
     end
     table.insert(asn_rows, {
       today(timestamp),
-      task:get_digest(),
+      digest,
       asn,
       country,
       ipnet
@@ -639,12 +640,13 @@ local function clickhouse_collect(task)
       if s.options then
         table.insert(options_tab, table.concat(s.options, ','))
       else
-        table.insert(options_tab, "''");
+        table.insert(options_tab, '');
       end
     end
 
     table.insert(symbols_rows, {
       today(timestamp),
+      digest,
       syms_tab,
       scores_tab,
       options_tab

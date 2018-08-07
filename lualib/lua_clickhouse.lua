@@ -27,6 +27,15 @@ local function escape_spaces(query)
   return query:gsub('%s', '%%20')
 end
 
+local function ch_number(a)
+  if (a+2^52)-2^52 == a then
+    -- Integer
+    return tostring(math.floor(a))
+  end
+
+  return tostring(a)
+end
+
 local function clickhouse_quote(str)
   if str then
     return str:gsub('[\'\\]', '\\%1'):lower()
@@ -40,8 +49,8 @@ local function array_to_string(ar)
   for i,elt in ipairs(ar) do
     if type(elt) == 'string' then
       ar[i] = '\'' .. clickhouse_quote(elt) .. '\''
-    else
-      ar[i] = tostring(elt)
+    elseif type(elt) == 'number' then
+      ar[i] = ch_number(elt)
     end
   end
 
@@ -54,8 +63,8 @@ local function row_to_tsv(row)
   for i,elt in ipairs(row) do
     if type(elt) == 'table' then
       row[i] = '[' .. array_to_string(elt) .. ']'
-    else
-      row[i] = tostring(elt) -- Assume there are no tabs there
+    elseif type(elt) == 'number' then
+      row[i] = ch_number(elt)
     end
   end
 
