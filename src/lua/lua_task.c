@@ -1244,6 +1244,16 @@ lua_task_unmap_dtor (gpointer p)
 	}
 }
 
+static void
+lua_task_free_dtor (gpointer p)
+{
+	struct rspamd_task *task = (struct rspamd_task *)p;
+
+	if (task->msg.begin) {
+		g_free ((gpointer)task->msg.begin);
+	}
+}
+
 static gint
 lua_task_load_from_file (lua_State * L)
 {
@@ -1306,10 +1316,11 @@ static gint
 lua_task_load_from_string (lua_State * L)
 {
 	struct rspamd_task *task = NULL, **ptask;
-	const gchar *str_message = luaL_checkstring (L, 1), *err = NULL;
-	gsize message_len = lua_strlen (L, 1);
+	const gchar *str_message;
+	gsize message_len;
 	struct rspamd_config *cfg = NULL;
-	gboolean res = FALSE;
+
+	str_message = luaL_checklstring (L, 1, &message_len);
 
 	if (str_message) {
 
@@ -1323,31 +1334,19 @@ lua_task_load_from_string (lua_State * L)
 		}
 
 		task = rspamd_task_new (NULL, cfg, NULL, NULL);
-		task->msg.begin = str_message;
+		task->msg.begin = g_strdup (str_message);
 		task->msg.len   = message_len;
-		rspamd_mempool_add_destructor (task->task_pool,
-									   lua_task_unmap_dtor, task);
-		res = TRUE;
+		rspamd_mempool_add_destructor (task->task_pool, lua_task_free_dtor, task);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushboolean (L, res);
+	lua_pushboolean (L, true);
 
-	if (res) {
-		ptask = lua_newuserdata (L, sizeof (*ptask));
-		*ptask = task;
-		rspamd_lua_setclass (L, "rspamd{task}", -1);
-	}
-	else {
-		if (err) {
-			lua_pushstring (L, err);
-		}
-		else {
-			lua_pushnil (L);
-		}
-	}
+	ptask = lua_newuserdata (L, sizeof (*ptask));
+	*ptask = task;
+	rspamd_lua_setclass (L, "rspamd{task}", -1);
 
 	return 2;
 }
