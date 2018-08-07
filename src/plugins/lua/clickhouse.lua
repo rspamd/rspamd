@@ -181,7 +181,7 @@ local function clickhouse_main_row(tname)
     'ListId',
     'Digest'
   }
-  local elt = string.format('INSERT INTO %s (%s) VALUES ',
+  local elt = string.format('INSERT INTO %s (%s) ',
     tname, table.concat(fields, ','))
 
   return elt
@@ -196,7 +196,7 @@ local function clickhouse_attachments_row(tname)
     'Attachments.Length',
     'Attachments.Digest',
   }
-  local elt = string.format('INSERT INTO %s (%s) VALUES ',
+  local elt = string.format('INSERT INTO %s (%s) ',
     tname, table.concat(attachement_fields, ','))
   return elt
 end
@@ -208,7 +208,7 @@ local function clickhouse_urls_row(tname)
     'Urls.Tld',
     'Urls.Url',
   }
-  local elt = string.format('INSERT INTO %s (%s) VALUES ',
+  local elt = string.format('INSERT INTO %s (%s) ',
     tname, table.concat(urls_fields, ','))
   return elt
 end
@@ -219,7 +219,7 @@ local function clickhouse_emails_row(tname)
     'Digest',
     'Emails',
   }
-  local elt = string.format('INSERT INTO %s (%s) VALUES ',
+  local elt = string.format('INSERT INTO %s (%s) ',
       tname, table.concat(emails_fields, ','))
   return elt
 end
@@ -232,7 +232,7 @@ local function clickhouse_symbols_row(tname)
     'Symbols.Scores',
     'Symbols.Options',
   }
-  local elt = string.format('INSERT INTO %s (%s) VALUES ',
+  local elt = string.format('INSERT INTO %s (%s) ',
     tname, table.concat(symbols_fields, ','))
   return elt
 end
@@ -245,7 +245,7 @@ local function clickhouse_asn_row(tname)
     'Country',
     'IPNet',
   }
-  local elt = string.format('INSERT INTO %s (%s) VALUES ',
+  local elt = string.format('INSERT INTO %s (%s) ',
     tname, table.concat(asn_fields, ','))
   return elt
 end
@@ -293,6 +293,7 @@ local function clickhouse_send_data(task)
     local ch_params = {
       task = task,
     }
+
     local ret = lua_clickhouse.insert(upstream, settings, ch_params,
         query, tbl,
         gen_success_cb(what, #tbl),
@@ -657,6 +658,7 @@ local function clickhouse_collect(task)
   end
 
   nrows = nrows + 1
+  rspamd_logger.debugm(N, task, "add clickhouse row %s / %s", nrows, settings.limit)
 
   if nrows > settings['limit'] then
     clickhouse_send_data(task)

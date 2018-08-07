@@ -243,9 +243,10 @@ exports.insert = function (upstream, settings, params, query, rows,
   http_params.no_ssl_verify = settings.no_ssl_verify
   http_params.user = settings.user
   http_params.password = settings.password
+  http_params.method = 'POST'
   http_params.body = {table.concat(fun.totable(fun.map(function(row)
     return row_to_tsv(row)
-  end), rows), '\n'), '\n'}
+  end, rows)), '\n'), '\n'}
   http_params.log_obj = params.task or params.config
 
   if not http_params.url then
