@@ -203,8 +203,8 @@ application/pidf+xml 0
 application/pidf-diff+xml 0
 application/pkcs10 0
 application/pkcs12 0
-application/pkcs7-mime 0
-application/pkcs7-signature 0
+application/pkcs7-mime -1
+application/pkcs7-signature -1
 application/pkcs8 0
 application/pkix-attr-cert 0
 application/pkix-cert 0
