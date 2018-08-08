@@ -76,7 +76,6 @@ local function parse_clickhouse_response(params, data)
   local lua_util = require "lua_util"
   local ucl = require "ucl"
 
-  rspamd_logger.debugm(N, params.log_obj, "got clickhouse response: %s", data)
   if data == nil then
     -- clickhouse returned no data (i.e. empty result set): exiting
     return {}
@@ -113,27 +112,35 @@ local function mk_http_select_cb(upstream, params, ok_cb, fail_cb)
     if code ~= 200 or err_message then
       if not err_message then err_message = data end
       local ip_addr = upstream:get_addr():to_string(true)
-      rspamd_logger.errx(params.log_obj,
-          "request failed on clickhouse server %s: %s",
-          ip_addr, err_message)
 
       if fail_cb then
         fail_cb(params, err_message, data)
+      else
+        rspamd_logger.errx(params.log_obj,
+            "request failed on clickhouse server %s: %s",
+            ip_addr, err_message)
       end
       upstream:fail()
     else
       upstream:ok()
-      rspamd_logger.debugm(N, params.log_obj,
-          "http_cb ok: %s, %s, %s, %s", err_message, code, data, _)
       local rows = parse_clickhouse_response(params, data)
 
       if rows then
         if ok_cb then
           ok_cb(params, rows)
+        else
+          rspamd_logger.debugm(N, params.log_obj,
+              "http_select_cb ok: %s, %s, %s, %s", err_message, code,
+              data:gsub('[\n%s]+', ' '), _)
         end
       else
         if fail_cb then
           fail_cb(params, 'failed to parse reply', data)
+        else
+          local ip_addr = upstream:get_addr():to_string(true)
+          rspamd_logger.errx(params.log_obj,
+            "request failed on clickhouse server %s: %s",
+            ip_addr, 'failed to parse reply')
         end
       end
     end
@@ -148,21 +155,24 @@ local function mk_http_insert_cb(upstream, params, ok_cb, fail_cb)
     if code ~= 200 or err_message then
       if not err_message then err_message = data end
       local ip_addr = upstream:get_addr():to_string(true)
-      rspamd_logger.errx(params.log_obj,
-          "request failed on clickhouse server %s: %s",
-          ip_addr, err_message)
 
       if fail_cb then
         fail_cb(params, err_message, data)
+      else
+        rspamd_logger.errx(params.log_obj,
+            "request failed on clickhouse server %s: %s",
+            ip_addr, err_message)
       end
       upstream:fail()
     else
       upstream:ok()
-      rspamd_logger.debugm(N, params.log_obj,
-          "http_cb ok: %s, %s, %s, %s", err_message, code, data, _)
 
       if ok_cb then
         ok_cb(params, data)
+      else
+        rspamd_logger.debugm(N, params.log_obj,
+            "http_insert_cb ok: %s, %s, %s, %s", err_message, code,
+            data:gsub('[\n%s]+', ' '), _)
       end
     end
   end
@@ -204,7 +214,7 @@ exports.select = function (upstream, settings, params, query, ok_cb, fail_cb)
   http_params.body = query
   http_params.log_obj = params.task or params.config
 
-  rspamd_logger.debugm(N, http_params.log_obj, "clickhouse select request: %s", params.body)
+  rspamd_logger.debugm(N, http_params.log_obj, "clickhouse select request: %s", http_params.body)
 
   if not http_params.url then
     local connect_prefix = "http://"
@@ -306,6 +316,7 @@ exports.generic = function (upstream, settings, params, query,
   http_params.user = settings.user
   http_params.password = settings.password
   http_params.log_obj = params.task or params.config
+  http_params.body = query
 
   if not http_params.url then
     local connect_prefix = "http://"
