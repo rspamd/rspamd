@@ -15,7 +15,6 @@ limitations under the License.
 ]]--
 
 local rspamd_logger = require 'rspamd_logger'
-local rspamd_http = require "rspamd_http"
 local rspamd_lua_utils = require "lua_util"
 local upstream_list = require "rspamd_upstream_list"
 local lua_util = require "lua_util"
@@ -32,7 +31,6 @@ local data_rows = {}
 local custom_rows = {}
 local nrows = 0
 local schema_version = 2 -- Current schema version
-local connect_prefix = 'http://'
 
 local settings = {
   limit = 1000,
@@ -860,8 +858,8 @@ local function check_clickhouse_upstream(upstream, ev_base, cfg)
         check_rspamd_table(upstream, ev_base, cfg)
       end)
   if not ret then
-    rspamd_logger.errx(rspamd_config, "cannot send custom schema %s to clickhouse server %s: cannot make request",
-        k, upstream:get_addr():to_string(true))
+    rspamd_logger.errx(rspamd_config, "cannot get version on clickhouse server %s: cannot make request",
+        upstream:get_addr():to_string(true))
   end
 end
 
@@ -918,9 +916,6 @@ if opts then
     else
       settings['from_map'] = rspamd_map_add('clickhouse', 'from_tables',
         'regexp', 'clickhouse specific domains')
-      if settings.use_https then
-        connect_prefix = 'https://'
-      end
 
       settings.upstream = upstream_list.create(rspamd_config,
         settings['server'] or settings['servers'], 8123)
