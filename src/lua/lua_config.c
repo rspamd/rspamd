@@ -19,6 +19,7 @@
 #include "libserver/composites.h"
 #include "libmime/lang_detection.h"
 #include "lua/lua_map.h"
+#include "lua/lua_thread_pool.h"
 #include "utlist.h"
 #include <math.h>
 
@@ -1036,6 +1037,8 @@ struct lua_callback_data {
 		gint ref;
 	} callback;
 	gboolean cb_is_ref;
+	gpointer thread_entry;
+	gint stack_level;
 	gint order;
 };
 
@@ -1185,42 +1188,68 @@ lua_watcher_callback (gpointer session_data, gpointer ud)
 }
 
 static void
+lua_metric_symbol_callback_return (struct rspamd_task *task, gpointer ud, gint ret);
+
+static void
 lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 {
 	struct lua_callback_data *cd = ud;
 	struct rspamd_task **ptask;
-	gint level = lua_gettop (cd->L), nresults, err_idx, ret;
-	lua_State *L = cd->L;
-	GString *tb;
-	struct rspamd_symbol_result *s;
+	gint ret;
 
-	lua_pushcfunction (L, &rspamd_lua_traceback);
-	err_idx = lua_gettop (L);
+	struct thread_entry *thread_entry = lua_thread_pool_get(task->cfg->lua_thread_pool);
+	cd->thread_entry = thread_entry;
 
-	level ++;
+	lua_State *thread = thread_entry->lua_state;
+	cd->stack_level = lua_gettop (cd->L);
 
 	if (cd->cb_is_ref) {
-		lua_rawgeti (L, LUA_REGISTRYINDEX, cd->callback.ref);
+		lua_rawgeti (thread, LUA_REGISTRYINDEX, cd->callback.ref);
 	}
 	else {
-		lua_getglobal (L, cd->callback.name);
+		lua_getglobal (thread, cd->callback.name);
 	}
 
-	ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-	rspamd_lua_setclass (L, "rspamd{task}", -1);
+	ptask = lua_newuserdata (thread, sizeof (struct rspamd_task *));
+	rspamd_lua_setclass (thread, "rspamd{task}", -1);
 	*ptask = task;
 
-	if ((ret = lua_pcall (L, 1, LUA_MULTRET, err_idx)) != 0) {
-		tb = lua_touserdata (L, -1);
+	ret = lua_resume (thread, 1);
+
+	if (ret == LUA_YIELD) {
+		msg_err_task ("LUA_YIELD");
+	} else {
+		lua_metric_symbol_callback_return (task, ud, ret);
+	}
+}
+
+static void
+lua_metric_symbol_callback_return (struct rspamd_task *task, gpointer ud, gint ret)
+{
+	GString *tb;
+	struct lua_callback_data *cd = ud;
+	int nresults;
+	struct rspamd_symbol_result *s;
+	struct thread_entry *thread_entry = cd->thread_entry;
+	lua_State *thread = thread_entry->lua_state;
+
+	if (ret != 0) {
+		lua_pushcfunction (thread, rspamd_lua_traceback);
+		lua_call (thread, 0, 1);
+
+		tb = lua_touserdata (thread, -1);
 		msg_err_task ("call to (%s) failed (%d): %v", cd->symbol, ret, tb);
 
 		if (tb) {
 			g_string_free (tb, TRUE);
-			lua_pop (L, 1);
+			lua_pop (thread, 1);
 		}
+		assert (lua_gettop (thread) >= cd->stack_level);
+		// maybe there is a way to recover here. For now, just remove foulty thread
+		lua_thread_pool_terminate_entry (task->cfg->lua_thread_pool, cd->thread_entry);
 	}
 	else {
-		nresults = lua_gettop (L) - level;
+		nresults = lua_gettop (thread) - cd->stack_level;
 
 		if (nresults >= 1) {
 			/* Function returned boolean, so maybe we need to insert result? */
@@ -1230,16 +1259,16 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 			gint type;
 			struct lua_watcher_data *wd;
 
-			type = lua_type (cd->L, level + 1);
+			type = lua_type (thread, cd->stack_level + 1);
 
 			if (type == LUA_TBOOLEAN) {
-				res = lua_toboolean (L, level + 1);
+				res = lua_toboolean (thread, cd->stack_level + 1);
 			}
 			else if (type == LUA_TFUNCTION) {
 				/* Function returned a closure that should be watched for */
 				wd = rspamd_mempool_alloc (task->task_pool, sizeof (*wd));
-				lua_pushvalue (cd->L, level + 1);
-				wd->cb_ref = luaL_ref (L, LUA_REGISTRYINDEX);
+				lua_pushvalue (thread /*cd->L*/, cd->stack_level + 1);
+				wd->cb_ref = luaL_ref (thread, LUA_REGISTRYINDEX);
 				wd->cbd = cd;
 				rspamd_session_watcher_push_callback (task->s,
 						rspamd_session_get_watcher (task->s),
@@ -1252,14 +1281,14 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 						rspamd_session_get_watcher (task->s));
 			}
 			else {
-				res = lua_tonumber (L, level + 1);
+				res = lua_tonumber (thread, cd->stack_level + 1);
 			}
 
 			if (res) {
 				gint first_opt = 2;
 
-				if (lua_type (L, level + 2) == LUA_TNUMBER) {
-					flag = lua_tonumber (L, level + 2);
+				if (lua_type (thread, cd->stack_level + 2) == LUA_TNUMBER) {
+					flag = lua_tonumber (thread, cd->stack_level + 2);
 					/* Shift opt index */
 					first_opt = 3;
 				}
@@ -1270,35 +1299,40 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 				s = rspamd_task_insert_result (task, cd->symbol, flag, NULL);
 
 				if (s) {
-					guint last_pos = lua_gettop (L);
+					guint last_pos = lua_gettop (thread);
 
-					for (i = level + first_opt; i <= last_pos; i++) {
-						if (lua_type (L, i) == LUA_TSTRING) {
-							const char *opt = lua_tostring (L, i);
+					for (i = cd->stack_level + first_opt; i <= last_pos; i++) {
+						if (lua_type (thread, i) == LUA_TSTRING) {
+							const char *opt = lua_tostring (thread, i);
 
 							rspamd_task_add_result_option (task, s, opt);
 						}
-						else if (lua_type (L, i) == LUA_TTABLE) {
-							lua_pushvalue (L, i);
+						else if (lua_type (thread, i) == LUA_TTABLE) {
+							lua_pushvalue (thread, i);
 
-							for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
-								const char *opt = lua_tostring (L, -1);
+							for (lua_pushnil (thread); lua_next (thread, -2); lua_pop (thread, 1)) {
+								const char *opt = lua_tostring (thread, -1);
 
 								rspamd_task_add_result_option (task, s, opt);
 							}
 
-							lua_pop (L, 1);
+							lua_pop (thread, 1);
 						}
 					}
 				}
 
 			}
 
-			lua_pop (L, nresults);
+			lua_pop (thread, nresults);
 		}
+
+		assert (lua_gettop (thread) == cd->stack_level); /* we properly cleaned up the stack */
+
+		lua_thread_pool_return(task->cfg->lua_thread_pool, cd->thread_entry);
 	}
 
-	lua_pop (L, 1); /* Error function */
+	cd->thread_entry = NULL;
+	cd->stack_level = 0;
 }
 
 static gint
