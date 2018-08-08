@@ -994,6 +994,8 @@ void rdns_resolver_set_fake_reply (struct rdns_resolver *resolver,
 			abort ();
 		}
 
+		fake_rep->rcode = rcode;
+
 		memcpy (&fake_rep->key, srch, sizeof (*srch) + len);
 
 		if (reply) {
