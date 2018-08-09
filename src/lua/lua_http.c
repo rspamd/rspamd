@@ -555,7 +555,8 @@ lua_http_request (lua_State *L)
 				body = rspamd_fstring_new_init (t->start, t->len);
 			}
 			else {
-				return luaL_error (L, "invalid body argument");
+				return luaL_error (L, "invalid body argument type: %s",
+						lua_typename (L, lua_type (L, -1)));
 			}
 		}
 		else if (lua_type (L, -1) == LUA_TTABLE) {
@@ -573,16 +574,19 @@ lua_http_request (lua_State *L)
 						body = rspamd_fstring_append (body, t->start, t->len);
 					}
 					else {
-						return luaL_error (L, "invalid body argument");
+						return luaL_error (L, "invalid body argument: %s",
+								lua_typename (L, lua_type (L, -1)));
 					}
 				}
 				else {
-					return luaL_error (L, "invalid body argument");
+					return luaL_error (L, "invalid body argument type: %s",
+							lua_typename (L, lua_type (L, -1)));
 				}
 			}
 		}
-		else {
-			return luaL_error (L, "invalid body argument");
+		else if (lua_type (L, -1) != LUA_TNONE && lua_type (L, -1) != LUA_TNIL) {
+			return luaL_error (L, "invalid body argument type: %s",
+					lua_typename (L, lua_type (L, -1)));
 		}
 		lua_pop (L, 1);
 
