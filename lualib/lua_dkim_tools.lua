@@ -166,7 +166,11 @@ local function prepare_dkim_signing(N, task, settings)
     end
 
     p.key = task:get_mempool():get_variable(key_var)
-    p.selector = task:get_mempool():get_variable(selector_var)
+    local selector_override = task:get_mempool():get_variable(selector_var)
+
+    if selector_override then
+      p.selector = selector_override
+    end
 
     if (not p.key or not p.selector) and (not (settings.try_fallback or
         settings.use_redis or settings.selector_map
