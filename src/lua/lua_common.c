@@ -688,6 +688,21 @@ rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L,
 	lua_settop (L, orig_top);
 }
 
+#ifdef WITH_LUA_TRACE
+static gint
+lua_push_trace_data (lua_State *L)
+{
+	if (lua_traces) {
+		ucl_object_push_lua (L, lua_traces, true);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+#endif
+
 lua_State *
 rspamd_lua_init ()
 {
@@ -782,6 +797,11 @@ rspamd_lua_init ()
 
 #undef ADD_TABLE
 	lua_setglobal (L, rspamd_modules_state_global);
+
+#ifdef WITH_LUA_TRACE
+	lua_pushcfunction (L, lua_push_trace_data);
+	lua_setglobal (L, "get_traces");
+#endif
 
 	return L;
 }
