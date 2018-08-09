@@ -168,6 +168,7 @@ lua_sqlite3_bind_statements (lua_State *L, gint start, gint end,
 static gint
 lua_sqlite3_sql (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	sqlite3 *db = lua_check_sqlite3 (L, 1);
 	const gchar *query = luaL_checkstring (L, 2);
 	sqlite3_stmt *stmt;
@@ -262,6 +263,7 @@ lua_sqlite3_push_row (lua_State *L, sqlite3_stmt *stmt)
 static gint
 lua_sqlite3_next_row (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	sqlite3_stmt *stmt = *(sqlite3_stmt **)lua_touserdata (L, lua_upvalueindex (1));
 	gint rc;
 
@@ -295,6 +297,7 @@ end
 static gint
 lua_sqlite3_rows (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	sqlite3 *db = lua_check_sqlite3 (L, 1);
 	const gchar *query = luaL_checkstring (L, 2);
 	sqlite3_stmt *stmt, **pstmt;
@@ -332,6 +335,7 @@ lua_sqlite3_rows (lua_State *L)
 static gint
 lua_sqlite3_close (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	sqlite3 *db = lua_check_sqlite3 (L, 1);
 
 	if (db) {

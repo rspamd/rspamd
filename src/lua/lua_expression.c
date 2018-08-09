@@ -190,6 +190,7 @@ lua_atom_process (gpointer input, rspamd_expression_atom_t *atom)
 static gint
 lua_expr_process (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_expression *e = rspamd_lua_expression (L, 1);
 	gdouble res;
 	gint flags = 0;
@@ -208,6 +209,7 @@ lua_expr_process (lua_State *L)
 static gint
 lua_expr_process_traced (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_expression *e = rspamd_lua_expression (L, 1);
 	rspamd_expression_atom_t *atom;
 	gint res;
@@ -242,6 +244,7 @@ lua_expr_process_traced (lua_State *L)
 static gint
 lua_expr_create (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_expression *e, **pe;
 	const char *line;
 	gsize len;
@@ -323,6 +326,7 @@ lua_expr_create (lua_State *L)
 static gint
 lua_expr_to_string (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_expression *e = rspamd_lua_expression (L, 1);
 	GString *str;
 
@@ -360,6 +364,7 @@ lua_exr_atom_cb (const rspamd_ftok_t *tok, gpointer ud)
 static gint
 lua_expr_atoms (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_expression *e = rspamd_lua_expression (L, 1);
 	struct lua_expr_atoms_cbdata cbdata;
 

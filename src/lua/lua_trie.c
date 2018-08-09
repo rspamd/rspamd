@@ -202,6 +202,7 @@ lua_trie_search_str (lua_State *L, struct rspamd_multipattern *trie,
 static gint
 lua_trie_match (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_multipattern *trie = lua_check_trie (L, 1);
 	const gchar *text;
 	gsize len;
@@ -249,6 +250,7 @@ lua_trie_match (lua_State *L)
 static gint
 lua_trie_search_mime (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_multipattern *trie = lua_check_trie (L, 1);
 	struct rspamd_task *task = lua_check_task (L, 2);
 	struct rspamd_mime_text_part *part;
@@ -286,6 +288,7 @@ lua_trie_search_mime (lua_State *L)
 static gint
 lua_trie_search_rawmsg (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_multipattern *trie = lua_check_trie (L, 1);
 	struct rspamd_task *task = lua_check_task (L, 2);
 	const gchar *text;
@@ -316,6 +319,7 @@ lua_trie_search_rawmsg (lua_State *L)
 static gint
 lua_trie_search_rawbody (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_multipattern *trie = lua_check_trie (L, 1);
 	struct rspamd_task *task = lua_check_task (L, 2);
 	const gchar *text;

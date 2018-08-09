@@ -27,6 +27,10 @@
 /* Lua module init function */
 #define MODULE_INIT_FUNC "module_init"
 
+#ifdef WITH_LUA_TRACE
+ucl_object_t *lua_traces;
+#endif
+
 const luaL_reg null_reg[] = {
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}

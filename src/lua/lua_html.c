@@ -197,6 +197,7 @@ lua_check_html_tag (lua_State * L, gint pos)
 static gint
 lua_html_has_tag (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct html_content *hc = lua_check_html (L, 1);
 	const gchar *tagname = luaL_checkstring (L, 2);
 	gboolean ret = FALSE;
@@ -215,6 +216,7 @@ lua_html_has_tag (lua_State *L)
 static gint
 lua_html_has_property (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct html_content *hc = lua_check_html (L, 1);
 	const gchar *propname = luaL_checkstring (L, 2);
 	gboolean ret = FALSE;
@@ -256,6 +258,7 @@ lua_html_has_property (lua_State *L)
 static void
 lua_html_push_image (lua_State *L, struct html_image *img)
 {
+	LUA_TRACE_POINT;
 	struct html_tag **ptag;
 
 	lua_newtable (L);
@@ -288,6 +291,7 @@ lua_html_push_image (lua_State *L, struct html_image *img)
 static gint
 lua_html_get_images (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct html_content *hc = lua_check_html (L, 1);
 	struct html_image *img;
 
@@ -317,6 +321,7 @@ lua_html_get_images (lua_State *L)
 static void
 lua_html_push_block (lua_State *L, struct html_block *bl)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t;
 
 	lua_createtable (L, 0, 6);
@@ -376,6 +381,7 @@ lua_html_push_block (lua_State *L, struct html_block *bl)
 static gint
 lua_html_get_blocks (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct html_content *hc = lua_check_html (L, 1);
 	struct html_block *bl;
 
@@ -445,6 +451,7 @@ lua_html_node_foreach_cb (GNode *n, gpointer d)
 static gint
 lua_html_foreach_tag (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct html_content *hc = lua_check_html (L, 1);
 	struct lua_html_traverse_ud ud;
 	const gchar *tagname;
@@ -518,6 +525,7 @@ lua_html_foreach_tag (lua_State *L)
 static gint
 lua_html_tag_get_type (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct html_tag *tag = lua_check_html_tag (L, 1);
 	const gchar *tagname;
 
@@ -541,6 +549,7 @@ lua_html_tag_get_type (lua_State *L)
 static gint
 lua_html_tag_get_parent (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct html_tag *tag = lua_check_html_tag (L, 1), **ptag;
 	GNode *node;
 
@@ -563,6 +572,7 @@ lua_html_tag_get_parent (lua_State *L)
 static gint
 lua_html_tag_get_flags (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct html_tag *tag = lua_check_html_tag (L, 1);
 	gint i = 1;
 
@@ -600,6 +610,7 @@ lua_html_tag_get_flags (lua_State *L)
 static gint
 lua_html_tag_get_content (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct html_tag *tag = lua_check_html_tag (L, 1);
 	struct rspamd_lua_text *t;
 
@@ -625,6 +636,7 @@ lua_html_tag_get_content (lua_State *L)
 static gint
 lua_html_tag_get_content_length (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct html_tag *tag = lua_check_html_tag (L, 1);
 
 	if (tag) {
@@ -640,6 +652,7 @@ lua_html_tag_get_content_length (lua_State *L)
 static gint
 lua_html_tag_get_extra (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct html_tag *tag = lua_check_html_tag (L, 1);
 	struct html_image *img;
 	struct rspamd_url **purl;

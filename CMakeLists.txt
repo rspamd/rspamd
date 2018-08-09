@@ -63,6 +63,7 @@ OPTION(ENABLE_FULL_DEBUG   "Build rspamd with all possible debug [default: OFF]"
 OPTION(ENABLE_UTILS        "Build rspamd internal utils [default: OFF]" OFF)
 OPTION(ENABLE_TORCH        "Install torch7 with Rspamd [default: ON]" ON)
 OPTION(ENABLE_LIBUNWIND    "Use libunwind to print crash traces [default: OFF]" OFF)
+OPTION(ENABLE_LUA_TRACE    "Trace all Lua C API invocations [default: OFF]" OFF)
 
 INCLUDE(FindArch.cmake)
 TARGET_ARCHITECTURE(ARCH)
@@ -844,6 +845,10 @@ IF(ENABLE_COVERAGE)
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage")
 	SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
 ENDIF(ENABLE_COVERAGE)
+
+IF(ENABLE_LUA_TRACE)
+	SET(WITH_LUA_TRACE 1)
+ENDIF(ENABLE_LUA_TRACE)
 
 SET(CMAKE_C_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_C_FLAGS} ${CMAKE_C_WARN_FLAGS}")
 

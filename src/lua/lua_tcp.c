@@ -954,6 +954,7 @@ lua_tcp_arg_toiovec (lua_State *L, gint pos, struct lua_tcp_cbdata *cbd,
 static gint
 lua_tcp_request (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	const gchar *host;
 	gchar *stop_pattern = NULL;
 	guint port;
@@ -1280,6 +1281,7 @@ lua_tcp_request (lua_State *L)
 static gint
 lua_tcp_close (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_tcp_cbdata *cbd = lua_check_tcp (L, 1);
 
 	if (cbd == NULL) {
@@ -1295,6 +1297,7 @@ lua_tcp_close (lua_State *L)
 static gint
 lua_tcp_set_timeout (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_tcp_cbdata *cbd = lua_check_tcp (L, 1);
 	gdouble ms = lua_tonumber (L, 2);
 
@@ -1311,6 +1314,7 @@ lua_tcp_set_timeout (lua_State *L)
 static gint
 lua_tcp_add_read (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_tcp_cbdata *cbd = lua_check_tcp (L, 1);
 	struct lua_tcp_handler *rh;
 	gchar *stop_pattern = NULL;
@@ -1351,6 +1355,7 @@ lua_tcp_add_read (lua_State *L)
 static gint
 lua_tcp_add_write (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_tcp_cbdata *cbd = lua_check_tcp (L, 1);
 	struct lua_tcp_handler *wh;
 	gint cbref = -1, tp;
@@ -1434,6 +1439,7 @@ lua_tcp_add_write (lua_State *L)
 static gint
 lua_tcp_shift_callback (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_tcp_cbdata *cbd = lua_check_tcp (L, 1);
 
 	if (cbd == NULL) {

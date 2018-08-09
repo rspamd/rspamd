@@ -229,6 +229,7 @@ lua_common_log_line (GLogLevelFlags level, lua_State *L,
 static gint
 lua_logger_err (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
 	lua_common_log_line (G_LOG_LEVEL_CRITICAL, L, msg, NULL, NULL);
@@ -238,6 +239,7 @@ lua_logger_err (lua_State *L)
 static gint
 lua_logger_warn (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
 	lua_common_log_line (G_LOG_LEVEL_WARNING, L, msg, NULL, NULL);
@@ -247,6 +249,7 @@ lua_logger_warn (lua_State *L)
 static gint
 lua_logger_info (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
 	lua_common_log_line (G_LOG_LEVEL_INFO, L, msg, NULL, NULL);
@@ -256,6 +259,7 @@ lua_logger_info (lua_State *L)
 static gint
 lua_logger_message (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
 	lua_common_log_line (G_LOG_LEVEL_MESSAGE, L, msg, NULL, NULL);
@@ -265,6 +269,7 @@ lua_logger_message (lua_State *L)
 static gint
 lua_logger_debug (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	const gchar *msg;
 	msg = luaL_checkstring (L, 1);
 	lua_common_log_line (G_LOG_LEVEL_DEBUG, L, msg, NULL, NULL);
@@ -739,36 +744,42 @@ lua_logger_logx (lua_State *L, GLogLevelFlags level, gboolean is_string)
 static gint
 lua_logger_errx (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	return lua_logger_logx (L, G_LOG_LEVEL_CRITICAL, FALSE);
 }
 
 static gint
 lua_logger_warnx (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	return lua_logger_logx (L, G_LOG_LEVEL_WARNING, FALSE);
 }
 
 static gint
 lua_logger_infox (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	return lua_logger_logx (L, G_LOG_LEVEL_INFO, FALSE);
 }
 
 static gint
 lua_logger_messagex (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	return lua_logger_logx (L, G_LOG_LEVEL_MESSAGE, FALSE);
 }
 
 static gint
 lua_logger_debugx (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	return lua_logger_logx (L, G_LOG_LEVEL_DEBUG, FALSE);
 }
 
 static gint
 lua_logger_debugm (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	gchar logbuf[RSPAMD_LOGBUF_SIZE - 128];
 	const gchar *uid = NULL, *module = NULL;
 	gboolean ret;

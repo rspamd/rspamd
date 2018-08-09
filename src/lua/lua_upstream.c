@@ -104,6 +104,7 @@ lua_check_upstream (lua_State * L)
 static gint
 lua_upstream_get_addr (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct upstream *up = lua_check_upstream (L);
 
 	if (up) {
@@ -123,6 +124,7 @@ lua_upstream_get_addr (lua_State *L)
 static gint
 lua_upstream_fail (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct upstream *up = lua_check_upstream (L);
 	gboolean fail_addr = FALSE;
 
@@ -145,6 +147,7 @@ lua_upstream_fail (lua_State *L)
 static gint
 lua_upstream_ok (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct upstream *up = lua_check_upstream (L);
 
 	if (up) {
@@ -176,6 +179,7 @@ lua_check_upstream_list (lua_State * L)
 static gint
 lua_upstream_list_create (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct upstream_list *new = NULL, **pnew;
 	struct rspamd_config *cfg = NULL;
 	const gchar *def;
@@ -243,6 +247,7 @@ lua_upstream_list_create (lua_State *L)
 static gint
 lua_upstream_list_destroy (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct upstream_list *upl = lua_check_upstream_list (L);
 
 	rspamd_upstreams_destroy (upl);
@@ -259,6 +264,7 @@ lua_upstream_list_destroy (lua_State *L)
 static gint
 lua_upstream_list_get_upstream_by_hash (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct upstream_list *upl;
 	struct upstream *selected, **pselected;
 	const gchar *key;
@@ -298,6 +304,7 @@ lua_upstream_list_get_upstream_by_hash (lua_State *L)
 static gint
 lua_upstream_list_get_upstream_round_robin (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct upstream_list *upl;
 	struct upstream *selected, **pselected;
 
@@ -329,6 +336,7 @@ lua_upstream_list_get_upstream_round_robin (lua_State *L)
 static gint
 lua_upstream_list_get_upstream_master_slave (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct upstream_list *upl;
 	struct upstream *selected, **pselected;
 
@@ -373,6 +381,7 @@ static void lua_upstream_inserter (struct upstream *up, guint idx, void *ud)
 static gint
 lua_upstream_list_all_upstreams (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct upstream_list *upl;
 
 	upl = lua_check_upstream_list (L);

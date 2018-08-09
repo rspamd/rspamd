@@ -372,6 +372,7 @@ lua_http_push_headers (lua_State *L, struct rspamd_http_message *msg)
 static gint
 lua_http_request (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct event_base *ev_base;
 	struct rspamd_http_message *msg;
 	struct lua_http_cbdata *cbd;

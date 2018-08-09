@@ -294,6 +294,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 	enum rdns_request_type type,
 	int first)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_async_session *session = NULL;
 	rspamd_mempool_t *pool = NULL;
 	const gchar *to_resolve = NULL, *user_str = NULL;
