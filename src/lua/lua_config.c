@@ -1197,7 +1197,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 	struct rspamd_task **ptask;
 	gint ret;
 
-	struct thread_entry *thread_entry = lua_thread_pool_get(task->cfg->lua_thread_pool);
+	struct thread_entry *thread_entry = lua_thread_pool_get (task->cfg->lua_thread_pool);
 	cd->thread_entry = thread_entry;
 
 	lua_State *thread = thread_entry->lua_state;
@@ -1216,9 +1216,12 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 
 	ret = lua_resume (thread, 1);
 
-	if (ret == LUA_YIELD) {
-		msg_err_task ("LUA_YIELD");
-	} else {
+	if (ret != LUA_YIELD) {
+		/*
+		 LUA_YIELD state should not be handled here.
+		 It should only happen when the thread initiated a asynchronous event and it will be restored as soon
+		 the event is finished
+		 */
 		lua_metric_symbol_callback_return (task, ud, ret);
 	}
 }
@@ -1235,7 +1238,7 @@ lua_metric_symbol_callback_return (struct rspamd_task *task, gpointer ud, gint r
 
 	if (ret != 0) {
 		lua_pushcfunction (thread, rspamd_lua_traceback);
-		lua_call (thread, 0, 1);
+		lua_call (thread, 0, LUA_MULTRET);
 
 		tb = lua_touserdata (thread, -1);
 		msg_err_task ("call to (%s) failed (%d): %v", cd->symbol, ret, tb);
@@ -1244,8 +1247,8 @@ lua_metric_symbol_callback_return (struct rspamd_task *task, gpointer ud, gint r
 			g_string_free (tb, TRUE);
 			lua_pop (thread, 1);
 		}
-		assert (lua_gettop (thread) >= cd->stack_level);
-		// maybe there is a way to recover here. For now, just remove foulty thread
+		g_assert (lua_gettop (thread) >= cd->stack_level);
+		// maybe there is a way to recover here. For now, just remove faulty thread
 		lua_thread_pool_terminate_entry (task->cfg->lua_thread_pool, cd->thread_entry);
 	}
 	else {
@@ -1326,7 +1329,7 @@ lua_metric_symbol_callback_return (struct rspamd_task *task, gpointer ud, gint r
 			lua_pop (thread, nresults);
 		}
 
-		assert (lua_gettop (thread) == cd->stack_level); /* we properly cleaned up the stack */
+		g_assert (lua_gettop (thread) == cd->stack_level); /* we properly cleaned up the stack */
 
 		lua_thread_pool_return(task->cfg->lua_thread_pool, cd->thread_entry);
 	}

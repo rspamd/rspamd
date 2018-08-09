@@ -1,7 +1,5 @@
 #include "config.h"
 
-#include <assert.h>
-
 #include "lua_common.h"
 #include "lua_thread_pool.h"
 
@@ -19,6 +17,7 @@ thread_entry_new (lua_State * L)
 	ent = g_malloc (sizeof *ent);
 	ent->lua_state = lua_newthread (L);
 	ent->thread_index = luaL_ref (L, LUA_REGISTRYINDEX);
+
 	return ent;
 }
 
@@ -41,7 +40,7 @@ lua_thread_pool_new (lua_State * L)
 	int i;
 
 	struct thread_entry *ent;
-	for (i = 0; i < pool->max_items; i ++) {
+	for (i = 0; i < MAX(2, pool->max_items / 10); i ++) {
 		ent = thread_entry_new (pool->L);
 		g_queue_push_head (pool->available_items, ent);
 	}
@@ -75,16 +74,19 @@ lua_thread_pool_get(struct lua_thread_pool *pool)
 	else {
 		ent = thread_entry_new (pool->L);
 	}
+
 	return ent;
 }
 
 void
 lua_thread_pool_return(struct lua_thread_pool *pool, struct thread_entry *thread_entry)
 {
-	assert (lua_status (thread_entry->lua_state) == 0); // we can't return a running/yielded stack into the pool
+	g_assert (lua_status (thread_entry->lua_state) == 0); /* we can't return a running/yielded thread into the pool */
+
 	if (pool->running_entry == thread_entry) {
 		pool->running_entry = NULL;
 	}
+
 	if (g_queue_get_length (pool->available_items) <= pool->max_items) {
 		g_queue_push_head (pool->available_items, thread_entry);
 	}
@@ -98,12 +100,13 @@ lua_thread_pool_terminate_entry(struct lua_thread_pool *pool, struct thread_entr
 {
 	struct thread_entry *ent = NULL;
 
+	/* we should only terminate failed threads */
+	g_assert (lua_status (thread_entry->lua_state) != 0 && lua_status (thread_entry->lua_state) != LUA_YIELD);
+
 	if (pool->running_entry == thread_entry) {
 		pool->running_entry = NULL;
 	}
 
-	// we should only terminate failed threads
-	assert (lua_status (thread_entry->lua_state) != 0 && lua_status (thread_entry->lua_state) != LUA_YIELD);
 	thread_entry_free (pool->L, thread_entry);
 
 	if (g_queue_get_length (pool->available_items) <= pool->max_items) {
