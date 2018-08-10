@@ -1572,6 +1572,11 @@ lua_task_set_pre_result (lua_State * L)
 
 	if (task != NULL) {
 
+		if (RSPAMD_TASK_IS_SKIPPED (task)) {
+			/* Do not set pre-result for a skipped task */
+			return 0;
+		}
+
 		if (lua_type (L, 2) == LUA_TNUMBER) {
 			action = lua_tointeger (L, 2);
 		}
