@@ -17,7 +17,7 @@ limitations under the License.
 
 local rspamd_logger = require 'rspamd_logger'
 local rspamd_http = require "rspamd_http"
-local rspamd_lua_utils = require "lua_util"
+local lua_util = require "lua_util"
 local util = require "rspamd_util"
 local ucl = require "ucl"
 local hash = require "rspamd_cryptobox_hash"
@@ -80,7 +80,7 @@ local function elastic_send_data(task)
   local bulk_json = table.concat(tbl, "\n")
   local function http_index_data_callback(err, code, body, _)
     -- todo error handling we may store the rows it into redis and send it again late
-    rspamd_logger.debugm(N, task, "After create data %1", body)
+    lua_util.debugm(N, task, "After create data %1", body)
     if code ~= 200 then
       rspamd_logger.infox(task, "cannot push data to elastic backend (%s): %s (%s)",
             push_url, err, code)
@@ -208,7 +208,7 @@ end
 
 local function elastic_collect(task)
   if not enabled then return end
-  if not settings.allow_local and rspamd_lua_utils.is_rspamc_or_controller(task) then return end
+  if not settings.allow_local and lua_util.is_rspamc_or_controller(task) then return end
   local row = {['rspamd_meta'] = get_general_metadata(task),
     ['@timestamp'] = tostring(util.get_time() * 1000)}
   table.insert(rows, row)
@@ -309,7 +309,7 @@ local function initial_setup(cfg, ev_base, worker)
                 err, code, body)
             enabled = false
           else
-            rspamd_logger.debugm(N, 'pushed kibana template: %s', body)
+            lua_util.debugm(N, 'pushed kibana template: %s', body)
           end
         end
 
@@ -380,7 +380,7 @@ local function initial_setup(cfg, ev_base, worker)
             template_url, err, code, body)
         enabled = false
       else
-        rspamd_logger.debugm(N, 'pushed rspamd template: %s', body)
+        lua_util.debugm(N, 'pushed rspamd template: %s', body)
         push_kibana_template()
       end
     end
@@ -431,7 +431,7 @@ if redis_params and opts then
 
   if not settings['server'] and not settings['servers'] then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
-    rspamd_lua_utils.disable_module(N, "config")
+    lua_util.disable_module(N, "config")
   else
     if settings.use_https then
       connect_prefix = 'https://'
@@ -443,12 +443,12 @@ if redis_params and opts then
     if not settings.upstream then
       rspamd_logger.errx('cannot parse elastic address: %s',
         settings['server'] or settings['servers'])
-      rspamd_lua_utils.disable_module(N, "config")
+      lua_util.disable_module(N, "config")
       return
     end
     if not settings['template_file'] then
       rspamd_logger.infox(rspamd_config, 'elastic template_file is required, disabling module')
-      rspamd_lua_utils.disable_module(N, "config")
+      lua_util.disable_module(N, "config")
       return
     end
 
@@ -456,7 +456,7 @@ if redis_params and opts then
     if not elastic_template then
       rspamd_logger.infox(rspamd_config, 'elastic unable to read %s, disabling module',
         settings['template_file'])
-      rspamd_lua_utils.disable_module(N, "config")
+      lua_util.disable_module(N, "config")
       return
     end
 

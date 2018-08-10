@@ -21,7 +21,7 @@ end
 -- IP score is a module that set ip score of specific ip, asn, country
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
-local rspamd_lua_utils = require "lua_util"
+local lua_util = require "lua_util"
 
 -- Default settings
 local redis_params = nil
@@ -102,7 +102,7 @@ end
 
 -- Set score based on metric's action
 local ip_score_set = function(task)
-  if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
+  if lua_util.is_rspamc_or_controller(task) then return end
   local function new_score_set(score, old_score, old_total)
     local new_total
     if old_total == -1 or old_total ~= old_total then
@@ -148,7 +148,7 @@ local ip_score_set = function(task)
         ipnet_score,total_ipnet,
         ip_score, total_ip = pool:get_variable('ip_score',
         'double,double,double,double,double,double,double,double')
-  rspamd_logger.debugm(M, task, "raw scores: asn: %s, total_asn: %s, country: %s, total_country: %s, ipnet: %s, total_ipnet: %s, ip:%s, total_ip: %s",
+  lua_util.debugm(M, task, "raw scores: asn: %s, total_asn: %s, country: %s, total_country: %s, ipnet: %s, total_ipnet: %s, ip:%s, total_ip: %s",
     asn_score,total_asn,
     country_score,total_country,
     ipnet_score,total_ipnet,
@@ -171,7 +171,7 @@ local ip_score_set = function(task)
   country_score,total_country = new_score_set(score, country_score, total_country)
   ipnet_score,total_ipnet = new_score_set(score, ipnet_score, total_ipnet)
   ip_score,total_ip = new_score_set(score, ip_score, total_ip)
-  rspamd_logger.debugm(M, task, "processed scores: asn: %s, total_asn: %s, country: %s, total_country: %s, ipnet: %s, total_ipnet: %s, ip:%s, total_ip: %s",
+  lua_util.debugm(M, task, "processed scores: asn: %s, total_asn: %s, country: %s, total_country: %s, ipnet: %s, total_ipnet: %s, ip:%s, total_ip: %s",
     asn_score,total_asn,
     country_score,total_country,
     ipnet_score,total_ipnet,
@@ -246,7 +246,7 @@ local ip_score_check = function(task)
       -- XXX: upstreams
     end
     local function calculate_score(score)
-      local parts = rspamd_lua_utils.rspamd_str_split(score, '|')
+      local parts = lua_util.rspamd_str_split(score, '|')
       local rep = tonumber(parts[1])
       local total = tonumber(parts[2])
 
@@ -400,5 +400,5 @@ if redis_params then
     flags = 'empty',
   })
 else
-  rspamd_lua_utils.disable_module(N, "redis")
+  lua_util.disable_module(N, "redis")
 end

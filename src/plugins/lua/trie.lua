@@ -62,7 +62,7 @@ local function tries_callback(task)
       local pattern_idx = pattern .. tostring(idx) .. type
 
       if param['multi'] or not matched[pattern_idx] then
-        rspamd_logger.debugm(N, task, "<%1> matched pattern %2 at pos %3",
+        lua_util.debugm(N, task, "<%1> matched pattern %2 at pos %3",
           task:get_message_id(), pattern, pos)
         task:insert_result(param['symbol'], 1.0, type)
         if not param['multi'] then

@@ -289,7 +289,7 @@ local function clickhouse_collect(task)
 
   for _,sym in ipairs(settings.stop_symbols) do
     if task:has_symbol(sym) then
-      rspamd_logger.debugm(N, task, 'skip collection as symbol %s has fired', sym)
+      lua_util.debugm(N, task, 'skip collection as symbol %s has fired', sym)
       return
     end
   end
@@ -568,7 +568,7 @@ local function clickhouse_collect(task)
 
   nrows = nrows + 1
   table.insert(data_rows, row)
-  rspamd_logger.debugm(N, task, "add clickhouse row %s / %s", nrows, settings.limit)
+  lua_util.debugm(N, task, "add clickhouse row %s / %s", nrows, settings.limit)
 
   if nrows > settings['limit'] then
     clickhouse_send_data(task)
@@ -579,7 +579,7 @@ local function clickhouse_collect(task)
 end
 
 local function do_remove_partition(ev_base, cfg, table_name, partition_id)
-  rspamd_logger.debugm(N, rspamd_config, "removing partition %s.%s", table_name, partition_id)
+  lua_util.debugm(N, rspamd_config, "removing partition %s.%s", table_name, partition_id)
   local upstream = settings.upstream:get_upstream_round_robin()
   local remove_partition_sql = "ALTER TABLE ${table_name} ${remove_method} PARTITION ${partition_id}"
   local remove_method = (settings.retention.method == 'drop') and 'DROP' or 'DETACH'
@@ -630,7 +630,7 @@ local function get_last_removal_ago()
   local last_ts
 
   if err then
-    rspamd_logger.debugm(N, rspamd_config, 'Failed to open %s: %s', ts_file, err)
+    lua_util.debugm(N, rspamd_config, 'Failed to open %s: %s', ts_file, err)
   else
     last_ts = tonumber(f:read('*number'))
     f:close()

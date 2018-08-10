@@ -19,6 +19,12 @@ if confighelp then
   return
 end
 
+local hash = require 'rspamd_cryptobox_hash'
+local rspamd_logger = require 'rspamd_logger'
+local rspamd_util = require 'rspamd_util'
+local fun = require 'fun'
+local lua_util = require 'lua_util'
+
 -- This plugin implements various types of RBL checks
 -- Documentation can be found here:
 -- https://rspamd.com/doc/modules/rbl.html
@@ -29,11 +35,6 @@ local N = 'rbl'
 local rbls = {}
 local local_exclusions = nil
 
-local hash = require 'rspamd_cryptobox_hash'
-local rspamd_logger = require 'rspamd_logger'
-local rspamd_util = require 'rspamd_util'
-local fun = require 'fun'
-local lua_util = require 'lua_util'
 local default_monitored = '1.0.0.127'
 
 local symbols = {
@@ -161,10 +162,10 @@ local function rbl_cb (task)
         rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
       end
       if not results then
-        rspamd_logger.debugm(N, task, 'DNS RESPONSE: label=%1 results=%2 error=%3 rbl=%4', to_resolve, false, err, rule['rbls'][1]['symbol'])
+        lua_util.debugm(N, task, 'DNS RESPONSE: label=%1 results=%2 error=%3 rbl=%4', to_resolve, false, err, rule['rbls'][1]['symbol'])
         return
       else
-        rspamd_logger.debugm(N, task, 'DNS RESPONSE: label=%1 results=%2 error=%3 rbl=%4', to_resolve, true, err, rule['rbls'][1]['symbol'])
+        lua_util.debugm(N, task, 'DNS RESPONSE: label=%1 results=%2 error=%3 rbl=%4', to_resolve, true, err, rule['rbls'][1]['symbol'])
       end
 
       for _,rbl in ipairs(rule.rbls) do
@@ -175,7 +176,7 @@ local function rbl_cb (task)
         for _,result in pairs(results) do
           local ipstr = result:to_string()
           local foundrc
-          rspamd_logger.debugm(N, task, '%s DNS result %s', to_resolve, ipstr)
+          lua_util.debugm(N, task, '%s DNS result %s', to_resolve, ipstr)
           for s,i in pairs(rbl['returncodes']) do
             if type(i) == 'string' then
               if string.find(ipstr, '^' .. i .. '$') then
@@ -211,7 +212,7 @@ local function rbl_cb (task)
   local params = {} -- indexed by rbl name
 
   local function gen_rbl_rule(to_resolve, rbl)
-    rspamd_logger.debugm(N, task, 'DNS REQUEST: label=%1 rbl=%2', to_resolve, rbl['symbol'])
+    lua_util.debugm(N, task, 'DNS REQUEST: label=%1 rbl=%2', to_resolve, rbl['symbol'])
     if not params[to_resolve] then
       local nrule = {
         to_resolve = to_resolve,

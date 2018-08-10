@@ -22,7 +22,7 @@ end
 -- A plugin that pushes metadata (or whole messages) to external services
 
 local redis_params
-local lutil = require "lua_util"
+local lua_util = require "lua_util"
 local rspamd_http = require "rspamd_http"
 local rspamd_tcp = require "rspamd_tcp"
 local rspamd_util = require "rspamd_util"
@@ -187,7 +187,7 @@ local formatters = {
     meta.mail_to = table.concat(display_emails, ', ')
     meta.our_message_id = rspamd_util.random_hex(12) .. '@rspamd'
     meta.date = rspamd_util.time_to_string(rspamd_util.get_time())
-    return lutil.template(rule.email_template or settings.email_template, meta), {mail_targets = mail_targets}
+    return lua_util.template(rule.email_template or settings.email_template, meta), { mail_targets = mail_targets}
   end,
   json = function(task)
     return ucl.to_format(get_general_metadata(task), 'json-compact')
@@ -593,7 +593,7 @@ if type(settings.rules) ~= 'table' then
     return
   end
 elseif not next(settings.rules) then
-  rspamd_logger.debugm(N, rspamd_config, 'No rules enabled')
+  lua_util.debugm(N, rspamd_config, 'No rules enabled')
   return
 end
 if not settings.rules or not next(settings.rules) then
@@ -691,23 +691,23 @@ local function gen_exporter(rule)
     local selector = rule.selector or 'default'
     local selected = selectors[selector](task)
     if selected then
-      rspamd_logger.debugm(N, task, 'Message selected for processing')
+      lua_util.debugm(N, task, 'Message selected for processing')
       local formatter = rule.formatter or 'default'
       local formatted, extra = formatters[formatter](task, rule)
       if formatted then
         pushers[rule.backend](task, formatted, rule, extra)
       else
-        rspamd_logger.debugm(N, task, 'Formatter [%s] returned non-truthy value [%s]', formatter, formatted)
+        lua_util.debugm(N, task, 'Formatter [%s] returned non-truthy value [%s]', formatter, formatted)
       end
     else
-      rspamd_logger.debugm(N, task, 'Selector [%s] returned non-truthy value [%s]', selector, selected)
+      lua_util.debugm(N, task, 'Selector [%s] returned non-truthy value [%s]', selector, selected)
     end
   end
 end
 
 if not next(settings.rules) then
   rspamd_logger.errx(rspamd_config, 'No rules enabled')
-  lutil.disable_module(N, "config")
+  lua_util.disable_module(N, "config")
 end
 for k, r in pairs(settings.rules) do
   rspamd_config:register_symbol({

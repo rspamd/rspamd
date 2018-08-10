@@ -18,6 +18,11 @@ if confighelp then
   return
 end
 
+local rspamd_logger = require "rspamd_logger"
+local rspamd_http = require "rspamd_http"
+local hash = require "rspamd_cryptobox_hash"
+local lua_util = require "lua_util"
+
 -- Some popular UA
 local default_ua = {
   'Mozilla/5.0 (compatible; Yahoo! Slurp; http://help.yahoo.com/help/us/ysearch/slurp)',
@@ -45,11 +50,6 @@ local settings = {
   top_urls_key = 'rdr:top_urls', -- key for top urls
   top_urls_count = 200, -- how many top urls to save
 }
-
-local rspamd_logger = require "rspamd_logger"
-local rspamd_http = require "rspamd_http"
-local hash = require "rspamd_cryptobox_hash"
-local lua_util = require "lua_util"
 
 local function cache_url(task, orig_url, url, key, param)
   local function redis_trim_cb(err, data)
@@ -166,7 +166,7 @@ local function resolve_cached(task, orig_url, url, key, param, ntries)
               if rspamd_plugins.surbl.is_redirector(task, loc) then
                 resolve_cached(task, orig_url, loc, key, param, ntries + 1)
               else
-                rspamd_logger.debugm(N, task,
+                lua_util.debugm(N, task,
                   "stop resolving redirects as %s is not a redirector", loc)
                 cache_url(task, orig_url, loc, key, param)
               end

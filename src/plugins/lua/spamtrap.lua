@@ -21,7 +21,7 @@ local rspamd_logger = require "rspamd_logger"
 local redis_params
 local use_redis = false;
 local M = 'spamtrap'
-local lutil = require "lua_util"
+local lua_util = require "lua_util"
 
 local settings = {
   symbol = 'SPAMTRAP',
@@ -65,7 +65,7 @@ local function spamtrap_cb(task)
       rspamd_logger.infox(task, 'spamtrap found: <%s>', rcpt)
       if settings.smtp_message then
         task:set_pre_result(settings['action'],
-          lutil.template(settings.smtp_message, {rcpt = rcpt}))
+          lua_util.template(settings.smtp_message, { rcpt = rcpt}))
       else
         local smtp_message = 'unknown error'
         if settings.action == 'no action' then
@@ -104,7 +104,7 @@ local function spamtrap_cb(task)
         end
         called_for_domain = true
       else
-        rspamd_logger.debugm(M, task, 'skip spamtrap for %s', target)
+        lua_util.debugm(M, task, 'skip spamtrap for %s', target)
       end
     end
   end
@@ -129,7 +129,7 @@ local function spamtrap_cb(task)
       if settings['map']:get_key(target) then
         do_action(target)
       else
-        rspamd_logger.debugm(M, task, 'skip spamtrap for %s', target)
+        lua_util.debugm(M, task, 'skip spamtrap for %s', target)
       end
     end
   end

@@ -17,6 +17,7 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_http = require "rspamd_http"
+local lua_util = require "lua_util"
 
 local exports = {}
 local N = 'clickhouse'
@@ -73,7 +74,6 @@ end
 
 -- Parses JSONEachRow reply from CH
 local function parse_clickhouse_response(params, data)
-  local lua_util = require "lua_util"
   local ucl = require "ucl"
 
   if data == nil then
@@ -129,7 +129,7 @@ local function mk_http_select_cb(upstream, params, ok_cb, fail_cb)
         if ok_cb then
           ok_cb(params, rows)
         else
-          rspamd_logger.debugm(N, params.log_obj,
+          lua_util.debugm(N, params.log_obj,
               "http_select_cb ok: %s, %s, %s, %s", err_message, code,
               data:gsub('[\n%s]+', ' '), _)
         end
@@ -170,7 +170,7 @@ local function mk_http_insert_cb(upstream, params, ok_cb, fail_cb)
       if ok_cb then
         ok_cb(params, data)
       else
-        rspamd_logger.debugm(N, params.log_obj,
+        lua_util.debugm(N, params.log_obj,
             "http_insert_cb ok: %s, %s, %s, %s", err_message, code,
             data:gsub('[\n%s]+', ' '), _)
       end
@@ -214,7 +214,7 @@ exports.select = function (upstream, settings, params, query, ok_cb, fail_cb)
   http_params.body = query
   http_params.log_obj = params.task or params.config
 
-  rspamd_logger.debugm(N, http_params.log_obj, "clickhouse select request: %s", http_params.body)
+  lua_util.debugm(N, http_params.log_obj, "clickhouse select request: %s", http_params.body)
 
   if not http_params.url then
     local connect_prefix = "http://"
