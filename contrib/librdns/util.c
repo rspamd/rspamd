@@ -290,7 +290,7 @@ rdns_type_fromstr (const char *str)
 }
 
 const char *
-str_from_rdns_type (enum rdns_request_type rcode)
+rdns_str_from_type (enum rdns_request_type rcode)
 {
 	switch (rcode) {
 		case RDNS_REQUEST_INVALID:

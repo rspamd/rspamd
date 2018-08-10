@@ -440,7 +440,7 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 					default:
 						msg_err_config ("invalid or unsupported reply element "
 										"for fake DNS record %s(%s): %s",
-								name, str_from_rdns_type (rtype), str_rep);
+								name, rdns_str_from_type (rtype), str_rep);
 						free (rep);
 						break;
 					}
@@ -449,7 +449,7 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 				ucl_object_iterate_free (rep_it);
 
 				if (replies) {
-					msg_info_config ("added fake record: %s(%s)", name, str_from_rdns_type (rtype));
+					msg_info_config ("added fake record: %s(%s)", name, rdns_str_from_type (rtype));
 					rdns_resolver_set_fake_reply (dns_resolver->r,
 							name, rtype, rcode, replies);
 				}
@@ -464,7 +464,7 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 
 				if (replies_obj) {
 					msg_warn_config ("replies are set for non-successful return "
-					  "code for %s(%s), they will be ignored", name, str_from_rdns_type (rtype));
+					  "code for %s(%s), they will be ignored", name, rdns_str_from_type (rtype));
 				}
 
 				rdns_resolver_set_fake_reply (dns_resolver->r,
