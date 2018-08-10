@@ -195,44 +195,22 @@ lua_common_log_line (GLogLevelFlags level, lua_State *L,
 					d.currentline);
 		}
 
-		if (level == G_LOG_LEVEL_DEBUG) {
-			rspamd_conditional_debug (NULL,
-					NULL,
-					module,
-					uid,
-					func_buf,
-					"%s",
-					msg);
-		}
-		else {
-			rspamd_common_log_function (NULL,
-					level,
-					module,
-					uid,
-					func_buf,
-					"%s",
-					msg);
-		}
+		rspamd_common_log_function (NULL,
+				level,
+				module,
+				uid,
+				func_buf,
+				"%s",
+				msg);
 	}
 	else {
-		if (level == G_LOG_LEVEL_DEBUG) {
-			rspamd_conditional_debug (NULL,
-					NULL,
-					module,
-					uid,
-					G_STRFUNC,
-					"%s",
-					msg);
-		}
-		else {
-			rspamd_common_log_function (NULL,
-					level,
-					module,
-					uid,
-					G_STRFUNC,
-					"%s",
-					msg);
-		}
+		rspamd_common_log_function (NULL,
+				level,
+				module,
+				uid,
+				G_STRFUNC,
+				"%s",
+				msg);
 	}
 }
 
@@ -516,7 +494,7 @@ lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len)
 }
 
 static const gchar *
-lua_logger_get_id (lua_State *L, gint pos)
+lua_logger_get_id (lua_State *L, gint pos, GError **err)
 {
 	const gchar *uid = NULL, *clsname;
 
@@ -536,6 +514,10 @@ lua_logger_get_id (lua_State *L, gint pos)
 			if (task) {
 				uid = task->task_pool->tag.uid;
 			}
+			else {
+				g_set_error (err, g_quark_from_static_string ("lua_logger"),
+						EINVAL, "invalid rspamd{task}");
+			}
 		}
 		else if (strcmp (clsname, "rspamd{mempool}") == 0) {
 			rspamd_mempool_t  *pool;
@@ -545,6 +527,10 @@ lua_logger_get_id (lua_State *L, gint pos)
 			if (pool) {
 				uid = pool->tag.uid;
 			}
+			else {
+				g_set_error (err, g_quark_from_static_string ("lua_logger"),
+						EINVAL, "invalid rspamd{mempool}");
+			}
 		}
 		else if (strcmp (clsname, "rspamd{config}") == 0) {
 			struct rspamd_config *cfg;
@@ -552,7 +538,13 @@ lua_logger_get_id (lua_State *L, gint pos)
 			cfg = lua_check_config (L, pos);
 
 			if (cfg) {
-				uid = cfg->checksum;
+				if (cfg->checksum) {
+					uid = cfg->checksum;
+				}
+			}
+			else {
+				g_set_error (err, g_quark_from_static_string ("lua_logger"),
+						EINVAL, "invalid rspamd{config}");
 			}
 		}
 		else if (strcmp (clsname, "rspamd{map}") == 0) {
@@ -568,11 +560,23 @@ lua_logger_get_id (lua_State *L, gint pos)
 					uid = "embedded";
 				}
 			}
+			else {
+				g_set_error (err, g_quark_from_static_string ("lua_logger"),
+						EINVAL, "invalid rspamd{map}");
+			}
+		}
+		else {
+			g_set_error (err, g_quark_from_static_string ("lua_logger"),
+					EINVAL, "unknown class: %s", clsname);
 		}
 
 
 		/* Metatable, __index, classname */
 		lua_pop (L, 3);
+	}
+	else {
+		g_set_error (err, g_quark_from_static_string ("lua_logger"),
+				EINVAL, "no metatable found for userdata");
 	}
 
 	return uid;
@@ -709,7 +713,8 @@ lua_logger_do_log (lua_State *L,
 	gchar logbuf[RSPAMD_LOGBUF_SIZE - 128];
 	const gchar *uid = NULL;
 	gint fmt_pos = start_pos;
-	gboolean ret;
+	gint ret;
+	GError *err = NULL;
 
 	if (lua_type (L, start_pos) == LUA_TSTRING) {
 		fmt_pos = start_pos;
@@ -717,10 +722,17 @@ lua_logger_do_log (lua_State *L,
 	else if (lua_type (L, start_pos) == LUA_TUSERDATA) {
 		fmt_pos = start_pos + 1;
 
-		uid = lua_logger_get_id (L, start_pos);
+		uid = lua_logger_get_id (L, start_pos, &err);
 
 		if (uid == NULL) {
-			return luaL_error (L, "bad userdata for logging");
+			ret = luaL_error (L, "bad userdata for logging: %s",
+					err ? err->message : "unknown error");
+
+			if (err) {
+				g_error_free (err);
+			}
+
+			return ret;
 		}
 	}
 	else {
@@ -793,7 +805,7 @@ lua_logger_logx (lua_State *L)
 	LUA_TRACE_POINT;
 	GLogLevelFlags flags = lua_tonumber (L, 1);
 
-	return lua_logger_do_log (L, (flags & G_LOG_LEVEL_MASK), FALSE, 2);
+	return lua_logger_do_log (L, flags, FALSE, 2);
 }
 
 
@@ -811,7 +823,7 @@ lua_logger_debugm (lua_State *L)
 		uid = luaL_checkstring (L, 2);
 	}
 	else {
-		uid = lua_logger_get_id (L, 2);
+		uid = lua_logger_get_id (L, 2, NULL);
 	}
 
 	if (uid && module && lua_type (L, 3) == LUA_TSTRING) {

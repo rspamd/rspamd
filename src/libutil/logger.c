@@ -545,7 +545,7 @@ rspamd_logger_need_log (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 {
 	g_assert (rspamd_log != NULL);
 
-	if (log_level <= rspamd_log->cfg->log_level) {
+	if ((log_level & RSPAMD_LOG_FORCED) || log_level <= rspamd_log->cfg->log_level) {
 		return TRUE;
 	}
 
