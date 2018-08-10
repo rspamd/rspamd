@@ -843,7 +843,6 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 	if (RSPAMD_TASK_IS_SKIPPED (task)) {
 		/* Set all bits except idempotent filters */
 		task->processed_stages |= 0x7FFF;
-		return rspamd_task_process (task, stages);
 	}
 
 	task->flags &= ~RSPAMD_TASK_FLAG_PROCESSING;
