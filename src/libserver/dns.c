@@ -385,8 +385,8 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 						svec = g_strsplit_set (str_rep, " :", -1);
 
 						if (svec && svec[0] && svec[1]) {
-							rep->content.mx.name = strdup (svec[0]);
-							rep->content.mx.priority = strtoul (svec[1], NULL, 10);
+							rep->content.mx.priority = strtoul (svec[0], NULL, 10);
+							rep->content.mx.name = strdup (svec[1]);
 							DL_APPEND (replies, rep);
 						}
 						else {
