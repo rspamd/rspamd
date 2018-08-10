@@ -12,6 +12,7 @@ import string
 import sys
 import tempfile
 import time
+from robot.libraries.BuiltIn import BuiltIn
 
 if sys.version_info > (3,):
     long = int
@@ -32,6 +33,19 @@ def Check_JSON(j):
 
 def cleanup_temporary_directory(directory):
     shutil.rmtree(directory)
+
+def save_run_results(directory, filenames):
+    current_directory = os.getcwd()
+    destination_directory = "%s/robot-save/%s/%s" % (
+        current_directory, BuiltIn().get_variable_value("${SUITE_NAME}"), BuiltIn().get_variable_value("${TEST_NAME}")
+    )
+    if not os.path.isdir(destination_directory):
+        os.makedirs(destination_directory)
+    for file in filenames.split(' '):
+        source_file = "%s/%s" % (directory, file)
+        if os.path.isfile(source_file):
+            shutil.copy(source_file, "%s/%s" % (destination_directory, file))
+            shutil.copy(source_file, "%s/robot-save/%s.last" % (current_directory, file))
 
 def encode_filename(filename):
     return "".join(['%%%0X' % ord(b) for b in filename])
@@ -58,6 +72,7 @@ def get_rspamd():
         return os.environ['RSPAMD_INSTALLROOT'] + "/bin/rspamd"
     dname = get_top_dir()
     return dname + "/src/rspamd"
+
 def get_rspamc():
     if os.environ.get('RSPAMC'):
         return os.environ['RSPAMC']
@@ -65,6 +80,7 @@ def get_rspamc():
         return os.environ['RSPAMD_INSTALLROOT'] + "/bin/rspamc"
     dname = get_top_dir()
     return dname + "/src/client/rspamc"
+
 def get_rspamadm():
     if os.environ.get('RSPAMADM'):
         return os.environ['RSPAMADM']
