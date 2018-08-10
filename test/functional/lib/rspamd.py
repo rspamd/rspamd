@@ -39,7 +39,8 @@ def save_run_results(directory, filenames):
     destination_directory = "%s/robot-save/%s/%s" % (
         current_directory, BuiltIn().get_variable_value("${SUITE_NAME}"), BuiltIn().get_variable_value("${TEST_NAME}")
     )
-    os.makedirs(destination_directory)
+    if not os.path.isdir(destination_directory):
+        os.makedirs(destination_directory)
     for file in filenames.split(' '):
         source_file = "%s/%s" % (directory, file)
         if os.path.isfile(source_file):
