@@ -286,7 +286,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 tabClick("#status_nav");
             }
         });
-        tab_config.setup(ui, checked_server);
+        tab_config.setup(ui);
         tab_symbols.setup(ui);
         tab_upload.setup(ui);
         selData = tab_graph.setup();
