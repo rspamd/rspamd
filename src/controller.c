@@ -1059,7 +1059,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	rspamd_http_connection_reset (conn_ent->conn);
-	rspamd_http_router_insert_headers (conn_ent->rt, msg);
+	rspamd_http_router_insert_headers (conn_ent->rt, reply);
 	rspamd_http_connection_write_message (conn_ent->conn, reply, NULL,
 		"text/plain", conn_ent, conn_ent->conn->fd,
 		conn_ent->rt->ptv, conn_ent->rt->ev_base);
