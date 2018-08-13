@@ -917,9 +917,14 @@ proxy_backend_parse_results (struct rspamd_proxy_session *session,
 		parser = ucl_parser_new (0);
 
 		if (!ucl_parser_add_chunk (parser, in, inlen)) {
+			gchar *encoded;
+
+			encoded = rspamd_encode_base64 (in, inlen, 0, NULL);
 			msg_err_session ("cannot parse input: %s", ucl_parser_get_error (
 					parser));
+			msg_err_session ("input encoded: %s", encoded);
 			ucl_parser_free (parser);
+			g_free (encoded);
 
 			return FALSE;
 		}
