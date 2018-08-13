@@ -344,8 +344,13 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 				return;
 			}
 
-			rc = rspamd_process_expression (comp->expr,
-					RSPAMD_EXPRESSION_FLAG_NOOPT, cd);
+			struct rspamd_expr_process_data process_data;
+			memset (&process_data, 0, sizeof process_data);
+
+			process_data.flags = RSPAMD_EXPRESSION_FLAG_NOOPT;
+			process_data.cd = cd;
+
+			rc = rspamd_process_expression (comp->expr, &process_data);
 
 			/* Checked bit */
 			setbit (cd->checked, comp->id * 2);
