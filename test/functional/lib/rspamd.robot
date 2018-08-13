@@ -70,6 +70,7 @@ Generic Teardown
   [Arguments]  @{ports}
   Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Check Controller Errors
   Shutdown Process With Children  ${RSPAMD_PID}
+  Save Run Results  ${TMPDIR}  rspamd.log redis.log rspamd.conf
   Cleanup Temporary Directory  ${TMPDIR}
 
 Log Logs
