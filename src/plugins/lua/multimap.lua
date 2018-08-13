@@ -685,10 +685,10 @@ local function multimap_callback(task, rule)
     local res,trace = rule['expression']:process_traced(task)
 
     if not res or res == 0 then
-      rspamd_logger.debugm(N, task, 'condition is false for %s', rule['symbol'])
+      lua_util.debugm(N, task, 'condition is false for %s', rule['symbol'])
       return
     else
-      rspamd_logger.debugm(N, task, 'condition is true for %s: %s', rule['symbol'],
+      lua_util.debugm(N, task, 'condition is true for %s: %s', rule['symbol'],
         trace)
     end
   end
@@ -1060,7 +1060,7 @@ local function add_multimap_rule(key, newrule)
 
       local function process_atom(atom, task)
         local f_ret = task:has_symbol(atom)
-        rspamd_logger.debugm(N, rspamd_config, 'check for symbol %s: %s', atom, f_ret)
+        lua_util.debugm(N, rspamd_config, 'check for symbol %s: %s', atom, f_ret)
 
         if f_ret then
           return 1
@@ -1075,7 +1075,7 @@ local function add_multimap_rule(key, newrule)
         newrule['expression'] = expression
 
         fun.each(function(v)
-          rspamd_logger.debugm(N, rspamd_config, 'add dependency %s -> %s',
+          lua_util.debugm(N, rspamd_config, 'add dependency %s -> %s',
             newrule['symbol'], v)
           rspamd_config:register_dependency(newrule['symbol'], v)
         end, atoms)

@@ -24,6 +24,7 @@ local rspamd_tcp = require "rspamd_tcp"
 local rspamd_url = require "rspamd_url"
 local rspamd_util = require "rspamd_util"
 local rspamd_redis = require "lua_redis"
+local lua_util = require "lua_util"
 local check_local = false
 local check_authed = false
 
@@ -665,7 +666,7 @@ if opts['reporting'] == true then
       local function dmarc_report_xml()
         local entries = {}
         report_id = string.format('%s.%d.%d', reporting_domain, report_start, report_end)
-        rspamd_logger.debugm(N, rspamd_config, 'new report: %s', report_id)
+        lua_util.debugm(N, rspamd_config, 'new report: %s', report_id)
         local actions = {
           push = function(t)
             local data = t[1]
@@ -1183,19 +1184,19 @@ if opts['reporting'] == true then
       end
       local time = rspamd_util.get_time()
       if not stamp then
-        rspamd_logger.debugm(N, rspamd_config, 'No state found - sending reports immediately')
+        lua_util.debugm(N, rspamd_config, 'No state found - sending reports immediately')
         schedule_regular_send()
         send_reports(time)
         return
       end
       local delta = stamp - time + INTERVAL
       if delta <= 0 then
-        rspamd_logger.debugm(N, rspamd_config, 'Last send is too old - sending reports immediately')
+        lua_util.debugm(N, rspamd_config, 'Last send is too old - sending reports immediately')
         schedule_regular_send()
         send_reports(time)
         return
       end
-      rspamd_logger.debugm(N, rspamd_config, 'Scheduling next send in %s seconds', delta)
+      lua_util.debugm(N, rspamd_config, 'Scheduling next send in %s seconds', delta)
       schedule_intermediate_send(delta)
     end)
   end

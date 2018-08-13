@@ -23,7 +23,6 @@ if confighelp then
   return
 end
 
-local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local lua_util = require "lua_util"
 local rspamc_local_helo = "rspamc.local"
@@ -230,7 +229,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
   local function check_host_cb_mx(_, to_resolve, results, err)
     task:inc_dns_req()
     if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
-        rspamd_logger.debugm(N, task, 'error looking up %s: %s', to_resolve, err)
+        lua_util.debugm(N, task, 'error looking up %s: %s', to_resolve, err)
     end
     if not results then
       task:insert_result('HFILTER_' .. symbol_suffix .. '_NORES_A_OR_MX', 1.0,

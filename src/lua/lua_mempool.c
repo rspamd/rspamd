@@ -152,6 +152,7 @@ rspamd_lua_check_mempool (lua_State * L, gint pos)
 static int
 lua_mempool_create (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_mempool_new (
 			rspamd_mempool_suggest_size (), "lua"), **pmempool;
 
@@ -183,6 +184,7 @@ lua_mempool_destructor_func (gpointer p)
 static int
 lua_mempool_add_destructor (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	struct lua_mempool_udata *ud;
 
@@ -213,6 +215,7 @@ lua_mempool_add_destructor (lua_State *L)
 static int
 lua_mempool_delete (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 
 	if (mempool) {
@@ -229,6 +232,7 @@ lua_mempool_delete (lua_State *L)
 static int
 lua_mempool_stat (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 
 	if (mempool) {
@@ -244,6 +248,7 @@ lua_mempool_stat (lua_State *L)
 static int
 lua_mempool_suggest_size (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 
 	if (mempool) {
@@ -265,6 +270,7 @@ struct lua_numbers_bucket {
 static int
 lua_mempool_set_bucket (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	const gchar *var = luaL_checkstring (L, 2);
 	struct lua_numbers_bucket *bucket;
@@ -301,6 +307,7 @@ lua_mempool_set_bucket (lua_State *L)
 static int
 lua_mempool_set_variable (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	const gchar *var = luaL_checkstring (L, 2);
 	gpointer value;
@@ -400,6 +407,7 @@ lua_mempool_set_variable (lua_State *L)
 static int
 lua_mempool_get_variable (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	const gchar *var = luaL_checkstring (L, 2);
 	const gchar *type = NULL, *pt;
@@ -516,6 +524,7 @@ lua_mempool_get_variable (lua_State *L)
 static int
 lua_mempool_has_variable (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	const gchar *var = luaL_checkstring (L, 2);
 	gboolean ret = FALSE;
@@ -534,6 +543,7 @@ lua_mempool_has_variable (lua_State *L)
 static int
 lua_mempool_delete_variable (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	const gchar *var = luaL_checkstring (L, 2);
 	gboolean ret = FALSE;

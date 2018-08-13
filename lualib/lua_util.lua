@@ -664,4 +664,37 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
   return res
 end
 
+-- Debugging support
+local unconditional_debug = false
+local debug_modules = {}
+local log_level = 384 -- debug + forced (1 << 7 | 1 << 8)
+
+if type(rspamd_config) == 'userdata' then
+  local logger = require "rspamd_logger"
+  -- Fill debug modules from the config
+  local logging = rspamd_config:get_all_opt('logging')
+  if logging then
+    local log_level_str = logging.level
+    if log_level_str then
+      if log_level_str == 'debug' then
+        unconditional_debug = true
+      end
+    end
+
+    if not unconditional_debug and logging.debug_modules then
+      for _,m in ipairs(logging.debug_modules) do
+        debug_modules[m] = true
+        logger.infox(rspamd_config, 'enable debug for Lua module %s', m)
+      end
+    end
+  end
+end
+
+exports.debugm = function(mod, ...)
+  local logger = require "rspamd_logger"
+  if unconditional_debug or debug_modules[mod] then
+    logger.logx(log_level, ...)
+  end
+end
+
 return exports

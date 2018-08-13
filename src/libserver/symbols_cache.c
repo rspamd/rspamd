@@ -1709,6 +1709,10 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		for (i = 0; i < (gint)cache->prefilters->len; i ++) {
 			item = g_ptr_array_index (cache->prefilters, i);
 
+			if (RSPAMD_TASK_IS_SKIPPED (task)) {
+				return TRUE;
+			}
+
 			if (!isset (checkpoint->processed_bits, item->id * 2) &&
 					!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
 				/* Check priorities */
@@ -1762,6 +1766,10 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		 * we just save it for another pass
 		 */
 		for (i = 0; i < (gint)checkpoint->version; i ++) {
+			if (RSPAMD_TASK_IS_SKIPPED (task)) {
+				return TRUE;
+			}
+
 			item = g_ptr_array_index (checkpoint->order->d, i);
 
 			if (item->type & SYMBOL_TYPE_CLASSIFIER) {
@@ -1882,6 +1890,10 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		saved_priority = G_MININT;
 
 		for (i = 0; i < (gint)cache->postfilters->len; i ++) {
+			if (RSPAMD_TASK_IS_SKIPPED (task)) {
+				return TRUE;
+			}
+
 			item = g_ptr_array_index (cache->postfilters, i);
 
 			if (!isset (checkpoint->processed_bits, item->id * 2) &&

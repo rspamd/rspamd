@@ -27,36 +27,6 @@ define(["jquery"],
         "use strict";
         var ui = {};
 
-        function save_map_success(rspamd) {
-            rspamd.alertMessage("alert-modal alert-success", "Map data successfully saved");
-            $("#modalDialog").modal("hide");
-        }
-        function save_map_error(rspamd, serv, jqXHR, textStatus, errorThrown) {
-            var serv_name = (typeof serv === "string") ? serv : serv.name;
-            rspamd.alertMessage("alert-modal alert-error", "Save map error on " +
-                serv_name + ": " + errorThrown);
-        }
-        // @upload map from modal
-        function saveMap(rspamd, action, id) {
-            var data = $("#" + id).find("textarea").val();
-            $.ajax({
-                data: data,
-                dataType: "text",
-                type: "POST",
-                jsonp: false,
-                url: action,
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader("Password", rspamd.getPassword());
-                    xhr.setRequestHeader("Map", id);
-                    xhr.setRequestHeader("Debug", true);
-                },
-                error: function (jqXHR) {
-                    save_map_error(rspamd, "local", null, null, jqXHR.statusText);
-                },
-                success: function () { save_map_success(rspamd); },
-            });
-        }
-
         function loadActionsFromForm() {
             var values = [];
             var inputs = $("#actionsForm :input[data-id=\"action\"]");
@@ -196,9 +166,14 @@ define(["jquery"],
         };
 
         // @upload edited actions
-        ui.setup = function (rspamd, checked_server) {
+        ui.setup = function (rspamd) {
         // Modal form for maps
             $(document).on("click", "[data-toggle=\"modal\"]", function () {
+                function getSelector(id) {
+                    var e = document.getElementById(id);
+                    return e.options[e.selectedIndex].value;
+                }
+                var checked_server = getSelector("selSrv");
                 var item = $(this).data("item");
                 rspamd.query("getmap", {
                     headers: {
@@ -240,20 +215,15 @@ define(["jquery"],
                 $("#modalBody form").hide();
             });
             // @save forms from modal
-            $("#modalSave").on("click", function () {
-                var form = $("#modalBody").children().filter(":visible");
-                var action = $(form).attr("action");
-                var id = $(form).attr("id");
-                saveMap(rspamd, action, id);
-            });
-            $("#modalSaveAll").on("click", function () {
+            function saveMap(server) {
                 var form = $("#modalBody").children().filter(":visible");
                 var action = $(form).attr("action");
                 var id = $(form).attr("id");
                 var data = $("#" + id).find("textarea").val();
                 rspamd.query(action, {
                     success: function () {
-                        save_map_success(rspamd);
+                        rspamd.alertMessage("alert-success", "Map data successfully saved");
+                        $("#modalDialog").modal("hide");
                     },
                     errorMessage: "Save map error",
                     method: "POST",
@@ -263,8 +233,15 @@ define(["jquery"],
                     params:{
                         data: data,
                         dataType: "text",
-                    }
+                    },
+                    server: server
                 });
+            }
+            $("#modalSave").on("click", function () {
+                saveMap();
+            });
+            $("#modalSaveAll").on("click", function () {
+                saveMap("All SERVERS");
             });
         };
 

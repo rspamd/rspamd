@@ -842,6 +842,7 @@ lua_config_get_api_version (lua_State *L)
 static gint
 lua_config_get_module_opt (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *mname, *optname;
 	const ucl_object_t *obj;
@@ -864,6 +865,7 @@ lua_config_get_module_opt (lua_State * L)
 static int
 lua_config_get_mempool (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	rspamd_mempool_t **ppool;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 
@@ -881,6 +883,7 @@ lua_config_get_mempool (lua_State * L)
 static int
 lua_config_get_resolver (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_dns_resolver **pres;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 
@@ -899,6 +902,7 @@ lua_config_get_resolver (lua_State * L)
 static gint
 lua_config_get_all_opt (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *mname;
 	const ucl_object_t *obj, *cur, *cur_elt;
@@ -966,6 +970,7 @@ lua_config_ucl_dtor (gpointer p)
 static gint
 lua_config_get_ucl (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_lua_cached_config *cached;
 
@@ -996,6 +1001,7 @@ lua_config_get_ucl (lua_State * L)
 static gint
 lua_config_get_classifier (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_classifier_config *clc = NULL, **pclc = NULL;
 	const gchar *name;
@@ -1469,6 +1475,7 @@ rspamd_register_symbol_fromlua (lua_State *L,
 static gint
 lua_config_register_post_filter (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	gint order = 0, cbref, ret;
 
@@ -1513,6 +1520,7 @@ lua_config_register_post_filter (lua_State *L)
 static gint
 lua_config_register_pre_filter (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	gint order = 0, cbref, ret;
 
@@ -1557,6 +1565,7 @@ lua_config_register_pre_filter (lua_State *L)
 static gint
 lua_config_get_key (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name;
 	size_t namelen;
@@ -1667,6 +1676,7 @@ lua_parse_symbol_type (const gchar *str)
 static gint
 lua_config_register_symbol (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name = NULL, *flags_str = NULL, *type_str = NULL,
 			*description = NULL, *group = NULL;
@@ -1770,6 +1780,7 @@ lua_config_register_symbol (lua_State * L)
 static gint
 lua_config_register_symbols (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	gint i, top, idx, ret = -1;
 	const gchar *sym;
@@ -1843,6 +1854,7 @@ lua_config_register_symbols (lua_State *L)
 static gint
 lua_config_register_virtual_symbol (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name;
 	double weight;
@@ -1871,6 +1883,7 @@ lua_config_register_virtual_symbol (lua_State * L)
 static gint
 lua_config_register_callback_symbol (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name = NULL;
 	double weight;
@@ -1911,6 +1924,7 @@ lua_config_register_callback_symbol (lua_State * L)
 static gint
 lua_config_register_callback_symbol_priority (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name = NULL;
 	double weight;
@@ -1989,6 +2003,7 @@ rspamd_lua_squeeze_dependency (lua_State *L, struct rspamd_config *cfg,
 static gint
 lua_config_register_dependency (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *parent = NULL, *child = NULL;
 	gint child_id;
@@ -2045,6 +2060,7 @@ lua_config_register_dependency (lua_State * L)
 static gint
 lua_config_set_metric_symbol (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *description = NULL,
 			*group = NULL, *name = NULL, *flags_str = NULL;
@@ -2144,6 +2160,7 @@ lua_config_set_metric_symbol (lua_State * L)
 static gint
 lua_config_get_metric_symbol (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *sym_name = luaL_checkstring (L, 2);
 	struct rspamd_symbol *sym_def;
@@ -2195,6 +2212,7 @@ lua_config_get_metric_symbol (lua_State * L)
 static gint
 lua_config_set_metric_action (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name = NULL;
 	double weight;
@@ -2233,6 +2251,7 @@ lua_config_set_metric_action (lua_State * L)
 static gint
 lua_config_get_metric_action (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *act_name = luaL_checkstring (L, 2);
 	gint act = 0;
@@ -2260,6 +2279,7 @@ lua_config_get_metric_action (lua_State * L)
 static gint
 lua_config_get_all_actions (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	gint act = 0;
 
@@ -2284,6 +2304,7 @@ lua_config_get_all_actions (lua_State * L)
 static gint
 lua_config_add_composite (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_expression *expr;
 	gchar *name;
@@ -2339,6 +2360,7 @@ lua_config_add_composite (lua_State * L)
 static gint
 lua_config_newindex (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name;
 	gint id, nshots;
@@ -2567,6 +2589,7 @@ lua_config_newindex (lua_State *L)
 static gint
 lua_config_add_condition (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *sym = luaL_checkstring (L, 2);
 	gboolean ret = FALSE;
@@ -2591,6 +2614,7 @@ lua_config_add_condition (lua_State *L)
 static gint
 lua_config_set_peak_cb (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	gint condref;
 
@@ -2607,6 +2631,7 @@ lua_config_set_peak_cb (lua_State *L)
 static gint
 lua_config_enable_symbol (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *sym = luaL_checkstring (L, 2);
 
@@ -2623,6 +2648,7 @@ lua_config_enable_symbol (lua_State *L)
 static gint
 lua_config_disable_symbol (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *sym = luaL_checkstring (L, 2);
 
@@ -2639,6 +2665,7 @@ lua_config_disable_symbol (lua_State *L)
 static gint
 lua_config_register_regexp (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_lua_regexp *re = NULL;
 	rspamd_regexp_t *cache_re;
@@ -2722,6 +2749,7 @@ lua_config_register_regexp (lua_State *L)
 static gint
 lua_config_replace_regexp (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_lua_regexp *old_re = NULL, *new_re = NULL;
 	GError *err = NULL;
@@ -2747,6 +2775,7 @@ lua_config_replace_regexp (lua_State *L)
 static gint
 lua_config_register_worker_script (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *worker_type = luaL_checkstring (L, 2), *wtype;
 	struct rspamd_worker_conf *cf;
@@ -2779,6 +2808,7 @@ lua_config_register_worker_script (lua_State *L)
 static gint
 lua_config_add_on_load (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_config_post_load_script *sc;
 
@@ -2868,6 +2898,7 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 static gint
 lua_config_add_periodic (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct event_base *ev_base = lua_check_ev_base (L, 2);
 	gdouble timeout = lua_tonumber (L, 3);
@@ -2907,6 +2938,7 @@ lua_config_add_periodic (lua_State *L)
 static gint
 lua_config_get_symbols_count (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	guint res = 0;
 
@@ -2925,6 +2957,7 @@ lua_config_get_symbols_count (lua_State *L)
 static gint
 lua_config_get_symbols_cksum (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	guint64 res = 0, *pres;
 
@@ -2945,6 +2978,7 @@ lua_config_get_symbols_cksum (lua_State *L)
 static gint
 lua_config_get_symbols_counters (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	ucl_object_t *counters;
 
@@ -2982,6 +3016,7 @@ lua_metric_symbol_inserter (gpointer k, gpointer v, gpointer ud)
 static gint
 lua_config_get_symbols_scores (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 
 	if (cfg != NULL) {
@@ -3001,6 +3036,7 @@ lua_config_get_symbols_scores (lua_State *L)
 static gint
 lua_config_get_symbol_callback (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *sym = luaL_checkstring (L, 2);
 	struct rspamd_abstract_callback_data *abs_cbdata;
@@ -3033,6 +3069,7 @@ lua_config_get_symbol_callback (lua_State *L)
 static gint
 lua_config_set_symbol_callback (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *sym = luaL_checkstring (L, 2);
 	struct rspamd_abstract_callback_data *abs_cbdata;
@@ -3069,6 +3106,7 @@ lua_config_set_symbol_callback (lua_State *L)
 static gint
 lua_config_get_symbol_stat (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *sym = luaL_checkstring (L, 2);
 	gdouble freq, stddev, tm;
@@ -3106,6 +3144,7 @@ lua_config_get_symbol_stat (lua_State *L)
 static gint
 lua_config_register_finish_script (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_config_post_load_script *sc;
 
@@ -3125,6 +3164,7 @@ lua_config_register_finish_script (lua_State *L)
 static gint
 lua_config_register_monitored (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_monitored *m, **pm;
 	const gchar *url, *type;
@@ -3176,6 +3216,7 @@ lua_config_register_monitored (lua_State *L)
 static gint
 lua_config_add_doc (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg;
 	const gchar *path = NULL, *option, *doc_string;
 	const gchar *type_str = NULL, *default_value = NULL;
@@ -3224,6 +3265,7 @@ lua_config_add_doc (lua_State *L)
 static gint
 lua_config_add_example (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg;
 	const gchar *path = NULL, *option, *doc_string, *example;
 	gsize example_len;
@@ -3253,6 +3295,7 @@ lua_config_add_example (lua_State *L)
 static gint
 lua_config_get_cpu_flags (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_cryptobox_library_ctx *crypto_ctx;
 
@@ -3306,6 +3349,7 @@ lua_config_get_cpu_flags (lua_State *L)
 static gint
 lua_config_has_torch (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct rspamd_cryptobox_library_ctx *crypto_ctx;
 
@@ -3333,6 +3377,7 @@ lua_config_has_torch (lua_State *L)
 static gint
 lua_config_experimental_enabled (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 
 	if (cfg != NULL) {
@@ -3415,6 +3460,7 @@ lua_config_load_ucl (lua_State *L)
 static gint
 lua_config_parse_rcl (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	GHashTable *excluded = g_hash_table_new_full (rspamd_str_hash, rspamd_str_equal,
 			g_free, NULL);
@@ -3459,6 +3505,7 @@ lua_config_parse_rcl (lua_State *L)
 static gint
 lua_config_init_modules (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 
 	if (cfg != NULL) {
@@ -3475,6 +3522,7 @@ lua_config_init_modules (lua_State *L)
 static gint
 lua_config_init_subsystem (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *subsystem = luaL_checkstring (L, 2);
 	gchar **parts;
@@ -3510,6 +3558,7 @@ lua_config_init_subsystem (lua_State *L)
 static gint
 lua_config_get_tld_path (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 
 	if (cfg != NULL) {
@@ -3525,6 +3574,7 @@ lua_config_get_tld_path (lua_State *L)
 static gint
 lua_monitored_alive (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_monitored *m = lua_check_monitored (L, 1);
 
 	if (m) {
@@ -3540,6 +3590,7 @@ lua_monitored_alive (lua_State *L)
 static gint
 lua_monitored_offline (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_monitored *m = lua_check_monitored (L, 1);
 
 	if (m) {
@@ -3555,6 +3606,7 @@ lua_monitored_offline (lua_State *L)
 static gint
 lua_monitored_total_offline (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_monitored *m = lua_check_monitored (L, 1);
 
 	if (m) {
@@ -3570,6 +3622,7 @@ lua_monitored_total_offline (lua_State *L)
 static gint
 lua_monitored_latency (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_monitored *m = lua_check_monitored (L, 1);
 
 	if (m) {

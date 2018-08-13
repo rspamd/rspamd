@@ -15,7 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
-local lutil = require "lua_util"
+local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local dkim_sign_tools = require "lua_dkim_tools"
 local rspamd_util = require "rspamd_util"
@@ -103,7 +103,7 @@ local function dkim_signing_cb(task)
           rspamd_logger.infox(task, "cannot make request to load DKIM key for %s: %s",
               rk, err)
         elseif type(data) ~= 'string' then
-          rspamd_logger.debugm(N, task, "missing DKIM key for %s", rk)
+          lua_util.debugm(N, task, "missing DKIM key for %s", rk)
         else
           p.rawkey = data
           do_sign()
@@ -150,11 +150,11 @@ local function dkim_signing_cb(task)
     end
   else
     if (p.key and p.selector) then
-      p.key = lutil.template(p.key, {domain = p.domain, selector = p.selector})
+      p.key = lua_util.template(p.key, { domain = p.domain, selector = p.selector})
       local exists,err = rspamd_util.file_exists(p.key)
       if not exists then
         if err and err == 'No such file or directory' then
-          rspamd_logger.debugm(N, task, 'cannot read key from %s: %s', p.key, err)
+          lua_util.debugm(N, task, 'cannot read key from %s: %s', p.key, err)
         else
           rspamd_logger.warnx(N, task, 'cannot read key from %s: %s', p.key, err)
         end
@@ -184,7 +184,7 @@ for k,v in pairs(opts) do
 end
 if not (settings.use_redis or settings.path or settings.domain or settings.path_map or settings.selector_map) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable dkim signing')
-  lutil.disable_module(N, "config")
+  lua_util.disable_module(N, "config")
   return
 end
 if settings.use_redis then
@@ -193,7 +193,7 @@ if settings.use_redis then
   if not redis_params then
     rspamd_logger.errx(rspamd_config,
         'no servers are specified, but module is configured to load keys from redis, disable dkim signing')
-    lutil.disable_module(N, "redis")
+    lua_util.disable_module(N, "redis")
     return
   end
 end

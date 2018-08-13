@@ -19,6 +19,15 @@ if confighelp then
   return
 end
 
+local rspamd_logger = require "rspamd_logger"
+local rspamd_util = require "rspamd_util"
+local rspamd_lua_utils = require "lua_util"
+local lua_redis = require "lua_redis"
+local fun = require "fun"
+local lua_maps = require "lua_maps"
+local lua_util = require "lua_util"
+local rspamd_hash = require "rspamd_cryptobox_hash"
+
 -- A plugin that implements ratelimits using redis
 
 local E = {}
@@ -147,15 +156,6 @@ local bucket_update_id
 local message_func = function(_, limit_type, _, _)
   return string.format('Ratelimit "%s" exceeded', limit_type)
 end
-
-local rspamd_logger = require "rspamd_logger"
-local rspamd_util = require "rspamd_util"
-local rspamd_lua_utils = require "lua_util"
-local lua_redis = require "lua_redis"
-local fun = require "fun"
-local lua_maps = require "lua_maps"
-local lua_util = require "lua_util"
-local rspamd_hash = require "rspamd_cryptobox_hash"
 
 
 local function load_scripts(cfg, ev_base)
@@ -500,7 +500,7 @@ local function ratelimit_cb(task)
     for pr,value in pairs(prefixes) do
       local bucket = value.bucket
       local rate = (bucket.rate) / 1000.0 -- Leak rate in messages/ms
-      rspamd_logger.debugm(N, task, "check limit %s:%s -> %s (%s/%s)",
+      lua_util.debugm(N, task, "check limit %s:%s -> %s (%s/%s)",
           value.name, pr, value.hash, bucket.burst, bucket.rate)
       lua_redis.exec_redis_script(bucket_check_id,
               {key = value.hash, task = task, is_write = true},
@@ -517,7 +517,7 @@ local function ratelimit_update_cb(task)
   if prefixes then
     if task:has_pre_result() then
       -- Already rate limited/greylisted, do nothing
-      rspamd_logger.debugm(N, task, 'pre-action has been set, do not update')
+      lua_util.debugm(N, task, 'pre-action has been set, do not update')
       return
     end
 
@@ -531,7 +531,7 @@ local function ratelimit_update_cb(task)
           rspamd_logger.errx(task, 'cannot update rate bucket %s: %s',
                   k, err)
         else
-          rspamd_logger.debugm(N, task,
+          lua_util.debugm(N, task,
               "updated limit %s:%s -> %s (%s/%s), burst: %s, dyn_rate: %s, dyn_burst: %s",
               v.name, k, v.hash,
               bucket.burst, bucket.rate,

@@ -306,7 +306,7 @@ end
 local function freemail_search(input)
   local res = 0
   local function trie_callback(number, pos)
-    rspamd_logger.debugm(N, rspamd_config, 'Matched pattern %1 at pos %2', freemail_domains[number], pos)
+    lua_util.debugm(N, rspamd_config, 'Matched pattern %1 at pos %2', freemail_domains[number], pos)
     res = res + 1
   end
 
@@ -562,7 +562,7 @@ local function maybe_parse_sa_function(line)
   local elts = split(line, '[^:]+')
   arg = elts[2]
 
-  rspamd_logger.debugm(N, rspamd_config, 'trying to parse SA function %1 with args %2',
+  lua_util.debugm(N, rspamd_config, 'trying to parse SA function %1 with args %2',
     elts[1], elts[2])
   local substitutions = {
     {'^exists:',
@@ -680,12 +680,12 @@ local function process_sa_conf(f)
   local function parse_score(words)
     if #words == 3 then
       -- score rule <x>
-      rspamd_logger.debugm(N, rspamd_config, 'found score for %1: %2', words[2], words[3])
+      lua_util.debugm(N, rspamd_config, 'found score for %1: %2', words[2], words[3])
       return tonumber(words[3])
     elseif #words == 6 then
       -- score rule <x1> <x2> <x3> <x4>
       -- we assume here that bayes and network are enabled and select <x4>
-      rspamd_logger.debugm(N, rspamd_config, 'found score for %1: %2', words[2], words[6])
+      lua_util.debugm(N, rspamd_config, 'found score for %1: %2', words[2], words[6])
       return tonumber(words[6])
     else
       rspamd_logger.errx(rspamd_config, 'invalid score for %1', words[2])
@@ -1173,9 +1173,9 @@ local function process_atom(atom, task)
     local res = atom_cb(task)
 
     if not res then
-      rspamd_logger.debugm(N, task, 'atom: %1, NULL result', atom)
+      lua_util.debugm(N, task, 'atom: %1, NULL result', atom)
     elseif res > 0 then
-      rspamd_logger.debugm(N, task, 'atom: %1, result: %2', atom, res)
+      lua_util.debugm(N, task, 'atom: %1, result: %2', atom, res)
     end
     return res
   else
@@ -1185,10 +1185,10 @@ local function process_atom(atom, task)
       real_sym = symbols_replacements[atom]
     end
     if task:has_symbol(real_sym) then
-      rspamd_logger.debugm(N, task, 'external atom: %1, result: 1', real_sym)
+      lua_util.debugm(N, task, 'external atom: %1, result: 1', real_sym)
       return 1
     end
-    rspamd_logger.debugm(N, task, 'external atom: %1, result: 0', real_sym)
+    lua_util.debugm(N, task, 'external atom: %1, result: 0', real_sym)
   end
   return 0
 end
@@ -1230,7 +1230,7 @@ local function post_process()
           --rule['re'] = nil
         else
           local old_max_hits = rule['re']:get_max_hits()
-          rspamd_logger.debugm(N, rspamd_config, 'replace %1 -> %2', r, nexpr)
+          lua_util.debugm(N, rspamd_config, 'replace %1 -> %2', r, nexpr)
           rspamd_config:replace_regexp({
             old_re = rule['re'],
             new_re = nre
@@ -1526,7 +1526,7 @@ local function post_process()
             if not external_deps[k][rspamd_symbol] then
               rspamd_config:register_dependency(k, rspamd_symbol)
               external_deps[k][rspamd_symbol] = true
-              rspamd_logger.debugm(N, rspamd_config,
+              lua_util.debugm(N, rspamd_config,
                 'atom %1 is a direct foreign dependency, ' ..
                 'register dependency for %2 on %3',
                 a, k, rspamd_symbol)
@@ -1556,7 +1556,7 @@ local function post_process()
               if not external_deps[k][dep] then
                 rspamd_config:register_dependency(k, dep)
                 external_deps[k][dep] = true
-                rspamd_logger.debugm(N, rspamd_config,
+                lua_util.debugm(N, rspamd_config,
                   'atom %1 is an indirect foreign dependency, ' ..
                   'register dependency for %2 on %3',
                   a, k, dep)

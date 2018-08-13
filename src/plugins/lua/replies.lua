@@ -19,6 +19,11 @@ if confighelp then
   return
 end
 
+local rspamd_logger = require 'rspamd_logger'
+local hash = require 'rspamd_cryptobox_hash'
+local lua_util = require 'lua_util'
+local lua_redis = require 'lua_redis'
+
 -- A plugin that implements replies check using redis
 
 -- Default port for redis upstreams
@@ -34,10 +39,6 @@ local settings = {
   use_local = true,
 }
 
-local rspamd_logger = require 'rspamd_logger'
-local hash = require 'rspamd_cryptobox_hash'
-local lua_util = require 'lua_util'
-local lua_redis = require 'lua_redis'
 local N = "replies"
 
 local function make_key(goop)
@@ -100,9 +101,9 @@ local function replies_set(task)
   -- If sender is unauthenticated return
   local ip = task:get_ip()
   if settings.use_auth and task:get_user() then
-    rspamd_logger.debugm(N, task, 'sender is authenticated')
+    lua_util.debugm(N, task, 'sender is authenticated')
   elseif settings.use_local and (ip and ip:is_local()) then
-    rspamd_logger.debugm(N, task, 'sender is from local network')
+    lua_util.debugm(N, task, 'sender is from local network')
   else
     return
   end
@@ -113,7 +114,7 @@ local function replies_set(task)
   end
   -- Create hash of message-id and store to redis
   local key = make_key(msg_id)
-  rspamd_logger.debugm(N, task, 'storing message-id for replies check')
+  lua_util.debugm(N, task, 'storing message-id for replies check')
   local ret = lua_redis.redis_make_request(task,
     redis_params, -- connect params
     key, -- hash key

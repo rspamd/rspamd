@@ -179,7 +179,7 @@ local function handle_history_request(task, conn, from, to, reset)
               end
               return nil
             end, data)))
-          rspamd_logger.debugm(N, task, 'decompress took %s ms',
+          lua_util.debugm(N, task, 'decompress took %s ms',
               (rspamd_util:get_ticks() - t1) * 1000.0)
           collectgarbage()
         end
@@ -203,7 +203,7 @@ local function handle_history_request(task, conn, from, to, reset)
                 return false, nil
               end
             end, data))))
-        rspamd_logger.debugm(N, task, 'parse took %s ms',
+        lua_util.debugm(N, task, 'parse took %s ms',
             (rspamd_util:get_ticks() - t1) * 1000.0)
         collectgarbage()
         t1 = rspamd_util:get_ticks()
@@ -218,7 +218,7 @@ local function handle_history_request(task, conn, from, to, reset)
         end, data)
         reply.rows = data
         conn:send_ucl(reply)
-        rspamd_logger.debugm(N, task, 'process + sending took %s ms',
+        lua_util.debugm(N, task, 'process + sending took %s ms',
             (rspamd_util:get_ticks() - t1) * 1000.0)
         collectgarbage()
       else

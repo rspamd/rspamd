@@ -3,7 +3,7 @@
 * [x] Crash/Hang/Data loss
 * [ ] WebUI/Usability
 * [ ] Serious bug
-* [ ] Other bug
+* [ ] Ordinary bug
 * [ ] Feature
 * [ ] Enhancement
 
@@ -18,13 +18,13 @@
 
 ### Rspamd version:
 
-### Operation system, CPU, memory and environment:
+### Operation system, CPU:
 
 ### Description (Please provide a descriptive summary of the issue):
 
 ### Compile errors (if any):
 
-### Steps to reproduce:
+### Relevant logs (see details [here](https://rspamd.com/doc/faq.html#how-to-debug-some-module-in-rspamd)):
 
 ### Expected results:
 
@@ -32,6 +32,6 @@
 
 ### Debugging information (see details [here](https://rspamd.com/doc/faq.html#how-to-figure-out-why-rspamd-process-crashed)):
 
-### Configuration:
+### Configuration (e.g. `rspamadm configdump module`):
 
 ### Additional information:

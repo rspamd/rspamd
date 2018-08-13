@@ -385,8 +385,8 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 						svec = g_strsplit_set (str_rep, " :", -1);
 
 						if (svec && svec[0] && svec[1]) {
-							rep->content.mx.name = strdup (svec[0]);
-							rep->content.mx.priority = strtoul (svec[1], NULL, 10);
+							rep->content.mx.priority = strtoul (svec[0], NULL, 10);
+							rep->content.mx.name = strdup (svec[1]);
 							DL_APPEND (replies, rep);
 						}
 						else {
@@ -439,8 +439,8 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 					case RDNS_REQUEST_SRV:
 					default:
 						msg_err_config ("invalid or unsupported reply element "
-										"for fake DNS record %s: %s",
-								name, str_rep);
+										"for fake DNS record %s(%s): %s",
+								name, rdns_str_from_type (rtype), str_rep);
 						free (rep);
 						break;
 					}
@@ -449,7 +449,7 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 				ucl_object_iterate_free (rep_it);
 
 				if (replies) {
-					msg_info_config ("added fake record: %s", name);
+					msg_info_config ("added fake record: %s(%s)", name, rdns_str_from_type (rtype));
 					rdns_resolver_set_fake_reply (dns_resolver->r,
 							name, rtype, rcode, replies);
 				}
@@ -464,7 +464,7 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 
 				if (replies_obj) {
 					msg_warn_config ("replies are set for non-successful return "
-					  "code for %s, they will be ignored", name);
+					  "code for %s(%s), they will be ignored", name, rdns_str_from_type (rtype));
 				}
 
 				rdns_resolver_set_fake_reply (dns_resolver->r,

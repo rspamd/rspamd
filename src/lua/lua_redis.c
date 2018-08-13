@@ -751,6 +751,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref)
 static int
 lua_redis_make_request (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_redis_specific_userdata *sp_ud;
 	struct lua_redis_userdata *ud;
 	struct lua_redis_ctx *ctx, **pctx;
@@ -858,6 +859,7 @@ lua_redis_make_request (lua_State *L)
 static int
 lua_redis_make_request_sync (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *addr = NULL;
 	rspamd_inet_addr_t *ip = NULL;
 	const gchar *cmd = NULL, *host;
@@ -1000,6 +1002,7 @@ lua_redis_make_request_sync (lua_State *L)
 static int
 lua_redis_connect (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_redis_userdata *ud;
 	struct lua_redis_ctx *ctx, **pctx;
 	gdouble timeout = REDIS_DEFAULT_TIMEOUT;
@@ -1042,6 +1045,7 @@ lua_redis_connect (lua_State *L)
 static int
 lua_redis_connect_sync (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *addr = NULL;
 	rspamd_inet_addr_t *ip = NULL;
 	const gchar *host;
@@ -1153,6 +1157,7 @@ lua_redis_connect_sync (lua_State *L)
 static int
 lua_redis_add_cmd (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_redis_ctx *ctx = lua_check_redis (L, 1);
 	struct lua_redis_specific_userdata *sp_ud;
 	struct lua_redis_userdata *ud;
@@ -1275,6 +1280,7 @@ lua_redis_add_cmd (lua_State *L)
 static int
 lua_redis_exec (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_redis_ctx *ctx = lua_check_redis (L, 1);
 	redisReply *r;
 	gint ret;
