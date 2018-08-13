@@ -693,7 +693,7 @@ end
 exports.debugm = function(mod, ...)
   local logger = require "rspamd_logger"
   if unconditional_debug or debug_modules[mod] then
-    logger.logx(log_level, ...)
+    logger.logx(log_level, mod, ...)
   end
 end
 

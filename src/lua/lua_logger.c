@@ -141,7 +141,7 @@ LUA_FUNCTION_DEF (logger, debugm);
 LUA_FUNCTION_DEF (logger, slog);
 
 /***
- * @function logger.logx(level, id, fmt[, args)
+ * @function logger.logx(level, module, id, fmt[, args)
  * Extended interface to make a generic log message on any level
  * @param {number} log level as a number (see GLogLevelFlags enum for values)
  * @param {task|cfg|pool|string} id id to log
@@ -804,8 +804,29 @@ lua_logger_logx (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	GLogLevelFlags flags = lua_tonumber (L, 1);
+	const gchar *modname = lua_tostring (L, 2), *uid = NULL;
+	gchar logbuf[RSPAMD_LOGBUF_SIZE - 128];
+	gboolean ret;
 
-	return lua_logger_do_log (L, flags, FALSE, 2);
+	if (lua_type (L, 3) == LUA_TSTRING) {
+		uid = luaL_checkstring (L, 3);
+	}
+	else {
+		uid = lua_logger_get_id (L, 3, NULL);
+	}
+
+	if (uid && modname && lua_type (L, 4) == LUA_TSTRING) {
+		ret = lua_logger_log_format (L, 4, FALSE, logbuf, sizeof (logbuf) - 1);
+
+		if (ret) {
+			lua_common_log_line (flags, L, logbuf, uid, modname);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
 }
 
 
