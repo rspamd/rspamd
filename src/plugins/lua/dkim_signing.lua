@@ -106,6 +106,8 @@ local function dkim_signing_cb(task)
           lua_util.debugm(N, task, "missing DKIM key for %s", rk)
         else
           p.rawkey = data
+          lua_util.debugm(N, task, 'found and parsed key for %s:%s in Redis',
+              p.domain, p.selector)
           do_sign()
         end
       end
@@ -122,7 +124,8 @@ local function dkim_signing_cb(task)
       end
     end
     if settings.selector_prefix then
-      rspamd_logger.infox(task, "Using selector prefix %s for domain %s", settings.selector_prefix, p.domain);
+      rspamd_logger.infox(task, "Using selector prefix '%s' for domain '%s'",
+          settings.selector_prefix, p.domain);
       local function redis_selector_cb(err, data)
         if err or type(data) ~= 'string' then
           rspamd_logger.infox(task, "cannot make request to load DKIM selector for domain %s: %s", p.domain, err)
@@ -139,7 +142,7 @@ local function dkim_signing_cb(task)
         {settings.selector_prefix, p.domain} -- arguments
       )
       if not rret then
-        rspamd_logger.infox(task, "cannot make request to load DKIM selector for %s", p.domain)
+        rspamd_logger.infox(task, "cannot make request to load DKIM selector for '%s'", p.domain)
       end
     else
       if not p.selector then
@@ -154,12 +157,15 @@ local function dkim_signing_cb(task)
       local exists,err = rspamd_util.file_exists(p.key)
       if not exists then
         if err and err == 'No such file or directory' then
-          lua_util.debugm(N, task, 'cannot read key from %s: %s', p.key, err)
+          lua_util.debugm(N, task, 'cannot read key from "%s": %s', p.key, err)
         else
-          rspamd_logger.warnx(N, task, 'cannot read key from %s: %s', p.key, err)
+          rspamd_logger.warnx(N, task, 'cannot read key from "%s": %s', p.key, err)
         end
         return false
       end
+
+      lua_util.debugm(N, task, 'key found at "%s", use selector "%s" for domain "%s"',
+          p.key, p.selector, p.domain)
 
       do_sign()
     else

@@ -178,12 +178,15 @@ local function prepare_dkim_signing(N, task, settings)
       lua_util.debugm(N, task, 'dkim unconfigured and fallback disabled')
       return false,{}
     end
+
+    lua_util.debugm(N, task, 'override selector and key to %s:%s', p.key, p.selector)
   end
 
   if not p.selector and settings.selector_map then
     local data = settings.selector_map:get_key(dkim_domain)
     if data then
       p.selector = data
+      lua_util.debugm(N, task, 'override selector to "%s" using selector_map', p.selector)
     elseif not settings.try_fallback then
       lua_util.debugm(N, task, 'no selector for %s', dkim_domain)
       return false,{}
@@ -194,6 +197,7 @@ local function prepare_dkim_signing(N, task, settings)
     local data = settings.path_map:get_key(dkim_domain)
     if data then
       p.key = data
+      lua_util.debugm(N, task, 'override key to "%s" using path_map', p.key)
     elseif not settings.try_fallback then
       lua_util.debugm(N, task, 'no key for %s', dkim_domain)
       return false,{}
@@ -203,12 +207,15 @@ local function prepare_dkim_signing(N, task, settings)
   if not p.key then
     if not settings.use_redis then
       p.key = settings.path
+      lua_util.debugm(N, task, 'use default key "%s" from path', p.key)
     end
   end
 
   if not p.selector then
     p.selector = settings.selector
+    lua_util.debugm(N, task, 'use default selector "%s"', p.selector)
   end
+
   p.domain = dkim_domain
 
   return true,p
