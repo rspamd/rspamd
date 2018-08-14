@@ -228,21 +228,6 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 		}
 		lua_pushnil (cd->L);
 	}
-	else {
-		lua_pushnil (cd->L);
-		lua_pushstring (cd->L, rdns_strerror (reply->code));
-	}
-
-	if (cd->cbref != -1) {
-		if (cd->user_str != NULL) {
-			lua_pushstring (cd->L, cd->user_str);
-		}
-		else {
-			lua_pushnil (cd->L);
-		}
-	}
-
-	lua_pushboolean (cd->L, reply->authenticated);
 
 	if (cd->cbref != -1) {
 		/*
@@ -253,6 +238,19 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 		 * 5 - user_str
 		 * 6 - reply->authenticated
 		 */
+		if (reply->code != RDNS_RC_NOERROR) {
+			lua_pushnil (cd->L);
+			lua_pushstring (cd->L, rdns_strerror (reply->code));
+		}
+		if (cd->user_str != NULL) {
+			lua_pushstring (cd->L, cd->user_str);
+		}
+		else {
+			lua_pushnil (cd->L);
+		}
+
+		lua_pushboolean (cd->L, reply->authenticated);
+
 		if (lua_pcall (cd->L, 6, 0, 0) != 0) {
 			msg_info ("call to dns callback failed: %s", lua_tostring (cd->L, -1));
 			lua_pop (cd->L, 1);
@@ -262,11 +260,28 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 		luaL_unref (cd->L, LUA_REGISTRYINDEX, cd->cbref);
 	} else {
 		/*
-		 * 1 - entries
-		 * 2 - error | nil
-		 * 3 - reply->authenticated
+		 * 1 - true | false in the case of error
+		 * 2. string - error message or table {
+		 * [0] -> entry 1
+		 * [1] -> entry 2
+		 * ...
+		 * is_authenticated = true|false
+		 * }
 		 */
-		lua_resume_thread (cd->task, cd->thread, 3);
+		if (reply->code != RDNS_RC_NOERROR) {
+			lua_pushboolean (cd->L, false);
+			lua_pushstring (cd->L, rdns_strerror (reply->code));
+		}
+		else {
+			lua_pushboolean (cd->L, reply->authenticated);
+			lua_setfield (cd->L, -3, "authenticated");
+
+			/* result 1 - not and error */
+			lua_pushboolean (cd->L, true);
+			/* push table into stack, result 2 - results itself */
+			lua_pushvalue (cd->L, -3);
+		}
+		lua_resume_thread (cd->task, cd->thread, 2);
 	}
 
 	if (cd->s) {
