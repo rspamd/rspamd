@@ -408,6 +408,27 @@ void rspamd_lua_add_ref_dtor (lua_State *L, rspamd_mempool_t *pool,
 gboolean rspamd_lua_require_function (lua_State *L, const gchar *modname,
 		const gchar *funcname);
 
+struct thread_entry;
+/**
+ * Yields thread. should be only called in return statement
+ * @param thread_entry
+ * @param nresults
+ * @return
+ */
+gint
+lua_yield_thread (struct thread_entry *thread_entry, gint nresults);
+
+/**
+ *
+ * @param pool
+ * @param thread_entry
+ * @param narg
+ * @return
+ */
+void
+lua_resume_thread (struct rspamd_task *task, struct thread_entry *thread_entry, gint narg);
+
+
 /* Paths defs */
 #define RSPAMD_CONFDIR_INDEX "CONFDIR"
 #define RSPAMD_RUNDIR_INDEX "RUNDIR"

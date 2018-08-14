@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "lua_common.h"
+#include "lua_thread_pool.h"
 #include "utlist.h"
 
 
@@ -78,6 +79,8 @@ lua_check_dns_resolver (lua_State * L)
 
 struct lua_dns_cbdata {
 	lua_State *L;
+	struct thread_entry *thread;
+	struct rspamd_task *task;
 	struct rspamd_dns_resolver *resolver;
 	gint cbref;
 	const gchar *to_resolve;
@@ -140,12 +143,15 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 	struct rdns_reply_entry *elt;
 	rspamd_inet_addr_t *addr;
 
-	lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->cbref);
-	presolver = lua_newuserdata (cd->L, sizeof (gpointer));
-	rspamd_lua_setclass (cd->L, "rspamd{resolver}", -1);
+	if (cd->cbref != -1) {
+		lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->cbref);
 
-	*presolver = cd->resolver;
-	lua_pushstring (cd->L, cd->to_resolve);
+		presolver = lua_newuserdata (cd->L, sizeof (gpointer));
+		rspamd_lua_setclass (cd->L, "rspamd{resolver}", -1);
+
+		*presolver = cd->resolver;
+		lua_pushstring (cd->L, cd->to_resolve);
+	}
 
 	/*
 	 * XXX: rework to handle different request types
@@ -227,22 +233,41 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 		lua_pushstring (cd->L, rdns_strerror (reply->code));
 	}
 
-	if (cd->user_str != NULL) {
-		lua_pushstring (cd->L, cd->user_str);
-	}
-	else {
-		lua_pushnil (cd->L);
+	if (cd->cbref != -1) {
+		if (cd->user_str != NULL) {
+			lua_pushstring (cd->L, cd->user_str);
+		}
+		else {
+			lua_pushnil (cd->L);
+		}
 	}
 
 	lua_pushboolean (cd->L, reply->authenticated);
 
-	if (lua_pcall (cd->L, 6, 0, 0) != 0) {
-		msg_info ("call to dns callback failed: %s", lua_tostring (cd->L, -1));
-		lua_pop (cd->L, 1);
-	}
+	if (cd->cbref != -1) {
+		/*
+		 * 1 - resolver
+		 * 2 - to_resolve
+		 * 3 - entries | nil
+		 * 4 - error | nil
+		 * 5 - user_str
+		 * 6 - reply->authenticated
+		 */
+		if (lua_pcall (cd->L, 6, 0, 0) != 0) {
+			msg_info ("call to dns callback failed: %s", lua_tostring (cd->L, -1));
+			lua_pop (cd->L, 1);
+		}
 
-	/* Unref function */
-	luaL_unref (cd->L, LUA_REGISTRYINDEX, cd->cbref);
+		/* Unref function */
+		luaL_unref (cd->L, LUA_REGISTRYINDEX, cd->cbref);
+	} else {
+		/*
+		 * 1 - entries
+		 * 2 - error | nil
+		 * 3 - reply->authenticated
+		 */
+		lua_resume_thread (cd->task, cd->thread, 3);
+	}
 
 	if (cd->s) {
 		rspamd_session_watcher_pop (cd->s, cd->w);
@@ -306,7 +331,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 
 	/* Check arguments */
 	if (!rspamd_lua_parse_table_arguments (L, first, &err,
-			"session=U{session};mempool=U{mempool};*name=S;*callback=F;"
+			"session=U{session};mempool=U{mempool};*name=S;callback=F;"
 			"option=S;task=U{task};forced=B",
 			&session, &pool, &to_resolve, &cbref, &user_str, &task, &forced)) {
 
@@ -325,7 +350,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 		session = task->s;
 	}
 
-	if (pool != NULL && to_resolve != NULL && cbref != -1) {
+	if (pool != NULL && to_resolve != NULL) {
 		cbdata = rspamd_mempool_alloc0 (pool, sizeof (struct lua_dns_cbdata));
 		cbdata->L = L;
 		cbdata->resolver = resolver;
@@ -375,6 +400,9 @@ lua_dns_resolver_resolve_common (lua_State *L,
 			}
 		}
 		else {
+			cbdata->thread = lua_thread_pool_get_running_entry (task->cfg->lua_thread_pool);
+			cbdata->task = task;
+
 			if (forced) {
 				ret = make_dns_request_task_forced (task,
 						lua_dns_callback,
@@ -391,10 +419,16 @@ lua_dns_resolver_resolve_common (lua_State *L,
 			}
 
 			if (ret) {
-				lua_pushboolean (L, TRUE);
 				cbdata->s = session;
 				cbdata->w = rspamd_session_get_watcher (session);
 				rspamd_session_watcher_push (session);
+				if (cbdata->cbref != -1) {
+					/* callback was set up */
+					lua_pushboolean (L, TRUE);
+				} else {
+					/* this is coroutine-based call */
+					return lua_yield_thread (cbdata->thread, 0);
+				}
 			}
 			else {
 				lua_pushnil (L);

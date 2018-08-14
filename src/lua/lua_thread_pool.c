@@ -14,7 +14,7 @@ static struct thread_entry *
 thread_entry_new (lua_State * L)
 {
 	struct thread_entry *ent;
-	ent = g_malloc (sizeof *ent);
+	ent = g_new0(struct thread_entry, 1);
 	ent->lua_state = lua_newthread (L);
 	ent->thread_index = luaL_ref (L, LUA_REGISTRYINDEX);
 
@@ -75,6 +75,8 @@ lua_thread_pool_get(struct lua_thread_pool *pool)
 		ent = thread_entry_new (pool->L);
 	}
 
+	pool->running_entry = ent;
+
 	return ent;
 }
 
@@ -88,6 +90,7 @@ lua_thread_pool_return(struct lua_thread_pool *pool, struct thread_entry *thread
 	}
 
 	if (g_queue_get_length (pool->available_items) <= pool->max_items) {
+		thread_entry->cd = NULL;
 		g_queue_push_head (pool->available_items, thread_entry);
 	}
 	else {

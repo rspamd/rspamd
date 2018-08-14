@@ -6,6 +6,7 @@
 struct thread_entry {
 	lua_State *lua_state;
 	gint thread_index;
+	gpointer cd;
 };
 
 struct thread_pool;

@@ -1206,6 +1206,9 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 	struct thread_entry *thread_entry = lua_thread_pool_get (task->cfg->lua_thread_pool);
 	cd->thread_entry = thread_entry;
 
+	g_assert(thread_entry->cd == NULL);
+	thread_entry->cd = cd;
+
 	lua_State *thread = thread_entry->lua_state;
 	cd->stack_level = lua_gettop (cd->L);
 
@@ -1229,6 +1232,29 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 		 the event is finished
 		 */
 		lua_metric_symbol_callback_return (task, ud, ret);
+	}
+}
+
+gint
+lua_yield_thread (struct thread_entry *thread_entry, gint nresults)
+{
+    g_assert (thread_entry->cd != NULL);
+
+	return lua_yield (thread_entry->lua_state, nresults);
+}
+
+void
+lua_resume_thread (struct rspamd_task *task, struct thread_entry *thread_entry, gint narg)
+{
+    g_assert (thread_entry->cd != NULL);
+
+	gint ret;
+
+	lua_thread_pool_set_running_entry (task->cfg->lua_thread_pool, thread_entry);
+	ret = lua_resume (thread_entry->lua_state, narg);
+
+	if (ret != LUA_YIELD) {
+		lua_metric_symbol_callback_return (task, thread_entry->cd, ret);
 	}
 }
 
@@ -1337,7 +1363,7 @@ lua_metric_symbol_callback_return (struct rspamd_task *task, gpointer ud, gint r
 
 		g_assert (lua_gettop (thread) == cd->stack_level); /* we properly cleaned up the stack */
 
-		lua_thread_pool_return(task->cfg->lua_thread_pool, cd->thread_entry);
+		lua_thread_pool_return (task->cfg->lua_thread_pool, cd->thread_entry);
 	}
 
 	cd->thread_entry = NULL;
