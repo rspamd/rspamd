@@ -15,6 +15,7 @@
  */
 
 #include <contrib/librdns/rdns.h>
+#include <contrib/librdns/dns_private.h>
 #include "config.h"
 #include "dns.h"
 #include "rspamd.h"
@@ -49,12 +50,28 @@ struct rspamd_dns_request_ud {
 	gpointer ud;
 	rspamd_mempool_t *pool;
 	struct rdns_request *req;
+	struct rdns_reply *reply;
 };
 
 static void
 rspamd_dns_fin_cb (gpointer arg)
 {
 	struct rspamd_dns_request_ud *reqdata = (struct rspamd_dns_request_ud *)arg;
+
+	if (reqdata->reply) {
+		reqdata->cb (reqdata->reply, reqdata->ud);
+	}
+	else {
+		struct rdns_reply fake_reply;
+
+		memset (&fake_reply, 0, sizeof (fake_reply));
+		fake_reply.code = RDNS_RC_TIMEOUT;
+		fake_reply.request = reqdata->req;
+		fake_reply.resolver = reqdata->req->resolver;
+		fake_reply.requested_name = reqdata->req->requested_names[0].name;
+
+		reqdata->cb (&fake_reply, reqdata->ud);
+	}
 
 	rdns_request_release (reqdata->req);
 
@@ -68,7 +85,7 @@ rspamd_dns_callback (struct rdns_reply *reply, gpointer ud)
 {
 	struct rspamd_dns_request_ud *reqdata = ud;
 
-	reqdata->cb (reply, reqdata->ud);
+	reqdata->reply = reply;
 
 	if (reqdata->session) {
 		/*
@@ -78,8 +95,12 @@ rspamd_dns_callback (struct rdns_reply *reply, gpointer ud)
 		rdns_request_retain (reply->request);
 		rspamd_session_remove_event (reqdata->session, rspamd_dns_fin_cb, reqdata);
 	}
-	else if (reqdata->pool == NULL) {
-		g_free (reqdata);
+	else {
+		reqdata->cb (reply, reqdata->ud);
+
+		if (reqdata->pool == NULL) {
+			g_free (reqdata);
+		}
 	}
 }
 
@@ -103,11 +124,12 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 
 	if (pool != NULL) {
 		reqdata =
-			rspamd_mempool_alloc (pool, sizeof (struct rspamd_dns_request_ud));
+			rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_dns_request_ud));
 	}
 	else {
-		reqdata = g_malloc (sizeof (struct rspamd_dns_request_ud));
+		reqdata = g_malloc0 (sizeof (struct rspamd_dns_request_ud));
 	}
+
 	reqdata->pool = pool;
 	reqdata->session = session;
 	reqdata->cb = cb;
