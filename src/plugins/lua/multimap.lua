@@ -701,24 +701,24 @@ local function multimap_callback(task, rule)
         if rt == 'ip' then
           match_rule(rule, ip)
         else
-          local cb = function (_, to_resolve, results, err)
-            task:inc_dns_req()
-            if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
-              rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
-            end
-            if results then
-              task:insert_result(rule['symbol'], 1, rule['map'])
+          local to_resolve = ip_to_rbl(ip, rule['map'])
 
-              if pre_filter then
-                task:set_pre_result(rule['action'], 'Matched map: ' .. rule['symbol'])
-              end
+          local is_ok, results = task:get_resolver():resolve_a({
+            task = task,
+            name = to_resolve,
+          })
+
+          lua_util.debugm(N, rspamd_config, 'resolve_a() finished: results=%1, is_ok=%2, to_resolve=%3', results, is_ok, to_resolve)
+
+          if not is_ok and (results ~= 'requested record is not found' and results ~= 'no records with this name') then
+            rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, results)
+          elseif is_ok then
+            task:insert_result(rule['symbol'], 1, rule['map'])
+            if pre_filter then
+              task:set_pre_result(rule['action'], 'Matched map: ' .. rule['symbol'])
             end
           end
 
-          task:get_resolver():resolve_a({task = task,
-            name = ip_to_rbl(ip, rule['map']),
-            callback = cb,
-          })
         end
       end
     end,
