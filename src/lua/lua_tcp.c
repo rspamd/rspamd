@@ -804,7 +804,8 @@ lua_tcp_plan_handler_event (struct lua_tcp_cbdata *cbd, gboolean can_read,
 	}
 }
 
-static void
+
+static gboolean
 lua_tcp_register_event (struct lua_tcp_cbdata *cbd)
 {
 	if (cbd->session) {
@@ -812,9 +813,16 @@ lua_tcp_register_event (struct lua_tcp_cbdata *cbd)
 				(event_finalizer_t) lua_tcp_fin,
 				cbd,
 				g_quark_from_static_string ("lua tcp"));
+
+		if (!cbd->async_ev) {
+			return FALSE;
+		}
+
 		cbd->w = rspamd_session_get_watcher (cbd->session);
 		rspamd_session_watcher_push (cbd->session);
 	}
+
+	return TRUE;
 }
 
 static gboolean
@@ -1232,6 +1240,13 @@ lua_tcp_request (lua_State *L)
 
 	if (session) {
 		cbd->session = session;
+
+		if (rspamd_session_is_destroying (session)) {
+			REF_RELEASE (cbd);
+			lua_pushboolean (L, FALSE);
+
+			return 1;
+		}
 	}
 
 	if (rspamd_parse_inet_address (&cbd->addr, host, 0)) {

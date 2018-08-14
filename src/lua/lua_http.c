@@ -377,7 +377,7 @@ lua_http_request (lua_State *L)
 	struct rspamd_http_message *msg;
 	struct lua_http_cbdata *cbd;
 	struct rspamd_dns_resolver *resolver;
-	struct rspamd_async_session *session;
+	struct rspamd_async_session *session = NULL;
 	struct rspamd_lua_text *t;
 	struct rspamd_task *task = NULL;
 	struct rspamd_config *cfg = NULL;
@@ -695,6 +695,12 @@ lua_http_request (lua_State *L)
 	}
 	else {
 		msg_err ("http request has bad params");
+		lua_pushboolean (L, FALSE);
+
+		return 1;
+	}
+
+	if (session && rspamd_session_is_destroying (session)) {
 		lua_pushboolean (L, FALSE);
 
 		return 1;

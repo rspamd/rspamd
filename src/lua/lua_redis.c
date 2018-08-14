@@ -675,6 +675,10 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref)
 
 		lua_pop (L, 1); /* table */
 
+		if (session && rspamd_session_is_destroying (session)) {
+			ret = FALSE;
+		}
+
 
 		if (ret && addr != NULL) {
 			ctx = g_malloc0 (sizeof (struct lua_redis_ctx));
@@ -1199,6 +1203,13 @@ lua_redis_add_cmd (lua_State *L)
 						&sp_ud->arglens, &sp_ud->nargs);
 
 			LL_PREPEND (sp_ud->c->specific, sp_ud);
+
+			if (ud->s && rspamd_session_is_destroying (ud->s)) {
+				lua_pushboolean (L, 0);
+				lua_pushstring (L, "session is terminating");
+
+				return 2;
+			}
 
 			ret = redisAsyncCommandArgv (sp_ud->c->ctx,
 					lua_redis_callback,

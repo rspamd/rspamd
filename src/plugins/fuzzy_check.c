@@ -2830,49 +2830,50 @@ register_fuzzy_client_call (struct rspamd_task *task,
 	rspamd_inet_addr_t *addr;
 	gint sock;
 
-	/* Get upstream */
-	selected = rspamd_upstream_get (rule->servers, RSPAMD_UPSTREAM_ROUND_ROBIN,
-			NULL, 0);
-	if (selected) {
-		addr = rspamd_upstream_addr (selected);
-		if ((sock = rspamd_inet_address_connect (addr, SOCK_DGRAM, TRUE)) == -1) {
-			msg_warn_task ("cannot connect to %s(%s), %d, %s",
-				rspamd_upstream_name (selected),
-					rspamd_inet_address_to_string_pretty (addr),
-				errno,
-				strerror (errno));
-			rspamd_upstream_fail (selected, FALSE);
-			g_ptr_array_free (commands, TRUE);
-		}
-		else {
-			/* Create session for a socket */
-			session =
-				rspamd_mempool_alloc0 (task->task_pool,
-					sizeof (struct fuzzy_client_session));
-			msec_to_tv (rule->ctx->io_timeout, &session->tv);
-			session->state = 0;
-			session->commands = commands;
-			session->task = task;
-			session->fd = sock;
-			session->server = selected;
-			session->rule = rule;
-			session->addr = addr;
-			session->results = g_ptr_array_sized_new (32);
+	if (!rspamd_session_is_destroying (task->s)) {
+		/* Get upstream */
+		selected = rspamd_upstream_get (rule->servers, RSPAMD_UPSTREAM_ROUND_ROBIN,
+				NULL, 0);
+		if (selected) {
+			addr = rspamd_upstream_addr (selected);
+			if ((sock = rspamd_inet_address_connect (addr, SOCK_DGRAM, TRUE)) == -1) {
+				msg_warn_task ("cannot connect to %s(%s), %d, %s",
+						rspamd_upstream_name (selected),
+						rspamd_inet_address_to_string_pretty (addr),
+						errno,
+						strerror (errno));
+				rspamd_upstream_fail (selected, FALSE);
+				g_ptr_array_free (commands, TRUE);
+			} else {
+				/* Create session for a socket */
+				session =
+						rspamd_mempool_alloc0 (task->task_pool,
+								sizeof (struct fuzzy_client_session));
+				msec_to_tv (rule->ctx->io_timeout, &session->tv);
+				session->state = 0;
+				session->commands = commands;
+				session->task = task;
+				session->fd = sock;
+				session->server = selected;
+				session->rule = rule;
+				session->addr = addr;
+				session->results = g_ptr_array_sized_new (32);
 
-			event_set (&session->ev, sock, EV_WRITE, fuzzy_check_io_callback,
-					session);
-			event_base_set (session->task->ev_base, &session->ev);
-			event_add (&session->ev, NULL);
+				event_set (&session->ev, sock, EV_WRITE, fuzzy_check_io_callback,
+						session);
+				event_base_set (session->task->ev_base, &session->ev);
+				event_add (&session->ev, NULL);
 
-			evtimer_set (&session->timev, fuzzy_check_timer_callback,
-					session);
-			event_base_set (session->task->ev_base, &session->timev);
-			event_add (&session->timev, &session->tv);
+				evtimer_set (&session->timev, fuzzy_check_timer_callback,
+						session);
+				event_base_set (session->task->ev_base, &session->timev);
+				event_add (&session->timev, &session->tv);
 
-			rspamd_session_add_event (task->s,
-				fuzzy_io_fin,
-				session,
-				g_quark_from_static_string ("fuzzy check"));
+				rspamd_session_add_event (task->s,
+						fuzzy_io_fin,
+						session,
+						g_quark_from_static_string ("fuzzy check"));
+			}
 		}
 	}
 }
@@ -3310,48 +3311,48 @@ fuzzy_check_send_lua_learn (struct fuzzy_rule *rule,
 	gint ret = -1;
 
 	/* Get upstream */
+	if (!rspamd_session_is_destroying (task->s)) {
+		while ((selected = rspamd_upstream_get (rule->servers,
+				RSPAMD_UPSTREAM_SEQUENTIAL, NULL, 0))) {
+			/* Create UDP socket */
+			addr = rspamd_upstream_addr (selected);
 
-	while ((selected = rspamd_upstream_get (rule->servers,
-			RSPAMD_UPSTREAM_SEQUENTIAL, NULL, 0))) {
-		/* Create UDP socket */
-		addr = rspamd_upstream_addr (selected);
+			if ((sock = rspamd_inet_address_connect (addr,
+					SOCK_DGRAM, TRUE)) == -1) {
+				rspamd_upstream_fail (selected, TRUE);
+			} else {
+				s =
+						rspamd_mempool_alloc0 (task->task_pool,
+								sizeof (struct fuzzy_learn_session));
 
-		if ((sock = rspamd_inet_address_connect (addr,
-				SOCK_DGRAM, TRUE)) == -1) {
-			rspamd_upstream_fail (selected, TRUE);
-		}
-		else {
-			s =
-				rspamd_mempool_alloc0 (task->task_pool,
-					sizeof (struct fuzzy_learn_session));
+				msec_to_tv (rule->ctx->io_timeout, &s->tv);
+				s->task = task;
+				s->addr = addr;
+				s->commands = commands;
+				s->http_entry = NULL;
+				s->server = selected;
+				s->saved = saved;
+				s->fd = sock;
+				s->err = err;
+				s->rule = rule;
+				s->session = task->s;
 
-			msec_to_tv (rule->ctx->io_timeout, &s->tv);
-			s->task = task;
-			s->addr = addr;
-			s->commands = commands;
-			s->http_entry = NULL;
-			s->server = selected;
-			s->saved = saved;
-			s->fd = sock;
-			s->err = err;
-			s->rule = rule;
-			s->session = task->s;
+				event_set (&s->ev, sock, EV_WRITE, fuzzy_controller_io_callback, s);
+				event_base_set (task->ev_base, &s->ev);
+				event_add (&s->ev, NULL);
 
-			event_set (&s->ev, sock, EV_WRITE, fuzzy_controller_io_callback, s);
-			event_base_set (task->ev_base, &s->ev);
-			event_add (&s->ev, NULL);
+				evtimer_set (&s->timev, fuzzy_controller_timer_callback, s);
+				event_base_set (s->task->ev_base, &s->timev);
+				event_add (&s->timev, &s->tv);
 
-			evtimer_set (&s->timev, fuzzy_controller_timer_callback, s);
-			event_base_set (s->task->ev_base, &s->timev);
-			event_add (&s->timev, &s->tv);
+				rspamd_session_add_event (task->s,
+						fuzzy_lua_fin,
+						s,
+						g_quark_from_static_string ("fuzzy check"));
 
-			rspamd_session_add_event (task->s,
-					fuzzy_lua_fin,
-					s,
-					g_quark_from_static_string ("fuzzy check"));
-
-			(*saved)++;
-			ret = 1;
+				(*saved)++;
+				ret = 1;
+			}
 		}
 	}
 

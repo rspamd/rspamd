@@ -122,6 +122,10 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 		return FALSE;
 	}
 
+	if (session && rspamd_session_is_destroying (session)) {
+		return FALSE;
+	}
+
 	if (pool != NULL) {
 		reqdata =
 			rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_dns_request_ud));
