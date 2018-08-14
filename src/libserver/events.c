@@ -172,6 +172,13 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 		g_assert_not_reached ();
 	}
 
+	if (RSPAMD_SESSION_IS_DESTROYING (session)) {
+		msg_debug_session ("skip adding event subsystem: %s: session is destroying",
+				g_quark_to_string (subsystem));
+
+		return NULL;
+	}
+
 	new_event = rspamd_mempool_alloc (session->pool,
 			sizeof (struct rspamd_async_event));
 	new_event->fin = fin;
@@ -502,4 +509,12 @@ rspamd_session_mempool (struct rspamd_async_session *session)
 	g_assert (session != NULL);
 
 	return session->pool;
+}
+
+gboolean
+rspamd_session_is_destroying (struct rspamd_async_session *session)
+{
+	g_assert (session != NULL);
+
+	return RSPAMD_SESSION_IS_DESTROYING (session);
 }

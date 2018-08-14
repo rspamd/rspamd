@@ -1124,6 +1124,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	if (task->subject) {
 		p = task->subject;
 		len = strlen (p);
+		rspamd_cryptobox_hash_update (&st, p, len);
 		rspamd_url_find_multiple (task->task_pool, p, len, FALSE, NULL,
 				rspamd_url_task_subject_callback, task);
 	}

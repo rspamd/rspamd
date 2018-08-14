@@ -438,6 +438,10 @@ rspamd_stat_cache_redis_check (struct rspamd_task *task,
 	struct timeval tv;
 	gchar *h;
 
+	if (rspamd_session_is_destroying (task->s)) {
+		return RSPAMD_LEARN_INGORE;
+	}
+
 	h = rspamd_mempool_get_variable (task->task_pool, "words_hash");
 
 	if (h == NULL) {
@@ -468,6 +472,10 @@ rspamd_stat_cache_redis_learn (struct rspamd_task *task,
 	struct timeval tv;
 	gchar *h;
 	gint flag;
+
+	if (rspamd_session_is_destroying (task->s)) {
+		return RSPAMD_LEARN_INGORE;
+	}
 
 	h = rspamd_mempool_get_variable (task->task_pool, "words_hash");
 	g_assert (h != NULL);

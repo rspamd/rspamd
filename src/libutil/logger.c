@@ -655,7 +655,7 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 		const gchar *fmt, va_list args)
 {
 	gchar logbuf[RSPAMD_LOGBUF_SIZE], *end;
-	gint level = level_flags & (RSPAMD_LOG_LEVEL_MASK & G_LOG_LEVEL_MASK);
+	gint level = level_flags & (RSPAMD_LOG_LEVEL_MASK & G_LOG_LEVEL_MASK), mod_id;
 
 	if (G_UNLIKELY (rspamd_log == NULL)) {
 		rspamd_log = default_logger;
@@ -669,7 +669,14 @@ rspamd_common_logv (rspamd_logger_t *rspamd_log, gint level_flags,
 		}
 	}
 	else {
-		if (rspamd_logger_need_log (rspamd_log, level, -1)) {
+		if (level == G_LOG_LEVEL_DEBUG) {
+			mod_id = rspamd_logger_add_debug_module (module);
+		}
+		else {
+			mod_id = -1;
+		}
+
+		if (rspamd_logger_need_log (rspamd_log, level_flags, mod_id)) {
 			end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, args);
 
 			if ((level_flags & RSPAMD_LOG_ENCRYPTED) && rspamd_log->pk) {
