@@ -66,7 +66,7 @@ MAP - FROM MISS
 MAP - FROM REGEXP
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  user123@test.com
   Check Rspamc  ${result}  REGEXP_MAP
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  somebody@exAmplE.com
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  somebody@example.com
   Check Rspamc  ${result}  REGEXP_MAP
 
 MAP - FROM REGEXP MISS
