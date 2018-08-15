@@ -335,6 +335,48 @@ local keywords = {
       return task:get_principal_recipient()
     end,
   },
+  ['digest'] = {
+    ['get_value'] = function(task)
+      return task:get_digest()
+    end,
+  },
+  ['attachments'] = {
+    ['get_value'] = function(task)
+      local parts = task:get_parts() or E
+      local digests = {}
+
+      for _,p in ipairs(parts) do
+        if p:get_filename() then
+          table.insert(digests, p:get_digest())
+        end
+      end
+
+      if #digests > 0 then
+        return table.concat(digests, '')
+      end
+
+      return nil
+    end,
+  },
+  ['files'] = {
+    ['get_value'] = function(task)
+      local parts = task:get_parts() or E
+      local files = {}
+
+      for _,p in ipairs(parts) do
+        local fname = p:get_filename()
+        if fname then
+          table.insert(files, fname)
+        end
+      end
+
+      if #files > 0 then
+        return table.concat(files, ':')
+      end
+
+      return nil
+    end,
+  },
 }
 
 local function gen_rate_key(task, rtype, bucket)
