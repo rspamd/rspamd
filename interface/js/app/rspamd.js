@@ -195,15 +195,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         var req_params = {
             jsonp: false,
             data: o.data,
-            beforeSend: function (xhr) {
-                xhr.setRequestHeader("Password", getPassword());
-
-                if (o.headers) {
-                    $.each(o.headers, function (hname, hvalue) {
-                        xhr.setRequestHeader(hname, hvalue);
-                    });
-                }
-            },
+            headers: $.extend({Password: getPassword()}, o.headers),
             url: neighbours_status[ind].url + req_url,
             success: function (json) {
                 neighbours_status[ind].checked = true;
