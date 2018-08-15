@@ -580,7 +580,7 @@ xmlrpc_text (GMarkupParseContext *context,
 		case read_int:
 			/* Push integer value */
 			rspamd_strtoul (text, text_len, &num);
-			lua_pushnumber (ud->L, num);
+			lua_pushinteger (ud->L, num);
 			break;
 		case read_double:
 			/* Push integer value */

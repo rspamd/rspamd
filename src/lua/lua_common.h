@@ -22,7 +22,7 @@
 
 #define LUA_ENUM(L, name, val) \
 	lua_pushlstring (L, # name, sizeof(# name) - 1); \
-	lua_pushnumber (L, val); \
+	lua_pushinteger (L, val); \
 	lua_settable (L, -3);
 
 #if LUA_VERSION_NUM > 501 && !defined LUA_COMPAT_MODULE

@@ -121,7 +121,7 @@ lua_url_get_length (lua_State *L)
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
-		lua_pushnumber (L, url->url->urllen);
+		lua_pushinteger (L, url->url->urllen);
 	}
 	else {
 		lua_pushnil (L);
@@ -161,7 +161,7 @@ lua_url_get_port (lua_State *L)
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
-		lua_pushnumber (L, url->url->port);
+		lua_pushinteger (L, url->url->port);
 	}
 	else {
 		lua_pushnil (L);
@@ -585,7 +585,7 @@ lua_url_get_count (lua_State *L)
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL && url->url != NULL) {
-		lua_pushnumber (L, url->url->count);
+		lua_pushinteger (L, url->url->count);
 	}
 	else {
 		lua_pushnil (L);
@@ -628,7 +628,7 @@ lua_url_to_table (lua_State *L)
 
 		if (u->port != 0) {
 			lua_pushstring (L, "port");
-			lua_pushnumber (L, u->port);
+			lua_pushinteger (L, u->port);
 			lua_settable (L, -3);
 		}
 
@@ -787,7 +787,7 @@ lua_url_table_inserter (struct rspamd_url *url, gsize start_offset,
 	lua_url = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
 	rspamd_lua_setclass (L, "rspamd{url}", -1);
 	lua_url->url = url;
-	lua_pushnumber (L, n + 1);
+	lua_pushinteger (L, n + 1);
 	lua_pushlstring (L, url->string, url->urllen);
 	lua_settable (L, -3);
 }

@@ -637,10 +637,10 @@ lua_textpart_get_length (lua_State * L)
 	}
 
 	if (IS_PART_EMPTY (part) || part->content == NULL) {
-		lua_pushnumber (L, 0);
+		lua_pushinteger (L, 0);
 	}
 	else {
-		lua_pushnumber (L, part->content->len);
+		lua_pushinteger (L, part->content->len);
 	}
 
 	return 1;
@@ -657,7 +657,7 @@ lua_textpart_get_raw_length (lua_State * L)
 		return 1;
 	}
 
-	lua_pushnumber (L, part->raw.len);
+	lua_pushinteger (L, part->raw.len);
 
 	return 1;
 }
@@ -684,7 +684,7 @@ lua_textpart_get_urls_length (lua_State * L)
 		}
 	}
 
-	lua_pushnumber (L, total);
+	lua_pushinteger (L, total);
 
 	return 1;
 }
@@ -701,10 +701,10 @@ lua_textpart_get_lines_count (lua_State * L)
 	}
 
 	if (IS_PART_EMPTY (part)) {
-		lua_pushnumber (L, 0);
+		lua_pushinteger (L, 0);
 	}
 	else {
-		lua_pushnumber (L, part->nlines);
+		lua_pushinteger (L, part->nlines);
 	}
 
 	return 1;
@@ -722,10 +722,10 @@ lua_textpart_get_words_count (lua_State *L)
 	}
 
 	if (IS_PART_EMPTY (part) || part->normalized_words == NULL) {
-		lua_pushnumber (L, 0);
+		lua_pushinteger (L, 0);
 	}
 	else {
-		lua_pushnumber (L, part->normalized_words->len);
+		lua_pushinteger (L, part->normalized_words->len);
 	}
 
 	return 1;
@@ -1028,31 +1028,31 @@ lua_textpart_get_stats (lua_State * L)
 		lua_createtable (L, 0, 9);
 
 		lua_pushstring (L, "lines");
-		lua_pushnumber (L, part->nlines);
+		lua_pushinteger (L, part->nlines);
 		lua_settable (L, -3);
 		lua_pushstring (L, "empty_lines");
-		lua_pushnumber (L, part->empty_lines);
+		lua_pushinteger (L, part->empty_lines);
 		lua_settable (L, -3);
 		lua_pushstring (L, "spaces");
-		lua_pushnumber (L, part->spaces);
+		lua_pushinteger (L, part->spaces);
 		lua_settable (L, -3);
 		lua_pushstring (L, "non_spaces");
-		lua_pushnumber (L, part->non_spaces);
+		lua_pushinteger (L, part->non_spaces);
 		lua_settable (L, -3);
 		lua_pushstring (L, "double_spaces");
-		lua_pushnumber (L, part->double_spaces);
+		lua_pushinteger (L, part->double_spaces);
 		lua_settable (L, -3);
 		lua_pushstring (L, "ascii_characters");
-		lua_pushnumber (L, part->ascii_chars);
+		lua_pushinteger (L, part->ascii_chars);
 		lua_settable (L, -3);
 		lua_pushstring (L, "non_ascii_characters");
-		lua_pushnumber (L, part->non_ascii_chars);
+		lua_pushinteger (L, part->non_ascii_chars);
 		lua_settable (L, -3);
 		lua_pushstring (L, "capital_letters");
-		lua_pushnumber (L, part->capital_letters);
+		lua_pushinteger (L, part->capital_letters);
 		lua_settable (L, -3);
 		lua_pushstring (L, "numeric_characters");
-		lua_pushnumber (L, part->numeric_characters);
+		lua_pushinteger (L, part->numeric_characters);
 		lua_settable (L, -3);
 	}
 	else {
@@ -1117,7 +1117,7 @@ lua_mimepart_get_length (lua_State * L)
 		return 1;
 	}
 
-	lua_pushnumber (L, part->parsed_data.len);
+	lua_pushinteger (L, part->parsed_data.len);
 
 	return 1;
 }

@@ -156,8 +156,8 @@ lua_trie_callback (struct rspamd_multipattern *mp,
 
 	/* Function */
 	lua_pushvalue (L, 3);
-	lua_pushnumber (L, strnum + 1);
-	lua_pushnumber (L, textpos);
+	lua_pushinteger (L, strnum + 1);
+	lua_pushinteger (L, textpos);
 
 	if (lua_pcall (L, 2, 1, 0) != 0) {
 		msg_info ("call to trie callback has failed: %s",

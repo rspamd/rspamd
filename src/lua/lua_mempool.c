@@ -252,7 +252,7 @@ lua_mempool_suggest_size (lua_State *L)
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 
 	if (mempool) {
-		lua_pushnumber (L, rspamd_mempool_suggest_size ());
+		lua_pushinteger (L, rspamd_mempool_suggest_size ());
 		return 0;
 	}
 	else {
@@ -437,12 +437,12 @@ lua_mempool_get_variable (lua_State *L)
 					}
 					else if (len == sizeof ("int") - 1 &&
 							g_ascii_strncasecmp (pt, "int", len) == 0) {
-						lua_pushnumber (L, *(gint *)pv);
+						lua_pushinteger (L, *(gint *)pv);
 						pv += sizeof (gint);
 					}
 					else if (len == sizeof ("int64") - 1 &&
 							g_ascii_strncasecmp (pt, "int64", len) == 0) {
-						lua_pushnumber (L, *(gint64 *)pv);
+						lua_pushinteger (L, *(gint64 *)pv);
 						pv += sizeof (gint64);
 					}
 					else if (len == sizeof ("bool") - 1 &&

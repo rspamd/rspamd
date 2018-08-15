@@ -1242,7 +1242,7 @@ lua_util_levenshtein_distance (lua_State *L)
 				replace_cost);
 	}
 
-	lua_pushnumber (L, dist);
+	lua_pushinteger (L, dist);
 
 	return 1;
 }
@@ -1514,7 +1514,7 @@ lua_util_strlen_utf8 (lua_State *L)
 					+ (len - (end - str)) /* raw part */;
 		}
 
-		lua_pushnumber (L, len);
+		lua_pushinteger (L, len);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -1547,7 +1547,7 @@ lua_util_strcasecmp_utf8 (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnumber (L, ret);
+	lua_pushinteger (L, ret);
 	return 1;
 }
 
@@ -1575,7 +1575,7 @@ lua_util_strcasecmp_ascii (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnumber (L, ret);
+	lua_pushinteger (L, ret);
 	return 1;
 }
 
@@ -1688,11 +1688,11 @@ lua_util_stat (lua_State *L)
 			lua_createtable (L, 0, 3);
 
 			lua_pushstring (L, "size");
-			lua_pushnumber (L, st.st_size);
+			lua_pushinteger (L, st.st_size);
 			lua_settable (L, -3);
 
 			lua_pushstring (L, "mtime");
-			lua_pushnumber (L, st.st_mtime);
+			lua_pushinteger (L, st.st_mtime);
 			lua_settable (L, -3);
 
 			lua_pushstring (L, "type");
@@ -1793,7 +1793,7 @@ lua_util_lock_file (lua_State *L)
 			return 2;
 		}
 
-		lua_pushnumber (L, fd);
+		lua_pushinteger (L, fd);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -1819,7 +1819,7 @@ lua_util_unlock_file (lua_State *L)
 #endif
 
 	if (lua_isnumber (L, 1)) {
-		fd = lua_tonumber (L, 1);
+		fd = lua_tointeger (L, 1);
 
 		if (lua_isboolean (L, 2)) {
 			do_close = lua_toboolean (L, 2);
@@ -1864,7 +1864,7 @@ lua_util_create_file (lua_State *L)
 
 	if (fpath) {
 		if (lua_isnumber (L, 2)) {
-			mode = lua_tonumber (L, 2);
+			mode = lua_tointeger (L, 2);
 		}
 
 		fd = rspamd_file_xopen (fpath, O_RDWR | O_CREAT | O_EXCL, mode, 0);
@@ -1876,7 +1876,7 @@ lua_util_create_file (lua_State *L)
 			return 2;
 		}
 
-		lua_pushnumber (L, fd);
+		lua_pushinteger (L, fd);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -1892,7 +1892,7 @@ lua_util_close_file (lua_State *L)
 	gint fd = -1;
 
 	if (lua_isnumber (L, 1)) {
-		fd = lua_tonumber (L, 1);
+		fd = lua_tointeger (L, 1);
 
 		if (close (fd) == -1) {
 			lua_pushboolean (L, false);
@@ -1917,7 +1917,7 @@ lua_util_random_hex (lua_State *L)
 	gchar *buf;
 	gint buflen;
 
-	buflen = lua_tonumber (L, 1);
+	buflen = lua_tointeger (L, 1);
 
 	if (buflen <= 0) {
 		return luaL_error (L, "invalid arguments");
@@ -2607,7 +2607,7 @@ lua_util_umask (lua_State *L)
 
 	old = umask (mask);
 
-	lua_pushnumber (L, old);
+	lua_pushinteger (L, old);
 
 	return 1;
 }
@@ -3426,7 +3426,7 @@ lua_ev_base_loop (lua_State *L)
 	}
 
 	int ret = event_base_loop (ev_base, flags);
-	lua_pushnumber (L, ret);
+	lua_pushinteger (L, ret);
 
 	return 1;
 }

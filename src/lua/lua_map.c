@@ -894,7 +894,7 @@ lua_map_traverse_cb (gconstpointer key,
 	lua_State *L = (lua_State *)ud;
 
 	lua_pushstring (L, key);
-	lua_pushnumber (L, hits);
+	lua_pushinteger (L, hits);
 	lua_settable (L, -3);
 
 	return TRUE;
@@ -950,7 +950,7 @@ lua_map_get_nelts (lua_State * L)
 	struct rspamd_lua_map *map = lua_check_map (L, 1);
 
 	if (map != NULL) {
-		lua_pushnumber (L, map->map->nelts);
+		lua_pushinteger (L, map->map->nelts);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

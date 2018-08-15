@@ -190,7 +190,7 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 				lua_createtable (cd->L, 0, 2);
 				rspamd_lua_table_set (cd->L, "name", elt->content.mx.name);
 				lua_pushstring (cd->L, "priority");
-				lua_pushnumber (cd->L, elt->content.mx.priority);
+				lua_pushinteger (cd->L, elt->content.mx.priority);
 				lua_settable (cd->L, -3);
 
 				lua_rawseti (cd->L, -2, ++i);
@@ -200,20 +200,20 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 				rspamd_lua_table_set (cd->L, "ns", elt->content.soa.mname);
 				rspamd_lua_table_set (cd->L, "contact", elt->content.soa.admin);
 				lua_pushstring (cd->L, "serial");
-				lua_pushnumber (cd->L, elt->content.soa.serial);
+				lua_pushinteger (cd->L, elt->content.soa.serial);
 				lua_settable (cd->L, -3);
 				lua_pushstring (cd->L, "refresh");
-				lua_pushnumber (cd->L, elt->content.soa.refresh);
+				lua_pushinteger (cd->L, elt->content.soa.refresh);
 				lua_settable (cd->L, -3);
 				lua_pushstring (cd->L, "retry");
-				lua_pushnumber (cd->L, elt->content.soa.retry);
+				lua_pushinteger (cd->L, elt->content.soa.retry);
 				lua_settable (cd->L, -3);
 				lua_pushstring (cd->L, "expiry");
-				lua_pushnumber (cd->L, elt->content.soa.expire);
+				lua_pushinteger (cd->L, elt->content.soa.expire);
 				lua_settable (cd->L, -3);
 				/* Negative TTL */
 				lua_pushstring (cd->L, "nx");
-				lua_pushnumber (cd->L, elt->content.soa.minimum);
+				lua_pushinteger (cd->L, elt->content.soa.minimum);
 				lua_settable (cd->L, -3);
 
 				lua_rawseti (cd->L, -2, ++i);

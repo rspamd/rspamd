@@ -281,7 +281,7 @@ lua_redis_push_reply (lua_State *L, const redisReply *r, gboolean text_data)
 
 	switch (r->type) {
 	case REDIS_REPLY_INTEGER:
-		lua_pushnumber (L, r->integer);
+		lua_pushinteger (L, r->integer);
 		break;
 	case REDIS_REPLY_NIL:
 		/* XXX: not the best approach */

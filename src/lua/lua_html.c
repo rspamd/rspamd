@@ -278,10 +278,10 @@ lua_html_push_image (lua_State *L, struct html_image *img)
 	}
 
 	lua_pushstring (L, "height");
-	lua_pushnumber (L, img->height);
+	lua_pushinteger (L, img->height);
 	lua_settable (L, -3);
 	lua_pushstring (L, "width");
-	lua_pushnumber (L, img->width);
+	lua_pushinteger (L, img->width);
 	lua_settable (L, -3);
 	lua_pushstring (L, "embedded");
 	lua_pushboolean (L, img->flags & RSPAMD_HTML_FLAG_IMAGE_EMBEDDED);
@@ -335,26 +335,26 @@ lua_html_push_block (lua_State *L, struct html_block *bl)
 	if (bl->font_color.valid) {
 		lua_pushstring (L, "color");
 		lua_createtable (L, 4, 0);
-		lua_pushnumber (L, bl->font_color.d.comp.r);
+		lua_pushinteger (L, bl->font_color.d.comp.r);
 		lua_rawseti (L, -2, 1);
-		lua_pushnumber (L, bl->font_color.d.comp.g);
+		lua_pushinteger (L, bl->font_color.d.comp.g);
 		lua_rawseti (L, -2, 2);
-		lua_pushnumber (L, bl->font_color.d.comp.b);
+		lua_pushinteger (L, bl->font_color.d.comp.b);
 		lua_rawseti (L, -2, 3);
-		lua_pushnumber (L, bl->font_color.d.comp.alpha);
+		lua_pushinteger (L, bl->font_color.d.comp.alpha);
 		lua_rawseti (L, -2, 4);
 		lua_settable (L, -3);
 	}
 	if (bl->background_color.valid) {
 		lua_pushstring (L, "bgcolor");
 		lua_createtable (L, 4, 0);
-		lua_pushnumber (L, bl->background_color.d.comp.r);
+		lua_pushinteger (L, bl->background_color.d.comp.r);
 		lua_rawseti (L, -2, 1);
-		lua_pushnumber (L, bl->background_color.d.comp.g);
+		lua_pushinteger (L, bl->background_color.d.comp.g);
 		lua_rawseti (L, -2, 2);
-		lua_pushnumber (L, bl->background_color.d.comp.b);
+		lua_pushinteger (L, bl->background_color.d.comp.b);
 		lua_rawseti (L, -2, 3);
-		lua_pushnumber (L, bl->background_color.d.comp.alpha);
+		lua_pushinteger (L, bl->background_color.d.comp.alpha);
 		lua_rawseti (L, -2, 4);
 		lua_settable (L, -3);
 	}
@@ -374,7 +374,7 @@ lua_html_push_block (lua_State *L, struct html_block *bl)
 	lua_settable (L, -3);
 
 	lua_pushstring (L, "font_size");
-	lua_pushnumber (L, bl->font_size);
+	lua_pushinteger (L, bl->font_size);
 	lua_settable (L, -3);
 }
 
@@ -429,7 +429,7 @@ lua_html_node_foreach_cb (GNode *n, gpointer d)
 		ptag = lua_newuserdata (ud->L, sizeof (*ptag));
 		*ptag = tag;
 		rspamd_lua_setclass (ud->L, "rspamd{html_tag}", -1);
-		lua_pushnumber (ud->L, tag->content_length);
+		lua_pushinteger (ud->L, tag->content_length);
 
 		if (lua_pcall (ud->L, 2, 1, 0) != 0) {
 			msg_err ("error in foreach_tag callback: %s", lua_tostring (ud->L, -1));
@@ -640,7 +640,7 @@ lua_html_tag_get_content_length (lua_State *L)
 	struct html_tag *tag = lua_check_html_tag (L, 1);
 
 	if (tag) {
-		lua_pushnumber (L, tag->content_length);
+		lua_pushinteger (L, tag->content_length);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

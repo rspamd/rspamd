@@ -1525,8 +1525,8 @@ rspamd_controller_handle_lua_history (lua_State *L,
 				pconn_ent = lua_newuserdata (L, sizeof (*pconn_ent));
 				*pconn_ent = conn_ent;
 				rspamd_lua_setclass (L, "rspamd{csession}", -1);
-				lua_pushnumber (L, from);
-				lua_pushnumber (L, to);
+				lua_pushinteger (L, from);
+				lua_pushinteger (L, to);
 				lua_pushboolean (L, reset);
 
 				if (lua_pcall (L, 5, 0, 0) != 0) {

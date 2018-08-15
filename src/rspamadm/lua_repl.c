@@ -703,7 +703,7 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 		lua_newtable (L);
 
 		for (elt = lua_args; *elt != NULL; elt ++) {
-			lua_pushnumber (L, i);
+			lua_pushinteger (L, i);
 			lua_pushstring (L, *elt);
 			lua_settable (L, -3);
 			i++;
