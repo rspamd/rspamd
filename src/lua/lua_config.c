@@ -1232,7 +1232,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 	rspamd_lua_setclass (thread, "rspamd{task}", -1);
 	*ptask = task;
 
-	ret = lua_resume (thread, 1);
+	ret = lua_do_resume (thread, 1);
 
 	if (ret != LUA_YIELD) {
 		/*
@@ -1260,7 +1260,7 @@ lua_resume_thread (struct rspamd_task *task, struct thread_entry *thread_entry, 
 	gint ret;
 
 	lua_thread_pool_set_running_entry (task->cfg->lua_thread_pool, thread_entry);
-	ret = lua_resume (thread_entry->lua_state, narg);
+	ret = lua_do_resume (thread_entry->lua_state, narg);
 
 	if (ret != LUA_YIELD) {
 		lua_metric_symbol_callback_return (task, thread_entry, thread_entry->cd, ret);
