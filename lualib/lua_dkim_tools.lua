@@ -21,8 +21,58 @@ local E = {}
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
 
+local function parse_dkim_http_headers(N, task, settings)
+  local logger = require "rspamd_logger"
+  -- Configure headers
+  local headers = {
+    sign_header = settings.http_sign_header or "PerformDkimSign",
+    sign_on_reject_header = settings.http_sign_on_reject_header_header or 'SignOnAuthFailed',
+    domain_header = settings.http_domain_header or 'DkimDomain',
+    selector_header = settings.http_selector_header or 'DkimSelector',
+    key_header = settings.http_key_header or 'DkimPrivateKey'
+  }
+
+  if task:get_request_header(headers.sign_header) then
+    local domain = task:get_request_header(headers.domain_header)
+    local selector = task:get_request_header(headers.selector_header)
+    local key = task:get_request_header(headers.key_header)
+
+    if not (domain and selector and key) then
+
+      logger.errx(task, 'missing required headers to sign email')
+      return false,{}
+    end
+
+    -- Now check if we need to check the existing auth
+    local hdr = task:get_request_header(headers.sign_on_reject_header)
+    if not hdr then
+      -- Check for DKIM_REJECT
+      if task:has_symbol('R_DKIM_REJECT') then
+        local sym = task:get_symbol('R_DKIM_REJECT')
+        logger.infox(task, 'skip signing for %s:%s: R_DKIM_REJECT found: %s',
+            domain, selector, sym.options)
+        return false,{}
+      end
+    end
+
+    return true,{
+      rawkey = key,
+      domain = domain,
+      selector = selector
+    }
+  end
+
+  lua_util.debugm(N, task, 'no sign header %s', headers.sign_header)
+  return false,{}
+end
+
 local function prepare_dkim_signing(N, task, settings)
   local is_local, is_sign_networks
+
+  if settings.use_http_headers then
+    return parse_dkim_http_headers(N, task, settings)
+  end
+
   local auser = task:get_user()
   local ip = task:get_from_ip()
 

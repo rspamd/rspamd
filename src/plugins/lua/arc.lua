@@ -549,16 +549,22 @@ local function arc_signing_cb(task)
       try_redis_key(p.selector)
     end
   else
-    if (p.key and p.selector) then
-      p.key = lua_util.template(p.key, {domain = p.domain, selector = p.selector})
-      local exists,err = rspamd_util.file_exists(p.key)
-      if not exists then
-        if err and err == 'No such file or directory' then
-          lua_util.debugm(N, task, 'cannot read key from %s: %s', p.key, err)
-        else
-          rspamd_logger.warnx(N, task, 'cannot read key from %s: %s', p.key, err)
+    if ((p.key or p.rawkey) and p.selector) then
+      if p.key then
+        p.key = lua_util.template(p.key, {
+          domain = p.domain,
+          selector = p.selector
+        })
+
+        local exists,err = rspamd_util.file_exists(p.key)
+        if not exists then
+          if err and err == 'No such file or directory' then
+            lua_util.debugm(N, task, 'cannot read key from %s: %s', p.key, err)
+          else
+            rspamd_logger.warnx(N, task, 'cannot read key from %s: %s', p.key, err)
+          end
+          return false
         end
-        return false
       end
 
       local dret, hdr = dkim_sign(task, p)

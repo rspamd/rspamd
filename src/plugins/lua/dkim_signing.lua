@@ -152,20 +152,26 @@ local function dkim_signing_cb(task)
       try_redis_key(p.selector)
     end
   else
-    if (p.key and p.selector) then
-      p.key = lua_util.template(p.key, { domain = p.domain, selector = p.selector})
-      local exists,err = rspamd_util.file_exists(p.key)
-      if not exists then
-        if err and err == 'No such file or directory' then
-          lua_util.debugm(N, task, 'cannot read key from "%s": %s', p.key, err)
-        else
-          rspamd_logger.warnx(N, task, 'cannot read key from "%s": %s', p.key, err)
+    if ((p.key or p.rawkey) and p.selector) then
+      if p.key then
+        -- templates
+        p.key = lua_util.template(p.key, {
+          domain = p.domain,
+          selector = p.selector
+        })
+        local exists,err = rspamd_util.file_exists(p.key)
+        if not exists then
+          if err and err == 'No such file or directory' then
+            lua_util.debugm(N, task, 'cannot read key from "%s": %s', p.key, err)
+          else
+            rspamd_logger.warnx(N, task, 'cannot read key from "%s": %s', p.key, err)
+          end
+          return false
         end
-        return false
-      end
 
-      lua_util.debugm(N, task, 'key found at "%s", use selector "%s" for domain "%s"',
-          p.key, p.selector, p.domain)
+        lua_util.debugm(N, task, 'key found at "%s", use selector "%s" for domain "%s"',
+            p.key, p.selector, p.domain)
+      end
 
       do_sign()
     else
