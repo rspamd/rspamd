@@ -59,8 +59,7 @@ false positives (e.g. when an innocent message is badly classified as a spam one
 and learn messages, and to view the history of scans. The interface is self-hosted, requires zero configuration and follows the recent web applications standards. You don't need a
 web server or applications server to run it - you just need to run Rspamd itself and a web browser.
 
-* **Integration with MTAs** - Rspamd can work with the most popular mail transfer systems, such as Postfix, Exim or Sendmail. For Postfix and Sendmail, there is an [`Rmilter` project](https://github.com/vstakhov/rmilter),
-whilst for Exim there are several solutions to work with Rspamd. Should you require MTA integration then please consult the [integration guide](https://rspamd.com/doc/integration.html).
+* **Integration with MTAs** - Rspamd can work with the most popular mail transfer systems, such as Postfix, Exim or Sendmail. Should you require MTA integration then please consult the [integration guide](https://rspamd.com/doc/integration.html).
 
 * **Extensive Lua API** - Rspamd ships with hundreds of [Lua functions](https://rspamd.com/doc/lua) that enable one to write their own rules for efficient and targeted spam filtering.
 
@@ -133,4 +132,4 @@ Rspamd with Lua.
 ## References
 
 * Home site: <https://rspamd.com>
-* Development: <https://github.com/vstakhov/rspamd>
+* Development: <https://github.com/rspamd/rspamd>
