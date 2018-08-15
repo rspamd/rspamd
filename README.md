@@ -1,4 +1,4 @@
-[![CircleCI](https://circleci.com/gh/vstakhov/rspamd/tree/master.svg?style=svg)](https://circleci.com/gh/vstakhov/rspamd/tree/master)
+[![CircleCI](https://circleci.com/gh/rspamd/rspamd/tree/master.svg?style=svg)](https://circleci.com/gh/rspamd/rspamd/tree/master)
 
 ## Introduction
 
