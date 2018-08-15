@@ -1043,7 +1043,6 @@ struct lua_callback_data {
 		gint ref;
 	} callback;
 	gboolean cb_is_ref;
-	gpointer thread_entry;
 	gint stack_level;
 	gint order;
 };
@@ -1193,18 +1192,28 @@ lua_watcher_callback (gpointer session_data, gpointer ud)
 	lua_settop (L, err_idx - 1);
 }
 
+gint
+lua_do_resume (lua_State *L, gint narg)
+{
+#if LUA_VERSION_NUM < 503
+	return lua_resume (L, narg);
+#else
+	return lua_resume (L, NULL, narg);
+#endif
+}
+
 static void
-lua_metric_symbol_callback_return (struct rspamd_task *task, gpointer ud, gint ret);
+lua_metric_symbol_callback_return (struct rspamd_task *task, struct thread_entry *thread_entry, gpointer ud, gint ret);
 
 static void
 lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 {
 	struct lua_callback_data *cd = ud;
 	struct rspamd_task **ptask;
+	struct thread_entry *thread_entry;
 	gint ret;
 
-	struct thread_entry *thread_entry = lua_thread_pool_get (task->cfg->lua_thread_pool);
-	cd->thread_entry = thread_entry;
+	thread_entry = lua_thread_pool_get (task->cfg->lua_thread_pool);
 
 	g_assert(thread_entry->cd == NULL);
 	thread_entry->cd = cd;
@@ -1231,7 +1240,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 		 It should only happen when the thread initiated a asynchronous event and it will be restored as soon
 		 the event is finished
 		 */
-		lua_metric_symbol_callback_return (task, ud, ret);
+		lua_metric_symbol_callback_return (task, thread_entry, ud, ret);
 	}
 }
 
@@ -1254,18 +1263,17 @@ lua_resume_thread (struct rspamd_task *task, struct thread_entry *thread_entry, 
 	ret = lua_resume (thread_entry->lua_state, narg);
 
 	if (ret != LUA_YIELD) {
-		lua_metric_symbol_callback_return (task, thread_entry->cd, ret);
+		lua_metric_symbol_callback_return (task, thread_entry, thread_entry->cd, ret);
 	}
 }
 
 static void
-lua_metric_symbol_callback_return (struct rspamd_task *task, gpointer ud, gint ret)
+lua_metric_symbol_callback_return (struct rspamd_task *task, struct thread_entry *thread_entry, gpointer ud, gint ret)
 {
 	GString *tb;
 	struct lua_callback_data *cd = ud;
 	int nresults;
 	struct rspamd_symbol_result *s;
-	struct thread_entry *thread_entry = cd->thread_entry;
 	lua_State *thread = thread_entry->lua_state;
 
 	if (ret != 0) {
@@ -1280,8 +1288,8 @@ lua_metric_symbol_callback_return (struct rspamd_task *task, gpointer ud, gint r
 			lua_pop (thread, 1);
 		}
 		g_assert (lua_gettop (thread) >= cd->stack_level);
-		// maybe there is a way to recover here. For now, just remove faulty thread
-		lua_thread_pool_terminate_entry (task->cfg->lua_thread_pool, cd->thread_entry);
+		/* maybe there is a way to recover here. For now, just remove faulty thread */
+		lua_thread_pool_terminate_entry (task->cfg->lua_thread_pool, thread_entry);
 	}
 	else {
 		nresults = lua_gettop (thread) - cd->stack_level;
@@ -1363,10 +1371,9 @@ lua_metric_symbol_callback_return (struct rspamd_task *task, gpointer ud, gint r
 
 		g_assert (lua_gettop (thread) == cd->stack_level); /* we properly cleaned up the stack */
 
-		lua_thread_pool_return (task->cfg->lua_thread_pool, cd->thread_entry);
+		lua_thread_pool_return (task->cfg->lua_thread_pool, thread_entry);
 	}
 
-	cd->thread_entry = NULL;
 	cd->stack_level = 0;
 }
 
