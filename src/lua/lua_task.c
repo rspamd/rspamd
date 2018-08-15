@@ -2023,7 +2023,7 @@ rspamd_lua_push_header (lua_State *L, struct rspamd_mime_header *rh,
 		lua_settable (L, -3);
 		rspamd_lua_table_set (L, "separator", rh->separator);
 		lua_pushstring (L, "order");
-		lua_pushnumber (L, rh->order);
+		lua_pushinteger (L, rh->order);
 		lua_settable (L, -3);
 		break;
 	case RSPAMD_TASK_HEADER_PUSH_RAW:
@@ -2079,7 +2079,7 @@ rspamd_lua_push_header_array (lua_State * L,
 		}
 	}
 	else if (how == RSPAMD_TASK_HEADER_PUSH_COUNT) {
-		lua_pushnumber (L, ar->len);
+		lua_pushinteger (L, ar->len);
 	}
 	else {
 		rh = g_ptr_array_index (ar, 0);
@@ -2265,7 +2265,7 @@ lua_task_get_received_headers (lua_State * L)
 				lua_settable (L, -3);
 
 				lua_pushstring (L, "timestamp");
-				lua_pushnumber (L, rh->timestamp);
+				lua_pushinteger (L, rh->timestamp);
 				lua_settable (L, -3);
 
 				rspamd_lua_table_set (L, "by_hostname", rh->by_hostname);
@@ -2362,7 +2362,7 @@ lua_task_get_dns_req (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
-		lua_pushnumber (L, task->dns_requests);
+		lua_pushinteger (L, task->dns_requests);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -3578,7 +3578,7 @@ lua_task_get_symbols_numeric (lua_State *L)
 				if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
 					id = rspamd_symbols_cache_find_symbol (task->cfg->cache,
 							s->name);
-					lua_pushnumber (L, id);
+					lua_pushinteger (L, id);
 					lua_rawseti (L, -3, i);
 					lua_pushnumber (L, s->score);
 					lua_rawseti (L, -2, i);
@@ -3823,10 +3823,10 @@ lua_task_get_timeval (lua_State *L)
 	if (task != NULL) {
 		lua_createtable (L, 0, 2);
 		lua_pushstring (L, "tv_sec");
-		lua_pushnumber (L, (lua_Number)task->tv.tv_sec);
+		lua_pushinteger (L, (lua_Integer)task->tv.tv_sec);
 		lua_settable (L, -3);
 		lua_pushstring (L, "tv_usec");
-		lua_pushnumber (L, (lua_Number)task->tv.tv_usec);
+		lua_pushinteger (L, (lua_Integer)task->tv.tv_usec);
 		lua_settable (L, -3);
 	}
 	else {
@@ -3843,7 +3843,7 @@ lua_task_get_size (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
-		lua_pushnumber (L, task->msg.len);
+		lua_pushinteger (L, task->msg.len);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -4486,7 +4486,7 @@ lua_task_process_regexp (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnumber (L, ret);
+	lua_pushinteger (L, ret);
 
 	return 1;
 }
@@ -4669,7 +4669,7 @@ lua_push_stat_token (lua_State *L, rspamd_token_t *tok)
 	}
 
 	lua_pushstring (L, "win");
-	lua_pushnumber (L, tok->window_idx);
+	lua_pushinteger (L, tok->window_idx);
 	lua_settable (L, -3);
 
 	lua_pushstring (L, "flags");
@@ -4918,7 +4918,7 @@ lua_image_get_width (lua_State *L)
 	struct rspamd_image *img = lua_check_image (L);
 
 	if (img != NULL) {
-		lua_pushnumber (L, img->width);
+		lua_pushinteger (L, img->width);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -4934,7 +4934,7 @@ lua_image_get_height (lua_State *L)
 	struct rspamd_image *img = lua_check_image (L);
 
 	if (img != NULL) {
-		lua_pushnumber (L, img->height);
+		lua_pushinteger (L, img->height);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -4966,7 +4966,7 @@ lua_image_get_size (lua_State *L)
 	struct rspamd_image *img = lua_check_image (L);
 
 	if (img != NULL) {
-		lua_pushnumber (L, img->data->len);
+		lua_pushinteger (L, img->data->len);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -5054,11 +5054,11 @@ lua_archive_get_files_full (lua_State *L)
 			lua_settable (L, -3);
 
 			lua_pushstring (L, "compressed_size");
-			lua_pushnumber (L, f->compressed_size);
+			lua_pushinteger (L, f->compressed_size);
 			lua_settable (L, -3);
 
 			lua_pushstring (L, "uncompressed_size");
-			lua_pushnumber (L, f->uncompressed_size);
+			lua_pushinteger (L, f->uncompressed_size);
 			lua_settable (L, -3);
 
 			lua_pushstring (L, "encrypted");
@@ -5098,7 +5098,7 @@ lua_archive_get_size (lua_State *L)
 	struct rspamd_archive *arch = lua_check_archive (L);
 
 	if (arch != NULL) {
-		lua_pushnumber (L, arch->size);
+		lua_pushinteger (L, arch->size);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -5138,7 +5138,7 @@ lua_text_len (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnumber (L, l);
+	lua_pushinteger (L, l);
 
 	return 1;
 }

@@ -318,10 +318,10 @@ lua_regexp_set_max_hits (lua_State *L)
 	struct rspamd_lua_regexp *re = lua_check_regexp (L);
 	guint lim;
 
-	lim = luaL_checknumber (L, 2);
+	lim = luaL_checkinteger (L, 2);
 
 	if (re && re->re && !IS_DESTROYED (re)) {
-		lua_pushnumber (L, rspamd_regexp_set_maxhits (re->re, lim));
+		lua_pushinteger (L, rspamd_regexp_set_maxhits (re->re, lim));
 	}
 	else {
 		lua_pushnil (L);
@@ -342,10 +342,10 @@ lua_regexp_get_max_hits (lua_State *L)
 	struct rspamd_lua_regexp *re = lua_check_regexp (L);
 
 	if (re && re->re && !IS_DESTROYED (re)) {
-		lua_pushnumber (L, rspamd_regexp_get_maxhits (re->re));
+		lua_pushinteger (L, rspamd_regexp_get_maxhits (re->re));
 	}
 	else {
-		lua_pushnumber (L, 1);
+		lua_pushinteger (L, 1);
 	}
 
 	return 1;
@@ -580,7 +580,7 @@ lua_regexp_matchn (lua_State *L)
 				}
 			}
 
-			lua_pushnumber (L, matches);
+			lua_pushinteger (L, matches);
 
 			return 1;
 		}

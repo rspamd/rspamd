@@ -439,7 +439,7 @@ rspamd_lua_rspamd_version_cmp (lua_State *L)
 
 set:
 	g_strfreev (components);
-	lua_pushnumber (L, ret);
+	lua_pushinteger (L, ret);
 
 	return 1;
 }
@@ -472,7 +472,7 @@ rspamd_lua_rspamd_version_numeric (lua_State *L)
 		}
 	}
 
-	lua_pushnumber (L, version_num);
+	lua_pushinteger (L, version_num);
 
 	return 1;
 }
@@ -766,7 +766,7 @@ rspamd_lua_init ()
 	lua_getglobal (L, "math");
 	lua_pushstring (L, "randomseed");
 	lua_gettable (L, -2);
-	lua_pushnumber (L, ottery_rand_uint64 ());
+	lua_pushinteger (L, ottery_rand_uint64 ());
 	lua_pcall (L, 1, 0, 0);
 	lua_pop (L, 1); /* math table */
 
@@ -1785,7 +1785,7 @@ lua_worker_get_index (lua_State *L)
 	struct rspamd_worker *w = lua_check_worker (L, 1);
 
 	if (w) {
-		lua_pushnumber (L, w->index);
+		lua_pushinteger (L, w->index);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -1800,7 +1800,7 @@ lua_worker_get_pid (lua_State *L)
 	struct rspamd_worker *w = lua_check_worker (L, 1);
 
 	if (w) {
-		lua_pushnumber (L, w->pid);
+		lua_pushinteger (L, w->pid);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

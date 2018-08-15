@@ -156,11 +156,11 @@ lua_classifier_classify (struct rspamd_classifier *cl,
 		v = tok->data;
 		lua_createtable (L, 3, 0);
 		/* High word, low word, order */
-		lua_pushnumber (L, (guint32)(v >> 32));
+		lua_pushinteger (L, (guint32)(v >> 32));
 		lua_rawseti (L, -2, 1);
-		lua_pushnumber (L, (guint32)(v));
+		lua_pushinteger (L, (guint32)(v));
 		lua_rawseti (L, -2, 2);
-		lua_pushnumber (L, tok->window_idx);
+		lua_pushinteger (L, tok->window_idx);
 		lua_rawseti (L, -2, 3);
 		lua_rawseti (L, -2, i + 1);
 	}
@@ -212,11 +212,11 @@ lua_classifier_learn_spam (struct rspamd_classifier *cl,
 		v = tok->data;
 		lua_createtable (L, 3, 0);
 		/* High word, low word, order */
-		lua_pushnumber (L, (guint32)(v >> 32));
+		lua_pushinteger (L, (guint32)(v >> 32));
 		lua_rawseti (L, -2, 1);
-		lua_pushnumber (L, (guint32)(v));
+		lua_pushinteger (L, (guint32)(v));
 		lua_rawseti (L, -2, 2);
-		lua_pushnumber (L, tok->window_idx);
+		lua_pushinteger (L, tok->window_idx);
 		lua_rawseti (L, -2, 3);
 		lua_rawseti (L, -2, i + 1);
 	}

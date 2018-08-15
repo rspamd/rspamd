@@ -183,7 +183,7 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 	/* Error */
 	lua_pushnil (cbd->L);
 	/* Reply code */
-	lua_pushnumber (cbd->L, msg->code);
+	lua_pushinteger (cbd->L, msg->code);
 	/* Body */
 	body = rspamd_http_message_get_body (msg, &body_len);
 

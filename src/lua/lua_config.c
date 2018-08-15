@@ -940,7 +940,7 @@ lua_config_get_all_opt (lua_State * L)
 				i = 1;
 
 				LL_FOREACH (obj, cur) {
-					lua_pushnumber (L, i++);
+					lua_pushinteger (L, i++);
 					ucl_object_push_lua (L, cur, true);
 					lua_settable (L, -3);
 				}
@@ -1805,7 +1805,7 @@ lua_config_register_symbol (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnumber (L, ret);
+	lua_pushinteger (L, ret);
 
 	return 1;
 }
@@ -1879,7 +1879,7 @@ lua_config_register_symbols (lua_State *L)
 		}
 	}
 
-	lua_pushnumber (L, ret);
+	lua_pushinteger (L, ret);
 
 	return 1;
 }
@@ -1908,7 +1908,7 @@ lua_config_register_virtual_symbol (lua_State * L)
 		}
 	}
 
-	lua_pushnumber (L, ret);
+	lua_pushinteger (L, ret);
 
 	return 1;
 }
@@ -1949,7 +1949,7 @@ lua_config_register_callback_symbol (lua_State * L)
 				lua_type (L, top + 1) == LUA_TSTRING);
 	}
 
-	lua_pushnumber (L, ret);
+	lua_pushinteger (L, ret);
 
 	return 1;
 }
@@ -1992,7 +1992,7 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 				lua_type (L, top + 2) == LUA_TSTRING);
 	}
 
-	lua_pushnumber (L, ret);
+	lua_pushinteger (L, ret);
 
 	return 1;
 }
@@ -2982,7 +2982,7 @@ lua_config_get_symbols_count (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnumber (L, res);
+	lua_pushinteger (L, res);
 
 	return 1;
 }
@@ -3162,7 +3162,7 @@ lua_config_get_symbol_stat (lua_State *L)
 			lua_pushnumber (L, tm);
 			lua_settable (L, -3);
 			lua_pushstring (L, "hits");
-			lua_pushnumber (L, hits);
+			lua_pushinteger (L, hits);
 			lua_settable (L, -3);
 		}
 	}

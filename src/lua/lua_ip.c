@@ -229,7 +229,7 @@ lua_ip_to_table (lua_State *L)
 		lua_createtable (L, max, 0);
 
 		for (i = 1; i <= max; i++, ptr++) {
-			lua_pushnumber (L, *ptr);
+			lua_pushinteger (L, *ptr);
 			lua_rawseti (L, -2, i);
 		}
 	}
@@ -351,7 +351,7 @@ lua_ip_get_port (lua_State *L)
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
 
 	if (ip != NULL && ip->addr) {
-		lua_pushnumber (L, rspamd_inet_address_get_port (ip->addr));
+		lua_pushinteger (L, rspamd_inet_address_get_port (ip->addr));
 	}
 	else {
 		lua_pushnil (L);
@@ -433,7 +433,7 @@ lua_ip_get_version (lua_State *L)
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
 
 	if (ip && ip->addr) {
-		lua_pushnumber (L, rspamd_inet_address_get_af (ip->addr) == AF_INET6 ?
+		lua_pushinteger (L, rspamd_inet_address_get_af (ip->addr) == AF_INET6 ?
 				6 : 4);
 	}
 	else {
