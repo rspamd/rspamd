@@ -583,6 +583,14 @@ static kh_inline khint_t __ac_Wang_hash(khint_t key)
 		code;												\
 	} }
 
+#define kh_foreach_key(h, kvar, code) {						\
+	khint_t __i;											\
+	for (__i = kh_begin(h); __i != kh_end(h); ++__i) {		\
+		if (!kh_exist(h,__i)) continue;						\
+		(kvar) = kh_key(h,__i);								\
+		code;												\
+	} }
+
 /* More conenient interfaces */
 
 /*! @function

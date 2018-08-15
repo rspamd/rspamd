@@ -309,17 +309,13 @@ void
 rspamd_session_cleanup (struct rspamd_async_session *session)
 {
 	struct rspamd_async_event *ev;
-	int i;
 
 	if (session == NULL) {
 		msg_err ("session is NULL");
 		return;
 	}
 
-	for (i = kh_begin (session->events); i != kh_end (session->events); i ++) {
-		if (!kh_exist (session->events, i)) continue;
-		ev = kh_key (session->events, i);
-
+	kh_foreach_key (session->events, ev, {
 		/* Call event's finalizer */
 		msg_debug_session ("removed event on destroy: %p, subsystem: %s",
 				ev->user_data,
@@ -328,7 +324,7 @@ rspamd_session_cleanup (struct rspamd_async_session *session)
 		if (ev->fin != NULL) {
 			ev->fin (ev->user_data);
 		}
-	}
+	});
 
 	kh_clear (rspamd_events_hash, session->events);
 }
