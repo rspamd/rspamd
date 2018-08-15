@@ -65,7 +65,7 @@ local settings = {
 local bucket_check_script = [[
   local last = redis.call('HGET', KEYS[1], 'l')
   local now = tonumber(KEYS[2])
-  local dynr, dynb = 0, 0
+  local dynr, dynb, leaked = 0, 0, 0
   if not last then
     -- New bucket
     redis.call('HSET', KEYS[1], 'l', KEYS[2])
@@ -73,7 +73,7 @@ local bucket_check_script = [[
     redis.call('HSET', KEYS[1], 'dr', '10000')
     redis.call('HSET', KEYS[1], 'db', '10000')
     redis.call('EXPIRE', KEYS[1], KEYS[5])
-    return {0, 0, 1, 1}
+    return {0, '0', '1', '1', '0'}
   end
 
   last = tonumber(last)
@@ -84,9 +84,10 @@ local bucket_check_script = [[
     local rate = tonumber(KEYS[3])
     dynr = tonumber(redis.call('HGET', KEYS[1], 'dr')) / 10000.0
     rate = rate * dynr
-    local leaked = ((now - last) * rate)
+    leaked = ((now - last) * rate)
     burst = burst - leaked
     redis.call('HINCRBYFLOAT', KEYS[1], 'b', -(leaked))
+    redis.call('HSET', KEYS[1], 'l', KEYS[2])
    end
   else
    burst = 0
@@ -95,11 +96,11 @@ local bucket_check_script = [[
 
   dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
 
-  if (burst + 1) * dynb > tonumber(KEYS[4]) then
-   return {1, tostring(burst), tostring(dynr), tostring(dynb)}
+  if (burst + 1) > tonumber(KEYS[4]) * dynb then
+   return {1, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
   end
 
-  return {0, tostring(burst), tostring(dynr), tostring(dynb)}
+  return {0, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
 ]]
 local bucket_check_id
 
@@ -461,28 +462,35 @@ local function ratelimit_cb(task)
     return function(err, data)
       if err then
         rspamd_logger.errx('cannot check limit %s: %s %s', prefix, err, data)
-      elseif type(data) == 'table' and data[1] and data[1] == 1 then
-        -- set symbol only and do NOT soft reject
-        if settings.symbol then
-          task:insert_result(settings.symbol, 0.0, lim_name .. "(" .. prefix .. ")")
+      elseif type(data) == 'table' and data[1] then
+        lua_util.debugm(N, task,
+            "got reply for limit %s (%s / %s); %s burst, %s:%s dyn, %s leaked",
+            prefix, bucket.burst, bucket.rate,
+            data[2], data[3], data[4], data[5])
+
+        if data[1] == 1 then
+          -- set symbol only and do NOT soft reject
+          if settings.symbol then
+            task:insert_result(settings.symbol, 0.0, lim_name .. "(" .. prefix .. ")")
+            rspamd_logger.infox(task,
+                'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
+                lim_name, prefix,
+                bucket.burst, bucket.rate,
+                data[2], data[3], data[4])
+            return
+            -- set INFO symbol and soft reject
+          elseif settings.info_symbol then
+            task:insert_result(settings.info_symbol, 1.0,
+                lim_name .. "(" .. prefix .. ")")
+          end
           rspamd_logger.infox(task,
-              'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
+              'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
               lim_name, prefix,
               bucket.burst, bucket.rate,
               data[2], data[3], data[4])
-          return
-        -- set INFO symbol and soft reject
-        elseif settings.info_symbol then
-          task:insert_result(settings.info_symbol, 1.0,
-              lim_name .. "(" .. prefix .. ")")
+          task:set_pre_result('soft reject',
+              message_func(task, lim_name, prefix, bucket))
         end
-        rspamd_logger.infox(task,
-            'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
-            lim_name, prefix,
-            bucket.burst, bucket.rate,
-            data[2], data[3], data[4])
-        task:set_pre_result('soft reject',
-                message_func(task, lim_name, prefix, bucket))
       end
     end
   end
