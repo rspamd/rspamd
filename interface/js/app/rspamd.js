@@ -35,10 +35,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     var tables = {};
     var neighbours = []; // list of clusters
     var checked_server = "All SERVERS";
-    var ui = {
-        read_only: false,
-    };
-
+    var ui = {};
     var timer_id = [];
     var selData; // Graph's dataset selector state
 
@@ -158,7 +155,18 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     }
 
     function displayUI() {
-        // @toggle auth and main
+        // In many browsers local storage can only store string.
+        // So when we store the boolean true or false, it actually stores the strings "true" or "false".
+        ui.read_only = sessionStorage.getItem("read_only") === "true";
+        if (ui.read_only) {
+            $("#learning_nav").hide();
+            $("#resetHistory").attr("disabled", true);
+            $("#errors-history").hide();
+        } else {
+            $("#learning_nav").show();
+            $("#resetHistory").removeAttr("disabled", true);
+        }
+
         var buttons = $("#navBar .pull-right");
         $("#mainUI").show();
         $("#progress").show();
@@ -294,18 +302,6 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
 
     ui.connect = function () {
         if (isLogged()) {
-            var data = JSON.parse(sessionStorage.getItem("Credentials"));
-
-            if (data && data[checked_server].read_only) {
-                ui.read_only = true;
-                $("#learning_nav").hide();
-                $("#resetHistory").attr("disabled", true);
-                $("#errors-history").hide();
-            } else {
-                ui.read_only = false;
-                $("#learning_nav").show();
-                $("#resetHistory").removeAttr("disabled", true);
-            }
             displayUI();
             return;
         }
@@ -341,17 +337,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                     if (json.auth === "failed") {
                         // Is actually never returned by Rspamd
                     } else {
-                        if (json.read_only) {
-                            ui.read_only = true;
-                            $("#learning_nav").hide();
-                            $("#resetHistory").attr("disabled", true);
-                            $("#errors-history").hide();
-                        } else {
-                            ui.read_only = false;
-                            $("#learning_nav").show();
-                            $("#resetHistory").removeAttr("disabled", true);
-                        }
-
+                        sessionStorage.setItem("read_only", json.read_only);
                         saveCredentials(password);
                         $(dialog).hide();
                         $(backdrop).hide();

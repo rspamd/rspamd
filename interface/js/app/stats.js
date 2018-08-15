@@ -184,7 +184,6 @@ define(["jquery", "d3pie", "humanize"],
                             soft_reject: 0,
                             scanned: 0,
                             learned: 0,
-                            read_only: neighbours_status[0].data.read_only,
                             config_id: ""
                         };
                         var status_count = 0;
