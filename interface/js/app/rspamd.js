@@ -315,21 +315,15 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 return;
             }
 
-            $.ajax({
-                global: false,
-                jsonp: false,
-                dataType: "json",
-                type: "GET",
-                url: "auth",
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader("Password", password);
+            ui.query("auth", {
+                headers: {
+                    Password: password
                 },
                 success: function (json) {
+                    var data = json[0].data;
                     $("#connectPassword").val("");
-                    if (json.auth === "failed") {
-                        // Is actually never returned by Rspamd
-                    } else {
-                        sessionStorage.setItem("read_only", json.read_only);
+                    if (data.auth === "ok") {
+                        sessionStorage.setItem("read_only", data.read_only);
                         saveCredentials(password);
                         $(dialog).hide();
                         $(backdrop).hide();
@@ -340,7 +334,11 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                     ui.alertMessage("alert-modal alert-error", jqXHR.statusText);
                     $("#connectPassword").val("");
                     $("#connectPassword").focus();
-                }
+                },
+                params: {
+                    global: false,
+                },
+                server: "local"
             });
         });
     };
