@@ -2876,7 +2876,7 @@ rspamd_controller_handle_unknown (struct rspamd_http_connection_entry *conn_ent,
 		rspamd_http_message_add_header (rep, "Access-Control-Allow-Methods",
 				"POST, GET, OPTIONS");
 		rspamd_http_message_add_header (rep, "Access-Control-Allow-Headers",
-						"Content-Type, Password, Map");
+						"Content-Type,Password,Map,Weight,Flag");
 		rspamd_http_connection_reset (conn_ent->conn);
 		rspamd_http_router_insert_headers (conn_ent->rt, rep);
 		rspamd_http_connection_write_message (conn_ent->conn,
