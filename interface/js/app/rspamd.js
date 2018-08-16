@@ -234,7 +234,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                         alertMessage("alert-error", "Request failed");
                     }
                 }
-            }
+            },
+            statusCode: o.statusCode
         };
         if (o.method) {
             req_params.method = o.method;
@@ -458,7 +459,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         // Force options to be an object
         var o = options || {};
         Object.keys(o).forEach(function (option) {
-            if (["data", "error", "errorMessage", "errorOnceId", "headers", "method", "params", "server", "success"]
+            if (["data", "error", "errorMessage", "errorOnceId", "headers", "method", "params", "server", "statusCode",
+                "success"]
                 .indexOf(option) < 0) {
                 throw new Error("Unknown option: " + option);
             }
