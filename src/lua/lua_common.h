@@ -337,6 +337,14 @@ gboolean rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 gint rspamd_lua_traceback (lua_State *L);
 
 /**
+ * Returns stack trace as a string. Caller should clear memory.
+ * @param L
+ * @return
+ */
+GString *
+rspamd_lua_get_traceback_string (lua_State *L);
+
+/**
  * Returns size of table at position `tbl_pos`
  */
 guint rspamd_lua_table_size (lua_State *L, gint tbl_pos);

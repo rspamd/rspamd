@@ -1257,6 +1257,13 @@ lua_resume_thread (struct rspamd_task *task, struct thread_entry *thread_entry, 
 {
     g_assert (thread_entry->cd != NULL);
 
+    /*
+     * The only state where we can resume from is LUA_YIELD
+     * Another acceptable status is OK (0) but in that case we should push function on stack
+     * to start the thread from, which is happening in lua_metric_symbol_callback(), not in this function.
+     */
+    g_assert (lua_status (thread_entry->lua_state) == LUA_YIELD);
+
 	gint ret;
 
 	lua_thread_pool_set_running_entry (task->cfg->lua_thread_pool, thread_entry);
@@ -1277,15 +1284,12 @@ lua_metric_symbol_callback_return (struct rspamd_task *task, struct thread_entry
 	lua_State *thread = thread_entry->lua_state;
 
 	if (ret != 0) {
-		lua_pushcfunction (thread, rspamd_lua_traceback);
-		lua_call (thread, 0, LUA_MULTRET);
 
-		tb = lua_touserdata (thread, -1);
+		tb = rspamd_lua_get_traceback_string (thread);
 		msg_err_task ("call to (%s) failed (%d): %v", cd->symbol, ret, tb);
 
 		if (tb) {
 			g_string_free (tb, TRUE);
-			lua_pop (thread, 1);
 		}
 		g_assert (lua_gettop (thread) >= cd->stack_level);
 		/* maybe there is a way to recover here. For now, just remove faulty thread */
