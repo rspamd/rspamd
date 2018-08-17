@@ -25,6 +25,7 @@ local N = 'reputation'
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
+local rspamd_dns = require "rspamd_dns"
 local lua_util = require "lua_util"
 local lua_maps = require "lua_maps"
 local hash = require 'rspamd_cryptobox_hash'
@@ -716,11 +717,12 @@ end
 --]]
 
 local function reputation_dns_get_token(task, rule, token, continuation_cb)
-  local r = task:get_resolver()
+  -- local r = task:get_resolver()
   local key = gen_token_key(token, rule)
   local dns_name = key .. '.' .. rule.backend.config.list
 
-  local is_ok, results = r:resolve_a({
+  local is_ok, results = rspamd_dns.request({
+    type = 'a',
     task = task,
     name = dns_name,
     forced = true,

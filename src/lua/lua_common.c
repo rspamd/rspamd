@@ -740,6 +740,7 @@ rspamd_lua_init ()
 	luaopen_fann (L);
 	luaopen_sqlite3 (L);
 	luaopen_cryptobox (L);
+	luaopen_rspamd_dns (L);
 
 	luaL_newmetatable (L, "rspamd{ev_base}");
 	lua_pushstring (L, "class");
