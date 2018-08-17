@@ -332,8 +332,9 @@ local transform_function = {
   -- Extracts table value from key-value list
   ['elt'] = {
     ['types'] = {
-      ['kv_list'] = true,
+      ['kv'] = true,
     },
+    ['map_type'] = 'string',
     ['process'] = function(inp, t, args)
       return inp[args[1]],'string'
     end
