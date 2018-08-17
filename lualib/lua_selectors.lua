@@ -317,6 +317,16 @@ local transform_function = {
       return inp.value
     end
   },
+  -- Get header raw value
+  ['hdr_raw'] = {
+    ['types'] = {
+      ['header'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _)
+      return inp.raw
+    end
+  },
   -- Extracts table value from table
   ['elt'] = {
     ['types'] = {
