@@ -135,7 +135,7 @@ lua_dns_get_type (lua_State *L, int argno)
 }
 
 static void
-lua_dns_callback (struct rdns_reply *reply, gpointer arg)
+lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 {
 	struct lua_dns_cbdata *cd = arg;
 	struct rspamd_dns_resolver **presolver;
@@ -379,13 +379,13 @@ lua_dns_resolver_resolve_common (lua_State *L,
 		}
 
 		if (task == NULL) {
-			if (make_dns_request (resolver,
-					session,
-					pool,
-					lua_dns_callback,
-					cbdata,
-					type,
-					to_resolve)) {
+			if ( make_dns_request (resolver,
+								   session,
+								   pool,
+								   lua_dns_resolver_callback,
+								   cbdata,
+								   type,
+								   to_resolve)) {
 
 				lua_pushboolean (L, TRUE);
 
@@ -404,17 +404,17 @@ lua_dns_resolver_resolve_common (lua_State *L,
 
 			if (forced) {
 				ret = make_dns_request_task_forced (task,
-						lua_dns_callback,
-						cbdata,
-						type,
-						to_resolve);
+													lua_dns_resolver_callback,
+													cbdata,
+													type,
+													to_resolve);
 			}
 			else {
 				ret = make_dns_request_task (task,
-						lua_dns_callback,
-						cbdata,
-						type,
-						to_resolve);
+											 lua_dns_resolver_callback,
+											 cbdata,
+											 type,
+											 to_resolve);
 			}
 
 			if (ret) {
@@ -592,7 +592,7 @@ lua_dns_resolver_resolve (lua_State *L)
 }
 
 static gint
-lua_load_dns (lua_State * L)
+lua_load_dns_resolver (lua_State *L)
 {
 	lua_newtable (L);
 	luaL_register (L, NULL, dns_resolverlib_f);
@@ -625,7 +625,7 @@ luaopen_dns_resolver (lua_State * L)
 	}
 
 	luaL_register (L, NULL, dns_resolverlib_m);
-	rspamd_lua_add_preload (L, "rspamd_resolver", lua_load_dns);
+	rspamd_lua_add_preload (L, "rspamd_resolver", lua_load_dns_resolver);
 
 	lua_pop (L, 1);                      /* remove metatable from stack */
 }

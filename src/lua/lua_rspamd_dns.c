@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 #include "lua_common.h"
-#include "lua_dns.h"
+#include "lua_dns_resolver.h"
 #include "lua_thread_pool.h"
 
 LUA_FUNCTION_DEF (dns, request);

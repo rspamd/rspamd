@@ -12,7 +12,7 @@ SET(LUASRC			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_common.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_redis.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_upstream.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_mempool.c
-					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_dns.c
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_dns_resolver.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_rsa.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_ip.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_expression.c
