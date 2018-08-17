@@ -61,7 +61,7 @@ lua_thread_pool_free (struct lua_thread_pool *pool)
 }
 
 struct thread_entry *
-lua_thread_pool_get(struct lua_thread_pool *pool)
+lua_thread_pool_get (struct lua_thread_pool *pool)
 {
 	gpointer cur;
 	struct thread_entry *ent = NULL;
@@ -81,7 +81,7 @@ lua_thread_pool_get(struct lua_thread_pool *pool)
 }
 
 void
-lua_thread_pool_return(struct lua_thread_pool *pool, struct thread_entry *thread_entry)
+lua_thread_pool_return (struct lua_thread_pool *pool, struct thread_entry *thread_entry)
 {
 	g_assert (lua_status (thread_entry->lua_state) == 0); /* we can't return a running/yielded thread into the pool */
 
@@ -99,7 +99,7 @@ lua_thread_pool_return(struct lua_thread_pool *pool, struct thread_entry *thread
 }
 
 void
-lua_thread_pool_terminate_entry(struct lua_thread_pool *pool, struct thread_entry *thread_entry)
+lua_thread_pool_terminate_entry (struct lua_thread_pool *pool, struct thread_entry *thread_entry)
 {
 	struct thread_entry *ent = NULL;
 
@@ -119,13 +119,30 @@ lua_thread_pool_terminate_entry(struct lua_thread_pool *pool, struct thread_entr
 }
 
 struct thread_entry *
-lua_thread_pool_get_running_entry(struct lua_thread_pool *pool)
+lua_thread_pool_get_running_entry (struct lua_thread_pool *pool)
 {
 	return pool->running_entry;
 }
 
 void
-lua_thread_pool_set_running_entry(struct lua_thread_pool *pool, struct thread_entry *thread_entry)
+lua_thread_pool_set_running_entry (struct lua_thread_pool *pool, struct thread_entry *thread_entry)
 {
 	pool->running_entry = thread_entry;
+}
+
+
+void
+lua_thread_pool_prepare_callback (struct lua_thread_pool *pool, struct lua_callback_state *cbs)
+{
+	cbs->thread_pool = pool;
+	cbs->previous_thread = lua_thread_pool_get_running_entry (pool);
+	cbs->my_thread = lua_thread_pool_get (pool);
+	cbs->L = cbs->my_thread->lua_state;
+}
+
+void
+lua_thread_pool_restore_callback (struct lua_callback_state *cbs)
+{
+	lua_thread_pool_return (cbs->thread_pool, cbs->my_thread);
+	lua_thread_pool_set_running_entry (cbs->thread_pool, cbs->previous_thread);
 }

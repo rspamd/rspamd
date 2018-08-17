@@ -11,6 +11,13 @@ struct thread_entry {
 
 struct thread_pool;
 
+struct lua_callback_state {
+	lua_State *L;
+	struct thread_entry *my_thread;
+	struct thread_entry *previous_thread;
+	struct lua_thread_pool *thread_pool;
+};
+
 /**
  * Allocates new thread pool on state L. Pre-creates number of lua-threads to use later on
  *
@@ -67,7 +74,7 @@ lua_thread_pool_terminate_entry(struct lua_thread_pool *pool, struct thread_entr
  * @return
  */
 struct thread_entry *
-lua_thread_pool_get_running_entry(struct lua_thread_pool *pool);
+lua_thread_pool_get_running_entry (struct lua_thread_pool *pool);
 
 /**
  * Updates currently running thread
@@ -76,7 +83,24 @@ lua_thread_pool_get_running_entry(struct lua_thread_pool *pool);
  * @param thread_entry
  */
 void
-lua_thread_pool_set_running_entry(struct lua_thread_pool *pool, struct thread_entry *thread_entry);
+lua_thread_pool_set_running_entry (struct lua_thread_pool *pool, struct thread_entry *thread_entry);
+
+/**
+ * Prevents yielded thread to be used for callback execution. lua_thread_pool_restore_callback() should be called afterwards.
+ *
+ * @param pool
+ * @param cbs
+ */
+void
+lua_thread_pool_prepare_callback (struct lua_thread_pool *pool, struct lua_callback_state *cbs);
+
+/**
+ * Restores state after lua_thread_pool_prepare_callback () usage
+ *
+ * @param cbs
+ */
+void
+lua_thread_pool_restore_callback (struct lua_callback_state *cbs);
 
 #endif /* LUA_THREAD_POOL_H_ */
 

@@ -419,15 +419,13 @@ gint
 lua_yield_thread (struct thread_entry *thread_entry, gint nresults);
 
 /**
- *
- * @param pool
+ * Resumes suspended by lua_yield_thread () thread
+ * @param task
  * @param thread_entry
  * @param narg
- * @return
  */
 void
 lua_resume_thread (struct rspamd_task *task, struct thread_entry *thread_entry, gint narg);
-
 
 /* Paths defs */
 #define RSPAMD_CONFDIR_INDEX "CONFDIR"
