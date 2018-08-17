@@ -197,6 +197,18 @@ local selectors = {
     ['get_value'] = function(task, _, args)
       return task:get_mempool():get_variable(args[1], args[2])
     end,
+  },
+  -- Get specific HTTP request header. The first argument must be header name.
+  ['request_header'] = {
+    ['type'] = 'string',
+    ['get_value'] = function(task, _, args)
+      local hdr = task:get_request_header(args[1])
+      if hdr then
+        return tostring(hdr)
+      end
+
+      return nil
+    end
   }
 }
 
