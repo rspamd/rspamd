@@ -78,7 +78,6 @@ lua_check_dns_resolver (lua_State * L)
 }
 
 struct lua_dns_cbdata {
-	lua_State *L;
 	struct thread_entry *thread;
 	struct rspamd_task *task;
 	struct rspamd_dns_resolver *resolver;
@@ -142,15 +141,22 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 	struct rspamd_dns_resolver **presolver;
 	struct rdns_reply_entry *elt;
 	rspamd_inet_addr_t *addr;
+	lua_State *L;
+	struct lua_callback_state cbs;
 
 	if (cd->cbref != -1) {
-		lua_rawgeti (cd->L, LUA_REGISTRYINDEX, cd->cbref);
+		lua_thread_pool_prepare_callback (cd->resolver->cfg->lua_thread_pool, &cbs);
+		L = cbs.L;
 
-		presolver = lua_newuserdata (cd->L, sizeof (gpointer));
-		rspamd_lua_setclass (cd->L, "rspamd{resolver}", -1);
+		lua_rawgeti (L, LUA_REGISTRYINDEX, cd->cbref);
+
+		presolver = lua_newuserdata (L, sizeof (gpointer));
+		rspamd_lua_setclass (L, "rspamd{resolver}", -1);
 
 		*presolver = cd->resolver;
-		lua_pushstring (cd->L, cd->to_resolve);
+		lua_pushstring (L, cd->to_resolve);
+	} else {
+		L = cd->thread->lua_state;
 	}
 
 	/*
@@ -161,72 +167,72 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 			naddrs ++;
 		}
 
-		lua_createtable (cd->L, naddrs, 0);
+		lua_createtable (L, naddrs, 0);
 
 		LL_FOREACH (reply->entries, elt)
 		{
 			switch (elt->type) {
 			case RDNS_REQUEST_A:
 				addr = rspamd_inet_address_new (AF_INET, &elt->content.a.addr);
-				rspamd_lua_ip_push (cd->L, addr);
+				rspamd_lua_ip_push (L, addr);
 				rspamd_inet_address_free (addr);
-				lua_rawseti (cd->L, -2, ++i);
+				lua_rawseti (L, -2, ++i);
 				break;
 			case RDNS_REQUEST_AAAA:
 				addr = rspamd_inet_address_new (AF_INET6, &elt->content.aaa.addr);
-				rspamd_lua_ip_push (cd->L, addr);
+				rspamd_lua_ip_push (L, addr);
 				rspamd_inet_address_free (addr);
-				lua_rawseti (cd->L, -2, ++i);
+				lua_rawseti (L, -2, ++i);
 				break;
 			case RDNS_REQUEST_NS:
-				lua_pushstring (cd->L, elt->content.ns.name);
-				lua_rawseti (cd->L, -2, ++i);
+				lua_pushstring (L, elt->content.ns.name);
+				lua_rawseti (L, -2, ++i);
 				break;
 			case RDNS_REQUEST_PTR:
-				lua_pushstring (cd->L, elt->content.ptr.name);
-				lua_rawseti (cd->L, -2, ++i);
+				lua_pushstring (L, elt->content.ptr.name);
+				lua_rawseti (L, -2, ++i);
 				break;
 			case RDNS_REQUEST_TXT:
 			case RDNS_REQUEST_SPF:
-				lua_pushstring (cd->L, elt->content.txt.data);
-				lua_rawseti (cd->L, -2, ++i);
+				lua_pushstring (L, elt->content.txt.data);
+				lua_rawseti (L, -2, ++i);
 				break;
 			case RDNS_REQUEST_MX:
 				/* mx['name'], mx['priority'] */
-				lua_createtable (cd->L, 0, 2);
-				rspamd_lua_table_set (cd->L, "name", elt->content.mx.name);
-				lua_pushstring (cd->L, "priority");
-				lua_pushinteger (cd->L, elt->content.mx.priority);
-				lua_settable (cd->L, -3);
+				lua_createtable (L, 0, 2);
+				rspamd_lua_table_set (L, "name", elt->content.mx.name);
+				lua_pushstring (L, "priority");
+				lua_pushinteger (L, elt->content.mx.priority);
+				lua_settable (L, -3);
 
-				lua_rawseti (cd->L, -2, ++i);
+				lua_rawseti (L, -2, ++i);
 				break;
 			case RDNS_REQUEST_SOA:
-				lua_createtable (cd->L, 0, 7);
-				rspamd_lua_table_set (cd->L, "ns", elt->content.soa.mname);
-				rspamd_lua_table_set (cd->L, "contact", elt->content.soa.admin);
-				lua_pushstring (cd->L, "serial");
-				lua_pushinteger (cd->L, elt->content.soa.serial);
-				lua_settable (cd->L, -3);
-				lua_pushstring (cd->L, "refresh");
-				lua_pushinteger (cd->L, elt->content.soa.refresh);
-				lua_settable (cd->L, -3);
-				lua_pushstring (cd->L, "retry");
-				lua_pushinteger (cd->L, elt->content.soa.retry);
-				lua_settable (cd->L, -3);
-				lua_pushstring (cd->L, "expiry");
-				lua_pushinteger (cd->L, elt->content.soa.expire);
-				lua_settable (cd->L, -3);
+				lua_createtable (L, 0, 7);
+				rspamd_lua_table_set (L, "ns", elt->content.soa.mname);
+				rspamd_lua_table_set (L, "contact", elt->content.soa.admin);
+				lua_pushstring (L, "serial");
+				lua_pushinteger (L, elt->content.soa.serial);
+				lua_settable (L, -3);
+				lua_pushstring (L, "refresh");
+				lua_pushinteger (L, elt->content.soa.refresh);
+				lua_settable (L, -3);
+				lua_pushstring (L, "retry");
+				lua_pushinteger (L, elt->content.soa.retry);
+				lua_settable (L, -3);
+				lua_pushstring (L, "expiry");
+				lua_pushinteger (L, elt->content.soa.expire);
+				lua_settable (L, -3);
 				/* Negative TTL */
-				lua_pushstring (cd->L, "nx");
-				lua_pushinteger (cd->L, elt->content.soa.minimum);
-				lua_settable (cd->L, -3);
+				lua_pushstring (L, "nx");
+				lua_pushinteger (L, elt->content.soa.minimum);
+				lua_settable (L, -3);
 
-				lua_rawseti (cd->L, -2, ++i);
+				lua_rawseti (L, -2, ++i);
 				break;
 			}
 		}
-		lua_pushnil (cd->L);
+		lua_pushnil (L);
 	}
 
 	if (cd->cbref != -1) {
@@ -239,25 +245,27 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 		 * 6 - reply->authenticated
 		 */
 		if (reply->code != RDNS_RC_NOERROR) {
-			lua_pushnil (cd->L);
-			lua_pushstring (cd->L, rdns_strerror (reply->code));
+			lua_pushnil (L);
+			lua_pushstring (L, rdns_strerror (reply->code));
 		}
 		if (cd->user_str != NULL) {
-			lua_pushstring (cd->L, cd->user_str);
+			lua_pushstring (L, cd->user_str);
 		}
 		else {
-			lua_pushnil (cd->L);
+			lua_pushnil (L);
 		}
 
-		lua_pushboolean (cd->L, reply->authenticated);
+		lua_pushboolean (L, reply->authenticated);
 
-		if (lua_pcall (cd->L, 6, 0, 0) != 0) {
-			msg_info ("call to dns callback failed: %s", lua_tostring (cd->L, -1));
-			lua_pop (cd->L, 1);
+		if (lua_pcall (L, 6, 0, 0) != 0) {
+			msg_info ("call to dns callback failed: %s", lua_tostring (L, -1));
+			lua_pop (L, 1);
 		}
 
 		/* Unref function */
-		luaL_unref (cd->L, LUA_REGISTRYINDEX, cd->cbref);
+		luaL_unref (L, LUA_REGISTRYINDEX, cd->cbref);
+
+		lua_thread_pool_restore_callback (&cbs);
 	} else {
 		/*
 		 * 1 - true | false in the case of error
@@ -269,18 +277,21 @@ lua_dns_callback (struct rdns_reply *reply, gpointer arg)
 		 * }
 		 */
 		if (reply->code != RDNS_RC_NOERROR) {
-			lua_pushboolean (cd->L, false);
-			lua_pushstring (cd->L, rdns_strerror (reply->code));
+			lua_pushboolean (L, false);
+			lua_pushstring (L, rdns_strerror (reply->code));
 		}
 		else {
-			lua_pushboolean (cd->L, reply->authenticated);
-			lua_setfield (cd->L, -3, "authenticated");
+			lua_pushboolean (L, reply->authenticated);
+			lua_setfield (L, -3, "authenticated");
 
 			/* result 1 - not and error */
-			lua_pushboolean (cd->L, true);
+			lua_pushboolean (L, true);
 			/* push table into stack, result 2 - results itself */
-			lua_pushvalue (cd->L, -3);
+			lua_pushvalue (L, -3);
 		}
+
+		g_assert (L == cd->thread->lua_state);
+
 		lua_resume_thread (cd->task, cd->thread, 2);
 	}
 
@@ -364,10 +375,12 @@ lua_dns_resolver_resolve_common (lua_State *L,
 		pool = task->task_pool;
 		session = task->s;
 	}
+	else if (!session || !pool) {
+		return luaL_error (L, "invalid arguments: either 'task' or 'session'/'mempool' should be set");
+	}
 
 	if (pool != NULL && to_resolve != NULL) {
 		cbdata = rspamd_mempool_alloc0 (pool, sizeof (struct lua_dns_cbdata));
-		cbdata->L = L;
 		cbdata->resolver = resolver;
 		cbdata->cbref = cbref;
 		cbdata->user_str = rspamd_mempool_strdup (pool, user_str);
