@@ -164,14 +164,14 @@ local selectors = {
   -- Get header with the name that is expected as an argument. Returns list of
   -- headers with this name
   ['header'] = {
-    ['type'] = 'header_list',
+    ['type'] = 'kv_list',
     ['get_value'] = function(task, args)
       return task:get_header_full(args[1])
     end,
   },
   -- Get list of received headers (returns list of tables)
   ['received'] = {
-    ['type'] = 'received_list',
+    ['type'] = 'kv_list',
     ['get_value'] = function(task)
       return task:get_received_headers()
     end,
@@ -245,7 +245,7 @@ local transform_function = {
   ['first'] = {
     ['types'] = {
       ['url_list'] = true,
-      ['header_list'] = true,
+      ['kv_list'] = true,
       ['received_list'] = true,
       ['string_list'] = true
     },
@@ -258,8 +258,7 @@ local transform_function = {
   ['last'] = {
     ['types'] = {
       ['url_list'] = true,
-      ['header_list'] = true,
-      ['received_list'] = true,
+      ['kv_list'] = true,
       ['string_list'] = true
     },
     ['process'] = function(inp, t)
@@ -271,8 +270,7 @@ local transform_function = {
   ['nth'] = {
     ['types'] = {
       ['url_list'] = true,
-      ['header_list'] = true,
-      ['received_list'] = true,
+      ['kv_list'] = true,
       ['string_list'] = true
     },
     ['process'] = function(inp, t, args)
@@ -331,38 +329,16 @@ local transform_function = {
       return inp:sub(start_pos, end_pos), 'string'
     end
   },
-  -- Get header value
-  ['hdr_value'] = {
-    ['types'] = {
-      ['header'] = true,
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, _)
-      return inp.value
-    end
-  },
-  -- Get header raw value
-  ['hdr_raw'] = {
-    ['types'] = {
-      ['header'] = true,
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, _)
-      return inp.raw
-    end
-  },
-  -- Extracts table value from table
+  -- Extracts table value from key-value list
   ['elt'] = {
     ['types'] = {
-      ['header'] = true,
-      ['received'] = true,
+      ['kv_list'] = true,
     },
-    ['map_type'] = 'string',
     ['process'] = function(inp, t, args)
       return inp[args[1]],'string'
     end
   },
-  -- Get address
+  -- Call specific userdata method
   ['method'] = {
     ['types'] = {
       ['email'] = true,
