@@ -33,19 +33,29 @@ local E = {}
 
 local selectors = {
   ['ip'] = {
-    ['type'] = 'addr',
+    ['type'] = 'ip',
     ['get_value'] = function(task)
       local ip = task:get_ip()
       if ip and ip:is_valid() then return tostring(ip) end
       return nil
     end,
   },
-  ['from'] = {
+  ['smtp_from'] = {
     ['type'] = 'email',
     ['get_value'] = function(task)
       local from = task:get_from(0)
       if ((from or E)[1] or E).addr then
-        return string.lower(from[1]['addr'])
+        return from[1]
+      end
+      return nil
+    end,
+  },
+  ['mime_from'] = {
+    ['type'] = 'email',
+    ['get_value'] = function(task)
+      local from = task:get_from(0)
+      if ((from or E)[1] or E).addr then
+        return from[1]
       end
       return nil
     end,
@@ -142,17 +152,23 @@ local selectors = {
   },
   ['header'] = {
     ['type'] = 'header_list',
-    ['get_value'] = function(task, extra)
-      return task:get_header_full(extra)
+    ['get_value'] = function(task, args)
+      return task:get_header_full(args[1])
     end,
   },
-  ['url'] = {
+  ['received'] = {
+    ['type'] = 'received_list',
+    ['get_value'] = function(task)
+      return task:get_received_headers()
+    end,
+  },
+  ['urls'] = {
     ['type'] = 'url_list',
     ['get_value'] = function(task)
       return task:get_urls()
     end,
   },
-  ['email'] = {
+  ['emails'] = {
     ['type'] = 'url_list',
     ['get_value'] = function(task)
       return task:get_emails()
@@ -164,28 +180,20 @@ local transform_function = {
   -- Get hostname from url or a list of urls
   ['get_host'] = {
     ['types'] = {
-      ['url_list'] = true,
       ['url'] = true
     },
+    ['map_type'] = 'string',
     ['process'] = function(inp, t)
-      if t == 'url_list' then
-        return fun.map(function(u) return u:get_host() end, inp),'string_list'
-      end
-
       return inp:get_host(),'string'
     end
   },
   -- Get tld from url or a list of urls
   ['get_tld'] = {
     ['types'] = {
-      ['url_list'] = true,
       ['url'] = true
     },
+    ['map_type'] = 'string',
     ['process'] = function(inp, t)
-      if t == 'url_list' then
-        return fun.map(function(u) return u:get_tld() end, inp),'string_list'
-      end
-
       return inp:get_tld()
     end
   },
@@ -194,6 +202,7 @@ local transform_function = {
     ['types'] = {
       ['email'] = true
     },
+    ['map_type'] = 'string',
     ['process'] = function(inp, _)
       return inp:get_addr()
     end
@@ -202,13 +211,10 @@ local transform_function = {
   ['lower'] = {
     ['types'] = {
       ['string'] = true,
-      ['string_list'] = true
     },
+    ['map_type'] = 'string',
     ['process'] = function(inp, t)
-      if t == 'string' then
-        return inp:lower(),'string'
-      end
-      return fun.map(string.lower, inp),'string_list'
+      return inp:lower(),'string'
     end
   },
   -- Returns the first element
@@ -216,16 +222,12 @@ local transform_function = {
     ['types'] = {
       ['url_list'] = true,
       ['header_list'] = true,
+      ['received_list'] = true,
       ['string_list'] = true
     },
     ['process'] = function(inp, t)
-      if t == 'url_list' then
-        return inp[1],'url'
-      elseif t == 'header_list' then
-        return inp[1],'header'
-      elseif t == 'string_list' then
-        return inp[1],'string'
-      end
+      local pure_type = t:match('^(.*)_list$')
+      return inp[1],pure_type
     end
   },
   -- Returns the last element
@@ -233,16 +235,25 @@ local transform_function = {
     ['types'] = {
       ['url_list'] = true,
       ['header_list'] = true,
+      ['received_list'] = true,
       ['string_list'] = true
     },
     ['process'] = function(inp, t)
-      if t == 'url_list' then
-        return inp[#inp],'url'
-      elseif t == 'header_list' then
-        return inp[#inp],'header'
-      elseif t == 'string_list' then
-        return inp[#inp],'string'
-      end
+      local pure_type = t:match('^(.*)_list$')
+      return inp[#inp],pure_type
+    end
+  },
+  -- Returns the nth element
+  ['nth'] = {
+    ['types'] = {
+      ['url_list'] = true,
+      ['header_list'] = true,
+      ['received_list'] = true,
+      ['string_list'] = true
+    },
+    ['process'] = function(inp, t, args)
+      local pure_type = t:match('^(.*)_list$')
+      return inp[tonumber(args[1])],pure_type
     end
   },
   -- Joins strings into a single string using separator in the argument
@@ -257,42 +268,23 @@ local transform_function = {
   -- Create a digest from string or a list of strings
   ['digest'] = {
     ['types'] = {
-      ['string_list'] = true,
       ['string'] = true
     },
-    ['process'] = function(inp, t, args)
+    ['map_type'] = 'hash',
+    ['process'] = function(inp, _, args)
       local hash = require 'rspamd_cryptobox_hash'
       local ht = args[1] or 'blake2'
-
-      if t == 'string_list' then
-        return fun.map(function(s)
-          return hash:create_specific(ht):update(s)
-        end, inp),'hash_list'
-      end
-
       return hash:create_specific(ht):update(inp), 'hash'
     end
   },
   -- Encode hash to string (using hex encoding by default)
   ['encode'] = {
     ['types'] = {
-      ['hash_list'] = true,
       ['hash'] = true
     },
-    ['process'] = function(inp, t, args)
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
       local how = args[1] or 'hex'
-      if t == 'hash_list' then
-        return fun.map(function(s)
-          if how == 'hex' then
-            return s:hex()
-          elseif how == 'base32' then
-            return s:base32()
-          elseif how == 'base64' then
-            return s:base64()
-          end
-        end, inp),'string_list'
-      end
-
       if how == 'hex' then
         return inp:hex()
       elseif how == 'base32' then
@@ -307,11 +299,45 @@ local transform_function = {
     ['types'] = {
       ['string'] = true
     },
+    ['map_type'] = 'string',
     ['process'] = function(inp, _, args)
       local start_pos = args[1] or 1
       local end_pos = args[2] or -1
 
       return inp:sub(start_pos, end_pos), 'string'
+    end
+  },
+  -- Get header value
+  ['hdr_value'] = {
+    ['types'] = {
+      ['header'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _)
+      return inp.value
+    end
+  },
+  -- Extracts table value from table
+  ['elt'] = {
+    ['types'] = {
+      ['header'] = true,
+      ['received'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, t, args)
+      return inp[args[1]],'string'
+    end
+  },
+  -- Get address
+  ['method'] = {
+    ['types'] = {
+      ['email'] = true,
+      ['url'] = true,
+      ['ip'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
+      return inp[args[1]](inp)
     end
   },
 }
@@ -327,6 +353,14 @@ local function process_selector(task, sel)
     local t = acc[2]
 
     if not x.types[t] then
+      -- Additional case for map
+      local pure_type = t:match('^(.*)_list$')
+      if pure_type and x.map_type and x.types[pure_type] then
+        return fun.map(function(list_elt)
+          local ret, _ = x.process(list_elt, pure_type, x.args)
+          return ret
+        end, value), x.map_type
+      end
       logger.errx(task, 'cannot apply transform %s for type %s', x.name, t)
       return nil
     end
