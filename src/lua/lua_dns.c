@@ -24,7 +24,7 @@ static const struct luaL_reg dns_f[] = {
 };
 
 void
-lua_rspamd_dns_callback (struct rdns_reply *reply, void *arg);
+lua_dns_callback (struct rdns_reply *reply, void *arg);
 
 struct lua_rspamd_dns_cbdata {
 	struct thread_entry *thread;
@@ -99,14 +99,14 @@ lua_dns_request (lua_State *L)
 
 	if (forced) {
 		ret = make_dns_request_task_forced (task,
-											lua_rspamd_dns_callback,
+											lua_dns_callback,
 											cbdata,
 											type,
 											to_resolve);
 	}
 	else {
 		ret = make_dns_request_task (task,
-									 lua_rspamd_dns_callback,
+									 lua_dns_callback,
 									 cbdata,
 									 type,
 									 to_resolve);
@@ -126,7 +126,7 @@ lua_dns_request (lua_State *L)
 }
 
 void
-lua_rspamd_dns_callback (struct rdns_reply *reply, void *arg)
+lua_dns_callback (struct rdns_reply *reply, void *arg)
 {
 	struct lua_rspamd_dns_cbdata *cbdata = arg;
 	lua_State *L = cbdata->thread->lua_state;
@@ -155,7 +155,7 @@ lua_rspamd_dns_callback (struct rdns_reply *reply, void *arg)
 }
 
 static gint
-lua_load_rspamd_dns (lua_State * L)
+lua_load_dns (lua_State *L)
 {
 	lua_newtable (L);
 	luaL_register (L, NULL, dns_f);
@@ -164,7 +164,7 @@ lua_load_rspamd_dns (lua_State * L)
 }
 
 void
-luaopen_rspamd_dns (lua_State * L)
+luaopen_dns (lua_State *L)
 {
-	rspamd_lua_add_preload (L, "rspamd_dns", lua_load_rspamd_dns);
+	rspamd_lua_add_preload (L, "rspamd_dns", lua_load_dns);
 }
