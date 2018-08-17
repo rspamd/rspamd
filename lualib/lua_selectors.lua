@@ -32,6 +32,7 @@ local M = "lua_selectors"
 local E = {}
 
 local selectors = {
+  -- Get source IP address
   ['ip'] = {
     ['type'] = 'ip',
     ['get_value'] = function(task)
@@ -40,6 +41,7 @@ local selectors = {
       return nil
     end,
   },
+  -- Get SMTP from
   ['smtp_from'] = {
     ['type'] = 'email',
     ['get_value'] = function(task)
@@ -50,6 +52,7 @@ local selectors = {
       return nil
     end,
   },
+  -- Get MIME from
   ['mime_from'] = {
     ['type'] = 'email',
     ['get_value'] = function(task)
@@ -60,6 +63,7 @@ local selectors = {
       return nil
     end,
   },
+  -- Get country (ASN module must be executed first)
   ['country'] = {
     ['type'] = 'string',
     ['get_value'] = function(task)
@@ -71,6 +75,7 @@ local selectors = {
       end
     end,
   },
+  -- Get ASN number
   ['asn'] = {
     ['type'] = 'string',
     ['get_value'] = function(task)
@@ -82,6 +87,7 @@ local selectors = {
       end
     end,
   },
+  -- Get authenticated username
   ['user'] = {
     ['type'] = 'string',
     ['get_value'] = function(task)
@@ -93,18 +99,21 @@ local selectors = {
       end
     end,
   },
+  -- Get principal recipient
   ['to'] = {
     ['type'] = 'email',
     ['get_value'] = function(task)
       return task:get_principal_recipient()
     end,
   },
+  -- Get content digest
   ['digest'] = {
     ['type'] = 'string',
     ['get_value'] = function(task)
       return task:get_digest()
     end,
   },
+  -- Get list of all attachments digests
   ['attachments'] = {
     ['type'] = 'string_list',
     ['get_value'] = function(task)
@@ -124,6 +133,7 @@ local selectors = {
       return nil
     end,
   },
+  -- Get all attachments files
   ['files'] = {
     ['type'] = 'string_list',
     ['get_value'] = function(task)
@@ -144,34 +154,48 @@ local selectors = {
       return nil
     end,
   },
+  -- Get helo value
   ['helo'] = {
     ['type'] = 'string',
     ['get_value'] = function(task)
       return task:get_helo()
     end,
   },
+  -- Get header with the name that is expected as an argument. Returns list of
+  -- headers with this name
   ['header'] = {
     ['type'] = 'header_list',
     ['get_value'] = function(task, args)
       return task:get_header_full(args[1])
     end,
   },
+  -- Get list of received headers (returns list of tables)
   ['received'] = {
     ['type'] = 'received_list',
     ['get_value'] = function(task)
       return task:get_received_headers()
     end,
   },
+  -- Get all urls
   ['urls'] = {
     ['type'] = 'url_list',
     ['get_value'] = function(task)
       return task:get_urls()
     end,
   },
+  -- Get all emails
   ['emails'] = {
     ['type'] = 'url_list',
     ['get_value'] = function(task)
       return task:get_emails()
+    end,
+  },
+  -- Get specific pool var. The first argument must be variable name,
+  -- the second argument is optional and defines the type (string by default)
+  ['pool_var'] = {
+    ['type'] = 'string',
+    ['get_value'] = function(task, _, args)
+      return task:get_mempool():get_variable(args[1], args[2])
     end,
   }
 }
