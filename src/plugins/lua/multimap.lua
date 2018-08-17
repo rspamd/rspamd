@@ -884,18 +884,20 @@ local function add_multimap_rule(key, newrule)
     rspamd_logger.errx(rspamd_config, 'mempool map requires variable')
     return nil
   end
-  if newrule['type'] == 'selector' and not newrule['selector'] then
-    rspamd_logger.errx(rspamd_config, 'selector map requires selector definition')
-    return nil
-  else
-    local selector = lua_selectors.parse_selector(rspamd_config, newrule['selector'])
-
-    if not selector then
-      rspamd_logger.errx(rspamd_config, 'selector map has invalid selector')
+  if newrule['type'] == 'selector' then
+    if not newrule['selector'] then
+      rspamd_logger.errx(rspamd_config, 'selector map requires selector definition')
       return nil
-    end
+    else
+      local selector = lua_selectors.parse_selector(rspamd_config, newrule['selector'])
 
-    newrule.selector = selector
+      if not selector then
+        rspamd_logger.errx(rspamd_config, 'selector map has invalid selector')
+        return nil
+      end
+
+      newrule.selector = selector
+    end
   end
   -- Check cdb flag
   if type(newrule['map']) == 'string' and string.find(newrule['map'], '^cdb://.*$') then
