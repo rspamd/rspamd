@@ -27,6 +27,7 @@ local fun = require "fun"
 local lua_maps = require "lua_maps"
 local lua_util = require "lua_util"
 local rspamd_hash = require "rspamd_cryptobox_hash"
+local lua_selectors = require "lua_selectors"
 
 -- A plugin that implements ratelimits using redis
 
@@ -431,12 +432,24 @@ end
 
 local function limit_to_prefixes(task, k, v, prefixes)
   local n = 0
-  for _,bucket in ipairs(v) do
-    local prefix = gen_rate_key(task, k, bucket)
+  for _,bucket in ipairs(v.bucket) do
+    local prefix
+    if v.selector then
+      prefix = lua_selectors.process_selectors(task, v.selector)
+    else
+      prefix = gen_rate_key(task, k, bucket)
+    end
 
     if prefix then
-      prefixes[prefix] = make_prefix(prefix, k, bucket)
-      n = n + 1
+      if type(prefix) == 'string' then
+        prefixes[prefix] = make_prefix(prefix, k, bucket)
+        n = n + 1
+      else
+        fun.each(function(p)
+          prefixes[p] = make_prefix(p, k, bucket)
+          n = n + 1
+        end, prefix)
+      end
     end
   end
 
@@ -620,10 +633,19 @@ if opts then
   if opts['rates'] and type(opts['rates']) == 'table' then
     -- new way of setting limits
     fun.each(function(t, lim)
-      local buckets = parse_limit(t, lim)
-
-      if buckets and #buckets > 0 then
-        settings.limits[t] = buckets
+      local buckets
+      if type(lim) == 'table' and lim.selector and lim.bucket then
+        settings.limits[t] = {
+          selector = lua_selectors.parse_selector(rspamd_config, lim.selector),
+          buckets = parse_limit(t, lim)
+        }
+      else
+        buckets = parse_limit(t, lim)
+        if buckets and #buckets > 0 then
+          settings.limits[t] = {
+            buckets = buckets
+          }
+        end
       end
     end, opts['rates'])
   end
