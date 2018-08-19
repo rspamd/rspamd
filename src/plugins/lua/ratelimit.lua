@@ -432,25 +432,37 @@ end
 
 local function limit_to_prefixes(task, k, v, prefixes)
   local n = 0
-  for _,bucket in ipairs(v.bucket) do
-    local prefix
+  for _,bucket in ipairs(v.buckets) do
     if v.selector then
-      prefix = lua_selectors.process_selectors(task, v.selector)
-    else
-      prefix = gen_rate_key(task, k, bucket)
-    end
-
-    if prefix then
-      if type(prefix) == 'string' then
-        prefixes[prefix] = make_prefix(prefix, k, bucket)
-        n = n + 1
-      else
-        fun.each(function(p)
-          prefixes[p] = make_prefix(p, k, bucket)
+      local selectors = lua_selectors.process_selectors(task, v.selector)
+      if selectors then
+        local combined = lua_selectors.combine_selectors(task, selectors, ':')
+        if type(combined) == 'string' then
+          prefixes[combined] = make_prefix(combined, k, bucket)
           n = n + 1
-        end, prefix)
+        else
+          fun.each(function(p)
+            prefixes[p] = make_prefix(p, k, bucket)
+            n = n + 1
+          end, combined)
+        end
+      end
+    else
+      local prefix = gen_rate_key(task, k, bucket)
+      if prefix then
+        if type(prefix) == 'string' then
+          prefixes[prefix] = make_prefix(prefix, k, bucket)
+          n = n + 1
+        else
+          fun.each(function(p)
+            prefixes[p] = make_prefix(p, k, bucket)
+            n = n + 1
+          end, prefix)
+        end
       end
     end
+
+
   end
 
   return n
