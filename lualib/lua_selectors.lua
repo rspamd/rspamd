@@ -31,7 +31,7 @@ local lua_util = require "lua_util"
 local M = "lua_selectors"
 local E = {}
 
-local selectors = {
+local extractors = {
   -- Get source IP address
   ['ip'] = {
     ['type'] = 'ip',
@@ -470,12 +470,12 @@ exports.parse_selector = function(cfg, str)
       logger.errx(cfg, 'no selector represented')
       return nil
     end
-    if not selectors[selector_tbl[1]] then
+    if not extractors[selector_tbl[1]] then
       logger.errx(cfg, 'selector %s is unknown', selector_tbl[1])
       return nil
     end
 
-    res.selector = shallowcopy(selectors[selector_tbl[1]])
+    res.selector = shallowcopy(extractors[selector_tbl[1]])
     res.selector.name = selector_tbl[1]
     res.selector.args = selector_tbl[2] or {}
 
@@ -509,10 +509,10 @@ end
 --]]
 exports.register_selector = function(cfg, name, selector)
   if selector.get_value and selector.type then
-    if selectors[name] then
+    if extractors[name] then
       logger.warnx(cfg, 'redefining selector %s', name)
     end
-    selectors[name] = selector
+    extractors[name] = selector
 
     return true
   end
@@ -552,6 +552,57 @@ exports.process_selectors = function(task, selectors_pipe)
   end
 
   return ret
+end
+
+--[[[
+-- @function lua_selectors.combine_selectors(task, selectors, delimiter)
+--]]
+exports.combine_selectors = function(_, selectors, delimiter)
+  if not delimiter then delimiter = '' end
+
+  if not selectors then return nil end
+
+  local all_strings = fun.all(function(s) return type(s) == 'string' end, selectors)
+
+  if all_strings then
+    return table.concat(selectors, delimiter)
+  else
+    -- We need to do a spill on each table selector
+    -- e.g. s:tbl:s -> s:telt1:s + s:telt2:s ...
+    local prefix = {}
+    local tbl = {}
+    local suffix = {}
+    local res = {}
+
+    local in_prefix = true
+    for _,s in ipairs(selectors) do
+      if in_prefix then
+        if type(s) == 'string' then
+          table.insert(prefix, s)
+        else
+          in_prefix = false
+          table.insert(tbl, s)
+        end
+      else
+        if type(s) == 'string' then
+          table.insert(suffix, s)
+        else
+          table.insert(tbl, s)
+        end
+      end
+    end
+
+    prefix = table.concat(prefix, delimiter)
+    suffix = table.concat(suffix, delimiter)
+
+    for _,t in ipairs(tbl) do
+      fun.each(function(...)
+        table.insert(res, table.concat({...}, delimiter))
+      end, fun.zip(fun.duplicate(prefix), t, fun.duplicate(suffix)))
+    end
+
+    return res
+  end
 end
 
 return exports
