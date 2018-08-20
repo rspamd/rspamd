@@ -740,6 +740,7 @@ rspamd_lua_init ()
 	luaopen_fann (L);
 	luaopen_sqlite3 (L);
 	luaopen_cryptobox (L);
+	luaopen_dns (L);
 
 	luaL_newmetatable (L, "rspamd{ev_base}");
 	lua_pushstring (L, "class");
@@ -1494,14 +1495,26 @@ rspamd_lua_traceback (lua_State *L)
 {
 
 	GString *tb;
+
+	tb = rspamd_lua_get_traceback_string (L);
+
+	lua_pushlightuserdata (L, tb);
+
+	return 1;
+}
+
+GString *
+rspamd_lua_get_traceback_string (lua_State *L)
+{
+	GString *tb;
 	const gchar *msg = lua_tostring (L, 1);
 
 	tb = g_string_sized_new (100);
 	g_string_append_printf (tb, "%s; trace:", msg);
-	rspamd_lua_traceback_string (L, tb);
-	lua_pushlightuserdata (L, tb);
 
-	return 1;
+	rspamd_lua_traceback_string (L, tb);
+
+	return tb;
 }
 
 guint

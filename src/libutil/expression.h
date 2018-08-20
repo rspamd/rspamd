@@ -56,12 +56,24 @@ typedef struct rspamd_expression_atom_s {
 	gint priority;
 } rspamd_expression_atom_t;
 
+struct rspamd_expr_process_data {
+	/* Current Lua state to run atom processing */
+	struct lua_State *L;
+	/* Parameter of lua-function processing atom*/
+	gint stack_item;
+	gint flags;
+	/* != NULL if trace is collected */
+	GPtrArray *trace;
+	struct composites_data *cd;
+	struct rspamd_task *task;
+};
+
 struct rspamd_atom_subr {
 	/* Parses atom from string and returns atom structure */
 	rspamd_expression_atom_t * (*parse)(const gchar *line, gsize len,
 			rspamd_mempool_t *pool, gpointer ud, GError **err);
 	/* Process atom via the opaque pointer (e.g. struct rspamd_task *) */
-	gdouble (*process) (gpointer input, rspamd_expression_atom_t *atom);
+	gdouble (*process) (struct rspamd_expr_process_data *process_data, rspamd_expression_atom_t *atom);
 	/* Calculates the relative priority of the expression */
 	gint (*priority) (rspamd_expression_atom_t *atom);
 	void (*destroy) (rspamd_expression_atom_t *atom);
@@ -92,8 +104,8 @@ gboolean rspamd_parse_expression (const gchar *line, gsize len,
  * @param data opaque data pointer for all the atoms
  * @return the value of expression
  */
-gdouble rspamd_process_expression (struct rspamd_expression *expr, gint flags,
-		gpointer data);
+gdouble rspamd_process_expression (struct rspamd_expression *expr,
+		struct rspamd_expr_process_data *process_data);
 
 /**
  * Process the expression and return its value using atom 'process' functions with the specified data pointer.
@@ -103,8 +115,8 @@ gdouble rspamd_process_expression (struct rspamd_expression *expr, gint flags,
  * @param track pointer array to atoms tracking
  * @return the value of expression
  */
-gdouble rspamd_process_expression_track (struct rspamd_expression *expr, gint flags,
-		gpointer data, GPtrArray *track);
+gdouble rspamd_process_expression_track (struct rspamd_expression *expr,
+		struct rspamd_expr_process_data *process_data);
 
 /**
  * Shows string representation of an expression

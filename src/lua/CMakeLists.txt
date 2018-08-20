@@ -12,7 +12,7 @@ SET(LUASRC			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_common.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_redis.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_upstream.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_mempool.c
-					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_dns.c
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_dns_resolver.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_rsa.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_ip.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_expression.c
@@ -25,6 +25,8 @@ SET(LUASRC			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_common.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_fann.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_sqlite3.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_cryptobox.c
-					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_map.c)
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_map.c
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_thread_pool.c
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_dns.c)
 
 SET(RSPAMD_LUA ${LUASRC} PARENT_SCOPE)

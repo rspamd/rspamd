@@ -280,6 +280,7 @@ void luaopen_html (lua_State * L);
 void luaopen_fann (lua_State *L);
 void luaopen_sqlite3 (lua_State *L);
 void luaopen_cryptobox (lua_State *L);
+void luaopen_dns (lua_State *L);
 
 void rspamd_lua_dostring (const gchar *line);
 
@@ -335,6 +336,14 @@ gboolean rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 
 
 gint rspamd_lua_traceback (lua_State *L);
+
+/**
+ * Returns stack trace as a string. Caller should clear memory.
+ * @param L
+ * @return
+ */
+GString *
+rspamd_lua_get_traceback_string (lua_State *L);
 
 /**
  * Returns size of table at position `tbl_pos`
@@ -407,6 +416,25 @@ void rspamd_lua_add_ref_dtor (lua_State *L, rspamd_mempool_t *pool,
  */
 gboolean rspamd_lua_require_function (lua_State *L, const gchar *modname,
 		const gchar *funcname);
+
+struct thread_entry;
+/**
+ * Yields thread. should be only called in return statement
+ * @param thread_entry
+ * @param nresults
+ * @return
+ */
+gint
+lua_yield_thread (struct thread_entry *thread_entry, gint nresults);
+
+/**
+ * Resumes suspended by lua_yield_thread () thread
+ * @param task
+ * @param thread_entry
+ * @param narg
+ */
+void
+lua_resume_thread (struct rspamd_task *task, struct thread_entry *thread_entry, gint narg);
 
 /* Paths defs */
 #define RSPAMD_CONFDIR_INDEX "CONFDIR"

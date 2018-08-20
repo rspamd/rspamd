@@ -380,6 +380,7 @@ struct rspamd_config {
 	gchar * checksum;                               /**< real checksum of config file						*/
 	gchar * dump_checksum;                          /**< dump checksum of config file						*/
 	gpointer lua_state;                             /**< pointer to lua state								*/
+	gpointer lua_thread_pool;                       /**< pointer to lua thread (coroutine) pool				*/
 
 	gchar * rrd_file;                               /**< rrd file to store statistics						*/
 	gchar * history_file;                           /**< file to save rolling history						*/
