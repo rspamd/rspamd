@@ -1048,6 +1048,7 @@ rspamd_set_crash_handler (struct rspamd_main *rspamd_main)
 
 #ifdef HAVE_SIGALTSTACK
 	stack_t ss;
+	memset (&ss, 0, sizeof ss);
 
 	/* Allocate special stack, NOT freed at the end so far */
 	ss.ss_size = MAX (SIGSTKSZ, 8192 * 4);
