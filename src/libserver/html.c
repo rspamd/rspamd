@@ -446,116 +446,87 @@ static entity entities_defs[] = {
 	{"euro", 8364, "\u20AC"},
 };
 
-static GHashTable *html_colors_hash = NULL;
+KHASH_MAP_INIT_INT (entity_by_number, const char *);
+KHASH_MAP_INIT_STR (entity_by_name, const char *);
+KHASH_MAP_INIT_STR (tag_by_name, struct html_tag_def);
+KHASH_MAP_INIT_INT (tag_by_id, struct html_tag_def);
+KHASH_INIT (color_by_name, const rspamd_ftok_t *, struct html_color, true,
+		rspamd_ftok_icase_hash, rspamd_ftok_icase_equal);
 
-static entity entities_defs_num[ (G_N_ELEMENTS (entities_defs)) ];
-static struct html_tag_def tag_defs_num[ (G_N_ELEMENTS (tag_defs)) ];
-
-static gint
-tag_cmp (const void *m1, const void *m2)
-{
-	const struct html_tag_def *p1 = m1;
-	const struct html_tag_def *p2 = m2;
-
-	if (p1->len == p2->len) {
-		return rspamd_lc_cmp (p1->name, p2->name, p1->len);
-	}
-
-	return p1->len - p2->len;
-}
-
-static gint
-tag_cmp_id (const void *m1, const void *m2)
-{
-	const struct html_tag_def *p1 = m1;
-	const struct html_tag_def *p2 = m2;
-
-	return p1->id - p2->id;
-}
-
-static gint
-tag_find_id (const void *skey, const void *elt)
-{
-	const struct html_tag *tag = skey;
-	const struct html_tag_def *d = elt;
-
-	return tag->id - d->id;
-}
-
-static gint
-tag_find (const void *skey, const void *elt)
-{
-	const struct html_tag *tag = skey;
-	const struct html_tag_def *d = elt;
-
-	if (d->len == tag->name.len) {
-		return rspamd_lc_cmp (tag->name.start, d->name, tag->name.len);
-	}
-
-	return tag->name.len - d->len;
-}
-
-static gint
-entity_cmp (const void *m1, const void *m2)
-{
-	const entity *p1 = m1;
-	const entity *p2 = m2;
-
-	return g_ascii_strcasecmp (p1->name, p2->name);
-}
-
-static gint
-entity_cmp_num (const void *m1, const void *m2)
-{
-	const entity *p1 = m1;
-	const entity *p2 = m2;
-
-	return p1->code - p2->code;
-}
+khash_t(entity_by_number) *html_entity_by_number;
+khash_t(entity_by_name) *html_entity_by_name;
+khash_t(tag_by_name) *html_tag_by_name;
+khash_t(tag_by_id) *html_tag_by_id;
+khash_t(color_by_name) *html_color_by_name;
 
 static void
 rspamd_html_library_init (void)
 {
+	guint i;
+	khiter_t k;
+	gint rc;
+
 	if (!tags_sorted) {
-		qsort (tag_defs, G_N_ELEMENTS (
-				tag_defs), sizeof (struct html_tag_def), tag_cmp);
-		memcpy (tag_defs_num, tag_defs, sizeof (tag_defs));
-		qsort (tag_defs_num, G_N_ELEMENTS (tag_defs_num),
-				sizeof (struct html_tag_def), tag_cmp_id);
+		html_tag_by_id = kh_init (tag_by_id);
+		html_tag_by_name = kh_init (tag_by_name);
+		kh_resize (tag_by_id, html_tag_by_id, G_N_ELEMENTS (tag_defs));
+		kh_resize (tag_by_name, html_tag_by_name, G_N_ELEMENTS (tag_defs));
+
+		for (i = 0; i < G_N_ELEMENTS (tag_defs); i++) {
+			k = kh_put (tag_by_id, html_tag_by_id, tag_defs[i].id, &rc);
+			kh_val (html_tag_by_id, k) = tag_defs[i];
+
+			k = kh_put (tag_by_name, html_tag_by_name, tag_defs[i].name, &rc);
+			kh_val (html_tag_by_name, k) = tag_defs[i];
+		}
+
 		tags_sorted = 1;
 	}
 
 	if (!entities_sorted) {
-		qsort (entities_defs, G_N_ELEMENTS (
-				entities_defs), sizeof (entity), entity_cmp);
-		memcpy (entities_defs_num, entities_defs, sizeof (entities_defs));
-		qsort (entities_defs_num, G_N_ELEMENTS (
-				entities_defs), sizeof (entity), entity_cmp_num);
-		entities_sorted = 1;
+		html_entity_by_number = kh_init (entity_by_number);
+		html_entity_by_name = kh_init (entity_by_name);
+		kh_resize (entity_by_number, html_entity_by_number,
+				G_N_ELEMENTS (entities_defs));
+		kh_resize (entity_by_name, html_entity_by_name,
+				G_N_ELEMENTS (entities_defs));
+
+		for (i = 0; i < G_N_ELEMENTS (entities_defs); i++) {
+			k = kh_put (entity_by_number, html_entity_by_number,
+					entities_defs[i].code, &rc);
+			kh_val (html_entity_by_number, k) = entities_defs[i].replacement;
+
+			k = kh_put (entity_by_name, html_entity_by_name,
+					entities_defs[i].name, &rc);
+			kh_val (html_entity_by_name, k) = entities_defs[i].replacement;
 	}
 
-	if (html_colors_hash == NULL) {
-		guint i;
+		html_color_by_name = kh_init (color_by_name);
+		kh_resize (color_by_name, html_color_by_name,
+				G_N_ELEMENTS (html_colornames));
 
-		html_colors_hash = g_hash_table_new_full (rspamd_ftok_icase_hash,
-				rspamd_ftok_icase_equal, g_free, g_free);
+		rspamd_ftok_t *keys;
+
+		keys = g_malloc0 (sizeof (rspamd_ftok_t) *
+				G_N_ELEMENTS (html_colornames));
 
 		for (i = 0; i < G_N_ELEMENTS (html_colornames); i ++) {
-			struct html_color *color;
-			rspamd_ftok_t *key;
+			struct html_color c;
 
-			color = g_malloc0 (sizeof (*color));
-			color->d.comp.alpha = 255;
-			color->d.comp.r = html_colornames[i].rgb.r;
-			color->d.comp.g = html_colornames[i].rgb.g;
-			color->d.comp.b = html_colornames[i].rgb.b;
-			color->valid = TRUE;
-			key = g_malloc0 (sizeof (*key));
-			key->begin = html_colornames[i].name;
-			key->len = strlen (html_colornames[i].name);
+			keys[i].begin = html_colornames[i].name;
+			keys[i].len = strlen (html_colornames[i].name);
+			k = kh_put (color_by_name, html_color_by_name,
+					&keys[i], &rc);
+			c.valid = true;
+			c.d.comp.r = html_colornames[i].rgb.r;
+			c.d.comp.g = html_colornames[i].rgb.g;
+			c.d.comp.b = html_colornames[i].rgb.b;
+			c.d.comp.alpha = 255;
+			kh_val (html_color_by_name, k) = c;
 
-			g_hash_table_insert (html_colors_hash, key, color);
 		}
+
+		entities_sorted = 1;
 	}
 }
 
@@ -592,17 +563,12 @@ rspamd_html_check_balance (GNode * node, GNode ** cur_level)
 gint
 rspamd_html_tag_by_name (const gchar *name)
 {
-	struct html_tag tag;
-	struct html_tag_def *found;
+	khiter_t k;
 
-	tag.name.start = name;
-	tag.name.len = strlen (name);
+	k = kh_get (tag_by_name, html_tag_by_name, name);
 
-	found = bsearch (&tag, tag_defs, G_N_ELEMENTS (tag_defs),
-			sizeof (tag_defs[0]), tag_find);
-
-	if (found) {
-		return found->id;
+	if (k != kh_end (html_tag_by_name)) {
+		return kh_val (html_tag_by_name, k).id;
 	}
 
 	return -1;
@@ -625,19 +591,15 @@ rspamd_html_tag_seen (struct html_content *hc, const gchar *tagname)
 	return FALSE;
 }
 
-const gchar*
+const gchar *
 rspamd_html_tag_by_id (gint id)
 {
-	struct html_tag tag;
-	struct html_tag_def *found;
+	khiter_t k;
 
-	tag.id = id;
-	/* Should work as IDs monotonically increase */
-	found = bsearch (&tag, tag_defs_num, G_N_ELEMENTS (tag_defs_num),
-				sizeof (tag_defs_num[0]), tag_find_id);
+	k = kh_get (tag_by_id, html_tag_by_id, id);
 
-	if (found) {
-		return found->name;
+	if (k != kh_end (html_tag_by_id)) {
+		return kh_val (html_tag_by_id, k).name;
 	}
 
 	return NULL;
@@ -649,8 +611,9 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 {
 	guint l, rep_len;
 	gchar *t = s, *h = s, *e = s, *end_ptr;
+	const gchar *entity;
 	gint state = 0, val, base;
-	entity *found, key;
+	khiter_t k;
 
 	if (len == 0) {
 		l = strlen (s);
@@ -661,7 +624,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 
 	while (h - s < (gint)l) {
 		switch (state) {
-		/* Out of entitle */
+		/* Out of entity */
 		case 0:
 			if (*h == '&') {
 				state = 1;
@@ -679,21 +642,27 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 			if (*h == ';' && h > e) {
 				/* Determine base */
 				/* First find in entities table */
-
-				key.name = e + 1;
 				*h = '\0';
-				if (*(e + 1) != '#' &&
-					(found =
-					bsearch (&key, entities_defs, G_N_ELEMENTS (entities_defs),
-							sizeof (entity), entity_cmp)) != NULL) {
-					if (found->replacement) {
-						rep_len = strlen (found->replacement);
-						memcpy (t, found->replacement, rep_len);
-						t += rep_len;
-					}
-					else {
-						memmove (t, e, h - e);
-						t += h - e;
+				entity = e + 1;
+
+				if (*entity != '#') {
+					k = kh_get (entity_by_name, html_entity_by_name, entity);
+
+					if (k != kh_end (html_entity_by_name)) {
+						if (kh_val (html_entity_by_name, k)) {
+							rep_len = strlen (kh_val (html_entity_by_name, k));
+
+							if (end_ptr - t >= rep_len) {
+								memcpy (t, kh_val (html_entity_by_name, k),
+										rep_len);
+								t += rep_len;
+							}
+						} else {
+							if (end_ptr - t >= h - e) {
+								memmove (t, e, h - e);
+								t += h - e;
+							}
+						}
 					}
 				}
 				else if (e + 2 < h) {
@@ -712,23 +681,32 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 					else {
 						val = strtoul ((e + 3), &end_ptr, base);
 					}
+
 					if (end_ptr != NULL && *end_ptr != '\0') {
 						/* Skip undecoded */
-						memmove (t, e, h - e);
-						t += h - e;
+						if (end_ptr - t >= h - e) {
+							memmove (t, e, h - e);
+							t += h - e;
+						}
 					}
 					else {
 						/* Search for a replacement */
-						key.code = val;
-						found =
-							bsearch (&key, entities_defs_num, G_N_ELEMENTS (
-									entities_defs), sizeof (entity),
-								entity_cmp_num);
-						if (found) {
-							if (found->replacement) {
-								rep_len = strlen (found->replacement);
-								memcpy (t, found->replacement, rep_len);
-								t += rep_len;
+						k = kh_get (entity_by_number, html_entity_by_number, val);
+
+						if (k != kh_end (html_entity_by_number)) {
+							if (kh_val (html_entity_by_number, k)) {
+								rep_len = strlen (kh_val (html_entity_by_number, k));
+
+								if (end_ptr - t >= rep_len) {
+									memcpy (t, kh_val (html_entity_by_number, k),
+											rep_len);
+									t += rep_len;
+								}
+							} else {
+								if (end_ptr - t >= h - e) {
+									memmove (t, e, h - e);
+									t += h - e;
+								}
 							}
 						}
 						else {
@@ -1247,24 +1225,29 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 			}
 			else {
 				gchar *s;
+				khiter_t k;
 				/* We CANNOT safely modify tag's name here, as it is already parsed */
 
-				s = rspamd_mempool_alloc (pool, tag->name.len);
+				s = rspamd_mempool_alloc (pool, tag->name.len + 1);
 				memcpy (s, tag->name.start, tag->name.len);
 				tag->name.len = rspamd_html_decode_entitles_inplace (s,
 						tag->name.len);
 				tag->name.start = s;
+				s[tag->name.len] = '\0';
+				rspamd_str_lc_utf8 (s, tag->name.len);
 
-				found = bsearch (tag, tag_defs, G_N_ELEMENTS (tag_defs),
-					sizeof (tag_defs[0]), tag_find);
-				if (found == NULL) {
+				k = kh_get (tag_by_name, html_tag_by_name, s);
+
+				if (k == kh_end (html_tag_by_name)) {
 					hc->flags |= RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS;
 					tag->id = -1;
 				}
 				else {
+					found = &kh_val (html_tag_by_name, k);
 					tag->id = found->id;
 					tag->flags = found->flags;
 				}
+
 				state = spaces_after_name;
 			}
 		}
@@ -2034,13 +2017,15 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 		}
 	}
 	else {
+		khiter_t k;
 		/* Compare color by name */
 		search.begin = line;
 		search.len = len;
 
-		el = g_hash_table_lookup (html_colors_hash, &search);
+		k = kh_get (color_by_name, html_color_by_name, &search);
 
-		if (el != NULL) {
+		if (k != kh_end (html_color_by_name)) {
+			el = &kh_val (html_color_by_name, k);
 			memcpy (cl, el, sizeof (*cl));
 			cl->d.comp.alpha = 255; /* Non transparent */
 		}
