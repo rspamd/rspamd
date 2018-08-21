@@ -121,7 +121,8 @@ context("HTML processing", function()
       local t = rspamd_util.parse_html(c[1])
 
       assert_not_nil(t)
-      assert_equal(c[2], tostring(t))
+      assert_equal(c[2], tostring(t), string.format("'%s' doesn't match with '%s'",
+          c[2], t))
     end
   end)
 end)

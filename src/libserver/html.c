@@ -338,6 +338,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 {
 	guint l, rep_len;
 	gchar *t = s, *h = s, *e = s, *end_ptr;
+	const gchar *end;
 	const gchar *entity;
 	gint state = 0, val, base;
 	khiter_t k;
@@ -348,6 +349,8 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 	else {
 		l = len;
 	}
+
+	end = s + l;
 
 	while (h - s < (gint)l) {
 		switch (state) {
@@ -379,13 +382,13 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 						if (kh_val (html_entity_by_name, k)) {
 							rep_len = strlen (kh_val (html_entity_by_name, k));
 
-							if (end_ptr - t >= rep_len) {
+							if (end - t >= rep_len) {
 								memcpy (t, kh_val (html_entity_by_name, k),
 										rep_len);
 								t += rep_len;
 							}
 						} else {
-							if (end_ptr - t >= h - e) {
+							if (end - t >= h - e) {
 								memmove (t, e, h - e);
 								t += h - e;
 							}
@@ -411,7 +414,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 
 					if (end_ptr != NULL && *end_ptr != '\0') {
 						/* Skip undecoded */
-						if (end_ptr - t >= h - e) {
+						if (end - t >= h - e) {
 							memmove (t, e, h - e);
 							t += h - e;
 						}
@@ -424,13 +427,13 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 							if (kh_val (html_entity_by_number, k)) {
 								rep_len = strlen (kh_val (html_entity_by_number, k));
 
-								if (end_ptr - t >= rep_len) {
+								if (end - t >= rep_len) {
 									memcpy (t, kh_val (html_entity_by_number, k),
 											rep_len);
 									t += rep_len;
 								}
 							} else {
-								if (end_ptr - t >= h - e) {
+								if (end - t >= h - e) {
 									memmove (t, e, h - e);
 									t += h - e;
 								}
