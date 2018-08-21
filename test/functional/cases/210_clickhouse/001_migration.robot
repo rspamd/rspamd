@@ -35,6 +35,7 @@ Migration
 *** Keywords ***
 Clickhouse Setup
   ${TMPDIR} =  Make Temporary Directory
+  Set Global Variable  ${TMPDIR}
   Set Directory Ownership  ${TMPDIR}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
 
   ${template} =  Get File  ${TESTDIR}/configs/clickhouse-config.xml
