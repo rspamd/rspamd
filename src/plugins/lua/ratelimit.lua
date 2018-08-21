@@ -647,10 +647,24 @@ if opts then
     fun.each(function(t, lim)
       local buckets
       if type(lim) == 'table' and lim.selector and lim.bucket then
+        local selector = lua_selectors.parse_selector(rspamd_config, lim.selector)
+        if not selector then
+          rspamd_logger.errx(rspamd_config, 'bad ratelimit selector for %s: "%s"',
+              t, lim.selector)
+          return
+        end
+        local bucket = parse_limit(t, lim.bucket)
+
+        if not bucket then
+          rspamd_logger.errx(rspamd_config, 'bad ratelimit bucket for %s: "%s"',
+              t, lim.bucket)
+          return
+        end
         settings.limits[t] = {
-          selector = lua_selectors.parse_selector(rspamd_config, lim.selector),
-          buckets = parse_limit(t, lim.bucket)
+          selector = selector,
+          buckets = bucket
         }
+
       else
         buckets = parse_limit(t, lim)
         if buckets and #buckets > 0 then
