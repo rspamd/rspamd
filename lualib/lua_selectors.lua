@@ -209,6 +209,25 @@ local extractors = {
 
       return nil
     end
+  },
+  -- Get task date, optionally formatted
+  ['time'] = {
+    ['type'] = 'string',
+    ['get_value'] = function(task, _, args)
+      local what = args[1] or 'message'
+      local dt = task:get_date{format = what, gmt = true}
+
+      if dt then
+        if args[2] then
+          -- Should be in format !xxx, as dt is in GMT
+          return os.date(args[2], dt)
+        end
+
+        return tostring(dt)
+      end
+
+      return nil
+    end
   }
 }
 
