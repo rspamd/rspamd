@@ -462,11 +462,11 @@ local function make_grammar()
   local obrace = "(" * spc
   local ebrace = spc * ")"
   local comma = spc * "," * spc
-  local colon = ":"
+  local sel_separator = l.S":;"
 
   return l.P{
     "LIST";
-    LIST = l.Ct(l.V("EXPR")) * (colon * l.Ct(l.V("EXPR")))^0,
+    LIST = l.Ct(l.V("EXPR")) * (sel_separator * l.Ct(l.V("EXPR")))^0,
     EXPR = l.V("FUNCTION") * (dot * l.V("PROCESSOR"))^0,
     PROCESSOR = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
     FUNCTION = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
