@@ -649,7 +649,7 @@ if opts then
       if type(lim) == 'table' and lim.selector and lim.bucket then
         settings.limits[t] = {
           selector = lua_selectors.parse_selector(rspamd_config, lim.selector),
-          buckets = parse_limit(t, lim)
+          buckets = parse_limit(t, lim.bucket)
         }
       else
         buckets = parse_limit(t, lim)
