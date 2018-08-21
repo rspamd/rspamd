@@ -39,11 +39,8 @@ jobs:
     steps:
       - checkout
 
-      - run: echo 'deb http://repo.yandex.ru/clickhouse/deb/stable/ main/' | sudo tee /etc/apt/sources.list.d/clickhouse.list
-      - run: sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4    # optional
       - run: sudo apt-get update -qq || true
       - run: sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel
-      - run: sudo apt-get install clickhouse-server
 
       - run: mkdir ../build ; mkdir ../install ; cd ../build
       - run: cmake ../project -DDBDIR=/nana -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=../install
@@ -89,8 +86,12 @@ jobs:
       - attach_workspace:
           at: *workspace_root
 
+      - run: echo 'deb http://repo.yandex.ru/clickhouse/deb/stable/ main/' | sudo tee /etc/apt/sources.list.d/clickhouse.list
+      - run: sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4    # optional, clickhouse key
+
       - run: sudo apt-get update -qq || true
       - run: sudo apt-get install -qq libluajit-5.1-dev libpcre3-dev luarocks opendkim-tools python-pip redis-server
+      - run: sudo apt-get install clickhouse-server
 
       - run: sudo pip install demjson psutil robotframework requests
       - run: sudo luarocks install luacheck
