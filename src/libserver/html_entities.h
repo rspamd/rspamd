@@ -1611,7 +1611,7 @@ static entity entities_defs[] = {
 		{"nharr", 8622, "\xe2\x86\xae"},
 		{"varnothing", 8709, "\xe2\x88\x85"},
 		{"ShortDownArrow", 8595, "\xe2\x86\x93"},
-		{"nbsp", 160, "\xc2\xa0"},
+		{"nbsp", 160, " "},
 		{"asympeq", 8781, "\xe2\x89\x8d"},
 		{"rbrkslu", 10640, "\xe2\xa6\x90"},
 		{"rho", 961, "\xcf\x81"},
