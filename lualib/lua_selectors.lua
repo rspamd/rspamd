@@ -382,6 +382,27 @@ local transform_function = {
       return inp[args[1]](inp)
     end
   },
+  -- Boolean function in, returns either nil or its input if input is in args list
+  ['in'] = {
+    ['types'] = {
+      ['string'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
+      for _,a in ipairs(args) do if a == inp then return inp end end
+      return nil
+    end
+  },
+  ['not_in'] = {
+    ['types'] = {
+      ['string'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
+      for _,a in ipairs(args) do if a == inp then return nil end end
+      return inp
+    end
+  },
 }
 
 local function process_selector(task, sel)
