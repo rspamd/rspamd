@@ -10,8 +10,8 @@ Check Controller Errors
   Log  @{result}[1]
 
 Check Pidfile
-  [Arguments]  ${pidfile}
-  Wait Until Created  ${pidfile}
+  [Arguments]  ${pidfile}  ${timeout}=1 min
+  Wait Until Created  ${pidfile}  timeout=${timeout}
   ${size} =  Get File Size  ${pidfile}
   Should Not Be Equal As Integers  ${size}  0
 
@@ -70,7 +70,7 @@ Generic Teardown
   [Arguments]  @{ports}
   Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Check Controller Errors
   Shutdown Process With Children  ${RSPAMD_PID}
-  Save Run Results  ${TMPDIR}  rspamd.log redis.log rspamd.conf
+  Save Run Results  ${TMPDIR}  rspamd.log redis.log rspamd.conf clickhouse-server.log clickhouse-server.err.log clickhouse-config.xml
   Cleanup Temporary Directory  ${TMPDIR}
 
 Log Logs
