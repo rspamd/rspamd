@@ -39,7 +39,7 @@ jobs:
     steps:
       - checkout
 
-      - run: sudo deb http://repo.yandex.ru/clickhouse/deb/stable/ main/
+      - run: sudo add-apt-repository 'deb http://repo.yandex.ru/clickhouse/deb/stable/ main/'
       - run: sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4    # optional
       - run: sudo apt-get update -qq || true
       - run: sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel
