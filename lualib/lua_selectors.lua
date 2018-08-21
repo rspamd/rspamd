@@ -194,14 +194,14 @@ local extractors = {
   -- the second argument is optional and defines the type (string by default)
   ['pool_var'] = {
     ['type'] = 'string',
-    ['get_value'] = function(task, _, args)
+    ['get_value'] = function(task, args)
       return task:get_mempool():get_variable(args[1], args[2])
     end,
   },
   -- Get specific HTTP request header. The first argument must be header name.
   ['request_header'] = {
     ['type'] = 'string',
-    ['get_value'] = function(task, _, args)
+    ['get_value'] = function(task, args)
       local hdr = task:get_request_header(args[1])
       if hdr then
         return tostring(hdr)
@@ -213,7 +213,7 @@ local extractors = {
   -- Get task date, optionally formatted
   ['time'] = {
     ['type'] = 'string',
-    ['get_value'] = function(task, _, args)
+    ['get_value'] = function(task, args)
       local what = args[1] or 'message'
       local dt = task:get_date{format = what, gmt = true}
 
@@ -268,7 +268,7 @@ local transform_function = {
       ['string'] = true,
     },
     ['map_type'] = 'string',
-    ['process'] = function(inp, t)
+    ['process'] = function(inp, _)
       return inp:lower(),'string'
     end
   },
@@ -388,8 +388,8 @@ local transform_function = {
       ['string'] = true,
     },
     ['map_type'] = 'string',
-    ['process'] = function(inp, _, args)
-      for _,a in ipairs(args) do if a == inp then return inp end end
+    ['process'] = function(inp, t, args)
+      for _,a in ipairs(args) do if a == inp then return inp,t end end
       return nil
     end
   },
@@ -398,9 +398,9 @@ local transform_function = {
       ['string'] = true,
     },
     ['map_type'] = 'string',
-    ['process'] = function(inp, _, args)
+    ['process'] = function(inp, t, args)
       for _,a in ipairs(args) do if a == inp then return nil end end
-      return inp
+      return inp,t
     end
   },
 }
@@ -411,7 +411,7 @@ local function process_selector(task, sel)
 
   -- Now we fold elements using left fold
   local function fold_function(acc, x)
-    if acc == nil then return nil end
+    if acc == nil or acc[1] == nil then return nil end
     local value = acc[1]
     local t = acc[2]
 
@@ -419,27 +419,27 @@ local function process_selector(task, sel)
       -- Additional case for map
       local pure_type = t:match('^(.*)_list$')
       if pure_type and x.map_type and x.types[pure_type] then
-        return fun.map(function(list_elt)
+        return {fun.map(function(list_elt)
           local ret, _ = x.process(list_elt, pure_type, x.args)
           return ret
-        end, value), x.map_type
+        end, value), x.map_type}
       end
       logger.errx(task, 'cannot apply transform %s for type %s', x.name, t)
       return nil
     end
 
-    return x.process(value, t, x.args)
+    return {x.process(value, t, x.args)}
   end
 
   local res = fun.foldl(fold_function,
       {input, sel.selector.type},
       sel.processor_pipe)
 
-  if not res then return nil end -- Error in pipeline
+  if not res or not res[1] then return nil end -- Pipeline failed
 
   if not (res[2] == 'string' or res[2] == 'string_list') then
-    logger.errx(task, 'transform pipeline has returned bad type: %s, string expected',
-        res[2])
+    logger.errx(task, 'transform pipeline has returned bad type: %s, string expected: res = %s, sel: %s',
+        res[2], res, sel)
     return nil
   end
 
@@ -455,6 +455,7 @@ local function make_grammar()
   local l = require "lpeg"
   local spc = l.S(" \t\n")^0
   local atom = l.C((l.R("az") + l.R("AZ") + l.R("09") + l.S("_-"))^1)
+  local argument = atom + (l.P("'") * l.C((1-l.S("'"))^0) * l.P("'"))
   local dot = l.P(".")
   local obrace = "(" * spc
   local ebrace = spc * ")"
@@ -467,7 +468,7 @@ local function make_grammar()
     EXPR = l.V("FUNCTION") * (dot * l.V("PROCESSOR"))^0,
     PROCESSOR = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
     FUNCTION = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
-    ARG_LIST = l.Ct((atom * comma^0)^0)
+    ARG_LIST = l.Ct((argument * comma^0)^0)
   }
 end
 
@@ -477,7 +478,7 @@ local parser = make_grammar()
 -- @function lua_selectors.parse_selectors(cfg, str)
 --]]
 exports.parse_selector = function(cfg, str)
-  local parsed = parser:match(str)
+  local parsed = {parser:match(str)}
   local output = {}
 
   if not parsed then return nil end
@@ -582,13 +583,14 @@ end
 -- @function lua_selectors.process_selectors(task, selectors_pipe)
 --]]
 exports.process_selectors = function(task, selectors_pipe)
-  local ret = fun.totable(fun.map(function(sel)
-    return process_selector(task, sel)
-  end, selectors_pipe))
+  local ret = {}
 
-  if fun.any(function(e) return e == nil end, ret) then
+  for _,sel in ipairs(selectors_pipe) do
+    local r = process_selector(task, sel)
+
     -- If any element is nil, then the whole selector is nil
-    return nil
+    if not r then return nil end
+    table.insert(ret, r)
   end
 
   return ret
