@@ -455,7 +455,9 @@ local function make_grammar()
   local l = require "lpeg"
   local spc = l.S(" \t\n")^0
   local atom = l.C((l.R("az") + l.R("AZ") + l.R("09") + l.S("_-"))^1)
-  local argument = atom + (l.P("'") * l.C((1-l.S("'"))^0) * l.P("'"))
+  local singlequoted_string = l.P "'" * l.C(((1 - l.S "'\r\n\f\\") + (l.P'\\' * 1))^0) * "'"
+  local doublequoted_string = l.P '"' * l.C(((1 - l.S'"\r\n\f\\') + (l.P'\\' * 1))^0) * '"'
+  local argument = atom + singlequoted_string + doublequoted_string
   local dot = l.P(".")
   local obrace = "(" * spc
   local ebrace = spc * ")"
