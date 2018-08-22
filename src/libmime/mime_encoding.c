@@ -23,6 +23,7 @@
 #include "message.h"
 #include <unicode/ucnv.h>
 #include <unicode/ucsdet.h>
+#include <math.h>
 
 #define UTF8_CHARSET "UTF-8"
 
@@ -372,6 +373,7 @@ rspamd_mime_charset_find_by_content (gchar *in, gsize inlen)
 	const UCharsetMatch **csm, *sel = NULL;
 	UErrorCode uc_err = U_ZERO_ERROR;
 	gint32 matches, i, max_conf = G_MININT32, conf;
+	gdouble mean = 0.0, stddev = 0.0;
 
 	if (csd == NULL) {
 		csd = ucsdet_open (&uc_err);
@@ -398,9 +400,13 @@ detect:
 			max_conf = conf;
 			sel = csm[i];
 		}
+
+		mean += (conf - mean) / (i + 1);
+		gdouble err = fabs (conf - mean);
+		stddev += (err - stddev) / (i + 1);
 	}
 
-	if (sel && max_conf > 50) {
+	if (sel && ((max_conf > 50) || (max_conf - mean > stddev * 1.25))) {
 		return ucsdet_getName (sel, &uc_err);
 	}
 
