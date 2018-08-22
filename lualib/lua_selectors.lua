@@ -360,6 +360,22 @@ local transform_function = {
       return inp:sub(start_pos, end_pos), 'string'
     end
   },
+  -- Drops input value and return values from function's arguments or an empty string
+  ['id'] = {
+    ['types'] = {
+      ['string'] = true
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(_, _, args)
+      if args[1] and args[2] then
+        return fun.map(tostring, args)
+      elseif args[1] then
+        return args[1]
+      end
+
+      return ''
+    end
+  },
   -- Extracts table value from key-value list
   ['elt'] = {
     ['types'] = {
