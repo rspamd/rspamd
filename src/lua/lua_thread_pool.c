@@ -91,6 +91,10 @@ lua_thread_pool_return (struct lua_thread_pool *pool, struct thread_entry *threa
 
 	if (g_queue_get_length (pool->available_items) <= pool->max_items) {
 		thread_entry->cd = NULL;
+		thread_entry->finish_callback = NULL;
+		thread_entry->task = NULL;
+		thread_entry->cfg = NULL;
+
 		g_queue_push_head (pool->available_items, thread_entry);
 	}
 	else {
@@ -145,4 +149,89 @@ lua_thread_pool_restore_callback (struct lua_callback_state *cbs)
 {
 	lua_thread_pool_return (cbs->thread_pool, cbs->my_thread);
 	lua_thread_pool_set_running_entry (cbs->thread_pool, cbs->previous_thread);
+}
+
+static gint
+lua_do_resume (lua_State *L, gint narg)
+{
+#if LUA_VERSION_NUM < 503
+	return lua_resume (L, narg);
+#else
+	return lua_resume (L, NULL, narg);
+#endif
+}
+
+static void lua_resume_thread_internal (struct thread_entry *thread_entry, gint narg);
+
+void
+lua_thread_call (struct lua_thread_pool *pool, struct thread_entry *thread_entry, int narg)
+{
+	g_assert (lua_status (thread_entry->lua_state) == 0); /* we can't call running/yielded thread */
+	g_assert (thread_entry->task != NULL || thread_entry->cfg != NULL); /* we can't call running/yielded thread */
+
+	lua_resume_thread_internal (thread_entry, narg);
+}
+
+void
+lua_resume_thread (struct thread_entry *thread_entry, gint narg)
+{
+	/*
+	 * The only state where we can resume from is LUA_YIELD
+	 * Another acceptable status is OK (0) but in that case we should push function on stack
+	 * to start the thread from, which is happening in lua_metric_symbol_callback(), not in this function.
+	 */
+	g_assert (lua_status (thread_entry->lua_state) == LUA_YIELD);
+
+	lua_resume_thread_internal (thread_entry, narg);
+}
+
+static void
+lua_resume_thread_internal (struct thread_entry *thread_entry, gint narg)
+{
+	gint ret;
+	struct lua_thread_pool *pool;
+	GString *tb;
+	struct rspamd_task *task;
+
+	ret = lua_do_resume (thread_entry->lua_state, narg);
+
+	if (ret != LUA_YIELD) {
+		/*
+		 LUA_YIELD state should not be handled here.
+		 It should only happen when the thread initiated a asynchronous event and it will be restored as soon
+		 the event is finished
+		 */
+
+		if (thread_entry->task) {
+			pool = thread_entry->task->cfg->lua_thread_pool;
+		}
+		else {
+			pool = thread_entry->cfg->lua_thread_pool;
+		}
+		if (ret == 0) {
+			if (thread_entry->finish_callback) {
+				thread_entry->finish_callback (thread_entry, ret);
+			}
+			lua_thread_pool_return (pool, thread_entry);
+		}
+		else {
+			tb = rspamd_lua_get_traceback_string (thread_entry->lua_state);
+			if (thread_entry->error_callback) {
+				thread_entry->error_callback (thread_entry, ret, tb->str);
+			}
+			else if (thread_entry->task) {
+				task = thread_entry->task;
+				msg_err_task ("lua call failed (%d): %v", ret, tb);
+			}
+			else {
+				msg_err ("lua call failed (%d): %v", ret, tb);
+			}
+
+			if (tb) {
+				g_string_free (tb, TRUE);
+			}
+			/* maybe there is a way to recover here. For now, just remove faulty thread */
+			lua_thread_pool_terminate_entry (pool, thread_entry);
+		}
+	}
 }

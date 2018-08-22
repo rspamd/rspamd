@@ -147,7 +147,7 @@ lua_dns_callback (struct rdns_reply *reply, void *arg)
 		lua_pushvalue (L, -3);
 	}
 
-	lua_resume_thread (cbdata->task, cbdata->thread, 2);
+	lua_resume_thread (cbdata->thread, 2);
 
 	if (cbdata->s) {
 		rspamd_session_watcher_pop (cbdata->s, cbdata->w);
