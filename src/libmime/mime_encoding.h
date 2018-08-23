@@ -65,7 +65,7 @@ gboolean rspamd_mime_to_utf8_byte_array (GByteArray *in,
  * @param text_part
  * @return
  */
-GByteArray * rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
+void rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		struct rspamd_mime_text_part *text_part);
 
 /**

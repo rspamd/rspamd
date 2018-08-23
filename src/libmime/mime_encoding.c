@@ -23,6 +23,7 @@
 #include "message.h"
 #include <unicode/ucnv.h>
 #include <unicode/ucsdet.h>
+#include <unicode/unorm2.h>
 #include <math.h>
 
 #define UTF8_CHARSET "UTF-8"
@@ -38,6 +39,10 @@
 
 static rspamd_regexp_t *utf_compatible_re = NULL;
 UConverter *utf8_converter = NULL;
+
+#if U_ICU_VERSION_MAJOR_NUM >= 44
+static const UNormalizer2 *norm = NULL;
+#endif
 
 struct rspamd_charset_substitution {
 	const gchar *input;
@@ -92,6 +97,36 @@ rspamd_mime_get_converter_cached (const gchar *enc, UErrorCode *err)
 	}
 
 	return conv;
+}
+
+static inline void
+rspamd_mime_utf8_conv_init (void)
+{
+	if (utf8_converter == NULL) {
+		UErrorCode uc_err = U_ZERO_ERROR;
+
+		utf8_converter = ucnv_open (UTF8_CHARSET, &uc_err);
+
+		if (!U_SUCCESS (uc_err)) {
+			msg_err ("FATAL error: cannot open converter for utf8: %s",
+					u_errorName (uc_err));
+
+			g_assert_not_reached ();
+		}
+
+		ucnv_setFromUCallBack (utf8_converter,
+				UCNV_FROM_U_CALLBACK_SUBSTITUTE,
+				NULL,
+				NULL,
+				NULL,
+				&uc_err);
+		ucnv_setToUCallBack (utf8_converter,
+				UCNV_TO_U_CALLBACK_SUBSTITUTE,
+				NULL,
+				NULL,
+				NULL,
+				&uc_err);
+	}
 }
 
 static void
@@ -189,25 +224,7 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 	UErrorCode uc_err = U_ZERO_ERROR;
 	UConverter *conv;
 
-	if (utf8_converter == NULL) {
-		utf8_converter = ucnv_open (UTF8_CHARSET, &uc_err);
-
-		if (uc_err != U_ZERO_ERROR) {
-			g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
-					"cannot open converter for utf8: %s",
-					u_errorName (uc_err));
-
-			return NULL;
-		}
-
-		ucnv_setFromUCallBack (utf8_converter,
-				UCNV_FROM_U_CALLBACK_SUBSTITUTE,
-				NULL,
-				NULL,
-				NULL,
-				&uc_err);
-	}
-
+	rspamd_mime_utf8_conv_init ();
 	conv = rspamd_mime_get_converter_cached (in_enc, &uc_err);
 
 	if (conv == NULL) {
@@ -222,7 +239,7 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 	uc_err = U_ZERO_ERROR;
 	r = ucnv_toUChars (conv, tmp_buf, len + 1, input, len, &uc_err);
 
-	if (uc_err != U_ZERO_ERROR) {
+	if (!U_SUCCESS (uc_err)) {
 		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
 					"cannot convert data to unicode from %s: %s",
 					in_enc, u_errorName (uc_err));
@@ -237,7 +254,7 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 	d = rspamd_mempool_alloc (pool, dlen);
 	r = ucnv_fromUChars (utf8_converter, d, dlen, tmp_buf, r, &uc_err);
 
-	if (uc_err != U_ZERO_ERROR) {
+	if (!U_SUCCESS (uc_err)) {
 		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
 				"cannot convert data from unicode from %s: %s",
 				in_enc, u_errorName (uc_err));
@@ -255,6 +272,186 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 	}
 
 	return d;
+}
+
+static void
+rspamd_mime_text_part_ucs_from_utf (struct rspamd_task *task,
+									struct rspamd_mime_text_part *text_part)
+{
+	GByteArray *utf;
+	UErrorCode uc_err = U_ZERO_ERROR;
+
+	rspamd_mime_utf8_conv_init ();
+	utf = text_part->utf_raw_content;
+	text_part->ucs_raw_content = g_array_sized_new (FALSE, FALSE,
+			sizeof (UChar), utf->len + 1);
+	text_part->ucs_raw_content->len = ucnv_toUChars (utf8_converter,
+			(UChar *)text_part->ucs_raw_content->data,
+			utf->len + 1,
+			utf->data,
+			utf->len,
+			&uc_err);
+
+	if (!U_SUCCESS (uc_err)) {
+		g_array_free (text_part->ucs_raw_content, TRUE);
+		text_part->ucs_raw_content = NULL;
+	}
+}
+
+static void
+rspamd_mime_text_part_normalise (struct rspamd_task *task,
+								 struct rspamd_mime_text_part *text_part)
+{
+#if U_ICU_VERSION_MAJOR_NUM >= 44
+	UErrorCode uc_err = U_ZERO_ERROR;
+	gint32 nsym, end;
+	UChar *src = NULL, *dest = NULL;
+
+	if (norm == NULL) {
+		norm = unorm2_getInstance (NULL, "nfkc", UNORM2_COMPOSE, &uc_err);
+	}
+
+	if (!text_part->ucs_raw_content) {
+		return;
+	}
+
+	src = (UChar *)text_part->ucs_raw_content->data;
+	nsym = text_part->ucs_raw_content->len;
+
+	/* We can now check if we need to decompose */
+	end = unorm2_spanQuickCheckYes (norm, src, nsym, &uc_err);
+
+	if (!U_SUCCESS (uc_err)) {
+		msg_warn_task ("cannot normalise URL, cannot check normalisation: %s",
+				u_errorName (uc_err));
+		return;
+	}
+
+	if (end == nsym) {
+		/* Already normalised */
+		return;
+	}
+
+	text_part->flags |= RSPAMD_MIME_TEXT_PART_HAS_SUBNORMAL;
+	dest = g_malloc (nsym * sizeof (*dest));
+	memcpy (dest, src, end * sizeof (*dest));
+	nsym = unorm2_normalizeSecondAndAppend (norm, dest, end, nsym,
+			src + end, nsym - end, &uc_err);
+
+	if (!U_SUCCESS (uc_err)) {
+		if (uc_err != U_BUFFER_OVERFLOW_ERROR) {
+			msg_warn_task ("cannot normalise URL: %s",
+					u_errorName (uc_err));
+		}
+	}
+	else {
+		/* Copy normalised back */
+		memcpy (text_part->ucs_raw_content->data, dest, nsym * sizeof (UChar));
+		text_part->ucs_raw_content->len = nsym;
+		text_part->flags |= RSPAMD_MIME_TEXT_PART_NORMALISED;
+	}
+
+	g_free (dest);
+#endif
+}
+
+/*
+ * Recode utf from normalised unichars if needed
+ */
+static void
+rspamd_mime_text_part_maybe_renormalise (struct rspamd_task *task,
+										 struct rspamd_mime_text_part *text_part)
+{
+	UErrorCode uc_err = U_ZERO_ERROR;
+	guint clen, dlen;
+	gint r;
+
+	rspamd_mime_utf8_conv_init ();
+
+	if ((text_part->flags & RSPAMD_MIME_TEXT_PART_NORMALISED) &&
+		text_part->ucs_raw_content) {
+		clen = ucnv_getMaxCharSize (utf8_converter);
+		dlen = UCNV_GET_MAX_BYTES_FOR_STRING (text_part->ucs_raw_content->len,
+				clen);
+		g_byte_array_set_size (text_part->utf_raw_content, dlen);
+		r = ucnv_fromUChars (utf8_converter,
+				text_part->utf_raw_content->data,
+				dlen,
+				(UChar *)text_part->ucs_raw_content->data,
+				text_part->ucs_raw_content->len,
+				&uc_err);
+		text_part->utf_raw_content->len = r;
+	}
+}
+
+
+static gboolean
+rspamd_mime_text_part_utf8_convert (struct rspamd_task *task,
+									struct rspamd_mime_text_part *text_part,
+									GByteArray *input,
+									const gchar *charset,
+									GError **err)
+{
+	gchar *d;
+	gint32 r, clen, dlen;
+
+	UErrorCode uc_err = U_ZERO_ERROR;
+	UConverter *conv;
+
+	rspamd_mime_utf8_conv_init ();
+	conv = rspamd_mime_get_converter_cached (charset, &uc_err);
+
+	if (conv == NULL) {
+		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
+				"cannot open converter for %s: %s",
+				charset, u_errorName (uc_err));
+
+		return FALSE;
+	}
+
+
+	text_part->ucs_raw_content = g_array_sized_new (FALSE, FALSE,
+			sizeof (UChar), input->len + 1);
+	r = ucnv_toUChars (conv,
+			(UChar *)text_part->ucs_raw_content->data,
+			input->len + 1,
+			input->data,
+			input->len,
+			&uc_err);
+
+	if (!U_SUCCESS (uc_err)) {
+		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
+				"cannot convert data to unicode from %s: %s",
+				charset, u_errorName (uc_err));
+		return FALSE;
+	}
+
+	text_part->ucs_raw_content->len = r;
+	rspamd_mime_text_part_normalise (task, text_part);
+
+	/* Now, convert to utf8 */
+	clen = ucnv_getMaxCharSize (utf8_converter);
+	dlen = UCNV_GET_MAX_BYTES_FOR_STRING (r, clen);
+	d = rspamd_mempool_alloc (task->task_pool, dlen);
+	r = ucnv_fromUChars (utf8_converter, d, dlen,
+			(UChar *)text_part->ucs_raw_content->data, r, &uc_err);
+
+	if (!U_SUCCESS (uc_err)) {
+		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
+				"cannot convert data from unicode from %s: %s",
+				charset, u_errorName (uc_err));
+
+		return FALSE;
+	}
+
+	msg_info_task ("converted from %s to UTF-8 inlen: %z, outlen: %d",
+			charset, input->len, r);
+	text_part->utf_raw_content = rspamd_mempool_alloc (task->task_pool,
+			sizeof (text_part->utf_raw_content));
+	text_part->utf_raw_content->data = d;
+	text_part->utf_raw_content->len = r;
+
+	return TRUE;
 }
 
 gboolean
@@ -278,24 +475,7 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 		return TRUE;
 	}
 
-	if (utf8_converter == NULL) {
-		utf8_converter = ucnv_open (UTF8_CHARSET, &uc_err);
-
-		if (uc_err != U_ZERO_ERROR) {
-			msg_warn ("cannot open converter for utf8: %s",
-					u_errorName (uc_err));
-
-			return FALSE;
-		}
-
-		ucnv_setFromUCallBack (utf8_converter,
-				UCNV_FROM_U_CALLBACK_SUBSTITUTE,
-				NULL,
-				NULL,
-				NULL,
-				&uc_err);
-	}
-
+	rspamd_mime_utf8_conv_init ();
 	conv = rspamd_mime_get_converter_cached (enc, &uc_err);
 
 	if (conv == NULL) {
@@ -306,7 +486,7 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 	uc_err = U_ZERO_ERROR;
 	r = ucnv_toUChars (conv, tmp_buf, in->len + 1, in->data, in->len, &uc_err);
 
-	if (uc_err != U_ZERO_ERROR) {
+	if (!U_SUCCESS (uc_err)) {
 		g_free (tmp_buf);
 
 		return FALSE;
@@ -318,7 +498,7 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 	g_byte_array_set_size (out, dlen);
 	r = ucnv_fromUChars (utf8_converter, out->data, dlen, tmp_buf, r, &uc_err);
 
-	if (uc_err != U_ZERO_ERROR) {
+	if (!U_SUCCESS (uc_err)) {
 		g_free (tmp_buf);
 
 		return FALSE;
@@ -461,16 +641,14 @@ rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
 	return FALSE;
 }
 
-GByteArray *
+void
 rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		struct rspamd_mime_text_part *text_part)
 {
 	GError *err = NULL;
-	gsize write_bytes;
 	const gchar *charset = NULL;
 	gboolean checked = FALSE, need_charset_heuristic = TRUE;
-	gchar *res_str;
-	GByteArray *result_array, *part_content;
+	GByteArray *part_content;
 	rspamd_ftok_t charset_tok;
 	struct rspamd_mime_part *part = text_part->mime_part;
 
@@ -494,8 +672,9 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 
 	if (task->cfg && task->cfg->raw_mode) {
 		SET_PART_RAW (text_part);
+		text_part->utf_raw_content = part_content;
 
-		return part_content;
+		return;
 	}
 
 	if (part->ct->charset.len == 0) {
@@ -511,8 +690,11 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		}
 		else {
 			SET_PART_UTF (text_part);
+			rspamd_mime_text_part_ucs_from_utf (task, text_part);
+			rspamd_mime_text_part_normalise (task, text_part);
+			rspamd_mime_text_part_maybe_renormalise (task, text_part);
 
-			return part_content;
+			return;
 		}
 	}
 	else {
@@ -530,27 +712,26 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	if (charset == NULL) {
 		msg_info_task ("<%s>: has invalid charset", task->message_id);
 		SET_PART_RAW (text_part);
+		text_part->utf_raw_content = part_content;
 
-		return NULL;
+		return;
 	}
 
 	RSPAMD_FTOK_FROM_STR (&charset_tok, charset);
 
 	if (rspamd_mime_charset_utf_check (&charset_tok, part_content->data,
 			part_content->len, !checked)) {
-		SET_PART_UTF (text_part);
+		rspamd_mime_text_part_ucs_from_utf (task, text_part);
+		rspamd_mime_text_part_normalise (task, text_part);
+		rspamd_mime_text_part_maybe_renormalise (task, text_part);
 
-		return part_content;
+		return;
 	}
 	else {
 		charset = charset_tok.begin;
-		res_str = rspamd_mime_text_to_utf8 (task->task_pool, part_content->data,
-				part_content->len,
-				charset,
-				&write_bytes,
-				&err);
 
-		if (res_str == NULL) {
+		if (!rspamd_mime_text_part_utf8_convert (task, text_part,
+				part_content, charset, &err)) {
 			msg_warn_task ("<%s>: cannot convert from %s to utf8: %s",
 					task->message_id,
 					charset,
@@ -558,14 +739,10 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 			SET_PART_RAW (text_part);
 			g_error_free (err);
 
-			return NULL;
+			text_part->utf_raw_content = part_content;
+			return;
 		}
 	}
 
-	result_array = rspamd_mempool_alloc (task->task_pool, sizeof (GByteArray));
-	result_array->data = res_str;
-	result_array->len = write_bytes;
 	SET_PART_UTF (text_part);
-
-	return result_array;
 }

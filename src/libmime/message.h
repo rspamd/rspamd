@@ -73,6 +73,8 @@ struct rspamd_mime_part {
 #define RSPAMD_MIME_TEXT_PART_FLAG_HTML (1 << 3)
 #define RSPAMD_MIME_TEXT_PART_FLAG_8BIT (1 << 4)
 #define RSPAMD_MIME_TEXT_PART_FLAG_8BIT_ENCODED (1 << 5)
+#define RSPAMD_MIME_TEXT_PART_HAS_SUBNORMAL (1 << 6)
+#define RSPAMD_MIME_TEXT_PART_NORMALISED (1 << 7)
 
 #define IS_PART_EMPTY(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_EMPTY)
 #define IS_PART_UTF(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_UTF)
@@ -88,7 +90,7 @@ struct rspamd_mime_text_part {
 	rspamd_ftok_t parsed; /* decoded from mime encodings */
 	GByteArray *content; /* utf8 encoded processed content */
 
-	UChar *ucs_raw_content; /* unicode raw content */
+	GArray *ucs_raw_content; /* unicode raw content (of UChar) */
 	GByteArray *utf_raw_content; /* utf raw content */
 	GByteArray *stripped_content; /* utf content with no newlines */
 	GPtrArray *newlines;	/**< positions of newlines in text, relative to content*/

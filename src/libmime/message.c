@@ -661,7 +661,6 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 {
 	struct rspamd_mime_text_part *text_part;
 	rspamd_ftok_t html_tok, xhtml_tok;
-	GByteArray *part_content;
 	gboolean found_html = FALSE, found_txt = FALSE;
 	enum rspamd_action_type act;
 
@@ -756,22 +755,21 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 			return;
 		}
 
-		part_content = rspamd_mime_text_part_maybe_convert (task, text_part);
+		rspamd_mime_text_part_maybe_convert (task, text_part);
 
-		if (part_content == NULL) {
+		if (text_part->utf_raw_content == NULL) {
 			return;
 		}
 
 		text_part->html = rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (*text_part->html));
 		text_part->mime_part = mime_part;
-		text_part->utf_raw_content = part_content;
 
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_BALANCED;
 		text_part->content = rspamd_html_process_part_full (
 				task->task_pool,
 				text_part->html,
-				part_content,
+				text_part->utf_raw_content,
 				&text_part->exceptions,
 				task->urls,
 				task->emails);
@@ -802,15 +800,14 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 			return;
 		}
 
-		text_part->content = rspamd_mime_text_part_maybe_convert (task,
-				text_part);
-		text_part->utf_raw_content = text_part->content;
+		rspamd_mime_text_part_maybe_convert (task, text_part);
 
-		if (text_part->content != NULL) {
+		if (text_part->utf_raw_content != NULL) {
 			/*
 			 * We ignore unconverted parts from now as it is dangerous
 			 * to treat them as text parts
 			 */
+			text_part->content = text_part->utf_raw_content;
 			g_ptr_array_add (task->text_parts, text_part);
 		}
 		else {
