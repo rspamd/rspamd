@@ -1080,7 +1080,6 @@ lua_util_tokenize_text (lua_State *L)
 	struct rspamd_process_exception *ex;
 	GArray *res;
 	rspamd_stat_token_t *w;
-	gboolean compat = FALSE;
 
 	if (lua_type (L, 1) == LUA_TSTRING) {
 		in = luaL_checklstring (L, 1, &len);
@@ -1126,15 +1125,12 @@ lua_util_tokenize_text (lua_State *L)
 		lua_pop (L, 1);
 	}
 
-	if (lua_gettop (L) > 2 && lua_type (L, 3) == LUA_TBOOLEAN) {
-		compat = lua_toboolean (L, 3);
-	}
-
 	if (exceptions) {
 		exceptions = g_list_reverse (exceptions);
 	}
 
-	res = rspamd_tokenize_text ((gchar *)in, len, TRUE, NULL, exceptions, compat,
+	res = rspamd_tokenize_text ((gchar *)in, len, RSPAMD_TOKENIZE_UTF, NULL,
+			exceptions,
 			NULL);
 
 	if (res == NULL) {

@@ -13,6 +13,8 @@
 #include "mime_headers.h"
 #include "content_type.h"
 
+#include <unicode/uchar.h>
+
 struct rspamd_task;
 struct controller_session;
 struct html_content;
@@ -77,16 +79,19 @@ struct rspamd_mime_part {
 #define IS_PART_RAW(part) (!((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_UTF))
 #define IS_PART_HTML(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_HTML)
 
+
 struct rspamd_mime_text_part {
 	const gchar *language;
 	GPtrArray *languages;
 	const gchar *real_charset;
 	rspamd_ftok_t raw;
-	rspamd_ftok_t parsed;
-	GByteArray *content;
-	GByteArray *utf_raw_content;
-	GByteArray *stripped_content;
-	GPtrArray *newlines;	/**< positions of newlines in text					*/
+	rspamd_ftok_t parsed; /* decoded from mime encodings */
+	GByteArray *content; /* utf8 encoded processed content */
+
+	UChar *ucs_raw_content; /* unicode raw content */
+	GByteArray *utf_raw_content; /* utf raw content */
+	GByteArray *stripped_content; /* utf content with no newlines */
+	GPtrArray *newlines;	/**< positions of newlines in text, relative to content*/
 	struct html_content *html;
 	GList *exceptions;	/**< list of offsets of urls						*/
 	struct rspamd_mime_part *mime_part;

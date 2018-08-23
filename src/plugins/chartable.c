@@ -620,10 +620,9 @@ chartable_symbol_callback (struct rspamd_task *task, void *unused)
 		gdouble cur_score = 0.0;
 
 		words = rspamd_tokenize_text (task->subject, strlen (task->subject),
-				TRUE,
+				RSPAMD_TOKENIZE_UTF,
 				NULL,
 				NULL,
-				FALSE,
 				NULL);
 
 		if (words && words->len > 0) {

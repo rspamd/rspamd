@@ -26,7 +26,7 @@
 
 typedef gboolean (*token_get_function) (rspamd_stat_token_t * buf, gchar const **pos,
 		rspamd_stat_token_t * token,
-		GList **exceptions, gboolean is_utf, gsize *rl, gboolean check_signature);
+		GList **exceptions, gsize *rl, gboolean check_signature);
 
 const gchar t_delimiters[255] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
@@ -61,7 +61,7 @@ const gchar t_delimiters[255] = {
 static gboolean
 rspamd_tokenizer_get_word_compat (rspamd_stat_token_t * buf,
 		gchar const **cur, rspamd_stat_token_t * token,
-		GList **exceptions, gboolean is_utf, gsize *rl, gboolean unused)
+		GList **exceptions, gsize *rl, gboolean unused)
 {
 	gsize remain, pos;
 	const gchar *p;
@@ -138,12 +138,7 @@ rspamd_tokenizer_get_word_compat (rspamd_stat_token_t * buf,
 	}
 
 	if (rl) {
-		if (is_utf) {
-			*rl = g_utf8_strlen (token->begin, token->len);
-		}
-		else {
-			*rl = token->len;
-		}
+		*rl = token->len;
 	}
 
 	token->flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
@@ -156,7 +151,7 @@ rspamd_tokenizer_get_word_compat (rspamd_stat_token_t * buf,
 static gboolean
 rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 		gchar const **cur, rspamd_stat_token_t * token,
-		GList **exceptions, gboolean is_utf, gsize *rl,
+		GList **exceptions, gsize *rl,
 		gboolean check_signature)
 {
 	gint32 i, siglen = 0, remain;
@@ -179,7 +174,6 @@ rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
 		ex = (*exceptions)->data;
 	}
 
-	g_assert (is_utf);
 	g_assert (cur != NULL);
 
 	if (*cur == NULL) {
@@ -332,9 +326,10 @@ process_exception:
 }
 
 GArray *
-rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
-		struct rspamd_config *cfg, GList *exceptions, gboolean compat,
-		guint64 *hash)
+rspamd_tokenize_text (const gchar *text, gsize len,
+					  enum rspamd_tokenize_type how,
+					  struct rspamd_config *cfg, GList *exceptions,
+					  guint64 *hash)
 {
 	rspamd_stat_token_t token, buf;
 	const gchar *pos = NULL;
@@ -358,11 +353,16 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 	token.len = 0;
 	token.flags = 0;
 
-	if (compat || !is_utf) {
+	switch (how) {
+	case RSPAMD_TOKENIZE_RAW:
 		func = rspamd_tokenizer_get_word_compat;
-	}
-	else {
+		break;
+	case RSPAMD_TOKENIZE_UTF:
 		func = rspamd_tokenizer_get_word;
+		break;
+	default:
+		g_assert_not_reached ();
+		break;
 	}
 
 	if (cfg != NULL) {
@@ -375,7 +375,7 @@ rspamd_tokenize_text (gchar *text, gsize len, gboolean is_utf,
 	res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_stat_token_t),
 			initial_size);
 
-	while (func (&buf, &pos, &token, &cur, is_utf, &l, FALSE)) {
+	while (func (&buf, &pos, &token, &cur, &l, FALSE)) {
 		if (l == 0 || (min_len > 0 && l < min_len) ||
 					(max_len > 0 && l > max_len)) {
 			token.begin = pos;

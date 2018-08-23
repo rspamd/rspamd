@@ -365,8 +365,8 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	}
 
 	if (sub != NULL) {
-		words = rspamd_tokenize_text (sub, strlen (sub), TRUE, NULL, NULL, FALSE,
-				NULL);
+		words = rspamd_tokenize_text (sub, strlen (sub), RSPAMD_TOKENIZE_UTF,
+				NULL, NULL, NULL);
 		if (words != NULL) {
 
 			for (i = 0; i < words->len; i ++) {

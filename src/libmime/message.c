@@ -194,20 +194,28 @@ rspamd_mime_part_create_words (struct rspamd_task *task,
 {
 	rspamd_stat_token_t *w, ucs_w;
 	guint i, ucs_len = 0;
+	enum rspamd_tokenize_type tok_type;
+
+	if (IS_PART_UTF (part)) {
+		tok_type = RSPAMD_TOKENIZE_UTF;
+	}
+	else {
+		tok_type = RSPAMD_TOKENIZE_RAW;
+	}
 
 	/* Ugly workaround */
 	if (IS_PART_HTML (part)) {
 		part->normalized_words = rspamd_tokenize_text (
 				part->stripped_content->data,
-				part->stripped_content->len, IS_PART_UTF (part), task->cfg,
-				part->exceptions, FALSE,
+				part->stripped_content->len, tok_type, task->cfg,
+				part->exceptions,
 				NULL);
 	}
 	else {
 		part->normalized_words = rspamd_tokenize_text (
 				part->stripped_content->data,
-				part->stripped_content->len, IS_PART_UTF (part), task->cfg,
-				part->exceptions, FALSE,
+				part->stripped_content->len, tok_type, task->cfg,
+				part->exceptions,
 				NULL);
 	}
 
