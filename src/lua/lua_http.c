@@ -815,6 +815,9 @@ lua_http_request (lua_State *L)
 
 		return 1;
 	}
+	if (task == NULL && cfg == NULL) {
+		return luaL_error (L, "Bad params to rspamd_http:request(): either task or config should be set");
+	}
 
 	cbd = g_malloc0 (sizeof (*cbd));
 	cbd->cbref = cbref;
