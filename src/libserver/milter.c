@@ -1640,6 +1640,34 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 			g_string_free (hvalue, TRUE);
 		}
 
+		elt = ucl_object_lookup (obj, "add_rcpt");
+
+		if (elt && ucl_object_type (elt) == UCL_ARRAY) {
+			it = NULL;
+
+			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+				hvalue = g_string_new (ucl_object_tostring (cur));
+				rspamd_milter_send_action (session,
+						RSPAMD_MILTER_ADDRCPT,
+						hvalue);
+				g_string_free (hvalue, TRUE);
+			}
+		}
+
+		elt = ucl_object_lookup (obj, "del_rcpt");
+
+		if (elt && ucl_object_type (elt) == UCL_ARRAY) {
+			it = NULL;
+
+			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+				hvalue = g_string_new (ucl_object_tostring (cur));
+				rspamd_milter_send_action (session,
+						RSPAMD_MILTER_DELRCPT,
+						hvalue);
+				g_string_free (hvalue, TRUE);
+			}
+		}
+
 		elt = ucl_object_lookup (obj, "reject");
 
 		if (elt && ucl_object_type (elt) == UCL_STRING) {
