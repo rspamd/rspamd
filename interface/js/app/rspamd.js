@@ -123,8 +123,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             tab_symbols.getSymbols(ui, checked_server);
             break;
         case "#history_nav":
-            tab_history.getHistory(ui, tables, neighbours, checked_server);
-            tab_history.getErrors(ui, tables, neighbours, checked_server);
+            tab_history.getHistory(ui, tables);
+            tab_history.getErrors(ui, tables);
             break;
         case "#disconnect":
             disconnect();
@@ -165,6 +165,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         } else {
             $("#learning_nav").show();
             $("#resetHistory").removeAttr("disabled", true);
+            $("#errors-history").show();
         }
 
         var buttons = $("#navBar .pull-right");
@@ -288,6 +289,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             }
         });
         tab_config.setup(ui);
+        tab_history.setup(ui, tables);
         tab_symbols.setup(ui);
         tab_upload.setup(ui);
         selData = tab_graph.setup();
