@@ -20,6 +20,8 @@
 #include "config.h"
 #include "libutil/mem_pool.h"
 #include <event.h>
+#include "khash.h"
+#include "libutil/str_util.h"
 
 enum rspamd_milter_state {
 	st_len_1 = 0,
@@ -52,6 +54,9 @@ enum rspamd_milter_io_state {
 	RSPAMD_MILTER_WRITE_AND_DIE,
 };
 
+KHASH_INIT (milter_headers_hash_t, char *, GArray *, true,
+		rspamd_strcase_hash, rspamd_strcase_equal);
+
 struct rspamd_milter_private {
 	struct rspamd_milter_parser parser;
 	struct event ev;
@@ -60,7 +65,8 @@ struct rspamd_milter_private {
 	struct timeval *ptv;
 	struct event_base *ev_base;
 	rspamd_mempool_t *pool;
-	GHashTable *headers;
+	khash_t(milter_headers_hash_t) *headers;
+	gint cur_hdr;
 	rspamd_milter_finish fin_cb;
 	rspamd_milter_error err_cb;
 	void *ud;
