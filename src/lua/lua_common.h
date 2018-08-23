@@ -434,7 +434,7 @@ lua_yield_thread (struct thread_entry *thread_entry, gint nresults);
  * @param narg
  */
 void
-lua_resume_thread (struct rspamd_task *task, struct thread_entry *thread_entry, gint narg);
+lua_resume_thread (struct thread_entry *thread_entry, gint narg);
 
 /* Paths defs */
 #define RSPAMD_CONFDIR_INDEX "CONFDIR"

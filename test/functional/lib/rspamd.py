@@ -8,11 +8,12 @@ import re
 import shutil
 import signal
 import socket
-import string
+import errno
 import sys
 import tempfile
 import time
 from robot.libraries.BuiltIn import BuiltIn
+from robot.api import logger
 
 if sys.version_info > (3,):
     long = int
@@ -167,32 +168,47 @@ def update_dictionary(a, b):
     a.update(b)
     return a
 
-def shutdown_process(pid):
+def shutdown_process(process):
     i = 0
     while i < 100:
         try:
-            os.kill(pid, signal.SIGTERM)
+            os.kill(process.pid, signal.SIGTERM)
         except OSError as e:
-            assert e.errno == 3
+            assert e.errno == errno.ESRCH
             return
+
+        if process.status() == psutil.STATUS_ZOMBIE:
+            return
+
         i += 1
         time.sleep(0.1)
+
     while i < 200:
         try:
-            os.kill(pid, signal.SIGKILL)
+            os.kill(process.pid, signal.SIGKILL)
         except OSError as e:
-            assert e.errno == 3
+            assert e.errno == errno.ESRCH
             return
+
+        if process.status() == psutil.STATUS_ZOMBIE:
+            return
+
         i += 1
         time.sleep(0.1)
-    assert False, "Failed to shutdown process %s" % pid
+    assert False, "Failed to shutdown process %d (%s)" % (process.pid, process.name())
+
 
 def shutdown_process_with_children(pid):
     pid = int(pid)
-    children = psutil.Process(pid=pid).children(recursive=False)
-    shutdown_process(pid)
+    try:
+        process = psutil.Process(pid=pid)
+    except psutil.NoSuchProcess:
+        return
+    children = process.children(recursive=False)
+    shutdown_process(process)
     for child in children:
         try:
-            shutdown_process(child.pid)
+            shutdown_process(child)
         except:
             pass
+

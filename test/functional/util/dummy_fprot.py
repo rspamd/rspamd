@@ -1,14 +1,15 @@
 #!/usr/bin/env python
-
-PID = "/tmp/dummy_fprot.pid"
-
 import os
 import sys
+import signal
+
+
 try:
     import SocketServer as socketserver
 except:
     import socketserver
-import signal
+
+PID = "/tmp/dummy_fprot.pid"
 
 class MyTCPHandler(socketserver.BaseRequestHandler):
 

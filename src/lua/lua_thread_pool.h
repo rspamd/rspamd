@@ -3,13 +3,25 @@
 
 #include <lua.h>
 
+struct thread_entry;
+struct lua_thread_pool;
+
+typedef void (*lua_thread_finish_t) (struct thread_entry *thread, int ret);
+typedef void (*lua_thread_error_t) (struct thread_entry *thread, int ret, const char *msg);
+
 struct thread_entry {
 	lua_State *lua_state;
 	gint thread_index;
 	gpointer cd;
-};
 
-struct thread_pool;
+	/* function to handle result of called method, can be NULL */
+	lua_thread_finish_t finish_callback;
+
+	/* function to log result, i.e. if you want to modify error logging message or somehow process this state, can be NUL */
+	lua_thread_error_t error_callback;
+	struct rspamd_task *task;
+	struct rspamd_config *cfg;
+};
 
 struct lua_callback_state {
 	lua_State *L;
@@ -59,15 +71,6 @@ void
 lua_thread_pool_return(struct lua_thread_pool *pool, struct thread_entry *thread_entry);
 
 /**
- * Removes thread from Lua state. It should be done to dead (which ended with an error) threads only
- *
- * @param pool
- * @param thread_entry
- */
-void
-lua_thread_pool_terminate_entry(struct lua_thread_pool *pool, struct thread_entry *thread_entry);
-
-/**
  * Currently running thread. Typically needed in yielding point - to fill-up continuation.
  *
  * @param pool
@@ -101,6 +104,17 @@ lua_thread_pool_prepare_callback (struct lua_thread_pool *pool, struct lua_callb
  */
 void
 lua_thread_pool_restore_callback (struct lua_callback_state *cbs);
+
+
+/**
+ * Acts like lua_call but the tread is able to suspend execution.
+ * As soon as the call is over, call either thread_entry::finish_callback or thread_entry::error_callback.
+ *
+ * @param thread_entry
+ * @param narg
+ */
+void
+lua_thread_call (struct thread_entry *thread_entry, int narg);
 
 #endif /* LUA_THREAD_POOL_H_ */
 

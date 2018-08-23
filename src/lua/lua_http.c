@@ -75,6 +75,7 @@ struct lua_http_cbdata {
 	gint flags;
 	gint fd;
 	gint cbref;
+	struct thread_entry *thread;
 };
 
 static const int default_http_timeout = 5000;
@@ -96,7 +97,10 @@ lua_http_fin (gpointer arg)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)arg;
 
-	luaL_unref (cbd->cfg->lua_state, LUA_REGISTRYINDEX, cbd->cbref);
+	if (cbd->cbref != -1) {
+		luaL_unref (cbd->cfg->lua_state, LUA_REGISTRYINDEX, cbd->cbref);
+	}
+
 	if (cbd->conn) {
 		/* Here we already have a connection, so we need to unref it */
 		rspamd_http_connection_unref (cbd->conn);
@@ -170,12 +174,19 @@ lua_http_push_error (struct lua_http_cbdata *cbd, const char *err)
 	lua_thread_pool_restore_callback (&lcbd);
 }
 
+static void lua_http_resume_handler (struct rspamd_http_connection *conn,
+						 struct rspamd_http_message *msg, const char *err);
+
 static void
 lua_http_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)conn->ud;
-
-	lua_http_push_error (cbd, err->message);
+	if (cbd->cbref == -1) {
+		lua_http_resume_handler (conn, NULL, err->message);
+	}
+	else {
+		lua_http_push_error (cbd, err->message);
+	}
 	lua_http_maybe_free (cbd);
 }
 
@@ -191,6 +202,11 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 	struct lua_callback_state lcbd;
 	lua_State *L;
 
+	if (cbd->cbref == -1) {
+		lua_http_resume_handler (conn, msg, NULL);
+		lua_http_maybe_free (cbd);
+		return 0;
+	}
 	lua_thread_pool_prepare_callback (cbd->cfg->lua_thread_pool, &lcbd);
 
 	L = lcbd.L;
@@ -243,6 +259,84 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 	lua_thread_pool_restore_callback (&lcbd);
 
 	return 0;
+}
+
+/*
+ * resumes yielded thread
+ */
+static void
+lua_http_resume_handler (struct rspamd_http_connection *conn,
+						 struct rspamd_http_message *msg, const char *err)
+{
+	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)conn->ud;
+	lua_State *L = cbd->thread->lua_state;
+	const gchar *body;
+	gsize body_len;
+	struct rspamd_http_header *h, *htmp;
+
+	msg_info ("T=%p, L=%p, status=%d, err=%s", cbd->thread, cbd->thread->lua_state, lua_status (cbd->thread->lua_state), err);
+	if (err) {
+		lua_pushstring (L, err);
+		lua_pushnil (L);
+	}
+	else {
+		/*
+		 * 1 - nil (error)
+		 * 2 - table:
+		 *   code (int)
+		 *   content (string)
+		 *   headers (table: header -> value)
+		 */
+		lua_pushnil (L); // error code
+
+		lua_createtable (L, 0, 3);
+
+		/* code */
+		lua_pushliteral (L, "code");
+		lua_pushinteger (L, msg->code);
+		lua_settable (L, -3);
+
+		/* content */
+		lua_pushliteral (L, "content");
+
+		body = rspamd_http_message_get_body (msg, &body_len);
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_TEXT) {
+			struct rspamd_lua_text *t;
+
+			t = lua_newuserdata (L, sizeof (*t));
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+			t->start = body;
+			t->len = body_len;
+			t->flags = 0;
+		}
+		else {
+			if (body_len > 0) {
+				lua_pushlstring (L, body, body_len);
+			}
+			else {
+				lua_pushnil (L);
+			}
+		}
+		lua_settable (L, -3);
+
+		/* headers */
+		lua_pushliteral (L, "headers");
+		lua_newtable (L);
+
+		HASH_ITER (hh, msg->headers, h, htmp) {
+			/*
+			 * Lowercase header name, as Lua cannot search in caseless matter
+			 */
+			rspamd_str_lc (h->combined->str, h->name.len);
+			lua_pushlstring (L, h->name.begin, h->name.len);
+			lua_pushlstring (L, h->value.begin, h->value.len);
+			lua_settable (L, -3);
+		}
+
+		lua_settable (L, -3);
+	}
+
+	lua_resume_thread (cbd->thread, 2);
 }
 
 static gboolean
@@ -404,7 +498,7 @@ lua_http_request (lua_State *L)
 	const gchar *url, *lua_body;
 	rspamd_fstring_t *body = NULL;
 	gchar *to_resolve;
-	gint cbref;
+	gint cbref = -1;
 	gsize bodylen;
 	gdouble timeout = default_http_timeout;
 	gint flags = 0;
@@ -464,11 +558,9 @@ lua_http_request (lua_State *L)
 		lua_gettable (L, 1);
 		if (url == NULL || lua_type (L, -1) != LUA_TFUNCTION) {
 			lua_pop (L, 1);
-			msg_err ("http request has bad params");
-			lua_pushboolean (L, FALSE);
-			return 1;
+		} else {
+			cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 		}
-		cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 
 		lua_pushstring (L, "task");
 		lua_gettable (L, 1);
@@ -802,8 +894,13 @@ lua_http_request (lua_State *L)
 		}
 	}
 
-	lua_pushboolean (L, TRUE);
-	return 1;
+	if (cbd->cbref == -1) {
+		cbd->thread = lua_thread_pool_get_running_entry (cfg->lua_thread_pool);
+		return lua_yield_thread (cbd->thread, 0);
+	} else {
+		lua_pushboolean (L, TRUE);
+		return 1;
+	}
 }
 
 static gint
