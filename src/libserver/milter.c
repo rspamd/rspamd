@@ -575,7 +575,7 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 
 				k = kh_get (milter_headers_hash_t, priv->headers, (gchar *)pos);
 
-				if (k != kh_end (priv->headers)) {
+				if (k == kh_end (priv->headers)) {
 					GArray *ar;
 
 					k = kh_put (milter_headers_hash_t, priv->headers,
