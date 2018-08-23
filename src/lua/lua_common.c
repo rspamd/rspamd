@@ -1507,7 +1507,7 @@ GString *
 rspamd_lua_get_traceback_string (lua_State *L)
 {
 	GString *tb;
-	const gchar *msg = lua_tostring (L, 1);
+	const gchar *msg = lua_tostring (L, -1);
 
 	tb = g_string_sized_new (100);
 	g_string_append_printf (tb, "%s; trace:", msg);

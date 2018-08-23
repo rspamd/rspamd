@@ -92,6 +92,7 @@ lua_thread_pool_return (struct lua_thread_pool *pool, struct thread_entry *threa
 	if (g_queue_get_length (pool->available_items) <= pool->max_items) {
 		thread_entry->cd = NULL;
 		thread_entry->finish_callback = NULL;
+		thread_entry->error_callback = NULL;
 		thread_entry->task = NULL;
 		thread_entry->cfg = NULL;
 
@@ -102,7 +103,7 @@ lua_thread_pool_return (struct lua_thread_pool *pool, struct thread_entry *threa
 	}
 }
 
-void
+static void
 lua_thread_pool_terminate_entry (struct lua_thread_pool *pool, struct thread_entry *thread_entry)
 {
 	struct thread_entry *ent = NULL;
@@ -164,10 +165,10 @@ lua_do_resume (lua_State *L, gint narg)
 static void lua_resume_thread_internal (struct thread_entry *thread_entry, gint narg);
 
 void
-lua_thread_call (struct lua_thread_pool *pool, struct thread_entry *thread_entry, int narg)
+lua_thread_call (struct thread_entry *thread_entry, int narg)
 {
 	g_assert (lua_status (thread_entry->lua_state) == 0); /* we can't call running/yielded thread */
-	g_assert (thread_entry->task != NULL || thread_entry->cfg != NULL); /* we can't call running/yielded thread */
+	g_assert (thread_entry->task != NULL || thread_entry->cfg != NULL); /* we can't call without pool */
 
 	lua_resume_thread_internal (thread_entry, narg);
 }
@@ -178,7 +179,7 @@ lua_resume_thread (struct thread_entry *thread_entry, gint narg)
 	/*
 	 * The only state where we can resume from is LUA_YIELD
 	 * Another acceptable status is OK (0) but in that case we should push function on stack
-	 * to start the thread from, which is happening in lua_metric_symbol_callback(), not in this function.
+	 * to start the thread from, which is happening in lua_thread_call(), not in this function.
 	 */
 	g_assert (lua_status (thread_entry->lua_state) == LUA_YIELD);
 

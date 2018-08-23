@@ -1209,7 +1209,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 	thread_entry->cd = cd;
 
 	lua_State *thread = thread_entry->lua_state;
-	cd->stack_level = lua_gettop (cd->L);
+	cd->stack_level = lua_gettop (thread);
 
 	if (cd->cb_is_ref) {
 		lua_rawgeti (thread, LUA_REGISTRYINDEX, cd->callback.ref);
@@ -1226,7 +1226,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 	thread_entry->error_callback = lua_metric_symbol_callback_error;
 	thread_entry->task = task;
 
-	lua_thread_call (task->cfg->lua_thread_pool, thread_entry, 1);
+	lua_thread_call (thread_entry, 1);
 }
 
 gint

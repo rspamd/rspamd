@@ -71,15 +71,6 @@ void
 lua_thread_pool_return(struct lua_thread_pool *pool, struct thread_entry *thread_entry);
 
 /**
- * Removes thread from Lua state. It should be done to dead (which ended with an error) threads only
- *
- * @param pool
- * @param thread_entry
- */
-void
-lua_thread_pool_terminate_entry(struct lua_thread_pool *pool, struct thread_entry *thread_entry);
-
-/**
  * Currently running thread. Typically needed in yielding point - to fill-up continuation.
  *
  * @param pool
@@ -115,8 +106,15 @@ void
 lua_thread_pool_restore_callback (struct lua_callback_state *cbs);
 
 
+/**
+ * Acts like lua_call but the tread is able to suspend execution.
+ * As soon as the call is over, call either thread_entry::finish_callback or thread_entry::error_callback.
+ *
+ * @param thread_entry
+ * @param narg
+ */
 void
-lua_thread_call (struct lua_thread_pool *pool, struct thread_entry *thread_entry, int narg);
+lua_thread_call (struct thread_entry *thread_entry, int narg);
 
 #endif /* LUA_THREAD_POOL_H_ */
 
