@@ -1638,6 +1638,19 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 								}
 								else {
 									/* Calculate negative offset */
+
+									if (-idx <= priv->cur_hdr) {
+										rspamd_milter_send_action (session,
+												RSPAMD_MILTER_INSHEADER,
+												priv->cur_hdr + idx + 1,
+												hname, hvalue);
+									}
+									else {
+										rspamd_milter_send_action (session,
+												RSPAMD_MILTER_INSHEADER,
+												0,
+												hname, hvalue);
+									}
 								}
 							}
 							else {
