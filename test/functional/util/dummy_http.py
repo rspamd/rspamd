@@ -21,14 +21,36 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     def do_GET(self):
         """Respond to a GET request."""
-        self.send_response(200)
+        if self.path == "/empty":
+            self.finish()
+            return
+
+        if self.path == "/timeout":
+            time.sleep(2)
+
+        if self.path == "/error_403":
+            self.send_response(403)
+        else:
+            self.send_response(200)
+
         self.send_header("Content-type", "text/plain")
         self.end_headers()
         self.wfile.write("hello world")
 
     def do_POST(self):
         """Respond to a GET request."""
-        self.send_response(200)
+        if self.path == "/empty":
+            self.finish()
+            return
+
+        if self.path == "/timeout":
+            time.sleep(2)
+
+        if self.path == "/error_403":
+            self.send_response(403)
+        else:
+            self.send_response(200)
+
         self.send_header("Content-type", "text/plain")
         self.end_headers()
         self.wfile.write("hello post")
@@ -69,7 +91,7 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGALRM, alarm_handler)
     signal.signal(signal.SIGTERM, alarm_handler)
-    signal.alarm(5)
+    signal.alarm(10)
 
     try:
         httpd.run()

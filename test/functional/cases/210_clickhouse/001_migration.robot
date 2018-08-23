@@ -24,7 +24,7 @@ Migration
 
   Prepare rspamd
 
-  Sleep  1  #TODO: replace this check with waiting until migration finishes
+  Sleep  2  #TODO: replace this check with waiting until migration finishes
 
   Column should exist  rspamd  Symbols.Scores
   Column should exist  rspamd  Attachments.Digest
