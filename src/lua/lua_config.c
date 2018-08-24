@@ -2810,6 +2810,9 @@ lua_config_add_on_load (lua_State *L)
 	return 0;
 }
 
+static void lua_periodic_callback_finish (struct thread_entry *thread, int ret);
+static void lua_periodic_callback_error (struct thread_entry *thread, int ret, const char *msg);
+
 struct rspamd_lua_periodic {
 	struct event_base *ev_base;
 	struct rspamd_config *cfg;
@@ -2823,19 +2826,18 @@ struct rspamd_lua_periodic {
 static void
 lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 {
-	gdouble timeout;
-	struct timeval tv;
 	struct rspamd_lua_periodic *periodic = ud;
 	struct rspamd_config **pcfg, *cfg;
 	struct event_base **pev_base;
+	struct thread_entry *thread;
 	lua_State *L;
-	gint err_idx;
-	gboolean plan_more = FALSE;
-	GString *tb;
 
-	L = periodic->L;
-	lua_pushcfunction (L, &rspamd_lua_traceback);
-	err_idx = lua_gettop (L);
+	thread = lua_thread_pool_get_for_config (periodic->cfg);
+	thread->cd = periodic;
+	thread->finish_callback = lua_periodic_callback_finish;
+	thread->error_callback = lua_periodic_callback_error;
+
+	L = thread->lua_state;
 
 	lua_rawgeti (L, LUA_REGISTRYINDEX, periodic->cbref);
 	pcfg = lua_newuserdata (L, sizeof (*pcfg));
@@ -2846,13 +2848,23 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
 	*pev_base = periodic->ev_base;
 
-	if (lua_pcall (L, 2, 1, err_idx) != 0) {
-		tb = lua_touserdata (L, -1);
-		msg_err_config ("call to finishing script failed: %v", tb);
-		g_string_free (tb, TRUE);
-		lua_pop (L, 2);
-	}
-	else {
+	event_del (&periodic->ev);
+
+	lua_thread_call (thread, 2);
+}
+
+static void
+lua_periodic_callback_finish (struct thread_entry *thread, int ret)
+{
+	lua_State *L;
+	struct rspamd_lua_periodic *periodic = thread->cd;
+	gboolean plan_more = FALSE;
+	struct timeval tv;
+	gdouble timeout = 0.0;
+
+	L = thread->lua_state;
+
+	if (ret == 0) {
 		if (lua_type (L, -1) == LUA_TBOOLEAN) {
 			plan_more = lua_toboolean (L, -1);
 			timeout = periodic->timeout;
@@ -2862,11 +2874,8 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 			plan_more = timeout > 0 ? TRUE : FALSE;
 		}
 
-		lua_pop (L, 2); /* Return value + error function */
+		lua_pop (L, 1); /* Return value + error function */
 	}
-
-	event_del (&periodic->ev);
-
 	if (plan_more) {
 		if (periodic->need_jitter) {
 			timeout = rspamd_time_jitter (timeout, 0.0);
@@ -2880,6 +2889,19 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 		g_free (periodic);
 	}
 }
+
+static void
+lua_periodic_callback_error (struct thread_entry *thread, int ret, const char *msg)
+{
+	struct rspamd_config *cfg;
+	struct rspamd_lua_periodic *periodic = thread->cd;
+	cfg = periodic->cfg;
+
+	msg_err_config ("call to finishing script failed: %s", msg);
+
+	lua_periodic_callback_finish(thread, ret);
+}
+
 
 static gint
 lua_config_add_periodic (lua_State *L)
@@ -3634,30 +3656,22 @@ luaopen_config (lua_State * L)
 }
 
 void
-lua_call_finish_script (lua_State *L, struct rspamd_config_post_load_script *sc,
-		struct rspamd_task *task)
-{
-	struct rspamd_task **ptask;
-	gint err_idx;
-	GString *tb;
+lua_call_finish_script (struct rspamd_config_post_load_script *sc,
+		struct rspamd_task *task) {
 
-	lua_pushcfunction (L, &rspamd_lua_traceback);
-	err_idx = lua_gettop (L);
+	struct rspamd_task **ptask;
+	struct thread_entry *thread;
+
+	thread = lua_thread_pool_get_for_task (task);
+	thread->task = task;
+
+	lua_State *L = thread->lua_state;
 
 	lua_rawgeti (L, LUA_REGISTRYINDEX, sc->cbref);
 
 	ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-	rspamd_lua_setclass (L, "rspamd{task}", -1);
+	rspamd_lua_setclass (L, "rspamd{task}", - 1);
 	*ptask = task;
 
-	if (lua_pcall (L, 1, 0, err_idx) != 0) {
-		tb = lua_touserdata (L, -1);
-		msg_err_task ("call to finishing script failed: %v", tb);
-		g_string_free (tb, TRUE);
-		lua_pop (L, 1);
-	}
-
-	lua_pop (L, 1); /* Error function */
-
-	return;
+	lua_thread_call (thread, 1);
 }

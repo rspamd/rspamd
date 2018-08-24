@@ -381,12 +381,10 @@ void *rspamd_lua_check_udata_maybe (lua_State *L, gint pos, const gchar *classna
 
 /**
  * Call finishing script with the specified task
- * @param L
  * @param sc
  * @param task
  */
-void lua_call_finish_script (lua_State *L, struct
-		rspamd_config_post_load_script *sc,
+void lua_call_finish_script (struct rspamd_config_post_load_script *sc,
 		struct rspamd_task *task);
 
 /**
@@ -395,7 +393,7 @@ void lua_call_finish_script (lua_State *L, struct
  * @param cfg
  * @param ev_base
  */
-gboolean rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
+void rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 		struct event_base *ev_base, struct rspamd_worker *w);
 
 /**
