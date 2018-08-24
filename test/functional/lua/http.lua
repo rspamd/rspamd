@@ -70,9 +70,56 @@ local function http_symbol(task)
   end
 end
 
+
+local function finish(task)
+  rspamd_logger.errx('function finish')
+  local err, response = rspamd_http.request({
+    url = 'http://site.resolveme:18080/timeout',
+    task = task,
+    method = 'get',
+    timeout = 1,
+  })
+  if err then
+    task:insert_result('HTTP_CORO_DNS_FINISH_ERROR', 1.0, err)
+  else
+    task:insert_result('HTTP_CORO_DNS_FINISH_' .. response.code, 1.0, response.content)
+  end
+end
+
+local function periodic(cfg, ev_base)
+  local err, response = rspamd_http.request({
+    url = 'http://site.resolveme:18080/request/periodic',
+    config = cfg,
+  })
+  if err then
+    rspamd_logger.errx('periodic err ' .. err)
+  else
+    rspamd_logger.errx('periodic success ' .. response.content)
+  end
+
+  return false
+end
+
 rspamd_config:register_symbol({
-  name = 'SIMPLE_TEST',
-  score = 1.0,
-  callback = http_symbol,
-  no_squeeze = true
+name = 'SIMPLE_TEST',
+score = 1.0,
+callback = http_symbol,
+no_squeeze = true
 })
+
+
+rspamd_config:register_finish_script(finish)
+
+rspamd_config:add_on_load(function(cfg, ev_base, worker)
+  local err, response = rspamd_http.request({
+    url = 'http://site.resolveme:18080/request/add_on_load',
+    config = cfg,
+  })
+  if err then
+    rspamd_logger.errx('add_on_load err ' .. err)
+  else
+    rspamd_logger.errx('add_on_load success ' .. response.content)
+  end
+
+  rspamd_config:add_periodic(ev_base, 0, periodic, false)
+end)

@@ -60,12 +60,35 @@ lua_thread_pool_free (struct lua_thread_pool *pool)
 	g_free (pool);
 }
 
+struct thread_entry *lua_thread_pool_get_for_config (struct rspamd_config *cfg);
+
+static struct thread_entry *lua_thread_pool_get (struct lua_thread_pool *pool);
+
 struct thread_entry *
+lua_thread_pool_get_for_task (struct rspamd_task *task)
+{
+	struct thread_entry *ent = lua_thread_pool_get (task->cfg->lua_thread_pool);
+
+	ent->task = task;
+
+	return ent;
+}
+
+struct thread_entry *
+lua_thread_pool_get_for_config (struct rspamd_config *cfg)
+{
+	struct thread_entry *ent = lua_thread_pool_get (cfg->lua_thread_pool);
+
+	ent->cfg = cfg;
+
+	return ent;
+}
+
+static struct thread_entry *
 lua_thread_pool_get (struct lua_thread_pool *pool)
 {
 	gpointer cur;
 	struct thread_entry *ent = NULL;
-
 	cur = g_queue_pop_head (pool->available_items);
 
 	if (cur) {
@@ -174,7 +197,7 @@ lua_thread_call (struct thread_entry *thread_entry, int narg)
 }
 
 void
-lua_resume_thread (struct thread_entry *thread_entry, gint narg)
+lua_thread_resume (struct thread_entry *thread_entry, gint narg)
 {
 	/*
 	 * The only state where we can resume from is LUA_YIELD
@@ -235,4 +258,10 @@ lua_resume_thread_internal (struct thread_entry *thread_entry, gint narg)
 			lua_thread_pool_terminate_entry (pool, thread_entry);
 		}
 	}
+}
+
+gint
+lua_thread_yield (struct thread_entry *thread_entry, gint nresults)
+{
+	return lua_yield (thread_entry->lua_state, nresults);
 }

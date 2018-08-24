@@ -20,6 +20,7 @@
 #include "worker_util.h"
 #include "ottery.h"
 #include "rspamd_control.h"
+#include "lua_thread_pool.h"
 #include <math.h>
 #include <sys/wait.h>
 #include <src/libserver/rspamd_control.h>
@@ -1641,7 +1642,9 @@ lua_check_ev_base (lua_State * L, gint pos)
 	return ud ? *((struct event_base **)ud) : NULL;
 }
 
-gboolean
+static void rspamd_lua_run_postloads_error (struct thread_entry *thread, int ret, const char *msg);
+
+void
 rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 		struct event_base *ev_base, struct rspamd_worker *w)
 {
@@ -1649,41 +1652,39 @@ rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 	struct rspamd_config **pcfg;
 	struct event_base **pev_base;
 	struct rspamd_worker **pw;
-	gint err_idx;
-	GString *tb;
 
 	/* Execute post load scripts */
 	LL_FOREACH (cfg->on_load, sc) {
-		lua_pushcfunction (L, &rspamd_lua_traceback);
-		err_idx = lua_gettop (L);
+		struct thread_entry *thread = lua_thread_pool_get_for_config (cfg);
+		thread->error_callback = rspamd_lua_run_postloads_error;
+		L = thread->lua_state;
 
-		lua_rawgeti (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
-		pcfg = lua_newuserdata (cfg->lua_state, sizeof (*pcfg));
+		lua_rawgeti (L, LUA_REGISTRYINDEX, sc->cbref);
+		pcfg = lua_newuserdata (L, sizeof (*pcfg));
 		*pcfg = cfg;
-		rspamd_lua_setclass (cfg->lua_state, "rspamd{config}", -1);
+		rspamd_lua_setclass (L, "rspamd{config}", -1);
 
-		pev_base = lua_newuserdata (cfg->lua_state, sizeof (*pev_base));
+		pev_base = lua_newuserdata (L, sizeof (*pev_base));
 		*pev_base = ev_base;
-		rspamd_lua_setclass (cfg->lua_state, "rspamd{ev_base}", -1);
+		rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
 
-		pw = lua_newuserdata (cfg->lua_state, sizeof (*pw));
+		pw = lua_newuserdata (L, sizeof (*pw));
 		*pw = w;
-		rspamd_lua_setclass (cfg->lua_state, "rspamd{worker}", -1);
+		rspamd_lua_setclass (L, "rspamd{worker}", -1);
 
-		if (lua_pcall (cfg->lua_state, 3, 0, err_idx) != 0) {
-			tb = lua_touserdata (L, -1);
-			msg_err_config ("error executing post load code: %v", tb);
-			g_string_free (tb, TRUE);
-			lua_settop (L, err_idx - 1);
-
-			return FALSE;
-		}
-
-		lua_settop (L, err_idx - 1);
+		lua_thread_call (thread, 3);
 	}
-
-	return TRUE;
 }
+
+
+static void
+rspamd_lua_run_postloads_error (struct thread_entry *thread, int ret, const char *msg)
+{
+	struct rspamd_config *cfg = thread->cfg;
+
+	msg_err_config ("error executing post load code: %s", msg);
+}
+
 
 static struct rspamd_worker *
 lua_check_worker (lua_State *L, gint pos)

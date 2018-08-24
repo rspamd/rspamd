@@ -72,7 +72,7 @@ test_resume_get_thread(gint function_call)
 	t1 = rspamd_get_virtual_ticks ();
 
 	for (i = 0; i < N; i ++) {
-		ent = lua_thread_pool_get (rspamd_main->cfg->lua_thread_pool);
+		ent = lua_thread_pool_get_for_config (rspamd_main->cfg);
 
 		lua_rawgeti (ent->lua_state, LUA_REGISTRYINDEX, function_call);
 		lua_resume (ent->lua_state, 0);
@@ -96,7 +96,7 @@ test_resume_get_new_thread(gint function_call)
 	t1 = rspamd_get_virtual_ticks ();
 
 	for (i = 0; i < N; i ++) {
-		ent = lua_thread_pool_get (rspamd_main->cfg->lua_thread_pool);
+		ent = lua_thread_pool_get_for_task (rspamd_main->cfg->lua_thread_pool);
 
 		lua_rawgeti (ent->lua_state, LUA_REGISTRYINDEX, function_call);
 		lua_resume (ent->lua_state, 0);

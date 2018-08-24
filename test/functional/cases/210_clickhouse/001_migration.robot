@@ -5,22 +5,31 @@ Library         ${TESTDIR}/lib/rspamd.py
 Library         clickhouse.py
 Resource        ${TESTDIR}/lib/rspamd.robot
 
-Suite Setup     Clickhouse Setup
-Suite Teardown  Clickhosue Teardown
+Test Setup     Clickhouse Setup
+Test Teardown  Clickhosue Teardown
 
 *** Variables ***
 ${CONFIG}       ${TESTDIR}/configs/clickhouse.conf
 ${RSPAMD_SCOPE}  Suite
 
 *** Test Cases ***
+Initial schema
+  Prepare rspamd
+  Sleep  2  #TODO: replace this check with waiting until migration finishes
+  Column should exist  rspamd  Symbols.Scores
+  Column should exist  rspamd  Attachments.Digest
+  Column should exist  rspamd  Symbols.Scores
+  Schema version should be  2
+
+
 Migration
   Upload new schema                ${TESTDIR}/data/initial_schema/schema.sql
   Insert data  rspamd              ${TESTDIR}/data/initial_schema/data.rspamd.sql
   Insert data  rspamd_asn          ${TESTDIR}/data/initial_schema/data.rspamd_asn.sql
-  Insert data  rspamd_emails       ${TESTDIR}/data/initial_schema/data.rspamd_emails.sql
   Insert data  rspamd_urls         ${TESTDIR}/data/initial_schema/data.rspamd_urls.sql
-  Insert data  rspamd_attachments  ${TESTDIR}/data/initial_schema/data.rspamd_attachments.sql
+  Insert data  rspamd_emails       ${TESTDIR}/data/initial_schema/data.rspamd_emails.sql
   Insert data  rspamd_symbols      ${TESTDIR}/data/initial_schema/data.rspamd_symbols.sql
+  Insert data  rspamd_attachments  ${TESTDIR}/data/initial_schema/data.rspamd_attachments.sql
 
   Prepare rspamd
 
@@ -30,6 +39,18 @@ Migration
   Column should exist  rspamd  Attachments.Digest
   Column should exist  rspamd  Symbols.Scores
   Schema version should be  2
+
+
+Retention
+  Upload new schema    ${TESTDIR}/data/schema_2/schema.sql
+  Insert data  rspamd  ${TESTDIR}/data/schema_2/data.rspamd.sql
+
+  Assert rows count  rspamd  56
+  Prepare rspamd
+
+  Sleep  2  #TODO: replace this check with waiting until migration finishes
+
+  Assert rows count  rspamd  30
 
 
 *** Keywords ***

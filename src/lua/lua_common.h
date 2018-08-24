@@ -381,12 +381,10 @@ void *rspamd_lua_check_udata_maybe (lua_State *L, gint pos, const gchar *classna
 
 /**
  * Call finishing script with the specified task
- * @param L
  * @param sc
  * @param task
  */
-void lua_call_finish_script (lua_State *L, struct
-		rspamd_config_post_load_script *sc,
+void lua_call_finish_script (struct rspamd_config_post_load_script *sc,
 		struct rspamd_task *task);
 
 /**
@@ -395,7 +393,7 @@ void lua_call_finish_script (lua_State *L, struct
  * @param cfg
  * @param ev_base
  */
-gboolean rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
+void rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 		struct event_base *ev_base, struct rspamd_worker *w);
 
 /**
@@ -416,25 +414,6 @@ void rspamd_lua_add_ref_dtor (lua_State *L, rspamd_mempool_t *pool,
  */
 gboolean rspamd_lua_require_function (lua_State *L, const gchar *modname,
 		const gchar *funcname);
-
-struct thread_entry;
-/**
- * Yields thread. should be only called in return statement
- * @param thread_entry
- * @param nresults
- * @return
- */
-gint
-lua_yield_thread (struct thread_entry *thread_entry, gint nresults);
-
-/**
- * Resumes suspended by lua_yield_thread () thread
- * @param task
- * @param thread_entry
- * @param narg
- */
-void
-lua_resume_thread (struct thread_entry *thread_entry, gint narg);
 
 /* Paths defs */
 #define RSPAMD_CONFDIR_INDEX "CONFDIR"

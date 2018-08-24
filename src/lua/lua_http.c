@@ -274,7 +274,6 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 	gsize body_len;
 	struct rspamd_http_header *h, *htmp;
 
-	msg_info ("T=%p, L=%p, status=%d, err=%s", cbd->thread, cbd->thread->lua_state, lua_status (cbd->thread->lua_state), err);
 	if (err) {
 		lua_pushstring (L, err);
 		lua_pushnil (L);
@@ -336,7 +335,7 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 		lua_settable (L, -3);
 	}
 
-	lua_resume_thread (cbd->thread, 2);
+	lua_thread_resume (cbd->thread, 2);
 }
 
 static gboolean
@@ -899,7 +898,7 @@ lua_http_request (lua_State *L)
 
 	if (cbd->cbref == -1) {
 		cbd->thread = lua_thread_pool_get_running_entry (cfg->lua_thread_pool);
-		return lua_yield_thread (cbd->thread, 0);
+		return lua_thread_yield (cbd->thread, 0);
 	} else {
 		lua_pushboolean (L, TRUE);
 		return 1;

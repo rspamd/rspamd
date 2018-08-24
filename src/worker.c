@@ -108,7 +108,7 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 				task);
 
 		DL_FOREACH (cfg->finish_callbacks, sc) {
-			lua_call_finish_script (cfg->lua_state, sc, task);
+			lua_call_finish_script (sc, task);
 		}
 
 		task->flags &= ~RSPAMD_TASK_FLAG_PROCESSING;
