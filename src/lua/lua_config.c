@@ -2874,7 +2874,7 @@ lua_periodic_callback_finish (struct thread_entry *thread, int ret)
 			plan_more = timeout > 0 ? TRUE : FALSE;
 		}
 
-		lua_pop (L, 1); /* Return value + error function */
+		lua_pop (L, 1); /* Return value */
 	}
 	if (plan_more) {
 		if (periodic->need_jitter) {
