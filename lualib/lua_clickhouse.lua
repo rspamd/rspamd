@@ -229,6 +229,65 @@ exports.select = function (upstream, settings, params, query, ok_cb, fail_cb)
 end
 
 --[[[
+-- @function lua_clickhouse.select_sync(upstream, settings, params, query,
+      ok_cb, fail_cb)
+-- Make select request to clickhouse
+-- @param {upstream} upstream clickhouse server upstream
+-- @param {table} settings global settings table:
+--   * use_gsip: use gzip compression
+--   * timeout: request timeout
+--   * no_ssl_verify: skip SSL verification
+--   * user: HTTP user
+--   * password: HTTP password
+-- @param {params} HTTP request params
+-- @param {string} query select query (passed in HTTP body)
+-- @param {function} ok_cb callback to be called in case of success
+-- @param {function} fail_cb callback to be called in case of some error
+-- @return
+--          {string} error message if exists
+--          nil | {rows} | {http_response}
+-- @example
+--
+--]]
+exports.select_sync = function (upstream, settings, params, query, ok_cb, fail_cb)
+  local http_params = {}
+
+  for k,v in pairs(params) do http_params[k] = v end
+
+  http_params.gzip = settings.use_gzip
+  http_params.mime_type = 'text/plain'
+  http_params.timeout = settings.timeout or default_timeout
+  http_params.no_ssl_verify = settings.no_ssl_verify
+  http_params.user = settings.user
+  http_params.password = settings.password
+  http_params.body = query
+  http_params.log_obj = params.task or params.config
+
+  lua_util.debugm(N, http_params.log_obj, "clickhouse select request: %s", http_params.body)
+
+  if not http_params.url then
+    local connect_prefix = "http://"
+    if settings.use_https then
+      connect_prefix = 'https://'
+    end
+    local ip_addr = upstream:get_addr():to_string(true)
+    http_params.url = connect_prefix .. ip_addr .. '/?default_format=JSONEachRow'
+  end
+
+  local err, response = rspamd_http.request(http_params)
+
+  if err then
+    return err, nil
+  elseif response.code ~= 200 then
+    return response.content, response
+  else
+    lua_util.debugm(N, http_params.log_obj, "clickhouse select response: %1", response)
+    local rows = parse_clickhouse_response(params, response.content)
+    return nil, rows
+  end
+end
+
+--[[[
 -- @function lua_clickhouse.insert(upstream, settings, params, query, rows,
       ok_cb, fail_cb)
 -- Insert data rows to clickhouse
@@ -330,5 +389,47 @@ exports.generic = function (upstream, settings, params, query,
   return rspamd_http.request(http_params)
 end
 
+--[[[
+-- @function lua_clickhouse.generic_sync(upstream, settings, params, query,
+      ok_cb, fail_cb)
+-- Make a generic request to Clickhouse (e.g. alter)
+-- @param {upstream} upstream clickhouse server upstream
+-- @param {table} settings global settings table:
+--   * use_gsip: use gzip compression
+--   * timeout: request timeout
+--   * no_ssl_verify: skip SSL verification
+--   * user: HTTP user
+--   * password: HTTP password
+-- @param {params} HTTP request params
+-- @param {string} query Clickhouse query (passed in `query` request element with spaces escaped)
+-- @return {boolean} whether a connection was successful
+-- @example
+--
+--]]
+exports.generic_sync = function (upstream, settings, params, query)
+  local http_params = {}
+
+  for k,v in pairs(params) do http_params[k] = v end
+
+  http_params.gzip = settings.use_gzip
+  http_params.mime_type = 'text/plain'
+  http_params.timeout = settings.timeout or default_timeout
+  http_params.no_ssl_verify = settings.no_ssl_verify
+  http_params.user = settings.user
+  http_params.password = settings.password
+  http_params.log_obj = params.task or params.config
+  http_params.body = query
+
+  if not http_params.url then
+    local connect_prefix = "http://"
+    if settings.use_https then
+      connect_prefix = 'https://'
+    end
+    local ip_addr = upstream:get_addr():to_string(true)
+    http_params.url = connect_prefix .. ip_addr .. '/?default_format=JSONEachRow'
+  end
+
+  return rspamd_http.request(http_params)
+end
 
 return exports
