@@ -117,7 +117,7 @@ lua_dns_request (lua_State *L)
 		cbdata->s = session;
 		cbdata->w = rspamd_session_get_watcher (session);
 		rspamd_session_watcher_push (session);
-		return lua_yield_thread (cbdata->thread, 0);
+		return lua_thread_yield (cbdata->thread, 0);
 	}
 	else {
 		lua_pushnil (L);
@@ -147,7 +147,7 @@ lua_dns_callback (struct rdns_reply *reply, void *arg)
 		lua_pushvalue (L, -3);
 	}
 
-	lua_resume_thread (cbdata->thread, 2);
+	lua_thread_resume (cbdata->thread, 2);
 
 	if (cbdata->s) {
 		rspamd_session_watcher_pop (cbdata->s, cbdata->w);

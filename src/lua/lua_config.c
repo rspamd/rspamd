@@ -1203,7 +1203,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 	struct rspamd_task **ptask;
 	struct thread_entry *thread_entry;
 
-	thread_entry = lua_thread_pool_get (task->cfg->lua_thread_pool);
+	thread_entry = lua_thread_pool_get_for_task (task);
 
 	g_assert(thread_entry->cd == NULL);
 	thread_entry->cd = cd;
@@ -1224,17 +1224,8 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 
 	thread_entry->finish_callback = lua_metric_symbol_callback_return;
 	thread_entry->error_callback = lua_metric_symbol_callback_error;
-	thread_entry->task = task;
 
 	lua_thread_call (thread_entry, 1);
-}
-
-gint
-lua_yield_thread (struct thread_entry *thread_entry, gint nresults)
-{
-    g_assert (thread_entry->cd != NULL);
-
-	return lua_yield (thread_entry->lua_state, nresults);
 }
 
 static void

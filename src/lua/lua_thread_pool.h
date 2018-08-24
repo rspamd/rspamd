@@ -55,11 +55,20 @@ lua_thread_pool_free (struct lua_thread_pool *pool);
  *
  * If the code performed YIELD, the thread is still running and it's live should be controlled by the callee
  *
- * @param pool
+ * @param task
  * @return
  */
 struct thread_entry *
-lua_thread_pool_get(struct lua_thread_pool *pool);
+lua_thread_pool_get_for_task (struct rspamd_task *task);
+
+/**
+ * The same, but used when task is not available
+ *
+ * @param cfg
+ * @return
+ */
+struct thread_entry *
+lua_thread_pool_get_for_config (struct rspamd_config *cfg);
 
 /**
  * Return thread into the list of available ones. It can't be done with yielded or dead threads.
@@ -115,6 +124,24 @@ lua_thread_pool_restore_callback (struct lua_callback_state *cbs);
  */
 void
 lua_thread_call (struct thread_entry *thread_entry, int narg);
+
+/**
+ * Yields thread. should be only called in return statement
+ * @param thread_entry
+ * @param nresults
+ * @return
+ */
+int
+lua_thread_yield (struct thread_entry *thread_entry, int nresults);
+
+/**
+ * Resumes suspended by lua_yield_thread () thread
+ * @param task
+ * @param thread_entry
+ * @param narg
+ */
+void
+lua_thread_resume (struct thread_entry *thread_entry, int narg);
 
 #endif /* LUA_THREAD_POOL_H_ */
 
