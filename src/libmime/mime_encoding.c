@@ -690,6 +690,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		}
 		else {
 			SET_PART_UTF (text_part);
+			text_part->utf_raw_content = part_content;
 			rspamd_mime_text_part_ucs_from_utf (task, text_part);
 			rspamd_mime_text_part_normalise (task, text_part);
 			rspamd_mime_text_part_maybe_renormalise (task, text_part);
@@ -721,6 +722,8 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 
 	if (rspamd_mime_charset_utf_check (&charset_tok, part_content->data,
 			part_content->len, !checked)) {
+		SET_PART_UTF (text_part);
+		text_part->utf_raw_content = part_content;
 		rspamd_mime_text_part_ucs_from_utf (task, text_part);
 		rspamd_mime_text_part_normalise (task, text_part);
 		rspamd_mime_text_part_maybe_renormalise (task, text_part);
