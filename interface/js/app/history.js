@@ -705,13 +705,22 @@ define(["jquery", "footable", "humanize"],
             });
         };
 
-        function drawErrorsTable(tables, data) {
-            var items = [];
-            $.each(data, function (i, item) {
-                items.push(
-                    item.ts = unix_time_format(item.ts)
-                );
+        function updateErrorsTable(tables, data) {
+            var neighbours_data = data
+                .filter(function (d) {
+                    return d.status;
+                }) // filter out unavailable neighbours
+                .map(function (d) {
+                    return d.data;
+                });
+            var flattened_data = [].concat.apply([], neighbours_data);
+            $.each(flattened_data, function (i, item) {
+                item.ts = unix_time_format(item.ts);
             });
+            tables.errors.rows.load(flattened_data);
+        }
+
+        function initErrorsTable(tables, data) {
             tables.errors = FooTable.init("#errorsLog", {
                 columns: [
                     {sorted: true, direction: "DESC", name:"ts", title:"Time", style:{"font-size":"11px", "width":300, "maxWidth":300}},
@@ -721,7 +730,6 @@ define(["jquery", "footable", "humanize"],
                     {name:"id", title:"Internal ID", style:{"font-size":"11px"}},
                     {name:"message", title:"Message", breakpoints:"xs sm", style:{"font-size":"11px"}},
                 ],
-                rows: data,
                 paging: {
                     enabled: true,
                     limit: 5,
@@ -734,6 +742,11 @@ define(["jquery", "footable", "humanize"],
                 },
                 sorting: {
                     enabled: true
+                },
+                on: {
+                    "ready.ft.table": function () {
+                        updateErrorsTable(tables, data);
+                    }
                 }
             });
         }
@@ -742,15 +755,12 @@ define(["jquery", "footable", "humanize"],
             if (rspamd.read_only) return;
 
             rspamd.query("errors", {
-                success: function (req_data) {
-                    var neighbours_data = req_data
-                        .filter(function (d) {
-                            return d.status;
-                        }) // filter out unavailable neighbours
-                        .map(function (d) {
-                            return d.data;
-                        });
-                    drawErrorsTable(tables, [].concat.apply([], neighbours_data));
+                success: function (data) {
+                    if (Object.prototype.hasOwnProperty.call(tables, "errors")) {
+                        updateErrorsTable(tables, data);
+                    } else {
+                        initErrorsTable(tables, data);
+                    }
                 }
             });
 
