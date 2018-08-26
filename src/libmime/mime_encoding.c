@@ -651,7 +651,9 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	GByteArray *part_content;
 	rspamd_ftok_t charset_tok;
 	struct rspamd_mime_part *part = text_part->mime_part;
+	gdouble t1, t2;
 
+	t1 = rspamd_get_ticks (TRUE);
 	if (rspamd_str_has_8bit (text_part->raw.begin, text_part->raw.len)) {
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_8BIT;
 	}
@@ -727,6 +729,8 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		rspamd_mime_text_part_ucs_from_utf (task, text_part);
 		rspamd_mime_text_part_normalise (task, text_part);
 		rspamd_mime_text_part_maybe_renormalise (task, text_part);
+		t2 = rspamd_get_ticks (TRUE);
+		msg_err_task ("conversion time: %.0f ticks", t2 - t1);
 
 		return;
 	}
@@ -748,4 +752,6 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	}
 
 	SET_PART_UTF (text_part);
+	t2 = rspamd_get_ticks (TRUE);
+	msg_err_task ("conversion time: %.0f ticks", t2 - t1);
 }
