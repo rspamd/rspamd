@@ -990,10 +990,10 @@ lua_tcp_request (lua_State *L)
 	gsize plen = 0;
 	struct event_base *ev_base;
 	struct lua_tcp_cbdata *cbd;
-	struct rspamd_dns_resolver *resolver;
+	struct rspamd_dns_resolver *resolver = NULL;
 	struct rspamd_async_session *session = NULL;
 	struct rspamd_task *task = NULL;
-	struct rspamd_config *cfg;
+	struct rspamd_config *cfg = NULL;
 	struct iovec *iov = NULL;
 	guint niov = 0, total_out;
 	guint64 h;
@@ -1189,6 +1189,13 @@ lua_tcp_request (lua_State *L)
 	}
 	else {
 		msg_err ("tcp request has bad params");
+		lua_pushboolean (L, FALSE);
+
+		return 1;
+	}
+
+	if (resolver == NULL && cfg == NULL && task == NULL) {
+		msg_err ("tcp request has bad params: one of {resolver,task,config} should be set");
 		lua_pushboolean (L, FALSE);
 
 		return 1;
