@@ -52,6 +52,8 @@
 
 #ifdef HAVE_UCONTEXT_H
 #include <ucontext.h>
+#elif defined(HAVE_SYS_UCONTEXT_H)
+#include <sys/ucontext.h>
 #endif
 
 static void rspamd_worker_ignore_signal (int signo);
