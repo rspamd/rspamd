@@ -44,9 +44,6 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         $("#statWidgets").empty();
         $("#listMaps").empty();
         $("#modalBody").empty();
-        $("#historyLog tbody").remove();
-        $("#errorsLog tbody").remove();
-        $("#symbolsTable tbody").remove();
     }
 
     function stopTimers() {
@@ -120,7 +117,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             tab_config.getMaps(ui, checked_server);
             break;
         case "#symbols_nav":
-            tab_symbols.getSymbols(ui, checked_server);
+            tab_symbols.getSymbols(ui, tables, checked_server);
             break;
         case "#history_nav":
             tab_history.getHistory(ui, tables);
@@ -290,7 +287,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         });
         tab_config.setup(ui);
         tab_history.setup(ui, tables);
-        tab_symbols.setup(ui);
+        tab_symbols.setup(ui, tables);
         tab_upload.setup(ui);
         selData = tab_graph.setup();
     };

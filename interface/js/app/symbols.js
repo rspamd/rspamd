@@ -27,7 +27,6 @@
 define(["jquery", "footable"],
     function ($) {
         "use strict";
-        var ft = {};
         var ui = {};
 
         function getSelector(id) {
@@ -144,7 +143,7 @@ define(["jquery", "footable"],
             return [items, distinct_groups];
         }
         // @get symbols into modal form
-        ui.getSymbols = function (rspamd, checked_server) {
+        ui.getSymbols = function (rspamd, tables, checked_server) {
             rspamd.query("symbols", {
                 success: function (json) {
                     var data = json[0].data;
@@ -197,7 +196,7 @@ define(["jquery", "footable"],
                             }
                         }
                     });
-                    ft.symbols = FooTable.init("#symbolsTable", {
+                    tables.symbols = FooTable.init("#symbolsTable", {
                         columns: [
                             {sorted: true, direction: "ASC", name:"group", title:"Group", style:{"font-size":"11px"}},
                             {name:"symbol", title:"Symbol", style:{"font-size":"11px"}},
@@ -244,14 +243,14 @@ define(["jquery", "footable"],
                 });
         };
 
-        ui.setup = function (rspamd) {
+        ui.setup = function (rspamd, tables) {
             $("#updateSymbols").on("click", function (e) {
                 e.preventDefault();
                 var checked_server = getSelector("selSrv");
                 rspamd.query("symbols", {
                     success: function (data) {
                         var items = process_symbols_data(data[0].data)[0];
-                        ft.symbols.rows.load(items);
+                        tables.symbols.rows.load(items);
                     },
                     server: (checked_server === "All SERVERS") ? "local" : checked_server
                 });
