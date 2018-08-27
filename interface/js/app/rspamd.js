@@ -53,30 +53,12 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     }
 
     function disconnect() {
-        if (graphs.chart) {
-            graphs.chart.destroy();
-            delete graphs.chart;
-        }
-        if (graphs.rrd_pie) {
-            graphs.rrd_pie.destroy();
-            delete graphs.rrd_pie;
-        }
-        if (graphs.graph) {
-            graphs.graph.destroy();
-            delete graphs.graph;
-        }
-        if (tables.history) {
-            tables.history.destroy();
-            delete tables.history;
-        }
-        if (tables.errors) {
-            tables.errors.destroy();
-            delete tables.errors;
-        }
-        if (tables.symbols) {
-            tables.symbols.destroy();
-            delete tables.symbols;
-        }
+        [graphs, tables].forEach(function (o) {
+            Object.keys(o).forEach(function (key) {
+                o[key].destroy();
+                delete o[key];
+            });
+        });
 
         stopTimers();
         cleanCredentials();
