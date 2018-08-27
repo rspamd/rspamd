@@ -27,8 +27,10 @@
 define(["jquery", "footable", "humanize"],
     function ($, _, Humanize) {
         "use strict";
+        var rows_per_page = 25;
+
         var ui = {};
-        var ft = {};
+        var prevVersion;
         var htmlEscapes = {
             "&": "&amp;",
             "<": "&lt;",
@@ -499,7 +501,18 @@ define(["jquery", "footable", "humanize"],
             return func();
         }
 
-        ui.getHistory = function (rspamd, tables, neighbours, checked_server) {
+        function drawTooltips() {
+            // Update symbol description tooltips
+            $.each(symbolDescriptions, function (key, description) {
+                $("abbr[data-sym-key=" + key + "]").tooltip({
+                    placement: "bottom",
+                    html: true,
+                    title: description
+                });
+            });
+        }
+
+        function initHistoryTable(rspamd, tables, data, items) {
             FooTable.actionFilter = FooTable.Filtering.extend({
                 construct : function (instance) {
                     this._super(instance);
@@ -558,16 +571,53 @@ define(["jquery", "footable", "humanize"],
                 }
             });
 
-            var drawTooltips = function () {
-            // Update symbol description tooltips
-                $.each(symbolDescriptions, function (key, description) {
-                    $("abbr[data-sym-key=" + key + "]").tooltip({
-                        placement: "bottom",
-                        html: true,
-                        title: description
-                    });
-                });
-            };
+            tables.history = FooTable.init("#historyTable", {
+                columns: get_history_columns(data),
+                rows: items,
+                paging: {
+                    enabled: true,
+                    limit: 5,
+                    size: rows_per_page
+                },
+                filtering: {
+                    enabled: true,
+                    position: "left",
+                    connectors: false
+                },
+                sorting: {
+                    enabled: true
+                },
+                components: {
+                    filtering: FooTable.actionFilter
+                },
+                on: {
+                    "ready.ft.table": drawTooltips,
+                    "after.ft.sorting": drawTooltips,
+                    "after.ft.paging": drawTooltips,
+                    "after.ft.filtering": drawTooltips
+                }
+            });
+        }
+
+        function destroyTable(tables, table) {
+            if (tables[table]) {
+                tables[table].destroy();
+                delete tables[table];
+            }
+        }
+
+        ui.getHistory = function (rspamd, tables) {
+            function waitForRowsDisplayed(callback, iteration) {
+                var i = (typeof iteration === "undefined") ? 10 : iteration;
+                var num_rows = $("#historyTable > tbody > tr").length;
+                if (num_rows === rows_per_page) {
+                    callback();
+                } else if (--i) {
+                    setTimeout(function () {
+                        waitForRowsDisplayed(callback, i);
+                    }, 500);
+                }
+            }
 
             rspamd.query("history", {
                 success: function (req_data) {
@@ -587,58 +637,52 @@ define(["jquery", "footable", "humanize"],
                         .map(function (d) { return d.data; });
                     if (neighbours_data.length && !differentVersions(neighbours_data)) {
                         var data = {};
-                        if (neighbours_data[0].version) {
+                        var version = neighbours_data[0].version;
+                        if (version) {
                             data.rows = [].concat.apply([], neighbours_data
                                 .map(function (e) {
                                     return e.rows;
                                 }));
-                            data.version = neighbours_data[0].version;
+                            data.version = version;
                         } else {
-                        // Legacy version
+                            // Legacy version
                             data = [].concat.apply([], neighbours_data);
                         }
                         var items = process_history_data(data);
-                        ft.history = FooTable.init("#historyTable", {
-                            columns: get_history_columns(data),
-                            rows: items,
-                            paging: {
-                                enabled: true,
-                                limit: 5,
-                                size: 25
-                            },
-                            filtering: {
-                                enabled: true,
-                                position: "left",
-                                connectors: false
-                            },
-                            sorting: {
-                                enabled: true
-                            },
-                            components: {
-                                filtering: FooTable.actionFilter
-                            },
-                            on: {
-                                "ready.ft.table": drawTooltips,
-                                "after.ft.sorting": drawTooltips,
-                                "after.ft.paging": drawTooltips,
-                                "after.ft.filtering": drawTooltips
+
+                        if (Object.prototype.hasOwnProperty.call(tables, "history") &&
+                            version === prevVersion) {
+                            tables.history.rows.load(items);
+                            if (version) { // Non-legacy
+                                // Is there a way to get an event when all rows are loaded?
+                                waitForRowsDisplayed(function () {
+                                    drawTooltips();
+                                });
                             }
-                        });
-                    } else if (ft.history) {
-                        ft.history.destroy();
-                        delete ft.history;
+                        } else {
+                            destroyTable(tables, "history");
+                            // Is there a way to get an event when the table is destroyed?
+                            setTimeout(function () {
+                                initHistoryTable(rspamd, tables, data, items);
+                            }, 200);
+                        }
+                        prevVersion = version;
+                    } else {
+                        destroyTable(tables, "history");
                     }
                 },
                 errorMessage: "Cannot receive history",
             });
+        };
 
+        ui.setup = function (rspamd, tables) {
             $("#updateHistory").off("click");
             $("#updateHistory").on("click", function (e) {
                 e.preventDefault();
-                ui.getHistory(rspamd, tables, neighbours, checked_server);
+                ui.getHistory(rspamd, tables);
             });
             $("#selSymOrder").unbind().change(function () {
-                ui.getHistory(rspamd, tables, neighbours, checked_server);
+                ui.getHistory(rspamd, tables);
             });
 
             // @reset history log
@@ -648,33 +692,36 @@ define(["jquery", "footable", "humanize"],
                 if (!confirm("Are you sure you want to reset history log?")) { // eslint-disable-line no-alert
                     return;
                 }
-                if (ft.history) {
-                    ft.history.destroy();
-                    delete ft.history;
-                }
-                if (ft.errors) {
-                    ft.errors.destroy();
-                    delete ft.errors;
-                }
+                destroyTable(tables, "history");
+                destroyTable(tables, "errors");
 
                 rspamd.query("historyreset", {
                     success: function () {
-                        ui.getHistory(rspamd, tables, neighbours, checked_server);
-                        ui.getErrors(rspamd, tables, neighbours, checked_server);
+                        ui.getHistory(rspamd, tables);
+                        ui.getErrors(rspamd, tables);
                     },
                     errorMessage: "Cannot reset history log"
                 });
             });
         };
 
-        function drawErrorsTable(data) {
-            var items = [];
-            $.each(data, function (i, item) {
-                items.push(
-                    item.ts = unix_time_format(item.ts)
-                );
+        function updateErrorsTable(tables, data) {
+            var neighbours_data = data
+                .filter(function (d) {
+                    return d.status;
+                }) // filter out unavailable neighbours
+                .map(function (d) {
+                    return d.data;
+                });
+            var flattened_data = [].concat.apply([], neighbours_data);
+            $.each(flattened_data, function (i, item) {
+                item.ts = unix_time_format(item.ts);
             });
-            ft.errors = FooTable.init("#errorsLog", {
+            tables.errors.rows.load(flattened_data);
+        }
+
+        function initErrorsTable(tables, data) {
+            tables.errors = FooTable.init("#errorsLog", {
                 columns: [
                     {sorted: true, direction: "DESC", name:"ts", title:"Time", style:{"font-size":"11px", "width":300, "maxWidth":300}},
                     {name:"type", title:"Worker type", breakpoints:"xs sm", style:{"font-size":"11px", "width":150, "maxWidth":150}},
@@ -683,11 +730,10 @@ define(["jquery", "footable", "humanize"],
                     {name:"id", title:"Internal ID", style:{"font-size":"11px"}},
                     {name:"message", title:"Message", breakpoints:"xs sm", style:{"font-size":"11px"}},
                 ],
-                rows: data,
                 paging: {
                     enabled: true,
                     limit: 5,
-                    size: 25
+                    size: rows_per_page
                 },
                 filtering: {
                     enabled: true,
@@ -696,30 +742,32 @@ define(["jquery", "footable", "humanize"],
                 },
                 sorting: {
                     enabled: true
+                },
+                on: {
+                    "ready.ft.table": function () {
+                        updateErrorsTable(tables, data);
+                    }
                 }
             });
         }
 
-        ui.getErrors = function (rspamd, tables, neighbours, checked_server) {
+        ui.getErrors = function (rspamd, tables) {
             if (rspamd.read_only) return;
 
             rspamd.query("errors", {
-                success: function (req_data) {
-                    var neighbours_data = req_data
-                        .filter(function (d) {
-                            return d.status;
-                        }) // filter out unavailable neighbours
-                        .map(function (d) {
-                            return d.data;
-                        });
-                    drawErrorsTable([].concat.apply([], neighbours_data));
+                success: function (data) {
+                    if (Object.prototype.hasOwnProperty.call(tables, "errors")) {
+                        updateErrorsTable(tables, data);
+                    } else {
+                        initErrorsTable(tables, data);
+                    }
                 }
             });
 
             $("#updateErrors").off("click");
             $("#updateErrors").on("click", function (e) {
                 e.preventDefault();
-                ui.getErrors(rspamd, tables, neighbours, checked_server);
+                ui.getErrors(rspamd, tables);
             });
         };
 

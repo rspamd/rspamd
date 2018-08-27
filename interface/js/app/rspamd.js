@@ -44,9 +44,6 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         $("#statWidgets").empty();
         $("#listMaps").empty();
         $("#modalBody").empty();
-        $("#historyLog tbody").remove();
-        $("#errorsLog tbody").remove();
-        $("#symbolsTable tbody").remove();
     }
 
     function stopTimers() {
@@ -56,30 +53,12 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     }
 
     function disconnect() {
-        if (graphs.chart) {
-            graphs.chart.destroy();
-            delete graphs.chart;
-        }
-        if (graphs.rrd_pie) {
-            graphs.rrd_pie.destroy();
-            delete graphs.rrd_pie;
-        }
-        if (graphs.graph) {
-            graphs.graph.destroy();
-            delete graphs.graph;
-        }
-        if (tables.history) {
-            tables.history.destroy();
-            delete tables.history;
-        }
-        if (tables.errors) {
-            tables.errors.destroy();
-            delete tables.errors;
-        }
-        if (tables.symbols) {
-            tables.symbols.destroy();
-            delete tables.symbols;
-        }
+        [graphs, tables].forEach(function (o) {
+            Object.keys(o).forEach(function (key) {
+                o[key].destroy();
+                delete o[key];
+            });
+        });
 
         stopTimers();
         cleanCredentials();
@@ -120,11 +99,11 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             tab_config.getMaps(ui, checked_server);
             break;
         case "#symbols_nav":
-            tab_symbols.getSymbols(ui, checked_server);
+            tab_symbols.getSymbols(ui, tables, checked_server);
             break;
         case "#history_nav":
-            tab_history.getHistory(ui, tables, neighbours, checked_server);
-            tab_history.getErrors(ui, tables, neighbours, checked_server);
+            tab_history.getHistory(ui, tables);
+            tab_history.getErrors(ui, tables);
             break;
         case "#disconnect":
             disconnect();
@@ -165,6 +144,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         } else {
             $("#learning_nav").show();
             $("#resetHistory").removeAttr("disabled", true);
+            $("#errors-history").show();
         }
 
         var buttons = $("#navBar .pull-right");
@@ -288,7 +268,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             }
         });
         tab_config.setup(ui);
-        tab_symbols.setup(ui);
+        tab_history.setup(ui, tables);
+        tab_symbols.setup(ui, tables);
         tab_upload.setup(ui);
         selData = tab_graph.setup();
     };
