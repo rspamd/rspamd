@@ -5,7 +5,6 @@ local function http_symbol(task)
 
   local url = tostring(task:get_request_header('url'))
   local method = tostring(task:get_request_header('method'))
-
   task:insert_result('method_' .. method, 1.0)
 
   local function http_callback(err, code, body)
