@@ -294,6 +294,7 @@ reread_config (struct rspamd_main *rspamd_main)
 				TRUE)) {
 		rspamd_main->cfg = old_cfg;
 		rspamd_log_close_priv (rspamd_main->logger,
+					FALSE,
 					rspamd_main->workers_uid,
 					rspamd_main->workers_gid);
 		rspamd_set_logger (rspamd_main->cfg, g_quark_try_string ("main"),
@@ -972,6 +973,7 @@ rspamd_hup_handler (gint signo, short what, gpointer arg)
 			" is restarting");
 	g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
 	rspamd_log_close_priv (rspamd_main->logger,
+				FALSE,
 				rspamd_main->workers_uid,
 				rspamd_main->workers_gid);
 	reread_config (rspamd_main);
@@ -1288,8 +1290,8 @@ main (gint argc, gchar **argv, gchar **env)
 		exit (EXIT_SUCCESS);
 	}
 
-	rspamd_log_close_priv (rspamd_main->logger, rspamd_main->workers_uid,
-			rspamd_main->workers_gid);
+	rspamd_log_close_priv (rspamd_main->logger, FALSE,
+			rspamd_main->workers_uid, rspamd_main->workers_gid);
 
 	if (config_test || dump_cache) {
 		if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, FALSE, 0,
@@ -1516,8 +1518,8 @@ main (gint argc, gchar **argv, gchar **env)
 
 	msg_info_main ("terminating...");
 
-	rspamd_log_close (rspamd_main->logger);
 	REF_RELEASE (rspamd_main->cfg);
+	rspamd_log_close (rspamd_main->logger, TRUE);
 	g_hash_table_unref (rspamd_main->spairs);
 	g_hash_table_unref (rspamd_main->workers);
 	rspamd_mempool_delete (rspamd_main->server_pool);

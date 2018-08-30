@@ -227,8 +227,8 @@ start_log_helper (struct rspamd_worker *worker)
 	close (ctx->pair[0]);
 	rspamd_worker_block_signals ();
 
-	rspamd_log_close (worker->srv->logger);
 	REF_RELEASE (ctx->cfg);
+	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);
 }

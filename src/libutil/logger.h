@@ -40,7 +40,7 @@ gint rspamd_log_open (rspamd_logger_t *logger);
 /**
  * Close log file or destroy other structures
  */
-void rspamd_log_close (rspamd_logger_t *logger);
+void rspamd_log_close (rspamd_logger_t *logger, gboolean termination);
 
 /**
  * Close and open log again
@@ -55,7 +55,7 @@ gint rspamd_log_open_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
 /**
  * Close log file or destroy other structures for privileged processes
  */
-void rspamd_log_close_priv (rspamd_logger_t *logger, uid_t uid, gid_t gid);
+void rspamd_log_close_priv (rspamd_logger_t *logger, gboolean termination, uid_t uid, gid_t gid);
 
 /**
  * Close and open log again for privileged processes
