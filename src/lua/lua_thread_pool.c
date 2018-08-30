@@ -158,6 +158,20 @@ lua_thread_pool_set_running_entry (struct lua_thread_pool *pool, struct thread_e
 	pool->running_entry = thread_entry;
 }
 
+static void
+lua_thread_pool_set_running_entry_for_thread (struct thread_entry *thread_entry)
+{
+	struct lua_thread_pool *pool;
+
+	if (thread_entry->task) {
+		pool = thread_entry->task->cfg->lua_thread_pool;
+	}
+	else {
+		pool = thread_entry->cfg->lua_thread_pool;
+	}
+
+	lua_thread_pool_set_running_entry (pool, thread_entry);
+}
 
 void
 lua_thread_pool_prepare_callback (struct lua_thread_pool *pool, struct lua_callback_state *cbs)
@@ -205,6 +219,8 @@ lua_thread_resume (struct thread_entry *thread_entry, gint narg)
 	 * to start the thread from, which is happening in lua_thread_call(), not in this function.
 	 */
 	g_assert (lua_status (thread_entry->lua_state) == LUA_YIELD);
+
+	lua_thread_pool_set_running_entry_for_thread(thread_entry);
 
 	lua_resume_thread_internal (thread_entry, narg);
 }
@@ -263,5 +279,7 @@ lua_resume_thread_internal (struct thread_entry *thread_entry, gint narg)
 gint
 lua_thread_yield (struct thread_entry *thread_entry, gint nresults)
 {
+	g_assert (lua_status (thread_entry->lua_state) == 0);
+
 	return lua_yield (thread_entry->lua_state, nresults);
 }
