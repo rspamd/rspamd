@@ -11,8 +11,7 @@ Variables       ${TESTDIR}/lib/vars.py
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 ${CONFIG}       ${TESTDIR}/configs/lua_test.conf
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
-${REDIS_SCOPE}  Suite
-${RSPAMD_SCOPE}  Suite
+${RSPAMD_SCOPE}  Test
 
 *** Test Cases ***
 Simple HTTP request
