@@ -2211,14 +2211,13 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
 
-	rspamd_log_close (worker->srv->logger);
-
 	if (ctx->has_self_scan) {
 		rspamd_stat_close ();
 	}
 
 	rspamd_keypair_cache_destroy (ctx->keys_cache);
 	REF_RELEASE (ctx->cfg);
+	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);
 }

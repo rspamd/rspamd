@@ -3855,7 +3855,6 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	rspamd_stat_close ();
 	rspamd_http_router_free (ctx->http);
-	rspamd_log_close (worker->srv->logger);
 
 	if (ctx->cached_password.len > 0) {
 		m = (gpointer)ctx->cached_password.begin;
@@ -3870,6 +3869,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	g_hash_table_unref (ctx->plugins);
 	g_hash_table_unref (ctx->custom_commands);
 	REF_RELEASE (ctx->cfg);
+	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);
 }

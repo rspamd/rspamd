@@ -412,8 +412,9 @@ start_lua_worker (struct rspamd_worker *worker)
 		luaL_unref (L, LUA_REGISTRYINDEX, ctx->cbref_fin);
 	}
 
-	rspamd_log_close (worker->srv->logger);
 	REF_RELEASE (ctx->cfg);
+	rspamd_log_close (worker->srv->logger, TRUE);
+
 	exit (EXIT_SUCCESS);
 }
 
