@@ -28,7 +28,6 @@
 define(["jquery", "d3evolution", "footable"],
     function ($, D3Evolution) {
         "use strict";
-        var ft;
 
         var rrd_pie_config = {
             header: {},
@@ -139,7 +138,7 @@ define(["jquery", "d3evolution", "footable"],
             }, []);
         }
 
-        function updateSummaryTable(data) {
+        function updateSummaryTable(tables, data) {
             var total_messages = 0;
             var rows = data.map(function (curr, i) {
                 total_messages += curr.value;
@@ -155,11 +154,11 @@ define(["jquery", "d3evolution", "footable"],
 
             document.getElementById("rrd-total-value").innerHTML = total_messages;
 
-            ft.rows.load(rows);
+            tables.rrd_summary.rows.load(rows);
         }
 
-        function initSummaryTable(data, unit) {
-            return FooTable.init("#rrd-table", {
+        function initSummaryTable(tables, data, unit) {
+            tables.rrd_summary = FooTable.init("#rrd-table", {
                 sorting: {
                     enabled: true
                 },
@@ -173,24 +172,24 @@ define(["jquery", "d3evolution", "footable"],
                 ],
                 on: {
                     "ready.ft.table": function () {
-                        updateSummaryTable(data);
+                        updateSummaryTable(tables, data);
                     }
                 }
             });
         }
 
-        function drawRrdTable(data, unit) {
-            if (ft) {
-                updateSummaryTable(data);
+        function drawRrdTable(tables, data, unit) {
+            if (Object.prototype.hasOwnProperty.call(tables, "rrd_summary")) {
+                updateSummaryTable(tables, data);
             } else {
-                ft = initSummaryTable(data, unit);
+                initSummaryTable(tables, data, unit);
             }
         }
 
         var ui = {};
         var prevUnit = "msg/s";
 
-        ui.draw = function (rspamd, graphs, neighbours, checked_server, type) {
+        ui.draw = function (rspamd, graphs, tables, neighbours, checked_server, type) {
             function updateWidgets(data) {
                 var rrd_summary = [];
                 var unit = "msg/s";
@@ -224,7 +223,7 @@ define(["jquery", "d3evolution", "footable"],
                     $(".unit").text(unit);
                     prevUnit = unit;
                 }
-                drawRrdTable(rrd_summary, unit);
+                drawRrdTable(tables, rrd_summary, unit);
             }
 
             if (!graphs.graph) {
