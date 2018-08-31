@@ -1660,7 +1660,7 @@ lua_tcp_connect_sync (lua_State *L)
 
 	int arguments_validated = rspamd_lua_parse_table_arguments (L, 1, &err,
 			"task=U{task};session=U{session};resolver=U{resolver};ev_base=U{ev_base};"
-			"*host=S;*port=I;timeout=N;config=U{cfg}",
+			"*host=S;*port=I;timeout=N;config=U{config}",
 			&task, &session, &resolver, &ev_base,
 			&host, &port, &timeout, &cfg);
 
