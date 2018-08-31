@@ -54,25 +54,44 @@ local function http_simple_tcp_symbol(task)
   end
 
   local data
-  is_ok, data = connection:read_once();
+  local got_content = ''
+  repeat
+    is_ok, data = connection:read_once(); 
+    logger.errx(task, 'read_once: is_ok: %1, data: %2', is_ok, data)
+    if not is_ok then
+      task:insert_result('HTTP_SYNC_ERROR', 1.0, data)
+      return
+    else
+      got_content = got_content .. data
+    end
+    if got_content:find('hello') then
+      -- dummy_http.py responds with either hello world or hello post
+      break
+    end
+  until false
 
-  logger.errx(task, 'read_once: is_ok: %1, data: %2', is_ok, data)
-  if not is_ok then
-    task:insert_result('HTTP_SYNC_ERROR', 1.0, data)
-  else
-    task:insert_result('HTTP_SYNC_RESPONSE', 1.0, data)
-  end
+  task:insert_result('HTTP_SYNC_RESPONSE', 1.0, got_content)
 
   is_ok, err = connection:write("POST /request2 HTTP/1.1\r\n\r\n")
   logger.errx(task, 'write[2] %1, %2', is_ok, err)
 
-  is_ok, data = connection:read_once();
-  logger.errx(task, 'read_once[2]: is_ok %1, data: %2', is_ok, data)
-  if not is_ok then
-    task:insert_result('HTTP_SYNC_ERROR_2', 1.0, data)
-  else
-    task:insert_result('HTTP_SYNC_RESPONSE_2', 1.0, data)
-  end
+  got_content = ''
+  repeat
+    is_ok, data = connection:read_once();
+    logger.errx(task, 'read_once[2]: is_ok %1, data: %2', is_ok, data)
+    if not is_ok then
+      task:insert_result('HTTP_SYNC_ERROR_2', 1.0, data)
+      return
+    else
+      got_content = got_content .. data
+    end
+    if got_content:find('hello') then
+      -- dummy_http.py responds with either hello world or hello post
+      break
+    end
+  until false
+
+  task:insert_result('HTTP_SYNC_RESPONSE_2', 1.0, data)
 
   connection:close()
 end
