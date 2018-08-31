@@ -69,7 +69,14 @@ struct rspamd_logger_error_log {
  */
 struct rspamd_logger_s {
 	rspamd_log_func_t log_func;
-	struct rspamd_config *cfg;
+	enum rspamd_log_type log_type;
+	gint log_facility;
+	gint log_level;
+	gchar *log_file;
+	gboolean log_buffered;
+	gboolean log_silent_workers;
+	guint32 log_buf_size;
+
 	struct rspamd_logger_error_log *errlog;
 	struct rspamd_cryptobox_pubkey *pk;
 	struct rspamd_cryptobox_keypair *keypair;
@@ -249,7 +256,7 @@ gint
 rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 {
 	if (!rspamd_log->opened) {
-		switch (rspamd_log->cfg->log_type) {
+		switch (rspamd_log->log_type) {
 		case RSPAMD_LOG_CONSOLE:
 			/* Do nothing with console */
 			rspamd_log->fd = -1;
@@ -257,23 +264,23 @@ rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 		case RSPAMD_LOG_SYSLOG:
 #ifdef HAVE_SYSLOG_H
 			openlog ("rspamd", LOG_NDELAY | LOG_PID,
-					rspamd_log->cfg->log_facility);
+					rspamd_log->log_facility);
 #endif
 			break;
 		case RSPAMD_LOG_FILE:
-			rspamd_log->fd = open (rspamd_log->cfg->log_file,
+			rspamd_log->fd = open (rspamd_log->log_file,
 					O_CREAT | O_WRONLY | O_APPEND,
 					S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
 			if (rspamd_log->fd == -1) {
 				fprintf (stderr,
-						"open_log: cannot open desired log file: %s, %s",
-						rspamd_log->cfg->log_file, strerror (errno));
+						"open_log: cannot open desired log file: %s, %s my pid: %d",
+						rspamd_log->log_file, strerror (errno), getpid ());
 				return -1;
 			}
 			if (fchown (rspamd_log->fd, uid, gid) == -1) {
 				fprintf (stderr,
 						"open_log: cannot chown desired log file: %s, %s",
-						rspamd_log->cfg->log_file, strerror (errno));
+						rspamd_log->log_file, strerror (errno));
 				close (rspamd_log->fd);
 				return -1;
 			}
@@ -290,7 +297,7 @@ rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 }
 
 void
-rspamd_log_close_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
+rspamd_log_close_priv (rspamd_logger_t *rspamd_log, gboolean termination, uid_t uid, gid_t gid)
 {
 	gchar tmpbuf[256];
 	rspamd_log_flush (rspamd_log);
@@ -349,12 +356,17 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 		rspamd_log->enabled = FALSE;
 		rspamd_log->opened = FALSE;
 	}
+
+	if (termination && rspamd_log->log_file) {
+		g_free (rspamd_log->log_file);
+		rspamd_log->log_file = NULL;
+	}
 }
 
 gint
 rspamd_log_reopen_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 {
-	rspamd_log_close_priv (rspamd_log, uid, gid);
+	rspamd_log_close_priv (rspamd_log, FALSE, uid, gid);
 
 	if (rspamd_log_open_priv (rspamd_log, uid, gid) == 0) {
 		msg_info ("log file reopened");
@@ -377,9 +389,9 @@ rspamd_log_open (rspamd_logger_t *logger)
  * Close log file or destroy other structures
  */
 void
-rspamd_log_close (rspamd_logger_t *logger)
+rspamd_log_close (rspamd_logger_t *logger, gboolean termination)
 {
-	rspamd_log_close_priv (logger, -1, -1);
+	rspamd_log_close_priv (logger, termination, -1, -1);
 }
 
 /**
@@ -445,7 +457,21 @@ rspamd_set_logger (struct rspamd_config *cfg,
 			break;
 	}
 
-	logger->cfg = cfg;
+	logger->log_type = cfg->log_type;
+	logger->log_facility = cfg->log_facility;
+	logger->log_level = cfg->log_level;
+	logger->log_buffered = cfg->log_buffered;
+	logger->log_silent_workers = cfg->log_silent_workers;
+	logger->log_buf_size = cfg->log_buf_size;
+
+	if (logger->log_file) {
+		g_free (logger->log_file);
+		logger->log_file = NULL;
+	}
+	if (cfg->log_file) {
+		logger->log_file = g_strdup (cfg->log_file);
+	}
+
 	logger->flags = cfg->log_flags;
 
 	/* Set up buffer */
@@ -534,7 +560,7 @@ rspamd_log_flush (rspamd_logger_t *rspamd_log)
 		direct_write_log_line (rspamd_log,
 				rspamd_log->io_buf.buf,
 				rspamd_log->io_buf.used,
-				FALSE, rspamd_log->cfg->log_level);
+				FALSE, rspamd_log->log_level);
 		rspamd_log->io_buf.used = 0;
 	}
 }
@@ -545,7 +571,7 @@ rspamd_logger_need_log (rspamd_logger_t *rspamd_log, GLogLevelFlags log_level,
 {
 	g_assert (rspamd_log != NULL);
 
-	if ((log_level & RSPAMD_LOG_FORCED) || log_level <= rspamd_log->cfg->log_level) {
+	if ((log_level & RSPAMD_LOG_FORCED) || log_level <= rspamd_log->log_level) {
 		return TRUE;
 	}
 

@@ -647,7 +647,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		}
 
 		/* Do silent log reopen to avoid collisions */
-		rspamd_log_close (rspamd_main->logger);
+		rspamd_log_close (rspamd_main->logger, FALSE);
 
 
 		if (rspamd_main->cfg->log_silent_workers) {
@@ -771,7 +771,7 @@ rspamd_hard_terminate (struct rspamd_main *rspamd_main)
 
 	msg_err_main ("shutting down Rspamd due to fatal error");
 
-	rspamd_log_close (rspamd_main->logger);
+	rspamd_log_close (rspamd_main->logger, TRUE);
 	exit (EXIT_FAILURE);
 }
 

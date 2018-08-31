@@ -393,7 +393,7 @@ lua_tcp_shift_handler (struct lua_tcp_cbdata *cbd)
 	}
 
 	if (hdl->type == LUA_WANT_READ) {
-		if (hdl->h.r.cbref) {
+		if (hdl->h.r.cbref && hdl->h.r.cbref != -1) {
 			luaL_unref (cbd->task->cfg->lua_state, LUA_REGISTRYINDEX, hdl->h.r.cbref);
 		}
 
@@ -402,7 +402,7 @@ lua_tcp_shift_handler (struct lua_tcp_cbdata *cbd)
 		}
 	}
 	else if (hdl->type == LUA_WANT_WRITE) {
-		if (hdl->h.w.cbref) {
+		if (hdl->h.w.cbref && hdl->h.w.cbref != -1) {
 			luaL_unref (cbd->task->cfg->lua_state, LUA_REGISTRYINDEX, hdl->h.w.cbref);
 		}
 
