@@ -28,7 +28,6 @@
 define(["jquery", "d3evolution", "footable"],
     function ($, D3Evolution) {
         "use strict";
-        var ft;
 
         var rrd_pie_config = {
             header: {},
@@ -139,7 +138,24 @@ define(["jquery", "d3evolution", "footable"],
             }, []);
         }
 
-        function updateSummaryTable(data) {
+        function initSummaryTable(tables, rows, unit) {
+            tables.rrd_summary = FooTable.init("#rrd-table", {
+                sorting: {
+                    enabled: true
+                },
+                columns: [
+                    {name: "label", title: "Action"},
+                    {name: "value", title: "Messages", defaultContent: ""},
+                    {name: "min", title: "Minimum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
+                    {name: "avg", title: "Average, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
+                    {name: "max", title: "Maximum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
+                    {name: "last", title: "Last, " + unit},
+                ],
+                rows: rows
+            });
+        }
+
+        function drawRrdTable(tables, data, unit) {
             var total_messages = 0;
             var rows = data.map(function (curr, i) {
                 total_messages += curr.value;
@@ -155,42 +171,17 @@ define(["jquery", "d3evolution", "footable"],
 
             document.getElementById("rrd-total-value").innerHTML = total_messages;
 
-            ft.rows.load(rows);
-        }
-
-        function initSummaryTable(data, unit) {
-            return FooTable.init("#rrd-table", {
-                sorting: {
-                    enabled: true
-                },
-                columns: [
-                    {name: "label", title: "Action"},
-                    {name: "value", title: "Messages", defaultContent: ""},
-                    {name: "min", title: "Minimum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                    {name: "avg", title: "Average, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                    {name: "max", title: "Maximum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                    {name: "last", title: "Last, " + unit},
-                ],
-                on: {
-                    "ready.ft.table": function () {
-                        updateSummaryTable(data);
-                    }
-                }
-            });
-        }
-
-        function drawRrdTable(data, unit) {
-            if (ft) {
-                updateSummaryTable(data);
+            if (Object.prototype.hasOwnProperty.call(tables, "rrd_summary")) {
+                tables.rrd_summary.rows.load(rows);
             } else {
-                ft = initSummaryTable(data, unit);
+                initSummaryTable(tables, rows, unit);
             }
         }
 
         var ui = {};
         var prevUnit = "msg/s";
 
-        ui.draw = function (rspamd, graphs, neighbours, checked_server, type) {
+        ui.draw = function (rspamd, graphs, tables, neighbours, checked_server, type) {
             function updateWidgets(data) {
                 var rrd_summary = [];
                 var unit = "msg/s";
@@ -224,7 +215,7 @@ define(["jquery", "d3evolution", "footable"],
                     $(".unit").text(unit);
                     prevUnit = unit;
                 }
-                drawRrdTable(rrd_summary, unit);
+                drawRrdTable(tables, rrd_summary, unit);
             }
 
             if (!graphs.graph) {
