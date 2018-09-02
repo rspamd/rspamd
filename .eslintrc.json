@@ -18,7 +18,7 @@
         // "func-style": ["error", "declaration"],
         "id-length": ["error", { "min": 1 }],
         // "max-len": ["error", { "code": 120 }],
-        "max-params": ["warn", 9],
+        "max-params": ["warn", 6],
         "max-statements": ["warn", 28],
         "max-statements-per-line": ["error", { "max": 2 }],
         "multiline-comment-style": "off",

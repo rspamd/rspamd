@@ -25,9 +25,10 @@
 
 /* global jQuery:false, Visibility:false */
 
-define(["jquery", "d3pie", "visibility", "app/stats", "app/graph", "app/config",
+define(["jquery", "d3pie", "visibility", "nprogress", "app/stats", "app/graph", "app/config",
     "app/symbols", "app/history", "app/upload"],
-function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
+// eslint-disable-next-line max-params
+function ($, d3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
     tab_symbols, tab_history, tab_upload) {
     "use strict";
     // begin
@@ -38,6 +39,11 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     var ui = {};
     var timer_id = [];
     var selData; // Graph's dataset selector state
+
+    NProgress.configure({
+        minimum: 0.01,
+        showSpinner: false,
+    });
 
     function cleanCredentials() {
         sessionStorage.clear();
@@ -177,6 +183,22 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             data: o.data,
             headers: $.extend({Password: getPassword()}, o.headers),
             url: neighbours_status[ind].url + req_url,
+            xhr: function () {
+                var xhr = $.ajaxSettings.xhr();
+                // Download progress
+                if (req_url !== "neighbours") {
+                    xhr.addEventListener("progress", function (e) {
+                        if (e.lengthComputable) {
+                            neighbours_status[ind].percentComplete = e.loaded / e.total;
+                            var percentComplete = neighbours_status.reduce(function (prev, curr) {
+                                return curr.percentComplete ? curr.percentComplete + prev : prev;
+                            }, 0);
+                            NProgress.set(percentComplete / neighbours_status.length);
+                        }
+                    }, false);
+                }
+                return xhr;
+            },
             success: function (json) {
                 neighbours_status[ind].checked = true;
                 neighbours_status[ind].status = true;
@@ -213,6 +235,7 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                     } else {
                         alertMessage("alert-error", "Request failed");
                     }
+                    NProgress.done();
                 }
             },
             statusCode: o.statusCode
