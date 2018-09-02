@@ -12,6 +12,7 @@ requirejs.config({
         d3evolution: "d3evolution.min",
         d3pie: "d3pie.min",
         footable: "footable.min",
+        nprogress: "nprogress.min",
     },
     shim: {
         d3: {exports: "d3"},
