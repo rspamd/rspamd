@@ -28,7 +28,7 @@ function tcp_sync.new(connection)
 end
 
 --[[[
--- @function tcp_sync.read_once()
+-- @method tcp_sync.read_once()
 --
 -- Acts exactly like low-level tcp_sync.read_once()
 -- the only exception is that if there is some pending data,
@@ -53,7 +53,7 @@ function tcp_sync:read_once()
 end
 
 --[[[
--- @function tcp_sync.read_until(pattern)
+-- @method tcp_sync.read_until(pattern)
 --
 -- Reads data from the connection until pattern is found
 -- returns all bytes before the pattern
@@ -84,7 +84,7 @@ function tcp_sync:read_until(pattern)
 end
 
 --[[[
--- @function tcp_sync.read_bytes(n)
+-- @method tcp_sync.read_bytes(n)
 --
 -- Reads {n} bytes from the stream
 --
@@ -112,7 +112,7 @@ function tcp_sync:read_bytes(n)
 end
 
 --[[[
--- @function tcp_sync.read_until_eof(n)
+-- @method tcp_sync.read_until_eof(n)
 --
 -- Reads stream until EOF is reached
 --
@@ -141,7 +141,7 @@ function tcp_sync:read_until_eof()
 end
 
 --[[[
--- @function tcp_sync.write(n)
+-- @method tcp_sync.write(n)
 --
 -- Writes data into the stream.
 --
@@ -155,7 +155,7 @@ function tcp_sync:write(data)
 end
 
 --[[[
--- @function tcp_sync.close()
+-- @method tcp_sync.close()
 --
 -- Closes the connection. If the connection was created with task,
 -- this method is called automatically as soon as the task is done
@@ -170,7 +170,7 @@ function tcp_sync:close()
 end
 
 --[[[
--- @function tcp_sync.eof()
+-- @method tcp_sync.eof()
 --
 -- @return
 --          true if last "read" operation ended with EOF
