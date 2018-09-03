@@ -17,6 +17,7 @@
 #include "lua_thread_pool.h"
 #include "utlist.h"
 #include "unix-std.h"
+#include <math.h>
 
 /***
  * @module rspamd_tcp
@@ -93,7 +94,7 @@ rspamd_config:register_symbol({
 LUA_FUNCTION_DEF (tcp, request);
 
 /***
- * @method connect_sync()
+ * @function rspamd_tcp.connect_sync()
  *
  * Creates pseudo-synchronous TCP connection.
  * Each method of the connection requiring IO, becames a yielding point,
@@ -109,7 +110,7 @@ local logger = require "rspamd_logger"
 local function http_simple_tcp_symbol(task)
 
     local err
-    local is_ok, connection = tcp_sync.connect {
+    local is_ok, connection = rspamd_tcp.connect_sync {
       task = task,
       host = '127.0.0.1',
       timeout = 20,
@@ -308,12 +309,12 @@ struct lua_tcp_dtor {
 #undef TCP_DEBUG_REFS
 #ifdef TCP_DEBUG_REFS
 #define TCP_RETAIN(x) do { \
-	msg_err ("retain ref %p, refcount: %d", (x), (x)->ref.refcount); \
+	msg_info ("retain ref %p, refcount: %d", (x), (x)->ref.refcount); \
 	REF_RETAIN(x);	\
 } while (0)
 
 #define TCP_RELEASE(x) do { \
-	msg_err ("release ref %p, refcount: %d", (x), (x)->ref.refcount); \
+	msg_info ("release ref %p, refcount: %d", (x), (x)->ref.refcount); \
 	REF_RELEASE(x);	\
 } while (0)
 #else
@@ -517,9 +518,7 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 
 	if (cbd->thread) {
 		va_start (ap, err);
-		va_copy (ap_copy, ap);
-		lua_tcp_resume_thread_error_argp (cbd, err, ap_copy);
-		va_end (ap_copy);
+		lua_tcp_resume_thread_error_argp (cbd, err, ap);
 		va_end (ap);
 
 		return;
@@ -1660,7 +1659,7 @@ lua_tcp_connect_sync (lua_State *L)
 
 	int arguments_validated = rspamd_lua_parse_table_arguments (L, 1, &err,
 			"task=U{task};session=U{session};resolver=U{resolver};ev_base=U{ev_base};"
-			"*host=S;*port=I;timeout=N;config=U{config}",
+			"*host=S;*port=I;timeout=D;config=U{config}",
 			&task, &session, &resolver, &ev_base,
 			&host, &port, &timeout, &cfg);
 
@@ -1683,13 +1682,11 @@ lua_tcp_connect_sync (lua_State *L)
 		return luaL_error (L, "invalid arguments: either task or config+ev_base+session should be set");
 	}
 
-	if (timeout < 0.00001) {
+	if (isnan (timeout)) {
 		/* rspamd_lua_parse_table_arguments() sets missing N field to zero */
 		timeout = default_tcp_timeout;
 	}
-	else {
-		timeout *= 1000.;
-	}
+
 	if (task) {
 		cfg = task->cfg;
 		ev_base = task->ev_base;
@@ -1716,7 +1713,7 @@ lua_tcp_connect_sync (lua_State *L)
 
 	cbd->ev_base = ev_base;
 	cbd->flags |= LUA_TCP_FLAG_SYNC;
-	msec_to_tv (timeout, &cbd->tv);
+	double_to_tv (timeout, &cbd->tv);
 	cbd->fd = -1;
 	cbd->port = (guint16)port;
 
