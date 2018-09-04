@@ -1853,8 +1853,8 @@ rspamd_get_virtual_ticks (void)
 
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
-	static clockid_t cid = -1;
-	if (cid == -1) {
+	static clockid_t cid = (clockid_t)-1;
+	if (cid == (clockid_t)-1) {
 # ifdef HAVE_CLOCK_GETCPUCLOCKID
 		if (clock_getcpuclockid (0, &cid) == -1) {
 # endif
