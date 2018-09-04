@@ -41,6 +41,7 @@
         "prefer-template": "off",
         "quote-props" : ["error", "consistent-as-needed"],
         "require-jsdoc": "off",
+        "require-unicode-regexp": "off",
         "space-before-function-paren": ["error", {
             "anonymous": "always",
             "named": "never"
