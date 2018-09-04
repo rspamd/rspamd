@@ -665,4 +665,20 @@ exports.combine_selectors = function(_, selectors, delimiter)
   end
 end
 
+local function display_selectors(tbl)
+  return fun.tomap(fun.map(function(k,v)
+    return k, fun.tomap(fun.filter(function(kk, vv)
+      return type(vv) ~= 'function'
+    end, v))
+  end, tbl))
+end
+
+exports.list_extractors = function()
+  return display_selectors(extractors)
+end
+
+exports.list_transforms = function()
+  return display_selectors(transform_function)
+end
+
 return exports
