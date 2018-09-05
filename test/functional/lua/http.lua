@@ -5,7 +5,6 @@ local function http_symbol(task)
 
   local url = tostring(task:get_request_header('url'))
   local method = tostring(task:get_request_header('method'))
-
   task:insert_result('method_' .. method, 1.0)
 
   local function http_callback(err, code, body)
@@ -43,12 +42,15 @@ local function http_symbol(task)
     timeout = 1,
   })
 
+  rspamd_logger.errx(task, 'rspamd_http.request[before]')
+
   local err, response = rspamd_http.request({
     url = 'http://127.0.0.1:18080' .. url,
     task = task,
     method = method,
     timeout = 1,
   })
+  rspamd_logger.errx(task, 'rspamd_http.request[done] err: %1 response:%2', err, response)
 
   if not err then
     task:insert_result('HTTP_CORO_' .. response.code, 1.0, response.content)
