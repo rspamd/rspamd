@@ -502,23 +502,30 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	struct rspamd_process_exception *ex;
 
 	/* Strip newlines */
-	part->utf_stripped_content = g_byte_array_sized_new (part->utf_content->len);
-	part->newlines = g_ptr_array_sized_new (128);
-	p = (const gchar *)part->utf_content->data;
-	end = p + part->utf_content->len;
-
-	rspamd_strip_newlines_parse (p, end, part);
-
-	for (i = 0; i < part->newlines->len; i ++) {
-		ex = rspamd_mempool_alloc (task->task_pool, sizeof (*ex));
-		off = (goffset)g_ptr_array_index (part->newlines, i);
-		g_ptr_array_index (part->newlines, i) = (gpointer)(goffset)
-				(part->utf_stripped_content->data + off);
-		ex->pos = off;
-		ex->len = 0;
-		ex->type = RSPAMD_EXCEPTION_NEWLINE;
-		part->exceptions = g_list_prepend (part->exceptions, ex);
+	if (IS_PART_EMPTY (part)) {
+		part->utf_stripped_content = g_byte_array_new ();
 	}
+	else {
+		part->utf_stripped_content = g_byte_array_sized_new (part->utf_content->len);
+
+		p = (const gchar *)part->utf_content->data;
+		end = p + part->utf_content->len;
+
+		rspamd_strip_newlines_parse (p, end, part);
+
+		for (i = 0; i < part->newlines->len; i ++) {
+			ex = rspamd_mempool_alloc (task->task_pool, sizeof (*ex));
+			off = (goffset)g_ptr_array_index (part->newlines, i);
+			g_ptr_array_index (part->newlines, i) = (gpointer)(goffset)
+					(part->utf_stripped_content->data + off);
+			ex->pos = off;
+			ex->len = 0;
+			ex->type = RSPAMD_EXCEPTION_NEWLINE;
+			part->exceptions = g_list_prepend (part->exceptions, ex);
+		}
+	}
+
+	part->newlines = g_ptr_array_sized_new (128);
 
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) free_byte_array_callback,
