@@ -501,7 +501,8 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	goffset off;
 	struct rspamd_process_exception *ex;
 
-	/* Strip newlines */
+	part->newlines = g_ptr_array_sized_new (128);
+
 	if (IS_PART_EMPTY (part)) {
 		part->utf_stripped_content = g_byte_array_new ();
 	}
@@ -524,8 +525,6 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 			part->exceptions = g_list_prepend (part->exceptions, ex);
 		}
 	}
-
-	part->newlines = g_ptr_array_sized_new (128);
 
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) free_byte_array_callback,
