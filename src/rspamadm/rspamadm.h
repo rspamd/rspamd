@@ -24,6 +24,7 @@
 
 extern GHashTable *ucl_vars;
 extern lua_State *L;
+extern struct rspamd_main *rspamd_main;
 
 GQuark rspamadm_error (void);
 

@@ -31,6 +31,7 @@ static gboolean show_help = FALSE;
 static gboolean show_version = FALSE;
 GHashTable *ucl_vars = NULL;
 struct rspamd_main *rspamd_main = NULL;
+struct rspamd_async_session *rspamadm_session = NULL;
 lua_State *L = NULL;
 
 /* Defined in modules.c */
@@ -317,6 +318,28 @@ rspamadm_command_maybe_match_name (const gchar *cmd, const gchar *input)
 	return FALSE;
 }
 
+
+
+static void
+rspamadm_add_lua_globals()
+{
+	struct rspamd_async_session  **psession;
+	struct event_base **pev_base;
+
+	rspamadm_session = rspamd_session_create (rspamd_main->cfg->cfg_pool, NULL,
+			NULL, (event_finalizer_t )NULL, NULL);
+
+	psession = lua_newuserdata (L, sizeof (struct rspamd_async_session*));
+	rspamd_lua_setclass (L, "rspamd{session}", -1);
+	*psession = rspamadm_session;
+	lua_setglobal (L, "rspamadm_session");
+
+	pev_base = lua_newuserdata (L, sizeof (struct event_base *));
+	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
+	*pev_base = rspamd_main->ev_base;
+	lua_setglobal (L, "rspamadm_ev_base");
+}
+
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
@@ -343,6 +366,8 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->type = process_quark;
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 			"rspamadm");
+	rspamd_main->ev_base = event_init ();
+
 	rspamadm_fill_internal_commands (all_commands);
 	help_command.command_data = all_commands;
 
@@ -417,6 +442,7 @@ main (gint argc, gchar **argv, gchar **env)
 	L = cfg->lua_state;
 	rspamd_lua_set_path (L, NULL, ucl_vars);
 	rspamd_lua_set_globals (cfg, L, ucl_vars);
+	rspamadm_add_lua_globals();
 
 	/* Init rspamadm global */
 	lua_newtable (L);
@@ -497,6 +523,8 @@ main (gint argc, gchar **argv, gchar **env)
 	else {
 		cmd->run (0, NULL, cmd);
 	}
+
+	event_base_loopexit (rspamd_main->ev_base, NULL);
 
 	REF_RELEASE (rspamd_main->cfg);
 	rspamd_log_close (rspamd_main->logger, TRUE);
