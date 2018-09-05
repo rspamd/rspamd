@@ -560,13 +560,13 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 	guint i, ncap = 0;
 	gdouble cur_score = 0.0;
 
-	if (part == NULL || part->normalized_words == NULL ||
-			part->normalized_words->len == 0) {
+	if (part == NULL || part->utf_words == NULL ||
+			part->utf_words->len == 0) {
 		return;
 	}
 
-	for (i = 0; i < part->normalized_words->len; i++) {
-		w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
+	for (i = 0; i < part->utf_words->len; i++) {
+		w = &g_array_index (part->utf_words, rspamd_stat_token_t, i);
 
 		if (w->len > 0 && (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT)) {
 
@@ -588,7 +588,7 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 	 */
 	part->capital_letters += ncap;
 
-	cur_score /= (gdouble)part->normalized_words->len;
+	cur_score /= (gdouble)part->utf_words->len;
 
 	if (cur_score > 2.0) {
 		cur_score = 2.0;

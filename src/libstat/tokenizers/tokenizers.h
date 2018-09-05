@@ -28,7 +28,7 @@ struct rspamd_stat_tokenizer {
 enum rspamd_tokenize_type {
 	RSPAMD_TOKENIZE_UTF = 0,
 	RSPAMD_TOKENIZE_RAW,
-	RSPAMD_TOKENIZE_UCS
+	RSPAMD_TOKENIZE_UNICODE
 };
 
 /* Compare two token nodes */

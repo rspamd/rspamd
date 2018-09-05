@@ -1323,7 +1323,7 @@ rspamd_language_detector_cmp_heuristic (gconstpointer a, gconstpointer b,
 GPtrArray *
 rspamd_language_detector_detect (struct rspamd_task *task,
 		struct rspamd_lang_detector *d,
-		GArray *ucs_tokens, gsize words_len)
+		GArray *ucs_tokens)
 {
 	khash_t(rspamd_candidates_hash) *candidates;
 	GPtrArray *result;

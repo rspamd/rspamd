@@ -61,6 +61,6 @@ void rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
  */
 GPtrArray * rspamd_language_detector_detect (struct rspamd_task *task,
 		struct rspamd_lang_detector *d,
-		GArray *ucs_tokens, gsize words_len);
+		GArray *ucs_tokens);
 
 #endif

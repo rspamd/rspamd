@@ -1196,7 +1196,7 @@ fuzzy_io_fin (void *ud)
 static GArray *
 fuzzy_preprocess_words (struct rspamd_mime_text_part *part, rspamd_mempool_t *pool)
 {
-	return part->normalized_words;
+	return part->utf_words;
 }
 
 static void
@@ -1418,8 +1418,8 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 			rspamd_cryptobox_hash_init (&st, rule->hash_key->str,
 					rule->hash_key->len);
 
-			rspamd_cryptobox_hash_update (&st, part->stripped_content->data,
-					part->stripped_content->len);
+			rspamd_cryptobox_hash_update (&st, part->utf_stripped_content->data,
+					part->utf_stripped_content->len);
 
 			if (task->subject) {
 				/* We also include subject */
@@ -2615,7 +2615,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 			}
 
 			/* Check length of part */
-			fac = rule->ctx->text_multiplier * part->content->len;
+			fac = rule->ctx->text_multiplier * part->utf_content->len;
 			if ((double)min_bytes > fac) {
 				if (!rule->short_text_direct_hash) {
 					msg_info_task (
@@ -2624,7 +2624,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 									"skip fuzzy check",
 							task->message_id, min_bytes,
 							fac,
-							part->content->len,
+							part->utf_content->len,
 							rule->ctx->text_multiplier);
 					continue;
 				}
@@ -2635,21 +2635,21 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 									"use direct hash",
 							task->message_id, min_bytes,
 							fac,
-							part->content->len,
+							part->utf_content->len,
 							rule->ctx->text_multiplier);
 					short_text = TRUE;
 				}
 			}
 
-			if (part->normalized_words == NULL ||
-					part->normalized_words->len == 0) {
+			if (part->utf_words == NULL ||
+					part->utf_words->len == 0) {
 				msg_info_task ("<%s>, part hash empty, skip fuzzy check",
 						task->message_id);
 				continue;
 			}
 
 			if (rule->ctx->min_hash_len != 0 &&
-					part->normalized_words->len <
+					part->utf_words->len <
 							rule->ctx->min_hash_len) {
 				if (!rule->short_text_direct_hash) {
 					msg_info_task (

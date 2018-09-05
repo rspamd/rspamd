@@ -59,7 +59,7 @@ const gchar t_delimiters[255] = {
 
 /* Get next word from specified f_str_t buf */
 static gboolean
-rspamd_tokenizer_get_word_compat (rspamd_stat_token_t * buf,
+rspamd_tokenizer_get_word_raw (rspamd_stat_token_t * buf,
 		gchar const **cur, rspamd_stat_token_t * token,
 		GList **exceptions, gsize *rl, gboolean unused)
 {
@@ -149,7 +149,7 @@ rspamd_tokenizer_get_word_compat (rspamd_stat_token_t * buf,
 }
 
 static gboolean
-rspamd_tokenizer_get_word (rspamd_stat_token_t * buf,
+rspamd_tokenizer_get_word_utf8 (rspamd_stat_token_t * buf,
 		gchar const **cur, rspamd_stat_token_t * token,
 		GList **exceptions, gsize *rl,
 		gboolean check_signature)
@@ -355,10 +355,10 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 
 	switch (how) {
 	case RSPAMD_TOKENIZE_RAW:
-		func = rspamd_tokenizer_get_word_compat;
+		func = rspamd_tokenizer_get_word_raw;
 		break;
 	case RSPAMD_TOKENIZE_UTF:
-		func = rspamd_tokenizer_get_word;
+		func = rspamd_tokenizer_get_word_utf8;
 		break;
 	default:
 		g_assert_not_reached ();
