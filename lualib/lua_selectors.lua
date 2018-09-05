@@ -40,6 +40,7 @@ local extractors = {
       if ip and ip:is_valid() then return tostring(ip) end
       return nil
     end,
+    ['description'] = 'Get source IP address',
   },
   -- Get SMTP from
   ['smtp_from'] = {
@@ -51,6 +52,7 @@ local extractors = {
       end
       return nil
     end,
+    ['description'] = 'Get SMTP from',
   },
   -- Get MIME from
   ['mime_from'] = {
@@ -62,6 +64,7 @@ local extractors = {
       end
       return nil
     end,
+    ['description'] = 'Get MIME from',
   },
   -- Get country (ASN module must be executed first)
   ['country'] = {
@@ -74,6 +77,7 @@ local extractors = {
         return asn
       end
     end,
+    ['description'] = 'Get country (ASN module must be executed first)',
   },
   -- Get ASN number
   ['asn'] = {
@@ -86,6 +90,7 @@ local extractors = {
         return asn
       end
     end,
+    ['description'] = 'Get ASN number',
   },
   -- Get authenticated username
   ['user'] = {
@@ -98,6 +103,7 @@ local extractors = {
         return auser
       end
     end,
+    ['description'] = 'Get authenticated username',
   },
   -- Get principal recipient
   ['to'] = {
@@ -105,6 +111,7 @@ local extractors = {
     ['get_value'] = function(task)
       return task:get_principal_recipient()
     end,
+    ['description'] = 'Get principal recipient',
   },
   -- Get content digest
   ['digest'] = {
@@ -112,6 +119,7 @@ local extractors = {
     ['get_value'] = function(task)
       return task:get_digest()
     end,
+    ['description'] = 'Get content digest',
   },
   -- Get list of all attachments digests
   ['attachments'] = {
@@ -132,6 +140,7 @@ local extractors = {
 
       return nil
     end,
+    ['description'] = 'Get list of all attachments digests',
   },
   -- Get all attachments files
   ['files'] = {
@@ -153,6 +162,7 @@ local extractors = {
 
       return nil
     end,
+    ['description'] = 'Get all attachments files',
   },
   -- Get helo value
   ['helo'] = {
@@ -160,6 +170,7 @@ local extractors = {
     ['get_value'] = function(task)
       return task:get_helo()
     end,
+    ['description'] = 'Get helo value',
   },
   -- Get header with the name that is expected as an argument. Returns list of
   -- headers with this name
@@ -168,6 +179,7 @@ local extractors = {
     ['get_value'] = function(task, args)
       return task:get_header_full(args[1])
     end,
+    ['description'] = 'Get header with the name that is expected as an argument. Returns list of headers with this name',
   },
   -- Get list of received headers (returns list of tables)
   ['received'] = {
@@ -175,6 +187,7 @@ local extractors = {
     ['get_value'] = function(task)
       return task:get_received_headers()
     end,
+    ['description'] = 'Get list of received headers (returns list of tables)',
   },
   -- Get all urls
   ['urls'] = {
@@ -182,6 +195,7 @@ local extractors = {
     ['get_value'] = function(task)
       return task:get_urls()
     end,
+    ['description'] = 'Get all urls',
   },
   -- Get all emails
   ['emails'] = {
@@ -189,6 +203,7 @@ local extractors = {
     ['get_value'] = function(task)
       return task:get_emails()
     end,
+    ['description'] = 'Get all emails',
   },
   -- Get specific pool var. The first argument must be variable name,
   -- the second argument is optional and defines the type (string by default)
@@ -197,6 +212,8 @@ local extractors = {
     ['get_value'] = function(task, args)
       return task:get_mempool():get_variable(args[1], args[2])
     end,
+    ['description'] = [[Get specific pool var. The first argument must be variable name,
+      the second argument is optional and defines the type (string by default)]],
   },
   -- Get specific HTTP request header. The first argument must be header name.
   ['request_header'] = {
@@ -208,7 +225,8 @@ local extractors = {
       end
 
       return nil
-    end
+    end,
+    ['description'] = 'Get specific HTTP request header. The first argument must be header name.',
   },
   -- Get task date, optionally formatted
   ['time'] = {
@@ -227,9 +245,14 @@ local extractors = {
       end
 
       return nil
-    end
+    end,
+    ['description'] = 'Get task date, optionally formatted (see os.date)',
   }
 }
+
+local function pure_type(ltype)
+  return ltype:match('^(.*)_list$')
+end
 
 local transform_function = {
   -- Get hostname from url or a list of urls
@@ -240,7 +263,8 @@ local transform_function = {
     ['map_type'] = 'string',
     ['process'] = function(inp, t)
       return inp:get_host(),'string'
-    end
+    end,
+    ['description'] = 'Get hostname from url or a list of urls',
   },
   -- Get tld from url or a list of urls
   ['get_tld'] = {
@@ -250,7 +274,8 @@ local transform_function = {
     ['map_type'] = 'string',
     ['process'] = function(inp, t)
       return inp:get_tld()
-    end
+    end,
+    ['description'] = 'Get tld from url or a list of urls',
   },
   -- Get address
   ['get_addr'] = {
@@ -260,7 +285,8 @@ local transform_function = {
     ['map_type'] = 'string',
     ['process'] = function(inp, _)
       return inp:get_addr()
-    end
+    end,
+    ['description'] = 'Get email address as a string',
   },
   -- Returns the lowercased string
   ['lower'] = {
@@ -270,7 +296,8 @@ local transform_function = {
     ['map_type'] = 'string',
     ['process'] = function(inp, _)
       return inp:lower(),'string'
-    end
+    end,
+    ['description'] = 'Returns the lowercased string',
   },
   -- Returns the first element
   ['first'] = {
@@ -281,9 +308,9 @@ local transform_function = {
       ['string_list'] = true
     },
     ['process'] = function(inp, t)
-      local pure_type = t:match('^(.*)_list$')
-      return inp[1],pure_type
-    end
+      return inp[1],pure_type(t)
+    end,
+    ['description'] = 'Returns the first element',
   },
   -- Returns the last element
   ['last'] = {
@@ -293,9 +320,9 @@ local transform_function = {
       ['string_list'] = true
     },
     ['process'] = function(inp, t)
-      local pure_type = t:match('^(.*)_list$')
-      return inp[#inp],pure_type
-    end
+      return inp[#inp],pure_type(t)
+    end,
+    ['description'] = 'Returns the last element',
   },
   -- Returns the nth element
   ['nth'] = {
@@ -305,9 +332,9 @@ local transform_function = {
       ['string_list'] = true
     },
     ['process'] = function(inp, t, args)
-      local pure_type = t:match('^(.*)_list$')
-      return inp[tonumber(args[1])],pure_type
-    end
+      return inp[tonumber(args[1] or 1)],pure_type(t)
+    end,
+    ['description'] = 'Returns the nth element',
   },
   -- Joins strings into a single string using separator in the argument
   ['join'] = {
@@ -316,7 +343,8 @@ local transform_function = {
     },
     ['process'] = function(inp, _, args)
       return table.concat(inp, args[1] or ''), 'string'
-    end
+    end,
+    ['description'] = 'Joins strings into a single string using separator in the argument',
   },
   -- Create a digest from string or a list of strings
   ['digest'] = {
@@ -328,7 +356,8 @@ local transform_function = {
       local hash = require 'rspamd_cryptobox_hash'
       local ht = args[1] or 'blake2'
       return hash:create_specific(ht):update(inp), 'hash'
-    end
+    end,
+    ['description'] = 'Create a digest from string or a list of strings',
   },
   -- Encode hash to string (using hex encoding by default)
   ['encode'] = {
@@ -345,7 +374,8 @@ local transform_function = {
       elseif how == 'base64' then
         return inp:base64()
       end
-    end
+    end,
+    ['description'] = 'Encode hash to string (using hex encoding by default)',
   },
   -- Extracts substring
   ['substring'] = {
@@ -358,7 +388,8 @@ local transform_function = {
       local end_pos = args[2] or -1
 
       return inp:sub(start_pos, end_pos), 'string'
-    end
+    end,
+    ['description'] = 'Extracts substring',
   },
   -- Drops input value and return values from function's arguments or an empty string
   ['id'] = {
@@ -374,7 +405,8 @@ local transform_function = {
       end
 
       return ''
-    end
+    end,
+    ['description'] = 'Drops input value and return values from function\'s arguments or an empty string',
   },
   -- Extracts table value from key-value list
   ['elt'] = {
@@ -384,7 +416,8 @@ local transform_function = {
     ['map_type'] = 'string',
     ['process'] = function(inp, t, args)
       return inp[args[1]],'string'
-    end
+    end,
+    ['description'] = 'Extracts table value from key-value list',
   },
   -- Call specific userdata method
   ['method'] = {
@@ -396,7 +429,8 @@ local transform_function = {
     ['map_type'] = 'string',
     ['process'] = function(inp, _, args)
       return inp[args[1]](inp)
-    end
+    end,
+    ['description'] = 'Call specific userdata method',
   },
   -- Boolean function in, returns either nil or its input if input is in args list
   ['in'] = {
@@ -407,7 +441,8 @@ local transform_function = {
     ['process'] = function(inp, t, args)
       for _,a in ipairs(args) do if a == inp then return inp,t end end
       return nil
-    end
+    end,
+    ['description'] = 'Boolean function in, returns either nil or its input if input is in args list',
   },
   ['not_in'] = {
     ['types'] = {
@@ -417,7 +452,8 @@ local transform_function = {
     ['process'] = function(inp, t, args)
       for _,a in ipairs(args) do if a == inp then return nil end end
       return inp,t
-    end
+    end,
+    ['description'] = 'Boolean function in, returns either nil or its input if input is not in args list',
   },
 }
 
@@ -433,10 +469,10 @@ local function process_selector(task, sel)
 
     if not x.types[t] then
       -- Additional case for map
-      local pure_type = t:match('^(.*)_list$')
-      if pure_type and x.map_type and x.types[pure_type] then
+      local pt = pure_type(t, '^(.*)_list$')
+      if pt and x.map_type and x.types[pt] then
         return {fun.map(function(list_elt)
-          local ret, _ = x.process(list_elt, pure_type, x.args)
+          local ret, _ = x.process(list_elt, pt, x.args)
           return ret
         end, value), x.map_type}
       end
