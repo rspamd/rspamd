@@ -213,7 +213,7 @@ static const struct luaL_reg tcp_libm[] = {
 LUA_FUNCTION_DEF (tcp_sync, close);
 
 /***
- * @method set_timeout(timeout)
+ * @method set_timeout(seconds)
  *
  * Sets timeout for IO operations
  */
@@ -1813,14 +1813,16 @@ lua_tcp_set_timeout (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct lua_tcp_cbdata *cbd = lua_check_tcp (L, 1);
-	gdouble ms = lua_tonumber (L, 2);
+	gdouble seconds = lua_tonumber (L, 2);
 
 	if (cbd == NULL) {
 		return luaL_error (L, "invalid arguments");
 	}
+	if (!lua_isnumber (L, 2)) {
+		return luaL_error (L, "invalid arguments: 'seconds' is expected to be number");
+	}
 
-	ms *= 1000.0;
-	double_to_tv (ms, &cbd->tv);
+	double_to_tv (seconds, &cbd->tv);
 
 	return 0;
 }
@@ -2019,7 +2021,7 @@ lua_tcp_sync_set_timeout (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct lua_tcp_cbdata *cbd = lua_check_sync_tcp (L, 1);
-	gdouble ms = lua_tonumber (L, 2);
+	gdouble seconds = lua_tonumber (L, 2);
 
 	if (cbd == NULL) {
 		return luaL_error (L, "invalid arguments: self is not rspamd{tcp_sync}");
@@ -2028,8 +2030,7 @@ lua_tcp_sync_set_timeout (lua_State *L)
 		return luaL_error (L, "invalid arguments: second parameter is expected to be number");
 	}
 
-	ms *= 1000.0;
-	double_to_tv (ms, &cbd->tv);
+	double_to_tv (seconds, &cbd->tv);
 
 	return 0;
 }
