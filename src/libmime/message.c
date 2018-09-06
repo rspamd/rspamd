@@ -203,21 +203,14 @@ rspamd_mime_part_create_words (struct rspamd_task *task,
 		tok_type = RSPAMD_TOKENIZE_RAW;
 	}
 
-	/* Ugly workaround */
-	if (IS_PART_HTML (part)) {
-		part->utf_words = rspamd_tokenize_text (
-				part->utf_stripped_content->data,
-				part->utf_stripped_content->len, tok_type, task->cfg,
-				part->exceptions,
-				NULL);
-	}
-	else {
-		part->utf_words = rspamd_tokenize_text (
-				part->utf_stripped_content->data,
-				part->utf_stripped_content->len, tok_type, task->cfg,
-				part->exceptions,
-				NULL);
-	}
+	part->utf_words = rspamd_tokenize_text (
+			part->utf_stripped_content->data,
+			part->utf_stripped_content->len,
+			&part->utf_stripped_text,
+			tok_type, task->cfg,
+			part->exceptions,
+			NULL);
+
 
 	if (part->utf_words) {
 		part->normalized_hashes = g_array_sized_new (FALSE, FALSE,

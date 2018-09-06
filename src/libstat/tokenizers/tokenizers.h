@@ -7,6 +7,8 @@
 #include "rspamd.h"
 #include "stat_api.h"
 
+#include <unicode/utext.h>
+
 #define RSPAMD_DEFAULT_TOKENIZER "osb"
 
 struct rspamd_tokenizer_runtime;
@@ -37,6 +39,7 @@ gint token_node_compare_func (gconstpointer a, gconstpointer b);
 
 /* Tokenize text into array of words (rspamd_stat_token_t type) */
 GArray * rspamd_tokenize_text (const gchar *text, gsize len,
+							   const UText *utxt,
 							   enum rspamd_tokenize_type how,
 							   struct rspamd_config *cfg,
 							   GList *exceptions,

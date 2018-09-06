@@ -619,7 +619,17 @@ chartable_symbol_callback (struct rspamd_task *task, void *unused)
 		guint i;
 		gdouble cur_score = 0.0;
 
-		words = rspamd_tokenize_text (task->subject, strlen (task->subject),
+		UText utxt = UTEXT_INITIALIZER;
+		UErrorCode uc_err = U_ZERO_ERROR;
+		gsize slen = strlen (task->subject);
+
+		utext_openUTF8 (&utxt,
+				task->subject,
+				slen,
+				&uc_err);
+
+		words = rspamd_tokenize_text (task->subject, slen,
+				&utxt,
 				RSPAMD_TOKENIZE_UTF,
 				NULL,
 				NULL,
