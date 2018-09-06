@@ -71,7 +71,7 @@ rspamadm_confighelp_help (gboolean full_help, const struct rspamadm_command *cmd
 				"-P: use specific Lua plugins path\n"
 				"--no-color: disable coloured output\n"
 				"--short: show only option names\n"
-				"--no-examples: do not show examples (impied by --short)\n"
+				"--no-examples: do not show examples (implied by --short)\n"
 				"--help: shows available options and commands";
 	}
 	else {
