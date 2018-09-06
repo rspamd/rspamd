@@ -22,13 +22,11 @@ Tcp client
 
 Http Setup
   Run Dummy Http
-  Run Redis
 
 Http Teardown
   ${http_pid} =  Get File  /tmp/dummy_http.pid
   Shutdown Process With Children  ${http_pid}
   Remove file  /tmp/dummy_http.pid
-  Shutdown Process With Children  ${REDIS_PID}
 
 Run Dummy Http
   [Arguments]
