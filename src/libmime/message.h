@@ -14,6 +14,7 @@
 #include "content_type.h"
 
 #include <unicode/uchar.h>
+#include <unicode/utext.h>
 
 struct rspamd_task;
 struct controller_session;
@@ -97,6 +98,7 @@ struct rspamd_mime_text_part {
 	GByteArray *utf_stripped_content; /* utf content with no newlines */
 	GArray *normalized_hashes;
 	GArray *utf_words;
+	UText utf_stripped_text; /* Used by libicu to represent the utf8 content */
 
 	/* Unicode content, used by libicu */
 	GArray *unicode_raw_content; /* unicode raw content (of UChar) */

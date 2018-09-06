@@ -495,11 +495,11 @@ static void
 rspamd_normalize_text_part (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
-
 	const gchar *p, *end;
 	guint i;
 	goffset off;
 	struct rspamd_process_exception *ex;
+	UErrorCode uc_err = U_ZERO_ERROR;
 
 	part->newlines = g_ptr_array_sized_new (128);
 
@@ -523,6 +523,18 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 			ex->len = 0;
 			ex->type = RSPAMD_EXCEPTION_NEWLINE;
 			part->exceptions = g_list_prepend (part->exceptions, ex);
+		}
+	}
+
+	if (IS_PART_UTF (part)) {
+		utext_openUTF8 (&part->utf_stripped_text,
+				part->utf_stripped_content->data,
+				part->utf_stripped_content->len,
+				&uc_err);
+
+		if (!U_SUCCESS (uc_err)) {
+			msg_warn_task ("cannot open text from utf content");
+			/* Probably, should be an assertion */
 		}
 	}
 
@@ -833,6 +845,7 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 	text_part->raw.len = mime_part->raw_data.len;
 	text_part->parsed.begin = mime_part->parsed_data.begin;
 	text_part->parsed.len = mime_part->parsed_data.len;
+	text_part->utf_stripped_text = (UText)UTEXT_INITIALIZER;
 
 	if (found_html) {
 		if (!rspamd_message_process_html_text_part (task, text_part)) {
