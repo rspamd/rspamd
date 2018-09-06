@@ -18,6 +18,7 @@
 #include "rspamd.h"
 #include "ottery.h"
 #include "lua/lua_common.h"
+#include "lua/lua_thread_pool.h"
 #include "lua_ucl.h"
 #include "unix-std.h"
 
@@ -205,15 +206,27 @@ rspamadm_parse_ucl_var (const gchar *option_name,
 	return TRUE;
 }
 
+static void
+lua_thread_str_error_cb (struct thread_entry *thread, int ret, const char *msg)
+{
+	struct lua_call_data *cd = thread->cd;
+
+	msg_err ("call to rspamadm lua script failed (%d): %s", ret, msg);
+
+	cd->ret = ret;
+}
+
 gboolean
-rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
+rspamadm_execute_lua_ucl_subr (gint argc, gchar **argv,
 							   const ucl_object_t *res,
 							   const gchar *script_name,
 							   gboolean rspamadm_subcommand)
 {
-	lua_State *L = pL;
-	gint err_idx, i, ret;
-	GString *tb;
+	struct thread_entry *thread = lua_thread_pool_get_for_config (rspamd_main->cfg);
+
+	lua_State *L = thread->lua_state;
+
+	gint i;
 	gchar str[PATH_MAX];
 
 	g_assert (script_name != NULL);
@@ -251,32 +264,21 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 		}
 	}
 
-	lua_pushcfunction (L, &rspamd_lua_traceback);
-	err_idx = lua_gettop (L);
-
 	/* Push function */
-	lua_pushvalue (L, -2);
+	lua_pushvalue (L, -1);
 
 	/* Push argv */
 	lua_newtable (L);
 
 	for (i = 1; i < argc; i ++) {
 		lua_pushstring (L, argv[i]);
-		lua_rawseti (L, -2, i);
+		lua_rawseti (L, -1, i);
 	}
 
 	/* Push results */
 	ucl_object_push_lua (L, res, TRUE);
 
-	if ((ret = lua_pcall (L, 2, 0, err_idx)) != 0) {
-		tb = lua_touserdata (L, -1);
-		msg_err ("call to rspamadm lua script failed (%d): %v", ret, tb);
-
-		if (tb) {
-			g_string_free (tb, TRUE);
-		}
-
-		lua_settop (L, 0);
+	if (lua_repl_thread_call (thread, 2, NULL, lua_thread_str_error_cb) != 0) {
 
 		return FALSE;
 	}
@@ -443,6 +445,10 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_lua_set_path (L, NULL, ucl_vars);
 	rspamd_lua_set_globals (cfg, L, ucl_vars);
 	rspamadm_add_lua_globals();
+
+#ifdef WITH_HIREDIS
+	rspamd_redis_pool_config (cfg->redis_pool, cfg, rspamd_main->ev_base);
+#endif
 
 	/* Init rspamadm global */
 	lua_newtable (L);

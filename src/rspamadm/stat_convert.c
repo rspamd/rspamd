@@ -113,7 +113,6 @@ rspamadm_statconvert (gint argc, gchar **argv, const struct rspamadm_command *cm
 {
 	GOptionContext *context;
 	GError *error = NULL;
-	lua_State *L;
 	ucl_object_t *obj;
 
 	context = g_option_context_new (
@@ -237,8 +236,6 @@ rspamadm_statconvert (gint argc, gchar **argv, const struct rspamadm_command *cm
 		}
 	}
 
-	L = rspamd_lua_init ();
-	rspamd_lua_set_path (L, obj, ucl_vars);
 	ucl_object_insert_key (obj, ucl_object_frombool (reset_previous),
 			"reset_previous", 0, false);
 
@@ -247,8 +244,7 @@ rspamadm_statconvert (gint argc, gchar **argv, const struct rspamadm_command *cm
 				"expire", 0, false);
 	}
 
-	rspamadm_execute_lua_ucl_subr (L,
-			argc,
+	rspamadm_execute_lua_ucl_subr (argc,
 			argv,
 			obj,
 			"stat_convert",

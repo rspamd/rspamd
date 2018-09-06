@@ -17,6 +17,7 @@
 #include "libutil/util.h"
 #include "libutil/logger.h"
 #include "lua/lua_common.h"
+#include "lua/lua_thread_pool.h"
 
 extern struct rspamadm_command pw_command;
 extern struct rspamadm_command configtest_command;
@@ -88,15 +89,24 @@ rspamadm_fill_internal_commands (GPtrArray *dest)
 }
 
 static void
+lua_thread_str_error_cb (struct thread_entry *thread, int ret, const char *msg)
+{
+	const struct rspamadm_command *cmd = thread->cd;
+
+	msg_err ("call to rspamadm lua script %s failed (%d): %s", cmd->name,
+			ret, msg);
+}
+
+static void
 rspamadm_lua_command_run (gint argc, gchar **argv,
 						  const struct rspamadm_command *cmd)
 {
-	gint table_idx = GPOINTER_TO_INT (cmd->command_data);
-	gint i, err_idx, ret;
-	GString *tb;
+	struct thread_entry *thread = lua_thread_pool_get_for_config (rspamd_main->cfg);
 
-	lua_pushcfunction (L, &rspamd_lua_traceback);
-	err_idx = lua_gettop (L);
+	lua_State *L = thread->lua_state;
+
+	gint table_idx = GPOINTER_TO_INT (cmd->command_data);
+	gint i;
 
 	/* Function */
 	lua_rawgeti (L, LUA_REGISTRYINDEX, table_idx);
@@ -111,17 +121,7 @@ rspamadm_lua_command_run (gint argc, gchar **argv,
 		lua_rawseti (L, -2, i); /* Starting from zero ! */
 	}
 
-	if ((ret = lua_pcall (L, 1, 0, err_idx)) != 0) {
-		tb = lua_touserdata (L, -1);
-		msg_err ("call to rspamadm lua script %s failed (%d): %v", cmd->name,
-				ret, tb);
-
-		if (tb) {
-			g_string_free (tb, TRUE);
-		}
-
-		lua_settop (L, 0);
-
+	if (lua_repl_thread_call (thread, 1, (void *)cmd, lua_thread_str_error_cb) != 0) {
 		exit (EXIT_FAILURE);
 	}
 
@@ -132,13 +132,13 @@ static const gchar *
 rspamadm_lua_command_help (gboolean full_help,
 						  const struct rspamadm_command *cmd)
 {
+	struct thread_entry *thread = lua_thread_pool_get_for_config (rspamd_main->cfg);
+
+	lua_State *L = thread->lua_state;
+
 	gint table_idx = GPOINTER_TO_INT (cmd->command_data);
-	gint err_idx, ret;
-	GString *tb;
 
 	if (full_help) {
-		lua_pushcfunction (L, &rspamd_lua_traceback);
-		err_idx = lua_gettop (L);
 
 		lua_rawgeti (L, LUA_REGISTRYINDEX, table_idx);
 		/* Function */
@@ -153,17 +153,7 @@ rspamadm_lua_command_help (gboolean full_help,
 		lua_pushstring (L, "--help");
 		lua_rawseti (L, -2, 1);
 
-		if ((ret = lua_pcall (L, 1, 0, err_idx)) != 0) {
-			tb = lua_touserdata (L, -1);
-			msg_err ("call to rspamadm lua script %s failed (%d): %v", cmd->name,
-					ret, tb);
-
-			if (tb) {
-				g_string_free (tb, TRUE);
-			}
-
-			lua_settop (L, 0);
-
+		if (lua_repl_thread_call (thread, 1, (void *)cmd, lua_thread_str_error_cb) != 0) {
 			exit (EXIT_FAILURE);
 		}
 	}

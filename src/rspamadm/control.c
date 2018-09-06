@@ -45,7 +45,6 @@ struct rspamadm_command control_command = {
 };
 
 struct rspamadm_control_cbdata {
-	lua_State *L;
 	const gchar *path;
 	gint argc;
 	gchar **argv;
@@ -133,8 +132,7 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 		}
 		else {
 			if (strcmp (cbdata->path, "/fuzzystat") == 0) {
-				rspamadm_execute_lua_ucl_subr (cbdata->L,
-						cbdata->argc,
+				rspamadm_execute_lua_ucl_subr (cbdata->argc,
 						cbdata->argv,
 						obj,
 						"fuzzy_stat",
@@ -172,7 +170,6 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 	rspamd_inet_addr_t *addr;
 	struct timeval tv;
 	static struct rspamadm_control_cbdata cbdata;
-	lua_State *L;
 	gint sock;
 
 	context = g_option_context_new (
@@ -237,9 +234,6 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 		exit (1);
 	}
 
-	L = rspamd_lua_init ();
-	rspamd_lua_set_path (L, NULL, ucl_vars);
-
 	conn = rspamd_http_connection_new (NULL,
 			rspamd_control_error_handler,
 			rspamd_control_finish_handler,
@@ -251,7 +245,6 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 	msg->url = rspamd_fstring_new_init (path, strlen (path));
 	double_to_tv (timeout, &tv);
 
-	cbdata.L = L;
 	cbdata.argc = argc;
 	cbdata.argv = argv;
 	cbdata.path = path;

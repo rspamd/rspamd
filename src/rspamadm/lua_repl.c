@@ -72,23 +72,13 @@ struct rspamadm_lua_dot_command {
 	rspamadm_lua_dot_handler handler;
 };
 
-struct lua_call_data {
-	gint top;
-	gint ret;
-	gpointer ud;
-};
-
 static void rspamadm_lua_help_handler (lua_State *L, gint argc, gchar **argv);
 static void rspamadm_lua_load_handler (lua_State *L, gint argc, gchar **argv);
 static void rspamadm_lua_exec_handler (lua_State *L, gint argc, gchar **argv);
 static void rspamadm_lua_message_handler (lua_State *L, gint argc, gchar **argv);
-static void lua_execute_and_wait (gint narg);
 
 static void lua_thread_error_cb (struct thread_entry *thread, int ret, const char *msg);
 static void lua_thread_finish_cb (struct thread_entry *thread, int ret);
-static gint lua_repl_thread_call (struct thread_entry *thread, gint narg,
-		gpointer ud, lua_thread_error_t error_func);
-
 
 static struct rspamadm_lua_dot_command cmds[] = {
 	{
@@ -306,12 +296,12 @@ wait_session_events ()
 	}
 }
 
-static gint
+gint
 lua_repl_thread_call (struct thread_entry *thread, gint narg, gpointer ud, lua_thread_error_t error_func)
 {
 	int ret;
 	struct lua_call_data *cd = g_new0 (struct lua_call_data, 1);
-	cd->top = lua_gettop (L);
+	cd->top = lua_gettop (thread->lua_state);
 	cd->ud = ud;
 
 	thread->finish_callback = lua_thread_finish_cb;
@@ -736,6 +726,7 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 	GError *error = NULL;
 	gchar **elt;
 	guint i;
+	lua_State *L = rspamd_main->cfg->lua_state;
 
 	context = g_option_context_new ("lua - run lua interpreter");
 	g_option_context_set_summary (context,
