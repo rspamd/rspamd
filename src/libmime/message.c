@@ -188,12 +188,10 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 	}
 }
 
-static guint
+static void
 rspamd_mime_part_create_words (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
-	rspamd_stat_token_t *w, ucs_w;
-	guint i, ucs_len = 0;
 	enum rspamd_tokenize_type tok_type;
 
 	if (IS_PART_UTF (part)) {
@@ -215,31 +213,8 @@ rspamd_mime_part_create_words (struct rspamd_task *task,
 	if (part->utf_words) {
 		part->normalized_hashes = g_array_sized_new (FALSE, FALSE,
 				sizeof (guint64), part->utf_words->len);
-
-		if (IS_PART_UTF (part) && task->lang_det) {
-			part->unicode_words = g_array_sized_new (FALSE, FALSE,
-					sizeof (rspamd_stat_token_t), part->utf_words->len);
-		}
-
-		if (part->unicode_words) {
-
-
-			for (i = 0; i < part->utf_words->len; i++) {
-				w = &g_array_index (part->utf_words, rspamd_stat_token_t,
-						i);
-
-				if (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
-					rspamd_language_detector_to_ucs (task->lang_det,
-							task->task_pool,
-							w, &ucs_w);
-					g_array_append_val (part->unicode_words, ucs_w);
-					ucs_len += ucs_w.len;
-				}
-			}
-		}
 	}
 
-	return ucs_len;
 }
 
 static void
@@ -248,12 +223,8 @@ rspamd_mime_part_detect_language (struct rspamd_task *task,
 {
 	struct rspamd_lang_detector_res *lang;
 
-	if (part->unicode_words) {
-		part->languages = rspamd_language_detector_detect (task,
-				task->lang_det,
-				part->unicode_words);
-
-		if (part->languages->len > 0) {
+	if (part->utf_words) {
+		if (rspamd_language_detector_detect (task, task->lang_det, part)) {
 			lang = g_ptr_array_index (part->languages, 0);
 			part->language = lang->lang;
 

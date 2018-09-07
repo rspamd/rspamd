@@ -248,9 +248,6 @@ rspamd_task_free (struct rspamd_task *task)
 			if (tp->normalized_hashes) {
 				g_array_free (tp->normalized_hashes, TRUE);
 			}
-			if (tp->unicode_words) {
-				g_array_free (tp->unicode_words, TRUE);
-			}
 			if (tp->languages) {
 				g_ptr_array_unref (tp->languages);
 			}

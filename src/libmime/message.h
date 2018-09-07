@@ -103,7 +103,6 @@ struct rspamd_mime_text_part {
 	/* Unicode content, used by libicu */
 	GArray *unicode_raw_content; /* unicode raw content (of UChar) */
 	GArray *unicode_content; /* unicode processed content (of UChar) */
-	GArray *unicode_words;
 
 	GPtrArray *newlines;	/**< positions of newlines in text, relative to content*/
 	struct html_content *html;
@@ -120,6 +119,7 @@ struct rspamd_mime_text_part {
 	guint empty_lines;
 	guint capital_letters;
 	guint numeric_characters;
+	guint unicode_scripts;
 };
 
 enum rspamd_received_type {
