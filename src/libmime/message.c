@@ -223,7 +223,7 @@ rspamd_mime_part_detect_language (struct rspamd_task *task,
 {
 	struct rspamd_lang_detector_res *lang;
 
-	if (part->utf_words) {
+	if (part->utf_words && task->lang_det) {
 		if (rspamd_language_detector_detect (task, task->lang_det, part)) {
 			lang = g_ptr_array_index (part->languages, 0);
 			part->language = lang->lang;
