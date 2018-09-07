@@ -225,6 +225,15 @@ rspamd_utf_word_valid (const gchar *text, const gchar *end,
 
 	return FALSE;
 }
+#define SHIFT_EX do { \
+    cur = g_list_next (cur); \
+    if (cur) { \
+        ex = (struct rspamd_process_exception *) cur->data; \
+    } \
+    else { \
+        ex = NULL; \
+    } \
+} while(0)
 
 GArray *
 rspamd_tokenize_text (const gchar *text, gsize len,
@@ -278,7 +287,8 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 					&hv, &prob, &token, pos - text, len)) {
 				if (!decay) {
 					decay = TRUE;
-				} else {
+				}
+				else {
 					token.begin = pos;
 					continue;
 				}
@@ -322,16 +332,6 @@ start_over:
 							/* We have an exception at the beginning, skip those */
 							last += ex->len;
 
-							if (last > p) {
-								/* Exception spread over the boundaries */
-								while (last > p && p != UBRK_DONE) {
-									p = ubrk_next (bi);
-								}
-
-								/* We need to reset our scan with new p and last */
-								goto start_over;
-							}
-
 							if (ex->type == RSPAMD_EXCEPTION_URL) {
 								token.begin = "!!EX!!";
 								token.len = sizeof ("!!EX!!") - 1;
@@ -341,11 +341,18 @@ start_over:
 								token.flags = 0;
 							}
 
-							cur = g_list_next (cur);
+							if (last > p) {
+								/* Exception spread over the boundaries */
+								while (last > p && p != UBRK_DONE) {
+									p = ubrk_next (bi);
+								}
 
-							if (cur) {
-								ex = (struct rspamd_process_exception *) cur->data;
+								/* We need to reset our scan with new p and last */
+								SHIFT_EX;
+								goto start_over;
 							}
+
+							SHIFT_EX;
 						}
 
 						/* Now, we can have an exception within boundary again */
@@ -360,7 +367,7 @@ start_over:
 							}
 
 							/* Process the current exception */
-							last += ex->len + token.len;
+							last += ex->len + (ex->pos - last);
 
 							if (ex->type == RSPAMD_EXCEPTION_URL) {
 								token.begin = "!!EX!!";
@@ -376,8 +383,11 @@ start_over:
 									p = ubrk_next (bi);
 								}
 								/* We need to reset our scan with new p and last */
+								SHIFT_EX;
 								goto start_over;
 							}
+
+							SHIFT_EX;
 						}
 						else if (p > last) {
 							if (rspamd_utf_word_valid (text, text + len, last, p)) {
@@ -391,11 +401,7 @@ start_over:
 						/* Forward exceptions list */
 						while (cur && ex->pos <= last) {
 							/* We have an exception at the beginning, skip those */
-							cur = g_list_next (cur);
-
-							if (cur) {
-								ex = (struct rspamd_process_exception *) cur->data;
-							}
+							SHIFT_EX;
 						}
 
 						if (rspamd_utf_word_valid (text, text + len, last, p)) {
@@ -449,6 +455,8 @@ start_over:
 
 	return res;
 }
+
+#undef SHIFT_EX
 
 /*
  * vi:ts=4
