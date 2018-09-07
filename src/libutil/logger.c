@@ -273,13 +273,13 @@ rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 					S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
 			if (rspamd_log->fd == -1) {
 				fprintf (stderr,
-						"open_log: cannot open desired log file: %s, %s my pid: %d",
-						rspamd_log->log_file, strerror (errno), getpid ());
+						"open_log: cannot open desired log file: %s, %s\n",
+						rspamd_log->log_file, strerror (errno));
 				return -1;
 			}
 			if (fchown (rspamd_log->fd, uid, gid) == -1) {
 				fprintf (stderr,
-						"open_log: cannot chown desired log file: %s, %s",
+						"open_log: cannot chown desired log file: %s, %s\n",
 						rspamd_log->log_file, strerror (errno));
 				close (rspamd_log->fd);
 				return -1;
