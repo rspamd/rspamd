@@ -1327,8 +1327,6 @@ rspamd_language_detector_unicode_scripts (struct rspamd_task *task,
 			case UBLOCK_CJK_RADICALS_SUPPLEMENT:
 			case UBLOCK_CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A:
 			case UBLOCK_CJK_UNIFIED_IDEOGRAPHS_EXTENSION_B:
-			case UBLOCK_CJK_UNIFIED_IDEOGRAPHS_EXTENSION_C:
-			case UBLOCK_CJK_UNIFIED_IDEOGRAPHS_EXTENSION_D:
 				part->unicode_scripts |= RSPAMD_UNICODE_CJK;
 				nchinese ++;
 				break;
@@ -1339,18 +1337,14 @@ rspamd_language_detector_unicode_scripts (struct rspamd_task *task,
 				break;
 			case UBLOCK_HANGUL_JAMO:
 			case UBLOCK_HANGUL_COMPATIBILITY_JAMO:
-			case UBLOCK_HANGUL_JAMO_EXTENDED_A:
-			case UBLOCK_HANGUL_JAMO_EXTENDED_B:
 				part->unicode_scripts |= RSPAMD_UNICODE_HANGUL;
 				nspecial ++;
 				break;
 			case UBLOCK_ARABIC:
-			case UBLOCK_ARABIC_SUPPLEMENT:
 				part->unicode_scripts |= RSPAMD_UNICODE_ARABIC;
 				nspecial ++;
 				break;
 			case UBLOCK_DEVANAGARI:
-			case UBLOCK_DEVANAGARI_EXTENDED:
 				part->unicode_scripts |= RSPAMD_UNICODE_DEVANAGARI;
 				nspecial ++;
 				break;
@@ -1359,7 +1353,6 @@ rspamd_language_detector_unicode_scripts (struct rspamd_task *task,
 				nspecial ++;
 				break;
 			case UBLOCK_GEORGIAN:
-			case UBLOCK_GEORGIAN_EXTENDED:
 				part->unicode_scripts |= RSPAMD_UNICODE_GEORGIAN;
 				nspecial ++;
 				break;
