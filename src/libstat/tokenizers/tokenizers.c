@@ -393,7 +393,7 @@ start_over:
 							if (rspamd_utf_word_valid (text, text + len, last, p)) {
 								token.begin = text + last;
 								token.len = p - last;
-								token.flags = 0;
+								token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
 							}
 						}
 					}
@@ -407,7 +407,7 @@ start_over:
 						if (rspamd_utf_word_valid (text, text + len, last, p)) {
 							token.begin = text + last;
 							token.len = p - last;
-							token.flags = 0;
+							token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
 						}
 					}
 					else {
@@ -415,7 +415,7 @@ start_over:
 						if (rspamd_utf_word_valid (text, text + len, last, p)) {
 							token.begin = text + last;
 							token.len = p - last;
-							token.flags = 0;
+							token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
 						}
 					}
 				}
@@ -423,6 +423,7 @@ start_over:
 					if (rspamd_utf_word_valid (text, text + len, last, p)) {
 						token.begin = text + last;
 						token.len = p - last;
+						token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
 					}
 				}
 
