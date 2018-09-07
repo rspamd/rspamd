@@ -352,7 +352,8 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 	struct rspamd_language_ucs_elt *ucs_elt;
 	khash_t (rspamd_trigram_hash) *htb = NULL;
 	gchar *pos;
-	guint total = 0, total_latin = 0, total_ngramms = 0, i, skipped, loaded;
+	guint total = 0, total_latin = 0, total_ngramms = 0, i, skipped,
+			loaded, nstop = 0;
 	gdouble mean = 0, std = 0, delta = 0, delta2 = 0, m2 = 0;
 	enum rspamd_language_category cat = RSPAMD_LANGUAGE_MAX;
 
@@ -446,6 +447,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 			while ((w = ucl_object_iterate (specific_stop_words, &it, true)) != NULL) {
 				rspamd_multipattern_add_pattern (d->stop_words[cat].mp,
 						ucl_object_tostring (w), 0);
+				nstop ++;
 			}
 
 			stop = rspamd_multipattern_get_npatterns (d->stop_words[cat].mp);
@@ -584,13 +586,13 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 
 	msg_info_config ("loaded %s language, %d trigramms, "
 					 "%d ngramms loaded; "
-					 "std=%.2f, mean=%.2f, skipped=%d, loaded=%d; "
+					 "std=%.2f, mean=%.2f, skipped=%d, loaded=%d, stop_words=%d; "
 					 "(%s)",
 			nelt->name,
 			(gint)nelt->trigramms_words,
 			total,
 			std, mean,
-			skipped, loaded,
+			skipped, loaded, nstop,
 			rspamd_language_detector_print_flags (nelt));
 
 	g_ptr_array_add (d->languages, nelt);
@@ -717,7 +719,7 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 
 	languages_pattern = g_string_sized_new (PATH_MAX);
 	rspamd_printf_gstring (languages_pattern, "%s/stop_words", languages_path);
-	parser = ucl_parser_new (UCL_PARSER_DEFAULT|UCL_PARSER_ZEROCOPY);
+	parser = ucl_parser_new (UCL_PARSER_DEFAULT);
 
 	if (ucl_parser_add_file (parser, languages_pattern->str)) {
 		stop_words = ucl_parser_get_object (parser);
@@ -772,10 +774,18 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 	}
 
 	for (i = 0; i < RSPAMD_LANGUAGE_MAX; i ++) {
+		GError *err = NULL;
+
 		kh_foreach_value (ret->trigramms[i], schain, {
 			chain = &schain;
 			rspamd_language_detector_process_chain (cfg, chain);
 		});
+
+		if (!rspamd_multipattern_compile (ret->stop_words[i].mp, &err)) {
+			msg_err_config ("cannot compile stop words for %d language group: %e",
+					i, err);
+			g_error_free (err);
+		}
 
 		total += kh_size (ret->trigramms[i]);
 	}
@@ -1589,7 +1599,7 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 
 	cat = rspamd_language_detector_get_category (part->unicode_scripts);
 
-	if (rspamd_language_detector_try_stop_words (task, d, part, cat)) {
+	if (!ret && rspamd_language_detector_try_stop_words (task, d, part, cat)) {
 		ret = TRUE;
 	}
 
@@ -1679,6 +1689,8 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 		}
 
 		part->languages = result;
+
+		ret = TRUE;
 	}
 
 	end_ticks = rspamd_get_ticks (TRUE);
