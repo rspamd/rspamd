@@ -889,10 +889,16 @@ if opts and type(opts) == 'table' then
             for _, p in ipairs(m['patterns']) do
               if type(p) == 'table' then
                 for sym in pairs(p) do
+                  rspamd_logger.debugm(N, rspamd_config, 'registering: %1', {
+                    type = 'virtual',
+                    name = sym,
+                    parent = m['symbol'],
+                    parent_id = id,
+                  })
                   rspamd_config:register_symbol({
                     type = 'virtual',
                     name = sym,
-                    parent = m['symbol']
+                    parent = id
                   })
                 end
               end
