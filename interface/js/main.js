@@ -1,4 +1,4 @@
-/* global d3:false, require:false, requirejs:false */ // eslint-disable-line no-unused-vars
+/* global d3:true, require:false, requirejs:false */ // eslint-disable-line no-unused-vars
 
 requirejs.config({
     baseUrl: "js/lib",
@@ -15,10 +15,9 @@ requirejs.config({
         nprogress: "nprogress.min",
     },
     shim: {
-        d3: {exports: "d3"},
         bootstrap: {exports: "bootstrap", deps: ["jquery"]},
         d3pie: {exports: "d3pie", deps: ["d3.global", "jquery"]},
-        d3evolution: {exports: "D3Evolution", deps: ["d3", "d3pie", "jquery"]},
+        d3evolution: {exports: "D3Evolution", deps: ["d3", "jquery"]},
         footable: {deps: ["bootstrap", "jquery"]}
     }
 });
@@ -28,19 +27,16 @@ document.title = window.location.hostname +
     (window.location.pathname !== "/" ? window.location.pathname : "") +
     " - Rspamd Web Interface";
 
-define("d3.global", ["d3"], function (_) { // eslint-disable-line strict
-    d3 = _; // eslint-disable-line no-global-assign
+// Ugly hack to get d3pie work with requirejs
+define("d3.global", ["d3"], function (d3global) { // eslint-disable-line strict
+    d3 = d3global;
 });
 
 // Load main UI
-require(["domReady"],
-    function (domReady) {
+require(["app/rspamd"],
+    function (rspamd) {
         "use strict";
-        domReady(function () {
-            require(["jquery", "d3", "app/rspamd"],
-                function ($, d3, rspamd) {
-                    rspamd.setup();
-                    rspamd.connect();
-                });
-        });
-    });
+        rspamd.setup();
+        rspamd.connect();
+    }
+);
