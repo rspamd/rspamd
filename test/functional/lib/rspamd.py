@@ -212,3 +212,8 @@ def shutdown_process_with_children(pid):
         except:
             pass
 
+def get_file_if_exists(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, 'r') as myfile:
+            return myfile.read()
+    return None
