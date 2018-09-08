@@ -1572,6 +1572,9 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 	gint ret;
 	const gchar *learned_key = "learns";
 
+	if (rspamd_session_is_destroying (task->s)) {
+		return FALSE;
+	}
 
 	if (tokens == NULL || tokens->len == 0 || rt->redis == NULL) {
 		return FALSE;
@@ -1663,6 +1666,10 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	gint ret;
 	goffset off;
 	const gchar *learned_key = "learns";
+
+	if (rspamd_session_is_destroying (task->s)) {
+		return FALSE;
+	}
 
 	up = rspamd_upstream_get (rt->ctx->write_servers,
 			RSPAMD_UPSTREAM_MASTER_SLAVE,

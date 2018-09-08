@@ -13,6 +13,7 @@
 #cmakedefine HAVE_ARPA_INET_H    1
 #cmakedefine HAVE_ASM_PAUSE      1
 #cmakedefine HAVE_ATOMIC_BUILTINS 1
+#cmakedefine HAVE_CLOCK_GETCPUCLOCKID 1
 #cmakedefine HAVE_CLOCK_GETTIME  1
 #cmakedefine HAVE_CLOCK_PROCESS_CPUTIME_ID  1
 #cmakedefine HAVE_CLOCK_VIRTUAL  1
@@ -73,6 +74,7 @@
 #cmakedefine HAVE_PWD_H          1
 #cmakedefine HAVE_RDTSC          1
 #cmakedefine HAVE_READPASSPHRASE_H  1
+#cmakedefine HAVE_RUSAGE_SELF    1
 #cmakedefine HAVE_SA_SIGINFO     1
 #cmakedefine HAVE_SANE_SHMEM     1
 #cmakedefine HAVE_SANE_TZSET     1
@@ -111,6 +113,7 @@
 #cmakedefine HAVE_SYS_TIMEB_H    1
 #cmakedefine HAVE_SYS_TIME_H     1
 #cmakedefine HAVE_SYS_TYPES_H    1
+#cmakedefine HAVE_SYS_UCONTEXT_H 1
 #cmakedefine HAVE_SYS_UIO_H      1
 #cmakedefine HAVE_SYS_UN_H       1
 #cmakedefine HAVE_SYS_UTSNAME_H  1
@@ -144,6 +147,7 @@
 #cmakedefine WITH_SYSTEM_HIREDIS 1
 #cmakedefine WITH_TORCH          1
 #cmakedefine WITH_LIBUNWIND      1
+#cmakedefine WITH_LUA_TRACE      1
 
 #cmakedefine DISABLE_PTHREAD_MUTEX 1
 

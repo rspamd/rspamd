@@ -684,3 +684,7 @@ background: url("../img/asc.png") no-repeat center right;
 table.dataTable thead .sorting_desc_disabled {
 background: url("../img/desc.png") no-repeat center right;
 }
+
+#nprogress .bar {
+	height: 1px;
+}

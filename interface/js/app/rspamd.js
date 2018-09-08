@@ -25,9 +25,10 @@
 
 /* global jQuery:false, Visibility:false */
 
-define(["jquery", "d3pie", "visibility", "app/stats", "app/graph", "app/config",
+define(["jquery", "d3pie", "visibility", "nprogress", "app/stats", "app/graph", "app/config",
     "app/symbols", "app/history", "app/upload"],
-function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
+// eslint-disable-next-line max-params
+function ($, d3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
     tab_symbols, tab_history, tab_upload) {
     "use strict";
     // begin
@@ -35,21 +36,20 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     var tables = {};
     var neighbours = []; // list of clusters
     var checked_server = "All SERVERS";
-    var ui = {
-        read_only: false,
-    };
-
+    var ui = {};
     var timer_id = [];
     var selData; // Graph's dataset selector state
+
+    NProgress.configure({
+        minimum: 0.01,
+        showSpinner: false,
+    });
 
     function cleanCredentials() {
         sessionStorage.clear();
         $("#statWidgets").empty();
         $("#listMaps").empty();
         $("#modalBody").empty();
-        $("#historyLog tbody").remove();
-        $("#errorsLog tbody").remove();
-        $("#symbolsTable tbody").remove();
     }
 
     function stopTimers() {
@@ -59,30 +59,12 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     }
 
     function disconnect() {
-        if (graphs.chart) {
-            graphs.chart.destroy();
-            delete graphs.chart;
-        }
-        if (graphs.rrd_pie) {
-            graphs.rrd_pie.destroy();
-            delete graphs.rrd_pie;
-        }
-        if (graphs.graph) {
-            graphs.graph.destroy();
-            delete graphs.graph;
-        }
-        if (tables.history) {
-            tables.history.destroy();
-            delete tables.history;
-        }
-        if (tables.errors) {
-            tables.errors.destroy();
-            delete tables.errors;
-        }
-        if (tables.symbols) {
-            tables.symbols.destroy();
-            delete tables.symbols;
-        }
+        [graphs, tables].forEach(function (o) {
+            Object.keys(o).forEach(function (key) {
+                o[key].destroy();
+                delete o[key];
+            });
+        });
 
         stopTimers();
         cleanCredentials();
@@ -108,14 +90,14 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             });
             break;
         case "#throughput_nav":
-            tab_graph.draw(ui, graphs, neighbours, checked_server, selData);
+            tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
 
             var autoRefresh = {
                 hourly: 60000,
                 daily: 300000
             };
             timer_id.throughput = Visibility.every(autoRefresh[selData] || 3600000, function () {
-                tab_graph.draw(ui, graphs, neighbours, checked_server, selData);
+                tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
             });
             break;
         case "#configuration_nav":
@@ -123,11 +105,11 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
             tab_config.getMaps(ui, checked_server);
             break;
         case "#symbols_nav":
-            tab_symbols.getSymbols(ui, checked_server);
+            tab_symbols.getSymbols(ui, tables, checked_server);
             break;
         case "#history_nav":
-            tab_history.getHistory(ui, tables, neighbours, checked_server);
-            tab_history.getErrors(ui, tables, neighbours, checked_server);
+            tab_history.getHistory(ui, tables);
+            tab_history.getErrors(ui, tables);
             break;
         case "#disconnect":
             disconnect();
@@ -158,7 +140,19 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
     }
 
     function displayUI() {
-        // @toggle auth and main
+        // In many browsers local storage can only store string.
+        // So when we store the boolean true or false, it actually stores the strings "true" or "false".
+        ui.read_only = sessionStorage.getItem("read_only") === "true";
+        if (ui.read_only) {
+            $("#learning_nav").hide();
+            $("#resetHistory").attr("disabled", true);
+            $("#errors-history").hide();
+        } else {
+            $("#learning_nav").show();
+            $("#resetHistory").removeAttr("disabled", true);
+            $("#errors-history").show();
+        }
+
         var buttons = $("#navBar .pull-right");
         $("#mainUI").show();
         $("#progress").show();
@@ -187,16 +181,24 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         var req_params = {
             jsonp: false,
             data: o.data,
-            beforeSend: function (xhr) {
-                xhr.setRequestHeader("Password", getPassword());
-
-                if (o.headers) {
-                    $.each(o.headers, function (hname, hvalue) {
-                        xhr.setRequestHeader(hname, hvalue);
-                    });
-                }
-            },
+            headers: $.extend({Password: getPassword()}, o.headers),
             url: neighbours_status[ind].url + req_url,
+            xhr: function () {
+                var xhr = $.ajaxSettings.xhr();
+                // Download progress
+                if (req_url !== "neighbours") {
+                    xhr.addEventListener("progress", function (e) {
+                        if (e.lengthComputable) {
+                            neighbours_status[ind].percentComplete = e.loaded / e.total;
+                            var percentComplete = neighbours_status.reduce(function (prev, curr) {
+                                return curr.percentComplete ? curr.percentComplete + prev : prev;
+                            }, 0);
+                            NProgress.set(percentComplete / neighbours_status.length);
+                        }
+                    }, false);
+                }
+                return xhr;
+            },
             success: function (json) {
                 neighbours_status[ind].checked = true;
                 neighbours_status[ind].status = true;
@@ -233,8 +235,10 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                     } else {
                         alertMessage("alert-error", "Request failed");
                     }
+                    NProgress.done();
                 }
-            }
+            },
+            statusCode: o.statusCode
         };
         if (o.method) {
             req_params.method = o.method;
@@ -286,26 +290,15 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 tabClick("#status_nav");
             }
         });
-        tab_config.setup(ui, checked_server);
-        tab_symbols.setup(ui);
+        tab_config.setup(ui);
+        tab_history.setup(ui, tables);
+        tab_symbols.setup(ui, tables);
         tab_upload.setup(ui);
         selData = tab_graph.setup();
     };
 
     ui.connect = function () {
         if (isLogged()) {
-            var data = JSON.parse(sessionStorage.getItem("Credentials"));
-
-            if (data && data[checked_server].read_only) {
-                ui.read_only = true;
-                $("#learning_nav").hide();
-                $("#resetHistory").attr("disabled", true);
-                $("#errors-history").hide();
-            } else {
-                ui.read_only = false;
-                $("#learning_nav").show();
-                $("#resetHistory").removeAttr("disabled", true);
-            }
             displayUI();
             return;
         }
@@ -327,31 +320,15 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                 return;
             }
 
-            $.ajax({
-                global: false,
-                jsonp: false,
-                dataType: "json",
-                type: "GET",
-                url: "auth",
-                beforeSend: function (xhr) {
-                    xhr.setRequestHeader("Password", password);
+            ui.query("auth", {
+                headers: {
+                    Password: password
                 },
                 success: function (json) {
+                    var data = json[0].data;
                     $("#connectPassword").val("");
-                    if (json.auth === "failed") {
-                        // Is actually never returned by Rspamd
-                    } else {
-                        if (json.read_only) {
-                            ui.read_only = true;
-                            $("#learning_nav").hide();
-                            $("#resetHistory").attr("disabled", true);
-                            $("#errors-history").hide();
-                        } else {
-                            ui.read_only = false;
-                            $("#learning_nav").show();
-                            $("#resetHistory").removeAttr("disabled", true);
-                        }
-
+                    if (data.auth === "ok") {
+                        sessionStorage.setItem("read_only", data.read_only);
                         saveCredentials(password);
                         $(dialog).hide();
                         $(backdrop).hide();
@@ -362,7 +339,11 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
                     ui.alertMessage("alert-modal alert-error", jqXHR.statusText);
                     $("#connectPassword").val("");
                     $("#connectPassword").focus();
-                }
+                },
+                params: {
+                    global: false,
+                },
+                server: "local"
             });
         });
     };
@@ -482,7 +463,8 @@ function ($, d3pie, visibility, tab_stat, tab_graph, tab_config,
         // Force options to be an object
         var o = options || {};
         Object.keys(o).forEach(function (option) {
-            if (["data", "error", "errorMessage", "errorOnceId", "headers", "method", "params", "server", "success"]
+            if (["data", "error", "errorMessage", "errorOnceId", "headers", "method", "params", "server", "statusCode",
+                "success"]
                 .indexOf(option) < 0) {
                 throw new Error("Unknown option: " + option);
             }

@@ -357,7 +357,7 @@ local metafunctions = {
 }
 
 local function rspamd_gen_metatokens(task)
-  local rspamd_logger = require "rspamd_logger"
+  local lua_util = require "lua_util"
   local ipairs = ipairs
   local metatokens = {}
   local cached = task:cache_get('metatokens')
@@ -368,7 +368,7 @@ local function rspamd_gen_metatokens(task)
     for _,mt in ipairs(metafunctions) do
       local ct = mt.cb(task)
       for i,tok in ipairs(ct) do
-        rspamd_logger.debugm(N, task, "metatoken: %s = %s", mt.desc[i], tok)
+        lua_util.debugm(N, task, "metatoken: %s = %s", mt.desc[i], tok)
         table.insert(metatokens, tok)
       end
     end

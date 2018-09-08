@@ -105,6 +105,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 	const gchar *cache_name = NULL;
 	lua_State *L = cfg->lua_state;
 	guint lua_classifiers_cnt = 0, i;
+	gboolean skip_cache = FALSE;
 
 	if (stat_ctx == NULL) {
 		stat_ctx = g_malloc0 (sizeof (*stat_ctx));
@@ -217,17 +218,22 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 			cache_obj = ucl_object_lookup (clf->opts, "cache");
 			cache_name_obj = NULL;
 
-			if (cache_obj) {
-				cache_name_obj = ucl_object_lookup_any (cache_obj,
-						"name", "type", NULL);
+			if (cache_obj && ucl_object_type (cache_obj) == UCL_NULL) {
+				skip_cache = TRUE;
 			}
+			else {
+				if (cache_obj) {
+					cache_name_obj = ucl_object_lookup_any (cache_obj,
+							"name", "type", NULL);
+				}
 
-			if (cache_name_obj) {
-				cache_name = ucl_object_tostring (cache_name_obj);
+				if (cache_name_obj) {
+					cache_name = ucl_object_tostring (cache_name_obj);
+				}
 			}
 		}
 
-		if (cache_name == NULL) {
+		if (cache_name == NULL && !skip_cache) {
 			/* We assume that learn cache is the same as backend */
 			cache_name = clf->backend;
 		}
@@ -252,7 +258,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 			}
 
 			/* XXX: bad hack to pass statfiles configuration to cache */
-			if (cl->cache == NULL) {
+			if (cl->cache == NULL && !skip_cache) {
 				cl->cache = rspamd_stat_get_cache (cache_name);
 				g_assert (cl->cache != NULL);
 				cl->cachecf = cl->cache->init (stat_ctx, cfg, st, cache_obj);

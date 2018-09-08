@@ -8,10 +8,12 @@ import re
 import shutil
 import signal
 import socket
-import string
+import errno
 import sys
 import tempfile
 import time
+from robot.libraries.BuiltIn import BuiltIn
+from robot.api import logger
 
 if sys.version_info > (3,):
     long = int
@@ -32,6 +34,23 @@ def Check_JSON(j):
 
 def cleanup_temporary_directory(directory):
     shutil.rmtree(directory)
+
+def save_run_results(directory, filenames):
+    current_directory = os.getcwd()
+    suite_name = BuiltIn().get_variable_value("${SUITE_NAME}")
+    test_name = BuiltIn().get_variable_value("${TEST NAME}")
+    if test_name is None:
+        # this is suite-level tear down 
+        destination_directory = "%s/robot-save/%s" % (current_directory, suite_name)
+    else:
+        destination_directory = "%s/robot-save/%s/%s" % (current_directory, suite_name, test_name)
+    if not os.path.isdir(destination_directory):
+        os.makedirs(destination_directory)
+    for file in filenames.split(' '):
+        source_file = "%s/%s" % (directory, file)
+        if os.path.isfile(source_file):
+            shutil.copy(source_file, "%s/%s" % (destination_directory, file))
+            shutil.copy(source_file, "%s/robot-save/%s.last" % (current_directory, file))
 
 def encode_filename(filename):
     return "".join(['%%%0X' % ord(b) for b in filename])
@@ -58,6 +77,7 @@ def get_rspamd():
         return os.environ['RSPAMD_INSTALLROOT'] + "/bin/rspamd"
     dname = get_top_dir()
     return dname + "/src/rspamd"
+
 def get_rspamc():
     if os.environ.get('RSPAMC'):
         return os.environ['RSPAMC']
@@ -65,6 +85,7 @@ def get_rspamc():
         return os.environ['RSPAMD_INSTALLROOT'] + "/bin/rspamc"
     dname = get_top_dir()
     return dname + "/src/client/rspamc"
+
 def get_rspamadm():
     if os.environ.get('RSPAMADM'):
         return os.environ['RSPAMADM']
@@ -147,32 +168,47 @@ def update_dictionary(a, b):
     a.update(b)
     return a
 
-def shutdown_process(pid):
+def shutdown_process(process):
     i = 0
     while i < 100:
         try:
-            os.kill(pid, signal.SIGTERM)
+            os.kill(process.pid, signal.SIGTERM)
         except OSError as e:
-            assert e.errno == 3
+            assert e.errno == errno.ESRCH
             return
+
+        if process.status() == psutil.STATUS_ZOMBIE:
+            return
+
         i += 1
         time.sleep(0.1)
+
     while i < 200:
         try:
-            os.kill(pid, signal.SIGKILL)
+            os.kill(process.pid, signal.SIGKILL)
         except OSError as e:
-            assert e.errno == 3
+            assert e.errno == errno.ESRCH
             return
+
+        if process.status() == psutil.STATUS_ZOMBIE:
+            return
+
         i += 1
         time.sleep(0.1)
-    assert False, "Failed to shutdown process %s" % pid
+    assert False, "Failed to shutdown process %d (%s)" % (process.pid, process.name())
+
 
 def shutdown_process_with_children(pid):
     pid = int(pid)
-    children = psutil.Process(pid=pid).children(recursive=False)
-    shutdown_process(pid)
+    try:
+        process = psutil.Process(pid=pid)
+    except psutil.NoSuchProcess:
+        return
+    children = process.children(recursive=False)
+    shutdown_process(process)
     for child in children:
         try:
-            shutdown_process(child.pid)
+            shutdown_process(child)
         except:
             pass
+

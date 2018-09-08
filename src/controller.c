@@ -1059,6 +1059,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	rspamd_http_connection_reset (conn_ent->conn);
+	rspamd_http_router_insert_headers (conn_ent->rt, reply);
 	rspamd_http_connection_write_message (conn_ent->conn, reply, NULL,
 		"text/plain", conn_ent, conn_ent->conn->fd,
 		conn_ent->rt->ptv, conn_ent->rt->ev_base);
@@ -1524,8 +1525,8 @@ rspamd_controller_handle_lua_history (lua_State *L,
 				pconn_ent = lua_newuserdata (L, sizeof (*pconn_ent));
 				*pconn_ent = conn_ent;
 				rspamd_lua_setclass (L, "rspamd{csession}", -1);
-				lua_pushnumber (L, from);
-				lua_pushnumber (L, to);
+				lua_pushinteger (L, from);
+				lua_pushinteger (L, to);
 				lua_pushboolean (L, reset);
 
 				if (lua_pcall (L, 5, 0, 0) != 0) {
@@ -1925,6 +1926,7 @@ rspamd_controller_scan_reply (struct rspamd_task *task)
 	msg->code = 200;
 	rspamd_protocol_http_reply (msg, task, NULL);
 	rspamd_http_connection_reset (conn_ent->conn);
+	rspamd_http_router_insert_headers (conn_ent->rt, msg);
 	rspamd_http_connection_write_message (conn_ent->conn, msg, NULL,
 			"application/json", conn_ent, conn_ent->conn->fd, conn_ent->rt->ptv,
 			conn_ent->rt->ev_base);
@@ -2874,7 +2876,7 @@ rspamd_controller_handle_unknown (struct rspamd_http_connection_entry *conn_ent,
 		rspamd_http_message_add_header (rep, "Access-Control-Allow-Methods",
 				"POST, GET, OPTIONS");
 		rspamd_http_message_add_header (rep, "Access-Control-Allow-Headers",
-						"Content-Type, Password, Map");
+						"Content-Type,Password,Map,Weight,Flag");
 		rspamd_http_connection_reset (conn_ent->conn);
 		rspamd_http_router_insert_headers (conn_ent->rt, rep);
 		rspamd_http_connection_write_message (conn_ent->conn,
@@ -3853,7 +3855,6 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	rspamd_stat_close ();
 	rspamd_http_router_free (ctx->http);
-	rspamd_log_close (worker->srv->logger);
 
 	if (ctx->cached_password.len > 0) {
 		m = (gpointer)ctx->cached_password.begin;
@@ -3868,6 +3869,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	g_hash_table_unref (ctx->plugins);
 	g_hash_table_unref (ctx->custom_commands);
 	REF_RELEASE (ctx->cfg);
+	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);
 }

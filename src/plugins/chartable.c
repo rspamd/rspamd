@@ -560,13 +560,13 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 	guint i, ncap = 0;
 	gdouble cur_score = 0.0;
 
-	if (part == NULL || part->normalized_words == NULL ||
-			part->normalized_words->len == 0) {
+	if (part == NULL || part->utf_words == NULL ||
+			part->utf_words->len == 0) {
 		return;
 	}
 
-	for (i = 0; i < part->normalized_words->len; i++) {
-		w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
+	for (i = 0; i < part->utf_words->len; i++) {
+		w = &g_array_index (part->utf_words, rspamd_stat_token_t, i);
 
 		if (w->len > 0 && (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT)) {
 
@@ -588,7 +588,7 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 	 */
 	part->capital_letters += ncap;
 
-	cur_score /= (gdouble)part->normalized_words->len;
+	cur_score /= (gdouble)part->utf_words->len;
 
 	if (cur_score > 2.0) {
 		cur_score = 2.0;
@@ -619,11 +619,20 @@ chartable_symbol_callback (struct rspamd_task *task, void *unused)
 		guint i;
 		gdouble cur_score = 0.0;
 
-		words = rspamd_tokenize_text (task->subject, strlen (task->subject),
-				TRUE,
+		UText utxt = UTEXT_INITIALIZER;
+		UErrorCode uc_err = U_ZERO_ERROR;
+		gsize slen = strlen (task->subject);
+
+		utext_openUTF8 (&utxt,
+				task->subject,
+				slen,
+				&uc_err);
+
+		words = rspamd_tokenize_text (task->subject, slen,
+				&utxt,
+				RSPAMD_TOKENIZE_UTF,
 				NULL,
 				NULL,
-				FALSE,
 				NULL);
 
 		if (words && words->len > 0) {

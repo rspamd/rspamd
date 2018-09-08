@@ -20,6 +20,7 @@
 #include "uthash_strcase.h"
 #include "filter.h"
 #include "lua/lua_common.h"
+#include "lua/lua_thread_pool.h"
 #include "map.h"
 #include "map_helpers.h"
 #include "map_private.h"
@@ -175,6 +176,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	if (!(flags & RSPAMD_CONFIG_INIT_SKIP_LUA)) {
 		cfg->lua_state = rspamd_lua_init ();
 		cfg->own_lua_state = TRUE;
+		cfg->lua_thread_pool = lua_thread_pool_new (cfg->lua_state);
 	}
 
 	cfg->cache = rspamd_symbols_cache_new (cfg);
@@ -259,6 +261,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 	g_ptr_array_free (cfg->c_modules, TRUE);
 
 	if (cfg->lua_state && cfg->own_lua_state) {
+		lua_thread_pool_free (cfg->lua_thread_pool);
 		lua_close (cfg->lua_state);
 	}
 	REF_RELEASE (cfg->libs_ctx);

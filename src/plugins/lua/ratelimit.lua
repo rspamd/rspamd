@@ -19,6 +19,16 @@ if confighelp then
   return
 end
 
+local rspamd_logger = require "rspamd_logger"
+local rspamd_util = require "rspamd_util"
+local rspamd_lua_utils = require "lua_util"
+local lua_redis = require "lua_redis"
+local fun = require "fun"
+local lua_maps = require "lua_maps"
+local lua_util = require "lua_util"
+local rspamd_hash = require "rspamd_cryptobox_hash"
+local lua_selectors = require "lua_selectors"
+
 -- A plugin that implements ratelimits using redis
 
 local E = {}
@@ -56,7 +66,7 @@ local settings = {
 local bucket_check_script = [[
   local last = redis.call('HGET', KEYS[1], 'l')
   local now = tonumber(KEYS[2])
-  local dynr, dynb = 0, 0
+  local dynr, dynb, leaked = 0, 0, 0
   if not last then
     -- New bucket
     redis.call('HSET', KEYS[1], 'l', KEYS[2])
@@ -64,7 +74,7 @@ local bucket_check_script = [[
     redis.call('HSET', KEYS[1], 'dr', '10000')
     redis.call('HSET', KEYS[1], 'db', '10000')
     redis.call('EXPIRE', KEYS[1], KEYS[5])
-    return {0, 0, 1, 1}
+    return {0, '0', '1', '1', '0'}
   end
 
   last = tonumber(last)
@@ -75,9 +85,10 @@ local bucket_check_script = [[
     local rate = tonumber(KEYS[3])
     dynr = tonumber(redis.call('HGET', KEYS[1], 'dr')) / 10000.0
     rate = rate * dynr
-    local leaked = ((now - last) * rate)
+    leaked = ((now - last) * rate)
     burst = burst - leaked
     redis.call('HINCRBYFLOAT', KEYS[1], 'b', -(leaked))
+    redis.call('HSET', KEYS[1], 'l', KEYS[2])
    end
   else
    burst = 0
@@ -86,11 +97,11 @@ local bucket_check_script = [[
 
   dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
 
-  if (burst + 1) * dynb > tonumber(KEYS[4]) then
-   return {1, tostring(burst), tostring(dynr), tostring(dynb)}
+  if (burst + 1) > tonumber(KEYS[4]) * dynb then
+   return {1, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
   end
 
-  return {0, tostring(burst), tostring(dynr), tostring(dynb)}
+  return {0, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
 ]]
 local bucket_check_id
 
@@ -147,15 +158,6 @@ local bucket_update_id
 local message_func = function(_, limit_type, _, _)
   return string.format('Ratelimit "%s" exceeded', limit_type)
 end
-
-local rspamd_logger = require "rspamd_logger"
-local rspamd_util = require "rspamd_util"
-local rspamd_lua_utils = require "lua_util"
-local lua_redis = require "lua_redis"
-local fun = require "fun"
-local lua_maps = require "lua_maps"
-local lua_util = require "lua_util"
-local rspamd_hash = require "rspamd_cryptobox_hash"
 
 
 local function load_scripts(cfg, ev_base)
@@ -334,6 +336,48 @@ local keywords = {
       return task:get_principal_recipient()
     end,
   },
+  ['digest'] = {
+    ['get_value'] = function(task)
+      return task:get_digest()
+    end,
+  },
+  ['attachments'] = {
+    ['get_value'] = function(task)
+      local parts = task:get_parts() or E
+      local digests = {}
+
+      for _,p in ipairs(parts) do
+        if p:get_filename() then
+          table.insert(digests, p:get_digest())
+        end
+      end
+
+      if #digests > 0 then
+        return table.concat(digests, '')
+      end
+
+      return nil
+    end,
+  },
+  ['files'] = {
+    ['get_value'] = function(task)
+      local parts = task:get_parts() or E
+      local files = {}
+
+      for _,p in ipairs(parts) do
+        local fname = p:get_filename()
+        if fname then
+          table.insert(files, fname)
+        end
+      end
+
+      if #files > 0 then
+        return table.concat(files, ':')
+      end
+
+      return nil
+    end,
+  },
 }
 
 local function gen_rate_key(task, rtype, bucket)
@@ -388,13 +432,37 @@ end
 
 local function limit_to_prefixes(task, k, v, prefixes)
   local n = 0
-  for _,bucket in ipairs(v) do
-    local prefix = gen_rate_key(task, k, bucket)
-
-    if prefix then
-      prefixes[prefix] = make_prefix(prefix, k, bucket)
-      n = n + 1
+  for _,bucket in ipairs(v.buckets) do
+    if v.selector then
+      local selectors = lua_selectors.process_selectors(task, v.selector)
+      if selectors then
+        local combined = lua_selectors.combine_selectors(task, selectors, ':')
+        if type(combined) == 'string' then
+          prefixes[combined] = make_prefix(combined, k, bucket)
+          n = n + 1
+        else
+          fun.each(function(p)
+            prefixes[p] = make_prefix(p, k, bucket)
+            n = n + 1
+          end, combined)
+        end
+      end
+    else
+      local prefix = gen_rate_key(task, k, bucket)
+      if prefix then
+        if type(prefix) == 'string' then
+          prefixes[prefix] = make_prefix(prefix, k, bucket)
+          n = n + 1
+        else
+          fun.each(function(p)
+            prefixes[p] = make_prefix(p, k, bucket)
+            n = n + 1
+          end, prefix)
+        end
+      end
     end
+
+
   end
 
   return n
@@ -461,28 +529,35 @@ local function ratelimit_cb(task)
     return function(err, data)
       if err then
         rspamd_logger.errx('cannot check limit %s: %s %s', prefix, err, data)
-      elseif type(data) == 'table' and data[1] and data[1] == 1 then
-        -- set symbol only and do NOT soft reject
-        if settings.symbol then
-          task:insert_result(settings.symbol, 0.0, lim_name .. "(" .. prefix .. ")")
+      elseif type(data) == 'table' and data[1] then
+        lua_util.debugm(N, task,
+            "got reply for limit %s (%s / %s); %s burst, %s:%s dyn, %s leaked",
+            prefix, bucket.burst, bucket.rate,
+            data[2], data[3], data[4], data[5])
+
+        if data[1] == 1 then
+          -- set symbol only and do NOT soft reject
+          if settings.symbol then
+            task:insert_result(settings.symbol, 0.0, lim_name .. "(" .. prefix .. ")")
+            rspamd_logger.infox(task,
+                'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
+                lim_name, prefix,
+                bucket.burst, bucket.rate,
+                data[2], data[3], data[4])
+            return
+            -- set INFO symbol and soft reject
+          elseif settings.info_symbol then
+            task:insert_result(settings.info_symbol, 1.0,
+                lim_name .. "(" .. prefix .. ")")
+          end
           rspamd_logger.infox(task,
-              'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
+              'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
               lim_name, prefix,
               bucket.burst, bucket.rate,
               data[2], data[3], data[4])
-          return
-        -- set INFO symbol and soft reject
-        elseif settings.info_symbol then
-          task:insert_result(settings.info_symbol, 1.0,
-              lim_name .. "(" .. prefix .. ")")
+          task:set_pre_result('soft reject',
+              message_func(task, lim_name, prefix, bucket))
         end
-        rspamd_logger.infox(task,
-            'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
-            lim_name, prefix,
-            bucket.burst, bucket.rate,
-            data[2], data[3], data[4])
-        task:set_pre_result('soft reject',
-                message_func(task, lim_name, prefix, bucket))
       end
     end
   end
@@ -500,7 +575,7 @@ local function ratelimit_cb(task)
     for pr,value in pairs(prefixes) do
       local bucket = value.bucket
       local rate = (bucket.rate) / 1000.0 -- Leak rate in messages/ms
-      rspamd_logger.debugm(N, task, "check limit %s:%s -> %s (%s/%s)",
+      lua_util.debugm(N, task, "check limit %s:%s -> %s (%s/%s)",
           value.name, pr, value.hash, bucket.burst, bucket.rate)
       lua_redis.exec_redis_script(bucket_check_id,
               {key = value.hash, task = task, is_write = true},
@@ -517,7 +592,7 @@ local function ratelimit_update_cb(task)
   if prefixes then
     if task:has_pre_result() then
       -- Already rate limited/greylisted, do nothing
-      rspamd_logger.debugm(N, task, 'pre-action has been set, do not update')
+      lua_util.debugm(N, task, 'pre-action has been set, do not update')
       return
     end
 
@@ -531,7 +606,7 @@ local function ratelimit_update_cb(task)
           rspamd_logger.errx(task, 'cannot update rate bucket %s: %s',
                   k, err)
         else
-          rspamd_logger.debugm(N, task,
+          lua_util.debugm(N, task,
               "updated limit %s:%s -> %s (%s/%s), burst: %s, dyn_rate: %s, dyn_burst: %s",
               v.name, k, v.hash,
               bucket.burst, bucket.rate,
@@ -570,10 +645,33 @@ if opts then
   if opts['rates'] and type(opts['rates']) == 'table' then
     -- new way of setting limits
     fun.each(function(t, lim)
-      local buckets = parse_limit(t, lim)
+      local buckets
+      if type(lim) == 'table' and lim.selector and lim.bucket then
+        local selector = lua_selectors.parse_selector(rspamd_config, lim.selector)
+        if not selector then
+          rspamd_logger.errx(rspamd_config, 'bad ratelimit selector for %s: "%s"',
+              t, lim.selector)
+          return
+        end
+        local bucket = parse_limit(t, lim.bucket)
 
-      if buckets and #buckets > 0 then
-        settings.limits[t] = buckets
+        if not bucket then
+          rspamd_logger.errx(rspamd_config, 'bad ratelimit bucket for %s: "%s"',
+              t, lim.bucket)
+          return
+        end
+        settings.limits[t] = {
+          selector = selector,
+          buckets = bucket
+        }
+
+      else
+        buckets = parse_limit(t, lim)
+        if buckets and #buckets > 0 then
+          settings.limits[t] = {
+            buckets = buckets
+          }
+        end
       end
     end, opts['rates'])
   end

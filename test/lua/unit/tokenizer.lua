@@ -33,40 +33,6 @@ context("Text tokenization test", function()
     end)
   end
 
-
-  cases = {
-    -- First token is bad
-    {"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer mattis, nibh",
-     {"orem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit",
-      "Integer", "mattis", "nibh"
-     }
-    },
-    -- Unicode is broken
-    --{"Հետաքրքրվողների համար ոտորև ներկայացված",
-    --  {"Հետաքրքրվողների", "համար", "ոտորև", "ներկայացված"}
-    --},
-    {"", {}},
-    {",,,,,", {}},
-    {"word,,,,,word    ", {"ord", "word"}},
-    {"word", {"ord"}},
-    {",,,,word,,,", {"word"}}
-  }
-
-  for i,c in ipairs(cases) do
-    test("Tokenize simple text (legacy) " .. i, function()
-      local w = util.tokenize_text(c[1], {}, true)
-      if #c[2] == 0 then
-        assert_equal(#w, 0, "must not have tokens " .. c[1])
-      else
-        assert_not_nil(w, "must tokenize " .. c[1])
-
-        for i,wrd in ipairs(w) do
-          assert_equal(wrd, c[2][i])
-        end
-      end
-    end)
-  end
-
   cases = {
     {"word https://example.com/path word",
      {{5, 24}},

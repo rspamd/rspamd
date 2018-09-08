@@ -98,7 +98,7 @@ static const struct luaL_reg exprlib_f[] = {
 
 static rspamd_expression_atom_t * lua_atom_parse (const gchar *line, gsize len,
 			rspamd_mempool_t *pool, gpointer ud, GError **err);
-static gdouble lua_atom_process (gpointer input, rspamd_expression_atom_t *atom);
+static gdouble lua_atom_process (struct rspamd_expr_process_data *process_data, rspamd_expression_atom_t *atom);
 
 static const struct rspamd_atom_subr lua_atom_subr = {
 	.parse = lua_atom_parse,
@@ -166,22 +166,22 @@ lua_atom_parse (const gchar *line, gsize len,
 }
 
 static gdouble
-lua_atom_process (gpointer input, rspamd_expression_atom_t *atom)
+lua_atom_process (struct rspamd_expr_process_data *process_data, rspamd_expression_atom_t *atom)
 {
 	struct lua_expression *e = (struct lua_expression *)atom->data;
 	gdouble ret = 0;
 
-	lua_rawgeti (e->L, LUA_REGISTRYINDEX, e->process_idx);
-	lua_pushlstring (e->L, atom->str, atom->len);
-	lua_pushvalue (e->L, GPOINTER_TO_INT (input));
+	lua_rawgeti (process_data->L, LUA_REGISTRYINDEX, e->process_idx);
+	lua_pushlstring (process_data->L, atom->str, atom->len);
+	lua_pushvalue (process_data->L, process_data->stack_item);
 
-	if (lua_pcall (e->L, 2, 1, 0) != 0) {
-		msg_info ("callback call failed: %s", lua_tostring (e->L, -1));
-		lua_pop (e->L, 1);
+	if (lua_pcall (process_data->L, 2, 1, 0) != 0) {
+		msg_info ("callback call failed: %s", lua_tostring (process_data->L, -1));
+		lua_pop (process_data->L, 1);
 	}
 	else {
-		ret = lua_tonumber (e->L, -1);
-		lua_pop (e->L, 1);
+		ret = lua_tonumber (process_data->L, -1);
+		lua_pop (process_data->L, 1);
 	}
 
 	return ret;
@@ -190,15 +190,21 @@ lua_atom_process (gpointer input, rspamd_expression_atom_t *atom)
 static gint
 lua_expr_process (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_expression *e = rspamd_lua_expression (L, 1);
 	gdouble res;
 	gint flags = 0;
 
+	struct rspamd_expr_process_data process_data;
+	memset (&process_data, 0, sizeof process_data);
+	process_data.L = L;
+	process_data.stack_item = 2;
+
 	if (lua_gettop (L) >= 3) {
-		flags = lua_tonumber (L, 3);
+		process_data.flags = flags;
 	}
 
-	res = rspamd_process_expression (e->expr, flags, GINT_TO_POINTER (2));
+	res = rspamd_process_expression (e->expr, &process_data);
 
 	lua_pushnumber (L, res);
 
@@ -208,33 +214,41 @@ lua_expr_process (lua_State *L)
 static gint
 lua_expr_process_traced (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_expression *e = rspamd_lua_expression (L, 1);
 	rspamd_expression_atom_t *atom;
 	gint res;
 	guint i;
-	gint flags = 0;
-	GPtrArray *trace;
+	struct rspamd_expr_process_data process_data;
+	memset (&process_data, 0, sizeof process_data);
+
+	process_data.L = L;
+	/*
+	 * stack:1 - self
+	 * stack:2 - data, see process_traced() definition for details
+	 */
+	process_data.stack_item = 2;
 
 	if (lua_gettop (L) >= 3) {
-		flags = lua_tonumber (L, 3);
+		process_data.flags = lua_tonumber (L, 3);
 	}
 
-	trace = g_ptr_array_sized_new (32);
-	res = rspamd_process_expression_track (e->expr, flags, GINT_TO_POINTER (2),
-			trace);
+	process_data.trace = g_ptr_array_sized_new (32);
+
+	res = rspamd_process_expression_track (e->expr, &process_data);
 
 	lua_pushnumber (L, res);
 
-	lua_createtable (L, trace->len, 0);
+	lua_createtable (L, process_data.trace->len, 0);
 
-	for (i = 0; i < trace->len; i ++) {
-		atom = g_ptr_array_index (trace, i);
+	for (i = 0; i < process_data.trace->len; i ++) {
+		atom = g_ptr_array_index (process_data.trace, i);
 
 		lua_pushlstring (L, atom->str, atom->len);
 		lua_rawseti (L, -2, i + 1);
 	}
 
-	g_ptr_array_free (trace, TRUE);
+	g_ptr_array_free (process_data.trace, TRUE);
 
 	return 2;
 }
@@ -242,6 +256,7 @@ lua_expr_process_traced (lua_State *L)
 static gint
 lua_expr_create (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_expression *e, **pe;
 	const char *line;
 	gsize len;
@@ -323,6 +338,7 @@ lua_expr_create (lua_State *L)
 static gint
 lua_expr_to_string (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_expression *e = rspamd_lua_expression (L, 1);
 	GString *str;
 
@@ -360,6 +376,7 @@ lua_exr_atom_cb (const rspamd_ftok_t *tok, gpointer ud)
 static gint
 lua_expr_atoms (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_expression *e = rspamd_lua_expression (L, 1);
 	struct lua_expr_atoms_cbdata cbdata;
 

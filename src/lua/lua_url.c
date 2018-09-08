@@ -117,10 +117,11 @@ lua_check_url (lua_State * L, gint pos)
 static gint
 lua_url_get_length (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
-		lua_pushnumber (L, url->url->urllen);
+		lua_pushinteger (L, url->url->urllen);
 	}
 	else {
 		lua_pushnil (L);
@@ -136,6 +137,7 @@ lua_url_get_length (lua_State *L)
 static gint
 lua_url_get_host (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
@@ -155,10 +157,11 @@ lua_url_get_host (lua_State *L)
 static gint
 lua_url_get_port (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
-		lua_pushnumber (L, url->url->port);
+		lua_pushinteger (L, url->url->port);
 	}
 	else {
 		lua_pushnil (L);
@@ -174,6 +177,7 @@ lua_url_get_port (lua_State *L)
 static gint
 lua_url_get_user (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL && url->url->user != NULL) {
@@ -194,6 +198,7 @@ lua_url_get_user (lua_State *L)
 static gint
 lua_url_get_path (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL && url->url->datalen > 0) {
@@ -214,6 +219,7 @@ lua_url_get_path (lua_State *L)
 static gint
 lua_url_get_query (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL && url->url->querylen > 0) {
@@ -234,6 +240,7 @@ lua_url_get_query (lua_State *L)
 static gint
 lua_url_get_fragment (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL && url->url->fragmentlen > 0) {
@@ -254,6 +261,7 @@ lua_url_get_fragment (lua_State *L)
 static gint
 lua_url_get_text (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
@@ -274,6 +282,7 @@ lua_url_get_text (lua_State *L)
 static gint
 lua_url_get_raw (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
@@ -294,6 +303,7 @@ lua_url_get_raw (lua_State *L)
 static gint
 lua_url_is_phished (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
@@ -314,6 +324,7 @@ lua_url_is_phished (lua_State *L)
 static gint
 lua_url_is_redirected (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
@@ -334,6 +345,7 @@ lua_url_is_redirected (lua_State *L)
 static gint
 lua_url_is_obscured (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
@@ -355,6 +367,7 @@ lua_url_is_obscured (lua_State *L)
 static gint
 lua_url_is_html_displayed (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
@@ -375,6 +388,7 @@ lua_url_is_html_displayed (lua_State *L)
 static gint
 lua_url_is_subject (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL) {
@@ -395,6 +409,7 @@ lua_url_is_subject (lua_State *L)
 static gint
 lua_url_get_tag (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 	guint i;
 	const gchar *tag = luaL_checkstring (L, 2);
@@ -440,6 +455,7 @@ lua_url_get_tag (lua_State *L)
 static gint
 lua_url_get_tags (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 	guint i;
 	GHashTableIter it;
@@ -485,6 +501,7 @@ lua_url_get_tags (lua_State *L)
 static gint
 lua_url_add_tag (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 	rspamd_mempool_t *mempool = rspamd_lua_check_mempool (L, 4);
 	const gchar *tag = luaL_checkstring (L, 2);
@@ -515,6 +532,7 @@ lua_url_add_tag (lua_State *L)
 static gint
 lua_url_get_phished (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *purl, *url = lua_check_url (L, 1);
 
 	if (url) {
@@ -542,6 +560,7 @@ lua_url_get_phished (lua_State *L)
 static gint
 lua_url_get_tld (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL && url->url->tldlen > 0) {
@@ -562,10 +581,11 @@ lua_url_get_tld (lua_State *L)
 static gint
 lua_url_get_count (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
 	if (url != NULL && url->url != NULL) {
-		lua_pushnumber (L, url->url->count);
+		lua_pushinteger (L, url->url->count);
 	}
 	else {
 		lua_pushnil (L);
@@ -589,6 +609,7 @@ lua_url_get_count (lua_State *L)
 static gint
 lua_url_to_table (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 	struct rspamd_url *u;
 
@@ -607,7 +628,7 @@ lua_url_to_table (lua_State *L)
 
 		if (u->port != 0) {
 			lua_pushstring (L, "port");
-			lua_pushnumber (L, u->port);
+			lua_pushinteger (L, u->port);
 			lua_settable (L, -3);
 		}
 
@@ -696,6 +717,7 @@ lua_url_single_inserter (struct rspamd_url *url, gsize start_offset,
 static gint
 lua_url_create (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	rspamd_mempool_t *pool;
 	const gchar *text;
 	size_t length;
@@ -765,7 +787,7 @@ lua_url_table_inserter (struct rspamd_url *url, gsize start_offset,
 	lua_url = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
 	rspamd_lua_setclass (L, "rspamd{url}", -1);
 	lua_url->url = url;
-	lua_pushnumber (L, n + 1);
+	lua_pushinteger (L, n + 1);
 	lua_pushlstring (L, url->string, url->urllen);
 	lua_settable (L, -3);
 }
@@ -774,6 +796,7 @@ lua_url_table_inserter (struct rspamd_url *url, gsize start_offset,
 static gint
 lua_url_all (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	rspamd_mempool_t *pool = rspamd_lua_check_mempool (L, 1);
 	const gchar *text;
 	size_t length;
@@ -832,6 +855,7 @@ lua_url_all (lua_State *L)
 static gint
 lua_url_get_flags (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 	enum rspamd_url_flags flags;
 

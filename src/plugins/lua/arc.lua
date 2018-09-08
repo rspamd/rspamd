@@ -197,7 +197,7 @@ local function arc_callback(task)
     return (e1.i or 0) < (e2.i or 0)
   end)
 
-  rspamd_logger.debugm(N, task, 'got %s arc sections', #cbdata.seals)
+  lua_util.debugm(N, task, 'got %s arc sections', #cbdata.seals)
 
   -- Now check sanity of what we have
   if not arc_validate_seals(task, cbdata.seals, cbdata.sigs,
@@ -210,7 +210,7 @@ local function arc_callback(task)
 
   local function arc_seal_cb(_, res, err, domain)
     cbdata.checked = cbdata.checked + 1
-    rspamd_logger.debugm(N, task, 'checked arc seal: %s(%s), %s processed',
+    lua_util.debugm(N, task, 'checked arc seal: %s(%s), %s processed',
         res, err, cbdata.checked)
 
     if not res then
@@ -233,7 +233,7 @@ local function arc_callback(task)
   end
 
   local function arc_signature_cb(_, res, err, domain)
-    rspamd_logger.debugm(N, task, 'checked arc signature %s: %s(%s), %s processed',
+    lua_util.debugm(N, task, 'checked arc signature %s: %s(%s), %s processed',
       domain, res, err, cbdata.checked)
 
     if not res then
@@ -252,7 +252,7 @@ local function arc_callback(task)
             cbdata.res = 'fail'
             table.insert(cbdata.errors, string.format('sig:%s:%s', sig.d or '', lerr))
             cbdata.checked = cbdata.checked + 1
-            rspamd_logger.debugm(N, task, 'checked arc seal %s: %s(%s), %s processed',
+            lua_util.debugm(N, task, 'checked arc seal %s: %s(%s), %s processed',
               sig.d, ret, lerr, cbdata.checked)
           end
         end, cbdata.seals)
@@ -314,7 +314,7 @@ local function arc_callback(task)
     table.insert(cbdata.errors, string.format('sig:%s:%s', sig.d or '', err))
   else
     processed = processed + 1
-    rspamd_logger.debugm(N, task, 'processed arc signature %s[%s]: %s(%s), %s processed',
+    lua_util.debugm(N, task, 'processed arc signature %s[%s]: %s(%s), %s processed',
       sig.d, sig.i, ret, err, cbdata.checked)
   end
 
@@ -414,18 +414,18 @@ local function arc_sign_seal(task, params, header)
         local s = dkim_canonicalize('ARC-Authentication-Results',
           arc_auth_results[i].value)
         sha_ctx:update(s)
-        rspamd_logger.debugm(N, task, 'update signature with header: %s', s)
+        lua_util.debugm(N, task, 'update signature with header: %s', s)
       end
       if arc_sigs[i] then
         local s = dkim_canonicalize('ARC-Message-Signature',
           arc_sigs[i].raw_header)
         sha_ctx:update(s)
-        rspamd_logger.debugm(N, task, 'update signature with header: %s', s)
+        lua_util.debugm(N, task, 'update signature with header: %s', s)
       end
       if arc_seals[i] then
         local s = dkim_canonicalize('ARC-Seal', arc_seals[i].raw_header)
         sha_ctx:update(s)
-        rspamd_logger.debugm(N, task, 'update signature with header: %s', s)
+        lua_util.debugm(N, task, 'update signature with header: %s', s)
       end
     end
   end
@@ -442,16 +442,16 @@ local function arc_sign_seal(task, params, header)
   local s = dkim_canonicalize('ARC-Authentication-Results',
     cur_auth_results)
   sha_ctx:update(s)
-  rspamd_logger.debugm(N, task, 'update signature with header: %s', s)
+  lua_util.debugm(N, task, 'update signature with header: %s', s)
   s = dkim_canonicalize('ARC-Message-Signature', header)
   sha_ctx:update(s)
-  rspamd_logger.debugm(N, task, 'update signature with header: %s', s)
+  lua_util.debugm(N, task, 'update signature with header: %s', s)
 
   local cur_arc_seal = string.format('i=%d; s=%s; d=%s; t=%d; a=rsa-sha256; cv=%s; b=',
       cur_idx, params.selector, params.domain, math.floor(rspamd_util.get_time()), params.arc_cv)
   s = string.format('%s:%s', 'arc-seal', cur_arc_seal)
   sha_ctx:update(s)
-  rspamd_logger.debugm(N, task, 'initial update signature with header: %s', s)
+  lua_util.debugm(N, task, 'initial update signature with header: %s', s)
 
   local sig = rspamd_rsa.sign_memory(privkey, sha_ctx:bin())
   cur_arc_seal = string.format('%s%s', cur_arc_seal,
@@ -549,16 +549,22 @@ local function arc_signing_cb(task)
       try_redis_key(p.selector)
     end
   else
-    if (p.key and p.selector) then
-      p.key = lua_util.template(p.key, {domain = p.domain, selector = p.selector})
-      local exists,err = rspamd_util.file_exists(p.key)
-      if not exists then
-        if err and err == 'No such file or directory' then
-          rspamd_logger.debugm(N, task, 'cannot read key from %s: %s', p.key, err)
-        else
-          rspamd_logger.warnx(N, task, 'cannot read key from %s: %s', p.key, err)
+    if ((p.key or p.rawkey) and p.selector) then
+      if p.key then
+        p.key = lua_util.template(p.key, {
+          domain = p.domain,
+          selector = p.selector
+        })
+
+        local exists,err = rspamd_util.file_exists(p.key)
+        if not exists then
+          if err and err == 'No such file or directory' then
+            lua_util.debugm(N, task, 'cannot read key from %s: %s', p.key, err)
+          else
+            rspamd_logger.warnx(N, task, 'cannot read key from %s: %s', p.key, err)
+          end
+          return false
         end
-        return false
       end
 
       local dret, hdr = dkim_sign(task, p)
@@ -602,7 +608,8 @@ end
 
 rspamd_config:register_symbol({
   name = settings['sign_symbol'],
-  callback = arc_signing_cb
+  callback = arc_signing_cb,
+  groups = {"policies", "arc"}
 })
 
 -- Do not sign unless valid

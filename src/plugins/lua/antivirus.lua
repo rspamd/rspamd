@@ -299,11 +299,11 @@ local function check_av_cache(task, digest, rule, fn)
     if data and type(data) == 'string' then
       -- Cached
       if data ~= 'OK' then
-        rspamd_logger.debugm(N, task, 'got cached result for %s: %s', key, data)
+        lua_util.debugm(N, task, 'got cached result for %s: %s', key, data)
         data = rspamd_str_split(data, '\x30')
         yield_result(task, rule, data)
       else
-        rspamd_logger.debugm(N, task, 'got cached result for %s: %s', key, data)
+        lua_util.debugm(N, task, 'got cached result for %s: %s', key, data)
       end
     else
       if err then
@@ -341,7 +341,7 @@ local function save_av_cache(task, digest, rule, to_save)
       rspamd_logger.errx(task, 'failed to save virus cache for %s -> "%s": %s',
         to_save, key, err)
     else
-      rspamd_logger.debugm(N, task, 'saved cached result for %s: %s', key, to_save)
+      lua_util.debugm(N, task, 'saved cached result for %s: %s', key, to_save)
     end
   end
 
@@ -491,13 +491,13 @@ local function clamav_check(task, content, digest, rule)
         upstream:ok()
         data = tostring(data)
         local cached
-        rspamd_logger.debugm(N, task, '%s [%s]: got reply: %s', rule['symbol'], rule['type'], data)
+        lua_util.debugm(N, task, '%s [%s]: got reply: %s', rule['symbol'], rule['type'], data)
         if data == 'stream: OK' then
           cached = 'OK'
           if rule['log_clean'] then
             rspamd_logger.infox(task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
           else
-            rspamd_logger.debugm(N, task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
+            lua_util.debugm(N, task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
           end
         else
           local vname = string.match(data, 'stream: (.+) FOUND')
@@ -644,7 +644,7 @@ local function savapi_check(task, content, digest, rule)
       for virus,_ in pairs(vnames) do
         table.insert(vnames_reordered, virus)
       end
-      rspamd_logger.debugm(N, task, "%s: number of virus names found %s", rule['type'], #vnames_reordered)
+      lua_util.debugm(N, task, "%s: number of virus names found %s", rule['type'], #vnames_reordered)
       if #vnames_reordered > 0 then
         local vname = {}
         for _,virus in ipairs(vnames_reordered) do
@@ -661,7 +661,7 @@ local function savapi_check(task, content, digest, rule)
 
     local function savapi_scan2_cb(err, data, conn)
       local result = tostring(data)
-      rspamd_logger.debugm(N, task, "%s: got reply: %s", rule['type'], result)
+      lua_util.debugm(N, task, "%s: got reply: %s", rule['type'], result)
 
       -- Terminal response - clean
       if string.find(result, '200') or string.find(result, '210') then
@@ -701,7 +701,7 @@ local function savapi_check(task, content, digest, rule)
     local function savapi_greet2_cb(err, data, conn)
       local result = tostring(data)
       if string.find(result, '100 PRODUCT') then
-        rspamd_logger.debugm(N, task, "%s: scanning file: %s", rule['type'], message_file)
+        lua_util.debugm(N, task, "%s: scanning file: %s", rule['type'], message_file)
         conn:add_write(savapi_scan1_cb, {string.format('SCAN %s\n', message_file)})
       else
         rspamd_logger.errx(task, '%s: invalid product id %s', rule['type'], rule['product_id'])
@@ -889,10 +889,16 @@ if opts and type(opts) == 'table' then
             for _, p in ipairs(m['patterns']) do
               if type(p) == 'table' then
                 for sym in pairs(p) do
+                  rspamd_logger.debugm(N, rspamd_config, 'registering: %1', {
+                    type = 'virtual',
+                    name = sym,
+                    parent = m['symbol'],
+                    parent_id = id,
+                  })
                   rspamd_config:register_symbol({
                     type = 'virtual',
                     name = sym,
-                    parent = m['symbol']
+                    parent = id
                   })
                 end
               end

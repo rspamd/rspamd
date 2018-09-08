@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "lua_common.h"
+#include "lua_thread_pool.h"
 #include "http_private.h"
 #include "unix-std.h"
 #include "zlib.h"
@@ -56,7 +57,6 @@ static const struct luaL_reg httplib_m[] = {
 #define RSPAMD_LUA_HTTP_FLAG_NOVERIFY (1 << 1)
 
 struct lua_http_cbdata {
-	lua_State *L;
 	struct rspamd_http_connection *conn;
 	struct rspamd_async_session *session;
 	struct rspamd_async_watcher *w;
@@ -75,6 +75,7 @@ struct lua_http_cbdata {
 	gint flags;
 	gint fd;
 	gint cbref;
+	struct thread_entry *thread;
 };
 
 static const int default_http_timeout = 5000;
@@ -96,7 +97,10 @@ lua_http_fin (gpointer arg)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)arg;
 
-	luaL_unref (cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
+	if (cbd->cbref != -1) {
+		luaL_unref (cbd->cfg->lua_state, LUA_REGISTRYINDEX, cbd->cbref);
+	}
+
 	if (cbd->conn) {
 		/* Here we already have a connection, so we need to unref it */
 		rspamd_http_connection_unref (cbd->conn);
@@ -152,21 +156,37 @@ lua_http_maybe_free (struct lua_http_cbdata *cbd)
 static void
 lua_http_push_error (struct lua_http_cbdata *cbd, const char *err)
 {
-	lua_rawgeti (cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
-	lua_pushstring (cbd->L, err);
+	struct lua_callback_state lcbd;
+	lua_State *L;
 
-	if (lua_pcall (cbd->L, 1, 0, 0) != 0) {
-		msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
-		lua_pop (cbd->L, 1);
+	lua_thread_pool_prepare_callback (cbd->cfg->lua_thread_pool, &lcbd);
+
+	L = lcbd.L;
+
+	lua_rawgeti (L, LUA_REGISTRYINDEX, cbd->cbref);
+	lua_pushstring (L, err);
+
+	if (lua_pcall (L, 1, 0, 0) != 0) {
+		msg_info ("callback call failed: %s", lua_tostring (L, -1));
+		lua_pop (L, 1);
 	}
+
+	lua_thread_pool_restore_callback (&lcbd);
 }
+
+static void lua_http_resume_handler (struct rspamd_http_connection *conn,
+						 struct rspamd_http_message *msg, const char *err);
 
 static void
 lua_http_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)conn->ud;
-
-	lua_http_push_error (cbd, err->message);
+	if (cbd->cbref == -1) {
+		lua_http_resume_handler (conn, NULL, err->message);
+	}
+	else {
+		lua_http_push_error (cbd, err->message);
+	}
 	lua_http_maybe_free (cbd);
 }
 
@@ -179,52 +199,143 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 	const gchar *body;
 	gsize body_len;
 
-	lua_rawgeti (cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
+	struct lua_callback_state lcbd;
+	lua_State *L;
+
+	if (cbd->cbref == -1) {
+		lua_http_resume_handler (conn, msg, NULL);
+		lua_http_maybe_free (cbd);
+		return 0;
+	}
+	lua_thread_pool_prepare_callback (cbd->cfg->lua_thread_pool, &lcbd);
+
+	L = lcbd.L;
+
+	lua_rawgeti (L, LUA_REGISTRYINDEX, cbd->cbref);
 	/* Error */
-	lua_pushnil (cbd->L);
+	lua_pushnil (L);
 	/* Reply code */
-	lua_pushnumber (cbd->L, msg->code);
+	lua_pushinteger (L, msg->code);
 	/* Body */
 	body = rspamd_http_message_get_body (msg, &body_len);
 
 	if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_TEXT) {
 		struct rspamd_lua_text *t;
 
-		t = lua_newuserdata (cbd->L, sizeof (*t));
-		rspamd_lua_setclass (cbd->L, "rspamd{text}", -1);
+		t = lua_newuserdata (L, sizeof (*t));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
 		t->start = body;
 		t->len = body_len;
 		t->flags = 0;
 	}
 	else {
 		if (body_len > 0) {
-			lua_pushlstring (cbd->L, body, body_len);
+			lua_pushlstring (L, body, body_len);
 		}
 		else {
-			lua_pushnil (cbd->L);
+			lua_pushnil (L);
 		}
 	}
 	/* Headers */
-	lua_newtable (cbd->L);
+	lua_newtable (L);
 
 	HASH_ITER (hh, msg->headers, h, htmp) {
 		/*
 		 * Lowercase header name, as Lua cannot search in caseless matter
 		 */
 		rspamd_str_lc (h->combined->str, h->name.len);
-		lua_pushlstring (cbd->L, h->name.begin, h->name.len);
-		lua_pushlstring (cbd->L, h->value.begin, h->value.len);
-		lua_settable (cbd->L, -3);
+		lua_pushlstring (L, h->name.begin, h->name.len);
+		lua_pushlstring (L, h->value.begin, h->value.len);
+		lua_settable (L, -3);
 	}
 
-	if (lua_pcall (cbd->L, 4, 0, 0) != 0) {
-		msg_info ("callback call failed: %s", lua_tostring (cbd->L, -1));
-		lua_pop (cbd->L, 1);
+	if (lua_pcall (L, 4, 0, 0) != 0) {
+		msg_info ("callback call failed: %s", lua_tostring (L, -1));
+		lua_pop (L, 1);
 	}
 
 	lua_http_maybe_free (cbd);
 
+	lua_thread_pool_restore_callback (&lcbd);
+
 	return 0;
+}
+
+/*
+ * resumes yielded thread
+ */
+static void
+lua_http_resume_handler (struct rspamd_http_connection *conn,
+						 struct rspamd_http_message *msg, const char *err)
+{
+	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)conn->ud;
+	lua_State *L = cbd->thread->lua_state;
+	const gchar *body;
+	gsize body_len;
+	struct rspamd_http_header *h, *htmp;
+
+	if (err) {
+		lua_pushstring (L, err);
+		lua_pushnil (L);
+	}
+	else {
+		/*
+		 * 1 - nil (error)
+		 * 2 - table:
+		 *   code (int)
+		 *   content (string)
+		 *   headers (table: header -> value)
+		 */
+		lua_pushnil (L); // error code
+
+		lua_createtable (L, 0, 3);
+
+		/* code */
+		lua_pushliteral (L, "code");
+		lua_pushinteger (L, msg->code);
+		lua_settable (L, -3);
+
+		/* content */
+		lua_pushliteral (L, "content");
+
+		body = rspamd_http_message_get_body (msg, &body_len);
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_TEXT) {
+			struct rspamd_lua_text *t;
+
+			t = lua_newuserdata (L, sizeof (*t));
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+			t->start = body;
+			t->len = body_len;
+			t->flags = 0;
+		}
+		else {
+			if (body_len > 0) {
+				lua_pushlstring (L, body, body_len);
+			}
+			else {
+				lua_pushnil (L);
+			}
+		}
+		lua_settable (L, -3);
+
+		/* headers */
+		lua_pushliteral (L, "headers");
+		lua_newtable (L);
+
+		HASH_ITER (hh, msg->headers, h, htmp) {
+			/*
+			 * Lowercase header name, as Lua cannot search in caseless matter
+			 */
+			rspamd_str_lc (h->combined->str, h->name.len);
+			lua_pushlstring (L, h->name.begin, h->name.len);
+			lua_pushlstring (L, h->value.begin, h->value.len);
+			lua_settable (L, -3);
+		}
+
+		lua_settable (L, -3);
+	}
+
+	lua_thread_resume (cbd->thread, 2);
 }
 
 static gboolean
@@ -372,11 +483,12 @@ lua_http_push_headers (lua_State *L, struct rspamd_http_message *msg)
 static gint
 lua_http_request (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct event_base *ev_base;
 	struct rspamd_http_message *msg;
 	struct lua_http_cbdata *cbd;
 	struct rspamd_dns_resolver *resolver;
-	struct rspamd_async_session *session;
+	struct rspamd_async_session *session = NULL;
 	struct rspamd_lua_text *t;
 	struct rspamd_task *task = NULL;
 	struct rspamd_config *cfg = NULL;
@@ -385,7 +497,7 @@ lua_http_request (lua_State *L)
 	const gchar *url, *lua_body;
 	rspamd_fstring_t *body = NULL;
 	gchar *to_resolve;
-	gint cbref;
+	gint cbref = -1;
 	gsize bodylen;
 	gdouble timeout = default_http_timeout;
 	gint flags = 0;
@@ -445,11 +557,9 @@ lua_http_request (lua_State *L)
 		lua_gettable (L, 1);
 		if (url == NULL || lua_type (L, -1) != LUA_TFUNCTION) {
 			lua_pop (L, 1);
-			msg_err ("http request has bad params");
-			lua_pushboolean (L, FALSE);
-			return 1;
+		} else {
+			cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 		}
-		cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 
 		lua_pushstring (L, "task");
 		lua_gettable (L, 1);
@@ -553,6 +663,39 @@ lua_http_request (lua_State *L)
 			if (t) {
 				body = rspamd_fstring_new_init (t->start, t->len);
 			}
+			else {
+				return luaL_error (L, "invalid body argument type: %s",
+						lua_typename (L, lua_type (L, -1)));
+			}
+		}
+		else if (lua_type (L, -1) == LUA_TTABLE) {
+			body = rspamd_fstring_new ();
+
+			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+				if (lua_type (L, -1) == LUA_TSTRING) {
+					lua_body = lua_tolstring (L, -1, &bodylen);
+					body = rspamd_fstring_append (body, lua_body, bodylen);
+				}
+				else if (lua_type (L, -1) == LUA_TUSERDATA) {
+					t = lua_check_text (L, -1);
+
+					if (t) {
+						body = rspamd_fstring_append (body, t->start, t->len);
+					}
+					else {
+						return luaL_error (L, "invalid body argument: %s",
+								lua_typename (L, lua_type (L, -1)));
+					}
+				}
+				else {
+					return luaL_error (L, "invalid body argument type: %s",
+							lua_typename (L, lua_type (L, -1)));
+				}
+			}
+		}
+		else if (lua_type (L, -1) != LUA_TNONE && lua_type (L, -1) != LUA_TNIL) {
+			return luaL_error (L, "invalid body argument type: %s",
+					lua_typename (L, lua_type (L, -1)));
 		}
 		lua_pop (L, 1);
 
@@ -666,8 +809,16 @@ lua_http_request (lua_State *L)
 		return 1;
 	}
 
+	if (session && rspamd_session_is_destroying (session)) {
+		lua_pushboolean (L, FALSE);
+
+		return 1;
+	}
+	if (task == NULL && cfg == NULL) {
+		return luaL_error (L, "Bad params to rspamd_http:request(): either task or config should be set");
+	}
+
 	cbd = g_malloc0 (sizeof (*cbd));
-	cbd->L = L;
 	cbd->cbref = cbref;
 	cbd->msg = msg;
 	cbd->ev_base = ev_base;
@@ -745,8 +896,13 @@ lua_http_request (lua_State *L)
 		}
 	}
 
-	lua_pushboolean (L, TRUE);
-	return 1;
+	if (cbd->cbref == -1) {
+		cbd->thread = lua_thread_pool_get_running_entry (cfg->lua_thread_pool);
+		return lua_thread_yield (cbd->thread, 0);
+	} else {
+		lua_pushboolean (L, TRUE);
+		return 1;
+	}
 }
 
 static gint

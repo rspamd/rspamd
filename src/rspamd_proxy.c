@@ -917,9 +917,14 @@ proxy_backend_parse_results (struct rspamd_proxy_session *session,
 		parser = ucl_parser_new (0);
 
 		if (!ucl_parser_add_chunk (parser, in, inlen)) {
+			gchar *encoded;
+
+			encoded = rspamd_encode_base64 (in, inlen, 0, NULL);
 			msg_err_session ("cannot parse input: %s", ucl_parser_get_error (
 					parser));
+			msg_err_session ("input encoded: %s", encoded);
 			ucl_parser_free (parser);
+			g_free (encoded);
 
 			return FALSE;
 		}
@@ -2206,14 +2211,13 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();
 
-	rspamd_log_close (worker->srv->logger);
-
 	if (ctx->has_self_scan) {
 		rspamd_stat_close ();
 	}
 
 	rspamd_keypair_cache_destroy (ctx->keys_cache);
 	REF_RELEASE (ctx->cfg);
+	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);
 }

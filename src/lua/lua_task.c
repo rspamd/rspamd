@@ -1117,6 +1117,7 @@ static void
 lua_task_set_cached (lua_State *L, struct rspamd_task *task, const gchar *key,
 		gint pos, guint id)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_cached_entry *entry;
 
 	lua_pushvalue (L, pos);
@@ -1141,6 +1142,7 @@ static gboolean
 lua_task_get_cached (lua_State *L, struct rspamd_task *task, const gchar *key,
 		guint id)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_cached_entry *entry;
 
 	entry = g_hash_table_lookup (task->lua_cache, key);
@@ -1158,6 +1160,7 @@ lua_task_get_cached (lua_State *L, struct rspamd_task *task, const gchar *key,
 static int
 lua_task_process_message (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
@@ -1184,6 +1187,7 @@ lua_task_process_message (lua_State *L)
 static int
 lua_task_get_cfg (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_config **pcfg;
 
@@ -1202,6 +1206,7 @@ lua_task_get_cfg (lua_State *L)
 static int
 lua_task_set_cfg (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	void *ud = rspamd_lua_check_udata (L, 2, "rspamd{config}");
 
@@ -1219,6 +1224,7 @@ lua_task_set_cfg (lua_State *L)
 static int
 lua_task_destroy (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
@@ -1231,6 +1237,7 @@ lua_task_destroy (lua_State *L)
 static int
 lua_task_get_message (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	return luaL_error (L, "task:get_message is no longer supported");
 }
 
@@ -1257,6 +1264,7 @@ lua_task_free_dtor (gpointer p)
 static gint
 lua_task_load_from_file (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = NULL, **ptask;
 	const gchar *fname = luaL_checkstring (L, 1), *err = NULL;
 	struct rspamd_config *cfg = NULL;
@@ -1315,6 +1323,7 @@ lua_task_load_from_file (lua_State * L)
 static gint
 lua_task_load_from_string (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = NULL, **ptask;
 	const gchar *str_message;
 	gsize message_len;
@@ -1354,6 +1363,7 @@ lua_task_load_from_string (lua_State * L)
 static int
 lua_task_get_mempool (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	rspamd_mempool_t **ppool;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
@@ -1372,6 +1382,7 @@ lua_task_get_mempool (lua_State * L)
 static int
 lua_task_get_session (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_async_session **psession;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
@@ -1389,6 +1400,7 @@ lua_task_get_session (lua_State * L)
 static int
 lua_task_get_ev_base (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct event_base **pbase;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
@@ -1406,6 +1418,7 @@ lua_task_get_ev_base (lua_State * L)
 static int
 lua_task_get_worker (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_worker **pworker;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
@@ -1429,6 +1442,7 @@ lua_task_get_worker (lua_State * L)
 static gint
 lua_task_insert_result (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *symbol_name, *param;
 	double weight;
@@ -1487,6 +1501,7 @@ lua_task_insert_result (lua_State * L)
 static gint
 lua_task_adjust_result (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *symbol_name, *param;
 	struct rspamd_metric_result *metric_res;
@@ -1550,11 +1565,17 @@ lua_task_adjust_result (lua_State * L)
 static gint
 lua_task_set_pre_result (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gchar *action_str;
 	gint action = METRIC_ACTION_MAX;
 
 	if (task != NULL) {
+
+		if (RSPAMD_TASK_IS_SKIPPED (task)) {
+			/* Do not set pre-result for a skipped task */
+			return 0;
+		}
 
 		if (lua_type (L, 2) == LUA_TNUMBER) {
 			action = lua_tointeger (L, 2);
@@ -1607,6 +1628,7 @@ lua_task_set_pre_result (lua_State * L)
 static gint
 lua_task_has_pre_result (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
@@ -1622,6 +1644,7 @@ lua_task_has_pre_result (lua_State * L)
 static gint
 lua_task_append_message (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *message = luaL_checkstring (L, 2), *category;
 
@@ -1664,6 +1687,7 @@ lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 static gint
 lua_task_get_urls (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct lua_tree_cb_data cb;
 	gboolean need_emails = FALSE;
@@ -1711,6 +1735,7 @@ lua_task_get_urls (lua_State * L)
 static gint
 lua_task_has_urls (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gboolean need_emails = FALSE, ret = FALSE;
 
@@ -1739,6 +1764,7 @@ lua_task_has_urls (lua_State * L)
 static gint
 lua_task_get_content (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_lua_text *t;
 
@@ -1759,6 +1785,7 @@ lua_task_get_content (lua_State * L)
 static gint
 lua_task_get_filename (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
@@ -1779,6 +1806,7 @@ lua_task_get_filename (lua_State * L)
 static gint
 lua_task_get_rawbody (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_lua_text *t;
 
@@ -1808,6 +1836,7 @@ lua_task_get_rawbody (lua_State * L)
 static gint
 lua_task_get_emails (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct lua_tree_cb_data cb;
 
@@ -1827,6 +1856,7 @@ lua_task_get_emails (lua_State * L)
 static gint
 lua_task_get_text_parts (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	guint i;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_mime_text_part *part, **ppart;
@@ -1858,6 +1888,7 @@ lua_task_get_text_parts (lua_State * L)
 static gint
 lua_task_get_parts (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	guint i;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_mime_part *part, **ppart;
@@ -1888,6 +1919,7 @@ lua_task_get_parts (lua_State * L)
 static gint
 lua_task_get_request_header (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	rspamd_ftok_t *hdr;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *s;
@@ -1921,6 +1953,7 @@ lua_task_get_request_header (lua_State *L)
 static gint
 lua_task_set_request_header (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *s, *v = NULL;
 	rspamd_fstring_t *buf;
@@ -1967,7 +2000,7 @@ gint
 rspamd_lua_push_header (lua_State *L, struct rspamd_mime_header *rh,
 						enum rspamd_lua_task_header_type how)
 {
-
+	LUA_TRACE_POINT;
 	switch (how) {
 	case RSPAMD_TASK_HEADER_PUSH_FULL:
 		/* Create new associated table for a header */
@@ -1990,7 +2023,7 @@ rspamd_lua_push_header (lua_State *L, struct rspamd_mime_header *rh,
 		lua_settable (L, -3);
 		rspamd_lua_table_set (L, "separator", rh->separator);
 		lua_pushstring (L, "order");
-		lua_pushnumber (L, rh->order);
+		lua_pushinteger (L, rh->order);
 		lua_settable (L, -3);
 		break;
 	case RSPAMD_TASK_HEADER_PUSH_RAW:
@@ -2023,7 +2056,7 @@ rspamd_lua_push_header_array (lua_State * L,
 							  GPtrArray *ar,
 							  enum rspamd_lua_task_header_type how)
 {
-
+	LUA_TRACE_POINT;
 	struct rspamd_mime_header *rh;
 	guint i;
 
@@ -2046,7 +2079,7 @@ rspamd_lua_push_header_array (lua_State * L,
 		}
 	}
 	else if (how == RSPAMD_TASK_HEADER_PUSH_COUNT) {
-		lua_pushnumber (L, ar->len);
+		lua_pushinteger (L, ar->len);
 	}
 	else {
 		rh = g_ptr_array_index (ar, 0);
@@ -2060,6 +2093,7 @@ rspamd_lua_push_header_array (lua_State * L,
 static gint
 lua_task_get_header_common (lua_State *L, enum rspamd_lua_task_header_type how)
 {
+	LUA_TRACE_POINT;
 	gboolean strong = FALSE;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *name;
@@ -2108,6 +2142,7 @@ lua_task_get_header_count (lua_State * L)
 static gint
 lua_task_get_raw_headers (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_lua_text *t;
 
@@ -2129,6 +2164,7 @@ lua_task_get_raw_headers (lua_State *L)
 static gint
 lua_task_get_received_headers (lua_State * L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct received_header *rh;
 	const gchar *proto;
@@ -2229,7 +2265,7 @@ lua_task_get_received_headers (lua_State * L)
 				lua_settable (L, -3);
 
 				lua_pushstring (L, "timestamp");
-				lua_pushnumber (L, rh->timestamp);
+				lua_pushinteger (L, rh->timestamp);
 				lua_settable (L, -3);
 
 				rspamd_lua_table_set (L, "by_hostname", rh->by_hostname);
@@ -2250,6 +2286,7 @@ lua_task_get_received_headers (lua_State * L)
 static gint
 lua_task_get_queue_id (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
@@ -2270,6 +2307,7 @@ lua_task_get_queue_id (lua_State *L)
 static gint
 lua_task_get_uid (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
@@ -2285,6 +2323,7 @@ lua_task_get_uid (lua_State *L)
 static gint
 lua_task_get_resolver (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_dns_resolver **presolver;
 
@@ -2303,6 +2342,7 @@ lua_task_get_resolver (lua_State *L)
 static gint
 lua_task_inc_dns_req (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
@@ -2318,10 +2358,11 @@ lua_task_inc_dns_req (lua_State *L)
 static gint
 lua_task_get_dns_req (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
-		lua_pushnumber (L, task->dns_requests);
+		lua_pushinteger (L, task->dns_requests);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -2602,6 +2643,7 @@ lua_import_email_address (lua_State *L, struct rspamd_task *task,
 static gint
 lua_task_get_recipients (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	GPtrArray *ptrs = NULL;
 	gint what = 0;
@@ -2648,6 +2690,7 @@ lua_task_get_recipients (lua_State *L)
 static gint
 lua_task_set_recipients (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	GPtrArray *ptrs = NULL;
 	struct rspamd_email_address *addr = NULL;
@@ -2734,6 +2777,7 @@ lua_task_set_recipients (lua_State *L)
 static gint
 lua_task_has_from (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gint what = 0;
 	gboolean ret = FALSE;
@@ -2775,6 +2819,7 @@ lua_task_has_from (lua_State *L)
 static gint
 lua_task_has_recipients (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gint what = 0;
 	gboolean ret = FALSE;
@@ -2816,6 +2861,7 @@ lua_task_has_recipients (lua_State *L)
 static gint
 lua_task_get_from (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	GPtrArray *addrs = NULL;
 	struct rspamd_email_address *addr = NULL;
@@ -2875,6 +2921,7 @@ lua_task_get_from (lua_State *L)
 static gint
 lua_task_set_from (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	GPtrArray *addrs = NULL;
 	struct rspamd_email_address **paddr = NULL, *addr;
@@ -2954,6 +3001,7 @@ lua_task_set_from (lua_State *L)
 static gint
 lua_task_get_principal_recipient (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *r;
 
@@ -2976,6 +3024,7 @@ lua_task_get_principal_recipient (lua_State *L)
 static gint
 lua_task_get_user (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
@@ -2996,6 +3045,7 @@ lua_task_get_user (lua_State *L)
 static gint
 lua_task_set_user (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *new_user;
 
@@ -3037,6 +3087,7 @@ lua_task_set_user (lua_State *L)
 static gint
 lua_task_get_from_ip (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
@@ -3052,6 +3103,7 @@ lua_task_get_from_ip (lua_State *L)
 static gint
 lua_task_set_from_ip (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *ip_str = luaL_checkstring (L, 2);
 	rspamd_inet_addr_t *addr = NULL;
@@ -3082,6 +3134,7 @@ lua_task_set_from_ip (lua_State *L)
 static gint
 lua_task_get_from_ip_num (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	msg_err ("this function is deprecated and should no longer be used");
 	lua_pushnil (L);
 	return 1;
@@ -3090,6 +3143,7 @@ lua_task_get_from_ip_num (lua_State *L)
 static gint
 lua_task_get_client_ip (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
@@ -3105,6 +3159,7 @@ lua_task_get_client_ip (lua_State *L)
 static gint
 lua_task_get_helo (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
@@ -3126,6 +3181,7 @@ lua_task_get_helo (lua_State *L)
 static gint
 lua_task_get_subject (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
@@ -3147,6 +3203,7 @@ lua_task_get_subject (lua_State *L)
 static gint
 lua_task_set_helo (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *new_helo;
 
@@ -3166,6 +3223,7 @@ lua_task_set_helo (lua_State *L)
 static gint
 lua_task_get_hostname (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
@@ -3200,6 +3258,7 @@ lua_task_get_hostname (lua_State *L)
 static gint
 lua_task_set_hostname (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *new_hostname;
 
@@ -3220,6 +3279,7 @@ lua_task_set_hostname (lua_State *L)
 static gint
 lua_task_get_images (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	guint nelt = 0, i;
 	struct rspamd_mime_part *part;
@@ -3253,6 +3313,7 @@ lua_task_get_images (lua_State *L)
 static gint
 lua_task_get_archives (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	guint nelt = 0, i;
 	struct rspamd_mime_part *part;
@@ -3370,6 +3431,7 @@ lua_push_symbol_result (lua_State *L,
 static gint
 lua_task_get_symbol (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *symbol;
 	gboolean found = FALSE;
@@ -3403,6 +3465,7 @@ lua_task_get_symbol (lua_State *L)
 static gint
 lua_task_has_symbol (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *symbol;
 	gboolean found = FALSE;
@@ -3423,6 +3486,7 @@ lua_task_has_symbol (lua_State *L)
 static gint
 lua_task_get_symbols (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_metric_result *mres;
 	gint i = 1;
@@ -3460,6 +3524,7 @@ lua_task_get_symbols (lua_State *L)
 static gint
 lua_task_get_symbols_all (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_metric_result *mres;
 	struct rspamd_symbol_result *s;
@@ -3494,6 +3559,7 @@ lua_task_get_symbols_all (lua_State *L)
 static gint
 lua_task_get_symbols_numeric (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_metric_result *mres;
 	gint i = 1, id;
@@ -3512,7 +3578,7 @@ lua_task_get_symbols_numeric (lua_State *L)
 				if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
 					id = rspamd_symbols_cache_find_symbol (task->cfg->cache,
 							s->name);
-					lua_pushnumber (L, id);
+					lua_pushinteger (L, id);
 					lua_rawseti (L, -3, i);
 					lua_pushnumber (L, s->score);
 					lua_rawseti (L, -2, i);
@@ -3567,6 +3633,7 @@ tokens_foreach_cb (gint id, const gchar *sym, gint flags, gpointer ud)
 static gint
 lua_task_get_symbols_tokens (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct tokens_foreach_cbdata cbd;
 
@@ -3649,6 +3716,7 @@ lua_task_detect_date_type (struct rspamd_task *task,
 static gint
 lua_task_get_date (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	GPtrArray *hdrs;
 	gdouble tim;
@@ -3728,6 +3796,7 @@ lua_task_get_date (lua_State *L)
 static gint
 lua_task_get_message_id (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
@@ -3748,15 +3817,16 @@ lua_task_get_message_id (lua_State *L)
 static gint
 lua_task_get_timeval (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
 		lua_createtable (L, 0, 2);
 		lua_pushstring (L, "tv_sec");
-		lua_pushnumber (L, (lua_Number)task->tv.tv_sec);
+		lua_pushinteger (L, (lua_Integer)task->tv.tv_sec);
 		lua_settable (L, -3);
 		lua_pushstring (L, "tv_usec");
-		lua_pushnumber (L, (lua_Number)task->tv.tv_usec);
+		lua_pushinteger (L, (lua_Integer)task->tv.tv_usec);
 		lua_settable (L, -3);
 	}
 	else {
@@ -3769,10 +3839,11 @@ lua_task_get_timeval (lua_State *L)
 static gint
 lua_task_get_size (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
-		lua_pushnumber (L, task->msg.len);
+		lua_pushinteger (L, task->msg.len);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -3814,6 +3885,7 @@ lua_task_get_size (lua_State *L)
 static gint
 lua_task_set_flag (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *flag = luaL_checkstring (L, 2);
 	gboolean set = TRUE, found = FALSE;
@@ -3849,6 +3921,7 @@ lua_task_set_flag (lua_State *L)
 static gint
 lua_task_has_flag (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *flag = luaL_checkstring (L, 2);
 	gboolean found = FALSE;
@@ -3884,6 +3957,7 @@ lua_task_has_flag (lua_State *L)
 static gint
 lua_task_get_flags (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gint idx = 1;
 	guint flags, bit, i;
@@ -3958,6 +4032,7 @@ lua_task_get_flags (lua_State *L)
 static gint
 lua_task_get_digest (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gchar hexbuf[33];
 	gint r;
@@ -3985,6 +4060,7 @@ lua_task_get_digest (lua_State *L)
 static gint
 lua_task_learn (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gboolean is_spam = FALSE;
 	const gchar *clname = NULL;
@@ -4017,6 +4093,7 @@ lua_task_learn (lua_State *L)
 static gint
 lua_task_set_settings (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	ucl_object_t *settings;
 	const ucl_object_t *act, *elt, *metric_elt, *vars, *cur;
@@ -4086,6 +4163,7 @@ lua_task_set_settings (lua_State *L)
 static gint
 lua_task_set_milter_reply (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	ucl_object_t *reply, *prev;
 
@@ -4115,6 +4193,7 @@ lua_task_set_milter_reply (lua_State *L)
 static gint
 lua_task_get_settings (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
@@ -4136,6 +4215,7 @@ lua_task_get_settings (lua_State *L)
 static gint
 lua_task_lookup_settings (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *key = NULL;
 	const ucl_object_t *elt;
@@ -4175,6 +4255,7 @@ lua_task_lookup_settings (lua_State *L)
 static gint
 lua_task_get_settings_id (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	guint32 *hp;
 
@@ -4198,6 +4279,7 @@ lua_task_get_settings_id (lua_State *L)
 static gint
 lua_task_cache_get (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *key = luaL_checkstring (L, 2);
 	guint id = 0;
@@ -4221,6 +4303,7 @@ lua_task_cache_get (lua_State *L)
 static gint
 lua_task_cache_set (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *key = luaL_checkstring (L, 2);
 	guint id = 0;
@@ -4260,6 +4343,7 @@ lua_tmp_file_dtor (gpointer p)
 static gint
 lua_task_store_in_file (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gboolean force_new = FALSE, keep = FALSE;
 	gchar fpath[PATH_MAX];
@@ -4349,6 +4433,7 @@ lua_task_store_in_file (lua_State *L)
 static gint
 lua_task_process_regexp (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_lua_regexp *re = NULL;
 	gboolean strong = FALSE;
@@ -4401,7 +4486,7 @@ lua_task_process_regexp (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnumber (L, ret);
+	lua_pushinteger (L, ret);
 
 	return 1;
 }
@@ -4409,6 +4494,7 @@ lua_task_process_regexp (lua_State *L)
 static gint
 lua_task_get_metric_score (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gdouble rs;
 	struct rspamd_metric_result *metric_res;
@@ -4436,6 +4522,7 @@ lua_task_get_metric_score (lua_State *L)
 static gint
 lua_task_get_metric_action (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_metric_result *metric_res;
 	enum rspamd_action_type action;
@@ -4458,6 +4545,7 @@ lua_task_get_metric_action (lua_State *L)
 static gint
 lua_task_set_metric_score (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_metric_result *metric_res;
 	gdouble nscore;
@@ -4490,6 +4578,7 @@ lua_task_set_metric_score (lua_State *L)
 static gint
 lua_task_disable_action (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *action_name;
 	gint action;
@@ -4518,6 +4607,7 @@ lua_task_disable_action (lua_State *L)
 static gint
 lua_task_get_newlines_type (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
@@ -4579,7 +4669,7 @@ lua_push_stat_token (lua_State *L, rspamd_token_t *tok)
 	}
 
 	lua_pushstring (L, "win");
-	lua_pushnumber (L, tok->window_idx);
+	lua_pushinteger (L, tok->window_idx);
 	lua_settable (L, -3);
 
 	lua_pushstring (L, "flags");
@@ -4619,6 +4709,7 @@ lua_push_stat_token (lua_State *L, rspamd_token_t *tok)
 static gint
 lua_task_get_stat_tokens (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	guint i;
 	rspamd_token_t *tok;
@@ -4650,6 +4741,7 @@ lua_task_get_stat_tokens (lua_State *L)
 static gint
 lua_task_set_metric_subject (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *subject;
 
@@ -4670,6 +4762,7 @@ lua_task_set_metric_subject (lua_State *L)
 static gint
 lua_task_get_protocol_reply (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	guint flags = 0;
 	ucl_object_t *obj;
@@ -4733,6 +4826,7 @@ lua_task_get_protocol_reply (lua_State *L)
 static gint
 lua_task_headers_foreach (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	enum rspamd_lua_task_header_type how = RSPAMD_TASK_HEADER_PUSH_SIMPLE;
 	struct rspamd_lua_regexp *re = NULL;
@@ -4820,10 +4914,11 @@ lua_task_headers_foreach (lua_State *L)
 static gint
 lua_image_get_width (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_image *img = lua_check_image (L);
 
 	if (img != NULL) {
-		lua_pushnumber (L, img->width);
+		lua_pushinteger (L, img->width);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -4835,10 +4930,11 @@ lua_image_get_width (lua_State *L)
 static gint
 lua_image_get_height (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_image *img = lua_check_image (L);
 
 	if (img != NULL) {
-		lua_pushnumber (L, img->height);
+		lua_pushinteger (L, img->height);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -4850,6 +4946,7 @@ lua_image_get_height (lua_State *L)
 static gint
 lua_image_get_type (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_image *img = lua_check_image (L);
 
 	if (img != NULL) {
@@ -4865,10 +4962,11 @@ lua_image_get_type (lua_State *L)
 static gint
 lua_image_get_size (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_image *img = lua_check_image (L);
 
 	if (img != NULL) {
-		lua_pushnumber (L, img->data->len);
+		lua_pushinteger (L, img->data->len);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -4880,6 +4978,7 @@ lua_image_get_size (lua_State *L)
 static gint
 lua_image_get_filename (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_image *img = lua_check_image (L);
 
 	if (img != NULL && img->filename != NULL) {
@@ -4896,6 +4995,7 @@ lua_image_get_filename (lua_State *L)
 static gint
 lua_archive_get_type (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_archive *arch = lua_check_archive (L);
 
 	if (arch != NULL) {
@@ -4911,6 +5011,7 @@ lua_archive_get_type (lua_State *L)
 static gint
 lua_archive_get_files (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_archive *arch = lua_check_archive (L);
 	guint i;
 	struct rspamd_archive_file *f;
@@ -4935,6 +5036,7 @@ lua_archive_get_files (lua_State *L)
 static gint
 lua_archive_get_files_full (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_archive *arch = lua_check_archive (L);
 	guint i;
 	struct rspamd_archive_file *f;
@@ -4952,11 +5054,11 @@ lua_archive_get_files_full (lua_State *L)
 			lua_settable (L, -3);
 
 			lua_pushstring (L, "compressed_size");
-			lua_pushnumber (L, f->compressed_size);
+			lua_pushinteger (L, f->compressed_size);
 			lua_settable (L, -3);
 
 			lua_pushstring (L, "uncompressed_size");
-			lua_pushnumber (L, f->uncompressed_size);
+			lua_pushinteger (L, f->uncompressed_size);
 			lua_settable (L, -3);
 
 			lua_pushstring (L, "encrypted");
@@ -4976,6 +5078,7 @@ lua_archive_get_files_full (lua_State *L)
 static gint
 lua_archive_is_encrypted (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_archive *arch = lua_check_archive (L);
 
 	if (arch != NULL) {
@@ -4991,10 +5094,11 @@ lua_archive_is_encrypted (lua_State *L)
 static gint
 lua_archive_get_size (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_archive *arch = lua_check_archive (L);
 
 	if (arch != NULL) {
-		lua_pushnumber (L, arch->size);
+		lua_pushinteger (L, arch->size);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -5006,6 +5110,7 @@ lua_archive_get_size (lua_State *L)
 static gint
 lua_archive_get_filename (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_archive *arch = lua_check_archive (L);
 
 	if (arch != NULL) {
@@ -5022,6 +5127,7 @@ lua_archive_get_filename (lua_State *L)
 static gint
 lua_text_len (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = lua_check_text (L, 1);
 	gsize l = 0;
 
@@ -5032,7 +5138,7 @@ lua_text_len (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnumber (L, l);
+	lua_pushinteger (L, l);
 
 	return 1;
 }
@@ -5040,6 +5146,7 @@ lua_text_len (lua_State *L)
 static gint
 lua_text_str (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = lua_check_text (L, 1);
 
 	if (t != NULL) {
@@ -5055,6 +5162,7 @@ lua_text_str (lua_State *L)
 static gint
 lua_text_ptr (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = lua_check_text (L, 1);
 
 	if (t != NULL) {
@@ -5070,6 +5178,7 @@ lua_text_ptr (lua_State *L)
 static gint
 lua_text_take_ownership (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = lua_check_text (L, 1);
 	gchar *dest;
 
@@ -5096,6 +5205,7 @@ lua_text_take_ownership (lua_State *L)
 static gint
 lua_text_save_in_file (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = lua_check_text (L, 1);
 	const gchar *fname = NULL;
 	guint mode = 00644;
@@ -5150,6 +5260,7 @@ lua_text_save_in_file (lua_State *L)
 static gint
 lua_text_gc (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = lua_check_text (L, 1);
 
 	if (t != NULL) {

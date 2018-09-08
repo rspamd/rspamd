@@ -20,12 +20,17 @@
 #include "worker_util.h"
 #include "ottery.h"
 #include "rspamd_control.h"
+#include "lua_thread_pool.h"
 #include <math.h>
 #include <sys/wait.h>
 #include <src/libserver/rspamd_control.h>
 
 /* Lua module init function */
 #define MODULE_INIT_FUNC "module_init"
+
+#ifdef WITH_LUA_TRACE
+ucl_object_t *lua_traces;
+#endif
 
 const luaL_reg null_reg[] = {
 	{"__tostring", rspamd_lua_class_tostring},
@@ -435,7 +440,7 @@ rspamd_lua_rspamd_version_cmp (lua_State *L)
 
 set:
 	g_strfreev (components);
-	lua_pushnumber (L, ret);
+	lua_pushinteger (L, ret);
 
 	return 1;
 }
@@ -468,7 +473,7 @@ rspamd_lua_rspamd_version_numeric (lua_State *L)
 		}
 	}
 
-	lua_pushnumber (L, version_num);
+	lua_pushinteger (L, version_num);
 
 	return 1;
 }
@@ -684,6 +689,21 @@ rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L,
 	lua_settop (L, orig_top);
 }
 
+#ifdef WITH_LUA_TRACE
+static gint
+lua_push_trace_data (lua_State *L)
+{
+	if (lua_traces) {
+		ucl_object_push_lua (L, lua_traces, true);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+#endif
+
 lua_State *
 rspamd_lua_init ()
 {
@@ -721,6 +741,7 @@ rspamd_lua_init ()
 	luaopen_fann (L);
 	luaopen_sqlite3 (L);
 	luaopen_cryptobox (L);
+	luaopen_dns (L);
 
 	luaL_newmetatable (L, "rspamd{ev_base}");
 	lua_pushstring (L, "class");
@@ -747,7 +768,7 @@ rspamd_lua_init ()
 	lua_getglobal (L, "math");
 	lua_pushstring (L, "randomseed");
 	lua_gettable (L, -2);
-	lua_pushnumber (L, ottery_rand_uint64 ());
+	lua_pushinteger (L, ottery_rand_uint64 ());
 	lua_pcall (L, 1, 0, 0);
 	lua_pop (L, 1); /* math table */
 
@@ -778,6 +799,11 @@ rspamd_lua_init ()
 
 #undef ADD_TABLE
 	lua_setglobal (L, rspamd_modules_state_global);
+
+#ifdef WITH_LUA_TRACE
+	lua_pushcfunction (L, lua_push_trace_data);
+	lua_setglobal (L, "get_traces");
+#endif
 
 	return L;
 }
@@ -1470,14 +1496,26 @@ rspamd_lua_traceback (lua_State *L)
 {
 
 	GString *tb;
-	const gchar *msg = lua_tostring (L, 1);
 
-	tb = g_string_sized_new (100);
-	g_string_append_printf (tb, "%s; trace:", msg);
-	rspamd_lua_traceback_string (L, tb);
+	tb = rspamd_lua_get_traceback_string (L);
+
 	lua_pushlightuserdata (L, tb);
 
 	return 1;
+}
+
+GString *
+rspamd_lua_get_traceback_string (lua_State *L)
+{
+	GString *tb;
+	const gchar *msg = lua_tostring (L, -1);
+
+	tb = g_string_sized_new (100);
+	g_string_append_printf (tb, "%s; trace:", msg);
+
+	rspamd_lua_traceback_string (L, tb);
+
+	return tb;
 }
 
 guint
@@ -1604,7 +1642,9 @@ lua_check_ev_base (lua_State * L, gint pos)
 	return ud ? *((struct event_base **)ud) : NULL;
 }
 
-gboolean
+static void rspamd_lua_run_postloads_error (struct thread_entry *thread, int ret, const char *msg);
+
+void
 rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 		struct event_base *ev_base, struct rspamd_worker *w)
 {
@@ -1612,41 +1652,39 @@ rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 	struct rspamd_config **pcfg;
 	struct event_base **pev_base;
 	struct rspamd_worker **pw;
-	gint err_idx;
-	GString *tb;
 
 	/* Execute post load scripts */
 	LL_FOREACH (cfg->on_load, sc) {
-		lua_pushcfunction (L, &rspamd_lua_traceback);
-		err_idx = lua_gettop (L);
+		struct thread_entry *thread = lua_thread_pool_get_for_config (cfg);
+		thread->error_callback = rspamd_lua_run_postloads_error;
+		L = thread->lua_state;
 
-		lua_rawgeti (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
-		pcfg = lua_newuserdata (cfg->lua_state, sizeof (*pcfg));
+		lua_rawgeti (L, LUA_REGISTRYINDEX, sc->cbref);
+		pcfg = lua_newuserdata (L, sizeof (*pcfg));
 		*pcfg = cfg;
-		rspamd_lua_setclass (cfg->lua_state, "rspamd{config}", -1);
+		rspamd_lua_setclass (L, "rspamd{config}", -1);
 
-		pev_base = lua_newuserdata (cfg->lua_state, sizeof (*pev_base));
+		pev_base = lua_newuserdata (L, sizeof (*pev_base));
 		*pev_base = ev_base;
-		rspamd_lua_setclass (cfg->lua_state, "rspamd{ev_base}", -1);
+		rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
 
-		pw = lua_newuserdata (cfg->lua_state, sizeof (*pw));
+		pw = lua_newuserdata (L, sizeof (*pw));
 		*pw = w;
-		rspamd_lua_setclass (cfg->lua_state, "rspamd{worker}", -1);
+		rspamd_lua_setclass (L, "rspamd{worker}", -1);
 
-		if (lua_pcall (cfg->lua_state, 3, 0, err_idx) != 0) {
-			tb = lua_touserdata (L, -1);
-			msg_err_config ("error executing post load code: %v", tb);
-			g_string_free (tb, TRUE);
-			lua_settop (L, err_idx - 1);
-
-			return FALSE;
-		}
-
-		lua_settop (L, err_idx - 1);
+		lua_thread_call (thread, 3);
 	}
-
-	return TRUE;
 }
+
+
+static void
+rspamd_lua_run_postloads_error (struct thread_entry *thread, int ret, const char *msg)
+{
+	struct rspamd_config *cfg = thread->cfg;
+
+	msg_err_config ("error executing post load code: %s", msg);
+}
+
 
 static struct rspamd_worker *
 lua_check_worker (lua_State *L, gint pos)
@@ -1761,7 +1799,7 @@ lua_worker_get_index (lua_State *L)
 	struct rspamd_worker *w = lua_check_worker (L, 1);
 
 	if (w) {
-		lua_pushnumber (L, w->index);
+		lua_pushinteger (L, w->index);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -1776,7 +1814,7 @@ lua_worker_get_pid (lua_State *L)
 	struct rspamd_worker *w = lua_check_worker (L, 1);
 
 	if (w) {
-		lua_pushnumber (L, w->pid);
+		lua_pushinteger (L, w->pid);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

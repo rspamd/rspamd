@@ -141,8 +141,18 @@ rspamd_milter_session_reset (struct rspamd_milter_session *session,
 
 		if (priv->headers) {
 			msg_debug_milter ("cleanup headers");
-			g_hash_table_remove_all (priv->headers);
+			gchar *k;
+			GArray *ar;
+
+			kh_foreach (priv->headers, k, ar, {
+				g_free (k);
+				g_array_free (ar, TRUE);
+			});
+
+			kh_clear (milter_headers_hash_t, priv->headers);
 		}
+
+		priv->cur_hdr = 0;
 	}
 
 	if (how & RSPAMD_MILTER_RESET_ADDR) {
@@ -198,7 +208,15 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 		}
 
 		if (priv->headers) {
-			g_hash_table_destroy (priv->headers);
+			gchar *k;
+			GArray *ar;
+
+			kh_foreach (priv->headers, k, ar, {
+				g_free (k);
+				g_array_free (ar, TRUE);
+			});
+
+			kh_destroy (milter_headers_hash_t, priv->headers);
 		}
 
 		if (milter_ctx->sessions_cache) {
@@ -552,30 +570,29 @@ rspamd_milter_process_command (struct rspamd_milter_session *session,
 		}
 		else {
 			if (end > zero && *(end - 1) == '\0') {
-				gpointer res;
-				gint num;
+				khiter_t k;
+				gint res;
 
-				res = g_hash_table_lookup (priv->headers, pos);
-				if (res) {
-					num = GPOINTER_TO_INT (res);
-					num ++;
-					/*
-					 * We need to copy as glib is totally insane about it:
-					 * > If you supplied a key_destroy_func when creating the
-					 * > GHashTable, the passed key is freed using that function.
-					 */
-					g_hash_table_insert (priv->headers, g_strdup (pos),
-							GINT_TO_POINTER (num));
+				k = kh_get (milter_headers_hash_t, priv->headers, (gchar *)pos);
+
+				if (k == kh_end (priv->headers)) {
+					GArray *ar;
+
+					k = kh_put (milter_headers_hash_t, priv->headers,
+							g_strdup (pos), &res);
+					ar = g_array_new (FALSE, FALSE, sizeof (gint));
+					g_array_append_val (ar, priv->cur_hdr);
+					kh_value (priv->headers, k) = ar;
 				}
 				else {
-					num = 1;
-					g_hash_table_insert (priv->headers, g_strdup (pos),
-							GINT_TO_POINTER (num));
+					g_array_append_val (kh_value (priv->headers, k),
+							priv->cur_hdr);
 				}
 
 				rspamd_printf_fstring (&session->message, "%*s: %*s\r\n",
 						(int)(zero - pos), pos,
 						(int)(end - zero - 2), zero + 1);
+				priv->cur_hdr ++;
 			}
 			else {
 				err = g_error_new (rspamd_milter_quark (), EINVAL, "invalid "
@@ -1095,8 +1112,8 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 		memcpy (priv->pool->tag.uid, pool->tag.uid, sizeof (pool->tag.uid));
 	}
 
-	priv->headers = g_hash_table_new_full (rspamd_strcase_hash,
-			rspamd_strcase_equal, g_free, NULL);
+	priv->headers = kh_init (milter_headers_hash_t);
+	kh_resize (milter_headers_hash_t, priv->headers, 32);
 
 	if (tv) {
 		memcpy (&priv->tv, tv, sizeof (*tv));
@@ -1494,15 +1511,16 @@ static void
 rspamd_milter_remove_header_safe (struct rspamd_milter_session *session,
 		const gchar *key, gint nhdr)
 {
-	gint saved_nhdr, i;
-	gpointer found;
+	gint i;
 	GString *hname, *hvalue;
 	struct rspamd_milter_private *priv = session->priv;
+	khiter_t k;
+	GArray *ar;
 
-	found = g_hash_table_lookup (priv->headers, key);
+	k = kh_get (milter_headers_hash_t, priv->headers, (char *)key);
 
-	if (found) {
-		saved_nhdr = GPOINTER_TO_INT (found);
+	if (k != kh_end (priv->headers)) {
+		ar = kh_val (priv->headers, k);
 
 		hname = g_string_new (key);
 		hvalue = g_string_new ("");
@@ -1514,7 +1532,7 @@ rspamd_milter_remove_header_safe (struct rspamd_milter_session *session,
 		}
 		else if (nhdr == 0) {
 			/* We need to clear all headers */
-			for (i = 1; i <= saved_nhdr; i ++) {
+			for (i = 1; i <= ar->len; i ++) {
 				rspamd_milter_send_action (session,
 						RSPAMD_MILTER_CHGHEADER,
 						i, hname, hvalue);
@@ -1522,10 +1540,10 @@ rspamd_milter_remove_header_safe (struct rspamd_milter_session *session,
 		}
 		else {
 			/* Remove from the end */
-			if (nhdr >= -saved_nhdr) {
+			if (nhdr >= -(ar->len)) {
 				rspamd_milter_send_action (session,
 						RSPAMD_MILTER_CHGHEADER,
-						saved_nhdr + nhdr + 1, hname, hvalue);
+						ar->len + nhdr + 1, hname, hvalue);
 			}
 		}
 
@@ -1598,21 +1616,42 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 
 						if (val && ucl_object_type (val) == UCL_STRING) {
 							const ucl_object_t *idx_obj;
+							gboolean has_idx = FALSE;
 
 							idx_obj = ucl_object_lookup_any (cur_elt, "order",
 									"index", NULL);
+
 							if (idx_obj) {
 								idx = ucl_object_toint (idx_obj);
+								has_idx = TRUE;
 							}
 
 							hname = g_string_new (ucl_object_key (cur));
 							hvalue = g_string_new (ucl_object_tostring (val));
 
-							if (idx >= 0) {
-								rspamd_milter_send_action (session,
-										RSPAMD_MILTER_INSHEADER,
-										idx,
-										hname, hvalue);
+							if (has_idx) {
+								if (idx >= 0) {
+									rspamd_milter_send_action (session,
+											RSPAMD_MILTER_INSHEADER,
+											idx,
+											hname, hvalue);
+								}
+								else {
+									/* Calculate negative offset */
+
+									if (-idx <= priv->cur_hdr) {
+										rspamd_milter_send_action (session,
+												RSPAMD_MILTER_INSHEADER,
+												priv->cur_hdr + idx + 1,
+												hname, hvalue);
+									}
+									else {
+										rspamd_milter_send_action (session,
+												RSPAMD_MILTER_INSHEADER,
+												0,
+												hname, hvalue);
+									}
+								}
 							}
 							else {
 								rspamd_milter_send_action (session,
@@ -1638,6 +1677,34 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 					RSPAMD_MILTER_CHGFROM,
 					hvalue);
 			g_string_free (hvalue, TRUE);
+		}
+
+		elt = ucl_object_lookup (obj, "add_rcpt");
+
+		if (elt && ucl_object_type (elt) == UCL_ARRAY) {
+			it = NULL;
+
+			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+				hvalue = g_string_new (ucl_object_tostring (cur));
+				rspamd_milter_send_action (session,
+						RSPAMD_MILTER_ADDRCPT,
+						hvalue);
+				g_string_free (hvalue, TRUE);
+			}
+		}
+
+		elt = ucl_object_lookup (obj, "del_rcpt");
+
+		if (elt && ucl_object_type (elt) == UCL_ARRAY) {
+			it = NULL;
+
+			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+				hvalue = g_string_new (ucl_object_tostring (cur));
+				rspamd_milter_send_action (session,
+						RSPAMD_MILTER_DELRCPT,
+						hvalue);
+				g_string_free (hvalue, TRUE);
+			}
 		}
 
 		elt = ucl_object_lookup (obj, "reject");

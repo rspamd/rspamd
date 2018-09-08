@@ -79,6 +79,7 @@
 #include <x86intrin.h>
 #endif
 #endif
+
 #include <math.h> /* for pow */
 #include <glob.h> /* in fact, we require this file ultimately */
 
@@ -1852,16 +1853,24 @@ rspamd_get_virtual_ticks (void)
 
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
-# ifdef CLOCK_PROCESS_CPUTIME_ID
-	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &ts);
-# elif defined(CLOCK_PROF)
-	clock_gettime (CLOCK_PROF, &ts);
-# elif defined(CLOCK_VIRTUAL)
-	clock_gettime (CLOCK_VIRTUAL, &ts);
-# else
-	clock_gettime (CLOCK_REALTIME, &ts);
+	static clockid_t cid = (clockid_t)-1;
+	if (cid == (clockid_t)-1) {
+# ifdef HAVE_CLOCK_GETCPUCLOCKID
+		if (clock_getcpuclockid (0, &cid) == -1) {
 # endif
+# ifdef CLOCK_PROCESS_CPUTIME_ID
+		cid = CLOCK_PROCESS_CPUTIME_ID;
+# elif defined(CLOCK_PROF)
+		cid = CLOCK_PROF;
+# else
+		cid = CLOCK_REALTIME;
+# endif
+# ifdef HAVE_CLOCK_GETCPUCLOCKID
+		}
+# endif
+	}
 
+	clock_gettime (cid, &ts);
 	res = (double)ts.tv_sec + ts.tv_nsec / 1000000000.;
 #elif defined(__APPLE__)
 	thread_port_t thread = mach_thread_self ();
@@ -1875,6 +1884,12 @@ rspamd_get_virtual_ticks (void)
 	res = info.user_time.seconds + info.system_time.seconds;
 	res += ((gdouble)(info.user_time.microseconds + info.system_time.microseconds)) / 1e6;
 	mach_port_deallocate(mach_task_self(), thread);
+#elif defined(HAVE_RUSAGE_SELF)
+	struct rusage rusage;
+	if (getrusage (RUSAGE_SELF, &rusage) != -1) {
+		res = (double) rusage.ru_utime.tv_sec +
+			  (double) rusage.ru_utime.tv_usec / 1000000.0;
+	}
 #else
 	res = clock () / (double)CLOCKS_PER_SEC;
 #endif

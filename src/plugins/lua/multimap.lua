@@ -28,6 +28,8 @@ local regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_ip = require "rspamd_ip"
 local lua_util = require "lua_util"
+local rspamd_dns = require "rspamd_dns"
+local lua_selectors = require "lua_selectors"
 local redis_params
 local fun = require "fun"
 local N = 'multimap'
@@ -78,6 +80,9 @@ local value_types = {
     get_value = function(val) return val end,
   },
   mempool = {
+    get_value = function(val) return val end,
+  },
+  selector = {
     get_value = function(val) return val end,
   },
   symbol_options = {
@@ -367,6 +372,7 @@ local multimap_filters = {
   url = apply_url_filter,
   filename = apply_filename_filter,
   mempool = apply_regexp_filter,
+  selector = apply_regexp_filter,
   hostname = apply_hostname_filter,
   --content = apply_content_filter, -- Content filters are special :(
 }
@@ -685,10 +691,10 @@ local function multimap_callback(task, rule)
     local res,trace = rule['expression']:process_traced(task)
 
     if not res or res == 0 then
-      rspamd_logger.debugm(N, task, 'condition is false for %s', rule['symbol'])
+      lua_util.debugm(N, task, 'condition is false for %s', rule['symbol'])
       return
     else
-      rspamd_logger.debugm(N, task, 'condition is true for %s: %s', rule['symbol'],
+      lua_util.debugm(N, task, 'condition is true for %s: %s', rule['symbol'],
         trace)
     end
   end
@@ -701,24 +707,25 @@ local function multimap_callback(task, rule)
         if rt == 'ip' then
           match_rule(rule, ip)
         else
-          local cb = function (_, to_resolve, results, err)
-            task:inc_dns_req()
-            if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
-              rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
-            end
-            if results then
-              task:insert_result(rule['symbol'], 1, rule['map'])
+          local to_resolve = ip_to_rbl(ip, rule['map'])
 
-              if pre_filter then
-                task:set_pre_result(rule['action'], 'Matched map: ' .. rule['symbol'])
-              end
+          local is_ok, results = rspamd_dns.request({
+            type = "a",
+            task = task,
+            name = to_resolve,
+          })
+
+          lua_util.debugm(N, rspamd_config, 'resolve() finished: results=%1, is_ok=%2, to_resolve=%3', results, is_ok, to_resolve)
+
+          if not is_ok and (results ~= 'requested record is not found' and results ~= 'no records with this name') then
+            rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, results)
+          elseif is_ok then
+            task:insert_result(rule['symbol'], 1, rule['map'])
+            if pre_filter then
+              task:set_pre_result(rule['action'], 'Matched map: ' .. rule['symbol'])
             end
           end
 
-          task:get_resolver():resolve_a({task = task,
-            name = ip_to_rbl(ip, rule['map']),
-            callback = cb,
-          })
         end
       end
     end,
@@ -831,6 +838,12 @@ local function multimap_callback(task, rule)
         end
       end
     end,
+    selector = function()
+      local elts = lua_selectors.process_selectors(task, rule.selector) or {}
+      for _,elt in ipairs(elts) do
+        match_rule(rule, elt)
+      end
+    end,
   }
   process_rule_funcs.ip = process_rule_funcs.dnsbl
   local f = process_rule_funcs[rt]
@@ -872,6 +885,21 @@ local function add_multimap_rule(key, newrule)
   if newrule['type'] == 'mempool' and not newrule['variable'] then
     rspamd_logger.errx(rspamd_config, 'mempool map requires variable')
     return nil
+  end
+  if newrule['type'] == 'selector' then
+    if not newrule['selector'] then
+      rspamd_logger.errx(rspamd_config, 'selector map requires selector definition')
+      return nil
+    else
+      local selector = lua_selectors.parse_selector(rspamd_config, newrule['selector'])
+
+      if not selector then
+        rspamd_logger.errx(rspamd_config, 'selector map has invalid selector')
+        return nil
+      end
+
+      newrule.selector = selector
+    end
   end
   -- Check cdb flag
   if type(newrule['map']) == 'string' and string.find(newrule['map'], '^cdb://.*$') then
@@ -985,17 +1013,18 @@ local function add_multimap_rule(key, newrule)
           end
         end
       elseif newrule['type'] == 'header'
-        or newrule['type'] == 'rcpt'
-        or newrule['type'] == 'from'
-        or newrule['type'] == 'helo'
-        or newrule['type'] == 'symbol_options'
-        or newrule['type'] == 'filename'
-        or newrule['type'] == 'url'
-        or newrule['type'] == 'content'
-        or newrule['type'] == 'hostname'
-        or newrule['type'] == 'asn'
-        or newrule['type'] == 'country'
-        or newrule['type'] == 'mempool' then
+          or newrule['type'] == 'rcpt'
+          or newrule['type'] == 'from'
+          or newrule['type'] == 'helo'
+          or newrule['type'] == 'symbol_options'
+          or newrule['type'] == 'filename'
+          or newrule['type'] == 'url'
+          or newrule['type'] == 'content'
+          or newrule['type'] == 'hostname'
+          or newrule['type'] == 'asn'
+          or newrule['type'] == 'country'
+          or newrule['type'] == 'mempool'
+          or newrule['type'] == 'selector'then
         if newrule['regexp'] then
           newrule['hash'] = rspamd_config:add_map ({
             url = newrule['map'],
@@ -1060,7 +1089,7 @@ local function add_multimap_rule(key, newrule)
 
       local function process_atom(atom, task)
         local f_ret = task:has_symbol(atom)
-        rspamd_logger.debugm(N, rspamd_config, 'check for symbol %s: %s', atom, f_ret)
+        lua_util.debugm(N, rspamd_config, 'check for symbol %s: %s', atom, f_ret)
 
         if f_ret then
           return 1
@@ -1075,7 +1104,7 @@ local function add_multimap_rule(key, newrule)
         newrule['expression'] = expression
 
         fun.each(function(v)
-          rspamd_logger.debugm(N, rspamd_config, 'add dependency %s -> %s',
+          lua_util.debugm(N, rspamd_config, 'add dependency %s -> %s',
             newrule['symbol'], v)
           rspamd_config:register_dependency(newrule['symbol'], v)
         end, atoms)

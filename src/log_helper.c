@@ -114,7 +114,7 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 				lua_createtable (ctx->L, n, 0);
 				for (i = 0; i < n; i ++) {
 					lua_createtable (ctx->L, 2, 0);
-					lua_pushnumber (ctx->L, sm->results[i].id);
+					lua_pushinteger (ctx->L, sm->results[i].id);
 					lua_rawseti (ctx->L, -2, 1);
 					lua_pushnumber (ctx->L, sm->results[i].score);
 					lua_rawseti (ctx->L, -2, 2);
@@ -125,12 +125,12 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 				pcfg = lua_newuserdata (ctx->L, sizeof (*pcfg));
 				*pcfg = ctx->cfg;
 				rspamd_lua_setclass (ctx->L, "rspamd{config}", -1);
-				lua_pushnumber (ctx->L, sm->settings_id);
+				lua_pushinteger (ctx->L, sm->settings_id);
 
 				lua_createtable (ctx->L, nextra, 0);
 				for (i = 0; i < nextra; i ++) {
 					lua_createtable (ctx->L, 2, 0);
-					lua_pushnumber (ctx->L, sm->results[i + n].id);
+					lua_pushinteger (ctx->L, sm->results[i + n].id);
 					lua_rawseti (ctx->L, -2, 1);
 					lua_pushnumber (ctx->L, sm->results[i + n].score);
 					lua_rawseti (ctx->L, -2, 2);
@@ -227,8 +227,8 @@ start_log_helper (struct rspamd_worker *worker)
 	close (ctx->pair[0]);
 	rspamd_worker_block_signals ();
 
-	rspamd_log_close (worker->srv->logger);
 	REF_RELEASE (ctx->cfg);
+	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);
 }

@@ -18,6 +18,10 @@ if confighelp then
   return
 end
 
+local rspamd_logger = require "rspamd_logger"
+local util = require "rspamd_util"
+local lua_util = require "lua_util"
+
 -- Phishing detection interface for selecting phished urls and inserting corresponding symbol
 --
 --
@@ -40,8 +44,8 @@ local generic_service_hash
 local openphish_hash
 local generic_service_data = {}
 local openphish_data = {}
-local rspamd_logger = require "rspamd_logger"
-local util = require "rspamd_util"
+
+
 local opts = rspamd_config:get_all_opt(N)
 if not (opts and type(opts) == 'table') then
   rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
@@ -206,7 +210,7 @@ local function phishing_cb(task)
         local weight = 1.0
         local spoofed,why = util.is_utf_spoofed(tld, ptld)
         if spoofed then
-          rspamd_logger.debugm(N, task, "confusable: %1 -> %2: %3", tld, ptld, why)
+          lua_util.debugm(N, task, "confusable: %1 -> %2: %3", tld, ptld, why)
           weight = 1.0
         else
           local dist = util.levenshtein_distance(tld, ptld, 2)
@@ -224,7 +228,7 @@ local function phishing_cb(task)
 
             if a1 ~= a2 then
               weight = 1
-              rspamd_logger.debugm(N, task, "confusable: %1 -> %2: different characters",
+              lua_util.debugm(N, task, "confusable: %1 -> %2: different characters",
                 tld, ptld, why)
             else
               -- We have totally different strings in tld, so penalize it significantly
@@ -233,7 +237,7 @@ local function phishing_cb(task)
             end
           end
 
-          rspamd_logger.debugm(N, task, "distance: %1 -> %2: %3", tld, ptld, dist)
+          lua_util.debugm(N, task, "distance: %1 -> %2: %3", tld, ptld, dist)
         end
 
         local function found_in_map(map, furl, sweight)

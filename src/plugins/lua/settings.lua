@@ -25,6 +25,12 @@ end
 local rspamd_logger = require "rspamd_logger"
 local rspamd_maps = require "lua_maps"
 local lua_squeeze = require "lua_squeeze_rules"
+local lua_util = require "lua_util"
+local rspamd_ip = require "rspamd_ip"
+local rspamd_regexp = require "rspamd_regexp"
+local ucl = require "ucl"
+local fun = require "fun"
+
 local redis_params
 
 local settings = {}
@@ -32,10 +38,6 @@ local N = "settings"
 local settings_ids = {}
 local settings_initialized = false
 local max_pri = 0
-local rspamd_ip = require "rspamd_ip"
-local rspamd_regexp = require "rspamd_regexp"
-local ucl = require "ucl"
-local fun = require "fun"
 
 local function apply_settings(task, to_apply)
   task:set_settings(to_apply)
@@ -684,7 +686,7 @@ local function gen_redis_callback(handler, id)
     end
 
     if not key then
-      rspamd_logger.debugm(N, task, 'handler number %s returned nil', id)
+      lua_util.debugm(N, task, 'handler number %s returned nil', id)
       return
     end
 

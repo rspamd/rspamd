@@ -242,17 +242,17 @@ rspamd_task_free (struct rspamd_task *task)
 		for (i = 0; i < task->text_parts->len; i ++) {
 			tp = g_ptr_array_index (task->text_parts, i);
 
-			if (tp->normalized_words) {
-				g_array_free (tp->normalized_words, TRUE);
+			if (tp->utf_words) {
+				g_array_free (tp->utf_words, TRUE);
 			}
 			if (tp->normalized_hashes) {
 				g_array_free (tp->normalized_hashes, TRUE);
 			}
-			if (tp->ucs32_words) {
-				g_array_free (tp->ucs32_words, TRUE);
-			}
 			if (tp->languages) {
 				g_ptr_array_unref (tp->languages);
+			}
+			if (tp->unicode_raw_content) {
+				g_array_free (tp->unicode_raw_content, TRUE);
 			}
 		}
 
@@ -841,7 +841,8 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 	}
 
 	if (RSPAMD_TASK_IS_SKIPPED (task)) {
-		task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
+		/* Set all bits except idempotent filters */
+		task->processed_stages |= 0x7FFF;
 	}
 
 	task->flags &= ~RSPAMD_TASK_FLAG_PROCESSING;

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "lua_common.h"
+#include "lua_thread_pool.h"
 #include "utlist.h"
 
 #include "contrib/hiredis/hiredis.h"
@@ -92,7 +93,7 @@ struct lua_redis_specific_userdata;
  */
 struct lua_redis_userdata {
 	redisAsyncContext *ctx;
-	lua_State *L;
+	struct rspamd_task *task;
 	struct rspamd_async_session *s;
 	struct event_base *ev_base;
 	struct rspamd_config *cfg;
@@ -191,7 +192,7 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 			lua_redis_free_args (cur->args, cur->arglens, cur->nargs);
 
 			if (cur->cbref != -1) {
-				luaL_unref (ud->L, LUA_REGISTRYINDEX, cur->cbref);
+				luaL_unref (ud->cfg->lua_state, LUA_REGISTRYINDEX, cur->cbref);
 			}
 
 			g_free (cur);
@@ -244,21 +245,27 @@ lua_redis_push_error (const gchar *err,
 	gboolean connected)
 {
 	struct lua_redis_userdata *ud = sp_ud->c;
+	struct lua_callback_state cbs;
 
 	if (!(sp_ud->flags & (LUA_REDIS_SPECIFIC_REPLIED|LUA_REDIS_SPECIFIC_FINISHED))) {
 		if (sp_ud->cbref != -1) {
+
+			lua_thread_pool_prepare_callback (ud->cfg->lua_thread_pool, &cbs);
+
 			/* Push error */
-			lua_rawgeti (ud->L, LUA_REGISTRYINDEX, sp_ud->cbref);
+			lua_rawgeti (cbs.L, LUA_REGISTRYINDEX, sp_ud->cbref);
 
 			/* String of error */
-			lua_pushstring (ud->L, err);
+			lua_pushstring (cbs.L, err);
 			/* Data is nil */
-			lua_pushnil (ud->L);
+			lua_pushnil (cbs.L);
 
-			if (lua_pcall (ud->L, 2, 0, 0) != 0) {
-				msg_info ("call to callback failed: %s", lua_tostring (ud->L, -1));
-				lua_pop (ud->L, 1);
+			if (lua_pcall (cbs.L, 2, 0, 0) != 0) {
+				msg_info ("call to callback failed: %s", lua_tostring (cbs.L, -1));
+				lua_pop (cbs.L, 1);
 			}
+
+			lua_thread_pool_restore_callback (&cbs);
 		}
 
 		sp_ud->flags |= LUA_REDIS_SPECIFIC_REPLIED;
@@ -281,7 +288,7 @@ lua_redis_push_reply (lua_State *L, const redisReply *r, gboolean text_data)
 
 	switch (r->type) {
 	case REDIS_REPLY_INTEGER:
-		lua_pushnumber (L, r->integer);
+		lua_pushinteger (L, r->integer);
 		break;
 	case REDIS_REPLY_NIL:
 		/* XXX: not the best approach */
@@ -323,21 +330,25 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_ctx *ctx,
 		struct lua_redis_specific_userdata *sp_ud)
 {
 	struct lua_redis_userdata *ud = sp_ud->c;
+	struct lua_callback_state cbs;
 
 	if (!(sp_ud->flags & (LUA_REDIS_SPECIFIC_REPLIED|LUA_REDIS_SPECIFIC_FINISHED))) {
 		if (sp_ud->cbref != -1) {
-			/* Push error */
-			lua_rawgeti (ud->L, LUA_REGISTRYINDEX, sp_ud->cbref);
-			/* Error is nil */
-			lua_pushnil (ud->L);
-			/* Data */
-			lua_redis_push_reply (ud->L, r, ctx->flags & LUA_REDIS_TEXTDATA);
+			lua_thread_pool_prepare_callback (ud->cfg->lua_thread_pool, &cbs);
 
-			if (lua_pcall (ud->L, 2, 0, 0) != 0) {
-				msg_info ("call to callback failed: %s", lua_tostring (ud->L, -1));
-				lua_pop (ud->L, 1);
+			/* Push error */
+			lua_rawgeti (cbs.L, LUA_REGISTRYINDEX, sp_ud->cbref);
+			/* Error is nil */
+			lua_pushnil (cbs.L);
+			/* Data */
+			lua_redis_push_reply (cbs.L, r, ctx->flags & LUA_REDIS_TEXTDATA);
+
+			if (lua_pcall (cbs.L, 2, 0, 0) != 0) {
+				msg_info ("call to callback failed: %s", lua_tostring (cbs.L, -1));
+				lua_pop (cbs.L, 1);
 			}
 
+			lua_thread_pool_restore_callback (&cbs);
 		}
 
 		sp_ud->flags |= LUA_REDIS_SPECIFIC_REPLIED;
@@ -675,6 +686,10 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref)
 
 		lua_pop (L, 1); /* table */
 
+		if (session && rspamd_session_is_destroying (session)) {
+			ret = FALSE;
+		}
+
 
 		if (ret && addr != NULL) {
 			ctx = g_malloc0 (sizeof (struct lua_redis_ctx));
@@ -685,7 +700,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref)
 			ud->cfg = cfg;
 			ud->pool = cfg->redis_pool;
 			ud->ev_base = ev_base;
-			ud->L = L;
+			ud->task = task;
 
 			ret = TRUE;
 		}
@@ -751,6 +766,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref)
 static int
 lua_redis_make_request (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_redis_specific_userdata *sp_ud;
 	struct lua_redis_userdata *ud;
 	struct lua_redis_ctx *ctx, **pctx;
@@ -858,6 +874,7 @@ lua_redis_make_request (lua_State *L)
 static int
 lua_redis_make_request_sync (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *addr = NULL;
 	rspamd_inet_addr_t *ip = NULL;
 	const gchar *cmd = NULL, *host;
@@ -1000,6 +1017,7 @@ lua_redis_make_request_sync (lua_State *L)
 static int
 lua_redis_connect (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_redis_userdata *ud;
 	struct lua_redis_ctx *ctx, **pctx;
 	gdouble timeout = REDIS_DEFAULT_TIMEOUT;
@@ -1042,6 +1060,7 @@ lua_redis_connect (lua_State *L)
 static int
 lua_redis_connect_sync (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *addr = NULL;
 	rspamd_inet_addr_t *ip = NULL;
 	const gchar *host;
@@ -1153,6 +1172,7 @@ lua_redis_connect_sync (lua_State *L)
 static int
 lua_redis_add_cmd (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_redis_ctx *ctx = lua_check_redis (L, 1);
 	struct lua_redis_specific_userdata *sp_ud;
 	struct lua_redis_userdata *ud;
@@ -1194,6 +1214,13 @@ lua_redis_add_cmd (lua_State *L)
 						&sp_ud->arglens, &sp_ud->nargs);
 
 			LL_PREPEND (sp_ud->c->specific, sp_ud);
+
+			if (ud->s && rspamd_session_is_destroying (ud->s)) {
+				lua_pushboolean (L, 0);
+				lua_pushstring (L, "session is terminating");
+
+				return 2;
+			}
 
 			ret = redisAsyncCommandArgv (sp_ud->c->ctx,
 					lua_redis_callback,
@@ -1275,6 +1302,7 @@ lua_redis_add_cmd (lua_State *L)
 static int
 lua_redis_exec (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct lua_redis_ctx *ctx = lua_check_redis (L, 1);
 	redisReply *r;
 	gint ret;

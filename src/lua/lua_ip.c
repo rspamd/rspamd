@@ -219,6 +219,7 @@ lua_check_ip (lua_State * L, gint pos)
 static gint
 lua_ip_to_table (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
 	guint max, i;
 	guint8 *ptr;
@@ -228,7 +229,7 @@ lua_ip_to_table (lua_State *L)
 		lua_createtable (L, max, 0);
 
 		for (i = 1; i <= max; i++, ptr++) {
-			lua_pushnumber (L, *ptr);
+			lua_pushinteger (L, *ptr);
 			lua_rawseti (L, -2, i);
 		}
 	}
@@ -242,6 +243,7 @@ lua_ip_to_table (lua_State *L)
 static gint
 lua_ip_str_octets (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
 	guint max, i;
 	guint8 *ptr;
@@ -282,6 +284,7 @@ lua_ip_str_octets (lua_State *L)
 static gint
 lua_ip_inversed_str_octets (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
 	guint max, i;
 	guint8 *ptr;
@@ -323,6 +326,7 @@ lua_ip_inversed_str_octets (lua_State *L)
 static gint
 lua_ip_to_string (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
 
 	if (ip != NULL && ip->addr) {
@@ -343,10 +347,11 @@ lua_ip_to_string (lua_State *L)
 static gint
 lua_ip_get_port (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
 
 	if (ip != NULL && ip->addr) {
-		lua_pushnumber (L, rspamd_inet_address_get_port (ip->addr));
+		lua_pushinteger (L, rspamd_inet_address_get_port (ip->addr));
 	}
 	else {
 		lua_pushnil (L);
@@ -358,6 +363,7 @@ lua_ip_get_port (lua_State *L)
 static gint
 lua_ip_from_string (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *ip;
 	const gchar *ip_str;
 
@@ -380,6 +386,7 @@ lua_ip_from_string (lua_State *L)
 static gint
 lua_ip_to_number (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
 	guint32 c;
 	guint max, i;
@@ -406,6 +413,7 @@ lua_ip_to_number (lua_State *L)
 static gint
 lua_ip_destroy (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
 
 	if (ip) {
@@ -421,10 +429,11 @@ lua_ip_destroy (lua_State *L)
 static gint
 lua_ip_get_version (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
 
 	if (ip && ip->addr) {
-		lua_pushnumber (L, rspamd_inet_address_get_af (ip->addr) == AF_INET6 ?
+		lua_pushinteger (L, rspamd_inet_address_get_af (ip->addr) == AF_INET6 ?
 				6 : 4);
 	}
 	else {
@@ -437,6 +446,7 @@ lua_ip_get_version (lua_State *L)
 static gint
 lua_ip_is_valid (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
 
 	if (ip) {
@@ -452,6 +462,7 @@ lua_ip_is_valid (lua_State *L)
 static gint
 lua_ip_apply_mask (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1), *nip;
 	gint mask;
 
@@ -470,6 +481,7 @@ lua_ip_apply_mask (lua_State *L)
 static gint
 lua_ip_equal (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *ip1 = lua_check_ip (L, 1),
 		*ip2 = lua_check_ip (L, 2);
 	gboolean res = FALSE;
@@ -486,6 +498,7 @@ lua_ip_equal (lua_State *L)
 static gint
 lua_ip_copy (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_ip *ip = lua_check_ip (L, 1);
 
 	if (ip) {

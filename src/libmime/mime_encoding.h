@@ -65,7 +65,7 @@ gboolean rspamd_mime_to_utf8_byte_array (GByteArray *in,
  * @param text_part
  * @return
  */
-GByteArray * rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
+void rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		struct rspamd_mime_text_part *text_part);
 
 /**
@@ -85,5 +85,12 @@ gboolean rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
  * @param len
  */
 void rspamd_mime_charset_utf_enforce (gchar *in, gsize len);
+
+/**
+ * Converts utf8 to libicu unichars
+ * @param in
+ * @param dest
+ */
+void rspamd_utf_to_unicode (GByteArray *in, GArray *dest);
 
 #endif /* SRC_LIBMIME_MIME_ENCODING_H_ */

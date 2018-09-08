@@ -22,7 +22,7 @@
 
 #define LUA_ENUM(L, name, val) \
 	lua_pushlstring (L, # name, sizeof(# name) - 1); \
-	lua_pushnumber (L, val); \
+	lua_pushinteger (L, val); \
 	lua_settable (L, -3);
 
 #if LUA_VERSION_NUM > 501 && !defined LUA_COMPAT_MODULE
@@ -280,6 +280,7 @@ void luaopen_html (lua_State * L);
 void luaopen_fann (lua_State *L);
 void luaopen_sqlite3 (lua_State *L);
 void luaopen_cryptobox (lua_State *L);
+void luaopen_dns (lua_State *L);
 
 void rspamd_lua_dostring (const gchar *line);
 
@@ -337,6 +338,14 @@ gboolean rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 gint rspamd_lua_traceback (lua_State *L);
 
 /**
+ * Returns stack trace as a string. Caller should clear memory.
+ * @param L
+ * @return
+ */
+GString *
+rspamd_lua_get_traceback_string (lua_State *L);
+
+/**
  * Returns size of table at position `tbl_pos`
  */
 guint rspamd_lua_table_size (lua_State *L, gint tbl_pos);
@@ -372,12 +381,10 @@ void *rspamd_lua_check_udata_maybe (lua_State *L, gint pos, const gchar *classna
 
 /**
  * Call finishing script with the specified task
- * @param L
  * @param sc
  * @param task
  */
-void lua_call_finish_script (lua_State *L, struct
-		rspamd_config_post_load_script *sc,
+void lua_call_finish_script (struct rspamd_config_post_load_script *sc,
 		struct rspamd_task *task);
 
 /**
@@ -386,7 +393,7 @@ void lua_call_finish_script (lua_State *L, struct
  * @param cfg
  * @param ev_base
  */
-gboolean rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
+void rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 		struct event_base *ev_base, struct rspamd_worker *w);
 
 /**
@@ -419,6 +426,22 @@ gboolean rspamd_lua_require_function (lua_State *L, const gchar *modname,
 #define RSPAMD_WWWDIR_INDEX "WWWDIR"
 #define RSPAMD_PREFIX_INDEX "PREFIX"
 #define RSPAMD_VERSION_INDEX "VERSION"
+
+#ifdef WITH_LUA_TRACE
+extern ucl_object_t *lua_traces;
+#define LUA_TRACE_POINT do { \
+ ucl_object_t *func_obj; \
+ if (lua_traces == NULL) { lua_traces = ucl_object_typed_new (UCL_OBJECT); } \
+ func_obj = (ucl_object_t *)ucl_object_lookup (lua_traces, G_STRFUNC); \
+ if (func_obj == NULL) { \
+   func_obj = ucl_object_typed_new (UCL_INT); \
+   ucl_object_insert_key (lua_traces, func_obj, G_STRFUNC, 0, false); \
+ } \
+ func_obj->value.iv ++; \
+} while(0)
+#else
+#define LUA_TRACE_POINT
+#endif
 
 #endif /* WITH_LUA */
 #endif /* RSPAMD_LUA_H */

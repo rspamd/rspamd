@@ -498,8 +498,8 @@ main (gint argc, gchar **argv, gchar **env)
 		cmd->run (0, NULL, cmd);
 	}
 
-	rspamd_log_close (rspamd_main->logger);
 	REF_RELEASE (rspamd_main->cfg);
+	rspamd_log_close (rspamd_main->logger, TRUE);
 	g_free (rspamd_main);
 	g_ptr_array_free (all_commands, TRUE);
 

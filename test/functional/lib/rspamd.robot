@@ -10,8 +10,8 @@ Check Controller Errors
   Log  @{result}[1]
 
 Check Pidfile
-  [Arguments]  ${pidfile}
-  Wait Until Created  ${pidfile}
+  [Arguments]  ${pidfile}  ${timeout}=1 min
+  Wait Until Created  ${pidfile}  timeout=${timeout}
   ${size} =  Get File Size  ${pidfile}
   Should Not Be Equal As Integers  ${size}  0
 
@@ -70,7 +70,13 @@ Generic Teardown
   [Arguments]  @{ports}
   Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Check Controller Errors
   Shutdown Process With Children  ${RSPAMD_PID}
+  Log do not contain segfault record
+  Save Run Results  ${TMPDIR}  rspamd.log redis.log rspamd.conf clickhouse-server.log clickhouse-server.err.log clickhouse-config.xml
   Cleanup Temporary Directory  ${TMPDIR}
+
+Log do not contain segfault record
+  ${log} =  Get File  ${TMPDIR}/rspamd.log
+  Should not contain  ${log}  Segmentation fault:  msg=Segmentation fault detected
 
 Log Logs
   [Arguments]  ${logfile}  ${position}
@@ -148,7 +154,7 @@ Run Rspamd
   Log  ${config}
   Create File  ${tmpdir}/rspamd.conf  ${config}
   ${result} =  Run Process  ${RSPAMD}  -u  ${RSPAMD_USER}  -g  ${RSPAMD_GROUP}
-  ...  -c  ${tmpdir}/rspamd.conf  env:TMPDIR=${tmpdir}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
+  ...  -c  ${tmpdir}/rspamd.conf  env:TMPDIR=${tmpdir}  env:DBDIR=${tmpdir}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   ${rspamd_logpos} =  Log Logs  ${tmpdir}/rspamd.log  0
   Should Be Equal As Integers  ${result.rc}  0

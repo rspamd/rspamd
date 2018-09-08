@@ -1638,55 +1638,58 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 	struct rspamd_http_message *msg;
 	struct surbl_ctx *surbl_module_ctx = surbl_get_context (task->cfg);
 
-	selected = rspamd_upstream_get (surbl_module_ctx->redirectors,
-			RSPAMD_UPSTREAM_ROUND_ROBIN, url->host, url->hostlen);
+	if (!rspamd_session_is_destroying (task->s)) {
 
-	if (selected) {
-		s = rspamd_inet_address_connect (rspamd_upstream_addr (selected),
-				SOCK_STREAM, TRUE);
+		selected = rspamd_upstream_get (surbl_module_ctx->redirectors,
+				RSPAMD_UPSTREAM_ROUND_ROBIN, url->host, url->hostlen);
+
+		if (selected) {
+			s = rspamd_inet_address_connect (rspamd_upstream_addr (selected),
+					SOCK_STREAM, TRUE);
+		}
+
+		if (s == -1) {
+			msg_info_surbl ("<%s> cannot create tcp socket failed: %s",
+					task->message_id,
+					strerror (errno));
+			return;
+		}
+
+		param =
+				rspamd_mempool_alloc (task->task_pool,
+						sizeof (struct redirector_param));
+		param->url = url;
+		param->task = task;
+		param->conn = rspamd_http_connection_new (NULL,
+				surbl_redirector_error,
+				surbl_redirector_finish,
+				RSPAMD_HTTP_CLIENT_SIMPLE,
+				RSPAMD_HTTP_CLIENT,
+				NULL,
+				NULL);
+		param->ctx = surbl_module_ctx;
+		msg = rspamd_http_new_message (HTTP_REQUEST);
+		msg->url = rspamd_fstring_assign (msg->url, url->string, url->urllen);
+		param->sock = s;
+		param->redirector = selected;
+		timeout = rspamd_mempool_alloc (task->task_pool, sizeof (struct timeval));
+		double_to_tv (surbl_module_ctx->read_timeout, timeout);
+
+		rspamd_session_add_event (task->s,
+				free_redirector_session,
+				param,
+				g_quark_from_static_string ("surbl"));
+
+		rspamd_http_connection_write_message (param->conn, msg, NULL,
+				NULL, param, s, timeout, task->ev_base);
+
+		msg_info_surbl (
+				"<%s> registered redirector call for %*s to %s, according to rule: %s",
+				task->message_id,
+				url->urllen, url->string,
+				rspamd_upstream_name (param->redirector),
+				rule);
 	}
-
-	if (s == -1) {
-		msg_info_surbl ("<%s> cannot create tcp socket failed: %s",
-			task->message_id,
-			strerror (errno));
-		return;
-	}
-
-	param =
-		rspamd_mempool_alloc (task->task_pool,
-			sizeof (struct redirector_param));
-	param->url = url;
-	param->task = task;
-	param->conn = rspamd_http_connection_new (NULL,
-			surbl_redirector_error,
-			surbl_redirector_finish,
-			RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT,
-			NULL,
-			NULL);
-	param->ctx = surbl_module_ctx;
-	msg = rspamd_http_new_message (HTTP_REQUEST);
-	msg->url = rspamd_fstring_assign (msg->url, url->string, url->urllen);
-	param->sock = s;
-	param->redirector = selected;
-	timeout = rspamd_mempool_alloc (task->task_pool, sizeof (struct timeval));
-	double_to_tv (surbl_module_ctx->read_timeout, timeout);
-
-	rspamd_session_add_event (task->s,
-		free_redirector_session,
-		param,
-		g_quark_from_static_string ("surbl"));
-
-	rspamd_http_connection_write_message (param->conn, msg, NULL,
-			NULL, param, s, timeout, task->ev_base);
-
-	msg_info_surbl (
-		"<%s> registered redirector call for %*s to %s, according to rule: %s",
-		task->message_id,
-		url->urllen, url->string,
-		rspamd_upstream_name (param->redirector),
-		rule);
 }
 
 static gboolean

@@ -392,6 +392,14 @@ const char *rdns_strtype (enum rdns_request_type type);
 enum rdns_request_type rdns_type_fromstr (const char *str);
 
 /**
+ * Returns string representing request type
+ * @param rcode
+ * @return
+ */
+const char *
+rdns_str_from_type (enum rdns_request_type rcode);
+
+/**
  * Parse string and return error code
  * @param str
  * @return

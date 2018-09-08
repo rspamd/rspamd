@@ -156,8 +156,8 @@ lua_trie_callback (struct rspamd_multipattern *mp,
 
 	/* Function */
 	lua_pushvalue (L, 3);
-	lua_pushnumber (L, strnum + 1);
-	lua_pushnumber (L, textpos);
+	lua_pushinteger (L, strnum + 1);
+	lua_pushinteger (L, textpos);
 
 	if (lua_pcall (L, 2, 1, 0) != 0) {
 		msg_info ("call to trie callback has failed: %s",
@@ -202,6 +202,7 @@ lua_trie_search_str (lua_State *L, struct rspamd_multipattern *trie,
 static gint
 lua_trie_match (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_multipattern *trie = lua_check_trie (L, 1);
 	const gchar *text;
 	gsize len;
@@ -249,6 +250,7 @@ lua_trie_match (lua_State *L)
 static gint
 lua_trie_search_mime (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_multipattern *trie = lua_check_trie (L, 1);
 	struct rspamd_task *task = lua_check_task (L, 2);
 	struct rspamd_mime_text_part *part;
@@ -260,9 +262,9 @@ lua_trie_search_mime (lua_State *L)
 		for (i = 0; i < task->text_parts->len; i ++) {
 			part = g_ptr_array_index (task->text_parts, i);
 
-			if (!IS_PART_EMPTY (part) && part->content != NULL) {
-				text = part->content->data;
-				len = part->content->len;
+			if (!IS_PART_EMPTY (part) && part->utf_content != NULL) {
+				text = part->utf_content->data;
+				len = part->utf_content->len;
 
 				if (lua_trie_search_str (L, trie, text, len) != 0) {
 					found = TRUE;
@@ -286,6 +288,7 @@ lua_trie_search_mime (lua_State *L)
 static gint
 lua_trie_search_rawmsg (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_multipattern *trie = lua_check_trie (L, 1);
 	struct rspamd_task *task = lua_check_task (L, 2);
 	const gchar *text;
@@ -316,6 +319,7 @@ lua_trie_search_rawmsg (lua_State *L)
 static gint
 lua_trie_search_rawbody (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_multipattern *trie = lua_check_trie (L, 1);
 	struct rspamd_task *task = lua_check_task (L, 2);
 	const gchar *text;

@@ -25,11 +25,13 @@ local N = 'reputation'
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
+local rspamd_dns = require "rspamd_dns"
 local lua_util = require "lua_util"
 local lua_maps = require "lua_maps"
 local hash = require 'rspamd_cryptobox_hash'
 local lua_redis = require "lua_redis"
 local fun = require "fun"
+
 local redis_params = nil
 local default_expiry = 864000 -- 10 day by default
 
@@ -113,7 +115,7 @@ local function dkim_reputation_filter(task, rule)
   local rep_accepted = 0.0
   local rep_rejected = 0.0
 
-  rspamd_logger.debugm(N, task, 'dkim reputation tokens: %s', requests)
+  lua_util.debugm(N, task, 'dkim reputation tokens: %s', requests)
 
   local function tokens_cb(err, token, values)
     nchecked = nchecked + 1
@@ -575,7 +577,7 @@ local function spf_reputation_filter(task, rule)
   local cr = require "rspamd_cryptobox_hash"
   local hkey = cr.create(spf_record):base32():sub(1, 32)
 
-  rspamd_logger.debugm(N, task, 'check spf record %s -> %s', spf_record, hkey)
+  lua_util.debugm(N, task, 'check spf record %s -> %s', spf_record, hkey)
 
   local function tokens_cb(err, token, values)
     if values then
@@ -614,7 +616,7 @@ local function spf_reputation_idempotent(task, rule)
     local cr = require "rspamd_cryptobox_hash"
     local hkey = cr.create(spf_record):base32():sub(1, 32)
 
-    rspamd_logger.debugm(N, task, 'set spf record %s -> %s = %s',
+    lua_util.debugm(N, task, 'set spf record %s -> %s = %s',
         spf_record, hkey, token)
     rule.backend.set_token(task, rule, hkey, token)
   end
@@ -715,49 +717,45 @@ end
 --]]
 
 local function reputation_dns_get_token(task, rule, token, continuation_cb)
-  local r = task:get_resolver()
+  -- local r = task:get_resolver()
   local key = gen_token_key(token, rule)
   local dns_name = key .. '.' .. rule.backend.config.list
 
-  local function dns_callback(_, to_resolve, results, err)
-    if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
-      rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
-    end
-    if not results then
-      rspamd_logger.debugm(N, task, 'DNS RESPONSE: label=%1 results=%2 error=%3 list=%4',
-        to_resolve, false, err, rule.backend.config.list)
-    else
-      rspamd_logger.debugm(N, task, 'DNS RESPONSE: label=%1 results=%2 error=%3 list=%4',
-        to_resolve, true, err, rule.backend.config.list)
-    end
-
-    -- Now split tokens to list of values
-    if not err and results then
-      local values = {}
-      -- Format: key1=num1;key2=num2...keyn=numn
-      fun.each(function(e)
-          local vals = lua_util.rspamd_str_split(e, "=")
-          if vals and #vals == 2 then
-            local nv = tonumber(vals[2])
-            if nv then
-              values[vals[1]] = nv
-            end
-          end
-        end,
-        lua_util.rspamd_str_split(results[1], ";"))
-      continuation_cb(nil, to_resolve, values)
-    else
-      continuation_cb(err, to_resolve, nil)
-    end
-
-    task:inc_dns_req()
-  end
-  r:resolve_a({
+  local is_ok, results = rspamd_dns.request({
+    type = 'a',
     task = task,
     name = dns_name,
-    callback = dns_callback,
     forced = true,
   })
+
+  if not is_ok and (results ~= 'requested record is not found' and results ~= 'no records with this name') then
+    rspamd_logger.errx(task, 'error looking up %s: %s', dns_name, results)
+  end
+
+  lua_util.debugm(N, task, 'DNS RESPONSE: label=%1 results=%2 is_ok=%3 list=%4',
+    dns_name, results, is_ok, rule.backend.config.list)
+
+  -- Now split tokens to list of values
+  if is_ok  then
+    local values = {}
+    -- Format: key1=num1;key2=num2...keyn=numn
+    fun.each(function(e)
+      local vals = lua_util.rspamd_str_split(e, "=")
+      if vals and #vals == 2 then
+        local nv = tonumber(vals[2])
+        if nv then
+          values[vals[1]] = nv
+        end
+      end
+    end,
+    lua_util.rspamd_str_split(results[1], ";"))
+
+    continuation_cb(nil, dns_name, values)
+  else
+    continuation_cb(results, dns_name, nil)
+  end
+
+  task:inc_dns_req()
 end
 
 local function reputation_redis_init(rule, cfg, ev_base, worker)
@@ -855,7 +853,7 @@ local function reputation_redis_get_token(task, rule, token, continuation_cb)
             values[data[i]] = ndata
           end
         end
-        rspamd_logger.debugm(N, task, 'got values for key %s -> %s',
+        lua_util.debugm(N, task, 'got values for key %s -> %s',
             key, values)
         continuation_cb(nil, key, values)
       else
@@ -907,7 +905,7 @@ local function reputation_redis_set_token(task, rule, token, values, continuatio
     table.insert(args, k)
     table.insert(args, v)
   end
-  rspamd_logger.debugm(N, task, 'set values for key %s -> %s',
+  lua_util.debugm(N, task, 'set values for key %s -> %s',
       key, values)
   local ret = lua_redis.exec_redis_script(rule.backend.script_set,
       {task = task, is_write = true},

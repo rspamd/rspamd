@@ -20,6 +20,7 @@
 #include "html.h"
 #include "html_tags.h"
 #include "html_colors.h"
+#include "html_entities.h"
 #include "url.h"
 #include <unicode/uversion.h>
 #include <unicode/ucnv.h>
@@ -172,397 +173,87 @@ static struct html_tag_def tag_defs[] = {
 	TAG_DEF(Tag_WBR, "wbr", (CM_INLINE | CM_EMPTY)),
 };
 
-struct _entity;
-typedef struct _entity entity;
+KHASH_MAP_INIT_INT (entity_by_number, const char *);
+KHASH_MAP_INIT_STR (entity_by_name, const char *);
+KHASH_MAP_INIT_STR (tag_by_name, struct html_tag_def);
+KHASH_MAP_INIT_INT (tag_by_id, struct html_tag_def);
+KHASH_INIT (color_by_name, const rspamd_ftok_t *, struct html_color, true,
+		rspamd_ftok_icase_hash, rspamd_ftok_icase_equal);
 
-struct _entity {
-	gchar *name;
-	uint code;
-	gchar *replacement;
-};
-
-
-static entity entities_defs[] = {
-	/*
-	** Markup pre-defined character entities
-	*/
-	{"quot", 34, "\""},
-	{"amp", 38, "&"},
-	{"apos", 39, "'"},
-	{"lt", 60, "<"},
-	{"gt", 62, ">"},
-
-	/*
-	** Latin-1 character entities
-	*/
-	{"nbsp", 160, " "},
-	{"iexcl", 161, "!"},
-	{"cent", 162, "cent"},
-	{"pound", 163, "pound"},
-	{"curren", 164, "current"},
-	{"yen", 165, "yen"},
-	{"brvbar", 166, NULL},
-	{"sect", 167, NULL},
-	{"uml", 168, "uml"},
-	{"copy", 169, "c"},
-	{"ordf", 170, NULL},
-	{"laquo", 171, "\""},
-	{"not", 172, "!"},
-	{"shy", 173, NULL},
-	{"reg", 174, "r"},
-	{"macr", 175, NULL},
-	{"deg", 176, "deg"},
-	{"plusmn", 177, "+-"},
-	{"sup2", 178, "2"},
-	{"sup3", 179, "3"},
-	{"acute", 180, NULL},
-	{"micro", 181, NULL},
-	{"para", 182, NULL},
-	{"middot", 183, "."},
-	{"cedil", 184, NULL},
-	{"sup1", 185, "1"},
-	{"ordm", 186, NULL},
-	{"raquo", 187, "\""},
-	{"frac14", 188, "1/4"},
-	{"frac12", 189, "1/2"},
-	{"frac34", 190, "3/4"},
-	{"iquest", 191, "i"},
-	{"Agrave", 192, "a"},
-	{"Aacute", 193, "a"},
-	{"Acirc", 194, "a"},
-	{"Atilde", 195, "a"},
-	{"Auml", 196, "a"},
-	{"Aring", 197, "a"},
-	{"AElig", 198, "a"},
-	{"Ccedil", 199, "c"},
-	{"Egrave", 200, "e"},
-	{"Eacute", 201, "e"},
-	{"Ecirc", 202, "e"},
-	{"Euml", 203, "e"},
-	{"Igrave", 204, "i"},
-	{"Iacute", 205, "i"},
-	{"Icirc", 206, "i"},
-	{"Iuml", 207, "i"},
-	{"ETH", 208, "e"},
-	{"Ntilde", 209, "n"},
-	{"Ograve", 210, "o"},
-	{"Oacute", 211, "o"},
-	{"Ocirc", 212, "o"},
-	{"Otilde", 213, "o"},
-	{"Ouml", 214, "o"},
-	{"times", 215, "t"},
-	{"Oslash", 216, "o"},
-	{"Ugrave", 217, "u"},
-	{"Uacute", 218, "u"},
-	{"Ucirc", 219, "u"},
-	{"Uuml", 220, "u"},
-	{"Yacute", 221, "y"},
-	{"THORN", 222, "t"},
-	{"szlig", 223, "s"},
-	{"agrave", 224, "a"},
-	{"aacute", 225, "a"},
-	{"acirc", 226, "a"},
-	{"atilde", 227, "a"},
-	{"auml", 228, "a"},
-	{"aring", 229, "a"},
-	{"aelig", 230, "a"},
-	{"ccedil", 231, "c"},
-	{"egrave", 232, "e"},
-	{"eacute", 233, "e"},
-	{"ecirc", 234, "e"},
-	{"euml", 235, "e"},
-	{"igrave", 236, "e"},
-	{"iacute", 237, "e"},
-	{"icirc", 238, "e"},
-	{"iuml", 239, "e"},
-	{"eth", 240, "e"},
-	{"ntilde", 241, "n"},
-	{"ograve", 242, "o"},
-	{"oacute", 243, "o"},
-	{"ocirc", 244, "o"},
-	{"otilde", 245, "o"},
-	{"ouml", 246, "o"},
-	{"divide", 247, "/"},
-	{"oslash", 248, "/"},
-	{"ugrave", 249, "u"},
-	{"uacute", 250, "u"},
-	{"ucirc", 251, "u"},
-	{"uuml", 252, "u"},
-	{"yacute", 253, "y"},
-	{"thorn", 254, "t"},
-	{"yuml", 255, "y"},
-
-	/*
-	** Extended Entities defined in HTML 4: Symbols
-	*/
-	{"fnof", 402, "f"},
-	{"Alpha", 913, "alpha"},
-	{"Beta", 914, "beta"},
-	{"Gamma", 915, "gamma"},
-	{"Delta", 916, "delta"},
-	{"Epsilon", 917, "epsilon"},
-	{"Zeta", 918, "zeta"},
-	{"Eta", 919, "eta"},
-	{"Theta", 920, "theta"},
-	{"Iota", 921, "iota"},
-	{"Kappa", 922, "kappa"},
-	{"Lambda", 923, "lambda"},
-	{"Mu", 924, "mu"},
-	{"Nu", 925, "nu"},
-	{"Xi", 926, "xi"},
-	{"Omicron", 927, "omicron"},
-	{"Pi", 928, "pi"},
-	{"Rho", 929, "rho"},
-	{"Sigma", 931, "sigma"},
-	{"Tau", 932, "tau"},
-	{"Upsilon", 933, "upsilon"},
-	{"Phi", 934, "phi"},
-	{"Chi", 935, "chi"},
-	{"Psi", 936, "psi"},
-	{"Omega", 937, "omega"},
-	{"alpha", 945, "alpha"},
-	{"beta", 946, "beta"},
-	{"gamma", 947, "gamma"},
-	{"delta", 948, "delta"},
-	{"epsilon", 949, "epsilon"},
-	{"zeta", 950, "zeta"},
-	{"eta", 951, "eta"},
-	{"theta", 952, "theta"},
-	{"iota", 953, "iota"},
-	{"kappa", 954, "kappa"},
-	{"lambda", 955, "lambda"},
-	{"mu", 956, "mu"},
-	{"nu", 957, "nu"},
-	{"xi", 958, "xi"},
-	{"omicron", 959, "omicron"},
-	{"pi", 960, "pi"},
-	{"rho", 961, "rho"},
-	{"sigmaf", 962, "sigmaf"},
-	{"sigma", 963, "sigma"},
-	{"tau", 964, "tau"},
-	{"upsilon", 965, "upsilon"},
-	{"phi", 966, "phi"},
-	{"chi", 967, "chi"},
-	{"psi", 968, "psi"},
-	{"omega", 969, "omega"},
-	{"thetasym", 977, "thetasym"},
-	{"upsih", 978, "upsih"},
-	{"piv", 982, "piv"},
-	{"bull", 8226, "bull"},
-	{"hellip", 8230, "..."},
-	{"prime", 8242, "'"},
-	{"Prime", 8243, "'"},
-	{"oline", 8254, "-"},
-	{"frasl", 8260, NULL},
-	{"weierp", 8472, NULL},
-	{"image", 8465, NULL},
-	{"real", 8476, NULL},
-	{"trade", 8482, NULL},
-	{"alefsym", 8501, "a"},
-	{"larr", 8592, NULL},
-	{"uarr", 8593, NULL},
-	{"rarr", 8594, NULL},
-	{"darr", 8595, NULL},
-	{"harr", 8596, NULL},
-	{"crarr", 8629, NULL},
-	{"lArr", 8656, NULL},
-	{"uArr", 8657, NULL},
-	{"rArr", 8658, NULL},
-	{"dArr", 8659, NULL},
-	{"hArr", 8660, NULL},
-	{"forall", 8704, NULL},
-	{"part", 8706, NULL},
-	{"exist", 8707, NULL},
-	{"empty", 8709, NULL},
-	{"nabla", 8711, NULL},
-	{"isin", 8712, NULL},
-	{"notin", 8713, NULL},
-	{"ni", 8715, NULL},
-	{"prod", 8719, NULL},
-	{"sum", 8721, "E"},
-	{"minus", 8722, "-"},
-	{"lowast", 8727, NULL},
-	{"radic", 8730, NULL},
-	{"prop", 8733, NULL},
-	{"infin", 8734, NULL},
-	{"ang", 8736, "'"},
-	{"and", 8743, "&"},
-	{"or", 8744, "|"},
-	{"cap", 8745, NULL},
-	{"cup", 8746, NULL},
-	{"gint", 8747, NULL},
-	{"there4", 8756, NULL},
-	{"sim", 8764, NULL},
-	{"cong", 8773, NULL},
-	{"asymp", 8776, NULL},
-	{"ne", 8800, "!="},
-	{"equiv", 8801, "=="},
-	{"le", 8804, "<="},
-	{"ge", 8805, ">="},
-	{"sub", 8834, NULL},
-	{"sup", 8835, NULL},
-	{"nsub", 8836, NULL},
-	{"sube", 8838, NULL},
-	{"supe", 8839, NULL},
-	{"oplus", 8853, NULL},
-	{"otimes", 8855, NULL},
-	{"perp", 8869, NULL},
-	{"sdot", 8901, NULL},
-	{"lceil", 8968, NULL},
-	{"rceil", 8969, NULL},
-	{"lfloor", 8970, NULL},
-	{"rfloor", 8971, NULL},
-	{"lang", 9001, NULL},
-	{"rang", 9002, NULL},
-	{"loz", 9674, NULL},
-	{"spades", 9824, NULL},
-	{"clubs", 9827, NULL},
-	{"hearts", 9829, NULL},
-	{"diams", 9830, NULL},
-
-	/*
-	** Extended Entities defined in HTML 4: Special (less Markup at top)
-	*/
-	{"OElig", 338, NULL},
-	{"oelig", 339, NULL},
-	{"Scaron", 352, NULL},
-	{"scaron", 353, NULL},
-	{"Yuml", 376, NULL},
-	{"circ", 710, NULL},
-	{"tilde", 732, NULL},
-	{"ensp", 8194, NULL},
-	{"emsp", 8195, NULL},
-	{"thinsp", 8201, NULL},
-	{"zwnj", 8204, NULL},
-	{"zwj", 8205, NULL},
-	{"lrm", 8206, NULL},
-	{"rlm", 8207, NULL},
-	{"ndash", 8211, "-"},
-	{"mdash", 8212, "-"},
-	{"lsquo", 8216, "'"},
-	{"rsquo", 8217, "'"},
-	{"sbquo", 8218, "\""},
-	{"ldquo", 8220, "\""},
-	{"rdquo", 8221, "\""},
-	{"bdquo", 8222, "\""},
-	{"dagger", 8224, "T"},
-	{"Dagger", 8225, "T"},
-	{"permil", 8240, NULL},
-	{"lsaquo", 8249, "\""},
-	{"rsaquo", 8250, "\""},
-	{"euro", 8364, "E"},
-};
-
-static GHashTable *html_colors_hash = NULL;
-
-static entity entities_defs_num[ (G_N_ELEMENTS (entities_defs)) ];
-static struct html_tag_def tag_defs_num[ (G_N_ELEMENTS (tag_defs)) ];
-
-static gint
-tag_cmp (const void *m1, const void *m2)
-{
-	const struct html_tag_def *p1 = m1;
-	const struct html_tag_def *p2 = m2;
-
-	if (p1->len == p2->len) {
-		return rspamd_lc_cmp (p1->name, p2->name, p1->len);
-	}
-
-	return p1->len - p2->len;
-}
-
-static gint
-tag_cmp_id (const void *m1, const void *m2)
-{
-	const struct html_tag_def *p1 = m1;
-	const struct html_tag_def *p2 = m2;
-
-	return p1->id - p2->id;
-}
-
-static gint
-tag_find_id (const void *skey, const void *elt)
-{
-	const struct html_tag *tag = skey;
-	const struct html_tag_def *d = elt;
-
-	return tag->id - d->id;
-}
-
-static gint
-tag_find (const void *skey, const void *elt)
-{
-	const struct html_tag *tag = skey;
-	const struct html_tag_def *d = elt;
-
-	if (d->len == tag->name.len) {
-		return rspamd_lc_cmp (tag->name.start, d->name, tag->name.len);
-	}
-
-	return tag->name.len - d->len;
-}
-
-static gint
-entity_cmp (const void *m1, const void *m2)
-{
-	const entity *p1 = m1;
-	const entity *p2 = m2;
-
-	return g_ascii_strcasecmp (p1->name, p2->name);
-}
-
-static gint
-entity_cmp_num (const void *m1, const void *m2)
-{
-	const entity *p1 = m1;
-	const entity *p2 = m2;
-
-	return p1->code - p2->code;
-}
+khash_t(entity_by_number) *html_entity_by_number;
+khash_t(entity_by_name) *html_entity_by_name;
+khash_t(tag_by_name) *html_tag_by_name;
+khash_t(tag_by_id) *html_tag_by_id;
+khash_t(color_by_name) *html_color_by_name;
 
 static void
 rspamd_html_library_init (void)
 {
+	guint i;
+	khiter_t k;
+	gint rc;
+
 	if (!tags_sorted) {
-		qsort (tag_defs, G_N_ELEMENTS (
-				tag_defs), sizeof (struct html_tag_def), tag_cmp);
-		memcpy (tag_defs_num, tag_defs, sizeof (tag_defs));
-		qsort (tag_defs_num, G_N_ELEMENTS (tag_defs_num),
-				sizeof (struct html_tag_def), tag_cmp_id);
+		html_tag_by_id = kh_init (tag_by_id);
+		html_tag_by_name = kh_init (tag_by_name);
+		kh_resize (tag_by_id, html_tag_by_id, G_N_ELEMENTS (tag_defs));
+		kh_resize (tag_by_name, html_tag_by_name, G_N_ELEMENTS (tag_defs));
+
+		for (i = 0; i < G_N_ELEMENTS (tag_defs); i++) {
+			k = kh_put (tag_by_id, html_tag_by_id, tag_defs[i].id, &rc);
+			kh_val (html_tag_by_id, k) = tag_defs[i];
+
+			k = kh_put (tag_by_name, html_tag_by_name, tag_defs[i].name, &rc);
+			kh_val (html_tag_by_name, k) = tag_defs[i];
+		}
+
 		tags_sorted = 1;
 	}
 
 	if (!entities_sorted) {
-		qsort (entities_defs, G_N_ELEMENTS (
-				entities_defs), sizeof (entity), entity_cmp);
-		memcpy (entities_defs_num, entities_defs, sizeof (entities_defs));
-		qsort (entities_defs_num, G_N_ELEMENTS (
-				entities_defs), sizeof (entity), entity_cmp_num);
-		entities_sorted = 1;
+		html_entity_by_number = kh_init (entity_by_number);
+		html_entity_by_name = kh_init (entity_by_name);
+		kh_resize (entity_by_number, html_entity_by_number,
+				G_N_ELEMENTS (entities_defs));
+		kh_resize (entity_by_name, html_entity_by_name,
+				G_N_ELEMENTS (entities_defs));
+
+		for (i = 0; i < G_N_ELEMENTS (entities_defs); i++) {
+			k = kh_put (entity_by_number, html_entity_by_number,
+					entities_defs[i].code, &rc);
+			kh_val (html_entity_by_number, k) = entities_defs[i].replacement;
+
+			k = kh_put (entity_by_name, html_entity_by_name,
+					entities_defs[i].name, &rc);
+			kh_val (html_entity_by_name, k) = entities_defs[i].replacement;
 	}
 
-	if (html_colors_hash == NULL) {
-		guint i;
+		html_color_by_name = kh_init (color_by_name);
+		kh_resize (color_by_name, html_color_by_name,
+				G_N_ELEMENTS (html_colornames));
 
-		html_colors_hash = g_hash_table_new_full (rspamd_ftok_icase_hash,
-				rspamd_ftok_icase_equal, g_free, g_free);
+		rspamd_ftok_t *keys;
+
+		keys = g_malloc0 (sizeof (rspamd_ftok_t) *
+				G_N_ELEMENTS (html_colornames));
 
 		for (i = 0; i < G_N_ELEMENTS (html_colornames); i ++) {
-			struct html_color *color;
-			rspamd_ftok_t *key;
+			struct html_color c;
 
-			color = g_malloc0 (sizeof (*color));
-			color->d.comp.alpha = 255;
-			color->d.comp.r = html_colornames[i].rgb.r;
-			color->d.comp.g = html_colornames[i].rgb.g;
-			color->d.comp.b = html_colornames[i].rgb.b;
-			color->valid = TRUE;
-			key = g_malloc0 (sizeof (*key));
-			key->begin = html_colornames[i].name;
-			key->len = strlen (html_colornames[i].name);
+			keys[i].begin = html_colornames[i].name;
+			keys[i].len = strlen (html_colornames[i].name);
+			k = kh_put (color_by_name, html_color_by_name,
+					&keys[i], &rc);
+			c.valid = true;
+			c.d.comp.r = html_colornames[i].rgb.r;
+			c.d.comp.g = html_colornames[i].rgb.g;
+			c.d.comp.b = html_colornames[i].rgb.b;
+			c.d.comp.alpha = 255;
+			kh_val (html_color_by_name, k) = c;
 
-			g_hash_table_insert (html_colors_hash, key, color);
 		}
+
+		entities_sorted = 1;
 	}
 }
 
@@ -599,17 +290,12 @@ rspamd_html_check_balance (GNode * node, GNode ** cur_level)
 gint
 rspamd_html_tag_by_name (const gchar *name)
 {
-	struct html_tag tag;
-	struct html_tag_def *found;
+	khiter_t k;
 
-	tag.name.start = name;
-	tag.name.len = strlen (name);
+	k = kh_get (tag_by_name, html_tag_by_name, name);
 
-	found = bsearch (&tag, tag_defs, G_N_ELEMENTS (tag_defs),
-			sizeof (tag_defs[0]), tag_find);
-
-	if (found) {
-		return found->id;
+	if (k != kh_end (html_tag_by_name)) {
+		return kh_val (html_tag_by_name, k).id;
 	}
 
 	return -1;
@@ -632,19 +318,15 @@ rspamd_html_tag_seen (struct html_content *hc, const gchar *tagname)
 	return FALSE;
 }
 
-const gchar*
+const gchar *
 rspamd_html_tag_by_id (gint id)
 {
-	struct html_tag tag;
-	struct html_tag_def *found;
+	khiter_t k;
 
-	tag.id = id;
-	/* Should work as IDs monotonically increase */
-	found = bsearch (&tag, tag_defs_num, G_N_ELEMENTS (tag_defs_num),
-				sizeof (tag_defs_num[0]), tag_find_id);
+	k = kh_get (tag_by_id, html_tag_by_id, id);
 
-	if (found) {
-		return found->name;
+	if (k != kh_end (html_tag_by_id)) {
+		return kh_val (html_tag_by_id, k).name;
 	}
 
 	return NULL;
@@ -656,8 +338,10 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 {
 	guint l, rep_len;
 	gchar *t = s, *h = s, *e = s, *end_ptr;
+	const gchar *end;
+	const gchar *entity;
 	gint state = 0, val, base;
-	entity *found, key;
+	khiter_t k;
 
 	if (len == 0) {
 		l = strlen (s);
@@ -666,9 +350,11 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 		l = len;
 	}
 
+	end = s + l;
+
 	while (h - s < (gint)l) {
 		switch (state) {
-		/* Out of entitle */
+		/* Out of entity */
 		case 0:
 			if (*h == '&') {
 				state = 1;
@@ -686,21 +372,27 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 			if (*h == ';' && h > e) {
 				/* Determine base */
 				/* First find in entities table */
-
-				key.name = e + 1;
 				*h = '\0';
-				if (*(e + 1) != '#' &&
-					(found =
-					bsearch (&key, entities_defs, G_N_ELEMENTS (entities_defs),
-							sizeof (entity), entity_cmp)) != NULL) {
-					if (found->replacement) {
-						rep_len = strlen (found->replacement);
-						memcpy (t, found->replacement, rep_len);
-						t += rep_len;
-					}
-					else {
-						memmove (t, e, h - e);
-						t += h - e;
+				entity = e + 1;
+
+				if (*entity != '#') {
+					k = kh_get (entity_by_name, html_entity_by_name, entity);
+
+					if (k != kh_end (html_entity_by_name)) {
+						if (kh_val (html_entity_by_name, k)) {
+							rep_len = strlen (kh_val (html_entity_by_name, k));
+
+							if (end - t >= rep_len) {
+								memcpy (t, kh_val (html_entity_by_name, k),
+										rep_len);
+								t += rep_len;
+							}
+						} else {
+							if (end - t >= h - e) {
+								memmove (t, e, h - e);
+								t += h - e;
+							}
+						}
 					}
 				}
 				else if (e + 2 < h) {
@@ -719,23 +411,32 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 					else {
 						val = strtoul ((e + 3), &end_ptr, base);
 					}
+
 					if (end_ptr != NULL && *end_ptr != '\0') {
 						/* Skip undecoded */
-						memmove (t, e, h - e);
-						t += h - e;
+						if (end - t >= h - e) {
+							memmove (t, e, h - e);
+							t += h - e;
+						}
 					}
 					else {
 						/* Search for a replacement */
-						key.code = val;
-						found =
-							bsearch (&key, entities_defs_num, G_N_ELEMENTS (
-									entities_defs), sizeof (entity),
-								entity_cmp_num);
-						if (found) {
-							if (found->replacement) {
-								rep_len = strlen (found->replacement);
-								memcpy (t, found->replacement, rep_len);
-								t += rep_len;
+						k = kh_get (entity_by_number, html_entity_by_number, val);
+
+						if (k != kh_end (html_entity_by_number)) {
+							if (kh_val (html_entity_by_number, k)) {
+								rep_len = strlen (kh_val (html_entity_by_number, k));
+
+								if (end - t >= rep_len) {
+									memcpy (t, kh_val (html_entity_by_number, k),
+											rep_len);
+									t += rep_len;
+								}
+							} else {
+								if (end - t >= h - e) {
+									memmove (t, e, h - e);
+									t += h - e;
+								}
 							}
 						}
 						else {
@@ -1254,24 +955,29 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 			}
 			else {
 				gchar *s;
+				khiter_t k;
 				/* We CANNOT safely modify tag's name here, as it is already parsed */
 
-				s = rspamd_mempool_alloc (pool, tag->name.len);
+				s = rspamd_mempool_alloc (pool, tag->name.len + 1);
 				memcpy (s, tag->name.start, tag->name.len);
 				tag->name.len = rspamd_html_decode_entitles_inplace (s,
 						tag->name.len);
 				tag->name.start = s;
+				s[tag->name.len] = '\0';
+				rspamd_str_lc_utf8 (s, tag->name.len);
 
-				found = bsearch (tag, tag_defs, G_N_ELEMENTS (tag_defs),
-					sizeof (tag_defs[0]), tag_find);
-				if (found == NULL) {
+				k = kh_get (tag_by_name, html_tag_by_name, s);
+
+				if (k == kh_end (html_tag_by_name)) {
 					hc->flags |= RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS;
 					tag->id = -1;
 				}
 				else {
+					found = &kh_val (html_tag_by_name, k);
 					tag->id = found->id;
 					tag->flags = found->flags;
 				}
+
 				state = spaces_after_name;
 			}
 		}
@@ -2041,13 +1747,15 @@ rspamd_html_process_color (const gchar *line, guint len, struct html_color *cl)
 		}
 	}
 	else {
+		khiter_t k;
 		/* Compare color by name */
 		search.begin = line;
 		search.len = len;
 
-		el = g_hash_table_lookup (html_colors_hash, &search);
+		k = kh_get (color_by_name, html_color_by_name, &search);
 
-		if (el != NULL) {
+		if (k != kh_end (html_color_by_name)) {
+			el = &kh_val (html_color_by_name, k);
 			memcpy (cl, el, sizeof (*cl));
 			cl->d.comp.alpha = 255; /* Non transparent */
 		}

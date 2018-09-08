@@ -86,10 +86,14 @@ jobs:
       - attach_workspace:
           at: *workspace_root
 
+      - run: echo 'deb http://repo.yandex.ru/clickhouse/deb/stable/ main/' | sudo tee /etc/apt/sources.list.d/clickhouse.list
+      - run: sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4    # optional, clickhouse key
+
       - run: sudo apt-get update -qq || true
       - run: sudo apt-get install -qq libluajit-5.1-dev libpcre3-dev luarocks opendkim-tools python-pip redis-server
+      - run: sudo apt-get install clickhouse-server
 
-      - run: sudo pip install demjson psutil robotframework
+      - run: sudo pip install demjson psutil robotframework requests http
       - run: sudo luarocks install luacheck
 
       - run: cd ../build

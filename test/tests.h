@@ -41,4 +41,6 @@ void rspamd_cryptobox_test_func (void);
 
 void rspamd_heap_test_func (void);
 
+void rspamd_lua_lua_pcall_vs_resume_test_func(void);
+
 #endif

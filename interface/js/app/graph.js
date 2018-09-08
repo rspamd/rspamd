@@ -23,11 +23,12 @@
  THE SOFTWARE.
  */
 
-/* global d3:false */
+/* global d3:false, FooTable:false */
 
 define(["jquery", "d3evolution", "footable"],
     function ($, D3Evolution) {
         "use strict";
+
         var rrd_pie_config = {
             header: {},
             size: {
@@ -137,7 +138,24 @@ define(["jquery", "d3evolution", "footable"],
             }, []);
         }
 
-        function drawRrdTable(data, unit) {
+        function initSummaryTable(tables, rows, unit) {
+            tables.rrd_summary = FooTable.init("#rrd-table", {
+                sorting: {
+                    enabled: true
+                },
+                columns: [
+                    {name: "label", title: "Action"},
+                    {name: "value", title: "Messages", defaultContent: ""},
+                    {name: "min", title: "Minimum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
+                    {name: "avg", title: "Average, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
+                    {name: "max", title: "Maximum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
+                    {name: "last", title: "Last, " + unit},
+                ],
+                rows: rows
+            });
+        }
+
+        function drawRrdTable(tables, data, unit) {
             var total_messages = 0;
             var rows = data.map(function (curr, i) {
                 total_messages += curr.value;
@@ -153,59 +171,51 @@ define(["jquery", "d3evolution", "footable"],
 
             document.getElementById("rrd-total-value").innerHTML = total_messages;
 
-            $("#rrd-table").footable({
-                sorting: {
-                    enabled: true
-                },
-                columns: [
-                    {name: "label", title: "Action"},
-                    {name: "value", title: "Messages", defaultContent: ""},
-                    {name: "min", title: "Minimum, " + unit, defaultContent: ""},
-                    {name: "avg", title: "Average, " + unit, defaultContent: ""},
-                    {name: "max", title: "Maximum, " + unit, defaultContent: ""},
-                    {name: "last", title: "Last, " + unit},
-                ],
-                rows: rows
-            });
+            if (Object.prototype.hasOwnProperty.call(tables, "rrd_summary")) {
+                tables.rrd_summary.rows.load(rows);
+            } else {
+                initSummaryTable(tables, rows, unit);
+            }
         }
 
         var ui = {};
         var prevUnit = "msg/s";
 
-        ui.draw = function (rspamd, graphs, neighbours, checked_server, type) {
-
+        ui.draw = function (rspamd, graphs, tables, neighbours, checked_server, type) {
             function updateWidgets(data) {
-            // Autoranging
-                var scaleFactor = 1;
+                var rrd_summary = [];
                 var unit = "msg/s";
-                var yMax = d3.max(d3.merge(data), function (d) { return d.y; });
-                if (yMax < 1) {
-                    scaleFactor = 60;
-                    unit = "msg/min";
-                    data.forEach(function (s) {
-                        s.forEach(function (d) {
-                            if (d.y !== null) { d.y *= scaleFactor; }
+
+                if (data) {
+                    // Autoranging
+                    var scaleFactor = 1;
+                    var yMax = d3.max(d3.merge(data), function (d) { return d.y; });
+                    if (yMax < 1) {
+                        scaleFactor = 60;
+                        unit = "msg/min";
+                        data.forEach(function (s) {
+                            s.forEach(function (d) {
+                                if (d.y !== null) { d.y *= scaleFactor; }
+                            });
                         });
-                    });
+                    }
+
+                    rrd_summary = getRrdSummary(data, scaleFactor);
+                    graphs.rrd_pie = rspamd.drawPie(graphs.rrd_pie,
+                        "rrd-pie",
+                        rrd_summary,
+                        rrd_pie_config);
+                } else if (graphs.rrd_pie) {
+                    graphs.rrd_pie.destroy();
                 }
 
                 graphs.graph.data(data);
                 if (unit !== prevUnit) {
                     graphs.graph.yAxisLabel("Message rate, " + unit);
+                    $(".unit").text(unit);
                     prevUnit = unit;
                 }
-
-                if (!data) {
-                    graphs.rrd_pie.destroy();
-                    drawRrdTable([]);
-                    return;
-                }
-                var rrd_summary = getRrdSummary(data, scaleFactor);
-                graphs.rrd_pie = rspamd.drawPie(graphs.rrd_pie,
-                    "rrd-pie",
-                    rrd_summary,
-                    rrd_pie_config);
-                drawRrdTable(rrd_summary, unit);
+                drawRrdTable(tables, rrd_summary, unit);
             }
 
             if (!graphs.graph) {

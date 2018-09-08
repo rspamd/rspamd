@@ -13,6 +13,9 @@
 #include "mime_headers.h"
 #include "content_type.h"
 
+#include <unicode/uchar.h>
+#include <unicode/utext.h>
+
 struct rspamd_task;
 struct controller_session;
 struct html_content;
@@ -71,28 +74,41 @@ struct rspamd_mime_part {
 #define RSPAMD_MIME_TEXT_PART_FLAG_HTML (1 << 3)
 #define RSPAMD_MIME_TEXT_PART_FLAG_8BIT (1 << 4)
 #define RSPAMD_MIME_TEXT_PART_FLAG_8BIT_ENCODED (1 << 5)
+#define RSPAMD_MIME_TEXT_PART_HAS_SUBNORMAL (1 << 6)
+#define RSPAMD_MIME_TEXT_PART_NORMALISED (1 << 7)
 
 #define IS_PART_EMPTY(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_EMPTY)
 #define IS_PART_UTF(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_UTF)
 #define IS_PART_RAW(part) (!((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_UTF))
 #define IS_PART_HTML(part) ((part)->flags & RSPAMD_MIME_TEXT_PART_FLAG_HTML)
 
+
 struct rspamd_mime_text_part {
 	const gchar *language;
 	GPtrArray *languages;
 	const gchar *real_charset;
+
+	/* Raw data in native encoding */
 	rspamd_ftok_t raw;
-	rspamd_ftok_t parsed;
-	GByteArray *content;
-	GByteArray *utf_raw_content;
-	GByteArray *stripped_content;
-	GPtrArray *newlines;	/**< positions of newlines in text					*/
+	rspamd_ftok_t parsed; /* decoded from mime encodings */
+
+	/* UTF8 content */
+	GByteArray *utf_content; /* utf8 encoded processed content */
+	GByteArray *utf_raw_content; /* utf raw content */
+	GByteArray *utf_stripped_content; /* utf content with no newlines */
+	GArray *normalized_hashes;
+	GArray *utf_words;
+	UText utf_stripped_text; /* Used by libicu to represent the utf8 content */
+
+	/* Unicode content, used by libicu */
+	GArray *unicode_raw_content; /* unicode raw content (of UChar) */
+	GArray *unicode_content; /* unicode processed content (of UChar) */
+
+	GPtrArray *newlines;	/**< positions of newlines in text, relative to content*/
 	struct html_content *html;
 	GList *exceptions;	/**< list of offsets of urls						*/
 	struct rspamd_mime_part *mime_part;
-	GArray *normalized_words;
-	GArray *ucs32_words;
-	GArray *normalized_hashes;
+
 	guint flags;
 	guint nlines;
 	guint spaces;
@@ -103,7 +119,7 @@ struct rspamd_mime_text_part {
 	guint empty_lines;
 	guint capital_letters;
 	guint numeric_characters;
-	guint ucs_len;
+	guint unicode_scripts;
 };
 
 enum rspamd_received_type {

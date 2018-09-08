@@ -580,7 +580,7 @@ xmlrpc_text (GMarkupParseContext *context,
 		case read_int:
 			/* Push integer value */
 			rspamd_strtoul (text, text_len, &num);
-			lua_pushnumber (ud->L, num);
+			lua_pushinteger (ud->L, num);
 			break;
 		case read_double:
 			/* Push integer value */
@@ -603,6 +603,7 @@ xmlrpc_error (GMarkupParseContext *context, GError *error, gpointer user_data)
 static gint
 lua_xmlrpc_parse_reply (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	const gchar *data;
 	GMarkupParseContext *ctx;
 	GError *err = NULL;
@@ -708,6 +709,7 @@ lua_xmlrpc_parse_table (lua_State *L,
 static gint
 lua_xmlrpc_make_request (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	gchar databuf[BUFSIZ * 2];
 	const gchar *func;
 	gint r, top, i, num;

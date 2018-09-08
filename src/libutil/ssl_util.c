@@ -746,6 +746,18 @@ void
 rspamd_ssl_connection_free (struct rspamd_ssl_connection *conn)
 {
 	if (conn) {
+		/*
+		 * SSL_RECEIVED_SHUTDOWN tells SSL_shutdown to act as if we had already
+		 * received a close notify from the other end.  SSL_shutdown will then
+		 * send the final close notify in reply.  The other end will receive the
+		 * close notify and send theirs.  By this time, we will have already
+		 * closed the socket and the other end's real close notify will never be
+		 * received.  In effect, both sides will think that they have completed a
+		 * clean shutdown and keep their sessions valid.  This strategy will fail
+		 * if the socket is not ready for writing, in which case this hack will
+		 * lead to an unclean shutdown and lost session on the other end.
+		 */
+		SSL_set_shutdown (conn->ssl, SSL_RECEIVED_SHUTDOWN);
 		SSL_shutdown (conn->ssl);
 		SSL_free (conn->ssl);
 

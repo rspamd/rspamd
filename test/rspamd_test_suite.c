@@ -10,7 +10,7 @@ worker_t *workers[] = { NULL };
 int
 main (int argc, char **argv)
 {
-	struct rspamd_config            *cfg;
+	struct rspamd_config *cfg;
 
 	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 	memset (rspamd_main, 0, sizeof (struct rspamd_main));
@@ -52,6 +52,7 @@ main (int argc, char **argv)
 	g_test_add_func ("/rspamd/lua", rspamd_lua_test_func);
 	g_test_add_func ("/rspamd/cryptobox", rspamd_cryptobox_test_func);
 	g_test_add_func ("/rspamd/heap", rspamd_heap_test_func);
+	g_test_add_func ("/rspamd/lua_pcall", rspamd_lua_lua_pcall_vs_resume_test_func);
 
 #if 0
 	g_test_add_func ("/rspamd/url", rspamd_url_test_func);

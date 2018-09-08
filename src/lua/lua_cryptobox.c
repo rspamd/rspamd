@@ -203,6 +203,7 @@ lua_check_cryptobox_hash (lua_State * L, int pos)
 static gint
 lua_cryptobox_pubkey_load (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_pubkey *pkey = NULL, **ppkey;
 	const gchar *filename, *arg;
 	gint type = RSPAMD_KEYPAIR_SIGN;
@@ -278,6 +279,7 @@ lua_cryptobox_pubkey_load (lua_State *L)
 static gint
 lua_cryptobox_pubkey_create (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_pubkey *pkey = NULL, **ppkey;
 	const gchar *buf, *arg;
 	gsize len;
@@ -332,6 +334,7 @@ lua_cryptobox_pubkey_create (lua_State *L)
 static gint
 lua_cryptobox_pubkey_gc (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_pubkey *pkey = lua_check_cryptobox_pubkey (L, 1);
 
 	if (pkey != NULL) {
@@ -350,6 +353,7 @@ lua_cryptobox_pubkey_gc (lua_State *L)
 static gint
 lua_cryptobox_keypair_load (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_keypair *kp, **pkp;
 	const gchar *buf;
 	gsize len;
@@ -420,6 +424,7 @@ lua_cryptobox_keypair_load (lua_State *L)
 static gint
 lua_cryptobox_keypair_create (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_keypair *kp, **pkp;
 	enum rspamd_cryptobox_keypair_type type = RSPAMD_KEYPAIR_KEX;
 	enum rspamd_cryptobox_mode alg = RSPAMD_CRYPTOBOX_MODE_25519;
@@ -464,6 +469,7 @@ lua_cryptobox_keypair_create (lua_State *L)
 static gint
 lua_cryptobox_keypair_gc (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_keypair *kp = lua_check_cryptobox_keypair (L, 1);
 
 	if (kp != NULL) {
@@ -480,6 +486,7 @@ lua_cryptobox_keypair_gc (lua_State *L)
 static gint
 lua_cryptobox_keypair_totable (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_keypair *kp = lua_check_cryptobox_keypair (L, 1);
 	ucl_object_t *obj;
 	gboolean hex = FALSE;
@@ -510,6 +517,7 @@ lua_cryptobox_keypair_totable (lua_State *L)
 static gint
 lua_cryptobox_keypair_get_type (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_keypair *kp = lua_check_cryptobox_keypair (L, 1);
 
 	if (kp) {
@@ -535,6 +543,7 @@ lua_cryptobox_keypair_get_type (lua_State *L)
 static gint
 lua_cryptobox_keypair_get_alg (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_keypair *kp = lua_check_cryptobox_keypair (L, 1);
 
 	if (kp) {
@@ -560,6 +569,7 @@ lua_cryptobox_keypair_get_alg (lua_State *L)
 static gint
 lua_cryptobox_keypair_get_pk (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_keypair *kp = lua_check_cryptobox_keypair (L, 1);
 	struct rspamd_cryptobox_pubkey *pk, **ppk;
 	const guchar *data;
@@ -593,6 +603,7 @@ lua_cryptobox_keypair_get_pk (lua_State *L)
 static gint
 lua_cryptobox_signature_load (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	rspamd_fstring_t *sig, **psig;
 	const gchar *filename;
 	gpointer data;
@@ -664,6 +675,7 @@ lua_cryptobox_signature_load (lua_State *L)
 static gint
 lua_cryptobox_signature_save (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	rspamd_fstring_t *sig;
 	gint fd, flags;
 	const gchar *filename;
@@ -727,6 +739,7 @@ lua_cryptobox_signature_save (lua_State *L)
 static gint
 lua_cryptobox_signature_create (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	rspamd_fstring_t *sig, **psig;
 	struct rspamd_lua_text *t;
 	const gchar *data;
@@ -769,6 +782,7 @@ lua_cryptobox_signature_create (lua_State *L)
 static gint
 lua_cryptobox_signature_hex (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	rspamd_fstring_t *sig = lua_check_cryptobox_sign (L, 1);
 	gchar *encoded;
 
@@ -792,6 +806,7 @@ lua_cryptobox_signature_hex (lua_State *L)
 static gint
 lua_cryptobox_signature_base32 (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	rspamd_fstring_t *sig = lua_check_cryptobox_sign (L, 1);
 	gchar *encoded;
 
@@ -815,6 +830,7 @@ lua_cryptobox_signature_base32 (lua_State *L)
 static gint
 lua_cryptobox_signature_base64 (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	rspamd_fstring_t *sig = lua_check_cryptobox_sign (L, 1);
 	gsize dlen;
 	gchar *encoded;
@@ -839,6 +855,7 @@ lua_cryptobox_signature_base64 (lua_State *L)
 static gint
 lua_cryptobox_signature_bin (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	rspamd_fstring_t *sig = lua_check_cryptobox_sign (L, 1);
 
 	if (sig) {
@@ -854,6 +871,7 @@ lua_cryptobox_signature_bin (lua_State *L)
 static gint
 lua_cryptobox_signature_gc (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	rspamd_fstring_t *sig = lua_check_cryptobox_sign (L, 1);
 
 	rspamd_fstring_free (sig);
@@ -937,6 +955,7 @@ ret:
 static gint
 lua_cryptobox_hash_create (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h, **ph;
 	const gchar *s = NULL;
 	struct rspamd_lua_text *t;
@@ -979,6 +998,7 @@ lua_cryptobox_hash_create (lua_State *L)
 static gint
 lua_cryptobox_hash_create_specific (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h, **ph;
 	const gchar *s = NULL, *type = luaL_checkstring (L, 1);
 	gsize len = 0;
@@ -1024,6 +1044,7 @@ lua_cryptobox_hash_create_specific (lua_State *L)
 static gint
 lua_cryptobox_hash_create_keyed (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h, **ph;
 	const gchar *key, *s = NULL;
 	struct rspamd_lua_text *t;
@@ -1073,6 +1094,7 @@ lua_cryptobox_hash_create_keyed (lua_State *L)
 static gint
 lua_cryptobox_hash_update (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
 	const gchar *data;
 	struct rspamd_lua_text *t;
@@ -1120,6 +1142,7 @@ lua_cryptobox_hash_update (lua_State *L)
 static gint
 lua_cryptobox_hash_reset (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
 
 	if (h) {
@@ -1147,6 +1170,7 @@ lua_cryptobox_hash_reset (lua_State *L)
 static gint
 lua_cryptobox_hash_hex (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
 	guchar out[rspamd_cryptobox_HASHBYTES],
 		out_hex[rspamd_cryptobox_HASHBYTES * 2 + 1];
@@ -1183,6 +1207,7 @@ lua_cryptobox_hash_hex (lua_State *L)
 static gint
 lua_cryptobox_hash_base32 (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
 	guchar out[rspamd_cryptobox_HASHBYTES],
 		out_b32[rspamd_cryptobox_HASHBYTES * 2];
@@ -1218,6 +1243,7 @@ lua_cryptobox_hash_base32 (lua_State *L)
 static gint
 lua_cryptobox_hash_base64 (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
 	guchar out[rspamd_cryptobox_HASHBYTES], *b64;
 	gsize len;
@@ -1253,6 +1279,7 @@ lua_cryptobox_hash_base64 (lua_State *L)
 static gint
 lua_cryptobox_hash_bin (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
 	guchar out[rspamd_cryptobox_HASHBYTES];
 	guint dlen;
@@ -1280,6 +1307,7 @@ lua_cryptobox_hash_bin (lua_State *L)
 static gint
 lua_cryptobox_hash_gc (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
 
 	if (h->is_ssl) {
@@ -1311,6 +1339,7 @@ lua_cryptobox_hash_gc (lua_State *L)
 static gint
 lua_cryptobox_verify_memory (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_pubkey *pk;
 	rspamd_fstring_t *signature;
 	struct rspamd_lua_text *t;
@@ -1379,6 +1408,7 @@ lua_cryptobox_verify_memory (lua_State *L)
 static gint
 lua_cryptobox_verify_file (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	const gchar *fname;
 	struct rspamd_cryptobox_pubkey *pk;
 	rspamd_fstring_t *signature;
@@ -1444,6 +1474,7 @@ lua_cryptobox_verify_file (lua_State *L)
 static gint
 lua_cryptobox_sign_memory (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_keypair *kp;
 	const gchar *data;
 	struct rspamd_lua_text *t;
@@ -1494,6 +1525,7 @@ lua_cryptobox_sign_memory (lua_State *L)
 static gint
 lua_cryptobox_sign_file (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_keypair *kp;
 	const gchar *filename;
 	gchar *data;
@@ -1539,6 +1571,7 @@ lua_cryptobox_sign_file (lua_State *L)
 static gint
 lua_cryptobox_encrypt_memory (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_keypair *kp = NULL;
 	struct rspamd_cryptobox_pubkey *pk = NULL;
 	const gchar *data;
@@ -1620,6 +1653,7 @@ lua_cryptobox_encrypt_memory (lua_State *L)
 static gint
 lua_cryptobox_encrypt_file (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_keypair *kp = NULL;
 	struct rspamd_cryptobox_pubkey *pk = NULL;
 	const gchar *filename;
@@ -1695,6 +1729,7 @@ lua_cryptobox_encrypt_file (lua_State *L)
 static gint
 lua_cryptobox_decrypt_memory (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_keypair *kp;
 	const gchar *data;
 	guchar *out;
@@ -1750,6 +1785,7 @@ lua_cryptobox_decrypt_memory (lua_State *L)
 static gint
 lua_cryptobox_decrypt_file (lua_State *L)
 {
+	LUA_TRACE_POINT;
 	struct rspamd_cryptobox_keypair *kp;
 	const gchar *filename;
 	gchar *data;
