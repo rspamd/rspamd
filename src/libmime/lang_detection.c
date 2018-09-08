@@ -1608,8 +1608,10 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 				candidates);
 
 		if (r == rs_detect_none) {
-			msg_debug_lang_det ("no trigramms found, switch to nothing");
-		} else if (r == rs_detect_multiple) {
+			msg_debug_lang_det ("no trigramms found, fallback to english");
+			rspamd_language_detector_set_language (task, part, "en");
+		}
+		else if (r == rs_detect_multiple) {
 			/* Check our guess */
 
 			mean = 0.0;
@@ -1656,34 +1658,38 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 		}
 
 		/* Now, convert hash to array and sort it */
-		result = g_ptr_array_sized_new (kh_size (candidates));
+		if (r != rs_detect_none && kh_size (candidates) > 0) {
+			result = g_ptr_array_sized_new (kh_size (candidates));
 
-		kh_foreach_value (candidates, cand, {
-			if (!isnan (cand->prob)) {
-				msg_debug_lang_det ("final probability %s -> %.2f", cand->lang,
-						cand->prob);
-				g_ptr_array_add (result, cand);
+			kh_foreach_value (candidates, cand, {
+				if (!isnan (cand->prob)) {
+					msg_debug_lang_det ("final probability %s -> %.2f", cand->lang,
+							cand->prob);
+					g_ptr_array_add (result, cand);
+				}
+			});
+
+			if (frequency_heuristic_applied) {
+				g_ptr_array_sort_with_data (result,
+						rspamd_language_detector_cmp_heuristic, (gpointer) &cbd);
+			} else {
+				g_ptr_array_sort (result, rspamd_language_detector_cmp);
 			}
-		});
 
-		if (frequency_heuristic_applied) {
-			g_ptr_array_sort_with_data (result,
-					rspamd_language_detector_cmp_heuristic, (gpointer) &cbd);
-		} else {
-			g_ptr_array_sort (result, rspamd_language_detector_cmp);
+			if (result->len > 0 && !frequency_heuristic_applied) {
+				cand = g_ptr_array_index (result, 0);
+				cand->elt->occurencies++;
+				d->total_occurencies++;
+			}
+
+			part->languages = result;
+			ret = TRUE;
+		}
+		else if (part->languages == NULL) {
+			rspamd_language_detector_set_language (task, part, "en");
 		}
 
 		kh_destroy (rspamd_candidates_hash, candidates);
-
-		if (result->len > 0 && !frequency_heuristic_applied) {
-			cand = g_ptr_array_index (result, 0);
-			cand->elt->occurencies++;
-			d->total_occurencies++;
-		}
-
-		part->languages = result;
-
-		ret = TRUE;
 	}
 
 	end_ticks = rspamd_get_ticks (TRUE);
