@@ -1604,6 +1604,7 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 					(int)part->utf_words->len,
 					(int)default_short_text_limit);
 			rspamd_language_detector_set_language (task, part, "en");
+			candidates = kh_init (rspamd_candidates_hash);
 		}
 		else {
 			candidates = kh_init (rspamd_candidates_hash);
