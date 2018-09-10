@@ -283,18 +283,18 @@ rspamd_mime_text_part_ucs_from_utf (struct rspamd_task *task,
 
 	rspamd_mime_utf8_conv_init ();
 	utf = text_part->utf_raw_content;
-	text_part->ucs_raw_content = g_array_sized_new (FALSE, FALSE,
+	text_part->unicode_raw_content = g_array_sized_new (FALSE, FALSE,
 			sizeof (UChar), utf->len + 1);
-	text_part->ucs_raw_content->len = ucnv_toUChars (utf8_converter,
-			(UChar *)text_part->ucs_raw_content->data,
+	text_part->unicode_raw_content->len = ucnv_toUChars (utf8_converter,
+			(UChar *)text_part->unicode_raw_content->data,
 			utf->len + 1,
 			utf->data,
 			utf->len,
 			&uc_err);
 
 	if (!U_SUCCESS (uc_err)) {
-		g_array_free (text_part->ucs_raw_content, TRUE);
-		text_part->ucs_raw_content = NULL;
+		g_array_free (text_part->unicode_raw_content, TRUE);
+		text_part->unicode_raw_content = NULL;
 	}
 }
 
@@ -311,12 +311,12 @@ rspamd_mime_text_part_normalise (struct rspamd_task *task,
 		norm = unorm2_getInstance (NULL, "nfkc", UNORM2_COMPOSE, &uc_err);
 	}
 
-	if (!text_part->ucs_raw_content) {
+	if (!text_part->unicode_raw_content) {
 		return;
 	}
 
-	src = (UChar *)text_part->ucs_raw_content->data;
-	nsym = text_part->ucs_raw_content->len;
+	src = (UChar *)text_part->unicode_raw_content->data;
+	nsym = text_part->unicode_raw_content->len;
 
 	/* We can now check if we need to decompose */
 	end = unorm2_spanQuickCheckYes (norm, src, nsym, &uc_err);
@@ -346,8 +346,8 @@ rspamd_mime_text_part_normalise (struct rspamd_task *task,
 	}
 	else {
 		/* Copy normalised back */
-		memcpy (text_part->ucs_raw_content->data, dest, nsym * sizeof (UChar));
-		text_part->ucs_raw_content->len = nsym;
+		memcpy (text_part->unicode_raw_content->data, dest, nsym * sizeof (UChar));
+		text_part->unicode_raw_content->len = nsym;
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_NORMALISED;
 	}
 
@@ -369,16 +369,16 @@ rspamd_mime_text_part_maybe_renormalise (struct rspamd_task *task,
 	rspamd_mime_utf8_conv_init ();
 
 	if ((text_part->flags & RSPAMD_MIME_TEXT_PART_NORMALISED) &&
-		text_part->ucs_raw_content) {
+		text_part->unicode_raw_content) {
 		clen = ucnv_getMaxCharSize (utf8_converter);
-		dlen = UCNV_GET_MAX_BYTES_FOR_STRING (text_part->ucs_raw_content->len,
+		dlen = UCNV_GET_MAX_BYTES_FOR_STRING (text_part->unicode_raw_content->len,
 				clen);
 		g_byte_array_set_size (text_part->utf_raw_content, dlen);
 		r = ucnv_fromUChars (utf8_converter,
 				text_part->utf_raw_content->data,
 				dlen,
-				(UChar *)text_part->ucs_raw_content->data,
-				text_part->ucs_raw_content->len,
+				(UChar *)text_part->unicode_raw_content->data,
+				text_part->unicode_raw_content->len,
 				&uc_err);
 		text_part->utf_raw_content->len = r;
 	}
@@ -410,10 +410,10 @@ rspamd_mime_text_part_utf8_convert (struct rspamd_task *task,
 	}
 
 
-	text_part->ucs_raw_content = g_array_sized_new (FALSE, FALSE,
+	text_part->unicode_raw_content = g_array_sized_new (FALSE, FALSE,
 			sizeof (UChar), input->len + 1);
 	r = ucnv_toUChars (conv,
-			(UChar *)text_part->ucs_raw_content->data,
+			(UChar *)text_part->unicode_raw_content->data,
 			input->len + 1,
 			input->data,
 			input->len,
@@ -426,7 +426,7 @@ rspamd_mime_text_part_utf8_convert (struct rspamd_task *task,
 		return FALSE;
 	}
 
-	text_part->ucs_raw_content->len = r;
+	text_part->unicode_raw_content->len = r;
 	rspamd_mime_text_part_normalise (task, text_part);
 
 	/* Now, convert to utf8 */
@@ -434,7 +434,7 @@ rspamd_mime_text_part_utf8_convert (struct rspamd_task *task,
 	dlen = UCNV_GET_MAX_BYTES_FOR_STRING (r, clen);
 	d = rspamd_mempool_alloc (task->task_pool, dlen);
 	r = ucnv_fromUChars (utf8_converter, d, dlen,
-			(UChar *)text_part->ucs_raw_content->data, r, &uc_err);
+			(UChar *)text_part->unicode_raw_content->data, r, &uc_err);
 
 	if (!U_SUCCESS (uc_err)) {
 		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
@@ -749,4 +749,18 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	}
 
 	SET_PART_UTF (text_part);
+}
+
+void
+rspamd_utf_to_unicode (GByteArray *in, GArray *dest)
+{
+	UErrorCode uc_err = U_ZERO_ERROR;
+
+	g_array_set_size (dest, in->len + 1);
+	dest->len = ucnv_toUChars (utf8_converter,
+			(UChar *)dest->data,
+			in->len + 1,
+			in->data,
+			in->len,
+			&uc_err);
 }

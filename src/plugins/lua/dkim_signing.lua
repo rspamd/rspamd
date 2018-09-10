@@ -213,5 +213,6 @@ end
 
 rspamd_config:register_symbol({
   name = settings['symbol'],
-  callback = dkim_signing_cb
+  callback = dkim_signing_cb,
+  groups = {"policies", "dkim"}
 })

@@ -331,8 +331,8 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	for (i = 0; i < task->text_parts->len; i++) {
 		part = g_ptr_array_index (task->text_parts, i);
 
-		if (!IS_PART_EMPTY (part) && part->normalized_words != NULL) {
-			reserved_len += part->normalized_words->len;
+		if (!IS_PART_EMPTY (part) && part->utf_words != NULL) {
+			reserved_len += part->utf_words->len;
 		}
 		/* XXX: normal window size */
 		reserved_len += 5;
@@ -346,9 +346,9 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	for (i = 0; i < task->text_parts->len; i ++) {
 		part = g_ptr_array_index (task->text_parts, i);
 
-		if (!IS_PART_EMPTY (part) && part->normalized_words != NULL) {
+		if (!IS_PART_EMPTY (part) && part->utf_words != NULL) {
 			st_ctx->tokenizer->tokenize_func (st_ctx, task->task_pool,
-					part->normalized_words, IS_PART_UTF (part),
+					part->utf_words, IS_PART_UTF (part),
 					NULL, task->tokens);
 		}
 
@@ -365,8 +365,18 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	}
 
 	if (sub != NULL) {
-		words = rspamd_tokenize_text (sub, strlen (sub), RSPAMD_TOKENIZE_UTF,
+		UText utxt = UTEXT_INITIALIZER;
+		UErrorCode uc_err = U_ZERO_ERROR;
+		gsize slen = strlen (sub);
+
+		utext_openUTF8 (&utxt,
+				sub,
+				slen,
+				&uc_err);
+
+		words = rspamd_tokenize_text (sub, slen, &utxt, RSPAMD_TOKENIZE_UTF,
 				NULL, NULL, NULL);
+
 		if (words != NULL) {
 
 			for (i = 0; i < words->len; i ++) {

@@ -194,7 +194,9 @@ local function extract_handler(opts)
   local process_func
 
   if opts.words then
-    -- Enable stemming
+    -- Enable stemming and urls detection
+    load_config(opts)
+    rspamd_url.init(rspamd_config:get_tld_path())
     rspamd_config:init_subsystem('langdet')
   end
 

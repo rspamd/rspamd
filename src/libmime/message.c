@@ -67,7 +67,7 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 	guint i, nlen, total_len = 0, short_len = 0;
 	gdouble avg_len = 0;
 
-	if (part->normalized_words) {
+	if (part->utf_words) {
 #ifdef WITH_SNOWBALL
 		static GHashTable *stemmers = NULL;
 
@@ -97,10 +97,10 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 #endif
 
 
-		for (i = 0; i < part->normalized_words->len; i++) {
+		for (i = 0; i < part->utf_words->len; i++) {
 			guint64 h;
 
-			w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
+			w = &g_array_index (part->utf_words, rspamd_stat_token_t, i);
 			r = NULL;
 #ifdef WITH_SNOWBALL
 			if (stem) {
@@ -156,7 +156,7 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 			}
 		}
 
-		if (part->normalized_words && part->normalized_words->len) {
+		if (part->utf_words && part->utf_words->len) {
 			gdouble *avg_len_p, *short_len_p;
 
 			avg_len_p = rspamd_mempool_get_variable (task->task_pool,
@@ -188,12 +188,10 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 	}
 }
 
-static guint
+static void
 rspamd_mime_part_create_words (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
-	rspamd_stat_token_t *w, ucs_w;
-	guint i, ucs_len = 0;
 	enum rspamd_tokenize_type tok_type;
 
 	if (IS_PART_UTF (part)) {
@@ -203,68 +201,38 @@ rspamd_mime_part_create_words (struct rspamd_task *task,
 		tok_type = RSPAMD_TOKENIZE_RAW;
 	}
 
-	/* Ugly workaround */
-	if (IS_PART_HTML (part)) {
-		part->normalized_words = rspamd_tokenize_text (
-				part->stripped_content->data,
-				part->stripped_content->len, tok_type, task->cfg,
-				part->exceptions,
-				NULL);
-	}
-	else {
-		part->normalized_words = rspamd_tokenize_text (
-				part->stripped_content->data,
-				part->stripped_content->len, tok_type, task->cfg,
-				part->exceptions,
-				NULL);
-	}
+	part->utf_words = rspamd_tokenize_text (
+			part->utf_stripped_content->data,
+			part->utf_stripped_content->len,
+			&part->utf_stripped_text,
+			tok_type, task->cfg,
+			part->exceptions,
+			NULL);
 
-	if (part->normalized_words) {
+
+	if (part->utf_words) {
 		part->normalized_hashes = g_array_sized_new (FALSE, FALSE,
-				sizeof (guint64), part->normalized_words->len);
-
-		if (IS_PART_UTF (part) && task->lang_det) {
-			part->ucs32_words = g_array_sized_new (FALSE, FALSE,
-					sizeof (rspamd_stat_token_t), part->normalized_words->len);
-		}
-
-		if (part->ucs32_words) {
-
-
-			for (i = 0; i < part->normalized_words->len; i++) {
-				w = &g_array_index (part->normalized_words, rspamd_stat_token_t,
-						i);
-
-				if (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
-					rspamd_language_detector_to_ucs (task->lang_det,
-							task->task_pool,
-							w, &ucs_w);
-					g_array_append_val (part->ucs32_words, ucs_w);
-					ucs_len += ucs_w.len;
-				}
-			}
-		}
+				sizeof (guint64), part->utf_words->len);
 	}
 
-	return ucs_len;
 }
 
 static void
 rspamd_mime_part_detect_language (struct rspamd_task *task,
-		struct rspamd_mime_text_part *part, guint ucs_len)
+		struct rspamd_mime_text_part *part)
 {
 	struct rspamd_lang_detector_res *lang;
 
-	if (part->ucs32_words) {
-		part->languages = rspamd_language_detector_detect (task,
-				task->lang_det,
-				part->ucs32_words, ucs_len);
-
-		if (part->languages->len > 0) {
+	if (!IS_PART_EMPTY (part) && part->utf_words && part->utf_words->len > 0 &&
+			task->lang_det) {
+		if (rspamd_language_detector_detect (task, task->lang_det, part)) {
 			lang = g_ptr_array_index (part->languages, 0);
 			part->language = lang->lang;
 
 			msg_info_task ("detected part language: %s", part->language);
+		}
+		else {
+			part->language = "en"; /* Safe fallback */
 		}
 	}
 }
@@ -289,7 +257,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 				state = seen_cr;
 				if (p > c) {
 					last_c = *(p - 1);
-					g_byte_array_append (part->stripped_content,
+					g_byte_array_append (part->utf_stripped_content,
 							(const guint8 *)c, p - c);
 				}
 
@@ -299,11 +267,11 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 			case seen_cr:
 				/* Double \r\r */
 				if (!crlf_added) {
-					g_byte_array_append (part->stripped_content,
+					g_byte_array_append (part->utf_stripped_content,
 							(const guint8 *)" ", 1);
 					crlf_added = TRUE;
 					g_ptr_array_add (part->newlines,
-							(((gpointer) (goffset) (part->stripped_content->len))));
+							(((gpointer) (goffset) (part->utf_stripped_content->len))));
 				}
 
 				part->nlines ++;
@@ -326,17 +294,17 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 
 				if (p > c) {
 					last_c = *(p - 1);
-					g_byte_array_append (part->stripped_content,
+					g_byte_array_append (part->utf_stripped_content,
 							(const guint8 *)c, p - c);
 				}
 
 				c = p + 1;
 
 				if (IS_PART_HTML (part) || g_ascii_ispunct (last_c)) {
-					g_byte_array_append (part->stripped_content,
+					g_byte_array_append (part->utf_stripped_content,
 							(const guint8 *)" ", 1);
 					g_ptr_array_add (part->newlines,
-							(((gpointer) (goffset) (part->stripped_content->len))));
+							(((gpointer) (goffset) (part->utf_stripped_content->len))));
 					crlf_added = TRUE;
 				}
 				else {
@@ -348,13 +316,13 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 				/* \r\n */
 				if (!crlf_added) {
 					if (IS_PART_HTML (part) || g_ascii_ispunct (last_c)) {
-						g_byte_array_append (part->stripped_content,
+						g_byte_array_append (part->utf_stripped_content,
 								(const guint8 *) " ", 1);
 						crlf_added = TRUE;
 					}
 
 					g_ptr_array_add (part->newlines,
-							(((gpointer) (goffset) (part->stripped_content->len))));
+							(((gpointer) (goffset) (part->utf_stripped_content->len))));
 				}
 
 				c = p + 1;
@@ -364,11 +332,11 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 			case seen_lf:
 				/* Double \n\n */
 				if (!crlf_added) {
-					g_byte_array_append (part->stripped_content,
+					g_byte_array_append (part->utf_stripped_content,
 							(const guint8 *)" ", 1);
 					crlf_added = TRUE;
 					g_ptr_array_add (part->newlines,
-							(((gpointer) (goffset) (part->stripped_content->len))));
+							(((gpointer) (goffset) (part->utf_stripped_content->len))));
 				}
 
 				part->nlines++;
@@ -414,13 +382,13 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 
 				if (!crlf_added) {
 					g_ptr_array_add (part->newlines,
-							(((gpointer) (goffset) (part->stripped_content->len))));
+							(((gpointer) (goffset) (part->utf_stripped_content->len))));
 				}
 
 				/* Skip initial spaces */
 				if (G_UNLIKELY (*p == ' ')) {
 					if (!crlf_added) {
-						g_byte_array_append (part->stripped_content,
+						g_byte_array_append (part->utf_stripped_content,
 								(const guint8 *)" ", 1);
 					}
 
@@ -451,7 +419,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 
 		switch (state) {
 		case normal_char:
-			g_byte_array_append (part->stripped_content,
+			g_byte_array_append (part->utf_stripped_content,
 					(const guint8 *)c, p - c);
 
 			while (c < p) {
@@ -479,10 +447,10 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 		default:
 
 			if (!crlf_added) {
-				g_byte_array_append (part->stripped_content,
+				g_byte_array_append (part->utf_stripped_content,
 						(const guint8 *)" ", 1);
 				g_ptr_array_add (part->newlines,
-						(((gpointer) (goffset) (part->stripped_content->len))));
+						(((gpointer) (goffset) (part->utf_stripped_content->len))));
 			}
 
 			part->nlines++;
@@ -495,34 +463,52 @@ static void
 rspamd_normalize_text_part (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
-
 	const gchar *p, *end;
 	guint i;
 	goffset off;
 	struct rspamd_process_exception *ex;
+	UErrorCode uc_err = U_ZERO_ERROR;
 
-	/* Strip newlines */
-	part->stripped_content = g_byte_array_sized_new (part->content->len);
 	part->newlines = g_ptr_array_sized_new (128);
-	p = (const gchar *)part->content->data;
-	end = p + part->content->len;
 
-	rspamd_strip_newlines_parse (p, end, part);
+	if (IS_PART_EMPTY (part)) {
+		part->utf_stripped_content = g_byte_array_new ();
+	}
+	else {
+		part->utf_stripped_content = g_byte_array_sized_new (part->utf_content->len);
 
-	for (i = 0; i < part->newlines->len; i ++) {
-		ex = rspamd_mempool_alloc (task->task_pool, sizeof (*ex));
-		off = (goffset)g_ptr_array_index (part->newlines, i);
-		g_ptr_array_index (part->newlines, i) = (gpointer)(goffset)
-				(part->stripped_content->data + off);
-		ex->pos = off;
-		ex->len = 0;
-		ex->type = RSPAMD_EXCEPTION_NEWLINE;
-		part->exceptions = g_list_prepend (part->exceptions, ex);
+		p = (const gchar *)part->utf_content->data;
+		end = p + part->utf_content->len;
+
+		rspamd_strip_newlines_parse (p, end, part);
+
+		for (i = 0; i < part->newlines->len; i ++) {
+			ex = rspamd_mempool_alloc (task->task_pool, sizeof (*ex));
+			off = (goffset)g_ptr_array_index (part->newlines, i);
+			g_ptr_array_index (part->newlines, i) = (gpointer)(goffset)
+					(part->utf_stripped_content->data + off);
+			ex->pos = off;
+			ex->len = 0;
+			ex->type = RSPAMD_EXCEPTION_NEWLINE;
+			part->exceptions = g_list_prepend (part->exceptions, ex);
+		}
+	}
+
+	if (IS_PART_UTF (part)) {
+		utext_openUTF8 (&part->utf_stripped_text,
+				part->utf_stripped_content->data,
+				part->utf_stripped_content->len,
+				&uc_err);
+
+		if (!U_SUCCESS (uc_err)) {
+			msg_warn_task ("cannot open text from utf content");
+			/* Probably, should be an assertion */
+		}
 	}
 
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) free_byte_array_callback,
-			part->stripped_content);
+			part->utf_stripped_content);
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) rspamd_ptr_array_free_hard,
 			part->newlines);
@@ -615,10 +601,10 @@ rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part
 		g_assert (rspamd_multipattern_compile (gtube_matcher, NULL));
 	}
 
-	if (part->content && part->content->len >= sizeof (gtube_pattern_reject) &&
-			part->content->len <= max_check_size) {
-		if ((ret = rspamd_multipattern_lookup (gtube_matcher, part->content->data,
-				part->content->len,
+	if (part->utf_content && part->utf_content->len >= sizeof (gtube_pattern_reject) &&
+			part->utf_content->len <= max_check_size) {
+		if ((ret = rspamd_multipattern_lookup (gtube_matcher, part->utf_content->data,
+				part->utf_content->len,
 				rspamd_multipattern_gtube_cb, NULL, NULL)) > 0) {
 
 			switch (ret) {
@@ -639,7 +625,7 @@ rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part
 				msg_info_task (
 						"<%s>: gtube %s pattern has been found in part of length %ud",
 						task->message_id, rspamd_action_to_str (act),
-						part->content->len);
+						part->utf_content->len);
 			}
 		}
 	}
@@ -655,9 +641,86 @@ exceptions_compare_func (gconstpointer a, gconstpointer b)
 	return ea->pos - eb->pos;
 }
 
+static gboolean
+rspamd_message_process_plain_text_part (struct rspamd_task *task,
+										struct rspamd_mime_text_part *text_part)
+{
+	if (text_part->parsed.len == 0) {
+		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
+
+		return TRUE;
+	}
+
+	rspamd_mime_text_part_maybe_convert (task, text_part);
+
+	if (text_part->utf_raw_content != NULL) {
+		/* Different from HTML, where we also parse HTML and strip tags */
+		text_part->utf_content = text_part->utf_raw_content;
+		text_part->unicode_content = text_part->unicode_raw_content;
+	}
+	else {
+		/*
+		 * We ignore unconverted parts from now as it is dangerous
+		 * to treat them as text parts
+		 */
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_message_process_html_text_part (struct rspamd_task *task,
+										struct rspamd_mime_text_part *text_part)
+{
+	text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_HTML;
+
+	if (text_part->parsed.len == 0) {
+		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
+
+		return TRUE;
+	}
+
+	rspamd_mime_text_part_maybe_convert (task, text_part);
+
+	if (text_part->utf_raw_content == NULL) {
+		return FALSE;
+	}
+
+	text_part->html = rspamd_mempool_alloc0 (task->task_pool,
+			sizeof (*text_part->html));
+	text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_BALANCED;
+	text_part->utf_content = rspamd_html_process_part_full (
+			task->task_pool,
+			text_part->html,
+			text_part->utf_raw_content,
+			&text_part->exceptions,
+			task->urls,
+			task->emails);
+
+	if (text_part->utf_content->len == 0) {
+		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
+	}
+
+	/* Also add unicode content */
+	text_part->unicode_content =  g_array_sized_new (FALSE, FALSE,
+			sizeof (UChar), text_part->utf_content->len + 1);
+	rspamd_utf_to_unicode (text_part->utf_content, text_part->unicode_content);
+
+	rspamd_mempool_add_destructor (task->task_pool,
+			(rspamd_mempool_destruct_t) free_byte_array_callback,
+			text_part->utf_content);
+	rspamd_mempool_add_destructor (task->task_pool,
+			rspamd_array_free_hard,
+			text_part->unicode_content);
+
+	return TRUE;
+}
+
 static void
-rspamd_message_process_text_part (struct rspamd_task *task,
-	struct rspamd_mime_part *mime_part)
+rspamd_message_process_text_part_maybe (struct rspamd_task *task,
+										struct rspamd_mime_part *mime_part)
 {
 	struct rspamd_mime_text_part *text_part;
 	rspamd_ftok_t html_tok, xhtml_tok;
@@ -738,87 +801,32 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 		debug_task ("skip attachments for checking as text parts");
 		return;
 	}
+	else if (!(found_txt || found_html)) {
+		/* Not a text part */
+		return;
+	}
+
+	text_part = rspamd_mempool_alloc0 (task->task_pool,
+			sizeof (struct rspamd_mime_text_part));
+	text_part->mime_part = mime_part;
+	text_part->raw.begin = mime_part->raw_data.begin;
+	text_part->raw.len = mime_part->raw_data.len;
+	text_part->parsed.begin = mime_part->parsed_data.begin;
+	text_part->parsed.len = mime_part->parsed_data.len;
+	text_part->utf_stripped_text = (UText)UTEXT_INITIALIZER;
 
 	if (found_html) {
-		text_part = rspamd_mempool_alloc0 (task->task_pool,
-				sizeof (struct rspamd_mime_text_part));
-		text_part->raw.begin = mime_part->raw_data.begin;
-		text_part->raw.len = mime_part->raw_data.len;
-		text_part->parsed.begin = mime_part->parsed_data.begin;
-		text_part->parsed.len = mime_part->parsed_data.len;
-		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_HTML;
-		text_part->mime_part = mime_part;
-
-		if (mime_part->parsed_data.len == 0) {
-			text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
-			g_ptr_array_add (task->text_parts, text_part);
-			return;
-		}
-
-		rspamd_mime_text_part_maybe_convert (task, text_part);
-
-		if (text_part->utf_raw_content == NULL) {
-			return;
-		}
-
-		text_part->html = rspamd_mempool_alloc0 (task->task_pool,
-				sizeof (*text_part->html));
-		text_part->mime_part = mime_part;
-
-		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_BALANCED;
-		text_part->content = rspamd_html_process_part_full (
-				task->task_pool,
-				text_part->html,
-				text_part->utf_raw_content,
-				&text_part->exceptions,
-				task->urls,
-				task->emails);
-
-		if (text_part->content->len == 0) {
-			text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
-		}
-
-		rspamd_mempool_add_destructor (task->task_pool,
-			(rspamd_mempool_destruct_t) free_byte_array_callback,
-			text_part->content);
-		g_ptr_array_add (task->text_parts, text_part);
-	}
-	else if (found_txt) {
-		text_part =
-			rspamd_mempool_alloc0 (task->task_pool,
-				sizeof (struct rspamd_mime_text_part));
-		text_part->mime_part = mime_part;
-		text_part->raw.begin = mime_part->raw_data.begin;
-		text_part->raw.len = mime_part->raw_data.len;
-		text_part->parsed.begin = mime_part->parsed_data.begin;
-		text_part->parsed.len = mime_part->parsed_data.len;
-		text_part->mime_part = mime_part;
-
-		if (mime_part->parsed_data.len == 0) {
-			text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
-			g_ptr_array_add (task->text_parts, text_part);
-			return;
-		}
-
-		rspamd_mime_text_part_maybe_convert (task, text_part);
-
-		if (text_part->utf_raw_content != NULL) {
-			/*
-			 * We ignore unconverted parts from now as it is dangerous
-			 * to treat them as text parts
-			 */
-			text_part->content = text_part->utf_raw_content;
-			g_ptr_array_add (task->text_parts, text_part);
-		}
-		else {
+		if (!rspamd_message_process_html_text_part (task, text_part)) {
 			return;
 		}
 	}
 	else {
-		return;
+		if (!rspamd_message_process_plain_text_part (task, text_part)) {
+			return;
+		}
 	}
 
-
+	g_ptr_array_add (task->text_parts, text_part);
 	mime_part->flags |= RSPAMD_MIME_PART_TEXT;
 	mime_part->specific.txt = text_part;
 
@@ -867,7 +875,7 @@ rspamd_message_process_text_part (struct rspamd_task *task,
 				text_part->exceptions);
 	}
 
-	text_part->ucs_len = rspamd_mime_part_create_words (task, text_part);
+	rspamd_mime_part_create_words (task, text_part);
 }
 
 /* Creates message from various data using libmagic to detect type */
@@ -1172,7 +1180,7 @@ rspamd_message_process (struct rspamd_task *task)
 		struct rspamd_mime_part *part;
 
 		part = g_ptr_array_index (task->parts, i);
-		rspamd_message_process_text_part (task, part);
+		rspamd_message_process_text_part_maybe (task, part);
 	}
 
 	rspamd_images_process (task);
@@ -1207,7 +1215,7 @@ rspamd_message_process (struct rspamd_task *task)
 						sel = p2;
 					}
 					else {
-						if (p1->ucs_len > p2->ucs_len) {
+						if (p1->unicode_content->len > p2->unicode_content->len) {
 							sel = p1;
 						}
 						else {
@@ -1215,7 +1223,7 @@ rspamd_message_process (struct rspamd_task *task)
 						}
 					}
 
-					rspamd_mime_part_detect_language (task, sel, sel->ucs_len);
+					rspamd_mime_part_detect_language (task, sel);
 
 					if (sel->language && sel->language[0]) {
 						/* Propagate language */
@@ -1274,13 +1282,13 @@ rspamd_message_process (struct rspamd_task *task)
 
 	PTR_ARRAY_FOREACH (task->text_parts, i, text_part) {
 		if (!text_part->language) {
-			rspamd_mime_part_detect_language (task, text_part, text_part->ucs_len);
+			rspamd_mime_part_detect_language (task, text_part);
 		}
 
 		rspamd_mime_part_extract_words (task, text_part);
 
-		if (text_part->normalized_words) {
-			total_words += text_part->normalized_words->len;
+		if (text_part->utf_words) {
+			total_words += text_part->utf_words->len;
 		}
 	}
 

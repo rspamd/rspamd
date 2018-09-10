@@ -19,12 +19,14 @@ CLAMAV MISS
   Run Dummy Clam  ${PORT_CLAM}
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
   Check Rspamc  ${result}  CLAM_VIRUS  inverse=1
+  Shutdown clamav
 
 CLAMAV HIT
   Run Dummy Clam  ${PORT_CLAM}  1
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}
   Check Rspamc  ${result}  CLAM_VIRUS (1.00)[Eicar-Test-Signature]
   Should Not Contain  ${result.stdout}  CLAMAV_FAIL
+  Shutdown clamav
 
 CLAMAV CACHE HIT
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}
@@ -41,6 +43,7 @@ FPROT MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}
   Check Rspamc  ${result}  FPROT_VIRUS  inverse=1
   Should Not Contain  ${result.stdout}  FPROT_EICAR
+  Shutdown fport
 
 FPROT HIT - PATTERN
   Run Dummy Fprot  ${PORT_FPROT}  1
@@ -52,6 +55,8 @@ FPROT HIT - PATTERN
   Should Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_PATTERN
   Should Not Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_DEFAULT
   Should Not Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_NOPE
+  Shutdown fport
+  Shutdown fport duplicate
 
 FPROT CACHE HIT
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
@@ -75,6 +80,21 @@ Antivirus Setup
 Antivirus Teardown
   Normal Teardown
   Shutdown Process With Children  ${REDIS_PID}
+  Shutdown clamav
+  Shutdown fport
+  Terminate All Processes    kill=True
+
+Shutdown clamav
+  ${clamav_pid} =  Get File if exists  /tmp/dummy_clamav.pid
+  Run Keyword if  ${clamav_pid}  Shutdown Process With Children  ${clamav_pid}
+
+Shutdown fport
+  ${fport_pid} =  Get File if exists  /tmp/dummy_fprot.pid
+  Run Keyword if  ${fport_pid}  Shutdown Process With Children  ${fport_pid}
+
+Shutdown fport duplicate
+  ${fport_pid} =  Get File if exists  /tmp/dummy_fprot_dupe.pid
+  Run Keyword if  ${fport_pid}  Shutdown Process With Children  ${fport_pid}
 
 Run Dummy Clam
   [Arguments]  ${port}  ${found}=
@@ -83,5 +103,5 @@ Run Dummy Clam
 
 Run Dummy Fprot
   [Arguments]  ${port}  ${found}=  ${pid}=/tmp/dummy_fprot.pid
-  ${result} =  Start Process  ${TESTDIR}/util/dummy_fprot.py  ${port}  ${found}  ${pid}
+  Start Process  ${TESTDIR}/util/dummy_fprot.py  ${port}  ${found}  ${pid}
   Wait Until Created  ${pid}

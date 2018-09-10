@@ -549,16 +549,16 @@ lua_textpart_get_content (lua_State * L)
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
 
 	if (!type) {
-		start = part->content->data;
-		len = part->content->len;
+		start = part->utf_content->data;
+		len = part->utf_content->len;
 	}
 	else if (strcmp (type, "content") == 0) {
-		start = part->content->data;
-		len = part->content->len;
+		start = part->utf_content->data;
+		len = part->utf_content->len;
 	}
 	else if (strcmp (type, "content_oneline") == 0) {
-		start = part->stripped_content->data;
-		len = part->stripped_content->len;
+		start = part->utf_stripped_content->data;
+		len = part->utf_stripped_content->len;
 	}
 	else if (strcmp (type, "raw_parsed") == 0) {
 		start = part->parsed.begin;
@@ -618,8 +618,8 @@ lua_textpart_get_content_oneline (lua_State * L)
 
 	t = lua_newuserdata (L, sizeof (*t));
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
-	t->start = part->stripped_content->data;
-	t->len = part->stripped_content->len;
+	t->start = part->utf_stripped_content->data;
+	t->len = part->utf_stripped_content->len;
 	t->flags = 0;
 
 	return 1;
@@ -636,11 +636,11 @@ lua_textpart_get_length (lua_State * L)
 		return 1;
 	}
 
-	if (IS_PART_EMPTY (part) || part->content == NULL) {
+	if (IS_PART_EMPTY (part) || part->utf_content == NULL) {
 		lua_pushinteger (L, 0);
 	}
 	else {
-		lua_pushinteger (L, part->content->len);
+		lua_pushinteger (L, part->utf_content->len);
 	}
 
 	return 1;
@@ -721,11 +721,11 @@ lua_textpart_get_words_count (lua_State *L)
 		return 1;
 	}
 
-	if (IS_PART_EMPTY (part) || part->normalized_words == NULL) {
+	if (IS_PART_EMPTY (part) || part->utf_words == NULL) {
 		lua_pushinteger (L, 0);
 	}
 	else {
-		lua_pushinteger (L, part->normalized_words->len);
+		lua_pushinteger (L, part->utf_words->len);
 	}
 
 	return 1;
@@ -743,14 +743,14 @@ lua_textpart_get_words (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (IS_PART_EMPTY (part) || part->normalized_words == NULL) {
+	if (IS_PART_EMPTY (part) || part->utf_words == NULL) {
 		lua_createtable (L, 0, 0);
 	}
 	else {
-		lua_createtable (L, part->normalized_words->len, 0);
+		lua_createtable (L, part->utf_words->len, 0);
 
-		for (i = 0; i < part->normalized_words->len; i ++) {
-			w = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
+		for (i = 0; i < part->utf_words->len; i ++) {
+			w = &g_array_index (part->utf_words, rspamd_stat_token_t, i);
 
 			lua_pushlstring (L, w->begin, w->len);
 			lua_rawseti (L, -2, i + 1);
@@ -876,8 +876,8 @@ struct lua_shingle_data {
 };
 
 #define STORE_TOKEN(i, t) do { \
-    if ((i) < part->normalized_words->len) { \
-        word = &g_array_index (part->normalized_words, rspamd_stat_token_t, (i)); \
+    if ((i) < part->utf_words->len) { \
+        word = &g_array_index (part->utf_words, rspamd_stat_token_t, (i)); \
         sd->t.begin = word->begin; \
         sd->t.len = word->len; \
     } \
@@ -936,8 +936,8 @@ lua_textpart_get_fuzzy_hashes (lua_State * L)
 		/* Calculate direct hash */
 		rspamd_cryptobox_hash_init (&st, key, rspamd_cryptobox_HASHKEYBYTES);
 
-		for (i = 0; i < part->normalized_words->len; i ++) {
-			word = &g_array_index (part->normalized_words, rspamd_stat_token_t, i);
+		for (i = 0; i < part->utf_words->len; i ++) {
+			word = &g_array_index (part->utf_words, rspamd_stat_token_t, i);
 			rspamd_cryptobox_hash_update (&st, word->begin, word->len);
 		}
 
@@ -947,7 +947,7 @@ lua_textpart_get_fuzzy_hashes (lua_State * L)
 				sizeof (hexdigest));
 		lua_pushlstring (L, hexdigest, sizeof (hexdigest) - 1);
 
-		sgl = rspamd_shingles_from_text (part->normalized_words, key,
+		sgl = rspamd_shingles_from_text (part->utf_words, key,
 				pool, lua_shingles_filter, part, RSPAMD_SHINGLES_MUMHASH);
 
 		if (sgl == NULL) {

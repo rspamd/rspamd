@@ -20,10 +20,31 @@
 #include "config.h"
 #include "libserver/cfg_file.h"
 #include "libstat/stat_api.h"
+#include "libmime/message.h"
 
 struct rspamd_lang_detector;
 struct rspamd_language_elt;
 struct rspamd_task;
+
+enum rspamd_unicode_scripts {
+	RSPAMD_UNICODE_LATIN = (1 << 0),
+	RSPAMD_UNICODE_GREEK = (1 << 1),
+	RSPAMD_UNICODE_CYRILLIC = (1 << 2),
+	RSPAMD_UNICODE_HEBREW = (1 << 3),
+	RSPAMD_UNICODE_CJK = (1 << 4),
+	RSPAMD_UNICODE_JP = (1 << 5),
+	RSPAMD_UNICODE_ARABIC = (1 << 6),
+	RSPAMD_UNICODE_DEVANAGARI = (1 << 7),
+	RSPAMD_UNICODE_THAI = (1 << 8),
+	RSPAMD_UNICODE_ARMENIAN = (1 << 9),
+	RSPAMD_UNICODE_GEORGIAN = (1 << 10),
+	RSPAMD_UNICODE_GUJARATI = (1 << 11),
+	RSPAMD_UNICODE_TAMIL = (1 << 12),
+	RSPAMD_UNICODE_TELUGU = (1 << 13),
+	RSPAMD_UNICODE_MALAYALAM = (1 << 14),
+	RSPAMD_UNICODE_SINHALA = (1 << 15),
+	RSPAMD_UNICODE_HANGUL = (1 << 16),
+};
 
 struct rspamd_lang_detector_res {
 	gdouble prob;
@@ -59,8 +80,8 @@ void rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
  * @param words_len
  * @return array of struct rspamd_lang_detector_res sorted by freq descending
  */
-GPtrArray * rspamd_language_detector_detect (struct rspamd_task *task,
+gboolean rspamd_language_detector_detect (struct rspamd_task *task,
 		struct rspamd_lang_detector *d,
-		GArray *ucs_tokens, gsize words_len);
+		struct rspamd_mime_text_part *part);
 
 #endif

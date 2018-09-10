@@ -905,8 +905,8 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 							raw = TRUE;
 						}
 
-						in = part->content->data;
-						len = part->content->len;
+						in = part->utf_content->data;
+						len = part->utf_content->len;
 					}
 				}
 
@@ -1006,9 +1006,9 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		for (i = 0; i < task->text_parts->len; i++) {
 			part = g_ptr_array_index (task->text_parts, i);
 
-			if (part->stripped_content) {
-				scvec[i + 1] = (guchar *)part->stripped_content->data;
-				lenvec[i + 1] = part->stripped_content->len;
+			if (part->utf_stripped_content) {
+				scvec[i + 1] = (guchar *)part->utf_stripped_content->data;
+				lenvec[i + 1] = part->utf_stripped_content->len;
 			}
 			else {
 				scvec[i + 1] = (guchar *)"";

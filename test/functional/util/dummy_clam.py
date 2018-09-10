@@ -4,16 +4,16 @@ PID = "/tmp/dummy_clamav.pid"
 
 import os
 import sys
+import socket
+import dummy_killer
 try:
     import SocketServer as socketserver
 except:
     import socketserver
-import signal
 
 class MyTCPHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
-        os.remove(PID)
         self.data = self.request.recv(1024).strip()
         if self.server.foundvirus:
             self.request.sendall(b"stream: Eicar-Test-Signature FOUND\0")
@@ -22,11 +22,6 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         self.request.close()
 
 if __name__ == "__main__":
-    pid = os.fork()
-    if pid > 0:
-        sys.exit(0)
-    signal.alarm(5)
-
     HOST = "localhost"
 
     alen = len(sys.argv)
@@ -45,7 +40,13 @@ if __name__ == "__main__":
     server.foundvirus = foundvirus
     server.server_bind()
     server.server_activate()
-    open(PID, 'w').close()
-    server.handle_request()
+
+    dummy_killer.setup_killer(server)
+    dummy_killer.write_pid(PID)
+
+    try:
+        server.handle_request()
+    except socket.error:
+        print "Socket closed"
+
     server.server_close()
-    os.exit(0)

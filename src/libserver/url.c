@@ -2624,7 +2624,7 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 {
 	struct rspamd_url_mimepart_cbdata mcbd;
 
-	if (part->stripped_content == NULL || part->stripped_content->len == 0) {
+	if (part->utf_stripped_content == NULL || part->utf_stripped_content->len == 0) {
 		msg_warn_task ("got empty text part");
 		return;
 	}
@@ -2632,8 +2632,8 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 	mcbd.task = task;
 	mcbd.part = part;
 
-	rspamd_url_find_multiple (task->task_pool, part->stripped_content->data,
-			part->stripped_content->len, is_html, part->newlines,
+	rspamd_url_find_multiple (task->task_pool, part->utf_stripped_content->data,
+			part->utf_stripped_content->len, is_html, part->newlines,
 			rspamd_url_text_part_callback, &mcbd);
 }
 

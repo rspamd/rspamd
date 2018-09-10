@@ -262,9 +262,9 @@ lua_trie_search_mime (lua_State *L)
 		for (i = 0; i < task->text_parts->len; i ++) {
 			part = g_ptr_array_index (task->text_parts, i);
 
-			if (!IS_PART_EMPTY (part) && part->content != NULL) {
-				text = part->content->data;
-				len = part->content->len;
+			if (!IS_PART_EMPTY (part) && part->utf_content != NULL) {
+				text = part->utf_content->data;
+				len = part->utf_content->len;
 
 				if (lua_trie_search_str (L, trie, text, len) != 0) {
 					found = TRUE;

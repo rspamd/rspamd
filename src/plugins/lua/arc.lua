@@ -608,7 +608,8 @@ end
 
 rspamd_config:register_symbol({
   name = settings['sign_symbol'],
-  callback = arc_signing_cb
+  callback = arc_signing_cb,
+  groups = {"policies", "arc"}
 })
 
 -- Do not sign unless valid

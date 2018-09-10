@@ -1078,6 +1078,7 @@ lua_util_tokenize_text (lua_State *L)
 	GList *exceptions = NULL, *cur;
 	struct rspamd_lua_text *t;
 	struct rspamd_process_exception *ex;
+	UText utxt = UTEXT_INITIALIZER;
 	GArray *res;
 	rspamd_stat_token_t *w;
 
@@ -1129,7 +1130,15 @@ lua_util_tokenize_text (lua_State *L)
 		exceptions = g_list_reverse (exceptions);
 	}
 
-	res = rspamd_tokenize_text ((gchar *)in, len, RSPAMD_TOKENIZE_UTF, NULL,
+	UErrorCode uc_err = U_ZERO_ERROR;
+	utext_openUTF8 (&utxt,
+			in,
+			len,
+			&uc_err);
+
+	res = rspamd_tokenize_text ((gchar *)in, len,
+			&utxt,
+			RSPAMD_TOKENIZE_UTF, NULL,
 			exceptions,
 			NULL);
 
