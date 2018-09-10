@@ -23,7 +23,7 @@
 #include <lualib.h>
 
 extern GHashTable *ucl_vars;
-extern lua_State *L;
+extern struct rspamd_main *rspamd_main;
 
 GQuark rspamadm_error (void);
 
@@ -55,9 +55,21 @@ const struct rspamadm_command *rspamadm_search_command (const gchar *name,
 void rspamadm_fill_internal_commands (GPtrArray *dest);
 void rspamadm_fill_lua_commands (lua_State *L, GPtrArray *dest);
 
-gboolean rspamadm_execute_lua_ucl_subr (gpointer L, gint argc, gchar **argv,
+gboolean rspamadm_execute_lua_ucl_subr (gint argc, gchar **argv,
 										const ucl_object_t *res,
 										const gchar *script_name,
 										gboolean rspamadm_subcommand);
+
+struct thread_entry;
+typedef void (*lua_thread_error_t) (struct thread_entry *thread, int ret, const char *msg);
+
+
+struct lua_call_data {
+	gint top;
+	gint ret;
+	gpointer ud;
+};
+gint lua_repl_thread_call (struct thread_entry *thread, gint narg,
+		gpointer ud, lua_thread_error_t error_func);
 
 #endif

@@ -302,16 +302,12 @@ rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd
 
 	if (ret) {
 		if (modules_state) {
-			lua_State *L = cfg->lua_state;
 
-			rspamadm_execute_lua_ucl_subr (L,
-					argc,
+			rspamadm_execute_lua_ucl_subr (argc,
 					argv,
 					cfg->rcl_obj,
 					"plugins_stats",
 					FALSE);
-
-			lua_close (L);
 
 			exit (EXIT_SUCCESS);
 		}

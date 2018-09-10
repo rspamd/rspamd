@@ -212,8 +212,18 @@ def shutdown_process_with_children(pid):
         except:
             pass
 
+def write_to_stdin(process_handle, text):
+    lib = BuiltIn().get_library_instance('Process')
+    obj = lib.get_process_object()
+    obj.stdin.write(text + "\n")
+    obj.stdin.flush()
+    obj.stdin.close()
+    out = obj.stdout.read(4096)
+    return out
+
 def get_file_if_exists(file_path):
     if os.path.exists(file_path):
         with open(file_path, 'r') as myfile:
             return myfile.read()
     return None
+

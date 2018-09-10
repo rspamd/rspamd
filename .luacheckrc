@@ -5,6 +5,7 @@ exclude_files = {
   '/**/contrib/**',
   '/**/test/lua/**',
   '/**/test/functional/lua/miltertest/**',
+  '/**/test/functional/lua/rspamadm/**',
 }
 
 globals = {
