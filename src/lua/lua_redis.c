@@ -686,7 +686,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref)
 
 		lua_pop (L, 1); /* table */
 
-		if (session && rspamd_session_is_destroying (session)) {
+		if (session && rspamd_session_blocked (session)) {
 			ret = FALSE;
 		}
 
@@ -1215,7 +1215,7 @@ lua_redis_add_cmd (lua_State *L)
 
 			LL_PREPEND (sp_ud->c->specific, sp_ud);
 
-			if (ud->s && rspamd_session_is_destroying (ud->s)) {
+			if (ud->s && rspamd_session_blocked (ud->s)) {
 				lua_pushboolean (L, 0);
 				lua_pushstring (L, "session is terminating");
 

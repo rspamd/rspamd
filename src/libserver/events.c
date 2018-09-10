@@ -21,9 +21,10 @@
 
 #define RSPAMD_SESSION_FLAG_WATCHING (1 << 0)
 #define RSPAMD_SESSION_FLAG_DESTROYING (1 << 1)
+#define RSPAMD_SESSION_FLAG_CLEANUP (1 << 2)
 
 #define RSPAMD_SESSION_IS_WATCHING(s) ((s)->flags & RSPAMD_SESSION_FLAG_WATCHING)
-#define RSPAMD_SESSION_IS_DESTROYING(s) ((s)->flags & RSPAMD_SESSION_FLAG_DESTROYING)
+#define RSPAMD_SESSION_CAN_ADD_EVENT(s) (!((s)->flags & (RSPAMD_SESSION_FLAG_DESTROYING|RSPAMD_SESSION_FLAG_CLEANUP)))
 
 #define msg_err_session(...) rspamd_default_log_function(G_LOG_LEVEL_CRITICAL, \
         "events", session->pool->tag.uid, \
@@ -172,8 +173,9 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 		g_assert_not_reached ();
 	}
 
-	if (RSPAMD_SESSION_IS_DESTROYING (session)) {
-		msg_debug_session ("skip adding event subsystem: %s: session is destroying",
+	if (!RSPAMD_SESSION_CAN_ADD_EVENT (session)) {
+		msg_debug_session ("skip adding event subsystem: %s: "
+					 "session is destroying/cleaning",
 				g_quark_to_string (subsystem));
 
 		return NULL;
@@ -293,7 +295,7 @@ rspamd_session_destroy (struct rspamd_async_session *session)
 		return FALSE;
 	}
 
-	if (!(session->flags & RSPAMD_SESSION_FLAG_DESTROYING)) {
+	if (!rspamd_session_blocked (session)) {
 		session->flags |= RSPAMD_SESSION_FLAG_DESTROYING;
 		rspamd_session_cleanup (session);
 
@@ -315,6 +317,8 @@ rspamd_session_cleanup (struct rspamd_async_session *session)
 		return;
 	}
 
+	session->flags |= RSPAMD_SESSION_FLAG_CLEANUP;
+
 	kh_foreach_key (session->events, ev, {
 		/* Call event's finalizer */
 		msg_debug_session ("removed event on destroy: %p, subsystem: %s",
@@ -327,6 +331,8 @@ rspamd_session_cleanup (struct rspamd_async_session *session)
 	});
 
 	kh_clear (rspamd_events_hash, session->events);
+
+	session->flags &= ~RSPAMD_SESSION_FLAG_CLEANUP;
 }
 
 gboolean
@@ -509,9 +515,9 @@ rspamd_session_mempool (struct rspamd_async_session *session)
 }
 
 gboolean
-rspamd_session_is_destroying (struct rspamd_async_session *session)
+rspamd_session_blocked (struct rspamd_async_session *session)
 {
 	g_assert (session != NULL);
 
-	return RSPAMD_SESSION_IS_DESTROYING (session);
+	return !RSPAMD_SESSION_CAN_ADD_EVENT (session);
 }

@@ -1573,7 +1573,7 @@ lua_tcp_request (lua_State *L)
 	if (session) {
 		cbd->session = session;
 
-		if (rspamd_session_is_destroying (session)) {
+		if (rspamd_session_blocked (session)) {
 			TCP_RELEASE (cbd);
 			lua_pushboolean (L, FALSE);
 
@@ -1737,7 +1737,7 @@ lua_tcp_connect_sync (lua_State *L)
 	if (session) {
 		cbd->session = session;
 
-		if (rspamd_session_is_destroying (session)) {
+		if (rspamd_session_blocked (session)) {
 			TCP_RELEASE (cbd);
 			lua_pushboolean (L, FALSE);
 			lua_pushliteral (L, "Session is being destroyed, requests are not allowed");

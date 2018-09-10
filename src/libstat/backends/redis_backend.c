@@ -1572,7 +1572,7 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 	gint ret;
 	const gchar *learned_key = "learns";
 
-	if (rspamd_session_is_destroying (task->s)) {
+	if (rspamd_session_blocked (task->s)) {
 		return FALSE;
 	}
 
@@ -1667,7 +1667,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	goffset off;
 	const gchar *learned_key = "learns";
 
-	if (rspamd_session_is_destroying (task->s)) {
+	if (rspamd_session_blocked (task->s)) {
 		return FALSE;
 	}
 
