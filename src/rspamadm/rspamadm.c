@@ -323,7 +323,7 @@ rspamadm_command_maybe_match_name (const gchar *cmd, const gchar *input)
 
 
 static void
-rspamadm_add_lua_globals()
+rspamadm_add_lua_globals (void)
 {
 	struct rspamd_async_session  **psession;
 	struct event_base **pev_base;
@@ -444,7 +444,7 @@ main (gint argc, gchar **argv, gchar **env)
 	L = cfg->lua_state;
 	rspamd_lua_set_path (L, NULL, ucl_vars);
 	rspamd_lua_set_globals (cfg, L, ucl_vars);
-	rspamadm_add_lua_globals();
+	rspamadm_add_lua_globals ();
 
 #ifdef WITH_HIREDIS
 	rspamd_redis_pool_config (cfg->redis_pool, cfg, rspamd_main->ev_base);
