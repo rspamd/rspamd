@@ -1,7 +1,7 @@
 print('Check we will rewrite subjects')
 
-require './lib'
-require './data'
+dofile './lib.lua'
+dofile './data.lua'
 
 setup()
 
