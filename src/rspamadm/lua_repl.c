@@ -287,8 +287,8 @@ rspamadm_exec_input (lua_State *L, const gchar *input)
 	}
 }
 
-void
-wait_session_events ()
+static void
+wait_session_events (void)
 {
 	/* XXX: it's probably worth to add timeout here - not to wait forever */
 	while (rspamd_session_events_pending (rspamadm_session) > 0) {
