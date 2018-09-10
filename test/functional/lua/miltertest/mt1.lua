@@ -1,7 +1,7 @@
 print('Check we will accept a message')
 
-require './lib'
-require './data'
+dofile './lib.lua'
+dofile './data.lua'
 
 setup()
 
