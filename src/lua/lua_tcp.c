@@ -395,7 +395,7 @@ lua_tcp_shift_handler (struct lua_tcp_cbdata *cbd)
 
 	if (hdl->type == LUA_WANT_READ) {
 		if (hdl->h.r.cbref && hdl->h.r.cbref != -1) {
-			luaL_unref (cbd->task->cfg->lua_state, LUA_REGISTRYINDEX, hdl->h.r.cbref);
+			luaL_unref (cbd->cfg->lua_state, LUA_REGISTRYINDEX, hdl->h.r.cbref);
 		}
 
 		if (hdl->h.r.stop_pattern) {
@@ -404,7 +404,7 @@ lua_tcp_shift_handler (struct lua_tcp_cbdata *cbd)
 	}
 	else if (hdl->type == LUA_WANT_WRITE) {
 		if (hdl->h.w.cbref && hdl->h.w.cbref != -1) {
-			luaL_unref (cbd->task->cfg->lua_state, LUA_REGISTRYINDEX, hdl->h.w.cbref);
+			luaL_unref (cbd->cfg->lua_state, LUA_REGISTRYINDEX, hdl->h.w.cbref);
 		}
 
 		if (hdl->h.w.iov) {
@@ -439,7 +439,7 @@ lua_tcp_fin (gpointer arg)
 	msg_debug_tcp ("finishing TCP %s connection", IS_SYNC (cbd) ? "sync" : "async");
 
 	if (cbd->connect_cb != -1) {
-		luaL_unref (cbd->task->cfg->lua_state, LUA_REGISTRYINDEX, cbd->connect_cb);
+		luaL_unref (cbd->cfg->lua_state, LUA_REGISTRYINDEX, cbd->connect_cb);
 	}
 
 	if (cbd->fd != -1) {
@@ -600,7 +600,7 @@ lua_tcp_push_data (struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 		return;
 	}
 
-	lua_thread_pool_prepare_callback (cbd->task->cfg->lua_thread_pool, &cbs);
+	lua_thread_pool_prepare_callback (cbd->cfg->lua_thread_pool, &cbs);
 	L = cbs.L;
 
 	hdl = g_queue_peek_head (cbd->handlers);
@@ -992,7 +992,7 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 				cbd->flags |= LUA_TCP_FLAG_CONNECTED;
 
 				if (cbd->connect_cb != -1) {
-					lua_thread_pool_prepare_callback (cbd->task->cfg->lua_thread_pool, &cbs);
+					lua_thread_pool_prepare_callback (cbd->cfg->lua_thread_pool, &cbs);
 					L = cbs.L;
 
 					struct lua_tcp_cbdata **pcbd;
