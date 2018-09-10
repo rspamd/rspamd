@@ -657,6 +657,27 @@ rspamd_mempool_adjust_entry (struct rspamd_mempool_entry_point *e)
 }
 
 void
+rspamd_mempool_destructors_enforce (rspamd_mempool_t *pool)
+{
+	struct _pool_destructors *destructor;
+	guint i;
+
+	POOL_MTX_LOCK ();
+
+	for (i = 0; i < pool->destructors->len; i ++) {
+		destructor = &g_array_index (pool->destructors, struct _pool_destructors, i);
+		/* Avoid calling destructors for NULL pointers */
+		if (destructor->data != NULL) {
+			destructor->func (destructor->data);
+		}
+	}
+
+	pool->destructors->len = 0;
+
+	POOL_MTX_UNLOCK ();
+}
+
+void
 rspamd_mempool_delete (rspamd_mempool_t * pool)
 {
 	struct _pool_chain *cur;
@@ -667,7 +688,6 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 
 	POOL_MTX_LOCK ();
 
-	/* Find free space in pool chain */
 	cur = NULL;
 
 	if (pool->pools[RSPAMD_MEMPOOL_NORMAL] != NULL &&
