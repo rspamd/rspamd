@@ -996,20 +996,6 @@ local function reputation_idempotent_cb(task, rule)
   end
 end
 
-local function deepcopy(orig)
-  local orig_type = type(orig)
-  local copy
-  if orig_type == 'table' then
-    copy = {}
-    for orig_key, orig_value in next, orig, nil do
-      copy[deepcopy(orig_key)] = deepcopy(orig_value)
-    end
-    setmetatable(copy, deepcopy(getmetatable(orig)))
-  else -- number, string, boolean, etc
-    copy = orig
-  end
-  return copy
-end
 local function override_defaults(def, override)
   for k,v in pairs(override) do
     if k ~= 'selector' and k ~= 'backend' then
@@ -1059,8 +1045,8 @@ local function parse_rule(name, tbl)
   end
   -- Allow config override
   local rule = {
-    selector = deepcopy(selector),
-    backend = deepcopy(backend),
+    selector = lua_util.deepcopy(selector),
+    backend = lua_util.deepcopy(backend),
     config = {}
   }
 

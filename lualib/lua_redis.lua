@@ -961,9 +961,15 @@ end
 
 exports.exec_redis_script = exec_redis_script
 
-local function redis_connect_sync(redis_params, is_write, key, cfg)
+local function redis_connect_sync(redis_params, is_write, key, cfg, ev_base)
   if not redis_params then
     return false,nil
+  end
+  if not cfg then
+    cfg = rspamd_config
+  end
+  if not ev_base then
+    ev_base = rspamadm_ev_base
   end
 
   local rspamd_redis = require "rspamd_redis"
@@ -990,8 +996,13 @@ local function redis_connect_sync(redis_params, is_write, key, cfg)
   local options = {
     host = addr:get_addr(),
     timeout = redis_params['timeout'],
+    config = cfg,
+    ev_base = ev_base
   }
 
+  for k,v in pairs(redis_params) do
+    options[k] = v
+  end
 
   local ret,conn = rspamd_redis.connect_sync(options)
   if not ret then
