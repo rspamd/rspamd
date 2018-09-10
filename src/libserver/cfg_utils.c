@@ -213,8 +213,6 @@ rspamd_config_free (struct rspamd_config *cfg)
 	struct rspamd_config_post_load_script *sc, *sctmp;
 	struct rspamd_worker_log_pipe *lp, *ltmp;
 
-	rspamd_map_remove_all (cfg);
-
 	DL_FOREACH_SAFE (cfg->finish_callbacks, sc, sctmp) {
 		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
 		g_free (sc);
@@ -225,18 +223,12 @@ rspamd_config_free (struct rspamd_config *cfg)
 		g_free (sc);
 	}
 
-	if (cfg->monitored_ctx) {
-		rspamd_monitored_ctx_destroy (cfg->monitored_ctx);
-	}
+	rspamd_map_remove_all (cfg);
+	rspamd_mempool_destructors_enforce (cfg->cfg_pool);
 
 	g_list_free (cfg->classifiers);
 	g_list_free (cfg->workers);
 	rspamd_symbols_cache_destroy (cfg->cache);
-#ifdef WITH_HIREDIS
-	if (cfg->redis_pool) {
-		rspamd_redis_pool_destroy (cfg->redis_pool);
-	}
-#endif
 	ucl_object_unref (cfg->rcl_obj);
 	ucl_object_unref (cfg->config_comments);
 	ucl_object_unref (cfg->doc_strings);
@@ -251,19 +243,28 @@ rspamd_config_free (struct rspamd_config *cfg)
 	g_hash_table_unref (cfg->wrk_parsers);
 	g_hash_table_unref (cfg->trusted_keys);
 
-	if (cfg->checksum) {
-		g_free (cfg->checksum);
-	}
-
 	rspamd_re_cache_unref (cfg->re_cache);
 	rspamd_upstreams_library_unref (cfg->ups_ctx);
-	rspamd_mempool_delete (cfg->cfg_pool);
 	g_ptr_array_free (cfg->c_modules, TRUE);
 
 	if (cfg->lua_state && cfg->own_lua_state) {
 		lua_thread_pool_free (cfg->lua_thread_pool);
 		lua_close (cfg->lua_state);
 	}
+
+#ifdef WITH_HIREDIS
+	if (cfg->redis_pool) {
+		rspamd_redis_pool_destroy (cfg->redis_pool);
+	}
+#endif
+
+	if (cfg->monitored_ctx) {
+		rspamd_monitored_ctx_destroy (cfg->monitored_ctx);
+	}
+	if (cfg->checksum) {
+		g_free (cfg->checksum);
+	}
+
 	REF_RELEASE (cfg->libs_ctx);
 
 	DL_FOREACH_SAFE (cfg->log_pipes, lp, ltmp) {
@@ -271,6 +272,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 		g_free (lp);
 	}
 
+	rspamd_mempool_delete (cfg->cfg_pool);
 	g_free (cfg);
 }
 

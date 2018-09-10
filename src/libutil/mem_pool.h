@@ -224,6 +224,13 @@ void rspamd_mempool_replace_destructor (rspamd_mempool_t *pool,
 	rspamd_mempool_destruct_t func, void *old_data, void *new_data);
 
 /**
+ * Calls all destructors associated with the specific memory pool without removing
+ * of the pool itself
+ * @param pool
+ */
+void rspamd_mempool_destructors_enforce (rspamd_mempool_t *pool);
+
+/**
  * Delete pool, free all its chunks and call destructors chain
  * @param pool memory pool object
  */
