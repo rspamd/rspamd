@@ -21,7 +21,10 @@ function setup(c_ip, helo, hn)
 end
 
 function teardown()
-  mt.disconnect(conn)
+  if conn then
+    mt.disconnect(conn)
+  end
+  conn = nil
 end
 
 function send_message(body, hdrs, id, sender, rcpts)
