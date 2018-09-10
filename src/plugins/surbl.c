@@ -1638,7 +1638,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 	struct rspamd_http_message *msg;
 	struct surbl_ctx *surbl_module_ctx = surbl_get_context (task->cfg);
 
-	if (!rspamd_session_is_destroying (task->s)) {
+	if (!rspamd_session_blocked (task->s)) {
 
 		selected = rspamd_upstream_get (surbl_module_ctx->redirectors,
 				RSPAMD_UPSTREAM_ROUND_ROBIN, url->host, url->hostlen);

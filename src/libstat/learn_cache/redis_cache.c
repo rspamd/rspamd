@@ -438,7 +438,7 @@ rspamd_stat_cache_redis_check (struct rspamd_task *task,
 	struct timeval tv;
 	gchar *h;
 
-	if (rspamd_session_is_destroying (task->s)) {
+	if (rspamd_session_blocked (task->s)) {
 		return RSPAMD_LEARN_INGORE;
 	}
 
@@ -473,7 +473,7 @@ rspamd_stat_cache_redis_learn (struct rspamd_task *task,
 	gchar *h;
 	gint flag;
 
-	if (rspamd_session_is_destroying (task->s)) {
+	if (rspamd_session_blocked (task->s)) {
 		return RSPAMD_LEARN_INGORE;
 	}
 

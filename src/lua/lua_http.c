@@ -809,7 +809,7 @@ lua_http_request (lua_State *L)
 		return 1;
 	}
 
-	if (session && rspamd_session_is_destroying (session)) {
+	if (session && rspamd_session_blocked (session)) {
 		lua_pushboolean (L, FALSE);
 
 		return 1;

@@ -122,7 +122,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 		return FALSE;
 	}
 
-	if (session && rspamd_session_is_destroying (session)) {
+	if (session && rspamd_session_blocked (session)) {
 		return FALSE;
 	}
 
