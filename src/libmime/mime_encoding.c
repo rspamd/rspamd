@@ -23,7 +23,9 @@
 #include "message.h"
 #include <unicode/ucnv.h>
 #include <unicode/ucsdet.h>
+#if U_ICU_VERSION_MAJOR_NUM >= 44
 #include <unicode/unorm2.h>
+#endif
 #include <math.h>
 
 #define UTF8_CHARSET "UTF-8"
