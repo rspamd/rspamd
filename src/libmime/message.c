@@ -504,6 +504,11 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 			msg_warn_task ("cannot open text from utf content");
 			/* Probably, should be an assertion */
 		}
+		else {
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t)utext_close,
+					&part->utf_stripped_text);
+		}
 	}
 
 	rspamd_mempool_add_destructor (task->task_pool,

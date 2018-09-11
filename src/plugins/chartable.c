@@ -658,6 +658,8 @@ chartable_symbol_callback (struct rspamd_task *task, void *unused)
 		if (words) {
 			g_array_free (words, TRUE);
 		}
+
+		utext_close (&utxt);
 	}
 }
 
