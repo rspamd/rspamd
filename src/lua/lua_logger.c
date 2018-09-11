@@ -737,8 +737,8 @@ lua_logger_do_log (lua_State *L,
 	}
 	else {
 		/* Bad argument type */
-		msg_err ("bad format string type: %s", lua_typename (L, lua_type (L, 1)));
-		return lua_error (L);
+		return luaL_error (L, "bad format string type: %s",
+				lua_typename (L, lua_type (L, start_pos)));
 	}
 
 	ret = lua_logger_log_format (L, fmt_pos, is_string,
