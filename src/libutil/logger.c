@@ -1479,3 +1479,9 @@ rspamd_logger_configure_modules (GHashTable *mods_enabled)
 		}
 	}
 }
+
+rspamd_logger_t*
+rspamd_logger_get_singleton (void)
+{
+	return default_logger;
+}

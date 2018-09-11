@@ -183,6 +183,12 @@ const guint64* rspamd_log_counters (rspamd_logger_t *logger);
  */
 ucl_object_t * rspamd_log_errorbuf_export (const rspamd_logger_t *logger);
 
+/**
+ * Returns the current logger object
+ * @return
+ */
+rspamd_logger_t* rspamd_logger_get_singleton (void);
+
 /* Typical functions */
 
 extern guint rspamd_task_log_id;
