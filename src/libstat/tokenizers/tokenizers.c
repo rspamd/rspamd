@@ -428,7 +428,7 @@ start_over:
 				}
 
 				if (rspamd_tokenize_check_limit (decay, word_decay, res->len,
-						&hv, &prob, &token, pos - text, len)) {
+						&hv, &prob, &token, p, len)) {
 					if (!decay) {
 						decay = TRUE;
 					} else {
