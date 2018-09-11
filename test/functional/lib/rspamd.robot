@@ -70,11 +70,11 @@ Generic Teardown
   [Arguments]  @{ports}
   Run Keyword If  '${CONTROLLER_ERRORS}' == 'True'  Check Controller Errors
   Shutdown Process With Children  ${RSPAMD_PID}
-  Log do not contain segfault record
+  Log does not contain segfault record
   Save Run Results  ${TMPDIR}  rspamd.log redis.log rspamd.conf clickhouse-server.log clickhouse-server.err.log clickhouse-config.xml
   Cleanup Temporary Directory  ${TMPDIR}
 
-Log do not contain segfault record
+Log does not contain segfault record
   ${log} =  Get File  ${TMPDIR}/rspamd.log
   Should not contain  ${log}  Segmentation fault:  msg=Segmentation fault detected
 
@@ -98,7 +98,18 @@ Redis HSET
   Log  ${result.stdout}
   Should Be Equal As Integers  ${result.rc}  0
 
+Redis SET
+  [Arguments]  ${key}  ${value}
+  ${result} =  Run Process  redis-cli  -h  ${REDIS_ADDR}  -p  ${REDIS_PORT}
+  ...  SET  ${key}  ${value}
+  Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
+  Log  ${result.stdout}
+  Should Be Equal As Integers  ${result.rc}  0
+
 Run Redis
+  ${has_TMPDIR} =  Evaluate  'TMPDIR'
+  ${tmpdir} =  Run Keyword If  '${has_TMPDIR}' == 'True'  Set Variable  &{kwargs}[TMPDIR]
+  ...  ELSE  Make Temporary Directory
   ${template} =  Get File  ${TESTDIR}/configs/redis-server.conf
   ${config} =  Replace Variables  ${template}
   Create File  ${TMPDIR}/redis-server.conf  ${config}
