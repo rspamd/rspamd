@@ -20,7 +20,7 @@ local function http_simple_tcp_async_symbol(task)
   local function http_read_cb(err, data, conn)
     logger.errx(task, 'http_read_cb: got reply: %s, error: %s, conn: %s', data, err, conn)
     conn:add_write(http_read_post_cb, "POST /request2 HTTP/1.1\r\n\r\n")
-    task:insert_result('HTTP_ASYNC_RESPONSE', 1.0, data)
+    task:insert_result('HTTP_ASYNC_RESPONSE', 1.0, data or err)
   end
   rspamd_tcp:request({
     task = task,
@@ -42,6 +42,11 @@ local function http_simple_tcp_symbol(task)
     timeout = 20,
     port = 18080,
   }
+
+  if not is_ok then
+    task:insert_result('HTTP_SYNC_WRITE_ERROR', 1.0, connection)
+    logger.errx(task, 'write error: %1', connection)
+  end
 
   logger.errx(task, 'connect_sync %1, %2', is_ok, tostring(connection))
 
