@@ -536,19 +536,6 @@ exports.parse_selector = function(cfg, str)
   local output = {}
 
   if not parsed then return nil end
-  local function shallowcopy(orig)
-    local orig_type = type(orig)
-    local copy
-    if orig_type == 'table' then
-      copy = {}
-      for orig_key, orig_value in pairs(orig) do
-        copy[orig_key] = orig_value
-      end
-    else
-      copy = orig
-    end
-    return copy
-  end
 
   -- Output AST format is the following:
   -- table of individual selectors
@@ -570,7 +557,7 @@ exports.parse_selector = function(cfg, str)
       return nil
     end
 
-    res.selector = shallowcopy(extractors[selector_tbl[1]])
+    res.selector = lua_util.shallowcopy(extractors[selector_tbl[1]])
     res.selector.name = selector_tbl[1]
     res.selector.args = selector_tbl[2] or {}
 
@@ -585,7 +572,7 @@ exports.parse_selector = function(cfg, str)
         logger.errx(cfg, 'processor %s is unknown', proc_name)
         return nil
       end
-      local processor = shallowcopy(transform_function[proc_name])
+      local processor = lua_util.shallowcopy(transform_function[proc_name])
       processor.name = proc_name
       processor.args = proc_tbl[2]
       lua_util.debugm(M, cfg, 'attached processor %s to selector %s, args: %s',

@@ -688,6 +688,24 @@ end
 
 exports.deepcopy = deepcopy
 
+--[[[
+-- @function lua_util.shallowcopy(tbl)
+-- Performs shallow (and fast) copy of a table or another Lua type
+--]]
+exports.shallowcopy = function(orig)
+  local orig_type = type(orig)
+  local copy
+  if orig_type == 'table' then
+    copy = {}
+    for orig_key, orig_value in pairs(orig) do
+      copy[orig_key] = orig_value
+    end
+  else
+    copy = orig
+  end
+  return copy
+end
+
 -- Debugging support
 local unconditional_debug = false
 local debug_modules = {}
@@ -720,5 +738,6 @@ exports.debugm = function(mod, ...)
     logger.logx(log_level, mod, ...)
   end
 end
+
 
 return exports
