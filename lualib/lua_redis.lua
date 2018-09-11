@@ -1031,10 +1031,12 @@ exports.redis_connect_sync = redis_connect_sync
 
 --[[[
 -- @function lua_redis.request(redis_params, attrs, req)
--- Sends a request to Redis (modern API)
+-- Sends a request to Redis synchronously with coroutines or asynchronously using
+-- a callback (modern API)
 -- @param redis_params a table of redis server parameters
 -- @param attrs a table of redis request attributes (e.g. task, or ev_base + cfg + session)
 -- @param req a table of request: a command + command options
+-- @return {result,data/connection,address} boolean result, connection object in case of async request and results if using coroutines, redis server address
 --]]
 
 exports.request = function(redis_params, attrs, req)
@@ -1110,13 +1112,122 @@ exports.request = function(redis_params, attrs, req)
     opts.dbname = redis_params.db
   end
 
-  local ret,conn = rspamd_redis.make_request(opts)
-  if not ret then
-    logger.errx(log_obj, 'cannot execute redis request')
-    addr:fail()
+  if opts.callback then
+    local ret,conn = rspamd_redis.make_request(opts)
+    if not ret then
+      logger.errx(log_obj, 'cannot execute redis request')
+      addr:fail()
+    end
+
+    return ret,conn,addr
+  else
+    -- Coroutines version
+    local ret,conn = rspamd_redis.connect_sync(opts)
+    if not ret then
+      logger.errx(log_obj, 'cannot execute redis request')
+      addr:fail()
+    else
+      conn:add_cmd(opts.cmd, opts.args)
+      return conn:exec()
+    end
+    return false,nil,addr
+  end
+end
+
+--[[[
+-- @function lua_redis.connect(redis_params, attrs)
+-- Connects to Redis synchronously with coroutines or asynchronously using a callback (modern API)
+-- @param redis_params a table of redis server parameters
+-- @param attrs a table of redis request attributes (e.g. task, or ev_base + cfg + session)
+-- @return {result,connection,address} boolean result, connection object, redis server address
+--]]
+
+exports.connect = function(redis_params, attrs)
+  local lua_util = require "lua_util"
+
+  if not attrs or not redis_params then
+    logger.errx('invalid arguments for redis connect')
+    return false,nil,nil
   end
 
-  return ret,conn,addr
+  if not (attrs.task or (attrs.config and attrs.ev_base)) then
+    logger.errx('invalid attributes for redis connect')
+    return false,nil,nil
+  end
+
+  local opts = lua_util.shallowcopy(attrs)
+
+  local log_obj = opts.task or opts.config
+
+  local addr
+
+  if opts.callback then
+    -- Wrap callback
+    local callback = opts.callback
+    local function rspamd_redis_make_request_cb(err, data)
+      if err then
+        addr:fail()
+      else
+        addr:ok()
+      end
+      callback(err, data, addr)
+    end
+    opts.callback = rspamd_redis_make_request_cb
+  end
+
+  local rspamd_redis = require "rspamd_redis"
+  local is_write = opts.is_write
+
+  if opts.key then
+    if is_write then
+      addr = redis_params['write_servers']:get_upstream_by_hash(attrs.key)
+    else
+      addr = redis_params['read_servers']:get_upstream_by_hash(attrs.key)
+    end
+  else
+    if is_write then
+      addr = redis_params['write_servers']:get_upstream_master_slave(attrs.key)
+    else
+      addr = redis_params['read_servers']:get_upstream_round_robin(attrs.key)
+    end
+  end
+
+  if not addr then
+    logger.errx(log_obj, 'cannot select server to make redis connect')
+  end
+
+  opts.host = addr:get_addr()
+  opts.timeout = redis_params.timeout
+
+  if redis_params.password then
+    opts.password = redis_params.password
+  end
+
+  if redis_params.db then
+    opts.dbname = redis_params.db
+  end
+
+  if opts.callback then
+    local ret,conn = rspamd_redis.connect(opts)
+    if not ret then
+      logger.errx(log_obj, 'cannot execute redis connect')
+      addr:fail()
+    end
+
+    return ret,conn,addr
+  else
+    -- Coroutines version
+    local ret,conn = rspamd_redis.connect_sync(opts)
+    if not ret then
+      logger.errx(log_obj, 'cannot execute redis connect')
+      addr:fail()
+    else
+      return true,conn,addr
+    end
+
+    return false,nil,addr
+  end
 end
+
 
 return exports
