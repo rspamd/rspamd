@@ -718,6 +718,7 @@ LUA_FUNCTION_DEF (config, init_modules);
  * Initialize config subsystem from a comma separated list:
  * - `modules` - init modules
  * - `langdet` - language detector
+ * - `dns` - DNS resolver
  * - TODO: add more
  */
 LUA_FUNCTION_DEF (config, init_subsystem);
@@ -3550,6 +3551,18 @@ lua_config_init_subsystem (lua_State *L)
 			}
 			else if (strcmp (parts[i], "stat") == 0) {
 				rspamd_stat_init (cfg, NULL);
+			}
+			else if (strcmp (parts[i], "dns") == 0) {
+				struct event_base *ev_base = lua_check_ev_base (L, 3);
+
+				if (ev_base) {
+					cfg->dns_resolver = dns_resolver_init (rspamd_logger_get_singleton(),
+							ev_base,
+							cfg);
+				}
+				else {
+					return luaL_error (L, "no event base specified");
+				}
 			}
 			else {
 				return luaL_error (L, "invalid param: %s", parts[i]);
