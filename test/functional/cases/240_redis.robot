@@ -22,6 +22,7 @@ Redis client
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
   Check Rspamc  ${result}  REDIS (0.00)[hello from lua on redis]
   Check Rspamc  ${result}  REDIS_ASYNC (0.00)[test value]
+  Check Rspamc  ${result}  REDIS_ASYNC201809 (0.00)[test value]
 
 *** Keywords ***
 Lua Setup

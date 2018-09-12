@@ -4,7 +4,6 @@
 
 local logger = require "rspamd_logger"
 local redis_lua = require "lua_redis"
-local lua_util = require "lua_util"
 
 local redis_params
 local N = 'redis_test'
@@ -34,11 +33,30 @@ local function redis_simple_async_symbol(task)
   )
 end
 
+local function redis_simple_async_api201809(task)
+  local function redis_cb(err, data)
+    if err then
+      task:insert_result('REDIS_ASYNC201809_ERROR', 1.0, err)
+    else
+      task:insert_result('REDIS_ASYNC201809', 1.0, data)
+    end
+  end
+
+  local attrs = {
+    task = task,
+    callback = redis_cb
+  }
+  local request = {
+    'GET', 
+    'test_key'
+  }
+  redis_lua.request(redis_params, attrs, request)
+end
+
 local function redis_symbol(task)
 
-  local params = lua_util.deepcopy(redis_params)
-  params.task = task
-  local is_ok, connection = redis_lua.redis_connect_sync(params)
+  local attrs = {task = task}
+  local is_ok, connection = redis_lua.connect(redis_params, attrs)
 
   logger.infox(task, "connect: %1, %2", is_ok, connection)
 
@@ -76,6 +94,13 @@ rspamd_config:register_symbol({
   name = 'SIMPLE_REDIS_ASYNC_TEST',
   score = 1.0,
   callback = redis_simple_async_symbol,
+  no_squeeze = true
+})
+
+rspamd_config:register_symbol({
+  name = 'SIMPLE_REDIS_ASYNC201809_TEST',
+  score = 1.0,
+  callback = redis_simple_async_api201809,
   no_squeeze = true
 })
 
