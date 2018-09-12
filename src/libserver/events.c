@@ -238,6 +238,11 @@ rspamd_session_remove_event (struct rspamd_async_session *session,
 		return;
 	}
 
+	if (!RSPAMD_SESSION_CAN_ADD_EVENT (session)) {
+		/* Session is already cleaned up, ignore this */
+		return;
+	}
+
 	/* Search for event */
 	search_ev.fin = fin;
 	search_ev.user_data = ud;
