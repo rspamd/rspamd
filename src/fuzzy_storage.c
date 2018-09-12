@@ -3013,7 +3013,9 @@ start_fuzzy (struct rspamd_worker *worker)
 
 			close (fd);
 		}
+	}
 
+	if (worker->index == 0) {
 		g_array_free (ctx->updates_pending, TRUE);
 	}
 
