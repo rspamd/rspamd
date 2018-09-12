@@ -22,6 +22,8 @@ ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
 Dead Redis client
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
   Check Rspamc  ${result}  REDIS_ERROR_3 (0.00)[Connection refused]
+  Check Rspamc  ${result}  REDIS_ASYNC201809_ERROR (0.00)[Connection refused]
+  Check Rspamc  ${result}  REDIS_ASYNC_ERROR (0.00)[Connection refused]
 
 *** Keywords ***
 Lua Setup
