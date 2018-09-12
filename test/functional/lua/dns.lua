@@ -37,7 +37,7 @@ local function dns_symbol(task)
     end
   end
   local to_resolve = tostring(task:get_request_header('to-resolve'))
-  
+
   task:get_resolver():resolve_a({
     task = task,
     name = to_resolve,
