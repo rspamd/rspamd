@@ -1133,10 +1133,7 @@ lua_tcp_register_event (struct lua_tcp_cbdata *cbd)
 	if (cbd->session) {
 		event_finalizer_t fin = IS_SYNC (cbd) ? lua_tcp_void_finalyser : lua_tcp_fin;
 
-		cbd->async_ev = rspamd_session_add_event (cbd->session,
-				fin,
-				cbd,
-				g_quark_from_static_string ("lua tcp"));
+		cbd->async_ev = rspamd_session_add_event (cbd->session, NULL, fin, cbd, g_quark_from_static_string ("lua tcp"));
 
 		if (!cbd->async_ev) {
 			return FALSE;

@@ -161,9 +161,10 @@ rspamd_session_create (rspamd_mempool_t * pool,
 
 struct rspamd_async_event *
 rspamd_session_add_event (struct rspamd_async_session *session,
-	event_finalizer_t fin,
-	void *user_data,
-	GQuark subsystem)
+						  struct rspamd_async_watcher *w,
+						  event_finalizer_t fin,
+						  gpointer user_data,
+						  GQuark subsystem)
 {
 	struct rspamd_async_event *new_event;
 	gint ret;
@@ -187,23 +188,34 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 	new_event->user_data = user_data;
 	new_event->subsystem = subsystem;
 
-	if (RSPAMD_SESSION_IS_WATCHING (session)) {
-		new_event->w = session->cur_watcher;
-		new_event->w->remain ++;
+	if (w == NULL) {
+		if (RSPAMD_SESSION_IS_WATCHING (session)) {
+			new_event->w = session->cur_watcher;
+			new_event->w->remain++;
+			msg_debug_session ("added event: %p, pending %d events, "
+							   "subsystem: %s, watcher: %d",
+					user_data,
+					kh_size (session->events),
+					g_quark_to_string (subsystem),
+					new_event->w->id);
+		} else {
+			new_event->w = NULL;
+			msg_debug_session ("added event: %p, pending %d events, "
+							   "subsystem: %s, no watcher!",
+					user_data,
+					kh_size (session->events),
+					g_quark_to_string (subsystem));
+		}
+	}
+	else {
+		new_event->w = w;
+		new_event->w->remain++;
 		msg_debug_session ("added event: %p, pending %d events, "
-				"subsystem: %s, watcher: %d",
+						   "subsystem: %s, explicit watcher: %d",
 				user_data,
 				kh_size (session->events),
 				g_quark_to_string (subsystem),
 				new_event->w->id);
-	}
-	else {
-		new_event->w = NULL;
-		msg_debug_session ("added event: %p, pending %d events, "
-				"subsystem: %s, no watcher!",
-				user_data,
-				kh_size (session->events),
-				g_quark_to_string (subsystem));
 	}
 
 	kh_put (rspamd_events_hash, session->events, new_event, &ret);

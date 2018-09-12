@@ -1012,10 +1012,7 @@ lua_redis_make_request (lua_State *L)
 
 		if (ret == REDIS_OK) {
 			if (ud->s) {
-				rspamd_session_add_event (ud->s,
-						lua_redis_fin,
-						sp_ud,
-						g_quark_from_static_string ("lua redis"));
+				rspamd_session_add_event (ud->s, NULL, lua_redis_fin, sp_ud, g_quark_from_static_string ("lua redis"));
 				sp_ud->w = rspamd_session_get_watcher (ud->s);
 				rspamd_session_watcher_push (ud->s);
 			}
@@ -1382,10 +1379,7 @@ lua_redis_add_cmd (lua_State *L)
 
 		if (ret == REDIS_OK) {
 			if (ud->s) {
-				rspamd_session_add_event (ud->s,
-						lua_redis_fin,
-						sp_ud,
-						g_quark_from_static_string ("lua redis"));
+				rspamd_session_add_event (ud->s, NULL, lua_redis_fin, sp_ud, g_quark_from_static_string ("lua redis"));
 				sp_ud->w = rspamd_session_get_watcher (ud->s);
 				rspamd_session_watcher_push (ud->s);
 			}

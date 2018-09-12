@@ -1594,8 +1594,7 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 	if (redisAsyncCommand (rt->redis, rspamd_redis_connected, rt, "HGET %s %s",
 			rt->redis_object_expanded, learned_key) == REDIS_OK) {
 
-		rspamd_session_add_event (task->s, rspamd_redis_fin, rt,
-				rspamd_redis_stat_quark ());
+		rspamd_session_add_event (task->s, NULL, rspamd_redis_fin, rt, rspamd_redis_stat_quark ());
 		rt->has_event = TRUE;
 
 		if (event_get_base (&rt->timeout_event)) {
@@ -1799,8 +1798,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 					"RSIG");
 		}
 
-		rspamd_session_add_event (task->s, rspamd_redis_fin_learn, rt,
-				rspamd_redis_stat_quark ());
+		rspamd_session_add_event (task->s, NULL, rspamd_redis_fin_learn, rt, rspamd_redis_stat_quark ());
 		rt->has_event = TRUE;
 
 		/* Set timeout */

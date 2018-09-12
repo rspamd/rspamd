@@ -47,9 +47,12 @@ struct rspamd_async_session * rspamd_session_create (rspamd_mempool_t *pool,
  * @param user_data abstract user_data
  * @param forced unused
  */
-struct rspamd_async_event* rspamd_session_add_event (
-		struct rspamd_async_session *session,
-		event_finalizer_t fin, gpointer user_data, GQuark subsystem);
+struct rspamd_async_event *
+rspamd_session_add_event (struct rspamd_async_session *session,
+						  struct rspamd_async_watcher *w,
+						  event_finalizer_t fin,
+						  gpointer user_data,
+						  GQuark subsystem);
 
 /**
  * Remove normal event

@@ -2869,9 +2869,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 				event_base_set (session->task->ev_base, &session->timev);
 				event_add (&session->timev, &session->tv);
 
-				rspamd_session_add_event (task->s,
-						fuzzy_io_fin,
-						session,
+				rspamd_session_add_event (task->s, NULL, fuzzy_io_fin, session,
 						g_quark_from_static_string ("fuzzy check"));
 			}
 		}
@@ -3345,10 +3343,7 @@ fuzzy_check_send_lua_learn (struct fuzzy_rule *rule,
 				event_base_set (s->task->ev_base, &s->timev);
 				event_add (&s->timev, &s->tv);
 
-				rspamd_session_add_event (task->s,
-						fuzzy_lua_fin,
-						s,
-						g_quark_from_static_string ("fuzzy check"));
+				rspamd_session_add_event (task->s, NULL, fuzzy_lua_fin, s, g_quark_from_static_string ("fuzzy check"));
 
 				(*saved)++;
 				ret = 1;

@@ -145,9 +145,11 @@ lua_http_fin (gpointer arg)
 static void
 lua_http_maybe_free (struct lua_http_cbdata *cbd)
 {
-	if (cbd->session && cbd->w) {
-		/* We still need to clear watcher */
-		rspamd_session_watcher_pop (cbd->session, cbd->w);
+	if (cbd->session) {
+		if (cbd->w) {
+			/* We still need to clear watcher */
+			rspamd_session_watcher_pop (cbd->session, cbd->w);
+		}
 
 		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_RESOLVED) {
 			/* Event is added merely for resolved events */
@@ -407,9 +409,8 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 		cbd->msg = NULL;
 
 		if (cbd->session) {
-			rspamd_session_add_event (cbd->session,
-					(event_finalizer_t)lua_http_fin,
-					cbd,
+			rspamd_session_add_event (cbd->session, cbd->w,
+					(event_finalizer_t) lua_http_fin, cbd,
 					g_quark_from_static_string ("lua http"));
 			cbd->flags |= RSPAMD_LUA_HTTP_FLAG_RESOLVED;
 		}
