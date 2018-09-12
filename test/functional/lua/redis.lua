@@ -4,7 +4,6 @@
 
 local logger = require "rspamd_logger"
 local redis_lua = require "lua_redis"
-local lua_util = require "lua_util"
 
 local redis_params
 local N = 'redis_test'
