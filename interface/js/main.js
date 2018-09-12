@@ -32,6 +32,21 @@ define("d3.global", ["d3"], function (d3global) { // eslint-disable-line strict
     d3 = d3global;
 });
 
+// Notify user on module loading failure
+requirejs.onError = function (e) {
+    "use strict";
+    document.getElementsByClassName("notification-area")[0].innerHTML =
+        "<div class=\"alert alert-error\">" +
+            "<strong>Module loading error: " + e.requireType + ", module: " + e.requireModules + "</strong>" +
+            "<button type=\"button\" class=\"btn btn-info btn-xs pull-right\" " +
+                "onClick=\"window.location.reload(); this.parentNode.parentNode.removeChild(this.parentNode);\" " +
+                "title=\"Reload current page\">" +
+                "<i class=\"glyphicon glyphicon-repeat\"></i> Reload" +
+            "</button>" +
+        "</div>";
+    throw e;
+};
+
 // Load main UI
 require(["app/rspamd"],
     function (rspamd) {
