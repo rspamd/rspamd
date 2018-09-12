@@ -55,6 +55,7 @@ static const struct luaL_reg httplib_m[] = {
 
 #define RSPAMD_LUA_HTTP_FLAG_TEXT (1 << 0)
 #define RSPAMD_LUA_HTTP_FLAG_NOVERIFY (1 << 1)
+#define RSPAMD_LUA_HTTP_FLAG_RESOLVED (1 << 2)
 
 struct lua_http_cbdata {
 	struct rspamd_http_connection *conn;
@@ -144,9 +145,14 @@ lua_http_fin (gpointer arg)
 static void
 lua_http_maybe_free (struct lua_http_cbdata *cbd)
 {
-	if (cbd->session) {
+	if (cbd->session && cbd->w) {
+		/* We still need to clear watcher */
 		rspamd_session_watcher_pop (cbd->session, cbd->w);
-		rspamd_session_remove_event (cbd->session, lua_http_fin, cbd);
+
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_RESOLVED) {
+			/* Event is added merely for resolved events */
+			rspamd_session_remove_event (cbd->session, lua_http_fin, cbd);
+		}
 	}
 	else {
 		lua_http_fin (cbd);
@@ -399,6 +405,14 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 				&cbd->tv, cbd->ev_base);
 		/* Message is now owned by a connection object */
 		cbd->msg = NULL;
+
+		if (cbd->session) {
+			rspamd_session_add_event (cbd->session,
+					(event_finalizer_t)lua_http_fin,
+					cbd,
+					g_quark_from_static_string ("lua http"));
+			cbd->flags |= RSPAMD_LUA_HTTP_FLAG_RESOLVED;
+		}
 
 		return TRUE;
 	}
@@ -849,12 +863,9 @@ lua_http_request (lua_State *L)
 
 	if (session) {
 		cbd->session = session;
-		rspamd_session_add_event (session,
-				(event_finalizer_t)lua_http_fin,
-				cbd,
-				g_quark_from_static_string ("lua http"));
-		cbd->w = rspamd_session_get_watcher (session);
-		rspamd_session_watcher_push_specific (session, cbd->w);
+
+		cbd->w = rspamd_session_get_watcher (cbd->session);
+		rspamd_session_watcher_push_specific (cbd->session, cbd->w);
 	}
 
 	if (rspamd_parse_inet_address (&cbd->addr, msg->host->str, msg->host->len)) {
