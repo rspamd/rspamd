@@ -40,7 +40,7 @@ jobs:
       - checkout
 
       - run: sudo apt-get update -qq || true
-      - run: sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev
+      - run: sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8
 
       - run: mkdir ../build ; mkdir ../install ; cd ../build
       - run: cmake ../project -DDBDIR=/nana -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=../install
@@ -61,7 +61,7 @@ jobs:
           at: *workspace_root
 
       - run: sudo apt-get update -qq || true
-      - run: sudo apt-get install -qq cmake libluajit-5.1-dev libmagic-dev
+      - run: sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8
 
       - run: cd ../build
       - run: make rspamd-test -j`nproc`
