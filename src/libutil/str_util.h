@@ -74,7 +74,18 @@ gboolean rspamd_gstring_icase_equal (gconstpointer v, gconstpointer v2);
  * @param siz length of destination buffer
  * @return bytes copied
  */
-gsize rspamd_strlcpy (gchar *dst, const gchar *src, gsize siz);
+gsize rspamd_strlcpy_fast (gchar *dst, const gchar *src, gsize siz);
+gsize rspamd_strlcpy_safe (gchar *dst, const gchar *src, gsize siz);
+
+#if defined(__has_feature)
+#  if __has_feature(address_sanitizer)
+#    define rspamd_strlcpy rspamd_strlcpy_safe
+#  else
+#    define rspamd_strlcpy rspamd_strlcpy_fast
+#  endif
+#else
+#  define rspamd_strlcpy rspamd_strlcpy_fast
+#endif
 
 /*
  * Try to convert string of length to long
