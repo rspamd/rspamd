@@ -204,6 +204,7 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)conn->ud;
 	struct rspamd_http_header *h, *htmp;
+	struct rspamd_async_watcher *existing_watcher = NULL;
 	const gchar *body;
 	gsize body_len;
 
@@ -257,9 +258,19 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 		lua_settable (L, -3);
 	}
 
+	if (cbd->w) {
+		/* Replace watcher to deal with nested calls */
+		existing_watcher = rspamd_session_replace_watcher (cbd->session, cbd->w);
+	}
+
 	if (lua_pcall (L, 4, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (L, -1));
 		lua_pop (L, 1);
+	}
+
+	if (cbd->w) {
+		/* Restore existing watcher */
+		rspamd_session_replace_watcher (cbd->session, existing_watcher);
 	}
 
 	lua_http_maybe_free (cbd);
@@ -281,6 +292,7 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 	const gchar *body;
 	gsize body_len;
 	struct rspamd_http_header *h, *htmp;
+	struct rspamd_async_watcher *existing_watcher = NULL;
 
 	if (err) {
 		lua_pushstring (L, err);
@@ -343,7 +355,17 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 		lua_settable (L, -3);
 	}
 
+	if (cbd->w) {
+		/* Replace watcher to deal with nested calls */
+		existing_watcher = rspamd_session_replace_watcher (cbd->session, cbd->w);
+	}
+
 	lua_thread_resume (cbd->thread, 2);
+
+	if (cbd->w) {
+		/* Restore existing watcher */
+		rspamd_session_replace_watcher (cbd->session, existing_watcher);
+	}
 }
 
 static gboolean

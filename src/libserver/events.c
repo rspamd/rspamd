@@ -193,11 +193,12 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 			new_event->w = session->cur_watcher;
 			new_event->w->remain++;
 			msg_debug_session ("added event: %p, pending %d events, "
-							   "subsystem: %s, watcher: %d",
+							   "subsystem: %s, watcher: %d (%d)",
 					user_data,
 					kh_size (session->events),
 					g_quark_to_string (subsystem),
-					new_event->w->id);
+					new_event->w->id,
+					new_event->w->remain);
 		} else {
 			new_event->w = NULL;
 			msg_debug_session ("added event: %p, pending %d events, "
@@ -211,11 +212,12 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 		new_event->w = w;
 		new_event->w->remain++;
 		msg_debug_session ("added event: %p, pending %d events, "
-						   "subsystem: %s, explicit watcher: %d",
+						   "subsystem: %s, explicit watcher: %d (%d)",
 				user_data,
 				kh_size (session->events),
 				g_quark_to_string (subsystem),
-				new_event->w->id);
+				new_event->w->id,
+				new_event->w->remain);
 	}
 
 	kh_put (rspamd_events_hash, session->events, new_event, &ret);
@@ -286,7 +288,7 @@ rspamd_session_remove_event (struct rspamd_async_session *session,
 				"pending %d events, watcher: %d (%d pending)", ud,
 				g_quark_to_string (found_ev->subsystem),
 				kh_size (session->events),
-				found_ev->w->id, found_ev->w->remain);
+				found_ev->w->id, found_ev->w->remain - 1);
 
 		if (found_ev->w->remain > 0) {
 			if (--found_ev->w->remain == 0) {
@@ -522,6 +524,35 @@ rspamd_session_get_watcher (struct rspamd_async_session *session)
 	}
 }
 
+struct rspamd_async_watcher*
+rspamd_session_replace_watcher (struct rspamd_async_session *s,
+		struct rspamd_async_watcher *w)
+{
+	struct rspamd_async_watcher *res = NULL;
+
+	g_assert (s != NULL);
+
+	if (s->cur_watcher) {
+		res = s->cur_watcher;
+
+		if (!w) {
+			/* We remove watching, so clear watching flag as well */
+			s->flags &= ~RSPAMD_SESSION_FLAG_WATCHING;
+
+		}
+
+		s->cur_watcher = w;
+	}
+	else {
+		if (w) {
+			s->flags |= RSPAMD_SESSION_FLAG_WATCHING;
+		}
+
+		s->cur_watcher = w;
+	}
+
+	return res;
+}
 
 rspamd_mempool_t *
 rspamd_session_mempool (struct rspamd_async_session *session)

@@ -151,6 +151,10 @@ void rspamd_session_watcher_pop (struct rspamd_async_session *s,
 struct rspamd_async_watcher* rspamd_session_get_watcher (
 		struct rspamd_async_session *s);
 
+struct rspamd_async_watcher* rspamd_session_replace_watcher (
+		struct rspamd_async_session *s,
+		struct rspamd_async_watcher *w);
+
 /**
  * Returns TRUE if an async session is currently destroying
  * @param s
