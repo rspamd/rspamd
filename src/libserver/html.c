@@ -2012,7 +2012,7 @@ rspamd_html_process_style (rspamd_mempool_t *pool, struct html_block *bl,
 							 g_ascii_strncasecmp (key, "font-size", 9) == 0) {
 						rspamd_html_process_font_size (c, p - c,
 								&bl->font_size, TRUE);
-						msg_debug_html ("got font size: %u", bl->font_size);
+						msg_debug_html ("got font size: %ud", bl->font_size);
 					}
 					else if (klen == 7 &&
 							 g_ascii_strncasecmp (key, "opacity", 7) == 0) {
