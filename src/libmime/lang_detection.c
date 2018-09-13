@@ -404,7 +404,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 	type = ucl_object_lookup (top, "type");
 
 	if (type == NULL || ucl_object_type (type) != UCL_STRING) {
-		msg_warn_config ("cannot find type in language %s", nelt->name);
+		msg_debug_config ("cannot find type in language %s", nelt->name);
 		ucl_object_unref (top);
 
 		return;
@@ -425,7 +425,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 			cat = RSPAMD_LANGUAGE_DEVANAGARI;
 		}
 		else {
-			msg_warn_config ("unknown type %s of language %s", stype, nelt->name);
+			msg_debug_config ("unknown type %s of language %s", stype, nelt->name);
 			ucl_object_unref (top);
 
 			return;
