@@ -498,7 +498,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 	}
 
 	if (len == 0) {
-		len = strlen (in);
+		return rt->results[id];
 	}
 
 	if (rt->cache->max_re_data > 0 && len > rt->cache->max_re_data) {
