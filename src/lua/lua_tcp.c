@@ -1655,12 +1655,9 @@ lua_tcp_request (lua_State *L)
 		rspamd_inet_address_set_port (cbd->addr, port);
 		/* Host is numeric IP, no need to resolve */
 		if (!lua_tcp_make_connection (cbd)) {
-			TCP_RELEASE (cbd);
 			lua_pushboolean (L, FALSE);
 
-			if (cbd->w) {
-				rspamd_session_watcher_pop (cbd->session, cbd->w);
-			}
+			TCP_RELEASE (cbd);
 
 			return 1;
 		}
@@ -1670,12 +1667,9 @@ lua_tcp_request (lua_State *L)
 			if (!make_dns_request (resolver, session, NULL, lua_tcp_dns_handler, cbd,
 					RDNS_REQUEST_A, host)) {
 				lua_tcp_push_error (cbd, TRUE, "cannot resolve host: %s", host);
-				TCP_RELEASE (cbd);
 				lua_pushboolean (L, FALSE);
 
-				if (cbd->w) {
-					rspamd_session_watcher_pop (cbd->session, cbd->w);
-				}
+				TCP_RELEASE (cbd);
 
 				return 1;
 			}
@@ -1684,12 +1678,9 @@ lua_tcp_request (lua_State *L)
 			if (!make_dns_request_task (task, lua_tcp_dns_handler, cbd,
 					RDNS_REQUEST_A, host)) {
 				lua_tcp_push_error (cbd, TRUE, "cannot resolve host: %s", host);
-				TCP_RELEASE (cbd);
 				lua_pushboolean (L, FALSE);
 
-				if (cbd->w) {
-					rspamd_session_watcher_pop (cbd->session, cbd->w);
-				}
+				TCP_RELEASE (cbd);
 
 				return 1;
 			}
@@ -1827,13 +1818,10 @@ lua_tcp_connect_sync (lua_State *L)
 		rspamd_inet_address_set_port (cbd->addr, (guint16)port);
 		/* Host is numeric IP, no need to resolve */
 		if (!lua_tcp_make_connection (cbd)) {
-			TCP_RELEASE (cbd);
 			lua_pushboolean (L, FALSE);
 			lua_pushliteral (L, "Failed to initiate connection");
 
-			if (cbd->w) {
-				rspamd_session_watcher_pop (cbd->session, cbd->w);
-			}
+			TCP_RELEASE (cbd);
 
 			return 2;
 		}
@@ -1842,13 +1830,10 @@ lua_tcp_connect_sync (lua_State *L)
 		if (task == NULL) {
 			if (!make_dns_request (resolver, session, NULL, lua_tcp_dns_handler, cbd,
 								RDNS_REQUEST_A, host)) {
-				TCP_RELEASE (cbd);
 				lua_pushboolean (L, FALSE);
 				lua_pushliteral (L, "Failed to initiate dns request");
 
-				if (cbd->w) {
-					rspamd_session_watcher_pop (cbd->session, cbd->w);
-				}
+				TCP_RELEASE (cbd);
 
 				return 2;
 			}
@@ -1856,13 +1841,9 @@ lua_tcp_connect_sync (lua_State *L)
 		else {
 			if (!make_dns_request_task (task, lua_tcp_dns_handler, cbd,
 										RDNS_REQUEST_A, host)) {
-				TCP_RELEASE (cbd);
 				lua_pushboolean (L, FALSE);
 				lua_pushliteral (L, "Failed to initiate dns request");
-
-				if (cbd->w) {
-					rspamd_session_watcher_pop (cbd->session, cbd->w);
-				}
+				TCP_RELEASE (cbd);
 
 				return 2;
 			}
