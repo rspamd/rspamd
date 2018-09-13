@@ -1973,11 +1973,14 @@ start_spf_parse (struct spf_record *rec, struct spf_resolved_element *resolved,
 		gchar *begin)
 {
 	gchar **elts, **cur_elt;
+	gsize len;
 
 	/* Skip spaces */
 	while (g_ascii_isspace (*begin)) {
 		begin++;
 	}
+
+	len = strlen (begin);
 
 	if (g_ascii_strncasecmp (begin, SPF_VER1_STR, sizeof (SPF_VER1_STR) - 1) ==
 		0) {
@@ -2006,8 +2009,9 @@ start_spf_parse (struct spf_record *rec, struct spf_resolved_element *resolved,
 				"<%s>: spf error for domain %s: bad spf record start: %*s",
 				rec->task->message_id,
 				rec->sender_domain,
-				(gint)sizeof (SPF_VER1_STR) - 1,
+				(gint)len,
 				begin);
+
 		return FALSE;
 	}
 
