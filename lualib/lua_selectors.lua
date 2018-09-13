@@ -329,6 +329,24 @@ local transform_function = {
     end,
     ['description'] = 'Returns the nth element',
   },
+  ['take_n'] = {
+    ['types'] = {
+      ['list'] = true,
+    },
+    ['process'] = function(inp, t, args)
+      return fun.take_n(tonumber(args[1]) or 1, inp),t
+    end,
+    ['description'] = 'Returns the n first elements',
+  },
+  ['drop_n'] = {
+    ['types'] = {
+      ['list'] = true,
+    },
+    ['process'] = function(inp, t, args)
+      return fun.drop_n(tonumber(args[1]) or 1, inp),t
+    end,
+    ['description'] = 'Returns list without the first n elements',
+  },
   -- Joins strings into a single string using separator in the argument
   ['join'] = {
     ['types'] = {
