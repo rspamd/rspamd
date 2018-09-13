@@ -897,6 +897,10 @@ lua_http_request (lua_State *L)
 			lua_http_maybe_free (cbd);
 			lua_pushboolean (L, FALSE);
 
+			if (cbd->w) {
+				rspamd_session_watcher_pop (cbd->session, cbd->w);
+			}
+
 			return 1;
 		}
 	}
@@ -912,8 +916,13 @@ lua_http_request (lua_State *L)
 				lua_pushboolean (L, FALSE);
 				g_free (to_resolve);
 
+				if (cbd->w) {
+					rspamd_session_watcher_pop (cbd->session, cbd->w);
+				}
+
 				return 1;
 			}
+
 
 			g_free (to_resolve);
 		}
@@ -925,6 +934,10 @@ lua_http_request (lua_State *L)
 				lua_http_maybe_free (cbd);
 				lua_pushboolean (L, FALSE);
 
+				if (cbd->w) {
+					rspamd_session_watcher_pop (cbd->session, cbd->w);
+				}
+
 				return 1;
 			}
 		}
@@ -932,11 +945,14 @@ lua_http_request (lua_State *L)
 
 	if (cbd->cbref == -1) {
 		cbd->thread = lua_thread_pool_get_running_entry (cfg->lua_thread_pool);
+
 		return lua_thread_yield (cbd->thread, 0);
-	} else {
-		lua_pushboolean (L, TRUE);
-		return 1;
 	}
+	else {
+		lua_pushboolean (L, TRUE);
+	}
+
+	return 1;
 }
 
 static gint
