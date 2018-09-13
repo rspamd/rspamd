@@ -302,10 +302,7 @@ local transform_function = {
   -- Returns the first element
   ['first'] = {
     ['types'] = {
-      ['url_list'] = true,
-      ['kv_list'] = true,
-      ['received_list'] = true,
-      ['string_list'] = true
+      ['list'] = true,
     },
     ['process'] = function(inp, t)
       return inp[1],pure_type(t)
@@ -315,9 +312,7 @@ local transform_function = {
   -- Returns the last element
   ['last'] = {
     ['types'] = {
-      ['url_list'] = true,
-      ['kv_list'] = true,
-      ['string_list'] = true
+      ['list'] = true,
     },
     ['process'] = function(inp, t)
       return inp[#inp],pure_type(t)
@@ -327,9 +322,7 @@ local transform_function = {
   -- Returns the nth element
   ['nth'] = {
     ['types'] = {
-      ['url_list'] = true,
-      ['kv_list'] = true,
-      ['string_list'] = true
+      ['list'] = true,
     },
     ['process'] = function(inp, t, args)
       return inp[tonumber(args[1] or 1)],pure_type(t)
@@ -470,7 +463,10 @@ local function process_selector(task, sel)
     if not x.types[t] then
       -- Additional case for map
       local pt = pure_type(t, '^(.*)_list$')
-      if pt and x.map_type and x.types[pt] then
+      if x.types['list'] then
+        -- Generic list
+        return {x.process(value, t, x.args)}
+      elseif pt and x.map_type and x.types[pt] then
         return {fun.map(function(list_elt)
           local ret, _ = x.process(list_elt, pt, x.args)
           return ret
