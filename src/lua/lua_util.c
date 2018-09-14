@@ -1163,6 +1163,7 @@ lua_util_tokenize_text (lua_State *L)
 	}
 
 	g_list_free (exceptions);
+	utext_close (&utxt);
 
 	return 1;
 }

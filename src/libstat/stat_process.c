@@ -394,6 +394,8 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 			rspamd_mempool_add_destructor (task->task_pool,
 					rspamd_array_free_hard, words);
 		}
+
+		utext_close (&utxt);
 	}
 
 	rspamd_stat_tokenize_parts_metadata (st_ctx, task);
