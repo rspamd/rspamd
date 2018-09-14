@@ -80,7 +80,13 @@ gchar * rspamd_regexp_list_read_multiple (
 		gint len,
 		struct map_cb_data *data,
 		gboolean final);
+
 gchar * rspamd_glob_list_read_single (
+		gchar *chunk,
+		gint len,
+		struct map_cb_data *data,
+		gboolean final);
+gchar * rspamd_glob_list_read_multiple (
 		gchar *chunk,
 		gint len,
 		struct map_cb_data *data,

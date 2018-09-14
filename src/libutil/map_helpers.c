@@ -1027,6 +1027,30 @@ rspamd_regexp_list_read_multiple (
 	struct rspamd_regexp_map_helper *re_map;
 
 	if (data->cur_data == NULL) {
+		re_map = rspamd_map_helper_new_regexp (data->map,
+				RSPAMD_REGEXP_MAP_FLAG_GLOB|RSPAMD_REGEXP_MAP_FLAG_MULTIPLE);
+		data->cur_data = re_map;
+	}
+
+	return rspamd_parse_kv_list (
+			chunk,
+			len,
+			data,
+			rspamd_map_helper_insert_re,
+			hash_fill,
+			final);
+}
+
+gchar *
+rspamd_glob_list_read_multiple (
+		gchar *chunk,
+		gint len,
+		struct map_cb_data *data,
+		gboolean final)
+{
+	struct rspamd_regexp_map_helper *re_map;
+
+	if (data->cur_data == NULL) {
 		re_map = rspamd_map_helper_new_regexp (data->map, RSPAMD_REGEXP_MAP_FLAG_MULTIPLE);
 		data->cur_data = re_map;
 	}
@@ -1039,6 +1063,7 @@ rspamd_regexp_list_read_multiple (
 			hash_fill,
 			final);
 }
+
 
 void
 rspamd_regexp_list_fin (struct map_cb_data *data)
