@@ -374,13 +374,13 @@ rspamd_strlcpy_fast (gchar *dst, const gchar *src, gsize siz)
 size_t
 rspamd_strlcpy_safe (gchar *dst, const gchar *src, gsize siz)
 {
-	const gchar *osrc = src;
 	gchar *d = dst;
 	gsize nleft = siz;
 
 	if (nleft != 0) {
 		while (--nleft != 0) {
 			if ((*d++ = *src++) == '\0') {
+				d --;
 				break;
 			}
 		}
