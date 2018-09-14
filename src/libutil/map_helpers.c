@@ -1028,7 +1028,7 @@ rspamd_regexp_list_read_multiple (
 
 	if (data->cur_data == NULL) {
 		re_map = rspamd_map_helper_new_regexp (data->map,
-				RSPAMD_REGEXP_MAP_FLAG_GLOB|RSPAMD_REGEXP_MAP_FLAG_MULTIPLE);
+				RSPAMD_REGEXP_MAP_FLAG_MULTIPLE);
 		data->cur_data = re_map;
 	}
 
@@ -1051,7 +1051,8 @@ rspamd_glob_list_read_multiple (
 	struct rspamd_regexp_map_helper *re_map;
 
 	if (data->cur_data == NULL) {
-		re_map = rspamd_map_helper_new_regexp (data->map, RSPAMD_REGEXP_MAP_FLAG_MULTIPLE);
+		re_map = rspamd_map_helper_new_regexp (data->map,
+				RSPAMD_REGEXP_MAP_FLAG_GLOB|RSPAMD_REGEXP_MAP_FLAG_MULTIPLE);
 		data->cur_data = re_map;
 	}
 
