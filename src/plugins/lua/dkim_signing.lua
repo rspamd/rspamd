@@ -65,7 +65,6 @@ local function dkim_signing_cb(task)
         task = task,
         name = resolve_name,
         callback = function(_, _, results, err)
-          task:inc_dns_req()
           if not err and results and results[1] then
             p.pubkey = results[1]
             p.strict_pubkey_check = not settings.allow_pubkey_mismatch

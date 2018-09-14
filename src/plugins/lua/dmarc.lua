@@ -246,7 +246,6 @@ local function dmarc_callback(task)
 
   local function dmarc_dns_cb(_, to_resolve, results, err)
 
-    task:inc_dns_req()
     local lookup_domain = string.sub(to_resolve, 8)
     if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
       task:insert_result(dmarc_symbols['dnsfail'], 1.0, lookup_domain .. ' : ' .. err)

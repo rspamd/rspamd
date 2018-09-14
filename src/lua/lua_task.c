@@ -2344,9 +2344,15 @@ lua_task_inc_dns_req (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
+	static guint warning_shown = 0;
+
+	if (warning_shown < 100) {
+		warning_shown ++;
+		msg_warn_task_check ("task:inc_dns_req is deprecated and should not be used");
+	}
 
 	if (task != NULL) {
-		task->dns_requests++;
+		/* Deprecation: already done in make_dns_request */
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

@@ -754,8 +754,6 @@ local function reputation_dns_get_token(task, rule, token, continuation_cb)
   else
     continuation_cb(results, dns_name, nil)
   end
-
-  task:inc_dns_req()
 end
 
 local function reputation_redis_init(rule, cfg, ev_base, worker)

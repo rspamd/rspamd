@@ -227,7 +227,6 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
   local resolved_address = {}
 
   local function check_host_cb_mx(_, to_resolve, results, err)
-    task:inc_dns_req()
     if err and (err ~= 'requested record is not found' and err ~= 'no records with this name') then
         lua_util.debugm(N, task, 'error looking up %s: %s', to_resolve, err)
     end
@@ -240,8 +239,6 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
           local failed_mx_address = 0
           -- Capture failed_mx_address
           local function check_host_cb_mx_a(_, _, mx_results)
-            task:inc_dns_req()
-
             if not mx_results then
               failed_mx_address = failed_mx_address + 1
             end
@@ -267,8 +264,6 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
     end
   end
   local function check_host_cb_a(_, _, results)
-    task:inc_dns_req()
-
     if not results then
       failed_address = failed_address + 1
     else
