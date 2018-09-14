@@ -871,6 +871,45 @@ end
 
 local function add_multimap_rule(key, newrule)
   local ret = false
+
+  local function multimap_load_hash(rule)
+    if rule['regexp'] then
+      if rule['multi'] then
+        rule['hash'] = rspamd_config:add_map ({
+          url = rule['map'],
+          description = rule['description'],
+          type = 'regexp_multi'
+        })
+      else
+        rule['hash'] = rspamd_config:add_map ({
+          url = newrule['map'],
+          description = newrule['description'],
+          type = 'regexp'
+        })
+      end
+    elseif rule['glob'] then
+      if rule['multi'] then
+        rule['hash'] = rspamd_config:add_map ({
+          url = rule['map'],
+          description = rule['description'],
+          type = 'glob_multi'
+        })
+      else
+        rule['hash'] = rspamd_config:add_map ({
+          url = rule['map'],
+          description = rule['description'],
+          type = 'glob'
+        })
+      end
+    else
+      rule['hash'] = rspamd_config:add_map ({
+        url = rule['map'],
+        description = rule['description'],
+        type = 'hash'
+      })
+    end
+  end
+
   if newrule['message_func'] then
     newrule['message_func'] = assert(load(newrule['message_func']))()
   end
@@ -988,41 +1027,8 @@ local function add_multimap_rule(key, newrule)
             ret = true
           end
         else
-          if newrule['regexp'] then
-            if newrule['multi'] then
-              newrule['hash'] = rspamd_config:add_map ({
-                url = newrule['map'],
-                description = newrule['description'],
-                type = 'regexp_multi'
-              })
-            else
-              newrule['hash'] = rspamd_config:add_map ({
-                url = newrule['map'],
-                description = newrule['description'],
-                type = 'regexp'
-              })
-            end
-          elseif newrule['glob'] then
-            if newrule['multi'] then
-              newrule['hash'] = rspamd_config:add_map ({
-                url = newrule['map'],
-                description = newrule['description'],
-                type = 'glob_multi'
-              })
-            else
-              newrule['hash'] = rspamd_config:add_map ({
-                url = newrule['map'],
-                description = newrule['description'],
-                type = 'glob'
-              })
-            end
-          else
-            newrule['hash'] = rspamd_config:add_map ({
-              url = newrule['map'],
-              description = newrule['description'],
-              type = 'hash'
-            })
-          end
+          multimap_load_hash(newrule)
+
           if newrule['hash'] then
             ret = true
             if type(newrule['map']) == 'string' then
@@ -1050,25 +1056,9 @@ local function add_multimap_rule(key, newrule)
           or newrule['type'] == 'country'
           or newrule['type'] == 'mempool'
           or newrule['type'] == 'selector'then
-        if newrule['regexp'] then
-          newrule['hash'] = rspamd_config:add_map ({
-            url = newrule['map'],
-            description = newrule['description'],
-            type = 'regexp'
-          })
-        elseif newrule['glob'] then
-          newrule['hash'] = rspamd_config:add_map ({
-            url = newrule['map'],
-            description = newrule['description'],
-            type = 'glob'
-          })
-        else
-          newrule['hash'] = rspamd_config:add_map ({
-            url = newrule['map'],
-            description = newrule['description'],
-            type = 'hash'
-          })
-        end
+
+        multimap_load_hash(newrule)
+
         if newrule['hash'] then
           ret = true
           if type(newrule['map']) == 'string' then
