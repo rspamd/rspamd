@@ -438,8 +438,17 @@ local function multimap_callback(task, rule)
     end
 
     if ret then
-      callback(ret)
+      if type(ret) == 'table' then
+        for _,elt in ipairs(ret) do
+          callback(elt)
+        end
+
+        ret = true
+      else
+        callback(ret)
+      end
     end
+
     return ret
   end
 
@@ -980,17 +989,33 @@ local function add_multimap_rule(key, newrule)
           end
         else
           if newrule['regexp'] then
-            newrule['hash'] = rspamd_config:add_map ({
-              url = newrule['map'],
-              description = newrule['description'],
-              type = 'regexp'
-            })
+            if newrule['multi'] then
+              newrule['hash'] = rspamd_config:add_map ({
+                url = newrule['map'],
+                description = newrule['description'],
+                type = 'regexp_multi'
+              })
+            else
+              newrule['hash'] = rspamd_config:add_map ({
+                url = newrule['map'],
+                description = newrule['description'],
+                type = 'regexp'
+              })
+            end
           elseif newrule['glob'] then
-            newrule['hash'] = rspamd_config:add_map ({
-              url = newrule['map'],
-              description = newrule['description'],
-              type = 'glob'
-            })
+            if newrule['multi'] then
+              newrule['hash'] = rspamd_config:add_map ({
+                url = newrule['map'],
+                description = newrule['description'],
+                type = 'glob_multi'
+              })
+            else
+              newrule['hash'] = rspamd_config:add_map ({
+                url = newrule['map'],
+                description = newrule['description'],
+                type = 'glob'
+              })
+            end
           else
             newrule['hash'] = rspamd_config:add_map ({
               url = newrule['map'],
