@@ -171,4 +171,10 @@ gboolean rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
  */
 gboolean rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 		const char *cache_dir);
+
+/**
+ * Registers lua selector in the cache
+ */
+void rspamd_re_cache_add_selector (struct rspamd_re_cache *cache,
+		const gchar *sname, gint ref);
 #endif

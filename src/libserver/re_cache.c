@@ -23,6 +23,9 @@
 #include "libutil/util.h"
 #include "libutil/regexp.h"
 #include "lua/lua_common.h"
+
+#include "khash.h"
+
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
 #include "unix-std.h"
@@ -70,6 +73,7 @@ static const guchar rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '1'}
 		rspamd_hs_magic_vector[] = {'r', 's', 'h', 's', 'r', 'v', '1', '1'};
 #endif
 
+
 struct rspamd_re_class {
 	guint64 id;
 	enum rspamd_re_type type;
@@ -97,13 +101,18 @@ struct rspamd_re_cache_elt {
 	enum rspamd_re_cache_elt_match_type match_type;
 };
 
+KHASH_INIT (lua_selectors_hash, gchar *, int, 1, kh_str_hash_func, kh_str_hash_equal);
+
 struct rspamd_re_cache {
 	GHashTable *re_classes;
+
 	GPtrArray *re;
+	khash_t (lua_selectors_hash) *selectors;
 	ref_entry_t ref;
 	guint nre;
 	guint max_re_data;
 	gchar hash[rspamd_cryptobox_HASHBYTES + 1];
+	lua_State *L;
 #ifdef WITH_HYPERSCAN
 	gboolean hyperscan_loaded;
 	gboolean disable_hyperscan;
@@ -149,6 +158,8 @@ rspamd_re_cache_destroy (struct rspamd_re_cache *cache)
 	GHashTableIter it;
 	gpointer k, v;
 	struct rspamd_re_class *re_class;
+	gchar *skey;
+	gint sref;
 
 	g_assert (cache != NULL);
 	g_hash_table_iter_init (&it, cache->re_classes);
@@ -176,6 +187,15 @@ rspamd_re_cache_destroy (struct rspamd_re_cache *cache)
 		g_free (re_class);
 	}
 
+	if (cache->L) {
+		kh_foreach (cache->selectors, skey, sref, {
+			luaL_unref (cache->L, LUA_REGISTRYINDEX, sref);
+			g_free (skey);
+		});
+	}
+
+	kh_destroy (lua_selectors_hash, cache->selectors);
+
 	g_hash_table_unref (cache->re_classes);
 	g_ptr_array_free (cache->re, TRUE);
 	g_free (cache);
@@ -199,6 +219,7 @@ rspamd_re_cache_new (void)
 	cache->re_classes = g_hash_table_new (g_int64_hash, g_int64_equal);
 	cache->nre = 0;
 	cache->re = g_ptr_array_new_full (256, rspamd_re_cache_elt_dtor);
+	cache->selectors = kh_init (lua_selectors_hash);
 #ifdef WITH_HYPERSCAN
 	cache->hyperscan_loaded = FALSE;
 #endif
@@ -412,6 +433,8 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 			re_class->st = NULL;
 		}
 	}
+
+	cache->L = cfg->lua_state;
 
 #ifdef WITH_HYPERSCAN
 	const gchar *platform = "generic";
@@ -1978,4 +2001,31 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 
 	return TRUE;
 #endif
+}
+
+void rspamd_re_cache_add_selector (struct rspamd_re_cache *cache,
+								   const gchar *sname,
+								   gint ref)
+{
+	khiter_t k;
+
+	k = kh_get (lua_selectors_hash, cache->selectors, (gchar *)sname);
+
+	if (k == kh_end (cache->selectors)) {
+		gchar *cpy = g_strdup (sname);
+		gint res;
+
+		k = kh_put (lua_selectors_hash, cache->selectors, cpy, &res);
+
+		kh_value (cache->selectors, k) = ref;
+	}
+	else {
+		msg_warn_re_cache ("replacing selector with name %s", sname);
+
+		if (cache->L) {
+			luaL_unref (cache->L, LUA_REGISTRYINDEX, kh_value (cache->selectors, k));
+		}
+
+		kh_value (cache->selectors, k) = ref;
+	}
 }
