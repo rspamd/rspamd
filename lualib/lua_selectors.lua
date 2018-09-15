@@ -716,7 +716,7 @@ exports.create_selector_closure = function(cfg, selector_str, delimiter)
     local res = exports.process_selectors(task, selector)
 
     if res then
-      return exports.combine_selectors(_, res, delimiter)
+      return exports.combine_selectors(nil, res, delimiter)
     end
 
     return nil
