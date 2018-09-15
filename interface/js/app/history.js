@@ -62,30 +62,30 @@ define(["jquery", "footable", "humanize"],
         function preprocess_item(item) {
             for (var prop in item) {
                 switch (prop) {
-                case "rcpt_mime":
-                case "rcpt_smtp":
-                    escape_HTML_array(item[prop]);
-                    break;
-                case "symbols":
-                    Object.keys(item.symbols).map(function (key) {
-                        var sym = item.symbols[key];
-                        if (!sym.name) {
-                            sym.name = key;
-                        }
-                        sym.name = escapeHTML(sym.name);
-                        if (sym.description) {
-                            sym.description = escapeHTML(sym.description);
-                        }
+                    case "rcpt_mime":
+                    case "rcpt_smtp":
+                        escape_HTML_array(item[prop]);
+                        break;
+                    case "symbols":
+                        Object.keys(item.symbols).map(function (key) {
+                            var sym = item.symbols[key];
+                            if (!sym.name) {
+                                sym.name = key;
+                            }
+                            sym.name = escapeHTML(sym.name);
+                            if (sym.description) {
+                                sym.description = escapeHTML(sym.description);
+                            }
 
-                        if (sym.options) {
-                            escape_HTML_array(sym.options);
+                            if (sym.options) {
+                                escape_HTML_array(sym.options);
+                            }
+                        });
+                        break;
+                    default:
+                        if (typeof (item[prop]) === "string") {
+                            item[prop] = escapeHTML(item[prop]);
                         }
-                    });
-                    break;
-                default:
-                    if (typeof (item[prop]) === "string") {
-                        item[prop] = escapeHTML(item[prop]);
-                    }
                 }
             }
 
