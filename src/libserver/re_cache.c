@@ -771,6 +771,86 @@ rspamd_re_cache_finish_class (struct rspamd_re_runtime *rt,
 #endif
 }
 
+static gboolean
+rspamd_re_cache_process_selector (struct rspamd_task *task,
+								  struct rspamd_re_cache *cache,
+								  const gchar *name,
+								  guchar ***svec,
+								  guint **lenvec,
+								  guint *n)
+{
+	gint ref;
+	khiter_t k;
+	lua_State *L;
+	gint err_idx, ret;
+	GString *tb;
+	struct rspamd_task **ptask;
+	gboolean result = FALSE;
+
+	L = cache->L;
+	k = kh_get (lua_selectors_hash, cache->selectors, (gchar *)name);
+
+	if (k == kh_end (cache->selectors)) {
+		msg_err_task ("cannot find selector %s, not registered", name);
+
+		return FALSE;
+	}
+
+	ref = kh_value (cache->selectors, k);
+
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	lua_pushvalue (L, ref);
+	ptask = lua_newuserdata (L, sizeof (*ptask));
+	*ptask = task;
+	rspamd_lua_setclass (L, "rspamd{task}", -1);
+
+	if ((ret = lua_pcall (L, 1, 1, err_idx)) != 0) {
+		tb = lua_touserdata (L, -1);
+		msg_err_task ("call to selector %s "
+						"failed (%d): %v", name, ret, tb);
+
+		if (tb) {
+			g_string_free (tb, TRUE);
+		}
+	}
+	else {
+		gsize slen;
+
+		if (lua_type (L, -1) == LUA_TSTRING) {
+			*n = 1;
+			*svec = g_malloc (sizeof (guchar *));
+			*lenvec = g_malloc (sizeof (guint));
+			(*svec)[0] = g_strdup (lua_tolstring (L, -1, &slen));
+			(*lenvec)[0] = slen;
+
+			result = TRUE;
+		}
+		else {
+			*n = rspamd_lua_table_size (L, -1);
+
+			if (*n > 0) {
+				*svec = g_malloc (sizeof (guchar *) * (*n));
+				*lenvec = g_malloc (sizeof (guint) * (*n));
+
+				for (guint i = 0; i < *n; i ++) {
+					lua_rawgeti (L, -2, i + 1);
+					(*svec)[i] = g_strdup (lua_tolstring (L, -1, &slen));
+					(*lenvec)[i] = slen;
+					lua_pop (L, 1);
+				}
+
+				result = TRUE;
+			}
+		}
+	}
+
+	lua_settop (L, err_idx - 1);
+
+	return result;
+}
+
 /*
  * Calculates the specified regexp for the specified class if it's not calculated
  */
@@ -1080,6 +1160,27 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			g_free (lenvec);
 		}
 		break;
+	case RSPAMD_RE_SELECTOR:
+		if (rspamd_re_cache_process_selector (task, rt->cache,
+				re_class->type_data,
+				(guchar ***)&scvec,
+				&lenvec, &cnt)) {
+
+			ret = rspamd_re_cache_process_regexp_data (rt, re,
+					task, scvec, lenvec, cnt, TRUE);
+			msg_debug_re_task ("checking selector (%s) regexp: %s -> %d",
+					re_class->type_data,
+					rspamd_regexp_get_pattern (re), ret);
+
+			/* TODO: add caching logic for this data */
+			for (i = 0; i < cnt; i ++) {
+				g_free ((gpointer)scvec[i]);
+			}
+
+			g_free (scvec);
+			g_free (lenvec);
+		}
+		break;
 	case RSPAMD_RE_MAX:
 		msg_err_task ("regexp of class invalid has been called: %s",
 				rspamd_regexp_get_pattern (re));
@@ -1242,6 +1343,9 @@ rspamd_re_cache_type_to_string (enum rspamd_re_type type)
 		break;
 	case RSPAMD_RE_SARAWBODY:
 		ret = "sa body";
+		break;
+	case RSPAMD_RE_SELECTOR:
+		ret = "selector";
 		break;
 	case RSPAMD_RE_MAX:
 		ret = "invalid class";
