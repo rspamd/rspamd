@@ -94,7 +94,10 @@ struct rspamd_regexp_atom {
 	enum rspamd_re_type type;                       /**< regexp type										*/
 	gchar *regexp_text;                             /**< regexp text representation							*/
 	rspamd_regexp_t *regexp;                        /**< regexp structure									*/
-	gchar *header;                                  /**< header name for header regexps						*/
+	union {
+		const gchar *header;                        /**< header name for header regexps						*/
+		const gchar *selector;                      /**< selector name for lua selector regexp				*/
+	} extra;
 	gboolean is_test;                               /**< true if this expression must be tested				*/
 	gboolean is_strong;                             /**< true if headers search must be case sensitive		*/
 	gboolean is_multiple;                           /**< true if we need to match all inclusions of atom	*/
@@ -236,6 +239,10 @@ rspamd_parse_long_option (const gchar *start, gsize len,
 		ret = TRUE;
 		a->type = RSPAMD_RE_SARAWBODY;
 	}
+	else if (TYPE_CHECK (start, "selector", len)) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_SELECTOR;
+	}
 
 	return ret;
 }
@@ -248,7 +255,7 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 		struct rspamd_config *cfg)
 {
 	const gchar *begin, *end, *p, *src, *start, *brace;
-	gchar *dbegin, *dend;
+	gchar *dbegin, *dend, *extra = NULL;
 	struct rspamd_regexp_atom *result;
 	GError *err = NULL;
 	GString *re_flags;
@@ -268,6 +275,9 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 		msg_warn_pool ("got empty regexp");
 		return NULL;
 	}
+
+	result->type = RSPAMD_RE_MAX;
+
 	start = line;
 	/* First try to find header name */
 	begin = strchr (line, '/');
@@ -281,15 +291,15 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 			}
 			p--;
 		}
+
 		if (end) {
-			result->header = rspamd_mempool_alloc (pool, end - line + 1);
-			rspamd_strlcpy (result->header, line, end - line + 1);
-			result->type = RSPAMD_RE_HEADER;
+			extra = rspamd_mempool_alloc (pool, end - line + 1);
+			rspamd_strlcpy (extra, line, end - line + 1);
 			line = end;
 		}
 	}
 	else {
-		result->header = rspamd_mempool_strdup (pool, line);
+		extra = rspamd_mempool_strdup (pool, line);
 		result->type = RSPAMD_RE_MAX;
 		line = start;
 	}
@@ -300,9 +310,9 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 	if (*line != '\0') {
 		begin = line + 1;
 	}
-	else if (result->header == NULL) {
+	else if (extra == NULL) {
 		/* Assume that line without // is just a header name */
-		result->header = rspamd_mempool_strdup (pool, line);
+		extra = rspamd_mempool_strdup (pool, line);
 		result->type = RSPAMD_RE_HEADER;
 		return result;
 	}
@@ -382,6 +392,10 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 			result->type = RSPAMD_RE_RAWHEADER;
 			p++;
 			break;
+		case '$':
+			result->type = RSPAMD_RE_SELECTOR;
+			p++;
+			break;
 		case '{':
 			/* Long definition */
 			if ((brace = strchr (p + 1, '}')) != NULL) {
@@ -425,10 +439,24 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 
 	if ((result->type == RSPAMD_RE_HEADER ||
 			result->type == RSPAMD_RE_RAWHEADER ||
-			result->type == RSPAMD_RE_MIMEHEADER) &&
-			result->header == NULL) {
-		msg_err_pool ("header regexp: '%s' has no header part", src);
-		return NULL;
+			result->type == RSPAMD_RE_MIMEHEADER)) {
+		if (extra == NULL) {
+			msg_err_pool ("header regexp: '%s' has no header part", src);
+			return NULL;
+		}
+		else {
+			result->extra.header = extra;
+		}
+	}
+
+	if (result->type == RSPAMD_RE_SELECTOR) {
+		if (extra == NULL) {
+			msg_err_pool ("selector regexp: '%s' has no selector part", src);
+			return NULL;
+		}
+		else {
+			result->extra.selector = extra;
+		}
 	}
 
 
@@ -734,13 +762,13 @@ set:
 					mime_atom->d.re->type == RSPAMD_RE_RAWHEADER ||
 					mime_atom->d.re->type == RSPAMD_RE_MIMEHEADER) {
 
-				if (mime_atom->d.re->header != NULL) {
+				if (mime_atom->d.re->extra.header != NULL) {
 					own_re = mime_atom->d.re->regexp;
 					mime_atom->d.re->regexp = rspamd_re_cache_add (cfg->re_cache,
 							mime_atom->d.re->regexp,
 							mime_atom->d.re->type,
-							mime_atom->d.re->header,
-							strlen (mime_atom->d.re->header) + 1);
+							mime_atom->d.re->extra.header,
+							strlen (mime_atom->d.re->extra.header) + 1);
 					/* Pass ownership to the cache */
 					rspamd_regexp_unref (own_re);
 				}
@@ -749,7 +777,29 @@ set:
 					g_set_error (err,
 							rspamd_mime_expr_quark (),
 							200,
-							"no header name in /H regexp: '%s'",
+							"no header name in header regexp: '%s'",
+							mime_atom->str);
+					goto err;
+				}
+
+			}
+			else if (mime_atom->d.re->type == RSPAMD_RE_SELECTOR) {
+				if (mime_atom->d.re->extra.selector != NULL) {
+					own_re = mime_atom->d.re->regexp;
+					mime_atom->d.re->regexp = rspamd_re_cache_add (cfg->re_cache,
+							mime_atom->d.re->regexp,
+							mime_atom->d.re->type,
+							mime_atom->d.re->extra.selector,
+							strlen (mime_atom->d.re->extra.selector) + 1);
+					/* Pass ownership to the cache */
+					rspamd_regexp_unref (own_re);
+				}
+				else {
+					/* We have header regexp, but no header name is detected */
+					g_set_error (err,
+							rspamd_mime_expr_quark (),
+							200,
+							"no selector name in selector regexp: '%s'",
 							mime_atom->str);
 					goto err;
 				}
@@ -817,8 +867,16 @@ rspamd_mime_expr_process_regexp (struct rspamd_regexp_atom *re,
 		ret = rspamd_re_cache_process (task,
 				re->regexp,
 				re->type,
-				re->header,
-				strlen (re->header),
+				re->extra.header,
+				strlen (re->extra.header),
+				re->is_strong);
+	}
+	else if (re->type == RSPAMD_RE_SELECTOR) {
+		ret = rspamd_re_cache_process (task,
+				re->regexp,
+				re->type,
+				re->extra.selector,
+				strlen (re->extra.selector),
 				re->is_strong);
 	}
 	else {

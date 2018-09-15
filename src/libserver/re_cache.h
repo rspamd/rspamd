@@ -35,6 +35,7 @@ enum rspamd_re_type {
 	RSPAMD_RE_BODY, /* full in SA */
 	RSPAMD_RE_SABODY, /* body in SA */
 	RSPAMD_RE_SARAWBODY, /* rawbody in SA */
+	RSPAMD_RE_SELECTOR, /* use lua selector to process regexp */
 	RSPAMD_RE_MAX
 };
 
@@ -61,8 +62,9 @@ struct rspamd_re_cache *rspamd_re_cache_new (void);
  * @param datalen associated data length
  */
 rspamd_regexp_t *
-		rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
-		enum rspamd_re_type type, gpointer type_data, gsize datalen);
+rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
+					 enum rspamd_re_type type,
+					 gconstpointer type_data, gsize datalen);
 
 /**
  * Replace regexp in the cache with another regexp
@@ -111,7 +113,7 @@ const struct rspamd_re_cache_stat *
 gint rspamd_re_cache_process (struct rspamd_task *task,
 		rspamd_regexp_t *re,
 		enum rspamd_re_type type,
-		gpointer type_data,
+		gconstpointer type_data,
 		gsize datalen,
 		gboolean is_strong);
 

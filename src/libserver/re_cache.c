@@ -128,7 +128,7 @@ rspamd_re_cache_quark (void)
 
 static guint64
 rspamd_re_cache_class_id (enum rspamd_re_type type,
-		gpointer type_data,
+		gconstpointer type_data,
 		gsize datalen)
 {
 	rspamd_cryptobox_fast_hash_state_t st;
@@ -221,7 +221,7 @@ rspamd_re_cache_is_hs_loaded (struct rspamd_re_cache *cache)
 
 rspamd_regexp_t *
 rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
-		enum rspamd_re_type type, gpointer type_data, gsize datalen)
+		enum rspamd_re_type type, gconstpointer type_data, gsize datalen)
 {
 	guint64 class_id;
 	struct rspamd_re_class *re_class;
@@ -1078,7 +1078,7 @@ gint
 rspamd_re_cache_process (struct rspamd_task *task,
 		rspamd_regexp_t *re,
 		enum rspamd_re_type type,
-		gpointer type_data,
+		gconstpointer type_data,
 		gsize datalen,
 		gboolean is_strong)
 {
