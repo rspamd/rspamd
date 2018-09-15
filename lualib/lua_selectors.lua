@@ -702,6 +702,27 @@ exports.combine_selectors = function(_, selectors, delimiter)
   end
 end
 
+--[[[
+-- @function lua_selectors.create_closure(cfg, selector_str, delimiter='')
+--]]
+exports.create_selector_closure = function(cfg, selector_str, delimiter)
+  local selector = exports.parse_selector(cfg, selector_str)
+
+  if not selector then
+    return nil
+  end
+
+  return function(task)
+    local res = exports.process_selectors(task, selector)
+
+    if res then
+      return exports.combine_selectors(_, res, delimiter)
+    end
+
+    return nil
+  end
+end
+
 local function display_selectors(tbl)
   return fun.tomap(fun.map(function(k,v)
     return k, fun.tomap(fun.filter(function(kk, vv)
