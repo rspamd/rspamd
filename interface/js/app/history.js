@@ -608,7 +608,7 @@ define(["jquery", "footable", "humanize"],
                 var i = (typeof iteration === "undefined") ? 10 : iteration;
                 var num_rows = $("#historyTable > tbody > tr").length;
                 if (num_rows === rows_per_page) {
-                    callback();
+                    return callback();
                 } else if (--i) {
                     setTimeout(function () {
                         waitForRowsDisplayed(callback, i);
