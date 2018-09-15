@@ -28,7 +28,7 @@
 define(["jquery", "d3pie", "visibility", "nprogress", "app/stats", "app/graph", "app/config",
     "app/symbols", "app/history", "app/upload"],
 // eslint-disable-next-line max-params
-function ($, d3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
+function ($, D3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
     tab_symbols, tab_history, tab_upload) {
     "use strict";
     // begin
@@ -357,7 +357,7 @@ function ($, d3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
                 })
             );
         } else {
-            obj = new d3pie(id,
+            obj = new D3pie(id,
                 $.extend({}, {
                     header: {
                         title: {

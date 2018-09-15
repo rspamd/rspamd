@@ -44,14 +44,14 @@ define(["jquery", "footable", "humanize"],
         var htmlEscaper = /[&<>"'/`=]/g;
         var symbolDescriptions = {};
 
-        var EscapeHTML = function (string) {
+        var escapeHTML = function (string) {
             return (String(string)).replace(htmlEscaper, function (match) {
                 return htmlEscapes[match];
             });
         };
 
         var escape_HTML_array = function (arr) {
-            arr.forEach(function (d, i) { arr[i] = EscapeHTML(d); });
+            arr.forEach(function (d, i) { arr[i] = escapeHTML(d); });
         };
 
         function unix_time_format(tm) {
@@ -72,9 +72,9 @@ define(["jquery", "footable", "humanize"],
                         if (!sym.name) {
                             sym.name = key;
                         }
-                        sym.name = EscapeHTML(sym.name);
+                        sym.name = escapeHTML(sym.name);
                         if (sym.description) {
-                            sym.description = EscapeHTML(sym.description);
+                            sym.description = escapeHTML(sym.description);
                         }
 
                         if (sym.options) {
@@ -84,7 +84,7 @@ define(["jquery", "footable", "humanize"],
                     break;
                 default:
                     if (typeof (item[prop]) === "string") {
-                        item[prop] = EscapeHTML(item[prop]);
+                        item[prop] = escapeHTML(item[prop]);
                     }
                 }
             }
