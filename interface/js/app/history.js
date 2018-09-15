@@ -30,7 +30,7 @@ define(["jquery", "footable", "humanize"],
         var rows_per_page = 25;
 
         var ui = {};
-        var prevVersion;
+        var prevVersion = null;
         var htmlEscapes = {
             "&": "&amp;",
             "<": "&lt;",
@@ -99,12 +99,9 @@ define(["jquery", "footable", "humanize"],
                 item.action = "<div style='font-size:11px' class='label label-info'>" + item.action + "</div>";
             }
 
-            var score_content;
-            if (item.score < item.required_score) {
-                score_content = "<span class='text-success'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
-            } else {
-                score_content = "<span class='text-danger'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
-            }
+            var score_content = (item.score < item.required_score)
+                ? "<span class='text-success'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>"
+                : "<span class='text-danger'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
 
             item.score = {
                 options: {
@@ -159,7 +156,7 @@ define(["jquery", "footable", "humanize"],
 
                     preprocess_item(item);
                     Object.keys(item.symbols).map(function (key) {
-                        var str;
+                        var str = null;
                         var sym = item.symbols[key];
 
                         if (sym.description) {

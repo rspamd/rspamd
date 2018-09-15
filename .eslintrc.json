@@ -60,7 +60,6 @@
         "function-paren-newline": "off",
         "global-require": "off",
         "guard-for-in": "off",
-        "init-declarations": "off",
         "key-spacing": "off",
         "line-comment-position": "off",
         "max-len": "off",

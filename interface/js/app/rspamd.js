@@ -38,7 +38,7 @@ function ($, D3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
     var checked_server = "All SERVERS";
     var ui = {};
     var timer_id = [];
-    var selData; // Graph's dataset selector state
+    var selData = null; // Graph's dataset selector state
 
     NProgress.configure({
         minimum: 0.01,

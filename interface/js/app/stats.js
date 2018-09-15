@@ -34,7 +34,7 @@ define(["jquery", "d3pie", "humanize"],
             var hours = seconds % 31536000 % 2628000 % 86400 / 3600 >> 0;
             var minutes = seconds % 31536000 % 2628000 % 86400 % 3600 / 60 >> 0;
             /* eslint-enable no-bitwise */
-            var out;
+            var out = null;
             if (years > 0) {
                 if (months > 0) {
                     out = years + "yr " + months + "mth";

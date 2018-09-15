@@ -33,7 +33,7 @@ define(["jquery"],
 
         // @upload text
         function uploadText(rspamd, data, source, headers) {
-            var url;
+            var url = null;
             if (source === "spam") {
                 url = "learnspam";
             } else if (source === "ham") {
