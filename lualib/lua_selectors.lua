@@ -53,29 +53,28 @@ local extractors = {
     end,
     ['description'] = 'Get source IP address',
   },
-  -- Get SMTP from
-  ['smtp_from'] = {
-    ['type'] = 'email',
-    ['get_value'] = function(task)
-      local from = task:get_from(0)
-      if ((from or E)[1] or E).addr then
-        return from[1]
-      end
-      return nil
-    end,
-    ['description'] = 'Get SMTP from',
-  },
   -- Get MIME from
-  ['mime_from'] = {
+  ['from'] = {
     ['type'] = 'email',
-    ['get_value'] = function(task)
-      local from = task:get_from(0)
+    ['get_value'] = function(task, args)
+      local from = task:get_from(args[1] or 0)
       if ((from or E)[1] or E).addr then
         return from[1]
       end
       return nil
     end,
-    ['description'] = 'Get MIME from',
+    ['description'] = 'Get MIME or SMTP from (e.g. from(\'smtp\') or from(\'mime\'), uses any type by default)',
+  },
+  ['rcpts'] = {
+    ['type'] = 'email_list',
+    ['get_value'] = function(task, args)
+      local rcpts = task:get_rcpt(args[1] or 0)
+      if ((rcpts or E)[1] or E).addr then
+        return rcpts
+      end
+      return nil
+    end,
+    ['description'] = 'Get MIME or SMTP recipients (e.g. rcpts(\'smtp\') or rcpts(\'mime\'), uses any type by default)',
   },
   -- Get country (ASN module must be executed first)
   ['country'] = {
