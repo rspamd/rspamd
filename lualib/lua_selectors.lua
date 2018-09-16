@@ -32,6 +32,17 @@ local M = "lua_selectors"
 local E = {}
 
 local extractors = {
+  ['id'] = {
+    ['type'] = 'string',
+    ['get_value'] = function(_, args)
+      if args[1] then
+        return args[1]
+      end
+
+      return ''
+    end,
+    ['description'] = 'Return value from function\'s argument or an empty string',
+  },
   -- Get source IP address
   ['ip'] = {
     ['type'] = 'ip',
@@ -401,6 +412,36 @@ local transform_function = {
       return inp:sub(start_pos, end_pos), 'string'
     end,
     ['description'] = 'Extracts substring',
+  },
+  -- Regexp matching
+  ['regexp'] = {
+    ['types'] = {
+      ['string'] = true
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
+      local rspamd_regexp = require "rspamd_regexp"
+
+      local re = rspamd_regexp.create_cached(args[1])
+
+      if not re then
+        logger.errx('invalid regexp: %s', args[1])
+        return nil
+      end
+
+      local res = re:search(inp, false, true)
+
+      if res then
+        if #res == 1 then
+          return res[1],'string'
+        end
+
+        return res,'string_list'
+      end
+
+      return nil
+    end,
+    ['description'] = 'Regexp matching',
   },
   -- Drops input value and return values from function's arguments or an empty string
   ['id'] = {
