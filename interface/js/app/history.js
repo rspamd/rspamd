@@ -30,7 +30,7 @@ define(["jquery", "footable", "humanize"],
         var rows_per_page = 25;
 
         var ui = {};
-        var prevVersion;
+        var prevVersion = null;
         var htmlEscapes = {
             "&": "&amp;",
             "<": "&lt;",
@@ -44,14 +44,14 @@ define(["jquery", "footable", "humanize"],
         var htmlEscaper = /[&<>"'/`=]/g;
         var symbolDescriptions = {};
 
-        var EscapeHTML = function (string) {
+        var escapeHTML = function (string) {
             return (String(string)).replace(htmlEscaper, function (match) {
                 return htmlEscapes[match];
             });
         };
 
         var escape_HTML_array = function (arr) {
-            arr.forEach(function (d, i) { arr[i] = EscapeHTML(d); });
+            arr.forEach(function (d, i) { arr[i] = escapeHTML(d); });
         };
 
         function unix_time_format(tm) {
@@ -62,30 +62,30 @@ define(["jquery", "footable", "humanize"],
         function preprocess_item(item) {
             for (var prop in item) {
                 switch (prop) {
-                case "rcpt_mime":
-                case "rcpt_smtp":
-                    escape_HTML_array(item[prop]);
-                    break;
-                case "symbols":
-                    Object.keys(item.symbols).map(function (key) {
-                        var sym = item.symbols[key];
-                        if (!sym.name) {
-                            sym.name = key;
-                        }
-                        sym.name = EscapeHTML(sym.name);
-                        if (sym.description) {
-                            sym.description = EscapeHTML(sym.description);
-                        }
+                    case "rcpt_mime":
+                    case "rcpt_smtp":
+                        escape_HTML_array(item[prop]);
+                        break;
+                    case "symbols":
+                        Object.keys(item.symbols).map(function (key) {
+                            var sym = item.symbols[key];
+                            if (!sym.name) {
+                                sym.name = key;
+                            }
+                            sym.name = escapeHTML(sym.name);
+                            if (sym.description) {
+                                sym.description = escapeHTML(sym.description);
+                            }
 
-                        if (sym.options) {
-                            escape_HTML_array(sym.options);
+                            if (sym.options) {
+                                escape_HTML_array(sym.options);
+                            }
+                        });
+                        break;
+                    default:
+                        if (typeof (item[prop]) === "string") {
+                            item[prop] = escapeHTML(item[prop]);
                         }
-                    });
-                    break;
-                default:
-                    if (typeof (item[prop]) === "string") {
-                        item[prop] = EscapeHTML(item[prop]);
-                    }
                 }
             }
 
@@ -99,12 +99,9 @@ define(["jquery", "footable", "humanize"],
                 item.action = "<div style='font-size:11px' class='label label-info'>" + item.action + "</div>";
             }
 
-            var score_content;
-            if (item.score < item.required_score) {
-                score_content = "<span class='text-success'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
-            } else {
-                score_content = "<span class='text-danger'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
-            }
+            var score_content = (item.score < item.required_score)
+                ? "<span class='text-success'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>"
+                : "<span class='text-danger'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
 
             item.score = {
                 options: {
@@ -154,12 +151,12 @@ define(["jquery", "footable", "humanize"],
                             full += item.rcpt_mime.join(", ");
                             shrt += item.rcpt_mime.slice(0, rcpt_lim).join(",&#8203;") + more("rcpt_mime");
                         }
-                        return {full: full, shrt: shrt};
+                        return {full:full, shrt:shrt};
                     }
 
                     preprocess_item(item);
                     Object.keys(item.symbols).map(function (key) {
-                        var str;
+                        var str = null;
                         var sym = item.symbols[key];
 
                         if (sym.description) {
@@ -514,36 +511,36 @@ define(["jquery", "footable", "humanize"],
 
         function initHistoryTable(rspamd, tables, data, items) {
             FooTable.actionFilter = FooTable.Filtering.extend({
-                construct : function (instance) {
+                construct: function (instance) {
                     this._super(instance);
                     this.actions = ["reject", "add header", "greylist",
                         "no action", "soft reject", "rewrite subject"];
                     this.def = "Any action";
                     this.$action = null;
                 },
-                $create : function () {
+                $create: function () {
                     this._super();
                     var self = this, $form_grp = $("<div/>", {
-                        class : "form-group"
+                        class: "form-group"
                     }).append($("<label/>", {
-                        class : "sr-only",
-                        text : "Action"
+                        class: "sr-only",
+                        text: "Action"
                     })).prependTo(self.$form);
 
                     self.$action = $("<select/>", {
-                        class : "form-control"
+                        class: "form-control"
                     }).on("change", {
-                        self : self
+                        self: self
                     }, self._onStatusDropdownChanged).append(
                         $("<option/>", {
-                            text : self.def
+                            text: self.def
                         })).appendTo($form_grp);
 
                     $.each(self.actions, function (i, action) {
                         self.$action.append($("<option/>").text(action));
                     });
                 },
-                _onStatusDropdownChanged : function (e) {
+                _onStatusDropdownChanged: function (e) {
                     var self = e.data.self, selected = $(this).val();
                     if (selected !== self.def) {
                         if (selected === "reject") {
@@ -556,7 +553,7 @@ define(["jquery", "footable", "humanize"],
                     }
                     self.filter();
                 },
-                draw : function () {
+                draw: function () {
                     this._super();
                     var action = this.find("action");
                     if (action instanceof FooTable.Filter) {
@@ -611,7 +608,7 @@ define(["jquery", "footable", "humanize"],
                 var i = (typeof iteration === "undefined") ? 10 : iteration;
                 var num_rows = $("#historyTable > tbody > tr").length;
                 if (num_rows === rows_per_page) {
-                    callback();
+                    return callback();
                 } else if (--i) {
                     setTimeout(function () {
                         waitForRowsDisplayed(callback, i);
@@ -708,7 +705,7 @@ define(["jquery", "footable", "humanize"],
         function initErrorsTable(tables, rows) {
             tables.errors = FooTable.init("#errorsLog", {
                 columns: [
-                    {sorted: true, direction: "DESC", name:"ts", title:"Time", style:{"font-size":"11px", "width":300, "maxWidth":300}},
+                    {sorted:true, direction:"DESC", name:"ts", title:"Time", style:{"font-size":"11px", "width":300, "maxWidth":300}},
                     {name:"type", title:"Worker type", breakpoints:"xs sm", style:{"font-size":"11px", "width":150, "maxWidth":150}},
                     {name:"pid", title:"PID", breakpoints:"xs sm", style:{"font-size":"11px", "width":110, "maxWidth":110}},
                     {name:"module", title:"Module", style:{"font-size":"11px"}},

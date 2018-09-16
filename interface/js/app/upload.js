@@ -33,7 +33,7 @@ define(["jquery"],
 
         // @upload text
         function uploadText(rspamd, data, source, headers) {
-            var url;
+            var url = null;
             if (source === "spam") {
                 url = "learnspam";
             } else if (source === "ham") {
@@ -161,7 +161,7 @@ define(["jquery"],
                 $("#scanTextSource").val("");
                 $("#scanResult").hide();
                 $("#scanOutput tbody").remove();
-                $("html, body").animate({scrollTop: 0}, 1000);
+                $("html, body").animate({scrollTop:0}, 1000);
                 return false;
             });
             // @init upload

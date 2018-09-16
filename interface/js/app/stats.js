@@ -34,7 +34,7 @@ define(["jquery", "d3pie", "humanize"],
             var hours = seconds % 31536000 % 2628000 % 86400 / 3600 >> 0;
             var minutes = seconds % 31536000 % 2628000 % 86400 % 3600 / 60 >> 0;
             /* eslint-enable no-bitwise */
-            var out;
+            var out = null;
             if (years > 0) {
                 if (months > 0) {
                     out = years + "yr " + months + "mth";
@@ -139,30 +139,30 @@ define(["jquery", "d3pie", "humanize"],
             if (creds && creds[checked_server]) {
                 var data = creds[checked_server].data;
                 var new_data = [{
-                    color : "#66CC00",
-                    label : "Clean",
-                    data : data.clean,
-                    value : data.clean
+                    color: "#66CC00",
+                    label: "Clean",
+                    data: data.clean,
+                    value: data.clean
                 }, {
-                    color : "#BF8040",
-                    label : "Temporarily rejected",
-                    data : data.soft_reject,
-                    value : data.soft_reject
+                    color: "#BF8040",
+                    label: "Temporarily rejected",
+                    data: data.soft_reject,
+                    value: data.soft_reject
                 }, {
-                    color : "#FFAD00",
-                    label : "Probable spam",
-                    data : data.probable,
-                    value : data.probable
+                    color: "#FFAD00",
+                    label: "Probable spam",
+                    data: data.probable,
+                    value: data.probable
                 }, {
-                    color : "#436EEE",
-                    label : "Greylisted",
-                    data : data.greylist,
-                    value : data.greylist
+                    color: "#436EEE",
+                    label: "Greylisted",
+                    data: data.greylist,
+                    value: data.greylist
                 }, {
-                    color : "#FF0000",
-                    label : "Rejected",
-                    data : data.reject,
-                    value : data.reject
+                    color: "#FF0000",
+                    label: "Rejected",
+                    data: data.reject,
+                    value: data.reject
                 }];
 
                 return rspamd.drawPie(pie, "chart", new_data);

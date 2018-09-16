@@ -149,35 +149,35 @@ define(["jquery", "footable"],
                     var data = json[0].data;
                     var items = process_symbols_data(data);
                     FooTable.groupFilter = FooTable.Filtering.extend({
-                        construct : function (instance) {
+                        construct: function (instance) {
                             this._super(instance);
                             this.groups = items[1];
                             this.def = "Any group";
                             this.$group = null;
                         },
-                        $create : function () {
+                        $create: function () {
                             this._super();
                             var self = this, $form_grp = $("<div/>", {
-                                class : "form-group"
+                                class: "form-group"
                             }).append($("<label/>", {
-                                class : "sr-only",
-                                text : "Group"
+                                class: "sr-only",
+                                text: "Group"
                             })).prependTo(self.$form);
 
                             self.$group = $("<select/>", {
-                                class : "form-control"
+                                class: "form-control"
                             }).on("change", {
-                                self : self
+                                self: self
                             }, self._onStatusDropdownChanged).append(
                                 $("<option/>", {
-                                    text : self.def
+                                    text: self.def
                                 })).appendTo($form_grp);
 
                             $.each(self.groups, function (i, group) {
                                 self.$group.append($("<option/>").text(group));
                             });
                         },
-                        _onStatusDropdownChanged : function (e) {
+                        _onStatusDropdownChanged: function (e) {
                             var self = e.data.self, selected = $(this).val();
                             if (selected !== self.def) {
                                 self.addFilter("group", selected, ["group"]);
@@ -186,7 +186,7 @@ define(["jquery", "footable"],
                             }
                             self.filter();
                         },
-                        draw : function () {
+                        draw: function () {
                             this._super();
                             var group = this.find("group");
                             if (group instanceof FooTable.Filter) {
@@ -198,11 +198,11 @@ define(["jquery", "footable"],
                     });
                     tables.symbols = FooTable.init("#symbolsTable", {
                         columns: [
-                            {sorted: true, direction: "ASC", name:"group", title:"Group", style:{"font-size":"11px"}},
+                            {sorted:true, direction:"ASC", name:"group", title:"Group", style:{"font-size":"11px"}},
                             {name:"symbol", title:"Symbol", style:{"font-size":"11px"}},
                             {name:"description", title:"Description", breakpoints:"xs sm", style:{"font-size":"11px"}},
                             {name:"weight", title:"Score", style:{"font-size":"11px"}},
-                            {name:"frequency", title:"Frequency", breakpoints:"xs sm", style:{"font-size":"11px"}, sortValue: function (value) { return Number(value).toFixed(2); }},
+                            {name:"frequency", title:"Frequency", breakpoints:"xs sm", style:{"font-size":"11px"}, sortValue:function (value) { return Number(value).toFixed(2); }},
                             {name:"time", title:"Avg. time", breakpoints:"xs sm", style:{"font-size":"11px"}},
                             {name:"save", title:"Save", style:{"font-size":"11px"}},
                         ],

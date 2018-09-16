@@ -28,7 +28,7 @@
 define(["jquery", "d3pie", "visibility", "nprogress", "app/stats", "app/graph", "app/config",
     "app/symbols", "app/history", "app/upload"],
 // eslint-disable-next-line max-params
-function ($, d3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
+function ($, D3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
     tab_symbols, tab_history, tab_upload) {
     "use strict";
     // begin
@@ -38,7 +38,7 @@ function ($, d3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
     var checked_server = "All SERVERS";
     var ui = {};
     var timer_id = [];
-    var selData; // Graph's dataset selector state
+    var selData = null; // Graph's dataset selector state
 
     NProgress.configure({
         minimum: 0.01,
@@ -83,37 +83,38 @@ function ($, d3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
         }
 
         switch (tab_id) {
-        case "#status_nav":
-            tab_stat.statWidgets(ui, graphs, checked_server);
-            timer_id.status = Visibility.every(10000, function () {
+            case "#status_nav":
                 tab_stat.statWidgets(ui, graphs, checked_server);
-            });
-            break;
-        case "#throughput_nav":
-            tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
-
-            var autoRefresh = {
-                hourly: 60000,
-                daily: 300000
-            };
-            timer_id.throughput = Visibility.every(autoRefresh[selData] || 3600000, function () {
+                timer_id.status = Visibility.every(10000, function () {
+                    tab_stat.statWidgets(ui, graphs, checked_server);
+                });
+                break;
+            case "#throughput_nav":
                 tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
-            });
-            break;
-        case "#configuration_nav":
-            tab_config.getActions(ui, checked_server);
-            tab_config.getMaps(ui, checked_server);
-            break;
-        case "#symbols_nav":
-            tab_symbols.getSymbols(ui, tables, checked_server);
-            break;
-        case "#history_nav":
-            tab_history.getHistory(ui, tables);
-            tab_history.getErrors(ui, tables);
-            break;
-        case "#disconnect":
-            disconnect();
-            break;
+
+                var autoRefresh = {
+                    hourly: 60000,
+                    daily: 300000
+                };
+                timer_id.throughput = Visibility.every(autoRefresh[selData] || 3600000, function () {
+                    tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
+                });
+                break;
+            case "#configuration_nav":
+                tab_config.getActions(ui, checked_server);
+                tab_config.getMaps(ui, checked_server);
+                break;
+            case "#symbols_nav":
+                tab_symbols.getSymbols(ui, tables, checked_server);
+                break;
+            case "#history_nav":
+                tab_history.getHistory(ui, tables);
+                tab_history.getErrors(ui, tables);
+                break;
+            case "#disconnect":
+                disconnect();
+                break;
+            default:
         }
 
         setTimeout(function () {
@@ -181,7 +182,7 @@ function ($, d3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
         var req_params = {
             jsonp: false,
             data: o.data,
-            headers: $.extend({Password: getPassword()}, o.headers),
+            headers: $.extend({Password:getPassword()}, o.headers),
             url: neighbours_status[ind].url + req_url,
             xhr: function () {
                 var xhr = $.ajaxSettings.xhr();
@@ -357,7 +358,7 @@ function ($, d3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
                 })
             );
         } else {
-            obj = new d3pie(id,
+            obj = new D3pie(id,
                 $.extend({}, {
                     header: {
                         title: {
@@ -482,7 +483,7 @@ function ($, d3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
                     var data = json[0].data;
                     if (jQuery.isEmptyObject(data)) {
                         neighbours = {
-                            local:  {
+                            local: {
                                 host: window.location.host,
                                 url: window.location.href
                             }
@@ -508,7 +509,7 @@ function ($, d3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
             if (o.server !== "local") {
                 neighbours_status = [{
                     name: o.server,
-                    host:  neighbours[o.server].host,
+                    host: neighbours[o.server].host,
                     url: neighbours[o.server].url,
                 }];
             }
