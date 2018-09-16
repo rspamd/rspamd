@@ -433,8 +433,15 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 	}
 
 	if (result->type >= RSPAMD_RE_MAX) {
-		msg_err_pool ("could not read regexp: %s, unknown type", src);
-		return NULL;
+		if (extra) {
+			/* Assume header regexp */
+			result->extra.header = extra;
+			result->type = RSPAMD_RE_HEADER;
+		}
+		else {
+			msg_err_pool ("could not read regexp: %s, unknown type", src);
+			return NULL;
+		}
 	}
 
 	if ((result->type == RSPAMD_RE_HEADER ||
