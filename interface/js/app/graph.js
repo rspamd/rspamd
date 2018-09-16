@@ -94,10 +94,10 @@ define(["jquery", "d3evolution", "footable"],
 
         function initGraph() {
             var graph = new D3Evolution("graph", $.extend({}, graph_options, {
-                yScale:      getSelector("selYScale"),
-                type:        getSelector("selType"),
+                yScale: getSelector("selYScale"),
+                type: getSelector("selType"),
                 interpolate: getSelector("selInterpolate"),
-                convert:     getSelector("selConvert"),
+                convert: getSelector("selConvert"),
             }));
             $("#selYScale").change(function () {
                 graph.yScale(this.value);
@@ -144,12 +144,12 @@ define(["jquery", "d3evolution", "footable"],
                     enabled: true
                 },
                 columns: [
-                    {name: "label", title: "Action"},
-                    {name: "value", title: "Messages", defaultContent: ""},
-                    {name: "min", title: "Minimum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                    {name: "avg", title: "Average, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                    {name: "max", title: "Maximum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                    {name: "last", title: "Last, " + unit},
+                    {name:"label", title:"Action"},
+                    {name:"value", title:"Messages", defaultContent:""},
+                    {name:"min", title:"Minimum, <span class=\"unit\">" + unit + "</span>", defaultContent:""},
+                    {name:"avg", title:"Average, <span class=\"unit\">" + unit + "</span>", defaultContent:""},
+                    {name:"max", title:"Maximum, <span class=\"unit\">" + unit + "</span>", defaultContent:""},
+                    {name:"last", title:"Last, " + unit},
                 ],
                 rows: rows
             });
@@ -257,7 +257,7 @@ define(["jquery", "d3evolution", "footable"],
                 },
                 errorMessage: "Cannot receive throughput data",
                 errorOnceId: "alerted_graph_",
-                data: {type: type}
+                data: {type:type}
             });
         };
 

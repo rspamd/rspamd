@@ -15,10 +15,10 @@ requirejs.config({
         nprogress: "nprogress.min",
     },
     shim: {
-        bootstrap: {exports: "bootstrap", deps: ["jquery"]},
-        d3pie: {exports: "d3pie", deps: ["d3.global", "jquery"]},
-        d3evolution: {exports: "D3Evolution", deps: ["d3", "jquery"]},
-        footable: {deps: ["bootstrap", "jquery"]}
+        bootstrap: {exports:"bootstrap", deps:["jquery"]},
+        d3pie: {exports:"d3pie", deps:["d3.global", "jquery"]},
+        d3evolution: {exports:"D3Evolution", deps:["d3", "jquery"]},
+        footable: {deps:["bootstrap", "jquery"]}
     }
 });
 

@@ -19,6 +19,9 @@
         "id-length": ["error", { "min": 1 }],
         "indent": ["error", 4, { "SwitchCase": 1 }],
         // "max-len": ["error", { "code": 120 }],
+        "key-spacing": ["error", {
+            "singleLine": { "afterColon": false }
+        }],
         "max-params": ["warn", 6],
         "max-statements": ["warn", 28],
         "max-statements-per-line": ["error", { "max": 2 }],
@@ -58,7 +61,6 @@
         "func-style": "off",
         "function-paren-newline": "off",
         "guard-for-in": "off",
-        "key-spacing": "off",
         "line-comment-position": "off",
         "max-len": "off",
         "max-lines": "off",

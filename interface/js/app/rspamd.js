@@ -182,7 +182,7 @@ function ($, D3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
         var req_params = {
             jsonp: false,
             data: o.data,
-            headers: $.extend({Password: getPassword()}, o.headers),
+            headers: $.extend({Password:getPassword()}, o.headers),
             url: neighbours_status[ind].url + req_url,
             xhr: function () {
                 var xhr = $.ajaxSettings.xhr();
@@ -483,7 +483,7 @@ function ($, D3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
                     var data = json[0].data;
                     if (jQuery.isEmptyObject(data)) {
                         neighbours = {
-                            local:  {
+                            local: {
                                 host: window.location.host,
                                 url: window.location.href
                             }
@@ -509,7 +509,7 @@ function ($, D3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
             if (o.server !== "local") {
                 neighbours_status = [{
                     name: o.server,
-                    host:  neighbours[o.server].host,
+                    host: neighbours[o.server].host,
                     url: neighbours[o.server].url,
                 }];
             }
