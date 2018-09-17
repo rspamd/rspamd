@@ -3594,10 +3594,15 @@ lua_config_register_re_selector (lua_State *L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name = luaL_checkstring (L, 2);
 	const gchar *selector_str = luaL_checkstring (L, 3);
+	const gchar *delimiter = "";
 	gint top = lua_gettop (L);
 	bool res = false;
 
 	if (cfg && name && selector_str) {
+		if (lua_gettop (L) >= 4) {
+			delimiter = luaL_checkstring (L, 4);
+		}
+
 		if (luaL_dostring (L, "return require \"lua_selectors\"") != 0) {
 			msg_warn_config ("cannot require lua_selectors: %s",
 					lua_tostring (L, -1));
@@ -3632,8 +3637,9 @@ lua_config_register_re_selector (lua_State *L)
 					rspamd_lua_setclass (L, "rspamd{config}", -1);
 					*pcfg = cfg;
 					lua_pushstring (L, selector_str);
+					lua_pushstring (L, delimiter);
 
-					if ((ret = lua_pcall (L, 2, 1, err_idx)) != 0) {
+					if ((ret = lua_pcall (L, 3, 1, err_idx)) != 0) {
 						tb = lua_touserdata (L, -1);
 						msg_err_config ("call to create_selector_closure lua "
 										"script failed (%d): %v", ret, tb);
