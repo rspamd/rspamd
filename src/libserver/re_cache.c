@@ -865,7 +865,7 @@ rspamd_re_cache_process_selector (struct rspamd_task *task,
 				*lenvec = g_malloc (sizeof (guint) * (*n));
 
 				for (guint i = 0; i < *n; i ++) {
-					lua_rawgeti (L, -2, i + 1);
+					lua_rawgeti (L, -1, i + 1);
 					(*svec)[i] = g_strdup (lua_tolstring (L, -1, &slen));
 					(*lenvec)[i] = slen;
 					lua_pop (L, 1);

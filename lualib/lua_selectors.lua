@@ -66,7 +66,7 @@ uses any type by default)]],
   },
   ['rcpts'] = {
     ['get_value'] = function(task, args)
-      local rcpts = task:get_rcpt(args[1] or 0)
+      local rcpts = task:get_recipients(args[1] or 0)
       if ((rcpts or E)[1] or E).addr then
         return rcpts,'email_list'
       end
