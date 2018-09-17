@@ -657,7 +657,7 @@ local function make_grammar()
   local obrace = "(" * spc
   local ebrace = spc * ")"
   local comma = spc * "," * spc
-  local sel_separator = l.S":;"
+  local sel_separator = spc * l.S":;*" * spc
 
   return l.P{
     "LIST";
