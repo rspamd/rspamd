@@ -121,9 +121,19 @@ struct rspamd_re_cache {
 #endif
 };
 
+struct rspamd_re_selector_result {
+	guchar **scvec;
+	guint *lenvec;
+	guint cnt;
+};
+
+KHASH_INIT (selectors_results_hash, int, struct rspamd_re_selector_result, 1,
+		kh_int_hash_func, kh_int_hash_equal);
+
 struct rspamd_re_runtime {
 	guchar *checked;
 	guchar *results;
+	khash_t (selectors_results_hash) *sel_cache;
 	struct rspamd_re_cache *cache;
 	struct rspamd_re_cache_stat stat;
 	gboolean has_hs;
@@ -482,11 +492,11 @@ rspamd_re_cache_runtime_new (struct rspamd_re_cache *cache)
 	struct rspamd_re_runtime *rt;
 	g_assert (cache != NULL);
 
-	rt = g_malloc0 (sizeof (*rt));
+	rt = g_malloc0 (sizeof (*rt) + NBYTES (cache->nre) + cache->nre);
 	rt->cache = cache;
 	REF_RETAIN (cache);
-	rt->checked = g_malloc0 (NBYTES (cache->nre));
-	rt->results = g_malloc0 (cache->nre);
+	rt->checked = ((guchar *)rt) + sizeof (*rt);
+	rt->results = rt->checked + NBYTES (cache->nre);
 	rt->stat.regexp_total = cache->nre;
 #ifdef WITH_HYPERSCAN
 	rt->has_hs = cache->hyperscan_loaded;
@@ -773,7 +783,7 @@ rspamd_re_cache_finish_class (struct rspamd_re_runtime *rt,
 
 static gboolean
 rspamd_re_cache_process_selector (struct rspamd_task *task,
-								  struct rspamd_re_cache *cache,
+								  struct rspamd_re_runtime *rt,
 								  const gchar *name,
 								  guchar ***svec,
 								  guint **lenvec,
@@ -786,6 +796,8 @@ rspamd_re_cache_process_selector (struct rspamd_task *task,
 	GString *tb;
 	struct rspamd_task **ptask;
 	gboolean result = FALSE;
+	struct rspamd_re_cache *cache = rt->cache;
+	struct rspamd_re_selector_result *sr;
 
 	L = cache->L;
 	k = kh_get (lua_selectors_hash, cache->selectors, (gchar *)name);
@@ -797,6 +809,24 @@ rspamd_re_cache_process_selector (struct rspamd_task *task,
 	}
 
 	ref = kh_value (cache->selectors, k);
+
+	/* First, search for the cached result */
+	if (rt->sel_cache) {
+		k = kh_get (selectors_results_hash, rt->sel_cache, ref);
+
+		if (k != kh_end (rt->sel_cache)) {
+			sr = &kh_value (rt->sel_cache, k);
+
+			*svec = sr->scvec;
+			*lenvec = sr->lenvec;
+			*n = sr->cnt;
+
+			return TRUE;
+		}
+	}
+	else {
+		rt->sel_cache = kh_init (selectors_results_hash);
+	}
 
 	lua_pushcfunction (L, &rspamd_lua_traceback);
 	err_idx = lua_gettop (L);
@@ -847,6 +877,15 @@ rspamd_re_cache_process_selector (struct rspamd_task *task,
 	}
 
 	lua_settop (L, err_idx - 1);
+
+	if (result) {
+		k = kh_put (selectors_results_hash, rt->sel_cache, ref, &ret);
+		sr = &kh_value (rt->sel_cache, k);
+
+		sr->cnt = *n;
+		sr->scvec = *svec;
+		sr->lenvec = *lenvec;
+	}
 
 	return result;
 }
@@ -1161,7 +1200,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_RE_SELECTOR:
-		if (rspamd_re_cache_process_selector (task, rt->cache,
+		if (rspamd_re_cache_process_selector (task, rt,
 				re_class->type_data,
 				(guchar ***)&scvec,
 				&lenvec, &cnt)) {
@@ -1172,13 +1211,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 					re_class->type_data,
 					rspamd_regexp_get_pattern (re), ret);
 
-			/* TODO: add caching logic for this data */
-			for (i = 0; i < cnt; i ++) {
-				g_free ((gpointer)scvec[i]);
-			}
-
-			g_free (scvec);
-			g_free (lenvec);
+			/* Do not free vectors as they are managed by rt->sel_cache */
 		}
 		break;
 	case RSPAMD_RE_MAX:
@@ -1271,8 +1304,20 @@ rspamd_re_cache_runtime_destroy (struct rspamd_re_runtime *rt)
 {
 	g_assert (rt != NULL);
 
-	g_free (rt->checked);
-	g_free (rt->results);
+	if (rt->sel_cache) {
+		struct rspamd_re_selector_result sr;
+
+		kh_foreach_value (rt->sel_cache, sr, {
+			for (guint i = 0; i < sr.cnt; i ++) {
+				g_free ((gpointer)sr.scvec[i]);
+			}
+
+			g_free (sr.scvec);
+			g_free (sr.lenvec);
+		});
+		kh_destroy (selectors_results_hash, rt->sel_cache);
+	}
+
 	REF_RELEASE (rt->cache);
 	g_free (rt);
 }
