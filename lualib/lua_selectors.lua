@@ -28,7 +28,7 @@ local exports = {}
 local logger = require 'rspamd_logger'
 local fun = require 'fun'
 local lua_util = require "lua_util"
-local M = "lua_selectors"
+local M = "selectors"
 local E = {}
 
 local extractors = {
@@ -312,15 +312,26 @@ local transform_function = {
     ['description'] = 'Get tld from url or a list of urls',
   },
   -- Get address
-  ['get_addr'] = {
+  ['addr'] = {
     ['types'] = {
       ['email'] = true
     },
     ['map_type'] = 'string',
     ['process'] = function(inp, _)
-      return inp:get_addr()
+      return inp.addr
     end,
     ['description'] = 'Get email address as a string',
+  },
+  -- Get address
+  ['name'] = {
+    ['types'] = {
+      ['email'] = true
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _)
+      return inp.name
+    end,
+    ['description'] = 'Get email name as a string',
   },
   -- Returns the lowercased string
   ['lower'] = {
@@ -534,23 +545,47 @@ Returns either nil or its input if input is not in args list]],
   },
 }
 
+local implicit_types_map = {
+  ip = {'string', tostring},
+  email = {'string', function(e)
+    if e.name then
+      return string.format("%s <%s>", e.name, e.addr)
+    end
+    return string.format("<%s>", e.addr)
+  end},
+  url = {'string', tostring}
+}
+
 local function process_selector(task, sel)
   local input,etype = sel.selector.get_value(task, sel.selector.args)
-  if not input then return nil end
+
+  if not input then
+    lua_util.debugm(M, task, 'no value extracted for %s', sel.selector.name)
+    return nil
+  end
+
+  lua_util.debugm(M, task, 'extracted %s, type %s', sel.selector.name, etype)
 
   -- Now we fold elements using left fold
   local function fold_function(acc, x)
-    if acc == nil or acc[1] == nil then return nil end
+    if acc == nil or acc[1] == nil then
+      lua_util.debugm(M, task, 'do not apply %s, accumulator is nil', x.name)
+      return nil
+    end
     local value = acc[1]
     local t = acc[2]
 
     if not x.types[t] then
       -- Additional case for map
-      local pt = pure_type(t, '^(.*)_list$')
+      local pt = pure_type(t)
       if x.types['list'] then
         -- Generic list
+        lua_util.debugm(M, task, 'apply list function %s to %s', x.name, t)
         return {x.process(value, t, x.args)}
       elseif pt and x.map_type and x.types[pt] then
+        lua_util.debugm(M, task, 'map %s to list of %s resulting %s',
+            x.name, pt, x.map_type)
+
         return {fun.map(function(list_elt)
           local ret, _ = x.process(list_elt, pt, x.args)
           return ret
@@ -560,6 +595,7 @@ local function process_selector(task, sel)
       return nil
     end
 
+    lua_util.debugm(M, task, 'apply %s to %s', x.name, t)
     return {x.process(value, t, x.args)}
   end
 
@@ -570,10 +606,37 @@ local function process_selector(task, sel)
   if not res or not res[1] then return nil end -- Pipeline failed
 
   if not (res[2] == 'string' or res[2] == 'string_list') then
-    logger.errx(task, 'transform pipeline has returned bad type: %s, string expected: res = %s, sel: %s',
-        res[2], res, sel)
-    return nil
+
+    -- Search for implicit conversion
+    local pt = pure_type(res[2])
+
+    if pt then
+      local it = implicit_types_map[pt]
+      if it then
+        lua_util.debugm(M, task, 'apply implicit map %s->%s',
+            pt, it[1])
+        res[1] = fun.map(it[2], res[1])
+        res[2] = string.format('%s_list', it[1])
+      end
+    else
+      local it = implicit_types_map[res[2]]
+
+      if it then
+        lua_util.debugm(M, task, 'apply implicit conversion %s->%s',
+            res[2], it[1])
+        res[1] = it[2](res[1])
+        res[2] = it[1]
+      end
+    end
+
+    if not (res[2] == 'string' or res[2] == 'string_list') then
+      logger.errx(task, 'transform pipeline has returned bad type: %s, string expected: res = %s, sel: %s',
+          res[2], res, sel)
+      return nil
+    end
   end
+
+  lua_util.debugm(M, task, 'final selector type: %s', res[2])
 
   if res[2] == 'string_list' then
     -- Convert to table as it might have a functional form
