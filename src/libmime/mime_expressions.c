@@ -690,7 +690,7 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 				state = in_flags_brace;
 				p ++;
 			}
-			else if (!g_ascii_isalpha (t)) {
+			else if (!g_ascii_isalpha (t) && t != '$') {
 				state = end_atom;
 			}
 			else {

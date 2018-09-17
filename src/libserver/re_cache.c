@@ -831,7 +831,7 @@ rspamd_re_cache_process_selector (struct rspamd_task *task,
 	lua_pushcfunction (L, &rspamd_lua_traceback);
 	err_idx = lua_gettop (L);
 
-	lua_pushvalue (L, ref);
+	lua_rawgeti (L, LUA_REGISTRYINDEX, ref);
 	ptask = lua_newuserdata (L, sizeof (*ptask));
 	*ptask = task;
 	rspamd_lua_setclass (L, "rspamd{task}", -1);

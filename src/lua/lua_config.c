@@ -3673,6 +3673,10 @@ lua_config_register_re_selector (lua_State *L)
 	lua_settop (L, top);
 	lua_pushboolean (L, res);
 
+	if (res) {
+		msg_info_config ("registered regexp selector %s", name);
+	}
+
 	return 1;
 }
 
