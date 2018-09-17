@@ -558,6 +558,18 @@ local implicit_types_map = {
 }
 
 local function process_selector(task, sel)
+  local function allowed_type(t)
+    if t == 'string' or t == 'text' or t == 'string_list' or t == 'text_list' then
+      return true
+    end
+
+    return false
+  end
+
+  local function list_type(t)
+    return pure_type(t)
+  end
+
   local input,etype = sel.selector.get_value(task, sel.selector.args)
 
   if not input then
@@ -606,7 +618,7 @@ local function process_selector(task, sel)
 
   if not res or not res[1] then return nil end -- Pipeline failed
 
-  if not (res[2] == 'string' or res[2] == 'string_list') then
+  if not allowed_type(res[2]) then
 
     -- Search for implicit conversion
     local pt = pure_type(res[2])
@@ -630,7 +642,7 @@ local function process_selector(task, sel)
       end
     end
 
-    if not (res[2] == 'string' or res[2] == 'string_list') then
+    if not not allowed_type(res[2]) then
       logger.errx(task, 'transform pipeline has returned bad type: %s, string expected: res = %s, sel: %s',
           res[2], res, sel)
       return nil
@@ -639,7 +651,7 @@ local function process_selector(task, sel)
 
   lua_util.debugm(M, task, 'final selector type: %s', res[2])
 
-  if res[2] == 'string_list' then
+  if list_type(res[2]) then
     -- Convert to table as it might have a functional form
     return fun.totable(res[1])
   end
@@ -806,6 +818,8 @@ exports.combine_selectors = function(_, selectors, delimiter)
       if in_prefix then
         if type(s) == 'string' then
           table.insert(prefix, s)
+        elseif type(s) == 'userdata' then
+          table.insert(prefix, tostring(s))
         else
           in_prefix = false
           table.insert(tbl, s)
@@ -813,6 +827,8 @@ exports.combine_selectors = function(_, selectors, delimiter)
       else
         if type(s) == 'string' then
           table.insert(suffix, s)
+        elseif type(s) == 'userdata' then
+          table.insert(suffix, tostring(s))
         else
           table.insert(tbl, s)
         end
