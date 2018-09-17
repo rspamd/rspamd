@@ -45,7 +45,7 @@ define(["jquery", "footable", "humanize"],
         var symbolDescriptions = {};
 
         var escapeHTML = function (string) {
-            return (String(string)).replace(htmlEscaper, function (match) {
+            return String(string).replace(htmlEscaper, function (match) {
                 return htmlEscapes[match];
             });
         };
@@ -83,7 +83,7 @@ define(["jquery", "footable", "humanize"],
                         });
                         break;
                     default:
-                        if (typeof (item[prop]) === "string") {
+                        if (typeof item[prop] === "string") {
                             item[prop] = escapeHTML(item[prop]);
                         }
                 }

@@ -210,7 +210,7 @@ function ($, D3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
                 function errorMessage() {
                     alertMessage("alert-error", neighbours_status[ind].name + " > " +
                         (o.errorMessage ? o.errorMessage : "Request failed") +
-                        (errorThrown ? (": " + errorThrown) : ""));
+                        (errorThrown ? ": " + errorThrown : ""));
                 }
                 if (o.error) {
                     o.error(neighbours_status[ind],
