@@ -244,7 +244,7 @@ define(["jquery", "d3evolution", "footable"],
                                     action.map(function (d, i) {
                                         return {
                                             x: d.x,
-                                            y: ((res[j][i].y === null) ? d.y : res[j][i].y + d.y)
+                                            y: (res[j][i].y === null) ? d.y : res[j][i].y + d.y
                                         };
                                     })
                                 );

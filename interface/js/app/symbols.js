@@ -59,8 +59,8 @@ define(["jquery", "footable"],
             });
         }
         function decimalStep(number) {
-            var digits = ((Number(number)).toFixed(20)).replace(/^-?\d*\.?|0+$/g, "").length;
-            return (digits === 0 || digits > 4) ? 0.1 : 1.0 / (Math.pow(10, digits));
+            var digits = Number(number).toFixed(20).replace(/^-?\d*\.?|0+$/g, "").length;
+            return (digits === 0 || digits > 4) ? 0.1 : 1.0 / Math.pow(10, digits);
         }
         function process_symbols_data(data) {
             var items = [];

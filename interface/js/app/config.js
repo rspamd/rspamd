@@ -145,7 +145,7 @@ define(["jquery"],
                     var $tbody = $("<tbody>");
 
                     $.each(data, function (i, item) {
-                        var label = ((item.editable === false || rspamd.read_only))
+                        var label = (item.editable === false || rspamd.read_only)
                             ? "<span class=\"label label-default\">Read</span>"
                             : "<span class=\"label label-default\">Read</span>&nbsp;<span class=\"label label-success\">Write</span>";
                         var $tr = $("<tr>");
@@ -179,7 +179,7 @@ define(["jquery"],
                     success: function (data) {
                         var disabled = "";
                         var text = data[0].data;
-                        if ((item.editable === false || rspamd.read_only)) {
+                        if (item.editable === false || rspamd.read_only) {
                             disabled = "disabled=\"disabled\"";
                         }
 
