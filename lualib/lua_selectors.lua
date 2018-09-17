@@ -61,7 +61,7 @@ For example, `id('Something')` returns a string 'Something']],
       end
       return nil
     end,
-    ['description'] = [[Get MIME or SMTP from (e.g. from('smtp') or from(mime),
+    ['description'] = [[Get MIME or SMTP from (e.g. `from('smtp')` or `from('mime')`,
 uses any type by default)]],
   },
   ['rcpts'] = {
@@ -72,7 +72,7 @@ uses any type by default)]],
       end
       return nil
     end,
-    ['description'] = [[Get MIME or SMTP rcpts (e.g. rcpts('smtp') or rcpts(mime),
+    ['description'] = [[Get MIME or SMTP rcpts (e.g. `rcpts('smtp')` or `rcpts('mime')`,
 uses any type by default)]],
   },
   -- Get country (ASN module must be executed first)
@@ -245,7 +245,7 @@ e.g. `get_user`]],
       return task:get_mempool():get_variable(args[1], args[2]),(args[2] or 'string')
     end,
     ['description'] = [[Get specific pool var. The first argument must be variable name,
-      the second argument is optional and defines the type (string by default)]],
+the second argument is optional and defines the type (string by default)]],
   },
   -- Get specific HTTP request header. The first argument must be header name.
   ['request_header'] = {
@@ -280,7 +280,8 @@ The first argument must be header name.]],
     ['description'] = [[Get task timestamp. The first argument is type:
   - `connect`: connection timestamp (default)
   - `message`: timestamp as defined by `Date` header
-The second argument is optional time format, see [os.date](http://pgl.yoyo.org/luai/i/os.date) description]]
+
+  The second argument is optional time format, see [os.date](http://pgl.yoyo.org/luai/i/os.date) description]]
   }
 }
 
@@ -730,10 +731,10 @@ exports.parse_selector = function(cfg, str)
 end
 
 --[[[
--- @function lua_selectors.register_selector(cfg, name, selector)
+-- @function lua_selectors.register_extractor(cfg, name, selector)
 --]]
-exports.register_selector = function(cfg, name, selector)
-  if selector.get_value and selector.type then
+exports.register_extractor = function(cfg, name, selector)
+  if selector.get_value then
     if extractors[name] then
       logger.warnx(cfg, 'redefining selector %s', name)
     end
