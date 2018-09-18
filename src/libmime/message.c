@@ -244,6 +244,8 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 	const gchar *p = begin, *c = begin;
 	gchar last_c = '\0';
 	gboolean crlf_added = FALSE;
+	gboolean url_open_bracket = FALSE;
+
 	enum {
 		normal_char,
 		seen_cr,
@@ -285,6 +287,8 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 				break;
 			}
 
+			url_open_bracket = FALSE;
+
 			p ++;
 		}
 		else if (G_UNLIKELY (*p == '\n')) {
@@ -300,7 +304,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 
 				c = p + 1;
 
-				if (IS_PART_HTML (part) || g_ascii_ispunct (last_c)) {
+				if (IS_PART_HTML (part) || !url_open_bracket) {
 					g_byte_array_append (part->utf_stripped_content,
 							(const guint8 *)" ", 1);
 					g_ptr_array_add (part->newlines,
@@ -315,7 +319,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 			case seen_cr:
 				/* \r\n */
 				if (!crlf_added) {
-					if (IS_PART_HTML (part) || g_ascii_ispunct (last_c)) {
+					if (IS_PART_HTML (part) || !url_open_bracket) {
 						g_byte_array_append (part->utf_stripped_content,
 								(const guint8 *) " ", 1);
 						crlf_added = TRUE;
@@ -345,10 +349,18 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 				c = p + 1;
 				break;
 			}
+			url_open_bracket = FALSE;
 
 			p ++;
 		}
 		else {
+			if ((*p) == '<') {
+				url_open_bracket = TRUE;
+			}
+			else if ((*p) == '>') {
+				url_open_bracket = FALSE;
+			}
+
 			switch (state) {
 			case normal_char:
 				if (G_UNLIKELY (*p) == ' ') {
