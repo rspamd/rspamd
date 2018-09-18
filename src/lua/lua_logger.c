@@ -811,6 +811,7 @@ lua_logger_logx (lua_State *L)
 	const gchar *modname = lua_tostring (L, 2), *uid = NULL;
 	gchar logbuf[RSPAMD_LOGBUF_SIZE - 128];
 	gboolean ret;
+	gint stack_pos = 1;
 
 	if (lua_type (L, 3) == LUA_TSTRING) {
 		uid = luaL_checkstring (L, 3);
@@ -819,11 +820,20 @@ lua_logger_logx (lua_State *L)
 		uid = lua_logger_get_id (L, 3, NULL);
 	}
 
-	if (uid && modname && lua_type (L, 4) == LUA_TSTRING) {
-		ret = lua_logger_log_format (L, 4, FALSE, logbuf, sizeof (logbuf) - 1);
+	if (uid && modname) {
+		if (lua_type (L, 4) == LUA_TSTRING) {
+			ret = lua_logger_log_format (L, 4, FALSE, logbuf, sizeof (logbuf) - 1);
+		}
+		else if (lua_type (L, 4) == LUA_TNUMBER) {
+			stack_pos = lua_tonumber (L, 4);
+			ret = lua_logger_log_format (L, 5, FALSE, logbuf, sizeof (logbuf) - 1);
+		}
+		else {
+			return luaL_error (L, "invalid argument on pos 4");
+		}
 
 		if (ret) {
-			lua_common_log_line (flags, L, logbuf, uid, modname, 1);
+			lua_common_log_line (flags, L, logbuf, uid, modname, stack_pos);
 		}
 	}
 	else {
