@@ -667,17 +667,19 @@ local function make_grammar()
   local doublequoted_string = l.P '"' * l.C(((1 - l.S'"\r\n\f\\') + (l.P'\\' * 1))^0) * '"'
   local argument = atom + singlequoted_string + doublequoted_string
   local dot = l.P(".")
+  local semicolon = l.P(":")
   local obrace = "(" * spc
   local ebrace = spc * ")"
   local comma = spc * "," * spc
-  local sel_separator = spc * l.S":;*" * spc
+  local sel_separator = spc * l.S";*" * spc
 
   return l.P{
     "LIST";
     LIST = l.Ct(l.V("EXPR")) * (sel_separator * l.Ct(l.V("EXPR")))^0,
-    EXPR = l.V("FUNCTION") * (dot * l.V("PROCESSOR"))^0,
+    EXPR = l.V("FUNCTION") * (semicolon * l.V("METHOD"))^-1 * (dot * l.V("PROCESSOR"))^0,
     PROCESSOR = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
     FUNCTION = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
+    METHOD = l.Ct(atom / function(e) return '__' .. e end * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
     ARG_LIST = l.Ct((argument * comma^0)^0)
   }
 end
