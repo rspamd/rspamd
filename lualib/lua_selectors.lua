@@ -412,7 +412,12 @@ local transform_function = {
     ['process'] = function(inp, _, args)
       local hash = require 'rspamd_cryptobox_hash'
       local ht = args[1] or 'blake2'
-      return hash:create_specific(ht):update(inp), 'hash'
+      local h = hash:create_specific(ht):update(inp)
+
+      if args[2] then
+        return h[args[2]](h),'string' -- Call hash method
+      end
+      return h, 'hash'
     end,
     ['description'] = 'Create a digest from string or a list of strings',
   },
