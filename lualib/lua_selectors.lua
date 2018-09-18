@@ -733,7 +733,7 @@ end
 local parser = make_grammar()
 
 --[[[
--- @function lua_selectors.parse_selectors(cfg, str)
+-- @function lua_selectors.parse_selector(cfg, str)
 --]]
 exports.parse_selector = function(cfg, str)
   local parsed = {parser:match(str)}
