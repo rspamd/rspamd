@@ -584,6 +584,55 @@ local function process_selector(task, sel)
   lua_util.debugm(M, task, 'extracted %s, type %s',
       sel.selector.name, etype)
 
+  local pipe = sel.processor_pipe or E
+
+  if etype:match('^userdata') or etype:match('^table') then
+    -- Apply userdata conversion first
+    local first_elt = pipe[1]
+
+    if first_elt and first_elt.method then
+      -- Explicit conversion
+      local meth = first_elt
+
+      if meth.types[etype] then
+        lua_util.debugm(M, task, 'apply method `%s` to %s',
+            meth.name, etype)
+        input,etype = meth.process(input, etype)
+      else
+        local pt = pure_type(etype)
+
+        if meth.types[pt] then
+          lua_util.debugm(M, task, 'map method `%s` to list of %s',
+              meth.name, pt)
+          input = fun.map(function(list_elt)
+            local ret, _ = meth.process(list_elt, pt)
+            return ret
+          end, input)
+          etype = 'string_list'
+        end
+      end
+      -- Remove method from the pipeline
+      pipe = fun.drop_n(1, pipe)
+    else
+      -- Implicit conversion
+
+      local pt = pure_type(etype)
+
+      if not pt then
+        lua_util.debugm(M, task, 'apply implicit conversion %s->string', etype)
+        input = implicit_tostring(etype, input)
+        etype = 'string'
+      else
+        lua_util.debugm(M, task, 'apply implicit map %s->string', pt)
+        input = fun.map(function(list_elt)
+          local ret = implicit_tostring(etype, list_elt)
+          return ret
+        end, input)
+        etype = 'string_list'
+      end
+    end
+  end
+
   -- Now we fold elements using left fold
   local function fold_function(acc, x)
     if acc == nil or acc[1] == nil then
@@ -595,40 +644,22 @@ local function process_selector(task, sel)
     local t = acc[2]
 
     if not x.types[t] then
-      -- Additional case for maps, tables and userdata
-      if t == 'userdata' or t == 'table' then
-        if not x.method then
-          -- Implicit conversion
-          lua_util.debugm(M, task, 'apply implicit conversion %s->string', t)
-          return fold_function({implicit_tostring(t, value)}, x)
-        end
-      else
-        local pt = pure_type(t)
+      local pt = pure_type(t)
 
-        if pt and x.types['list'] then
-          -- Generic list
-          lua_util.debugm(M, task, 'apply list function `%s` to %s', x.name, t)
-          return {x.process(value, t, x.args)}
-        elseif pt and x.map_type and x.types[pt] then
-          local map_type = x.map_type .. '_list'
-          lua_util.debugm(M, task, 'map `%s` to list of %s resulting %s',
-              x.name, pt, map_type)
+      if pt and x.types['list'] then
+        -- Generic list processor
+        lua_util.debugm(M, task, 'apply list function `%s` to %s', x.name, t)
+        return {x.process(value, t, x.args)}
+      elseif pt and x.map_type and x.types[pt] then
+        local map_type = x.map_type .. '_list'
+        lua_util.debugm(M, task, 'map `%s` to list of %s resulting %s',
+            x.name, pt, map_type)
 
-          return {fun.map(function(list_elt)
-            if not list_elt then return nil end
-            local ret, _ = x.process(list_elt, pt, x.args)
-            return ret
-          end, value), map_type}
-        elseif pt and pt == 'userdata' or pt == 'table' then
-          if not x.method then
-            -- Implicit conversion
-            lua_util.debugm(M, task, 'apply implicit map %s->string', pt)
-            return fold_function({fun.map(function(list_elt)
-              local ret, _ = implicit_tostring(pt, list_elt)
-              return ret
-            end, value), 'string_list'}, x)
-          end
-        end
+        return {fun.map(function(list_elt)
+          if not list_elt then return nil end
+          local ret, _ = x.process(list_elt, pt, x.args)
+          return ret
+        end, value), map_type}
       end
       logger.errx(task, 'cannot apply transform %s for type %s', x.name, t)
       return nil
@@ -640,7 +671,7 @@ local function process_selector(task, sel)
 
   local res = fun.foldl(fold_function,
       {input, etype},
-      sel.processor_pipe)
+      pipe)
 
   if not res or not res[1] then return nil end -- Pipeline failed
 
