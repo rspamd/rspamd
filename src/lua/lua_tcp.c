@@ -485,6 +485,7 @@ lua_tcp_maybe_free (struct lua_tcp_cbdata *cbd)
 		if (cbd->w) {
 			rspamd_session_watcher_pop (cbd->session, cbd->w);
 		}
+		cbd->w = NULL;
 
 		if (cbd->async_ev) {
 			rspamd_session_remove_event (cbd->session, lua_tcp_void_finalyser, cbd);
@@ -496,6 +497,7 @@ lua_tcp_maybe_free (struct lua_tcp_cbdata *cbd)
 		if (cbd->w) {
 			rspamd_session_watcher_pop (cbd->session, cbd->w);
 		}
+		cbd->w = NULL;
 
 		if (cbd->async_ev) {
 			rspamd_session_remove_event (cbd->session, lua_tcp_fin, cbd);
