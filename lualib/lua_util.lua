@@ -732,10 +732,14 @@ if type(rspamd_config) == 'userdata' then
   end
 end
 
-exports.debugm = function(mod, ...)
+exports.debugm = function(mod, obj_or_fmt, fmt_or_something, ...)
   local logger = require "rspamd_logger"
   if unconditional_debug or debug_modules[mod] then
-    logger.logx(log_level, mod, ...)
+    if type(obj_or_fmt) == 'string' then
+      logger.logx(log_level, mod, 2, obj_or_fmt, fmt_or_something, ...)
+    else
+      logger.logx(log_level, mod, obj_or_fmt, 2, fmt_or_something, ...)
+    end
   end
 end
 
