@@ -4,7 +4,6 @@
 - cdb               Version: 1.1.0  License: Public Domain / CC0    Patched: NO
 - hiredis           Version: 0.13.3 License: BSD-3-Clause           Patched: YES
 - lc-btrie          Version: ?      License: BSD-3-Clause           Patched: YES
-- lgpl              Version: ?      License: LGPL-2.1               Patched: NO
 - libottery         Version: ?      License: Public Domain / CC0    Patched: YES
 - librdns           Version: ?      License: BSD-2-Clause           Patched: ?
 - libucl            Version: ?      License: BSD-2-Clause           Patched: ?
