@@ -7,10 +7,22 @@ struct rspamd_main             *rspamd_main = NULL;
 struct event_base              *base = NULL;
 worker_t *workers[] = { NULL };
 
+gchar *lua_test = NULL;
+gboolean verbose = FALSE;
+
+static GOptionEntry entries[] =
+{
+	{ "test", 't', 0, G_OPTION_ARG_STRING, &lua_test,
+	  "Lua test to run (i.e. selectors.lua)", NULL },
+	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
+};
+
 int
 main (int argc, char **argv)
 {
 	struct rspamd_config *cfg;
+	GOptionContext *context;
+	GError *error = NULL;
 
 	rspamd_main = (struct rspamd_main *)g_malloc (sizeof (struct rspamd_main));
 	memset (rspamd_main, 0, sizeof (struct rspamd_main));
@@ -26,6 +38,15 @@ main (int argc, char **argv)
 	(void)rspamd_log_open (rspamd_main->logger);
 
 	g_test_init (&argc, &argv, NULL);
+
+	context = g_option_context_new ("- run rspamd test");
+	g_option_context_add_main_entries (context, entries, NULL);
+
+	if (!g_option_context_parse (context, &argc, &argv, &error)) {
+		fprintf (stderr, "option parsing failed: %s\n", error->message);
+		g_option_context_free (context);
+		exit (1);
+	}
 
 	cfg->libs_ctx = rspamd_init_libs ();
 
