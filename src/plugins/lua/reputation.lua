@@ -1199,8 +1199,8 @@ local function parse_rule(name, tbl)
   end
   -- Allow config override
   local rule = {
-    selector = lua_util.deepcopy(selector),
-    backend = lua_util.deepcopy(backend),
+    selector = lua_util.shallowcopy(selector),
+    backend = lua_util.shallowcopy(backend),
     config = {}
   }
 
