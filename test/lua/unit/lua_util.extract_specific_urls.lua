@@ -110,8 +110,7 @@ context("Lua util - extract_specific_urls", function()
         local s = logger.slog("%1 =?= %2", c.expect, actual_result)
         print(s) --]]
 
-      assert_equal(true, util.table_cmp(c.expect, actual_result), "checking that we got the same tables")
-
+      assert_rspamd_table_eq({actual = actual_result, expect = c.expect})
     end)
 
     test("extract_specific_urls " .. i, function()
@@ -132,8 +131,7 @@ context("Lua util - extract_specific_urls", function()
         local s = logger.slog("case[%1] %2 =?= %3", i, c.expect, actual_result)
         print(s) --]]
 
-      assert_equal(true, util.table_cmp(c.expect, actual_result), "checking that we got the same tables")
-
+      assert_rspamd_table_eq({actual = actual_result, expect = c.expect})
     end)
   end
 
