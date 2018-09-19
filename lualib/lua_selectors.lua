@@ -353,7 +353,7 @@ local transform_function = {
       ['list'] = true,
     },
     ['process'] = function(inp, t)
-      return inp[1],pure_type(t)
+      return fun.head(inp),pure_type(t)
     end,
     ['description'] = 'Returns the first element',
   },
@@ -363,7 +363,7 @@ local transform_function = {
       ['list'] = true,
     },
     ['process'] = function(inp, t)
-      return inp[#inp],pure_type(t)
+      return fun.nth(#inp, inp),pure_type(t)
     end,
     ['description'] = 'Returns the last element',
   },
@@ -373,7 +373,7 @@ local transform_function = {
       ['list'] = true,
     },
     ['process'] = function(inp, t, args)
-      return inp[tonumber(args[1] or 1)],pure_type(t)
+      return fun.nth(tonumber(args[1]) or 1, inp),pure_type(t)
     end,
     ['description'] = 'Returns the nth element',
   },
@@ -401,7 +401,7 @@ local transform_function = {
       ['string_list'] = true
     },
     ['process'] = function(inp, _, args)
-      return table.concat(inp, args[1] or ''), 'string'
+      return table.concat(fun.totable(inp), args[1] or ''), 'string'
     end,
     ['description'] = 'Joins strings into a single string using separator in the argument',
   },
@@ -488,7 +488,8 @@ local transform_function = {
   -- Drops input value and return values from function's arguments or an empty string
   ['id'] = {
     ['types'] = {
-      ['string'] = true
+      ['string'] = true,
+      ['list'] = true,
     },
     ['map_type'] = 'string',
     ['process'] = function(_, _, args)
