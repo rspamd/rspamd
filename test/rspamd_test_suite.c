@@ -31,6 +31,7 @@ main (int argc, char **argv)
 
 	base = event_init ();
 	rspamd_stat_init (cfg, base);
+	rspamd_url_init (NULL);
 
 	if (g_test_verbose ()) {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
