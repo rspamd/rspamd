@@ -61,6 +61,7 @@ define(["jquery", "footable", "humanize"],
 
         function preprocess_item(item) {
             for (var prop in item) {
+                if (!{}.hasOwnProperty.call(item, prop)) continue;
                 switch (prop) {
                     case "rcpt_mime":
                     case "rcpt_smtp":
