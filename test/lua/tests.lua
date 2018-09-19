@@ -1,6 +1,7 @@
 -- Run all unit tests in 'unit' directory
 
 local telescope = require "telescope"
+require "rspamd_assertions"
 
 local contexts = {}
 
