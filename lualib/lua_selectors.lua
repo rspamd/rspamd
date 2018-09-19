@@ -494,12 +494,12 @@ local transform_function = {
     ['map_type'] = 'string',
     ['process'] = function(_, _, args)
       if args[1] and args[2] then
-        return fun.map(tostring, args)
+        return fun.map(tostring, args),'string_list'
       elseif args[1] then
-        return args[1]
+        return args[1],'string'
       end
 
-      return ''
+      return '','string'
     end,
     ['description'] = 'Drops input value and return values from function\'s arguments or an empty string',
   },
@@ -578,7 +578,7 @@ local function process_selector(task, sel)
         return ud_or_table.addr,'string'
       end
 
-      return table.concat(ud_or_table, " ")
+      return logger.slog("%s", ud_or_table),'string'
     end
   end
 
@@ -766,7 +766,7 @@ exports.parse_selector = function(cfg, str)
 
     res.selector = lua_util.shallowcopy(extractors[selector_tbl[1]])
     res.selector.name = selector_tbl[1]
-    res.selector.args = selector_tbl[2] or {}
+    res.selector.args = selector_tbl[2] or E
 
     lua_util.debugm(M, cfg, 'processed selector %s, args: %s',
         res.selector.name, res.selector.arg)
@@ -781,7 +781,7 @@ exports.parse_selector = function(cfg, str)
         local processor = {
           name = method_name,
           method = true,
-          args = proc_tbl[2],
+          args = proc_tbl[2] or E,
           types = {
             userdata = true,
             table = true,
@@ -807,7 +807,7 @@ exports.parse_selector = function(cfg, str)
         end
         local processor = lua_util.shallowcopy(transform_function[proc_name])
         processor.name = proc_name
-        processor.args = proc_tbl[2]
+        processor.args = proc_tbl[2] or E
         lua_util.debugm(M, cfg, 'attached processor %s to selector %s, args: %s',
             proc_name, res.selector.name, processor.args)
         table.insert(res.processor_pipe, processor)
