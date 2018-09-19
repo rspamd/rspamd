@@ -615,6 +615,7 @@ define(["jquery", "footable", "humanize"],
                         waitForRowsDisplayed(callback, i);
                     }, 500);
                 }
+                return null;
             }
 
             rspamd.query("history", {
@@ -628,6 +629,7 @@ define(["jquery", "footable", "humanize"],
                                 "Neighbours history backend versions do not match. Cannot display history.");
                             return true;
                         }
+                        return false;
                     }
 
                     var neighbours_data = req_data

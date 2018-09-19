@@ -43,6 +43,7 @@
         "padded-blocks": "off",
         "prefer-arrow-callback": "off",
         "prefer-destructuring": "off",
+        "prefer-spread": "off",
         "prefer-template": "off",
         "quote-props" : ["error", "consistent-as-needed"],
         "require-jsdoc": "off",
@@ -57,7 +58,6 @@
         // Temporarily disabled rules
         "array-callback-return": "off",
         "array-element-newline": "off",
-        "consistent-return": "off",
         "consistent-this": "off",
         "func-style": "off",
         "function-paren-newline": "off",
@@ -69,7 +69,6 @@
         "no-invalid-this": "off",
         "no-underscore-dangle": "off",
         "one-var-declaration-per-line": "off",
-        "prefer-spread": "off",
         "sort-keys": "off",
         "sort-vars": "off"
     }
