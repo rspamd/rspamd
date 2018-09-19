@@ -31,9 +31,18 @@ local lua_maps = require "lua_maps"
 local hash = require 'rspamd_cryptobox_hash'
 local lua_redis = require "lua_redis"
 local fun = require "fun"
+local lua_selectors = require "lua_selectors"
+local ts = require("tableshape").types
 
 local redis_params = nil
 local default_expiry = 864000 -- 10 day by default
+
+local keymap_schema = ts.shape{
+  ['reject'] = ts.string,
+  ['add header'] = ts.string,
+  ['rewrite subject'] = ts.string,
+  ['no action'] = ts.string
+}
 
 -- Get reputation from ham/spam/probable hits
 local function generic_reputation_calc(token, rule, mult)
@@ -649,12 +658,148 @@ local spf_selector = {
   idempotent = spf_reputation_idempotent -- used to set scores
 }
 
+-- Generic selector based on lua_selectors framework
+
+local function generic_reputation_init(rule)
+  local cfg = rule.selector.config
+
+  if not cfg.selector then
+    rspamd_logger.errx(rspamd_config, 'cannot configure generic rule: no selector specified')
+    return false
+  end
+
+  if not cfg.symbol then
+    rspamd_logger.errx(rspamd_config, 'cannot configure generic rule: no symbol specified')
+    return false
+  end
+
+  local selector = lua_selectors.create_selector_closure(rspamd_config,
+      cfg.selector, cfg.delimiter)
+
+  if not selector then
+    rspamd_logger.errx(rspamd_config, 'cannot configure generic rule: bad selector: %s',
+        cfg.selector)
+    return false
+  end
+
+  cfg.selector = selector -- Replace with closure
+
+  if cfg.whitelist then
+    cfg.whitelist = lua_maps.map_add('reputation',
+        'generic_whitelist',
+        'map',
+        'Whitelisted selectors')
+  end
+
+  return true
+end
+
+local function generic_reputation_filter(task, rule)
+  local selector_res = rule.selector(task)
+
+  local function tokens_cb(err, token, values)
+    if values then
+      local score = generic_reputation_calc(values, rule, 1.0)
+
+      if math.abs(score) > 1e-3 then
+        -- TODO: add description
+        add_symbol_score(task, rule, score)
+      end
+    end
+  end
+
+  if selector_res then
+    if type(selector_res) == 'table' then
+      fun.each(function(e)
+        lua_util.debugm(N, task, 'check generic reputation %s', e)
+        rule.backend.get_token(task, rule, e, tokens_cb)
+      end, selector_res)
+    else
+      lua_util.debugm(N, task, 'check generic reputation %s', selector_res)
+      rule.backend.get_token(task, rule, selector_res, tokens_cb)
+    end
+  end
+end
+
+local function generic_reputation_idempotent(task, rule)
+  local action = task:get_metric_action()
+  local cfg = rule.selector.config
+  local need_set = false
+  local token = {}
+
+  local selector_res = rule.selector(task)
+  if not selector_res then return end
+
+  local k = cfg.keys_map[action]
+
+  if k then
+    token[k] = 1.0
+    need_set = true
+  end
+
+  if need_set then
+    if type(selector_res) == 'table' then
+      fun.each(function(e)
+        lua_util.debugm(N, task, 'set generic selector %s = %s',
+            e, token)
+        rule.backend.set_token(task, rule, e, token)
+      end, selector_res)
+    else
+      lua_util.debugm(N, task, 'set generic selector %s = %s',
+          selector_res, token)
+      rule.backend.set_token(task, rule, selector_res, token)
+    end
+  end
+end
+
+
+local generic_selector = {
+  schema = ts.shape{
+    keys_map = keymap_schema,
+    symbol = ts.string,
+    lower_bound = ts.number + ts.string / tonumber,
+    max_score = ts.number:is_optional(),
+    min_score = ts.number:is_optional(),
+    outbound = ts.boolean,
+    inbound = ts.boolean,
+    selector = ts.string,
+    delimiter = ts.string,
+    whitelist = ts.string:is_optional(),
+  },
+  config = {
+    -- keys map between actions and hash elements in bucket,
+    -- h is for ham,
+    -- s is for spam,
+    -- p is for probable spam
+    keys_map = {
+      ['reject'] = 's',
+      ['add header'] = 'p',
+      ['rewrite subject'] = 'p',
+      ['no action'] = 'h'
+    },
+    symbol = nil, -- symbol to be inserted (not defined)
+    lower_bound = 10, -- minimum number of messages to be scored
+    min_score = nil,
+    max_score = nil,
+    outbound = true,
+    inbound = true,
+    selector = nil,
+    delimiter = ':',
+    whitelist = nil
+  },
+  init = generic_reputation_init,
+  filter = generic_reputation_filter, -- used to get scores
+  idempotent = generic_reputation_idempotent -- used to set scores
+}
+
+
 
 local selectors = {
   ip = ip_selector,
   url = url_selector,
   dkim = dkim_selector,
-  spf = spf_selector
+  spf = spf_selector,
+  generic = generic_selector
 }
 
 local function reputation_dns_init(rule, _, _, _)
@@ -924,6 +1069,14 @@ end
 --]]
 local backends = {
   redis = {
+    schema = ts.shape{
+      expiry = ts.number + ts.string / lua_util.parse_time_interval,
+      buckets = ts.shape{
+        time = ts.number + ts.string / lua_util.parse_time_interval,
+        name = ts.string,
+        mult = ts.number + ts.string / tonumber
+      }
+    },
     config = {
       expiry = default_expiry,
       buckets = {
@@ -944,6 +1097,9 @@ local backends = {
     set_token = reputation_redis_set_token,
   },
   dns = {
+    schema = ts.shape{
+      list = ts.string,
+    },
     config = {
       -- list = rep.example.com
     },
@@ -1050,7 +1206,28 @@ local function parse_rule(name, tbl)
 
   -- Override default config params
   override_defaults(rule.backend.config, tbl.backend)
+  local schema_err
+  if backend.schema then
+    rule.backend.config,schema_err = backend.schema:transform(rule.backend.config)
+    if not rule.backend.config then
+      rspamd_logger.errx(rspamd_config, "cannot parse backend config for %s: %s",
+          sel_type, schema_err)
+
+      return
+    end
+  end
+
   override_defaults(rule.selector.config, tbl.selector)
+  if selector.schema then
+    rule.selector.config,schema_err = selector.schema:transform(rule.selector.config)
+
+    if not rule.selector.config then
+      rspamd_logger.errx(rspamd_config, "cannot parse selector config for %s: %s",
+          sel_type,
+          schema_err)
+      return
+    end
+  end
   -- Generic options
   override_defaults(rule.config, tbl)
 

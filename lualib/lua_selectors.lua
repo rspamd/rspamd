@@ -16,6 +16,8 @@ limitations under the License.
 
 -- This module contains 'selectors' implementation: code to extract data
 -- from Rspamd tasks and compose those together
+--
+-- Read more at https://rspamd.com/doc/configuration/selectors.html
 
 --[[[
 -- @module lua_selectors
