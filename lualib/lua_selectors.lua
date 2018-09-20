@@ -569,9 +569,7 @@ local function process_selector(task, sel)
   end
 
   local function implicit_tostring(t, ud_or_table)
-    if t == 'userdata' then
-      return tostring(ud_or_table),'string'
-    else
+    if t == 'table' then
       -- Table (very special)
       if ud_or_table.value then
         return ud_or_table.value,'string'
@@ -580,6 +578,8 @@ local function process_selector(task, sel)
       end
 
       return logger.slog("%s", ud_or_table),'string'
+    else
+      return tostring(ud_or_table),'string'
     end
   end
 
