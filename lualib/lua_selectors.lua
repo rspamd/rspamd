@@ -769,7 +769,7 @@ exports.parse_selector = function(cfg, str)
     res.selector.args = selector_tbl[2] or E
 
     lua_util.debugm(M, cfg, 'processed selector %s, args: %s',
-        res.selector.name, res.selector.arg)
+        res.selector.name, res.selector.args)
 
     -- Now process processors pipe
     fun.each(function(proc_tbl)
