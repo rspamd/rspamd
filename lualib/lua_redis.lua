@@ -17,10 +17,35 @@ limitations under the License.
 local logger = require "rspamd_logger"
 local lutil = require "lua_util"
 local rspamd_util = require "rspamd_util"
+local ts = require("tableshape").types
 
 local exports = {}
 
 local E = {}
+
+local common_schema = ts.shape {
+  timeout = (ts.number + ts.string / lutil.parse_time_interval):is_optional(),
+  db = ts.string:is_optional(),
+  database = ts.string:is_optional(),
+  dbname = ts.string:is_optional(),
+  prefix = ts.string:is_optional(),
+  password = ts.string:is_optional(),
+  expand_keys = ts.boolean:is_optional(),
+}
+
+local config_schema =
+  ts.shape({
+    read_servers = ts.string + ts.array_of(ts.string),
+    write_servers = ts.string + ts.array_of(ts.string),
+  }, {extra_opts = common_schema}) +
+  ts.shape({
+    servers = ts.string + ts.array_of(ts.string),
+  }, {extra_opts = common_schema}) +
+  ts.shape({
+    server = ts.string + ts.array_of(ts.string),
+  }, {extra_opts = common_schema})
+
+exports.config_schema = config_schema
 
 --[[[
 -- @module lua_redis
@@ -143,6 +168,8 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
     opts = module_opts
   end
 
+  local schema_error
+
   if opts then
     local ret
 
@@ -157,11 +184,18 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
     ret = try_load_redis_servers(opts, rspamd_config, result)
 
     if ret then
-      return result
+      ret,schema_error = config_schema:transform(ret)
+
+      if ret then return ret end
     end
   end
 
-  if no_fallback then return nil end
+  if no_fallback then
+    if schema_error then
+      logger.errx(rspamd_config, "invalid Redis definition: %s", schema_error)
+    end
+    return nil
+  end
 
   -- Try global options
   opts = rspamd_config:get_all_opt('redis')
@@ -171,8 +205,11 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
 
     if opts[module_name] then
       ret = try_load_redis_servers(opts[module_name], rspamd_config, result)
+
       if ret then
-        return result
+        ret,schema_error = config_schema:transform(ret)
+
+        if ret then return ret end
       end
     else
       ret = try_load_redis_servers(opts, rspamd_config, result)
@@ -190,15 +227,22 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
       end
 
       if ret then
-        logger.infox(rspamd_config, "using default redis server for module %s",
-          module_name)
+        ret,schema_error = config_schema:transform(ret)
+
+        if ret then return ret end
       end
     end
   end
 
   if result.read_servers then
-    return result
+      result,schema_error = config_schema:transform(ret)
+
+      if result then return result end
   else
+    if schema_error then
+      logger.errx(rspamd_config, "invalid Redis definition: %s", schema_error)
+    end
+
     return nil
   end
 end
