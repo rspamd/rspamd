@@ -244,7 +244,8 @@ e.g. `get_user`]],
   -- the second argument is optional and defines the type (string by default)
   ['pool_var'] = {
     ['get_value'] = function(task, args)
-      return task:get_mempool():get_variable(args[1], args[2]),(args[2] or 'string')
+      local type = args[2] or 'string'
+      return task:get_mempool():get_variable(args[1], type),(type)
     end,
     ['description'] = [[Get specific pool var. The first argument must be variable name,
 the second argument is optional and defines the type (string by default)]],
@@ -769,7 +770,7 @@ exports.parse_selector = function(cfg, str)
     res.selector.args = selector_tbl[2] or E
 
     lua_util.debugm(M, cfg, 'processed selector %s, args: %s',
-        res.selector.name, res.selector.arg)
+        res.selector.name, res.selector.args)
 
     -- Now process processors pipe
     fun.each(function(proc_tbl)
