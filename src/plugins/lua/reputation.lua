@@ -668,11 +668,6 @@ local function generic_reputation_init(rule)
     return false
   end
 
-  if not cfg.symbol then
-    rspamd_logger.errx(rspamd_config, 'cannot configure generic rule: no symbol specified')
-    return false
-  end
-
   local selector = lua_selectors.create_selector_closure(rspamd_config,
       cfg.selector, cfg.delimiter)
 
@@ -695,7 +690,8 @@ local function generic_reputation_init(rule)
 end
 
 local function generic_reputation_filter(task, rule)
-  local selector_res = rule.selector(task)
+  local cfg = rule.selector.config
+  local selector_res = cfg.selector(task)
 
   local function tokens_cb(err, token, values)
     if values then
@@ -727,7 +723,7 @@ local function generic_reputation_idempotent(task, rule)
   local need_set = false
   local token = {}
 
-  local selector_res = rule.selector(task)
+  local selector_res = cfg.selector(task)
   if not selector_res then return end
 
   local k = cfg.keys_map[action]
@@ -756,7 +752,6 @@ end
 local generic_selector = {
   schema = ts.shape{
     keys_map = keymap_schema,
-    symbol = ts.string,
     lower_bound = ts.number + ts.string / tonumber,
     max_score = ts.number:is_optional(),
     min_score = ts.number:is_optional(),
@@ -777,7 +772,6 @@ local generic_selector = {
       ['rewrite subject'] = 'p',
       ['no action'] = 'h'
     },
-    symbol = nil, -- symbol to be inserted (not defined)
     lower_bound = 10, -- minimum number of messages to be scored
     min_score = nil,
     max_score = nil,
@@ -1150,22 +1144,6 @@ local function reputation_idempotent_cb(task, rule)
   end
 end
 
-local function override_defaults(def, override)
-  for k,v in pairs(override) do
-    if k ~= 'selector' and k ~= 'backend' then
-      if def[k] then
-        if type(v) == 'table' then
-          override_defaults(def[k], v)
-        else
-          def[k] = v
-        end
-      else
-        def[k] = v
-      end
-    end
-  end
-end
-
 local function callback_gen(cb, rule)
   return function(task)
     if rule.enabled then
@@ -1200,7 +1178,7 @@ local function parse_rule(name, tbl)
   }
 
   -- Override default config params
-  override_defaults(rule.backend.config, bk_conf)
+  rule.backend.config = lua_util.override_defaults(rule.backend.config, bk_conf)
   if backend.schema then
     local checked,schema_err = backend.schema:transform(rule.backend.config)
     if not checked then
@@ -1213,21 +1191,23 @@ local function parse_rule(name, tbl)
     rule.backend.config = checked
   end
 
-  override_defaults(rule.selector.config, sel_conf)
+  rule.selector.config = lua_util.override_defaults(rule.selector.config, sel_conf)
   if selector.schema then
     local checked,schema_err = selector.schema:transform(rule.selector.config)
 
     if not checked then
-      rspamd_logger.errx(rspamd_config, "cannot parse selector config for %s: %s",
+      rspamd_logger.errx(rspamd_config, "cannot parse selector config for %s: %s (%s)",
           sel_type,
-          schema_err)
+          schema_err, sel_conf)
       return
     end
 
     rule.selector.config = checked
   end
   -- Generic options
-  override_defaults(rule.config, tbl)
+  tbl.selector = nil
+  tbl.backend = nil
+  rule.config = lua_util.override_defaults(rule.config, tbl)
 
   if rule.config.whitelisted_ip then
     rule.config.whitelisted_ip_map = lua_maps.rspamd_map_add_from_ucl(rule.whitelisted_ip,

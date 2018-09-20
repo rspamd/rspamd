@@ -184,7 +184,7 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
     ret = try_load_redis_servers(opts, rspamd_config, result)
 
     if ret then
-      ret,schema_error = config_schema:transform(ret)
+      ret,schema_error = config_schema:transform(result)
 
       if ret then return ret end
     end
@@ -207,7 +207,7 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
       ret = try_load_redis_servers(opts[module_name], rspamd_config, result)
 
       if ret then
-        ret,schema_error = config_schema:transform(ret)
+        ret,schema_error = config_schema:transform(result)
 
         if ret then return ret end
       end
@@ -227,7 +227,7 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
       end
 
       if ret then
-        ret,schema_error = config_schema:transform(ret)
+        ret,schema_error = config_schema:transform(result)
 
         if ret then return ret end
       end
@@ -235,7 +235,7 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
   end
 
   if result.read_servers then
-      result,schema_error = config_schema:transform(ret)
+      result,schema_error = config_schema:transform(result)
 
       if result then return result end
   else
