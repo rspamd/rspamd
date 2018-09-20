@@ -65,7 +65,7 @@ context("Selectors test", function()
 
     ["digest"] = {
                 selector = "digest", 
-                expect = {"4676b65106f41941d65ee21b5f3f37ec"}},
+                expect = {"843186d5d1f518fd7de17c13c114bb26"}},
 
     ["user"] = {
                 selector = "user", 
@@ -78,11 +78,15 @@ context("Selectors test", function()
     ["rcpts"] = {
                 selector = "rcpts", 
                 expect = {{"nobody@example.com", "no-one@example.com"}}},
---[[ not working so far
+
     ["1st rcpts"] = {
                 selector = "rcpts.nth(1)", 
                 expect = {"nobody@example.com"}},
-]]
+
+    ["first rcpts"] = {
+                selector = "rcpts.first", 
+                expect = {"nobody@example.com"}},
+
     ["to"] = {
                 selector = "to", 
                 expect = {"nobody@example.com"}},
@@ -93,11 +97,10 @@ context("Selectors test", function()
                           "ce112d07c52ae649f9646f3d0b5aaab5d4834836d771c032d1a75059d31fed84f38e00c0b205918f6d354934c2055d33d19d045f783a62561f467728ebcf0160"
                           }}},
 
---[[ not working
     ["attachments id"] = {
                 selector = "attachments.id", 
                 expect = {""}},
-]]
+
     ["files"] = {
                 selector = "files", 
                 expect = {{"f.zip", "f2.zip"}}},
@@ -105,48 +108,38 @@ context("Selectors test", function()
     ["helo"] = {
                 selector = "helo", 
                 expect = {"hello mail"}},
-
---[[ not working:
-Failed asserting that 
-  (actual)   {[1] = {[1] = , [2] = , [3] = }} 
- equals to
-  (expected) {[1] = hello mail}
-
+--[[
+  Received is a complicated structure: should be tested separately
     ["received"] = {
                 selector = "received", 
-                expect = {"hello mail"}},
-]]
+                expect = {},
+-- ]]
 
---[[ not working:
-/Users/mgalanin/install/share/rspamd/lib/lua_selectors.lua:633: bad argument #1 to 'implicit_tostring' (table expected, got userdata)
-stack traceback:
-  [C]: in function 'implicit_tostring'
-  install/share/rspamd/lib/lua_selectors.lua:633: in function 'fun'
-  install/share/rspamd/lib/fun.lua:30: in function 'gen_x'
-  install/share/rspamd/lib/fun.lua:778: in function 'totable'
-  install/share/rspamd/lib/lua_selectors.lua:700: in function 'process_selector'
-  install/share/rspamd/lib/lua_selectors.lua:860: in function 'process_selectors'
-  build/test/lua/unit/selectors.lua:35: in function 'check_selector'
-  build/test/lua/unit/selectors.lua:131: in function <build/test/lua/unit/selectors.lua:129>
     ["urls"] = {
                 selector = "urls", 
-                expect = {"hello mail"}},
-]]
+                expect = {{"http://example.net"}}},
 
---[===[ not working
-lua_selectors.lua:771: processed selector pool_var, args: nil
 
-    ["pool_var"] = {
+    ["pool_var str, default type"] = {
                 selector = [[pool_var("str_var")]], 
-                expect = {"hello mail"}},
-]===]
+                expect = {"str 1"}},
+
+    ["pool_var str"] = {
+                selector = [[pool_var("str_var", 'string')]], 
+                expect = {"str 1"}},
+
+-- [===[ not working
+    ["pool_var int"] = {
+                selector = [[pool_var("int_var", 'int')]], 
+                expect = {"str 1"}},
+-- ]===]
     ["time"] = {
                 selector = "time", 
                 expect = {"1537364211"}},
 
   }
-  
-  local check_this_case = nil -- replace this with case name
+
+  local check_this_case = "pool_var int" -- replace this with case name
   if check_this_case then
     cases = {[check_this_case] = cases[check_this_case]}
   end
@@ -164,12 +157,6 @@ end)
 
 --[=========[ *******************  message  ******************* ]=========]
 msg = [[
-Received: from server.chat-met-vreemden.nl (unknown [IPv6:2a01:7c8:aab6:26d:5054:ff:fed1:1da2])
-    (using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
-    (Client did not present a certificate)
-    by mx1.freebsd.org (Postfix) with ESMTPS id CF0171862
-    for <test@example.com>; Mon,  6 Jul 2015 09:01:20 +0000 (UTC)
-    (envelope-from upwest201diana@outlook.com)
 Received: from ca-18-193-131.service.infuturo.it ([151.18.193.131] helo=User)
     by server.chat-met-vreemden.nl with esmtpa (Exim 4.76)
     (envelope-from <upwest201diana@outlook.com>)
@@ -194,16 +181,6 @@ Content-Type: text/html; charset="utf-8"
 
 <html><body>
 <a href="http://example.net">http://example.net</a>
-<a href="http://example1.net">http://example1.net</a>
-<a href="http://example2.net">http://example2.net</a>
-<a href="http://example3.net">http://example3.net</a>
-<a href="http://example4.net">http://example4.net</a>
-<a href="http://domain1.com">http://domain1.com</a>
-<a href="http://domain2.com">http://domain2.com</a>
-<a href="http://domain3.com">http://domain3.com</a>
-<a href="http://domain4.com">http://domain4.com</a>
-<a href="http://domain5.com">http://domain5.com</a>
-<a href="http://domain.com">http://example.net/</a>
 </html>
 
 
