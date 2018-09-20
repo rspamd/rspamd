@@ -8,12 +8,15 @@ struct event_base              *base = NULL;
 worker_t *workers[] = { NULL };
 
 gchar *lua_test = NULL;
+gchar *lua_test_case = NULL;
 gboolean verbose = FALSE;
 
 static GOptionEntry entries[] =
 {
 	{ "test", 't', 0, G_OPTION_ARG_STRING, &lua_test,
 	  "Lua test to run (i.e. selectors.lua)", NULL },
+	{ "test-case", 'c', 0, G_OPTION_ARG_STRING, &lua_test_case,
+	  "Lua test to run, lua pattern i.e. \"case .* rcpts\"", NULL },
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 

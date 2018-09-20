@@ -8,8 +8,14 @@ local contexts = {}
 for _,t in ipairs(tests_list) do
   telescope.load_contexts(t, contexts)
 end
+local function test_filter(test)
+  return test.name:match(test_pattern)
+end
+if not test_pattern then
+  test_filter = function(_) return true end
+end
 local buffer = {}
-local results = telescope.run(contexts, callbacks, test_pattern)
+local results = telescope.run(contexts, callbacks, test_filter)
 local summary, data = telescope.summary_report(contexts, results)
 
 table.insert(buffer, telescope.test_report(contexts, results))
