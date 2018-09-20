@@ -168,8 +168,6 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
     opts = module_opts
   end
 
-  local schema_error
-
   if opts then
     local ret
 
@@ -184,16 +182,14 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
     ret = try_load_redis_servers(opts, rspamd_config, result)
 
     if ret then
-      ret,schema_error = config_schema:transform(result)
-
-      if ret then return ret end
+      return result
     end
   end
 
   if no_fallback then
-    if schema_error then
-      logger.errx(rspamd_config, "invalid Redis definition: %s", schema_error)
-    end
+    logger.infox(rspamd_config, "cannot find Redis definitions for %s and fallback is disabled",
+        module_name)
+
     return nil
   end
 
@@ -207,9 +203,7 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
       ret = try_load_redis_servers(opts[module_name], rspamd_config, result)
 
       if ret then
-        ret,schema_error = config_schema:transform(result)
-
-        if ret then return ret end
+        return result
       end
     else
       ret = try_load_redis_servers(opts, rspamd_config, result)
@@ -227,24 +221,18 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
       end
 
       if ret then
-        ret,schema_error = config_schema:transform(result)
-
-        if ret then return ret end
+        logger.infox(rspamd_config, "use default Redis settings for %s",
+            module_name)
+        return result
       end
     end
   end
 
   if result.read_servers then
-      result,schema_error = config_schema:transform(result)
-
-      if result then return result end
-  else
-    if schema_error then
-      logger.errx(rspamd_config, "invalid Redis definition: %s", schema_error)
-    end
-
-    return nil
+      return result
   end
+
+  return nil
 end
 
 --[[[
