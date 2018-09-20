@@ -121,32 +121,25 @@ context("Selectors test", function()
 
 
     ["pool_var str, default type"] = {
-                selector = [[pool_var("str_var")]], 
+                selector = [[pool_var("str_var")]],
                 expect = {"str 1"}},
 
     ["pool_var str"] = {
-                selector = [[pool_var("str_var", 'string')]], 
+                selector = [[pool_var("str_var", 'string')]],
                 expect = {"str 1"}},
 
--- [===[ not working
-    ["pool_var int"] = {
-                selector = [[pool_var("int_var", 'int')]], 
-                expect = {"str 1"}},
--- ]===]
+    ["pool_var double"] = {
+                selector = [[pool_var("int_var", 'double')]],
+                expect = {"1"}},
+
     ["time"] = {
                 selector = "time", 
                 expect = {"1537364211"}},
 
   }
 
-  local check_this_case = "pool_var int" -- replace this with case name
-  if check_this_case then
-    cases = {[check_this_case] = cases[check_this_case]}
-  end
-
   for case_name, case in pairs(cases) do
     test("case " .. case_name, function()
-      -- local selector_string = [[ip;header(Subject, "full").lower;rcpts:addr.lower]]
       local elts = check_selector(case.selector)
       assert_not_nil(elts)
       assert_rspamd_table_eq({actual = elts, expect = case.expect})

@@ -25,6 +25,7 @@
 
 static const char *lua_src = BUILDROOT "/test/lua/tests.lua";
 extern gchar *lua_test;
+extern gchar *lua_test_case;
 extern struct rspamd_main *rspamd_main;
 
 static int
@@ -64,6 +65,11 @@ rspamd_lua_test_func (void)
 	gint i, len;
 
 	rspamd_lua_set_globals (rspamd_main->cfg, L, NULL);
+
+	if (lua_test_case) {
+		lua_pushstring (L, lua_test_case);
+		lua_setglobal (L, "test_pattern");
+	}
 
 	rspamd_printf ("Starting lua tests\n");
 
