@@ -1069,14 +1069,14 @@ end
 --]]
 local backends = {
   redis = {
-    schema = ts.shape{
+    schema = ts.shape({
       expiry = ts.number + ts.string / lua_util.parse_time_interval,
-      buckets = ts.shape{
+      buckets = ts.array_of(ts.shape{
         time = ts.number + ts.string / lua_util.parse_time_interval,
         name = ts.string,
         mult = ts.number + ts.string / tonumber
-      }
-    },
+      }),
+    }, {extra_fields = lua_redis.config_schema}),
     config = {
       expiry = default_expiry,
       buckets = {
@@ -1175,23 +1175,18 @@ local function callback_gen(cb, rule)
 end
 
 local function parse_rule(name, tbl)
-  local sel_type = tbl.selector['type']
+  local sel_type,sel_conf = fun.head(tbl.selector)
   local selector = selectors[sel_type]
 
   if not selector then
     rspamd_logger.errx(rspamd_config, "unknown selector defined for rule %s: %s", name,
-      tbl.selector.type)
+        sel_type)
     return
   end
 
-  local backend = tbl.backend
-  if not backend or not backend.type then
-    rspamd_logger.errx(rspamd_config, "no backend defined for rule %s", name)
-    return
-  end
+  local bk_type,bk_conf = fun.head(tbl.backend)
 
-  local bk_type = backend.type
-  backend = backends[bk_type]
+  local backend = backends[bk_type]
   if not backend then
     rspamd_logger.errx(rspamd_config, "unknown backend defined for rule %s: %s", name,
       tbl.backend.type)
@@ -1205,28 +1200,31 @@ local function parse_rule(name, tbl)
   }
 
   -- Override default config params
-  override_defaults(rule.backend.config, tbl.backend)
-  local schema_err
+  override_defaults(rule.backend.config, bk_conf)
   if backend.schema then
-    rule.backend.config,schema_err = backend.schema:transform(rule.backend.config)
-    if not rule.backend.config then
+    local checked,schema_err = backend.schema:transform(rule.backend.config)
+    if not checked then
       rspamd_logger.errx(rspamd_config, "cannot parse backend config for %s: %s",
           sel_type, schema_err)
 
       return
     end
+
+    rule.backend.config = checked
   end
 
-  override_defaults(rule.selector.config, tbl.selector)
+  override_defaults(rule.selector.config, sel_conf)
   if selector.schema then
-    rule.selector.config,schema_err = selector.schema:transform(rule.selector.config)
+    local checked,schema_err = selector.schema:transform(rule.selector.config)
 
-    if not rule.selector.config then
+    if not checked then
       rspamd_logger.errx(rspamd_config, "cannot parse selector config for %s: %s",
           sel_type,
           schema_err)
       return
     end
+
+    rule.selector.config = checked
   end
   -- Generic options
   override_defaults(rule.config, tbl)
@@ -1334,7 +1332,7 @@ end
 
 if opts['rules'] then
   for k,v in pairs(opts['rules']) do
-    if not ((v or E).selector or E).type then
+    if not ((v or E).selector) then
       rspamd_logger.errx(rspamd_config, "no selector defined for rule %s", k)
     else
       parse_rule(k, v)
