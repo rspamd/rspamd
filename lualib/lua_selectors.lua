@@ -634,7 +634,7 @@ local function process_selector(task, sel)
       else
         lua_util.debugm(M, task, 'apply implicit map %s->string', pt)
         input = fun.map(function(list_elt)
-          local ret = implicit_tostring(etype, list_elt)
+          local ret = implicit_tostring(pt, list_elt)
           return ret
         end, input)
         etype = 'string_list'
