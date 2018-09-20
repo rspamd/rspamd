@@ -1965,7 +1965,7 @@ lua_task_set_request_header (lua_State *L)
 
 	if (s && task) {
 		if (lua_type (L, 3) == LUA_TSTRING) {
-			v = luaL_checklstring (L, 2, &vlen);
+			v = luaL_checklstring (L, 3, &vlen);
 		}
 		else if (lua_type (L, 3) == LUA_TUSERDATA) {
 			t = lua_check_text (L, 3);
