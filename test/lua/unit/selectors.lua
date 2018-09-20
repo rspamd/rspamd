@@ -24,6 +24,7 @@ context("Selectors test", function()
     task:set_from_ip("198.172.22.91")
     task:set_user("cool user name")
     task:set_helo("hello mail")
+    task:set_request_header("hdr1", "value1")
     task:process_message()
     task:get_mempool():set_variable("int_var", 1)
     task:get_mempool():set_variable("str_var", "str 1")
@@ -65,7 +66,7 @@ context("Selectors test", function()
 
     ["digest"] = {
                 selector = "digest", 
-                expect = {"843186d5d1f518fd7de17c13c114bb26"}},
+                expect = {"2216397bc061bb6968e1836f3680fed0"}},
 
     ["user"] = {
                 selector = "user", 
@@ -80,11 +81,19 @@ context("Selectors test", function()
                 expect = {{"nobody@example.com", "no-one@example.com"}}},
 
     ["1st rcpts"] = {
-                selector = "rcpts.nth(1)", 
+                selector = "rcpts.nth(1)",
+                expect = {"nobody@example.com"}},
+
+    ["lower rcpts"] = {
+                selector = "rcpts.lower.first",
                 expect = {"nobody@example.com"}},
 
     ["first rcpts"] = {
                 selector = "rcpts.first", 
+                expect = {"nobody@example.com"}},
+
+    ["first addr rcpts"] = {
+                selector = "rcpts:addr.first",
                 expect = {"nobody@example.com"}},
 
     ["to"] = {
@@ -92,33 +101,34 @@ context("Selectors test", function()
                 expect = {"nobody@example.com"}},
 
     ["attachments"] = {
-                selector = "attachments", 
+                selector = "attachments",
                 expect = {{"ce112d07c52ae649f9646f3d0b5aaab5d4834836d771c032d1a75059d31fed84f38e00c0b205918f6d354934c2055d33d19d045f783a62561f467728ebcf0160",
                           "ce112d07c52ae649f9646f3d0b5aaab5d4834836d771c032d1a75059d31fed84f38e00c0b205918f6d354934c2055d33d19d045f783a62561f467728ebcf0160"
                           }}},
 
     ["attachments id"] = {
-                selector = "attachments.id", 
+                selector = "attachments.id",
                 expect = {""}},
 
     ["files"] = {
-                selector = "files", 
+                selector = "files",
                 expect = {{"f.zip", "f2.zip"}}},
 
     ["helo"] = {
                 selector = "helo", 
                 expect = {"hello mail"}},
---[[
-  Received is a complicated structure: should be tested separately
-    ["received"] = {
-                selector = "received", 
-                expect = {},
--- ]]
+
+    ["received by hostname"] = {
+                selector = "received:by_hostname",
+                expect = {{"server.chat-met-vreemden.nl"}}},
 
     ["urls"] = {
                 selector = "urls", 
                 expect = {{"http://example.net"}}},
 
+    ["emails"] = {
+                selector = "emails",
+                expect = {{"mailto://test@example.net"}}},
 
     ["pool_var str, default type"] = {
                 selector = [[pool_var("str_var")]],
@@ -136,6 +146,9 @@ context("Selectors test", function()
                 selector = "time", 
                 expect = {"1537364211"}},
 
+    ["request_header"] = {
+                selector = "request_header(hdr1)", 
+                expect = {"value1"}},
   }
 
   for case_name, case in pairs(cases) do
@@ -174,6 +187,7 @@ Content-Type: text/html; charset="utf-8"
 
 <html><body>
 <a href="http://example.net">http://example.net</a>
+<a href="mailto:test@example.net">mail me</a>
 </html>
 
 
