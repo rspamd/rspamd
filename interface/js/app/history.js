@@ -68,7 +68,7 @@ define(["jquery", "footable", "humanize"],
                         escape_HTML_array(item[prop]);
                         break;
                     case "symbols":
-                        Object.keys(item.symbols).map(function (key) {
+                        Object.keys(item.symbols).forEach(function (key) {
                             var sym = item.symbols[key];
                             if (!sym.name) {
                                 sym.name = key;
@@ -156,7 +156,7 @@ define(["jquery", "footable", "humanize"],
                     }
 
                     preprocess_item(item);
-                    Object.keys(item.symbols).map(function (key) {
+                    Object.keys(item.symbols).forEach(function (key) {
                         var str = null;
                         var sym = item.symbols[key];
 

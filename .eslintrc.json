@@ -56,7 +56,6 @@
 
 
         // Temporarily disabled rules
-        "array-callback-return": "off",
         "array-element-newline": "off",
         "consistent-this": "off",
         "func-style": "off",
