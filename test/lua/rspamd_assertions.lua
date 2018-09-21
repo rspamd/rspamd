@@ -77,6 +77,7 @@ local function rspamd_assert_table_diff_msg(_, tbl)
       local v_actual = actual[i_v_actual]
 
       if i_v_expect == i_v_actual then
+        -- table keys are the same: compare values
         if type(v_expect) == 'table' and type(v_actual) == 'table' then
           if util.table_cmp(v_expect, v_actual) then
             -- we use the same value for 'actual' and 'expect' as soon as they're equal and don't bother us
@@ -86,15 +87,13 @@ local function rspamd_assert_table_diff_msg(_, tbl)
             recurse(v_expect, v_actual, level + 1)
             diff[#diff + 1] = format_table_end(level)
           end
-        elseif v_expect ~= v_actual then
-          diff[#diff + 1] = format_line(level, i_v_expect, v_expect, v_actual)
         else
           diff[#diff + 1] = format_line(level, i_v_expect, v_expect, v_actual)
         end
 
         i_k_expect, i_v_expect = next(keys_expect, i_k_expect)
         i_k_actual, i_v_actual = next(keys_actual, i_k_actual)
-      elseif tostring(v_actual) > tostring(i_v_actual) then
+      elseif tostring(v_actual) > tostring(v_expect) then
         diff[#diff + 1] = format_line(level, i_v_expect, v_expect, nil)
         i_k_expect, i_v_expect = next(keys_expect, i_k_expect)
       else
