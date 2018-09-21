@@ -894,41 +894,22 @@ exports.combine_selectors = function(_, selectors, delimiter)
   else
     -- We need to do a spill on each table selector
     -- e.g. s:tbl:s -> s:telt1:s + s:telt2:s ...
-    local prefix = {}
     local tbl = {}
-    local suffix = {}
     local res = {}
 
-    local in_prefix = true
-    for _,s in ipairs(selectors) do
-      if in_prefix then
-        if type(s) == 'string' then
-          table.insert(prefix, s)
-        elseif type(s) == 'userdata' then
-          table.insert(prefix, tostring(s))
-        else
-          in_prefix = false
-          table.insert(tbl, s)
-        end
+    for i,s in ipairs(selectors) do
+      if type(s) == 'string' then
+        rawset(tbl, i, fun.duplicate(s))
+      elseif type(s) == 'userdata' then
+        rawset(tbl, i, fun.duplicate(tostring(s)))
       else
-        if type(s) == 'string' then
-          table.insert(suffix, s)
-        elseif type(s) == 'userdata' then
-          table.insert(suffix, tostring(s))
-        else
-          table.insert(tbl, s)
-        end
+        rawset(tbl, i, s)
       end
     end
 
-    prefix = table.concat(prefix, delimiter)
-    suffix = table.concat(suffix, delimiter)
-
-    for _,t in ipairs(tbl) do
-      fun.each(function(...)
-        table.insert(res, table.concat({...}, delimiter))
-      end, fun.zip(fun.duplicate(prefix), t, fun.duplicate(suffix)))
-    end
+    fun.each(function(...)
+      table.insert(res, table.concat({...}, delimiter))
+    end, fun.zip(lua_util.unpack(tbl)))
 
     return res
   end
