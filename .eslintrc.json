@@ -28,6 +28,7 @@
         "multiline-comment-style": "off",
         "multiline-ternary": ["error", "always-multiline"],
         "newline-per-chained-call": ["error", { "ignoreChainWithDepth": 5 }],
+        "no-continue": "off",
         "no-extra-parens": ["error", "functions"],
         "no-implicit-globals": "off",
         "no-magic-numbers": "off",
@@ -42,6 +43,7 @@
         "padded-blocks": "off",
         "prefer-arrow-callback": "off",
         "prefer-destructuring": "off",
+        "prefer-spread": "off",
         "prefer-template": "off",
         "quote-props" : ["error", "consistent-as-needed"],
         "require-jsdoc": "off",
@@ -54,13 +56,10 @@
 
 
         // Temporarily disabled rules
-        "array-callback-return": "off",
         "array-element-newline": "off",
-        "consistent-return": "off",
         "consistent-this": "off",
         "func-style": "off",
         "function-paren-newline": "off",
-        "guard-for-in": "off",
         "line-comment-position": "off",
         "max-len": "off",
         "max-lines": "off",
@@ -69,7 +68,6 @@
         "no-invalid-this": "off",
         "no-underscore-dangle": "off",
         "one-var-declaration-per-line": "off",
-        "prefer-spread": "off",
         "sort-keys": "off",
         "sort-vars": "off"
     }

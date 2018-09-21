@@ -54,6 +54,7 @@ function ($, D3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
 
     function stopTimers() {
         for (var key in timer_id) {
+            if (!{}.hasOwnProperty.call(timer_id, key)) continue;
             Visibility.stop(timer_id[key]);
         }
     }

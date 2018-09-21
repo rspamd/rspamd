@@ -61,13 +61,14 @@ define(["jquery", "footable", "humanize"],
 
         function preprocess_item(item) {
             for (var prop in item) {
+                if (!{}.hasOwnProperty.call(item, prop)) continue;
                 switch (prop) {
                     case "rcpt_mime":
                     case "rcpt_smtp":
                         escape_HTML_array(item[prop]);
                         break;
                     case "symbols":
-                        Object.keys(item.symbols).map(function (key) {
+                        Object.keys(item.symbols).forEach(function (key) {
                             var sym = item.symbols[key];
                             if (!sym.name) {
                                 sym.name = key;
@@ -155,7 +156,7 @@ define(["jquery", "footable", "humanize"],
                     }
 
                     preprocess_item(item);
-                    Object.keys(item.symbols).map(function (key) {
+                    Object.keys(item.symbols).forEach(function (key) {
                         var str = null;
                         var sym = item.symbols[key];
 
@@ -614,6 +615,7 @@ define(["jquery", "footable", "humanize"],
                         waitForRowsDisplayed(callback, i);
                     }, 500);
                 }
+                return null;
             }
 
             rspamd.query("history", {
@@ -627,6 +629,7 @@ define(["jquery", "footable", "humanize"],
                                 "Neighbours history backend versions do not match. Cannot display history.");
                             return true;
                         }
+                        return false;
                     }
 
                     var neighbours_data = req_data
