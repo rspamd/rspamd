@@ -743,7 +743,7 @@ exports.parse_selector = function(cfg, str)
   local parsed = {parser:match(str)}
   local output = {}
 
-  if not parsed then return nil end
+  if not parsed or not parsed[1] then return nil end
 
   -- Output AST format is the following:
   -- table of individual selectors
@@ -772,6 +772,7 @@ exports.parse_selector = function(cfg, str)
     lua_util.debugm(M, cfg, 'processed selector %s, args: %s',
         res.selector.name, res.selector.args)
 
+    local it_happened = false
     -- Now process processors pipe
     fun.each(function(proc_tbl)
       local proc_name = proc_tbl[1]
@@ -804,6 +805,7 @@ exports.parse_selector = function(cfg, str)
 
         if not transform_function[proc_name] then
           logger.errx(cfg, 'processor %s is unknown', proc_name)
+          it_happened = true
           return nil
         end
         local processor = lua_util.shallowcopy(transform_function[proc_name])
@@ -814,6 +816,11 @@ exports.parse_selector = function(cfg, str)
         table.insert(res.processor_pipe, processor)
       end
     end, fun.tail(sel))
+
+    if it_happened then
+      logger.errx(cfg, 'unknown processor used, exiting')
+      return nil
+    end
 
     table.insert(output, res)
   end
