@@ -897,7 +897,6 @@ exports.combine_selectors = function(_, selectors, delimiter)
     local tbl = {}
     local res = {}
 
-    local in_prefix = true
     for i,s in ipairs(selectors) do
       if type(s) == 'string' then
         rawset(tbl, i, fun.duplicate(s))
