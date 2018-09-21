@@ -743,7 +743,7 @@ exports.parse_selector = function(cfg, str)
   local parsed = {parser:match(str)}
   local output = {}
 
-  if not parsed then return nil end
+  if not parsed or not parsed[1] then return nil end
 
   -- Output AST format is the following:
   -- table of individual selectors
