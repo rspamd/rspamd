@@ -3,20 +3,11 @@ context("Selectors test", function()
   local rspamd_task = require "rspamd_task"
   local logger = require "rspamd_logger"
   local lua_selectors = require "lua_selectors"
-  local ffi = require "ffi"
+  local test_helper = require "rspamd_test_helper"
   local cfg = rspamd_config
-  
   local task
-  
-  ffi.cdef[[
-  void rspamd_url_init (const char *tld_file);
-  unsigned ottery_rand_range(unsigned top);
-  void rspamd_http_normalize_path_inplace(char *path, size_t len, size_t *nlen);
-  ]]
 
-  local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
-
-  ffi.C.rspamd_url_init(string.format('%s/%s', test_dir, "test_tld.dat"))
+  test_helper.init_url_parser()
 
   before(function()
     local res
