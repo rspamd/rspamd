@@ -140,6 +140,82 @@ context("Selectors test", function()
     ["request_header"] = {
                 selector = "request_header(hdr1)", 
                 expect = {"value1"}},
+
+    ["get_host"] = {
+                selector = "urls:get_host",
+                expect = {{"example.net"}}},
+
+    ["get_tld"] = {
+                selector = "urls:get_tld",
+                expect = {{"example.net"}}},
+
+    ["transformation regexp"] = {
+                selector = "urls:get_tld.regexp('\\.([\\w]+)$')",
+                expect = {{{".net", "net"}}}},
+
+    ["transformation id"] = {
+                selector = "urls:get_tld.id",
+                expect = {''}},
+
+    ["transformation id arg"] = {
+                selector = "urls:get_tld.id('1')",
+                expect = {'1'}},
+
+    ["transformation id args"] = {
+                selector = "urls:get_tld.id('1', '2', '3')",
+                expect = {{'1', '2', '3'}}},
+
+    ["transformation in"] = {
+                selector = "time(message, '!%w').in(2,3,4)",
+                expect = {'3'}},
+
+    ["transformation in id"] = {
+                selector = "time(message, '!%w').in(2,3,4).id",
+                expect = {''}},
+
+    ["transformation not in"] = {
+                selector = "time(message, '!%w').not_in(1,6,7)",
+                expect = {'3'}},
+
+    ["transformation in not id"] = {
+                selector = "time(message, '!%w').not_in(1,6,7).id",
+                expect = {''}},
+
+    ["transformation in not id 1"] = {
+                selector = "time(message, '!%w').not_in(1,6,7).id(1)",
+                expect = {'1'}},
+
+    ["transformation take"] = {
+                selector = "rcpts.take_n(1).lower",
+                expect = {{'nobody@example.com'}}},
+
+    ["transformation take 2"] = {
+                selector = "rcpts.take_n(2).lower",
+                expect = {{'nobody@example.com', 'no-one@example.com'}}},
+
+    ["transformation take 3"] = {
+                selector = "rcpts.take_n(3).lower",
+                expect = {{'nobody@example.com', 'no-one@example.com'}}},
+
+    ["transformation nth"] = {
+                selector = "rcpts.nth(1).lower",
+                expect = {'nobody@example.com'}},
+
+    ["transformation nth 2"] = {
+                selector = "rcpts.nth(2).lower",
+                expect = {'no-one@example.com'}},
+
+    ["transformation substring"] = {
+                selector = "header(Subject, strong).substring(6)",
+                expect = {'subject'}},
+
+    ["transformation substring 2"] = {
+                selector = "header(Subject, strong).substring(6, 7)",
+                expect = {'su'}},
+
+    ["transformation substring -4"] = {
+                selector = "header(Subject, strong).substring(-4)",
+                expect = {'ject'}},
   }
 
   for case_name, case in pairs(cases) do
