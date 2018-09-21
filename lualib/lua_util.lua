@@ -46,7 +46,12 @@ local function rspamd_str_split(s, sep)
     gr = split_grammar[sep]
 
     if not gr then
-      local _sep = lpeg.P(sep)
+      local _sep
+      if type(sep) == 'string' then
+        _sep = lpeg.S(sep) -- Assume set
+      else
+        _sep = sep -- Assume lpeg object
+      end
       local elem = lpeg.C((1 - _sep)^0)
       local p = lpeg.Ct(elem * (_sep * elem)^0)
       gr = p
