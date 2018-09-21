@@ -942,7 +942,7 @@ local function add_multimap_rule(key, newrule)
       local selector = lua_selectors.parse_selector(rspamd_config, newrule['selector'])
 
       if not selector then
-        rspamd_logger.errx(rspamd_config, 'selector map has invalid selector: "%1", symbol: %s',
+        rspamd_logger.errx(rspamd_config, 'selector map has invalid selector: "%s", symbol: %s',
             newrule['selector'], newrule['symbol'])
         return nil
       end
