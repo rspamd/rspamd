@@ -898,13 +898,13 @@ exports.combine_selectors = function(_, selectors, delimiter)
     local res = {}
 
     local in_prefix = true
-    for _,s in ipairs(selectors) do
+    for i,s in ipairs(selectors) do
       if type(s) == 'string' then
-        tbl[#tbl + 1] = fun.duplicate(s)
+        rawset(tbl, i, fun.duplicate(s))
       elseif type(s) == 'userdata' then
-        tbl[#tbl + 1] = fun.duplicate(tostring(s))
+        rawset(tbl, i, fun.duplicate(tostring(s)))
       else
-        tbl[#tbl + 1] = s
+        rawset(tbl, i, s)
       end
     end
 
