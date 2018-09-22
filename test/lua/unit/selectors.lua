@@ -26,49 +26,50 @@ context("Selectors test", function()
 
   local function check_selector(selector_string)
     local sels = lua_selectors.parse_selector(cfg, selector_string)
+    assert_not_nil(sels)
     local elts = lua_selectors.process_selectors(task, sels)
     return elts
   end
 
   local cases = {
     ["ip"] = {
-                selector = "ip", 
+                selector = "ip",
                 expect = {"198.172.22.91"}},
 
     ["header Subject"] = {
-                selector = "header(Subject)", 
+                selector = "header(Subject)",
                 expect = {"Second, lower-cased header subject"}},
 
     ["header Subject lower"] = {
-                selector = "header(Subject).lower", 
+                selector = "header(Subject).lower",
                 expect = {"second, lower-cased header subject"}},
 
     ["header full Subject lower"] = {
-                selector = "header(Subject, 'full').lower", 
+                selector = "header(Subject, 'full').lower",
                 expect = {{"second, lower-cased header subject", "test subject"}}},
 
     ["header full strong Subject"] = {
-                selector = "header(Subject, 'full,strong')", 
+                selector = "header(Subject, 'full,strong')",
                 expect = {{"Test subject"}}},
 
     ["header full strong lower-cased Subject"] = {
-                selector = "header(subject, 'full,strong')", 
+                selector = "header(subject, 'full,strong')",
                 expect = {{"Second, lower-cased header subject"}}},
 
     ["digest"] = {
-                selector = "digest", 
+                selector = "digest",
                 expect = {"2216397bc061bb6968e1836f3680fed0"}},
 
     ["user"] = {
-                selector = "user", 
+                selector = "user",
                 expect = {"cool user name"}},
 
     ["from"] = {
-                selector = "from", 
+                selector = "from",
                 expect = {"whoknows@nowhere.com"}},
 
     ["rcpts"] = {
-                selector = "rcpts", 
+                selector = "rcpts",
                 expect = {{"nobody@example.com", "no-one@example.com"}}},
 
     ["1st rcpts"] = {
@@ -80,7 +81,7 @@ context("Selectors test", function()
                 expect = {"nobody@example.com"}},
 
     ["first rcpts"] = {
-                selector = "rcpts.first", 
+                selector = "rcpts.first",
                 expect = {"nobody@example.com"}},
 
     ["first addr rcpts"] = {
@@ -88,7 +89,7 @@ context("Selectors test", function()
                 expect = {"nobody@example.com"}},
 
     ["to"] = {
-                selector = "to", 
+                selector = "to",
                 expect = {"nobody@example.com"}},
 
     ["attachments"] = {
@@ -106,7 +107,7 @@ context("Selectors test", function()
                 expect = {{"f.zip", "f2.zip"}}},
 
     ["helo"] = {
-                selector = "helo", 
+                selector = "helo",
                 expect = {"hello mail"}},
 
     ["received by hostname"] = {
@@ -114,7 +115,7 @@ context("Selectors test", function()
                 expect = {{"server.chat-met-vreemden.nl"}}},
 
     ["urls"] = {
-                selector = "urls", 
+                selector = "urls",
                 expect = {{"http://example.net"}}},
 
     ["emails"] = {
@@ -134,11 +135,11 @@ context("Selectors test", function()
                 expect = {"1"}},
 
     ["time"] = {
-                selector = "time", 
+                selector = "time",
                 expect = {"1537364211"}},
 
     ["request_header"] = {
-                selector = "request_header(hdr1)", 
+                selector = "request_header(hdr1)",
                 expect = {"value1"}},
 
     ["get_host"] = {
