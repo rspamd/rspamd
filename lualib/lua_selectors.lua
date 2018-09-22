@@ -705,7 +705,7 @@ exports.parse_selector = function(cfg, str)
         for i,selt in ipairs(schema) do
           local res,err = selt:transform(args[i])
 
-          if not res then
+          if err then
             logger.errx(rspamd_config, 'invalid arguments for %s: %s', name, err)
             return false
           else
