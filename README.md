@@ -29,13 +29,13 @@ If that is not enough, Rspamd provides an extensive [Lua API](https://rspamd.com
 
 ## Contributing
 
-Please read [CONTRIBUTIONS.md](https://github.com/rspamd/rspamd/blob/master/CONTRIBUTIONS.md) for details on the process for submitting pull requests to us.
+Please read [CONTRIBUTIONS.md](CONTRIBUTIONS.md) for details on the process for submitting pull requests to us.
 
 ## Authors
 
 * **Vsevolod Stakhov** - [vstakhov](https://github.com/vstakhov)
 
-See also the list of [contributors](https://github.com/rspamd/rspamd/AUTHORS.md) who participated in this project.
+See also the list of [contributors](AUTHORS.md) who participated in this project.
 
 ## License
 
