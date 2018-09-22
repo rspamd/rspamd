@@ -45,6 +45,7 @@ local extractors = {
     end,
     ['description'] = [[Return value from function's argument or an empty string,
 For example, `id('Something')` returns a string 'Something']],
+    ['args_schema'] = {ts.string:is_optional()}
   },
   -- Get source IP address
   ['ip'] = {
@@ -200,6 +201,8 @@ uses any type by default)]],
 The optional second argument accepts list of flags:
   - `full`: returns all headers with this name with all data (like task:get_header_full())
   - `strong`: use case sensitive match when matching header's name]],
+    ['args_schema'] = {ts.string,
+                       (ts.pattern("strong") + ts.pattern("full")):is_optional()}
   },
   -- Get list of received headers (returns list of tables)
   ['received'] = {
@@ -250,6 +253,7 @@ e.g. `get_user`]],
     end,
     ['description'] = [[Get specific pool var. The first argument must be variable name,
 the second argument is optional and defines the type (string by default)]],
+    ['args_schema'] = {ts.string, ts.string:is_optional()}
   },
   -- Get specific HTTP request header. The first argument must be header name.
   ['request_header'] = {
@@ -263,6 +267,7 @@ the second argument is optional and defines the type (string by default)]],
     end,
     ['description'] = [[Get specific HTTP request header.
 The first argument must be header name.]],
+    ['args_schema'] = {ts.string}
   },
   -- Get task date, optionally formatted
   ['time'] = {
@@ -285,7 +290,9 @@ The first argument must be header name.]],
   - `connect`: connection timestamp (default)
   - `message`: timestamp as defined by `Date` header
 
-  The second argument is optional time format, see [os.date](http://pgl.yoyo.org/luai/i/os.date) description]]
+  The second argument is optional time format, see [os.date](http://pgl.yoyo.org/luai/i/os.date) description]],
+    ['args_schema'] = {ts.one_of{'connect', 'message'}:is_optional(),
+                       ts.string:is_optional()}
   }
 }
 
@@ -331,27 +338,30 @@ local transform_function = {
       ['list'] = true,
     },
     ['process'] = function(inp, t, args)
-      return fun.nth(tonumber(args[1]) or 1, inp),pure_type(t)
+      return fun.nth(args[1] or 1, inp),pure_type(t)
     end,
     ['description'] = 'Returns the nth element',
+    ['args_schema'] = {ts.number + ts.string / tonumber}
   },
   ['take_n'] = {
     ['types'] = {
       ['list'] = true,
     },
     ['process'] = function(inp, t, args)
-      return fun.take_n(tonumber(args[1]) or 1, inp),t
+      return fun.take_n(args[1] or 1, inp),t
     end,
     ['description'] = 'Returns the n first elements',
+    ['args_schema'] = {ts.number + ts.string / tonumber}
   },
   ['drop_n'] = {
     ['types'] = {
       ['list'] = true,
     },
     ['process'] = function(inp, t, args)
-      return fun.drop_n(tonumber(args[1]) or 1, inp),t
+      return fun.drop_n(args[1] or 1, inp),t
     end,
     ['description'] = 'Returns list without the first n elements',
+    ['args_schema'] = {ts.number + ts.string / tonumber}
   },
   -- Joins strings into a single string using separator in the argument
   ['join'] = {
@@ -362,6 +372,7 @@ local transform_function = {
       return table.concat(fun.totable(inp), args[1] or ''), 'string'
     end,
     ['description'] = 'Joins strings into a single string using separator in the argument',
+    ['args_schema'] = {ts.string:is_optional()}
   },
   -- Create a digest from string or a list of strings
   ['digest'] = {
@@ -389,6 +400,8 @@ local transform_function = {
     ['description'] = [[Create a digest from a string.
 The first argument is encoding (`hex`, `base32`, `base64`),
 the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`, `md5`)]],
+    ['args_schema'] = {ts.one_of{'hex', 'base32', 'base64'}:is_optional(),
+                       ts.one_of{'blake2', 'sha256', 'sha1', 'sha512', 'md5'}:is_optional()}
   },
   -- Extracts substring
   ['substring'] = {
@@ -403,6 +416,8 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
       return inp:sub(start_pos, end_pos), 'string'
     end,
     ['description'] = 'Extracts substring',
+    ['args_schema'] = {(ts.number + ts.string / tonumber):is_optional(),
+                       (ts.number + ts.string / tonumber):is_optional()}
   },
   -- Regexp matching
   ['regexp'] = {
@@ -433,6 +448,7 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
       return nil
     end,
     ['description'] = 'Regexp matching',
+    ['args_schema'] = {ts.string}
   },
   -- Drops input value and return values from function's arguments or an empty string
   ['id'] = {
@@ -451,6 +467,7 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
       return '','string'
     end,
     ['description'] = 'Drops input value and return values from function\'s arguments or an empty string',
+    ['args_schema'] = (ts.string + ts.array_of(ts.string)):is_optional()
   },
   -- Boolean function in, returns either nil or its input if input is in args list
   ['in'] = {
@@ -464,6 +481,7 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
     end,
     ['description'] = [[Boolean function in.
 Returns either nil or its input if input is in args list]],
+    ['args_schema'] = ts.array_of(ts.string)
   },
   ['not_in'] = {
     ['types'] = {
@@ -476,6 +494,7 @@ Returns either nil or its input if input is in args list]],
     end,
     ['description'] = [[Boolean function not in.
 Returns either nil or its input if input is not in args list]],
+    ['args_schema'] = ts.array_of(ts.string)
   },
 }
 
@@ -671,14 +690,27 @@ exports.parse_selector = function(cfg, str)
 
   local function check_args(name, schema, args)
     if schema then
-      for i,selt in ipairs(schema) do
-        local res,err = selt:transform(args[i])
-
+      if getmetatable(schema) then
+        -- Schema covers all arguments
+        local res,err = schema:transform(args)
         if not res then
           logger.errx(rspamd_config, 'invalid arguments for %s: %s', name, err)
           return false
         else
-          args[i] = res
+          for i,elt in ipairs(res) do
+            args[i] = elt
+          end
+        end
+      else
+        for i,selt in ipairs(schema) do
+          local res,err = selt:transform(args[i])
+
+          if not res then
+            logger.errx(rspamd_config, 'invalid arguments for %s: %s', name, err)
+            return false
+          else
+            args[i] = res
+          end
         end
       end
     end
