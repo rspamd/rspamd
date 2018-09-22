@@ -47,6 +47,7 @@ LUA_FUNCTION_DEF (url, get_path);
 LUA_FUNCTION_DEF (url, get_query);
 LUA_FUNCTION_DEF (url, get_fragment);
 LUA_FUNCTION_DEF (url, get_text);
+LUA_FUNCTION_DEF (url, tostring);
 LUA_FUNCTION_DEF (url, get_raw);
 LUA_FUNCTION_DEF (url, get_tld);
 LUA_FUNCTION_DEF (url, get_flags);
@@ -89,7 +90,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_count),
 	LUA_INTERFACE_DEF (url, get_flags),
 	{"get_redirected", lua_url_get_phished},
-	{"__tostring", lua_url_get_text},
+	{"__tostring", lua_url_tostring},
 	{NULL, NULL}
 };
 
@@ -266,6 +267,38 @@ lua_url_get_text (lua_State *L)
 
 	if (url != NULL) {
 		lua_pushlstring (L, url->url->string, url->url->urllen);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method url:tostring()
+ * Get full content of the url or user@domain in case of email
+ * @return {string} url as a string
+ */
+static gint
+lua_url_tostring (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url != NULL && url->url != NULL) {
+		if (url->url->protocol == PROTOCOL_MAILTO) {
+			if (url->url->userlen + 1 + url->url->hostlen >= url->url->urllen) {
+				lua_pushlstring (L, url->url->user,
+						url->url->userlen + 1 + url->url->hostlen);
+			}
+			else {
+				lua_pushlstring (L, url->url->string, url->url->urllen);
+			}
+		}
+		else {
+			lua_pushlstring (L, url->url->string, url->url->urllen);
+		}
 	}
 	else {
 		lua_pushnil (L);
