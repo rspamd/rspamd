@@ -1,4 +1,7 @@
+# [![Rspamd](https://rspamd.com/img/rspamd_logo_black.png)](https://rspamd.com)
+
 [![CircleCI](https://circleci.com/gh/rspamd/rspamd/tree/master.svg?style=svg)](https://circleci.com/gh/rspamd/rspamd/tree/master)
+
 
 ## Introduction
 
