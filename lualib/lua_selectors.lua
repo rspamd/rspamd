@@ -293,50 +293,6 @@ local function pure_type(ltype)
 end
 
 local transform_function = {
-  -- Get hostname from url or a list of urls
-  ['get_host'] = {
-    ['types'] = {
-      ['url'] = true
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, t)
-      return inp:get_host(),'string'
-    end,
-    ['description'] = 'Get hostname from url or a list of urls',
-  },
-  -- Get tld from url or a list of urls
-  ['get_tld'] = {
-    ['types'] = {
-      ['url'] = true
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, t)
-      return inp:get_tld()
-    end,
-    ['description'] = 'Get tld from url or a list of urls',
-  },
-  -- Get address
-  ['addr'] = {
-    ['types'] = {
-      ['email'] = true
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, _)
-      return inp.addr
-    end,
-    ['description'] = 'Get email address as a string',
-  },
-  -- Get address
-  ['name'] = {
-    ['types'] = {
-      ['email'] = true
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, _)
-      return inp.name
-    end,
-    ['description'] = 'Get email name as a string',
-  },
   -- Returns the lowercased string
   ['lower'] = {
     ['types'] = {
@@ -414,33 +370,24 @@ local transform_function = {
     ['map_type'] = 'hash',
     ['process'] = function(inp, _, args)
       local hash = require 'rspamd_cryptobox_hash'
-      local ht = args[1] or 'blake2'
+      local encoding = args[1] or 'hex'
+      local ht = args[2] or 'blake2'
       local h = hash:create_specific(ht):update(inp)
+      local s
 
-      if args[2] then
-        return h[args[2]](h),'string' -- Call hash method
+      if encoding == 'hex' then
+        s = h:hex()
+      elseif encoding == 'base32' then
+        s = h:base32()
+      elseif encoding == 'base64' then
+        s = h:base64()
       end
-      return h, 'hash'
+
+      return s,'string'
     end,
-    ['description'] = 'Create a digest from string or a list of strings',
-  },
-  -- Encode hash to string (using hex encoding by default)
-  ['encode'] = {
-    ['types'] = {
-      ['hash'] = true
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, _, args)
-      local how = args[1] or 'hex'
-      if how == 'hex' then
-        return inp:hex()
-      elseif how == 'base32' then
-        return inp:base32()
-      elseif how == 'base64' then
-        return inp:base64()
-      end
-    end,
-    ['description'] = 'Encode hash to string (using hex encoding by default)',
+    ['description'] = [[Create a digest from a string.
+The first argument is encoding (`hex`, `base32`, `base64`),
+the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`, `md5`)]],
   },
   -- Extracts substring
   ['substring'] = {
@@ -503,30 +450,6 @@ local transform_function = {
       return '','string'
     end,
     ['description'] = 'Drops input value and return values from function\'s arguments or an empty string',
-  },
-  -- Extracts table value from key-value list
-  ['elt'] = {
-    ['types'] = {
-      ['kv'] = true,
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, t, args)
-      return inp[args[1]],'string'
-    end,
-    ['description'] = 'Extracts table value from key-value list',
-  },
-  -- Call specific userdata method
-  ['method'] = {
-    ['types'] = {
-      ['email'] = true,
-      ['url'] = true,
-      ['ip'] = true,
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, _, args)
-      return inp[args[1]](inp)
-    end,
-    ['description'] = 'Call specific userdata method',
   },
   -- Boolean function in, returns either nil or its input if input is in args list
   ['in'] = {
