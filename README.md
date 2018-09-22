@@ -45,3 +45,4 @@ This project is licensed under the Apache 2.0 License - see the [LICENSE.md](LIC
 
 * Home site: <https://rspamd.com>
 * Development: <https://github.com/rspamd/rspamd>
+* Site repository: <https://github.com/rspamd/rspamd.com>
