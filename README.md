@@ -1,4 +1,4 @@
-# <a href="https://rspamd.com"><img src="https://rspamd.com/img/rspamd_logo_black.png" alt="Rspamd" width="50%"/></a>
+# <a href="https://rspamd.com"><img src="https://rspamd.com/img/rspamd_logo_black.png" alt="Rspamd" width="220px"/></a>
 
 [![CircleCI](https://circleci.com/gh/rspamd/rspamd/tree/master.svg?style=svg)](https://circleci.com/gh/rspamd/rspamd/tree/master)
 
