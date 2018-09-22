@@ -672,11 +672,13 @@ exports.parse_selector = function(cfg, str)
   local function check_args(name, schema, args)
     if schema then
       for i,selt in ipairs(schema) do
-        local res,err = selt(args[i])
+        local res,err = selt:transform(args[i])
 
         if not res then
           logger.errx(rspamd_config, 'invalid arguments for %s: %s', name, err)
           return false
+        else
+          args[i] = res
         end
       end
     end
