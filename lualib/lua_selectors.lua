@@ -30,6 +30,7 @@ local exports = {}
 local logger = require 'rspamd_logger'
 local fun = require 'fun'
 local lua_util = require "lua_util"
+local ts = require("tableshape").types
 local M = "selectors"
 local E = {}
 
@@ -668,6 +669,21 @@ exports.parse_selector = function(cfg, str)
 
   if not parsed or not parsed[1] then return nil end
 
+  local function check_args(name, schema, args)
+    if schema then
+      for i,selt in ipairs(schema) do
+        local res,err = selt(args[i])
+
+        if not res then
+          logger.errx(rspamd_config, 'invalid arguments for %s: %s', name, err)
+          return false
+        end
+      end
+    end
+
+    return true
+  end
+
   -- Output AST format is the following:
   -- table of individual selectors
   -- each selector: list of functions
@@ -692,10 +708,16 @@ exports.parse_selector = function(cfg, str)
     res.selector.name = selector_tbl[1]
     res.selector.args = selector_tbl[2] or E
 
+    if not check_args(res.selector.name,
+        res.selector.args_schema,
+        res.selector.args) then
+      return nil
+    end
+
     lua_util.debugm(M, cfg, 'processed selector %s, args: %s',
         res.selector.name, res.selector.args)
 
-    local it_happened = false
+    local pipeline_error = false
     -- Now process processors pipe
     fun.each(function(proc_tbl)
       local proc_name = proc_tbl[1]
@@ -728,20 +750,26 @@ exports.parse_selector = function(cfg, str)
 
         if not transform_function[proc_name] then
           logger.errx(cfg, 'processor %s is unknown', proc_name)
-          it_happened = true
+          pipeline_error = true
           return nil
         end
         local processor = lua_util.shallowcopy(transform_function[proc_name])
         processor.name = proc_name
         processor.args = proc_tbl[2] or E
+
+        if not check_args(processor.name, processor.args_schema, processor.args) then
+          pipeline_error = true
+          return nil
+        end
+
         lua_util.debugm(M, cfg, 'attached processor %s to selector %s, args: %s',
             proc_name, res.selector.name, processor.args)
         table.insert(res.processor_pipe, processor)
       end
     end, fun.tail(sel))
 
-    if it_happened then
-      logger.errx(cfg, 'unknown processor used, exiting')
+    if pipeline_error then
+      logger.errx(cfg, 'unknown or invalid processor used, exiting')
       return nil
     end
 
