@@ -511,6 +511,7 @@ define(["jquery", "footable", "humanize"],
         }
 
         function initHistoryTable(rspamd, tables, data, items) {
+            /* eslint-disable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
             FooTable.actionFilter = FooTable.Filtering.extend({
                 construct: function (instance) {
                     this._super(instance);
@@ -568,6 +569,7 @@ define(["jquery", "footable", "humanize"],
                     }
                 }
             });
+            /* eslint-enable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
 
             tables.history = FooTable.init("#historyTable", {
                 columns: get_history_columns(data),
