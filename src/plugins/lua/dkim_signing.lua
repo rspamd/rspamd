@@ -193,7 +193,12 @@ for k,v in pairs(opts) do
     settings[k] = v
   end
 end
-if not (settings.use_redis or settings.path or settings.domain or settings.path_map or settings.selector_map) then
+if not (settings.use_redis or
+    settings.path or
+    settings.domain or
+    settings.path_map or
+    settings.selector_map or
+    settings.use_http_headers) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable dkim signing')
   lua_util.disable_module(N, "config")
   return

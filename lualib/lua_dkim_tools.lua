@@ -56,9 +56,9 @@ local function parse_dkim_http_headers(N, task, settings)
     end
 
     return true,{
-      rawkey = key,
-      domain = domain,
-      selector = selector
+      rawkey = tostring(key),
+      domain = tostring(domain),
+      selector = tostring(selector)
     }
   end
 
