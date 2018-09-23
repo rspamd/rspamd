@@ -39,7 +39,8 @@ local openphish_map = 'https://www.openphish.com/feed.txt'
 local phishtank_suffix = 'phishtank.rspamd.com'
 -- Not enabled by default as their feed is quite large
 local openphish_premium = false
-local phishtank_enabled = false
+-- Published via DNS
+local phishtank_enabled = true
 local generic_service_hash
 local openphish_hash
 local generic_service_data = {}
@@ -143,12 +144,20 @@ local function phishing_cb(task)
     if host and path then
       local function host_host_path_cb(_, _, results, err)
         if not err and results then
-          task:insert_result(phish_symbol, 0.3, results)
+          if not query then
+            task:insert_result(phish_symbol, 0.3, results)
+          else
+            task:insert_result(phish_symbol, 1.0, results)
+          end
         end
       end
-      r:resolve_a({
+
+      local to_resolve_hp = compose_dns_query({host, path})
+      rspamd_logger.debugm(N, task, 'try to resolve {%s, %s} -> %s',
+          host, path, to_resolve_hp)
+      r:resolve_txt({
         task = task,
-        name = compose_dns_query({host, path}),
+        name = to_resolve_hp,
         callback = host_host_path_cb})
 
 
@@ -158,9 +167,13 @@ local function phishing_cb(task)
             task:insert_result(phish_symbol, 1.0, results)
           end
         end
-        r:resolve_a({
+
+        local to_resolve_hpq = compose_dns_query({host, path, query})
+        rspamd_logger.debugm(N, task, 'try to resolve {%s, %s, %s} -> %s',
+            host, path, query, to_resolve_hpq)
+        r:resolve_txt({
           task = task,
-          name = compose_dns_query({host, path, query}),
+          name = to_resolve_hpq,
           callback = host_host_path_query_cb})
       end
 
