@@ -148,6 +148,8 @@ define(["jquery", "footable"],
                 success: function (json) {
                     var data = json[0].data;
                     var items = process_symbols_data(data);
+
+                    /* eslint-disable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
                     FooTable.groupFilter = FooTable.Filtering.extend({
                         construct: function (instance) {
                             this._super(instance);
@@ -196,6 +198,8 @@ define(["jquery", "footable"],
                             }
                         }
                     });
+                    /* eslint-enable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
+
                     tables.symbols = FooTable.init("#symbolsTable", {
                         columns: [
                             {sorted:true, direction:"ASC", name:"group", title:"Group", style:{"font-size":"11px"}},

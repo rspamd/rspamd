@@ -149,12 +149,10 @@ define(["jquery"],
                 return e.options[e.selectedIndex].value;
             }
 
-            $("textarea").change(function () {
-                if ($(this).val().length !== "") {
-                    $(this).closest("form").find("button").removeAttr("disabled").removeClass("disabled");
-                } else {
-                    $(this).closest("form").find("button").attr("disabled").addClass("disabled");
-                }
+            $("textarea").keyup(function () {
+                var $this = $(this);
+                $this.closest("form").find("button")
+                    .prop("disabled", ($.trim($this.val()).length === 0));
             });
 
             $("#scanClean").on("click", function () {
@@ -174,7 +172,7 @@ define(["jquery"],
                         weight: $("#fuzzyWeightText").val()
                     }
                     : {};
-                if (data.length > 0) {
+                if ($.trim(data).length > 0) {
                     if (source === "scan") {
                         var checked_server = getSelector("selSrv");
                         var server = (checked_server === "All SERVERS") ? "local" : checked_server;

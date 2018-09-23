@@ -57,7 +57,6 @@
 
         // Temporarily disabled rules
         "array-element-newline": "off",
-        "consistent-this": "off",
         "func-style": "off",
         "function-paren-newline": "off",
         "line-comment-position": "off",
@@ -66,8 +65,6 @@
         "max-lines-per-function": "off",
         "no-inline-comments": "off",
         "no-invalid-this": "off",
-        "no-underscore-dangle": "off",
-        "one-var-declaration-per-line": "off",
         "sort-keys": "off",
         "sort-vars": "off"
     }
