@@ -145,9 +145,9 @@ local function phishing_cb(task)
       local function host_host_path_cb(_, _, results, err)
         if not err and results then
           if not query then
-            task:insert_result(phish_symbol, 0.3, results)
-          else
             task:insert_result(phish_symbol, 1.0, results)
+          else
+            task:insert_result(phish_symbol, 0.3, results)
           end
         end
       end
