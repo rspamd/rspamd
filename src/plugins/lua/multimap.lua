@@ -848,12 +848,18 @@ local function multimap_callback(task, rule)
       end
     end,
     selector = function()
-      local elts = lua_selectors.process_selectors(task, rule.selector) or {}
-      for _,elt in ipairs(elts) do
-        match_rule(rule, elt)
+      local elts = rule.selector(task)
+
+      if type(elts) == 'table' then
+        for _,elt in ipairs(elts) do
+          match_rule(rule, elt)
+        end
+      else
+        match_rule(rule, elts)
       end
     end,
   }
+
   process_rule_funcs.ip = process_rule_funcs.dnsbl
   local f = process_rule_funcs[rt]
   if f then
@@ -939,7 +945,8 @@ local function add_multimap_rule(key, newrule)
       rspamd_logger.errx(rspamd_config, 'selector map requires selector definition')
       return nil
     else
-      local selector = lua_selectors.parse_selector(rspamd_config, newrule['selector'])
+      local selector = lua_selectors.create_selector_closure(
+          rspamd_config, newrule['selector'], newrule['delimiter'] or "")
 
       if not selector then
         rspamd_logger.errx(rspamd_config, 'selector map has invalid selector: "%s", symbol: %s',
