@@ -850,12 +850,14 @@ local function multimap_callback(task, rule)
     selector = function()
       local elts = rule.selector(task)
 
-      if type(elts) == 'table' then
-        for _,elt in ipairs(elts) do
-          match_rule(rule, elt)
+      if elts then
+        if type(elts) == 'table' then
+          for _,elt in ipairs(elts) do
+            match_rule(rule, elt)
+          end
+        else
+          match_rule(rule, elts)
         end
-      else
-        match_rule(rule, elts)
       end
     end,
   }
