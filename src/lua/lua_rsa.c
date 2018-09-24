@@ -357,7 +357,6 @@ lua_rsa_privkey_load_base64 (lua_State *L)
 		}
 
 		b = BIO_new_mem_buf (decoded, dec_len);
-		g_free (decoded);
 		rsa = d2i_RSAPrivateKey_bio (b, NULL);
 
 		if (rsa == NULL) {
@@ -372,6 +371,7 @@ lua_rsa_privkey_load_base64 (lua_State *L)
 		}
 
 		BIO_free (b);
+		g_free (decoded);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
