@@ -394,13 +394,19 @@ local function arc_sign_seal(task, params, header)
   local privkey
 
   if params.rawkey then
-    privkey = rspamd_rsa_privkey.load_pem(params.rawkey)
+    -- Distinguish between pem and base64
+    if string.match(params.rawkey, '^-----BEGIN') then
+      privkey = rspamd_rsa_privkey.load_pem(params.rawkey)
+    else
+      privkey = rspamd_rsa_privkey.load_base64(params.rawkey)
+    end
   elseif params.key then
     privkey = rspamd_rsa_privkey.load_file(params.key)
   end
 
   if not privkey then
     rspamd_logger.errx(task, 'cannot load private key for signing')
+    return
   end
 
   if settings.reuse_auth_results then
