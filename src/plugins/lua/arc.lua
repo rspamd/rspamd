@@ -459,9 +459,9 @@ local function arc_sign_seal(task, params, header)
 
   task:set_milter_reply({
     add_headers = {
-      ['ARC-Authentication-Results'] = {order = 0, value = cur_auth_results},
-      ['ARC-Message-Signature'] = {order = 0, value = header},
-      ['ARC-Seal'] = {order = 0, value = lua_util.fold_header(task,
+      ['ARC-Authentication-Results'] = {order = 1, value = cur_auth_results},
+      ['ARC-Message-Signature'] = {order = 1, value = header},
+      ['ARC-Seal'] = {order = 1, value = lua_util.fold_header(task,
         'ARC-Seal', cur_arc_seal) }
     }
   })
@@ -596,7 +596,6 @@ if not (settings.use_redis or
     settings.selector_map or
     settings.use_http_headers) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable arc signing')
-  lua_util.disable_module(N, "fail")
   return
 end
 
@@ -605,7 +604,6 @@ if settings.use_redis then
 
   if not redis_params then
     rspamd_logger.errx(rspamd_config, 'no servers are specified, but module is configured to load keys from redis, disable arc signing')
-    lua_util.disable_module(N, "config")
     return
   end
 end
