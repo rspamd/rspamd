@@ -1836,7 +1836,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		hvalue = g_string_new (ucl_object_tostring (elt));
 
 		rspamd_milter_send_action (session, RSPAMD_MILTER_INSHEADER,
-				2, hname, hvalue);
+				1, hname, hvalue);
 		g_string_free (hname, TRUE);
 		g_string_free (hvalue, TRUE);
 	}

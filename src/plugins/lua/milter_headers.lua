@@ -449,7 +449,7 @@ local function milter_headers(task)
       settings.routines['authentication-results'])
 
     if res then
-      add_header('authentication-results', res, ';', 0)
+      add_header('authentication-results', res, ';', 1)
     end
   end
 
