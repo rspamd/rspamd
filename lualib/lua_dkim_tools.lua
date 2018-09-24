@@ -45,12 +45,15 @@ local function parse_dkim_http_headers(N, task, settings)
 
     -- Now check if we need to check the existing auth
     local hdr = task:get_request_header(headers.sign_on_reject_header)
-    if not hdr then
+    if not hdr or tostring(hdr) == '0' or tostring(hdr) == 'false' then
       -- Check for DKIM_REJECT
-      if task:has_symbol('R_DKIM_REJECT') then
-        local sym = task:get_symbol('R_DKIM_REJECT')
-        logger.infox(task, 'skip signing for %s:%s: R_DKIM_REJECT found: %s',
-            domain, selector, sym.options)
+      local sym_check = 'R_DKIM_REJECT'
+
+      if N == 'arc' then sym_check = 'ARC_REJECT' end
+      if task:has_symbol(sym_check) then
+        local sym = task:get_symbol(sym_check)
+        logger.infox(task, 'skip signing for %s:%s: %s found: %s',
+            domain, selector, sym_check, sym.options)
         return false,{}
       end
     end
