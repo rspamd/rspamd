@@ -52,7 +52,6 @@ Http Teardown
   Normal Teardown
 
 Run Dummy Http
-  [Arguments]
   ${result} =  Start Process  ${TESTDIR}/util/dummy_http.py
   Wait Until Created  /tmp/dummy_http.pid
 
