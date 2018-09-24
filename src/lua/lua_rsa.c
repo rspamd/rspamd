@@ -328,6 +328,7 @@ lua_rsa_privkey_load_base64 (lua_State *L)
 {
 	RSA *rsa = NULL, **prsa;
 	BIO *b;
+	EVP_PKEY *evp = NULL;
 	struct rspamd_lua_text *t;
 	const gchar *data;
 	guchar *decoded;
@@ -357,17 +358,27 @@ lua_rsa_privkey_load_base64 (lua_State *L)
 		}
 
 		b = BIO_new_mem_buf (decoded, dec_len);
-		rsa = d2i_RSAPrivateKey_bio (b, NULL);
 
-		if (rsa == NULL) {
-			msg_err ("cannot open private key from data, %s",
-					ERR_error_string (ERR_get_error (), NULL));
-			lua_pushnil (L);
+		if (d2i_PrivateKey_bio (b, &evp) != NULL) {
+			rsa = EVP_PKEY_get1_RSA (evp);
+
+			if (rsa == NULL) {
+				msg_err ("cannot open RSA private key from data, %s",
+						ERR_error_string (ERR_get_error (), NULL));
+				lua_pushnil (L);
+			}
+			else {
+				prsa = lua_newuserdata (L, sizeof (RSA *));
+				rspamd_lua_setclass (L, "rspamd{rsa_privkey}", -1);
+				*prsa = rsa;
+			}
+
+			EVP_PKEY_free (evp);
 		}
 		else {
-			prsa = lua_newuserdata (L, sizeof (RSA *));
-			rspamd_lua_setclass (L, "rspamd{rsa_privkey}", -1);
-			*prsa = rsa;
+			msg_err ("cannot open EVP private key from data, %s",
+					ERR_error_string (ERR_get_error (), NULL));
+			lua_pushnil (L);
 		}
 
 		BIO_free (b);
