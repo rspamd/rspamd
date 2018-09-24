@@ -87,6 +87,7 @@ local settings = {
   use_esld = true,
   use_redis = false,
   key_prefix = 'arc_keys', -- default hash name
+  reuse_auth_results = false, -- Reuse the existing authentication results
 }
 
 local function parse_arc_header(hdr, target)
@@ -389,7 +390,7 @@ local function arc_sign_seal(task, params, header)
   local arc_sigs = task:cache_get('arc-sigs')
   local arc_seals = task:cache_get('arc-seals')
   local arc_auth_results = task:get_header_full('ARC-Authentication-Results') or {}
-  local cur_auth_results = auth_results.gen_auth_results(task) or ''
+  local cur_auth_results
   local privkey
 
   if params.rawkey then
@@ -402,6 +403,19 @@ local function arc_sign_seal(task, params, header)
     rspamd_logger.errx(task, 'cannot load private key for signing')
   end
 
+  if settings.reuse_auth_results then
+    local ar_header = task:get_header('Authentication-Results')
+
+    if ar_header then
+      rspamd_logger.debugm(N, task, 'reuse authentication results header for ARC')
+      cur_auth_results = ar_header
+    else
+      rspamd_logger.debugm(N, task, 'cannot reuse authentication results, header is missing')
+      cur_auth_results = auth_results.gen_auth_results(task) or ''
+    end
+  else
+    cur_auth_results = auth_results.gen_auth_results(task) or ''
+  end
 
   local sha_ctx = hash.create_specific('sha256')
 
@@ -434,11 +448,11 @@ local function arc_sign_seal(task, params, header)
     'ARC-Message-Signature',
     header)
 
-  cur_auth_results = lua_util.fold_header(task,
-    'ARC-Authentication-Results',
-    cur_auth_results, ';')
-
   cur_auth_results = string.format('i=%d; %s', cur_idx, cur_auth_results)
+  cur_auth_results = lua_util.fold_header(task,
+      'ARC-Authentication-Results',
+      cur_auth_results, ';')
+
   local s = dkim_canonicalize('ARC-Authentication-Results',
     cur_auth_results)
   sha_ctx:update(s)
@@ -448,7 +462,10 @@ local function arc_sign_seal(task, params, header)
   lua_util.debugm(N, task, 'update signature with header: %s', s)
 
   local cur_arc_seal = string.format('i=%d; s=%s; d=%s; t=%d; a=rsa-sha256; cv=%s; b=',
-      cur_idx, params.selector, params.domain, math.floor(rspamd_util.get_time()), params.arc_cv)
+      cur_idx,
+      params.selector,
+      params.domain,
+      math.floor(rspamd_util.get_time()), params.arc_cv)
   s = string.format('%s:%s', 'arc-seal', cur_arc_seal)
   sha_ctx:update(s)
   lua_util.debugm(N, task, 'initial update signature with header: %s', s)
