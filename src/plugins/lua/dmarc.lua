@@ -46,8 +46,9 @@ local report_settings = {
   smtp = '127.0.0.1',
   smtp_port = 25,
   retries = 2,
+  from_name = 'Rspamd',
 }
-local report_template = [[From: "Rspamd" <%s>
+local report_template = [[From: "%s" <%s>
 To: %s
 Subject: Report Domain: %s
 	Submitter: %s
@@ -814,6 +815,7 @@ if opts['reporting'] == true then
               end
               local addr_string = table.concat(atmp, ', ')
               local rhead = string.format(report_template,
+		  report_settings.from_name,
                   report_settings.email,
                   addr_string,
                   reporting_domain,
