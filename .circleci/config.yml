@@ -15,6 +15,14 @@ references:
         gem install coveralls-lcov
         lcov --no-external -b ../project -d ../project -c --output-file coverage.${CIRCLE_JOB}.info
 
+  - &capture_lua_coverage_data
+    run:
+      name: Capturing Lua coverage data
+      command: |
+        set -e
+        sudo luarocks install luacov-coveralls
+        if [ ! -z $COVERALLS_REPO_TOKEN ]; then luacov-coveralls -t ${COVERALLS_REPO_TOKEN} || true; fi
+
   - &restore_coverage_data
     restore_cache:
       keys:
@@ -61,13 +69,16 @@ jobs:
           at: *workspace_root
 
       - run: sudo apt-get update -qq || true
-      - run: sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8
+      - run: sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8 luarocks
+      - run: sudo luarocks install luacheck
+      - run: sudo luarocks install luacov
 
       - run: cd ../build
       - run: make rspamd-test -j`nproc`
       - run: set +e; test/rspamd-test -p /rspamd/lua; echo "export RETURN_CODE=$?" >> $BASH_ENV
 
       - *capture_coverage_data
+      - *capture_lua_coverage_data
 
       # Share coverage data between jobs
       - save_cache:
@@ -95,6 +106,7 @@ jobs:
 
       - run: sudo pip install demjson psutil robotframework requests http
       - run: sudo luarocks install luacheck
+      - run: sudo luarocks install luacov
 
       - run: cd ../build
       - run: set +e; RSPAMD_INSTALLROOT=../install sudo -E robot -x xunit.xml --exclude isbroken ../project/test/functional/cases; echo "export RETURN_CODE=$?" >> $BASH_ENV

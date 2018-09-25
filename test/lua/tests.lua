@@ -2,6 +2,15 @@
 
 local telescope = require "telescope"
 require "rspamd_assertions"
+local loaded, luacov = pcall(require, 'luacov.runner')
+if not loaded then
+  luacov = {
+    init = function() end,
+    shutdown = function() end,
+    run_report = function() end
+  }
+end
+luacov.init()
 
 local contexts = {}
 
@@ -14,6 +23,7 @@ end
 if not test_pattern then
   test_filter = function(_) return true end
 end
+
 local buffer = {}
 local results = telescope.run(contexts, callbacks, test_filter)
 local summary, data = telescope.summary_report(contexts, results)
@@ -36,3 +46,6 @@ for _, v in pairs(results) do
     os.exit(1)
   end
 end
+
+luacov:shutdown()
+luacov:run_report()
