@@ -105,7 +105,8 @@ jobs:
       - run: sudo apt-get install clickhouse-server
 
       - run: sudo pip install demjson psutil robotframework requests http
-      - run: sudo luarocks install luacheck luacov
+      - run: sudo luarocks install luacheck
+      - run: sudo luarocks install luacov
 
       - run: cd ../build
       - run: set +e; RSPAMD_INSTALLROOT=../install sudo -E robot -x xunit.xml --exclude isbroken ../project/test/functional/cases; echo "export RETURN_CODE=$?" >> $BASH_ENV
