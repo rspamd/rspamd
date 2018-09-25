@@ -85,9 +85,6 @@ jobs:
           key: coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
           paths:
             - coverage.rspamd-test.info
-      - *restore_coverage_data
-
-      - *merge_and_upload_coverage_data
 
       - run: (exit $RETURN_CODE)
 
@@ -118,9 +115,6 @@ jobs:
           key: coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
           paths:
             - coverage.functional.info
-      - *restore_coverage_data
-
-      - *merge_and_upload_coverage_data
 
       - store_artifacts:
           path: output.xml
@@ -152,6 +146,12 @@ jobs:
           key: v1-dependencies-{{ checksum "package.json" }}
       - run: ./node_modules/.bin/eslint -v && ./node_modules/.bin/eslint ./
 
+  send-coverage:
+    <<: *defaults
+    steps:
+      - *restore_coverage_data
+      - *merge_and_upload_coverage_data
+
 workflows:
   version: 2
   build-and-test:
@@ -164,3 +164,7 @@ workflows:
       - functional:
           requires:
             - build
+      - send-coverage:
+          requires:
+            - rspamd-test
+            - functional
