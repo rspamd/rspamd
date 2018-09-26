@@ -505,14 +505,14 @@ LUA_FUNCTION_DEF (config, replace_regexp);
 LUA_FUNCTION_DEF (config, register_worker_script);
 
 /***
- * @method rspamd_config:add_on_load(function(cfg, ev_base) ... end)
+ * @method rspamd_config:add_on_load(function(cfg, ev_base, worker) ... end)
  * Registers the following script to be executed when configuration is completely loaded
  * @param {function} script function to be executed
  * @example
-rspamd_config:add_on_load(function(cfg, ev_base)
+rspamd_config:add_on_load(function(cfg, ev_base, worker)
 	rspamd_config:add_periodic(ev_base, 1.0, function(cfg, ev_base)
 		local logger = require "rspamd_logger"
-		logger.infox(cfg, "periodic function")
+		logger.infox(cfg, "periodic function in worker %s", worker)
 		return true
 	end)
 end)
