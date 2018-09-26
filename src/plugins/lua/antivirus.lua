@@ -35,8 +35,11 @@ antivirus {
     # action = "reject";
     # If set, then rejection message is set to this value (mention single quotes)
     # message = '${SCANNER}: virus found: "${VIRUS}"';
-    # if `true` only messages with non-image attachments will be checked (default true)
-    attachments_only = true;
+    # Scan mime_parts seperately - otherwise the complete mail will be transfered to AV Scanner
+    #scan_mime_parts = true;
+    # Scanning Text is suitable for some av scanner databases (e.g. Sanesecurity)
+    #scan_text_mime = false;
+    #scan_image_mime = false;
     # If `max_size` is set, messages > n bytes in size are not scanned
     max_size = 20000000;
     # symbol to add (add it to metric if you want non-zero weight)
@@ -126,7 +129,9 @@ end
 
 local function clamav_config(opts)
   local clamav_conf = {
-    attachments_only = true,
+    scan_mime_parts = true;
+    scan_text_mime = false;
+    scan_image_mime = false;
     default_port = 3310,
     log_clean = false,
     timeout = 15.0,
@@ -164,7 +169,9 @@ end
 
 local function fprot_config(opts)
   local fprot_conf = {
-    attachments_only = true,
+    scan_mime_parts = true;
+    scan_text_mime = false;
+    scan_image_mime = false;
     default_port = 10200,
     timeout = 15.0,
     log_clean = false,
@@ -202,7 +209,9 @@ end
 
 local function sophos_config(opts)
   local sophos_conf = {
-    attachments_only = true,
+    scan_mime_parts = true;
+    scan_text_mime = false;
+    scan_image_mime = false;
     default_port = 4010,
     timeout = 15.0,
     log_clean = false,
@@ -240,7 +249,9 @@ end
 
 local function savapi_config(opts)
   local savapi_conf = {
-    attachments_only = true,
+    scan_mime_parts = true;
+    scan_text_mime = false;
+    scan_image_mime = false;
     default_port = 4444, -- note: You must set ListenAddress in savapi.conf
     product_id = 0,
     log_clean = false,
@@ -378,30 +389,32 @@ local function fprot_check(task, content, digest, rule)
 
     local function fprot_callback(err, data)
       if err then
-        if err == 'IO timeout' then
-          if retransmits > 0 then
-            retransmits = retransmits - 1
-            -- Select a different upstream!
-            upstream = rule.upstreams:get_upstream_round_robin()
-            addr = upstream:get_addr()
-            tcp.request({
-              task = task,
-              host = addr:to_string(),
-              port = addr:get_port(),
-              timeout = rule['timeout'],
-              callback = fprot_callback,
-              data = { header, content, footer },
-              stop_pattern = '\n'
-            })
-          else
-            rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
-            task:insert_result(rule['symbol_fail'], 0.0, 'retransmits exceed')
-            upstream:fail()
-          end
+        -- set current upstream to fail because an error occurred
+        upstream:fail()
+
+        -- retry with another upstream until retransmits exceeds
+        if retransmits > 0 then
+
+          retransmits = retransmits - 1
+
+          -- Select a different upstream!
+          upstream = rule.upstreams:get_upstream_round_robin()
+          addr = upstream:get_addr()
+
+          lua_util.debugm(N, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
+
+          tcp.request({
+            task = task,
+            host = addr:to_string(),
+            port = addr:get_port(),
+            timeout = rule['timeout'],
+            callback = fprot_callback,
+            data = { header, content, footer },
+            stop_pattern = '\n'
+          })
         else
-          rspamd_logger.errx(task, 'failed to scan: %s', err)
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan')
-          upstream:fail()
+          rspamd_logger.errx(task, '%s [%s]: failed to scan, maximum retransmits exceed', rule['symbol'], rule['type'])
+          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and retransmits exceed')
         end
       else
         upstream:ok()
@@ -411,7 +424,7 @@ local function fprot_check(task, content, digest, rule)
         if clean then
           cached = 'OK'
           if rule['log_clean'] then
-            rspamd_logger.infox(task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
+            rspamd_logger.infox(task, '%s [%s]: message or mime_part is clean', rule['symbol'], rule['type'])
           end
         else
           -- returncodes: 1: infected, 2: suspicious, 3: both, 4-255: some error occured
@@ -461,32 +474,35 @@ local function clamav_check(task, content, digest, rule)
 
     local function clamav_callback(err, data)
       if err then
-        if err == 'IO timeout' then
-          if retransmits > 0 then
-            retransmits = retransmits - 1
-            -- Select a different upstream!
-            upstream = rule.upstreams:get_upstream_round_robin()
-            addr = upstream:get_addr()
 
-            tcp.request({
-              task = task,
-              host = addr:to_string(),
-              port = addr:get_port(),
-              timeout = rule['timeout'],
-              callback = clamav_callback,
-              data = { header, content, footer },
-              stop_pattern = '\0'
-            })
-          else
-            rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
-            task:insert_result(rule['symbol_fail'], 0.0, 'retransmits exceed')
-            upstream:fail()
-          end
+        -- set current upstream to fail because an error occurred
+        upstream:fail()
+
+        -- retry with another upstream until retransmits exceeds
+        if retransmits > 0 then
+
+          retransmits = retransmits - 1
+
+          -- Select a different upstream!
+          upstream = rule.upstreams:get_upstream_round_robin()
+          addr = upstream:get_addr()
+
+          lua_util.debugm(N, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
+
+          tcp.request({
+            task = task,
+            host = addr:to_string(),
+            port = addr:get_port(),
+            timeout = rule['timeout'],
+            callback = clamav_callback,
+            data = { header, content, footer },
+            stop_pattern = '\0'
+          })
         else
-          rspamd_logger.errx(task, 'failed to scan: %s', err)
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan')
-          upstream:fail()
+          rspamd_logger.errx(task, '%s [%s]: failed to scan, maximum retransmits exceed', rule['symbol'], rule['type'])
+          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and retransmits exceed')
         end
+
       else
         upstream:ok()
         data = tostring(data)
@@ -495,9 +511,9 @@ local function clamav_check(task, content, digest, rule)
         if data == 'stream: OK' then
           cached = 'OK'
           if rule['log_clean'] then
-            rspamd_logger.infox(task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
+            rspamd_logger.infox(task, '%s [%s]: message or mime_part is clean', rule['symbol'], rule['type'])
           else
-            lua_util.debugm(N, task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
+            lua_util.debugm(N, task, '%s [%s]: message or mime_part is clean', rule['symbol'], rule['type'])
           end
         else
           local vname = string.match(data, 'stream: (.+) FOUND')
@@ -547,12 +563,21 @@ local function sophos_check(task, content, digest, rule)
     local function sophos_callback(err, data, conn)
 
       if err then
-        if err == 'IO timeout' then
+
+          -- set current upstream to fail because an error occurred
+          upstream:fail()
+
+          -- retry with another upstream until retransmits exceeds
           if retransmits > 0 then
+
             retransmits = retransmits - 1
+
             -- Select a different upstream!
             upstream = rule.upstreams:get_upstream_round_robin()
             addr = upstream:get_addr()
+
+            lua_util.debugm(N, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
+
             tcp.request({
               task = task,
               host = addr:to_string(),
@@ -562,15 +587,9 @@ local function sophos_check(task, content, digest, rule)
               data = { protocol, streamsize, content, bye }
             })
           else
-            rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
-            task:insert_result(rule['symbol_fail'], 0.0, 'retransmits exceed')
-            upstream:fail()
+            rspamd_logger.errx(task, '%s [%s]: failed to scan, maximum retransmits exceed', rule['symbol'], rule['type'])
+            task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and retransmits exceed')
           end
-        else
-          rspamd_logger.errx(task, 'failed to scan: %s', err)
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan')
-          upstream:fail()
-        end
       else
         upstream:ok()
         data = tostring(data)
@@ -581,29 +600,35 @@ local function sophos_check(task, content, digest, rule)
         else
           if string.find(data, 'DONE OK') then
             if rule['log_clean'] then
-              rspamd_logger.infox(task, '%s [%s]: message is clean', rule['symbol'], rule['type'])
+              rspamd_logger.infox(task, '%s [%s]: message or mime_part is clean', rule['symbol'], rule['type'])
             end
             save_av_cache(task, digest, rule, 'OK')
+            -- not finished - continue
+          elseif string.find(data, 'ACC') or string.find(data, 'OK SSSP') then
+            conn:add_read(sophos_callback)
+            -- set pseudo virus if configured, else do nothing since it's no fatal
           elseif string.find(data, 'FAIL 0212') then
+            rspamd_logger.infox(task, 'Message is ENCRYPTED (0212 SOPHOS_SAVI_ERROR_FILE_ENCRYPTED): %s', data)
             if rule['savdi_report_encrypted'] then
-              rspamd_logger.infox(task, 'Message is ENCRYPTED (0212 SOPHOS_SAVI_ERROR_FILE_ENCRYPTED): %s', data)
               yield_result(task, rule, "SAVDI_FILE_ENCRYPTED")
               save_av_cache(task, digest, rule, "SAVDI_FILE_ENCRYPTED")
             end
+            -- set pseudo virus if configured, else do nothing since it's no fatal
           elseif string.find(data, 'REJ 4') then
             if rule['savdi_report_oversize'] then
               rspamd_logger.infox(task, 'Message is OVERSIZED (SSSP reject code 4): %s', data)
-              yield_result(task, digest, rule, "SAVDI_FILE_OVERSIZED")
+              yield_result(task, rule, "SAVDI_FILE_OVERSIZED")
               save_av_cache(task, digest, rule, "SAVDI_FILE_OVERSIZED")
             end
+            -- excplicitly set REJ1 message when SAVDIreports a protocol error
           elseif string.find(data, 'REJ 1') then
             rspamd_logger.errx(task, 'SAVDI (Protocol error (REJ 1)): %s', data)
-          elseif string.find(data, 'ACC') or string.find(data, 'OK SSSP') then
-            conn:add_read(sophos_callback)
+            task:insert_result(rule['symbol_fail'], 0.0, 'SAVDI (Protocol error (REJ 1)):' .. data)
           else
             rspamd_logger.errx(task, 'unhandled response: %s', data)
             task:insert_result(rule['symbol_fail'], 0.0, 'unhandled response')
           end
+
         end
       end
     end
@@ -666,7 +691,7 @@ local function savapi_check(task, content, digest, rule)
       -- Terminal response - clean
       if string.find(result, '200') or string.find(result, '210') then
         if rule['log_clean'] then
-          rspamd_logger.infox(task, '%s: message is clean', rule['type'])
+          rspamd_logger.infox(task, '%s: message or mime_part is clean', rule['type'])
         end
         save_av_cache(task, digest, rule, 'OK')
         conn:add_write(savapi_fin_cb, 'QUIT\n')
@@ -715,29 +740,32 @@ local function savapi_check(task, content, digest, rule)
 
     local function savapi_callback_init(err, data, conn)
       if err then
-        if err == 'IO timeout' then
-          if retransmits > 0 then
-            retransmits = retransmits - 1
-            -- Select a different upstream!
-            upstream = rule.upstreams:get_upstream_round_robin()
-            addr = upstream:get_addr()
-            tcp.request({
-              task = task,
-              host = addr:to_string(),
-              port = addr:get_port(),
-              timeout = rule['timeout'],
-              callback = savapi_callback_init,
-              stop_pattern = {'\n'},
-            })
-          else
-            rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
-            upstream:fail()
-            task:insert_result(rule['symbol_fail'], 0.0, 'retransmits exceed')
-          end
+
+        -- set current upstream to fail because an error occurred
+        upstream:fail()
+
+        -- retry with another upstream until retransmits exceeds
+        if retransmits > 0 then
+
+          retransmits = retransmits - 1
+
+          -- Select a different upstream!
+          upstream = rule.upstreams:get_upstream_round_robin()
+          addr = upstream:get_addr()
+
+          lua_util.debugm(N, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
+
+          tcp.request({
+            task = task,
+            host = addr:to_string(),
+            port = addr:get_port(),
+            timeout = rule['timeout'],
+            callback = savapi_callback_init,
+            stop_pattern = {'\n'},
+          })
         else
-          rspamd_logger.errx(task, 'failed to scan: %s', err)
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan')
-          upstream:fail()
+          rspamd_logger.errx(task, '%s [%s]: failed to scan, maximum retransmits exceed', rule['symbol'], rule['type'])
+          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and retransmits exceed')
         end
       else
         upstream:ok()
