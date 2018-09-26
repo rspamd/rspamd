@@ -871,11 +871,17 @@ local function add_antivirus_rule(sym, opts)
   end
 
   return function(task)
-    if rule.attachments_only then
+    if rule.scan_mime_parts then
       local parts = task:get_parts() or {}
 
       for _,p in ipairs(parts) do
-        if not p:is_image() and not p:is_text() and not p:is_multipart() then
+        if (
+            (p:is_image() and rule.scan_image_mime)
+            or (p:is_text() and rule.scan_text_mime)
+            or (p:is_multipart() and rule.scan_text_mime)
+            or (not p:is_image() and not p:is_text() and not p:is_multipart())
+            ) then
+
           local content = p:get_content()
 
           if content and #content > 0 then
