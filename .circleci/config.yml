@@ -34,12 +34,12 @@ references:
         set -e
         if [ -f ~/project/coverage.rspamd-test.info ] && [ -f ~/project/coverage.functional.info ]; then
             sudo apt-get install -qq lcov
-            # lcov -a ~/project/coverage.rspamd-test.info -t rspamd-test -a ~/project/coverage.functional.info -t functional -o coverage.info
+            lcov -a ~/project/coverage.rspamd-test.info -t rspamd-test -a ~/project/coverage.functional.info -t functional -o coverage.info
             gem install coveralls-lcov
             sudo pip install cpp-coveralls
             sudo luarocks install luacov-coveralls
             if [ ! -z $COVERALLS_REPO_TOKEN ]; then
-              coveralls coverage.info --dump coveralls.dump || true;
+              coveralls --lcov-file coverage.info --dump coveralls.dump
               luacov-coveralls -t ${COVERALLS_REPO_TOKEN} -j coveralls.dump --root=../project
             fi
         fi
@@ -81,14 +81,15 @@ jobs:
       - run: make rspamd-test -j`nproc`
       - run: set +e; test/rspamd-test -p /rspamd/lua; echo "export RETURN_CODE=$?" >> $BASH_ENV
 
-      #- *capture_coverage_data
-      #- *capture_lua_coverage_data
+      - *capture_coverage_data
+      - *capture_lua_coverage_data
 
       # Share coverage data between jobs
-      #- save_cache:
-      #    key: coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
-      #    paths:
-      #      - coverage.rspamd-test.info
+      - save_cache:
+          key: coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
+          paths:
+            - coverage.rspamd-test.info
+            - luacov.stats.out
 
       - run: (exit $RETURN_CODE)
 
@@ -112,13 +113,13 @@ jobs:
       - run: cd ../build
       - run: set +e; RSPAMD_INSTALLROOT=../install sudo -E robot -x xunit.xml --exclude isbroken ../project/test/functional/cases; echo "export RETURN_CODE=$?" >> $BASH_ENV
 
-      #- *capture_coverage_data
+      - *capture_coverage_data
 
       # Share coverage data between jobs
-      #- save_cache:
-      #    key: coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
-      #    paths:
-      #      - coverage.functional.info
+      - save_cache:
+          key: coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
+          paths:
+            - coverage.functional.info
 
       - store_artifacts:
           path: output.xml
@@ -153,6 +154,9 @@ jobs:
   send-coverage:
     <<: *defaults
     steps:
+      - attach_workspace:
+          at: *workspace_root
+
       - *restore_coverage_data
       - *merge_and_upload_coverage_data
 
