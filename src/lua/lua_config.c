@@ -512,7 +512,7 @@ LUA_FUNCTION_DEF (config, register_worker_script);
 rspamd_config:add_on_load(function(cfg, ev_base, worker)
 	rspamd_config:add_periodic(ev_base, 1.0, function(cfg, ev_base)
 		local logger = require "rspamd_logger"
-		logger.infox(cfg, "periodic function in worker %s", worker)
+		logger.infox(cfg, "periodic function in worker %s", worker:get_name())
 		return true
 	end)
 end)
