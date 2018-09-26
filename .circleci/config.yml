@@ -25,7 +25,8 @@ references:
   - &restore_coverage_data
     restore_cache:
       keys:
-        - coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
+        - coverage-rspamd-test-{{ .Environment.CIRCLE_WORKFLOW_ID }}
+        - coverage-functional-{{ .Environment.CIRCLE_WORKFLOW_ID }}
 
   - &merge_and_upload_coverage_data
     run:
@@ -38,9 +39,10 @@ references:
             gem install coveralls-lcov
             sudo pip install cpp-coveralls
             sudo luarocks install luacov-coveralls
+            cd ~/project
             if [ ! -z $COVERALLS_REPO_TOKEN ]; then
               coveralls --lcov-file coverage.info --dump coveralls.dump
-              luacov-coveralls -t ${COVERALLS_REPO_TOKEN} -j coveralls.dump --root=../project
+              luacov-coveralls -t ${COVERALLS_REPO_TOKEN} -j coveralls.dump -m --root=../project
             fi
         fi
 
@@ -82,11 +84,11 @@ jobs:
       - run: set +e; test/rspamd-test -p /rspamd/lua; echo "export RETURN_CODE=$?" >> $BASH_ENV
 
       - *capture_coverage_data
-      - *capture_lua_coverage_data
+      #- *capture_lua_coverage_data
 
       # Share coverage data between jobs
       - save_cache:
-          key: coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
+          key: coverage-rspamd-test-{{ .Environment.CIRCLE_WORKFLOW_ID }}
           paths:
             - coverage.rspamd-test.info
             - luacov.stats.out
@@ -117,7 +119,7 @@ jobs:
 
       # Share coverage data between jobs
       - save_cache:
-          key: coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
+          key: coverage-functional-{{ .Environment.CIRCLE_WORKFLOW_ID }}
           paths:
             - coverage.functional.info
 
