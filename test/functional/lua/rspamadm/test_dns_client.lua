@@ -1,16 +1,17 @@
 local rspamd_dns = require "rspamd_dns"
 local logger = require "rspamd_logger"
 
-local _r,err = rspamd_config:load_ucl('/Users/mgalanin/build/robot-save/rspamd.conf.last')
+local config_path = '/Users/mgalanin/build/robot-save/rspamd.conf.last'
+local _r,err = rspamd_config:load_ucl(config_path)
 
 if not _r then
-  rspamd_logger.errx('cannot parse %s: %s', opts['config'], err)
+  logger.errx('cannot parse %s: %s (r=%s)', config_path, err, _r)
   os.exit(1)
 end
 
 _r,err = rspamd_config:parse_rcl({'logging', 'worker'})
 if not _r then
-  rspamd_logger.errx('cannot process %s: %s', opts['config'], err)
+  logger.errx('cannot process %s: %s (r=%s)', config_path, err, _r)
   os.exit(1)
 end
 
