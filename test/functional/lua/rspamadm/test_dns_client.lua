@@ -1,7 +1,7 @@
 local rspamd_dns = require "rspamd_dns"
 local logger = require "rspamd_logger"
 
-local config_path = '/Users/mgalanin/build/robot-save/rspamd.conf.last'
+local config_path = rspamd_paths['CONFDIR'] .. '/rspamd.conf'
 local _r,err = rspamd_config:load_ucl(config_path)
 
 if not _r then
