@@ -116,10 +116,10 @@ def path_splitter(path):
 
 def read_log_from_position(filename, offset):
     offset = long(offset)
-    f = open(filename, 'rb')
-    f.seek(offset)
-    goo = f.read()
-    size = len(goo)
+    with open(filename, 'rb') as f:
+        f.seek(offset)
+        goo = f.read()
+        size = len(goo)
     return [goo, size+offset]
 
 def rspamc(addr, port, filename):
