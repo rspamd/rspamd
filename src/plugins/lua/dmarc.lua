@@ -17,7 +17,6 @@ limitations under the License.
 
 -- Dmarc policy filter
 
-local rspamd_resolver = require "rspamd_resolver"
 local rspamd_logger = require "rspamd_logger"
 local mempool = require "rspamd_mempool"
 local rspamd_tcp = require "rspamd_tcp"
@@ -610,7 +609,6 @@ if opts['reporting'] == true then
     take_report_id = rspamd_redis.add_redis_script(take_report_script, redis_params)
     rspamd_config:add_on_load(function(cfg, ev_base, worker)
       if not worker:is_primary_controller() then return end
-      local rresolver = rspamd_resolver.init(ev_base, rspamd_config)
       pool = mempool.create()
       rspamd_config:register_finish_script(function ()
         local stamp = pool:get_variable(VAR_NAME, 'double')
@@ -884,7 +882,7 @@ if opts['reporting'] == true then
           stop_pattern = '\r\n',
           host = report_settings.smtp,
           port = report_settings.smtp_port,
-          resolver = rresolver,
+          resolver = rspamd_config:get_resolver(),
         })
       end
       local function make_report()
@@ -975,8 +973,12 @@ if opts['reporting'] == true then
                 rspamd_logger.errx(rspamd_config, 'Lookup error [%s]: %s', to_resolve, err)
                 if retry < report_settings.retries then
                   retry = retry + 1
-                  rspamd_config:get_resolver():resolve_txt(nil, pool,
-                    string.format('%s._report._dmarc.%s', reporting_domain, vdom), verify_cb)
+                  rspamd_config:get_resolver():resolve('txt', {
+                    ev_base = ev_base,
+                    name = string.format('%s._report._dmarc.%s',
+                        reporting_domain, vdom),
+                    callback = verify_cb,
+                  })
                 else
                   delete_reports()
                 end
@@ -1010,8 +1012,12 @@ if opts['reporting'] == true then
               verifier(t, nvdom)
             end
           end
-          rspamd_config:get_resolver():resolve_txt(nil, pool,
-            string.format('%s._report._dmarc.%s', reporting_domain, vdom), verify_cb)
+          rspamd_config:get_resolver():resolve('txt', {
+            ev_base = ev_base,
+            name = string.format('%s._report._dmarc.%s',
+                reporting_domain, vdom),
+            callback = verify_cb,
+          })
         end
         local t, vdom = next(to_verify)
         verifier(t, vdom)
@@ -1023,8 +1029,11 @@ if opts['reporting'] == true then
           if err then
             if err == 'no records with this name' or err == 'requested record is not found' then
               if reporting_domain ~= esld then
-                rspamd_config:get_resolver():resolve_txt(nil, pool,
-                string.format('_dmarc.%s', esld), check_addr_cb)
+                rspamd_config:get_resolver():resolve('txt', {
+                  ev_base = ev_base,
+                  name = string.format('_dmarc.%s', esld),
+                  callback = check_addr_cb,
+                })
               else
                 rspamd_logger.errx(rspamd_config, 'No DMARC record found for %s', reporting_domain)
                 delete_reports()
@@ -1033,8 +1042,11 @@ if opts['reporting'] == true then
               rspamd_logger.errx(rspamd_config, 'Lookup error [%s]: %s', to_resolve, err)
               if retry < report_settings.retries then
                 retry = retry + 1
-                rspamd_config:get_resolver():resolve_txt(nil, pool,
-                  to_resolve, check_addr_cb)
+                rspamd_config:get_resolver():resolve('txt', {
+                  ev_base = ev_base,
+                  name = to_resolve,
+                  callback = check_addr_cb,
+                })
               else
                 rspamd_logger.errx(rspamd_config, "Couldn't get reporting address for %s: retries exceeded", reporting_domain)
                 delete_reports()
@@ -1055,8 +1067,11 @@ if opts['reporting'] == true then
             if not found_policy then
               rspamd_logger.errx(rspamd_config, 'No policy: %s', to_resolve)
               if reporting_domain ~= esld then
-                rspamd_config:get_resolver():resolve_txt(nil, pool,
-                string.format('_dmarc.%s', esld), check_addr_cb)
+                rspamd_config:get_resolver():resolve('txt', {
+                  ev_base = ev_base,
+                  name = string.format('_dmarc.%s', esld),
+                  callback = check_addr_cb,
+                })
               else
                 delete_reports()
               end
@@ -1103,8 +1118,12 @@ if opts['reporting'] == true then
             end
           end
         end
-        rspamd_config:get_resolver():resolve_txt(nil, pool,
-          string.format('_dmarc.%s', reporting_domain), check_addr_cb)
+
+        rspamd_config:get_resolver():resolve('txt', {
+          ev_base = ev_base,
+          name = string.format('_dmarc.%s', reporting_domain),
+          callback = check_addr_cb,
+        })
       end
       get_reporting_domain = function()
         reporting_domain = nil
