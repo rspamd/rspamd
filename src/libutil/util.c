@@ -2113,6 +2113,9 @@ rspamd_init_libs (void)
 	SSL_CTX_set_verify (ctx->ssl_ctx_noverify, SSL_VERIFY_NONE, NULL);
 	SSL_CTX_set_options (ctx->ssl_ctx_noverify, ssl_options);
 #endif
+#ifdef SSL_SESS_CACHE_BOTH
+	SSL_CTX_set_session_cache_mode (ctx->ssl_ctx, SSL_SESS_CACHE_BOTH);
+#endif
 	rspamd_random_seed_fast ();
 
 	/* Set stack size for pcre */

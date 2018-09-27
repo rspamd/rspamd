@@ -526,6 +526,10 @@ td.maps-cell {
 }
 
 /* Some spacing tweaks */
+.notification-area div > button:not(.close) {
+	margin-right: 9px;
+}
+
 #learning p > button {
     margin-top: 10px;
     }

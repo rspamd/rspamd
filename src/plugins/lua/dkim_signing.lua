@@ -65,7 +65,6 @@ local function dkim_signing_cb(task)
         task = task,
         name = resolve_name,
         callback = function(_, _, results, err)
-          task:inc_dns_req()
           if not err and results and results[1] then
             p.pubkey = results[1]
             p.strict_pubkey_check = not settings.allow_pubkey_mismatch
@@ -194,7 +193,12 @@ for k,v in pairs(opts) do
     settings[k] = v
   end
 end
-if not (settings.use_redis or settings.path or settings.domain or settings.path_map or settings.selector_map) then
+if not (settings.use_redis or
+    settings.path or
+    settings.domain or
+    settings.path_map or
+    settings.selector_map or
+    settings.use_http_headers) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable dkim signing')
   lua_util.disable_module(N, "config")
   return
@@ -214,5 +218,6 @@ end
 rspamd_config:register_symbol({
   name = settings['symbol'],
   callback = dkim_signing_cb,
-  groups = {"policies", "dkim"}
+  groups = {"policies", "dkim"},
+  score = 0.0,
 })

@@ -47,7 +47,7 @@ define(["jquery"],
                     var items = [];
                     $.each(data[0].data, function (i, item) {
                         var idx = -1;
-                        var label;
+                        var label = null;
                         if (item.action === "greylist") {
                             label = "Greylist";
                             idx = 0;
@@ -145,12 +145,9 @@ define(["jquery"],
                     var $tbody = $("<tbody>");
 
                     $.each(data, function (i, item) {
-                        var label;
-                        if ((item.editable === false || rspamd.read_only)) {
-                            label = "<span class=\"label label-default\">Read</span>";
-                        } else {
-                            label = "<span class=\"label label-default\">Read</span>&nbsp;<span class=\"label label-success\">Write</span>";
-                        }
+                        var label = (item.editable === false || rspamd.read_only)
+                            ? "<span class=\"label label-default\">Read</span>"
+                            : "<span class=\"label label-default\">Read</span>&nbsp;<span class=\"label label-success\">Write</span>";
                         var $tr = $("<tr>");
                         $("<td class=\"col-md-2 maps-cell\">" + label + "</td>").appendTo($tr);
                         var $span = $("<span class=\"map-link\" data-toggle=\"modal\" data-target=\"#modalDialog\">" + item.uri + "</span>").data("item", item);
@@ -182,7 +179,7 @@ define(["jquery"],
                     success: function (data) {
                         var disabled = "";
                         var text = data[0].data;
-                        if ((item.editable === false || rspamd.read_only)) {
+                        if (item.editable === false || rspamd.read_only) {
                             disabled = "disabled=\"disabled\"";
                         }
 
@@ -196,7 +193,7 @@ define(["jquery"],
                         $("#modalTitle").html(item.uri);
                         $("#" + item.map).first().show();
                         $("#modalDialog .progress").hide();
-                        $("#modalDialog").modal({backdrop: true, keyboard: "show", show: true});
+                        $("#modalDialog").modal({backdrop:true, keyboard:"show", show:true});
                         if (item.editable === false) {
                             $("#modalSave").hide();
                             $("#modalSaveAll").hide();
@@ -230,7 +227,7 @@ define(["jquery"],
                     headers: {
                         Map: id,
                     },
-                    params:{
+                    params: {
                         data: data,
                         dataType: "text",
                     },

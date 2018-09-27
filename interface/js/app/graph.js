@@ -94,10 +94,10 @@ define(["jquery", "d3evolution", "footable"],
 
         function initGraph() {
             var graph = new D3Evolution("graph", $.extend({}, graph_options, {
-                yScale:      getSelector("selYScale"),
-                type:        getSelector("selType"),
+                yScale: getSelector("selYScale"),
+                type: getSelector("selType"),
                 interpolate: getSelector("selInterpolate"),
-                convert:     getSelector("selConvert"),
+                convert: getSelector("selConvert"),
             }));
             $("#selYScale").change(function () {
                 graph.yScale(this.value);
@@ -120,7 +120,7 @@ define(["jquery", "d3evolution", "footable"],
             var timeInterval = xExtents[1] - xExtents[0];
 
             return json.map(function (curr, i) {
-            // Time intervals that don't have data are excluded from average calculation as d3.mean()ignores nulls
+                // Time intervals that don't have data are excluded from average calculation as d3.mean()ignores nulls
                 var avg = d3.mean(curr, function (d) { return d.y; });
                 // To find an integral on the whole time interval we need to convert nulls to zeroes
                 var value = d3.mean(curr, function (d) { return Number(d.y); }) * timeInterval / scaleFactor;
@@ -144,12 +144,12 @@ define(["jquery", "d3evolution", "footable"],
                     enabled: true
                 },
                 columns: [
-                    {name: "label", title: "Action"},
-                    {name: "value", title: "Messages", defaultContent: ""},
-                    {name: "min", title: "Minimum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                    {name: "avg", title: "Average, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                    {name: "max", title: "Maximum, <span class=\"unit\">" + unit + "</span>", defaultContent: ""},
-                    {name: "last", title: "Last, " + unit},
+                    {name:"label", title:"Action"},
+                    {name:"value", title:"Messages", defaultContent:""},
+                    {name:"min", title:"Minimum, <span class=\"unit\">" + unit + "</span>", defaultContent:""},
+                    {name:"avg", title:"Average, <span class=\"unit\">" + unit + "</span>", defaultContent:""},
+                    {name:"max", title:"Maximum, <span class=\"unit\">" + unit + "</span>", defaultContent:""},
+                    {name:"last", title:"Last, " + unit},
                 ],
                 rows: rows
             });
@@ -224,45 +224,49 @@ define(["jquery", "d3evolution", "footable"],
 
             rspamd.query("graph", {
                 success: function (req_data) {
+                    var data = null;
                     var neighbours_data = req_data
                         .filter(function (d) { return d.status; }) // filter out unavailable neighbours
                         .map(function (d) { return d.data; });
 
-                    if (neighbours_data.length > 1) {
-                        neighbours_data.reduce(function (res, curr) {
+                    if (neighbours_data.length === 1) {
+                        data = neighbours_data[0];
+                    } else {
+                        var time_match = true;
+                        neighbours_data.reduce(function (res, curr, _, arr) {
                             if ((curr[0][0].x !== res[0][0].x) ||
                             (curr[0][curr[0].length - 1].x !== res[0][res[0].length - 1].x)) {
+                                time_match = false;
                                 rspamd.alertMessage("alert-error",
                                     "Neighbours time extents do not match. Check if time is synchronized on all servers.");
-                                updateWidgets();
-                                return;
+                                arr.splice(1); // Break out of .reduce() by mutating the source array
                             }
+                            return curr;
+                        });
 
-                            var data = [];
-                            curr.forEach(function (action, j) {
-                                data.push(
-                                    action.map(function (d, i) {
+                        if (time_match) {
+                            data = neighbours_data.reduce(function (res, curr) {
+                                return curr.map(function (action, j) {
+                                    return action.map(function (d, i) {
                                         return {
                                             x: d.x,
-                                            y: ((res[j][i].y === null) ? d.y : res[j][i].y + d.y)
+                                            y: (res[j][i].y === null) ? d.y : res[j][i].y + d.y
                                         };
-                                    })
-                                );
+                                    });
+                                });
                             });
-                            updateWidgets(data);
-                        });
-                    } else {
-                        updateWidgets(neighbours_data[0]);
+                        }
                     }
+                    updateWidgets(data);
                 },
                 errorMessage: "Cannot receive throughput data",
                 errorOnceId: "alerted_graph_",
-                data: {type: type}
+                data: {type:type}
             });
         };
 
         ui.setup = function () {
-        // Handling mouse events on overlapping elements
+            // Handling mouse events on overlapping elements
             $("#rrd-pie").mouseover(function () {
                 $("#rrd-pie").css("z-index", "200");
                 $("#rrd-table_toggle").css("z-index", "300");

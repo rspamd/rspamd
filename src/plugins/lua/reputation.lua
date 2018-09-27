@@ -31,9 +31,18 @@ local lua_maps = require "lua_maps"
 local hash = require 'rspamd_cryptobox_hash'
 local lua_redis = require "lua_redis"
 local fun = require "fun"
+local lua_selectors = require "lua_selectors"
+local ts = require("tableshape").types
 
 local redis_params = nil
 local default_expiry = 864000 -- 10 day by default
+
+local keymap_schema = ts.shape{
+  ['reject'] = ts.string,
+  ['add header'] = ts.string,
+  ['rewrite subject'] = ts.string,
+  ['no action'] = ts.string
+}
 
 -- Get reputation from ham/spam/probable hits
 local function generic_reputation_calc(token, rule, mult)
@@ -649,12 +658,142 @@ local spf_selector = {
   idempotent = spf_reputation_idempotent -- used to set scores
 }
 
+-- Generic selector based on lua_selectors framework
+
+local function generic_reputation_init(rule)
+  local cfg = rule.selector.config
+
+  if not cfg.selector then
+    rspamd_logger.errx(rspamd_config, 'cannot configure generic rule: no selector specified')
+    return false
+  end
+
+  local selector = lua_selectors.create_selector_closure(rspamd_config,
+      cfg.selector, cfg.delimiter)
+
+  if not selector then
+    rspamd_logger.errx(rspamd_config, 'cannot configure generic rule: bad selector: %s',
+        cfg.selector)
+    return false
+  end
+
+  cfg.selector = selector -- Replace with closure
+
+  if cfg.whitelist then
+    cfg.whitelist = lua_maps.map_add('reputation',
+        'generic_whitelist',
+        'map',
+        'Whitelisted selectors')
+  end
+
+  return true
+end
+
+local function generic_reputation_filter(task, rule)
+  local cfg = rule.selector.config
+  local selector_res = cfg.selector(task)
+
+  local function tokens_cb(err, token, values)
+    if values then
+      local score = generic_reputation_calc(values, rule, 1.0)
+
+      if math.abs(score) > 1e-3 then
+        -- TODO: add description
+        add_symbol_score(task, rule, score)
+      end
+    end
+  end
+
+  if selector_res then
+    if type(selector_res) == 'table' then
+      fun.each(function(e)
+        lua_util.debugm(N, task, 'check generic reputation %s', e)
+        rule.backend.get_token(task, rule, e, tokens_cb)
+      end, selector_res)
+    else
+      lua_util.debugm(N, task, 'check generic reputation %s', selector_res)
+      rule.backend.get_token(task, rule, selector_res, tokens_cb)
+    end
+  end
+end
+
+local function generic_reputation_idempotent(task, rule)
+  local action = task:get_metric_action()
+  local cfg = rule.selector.config
+  local need_set = false
+  local token = {}
+
+  local selector_res = cfg.selector(task)
+  if not selector_res then return end
+
+  local k = cfg.keys_map[action]
+
+  if k then
+    token[k] = 1.0
+    need_set = true
+  end
+
+  if need_set then
+    if type(selector_res) == 'table' then
+      fun.each(function(e)
+        lua_util.debugm(N, task, 'set generic selector %s = %s',
+            e, token)
+        rule.backend.set_token(task, rule, e, token)
+      end, selector_res)
+    else
+      lua_util.debugm(N, task, 'set generic selector %s = %s',
+          selector_res, token)
+      rule.backend.set_token(task, rule, selector_res, token)
+    end
+  end
+end
+
+
+local generic_selector = {
+  schema = ts.shape{
+    keys_map = keymap_schema,
+    lower_bound = ts.number + ts.string / tonumber,
+    max_score = ts.number:is_optional(),
+    min_score = ts.number:is_optional(),
+    outbound = ts.boolean,
+    inbound = ts.boolean,
+    selector = ts.string,
+    delimiter = ts.string,
+    whitelist = ts.string:is_optional(),
+  },
+  config = {
+    -- keys map between actions and hash elements in bucket,
+    -- h is for ham,
+    -- s is for spam,
+    -- p is for probable spam
+    keys_map = {
+      ['reject'] = 's',
+      ['add header'] = 'p',
+      ['rewrite subject'] = 'p',
+      ['no action'] = 'h'
+    },
+    lower_bound = 10, -- minimum number of messages to be scored
+    min_score = nil,
+    max_score = nil,
+    outbound = true,
+    inbound = true,
+    selector = nil,
+    delimiter = ':',
+    whitelist = nil
+  },
+  init = generic_reputation_init,
+  filter = generic_reputation_filter, -- used to get scores
+  idempotent = generic_reputation_idempotent -- used to set scores
+}
+
+
 
 local selectors = {
   ip = ip_selector,
   url = url_selector,
   dkim = dkim_selector,
-  spf = spf_selector
+  spf = spf_selector,
+  generic = generic_selector
 }
 
 local function reputation_dns_init(rule, _, _, _)
@@ -754,8 +893,6 @@ local function reputation_dns_get_token(task, rule, token, continuation_cb)
   else
     continuation_cb(results, dns_name, nil)
   end
-
-  task:inc_dns_req()
 end
 
 local function reputation_redis_init(rule, cfg, ev_base, worker)
@@ -926,6 +1063,14 @@ end
 --]]
 local backends = {
   redis = {
+    schema = ts.shape({
+      expiry = ts.number + ts.string / lua_util.parse_time_interval,
+      buckets = ts.array_of(ts.shape{
+        time = ts.number + ts.string / lua_util.parse_time_interval,
+        name = ts.string,
+        mult = ts.number + ts.string / tonumber
+      }),
+    }, {extra_fields = lua_redis.config_schema}),
     config = {
       expiry = default_expiry,
       buckets = {
@@ -946,6 +1091,9 @@ local backends = {
     set_token = reputation_redis_set_token,
   },
   dns = {
+    schema = ts.shape{
+      list = ts.string,
+    },
     config = {
       -- list = rep.example.com
     },
@@ -996,36 +1144,6 @@ local function reputation_idempotent_cb(task, rule)
   end
 end
 
-local function deepcopy(orig)
-  local orig_type = type(orig)
-  local copy
-  if orig_type == 'table' then
-    copy = {}
-    for orig_key, orig_value in next, orig, nil do
-      copy[deepcopy(orig_key)] = deepcopy(orig_value)
-    end
-    setmetatable(copy, deepcopy(getmetatable(orig)))
-  else -- number, string, boolean, etc
-    copy = orig
-  end
-  return copy
-end
-local function override_defaults(def, override)
-  for k,v in pairs(override) do
-    if k ~= 'selector' and k ~= 'backend' then
-      if def[k] then
-        if type(v) == 'table' then
-          override_defaults(def[k], v)
-        else
-          def[k] = v
-        end
-      else
-        def[k] = v
-      end
-    end
-  end
-end
-
 local function callback_gen(cb, rule)
   return function(task)
     if rule.enabled then
@@ -1035,23 +1153,18 @@ local function callback_gen(cb, rule)
 end
 
 local function parse_rule(name, tbl)
-  local sel_type = tbl.selector['type']
+  local sel_type,sel_conf = fun.head(tbl.selector)
   local selector = selectors[sel_type]
 
   if not selector then
     rspamd_logger.errx(rspamd_config, "unknown selector defined for rule %s: %s", name,
-      tbl.selector.type)
+        sel_type)
     return
   end
 
-  local backend = tbl.backend
-  if not backend or not backend.type then
-    rspamd_logger.errx(rspamd_config, "no backend defined for rule %s", name)
-    return
-  end
+  local bk_type,bk_conf = fun.head(tbl.backend)
 
-  local bk_type = backend.type
-  backend = backends[bk_type]
+  local backend = backends[bk_type]
   if not backend then
     rspamd_logger.errx(rspamd_config, "unknown backend defined for rule %s: %s", name,
       tbl.backend.type)
@@ -1059,16 +1172,42 @@ local function parse_rule(name, tbl)
   end
   -- Allow config override
   local rule = {
-    selector = deepcopy(selector),
-    backend = deepcopy(backend),
+    selector = lua_util.shallowcopy(selector),
+    backend = lua_util.shallowcopy(backend),
     config = {}
   }
 
   -- Override default config params
-  override_defaults(rule.backend.config, tbl.backend)
-  override_defaults(rule.selector.config, tbl.selector)
+  rule.backend.config = lua_util.override_defaults(rule.backend.config, bk_conf)
+  if backend.schema then
+    local checked,schema_err = backend.schema:transform(rule.backend.config)
+    if not checked then
+      rspamd_logger.errx(rspamd_config, "cannot parse backend config for %s: %s",
+          sel_type, schema_err)
+
+      return
+    end
+
+    rule.backend.config = checked
+  end
+
+  rule.selector.config = lua_util.override_defaults(rule.selector.config, sel_conf)
+  if selector.schema then
+    local checked,schema_err = selector.schema:transform(rule.selector.config)
+
+    if not checked then
+      rspamd_logger.errx(rspamd_config, "cannot parse selector config for %s: %s (%s)",
+          sel_type,
+          schema_err, sel_conf)
+      return
+    end
+
+    rule.selector.config = checked
+  end
   -- Generic options
-  override_defaults(rule.config, tbl)
+  tbl.selector = nil
+  tbl.backend = nil
+  rule.config = lua_util.override_defaults(rule.config, tbl)
 
   if rule.config.whitelisted_ip then
     rule.config.whitelisted_ip_map = lua_maps.rspamd_map_add_from_ucl(rule.whitelisted_ip,
@@ -1173,7 +1312,7 @@ end
 
 if opts['rules'] then
   for k,v in pairs(opts['rules']) do
-    if not ((v or E).selector or E).type then
+    if not ((v or E).selector) then
       rspamd_logger.errx(rspamd_config, "no selector defined for rule %s", k)
     else
       parse_rule(k, v)

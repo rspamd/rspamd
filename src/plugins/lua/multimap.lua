@@ -438,8 +438,17 @@ local function multimap_callback(task, rule)
     end
 
     if ret then
-      callback(ret)
+      if type(ret) == 'table' then
+        for _,elt in ipairs(ret) do
+          callback(elt)
+        end
+
+        ret = true
+      else
+        callback(ret)
+      end
     end
+
     return ret
   end
 
@@ -839,12 +848,20 @@ local function multimap_callback(task, rule)
       end
     end,
     selector = function()
-      local elts = lua_selectors.process_selectors(task, rule.selector) or {}
-      for _,elt in ipairs(elts) do
-        match_rule(rule, elt)
+      local elts = rule.selector(task)
+
+      if elts then
+        if type(elts) == 'table' then
+          for _,elt in ipairs(elts) do
+            match_rule(rule, elt)
+          end
+        else
+          match_rule(rule, elts)
+        end
       end
     end,
   }
+
   process_rule_funcs.ip = process_rule_funcs.dnsbl
   local f = process_rule_funcs[rt]
   if f then
@@ -862,6 +879,45 @@ end
 
 local function add_multimap_rule(key, newrule)
   local ret = false
+
+  local function multimap_load_hash(rule)
+    if rule['regexp'] then
+      if rule['multi'] then
+        rule['hash'] = rspamd_config:add_map ({
+          url = rule['map'],
+          description = rule['description'],
+          type = 'regexp_multi'
+        })
+      else
+        rule['hash'] = rspamd_config:add_map ({
+          url = newrule['map'],
+          description = newrule['description'],
+          type = 'regexp'
+        })
+      end
+    elseif rule['glob'] then
+      if rule['multi'] then
+        rule['hash'] = rspamd_config:add_map ({
+          url = rule['map'],
+          description = rule['description'],
+          type = 'glob_multi'
+        })
+      else
+        rule['hash'] = rspamd_config:add_map ({
+          url = rule['map'],
+          description = rule['description'],
+          type = 'glob'
+        })
+      end
+    else
+      rule['hash'] = rspamd_config:add_map ({
+        url = rule['map'],
+        description = rule['description'],
+        type = 'hash'
+      })
+    end
+  end
+
   if newrule['message_func'] then
     newrule['message_func'] = assert(load(newrule['message_func']))()
   end
@@ -891,10 +947,12 @@ local function add_multimap_rule(key, newrule)
       rspamd_logger.errx(rspamd_config, 'selector map requires selector definition')
       return nil
     else
-      local selector = lua_selectors.parse_selector(rspamd_config, newrule['selector'])
+      local selector = lua_selectors.create_selector_closure(
+          rspamd_config, newrule['selector'], newrule['delimiter'] or "")
 
       if not selector then
-        rspamd_logger.errx(rspamd_config, 'selector map has invalid selector')
+        rspamd_logger.errx(rspamd_config, 'selector map has invalid selector: "%s", symbol: %s',
+            newrule['selector'], newrule['symbol'])
         return nil
       end
 
@@ -979,25 +1037,8 @@ local function add_multimap_rule(key, newrule)
             ret = true
           end
         else
-          if newrule['regexp'] then
-            newrule['hash'] = rspamd_config:add_map ({
-              url = newrule['map'],
-              description = newrule['description'],
-              type = 'regexp'
-            })
-          elseif newrule['glob'] then
-            newrule['hash'] = rspamd_config:add_map ({
-              url = newrule['map'],
-              description = newrule['description'],
-              type = 'glob'
-            })
-          else
-            newrule['hash'] = rspamd_config:add_map ({
-              url = newrule['map'],
-              description = newrule['description'],
-              type = 'hash'
-            })
-          end
+          multimap_load_hash(newrule)
+
           if newrule['hash'] then
             ret = true
             if type(newrule['map']) == 'string' then
@@ -1025,25 +1066,9 @@ local function add_multimap_rule(key, newrule)
           or newrule['type'] == 'country'
           or newrule['type'] == 'mempool'
           or newrule['type'] == 'selector'then
-        if newrule['regexp'] then
-          newrule['hash'] = rspamd_config:add_map ({
-            url = newrule['map'],
-            description = newrule['description'],
-            type = 'regexp'
-          })
-        elseif newrule['glob'] then
-          newrule['hash'] = rspamd_config:add_map ({
-            url = newrule['map'],
-            description = newrule['description'],
-            type = 'glob'
-          })
-        else
-          newrule['hash'] = rspamd_config:add_map ({
-            url = newrule['map'],
-            description = newrule['description'],
-            type = 'hash'
-          })
-        end
+
+        multimap_load_hash(newrule)
+
         if newrule['hash'] then
           ret = true
           if type(newrule['map']) == 'string' then

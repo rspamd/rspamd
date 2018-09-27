@@ -23,6 +23,9 @@
 #include "libutil/util.h"
 #include "libutil/regexp.h"
 #include "lua/lua_common.h"
+
+#include "khash.h"
+
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
 #include "unix-std.h"
@@ -70,6 +73,7 @@ static const guchar rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '1'}
 		rspamd_hs_magic_vector[] = {'r', 's', 'h', 's', 'r', 'v', '1', '1'};
 #endif
 
+
 struct rspamd_re_class {
 	guint64 id;
 	enum rspamd_re_type type;
@@ -97,13 +101,18 @@ struct rspamd_re_cache_elt {
 	enum rspamd_re_cache_elt_match_type match_type;
 };
 
+KHASH_INIT (lua_selectors_hash, gchar *, int, 1, kh_str_hash_func, kh_str_hash_equal);
+
 struct rspamd_re_cache {
 	GHashTable *re_classes;
+
 	GPtrArray *re;
+	khash_t (lua_selectors_hash) *selectors;
 	ref_entry_t ref;
 	guint nre;
 	guint max_re_data;
 	gchar hash[rspamd_cryptobox_HASHBYTES + 1];
+	lua_State *L;
 #ifdef WITH_HYPERSCAN
 	gboolean hyperscan_loaded;
 	gboolean disable_hyperscan;
@@ -112,9 +121,19 @@ struct rspamd_re_cache {
 #endif
 };
 
+struct rspamd_re_selector_result {
+	guchar **scvec;
+	guint *lenvec;
+	guint cnt;
+};
+
+KHASH_INIT (selectors_results_hash, int, struct rspamd_re_selector_result, 1,
+		kh_int_hash_func, kh_int_hash_equal);
+
 struct rspamd_re_runtime {
 	guchar *checked;
 	guchar *results;
+	khash_t (selectors_results_hash) *sel_cache;
 	struct rspamd_re_cache *cache;
 	struct rspamd_re_cache_stat stat;
 	gboolean has_hs;
@@ -128,7 +147,7 @@ rspamd_re_cache_quark (void)
 
 static guint64
 rspamd_re_cache_class_id (enum rspamd_re_type type,
-		gpointer type_data,
+		gconstpointer type_data,
 		gsize datalen)
 {
 	rspamd_cryptobox_fast_hash_state_t st;
@@ -149,6 +168,8 @@ rspamd_re_cache_destroy (struct rspamd_re_cache *cache)
 	GHashTableIter it;
 	gpointer k, v;
 	struct rspamd_re_class *re_class;
+	gchar *skey;
+	gint sref;
 
 	g_assert (cache != NULL);
 	g_hash_table_iter_init (&it, cache->re_classes);
@@ -176,6 +197,15 @@ rspamd_re_cache_destroy (struct rspamd_re_cache *cache)
 		g_free (re_class);
 	}
 
+	if (cache->L) {
+		kh_foreach (cache->selectors, skey, sref, {
+			luaL_unref (cache->L, LUA_REGISTRYINDEX, sref);
+			g_free (skey);
+		});
+	}
+
+	kh_destroy (lua_selectors_hash, cache->selectors);
+
 	g_hash_table_unref (cache->re_classes);
 	g_ptr_array_free (cache->re, TRUE);
 	g_free (cache);
@@ -199,6 +229,7 @@ rspamd_re_cache_new (void)
 	cache->re_classes = g_hash_table_new (g_int64_hash, g_int64_equal);
 	cache->nre = 0;
 	cache->re = g_ptr_array_new_full (256, rspamd_re_cache_elt_dtor);
+	cache->selectors = kh_init (lua_selectors_hash);
 #ifdef WITH_HYPERSCAN
 	cache->hyperscan_loaded = FALSE;
 #endif
@@ -221,7 +252,7 @@ rspamd_re_cache_is_hs_loaded (struct rspamd_re_cache *cache)
 
 rspamd_regexp_t *
 rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
-		enum rspamd_re_type type, gpointer type_data, gsize datalen)
+		enum rspamd_re_type type, gconstpointer type_data, gsize datalen)
 {
 	guint64 class_id;
 	struct rspamd_re_class *re_class;
@@ -413,6 +444,8 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 		}
 	}
 
+	cache->L = cfg->lua_state;
+
 #ifdef WITH_HYPERSCAN
 	const gchar *platform = "generic";
 	rspamd_fstring_t *features = rspamd_fstring_new ();
@@ -459,11 +492,11 @@ rspamd_re_cache_runtime_new (struct rspamd_re_cache *cache)
 	struct rspamd_re_runtime *rt;
 	g_assert (cache != NULL);
 
-	rt = g_malloc0 (sizeof (*rt));
+	rt = g_malloc0 (sizeof (*rt) + NBYTES (cache->nre) + cache->nre);
 	rt->cache = cache;
 	REF_RETAIN (cache);
-	rt->checked = g_malloc0 (NBYTES (cache->nre));
-	rt->results = g_malloc0 (cache->nre);
+	rt->checked = ((guchar *)rt) + sizeof (*rt);
+	rt->results = rt->checked + NBYTES (cache->nre);
 	rt->stat.regexp_total = cache->nre;
 #ifdef WITH_HYPERSCAN
 	rt->has_hs = cache->hyperscan_loaded;
@@ -498,7 +531,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 	}
 
 	if (len == 0) {
-		len = strlen (in);
+		return rt->results[id];
 	}
 
 	if (rt->cache->max_re_data > 0 && len > rt->cache->max_re_data) {
@@ -746,6 +779,115 @@ rspamd_re_cache_finish_class (struct rspamd_re_runtime *rt,
 		}
 	}
 #endif
+}
+
+static gboolean
+rspamd_re_cache_process_selector (struct rspamd_task *task,
+								  struct rspamd_re_runtime *rt,
+								  const gchar *name,
+								  guchar ***svec,
+								  guint **lenvec,
+								  guint *n)
+{
+	gint ref;
+	khiter_t k;
+	lua_State *L;
+	gint err_idx, ret;
+	GString *tb;
+	struct rspamd_task **ptask;
+	gboolean result = FALSE;
+	struct rspamd_re_cache *cache = rt->cache;
+	struct rspamd_re_selector_result *sr;
+
+	L = cache->L;
+	k = kh_get (lua_selectors_hash, cache->selectors, (gchar *)name);
+
+	if (k == kh_end (cache->selectors)) {
+		msg_err_task ("cannot find selector %s, not registered", name);
+
+		return FALSE;
+	}
+
+	ref = kh_value (cache->selectors, k);
+
+	/* First, search for the cached result */
+	if (rt->sel_cache) {
+		k = kh_get (selectors_results_hash, rt->sel_cache, ref);
+
+		if (k != kh_end (rt->sel_cache)) {
+			sr = &kh_value (rt->sel_cache, k);
+
+			*svec = sr->scvec;
+			*lenvec = sr->lenvec;
+			*n = sr->cnt;
+
+			return TRUE;
+		}
+	}
+	else {
+		rt->sel_cache = kh_init (selectors_results_hash);
+	}
+
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	lua_rawgeti (L, LUA_REGISTRYINDEX, ref);
+	ptask = lua_newuserdata (L, sizeof (*ptask));
+	*ptask = task;
+	rspamd_lua_setclass (L, "rspamd{task}", -1);
+
+	if ((ret = lua_pcall (L, 1, 1, err_idx)) != 0) {
+		tb = lua_touserdata (L, -1);
+		msg_err_task ("call to selector %s "
+						"failed (%d): %v", name, ret, tb);
+
+		if (tb) {
+			g_string_free (tb, TRUE);
+		}
+	}
+	else {
+		gsize slen;
+
+		if (lua_type (L, -1) == LUA_TSTRING) {
+			*n = 1;
+			*svec = g_malloc (sizeof (guchar *));
+			*lenvec = g_malloc (sizeof (guint));
+			(*svec)[0] = g_strdup (lua_tolstring (L, -1, &slen));
+			(*lenvec)[0] = slen;
+
+			result = TRUE;
+		}
+		else {
+			*n = rspamd_lua_table_size (L, -1);
+
+			if (*n > 0) {
+				*svec = g_malloc (sizeof (guchar *) * (*n));
+				*lenvec = g_malloc (sizeof (guint) * (*n));
+
+				for (guint i = 0; i < *n; i ++) {
+					lua_rawgeti (L, -1, i + 1);
+					(*svec)[i] = g_strdup (lua_tolstring (L, -1, &slen));
+					(*lenvec)[i] = slen;
+					lua_pop (L, 1);
+				}
+
+				result = TRUE;
+			}
+		}
+	}
+
+	lua_settop (L, err_idx - 1);
+
+	if (result) {
+		k = kh_put (selectors_results_hash, rt->sel_cache, ref, &ret);
+		sr = &kh_value (rt->sel_cache, k);
+
+		sr->cnt = *n;
+		sr->scvec = *svec;
+		sr->lenvec = *lenvec;
+	}
+
+	return result;
 }
 
 /*
@@ -1057,6 +1199,21 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			g_free (lenvec);
 		}
 		break;
+	case RSPAMD_RE_SELECTOR:
+		if (rspamd_re_cache_process_selector (task, rt,
+				re_class->type_data,
+				(guchar ***)&scvec,
+				&lenvec, &cnt)) {
+
+			ret = rspamd_re_cache_process_regexp_data (rt, re,
+					task, scvec, lenvec, cnt, TRUE);
+			msg_debug_re_task ("checking selector (%s) regexp: %s -> %d",
+					re_class->type_data,
+					rspamd_regexp_get_pattern (re), ret);
+
+			/* Do not free vectors as they are managed by rt->sel_cache */
+		}
+		break;
 	case RSPAMD_RE_MAX:
 		msg_err_task ("regexp of class invalid has been called: %s",
 				rspamd_regexp_get_pattern (re));
@@ -1078,7 +1235,7 @@ gint
 rspamd_re_cache_process (struct rspamd_task *task,
 		rspamd_regexp_t *re,
 		enum rspamd_re_type type,
-		gpointer type_data,
+		gconstpointer type_data,
 		gsize datalen,
 		gboolean is_strong)
 {
@@ -1147,8 +1304,20 @@ rspamd_re_cache_runtime_destroy (struct rspamd_re_runtime *rt)
 {
 	g_assert (rt != NULL);
 
-	g_free (rt->checked);
-	g_free (rt->results);
+	if (rt->sel_cache) {
+		struct rspamd_re_selector_result sr;
+
+		kh_foreach_value (rt->sel_cache, sr, {
+			for (guint i = 0; i < sr.cnt; i ++) {
+				g_free ((gpointer)sr.scvec[i]);
+			}
+
+			g_free (sr.scvec);
+			g_free (sr.lenvec);
+		});
+		kh_destroy (selectors_results_hash, rt->sel_cache);
+	}
+
 	REF_RELEASE (rt->cache);
 	g_free (rt);
 }
@@ -1219,6 +1388,9 @@ rspamd_re_cache_type_to_string (enum rspamd_re_type type)
 		break;
 	case RSPAMD_RE_SARAWBODY:
 		ret = "sa body";
+		break;
+	case RSPAMD_RE_SELECTOR:
+		ret = "selector";
 		break;
 	case RSPAMD_RE_MAX:
 		ret = "invalid class";
@@ -1978,4 +2150,31 @@ rspamd_re_cache_load_hyperscan (struct rspamd_re_cache *cache,
 
 	return TRUE;
 #endif
+}
+
+void rspamd_re_cache_add_selector (struct rspamd_re_cache *cache,
+								   const gchar *sname,
+								   gint ref)
+{
+	khiter_t k;
+
+	k = kh_get (lua_selectors_hash, cache->selectors, (gchar *)sname);
+
+	if (k == kh_end (cache->selectors)) {
+		gchar *cpy = g_strdup (sname);
+		gint res;
+
+		k = kh_put (lua_selectors_hash, cache->selectors, cpy, &res);
+
+		kh_value (cache->selectors, k) = ref;
+	}
+	else {
+		msg_warn_re_cache ("replacing selector with name %s", sname);
+
+		if (cache->L) {
+			luaL_unref (cache->L, LUA_REGISTRYINDEX, kh_value (cache->selectors, k));
+		}
+
+		kh_value (cache->selectors, k) = ref;
+	}
 }

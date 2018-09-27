@@ -449,7 +449,7 @@ local function milter_headers(task)
       settings.routines['authentication-results'])
 
     if res then
-      add_header('authentication-results', res, ';', 0)
+      add_header('authentication-results', res, ';', 1)
     end
   end
 
@@ -619,7 +619,7 @@ if type(opts['extended_headers_rcpt']) == 'table' and opts['extended_headers_rcp
 end
 rspamd_config:register_symbol({
   name = 'MILTER_HEADERS',
-  type = 'postfilter,idempotent',
+  type = 'idempotent',
   callback = milter_headers,
   priority = 10,
   flags = 'empty',

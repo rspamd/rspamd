@@ -24,6 +24,9 @@
 #endif
 
 static const char *lua_src = BUILDROOT "/test/lua/tests.lua";
+extern gchar *lua_test;
+extern gchar *lua_test_case;
+extern struct rspamd_main *rspamd_main;
 
 static int
 traceback (lua_State *L)
@@ -61,6 +64,13 @@ rspamd_lua_test_func (void)
 	glob_t globbuf;
 	gint i, len;
 
+	rspamd_lua_set_globals (rspamd_main->cfg, L, NULL);
+
+	if (lua_test_case) {
+		lua_pushstring (L, lua_test_case);
+		lua_setglobal (L, "test_pattern");
+	}
+
 	rspamd_printf ("Starting lua tests\n");
 
 	if ((rp = realpath (lua_src, rp_buf)) == NULL) {
@@ -90,11 +100,27 @@ rspamd_lua_test_func (void)
 	pattern = g_malloc (len);
 	rspamd_snprintf (pattern, len, "%s/unit/%s", dir, "*.lua");
 
+	gint lua_test_len = 0;
+	gint inserted_file = 1;
+	gint path_start;
+	if (lua_test) {
+		lua_test_len = strlen (lua_test);
+	}
 	if (glob (pattern, GLOB_DOOFFS, NULL, &globbuf) == 0) {
 		for (i = 0; i < (gint)globbuf.gl_pathc; i++) {
-			lua_pushinteger (L, i + 1);
+			if (lua_test) {
+				path_start = strlen (globbuf.gl_pathv[i]) - lua_test_len;
+				if (path_start < 0 ||
+						strncmp (globbuf.gl_pathv[i] + path_start, lua_test, lua_test_len) != 0) {
+					continue;
+				}
+			}
+
+			lua_pushinteger (L, inserted_file);
 			lua_pushstring (L, globbuf.gl_pathv[i]);
 			lua_settable (L, -3);
+
+			inserted_file ++;
 		}
 		globfree (&globbuf);
 		g_free (pattern);

@@ -25,15 +25,23 @@
 #include <openssl/conf.h>
 #include <openssl/x509v3.h>
 
+enum rspamd_ssl_state {
+	ssl_conn_reset = 0,
+	ssl_conn_init,
+	ssl_conn_connected,
+	ssl_next_read,
+	ssl_next_write
+};
+
+enum rspamd_ssl_shutdown {
+	ssl_shut_default = 0,
+	ssl_shut_unclean,
+};
+
 struct rspamd_ssl_connection {
 	gint fd;
-	enum {
-		ssl_conn_reset = 0,
-		ssl_conn_init,
-		ssl_conn_connected,
-		ssl_next_read,
-		ssl_next_write
-	} state;
+	enum rspamd_ssl_state state;
+	enum rspamd_ssl_shutdown shut;
 	gboolean verify_peer;
 	SSL *ssl;
 	gchar *hostname;
@@ -399,6 +407,10 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 	gint ret;
 	GError *err = NULL;
 
+	if (what == EV_TIMEOUT) {
+		c->shut = ssl_shut_unclean;
+	}
+
 	switch (c->state) {
 	case ssl_conn_init:
 		/* Continue connection */
@@ -544,6 +556,8 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 			what = EV_WRITE;
 		}
 		else {
+			conn->shut = ssl_shut_unclean;
+
 			return FALSE;
 		}
 
@@ -573,6 +587,7 @@ rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
 		errno = EINVAL;
 		g_set_error (&err, rspamd_ssl_quark (), ECONNRESET,
 				"ssl state error: cannot read data");
+		conn->shut = ssl_shut_unclean;
 		conn->err_handler (conn->handler_data, err);
 		g_error_free (err);
 
@@ -593,6 +608,7 @@ rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
 			return 0;
 		}
 		else {
+			conn->shut = ssl_shut_unclean;
 			rspamd_tls_set_error (ret, "read", &err);
 			conn->err_handler (conn->handler_data, err);
 			g_error_free (err);
@@ -613,6 +629,7 @@ rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
 			what |= EV_WRITE;
 		}
 		else {
+			conn->shut = ssl_shut_unclean;
 			rspamd_tls_set_error (ret, "read", &err);
 			conn->err_handler (conn->handler_data, err);
 			g_error_free (err);
@@ -667,6 +684,7 @@ rspamd_ssl_write (struct rspamd_ssl_connection *conn, gconstpointer buf,
 			return -1;
 		}
 		else {
+			conn->shut = ssl_shut_unclean;
 			rspamd_tls_set_error (ret, "write", &err);
 			conn->err_handler (conn->handler_data, err);
 			g_error_free (err);
@@ -686,6 +704,7 @@ rspamd_ssl_write (struct rspamd_ssl_connection *conn, gconstpointer buf,
 			what = EV_WRITE;
 		}
 		else {
+			conn->shut = ssl_shut_unclean;
 			rspamd_tls_set_error (ret, "write", &err);
 			conn->err_handler (conn->handler_data, err);
 			g_error_free (err);
@@ -757,8 +776,21 @@ rspamd_ssl_connection_free (struct rspamd_ssl_connection *conn)
 		 * if the socket is not ready for writing, in which case this hack will
 		 * lead to an unclean shutdown and lost session on the other end.
 		 */
-		SSL_set_shutdown (conn->ssl, SSL_RECEIVED_SHUTDOWN);
-		SSL_shutdown (conn->ssl);
+		if (conn->shut == ssl_shut_unclean) {
+			SSL_set_shutdown (conn->ssl, SSL_RECEIVED_SHUTDOWN|SSL_SENT_SHUTDOWN);
+			SSL_set_quiet_shutdown (conn->ssl, 1);
+		}
+		else {
+			SSL_set_shutdown (conn->ssl, SSL_RECEIVED_SHUTDOWN);
+		}
+
+		/* Stupid hack to enforce SSL to do shutdown sequence */
+		for (guint i = 0; i < 4; i++) {
+			if (SSL_shutdown (conn->ssl)) {
+				break;
+			}
+		}
+
 		SSL_free (conn->ssl);
 
 		if (conn->hostname) {

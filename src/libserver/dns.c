@@ -122,7 +122,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 		return FALSE;
 	}
 
-	if (session && rspamd_session_is_destroying (session)) {
+	if (session && rspamd_session_blocked (session)) {
 		return FALSE;
 	}
 
@@ -146,9 +146,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 
 	if (session) {
 		if (req != NULL) {
-			rspamd_session_add_event (session,
-					(event_finalizer_t)rspamd_dns_fin_cb,
-					reqdata,
+			rspamd_session_add_event (session, NULL, (event_finalizer_t) rspamd_dns_fin_cb, reqdata,
 					g_quark_from_static_string ("dns resolver"));
 		}
 	}

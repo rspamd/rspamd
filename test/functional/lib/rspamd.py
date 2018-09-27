@@ -116,10 +116,10 @@ def path_splitter(path):
 
 def read_log_from_position(filename, offset):
     offset = long(offset)
-    f = open(filename, 'rb')
-    f.seek(offset)
-    goo = f.read()
-    size = len(goo)
+    with open(filename, 'rb') as f:
+        f.seek(offset)
+        goo = f.read()
+        size = len(goo)
     return [goo, size+offset]
 
 def rspamc(addr, port, filename):
@@ -211,4 +211,19 @@ def shutdown_process_with_children(pid):
             shutdown_process(child)
         except:
             pass
+
+def write_to_stdin(process_handle, text):
+    lib = BuiltIn().get_library_instance('Process')
+    obj = lib.get_process_object()
+    obj.stdin.write(text + "\n")
+    obj.stdin.flush()
+    obj.stdin.close()
+    out = obj.stdout.read(4096)
+    return out
+
+def get_file_if_exists(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, 'r') as myfile:
+            return myfile.read()
+    return None
 

@@ -1,3 +1,90 @@
+1.8.0: 24 Sep 2018
+  * [Feature] Add arguments schemas to processors and extractors
+  * [Feature] Add functional selectors library
+  * [Feature] Add generic selector to reputation module
+  * [Feature] Add more ratelimits: by digest, by attachments data, by filenames
+  * [Feature] Add preliminary stop words detection support
+  * [Feature] Add pure Lua debugm function
+  * [Feature] Add schema validation for Redis settings
+  * [Feature] Add selectors combine function
+  * [Feature] Add some recursion protection to lua logger
+  * [Feature] Add support for Lua API tracing
+  * [Feature] Allow to apply schema to arguments
+  * [Feature] Allow to get dkim signing data directly from HTTP headers
+  * [Feature] Allow to reuse existing authentication results
+  * [Feature] Cache selectors results in re runtime
+  * [Feature] Implement new text tokenizer based on libicu
+  * [Feature] Integrate selectors framework to multimap
+  * [Feature] Relax FORGED_RECIPIENTS
+  * [Feature] Support (almost) all html entities
+  * [Feature] Support adding and deletion of recipients in the milter block
+  * [Feature] Support gathering HTTP body from fragments in lua_http
+  * [Feature] Support multi flag in regexp and glob maps
+  * [Feature] Support selectors in ratelimit module
+  * [Feature] Support selectors in settings
+  * [Feature] Use khash in HTML parser
+  * [Feature] Use pure Lua debugm function
+  * [Fix] Add fail-safety for destroying sessions
+  * [Fix] Allow to add result-less fake DNS records
+  * [Fix] Another try to fix race conditions on config unload
+  * [Fix] Call Lua callback on DNS timeouts
+  * [Fix] Deprecate task:inc_dns_req as it is redundant
+  * [Fix] Do not allow events deletions on cleanup
+  * [Fix] Do not try to process skipped messages
+  * [Fix] Fix HTTP requests with no body
+  * [Fix] Fix another cleanup race condition
+  * [Fix] Fix bug in processing of pcre regexps
+  * [Fix] Fix byte array allocation in the pool
+  * [Fix] Fix crashes on task cleanup
+  * [Fix] Fix dynamic buckets in ratelimits
+  * [Fix] Fix endless loop when waiting for Rspamd to stop
+  * [Fix] Fix lua_util.str_split in case of delimiters set
+  * [Fix] Fix more issues with watching of async events
+  * [Fix] Fix stop words detection and loading logic
+  * [Fix] Fix various corner cases for language detection
+  * [Fix] Fix watchers in lua_tcp
+  * [Fix] Fix words decay algorithm
+  * [Fix] Implement watchers replacement to handle nested calls
+  * [Fix] Save faked code into fake dns record
+  * [Fix] Show the proper frame when using lua_util.debugm
+  * [Fix] Use fake dns records in tests
+  * [Fix] Use unicode replacements for HTML entities
+  * [Fix] fixed "cannot find dependency on symbol 1" issue when using replaced symbols in spamassassin rules
+  * [Fix] partition_id is not available in old versions of CH
+  * [Project] Add implicit conversion logic to selectors
+  * [Project] Add initial support for selectors in regexps
+  * [Project] Add method concept
+  * [Project] Further changes in unicode operations
+  * [Project] Implement Clickhouse migrations
+  * [Project] Implement implicit conversions to userdata
+  * [Project] Implement insert method
+  * [Project] Implement selectors registration for regular expressions
+  * [Project] Implement selectors support in re_cache
+  * [Project] Improve language detector: cleanup unused files, categorize
+  * [Project] Migrate CH data to a fat table
+  * [Project] Rework selectors logic
+  * [Project] Start Clickhouse utilities library
+  * [Project] Start unicode rework
+  * [Project] coroutine threaded model for API calls: thread pool
+  * [Rework] Move phishtank to a DNS based service
+  * [Rework] Rework Clickhouse plugin to use the new API
+  * [Rework] Rework language detector
+  * [Rework] Rework utf content processing in text parts
+  * [WebUI] Add progress bar for AJAX requests
+  * [WebUI] Avoid errors table reinitialization
+  * [WebUI] Avoid history table reinitialization
+  * [WebUI] Avoid throughput summary table reinitialization
+  * [WebUI] Destroy summary table on disconnect
+  * [WebUI] Fix "auth" request URL
+  * [WebUI] Fix disabling and hiding controls on page reload
+  * [WebUI] Fix maps loading from neighbours
+  * [WebUI] Fix symbols sorting by score
+  * [WebUI] Fix tables destroying
+  * [WebUI] Fix throughput data consolidation
+  * [WebUI] Fix upload buttons disabling
+  * [WebUI] Notify user on module loading failure
+  * [WebUI] Update FooTable 3.1.4 -> 3.1.6
+
 1.7.9: 01 Aug 2018
   * [CritFix] Fix caseless comparison of equal length strings
   * [Feature] Add HTTP basic auth support to elastic and clickhouse plugins

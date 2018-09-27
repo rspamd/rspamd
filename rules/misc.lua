@@ -249,7 +249,7 @@ rspamd_config:register_symbol{
   parent = check_rcvd,
   name = 'RCVD_NO_TLS_LAST',
   description = 'Last hop did not use encrypted transports',
-  score = 0.0,
+  score = 0.1,
   group = 'headers'
 }
 
@@ -414,7 +414,7 @@ rspamd_config.URL_IN_SUBJECT = {
   end,
   score = 4.0,
   group = 'subject',
-  description = 'Url found in Subject'
+  description = 'URL found in Subject'
 
 }
 

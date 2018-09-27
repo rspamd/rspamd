@@ -183,6 +183,12 @@ const guint64* rspamd_log_counters (rspamd_logger_t *logger);
  */
 ucl_object_t * rspamd_log_errorbuf_export (const rspamd_logger_t *logger);
 
+/**
+ * Returns the current logger object
+ * @return
+ */
+rspamd_logger_t* rspamd_logger_get_singleton (void);
+
 /* Typical functions */
 
 extern guint rspamd_task_log_id;
@@ -301,9 +307,8 @@ extern guint rspamd_task_log_id;
 		pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_info_pool_check(...)   rspamd_conditional_debug (NULL, NULL, \
-		G_LOG_LEVEL_INFO, \
-		pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
+#define msg_info_pool_check(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_debug_pool_check(...)  rspamd_conditional_debug (NULL, NULL, \

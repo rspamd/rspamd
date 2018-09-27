@@ -87,6 +87,7 @@ local settings = {
   use_esld = true,
   use_redis = false,
   key_prefix = 'arc_keys', -- default hash name
+  reuse_auth_results = false, -- Reuse the existing authentication results
 }
 
 local function parse_arc_header(hdr, target)
@@ -389,19 +390,38 @@ local function arc_sign_seal(task, params, header)
   local arc_sigs = task:cache_get('arc-sigs')
   local arc_seals = task:cache_get('arc-seals')
   local arc_auth_results = task:get_header_full('ARC-Authentication-Results') or {}
-  local cur_auth_results = auth_results.gen_auth_results(task) or ''
+  local cur_auth_results
   local privkey
 
   if params.rawkey then
-    privkey = rspamd_rsa_privkey.load_pem(params.rawkey)
+    -- Distinguish between pem and base64
+    if string.match(params.rawkey, '^-----BEGIN') then
+      privkey = rspamd_rsa_privkey.load_pem(params.rawkey)
+    else
+      privkey = rspamd_rsa_privkey.load_base64(params.rawkey)
+    end
   elseif params.key then
     privkey = rspamd_rsa_privkey.load_file(params.key)
   end
 
   if not privkey then
     rspamd_logger.errx(task, 'cannot load private key for signing')
+    return
   end
 
+  if settings.reuse_auth_results then
+    local ar_header = task:get_header('Authentication-Results')
+
+    if ar_header then
+      rspamd_logger.debugm(N, task, 'reuse authentication results header for ARC')
+      cur_auth_results = ar_header
+    else
+      rspamd_logger.debugm(N, task, 'cannot reuse authentication results, header is missing')
+      cur_auth_results = auth_results.gen_auth_results(task) or ''
+    end
+  else
+    cur_auth_results = auth_results.gen_auth_results(task) or ''
+  end
 
   local sha_ctx = hash.create_specific('sha256')
 
@@ -434,11 +454,11 @@ local function arc_sign_seal(task, params, header)
     'ARC-Message-Signature',
     header)
 
-  cur_auth_results = lua_util.fold_header(task,
-    'ARC-Authentication-Results',
-    cur_auth_results, ';')
-
   cur_auth_results = string.format('i=%d; %s', cur_idx, cur_auth_results)
+  cur_auth_results = lua_util.fold_header(task,
+      'ARC-Authentication-Results',
+      cur_auth_results, ';')
+
   local s = dkim_canonicalize('ARC-Authentication-Results',
     cur_auth_results)
   sha_ctx:update(s)
@@ -448,7 +468,10 @@ local function arc_sign_seal(task, params, header)
   lua_util.debugm(N, task, 'update signature with header: %s', s)
 
   local cur_arc_seal = string.format('i=%d; s=%s; d=%s; t=%d; a=rsa-sha256; cv=%s; b=',
-      cur_idx, params.selector, params.domain, math.floor(rspamd_util.get_time()), params.arc_cv)
+      cur_idx,
+      params.selector,
+      params.domain,
+      math.floor(rspamd_util.get_time()), params.arc_cv)
   s = string.format('%s:%s', 'arc-seal', cur_arc_seal)
   sha_ctx:update(s)
   lua_util.debugm(N, task, 'initial update signature with header: %s', s)
@@ -459,9 +482,9 @@ local function arc_sign_seal(task, params, header)
 
   task:set_milter_reply({
     add_headers = {
-      ['ARC-Authentication-Results'] = {order = 0, value = cur_auth_results},
-      ['ARC-Message-Signature'] = {order = 0, value = header},
-      ['ARC-Seal'] = {order = 0, value = lua_util.fold_header(task,
+      ['ARC-Authentication-Results'] = {order = 1, value = cur_auth_results},
+      ['ARC-Message-Signature'] = {order = 1, value = header},
+      ['ARC-Seal'] = {order = 1, value = lua_util.fold_header(task,
         'ARC-Seal', cur_arc_seal) }
     }
   })
@@ -589,10 +612,13 @@ for k,v in pairs(opts) do
     settings[k] = v
   end
 end
-if not (settings.use_redis or settings.path or
-    settings.domain or settings.path_map or settings.selector_map) then
+if not (settings.use_redis or
+    settings.path or
+    settings.domain or
+    settings.path_map or
+    settings.selector_map or
+    settings.use_http_headers) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable arc signing')
-  lua_util.disable_module(N, "fail")
   return
 end
 
@@ -601,7 +627,6 @@ if settings.use_redis then
 
   if not redis_params then
     rspamd_logger.errx(rspamd_config, 'no servers are specified, but module is configured to load keys from redis, disable arc signing')
-    lua_util.disable_module(N, "config")
     return
   end
 end
@@ -609,7 +634,8 @@ end
 rspamd_config:register_symbol({
   name = settings['sign_symbol'],
   callback = arc_signing_cb,
-  groups = {"policies", "arc"}
+  groups = {"policies", "arc"},
+  score = 0.0,
 })
 
 -- Do not sign unless valid

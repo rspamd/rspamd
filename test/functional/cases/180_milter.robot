@@ -36,4 +36,6 @@ Milter Test
   ...  cwd=${TESTDIR}/lua/miltertest
   Follow Rspamd Log
   Should Match Regexp  ${result.stderr}  ^$
+  Log  ${result.rc}
+  Log  ${result.stdout}
   Should Be Equal As Integers  ${result.rc}  0  msg=${result.stdout}  values=false

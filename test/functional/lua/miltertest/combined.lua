@@ -1,7 +1,7 @@
 -- Combine tests
 
-require './lib'
-require './data'
+dofile './lib.lua'
+dofile './data.lua'
 
 setup()
 

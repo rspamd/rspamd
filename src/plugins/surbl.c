@@ -1638,7 +1638,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 	struct rspamd_http_message *msg;
 	struct surbl_ctx *surbl_module_ctx = surbl_get_context (task->cfg);
 
-	if (!rspamd_session_is_destroying (task->s)) {
+	if (!rspamd_session_blocked (task->s)) {
 
 		selected = rspamd_upstream_get (surbl_module_ctx->redirectors,
 				RSPAMD_UPSTREAM_ROUND_ROBIN, url->host, url->hostlen);
@@ -1675,10 +1675,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 		timeout = rspamd_mempool_alloc (task->task_pool, sizeof (struct timeval));
 		double_to_tv (surbl_module_ctx->read_timeout, timeout);
 
-		rspamd_session_add_event (task->s,
-				free_redirector_session,
-				param,
-				g_quark_from_static_string ("surbl"));
+		rspamd_session_add_event (task->s, NULL, free_redirector_session, param, g_quark_from_static_string ("surbl"));
 
 		rspamd_http_connection_write_message (param->conn, msg, NULL,
 				NULL, param, s, timeout, task->ev_base);

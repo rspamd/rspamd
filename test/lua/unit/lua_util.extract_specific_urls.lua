@@ -4,19 +4,11 @@ context("Lua util - extract_specific_urls", function()
   local fun   = require "fun"
   local url   = require "rspamd_url"
   local logger = require "rspamd_logger"
-  local ffi = require "ffi"
   local rspamd_util = require "rspamd_util"
   local rspamd_task = require "rspamd_task"
+  local test_helper = require "rspamd_test_helper"
 
-  ffi.cdef[[
-  void rspamd_url_init (const char *tld_file);
-  unsigned ottery_rand_range(unsigned top);
-  void rspamd_http_normalize_path_inplace(char *path, size_t len, size_t *nlen);
-  ]]
-
-  local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
-
-  ffi.C.rspamd_url_init(string.format('%s/%s', test_dir, "test_tld.dat"))
+  test_helper.init_url_parser()
 
   local task_object = {
     urls      = {},
@@ -110,8 +102,7 @@ context("Lua util - extract_specific_urls", function()
         local s = logger.slog("%1 =?= %2", c.expect, actual_result)
         print(s) --]]
 
-      assert_equal(true, util.table_cmp(c.expect, actual_result), "checking that we got the same tables")
-
+      assert_rspamd_table_eq({actual = actual_result, expect = c.expect})
     end)
 
     test("extract_specific_urls " .. i, function()
@@ -132,8 +123,7 @@ context("Lua util - extract_specific_urls", function()
         local s = logger.slog("case[%1] %2 =?= %3", i, c.expect, actual_result)
         print(s) --]]
 
-      assert_equal(true, util.table_cmp(c.expect, actual_result), "checking that we got the same tables")
-
+      assert_rspamd_table_eq({actual = actual_result, expect = c.expect})
     end)
   end
 

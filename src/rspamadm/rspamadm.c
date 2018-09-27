@@ -18,6 +18,7 @@
 #include "rspamd.h"
 #include "ottery.h"
 #include "lua/lua_common.h"
+#include "lua/lua_thread_pool.h"
 #include "lua_ucl.h"
 #include "unix-std.h"
 
@@ -31,6 +32,7 @@ static gboolean show_help = FALSE;
 static gboolean show_version = FALSE;
 GHashTable *ucl_vars = NULL;
 struct rspamd_main *rspamd_main = NULL;
+struct rspamd_async_session *rspamadm_session = NULL;
 lua_State *L = NULL;
 
 /* Defined in modules.c */
@@ -204,15 +206,27 @@ rspamadm_parse_ucl_var (const gchar *option_name,
 	return TRUE;
 }
 
+static void
+lua_thread_str_error_cb (struct thread_entry *thread, int ret, const char *msg)
+{
+	struct lua_call_data *cd = thread->cd;
+
+	msg_err ("call to rspamadm lua script failed (%d): %s", ret, msg);
+
+	cd->ret = ret;
+}
+
 gboolean
-rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
+rspamadm_execute_lua_ucl_subr (gint argc, gchar **argv,
 							   const ucl_object_t *res,
 							   const gchar *script_name,
 							   gboolean rspamadm_subcommand)
 {
-	lua_State *L = pL;
-	gint err_idx, i, ret;
-	GString *tb;
+	struct thread_entry *thread = lua_thread_pool_get_for_config (rspamd_main->cfg);
+
+	lua_State *L = thread->lua_state;
+
+	gint i;
 	gchar str[PATH_MAX];
 
 	g_assert (script_name != NULL);
@@ -250,32 +264,21 @@ rspamadm_execute_lua_ucl_subr (gpointer pL, gint argc, gchar **argv,
 		}
 	}
 
-	lua_pushcfunction (L, &rspamd_lua_traceback);
-	err_idx = lua_gettop (L);
-
 	/* Push function */
-	lua_pushvalue (L, -2);
+	lua_pushvalue (L, -1);
 
 	/* Push argv */
 	lua_newtable (L);
 
 	for (i = 1; i < argc; i ++) {
 		lua_pushstring (L, argv[i]);
-		lua_rawseti (L, -2, i);
+		lua_rawseti (L, -1, i);
 	}
 
 	/* Push results */
 	ucl_object_push_lua (L, res, TRUE);
 
-	if ((ret = lua_pcall (L, 2, 0, err_idx)) != 0) {
-		tb = lua_touserdata (L, -1);
-		msg_err ("call to rspamadm lua script failed (%d): %v", ret, tb);
-
-		if (tb) {
-			g_string_free (tb, TRUE);
-		}
-
-		lua_settop (L, 0);
+	if (lua_repl_thread_call (thread, 2, NULL, lua_thread_str_error_cb) != 0) {
 
 		return FALSE;
 	}
@@ -317,6 +320,28 @@ rspamadm_command_maybe_match_name (const gchar *cmd, const gchar *input)
 	return FALSE;
 }
 
+
+
+static void
+rspamadm_add_lua_globals (void)
+{
+	struct rspamd_async_session  **psession;
+	struct event_base **pev_base;
+
+	rspamadm_session = rspamd_session_create (rspamd_main->cfg->cfg_pool, NULL,
+			NULL, (event_finalizer_t )NULL, NULL);
+
+	psession = lua_newuserdata (L, sizeof (struct rspamd_async_session*));
+	rspamd_lua_setclass (L, "rspamd{session}", -1);
+	*psession = rspamadm_session;
+	lua_setglobal (L, "rspamadm_session");
+
+	pev_base = lua_newuserdata (L, sizeof (struct event_base *));
+	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
+	*pev_base = rspamd_main->ev_base;
+	lua_setglobal (L, "rspamadm_ev_base");
+}
+
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
@@ -343,6 +368,8 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->type = process_quark;
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 			"rspamadm");
+	rspamd_main->ev_base = event_init ();
+
 	rspamadm_fill_internal_commands (all_commands);
 	help_command.command_data = all_commands;
 
@@ -417,6 +444,11 @@ main (gint argc, gchar **argv, gchar **env)
 	L = cfg->lua_state;
 	rspamd_lua_set_path (L, NULL, ucl_vars);
 	rspamd_lua_set_globals (cfg, L, ucl_vars);
+	rspamadm_add_lua_globals ();
+
+#ifdef WITH_HIREDIS
+	rspamd_redis_pool_config (cfg->redis_pool, cfg, rspamd_main->ev_base);
+#endif
 
 	/* Init rspamadm global */
 	lua_newtable (L);
@@ -497,6 +529,8 @@ main (gint argc, gchar **argv, gchar **env)
 	else {
 		cmd->run (0, NULL, cmd);
 	}
+
+	event_base_loopexit (rspamd_main->ev_base, NULL);
 
 	REF_RELEASE (rspamd_main->cfg);
 	rspamd_log_close (rspamd_main->logger, TRUE);

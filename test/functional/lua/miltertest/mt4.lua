@@ -1,7 +1,7 @@
 print('Check we will defer messages')
 
-require './lib'
-require './data'
+dofile './lib.lua'
+dofile './data.lua'
 
 setup()
 

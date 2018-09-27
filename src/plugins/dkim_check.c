@@ -321,14 +321,14 @@ dkim_module_config (struct rspamd_config *cfg)
 	dkim_module_ctx->whitelist_ip = NULL;
 
 	if ((value =
-			rspamd_config_get_module_opt (cfg, "options", "check_local")) != NULL) {
+			rspamd_config_get_module_opt (cfg, "dkim", "check_local")) != NULL) {
 		dkim_module_ctx->check_local = ucl_object_toboolean (value);
 	}
 	else {
 		dkim_module_ctx->check_local = FALSE;
 	}
 	if ((value =
-		rspamd_config_get_module_opt (cfg, "options", "check_authed")) != NULL) {
+		rspamd_config_get_module_opt (cfg, "dkim", "check_authed")) != NULL) {
 		dkim_module_ctx->check_authed = ucl_object_toboolean (value);
 	}
 	else {

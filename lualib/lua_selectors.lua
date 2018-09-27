@@ -16,6 +16,8 @@ limitations under the License.
 
 -- This module contains 'selectors' implementation: code to extract data
 -- from Rspamd tasks and compose those together
+--
+-- Read more at https://rspamd.com/doc/configuration/selectors.html
 
 --[[[
 -- @module lua_selectors
@@ -28,56 +30,66 @@ local exports = {}
 local logger = require 'rspamd_logger'
 local fun = require 'fun'
 local lua_util = require "lua_util"
-local M = "lua_selectors"
+local ts = require("tableshape").types
+local M = "selectors"
 local E = {}
 
 local extractors = {
+  ['id'] = {
+    ['get_value'] = function(_, args)
+      if args[1] then
+        return args[1], 'string'
+      end
+
+      return '','string'
+    end,
+    ['description'] = [[Return value from function's argument or an empty string,
+For example, `id('Something')` returns a string 'Something']],
+    ['args_schema'] = {ts.string:is_optional()}
+  },
   -- Get source IP address
   ['ip'] = {
-    ['type'] = 'ip',
     ['get_value'] = function(task)
       local ip = task:get_ip()
-      if ip and ip:is_valid() then return tostring(ip) end
+      if ip and ip:is_valid() then return ip,'userdata' end
       return nil
     end,
-    ['description'] = 'Get source IP address',
-  },
-  -- Get SMTP from
-  ['smtp_from'] = {
-    ['type'] = 'email',
-    ['get_value'] = function(task)
-      local from = task:get_from(0)
-      if ((from or E)[1] or E).addr then
-        return from[1]
-      end
-      return nil
-    end,
-    ['description'] = 'Get SMTP from',
+    ['description'] = [[Get source IP address]],
   },
   -- Get MIME from
-  ['mime_from'] = {
-    ['type'] = 'email',
-    ['get_value'] = function(task)
-      local from = task:get_from(0)
+  ['from'] = {
+    ['get_value'] = function(task, args)
+      local from = task:get_from(args[1] or 0)
       if ((from or E)[1] or E).addr then
-        return from[1]
+        return from[1],'table'
       end
       return nil
     end,
-    ['description'] = 'Get MIME from',
+    ['description'] = [[Get MIME or SMTP from (e.g. `from('smtp')` or `from('mime')`,
+uses any type by default)]],
+  },
+  ['rcpts'] = {
+    ['get_value'] = function(task, args)
+      local rcpts = task:get_recipients(args[1] or 0)
+      if ((rcpts or E)[1] or E).addr then
+        return rcpts,'table_list'
+      end
+      return nil
+    end,
+    ['description'] = [[Get MIME or SMTP rcpts (e.g. `rcpts('smtp')` or `rcpts('mime')`,
+uses any type by default)]],
   },
   -- Get country (ASN module must be executed first)
   ['country'] = {
-    ['type'] = 'string',
     ['get_value'] = function(task)
-      local asn = task:get_mempool():get_variable('asn')
-      if not asn then
+      local country = task:get_mempool():get_variable('country')
+      if not country then
         return nil
       else
-        return asn
+        return country,'string'
       end
     end,
-    ['description'] = 'Get country (ASN module must be executed first)',
+    ['description'] = [[Get country (ASN module must be executed first)]],
   },
   -- Get ASN number
   ['asn'] = {
@@ -87,43 +99,39 @@ local extractors = {
       if not asn then
         return nil
       else
-        return asn
+        return asn,'string'
       end
     end,
-    ['description'] = 'Get ASN number',
+    ['description'] = [[Get AS number (ASN module must be executed first)]],
   },
   -- Get authenticated username
   ['user'] = {
-    ['type'] = 'string',
     ['get_value'] = function(task)
       local auser = task:get_user()
       if not auser then
         return nil
       else
-        return auser
+        return auser,'string'
       end
     end,
-    ['description'] = 'Get authenticated username',
+    ['description'] = 'Get authenticated user name',
   },
   -- Get principal recipient
   ['to'] = {
-    ['type'] = 'email',
     ['get_value'] = function(task)
-      return task:get_principal_recipient()
+      return task:get_principal_recipient(),'string'
     end,
     ['description'] = 'Get principal recipient',
   },
   -- Get content digest
   ['digest'] = {
-    ['type'] = 'string',
     ['get_value'] = function(task)
-      return task:get_digest()
+      return task:get_digest(),'string'
     end,
     ['description'] = 'Get content digest',
   },
   -- Get list of all attachments digests
   ['attachments'] = {
-    ['type'] = 'string_list',
     ['get_value'] = function(task)
       local parts = task:get_parts() or E
       local digests = {}
@@ -135,7 +143,7 @@ local extractors = {
       end
 
       if #digests > 0 then
-        return digests
+        return digests,'string_list'
       end
 
       return nil
@@ -144,7 +152,6 @@ local extractors = {
   },
   -- Get all attachments files
   ['files'] = {
-    ['type'] = 'string_list',
     ['get_value'] = function(task)
       local parts = task:get_parts() or E
       local files = {}
@@ -157,7 +164,7 @@ local extractors = {
       end
 
       if #files > 0 then
-        return files
+        return files,'string_list'
       end
 
       return nil
@@ -166,71 +173,104 @@ local extractors = {
   },
   -- Get helo value
   ['helo'] = {
-    ['type'] = 'string',
     ['get_value'] = function(task)
-      return task:get_helo()
+      return task:get_helo(),'string'
     end,
     ['description'] = 'Get helo value',
   },
   -- Get header with the name that is expected as an argument. Returns list of
   -- headers with this name
   ['header'] = {
-    ['type'] = 'kv_list',
     ['get_value'] = function(task, args)
-      return task:get_header_full(args[1])
+      local strong = false
+      if args[2] then
+        if args[2]:match('strong') then
+          strong = true
+        end
+
+        if args[2]:match('full') then
+          return task:get_header_full(args[1], strong),'table_list'
+        end
+
+        return task:get_header(args[1], strong),'string'
+      else
+        return task:get_header(args[1]),'string'
+      end
     end,
-    ['description'] = 'Get header with the name that is expected as an argument. Returns list of headers with this name',
+    ['description'] = [[Get header with the name that is expected as an argument.
+The optional second argument accepts list of flags:
+  - `full`: returns all headers with this name with all data (like task:get_header_full())
+  - `strong`: use case sensitive match when matching header's name]],
+    ['args_schema'] = {ts.string,
+                       (ts.pattern("strong") + ts.pattern("full")):is_optional()}
   },
   -- Get list of received headers (returns list of tables)
   ['received'] = {
-    ['type'] = 'kv_list',
-    ['get_value'] = function(task)
-      return task:get_received_headers()
+    ['get_value'] = function(task, args)
+      local rh = task:get_received_headers()
+      if args[1] and rh then
+        return fun.map(function(r) return r[args[1]] end, rh), 'string_list'
+      end
+
+      return rh,'table_list'
     end,
-    ['description'] = 'Get list of received headers (returns list of tables)',
+    ['description'] = [[Get list of received headers.
+If no arguments specified, returns list of tables. Otherwise, selects a specific element,
+e.g. `by_hostname`]],
   },
   -- Get all urls
   ['urls'] = {
-    ['type'] = 'url_list',
-    ['get_value'] = function(task)
-      return task:get_urls()
+    ['get_value'] = function(task, args)
+      local urls = task:get_urls()
+      if args[1] and urls then
+        return fun.map(function(r) return r[args[1]](r) end, urls), 'string_list'
+      end
+      return urls,'userdata_list'
     end,
-    ['description'] = 'Get all urls',
+    ['description'] = [[Get list of all urls.
+If no arguments specified, returns list of url objects. Otherwise, calls a specific method,
+e.g. `get_tld`]],
   },
   -- Get all emails
   ['emails'] = {
-    ['type'] = 'url_list',
-    ['get_value'] = function(task)
-      return task:get_emails()
+    ['get_value'] = function(task, args)
+      local urls = task:get_emails()
+      if args[1] and urls then
+        return fun.map(function(r) return r[args[1]](r) end, urls), 'string_list'
+      end
+      return urls,'userdata_list'
     end,
-    ['description'] = 'Get all emails',
+    ['description'] = [[Get list of all emails.
+If no arguments specified, returns list of url objects. Otherwise, calls a specific method,
+e.g. `get_user`]],
   },
   -- Get specific pool var. The first argument must be variable name,
   -- the second argument is optional and defines the type (string by default)
   ['pool_var'] = {
-    ['type'] = 'string',
     ['get_value'] = function(task, args)
-      return task:get_mempool():get_variable(args[1], args[2])
+      local type = args[2] or 'string'
+      return task:get_mempool():get_variable(args[1], type),(type)
     end,
     ['description'] = [[Get specific pool var. The first argument must be variable name,
-      the second argument is optional and defines the type (string by default)]],
+the second argument is optional and defines the type (string by default)]],
+    ['args_schema'] = {ts.string, ts.string:is_optional()}
   },
   -- Get specific HTTP request header. The first argument must be header name.
   ['request_header'] = {
-    ['type'] = 'string',
     ['get_value'] = function(task, args)
       local hdr = task:get_request_header(args[1])
       if hdr then
-        return tostring(hdr)
+        return tostring(hdr),'string'
       end
 
       return nil
     end,
-    ['description'] = 'Get specific HTTP request header. The first argument must be header name.',
+    ['description'] = [[Get specific HTTP request header.
+The first argument must be header name.]],
+    ['args_schema'] = {ts.string}
   },
   -- Get task date, optionally formatted
   ['time'] = {
-    ['type'] = 'string',
     ['get_value'] = function(task, args)
       local what = args[1] or 'message'
       local dt = task:get_date{format = what, gmt = true}
@@ -238,15 +278,21 @@ local extractors = {
       if dt then
         if args[2] then
           -- Should be in format !xxx, as dt is in GMT
-          return os.date(args[2], dt)
+          return os.date(args[2], dt),'string'
         end
 
-        return tostring(dt)
+        return tostring(dt),'string'
       end
 
       return nil
     end,
-    ['description'] = 'Get task date, optionally formatted (see os.date)',
+    ['description'] = [[Get task timestamp. The first argument is type:
+  - `connect`: connection timestamp (default)
+  - `message`: timestamp as defined by `Date` header
+
+  The second argument is optional time format, see [os.date](http://pgl.yoyo.org/luai/i/os.date) description]],
+    ['args_schema'] = {ts.one_of{'connect', 'message'}:is_optional(),
+                       ts.string:is_optional()}
   }
 }
 
@@ -255,39 +301,6 @@ local function pure_type(ltype)
 end
 
 local transform_function = {
-  -- Get hostname from url or a list of urls
-  ['get_host'] = {
-    ['types'] = {
-      ['url'] = true
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, t)
-      return inp:get_host(),'string'
-    end,
-    ['description'] = 'Get hostname from url or a list of urls',
-  },
-  -- Get tld from url or a list of urls
-  ['get_tld'] = {
-    ['types'] = {
-      ['url'] = true
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, t)
-      return inp:get_tld()
-    end,
-    ['description'] = 'Get tld from url or a list of urls',
-  },
-  -- Get address
-  ['get_addr'] = {
-    ['types'] = {
-      ['email'] = true
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, _)
-      return inp:get_addr()
-    end,
-    ['description'] = 'Get email address as a string',
-  },
   -- Returns the lowercased string
   ['lower'] = {
     ['types'] = {
@@ -302,39 +315,53 @@ local transform_function = {
   -- Returns the first element
   ['first'] = {
     ['types'] = {
-      ['url_list'] = true,
-      ['kv_list'] = true,
-      ['received_list'] = true,
-      ['string_list'] = true
+      ['list'] = true,
     },
     ['process'] = function(inp, t)
-      return inp[1],pure_type(t)
+      return fun.head(inp),pure_type(t)
     end,
     ['description'] = 'Returns the first element',
   },
   -- Returns the last element
   ['last'] = {
     ['types'] = {
-      ['url_list'] = true,
-      ['kv_list'] = true,
-      ['string_list'] = true
+      ['list'] = true,
     },
     ['process'] = function(inp, t)
-      return inp[#inp],pure_type(t)
+      return fun.nth(#inp, inp),pure_type(t)
     end,
     ['description'] = 'Returns the last element',
   },
   -- Returns the nth element
   ['nth'] = {
     ['types'] = {
-      ['url_list'] = true,
-      ['kv_list'] = true,
-      ['string_list'] = true
+      ['list'] = true,
     },
     ['process'] = function(inp, t, args)
-      return inp[tonumber(args[1] or 1)],pure_type(t)
+      return fun.nth(args[1] or 1, inp),pure_type(t)
     end,
     ['description'] = 'Returns the nth element',
+    ['args_schema'] = {ts.number + ts.string / tonumber}
+  },
+  ['take_n'] = {
+    ['types'] = {
+      ['list'] = true,
+    },
+    ['process'] = function(inp, t, args)
+      return fun.take_n(args[1] or 1, inp),t
+    end,
+    ['description'] = 'Returns the n first elements',
+    ['args_schema'] = {ts.number + ts.string / tonumber}
+  },
+  ['drop_n'] = {
+    ['types'] = {
+      ['list'] = true,
+    },
+    ['process'] = function(inp, t, args)
+      return fun.drop_n(args[1] or 1, inp),t
+    end,
+    ['description'] = 'Returns list without the first n elements',
+    ['args_schema'] = {ts.number + ts.string / tonumber}
   },
   -- Joins strings into a single string using separator in the argument
   ['join'] = {
@@ -342,9 +369,10 @@ local transform_function = {
       ['string_list'] = true
     },
     ['process'] = function(inp, _, args)
-      return table.concat(inp, args[1] or ''), 'string'
+      return table.concat(fun.totable(inp), args[1] or ''), 'string'
     end,
     ['description'] = 'Joins strings into a single string using separator in the argument',
+    ['args_schema'] = {ts.string:is_optional()}
   },
   -- Create a digest from string or a list of strings
   ['digest'] = {
@@ -354,28 +382,26 @@ local transform_function = {
     ['map_type'] = 'hash',
     ['process'] = function(inp, _, args)
       local hash = require 'rspamd_cryptobox_hash'
-      local ht = args[1] or 'blake2'
-      return hash:create_specific(ht):update(inp), 'hash'
-    end,
-    ['description'] = 'Create a digest from string or a list of strings',
-  },
-  -- Encode hash to string (using hex encoding by default)
-  ['encode'] = {
-    ['types'] = {
-      ['hash'] = true
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, _, args)
-      local how = args[1] or 'hex'
-      if how == 'hex' then
-        return inp:hex()
-      elseif how == 'base32' then
-        return inp:base32()
-      elseif how == 'base64' then
-        return inp:base64()
+      local encoding = args[1] or 'hex'
+      local ht = args[2] or 'blake2'
+      local h = hash:create_specific(ht):update(inp)
+      local s
+
+      if encoding == 'hex' then
+        s = h:hex()
+      elseif encoding == 'base32' then
+        s = h:base32()
+      elseif encoding == 'base64' then
+        s = h:base64()
       end
+
+      return s,'string'
     end,
-    ['description'] = 'Encode hash to string (using hex encoding by default)',
+    ['description'] = [[Create a digest from a string.
+The first argument is encoding (`hex`, `base32`, `base64`),
+the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`, `md5`)]],
+    ['args_schema'] = {ts.one_of{'hex', 'base32', 'base64'}:is_optional(),
+                       ts.one_of{'blake2', 'sha256', 'sha1', 'sha512', 'md5'}:is_optional()}
   },
   -- Extracts substring
   ['substring'] = {
@@ -390,47 +416,58 @@ local transform_function = {
       return inp:sub(start_pos, end_pos), 'string'
     end,
     ['description'] = 'Extracts substring',
+    ['args_schema'] = {(ts.number + ts.string / tonumber):is_optional(),
+                       (ts.number + ts.string / tonumber):is_optional()}
   },
-  -- Drops input value and return values from function's arguments or an empty string
-  ['id'] = {
+  -- Regexp matching
+  ['regexp'] = {
     ['types'] = {
       ['string'] = true
     },
     ['map_type'] = 'string',
-    ['process'] = function(_, _, args)
-      if args[1] and args[2] then
-        return fun.map(tostring, args)
-      elseif args[1] then
-        return args[1]
+    ['process'] = function(inp, _, args)
+      local rspamd_regexp = require "rspamd_regexp"
+
+      local re = rspamd_regexp.create_cached(args[1])
+
+      if not re then
+        logger.errx('invalid regexp: %s', args[1])
+        return nil
       end
 
-      return ''
+      local res = re:search(inp, false, true)
+
+      if res then
+        if #res == 1 then
+          return res[1],'string'
+        end
+
+        return res,'string_list'
+      end
+
+      return nil
+    end,
+    ['description'] = 'Regexp matching',
+    ['args_schema'] = {ts.string}
+  },
+  -- Drops input value and return values from function's arguments or an empty string
+  ['id'] = {
+    ['types'] = {
+      ['string'] = true,
+      ['list'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(_, _, args)
+      if args[1] and args[2] then
+        return fun.map(tostring, args),'string_list'
+      elseif args[1] then
+        return args[1],'string'
+      end
+
+      return '','string'
     end,
     ['description'] = 'Drops input value and return values from function\'s arguments or an empty string',
-  },
-  -- Extracts table value from key-value list
-  ['elt'] = {
-    ['types'] = {
-      ['kv'] = true,
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, t, args)
-      return inp[args[1]],'string'
-    end,
-    ['description'] = 'Extracts table value from key-value list',
-  },
-  -- Call specific userdata method
-  ['method'] = {
-    ['types'] = {
-      ['email'] = true,
-      ['url'] = true,
-      ['ip'] = true,
-    },
-    ['map_type'] = 'string',
-    ['process'] = function(inp, _, args)
-      return inp[args[1]](inp)
-    end,
-    ['description'] = 'Call specific userdata method',
+    ['args_schema'] = (ts.string + ts.array_of(ts.string)):is_optional()
   },
   -- Boolean function in, returns either nil or its input if input is in args list
   ['in'] = {
@@ -442,7 +479,9 @@ local transform_function = {
       for _,a in ipairs(args) do if a == inp then return inp,t end end
       return nil
     end,
-    ['description'] = 'Boolean function in, returns either nil or its input if input is in args list',
+    ['description'] = [[Boolean function in.
+Returns either nil or its input if input is in args list]],
+    ['args_schema'] = ts.array_of(ts.string)
   },
   ['not_in'] = {
     ['types'] = {
@@ -453,52 +492,162 @@ local transform_function = {
       for _,a in ipairs(args) do if a == inp then return nil end end
       return inp,t
     end,
-    ['description'] = 'Boolean function in, returns either nil or its input if input is not in args list',
+    ['description'] = [[Boolean function not in.
+Returns either nil or its input if input is not in args list]],
+    ['args_schema'] = ts.array_of(ts.string)
   },
 }
 
 local function process_selector(task, sel)
-  local input = sel.selector.get_value(task, sel.selector.args)
-  if not input then return nil end
+  local function allowed_type(t)
+    if t == 'string' or t == 'text' or t == 'string_list' or t == 'text_list' then
+      return true
+    end
+
+    return false
+  end
+
+  local function list_type(t)
+    return pure_type(t)
+  end
+
+  local function implicit_tostring(t, ud_or_table)
+    if t == 'table' then
+      -- Table (very special)
+      if ud_or_table.value then
+        return ud_or_table.value,'string'
+      elseif ud_or_table.addr then
+        return ud_or_table.addr,'string'
+      end
+
+      return logger.slog("%s", ud_or_table),'string'
+    else
+      return tostring(ud_or_table),'string'
+    end
+  end
+
+  local input,etype = sel.selector.get_value(task, sel.selector.args)
+
+  if not input then
+    lua_util.debugm(M, task, 'no value extracted for %s', sel.selector.name)
+    return nil
+  end
+
+  lua_util.debugm(M, task, 'extracted %s, type %s',
+      sel.selector.name, etype)
+
+  local pipe = sel.processor_pipe or E
+
+  if etype:match('^userdata') or etype:match('^table') then
+    -- Apply userdata conversion first
+    local first_elt = pipe[1]
+
+    if first_elt and first_elt.method then
+      -- Explicit conversion
+      local meth = first_elt
+
+      if meth.types[etype] then
+        lua_util.debugm(M, task, 'apply method `%s` to %s',
+            meth.name, etype)
+        input,etype = meth.process(input, etype)
+      else
+        local pt = pure_type(etype)
+
+        if meth.types[pt] then
+          lua_util.debugm(M, task, 'map method `%s` to list of %s',
+              meth.name, pt)
+          input = fun.map(function(list_elt)
+            local ret, _ = meth.process(list_elt, pt)
+            return ret
+          end, input)
+          etype = 'string_list'
+        end
+      end
+      -- Remove method from the pipeline
+      pipe = fun.drop_n(1, pipe)
+    else
+      -- Implicit conversion
+
+      local pt = pure_type(etype)
+
+      if not pt then
+        lua_util.debugm(M, task, 'apply implicit conversion %s->string', etype)
+        input = implicit_tostring(etype, input)
+        etype = 'string'
+      else
+        lua_util.debugm(M, task, 'apply implicit map %s->string', pt)
+        input = fun.map(function(list_elt)
+          local ret = implicit_tostring(pt, list_elt)
+          return ret
+        end, input)
+        etype = 'string_list'
+      end
+    end
+  end
 
   -- Now we fold elements using left fold
   local function fold_function(acc, x)
-    if acc == nil or acc[1] == nil then return nil end
+    if acc == nil or acc[1] == nil then
+      lua_util.debugm(M, task, 'do not apply %s, accumulator is nil', x.name)
+      return nil
+    end
+
     local value = acc[1]
     local t = acc[2]
 
     if not x.types[t] then
-      -- Additional case for map
-      local pt = pure_type(t, '^(.*)_list$')
-      if pt and x.map_type and x.types[pt] then
+      local pt = pure_type(t)
+
+      if pt and x.types['list'] then
+        -- Generic list processor
+        lua_util.debugm(M, task, 'apply list function `%s` to %s', x.name, t)
+        return {x.process(value, t, x.args)}
+      elseif pt and x.map_type and x.types[pt] then
+        local map_type = x.map_type .. '_list'
+        lua_util.debugm(M, task, 'map `%s` to list of %s resulting %s',
+            x.name, pt, map_type)
+
         return {fun.map(function(list_elt)
+          if not list_elt then return nil end
           local ret, _ = x.process(list_elt, pt, x.args)
           return ret
-        end, value), x.map_type}
+        end, value), map_type}
       end
       logger.errx(task, 'cannot apply transform %s for type %s', x.name, t)
       return nil
     end
 
+    lua_util.debugm(M, task, 'apply %s to %s', x.name, t)
     return {x.process(value, t, x.args)}
   end
 
   local res = fun.foldl(fold_function,
-      {input, sel.selector.type},
-      sel.processor_pipe)
+      {input, etype},
+      pipe)
 
   if not res or not res[1] then return nil end -- Pipeline failed
 
-  if not (res[2] == 'string' or res[2] == 'string_list') then
-    logger.errx(task, 'transform pipeline has returned bad type: %s, string expected: res = %s, sel: %s',
-        res[2], res, sel)
-    return nil
+  if not allowed_type(res[2]) then
+
+    -- Search for implicit conversion
+    local pt = pure_type(res[2])
+
+    if pt then
+      lua_util.debugm(M, task, 'apply implicit map %s->string_list', pt)
+      res[1] = fun.map(function(e) return implicit_tostring(pt, e) end, res[1])
+      res[2] = 'string_list'
+    else
+      res[1] = implicit_tostring(res[2], res[1])
+      res[2] = 'string'
+    end
   end
 
-  if res[2] == 'string_list' then
+  if list_type(res[2]) then
     -- Convert to table as it might have a functional form
-    return fun.totable(res[1])
+    res[1] = fun.totable(res[1])
   end
+
+  lua_util.debugm(M, task, 'final selector type: %s, value: %s', res[2], res[1])
 
   return res[1]
 end
@@ -511,17 +660,19 @@ local function make_grammar()
   local doublequoted_string = l.P '"' * l.C(((1 - l.S'"\r\n\f\\') + (l.P'\\' * 1))^0) * '"'
   local argument = atom + singlequoted_string + doublequoted_string
   local dot = l.P(".")
+  local semicolon = l.P(":")
   local obrace = "(" * spc
   local ebrace = spc * ")"
   local comma = spc * "," * spc
-  local sel_separator = l.S":;"
+  local sel_separator = spc * l.S";*" * spc
 
   return l.P{
     "LIST";
     LIST = l.Ct(l.V("EXPR")) * (sel_separator * l.Ct(l.V("EXPR")))^0,
-    EXPR = l.V("FUNCTION") * (dot * l.V("PROCESSOR"))^0,
+    EXPR = l.V("FUNCTION") * (semicolon * l.V("METHOD"))^-1 * (dot * l.V("PROCESSOR"))^0,
     PROCESSOR = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
     FUNCTION = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
+    METHOD = l.Ct(atom / function(e) return '__' .. e end * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
     ARG_LIST = l.Ct((argument * comma^0)^0)
   }
 end
@@ -529,25 +680,42 @@ end
 local parser = make_grammar()
 
 --[[[
--- @function lua_selectors.parse_selectors(cfg, str)
+-- @function lua_selectors.parse_selector(cfg, str)
 --]]
 exports.parse_selector = function(cfg, str)
   local parsed = {parser:match(str)}
   local output = {}
 
-  if not parsed then return nil end
-  local function shallowcopy(orig)
-    local orig_type = type(orig)
-    local copy
-    if orig_type == 'table' then
-      copy = {}
-      for orig_key, orig_value in pairs(orig) do
-        copy[orig_key] = orig_value
+  if not parsed or not parsed[1] then return nil end
+
+  local function check_args(name, schema, args)
+    if schema then
+      if getmetatable(schema) then
+        -- Schema covers all arguments
+        local res,err = schema:transform(args)
+        if not res then
+          logger.errx(rspamd_config, 'invalid arguments for %s: %s', name, err)
+          return false
+        else
+          for i,elt in ipairs(res) do
+            args[i] = elt
+          end
+        end
+      else
+        for i,selt in ipairs(schema) do
+          local res,err = selt:transform(args[i])
+
+          if err then
+            logger.errx(rspamd_config, 'invalid arguments for %s: %s', name, err)
+            return false
+          else
+            args[i] = res
+          end
+        end
       end
-    else
-      copy = orig
     end
-    return copy
+
+    return true
   end
 
   -- Output AST format is the following:
@@ -570,28 +738,74 @@ exports.parse_selector = function(cfg, str)
       return nil
     end
 
-    res.selector = shallowcopy(extractors[selector_tbl[1]])
+    res.selector = lua_util.shallowcopy(extractors[selector_tbl[1]])
     res.selector.name = selector_tbl[1]
-    res.selector.args = selector_tbl[2] or {}
+    res.selector.args = selector_tbl[2] or E
+
+    if not check_args(res.selector.name,
+        res.selector.args_schema,
+        res.selector.args) then
+      return nil
+    end
 
     lua_util.debugm(M, cfg, 'processed selector %s, args: %s',
-        res.selector.name, res.selector.arg)
+        res.selector.name, res.selector.args)
 
+    local pipeline_error = false
     -- Now process processors pipe
     fun.each(function(proc_tbl)
       local proc_name = proc_tbl[1]
 
-      if not transform_function[proc_name] then
-        logger.errx(cfg, 'processor %s is unknown', proc_name)
-        return nil
+      if proc_name:match('^__') then
+        -- Special case - method
+        local method_name = proc_name:match('^__(.*)$')
+        local processor = {
+          name = method_name,
+          method = true,
+          args = proc_tbl[2] or E,
+          types = {
+            userdata = true,
+            table = true,
+          },
+          map_type = 'string',
+          process = function(inp, t, args)
+            if t == 'userdata' then
+              return inp[method_name](inp, args),string
+            else
+              -- Table
+              return inp[method_name],string
+            end
+          end,
+        }
+        lua_util.debugm(M, cfg, 'attached method %s to selector %s, args: %s',
+            proc_name, res.selector.name, processor.args)
+        table.insert(res.processor_pipe, processor)
+      else
+
+        if not transform_function[proc_name] then
+          logger.errx(cfg, 'processor %s is unknown', proc_name)
+          pipeline_error = true
+          return nil
+        end
+        local processor = lua_util.shallowcopy(transform_function[proc_name])
+        processor.name = proc_name
+        processor.args = proc_tbl[2] or E
+
+        if not check_args(processor.name, processor.args_schema, processor.args) then
+          pipeline_error = true
+          return nil
+        end
+
+        lua_util.debugm(M, cfg, 'attached processor %s to selector %s, args: %s',
+            proc_name, res.selector.name, processor.args)
+        table.insert(res.processor_pipe, processor)
       end
-      local processor = shallowcopy(transform_function[proc_name])
-      processor.name = proc_name
-      processor.args = proc_tbl[2]
-      lua_util.debugm(M, cfg, 'attached processor %s to selector %s, args: %s',
-          proc_name, res.selector.name, processor.args)
-      table.insert(res.processor_pipe, processor)
     end, fun.tail(sel))
+
+    if pipeline_error then
+      logger.errx(cfg, 'unknown or invalid processor used, exiting')
+      return nil
+    end
 
     table.insert(output, res)
   end
@@ -600,10 +814,10 @@ exports.parse_selector = function(cfg, str)
 end
 
 --[[[
--- @function lua_selectors.register_selector(cfg, name, selector)
+-- @function lua_selectors.register_extractor(cfg, name, selector)
 --]]
-exports.register_selector = function(cfg, name, selector)
-  if selector.get_value and selector.type then
+exports.register_extractor = function(cfg, name, selector)
+  if selector.get_value then
     if extractors[name] then
       logger.warnx(cfg, 'redefining selector %s', name)
     end
@@ -665,39 +879,45 @@ exports.combine_selectors = function(_, selectors, delimiter)
   else
     -- We need to do a spill on each table selector
     -- e.g. s:tbl:s -> s:telt1:s + s:telt2:s ...
-    local prefix = {}
     local tbl = {}
-    local suffix = {}
     local res = {}
 
-    local in_prefix = true
-    for _,s in ipairs(selectors) do
-      if in_prefix then
-        if type(s) == 'string' then
-          table.insert(prefix, s)
-        else
-          in_prefix = false
-          table.insert(tbl, s)
-        end
+    for i,s in ipairs(selectors) do
+      if type(s) == 'string' then
+        rawset(tbl, i, fun.duplicate(s))
+      elseif type(s) == 'userdata' then
+        rawset(tbl, i, fun.duplicate(tostring(s)))
       else
-        if type(s) == 'string' then
-          table.insert(suffix, s)
-        else
-          table.insert(tbl, s)
-        end
+        rawset(tbl, i, s)
       end
     end
 
-    prefix = table.concat(prefix, delimiter)
-    suffix = table.concat(suffix, delimiter)
-
-    for _,t in ipairs(tbl) do
-      fun.each(function(...)
-        table.insert(res, table.concat({...}, delimiter))
-      end, fun.zip(fun.duplicate(prefix), t, fun.duplicate(suffix)))
-    end
+    fun.each(function(...)
+      table.insert(res, table.concat({...}, delimiter))
+    end, fun.zip(lua_util.unpack(tbl)))
 
     return res
+  end
+end
+
+--[[[
+-- @function lua_selectors.create_closure(cfg, selector_str, delimiter='')
+--]]
+exports.create_selector_closure = function(cfg, selector_str, delimiter)
+  local selector = exports.parse_selector(cfg, selector_str)
+
+  if not selector then
+    return nil
+  end
+
+  return function(task)
+    local res = exports.process_selectors(task, selector)
+
+    if res then
+      return exports.combine_selectors(nil, res, delimiter)
+    end
+
+    return nil
   end
 end
 

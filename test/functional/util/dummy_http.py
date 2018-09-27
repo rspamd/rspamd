@@ -3,11 +3,11 @@
 import BaseHTTPServer
 import SocketServer
 import SimpleHTTPServer
+import dummy_killer
 
 import time
 import os
 import sys
-import signal
 import socket
 
 PORT = 18080
@@ -90,9 +90,7 @@ class ThreadingSimpleServer(SocketServer.ThreadingMixIn,
         self.timeout = 1
         
     def run(self):
-        with open(PID, 'w+') as f:
-            f.write(str(os.getpid()))
-            f.close()
+        dummy_killer.write_pid(PID)
         try:
             while 1:
                 sys.stdout.flush()
@@ -101,7 +99,6 @@ class ThreadingSimpleServer(SocketServer.ThreadingMixIn,
             print "Interrupt"
         except socket.error:
             print "Socket closed"
-            pass
 
     def stop(self):
         self.keep_running = False
@@ -111,11 +108,6 @@ class ThreadingSimpleServer(SocketServer.ThreadingMixIn,
 if __name__ == '__main__':
     server = ThreadingSimpleServer()
 
-    def alarm_handler(signum, frame):
-        server.stop()
-
-    signal.signal(signal.SIGALRM, alarm_handler)
-    signal.signal(signal.SIGTERM, alarm_handler)
-    signal.alarm(1000)
+    dummy_killer.setup_killer(server, server.stop)
 
     server.run()

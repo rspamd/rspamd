@@ -1965,7 +1965,7 @@ lua_task_set_request_header (lua_State *L)
 
 	if (s && task) {
 		if (lua_type (L, 3) == LUA_TSTRING) {
-			v = luaL_checklstring (L, 2, &vlen);
+			v = luaL_checklstring (L, 3, &vlen);
 		}
 		else if (lua_type (L, 3) == LUA_TUSERDATA) {
 			t = lua_check_text (L, 3);
@@ -2344,9 +2344,15 @@ lua_task_inc_dns_req (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
+	static guint warning_shown = 0;
+
+	if (warning_shown < 100) {
+		warning_shown ++;
+		msg_warn_task_check ("task:inc_dns_req is deprecated and should not be used");
+	}
 
 	if (task != NULL) {
-		task->dns_requests++;
+		/* Deprecation: already done in make_dns_request */
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

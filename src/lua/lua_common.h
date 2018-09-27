@@ -352,6 +352,14 @@ guint rspamd_lua_table_size (lua_State *L, gint tbl_pos);
 
 void lua_push_emails_address_list (lua_State *L, GPtrArray *addrs);
 
+
+#define TRACE_POINTS 6
+
+struct lua_logger_trace {
+	gint cur_level;
+	gconstpointer traces[TRACE_POINTS];
+};
+
 /**
  * Log lua object to string
  * @param L
@@ -361,7 +369,7 @@ void lua_push_emails_address_list (lua_State *L, GPtrArray *addrs);
  * @return
  */
 gsize lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf,
-		gsize len);
+		gsize len, struct lua_logger_trace *trace);
 
 /**
  * Safely checks userdata to match specified class

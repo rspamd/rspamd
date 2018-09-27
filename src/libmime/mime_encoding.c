@@ -23,7 +23,9 @@
 #include "message.h"
 #include <unicode/ucnv.h>
 #include <unicode/ucsdet.h>
+#if U_ICU_VERSION_MAJOR_NUM >= 44
 #include <unicode/unorm2.h>
+#endif
 #include <math.h>
 
 #define UTF8_CHARSET "UTF-8"
@@ -447,7 +449,7 @@ rspamd_mime_text_part_utf8_convert (struct rspamd_task *task,
 	msg_info_task ("converted from %s to UTF-8 inlen: %z, outlen: %d",
 			charset, input->len, r);
 	text_part->utf_raw_content = rspamd_mempool_alloc (task->task_pool,
-			sizeof (text_part->utf_raw_content));
+			sizeof (*text_part->utf_raw_content) + sizeof (gpointer) * 4);
 	text_part->utf_raw_content->data = d;
 	text_part->utf_raw_content->len = r;
 

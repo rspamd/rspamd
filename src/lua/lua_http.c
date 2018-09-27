@@ -55,6 +55,7 @@ static const struct luaL_reg httplib_m[] = {
 
 #define RSPAMD_LUA_HTTP_FLAG_TEXT (1 << 0)
 #define RSPAMD_LUA_HTTP_FLAG_NOVERIFY (1 << 1)
+#define RSPAMD_LUA_HTTP_FLAG_RESOLVED (1 << 2)
 
 struct lua_http_cbdata {
 	struct rspamd_http_connection *conn;
@@ -145,8 +146,15 @@ static void
 lua_http_maybe_free (struct lua_http_cbdata *cbd)
 {
 	if (cbd->session) {
-		rspamd_session_watcher_pop (cbd->session, cbd->w);
-		rspamd_session_remove_event (cbd->session, lua_http_fin, cbd);
+		if (cbd->w) {
+			/* We still need to clear watcher */
+			rspamd_session_watcher_pop (cbd->session, cbd->w);
+		}
+
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_RESOLVED) {
+			/* Event is added merely for resolved events */
+			rspamd_session_remove_event (cbd->session, lua_http_fin, cbd);
+		}
 	}
 	else {
 		lua_http_fin (cbd);
@@ -196,6 +204,7 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)conn->ud;
 	struct rspamd_http_header *h, *htmp;
+	struct rspamd_async_watcher *existing_watcher = NULL;
 	const gchar *body;
 	gsize body_len;
 
@@ -249,9 +258,19 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 		lua_settable (L, -3);
 	}
 
+	if (cbd->w) {
+		/* Replace watcher to deal with nested calls */
+		existing_watcher = rspamd_session_replace_watcher (cbd->session, cbd->w);
+	}
+
 	if (lua_pcall (L, 4, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (L, -1));
 		lua_pop (L, 1);
+	}
+
+	if (cbd->w) {
+		/* Restore existing watcher */
+		rspamd_session_replace_watcher (cbd->session, existing_watcher);
 	}
 
 	lua_http_maybe_free (cbd);
@@ -273,6 +292,7 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 	const gchar *body;
 	gsize body_len;
 	struct rspamd_http_header *h, *htmp;
+	struct rspamd_async_watcher *existing_watcher = NULL;
 
 	if (err) {
 		lua_pushstring (L, err);
@@ -335,7 +355,17 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 		lua_settable (L, -3);
 	}
 
+	if (cbd->w) {
+		/* Replace watcher to deal with nested calls */
+		existing_watcher = rspamd_session_replace_watcher (cbd->session, cbd->w);
+	}
+
 	lua_thread_resume (cbd->thread, 2);
+
+	if (cbd->w) {
+		/* Restore existing watcher */
+		rspamd_session_replace_watcher (cbd->session, existing_watcher);
+	}
 }
 
 static gboolean
@@ -399,6 +429,13 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 				&cbd->tv, cbd->ev_base);
 		/* Message is now owned by a connection object */
 		cbd->msg = NULL;
+
+		if (cbd->session) {
+			rspamd_session_add_event (cbd->session, cbd->w,
+					(event_finalizer_t) lua_http_fin, cbd,
+					g_quark_from_static_string ("lua http"));
+			cbd->flags |= RSPAMD_LUA_HTTP_FLAG_RESOLVED;
+		}
 
 		return TRUE;
 	}
@@ -809,7 +846,7 @@ lua_http_request (lua_State *L)
 		return 1;
 	}
 
-	if (session && rspamd_session_is_destroying (session)) {
+	if (session && rspamd_session_blocked (session)) {
 		lua_pushboolean (L, FALSE);
 
 		return 1;
@@ -849,12 +886,9 @@ lua_http_request (lua_State *L)
 
 	if (session) {
 		cbd->session = session;
-		rspamd_session_add_event (session,
-				(event_finalizer_t)lua_http_fin,
-				cbd,
-				g_quark_from_static_string ("lua http"));
-		cbd->w = rspamd_session_get_watcher (session);
-		rspamd_session_watcher_push_specific (session, cbd->w);
+
+		cbd->w = rspamd_session_get_watcher (cbd->session);
+		rspamd_session_watcher_push_specific (cbd->session, cbd->w);
 	}
 
 	if (rspamd_parse_inet_address (&cbd->addr, msg->host->str, msg->host->len)) {
@@ -862,6 +896,10 @@ lua_http_request (lua_State *L)
 		if (!lua_http_make_connection (cbd)) {
 			lua_http_maybe_free (cbd);
 			lua_pushboolean (L, FALSE);
+
+			if (cbd->w) {
+				rspamd_session_watcher_pop (cbd->session, cbd->w);
+			}
 
 			return 1;
 		}
@@ -878,8 +916,13 @@ lua_http_request (lua_State *L)
 				lua_pushboolean (L, FALSE);
 				g_free (to_resolve);
 
+				if (cbd->w) {
+					rspamd_session_watcher_pop (cbd->session, cbd->w);
+				}
+
 				return 1;
 			}
+
 
 			g_free (to_resolve);
 		}
@@ -891,6 +934,10 @@ lua_http_request (lua_State *L)
 				lua_http_maybe_free (cbd);
 				lua_pushboolean (L, FALSE);
 
+				if (cbd->w) {
+					rspamd_session_watcher_pop (cbd->session, cbd->w);
+				}
+
 				return 1;
 			}
 		}
@@ -898,11 +945,14 @@ lua_http_request (lua_State *L)
 
 	if (cbd->cbref == -1) {
 		cbd->thread = lua_thread_pool_get_running_entry (cfg->lua_thread_pool);
+
 		return lua_thread_yield (cbd->thread, 0);
-	} else {
-		lua_pushboolean (L, TRUE);
-		return 1;
 	}
+	else {
+		lua_pushboolean (L, TRUE);
+	}
+
+	return 1;
 }
 
 static gint

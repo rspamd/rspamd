@@ -161,6 +161,9 @@ local function whitelist_cb(symbol, rule, task)
 
       if tld then
         found, mult = find_domain(tld)
+        if not found then
+          found, mult = find_domain(from[1]['domain'])
+        end
       end
     end
   end

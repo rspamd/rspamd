@@ -1582,6 +1582,7 @@ rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 	struct rspamd_symbols_group *gr;
 	GHashTableIter gr_it;
 	ucl_object_iter_t it = NULL;
+	gboolean already_disabled = FALSE;
 	gpointer k, v;
 
 	wl = ucl_object_lookup (task->settings, "whitelist");
@@ -1597,6 +1598,7 @@ rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 	if (enabled) {
 		/* Disable all symbols but selected */
 		rspamd_symbols_cache_disable_all_symbols (task, cache);
+		already_disabled = TRUE;
 		it = NULL;
 
 		while ((cur = ucl_iterate_object (enabled, &it, true)) != NULL) {
@@ -1610,7 +1612,10 @@ rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 
 	if (enabled) {
 		it = NULL;
-		rspamd_symbols_cache_disable_all_symbols (task, cache);
+
+		if (!already_disabled) {
+			rspamd_symbols_cache_disable_all_symbols (task, cache);
+		}
 
 		while ((cur = ucl_iterate_object (enabled, &it, true)) != NULL) {
 			if (ucl_object_type (cur) == UCL_STRING) {

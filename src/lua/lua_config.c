@@ -262,6 +262,16 @@ rspamd_config:register_dependency('SYMBOL_FROM', 'SYMBOL_TO')
 LUA_FUNCTION_DEF (config, register_dependency);
 
 /**
+ * @method rspamd_config:register_re_selector(name, selector_str)
+ * Registers selector with the specific name to use in regular expressions in form
+ * name=/re/$ or name=/re/{selector}
+ * @param {string} name name of the selector
+ * @param {selector_str} selector string
+ * @return true if selector has been registered
+ */
+LUA_FUNCTION_DEF (config, register_re_selector);
+
+/**
  * @method rspamd_config:set_symbol({table})
  * Sets the value of a specified symbol in a metric. This function accepts table with the following elements:
  *
@@ -495,14 +505,14 @@ LUA_FUNCTION_DEF (config, replace_regexp);
 LUA_FUNCTION_DEF (config, register_worker_script);
 
 /***
- * @method rspamd_config:add_on_load(function(cfg, ev_base) ... end)
+ * @method rspamd_config:add_on_load(function(cfg, ev_base, worker) ... end)
  * Registers the following script to be executed when configuration is completely loaded
  * @param {function} script function to be executed
  * @example
-rspamd_config:add_on_load(function(cfg, ev_base)
+rspamd_config:add_on_load(function(cfg, ev_base, worker)
 	rspamd_config:add_periodic(ev_base, 1.0, function(cfg, ev_base)
 		local logger = require "rspamd_logger"
-		logger.infox(cfg, "periodic function")
+		logger.infox(cfg, "periodic function in worker %s", worker:get_name())
 		return true
 	end)
 end)
@@ -718,6 +728,7 @@ LUA_FUNCTION_DEF (config, init_modules);
  * Initialize config subsystem from a comma separated list:
  * - `modules` - init modules
  * - `langdet` - language detector
+ * - `dns` - DNS resolver
  * - TODO: add more
  */
 LUA_FUNCTION_DEF (config, init_subsystem);
@@ -770,6 +781,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_regexp),
 	LUA_INTERFACE_DEF (config, replace_regexp),
 	LUA_INTERFACE_DEF (config, register_worker_script),
+	LUA_INTERFACE_DEF (config, register_re_selector),
 	LUA_INTERFACE_DEF (config, add_on_load),
 	LUA_INTERFACE_DEF (config, add_periodic),
 	LUA_INTERFACE_DEF (config, get_symbols_count),
@@ -3551,6 +3563,18 @@ lua_config_init_subsystem (lua_State *L)
 			else if (strcmp (parts[i], "stat") == 0) {
 				rspamd_stat_init (cfg, NULL);
 			}
+			else if (strcmp (parts[i], "dns") == 0) {
+				struct event_base *ev_base = lua_check_ev_base (L, 3);
+
+				if (ev_base) {
+					cfg->dns_resolver = dns_resolver_init (rspamd_logger_get_singleton(),
+							ev_base,
+							cfg);
+				}
+				else {
+					return luaL_error (L, "no event base specified");
+				}
+			}
 			else {
 				return luaL_error (L, "invalid param: %s", parts[i]);
 			}
@@ -3561,6 +3585,99 @@ lua_config_init_subsystem (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_config_register_re_selector (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *name = luaL_checkstring (L, 2);
+	const gchar *selector_str = luaL_checkstring (L, 3);
+	const gchar *delimiter = "";
+	gint top = lua_gettop (L);
+	bool res = false;
+
+	if (cfg && name && selector_str) {
+		if (lua_gettop (L) >= 4) {
+			delimiter = luaL_checkstring (L, 4);
+		}
+
+		if (luaL_dostring (L, "return require \"lua_selectors\"") != 0) {
+			msg_warn_config ("cannot require lua_selectors: %s",
+					lua_tostring (L, -1));
+		}
+		else {
+			if (lua_type (L, -1) != LUA_TTABLE) {
+				msg_warn_config ("lua selectors must return "
+								 "table and not %s",
+						lua_typename (L, lua_type (L, -1)));
+			}
+			else {
+				lua_pushstring (L, "create_selector_closure");
+				lua_gettable (L, -2);
+
+				if (lua_type (L, -1) != LUA_TFUNCTION) {
+					msg_warn_config ("create_selector_closure must return "
+									 "function and not %s",
+							lua_typename (L, lua_type (L, -1)));
+				}
+				else {
+					gint err_idx, ret;
+					GString *tb;
+					struct rspamd_config **pcfg;
+
+					lua_pushcfunction (L, &rspamd_lua_traceback);
+					err_idx = lua_gettop (L);
+
+					/* Push function */
+					lua_pushvalue (L, -2);
+
+					pcfg = lua_newuserdata (L, sizeof (*pcfg));
+					rspamd_lua_setclass (L, "rspamd{config}", -1);
+					*pcfg = cfg;
+					lua_pushstring (L, selector_str);
+					lua_pushstring (L, delimiter);
+
+					if ((ret = lua_pcall (L, 3, 1, err_idx)) != 0) {
+						tb = lua_touserdata (L, -1);
+						msg_err_config ("call to create_selector_closure lua "
+										"script failed (%d): %v", ret, tb);
+
+						if (tb) {
+							g_string_free (tb, TRUE);
+						}
+					}
+					else {
+						if (lua_type (L, -1) != LUA_TFUNCTION) {
+							msg_warn_config ("create_selector_closure "
+											 "invocation must return "
+											 "function and not %s",
+									lua_typename (L, lua_type (L, -1)));
+						}
+						else {
+							ret = luaL_ref (L, LUA_REGISTRYINDEX);
+							rspamd_re_cache_add_selector (cfg->re_cache,
+									name, ret);
+							res = true;
+						}
+					}
+				}
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_settop (L, top);
+	lua_pushboolean (L, res);
+
+	if (res) {
+		msg_info_config ("registered regexp selector %s", name);
+	}
+
+	return 1;
 }
 
 static gint

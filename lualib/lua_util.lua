@@ -46,7 +46,12 @@ local function rspamd_str_split(s, sep)
     gr = split_grammar[sep]
 
     if not gr then
-      local _sep = lpeg.P(sep)
+      local _sep
+      if type(sep) == 'string' then
+        _sep = lpeg.S(sep) -- Assume set
+      else
+        _sep = sep -- Assume lpeg object
+      end
       local elem = lpeg.C((1 - _sep)^0)
       local p = lpeg.Ct(elem * (_sep * elem)^0)
       gr = p
@@ -664,6 +669,48 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
   return res
 end
 
+--[[[
+-- @function lua_util.deepcopy(table)
+-- params: {
+- - table
+-- }
+-- Performs deep copy of the table. Including metatables
+--]]
+local function deepcopy(orig)
+  local orig_type = type(orig)
+  local copy
+  if orig_type == 'table' then
+    copy = {}
+    for orig_key, orig_value in next, orig, nil do
+      copy[deepcopy(orig_key)] = deepcopy(orig_value)
+    end
+    setmetatable(copy, deepcopy(getmetatable(orig)))
+  else -- number, string, boolean, etc
+    copy = orig
+  end
+  return copy
+end
+
+exports.deepcopy = deepcopy
+
+--[[[
+-- @function lua_util.shallowcopy(tbl)
+-- Performs shallow (and fast) copy of a table or another Lua type
+--]]
+exports.shallowcopy = function(orig)
+  local orig_type = type(orig)
+  local copy
+  if orig_type == 'table' then
+    copy = {}
+    for orig_key, orig_value in pairs(orig) do
+      copy[orig_key] = orig_value
+    end
+  else
+    copy = orig
+  end
+  return copy
+end
+
 -- Debugging support
 local unconditional_debug = false
 local debug_modules = {}
@@ -690,11 +737,16 @@ if type(rspamd_config) == 'userdata' then
   end
 end
 
-exports.debugm = function(mod, ...)
+exports.debugm = function(mod, obj_or_fmt, fmt_or_something, ...)
   local logger = require "rspamd_logger"
   if unconditional_debug or debug_modules[mod] then
-    logger.logx(log_level, mod, ...)
+    if type(obj_or_fmt) == 'string' then
+      logger.logx(log_level, mod, 2, obj_or_fmt, fmt_or_something, ...)
+    else
+      logger.logx(log_level, mod, obj_or_fmt, 2, fmt_or_something, ...)
+    end
   end
 end
+
 
 return exports

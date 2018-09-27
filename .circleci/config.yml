@@ -15,6 +15,13 @@ references:
         gem install coveralls-lcov
         lcov --no-external -b ../project -d ../project -c --output-file coverage.${CIRCLE_JOB}.info
 
+  - &capture_lua_coverage_data
+    run:
+      name: Capturing Lua coverage data
+      command: |
+        set -e
+        if [ ! -z $COVERALLS_REPO_TOKEN ]; then luacov-coveralls -t ${COVERALLS_REPO_TOKEN} || true; fi
+
   - &restore_coverage_data
     restore_cache:
       keys:
@@ -29,7 +36,12 @@ references:
             sudo apt-get install -qq lcov
             lcov -a ~/project/coverage.rspamd-test.info -t rspamd-test -a ~/project/coverage.functional.info -t functional -o coverage.info
             gem install coveralls-lcov
-            if [ ! -z $COVERALLS_REPO_TOKEN ]; then coveralls-lcov -t ${COVERALLS_REPO_TOKEN} coverage.info || true; fi
+            sudo pip install cpp-coveralls
+            sudo luarocks install luacov-coveralls
+            if [ ! -z $COVERALLS_REPO_TOKEN ]; then
+              coveralls --lcov-file coverage.info --dump coveralls.dump
+              luacov-coveralls -t ${COVERALLS_REPO_TOKEN} -j coveralls.dump --root=../project
+            fi
         fi
 
 version: 2
@@ -40,10 +52,10 @@ jobs:
       - checkout
 
       - run: sudo apt-get update -qq || true
-      - run: sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel
+      - run: sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8
 
       - run: mkdir ../build ; mkdir ../install ; cd ../build
-      - run: cmake ../project -DDBDIR=/nana -DENABLE_COVERAGE=ON -DCMAKE_INSTALL_PREFIX=../install
+      - run: cmake ../project -DDBDIR=/nana -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=../install
 
       - run: make install -j`nproc`
 
@@ -61,22 +73,23 @@ jobs:
           at: *workspace_root
 
       - run: sudo apt-get update -qq || true
-      - run: sudo apt-get install -qq cmake libluajit-5.1-dev libmagic-dev
+      - run: sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8 luarocks
+      - run: sudo luarocks install luacheck
+      - run: sudo luarocks install luacov
 
       - run: cd ../build
       - run: make rspamd-test -j`nproc`
       - run: set +e; test/rspamd-test -p /rspamd/lua; echo "export RETURN_CODE=$?" >> $BASH_ENV
 
       - *capture_coverage_data
+      - *capture_lua_coverage_data
 
       # Share coverage data between jobs
       - save_cache:
           key: coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
           paths:
             - coverage.rspamd-test.info
-      - *restore_coverage_data
-
-      - *merge_and_upload_coverage_data
+            - luacov.stats.out
 
       - run: (exit $RETURN_CODE)
 
@@ -90,11 +103,12 @@ jobs:
       - run: sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4    # optional, clickhouse key
 
       - run: sudo apt-get update -qq || true
-      - run: sudo apt-get install -qq libluajit-5.1-dev libpcre3-dev luarocks opendkim-tools python-pip redis-server
+      - run: sudo apt-get install -qq libluajit-5.1-dev libpcre3-dev luarocks opendkim-tools python-pip redis-server libunwind8 libglib2.0-dev libicu-dev libevent-dev
       - run: sudo apt-get install clickhouse-server
 
       - run: sudo pip install demjson psutil robotframework requests http
       - run: sudo luarocks install luacheck
+      - run: sudo luarocks install luacov
 
       - run: cd ../build
       - run: set +e; RSPAMD_INSTALLROOT=../install sudo -E robot -x xunit.xml --exclude isbroken ../project/test/functional/cases; echo "export RETURN_CODE=$?" >> $BASH_ENV
@@ -106,9 +120,6 @@ jobs:
           key: coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
           paths:
             - coverage.functional.info
-      - *restore_coverage_data
-
-      - *merge_and_upload_coverage_data
 
       - store_artifacts:
           path: output.xml
@@ -140,6 +151,19 @@ jobs:
           key: v1-dependencies-{{ checksum "package.json" }}
       - run: ./node_modules/.bin/eslint -v && ./node_modules/.bin/eslint ./
 
+  send-coverage:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: *workspace_root
+
+      - *restore_coverage_data
+      - *merge_and_upload_coverage_data
+
+notify:
+  webhooks:
+    - url: https://coveralls.io/webhook?repo_token={{ .Environment.COVERALLS_REPO_TOKEN }}
+
 workflows:
   version: 2
   build-and-test:
@@ -152,3 +176,7 @@ workflows:
       - functional:
           requires:
             - build
+      - send-coverage:
+          requires:
+            - rspamd-test
+            - functional

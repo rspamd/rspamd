@@ -204,8 +204,6 @@ local function rbl_cb (task)
           end
         end
       end
-
-      task:inc_dns_req()
     end
   end
 

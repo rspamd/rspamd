@@ -1569,19 +1569,19 @@ err:
 	if (fatal) {
 		const gchar *actual_classname = NULL;
 
-		if (lua_getmetatable (L, pos)) {
+		if (lua_type (L, pos) == LUA_TUSERDATA && lua_getmetatable (L, pos)) {
 			lua_pushstring (L, "__index");
-			lua_gettable (L, -3);
+			lua_gettable (L, -2);
 			lua_pushstring (L, "class");
 			lua_gettable (L, -2);
 			actual_classname = lua_tostring (L, -1);
 		}
 		else {
-			actual_classname = lua_typename (L, lua_type (L, -1));
+			actual_classname = lua_typename (L, lua_type (L, pos));
 		}
 
 		err_msg = g_string_sized_new (100);
-		rspamd_printf_gstring (err_msg, "expected %s at %d, but userdata has "
+		rspamd_printf_gstring (err_msg, "expected %s at position %d, but userdata has "
 										"%s metatable; trace: ",
 				classname, pos, actual_classname);
 		rspamd_lua_traceback_string (L, err_msg);
@@ -1589,15 +1589,21 @@ err:
 
 		for (i = 1; i <= MIN (top, 10); i ++) {
 			if (lua_type (L, i) == LUA_TUSERDATA) {
-				lua_getmetatable (L, i);
-				lua_pushstring (L, "__index");
-				lua_gettable (L, -3);
-				lua_pushstring (L, "class");
-				lua_gettable (L, -2);
+				const char *clsname;
+
+				if (lua_getmetatable (L, i)) {
+					lua_pushstring (L, "__index");
+					lua_gettable (L, -2);
+					lua_pushstring (L, "class");
+					lua_gettable (L, -2);
+					clsname = lua_tostring (L, -1);
+				}
+				else {
+					clsname = lua_typename (L, lua_type (L, i));
+				}
 
 				rspamd_printf_gstring (err_msg, "[%d: ud=%s] ", i,
-						lua_tostring (L, -1));
-				lua_pop (L, 3);
+						clsname);
 			}
 			else {
 				rspamd_printf_gstring (err_msg, "[%d: %s] ", i,

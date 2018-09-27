@@ -78,7 +78,6 @@ rspamadm_fuzzyconvert (gint argc, gchar **argv, const struct rspamadm_command *c
 {
 	GOptionContext *context;
 	GError *error = NULL;
-	lua_State *L;
 	ucl_object_t *obj;
 
 	context = g_option_context_new (
@@ -110,9 +109,6 @@ rspamadm_fuzzyconvert (gint argc, gchar **argv, const struct rspamadm_command *c
 		exit (1);
 	}
 
-	L = rspamd_lua_init ();
-	rspamd_lua_set_path (L, NULL, ucl_vars);
-
 	obj = ucl_object_typed_new (UCL_OBJECT);
 	ucl_object_insert_key (obj, ucl_object_fromstring (source_db),
 			"source_db", 0, false);
@@ -131,8 +127,7 @@ rspamadm_fuzzyconvert (gint argc, gchar **argv, const struct rspamadm_command *c
 				"redis_db", 0, false);
 	}
 
-	rspamadm_execute_lua_ucl_subr (L,
-			argc,
+	rspamadm_execute_lua_ucl_subr (argc,
 			argv,
 			obj,
 			"fuzzy_convert",

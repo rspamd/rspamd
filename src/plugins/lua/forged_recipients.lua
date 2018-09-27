@@ -28,6 +28,7 @@ local E = {}
 
 local function check_forged_headers(task)
   local auser = task:get_user()
+  local delivered_to = task:get_header('Delivered-To')
   local smtp_rcpt = task:get_recipients(1)
   local smtp_from = task:get_from(1)
   local res
@@ -43,12 +44,16 @@ local function check_forged_headers(task)
     task:insert_result(symbol_rcpt, score, '', sra)
     return
   end
-  -- Find pair for each smtp recipient recipient in To or Cc headers
+  -- Find pair for each smtp recipient in To or Cc headers
   for _,sr in ipairs(smtp_rcpt) do
     res = false
     for _,mr in ipairs(mime_rcpt) do
       if mr['addr'] and sr['addr'] and
         string.lower(mr['addr']) == string.lower(sr['addr']) then
+        res = true
+        break
+      elseif delivered_to and delivered_to == mr['addr'] then
+        -- allow alias expansion and forwarding (Postfix)
         res = true
         break
       elseif auser and auser == sr['addr'] then

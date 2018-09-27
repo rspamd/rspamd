@@ -50,7 +50,6 @@ local function check_quantity_received (task)
       rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
       task:insert_result(symbol_rdns_dnsfail, 1.0)
     end
-    task:inc_dns_req()
 
     if not results then
       if nreceived <= 1 then

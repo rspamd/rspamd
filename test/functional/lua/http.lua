@@ -25,6 +25,7 @@ local function http_symbol(task)
     end
   end
 
+  rspamd_logger.errx(task, 'do http request with callback')
   rspamd_http.request({
     url = 'http://127.0.0.1:18080' .. url,
     task = task,
@@ -34,6 +35,7 @@ local function http_symbol(task)
   })
 
   --[[ request to this address involved DNS resolver subsystem ]]
+  rspamd_logger.errx(task, 'do http request with callback + dns resolving')
   rspamd_http.request({
     url = 'http://site.resolveme:18080' .. url,
     task = task,
@@ -58,6 +60,7 @@ local function http_symbol(task)
     task:insert_result('HTTP_CORO_ERROR', 1.0, err)
   end
 
+  rspamd_logger.errx(task, 'do http request after coroutine finished')
   err, response = rspamd_http.request({
     url = 'http://site.resolveme:18080' .. url,
     task = task,

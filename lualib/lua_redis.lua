@@ -17,10 +17,35 @@ limitations under the License.
 local logger = require "rspamd_logger"
 local lutil = require "lua_util"
 local rspamd_util = require "rspamd_util"
+local ts = require("tableshape").types
 
 local exports = {}
 
 local E = {}
+
+local common_schema = ts.shape {
+  timeout = (ts.number + ts.string / lutil.parse_time_interval):is_optional(),
+  db = ts.string:is_optional(),
+  database = ts.string:is_optional(),
+  dbname = ts.string:is_optional(),
+  prefix = ts.string:is_optional(),
+  password = ts.string:is_optional(),
+  expand_keys = ts.boolean:is_optional(),
+}
+
+local config_schema =
+  ts.shape({
+    read_servers = ts.string + ts.array_of(ts.string),
+    write_servers = ts.string + ts.array_of(ts.string),
+  }, {extra_opts = common_schema}) +
+  ts.shape({
+    servers = ts.string + ts.array_of(ts.string),
+  }, {extra_opts = common_schema}) +
+  ts.shape({
+    server = ts.string + ts.array_of(ts.string),
+  }, {extra_opts = common_schema})
+
+exports.config_schema = config_schema
 
 --[[[
 -- @module lua_redis
@@ -161,7 +186,12 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
     end
   end
 
-  if no_fallback then return nil end
+  if no_fallback then
+    logger.infox(rspamd_config, "cannot find Redis definitions for %s and fallback is disabled",
+        module_name)
+
+    return nil
+  end
 
   -- Try global options
   opts = rspamd_config:get_all_opt('redis')
@@ -171,6 +201,7 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
 
     if opts[module_name] then
       ret = try_load_redis_servers(opts[module_name], rspamd_config, result)
+
       if ret then
         return result
       end
@@ -190,17 +221,18 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
       end
 
       if ret then
-        logger.infox(rspamd_config, "using default redis server for module %s",
-          module_name)
+        logger.infox(rspamd_config, "use default Redis settings for %s",
+            module_name)
+        return result
       end
     end
   end
 
   if result.read_servers then
-    return result
-  else
-    return nil
+      return result
   end
+
+  return nil
 end
 
 --[[[
@@ -961,9 +993,15 @@ end
 
 exports.exec_redis_script = exec_redis_script
 
-local function redis_connect_sync(redis_params, is_write, key, cfg)
+local function redis_connect_sync(redis_params, is_write, key, cfg, ev_base)
   if not redis_params then
     return false,nil
+  end
+  if not cfg then
+    cfg = rspamd_config
+  end
+  if not ev_base then
+    ev_base = rspamadm_ev_base
   end
 
   local rspamd_redis = require "rspamd_redis"
@@ -990,8 +1028,13 @@ local function redis_connect_sync(redis_params, is_write, key, cfg)
   local options = {
     host = addr:get_addr(),
     timeout = redis_params['timeout'],
+    config = cfg,
+    ev_base = ev_base
   }
 
+  for k,v in pairs(redis_params) do
+    options[k] = v
+  end
 
   local ret,conn = rspamd_redis.connect_sync(options)
   if not ret then
@@ -1017,5 +1060,206 @@ local function redis_connect_sync(redis_params, is_write, key, cfg)
 end
 
 exports.redis_connect_sync = redis_connect_sync
+
+--[[[
+-- @function lua_redis.request(redis_params, attrs, req)
+-- Sends a request to Redis synchronously with coroutines or asynchronously using
+-- a callback (modern API)
+-- @param redis_params a table of redis server parameters
+-- @param attrs a table of redis request attributes (e.g. task, or ev_base + cfg + session)
+-- @param req a table of request: a command + command options
+-- @return {result,data/connection,address} boolean result, connection object in case of async request and results if using coroutines, redis server address
+--]]
+
+exports.request = function(redis_params, attrs, req)
+  local lua_util = require "lua_util"
+
+  if not attrs or not redis_params or not req then
+    logger.errx('invalid arguments for redis request')
+    return false,nil,nil
+  end
+
+  if not (attrs.task or (attrs.config and attrs.ev_base)) then
+    logger.errx('invalid attributes for redis request')
+    return false,nil,nil
+  end
+
+  local opts = lua_util.shallowcopy(attrs)
+
+  local log_obj = opts.task or opts.config
+
+  local addr
+
+  if opts.callback then
+    -- Wrap callback
+    local callback = opts.callback
+    local function rspamd_redis_make_request_cb(err, data)
+      if err then
+        addr:fail()
+      else
+        addr:ok()
+      end
+      callback(err, data, addr)
+    end
+    opts.callback = rspamd_redis_make_request_cb
+  end
+
+  local rspamd_redis = require "rspamd_redis"
+  local is_write = opts.is_write
+
+  if opts.key then
+    if is_write then
+      addr = redis_params['write_servers']:get_upstream_by_hash(attrs.key)
+    else
+      addr = redis_params['read_servers']:get_upstream_by_hash(attrs.key)
+    end
+  else
+    if is_write then
+      addr = redis_params['write_servers']:get_upstream_master_slave(attrs.key)
+    else
+      addr = redis_params['read_servers']:get_upstream_round_robin(attrs.key)
+    end
+  end
+
+  if not addr then
+    logger.errx(log_obj, 'cannot select server to make redis request')
+  end
+
+  opts.host = addr:get_addr()
+  opts.timeout = redis_params.timeout
+
+  if type(req) == 'string' then
+    opts.cmd = req
+  else
+    -- XXX: modifies the input table
+    opts.cmd = table.remove(req, 1);
+    opts.args = req
+  end
+
+  if redis_params.password then
+    opts.password = redis_params.password
+  end
+
+  if redis_params.db then
+    opts.dbname = redis_params.db
+  end
+
+  if opts.callback then
+    local ret,conn = rspamd_redis.make_request(opts)
+    if not ret then
+      logger.errx(log_obj, 'cannot execute redis request')
+      addr:fail()
+    end
+
+    return ret,conn,addr
+  else
+    -- Coroutines version
+    local ret,conn = rspamd_redis.connect_sync(opts)
+    if not ret then
+      logger.errx(log_obj, 'cannot execute redis request')
+      addr:fail()
+    else
+      conn:add_cmd(opts.cmd, opts.args)
+      return conn:exec()
+    end
+    return false,nil,addr
+  end
+end
+
+--[[[
+-- @function lua_redis.connect(redis_params, attrs)
+-- Connects to Redis synchronously with coroutines or asynchronously using a callback (modern API)
+-- @param redis_params a table of redis server parameters
+-- @param attrs a table of redis request attributes (e.g. task, or ev_base + cfg + session)
+-- @return {result,connection,address} boolean result, connection object, redis server address
+--]]
+
+exports.connect = function(redis_params, attrs)
+  local lua_util = require "lua_util"
+
+  if not attrs or not redis_params then
+    logger.errx('invalid arguments for redis connect')
+    return false,nil,nil
+  end
+
+  if not (attrs.task or (attrs.config and attrs.ev_base)) then
+    logger.errx('invalid attributes for redis connect')
+    return false,nil,nil
+  end
+
+  local opts = lua_util.shallowcopy(attrs)
+
+  local log_obj = opts.task or opts.config
+
+  local addr
+
+  if opts.callback then
+    -- Wrap callback
+    local callback = opts.callback
+    local function rspamd_redis_make_request_cb(err, data)
+      if err then
+        addr:fail()
+      else
+        addr:ok()
+      end
+      callback(err, data, addr)
+    end
+    opts.callback = rspamd_redis_make_request_cb
+  end
+
+  local rspamd_redis = require "rspamd_redis"
+  local is_write = opts.is_write
+
+  if opts.key then
+    if is_write then
+      addr = redis_params['write_servers']:get_upstream_by_hash(attrs.key)
+    else
+      addr = redis_params['read_servers']:get_upstream_by_hash(attrs.key)
+    end
+  else
+    if is_write then
+      addr = redis_params['write_servers']:get_upstream_master_slave(attrs.key)
+    else
+      addr = redis_params['read_servers']:get_upstream_round_robin(attrs.key)
+    end
+  end
+
+  if not addr then
+    logger.errx(log_obj, 'cannot select server to make redis connect')
+  end
+
+  opts.host = addr:get_addr()
+  opts.timeout = redis_params.timeout
+
+  if redis_params.password then
+    opts.password = redis_params.password
+  end
+
+  if redis_params.db then
+    opts.dbname = redis_params.db
+  end
+
+  if opts.callback then
+    local ret,conn = rspamd_redis.connect(opts)
+    if not ret then
+      logger.errx(log_obj, 'cannot execute redis connect')
+      addr:fail()
+    end
+
+    return ret,conn,addr
+  else
+    -- Coroutines version
+    local ret,conn = rspamd_redis.connect_sync(opts)
+    if not ret then
+      logger.errx(log_obj, 'cannot execute redis connect')
+      addr:fail()
+    else
+      return true,conn,addr
+    end
+
+    return false,nil,addr
+  end
+end
+
 
 return exports

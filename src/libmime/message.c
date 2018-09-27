@@ -223,12 +223,16 @@ rspamd_mime_part_detect_language (struct rspamd_task *task,
 {
 	struct rspamd_lang_detector_res *lang;
 
-	if (part->utf_words && task->lang_det) {
+	if (!IS_PART_EMPTY (part) && part->utf_words && part->utf_words->len > 0 &&
+			task->lang_det) {
 		if (rspamd_language_detector_detect (task, task->lang_det, part)) {
 			lang = g_ptr_array_index (part->languages, 0);
 			part->language = lang->lang;
 
 			msg_info_task ("detected part language: %s", part->language);
+		}
+		else {
+			part->language = "en"; /* Safe fallback */
 		}
 	}
 }
@@ -240,6 +244,8 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 	const gchar *p = begin, *c = begin;
 	gchar last_c = '\0';
 	gboolean crlf_added = FALSE;
+	gboolean url_open_bracket = FALSE;
+
 	enum {
 		normal_char,
 		seen_cr,
@@ -281,6 +287,8 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 				break;
 			}
 
+			url_open_bracket = FALSE;
+
 			p ++;
 		}
 		else if (G_UNLIKELY (*p == '\n')) {
@@ -296,7 +304,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 
 				c = p + 1;
 
-				if (IS_PART_HTML (part) || g_ascii_ispunct (last_c)) {
+				if (IS_PART_HTML (part) || !url_open_bracket) {
 					g_byte_array_append (part->utf_stripped_content,
 							(const guint8 *)" ", 1);
 					g_ptr_array_add (part->newlines,
@@ -311,7 +319,7 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 			case seen_cr:
 				/* \r\n */
 				if (!crlf_added) {
-					if (IS_PART_HTML (part) || g_ascii_ispunct (last_c)) {
+					if (IS_PART_HTML (part) || !url_open_bracket) {
 						g_byte_array_append (part->utf_stripped_content,
 								(const guint8 *) " ", 1);
 						crlf_added = TRUE;
@@ -341,10 +349,18 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 				c = p + 1;
 				break;
 			}
+			url_open_bracket = FALSE;
 
 			p ++;
 		}
 		else {
+			if ((*p) == '<') {
+				url_open_bracket = TRUE;
+			}
+			else if ((*p) == '>') {
+				url_open_bracket = FALSE;
+			}
+
 			switch (state) {
 			case normal_char:
 				if (G_UNLIKELY (*p) == ' ') {
@@ -499,6 +515,11 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		if (!U_SUCCESS (uc_err)) {
 			msg_warn_task ("cannot open text from utf content");
 			/* Probably, should be an assertion */
+		}
+		else {
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t)utext_close,
+					&part->utf_stripped_text);
 		}
 	}
 
