@@ -39,6 +39,7 @@ lua_dns_request (lua_State *L)
 {
 	GError *err = NULL;
 	struct rspamd_async_session *session = NULL;
+	struct rspamd_config *cfg = NULL;
 	struct lua_rspamd_dns_cbdata *cbdata = NULL;
 	const gchar *to_resolve = NULL;
 	const gchar *type_str = NULL;
@@ -49,8 +50,8 @@ lua_dns_request (lua_State *L)
 
 	/* Check arguments */
 	if (!rspamd_lua_parse_table_arguments (L, 1, &err,
-										   "*name=S;*task=U{task};*type=S;forced=B",
-										   &to_resolve, &task, &type_str, &forced)) {
+										   "*name=S;task=U{task};*type=S;forced=B;session=U{session};config=U{config}",
+										   &to_resolve, &task, &type_str, &forced, &session, &cfg)) {
 
 		if (err) {
 			ret = luaL_error (L, "invalid arguments: %s", err->message);
@@ -65,6 +66,10 @@ lua_dns_request (lua_State *L)
 	if (task) {
 		session = task->s;
 		pool = task->task_pool;
+		cfg = task->cfg;
+	}
+	else if (session && cfg) {
+		pool = cfg->cfg_pool;
 	}
 	else {
 		return luaL_error (L, "invalid arguments: either task or session/config should be set");
@@ -97,23 +102,35 @@ lua_dns_request (lua_State *L)
 		free (ptr_str);
 	}
 
-	if (forced) {
-		ret = make_dns_request_task_forced (task,
-											lua_dns_callback,
-											cbdata,
-											type,
-											to_resolve);
+
+	if (task == NULL) {
+		ret = make_dns_request (cfg->dns_resolver,
+							   session,
+							   pool,
+							   lua_dns_callback,
+							   cbdata,
+							   type,
+							   to_resolve);
 	}
 	else {
-		ret = make_dns_request_task (task,
-									 lua_dns_callback,
-									 cbdata,
-									 type,
-									 to_resolve);
+	if (forced) {
+			ret = make_dns_request_task_forced (task,
+												lua_dns_callback,
+												cbdata,
+												type,
+												to_resolve);
+		}
+		else {
+			ret = make_dns_request_task (task,
+										 lua_dns_callback,
+										 cbdata,
+										 type,
+										 to_resolve);
+		}
 	}
 
 	if (ret) {
-		cbdata->thread = lua_thread_pool_get_running_entry (task->cfg->lua_thread_pool);
+		cbdata->thread = lua_thread_pool_get_running_entry (cfg->lua_thread_pool);
 		cbdata->s = session;
 		cbdata->w = rspamd_session_get_watcher (session);
 		rspamd_session_watcher_push (session);
