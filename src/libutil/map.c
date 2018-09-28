@@ -1285,7 +1285,8 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 		}
 		else {
 			/* We could not resolve host, so cowardly fail here */
-			msg_err_map ("cannot resolve %s", cbd->data->host);
+			msg_err_map ("cannot resolve %s: %s", cbd->data->host,
+					rdns_strerror (reply->code));
 			cbd->periodic->errored = 1;
 			rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
 		}
