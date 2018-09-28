@@ -795,6 +795,10 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 			(gint)ret->languages->len,
 			(gint)total);
 
+	if (stop_words) {
+		ucl_object_unref (stop_words);
+	}
+
 	REF_INIT_RETAIN (ret, rspamd_language_detector_dtor);
 	rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t)rspamd_language_detector_unref,
