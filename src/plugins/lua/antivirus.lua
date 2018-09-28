@@ -218,6 +218,8 @@ local function sophos_config(opts)
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
     message = default_message,
+    savdi_report_encrypted = false,
+    savdi_report_oversize = false,
   }
 
   for k,v in pairs(opts) do
@@ -593,6 +595,7 @@ local function sophos_check(task, content, digest, rule)
       else
         upstream:ok()
         data = tostring(data)
+        lua_util.debugm(N, task, '%s [%s]: got reply: %s', rule['symbol'], rule['type'], data)
         local vname = string.match(data, 'VIRUS (%S+) ')
         if vname then
           yield_result(task, rule, vname)
@@ -601,6 +604,8 @@ local function sophos_check(task, content, digest, rule)
           if string.find(data, 'DONE OK') then
             if rule['log_clean'] then
               rspamd_logger.infox(task, '%s [%s]: message or mime_part is clean', rule['symbol'], rule['type'])
+            else
+              lua_util.debugm(N, task, '%s [%s]: message or mime_part is clean', rule['symbol'], rule['type'])
             end
             save_av_cache(task, digest, rule, 'OK')
             -- not finished - continue
@@ -613,12 +618,15 @@ local function sophos_check(task, content, digest, rule)
               yield_result(task, rule, "SAVDI_FILE_ENCRYPTED")
               save_av_cache(task, digest, rule, "SAVDI_FILE_ENCRYPTED")
             end
-            -- set pseudo virus if configured, else do nothing since it's no fatal
+            -- set pseudo virus if configured, else set fail since part was not scanned
           elseif string.find(data, 'REJ 4') then
             if rule['savdi_report_oversize'] then
-              rspamd_logger.infox(task, 'Message is OVERSIZED (SSSP reject code 4): %s', data)
+              rspamd_logger.infox(task, 'SAVDI: Message is OVERSIZED (SSSP reject code 4): %s', data)
               yield_result(task, rule, "SAVDI_FILE_OVERSIZED")
               save_av_cache(task, digest, rule, "SAVDI_FILE_OVERSIZED")
+            else
+              rspamd_logger.errx(task, 'SAVDI: Message is OVERSIZED (SSSP reject code 4): %s', data)
+              task:insert_result(rule['symbol_fail'], 0.0, 'Message is OVERSIZED (SSSP reject code 4):' .. data)
             end
             -- excplicitly set REJ1 message when SAVDIreports a protocol error
           elseif string.find(data, 'REJ 1') then
