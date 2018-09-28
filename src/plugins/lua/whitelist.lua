@@ -40,17 +40,33 @@ local function whitelist_cb(symbol, rule, task)
   local domains = {}
 
   local function find_domain(dom)
-    local mult = 1.0
+    local mult
+    local how = 'wl'
+
+    local function parse_val(val)
+      if val then
+        if val == '' then
+          return 'wl',1.0
+        elseif val:match('^bl:') then
+          return 'bl',(tonumber(val:sub(4)) or 1.0)
+        elseif val:match('^wl:') then
+          return 'wl',(tonumber(val:sub(4)) or 1.0)
+        elseif val:match('^both:') then
+          return 'both',(tonumber(val:sub(6)) or 1.0)
+        else
+          return 'wl',(tonumber(val) or 1.0)
+        end
+      end
+
+      return 'wl',1.0
+    end
 
     if rule['map'] then
       local val = rule['map']:get_key(dom)
       if val then
-        if #val > 0 then
-          mult = tonumber(val)
-        end
-
+        how,mult = parse_val(val)
         table.insert(domains, dom)
-        return true,mult
+        return true,mult,how
       end
     elseif rule['maps'] then
       for _,v in pairs(rule['maps']) do
@@ -58,13 +74,9 @@ local function whitelist_cb(symbol, rule, task)
         if map then
           local val = map:get_key(dom)
           if val then
-            if #val > 0 then
-              mult = tonumber(val)
-            else
-              mult = v.mult or 1.0
-            end
+            how,mult = parse_val(val)
             table.insert(domains, dom)
-            return true,mult
+            return true,mult,how
           end
         end
       end
@@ -72,15 +84,16 @@ local function whitelist_cb(symbol, rule, task)
       mult = rule['domains'][dom]
       if mult then
         table.insert(domains, dom)
-        return true, mult
+        return true, mult,how
       end
     end
 
-    return false,0.0
+    return false,0.0,how
   end
 
   local found = false
-  local mult = 1.0
+  local mult
+  local how = '' -- whitelist only
   local spf_violated = false
   local dkim_violated = false
   local dmarc_violated = false
@@ -102,7 +115,7 @@ local function whitelist_cb(symbol, rule, task)
       local tld = rspamd_util.get_tld(from[1]['domain'])
 
       if tld then
-        found,mult = find_domain(tld)
+        found, mult, how = find_domain(tld)
       end
     else
       local helo = task:get_helo()
@@ -111,7 +124,7 @@ local function whitelist_cb(symbol, rule, task)
         local tld = rspamd_util.get_tld(helo)
 
         if tld then
-          found, mult = find_domain(tld)
+          found, mult, how = find_domain(tld)
         end
       end
     end
@@ -134,9 +147,9 @@ local function whitelist_cb(symbol, rule, task)
             local tld = rspamd_util.get_tld(val)
 
             if tld then
-              found, mult = find_domain(tld)
+              found, mult, how = find_domain(tld)
               if not found then
-                found, mult = find_domain(val)
+                found, mult, how = find_domain(val)
               end
             end
           end
@@ -160,37 +173,38 @@ local function whitelist_cb(symbol, rule, task)
       local tld = rspamd_util.get_tld(from[1]['domain'])
 
       if tld then
-        found, mult = find_domain(tld)
+        found, mult, how = find_domain(tld)
         if not found then
-          found, mult = find_domain(from[1]['domain'])
+          found, mult, how = find_domain(from[1]['domain'])
         end
       end
     end
   end
 
   if found then
-    if not rule['blacklist'] and not rule['strict'] then
-      task:insert_result(symbol, mult, domains)
-    else
-      -- Additional constraints for blacklist
-      if rule['valid_spf'] or rule['valid_dkim'] or rule['valid_dmarc'] then
-        if dmarc_violated or dkim_violated or spf_violated then
+    local function add_symbol(violated)
+      local sym = symbol
 
-          if rule['strict'] then
-            -- Inverse multiplier to convert whitelist to blacklist
-            mult = -mult
-          end
+      if violated then
+        if rule.inverse_symbol then
+          sym = rule.inverse_symbol
+        else
+          -- Inverse multiplier
+          mult = -mult
+        end
 
-          task:insert_result(symbol, mult, domains)
-        elseif rule['strict'] then
-          -- Add whitelist score (negative)
-          task:insert_result(symbol, mult, domains)
+        if rule.strict or how == 'bl' or how == 'both' then
+          -- Insert violation rule
+          task:insert_result(sym, mult, domains)
         end
       else
-        -- Unconstrained input
-        task:insert_result(symbol, mult, domains)
+        if how == 'wl' or how == 'both' then
+          task:insert_result(sym, mult, domains)
+        end
       end
     end
+
+    add_symbol(dmarc_violated or dkim_violated or spf_violated)
   end
 
 end
@@ -261,11 +275,19 @@ local configure_whitelist_module = function()
           flags = 'empty'
         end
 
-        rspamd_config:register_symbol({
+        local id = rspamd_config:register_symbol({
           name = symbol,
           flags = flags,
           callback = gen_whitelist_cb(symbol, rule)
         })
+
+        if rule.inverse_symbol then
+          rspamd_config:register_symbol({
+            name = rule.inverse_symbol,
+            flags = 'virtual',
+            parent = id
+          })
+        end
 
         local spf_dep = false
         local dkim_dep = false
