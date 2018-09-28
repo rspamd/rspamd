@@ -395,12 +395,25 @@ rspamd_session_watch_start (struct rspamd_async_session *session,
 	if (session->cur_watcher == NULL) {
 		session->cur_watcher = rspamd_mempool_alloc0 (session->pool,
 				sizeof (*session->cur_watcher));
-	}
 
-	st_elt = rspamd_mempool_alloc (session->pool, sizeof (*st_elt));
-	st_elt->cb = cb;
-	st_elt->ud = ud;
-	LL_PREPEND (session->cur_watcher->st, st_elt);
+		st_elt = rspamd_mempool_alloc (session->pool, sizeof (*st_elt));
+		st_elt->cb = cb;
+		st_elt->ud = ud;
+		LL_PREPEND (session->cur_watcher->st, st_elt);
+	}
+	else {
+		if (session->cur_watcher->st) {
+			/* Reuse the existing (empty) watcher */
+			session->cur_watcher->st->cb = cb;
+			session->cur_watcher->st->ud = ud;
+		}
+		else {
+			st_elt = rspamd_mempool_alloc (session->pool, sizeof (*st_elt));
+			st_elt->cb = cb;
+			st_elt->ud = ud;
+			LL_PREPEND (session->cur_watcher->st, st_elt);
+		}
+	}
 
 	session->cur_watcher->id = id;
 	session->flags |= RSPAMD_SESSION_FLAG_WATCHING;
