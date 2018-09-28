@@ -180,6 +180,20 @@ local function check_dcc (task)
 end
 
 -- Configuration
+
+-- WORKAROUND for deprecated host and port settings
+if opts['host'] ~= nil and opts['port'] ~= nil then
+  opts['servers'] = opts['host'] .. ':' .. opts['port']
+  rspamd_logger.warnx(rspamd_config, 'Using host and port parameters is deprecated. '..
+   'Please use servers = "%s:%s"; instead', opts['host'], opts['port'])
+end
+if opts['host'] ~= nil and not opts['port'] then
+  opts['socket'] = opts['host']
+  rspamd_logger.warnx(rspamd_config, 'Using host parameters is deprecated. '..
+   'Please use socket = "%s"; instead', opts['host'])
+end
+-- WORKAROUND for deprecated host and port settings
+
 if opts and ( opts['servers'] or opts['socket'] ) then
   rspamd_config:register_symbol({
     name = symbol_bulk,
