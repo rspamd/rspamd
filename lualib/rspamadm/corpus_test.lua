@@ -130,9 +130,9 @@ end
 
 local function handler(args)
   opts = parser:parse(args)
-  local ham_directory = opts['ham_directory']
-  local spam_directory = opts['spam_directory']
-  local connections = opts["connections"]
+  local ham_directory = opts['ham']
+  local spam_directory = opts['spam']
+  local connections = opts["conns"]
   local output = opts["output"]
 
   local results = {}
