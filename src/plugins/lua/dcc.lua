@@ -25,7 +25,6 @@ local lua_util = require "lua_util"
 local tcp = require "rspamd_tcp"
 local upstream_list = require "rspamd_upstream_list"
 local fun = require "fun"
-local lua_util = require "lua_util"
 
 if confighelp then
   rspamd_config:add_example(nil, 'dcc',
@@ -44,10 +43,10 @@ local function check_dcc (task)
   -- Connection
   local client = '0.0.0.0'
   local client_ip = task:get_from_ip()
-  local dcc_upstream = nil
-  local upstream = nil
-  local addr = nil
-  local port = nil
+  local dcc_upstream
+  local upstream
+  local addr
+  local port
   local retransmits = 2
 
   if opts['servers'] then
