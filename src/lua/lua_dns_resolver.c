@@ -185,8 +185,12 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 	lua_pushboolean (L, reply->authenticated);
 
 	if (lua_pcall (L, 6, 0, err_idx) != 0) {
-		msg_info_pool_check ("call to dns callback failed: %s", tb->str);
-		g_string_free (tb, TRUE);
+		tb = lua_touserdata (L, -1);
+
+		if (tb) {
+			msg_info_pool_check ("call to dns callback failed: %s", tb->str);
+			g_string_free (tb, TRUE);
+		}
 	}
 
 	lua_settop (L, err_idx - 1);
