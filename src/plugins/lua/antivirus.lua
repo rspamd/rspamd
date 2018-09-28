@@ -829,6 +829,14 @@ local function add_antivirus_rule(sym, opts)
     opts['symbol_fail'] = string.upper(opts['type']) .. '_FAIL'
   end
 
+  -- WORKAROUND for deprecated attachments_only
+  if opts['attachments_only'] ~= nil then
+    opts['scan_mime_parts'] = opts['attachments_only']
+    rspamd_logger.warnx(rspamd_config, '%s [%s]: Using attachments_only is deprecated. '..
+     'Please use scan_mime_parts = %s instead', opts['symbol'], opts['type'], opts['attachments_only'])
+  end
+  -- WORKAROUND for deprecated attachments_only
+
   if not cfg then
     rspamd_logger.errx(rspamd_config, 'unknown antivirus type: %s',
       opts['type'])
