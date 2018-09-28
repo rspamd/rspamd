@@ -113,7 +113,7 @@ define(["jquery", "footable", "humanize"],
         }
 
         function process_history_v2(data) {
-        // Display no more than rcpt_lim recipients
+            // Display no more than rcpt_lim recipients
             var rcpt_lim = 3;
             var items = [];
 
@@ -121,13 +121,23 @@ define(["jquery", "footable", "humanize"],
                 var e = document.getElementById(id);
                 return e.options[e.selectedIndex].value;
             }
-            var compare = (getSelector("selSymOrder") === "score")
-                ? function (e1, e2) {
-                    return Math.abs(e2.score) - Math.abs(e1.score);
-                }
-                : function (e1, e2) {
-                    return e1.name.localeCompare(e2.name);
-                };
+            var compare = null;
+            switch (getSelector("selSymOrder")) {
+                case "score":
+                    compare = function (e1, e2) {
+                        return e2.score - e1.score;
+                    };
+                    break;
+                case "name":
+                    compare = function (e1, e2) {
+                        return e1.name.localeCompare(e2.name);
+                    };
+                    break;
+                default:
+                    compare = function (e1, e2) {
+                        return Math.abs(e2.score) - Math.abs(e1.score);
+                    };
+            }
 
             $("#selSymOrder, label[for='selSymOrder']").show();
 
