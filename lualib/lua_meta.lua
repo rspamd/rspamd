@@ -421,28 +421,55 @@ local function fill_metatokens_by_name()
   end
 end
 
-local function rspamd_gen_metatokens(task)
+local function calculate_digest()
+  local cr = require "rspamd_cryptobox_hash"
+
+  cr.create()
+  for _,mt in ipairs(metafunctions) do
+    for i=1,mt.ninputs do
+      local name = mt.names[i]
+      cr:update(name)
+    end
+  end
+
+  exports.digest = cr:hex()
+end
+
+local function rspamd_gen_metatokens(task, names)
   local lua_util = require "lua_util"
   local ipairs = ipairs
   local metatokens = {}
-  local cached = task:cache_get('metatokens')
 
-  if cached then
-    return cached
-  else
-    for _,mt in ipairs(metafunctions) do
-      local ct = mt.cb(task)
-      for i,tok in ipairs(ct) do
-        lua_util.debugm(N, task, "metatoken: %s = %s", mt.name[i], tok)
-        table.insert(metatokens, tok)
+  if not names then
+    local cached = task:cache_get('metatokens')
+
+    if cached then
+      return cached
+    else
+      for _,mt in ipairs(metafunctions) do
+        local ct = mt.cb(task)
+        for i,tok in ipairs(ct) do
+          lua_util.debugm(N, task, "metatoken: %s = %s", mt.name[i], tok)
+          table.insert(metatokens, tok)
+        end
       end
+
+      task:cache_set('metatokens', metatokens)
     end
 
-    task:cache_set('metatokens', metatokens)
+  else
+    local logger = require "rspamd_logger"
+    for _,n in ipairs(names) do
+      if metatokens_by_name[n] then
+        table.insert(metatokens, metatokens_by_name[n](task))
+      else
+        logger.errx(task, 'unknown metatoken: %s', n)
+      end
+    end
   end
 
   return metatokens
-end
+  end
 
 exports.rspamd_gen_metatokens = rspamd_gen_metatokens
 exports.gen_metatokens = rspamd_gen_metatokens
@@ -453,7 +480,7 @@ local function rspamd_gen_metatokens_table(task)
   for _,mt in ipairs(metafunctions) do
     local ct = mt.cb(task)
     for i,tok in ipairs(ct) do
-      metatokens[mt.desc[i]] = tok
+      metatokens[mt.name[i]] = tok
     end
   end
 
@@ -485,9 +512,11 @@ exports.add_metafunction = function(tbl)
   else
     table.insert(metafunctions, tbl)
     fill_metatokens_by_name()
+    calculate_digest()
   end
 end
 
 fill_metatokens_by_name()
+calculate_digest()
 
 return exports
