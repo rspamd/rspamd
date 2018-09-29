@@ -42,11 +42,14 @@ local function whitelist_cb(symbol, rule, task)
   local function find_domain(dom)
     local mult
     local how = 'wl'
+    if rule.blacklist then how = 'bl' end
 
     local function parse_val(val)
+      local how = 'wl'
+      if rule.blacklist then how = 'bl' end
       if val then
         if val == '' then
-          return 'wl',1.0
+          return how,1.0
         elseif val:match('^bl:') then
           return 'bl',(tonumber(val:sub(4)) or 1.0)
         elseif val:match('^wl:') then
@@ -54,11 +57,11 @@ local function whitelist_cb(symbol, rule, task)
         elseif val:match('^both:') then
           return 'both',(tonumber(val:sub(6)) or 1.0)
         else
-          return 'wl',(tonumber(val) or 1.0)
+          return how,(tonumber(val) or 1.0)
         end
       end
 
-      return 'wl',1.0
+      return how,1.0
     end
 
     if rule['map'] then
@@ -93,7 +96,7 @@ local function whitelist_cb(symbol, rule, task)
 
   local found = false
   local mult
-  local how = '' -- whitelist only
+  local how = 'wl' -- whitelist only
   local spf_violated = false
   local dkim_violated = false
   local dmarc_violated = false
