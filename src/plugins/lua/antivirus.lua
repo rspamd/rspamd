@@ -926,12 +926,15 @@ if opts and type(opts) == 'table' then
           type = 'normal',
           name = m['symbol'],
           callback = cb,
+          score = 0.0,
+          group = 'antivirus'
         })
         rspamd_config:register_symbol({
           type = 'virtual',
           name = m['symbol_fail'],
           parent = id,
           score = 0.0,
+          group = 'antivirus'
         })
         has_valid = true
         if type(m['patterns']) == 'table' then
@@ -977,7 +980,7 @@ if opts and type(opts) == 'table' then
             name = m['symbol'],
             score = m['score'],
             description = description,
-            group = group
+            group = group or 'antivirus'
           })
         end
       end

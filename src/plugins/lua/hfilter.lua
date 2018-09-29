@@ -618,6 +618,19 @@ end
 --dumper(symbols_enabled)
 if #symbols_enabled > 0 then
   rspamd_config:register_symbols(hfilter, 1.0, "HFILTER", symbols_enabled);
+  rspamd_config:set_metric_symbol({
+    name = 'HFILTER',
+    score = 0.0,
+    group = 'hfilter'
+  })
+
+  for _,s in ipairs(symbols_enabled) do
+    rspamd_config:set_metric_symbol({
+      name = s,
+      score = 0.0,
+      group = 'hfilter'
+    })
+  end
 else
   lua_util.disable_module(N, "config")
 end

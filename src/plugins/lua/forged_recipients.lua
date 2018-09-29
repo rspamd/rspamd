@@ -97,6 +97,8 @@ if opts then
       name = 'FORGED_CALLBACK',
       callback = check_forged_headers,
       type = 'callback',
+      group = 'headers',
+      score = 0.0,
     })
     if opts['symbol_rcpt'] then
       symbol_rcpt = opts['symbol_rcpt']
