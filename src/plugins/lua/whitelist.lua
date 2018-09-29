@@ -45,8 +45,6 @@ local function whitelist_cb(symbol, rule, task)
     if rule.blacklist then how = 'bl' end
 
     local function parse_val(val)
-      local how = 'wl'
-      if rule.blacklist then how = 'bl' end
       if val then
         if val == '' then
           return how,1.0
@@ -193,7 +191,9 @@ local function whitelist_cb(symbol, rule, task)
           sym = rule.inverse_symbol
         else
           -- Inverse multiplier
-          mult = -mult
+          if not rule.blacklist then
+            mult = -mult
+          end
         end
 
         if rule.strict or how == 'bl' or how == 'both' then
