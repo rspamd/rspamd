@@ -17,6 +17,7 @@ limitations under the License.
 local exports = {}
 
 local N = "metatokens"
+local ts = require("tableshape").types
 
 -- Metafunctions
 local function meta_size_function(task)
@@ -272,9 +273,10 @@ local metafunctions = {
   {
     cb = meta_size_function,
     ninputs = 1,
-    desc = {
+    names = {
       "size"
-    }
+    },
+    description = 'Describes size of the message',
   },
   {
     cb = meta_images_function,
@@ -284,65 +286,93 @@ local metafunctions = {
     -- 3 - number of jpeg images
     -- 4 - number of large images (> 128 x 128)
     -- 5 - number of small images (< 128 x 128)
-    desc = {
+    names = {
       'nimages',
       'npng_images',
       'njpeg_images',
       'nlarge_images',
       'nsmall_images'
-    }
+    },
+    description = [[Functions for images matching:
+    - number of images,
+    - number of png images,
+    - number of jpeg images
+    - number of large images (> 128 x 128)
+    - number of small images (< 128 x 128)
+]]
   },
   {
     cb = meta_nparts_function,
     ninputs = 2,
     -- 1 - number of text parts
     -- 2 - number of attachments
-    desc = {
+    names = {
       'ntext_parts',
       'nattachments'
-    }
+    },
+    description = [[Functions for images matching:
+    - number of text parts
+    - number of attachments
+]]
   },
   {
     cb = meta_encoding_function,
     ninputs = 2,
     -- 1 - number of utf parts
     -- 2 - number of non-utf parts
-    desc = {
+    names = {
       'nutf_parts',
       'nascii_parts'
-    }
+    },
+    description = [[Functions for encoding matching:
+    - number of utf parts
+    - number of non-utf parts
+]]
   },
   {
     cb = meta_recipients_function,
     ninputs = 2,
     -- 1 - number of mime rcpt
     -- 2 - number of smtp rcpt
-    desc = {
+    names = {
       'nmime_rcpt',
       'nsmtp_rcpt'
-    }
+    },
+    description = [[Functions for recipients data matching:
+    - number of mime rcpt
+    - number of smtp rcpt
+]]
   },
   {
     cb = meta_received_function,
     ninputs = 4,
-    desc = {
+    names = {
       'nreceived',
       'nreceived_invalid',
       'nreceived_bad_time',
       'nreceived_secure'
-    }
+    },
+    description = [[Functions for received headers data matching:
+    - number of received headers
+    - number of bad received headers
+    - number of skewed time received headers
+    - number of received via secured relays
+]]
   },
   {
     cb = meta_urls_function,
     ninputs = 1,
-    desc = {
+    names = {
       'nurls'
-    }
+    },
+    description = [[Functions for urls data matching:
+    - number of urls
+]]
   },
   {
     cb = meta_words_function,
     ninputs = 9,
-    desc = {
+    names = {
       'avg_words_len',
       'nshort_words',
       'spaces_rate',
@@ -352,9 +382,44 @@ local metafunctions = {
       'non_ascii_characters_rate',
       'capital_characters_rate',
       'numeric_cahracters'
-    }
+    },
+    description = [[Functions for words data matching:
+    - average length of the words
+    - number of short words
+    - rate of spaces in the text
+    - rate of multiple spaces
+    - rate of non space characters
+    - rate of ascii characters
+    - rate of non-ascii characters
+    - rate of capital letters
+    - rate of numbers
+]]
   },
 }
+
+local meta_schema = ts.shape{
+  cb = ts.func,
+  ninputs = ts.number,
+  names = ts.array_of(ts.string),
+  description = ts.string:is_optional()
+}
+
+local metatokens_by_name = {}
+
+local function fill_metatokens_by_name()
+  metatokens_by_name = {}
+
+  for _,mt in ipairs(metafunctions) do
+    for i=1,mt.ninputs do
+      local name = mt.names[i]
+
+      metatokens_by_name[name] = function(task)
+        local results = mt.cb(task)
+        return results[i]
+      end
+    end
+  end
+end
 
 local function rspamd_gen_metatokens(task)
   local lua_util = require "lua_util"
@@ -368,7 +433,7 @@ local function rspamd_gen_metatokens(task)
     for _,mt in ipairs(metafunctions) do
       local ct = mt.cb(task)
       for i,tok in ipairs(ct) do
-        lua_util.debugm(N, task, "metatoken: %s = %s", mt.desc[i], tok)
+        lua_util.debugm(N, task, "metatoken: %s = %s", mt.name[i], tok)
         table.insert(metatokens, tok)
       end
     end
@@ -410,5 +475,19 @@ end
 
 exports.rspamd_count_metatokens = rspamd_count_metatokens
 exports.count_metatokens = rspamd_count_metatokens
+
+exports.add_metafunction = function(tbl)
+  local ret, err = meta_schema(tbl)
+
+  if not ret then
+    local logger = require "rspamd_logger"
+    logger.errx('cannot add metafunction: %s', err)
+  else
+    table.insert(metafunctions, tbl)
+    fill_metatokens_by_name()
+  end
+end
+
+fill_metatokens_by_name()
 
 return exports
