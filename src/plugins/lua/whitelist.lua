@@ -284,7 +284,7 @@ local configure_whitelist_module = function()
         if rule.inverse_symbol then
           rspamd_config:register_symbol({
             name = rule.inverse_symbol,
-            flags = 'virtual',
+            type = 'virtual',
             parent = id
           })
         end
