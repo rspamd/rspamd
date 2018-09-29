@@ -424,15 +424,15 @@ end
 local function calculate_digest()
   local cr = require "rspamd_cryptobox_hash"
 
-  cr.create()
+  local h = cr.create()
   for _,mt in ipairs(metafunctions) do
     for i=1,mt.ninputs do
       local name = mt.names[i]
-      cr:update(name)
+      h:update(name)
     end
   end
 
-  exports.digest = cr:hex()
+  exports.digest = h:hex()
 end
 
 local function rspamd_gen_metatokens(task, names)
