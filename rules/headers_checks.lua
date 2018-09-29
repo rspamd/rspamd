@@ -26,6 +26,8 @@ local E = {}
 local rcvd_cb_id = rspamd_config:register_symbol{
   name = 'CHECK_RECEIVED',
   type = 'callback',
+  score = 0.0,
+  group = 'headers',
   callback = function(task)
     local cnts = {
       [1] = 'ONE',
@@ -113,6 +115,8 @@ rspamd_config:register_symbol{
 local prio_cb_id = rspamd_config:register_symbol {
   name = 'HAS_X_PRIO',
   type = 'callback',
+  score = 0.0,
+  group = 'headers',
   callback = function (task)
      local cnts = {
       [1] = 'ONE',
@@ -180,10 +184,16 @@ local function get_raw_header(task, name)
   return ((task:get_header_full(name) or {})[1] or {})['value']
 end
 
-local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO', 1.0,
-  function (task)
+local check_replyto_id = rspamd_config:register_symbol({
+  type = 'callback',
+  name = 'CHECK_REPLYTO',
+  score = 0.0,
+  group = 'headers',
+  callback = function(task)
     local replyto = get_raw_header(task, 'Reply-To')
-    if not replyto then return false end
+    if not replyto then
+      return false
+    end
     local rt = util.parse_mail_address(replyto, task:get_mempool())
     if not (rt and rt[1] and (string.len(rt[1].addr) > 0)) then
       task:insert_result('REPLYTO_UNPARSEABLE', 1.0)
@@ -205,7 +215,9 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
     -- See if Reply-To matches From in some way
     local from = task:get_from(2)
     local from_h = get_raw_header(task, 'From')
-    if not (from and from[1]) then return false end
+    if not (from and from[1]) then
+      return false
+    end
     if (from_h and from_h == replyto) then
       -- From and Reply-To are identical
       task:insert_result('REPLYTO_EQ_FROM', 1.0)
@@ -221,17 +233,17 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
             -- See if Reply-To matches the To address
             local to = task:get_recipients(2)
             if (to and to[1] and to[1].addr:lower() == rt[1].addr:lower()) then
-                -- Ignore this for mailing-lists and automatic submissions
-                if (not (task:get_header('List-Unsubscribe') or
-                         task:get_header('X-To-Get-Off-This-List') or
-                         task:get_header('X-List') or
-                         task:get_header('Auto-Submitted')))
-                then
-                   task:insert_result('REPLYTO_EQ_TO_ADDR', 1.0)
-                end
+              -- Ignore this for mailing-lists and automatic submissions
+              if (not (task:get_header('List-Unsubscribe') or
+                  task:get_header('X-To-Get-Off-This-List') or
+                  task:get_header('X-List') or
+                  task:get_header('Auto-Submitted')))
+              then
+                task:insert_result('REPLYTO_EQ_TO_ADDR', 1.0)
+              end
             else
               task:insert_result('REPLYTO_DOM_NEQ_FROM_DOM', 1.0)
-	    end
+            end
           end
         end
         -- See if the Display Names match
@@ -242,7 +254,7 @@ local check_replyto_id = rspamd_config:register_callback_symbol('CHECK_REPLYTO',
       end
     end
   end
-)
+})
 
 rspamd_config:register_symbol{
   name = 'REPLYTO_UNPARSEABLE',
@@ -322,6 +334,8 @@ rspamd_config:register_dependency('CHECK_REPLYTO', 'CHECK_FROM')
 local check_mime_id = rspamd_config:register_symbol{
   name = 'CHECK_MIME',
   type = 'callback',
+  group = 'headers',
+  score = 0.0,
   callback = function(task)
     local parts = task:get_parts()
     if not parts then return false end
@@ -420,6 +434,7 @@ rspamd_config.PREVIOUSLY_DELIVERED = {
     end
   end,
   description = 'Message either to a list or was forwarded',
+  group = 'headers',
   score = 0.0
 }
 rspamd_config.BROKEN_HEADERS = {
@@ -612,6 +627,8 @@ rspamd_config.FAKE_REPLY = {
 local check_from_id = rspamd_config:register_symbol{
   name = 'CHECK_FROM',
   type = 'callback',
+  score = 0.0,
+  group = 'headers',
   callback = function(task)
     local envfrom = task:get_from(1)
     local from = task:get_from(2)
@@ -735,6 +752,8 @@ rspamd_config:register_symbol{
 local check_to_cc_id = rspamd_config:register_symbol{
   name = 'CHECK_TO_CC',
   type = 'callback',
+  score = 0.0,
+  group = 'headers',
   callback = function(task)
     local rcpts = task:get_recipients(1)
     local to = task:get_recipients(2)

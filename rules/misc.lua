@@ -190,6 +190,7 @@ rspamd_config.ENVFROM_VERP = {
 
 local check_rcvd = rspamd_config:register_symbol{
   name = 'CHECK_RCVD',
+  group = 'headers',
   callback = function (task)
     local rcvds = task:get_received_headers()
     if not rcvds then return false end
@@ -521,6 +522,7 @@ local check_from_display_name = rspamd_config:register_symbol{
     end
     return false
   end,
+  group = 'headers',
 }
 
 rspamd_config:register_symbol{
