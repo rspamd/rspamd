@@ -30,7 +30,9 @@ globals = {
   'rspamd_maps',
   'rspamd_plugins_state',
   'rspamadm',
-  'loadstring'
+  'loadstring',
+  'rspamadm_ev_base',
+  'rspamadm_session',
 }
 
 ignore = {
