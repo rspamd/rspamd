@@ -489,8 +489,11 @@ minyurl.org
 mislead.in
 miud.in
 mixe.me
+mj.is
+mjt.lu
 mke.me
 mlcampaignru.com
+mljt.tech
 mlsendru.com
 mmt.su
 mobotix-news.com
