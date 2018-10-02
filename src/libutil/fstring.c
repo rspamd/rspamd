@@ -160,14 +160,19 @@ rspamd_fstring_grow (rspamd_fstring_t *str, gsize needed_len)
 rspamd_fstring_t *
 rspamd_fstring_append (rspamd_fstring_t *str, const char *in, gsize len)
 {
-	gsize avail = fstravail (str);
-
-	if (avail < len) {
-		str = rspamd_fstring_grow (str, len);
+	if (str == NULL) {
+		str = rspamd_fstring_new_init (in, len);
 	}
+	else {
+		gsize avail = fstravail (str);
 
-	memcpy (str->str + str->len, in, len);
-	str->len += len;
+		if (avail < len) {
+			str = rspamd_fstring_grow (str, len);
+		}
+
+		memcpy (str->str + str->len, in, len);
+		str->len += len;
+	}
 
 	return str;
 }
@@ -176,14 +181,22 @@ rspamd_fstring_t *
 rspamd_fstring_append_chars (rspamd_fstring_t *str,
 		char c, gsize len)
 {
-	gsize avail = fstravail (str);
+	if (str == NULL) {
+		str = rspamd_fstring_sized_new (len);
 
-	if (avail < len) {
-		str = rspamd_fstring_grow (str, len);
+		memset (str->str + str->len, c, len);
+		str->len += len;
 	}
+	else {
+		gsize avail = fstravail (str);
 
-	memset (str->str + str->len, c, len);
-	str->len += len;
+		if (avail < len) {
+			str = rspamd_fstring_grow (str, len);
+		}
+
+		memset (str->str + str->len, c, len);
+		str->len += len;
+	}
 
 	return str;
 }
