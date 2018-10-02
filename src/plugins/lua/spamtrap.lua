@@ -137,12 +137,6 @@ local function spamtrap_cb(task)
 end
 
 -- Module setup
-local opts = rspamd_config:get_all_opt('spamtrap')
-if not (opts and type(opts) == 'table') then
-  rspamd_logger.infox(rspamd_config, 'module is unconfigured')
-  return
-end
-
 local function try_opts(where)
   local ret = false
   local opts = rspamd_config:get_all_opt(where)
@@ -158,6 +152,12 @@ local function try_opts(where)
   end
 
   return ret
+end
+
+local opts = rspamd_config:get_all_opt('spamtrap')
+if not (opts and type(opts) == 'table') then
+  rspamd_logger.infox(rspamd_config, 'module is unconfigured')
+  return
 end
 
 if not try_opts(M) then try_opts('options') end
