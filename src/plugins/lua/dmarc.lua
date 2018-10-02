@@ -561,17 +561,26 @@ local function dmarc_callback(task)
     forced = true})
 end
 
-local opts = rspamd_config:get_all_opt('options')
-if type(opts) == 'table' then
-  if type(opts['check_local']) == 'boolean' then
-    check_local = opts['check_local']
+local function try_opts(where)
+  local ret = false
+  local opts = rspamd_config:get_all_opt(where)
+  if type(opts) == 'table' then
+    if type(opts['check_local']) == 'boolean' then
+      check_local = opts['check_local']
+      ret = true
+    end
+    if type(opts['check_authed']) == 'boolean' then
+      check_authed = opts['check_authed']
+      ret = true
+    end
   end
-  if type(opts['check_authed']) == 'boolean' then
-    check_authed = opts['check_authed']
-  end
+
+  return ret
 end
 
-opts = rspamd_config:get_all_opt('dmarc')
+if not try_opts(N) then try_opts('options') end
+
+local opts = rspamd_config:get_all_opt('dmarc')
 if not opts or type(opts) ~= 'table' then
   return
 end

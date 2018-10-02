@@ -356,18 +356,29 @@ local ip_score_check = function(task)
   end
 end
 
+local function try_opts(where)
+  local ret = false
+  local opts = rspamd_config:get_all_opt(where)
+  if type(opts) == 'table' then
+    if type(opts['check_local']) == 'boolean' then
+      check_local = opts['check_local']
+      ret = true
+    end
+    if type(opts['check_authed']) == 'boolean' then
+      check_authed = opts['check_authed']
+      ret = true
+    end
+  end
+
+  return ret
+end
+
+if not try_opts(N) then try_opts('options') end
 
 -- Configuration options
 local configure_ip_score_module = function()
   local opts = rspamd_config:get_all_opt(N)
-  if type(opts) == 'table' then
-    if type(opts['check_authed']) == 'boolean' then
-      check_authed = opts['check_authed']
-    end
-    if type(opts['check_local']) == 'boolean' then
-      check_local = opts['check_local']
-    end
-  end
+
   if not opts then return end
   for k,v in pairs(opts) do
     options[k] = v

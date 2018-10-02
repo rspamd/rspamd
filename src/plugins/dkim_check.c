@@ -320,15 +320,26 @@ dkim_module_config (struct rspamd_config *cfg)
 	lua_pop (cfg->lua_state, 1); /* Remove global function */
 	dkim_module_ctx->whitelist_ip = NULL;
 
-	if ((value =
-			rspamd_config_get_module_opt (cfg, "dkim", "check_local")) != NULL) {
+	value = rspamd_config_get_module_opt (cfg, "dkim", "check_local");
+
+	if (value == NULL) {
+		rspamd_config_get_module_opt (cfg, "options", "check_local");
+	}
+
+	if (value != NULL) {
 		dkim_module_ctx->check_local = ucl_object_toboolean (value);
 	}
 	else {
 		dkim_module_ctx->check_local = FALSE;
 	}
-	if ((value =
-		rspamd_config_get_module_opt (cfg, "dkim", "check_authed")) != NULL) {
+
+	value = rspamd_config_get_module_opt (cfg, "dkim", "check_authed");
+
+	if (value == NULL) {
+		rspamd_config_get_module_opt (cfg, "options", "check_authed");
+	}
+
+	if (value != NULL) {
 		dkim_module_ctx->check_authed = ucl_object_toboolean (value);
 	}
 	else {

@@ -31,9 +31,10 @@ local settings = {
   fuzzy_flag = 1,
   fuzzy_weight = 10.0,
   key_prefix = 'sptr_',
-  check_authed = true,
-  check_local = true,
 }
+
+local check_authed = true
+local check_local = true
 
 local function spamtrap_cb(task)
   local rcpts = task:get_recipients('smtp')
@@ -42,8 +43,8 @@ local function spamtrap_cb(task)
   local called_for_domain = false
   local target
 
-  if ((not settings['check_authed'] and authed_user) or
-      (not settings['check_local'] and ip_addr and ip_addr:is_local())) then
+  if ((not check_authed and authed_user) or
+      (not check_local and ip_addr and ip_addr:is_local())) then
     rspamd_logger.infox(task, "skip spamtrap checks for local networks or authenticated user");
     return
   end
@@ -141,6 +142,26 @@ if not (opts and type(opts) == 'table') then
   rspamd_logger.infox(rspamd_config, 'module is unconfigured')
   return
 end
+
+local function try_opts(where)
+  local ret = false
+  local opts = rspamd_config:get_all_opt(where)
+  if type(opts) == 'table' then
+    if type(opts['check_local']) == 'boolean' then
+      check_local = opts['check_local']
+      ret = true
+    end
+    if type(opts['check_authed']) == 'boolean' then
+      check_authed = opts['check_authed']
+      ret = true
+    end
+  end
+
+  return ret
+end
+
+if not try_opts(M) then try_opts('options') end
+
 if opts then
   for k,v in pairs(opts) do
     settings[k] = v
