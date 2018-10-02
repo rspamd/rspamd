@@ -300,6 +300,18 @@ function ($, D3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
     };
 
     ui.connect = function () {
+
+        $.ajax({
+                type: 'GET',
+                url: 'stat',
+                success: function () {
+                    saveCredentials({}, 'nopassword');
+                    $(dialog).hide();
+                    $(backdrop).hide();
+                    displayUI();
+                },
+        });
+
         if (isLogged()) {
             displayUI();
             return;
