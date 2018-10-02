@@ -449,7 +449,8 @@ local function rspamd_gen_metatokens(task, names)
       for _,mt in ipairs(metafunctions) do
         local ct = mt.cb(task)
         for i,tok in ipairs(ct) do
-          lua_util.debugm(N, task, "metatoken: %s = %s", mt.name[i], tok)
+          lua_util.debugm(N, task, "metatoken: %s = %s",
+              mt.names[i], tok)
           table.insert(metatokens, tok)
         end
       end
@@ -480,7 +481,7 @@ local function rspamd_gen_metatokens_table(task)
   for _,mt in ipairs(metafunctions) do
     local ct = mt.cb(task)
     for i,tok in ipairs(ct) do
-      metatokens[mt.name[i]] = tok
+      metatokens[mt.names[i]] = tok
     end
   end
 
