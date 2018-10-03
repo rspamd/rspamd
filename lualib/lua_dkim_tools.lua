@@ -20,9 +20,24 @@ local exports = {}
 local E = {}
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
+local logger = require "rspamd_logger"
+
+local function check_violation(N, task, domain, selector)
+  -- Check for DKIM_REJECT
+  local sym_check = 'R_DKIM_REJECT'
+
+  if N == 'arc' then sym_check = 'ARC_REJECT' end
+  if task:has_symbol(sym_check) then
+    local sym = task:get_symbol(sym_check)
+    logger.infox(task, 'skip signing for %s:%s: violation %s found: %s',
+        domain, selector, sym_check, sym.options)
+    return false
+  end
+
+  return true
+end
 
 local function parse_dkim_http_headers(N, task, settings)
-  local logger = require "rspamd_logger"
   -- Configure headers
   local headers = {
     sign_header = settings.http_sign_header or "PerformDkimSign",
@@ -46,15 +61,8 @@ local function parse_dkim_http_headers(N, task, settings)
     -- Now check if we need to check the existing auth
     local hdr = task:get_request_header(headers.sign_on_reject_header)
     if not hdr or tostring(hdr) == '0' or tostring(hdr) == 'false' then
-      -- Check for DKIM_REJECT
-      local sym_check = 'R_DKIM_REJECT'
-
-      if N == 'arc' then sym_check = 'ARC_REJECT' end
-      if task:has_symbol(sym_check) then
-        local sym = task:get_symbol(sym_check)
-        logger.infox(task, 'skip signing for %s:%s: %s found: %s',
-            domain, selector, sym_check, sym.options)
-        return false,{}
+      if not check_violation(N, task, domain, selector) then
+        return false, {}
       end
     end
 
@@ -267,6 +275,12 @@ local function prepare_dkim_signing(N, task, settings)
   if not p.selector then
     p.selector = settings.selector
     lua_util.debugm(N, task, 'use default selector "%s"', p.selector)
+  end
+
+  if settings.check_violation then
+    if not check_violation(N, task, p.domain, p.selector) then
+      return false,{}
+    end
   end
 
   p.domain = dkim_domain
