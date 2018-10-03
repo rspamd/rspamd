@@ -499,36 +499,43 @@ dkim_module_config (struct rspamd_config *cfg)
 		}
 
 		cb_id = rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_reject,
-			0,
-			dkim_symbol_callback,
-			NULL,
-			SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_FINE,
-			-1);
+				"DKIM_CHECK",
+				0,
+				dkim_symbol_callback,
+				NULL,
+				SYMBOL_TYPE_CALLBACK,
+				-1);
 		rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_na,
-			0,
-			NULL, NULL,
-			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
-			cb_id);
+				dkim_module_ctx->symbol_reject,
+				0,
+				NULL,
+				NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
 		rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_permfail,
-			0,
-			NULL, NULL,
-			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
-			cb_id);
+				dkim_module_ctx->symbol_na,
+				0,
+				NULL, NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
 		rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_tempfail,
-			0,
-			NULL, NULL,
-			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
-			cb_id);
+				dkim_module_ctx->symbol_permfail,
+				0,
+				NULL, NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
 		rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_allow,
-			0,
-			NULL, NULL,
-			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
-			cb_id);
+				dkim_module_ctx->symbol_tempfail,
+				0,
+				NULL, NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
+		rspamd_symbols_cache_add_symbol (cfg->cache,
+				dkim_module_ctx->symbol_allow,
+				0,
+				NULL, NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
 
 		rspamd_symbols_cache_add_symbol (cfg->cache,
 				"DKIM_TRACE",

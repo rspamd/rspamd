@@ -221,3 +221,6 @@ rspamd_config:register_symbol({
   groups = {"policies", "dkim"},
   score = 0.0,
 })
+
+-- Add dependency on DKIM checks
+rspamd_config:register_dependency(settings['symbol'], 'DKIM_CHECK')
