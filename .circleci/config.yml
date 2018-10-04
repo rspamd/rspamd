@@ -55,6 +55,10 @@ jobs:
       - run: sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8
 
       - run: mkdir ../build ; mkdir ../install ; cd ../build
+      # this weird peice is needed to properly collect coverage
+      # rspamd works under "nobody" user and will not be able to dump
+      # the coverage if directories have restrictive permissions
+      - run: umask 0000
       - run: cmake ../project -DDBDIR=/nana -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=../install
 
       - run: make install -j`nproc`
@@ -111,7 +115,8 @@ jobs:
       - run: sudo luarocks install luacov
 
       - run: cd ../build
-      - run: set +e; RSPAMD_INSTALLROOT=../install sudo -E robot -x xunit.xml --exclude isbroken ../project/test/functional/cases; echo "export RETURN_CODE=$?" >> $BASH_ENV
+      # see coverage notice in "build" stage
+      - run: set +e; RSPAMD_INSTALLROOT=../install sudo -E bash -c "umask 0000; robot -x xunit.xml --exclude isbroken ../project/test/functional/cases"; echo "export RETURN_CODE=$?" >> $BASH_ENV
 
       - *capture_coverage_data
 
