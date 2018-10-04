@@ -376,7 +376,7 @@ local full_extensions_map = {
   {"hxx", "text/plain"},
   {"i", "text/plain"},
   {"ico", "image/x-icon"},
-  {"ics", "application/octet-stream"},
+  {"ics", {"text/calendar", "application/octet-stream"}},
   {"idl", "text/plain"},
   {"ief", "image/ief"},
   {"iii", "application/x-iphone"},
