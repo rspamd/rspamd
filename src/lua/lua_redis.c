@@ -480,6 +480,8 @@ lua_redis_push_results (struct lua_redis_ctx *ctx, lua_State *L)
 static void
 lua_redis_cleanup_events (struct lua_redis_ctx *ctx)
 {
+	REDIS_RETAIN (ctx); /* To avoid preliminary destruction */
+
 	while (!g_queue_is_empty (ctx->events_cleanup)) {
 		struct lua_redis_result *result = g_queue_pop_head (ctx->events_cleanup);
 
@@ -488,6 +490,8 @@ lua_redis_cleanup_events (struct lua_redis_ctx *ctx)
 
 		g_free (result);
 	}
+
+	REDIS_RELEASE (ctx);
 }
 
 /**
