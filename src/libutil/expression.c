@@ -1098,16 +1098,15 @@ rspamd_process_expression_track (struct rspamd_expression *expr, struct rspamd_e
 	/* Ensure that stack is empty at this point */
 	g_assert (expr->expression_stack->len == 0);
 
+	expr->evals ++;
 	ret = rspamd_ast_process_node (expr, expr->ast, process_data);
 
 	/* Cleanup */
 	g_node_traverse (expr->ast, G_IN_ORDER, G_TRAVERSE_ALL, -1,
 			rspamd_ast_cleanup_traverse, NULL);
 
-	expr->evals ++;
-
 	/* Check if we need to resort */
-	if (expr->evals == expr->next_resort) {
+	if (expr->evals % expr->next_resort == 0) {
 		expr->next_resort = ottery_rand_range (MAX_RESORT_EVALS) +
 				MIN_RESORT_EVALS;
 		/* Set priorities for branches */

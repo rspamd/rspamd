@@ -124,9 +124,23 @@ write_http_request (struct http_callback_data *cbd)
 			g_assert_not_reached ();
 		}
 
+		msg->url = rspamd_fstring_append (msg->url, cbd->data->rest,
+					strlen (cbd->data->rest));
+
+		if (cbd->data->userinfo) {
+			rspamd_http_message_add_header (msg, "Authorization",
+					cbd->data->userinfo);
+		}
+
 		MAP_RETAIN (cbd, "http_callback_data");
-		rspamd_http_connection_write_message (cbd->conn, msg, cbd->data->host,
-				NULL, cbd, cbd->fd, &cbd->tv, cbd->ev_base);
+		rspamd_http_connection_write_message (cbd->conn,
+				msg,
+				cbd->data->host,
+				NULL,
+				cbd,
+				cbd->fd,
+				&cbd->tv,
+				cbd->ev_base);
 	}
 	else {
 		msg_err_map ("cannot connect to %s: %s", cbd->data->host,
@@ -1285,7 +1299,8 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 		}
 		else {
 			/* We could not resolve host, so cowardly fail here */
-			msg_err_map ("cannot resolve %s", cbd->data->host);
+			msg_err_map ("cannot resolve %s: %s", cbd->data->host,
+					rdns_strerror (reply->code));
 			cbd->periodic->errored = 1;
 			rspamd_map_periodic_callback (-1, EV_TIMEOUT, cbd->periodic);
 		}
@@ -2244,6 +2259,11 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 
 			g_free (data->host);
 			g_free (data->path);
+			g_free (data->rest);
+
+			if (data->userinfo) {
+				g_free (data->userinfo);
+			}
 
 			if (data->etag) {
 				rspamd_fstring_free (data->etag);
@@ -2338,7 +2358,7 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 			goto err;
 		}
 		else {
-			if (!(up.field_set & 1 << UF_HOST)) {
+			if (!(up.field_set & 1u << UF_HOST)) {
 				msg_err_config ("cannot parse HTTP url: %s: no host", bk->uri);
 				goto err;
 			}
@@ -2347,7 +2367,7 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 			tok.len = up.field_data[UF_HOST].len;
 			hdata->host = rspamd_ftokdup (&tok);
 
-			if (up.field_set & 1 << UF_PORT) {
+			if (up.field_set & (1u << UF_PORT)) {
 				hdata->port = up.port;
 			}
 			else {
@@ -2359,11 +2379,32 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 				}
 			}
 
-			if (up.field_set & 1 << UF_PATH) {
+			if (up.field_set & (1u << UF_PATH)) {
 				tok.begin = bk->uri + up.field_data[UF_PATH].off;
-				tok.len = strlen (tok.begin);
+				tok.len = up.field_data[UF_PATH].len;
 
 				hdata->path = rspamd_ftokdup (&tok);
+
+				/* We also need to check query + fragment */
+				if (up.field_set & ((1u << UF_QUERY) | (1u << UF_FRAGMENT))) {
+					tok.begin = bk->uri + up.field_data[UF_PATH].off +
+							up.field_data[UF_PATH].len;
+					tok.len = strlen (tok.begin);
+					hdata->rest = rspamd_ftokdup (&tok);
+				}
+				else {
+					hdata->rest = g_strdup ("");
+				}
+			}
+
+			if (up.field_set & (1u << UF_USERINFO)) {
+				/* Create authorisation header for basic auth */
+				guint len = sizeof ("Basic ") +
+							up.field_data[UF_USERINFO].len * 8 / 5 + 4;
+				hdata->userinfo = g_malloc (len);
+				rspamd_snprintf (hdata->userinfo, len, "Basic %*Bs",
+						(int)up.field_data[UF_USERINFO].len,
+						bk->uri + up.field_data[UF_USERINFO].off);
 			}
 		}
 

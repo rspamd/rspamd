@@ -8,9 +8,9 @@ local upstreams_read = upstream_list.create('127.0.0.1', 56379)
 local is_ok, connection = redis.redis_connect_sync({
   write_servers = upstreams_write,
   read_servers = upstreams_read,
-  config = rspamd_config,
-  ev_base = rspamadm_ev_base,
-  session = rspamadm_session,
+--  config = rspamd_config,
+--  ev_base = rspamadm_ev_base,
+--  session = rspamadm_session,
   timeout = 2
 })
 

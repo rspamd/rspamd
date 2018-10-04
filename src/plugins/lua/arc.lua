@@ -343,6 +343,8 @@ end
 local id = rspamd_config:register_symbol({
   name = 'ARC_CALLBACK',
   type = 'callback',
+  group = 'policies',
+  groups = {'arc'},
   callback = arc_callback
 })
 
@@ -353,6 +355,7 @@ rspamd_config:register_symbol({
   type = 'virtual',
   score = -1.0,
   group = 'policies',
+  groups = {'arc'},
 })
 rspamd_config:register_symbol({
   name = arc_symbols['reject'],
@@ -360,6 +363,7 @@ rspamd_config:register_symbol({
   type = 'virtual',
   score = 2.0,
   group = 'policies',
+  groups = {'arc'},
 })
 rspamd_config:register_symbol({
   name = arc_symbols['invalid'],
@@ -367,6 +371,7 @@ rspamd_config:register_symbol({
   type = 'virtual',
   score = 1.0,
   group = 'policies',
+  groups = {'arc'},
 })
 rspamd_config:register_symbol({
   name = arc_symbols['dnsfail'],
@@ -374,6 +379,7 @@ rspamd_config:register_symbol({
   type = 'virtual',
   score = 0.0,
   group = 'policies',
+  groups = {'arc'},
 })
 rspamd_config:register_symbol({
   name = arc_symbols['na'],
@@ -381,6 +387,7 @@ rspamd_config:register_symbol({
   type = 'virtual',
   score = 0.0,
   group = 'policies',
+  groups = {'arc'},
 })
 
 rspamd_config:register_dependency('ARC_CALLBACK', symbols['spf_allow_symbol'])

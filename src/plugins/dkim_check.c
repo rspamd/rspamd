@@ -320,15 +320,26 @@ dkim_module_config (struct rspamd_config *cfg)
 	lua_pop (cfg->lua_state, 1); /* Remove global function */
 	dkim_module_ctx->whitelist_ip = NULL;
 
-	if ((value =
-			rspamd_config_get_module_opt (cfg, "dkim", "check_local")) != NULL) {
+	value = rspamd_config_get_module_opt (cfg, "dkim", "check_local");
+
+	if (value == NULL) {
+		rspamd_config_get_module_opt (cfg, "options", "check_local");
+	}
+
+	if (value != NULL) {
 		dkim_module_ctx->check_local = ucl_object_toboolean (value);
 	}
 	else {
 		dkim_module_ctx->check_local = FALSE;
 	}
-	if ((value =
-		rspamd_config_get_module_opt (cfg, "dkim", "check_authed")) != NULL) {
+
+	value = rspamd_config_get_module_opt (cfg, "dkim", "check_authed");
+
+	if (value == NULL) {
+		rspamd_config_get_module_opt (cfg, "options", "check_authed");
+	}
+
+	if (value != NULL) {
 		dkim_module_ctx->check_authed = ucl_object_toboolean (value);
 	}
 	else {
@@ -488,36 +499,43 @@ dkim_module_config (struct rspamd_config *cfg)
 		}
 
 		cb_id = rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_reject,
-			0,
-			dkim_symbol_callback,
-			NULL,
-			SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_FINE,
-			-1);
+				"DKIM_CHECK",
+				0,
+				dkim_symbol_callback,
+				NULL,
+				SYMBOL_TYPE_CALLBACK,
+				-1);
 		rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_na,
-			0,
-			NULL, NULL,
-			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
-			cb_id);
+				dkim_module_ctx->symbol_reject,
+				0,
+				NULL,
+				NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
 		rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_permfail,
-			0,
-			NULL, NULL,
-			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
-			cb_id);
+				dkim_module_ctx->symbol_na,
+				0,
+				NULL, NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
 		rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_tempfail,
-			0,
-			NULL, NULL,
-			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
-			cb_id);
+				dkim_module_ctx->symbol_permfail,
+				0,
+				NULL, NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
 		rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_allow,
-			0,
-			NULL, NULL,
-			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
-			cb_id);
+				dkim_module_ctx->symbol_tempfail,
+				0,
+				NULL, NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
+		rspamd_symbols_cache_add_symbol (cfg->cache,
+				dkim_module_ctx->symbol_allow,
+				0,
+				NULL, NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
 
 		rspamd_symbols_cache_add_symbol (cfg->cache,
 				"DKIM_TRACE",

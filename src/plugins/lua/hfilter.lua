@@ -569,17 +569,26 @@ local symbols_from = {
   "HFILTER_FROM_BOUNCE"
 }
 
-local opts = rspamd_config:get_all_opt('options')
-if type(opts) == 'table' then
-  if type(opts['check_local']) == 'boolean' then
-    check_local = opts['check_local']
+local function try_opts(where)
+  local ret = false
+  local opts = rspamd_config:get_all_opt(where)
+  if type(opts) == 'table' then
+    if type(opts['check_local']) == 'boolean' then
+      check_local = opts['check_local']
+      ret = true
+    end
+    if type(opts['check_authed']) == 'boolean' then
+      check_authed = opts['check_authed']
+      ret = true
+    end
   end
-  if type(opts['check_authed']) == 'boolean' then
-    check_authed = opts['check_authed']
-  end
+
+  return ret
 end
 
-opts = rspamd_config:get_all_opt('hfilter')
+if not try_opts(N) then try_opts('options') end
+
+local opts = rspamd_config:get_all_opt('hfilter')
 if opts then
   for k,v in pairs(opts) do
     config[k] = v
@@ -618,6 +627,19 @@ end
 --dumper(symbols_enabled)
 if #symbols_enabled > 0 then
   rspamd_config:register_symbols(hfilter, 1.0, "HFILTER", symbols_enabled);
+  rspamd_config:set_metric_symbol({
+    name = 'HFILTER',
+    score = 0.0,
+    group = 'hfilter'
+  })
+
+  for _,s in ipairs(symbols_enabled) do
+    rspamd_config:set_metric_symbol({
+      name = s,
+      score = 0.0,
+      group = 'hfilter'
+    })
+  end
 else
   lua_util.disable_module(N, "config")
 end

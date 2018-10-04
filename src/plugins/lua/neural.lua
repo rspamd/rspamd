@@ -33,8 +33,6 @@ local N = "neural"
 
 if rspamd_config:has_torch() then
   use_torch = true
-  torch = require "torch"
-  nn = require "nn"
 end
 
 -- Module vars
@@ -949,6 +947,9 @@ else
 
   if opts.disable_torch then
     use_torch = false
+  else
+    torch = require "torch"
+    nn = require "nn"
   end
 
   local id = rspamd_config:register_symbol({
@@ -1017,9 +1018,9 @@ else
       if worker:is_primary_controller() then
         -- We also want to train neural nets when they have enough data
         rspamd_config:add_periodic(ev_base, 0.0,
-          function(_, _)
-            return maybe_train_anns(rule, cfg, ev_base, worker)
-          end)
+            function(_, _)
+              return maybe_train_anns(rule, cfg, ev_base, worker)
+            end)
       end
     end)
   end

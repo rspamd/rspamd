@@ -1194,7 +1194,8 @@ lua_tcp_register_event (struct lua_tcp_cbdata *cbd)
 	if (cbd->session) {
 		event_finalizer_t fin = IS_SYNC (cbd) ? lua_tcp_void_finalyser : lua_tcp_fin;
 
-		cbd->async_ev = rspamd_session_add_event (cbd->session, NULL, fin, cbd, g_quark_from_static_string ("lua tcp"));
+		cbd->async_ev = rspamd_session_add_event (cbd->session, NULL, fin, cbd,
+				g_quark_from_static_string ("lua tcp"));
 
 		if (!cbd->async_ev) {
 			return FALSE;
@@ -1240,7 +1241,14 @@ lua_tcp_make_connection (struct lua_tcp_cbdata *cbd)
 		return FALSE;
 	}
 
-	cbd->flags |= LUA_TCP_FLAG_RESOLVED;
+	if (!(cbd->flags & LUA_TCP_FLAG_RESOLVED)) {
+		/* We come here without resolving, so we need to add a watcher */
+		lua_tcp_register_watcher (cbd);
+	}
+	else {
+		cbd->flags |= LUA_TCP_FLAG_RESOLVED;
+	}
+
 	lua_tcp_register_event (cbd);
 
 	cbd->fd = fd;
@@ -1262,6 +1270,12 @@ lua_tcp_dns_handler (struct rdns_reply *reply, gpointer ud)
 		TCP_RELEASE (cbd);
 	}
 	else {
+		/*
+		 * We set this flag as it means that we have already registered the watcher
+		 * when started DNS query
+		 */
+		cbd->flags |= LUA_TCP_FLAG_RESOLVED;
+
 		if (reply->entries->type == RDNS_REQUEST_A) {
 			cbd->addr = rspamd_inet_address_new (AF_INET,
 					&reply->entries->content.a.addr);
@@ -1649,8 +1663,6 @@ lua_tcp_request (lua_State *L)
 
 			return 1;
 		}
-
-		lua_tcp_register_watcher (cbd);
 	}
 
 	if (rspamd_parse_inet_address (&cbd->addr, host, 0)) {
@@ -1675,6 +1687,9 @@ lua_tcp_request (lua_State *L)
 
 				return 1;
 			}
+			else {
+				lua_tcp_register_watcher (cbd);
+			}
 		}
 		else {
 			if (!make_dns_request_task (task, lua_tcp_dns_handler, cbd,
@@ -1685,6 +1700,9 @@ lua_tcp_request (lua_State *L)
 				TCP_RELEASE (cbd);
 
 				return 1;
+			}
+			else {
+				lua_tcp_register_watcher (cbd);
 			}
 		}
 	}
@@ -1812,8 +1830,6 @@ lua_tcp_connect_sync (lua_State *L)
 
 			return 2;
 		}
-
-		lua_tcp_register_watcher (cbd);
 	}
 
 	if (rspamd_parse_inet_address (&cbd->addr, host, 0)) {
@@ -1839,6 +1855,9 @@ lua_tcp_connect_sync (lua_State *L)
 
 				return 2;
 			}
+			else {
+				lua_tcp_register_watcher (cbd);
+			}
 		}
 		else {
 			if (!make_dns_request_task (task, lua_tcp_dns_handler, cbd,
@@ -1848,6 +1867,9 @@ lua_tcp_connect_sync (lua_State *L)
 				TCP_RELEASE (cbd);
 
 				return 2;
+			}
+			else {
+				lua_tcp_register_watcher (cbd);
 			}
 		}
 	}
@@ -2202,7 +2224,6 @@ lua_tcp_sync_write (lua_State *L)
 	lua_tcp_plan_handler_event (cbd, TRUE, TRUE);
 
 	TCP_RETAIN (cbd);
-	// lua_tcp_register_event (cbd);
 
 	return lua_thread_yield (thread, 0);
 }

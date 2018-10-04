@@ -997,12 +997,6 @@ local function redis_connect_sync(redis_params, is_write, key, cfg, ev_base)
   if not redis_params then
     return false,nil
   end
-  if not cfg then
-    cfg = rspamd_config
-  end
-  if not ev_base then
-    ev_base = rspamadm_ev_base
-  end
 
   local rspamd_redis = require "rspamd_redis"
   local addr
@@ -1028,12 +1022,28 @@ local function redis_connect_sync(redis_params, is_write, key, cfg, ev_base)
   local options = {
     host = addr:get_addr(),
     timeout = redis_params['timeout'],
-    config = cfg,
-    ev_base = ev_base
+    config = cfg or rspamd_config,
+    ev_base = ev_base or rspamadm_ev_base,
+    session = redis_params.session or rspamadm_session
   }
 
   for k,v in pairs(redis_params) do
     options[k] = v
+  end
+
+  if not options.config then
+    logger.errx('config is not set')
+    return false,nil,addr
+  end
+
+  if not options.ev_base then
+    logger.errx('ev_base is not set')
+    return false,nil,addr
+  end
+
+  if not options.session then
+    logger.errx('session is not set')
+    return false,nil,addr
   end
 
   local ret,conn = rspamd_redis.connect_sync(options)

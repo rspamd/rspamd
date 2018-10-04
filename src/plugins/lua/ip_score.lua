@@ -314,8 +314,12 @@ local ip_score_check = function(task)
     return cmd, args
   end
 
-  if task:get_user() or (ip and ip:is_local()) then
-    rspamd_logger.infox(task, "skip IP Score for local networks and authorized users")
+  if task:get_user() and not check_authed then
+    rspamd_logger.infox(task, "skip IP Score for authorized users")
+    return
+  end
+  if ip and ip:is_local() and not check_local then
+    rspamd_logger.infox(task, "skip IP Score for local networks")
     return
   end
   if ip:is_valid() then
@@ -352,19 +356,29 @@ local ip_score_check = function(task)
   end
 end
 
+local function try_opts(where)
+  local ret = false
+  local opts = rspamd_config:get_all_opt(where)
+  if type(opts) == 'table' then
+    if type(opts['check_local']) == 'boolean' then
+      check_local = opts['check_local']
+      ret = true
+    end
+    if type(opts['check_authed']) == 'boolean' then
+      check_authed = opts['check_authed']
+      ret = true
+    end
+  end
+
+  return ret
+end
+
+if not try_opts(N) then try_opts('options') end
 
 -- Configuration options
 local configure_ip_score_module = function()
-  local opts = rspamd_config:get_all_opt('options')
-  if type(opts) == 'table' then
-    if type(opts['check_authed']) == 'boolean' then
-      check_authed = opts['check_authed']
-    end
-    if type(opts['check_local']) == 'boolean' then
-      check_local = opts['check_local']
-    end
-  end
-  opts = rspamd_config:get_all_opt('ip_score')
+  local opts = rspamd_config:get_all_opt(N)
+
   if not opts then return end
   for k,v in pairs(opts) do
     options[k] = v

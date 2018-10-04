@@ -51,7 +51,8 @@ rspamd_config.HAS_X_AS = {
     end
   end,
   description = 'Has X-Authenticated-Sender header',
-  group = "compromised_hosts"
+  group = "compromised_hosts",
+  score = 0.0
 }
 
 -- X-Get-Message-Sender-Via: accord.host-care.com: authenticated_id: sales@cortaflex.si
@@ -69,7 +70,8 @@ rspamd_config.HAS_X_GMSV = {
     end
   end,
   description = 'Has X-Get-Message-Sender-Via: header',
-  group = "compromised_hosts"
+  group = "compromised_hosts",
+  score = 0.0,
 }
 
 -- X-AntiAbuse: This header was added to track abuse, please include it with any abuse report

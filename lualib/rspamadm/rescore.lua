@@ -18,8 +18,6 @@ if not rspamd_config:has_torch() then
   return
 end
 
-local torch = require "torch"
-local nn = require "nn"
 local lua_util = require "lua_util"
 local ucl = require "ucl"
 local logger = require "rspamd_logger"
@@ -27,6 +25,10 @@ local optim = require "optim"
 local rspamd_util = require "rspamd_util"
 local argparse = require "argparse"
 local rescore_utility = require "rescore_utility"
+
+-- Load these lazily
+local torch
+local nn
 
 local opts
 local ignore_symbols = {
@@ -509,6 +511,8 @@ local function get_threshold()
 end
 
 local function handler(args)
+  torch = require "torch"
+  nn = require "nn"
   opts = parser:parse(args)
   if not opts['log'] then
     parser:error('no log specified')

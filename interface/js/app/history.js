@@ -42,6 +42,7 @@ define(["jquery", "footable", "humanize"],
             "=": "&#x3D;"
         };
         var htmlEscaper = /[&<>"'/`=]/g;
+        var symbols = [];
         var symbolDescriptions = {};
 
         var escapeHTML = function (string) {
@@ -112,22 +113,43 @@ define(["jquery", "footable", "humanize"],
             };
         }
 
-        function process_history_v2(data) {
-        // Display no more than rcpt_lim recipients
-            var rcpt_lim = 3;
-            var items = [];
+        function get_compare_function() {
+            var compare_functions = {
+                magnitude: function (e1, e2) {
+                    return Math.abs(e2.score) - Math.abs(e1.score);
+                },
+                name: function (e1, e2) {
+                    return e1.name.localeCompare(e2.name);
+                },
+                score: function (e1, e2) {
+                    return e2.score - e1.score;
+                }
+            };
 
             function getSelector(id) {
                 var e = document.getElementById(id);
                 return e.options[e.selectedIndex].value;
             }
-            var compare = (getSelector("selSymOrder") === "score")
-                ? function (e1, e2) {
-                    return Math.abs(e2.score) - Math.abs(e1.score);
-                }
-                : function (e1, e2) {
-                    return e1.name.localeCompare(e2.name);
-                };
+
+            return compare_functions[getSelector("selSymOrder")];
+        }
+
+        function sort_symbols(o, compare_function) {
+            return Object.keys(o)
+                .map(function (key) {
+                    return o[key];
+                })
+                .sort(compare_function)
+                .map(function (e) { return e.str; })
+                .join("<br>\n");
+        }
+
+        function process_history_v2(data) {
+            // Display no more than rcpt_lim recipients
+            var rcpt_lim = 3;
+            var items = [];
+            var unsorted_symbols = [];
+            var compare_function = get_compare_function();
 
             $("#selSymOrder, label[for='selSymOrder']").show();
 
@@ -172,15 +194,10 @@ define(["jquery", "footable", "humanize"],
                         if (sym.options) {
                             str += "[" + sym.options.join(",") + "]";
                         }
-                        item.symbols[key].str = str;
+                        sym.str = str;
                     });
-                    item.symbols = Object.keys(item.symbols)
-                        .map(function (key) {
-                            return item.symbols[key];
-                        })
-                        .sort(compare)
-                        .map(function (e) { return e.str; })
-                        .join("<br>\n");
+                    unsorted_symbols.push(item.symbols);
+                    item.symbols = sort_symbols(item.symbols, compare_function);
                     item.time = {
                         value: unix_time_format(item.unix_time),
                         options: {
@@ -214,7 +231,7 @@ define(["jquery", "footable", "humanize"],
                     items.push(item);
                 });
 
-            return items;
+            return {items:items, symbols:unsorted_symbols};
         }
 
         function process_history_legacy(data) {
@@ -252,7 +269,7 @@ define(["jquery", "footable", "humanize"],
                 items.push(item);
             });
 
-            return items;
+            return {items:items};
         }
 
         function columns_v2() {
@@ -650,7 +667,9 @@ define(["jquery", "footable", "humanize"],
                             // Legacy version
                             data = [].concat.apply([], neighbours_data);
                         }
-                        var items = process_history_data(data);
+                        var o = process_history_data(data);
+                        var items = o.items;
+                        symbols = o.symbols;
 
                         if (Object.prototype.hasOwnProperty.call(tables, "history") &&
                             version === prevVersion) {
@@ -684,7 +703,12 @@ define(["jquery", "footable", "humanize"],
                 ui.getHistory(rspamd, tables);
             });
             $("#selSymOrder").unbind().change(function () {
-                ui.getHistory(rspamd, tables);
+                var compare_function = get_compare_function();
+                $.each(tables.history.rows.all, function (i, row) {
+                    var cell_val = sort_symbols(symbols[i], compare_function);
+                    row.cells[8].val(cell_val, false, true);
+                });
+                drawTooltips();
             });
 
             // @reset history log

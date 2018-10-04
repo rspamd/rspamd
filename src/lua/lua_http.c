@@ -506,16 +506,27 @@ lua_http_push_headers (lua_State *L, struct rspamd_http_message *msg)
  * Required params are:
  *
  * - `url`
- * - `callback`
  * - `task`
+ *
+ * In taskless mode, instead of `task` required are:
+ *
+ * - `ev_base`
+ * - `config`
+ *
  * @param {string} url specifies URL for a request in the standard URI form (e.g. 'http://example.com/path')
- * @param {function} callback specifies callback function in format  `function (err_message, code, body, headers)` that is called on HTTP request completion
+ * @param {function} callback specifies callback function in format  `function (err_message, code, body, headers)` that is called on HTTP request completion. if this parameter is missing, the function performs "pseudo-synchronous" call (see [Synchronous and Asynchronous API overview](/doc/lua/sync_async.html#API-example-http-module)
  * @param {task} task if called from symbol handler it is generally a good idea to use the common task objects: event base, DNS resolver and events session
  * @param {table} headers optional headers in form `[name='value', name='value']`
  * @param {string} mime_type MIME type of the HTTP content (for example, `text/html`)
  * @param {string/text} body full body content, can be opaque `rspamd{text}` to avoid data copying
  * @param {number} timeout floating point request timeout value in seconds (default is 5.0 seconds)
- * @return {boolean} `true` if a request has been successfully scheduled. If this value is `false` then some error occurred, the callback thus will not be called
+ * @param {resolver} resolver to perform DNS-requests. Usually got from either `task` or `config`
+ * @param {boolean} gzip if true, body of the requests will be compressed
+ * @param {boolean} no_ssl_verify disable SSL peer checks
+ * @param {string} user for HTTP authentication
+ * @param {string} password for HTTP authentication, only if "user" present
+ * @return {boolean} `true`, in **async** mode, if a request has been successfully scheduled. If this value is `false` then some error occurred, the callback thus will not be called.
+ * @return In **sync** mode `string|nil, nil|table` In sync mode  error message if any and response as table: `int` _code_, `string` _content_ and `table` _headers_ (header -> value)
  */
 static gint
 lua_http_request (lua_State *L)
@@ -853,6 +864,9 @@ lua_http_request (lua_State *L)
 	}
 	if (task == NULL && cfg == NULL) {
 		return luaL_error (L, "Bad params to rspamd_http:request(): either task or config should be set");
+	}
+	if (ev_base == NULL) {
+		return luaL_error (L, "Bad params to rspamd_http:request(): ev_base isn't passed");
 	}
 
 	cbd = g_malloc0 (sizeof (*cbd));

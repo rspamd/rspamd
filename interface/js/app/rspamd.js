@@ -134,13 +134,6 @@ function ($, D3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
         sessionStorage.setItem("Password", password);
     }
 
-    function isLogged() {
-        if (sessionStorage.getItem("Credentials") !== null) {
-            return true;
-        }
-        return false;
-    }
-
     function displayUI() {
         // In many browsers local storage can only store string.
         // So when we store the boolean true or false, it actually stores the strings "true" or "false".
@@ -300,53 +293,59 @@ function ($, D3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
     };
 
     ui.connect = function () {
-        if (isLogged()) {
-            displayUI();
-            return;
-        }
-
-        var dialog = $("#connectDialog");
-        var backdrop = $("#backDrop");
-        $("#mainUI").hide();
-        $(dialog).show();
-        $(backdrop).show();
-        $("#connectPassword").focus();
-        $("#connectForm").off("submit");
-
-        $("#connectForm").on("submit", function (e) {
-            e.preventDefault();
-            var password = $("#connectPassword").val();
-            if (!(/^[\u0020-\u007e]*$/).test(password)) {
-                alertMessage("alert-modal alert-error", "Invalid characters in the password");
+        // Query "/stat" to check if user is already logged in or client ip matches "secure_ip"
+        $.ajax({
+            type: "GET",
+            url: "stat",
+            async: false,
+            success: function () {
+                displayUI();
+            },
+            error: function () {
+                var dialog = $("#connectDialog");
+                var backdrop = $("#backDrop");
+                $("#mainUI").hide();
+                $(dialog).show();
+                $(backdrop).show();
                 $("#connectPassword").focus();
-                return;
-            }
+                $("#connectForm").off("submit");
 
-            ui.query("auth", {
-                headers: {
-                    Password: password
-                },
-                success: function (json) {
-                    var data = json[0].data;
-                    $("#connectPassword").val("");
-                    if (data.auth === "ok") {
-                        sessionStorage.setItem("read_only", data.read_only);
-                        saveCredentials(password);
-                        $(dialog).hide();
-                        $(backdrop).hide();
-                        displayUI();
+                $("#connectForm").on("submit", function (e) {
+                    e.preventDefault();
+                    var password = $("#connectPassword").val();
+                    if (!(/^[\u0020-\u007e]*$/).test(password)) {
+                        alertMessage("alert-modal alert-error", "Invalid characters in the password");
+                        $("#connectPassword").focus();
+                        return;
                     }
-                },
-                error: function (jqXHR) {
-                    ui.alertMessage("alert-modal alert-error", jqXHR.statusText);
-                    $("#connectPassword").val("");
-                    $("#connectPassword").focus();
-                },
-                params: {
-                    global: false,
-                },
-                server: "local"
-            });
+
+                    ui.query("auth", {
+                        headers: {
+                            Password: password
+                        },
+                        success: function (json) {
+                            var data = json[0].data;
+                            $("#connectPassword").val("");
+                            if (data.auth === "ok") {
+                                sessionStorage.setItem("read_only", data.read_only);
+                                saveCredentials(password);
+                                $(dialog).hide();
+                                $(backdrop).hide();
+                                displayUI();
+                            }
+                        },
+                        error: function (jqXHR) {
+                            ui.alertMessage("alert-modal alert-error", jqXHR.statusText);
+                            $("#connectPassword").val("");
+                            $("#connectPassword").focus();
+                        },
+                        params: {
+                            global: false,
+                        },
+                        server: "local"
+                    });
+                });
+            }
         });
     };
 

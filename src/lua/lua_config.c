@@ -1739,14 +1739,21 @@ lua_config_register_symbol (lua_State * L)
 				FALSE,
 				no_squeeze);
 
-		if (!isnan (score)) {
+		if (!isnan (score) || group) {
 			if (one_shot) {
 				nshots = 1;
 			}
 
-			rspamd_config_add_symbol (cfg, name,
-					score, description, group, flags,
-					(guint) priority, nshots);
+			if (!isnan (score)) {
+				rspamd_config_add_symbol (cfg, name,
+						score, description, group, flags,
+						(guint) priority, nshots);
+			}
+			else {
+				rspamd_config_add_symbol (cfg, name,
+						0.0, description, group, flags,
+						(guint) priority, nshots);
+			}
 
 			lua_pushstring (L, "groups");
 			lua_gettable (L, 2);
@@ -2385,7 +2392,7 @@ lua_config_newindex (lua_State *L)
 		}
 		else if (lua_type (L, 3) == LUA_TTABLE) {
 			gint type = SYMBOL_TYPE_NORMAL, priority = 0, idx;
-			gdouble weight = 1.0, score;
+			gdouble weight = 1.0, score = NAN;
 			const char *type_str, *group = NULL, *description = NULL;
 			guint flags = 0;
 
@@ -2500,22 +2507,23 @@ lua_config_newindex (lua_State *L)
 			 */
 			if (g_hash_table_lookup (cfg->symbols, name) == NULL) {
 				nshots = cfg->default_max_shots;
+
 				lua_pushstring (L, "score");
 				lua_gettable (L, -2);
-
 				if (lua_type (L, -1) == LUA_TNUMBER) {
 					score = lua_tonumber (L, -1);
-					lua_pop (L, 1);
 
-					/* If score defined, then we can check other metric fields */
-					lua_pushstring (L, "group");
-					lua_gettable (L, -2);
+				}
+				lua_pop (L, 1);
 
-					if (lua_type (L, -1) == LUA_TSTRING) {
-						group = lua_tostring (L, -1);
-					}
-					lua_pop (L, 1);
+				lua_pushstring (L, "group");
+				lua_gettable (L, -2);
+				if (lua_type (L, -1) == LUA_TSTRING) {
+					group = lua_tostring (L, -1);
+				}
+				lua_pop (L, 1);
 
+				if (!isnan (score) || group != NULL) {
 					lua_pushstring (L, "description");
 					lua_gettable (L, -2);
 
@@ -2548,8 +2556,15 @@ lua_config_newindex (lua_State *L)
 					 * Do not override the existing symbols (using zero priority),
 					 * since we are defining default values here
 					 */
-					rspamd_config_add_symbol (cfg, name, score,
-							description, group, flags, 0, nshots);
+					if (!isnan (score)) {
+						rspamd_config_add_symbol (cfg, name, score,
+								description, group, flags, 0, nshots);
+					}
+					else if (group) {
+						/* Add with zero score */
+						rspamd_config_add_symbol (cfg, name, 0.0,
+								description, group, flags, 0, nshots);
+					}
 
 					lua_pushstring (L, "groups");
 					lua_gettable (L, -2);
@@ -2566,9 +2581,6 @@ lua_config_newindex (lua_State *L)
 						}
 					}
 
-					lua_pop (L, 1);
-				}
-				else {
 					lua_pop (L, 1);
 				}
 			}

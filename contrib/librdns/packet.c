@@ -235,18 +235,23 @@ rdns_format_dns_name (struct rdns_resolver *resolver, const char *in,
 	return false;
 }
 
+#define U16_TO_WIRE_ADVANCE(val, p8) \
+	*p8++ = (uint8_t)(((uint16_t)(val)) >> 8); \
+	*p8++ = (uint8_t)(((uint16_t)(val)) & 0xFF);
+
 bool
 rdns_add_rr (struct rdns_request *req, const char *name, unsigned int len,
 		enum dns_type type, struct rdns_compression_entry **comp)
 {
-	uint16_t *p;
+	uint8_t *p8;
 
 	if (!rdns_write_name_compressed (req, name, len, comp)) {
 		return false;
 	}
-	p = (uint16_t *)(req->packet + req->pos);
-	*p++ = htons (type);
-	*p = htons (DNS_C_IN);
+
+	p8 = (req->packet + req->pos);
+	U16_TO_WIRE_ADVANCE (type, p8);
+	U16_TO_WIRE_ADVANCE (DNS_C_IN, p8);
 	req->pos += sizeof (uint16_t) * 2;
 
 	return true;
@@ -256,18 +261,13 @@ bool
 rdns_add_edns0 (struct rdns_request *req)
 {
 	uint8_t *p8;
-	uint16_t *p16;
 
-	p8 = (uint8_t *)(req->packet + req->pos);
-	*p8 = '\0'; /* Name is root */
-	p16 = (uint16_t *)(req->packet + req->pos + 1);
-	*p16++ = htons (DNS_T_OPT);
-	/* UDP packet length */
-	*p16++ = htons (UDP_PACKET_SIZE);
-	/* Extended rcode 00 00 */
-	*p16++ = 0;
-	/* Z 10000000 00000000 to allow dnssec */
-	p8 = (uint8_t *)p16;
+	p8 = (req->packet + req->pos);
+	*p8++ = '\0'; /* Name is root */
+	U16_TO_WIRE_ADVANCE (DNS_T_OPT, p8);
+	U16_TO_WIRE_ADVANCE (UDP_PACKET_SIZE, p8);
+	U16_TO_WIRE_ADVANCE (0, p8);
+
 	if (req->resolver->enable_dnssec) {
 		*p8++ = 0x80;
 	}
@@ -275,9 +275,9 @@ rdns_add_edns0 (struct rdns_request *req)
 		*p8++ = 0x00;
 	}
 	*p8++ = 0;
-	p16 = (uint16_t *)p8;
 	/* Length */
-	*p16 = 0;
+	U16_TO_WIRE_ADVANCE (0, p8);
+
 	req->pos += sizeof (uint8_t) + sizeof (uint16_t) * 5;
 
 	return true;
