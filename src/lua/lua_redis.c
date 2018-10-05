@@ -196,7 +196,7 @@ lua_redis_dtor (struct lua_redis_ctx *ctx)
 		ud->terminated = 1;
 		ac = ud->ctx;
 		ud->ctx = NULL;
-		rspamd_redis_pool_release_connection (ud->pool, ac, is_successful);
+		rspamd_redis_pool_release_connection (ud->pool, ac, !is_successful);
 	}
 
 	LL_FOREACH_SAFE (ud->specific, cur, tmp) {
