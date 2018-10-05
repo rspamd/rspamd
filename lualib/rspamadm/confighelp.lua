@@ -20,7 +20,7 @@ parser:flag "--no-color"
 parser:flag "--short"
     :description "Show only option names"
 parser:flag "--no-examples"
-    :description "Do not show examples (impied by --short)"
+    :description "Do not show examples (implied by --short)"
 
 local function maybe_print_color(key)
   if not opts['no-color'] then
