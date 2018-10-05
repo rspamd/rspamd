@@ -105,6 +105,7 @@ typedef enum ucl_error {
 	UCL_EIO, /**< IO error occurred during parsing */
 	UCL_ESTATE, /**< Invalid state machine state */
 	UCL_ENESTED, /**< Input has too many recursion levels */
+	UCL_EUNPAIRED, /**< Input has too many recursion levels */
 	UCL_EMACRO, /**< Error processing a macro */
 	UCL_EINTERNAL, /**< Internal unclassified error */
 	UCL_ESSL, /**< SSL error */
