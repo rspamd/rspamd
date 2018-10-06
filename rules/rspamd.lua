@@ -21,7 +21,7 @@ require "global_functions" ()
 config['regexp'] = {}
 rspamd_maps = {} -- Global maps
 
-local local_conf = rspamd_paths['CONFDIR']
+local local_conf = rspamd_paths['LOCAL_CONFDIR']
 local local_rules = rspamd_paths['RULESDIR']
 local rspamd_util = require "rspamd_util"
 
