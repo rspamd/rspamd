@@ -120,7 +120,7 @@ rspamd_redis_pool_conn_dtor (struct rspamd_redis_pool_connection *conn)
 	else {
 		msg_debug_rpool ("inactive connection removed");
 
-		if (event_get_base (&conn->timeout)) {
+		if (rspamd_event_pending (&conn->timeout, EV_TIMEOUT)) {
 			event_del (&conn->timeout);
 		}
 

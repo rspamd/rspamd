@@ -296,7 +296,7 @@ rspamd_task_free (struct rspamd_task *task)
 			g_error_free (task->err);
 		}
 
-		if (event_get_base (&task->timeout_ev) != NULL) {
+		if (rspamd_event_pending (&task->timeout_ev, EV_TIMEOUT)) {
 			event_del (&task->timeout_ev);
 		}
 

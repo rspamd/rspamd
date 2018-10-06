@@ -359,11 +359,11 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 	while (cur) {
 		events = cur->data;
 
-		if (event_get_base (&events[0])) {
+		if (rspamd_event_pending (&events[0], EV_TIMEOUT|EV_READ|EV_WRITE)) {
 			event_del (&events[0]);
 		}
 
-		if (event_get_base (&events[1])) {
+		if (rspamd_event_pending (&events[1], EV_TIMEOUT|EV_READ|EV_WRITE)) {
 			event_del (&events[1]);
 		}
 

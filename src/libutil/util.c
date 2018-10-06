@@ -2469,6 +2469,16 @@ event_get_base (struct event *ev)
 #endif
 
 int
+rspamd_event_pending (struct event *ev, short what)
+{
+	if (ev->ev_base == NULL) {
+		return 0;
+	}
+
+	return event_pending (ev, what, NULL);
+}
+
+int
 rspamd_file_xopen (const char *fname, int oflags, guint mode,
 		gboolean allow_symlink)
 {

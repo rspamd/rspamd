@@ -429,6 +429,9 @@ struct event_base * event_get_base (struct event *ev);
     event_set((ev), (x), EV_SIGNAL|EV_PERSIST, (cb), (arg))
 #endif
 
+/* Avoid stupidity in libevent > 1.4 */
+int rspamd_event_pending (struct event *ev, short what);
+
 /**
  * Open file without following symlinks or special stuff
  * @param fname filename

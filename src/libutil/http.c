@@ -629,7 +629,7 @@ rspamd_http_on_headers_complete (http_parser * parser)
 
 	if (msg->method == HTTP_HEAD) {
 		/* We don't care about the rest */
-		if (event_pending (&priv->ev, EV_READ, NULL)) {
+		if (rspamd_event_pending (&priv->ev, EV_READ)) {
 			event_del (&priv->ev);
 		}
 
@@ -804,7 +804,7 @@ rspamd_http_on_headers_complete_decrypted (http_parser *parser)
 
 	if (msg->method == HTTP_HEAD) {
 		/* We don't care about the rest */
-		if (event_pending (&priv->ev, EV_READ, NULL)) {
+		if (rspamd_event_pending (&priv->ev, EV_READ)) {
 			event_del (&priv->ev);
 		}
 
@@ -949,7 +949,7 @@ rspamd_http_on_message_complete (http_parser * parser)
 	}
 
 	if (ret == 0) {
-		if (event_pending (&priv->ev, EV_READ, NULL)) {
+		if (rspamd_event_pending (&priv->ev, EV_READ)) {
 			event_del (&priv->ev);
 		}
 
@@ -1370,7 +1370,7 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 
 	if (!(priv->flags & RSPAMD_HTTP_CONN_FLAG_RESETED)) {
 
-		if (event_get_base (&priv->ev)) {
+		if (rspamd_event_pending (&priv->ev, EV_READ|EV_WRITE|EV_TIMEOUT)) {
 			event_del (&priv->ev);
 		}
 
@@ -2296,7 +2296,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 
 	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
 
-	if (base != NULL && event_get_base (&priv->ev) == base) {
+	if (rspamd_event_pending (&priv->ev, EV_TIMEOUT|EV_WRITE|EV_READ)) {
 		event_del (&priv->ev);
 	}
 
