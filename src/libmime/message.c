@@ -109,7 +109,7 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 #endif
 
 			if (w->len > 0 && (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT)) {
-				avg_len = avg_len + (w->len - avg_len) / (double) i;
+				avg_len = avg_len + (w->len - avg_len) / (double) (i + 1);
 
 				if (r != NULL) {
 					nlen = strlen (r);
@@ -119,19 +119,22 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 
 					if (IS_PART_UTF (part)) {
 						rspamd_str_lc_utf8 (temp_word, nlen);
-					} else {
+					}
+					else {
 						rspamd_str_lc (temp_word, nlen);
 					}
 
 					w->begin = temp_word;
 					w->len = nlen;
-				} else {
+				}
+				else {
 					temp_word = rspamd_mempool_alloc (task->task_pool, w->len);
 					memcpy (temp_word, w->begin, w->len);
 
 					if (IS_PART_UTF (part)) {
 						rspamd_str_lc_utf8 (temp_word, w->len);
-					} else {
+					}
+					else {
 						rspamd_str_lc (temp_word, w->len);
 					}
 
@@ -168,7 +171,8 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 				*avg_len_p = total_len;
 				rspamd_mempool_set_variable (task->task_pool,
 						RSPAMD_MEMPOOL_AVG_WORDS_LEN, avg_len_p, NULL);
-			} else {
+			}
+			else {
 				*avg_len_p += total_len;
 			}
 
@@ -181,7 +185,8 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 				*short_len_p = short_len;
 				rspamd_mempool_set_variable (task->task_pool,
 						RSPAMD_MEMPOOL_SHORT_WORDS_CNT, avg_len_p, NULL);
-			} else {
+			}
+			else {
 				*short_len_p += short_len;
 			}
 		}
