@@ -3453,6 +3453,7 @@ lua_config_load_ucl (lua_State *L)
 
 		if (lua_istable (L, -1)) {
 			LUA_TABLE_TO_HASH(paths, RSPAMD_CONFDIR_INDEX);
+			LUA_TABLE_TO_HASH(paths, RSPAMD_LOCAL_CONFDIR_INDEX);
 			LUA_TABLE_TO_HASH(paths, RSPAMD_RUNDIR_INDEX);
 			LUA_TABLE_TO_HASH(paths, RSPAMD_DBDIR_INDEX);
 			LUA_TABLE_TO_HASH(paths, RSPAMD_LOGDIR_INDEX);

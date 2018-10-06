@@ -425,6 +425,7 @@ gboolean rspamd_lua_require_function (lua_State *L, const gchar *modname,
 
 /* Paths defs */
 #define RSPAMD_CONFDIR_INDEX "CONFDIR"
+#define RSPAMD_LOCAL_CONFDIR_INDEX "LOCAL_CONFDIR"
 #define RSPAMD_RUNDIR_INDEX "RUNDIR"
 #define RSPAMD_DBDIR_INDEX "DBDIR"
 #define RSPAMD_LOGDIR_INDEX "LOGDIR"

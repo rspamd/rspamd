@@ -580,10 +580,15 @@ rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L,
 	/* Set known paths as rspamd_paths global */
 	lua_getglobal (L, "rspamd_paths");
 	if (lua_isnil (L, -1)) {
-		const gchar *confdir = RSPAMD_CONFDIR, *rundir = RSPAMD_RUNDIR,
-				*dbdir = RSPAMD_DBDIR, *logdir = RSPAMD_LOGDIR,
-				*wwwdir = RSPAMD_WWWDIR, *pluginsdir = RSPAMD_PLUGINSDIR,
-				*rulesdir = RSPAMD_RULESDIR, *lualibdir = RSPAMD_LUALIBDIR,
+		const gchar *confdir = RSPAMD_CONFDIR,
+				*local_confdir = RSPAMD_LOCAL_CONFDIR,
+				*rundir = RSPAMD_RUNDIR,
+				*dbdir = RSPAMD_DBDIR,
+				*logdir = RSPAMD_LOGDIR,
+				*wwwdir = RSPAMD_WWWDIR,
+				*pluginsdir = RSPAMD_PLUGINSDIR,
+				*rulesdir = RSPAMD_RULESDIR,
+				*lualibdir = RSPAMD_LUALIBDIR,
 				*prefix = RSPAMD_PREFIX;
 		const gchar *t;
 
@@ -628,6 +633,11 @@ rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L,
 			confdir = t;
 		}
 
+		t = getenv ("LOCAL_CONFDIR");
+		if (t) {
+			local_confdir = t;
+		}
+
 
 		if (vars) {
 			t = g_hash_table_lookup (vars, "PLUGINSDIR");
@@ -660,6 +670,11 @@ rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L,
 				confdir = t;
 			}
 
+			t = g_hash_table_lookup (vars, "LOCAL_CONFDIR");
+			if (t) {
+				local_confdir = t;
+			}
+
 			t = g_hash_table_lookup (vars, "DBDIR");
 			if (t) {
 				dbdir = t;
@@ -674,6 +689,7 @@ rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L,
 		lua_createtable (L, 0, 9);
 
 		rspamd_lua_table_set (L, RSPAMD_CONFDIR_INDEX, confdir);
+		rspamd_lua_table_set (L, RSPAMD_LOCAL_CONFDIR_INDEX, local_confdir);
 		rspamd_lua_table_set (L, RSPAMD_RUNDIR_INDEX, rundir);
 		rspamd_lua_table_set (L, RSPAMD_DBDIR_INDEX, dbdir);
 		rspamd_lua_table_set (L, RSPAMD_LOGDIR_INDEX, logdir);
