@@ -714,14 +714,25 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	gpointer k, v;
 	gint fd;
 	bool ret;
+	gchar path[PATH_MAX];
 
-	(void)unlink (name);
-	fd = open (name, O_CREAT | O_TRUNC | O_WRONLY | O_EXCL, 00644);
+	rspamd_snprintf (path, sizeof (path), "%s.new", name);
 
-	if (fd == -1) {
-		msg_info_cache ("cannot open file %s, error %d, %s", name,
-				errno, strerror (errno));
-		return FALSE;
+	for (;;) {
+		fd = open (path, O_CREAT | O_WRONLY | O_EXCL, 00644);
+
+		if (fd == -1) {
+			if (errno == EEXIST) {
+				/* Some other process is already writing data, give up silently */
+				return TRUE;
+			}
+
+			msg_info_cache ("cannot open file %s, error %d, %s", path,
+					errno, strerror (errno));
+			return FALSE;
+		}
+
+		break;
 	}
 
 	rspamd_file_lock (fd, FALSE);
@@ -731,7 +742,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 			sizeof (rspamd_symbols_cache_magic));
 
 	if (write (fd, &hdr, sizeof (hdr)) == -1) {
-		msg_info_cache ("cannot write to file %s, error %d, %s", name,
+		msg_info_cache ("cannot write to file %s, error %d, %s", path,
 				errno, strerror (errno));
 		rspamd_file_unlock (fd, FALSE);
 		close (fd);
@@ -772,6 +783,13 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	ucl_object_unref (top);
 	rspamd_file_unlock (fd, FALSE);
 	close (fd);
+
+	if (rename (path, name) == -1) {
+		msg_info_cache ("cannot rename %s -> %s, error %d, %s", path, name,
+				errno, strerror (errno));
+		(void)unlink (path);
+		ret = FALSE;
+	}
 
 	return ret;
 }
