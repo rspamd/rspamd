@@ -258,10 +258,12 @@ rspamd_config_free (struct rspamd_config *cfg)
 	}
 #endif
 
-	rspamd_mempool_delete (cfg->cfg_pool);
 	if (cfg->monitored_ctx) {
 		rspamd_monitored_ctx_destroy (cfg->monitored_ctx);
 	}
+
+	rspamd_mempool_delete (cfg->cfg_pool);
+
 	if (cfg->checksum) {
 		g_free (cfg->checksum);
 	}
