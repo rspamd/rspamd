@@ -624,14 +624,15 @@ define(["jquery", "footable", "humanize"],
         }
 
         ui.getHistory = function (rspamd, tables) {
-            function waitForRowsDisplayed(callback, iteration) {
+            function waitForRowsDisplayed(rows_total, callback, iteration) {
                 var i = (typeof iteration === "undefined") ? 10 : iteration;
                 var num_rows = $("#historyTable > tbody > tr").length;
-                if (num_rows === rows_per_page) {
+                if (num_rows === rows_per_page ||
+                    num_rows === rows_total) {
                     return callback();
                 } else if (--i) {
                     setTimeout(function () {
-                        waitForRowsDisplayed(callback, i);
+                        waitForRowsDisplayed(rows_total, callback, i);
                     }, 500);
                 }
                 return null;
@@ -676,7 +677,7 @@ define(["jquery", "footable", "humanize"],
                             tables.history.rows.load(items);
                             if (version) { // Non-legacy
                                 // Is there a way to get an event when all rows are loaded?
-                                waitForRowsDisplayed(function () {
+                                waitForRowsDisplayed(items.length, function () {
                                     drawTooltips();
                                 });
                             }
