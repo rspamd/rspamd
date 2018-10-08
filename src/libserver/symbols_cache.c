@@ -1303,6 +1303,9 @@ rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 	setbit (checkpoint->processed_bits, item->id * 2 + 1);
 
 	if (checkpoint->pass > 0) {
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+		event_base_update_cache_time (task->ev_base);
+#endif
 		for (i = 0; i < (gint)checkpoint->waitq->len; i ++) {
 			it = g_ptr_array_index (checkpoint->waitq, i);
 
@@ -1382,9 +1385,26 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 					rspamd_symbols_cache_watcher_cb,
 					item);
 			msg_debug_task ("execute %s, %d", item->symbol, item->id);
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+			struct timeval tv;
+
+			event_base_update_cache_time (task->ev_base);
+			event_base_gettimeofday_cached (task->ev_base, &tv);
+			t1 = tv_to_double (&tv);
+#else
 			t1 = rspamd_get_ticks (FALSE);
+#endif
+
 			item->func (task, item->user_data);
+
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+			event_base_update_cache_time (task->ev_base);
+			event_base_gettimeofday_cached (task->ev_base, &tv);
+			t2 = tv_to_double (&tv);
+#else
 			t2 = rspamd_get_ticks (FALSE);
+#endif
+
 			diff = (t2 - t1);
 
 			if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {

@@ -2873,7 +2873,6 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 	*pev_base = periodic->ev_base;
 
 	event_del (&periodic->ev);
-
 	lua_thread_call (thread, 2);
 }
 
@@ -2887,6 +2886,10 @@ lua_periodic_callback_finish (struct thread_entry *thread, int ret)
 	gdouble timeout = 0.0;
 
 	L = thread->lua_state;
+
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+	event_base_update_cache_time (periodic->ev_base);
+#else
 
 	if (ret == 0) {
 		if (lua_type (L, -1) == LUA_TBOOLEAN) {
