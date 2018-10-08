@@ -1006,7 +1006,7 @@ lua_redis_make_request (lua_State *L)
 		lua_pop (L, 1);
 
 		lua_pushstring (L, "timeout");
-		lua_gettable (L, -2);
+		lua_gettable (L, 1);
 		if (lua_type (L, -1) == LUA_TNUMBER) {
 			timeout = lua_tonumber (L, -1);
 		}
@@ -1015,7 +1015,7 @@ lua_redis_make_request (lua_State *L)
 
 
 		lua_pushstring (L, "args");
-		lua_gettable (L, -2);
+		lua_gettable (L, 1);
 		lua_redis_parse_args (L, -1, cmd, &sp_ud->args, &sp_ud->arglens,
 				&sp_ud->nargs);
 		lua_pop (L, 1);
