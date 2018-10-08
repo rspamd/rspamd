@@ -3,6 +3,7 @@ import grp
 import os
 import os.path
 import psutil
+import glob
 import pwd
 import re
 import shutil
@@ -12,6 +13,7 @@ import errno
 import sys
 import tempfile
 import time
+import subprocess
 from robot.libraries.BuiltIn import BuiltIn
 from robot.api import logger
 
@@ -226,4 +228,108 @@ def get_file_if_exists(file_path):
         with open(file_path, 'r') as myfile:
             return myfile.read()
     return None
+
+# copy-paste from 
+# https://hg.python.org/cpython/file/6860263c05b3/Lib/shutil.py#l1068
+# As soon as we move to Python 3, this should be removed in favor of shutil.which()
+def python3_which(cmd, mode=os.F_OK | os.X_OK, path=None):
+    """Given a command, mode, and a PATH string, return the path which
+    conforms to the given mode on the PATH, or None if there is no such
+    file.
+
+    `mode` defaults to os.F_OK | os.X_OK. `path` defaults to the result
+    of os.environ.get("PATH"), or can be overridden with a custom search
+    path.
+    """
+
+    # Check that a given file can be accessed with the correct mode.
+    # Additionally check that `file` is not a directory, as on Windows
+    # directories pass the os.access check.
+    def _access_check(fn, mode):
+        return (os.path.exists(fn) and os.access(fn, mode)
+                and not os.path.isdir(fn))
+
+    # If we're given a path with a directory part, look it up directly rather
+    # than referring to PATH directories. This includes checking relative to the
+    # current directory, e.g. ./script
+    if os.path.dirname(cmd):
+        if _access_check(cmd, mode):
+            return cmd
+        return None
+
+    if path is None:
+        path = os.environ.get("PATH", os.defpath)
+    if not path:
+        return None
+    path = path.split(os.pathsep)
+
+    if sys.platform == "win32":
+        # The current directory takes precedence on Windows.
+        if not os.curdir in path:
+            path.insert(0, os.curdir)
+
+        # PATHEXT is necessary to check on Windows.
+        pathext = os.environ.get("PATHEXT", "").split(os.pathsep)
+        # See if the given file matches any of the expected path extensions.
+        # This will allow us to short circuit when given "python.exe".
+        # If it does match, only test that one, otherwise we have to try
+        # others.
+        if any(cmd.lower().endswith(ext.lower()) for ext in pathext):
+            files = [cmd]
+        else:
+            files = [cmd + ext for ext in pathext]
+    else:
+        # On other platforms you don't have things like PATHEXT to tell you
+        # what file suffixes are executable, so just pass on cmd as-is.
+        files = [cmd]
+
+    seen = set()
+    for dir in path:
+        normdir = os.path.normcase(dir)
+        if not normdir in seen:
+            seen.add(normdir)
+            for thefile in files:
+                name = os.path.join(dir, thefile)
+                if _access_check(name, mode):
+                    return name
+    return None
+
+
+def collect_lua_coverage():
+    if python3_which("luacov-coveralls") is None:
+        logger.info("luacov-coveralls not found, will not collect Lua coverage")
+        return
+
+    # decided not to do optional coverage so far
+    #if not 'ENABLE_LUA_COVERAGE' in os.environ['HOME']:
+    #    logger.info("ENABLE_LUA_COVERAGE is not present in env, will not collect Lua coverage")
+    #    return
+
+    current_directory = os.getcwd()
+    report_file = current_directory + "/lua_coverage_report.json"
+    old_report = current_directory + "/lua_coverage_report.json.old"
+
+    tmp_dir = BuiltIn().get_variable_value("${TMPDIR}")
+    coverage_files = glob.glob('%s/*.luacov.stats.out' % (tmp_dir))
+
+    for stat_file in coverage_files:
+        shutil.move(stat_file, "luacov.stats.out")
+        # logger.console("statfile: " + stat_file)
+
+        if (os.path.isfile(report_file)):
+            shutil.move(report_file, old_report)
+            p = subprocess.Popen(["luacov-coveralls", "-o", report_file, "-j", old_report, "--merge", "--dryrun"], 
+                                 stdout = subprocess.PIPE, stderr= subprocess.PIPE)
+            output,error = p.communicate()
+
+            logger.info("luacov-coveralls stdout: " + output)
+            logger.info("luacov-coveralls stderr: " + error)
+            os.remove(old_report)
+        else:
+            p = subprocess.Popen(["luacov-coveralls", "-o", report_file, "--dryrun"], stdout = subprocess.PIPE, stderr= subprocess.PIPE)
+            output,error = p.communicate()
+
+            logger.info("luacov-coveralls stdout: " + output)
+            logger.info("luacov-coveralls stderr: " + error)
+        os.remove("luacov.stats.out")
 
