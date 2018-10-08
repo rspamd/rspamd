@@ -656,9 +656,14 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
   for i=1,ntlds / 2 do
     local tld1 = tlds[tlds_keys[i]]
     local tld2 = tlds[tlds_keys[ntlds - i]]
-    table.insert(res, table.remove(tld1))
-    table.insert(res, table.remove(tld2))
-    limit = limit - 2
+    if #tld1 > 0 then
+      table.insert(res, table.remove(tld1))
+      limit = limit - 1
+    end
+    if #tld2 > 0 then
+      table.insert(res, table.remove(tld2))
+      limit = limit - 1
+    end
 
     if limit <= 0 then
       break
