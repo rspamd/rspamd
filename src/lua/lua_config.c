@@ -2889,7 +2889,7 @@ lua_periodic_callback_finish (struct thread_entry *thread, int ret)
 
 #ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
 	event_base_update_cache_time (periodic->ev_base);
-#else
+#endif
 
 	if (ret == 0) {
 		if (lua_type (L, -1) == LUA_TBOOLEAN) {
