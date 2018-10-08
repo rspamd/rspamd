@@ -803,7 +803,7 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 			exit (EXIT_FAILURE);
 		}
 
-		ev_base = event_init ();
+		ev_base = rspamd_main->ev_base;
 		ctx = g_malloc0  (sizeof (*ctx));
 		http = rspamd_http_router_new (rspamadm_lua_error_handler,
 						rspamadm_lua_finish_handler,

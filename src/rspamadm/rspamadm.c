@@ -368,7 +368,15 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->type = process_quark;
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 			"rspamadm");
+
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FLAG
+	struct event_config *ev_cfg;
+	ev_cfg = event_config_new ();
+	event_config_set_flag (ev_cfg, EVENT_BASE_FLAG_NO_CACHE_TIME);
+	rspamd_main->ev_base = event_base_new_with_config (ev_cfg);
+#else
 	rspamd_main->ev_base = event_init ();
+#endif
 
 	rspamadm_fill_internal_commands (all_commands);
 	help_command.command_data = all_commands;
@@ -537,6 +545,9 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	event_base_loopexit (rspamd_main->ev_base, NULL);
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FLAG
+	event_config_free (ev_cfg);
+#endif
 
 	REF_RELEASE (rspamd_main->cfg);
 	rspamd_log_close (rspamd_main->logger, TRUE);
