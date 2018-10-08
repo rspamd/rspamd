@@ -412,6 +412,7 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Setup logger */
 	if (verbose) {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
+		cfg->log_flags |= RSPAMD_LOG_FLAG_USEC;
 	}
 	else {
 		cfg->log_level = G_LOG_LEVEL_MESSAGE;
@@ -419,7 +420,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	cfg->log_type = RSPAMD_LOG_CONSOLE;
 	/* Avoid timestamps printing */
-	cfg->log_flags = RSPAMD_LOG_FLAG_RSPAMADM;
+	cfg->log_flags |= RSPAMD_LOG_FLAG_RSPAMADM;
 	rspamd_set_logger (cfg, process_quark, &rspamd_main->logger,
 			rspamd_main->server_pool);
 	(void) rspamd_log_open (rspamd_main->logger);
