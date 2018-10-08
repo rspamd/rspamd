@@ -72,6 +72,7 @@ Generic Teardown
   Shutdown Process With Children  ${RSPAMD_PID}
   Log does not contain segfault record
   Save Run Results  ${TMPDIR}  rspamd.log redis.log rspamd.conf clickhouse-server.log clickhouse-server.err.log clickhouse-config.xml
+  Collect Lua Coverage
   Cleanup Temporary Directory  ${TMPDIR}
 
 Log does not contain segfault record
