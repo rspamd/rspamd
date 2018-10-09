@@ -57,6 +57,7 @@ pipeline:
       - apt-get install -qq libluajit-5.1-dev libpcre3-dev luarocks opendkim-tools python-pip redis-server libunwind8 libglib2.0-dev libicu-dev libevent-dev python-dev
       - apt-get install -qq clickhouse-server
       - apt-get install -qq python-pip python-dev
+      - pip install demjson psutil robotframework http
       - pip install --upgrade setuptools
       - pip install --upgrade pyOpenSSL
       - pip install --upgrade certifi
@@ -65,7 +66,6 @@ pipeline:
       - pip install --upgrade enum34
       - pip install --upgrade cpp-coveralls requests cryptography
 
-      - pip install demjson psutil robotframework http
       - luarocks install luacheck
       - luarocks install luacov
       - luarocks install luacov-coveralls
