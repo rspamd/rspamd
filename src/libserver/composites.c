@@ -21,6 +21,8 @@
 #include "filter.h"
 #include "composites.h"
 
+#include <math.h>
+
 #define msg_err_composites(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "composites", task->task_pool->tag.uid, \
         G_STRFUNC, \
@@ -180,6 +182,7 @@ rspamd_composite_process_symbol_removal (rspamd_expression_atom_t *atom,
 {
 	gchar t;
 	struct symbol_remove_data *rd, *nrd;
+	struct rspamd_task *task = cd->task;
 
 	if (ms == NULL) {
 		return;
@@ -239,9 +242,13 @@ rspamd_composite_process_symbol_removal (rspamd_expression_atom_t *atom,
 	if (rd == NULL) {
 		DL_APPEND (rd, nrd);
 		g_hash_table_insert (cd->symbols_to_remove, (gpointer)ms->name, rd);
+		msg_debug_composites ("added symbol %s to removal: %d policy, from composite %s",
+				ms->name, nrd->action, cd->composite->sym);
 	}
 	else {
 		DL_APPEND (rd, nrd);
+		msg_debug_composites ("append symbol %s to removal: %d policy, from composite %s",
+				ms->name, nrd->action, cd->composite->sym);
 	}
 }
 
@@ -258,7 +265,7 @@ rspamd_composite_expr_process (struct rspamd_expr_process_data *process_data,
 	struct rspamd_task *task = cd->task;
 	GHashTableIter it;
 	gpointer k, v;
-	gdouble rc = 0;
+	gdouble rc = 0, max = 0;
 
 	if (isset (cd->checked, cd->composite->id * 2)) {
 		/* We have already checked this composite, so just return its value */
@@ -302,9 +309,15 @@ rspamd_composite_expr_process (struct rspamd_expr_process_data *process_data,
 							cd,
 							ms,
 							beg);
+
+					if (fabs (rc) > max) {
+						max = fabs (rc);
+					}
 				}
 			}
 		}
+
+		rc = max;
 	}
 	else if (strncmp (sym, "g+:", 3) == 0) {
 		/* Group, positive symbols only */
@@ -326,13 +339,19 @@ rspamd_composite_expr_process (struct rspamd_expr_process_data *process_data,
 								cd,
 								ms,
 								beg);
+
+						if (fabs (rc) > max) {
+							max = fabs (rc);
+						}
 					}
 				}
 			}
+
+			rc = max;
 		}
 	}
 	else if (strncmp (sym, "g-:", 3) == 0) {
-		/* Group, positive symbols only */
+		/* Group, negative symbols only */
 		gr = g_hash_table_lookup (cd->task->cfg->groups, sym + 3);
 
 		if (gr != NULL) {
@@ -349,9 +368,15 @@ rspamd_composite_expr_process (struct rspamd_expr_process_data *process_data,
 								cd,
 								ms,
 								beg);
+
+						if (fabs (rc) > max) {
+							max = fabs (rc);
+						}
 					}
 				}
 			}
+
+			rc = max;
 		}
 	}
 	else {
@@ -364,6 +389,9 @@ rspamd_composite_expr_process (struct rspamd_expr_process_data *process_data,
 					beg);
 		}
 	}
+
+	msg_debug_composites ("final result for composite %s is %.2f",
+			cd->composite->sym, rc);
 
 	return rc;
 }

@@ -619,8 +619,7 @@ rspamd_parse_expression (const gchar *line, gsize len,
 				if (p + 1 < end) {
 					gchar t = *(p + 1);
 
-					if (g_ascii_isspace (t) || g_ascii_isalnum (t) ||
-							rspamd_expr_is_operation_symbol (t)) {
+					if (t != ':') {
 						state = PARSE_OP;
 						continue;
 					}
