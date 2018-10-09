@@ -2,26 +2,25 @@ workspace:
   base: /rspamd
 
 pipeline:
-  dependencies:
+  prepare:
     image: gcc
     commands:
+      - apt-get update -qq
+      - apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8
+      - mkdir /rspamd/build ; mkdir /rspamd/install ; cd /rspamd/build
 
   build:
     image: gcc
     commands:
       - pwd
       - set -e
-      - apt-get update -qq
-      - apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8
-      - mkdir ../build ; mkdir ../install ; cd ../build
       - umask 0000
-      - cmake /rspamd/src/github.com/rspamd/rspamd/ -DDBDIR=/nana -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=../install
+      - cmake /rspamd/src/github.com/rspamd/rspamd/ -DDBDIR=/nana -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install
       - make install -j`nproc`
 
   rspamd-test:
     image: gcc
-    image: cmake
     commands:
-      - cd ../build
+      - cd /rspamd/build
       - make rspamd-test -j`nproc`
       - set +e; test/rspamd-test -p /rspamd/lua; echo "export RETURN_CODE=$?" >> $BASH_ENV
