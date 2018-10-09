@@ -1906,15 +1906,10 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 					img = g_ptr_array_index (part->html->images, j);
 
 					if ((img->flags & RSPAMD_HTML_FLAG_IMAGE_EXTERNAL)
-							&& img->src) {
-						url = rspamd_html_process_url (task->task_pool,
-								img->src, strlen (img->src), NULL);
-
-						if (url) {
-							surbl_tree_url_callback (url, url, param);
-							msg_debug_surbl ("checked image url %s over %s",
-									img->src, suffix->suffix);
-						}
+							&& img->url) {
+						surbl_tree_url_callback (img->url, img->url, param);
+						msg_debug_surbl ("checked image url %s over %s",
+								img->src, suffix->suffix);
 					}
 				}
 			}

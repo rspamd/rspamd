@@ -1512,6 +1512,10 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 			}
 			else {
 				img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
+				if (img->src) {
+					img->url = rspamd_html_process_url (pool,
+							img->src, fstr.len, NULL);
+				}
 			}
 		}
 		else if (comp->type == RSPAMD_HTML_COMPONENT_HEIGHT) {
