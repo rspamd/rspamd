@@ -1,4 +1,11 @@
+workspace:
+  base: /rspamd
+
 pipeline:
+  dependencies:
+    image: gcc
+    commands:
+
   build:
     image: gcc
     commands:
@@ -12,6 +19,7 @@ pipeline:
 
   rspamd-test:
     image: gcc
+    image: cmake
     commands:
       - cd ../build
       - make rspamd-test -j`nproc`
