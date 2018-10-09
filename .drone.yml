@@ -9,12 +9,13 @@ pipeline:
   build:
     image: gcc
     commands:
+      - pwd
       - set -e
       - apt-get update -qq
       - apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8
       - mkdir ../build ; mkdir ../install ; cd ../build
       - umask 0000
-      - cmake /drone/src/github.com/rspamd/rspamd/ -DDBDIR=/nana -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=../install
+      - cmake /rspamd/src/github.com/rspamd/rspamd/ -DDBDIR=/nana -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=../install
       - make install -j`nproc`
 
   rspamd-test:
