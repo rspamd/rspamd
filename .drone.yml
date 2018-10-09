@@ -23,4 +23,4 @@ pipeline:
       - apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8
       - cd /rspamd/build
       - make rspamd-test -j`nproc`
-      - set +e; test/rspamd-test -p /rspamd/lua; echo "export RETURN_CODE=$?" >> $BASH_ENV
+      - set +e; test/rspamd-test -p /rspamd/lua
