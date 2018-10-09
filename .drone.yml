@@ -34,10 +34,12 @@ pipeline:
     image: gcc
     commands:
       - echo 'deb http://repo.yandex.ru/clickhouse/deb/stable/ main/' | sudo tee /etc/apt/sources.list.d/clickhouse.list
-      - sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4    # optional, clickhouse key
-      - sudo apt-get update -qq || true
-      - sudo apt-get install -qq libluajit-5.1-dev libpcre3-dev luarocks opendkim-tools python-pip redis-server libunwind8 libglib2.0-dev libicu-dev libevent-dev python-dev
+      - apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4    # optional, clickhouse key
+      - apt-get update -qq || true
+      - apt-get install -qq libluajit-5.1-dev libpcre3-dev luarocks opendkim-tools python-pip redis-server libunwind8 libglib2.0-dev libicu-dev libevent-dev python-dev
       - apt-get install clickhouse-server
+      - apt-get install -qq python-pip
+      - pip install cpp-coveralls
 
       - pip install demjson psutil robotframework requests http
       - luarocks install luacheck
@@ -46,4 +48,11 @@ pipeline:
 
       - cd /rspamd/build
       - umask 0000
-      - set +e; RSPAMD_INSTALLROOT=/rspamd/install robot -x xunit.xml --exclude isbroken ../project/test/functional/cases
+      - set +e; RSPAMD_INSTALLROOT=/rspamd/install robot -x xunit.xml --exclude isbroken /rspamd/src/github.com/rspamd/rspamd/test/functional/cases
+      - coveralls --dump coverage.dump
+
+  eslint:
+    image: node:latest
+    commands:
+      - npm install
+      - ./node_modules/.bin/eslint -v && ./node_modules/.bin/eslint ./
