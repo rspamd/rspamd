@@ -26,10 +26,10 @@ pipeline:
 #      - luarocks install luacheck
 #      - luarocks install luacov
 #      - luarocks install luacov-coveralls
-
-      - cd /rspamd/build
-      - set +e; test/rspamd-test -p /rspamd/lua
-      - luacov-coveralls -o unit_test_lua.json --dryrun
+#
+#      - cd /rspamd/build
+#      - set +e; test/rspamd-test -p /rspamd/lua
+#      - luacov-coveralls -o unit_test_lua.json --dryrun
 
   functional:
     image: gcc
