@@ -21,7 +21,7 @@ pipeline:
     commands:
       - set -e
       - apt-get update -qq
-      - apt-get install -qq luarocks libunwind8 libevent libglib2.0 libicu libluajit libmagic libsqlite3 libssl
+      - apt-get install -qq luarocks apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8
       - luarocks install luacheck
       - luarocks install luacov
       - luarocks install luacov-coveralls
