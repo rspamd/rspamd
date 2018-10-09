@@ -4,7 +4,7 @@ workspace:
 pipeline:
 
   build:
-    image: gcc
+    image: gcc:5
     group: build
     commands:
       - pwd
@@ -25,7 +25,7 @@ pipeline:
       - ./node_modules/.bin/eslint -v && ./node_modules/.bin/eslint ./
 
   rspamd-test:
-    image: gcc
+    image: gcc:5
     group: tests
     commands:
       - set -e
@@ -38,9 +38,10 @@ pipeline:
       - cd /rspamd/build
       - set +e; test/rspamd-test -p /rspamd/lua
       - luacov-coveralls -o unit_test_lua.json --dryrun
+      - coveralls --dump coverage.rspamd-test.dump
 
   functional:
-    image: gcc
+    image: gcc:5
     group: tests
     commands:
       - echo 'deb http://repo.yandex.ru/clickhouse/deb/stable/ main/' | tee /etc/apt/sources.list.d/clickhouse.list
@@ -62,10 +63,10 @@ pipeline:
       - cd /rspamd/build
       - umask 0000
       - set +e; RSPAMD_INSTALLROOT=/rspamd/install robot -t "Lua batch mode" -x xunit.xml --exclude isbroken /rspamd/src/github.com/rspamd/rspamd/test/functional/cases
-      # - coveralls --dump coverage.dump
+      - coveralls --dump coverage.functional.dump
 
   send-coverage:
-    image: gcc
+    image: gcc:5
     commands: |
       apt-get update -qq || true
       apt-get install -qq python-pip python-dev
@@ -74,6 +75,6 @@ pipeline:
       pip install cpp-coveralls requests cryptography
       cd /rspamd/build
       export COVERALLS_REPO_TOKEN=HmOeHCagzAOAt0fkN9nhMxQO2NrQK6idG
-      [ ! -z $COVERALLS_REPO_TOKEN ] && /rspamd/src/github.com/rspamd/rspamd/test/functional/util/merge_coveralls.py --input coverage.functional.dump coverage.rspamd-test.dump lua_coverage_report.json unit_test_lua.json --output out.josn --token=${COVERALLS_REPO_TOKEN}
+      [ ! -z $COVERALLS_REPO_TOKEN ] && /rspamd/src/github.com/rspamd/rspamd/test/functional/util/merge_coveralls.py --input coverage.functional.dump coverage.rspamd-test.dump lua_coverage_report.json unit_test_lua.json --output out.josn --token=$COVERALLS_REPO_TOKEN
 
     # branches: master
