@@ -73,7 +73,8 @@ pipeline:
       - cd /rspamd/build
       - umask 0000
       - set +e; RSPAMD_INSTALLROOT=/rspamd/install robot -s "210 *" -x xunit.xml --exclude isbroken /rspamd/src/github.com/rspamd/rspamd/test/functional/cases; export RETURN_CODE=$?
-      - coveralls --dump coverage.functional.dump
+      - cat log.html
+      #- coveralls --dump coverage.functional.dump
       - exit $RETURN_CODE
 
   send-coverage:
