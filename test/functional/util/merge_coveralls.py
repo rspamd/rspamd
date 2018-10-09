@@ -31,9 +31,9 @@ path_mapping = [
 parser = argparse.ArgumentParser(description='')
 parser.add_argument('--input', type=open, required=True, nargs='+', help='input files')
 parser.add_argument('--output', type=str, required=True, help='output file)')
-parser.add_argument('--root', type=str, required=False, default="/home/circleci/project", help='repository root)')
-parser.add_argument('--install-dir', type=str, required=False, default="/home/circleci/install", help='install root)')
-parser.add_argument('--build-dir', type=str, required=False, default="/home/circleci/build", help='build root)')
+parser.add_argument('--root', type=str, required=False, default="/rspamd/src/github.com/rspamd/rspamd", help='repository root)')
+parser.add_argument('--install-dir', type=str, required=False, default="/rspamd/install", help='install root)')
+parser.add_argument('--build-dir', type=str, required=False, default="/rspamd/build", help='build root)')
 parser.add_argument('--token', type=str, help='If present, the file will be uploaded to coveralls)')
 
 def merge_coverage_vectors(c1, c2):
@@ -116,10 +116,16 @@ if __name__ == '__main__':
             j1['service_name'] = j2['service_name']
         if 'service_job_id' not in j1 and 'service_job_id' in j2:
             j1['service_job_id'] = j2['service_job_id']
+
         if not j1['service_job_id'] and 'CIRCLE_BUILD_NUM' in os.environ:
             j1['service_job_id'] = os.environ['CIRCLE_BUILD_NUM']
+        elif not j1['service_job_id'] and 'DRONE_PREV_BUILD_NUMBER' in os.environ:
+            j1['service_job_id'] = os.environ['DRONE_PREV_BUILD_NUMBER']
+
         if 'CIRCLECI' in os.environ and os.environ['CIRCLECI']:
             j1['service_name'] = 'circleci'
+        elif 'DRONE' in os.environ and os.environ['DRONE']:
+            j1['service_name'] = 'drone'
 
     j1['source_files'] = files.values()
 
