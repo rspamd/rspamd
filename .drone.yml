@@ -31,7 +31,10 @@ pipeline:
       - set -e
       - apt-get update -qq
       - apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8 luarocks
-      - luarocks install luacheck
+      - apt-get install -qq python-pip python-dev
+      - pip install --upgrade setuptools
+      - pip install --upgrade pyOpenSSL
+      - pip install cpp-coveralls requests cryptography
       - luarocks install luacov
       - luarocks install luacov-coveralls
 
@@ -52,7 +55,6 @@ pipeline:
       - apt-get install -qq python-pip python-dev
       - pip install --upgrade setuptools
       - pip install --upgrade pyOpenSSL
-
       - pip install cpp-coveralls
 
       - pip install demjson psutil robotframework requests cryptography http
