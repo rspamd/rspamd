@@ -24,23 +24,24 @@ pipeline:
       - npm install
       - ./node_modules/.bin/eslint -v && ./node_modules/.bin/eslint ./
 
-# temporary disable - to save some time
-#  rspamd-test:
-#    image: gcc
-#    commands:
-#      - set -e
-#      - apt-get update -qq
-#      - apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8 luarocks
-#      - luarocks install luacheck
-#      - luarocks install luacov
-#      - luarocks install luacov-coveralls
-#
-#      - cd /rspamd/build
-#      - set +e; test/rspamd-test -p /rspamd/lua
-#      - luacov-coveralls -o unit_test_lua.json --dryrun
+  rspamd-test:
+    image: gcc
+    group: tests
+    commands:
+      - set -e
+      - apt-get update -qq
+      - apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8 luarocks
+      - luarocks install luacheck
+      - luarocks install luacov
+      - luarocks install luacov-coveralls
+
+      - cd /rspamd/build
+      - set +e; test/rspamd-test -p /rspamd/lua
+      - luacov-coveralls -o unit_test_lua.json --dryrun
 
   functional:
     image: gcc
+    group: tests
     commands:
       - echo 'deb http://repo.yandex.ru/clickhouse/deb/stable/ main/' | tee /etc/apt/sources.list.d/clickhouse.list
       - apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4    # optional, clickhouse key
@@ -63,7 +64,7 @@ pipeline:
       - set +e; RSPAMD_INSTALLROOT=/rspamd/install robot -t "Lua batch mode" -x xunit.xml --exclude isbroken /rspamd/src/github.com/rspamd/rspamd/test/functional/cases
       # - coveralls --dump coverage.dump
 
-  sendcoverage:
+  send-coverage:
     image: gcc
     commands: |
       apt-get update -qq || true
@@ -71,7 +72,7 @@ pipeline:
       pip install --upgrade setuptools
       pip install --upgrade pyOpenSSL
       pip install cpp-coveralls requests cryptography
-      cd /rspamd/project
+      cd /rspamd/build
       export COVERALLS_REPO_TOKEN=HmOeHCagzAOAt0fkN9nhMxQO2NrQK6idG
       [ ! -z $COVERALLS_REPO_TOKEN ] && /rspamd/src/github.com/rspamd/rspamd/test/functional/util/merge_coveralls.py --input coverage.functional.dump coverage.rspamd-test.dump lua_coverage_report.json unit_test_lua.json --output out.josn --token=${COVERALLS_REPO_TOKEN}
 
