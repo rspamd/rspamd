@@ -35,6 +35,7 @@ pipeline:
       - pip install --upgrade setuptools
       - pip install --upgrade pyOpenSSL
       - pip install --upgrade certifi
+      - pip install --upgrade ipaddress
       - pip install --upgrade urllib3
       - pip install cpp-coveralls requests cryptography
       - luarocks install luacov
@@ -58,6 +59,7 @@ pipeline:
       - pip install --upgrade setuptools
       - pip install --upgrade pyOpenSSL
       - pip install --upgrade certifi
+      - pip install --upgrade ipaddress
       - pip install --upgrade urllib3
       - pip install cpp-coveralls
 
