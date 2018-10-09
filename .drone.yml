@@ -41,6 +41,8 @@ pipeline:
       - apt-get install -qq python-pip
       - pip install cpp-coveralls
 
+      - pip install --upgrade setuptools
+      - pip install --upgrade pyOpenSSL
       - pip install demjson psutil robotframework requests http
       - luarocks install luacheck
       - luarocks install luacov
