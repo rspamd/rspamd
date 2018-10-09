@@ -62,9 +62,10 @@ pipeline:
       - pip install --upgrade certifi
       - pip install --upgrade ipaddress
       - pip install --upgrade urllib3
-      - pip install --upgrade cpp-coveralls cryptography
+      - pip install --upgrade enum34
+      - pip install --upgrade cpp-coveralls requests cryptography
 
-      - pip install demjson psutil robotframework requests cryptography http
+      - pip install demjson psutil robotframework http
       - luarocks install luacheck
       - luarocks install luacov
       - luarocks install luacov-coveralls
