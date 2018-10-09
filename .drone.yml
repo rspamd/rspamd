@@ -80,8 +80,8 @@ pipeline:
   send-coverage:
     image: gcc:5
     secrets: [ coveralls_repo_token ]
-    branches: [ master ]
     commands: |
+      [ ! $DRONE_COMMIT_BRANCH = 'master' ] && exit 0
       apt-get update -qq || true
       apt-get install -qq python-pip python-dev
       pip install --upgrade setuptools
