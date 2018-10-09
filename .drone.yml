@@ -72,13 +72,14 @@ pipeline:
 
       - cd /rspamd/build
       - umask 0000
-      - set +e; RSPAMD_INSTALLROOT=/rspamd/install robot -s "101*" -x xunit.xml --exclude isbroken /rspamd/src/github.com/rspamd/rspamd/test/functional/cases
+      - set +e; RSPAMD_INSTALLROOT=/rspamd/install robot -x xunit.xml --exclude isbroken /rspamd/src/github.com/rspamd/rspamd/test/functional/cases
       - coveralls --dump coverage.functional.dump
       - ls
       - set
 
   send-coverage:
     image: gcc:5
+    secrets: [ coveralls_repo_token ]
     commands: |
       apt-get update -qq || true
       apt-get install -qq python-pip python-dev
@@ -86,7 +87,6 @@ pipeline:
       pip install --upgrade pyOpenSSL
       pip install cpp-coveralls requests cryptography
       cd /rspamd/build
-      export COVERALLS_REPO_TOKEN=HmOeHCagzAOAt0fkN9nhMxQO2NrQK6idG
       [ ! -z $COVERALLS_REPO_TOKEN ] && /rspamd/src/github.com/rspamd/rspamd/test/functional/util/merge_coveralls.py --input coverage.functional.dump coverage.rspamd-test.dump unit_test_lua.json lua_coverage_report.json --output out.josn --token=$COVERALLS_REPO_TOKEN
 
-    # branches: master
+    branches: master
