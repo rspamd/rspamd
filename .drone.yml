@@ -3,5 +3,6 @@ pipeline:
     image: gcc
     commands:
       - set -e
-      - apt-get install -qq python-pip
-      - pip install cpp-coveralls
+      - apt-get update -qq
+      - apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8
+      - mkdir ../build ; mkdir ../install ; cd ../build
