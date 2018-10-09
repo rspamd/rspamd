@@ -87,6 +87,6 @@ pipeline:
       pip install cpp-coveralls requests cryptography
       cd /rspamd/build
       export COVERALLS_REPO_TOKEN=HmOeHCagzAOAt0fkN9nhMxQO2NrQK6idG
-      [ ! -z $COVERALLS_REPO_TOKEN ] && /rspamd/src/github.com/rspamd/rspamd/test/functional/util/merge_coveralls.py --input coverage.functional.dump coverage.rspamd-test.dump unit_test_lua.json --output out.josn --token=$COVERALLS_REPO_TOKEN
+      [ ! -z $COVERALLS_REPO_TOKEN ] && /rspamd/src/github.com/rspamd/rspamd/test/functional/util/merge_coveralls.py --input coverage.functional.dump coverage.rspamd-test.dump unit_test_lua.json lua_coverage_report.json --output out.josn --token=$COVERALLS_REPO_TOKEN
 
     # branches: master

@@ -116,10 +116,16 @@ if __name__ == '__main__':
             j1['service_name'] = j2['service_name']
         if 'service_job_id' not in j1 and 'service_job_id' in j2:
             j1['service_job_id'] = j2['service_job_id']
+
         if not j1['service_job_id'] and 'CIRCLE_BUILD_NUM' in os.environ:
             j1['service_job_id'] = os.environ['CIRCLE_BUILD_NUM']
+        elif not j1['service_job_id'] and 'DRONE_PREV_BUILD_NUMBER' in os.environ:
+            j1['service_job_id'] = os.environ['DRONE_PREV_BUILD_NUMBER']
+
         if 'CIRCLECI' in os.environ and os.environ['CIRCLECI']:
             j1['service_name'] = 'circleci'
+        elif 'DRONE' in os.environ and os.environ['DRONE']:
+            j1['service_name'] = 'drone'
 
     j1['source_files'] = files.values()
 
