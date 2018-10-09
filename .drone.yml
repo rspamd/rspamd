@@ -1,0 +1,11 @@
+clone:
+  git:
+    image: plugins/git
+    recursive: true
+
+pipeline:
+  build:
+    commands:
+      - set -e
+      - apt-get install -qq python-pip
+      - pip install cpp-coveralls
