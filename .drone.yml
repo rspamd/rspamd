@@ -37,7 +37,8 @@ pipeline:
       - pip install --upgrade certifi
       - pip install --upgrade ipaddress
       - pip install --upgrade urllib3
-      - pip install cpp-coveralls requests cryptography
+      - pip install --upgrade enum34
+      - pip install --upgrade --upgrade-strategy eager cpp-coveralls requests cryptography
       - luarocks install luacov
       - luarocks install luacov-coveralls
 
@@ -61,7 +62,7 @@ pipeline:
       - pip install --upgrade certifi
       - pip install --upgrade ipaddress
       - pip install --upgrade urllib3
-      - pip install cpp-coveralls
+      - pip install  --upgrade --upgrade-strategy eager cpp-coveralls cryptography
 
       - pip install demjson psutil robotframework requests cryptography http
       - luarocks install luacheck
