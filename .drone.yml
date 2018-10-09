@@ -1,10 +1,6 @@
-clone:
-  git:
-    image: plugins/git
-    recursive: true
-
 pipeline:
   build:
+    image: gcc
     commands:
       - set -e
       - apt-get install -qq python-pip
