@@ -75,6 +75,7 @@ pipeline:
       - set +e; RSPAMD_INSTALLROOT=/rspamd/install robot -s "101*" -x xunit.xml --exclude isbroken /rspamd/src/github.com/rspamd/rspamd/test/functional/cases
       - coveralls --dump coverage.functional.dump
       - ls
+      - set
 
   send-coverage:
     image: gcc:5
