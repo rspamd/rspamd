@@ -1,6 +1,5 @@
 
 local msg
-local msg2
 
 context("Lua util - extract_specific_urls", function()
   local util  = require 'lua_util'
@@ -203,7 +202,7 @@ context("Lua util - extract_specific_urls", function()
 end)
 
 --[=========[ *******************  message  ******************* ]=========]
-local msg = [[
+msg = [[
 From: <>
 To: <nobody@example.com>
 Subject: test
