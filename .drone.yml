@@ -63,3 +63,15 @@ pipeline:
       - set +e; RSPAMD_INSTALLROOT=/rspamd/install robot -t "Lua batch mode" -x xunit.xml --exclude isbroken /rspamd/src/github.com/rspamd/rspamd/test/functional/cases
       # - coveralls --dump coverage.dump
 
+  send-coverage:
+    image: gcc
+      - apt-get update -qq || true
+      - apt-get install -qq python-pip python-dev
+      - pip install --upgrade setuptools
+      - pip install --upgrade pyOpenSSL
+      - pip install cpp-coveralls requests cryptography
+      - cd /rspamd/project
+      - export COVERALLS_REPO_TOKEN=HmOeHCagzAOAt0fkN9nhMxQO2NrQK6idG
+      - [ ! -z $COVERALLS_REPO_TOKEN ] && /rspamd/src/github.com/rspamd/rspamd/test/functional/util/merge_coveralls.py --input coverage.functional.dump coverage.rspamd-test.dump lua_coverage_report.json unit_test_lua.json --output out.josn --token=${COVERALLS_REPO_TOKEN}
+
+    # branches: master
