@@ -4136,9 +4136,18 @@ lua_task_set_settings (lua_State *L)
 						rspamd_action_to_str_alt (i), NULL);
 
 				if (elt) {
-					mres->actions_limits[i] = ucl_object_todouble (elt);
-					msg_debug_task ("adjusted action %s to %.2f",
-							ucl_object_key (elt), mres->actions_limits[i]);
+
+					if (ucl_object_type (elt) == UCL_FLOAT ||
+								ucl_object_type (elt) == UCL_INT) {
+						mres->actions_limits[i] = ucl_object_todouble (elt);
+						msg_debug_task ("adjusted action %s to %.2f",
+								ucl_object_key (elt), mres->actions_limits[i]);
+					}
+					else if (ucl_object_type (elt) == UCL_NULL) {
+						mres->actions_limits[i] = NAN;
+						msg_info_task ("disabled action %s due to settings",
+								ucl_object_key (elt));
+					}
 				}
 			}
 		}
