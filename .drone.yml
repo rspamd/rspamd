@@ -20,7 +20,31 @@ pipeline:
     commands:
       - set -e
       - apt-get update -qq
-      - apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8
+      - apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8 luarocks
+      - luarocks install luacheck
+      - luarocks install luacov
+      - luarocks install luacov-coveralls
+
       - cd /rspamd/build
       - make rspamd-test -j`nproc`
       - set +e; test/rspamd-test -p /rspamd/lua
+      - luacov-coveralls -o unit_test_lua.json --dryrun
+
+  functional:
+    image: gcc
+    commands:
+      - echo 'deb http://repo.yandex.ru/clickhouse/deb/stable/ main/' | sudo tee /etc/apt/sources.list.d/clickhouse.list
+      - sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4    # optional, clickhouse key
+      - sudo apt-get update -qq || true
+      - sudo apt-get install -qq libluajit-5.1-dev libpcre3-dev luarocks opendkim-tools python-pip redis-server libunwind8 libglib2.0-dev libicu-dev libevent-dev python-dev
+      - apt-get install clickhouse-server
+
+      - pip install demjson psutil robotframework requests http
+      - luarocks install luacheck
+      - luarocks install luacov
+      - luarocks install luacov-coveralls
+
+      - cd /rspamd/build
+      - umask 0000
+      - set +e; RSPAMD_INSTALLROOT=/rspamd/install robot -x xunit.xml --exclude isbroken ../project/test/functional/cases
+      - 
