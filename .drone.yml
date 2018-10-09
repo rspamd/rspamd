@@ -5,6 +5,7 @@ pipeline:
 
   build:
     image: gcc
+    group: build
     commands:
       - pwd
       - set -e
@@ -16,9 +17,18 @@ pipeline:
       - make install -j`nproc`
       - make rspamd-test -j`nproc`
 
+
+  eslint:
+    image: node:latest
+    group: build
+    commands:
+      - npm install
+      - ./node_modules/.bin/eslint -v && ./node_modules/.bin/eslint ./
+
 # temporary disable - to save some time
 #  rspamd-test:
 #    image: gcc
+#    group: test
 #    commands:
 #      - set -e
 #      - apt-get update -qq
@@ -33,6 +43,7 @@ pipeline:
 
   functional:
     image: gcc
+    group: test
     commands:
       - echo 'deb http://repo.yandex.ru/clickhouse/deb/stable/ main/' | tee /etc/apt/sources.list.d/clickhouse.list
       - apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4    # optional, clickhouse key
@@ -55,8 +66,14 @@ pipeline:
       - set +e; RSPAMD_INSTALLROOT=/rspamd/install robot -t "Lua batch mode" -x xunit.xml --exclude isbroken /rspamd/src/github.com/rspamd/rspamd/test/functional/cases
       # - coveralls --dump coverage.dump
 
-  eslint:
-    image: node:latest
-    commands:
-      - npm install
-      - ./node_modules/.bin/eslint -v && ./node_modules/.bin/eslint ./
+  send-coverage:
+    image: gcc
+      - apt-get update -qq || true
+      - apt-get install -qq python-pip python-dev
+      - pip install --upgrade setuptools
+      - pip install --upgrade pyOpenSSL
+      - pip install cpp-coveralls requests cryptography
+      - cd /rspamd/project
+      - [ ! -z $COVERALLS_REPO_TOKEN ] && /rspamd/src/github.com/rspamd/rspamd/test/functional/util/merge_coveralls.py --input coverage.functional.dump coverage.rspamd-test.dump lua_coverage_report.json unit_test_lua.json --output out.josn --token=${COVERALLS_REPO_TOKEN}
+
+    branches: master
