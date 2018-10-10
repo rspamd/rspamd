@@ -406,7 +406,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 						}
 					}
 
-					c = p;
+					c = p + 1;
 				}
 
 				state = next_state;
