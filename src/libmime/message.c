@@ -32,6 +32,8 @@
 #include "libstemmer.h"
 #endif
 
+#include <math.h>
+
 #define GTUBE_SYMBOL "GTUBE"
 
 #define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_TEXT_PART_FLAG_UTF)
@@ -854,22 +856,18 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 
 	act = rspamd_check_gtube (task, text_part);
 	if (act != METRIC_ACTION_NOACTION) {
-		struct rspamd_metric_result *mres;
+		struct rspamd_metric_result *mres = task->result;
+		gdouble score = NAN;
 
-		mres = task->result;
-
-		if (mres != NULL) {
-			if (act == METRIC_ACTION_REJECT) {
-				mres->score = rspamd_task_get_required_score (task, mres);
-			}
-			else {
-				mres->score = mres->actions_limits[act];
-			}
+		if (act == METRIC_ACTION_REJECT) {
+			score = rspamd_task_get_required_score (task, mres);
+		}
+		else {
+			score = mres->actions_limits[act];
 		}
 
-		task->result = mres;
-		task->pre_result.action = act;
-		task->pre_result.str = "Gtube pattern";
+		rspamd_add_passthrough_result (task, act, RSPAMD_PASSTHROUGH_CRITICAL,
+				score, "Gtube pattern", "GTUBE");
 
 		if (ucl_object_lookup (task->messages, "smtp_message") == NULL) {
 			ucl_object_replace_key (task->messages,
