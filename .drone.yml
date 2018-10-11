@@ -7,10 +7,9 @@ pipeline:
     image: rspamd/ci-ubuntu-build
     group: build
     commands:
-      - env
       - mkdir /rspamd/build /rspamd/install
       - cd /rspamd/build
-      - cmake /rspamd/src/github.com/rspamd/rspamd -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install
+      - cmake ${DRONE_WORKSPACE} -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install
       - ncpu=$(getconf _NPROCESSORS_ONLN)
       - make -j $ncpu install
       - make -j $ncpu rspamd-test
