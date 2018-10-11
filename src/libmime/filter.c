@@ -72,8 +72,15 @@ rspamd_create_metric_result (struct rspamd_task *task)
 		kh_resize (rspamd_symbols_hash, metric_res->symbols, 4);
 	}
 
-	for (i = 0; i < METRIC_ACTION_MAX; i++) {
-		metric_res->actions_limits[i] = task->cfg->actions[i].score;
+	if (task->cfg) {
+		for (i = 0; i < METRIC_ACTION_MAX; i++) {
+			metric_res->actions_limits[i] = task->cfg->actions[i].score;
+		}
+	}
+	else {
+		for (i = 0; i < METRIC_ACTION_MAX; i++) {
+			metric_res->actions_limits[i] = NAN;
+		}
 	}
 
 	rspamd_mempool_add_destructor (task->task_pool,
