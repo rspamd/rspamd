@@ -72,8 +72,15 @@ rspamd_create_metric_result (struct rspamd_task *task)
 		kh_resize (rspamd_symbols_hash, metric_res->symbols, 4);
 	}
 
-	for (i = 0; i < METRIC_ACTION_MAX; i++) {
-		metric_res->actions_limits[i] = task->cfg->actions[i].score;
+	if (task->cfg) {
+		for (i = 0; i < METRIC_ACTION_MAX; i++) {
+			metric_res->actions_limits[i] = task->cfg->actions[i].score;
+		}
+	}
+	else {
+		for (i = 0; i < METRIC_ACTION_MAX; i++) {
+			metric_res->actions_limits[i] = NAN;
+		}
 	}
 
 	rspamd_mempool_add_destructor (task->task_pool,
@@ -489,28 +496,8 @@ rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_resul
 	else {
 		/* Peek the highest priority result */
 		pr = task->result->passthrough_result;
-		sc = NAN;
-
-		if (isnan (pr->target_score)) {
-			for (i = pr->action; i < METRIC_ACTION_MAX; i++) {
-				selected_action = &task->cfg->actions[i];
-				sc = mres->actions_limits[i];
-
-				if (isnan (sc)) {
-					if (i == pr->action) {
-						/* No scores defined, just avoid NaN */
-						sc = 0;
-						break;
-					}
-				}
-				else {
-					break;
-				}
-			}
-		}
-		else {
-			sc = pr->target_score;
-		}
+		sc = pr->target_score;
+		selected_action = &task->cfg->actions[pr->action];
 
 		if (!isnan (sc)) {
 			if (pr->action == METRIC_ACTION_NOACTION) {

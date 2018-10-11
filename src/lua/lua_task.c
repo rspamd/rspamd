@@ -1610,7 +1610,7 @@ lua_task_set_pre_result (lua_State * L)
 		}
 
 		if (lua_type (L, 6) == LUA_TNUMBER) {
-			priority = lua_tonumber (L, 5);
+			priority = lua_tonumber (L, 6);
 		}
 
 		if (action < METRIC_ACTION_MAX && action >= METRIC_ACTION_REJECT) {
