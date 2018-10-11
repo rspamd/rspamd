@@ -16,7 +16,7 @@ pipeline:
       - make -j $$ncpu rspamd-test
 
   eslint:
-    image: node:latest
+    image: node:10-alpine
     group: build
     commands:
       - npm install
