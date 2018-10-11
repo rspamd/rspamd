@@ -28,8 +28,7 @@ pipeline:
     commands:
       - cd /rspamd/build
       - set +e
-      - test/rspamd-test -p /rspamd/lua
-      - RET=$?
+      - test/rspamd-test -p /rspamd/lua; RET=$?
       - 'echo "test/rspamd-test exit code: $RET"'
       - set -e
       - luacov-coveralls -o unit_test_lua.json --dryrun
