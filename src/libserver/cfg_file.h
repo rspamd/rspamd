@@ -236,6 +236,7 @@ enum rspamd_log_format_type {
 	RSPAMD_LOG_LUA,
 	RSPAMD_LOG_DIGEST,
 	RSPAMD_LOG_FILENAME,
+	RSPAMD_LOG_FORCED_ACTION,
 };
 
 enum rspamd_log_format_flags {
