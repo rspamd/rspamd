@@ -4,14 +4,10 @@ workspace:
 pipeline:
 
   build:
+    # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-build/Dockerfile
     image: rspamd/ci-ubuntu-build
     group: build
     commands:
-      - echo $CI_WORKSPACE
-      - echo ${CI_WORKSPACE}
-      - echo "${CI_WORKSPACE}"
-      - echo $${CI_WORKSPACE}
-      - echo $$CI_WORKSPACE
       - mkdir /rspamd/build /rspamd/install
       - cd /rspamd/build
       - cmake $${CI_WORKSPACE} -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install
