@@ -12,8 +12,8 @@ pipeline:
       - cd /rspamd/build
       - cmake $${CI_WORKSPACE} -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install -DCMAKE_RULE_MESSAGES=OFF
       - ncpu=$(getconf _NPROCESSORS_ONLN)
-      - make -j $ncpu install
-      - make -j $ncpu rspamd-test
+      - make -j $$ncpu install
+      - make -j $$ncpu rspamd-test
 
   eslint:
     image: node:latest
