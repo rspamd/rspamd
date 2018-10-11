@@ -10,10 +10,10 @@ pipeline:
     commands:
       - mkdir /rspamd/build /rspamd/install
       - cd /rspamd/build
-      - cmake $${CI_WORKSPACE} -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install -DCMAKE_RULE_MESSAGES=OFF
+      - cmake $CI_WORKSPACE -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install -DCMAKE_RULE_MESSAGES=OFF
       - ncpu=$(getconf _NPROCESSORS_ONLN)
-      - make -j $$ncpu install
-      - make -j $$ncpu rspamd-test
+      - make -j $ncpu install
+      - make -j $ncpu rspamd-test
 
   eslint:
     image: node:10-alpine
@@ -29,10 +29,10 @@ pipeline:
       - cd /rspamd/build
       - set +e
       - test/rspamd-test -p /rspamd/lua
-      - RET=$$?
+      - RET=$?
       - luacov-coveralls -o unit_test_lua.json --dryrun
       # coveralls dosn't support layout when object files are located outside git repo root
       # add hack to disable searching for git
       - ln -s /bin/true /usr/local/bin/git
       - coveralls --dump coverage.rspamd-test.dump
-      - exit $$RET
+      - exit $RET
