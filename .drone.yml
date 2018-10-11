@@ -21,3 +21,18 @@ pipeline:
     commands:
       - npm install
       - ./node_modules/.bin/eslint -v && ./node_modules/.bin/eslint ./
+
+  rspamd-test:
+    image: rspamd/ci-ubuntu-test
+    group: tests
+    commands:
+      - cd /rspamd/build
+      - set +e
+      - test/rspamd-test -p /rspamd/lua
+      - RET=$$?
+      - luacov-coveralls -o unit_test_lua.json --dryrun
+      # coveralls dosn't support layout when object files are located outside git repo root
+      # add hack to disable searching for git
+      - ln -s /bin/true /usr/local/bin/git
+      - coveralls --dump coverage.rspamd-test.dump
+      - exit $$RET
