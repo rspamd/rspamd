@@ -145,7 +145,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 
 	new_task->sock = -1;
 	new_task->flags |= (RSPAMD_TASK_FLAG_MIME|RSPAMD_TASK_FLAG_JSON);
-	new_task->pre_result.action = METRIC_ACTION_MAX;
+	new_task->result = rspamd_create_metric_result (new_task);
 
 	new_task->message_id = new_task->queue_id = "undef";
 	new_task->messages = ucl_object_typed_new (UCL_OBJECT);

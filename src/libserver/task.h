@@ -201,12 +201,6 @@ struct rspamd_task {
 	struct event *guard_ev;							/**< Event for input sanity guard 					*/
 
 	gpointer checkpoint;							/**< Opaque checkpoint data							*/
-
-	struct {
-		gint action;								/**< Action of pre filters							*/
-		gchar *str;									/**< String describing action						*/
-	} pre_result;									/**< Result of pre-filters							*/
-
 	ucl_object_t *settings;							/**< Settings applied to task						*/
 
 	const gchar *classifier;						/**< Classifier to learn (if needed)				*/

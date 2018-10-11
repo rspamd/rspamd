@@ -856,7 +856,7 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 	if (act != METRIC_ACTION_NOACTION) {
 		struct rspamd_metric_result *mres;
 
-		mres = rspamd_create_metric_result (task);
+		mres = task->result;
 
 		if (mres != NULL) {
 			if (act == METRIC_ACTION_REJECT) {

@@ -1586,9 +1586,6 @@ lua_task_set_pre_result (lua_State * L)
 
 		if (action < METRIC_ACTION_MAX && action >= METRIC_ACTION_REJECT) {
 			/* We also need to set the default metric to that result */
-			if (!task->result) {
-				task->result = rspamd_create_metric_result (task);
-			}
 
 			task->pre_result.action = action;
 
@@ -4127,10 +4124,6 @@ lua_task_set_settings (lua_State *L)
 			/* Adjust desired actions */
 			mres = task->result;
 
-			if (mres == NULL) {
-				mres = rspamd_create_metric_result (task);
-			}
-
 			for (i = 0; i < METRIC_ACTION_MAX; i++) {
 				elt = ucl_object_lookup_any (act, rspamd_action_to_str (i),
 						rspamd_action_to_str_alt (i), NULL);
@@ -4543,9 +4536,7 @@ lua_task_get_metric_action (lua_State *L)
 	enum rspamd_action_type action;
 
 	if (task) {
-		if ((metric_res = task->result) == NULL) {
-			metric_res = rspamd_create_metric_result (task);
-		}
+		metric_res = task->result;
 
 		action = rspamd_check_action_metric (task, metric_res);
 		lua_pushstring (L, rspamd_action_to_str (action));

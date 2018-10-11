@@ -123,7 +123,7 @@ insert_metric_result (struct rspamd_task *task,
 	gboolean single = !!(flags & RSPAMD_SYMBOL_INSERT_SINGLE);
 	gchar *sym_cpy;
 
-	metric_res = rspamd_create_metric_result (task);
+	metric_res = task->result;
 
 	if (!isfinite (weight)) {
 		msg_warn_task ("detected %s score for symbol %s, replace it with zero",

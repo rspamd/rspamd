@@ -1607,7 +1607,7 @@ rspamd_symbols_cache_make_checkpoint (struct rspamd_task *task,
 	checkpoint->pass = RSPAMD_CACHE_PASS_INIT;
 	task->checkpoint = checkpoint;
 
-	task->result = rspamd_create_metric_result (task);
+	task->result = task->result;
 
 	return checkpoint;
 }

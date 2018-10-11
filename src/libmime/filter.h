@@ -59,8 +59,9 @@ KHASH_INIT (rspamd_symbols_group_hash,
 		rspamd_ptr_hash_func,
 		rspamd_ptr_equal_func);
 struct rspamd_metric_result {
-	double score;                                   /**< total score							*/
+	double score;									/**< total score							*/
 	double grow_factor;								/**< current grow factor					*/
+
 	khash_t(rspamd_symbols_hash) *symbols;			/**< symbols of metric						*/
 	khash_t(rspamd_symbols_group_hash) *sym_groups; /**< groups of symbols						*/
 	gdouble actions_limits[METRIC_ACTION_MAX];		/**< set of actions for this metric			*/
