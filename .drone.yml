@@ -4,18 +4,15 @@ workspace:
 pipeline:
 
   build:
-    image: gcc:5
+    image: rspamd/ci-ubuntu-build
     group: build
     commands:
-      - pwd
-      - set -e
-      - apt-get update -qq
-      - apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8
-      - umask 0000
-      - mkdir /rspamd/build ; mkdir /rspamd/install ; cd /rspamd/build
-      - cmake /rspamd/src/github.com/rspamd/rspamd/ -DDBDIR=/nana -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install
-      - make install -j`nproc`
-      - make rspamd-test -j`nproc`
+      - mkdir /rspamd/build /rspamd/install
+      - cd /rspamd/build
+      - cmake /rspamd/src/github.com/rspamd/rspamd -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install
+      - ncpu=$(getconf _NPROCESSORS_ONLN)
+      - make -j $ncpu install
+      - make -j $ncpu rspamd-test
 
   eslint:
     image: node:latest
@@ -23,70 +20,3 @@ pipeline:
     commands:
       - npm install
       - ./node_modules/.bin/eslint -v && ./node_modules/.bin/eslint ./
-
-  rspamd-test:
-    image: gcc:5
-    group: tests
-    commands:
-      - set -e
-      - apt-get update -qq
-      - apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8 luarocks
-      - apt-get install -qq python-pip python-dev
-      - pip install --upgrade setuptools
-      - pip install --upgrade pyOpenSSL
-      - pip install --upgrade certifi
-      - pip install --upgrade ipaddress
-      - pip install --upgrade urllib3
-      - pip install --upgrade enum34
-      - pip install --upgrade cpp-coveralls requests cryptography
-      - luarocks install luacov
-      - luarocks install luacov-coveralls
-
-      - cd /rspamd/build
-      - set +e; test/rspamd-test -p /rspamd/lua
-      - luacov-coveralls -o unit_test_lua.json --dryrun
-      - coveralls --dump coverage.rspamd-test.dump
-
-  functional:
-    image: gcc:5
-    group: tests
-    commands:
-      - echo 'deb http://repo.yandex.ru/clickhouse/deb/stable/ main/' | tee /etc/apt/sources.list.d/clickhouse.list
-      - apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4    # optional, clickhouse key
-      - apt-get update -qq || true
-      - apt-get install -qq libluajit-5.1-dev libpcre3-dev luarocks opendkim-tools python-pip redis-server libunwind8 libglib2.0-dev libicu-dev libevent-dev python-dev
-      - apt-get install -qq clickhouse-server
-      - apt-get install -qq python-pip python-dev
-      - pip install demjson psutil robotframework http
-      - pip install --upgrade setuptools
-      - pip install --upgrade pyOpenSSL
-      - pip install --upgrade certifi
-      - pip install --upgrade ipaddress
-      - pip install --upgrade urllib3
-      - pip install --upgrade enum34
-      - pip install --upgrade cpp-coveralls requests cryptography
-
-      - luarocks install luacheck
-      - luarocks install luacov
-      - luarocks install luacov-coveralls
-
-      - cd /rspamd/build
-      - umask 0000
-      - set +e; RSPAMD_INSTALLROOT=/rspamd/install robot -x xunit.xml --exclude isbroken /rspamd/src/github.com/rspamd/rspamd/test/functional/cases; export RETURN_CODE=$?
-      - cat log.html
-      - coveralls --dump coverage.functional.dump
-      - exit $RETURN_CODE
-
-  send-coverage:
-    image: gcc:5
-    secrets: [ coveralls_repo_token ]
-    commands: |
-      [ ! $DRONE_COMMIT_BRANCH = 'master' ] && exit 0
-      apt-get update -qq || true
-      apt-get install -qq python-pip python-dev
-      pip install --upgrade setuptools
-      pip install --upgrade pyOpenSSL
-      pip install cpp-coveralls requests cryptography
-      cd /rspamd/build
-      [ ! -z $COVERALLS_REPO_TOKEN ] && /rspamd/src/github.com/rspamd/rspamd/test/functional/util/merge_coveralls.py --input coverage.functional.dump coverage.rspamd-test.dump unit_test_lua.json lua_coverage_report.json --output out.josn --token=$COVERALLS_REPO_TOKEN
-
