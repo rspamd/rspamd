@@ -11,9 +11,10 @@ pipeline:
       - echo ${CI_WORKSPACE}
       - echo "${CI_WORKSPACE}"
       - echo $${CI_WORKSPACE}
+      - echo $$CI_WORKSPACE
       - mkdir /rspamd/build /rspamd/install
       - cd /rspamd/build
-      - cmake ${CI_WORKSPACE} -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install
+      - cmake $${CI_WORKSPACE} -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install
       - ncpu=$(getconf _NPROCESSORS_ONLN)
       - make -j $ncpu install
       - make -j $ncpu rspamd-test
