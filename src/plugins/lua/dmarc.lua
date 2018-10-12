@@ -288,7 +288,7 @@ local function dmarc_check_record(task, record, is_tld)
   return true, result
 end
 
-local function dmarc_validate_policy(task, policy, hdrfromdom)
+local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
   local reason = {}
 
   -- Check dkim and spf symbols
@@ -312,7 +312,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom)
       end
     else
       local spf_tld = rspamd_util.get_tld(spf_domain)
-      if rspamd_util.strequal_caseless(spf_tld, policy.domain) then
+      if rspamd_util.strequal_caseless(spf_tld, dmarc_esld) then
         spf_ok = true
       else
         table.insert(reason, "SPF not aligned (relaxed)")
@@ -326,7 +326,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom)
         end
       else
         local spf_tld = rspamd_util.get_tld(spf_domain)
-        if rspamd_util.strequal_caseless(spf_tld, policy.domain) then
+        if rspamd_util.strequal_caseless(spf_tld, dmarc_esld) then
           spf_tmpfail = true
         end
       end
@@ -365,7 +365,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom)
         else
           local dkim_tld = rspamd_util.get_tld(domain)
 
-          if rspamd_util.strequal_caseless(dkim_tld, policy.domain) then
+          if rspamd_util.strequal_caseless(dkim_tld, dmarc_esld) then
             dkim_ok = true
           else
             dkim_violated = "DKIM not aligned (relaxed)"
@@ -381,7 +381,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom)
           else
             local dkim_tld = rspamd_util.get_tld(domain)
 
-            if rspamd_util.strequal_caseless(dkim_tld, policy.domain) then
+            if rspamd_util.strequal_caseless(dkim_tld, dmarc_esld) then
               dkim_tmpfail = true
             end
           end
@@ -411,9 +411,9 @@ local function dmarc_validate_policy(task, policy, hdrfromdom)
 
   local function handle_dmarc_failure(what, reason_str)
     if not policy.pct or policy.pct == 100 then
-      task:insert_result(what, 1.0,
+      task:insert_result(dmarc_symbols[what], 1.0,
           policy.domain .. ' : ' .. reason_str, policy.dmarc_policy)
-      disposition = "quarantine"
+      disposition = what
     else
       if (math.random(100) > policy.pct) then
         if (not no_sampling_domains or
@@ -422,7 +422,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom)
               policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "sampled_out")
           sampled_out = true
         else
-          task:insert_result(what, 1.0,
+          task:insert_result(dmarc_symbols[what], 1.0,
               policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "local_policy")
           disposition = what
         end
@@ -459,7 +459,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom)
           ' : ' .. 'SPF/DKIM temp error', policy.dmarc_policy)
     else
       -- We can now check the failed policy and maybe send report data elt
-      local reason_str = table.concat(reason, ',')
+      local reason_str = table.concat(reason, ', ')
 
       if policy.dmarc_policy == 'quarantine' then
         handle_dmarc_failure('quarantine', reason_str)
@@ -577,20 +577,20 @@ local function dmarc_callback(task)
   local dmarc_domain_policy = {}
   local dmarc_tld_policy = {}
 
-  local function process_dmarc_policy(policy, is_tld)
-    lua_util.debugm(N, task, "validate DMARC policy (is_tld=%s): %s",
-        is_tld, policy)
+  local function process_dmarc_policy(policy, final)
+    lua_util.debugm(N, task, "validate DMARC policy (final=%s): %s",
+        true, policy)
     if policy.err and policy.symbol then
       -- In case of fatal errors or final check for tld, we give up and
       -- insert result
-      if is_tld or policy.fatal then
+      if final or policy.fatal then
         task:insert_result(policy.symbol, 1.0, policy.err)
         maybe_force_action(task, policy.disposition)
 
         return true
       end
     elseif policy.dmarc_policy then
-      dmarc_validate_policy(task, policy, hfromdom)
+      dmarc_validate_policy(task, policy, hfromdom, dmarc_domain)
 
       return true -- We have a more specific version, use it
     end
@@ -656,7 +656,9 @@ local function dmarc_callback(task)
         -- We have checked both tld and real domain (if different)
         if not process_dmarc_policy(dmarc_domain_policy, false) then
           -- Try tld policy as well
-          process_dmarc_policy(dmarc_tld_policy, true)
+          if not process_dmarc_policy(dmarc_tld_policy, true) then
+            process_dmarc_policy(dmarc_domain_policy, true)
+          end
         end
       end
     end
