@@ -27,6 +27,7 @@ pipeline:
   rspamd-test:
     # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test/Dockerfile
     image: rspamd/ci-ubuntu-test
+    group: tests
     commands:
       - cd /rspamd/build
       - set +e
@@ -42,6 +43,7 @@ pipeline:
   functional:
     # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test-func/Dockerfile
     image: rspamd/ci-ubuntu-test-func
+    group: tests
     commands:
       - cd /rspamd/build
       - set +e
