@@ -29,16 +29,17 @@ pipeline:
     image: rspamd/ci-ubuntu-test
     group: tests
     commands:
-      - cd /rspamd/build
+      # rspamd-test and functional test both use luacov.stats.out file and should be started from
+      # different directories (if started in parallel)
+      - cd /rspamd/build/test
       - set +e
-      - test/rspamd-test -p /rspamd/lua; EXIT_CODE=$?
+      - ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
       - set -e
-      - wc -l luacov.*
-      - luacov-coveralls -o unit_test_lua.json --dryrun
+      - luacov-coveralls -o /rspamd/build/unit_test_lua.json --dryrun
       # coveralls dosn't support layout when object files are located outside git repo root
       # add hack to disable searching for git
       - ln -s /bin/true /usr/local/bin/git
-      - coveralls --dump coverage.rspamd-test.dump
+      - coveralls --dump /rspamd/build/coverage.rspamd-test.dump
       - exit $EXIT_CODE
 
   functional:
