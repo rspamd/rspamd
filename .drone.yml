@@ -37,3 +37,15 @@ pipeline:
       - ln -s /bin/true /usr/local/bin/git
       - coveralls --dump coverage.rspamd-test.dump
       - exit $RET
+
+  functional:
+    image: rspamd/ci-ubuntu-test-func
+    group: tests
+    commands:
+      - cd /rspamd/build
+      - set +e
+      - RSPAMD_INSTALLROOT=/rspamd/install robot --xunit xunit.xml --exclude isbroken $CI_WORKSPACE/test/functional/cases; EXIT_CODE=$?
+      - set -e
+      - wc -l log.html
+      - coveralls --dump coverage.functional.dump
+      - exit $EXIT_CODE
