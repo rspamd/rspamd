@@ -46,6 +46,7 @@ pipeline:
       - set +e
       - RSPAMD_INSTALLROOT=/rspamd/install robot --xunit xunit.xml --exclude isbroken $CI_WORKSPACE/test/functional/cases; EXIT_CODE=$?
       - set -e
-      - wc -l log.html
+      # coveralls will not find git repo anyway, see above
+      - ln -s /bin/true /usr/local/bin/git
       - coveralls --dump coverage.functional.dump
       - exit $EXIT_CODE
