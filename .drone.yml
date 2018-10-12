@@ -20,7 +20,8 @@ pipeline:
     group: build
     commands:
       - npm install
-      - ./node_modules/.bin/eslint -v && ./node_modules/.bin/eslint ./
+      - ./node_modules/.bin/eslint -v
+      - ./node_modules/.bin/eslint ./
 
   rspamd-test:
     image: rspamd/ci-ubuntu-test
