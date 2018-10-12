@@ -242,11 +242,10 @@ insert_metric_result (struct rspamd_task *task,
 			k = kh_get (rspamd_options_hash, s->options, opt);
 
 			if (k == kh_end (s->options)) {
-				single = TRUE;
+				rspamd_task_add_result_option (task, s, opt);
 			}
 			else {
 				s->nshots ++;
-				rspamd_task_add_result_option (task, s, opt);
 			}
 		}
 		else {
