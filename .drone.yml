@@ -1,3 +1,4 @@
+---
 workspace:
   base: /rspamd
 
@@ -24,6 +25,7 @@ pipeline:
       - ./node_modules/.bin/eslint ./
 
   rspamd-test:
+    # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test/Dockerfile
     image: rspamd/ci-ubuntu-test
     group: tests
     commands:
@@ -39,6 +41,7 @@ pipeline:
       - exit $EXIT_CODE
 
   functional:
+    # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test-func/Dockerfile
     image: rspamd/ci-ubuntu-test-func
     group: tests
     commands:
