@@ -132,7 +132,7 @@ if __name__ == '__main__':
     with open(args.output, 'w') as f:
         f.write(json.dumps(j1))
 
-    if not args.token is None:
+    if args.token:
         j1['repo_token'] = args.token
         print("sending data to coveralls...")
         r = requests.post('https://coveralls.io/api/v1/jobs', files={"json_file": json.dumps(j1)})
