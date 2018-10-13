@@ -111,12 +111,12 @@ if __name__ == '__main__':
 
     prepare_path_mapping()
 
-    with codecs.open(args.input[0], 'r', 'utf-8-sig') as fh:
+    with args.input[0].open(encoding='utf-8-sig') as fh:
         j1 = json.load(fh)
 
     files = merge({}, j1)
     for i in range(1, len(args.input)):
-        with codecs.open(args.input[i], 'r', 'utf-8-sig') as fh:
+        with args.input[i].open(encoding='utf-8-sig') as fh:
             j2 = json.load(fh)
 
         files = merge(files, j2)
