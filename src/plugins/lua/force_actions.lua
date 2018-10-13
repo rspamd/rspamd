@@ -79,9 +79,9 @@ local function gen_cb(expr, act, pool, message, subject, raction, honor, limit)
         task:set_metric_subject(subject)
       end
       if type(message) == 'string' then
-        task:set_pre_result(act, message)
+        task:set_pre_result(act, message, N)
       else
-        task:set_pre_result(act)
+        task:set_pre_result(act, nil, N)
       end
       return true, act
     end

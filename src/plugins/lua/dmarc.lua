@@ -201,7 +201,7 @@ local function maybe_force_action(task, disposition)
     if force_action then
       -- Don't do anything if pre-result has been already set
       if task:has_pre_result() then return end
-      task:set_pre_result(force_action, 'Action set by DMARC')
+      task:set_pre_result(force_action, 'Action set by DMARC', N)
     end
   end
 end

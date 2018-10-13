@@ -123,7 +123,7 @@ local function yield_result(task, rule, vname)
         lua_util.template(rule.message or 'Rejected', {
           SCANNER = rule['type'],
           VIRUS = vname,
-        }))
+        }), N)
   end
 end
 

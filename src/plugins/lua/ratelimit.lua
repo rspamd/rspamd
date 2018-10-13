@@ -556,7 +556,7 @@ local function ratelimit_cb(task)
               bucket.burst, bucket.rate,
               data[2], data[3], data[4])
           task:set_pre_result('soft reject',
-              message_func(task, lim_name, prefix, bucket))
+              message_func(task, lim_name, prefix, bucket), N)
         end
       end
     end
