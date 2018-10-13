@@ -110,7 +110,7 @@ if __name__ == '__main__':
 
     prepare_path_mapping()
 
-    j1 = json.loads(args.input[0].read())
+    j1 = json.loads(args.input[0].read().decode("utf-8-sig"))
 
     files = merge({}, j1)
     for i in xrange(1, len(args.input)):
