@@ -45,6 +45,7 @@ pipeline:
       # rspamd-test and functional test both use luacov.stats.out file and should be started from
       # different directories (if started in parallel)
       - cd /rspamd/build/test
+      - ls -l /rspamd/build/contrib/t1ha/CMakeFiles /rspamd/build/contrib/t1ha/CMakeFiles/rspamd-t1ha.dir
       - set +e
       - ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
       - set -e
