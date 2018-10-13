@@ -130,8 +130,8 @@ if __name__ == '__main__':
 
         if not j1['service_job_id'] and 'CIRCLE_BUILD_NUM' in os.environ:
             j1['service_job_id'] = os.environ['CIRCLE_BUILD_NUM']
-        elif not j1['service_job_id'] and 'DRONE_PREV_BUILD_NUMBER' in os.environ:
-            j1['service_job_id'] = os.environ['DRONE_PREV_BUILD_NUMBER']
+        elif not j1['service_job_id'] and 'CI_BUILD_NUMBER' in os.environ:
+            j1['service_job_id'] = os.environ['CI_BUILD_NUMBER']
 
         if 'CIRCLECI' in os.environ and os.environ['CIRCLECI']:
             j1['service_name'] = 'circleci'
