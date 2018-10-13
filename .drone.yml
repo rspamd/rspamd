@@ -51,9 +51,6 @@ pipeline:
       # luacov-coveralls reads luacov.stats.out written by rspamd-test using luacov module
       # and writes json report for coveralls.io service
       - luacov-coveralls -o /rspamd/build/unit_test_lua.json --dryrun
-      # coveralls dosn't support layout when object files are located outside git repo root
-      # add hack to disable searching for git
-      - ln -s /bin/true /usr/local/bin/git
       - cd /rspamd/build
       - coveralls --dump coverage.rspamd-test.dump
       - exit $EXIT_CODE
@@ -61,14 +58,13 @@ pipeline:
   functional:
     # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test-func/Dockerfile
     image: rspamd/ci-ubuntu-test-func
+    pull: true
     group: tests
     commands:
       - cd /rspamd/build
       - set +e
       - RSPAMD_INSTALLROOT=/rspamd/install robot --xunit xunit.xml --exclude isbroken $CI_WORKSPACE/test/functional/cases; EXIT_CODE=$?
       - set -e
-      # coveralls will not find git repo anyway, see above
-      - ln -s /bin/true /usr/local/bin/git
       - coveralls --dump coverage.functional.dump
       - exit $EXIT_CODE
 
