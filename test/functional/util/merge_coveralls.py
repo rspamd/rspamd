@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from __future__ import print_function
 
@@ -16,7 +16,7 @@ if sys.version_info.major > 2:
 # install path to repository mapping
 # if path mapped to None, it means that the file should be ignored (i.e. test file/helper)
 # first matched path counts.
-# terminating slash should be added for directories 
+# terminating slash should be added for directories
 path_mapping = [
     ("${install-dir}/share/rspamd/lib/fun.lua", None),
     ("${install-dir}/share/rspamd/lib/", "lualib/"),
@@ -45,7 +45,7 @@ parser.add_argument('--token', type=str, help='If present, the file will be uplo
 
 def merge_coverage_vectors(c1, c2):
     assert(len(c1) == len(c2))
-    
+
     for i in xrange(0, len(c1)):
         if c1[i] is None and c2[i] is None:
             pass
@@ -98,7 +98,7 @@ def prepare_path_mapping():
         new_key = path_mapping[i][0].replace("${install-dir}", install_dir)
         new_key = new_key.replace("${project-root}", repository_root)
         new_key = new_key.replace("${build-dir}", build_dir)
-                    
+
         path_mapping[i] = (new_key, path_mapping[i][1])
 
 if __name__ == '__main__':
@@ -116,7 +116,7 @@ if __name__ == '__main__':
     for i in xrange(1, len(args.input)):
         j2 = json.loads(args.input[i].read())
         files = merge(files, j2)
-        
+
         if 'git' not in j1 and 'git' in j2:
             j1['git'] = j2['git']
         if 'service_name' not in j1 and 'service_name' in j2:
