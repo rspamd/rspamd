@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sys
+import codecs
 
 import requests
 
@@ -46,7 +47,7 @@ parser.add_argument('--token', type=str, help='If present, the file will be uplo
 def merge_coverage_vectors(c1, c2):
     assert(len(c1) == len(c2))
 
-    for i in xrange(0, len(c1)):
+    for i in range(0, len(c1)):
         if c1[i] is None and c2[i] is None:
             pass
         elif type(c1[i]) is int and c2[i] is None:
@@ -94,7 +95,7 @@ def merge(files, j1):
     return files
 
 def prepare_path_mapping():
-    for i in xrange(0, len(path_mapping)):
+    for i in range(0, len(path_mapping)):
         new_key = path_mapping[i][0].replace("${install-dir}", install_dir)
         new_key = new_key.replace("${project-root}", repository_root)
         new_key = new_key.replace("${build-dir}", build_dir)
@@ -110,11 +111,14 @@ if __name__ == '__main__':
 
     prepare_path_mapping()
 
-    j1 = json.loads(args.input[0].read().decode("utf-8-sig"))
+    with codecs.open(args.input[0], 'r', 'utf-8-sig') as fh:
+        j1 = json.load(fh)
 
     files = merge({}, j1)
-    for i in xrange(1, len(args.input)):
-        j2 = json.loads(args.input[i].read())
+    for i in range(1, len(args.input)):
+        with codecs.open(args.input[i], 'r', 'utf-8-sig') as fh:
+            j2 = json.load(fh)
+
         files = merge(files, j2)
 
         if 'git' not in j1 and 'git' in j2:
