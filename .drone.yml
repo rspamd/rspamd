@@ -20,7 +20,7 @@ pipeline:
     commands:
       # build directories should be writable by nobody, for rspamd in functional tests
       # works as nobody and writes coverage files there
-      - test "$(id -un) = nobody"
+      - test "$(id -un)" = nobody
       - cd /rspamd/build
       - cmake $CI_WORKSPACE -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install -DCMAKE_RULE_MESSAGES=OFF
       - ncpu=$(getconf _NPROCESSORS_ONLN)
@@ -38,8 +38,10 @@ pipeline:
   rspamd-test:
     # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test/Dockerfile
     image: rspamd/ci-ubuntu-test
+    pull: true
     group: tests
     commands:
+      - test "$(id -un)" = nobody
       # rspamd-test and functional test both use luacov.stats.out file and should be started from
       # different directories (if started in parallel)
       - cd /rspamd/build/test
