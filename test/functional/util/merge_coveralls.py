@@ -37,7 +37,7 @@ path_mapping = [
 ]
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--input', type=open, required=True, nargs='+', help='input files')
+parser.add_argument('--input', type=str, required=True, nargs='+', help='input files')
 parser.add_argument('--output', type=str, required=True, help='output file)')
 parser.add_argument('--root', type=str, required=False, default="/rspamd/src/github.com/rspamd/rspamd", help='repository root)')
 parser.add_argument('--install-dir', type=str, required=False, default="/rspamd/install", help='install root)')
@@ -111,12 +111,12 @@ if __name__ == '__main__':
 
     prepare_path_mapping()
 
-    with args.input[0].open(encoding='utf-8-sig') as fh:
+    with codecs.open(args.input[0], 'r', encoding='utf-8') as fh:
         j1 = json.load(fh)
 
     files = merge({}, j1)
     for i in range(1, len(args.input)):
-        with args.input[i].open(encoding='utf-8-sig') as fh:
+        with codecs.open(args.input[i], 'r', encoding='utf-8') as fh:
             j2 = json.load(fh)
 
         files = merge(files, j2)
