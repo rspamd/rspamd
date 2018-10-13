@@ -138,7 +138,7 @@ if __name__ == '__main__':
         elif 'DRONE' in os.environ and os.environ['DRONE']:
             j1['service_name'] = 'drone'
 
-    j1['source_files'] = files.values()
+    j1['source_files'] = list(files.values())
 
     with open(args.output, 'w') as f:
         f.write(json.dumps(j1))
