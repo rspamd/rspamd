@@ -46,6 +46,8 @@ pipeline:
       - set +e
       - ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
       - set -e
+      # luacov-coveralls reads luacov.stats.out written by rspamd-test using luacov module
+      # and writes json report for coveralls.io service
       - luacov-coveralls -o /rspamd/build/unit_test_lua.json --dryrun
       # coveralls dosn't support layout when object files are located outside git repo root
       # add hack to disable searching for git
