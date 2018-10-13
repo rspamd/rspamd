@@ -49,6 +49,7 @@ pipeline:
       - set +e
       - ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
       - set -e
+      - ls -l /rspamd/build/contrib/t1ha/CMakeFiles /rspamd/build/contrib/t1ha/CMakeFiles/rspamd-t1ha.dir
       # luacov-coveralls reads luacov.stats.out written by rspamd-test using luacov module
       # and writes json report for coveralls.io service
       - luacov-coveralls -o /rspamd/build/unit_test_lua.json --dryrun
