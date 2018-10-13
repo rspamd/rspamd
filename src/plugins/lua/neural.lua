@@ -950,6 +950,8 @@ else
   else
     torch = require "torch"
     nn = require "nn"
+
+    torch.setnumthreads(1)
   end
 
   local id = rspamd_config:register_symbol({
