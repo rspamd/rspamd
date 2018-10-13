@@ -113,6 +113,11 @@ define(["jquery", "footable", "humanize"],
             };
         }
 
+        function getSelector(id) {
+            var e = document.getElementById(id);
+            return e.options[e.selectedIndex].value;
+        }
+
         function get_compare_function() {
             var compare_functions = {
                 magnitude: function (e1, e2) {
@@ -125,11 +130,6 @@ define(["jquery", "footable", "humanize"],
                     return e2.score - e1.score;
                 }
             };
-
-            function getSelector(id) {
-                var e = document.getElementById(id);
-                return e.options[e.selectedIndex].value;
-            }
 
             return compare_functions[getSelector("selSymOrder")];
         }
@@ -346,7 +346,13 @@ define(["jquery", "footable", "humanize"],
                 sortValue: function (val) { return Number(val.options.sortValue); }
             }, {
                 name: "symbols",
-                title: "Symbols",
+                title: "Symbols<br /><br />" +
+                        '<span style="font-weight:normal;">Sort by:</span><br />' +
+                        '<div class="btn-group btn-group-xs btn-sym-order" data-toggle="buttons">' +
+                            '<button type="button" class="btn btn-default btn-sym-magnitude" value="magnitude">Magnitude</button>' +
+                            '<button type="button" class="btn btn-default btn-sym-score" value="score">Value</button>' +
+                            '<button type="button" class="btn btn-default btn-sym-name" value="name">Name</button>' +
+                        "</div>",
                 breakpoints: "all",
                 style: {
                     "font-size": "11px",
@@ -611,7 +617,15 @@ define(["jquery", "footable", "humanize"],
                     "ready.ft.table": drawTooltips,
                     "after.ft.sorting": drawTooltips,
                     "after.ft.paging": drawTooltips,
-                    "after.ft.filtering": drawTooltips
+                    "after.ft.filtering": drawTooltips,
+                    "expand.ft.row": function (e, ft, row) {
+                        setTimeout(function () {
+                            var detail_row = row.$el.next();
+                            var order = getSelector("selSymOrder");
+                            detail_row.find(".btn-sym-" + order)
+                                .addClass("active").siblings().removeClass("active");
+                        }, 5);
+                    }
                 }
             });
         }
@@ -624,14 +638,15 @@ define(["jquery", "footable", "humanize"],
         }
 
         ui.getHistory = function (rspamd, tables) {
-            function waitForRowsDisplayed(callback, iteration) {
+            function waitForRowsDisplayed(rows_total, callback, iteration) {
                 var i = (typeof iteration === "undefined") ? 10 : iteration;
                 var num_rows = $("#historyTable > tbody > tr").length;
-                if (num_rows === rows_per_page) {
+                if (num_rows === rows_per_page ||
+                    num_rows === rows_total) {
                     return callback();
                 } else if (--i) {
                     setTimeout(function () {
-                        waitForRowsDisplayed(callback, i);
+                        waitForRowsDisplayed(rows_total, callback, i);
                     }, 500);
                 }
                 return null;
@@ -676,7 +691,7 @@ define(["jquery", "footable", "humanize"],
                             tables.history.rows.load(items);
                             if (version) { // Non-legacy
                                 // Is there a way to get an event when all rows are loaded?
-                                waitForRowsDisplayed(function () {
+                                waitForRowsDisplayed(items.length, function () {
                                     drawTooltips();
                                 });
                             }
@@ -697,18 +712,29 @@ define(["jquery", "footable", "humanize"],
         };
 
         ui.setup = function (rspamd, tables) {
-            $("#updateHistory").off("click");
-            $("#updateHistory").on("click", function (e) {
-                e.preventDefault();
-                ui.getHistory(rspamd, tables);
-            });
-            $("#selSymOrder").unbind().change(function () {
+            function change_symbols_order(order) {
+                $(".btn-sym-" + order).addClass("active").siblings().removeClass("active");
                 var compare_function = get_compare_function();
                 $.each(tables.history.rows.all, function (i, row) {
                     var cell_val = sort_symbols(symbols[i], compare_function);
                     row.cells[8].val(cell_val, false, true);
                 });
                 drawTooltips();
+            }
+
+            $("#updateHistory").off("click");
+            $("#updateHistory").on("click", function (e) {
+                e.preventDefault();
+                ui.getHistory(rspamd, tables);
+            });
+            $("#selSymOrder").unbind().change(function () {
+                var order = this.value;
+                change_symbols_order(order);
+            });
+            $(document).on("click", ".btn-sym-order button", function () {
+                var order = this.value;
+                $("#selSymOrder").val(order);
+                change_symbols_order(order);
             });
 
             // @reset history log

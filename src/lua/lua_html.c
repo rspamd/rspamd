@@ -260,12 +260,21 @@ lua_html_push_image (lua_State *L, struct html_image *img)
 {
 	LUA_TRACE_POINT;
 	struct html_tag **ptag;
+	struct rspamd_url **purl;
 
 	lua_newtable (L);
 
 	if (img->src) {
 		lua_pushstring (L, "src");
 		lua_pushstring (L, img->src);
+		lua_settable (L, -3);
+	}
+
+	if (img->url) {
+		lua_pushstring (L, "url");
+		purl = lua_newuserdata (L, sizeof (gpointer));
+		*purl = img->url;
+		rspamd_lua_setclass (L, "rspamd{url}", -1);
 		lua_settable (L, -3);
 	}
 

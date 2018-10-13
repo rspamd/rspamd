@@ -589,7 +589,7 @@ rspamd_monitored_stop (struct rspamd_monitored *m)
 {
 	g_assert (m != NULL);
 
-	if (event_get_base (&m->periodic)) {
+	if (rspamd_event_pending (&m->periodic, EV_TIMEOUT)) {
 		event_del (&m->periodic);
 	}
 }
@@ -606,7 +606,7 @@ rspamd_monitored_start (struct rspamd_monitored *m)
 			0.0);
 	double_to_tv (jittered, &tv);
 
-	if (event_get_base (&m->periodic)) {
+	if (rspamd_event_pending (&m->periodic, EV_TIMEOUT)) {
 		event_del (&m->periodic);
 	}
 
@@ -626,8 +626,8 @@ rspamd_monitored_ctx_destroy (struct rspamd_monitored_ctx *ctx)
 	for (i = 0; i < ctx->elts->len; i ++) {
 		m = g_ptr_array_index (ctx->elts, i);
 		rspamd_monitored_stop (m);
-		g_free (m->url);
 		m->proc.monitored_dtor (m, m->ctx, m->proc.ud);
+		g_free (m->url);
 		g_free (m);
 	}
 

@@ -157,13 +157,13 @@ local function greylist_message(task, end_time, why)
   if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
   if settings.message_func then
     task:set_pre_result(settings['action'],
-      settings.message_func(task, end_time))
+      settings.message_func(task, end_time), N)
   else
     local message = settings['message']
     if settings.report_time then
       message = string.format("%s: %s", message, end_time)
     end
-    task:set_pre_result(settings['action'], message)
+    task:set_pre_result(settings['action'], message, N)
   end
 
   task:set_flag('greylisted')

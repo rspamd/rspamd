@@ -714,14 +714,25 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	gpointer k, v;
 	gint fd;
 	bool ret;
+	gchar path[PATH_MAX];
 
-	(void)unlink (name);
-	fd = open (name, O_CREAT | O_TRUNC | O_WRONLY | O_EXCL, 00644);
+	rspamd_snprintf (path, sizeof (path), "%s.new", name);
 
-	if (fd == -1) {
-		msg_info_cache ("cannot open file %s, error %d, %s", name,
-				errno, strerror (errno));
-		return FALSE;
+	for (;;) {
+		fd = open (path, O_CREAT | O_WRONLY | O_EXCL, 00644);
+
+		if (fd == -1) {
+			if (errno == EEXIST) {
+				/* Some other process is already writing data, give up silently */
+				return TRUE;
+			}
+
+			msg_info_cache ("cannot open file %s, error %d, %s", path,
+					errno, strerror (errno));
+			return FALSE;
+		}
+
+		break;
 	}
 
 	rspamd_file_lock (fd, FALSE);
@@ -731,7 +742,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 			sizeof (rspamd_symbols_cache_magic));
 
 	if (write (fd, &hdr, sizeof (hdr)) == -1) {
-		msg_info_cache ("cannot write to file %s, error %d, %s", name,
+		msg_info_cache ("cannot write to file %s, error %d, %s", path,
 				errno, strerror (errno));
 		rspamd_file_unlock (fd, FALSE);
 		close (fd);
@@ -772,6 +783,13 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	ucl_object_unref (top);
 	rspamd_file_unlock (fd, FALSE);
 	close (fd);
+
+	if (rename (path, name) == -1) {
+		msg_info_cache ("cannot rename %s -> %s, error %d, %s", path, name,
+				errno, strerror (errno));
+		(void)unlink (path);
+		ret = FALSE;
+	}
 
 	return ret;
 }
@@ -1285,6 +1303,9 @@ rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 	setbit (checkpoint->processed_bits, item->id * 2 + 1);
 
 	if (checkpoint->pass > 0) {
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+		event_base_update_cache_time (task->ev_base);
+#endif
 		for (i = 0; i < (gint)checkpoint->waitq->len; i ++) {
 			it = g_ptr_array_index (checkpoint->waitq, i);
 
@@ -1364,9 +1385,26 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 					rspamd_symbols_cache_watcher_cb,
 					item);
 			msg_debug_task ("execute %s, %d", item->symbol, item->id);
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+			struct timeval tv;
+
+			event_base_update_cache_time (task->ev_base);
+			event_base_gettimeofday_cached (task->ev_base, &tv);
+			t1 = tv_to_double (&tv);
+#else
 			t1 = rspamd_get_ticks (FALSE);
+#endif
+
 			item->func (task, item->user_data);
+
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+			event_base_update_cache_time (task->ev_base);
+			event_base_gettimeofday_cached (task->ev_base, &tv);
+			t2 = tv_to_double (&tv);
+#else
 			t2 = rspamd_get_ticks (FALSE);
+#endif
+
 			diff = (t2 - t1);
 
 			if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {
@@ -1569,7 +1607,7 @@ rspamd_symbols_cache_make_checkpoint (struct rspamd_task *task,
 	checkpoint->pass = RSPAMD_CACHE_PASS_INIT;
 	task->checkpoint = checkpoint;
 
-	task->result = rspamd_create_metric_result (task);
+	task->result = task->result;
 
 	return checkpoint;
 }

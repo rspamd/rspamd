@@ -1,3 +1,6 @@
+
+local msg
+
 context("Lua util - extract_specific_urls", function()
   local util  = require 'lua_util'
   local mpool = require "rspamd_mempool"
@@ -43,6 +46,7 @@ context("Lua util - extract_specific_urls", function()
     {expect = url_list, filter = nil, limit = 9999, need_emails = true, prefix = 'p'},
     {expect = {}, filter = (function() return false end), limit = 9999, need_emails = true, prefix = 'p'},
     {expect = {"domain4.co.net", "test.com"}, filter = nil, limit = 2, need_emails = true, prefix = 'p'},
+    {expect = {"domain4.co.net", "test.com", "domain3.org"}, filter = nil, limit = 3, need_emails = true, prefix = 'p'},
     {
       expect = {"gov.co.net", "tesco.co.net", "domain1.co.net", "domain2.co.net", "domain3.co.net", "domain4.co.net"},
       filter = (function(s) return s:get_host():sub(-4) == ".net" end),
@@ -79,17 +83,16 @@ context("Lua util - extract_specific_urls", function()
 
   local pool = mpool.create()
 
-  for i,c in ipairs(cases) do
-
-    local function prepare_url_list(c)
-      return fun.totable(fun.map(
+  local function prepare_url_list(list)
+    return fun.totable(fun.map(
     function (u) return url.create(pool, u) end,
-    c.input or url_list
+    list or url_list
     ))
   end
 
+  for i,c in ipairs(cases) do
     test("extract_specific_urls, backward compatibility case #" .. i, function()
-      task_object.urls = prepare_url_list(c)
+      task_object.urls = prepare_url_list(c.input)
       if (c.esld_limit) then
         -- not awailable in deprecated version
         return
@@ -106,7 +109,7 @@ context("Lua util - extract_specific_urls", function()
     end)
 
     test("extract_specific_urls " .. i, function()
-      task_object.urls = prepare_url_list(c)
+      task_object.urls = prepare_url_list(c.input)
 
       local actual = util.extract_specific_urls({
         task = task_object,
@@ -126,6 +129,20 @@ context("Lua util - extract_specific_urls", function()
       assert_rspamd_table_eq({actual = actual_result, expect = c.expect})
     end)
   end
+
+  test("extract_specific_urls, another case", function()
+    task_object.urls = prepare_url_list {"abc.net", "abc.com", "abc.net", "abc.za.org"}
+    local actual = util.extract_specific_urls(task_object, 3, true)
+
+    local actual_result = prepare_actual_result(actual)
+    table.sort(actual_result)
+    --[[
+      local s = logger.slog("%1 =?= %2", c.expect, actual_result)
+      print(s) --]]
+
+    assert_rspamd_table_eq({actual = actual_result, expect = {"abc.com", "abc.net", "abc.za.org"}})
+  end)
+
 
 --[[ ******************* kinda functional *************************************** ]]
   local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
@@ -156,7 +173,36 @@ context("Lua util - extract_specific_urls", function()
     local cfg = rspamd_util.config_from_ucl(config, "INIT_URL,INIT_LIBS,INIT_SYMCACHE,INIT_VALIDATE,INIT_PRELOAD_MAPS")
     assert_not_nil(cfg)
 
-    local msg = [[
+    local expect = {"example.net", "domain.com"}
+    local res,task = rspamd_task.load_from_string(msg, rspamd_config)
+
+    if not res then
+      assert_true(false, "failed to load message")
+    end
+
+    if not task:process_message() then
+      assert_true(false, "failed to process message")
+    end
+
+    local actual = util.extract_specific_urls({
+      task = task,
+      limit = 2,
+      esld_limit = 2,
+    })
+
+    local actual_result = prepare_actual_result(actual)
+
+    --[[
+      local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
+      print(s) --]]
+
+    assert_equal("domain.com", actual_result[1], "checking that first url is the one with highest suspiciousness level")
+
+  end)
+end)
+
+--[=========[ *******************  message  ******************* ]=========]
+msg = [[
 From: <>
 To: <nobody@example.com>
 Subject: test
@@ -187,30 +233,3 @@ Content-Type: text/html; charset="utf-8"
 <a href="http://domain.com">http://example.net/</a>
 </html>
 ]]
-    local expect = {"example.net", "domain.com"}
-    local res,task = rspamd_task.load_from_string(msg, rspamd_config)
-
-    if not res then
-      assert_true(false, "failed to load message")
-    end
-
-    if not task:process_message() then
-      assert_true(false, "failed to process message")
-    end
-
-    local actual = util.extract_specific_urls({
-      task = task,
-      limit = 2,
-      esld_limit = 2,
-    })
-
-    local actual_result = prepare_actual_result(actual)
-
-    --[[
-      local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
-      print(s) --]]
-
-    assert_equal("domain.com", actual_result[1], "checking that first url is the one with highest suspiciousness level")
-
-  end)
-end)

@@ -73,7 +73,7 @@ rspamd_redis_cache_fin (gpointer data)
 	redisAsyncContext *redis;
 
 	rt->has_event = FALSE;
-	if (event_get_base (&rt->timeout_event)) {
+	if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
 		event_del (&rt->timeout_event);
 	}
 

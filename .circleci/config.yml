@@ -11,36 +11,30 @@ references:
       name: Capturing coverage data
       command: |
         set -e
-        sudo apt-get install -qq lcov
-        gem install coveralls-lcov
-        lcov --no-external -b ../project -d ../project -c --output-file coverage.${CIRCLE_JOB}.info
+        sudo apt-get install -qq python-pip
+        sudo pip install cpp-coveralls
 
-  - &capture_lua_coverage_data
-    run:
-      name: Capturing Lua coverage data
-      command: |
-        set -e
-        if [ ! -z $COVERALLS_REPO_TOKEN ]; then luacov-coveralls -t ${COVERALLS_REPO_TOKEN} || true; fi
-
-  - &restore_coverage_data
-    restore_cache:
-      keys:
-        - coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
+        # further, these files will be saved in cache and used in "send-coverage" step
+        # see "merge_and_upload_coverage_data" and "save_cache" records
+        coveralls --dump coverage.${CIRCLE_JOB}.dump
 
   - &merge_and_upload_coverage_data
     run:
       name: Merging and uploading coverage data
       command: |
         set -e
-        if [ -f ~/project/coverage.rspamd-test.info ] && [ -f ~/project/coverage.functional.info ]; then
-            sudo apt-get install -qq lcov
-            lcov -a ~/project/coverage.rspamd-test.info -t rspamd-test -a ~/project/coverage.functional.info -t functional -o coverage.info
-            gem install coveralls-lcov
-            sudo pip install cpp-coveralls
-            sudo luarocks install luacov-coveralls
+        if [ -f ~/project/coverage.rspamd-test.dump ] && [ -f ~/project/coverage.functional.dump ]; then
+            sudo apt-get install -qq python-pip python-dev
+            sudo pip install --upgrade setuptools
+            sudo pip install --upgrade pyOpenSSL
+            sudo pip install cpp-coveralls requests cryptography
+
+            cd ~/project
             if [ ! -z $COVERALLS_REPO_TOKEN ]; then
-              coveralls --lcov-file coverage.info --dump coveralls.dump
-              luacov-coveralls -t ${COVERALLS_REPO_TOKEN} -j coveralls.dump --root=../project
+              # Merge Lua coverage (collected into lua_coverage_report.json) and with C-coverage
+              # (in coverage.rspamd-test.dump, coverage.functional.dump, see &capture_coverage_data)
+              # and finally upload it into coveralls.io
+              test/functional/util/merge_coveralls.py --input coverage.functional.dump coverage.rspamd-test.dump lua_coverage_report.json unit_test_lua.json --output out.josn --token=${COVERALLS_REPO_TOKEN}
             fi
         fi
 
@@ -80,20 +74,21 @@ jobs:
       - run: sudo apt-get install -qq cmake libevent-dev libglib2.0-dev libicu-dev libluajit-5.1-dev libmagic-dev libsqlite3-dev libssl-dev ragel libunwind-dev libunwind8 luarocks
       - run: sudo luarocks install luacheck
       - run: sudo luarocks install luacov
+      - run: sudo luarocks install luacov-coveralls
 
       - run: cd ../build
       - run: make rspamd-test -j`nproc`
       - run: set +e; test/rspamd-test -p /rspamd/lua; echo "export RETURN_CODE=$?" >> $BASH_ENV
+      - run: luacov-coveralls -o unit_test_lua.json --dryrun
 
       - *capture_coverage_data
-      - *capture_lua_coverage_data
 
       # Share coverage data between jobs
       - save_cache:
-          key: coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
+          key: coverage-rspamd-test-{{ .Environment.CIRCLE_WORKFLOW_ID }}
           paths:
-            - coverage.rspamd-test.info
-            - luacov.stats.out
+            - coverage.rspamd-test.dump
+            - unit_test_lua.json
 
       - run: (exit $RETURN_CODE)
 
@@ -107,12 +102,13 @@ jobs:
       - run: sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4    # optional, clickhouse key
 
       - run: sudo apt-get update -qq || true
-      - run: sudo apt-get install -qq libluajit-5.1-dev libpcre3-dev luarocks opendkim-tools python-pip redis-server libunwind8 libglib2.0-dev libicu-dev libevent-dev
+      - run: sudo apt-get install -qq libluajit-5.1-dev libpcre3-dev luarocks opendkim-tools python-pip redis-server libunwind8 libglib2.0-dev libicu-dev libevent-dev python-dev
       - run: sudo apt-get install clickhouse-server
 
       - run: sudo pip install demjson psutil robotframework requests http
       - run: sudo luarocks install luacheck
       - run: sudo luarocks install luacov
+      - run: sudo luarocks install luacov-coveralls
 
       - run: cd ../build
       # see coverage notice in "build" stage
@@ -122,9 +118,10 @@ jobs:
 
       # Share coverage data between jobs
       - save_cache:
-          key: coverage-{{ .Environment.CIRCLE_WORKFLOW_ID }}
+          key: coverage-functional-{{ .Environment.CIRCLE_WORKFLOW_ID }}
           paths:
-            - coverage.functional.info
+            - coverage.functional.dump
+            - lua_coverage_report.json
 
       - store_artifacts:
           path: output.xml
@@ -161,9 +158,15 @@ jobs:
     steps:
       - attach_workspace:
           at: *workspace_root
+      - restore_cache:
+          key: coverage-rspamd-test-{{ .Environment.CIRCLE_WORKFLOW_ID }}
+      - restore_cache:
+          key: coverage-functional-{{ .Environment.CIRCLE_WORKFLOW_ID }}
 
-      - *restore_coverage_data
       - *merge_and_upload_coverage_data
+
+      - store_artifacts:
+          path: out.josn
 
 notify:
   webhooks:

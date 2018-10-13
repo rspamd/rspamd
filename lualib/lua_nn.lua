@@ -20,9 +20,13 @@ local exports = {}
 
 local lua_nn_models = {}
 
-if rspamd_config:has_torch() then
-  torch = require "torch"
-  torch.setnumthreads(1)
+local conf_section = rspamd_config:get_all_opt("nn_models")
+
+if conf_section then
+  if rspamd_config:has_torch() then
+    torch = require "torch"
+    torch.setnumthreads(1)
+  end
 end
 
 if torch then
@@ -43,10 +47,9 @@ if torch then
         end
       end
     end
-    local section = rspamd_config:get_all_opt("nn_models")
 
-    if section and type(section) == 'table' then
-      for k,v in pairs(section) do
+    if conf_section and type(conf_section) == 'table' then
+      for k,v in pairs(conf_section) do
         if not rspamd_config:add_map(v, "nn map " .. k, gen_process_callback(k)) then
           rspamd_logger.warnx(rspamd_config, 'cannot load NN map %1', k)
         end

@@ -2873,7 +2873,6 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 	*pev_base = periodic->ev_base;
 
 	event_del (&periodic->ev);
-
 	lua_thread_call (thread, 2);
 }
 
@@ -2887,6 +2886,10 @@ lua_periodic_callback_finish (struct thread_entry *thread, int ret)
 	gdouble timeout = 0.0;
 
 	L = thread->lua_state;
+
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+	event_base_update_cache_time (periodic->ev_base);
+#endif
 
 	if (ret == 0) {
 		if (lua_type (L, -1) == LUA_TBOOLEAN) {
@@ -3453,6 +3456,7 @@ lua_config_load_ucl (lua_State *L)
 
 		if (lua_istable (L, -1)) {
 			LUA_TABLE_TO_HASH(paths, RSPAMD_CONFDIR_INDEX);
+			LUA_TABLE_TO_HASH(paths, RSPAMD_LOCAL_CONFDIR_INDEX);
 			LUA_TABLE_TO_HASH(paths, RSPAMD_RUNDIR_INDEX);
 			LUA_TABLE_TO_HASH(paths, RSPAMD_DBDIR_INDEX);
 			LUA_TABLE_TO_HASH(paths, RSPAMD_LOGDIR_INDEX);

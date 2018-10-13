@@ -1078,10 +1078,16 @@ ENDIF(HAVE_SIGINFO_H)
 
 # Some hack for libevent 2.0
 CHECK_C_SOURCE_COMPILES ("#include <event.h>
-					#if _EVENT_NUMERIC_VERSION < 0x02000000
+					#if !defined(LIBEVENT_VERSION_NUMBER) || LIBEVENT_VERSION_NUMBER < 0x02000000
 					#error Unsupported
 					#endif
 					int main() { return 0;}" HAVE_LIBEVENT2)
+CHECK_C_SOURCE_COMPILES ("#include <event2/event.h>
+					int main() { return EVENT_BASE_FLAG_NO_CACHE_TIME; }"
+		HAVE_EVENT_NO_CACHE_TIME_FLAG)
+LIST(APPEND CMAKE_REQUIRED_LIBRARIES "event")
+CHECK_SYMBOL_EXISTS(event_base_update_cache_time "sys/types.h;event.h"
+		HAVE_EVENT_NO_CACHE_TIME_FUNC)
 
 IF(NOT CMAKE_SYSTEM_NAME STREQUAL "SunOS")
 IF(HAVE_CLOCK_GETTIME)

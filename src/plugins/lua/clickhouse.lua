@@ -493,18 +493,22 @@ local function clickhouse_collect(task)
   local urls_urls = {}
   if task:has_urls(false) then
     for _,u in ipairs(task:get_urls(false)) do
-      table.insert(urls_tlds, u:get_tld())
+      urls_tlds[u:get_tld()] = true
       if settings['full_urls'] then
-        table.insert(urls_urls, u:get_text())
+        urls_urls[u:get_text()] = true
       else
-        table.insert(urls_urls, u:get_host())
+        urls_urls[u:get_host()] = true
       end
     end
   end
 
+  local flatten_urls = function(...)
+    return fun.totable(fun.map(function(k,_) return k end, ...))
+  end
+
   if #urls_tlds > 0 then
-    table.insert(row, urls_tlds)
-    table.insert(row, urls_urls)
+    table.insert(row, flatten_urls(urls_tlds))
+    table.insert(row, flatten_urls(urls_urls))
   else
     table.insert(row, {})
     table.insert(row, {})
@@ -512,8 +516,8 @@ local function clickhouse_collect(task)
 
   -- Emails step
   if task:has_urls(true) then
-    table.insert(row, fun.totable(fun.map(function(u)
-      return string.format('%s@%s', u:get_user(), u:get_host())
+    table.insert(row, flatten_urls(fun.map(function(u)
+      return string.format('%s@%s', u:get_user(), u:get_host()),true
     end, task:get_emails())))
   else
     table.insert(row, {})

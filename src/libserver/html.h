@@ -48,6 +48,7 @@ struct html_image {
 	guint width;
 	guint flags;
 	gchar *src;
+	struct rspamd_url *url;
 	struct html_tag *tag;
 };
 

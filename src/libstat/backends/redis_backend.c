@@ -994,7 +994,7 @@ rspamd_redis_fin (gpointer data)
 
 	rt->has_event = FALSE;
 	/* Stop timeout */
-	if (event_get_base (&rt->timeout_event)) {
+	if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
 		event_del (&rt->timeout_event);
 	}
 
@@ -1014,7 +1014,7 @@ rspamd_redis_fin_learn (gpointer data)
 
 	rt->has_event = FALSE;
 	/* Stop timeout */
-	if (event_get_base (&rt->timeout_event)) {
+	if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
 		event_del (&rt->timeout_event);
 	}
 
@@ -1597,7 +1597,7 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 		rspamd_session_add_event (task->s, NULL, rspamd_redis_fin, rt, rspamd_redis_stat_quark ());
 		rt->has_event = TRUE;
 
-		if (event_get_base (&rt->timeout_event)) {
+		if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
 			event_del (&rt->timeout_event);
 		}
 		event_set (&rt->timeout_event, -1, EV_TIMEOUT, rspamd_redis_timeout, rt);
@@ -1634,7 +1634,7 @@ rspamd_redis_finalize_process (struct rspamd_task *task, gpointer runtime,
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
 	redisAsyncContext *redis;
 
-	if (event_get_base (&rt->timeout_event)) {
+	if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
 		event_del (&rt->timeout_event);
 	}
 
@@ -1802,7 +1802,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 		rt->has_event = TRUE;
 
 		/* Set timeout */
-		if (event_get_base (&rt->timeout_event)) {
+		if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
 			event_del (&rt->timeout_event);
 		}
 		event_set (&rt->timeout_event, -1, EV_TIMEOUT, rspamd_redis_timeout, rt);
@@ -1827,7 +1827,7 @@ rspamd_redis_finalize_learn (struct rspamd_task *task, gpointer runtime,
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
 	redisAsyncContext *redis;
 
-	if (event_get_base (&rt->timeout_event)) {
+	if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
 		event_del (&rt->timeout_event);
 	}
 

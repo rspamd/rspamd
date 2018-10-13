@@ -21,6 +21,8 @@
 #include "filter.h"
 #include "composites.h"
 
+#include <math.h>
+
 #define msg_err_composites(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         "composites", task->task_pool->tag.uid, \
         G_STRFUNC, \
@@ -94,7 +96,7 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 	/*
 	 * Composites are just sequences of symbols
 	 */
-	clen = strcspn (line, ", \t()><+!|&\n");
+	clen = strcspn (line, ", \t()><!|&\n");
 	if (clen == 0) {
 		/* Invalid composite atom */
 		g_set_error (err, rspamd_composites_quark (), 100, "Invalid composite: %s",
@@ -172,20 +174,98 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 	return rc;
 }
 
+static void
+rspamd_composite_process_symbol_removal (rspamd_expression_atom_t *atom,
+										 struct composites_data *cd,
+										 struct rspamd_symbol_result *ms,
+										 const gchar *beg)
+{
+	gchar t;
+	struct symbol_remove_data *rd, *nrd;
+	struct rspamd_task *task = cd->task;
+
+	if (ms == NULL) {
+		return;
+	}
+
+	/*
+	 * At this point we know that we need to do something about this symbol,
+	 * however, we don't know whether we need to delete it unfortunately,
+	 * that depends on the later decisions when the complete expression is
+	 * evaluated.
+	 */
+	rd = g_hash_table_lookup (cd->symbols_to_remove, ms->name);
+
+	nrd = rspamd_mempool_alloc (cd->task->task_pool, sizeof (*nrd));
+	nrd->sym = ms->name;
+
+	/* By default remove symbols */
+	switch (cd->composite->policy) {
+	case RSPAMD_COMPOSITE_POLICY_REMOVE_ALL:
+	default:
+		nrd->action = (RSPAMD_COMPOSITE_REMOVE_SYMBOL|RSPAMD_COMPOSITE_REMOVE_WEIGHT);
+		break;
+	case RSPAMD_COMPOSITE_POLICY_REMOVE_SYMBOL:
+		nrd->action = RSPAMD_COMPOSITE_REMOVE_SYMBOL;
+		break;
+	case RSPAMD_COMPOSITE_POLICY_REMOVE_WEIGHT:
+		nrd->action = RSPAMD_COMPOSITE_REMOVE_WEIGHT;
+		break;
+	case RSPAMD_COMPOSITE_POLICY_LEAVE:
+		nrd->action = 0;
+		break;
+	}
+
+	for (;;) {
+		t = *beg;
+
+		if (t == '~') {
+			nrd->action &= ~RSPAMD_COMPOSITE_REMOVE_SYMBOL;
+		}
+		else if (t == '-') {
+			nrd->action &= ~(RSPAMD_COMPOSITE_REMOVE_WEIGHT|
+							 RSPAMD_COMPOSITE_REMOVE_SYMBOL);
+		}
+		else if (t == '^') {
+			nrd->action |= RSPAMD_COMPOSITE_REMOVE_FORCED;
+		}
+		else {
+			break;
+		}
+
+		beg ++;
+	}
+
+	nrd->comp = cd->composite;
+	nrd->parent = atom->parent;
+
+	if (rd == NULL) {
+		DL_APPEND (rd, nrd);
+		g_hash_table_insert (cd->symbols_to_remove, (gpointer)ms->name, rd);
+		msg_debug_composites ("added symbol %s to removal: %d policy, from composite %s",
+				ms->name, nrd->action, cd->composite->sym);
+	}
+	else {
+		DL_APPEND (rd, nrd);
+		msg_debug_composites ("append symbol %s to removal: %d policy, from composite %s",
+				ms->name, nrd->action, cd->composite->sym);
+	}
+}
+
 static gdouble
-rspamd_composite_expr_process (struct rspamd_expr_process_data *process_data, rspamd_expression_atom_t *atom)
+rspamd_composite_expr_process (struct rspamd_expr_process_data *process_data,
+		rspamd_expression_atom_t *atom)
 {
 	struct composites_data *cd = process_data->cd;
 	const gchar *beg = atom->data, *sym = NULL;
-	gchar t;
-	struct symbol_remove_data *rd, *nrd;
+
 	struct rspamd_symbol_result *ms = NULL;
 	struct rspamd_symbols_group *gr;
 	struct rspamd_symbol *sdef;
 	struct rspamd_task *task = cd->task;
 	GHashTableIter it;
 	gpointer k, v;
-	gdouble rc = 0;
+	gdouble rc = 0, max = 0;
 
 	if (isset (cd->checked, cd->composite->id * 2)) {
 		/* We have already checked this composite, so just return its value */
@@ -225,75 +305,93 @@ rspamd_composite_expr_process (struct rspamd_expr_process_data *process_data, rs
 				rc = rspamd_composite_process_single_symbol (cd, sdef->name, &ms);
 
 				if (rc) {
-					break;
+					rspamd_composite_process_symbol_removal (atom,
+							cd,
+							ms,
+							beg);
+
+					if (fabs (rc) > max) {
+						max = fabs (rc);
+					}
 				}
 			}
+		}
+
+		rc = max;
+	}
+	else if (strncmp (sym, "g+:", 3) == 0) {
+		/* Group, positive symbols only */
+		gr = g_hash_table_lookup (cd->task->cfg->groups, sym + 3);
+
+		if (gr != NULL) {
+			g_hash_table_iter_init (&it, gr->symbols);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				sdef = v;
+
+				if (sdef->score > 0) {
+					rc = rspamd_composite_process_single_symbol (cd,
+							sdef->name,
+							&ms);
+
+					if (rc) {
+						rspamd_composite_process_symbol_removal (atom,
+								cd,
+								ms,
+								beg);
+
+						if (fabs (rc) > max) {
+							max = fabs (rc);
+						}
+					}
+				}
+			}
+
+			rc = max;
+		}
+	}
+	else if (strncmp (sym, "g-:", 3) == 0) {
+		/* Group, negative symbols only */
+		gr = g_hash_table_lookup (cd->task->cfg->groups, sym + 3);
+
+		if (gr != NULL) {
+			g_hash_table_iter_init (&it, gr->symbols);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				sdef = v;
+
+				if (sdef->score < 0) {
+					rc = rspamd_composite_process_single_symbol (cd, sdef->name, &ms);
+
+					if (rc) {
+						rspamd_composite_process_symbol_removal (atom,
+								cd,
+								ms,
+								beg);
+
+						if (fabs (rc) > max) {
+							max = fabs (rc);
+						}
+					}
+				}
+			}
+
+			rc = max;
 		}
 	}
 	else {
 		rc = rspamd_composite_process_single_symbol (cd, sym, &ms);
-	}
 
-	if (rc != 0 && ms) {
-		/*
-		 * At this point we know that we need to do something about this symbol,
-		 * however, we don't know whether we need to delete it unfortunately,
-		 * that depends on the later decisions when the complete expression is
-		 * evaluated.
-		 */
-		rd = g_hash_table_lookup (cd->symbols_to_remove, ms->name);
-
-		nrd = rspamd_mempool_alloc (cd->task->task_pool, sizeof (*nrd));
-		nrd->sym = ms->name;
-
-		/* By default remove symbols */
-		switch (cd->composite->policy) {
-		case RSPAMD_COMPOSITE_POLICY_REMOVE_ALL:
-		default:
-			nrd->action = (RSPAMD_COMPOSITE_REMOVE_SYMBOL|RSPAMD_COMPOSITE_REMOVE_WEIGHT);
-			break;
-		case RSPAMD_COMPOSITE_POLICY_REMOVE_SYMBOL:
-			nrd->action = RSPAMD_COMPOSITE_REMOVE_SYMBOL;
-			break;
-		case RSPAMD_COMPOSITE_POLICY_REMOVE_WEIGHT:
-			nrd->action = RSPAMD_COMPOSITE_REMOVE_WEIGHT;
-			break;
-		case RSPAMD_COMPOSITE_POLICY_LEAVE:
-			nrd->action = 0;
-			break;
-		}
-
-		for (;;) {
-			t = *beg;
-
-			if (t == '~') {
-				nrd->action &= ~RSPAMD_COMPOSITE_REMOVE_SYMBOL;
-			}
-			else if (t == '-') {
-				nrd->action &= ~(RSPAMD_COMPOSITE_REMOVE_WEIGHT|
-						RSPAMD_COMPOSITE_REMOVE_SYMBOL);
-			}
-			else if (t == '^') {
-				nrd->action |= RSPAMD_COMPOSITE_REMOVE_FORCED;
-			}
-			else {
-				break;
-			}
-
-			beg ++;
-		}
-
-		nrd->comp = cd->composite;
-		nrd->parent = atom->parent;
-
-		if (rd == NULL) {
-			DL_APPEND (rd, nrd);
-			g_hash_table_insert (cd->symbols_to_remove, (gpointer)ms->name, rd);
-		}
-		else {
-			DL_APPEND (rd, nrd);
+		if (rc) {
+			rspamd_composite_process_symbol_removal (atom,
+					cd,
+					ms,
+					beg);
 		}
 	}
+
+	msg_debug_composites ("final result for composite %s is %.2f",
+			cd->composite->sym, rc);
 
 	return rc;
 }

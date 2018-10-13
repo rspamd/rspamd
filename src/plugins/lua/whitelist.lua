@@ -207,7 +207,6 @@ local function whitelist_cb(symbol, rule, task)
 
         if not found_bl then
           final_mult = val[2]
-          lua_util.debugm(N, task, "hui4 final mult: %s", final_mult)
         end
       end
     end
@@ -219,7 +218,6 @@ local function whitelist_cb(symbol, rule, task)
         table.insert(opts, dom .. ':d:-')
         found_bl = true
         final_mult = val[2]
-        lua_util.debugm(N, task, "hui2 final mult: %s", final_mult)
       end
     end
   end
@@ -229,7 +227,6 @@ local function whitelist_cb(symbol, rule, task)
       if val[1] == 'both' or val[1] == 'bl' then
         found_bl = true
         final_mult = val[2]
-        lua_util.debugm(N, task, "hui3 final mult: %s", final_mult)
         table.insert(opts, string.format("%s:%s:-", dom, what))
       end
     else
@@ -238,7 +235,6 @@ local function whitelist_cb(symbol, rule, task)
         table.insert(opts, string.format("%s:%s:+", dom, what))
         if not found_bl then
           final_mult = val[2]
-          lua_util.debugm(N, task, "hui1 final mult: %s", final_mult)
         end
       end
     end

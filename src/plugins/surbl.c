@@ -70,6 +70,7 @@ INIT_LOG_MODULE(surbl)
 #define SURBL_OPTION_NOIP (1 << 0)
 #define SURBL_OPTION_RESOLVEIP (1 << 1)
 #define SURBL_OPTION_CHECKIMAGES (1 << 2)
+#define SURBL_OPTION_CHECKDKIM (1 << 3)
 #define MAX_LEVELS 10
 
 struct surbl_ctx {
@@ -574,6 +575,15 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0,
 			NULL,
 			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"surbl.rule",
+			"Check domains in valid DKIM signatures",
+			"check_dkim",
+			UCL_BOOLEAN,
+			NULL,
+			0,
+			NULL,
+			0);
 
 	return 0;
 }
@@ -727,6 +737,13 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
 			if (ucl_object_toboolean (cur)) {
 				new_suffix->options |= SURBL_OPTION_CHECKIMAGES;
+			}
+		}
+
+		cur = ucl_object_lookup (cur_rule, "check_dkim");
+		if (cur != NULL && cur->type == UCL_BOOLEAN) {
+			if (ucl_object_toboolean (cur)) {
+				new_suffix->options |= SURBL_OPTION_CHECKDKIM;
 			}
 		}
 
@@ -1057,12 +1074,20 @@ surbl_module_config (struct rspamd_config *cfg)
 			surbl_module_ctx->suffixes);
 	}
 
+
 	cur_opt = surbl_module_ctx->suffixes;
 	while (cur_opt) {
 		cur_suffix = cur_opt->data;
+
 		if (cur_suffix->bits != NULL || cur_suffix->ips != NULL) {
 			register_bit_symbols (cfg, cur_suffix, cur_suffix->callback_id);
 		}
+
+		if (cur_suffix->options & SURBL_OPTION_CHECKDKIM) {
+			rspamd_symbols_cache_add_dependency (cfg->cache,
+					cur_suffix->callback_id, "DKIM_TRACE");
+		}
+
 		cur_opt = g_list_next (cur_opt);
 	}
 
@@ -1881,15 +1906,35 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 					img = g_ptr_array_index (part->html->images, j);
 
 					if ((img->flags & RSPAMD_HTML_FLAG_IMAGE_EXTERNAL)
-							&& img->src) {
-						url = rspamd_html_process_url (task->task_pool,
-								img->src, strlen (img->src), NULL);
+							&& img->url) {
+						surbl_tree_url_callback (img->url, img->url, param);
+						msg_debug_surbl ("checked image url %s over %s",
+								img->src, suffix->suffix);
+					}
+				}
+			}
+		}
+	}
 
-						if (url) {
-							surbl_tree_url_callback (url, url, param);
-							msg_debug_surbl ("checked image url %s over %s",
-									img->src, suffix->suffix);
-						}
+	if (suffix->options & SURBL_OPTION_CHECKDKIM) {
+		struct rspamd_symbol_result *s;
+		struct rspamd_symbol_option *opt;
+
+		s = rspamd_task_find_symbol_result (task, "DKIM_TRACE");
+
+		if (s && s->opts_head) {
+			DL_FOREACH (s->opts_head, opt) {
+				gsize len = strlen (opt->option);
+				gchar *p = opt->option + len - 1;
+
+				if (*p == '+') {
+					url = rspamd_html_process_url (task->task_pool,
+							opt->option, len - 2, NULL);
+
+					if (url) {
+						surbl_tree_url_callback (url, url, param);
+						msg_debug_surbl ("checked dkim url %s over %s",
+								url->string, suffix->suffix);
 					}
 				}
 			}

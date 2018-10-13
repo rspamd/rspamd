@@ -659,7 +659,7 @@ local function train_ann(rule, _, ev_base, elt, worker)
           dataset.size = function() return #dataset end
 
           local function train_torch()
-            if rule.train.learn_threads > 1 then
+            if rule.train.learn_threads then
               torch.setnumthreads(rule.train.learn_threads)
             end
             local criterion = nn.MSECriterion()
@@ -950,6 +950,8 @@ else
   else
     torch = require "torch"
     nn = require "nn"
+
+    torch.setnumthreads(1)
   end
 
   local id = rspamd_config:register_symbol({

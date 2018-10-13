@@ -1,0 +1,76 @@
+---
+workspace:
+  base: /rspamd
+
+pipeline:
+
+  build:
+    # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-build/Dockerfile
+    image: rspamd/ci-ubuntu-build
+    group: build
+    commands:
+      - mkdir /rspamd/build /rspamd/install
+      - cd /rspamd/build
+      - cmake $CI_WORKSPACE -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install -DCMAKE_RULE_MESSAGES=OFF
+      - ncpu=$(getconf _NPROCESSORS_ONLN)
+      - make -j $ncpu install
+      - make -j $ncpu rspamd-test
+
+  eslint:
+    image: node:10-alpine
+    group: build
+    commands:
+      - npm install
+      - ./node_modules/.bin/eslint -v
+      - ./node_modules/.bin/eslint ./
+
+  rspamd-test:
+    # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test/Dockerfile
+    image: rspamd/ci-ubuntu-test
+    group: tests
+    commands:
+      # rspamd-test and functional test both use luacov.stats.out file and should be started from
+      # different directories (if started in parallel)
+      - cd /rspamd/build/test
+      - set +e
+      - ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
+      - set -e
+      - luacov-coveralls -o /rspamd/build/unit_test_lua.json --dryrun
+      # coveralls dosn't support layout when object files are located outside git repo root
+      # add hack to disable searching for git
+      - ln -s /bin/true /usr/local/bin/git
+      - coveralls --dump /rspamd/build/coverage.rspamd-test.dump
+      - exit $EXIT_CODE
+
+  functional:
+    # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test-func/Dockerfile
+    image: rspamd/ci-ubuntu-test-func
+    group: tests
+    commands:
+      - cd /rspamd/build
+      - set +e
+      - RSPAMD_INSTALLROOT=/rspamd/install robot --xunit xunit.xml --exclude isbroken $CI_WORKSPACE/test/functional/cases; EXIT_CODE=$?
+      - set -e
+      # coveralls will not find git repo anyway, see above
+      - ln -s /bin/true /usr/local/bin/git
+      - coveralls --dump coverage.functional.dump
+      - exit $EXIT_CODE
+
+  send-coverage:
+    image: rspamd/ci-ubuntu-test
+    secrets: [ coveralls_repo_token ]
+    commands:
+      - cd /rspamd/build
+      - $CI_WORKSPACE/test/functional/util/merge_coveralls.py --input coverage.functional.dump coverage.rspamd-test.dump unit_test_lua.json lua_coverage_report.json --output out.josn --token=$COVERALLS_REPO_TOKEN
+    when:
+      branch: master
+      # don't send coverage report for pull request
+      event: [push, tag]
+
+  send-test-log:
+    image: drillster/drone-email
+    from: noreply@rspamd.com
+    attachment: /rspamd/build/log.html
+    secrets: [email_host, email_username, email_password]
+    when:
+      status: failure

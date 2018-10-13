@@ -555,9 +555,9 @@ local function multimap_callback(task, rule)
             r['message'] = r.message_func(task, r['symbol'], opt)
           end
           if r['message'] then
-            task:set_pre_result(r['action'], r['message'])
+            task:set_pre_result(r['action'], r['message'], N)
           else
-            task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'])
+            task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'], N)
           end
         end
       end
@@ -731,7 +731,7 @@ local function multimap_callback(task, rule)
           elseif is_ok then
             task:insert_result(rule['symbol'], 1, rule['map'])
             if pre_filter then
-              task:set_pre_result(rule['action'], 'Matched map: ' .. rule['symbol'])
+              task:set_pre_result(rule['action'], 'Matched map: ' .. rule['symbol'], N)
             end
           end
 

@@ -66,7 +66,7 @@ local function spamtrap_cb(task)
       rspamd_logger.infox(task, 'spamtrap found: <%s>', rcpt)
       if settings.smtp_message then
         task:set_pre_result(settings['action'],
-          lua_util.template(settings.smtp_message, { rcpt = rcpt}))
+          lua_util.template(settings.smtp_message, { rcpt = rcpt}), 'spamtrap')
       else
         local smtp_message = 'unknown error'
         if settings.action == 'no action' then
@@ -74,7 +74,7 @@ local function spamtrap_cb(task)
         elseif settings.action == 'reject' then
           smtp_message = 'message rejected'
         end
-        task:set_pre_result(settings['action'], smtp_message)
+        task:set_pre_result(settings['action'], smtp_message, 'spamtrap')
       end
     end
   end
