@@ -167,6 +167,34 @@ input.action-scores {
     font-weight: normal;
 }
 
+/* Symbols coloring */
+.symbol-default {
+    border-radius: 2px;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+.symbol-default:hover {
+    background-color: #E6E6E6;
+}
+.symbol-negative {
+    background-color: #EEF9E7;
+}
+.symbol-positive {
+    background-color: #FBE9E5;
+}
+.symbol-special {
+    background-color: #E2E9FE;
+}
+.symbol-negative:hover {
+    background-color: #DCF9D3;
+}
+.symbol-positive:hover {
+    background-color: #FBD6D1;
+}
+.symbol-special:hover {
+    background-color: #CDDBFF;
+}
+
 .btn-upload-trigger {
 	position:relative;
 	z-index:1;
