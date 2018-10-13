@@ -54,7 +54,8 @@ pipeline:
       # coveralls dosn't support layout when object files are located outside git repo root
       # add hack to disable searching for git
       - ln -s /bin/true /usr/local/bin/git
-      - coveralls --dump /rspamd/build/coverage.rspamd-test.dump
+      - cd /rspamd/build
+      - coveralls --dump coverage.rspamd-test.dump
       - exit $EXIT_CODE
 
   functional:
