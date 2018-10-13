@@ -1,10 +1,17 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import argparse
 import json
 import os
+import sys
+
 import requests
 
+# Python 2/3 compatibility
+if sys.version_info.major > 2:
+    xrange = range
 
 # install path to repository mapping
 # if path mapped to None, it means that the file should be ignored (i.e. test file/helper)
@@ -132,12 +139,12 @@ if __name__ == '__main__':
     with open(args.output, 'w') as f:
         f.write(json.dumps(j1))
 
-    if not args.token is None:
+    if args.token:
         j1['repo_token'] = args.token
         print("sending data to coveralls...")
         r = requests.post('https://coveralls.io/api/v1/jobs', files={"json_file": json.dumps(j1)})
         response = json.loads(r.text)
-        print "uploaded %s\nmessage:%s" % (response['url'], response['message'])
+        print("uploaded %s\nmessage:%s" % (response['url'], response['message']))
 
     # post https://coveralls.io/api/v1/jobs
     # print args
