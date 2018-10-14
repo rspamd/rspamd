@@ -30,12 +30,6 @@ textarea {
 	font-family:"Courier New", Courier, monospace;
 	}
 
-.login {
-	width:480px;
-	margin-top:120px;
-	margin-left:-240px;
-	}
-
 /* local overrides */
 .disconnect {
 	margin:9px 0 0;
@@ -74,9 +68,6 @@ input.action-scores {
   margin:5px -7em 5px 0;
   padding:2px 0;
   text-align:center;
-}
-.symbols-label {
-  font-size:11px !important;
 }
 
 /* history table */
@@ -167,10 +158,34 @@ input.action-scores {
     font-weight: normal;
 }
 
-.btn-upload-trigger {
-	position:relative;
-	z-index:1;
-	}
+/* Symbols coloring */
+.symbol-default {
+    border-radius: 2px;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+.symbol-default:hover {
+    background-color: #E6E6E6;
+}
+.symbol-negative {
+    background-color: #EEF9E7;
+}
+.symbol-positive {
+    background-color: #FBE9E5;
+}
+.symbol-special {
+    background-color: #E2E9FE;
+}
+.symbol-negative:hover {
+    background-color: #DCF9D3;
+}
+.symbol-positive:hover {
+    background-color: #FBD6D1;
+}
+.symbol-special:hover {
+    background-color: #CDDBFF;
+}
+
 .upload-textarea,
 .scan-textarea {
 	width:100% !important;
@@ -184,18 +199,6 @@ input.action-scores {
  .stat-boxes {
 	padding-left: 0;
   margin-right: -10px !important;
-	}
-
-.row-bordered {
-	margin-bottom:13px;
-	border-bottom:1px solid #cdcdcd;
-	}
-.symbol-description {
-	display:block;
-	margin:4px 0 0 6px;
-	font-size:10px;
-	font-weight:bold;
-	color:#666;
 	}
 
 .list-textarea {
@@ -375,44 +378,6 @@ td.maps-cell {
 .nopadding {
 	padding:0 !important;
 	}
-.activity-list {
-	list-style:none outside none;
-	margin:0;
-	}
-	.activity-list li {
-		border-bottom:1px solid #EEEEEE;
-		display:block;
-		}
-	.activity-list li:last-child {
-		border-bottom:medium none;
-		}
-		.activity-list li a {
-			color:#888888;
-			display:block;
-			padding:7px 10px;
-			}
-		.activity-list li a:hover {
-			background-color:#FBFBFB;
-			}
-			.activity-list li a span {
-				color:#AAAAAA;
-				font-size:11px;
-				font-style:italic;
-				}
-			.activity-list li a i {
-				margin-right:10px;
-				opacity:0.6;
-				vertical-align:middle;
-				}
-.recent-posts, .recent-comments, .recent-users {
-	margin:0;
-	padding:0;
-	}
-	.recent-posts li, .article-post li {
-		border-bottom:1px dotted #AEBDC8;
-		list-style:none outside none;
-		padding:10px;
-		}
 .modal-header {
 	height:auto;
 	padding:8px 15px 5px;
@@ -542,12 +507,6 @@ td.maps-cell {
 #scanForm button {
     margin-top: 10px;
     }
-#historyLog_wrapper div.row:first-child > div {
-    padding: 5px 20px 0 20px;
-    }
-#historyLog_wrapper div.row:last-child > div {
-    padding: 5px 20px 0 20px;
-    }
 
 #throughput div.widget-content {
     text-align: center;
@@ -672,21 +631,6 @@ input.radio {
 
 #clusterTable .col3 {
 	width: 50%;
-}
-table.dataTable thead .sorting {
-background: url("../img/asc.png") no-repeat center right;
-}
-table.dataTable thead .sorting_asc {
-background: url("../img/asc.png") no-repeat center right;
-}
-table.dataTable thead .sorting_desc {
-background: url("../img/desc.png") no-repeat center right;
-}
-table.dataTable thead .sorting_asc_disabled {
-background: url("../img/asc.png") no-repeat center right;
-}
-table.dataTable thead .sorting_desc_disabled {
-background: url("../img/desc.png") no-repeat center right;
 }
 
 #nprogress .bar {
