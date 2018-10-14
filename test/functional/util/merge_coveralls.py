@@ -139,7 +139,7 @@ if __name__ == '__main__':
             j1['service_job_id'] = os.getenv('CI_JOB_NUMBER')
             j1['service_number'] = os.getenv('CI_BUILD_NUMBER')
             j1['commit_sha'] = os.getenv('CI_COMMIT_SHA')
-            if os.getenv('CI_BUILD_EVENT') == 'pull':
+            if os.getenv('CI_BUILD_EVENT') == 'pull_request':
                 j1['service_pull_request'] = os.getenv('CI_PULL_REQUEST')
 
 
