@@ -63,7 +63,6 @@ def merge_coverage_vectors(c1, c2):
 
 
 def normalize_name(name):
-    orig_name = name
     name = os.path.normpath(name)
     if not os.path.isabs(name):
         name = os.path.abspath(repository_root + "/" + name)
