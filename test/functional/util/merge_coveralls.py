@@ -152,8 +152,10 @@ if __name__ == '__main__':
         j1['repo_token'] = args.token
         print("sending data to coveralls...")
         r = requests.post('https://coveralls.io/api/v1/jobs', files={"json_file": json.dumps(j1)})
-        response = json.loads(r.text)
-        print("uploaded %s\nmessage:%s" % (response['url'], response['message']))
+        response = r.json()
+        print("[coveralls] %s" % response['message'])
+        if 'url' in response:
+            print("[coveralls] Uploaded to %s" % response['url'])
 
     # post https://coveralls.io/api/v1/jobs
     # print args
