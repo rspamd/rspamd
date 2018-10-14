@@ -63,7 +63,6 @@ def merge_coverage_vectors(c1, c2):
 
 
 def normalize_name(name):
-    orig_name = name
     name = os.path.normpath(name)
     if not os.path.isabs(name):
         name = os.path.abspath(repository_root + "/" + name)
@@ -130,13 +129,19 @@ if __name__ == '__main__':
 
         if not j1['service_job_id'] and 'CIRCLE_BUILD_NUM' in os.environ:
             j1['service_job_id'] = os.environ['CIRCLE_BUILD_NUM']
-        elif not j1['service_job_id'] and 'DRONE_PREV_BUILD_NUMBER' in os.environ:
-            j1['service_job_id'] = os.environ['DRONE_PREV_BUILD_NUMBER']
 
         if 'CIRCLECI' in os.environ and os.environ['CIRCLECI']:
             j1['service_name'] = 'circleci'
-        elif 'DRONE' in os.environ and os.environ['DRONE']:
+        elif os.getenv('CI') == 'drone':
             j1['service_name'] = 'drone'
+            j1['service_branch'] = os.getenv('CI_COMMIT_BRANCH')
+            j1['service_build_url'] = os.getenv('DRONE_BUILD_LINK')
+            j1['service_job_id'] = os.getenv('CI_JOB_NUMBER')
+            j1['service_number'] = os.getenv('CI_BUILD_NUMBER')
+            j1['commit_sha'] = os.getenv('CI_COMMIT_SHA')
+            if os.getenv('CI_BUILD_EVENT') == 'pull_request':
+                j1['service_pull_request'] = os.getenv('CI_PULL_REQUEST')
+
 
     j1['source_files'] = list(files.values())
 
@@ -147,8 +152,10 @@ if __name__ == '__main__':
         j1['repo_token'] = args.token
         print("sending data to coveralls...")
         r = requests.post('https://coveralls.io/api/v1/jobs', files={"json_file": json.dumps(j1)})
-        response = json.loads(r.text)
-        print("uploaded %s\nmessage:%s" % (response['url'], response['message']))
+        response = r.json()
+        print("[coveralls] %s" % response['message'])
+        if 'url' in response:
+            print("[coveralls] Uploaded to %s" % response['url'])
 
     # post https://coveralls.io/api/v1/jobs
     # print args
