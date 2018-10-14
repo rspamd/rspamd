@@ -132,7 +132,7 @@ if __name__ == '__main__':
 
         if 'CIRCLECI' in os.environ and os.environ['CIRCLECI']:
             j1['service_name'] = 'circleci'
-        elif 'CI' in os.environ and os.getenv('CI') == 'drone':
+        elif os.getenv('CI') == 'drone':
             j1['service_name'] = 'drone'
             j1['service_branch'] = os.getenv('CI_COMMIT_BRANCH')
             j1['service_build_url'] = os.getenv('DRONE_BUILD_LINK')
