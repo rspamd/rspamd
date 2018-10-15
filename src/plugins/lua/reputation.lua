@@ -164,7 +164,7 @@ local function dkim_reputation_filter(task, rule)
 end
 
 local function dkim_reputation_idempotent(task, rule)
-  local verdict = lua_util.get_task_verdict()
+  local verdict = lua_util.get_task_verdict(task)
   local token = {
   }
   local cfg = rule.selector.config
