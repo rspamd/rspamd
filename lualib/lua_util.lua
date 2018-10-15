@@ -742,6 +742,10 @@ if type(rspamd_config) == 'userdata' then
   end
 end
 
+--[[[
+-- @function lua_util.debugm(module, [log_object], format, ...)
+-- Performs fast debug log for a specific module
+--]]
 exports.debugm = function(mod, obj_or_fmt, fmt_or_something, ...)
   local logger = require "rspamd_logger"
   if unconditional_debug or debug_modules[mod] then
@@ -751,6 +755,46 @@ exports.debugm = function(mod, obj_or_fmt, fmt_or_something, ...)
       logger.logx(log_level, mod, obj_or_fmt, 2, fmt_or_something, ...)
     end
   end
+end
+
+---[[[
+-- @function lua_util.get_task_verdict(task)
+-- Returns verdict for a task, must be called from idempotent filters only
+-- Returns string:
+-- * `spam`: if message have over reject threshold and has more than one positive rule
+-- * `junk`: if a message has between score between [add_header/rewrite subject] to reject thresholds and has more than two positive rules
+-- * `passthrough`: if a message has been passed through some short-circuit rule
+-- * `ham`: if a message has overall score below junk level **and** more than three negative rule, or negative total score
+-- * `uncertain`: all other cases
+--]]
+exports.get_task_verdict = function(task)
+  local result = task:get_metric_result()
+
+  if result then
+
+    if result.passthrough then
+      return 'passthrough'
+    end
+
+    local action = result.action
+
+    if action == 'reject' and result.npositive > 1 then
+      return 'spam'
+    elseif action == 'no action' then
+      if result.score < 0 or result.nnegative > 3 then
+        return 'ham'
+      end
+    else
+      -- All colors of junk
+      if action == 'add header' or action == 'rewrite subject' then
+        if result.npositive > 2 then
+          return 'junk'
+        end
+      end
+    end
+  end
+
+  return 'uncertain'
 end
 
 
