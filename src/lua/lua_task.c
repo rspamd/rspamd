@@ -620,15 +620,28 @@ LUA_FUNCTION_DEF (task, get_date);
 LUA_FUNCTION_DEF (task, get_message_id);
 LUA_FUNCTION_DEF (task, get_timeval);
 /***
+ * @method task:get_metric_result()
+ * Get full result of a metric as a table:
+ * - `score`: current score
+ * - `action`: current action as a string
+ * - `nnegative`: number of negative rules matched
+ * - `npositive`: number of positive rules matched
+ * - `positive_score`: total score for positive rules
+ * - `negative_score`: total score for negative rules
+ * - `passthrough`: set to true if message has a passthrough result
+ * @return {table} metric result
+ */
+LUA_FUNCTION_DEF (task, get_metric_result);
+/***
  * @method task:get_metric_score(name)
- * Get the current score of metric `name`. Should be used in post-filters only.
+ * Get the current score of metric `name` (must be nil or 'default') . Should be used in idempotent filters only.
  * @param {string} name name of a metric
- * @return {table} table containing the current score and required score of the metric
+ * @return {number,number} 2 numbers containing the current score and required score of the metric
  */
 LUA_FUNCTION_DEF (task, get_metric_score);
 /***
  * @method task:get_metric_action(name)
- * Get the current action of metric `name`. Should be used in post-filters only.
+ * Get the current action of metric `name` (must be nil or 'default'). Should be used in idempotent filters only.
  * @param {string} name name of a metric
  * @return {string} the current action of the metric as a string
  */
@@ -986,6 +999,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_date),
 	LUA_INTERFACE_DEF (task, get_message_id),
 	LUA_INTERFACE_DEF (task, get_timeval),
+	LUA_INTERFACE_DEF (task, get_metric_result),
 	LUA_INTERFACE_DEF (task, get_metric_score),
 	LUA_INTERFACE_DEF (task, get_metric_action),
 	LUA_INTERFACE_DEF (task, set_metric_score),
@@ -4509,6 +4523,63 @@ lua_task_process_regexp (lua_State *L)
 	}
 
 	lua_pushinteger (L, ret);
+
+	return 1;
+}
+
+static gint
+lua_task_get_metric_result (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_metric_result *metric_res;
+
+	if (task) {
+		metric_res = task->result;
+
+		/* Fields added:
+		 * - `score`: current score
+		 * - `action`: current action as a string
+		 * - `nnegative`: number of negative rules matched
+		 * - `npositive`: number of positive rules matched
+		 * - `positive_score`: total score for positive rules
+		 * - `negative_score`: total score for negative rules
+		 * - `passthrough`: set to true if message has a passthrough result
+		 */
+		lua_createtable (L, 0, 7);
+
+		lua_pushstring (L, "score");
+		lua_pushnumber (L, metric_res->score);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "action");
+		lua_pushstring (L, rspamd_action_to_str (
+				rspamd_check_action_metric (task, metric_res)));
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "nnegative");
+		lua_pushnumber (L, metric_res->nnegative);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "npositive");
+		lua_pushnumber (L, metric_res->npositive);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "positive_score");
+		lua_pushnumber (L, metric_res->positive_score);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "negative_score");
+		lua_pushnumber (L, metric_res->negative_score);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "passthrough");
+		lua_pushboolean (L, !!(metric_res->passthrough_result != NULL));
+		lua_settable (L, -3);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }
