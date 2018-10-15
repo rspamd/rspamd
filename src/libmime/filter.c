@@ -54,13 +54,10 @@ rspamd_create_metric_result (struct rspamd_task *task)
 		return metric_res;
 	}
 
-	metric_res = rspamd_mempool_alloc (task->task_pool,
+	metric_res = rspamd_mempool_alloc0 (task->task_pool,
 			sizeof (struct rspamd_metric_result));
 	metric_res->symbols = kh_init (rspamd_symbols_hash);
 	metric_res->sym_groups = kh_init (rspamd_symbols_group_hash);
-	metric_res->grow_factor = 0;
-	metric_res->score = 0;
-	metric_res->passthrough_result = NULL;
 
 	/* Optimize allocation */
 	kh_resize (rspamd_symbols_group_hash, metric_res->sym_groups, 4);
@@ -364,9 +361,24 @@ insert_metric_result (struct rspamd_task *task,
 		}
 
 		if (!isnan (final_score)) {
+#ifndef DBL_EPSILON
+#define DBL_EPSILON 2.2204460492503131e-16
+#endif
+			const double epsilon = DBL_EPSILON;
+
 			metric_res->score += final_score;
 			metric_res->grow_factor = next_gf;
 			s->score = final_score;
+
+			/* We ignore zero scored symbols */
+			if (final_score > epsilon) {
+				metric_res->npositive ++;
+				metric_res->positive_score += final_score;
+			}
+			else if (final_score < epsilon) {
+				metric_res->nnegative ++;
+				metric_res->negative_score += fabs (final_score);
+			}
 		}
 		else {
 			s->score = 0;

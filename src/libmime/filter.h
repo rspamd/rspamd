@@ -77,6 +77,10 @@ struct rspamd_metric_result {
 	double score;									/**< total score							*/
 	double grow_factor;								/**< current grow factor					*/
 	struct rspamd_passthrough_result *passthrough_result;
+	guint npositive;
+	guint nnegative;
+	double positive_score;
+	double negative_score;
 	khash_t(rspamd_symbols_hash) *symbols;			/**< symbols of metric						*/
 	khash_t(rspamd_symbols_group_hash) *sym_groups; /**< groups of symbols						*/
 	gdouble actions_limits[METRIC_ACTION_MAX];		/**< set of actions for this metric			*/
