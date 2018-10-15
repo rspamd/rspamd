@@ -132,7 +132,6 @@ struct fuzzy_client_session {
 	GPtrArray *results;
 	struct rspamd_task *task;
 	struct upstream *server;
-	rspamd_inet_addr_t *addr;
 	struct fuzzy_rule *rule;
 	struct event ev;
 	struct event timev;
@@ -149,7 +148,6 @@ struct fuzzy_learn_session {
 	struct rspamd_http_connection_entry *http_entry;
 	struct rspamd_async_session *session;
 	struct upstream *server;
-	rspamd_inet_addr_t *addr;
 	struct fuzzy_rule *rule;
 	struct rspamd_task *task;
 	struct event ev;
@@ -2174,7 +2172,8 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 		/* Error state */
 		msg_err_task ("got error on IO with server %s(%s), on %s, %d, %s",
 			rspamd_upstream_name (session->server),
-				rspamd_inet_address_to_string_pretty (session->addr),
+				rspamd_inet_address_to_string_pretty (
+						rspamd_upstream_addr (session->server)),
 			session->state == 1 ? "read" : "write",
 			errno,
 			strerror (errno));
@@ -2215,7 +2214,8 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 	if (session->retransmits >= session->rule->ctx->retransmits) {
 		msg_err_task ("got IO timeout with server %s(%s), after %d retransmits",
 				rspamd_upstream_name (session->server),
-				rspamd_inet_address_to_string_pretty (session->addr),
+				rspamd_inet_address_to_string_pretty (
+						rspamd_upstream_addr (session->server)),
 				session->retransmits);
 		rspamd_upstream_fail (session->server, FALSE);
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
@@ -2420,7 +2420,8 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 	else if (ret == return_error) {
 		msg_err_task ("got error in IO with server %s(%s), %d, %s",
 				rspamd_upstream_name (session->server),
-				rspamd_inet_address_to_string_pretty (session->addr),
+				rspamd_inet_address_to_string_pretty (
+						rspamd_upstream_addr (session->server)),
 				errno, strerror (errno));
 		rspamd_upstream_fail (session->server, FALSE);
 	}
@@ -2523,7 +2524,8 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 		msg_err_task_check ("got IO timeout with server %s(%s), "
 				"after %d retransmits",
 				rspamd_upstream_name (session->server),
-				rspamd_inet_address_to_string_pretty (session->addr),
+				rspamd_inet_address_to_string_pretty (
+						rspamd_upstream_addr (session->server)),
 				session->retransmits);
 
 		if (session->session) {
@@ -2856,7 +2858,6 @@ register_fuzzy_client_call (struct rspamd_task *task,
 				session->fd = sock;
 				session->server = selected;
 				session->rule = rule;
-				session->addr = addr;
 				session->results = g_ptr_array_sized_new (32);
 
 				event_set (&session->ev, sock, EV_WRITE, fuzzy_check_io_callback,
@@ -2963,7 +2964,6 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 
 			msec_to_tv (fuzzy_module_ctx->io_timeout, &s->tv);
 			s->task = task;
-			s->addr = addr;
 			s->commands = commands;
 			s->http_entry = entry;
 			s->server = selected;
@@ -3325,7 +3325,6 @@ fuzzy_check_send_lua_learn (struct fuzzy_rule *rule,
 
 				msec_to_tv (rule->ctx->io_timeout, &s->tv);
 				s->task = task;
-				s->addr = addr;
 				s->commands = commands;
 				s->http_entry = NULL;
 				s->server = selected;
