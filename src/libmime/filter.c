@@ -152,6 +152,10 @@ rspamd_check_group_score (struct rspamd_task *task,
 	return w;
 }
 
+#ifndef DBL_EPSILON
+#define DBL_EPSILON 2.2204460492503131e-16
+#endif
+
 static struct rspamd_symbol_result *
 insert_metric_result (struct rspamd_task *task,
 		const gchar *symbol,
@@ -361,21 +365,17 @@ insert_metric_result (struct rspamd_task *task,
 		}
 
 		if (!isnan (final_score)) {
-#ifndef DBL_EPSILON
-#define DBL_EPSILON 2.2204460492503131e-16
-#endif
 			const double epsilon = DBL_EPSILON;
 
 			metric_res->score += final_score;
 			metric_res->grow_factor = next_gf;
 			s->score = final_score;
 
-			/* We ignore zero scored symbols */
 			if (final_score > epsilon) {
 				metric_res->npositive ++;
 				metric_res->positive_score += final_score;
 			}
-			else if (final_score < epsilon) {
+			else if (final_score < -epsilon) {
 				metric_res->nnegative ++;
 				metric_res->negative_score += fabs (final_score);
 			}
