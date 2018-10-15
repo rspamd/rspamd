@@ -596,7 +596,7 @@ local function ratelimit_update_cb(task)
       return
     end
 
-    local is_spam = not (task:get_metric_action() == 'no action')
+    local verdict = lua_util.get_task_verdict(task)
 
     -- Update each bucket
     for k, v in pairs(prefixes) do
@@ -615,12 +615,15 @@ local function ratelimit_update_cb(task)
       end
       local now = rspamd_util.get_time()
       now = lua_util.round(now * 1000.0) -- Get milliseconds
-      local mult_burst = bucket.ham_factor_burst or 1.0
-      local mult_rate = bucket.ham_factor_burst or 1.0
+      local mult_burst = 1.0
+      local mult_rate = 1.0
 
-      if is_spam then
+      if verdict == 'spam' or verdict == 'junk' then
         mult_burst = bucket.spam_factor_burst or 1.0
         mult_rate = bucket.spam_factor_rate or 1.0
+      elseif verdict == 'ham' then
+        mult_burst = bucket.ham_factor_burst or 1.0
+        mult_rate = bucket.ham_factor_rate or 1.0
       end
 
       lua_redis.exec_redis_script(bucket_update_id,
