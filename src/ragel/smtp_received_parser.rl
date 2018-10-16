@@ -100,33 +100,19 @@
   }
 
   action Real_IP_Start {
-    if (real_ip_end == NULL) {
+    if (real_ip_end == NULL && real_ip_start == NULL) {
       real_ip_start = p;
     }
   }
   action Real_IP_End {
-    if (ip_start && ip_end && ip_end > ip_start) {
-      real_ip_start = ip_start;
-      real_ip_end = ip_end;
-    }
-    else {
-      real_ip_end = p;
-    }
-
-    ip_start = NULL;
-    ip_end = NULL;
-  }
-  action Reported_IP_Start {
-    reported_ip_start = p;
-  }
-  action Reported_IP_End {
-
-    if (ip_start && ip_end && ip_end > ip_start) {
-      reported_ip_start = ip_start;
-      reported_ip_end = ip_end;
-    }
-    else {
-      reported_ip_end = p;
+    if (real_ip_end == NULL && real_ip_start != NULL) {
+      if (ip_start && ip_end && ip_end > ip_start) {
+        real_ip_start = ip_start;
+        real_ip_end = ip_end;
+      }
+      else {
+        real_ip_end = p;
+      }
     }
 
     ip_start = NULL;
@@ -225,6 +211,21 @@
     }
   }
 
+  action Comment_Start {
+    cstart = p;
+  }
+
+  action Comment_End {
+    cend = p;
+
+    if (cend && cstart && cend > cstart) {
+      rspamd_smtp_maybe_process_smtp_comment (task, cstart, cend - cstart, rh);
+    }
+
+    cend = NULL;
+    cstart = NULL;
+  }
+
   include smtp_whitespace "smtp_whitespace.rl";
   include smtp_ip "smtp_ip.rl";
   include smtp_date "smtp_date.rl";
@@ -246,9 +247,8 @@ rspamd_smtp_received_parse (struct rspamd_task *task, const char *data, size_t l
   const char *real_domain_start, *real_domain_end,
               *real_ip_start, *real_ip_end,
               *reported_domain_start, *reported_domain_end,
-              *reported_ip_start, *reported_ip_end,
               *ip_start, *ip_end, *date_start,
-              *for_start, *for_end, *tmp;
+              *for_start, *for_end, *tmp, *cstart, *cend;
   struct tm tm;
   const char *p = data, *pe = data + len, *eof;
   int cs, in_v6 = 0, *stack = NULL;
@@ -269,13 +269,13 @@ rspamd_smtp_received_parse (struct rspamd_task *task, const char *data, size_t l
   real_ip_end = NULL;
   reported_domain_start = NULL;
   reported_domain_end = NULL;
-  reported_ip_start = NULL;
-  reported_ip_end = NULL;
   ip_start = NULL;
   ip_end = NULL;
   date_start = NULL;
   for_start = NULL;
   for_end = NULL;
+  cstart = NULL;
+  cend = NULL;
   rh->type = RSPAMD_RECEIVED_UNKNOWN;
 
   memset (&for_addr, 0, sizeof (for_addr));
@@ -290,10 +290,9 @@ rspamd_smtp_received_parse (struct rspamd_task *task, const char *data, size_t l
     rh->real_ip = rspamd_mempool_alloc (task->task_pool, tmplen + 1);
     rspamd_strlcpy (rh->real_ip, real_ip_start, tmplen + 1);
   }
-  if (reported_ip_end && reported_ip_start && reported_ip_end > reported_ip_start) {
-    tmplen = reported_ip_end - reported_ip_start;
-    rh->from_ip = rspamd_mempool_alloc (task->task_pool, tmplen + 1);
-    rspamd_strlcpy (rh->from_ip, reported_ip_start, tmplen + 1);
+
+  if (!rh->real_ip && rh->comment_ip) {
+    rh->real_ip = rh->comment_ip;
   }
 
   if (rh->real_ip && !rh->from_ip) {

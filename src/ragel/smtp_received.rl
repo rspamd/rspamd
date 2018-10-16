@@ -24,12 +24,9 @@
                   ( address_literal >Real_Domain_Start %Real_Domain_End FWS "(" TCP_info ")" ) |
                   address_literal >Real_IP_Start %Real_IP_End; # Not RFC conforming, but many MTA try this
 
-  exim_real_ip = "[" (IPv4_addr|IPv6_simple) >IP4_start %IP4_end "]"
-                  >Real_IP_Start %Real_IP_End (":" digit{1,4})?;
-  exim_content = exim_real_ip;
   ccontent = ctext | FWS | '(' @{ fcall balanced_ccontent; };
   balanced_ccontent := ccontent* ')' @{ fret; };
-  comment        =   "(" (FWS? ccontent|exim_content)* FWS? ")";
+  comment        =   "(" ((FWS? ccontent)* FWS?) >Comment_Start %Comment_End ")";
   CFWS           =   ((FWS? comment)+ FWS?) | FWS;
 
   From_domain    = "FROM"i FWS Extended_Domain >From_Start %From_End;
