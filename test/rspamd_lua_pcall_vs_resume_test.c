@@ -53,7 +53,11 @@ test_resume(lua_State *L, gint function_call)
 
 	for (i = 0; i < N; i ++) {
 		lua_rawgeti (L, LUA_REGISTRYINDEX, function_call);
+#if LUA_VERSION_NUM < 503
 		lua_resume (L, 0);
+#else
+		lua_resume (L, NULL, 0);
+#endif
 		lua_pop (L, 1);
 	}
 
@@ -75,7 +79,11 @@ test_resume_get_thread(gint function_call)
 		ent = lua_thread_pool_get_for_config (rspamd_main->cfg);
 
 		lua_rawgeti (ent->lua_state, LUA_REGISTRYINDEX, function_call);
+#if LUA_VERSION_NUM < 503
 		lua_resume (ent->lua_state, 0);
+#else
+		lua_resume (ent->lua_state, NULL, 0);
+#endif
 		lua_pop (ent->lua_state, 1);
 
 		lua_thread_pool_return (rspamd_main->cfg->lua_thread_pool, ent);
@@ -99,7 +107,11 @@ test_resume_get_new_thread(gint function_call)
 		ent = lua_thread_pool_get_for_task (rspamd_main->cfg->lua_thread_pool);
 
 		lua_rawgeti (ent->lua_state, LUA_REGISTRYINDEX, function_call);
+#if LUA_VERSION_NUM < 503
 		lua_resume (ent->lua_state, 0);
+#else
+		lua_resume (ent->lua_state, NULL, 0);
+#endif
 		lua_pop (ent->lua_state, 1);
 
 		/* lua_thread_pool_return (rspamd_main->cfg->lua_thread_pool, ent); */
