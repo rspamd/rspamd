@@ -52,9 +52,9 @@ pipeline:
       # shell sets exit status of a process terminated by a signal to '128 + signal-number'
       # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
       - >
-        if [ $EXIT_CODE -gt 128 ];
-        then gdb -c /var/tmp/*.rspamd-test.core ./rspamd-test -ex "set pagination 0" -ex "thread apply all bt full" --batch;
-        exit $EXIT_CODE;
+        if [ $EXIT_CODE -gt 128 ]; then
+        	gdb -c /var/tmp/*.rspamd-test.core ./rspamd-test -ex "set pagination 0" -ex "thread apply all bt full" --batch;
+        	exit $EXIT_CODE;
         fi
       # luacov-coveralls reads luacov.stats.out written by rspamd-test using luacov module
       # and writes json report for coveralls.io service
