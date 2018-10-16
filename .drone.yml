@@ -42,6 +42,7 @@ pipeline:
     group: tests
     commands:
       - test "$(id -un)" = nobody
+      - ulimit -c unlimited
       # rspamd-test and functional test both use luacov.stats.out file and should be started from
       # different directories (if started in parallel)
       - cd /rspamd/build/test
