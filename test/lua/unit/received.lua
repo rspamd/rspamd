@@ -5,17 +5,18 @@ context("Received headers parser", function()
 
   ffi.cdef[[
     struct received_header {
-    char *from_hostname;
-    char *from_ip;
-    char *real_hostname;
-    char *real_ip;
-    char *by_hostname;
-    char *for_mbox;
-    void *addr;
-    void *hdr;
-    long timestamp;
-    int type;
-    int flags;
+      char *from_hostname;
+      char *from_ip;
+      char *real_hostname;
+      char *real_ip;
+      char *by_hostname;
+      char *for_mbox;
+      char *comment_ip;
+      void *addr;
+      void *hdr;
+      long timestamp;
+      int type;
+      int flags;
   };
   struct rspamd_task * rspamd_task_new(struct rspamd_worker *worker, struct rspamd_config *cfg);
   int rspamd_smtp_received_parse (struct rspamd_task *task,
