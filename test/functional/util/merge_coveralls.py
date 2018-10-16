@@ -141,6 +141,20 @@ if __name__ == '__main__':
             j1['commit_sha'] = os.getenv('CI_COMMIT_SHA')
             if os.getenv('CI_BUILD_EVENT') == 'pull_request':
                 j1['service_pull_request'] = os.getenv('CI_PULL_REQUEST')
+            # git data can be filled by cpp-coveralls, but in our layout it can't find repo
+            # so we can override git info witout merging
+            j1['git'] = {
+                'head': {
+                    'id': j1['commit_sha'],
+                    'author_email': os.getenv('CI_COMMIT_AUTHOR_EMAIL'),
+                    'message': os.getenv('CI_COMMIT_MESSAGE')
+                },
+                'branch': j1['service_branch'],
+                'remotes': [{
+                    'name': 'origin',
+                    'url': os.getenv('CI_REPO_REMOTE')
+                }]
+            }
 
 
     j1['source_files'] = list(files.values())
