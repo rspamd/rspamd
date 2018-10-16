@@ -1794,6 +1794,16 @@ restart:
 #endif
 }
 
+#ifdef HAVE_CLOCK_GETTIME
+# ifdef CLOCK_MONOTONIC_COARSE
+#  define RSPAMD_FAST_MONOTONIC_CLOCK CLOCK_MONOTONIC_COARSE
+# elif defined(CLOCK_MONOTONIC_FAST)
+#  define RSPAMD_FAST_MONOTONIC_CLOCK CLOCK_MONOTONIC_FAST
+# else
+#  define RSPAMD_FAST_MONOTONIC_CLOCK CLOCK_MONOTONIC
+# endif
+#endif
+
 gdouble
 rspamd_get_ticks (gboolean rdtsc_ok)
 {
@@ -1814,7 +1824,7 @@ rspamd_get_ticks (gboolean rdtsc_ok)
 #endif
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
-	gint clk_id = CLOCK_MONOTONIC;
+	gint clk_id = RSPAMD_FAST_MONOTONIC_CLOCK;
 
 	clock_gettime (clk_id, &ts);
 
