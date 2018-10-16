@@ -13,7 +13,10 @@ EOD
 log_re_cache = true;
 
 # Can be used for console logging
-color = false
+color = false;
+
+# Log with microseconds resolution
+log_usec = false;
 
 # Enable debug for specific modules (e.g. `debug_modules = ["dkim", "re_cache"];`)
 debug_modules = []
