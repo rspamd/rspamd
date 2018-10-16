@@ -1,3 +1,48 @@
+1.8.1: 16 Oct 2018
+  * [CritFix] Fix options insertion
+  * [CritFix] Fix words decay one more time (affects long messages)
+  * [CritFix] Increase default words_decay
+  * [CritFix] Plug memory leak in redis pool
+  * [Feature] Add `check_violation` feature to DKIM/ARC signing
+  * [Feature] Add only unique elements to Clickhouse url arrays
+  * [Feature] Allow `g+:` and `g-:` composite atoms
+  * [Feature] Allow dkim domains check in surbl
+  * [Feature] Allow maps with HTTP auth
+  * [Feature] Allow to disable actions by users settings
+  * [Feature] Extend whitelisting options
+  * [Feature] Store url object in images
+  * [Feature] Use verdict instead of the plain action in plugins
+  * [Fix] Allow to call fstring append with NULL string
+  * [Fix] DCC - luacheck
+  * [Fix] Do not load torch on each rspamadm invocation
+  * [Fix] Fix boundaries detection and rework stop words algorithm
+  * [Fix] Fix dependencies for DNS_SIGNED symbol
+  * [Fix] Fix errors when dealing with dynamic rates/bursts in Ratelimit
+  * [Fix] Fix groups mess
+  * [Fix] Fix groups mess
+  * [Fix] Fix parsing address with comments
+  * [Fix] Fix resolving in DMARC reports
+  * [Fix] Fix various issues with parsing of the received headers
+  * [Fix] Fix watchers issue in lua_tcp when doing no resolving
+  * [Fix] Plug memory leak in language detector (affects reloads)
+  * [Fix] Remove one letter stop words
+  * [Fix] Slashing: backport chunk logic from libucl
+  * [Fix] Stop libevent from using cached time in rspamadm
+  * [Fix] Try to fix watchers chaining
+  * [Fix] Various fixes in redis sync interface
+  * [Fix] ip_score - respect check_authed and check_local settings from config
+  * [Project] Rework passthrough actions
+  * [Project] Clustering module
+  * [Rework] Always create result for a task
+  * [Rework] Completely rewrite DMARC checks logic
+  * [Rework] Rework and fix whitelist plugin
+  * [WebUI] Add symbols sorting buttons
+  * [WebUI] Change symbols order without updating history
+  * [WebUI] Colorize symbols
+  * [WebUI] Do not display password form when secure_ip is set
+  * [WebUI] Fix symbol description tooltips display
+  * [WebUI] History: add sorting by symbol score value
+
 1.8.0: 24 Sep 2018
   * [Feature] Add arguments schemas to processors and extractors
   * [Feature] Add functional selectors library
