@@ -48,6 +48,12 @@ pipeline:
       - set +e
       - ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
       - set -e
+      # shell sets exit status of a process that terminated by a signal to '128 + signal-number'
+      - >
+        if [ $EXIT_CODE -gt 128 ];
+        then gdb -c /var/tmp/*.rspamd-test.core ./rspamd-test -ex "set pagination 0" -ex "thread apply all bt full" --batch;
+        exit $EXIT_CODE;
+        fi
       # luacov-coveralls reads luacov.stats.out written by rspamd-test using luacov module
       # and writes json report for coveralls.io service
       - luacov-coveralls -o /rspamd/build/unit_test_lua.json --dryrun
