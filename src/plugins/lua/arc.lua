@@ -591,7 +591,7 @@ local function arc_signing_cb(task)
           if err and err == 'No such file or directory' then
             lua_util.debugm(N, task, 'cannot read key from %s: %s', p.key, err)
           else
-            rspamd_logger.warnx(N, task, 'cannot read key from %s: %s', p.key, err)
+            rspamd_logger.warnx(task, 'cannot read key from %s: %s', p.key, err)
           end
           return false
         end
