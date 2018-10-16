@@ -5,14 +5,11 @@ import os.path
 import psutil
 import glob
 import pwd
-import re
 import shutil
 import signal
 import socket
-import errno
 import sys
 import tempfile
-import time
 import subprocess
 from robot.libraries.BuiltIn import BuiltIn
 from robot.api import logger
