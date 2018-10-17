@@ -666,6 +666,14 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 			}
 			else {
 				check_enable = FALSE;
+
+				if (check_normal) {
+					/*
+					 * If no enable password is specified use normal password as
+					 * enable password
+					 */
+					session->is_enable = TRUE;
+				}
 			}
 		}
 	}
