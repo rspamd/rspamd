@@ -153,6 +153,40 @@ jobs:
           key: v1-dependencies-{{ checksum "package.json" }}
       - run: ./node_modules/.bin/eslint -v && ./node_modules/.bin/eslint ./
 
+  tidy:
+    docker:
+      - image: buildpack-deps:latest
+    steps:
+      - run:
+          name: Exporting env vars
+          command: |
+            cat >> $BASH_ENV <<EOF
+            export PATH=$PATH:$HOME/perl5/bin
+            export PERL_CPANM_OPT=--local-lib=$HOME/perl5
+            export PERL5LIB=$HOME/perl5/lib/perl5:$PERL5LIB
+            EOF
+      - checkout
+
+      - restore_cache:
+          key: v0-tidyall_dependencies
+      - run:
+          name: Installing cpanm
+          command: 'curl -L https://cpanmin.us | perl - App::cpanminus'
+      - run:
+          name: Installing CPAN dependencies
+          command: |
+            cpanm --quiet --notest \
+              Code::TidyAll \
+              Code::TidyAll::Plugin::Test::Vars \
+              Perl::Critic \
+              Perl::Tidy \
+              Pod::Tidy
+      - save_cache:
+          key: v0-tidyall_dependencies
+          paths:
+            - ~/perl5
+      - run: tidyall -a --check-only
+
   send-coverage:
     <<: *defaults
     steps:
@@ -178,6 +212,7 @@ workflows:
     jobs:
       - build
       - eslint
+      - tidy
       - rspamd-test:
           requires:
             - build
