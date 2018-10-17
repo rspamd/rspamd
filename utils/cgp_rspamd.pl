@@ -359,6 +359,4 @@ protocol.  On scan requests, this filter can query Rspamd to process a message.
 B<cgp_rspamd> can tell CGP to add header or reject SPAM messages depending on
 Rspamd scan result.
 
-=back
-
 =cut

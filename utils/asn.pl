@@ -16,14 +16,14 @@ $LWP::Simple::ua->show_progress(1);
 $Net::MRT::USE_RFC4760 = -1;
 
 my %config = (
-  asn_sources => [
-    'ftp://ftp.arin.net/pub/stats/arin/delegated-arin-extended-latest',
-    'ftp://ftp.ripe.net/ripe/stats/delegated-ripencc-latest',
-    'ftp://ftp.afrinic.net/pub/stats/afrinic/delegated-afrinic-latest',
-    'ftp://ftp.apnic.net/pub/stats/apnic/delegated-apnic-latest',
-    'ftp://ftp.lacnic.net/pub/stats/lacnic/delegated-lacnic-latest'
-  ],
-  bgp_sources => ['http://data.ris.ripe.net/rrc00/latest-bview.gz']
+    asn_sources => [
+        'ftp://ftp.arin.net/pub/stats/arin/delegated-arin-extended-latest',
+        'ftp://ftp.ripe.net/ripe/stats/delegated-ripencc-latest',
+        'ftp://ftp.afrinic.net/pub/stats/afrinic/delegated-afrinic-latest',
+        'ftp://ftp.apnic.net/pub/stats/apnic/delegated-apnic-latest',
+        'ftp://ftp.lacnic.net/pub/stats/lacnic/delegated-lacnic-latest'
+    ],
+    bgp_sources => ['http://data.ris.ripe.net/rrc00/latest-bview.gz']
 );
 
 my $download_asn    = 0;
@@ -38,171 +38,169 @@ my $v4_zone         = "asn.rspamd.com";
 my $v6_zone         = "asn6.rspamd.com";
 my $v4_file         = "asn.zone";
 my $v6_file         = "asn6.zone";
-my $ns_servers      = ["asn-ns.rspamd.com", "asn-ns2.rspamd.com"];
+my $ns_servers      = [ "asn-ns.rspamd.com", "asn-ns2.rspamd.com" ];
 
 GetOptions(
-  "download-asn" => \$download_asn,
-  "download-bgp" => \$download_bgp,
-  "4!"           => \$v4,
-  "6!"           => \$v6,
-  "parse!"       => \$parse,
-  "target=s"     => \$download_target,
-  "zone-v4=s"    => \$v4_zone,
-  "zone-v6=s"    => \$v6_zone,
-  "file-v4=s"    => \$v4_file,
-  "file-v6=s"    => \$v6_file,
-  "ns-server=s@" => \$ns_servers,
-  "help|?"       => \$help,
-  "man"          => \$man
+    "download-asn" => \$download_asn,
+    "download-bgp" => \$download_bgp,
+    "4!"           => \$v4,
+    "6!"           => \$v6,
+    "parse!"       => \$parse,
+    "target=s"     => \$download_target,
+    "zone-v4=s"    => \$v4_zone,
+    "zone-v6=s"    => \$v6_zone,
+    "file-v4=s"    => \$v4_file,
+    "file-v6=s"    => \$v6_file,
+    "ns-server=s@" => \$ns_servers,
+    "help|?"       => \$help,
+    "man"          => \$man
 ) or pod2usage(2);
 
 pod2usage(1) if $help;
 pod2usage( -exitval => 0, -verbose => 2 ) if $man;
 
 sub download_file {
-  my ($u) = @_;
+    my ($u) = @_;
 
-  print "Fetching $u\n";
-  my $ff = File::Fetch->new( uri => $u );
-  my $where = $ff->fetch( to => $download_target ) or die $ff->error;
+    print "Fetching $u\n";
+    my $ff = File::Fetch->new( uri => $u );
+    my $where = $ff->fetch( to => $download_target ) or die $ff->error;
 
-  return $where;
+    return $where;
 }
 
 if ($download_asn) {
-  foreach my $u ( @{ $config{'asn_sources'} } ) {
-    download_file($u);
-  }
+    foreach my $u ( @{ $config{'asn_sources'} } ) {
+        download_file($u);
+    }
 }
 
 if ($download_bgp) {
-  foreach my $u ( @{ $config{'bgp_sources'} } ) {
-    download_file($u);
-  }
+    foreach my $u ( @{ $config{'bgp_sources'} } ) {
+        download_file($u);
+    }
 }
 
 if ( !$parse ) {
-  exit 0;
+    exit 0;
 }
 
 my $v4_fh;
 my $v6_fh;
 
 if ($v4) {
-  open( $v4_fh, ">", $v4_file ) or die "Cannot open $v4_file for writing: $!";
-  print $v4_fh
-    "\$SOA 43200 $ns_servers->[0] support.rspamd.com 0 600 300 86400 300\n";
-  foreach my $ns (@{$ns_servers}) {
-    print $v4_fh "\$NS 43200 $ns\n";
-  }
+    open( $v4_fh, ">", $v4_file ) or die "Cannot open $v4_file for writing: $!";
+    print $v4_fh "\$SOA 43200 $ns_servers->[0] support.rspamd.com 0 600 300 86400 300\n";
+    foreach my $ns ( @{$ns_servers} ) {
+        print $v4_fh "\$NS 43200 $ns\n";
+    }
 }
 if ($v6) {
-  open( $v6_fh, ">", $v6_file ) or die "Cannot open $v6_file for writing: $!";
-  print $v6_fh
-    "\$SOA 43200 $ns_servers->[0] support.rspamd.com 0 600 300 86400 300\n";
-  foreach my $ns (@{$ns_servers}) {
-    print $v6_fh "\$NS 43200 $ns\n";
-  }
+    open( $v6_fh, ">", $v6_file ) or die "Cannot open $v6_file for writing: $!";
+    print $v6_fh "\$SOA 43200 $ns_servers->[0] support.rspamd.com 0 600 300 86400 300\n";
+    foreach my $ns ( @{$ns_servers} ) {
+        print $v6_fh "\$NS 43200 $ns\n";
+    }
 }
 
 # Now load BGP data
 my $networks = {};
 
 foreach my $u ( @{ $config{'bgp_sources'} } ) {
-  my $parsed = URI->new($u);
-  my $fname  = $download_target . '/' . basename( $parsed->path );
-  open( my $fh, "<:gzip", $fname )
-    or die "Cannot open $fname: $!";
+    my $parsed = URI->new($u);
+    my $fname  = $download_target . '/' . basename( $parsed->path );
+    open( my $fh, "<:gzip", $fname )
+      or die "Cannot open $fname: $!";
 
-  while ( my $dd = eval { Net::MRT::mrt_read_next($fh) } ) {
-    if ( $dd->{'prefix'} && $dd->{'bits'} ) {
-      next if $dd->{'subtype'} == 2 and !$v4;
-      next if $dd->{'subtype'} == 4 and !$v6;
-      my $entry = $dd->{'entries'}->[0];
-      my $net   = $dd->{'prefix'} . '/' . $dd->{'bits'};
-      if ( $entry && $entry->{'AS_PATH'} ) {
-        my $as = $entry->{'AS_PATH'}->[-1];
-        if (ref($as) eq "ARRAY") {
-          $as = @{$as}[0];
-        }
+    while ( my $dd = eval { Net::MRT::mrt_read_next($fh) } ) {
+        if ( $dd->{'prefix'} && $dd->{'bits'} ) {
+            next if $dd->{'subtype'} == 2 and !$v4;
+            next if $dd->{'subtype'} == 4 and !$v6;
+            my $entry = $dd->{'entries'}->[0];
+            my $net   = $dd->{'prefix'} . '/' . $dd->{'bits'};
+            if ( $entry && $entry->{'AS_PATH'} ) {
+                my $as = $entry->{'AS_PATH'}->[-1];
+                if ( ref($as) eq "ARRAY" ) {
+                    $as = @{$as}[0];
+                }
 
-        if ( !$networks->{$as} ) {
-          if ( $dd->{'subtype'} == 2 ) {
-            $networks->{$as} = { nets_v4 => [$net], nets_v6 => [] };
-          }
-          else {
-            $networks->{$as} = { nets_v6 => [$net], nets_v4 => [] };
-          }
+                if ( !$networks->{$as} ) {
+                    if ( $dd->{'subtype'} == 2 ) {
+                        $networks->{$as} = { nets_v4 => [$net], nets_v6 => [] };
+                    }
+                    else {
+                        $networks->{$as} = { nets_v6 => [$net], nets_v4 => [] };
+                    }
+                }
+                else {
+                    if ( $dd->{'subtype'} == 2 ) {
+                        push @{ $networks->{$as}->{'nets_v4'} }, $net;
+                    }
+                    else {
+                        push @{ $networks->{$as}->{'nets_v6'} }, $net;
+                    }
+                }
+            }
         }
-        else {
-          if ( $dd->{'subtype'} == 2 ) {
-            push @{ $networks->{$as}->{'nets_v4'} }, $net;
-          }
-          else {
-            push @{ $networks->{$as}->{'nets_v6'} }, $net;
-          }
-        }
-      }
     }
-  }
 }
 
 # Now roughly detect countries
 foreach my $u ( @{ $config{'asn_sources'} } ) {
-  my $parsed = URI->new($u);
-  my $fname  = $download_target . '/' . basename( $parsed->path );
-  open( my $fh, "<", $fname ) or die "Cannot open $fname: $!";
+    my $parsed = URI->new($u);
+    my $fname  = $download_target . '/' . basename( $parsed->path );
+    open( my $fh, "<", $fname ) or die "Cannot open $fname: $!";
 
-  while (<$fh>) {
-    next if /^\#/;
-    chomp;
-    my @elts = split /\|/;
+    while (<$fh>) {
+        next if /^\#/;
+        chomp;
+        my @elts = split /\|/;
 
-    if ( $elts[2] eq 'asn' && $elts[3] ne '*' ) {
-      my $as_start = int( $elts[3] );
-      my $as_end   = $as_start + int( $elts[4] );
+        if ( $elts[2] eq 'asn' && $elts[3] ne '*' ) {
+            my $as_start = int( $elts[3] );
+            my $as_end   = $as_start + int( $elts[4] );
 
-      for ( my $as = $as_start ; $as < $as_end ; $as++ ) {
-        my $real_as = $as;
+            for ( my $as = $as_start ; $as < $as_end ; $as++ ) {
+                my $real_as = $as;
 
-        if (ref($as) eq "ARRAY") {
-          $real_as = @{$as}[0];
+                if ( ref($as) eq "ARRAY" ) {
+                    $real_as = @{$as}[0];
+                }
+
+                if ( $networks->{"$real_as"} ) {
+                    $networks->{"$real_as"}->{'country'} = $elts[1];
+                    $networks->{"$real_as"}->{'rir'}     = $elts[0];
+                }
+            }
         }
-
-        if ( $networks->{"$real_as"} ) {
-          $networks->{"$real_as"}->{'country'} = $elts[1];
-          $networks->{"$real_as"}->{'rir'}     = $elts[0];
-        }
-      }
     }
-  }
 }
 
 while ( my ( $k, $v ) = each( %{$networks} ) ) {
-  if ($v4) {
-    foreach my $n ( @{ $v->{'nets_v4'} } ) {
+    if ($v4) {
+        foreach my $n ( @{ $v->{'nets_v4'} } ) {
 
-      # "15169 | 8.8.8.0/24 | US | arin |" for 8.8.8.8
-      if ( $v->{'country'} ) {
-        printf $v4_fh "%s %s|%s|%s|%s|\n", $n, $k, $n, $v->{'country'}, $v->{'rir'};
-      }
-      else {
-        printf $v4_fh "%s %s|%s|%s|%s|\n", $n, $k, $n, 'UN', 'UN';
-      }
+            # "15169 | 8.8.8.0/24 | US | arin |" for 8.8.8.8
+            if ( $v->{'country'} ) {
+                printf $v4_fh "%s %s|%s|%s|%s|\n", $n, $k, $n, $v->{'country'}, $v->{'rir'};
+            }
+            else {
+                printf $v4_fh "%s %s|%s|%s|%s|\n", $n, $k, $n, 'UN', 'UN';
+            }
+        }
     }
-  }
-  if ($v6) {
-    foreach my $n ( @{ $v->{'nets_v6'} } ) {
+    if ($v6) {
+        foreach my $n ( @{ $v->{'nets_v6'} } ) {
 
-      # "15169 | 8.8.8.0/24 | US | arin |" for 8.8.8.8
-      if ( $v->{'country'} ) {
-        printf $v6_fh "%s %s|%s|%s|%s|\n", $n, $k, $n, $v->{'country'}, $v->{'rir'};
-      }
-      else {
-        printf $v6_fh "%s %s|%s|%s|%s|\n", $n, $k, $n, 'UN', 'UN';
-      }
+            # "15169 | 8.8.8.0/24 | US | arin |" for 8.8.8.8
+            if ( $v->{'country'} ) {
+                printf $v6_fh "%s %s|%s|%s|%s|\n", $n, $k, $n, $v->{'country'}, $v->{'rir'};
+            }
+            else {
+                printf $v6_fh "%s %s|%s|%s|%s|\n", $n, $k, $n, 'UN', 'UN';
+            }
+        }
     }
-  }
 }
 
 __END__
