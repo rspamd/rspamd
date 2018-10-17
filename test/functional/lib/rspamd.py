@@ -5,14 +5,11 @@ import os.path
 import psutil
 import glob
 import pwd
-import re
 import shutil
 import signal
 import socket
-import errno
 import sys
 import tempfile
-import time
 import subprocess
 from robot.libraries.BuiltIn import BuiltIn
 from robot.api import logger
@@ -170,34 +167,31 @@ def update_dictionary(a, b):
     a.update(b)
     return a
 
+
+TERM_TIMEOUT = 10  # wait after sending a SIGTERM signal
+KILL_WAIT = 20  # additional wait after sending a SIGKILL signal
+
 def shutdown_process(process):
-    i = 0
-    while i < 100:
+    # send SIGTERM
+    process.terminate()
+
+    try:
+        process.wait(TERM_TIMEOUT)
+        return
+    except psutil.TimeoutExpired:
+        logger.info( "PID {} is not termianated in {} seconds, sending SIGKILL..." %
+            (process.pid, TERM_TIMEOUT))
         try:
-            os.kill(process.pid, signal.SIGTERM)
-        except OSError as e:
-            assert e.errno == errno.ESRCH
+            # send SIGKILL
+            process.kill()
+        except psutil.NoSuchProcess:
+            # process exited just befor we tried to kill
             return
 
-        if process.status() == psutil.STATUS_ZOMBIE:
-            return
-
-        i += 1
-        time.sleep(0.1)
-
-    while i < 200:
-        try:
-            os.kill(process.pid, signal.SIGKILL)
-        except OSError as e:
-            assert e.errno == errno.ESRCH
-            return
-
-        if process.status() == psutil.STATUS_ZOMBIE:
-            return
-
-        i += 1
-        time.sleep(0.1)
-    assert False, "Failed to shutdown process %d (%s)" % (process.pid, process.name())
+    try:
+        process.wait(KILL_WAIT)
+    except psutil.TimeoutExpired:
+        raise RuntimeError("Failed to shutdown process %d (%s)" % (process.pid, process.name()))
 
 
 def shutdown_process_with_children(pid):
