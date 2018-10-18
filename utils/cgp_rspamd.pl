@@ -324,8 +324,7 @@ Specifies Rspamd host to use for scanning
 
 =item B<--header>
 
-Specifies the header that should be added when Rspamd action is B<add header>
-or B<rewrite subject>.
+Specifies the header that should be added when Rspamd action is B<add header> or B<rewrite subject>.
 
 =item B<--reject-message>
 
@@ -351,10 +350,8 @@ Prints the manual page and exits.
 
 =head1 DESCRIPTION
 
-B<cgp_rspamd> is intended to scan messages processed with B<CommunigatePro> MTA
-on some Rspamd scanner. It reads standard input and parses CGP helpers
-protocol.  On scan requests, this filter can query Rspamd to process a message.
-B<cgp_rspamd> can tell CGP to add header or reject SPAM messages depending on
-Rspamd scan result.
+B<cgp_rspamd> is intended to scan messages processed with B<CommunigatePro> MTA on some Rspamd scanner. It reads
+standard input and parses CGP helpers protocol.  On scan requests, this filter can query Rspamd to process a message.
+B<cgp_rspamd> can tell CGP to add header or reject SPAM messages depending on Rspamd scan result.
 
 =cut

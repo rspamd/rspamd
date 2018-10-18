@@ -533,8 +533,7 @@ Prints the manual page and exits.
 
 =head1 DESCRIPTION
 
-B<classifier_test.pl> is intended to test Rspamd classifier for false positives,
-false negatives and other parameters. It uses half of the corpus for training
-and half for cross-validation.
+B<classifier_test.pl> is intended to test Rspamd classifier for false positives, false negatives and other parameters.
+It uses half of the corpus for training and half for cross-validation.
 
 =cut

@@ -17,9 +17,9 @@ select = **/*.{pl,pl.in,pm,pod}
 ;[PodSpell]
 ;select = **/*.{pl,pl.in,pm,pod}
 
-;[PodTidy]
-;select = **/*.{pl,pl.in,pm,pod}
-;argv = --columns=120
+[PodTidy]
+select = **/*.{pl,pl.in,pm,pod}
+columns = 120
 
 [Test::Vars]
 select = **/*.{pl,pl.in,pm,t}
