@@ -5,21 +5,21 @@
 ignore = contrib/**/* doc/doxydown/doxydown.pl
 
 ;[PerlCritic]
-;select = **/*.{pl,pm,t}
+;select = **/*.{pl,pl.in,pm,t}
 
 [PerlTidy]
-select = **/*.{pl,pm,t}
+select = **/*.{pl,pl.in,pm,t}
 argv = -l=120
 
 [PodChecker]
-select = **/*.{pl,pm,pod}
+select = **/*.{pl,pl.in,pm,pod}
 
 ;[PodSpell]
-;select = **/*.{pl,pm,pod}
+;select = **/*.{pl,pl.in,pm,pod}
 
-;[PodTidy]
-;select = **/*.{pl,pm,pod}
-;argv = --columns=120
+[PodTidy]
+select = **/*.{pl,pl.in,pm,pod}
+columns = 120
 
 [Test::Vars]
-select = **/*.{pl,pm,t}
+select = **/*.{pl,pl.in,pm,t}

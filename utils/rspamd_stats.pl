@@ -873,13 +873,11 @@ rspamd_stats [options] [--symbol=SYM1 [--symbol=SYM2...]] [--log file]
 
 =item B<--log>
 
-Specifies log file or directory to read data from.
-If a directory is specified B<rspamd_stats> analyses files in the directory
-including known compressed file types. Number of log files can be limited using
-B<--num-logs> and B<--exclude-logs> options. This assumes that files in the log
-directory have B<newsyslog(8)>- or B<logrotate(8)>-like name format with numeric
-indexes. Files without indexes (generally it is merely one file) are considered
-the most recent and files with lower indexes are considered newer.
+Specifies log file or directory to read data from. If a directory is specified B<rspamd_stats> analyses files in the
+directory including known compressed file types. Number of log files can be limited using B<--num-logs> and
+B<--exclude-logs> options. This assumes that files in the log directory have B<newsyslog(8)>- or B<logrotate(8)>-like
+name format with numeric indexes. Files without indexes (generally it is merely one file) are considered the most
+recent and files with lower indexes are considered newer.
 
 =item B<--reject-score>
 
@@ -907,7 +905,8 @@ Number of latest logs to exclude (0 by default).
 
 =item B<--correlations>
 
-Additionally print correlation rate for each symbol displayed. This routine calculates merely paired correlations between symbols.
+Additionally print correlation rate for each symbol displayed. This routine calculates merely paired correlations
+between symbols.
 
 =item B<--search-pattern>
 
@@ -915,20 +914,19 @@ Do not process input unless finding the specified regular expression. Useful to 
 
 =item  B<--exclude>
 
-Exclude log lines if certain symbols are fired (e.g. GTUBE). You may specify this option multiple time to skip multiple symbols.
+Exclude log lines if certain symbols are fired (e.g. GTUBE). You may specify this option multiple time to skip multiple
+symbols.
 
 =item B<--start>
 
-Select log entries after this time. Format: C<YYYY-MM-DD HH:MM:SS> (can be
-truncated to any desired accuracy). If used with B<--end> select entries between
-B<--start> and B<--end>. The omitted date defaults to the current date if you
+Select log entries after this time. Format: C<YYYY-MM-DD HH:MM:SS> (can be truncated to any desired accuracy). If used
+with B<--end> select entries between B<--start> and B<--end>. The omitted date defaults to the current date if you
 supply the time.
 
 =item B<--end>
 
-Select log entries before this time. Format: C<YYYY-MM-DD HH:MM:SS> (can be
-truncated to any desired accuracy). If used with B<--start> select entries between
-B<--start> and B<--end>. The omitted date defaults to the current date if you
+Select log entries before this time. Format: C<YYYY-MM-DD HH:MM:SS> (can be truncated to any desired accuracy). If used
+with B<--start> select entries between B<--start> and B<--end>. The omitted date defaults to the current date if you
 supply the time.
 
 =item B<--help>
@@ -984,7 +982,8 @@ B<total ham hits>: overall number of B<HAM> messages
 
 =item 4.
 
-B<ham with symbol percentage>: percentage of number of hits with specified symbol in B<HAM> messages divided by total number of B<HAM> messages.
+B<ham with symbol percentage>: percentage of number of hits with specified symbol in B<HAM> messages divided by total
+number of B<HAM> messages.
 
 =back
 
