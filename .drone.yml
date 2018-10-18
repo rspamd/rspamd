@@ -35,6 +35,14 @@ pipeline:
       - ./node_modules/.bin/eslint -v
       - ./node_modules/.bin/eslint ./
 
+  # Run checks on perl source using tidyall
+  perl-tidyall:
+    # https://github.com/rspamd/rspamd-build-docker/blob/master/perl-tidyall/Dockerfile
+    image: rspamd/ci-perl-tidyall
+    group: build
+    commands:
+      - tidyall --all --root-dir /rspamd/src --check-only --no-cache --data-dir /tmp/tidyall
+
   rspamd-test:
     # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test/Dockerfile
     image: rspamd/ci-ubuntu-test
