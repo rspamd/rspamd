@@ -127,11 +127,10 @@ if __name__ == '__main__':
         if 'service_job_id' not in j1 and 'service_job_id' in j2:
             j1['service_job_id'] = j2['service_job_id']
 
-        if not j1['service_job_id'] and 'CIRCLE_BUILD_NUM' in os.environ:
-            j1['service_job_id'] = os.environ['CIRCLE_BUILD_NUM']
 
-        if 'CIRCLECI' in os.environ and os.environ['CIRCLECI']:
+        if os.getenv('CIRCLECI'):
             j1['service_name'] = 'circleci'
+            j1['service_job_id'] = os.getenv('CIRCLE_BUILD_NUM')
         elif os.getenv('CI') == 'drone':
             j1['service_name'] = 'drone'
             j1['service_branch'] = os.getenv('CI_COMMIT_BRANCH')
@@ -173,5 +172,3 @@ if __name__ == '__main__':
 
     # post https://coveralls.io/api/v1/jobs
     # print args
-
-
