@@ -88,7 +88,7 @@ pipeline:
     commands:
       - cd /rspamd/build
       # extract coverage data for C code from .gcda file and save it in format sutible for coveralls.io
-      - $CI_WORKSPACE/test/tools/gcov-coveralls.py --exclude test --prefix /rspamd/build --prefix $CI_WORKSPACE --out coverage.c.json
+      - $CI_WORKSPACE/test/tools/gcov_coveralls.py --exclude test --prefix /rspamd/build --prefix $CI_WORKSPACE --out coverage.c.json
       # dump lua coverage
       - $CI_WORKSPACE/test/tools/dump_coveralls.py unit_test_lua.json lua_coverage_report.json
       # merge coverage for C and Lua code, upload it to coveralls.io
