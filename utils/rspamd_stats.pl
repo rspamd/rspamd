@@ -208,13 +208,14 @@ sub SymbolsStat {
         my $has_comma = 0;
         while ( my ( $s, $r ) = each(%sym_res) ) {
             if ( $r->{hits} > 0 ) {
-                my $th  = $r->{hits};
-                my $sh  = $r->{spam_hits};
-                my $jh  = $r->{junk_hits};
-                my $hh  = $r->{hits} - $sh - $jh;
-                my $htp = $hh * 100.0 / $total_ham if $total_ham != 0;
-                my $stp = $sh * 100.0 / $total_spam if $total_spam != 0;
-                my $jtp = $jh * 100.0 / $total_junk if $total_junk != 0;
+                my $th = $r->{hits};
+                my $sh = $r->{spam_hits};
+                my $jh = $r->{junk_hits};
+                my $hh = $r->{hits} - $sh - $jh;
+                my ( $htp, $stp, $jtp );
+                $htp = $hh * 100.0 / $total_ham  if $total_ham != 0;
+                $stp = $sh * 100.0 / $total_spam if $total_spam != 0;
+                $jtp = $jh * 100.0 / $total_junk if $total_junk != 0;
 
                 if ($json) {
                     if ($has_comma) {
@@ -258,9 +259,9 @@ sub SymbolsStat {
                       ( $sh / $th * 100 ), $sh, $total_spam, ( $stp or 0 ),
                       ( $jh / $th * 100 ), $jh, $total_junk, ( $jtp or 0 );
                 }
-
-                my $schp = $r->{spam_change} / $total_spam * 100.0 if $total_spam;
-                my $jchp = $r->{junk_change} / $total_junk * 100.0 if $total_junk;
+                my ( $schp, $jchp );
+                $schp = $r->{spam_change} / $total_spam * 100.0 if $total_spam;
+                $jchp = $r->{junk_change} / $total_junk * 100.0 if $total_junk;
 
                 if ( $r->{weight} != 0 ) {
                     if ( !$json ) {
@@ -758,7 +759,7 @@ sub log_time_format {
 }
 
 sub normalized_time {
-    return undef
+    return
       if !defined( $_ = shift );
 
     /^\d\d(?::\d\d){0,2}$/
@@ -799,6 +800,8 @@ sub syslog2iso {
 
 ### Imported from IO::Interactive 1.022 Perl module
 sub is_interactive {
+    ## no critic (ProhibitInteractiveTest)
+
     my ($out_handle) = ( @_, select );    # Default to default output handle
 
     # Not interactive if output is not to terminal...
