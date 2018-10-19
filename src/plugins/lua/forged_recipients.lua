@@ -40,36 +40,38 @@ local function check_forged_headers(task)
   if not mime_rcpt then
     return
   elseif #mime_rcpt == 0 then
-    local sra = smtp_rcpt[1].addr .. (#smtp_rcpt > 1 and ' ...' or '')
-    task:insert_result(symbol_rcpt, score, '', sra)
     return
   end
   -- Find pair for each smtp recipient in To or Cc headers
   for _,sr in ipairs(smtp_rcpt) do
     res = false
     for _,mr in ipairs(mime_rcpt) do
-      if mr['addr'] and sr['addr'] and
-        string.lower(mr['addr']) == string.lower(sr['addr']) then
+      if mr.addr and mr.addr ~= '' then
+        if sr['addr'] and
+            string.lower(mr['addr']) == string.lower(sr['addr']) then
+          res = true
+          break
+        elseif delivered_to and delivered_to == mr['addr'] then
+          -- allow alias expansion and forwarding (Postfix)
+          res = true
+          break
+        elseif auser and auser == sr['addr'] then
+          -- allow user to BCC themselves
+          res = true
+          break
+        elseif ((smtp_from or E)[1] or E).addr and
+            smtp_from[1]['addr'] == sr['addr'] then
+          -- allow sender to BCC themselves
+          res = true
+          break
+        elseif mr['user'] and sr['user'] and
+            string.lower(mr['user']) == string.lower(sr['user']) then
+          -- If we have the same username but for another domain, then
+          -- lower the overall score
+          score = score / 2
+        end
+      else
         res = true
-        break
-      elseif delivered_to and delivered_to == mr['addr'] then
-        -- allow alias expansion and forwarding (Postfix)
-        res = true
-        break
-      elseif auser and auser == sr['addr'] then
-        -- allow user to BCC themselves
-        res = true
-        break
-      elseif ((smtp_from or E)[1] or E).addr and
-          smtp_from[1]['addr'] == sr['addr'] then
-        -- allow sender to BCC themselves
-        res = true
-        break
-      elseif mr['user'] and sr['user'] and
-        string.lower(mr['user']) == string.lower(sr['user']) then
-        -- If we have the same username but for another domain, then
-        -- lower the overall score
-        score = score / 2
       end
     end
     if not res then
