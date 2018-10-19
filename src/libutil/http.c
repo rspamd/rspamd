@@ -29,6 +29,8 @@
 #include "libutil/regexp.h"
 #include "libserver/url.h"
 
+#include <openssl/err.h>
+
 #define ENCRYPTED_VERSION " HTTP/1.0"
 
 struct _rspamd_http_privbuf {
@@ -2327,7 +2329,10 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 					priv->ptv, rspamd_http_event_handler,
 					rspamd_http_ssl_err_handler, conn)) {
 
-				err = g_error_new (HTTP_ERROR, errno, "ssl connection error");
+				err = g_error_new (HTTP_ERROR, errno,
+						"ssl connection error: ssl error=%s, errno=%s",
+						ERR_error_string (ERR_get_error (), NULL),
+						strerror (errno));
 				rspamd_http_connection_ref (conn);
 				conn->error_handler (conn, err);
 				rspamd_http_connection_unref (conn);
