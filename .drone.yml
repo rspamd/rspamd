@@ -91,8 +91,10 @@ pipeline:
       - $CI_WORKSPACE/test/tools/gcov-coveralls.py --exclude test --prefix /rspamd/build --prefix $CI_WORKSPACE --out coverage.c.json
       # merge coverage for C and Lua code, upload it to coveralls.io
       - $CI_WORKSPACE/test/functional/util/merge_coveralls.py --input coverage.c.json unit_test_lua.json lua_coverage_report.json --output out.josn --token=$COVERALLS_REPO_TOKEN
+      # debug
+      - $CI_WORKSPACE/test/tools/dump_coveralls.py out.josn
     when:
-      branch: master
+      # branch: master
       # don't send coverage report for pull request
       event: [push, tag]
 
