@@ -17,7 +17,7 @@ def dump_file(json_file):
        Returns: 0 if successful, 1 otherwise
     """
     try:
-        with open(json_file) as f:
+        with open(json_file, encoding='utf8') as f:
             data = json.load(f)
     except OSError as err:
         warn(err)
