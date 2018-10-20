@@ -89,18 +89,14 @@ pipeline:
     secrets: [ coveralls_repo_token ]
     commands:
       - cd /rspamd/build
-      # extract coverage data for C code from .gcda file and save it in format sutible for coveralls.io
+      # extract coverage data for C code from .gcda files and save it in a format sutible for coveralls.io
       - $CI_WORKSPACE/test/tools/gcov_coveralls.py --exclude test --prefix /rspamd/build --prefix $CI_WORKSPACE --out coverage.c.json
-      # dump lua coverage
-      - $CI_WORKSPACE/test/tools/dump_coveralls.py unit_test_lua.json lua_coverage_report.json
       # * merge coverage for C and Lua code
       # * remove prefixes from absolute paths (in luacov-coveralls files), filter test, contrib, e. t.c
       # * upload report to coveralls.io
-      - $CI_WORKSPACE/test/tools/merge_coveralls.py --root $CI_WORKSPACE --input coverage.c.json unit_test_lua.json lua_coverage_report.json --output out.josn --token=$COVERALLS_REPO_TOKEN
-      # debug
-      - $CI_WORKSPACE/test/tools/dump_coveralls.py out.josn
+      - $CI_WORKSPACE/test/tools/merge_coveralls.py --root $CI_WORKSPACE --input coverage.c.json unit_test_lua.json lua_coverage_report.json --token=$COVERALLS_REPO_TOKEN
     when:
-      # branch: master
+      branch: master
       # don't send coverage report for pull request
       event: [push, tag]
 
