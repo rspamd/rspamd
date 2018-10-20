@@ -85,11 +85,6 @@ def merge(files, j1):
         else:
             sf['name'] = name
             files[name] = sf
-            if not ('source' in sf):
-                path = "%s/%s" % (repository_root, sf['name'])
-                if os.path.isfile(path):
-                    with open(path) as f:
-                        files[name]['source'] = f.read()
 
     return files
 
