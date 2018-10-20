@@ -12,6 +12,8 @@ pipeline:
       - install -d -o nobody -g nogroup /rspamd/build /rspamd/install
       # lua-torch CMakeLists writes to src dir
       - chown nobody $CI_WORKSPACE/contrib/lua-torch/nn
+      # for debug
+      - echo $CI_COMMIT_AUTHOR
 
   build:
     # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-build/Dockerfile
