@@ -37,12 +37,13 @@ path_mapping = [
 ]
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--input', type=str, required=True, nargs='+', help='input files')
-parser.add_argument('--output', type=str, required=True, help='output file)')
-parser.add_argument('--root', type=str, required=False, default="/rspamd/src/github.com/rspamd/rspamd", help='repository root)')
-parser.add_argument('--install-dir', type=str, required=False, default="/rspamd/install", help='install root)')
-parser.add_argument('--build-dir', type=str, required=False, default="/rspamd/build", help='build root)')
-parser.add_argument('--token', type=str, help='If present, the file will be uploaded to coveralls)')
+parser.add_argument('--input', required=True, nargs='+', help='input files')
+parser.add_argument('--output', help='output file)')
+parser.add_argument('--root', default="/rspamd/src/github.com/rspamd/rspamd", help='repository root)')
+parser.add_argument('--install-dir', default="/rspamd/install", help='install root)')
+parser.add_argument('--build-dir', default="/rspamd/build", help='build root)')
+parser.add_argument('--token', help='If present, the file will be uploaded to coveralls)')
+
 
 def merge_coverage_vectors(c1, c2):
     assert(len(c1) == len(c2))
@@ -85,11 +86,6 @@ def merge(files, j1):
         else:
             sf['name'] = name
             files[name] = sf
-            if not ('source' in sf):
-                path = "%s/%s" % (repository_root, sf['name'])
-                if os.path.isfile(path):
-                    with open(path) as f:
-                        files[name]['source'] = f.read()
 
     return files
 
@@ -127,11 +123,10 @@ if __name__ == '__main__':
         if 'service_job_id' not in j1 and 'service_job_id' in j2:
             j1['service_job_id'] = j2['service_job_id']
 
-        if not j1['service_job_id'] and 'CIRCLE_BUILD_NUM' in os.environ:
-            j1['service_job_id'] = os.environ['CIRCLE_BUILD_NUM']
 
-        if 'CIRCLECI' in os.environ and os.environ['CIRCLECI']:
+        if os.getenv('CIRCLECI'):
             j1['service_name'] = 'circleci'
+            j1['service_job_id'] = os.getenv('CIRCLE_BUILD_NUM')
         elif os.getenv('CI') == 'drone':
             j1['service_name'] = 'drone'
             j1['service_branch'] = os.getenv('CI_COMMIT_BRANCH')
@@ -159,8 +154,9 @@ if __name__ == '__main__':
 
     j1['source_files'] = list(files.values())
 
-    with open(args.output, 'w') as f:
-        f.write(json.dumps(j1))
+    if args.output:
+        with open(args.output, 'w') as f:
+            f.write(json.dumps(j1))
 
     if args.token:
         j1['repo_token'] = args.token
@@ -173,5 +169,3 @@ if __name__ == '__main__':
 
     # post https://coveralls.io/api/v1/jobs
     # print args
-
-
