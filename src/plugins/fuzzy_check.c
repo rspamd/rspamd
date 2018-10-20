@@ -175,7 +175,9 @@ struct fuzzy_cmd_io {
 
 static const char *default_headers = "Subject,Content-Type,Reply-To,X-Mailer";
 
-static void fuzzy_symbol_callback (struct rspamd_task *task, void *unused);
+static void fuzzy_symbol_callback (struct rspamd_task *task,
+								   struct rspamd_symcache_item *item,
+								   void *unused);
 
 /* Initialization */
 gint fuzzy_check_module_init (struct rspamd_config *cfg,
@@ -2879,7 +2881,9 @@ register_fuzzy_client_call (struct rspamd_task *task,
 
 /* This callback is called when we check message in fuzzy hashes storage */
 static void
-fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
+fuzzy_symbol_callback (struct rspamd_task *task,
+					   struct rspamd_symcache_item *item,
+					   void *unused)
 {
 	struct fuzzy_rule *rule;
 	guint i;

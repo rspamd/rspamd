@@ -136,8 +136,12 @@ static const guint64 rspamd_surbl_cb_magic = 0xe09b8536f80de0d1ULL;
 static const gchar *rspamd_surbl_default_monitored = "facebook.com";
 static const guint default_max_redirected_urls = 10;
 
-static void surbl_test_url (struct rspamd_task *task, void *user_data);
-static void surbl_test_redirector (struct rspamd_task *task, void *user_data);
+static void surbl_test_url (struct rspamd_task *task,
+							struct rspamd_symcache_item *item,
+							void *user_data);
+static void surbl_test_redirector (struct rspamd_task *task,
+								   struct rspamd_symcache_item *item,
+								   void *user_data);
 static void surbl_dns_callback (struct rdns_reply *reply, gpointer arg);
 static void surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg);
 static void process_dns_results (struct rspamd_task *task,
@@ -1870,7 +1874,9 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 }
 
 static void
-surbl_test_url (struct rspamd_task *task, void *user_data)
+surbl_test_url (struct rspamd_task *task,
+		struct rspamd_symcache_item *item,
+		void *user_data)
 {
 	struct redirector_param *param;
 	struct suffix_item *suffix = user_data;
@@ -1943,7 +1949,9 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 }
 
 static void
-surbl_test_redirector (struct rspamd_task *task, void *user_data)
+surbl_test_redirector (struct rspamd_task *task,
+					   struct rspamd_symcache_item *item,
+					   void *user_data)
 {
 	struct redirector_param *param;
 	guint i, j;

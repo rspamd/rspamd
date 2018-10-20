@@ -62,7 +62,9 @@ struct spf_ctx {
 	gboolean check_authed;
 };
 
-static void spf_symbol_callback (struct rspamd_task *task, void *unused);
+static void spf_symbol_callback (struct rspamd_task *task,
+								 struct rspamd_symcache_item *item,
+								 void *unused);
 
 /* Initialization */
 gint spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
@@ -565,7 +567,9 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 
 
 static void
-spf_symbol_callback (struct rspamd_task *task, void *unused)
+spf_symbol_callback (struct rspamd_task *task,
+					 struct rspamd_symcache_item *item,
+					 void *unused)
 {
 	const gchar *domain;
 	struct spf_resolved *l;

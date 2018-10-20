@@ -96,7 +96,7 @@ struct item_stat {
 	gdouble stddev_frequency;
 };
 
-struct cache_item {
+struct rspamd_symcache_item {
 	/* This block is likely shared */
 	struct item_stat *st;
 
@@ -130,7 +130,7 @@ struct cache_item {
 };
 
 struct cache_dependency {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 	gchar *sym;
 	gint id;
 };
@@ -187,12 +187,12 @@ struct rspamd_cache_refresh_cbdata {
 
 static gboolean rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		struct symbols_cache *cache,
-		struct cache_item *item,
+		struct rspamd_symcache_item *item,
 		struct cache_savepoint *checkpoint,
 		gdouble *total_diff);
 static gboolean rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 		struct symbols_cache *cache,
-		struct cache_item *item,
+		struct rspamd_symcache_item *item,
 		struct cache_savepoint *checkpoint,
 		guint recursion,
 		gboolean check_only);
@@ -243,8 +243,8 @@ rspamd_symbols_cache_order_new (struct symbols_cache *cache,
 static gint
 postfilters_cmp (const void *p1, const void *p2, gpointer ud)
 {
-	const struct cache_item *i1 = *(struct cache_item **)p1,
-			*i2 = *(struct cache_item **)p2;
+	const struct rspamd_symcache_item *i1 = *(struct rspamd_symcache_item **)p1,
+			*i2 = *(struct rspamd_symcache_item **)p2;
 	double w1, w2;
 
 	w1 = i1->priority;
@@ -263,8 +263,8 @@ postfilters_cmp (const void *p1, const void *p2, gpointer ud)
 static gint
 prefilters_cmp (const void *p1, const void *p2, gpointer ud)
 {
-	const struct cache_item *i1 = *(struct cache_item **)p1,
-			*i2 = *(struct cache_item **)p2;
+	const struct rspamd_symcache_item *i1 = *(struct rspamd_symcache_item **)p1,
+			*i2 = *(struct rspamd_symcache_item **)p2;
 	double w1, w2;
 
 	w1 = i1->priority;
@@ -289,8 +289,8 @@ prefilters_cmp (const void *p1, const void *p2, gpointer ud)
 static gint
 cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 {
-	const struct cache_item *i1 = *(struct cache_item **)p1,
-			*i2 = *(struct cache_item **)p2;
+	const struct rspamd_symcache_item *i1 = *(struct rspamd_symcache_item **)p1,
+			*i2 = *(struct rspamd_symcache_item **)p2;
 	struct symbols_cache *cache = ud;
 	double w1, w2;
 	double weight1, weight2;
@@ -334,7 +334,7 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 
 static void
 rspamd_symbols_cache_tsort_visit (struct symbols_cache *cache,
-								  struct cache_item *it,
+								  struct rspamd_symcache_item *it,
 								  guint cur_order)
 {
 	struct cache_dependency *dep;
@@ -375,7 +375,7 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 	struct symbols_cache_order *ord;
 	guint i;
 	guint64 total_hits = 0;
-	struct cache_item *it;
+	struct rspamd_symcache_item *it;
 
 	ord = rspamd_symbols_cache_order_new (cache, cache->used_items);
 
@@ -424,7 +424,7 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 static void
 rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 {
-	struct cache_item *it, *dit;
+	struct rspamd_symcache_item *it, *dit;
 	struct cache_dependency *dep, *rdep;
 	struct delayed_cache_dependency *ddep;
 	struct delayed_cache_condition *dcond;
@@ -546,7 +546,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 	ucl_object_t *top;
 	const ucl_object_t *cur, *elt;
 	ucl_object_iter_t it;
-	struct cache_item *item, *parent;
+	struct rspamd_symcache_item *item, *parent;
 	const guchar *p;
 	gint fd;
 	gpointer map;
@@ -709,7 +709,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	struct rspamd_symbols_cache_header hdr;
 	ucl_object_t *top, *elt, *freq;
 	GHashTableIter it;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 	struct ucl_emitter_functions *efunc;
 	gpointer k, v;
 	gint fd;
@@ -805,7 +805,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	enum rspamd_symbol_type type,
 	gint parent)
 {
-	struct cache_item *item = NULL;
+	struct rspamd_symcache_item *item = NULL;
 
 	g_assert (cache != NULL);
 
@@ -831,7 +831,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	}
 
 	item = rspamd_mempool_alloc0 (cache->static_pool,
-			sizeof (struct cache_item));
+			sizeof (struct rspamd_symcache_item));
 	item->st = rspamd_mempool_alloc0_shared (cache->static_pool,
 			sizeof (*item->st));
 	item->condition_cb = -1;
@@ -912,7 +912,7 @@ gboolean
 rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id,
 		lua_State *L, gint cbref)
 {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 
@@ -1102,7 +1102,7 @@ rspamd_symbols_cache_init (struct symbols_cache* cache)
 static void
 rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 {
-	struct cache_item *item = v, *parent;
+	struct rspamd_symcache_item *item = v, *parent;
 	struct rspamd_config *cfg;
 	struct symbols_cache *cache = (struct symbols_cache *)ud;
 	struct rspamd_symbol *s;
@@ -1184,7 +1184,7 @@ rspamd_symbols_cache_metric_validate_cb (gpointer k, gpointer v, gpointer ud)
 	const gchar *sym = k;
 	struct rspamd_symbol *s = (struct rspamd_symbol *)v;
 	gdouble weight;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	weight = *s->weight_ptr;
 	item = g_hash_table_lookup (cache->items_by_symbol, sym);
@@ -1199,7 +1199,7 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 	struct rspamd_config *cfg,
 	gboolean strict)
 {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 	GHashTableIter it;
 	gpointer k, v;
 	struct rspamd_symbol *sym_def;
@@ -1291,7 +1291,7 @@ static void
 rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 {
 	struct rspamd_task *task = sessiond;
-	struct cache_item *item = ud, *it;
+	struct rspamd_symcache_item *item = ud, *it;
 	struct cache_savepoint *checkpoint;
 	struct symbols_cache *cache;
 	gint i, remain = 0;
@@ -1336,7 +1336,7 @@ rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
 static gboolean
 rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		struct symbols_cache *cache,
-		struct cache_item *item,
+		struct rspamd_symcache_item *item,
 		struct cache_savepoint *checkpoint,
 		gdouble *total_diff)
 {
@@ -1395,7 +1395,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 			t1 = rspamd_get_ticks (FALSE);
 #endif
 
-			item->func (task, item->user_data);
+			item->func (task, item, item->user_data);
 
 #ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
 			event_base_update_cache_time (task->ev_base);
@@ -1455,7 +1455,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 static gboolean
 rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 		struct symbols_cache *cache,
-		struct cache_item *item,
+		struct rspamd_symcache_item *item,
 		struct cache_savepoint *checkpoint,
 		guint recursion,
 		gboolean check_only)
@@ -1494,7 +1494,7 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 								check_only)) {
 							gboolean found = FALSE;
 							guint j;
-							struct cache_item *tmp_it;
+							struct rspamd_symcache_item *tmp_it;
 
 							PTR_ARRAY_FOREACH (checkpoint->waitq, j, tmp_it) {
 								if (item->id == tmp_it->id) {
@@ -1711,7 +1711,7 @@ gboolean
 rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	struct symbols_cache *cache, gint stage)
 {
-	struct cache_item *item = NULL;
+	struct rspamd_symcache_item *item = NULL;
 	struct cache_savepoint *checkpoint;
 	gint i;
 	gdouble total_ticks = 0;
@@ -1835,7 +1835,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 						checkpoint, 0, FALSE)) {
 					gboolean found = FALSE;
 					guint j;
-					struct cache_item *tmp_it;
+					struct rspamd_symcache_item *tmp_it;
 
 					msg_debug_task ("blocked execution of %d(%s) unless deps are "
 							"resolved",
@@ -2061,7 +2061,7 @@ rspamd_symbols_cache_counters_cb (gpointer v, gpointer ud)
 {
 	struct counters_cbdata *cbd = ud;
 	ucl_object_t *obj, *top;
-	struct cache_item *item = v, *parent;
+	struct rspamd_symcache_item *item = v, *parent;
 
 	top = cbd->top;
 
@@ -2128,7 +2128,7 @@ rspamd_symbols_cache_counters (struct symbols_cache * cache)
 static void
 rspamd_symbols_cache_call_peak_cb (struct event_base *ev_base,
 		struct symbols_cache *cache,
-		struct cache_item *item,
+		struct rspamd_symcache_item *item,
 		gdouble cur_value,
 		gdouble cur_err)
 {
@@ -2159,7 +2159,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 	gdouble tm;
 	struct rspamd_cache_refresh_cbdata *cbdata = ud;
 	struct symbols_cache *cache;
-	struct cache_item *item, *parent;
+	struct rspamd_symcache_item *item, *parent;
 	guint i;
 	gdouble cur_ticks;
 	static const double decay_rate = 0.7;
@@ -2283,7 +2283,7 @@ void
 rspamd_symbols_cache_inc_frequency (struct symbols_cache *cache,
 		const gchar *symbol)
 {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 
@@ -2298,7 +2298,7 @@ void
 rspamd_symbols_cache_add_dependency (struct symbols_cache *cache,
 		gint id_from, const gchar *to)
 {
-	struct cache_item *source;
+	struct rspamd_symcache_item *source;
 	struct cache_dependency *dep;
 
 	g_assert (id_from < (gint)cache->items_by_id->len);
@@ -2331,7 +2331,7 @@ rspamd_symbols_cache_add_delayed_dependency (struct symbols_cache *cache,
 gint
 rspamd_symbols_cache_find_symbol (struct symbols_cache *cache, const gchar *name)
 {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 
@@ -2353,7 +2353,7 @@ rspamd_symbols_cache_stat_symbol (struct symbols_cache *cache,
 		const gchar *name, gdouble *frequency, gdouble *freq_stddev,
 		gdouble *tm, guint *nhits)
 {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 
@@ -2382,7 +2382,7 @@ static gint
 rspamd_symbols_cache_find_symbol_parent (struct symbols_cache *cache,
 		const gchar *name)
 {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 
@@ -2408,7 +2408,7 @@ const gchar *
 rspamd_symbols_cache_symbol_by_id (struct symbols_cache *cache,
 		gint id)
 {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 
@@ -2453,7 +2453,7 @@ rspamd_symbols_cache_disable_symbol_checkpoint (struct rspamd_task *task,
 		struct symbols_cache *cache, const gchar *symbol)
 {
 	struct cache_savepoint *checkpoint;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 	gint id;
 
 	if (task->checkpoint == NULL) {
@@ -2490,7 +2490,7 @@ rspamd_symbols_cache_enable_symbol_checkpoint (struct rspamd_task *task,
 		struct symbols_cache *cache, const gchar *symbol)
 {
 	struct cache_savepoint *checkpoint;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 	gint id;
 
 	if (task->checkpoint == NULL) {
@@ -2522,7 +2522,7 @@ rspamd_symbols_cache_get_cbdata (struct symbols_cache *cache,
 		const gchar *symbol)
 {
 	gint id;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
@@ -2543,7 +2543,7 @@ rspamd_symbols_cache_set_cbdata (struct symbols_cache *cache,
 		const gchar *symbol, struct rspamd_abstract_callback_data *cbdata)
 {
 	gint id;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
@@ -2590,7 +2590,7 @@ rspamd_symbols_cache_disable_symbol (struct symbols_cache *cache,
 		const gchar *symbol)
 {
 	gint id;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
@@ -2608,7 +2608,7 @@ rspamd_symbols_cache_enable_symbol (struct symbols_cache *cache,
 		const gchar *symbol)
 {
 	gint id;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
@@ -2636,7 +2636,7 @@ rspamd_symbols_cache_is_symbol_enabled (struct rspamd_task *task,
 {
 	gint id;
 	struct cache_savepoint *checkpoint;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 	lua_State *L;
 	struct rspamd_task **ptask;
 	gboolean ret = TRUE;
@@ -2688,7 +2688,7 @@ rspamd_symbols_cache_foreach (struct symbols_cache *cache,
 		gpointer ud)
 {
 	guint i;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	PTR_ARRAY_FOREACH (cache->items_by_id, i, item) {
 		func (item->id, item->symbol, item->type, ud);

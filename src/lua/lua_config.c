@@ -1209,7 +1209,9 @@ static void lua_metric_symbol_callback_return (struct thread_entry *thread_entry
 static void lua_metric_symbol_callback_error (struct thread_entry *thread_entry, int ret, const char *msg);
 
 static void
-lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
+lua_metric_symbol_callback (struct rspamd_task *task,
+		struct rspamd_symcache_item *item,
+		gpointer ud)
 {
 	struct lua_callback_data *cd = ud;
 	struct rspamd_task **ptask;

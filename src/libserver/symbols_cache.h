@@ -25,8 +25,11 @@ struct rspamd_task;
 struct rspamd_config;
 struct symbols_cache;
 struct rspamd_worker;
+struct rspamd_symcache_item;
 
-typedef void (*symbol_func_t)(struct rspamd_task *task, gpointer user_data);
+typedef void (*symbol_func_t)(struct rspamd_task *task,
+							  struct rspamd_symcache_item *item,
+							  gpointer user_data);
 
 enum rspamd_symbol_type {
 	SYMBOL_TYPE_NORMAL = (1 << 0),

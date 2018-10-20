@@ -39,7 +39,9 @@ struct regexp_ctx {
 	gsize max_size;
 };
 
-static void process_regexp_item (struct rspamd_task *task, void *user_data);
+static void process_regexp_item (struct rspamd_task *task,
+								 struct rspamd_symcache_item *item,
+								 void *user_data);
 
 
 /* Initialization */
@@ -415,7 +417,9 @@ rspamd_lua_call_expression_func (struct ucl_lua_funcdata *lua_data,
 
 
 static void
-process_regexp_item (struct rspamd_task *task, void *user_data)
+process_regexp_item (struct rspamd_task *task,
+		struct rspamd_symcache_item *symcache_item,
+		void *user_data)
 {
 	struct regexp_module_item *item = user_data;
 	gint res = FALSE;

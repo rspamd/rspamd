@@ -90,8 +90,12 @@ struct dkim_check_result {
 	struct dkim_check_result *next, *prev, *first;
 };
 
-static void dkim_symbol_callback (struct rspamd_task *task, void *unused);
-static void dkim_sign_callback (struct rspamd_task *task, void *unused);
+static void dkim_symbol_callback (struct rspamd_task *task,
+								  struct rspamd_symcache_item *item,
+								  void *unused);
+static void dkim_sign_callback (struct rspamd_task *task,
+								struct rspamd_symcache_item *item,
+								void *unused);
 
 static gint lua_dkim_sign_handler (lua_State *L);
 static gint lua_dkim_verify_handler (lua_State *L);
@@ -1080,7 +1084,9 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 }
 
 static void
-dkim_symbol_callback (struct rspamd_task *task, void *unused)
+dkim_symbol_callback (struct rspamd_task *task,
+		struct rspamd_symcache_item *item,
+		void *unused)
 {
 	GPtrArray *hlist;
 	rspamd_dkim_context_t *ctx;
@@ -1232,7 +1238,9 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 }
 
 static void
-dkim_sign_callback (struct rspamd_task *task, void *unused)
+dkim_sign_callback (struct rspamd_task *task,
+					struct rspamd_symcache_item *item,
+					void *unused)
 {
 	lua_State *L;
 	struct rspamd_task **ptask;
