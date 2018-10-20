@@ -49,6 +49,8 @@ struct rspamd_dns_request_ud {
 	dns_callback_type cb;
 	gpointer ud;
 	rspamd_mempool_t *pool;
+	struct rspamd_task *task;
+	struct rspamd_symcache_item *item;
 	struct rdns_request *req;
 	struct rdns_reply *reply;
 };
@@ -93,6 +95,12 @@ rspamd_dns_callback (struct rdns_reply *reply, gpointer ud)
 		 * event removing
 		 */
 		rdns_request_retain (reply->request);
+
+		if (reqdata->item) {
+			rspamd_symcache_item_async_dec_check (reqdata->task,
+					reqdata->item);
+		}
+
 		rspamd_session_remove_event (reqdata->session, rspamd_dns_fin_cb, reqdata);
 	}
 	else {
@@ -104,7 +112,7 @@ rspamd_dns_callback (struct rdns_reply *reply, gpointer ud)
 	}
 }
 
-gboolean
+struct rspamd_dns_request_ud *
 make_dns_request (struct rspamd_dns_resolver *resolver,
 	struct rspamd_async_session *session,
 	rspamd_mempool_t *pool,
@@ -119,11 +127,11 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 	g_assert (resolver != NULL);
 
 	if (resolver->r == NULL) {
-		return FALSE;
+		return NULL;
 	}
 
 	if (session && rspamd_session_blocked (session)) {
-		return FALSE;
+		return NULL;
 	}
 
 	if (pool != NULL) {
@@ -146,7 +154,9 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 
 	if (session) {
 		if (req != NULL) {
-			rspamd_session_add_event (session, NULL, (event_finalizer_t) rspamd_dns_fin_cb, reqdata,
+			rspamd_session_add_event (session,
+					(event_finalizer_t) rspamd_dns_fin_cb,
+					reqdata,
 					g_quark_from_static_string ("dns resolver"));
 		}
 	}
@@ -155,10 +165,10 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 		if (pool == NULL) {
 			g_free (reqdata);
 		}
-		return FALSE;
+		return NULL;
 	}
 
-	return TRUE;
+	return reqdata;
 }
 
 static gboolean
@@ -169,25 +179,31 @@ make_dns_request_task_common (struct rspamd_task *task,
 	const char *name,
 	gboolean forced)
 {
-	gboolean ret;
+	struct rspamd_dns_request_ud *reqdata;
 
 	if (!forced && task->dns_requests >= task->cfg->dns_max_requests) {
 		return FALSE;
 	}
 
-	ret = make_dns_request (task->resolver, task->s, task->task_pool, cb, ud,
+	reqdata = make_dns_request (task->resolver, task->s, task->task_pool, cb, ud,
 			type, name);
 
-	if (ret) {
+	if (reqdata) {
 		task->dns_requests ++;
+
+		reqdata->task = task;
+		reqdata->item = rspamd_symbols_cache_get_cur_item (task);
+		rspamd_symcache_item_async_inc (task, reqdata->item);
 
 		if (!forced && task->dns_requests >= task->cfg->dns_max_requests) {
 			msg_info_task ("<%s> stop resolving on reaching %ud requests",
 					task->message_id, task->dns_requests);
 		}
+
+		return FALSE;
 	}
 
-	return ret;
+	return TRUE;
 }
 
 gboolean
