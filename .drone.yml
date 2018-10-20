@@ -46,6 +46,16 @@ pipeline:
       # checks are configured in .tidyallrc at the top of rspamd repo
       - tidyall --all --root-dir $CI_WORKSPACE --check-only --no-cache --data-dir /tmp/tidyall
 
+  # We run rspamd-test (unit test) and functional test (runned by robot) in
+  # parallel to save time. To avoid conflict in saving lua coverage we run them
+  # from different directories. For C code coverage counters is saved to .gcda
+  # files and binary contain absolute path to them, so rspamd-test and
+  # processes started by functional test are writing to the same files. On
+  # process exit new coverage data merged with existing content of .gcda file.
+  # Race is possible if rspamd-test and some rspamd process in functional test
+  # will try to write .gcda file simultaneous.  But it is very unlikely and
+  # performance is more important then correct coverage data.
+
   rspamd-test:
     # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test/Dockerfile
     image: rspamd/ci-ubuntu-test
