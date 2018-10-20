@@ -96,7 +96,7 @@ pipeline:
       # * merge coverage for C and Lua code
       # * remove prefixes from absolute paths (in luacov-coveralls files), filter test, contrib, e. t.c
       # * upload report to coveralls.io
-      - $CI_WORKSPACE/test/functional/util/merge_coveralls.py --root $CI_WORKSPACE --input coverage.c.json unit_test_lua.json lua_coverage_report.json --output out.josn --token=$COVERALLS_REPO_TOKEN
+      - $CI_WORKSPACE/test/tools/merge_coveralls.py --root $CI_WORKSPACE --input coverage.c.json unit_test_lua.json lua_coverage_report.json --output out.josn --token=$COVERALLS_REPO_TOKEN
       # debug
       - $CI_WORKSPACE/test/tools/dump_coveralls.py out.josn
     when:

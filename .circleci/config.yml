@@ -34,7 +34,7 @@ references:
               # Merge Lua coverage (collected into lua_coverage_report.json) and with C-coverage
               # (in coverage.rspamd-test.dump, coverage.functional.dump, see &capture_coverage_data)
               # and finally upload it into coveralls.io
-              test/functional/util/merge_coveralls.py --input coverage.functional.dump coverage.rspamd-test.dump lua_coverage_report.json unit_test_lua.json --output out.josn --token=${COVERALLS_REPO_TOKEN}
+              test/tools/merge_coveralls.py --input coverage.functional.dump coverage.rspamd-test.dump lua_coverage_report.json unit_test_lua.json --output out.josn --token=${COVERALLS_REPO_TOKEN}
             fi
         fi
 
