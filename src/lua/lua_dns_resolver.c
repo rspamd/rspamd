@@ -86,7 +86,7 @@ struct lua_dns_cbdata {
 	gint cbref;
 	gchar *to_resolve;
 	gchar *user_str;
-	struct rspamd_async_watcher *w;
+	struct rspamd_symcache_item *item;
 	struct rspamd_async_session *s;
 };
 
@@ -199,8 +199,8 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 	luaL_unref (L, LUA_REGISTRYINDEX, cd->cbref);
 	lua_thread_pool_restore_callback (&cbs);
 
-	if (cd->s) {
-		rspamd_session_watcher_pop (cd->s, cd->w);
+	if (cd->item) {
+		rspamd_symcache_item_async_dec_check (cd->task, cd->item);
 	}
 
 	if (!cd->pool) {
@@ -432,8 +432,6 @@ lua_dns_resolver_resolve_common (lua_State *L,
 
 				if (session) {
 					cbdata->s = session;
-					cbdata->w = rspamd_session_get_watcher (session);
-					rspamd_session_watcher_push (session);
 				}
 			}
 			else {
@@ -457,8 +455,8 @@ lua_dns_resolver_resolve_common (lua_State *L,
 
 			if (ret) {
 				cbdata->s = session;
-				cbdata->w = rspamd_session_get_watcher (session);
-				rspamd_session_watcher_push (session);
+				cbdata->item = rspamd_symbols_cache_get_cur_item (task);
+				rspamd_symcache_item_async_inc (task, cbdata->item);
 				/* callback was set up */
 				lua_pushboolean (L, TRUE);
 			} else {

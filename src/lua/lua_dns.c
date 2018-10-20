@@ -30,7 +30,7 @@ struct lua_rspamd_dns_cbdata {
 	struct thread_entry *thread;
 	struct rspamd_task *task;
 	struct rspamd_dns_resolver *resolver;
-	struct rspamd_async_watcher *w;
+	struct rspamd_symcache_item *item;
 	struct rspamd_async_session *s;
 };
 
@@ -50,8 +50,13 @@ lua_dns_request (lua_State *L)
 
 	/* Check arguments */
 	if (!rspamd_lua_parse_table_arguments (L, 1, &err,
-										   "*name=S;task=U{task};*type=S;forced=B;session=U{session};config=U{config}",
-										   &to_resolve, &task, &type_str, &forced, &session, &cfg)) {
+			"*name=S;task=U{task};*type=S;forced=B;session=U{session};config=U{config}",
+			&to_resolve,
+			&task,
+			&type_str,
+			&forced,
+			&session,
+			&cfg)) {
 
 		if (err) {
 			ret = luaL_error (L, "invalid arguments: %s", err->message);
@@ -132,8 +137,12 @@ lua_dns_request (lua_State *L)
 	if (ret) {
 		cbdata->thread = lua_thread_pool_get_running_entry (cfg->lua_thread_pool);
 		cbdata->s = session;
-		cbdata->w = rspamd_session_get_watcher (session);
-		rspamd_session_watcher_push (session);
+
+		if (task) {
+			cbdata->item = rspamd_symbols_cache_get_cur_item (task);
+			rspamd_symcache_item_async_inc (task, cbdata->item);
+		}
+
 		return lua_thread_yield (cbdata->thread, 0);
 	}
 	else {
@@ -166,8 +175,8 @@ lua_dns_callback (struct rdns_reply *reply, void *arg)
 
 	lua_thread_resume (cbdata->thread, 2);
 
-	if (cbdata->s) {
-		rspamd_session_watcher_pop (cbdata->s, cbdata->w);
+	if (cbdata->item) {
+		rspamd_symcache_item_async_dec_check (cbdata->task, cbdata->item);
 	}
 }
 
