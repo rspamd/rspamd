@@ -667,6 +667,8 @@ chartable_symbol_callback (struct rspamd_task *task,
 
 		utext_close (&utxt);
 	}
+
+	rspamd_symbols_cache_finalize_item (task, item);
 }
 
 static void
@@ -736,4 +738,6 @@ chartable_url_symbol_callback (struct rspamd_task *task,
 				cur_score, NULL);
 
 	}
+
+	rspamd_symbols_cache_finalize_item (task, item);
 }

@@ -308,4 +308,27 @@ void rspamd_symbols_cache_foreach (struct symbols_cache *cache,
 				gint /* flags */, gpointer /* userdata */),
 		gpointer ud);
 
+/**
+ * Returns the current item being processed (if any)
+ * @param task
+ * @return
+ */
+struct rspamd_symcache_item *rspamd_symbols_cache_get_cur_item (struct rspamd_task *task);
+
+/**
+ * Replaces the current item being processed.
+ * Returns the current item being processed (if any)
+ * @param task
+ * @param item
+ * @return
+ */
+struct rspamd_symcache_item *rspamd_symbols_cache_set_cur_item (struct rspamd_task *task,
+																struct rspamd_symcache_item *item);
+
+
+/**
+ * Finalize the current async element potentially calling its deps
+ */
+void rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
+										 struct rspamd_symcache_item *item);
 #endif
