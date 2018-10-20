@@ -38,7 +38,7 @@ path_mapping = [
 
 parser = argparse.ArgumentParser(description='')
 parser.add_argument('--input', required=True, nargs='+', help='input files')
-parser.add_argument('--output', required=True, help='output file)')
+parser.add_argument('--output', help='output file)')
 parser.add_argument('--root', default="/rspamd/src/github.com/rspamd/rspamd", help='repository root)')
 parser.add_argument('--install-dir', default="/rspamd/install", help='install root)')
 parser.add_argument('--build-dir', default="/rspamd/build", help='build root)')
@@ -154,8 +154,9 @@ if __name__ == '__main__':
 
     j1['source_files'] = list(files.values())
 
-    with open(args.output, 'w') as f:
-        f.write(json.dumps(j1))
+    if args.output:
+        with open(args.output, 'w') as f:
+            f.write(json.dumps(j1))
 
     if args.token:
         j1['repo_token'] = args.token
