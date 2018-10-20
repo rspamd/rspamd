@@ -86,7 +86,7 @@ struct dkim_check_result {
 	gint res;
 	gdouble mult_allow;
 	gdouble mult_deny;
-	struct rspamd_async_watcher *w;
+	struct rspamd_symcache_item *item;
 	struct dkim_check_result *next, *prev, *first;
 };
 
@@ -1029,7 +1029,8 @@ dkim_module_check (struct dkim_check_result *res)
 						tracebuf);
 			}
 		}
-		rspamd_session_watcher_pop (res->task->s, res->w);
+
+		rspamd_symcache_item_async_dec_check (res->task, res->item);
 	}
 }
 
@@ -1147,6 +1148,7 @@ dkim_symbol_callback (struct rspamd_task *task,
 			cur->task = task;
 			cur->mult_allow = 1.0;
 			cur->mult_deny = 1.0;
+			cur->item = item;
 
 			ctx = rspamd_create_dkim_context (rh->decoded,
 					task->task_pool,
@@ -1207,10 +1209,8 @@ dkim_symbol_callback (struct rspamd_task *task,
 				res = cur;
 				res->first = res;
 				res->prev = res;
-				res->w = rspamd_session_get_watcher (task->s);
 			}
 			else {
-				cur->w = res->w;
 				DL_APPEND (res, cur);
 			}
 
@@ -1232,7 +1232,7 @@ dkim_symbol_callback (struct rspamd_task *task,
 	}
 
 	if (res != NULL) {
-		rspamd_session_watcher_push (task->s);
+		rspamd_symcache_item_async_inc (task, item);
 		dkim_module_check (res);
 	}
 }

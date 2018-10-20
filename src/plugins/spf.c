@@ -512,7 +512,7 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 		gpointer ud)
 {
 	struct spf_resolved *l;
-	struct rspamd_async_watcher *w = ud;
+	struct rspamd_symcache_item *item = (struct rspamd_symcache_item *)ud;
 	struct spf_ctx *spf_module_ctx = spf_get_context (task->cfg);
 
 	if (record && record->na) {
@@ -562,7 +562,7 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 		spf_record_unref (l);
 	}
 
-	rspamd_session_watcher_pop (task->s, w);
+	rspamd_symcache_item_async_dec_check (task, item);
 }
 
 
@@ -573,7 +573,6 @@ spf_symbol_callback (struct rspamd_task *task,
 {
 	const gchar *domain;
 	struct spf_resolved *l;
-	struct rspamd_async_watcher *w;
 	gint *dmarc_checks;
 	struct spf_ctx *spf_module_ctx = spf_get_context (task->cfg);
 
@@ -616,9 +615,8 @@ spf_symbol_callback (struct rspamd_task *task,
 			spf_record_unref (l);
 		}
 		else {
-			w = rspamd_session_get_watcher (task->s);
 
-			if (!rspamd_spf_resolve (task, spf_plugin_callback, w)) {
+			if (!rspamd_spf_resolve (task, spf_plugin_callback, item)) {
 				msg_info_task ("cannot make spf request for [%s]",
 						task->message_id);
 				rspamd_task_insert_result (task,
@@ -627,7 +625,7 @@ spf_symbol_callback (struct rspamd_task *task,
 						"(SPF): spf DNS fail");
 			}
 			else {
-				rspamd_session_watcher_push (task->s);
+				rspamd_symcache_item_async_inc (task, item);
 			}
 		}
 	}

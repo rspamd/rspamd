@@ -1705,7 +1705,10 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 		timeout = rspamd_mempool_alloc (task->task_pool, sizeof (struct timeval));
 		double_to_tv (surbl_module_ctx->read_timeout, timeout);
 
-		rspamd_session_add_event (task->s, NULL, free_redirector_session, param, g_quark_from_static_string ("surbl"));
+		rspamd_session_add_event (task->s,
+				free_redirector_session, param,
+				g_quark_from_static_string ("surbl"));
+		param->item = rspamd_symbols_cache_get_cur_item (task);
 
 		rspamd_http_connection_write_message (param->conn, msg, NULL,
 				NULL, param, s, timeout, task->ev_base);
