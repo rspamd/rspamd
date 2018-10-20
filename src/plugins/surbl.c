@@ -108,7 +108,7 @@ struct dns_param {
 	struct rspamd_task *task;
 	gchar *host_resolve;
 	struct suffix_item *suffix;
-	struct rspamd_async_watcher *w;
+	struct rspamd_symcache_item *item;
 	struct surbl_module_ctx *ctx;
 };
 
@@ -120,7 +120,7 @@ struct redirector_param {
 	struct rspamd_http_connection *conn;
 	GHashTable *tree;
 	struct suffix_item *suffix;
-	struct rspamd_async_watcher *w;
+	struct rspamd_symcache_item *item;
 	gint sock;
 	guint redirector_requests;
 };
@@ -1323,6 +1323,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 
 static void
 make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
+					 struct rspamd_symcache_item *item,
 					 struct suffix_item *suffix,
 					 gboolean forced, GHashTable *tree,
 					 struct surbl_ctx *surbl_module_ctx)
@@ -1379,8 +1380,7 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 			if (make_dns_request_task (task,
 					surbl_dns_ip_callback,
 					(void *) param, RDNS_REQUEST_A, surbl_req)) {
-				param->w = rspamd_session_get_watcher (task->s);
-				rspamd_session_watcher_push (task->s);
+				param->item = item;
 			}
 		}
 	}

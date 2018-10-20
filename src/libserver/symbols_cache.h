@@ -331,4 +331,15 @@ struct rspamd_symcache_item *rspamd_symbols_cache_set_cur_item (struct rspamd_ta
  */
 void rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
 										 struct rspamd_symcache_item *item);
+
+/*
+ * Increase number of async events pending for an item
+ */
+guint rspamd_symcahe_item_async_inc (struct rspamd_task *task,
+		struct rspamd_symcache_item *item);
+/*
+ * Decrease number of async events pending for an item, asserts if no events pending
+ */
+guint rspamd_symcahe_item_async_dec (struct rspamd_task *task,
+		struct rspamd_symcache_item *item);
 #endif
