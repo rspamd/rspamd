@@ -96,41 +96,34 @@ def run_gcov(filename, coverage, args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Save gcov coverage results in JSON file for coveralls.io.'
-    )
+        description='Save gcov coverage results in JSON file for coveralls.io.')
     parser.add_argument(
         '-v',
         '--verbose',
         action="store_true",
-        help='Display additional informaton and gcov command output.'
-    )
+        help='Display additional informaton and gcov command output.')
     parser.add_argument(
         '-e',
         '--exclude',
         action='append',
         metavar='DIR',
-        help=(
-            "Don't look for .gcno/.gcda files in this directories (repeat option to skip several directories). "
-            "Path is relative to the dirictory where script was started, e. g. '.git'"
-        )
-    )
+        help=
+        ("Don't look for .gcno/.gcda files in this directories (repeat option to skip several directories). "
+         "Path is relative to the dirictory where script was started, e. g. '.git'"))
     parser.add_argument(
         '-p',
         '--prefix',
         action='append',
-        help=(
-            "Strip this prefix from absolute path to source file. "
-            "If this option is provided, then only files with given prefixex in absolute path "
-            "will be added to coverage (option can be repeated)."
-        )
-    )
+        help=
+        ("Strip this prefix from absolute path to source file. "
+         "If this option is provided, then only files with given prefixex in absolute path "
+         "will be added to coverage (option can be repeated)."))
     parser.add_argument(
         '--out',
         type=argparse.FileType('w'),
         required=True,
         metavar='FILE',
-        help='Save JSON payload to this file'
-    )
+        help='Save JSON payload to this file')
     args = parser.parse_args()
 
     # ensure that there is no unrelated .gcov files in current directory
@@ -205,11 +198,8 @@ def main():
     args.out.write(json.dumps(coveralls_data))
 
     if args.verbose:
-        warn(
-            'Coverage for {} source files was written'.format(
-                len(coveralls_data['source_files'])
-            )
-        )
+        warn('Coverage for {} source files was written'.format(
+            len(coveralls_data['source_files'])))
 
 
 if __name__ == '__main__':
