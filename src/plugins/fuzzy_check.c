@@ -2897,6 +2897,8 @@ fuzzy_symbol_callback (struct rspamd_task *task,
 	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
 
 	if (!fuzzy_module_ctx->enabled) {
+		rspamd_symbols_cache_finalize_item (task, item);
+
 		return;
 	}
 
@@ -2907,9 +2909,13 @@ fuzzy_symbol_callback (struct rspamd_task *task,
 			msg_info_task ("<%s>, address %s is whitelisted, skip fuzzy check",
 				task->message_id,
 				rspamd_inet_address_to_string (task->from_addr));
+			rspamd_symbols_cache_finalize_item (task, item);
+
 			return;
 		}
 	}
+
+	rspamd_symcache_item_async_inc (task, item);
 
 	PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
 		commands = fuzzy_generate_commands (task, rule, FUZZY_CHECK, 0, 0, 0);
@@ -2918,6 +2924,8 @@ fuzzy_symbol_callback (struct rspamd_task *task,
 			register_fuzzy_client_call (task, rule, commands);
 		}
 	}
+
+	rspamd_symcache_item_async_dec_check (task, item);
 }
 
 void
@@ -3040,6 +3048,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 			rspamd_task_free (task);
 			rspamd_controller_send_error (conn_ent, 400,
 					"Message processing error");
+
 			return;
 		}
 

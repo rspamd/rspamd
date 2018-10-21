@@ -1235,6 +1235,9 @@ dkim_symbol_callback (struct rspamd_task *task,
 		rspamd_symcache_item_async_inc (task, item);
 		dkim_module_check (res);
 	}
+	else {
+		rspamd_symbols_cache_finalize_item (task, item);
+	}
 }
 
 static void

@@ -1893,6 +1893,8 @@ surbl_test_url (struct rspamd_task *task,
 	if (!rspamd_monitored_alive (suffix->m)) {
 		msg_info_surbl ("disable surbl %s as it is reported to be offline",
 				suffix->suffix);
+		rspamd_symbols_cache_finalize_item (task, item);
+
 		return;
 	}
 

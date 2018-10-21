@@ -594,6 +594,7 @@ spf_symbol_callback (struct rspamd_task *task,
 
 	if (rspamd_match_radix_map_addr (spf_module_ctx->whitelist_ip,
 			task->from_addr) != NULL) {
+		rspamd_symbols_cache_finalize_item (task, item);
 		return;
 	}
 
@@ -601,6 +602,7 @@ spf_symbol_callback (struct rspamd_task *task,
 			|| (!spf_module_ctx->check_local &&
 					rspamd_inet_address_is_local (task->from_addr, TRUE))) {
 		msg_info_task ("skip SPF checks for local networks and authorized users");
+		rspamd_symbols_cache_finalize_item (task, item);
 		return;
 	}
 
@@ -623,6 +625,7 @@ spf_symbol_callback (struct rspamd_task *task,
 						spf_module_ctx->symbol_dnsfail,
 						1,
 						"(SPF): spf DNS fail");
+				rspamd_symbols_cache_finalize_item (task, item);
 			}
 			else {
 				rspamd_symcache_item_async_inc (task, item);

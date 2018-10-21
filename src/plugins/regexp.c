@@ -453,4 +453,6 @@ process_regexp_item (struct rspamd_task *task,
 	if (res) {
 		rspamd_task_insert_result (task, item->symbol, res, NULL);
 	}
+
+	rspamd_symbols_cache_finalize_item (task, symcache_item);
 }
