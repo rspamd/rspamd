@@ -74,8 +74,9 @@ local function asn_check(task)
       asn_set(parts[1], parts[2], parts[3])
     end
 
-    task:get_resolver():resolve_txt(task:get_session(), task:get_mempool(),
-        req_name, rspamd_dns_cb)
+    task:get_resolver():resolve_txt({task = task,
+                                     name = req_name,
+                                     callback = rspamd_dns_cb})
   end
 
   local ip = task:get_from_ip()

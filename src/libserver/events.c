@@ -172,7 +172,7 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 	new_event->user_data = user_data;
 	new_event->subsystem = subsystem;
 
-	msg_debug_session ("added event: %p, pending %d events, "
+	msg_debug_session ("added event: %p, pending %d (+1) events, "
 					   "subsystem: %s",
 			user_data,
 			kh_size (session->events),
@@ -222,6 +222,11 @@ rspamd_session_remove_event (struct rspamd_async_session *session,
 	}
 
 	found_ev = kh_key (session->events, k);
+	msg_debug_session ("removed event: %p, pending %d (-1) events, "
+					   "subsystem: %s",
+			ud,
+			kh_size (session->events),
+			g_quark_to_string (found_ev->subsystem));
 	kh_del (rspamd_events_hash, session->events, k);
 
 	/* Remove event */
