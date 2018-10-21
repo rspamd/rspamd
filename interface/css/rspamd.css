@@ -155,7 +155,12 @@ input.action-scores {
     height: auto;
 }
 .widget-title-form label {
+    font-size: 12px;
     font-weight: normal;
+}
+#history_page_size {
+    width:6em !important;
+    text-align: center;
 }
 
 /* Symbols coloring */
