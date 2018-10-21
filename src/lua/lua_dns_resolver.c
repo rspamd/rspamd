@@ -37,8 +37,7 @@ local function symbol_callback(task)
 		end
 	end
 
-	task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-		host, dns_cb)
+	task:get_resolver():resolve_a({task = task, name = host, callback = dns_cb})
 end
  */
 struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L);
@@ -482,12 +481,15 @@ err:
 }
 
 /***
- * @method resolver:resolve_a(session, pool, host, callback)
+ * @method resolver:resolve_a(table)
  * Resolve A record for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} host name to resolve
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int
@@ -509,12 +511,15 @@ lua_dns_resolver_resolve_a (lua_State *L)
 }
 
 /***
- * @method resolver:resolve_ptr(session, pool, ip, callback)
+ * @method resolver:resolve_ptr(table)
  * Resolve PTR record for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} ip name to resolve in string form (e.g. '8.8.8.8' or '2001:dead::')
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int
@@ -536,12 +541,15 @@ lua_dns_resolver_resolve_ptr (lua_State *L)
 }
 
 /***
- * @method resolver:resolve_txt(session, pool, host, callback)
+ * @method resolver:resolve_txt(table)
  * Resolve TXT record for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} host name to get TXT record for
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int
@@ -563,12 +571,15 @@ lua_dns_resolver_resolve_txt (lua_State *L)
 }
 
 /***
- * @method resolver:resolve_mx(session, pool, host, callback)
+ * @method resolver:resolve_mx(table)
  * Resolve MX record for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} host name to get MX record for
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int
@@ -590,12 +601,15 @@ lua_dns_resolver_resolve_mx (lua_State *L)
 }
 
 /***
- * @method resolver:resolve_ns(session, pool, host, callback)
+ * @method resolver:resolve_ns(table)
  * Resolve NS records for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} host name to get NS records for
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int
