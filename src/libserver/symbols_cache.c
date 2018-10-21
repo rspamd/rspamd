@@ -2543,7 +2543,21 @@ rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
 
 	/* Sanity checks */
 	g_assert (checkpoint->items_inflight > 0);
-	g_assert (item->async_events == 0);
+
+	if (item->async_events > 0) {
+		/*
+		 * XXX: Race condition
+		 *
+		 * It is possible that some async event is still in flight, but we
+		 * already know its result, however, it is the responsibility of that
+		 * event to decrease async events count and call this function
+		 * one more time
+		 */
+		msg_debug_cache_task ("postpone finalisation of %s as there are %d "
+							  "async events pendning", item->symbol, item->async_events);
+
+		return;
+	}
 
 	msg_debug_cache_task ("process finalize for item %s", item->symbol);
 	setbit (checkpoint->processed_bits, item->id * 2 + 1);

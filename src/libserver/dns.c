@@ -77,6 +77,11 @@ rspamd_dns_fin_cb (gpointer arg)
 
 	rdns_request_release (reqdata->req);
 
+	if (reqdata->item) {
+		rspamd_symcache_item_async_dec_check (reqdata->task,
+				reqdata->item);
+	}
+
 	if (reqdata->pool == NULL) {
 		g_free (reqdata);
 	}
@@ -95,12 +100,6 @@ rspamd_dns_callback (struct rdns_reply *reply, gpointer ud)
 		 * event removing
 		 */
 		rdns_request_retain (reply->request);
-
-		if (reqdata->item) {
-			rspamd_symcache_item_async_dec_check (reqdata->task,
-					reqdata->item);
-		}
-
 		rspamd_session_remove_event (reqdata->session, rspamd_dns_fin_cb, reqdata);
 	}
 	else {
@@ -193,17 +192,21 @@ make_dns_request_task_common (struct rspamd_task *task,
 
 		reqdata->task = task;
 		reqdata->item = rspamd_symbols_cache_get_cur_item (task);
-		rspamd_symcache_item_async_inc (task, reqdata->item);
+
+		if (reqdata->item) {
+			/* We are inside some session */
+			rspamd_symcache_item_async_inc (task, reqdata->item);
+		}
 
 		if (!forced && task->dns_requests >= task->cfg->dns_max_requests) {
 			msg_info_task ("<%s> stop resolving on reaching %ud requests",
 					task->message_id, task->dns_requests);
 		}
 
-		return FALSE;
+		return TRUE;
 	}
 
-	return TRUE;
+	return FALSE;
 }
 
 gboolean

@@ -1029,8 +1029,6 @@ dkim_module_check (struct dkim_check_result *res)
 						tracebuf);
 			}
 		}
-
-		rspamd_symcache_item_async_dec_check (res->task, res->item);
 	}
 }
 
@@ -1119,14 +1117,20 @@ dkim_symbol_callback (struct rspamd_task *task,
 			|| (!dkim_module_ctx->check_local &&
 					rspamd_inet_address_is_local (task->from_addr, TRUE))) {
 		msg_info_task ("skip DKIM checks for local networks and authorized users");
+		rspamd_symbols_cache_finalize_item (task, item);
+
 		return;
 	}
 	/* Check whitelist */
 	if (rspamd_match_radix_map_addr (dkim_module_ctx->whitelist_ip,
 			task->from_addr) != NULL) {
 		msg_info_task ("skip DKIM checks for whitelisted address");
+		rspamd_symbols_cache_finalize_item (task, item);
+
 		return;
 	}
+
+	rspamd_symcache_item_async_inc (task, item);
 
 	/* Now check if a message has its signature */
 	hlist = rspamd_message_get_header_array (task,
@@ -1155,6 +1159,15 @@ dkim_symbol_callback (struct rspamd_task *task,
 					dkim_module_ctx->time_jitter,
 					RSPAMD_DKIM_NORMAL,
 					&err);
+
+			if (res == NULL) {
+				res = cur;
+				res->first = res;
+				res->prev = res;
+			}
+			else {
+				DL_APPEND (res, cur);
+			}
 
 			if (ctx == NULL) {
 				if (err != NULL) {
@@ -1205,15 +1218,6 @@ dkim_symbol_callback (struct rspamd_task *task,
 				}
 			}
 
-			if (res == NULL) {
-				res = cur;
-				res->first = res;
-				res->prev = res;
-			}
-			else {
-				DL_APPEND (res, cur);
-			}
-
 			checked ++;
 
 			if (checked > dkim_module_ctx->max_sigs) {
@@ -1232,12 +1236,10 @@ dkim_symbol_callback (struct rspamd_task *task,
 	}
 
 	if (res != NULL) {
-		rspamd_symcache_item_async_inc (task, item);
 		dkim_module_check (res);
 	}
-	else {
-		rspamd_symbols_cache_finalize_item (task, item);
-	}
+
+	rspamd_symcache_item_async_dec_check (task, item);
 }
 
 static void
