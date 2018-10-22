@@ -89,10 +89,13 @@ pipeline:
     group: tests
     commands:
       - cd /rspamd/build
+      - ulimit -c unlimited
       # some rspamd processes during this test work as root and some as nobody
       # use umask to create world-writable files so nobody can write to *.gcda files created by root
       - umask 0000
-      - RSPAMD_INSTALLROOT=/rspamd/install robot --xunit xunit.xml --exclude isbroken $CI_WORKSPACE/test/functional/cases
+      - RSPAMD_INSTALLROOT=/rspamd/install robot --xunit xunit.xml --exclude isbroken $CI_WORKSPACE/test/functional/cases; EXIT_CODE=$?
+      - find /var/tmp/ -name '*.core'
+      - exit $EXIT_CODE
 
   send-coverage:
     image: rspamd/ci-ubuntu-test
