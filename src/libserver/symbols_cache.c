@@ -48,6 +48,16 @@
 
 INIT_LOG_MODULE(symcache)
 
+#define CHECK_START_BIT(checkpoint, item) \
+	isset(checkpoint->processed_bits, item->id * 2)
+#define SET_START_BIT(checkpoint, item) \
+	setbit(checkpoint->processed_bits, item->id * 2)
+
+#define CHECK_FINISH_BIT(checkpoint, item) \
+	isset(checkpoint->processed_bits, item->id * 2 + 1)
+#define SET_FINISH_BIT(checkpoint, item) \
+	setbit(checkpoint->processed_bits, item->id * 2 + 1)
+
 static const guchar rspamd_symbols_cache_magic[8] = {'r', 's', 'c', 2, 0, 0, 0, 0 };
 
 static gint rspamd_symbols_cache_find_symbol_parent (struct symbols_cache *cache,
@@ -1304,9 +1314,9 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 	if (item->func) {
 
 		g_assert (item->func != NULL);
-		g_assert (!isset (checkpoint->processed_bits, item->id * 2));
+		g_assert (!CHECK_START_BIT (checkpoint, item));
 		/* Check has been started */
-		setbit (checkpoint->processed_bits, item->id * 2);
+		SET_START_BIT (checkpoint, item);
 
 		if (!item->enabled ||
 				(RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY))) {
@@ -1356,19 +1366,23 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 				return TRUE;
 			}
 
+			if (item->async_events == 0 && !CHECK_FINISH_BIT (checkpoint, item)) {
+				g_assert_not_reached ();
+			}
+
 			return FALSE;
 		}
 		else {
 			msg_debug_cache_task ("skipping check of %s as its start condition is false",
 					item->symbol);
-			setbit (checkpoint->processed_bits, item->id * 2 + 1);
+			SET_FINISH_BIT (checkpoint, item);
 
 			return TRUE;
 		}
 	}
 	else {
-		setbit (checkpoint->processed_bits, item->id * 2);
-		setbit (checkpoint->processed_bits, item->id * 2 + 1);
+		SET_START_BIT (checkpoint, item);
+		SET_FINISH_BIT (checkpoint, item);
 
 		return TRUE;
 	}
@@ -1405,8 +1419,8 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 				continue;
 			}
 
-			if (!isset (checkpoint->processed_bits, dep->id * 2 + 1)) {
-				if (!isset (checkpoint->processed_bits, dep->id * 2)) {
+			if (!CHECK_FINISH_BIT (checkpoint, item)) {
+				if (!SET_START_BIT (checkpoint, item)) {
 					/* Not started */
 					if (!check_only) {
 						if (!rspamd_symbols_cache_check_deps (task, cache,
@@ -1650,8 +1664,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				return TRUE;
 			}
 
-			if (!isset (checkpoint->processed_bits, item->id * 2) &&
-					!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
+			if (!CHECK_START_BIT (checkpoint, item) &&
+					!CHECK_FINISH_BIT (checkpoint, item)) {
 				/* Check priorities */
 				if (saved_priority == G_MININT) {
 					saved_priority = item->priority;
@@ -1713,7 +1727,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				}
 			}
 
-			if (!isset (checkpoint->processed_bits, item->id * 2)) {
+			if (!CHECK_START_BIT (checkpoint, item)) {
 				all_done = FALSE;
 
 				if (!rspamd_symbols_cache_check_deps (task, cache, item,
@@ -1753,8 +1767,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 			item = g_ptr_array_index (cache->postfilters, i);
 
-			if (!isset (checkpoint->processed_bits, item->id * 2) &&
-					!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
+			if (!CHECK_START_BIT (checkpoint, item) &&
+					!CHECK_FINISH_BIT (checkpoint, item)) {
 				/* Check priorities */
 				all_done = FALSE;
 
@@ -1800,8 +1814,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		for (i = 0; i < (gint)cache->idempotent->len; i ++) {
 			item = g_ptr_array_index (cache->idempotent, i);
 
-			if (!isset (checkpoint->processed_bits, item->id * 2) &&
-					!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
+			if (!CHECK_START_BIT (checkpoint, item) &&
+					!CHECK_FINISH_BIT (checkpoint, item)) {
 				/* Check priorities */
 				if (saved_priority == G_MININT) {
 					saved_priority = item->priority;
@@ -1830,7 +1844,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		for (i = 0; i < (gint)cache->idempotent->len; i ++) {
 			item = g_ptr_array_index (cache->idempotent, i);
 
-			if (!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
+			if (!CHECK_FINISH_BIT (checkpoint, item)) {
 				all_done = FALSE;
 				break;
 			}
@@ -2273,8 +2287,8 @@ rspamd_symbols_cache_disable_symbol_checkpoint (struct rspamd_task *task,
 		item = g_ptr_array_index (cache->items_by_id, id);
 
 		if (!(item->type & SYMBOL_TYPE_SQUEEZED)) {
-			setbit (checkpoint->processed_bits, item->id * 2);
-			setbit (checkpoint->processed_bits, item->id * 2 + 1);
+			SET_START_BIT (checkpoint, item);
+			SET_FINISH_BIT (checkpoint, item);
 
 			msg_debug_cache_task ("disable execution of %s", symbol);
 		}
@@ -2456,7 +2470,7 @@ rspamd_symbols_cache_is_symbol_enabled (struct rspamd_task *task,
 	item = g_ptr_array_index (cache->items_by_id, id);
 
 	if (checkpoint) {
-		if (isset (checkpoint->processed_bits, id * 2)) {
+		if (CHECK_START_BIT (checkpoint, item)) {
 			ret = FALSE;
 		}
 		else {
@@ -2501,6 +2515,10 @@ struct rspamd_symcache_item *
 rspamd_symbols_cache_get_cur_item (struct rspamd_task *task)
 {
 	struct cache_savepoint *checkpoint = task->checkpoint;
+
+	if (checkpoint == NULL) {
+		return NULL;
+	}
 
 	return checkpoint->cur_item;
 }
@@ -2559,7 +2577,7 @@ rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
 	}
 
 	msg_debug_cache_task ("process finalize for item %s", item->symbol);
-	setbit (checkpoint->processed_bits, item->id * 2 + 1);
+	SET_FINISH_BIT (checkpoint, item);
 	checkpoint->items_inflight --;
 	checkpoint->cur_item = NULL;
 
@@ -2591,7 +2609,7 @@ rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
 	/* Process all reverse dependencies */
 	PTR_ARRAY_FOREACH (item->rdeps, i, rdep) {
 		if (rdep->item) {
-			if (!isset (checkpoint->processed_bits, rdep->item->id * 2)) {
+			if (!CHECK_START_BIT (checkpoint, rdep->item)) {
 				if (!rspamd_symbols_cache_check_deps (task, task->cfg->cache,
 						rdep->item,
 						checkpoint, 0, FALSE)) {
