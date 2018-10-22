@@ -2,5 +2,8 @@
     "devDependencies": {
         "eslint": "*"
     },
-    "eslintIgnore": ["*.min.js", "interface/js/lib/domReady.js"]
+    "eslintIgnore": [
+        "*.min.js",
+        "interface/js/lib/domReady.js"
+    ]
 }

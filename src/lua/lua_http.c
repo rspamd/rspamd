@@ -150,11 +150,11 @@ lua_http_maybe_free (struct lua_http_cbdata *cbd)
 
 		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_RESOLVED) {
 			/* Event is added merely for resolved events */
-			rspamd_session_remove_event (cbd->session, lua_http_fin, cbd);
-		}
+			if (cbd->item) {
+				rspamd_symcache_item_async_dec_check (cbd->task, cbd->item);
+			}
 
-		if (cbd->item) {
-			rspamd_symcache_item_async_dec_check (cbd->task, cbd->item);
+			rspamd_session_remove_event (cbd->session, lua_http_fin, cbd);
 		}
 	}
 	else {
@@ -946,7 +946,7 @@ lua_http_request (lua_State *L)
 
 				return 1;
 			}
-			else {
+			else if (cbd->item) {
 				rspamd_symcache_item_async_inc (cbd->task, cbd->item);
 			}
 		}
