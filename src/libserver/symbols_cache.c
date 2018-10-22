@@ -49,14 +49,14 @@
 INIT_LOG_MODULE(symcache)
 
 #define CHECK_START_BIT(checkpoint, item) \
-	isset(checkpoint->processed_bits, item->id * 2)
+	isset((checkpoint)->processed_bits, (item)->id * 2)
 #define SET_START_BIT(checkpoint, item) \
-	setbit(checkpoint->processed_bits, item->id * 2)
+	setbit((checkpoint)->processed_bits, (item)->id * 2)
 
 #define CHECK_FINISH_BIT(checkpoint, item) \
-	isset(checkpoint->processed_bits, item->id * 2 + 1)
+	isset((checkpoint)->processed_bits, (item)->id * 2 + 1)
 #define SET_FINISH_BIT(checkpoint, item) \
-	setbit(checkpoint->processed_bits, item->id * 2 + 1)
+	setbit((checkpoint)->processed_bits, (item)->id * 2 + 1)
 
 static const guchar rspamd_symbols_cache_magic[8] = {'r', 's', 'c', 2, 0, 0, 0, 0 };
 
@@ -1314,7 +1314,11 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 	if (item->func) {
 
 		g_assert (item->func != NULL);
-		g_assert (!CHECK_START_BIT (checkpoint, item));
+		if (CHECK_START_BIT (checkpoint, item)) {
+			msg_err_cache ("critical error: trying to execute already executed symbol %s",
+				item->symbol);
+			g_assert_not_reached ();
+		}
 		/* Check has been started */
 		SET_START_BIT (checkpoint, item);
 
@@ -1367,6 +1371,8 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 			}
 
 			if (item->async_events == 0 && !CHECK_FINISH_BIT (checkpoint, item)) {
+				msg_err_cache ("critical error: item %s has no async events pending, "
+				   "but it is not finalised", item->symbol);
 				g_assert_not_reached ();
 			}
 
@@ -1419,8 +1425,8 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 				continue;
 			}
 
-			if (!CHECK_FINISH_BIT (checkpoint, item)) {
-				if (!SET_START_BIT (checkpoint, item)) {
+			if (!CHECK_FINISH_BIT (checkpoint, dep->item)) {
+				if (!CHECK_START_BIT (checkpoint, dep->item)) {
 					/* Not started */
 					if (!check_only) {
 						if (!rspamd_symbols_cache_check_deps (task, cache,
@@ -2610,6 +2616,9 @@ rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
 	PTR_ARRAY_FOREACH (item->rdeps, i, rdep) {
 		if (rdep->item) {
 			if (!CHECK_START_BIT (checkpoint, rdep->item)) {
+				msg_debug_cache_task ("check item %d(%s) rdep of %s ",
+						rdep->item->id, rdep->item->symbol, item->symbol);
+
 				if (!rspamd_symbols_cache_check_deps (task, task->cfg->cache,
 						rdep->item,
 						checkpoint, 0, FALSE)) {
