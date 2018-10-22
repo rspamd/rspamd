@@ -603,10 +603,12 @@ spf_symbol_callback (struct rspamd_task *task,
 					rspamd_inet_address_is_local (task->from_addr, TRUE))) {
 		msg_info_task ("skip SPF checks for local networks and authorized users");
 		rspamd_symbols_cache_finalize_item (task, item);
+
 		return;
 	}
 
 	domain = rspamd_spf_get_domain (task);
+	rspamd_symcache_item_async_inc (task, item);
 
 	if (domain) {
 		if ((l =
@@ -625,11 +627,12 @@ spf_symbol_callback (struct rspamd_task *task,
 						spf_module_ctx->symbol_dnsfail,
 						1,
 						"(SPF): spf DNS fail");
-				rspamd_symbols_cache_finalize_item (task, item);
 			}
 			else {
 				rspamd_symcache_item_async_inc (task, item);
 			}
 		}
 	}
+
+	rspamd_symcache_item_async_dec_check (task, item);
 }
