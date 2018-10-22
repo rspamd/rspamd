@@ -1910,6 +1910,8 @@ surbl_test_url (struct rspamd_task *task,
 		param->tree);
 	g_hash_table_foreach (task->urls, surbl_tree_url_callback, param);
 
+	rspamd_symcache_item_async_inc (task, item);
+
 	/* We also need to check and process img URLs */
 	if (suffix->options & SURBL_OPTION_CHECKIMAGES) {
 		for (i = 0; i < task->text_parts->len; i ++) {
@@ -1971,8 +1973,12 @@ surbl_test_redirector (struct rspamd_task *task,
 	struct surbl_ctx *surbl_module_ctx = surbl_get_context (task->cfg);
 
 	if (!surbl_module_ctx->use_redirector || !surbl_module_ctx->redirector_tlds) {
+		rspamd_symbols_cache_finalize_item (task, item);
+
 		return;
 	}
+
+	rspamd_symcache_item_async_inc (task, item);
 
 	param = rspamd_mempool_alloc0 (task->task_pool, sizeof (*param));
 	param->task = task;

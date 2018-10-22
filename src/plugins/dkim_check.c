@@ -1298,6 +1298,7 @@ dkim_sign_callback (struct rspamd_task *task,
 					msg_err_task ("invalid return value from sign condition: %e",
 							err);
 					g_error_free (err);
+					rspamd_symbols_cache_finalize_item (task, item);
 
 					return;
 				}
@@ -1320,6 +1321,7 @@ dkim_sign_callback (struct rspamd_task *task,
 						lua_settop (L, 0);
 						luaL_error (L, "unknown key type: %s",
 								key_type);
+						rspamd_symbols_cache_finalize_item (task, item);
 
 						return;
 					}
@@ -1334,6 +1336,7 @@ dkim_sign_callback (struct rspamd_task *task,
 						if (arc_idx == 0) {
 							lua_settop (L, 0);
 							luaL_error (L, "no arc idx specified");
+							rspamd_symbols_cache_finalize_item (task, item);
 
 							return;
 						}
@@ -1343,12 +1346,14 @@ dkim_sign_callback (struct rspamd_task *task,
 						if (arc_cv == NULL) {
 							lua_settop (L, 0);
 							luaL_error (L, "no arc cv specified");
+							rspamd_symbols_cache_finalize_item (task, item);
 
 							return;
 						}
 						if (arc_idx == 0) {
 							lua_settop (L, 0);
 							luaL_error (L, "no arc idx specified");
+							rspamd_symbols_cache_finalize_item (task, item);
 
 							return;
 						}
@@ -1357,6 +1362,7 @@ dkim_sign_callback (struct rspamd_task *task,
 						lua_settop (L, 0);
 						luaL_error (L, "unknown sign type: %s",
 								sign_type_str);
+						rspamd_symbols_cache_finalize_item (task, item);
 
 						return;
 					}
@@ -1389,6 +1395,7 @@ dkim_sign_callback (struct rspamd_task *task,
 						msg_err_task ("cannot load dkim key %s: %e",
 								lru_key, err);
 						g_error_free (err);
+						rspamd_symbols_cache_finalize_item (task, item);
 
 						return;
 					}
@@ -1413,6 +1420,7 @@ dkim_sign_callback (struct rspamd_task *task,
 						msg_err_task ("cannot load dkim key %s: %e",
 								lru_key, err);
 						g_error_free (err);
+						rspamd_symbols_cache_finalize_item (task, item);
 
 						return;
 					}
@@ -1432,6 +1440,7 @@ dkim_sign_callback (struct rspamd_task *task,
 					msg_err_task ("cannot create sign context: %e",
 							err);
 					g_error_free (err);
+					rspamd_symbols_cache_finalize_item (task, item);
 
 					return;
 				}
@@ -1459,9 +1468,13 @@ dkim_sign_callback (struct rspamd_task *task,
 		if (!sign) {
 			msg_debug_task ("skip signing as dkim condition callback returned"
 					" false");
+			rspamd_symbols_cache_finalize_item (task, item);
+
 			return;
 		}
 	}
+
+	rspamd_symbols_cache_finalize_item (task, item);
 }
 
 struct rspamd_dkim_lua_verify_cbdata {
