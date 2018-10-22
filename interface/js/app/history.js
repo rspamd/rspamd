@@ -27,7 +27,22 @@
 define(["jquery", "footable", "humanize"],
     function ($, _, Humanize) {
         "use strict";
-        var rows_per_page = 25;
+        var page_size = {
+            errors: 25,
+            history: 25
+        };
+
+        function set_page_size(n, callback) {
+            if (n !== page_size.history && n > 0) {
+                page_size.history = n;
+                if (callback) {
+                    return callback(n);
+                }
+            }
+            return null;
+        }
+
+        set_page_size($("#history_page_size").val());
 
         var ui = {};
         var prevVersion = null;
@@ -611,7 +626,7 @@ define(["jquery", "footable", "humanize"],
                 paging: {
                     enabled: true,
                     limit: 5,
-                    size: rows_per_page
+                    size: page_size.history
                 },
                 filtering: {
                     enabled: true,
@@ -652,7 +667,7 @@ define(["jquery", "footable", "humanize"],
             function waitForRowsDisplayed(rows_total, callback, iteration) {
                 var i = (typeof iteration === "undefined") ? 10 : iteration;
                 var num_rows = $("#historyTable > tbody > tr").length;
-                if (num_rows === rows_per_page ||
+                if (num_rows === page_size.history ||
                     num_rows === rows_total) {
                     return callback();
                 } else if (--i) {
@@ -742,6 +757,9 @@ define(["jquery", "footable", "humanize"],
                 var order = this.value;
                 change_symbols_order(order);
             });
+            $("#history_page_size").change(function () {
+                set_page_size(this.value, function (n) { tables.history.pageSize(n); });
+            });
             $(document).on("click", ".btn-sym-order button", function () {
                 var order = this.value;
                 $("#selSymOrder").val(order);
@@ -782,7 +800,7 @@ define(["jquery", "footable", "humanize"],
                 paging: {
                     enabled: true,
                     limit: 5,
-                    size: rows_per_page
+                    size: page_size.errors
                 },
                 filtering: {
                     enabled: true,

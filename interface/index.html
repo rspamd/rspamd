@@ -287,22 +287,22 @@
 
 				<div class="widget-box">
 					<div class="widget-title">
-						<form role="form" class="form-inline pull-right buttons">
-							<div class="form-group widget-title-form">
+						<div class="form-inline widget-title-form input-group-sm pull-right buttons">
 								<label for="selSymOrder">Symbols order:</label>
 								<select id="selSymOrder" class="form-control">
 									<option value="magnitude" selected>Score magnitude</option>
 									<option value="score">Score value</option>
 									<option value="name">Name</option>
 								</select>
-							</div>
+							<label for="history_page_size">Rows per page:</label>
+							<input id="history_page_size" class="form-control" value="25" min="1" type="number">
 							<button class="btn btn-danger btn-sm" id="resetHistory">
 								<i class="glyphicon glyphicon-remove-circle"></i> Reset
 							</button>
 							<button class="btn btn-info btn-sm" id="updateHistory">
 								<i class="glyphicon glyphicon-refresh"></i> Update
 							</button>
-						</form>
+						</div>
 						<span class="icon"><i class="glyphicon glyphicon-eye-open"></i></span>
 						<h5>History</h5>
 					</div>

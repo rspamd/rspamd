@@ -23,7 +23,7 @@
             "singleLine": { "afterColon": false }
         }],
         "max-params": ["warn", 6],
-        "max-statements": ["warn", 31],
+        "max-statements": ["warn", 33],
         "max-statements-per-line": ["error", { "max": 2 }],
         "multiline-comment-style": "off",
         "multiline-ternary": ["error", "always-multiline"],
