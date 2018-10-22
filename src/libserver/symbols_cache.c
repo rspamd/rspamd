@@ -1703,8 +1703,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				continue;
 			}
 
-			if (!(item->type & SYMBOL_TYPE_FINE) &&
-					rspamd_session_events_pending (task->s) == 0) {
+			if (!(item->type & SYMBOL_TYPE_FINE)) {
 				if (rspamd_symbols_cache_metric_limit (task, checkpoint)) {
 					msg_info_task ("<%s> has already scored more than %.2f, so do "
 							"not "
@@ -2593,9 +2592,18 @@ rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
 	PTR_ARRAY_FOREACH (item->rdeps, i, rdep) {
 		if (rdep->item) {
 			if (!isset (checkpoint->processed_bits, rdep->item->id * 2)) {
-				rspamd_symbols_cache_check_symbol (task, task->cfg->cache,
+				if (!rspamd_symbols_cache_check_deps (task, task->cfg->cache,
 						rdep->item,
-						checkpoint);
+						checkpoint, 0, FALSE)) {
+					msg_debug_cache_task ("blocked execution of %d(%s) rdep of %s "
+						   "unless deps are resolved",
+							rdep->item->id, rdep->item->symbol, item->symbol);
+				}
+				else {
+					rspamd_symbols_cache_check_symbol (task, task->cfg->cache,
+							rdep->item,
+							checkpoint);
+				}
 			}
 		}
 	}
