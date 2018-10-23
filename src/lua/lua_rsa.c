@@ -557,10 +557,30 @@ static gint
 lua_rsa_signature_base64 (lua_State *L)
 {
 	rspamd_fstring_t *sig = lua_check_rsa_sign (L, 1);
+	guint boundary = 0;
 	gchar *b64;
 	gsize outlen;
+	enum rspamd_newlines_type how = RSPAMD_TASK_NEWLINES_CRLF;
 
-	b64 = rspamd_encode_base64 (sig->str, sig->len, 0, &outlen);
+	if (lua_isnumber (L, 2)) {
+		boundary = lua_tonumber (L, 2);
+	}
+
+	if (lua_isstring (L, 3)) {
+		const gchar *how_str = lua_tostring (L, 3);
+
+		if (strcmp (how_str, "cr") == 0) {
+			how = RSPAMD_TASK_NEWLINES_CR;
+		}
+		else if (strcmp (how_str, "lf") == 0) {
+			how = RSPAMD_TASK_NEWLINES_LF;
+		}
+		else {
+			how = RSPAMD_TASK_NEWLINES_CRLF;
+		}
+	}
+
+	b64 = rspamd_encode_base64_fold (sig->str, sig->len, boundary, &outlen, how);
 
 	if (b64) {
 		lua_pushlstring (L, b64, outlen);
@@ -589,14 +609,15 @@ lua_rsa_verify_memory (lua_State *L)
 	RSA *rsa;
 	rspamd_fstring_t *signature;
 	const gchar *data;
+	gsize sz;
 	gint ret;
 
 	rsa = lua_check_rsa_pubkey (L, 1);
 	signature = lua_check_rsa_sign (L, 2);
-	data = luaL_checkstring (L, 3);
+	data = luaL_checklstring (L, 3, &sz);
 
 	if (rsa != NULL && signature != NULL && data != NULL) {
-		ret = RSA_verify (NID_sha256, data, strlen (data),
+		ret = RSA_verify (NID_sha256, data, sz,
 				signature->str, signature->len, rsa);
 
 		if (ret == 0) {
@@ -631,14 +652,15 @@ lua_rsa_sign_memory (lua_State *L)
 	RSA *rsa;
 	rspamd_fstring_t *signature, **psig;
 	const gchar *data;
+	gsize sz;
 	gint ret;
 
 	rsa = lua_check_rsa_privkey (L, 1);
-	data = luaL_checkstring (L, 2);
+	data = luaL_checklstring (L, 2, &sz);
 
 	if (rsa != NULL && data != NULL) {
 		signature = rspamd_fstring_sized_new (RSA_size (rsa));
-		ret = RSA_sign (NID_sha256, data, strlen (data),
+		ret = RSA_sign (NID_sha256, data, sz,
 				signature->str, (guint *)&signature->len, rsa);
 
 		if (ret != 1) {

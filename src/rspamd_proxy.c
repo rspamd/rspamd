@@ -38,6 +38,8 @@
 #include "libmime/lang_detection.h"
 #include "contrib/zstd/zstd.h"
 
+#include <math.h>
+
 #ifdef HAVE_NETINET_TCP_H
 #include <netinet/tcp.h> /* for TCP_NODELAY */
 #endif
@@ -416,6 +418,7 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 
 	if (elt) {
 		up->u = rspamd_upstreams_create (ctx->cfg->ups_ctx);
+
 		if (!rspamd_upstreams_from_ucl (up->u, elt, 11333, NULL)) {
 			g_set_error (err, rspamd_proxy_quark (), 100,
 					"upstream has bad hosts definition");
@@ -2157,6 +2160,34 @@ proxy_rotate_key (gint fd, short what, void *arg)
 	rspamd_keypair_unref (kp);
 }
 
+static void
+adjust_upstreams_limits (struct rspamd_proxy_ctx *ctx)
+{
+	struct rspamd_http_upstream *backend;
+	gpointer k, v;
+	GHashTableIter it;
+
+	/*
+	 * We set error time equal to max_retries * backend_timeout and max_errors
+	 * to max_retries - 1
+	 *
+	 * So if we failed to scan a message on a backend for some reasons, we
+	 * will try to re-resolve it faster
+	 */
+
+	g_hash_table_iter_init (&it, ctx->upstreams);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		backend = (struct rspamd_http_upstream *)v;
+
+		if (!backend->self_scan && backend->u) {
+			rspamd_upstreams_set_limits (backend->u,
+					NAN, NAN, ctx->max_retries * backend->timeout, NAN,
+					ctx->max_retries - 1, 0);
+		}
+	}
+}
+
 void
 start_rspamd_proxy (struct rspamd_worker *worker) {
 	struct rspamd_proxy_ctx *ctx = worker->ctx;
@@ -2207,6 +2238,7 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
 			worker);
+	adjust_upstreams_limits (ctx);
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();

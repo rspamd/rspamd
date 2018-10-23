@@ -22,6 +22,8 @@
 #include "cryptobox.h"
 #include "utlist.h"
 
+#include <math.h>
+
 struct upstream_inet_addr_entry {
 	rspamd_inet_addr_t *addr;
 	struct upstream_inet_addr_entry *next;
@@ -58,12 +60,22 @@ struct upstream {
 	ref_entry_t ref;
 };
 
+struct upstream_limits {
+	gdouble revive_time;
+	gdouble revive_jitter;
+	gdouble error_time;
+	gdouble dns_timeout;
+	guint max_errors;
+	guint dns_retransmits;
+};
+
 struct upstream_list {
 	struct upstream_ctx *ctx;
 	GPtrArray *ups;
 	GPtrArray *alive;
 	rspamd_mutex_t *lock;
 	guint64 hash_seed;
+	struct upstream_limits limits;
 	guint cur_elt;
 	enum rspamd_upstream_flag flags;
 	enum rspamd_upstream_rotation rot_alg;
@@ -72,12 +84,7 @@ struct upstream_list {
 struct upstream_ctx {
 	struct rdns_resolver *res;
 	struct event_base *ev_base;
-	guint max_errors;
-	gdouble revive_time;
-	gdouble revive_jitter;
-	gdouble error_time;
-	gdouble dns_timeout;
-	guint dns_retransmits;
+	struct upstream_limits limits;
 	GQueue *upstreams;
 	gboolean configured;
 	rspamd_mempool_t *pool;
@@ -109,19 +116,19 @@ rspamd_upstreams_library_config (struct rspamd_config *cfg,
 	g_assert (cfg != NULL);
 
 	if (cfg->upstream_error_time) {
-		ctx->error_time = cfg->upstream_error_time;
+		ctx->limits.error_time = cfg->upstream_error_time;
 	}
 	if (cfg->upstream_max_errors) {
-		ctx->max_errors = cfg->upstream_max_errors;
+		ctx->limits.max_errors = cfg->upstream_max_errors;
 	}
 	if (cfg->upstream_revive_time) {
-		ctx->revive_time = cfg->upstream_max_errors;
+		ctx->limits.revive_time = cfg->upstream_max_errors;
 	}
 	if (cfg->dns_retransmits) {
-		ctx->dns_retransmits = cfg->dns_retransmits;
+		ctx->limits.dns_retransmits = cfg->dns_retransmits;
 	}
 	if (cfg->dns_timeout) {
-		ctx->dns_timeout = cfg->dns_timeout;
+		ctx->limits.dns_timeout = cfg->dns_timeout;
 	}
 
 	ctx->ev_base = ev_base;
@@ -161,12 +168,12 @@ rspamd_upstreams_library_init (void)
 	struct upstream_ctx *ctx;
 
 	ctx = g_malloc0 (sizeof (*ctx));
-	ctx->error_time = default_error_time;
-	ctx->max_errors = default_max_errors;
-	ctx->dns_retransmits = default_dns_retransmits;
-	ctx->dns_timeout = default_dns_timeout;
-	ctx->revive_jitter = default_revive_jitter;
-	ctx->revive_time = default_revive_time;
+	ctx->limits.error_time = default_error_time;
+	ctx->limits.max_errors = default_max_errors;
+	ctx->limits.dns_retransmits = default_dns_retransmits;
+	ctx->limits.dns_timeout = default_dns_timeout;
+	ctx->limits.revive_jitter = default_revive_jitter;
+	ctx->limits.revive_time = default_revive_time;
 	ctx->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 			"upstreams");
 
@@ -375,14 +382,14 @@ rspamd_upstream_resolve_addrs (const struct upstream_list *ls,
 		if (up->name[0] != '/') {
 
 			if (rdns_make_request_full (up->ctx->res, rspamd_upstream_dns_cb, up,
-					up->ctx->dns_timeout, up->ctx->dns_retransmits,
+					ls->limits.dns_timeout, ls->limits.dns_retransmits,
 					1, up->name, RDNS_REQUEST_A) != NULL) {
 				up->dns_requests ++;
 				REF_RETAIN (up);
 			}
 
 			if (rdns_make_request_full (up->ctx->res, rspamd_upstream_dns_cb, up,
-					up->ctx->dns_timeout, up->ctx->dns_retransmits,
+					ls->limits.dns_timeout, ls->limits.dns_retransmits,
 					1, up->name, RDNS_REQUEST_AAAA) != NULL) {
 				up->dns_requests ++;
 				REF_RETAIN (up);
@@ -418,8 +425,8 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 			event_base_set (up->ctx->ev_base, &up->ev);
 		}
 
-		ntim = rspamd_time_jitter (up->ctx->revive_time,
-				up->ctx->revive_jitter);
+		ntim = rspamd_time_jitter (ls->limits.revive_time,
+				ls->limits.revive_jitter);
 		double_to_tv (ntim, &tv);
 		event_add (&up->ev, &tv);
 	}
@@ -451,8 +458,8 @@ rspamd_upstream_fail (struct upstream *up, gboolean addr_failure)
 
 				if (sec_cur > sec_last) {
 					error_rate = ((gdouble)up->errors) / (sec_cur - sec_last);
-					max_error_rate = ((gdouble)up->ctx->max_errors) /
-							up->ctx->error_time;
+					max_error_rate = ((gdouble)up->ls->limits.max_errors) /
+							up->ls->limits.error_time;
 				}
 				else {
 					error_rate = 1;
@@ -467,7 +474,7 @@ rspamd_upstream_fail (struct upstream *up, gboolean addr_failure)
 					}
 					else {
 						/* Just re-resolve addresses */
-						if (sec_cur - sec_last > up->ctx->revive_time) {
+						if (sec_cur - sec_last > up->ls->limits.revive_time) {
 							up->errors = 0;
 							rspamd_upstream_resolve_addrs (up->ls, up);
 						}
@@ -530,6 +537,18 @@ rspamd_upstreams_create (struct upstream_ctx *ctx)
 	ls->cur_elt = 0;
 	ls->ctx = ctx;
 	ls->rot_alg = RSPAMD_UPSTREAM_UNDEF;
+
+	if (ctx) {
+		ls->limits = ctx->limits;
+	}
+	else {
+		ls->limits.error_time = default_error_time;
+		ls->limits.max_errors = default_max_errors;
+		ls->limits.dns_retransmits = default_dns_retransmits;
+		ls->limits.dns_timeout = default_dns_timeout;
+		ls->limits.revive_jitter = default_revive_jitter;
+		ls->limits.revive_time = default_revive_time;
+	}
 
 	return ls;
 }
@@ -1068,5 +1087,41 @@ rspamd_upstreams_foreach (struct upstream_list *ups,
 		up = g_ptr_array_index (ups->ups, i);
 
 		cb (up, i, ud);
+	}
+}
+
+void
+rspamd_upstreams_set_limits (struct upstream_list *ups,
+								  gdouble revive_time,
+								  gdouble revive_jitter,
+								  gdouble error_time,
+								  gdouble dns_timeout,
+								  guint max_errors,
+								  guint dns_retransmits)
+{
+	g_assert (ups != NULL);
+
+	if (!isnan (revive_time)) {
+		ups->limits.revive_time = revive_time;
+	}
+
+	if (!isnan (revive_jitter)) {
+		ups->limits.revive_jitter = revive_jitter;
+	}
+
+	if (!isnan (error_time)) {
+		ups->limits.error_time = error_time;
+	}
+
+	if (!isnan (dns_timeout)) {
+		ups->limits.dns_timeout = dns_timeout;
+	}
+
+	if (max_errors > 0) {
+		ups->limits.max_errors = max_errors;
+	}
+
+	if (dns_retransmits > 0) {
+		ups->limits.dns_retransmits = dns_retransmits;
 	}
 }

@@ -12,7 +12,7 @@ context("RSA signature verification test", function()
   local signature = 'test.sig'
   local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
   local rsa_key, rsa_sig
-  
+
   test("RSA sign", function()
     -- Signing test
     rsa_key = rsa_privkey.load_file(string.format('%s/%s', test_dir, privkey))
@@ -25,7 +25,7 @@ context("RSA signature verification test", function()
     assert_not_nil(sig)
     sig:save(string.format('%s/%s', test_dir, signature), true)
   end)
-  
+
   test("RSA verify", function()
     -- Verifying test
     local h = hash.create_specific('sha256')
