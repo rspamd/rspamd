@@ -557,10 +557,30 @@ static gint
 lua_rsa_signature_base64 (lua_State *L)
 {
 	rspamd_fstring_t *sig = lua_check_rsa_sign (L, 1);
+	guint boundary = 0;
 	gchar *b64;
 	gsize outlen;
+	enum rspamd_newlines_type how = RSPAMD_TASK_NEWLINES_CRLF;
 
-	b64 = rspamd_encode_base64 (sig->str, sig->len, 0, &outlen);
+	if (lua_isnumber (L, 2)) {
+		boundary = lua_tonumber (L, 2);
+	}
+
+	if (lua_isstring (L, 3)) {
+		const gchar *how_str = lua_tostring (L, 3);
+
+		if (strcmp (how_str, "cr") == 0) {
+			how = RSPAMD_TASK_NEWLINES_CR;
+		}
+		else if (strcmp (how_str, "lf") == 0) {
+			how = RSPAMD_TASK_NEWLINES_LF;
+		}
+		else {
+			how = RSPAMD_TASK_NEWLINES_CRLF;
+		}
+	}
+
+	b64 = rspamd_encode_base64_fold (sig->str, sig->len, boundary, &outlen, how);
 
 	if (b64) {
 		lua_pushlstring (L, b64, outlen);
