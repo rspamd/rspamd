@@ -44,7 +44,7 @@ pipeline:
     group: build
     commands:
       # checks are configured in .tidyallrc at the top of rspamd repo
-      - tidyall --all --root-dir $CI_WORKSPACE --check-only --no-cache --data-dir /tmp/tidyall
+      - tidyall --all --check-only --no-cache --data-dir /tmp/tidyall
 
   # We run rspamd-test (unit test) and functional test (runned by robot) in
   # parallel to save time. To avoid conflict in saving lua coverage we run them
