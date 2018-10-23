@@ -26,11 +26,13 @@
  * print(h:hex())
  */
 
+
 #include "lua_common.h"
 #include "libcryptobox/cryptobox.h"
 #include "libcryptobox/keypair.h"
 #include "libcryptobox/keypair_private.h"
 #include "unix-std.h"
+#include "contrib/libottery/ottery.h"
 
 struct rspamd_lua_cryptobox_hash {
 	rspamd_cryptobox_hash_state_t *h;
@@ -75,6 +77,8 @@ LUA_FUNCTION_DEF (cryptobox, encrypt_memory);
 LUA_FUNCTION_DEF (cryptobox, encrypt_file);
 LUA_FUNCTION_DEF (cryptobox, decrypt_memory);
 LUA_FUNCTION_DEF (cryptobox, decrypt_file);
+LUA_FUNCTION_DEF (cryptobox, encrypt_cookie);
+LUA_FUNCTION_DEF (cryptobox, decrypt_cookie);
 
 static const struct luaL_reg cryptoboxlib_f[] = {
 	LUA_INTERFACE_DEF (cryptobox, verify_memory),
@@ -85,6 +89,8 @@ static const struct luaL_reg cryptoboxlib_f[] = {
 	LUA_INTERFACE_DEF (cryptobox, encrypt_file),
 	LUA_INTERFACE_DEF (cryptobox, decrypt_memory),
 	LUA_INTERFACE_DEF (cryptobox, decrypt_file),
+	LUA_INTERFACE_DEF (cryptobox, encrypt_cookie),
+	LUA_INTERFACE_DEF (cryptobox, decrypt_cookie),
 	{NULL, NULL}
 };
 
@@ -1820,6 +1826,187 @@ lua_cryptobox_decrypt_file (lua_State *L)
 	munmap (data, len);
 
 	return 2;
+}
+
+#define RSPAMD_CRYPTOBOX_AES_BLOCKSIZE 16
+#define RSPAMD_CRYPTOBOX_AES_KEYSIZE 16
+
+/***
+ * @function rspamd_cryptobox.encrypt_cookie(secret_key, secret_cookie)
+ * Specialised function that performs AES-CTR encryption of the provided cookie
+ * e := base64(nonce||aesencrypt(nonce, secret_cookie))
+ * nonce := int64_le(unix_timestamp)||random_64bit
+ * aesencrypt := aes_ctr(nonce, secret_key) ^ pad(secret_cookie)
+ * pad := secret_cookie || 0^(32-len(secret_cookie))
+ * @param {string} secret_key secret key as a hex string (must be 16 bytes in raw or 32 in hex)
+ * @param {string} secret_cookie secret cookie as a string for up to 31 character
+ * @return {string} e function value for this sk and cookie
+ */
+static gint
+lua_cryptobox_encrypt_cookie (lua_State *L)
+{
+	guchar aes_block[RSPAMD_CRYPTOBOX_AES_BLOCKSIZE], *blk;
+	guchar padded_cookie[RSPAMD_CRYPTOBOX_AES_BLOCKSIZE];
+	guchar nonce[RSPAMD_CRYPTOBOX_AES_BLOCKSIZE];
+	guchar aes_key[RSPAMD_CRYPTOBOX_AES_KEYSIZE];
+	guchar result[RSPAMD_CRYPTOBOX_AES_BLOCKSIZE * 2];
+	guint64 ts;
+
+	const gchar *sk, *cookie;
+	gsize sklen, cookie_len;
+	gint bklen;
+
+	sk = lua_tolstring (L, 1, &sklen);
+	cookie = lua_tolstring (L, 2, &cookie_len);
+
+	if (sk && cookie) {
+		if (sklen == 32) {
+			/* Hex */
+			rspamd_decode_hex_buf (sk, sklen, aes_key, sizeof (aes_key));
+		}
+		else if (sklen == RSPAMD_CRYPTOBOX_AES_KEYSIZE) {
+			/* Raw */
+			memcpy (aes_key, sk, sizeof (aes_key));
+		}
+		else {
+			return luaL_error (L, "invalid keysize %d", (gint)sklen);
+		}
+
+		if (cookie_len > sizeof (padded_cookie) - 1) {
+			return luaL_error (L, "cookie is too long %d", (gint)padded_cookie);
+		}
+
+		/* Fill nonce */
+		ottery_rand_bytes (nonce, sizeof (nonce) / 2);
+		ts = (guint64)rspamd_get_calendar_ticks ();
+		memcpy (nonce + sizeof (nonce) / 2, &ts, sizeof (ts));
+
+		/* Prepare padded cookie */
+		memset (padded_cookie, 0, sizeof (padded_cookie));
+		memcpy (padded_cookie, cookie, cookie_len);
+
+		/* Perform AES CTR via AES ECB on nonce */
+		EVP_CIPHER_CTX *ctx;
+		ctx = EVP_CIPHER_CTX_new ();
+		EVP_EncryptInit_ex (ctx, EVP_aes_128_ecb (), NULL, aes_key, NULL);
+		EVP_CIPHER_CTX_set_padding (ctx, 0);
+
+		bklen = sizeof (aes_block);
+		blk = aes_block;
+		g_assert (EVP_EncryptUpdate (ctx, blk, &bklen, nonce, sizeof (nonce)));
+		blk += bklen;
+		g_assert (EVP_EncryptFinal_ex(ctx, blk, &bklen));
+		EVP_CIPHER_CTX_free (ctx);
+
+		/* Encode result */
+		memcpy (result, nonce, sizeof (nonce));
+		for (guint i = 0; i < sizeof (aes_block); i ++) {
+			result[i + sizeof (nonce)] = padded_cookie[i] ^ aes_block[i];
+		}
+
+		gsize rlen;
+		gchar *res = rspamd_encode_base64 (result, sizeof (result),
+				0, &rlen);
+
+		lua_pushlstring (L, res, rlen);
+		g_free (res);
+		rspamd_explicit_memzero (aes_key, sizeof (aes_key));
+		rspamd_explicit_memzero (aes_block, sizeof (aes_block));
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @function rspamd_cryptobox.decrypt_cookie(secret_key, encrypted_cookie)
+ * Specialised function that performs AES-CTR decryption of the provided cookie in form
+ * e := base64(nonce||aesencrypt(nonce, secret_cookie))
+ * nonce := int64_le(unix_timestamp)||random_64bit
+ * aesencrypt := aes_ctr(nonce, secret_key) ^ pad(secret_cookie)
+ * pad := secret_cookie || 0^(32-len(secret_cookie))
+ * @param {string} secret_key secret key as a hex string (must be 16 bytes in raw or 32 in hex)
+ * @param {string} encrypted_cookie encrypted cookie as a base64 encoded string
+ * @return {string} decrypted value of the cookie
+ */
+static gint
+lua_cryptobox_decrypt_cookie (lua_State *L)
+{
+	guchar *blk;
+	guchar nonce[RSPAMD_CRYPTOBOX_AES_BLOCKSIZE];
+	guchar aes_key[RSPAMD_CRYPTOBOX_AES_KEYSIZE];
+	guchar *src;
+	guint64 ts;
+
+	const gchar *sk, *cookie;
+	gsize sklen, cookie_len;
+	gint bklen;
+
+	sk = lua_tolstring (L, 1, &sklen);
+	cookie = lua_tolstring (L, 2, &cookie_len);
+
+	if (sk && cookie) {
+		if (sklen == 32) {
+			/* Hex */
+			rspamd_decode_hex_buf (sk, sklen, aes_key, sizeof (aes_key));
+		}
+		else if (sklen == RSPAMD_CRYPTOBOX_AES_KEYSIZE) {
+			/* Raw */
+			memcpy (aes_key, sk, sizeof (aes_key));
+		}
+		else {
+			return luaL_error (L, "invalid keysize %d", (gint)sklen);
+		}
+
+		src = g_malloc (cookie_len);
+
+		rspamd_cryptobox_base64_decode (cookie, cookie_len, src, &cookie_len);
+
+		if (cookie_len != RSPAMD_CRYPTOBOX_AES_BLOCKSIZE * 2) {
+			g_free (src);
+
+			return luaL_error (L, "invalid cookie len %d", (gint)cookie_len);
+		}
+
+		/* Perform AES CTR via AES ECB on nonce */
+		EVP_CIPHER_CTX *ctx;
+		ctx = EVP_CIPHER_CTX_new ();
+		/* As per CTR definition, we use encrypt for both encrypt and decrypt */
+		EVP_EncryptInit_ex (ctx, EVP_aes_128_ecb (), NULL, aes_key, NULL);
+		EVP_CIPHER_CTX_set_padding (ctx, 0);
+
+		bklen = sizeof (nonce);
+		blk = nonce;
+		g_assert (EVP_EncryptUpdate (ctx, blk, &bklen, src,
+				RSPAMD_CRYPTOBOX_AES_BLOCKSIZE));
+		blk += bklen;
+		g_assert (EVP_EncryptFinal_ex (ctx, blk, &bklen));
+		EVP_CIPHER_CTX_free (ctx);
+
+		/* Decode result */
+		for (guint i = 0; i < RSPAMD_CRYPTOBOX_AES_BLOCKSIZE; i ++) {
+			src[i + sizeof (nonce)] ^= nonce[i];
+		}
+
+		if (src[RSPAMD_CRYPTOBOX_AES_BLOCKSIZE * 2 - 1] != '\0') {
+			/* Bad cookie */
+			lua_pushnil (L);
+		}
+		else {
+			lua_pushstring (L, src + sizeof (nonce));
+		}
+
+		rspamd_explicit_memzero (src, RSPAMD_CRYPTOBOX_AES_BLOCKSIZE * 2);
+		g_free (src);
+		rspamd_explicit_memzero (aes_key, sizeof (aes_key));
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 static gint
