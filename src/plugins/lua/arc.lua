@@ -483,12 +483,13 @@ local function arc_sign_seal(task, params, header)
   sha_ctx:update(s)
   lua_util.debugm(N, task, 'initial update signature with header: %s', s)
 
-  local nl_type = 'crlf'
+  local nl_type
   if task:has_flag("milter") then
     nl_type = "lf"
   else
     nl_type = task:get_newlines_type()
   end
+
   local sig = rspamd_rsa.sign_memory(privkey, sha_ctx:bin())
   cur_arc_seal = string.format('%s%s', cur_arc_seal,
     sig:base64(70, nl_type))
