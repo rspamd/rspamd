@@ -609,14 +609,15 @@ lua_rsa_verify_memory (lua_State *L)
 	RSA *rsa;
 	rspamd_fstring_t *signature;
 	const gchar *data;
+	gsize sz;
 	gint ret;
 
 	rsa = lua_check_rsa_pubkey (L, 1);
 	signature = lua_check_rsa_sign (L, 2);
-	data = luaL_checkstring (L, 3);
+	data = luaL_checklstring (L, 3, &sz);
 
 	if (rsa != NULL && signature != NULL && data != NULL) {
-		ret = RSA_verify (NID_sha256, data, strlen (data),
+		ret = RSA_verify (NID_sha256, data, sz,
 				signature->str, signature->len, rsa);
 
 		if (ret == 0) {
@@ -651,14 +652,15 @@ lua_rsa_sign_memory (lua_State *L)
 	RSA *rsa;
 	rspamd_fstring_t *signature, **psig;
 	const gchar *data;
+	gsize sz;
 	gint ret;
 
 	rsa = lua_check_rsa_privkey (L, 1);
-	data = luaL_checkstring (L, 2);
+	data = luaL_checklstring (L, 2, &sz);
 
 	if (rsa != NULL && data != NULL) {
 		signature = rspamd_fstring_sized_new (RSA_size (rsa));
-		ret = RSA_sign (NID_sha256, data, strlen (data),
+		ret = RSA_sign (NID_sha256, data, sz,
 				signature->str, (guint *)&signature->len, rsa);
 
 		if (ret != 1) {
