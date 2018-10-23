@@ -959,10 +959,15 @@ local function check_mime_type(task)
           if v then
             local n = tonumber(v)
 
-            if n > 0 then
-              task:insert_result(settings['symbol_bad'], n, ct)
-            elseif n < 0 then
-              task:insert_result(settings['symbol_good'], -n, ct)
+            if n then
+              if n > 0 then
+                task:insert_result(settings['symbol_bad'], n, ct)
+              elseif n < 0 then
+                task:insert_result(settings['symbol_good'], -n, ct)
+              end
+            else
+              logger.warnx(task, 'unknown value: "%s" for content type %s in the map',
+                  v, ct)
             end
           else
             task:insert_result(settings['symbol_unknown'], 1.0, ct)
