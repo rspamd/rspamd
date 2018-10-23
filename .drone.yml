@@ -74,7 +74,7 @@ pipeline:
       # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
       - >
         if [ $EXIT_CODE -gt 128 ]; then
-        gdb -c /var/tmp/*.rspamd-test.core ./rspamd-test -ex "set pagination 0" -ex "thread apply all bt full" --batch;
+        gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test.core ./rspamd-test;
         exit $EXIT_CODE;
         fi
       # luacov-coveralls reads luacov.stats.out written by rspamd-test using luacov module
