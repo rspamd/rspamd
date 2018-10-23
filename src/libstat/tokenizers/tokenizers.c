@@ -25,6 +25,7 @@
 #include <unicode/uchar.h>
 #include <unicode/uiter.h>
 #include <unicode/ubrk.h>
+#include <math.h>
 
 typedef gboolean (*token_get_function) (rspamd_stat_token_t * buf, gchar const **pos,
 		rspamd_stat_token_t * token,
@@ -181,7 +182,8 @@ rspamd_tokenize_check_limit (gboolean decay,
 			*hv = mum_hash_finish (*hv);
 
 			/* We assume that word is 6 symbols length in average */
-			decay_prob = (gdouble)word_decay / ((total - (remain)) / avg_word_len);
+			decay_prob = (gdouble)word_decay / ((total - (remain)) / avg_word_len) * 10;
+			decay_prob = floor (decay_prob) / 10.0;
 
 			if (decay_prob >= 1.0) {
 				*prob = G_MAXUINT64;
@@ -251,7 +253,7 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 	guint min_len = 0, max_len = 0, word_decay = 0, initial_size = 128;
 	guint64 hv = 0;
 	gboolean decay = FALSE;
-	guint64 prob;
+	guint64 prob = 0;
 	static UBreakIterator* bi = NULL;
 
 	if (text == NULL) {
@@ -283,7 +285,8 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 				continue;
 			}
 
-			if (rspamd_tokenize_check_limit (decay, word_decay, res->len,
+			if (token.len > 0 &&
+				rspamd_tokenize_check_limit (decay, word_decay, res->len,
 					&hv, &prob, &token, pos - text, len)) {
 				if (!decay) {
 					decay = TRUE;
@@ -427,7 +430,8 @@ start_over:
 					}
 				}
 
-				if (rspamd_tokenize_check_limit (decay, word_decay, res->len,
+				if (token.len > 0 &&
+					rspamd_tokenize_check_limit (decay, word_decay, res->len,
 						&hv, &prob, &token, p, len)) {
 					if (!decay) {
 						decay = TRUE;

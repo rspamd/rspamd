@@ -41,8 +41,22 @@
         rspamd_symcache_log_id, "symcache", cache->cfg->checksum, \
         G_STRFUNC, \
         __VA_ARGS__)
+#define msg_debug_cache_task(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_symcache_log_id, "symcache", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
 
 INIT_LOG_MODULE(symcache)
+
+#define CHECK_START_BIT(checkpoint, item) \
+	isset((checkpoint)->processed_bits, (item)->id * 2)
+#define SET_START_BIT(checkpoint, item) \
+	setbit((checkpoint)->processed_bits, (item)->id * 2)
+
+#define CHECK_FINISH_BIT(checkpoint, item) \
+	isset((checkpoint)->processed_bits, (item)->id * 2 + 1)
+#define SET_FINISH_BIT(checkpoint, item) \
+	setbit((checkpoint)->processed_bits, (item)->id * 2 + 1)
 
 static const guchar rspamd_symbols_cache_magic[8] = {'r', 's', 'c', 2, 0, 0, 0, 0 };
 
@@ -96,13 +110,15 @@ struct item_stat {
 	gdouble stddev_frequency;
 };
 
-struct cache_item {
+struct rspamd_symcache_item {
 	/* This block is likely shared */
 	struct item_stat *st;
 
 	guint64 last_count;
 
 	/* Per process counter */
+	gdouble start_ticks;
+	guint async_events;
 	struct rspamd_counter_data *cd;
 	gchar *symbol;
 	enum rspamd_symbol_type type;
@@ -130,7 +146,7 @@ struct cache_item {
 };
 
 struct cache_dependency {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 	gchar *sym;
 	gint id;
 };
@@ -149,11 +165,8 @@ struct delayed_cache_condition {
 enum rspamd_cache_savepoint_stage {
 	RSPAMD_CACHE_PASS_INIT = 0,
 	RSPAMD_CACHE_PASS_PREFILTERS,
-	RSPAMD_CACHE_PASS_WAIT_PREFILTERS,
 	RSPAMD_CACHE_PASS_FILTERS,
-	RSPAMD_CACHE_PASS_WAIT_FILTERS,
 	RSPAMD_CACHE_PASS_POSTFILTERS,
-	RSPAMD_CACHE_PASS_WAIT_POSTFILTERS,
 	RSPAMD_CACHE_PASS_IDEMPOTENT,
 	RSPAMD_CACHE_PASS_WAIT_IDEMPOTENT,
 	RSPAMD_CACHE_PASS_DONE,
@@ -165,7 +178,8 @@ struct cache_savepoint {
 	guint version;
 	struct rspamd_metric_result *rs;
 	gdouble lim;
-	GPtrArray *waitq;
+	struct rspamd_symcache_item *cur_item;
+	guint items_inflight;
 	struct symbols_cache_order *order;
 };
 
@@ -187,12 +201,11 @@ struct rspamd_cache_refresh_cbdata {
 
 static gboolean rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		struct symbols_cache *cache,
-		struct cache_item *item,
-		struct cache_savepoint *checkpoint,
-		gdouble *total_diff);
+		struct rspamd_symcache_item *item,
+		struct cache_savepoint *checkpoint);
 static gboolean rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 		struct symbols_cache *cache,
-		struct cache_item *item,
+		struct rspamd_symcache_item *item,
 		struct cache_savepoint *checkpoint,
 		guint recursion,
 		gboolean check_only);
@@ -243,8 +256,8 @@ rspamd_symbols_cache_order_new (struct symbols_cache *cache,
 static gint
 postfilters_cmp (const void *p1, const void *p2, gpointer ud)
 {
-	const struct cache_item *i1 = *(struct cache_item **)p1,
-			*i2 = *(struct cache_item **)p2;
+	const struct rspamd_symcache_item *i1 = *(struct rspamd_symcache_item **)p1,
+			*i2 = *(struct rspamd_symcache_item **)p2;
 	double w1, w2;
 
 	w1 = i1->priority;
@@ -263,8 +276,8 @@ postfilters_cmp (const void *p1, const void *p2, gpointer ud)
 static gint
 prefilters_cmp (const void *p1, const void *p2, gpointer ud)
 {
-	const struct cache_item *i1 = *(struct cache_item **)p1,
-			*i2 = *(struct cache_item **)p2;
+	const struct rspamd_symcache_item *i1 = *(struct rspamd_symcache_item **)p1,
+			*i2 = *(struct rspamd_symcache_item **)p2;
 	double w1, w2;
 
 	w1 = i1->priority;
@@ -289,8 +302,8 @@ prefilters_cmp (const void *p1, const void *p2, gpointer ud)
 static gint
 cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 {
-	const struct cache_item *i1 = *(struct cache_item **)p1,
-			*i2 = *(struct cache_item **)p2;
+	const struct rspamd_symcache_item *i1 = *(struct rspamd_symcache_item **)p1,
+			*i2 = *(struct rspamd_symcache_item **)p2;
 	struct symbols_cache *cache = ud;
 	double w1, w2;
 	double weight1, weight2;
@@ -334,7 +347,7 @@ cache_logic_cmp (const void *p1, const void *p2, gpointer ud)
 
 static void
 rspamd_symbols_cache_tsort_visit (struct symbols_cache *cache,
-								  struct cache_item *it,
+								  struct rspamd_symcache_item *it,
 								  guint cur_order)
 {
 	struct cache_dependency *dep;
@@ -375,7 +388,7 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 	struct symbols_cache_order *ord;
 	guint i;
 	guint64 total_hits = 0;
-	struct cache_item *it;
+	struct rspamd_symcache_item *it;
 
 	ord = rspamd_symbols_cache_order_new (cache, cache->used_items);
 
@@ -424,7 +437,7 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 static void
 rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 {
-	struct cache_item *it, *dit;
+	struct rspamd_symcache_item *it, *dit;
 	struct cache_dependency *dep, *rdep;
 	struct delayed_cache_dependency *ddep;
 	struct delayed_cache_condition *dcond;
@@ -546,7 +559,7 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 	ucl_object_t *top;
 	const ucl_object_t *cur, *elt;
 	ucl_object_iter_t it;
-	struct cache_item *item, *parent;
+	struct rspamd_symcache_item *item, *parent;
 	const guchar *p;
 	gint fd;
 	gpointer map;
@@ -709,19 +722,30 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	struct rspamd_symbols_cache_header hdr;
 	ucl_object_t *top, *elt, *freq;
 	GHashTableIter it;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 	struct ucl_emitter_functions *efunc;
 	gpointer k, v;
 	gint fd;
 	bool ret;
+	gchar path[PATH_MAX];
 
-	(void)unlink (name);
-	fd = open (name, O_CREAT | O_TRUNC | O_WRONLY | O_EXCL, 00644);
+	rspamd_snprintf (path, sizeof (path), "%s.new", name);
 
-	if (fd == -1) {
-		msg_info_cache ("cannot open file %s, error %d, %s", name,
-				errno, strerror (errno));
-		return FALSE;
+	for (;;) {
+		fd = open (path, O_CREAT | O_WRONLY | O_EXCL, 00644);
+
+		if (fd == -1) {
+			if (errno == EEXIST) {
+				/* Some other process is already writing data, give up silently */
+				return TRUE;
+			}
+
+			msg_info_cache ("cannot open file %s, error %d, %s", path,
+					errno, strerror (errno));
+			return FALSE;
+		}
+
+		break;
 	}
 
 	rspamd_file_lock (fd, FALSE);
@@ -731,7 +755,7 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 			sizeof (rspamd_symbols_cache_magic));
 
 	if (write (fd, &hdr, sizeof (hdr)) == -1) {
-		msg_info_cache ("cannot write to file %s, error %d, %s", name,
+		msg_info_cache ("cannot write to file %s, error %d, %s", path,
 				errno, strerror (errno));
 		rspamd_file_unlock (fd, FALSE);
 		close (fd);
@@ -773,6 +797,13 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 	rspamd_file_unlock (fd, FALSE);
 	close (fd);
 
+	if (rename (path, name) == -1) {
+		msg_info_cache ("cannot rename %s -> %s, error %d, %s", path, name,
+				errno, strerror (errno));
+		(void)unlink (path);
+		ret = FALSE;
+	}
+
 	return ret;
 }
 
@@ -787,7 +818,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	enum rspamd_symbol_type type,
 	gint parent)
 {
-	struct cache_item *item = NULL;
+	struct rspamd_symcache_item *item = NULL;
 
 	g_assert (cache != NULL);
 
@@ -813,7 +844,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	}
 
 	item = rspamd_mempool_alloc0 (cache->static_pool,
-			sizeof (struct cache_item));
+			sizeof (struct rspamd_symcache_item));
 	item->st = rspamd_mempool_alloc0_shared (cache->static_pool,
 			sizeof (*item->st));
 	item->condition_cb = -1;
@@ -894,7 +925,7 @@ gboolean
 rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id,
 		lua_State *L, gint cbref)
 {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 
@@ -1084,7 +1115,7 @@ rspamd_symbols_cache_init (struct symbols_cache* cache)
 static void
 rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 {
-	struct cache_item *item = v, *parent;
+	struct rspamd_symcache_item *item = v, *parent;
 	struct rspamd_config *cfg;
 	struct symbols_cache *cache = (struct symbols_cache *)ud;
 	struct rspamd_symbol *s;
@@ -1166,7 +1197,7 @@ rspamd_symbols_cache_metric_validate_cb (gpointer k, gpointer v, gpointer ud)
 	const gchar *sym = k;
 	struct rspamd_symbol *s = (struct rspamd_symbol *)v;
 	gdouble weight;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	weight = *s->weight_ptr;
 	item = g_hash_table_lookup (cache->items_by_symbol, sym);
@@ -1181,7 +1212,7 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 	struct rspamd_config *cfg,
 	gboolean strict)
 {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 	GHashTableIter it;
 	gpointer k, v;
 	struct rspamd_symbol *sym_def;
@@ -1269,69 +1300,27 @@ rspamd_symbols_cache_metric_limit (struct rspamd_task *task,
 	return FALSE;
 }
 
-static void
-rspamd_symbols_cache_watcher_cb (gpointer sessiond, gpointer ud)
-{
-	struct rspamd_task *task = sessiond;
-	struct cache_item *item = ud, *it;
-	struct cache_savepoint *checkpoint;
-	struct symbols_cache *cache;
-	gint i, remain = 0;
-
-	checkpoint = task->checkpoint;
-	cache = task->cfg->cache;
-
-	/* Specify that we are done with this item */
-	setbit (checkpoint->processed_bits, item->id * 2 + 1);
-
-	if (checkpoint->pass > 0) {
-		for (i = 0; i < (gint)checkpoint->waitq->len; i ++) {
-			it = g_ptr_array_index (checkpoint->waitq, i);
-
-			if (!isset (checkpoint->processed_bits, it->id * 2)) {
-				if (!rspamd_symbols_cache_check_deps (task, cache, it,
-						checkpoint, 0, TRUE)) {
-					remain ++;
-				}
-				else {
-					msg_debug_task ("watcher for %d(%s), unblocked item %d(%s)",
-							item->id,
-							item->symbol,
-							it->id,
-							it->symbol);
-					rspamd_symbols_cache_check_symbol (task, cache, it,
-							checkpoint,
-							NULL);
-				}
-			}
-		}
-	}
-
-	msg_debug_task ("finished watcher for %d(%s), %ud symbols waiting",
-			item->id, item->symbol,
-			remain);
-}
-
 static gboolean
 rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		struct symbols_cache *cache,
-		struct cache_item *item,
-		struct cache_savepoint *checkpoint,
-		gdouble *total_diff)
+		struct rspamd_symcache_item *item,
+		struct cache_savepoint *checkpoint)
 {
-	guint pending_before, pending_after;
-	double t1 = 0, t2 = 0;
-	gdouble diff;
+	double t1 = 0;
 	struct rspamd_task **ptask;
 	lua_State *L;
 	gboolean check = TRUE;
-	const gdouble slow_diff_limit = 0.1;
 
 	if (item->func) {
 
 		g_assert (item->func != NULL);
+		if (CHECK_START_BIT (checkpoint, item)) {
+			msg_err_cache ("critical error: trying to execute already executed symbol %s",
+				item->symbol);
+			g_assert_not_reached ();
+		}
 		/* Check has been started */
-		setbit (checkpoint->processed_bits, item->id * 2);
+		SET_START_BIT (checkpoint, item);
 
 		if (!item->enabled ||
 				(RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY))) {
@@ -1357,58 +1346,49 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 		}
 
 		if (check) {
-			pending_before = rspamd_session_events_pending (task->s);
-			/* Watch for events appeared */
-			rspamd_session_watch_start (task->s,
-					item->id,
-					rspamd_symbols_cache_watcher_cb,
-					item);
-			msg_debug_task ("execute %s, %d", item->symbol, item->id);
+			msg_debug_cache_task ("execute %s, %d", item->symbol, item->id);
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+			struct timeval tv;
+
+			event_base_update_cache_time (task->ev_base);
+			event_base_gettimeofday_cached (task->ev_base, &tv);
+			t1 = tv_to_double (&tv);
+#else
 			t1 = rspamd_get_ticks (FALSE);
-			item->func (task, item->user_data);
-			t2 = rspamd_get_ticks (FALSE);
-			diff = (t2 - t1);
+#endif
+			item->start_ticks = t1;
+			item->async_events = 0;
+			g_assert (checkpoint->cur_item == NULL);
+			checkpoint->cur_item = item;
+			checkpoint->items_inflight ++;
+			/* Callback now must finalize itself */
+			item->func (task, item, item->user_data);
+			checkpoint->cur_item = NULL;
 
-			if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {
-				rspamd_task_profile_set (task, item->symbol, diff);
-			}
-
-			if (total_diff) {
-				*total_diff += diff;
-			}
-
-			if (diff > slow_diff_limit && !(item->type & SYMBOL_TYPE_SQUEEZED)) {
-				msg_info_task ("slow rule: %s: %.2f ms", item->symbol,
-						diff * 1000);
-			}
-
-			if (rspamd_worker_is_scanner (task->worker)) {
-				rspamd_set_counter (item->cd, diff);
-			}
-
-			pending_after = rspamd_session_events_pending (task->s);
-			rspamd_session_watch_stop (task->s);
-
-			if (pending_before == pending_after) {
-				/* No new events registered */
-				setbit (checkpoint->processed_bits, item->id * 2 + 1);
+			if (checkpoint->items_inflight == 0) {
 
 				return TRUE;
+			}
+
+			if (item->async_events == 0 && !CHECK_FINISH_BIT (checkpoint, item)) {
+				msg_err_cache ("critical error: item %s has no async events pending, "
+				   "but it is not finalised", item->symbol);
+				g_assert_not_reached ();
 			}
 
 			return FALSE;
 		}
 		else {
-			msg_debug_task ("skipping check of %s as its start condition is false",
+			msg_debug_cache_task ("skipping check of %s as its start condition is false",
 					item->symbol);
-			setbit (checkpoint->processed_bits, item->id * 2 + 1);
+			SET_FINISH_BIT (checkpoint, item);
 
 			return TRUE;
 		}
 	}
 	else {
-		setbit (checkpoint->processed_bits, item->id * 2);
-		setbit (checkpoint->processed_bits, item->id * 2 + 1);
+		SET_START_BIT (checkpoint, item);
+		SET_FINISH_BIT (checkpoint, item);
 
 		return TRUE;
 	}
@@ -1417,7 +1397,7 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 static gboolean
 rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 		struct symbols_cache *cache,
-		struct cache_item *item,
+		struct rspamd_symcache_item *item,
 		struct cache_savepoint *checkpoint,
 		guint recursion,
 		gboolean check_only)
@@ -1440,13 +1420,13 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 
 			if (dep->item == NULL) {
 				/* Assume invalid deps as done */
-				msg_debug_task ("symbol %d(%s) has invalid dependencies on %d(%s)",
+				msg_debug_cache_task ("symbol %d(%s) has invalid dependencies on %d(%s)",
 						item->id, item->symbol, dep->id, dep->sym);
 				continue;
 			}
 
-			if (!isset (checkpoint->processed_bits, dep->id * 2 + 1)) {
-				if (!isset (checkpoint->processed_bits, dep->id * 2)) {
+			if (!CHECK_FINISH_BIT (checkpoint, dep->item)) {
+				if (!CHECK_START_BIT (checkpoint, dep->item)) {
 					/* Not started */
 					if (!check_only) {
 						if (!rspamd_symbols_cache_check_deps (task, cache,
@@ -1454,45 +1434,30 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 								checkpoint,
 								recursion + 1,
 								check_only)) {
-							gboolean found = FALSE;
-							guint j;
-							struct cache_item *tmp_it;
-
-							PTR_ARRAY_FOREACH (checkpoint->waitq, j, tmp_it) {
-								if (item->id == tmp_it->id) {
-									found = TRUE;
-									break;
-								}
-							}
-
-							if (!found) {
-								g_ptr_array_add (checkpoint->waitq, item);
-							}
 
 							ret = FALSE;
-							msg_debug_task ("delayed dependency %d(%s) for "
+							msg_debug_cache_task ("delayed dependency %d(%s) for "
 											"symbol %d(%s)",
 									dep->id, dep->sym, item->id, item->symbol);
 						}
 						else if (!rspamd_symbols_cache_check_symbol (task, cache,
 								dep->item,
-								checkpoint,
-								NULL)) {
+								checkpoint)) {
 							/* Now started, but has events pending */
 							ret = FALSE;
-							msg_debug_task ("started check of %d(%s) symbol "
+							msg_debug_cache_task ("started check of %d(%s) symbol "
 											"as dep for "
 											"%d(%s)",
 									dep->id, dep->sym, item->id, item->symbol);
 						}
 						else {
-							msg_debug_task ("dependency %d(%s) for symbol %d(%s) is "
+							msg_debug_cache_task ("dependency %d(%s) for symbol %d(%s) is "
 									"already processed",
 									dep->id, dep->sym, item->id, item->symbol);
 						}
 					}
 					else {
-						msg_debug_task ("dependency %d(%s) for symbol %d(%s) "
+						msg_debug_cache_task ("dependency %d(%s) for symbol %d(%s) "
 										"cannot be started now",
 								dep->id, dep->sym,
 								item->id, item->symbol);
@@ -1501,7 +1466,7 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 				}
 				else {
 					/* Started but not finished */
-					msg_debug_task ("dependency %d(%s) for symbol %d(%s) is "
+					msg_debug_cache_task ("dependency %d(%s) for symbol %d(%s) is "
 									"still executing",
 							dep->id, dep->sym,
 							item->id, item->symbol);
@@ -1509,7 +1474,7 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 				}
 			}
 			else {
-				msg_debug_task ("dependency %d(%s) for symbol %d(%s) is already "
+				msg_debug_cache_task ("dependency %d(%s) for symbol %d(%s) is already "
 						"checked",
 						dep->id, dep->sym,
 						item->id, item->symbol);
@@ -1526,15 +1491,6 @@ rspamd_symbols_cache_continuation (void *data)
 	struct rspamd_task *task = data;
 
 	rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
-}
-
-static void
-rspamd_symbols_cache_tm (gint fd, short what, void *data)
-{
-	struct rspamd_task *task = data;
-
-	rspamd_session_remove_event (task->s, rspamd_symbols_cache_continuation,
-			data);
 }
 
 static struct cache_savepoint *
@@ -1557,19 +1513,16 @@ rspamd_symbols_cache_make_checkpoint (struct rspamd_task *task,
 	/* Bit 0: check started, Bit 1: check finished */
 	checkpoint->processed_bits = rspamd_mempool_alloc0 (task->task_pool,
 			NBYTES (cache->used_items) * 2);
-	checkpoint->waitq = g_ptr_array_new ();
 	g_assert (cache->items_by_order != NULL);
 	checkpoint->version = cache->items_by_order->d->len;
 	checkpoint->order = cache->items_by_order;
 	REF_RETAIN (checkpoint->order);
 	rspamd_mempool_add_destructor (task->task_pool,
 			rspamd_symbols_cache_order_unref, checkpoint->order);
-	rspamd_mempool_add_destructor (task->task_pool,
-			rspamd_ptr_array_free_hard, checkpoint->waitq);
 	checkpoint->pass = RSPAMD_CACHE_PASS_INIT;
 	task->checkpoint = checkpoint;
 
-	task->result = rspamd_create_metric_result (task);
+	task->result = task->result;
 
 	return checkpoint;
 }
@@ -1582,6 +1535,7 @@ rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 	struct rspamd_symbols_group *gr;
 	GHashTableIter gr_it;
 	ucl_object_iter_t it = NULL;
+	gboolean already_disabled = FALSE;
 	gpointer k, v;
 
 	wl = ucl_object_lookup (task->settings, "whitelist");
@@ -1597,6 +1551,7 @@ rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 	if (enabled) {
 		/* Disable all symbols but selected */
 		rspamd_symbols_cache_disable_all_symbols (task, cache);
+		already_disabled = TRUE;
 		it = NULL;
 
 		while ((cur = ucl_iterate_object (enabled, &it, true)) != NULL) {
@@ -1610,7 +1565,10 @@ rspamd_symbols_cache_process_settings (struct rspamd_task *task,
 
 	if (enabled) {
 		it = NULL;
-		rspamd_symbols_cache_disable_all_symbols (task, cache);
+
+		if (!already_disabled) {
+			rspamd_symbols_cache_disable_all_symbols (task, cache);
+		}
 
 		while ((cur = ucl_iterate_object (enabled, &it, true)) != NULL) {
 			if (ucl_object_type (cur) == UCL_STRING) {
@@ -1668,13 +1626,11 @@ gboolean
 rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	struct symbols_cache *cache, gint stage)
 {
-	struct cache_item *item = NULL;
+	struct rspamd_symcache_item *item = NULL;
 	struct cache_savepoint *checkpoint;
 	gint i;
-	gdouble total_ticks = 0;
 	gboolean all_done;
 	gint saved_priority;
-	const gdouble max_ticks = 3e8;
 	guint start_events_pending;
 
 	g_assert (cache != NULL);
@@ -1697,7 +1653,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		checkpoint->pass = RSPAMD_CACHE_PASS_IDEMPOTENT;
 	}
 
-	msg_debug_task ("symbols processing stage at pass: %d", checkpoint->pass);
+	msg_debug_cache_task ("symbols processing stage at pass: %d", checkpoint->pass);
 	start_events_pending = rspamd_session_events_pending (task->s);
 
 	switch (checkpoint->pass) {
@@ -1705,6 +1661,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	case RSPAMD_CACHE_PASS_PREFILTERS:
 		/* Check for prefilters */
 		saved_priority = G_MININT;
+		all_done = TRUE;
 
 		for (i = 0; i < (gint)cache->prefilters->len; i ++) {
 			item = g_ptr_array_index (cache->prefilters, i);
@@ -1713,8 +1670,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				return TRUE;
 			}
 
-			if (!isset (checkpoint->processed_bits, item->id * 2) &&
-					!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
+			if (!CHECK_START_BIT (checkpoint, item) &&
+					!CHECK_FINISH_BIT (checkpoint, item)) {
 				/* Check priorities */
 				if (saved_priority == G_MININT) {
 					saved_priority = item->priority;
@@ -1732,22 +1689,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				}
 
 				rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint, &total_ticks);
-			}
-		}
-
-		checkpoint->pass = RSPAMD_CACHE_PASS_WAIT_PREFILTERS;
-		break;
-
-	case RSPAMD_CACHE_PASS_WAIT_PREFILTERS:
-		all_done = TRUE;
-
-		for (i = 0; i < (gint)cache->prefilters->len; i ++) {
-			item = g_ptr_array_index (cache->prefilters, i);
-
-			if (!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
+						checkpoint);
 				all_done = FALSE;
-				break;
 			}
 		}
 
@@ -1758,13 +1701,17 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		if (stage == RSPAMD_TASK_STAGE_FILTERS) {
 			return rspamd_symbols_cache_process_symbols (task, cache, stage);
 		}
+
 		break;
+
 	case RSPAMD_CACHE_PASS_FILTERS:
 		/*
 		 * On the first pass we check symbols that do not have dependencies
 		 * If we figure out symbol that has no dependencies satisfied, then
 		 * we just save it for another pass
 		 */
+		all_done = TRUE;
+
 		for (i = 0; i < (gint)checkpoint->version; i ++) {
 			if (RSPAMD_TASK_IS_SKIPPED (task)) {
 				return TRUE;
@@ -1776,8 +1723,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				continue;
 			}
 
-			if (!(item->type & SYMBOL_TYPE_FINE) &&
-					rspamd_session_events_pending (task->s) == 0) {
+			if (!(item->type & SYMBOL_TYPE_FINE)) {
 				if (rspamd_symbols_cache_metric_limit (task, checkpoint)) {
 					msg_info_task ("<%s> has already scored more than %.2f, so do "
 							"not "
@@ -1787,95 +1733,25 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				}
 			}
 
-			if (!isset (checkpoint->processed_bits, item->id * 2)) {
+			if (!CHECK_START_BIT (checkpoint, item)) {
+				all_done = FALSE;
+
 				if (!rspamd_symbols_cache_check_deps (task, cache, item,
 						checkpoint, 0, FALSE)) {
-					gboolean found = FALSE;
-					guint j;
-					struct cache_item *tmp_it;
 
-					msg_debug_task ("blocked execution of %d(%s) unless deps are "
+					msg_debug_cache_task ("blocked execution of %d(%s) unless deps are "
 							"resolved",
 							item->id, item->symbol);
-
-					PTR_ARRAY_FOREACH (checkpoint->waitq, j, tmp_it) {
-						if (item->id == tmp_it->id) {
-							found = TRUE;
-							break;
-						}
-					}
-
-					if (!found) {
-						g_ptr_array_add (checkpoint->waitq, item);
-					}
 
 					continue;
 				}
 
 				rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint, &total_ticks);
-			}
-
-			if (total_ticks > max_ticks) {
-				/* Maybe we should stop and check pending events? */
-				if (rspamd_session_events_pending (task->s) > start_events_pending) {
-					/* Add some timeout event to avoid too long waiting */
-#if 0
-					struct event *ev;
-					struct timeval tv;
-
-					rspamd_session_add_event (task->s,
-							rspamd_symbols_cache_continuation, task,
-							rspamd_symbols_cache_quark ());
-					ev = rspamd_mempool_alloc (task->task_pool, sizeof (*ev));
-					event_set (ev, -1, EV_TIMEOUT, rspamd_symbols_cache_tm, task);
-					event_base_set (task->ev_base, ev);
-					msec_to_tv (50, &tv);
-					event_add (ev, &tv);
-					rspamd_mempool_add_destructor (task->task_pool,
-							(rspamd_mempool_destruct_t)event_del, ev);
-#endif
-					msg_info_task ("trying to check async events after spending "
-							"%.0f ticks processing symbols",
-							total_ticks);
-
-					return TRUE;
-				}
+						checkpoint);
 			}
 		}
 
-		checkpoint->pass = RSPAMD_CACHE_PASS_WAIT_FILTERS;
-		break;
-
-	case RSPAMD_CACHE_PASS_WAIT_FILTERS:
-		/* We just go through the blocked symbols and check if they are ready */
-		for (i = 0; i < (gint)checkpoint->waitq->len; i ++) {
-			item = g_ptr_array_index (checkpoint->waitq, i);
-
-			if (!isset (checkpoint->processed_bits, item->id * 2)) {
-				if (!rspamd_symbols_cache_check_deps (task, cache, item,
-						checkpoint, 0, FALSE)) {
-					break;
-				}
-
-				rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint, &total_ticks);
-			}
-
-			if (total_ticks > max_ticks) {
-				/* Maybe we should stop and check pending events? */
-				if (rspamd_session_events_pending (task->s) >
-						start_events_pending) {
-					msg_debug_task ("trying to check async events after spending "
-							"%.0f microseconds processing symbols",
-							total_ticks);
-					return TRUE;
-				}
-			}
-		}
-
-		if (checkpoint->waitq->len == 0 ||
-				stage == RSPAMD_TASK_STAGE_POST_FILTERS) {
+		if (all_done || stage == RSPAMD_TASK_STAGE_POST_FILTERS) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_POSTFILTERS;
 		}
 
@@ -1888,6 +1764,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	case RSPAMD_CACHE_PASS_POSTFILTERS:
 		/* Check for postfilters */
 		saved_priority = G_MININT;
+		all_done = TRUE;
 
 		for (i = 0; i < (gint)cache->postfilters->len; i ++) {
 			if (RSPAMD_TASK_IS_SKIPPED (task)) {
@@ -1896,9 +1773,11 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 			item = g_ptr_array_index (cache->postfilters, i);
 
-			if (!isset (checkpoint->processed_bits, item->id * 2) &&
-					!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
+			if (!CHECK_START_BIT (checkpoint, item) &&
+					!CHECK_FINISH_BIT (checkpoint, item)) {
 				/* Check priorities */
+				all_done = FALSE;
+
 				if (saved_priority == G_MININT) {
 					saved_priority = item->priority;
 				}
@@ -1915,21 +1794,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 				}
 
 				rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint, &total_ticks);
-			}
-		}
-		checkpoint->pass = RSPAMD_CACHE_PASS_WAIT_POSTFILTERS;
-		break;
-
-	case RSPAMD_CACHE_PASS_WAIT_POSTFILTERS:
-		all_done = TRUE;
-
-		for (i = 0; i < (gint)cache->postfilters->len; i ++) {
-			item = g_ptr_array_index (cache->postfilters, i);
-
-			if (!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
-				all_done = FALSE;
-				break;
+						checkpoint);
 			}
 		}
 
@@ -1937,7 +1802,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 			checkpoint->pass = RSPAMD_CACHE_PASS_IDEMPOTENT;
 		}
 
-		if (checkpoint->waitq->len == 0 ||
+		if (checkpoint->items_inflight == 0 ||
 				stage == RSPAMD_TASK_STAGE_IDEMPOTENT) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_IDEMPOTENT;
 		}
@@ -1955,8 +1820,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		for (i = 0; i < (gint)cache->idempotent->len; i ++) {
 			item = g_ptr_array_index (cache->idempotent, i);
 
-			if (!isset (checkpoint->processed_bits, item->id * 2) &&
-					!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
+			if (!CHECK_START_BIT (checkpoint, item) &&
+					!CHECK_FINISH_BIT (checkpoint, item)) {
 				/* Check priorities */
 				if (saved_priority == G_MININT) {
 					saved_priority = item->priority;
@@ -1973,7 +1838,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 					}
 				}
 				rspamd_symbols_cache_check_symbol (task, cache, item,
-						checkpoint, &total_ticks);
+						checkpoint);
 			}
 		}
 		checkpoint->pass = RSPAMD_CACHE_PASS_WAIT_IDEMPOTENT;
@@ -1985,7 +1850,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		for (i = 0; i < (gint)cache->idempotent->len; i ++) {
 			item = g_ptr_array_index (cache->idempotent, i);
 
-			if (!isset (checkpoint->processed_bits, item->id * 2 + 1)) {
+			if (!CHECK_FINISH_BIT (checkpoint, item)) {
 				all_done = FALSE;
 				break;
 			}
@@ -2018,7 +1883,7 @@ rspamd_symbols_cache_counters_cb (gpointer v, gpointer ud)
 {
 	struct counters_cbdata *cbd = ud;
 	ucl_object_t *obj, *top;
-	struct cache_item *item = v, *parent;
+	struct rspamd_symcache_item *item = v, *parent;
 
 	top = cbd->top;
 
@@ -2085,7 +1950,7 @@ rspamd_symbols_cache_counters (struct symbols_cache * cache)
 static void
 rspamd_symbols_cache_call_peak_cb (struct event_base *ev_base,
 		struct symbols_cache *cache,
-		struct cache_item *item,
+		struct rspamd_symcache_item *item,
 		gdouble cur_value,
 		gdouble cur_err)
 {
@@ -2116,7 +1981,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 	gdouble tm;
 	struct rspamd_cache_refresh_cbdata *cbdata = ud;
 	struct symbols_cache *cache;
-	struct cache_item *item, *parent;
+	struct rspamd_symcache_item *item, *parent;
 	guint i;
 	gdouble cur_ticks;
 	static const double decay_rate = 0.7;
@@ -2240,7 +2105,7 @@ void
 rspamd_symbols_cache_inc_frequency (struct symbols_cache *cache,
 		const gchar *symbol)
 {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 
@@ -2255,7 +2120,7 @@ void
 rspamd_symbols_cache_add_dependency (struct symbols_cache *cache,
 		gint id_from, const gchar *to)
 {
-	struct cache_item *source;
+	struct rspamd_symcache_item *source;
 	struct cache_dependency *dep;
 
 	g_assert (id_from < (gint)cache->items_by_id->len);
@@ -2288,7 +2153,7 @@ rspamd_symbols_cache_add_delayed_dependency (struct symbols_cache *cache,
 gint
 rspamd_symbols_cache_find_symbol (struct symbols_cache *cache, const gchar *name)
 {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 
@@ -2310,7 +2175,7 @@ rspamd_symbols_cache_stat_symbol (struct symbols_cache *cache,
 		const gchar *name, gdouble *frequency, gdouble *freq_stddev,
 		gdouble *tm, guint *nhits)
 {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 
@@ -2339,7 +2204,7 @@ static gint
 rspamd_symbols_cache_find_symbol_parent (struct symbols_cache *cache,
 		const gchar *name)
 {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 
@@ -2365,7 +2230,7 @@ const gchar *
 rspamd_symbols_cache_symbol_by_id (struct symbols_cache *cache,
 		gint id)
 {
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 
@@ -2410,7 +2275,7 @@ rspamd_symbols_cache_disable_symbol_checkpoint (struct rspamd_task *task,
 		struct symbols_cache *cache, const gchar *symbol)
 {
 	struct cache_savepoint *checkpoint;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 	gint id;
 
 	if (task->checkpoint == NULL) {
@@ -2428,13 +2293,13 @@ rspamd_symbols_cache_disable_symbol_checkpoint (struct rspamd_task *task,
 		item = g_ptr_array_index (cache->items_by_id, id);
 
 		if (!(item->type & SYMBOL_TYPE_SQUEEZED)) {
-			setbit (checkpoint->processed_bits, item->id * 2);
-			setbit (checkpoint->processed_bits, item->id * 2 + 1);
+			SET_START_BIT (checkpoint, item);
+			SET_FINISH_BIT (checkpoint, item);
 
-			msg_debug_task ("disable execution of %s", symbol);
+			msg_debug_cache_task ("disable execution of %s", symbol);
 		}
 		else {
-			msg_debug_task ("skip squeezed symbol %s", symbol);
+			msg_debug_cache_task ("skip squeezed symbol %s", symbol);
 		}
 	}
 	else {
@@ -2447,7 +2312,7 @@ rspamd_symbols_cache_enable_symbol_checkpoint (struct rspamd_task *task,
 		struct symbols_cache *cache, const gchar *symbol)
 {
 	struct cache_savepoint *checkpoint;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 	gint id;
 
 	if (task->checkpoint == NULL) {
@@ -2467,7 +2332,7 @@ rspamd_symbols_cache_enable_symbol_checkpoint (struct rspamd_task *task,
 		clrbit (checkpoint->processed_bits, item->id * 2);
 		clrbit (checkpoint->processed_bits, item->id * 2 + 1);
 
-		msg_debug_task ("enable execution of %s (%d)", symbol, id);
+		msg_debug_cache_task ("enable execution of %s (%d)", symbol, id);
 	}
 	else {
 		msg_info_task ("cannot enable %s: not found", symbol);
@@ -2479,7 +2344,7 @@ rspamd_symbols_cache_get_cbdata (struct symbols_cache *cache,
 		const gchar *symbol)
 {
 	gint id;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
@@ -2500,7 +2365,7 @@ rspamd_symbols_cache_set_cbdata (struct symbols_cache *cache,
 		const gchar *symbol, struct rspamd_abstract_callback_data *cbdata)
 {
 	gint id;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
@@ -2547,7 +2412,7 @@ rspamd_symbols_cache_disable_symbol (struct symbols_cache *cache,
 		const gchar *symbol)
 {
 	gint id;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
@@ -2565,7 +2430,7 @@ rspamd_symbols_cache_enable_symbol (struct symbols_cache *cache,
 		const gchar *symbol)
 {
 	gint id;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
@@ -2593,7 +2458,7 @@ rspamd_symbols_cache_is_symbol_enabled (struct rspamd_task *task,
 {
 	gint id;
 	struct cache_savepoint *checkpoint;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 	lua_State *L;
 	struct rspamd_task **ptask;
 	gboolean ret = TRUE;
@@ -2611,7 +2476,7 @@ rspamd_symbols_cache_is_symbol_enabled (struct rspamd_task *task,
 	item = g_ptr_array_index (cache->items_by_id, id);
 
 	if (checkpoint) {
-		if (isset (checkpoint->processed_bits, id * 2)) {
+		if (CHECK_START_BIT (checkpoint, item)) {
 			ret = FALSE;
 		}
 		else {
@@ -2645,9 +2510,161 @@ rspamd_symbols_cache_foreach (struct symbols_cache *cache,
 		gpointer ud)
 {
 	guint i;
-	struct cache_item *item;
+	struct rspamd_symcache_item *item;
 
 	PTR_ARRAY_FOREACH (cache->items_by_id, i, item) {
 		func (item->id, item->symbol, item->type, ud);
 	}
+}
+
+struct rspamd_symcache_item *
+rspamd_symbols_cache_get_cur_item (struct rspamd_task *task)
+{
+	struct cache_savepoint *checkpoint = task->checkpoint;
+
+	if (checkpoint == NULL) {
+		return NULL;
+	}
+
+	return checkpoint->cur_item;
+}
+
+/**
+ * Replaces the current item being processed.
+ * Returns the current item being processed (if any)
+ * @param task
+ * @param item
+ * @return
+ */
+struct rspamd_symcache_item *
+rspamd_symbols_cache_set_cur_item (struct rspamd_task *task,
+								   struct rspamd_symcache_item *item)
+{
+	struct cache_savepoint *checkpoint = task->checkpoint;
+	struct rspamd_symcache_item *ex;
+
+	ex = checkpoint->cur_item;
+	checkpoint->cur_item = item;
+
+	return ex;
+}
+
+
+/**
+ * Finalize the current async element potentially calling its deps
+ */
+void
+rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
+									struct rspamd_symcache_item *item)
+{
+	struct cache_savepoint *checkpoint = task->checkpoint;
+	struct cache_dependency *rdep;
+	gdouble total_ticks = 0, t2, diff;
+	guint i;
+	struct timeval tv;
+	const gdouble slow_diff_limit = 0.1;
+
+	/* Sanity checks */
+	g_assert (checkpoint->items_inflight > 0);
+
+	if (item->async_events > 0) {
+		/*
+		 * XXX: Race condition
+		 *
+		 * It is possible that some async event is still in flight, but we
+		 * already know its result, however, it is the responsibility of that
+		 * event to decrease async events count and call this function
+		 * one more time
+		 */
+		msg_debug_cache_task ("postpone finalisation of %s as there are %d "
+							  "async events pendning", item->symbol, item->async_events);
+
+		return;
+	}
+
+	msg_debug_cache_task ("process finalize for item %s", item->symbol);
+	SET_FINISH_BIT (checkpoint, item);
+	checkpoint->items_inflight --;
+	checkpoint->cur_item = NULL;
+
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+	event_base_update_cache_time (task->ev_base);
+	event_base_gettimeofday_cached (task->ev_base, &tv);
+	t2 = tv_to_double (&tv);
+#else
+	t2 = rspamd_get_ticks (FALSE);
+#endif
+
+	diff = (t2 - item->start_ticks);
+
+	if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {
+		rspamd_task_profile_set (task, item->symbol, diff);
+	}
+
+	if (!(item->type & SYMBOL_TYPE_SQUEEZED)) {
+		if (diff > slow_diff_limit) {
+			msg_info_task ("slow rule: %s: %.2f ms", item->symbol,
+					diff * 1000);
+		}
+
+		if (rspamd_worker_is_scanner (task->worker)) {
+			rspamd_set_counter (item->cd, diff);
+		}
+	}
+
+	/* Process all reverse dependencies */
+	PTR_ARRAY_FOREACH (item->rdeps, i, rdep) {
+		if (rdep->item) {
+			if (!CHECK_START_BIT (checkpoint, rdep->item)) {
+				msg_debug_cache_task ("check item %d(%s) rdep of %s ",
+						rdep->item->id, rdep->item->symbol, item->symbol);
+
+				if (!rspamd_symbols_cache_check_deps (task, task->cfg->cache,
+						rdep->item,
+						checkpoint, 0, FALSE)) {
+					msg_debug_cache_task ("blocked execution of %d(%s) rdep of %s "
+						   "unless deps are resolved",
+							rdep->item->id, rdep->item->symbol, item->symbol);
+				}
+				else {
+					rspamd_symbols_cache_check_symbol (task, task->cfg->cache,
+							rdep->item,
+							checkpoint);
+				}
+			}
+		}
+	}
+}
+
+guint
+rspamd_symcache_item_async_inc (struct rspamd_task *task,
+								struct rspamd_symcache_item *item)
+{
+	msg_debug_cache_task ("increase async events counter for %s = %d + 1",
+			item->symbol, item->async_events);
+	return ++item->async_events;
+}
+
+guint
+rspamd_symcache_item_async_dec (struct rspamd_task *task,
+								struct rspamd_symcache_item *item)
+{
+	msg_debug_cache_task ("decrease async events counter for %s = %d - 1",
+			item->symbol, item->async_events);
+	g_assert (item->async_events > 0);
+
+	return --item->async_events;
+}
+
+gboolean
+rspamd_symcache_item_async_dec_check (struct rspamd_task *task,
+									  struct rspamd_symcache_item *item)
+{
+	if (rspamd_symcache_item_async_dec (task, item) == 0) {
+		rspamd_symbols_cache_finalize_item (task, item);
+
+		return TRUE;
+	}
+
+	return FALSE;
 }

@@ -58,9 +58,6 @@ local exports = {}
 local local_hostname = rspamd_util.get_hostname()
 
 local function gen_auth_results(task, settings)
-  local table = table
-  local pairs = pairs
-  local ipairs = ipairs
   local auth_results, hdr_parts = {}, {}
 
   if not settings then

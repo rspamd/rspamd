@@ -24,13 +24,13 @@ CLAMAV MISS
 CLAMAV HIT
   Run Dummy Clam  ${PORT_CLAM}  1
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}
-  Check Rspamc  ${result}  CLAM_VIRUS (1.00)[Eicar-Test-Signature]
+  Check Rspamc  ${result}  CLAM_VIRUS
   Should Not Contain  ${result.stdout}  CLAMAV_FAIL
   Shutdown clamav
 
 CLAMAV CACHE HIT
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}
-  Check Rspamc  ${result}  CLAM_VIRUS (1.00)[Eicar-Test-Signature]
+  Check Rspamc  ${result}  CLAM_VIRUS
   Should Not Contain  ${result.stdout}  CLAMAV_FAIL
 
 CLAMAV CACHE MISS
@@ -49,7 +49,7 @@ FPROT HIT - PATTERN
   Run Dummy Fprot  ${PORT_FPROT}  1
   Run Dummy Fprot  ${PORT_FPROT_DUPLICATE}  1  /tmp/dummy_fprot_dupe.pid
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  FPROT_EICAR (1.00)[EICAR_Test_File]
+  Check Rspamc  ${result}  FPROT_EICAR
   Should Not Contain  ${result.stdout}  CLAMAV_VIRUS
   # Also check ordered pattern match
   Should Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_PATTERN
@@ -60,7 +60,7 @@ FPROT HIT - PATTERN
 
 FPROT CACHE HIT
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  FPROT_EICAR (1.00)[EICAR_Test_File]
+  Check Rspamc  ${result}  FPROT_EICAR
   Should Not Contain  ${result.stdout}  CLAMAV_VIRUS
   # Also check ordered pattern match
   Should Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_PATTERN

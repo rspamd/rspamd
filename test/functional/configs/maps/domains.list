@@ -1,3 +1,5 @@
 example.com
-cacophony.za.org
+cacophony.za.org both:1.0
+highsecure.ru bl:1.0
+rspamd.com wl:2.0
 #other.com

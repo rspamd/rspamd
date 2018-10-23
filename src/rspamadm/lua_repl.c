@@ -431,7 +431,7 @@ rspamadm_lua_message_handler (lua_State *L, gint argc, gchar **argv)
 			rspamd_printf ("cannot open %s: %s\n", argv[i], strerror (errno));
 		}
 		else {
-			task = rspamd_task_new (NULL, NULL, NULL, NULL);
+			task = rspamd_task_new (NULL, rspamd_main->cfg, NULL, NULL);
 
 			if (!rspamd_task_load_message (task, NULL, map, len)) {
 				rspamd_printf ("cannot load %s\n", argv[i]);
@@ -803,7 +803,7 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 			exit (EXIT_FAILURE);
 		}
 
-		ev_base = event_init ();
+		ev_base = rspamd_main->ev_base;
 		ctx = g_malloc0  (sizeof (*ctx));
 		http = rspamd_http_router_new (rspamadm_lua_error_handler,
 						rspamadm_lua_finish_handler,

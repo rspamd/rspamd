@@ -42,6 +42,8 @@
 #cmakedefine HAVE_IPV6_V6ONLY    1
 #cmakedefine HAVE_LIBAIO_H       1
 #cmakedefine HAVE_LIBEVENT2      1
+#cmakedefine HAVE_EVENT_NO_CACHE_TIME_FLAG 1
+#cmakedefine HAVE_EVENT_NO_CACHE_TIME_FUNC 1
 #cmakedefine HAVE_LIBGEN_H       1
 #cmakedefine HAVE_LIBUTIL_H      1
 #cmakedefine HAVE_LOCALE_H       1

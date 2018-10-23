@@ -3440,6 +3440,7 @@ rspamd_config_parse_ucl (struct rspamd_config *cfg, const gchar *filename,
 	parser = ucl_parser_new (UCL_PARSER_SAVE_COMMENTS);
 	rspamd_ucl_add_conf_variables (parser, vars);
 	rspamd_ucl_add_conf_macros (parser, cfg);
+	ucl_parser_set_filevars (parser, filename, true);
 
 	if (decrypt_keypair) {
 		struct ucl_parser_special_handler *decrypt_handler;

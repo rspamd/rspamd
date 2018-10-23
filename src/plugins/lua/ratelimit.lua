@@ -84,6 +84,7 @@ local bucket_check_script = [[
    if last < tonumber(KEYS[2]) then
     local rate = tonumber(KEYS[3])
     dynr = tonumber(redis.call('HGET', KEYS[1], 'dr')) / 10000.0
+    if dynr == 0 then dynr = 0.0001 end
     rate = rate * dynr
     leaked = ((now - last) * rate)
     burst = burst - leaked
@@ -96,6 +97,7 @@ local bucket_check_script = [[
   end
 
   dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
+  if dynb == 0 then dynb = 0.0001 end
 
   if (burst + 1) > tonumber(KEYS[4]) * dynb then
    return {1, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
@@ -132,20 +134,53 @@ local bucket_update_script = [[
     return {1, 1, 1}
   end
 
+  local dr, db = 1.0, 1.0
+
+  if tonumber(KEYS[5]) > 1 then
+    local rate_mult = tonumber(KEYS[3])
+    local rate_limit = tonumber(KEYS[5])
+    dr = tonumber(redis.call('HGET', KEYS[1], 'dr')) / 10000
+
+    if rate_mult > 1.0 and dr < rate_limit then
+      dr = dr * rate_mult
+      if dr > 0.0001 then
+        redis.call('HSET', KEYS[1], 'dr', tostring(math.floor(dr * 10000)))
+      else
+        redis.call('HSET', KEYS[1], 'dr', '1')
+      end
+    elseif rate_mult < 1.0 and dr > (1.0 / rate_limit) then
+      dr = dr * rate_mult
+      if dr > 0.0001 then
+        redis.call('HSET', KEYS[1], 'dr', tostring(math.floor(dr * 10000)))
+      else
+        redis.call('HSET', KEYS[1], 'dr', '1')
+      end
+    end
+  end
+
+  if tonumber(KEYS[6]) > 1 then
+    local rate_mult = tonumber(KEYS[4])
+    local rate_limit = tonumber(KEYS[6])
+    db = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000
+
+    if rate_mult > 1.0 and db < rate_limit then
+      db = db * rate_mult
+      if db > 0.0001 then
+        redis.call('HSET', KEYS[1], 'db', tostring(math.floor(db * 10000)))
+      else
+        redis.call('HSET', KEYS[1], 'db', '1')
+      end
+    elseif rate_mult < 1.0 and db > (1.0 / rate_limit) then
+      db = db * rate_mult
+      if db > 0.0001 then
+        redis.call('HSET', KEYS[1], 'db', tostring(math.floor(db * 10000)))
+      else
+        redis.call('HSET', KEYS[1], 'db', '1')
+      end
+    end
+  end
+
   local burst = tonumber(redis.call('HGET', KEYS[1], 'b'))
-  local db = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000
-  local dr = tonumber(redis.call('HGET', KEYS[1], 'dr')) / 10000
-
-  if dr < tonumber(KEYS[5]) and dr > 1.0 / tonumber(KEYS[5]) then
-    dr = dr * tonumber(KEYS[3])
-    redis.call('HSET', KEYS[1], 'dr', tostring(math.floor(dr * 10000)))
-  end
-
-  if db < tonumber(KEYS[6]) and db > 1.0 / tonumber(KEYS[6]) then
-    db = db * tonumber(KEYS[4])
-    redis.call('HSET', KEYS[1], 'db', tostring(math.floor(db * 10000)))
-  end
-
   redis.call('HINCRBYFLOAT', KEYS[1], 'b', 1)
   redis.call('HSET', KEYS[1], 'l', KEYS[2])
   redis.call('EXPIRE', KEYS[1], KEYS[7])
@@ -556,7 +591,7 @@ local function ratelimit_cb(task)
               bucket.burst, bucket.rate,
               data[2], data[3], data[4])
           task:set_pre_result('soft reject',
-              message_func(task, lim_name, prefix, bucket))
+              message_func(task, lim_name, prefix, bucket), N)
         end
       end
     end
@@ -596,7 +631,7 @@ local function ratelimit_update_cb(task)
       return
     end
 
-    local is_spam = not (task:get_metric_action() == 'no action')
+    local verdict = lua_util.get_task_verdict(task)
 
     -- Update each bucket
     for k, v in pairs(prefixes) do
@@ -615,12 +650,15 @@ local function ratelimit_update_cb(task)
       end
       local now = rspamd_util.get_time()
       now = lua_util.round(now * 1000.0) -- Get milliseconds
-      local mult_burst = bucket.ham_factor_burst or 1.0
-      local mult_rate = bucket.ham_factor_burst or 1.0
+      local mult_burst = 1.0
+      local mult_rate = 1.0
 
-      if is_spam then
+      if verdict == 'spam' or verdict == 'junk' then
         mult_burst = bucket.spam_factor_burst or 1.0
         mult_rate = bucket.spam_factor_rate or 1.0
+      elseif verdict == 'ham' then
+        mult_burst = bucket.ham_factor_burst or 1.0
+        mult_rate = bucket.ham_factor_rate or 1.0
       end
 
       lua_redis.exec_redis_script(bucket_update_id,

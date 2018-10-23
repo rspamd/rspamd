@@ -25,8 +25,11 @@ struct rspamd_task;
 struct rspamd_config;
 struct symbols_cache;
 struct rspamd_worker;
+struct rspamd_symcache_item;
 
-typedef void (*symbol_func_t)(struct rspamd_task *task, gpointer user_data);
+typedef void (*symbol_func_t)(struct rspamd_task *task,
+							  struct rspamd_symcache_item *item,
+							  gpointer user_data);
 
 enum rspamd_symbol_type {
 	SYMBOL_TYPE_NORMAL = (1 << 0),
@@ -305,4 +308,48 @@ void rspamd_symbols_cache_foreach (struct symbols_cache *cache,
 				gint /* flags */, gpointer /* userdata */),
 		gpointer ud);
 
+/**
+ * Returns the current item being processed (if any)
+ * @param task
+ * @return
+ */
+struct rspamd_symcache_item *rspamd_symbols_cache_get_cur_item (struct rspamd_task *task);
+
+/**
+ * Replaces the current item being processed.
+ * Returns the current item being processed (if any)
+ * @param task
+ * @param item
+ * @return
+ */
+struct rspamd_symcache_item *rspamd_symbols_cache_set_cur_item (struct rspamd_task *task,
+																struct rspamd_symcache_item *item);
+
+
+/**
+ * Finalize the current async element potentially calling its deps
+ */
+void rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
+										 struct rspamd_symcache_item *item);
+
+/*
+ * Increase number of async events pending for an item
+ */
+guint rspamd_symcache_item_async_inc (struct rspamd_task *task,
+									  struct rspamd_symcache_item *item);
+/*
+ * Decrease number of async events pending for an item, asserts if no events pending
+ */
+guint rspamd_symcache_item_async_dec (struct rspamd_task *task,
+									  struct rspamd_symcache_item *item);
+
+/**
+ * Decrease number of async events pending for an item, asserts if no events pending
+ * If no events are left, this function calls `rspamd_symbols_cache_finalize_item` and returns TRUE
+ * @param task
+ * @param item
+ * @return
+ */
+gboolean rspamd_symcache_item_async_dec_check (struct rspamd_task *task,
+											   struct rspamd_symcache_item *item);
 #endif

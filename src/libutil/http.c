@@ -29,6 +29,8 @@
 #include "libutil/regexp.h"
 #include "libserver/url.h"
 
+#include <openssl/err.h>
+
 #define ENCRYPTED_VERSION " HTTP/1.0"
 
 struct _rspamd_http_privbuf {
@@ -629,7 +631,7 @@ rspamd_http_on_headers_complete (http_parser * parser)
 
 	if (msg->method == HTTP_HEAD) {
 		/* We don't care about the rest */
-		if (event_pending (&priv->ev, EV_READ, NULL)) {
+		if (rspamd_event_pending (&priv->ev, EV_READ)) {
 			event_del (&priv->ev);
 		}
 
@@ -804,7 +806,7 @@ rspamd_http_on_headers_complete_decrypted (http_parser *parser)
 
 	if (msg->method == HTTP_HEAD) {
 		/* We don't care about the rest */
-		if (event_pending (&priv->ev, EV_READ, NULL)) {
+		if (rspamd_event_pending (&priv->ev, EV_READ)) {
 			event_del (&priv->ev);
 		}
 
@@ -949,7 +951,7 @@ rspamd_http_on_message_complete (http_parser * parser)
 	}
 
 	if (ret == 0) {
-		if (event_pending (&priv->ev, EV_READ, NULL)) {
+		if (rspamd_event_pending (&priv->ev, EV_READ)) {
 			event_del (&priv->ev);
 		}
 
@@ -1370,7 +1372,7 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 
 	if (!(priv->flags & RSPAMD_HTTP_CONN_FLAG_RESETED)) {
 
-		if (event_get_base (&priv->ev)) {
+		if (rspamd_event_pending (&priv->ev, EV_READ|EV_WRITE|EV_TIMEOUT)) {
 			event_del (&priv->ev);
 		}
 
@@ -2296,7 +2298,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 
 	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
 
-	if (base != NULL && event_get_base (&priv->ev) == base) {
+	if (rspamd_event_pending (&priv->ev, EV_TIMEOUT|EV_WRITE|EV_READ)) {
 		event_del (&priv->ev);
 	}
 
@@ -2327,7 +2329,10 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 					priv->ptv, rspamd_http_event_handler,
 					rspamd_http_ssl_err_handler, conn)) {
 
-				err = g_error_new (HTTP_ERROR, errno, "ssl connection error");
+				err = g_error_new (HTTP_ERROR, errno,
+						"ssl connection error: ssl error=%s, errno=%s",
+						ERR_error_string (ERR_get_error (), NULL),
+						strerror (errno));
 				rspamd_http_connection_ref (conn);
 				conn->error_handler (conn, err);
 				rspamd_http_connection_unref (conn);

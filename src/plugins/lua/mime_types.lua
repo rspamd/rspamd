@@ -376,7 +376,7 @@ local full_extensions_map = {
   {"hxx", "text/plain"},
   {"i", "text/plain"},
   {"ico", "image/x-icon"},
-  {"ics", "application/octet-stream"},
+  {"ics", {"text/calendar", "application/octet-stream"}},
   {"idl", "text/plain"},
   {"ief", "image/ief"},
   {"iii", "application/x-iphone"},
@@ -1018,49 +1018,58 @@ if opts then
     local id = rspamd_config:register_symbol({
       name = 'MIME_TYPES_CALLBACK',
       callback = check_mime_type,
-      type = 'callback,nostat'
+      type = 'callback,nostat',
+      group = 'mime_types',
     })
 
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_unknown'],
-      parent = id
+      parent = id,
+      group = 'mime_types',
     })
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_bad'],
-      parent = id
+      parent = id,
+      group = 'mime_types',
     })
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_good'],
       flags = 'nice',
-      parent = id
+      parent = id,
+      group = 'mime_types',
     })
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_attachment'],
-      parent = id
+      parent = id,
+      group = 'mime_types',
     })
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_encrypted_archive'],
-      parent = id
+      parent = id,
+      group = 'mime_types',
     })
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_archive_in_archive'],
-      parent = id
+      parent = id,
+      group = 'mime_types',
     })
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_double_extension'],
-      parent = id
+      parent = id,
+      group = 'mime_types',
     })
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_bad_extension'],
-      parent = id
+      parent = id,
+      group = 'mime_types',
     })
   else
     lua_util.disable_module(N, "config")

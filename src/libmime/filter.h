@@ -58,9 +58,29 @@ KHASH_INIT (rspamd_symbols_group_hash,
 		1,
 		rspamd_ptr_hash_func,
 		rspamd_ptr_equal_func);
+
+#define RSPAMD_PASSTHROUGH_NORMAL 1
+#define RSPAMD_PASSTHROUGH_LOW 0
+#define RSPAMD_PASSTHROUGH_HIGH 2
+#define RSPAMD_PASSTHROUGH_CRITICAL 3
+
+struct rspamd_passthrough_result {
+	enum rspamd_action_type action;
+	guint priority;
+	double target_score;
+	const gchar *message;
+	const gchar *module;
+	struct rspamd_passthrough_result *prev, *next;
+};
+
 struct rspamd_metric_result {
-	double score;                                   /**< total score							*/
+	double score;									/**< total score							*/
 	double grow_factor;								/**< current grow factor					*/
+	struct rspamd_passthrough_result *passthrough_result;
+	guint npositive;
+	guint nnegative;
+	double positive_score;
+	double negative_score;
 	khash_t(rspamd_symbols_hash) *symbols;			/**< symbols of metric						*/
 	khash_t(rspamd_symbols_group_hash) *sym_groups; /**< groups of symbols						*/
 	gdouble actions_limits[METRIC_ACTION_MAX];		/**< set of actions for this metric			*/
@@ -72,6 +92,22 @@ struct rspamd_metric_result {
  * @return metric result or NULL if metric `name` has not been found
  */
 struct rspamd_metric_result * rspamd_create_metric_result (struct rspamd_task *task);
+
+/**
+ * Adds a new passthrough result to a task
+ * @param task
+ * @param action
+ * @param priority
+ * @param target_score
+ * @param message
+ * @param module
+ */
+void rspamd_add_passthrough_result (struct rspamd_task *task,
+									enum rspamd_action_type action,
+									guint priority,
+									double target_score,
+									const gchar *message,
+									const gchar *module);
 
 enum rspamd_symbol_insert_flags {
 	RSPAMD_SYMBOL_INSERT_DEFAULT = 0,

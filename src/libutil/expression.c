@@ -613,78 +613,89 @@ rspamd_parse_expression (const gchar *line, gsize len,
 		case PARSE_ATOM:
 			if (g_ascii_isspace (*p)) {
 				state = SKIP_SPACES;
+				continue;
 			}
 			else if (rspamd_expr_is_operation_symbol (*p)) {
+				if (p + 1 < end) {
+					gchar t = *(p + 1);
+
+					if (t != ':') {
+						state = PARSE_OP;
+						continue;
+					}
+				}
+				else {
+					state = PARSE_OP;
+					continue;
+				}
+			}
+
+			/*
+			 * First of all, we check some pre-conditions:
+			 * 1) if we have 'and ' or 'or ' or 'not ' strings, they are op
+			 * 2) if we have full numeric string, then we check for
+			 * the following expression:
+			 *  ^\d+\s*[><]$
+			 */
+			if ((gulong)(end - p) > sizeof ("and ") &&
+				(g_ascii_strncasecmp (p, "and ", sizeof ("and ") - 1) == 0 ||
+				 g_ascii_strncasecmp (p, "not ", sizeof ("not ") - 1) == 0 )) {
+				state = PARSE_OP;
+			}
+			else if ((gulong)(end - p) > sizeof ("or ") &&
+					 g_ascii_strncasecmp (p, "or ", sizeof ("or ") - 1) == 0) {
 				state = PARSE_OP;
 			}
 			else {
 				/*
-				 * First of all, we check some pre-conditions:
-				 * 1) if we have 'and ' or 'or ' or 'not ' strings, they are op
-				 * 2) if we have full numeric string, then we check for
-				 * the following expression:
-				 *  ^\d+\s*[><]$
+				 * If we have any comparison operator in the stack, then try
+				 * to parse limit
 				 */
-				if ((gulong)(end - p) > sizeof ("and ") &&
-					(g_ascii_strncasecmp (p, "and ", sizeof ("and ") - 1) == 0 ||
-					g_ascii_strncasecmp (p, "not ", sizeof ("not ") - 1) == 0 )) {
-					state = PARSE_OP;
-				}
-				else if ((gulong)(end - p) > sizeof ("or ") &&
-					g_ascii_strncasecmp (p, "or ", sizeof ("or ") - 1) == 0) {
-					state = PARSE_OP;
-				}
-				else {
-					/*
-					 * If we have any comparison operator in the stack, then try
-					 * to parse limit
-					 */
-					op = GPOINTER_TO_INT (rspamd_expr_stack_peek (e));
+				op = GPOINTER_TO_INT (rspamd_expr_stack_peek (e));
 
-					if (op >= OP_LT && op <= OP_GE) {
-						if (rspamd_regexp_search (num_re,
-								p,
-								end - p,
-								NULL,
-								NULL,
-								FALSE,
-								NULL)) {
-							c = p;
-							state = PARSE_LIM;
-							continue;
-						}
+				if (op >= OP_LT && op <= OP_GE) {
+					if (rspamd_regexp_search (num_re,
+							p,
+							end - p,
+							NULL,
+							NULL,
+							FALSE,
+							NULL)) {
+						c = p;
+						state = PARSE_LIM;
+						continue;
 					}
-
-					/* Try to parse atom */
-					atom = subr->parse (p, end - p, pool, subr_data, err);
-					if (atom == NULL || atom->len == 0) {
-						/* We couldn't parse the atom, so go out */
-						if (err != NULL && *err == NULL) {
-							g_set_error (err,
-									rspamd_expr_quark (),
-									500,
-									"Cannot parse atom: callback function failed"
-											" to parse '%.*s'",
-									(int) (end - p),
-									p);
-						}
-						goto err;
-					}
-
-					if (atom->str == NULL) {
-						atom->str = p;
-					}
-
-					p = p + atom->len;
-
-					/* Push to output */
-					elt.type = ELT_ATOM;
-					elt.p.atom = atom;
-					g_array_append_val (e->expressions, elt);
-					rspamd_expr_stack_elt_push (operand_stack,
-							g_node_new (rspamd_expr_dup_elt (pool, &elt)));
-
 				}
+
+				/* Try to parse atom */
+				atom = subr->parse (p, end - p, pool, subr_data, err);
+				if (atom == NULL || atom->len == 0) {
+					/* We couldn't parse the atom, so go out */
+					if (err != NULL && *err == NULL) {
+						g_set_error (err,
+								rspamd_expr_quark (),
+								500,
+								"Cannot parse atom: callback function failed"
+								" to parse '%.*s'",
+								(int) (end - p),
+								p);
+					}
+					goto err;
+				}
+
+				if (atom->str == NULL) {
+					atom->str = p;
+				}
+
+				p = p + atom->len;
+
+				/* Push to output */
+				elt.type = ELT_ATOM;
+				elt.p.atom = atom;
+				g_array_append_val (e->expressions, elt);
+				rspamd_expr_stack_elt_push (operand_stack,
+						g_node_new (rspamd_expr_dup_elt (pool, &elt)));
+
 			}
 			break;
 		case PARSE_LIM:
@@ -1098,16 +1109,15 @@ rspamd_process_expression_track (struct rspamd_expression *expr, struct rspamd_e
 	/* Ensure that stack is empty at this point */
 	g_assert (expr->expression_stack->len == 0);
 
+	expr->evals ++;
 	ret = rspamd_ast_process_node (expr, expr->ast, process_data);
 
 	/* Cleanup */
 	g_node_traverse (expr->ast, G_IN_ORDER, G_TRAVERSE_ALL, -1,
 			rspamd_ast_cleanup_traverse, NULL);
 
-	expr->evals ++;
-
 	/* Check if we need to resort */
-	if (expr->evals == expr->next_resort) {
+	if (expr->evals % expr->next_resort == 0) {
 		expr->next_resort = ottery_rand_range (MAX_RESORT_EVALS) +
 				MIN_RESORT_EVALS;
 		/* Set priorities for branches */

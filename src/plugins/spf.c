@@ -62,7 +62,9 @@ struct spf_ctx {
 	gboolean check_authed;
 };
 
-static void spf_symbol_callback (struct rspamd_task *task, void *unused);
+static void spf_symbol_callback (struct rspamd_task *task,
+								 struct rspamd_symcache_item *item,
+								 void *unused);
 
 /* Initialization */
 gint spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx);
@@ -206,15 +208,26 @@ spf_module_config (struct rspamd_config *cfg)
 
 	spf_module_ctx->whitelist_ip = NULL;
 
-	if ((value =
-		rspamd_config_get_module_opt (cfg, "options", "check_local")) != NULL) {
+	value = rspamd_config_get_module_opt (cfg, "spf", "check_local");
+
+	if (value == NULL) {
+		rspamd_config_get_module_opt (cfg, "options", "check_local");
+	}
+
+	if (value != NULL) {
 		spf_module_ctx->check_local = ucl_obj_toboolean (value);
 	}
 	else {
 		spf_module_ctx->check_local = FALSE;
 	}
-	if ((value =
-		rspamd_config_get_module_opt (cfg, "options", "check_authed")) != NULL) {
+
+	value = rspamd_config_get_module_opt (cfg, "spf", "check_authed");
+
+	if (value == NULL) {
+		rspamd_config_get_module_opt (cfg, "options", "check_authed");
+	}
+
+	if (value != NULL) {
 		spf_module_ctx->check_authed = ucl_obj_toboolean (value);
 	}
 	else {
@@ -499,7 +512,7 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 		gpointer ud)
 {
 	struct spf_resolved *l;
-	struct rspamd_async_watcher *w = ud;
+	struct rspamd_symcache_item *item = (struct rspamd_symcache_item *)ud;
 	struct spf_ctx *spf_module_ctx = spf_get_context (task->cfg);
 
 	if (record && record->na) {
@@ -549,16 +562,17 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 		spf_record_unref (l);
 	}
 
-	rspamd_session_watcher_pop (task->s, w);
+	rspamd_symcache_item_async_dec_check (task, item);
 }
 
 
 static void
-spf_symbol_callback (struct rspamd_task *task, void *unused)
+spf_symbol_callback (struct rspamd_task *task,
+					 struct rspamd_symcache_item *item,
+					 void *unused)
 {
 	const gchar *domain;
 	struct spf_resolved *l;
-	struct rspamd_async_watcher *w;
 	gint *dmarc_checks;
 	struct spf_ctx *spf_module_ctx = spf_get_context (task->cfg);
 
@@ -580,6 +594,7 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 
 	if (rspamd_match_radix_map_addr (spf_module_ctx->whitelist_ip,
 			task->from_addr) != NULL) {
+		rspamd_symbols_cache_finalize_item (task, item);
 		return;
 	}
 
@@ -587,10 +602,13 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 			|| (!spf_module_ctx->check_local &&
 					rspamd_inet_address_is_local (task->from_addr, TRUE))) {
 		msg_info_task ("skip SPF checks for local networks and authorized users");
+		rspamd_symbols_cache_finalize_item (task, item);
+
 		return;
 	}
 
 	domain = rspamd_spf_get_domain (task);
+	rspamd_symcache_item_async_inc (task, item);
 
 	if (domain) {
 		if ((l =
@@ -601,9 +619,8 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 			spf_record_unref (l);
 		}
 		else {
-			w = rspamd_session_get_watcher (task->s);
 
-			if (!rspamd_spf_resolve (task, spf_plugin_callback, w)) {
+			if (!rspamd_spf_resolve (task, spf_plugin_callback, item)) {
 				msg_info_task ("cannot make spf request for [%s]",
 						task->message_id);
 				rspamd_task_insert_result (task,
@@ -612,8 +629,10 @@ spf_symbol_callback (struct rspamd_task *task, void *unused)
 						"(SPF): spf DNS fail");
 			}
 			else {
-				rspamd_session_watcher_push (task->s);
+				rspamd_symcache_item_async_inc (task, item);
 			}
 		}
 	}
+
+	rspamd_symcache_item_async_dec_check (task, item);
 }

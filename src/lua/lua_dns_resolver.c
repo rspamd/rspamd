@@ -37,8 +37,7 @@ local function symbol_callback(task)
 		end
 	end
 
-	task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-		host, dns_cb)
+	task:get_resolver():resolve_a({task = task, name = host, callback = dns_cb})
 end
  */
 struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L);
@@ -81,11 +80,12 @@ lua_check_dns_resolver (lua_State * L)
 
 struct lua_dns_cbdata {
 	struct rspamd_task *task;
+	rspamd_mempool_t *pool;
 	struct rspamd_dns_resolver *resolver;
 	gint cbref;
-	const gchar *to_resolve;
-	const gchar *user_str;
-	struct rspamd_async_watcher *w;
+	gchar *to_resolve;
+	gchar *user_str;
+	struct rspamd_symcache_item *item;
 	struct rspamd_async_session *s;
 };
 
@@ -141,9 +141,16 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 	struct rspamd_dns_resolver **presolver;
 	lua_State *L;
 	struct lua_callback_state cbs;
+	rspamd_mempool_t *pool;
+	gint err_idx;
+	GString *tb = NULL;
 
+	pool = cd->pool;
 	lua_thread_pool_prepare_callback (cd->resolver->cfg->lua_thread_pool, &cbs);
 	L = cbs.L;
+
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
 
 	lua_rawgeti (L, LUA_REGISTRYINDEX, cd->cbref);
 
@@ -176,18 +183,29 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 
 	lua_pushboolean (L, reply->authenticated);
 
-	if (lua_pcall (L, 6, 0, 0) != 0) {
-		msg_info ("call to dns callback failed: %s", lua_tostring (L, -1));
-		lua_pop (L, 1);
+	if (lua_pcall (L, 6, 0, err_idx) != 0) {
+		tb = lua_touserdata (L, -1);
+
+		if (tb) {
+			msg_err_pool_check ("call to dns callback failed: %s", tb->str);
+			g_string_free (tb, TRUE);
+		}
 	}
+
+	lua_settop (L, err_idx - 1);
 
 	/* Unref function */
 	luaL_unref (L, LUA_REGISTRYINDEX, cd->cbref);
-
 	lua_thread_pool_restore_callback (&cbs);
 
-	if (cd->s) {
-		rspamd_session_watcher_pop (cd->s, cd->w);
+	if (cd->item) {
+		rspamd_symcache_item_async_dec_check (cd->task, cd->item);
+	}
+
+	if (!cd->pool) {
+		g_free (cd->to_resolve);
+		g_free (cd->user_str);
+		g_free (cd);
 	}
 }
 
@@ -347,84 +365,100 @@ lua_dns_resolver_resolve_common (lua_State *L,
 		pool = task->task_pool;
 		session = task->s;
 	}
-	else if (!session || !pool) {
-		return luaL_error (L, "invalid arguments: either 'task' or 'session'/'mempool' should be set");
-	}
 
-	if (pool != NULL && to_resolve != NULL) {
-		cbdata = rspamd_mempool_alloc0 (pool, sizeof (struct lua_dns_cbdata));
-		cbdata->resolver = resolver;
-		cbdata->cbref = cbref;
-		cbdata->user_str = rspamd_mempool_strdup (pool, user_str);
+	if (to_resolve != NULL) {
+		if (pool != NULL) {
+			cbdata = rspamd_mempool_alloc0 (pool, sizeof (struct lua_dns_cbdata));
+			cbdata->user_str = rspamd_mempool_strdup (pool, user_str);
 
-		if (type != RDNS_REQUEST_PTR) {
-			cbdata->to_resolve = rspamd_mempool_strdup (pool, to_resolve);
+			if (type != RDNS_REQUEST_PTR) {
+				cbdata->to_resolve = rspamd_mempool_strdup (pool, to_resolve);
+			}
+			else {
+				char *ptr_str;
+
+				ptr_str = rdns_generate_ptr_from_str (to_resolve);
+
+				if (ptr_str == NULL) {
+					msg_err_task_check ("wrong resolve string to PTR request: %s",
+							to_resolve);
+					goto err;
+				}
+
+				cbdata->to_resolve = rspamd_mempool_strdup (pool, ptr_str);
+				to_resolve = cbdata->to_resolve;
+				free (ptr_str);
+			}
 		}
 		else {
-			char *ptr_str;
+			cbdata = g_malloc0 (sizeof (struct lua_dns_cbdata));
+			cbdata->user_str = user_str ? g_strdup (user_str) : NULL;
 
-			ptr_str = rdns_generate_ptr_from_str (to_resolve);
-
-			if (ptr_str == NULL) {
-				msg_err_task_check ("wrong resolve string to PTR request: %s",
-						to_resolve);
-				lua_pushnil (L);
-
-				return 1;
+			if (type != RDNS_REQUEST_PTR) {
+				cbdata->to_resolve = g_strdup (to_resolve);
 			}
+			else {
+				char *ptr_str;
 
-			cbdata->to_resolve = rspamd_mempool_strdup (pool, ptr_str);
-			to_resolve = cbdata->to_resolve;
-			free (ptr_str);
+				ptr_str = rdns_generate_ptr_from_str (to_resolve);
+
+				if (ptr_str == NULL) {
+					msg_err_task_check ("wrong resolve string to PTR request: %s",
+							to_resolve);
+					goto err;
+				}
+
+				cbdata->to_resolve = g_strdup (ptr_str);
+				free (ptr_str);
+			}
 		}
 
+		cbdata->resolver = resolver;
+		cbdata->cbref = cbref;
+		cbdata->task = task;
+		cbdata->pool = pool;
+
 		if (task == NULL) {
-			if ( make_dns_request (resolver,
-								   session,
-								   pool,
-								   lua_dns_resolver_callback,
-								   cbdata,
-								   type,
-								   to_resolve)) {
+			if (make_dns_request (resolver,
+					session,
+					pool,
+					lua_dns_resolver_callback,
+					cbdata,
+					type,
+					to_resolve)) {
 
 				lua_pushboolean (L, TRUE);
 
 				if (session) {
 					cbdata->s = session;
-					cbdata->w = rspamd_session_get_watcher (session);
-					rspamd_session_watcher_push (session);
 				}
 			}
 			else {
-				lua_pushnil (L);
+				goto err;
 			}
 		}
 		else {
-			cbdata->task = task;
-
 			if (forced) {
 				ret = make_dns_request_task_forced (task,
-													lua_dns_resolver_callback,
-													cbdata,
-													type,
-													to_resolve);
-			}
-			else {
+						lua_dns_resolver_callback,
+						cbdata,
+						type,
+						to_resolve);
+			} else {
 				ret = make_dns_request_task (task,
-											 lua_dns_resolver_callback,
-											 cbdata,
-											 type,
-											 to_resolve);
+						lua_dns_resolver_callback,
+						cbdata,
+						type,
+						to_resolve);
 			}
 
 			if (ret) {
 				cbdata->s = session;
-				cbdata->w = rspamd_session_get_watcher (session);
-				rspamd_session_watcher_push (session);
+				cbdata->item = rspamd_symbols_cache_get_cur_item (task);
+				rspamd_symcache_item_async_inc (task, cbdata->item);
 				/* callback was set up */
 				lua_pushboolean (L, TRUE);
-			}
-			else {
+			} else {
 				lua_pushnil (L);
 			}
 		}
@@ -434,16 +468,28 @@ lua_dns_resolver_resolve_common (lua_State *L,
 	}
 
 	return 1;
+err:
+	if (!pool) {
+		/* Free resources */
+		g_free (cbdata->to_resolve);
+		g_free (cbdata->user_str);
+	}
 
+	lua_pushnil (L);
+
+	return 1;
 }
 
 /***
- * @method resolver:resolve_a(session, pool, host, callback)
+ * @method resolver:resolve_a(table)
  * Resolve A record for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} host name to resolve
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int
@@ -465,12 +511,15 @@ lua_dns_resolver_resolve_a (lua_State *L)
 }
 
 /***
- * @method resolver:resolve_ptr(session, pool, ip, callback)
+ * @method resolver:resolve_ptr(table)
  * Resolve PTR record for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} ip name to resolve in string form (e.g. '8.8.8.8' or '2001:dead::')
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int
@@ -492,12 +541,15 @@ lua_dns_resolver_resolve_ptr (lua_State *L)
 }
 
 /***
- * @method resolver:resolve_txt(session, pool, host, callback)
+ * @method resolver:resolve_txt(table)
  * Resolve TXT record for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} host name to get TXT record for
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int
@@ -519,12 +571,15 @@ lua_dns_resolver_resolve_txt (lua_State *L)
 }
 
 /***
- * @method resolver:resolve_mx(session, pool, host, callback)
+ * @method resolver:resolve_mx(table)
  * Resolve MX record for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} host name to get MX record for
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int
@@ -546,12 +601,15 @@ lua_dns_resolver_resolve_mx (lua_State *L)
 }
 
 /***
- * @method resolver:resolve_ns(session, pool, host, callback)
+ * @method resolver:resolve_ns(table)
  * Resolve NS records for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} host name to get NS records for
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int

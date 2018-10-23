@@ -87,11 +87,11 @@ DKIM PERMFAIL BAD RECORD
   ...  -i  37.48.67.26
   Check Rspamc  ${result}  R_DKIM_PERMFAIL
 
-DKIM TEMPFAIL SERVFAIL
+DKIM TEMPFAIL SERVFAIL UNALIGNED
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim3.eml
   ...  -i  37.48.67.26
   Check Rspamc  ${result}  R_DKIM_TEMPFAIL
-  Should Contain  ${result.stdout}  DMARC_DNSFAIL
+  Should Contain  ${result.stdout}  DMARC_POLICY_SOFTFAIL
 
 DKIM NA NOSIG
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/utf.eml
@@ -103,11 +103,11 @@ SPF PERMFAIL UNRESOLVEABLE INCLUDE
   ...  -i  37.48.67.26  -F  x@fail3.org.org.za
   Check Rspamc  ${result}  R_SPF_PERMFAIL
 
-SPF DNSFAIL FAILED INCLUDE
+SPF DNSFAIL FAILED INCLUDE UNALIGNED
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  -i  8.8.8.8  -F  x@fail2.org.org.za
   Check Rspamc  ${result}  R_SPF_DNSFAIL
-  Should Contain  ${result.stdout}  DMARC_DNSFAIL
+  Should Contain  ${result.stdout}  DMARC_POLICY_SOFTFAIL
 
 SPF ALLOW UNRESOLVEABLE INCLUDE
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml

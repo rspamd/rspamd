@@ -107,7 +107,7 @@ rspamd_redis_pool_conn_dtor (struct rspamd_redis_pool_connection *conn)
 				redisAsyncContext *ac = conn->ctx;
 
 				conn->ctx = NULL;
-				g_hash_table_remove (conn->elt->pool->elts_by_ctx, conn->ctx);
+				g_hash_table_remove (conn->elt->pool->elts_by_ctx, ac);
 				ac->onDisconnect = NULL;
 				redisAsyncFree (ac);
 			}
@@ -120,7 +120,7 @@ rspamd_redis_pool_conn_dtor (struct rspamd_redis_pool_connection *conn)
 	else {
 		msg_debug_rpool ("inactive connection removed");
 
-		if (event_get_base (&conn->timeout)) {
+		if (rspamd_event_pending (&conn->timeout, EV_TIMEOUT)) {
 			event_del (&conn->timeout);
 		}
 
@@ -129,7 +129,7 @@ rspamd_redis_pool_conn_dtor (struct rspamd_redis_pool_connection *conn)
 
 			/* To prevent on_disconnect here */
 			conn->active = TRUE;
-			g_hash_table_remove (conn->elt->pool->elts_by_ctx, conn->ctx);
+			g_hash_table_remove (conn->elt->pool->elts_by_ctx, ac);
 			conn->ctx = NULL;
 			ac->onDisconnect = NULL;
 			redisAsyncFree (ac);
@@ -178,8 +178,8 @@ rspamd_redis_conn_timeout (gint fd, short what, gpointer p)
 	struct rspamd_redis_pool_connection *conn = p;
 
 	g_assert (!conn->active);
-	msg_debug_rpool ("scheduled removal of connection, refcount: %d",
-			conn->ref.refcount);
+	msg_debug_rpool ("scheduled removal of connection %p, refcount: %d",
+			conn->ctx, conn->ref.refcount);
 	REF_RELEASE (conn);
 }
 
@@ -201,8 +201,8 @@ rspamd_redis_pool_schedule_timeout (struct rspamd_redis_pool_connection *conn)
 		real_timeout = rspamd_time_jitter (real_timeout, real_timeout / 2.0);
 	}
 
-	msg_debug_rpool ("scheduled connection cleanup in %.1f seconds",
-			real_timeout);
+	msg_debug_rpool ("scheduled connection %p cleanup in %.1f seconds",
+			conn->ctx, real_timeout);
 	double_to_tv (real_timeout, &tv);
 	event_set (&conn->timeout, -1, EV_TIMEOUT, rspamd_redis_conn_timeout, conn);
 	event_base_set (conn->elt->pool->ev_base, &conn->timeout);
@@ -268,7 +268,7 @@ rspamd_redis_pool_new_connection (struct rspamd_redis_pool *pool,
 			conn->ctx = ctx;
 			rspamd_random_hex (conn->tag, sizeof (conn->tag));
 			REF_INIT_RETAIN (conn, rspamd_redis_pool_conn_dtor);
-			msg_debug_rpool ("created new connection to %s:%d", ip, port);
+			msg_debug_rpool ("created new connection to %s:%d: %p", ip, port, ctx);
 
 			redisLibeventAttach (ctx, pool->ev_base);
 			redisAsyncSetDisconnectCallback (ctx, rspamd_redis_pool_on_disconnect,
@@ -355,7 +355,8 @@ rspamd_redis_pool_connect (struct rspamd_redis_pool *pool,
 				event_del (&conn->timeout);
 				conn->active = TRUE;
 				g_queue_push_tail_link (elt->active, conn_entry);
-				msg_debug_rpool ("reused existing connection to %s:%d", ip, port);
+				msg_debug_rpool ("reused existing connection to %s:%d: %p",
+						ip, port, conn->ctx);
 			}
 			else {
 				g_list_free (conn->entry);
@@ -407,7 +408,7 @@ rspamd_redis_pool_release_connection (struct rspamd_redis_pool *pool,
 
 		if (is_fatal || ctx->err != REDIS_OK) {
 			/* We need to terminate connection forcefully */
-			msg_debug_rpool ("closed connection forcefully");
+			msg_debug_rpool ("closed connection %p forcefully", conn->ctx);
 			REF_RELEASE (conn);
 		}
 		else {
@@ -418,10 +419,11 @@ rspamd_redis_pool_release_connection (struct rspamd_redis_pool *pool,
 				g_queue_push_head_link (conn->elt->inactive, conn->entry);
 				conn->active = FALSE;
 				rspamd_redis_pool_schedule_timeout (conn);
-				msg_debug_rpool ("mark connection inactive");
+				msg_debug_rpool ("mark connection %p inactive", conn->ctx);
 			}
 			else {
-				msg_debug_rpool ("closed connection due to callbacks leftover");
+				msg_debug_rpool ("closed connection %p due to callbacks left",
+					conn->ctx);
 				REF_RELEASE (conn);
 			}
 		}

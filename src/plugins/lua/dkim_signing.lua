@@ -163,7 +163,7 @@ local function dkim_signing_cb(task)
           if err and err == 'No such file or directory' then
             lua_util.debugm(N, task, 'cannot read key from "%s": %s', p.key, err)
           else
-            rspamd_logger.warnx(N, task, 'cannot read key from "%s": %s', p.key, err)
+            rspamd_logger.warnx(task, 'cannot read key from "%s": %s', p.key, err)
           end
           return false
         end
@@ -221,3 +221,6 @@ rspamd_config:register_symbol({
   groups = {"policies", "dkim"},
   score = 0.0,
 })
+
+-- Add dependency on DKIM checks
+rspamd_config:register_dependency(settings['symbol'], 'DKIM_CHECK')

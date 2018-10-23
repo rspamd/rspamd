@@ -51,6 +51,19 @@ struct rspamd_email_address {
 	guchar flags;
 };
 
+struct received_header;
+struct rspamd_task;
+/**
+ * Try to parse SMTP comment to process stupid Exim received headers
+ * @param task
+ * @param data
+ * @param len
+ * @param rh
+ */
+void rspamd_smtp_maybe_process_smtp_comment (struct rspamd_task *task,
+											 const char *data, size_t len,
+											 struct received_header *rh);
+
 /**
  * Create email address from a single rfc822 address (e.g. from mail from:)
  * @param str string to use

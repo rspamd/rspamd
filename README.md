@@ -1,6 +1,6 @@
 # <a href="https://rspamd.com"><img src="https://rspamd.com/img/rspamd_logo_black.png" alt="Rspamd" width="220px"/></a>
 
-[![CircleCI](https://circleci.com/gh/rspamd/rspamd/tree/master.svg?style=svg)](https://circleci.com/gh/rspamd/rspamd/tree/master)
+[![DroneCI](https://ci.rspamd.com/api/badges/rspamd/rspamd/status.svg)](https://ci.rspamd.com/rspamd/rspamd)
 
 
 ## Introduction

@@ -50,7 +50,7 @@ static TNODE* find_child(TNODE*, SYMBOL);
 static inline void
 set_tran(ac_trie_t *psp, STATE s, SYMBOL sym, int match, int suffix, TRAN ns)
 {
-    psp->tranv[s + sym] = sym   | (match ? IS_MATCH : 0) 
+    psp->tranv[s + sym] = sym   | (match ? IS_MATCH : 0)
                                 | (suffix ? IS_SUFFIX : 0)
                                 | (ns << SYM_BITS);
 }
@@ -151,7 +151,7 @@ fill_symv(ac_trie_t *psp, ac_trie_pat_t const *strv, int nstrs)
     ++psp->nsyms;
 #if ACISM_SIZE < 8
     psp->sym_bits = bitwid(psp->nsyms);
-    psp->sym_mask = ~(-1 << psp->sym_bits);
+    psp->sym_mask = ~((~(uint32_t)0u) << psp->sym_bits);
 #endif
 }
 

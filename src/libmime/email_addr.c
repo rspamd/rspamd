@@ -193,6 +193,36 @@ rspamd_email_address_parse_heuristic (const char *data, size_t len,
 	return ret;
 }
 
+static inline gboolean
+rspamd_email_address_check_and_add (const gchar *start, gsize len,
+									GPtrArray *res,
+									rspamd_mempool_t *pool,
+									GString *ns)
+{
+	struct rspamd_email_address addr;
+
+	/* The whole email is likely address */
+	rspamd_smtp_addr_parse (start, len, &addr);
+
+	if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
+		rspamd_email_address_add (pool, res, &addr, ns);
+	}
+	else {
+		/* Try heuristic */
+		if (rspamd_email_address_parse_heuristic (start,
+				len, &addr)) {
+			rspamd_email_address_add (pool, res, &addr, ns);
+
+			return TRUE;
+		}
+		else {
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
 GPtrArray *
 rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 		const gchar *hdr, guint len,
@@ -200,7 +230,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 {
 	GPtrArray *res = src;
 	gboolean seen_at = FALSE;
-	struct rspamd_email_address addr;
+
 	const gchar *p = hdr, *end = hdr + len, *c = hdr, *t;
 	GString *ns;
 	gint obraces, ebraces;
@@ -264,21 +294,9 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 						t --;
 					}
 
-					rspamd_smtp_addr_parse (c, t - c + 1, &addr);
-
-					if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
-						rspamd_email_address_add (pool, res, &addr, ns);
-					}
-					else {
-						/* Try heuristic */
-						if (seen_at &&
-								rspamd_email_address_parse_heuristic (c,
-										t - c + 1, &addr)) {
-							rspamd_email_address_add (pool, res, &addr, ns);
-						}
-						else {
-							rspamd_email_address_add (pool, res, NULL, ns);
-						}
+					if (!rspamd_email_address_check_and_add (c, t - c + 1,
+							res, pool, ns)) {
+						rspamd_email_address_add (pool, res, NULL, ns);
 					}
 
 					/* Cleanup for the next use */
@@ -301,6 +319,16 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 					}
 
 					g_string_append_len (ns, c, t - c + 1);
+
+					if (seen_at) {
+						if (!rspamd_email_address_check_and_add (c, t - c + 1,
+								res, pool, ns)) {
+							rspamd_email_address_add (pool, res, NULL, ns);
+						}
+
+						g_string_set_size (ns, 0);
+						seen_at = FALSE;
+					}
 				}
 
 				c = p;
@@ -324,21 +352,9 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 			break;
 		case parse_addr:
 			if (*p == '>') {
-				rspamd_smtp_addr_parse (c, p - c + 1, &addr);
-
-				if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
-					rspamd_email_address_add (pool, res, &addr, ns);
-				}
-				else {
-					/* Try heuristic */
-					if (seen_at &&
-							rspamd_email_address_parse_heuristic (c,
-									p - c + 1, &addr)) {
-						rspamd_email_address_add (pool, res, &addr, ns);
-					}
-					else {
-						rspamd_email_address_add (pool, res, NULL, ns);
-					}
+				if (!rspamd_email_address_check_and_add (c, p - c + 1,
+						res, pool, ns)) {
+					rspamd_email_address_add (pool, res, NULL, ns);
 				}
 
 				/* Cleanup for the next use */
@@ -377,19 +393,22 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 
 			if (obraces == ebraces) {
 				if (next_state == parse_name) {
-					/* Include comment in name */
-					if (p > c) {
-						t = p - 1;
+					if (ns->len > 0) {
+						/* Include comment in name if it has been seen */
+						if (p > c) {
+							t = p - 1;
 
-						while (t > c && g_ascii_isspace (*t)) {
-							t --;
+							while (t > c && g_ascii_isspace (*t)) {
+								t --;
+							}
+
+							g_string_append_len (ns, c, t - c + 1);
 						}
-
-						g_string_append_len (ns, c, t - c + 1);
 					}
 
-					c = p;
+					c = p + 1;
 				}
+
 				state = next_state;
 			}
 			p ++;
@@ -406,43 +425,35 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 				p --;
 			}
 
-			if (seen_at) {
-				/* The whole email is likely address */
-				rspamd_smtp_addr_parse (c, p - c, &addr);
-
-				if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
-					rspamd_email_address_add (pool, res, &addr, ns);
-				}
-				else {
-					/* Try heuristic */
-					if (rspamd_email_address_parse_heuristic (c,
-									p - c, &addr)) {
-						rspamd_email_address_add (pool, res, &addr, ns);
+			if (p > c) {
+				if (seen_at) {
+					/* The whole email is likely address */
+					if (!rspamd_email_address_check_and_add (c, p - c,
+							res, pool, ns)) {
+						if (res->len == 0) {
+							rspamd_email_address_add (pool, res, NULL, ns);
+						}
 					}
-					else {
+				} else {
+					/* No @ seen */
+					g_string_append_len (ns, c, p - c);
+
+					if (res->len == 0) {
 						rspamd_email_address_add (pool, res, NULL, ns);
 					}
 				}
 			}
-			else {
-				/* No @ seen */
-				g_string_append_len (ns, c, p - c);
+			else if (res->len == 0) {
 				rspamd_email_address_add (pool, res, NULL, ns);
 			}
 		}
 		break;
 	case parse_addr:
 		if (p > c) {
-			rspamd_smtp_addr_parse (c, p - c, &addr);
-
-			if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
-				rspamd_email_address_add (pool, res, &addr, ns);
-			}
-			else {
-				/* Try heuristic */
-				if (rspamd_email_address_parse_heuristic (c, p - c,
-						&addr)) {
-					rspamd_email_address_add (pool, res, &addr, ns);
+			if (!rspamd_email_address_check_and_add (c, p - c,
+					res, pool, ns)) {
+				if (res->len == 0) {
+					rspamd_email_address_add (pool, res, NULL, ns);
 				}
 			}
 		}
@@ -473,4 +484,30 @@ rspamd_email_address_list_destroy (gpointer ptr)
 	}
 
 	g_ptr_array_free (ar, TRUE);
+}
+
+void rspamd_smtp_maybe_process_smtp_comment (struct rspamd_task *task,
+											 const char *data, size_t len,
+											 struct received_header *rh)
+{
+	if (!rh->by_hostname) {
+		/* Heuristic to detect IP addresses like in Exim received:
+		 * [xxx]:port or [xxx]
+		 */
+
+		if (*data == '[' && len > 2) {
+			const gchar *p = data + 1;
+			gsize iplen = rspamd_memcspn (p, "]", len - 1);
+
+			if (iplen > 0) {
+				guchar tbuf[sizeof(struct in6_addr) + sizeof(guint32)];
+
+				if (rspamd_parse_inet_address_ip4 (p, iplen, tbuf) ||
+						rspamd_parse_inet_address_ip6 (p, iplen, tbuf)) {
+					rh->comment_ip = rspamd_mempool_alloc (task->task_pool, iplen + 1);
+					rspamd_strlcpy (rh->comment_ip, p, iplen + 1);
+				}
+			}
+		}
+	}
 }

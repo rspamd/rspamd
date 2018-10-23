@@ -32,6 +32,8 @@
 #include "libstemmer.h"
 #endif
 
+#include <math.h>
+
 #define GTUBE_SYMBOL "GTUBE"
 
 #define SET_PART_RAW(part) ((part)->flags &= ~RSPAMD_MIME_TEXT_PART_FLAG_UTF)
@@ -109,7 +111,7 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 #endif
 
 			if (w->len > 0 && (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT)) {
-				avg_len = avg_len + (w->len - avg_len) / (double) i;
+				avg_len = avg_len + (w->len - avg_len) / (double) (i + 1);
 
 				if (r != NULL) {
 					nlen = strlen (r);
@@ -119,19 +121,22 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 
 					if (IS_PART_UTF (part)) {
 						rspamd_str_lc_utf8 (temp_word, nlen);
-					} else {
+					}
+					else {
 						rspamd_str_lc (temp_word, nlen);
 					}
 
 					w->begin = temp_word;
 					w->len = nlen;
-				} else {
+				}
+				else {
 					temp_word = rspamd_mempool_alloc (task->task_pool, w->len);
 					memcpy (temp_word, w->begin, w->len);
 
 					if (IS_PART_UTF (part)) {
 						rspamd_str_lc_utf8 (temp_word, w->len);
-					} else {
+					}
+					else {
 						rspamd_str_lc (temp_word, w->len);
 					}
 
@@ -168,7 +173,8 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 				*avg_len_p = total_len;
 				rspamd_mempool_set_variable (task->task_pool,
 						RSPAMD_MEMPOOL_AVG_WORDS_LEN, avg_len_p, NULL);
-			} else {
+			}
+			else {
 				*avg_len_p += total_len;
 			}
 
@@ -181,7 +187,8 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 				*short_len_p = short_len;
 				rspamd_mempool_set_variable (task->task_pool,
 						RSPAMD_MEMPOOL_SHORT_WORDS_CNT, avg_len_p, NULL);
-			} else {
+			}
+			else {
 				*short_len_p += short_len;
 			}
 		}
@@ -849,22 +856,18 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 
 	act = rspamd_check_gtube (task, text_part);
 	if (act != METRIC_ACTION_NOACTION) {
-		struct rspamd_metric_result *mres;
+		struct rspamd_metric_result *mres = task->result;
+		gdouble score = NAN;
 
-		mres = rspamd_create_metric_result (task);
-
-		if (mres != NULL) {
-			if (act == METRIC_ACTION_REJECT) {
-				mres->score = rspamd_task_get_required_score (task, mres);
-			}
-			else {
-				mres->score = mres->actions_limits[act];
-			}
+		if (act == METRIC_ACTION_REJECT) {
+			score = rspamd_task_get_required_score (task, mres);
+		}
+		else {
+			score = mres->actions_limits[act];
 		}
 
-		task->result = mres;
-		task->pre_result.action = act;
-		task->pre_result.str = "Gtube pattern";
+		rspamd_add_passthrough_result (task, act, RSPAMD_PASSTHROUGH_CRITICAL,
+				score, "Gtube pattern", "GTUBE");
 
 		if (ucl_object_lookup (task->messages, "smtp_message") == NULL) {
 			ucl_object_replace_key (task->messages,

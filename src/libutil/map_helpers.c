@@ -118,6 +118,7 @@ rspamd_parse_kv_list (
 
 	gchar *c, *p, *key = NULL, *value = NULL, *end;
 	struct rspamd_map *map = data->map;
+	guint line_number = 0;
 
 	p = chunk;
 	c = p;
@@ -155,8 +156,8 @@ rspamd_parse_kv_list (
 					/* Store a single key */
 					MAP_STORE_KEY;
 					func (data->cur_data, key, default_value);
-					msg_debug_map ("insert key only pair: %s -> %s",
-							key, default_value);
+					msg_debug_map ("insert key only pair: %s -> %s; line: %d",
+							key, default_value, line_number);
 					g_free (key);
 				}
 
@@ -168,8 +169,8 @@ rspamd_parse_kv_list (
 					/* Store a single key */
 					MAP_STORE_KEY;
 					func (data->cur_data, key, default_value);
-					msg_debug_map ("insert key only pair: %s -> %s",
-							key, default_value);
+					msg_debug_map ("insert key only pair: %s -> %s; line: %d",
+							key, default_value, line_number);
 					g_free (key);
 				}
 
@@ -182,8 +183,8 @@ rspamd_parse_kv_list (
 					data->state = map_skip_spaces_after_key;
 				}
 				else {
-					/* Should not happen */
-					g_assert_not_reached ();
+					msg_err_map ("empty or invalid key found on line %d", line_number);
+					data->state = map_skip_comment;
 				}
 			}
 			else {
@@ -238,8 +239,8 @@ rspamd_parse_kv_list (
 					/* Store a single key */
 					MAP_STORE_KEY;
 					func (data->cur_data, key, default_value);
-					msg_debug_map ("insert key only pair: %s -> %s",
-							key, default_value);
+					msg_debug_map ("insert key only pair: %s -> %s; line: %d",
+							key, default_value, line_number);
 					g_free (key);
 					key = NULL;
 				}
@@ -252,8 +253,8 @@ rspamd_parse_kv_list (
 					MAP_STORE_KEY;
 					func (data->cur_data, key, default_value);
 
-					msg_debug_map ("insert key only pair: %s -> %s",
-							key, default_value);
+					msg_debug_map ("insert key only pair: %s -> %s; line: %d",
+							key, default_value, line_number);
 					g_free (key);
 					key = NULL;
 				}
@@ -267,8 +268,8 @@ rspamd_parse_kv_list (
 					data->state = map_skip_spaces_after_key;
 				}
 				else {
-					/* Should not happen */
-					g_assert_not_reached ();
+					msg_err_map ("empty or invalid key found on line %d", line_number);
+					data->state = map_skip_comment;
 				}
 			}
 			else {
@@ -293,54 +294,57 @@ rspamd_parse_kv_list (
 			}
 			break;
 		case map_read_value:
-			g_assert (key != NULL);
-			if (*p == '#') {
-				if (p - c > 0) {
-					/* Store a single key */
-					MAP_STORE_VALUE;
-					func (data->cur_data, key, value);
-					msg_debug_map ("insert key value pair: %s -> %s",
-							key, value);
-					g_free (key);
-					g_free (value);
-					key = NULL;
-					value = NULL;
-				}
-				else {
-					func (data->cur_data, key, default_value);
-					msg_debug_map ("insert key only pair: %s -> %s",
-							key, default_value);
-					g_free (key);
-					key = NULL;
-				}
-
-				data->state = map_read_comment_start;
-			}
-			else if (*p == '\r' || *p == '\n') {
-				if (p - c > 0) {
-					/* Store a single key */
-					MAP_STORE_VALUE;
-					func (data->cur_data, key, value);
-					msg_debug_map ("insert key value pair: %s -> %s",
-							key, value);
-					g_free (key);
-					g_free (value);
-					key = NULL;
-					value = NULL;
-				}
-				else {
-					func (data->cur_data, key, default_value);
-					msg_debug_map ("insert key only pair: %s -> %s",
-							key, default_value);
-					g_free (key);
-					key = NULL;
-				}
-
-				data->state = map_read_eol;
-				key = NULL;
+			if (key == NULL) {
+				/* Ignore line */
+				msg_err_map ("empty or invalid key found on line %d", line_number);
+				data->state = map_skip_comment;
 			}
 			else {
-				p ++;
+				if (*p == '#') {
+					if (p - c > 0) {
+						/* Store a single key */
+						MAP_STORE_VALUE;
+						func (data->cur_data, key, value);
+						msg_debug_map ("insert key value pair: %s -> %s; line: %d",
+								key, value, line_number);
+						g_free (key);
+						g_free (value);
+						key = NULL;
+						value = NULL;
+					} else {
+						func (data->cur_data, key, default_value);
+						msg_debug_map ("insert key only pair: %s -> %s; line: %d",
+								key, default_value, line_number);
+						g_free (key);
+						key = NULL;
+					}
+
+					data->state = map_read_comment_start;
+				} else if (*p == '\r' || *p == '\n') {
+					if (p - c > 0) {
+						/* Store a single key */
+						MAP_STORE_VALUE;
+						func (data->cur_data, key, value);
+						msg_debug_map ("insert key value pair: %s -> %s",
+								key, value);
+						g_free (key);
+						g_free (value);
+						key = NULL;
+						value = NULL;
+					} else {
+						func (data->cur_data, key, default_value);
+						msg_debug_map ("insert key only pair: %s -> %s",
+								key, default_value);
+						g_free (key);
+						key = NULL;
+					}
+
+					data->state = map_read_eol;
+					key = NULL;
+				}
+				else {
+					p++;
+				}
 			}
 			break;
 		case map_read_comment_start:
@@ -365,6 +369,10 @@ rspamd_parse_kv_list (
 		case map_read_eol:
 			/* Skip \r\n and whitespaces */
 			if (*p == '\r' || *p == '\n') {
+				if (*p == '\n') {
+					/* We don't care about \r only line separators, they are too rare */
+					line_number ++;
+				}
 				p++;
 			}
 			else {
@@ -392,24 +400,29 @@ rspamd_parse_kv_list (
 			}
 			break;
 		case map_read_value:
-			g_assert (key != NULL);
-			if (p - c > 0) {
-				/* Store a single key */
-				MAP_STORE_VALUE;
-				func (data->cur_data, key, value);
-				msg_debug_map ("insert key value pair: %s -> %s",
-						key, value);
-				g_free (key);
-				g_free (value);
-				key = NULL;
-				value = NULL;
+			if (key == NULL) {
+				/* Ignore line */
+				msg_err_map ("empty or invalid key found on line %d", line_number);
+				data->state = map_skip_comment;
 			}
 			else {
-				func (data->cur_data, key, default_value);
-				msg_debug_map ("insert key only pair: %s -> %s",
-						key, default_value);
-				g_free (key);
-				key = NULL;
+				if (p - c > 0) {
+					/* Store a single key */
+					MAP_STORE_VALUE;
+					func (data->cur_data, key, value);
+					msg_debug_map ("insert key value pair: %s -> %s",
+							key, value);
+					g_free (key);
+					g_free (value);
+					key = NULL;
+					value = NULL;
+				} else {
+					func (data->cur_data, key, default_value);
+					msg_debug_map ("insert key only pair: %s -> %s",
+							key, default_value);
+					g_free (key);
+					key = NULL;
+				}
 			}
 			break;
 		}

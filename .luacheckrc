@@ -6,6 +6,7 @@ exclude_files = {
   '/**/test/lua/**',
   '/**/test/functional/lua/miltertest/**',
   '/**/test/functional/lua/rspamadm/**',
+  '.git/**/',
 }
 
 globals = {
@@ -29,7 +30,9 @@ globals = {
   'rspamd_maps',
   'rspamd_plugins_state',
   'rspamadm',
-  'loadstring'
+  'loadstring',
+  'rspamadm_ev_base',
+  'rspamadm_session',
 }
 
 ignore = {
@@ -59,4 +62,8 @@ files['/**/lualib/lua_redis.lua'].globals = {
 files['/**/src/rspamadm/*'].globals = {
   'ansicolors',
   'getopt',
+}
+
+files['test/functional/lua/test_coverage.lua'].globals = {
+  '__GLOBAL_COVERAGE_WATCHDOG'
 }

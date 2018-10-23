@@ -620,15 +620,28 @@ LUA_FUNCTION_DEF (task, get_date);
 LUA_FUNCTION_DEF (task, get_message_id);
 LUA_FUNCTION_DEF (task, get_timeval);
 /***
+ * @method task:get_metric_result()
+ * Get full result of a metric as a table:
+ * - `score`: current score
+ * - `action`: current action as a string
+ * - `nnegative`: number of negative rules matched
+ * - `npositive`: number of positive rules matched
+ * - `positive_score`: total score for positive rules
+ * - `negative_score`: total score for negative rules
+ * - `passthrough`: set to true if message has a passthrough result
+ * @return {table} metric result
+ */
+LUA_FUNCTION_DEF (task, get_metric_result);
+/***
  * @method task:get_metric_score(name)
- * Get the current score of metric `name`. Should be used in post-filters only.
+ * Get the current score of metric `name` (must be nil or 'default') . Should be used in idempotent filters only.
  * @param {string} name name of a metric
- * @return {table} table containing the current score and required score of the metric
+ * @return {number,number} 2 numbers containing the current score and required score of the metric
  */
 LUA_FUNCTION_DEF (task, get_metric_score);
 /***
  * @method task:get_metric_action(name)
- * Get the current action of metric `name`. Should be used in post-filters only.
+ * Get the current action of metric `name` (must be nil or 'default'). Should be used in idempotent filters only.
  * @param {string} name name of a metric
  * @return {string} the current action of the metric as a string
  */
@@ -986,6 +999,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_date),
 	LUA_INTERFACE_DEF (task, get_message_id),
 	LUA_INTERFACE_DEF (task, get_timeval),
+	LUA_INTERFACE_DEF (task, get_metric_result),
 	LUA_INTERFACE_DEF (task, get_metric_score),
 	LUA_INTERFACE_DEF (task, get_metric_action),
 	LUA_INTERFACE_DEF (task, set_metric_score),
@@ -1567,8 +1581,10 @@ lua_task_set_pre_result (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	gchar *action_str;
+	const gchar *message = NULL, *module = NULL;
+	gdouble score = NAN;
 	gint action = METRIC_ACTION_MAX;
+	guint priority = RSPAMD_PASSTHROUGH_NORMAL;
 
 	if (task != NULL) {
 
@@ -1584,29 +1600,38 @@ lua_task_set_pre_result (lua_State * L)
 			rspamd_action_from_str (lua_tostring (L, 2), &action);
 		}
 
+		if (lua_type (L, 3) == LUA_TSTRING) {
+			message = lua_tostring (L, 3);
+
+			/* Keep compatibility here :( */
+			ucl_object_replace_key (task->messages,
+					ucl_object_fromstring (message), "smtp_message", 0,
+					false);
+		}
+		else {
+			message = "unknown reason";
+		}
+
+		if (lua_type (L, 4) == LUA_TSTRING) {
+			module = lua_tostring (L, 4);
+		}
+		else {
+			module = "Unknown lua";
+		}
+
+		if (lua_type (L, 5) == LUA_TNUMBER) {
+			score = lua_tonumber (L, 5);
+		}
+
+		if (lua_type (L, 6) == LUA_TNUMBER) {
+			priority = lua_tonumber (L, 6);
+		}
+
 		if (action < METRIC_ACTION_MAX && action >= METRIC_ACTION_REJECT) {
-			/* We also need to set the default metric to that result */
-			if (!task->result) {
-				task->result = rspamd_create_metric_result (task);
-			}
 
-			task->pre_result.action = action;
-
-			if (lua_gettop (L) >= 3) {
-				action_str = rspamd_mempool_strdup (task->task_pool,
-						luaL_checkstring (L, 3));
-				task->pre_result.str = action_str;
-				ucl_object_replace_key (task->messages,
-						ucl_object_fromstring (action_str), "smtp_message", 0,
-						false);
-			}
-			else {
-				task->pre_result.str = "unknown";
-			}
-
-			msg_info_task ("<%s>: set pre-result to %s: '%s'",
-						task->message_id, rspamd_action_to_str (action),
-						task->pre_result.str);
+			rspamd_add_passthrough_result (task, action, priority,
+					score, rspamd_mempool_strdup (task->task_pool, message),
+					rspamd_mempool_strdup (task->task_pool, module));
 
 			/* Don't classify or filter message if pre-filter sets results */
 			task->processed_stages |= (RSPAMD_TASK_STAGE_FILTERS |
@@ -1632,7 +1657,7 @@ lua_task_has_pre_result (lua_State * L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
-		lua_pushboolean (L, task->pre_result.action != METRIC_ACTION_MAX);
+		lua_pushboolean (L, task->result->passthrough_result != NULL);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -4127,18 +4152,23 @@ lua_task_set_settings (lua_State *L)
 			/* Adjust desired actions */
 			mres = task->result;
 
-			if (mres == NULL) {
-				mres = rspamd_create_metric_result (task);
-			}
-
 			for (i = 0; i < METRIC_ACTION_MAX; i++) {
 				elt = ucl_object_lookup_any (act, rspamd_action_to_str (i),
 						rspamd_action_to_str_alt (i), NULL);
 
 				if (elt) {
-					mres->actions_limits[i] = ucl_object_todouble (elt);
-					msg_debug_task ("adjusted action %s to %.2f",
-							ucl_object_key (elt), mres->actions_limits[i]);
+
+					if (ucl_object_type (elt) == UCL_FLOAT ||
+								ucl_object_type (elt) == UCL_INT) {
+						mres->actions_limits[i] = ucl_object_todouble (elt);
+						msg_debug_task ("adjusted action %s to %.2f",
+								ucl_object_key (elt), mres->actions_limits[i]);
+					}
+					else if (ucl_object_type (elt) == UCL_NULL) {
+						mres->actions_limits[i] = NAN;
+						msg_info_task ("disabled action %s due to settings",
+								ucl_object_key (elt));
+					}
 				}
 			}
 		}
@@ -4498,6 +4528,63 @@ lua_task_process_regexp (lua_State *L)
 }
 
 static gint
+lua_task_get_metric_result (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_metric_result *metric_res;
+
+	if (task) {
+		metric_res = task->result;
+
+		/* Fields added:
+		 * - `score`: current score
+		 * - `action`: current action as a string
+		 * - `nnegative`: number of negative rules matched
+		 * - `npositive`: number of positive rules matched
+		 * - `positive_score`: total score for positive rules
+		 * - `negative_score`: total score for negative rules
+		 * - `passthrough`: set to true if message has a passthrough result
+		 */
+		lua_createtable (L, 0, 7);
+
+		lua_pushstring (L, "score");
+		lua_pushnumber (L, metric_res->score);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "action");
+		lua_pushstring (L, rspamd_action_to_str (
+				rspamd_check_action_metric (task, metric_res)));
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "nnegative");
+		lua_pushnumber (L, metric_res->nnegative);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "npositive");
+		lua_pushnumber (L, metric_res->npositive);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "positive_score");
+		lua_pushnumber (L, metric_res->positive_score);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "negative_score");
+		lua_pushnumber (L, metric_res->negative_score);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "passthrough");
+		lua_pushboolean (L, !!(metric_res->passthrough_result != NULL));
+		lua_settable (L, -3);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
 lua_task_get_metric_score (lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -4534,9 +4621,7 @@ lua_task_get_metric_action (lua_State *L)
 	enum rspamd_action_type action;
 
 	if (task) {
-		if ((metric_res = task->result) == NULL) {
-			metric_res = rspamd_create_metric_result (task);
-		}
+		metric_res = task->result;
 
 		action = rspamd_check_action_metric (task, metric_res);
 		lua_pushstring (L, rspamd_action_to_str (action));

@@ -32,6 +32,7 @@ local whitelist = nil
 
 local rspamd_logger = require "rspamd_logger"
 local fun = require "fun"
+local N = 'once_received'
 
 local check_local = false
 local check_authed = false
@@ -152,17 +153,27 @@ local function check_quantity_received (task)
   end
 end
 
-local opts = rspamd_config:get_all_opt('options')
-if type(opts) == 'table' then
-  if type(opts['check_local']) == 'boolean' then
-    check_local = opts['check_local']
+local function try_opts(where)
+  local ret = false
+  local opts = rspamd_config:get_all_opt(where)
+  if type(opts) == 'table' then
+    if type(opts['check_local']) == 'boolean' then
+      check_local = opts['check_local']
+      ret = true
+    end
+    if type(opts['check_authed']) == 'boolean' then
+      check_authed = opts['check_authed']
+      ret = true
+    end
   end
-  if type(opts['check_authed']) == 'boolean' then
-    check_authed = opts['check_authed']
-  end
+
+  return ret
 end
+
+if not try_opts(N) then try_opts('options') end
+
 -- Configuration
-opts = rspamd_config:get_all_opt('once_received')
+local opts = rspamd_config:get_all_opt(N)
 if opts then
   if opts['symbol'] then
     symbol = opts['symbol']

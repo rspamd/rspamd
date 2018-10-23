@@ -41,7 +41,7 @@
 #define DEFAULT_MAP_FILE_WATCH_MULTIPLIER 1
 #define DEFAULT_MIN_WORD 0
 #define DEFAULT_MAX_WORD 40
-#define DEFAULT_WORDS_DECAY 200
+#define DEFAULT_WORDS_DECAY 600
 #define DEFAULT_MAX_MESSAGE (50 * 1024 * 1024)
 #define DEFAULT_MAX_PIC (1 * 1024 * 1024)
 #define DEFAULT_MAX_SHOTS 100
@@ -258,10 +258,12 @@ rspamd_config_free (struct rspamd_config *cfg)
 	}
 #endif
 
-	rspamd_mempool_delete (cfg->cfg_pool);
 	if (cfg->monitored_ctx) {
 		rspamd_monitored_ctx_destroy (cfg->monitored_ctx);
 	}
+
+	rspamd_mempool_delete (cfg->cfg_pool);
+
 	if (cfg->checksum) {
 		g_free (cfg->checksum);
 	}
@@ -443,6 +445,9 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 	}
 	else if (rspamd_ftok_cstr_equal (&tok, "filename", TRUE)) {
 		type = RSPAMD_LOG_FILENAME;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "forced_action", TRUE)) {
+		type = RSPAMD_LOG_FORCED_ACTION;
 	}
 	else {
 		msg_err_config ("unknown log variable: %T", &tok);

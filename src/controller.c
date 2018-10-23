@@ -666,6 +666,14 @@ rspamd_controller_check_password (struct rspamd_http_connection_entry *entry,
 			}
 			else {
 				check_enable = FALSE;
+
+				if (check_normal) {
+					/*
+					 * If no enable password is specified use normal password as
+					 * enable password
+					 */
+					session->is_enable = TRUE;
+				}
 			}
 		}
 	}
@@ -1047,12 +1055,18 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 		reply->date = time (NULL);
 		reply->code = 200;
 
-		if (!rspamd_http_message_set_body_from_fd (reply, fd)) {
-			close (fd);
-			rspamd_http_message_unref (reply);
-			msg_err_session ("cannot read map %s: %s", bk->uri, strerror (errno));
-			rspamd_controller_send_error (conn_ent, 500, "Map read error");
-			return 0;
+		if (st.st_size > 0) {
+			if (!rspamd_http_message_set_body_from_fd (reply, fd)) {
+				close (fd);
+				rspamd_http_message_unref (reply);
+				msg_err_session ("cannot read map %s: %s", bk->uri, strerror (errno));
+				rspamd_controller_send_error (conn_ent, 500, "Map read error");
+				return 0;
+			}
+		}
+		else {
+			rspamd_fstring_t *empty_body = rspamd_fstring_new_init ("", 0);
+			rspamd_http_message_set_body_from_fstring_steal (reply, empty_body);
 		}
 
 		close (fd);

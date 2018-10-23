@@ -171,6 +171,7 @@ rspamd_config.R_SUSPICIOUS_IMAGES = {
 local vis_check_id = rspamd_config:register_symbol{
   name = 'HTML_VISIBLE_CHECKS',
   type = 'callback',
+  group = 'html',
   callback = function(task)
     --local logger = require "rspamd_logger"
     local tp = task:get_text_parts() -- get text parts in a message

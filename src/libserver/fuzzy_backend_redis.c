@@ -126,7 +126,7 @@ rspamd_fuzzy_redis_session_dtor (struct rspamd_fuzzy_redis_session *session,
 				ac, is_fatal);
 	}
 
-	if (event_get_base (&session->timeout)) {
+	if (rspamd_event_pending (&session->timeout, EV_TIMEOUT)) {
 		event_del (&session->timeout);
 	}
 

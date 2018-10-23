@@ -20,18 +20,19 @@ limitations under the License.
 local N = 'dcc'
 local symbol_bulk = "DCC_BULK"
 local opts = rspamd_config:get_all_opt(N)
-local logger = require "rspamd_logger"
-local tcp = require "rspamd_tcp"
-local fun = require "fun"
+local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
+local tcp = require "rspamd_tcp"
+local upstream_list = require "rspamd_upstream_list"
+local fun = require "fun"
 
 if confighelp then
   rspamd_config:add_example(nil, 'dcc',
     "Check messages for 'bulkiness' using DCC",
     [[
 dcc {
-  host = "/var/dcc/dccifd"; # Unix socket or hostname
-  port = 1234 # Port to use (needed for TCP socket)
+  socket = "/var/dcc/dccifd"; # Unix socket
+  servers = "127.0.0.1:10045" # OR TCP upstreams
   timeout = 2s; # Timeout to wait for checks
 }
 ]])
@@ -42,6 +43,22 @@ local function check_dcc (task)
   -- Connection
   local client = '0.0.0.0'
   local client_ip = task:get_from_ip()
+  local dcc_upstream
+  local upstream
+  local addr
+  local port
+  local retransmits = 2
+
+  if opts['servers'] then
+    dcc_upstream = upstream_list.create(rspamd_config, opts['servers'])
+    upstream = dcc_upstream:get_upstream_round_robin()
+    addr = upstream:get_addr()
+    port = addr:get_port()
+  else
+    lua_util.debugm(N, task, 'using socket %s', opts['socket'])
+    addr = opts['socket']
+  end
+
   if client_ip and client_ip:is_valid() then
     client = client_ip:to_string()
   end
@@ -74,27 +91,65 @@ local function check_dcc (task)
 
   -- Callback function to receive async result from DCC
   local function cb(err, data)
-    if (err) then
-      logger.warnx(task, 'DCC error: %1', err)
-      return
-    end
-    -- Parse the response
-    local _,_,result,disposition,header = tostring(data):find("(.-)\n(.-)\n(.-)\n")
-    logger.debugm(N, task, 'DCC result=%1 disposition=%2 header="%3"',
-      result, disposition, header)
 
-    if header then
-      local _,_,info = header:find("; (.-)$")
-      if (result == 'R') then
-        -- Reject
-        task:insert_result(symbol_bulk, 1.0, info)
-      elseif (result == 'T') then
-        -- Temporary failure
-        logger.warnx(task, 'DCC returned a temporary failure result')
+    if err then
+      if retransmits > 0 then
+        retransmits = retransmits - 1
+        -- Select a different upstream or the socket again
+        if opts['servers'] then
+          upstream = dcc_upstream:get_upstream_round_robin()
+          addr = upstream:get_addr()
+          port = addr:get_port()
+        else
+          addr = opts['socket']
+        end
+
+        lua_util.debugm(N, task, "sending query to %s:%s",tostring(addr), port)
+
+        data = {
+          "header\n",
+          client .. "\n",
+          helo .. "\n",
+          envfrom .. "\n",
+          envrcpt .. "\n",
+          "\n",
+          task:get_content()
+        }
+
+        tcp.request({
+          task = task,
+          host = tostring(addr),
+          port = port or 1,
+          timeout = opts['timeout'] or 2.0,
+          shutdown = true,
+          data = data,
+          callback = cb
+        })
+
       else
-        if result ~= 'A' and result ~= 'G' and result ~= 'S' then
-          -- Unknown result
-          logger.warnx(task, 'DCC result error: %1', result);
+        rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
+        if upstream then upstream:fail() end
+      end
+    else
+      -- Parse the response
+      if upstream then upstream:ok() end
+      local _,_,result,disposition,header = tostring(data):find("(.-)\n(.-)\n(.-)\n")
+      lua_util.debugm(N, task, 'DCC result=%1 disposition=%2 header="%3"',
+        result, disposition, header)
+
+      if header then
+        local _,_,info = header:find("; (.-)$")
+        if (result == 'R') then
+          -- Reject
+          task:insert_result(symbol_bulk, 1.0, info)
+        elseif (result == 'T') then
+          -- Temporary failure
+          rspamd_logger.warnx(task, 'DCC returned a temporary failure result')
+        else
+          if result ~= 'A' and result ~= 'G' and result ~= 'S' then
+            -- Unknown result
+            rspamd_logger.warnx(task, 'DCC result error: %1', result);
+          end
         end
       end
     end
@@ -112,13 +167,12 @@ local function check_dcc (task)
     task:get_content()
   }
 
-  logger.debugm(N, task, 'sending to dcc: client=%1 helo="%2" envfrom="%3" envrcpt="%4"',
-    client, helo, envfrom, envrcpt)
+  rspamd_logger.warnx(task, "sending to %s:%s",tostring(addr), port)
 
   tcp.request({
     task = task,
-    host = opts['host'],
-    port = opts['port'] or 1,
+    host = tostring(addr),
+    port = port or 1,
     timeout = opts['timeout'] or 2.0,
     shutdown = true,
     data = data,
@@ -127,7 +181,21 @@ local function check_dcc (task)
 end
 
 -- Configuration
-if opts and opts['host'] then
+
+-- WORKAROUND for deprecated host and port settings
+if opts['host'] ~= nil and opts['port'] ~= nil then
+  opts['servers'] = opts['host'] .. ':' .. opts['port']
+  rspamd_logger.warnx(rspamd_config, 'Using host and port parameters is deprecated. '..
+   'Please use servers = "%s:%s"; instead', opts['host'], opts['port'])
+end
+if opts['host'] ~= nil and not opts['port'] then
+  opts['socket'] = opts['host']
+  rspamd_logger.warnx(rspamd_config, 'Using host parameters is deprecated. '..
+   'Please use socket = "%s"; instead', opts['host'])
+end
+-- WORKAROUND for deprecated host and port settings
+
+if opts and ( opts['servers'] or opts['socket'] ) then
   rspamd_config:register_symbol({
     name = symbol_bulk,
     callback = check_dcc
@@ -141,5 +209,5 @@ if opts and opts['host'] then
   })
 else
   lua_util.disable_module(N, "config")
-  logger.infox('DCC module not configured');
+  rspamd_logger.infox('DCC module not configured');
 end

@@ -887,6 +887,28 @@ syslog_log_function (const gchar *module, const gchar *id,
 #endif
 }
 
+
+static inline void
+log_time (gdouble now, rspamd_logger_t *rspamd_log, gchar *timebuf,
+		size_t len)
+{
+	time_t sec = (time_t)now;
+	gsize r;
+	struct tm tms;
+
+	rspamd_localtime (sec, &tms);
+	r = strftime (timebuf, len, "%F %H:%M:%S", &tms);
+
+	if (rspamd_log->flags & RSPAMD_LOG_FLAG_USEC) {
+		gchar usec_buf[16];
+
+		rspamd_snprintf (usec_buf, sizeof (usec_buf), "%.5f",
+				now - (gdouble)sec);
+		rspamd_snprintf (timebuf + r, len - r,
+				"%s", usec_buf + 1);
+	}
+}
+
 /**
  * Main file interface for logging
  */
@@ -901,7 +923,7 @@ file_log_function (const gchar *module, const gchar *id,
 	gchar tmpbuf[256];
 	gchar *m;
 	gdouble now;
-	struct tm tms;
+
 	struct iovec iov[5];
 	gulong r = 0, mr = 0;
 	guint64 cksum;
@@ -1044,20 +1066,7 @@ file_log_function (const gchar *module, const gchar *id,
 
 		/* Format time */
 		if (!(rspamd_log->flags & RSPAMD_LOG_FLAG_SYSTEMD)) {
-			time_t sec = now;
-			gsize r;
-
-			rspamd_localtime (sec, &tms);
-			r = strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", &tms);
-
-			if (rspamd_log->flags & RSPAMD_LOG_FLAG_USEC) {
-				gchar usec_buf[16];
-
-				rspamd_snprintf (usec_buf, sizeof (usec_buf), "%.5f",
-						now - (gdouble)sec);
-				rspamd_snprintf (timebuf + r, sizeof (timebuf) - r,
-						"%s", usec_buf + 1);
-			}
+			log_time (now, rspamd_log, timebuf, sizeof (timebuf));
 		}
 
 		cptype = g_quark_to_string (rspamd_log->process_type);
@@ -1164,17 +1173,24 @@ file_log_function (const gchar *module, const gchar *id,
 
 			iov[0].iov_base = (void *) tmpbuf;
 			iov[0].iov_len = r;
-			iov[1].iov_base = (void *) message;
-			iov[1].iov_len = mlen;
-			r = 2;
-		}
-		else {
-			iov[0].iov_base = (void *) message;
-			iov[0].iov_len = mlen;
 			r = 1;
 		}
+		else {
+			r = 0;
+		}
 
 
+		if (rspamd_log->log_level == G_LOG_LEVEL_DEBUG) {
+			log_time (rspamd_get_calendar_ticks (),
+					rspamd_log, timebuf, sizeof (timebuf));
+			iov[r].iov_base = (void *) timebuf;
+			iov[r++].iov_len = strlen (timebuf);
+			iov[r].iov_base = (void *) " ";
+			iov[r++].iov_len = 1;
+		}
+
+		iov[r].iov_base = (void *) message;
+		iov[r++].iov_len = mlen;
 		iov[r].iov_base = (void *) &lf_chr;
 		iov[r++].iov_len = 1;
 

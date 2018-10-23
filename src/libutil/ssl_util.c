@@ -534,7 +534,7 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 	if (ret == 1) {
 		conn->state = ssl_conn_connected;
 
-		if (event_get_base (ev)) {
+		if (rspamd_event_pending (ev, EV_TIMEOUT|EV_WRITE|EV_READ)) {
 			event_del (ev);
 		}
 
@@ -561,7 +561,7 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 			return FALSE;
 		}
 
-		if (event_get_base (ev)) {
+		if (rspamd_event_pending (ev, EV_TIMEOUT|EV_WRITE|EV_READ)) {
 			event_del (ev);
 		}
 

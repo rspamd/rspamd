@@ -52,7 +52,8 @@ local function check_email_rule(task, rule, addr)
     local function emails_dns_cb(_, _, results, err)
       if err and (err ~= 'requested record is not found'
           and err ~= 'no records with this name') then
-        logger.errx(task, 'Error querying DNS(%s): %s', to_resolve, err)
+        logger.errx(task, 'Error querying DNS(%s.%s): %s', to_resolve,
+            rule['dnsbl'], err)
       elseif results then
         local expected_found = false
         local symbol = rule['symbol']

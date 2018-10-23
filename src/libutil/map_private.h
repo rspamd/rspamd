@@ -84,8 +84,10 @@ struct http_map_data {
 	struct rspamd_map_cachepoint *cache;
 	/* Non-shared for cache owner, used to cleanup cache */
 	struct rspamd_http_map_cached_cbdata *cur_cache_cbd;
+	gchar *userinfo;
 	gchar *path;
 	gchar *host;
+	gchar *rest;
 	gchar *last_signature;
 	rspamd_fstring_t *etag;
 	time_t last_modified;

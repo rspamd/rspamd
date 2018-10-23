@@ -34,7 +34,7 @@ allow_raw_input = true;
 
 # Start ignore words when reaching the following limit, so the total
 # amount of words processed will not be *LIKELY more than the twice of that limit
-words_decay = 200;
+words_decay = 600;
 
 # Write statistics about rspamd usage to the round-robin database
 rrd = "${DBDIR}/rspamd.rrd";

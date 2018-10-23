@@ -40,7 +40,7 @@ local phishtank_suffix = 'phishtank.rspamd.com'
 -- Not enabled by default as their feed is quite large
 local openphish_premium = false
 -- Published via DNS
-local phishtank_enabled = true
+local phishtank_enabled = false
 local generic_service_hash
 local openphish_hash
 local generic_service_data = {}

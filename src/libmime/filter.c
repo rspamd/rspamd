@@ -54,12 +54,10 @@ rspamd_create_metric_result (struct rspamd_task *task)
 		return metric_res;
 	}
 
-	metric_res = rspamd_mempool_alloc (task->task_pool,
+	metric_res = rspamd_mempool_alloc0 (task->task_pool,
 			sizeof (struct rspamd_metric_result));
 	metric_res->symbols = kh_init (rspamd_symbols_hash);
 	metric_res->sym_groups = kh_init (rspamd_symbols_group_hash);
-	metric_res->grow_factor = 0;
-	metric_res->score = 0;
 
 	/* Optimize allocation */
 	kh_resize (rspamd_symbols_group_hash, metric_res->sym_groups, 4);
@@ -71,8 +69,15 @@ rspamd_create_metric_result (struct rspamd_task *task)
 		kh_resize (rspamd_symbols_hash, metric_res->symbols, 4);
 	}
 
-	for (i = 0; i < METRIC_ACTION_MAX; i++) {
-		metric_res->actions_limits[i] = task->cfg->actions[i].score;
+	if (task->cfg) {
+		for (i = 0; i < METRIC_ACTION_MAX; i++) {
+			metric_res->actions_limits[i] = task->cfg->actions[i].score;
+		}
+	}
+	else {
+		for (i = 0; i < METRIC_ACTION_MAX; i++) {
+			metric_res->actions_limits[i] = NAN;
+		}
 	}
 
 	rspamd_mempool_add_destructor (task->task_pool,
@@ -80,6 +85,49 @@ rspamd_create_metric_result (struct rspamd_task *task)
 			metric_res);
 
 	return metric_res;
+}
+
+static inline int
+rspamd_pr_sort (const struct rspamd_passthrough_result *pra,
+				const struct rspamd_passthrough_result *prb)
+{
+	return prb->priority - pra->priority;
+}
+
+void
+rspamd_add_passthrough_result (struct rspamd_task *task,
+									enum rspamd_action_type action,
+									guint priority,
+									double target_score,
+									const gchar *message,
+									const gchar *module)
+{
+	struct rspamd_metric_result *metric_res;
+	struct rspamd_passthrough_result *pr;
+
+	metric_res = task->result;
+
+	pr = rspamd_mempool_alloc (task->task_pool, sizeof (*pr));
+	pr->action = action;
+	pr->priority = priority;
+	pr->message = message;
+	pr->module = module;
+	pr->target_score = target_score;
+
+	DL_APPEND (metric_res->passthrough_result, pr);
+	DL_SORT (metric_res->passthrough_result, rspamd_pr_sort);
+
+	if (!isnan (target_score)) {
+		msg_info_task ("<%s>: set pre-result to %s (%.2f): '%s' from %s(%d)",
+				task->message_id, rspamd_action_to_str (action), target_score,
+				message, module, priority);
+	}
+
+	else {
+		msg_info_task ("<%s>: set pre-result to %s (no score): '%s' from %s(%d)",
+				task->message_id, rspamd_action_to_str (action),
+				message, module, priority);
+	}
 }
 
 static inline gdouble
@@ -104,6 +152,10 @@ rspamd_check_group_score (struct rspamd_task *task,
 	return w;
 }
 
+#ifndef DBL_EPSILON
+#define DBL_EPSILON 2.2204460492503131e-16
+#endif
+
 static struct rspamd_symbol_result *
 insert_metric_result (struct rspamd_task *task,
 		const gchar *symbol,
@@ -123,7 +175,7 @@ insert_metric_result (struct rspamd_task *task,
 	gboolean single = !!(flags & RSPAMD_SYMBOL_INSERT_SINGLE);
 	gchar *sym_cpy;
 
-	metric_res = rspamd_create_metric_result (task);
+	metric_res = task->result;
 
 	if (!isfinite (weight)) {
 		msg_warn_task ("detected %s score for symbol %s, replace it with zero",
@@ -191,11 +243,10 @@ insert_metric_result (struct rspamd_task *task,
 			k = kh_get (rspamd_options_hash, s->options, opt);
 
 			if (k == kh_end (s->options)) {
-				single = TRUE;
+				rspamd_task_add_result_option (task, s, opt);
 			}
 			else {
 				s->nshots ++;
-				rspamd_task_add_result_option (task, s, opt);
 			}
 		}
 		else {
@@ -314,9 +365,20 @@ insert_metric_result (struct rspamd_task *task,
 		}
 
 		if (!isnan (final_score)) {
+			const double epsilon = DBL_EPSILON;
+
 			metric_res->score += final_score;
 			metric_res->grow_factor = next_gf;
 			s->score = final_score;
+
+			if (final_score > epsilon) {
+				metric_res->npositive ++;
+				metric_res->positive_score += final_score;
+			}
+			else if (final_score < -epsilon) {
+				metric_res->nnegative ++;
+				metric_res->negative_score += fabs (final_score);
+			}
 		}
 		else {
 			s->score = 0;
@@ -417,12 +479,13 @@ enum rspamd_action_type
 rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_result *mres)
 {
 	struct rspamd_action *action, *selected_action = NULL;
+	struct rspamd_passthrough_result *pr;
 	double max_score = -(G_MAXDOUBLE), sc;
 	int i;
 	gboolean set_action = FALSE;
 
 	/* We are not certain about the results during processing */
-	if (task->pre_result.action == METRIC_ACTION_MAX) {
+	if (task->result->passthrough_result == NULL) {
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
 			action = &task->cfg->actions[i];
 			sc = mres->actions_limits[i];
@@ -442,26 +505,13 @@ rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_resul
 		}
 	}
 	else {
-		sc = NAN;
-
-		for (i = task->pre_result.action; i < METRIC_ACTION_MAX; i ++) {
-			selected_action = &task->cfg->actions[i];
-			sc = mres->actions_limits[i];
-
-			if (isnan (sc)) {
-				if (i == task->pre_result.action) {
-					/* No scores defined, just avoid NaN */
-					sc = 0;
-					break;
-				}
-			}
-			else {
-				break;
-			}
-		}
+		/* Peek the highest priority result */
+		pr = task->result->passthrough_result;
+		sc = pr->target_score;
+		selected_action = &task->cfg->actions[pr->action];
 
 		if (!isnan (sc)) {
-			if (task->pre_result.action == METRIC_ACTION_NOACTION) {
+			if (pr->action == METRIC_ACTION_NOACTION) {
 				mres->score = MIN (sc, mres->score);
 			}
 			else {

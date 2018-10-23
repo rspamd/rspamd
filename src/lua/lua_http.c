@@ -60,10 +60,11 @@ static const struct luaL_reg httplib_m[] = {
 struct lua_http_cbdata {
 	struct rspamd_http_connection *conn;
 	struct rspamd_async_session *session;
-	struct rspamd_async_watcher *w;
+	struct rspamd_symcache_item *item;
 	struct rspamd_http_message *msg;
 	struct event_base *ev_base;
 	struct rspamd_config *cfg;
+	struct rspamd_task *task;
 	struct timeval tv;
 	struct rspamd_cryptobox_keypair *local_kp;
 	struct rspamd_cryptobox_pubkey *peer_pk;
@@ -146,13 +147,13 @@ static void
 lua_http_maybe_free (struct lua_http_cbdata *cbd)
 {
 	if (cbd->session) {
-		if (cbd->w) {
-			/* We still need to clear watcher */
-			rspamd_session_watcher_pop (cbd->session, cbd->w);
-		}
 
 		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_RESOLVED) {
 			/* Event is added merely for resolved events */
+			if (cbd->item) {
+				rspamd_symcache_item_async_dec_check (cbd->task, cbd->item);
+			}
+
 			rspamd_session_remove_event (cbd->session, lua_http_fin, cbd);
 		}
 	}
@@ -204,7 +205,6 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)conn->ud;
 	struct rspamd_http_header *h, *htmp;
-	struct rspamd_async_watcher *existing_watcher = NULL;
 	const gchar *body;
 	gsize body_len;
 
@@ -258,19 +258,14 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 		lua_settable (L, -3);
 	}
 
-	if (cbd->w) {
+	if (cbd->item) {
 		/* Replace watcher to deal with nested calls */
-		existing_watcher = rspamd_session_replace_watcher (cbd->session, cbd->w);
+		rspamd_symbols_cache_set_cur_item (cbd->task, cbd->item);
 	}
 
 	if (lua_pcall (L, 4, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (L, -1));
 		lua_pop (L, 1);
-	}
-
-	if (cbd->w) {
-		/* Restore existing watcher */
-		rspamd_session_replace_watcher (cbd->session, existing_watcher);
 	}
 
 	lua_http_maybe_free (cbd);
@@ -292,7 +287,6 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 	const gchar *body;
 	gsize body_len;
 	struct rspamd_http_header *h, *htmp;
-	struct rspamd_async_watcher *existing_watcher = NULL;
 
 	if (err) {
 		lua_pushstring (L, err);
@@ -355,17 +349,12 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 		lua_settable (L, -3);
 	}
 
-	if (cbd->w) {
+	if (cbd->item) {
 		/* Replace watcher to deal with nested calls */
-		existing_watcher = rspamd_session_replace_watcher (cbd->session, cbd->w);
+		rspamd_symbols_cache_set_cur_item (cbd->task, cbd->item);
 	}
 
 	lua_thread_resume (cbd->thread, 2);
-
-	if (cbd->w) {
-		/* Restore existing watcher */
-		rspamd_session_replace_watcher (cbd->session, existing_watcher);
-	}
 }
 
 static gboolean
@@ -431,10 +420,14 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 		cbd->msg = NULL;
 
 		if (cbd->session) {
-			rspamd_session_add_event (cbd->session, cbd->w,
+			rspamd_session_add_event (cbd->session,
 					(event_finalizer_t) lua_http_fin, cbd,
 					g_quark_from_static_string ("lua http"));
 			cbd->flags |= RSPAMD_LUA_HTTP_FLAG_RESOLVED;
+		}
+
+		if (cbd->item) {
+			rspamd_symcache_item_async_inc (cbd->task, cbd->item);
 		}
 
 		return TRUE;
@@ -465,7 +458,13 @@ lua_http_dns_handler (struct rdns_reply *reply, gpointer ud)
 		if (!lua_http_make_connection (cbd)) {
 			lua_http_push_error (cbd, "unable to make connection to the host");
 			lua_http_maybe_free (cbd);
+
+			return;
 		}
+	}
+
+	if (cbd->item) {
+		rspamd_symcache_item_async_dec_check (cbd->task, cbd->item);
 	}
 }
 
@@ -506,16 +505,27 @@ lua_http_push_headers (lua_State *L, struct rspamd_http_message *msg)
  * Required params are:
  *
  * - `url`
- * - `callback`
  * - `task`
+ *
+ * In taskless mode, instead of `task` required are:
+ *
+ * - `ev_base`
+ * - `config`
+ *
  * @param {string} url specifies URL for a request in the standard URI form (e.g. 'http://example.com/path')
- * @param {function} callback specifies callback function in format  `function (err_message, code, body, headers)` that is called on HTTP request completion
+ * @param {function} callback specifies callback function in format  `function (err_message, code, body, headers)` that is called on HTTP request completion. if this parameter is missing, the function performs "pseudo-synchronous" call (see [Synchronous and Asynchronous API overview](/doc/lua/sync_async.html#API-example-http-module)
  * @param {task} task if called from symbol handler it is generally a good idea to use the common task objects: event base, DNS resolver and events session
  * @param {table} headers optional headers in form `[name='value', name='value']`
  * @param {string} mime_type MIME type of the HTTP content (for example, `text/html`)
  * @param {string/text} body full body content, can be opaque `rspamd{text}` to avoid data copying
  * @param {number} timeout floating point request timeout value in seconds (default is 5.0 seconds)
- * @return {boolean} `true` if a request has been successfully scheduled. If this value is `false` then some error occurred, the callback thus will not be called
+ * @param {resolver} resolver to perform DNS-requests. Usually got from either `task` or `config`
+ * @param {boolean} gzip if true, body of the requests will be compressed
+ * @param {boolean} no_ssl_verify disable SSL peer checks
+ * @param {string} user for HTTP authentication
+ * @param {string} password for HTTP authentication, only if "user" present
+ * @return {boolean} `true`, in **async** mode, if a request has been successfully scheduled. If this value is `false` then some error occurred, the callback thus will not be called.
+ * @return In **sync** mode `string|nil, nil|table` In sync mode  error message if any and response as table: `int` _code_, `string` _content_ and `table` _headers_ (header -> value)
  */
 static gint
 lua_http_request (lua_State *L)
@@ -852,7 +862,13 @@ lua_http_request (lua_State *L)
 		return 1;
 	}
 	if (task == NULL && cfg == NULL) {
-		return luaL_error (L, "Bad params to rspamd_http:request(): either task or config should be set");
+		return luaL_error (L,
+				"Bad params to rspamd_http:request(): either task or config should be set");
+	}
+
+	if (ev_base == NULL) {
+		return luaL_error (L,
+				"Bad params to rspamd_http:request(): ev_base isn't passed");
 	}
 
 	cbd = g_malloc0 (sizeof (*cbd));
@@ -869,6 +885,11 @@ lua_http_request (lua_State *L)
 	cbd->max_size = max_size;
 	cbd->url = url;
 	cbd->auth = auth;
+	cbd->task = task;
+
+	if (task) {
+		cbd->item = rspamd_symbols_cache_get_cur_item (task);
+	}
 
 	if (msg->host) {
 		cbd->host = rspamd_fstring_cstr (msg->host);
@@ -886,9 +907,6 @@ lua_http_request (lua_State *L)
 
 	if (session) {
 		cbd->session = session;
-
-		cbd->w = rspamd_session_get_watcher (cbd->session);
-		rspamd_session_watcher_push_specific (cbd->session, cbd->w);
 	}
 
 	if (rspamd_parse_inet_address (&cbd->addr, msg->host->str, msg->host->len)) {
@@ -896,10 +914,6 @@ lua_http_request (lua_State *L)
 		if (!lua_http_make_connection (cbd)) {
 			lua_http_maybe_free (cbd);
 			lua_pushboolean (L, FALSE);
-
-			if (cbd->w) {
-				rspamd_session_watcher_pop (cbd->session, cbd->w);
-			}
 
 			return 1;
 		}
@@ -916,10 +930,6 @@ lua_http_request (lua_State *L)
 				lua_pushboolean (L, FALSE);
 				g_free (to_resolve);
 
-				if (cbd->w) {
-					rspamd_session_watcher_pop (cbd->session, cbd->w);
-				}
-
 				return 1;
 			}
 
@@ -934,11 +944,10 @@ lua_http_request (lua_State *L)
 				lua_http_maybe_free (cbd);
 				lua_pushboolean (L, FALSE);
 
-				if (cbd->w) {
-					rspamd_session_watcher_pop (cbd->session, cbd->w);
-				}
-
 				return 1;
+			}
+			else if (cbd->item) {
+				rspamd_symcache_item_async_inc (cbd->task, cbd->item);
 			}
 		}
 	}

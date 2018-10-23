@@ -1176,7 +1176,7 @@ rspamd_7zip_read_archive_props (struct rspamd_task *task,
 		struct rspamd_archive *arch)
 {
 	guchar proptype;
-	uint64_t proplen;
+	guint64 proplen;
 
 	/*
 	 * for (;;)

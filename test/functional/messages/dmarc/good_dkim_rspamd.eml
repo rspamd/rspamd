@@ -1,0 +1,60 @@
+Delivered-To: vstakhov@gmail.com
+Received: by 2002:a6b:e610:0:0:0:0:0 with SMTP id g16-v6csp2201135ioh;
+        Mon, 1 Oct 2018 07:27:55 -0700 (PDT)
+X-Google-Smtp-Source: ACcGV6270qkcKzPIvBSxvaIpBZbNAdj6Qp7qqenTBQi6YaUXdBFD2+2ZYmZaw2WM/SxZP2kYTIz2
+X-Received: by 2002:adf:93e6:: with SMTP id 93-v6mr1901854wrp.81.1538404075350;
+        Mon, 01 Oct 2018 07:27:55 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1538404075; cv=none;
+        d=google.com; s=arc-20160816;
+        b=RaCtnaDmStierMmg+OOhEkzaXxQVAcFO/Rc/ey+6INIQJx+lKVO+dWT0qNA7cZcwUm
+         my6bQE0AZNf45s3bVmQeECtvfe2yS7zVSRx1HFTJJ+iiNR9iSvC8j5PUz1VShRez9Csm
+         4tqy1ic5t0t9NoOL24f82ju5gTbpl0cc7aH9sMn8gr4DwBxnvuJu4+EdP1QcDKE9qTVa
+         QpjOOOpnkmA46PypufkX+ENaq+bfNDpgbAppKfz2rmutF49jouF8XkrB9Z2ZRWPHE4YA
+         gHJ78GT/4NPlFNo95Ik/nDdnUI6gHkTmiSS6aDJh1W5MiXbkuLT8DSa4Htc43nIr2/m6
+         uQ7g==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20160816;
+        h=content-transfer-encoding:content-language:mime-version:user-agent
+         :date:message-id:autocrypt:openpgp:to:subject:from:dkim-signature;
+        bh=47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=;
+        b=utFz5J7XQOwR6hdXC0uF+PX17r57baD9GXm5v+3ztobSCFAI0ex+psgbX2gBo6izq3
+         Vo/QjJ9SeJEYhTsLR7jZ3o5meWXJZJqRH073eZlisUGOnDJkJQ5aN/4DY0L5btqLYhwI
+         mJ7c3g4Uh9zFNK8eSIDLdLAIPXNXWRT3SvoS4Ck9ok7fivfZzNfKIPUXbQFIql4+vIAj
+         t1v47QwIrTU+ojwBfaaDjtQEnOB2t8c7RNXys+LQFawG6QZGmG8PCrkVZTU+1v23qbUb
+         M7kDhvSISDchgSrHFwSIniXnnqZe6MRm24xlfW5yebFgmjzMCZQLiyA+WuMIUVxDJpKO
+         V/6g==
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@rspamd.com header.s=dkim header.b=iuniqXuF;
+       spf=pass (google.com: domain of vsevolod@rspamd.com designates 88.99.142.95 as permitted sender) smtp.mailfrom=vsevolod@rspamd.com
+Return-Path: <vsevolod@rspamd.com>
+Received: from mail.highsecure.ru (mail.highsecure.ru. [88.99.142.95])
+        by mx.google.com with ESMTPS id u13-v6si8362844wmd.167.2018.10.01.07.27.54
+        for <vstakhov@gmail.com>
+        (version=TLS1_2 cipher=ECDHE-RSA-AES128-GCM-SHA256 bits=128/128);
+        Mon, 01 Oct 2018 07:27:55 -0700 (PDT)
+Received-SPF: pass (google.com: domain of vsevolod@rspamd.com designates 88.99.142.95 as permitted sender) client-ip=88.99.142.95;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@rspamd.com header.s=dkim header.b=iuniqXuF;
+       spf=pass (google.com: domain of vsevolod@rspamd.com designates 88.99.142.95 as permitted sender) smtp.mailfrom=vsevolod@rspamd.com
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=rspamd.com; s=dkim;
+	t=1538404074; h=from:from:sender:reply-to:subject:subject:date:date:
+	 message-id:message-id:to:to:cc:mime-version:mime-version:
+	 content-type:content-type:
+	 content-transfer-encoding:content-transfer-encoding:in-reply-to:
+	 references; bh=47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=;
+	b=iuniqXuFCfL63FjU4vXZQEjBRMXkRMwF3kAv+5heeVbgsAvpd+t4I/6w6CU+GVX8xLmsuW
+	jz+Ycmobj0O7eaw+93gfJ3rYnWNA4/WV2J3vAPSpqgBloYpoktEUOQcNm0VsWiCt6WNAq2
+	Ad2CNaQOOmvDMC5lBfp+YVJITiMcYoU=
+From: Vsevolod Stakhov <vsevolod@rspamd.com>
+Subject: test
+To: vstakhov@gmail.com
+Message-ID: <6f4415bf-ff61-f0f5-b60c-ba71a56b9e48@rspamd.com>
+Date: Mon, 1 Oct 2018 15:27:53 +0100
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:52.0)
+ Gecko/20100101 Thunderbird/52.9.1
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Language: en-US
+Content-Transfer-Encoding: 7bit
+Authentication-Results: mail.highsecure.ru;
+	auth=pass smtp.auth=vsevolod@highsecure.ru smtp.mailfrom=vsevolod@rspamd.com
+

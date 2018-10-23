@@ -86,12 +86,16 @@ struct dkim_check_result {
 	gint res;
 	gdouble mult_allow;
 	gdouble mult_deny;
-	struct rspamd_async_watcher *w;
+	struct rspamd_symcache_item *item;
 	struct dkim_check_result *next, *prev, *first;
 };
 
-static void dkim_symbol_callback (struct rspamd_task *task, void *unused);
-static void dkim_sign_callback (struct rspamd_task *task, void *unused);
+static void dkim_symbol_callback (struct rspamd_task *task,
+								  struct rspamd_symcache_item *item,
+								  void *unused);
+static void dkim_sign_callback (struct rspamd_task *task,
+								struct rspamd_symcache_item *item,
+								void *unused);
 
 static gint lua_dkim_sign_handler (lua_State *L);
 static gint lua_dkim_verify_handler (lua_State *L);
@@ -320,15 +324,26 @@ dkim_module_config (struct rspamd_config *cfg)
 	lua_pop (cfg->lua_state, 1); /* Remove global function */
 	dkim_module_ctx->whitelist_ip = NULL;
 
-	if ((value =
-			rspamd_config_get_module_opt (cfg, "options", "check_local")) != NULL) {
+	value = rspamd_config_get_module_opt (cfg, "dkim", "check_local");
+
+	if (value == NULL) {
+		rspamd_config_get_module_opt (cfg, "options", "check_local");
+	}
+
+	if (value != NULL) {
 		dkim_module_ctx->check_local = ucl_object_toboolean (value);
 	}
 	else {
 		dkim_module_ctx->check_local = FALSE;
 	}
-	if ((value =
-		rspamd_config_get_module_opt (cfg, "options", "check_authed")) != NULL) {
+
+	value = rspamd_config_get_module_opt (cfg, "dkim", "check_authed");
+
+	if (value == NULL) {
+		rspamd_config_get_module_opt (cfg, "options", "check_authed");
+	}
+
+	if (value != NULL) {
 		dkim_module_ctx->check_authed = ucl_object_toboolean (value);
 	}
 	else {
@@ -488,36 +503,43 @@ dkim_module_config (struct rspamd_config *cfg)
 		}
 
 		cb_id = rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_reject,
-			0,
-			dkim_symbol_callback,
-			NULL,
-			SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_FINE,
-			-1);
+				"DKIM_CHECK",
+				0,
+				dkim_symbol_callback,
+				NULL,
+				SYMBOL_TYPE_CALLBACK,
+				-1);
 		rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_na,
-			0,
-			NULL, NULL,
-			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
-			cb_id);
+				dkim_module_ctx->symbol_reject,
+				0,
+				NULL,
+				NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
 		rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_permfail,
-			0,
-			NULL, NULL,
-			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
-			cb_id);
+				dkim_module_ctx->symbol_na,
+				0,
+				NULL, NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
 		rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_tempfail,
-			0,
-			NULL, NULL,
-			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
-			cb_id);
+				dkim_module_ctx->symbol_permfail,
+				0,
+				NULL, NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
 		rspamd_symbols_cache_add_symbol (cfg->cache,
-			dkim_module_ctx->symbol_allow,
-			0,
-			NULL, NULL,
-			SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
-			cb_id);
+				dkim_module_ctx->symbol_tempfail,
+				0,
+				NULL, NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
+		rspamd_symbols_cache_add_symbol (cfg->cache,
+				dkim_module_ctx->symbol_allow,
+				0,
+				NULL, NULL,
+				SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+				cb_id);
 
 		rspamd_symbols_cache_add_symbol (cfg->cache,
 				"DKIM_TRACE",
@@ -1007,7 +1029,6 @@ dkim_module_check (struct dkim_check_result *res)
 						tracebuf);
 			}
 		}
-		rspamd_session_watcher_pop (res->task->s, res->w);
 	}
 }
 
@@ -1062,7 +1083,9 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 }
 
 static void
-dkim_symbol_callback (struct rspamd_task *task, void *unused)
+dkim_symbol_callback (struct rspamd_task *task,
+		struct rspamd_symcache_item *item,
+		void *unused)
 {
 	GPtrArray *hlist;
 	rspamd_dkim_context_t *ctx;
@@ -1094,14 +1117,20 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 			|| (!dkim_module_ctx->check_local &&
 					rspamd_inet_address_is_local (task->from_addr, TRUE))) {
 		msg_info_task ("skip DKIM checks for local networks and authorized users");
+		rspamd_symbols_cache_finalize_item (task, item);
+
 		return;
 	}
 	/* Check whitelist */
 	if (rspamd_match_radix_map_addr (dkim_module_ctx->whitelist_ip,
 			task->from_addr) != NULL) {
 		msg_info_task ("skip DKIM checks for whitelisted address");
+		rspamd_symbols_cache_finalize_item (task, item);
+
 		return;
 	}
+
+	rspamd_symcache_item_async_inc (task, item);
 
 	/* Now check if a message has its signature */
 	hlist = rspamd_message_get_header_array (task,
@@ -1123,12 +1152,22 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 			cur->task = task;
 			cur->mult_allow = 1.0;
 			cur->mult_deny = 1.0;
+			cur->item = item;
 
 			ctx = rspamd_create_dkim_context (rh->decoded,
 					task->task_pool,
 					dkim_module_ctx->time_jitter,
 					RSPAMD_DKIM_NORMAL,
 					&err);
+
+			if (res == NULL) {
+				res = cur;
+				res->first = res;
+				res->prev = res;
+			}
+			else {
+				DL_APPEND (res, cur);
+			}
 
 			if (ctx == NULL) {
 				if (err != NULL) {
@@ -1179,17 +1218,6 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 				}
 			}
 
-			if (res == NULL) {
-				res = cur;
-				res->first = res;
-				res->prev = res;
-				res->w = rspamd_session_get_watcher (task->s);
-			}
-			else {
-				cur->w = res->w;
-				DL_APPEND (res, cur);
-			}
-
 			checked ++;
 
 			if (checked > dkim_module_ctx->max_sigs) {
@@ -1208,13 +1236,16 @@ dkim_symbol_callback (struct rspamd_task *task, void *unused)
 	}
 
 	if (res != NULL) {
-		rspamd_session_watcher_push (task->s);
 		dkim_module_check (res);
 	}
+
+	rspamd_symcache_item_async_dec_check (task, item);
 }
 
 static void
-dkim_sign_callback (struct rspamd_task *task, void *unused)
+dkim_sign_callback (struct rspamd_task *task,
+					struct rspamd_symcache_item *item,
+					void *unused)
 {
 	lua_State *L;
 	struct rspamd_task **ptask;
@@ -1267,6 +1298,7 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 					msg_err_task ("invalid return value from sign condition: %e",
 							err);
 					g_error_free (err);
+					rspamd_symbols_cache_finalize_item (task, item);
 
 					return;
 				}
@@ -1289,6 +1321,7 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 						lua_settop (L, 0);
 						luaL_error (L, "unknown key type: %s",
 								key_type);
+						rspamd_symbols_cache_finalize_item (task, item);
 
 						return;
 					}
@@ -1303,6 +1336,7 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 						if (arc_idx == 0) {
 							lua_settop (L, 0);
 							luaL_error (L, "no arc idx specified");
+							rspamd_symbols_cache_finalize_item (task, item);
 
 							return;
 						}
@@ -1312,12 +1346,14 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 						if (arc_cv == NULL) {
 							lua_settop (L, 0);
 							luaL_error (L, "no arc cv specified");
+							rspamd_symbols_cache_finalize_item (task, item);
 
 							return;
 						}
 						if (arc_idx == 0) {
 							lua_settop (L, 0);
 							luaL_error (L, "no arc idx specified");
+							rspamd_symbols_cache_finalize_item (task, item);
 
 							return;
 						}
@@ -1326,6 +1362,7 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 						lua_settop (L, 0);
 						luaL_error (L, "unknown sign type: %s",
 								sign_type_str);
+						rspamd_symbols_cache_finalize_item (task, item);
 
 						return;
 					}
@@ -1358,6 +1395,7 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 						msg_err_task ("cannot load dkim key %s: %e",
 								lru_key, err);
 						g_error_free (err);
+						rspamd_symbols_cache_finalize_item (task, item);
 
 						return;
 					}
@@ -1382,6 +1420,7 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 						msg_err_task ("cannot load dkim key %s: %e",
 								lru_key, err);
 						g_error_free (err);
+						rspamd_symbols_cache_finalize_item (task, item);
 
 						return;
 					}
@@ -1401,6 +1440,7 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 					msg_err_task ("cannot create sign context: %e",
 							err);
 					g_error_free (err);
+					rspamd_symbols_cache_finalize_item (task, item);
 
 					return;
 				}
@@ -1428,9 +1468,13 @@ dkim_sign_callback (struct rspamd_task *task, void *unused)
 		if (!sign) {
 			msg_debug_task ("skip signing as dkim condition callback returned"
 					" false");
+			rspamd_symbols_cache_finalize_item (task, item);
+
 			return;
 		}
 	}
+
+	rspamd_symbols_cache_finalize_item (task, item);
 }
 
 struct rspamd_dkim_lua_verify_cbdata {

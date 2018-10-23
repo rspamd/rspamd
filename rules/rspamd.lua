@@ -21,7 +21,7 @@ require "global_functions" ()
 config['regexp'] = {}
 rspamd_maps = {} -- Global maps
 
-local local_conf = rspamd_paths['CONFDIR']
+local local_conf = rspamd_paths['LOCAL_CONFDIR']
 local local_rules = rspamd_paths['RULESDIR']
 local rspamd_util = require "rspamd_util"
 
@@ -65,4 +65,4 @@ if rmaps and type(rmaps) == 'table' then
 end
 
 local rspamd_nn = require "lua_nn"
-rspamd_nn.load_rspamd_nn() -- Load defined models
+rspamd_nn.load_rspamd_nn() -- Load defined models if any

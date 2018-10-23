@@ -87,6 +87,7 @@ struct rspamd_language_elt {
 	enum rspamd_language_elt_flags flags;
 	enum rspamd_language_category category;
 	guint trigramms_words;
+	guint stop_words;
 	gdouble mean;
 	gdouble std;
 	guint occurencies; /* total number of parts with this language */
@@ -447,6 +448,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 			while ((w = ucl_object_iterate (specific_stop_words, &it, true)) != NULL) {
 				rspamd_multipattern_add_pattern (d->stop_words[cat].mp,
 						ucl_object_tostring (w), 0);
+				nelt->stop_words ++;
 				nstop ++;
 			}
 
@@ -592,7 +594,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 			(gint)nelt->trigramms_words,
 			total,
 			std, mean,
-			skipped, loaded, nstop,
+			skipped, loaded, nelt->stop_words,
 			rspamd_language_detector_print_flags (nelt));
 
 	g_ptr_array_add (d->languages, nelt);
@@ -794,6 +796,10 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 			"%d trigramms",
 			(gint)ret->languages->len,
 			(gint)total);
+
+	if (stop_words) {
+		ucl_object_unref (stop_words);
+	}
 
 	REF_INIT_RETAIN (ret, rspamd_language_detector_dtor);
 	rspamd_mempool_add_destructor (cfg->cfg_pool,
@@ -1442,8 +1448,24 @@ rspamd_language_detector_try_uniscript (struct rspamd_task *task,
 	return FALSE;
 }
 
+static guint
+rspamd_langelt_hash_func (gconstpointer key)
+{
+	const struct rspamd_language_elt *elt = (const struct rspamd_language_elt *)key;
+	return rspamd_cryptobox_fast_hash (elt->name, strlen (elt->name),
+			rspamd_hash_seed ());
+}
 
-KHASH_MAP_INIT_STR (rspamd_sw_hash, int);
+static gboolean
+rspamd_langelt_equal_func (gconstpointer v, gconstpointer v2)
+{
+	const struct rspamd_language_elt *elt1 = (const struct rspamd_language_elt *)v,
+			*elt2 = (const struct rspamd_language_elt *)v2;
+	return strcmp (elt1->name, elt2->name) == 0;
+}
+
+KHASH_INIT (rspamd_sw_hash, struct rspamd_language_elt *, int, 1,
+		rspamd_langelt_hash_func, rspamd_langelt_equal_func);
 
 struct rspamd_sw_cbdata {
 	khash_t (rspamd_sw_hash) *res;
@@ -1476,7 +1498,7 @@ rspamd_language_detector_sw_cb (struct rspamd_multipattern *mp,
 								  void *context)
 {
 	/* Check if boundary */
-	const gchar *prev, *next;
+	const gchar *prev = text, *next = text + len;
 	struct rspamd_stop_word_range *r;
 	struct rspamd_sw_cbdata *cbdata = (struct rspamd_sw_cbdata *)context;
 	khiter_t k;
@@ -1488,8 +1510,9 @@ rspamd_language_detector_sw_cb (struct rspamd_multipattern *mp,
 			return 0;
 		}
 	}
-	else if (match_pos < len) {
-		next = text + match_pos + 1;
+
+	if (match_pos < len) {
+		next = text + match_pos;
 
 		if (!(g_ascii_isspace (*next) || g_ascii_ispunct (*next))) {
 			return 0;
@@ -1499,10 +1522,9 @@ rspamd_language_detector_sw_cb (struct rspamd_multipattern *mp,
 	/* We have a word on the boundary, check range */
 	r = bsearch (GINT_TO_POINTER (strnum), cbdata->ranges->data,
 			cbdata->ranges->len, sizeof (*r), rspamd_ranges_cmp);
-
 	g_assert (r != NULL);
 
-	k = kh_get (rspamd_sw_hash, cbdata->res, r->elt->name);
+	k = kh_get (rspamd_sw_hash, cbdata->res, r->elt);
 
 	if (k != kh_end (cbdata->res)) {
 		kh_value (cbdata->res, k) ++;
@@ -1510,7 +1532,7 @@ rspamd_language_detector_sw_cb (struct rspamd_multipattern *mp,
 	else {
 		gint tt;
 
-		k = kh_put (rspamd_sw_hash, cbdata->res, r->elt->name, &tt);
+		k = kh_put (rspamd_sw_hash, cbdata->res, r->elt, &tt);
 		kh_value (cbdata->res, k) = 1;
 	}
 
@@ -1536,19 +1558,24 @@ rspamd_language_detector_try_stop_words (struct rspamd_task *task,
 			&cbdata, NULL);
 
 	if (kh_size (cbdata.res) > 0) {
-		gint max = G_MININT, cur_matches;
-		const gchar *sel = NULL, *cur_lang;
+		gint cur_matches;
+		double max_rate = G_MINDOUBLE;
+		const gchar *sel = NULL;
+		struct rspamd_language_elt *cur_lang;
 
 		kh_foreach (cbdata.res, cur_lang, cur_matches, {
-			if (cur_matches > max) {
-				max = cur_matches;
-				sel = cur_lang;
+			double rate = (double)cur_matches / (double)cur_lang->stop_words;
+			if (rate > max_rate) {
+				max_rate = rate;
+				sel = cur_lang->name;
 			}
+			msg_debug_lang_det ("found %d stop words from %s: %3f rate",
+					cur_matches, cur_lang->name, rate);
 		});
 
-		if (max > 0 && sel) {
-			msg_debug_lang_det ("set language based on stop words script %s, %d found",
-					sel, max);
+		if (max_rate > 0 && sel) {
+			msg_debug_lang_det ("set language based on stop words script %s, %.3f found",
+					sel, max_rate);
 			rspamd_language_detector_set_language (task, part,
 					sel);
 

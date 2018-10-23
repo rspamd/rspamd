@@ -505,14 +505,14 @@ LUA_FUNCTION_DEF (config, replace_regexp);
 LUA_FUNCTION_DEF (config, register_worker_script);
 
 /***
- * @method rspamd_config:add_on_load(function(cfg, ev_base) ... end)
+ * @method rspamd_config:add_on_load(function(cfg, ev_base, worker) ... end)
  * Registers the following script to be executed when configuration is completely loaded
  * @param {function} script function to be executed
  * @example
-rspamd_config:add_on_load(function(cfg, ev_base)
+rspamd_config:add_on_load(function(cfg, ev_base, worker)
 	rspamd_config:add_periodic(ev_base, 1.0, function(cfg, ev_base)
 		local logger = require "rspamd_logger"
-		logger.infox(cfg, "periodic function")
+		logger.infox(cfg, "periodic function in worker %s", worker:get_name())
 		return true
 	end)
 end)
@@ -1055,13 +1055,11 @@ struct lua_callback_data {
 		gint ref;
 	} callback;
 	gboolean cb_is_ref;
+
+	/* Dynamic data */
 	gint stack_level;
 	gint order;
-};
-
-struct lua_watcher_data {
-	struct lua_callback_data *cbd;
-	gint cb_ref;
+	struct rspamd_symcache_item *item;
 };
 
 /*
@@ -1093,128 +1091,23 @@ rspamd_compare_order_func (gconstpointer a, gconstpointer b)
 	return cb2->order - cb1->order;
 }
 
-static void
-lua_watcher_callback (gpointer session_data, gpointer ud)
-{
-	struct rspamd_task *task = session_data, **ptask;
-	struct lua_watcher_data *wd = ud;
-	lua_State *L;
-	gint level, nresults, err_idx, ret;
-	GString *tb;
-	struct rspamd_symbol_result *s;
+static void lua_metric_symbol_callback_return (struct thread_entry *thread_entry,
+											   int ret);
 
-	L = wd->cbd->L;
-	level = lua_gettop (L);
-	lua_pushcfunction (L, &rspamd_lua_traceback);
-	err_idx = lua_gettop (L);
-
-	level ++;
-	lua_rawgeti (L, LUA_REGISTRYINDEX, wd->cb_ref);
-
-	ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-	rspamd_lua_setclass (L, "rspamd{task}", -1);
-	*ptask = task;
-
-	if ((ret = lua_pcall (L, 1, LUA_MULTRET, err_idx)) != 0) {
-		tb = lua_touserdata (L, -1);
-		msg_err_task ("call to (%s) failed (%d): %v",
-				wd->cbd->symbol, ret, tb);
-
-		if (tb) {
-			g_string_free (tb, TRUE);
-		}
-	}
-	else {
-		nresults = lua_gettop (L) - level;
-
-		if (nresults >= 1) {
-			/* Function returned boolean, so maybe we need to insert result? */
-			gint res = 0;
-			gint i;
-			gdouble flag = 1.0;
-			gint type;
-			struct lua_watcher_data *nwd;
-
-			type = lua_type (L, level + 1);
-
-			if (type == LUA_TBOOLEAN) {
-				res = lua_toboolean (L, level + 1);
-			}
-			else if (type == LUA_TFUNCTION) {
-				/* Function returned a closure that should be watched for */
-				nwd = rspamd_mempool_alloc (task->task_pool, sizeof (*nwd));
-				lua_pushvalue (L, level + 1);
-				nwd->cb_ref = luaL_ref (L, LUA_REGISTRYINDEX);
-				nwd->cbd = wd->cbd;
-				rspamd_session_watcher_push_callback (task->s,
-						rspamd_session_get_watcher (task->s),
-						lua_watcher_callback, nwd);
-				/*
-				 * We immediately pop watcher since we have not registered
-				 * any async events from here
-				 */
-				rspamd_session_watcher_pop (task->s,
-						rspamd_session_get_watcher (task->s));
-			}
-			else {
-				res = (gint)lua_tonumber (L, level + 1);
-			}
-
-			if (res) {
-				gint first_opt = 2;
-
-				if (lua_type (L, level + 2) == LUA_TNUMBER) {
-					flag = lua_tonumber (L, level + 2);
-					/* Shift opt index */
-					first_opt = 3;
-				}
-				else {
-					flag = res;
-				}
-
-				s = rspamd_task_insert_result (task,
-						wd->cbd->symbol, flag, NULL);
-
-				if (s) {
-					guint last_pos = lua_gettop (L);
-
-					for (i = level + first_opt; i <= last_pos; i++) {
-						if (lua_type (L, i) == LUA_TSTRING) {
-							const char *opt = lua_tostring (L, i);
-
-							rspamd_task_add_result_option (task, s, opt);
-						}
-						else if (lua_type (L, i) == LUA_TTABLE) {
-							lua_pushvalue (L, i);
-
-							for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
-								const char *opt = lua_tostring (L, -1);
-
-								rspamd_task_add_result_option (task, s, opt);
-							}
-
-							lua_pop (L, 1);
-						}
-					}
-				}
-			}
-		}
-	}
-
-	lua_settop (L, err_idx - 1);
-}
-
-static void lua_metric_symbol_callback_return (struct thread_entry *thread_entry, int ret);
-
-static void lua_metric_symbol_callback_error (struct thread_entry *thread_entry, int ret, const char *msg);
+static void lua_metric_symbol_callback_error (struct thread_entry *thread_entry,
+											  int ret,
+											  const char *msg);
 
 static void
-lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
+lua_metric_symbol_callback (struct rspamd_task *task,
+		struct rspamd_symcache_item *item,
+		gpointer ud)
 {
 	struct lua_callback_data *cd = ud;
 	struct rspamd_task **ptask;
 	struct thread_entry *thread_entry;
 
+	rspamd_symcache_item_async_inc (task, item);
 	thread_entry = lua_thread_pool_get_for_task (task);
 
 	g_assert(thread_entry->cd == NULL);
@@ -1222,6 +1115,7 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 
 	lua_State *thread = thread_entry->lua_state;
 	cd->stack_level = lua_gettop (thread);
+	cd->item = item;
 
 	if (cd->cb_is_ref) {
 		lua_rawgeti (thread, LUA_REGISTRYINDEX, cd->callback.ref);
@@ -1241,11 +1135,15 @@ lua_metric_symbol_callback (struct rspamd_task *task, gpointer ud)
 }
 
 static void
-lua_metric_symbol_callback_error (struct thread_entry *thread_entry, int ret, const char *msg)
+lua_metric_symbol_callback_error (struct thread_entry *thread_entry,
+								  int ret,
+								  const char *msg)
 {
 	struct lua_callback_data *cd = thread_entry->cd;
 	struct rspamd_task *task = thread_entry->task;
 	msg_err_task ("call to (%s) failed (%d): %s", cd->symbol, ret, msg);
+
+	rspamd_symcache_item_async_dec_check (task, cd->item);
 }
 
 static void
@@ -1268,7 +1166,6 @@ lua_metric_symbol_callback_return (struct thread_entry *thread_entry, int ret)
 		gint i;
 		gdouble flag = 1.0;
 		gint type;
-		struct lua_watcher_data *wd;
 
 		type = lua_type (L, cd->stack_level + 1);
 
@@ -1276,20 +1173,7 @@ lua_metric_symbol_callback_return (struct thread_entry *thread_entry, int ret)
 			res = lua_toboolean (L, cd->stack_level + 1);
 		}
 		else if (type == LUA_TFUNCTION) {
-			/* Function returned a closure that should be watched for */
-			wd = rspamd_mempool_alloc (task->task_pool, sizeof (*wd));
-			lua_pushvalue (L /*cd->L*/, cd->stack_level + 1);
-			wd->cb_ref = luaL_ref (L, LUA_REGISTRYINDEX);
-			wd->cbd = cd;
-			rspamd_session_watcher_push_callback (task->s,
-					rspamd_session_get_watcher (task->s),
-					lua_watcher_callback, wd);
-			/*
-			 * We immediately pop watcher since we have not registered
-			 * any async events from here
-			 */
-			rspamd_session_watcher_pop (task->s,
-					rspamd_session_get_watcher (task->s));
+			g_assert_not_reached ();
 		}
 		else {
 			res = lua_tonumber (L, cd->stack_level + 1);
@@ -1340,6 +1224,7 @@ lua_metric_symbol_callback_return (struct thread_entry *thread_entry, int ret)
 	g_assert (lua_gettop (L) == cd->stack_level); /* we properly cleaned up the stack */
 
 	cd->stack_level = 0;
+	rspamd_symcache_item_async_dec_check (task, cd->item);
 }
 
 static gint
@@ -1739,14 +1624,21 @@ lua_config_register_symbol (lua_State * L)
 				FALSE,
 				no_squeeze);
 
-		if (!isnan (score)) {
+		if (!isnan (score) || group) {
 			if (one_shot) {
 				nshots = 1;
 			}
 
-			rspamd_config_add_symbol (cfg, name,
-					score, description, group, flags,
-					(guint) priority, nshots);
+			if (!isnan (score)) {
+				rspamd_config_add_symbol (cfg, name,
+						score, description, group, flags,
+						(guint) priority, nshots);
+			}
+			else {
+				rspamd_config_add_symbol (cfg, name,
+						0.0, description, group, flags,
+						(guint) priority, nshots);
+			}
 
 			lua_pushstring (L, "groups");
 			lua_gettable (L, 2);
@@ -2385,7 +2277,7 @@ lua_config_newindex (lua_State *L)
 		}
 		else if (lua_type (L, 3) == LUA_TTABLE) {
 			gint type = SYMBOL_TYPE_NORMAL, priority = 0, idx;
-			gdouble weight = 1.0, score;
+			gdouble weight = 1.0, score = NAN;
 			const char *type_str, *group = NULL, *description = NULL;
 			guint flags = 0;
 
@@ -2500,22 +2392,23 @@ lua_config_newindex (lua_State *L)
 			 */
 			if (g_hash_table_lookup (cfg->symbols, name) == NULL) {
 				nshots = cfg->default_max_shots;
+
 				lua_pushstring (L, "score");
 				lua_gettable (L, -2);
-
 				if (lua_type (L, -1) == LUA_TNUMBER) {
 					score = lua_tonumber (L, -1);
-					lua_pop (L, 1);
 
-					/* If score defined, then we can check other metric fields */
-					lua_pushstring (L, "group");
-					lua_gettable (L, -2);
+				}
+				lua_pop (L, 1);
 
-					if (lua_type (L, -1) == LUA_TSTRING) {
-						group = lua_tostring (L, -1);
-					}
-					lua_pop (L, 1);
+				lua_pushstring (L, "group");
+				lua_gettable (L, -2);
+				if (lua_type (L, -1) == LUA_TSTRING) {
+					group = lua_tostring (L, -1);
+				}
+				lua_pop (L, 1);
 
+				if (!isnan (score) || group != NULL) {
 					lua_pushstring (L, "description");
 					lua_gettable (L, -2);
 
@@ -2548,8 +2441,15 @@ lua_config_newindex (lua_State *L)
 					 * Do not override the existing symbols (using zero priority),
 					 * since we are defining default values here
 					 */
-					rspamd_config_add_symbol (cfg, name, score,
-							description, group, flags, 0, nshots);
+					if (!isnan (score)) {
+						rspamd_config_add_symbol (cfg, name, score,
+								description, group, flags, 0, nshots);
+					}
+					else if (group) {
+						/* Add with zero score */
+						rspamd_config_add_symbol (cfg, name, 0.0,
+								description, group, flags, 0, nshots);
+					}
 
 					lua_pushstring (L, "groups");
 					lua_gettable (L, -2);
@@ -2566,9 +2466,6 @@ lua_config_newindex (lua_State *L)
 						}
 					}
 
-					lua_pop (L, 1);
-				}
-				else {
 					lua_pop (L, 1);
 				}
 			}
@@ -2861,7 +2758,6 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 	*pev_base = periodic->ev_base;
 
 	event_del (&periodic->ev);
-
 	lua_thread_call (thread, 2);
 }
 
@@ -2875,6 +2771,10 @@ lua_periodic_callback_finish (struct thread_entry *thread, int ret)
 	gdouble timeout = 0.0;
 
 	L = thread->lua_state;
+
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+	event_base_update_cache_time (periodic->ev_base);
+#endif
 
 	if (ret == 0) {
 		if (lua_type (L, -1) == LUA_TBOOLEAN) {
@@ -3441,6 +3341,7 @@ lua_config_load_ucl (lua_State *L)
 
 		if (lua_istable (L, -1)) {
 			LUA_TABLE_TO_HASH(paths, RSPAMD_CONFDIR_INDEX);
+			LUA_TABLE_TO_HASH(paths, RSPAMD_LOCAL_CONFDIR_INDEX);
 			LUA_TABLE_TO_HASH(paths, RSPAMD_RUNDIR_INDEX);
 			LUA_TABLE_TO_HASH(paths, RSPAMD_DBDIR_INDEX);
 			LUA_TABLE_TO_HASH(paths, RSPAMD_LOGDIR_INDEX);

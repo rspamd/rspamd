@@ -307,9 +307,8 @@ extern guint rspamd_task_log_id;
 		pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_info_pool_check(...)   rspamd_conditional_debug (NULL, NULL, \
-		G_LOG_LEVEL_INFO, \
-		pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
+#define msg_info_pool_check(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
+        pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_debug_pool_check(...)  rspamd_conditional_debug (NULL, NULL, \

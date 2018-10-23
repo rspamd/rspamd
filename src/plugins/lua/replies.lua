@@ -65,7 +65,7 @@ local function replies_check(task)
             (settings.use_local and ip_addr and ip_addr:is_local()) then
           rspamd_logger.infox(task, "not forcing action for local network or authorized user");
         else
-          task:set_pre_result(settings['action'], settings['message'])
+          task:set_pre_result(settings['action'], settings['message'], N)
         end
       end
     end

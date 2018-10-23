@@ -38,10 +38,9 @@ local redis_params = nil
 local default_expiry = 864000 -- 10 day by default
 
 local keymap_schema = ts.shape{
-  ['reject'] = ts.string,
-  ['add header'] = ts.string,
-  ['rewrite subject'] = ts.string,
-  ['no action'] = ts.string
+  ['spam'] = ts.string,
+  ['junk'] = ts.string,
+  ['ham'] = ts.string,
 }
 
 -- Get reputation from ham/spam/probable hits
@@ -165,14 +164,14 @@ local function dkim_reputation_filter(task, rule)
 end
 
 local function dkim_reputation_idempotent(task, rule)
-  local action = task:get_metric_action()
+  local verdict = lua_util.get_task_verdict(task)
   local token = {
   }
   local cfg = rule.selector.config
   local need_set = false
 
   -- TODO: take metric score into consideration
-  local k = cfg.keys_map[action]
+  local k = cfg.keys_map[verdict]
 
   if k then
     token[k] = 1.0
@@ -218,10 +217,9 @@ local dkim_selector = {
     -- s is for spam,
     -- p is for probable spam
     keys_map = {
-      ['reject'] = 's',
-      ['add header'] = 'p',
-      ['rewrite subject'] = 'p',
-      ['no action'] = 'h'
+      ['spam'] = 's',
+      ['junk'] = 'p',
+      ['ham'] = 'h'
     },
     symbol = 'DKIM_SCORE', -- symbol to be inserted
     lower_bound = 10, -- minimum number of messages to be scored
@@ -312,14 +310,14 @@ local function url_reputation_filter(task, rule)
 end
 
 local function url_reputation_idempotent(task, rule)
-  local action = task:get_metric_action()
+  local verdict = lua_util.get_task_verdict(task)
   local token = {
   }
   local cfg = rule.selector.config
   local need_set = false
 
   -- TODO: take metric score into consideration
-  local k = cfg.keys_map[action]
+  local k = cfg.keys_map[verdict]
 
   if k then
     token[k] = 1.0
@@ -343,10 +341,9 @@ local url_selector = {
     -- s is for spam,
     -- p is for probable spam
     keys_map = {
-      ['reject'] = 's',
-      ['add header'] = 'p',
-      ['rewrite subject'] = 'p',
-      ['no action'] = 'h'
+      ['spam'] = 's',
+      ['junk'] = 'p',
+      ['ham'] = 'h'
     },
     symbol = 'URL_SCORE', -- symbol to be inserted
     lower_bound = 10, -- minimum number of messages to be scored
@@ -509,13 +506,13 @@ local function ip_reputation_idempotent(task, rule)
     end
   end
 
-  local action = task:get_metric_action()
+  local verdict = lua_util.get_task_verdict(task)
   local token = {
   }
   local need_set = false
 
   -- TODO: take metric score into consideration
-  local k = cfg.keys_map[action]
+  local k = cfg.keys_map[verdict]
 
   if k then
     token[k] = 1.0
@@ -545,10 +542,9 @@ local ip_selector = {
     -- s is for spam,
     -- p is for probable spam
     keys_map = {
-      ['reject'] = 's',
-      ['add header'] = 'p',
-      ['rewrite subject'] = 'p',
-      ['no action'] = 'h'
+      ['spam'] = 's',
+      ['junk'] = 'p',
+      ['ham'] = 'h'
     },
     scores = { -- how each component is evaluated
       ['asn'] = 0.4,
@@ -603,7 +599,7 @@ local function spf_reputation_filter(task, rule)
 end
 
 local function spf_reputation_idempotent(task, rule)
-  local action = task:get_metric_action()
+  local verdict = lua_util.get_task_verdict(task)
   local spf_record = task:get_mempool():get_variable('spf_record')
   local spf_allow = task:has_symbol('R_SPF_ALLOW')
   local token = {
@@ -614,7 +610,7 @@ local function spf_reputation_idempotent(task, rule)
   if not spf_record or not spf_allow then return end
 
   -- TODO: take metric score into consideration
-  local k = cfg.keys_map[action]
+  local k = cfg.keys_map[verdict]
 
   if k then
     token[k] = 1.0
@@ -639,10 +635,9 @@ local spf_selector = {
     -- s is for spam,
     -- p is for probable spam
     keys_map = {
-      ['reject'] = 's',
-      ['add header'] = 'p',
-      ['rewrite subject'] = 'p',
-      ['no action'] = 'h'
+      ['spam'] = 's',
+      ['junk'] = 'p',
+      ['ham'] = 'h'
     },
     symbol = 'SPF_SCORE', -- symbol to be inserted
     lower_bound = 10, -- minimum number of messages to be scored
@@ -718,7 +713,7 @@ local function generic_reputation_filter(task, rule)
 end
 
 local function generic_reputation_idempotent(task, rule)
-  local action = task:get_metric_action()
+  local verdict = lua_util.get_task_verdict(task)
   local cfg = rule.selector.config
   local need_set = false
   local token = {}
@@ -726,7 +721,7 @@ local function generic_reputation_idempotent(task, rule)
   local selector_res = cfg.selector(task)
   if not selector_res then return end
 
-  local k = cfg.keys_map[action]
+  local k = cfg.keys_map[verdict]
 
   if k then
     token[k] = 1.0
@@ -767,10 +762,9 @@ local generic_selector = {
     -- s is for spam,
     -- p is for probable spam
     keys_map = {
-      ['reject'] = 's',
-      ['add header'] = 'p',
-      ['rewrite subject'] = 'p',
-      ['no action'] = 'h'
+      ['spam'] = 's',
+      ['junk'] = 'p',
+      ['ham'] = 'h'
     },
     lower_bound = 10, -- minimum number of messages to be scored
     min_score = nil,

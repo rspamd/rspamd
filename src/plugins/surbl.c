@@ -70,6 +70,7 @@ INIT_LOG_MODULE(surbl)
 #define SURBL_OPTION_NOIP (1 << 0)
 #define SURBL_OPTION_RESOLVEIP (1 << 1)
 #define SURBL_OPTION_CHECKIMAGES (1 << 2)
+#define SURBL_OPTION_CHECKDKIM (1 << 3)
 #define MAX_LEVELS 10
 
 struct surbl_ctx {
@@ -107,7 +108,7 @@ struct dns_param {
 	struct rspamd_task *task;
 	gchar *host_resolve;
 	struct suffix_item *suffix;
-	struct rspamd_async_watcher *w;
+	struct rspamd_symcache_item *item;
 	struct surbl_module_ctx *ctx;
 };
 
@@ -119,7 +120,7 @@ struct redirector_param {
 	struct rspamd_http_connection *conn;
 	GHashTable *tree;
 	struct suffix_item *suffix;
-	struct rspamd_async_watcher *w;
+	struct rspamd_symcache_item *item;
 	gint sock;
 	guint redirector_requests;
 };
@@ -135,8 +136,12 @@ static const guint64 rspamd_surbl_cb_magic = 0xe09b8536f80de0d1ULL;
 static const gchar *rspamd_surbl_default_monitored = "facebook.com";
 static const guint default_max_redirected_urls = 10;
 
-static void surbl_test_url (struct rspamd_task *task, void *user_data);
-static void surbl_test_redirector (struct rspamd_task *task, void *user_data);
+static void surbl_test_url (struct rspamd_task *task,
+							struct rspamd_symcache_item *item,
+							void *user_data);
+static void surbl_test_redirector (struct rspamd_task *task,
+								   struct rspamd_symcache_item *item,
+								   void *user_data);
 static void surbl_dns_callback (struct rdns_reply *reply, gpointer arg);
 static void surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg);
 static void process_dns_results (struct rspamd_task *task,
@@ -574,6 +579,15 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0,
 			NULL,
 			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"surbl.rule",
+			"Check domains in valid DKIM signatures",
+			"check_dkim",
+			UCL_BOOLEAN,
+			NULL,
+			0,
+			NULL,
+			0);
 
 	return 0;
 }
@@ -727,6 +741,13 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
 			if (ucl_object_toboolean (cur)) {
 				new_suffix->options |= SURBL_OPTION_CHECKIMAGES;
+			}
+		}
+
+		cur = ucl_object_lookup (cur_rule, "check_dkim");
+		if (cur != NULL && cur->type == UCL_BOOLEAN) {
+			if (ucl_object_toboolean (cur)) {
+				new_suffix->options |= SURBL_OPTION_CHECKDKIM;
 			}
 		}
 
@@ -1057,12 +1078,20 @@ surbl_module_config (struct rspamd_config *cfg)
 			surbl_module_ctx->suffixes);
 	}
 
+
 	cur_opt = surbl_module_ctx->suffixes;
 	while (cur_opt) {
 		cur_suffix = cur_opt->data;
+
 		if (cur_suffix->bits != NULL || cur_suffix->ips != NULL) {
 			register_bit_symbols (cfg, cur_suffix, cur_suffix->callback_id);
 		}
+
+		if (cur_suffix->options & SURBL_OPTION_CHECKDKIM) {
+			rspamd_symbols_cache_add_dependency (cfg->cache,
+					cur_suffix->callback_id, "DKIM_TRACE");
+		}
+
 		cur_opt = g_list_next (cur_opt);
 	}
 
@@ -1294,6 +1323,7 @@ format_surbl_request (rspamd_mempool_t * pool,
 
 static void
 make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
+					 struct rspamd_symcache_item *item,
 					 struct suffix_item *suffix,
 					 gboolean forced, GHashTable *tree,
 					 struct surbl_ctx *surbl_module_ctx)
@@ -1350,8 +1380,8 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 			if (make_dns_request_task (task,
 					surbl_dns_ip_callback,
 					(void *) param, RDNS_REQUEST_A, surbl_req)) {
-				param->w = rspamd_session_get_watcher (task->s);
-				rspamd_session_watcher_push (task->s);
+				param->item = item;
+				rspamd_symcache_item_async_inc (task, item);
 			}
 		}
 	}
@@ -1377,8 +1407,8 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 		if (make_dns_request_task (task,
 				surbl_dns_callback,
 				(void *) param, RDNS_REQUEST_A, surbl_req)) {
-			param->w = rspamd_session_get_watcher (task->s);
-			rspamd_session_watcher_push (task->s);
+			param->item = item;
+			rspamd_symcache_item_async_inc (task, item);
 		}
 	}
 	else if (err != NULL) {
@@ -1483,7 +1513,7 @@ surbl_dns_callback (struct rdns_reply *reply, gpointer arg)
 			param->suffix->suffix);
 	}
 
-	rspamd_session_watcher_pop (param->task->s, param->w);
+	rspamd_symcache_item_async_dec_check (param->task, param->item);
 }
 
 static void
@@ -1522,7 +1552,7 @@ surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg)
 				if (make_dns_request_task (task,
 						surbl_dns_callback,
 						param, RDNS_REQUEST_A, to_resolve->str)) {
-					rspamd_session_watcher_push_specific (task->s, param->w);
+					rspamd_symcache_item_async_inc (param->task, param->item);
 				}
 
 				g_string_free (to_resolve, TRUE);
@@ -1536,7 +1566,7 @@ surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg)
 
 	}
 
-	rspamd_session_watcher_pop (param->task->s, param->w);
+	rspamd_symcache_item_async_dec_check (param->task, param->item);
 }
 
 static void
@@ -1675,7 +1705,10 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 		timeout = rspamd_mempool_alloc (task->task_pool, sizeof (struct timeval));
 		double_to_tv (surbl_module_ctx->read_timeout, timeout);
 
-		rspamd_session_add_event (task->s, NULL, free_redirector_session, param, g_quark_from_static_string ("surbl"));
+		rspamd_session_add_event (task->s,
+				free_redirector_session, param,
+				g_quark_from_static_string ("surbl"));
+		param->item = rspamd_symbols_cache_get_cur_item (task);
 
 		rspamd_http_connection_write_message (param->conn, msg, NULL,
 				NULL, param, s, timeout, task->ev_base);
@@ -1794,6 +1827,7 @@ surbl_tree_redirector_callback (gpointer key, gpointer value, void *data)
 				*purl = url;
 				rspamd_lua_setclass (L, "rspamd{url}", -1);
 				lua_pushlightuserdata (L, nparam);
+				rspamd_symbols_cache_set_cur_item (task, param->item);
 
 				if (lua_pcall (L, 3, 0, 0) != 0) {
 					msg_err_task ("cannot call for redirector script: %s",
@@ -1801,8 +1835,7 @@ surbl_tree_redirector_callback (gpointer key, gpointer value, void *data)
 					lua_pop (L, 1);
 				}
 				else {
-					nparam->w = rspamd_session_get_watcher (task->s);
-					rspamd_session_watcher_push (task->s);
+					nparam->item = param->item;
 				}
 			}
 			else {
@@ -1840,12 +1873,14 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 		return;
 	}
 
-	make_surbl_requests (url, param->task, param->suffix, FALSE,
+	make_surbl_requests (url, param->task, param->item, param->suffix, FALSE,
 			param->tree, surbl_module_ctx);
 }
 
 static void
-surbl_test_url (struct rspamd_task *task, void *user_data)
+surbl_test_url (struct rspamd_task *task,
+		struct rspamd_symcache_item *item,
+		void *user_data)
 {
 	struct redirector_param *param;
 	struct suffix_item *suffix = user_data;
@@ -1858,6 +1893,8 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 	if (!rspamd_monitored_alive (suffix->m)) {
 		msg_info_surbl ("disable surbl %s as it is reported to be offline",
 				suffix->suffix);
+		rspamd_symbols_cache_finalize_item (task, item);
+
 		return;
 	}
 
@@ -1866,10 +1903,14 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 	param->suffix = suffix;
 	param->tree = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	param->ctx = surbl_module_ctx;
+	param->item = item;
+	rspamd_symcache_item_async_inc (task, item);
 	rspamd_mempool_add_destructor (task->task_pool,
 		(rspamd_mempool_destruct_t)g_hash_table_unref,
 		param->tree);
 	g_hash_table_foreach (task->urls, surbl_tree_url_callback, param);
+
+	rspamd_symcache_item_async_inc (task, item);
 
 	/* We also need to check and process img URLs */
 	if (suffix->options & SURBL_OPTION_CHECKIMAGES) {
@@ -1881,24 +1922,48 @@ surbl_test_url (struct rspamd_task *task, void *user_data)
 					img = g_ptr_array_index (part->html->images, j);
 
 					if ((img->flags & RSPAMD_HTML_FLAG_IMAGE_EXTERNAL)
-							&& img->src) {
-						url = rspamd_html_process_url (task->task_pool,
-								img->src, strlen (img->src), NULL);
-
-						if (url) {
-							surbl_tree_url_callback (url, url, param);
-							msg_debug_surbl ("checked image url %s over %s",
-									img->src, suffix->suffix);
-						}
+							&& img->url) {
+						surbl_tree_url_callback (img->url, img->url, param);
+						msg_debug_surbl ("checked image url %s over %s",
+								img->src, suffix->suffix);
 					}
 				}
 			}
 		}
 	}
+
+	if (suffix->options & SURBL_OPTION_CHECKDKIM) {
+		struct rspamd_symbol_result *s;
+		struct rspamd_symbol_option *opt;
+
+		s = rspamd_task_find_symbol_result (task, "DKIM_TRACE");
+
+		if (s && s->opts_head) {
+			DL_FOREACH (s->opts_head, opt) {
+				gsize len = strlen (opt->option);
+				gchar *p = opt->option + len - 1;
+
+				if (*p == '+') {
+					url = rspamd_html_process_url (task->task_pool,
+							opt->option, len - 2, NULL);
+
+					if (url) {
+						surbl_tree_url_callback (url, url, param);
+						msg_debug_surbl ("checked dkim url %s over %s",
+								url->string, suffix->suffix);
+					}
+				}
+			}
+		}
+	}
+
+	rspamd_symcache_item_async_dec_check (task, item);
 }
 
 static void
-surbl_test_redirector (struct rspamd_task *task, void *user_data)
+surbl_test_redirector (struct rspamd_task *task,
+					   struct rspamd_symcache_item *item,
+					   void *user_data)
 {
 	struct redirector_param *param;
 	guint i, j;
@@ -1908,14 +1973,20 @@ surbl_test_redirector (struct rspamd_task *task, void *user_data)
 	struct surbl_ctx *surbl_module_ctx = surbl_get_context (task->cfg);
 
 	if (!surbl_module_ctx->use_redirector || !surbl_module_ctx->redirector_tlds) {
+		rspamd_symbols_cache_finalize_item (task, item);
+
 		return;
 	}
+
+	rspamd_symcache_item_async_inc (task, item);
 
 	param = rspamd_mempool_alloc0 (task->task_pool, sizeof (*param));
 	param->task = task;
 	param->suffix = NULL;
 	param->redirector_requests = 0;
 	param->ctx = surbl_module_ctx;
+	param->item = item;
+	rspamd_symcache_item_async_inc (task, item);
 	g_hash_table_foreach (task->urls, surbl_tree_redirector_callback, param);
 
 	/* We also need to check and process img URLs */
@@ -1939,6 +2010,8 @@ surbl_test_redirector (struct rspamd_task *task, void *user_data)
 			}
 		}
 	}
+
+	rspamd_symcache_item_async_dec_check (task, item);
 }
 
 
@@ -2094,9 +2167,6 @@ surbl_continue_process_handler (lua_State *L)
 					param->task->message_id,
 					param->url->urllen, param->url->string);
 		}
-
-		rspamd_session_watcher_pop (task->s, param->w);
-		param->w = NULL;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

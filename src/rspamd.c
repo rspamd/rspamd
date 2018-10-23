@@ -43,6 +43,9 @@
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
 #endif
+#ifdef HAVE_SYS_RESOURCE_H
+#include <sys/resource.h>
+#endif
 #ifdef HAVE_LIBUTIL_H
 #include <libutil.h>
 #endif
@@ -1028,12 +1031,29 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 								g_strsignal (WTERMSIG (res)));
 					}
 					else {
+#ifdef HAVE_SYS_RESOURCE_H
+						struct rlimit rlmt;
+						(void)getrlimit (RLIMIT_CORE, &rlmt);
+
 						msg_warn_main (
 								"%s process %P terminated abnormally by signal: %s"
-								" but NOT created core file",
+								" but NOT created core file (throttled=%s); "
+								"core file limits: %L current, %L max",
 								g_quark_to_string (cur->type),
 								cur->pid,
-								g_strsignal (WTERMSIG (res)));
+								g_strsignal (WTERMSIG (res)),
+								cur->cores_throttled ? "yes" : "no",
+								(gint64)rlmt.rlim_cur,
+								(gint64)rlmt.rlim_max);
+#else
+						msg_warn_main (
+								"%s process %P terminated abnormally by signal: %s"
+								" but NOT created core file (throttled=%s); ",
+								g_quark_to_string (cur->type),
+								cur->pid,
+								g_strsignal (WTERMSIG (res)),
+								cur->cores_throttled ? "yes" : "no");
+#endif
 					}
 #else
 					msg_warn_main (
@@ -1063,6 +1083,8 @@ rspamd_cld_handler (gint signo, short what, gpointer arg)
 				if (need_refork) {
 					/* Fork another worker in replace of dead one */
 					rspamd_check_core_limits (rspamd_main);
+
+
 					rspamd_fork_delayed (cur->cf, cur->index, rspamd_main);
 				}
 			}

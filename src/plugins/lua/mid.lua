@@ -79,16 +79,19 @@ if opts then
     local id = rspamd_config:register_symbol({
       name = 'KNOWN_MID_CALLBACK',
       type = 'callback',
+      group = 'mid',
       callback = known_mid_cb
     })
     rspamd_config:register_symbol({
       name = settings['symbol_known_mid'],
       parent = id,
+      group = 'mid',
       type = 'virtual'
     })
     rspamd_config:register_symbol({
       name = settings['symbol_known_no_mid'],
       parent = id,
+      group = 'mid',
       type = 'virtual'
     })
     rspamd_config:add_composite(settings['csymbol_invalid_msgid_allowed'],

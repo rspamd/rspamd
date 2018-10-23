@@ -27,7 +27,22 @@
 define(["jquery", "footable", "humanize"],
     function ($, _, Humanize) {
         "use strict";
-        var rows_per_page = 25;
+        var page_size = {
+            errors: 25,
+            history: 25
+        };
+
+        function set_page_size(n, callback) {
+            if (n !== page_size.history && n > 0) {
+                page_size.history = n;
+                if (callback) {
+                    return callback(n);
+                }
+            }
+            return null;
+        }
+
+        set_page_size($("#history_page_size").val());
 
         var ui = {};
         var prevVersion = null;
@@ -42,6 +57,7 @@ define(["jquery", "footable", "humanize"],
             "=": "&#x3D;"
         };
         var htmlEscaper = /[&<>"'/`=]/g;
+        var symbols = [];
         var symbolDescriptions = {};
 
         var escapeHTML = function (string) {
@@ -112,22 +128,43 @@ define(["jquery", "footable", "humanize"],
             };
         }
 
+        function getSelector(id) {
+            var e = document.getElementById(id);
+            return e.options[e.selectedIndex].value;
+        }
+
+        function get_compare_function() {
+            var compare_functions = {
+                magnitude: function (e1, e2) {
+                    return Math.abs(e2.score) - Math.abs(e1.score);
+                },
+                name: function (e1, e2) {
+                    return e1.name.localeCompare(e2.name);
+                },
+                score: function (e1, e2) {
+                    return e2.score - e1.score;
+                }
+            };
+
+            return compare_functions[getSelector("selSymOrder")];
+        }
+
+        function sort_symbols(o, compare_function) {
+            return Object.keys(o)
+                .map(function (key) {
+                    return o[key];
+                })
+                .sort(compare_function)
+                .map(function (e) { return e.str; })
+                .join("<br>\n");
+        }
+
         function process_history_v2(data) {
-        // Display no more than rcpt_lim recipients
+            // Display no more than rcpt_lim recipients
             var rcpt_lim = 3;
             var items = [];
-
-            function getSelector(id) {
-                var e = document.getElementById(id);
-                return e.options[e.selectedIndex].value;
-            }
-            var compare = (getSelector("selSymOrder") === "score")
-                ? function (e1, e2) {
-                    return Math.abs(e2.score) - Math.abs(e1.score);
-                }
-                : function (e1, e2) {
-                    return e1.name.localeCompare(e2.name);
-                };
+            var unsorted_symbols = [];
+            var compare_function = get_compare_function();
 
             $("#selSymOrder, label[for='selSymOrder']").show();
 
@@ -155,40 +192,46 @@ define(["jquery", "footable", "humanize"],
                         return {full:full, shrt:shrt};
                     }
 
+                    function get_symbol_class(name, score) {
+                        if (name.match(/^GREYLIST$/)) {
+                            return "symbol-special";
+                        }
+
+                        if (score < 0) {
+                            return "symbol-negative";
+                        } else if (score > 0) {
+                            return "symbol-positive";
+                        }
+                        return null;
+                    }
+
                     preprocess_item(item);
                     Object.keys(item.symbols).forEach(function (key) {
-                        var str = null;
                         var sym = item.symbols[key];
+                        sym.str = '<span class="symbol-default ' + get_symbol_class(sym.name, sym.score) + '"><strong>';
 
                         if (sym.description) {
-                            str = "<strong><abbr data-sym-key=\"" + key + "\">" + sym.name + "</abbr></strong>(" + sym.score + ")";
-
+                            sym.str += '<abbr data-sym-key="' + key + '">' +
+                                sym.name + "</abbr></strong> (" + sym.score + ")</span>";
                             // Store description for tooltip
                             symbolDescriptions[key] = sym.description;
                         } else {
-                            str = "<strong>" + sym.name + "</strong>(" + sym.score + ")";
+                            sym.str += sym.name + "</strong> (" + sym.score + ")</span>";
                         }
 
                         if (sym.options) {
-                            str += "[" + sym.options.join(",") + "]";
+                            sym.str += " [" + sym.options.join(",") + "]";
                         }
-                        item.symbols[key].str = str;
                     });
-                    item.symbols = Object.keys(item.symbols)
-                        .map(function (key) {
-                            return item.symbols[key];
-                        })
-                        .sort(compare)
-                        .map(function (e) { return e.str; })
-                        .join("<br>\n");
+                    unsorted_symbols.push(item.symbols);
+                    item.symbols = sort_symbols(item.symbols, compare_function);
                     item.time = {
                         value: unix_time_format(item.unix_time),
                         options: {
                             sortValue: item.unix_time
                         }
                     };
-                    var scan_time = item.time_real.toFixed(3) + " / " +
-                item.time_virtual.toFixed(3);
+                    var scan_time = item.time_real.toFixed(3) + " / " + item.time_virtual.toFixed(3);
                     item.scan_time = {
                         options: {
                             sortValue: item.time_real
@@ -214,7 +257,7 @@ define(["jquery", "footable", "humanize"],
                     items.push(item);
                 });
 
-            return items;
+            return {items:items, symbols:unsorted_symbols};
         }
 
         function process_history_legacy(data) {
@@ -252,7 +295,7 @@ define(["jquery", "footable", "humanize"],
                 items.push(item);
             });
 
-            return items;
+            return {items:items};
         }
 
         function columns_v2() {
@@ -329,7 +372,13 @@ define(["jquery", "footable", "humanize"],
                 sortValue: function (val) { return Number(val.options.sortValue); }
             }, {
                 name: "symbols",
-                title: "Symbols",
+                title: "Symbols<br /><br />" +
+                        '<span style="font-weight:normal;">Sort by:</span><br />' +
+                        '<div class="btn-group btn-group-xs btn-sym-order" data-toggle="buttons">' +
+                            '<button type="button" class="btn btn-default btn-sym-magnitude" value="magnitude">Magnitude</button>' +
+                            '<button type="button" class="btn btn-default btn-sym-score" value="score">Value</button>' +
+                            '<button type="button" class="btn btn-default btn-sym-name" value="name">Name</button>' +
+                        "</div>",
                 breakpoints: "all",
                 style: {
                     "font-size": "11px",
@@ -577,7 +626,7 @@ define(["jquery", "footable", "humanize"],
                 paging: {
                     enabled: true,
                     limit: 5,
-                    size: rows_per_page
+                    size: page_size.history
                 },
                 filtering: {
                     enabled: true,
@@ -594,7 +643,15 @@ define(["jquery", "footable", "humanize"],
                     "ready.ft.table": drawTooltips,
                     "after.ft.sorting": drawTooltips,
                     "after.ft.paging": drawTooltips,
-                    "after.ft.filtering": drawTooltips
+                    "after.ft.filtering": drawTooltips,
+                    "expand.ft.row": function (e, ft, row) {
+                        setTimeout(function () {
+                            var detail_row = row.$el.next();
+                            var order = getSelector("selSymOrder");
+                            detail_row.find(".btn-sym-" + order)
+                                .addClass("active").siblings().removeClass("active");
+                        }, 5);
+                    }
                 }
             });
         }
@@ -607,14 +664,15 @@ define(["jquery", "footable", "humanize"],
         }
 
         ui.getHistory = function (rspamd, tables) {
-            function waitForRowsDisplayed(callback, iteration) {
+            function waitForRowsDisplayed(rows_total, callback, iteration) {
                 var i = (typeof iteration === "undefined") ? 10 : iteration;
                 var num_rows = $("#historyTable > tbody > tr").length;
-                if (num_rows === rows_per_page) {
+                if (num_rows === page_size.history ||
+                    num_rows === rows_total) {
                     return callback();
                 } else if (--i) {
                     setTimeout(function () {
-                        waitForRowsDisplayed(callback, i);
+                        waitForRowsDisplayed(rows_total, callback, i);
                     }, 500);
                 }
                 return null;
@@ -650,14 +708,16 @@ define(["jquery", "footable", "humanize"],
                             // Legacy version
                             data = [].concat.apply([], neighbours_data);
                         }
-                        var items = process_history_data(data);
+                        var o = process_history_data(data);
+                        var items = o.items;
+                        symbols = o.symbols;
 
                         if (Object.prototype.hasOwnProperty.call(tables, "history") &&
                             version === prevVersion) {
                             tables.history.rows.load(items);
                             if (version) { // Non-legacy
                                 // Is there a way to get an event when all rows are loaded?
-                                waitForRowsDisplayed(function () {
+                                waitForRowsDisplayed(items.length, function () {
                                     drawTooltips();
                                 });
                             }
@@ -678,13 +738,32 @@ define(["jquery", "footable", "humanize"],
         };
 
         ui.setup = function (rspamd, tables) {
+            function change_symbols_order(order) {
+                $(".btn-sym-" + order).addClass("active").siblings().removeClass("active");
+                var compare_function = get_compare_function();
+                $.each(tables.history.rows.all, function (i, row) {
+                    var cell_val = sort_symbols(symbols[i], compare_function);
+                    row.cells[8].val(cell_val, false, true);
+                });
+                drawTooltips();
+            }
+
             $("#updateHistory").off("click");
             $("#updateHistory").on("click", function (e) {
                 e.preventDefault();
                 ui.getHistory(rspamd, tables);
             });
             $("#selSymOrder").unbind().change(function () {
-                ui.getHistory(rspamd, tables);
+                var order = this.value;
+                change_symbols_order(order);
+            });
+            $("#history_page_size").change(function () {
+                set_page_size(this.value, function (n) { tables.history.pageSize(n); });
+            });
+            $(document).on("click", ".btn-sym-order button", function () {
+                var order = this.value;
+                $("#selSymOrder").val(order);
+                change_symbols_order(order);
             });
 
             // @reset history log
@@ -721,7 +800,7 @@ define(["jquery", "footable", "humanize"],
                 paging: {
                     enabled: true,
                     limit: 5,
-                    size: rows_per_page
+                    size: page_size.errors
                 },
                 filtering: {
                     enabled: true,

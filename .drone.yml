@@ -1,0 +1,119 @@
+---
+workspace:
+  base: /rspamd
+
+pipeline:
+
+  prepare:
+    # ubuntu used as base image for build and test images
+    # and we need to download it anyway
+    image: ubuntu:18.04
+    commands:
+      - install -d -o nobody -g nogroup /rspamd/build /rspamd/install
+      # lua-torch CMakeLists writes to src dir
+      - chown nobody $CI_WORKSPACE/contrib/lua-torch/nn
+      # for debug
+      - echo $CI_COMMIT_AUTHOR
+
+  build:
+    # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-build/Dockerfile
+    image: rspamd/ci-ubuntu-build
+    group: build
+    commands:
+      # build directories should be writable by nobody, for rspamd in functional tests
+      # works as nobody and writes coverage files there
+      - test "$(id -un)" = nobody
+      - cd /rspamd/build
+      - cmake $CI_WORKSPACE -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install -DCMAKE_RULE_MESSAGES=OFF
+      - ncpu=$(getconf _NPROCESSORS_ONLN)
+      - make -j $ncpu install
+      - make -j $ncpu rspamd-test
+
+  eslint:
+    image: node:10-alpine
+    group: build
+    commands:
+      - npm install
+      - ./node_modules/.bin/eslint -v
+      - ./node_modules/.bin/eslint ./
+
+  # Run checks on perl source using tidyall
+  perl-tidyall:
+    # https://github.com/rspamd/rspamd-build-docker/blob/master/perl-tidyall/Dockerfile
+    image: rspamd/ci-perl-tidyall
+    group: build
+    commands:
+      # checks are configured in .tidyallrc at the top of rspamd repo
+      - tidyall --all --root-dir $CI_WORKSPACE --check-only --no-cache --data-dir /tmp/tidyall
+
+  # We run rspamd-test (unit test) and functional test (runned by robot) in
+  # parallel to save time. To avoid conflict in saving lua coverage we run them
+  # from different directories. For C code coverage counters is saved to .gcda
+  # files and binary contain absolute path to them, so rspamd-test and
+  # processes started by functional test are writing to the same files. On
+  # process exit new coverage data merged with existing content of .gcda file.
+  # Race is possible if rspamd-test and some rspamd process in functional test
+  # will try to write .gcda file simultaneous.  But it is very unlikely and
+  # performance is more important then correct coverage data.
+
+  rspamd-test:
+    # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test/Dockerfile
+    image: rspamd/ci-ubuntu-test
+    pull: true
+    group: tests
+    commands:
+      - test "$(id -un)" = nobody
+      - ulimit -c unlimited
+      # rspamd-test and functional test both use luacov.stats.out file and should be started from
+      # different directories (if started in parallel)
+      - cd /rspamd/build/test
+      - set +e
+      - ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
+      - set -e
+      # shell sets exit status of a process terminated by a signal to '128 + signal-number'
+      # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
+      - >
+        if [ $EXIT_CODE -gt 128 ]; then
+        	gdb -c /var/tmp/*.rspamd-test.core ./rspamd-test -ex "set pagination 0" -ex "thread apply all bt full" --batch;
+        	exit $EXIT_CODE;
+        fi
+      # luacov-coveralls reads luacov.stats.out written by rspamd-test using luacov module
+      # and writes json report for coveralls.io service
+      - luacov-coveralls -o /rspamd/build/unit_test_lua.json --dryrun
+      - exit $EXIT_CODE
+
+  functional:
+    # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test-func/Dockerfile
+    image: rspamd/ci-ubuntu-test-func
+    pull: true
+    group: tests
+    commands:
+      - cd /rspamd/build
+      # some rspamd processes during this test work as root and some as nobody
+      # use umask to create world-writable files so nobody can write to *.gcda files created by root
+      - umask 0000
+      - RSPAMD_INSTALLROOT=/rspamd/install robot --xunit xunit.xml --exclude isbroken $CI_WORKSPACE/test/functional/cases
+
+  send-coverage:
+    image: rspamd/ci-ubuntu-test
+    secrets: [ coveralls_repo_token ]
+    commands:
+      - cd /rspamd/build
+      # extract coverage data for C code from .gcda files and save it in a format suitable for coveralls.io
+      - $CI_WORKSPACE/test/tools/gcov_coveralls.py --exclude test --prefix /rspamd/build --prefix $CI_WORKSPACE --out coverage.c.json
+      # * merge coverage for C and Lua code
+      # * remove prefixes from absolute paths (in luacov-coveralls files), filter test, contrib, e. t.c
+      # * upload report to coveralls.io
+      - $CI_WORKSPACE/test/tools/merge_coveralls.py --root $CI_WORKSPACE --input coverage.c.json unit_test_lua.json lua_coverage_report.json --token=$COVERALLS_REPO_TOKEN
+    when:
+      branch: master
+      # don't send coverage report for pull request
+      event: [push, tag]
+
+  send-test-log:
+    image: drillster/drone-email
+    from: noreply@rspamd.com
+    attachment: /rspamd/build/log.html
+    secrets: [email_host, email_username, email_password]
+    when:
+      status: failure

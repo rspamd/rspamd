@@ -271,15 +271,29 @@ exports.squeeze_init = function()
 
     if metric_sym then
       v.group = metric_sym.group
+      v.groups = metric_sym.groups
       v.score = metric_sym.score
       v.description = metric_sym.description
 
-      if not squeezed_groups[v.group] then
-        logger.debugm(SN, rspamd_config, 'added squeezed group: %s', v.group)
-        squeezed_groups[v.group] = {}
-      end
+      if v.group then
+        if not squeezed_groups[v.group] then
+          logger.debugm(SN, rspamd_config, 'added squeezed group: %s', v.group)
+          squeezed_groups[v.group] = {}
+        end
 
-      table.insert(squeezed_groups[v.group], k)
+        table.insert(squeezed_groups[v.group], k)
+
+      end
+      if v.groups then
+        for _,gr in ipairs(v.groups) do
+          if not squeezed_groups[gr] then
+            logger.debugm(SN, rspamd_config, 'added squeezed group: %s', gr)
+            squeezed_groups[gr] = {}
+          end
+
+          table.insert(squeezed_groups[gr], k)
+        end
+      end
     else
       logger.debugm(SN, rspamd_config, 'no metric symbol found for %s, maybe bug', k)
     end
@@ -334,6 +348,7 @@ exports.handle_settings = function(task, settings)
   if settings.symbols_disabled then
     found = true
     for _,s in ipairs(settings.symbols_disabled) do
+      logger.debugm(SN, task, 'try disable symbol %s as it is in `symbols_disabled`', s)
       if not symbols_enabled[s] then
         symbols_disabled[s] = true
         logger.debugm(SN, task, 'disable symbol %s as it is in `symbols_disabled`', s)
@@ -344,6 +359,7 @@ exports.handle_settings = function(task, settings)
   if settings.groups_disabled then
     found = true
     for _,gr in ipairs(settings.groups_disabled) do
+      logger.debugm(SN, task, 'try disable group %s as it is in `groups_disabled`: %s', gr)
       if squeezed_groups[gr] then
         for _,sym in ipairs(squeezed_groups[gr]) do
           if not symbols_enabled[sym] then

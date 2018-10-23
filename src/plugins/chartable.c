@@ -85,8 +85,12 @@ chartable_get_context (struct rspamd_config *cfg)
 			chartable_module.ctx_offset);
 }
 
-static void chartable_symbol_callback (struct rspamd_task *task, void *unused);
-static void chartable_url_symbol_callback (struct rspamd_task *task, void *unused);
+static void chartable_symbol_callback (struct rspamd_task *task,
+									   struct rspamd_symcache_item *item,
+									   void *unused);
+static void chartable_url_symbol_callback (struct rspamd_task *task,
+										   struct rspamd_symcache_item *item,
+										   void *unused);
 
 gint
 chartable_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
@@ -602,7 +606,9 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 }
 
 static void
-chartable_symbol_callback (struct rspamd_task *task, void *unused)
+chartable_symbol_callback (struct rspamd_task *task,
+		struct rspamd_symcache_item *item,
+		void *unused)
 {
 	guint i;
 	struct rspamd_mime_text_part *part;
@@ -661,10 +667,14 @@ chartable_symbol_callback (struct rspamd_task *task, void *unused)
 
 		utext_close (&utxt);
 	}
+
+	rspamd_symbols_cache_finalize_item (task, item);
 }
 
 static void
-chartable_url_symbol_callback (struct rspamd_task *task, void *unused)
+chartable_url_symbol_callback (struct rspamd_task *task,
+		struct rspamd_symcache_item *item,
+		void *unused)
 {
 	struct rspamd_url *u;
 	GHashTableIter it;
@@ -728,4 +738,6 @@ chartable_url_symbol_callback (struct rspamd_task *task, void *unused)
 				cur_score, NULL);
 
 	}
+
+	rspamd_symbols_cache_finalize_item (task, item);
 }

@@ -368,7 +368,15 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->type = process_quark;
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 			"rspamadm");
+
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FLAG
+	struct event_config *ev_cfg;
+	ev_cfg = event_config_new ();
+	event_config_set_flag (ev_cfg, EVENT_BASE_FLAG_NO_CACHE_TIME);
+	rspamd_main->ev_base = event_base_new_with_config (ev_cfg);
+#else
 	rspamd_main->ev_base = event_init ();
+#endif
 
 	rspamadm_fill_internal_commands (all_commands);
 	help_command.command_data = all_commands;
@@ -412,6 +420,7 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Setup logger */
 	if (verbose) {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
+		cfg->log_flags |= RSPAMD_LOG_FLAG_USEC;
 	}
 	else {
 		cfg->log_level = G_LOG_LEVEL_MESSAGE;
@@ -419,10 +428,15 @@ main (gint argc, gchar **argv, gchar **env)
 
 	cfg->log_type = RSPAMD_LOG_CONSOLE;
 	/* Avoid timestamps printing */
-	cfg->log_flags = RSPAMD_LOG_FLAG_RSPAMADM;
+	cfg->log_flags |= RSPAMD_LOG_FLAG_RSPAMADM;
 	rspamd_set_logger (cfg, process_quark, &rspamd_main->logger,
 			rspamd_main->server_pool);
 	(void) rspamd_log_open (rspamd_main->logger);
+
+	(void) dns_resolver_init (rspamd_main->logger,
+			rspamd_main->ev_base,
+			cfg);
+
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 	g_set_printerr_handler (rspamd_glib_printerr_function);
 	rspamd_config_post_load (cfg,
@@ -531,6 +545,9 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	event_base_loopexit (rspamd_main->ev_base, NULL);
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FLAG
+	event_config_free (ev_cfg);
+#endif
 
 	REF_RELEASE (rspamd_main->cfg);
 	rspamd_log_close (rspamd_main->logger, TRUE);

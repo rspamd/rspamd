@@ -145,7 +145,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 
 	new_task->sock = -1;
 	new_task->flags |= (RSPAMD_TASK_FLAG_MIME|RSPAMD_TASK_FLAG_JSON);
-	new_task->pre_result.action = METRIC_ACTION_MAX;
+	new_task->result = rspamd_create_metric_result (new_task);
 
 	new_task->message_id = new_task->queue_id = "undef";
 	new_task->messages = ucl_object_typed_new (UCL_OBJECT);
@@ -296,7 +296,7 @@ rspamd_task_free (struct rspamd_task *task)
 			g_error_free (task->err);
 		}
 
-		if (event_get_base (&task->timeout_ev) != NULL) {
+		if (rspamd_event_pending (&task->timeout_ev, EV_TIMEOUT)) {
 			event_del (&task->timeout_ev);
 		}
 
@@ -1010,6 +1010,11 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 			ret = TRUE;
 		}
 		break;
+	case RSPAMD_LOG_FORCED_ACTION:
+		if (task->result->passthrough_result) {
+			ret = TRUE;
+		}
+		break;
 	default:
 		ret = TRUE;
 		break;
@@ -1292,7 +1297,7 @@ rspamd_task_log_variable (struct rspamd_task *task,
 {
 	rspamd_fstring_t *res = logbuf;
 	rspamd_ftok_t var = {.begin = NULL, .len = 0};
-	static gchar numbuf[64];
+	static gchar numbuf[128];
 	static const gchar undef[] = "undef";
 
 	switch (lf->type) {
@@ -1406,6 +1411,29 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		if (task->msg.fpath) {
 			var.len = strlen (task->msg.fpath);
 			var.begin = task->msg.fpath;
+		}
+		else {
+			var.begin = undef;
+			var.len = sizeof (undef) - 1;
+		}
+		break;
+	case RSPAMD_LOG_FORCED_ACTION:
+		if (task->result->passthrough_result) {
+			struct rspamd_passthrough_result *pr = task->result->passthrough_result;
+
+			if (!isnan (pr->target_score)) {
+				var.len = rspamd_snprintf (numbuf, sizeof (numbuf),
+						"%s \"%s\"; score=%.2f (set by %s)",
+						rspamd_action_to_str (pr->action),
+						pr->message, pr->target_score, pr->module);
+			}
+			else {
+				var.len = rspamd_snprintf (numbuf, sizeof (numbuf),
+						"%s \"%s\"; score=nan (set by %s)",
+						rspamd_action_to_str (pr->action),
+						pr->message, pr->module);
+			}
+			var.begin = numbuf;
 		}
 		else {
 			var.begin = undef;

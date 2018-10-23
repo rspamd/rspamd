@@ -131,8 +131,8 @@ struct fuzzy_client_session {
 	GPtrArray *commands;
 	GPtrArray *results;
 	struct rspamd_task *task;
+	struct rspamd_symcache_item *item;
 	struct upstream *server;
-	rspamd_inet_addr_t *addr;
 	struct fuzzy_rule *rule;
 	struct event ev;
 	struct event timev;
@@ -149,7 +149,6 @@ struct fuzzy_learn_session {
 	struct rspamd_http_connection_entry *http_entry;
 	struct rspamd_async_session *session;
 	struct upstream *server;
-	rspamd_inet_addr_t *addr;
 	struct fuzzy_rule *rule;
 	struct rspamd_task *task;
 	struct event ev;
@@ -177,7 +176,9 @@ struct fuzzy_cmd_io {
 
 static const char *default_headers = "Subject,Content-Type,Reply-To,X-Mailer";
 
-static void fuzzy_symbol_callback (struct rspamd_task *task, void *unused);
+static void fuzzy_symbol_callback (struct rspamd_task *task,
+								   struct rspamd_symcache_item *item,
+								   void *unused);
 
 /* Initialization */
 gint fuzzy_check_module_init (struct rspamd_config *cfg,
@@ -2106,6 +2107,7 @@ fuzzy_check_session_is_completed (struct fuzzy_client_session *session)
 
 	if (nreplied == session->commands->len) {
 		fuzzy_insert_metric_results (session->task, session->results);
+		rspamd_symcache_item_async_dec_check (session->task, session->item);
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 
 		return TRUE;
@@ -2174,11 +2176,13 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 		/* Error state */
 		msg_err_task ("got error on IO with server %s(%s), on %s, %d, %s",
 			rspamd_upstream_name (session->server),
-				rspamd_inet_address_to_string_pretty (session->addr),
+				rspamd_inet_address_to_string_pretty (
+						rspamd_upstream_addr (session->server)),
 			session->state == 1 ? "read" : "write",
 			errno,
 			strerror (errno));
 		rspamd_upstream_fail (session->server, FALSE);
+		rspamd_symcache_item_async_dec_check (session->task, session->item);
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 	}
 	else {
@@ -2215,9 +2219,11 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 	if (session->retransmits >= session->rule->ctx->retransmits) {
 		msg_err_task ("got IO timeout with server %s(%s), after %d retransmits",
 				rspamd_upstream_name (session->server),
-				rspamd_inet_address_to_string_pretty (session->addr),
+				rspamd_inet_address_to_string_pretty (
+						rspamd_upstream_addr (session->server)),
 				session->retransmits);
 		rspamd_upstream_fail (session->server, FALSE);
+		rspamd_symcache_item_async_dec_check (session->task, session->item);
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 	}
 	else {
@@ -2420,7 +2426,8 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 	else if (ret == return_error) {
 		msg_err_task ("got error in IO with server %s(%s), %d, %s",
 				rspamd_upstream_name (session->server),
-				rspamd_inet_address_to_string_pretty (session->addr),
+				rspamd_inet_address_to_string_pretty (
+						rspamd_upstream_addr (session->server)),
 				errno, strerror (errno));
 		rspamd_upstream_fail (session->server, FALSE);
 	}
@@ -2523,7 +2530,8 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 		msg_err_task_check ("got IO timeout with server %s(%s), "
 				"after %d retransmits",
 				rspamd_upstream_name (session->server),
-				rspamd_inet_address_to_string_pretty (session->addr),
+				rspamd_inet_address_to_string_pretty (
+						rspamd_upstream_addr (session->server)),
 				session->retransmits);
 
 		if (session->session) {
@@ -2856,7 +2864,6 @@ register_fuzzy_client_call (struct rspamd_task *task,
 				session->fd = sock;
 				session->server = selected;
 				session->rule = rule;
-				session->addr = addr;
 				session->results = g_ptr_array_sized_new (32);
 
 				event_set (&session->ev, sock, EV_WRITE, fuzzy_check_io_callback,
@@ -2869,8 +2876,10 @@ register_fuzzy_client_call (struct rspamd_task *task,
 				event_base_set (session->task->ev_base, &session->timev);
 				event_add (&session->timev, &session->tv);
 
-				rspamd_session_add_event (task->s, NULL, fuzzy_io_fin, session,
+				rspamd_session_add_event (task->s, fuzzy_io_fin, session,
 						g_quark_from_static_string ("fuzzy check"));
+				session->item = rspamd_symbols_cache_get_cur_item (task);
+				rspamd_symcache_item_async_inc (task, session->item);
 			}
 		}
 	}
@@ -2878,7 +2887,9 @@ register_fuzzy_client_call (struct rspamd_task *task,
 
 /* This callback is called when we check message in fuzzy hashes storage */
 static void
-fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
+fuzzy_symbol_callback (struct rspamd_task *task,
+					   struct rspamd_symcache_item *item,
+					   void *unused)
 {
 	struct fuzzy_rule *rule;
 	guint i;
@@ -2886,6 +2897,8 @@ fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
 
 	if (!fuzzy_module_ctx->enabled) {
+		rspamd_symbols_cache_finalize_item (task, item);
+
 		return;
 	}
 
@@ -2896,9 +2909,13 @@ fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 			msg_info_task ("<%s>, address %s is whitelisted, skip fuzzy check",
 				task->message_id,
 				rspamd_inet_address_to_string (task->from_addr));
+			rspamd_symbols_cache_finalize_item (task, item);
+
 			return;
 		}
 	}
+
+	rspamd_symcache_item_async_inc (task, item);
 
 	PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
 		commands = fuzzy_generate_commands (task, rule, FUZZY_CHECK, 0, 0, 0);
@@ -2907,6 +2924,8 @@ fuzzy_symbol_callback (struct rspamd_task *task, void *unused)
 			register_fuzzy_client_call (task, rule, commands);
 		}
 	}
+
+	rspamd_symcache_item_async_dec_check (task, item);
 }
 
 void
@@ -2963,7 +2982,6 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 
 			msec_to_tv (fuzzy_module_ctx->io_timeout, &s->tv);
 			s->task = task;
-			s->addr = addr;
 			s->commands = commands;
 			s->http_entry = entry;
 			s->server = selected;
@@ -3030,6 +3048,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 			rspamd_task_free (task);
 			rspamd_controller_send_error (conn_ent, 400,
 					"Message processing error");
+
 			return;
 		}
 
@@ -3325,7 +3344,6 @@ fuzzy_check_send_lua_learn (struct fuzzy_rule *rule,
 
 				msec_to_tv (rule->ctx->io_timeout, &s->tv);
 				s->task = task;
-				s->addr = addr;
 				s->commands = commands;
 				s->http_entry = NULL;
 				s->server = selected;
@@ -3343,7 +3361,10 @@ fuzzy_check_send_lua_learn (struct fuzzy_rule *rule,
 				event_base_set (s->task->ev_base, &s->timev);
 				event_add (&s->timev, &s->tv);
 
-				rspamd_session_add_event (task->s, NULL, fuzzy_lua_fin, s, g_quark_from_static_string ("fuzzy check"));
+				rspamd_session_add_event (task->s,
+						fuzzy_lua_fin,
+						s,
+						g_quark_from_static_string ("fuzzy check"));
 
 				(*saved)++;
 				ret = 1;

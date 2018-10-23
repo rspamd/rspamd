@@ -72,6 +72,7 @@ struct rspamd_worker {
 	guint index;                    /**< index number									*/
 	guint nconns;                   /**< current connections count						*/
 	gboolean wanna_die;             /**< worker is terminating							*/
+	gboolean cores_throttled;       /**< set to true if cores throttling took place		*/
 	gdouble start_time;             /**< start time										*/
 	struct rspamd_main *srv;        /**< pointer to server structure					*/
 	GQuark type;                    /**< process type									*/
