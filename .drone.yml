@@ -101,7 +101,16 @@ pipeline:
         if [ -n "$HTTP_PUT_AUTH" ]; then
         $CI_WORKSPACE/test/tools/http_put.py log.html report.html $CI_SYSTEM_LINK/testlogs/$CI_REPO_NAME/$CI_BUILD_NUMBER/;
         fi
-      - find /var/tmp/ -name '*.core'
+      # core_pattern=/var/tmp/%u.%e.core so one or two cores can be saved for each binary
+      - core_files=$(find /var/tmp/ -name '*.core')
+      # use 'info proc mappings' to find path to executable file for given core
+      # first mapping is usually program executable
+      - >
+        for core in $core_files;
+        do
+        exe=$(gdb --batch -ex 'info proc mappings' -c $core | awk 'h {print $5; exit}; /objfile/ {h=1}');
+        gdb --batch -ex 'bt' -c $core $exe; echo '---';
+        done
       - exit $EXIT_CODE
     secrets: [http_put_auth]
 
