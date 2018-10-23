@@ -74,8 +74,8 @@ pipeline:
       # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
       - >
         if [ $EXIT_CODE -gt 128 ]; then
-        	gdb -c /var/tmp/*.rspamd-test.core ./rspamd-test -ex "set pagination 0" -ex "thread apply all bt full" --batch;
-        	exit $EXIT_CODE;
+        gdb -c /var/tmp/*.rspamd-test.core ./rspamd-test -ex "set pagination 0" -ex "thread apply all bt full" --batch;
+        exit $EXIT_CODE;
         fi
       # luacov-coveralls reads luacov.stats.out written by rspamd-test using luacov module
       # and writes json report for coveralls.io service
@@ -99,7 +99,7 @@ pipeline:
       # upload test results to nginx frontent using WebDAV PUT
       - >
         if [ -n "$HTTP_PUT_AUTH" ]; then
-        	$CI_WORKSPACE/test/tools/http_put.py log.html report.html $CI_SYSTEM_LINK/testlogs/$CI_REPO_NAME/$CI_BUILD_NUMBER/;
+        $CI_WORKSPACE/test/tools/http_put.py log.html report.html $CI_SYSTEM_LINK/testlogs/$CI_REPO_NAME/$CI_BUILD_NUMBER/;
         fi
       - find /var/tmp/ -name '*.core'
       - exit $EXIT_CODE
