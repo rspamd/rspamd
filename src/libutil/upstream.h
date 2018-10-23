@@ -83,6 +83,24 @@ void rspamd_upstreams_set_flags (struct upstream_list *ups,
 		enum rspamd_upstream_flag flags);
 
 /**
+ * Sets custom limits for upstreams
+ * @param ups
+ * @param revive_time
+ * @param revive_jitter
+ * @param error_time
+ * @param dns_timeout
+ * @param max_errors
+ * @param dns_retransmits
+ */
+void rspamd_upstreams_set_limits (struct upstream_list *ups,
+								  gdouble revive_time,
+								  gdouble revive_jitter,
+								  gdouble error_time,
+								  gdouble dns_timeout,
+								  guint max_errors,
+								  guint dns_retransmits);
+
+/**
  * Sets rotation policy for upstreams list
  * @param ups
  * @param rot
