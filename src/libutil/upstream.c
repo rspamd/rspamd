@@ -537,7 +537,18 @@ rspamd_upstreams_create (struct upstream_ctx *ctx)
 	ls->cur_elt = 0;
 	ls->ctx = ctx;
 	ls->rot_alg = RSPAMD_UPSTREAM_UNDEF;
-	ls->limits = ctx->limits;
+
+	if (ctx) {
+		ls->limits = ctx->limits;
+	}
+	else {
+		ls->limits.error_time = default_error_time;
+		ls->limits.max_errors = default_max_errors;
+		ls->limits.dns_retransmits = default_dns_retransmits;
+		ls->limits.dns_timeout = default_dns_timeout;
+		ls->limits.revive_jitter = default_revive_jitter;
+		ls->limits.revive_time = default_revive_time;
+	}
 
 	return ls;
 }
