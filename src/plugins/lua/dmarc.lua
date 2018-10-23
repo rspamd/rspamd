@@ -958,7 +958,7 @@ if opts['reporting'] == true then
                   report_settings.domain,
                   report_id,
                   rspamd_util.time_to_string(rspamd_util.get_time()),
-                  rspamd_util.random_hex(12) .. '@rspamd',
+                  rspamd_util.random_hex(12) .. '@' .. report_settings.helo,
                   report_settings.domain,
                   report_settings.domain,
                   reporting_domain,
