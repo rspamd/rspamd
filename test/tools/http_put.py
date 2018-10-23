@@ -19,11 +19,11 @@ def main():
     parser.add_argument(
         "file", type=argparse.FileType('rb'), nargs='+', help="File to upload")
     parser.add_argument(
-        "dir_url", help="Remote URL (path to a directory, must ends with /)")
+        "dir_url", help="Remote URL (path to a directory, must include a trailing /)")
     args = parser.parse_args()
 
     if not args.dir_url.endswith('/'):
-        parser.error("URL must ends with /")
+        parser.error("URL must end with /")
 
     http_auth = os.getenv('HTTP_PUT_AUTH')
     if http_auth:
