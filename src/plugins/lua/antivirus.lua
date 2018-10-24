@@ -313,7 +313,7 @@ local function check_av_cache(task, digest, rule, fn)
       -- Cached
       if data ~= 'OK' then
         lua_util.debugm(N, task, 'got cached result for %s: %s', key, data)
-        data = rspamd_str_split(data, '\x7c')
+        data = rspamd_str_split(data, '\v')
         yield_result(task, rule, data)
       else
         lua_util.debugm(N, task, 'got cached result for %s: %s', key, data)
@@ -359,7 +359,7 @@ local function save_av_cache(task, digest, rule, to_save)
   end
 
   if type(to_save) == 'table' then
-    to_save = table.concat(to_save, '\x30')
+    to_save = table.concat(to_save, '\v')
   end
 
   if redis_params then
