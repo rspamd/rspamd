@@ -1605,7 +1605,8 @@ lua_task_set_pre_result (lua_State * L)
 
 			/* Keep compatibility here :( */
 			ucl_object_replace_key (task->messages,
-					ucl_object_fromstring (message), "smtp_message", 0,
+					ucl_object_fromstring_common (message, 0, UCL_STRING_RAW),
+					"smtp_message", 0,
 					false);
 		}
 		else {
@@ -1682,7 +1683,8 @@ lua_task_append_message (lua_State * L)
 		}
 
 		ucl_object_insert_key (task->messages,
-				ucl_object_fromstring (message), category, 0,
+				ucl_object_fromstring_common (message, 0, UCL_STRING_RAW),
+				category, 0,
 				true);
 	}
 	else {
