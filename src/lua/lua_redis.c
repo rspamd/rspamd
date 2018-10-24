@@ -366,6 +366,10 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_ctx *ctx,
 			/* Data */
 			lua_redis_push_reply (cbs.L, r, ctx->flags & LUA_REDIS_TEXTDATA);
 
+			if (ud->item) {
+				rspamd_symbols_cache_set_cur_item (ud->task, ud->item);
+			}
+
 			if (lua_pcall (cbs.L, 2, 0, 0) != 0) {
 				msg_info ("call to callback failed: %s", lua_tostring (cbs.L, -1));
 				lua_pop (cbs.L, 1);
