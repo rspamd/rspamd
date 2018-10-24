@@ -2666,8 +2666,8 @@ guint
 rspamd_symcache_item_async_inc (struct rspamd_task *task,
 								struct rspamd_symcache_item *item)
 {
-	msg_debug_cache_task ("increase async events counter for %s = %d + 1",
-			item->symbol, item->async_events);
+	msg_debug_cache_task ("increase async events counter for %s(%d) = %d + 1",
+			item->symbol, item->id, item->async_events);
 	return ++item->async_events;
 }
 
@@ -2675,8 +2675,8 @@ guint
 rspamd_symcache_item_async_dec (struct rspamd_task *task,
 								struct rspamd_symcache_item *item)
 {
-	msg_debug_cache_task ("decrease async events counter for %s = %d - 1",
-			item->symbol, item->async_events);
+	msg_debug_cache_task ("decrease async events counter for %s(%d) = %d - 1",
+			item->symbol, item->id, item->async_events);
 	g_assert (item->async_events > 0);
 
 	return --item->async_events;

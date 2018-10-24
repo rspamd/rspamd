@@ -1574,6 +1574,10 @@ free_redirector_session (void *ud)
 {
 	struct redirector_param *param = (struct redirector_param *)ud;
 
+	if (param->item) {
+		rspamd_symcache_item_async_dec_check (param->task, param->item);
+	}
+
 	rspamd_http_connection_unref (param->conn);
 	close (param->sock);
 }
@@ -1682,6 +1686,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 			msg_info_surbl ("<%s> cannot create tcp socket failed: %s",
 					task->message_id,
 					strerror (errno));
+
 			return;
 		}
 
@@ -1709,6 +1714,10 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 				free_redirector_session, param,
 				g_quark_from_static_string ("surbl"));
 		param->item = rspamd_symbols_cache_get_cur_item (task);
+
+		if (param->item) {
+			rspamd_symcache_item_async_inc (param->task, param->item);
+		}
 
 		rspamd_http_connection_write_message (param->conn, msg, NULL,
 				NULL, param, s, timeout, task->ev_base);
@@ -1904,7 +1913,7 @@ surbl_test_url (struct rspamd_task *task,
 	param->tree = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 	param->ctx = surbl_module_ctx;
 	param->item = item;
-	rspamd_symcache_item_async_inc (task, item);
+
 	rspamd_mempool_add_destructor (task->task_pool,
 		(rspamd_mempool_destruct_t)g_hash_table_unref,
 		param->tree);
