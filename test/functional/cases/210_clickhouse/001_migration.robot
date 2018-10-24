@@ -11,6 +11,7 @@ Test Teardown  Clickhosue Teardown
 *** Variables ***
 ${CONFIG}       ${TESTDIR}/configs/clickhouse.conf
 ${RSPAMD_SCOPE}  Suite
+${CLICKHOUSE_PORT}  ${18123}
 
 *** Test Cases ***
 Initial schema

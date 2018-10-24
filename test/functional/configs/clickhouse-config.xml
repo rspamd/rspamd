@@ -10,7 +10,7 @@
         <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
     </logger>
     <!--display_name>production</display_name--> <!-- It is the name that will be shown in the client -->
-    <http_port>18123</http_port>
+    <http_port>${CLICKHOUSE_PORT}</http_port>
     <tcp_port>19000</tcp_port>
 
     <!-- For HTTPS and SSL over native protocol. -->

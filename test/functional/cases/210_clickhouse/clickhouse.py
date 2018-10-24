@@ -8,7 +8,7 @@ __client = None
 
 class Client:
     def __init__(self):
-        self.port = 18123
+        self.port = BuiltIn().get_variable_value('${CLICKHOUSE_PORT}', default=18123)
 
     def get_query_string(self):
         return "http://localhost:%d/?default_format=JSONEachRow" % (self.port)
