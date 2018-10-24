@@ -313,7 +313,7 @@ local function check_av_cache(task, digest, rule, fn)
       -- Cached
       if data ~= 'OK' then
         lua_util.debugm(N, task, 'got cached result for %s: %s', key, data)
-        data = rspamd_str_split(data, '\x30')
+        data = rspamd_str_split(data, '\x7c')
         yield_result(task, rule, data)
       else
         lua_util.debugm(N, task, 'got cached result for %s: %s', key, data)
