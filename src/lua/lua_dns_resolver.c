@@ -455,7 +455,10 @@ lua_dns_resolver_resolve_common (lua_State *L,
 			if (ret) {
 				cbdata->s = session;
 				cbdata->item = rspamd_symbols_cache_get_cur_item (task);
-				rspamd_symcache_item_async_inc (task, cbdata->item);
+
+				if (cbdata->item) {
+					rspamd_symcache_item_async_inc (task, cbdata->item);
+				}
 				/* callback was set up */
 				lua_pushboolean (L, TRUE);
 			} else {
