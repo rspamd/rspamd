@@ -49,14 +49,14 @@
 INIT_LOG_MODULE(symcache)
 
 #define CHECK_START_BIT(checkpoint, item) \
-	isset((checkpoint)->processed_bits, (item)->id * 2)
+	isset((checkpoint)->started_bits, (item)->id)
 #define SET_START_BIT(checkpoint, item) \
-	setbit((checkpoint)->processed_bits, (item)->id * 2)
+	setbit((checkpoint)->started_bits, (item)->id )
 
 #define CHECK_FINISH_BIT(checkpoint, item) \
-	isset((checkpoint)->processed_bits, (item)->id * 2 + 1)
+	isset((checkpoint)->finished_bits, (item)->id)
 #define SET_FINISH_BIT(checkpoint, item) \
-	setbit((checkpoint)->processed_bits, (item)->id * 2 + 1)
+	setbit((checkpoint)->finished_bits, (item)->id)
 
 static const guchar rspamd_symbols_cache_magic[8] = {'r', 's', 'c', 2, 0, 0, 0, 0 };
 
@@ -173,13 +173,15 @@ enum rspamd_cache_savepoint_stage {
 };
 
 struct cache_savepoint {
-	guchar *processed_bits;
+	guchar *started_bits;
+	guchar *finished_bits;
 	enum rspamd_cache_savepoint_stage pass;
 	guint version;
 	struct rspamd_metric_result *rs;
 	gdouble lim;
 	struct rspamd_symcache_item *cur_item;
 	guint items_inflight;
+	guint last_elt;
 	struct symbols_cache_order *order;
 };
 
@@ -1510,9 +1512,10 @@ rspamd_symbols_cache_make_checkpoint (struct rspamd_task *task,
 	}
 
 	checkpoint = rspamd_mempool_alloc0 (task->task_pool, sizeof (*checkpoint));
-	/* Bit 0: check started, Bit 1: check finished */
-	checkpoint->processed_bits = rspamd_mempool_alloc0 (task->task_pool,
-			NBYTES (cache->used_items) * 2);
+	checkpoint->started_bits = rspamd_mempool_alloc0 (task->task_pool,
+			NBYTES (cache->used_items));
+	checkpoint->finished_bits = rspamd_mempool_alloc0 (task->task_pool,
+			NBYTES (cache->used_items));
 	g_assert (cache->items_by_order != NULL);
 	checkpoint->version = cache->items_by_order->d->len;
 	checkpoint->order = cache->items_by_order;
@@ -1663,7 +1666,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		saved_priority = G_MININT;
 		all_done = TRUE;
 
-		for (i = 0; i < (gint)cache->prefilters->len; i ++) {
+		for (i = checkpoint->last_elt; i < (gint)cache->prefilters->len; i ++) {
 			item = g_ptr_array_index (cache->prefilters, i);
 
 			if (RSPAMD_TASK_IS_SKIPPED (task)) {
@@ -1684,6 +1687,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 						 * priority filters to be processed
 						 */
 						checkpoint->pass = RSPAMD_CACHE_PASS_PREFILTERS;
+						checkpoint->last_elt = i;
+
 						return TRUE;
 					}
 				}
@@ -1696,9 +1701,12 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 		if (all_done || stage == RSPAMD_TASK_STAGE_FILTERS) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_FILTERS;
+			checkpoint->last_elt = 0;
 		}
 
 		if (stage == RSPAMD_TASK_STAGE_FILTERS) {
+			checkpoint->last_elt = 0;
+
 			return rspamd_symbols_cache_process_symbols (task, cache, stage);
 		}
 
@@ -1712,7 +1720,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		 */
 		all_done = TRUE;
 
-		for (i = 0; i < (gint)checkpoint->version; i ++) {
+		for (i = checkpoint->last_elt; i < (gint)checkpoint->version; i ++) {
 			if (RSPAMD_TASK_IS_SKIPPED (task)) {
 				return TRUE;
 			}
@@ -1721,16 +1729,6 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 			if (item->type & SYMBOL_TYPE_CLASSIFIER) {
 				continue;
-			}
-
-			if (!(item->type & SYMBOL_TYPE_FINE)) {
-				if (rspamd_symbols_cache_metric_limit (task, checkpoint)) {
-					msg_info_task ("<%s> has already scored more than %.2f, so do "
-							"not "
-							"plan more checks", task->message_id,
-							checkpoint->rs->score);
-					continue;
-				}
 			}
 
 			if (!CHECK_START_BIT (checkpoint, item)) {
@@ -1743,19 +1741,37 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 							"resolved",
 							item->id, item->symbol);
 
+					if (checkpoint->last_elt == 0) {
+						checkpoint->last_elt = i;
+					}
+
 					continue;
 				}
 
 				rspamd_symbols_cache_check_symbol (task, cache, item,
 						checkpoint);
 			}
+
+			if (!(item->type & SYMBOL_TYPE_FINE)) {
+				if (rspamd_symbols_cache_metric_limit (task, checkpoint)) {
+					msg_info_task ("<%s> has already scored more than %.2f, so do "
+								   "not "
+								   "plan more checks", task->message_id,
+							checkpoint->rs->score);
+					all_done = TRUE;
+					break;
+				}
+			}
 		}
 
 		if (all_done || stage == RSPAMD_TASK_STAGE_POST_FILTERS) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_POSTFILTERS;
+			checkpoint->last_elt = 0;
 		}
 
 		if (stage == RSPAMD_TASK_STAGE_POST_FILTERS) {
+			checkpoint->last_elt = 0;
+
 			return rspamd_symbols_cache_process_symbols (task, cache, stage);
 		}
 
@@ -1766,7 +1782,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		saved_priority = G_MININT;
 		all_done = TRUE;
 
-		for (i = 0; i < (gint)cache->postfilters->len; i ++) {
+		for (i = checkpoint->last_elt; i < (gint)cache->postfilters->len; i ++) {
 			if (RSPAMD_TASK_IS_SKIPPED (task)) {
 				return TRUE;
 			}
@@ -1789,6 +1805,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 						 * priority filters to be processed
 						 */
 						checkpoint->pass = RSPAMD_CACHE_PASS_POSTFILTERS;
+						checkpoint->last_elt = i;
+
 						return TRUE;
 					}
 				}
@@ -1800,14 +1818,18 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 		if (all_done) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_IDEMPOTENT;
+			checkpoint->last_elt = 0;
 		}
 
 		if (checkpoint->items_inflight == 0 ||
 				stage == RSPAMD_TASK_STAGE_IDEMPOTENT) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_IDEMPOTENT;
+			checkpoint->last_elt = 0;
 		}
 
 		if (stage == RSPAMD_TASK_STAGE_IDEMPOTENT) {
+			checkpoint->last_elt = 0;
+
 			return rspamd_symbols_cache_process_symbols (task, cache, stage);
 		}
 
@@ -1817,7 +1839,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		/* Check for postfilters */
 		saved_priority = G_MININT;
 
-		for (i = 0; i < (gint)cache->idempotent->len; i ++) {
+		for (i = checkpoint->last_elt; i < (gint)cache->idempotent->len; i ++) {
 			item = g_ptr_array_index (cache->idempotent, i);
 
 			if (!CHECK_START_BIT (checkpoint, item) &&
@@ -1834,6 +1856,8 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 						 * priority filters to be processed
 						 */
 						checkpoint->pass = RSPAMD_CACHE_PASS_IDEMPOTENT;
+						checkpoint->last_elt = i;
+
 						return TRUE;
 					}
 				}
@@ -2266,8 +2290,10 @@ rspamd_symbols_cache_disable_all_symbols (struct rspamd_task *task,
 	}
 
 	/* Set all symbols as started + finished to disable their execution */
-	memset (checkpoint->processed_bits, 0xff,
-			NBYTES (cache->used_items) * 2);
+	memset (checkpoint->started_bits, 0xff,
+			NBYTES (cache->used_items));
+	memset (checkpoint->finished_bits, 0xff,
+			NBYTES (cache->used_items));
 }
 
 static void
@@ -2329,8 +2355,8 @@ rspamd_symbols_cache_enable_symbol_checkpoint (struct rspamd_task *task,
 		/* Set executed and finished flags */
 		item = g_ptr_array_index (cache->items_by_id, id);
 
-		clrbit (checkpoint->processed_bits, item->id * 2);
-		clrbit (checkpoint->processed_bits, item->id * 2 + 1);
+		clrbit (checkpoint->started_bits, item->id);
+		clrbit (checkpoint->finished_bits, item->id);
 
 		msg_debug_cache_task ("enable execution of %s (%d)", symbol, id);
 	}
@@ -2401,7 +2427,7 @@ rspamd_symbols_cache_is_checked (struct rspamd_task *task,
 	checkpoint = task->checkpoint;
 
 	if (checkpoint) {
-		return isset (checkpoint->processed_bits, id * 2);
+		return isset (checkpoint->started_bits, id);
 	}
 
 	return FALSE;
