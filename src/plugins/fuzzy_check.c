@@ -2107,7 +2107,9 @@ fuzzy_check_session_is_completed (struct fuzzy_client_session *session)
 
 	if (nreplied == session->commands->len) {
 		fuzzy_insert_metric_results (session->task, session->results);
-		rspamd_symcache_item_async_dec_check (session->task, session->item);
+		if (session->item) {
+			rspamd_symcache_item_async_dec_check (session->task, session->item);
+		}
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 
 		return TRUE;
@@ -2182,7 +2184,10 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 			errno,
 			strerror (errno));
 		rspamd_upstream_fail (session->server, FALSE);
-		rspamd_symcache_item_async_dec_check (session->task, session->item);
+
+		if (session->item) {
+			rspamd_symcache_item_async_dec_check (session->task, session->item);
+		}
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 	}
 	else {
@@ -2223,7 +2228,9 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 						rspamd_upstream_addr (session->server)),
 				session->retransmits);
 		rspamd_upstream_fail (session->server, FALSE);
-		rspamd_symcache_item_async_dec_check (session->task, session->item);
+		if (session->item) {
+			rspamd_symcache_item_async_dec_check (session->task, session->item);
+		}
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 	}
 	else {
@@ -2879,7 +2886,10 @@ register_fuzzy_client_call (struct rspamd_task *task,
 				rspamd_session_add_event (task->s, fuzzy_io_fin, session,
 						g_quark_from_static_string ("fuzzy check"));
 				session->item = rspamd_symbols_cache_get_cur_item (task);
-				rspamd_symcache_item_async_inc (task, session->item);
+
+				if (session->item) {
+					rspamd_symcache_item_async_inc (task, session->item);
+				}
 			}
 		}
 	}
