@@ -627,7 +627,7 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write,
 
   lutil.debugm(N, task, 'perform request to redis server' ..
       ' (host=%s, timeout=%s): cmd: %s, arguments: %s', ip_addr,
-      options.timeout, cmd, args)
+      options.timeout, options.cmd, args)
 
   local ret,conn = rspamd_redis.make_request(options)
 
@@ -715,8 +715,8 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key,
   end
 
   lutil.debugm(N, config, 'perform taskless request to redis server' ..
-      ' (host=%s, timeout=%s): cmd: %s, arguments: %s', ip_addr,
-      options.timeout, cmd, args)
+      ' (host=%s, timeout=%s): cmd: %s, arguments: %s', options.host,
+      options.timeout, options.cmd, args)
   local ret,conn = rspamd_redis.make_request(options)
   if not ret then
     logger.errx('cannot execute redis request')
