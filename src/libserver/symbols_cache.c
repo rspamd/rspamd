@@ -1316,9 +1316,11 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 
 		g_assert (item->func != NULL);
 		if (CHECK_START_BIT (checkpoint, item)) {
-			msg_err_cache ("critical error: trying to execute already executed symbol %s",
-				item->symbol);
-			g_assert_not_reached ();
+			/*
+			 * This can actually happen when deps span over different layers
+			 */
+
+			return CHECK_FINISH_BIT (checkpoint, item);
 		}
 		/* Check has been started */
 		SET_START_BIT (checkpoint, item);
