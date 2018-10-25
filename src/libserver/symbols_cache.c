@@ -181,7 +181,6 @@ struct cache_savepoint {
 	gdouble lim;
 	struct rspamd_symcache_item *cur_item;
 	guint items_inflight;
-	guint last_elt;
 	struct symbols_cache_order *order;
 };
 
@@ -1666,7 +1665,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		saved_priority = G_MININT;
 		all_done = TRUE;
 
-		for (i = checkpoint->last_elt; i < (gint)cache->prefilters->len; i ++) {
+		for (i = 0; i < (gint)cache->prefilters->len; i ++) {
 			item = g_ptr_array_index (cache->prefilters, i);
 
 			if (RSPAMD_TASK_IS_SKIPPED (task)) {
@@ -1687,7 +1686,6 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 						 * priority filters to be processed
 						 */
 						checkpoint->pass = RSPAMD_CACHE_PASS_PREFILTERS;
-						checkpoint->last_elt = i;
 
 						return TRUE;
 					}
@@ -1701,12 +1699,9 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 		if (all_done || stage == RSPAMD_TASK_STAGE_FILTERS) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_FILTERS;
-			checkpoint->last_elt = 0;
 		}
 
 		if (stage == RSPAMD_TASK_STAGE_FILTERS) {
-			checkpoint->last_elt = 0;
-
 			return rspamd_symbols_cache_process_symbols (task, cache, stage);
 		}
 
@@ -1720,7 +1715,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		 */
 		all_done = TRUE;
 
-		for (i = checkpoint->last_elt; i < (gint)checkpoint->version; i ++) {
+		for (i = 0; i < (gint)checkpoint->version; i ++) {
 			if (RSPAMD_TASK_IS_SKIPPED (task)) {
 				return TRUE;
 			}
@@ -1740,10 +1735,6 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 					msg_debug_cache_task ("blocked execution of %d(%s) unless deps are "
 							"resolved",
 							item->id, item->symbol);
-
-					if (checkpoint->last_elt == 0) {
-						checkpoint->last_elt = i;
-					}
 
 					continue;
 				}
@@ -1766,11 +1757,9 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 		if (all_done || stage == RSPAMD_TASK_STAGE_POST_FILTERS) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_POSTFILTERS;
-			checkpoint->last_elt = 0;
 		}
 
 		if (stage == RSPAMD_TASK_STAGE_POST_FILTERS) {
-			checkpoint->last_elt = 0;
 
 			return rspamd_symbols_cache_process_symbols (task, cache, stage);
 		}
@@ -1782,7 +1771,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		saved_priority = G_MININT;
 		all_done = TRUE;
 
-		for (i = checkpoint->last_elt; i < (gint)cache->postfilters->len; i ++) {
+		for (i = 0; i < (gint)cache->postfilters->len; i ++) {
 			if (RSPAMD_TASK_IS_SKIPPED (task)) {
 				return TRUE;
 			}
@@ -1805,7 +1794,6 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 						 * priority filters to be processed
 						 */
 						checkpoint->pass = RSPAMD_CACHE_PASS_POSTFILTERS;
-						checkpoint->last_elt = i;
 
 						return TRUE;
 					}
@@ -1818,18 +1806,14 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 		if (all_done) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_IDEMPOTENT;
-			checkpoint->last_elt = 0;
 		}
 
 		if (checkpoint->items_inflight == 0 ||
 				stage == RSPAMD_TASK_STAGE_IDEMPOTENT) {
 			checkpoint->pass = RSPAMD_CACHE_PASS_IDEMPOTENT;
-			checkpoint->last_elt = 0;
 		}
 
 		if (stage == RSPAMD_TASK_STAGE_IDEMPOTENT) {
-			checkpoint->last_elt = 0;
-
 			return rspamd_symbols_cache_process_symbols (task, cache, stage);
 		}
 
@@ -1839,7 +1823,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		/* Check for postfilters */
 		saved_priority = G_MININT;
 
-		for (i = checkpoint->last_elt; i < (gint)cache->idempotent->len; i ++) {
+		for (i = 0; i < (gint)cache->idempotent->len; i ++) {
 			item = g_ptr_array_index (cache->idempotent, i);
 
 			if (!CHECK_START_BIT (checkpoint, item) &&
@@ -1856,7 +1840,6 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 						 * priority filters to be processed
 						 */
 						checkpoint->pass = RSPAMD_CACHE_PASS_IDEMPOTENT;
-						checkpoint->last_elt = i;
 
 						return TRUE;
 					}
