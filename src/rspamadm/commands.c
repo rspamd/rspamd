@@ -91,9 +91,7 @@ rspamadm_fill_internal_commands (GPtrArray *dest)
 static void
 lua_thread_str_error_cb (struct thread_entry *thread, int ret, const char *msg)
 {
-	const struct rspamadm_command *cmd = thread->cd;
-
-	msg_err ("call to rspamadm lua script %s failed (%d): %s", cmd->name,
+	msg_err ("call to rspamadm lua script failed (%d): %s",
 			ret, msg);
 }
 
