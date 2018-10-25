@@ -101,30 +101,30 @@ return nconverted
 local keys = redis.call('SMEMBERS', KEYS[1]..'_keys')
 
 for _,k in ipairs(keys) do
-  local learns = redis.call('HGET', k, 'learns')
+  local learns = redis.call('HGET', k, 'learns') or 0
   local neutral_prefix = string.gsub(k, KEYS[1], 'RS')
 
   redis.call('HSET', neutral_prefix, KEYS[2], learns)
   redis.call('SADD', KEYS[1]..'_keys', neutral_prefix)
   redis.call('SREM', KEYS[1]..'_keys', k)
-  redis.call('DEL', k)
-  redis.call('SET', KEYS[1]..'_version', '2')
+  redis.call('DEL', KEYS[1])
+  redis.call('SET', k ..'_version', '2')
 end
 ]]
 
   conn:add_cmd('EVAL', {lua_script, '2', symbol_spam, 'learns_spam'})
-  ret = conn:exec()
+  ret,res = conn:exec()
 
   if not ret then
-    logger.errx('error converting metadata for symbol %s', symbol_spam)
+    logger.errx('error converting metadata for symbol %s: %s', symbol_spam, res)
     return false
   end
 
   conn:add_cmd('EVAL', {lua_script, '2', symbol_ham, 'learns_ham'})
-  ret = conn:exec()
+  ret, res = conn:exec()
 
   if not ret then
-    logger.errx('error converting metadata for symbol %s', symbol_ham)
+    logger.errx('error converting metadata for symbol %s', symbol_ham, res)
     return false
   end
 
