@@ -74,8 +74,8 @@ pipeline:
       # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
       - >
         if [ $EXIT_CODE -gt 128 ]; then
-        	gdb -c /var/tmp/*.rspamd-test.core ./rspamd-test -ex "set pagination 0" -ex "thread apply all bt full" --batch;
-        	exit $EXIT_CODE;
+        gdb --batch -ex 'thread apply all bt full' -c /var/tmp/*.rspamd-test.core ./rspamd-test;
+        exit $EXIT_CODE;
         fi
       # luacov-coveralls reads luacov.stats.out written by rspamd-test using luacov module
       # and writes json report for coveralls.io service
@@ -99,9 +99,18 @@ pipeline:
       # upload test results to nginx frontent using WebDAV PUT
       - >
         if [ -n "$HTTP_PUT_AUTH" ]; then
-        	$CI_WORKSPACE/test/tools/http_put.py log.html report.html $CI_SYSTEM_LINK/testlogs/$CI_REPO_NAME/$CI_BUILD_NUMBER/;
+        $CI_WORKSPACE/test/tools/http_put.py log.html report.html $CI_SYSTEM_LINK/testlogs/$CI_REPO_NAME/$CI_BUILD_NUMBER/;
         fi
-      - find /var/tmp/ -name '*.core'
+      # core_pattern=/var/tmp/%u.%e.core so one or two cores can be saved for each binary
+      - core_files=$(find /var/tmp/ -name '*.core')
+      # use 'info proc mappings' to find path to executable file for given core
+      # first mapping is usually program executable
+      - >
+        for core in $core_files;
+        do
+        exe=$(gdb --batch -ex 'info proc mappings' -c $core | awk 'h {print $5; exit}; /objfile/ {h=1}');
+        gdb --batch -ex 'bt' -c $core $exe; echo '---';
+        done
       - exit $EXIT_CODE
     secrets: [http_put_auth]
 
