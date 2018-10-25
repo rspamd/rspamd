@@ -183,6 +183,11 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 
 	lua_pushboolean (L, reply->authenticated);
 
+	if (cd->item) {
+		/* We also need to restore the item in case there are some chains */
+		rspamd_symbols_cache_set_cur_item (cd->task, cd->item);
+	}
+
 	if (lua_pcall (L, 6, 0, err_idx) != 0) {
 		tb = lua_touserdata (L, -1);
 
@@ -438,6 +443,13 @@ lua_dns_resolver_resolve_common (lua_State *L,
 			}
 		}
 		else {
+			/* Fail-safety as this function can, in theory, call
+			 * lua_dns_resolver_callback without switching to the event loop
+			 */
+			if (cbdata->item) {
+				rspamd_symcache_item_async_inc (task, cbdata->item);
+			}
+
 			if (forced) {
 				ret = make_dns_request_task_forced (task,
 						lua_dns_resolver_callback,
@@ -461,8 +473,13 @@ lua_dns_resolver_resolve_common (lua_State *L,
 				}
 				/* callback was set up */
 				lua_pushboolean (L, TRUE);
-			} else {
+			}
+			else {
 				lua_pushnil (L);
+			}
+
+			if (cbdata->item) {
+				rspamd_symcache_item_async_dec_check (task, cbdata->item);
 			}
 		}
 	}

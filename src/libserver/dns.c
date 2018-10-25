@@ -60,6 +60,10 @@ rspamd_dns_fin_cb (gpointer arg)
 {
 	struct rspamd_dns_request_ud *reqdata = (struct rspamd_dns_request_ud *)arg;
 
+	if (reqdata->item) {
+		rspamd_symbols_cache_set_cur_item (reqdata->task, reqdata->item);
+	}
+
 	if (reqdata->reply) {
 		reqdata->cb (reqdata->reply, reqdata->ud);
 	}
@@ -164,6 +168,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 		if (pool == NULL) {
 			g_free (reqdata);
 		}
+
 		return NULL;
 	}
 
