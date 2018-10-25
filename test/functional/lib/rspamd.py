@@ -160,8 +160,15 @@ def spamc(addr, port, filename):
     return r.decode('utf-8')
 
 def TCP_Connect(addr, port):
+    """Attempts to open a TCP connection to specified address:port
+
+    Example:
+    | Wait Until Keyword Succeeds | 5s | 10ms | TCP Connect | localhost | 8080 |
+    """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(5) # seconds
     s.connect((addr, port))
+    s.close()
 
 def update_dictionary(a, b):
     a.update(b)

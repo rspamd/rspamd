@@ -11,6 +11,7 @@ Test Teardown  Clickhosue Teardown
 *** Variables ***
 ${CONFIG}       ${TESTDIR}/configs/clickhouse.conf
 ${RSPAMD_SCOPE}  Suite
+${CLICKHOUSE_PORT}  ${18123}
 
 *** Test Cases ***
 Initial schema
@@ -68,7 +69,7 @@ Clickhouse Setup
   ${result} =  Run Process  clickhouse-server  --daemon  --config-file\=${TMPDIR}/clickhouse-config.xml  --pid-file\=${TMPDIR}/clickhouse.pid
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Be Equal As Integers  ${result.rc}  0
-  Wait Until Keyword Succeeds  5 sec  1 sec  Check Pidfile  ${TMPDIR}/clickhouse.pid  timeout=5 sec
+  Wait Until Keyword Succeeds  5 sec  50 ms  TCP Connect  localhost  ${CLICKHOUSE_PORT}
   Set Suite Variable  ${TMPDIR}  ${TMPDIR}
 
 
