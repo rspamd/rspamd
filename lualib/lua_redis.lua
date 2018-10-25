@@ -22,6 +22,7 @@ local ts = require("tableshape").types
 local exports = {}
 
 local E = {}
+local N = "lua_redis"
 
 local common_schema = ts.shape {
   timeout = (ts.number + ts.string / lutil.parse_time_interval):is_optional(),
@@ -146,6 +147,8 @@ local function try_load_redis_servers(options, rspamd_config, result)
     if upstreams_write then
       result.write_servers = upstreams_write
     end
+
+    lutil.debugm(N, 'loaded redis server: %s', result)
     return true
   end
 
@@ -162,6 +165,7 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
 
   -- Try local options
   local opts
+  lutil.debugm(N, rspamd_config, 'try load redis config for: %s', module_name)
   if not module_opts then
     opts = rspamd_config:get_all_opt(module_name)
   else
@@ -621,6 +625,10 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write,
     options['dbname'] = redis_params['db']
   end
 
+  lutil.debugm(N, task, 'perform request to redis server' ..
+      ' (host=%s, timeout=%s): cmd: %s, arguments: %s', ip_addr,
+      options.timeout, cmd, args)
+
   local ret,conn = rspamd_redis.make_request(options)
 
   if not ret then
@@ -706,6 +714,9 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key,
     options['dbname'] = redis_params['db']
   end
 
+  lutil.debugm(N, config, 'perform taskless request to redis server' ..
+      ' (host=%s, timeout=%s): cmd: %s, arguments: %s', ip_addr,
+      options.timeout, cmd, args)
   local ret,conn = rspamd_redis.make_request(options)
   if not ret then
     logger.errx('cannot execute redis request')
@@ -1153,6 +1164,10 @@ exports.request = function(redis_params, attrs, req)
   if redis_params.db then
     opts.dbname = redis_params.db
   end
+
+  lutil.debugm(N, 'perform generic request to redis server' ..
+      ' (host=%s, timeout=%s): cmd: %s, arguments: %s', addr,
+      opts.timeout, opts.cmd, opts.args)
 
   if opts.callback then
     local ret,conn = rspamd_redis.make_request(opts)
