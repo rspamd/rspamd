@@ -28,6 +28,8 @@
 #define REDIS_DEFAULT_PORT 6379
 #define DEFAULT_REDIS_KEY "learned_ids"
 
+static const gchar *M = "redis learn cache";
+
 struct rspamd_redis_cache_ctx {
 	struct rspamd_statfile_config *stcf;
 	struct upstream_list *read_servers;
@@ -51,7 +53,7 @@ struct rspamd_redis_cache_runtime {
 static GQuark
 rspamd_stat_cache_redis_quark (void)
 {
-	return g_quark_from_static_string ("redis-statistics");
+	return g_quark_from_static_string (M);
 }
 
 static void
@@ -153,7 +155,7 @@ rspamd_stat_cache_redis_get (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	if (rt->has_event) {
 		if (rt->item) {
-			rspamd_symcache_item_async_dec_check (task, rt->item);
+			rspamd_symcache_item_async_dec_check (task, rt->item, M);
 		}
 		rspamd_session_remove_event (task->s, rspamd_redis_cache_fin, rt);
 	}
@@ -178,7 +180,7 @@ rspamd_stat_cache_redis_set (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	if (rt->has_event) {
 		if (rt->item) {
-			rspamd_symcache_item_async_dec_check (task, rt->item);
+			rspamd_symcache_item_async_dec_check (task, rt->item, M);
 		}
 		rspamd_session_remove_event (task->s, rspamd_redis_cache_fin, rt);
 	}
@@ -463,7 +465,7 @@ rspamd_stat_cache_redis_check (struct rspamd_task *task,
 		rspamd_session_add_event (task->s,
 				rspamd_redis_cache_fin,
 				rt,
-				rspamd_stat_cache_redis_quark ());
+				M);
 		rt->item = rspamd_symbols_cache_get_cur_item (task);
 		event_add (&rt->timeout_event, &tv);
 		rt->has_event = TRUE;
@@ -497,7 +499,7 @@ rspamd_stat_cache_redis_learn (struct rspamd_task *task,
 			"HSET %s %s %d",
 			rt->ctx->redis_object, h, flag) == REDIS_OK) {
 		rspamd_session_add_event (task->s,
-				rspamd_redis_cache_fin, rt, rspamd_stat_cache_redis_quark ());
+				rspamd_redis_cache_fin, rt, M);
 		rt->item = rspamd_symbols_cache_get_cur_item (task);
 		event_add (&rt->timeout_event, &tv);
 		rt->has_event = TRUE;

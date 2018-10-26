@@ -40,6 +40,9 @@ local function symbol_callback(task)
 	task:get_resolver():resolve_a({task = task, name = host, callback = dns_cb})
 end
  */
+
+static const gchar *M = "rspamd lua dns resolver";
+
 struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L);
 void luaopen_dns_resolver (lua_State * L);
 
@@ -204,7 +207,7 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 	lua_thread_pool_restore_callback (&cbs);
 
 	if (cd->item) {
-		rspamd_symcache_item_async_dec_check (cd->task, cd->item);
+		rspamd_symcache_item_async_dec_check (cd->task, cd->item, M);
 	}
 
 	if (!cd->pool) {
@@ -447,7 +450,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 			 * lua_dns_resolver_callback without switching to the event loop
 			 */
 			if (cbdata->item) {
-				rspamd_symcache_item_async_inc (task, cbdata->item);
+				rspamd_symcache_item_async_inc (task, cbdata->item, M);
 			}
 
 			if (forced) {
@@ -469,7 +472,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 				cbdata->item = rspamd_symbols_cache_get_cur_item (task);
 
 				if (cbdata->item) {
-					rspamd_symcache_item_async_inc (task, cbdata->item);
+					rspamd_symcache_item_async_inc (task, cbdata->item, M);
 				}
 				/* callback was set up */
 				lua_pushboolean (L, TRUE);
@@ -479,7 +482,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 			}
 
 			if (cbdata->item) {
-				rspamd_symcache_item_async_dec_check (task, cbdata->item);
+				rspamd_symcache_item_async_dec_check (task, cbdata->item, M);
 			}
 		}
 	}

@@ -49,7 +49,7 @@ struct rspamd_async_event *
 rspamd_session_add_event (struct rspamd_async_session *session,
 						  event_finalizer_t fin,
 						  gpointer user_data,
-						  GQuark subsystem);
+						  const gchar *subsystem);
 
 /**
  * Remove normal event

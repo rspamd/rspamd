@@ -58,6 +58,7 @@
 #define RSPAMD_FUZZY_PLUGIN_VERSION RSPAMD_FUZZY_VERSION
 
 static const gint rspamd_fuzzy_hash_len = 5;
+static const gchar *M = "fuzzy check";
 struct fuzzy_ctx;
 
 struct fuzzy_mapping {
@@ -2108,7 +2109,7 @@ fuzzy_check_session_is_completed (struct fuzzy_client_session *session)
 	if (nreplied == session->commands->len) {
 		fuzzy_insert_metric_results (session->task, session->results);
 		if (session->item) {
-			rspamd_symcache_item_async_dec_check (session->task, session->item);
+			rspamd_symcache_item_async_dec_check (session->task, session->item, M);
 		}
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 
@@ -2186,7 +2187,7 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 		rspamd_upstream_fail (session->server, FALSE);
 
 		if (session->item) {
-			rspamd_symcache_item_async_dec_check (session->task, session->item);
+			rspamd_symcache_item_async_dec_check (session->task, session->item, M);
 		}
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 	}
@@ -2229,7 +2230,7 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 				session->retransmits);
 		rspamd_upstream_fail (session->server, FALSE);
 		if (session->item) {
-			rspamd_symcache_item_async_dec_check (session->task, session->item);
+			rspamd_symcache_item_async_dec_check (session->task, session->item, M);
 		}
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 	}
@@ -2298,7 +2299,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 					session->task->message_id, strerror (errno));
 			if (*(session->err) == NULL) {
 				g_set_error (session->err,
-						g_quark_from_static_string ("fuzzy check"),
+						g_quark_from_static_string (M),
 						errno, "read socket error: %s", strerror (errno));
 			}
 			ret = return_error;
@@ -2362,7 +2363,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 
 						if (*(session->err) == NULL) {
 							g_set_error (session->err,
-									g_quark_from_static_string ("fuzzy check"),
+									g_quark_from_static_string (M),
 									rep->v1.value, "fuzzy hash is skipped");
 						}
 					}
@@ -2381,7 +2382,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 
 						if (*(session->err) == NULL) {
 							g_set_error (session->err,
-									g_quark_from_static_string ("fuzzy check"),
+									g_quark_from_static_string (M),
 									rep->v1.value, "process fuzzy error");
 						}
 					}
@@ -2410,7 +2411,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 			if (!fuzzy_cmd_vector_to_wire (fd, session->commands)) {
 				if (*(session->err) == NULL) {
 					g_set_error (session->err,
-						g_quark_from_static_string ("fuzzy check"),
+						g_quark_from_static_string (M),
 						errno, "write socket error: %s", strerror (errno));
 				}
 				ret = return_error;
@@ -2883,12 +2884,11 @@ register_fuzzy_client_call (struct rspamd_task *task,
 				event_base_set (session->task->ev_base, &session->timev);
 				event_add (&session->timev, &session->tv);
 
-				rspamd_session_add_event (task->s, fuzzy_io_fin, session,
-						g_quark_from_static_string ("fuzzy check"));
+				rspamd_session_add_event (task->s, fuzzy_io_fin, session, M);
 				session->item = rspamd_symbols_cache_get_cur_item (task);
 
 				if (session->item) {
-					rspamd_symcache_item_async_inc (task, session->item);
+					rspamd_symcache_item_async_inc (task, session->item, M);
 				}
 			}
 		}
@@ -2925,7 +2925,7 @@ fuzzy_symbol_callback (struct rspamd_task *task,
 		}
 	}
 
-	rspamd_symcache_item_async_inc (task, item);
+	rspamd_symcache_item_async_inc (task, item, M);
 
 	PTR_ARRAY_FOREACH (fuzzy_module_ctx->fuzzy_rules, i, rule) {
 		commands = fuzzy_generate_commands (task, rule, FUZZY_CHECK, 0, 0, 0);
@@ -2935,7 +2935,7 @@ fuzzy_symbol_callback (struct rspamd_task *task,
 		}
 	}
 
-	rspamd_symcache_item_async_dec_check (task, item);
+	rspamd_symcache_item_async_dec_check (task, item, M);
 }
 
 void
@@ -3374,7 +3374,7 @@ fuzzy_check_send_lua_learn (struct fuzzy_rule *rule,
 				rspamd_session_add_event (task->s,
 						fuzzy_lua_fin,
 						s,
-						g_quark_from_static_string ("fuzzy check"));
+						M);
 
 				(*saved)++;
 				ret = 1;

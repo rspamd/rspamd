@@ -45,6 +45,8 @@ local function symbol_callback(task)
 
 #define MAX_HEADERS_SIZE 8192
 
+static const gchar *M = "rspamd lua http";
+
 LUA_FUNCTION_DEF (http, request);
 
 static const struct luaL_reg httplib_m[] = {
@@ -151,7 +153,7 @@ lua_http_maybe_free (struct lua_http_cbdata *cbd)
 		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_RESOLVED) {
 			/* Event is added merely for resolved events */
 			if (cbd->item) {
-				rspamd_symcache_item_async_dec_check (cbd->task, cbd->item);
+				rspamd_symcache_item_async_dec_check (cbd->task, cbd->item, M);
 			}
 
 			rspamd_session_remove_event (cbd->session, lua_http_fin, cbd);
@@ -422,12 +424,12 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 		if (cbd->session) {
 			rspamd_session_add_event (cbd->session,
 					(event_finalizer_t) lua_http_fin, cbd,
-					g_quark_from_static_string ("lua http"));
+					M);
 			cbd->flags |= RSPAMD_LUA_HTTP_FLAG_RESOLVED;
 		}
 
 		if (cbd->item) {
-			rspamd_symcache_item_async_inc (cbd->task, cbd->item);
+			rspamd_symcache_item_async_inc (cbd->task, cbd->item, M);
 		}
 
 		return TRUE;
@@ -464,7 +466,7 @@ lua_http_dns_handler (struct rdns_reply *reply, gpointer ud)
 	}
 
 	if (cbd->item) {
-		rspamd_symcache_item_async_dec_check (cbd->task, cbd->item);
+		rspamd_symcache_item_async_dec_check (cbd->task, cbd->item, M);
 	}
 }
 
@@ -947,7 +949,7 @@ lua_http_request (lua_State *L)
 				return 1;
 			}
 			else if (cbd->item) {
-				rspamd_symcache_item_async_inc (cbd->task, cbd->item);
+				rspamd_symcache_item_async_inc (cbd->task, cbd->item, M);
 			}
 		}
 	}

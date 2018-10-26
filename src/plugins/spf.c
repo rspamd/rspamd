@@ -45,6 +45,8 @@
 #define DEFAULT_SYMBOL_NA "R_SPF_NA"
 #define DEFAULT_CACHE_SIZE 2048
 
+static const gchar *M = "rspamd spf plugin";
+
 struct spf_ctx {
 	struct module_ctx ctx;
 	const gchar *symbol_fail;
@@ -562,7 +564,7 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 		spf_record_unref (l);
 	}
 
-	rspamd_symcache_item_async_dec_check (task, item);
+	rspamd_symcache_item_async_dec_check (task, item, M);
 }
 
 
@@ -608,7 +610,7 @@ spf_symbol_callback (struct rspamd_task *task,
 	}
 
 	domain = rspamd_spf_get_domain (task);
-	rspamd_symcache_item_async_inc (task, item);
+	rspamd_symcache_item_async_inc (task, item, M);
 
 	if (domain) {
 		if ((l =
@@ -629,10 +631,10 @@ spf_symbol_callback (struct rspamd_task *task,
 						"(SPF): spf DNS fail");
 			}
 			else {
-				rspamd_symcache_item_async_inc (task, item);
+				rspamd_symcache_item_async_inc (task, item, M);
 			}
 		}
 	}
 
-	rspamd_symcache_item_async_dec_check (task, item);
+	rspamd_symcache_item_async_dec_check (task, item, M);
 }

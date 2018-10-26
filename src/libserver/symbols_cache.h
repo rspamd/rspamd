@@ -316,12 +316,14 @@ void rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
  * Increase number of async events pending for an item
  */
 guint rspamd_symcache_item_async_inc (struct rspamd_task *task,
-									  struct rspamd_symcache_item *item);
+									  struct rspamd_symcache_item *item,
+									  const gchar *subsystem);
 /*
  * Decrease number of async events pending for an item, asserts if no events pending
  */
 guint rspamd_symcache_item_async_dec (struct rspamd_task *task,
-									  struct rspamd_symcache_item *item);
+									  struct rspamd_symcache_item *item,
+									  const gchar *subsystem);
 
 /**
  * Decrease number of async events pending for an item, asserts if no events pending
@@ -331,5 +333,6 @@ guint rspamd_symcache_item_async_dec (struct rspamd_task *task,
  * @return
  */
 gboolean rspamd_symcache_item_async_dec_check (struct rspamd_task *task,
-											   struct rspamd_symcache_item *item);
+											   struct rspamd_symcache_item *item,
+											   const gchar *subsystem);
 #endif

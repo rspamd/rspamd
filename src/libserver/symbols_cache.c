@@ -2677,19 +2677,21 @@ rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
 
 guint
 rspamd_symcache_item_async_inc (struct rspamd_task *task,
-								struct rspamd_symcache_item *item)
+								struct rspamd_symcache_item *item,
+								const gchar *subsystem)
 {
-	msg_debug_cache_task ("increase async events counter for %s(%d) = %d + 1",
-			item->symbol, item->id, item->async_events);
+	msg_debug_cache_task ("increase async events counter for %s(%d) = %d + 1; subsystem %s",
+			item->symbol, item->id, item->async_events, subsystem);
 	return ++item->async_events;
 }
 
 guint
 rspamd_symcache_item_async_dec (struct rspamd_task *task,
-								struct rspamd_symcache_item *item)
+								struct rspamd_symcache_item *item,
+								const gchar *subsystem)
 {
-	msg_debug_cache_task ("decrease async events counter for %s(%d) = %d - 1",
-			item->symbol, item->id, item->async_events);
+	msg_debug_cache_task ("decrease async events counter for %s(%d) = %d - 1; subsystem %s",
+			item->symbol, item->id, item->async_events, subsystem);
 	g_assert (item->async_events > 0);
 
 	return --item->async_events;
@@ -2697,9 +2699,10 @@ rspamd_symcache_item_async_dec (struct rspamd_task *task,
 
 gboolean
 rspamd_symcache_item_async_dec_check (struct rspamd_task *task,
-									  struct rspamd_symcache_item *item)
+									  struct rspamd_symcache_item *item,
+									  const gchar *subsystem)
 {
-	if (rspamd_symcache_item_async_dec (task, item) == 0) {
+	if (rspamd_symcache_item_async_dec (task, item, subsystem) == 0) {
 		rspamd_symbols_cache_finalize_item (task, item);
 
 		return TRUE;

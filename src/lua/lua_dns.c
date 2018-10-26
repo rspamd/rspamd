@@ -23,8 +23,9 @@ static const struct luaL_reg dns_f[] = {
 		{NULL, NULL}
 };
 
-void
-lua_dns_callback (struct rdns_reply *reply, void *arg);
+static const gchar *M = "rspamd lua dns";
+
+void lua_dns_callback (struct rdns_reply *reply, void *arg);
 
 struct lua_rspamd_dns_cbdata {
 	struct thread_entry *thread;
@@ -109,13 +110,13 @@ lua_dns_request (lua_State *L)
 
 
 	if (task == NULL) {
-		ret = make_dns_request (cfg->dns_resolver,
+		ret = (make_dns_request (cfg->dns_resolver,
 							   session,
 							   pool,
 							   lua_dns_callback,
 							   cbdata,
 							   type,
-							   to_resolve);
+							   to_resolve) != NULL);
 	}
 	else {
 	if (forced) {
@@ -140,7 +141,7 @@ lua_dns_request (lua_State *L)
 
 		if (task) {
 			cbdata->item = rspamd_symbols_cache_get_cur_item (task);
-			rspamd_symcache_item_async_inc (task, cbdata->item);
+			rspamd_symcache_item_async_inc (task, cbdata->item, M);
 		}
 
 		return lua_thread_yield (cbdata->thread, 0);
@@ -176,7 +177,7 @@ lua_dns_callback (struct rdns_reply *reply, void *arg)
 	lua_thread_resume (cbdata->thread, 2);
 
 	if (cbdata->item) {
-		rspamd_symcache_item_async_dec_check (cbdata->task, cbdata->item);
+		rspamd_symcache_item_async_dec_check (cbdata->task, cbdata->item, M);
 	}
 }
 

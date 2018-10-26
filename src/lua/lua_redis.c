@@ -22,6 +22,8 @@
 
 #define REDIS_DEFAULT_TIMEOUT 1.0
 
+static const gchar *M = "rspamd lua redis";
+
 /***
  * @module rspamd_redis
  * This module implements redis asynchronous client for rspamd LUA API.
@@ -292,7 +294,7 @@ lua_redis_push_error (const gchar *err,
 
 		if (connected && ud->s) {
 			if (ud->item) {
-				rspamd_symcache_item_async_dec_check (ud->task, ud->item);
+				rspamd_symcache_item_async_dec_check (ud->task, ud->item, M);
 			}
 
 			rspamd_session_remove_event (ud->s, lua_redis_fin, sp_ud);
@@ -382,7 +384,7 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_ctx *ctx,
 
 		if (ud->s) {
 			if (ud->item) {
-				rspamd_symcache_item_async_dec_check (ud->task, ud->item);
+				rspamd_symcache_item_async_dec_check (ud->task, ud->item, M);
 			}
 
 			rspamd_session_remove_event (ud->s, lua_redis_fin, sp_ud);
@@ -502,7 +504,7 @@ lua_redis_cleanup_events (struct lua_redis_ctx *ctx)
 		struct lua_redis_result *result = g_queue_pop_head (ctx->events_cleanup);
 
 		if (result->item) {
-			rspamd_symcache_item_async_dec_check (result->task, result->item);
+			rspamd_symcache_item_async_dec_check (result->task, result->item, M);
 		}
 
 		rspamd_session_remove_event (result->s, lua_redis_fin, result->sp_ud);
@@ -1051,10 +1053,10 @@ lua_redis_make_request (lua_State *L)
 			if (ud->s) {
 				rspamd_session_add_event (ud->s,
 						lua_redis_fin, sp_ud,
-						g_quark_from_static_string ("lua redis"));
+						M);
 
 				if (ud->item) {
-					rspamd_symcache_item_async_inc (ud->task, ud->item);
+					rspamd_symcache_item_async_inc (ud->task, ud->item, M);
 				}
 			}
 
@@ -1420,10 +1422,10 @@ lua_redis_add_cmd (lua_State *L)
 				rspamd_session_add_event (ud->s,
 						lua_redis_fin,
 						sp_ud,
-						g_quark_from_static_string ("lua redis"));
+						M);
 
 				if (ud->item) {
-					rspamd_symcache_item_async_inc (ud->task, ud->item);
+					rspamd_symcache_item_async_inc (ud->task, ud->item, M);
 				}
 			}
 

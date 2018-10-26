@@ -105,12 +105,13 @@ struct rspamd_redis_stat_cbdata {
 
 #define GET_TASK_ELT(task, elt) (task == NULL ? NULL : (task)->elt)
 
+static const gchar *M = "redis statistics";
+
 static GQuark
 rspamd_redis_stat_quark (void)
 {
-	return g_quark_from_static_string ("redis-statistics");
+	return g_quark_from_static_string (M);
 }
-
 
 /*
  * Non-static for lua unit testing
@@ -1198,7 +1199,7 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	if (rt->has_event) {
 		if (rt->item) {
-			rspamd_symcache_item_async_dec_check (task, rt->item);
+			rspamd_symcache_item_async_dec_check (task, rt->item, M);
 		}
 
 		rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
@@ -1234,7 +1235,7 @@ rspamd_redis_learned (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	if (rt->has_event) {
 		if (rt->item) {
-			rspamd_symcache_item_async_dec_check (task, rt->item);
+			rspamd_symcache_item_async_dec_check (task, rt->item, M);
 		}
 
 		rspamd_session_remove_event (task->s, rspamd_redis_fin_learn, rt);
@@ -1603,8 +1604,7 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 	if (redisAsyncCommand (rt->redis, rspamd_redis_connected, rt, "HGET %s %s",
 			rt->redis_object_expanded, learned_key) == REDIS_OK) {
 
-		rspamd_session_add_event (task->s,
-				rspamd_redis_fin, rt, rspamd_redis_stat_quark ());
+		rspamd_session_add_event (task->s, rspamd_redis_fin, rt, M);
 		rt->item = rspamd_symbols_cache_get_cur_item (task);
 		rt->has_event = TRUE;
 
@@ -1809,8 +1809,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 					"RSIG");
 		}
 
-		rspamd_session_add_event (task->s,
-				rspamd_redis_fin_learn, rt, rspamd_redis_stat_quark ());
+		rspamd_session_add_event (task->s, rspamd_redis_fin_learn, rt, M);
 		rt->item = rspamd_symbols_cache_get_cur_item (task);
 		rt->has_event = TRUE;
 

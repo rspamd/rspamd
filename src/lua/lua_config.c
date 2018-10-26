@@ -1107,7 +1107,7 @@ lua_metric_symbol_callback (struct rspamd_task *task,
 	struct rspamd_task **ptask;
 	struct thread_entry *thread_entry;
 
-	rspamd_symcache_item_async_inc (task, item);
+	rspamd_symcache_item_async_inc (task, item, "lua symbol");
 	thread_entry = lua_thread_pool_get_for_task (task);
 
 	g_assert(thread_entry->cd == NULL);
@@ -1143,7 +1143,7 @@ lua_metric_symbol_callback_error (struct thread_entry *thread_entry,
 	struct rspamd_task *task = thread_entry->task;
 	msg_err_task ("call to (%s) failed (%d): %s", cd->symbol, ret, msg);
 
-	rspamd_symcache_item_async_dec_check (task, cd->item);
+	rspamd_symcache_item_async_dec_check (task, cd->item, "lua symbol");
 }
 
 static void
@@ -1224,7 +1224,7 @@ lua_metric_symbol_callback_return (struct thread_entry *thread_entry, int ret)
 	g_assert (lua_gettop (L) == cd->stack_level); /* we properly cleaned up the stack */
 
 	cd->stack_level = 0;
-	rspamd_symcache_item_async_dec_check (task, cd->item);
+	rspamd_symcache_item_async_dec_check (task, cd->item, "lua symbol");
 }
 
 static gint

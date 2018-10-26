@@ -50,6 +50,8 @@
 #define DEFAULT_TIME_JITTER 60
 #define DEFAULT_MAX_SIGS 5
 
+static const gchar *M = "rspamd dkim plugin";
+
 static const gchar default_sign_headers[] = ""
 		"(o)from:(o)sender:(o)reply-to:(o)subject:(o)date:(o)message-id:"
 		"(o)to:(o)cc:(o)mime-version:(o)content-type:(o)content-transfer-encoding:"
@@ -1130,7 +1132,7 @@ dkim_symbol_callback (struct rspamd_task *task,
 		return;
 	}
 
-	rspamd_symcache_item_async_inc (task, item);
+	rspamd_symcache_item_async_inc (task, item, M);
 
 	/* Now check if a message has its signature */
 	hlist = rspamd_message_get_header_array (task,
@@ -1239,7 +1241,7 @@ dkim_symbol_callback (struct rspamd_task *task,
 		dkim_module_check (res);
 	}
 
-	rspamd_symcache_item_async_dec_check (task, item);
+	rspamd_symcache_item_async_dec_check (task, item, M);
 }
 
 static void

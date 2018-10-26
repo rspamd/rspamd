@@ -24,6 +24,8 @@
 #include "rdns_event.h"
 #include "unix-std.h"
 
+static const gchar *M = "rspamd dns";
+
 static struct rdns_upstream_elt* rspamd_dns_select_upstream (const char *name,
 		size_t len, void *ups_data);
 static struct rdns_upstream_elt* rspamd_dns_select_upstream_retransmit (
@@ -83,7 +85,7 @@ rspamd_dns_fin_cb (gpointer arg)
 
 	if (reqdata->item) {
 		rspamd_symcache_item_async_dec_check (reqdata->task,
-				reqdata->item);
+				reqdata->item, M);
 	}
 
 	if (reqdata->pool == NULL) {
@@ -160,7 +162,7 @@ make_dns_request (struct rspamd_dns_resolver *resolver,
 			rspamd_session_add_event (session,
 					(event_finalizer_t) rspamd_dns_fin_cb,
 					reqdata,
-					g_quark_from_static_string ("dns resolver"));
+					M);
 		}
 	}
 
@@ -200,7 +202,7 @@ make_dns_request_task_common (struct rspamd_task *task,
 
 		if (reqdata->item) {
 			/* We are inside some session */
-			rspamd_symcache_item_async_inc (task, reqdata->item);
+			rspamd_symcache_item_async_inc (task, reqdata->item, M);
 		}
 
 		if (!forced && task->dns_requests >= task->cfg->dns_max_requests) {

@@ -48,7 +48,7 @@ static struct rspamd_counter_data events_count;
 
 
 struct rspamd_async_event {
-	GQuark subsystem;
+	const gchar *subsystem;
 	event_finalizer_t fin;
 	void *user_data;
 };
@@ -148,7 +148,7 @@ struct rspamd_async_event *
 rspamd_session_add_event (struct rspamd_async_session *session,
 						  event_finalizer_t fin,
 						  gpointer user_data,
-						  GQuark subsystem)
+						  const gchar *subsystem)
 {
 	struct rspamd_async_event *new_event;
 	gint ret;
@@ -161,7 +161,7 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 	if (!RSPAMD_SESSION_CAN_ADD_EVENT (session)) {
 		msg_debug_session ("skip adding event subsystem: %s: "
 					 "session is destroying/cleaning",
-				g_quark_to_string (subsystem));
+				subsystem);
 
 		return NULL;
 	}
@@ -176,7 +176,7 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 					   "subsystem: %s",
 			user_data,
 			kh_size (session->events),
-			g_quark_to_string (subsystem));
+			subsystem);
 
 	kh_put (rspamd_events_hash, session->events, new_event, &ret);
 	g_assert (ret > 0);
@@ -212,8 +212,9 @@ rspamd_session_remove_event (struct rspamd_async_session *session,
 		msg_err_session ("cannot find event: %p(%p)", fin, ud);
 		kh_foreach (session->events, found_ev, t, {
 			msg_err_session ("existing event %s: %p(%p)",
-					g_quark_to_string (found_ev->subsystem),
-					found_ev->fin, found_ev->user_data);
+					found_ev->subsystem,
+					found_ev->fin,
+					found_ev->user_data);
 		});
 
 		(void)t;
@@ -226,7 +227,7 @@ rspamd_session_remove_event (struct rspamd_async_session *session,
 					   "subsystem: %s",
 			ud,
 			kh_size (session->events),
-			g_quark_to_string (found_ev->subsystem));
+			found_ev->subsystem);
 	kh_del (rspamd_events_hash, session->events, k);
 
 	/* Remove event */
@@ -271,7 +272,7 @@ rspamd_session_cleanup (struct rspamd_async_session *session)
 		/* Call event's finalizer */
 		msg_debug_session ("removed event on destroy: %p, subsystem: %s",
 				ev->user_data,
-				g_quark_to_string (ev->subsystem));
+				ev->subsystem);
 
 		if (ev->fin != NULL) {
 			ev->fin (ev->user_data);
