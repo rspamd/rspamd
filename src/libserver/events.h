@@ -46,10 +46,13 @@ struct rspamd_async_session * rspamd_session_create (rspamd_mempool_t *pool,
  * @param forced unused
  */
 struct rspamd_async_event *
-rspamd_session_add_event (struct rspamd_async_session *session,
+rspamd_session_add_event_full (struct rspamd_async_session *session,
 						  event_finalizer_t fin,
 						  gpointer user_data,
-						  const gchar *subsystem);
+						  const gchar *subsystem,
+						  const gchar *loc);
+#define rspamd_session_add_event(session, fin, user_data, subsystem) \
+	rspamd_session_add_event_full(session, fin, user_data, subsystem, G_STRLOC)
 
 /**
  * Remove normal event
@@ -57,9 +60,12 @@ rspamd_session_add_event (struct rspamd_async_session *session,
  * @param fin final callback
  * @param ud user data object
  */
-void rspamd_session_remove_event (struct rspamd_async_session *session,
-	event_finalizer_t fin,
-	gpointer ud);
+void rspamd_session_remove_event_full (struct rspamd_async_session *session,
+								  event_finalizer_t fin,
+								  gpointer ud,
+								  const gchar *loc);
+#define rspamd_session_remove_event(session, fin, user_data) \
+	rspamd_session_remove_event_full(session, fin, user_data, G_STRLOC)
 
 /**
  * Must be called at the end of session, it calls fin functions for all non-forced callbacks

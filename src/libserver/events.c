@@ -49,6 +49,7 @@ static struct rspamd_counter_data events_count;
 
 struct rspamd_async_event {
 	const gchar *subsystem;
+	const gchar *loc;
 	event_finalizer_t fin;
 	void *user_data;
 };
@@ -145,10 +146,11 @@ rspamd_session_create (rspamd_mempool_t * pool,
 }
 
 struct rspamd_async_event *
-rspamd_session_add_event (struct rspamd_async_session *session,
-						  event_finalizer_t fin,
-						  gpointer user_data,
-						  const gchar *subsystem)
+rspamd_session_add_event_full (struct rspamd_async_session *session,
+							   event_finalizer_t fin,
+							   gpointer user_data,
+							   const gchar *subsystem,
+							   const gchar *loc)
 {
 	struct rspamd_async_event *new_event;
 	gint ret;
@@ -171,12 +173,14 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 	new_event->fin = fin;
 	new_event->user_data = user_data;
 	new_event->subsystem = subsystem;
+	new_event->loc = loc;
 
 	msg_debug_session ("added event: %p, pending %d (+1) events, "
-					   "subsystem: %s",
+					   "subsystem: %s (%s)",
 			user_data,
 			kh_size (session->events),
-			subsystem);
+			subsystem,
+			loc);
 
 	kh_put (rspamd_events_hash, session->events, new_event, &ret);
 	g_assert (ret > 0);
@@ -185,9 +189,10 @@ rspamd_session_add_event (struct rspamd_async_session *session,
 }
 
 void
-rspamd_session_remove_event (struct rspamd_async_session *session,
-	event_finalizer_t fin,
-	void *ud)
+rspamd_session_remove_event_full (struct rspamd_async_session *session,
+								  event_finalizer_t fin,
+								  void *ud,
+								  const gchar *loc)
 {
 	struct rspamd_async_event search_ev, *found_ev;
 	khiter_t k;
@@ -209,10 +214,11 @@ rspamd_session_remove_event (struct rspamd_async_session *session,
 	if (k == kh_end (session->events)) {
 		gchar t;
 
-		msg_err_session ("cannot find event: %p(%p)", fin, ud);
+		msg_err_session ("cannot find event: %p(%p) from %s", fin, ud, loc);
 		kh_foreach (session->events, found_ev, t, {
-			msg_err_session ("existing event %s: %p(%p)",
+			msg_err_session ("existing event %s (%s): %p(%p)",
 					found_ev->subsystem,
+					found_ev->loc,
 					found_ev->fin,
 					found_ev->user_data);
 		});
@@ -224,10 +230,12 @@ rspamd_session_remove_event (struct rspamd_async_session *session,
 
 	found_ev = kh_key (session->events, k);
 	msg_debug_session ("removed event: %p, pending %d (-1) events, "
-					   "subsystem: %s",
+					   "subsystem: %s (%s), added at %s",
 			ud,
 			kh_size (session->events),
-			found_ev->subsystem);
+			found_ev->subsystem,
+			loc,
+			found_ev->loc);
 	kh_del (rspamd_events_hash, session->events, k);
 
 	/* Remove event */

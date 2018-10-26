@@ -315,16 +315,21 @@ void rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
 /*
  * Increase number of async events pending for an item
  */
-guint rspamd_symcache_item_async_inc (struct rspamd_task *task,
+guint rspamd_symcache_item_async_inc_full (struct rspamd_task *task,
 									  struct rspamd_symcache_item *item,
-									  const gchar *subsystem);
+									  const gchar *subsystem,
+									  const gchar *loc);
+#define rspamd_symcache_item_async_inc(task, item, subsystem) \
+	rspamd_symcache_item_async_inc_full(task, item, subsystem, G_STRLOC)
 /*
  * Decrease number of async events pending for an item, asserts if no events pending
  */
-guint rspamd_symcache_item_async_dec (struct rspamd_task *task,
+guint rspamd_symcache_item_async_dec_full (struct rspamd_task *task,
 									  struct rspamd_symcache_item *item,
-									  const gchar *subsystem);
-
+									  const gchar *subsystem,
+									  const gchar *loc);
+#define rspamd_symcache_item_async_dec(task, item, subsystem) \
+	rspamd_symcache_item_async_dec_full(task, item, subsystem, G_STRLOC)
 /**
  * Decrease number of async events pending for an item, asserts if no events pending
  * If no events are left, this function calls `rspamd_symbols_cache_finalize_item` and returns TRUE
@@ -332,7 +337,10 @@ guint rspamd_symcache_item_async_dec (struct rspamd_task *task,
  * @param item
  * @return
  */
-gboolean rspamd_symcache_item_async_dec_check (struct rspamd_task *task,
+gboolean rspamd_symcache_item_async_dec_check_full (struct rspamd_task *task,
 											   struct rspamd_symcache_item *item,
-											   const gchar *subsystem);
+											   const gchar *subsystem,
+											   const gchar *loc);
+#define rspamd_symcache_item_async_dec_check(task, item, subsystem) \
+	rspamd_symcache_item_async_dec_check_full(task, item, subsystem, G_STRLOC)
 #endif
