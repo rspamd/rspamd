@@ -33,9 +33,15 @@ struct f_str_s;
 #  else
 #    #define RSPAMD_ATTR_ALLOC_ALIGN(al)
 #  endif
+#  if __has_attribute(returns_nonnull)
+#    define RSPAMD_ATTR_RETURNS_NONNUL __attribute__((returns_nonnull))
+#  else
+#    #define RSPAMD_ATTR_RETURNS_NONNUL
+#  endif
 #else
 #define RSPAMD_ATTR_ALLOC_SIZE(pos)
 #define RSPAMD_ATTR_ALLOC_ALIGN(al)
+#define RSPAMD_ATTR_RETURNS_NONNUL
 #endif
 
 #define MEMPOOL_TAG_LEN 20
@@ -151,7 +157,7 @@ rspamd_mempool_t * rspamd_mempool_new_ (gsize size, const gchar *tag, const gcha
  * @return pointer to allocated object
  */
 void * rspamd_mempool_alloc (rspamd_mempool_t * pool, gsize size)
-		RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT);
+		RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 
 /**
  * Get memory from temporary pool
@@ -159,7 +165,7 @@ void * rspamd_mempool_alloc (rspamd_mempool_t * pool, gsize size)
  * @param size bytes to allocate
  * @return pointer to allocated object
  */
-void * rspamd_mempool_alloc_tmp (rspamd_mempool_t * pool, gsize size);
+void * rspamd_mempool_alloc_tmp (rspamd_mempool_t * pool, gsize size) RSPAMD_ATTR_RETURNS_NONNUL;
 
 /**
  * Get memory and set it to zero
@@ -168,7 +174,7 @@ void * rspamd_mempool_alloc_tmp (rspamd_mempool_t * pool, gsize size);
  * @return pointer to allocated object
  */
 void * rspamd_mempool_alloc0 (rspamd_mempool_t * pool, gsize size)
-	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT);
+	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 
 /**
  * Get memory and set it to zero
@@ -176,7 +182,7 @@ void * rspamd_mempool_alloc0 (rspamd_mempool_t * pool, gsize size)
  * @param size bytes to allocate
  * @return pointer to allocated object
  */
-void * rspamd_mempool_alloc0_tmp (rspamd_mempool_t * pool, gsize size);
+void * rspamd_mempool_alloc0_tmp (rspamd_mempool_t * pool, gsize size) RSPAMD_ATTR_RETURNS_NONNUL;
 
 /**
  * Cleanup temporary data in pool
@@ -218,9 +224,9 @@ gchar * rspamd_mempool_ftokdup (rspamd_mempool_t *pool,
  * @param size bytes to allocate
  */
 void * rspamd_mempool_alloc_shared (rspamd_mempool_t * pool, gsize size)
-	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT);
+	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 void * rspamd_mempool_alloc0_shared (rspamd_mempool_t *pool, gsize size)
-	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT);
+	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 /**
  * Add destructor callback to pool
  * @param pool memory pool object
