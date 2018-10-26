@@ -19,9 +19,28 @@
 
 struct f_str_s;
 
+
+
+#ifdef __has_attribute
+#  if __has_attribute(alloc_size)
+#    define RSPAMD_ATTR_ALLOC_SIZE(pos) __attribute__((alloc_size(pos)))
+#  else
+#    #define RSPAMD_ATTR_ALLOC_SIZE(pos)
+#  endif
+
+#  if __has_attribute(assume_aligned)
+#    define RSPAMD_ATTR_ALLOC_ALIGN(al) __attribute__((assume_aligned(al)))
+#  else
+#    #define RSPAMD_ATTR_ALLOC_ALIGN(al)
+#  endif
+#else
+#define RSPAMD_ATTR_ALLOC_SIZE(pos)
+#define RSPAMD_ATTR_ALLOC_ALIGN(al)
+#endif
+
 #define MEMPOOL_TAG_LEN 20
 #define MEMPOOL_UID_LEN 20
-#define MEM_ALIGNMENT   16
+#define MEM_ALIGNMENT   sizeof (guint64)
 #define align_ptr(p, a)                                                   \
     (guint8 *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
 
@@ -131,7 +150,8 @@ rspamd_mempool_t * rspamd_mempool_new_ (gsize size, const gchar *tag, const gcha
  * @param size bytes to allocate
  * @return pointer to allocated object
  */
-void * rspamd_mempool_alloc (rspamd_mempool_t * pool, gsize size);
+void * rspamd_mempool_alloc (rspamd_mempool_t * pool, gsize size)
+		RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT);
 
 /**
  * Get memory from temporary pool
@@ -147,7 +167,8 @@ void * rspamd_mempool_alloc_tmp (rspamd_mempool_t * pool, gsize size);
  * @param size bytes to allocate
  * @return pointer to allocated object
  */
-void * rspamd_mempool_alloc0 (rspamd_mempool_t * pool, gsize size);
+void * rspamd_mempool_alloc0 (rspamd_mempool_t * pool, gsize size)
+	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT);
 
 /**
  * Get memory and set it to zero
@@ -168,7 +189,8 @@ void rspamd_mempool_cleanup_tmp (rspamd_mempool_t * pool);
  * @param src source string
  * @return pointer to newly created string that is copy of src
  */
-gchar * rspamd_mempool_strdup (rspamd_mempool_t * pool, const gchar *src);
+gchar * rspamd_mempool_strdup (rspamd_mempool_t * pool, const gchar *src)
+	RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT);
 
 /**
  * Make a copy of fixed string in pool as null terminated string
@@ -177,7 +199,7 @@ gchar * rspamd_mempool_strdup (rspamd_mempool_t * pool, const gchar *src);
  * @return pointer to newly created string that is copy of src
  */
 gchar * rspamd_mempool_fstrdup (rspamd_mempool_t * pool,
-	const struct f_str_s *src);
+	const struct f_str_s *src) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT);
 
 struct f_str_tok;
 
@@ -188,15 +210,17 @@ struct f_str_tok;
  * @return pointer to newly created string that is copy of src
  */
 gchar * rspamd_mempool_ftokdup (rspamd_mempool_t *pool,
-		const struct f_str_tok *src);
+		const struct f_str_tok *src) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT);
 
 /**
  * Allocate piece of shared memory
  * @param pool memory pool object
  * @param size bytes to allocate
  */
-void * rspamd_mempool_alloc_shared (rspamd_mempool_t * pool, gsize size);
-void * rspamd_mempool_alloc0_shared (rspamd_mempool_t *pool, gsize size);
+void * rspamd_mempool_alloc_shared (rspamd_mempool_t * pool, gsize size)
+	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT);
+void * rspamd_mempool_alloc0_shared (rspamd_mempool_t *pool, gsize size)
+	RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT);
 /**
  * Add destructor callback to pool
  * @param pool memory pool object
