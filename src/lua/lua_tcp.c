@@ -1205,6 +1205,7 @@ lua_tcp_make_connection (struct lua_tcp_cbdata *cbd)
 		return FALSE;
 	}
 
+#if 0
 	if (!(cbd->flags & LUA_TCP_FLAG_RESOLVED)) {
 		/* We come here without resolving, so we need to add a watcher */
 		lua_tcp_register_watcher (cbd);
@@ -1212,6 +1213,7 @@ lua_tcp_make_connection (struct lua_tcp_cbdata *cbd)
 	else {
 		cbd->flags |= LUA_TCP_FLAG_RESOLVED;
 	}
+#endif
 
 	lua_tcp_register_event (cbd);
 
@@ -1637,6 +1639,8 @@ lua_tcp_request (lua_State *L)
 	if (rspamd_parse_inet_address (&cbd->addr, host, 0)) {
 		rspamd_inet_address_set_port (cbd->addr, port);
 		/* Host is numeric IP, no need to resolve */
+		lua_tcp_register_watcher (cbd);
+
 		if (!lua_tcp_make_connection (cbd)) {
 			lua_pushboolean (L, FALSE);
 
@@ -1829,6 +1833,8 @@ lua_tcp_connect_sync (lua_State *L)
 			}
 		}
 		else {
+			cbd->item = rspamd_symbols_cache_get_cur_item (task);
+
 			if (!make_dns_request_task (task, lua_tcp_dns_handler, cbd,
 										RDNS_REQUEST_A, host)) {
 				lua_pushboolean (L, FALSE);

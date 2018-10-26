@@ -2601,7 +2601,7 @@ rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
 	gdouble t2, diff;
 	guint i;
 	struct timeval tv;
-	const gdouble slow_diff_limit = 0.1;
+	const gdouble slow_diff_limit = 0.3;
 
 	/* Sanity checks */
 	g_assert (checkpoint->items_inflight > 0);
@@ -2615,13 +2615,14 @@ rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
 		 * event to decrease async events count and call this function
 		 * one more time
 		 */
-		msg_debug_cache_task ("postpone finalisation of %s as there are %d "
-							  "async events pendning", item->symbol, item->async_events);
+		msg_debug_cache_task ("postpone finalisation of %s(%d) as there are %d "
+							  "async events pendning",
+							  item->symbol, item->id, item->async_events);
 
 		return;
 	}
 
-	msg_debug_cache_task ("process finalize for item %s", item->symbol);
+	msg_debug_cache_task ("process finalize for item %s(%d)", item->symbol, item->id);
 	SET_FINISH_BIT (checkpoint, item);
 	checkpoint->items_inflight --;
 	checkpoint->cur_item = NULL;
@@ -2642,7 +2643,7 @@ rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
 
 	if (!(item->type & SYMBOL_TYPE_SQUEEZED)) {
 		if (diff > slow_diff_limit) {
-			msg_info_task ("slow rule: %s: %.2f ms", item->symbol,
+			msg_info_task ("slow rule: %s(%d): %.2f ms", item->symbol, item->id,
 					diff * 1000);
 		}
 

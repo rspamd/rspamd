@@ -352,6 +352,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 	struct rspamd_task *task = NULL;
 	GError *err = NULL;
 	gboolean forced = FALSE;
+	struct rspamd_symcache_item *item = NULL;
 
 	/* Check arguments */
 	if (!rspamd_lua_parse_table_arguments (L, first, &err,
@@ -372,6 +373,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 	if (task) {
 		pool = task->task_pool;
 		session = task->s;
+		item = rspamd_symbols_cache_get_cur_item (task);
 	}
 
 	if (to_resolve != NULL) {
@@ -449,8 +451,8 @@ lua_dns_resolver_resolve_common (lua_State *L,
 			/* Fail-safety as this function can, in theory, call
 			 * lua_dns_resolver_callback without switching to the event loop
 			 */
-			if (cbdata->item) {
-				rspamd_symcache_item_async_inc (task, cbdata->item, M);
+			if (item) {
+				rspamd_symcache_item_async_inc (task, item, M);
 			}
 
 			if (forced) {
@@ -469,10 +471,11 @@ lua_dns_resolver_resolve_common (lua_State *L,
 
 			if (ret) {
 				cbdata->s = session;
-				cbdata->item = rspamd_symbols_cache_get_cur_item (task);
 
-				if (cbdata->item) {
-					rspamd_symcache_item_async_inc (task, cbdata->item, M);
+
+				if (item) {
+					cbdata->item = item;
+					rspamd_symcache_item_async_inc (task, item, M);
 				}
 				/* callback was set up */
 				lua_pushboolean (L, TRUE);
@@ -481,8 +484,8 @@ lua_dns_resolver_resolve_common (lua_State *L,
 				lua_pushnil (L);
 			}
 
-			if (cbdata->item) {
-				rspamd_symcache_item_async_dec_check (task, cbdata->item, M);
+			if (item) {
+				rspamd_symcache_item_async_dec_check (task, item, M);
 			}
 		}
 	}

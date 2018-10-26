@@ -177,6 +177,11 @@ lua_http_push_error (struct lua_http_cbdata *cbd, const char *err)
 	lua_rawgeti (L, LUA_REGISTRYINDEX, cbd->cbref);
 	lua_pushstring (L, err);
 
+
+	if (cbd->item) {
+		rspamd_symbols_cache_set_cur_item (cbd->task, cbd->item);
+	}
+
 	if (lua_pcall (L, 1, 0, 0) != 0) {
 		msg_info ("callback call failed: %s", lua_tostring (L, -1));
 		lua_pop (L, 1);

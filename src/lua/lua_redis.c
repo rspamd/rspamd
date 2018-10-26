@@ -282,6 +282,10 @@ lua_redis_push_error (const gchar *err,
 			/* Data is nil */
 			lua_pushnil (cbs.L);
 
+			if (ud->item) {
+				rspamd_symbols_cache_set_cur_item (ud->task, ud->item);
+			}
+
 			if (lua_pcall (cbs.L, 2, 0, 0) != 0) {
 				msg_info ("call to callback failed: %s", lua_tostring (cbs.L, -1));
 				lua_pop (cbs.L, 1);
