@@ -515,7 +515,7 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 			dit = g_hash_table_lookup (cache->items_by_symbol, dep->sym);
 
 			if (dit != NULL) {
-				if (dit->is_virtual != -1) {
+				if (dit->is_virtual) {
 					dit = g_ptr_array_index (cache->filters,
 							dit->specific.virtual.parent);
 				}
