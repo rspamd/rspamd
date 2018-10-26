@@ -257,8 +257,10 @@ regexp_module_config (struct rspamd_config *cfg)
 				if (elt != NULL && ucl_object_type (elt) == UCL_USERDATA) {
 					struct ucl_lua_funcdata *conddata;
 
+					g_assert (cur_item->symbol != NULL);
 					conddata = ucl_object_toclosure (elt);
-					rspamd_symbols_cache_add_condition (cfg->cache, id,
+					rspamd_symbols_cache_add_condition_delayed (cfg->cache,
+							cur_item->symbol,
 							conddata->L, conddata->idx);
 				}
 

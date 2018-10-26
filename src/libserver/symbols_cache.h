@@ -100,17 +100,6 @@ gint rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	gint parent);
 
 /**
- * Add condition to the specific symbol in cache
- * @param cache
- * @param id id of symbol
- * @param L lua state pointer
- * @param cbref callback reference (returned by luaL_ref)
- * @return TRUE if condition has been added
- */
-gboolean rspamd_symbols_cache_add_condition (struct symbols_cache *cache,
-		gint id, lua_State *L, gint cbref);
-
-/**
  * Add callback to be executed whenever symbol has peak value
  * @param cache
  * @param cbref
@@ -251,15 +240,6 @@ void rspamd_symbols_cache_enable_symbol (struct symbols_cache *cache,
 struct rspamd_abstract_callback_data* rspamd_symbols_cache_get_cbdata (
 		struct symbols_cache *cache, const gchar *symbol);
 
-/**
- * Sets new callback data for a symbol in cache
- * @param cache
- * @param symbol
- * @param cbdata
- * @return
- */
-gboolean rspamd_symbols_cache_set_cbdata (struct symbols_cache *cache,
-		const gchar *symbol, struct rspamd_abstract_callback_data *cbdata);
 
 /**
  * Process settings for task

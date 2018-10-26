@@ -2379,7 +2379,9 @@ lua_config_newindex (lua_State *L)
 
 					/* Here we pop function from the stack, so no lua_pop is required */
 					condref = luaL_ref (L, LUA_REGISTRYINDEX);
-					rspamd_symbols_cache_add_condition (cfg->cache, id, L, condref);
+					g_assert (name != NULL);
+					rspamd_symbols_cache_add_condition_delayed (cfg->cache,
+							name, L, condref);
 				}
 				else {
 					lua_pop (L, 1);

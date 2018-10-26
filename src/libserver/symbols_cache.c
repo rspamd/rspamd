@@ -25,6 +25,10 @@
 #include "libserver/worker_util.h"
 #include <math.h>
 
+#if defined(__STDC_VERSION__) &&  __STDC_VERSION__ >= 201112L
+# include <stdalign.h>
+#endif
+
 #define msg_err_cache(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         cache->static_pool->tag.tagname, cache->cfg->checksum, \
         G_STRFUNC, \
@@ -49,19 +53,19 @@
 INIT_LOG_MODULE(symcache)
 
 #define CHECK_START_BIT(checkpoint, item) \
-	isset((checkpoint)->started_bits, (item)->id)
+	isset((checkpoint)->cur_bits->started, (item)->id)
 #define SET_START_BIT(checkpoint, item) \
-	setbit((checkpoint)->started_bits, (item)->id )
+	setbit((checkpoint)->cur_bits->started, (item)->id )
 
 #define CHECK_FINISH_BIT(checkpoint, item) \
-	isset((checkpoint)->finished_bits, (item)->id)
+	isset((checkpoint)->cur_bits->finished, (item)->id)
 #define SET_FINISH_BIT(checkpoint, item) \
-	setbit((checkpoint)->finished_bits, (item)->id)
+	setbit((checkpoint)->cur_bits->finished, (item)->id)
 
 static const guchar rspamd_symbols_cache_magic[8] = {'r', 's', 'c', 2, 0, 0, 0, 0 };
 
-static gint rspamd_symbols_cache_find_symbol_parent (struct symbols_cache *cache,
-		const gchar *name);
+static gint rspamd_symbols_cache_find_filter (struct symbols_cache *cache,
+											  const gchar *name);
 
 struct rspamd_symbols_cache_header {
 	guchar magic[8];
@@ -80,11 +84,12 @@ struct symbols_cache {
 	/* Hash table for fast access */
 	GHashTable *items_by_symbol;
 	struct symbols_cache_order *items_by_order;
-	GPtrArray *items_by_id;
+	GPtrArray *filters;
 	GPtrArray *prefilters;
 	GPtrArray *postfilters;
 	GPtrArray *composites;
 	GPtrArray *idempotent;
+	GPtrArray *virtual;
 	GList *delayed_deps;
 	GList *delayed_conditions;
 	rspamd_mempool_t *static_pool;
@@ -115,7 +120,6 @@ struct rspamd_symcache_item {
 	struct item_stat *st;
 
 	guint64 last_count;
-
 	/* Per process counter */
 	gdouble start_ticks;
 	guint async_events;
@@ -124,15 +128,23 @@ struct rspamd_symcache_item {
 	enum rspamd_symbol_type type;
 
 	/* Callback data */
-	symbol_func_t func;
-	gpointer user_data;
+	union {
+		struct {
+			symbol_func_t func;
+			gpointer user_data;
+			gint condition_cb;
+		} normal;
+		struct {
+			gint parent;
+		} virtual;
+	} specific;
 
 	/* Condition of execution */
-	gint condition_cb;
 	gboolean enabled;
+	/* Used for async stuff checks */
+	gboolean is_filter;
+	gboolean is_virtual;
 
-	/* Parent symbol id for virtual symbols */
-	gint parent;
 	/* Priority */
 	gint priority;
 	/* Topological order */
@@ -172,16 +184,33 @@ enum rspamd_cache_savepoint_stage {
 	RSPAMD_CACHE_PASS_DONE,
 };
 
+struct cache_bits {
+#if defined(__STDC_VERSION__) &&  __STDC_VERSION__ >= 201112L
+	_Alignas(guint64) guint8 *started;
+	_Alignas(guint64) guint8 *finished;
+#else
+#warning "outdated compiler, please use C11 compiler"
+	guint8 *started;
+	guint8 *finished;
+#endif
+};
+
 struct cache_savepoint {
-	guchar *started_bits;
-	guchar *finished_bits;
 	enum rspamd_cache_savepoint_stage pass;
 	guint version;
+	guint items_inflight;
+
 	struct rspamd_metric_result *rs;
 	gdouble lim;
+
 	struct rspamd_symcache_item *cur_item;
-	guint items_inflight;
+	struct cache_bits *cur_bits;
 	struct symbols_cache_order *order;
+
+	struct cache_bits prefilters;
+	struct cache_bits filters;
+	struct cache_bits postfilters;
+	struct cache_bits idempotent;
 };
 
 struct rspamd_cache_refresh_cbdata {
@@ -216,12 +245,6 @@ static void rspamd_symbols_cache_enable_symbol_checkpoint (struct rspamd_task *t
 		struct symbols_cache *cache, const gchar *symbol);
 static void rspamd_symbols_cache_disable_all_symbols (struct rspamd_task *task,
 		struct symbols_cache *cache);
-
-static GQuark
-rspamd_symbols_cache_quark (void)
-{
-	return g_quark_from_static_string ("symbols-cache");
-}
 
 static void
 rspamd_symbols_cache_order_dtor (gpointer p)
@@ -391,20 +414,13 @@ rspamd_symbols_cache_resort (struct symbols_cache *cache)
 	guint64 total_hits = 0;
 	struct rspamd_symcache_item *it;
 
-	ord = rspamd_symbols_cache_order_new (cache, cache->used_items);
+	ord = rspamd_symbols_cache_order_new (cache, cache->filters->len);
 
-	for (i = 0; i < cache->used_items; i ++) {
-		it = g_ptr_array_index (cache->items_by_id, i);
+	for (i = 0; i < cache->filters->len; i ++) {
+		it = g_ptr_array_index (cache->filters, i);
 		total_hits += it->st->total_hits;
-
-		if (!(it->type & (SYMBOL_TYPE_PREFILTER|
-				SYMBOL_TYPE_POSTFILTER|
-				SYMBOL_TYPE_COMPOSITE))) {
-			if (it->parent == -1 && it->func) {
-				it->order = 0;
-				g_ptr_array_add (ord->d, it);
-			}
-		}
+		it->order = 0;
+		g_ptr_array_add (ord->d, it);
 	}
 
 	/* Topological sort, intended to be O(N) but my implementation
@@ -450,9 +466,10 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 	while (cur) {
 		ddep = cur->data;
 
-		id = rspamd_symbols_cache_find_symbol_parent (cache, ddep->from);
+		id = rspamd_symbols_cache_find_filter (cache, ddep->from);
+
 		if (id != -1) {
-			it = g_ptr_array_index (cache->items_by_id, id);
+			it = g_ptr_array_index (cache->filters, id);
 		}
 		else {
 			it = NULL;
@@ -475,13 +492,7 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 	while (cur) {
 		dcond = cur->data;
 
-		id = rspamd_symbols_cache_find_symbol_parent (cache, dcond->sym);
-		if (id != -1) {
-			it = g_ptr_array_index (cache->items_by_id, id);
-		}
-		else {
-			it = NULL;
-		}
+		it = g_hash_table_lookup (cache->items_by_symbol, dcond->sym);
 
 		if (it == NULL) {
 			msg_err_cache (
@@ -490,23 +501,23 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 			luaL_unref (dcond->L, LUA_REGISTRYINDEX, dcond->cbref);
 		}
 		else {
-			rspamd_symbols_cache_add_condition (cache, it->id, dcond->L,
-					dcond->cbref);
+			it->specific.normal.condition_cb = dcond->cbref;
 		}
 
 		cur = g_list_next (cur);
 	}
 
-	for (i = 0; i < cache->items_by_id->len; i ++) {
-		it = g_ptr_array_index (cache->items_by_id, i);
+	for (i = 0; i < cache->filters->len; i ++) {
+		it = g_ptr_array_index (cache->filters, i);
 
 		for (j = 0; j < it->deps->len; j ++) {
 			dep = g_ptr_array_index (it->deps, j);
 			dit = g_hash_table_lookup (cache->items_by_symbol, dep->sym);
 
 			if (dit != NULL) {
-				if (dit->parent != -1) {
-					dit = g_ptr_array_index (cache->items_by_id, dit->parent);
+				if (dit->is_virtual != -1) {
+					dit = g_ptr_array_index (cache->filters,
+							dit->specific.virtual.parent);
 				}
 
 				if (dit->id == i) {
@@ -517,6 +528,7 @@ rspamd_symbols_cache_post_init (struct symbols_cache *cache)
 				else {
 					rdep = rspamd_mempool_alloc (cache->static_pool,
 							sizeof (*rdep));
+
 					rdep->sym = dep->sym;
 					rdep->item = it;
 					rdep->id = i;
@@ -688,10 +700,10 @@ rspamd_symbols_cache_load_items (struct symbols_cache *cache, const gchar *name)
 				}
 			}
 
-			if ((item->type & SYMBOL_TYPE_VIRTUAL) &&
-					!(item->type & SYMBOL_TYPE_SQUEEZED) && item->parent != -1) {
-				g_assert (item->parent < (gint)cache->items_by_id->len);
-				parent = g_ptr_array_index (cache->items_by_id, item->parent);
+			if (item->is_virtual) {
+				g_assert (item->specific.virtual.parent < (gint)cache->filters->len);
+				parent = g_ptr_array_index (cache->filters,
+						item->specific.virtual.parent);
 
 				if (parent->st->weight < item->st->weight) {
 					parent->st->weight = item->st->weight;
@@ -812,12 +824,12 @@ rspamd_symbols_cache_save_items (struct symbols_cache *cache, const gchar *name)
 
 gint
 rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
-	const gchar *name,
-	gint priority,
-	symbol_func_t func,
-	gpointer user_data,
-	enum rspamd_symbol_type type,
-	gint parent)
+								 const gchar *name,
+								 gint priority,
+								 symbol_func_t func,
+								 gpointer user_data,
+								 enum rspamd_symbol_type type,
+								 gint parent)
 {
 	struct rspamd_symcache_item *item = NULL;
 
@@ -848,7 +860,6 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 			sizeof (struct rspamd_symcache_item));
 	item->st = rspamd_mempool_alloc0_shared (cache->static_pool,
 			sizeof (*item->st));
-	item->condition_cb = -1;
 	item->enabled = TRUE;
 
 	/*
@@ -857,8 +868,6 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 	 */
 	item->cd = rspamd_mempool_alloc0 (cache->static_pool,
 			sizeof (struct rspamd_counter_data));
-	item->func = func;
-	item->user_data = user_data;
 	item->priority = priority;
 	item->type = type;
 
@@ -867,8 +876,59 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 		item->priority = 1;
 	}
 
-	item->id = cache->used_items;
-	item->parent = parent;
+	if (func) {
+		/* Non-virtual symbol */
+		g_assert (parent == -1);
+
+		if (item->type & SYMBOL_TYPE_PREFILTER) {
+			item->id = cache->prefilters->len;
+			g_ptr_array_add (cache->prefilters, item);
+		}
+		else if (item->type & SYMBOL_TYPE_IDEMPOTENT) {
+			item->id = cache->idempotent->len;
+			g_ptr_array_add (cache->idempotent, item);
+		}
+		else if (item->type & SYMBOL_TYPE_POSTFILTER) {
+			item->id = cache->postfilters->len;
+			g_ptr_array_add (cache->postfilters, item);
+		}
+		else {
+			item->id = cache->filters->len;
+			item->is_filter = TRUE;
+			g_ptr_array_add (cache->filters, item);
+		}
+
+		item->specific.normal.func = func;
+		item->specific.normal.user_data = user_data;
+		item->specific.normal.condition_cb = -1;
+	}
+	else {
+		/*
+		 * Three possibilities here when no function is specified:
+		 * - virtual symbol
+		 * - classifier symbol
+		 * - composite symbol
+		 */
+		if (item->type & SYMBOL_TYPE_COMPOSITE) {
+			item->id = cache->composites->len;
+			g_ptr_array_add (cache->composites, item);
+		}
+		else if (item->type & SYMBOL_TYPE_CLASSIFIER) {
+			/* Treat it as virtual */
+			item->id = cache->virtual->len;
+			g_ptr_array_add (cache->virtual, item);
+		}
+		else {
+			/* Require parent */
+			g_assert (parent != -1);
+
+			item->is_virtual = TRUE;
+			item->specific.virtual.parent = parent;
+			item->id = cache->virtual->len;
+			g_ptr_array_add (cache->virtual, item);
+		}
+	}
+
 	cache->used_items ++;
 	cache->id ++;
 
@@ -890,65 +950,26 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 		msg_debug_cache ("used items: %d, added symbol: %s, %d",
 				cache->used_items, name, item->id);
 	} else {
+		g_assert (func != NULL);
 		msg_debug_cache ("used items: %d, added unnamed symbol: %d",
 				cache->used_items, item->id);
 	}
 
-	g_ptr_array_add (cache->items_by_id, item);
-	item->deps = g_ptr_array_new ();
-	item->rdeps = g_ptr_array_new ();
-	rspamd_mempool_add_destructor (cache->static_pool,
-			rspamd_ptr_array_free_hard, item->deps);
-	rspamd_mempool_add_destructor (cache->static_pool,
-			rspamd_ptr_array_free_hard, item->rdeps);
+	if (item->is_filter) {
+		/* Only plain filters can have deps and rdeps */
+		item->deps = g_ptr_array_new ();
+		item->rdeps = g_ptr_array_new ();
+		rspamd_mempool_add_destructor (cache->static_pool,
+				rspamd_ptr_array_free_hard, item->deps);
+		rspamd_mempool_add_destructor (cache->static_pool,
+				rspamd_ptr_array_free_hard, item->rdeps);
+	}
 
 	if (name != NULL) {
 		g_hash_table_insert (cache->items_by_symbol, item->symbol, item);
 	}
 
-	if (item->type & SYMBOL_TYPE_PREFILTER) {
-		g_ptr_array_add (cache->prefilters, item);
-	}
-	else if (item->type & SYMBOL_TYPE_IDEMPOTENT) {
-		g_ptr_array_add (cache->idempotent, item);
-	}
-	else if (item->type & SYMBOL_TYPE_POSTFILTER) {
-		g_ptr_array_add (cache->postfilters, item);
-	}
-	else if (item->type & SYMBOL_TYPE_COMPOSITE) {
-		g_ptr_array_add (cache->composites, item);
-	}
-
 	return item->id;
-}
-
-gboolean
-rspamd_symbols_cache_add_condition (struct symbols_cache *cache, gint id,
-		lua_State *L, gint cbref)
-{
-	struct rspamd_symcache_item *item;
-
-	g_assert (cache != NULL);
-
-	if (id < 0 || id >= (gint)cache->items_by_id->len) {
-		return FALSE;
-	}
-
-	item = g_ptr_array_index (cache->items_by_id, id);
-
-	if (item->condition_cb != -1) {
-		/* We already have a condition, so we need to remove old cbref first */
-		msg_warn_cache ("rewriting condition for symbol %s", item->symbol);
-		luaL_unref (L, LUA_REGISTRYINDEX, item->condition_cb);
-	}
-
-	item->condition_cb = cbref;
-	cache->id ++;
-
-	msg_debug_cache ("adding condition at lua ref %d to %s (%d)",
-			cbref, item->symbol, item->id);
-
-	return TRUE;
 }
 
 void
@@ -970,18 +991,10 @@ gboolean
 rspamd_symbols_cache_add_condition_delayed (struct symbols_cache *cache,
 		const gchar *sym, lua_State *L, gint cbref)
 {
-	gint id;
 	struct delayed_cache_condition *ncond;
 
 	g_assert (cache != NULL);
 	g_assert (sym != NULL);
-
-	id = rspamd_symbols_cache_find_symbol_parent (cache, sym);
-
-	if (id != -1) {
-		/* We already know id, so just register a direct condition */
-		return rspamd_symbols_cache_add_condition (cache, id, L, cbref);
-	}
 
 	ncond = g_malloc0 (sizeof (*ncond));
 	ncond->sym = g_strdup (sym);
@@ -1049,7 +1062,7 @@ rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 
 		g_hash_table_destroy (cache->items_by_symbol);
 		rspamd_mempool_delete (cache->static_pool);
-		g_ptr_array_free (cache->items_by_id, TRUE);
+		g_ptr_array_free (cache->filters, TRUE);
 		g_ptr_array_free (cache->prefilters, TRUE);
 		g_ptr_array_free (cache->postfilters, TRUE);
 		g_ptr_array_free (cache->idempotent, TRUE);
@@ -1074,11 +1087,12 @@ rspamd_symbols_cache_new (struct rspamd_config *cfg)
 			rspamd_mempool_new (rspamd_mempool_suggest_size (), "symcache");
 	cache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
-	cache->items_by_id = g_ptr_array_new ();
+	cache->filters = g_ptr_array_new ();
 	cache->prefilters = g_ptr_array_new ();
 	cache->postfilters = g_ptr_array_new ();
 	cache->idempotent = g_ptr_array_new ();
 	cache->composites = g_ptr_array_new ();
+	cache->virtual = g_ptr_array_new ();
 	cache->reload_time = cfg->cache_reload_time;
 	cache->total_hits = 1;
 	cache->total_weight = 1.0;
@@ -1170,10 +1184,10 @@ rspamd_symbols_cache_validate_cb (gpointer k, gpointer v, gpointer ud)
 		item->priority ++;
 	}
 
-	if ((item->type & SYMBOL_TYPE_VIRTUAL) &&
-			!(item->type & SYMBOL_TYPE_SQUEEZED) && item->parent != -1) {
-		g_assert (item->parent < (gint)cache->items_by_id->len);
-		parent = g_ptr_array_index (cache->items_by_id, item->parent);
+	if (item->is_virtual) {
+		g_assert (item->specific.virtual.parent < (gint)cache->filters->len);
+		parent = g_ptr_array_index (cache->filters,
+				item->specific.virtual.parent);
 
 		if (fabs (parent->st->weight) < fabs (item->st->weight)) {
 			parent->st->weight = item->st->weight;
@@ -1241,7 +1255,6 @@ rspamd_symbols_cache_validate (struct symbols_cache *cache,
 
 		if (sym_def && (sym_def->flags & RSPAMD_SYMBOL_FLAG_IGNORE)) {
 			ignore_symbol = TRUE;
-			break;
 		}
 
 		if (!ignore_symbol) {
@@ -1312,89 +1325,82 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 	lua_State *L;
 	gboolean check = TRUE;
 
-	if (item->func) {
+	g_assert (!item->is_virtual);
 
-		g_assert (item->func != NULL);
-		if (CHECK_START_BIT (checkpoint, item)) {
-			/*
-			 * This can actually happen when deps span over different layers
-			 */
+	g_assert (item->specific.normal.func != NULL);
+	if (CHECK_START_BIT (checkpoint, item)) {
+		/*
+		 * This can actually happen when deps span over different layers
+		 */
+		return CHECK_FINISH_BIT (checkpoint, item);
+	}
 
-			return CHECK_FINISH_BIT (checkpoint, item);
-		}
-		/* Check has been started */
-		SET_START_BIT (checkpoint, item);
+	/* Check has been started */
+	SET_START_BIT (checkpoint, item);
 
-		if (!item->enabled ||
-				(RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY))) {
-			check = FALSE;
-		}
-		else if (item->condition_cb != -1) {
-			/* We also executes condition callback to check if we need this symbol */
-			L = task->cfg->lua_state;
-			lua_rawgeti (L, LUA_REGISTRYINDEX, item->condition_cb);
-			ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-			rspamd_lua_setclass (L, "rspamd{task}", -1);
-			*ptask = task;
+	if (!item->enabled ||
+		(RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY))) {
+		check = FALSE;
+	}
+	else if (item->specific.normal.condition_cb != -1) {
+		/* We also executes condition callback to check if we need this symbol */
+		L = task->cfg->lua_state;
+		lua_rawgeti (L, LUA_REGISTRYINDEX, item->specific.normal.condition_cb);
+		ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+		rspamd_lua_setclass (L, "rspamd{task}", -1);
+		*ptask = task;
 
-			if (lua_pcall (L, 1, 1, 0) != 0) {
-				msg_info_task ("call to condition for %s failed: %s",
-						item->symbol, lua_tostring (L, -1));
-				lua_pop (L, 1);
-			}
-			else {
-				check = lua_toboolean (L, -1);
-				lua_pop (L, 1);
-			}
-		}
-
-		if (check) {
-			msg_debug_cache_task ("execute %s, %d", item->symbol, item->id);
-#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
-			struct timeval tv;
-
-			event_base_update_cache_time (task->ev_base);
-			event_base_gettimeofday_cached (task->ev_base, &tv);
-			t1 = tv_to_double (&tv);
-#else
-			t1 = rspamd_get_ticks (FALSE);
-#endif
-			item->start_ticks = t1;
-			item->async_events = 0;
-			g_assert (checkpoint->cur_item == NULL);
-			checkpoint->cur_item = item;
-			checkpoint->items_inflight ++;
-			/* Callback now must finalize itself */
-			item->func (task, item, item->user_data);
-			checkpoint->cur_item = NULL;
-
-			if (checkpoint->items_inflight == 0) {
-
-				return TRUE;
-			}
-
-			if (item->async_events == 0 && !CHECK_FINISH_BIT (checkpoint, item)) {
-				msg_err_cache ("critical error: item %s has no async events pending, "
-				   "but it is not finalised", item->symbol);
-				g_assert_not_reached ();
-			}
-
-			return FALSE;
+		if (lua_pcall (L, 1, 1, 0) != 0) {
+			msg_info_task ("call to condition for %s failed: %s",
+					item->symbol, lua_tostring (L, -1));
+			lua_pop (L, 1);
 		}
 		else {
-			msg_debug_cache_task ("skipping check of %s as its start condition is false",
-					item->symbol);
-			SET_FINISH_BIT (checkpoint, item);
+			check = lua_toboolean (L, -1);
+			lua_pop (L, 1);
+		}
+	}
+
+	if (check) {
+		msg_debug_cache_task ("execute %s, %d", item->symbol, item->id);
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+		struct timeval tv;
+
+		event_base_update_cache_time (task->ev_base);
+		event_base_gettimeofday_cached (task->ev_base, &tv);
+		t1 = tv_to_double (&tv);
+#else
+		t1 = rspamd_get_ticks (FALSE);
+#endif
+		item->start_ticks = t1;
+		item->async_events = 0;
+		g_assert (checkpoint->cur_item == NULL);
+		checkpoint->cur_item = item;
+		checkpoint->items_inflight ++;
+		/* Callback now must finalize itself */
+		item->specific.normal.func (task, item, item->specific.normal.user_data);
+		checkpoint->cur_item = NULL;
+
+		if (checkpoint->items_inflight == 0) {
 
 			return TRUE;
 		}
+
+		if (item->async_events == 0 && !CHECK_FINISH_BIT (checkpoint, item)) {
+			msg_err_cache ("critical error: item %s has no async events pending, "
+						   "but it is not finalised", item->symbol);
+			g_assert_not_reached ();
+		}
+
+		return FALSE;
 	}
 	else {
-		SET_START_BIT (checkpoint, item);
+		msg_debug_cache_task ("skipping check of %s as its start condition is false",
+				item->symbol);
 		SET_FINISH_BIT (checkpoint, item);
-
-		return TRUE;
 	}
+
+	return TRUE;
 }
 
 static gboolean
@@ -1488,13 +1494,14 @@ rspamd_symbols_cache_check_deps (struct rspamd_task *task,
 	return ret;
 }
 
-static void
-rspamd_symbols_cache_continuation (void *data)
-{
-	struct rspamd_task *task = data;
-
-	rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
-}
+#define BITS_PER_UINT64 (NBBY * sizeof (guint64))
+#define UINT64_BITMAP_SIZE(nbits)   (((nbits) + BITS_PER_UINT64 - 1) / BITS_PER_UINT64)
+#define ALLOC_BITMAP(bmap, nelts) do { \
+	(bmap).started = rspamd_mempool_alloc0 (task->task_pool, \
+			UINT64_BITMAP_SIZE (nelts) * sizeof (guint64)); \
+	(bmap).finished = rspamd_mempool_alloc0 (task->task_pool, \
+			UINT64_BITMAP_SIZE (nelts) * sizeof (guint64)); \
+} while (0)
 
 static struct cache_savepoint *
 rspamd_symbols_cache_make_checkpoint (struct rspamd_task *task,
@@ -1513,17 +1520,21 @@ rspamd_symbols_cache_make_checkpoint (struct rspamd_task *task,
 	}
 
 	checkpoint = rspamd_mempool_alloc0 (task->task_pool, sizeof (*checkpoint));
-	checkpoint->started_bits = rspamd_mempool_alloc0 (task->task_pool,
-			NBYTES (cache->used_items));
-	checkpoint->finished_bits = rspamd_mempool_alloc0 (task->task_pool,
-			NBYTES (cache->used_items));
+
+	ALLOC_BITMAP (checkpoint->prefilters, cache->prefilters->len);
+	ALLOC_BITMAP (checkpoint->filters, cache->filters->len);
+	ALLOC_BITMAP (checkpoint->postfilters, cache->postfilters->len);
+	ALLOC_BITMAP (checkpoint->idempotent, cache->idempotent->len);
+
 	g_assert (cache->items_by_order != NULL);
 	checkpoint->version = cache->items_by_order->d->len;
 	checkpoint->order = cache->items_by_order;
 	REF_RETAIN (checkpoint->order);
 	rspamd_mempool_add_destructor (task->task_pool,
 			rspamd_symbols_cache_order_unref, checkpoint->order);
+
 	checkpoint->pass = RSPAMD_CACHE_PASS_INIT;
+	checkpoint->cur_bits = &checkpoint->prefilters;
 	task->checkpoint = checkpoint;
 
 	task->result = task->result;
@@ -1666,6 +1677,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		/* Check for prefilters */
 		saved_priority = G_MININT;
 		all_done = TRUE;
+		checkpoint->cur_bits = &checkpoint->prefilters;
 
 		for (i = 0; i < (gint)cache->prefilters->len; i ++) {
 			item = g_ptr_array_index (cache->prefilters, i);
@@ -1716,6 +1728,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		 * we just save it for another pass
 		 */
 		all_done = TRUE;
+		checkpoint->cur_bits = &checkpoint->filters;
 
 		for (i = 0; i < (gint)checkpoint->version; i ++) {
 			if (RSPAMD_TASK_IS_SKIPPED (task)) {
@@ -1772,6 +1785,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 		/* Check for postfilters */
 		saved_priority = G_MININT;
 		all_done = TRUE;
+		checkpoint->cur_bits = &checkpoint->postfilters;
 
 		for (i = 0; i < (gint)cache->postfilters->len; i ++) {
 			if (RSPAMD_TASK_IS_SKIPPED (task)) {
@@ -1824,6 +1838,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 	case RSPAMD_CACHE_PASS_IDEMPOTENT:
 		/* Check for postfilters */
 		saved_priority = G_MININT;
+		checkpoint->cur_bits = &checkpoint->idempotent;
 
 		for (i = 0; i < (gint)cache->idempotent->len; i ++) {
 			item = g_ptr_array_index (cache->idempotent, i);
@@ -1855,6 +1870,7 @@ rspamd_symbols_cache_process_symbols (struct rspamd_task * task,
 
 	case RSPAMD_CACHE_PASS_WAIT_IDEMPOTENT:
 		all_done = TRUE;
+		checkpoint->cur_bits = &checkpoint->idempotent;
 
 		for (i = 0; i < (gint)cache->idempotent->len; i ++) {
 			item = g_ptr_array_index (cache->idempotent, i);
@@ -1888,54 +1904,51 @@ struct counters_cbdata {
 #define ROUND_DOUBLE(x) (floor((x) * 100.0) / 100.0)
 
 static void
-rspamd_symbols_cache_counters_cb (gpointer v, gpointer ud)
+rspamd_symbols_cache_counters_cb (gpointer k, gpointer v, gpointer ud)
 {
 	struct counters_cbdata *cbd = ud;
 	ucl_object_t *obj, *top;
 	struct rspamd_symcache_item *item = v, *parent;
+	const gchar *symbol = k;
 
 	top = cbd->top;
 
-	if (!(item->type & SYMBOL_TYPE_CALLBACK)) {
-		obj = ucl_object_typed_new (UCL_OBJECT);
-		ucl_object_insert_key (obj, ucl_object_fromstring (item->symbol),
-				"symbol", 0, false);
+	obj = ucl_object_typed_new (UCL_OBJECT);
+	ucl_object_insert_key (obj, ucl_object_fromstring (symbol ? symbol : "unknown"),
+			"symbol", 0, false);
 
-		if ((item->type & SYMBOL_TYPE_VIRTUAL) &&
-				!(item->type & SYMBOL_TYPE_SQUEEZED) && item->parent != -1) {
-			g_assert (item->parent < (gint)cbd->cache->items_by_id->len);
-			parent = g_ptr_array_index (cbd->cache->items_by_id,
-					item->parent);
-			ucl_object_insert_key (obj,
-					ucl_object_fromdouble (ROUND_DOUBLE (item->st->weight)),
-					"weight", 0, false);
-			ucl_object_insert_key (obj,
-					ucl_object_fromdouble (ROUND_DOUBLE (parent->st->avg_frequency)),
-					"frequency", 0, false);
-			ucl_object_insert_key (obj,
-					ucl_object_fromint (parent->st->total_hits),
-					"hits", 0, false);
-			ucl_object_insert_key (obj,
-					ucl_object_fromdouble (ROUND_DOUBLE (parent->st->avg_time)),
-					"time", 0, false);
-		}
-		else {
-			ucl_object_insert_key (obj,
-					ucl_object_fromdouble (ROUND_DOUBLE (item->st->weight)),
-					"weight", 0, false);
-			ucl_object_insert_key (obj,
-					ucl_object_fromdouble (ROUND_DOUBLE (item->st->avg_frequency)),
-					"frequency", 0, false);
-			ucl_object_insert_key (obj,
-					ucl_object_fromint (item->st->total_hits),
-					"hits", 0, false);
-			ucl_object_insert_key (obj,
-					ucl_object_fromdouble (ROUND_DOUBLE (item->st->avg_time)),
-					"time", 0, false);
-		}
-
-		ucl_array_append (top, obj);
+	if (item->is_virtual) {
+		parent = g_ptr_array_index (cbd->cache->filters,
+				item->specific.virtual.parent);
+		ucl_object_insert_key (obj,
+				ucl_object_fromdouble (ROUND_DOUBLE (item->st->weight)),
+				"weight", 0, false);
+		ucl_object_insert_key (obj,
+				ucl_object_fromdouble (ROUND_DOUBLE (parent->st->avg_frequency)),
+				"frequency", 0, false);
+		ucl_object_insert_key (obj,
+				ucl_object_fromint (parent->st->total_hits),
+				"hits", 0, false);
+		ucl_object_insert_key (obj,
+				ucl_object_fromdouble (ROUND_DOUBLE (parent->st->avg_time)),
+				"time", 0, false);
 	}
+	else {
+		ucl_object_insert_key (obj,
+				ucl_object_fromdouble (ROUND_DOUBLE (item->st->weight)),
+				"weight", 0, false);
+		ucl_object_insert_key (obj,
+				ucl_object_fromdouble (ROUND_DOUBLE (item->st->avg_frequency)),
+				"frequency", 0, false);
+		ucl_object_insert_key (obj,
+				ucl_object_fromint (item->st->total_hits),
+				"hits", 0, false);
+		ucl_object_insert_key (obj,
+				ucl_object_fromdouble (ROUND_DOUBLE (item->st->avg_time)),
+				"time", 0, false);
+	}
+
+	ucl_array_append (top, obj);
 }
 
 #undef ROUND_DOUBLE
@@ -1950,7 +1963,7 @@ rspamd_symbols_cache_counters (struct symbols_cache * cache)
 	top = ucl_object_typed_new (UCL_ARRAY);
 	cbd.top = top;
 	cbd.cache = cache;
-	g_ptr_array_foreach (cache->items_by_id,
+	g_hash_table_foreach (cache->items_by_symbol,
 			rspamd_symbols_cache_counters_cb, &cbd);
 
 	return top;
@@ -1990,7 +2003,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 	gdouble tm;
 	struct rspamd_cache_refresh_cbdata *cbdata = ud;
 	struct symbols_cache *cache;
-	struct rspamd_symcache_item *item, *parent;
+	struct rspamd_symcache_item *item;
 	guint i;
 	gdouble cur_ticks;
 	static const double decay_rate = 0.7;
@@ -2006,10 +2019,10 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 	double_to_tv (tm, &tv);
 	event_add (&cbdata->resort_ev, &tv);
 
-	if (rspamd_worker_is_primary_controller (cbdata->w))
+	if (rspamd_worker_is_primary_controller (cbdata->w)) {
 		/* Gather stats from shared execution times */
-		for (i = 0; i < cache->items_by_id->len; i ++) {
-			item = g_ptr_array_index (cache->items_by_id, i);
+		for (i = 0; i < cache->filters->len; i ++) {
+			item = g_ptr_array_index (cache->filters, i);
 			item->st->total_hits += item->st->hits;
 			g_atomic_int_set (&item->st->hits, 0);
 
@@ -2018,7 +2031,7 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 				gdouble cur_err, cur_value;
 
 				cur_value = (item->st->total_hits - item->last_count) /
-						(cur_ticks - cbdata->last_resort);
+							(cur_ticks - cbdata->last_resort);
 				rspamd_set_counter_ema (&item->st->frequency_counter,
 						cur_value, decay_rate);
 				item->st->avg_frequency = item->st->frequency_counter.mean;
@@ -2036,15 +2049,15 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 				 * TODO: replace magic number
 				 */
 				if (item->st->frequency_counter.number > 10 &&
-						cur_err > sqrt (item->st->stddev_frequency) * 3) {
+					cur_err > sqrt (item->st->stddev_frequency) * 3) {
 					item->frequency_peaks ++;
 					msg_debug_cache ("peak found for %s is %.2f, avg: %.2f, "
-							"stddev: %.2f, error: %.2f, peaks: %d",
-						item->symbol, cur_value,
-						item->st->avg_frequency,
-						item->st->stddev_frequency,
-						cur_err,
-						item->frequency_peaks);
+									 "stddev: %.2f, error: %.2f, peaks: %d",
+							item->symbol, cur_value,
+							item->st->avg_frequency,
+							item->st->stddev_frequency,
+							cur_err,
+							item->frequency_peaks);
 
 					if (cache->peak_cb != -1) {
 						rspamd_symbols_cache_call_peak_cb (cbdata->ev_base,
@@ -2067,21 +2080,10 @@ rspamd_symbols_cache_resort_cb (gint fd, short what, gpointer ud)
 			}
 		}
 
-	/* Sync virtual symbols */
-	for (i = 0; i < cache->items_by_id->len; i ++) {
-		item = g_ptr_array_index (cache->items_by_id, i);
 
-		if (item->parent != -1) {
-			parent = g_ptr_array_index (cache->items_by_id, item->parent);
-
-			if (parent) {
-				item->st->avg_time = parent->st->avg_time;
-			}
-		}
+		cbdata->last_resort = cur_ticks;
+		/* We don't do actual sorting due to topological guarantees */
 	}
-
-	cbdata->last_resort = cur_ticks;
-	/* We don't do actual sorting due to topological guarantees */
 }
 
 void
@@ -2132,9 +2134,9 @@ rspamd_symbols_cache_add_dependency (struct symbols_cache *cache,
 	struct rspamd_symcache_item *source;
 	struct cache_dependency *dep;
 
-	g_assert (id_from < (gint)cache->items_by_id->len);
+	g_assert (id_from >= 0 && id_from < (gint)cache->filters->len);
 
-	source = g_ptr_array_index (cache->items_by_id, id_from);
+	source = g_ptr_array_index (cache->filters, id_from);
 	dep = rspamd_mempool_alloc (cache->static_pool, sizeof (*dep));
 	dep->id = id_from;
 	dep->sym = rspamd_mempool_strdup (cache->static_pool, to);
@@ -2210,8 +2212,8 @@ rspamd_symbols_cache_stat_symbol (struct symbols_cache *cache,
 }
 
 static gint
-rspamd_symbols_cache_find_symbol_parent (struct symbols_cache *cache,
-		const gchar *name)
+rspamd_symbols_cache_find_filter (struct symbols_cache *cache,
+								  const gchar *name)
 {
 	struct rspamd_symcache_item *item;
 
@@ -2224,12 +2226,11 @@ rspamd_symbols_cache_find_symbol_parent (struct symbols_cache *cache,
 	item = g_hash_table_lookup (cache->items_by_symbol, name);
 
 	if (item != NULL) {
-
-		while (item != NULL && item->parent != -1) {
-			item = g_ptr_array_index (cache->items_by_id, item->parent);
+		if (!item->is_filter) {
+			return -1;
 		}
 
-		return item ? item->id : -1;
+		return item->id;
 	}
 
 	return -1;
@@ -2243,11 +2244,11 @@ rspamd_symbols_cache_symbol_by_id (struct symbols_cache *cache,
 
 	g_assert (cache != NULL);
 
-	if (id < 0 || id >= (gint)cache->items_by_id->len) {
+	if (id < 0 || id >= (gint)cache->filters->len) {
 		return NULL;
 	}
 
-	item = g_ptr_array_index (cache->items_by_id, id);
+	item = g_ptr_array_index (cache->filters, id);
 
 	return item->symbol;
 }
@@ -2259,6 +2260,11 @@ rspamd_symbols_cache_stats_symbols_count (struct symbols_cache *cache)
 
 	return cache->stats_symbols_count;
 }
+
+#define DISABLE_BITS(what) do { \
+	memset (checkpoint->what.started, 0xff, NBYTES (cache->what->len)); \
+	memset (checkpoint->what.finished, 0xff, NBYTES (cache->what->len)); \
+} while(0)
 
 static void
 rspamd_symbols_cache_disable_all_symbols (struct rspamd_task *task,
@@ -2275,10 +2281,47 @@ rspamd_symbols_cache_disable_all_symbols (struct rspamd_task *task,
 	}
 
 	/* Set all symbols as started + finished to disable their execution */
-	memset (checkpoint->started_bits, 0xff,
-			NBYTES (cache->used_items));
-	memset (checkpoint->finished_bits, 0xff,
-			NBYTES (cache->used_items));
+	DISABLE_BITS(prefilters);
+	DISABLE_BITS(filters);
+	DISABLE_BITS(postfilters);
+	DISABLE_BITS(idempotent);
+}
+
+#undef DISABLE_BITS
+
+static struct rspamd_symcache_item *
+rspamd_symbols_cache_get_item_and_bits (struct rspamd_task *task,
+										struct symbols_cache *cache,
+										struct cache_savepoint *checkpoint,
+										const gchar *symbol,
+										struct cache_bits **bits)
+{
+	struct rspamd_symcache_item *item;
+
+	item = g_hash_table_lookup (cache->items_by_symbol, symbol);
+
+	if (item) {
+		if (item->is_virtual) {
+			item = g_ptr_array_index (cache->filters, item->specific.virtual.parent);
+			*bits = &checkpoint->filters;
+		}
+		else {
+			if (item->type & SYMBOL_TYPE_PREFILTER) {
+				*bits = &checkpoint->prefilters;
+			}
+			else if (item->type & SYMBOL_TYPE_POSTFILTER) {
+				*bits = &checkpoint->postfilters;
+			}
+			else if (item->type & SYMBOL_TYPE_IDEMPOTENT) {
+				*bits = &checkpoint->idempotent;
+			}
+			else {
+				*bits = &checkpoint->filters;
+			}
+		}
+	}
+
+	return item;
 }
 
 static void
@@ -2287,7 +2330,7 @@ rspamd_symbols_cache_disable_symbol_checkpoint (struct rspamd_task *task,
 {
 	struct cache_savepoint *checkpoint;
 	struct rspamd_symcache_item *item;
-	gint id;
+	struct cache_bits *bits = NULL;
 
 	if (task->checkpoint == NULL) {
 		checkpoint = rspamd_symbols_cache_make_checkpoint (task, cache);
@@ -2297,20 +2340,18 @@ rspamd_symbols_cache_disable_symbol_checkpoint (struct rspamd_task *task,
 		checkpoint = task->checkpoint;
 	}
 
-	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
+	item = rspamd_symbols_cache_get_item_and_bits (task, cache, checkpoint,
+			symbol, &bits);
 
-	if (id >= 0) {
-		/* Set executed and finished flags */
-		item = g_ptr_array_index (cache->items_by_id, id);
+	if (item) {
 
 		if (!(item->type & SYMBOL_TYPE_SQUEEZED)) {
-			SET_START_BIT (checkpoint, item);
-			SET_FINISH_BIT (checkpoint, item);
-
+			setbit (bits->started, item->id);
+			setbit (bits->finished, item->id);
 			msg_debug_cache_task ("disable execution of %s", symbol);
 		}
 		else {
-			msg_debug_cache_task ("skip squeezed symbol %s", symbol);
+			msg_debug_cache_task ("skip disabling squeezed symbol %s", symbol);
 		}
 	}
 	else {
@@ -2324,7 +2365,7 @@ rspamd_symbols_cache_enable_symbol_checkpoint (struct rspamd_task *task,
 {
 	struct cache_savepoint *checkpoint;
 	struct rspamd_symcache_item *item;
-	gint id;
+	struct cache_bits *bits = NULL;
 
 	if (task->checkpoint == NULL) {
 		checkpoint = rspamd_symbols_cache_make_checkpoint (task, cache);
@@ -2334,16 +2375,19 @@ rspamd_symbols_cache_enable_symbol_checkpoint (struct rspamd_task *task,
 		checkpoint = task->checkpoint;
 	}
 
-	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
+	item = rspamd_symbols_cache_get_item_and_bits (task, cache, checkpoint,
+			symbol, &bits);
 
-	if (id >= 0) {
-		/* Set executed and finished flags */
-		item = g_ptr_array_index (cache->items_by_id, id);
+	if (item) {
 
-		clrbit (checkpoint->started_bits, item->id);
-		clrbit (checkpoint->finished_bits, item->id);
-
-		msg_debug_cache_task ("enable execution of %s (%d)", symbol, id);
+		if (!(item->type & SYMBOL_TYPE_SQUEEZED)) {
+			clrbit (bits->started, item->id);
+			clrbit (bits->finished, item->id);
+			msg_debug_cache_task ("enable execution of %s", symbol);
+		}
+		else {
+			msg_debug_cache_task ("skip enabling of squeezed symbol %s", symbol);
+		}
 	}
 	else {
 		msg_info_task ("cannot enable %s: not found", symbol);
@@ -2354,65 +2398,49 @@ struct rspamd_abstract_callback_data*
 rspamd_symbols_cache_get_cbdata (struct symbols_cache *cache,
 		const gchar *symbol)
 {
-	gint id;
 	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
 
-	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
+	item = g_hash_table_lookup (cache->items_by_symbol, symbol);
 
-	if (id < 0) {
-		return NULL;
+	if (item) {
+
+		if (item->is_virtual) {
+			item = g_ptr_array_index (cache->filters, item->specific.virtual.parent);
+		}
+
+		return item->specific.normal.user_data;
 	}
 
-	item = g_ptr_array_index (cache->items_by_id, id);
-
-	return item->user_data;
-}
-
-gboolean
-rspamd_symbols_cache_set_cbdata (struct symbols_cache *cache,
-		const gchar *symbol, struct rspamd_abstract_callback_data *cbdata)
-{
-	gint id;
-	struct rspamd_symcache_item *item;
-
-	g_assert (cache != NULL);
-	g_assert (symbol != NULL);
-
-	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
-
-	if (id < 0) {
-		return FALSE;
-	}
-
-	item = g_ptr_array_index (cache->items_by_id, id);
-	item->user_data = cbdata;
-
-	return TRUE;
+	return NULL;
 }
 
 gboolean
 rspamd_symbols_cache_is_checked (struct rspamd_task *task,
 		struct symbols_cache *cache, const gchar *symbol)
 {
-	gint id;
 	struct cache_savepoint *checkpoint;
+	struct rspamd_symcache_item *item;
+	struct cache_bits *bits = NULL;
 
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
 
-	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
-
-	if (id < 0) {
-		return FALSE;
+	if (task->checkpoint == NULL) {
+		checkpoint = rspamd_symbols_cache_make_checkpoint (task, cache);
+		task->checkpoint = checkpoint;
+	}
+	else {
+		checkpoint = task->checkpoint;
 	}
 
-	checkpoint = task->checkpoint;
+	item = rspamd_symbols_cache_get_item_and_bits (task, cache, checkpoint,
+			symbol, &bits);
 
-	if (checkpoint) {
-		return isset (checkpoint->started_bits, id);
+	if (item) {
+		return isset (bits->started, item->id);
 	}
 
 	return FALSE;
@@ -2422,16 +2450,14 @@ void
 rspamd_symbols_cache_disable_symbol (struct symbols_cache *cache,
 		const gchar *symbol)
 {
-	gint id;
 	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
 
-	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
+	item = g_hash_table_lookup (cache->items_by_symbol, symbol);
 
-	if (id >= 0) {
-		item = g_ptr_array_index (cache->items_by_id, id);
+	if (item) {
 		item->enabled = FALSE;
 	}
 }
@@ -2440,16 +2466,14 @@ void
 rspamd_symbols_cache_enable_symbol (struct symbols_cache *cache,
 		const gchar *symbol)
 {
-	gint id;
 	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
 
-	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
+	item = g_hash_table_lookup (cache->items_by_symbol, symbol);
 
-	if (id >= 0) {
-		item = g_ptr_array_index (cache->items_by_id, id);
+	if (item) {
 		item->enabled = TRUE;
 	}
 }
@@ -2467,46 +2491,46 @@ gboolean
 rspamd_symbols_cache_is_symbol_enabled (struct rspamd_task *task,
 		struct symbols_cache *cache, const gchar *symbol)
 {
-	gint id;
 	struct cache_savepoint *checkpoint;
 	struct rspamd_symcache_item *item;
 	lua_State *L;
 	struct rspamd_task **ptask;
+	struct cache_bits *bits = NULL;
 	gboolean ret = TRUE;
 
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
 
-	id = rspamd_symbols_cache_find_symbol_parent (cache, symbol);
-
-	if (id < 0) {
-		return FALSE;
-	}
-
 	checkpoint = task->checkpoint;
-	item = g_ptr_array_index (cache->items_by_id, id);
+
 
 	if (checkpoint) {
-		if (CHECK_START_BIT (checkpoint, item)) {
-			ret = FALSE;
-		}
-		else {
-			if (item->condition_cb != -1) {
-				/* We also executes condition callback to check if we need this symbol */
-				L = task->cfg->lua_state;
-				lua_rawgeti (L, LUA_REGISTRYINDEX, item->condition_cb);
-				ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-				rspamd_lua_setclass (L, "rspamd{task}", -1);
-				*ptask = task;
+		item = rspamd_symbols_cache_get_item_and_bits (task, cache, checkpoint,
+				symbol, &bits);
 
-				if (lua_pcall (L, 1, 1, 0) != 0) {
-					msg_info_task ("call to condition for %s failed: %s",
-							item->symbol, lua_tostring (L, -1));
-					lua_pop (L, 1);
-				}
-				else {
-					ret = lua_toboolean (L, -1);
-					lua_pop (L, 1);
+		if (item) {
+			if (CHECK_START_BIT (checkpoint, item)) {
+				ret = FALSE;
+			}
+			else {
+				if (item->specific.normal.condition_cb != -1) {
+					/* We also executes condition callback to check if we need this symbol */
+					L = task->cfg->lua_state;
+					lua_rawgeti (L, LUA_REGISTRYINDEX,
+							item->specific.normal.condition_cb);
+					ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+					rspamd_lua_setclass (L, "rspamd{task}", -1);
+					*ptask = task;
+
+					if (lua_pcall (L, 1, 1, 0) != 0) {
+						msg_info_task ("call to condition for %s failed: %s",
+								item->symbol, lua_tostring (L, -1));
+						lua_pop (L, 1);
+					}
+					else {
+						ret = lua_toboolean (L, -1);
+						lua_pop (L, 1);
+					}
 				}
 			}
 		}
@@ -2520,10 +2544,14 @@ rspamd_symbols_cache_foreach (struct symbols_cache *cache,
 		void (*func)(gint , const gchar *, gint , gpointer ),
 		gpointer ud)
 {
-	guint i;
 	struct rspamd_symcache_item *item;
+	GHashTableIter it;
+	gpointer k, v;
 
-	PTR_ARRAY_FOREACH (cache->items_by_id, i, item) {
+	g_hash_table_iter_init (&it, cache->items_by_symbol);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		item = (struct rspamd_symcache_item *)v;
 		func (item->id, item->symbol, item->type, ud);
 	}
 }
@@ -2570,7 +2598,7 @@ rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
 {
 	struct cache_savepoint *checkpoint = task->checkpoint;
 	struct cache_dependency *rdep;
-	gdouble total_ticks = 0, t2, diff;
+	gdouble t2, diff;
 	guint i;
 	struct timeval tv;
 	const gdouble slow_diff_limit = 0.1;
