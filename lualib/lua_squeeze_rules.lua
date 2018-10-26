@@ -16,6 +16,7 @@ limitations under the License.
 
 local exports = {}
 local logger = require 'rspamd_logger'
+local lua_util = require 'lua_util'
 
 -- Squeezed rules part
 local squeezed_rules = {{}} -- plain vector of all rules squeezed
@@ -37,7 +38,7 @@ local function gen_lua_squeeze_function(order)
         end
 
         -- Too expensive to call :(
-        --logger.debugm(SN, task, 'call for: %s', data[2])
+        lua_util.debugm(SN, task, 'call for: %s', data[2])
         local status, ret = pcall(real_call)
 
         if not status then
@@ -90,7 +91,7 @@ local function gen_lua_squeeze_function(order)
           end
         end
       else
-        logger.debugm(SN, task, 'skip symbol due to settings: %s', data[2])
+        lua_util.debugm(SN, task, 'skip symbol due to settings: %s', data[2])
       end
 
 
@@ -106,14 +107,14 @@ exports.squeeze_rule = function(s, func)
         order = 0,
         sym = s,
       }
-      logger.debugm(SN, rspamd_config, 'squeezed rule: %s', s)
+      lua_util.debugm(SN, rspamd_config, 'squeezed rule: %s', s)
     else
       logger.warnx(rspamd_config, 'duplicate symbol registered: %s, skip', s)
     end
   else
     -- Unconditionally add function to the squeezed rules
     local id = tostring(#squeezed_rules)
-    logger.debugm(SN, rspamd_config, 'squeezed unnamed rule: %s', id)
+    lua_util.debugm(SN, rspamd_config, 'squeezed unnamed rule: %s', id)
     table.insert(squeezed_rules[1], {func, 'unnamed: ' .. id})
   end
 
@@ -132,7 +133,7 @@ exports.squeeze_rule = function(s, func)
 end
 
 exports.squeeze_dependency = function(child, parent)
-  logger.debugm(SN, rspamd_config, 'squeeze dep %s->%s', child, parent)
+  lua_util.debugm(SN, rspamd_config, 'squeeze dep %s->%s', child, parent)
 
   if not squeezed_deps[parent] then
     squeezed_deps[parent] = {}
@@ -176,7 +177,7 @@ local function register_topology_symbol(order)
   }
 
   local parent = get_ordered_symbol_name(order - 1)
-  logger.debugm(SN, rspamd_config, 'registered new order of deps: %s->%s',
+  lua_util.debugm(SN, rspamd_config, 'registered new order of deps: %s->%s',
       ord_sym, parent)
   rspamd_config:register_dependency(ord_sym, parent, true)
 end
@@ -188,7 +189,7 @@ exports.squeeze_init = function()
 
       if order > node.order then
         node.order = order
-        logger.debugm(SN, rspamd_config, "symbol: %s, order: %s", node.sym, order)
+        lua_util.debugm(SN, rspamd_config, "symbol: %s, order: %s", node.sym, order)
       else
         return
       end
@@ -215,12 +216,12 @@ exports.squeeze_init = function()
 
         if squeezed_symbols[s] then
           -- External dep depends on a squeezed symbol
-          logger.debugm(SN, rspamd_config, 'register external squeezed dependency on %s',
+          lua_util.debugm(SN, rspamd_config, 'register external squeezed dependency on %s',
               parent)
           rspamd_config:register_dependency(squeeze_sym, parent, true)
         else
           -- Generic rspamd symbols dependency
-          logger.debugm(SN, rspamd_config, 'register external dependency %s -> %s',
+          lua_util.debugm(SN, rspamd_config, 'register external dependency %s -> %s',
               s, parent)
           rspamd_config:register_dependency(s, parent, true)
         end
@@ -232,7 +233,7 @@ exports.squeeze_init = function()
       for cld,_ in pairs(children) do
         if squeezed_symbols[cld] then
           -- Cross dependency
-          logger.debugm(SN, rspamd_config, 'cross dependency in squeezed symbols %s->%s',
+          lua_util.debugm(SN, rspamd_config, 'cross dependency in squeezed symbols %s->%s',
               cld, parent)
           local order = squeezed_symbols[cld].order
           if not squeeze_function_ids[order] then
@@ -247,7 +248,7 @@ exports.squeeze_init = function()
           -- External symbol depends on a squeezed one
           local parent_symbol = get_ordered_symbol_name(ps.order)
           rspamd_config:register_dependency(cld, parent_symbol, true)
-          logger.debugm(SN, rspamd_config, 'register squeezed dependency for external symbol %s->%s',
+          lua_util.debugm(SN, rspamd_config, 'register squeezed dependency for external symbol %s->%s',
               cld, parent_symbol)
         end
       end
@@ -258,7 +259,7 @@ exports.squeeze_init = function()
   -- and create squeezed rules
   for k,v in pairs(squeezed_symbols) do
     local parent_symbol = get_ordered_symbol_name(v.order)
-    logger.debugm(SN, rspamd_config, 'added squeezed rule: %s (%s): %s',
+    lua_util.debugm(SN, rspamd_config, 'added squeezed rule: %s (%s): %s',
         k, parent_symbol, v)
     rspamd_config:register_symbol{
       type = 'virtual',
@@ -277,7 +278,7 @@ exports.squeeze_init = function()
 
       if v.group then
         if not squeezed_groups[v.group] then
-          logger.debugm(SN, rspamd_config, 'added squeezed group: %s', v.group)
+          lua_util.debugm(SN, rspamd_config, 'added squeezed group: %s', v.group)
           squeezed_groups[v.group] = {}
         end
 
@@ -287,7 +288,7 @@ exports.squeeze_init = function()
       if v.groups then
         for _,gr in ipairs(v.groups) do
           if not squeezed_groups[gr] then
-            logger.debugm(SN, rspamd_config, 'added squeezed group: %s', gr)
+            lua_util.debugm(SN, rspamd_config, 'added squeezed group: %s', gr)
             squeezed_groups[gr] = {}
           end
 
@@ -295,7 +296,7 @@ exports.squeeze_init = function()
         end
       end
     else
-      logger.debugm(SN, rspamd_config, 'no metric symbol found for %s, maybe bug', k)
+      lua_util.debugm(SN, rspamd_config, 'no metric symbol found for %s, maybe bug', k)
     end
     if not squeezed_rules[v.order] then
       squeezed_rules[v.order] = {}
@@ -324,7 +325,7 @@ exports.handle_settings = function(task, settings)
     found = true
     for _,s in ipairs(settings.symbols_enabled) do
       if squeezed_symbols[s] then
-        logger.debugm(SN, task, 'enable symbol %s as it is in `symbols_enabled`', s)
+        lua_util.debugm(SN, task, 'enable symbol %s as it is in `symbols_enabled`', s)
         symbols_enabled[s] = true
         symbols_disabled[s] = nil
       end
@@ -337,7 +338,7 @@ exports.handle_settings = function(task, settings)
     for _,gr in ipairs(settings.groups_enabled) do
       if squeezed_groups[gr] then
         for _,sym in ipairs(squeezed_groups[gr]) do
-          logger.debugm(SN, task, 'enable symbol %s as it is in `groups_enabled`', sym)
+          lua_util.debugm(SN, task, 'enable symbol %s as it is in `groups_enabled`', sym)
           symbols_enabled[sym] = true
           symbols_disabled[sym] = nil
         end
@@ -348,10 +349,10 @@ exports.handle_settings = function(task, settings)
   if settings.symbols_disabled then
     found = true
     for _,s in ipairs(settings.symbols_disabled) do
-      logger.debugm(SN, task, 'try disable symbol %s as it is in `symbols_disabled`', s)
+      lua_util.debugm(SN, task, 'try disable symbol %s as it is in `symbols_disabled`', s)
       if not symbols_enabled[s] then
         symbols_disabled[s] = true
-        logger.debugm(SN, task, 'disable symbol %s as it is in `symbols_disabled`', s)
+        lua_util.debugm(SN, task, 'disable symbol %s as it is in `symbols_disabled`', s)
       end
     end
   end
@@ -359,11 +360,11 @@ exports.handle_settings = function(task, settings)
   if settings.groups_disabled then
     found = true
     for _,gr in ipairs(settings.groups_disabled) do
-      logger.debugm(SN, task, 'try disable group %s as it is in `groups_disabled`: %s', gr)
+      lua_util.debugm(SN, task, 'try disable group %s as it is in `groups_disabled`: %s', gr)
       if squeezed_groups[gr] then
         for _,sym in ipairs(squeezed_groups[gr]) do
           if not symbols_enabled[sym] then
-            logger.debugm(SN, task, 'disable symbol %s as it is in `groups_disabled`', sym)
+            lua_util.debugm(SN, task, 'disable symbol %s as it is in `groups_disabled`', sym)
             symbols_disabled[sym] = true
           end
         end
