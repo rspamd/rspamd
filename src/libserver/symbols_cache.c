@@ -90,6 +90,7 @@ struct symbols_cache {
 	GPtrArray *composites;
 	GPtrArray *idempotent;
 	GPtrArray *virtual;
+	GPtrArray *squeezed;
 	GList *delayed_deps;
 	GList *delayed_conditions;
 	rspamd_mempool_t *static_pool;
@@ -929,6 +930,10 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 		}
 	}
 
+	if (item->type & SYMBOL_TYPE_SQUEEZED) {
+		g_ptr_array_add (cache->squeezed, item);
+	}
+
 	cache->used_items ++;
 	cache->id ++;
 
@@ -1067,6 +1072,7 @@ rspamd_symbols_cache_destroy (struct symbols_cache *cache)
 		g_ptr_array_free (cache->postfilters, TRUE);
 		g_ptr_array_free (cache->idempotent, TRUE);
 		g_ptr_array_free (cache->composites, TRUE);
+		g_ptr_array_free (cache->squeezed, TRUE);
 		REF_RELEASE (cache->items_by_order);
 
 		if (cache->peak_cb != -1) {
@@ -1093,6 +1099,7 @@ rspamd_symbols_cache_new (struct rspamd_config *cfg)
 	cache->idempotent = g_ptr_array_new ();
 	cache->composites = g_ptr_array_new ();
 	cache->virtual = g_ptr_array_new ();
+	cache->squeezed = g_ptr_array_new ();
 	cache->reload_time = cfg->cache_reload_time;
 	cache->total_hits = 1;
 	cache->total_weight = 1.0;
@@ -2271,6 +2278,8 @@ rspamd_symbols_cache_disable_all_symbols (struct rspamd_task *task,
 		struct symbols_cache *cache)
 {
 	struct cache_savepoint *checkpoint;
+	guint i;
+	struct rspamd_symcache_item *item;
 
 	if (task->checkpoint == NULL) {
 		checkpoint = rspamd_symbols_cache_make_checkpoint (task, cache);
@@ -2285,6 +2294,12 @@ rspamd_symbols_cache_disable_all_symbols (struct rspamd_task *task,
 	DISABLE_BITS(filters);
 	DISABLE_BITS(postfilters);
 	DISABLE_BITS(idempotent);
+
+	/* Enable for squeezed symbols */
+	PTR_ARRAY_FOREACH (cache->squeezed, i, item) {
+		clrbit (checkpoint->filters.started, item->id);
+		clrbit (checkpoint->filters.finished, item->id);
+	}
 }
 
 #undef DISABLE_BITS
