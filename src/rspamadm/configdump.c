@@ -143,8 +143,8 @@ rspamadm_add_doc_elt (const ucl_object_t *obj, const ucl_object_t *doc_obj,
 
 	elt = ucl_object_lookup (doc_obj, "required");
 	if (elt) {
-		rspamd_printf_fstring (&comment, " * Required: %B",
-				ucl_object_toboolean (elt));
+		rspamd_printf_fstring (&comment, " * Required: %s",
+				ucl_object_toboolean (elt) ? "true" : "false");
 		cur_comment = ucl_object_fromstring_common (comment->str, comment->len, 0);
 		rspamd_fstring_erase (comment, 0, comment->len);
 		DL_APPEND (nobj, cur_comment);

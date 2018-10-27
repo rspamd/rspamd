@@ -2509,7 +2509,8 @@ rspamd_rcl_parse_struct_string (rspamd_mempool_t *pool,
 		break;
 	case UCL_BOOLEAN:
 		*target = rspamd_mempool_alloc (pool, num_str_len);
-		rspamd_snprintf (*target, num_str_len, "%B", (gboolean)obj->value.iv);
+		rspamd_snprintf (*target, num_str_len, "%s",
+				((gboolean)obj->value.iv) ? "true" : "false");
 		break;
 	default:
 		g_set_error (err,
@@ -2869,7 +2870,8 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 			break;
 		case UCL_BOOLEAN:
 			val = rspamd_mempool_alloc (pool, num_str_len);
-			rspamd_snprintf (val, num_str_len, "%B", (gboolean)cur->value.iv);
+			rspamd_snprintf (val, num_str_len, "%s",
+					((gboolean)cur->value.iv) ? "true" : "false");
 			break;
 		default:
 			g_set_error (err,
