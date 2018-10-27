@@ -1,127 +1,251 @@
-# Copyright (c) 2007-2015 University of Illinois at Urbana-Champaign.
-# Copyright (c) 2015, Vsevolod Stakhov
-# - Find LLVM
-# This module can be used to find LLVM.
-# It requires that the llvm-config executable be available on the system path.
-# Once found, llvm-config is used for everything else.
+#===------------------------------------------------------------------------===#
 #
-# Typical usage could be:
-#   find_package(LLVM QUIET REQUIRED COMPONENTS jit native interpreter)
+#                     The KLEE Symbolic Virtual Machine
 #
-# If the QUIET flag is not set, the specified components and LLVM version are
-# outputted.
+# This file is distributed under the University of Illinois Open Source
+# License. See LICENSE.TXT for details.
 #
-# If the COMPONENTS are not set, the default set of "all" is used.
+#===------------------------------------------------------------------------===#
 #
-# The following variables are set:
+# This file provides multiple methods to detect LLVM.
 #
-# LLVM_FOUND        - Set to YES if LLVM is found.
-# LLVM_VERSION      - Set to the decimal version of the LLVM library.
-# LLVM_C_FLAGS      - All flags that should be passed to a C compiler.
-# LLVM_CXX_FLAGS    - All flags that should be passed to a C++ compiler.
-# LLVM_CPP_FLAGS    - All flags that should be passed to the C pre-processor.
-# LLVM_LD_FLAGS     - Additional flags to pass to the linker.
-# LLVM_LIBRARY_DIRS - A list of directories where the LLVM libraries are located.
-# LLVM_INCLUDE_DIRS - A list of directories where the LLVM headers are located.
-# LLVM_LIBRARIES    - A list of libraries which should be linked against.
+# * llvm-config executable. This method is portable across LLVM build systems
+# (i.e. works if LLVM was built with autoconf/Makefile or with CMake).
+#
+# * find_package(LLVM CONFIG). This method only works if LLVM was built with
+# CMake or with LLVM >= 3.5 when built with the autoconf/Makefile build system
+# This method relies on the `LLVMConfig.cmake` file generated to be generated
+# by LLVM's build system.
+#
+#===------------------------------------------------------------------------===#
 
-# A macro to run llvm config
-macro(_llvm_config _var_name)
-    # Firstly, locate the LLVM config executable
-    find_program(_llvm_config_exe
-            NAMES llvm-config
-            DOC "llvm-config executable location"
-            )
+function(string_to_list s output_var)
+    string(REPLACE " " ";" _output "${s}")
+    set(${output_var} ${_output} PARENT_SCOPE)
+endfunction()
 
-    # If no llvm-config executable was found, set the output variable to not
-    # found.
-    if (NOT _llvm_config_exe)
-        set(${_var_name} "${_var_name}-NOTFOUND")
-    else (NOT _llvm_config_exe)
-        # Otherwise, run llvm-config
-        execute_process(
-                COMMAND ${_llvm_config_exe} ${ARGN}
-                OUTPUT_VARIABLE ${_var_name}
-                RESULT_VARIABLE _llvm_config_retval
+option(USE_CMAKE_FIND_PACKAGE_LLVM "Use find_package(LLVM CONFIG) to find LLVM" OFF)
+
+if (USE_CMAKE_FIND_PACKAGE_LLVM)
+    find_package(LLVM CONFIG REQUIRED)
+
+    # Provide function to map LLVM components to libraries.
+    function(klee_get_llvm_libs output_var)
+        if (${LLVM_PACKAGE_VERSION} VERSION_LESS "3.5")
+            llvm_map_components_to_libraries(${output_var} ${ARGN})
+        else()
+            llvm_map_components_to_libnames(${output_var} ${ARGN})
+        endif()
+        set(${output_var} ${${output_var}} PARENT_SCOPE)
+    endfunction()
+    # HACK: This information is not exported so just pretend its OFF for now.
+    set(LLVM_ENABLE_VISIBILITY_INLINES_HIDDEN OFF)
+else()
+    # Use the llvm-config binary to get the information needed.
+    # Try to detect it in the user's environment. The user can
+    # force a particular binary by passing `-DLLVM_CONFIG_BINARY=/path/to/llvm-config`
+    # to CMake.
+    find_program(LLVM_CONFIG_BINARY
+            NAMES llvm-config)
+    message(STATUS "LLVM_CONFIG_BINARY: ${LLVM_CONFIG_BINARY}")
+
+    if (NOT LLVM_CONFIG_BINARY)
+        message(FATAL_ERROR
+                "Failed to find llvm-config.\n"
+                "Try passing -DLLVM_CONFIG_BINARY=/path/to/llvm-config to cmake")
+    endif()
+
+    function(_run_llvm_config output_var)
+        set(_command "${LLVM_CONFIG_BINARY}" ${ARGN})
+        execute_process(COMMAND ${_command}
+                RESULT_VARIABLE _exit_code
+                OUTPUT_VARIABLE ${output_var}
                 OUTPUT_STRIP_TRAILING_WHITESPACE
-        )
-        if (RESULT_VARIABLE)
-            message(SEND_ERROR
-                    "Error running llvm-config with arguments: ${ARGN}")
-        endif (RESULT_VARIABLE)
-    endif (NOT _llvm_config_exe)
-endmacro(_llvm_config)
+                ERROR_STRIP_TRAILING_WHITESPACE
+                )
+        if (NOT ("${_exit_code}" EQUAL "0"))
+            message(FATAL_ERROR "Failed running ${_command}")
+        endif()
+        set(${output_var} ${${output_var}} PARENT_SCOPE)
+    endfunction()
 
-# The default set of components
-set(_llvm_components all)
+    # Get LLVM version
+    _run_llvm_config(LLVM_PACKAGE_VERSION "--version")
+    # Try x.y.z patern
+    set(_llvm_version_regex "^([0-9]+)\\.([0-9]+)\\.([0-9]+)(svn)?$")
+    if ("${LLVM_PACKAGE_VERSION}" MATCHES "${_llvm_version_regex}")
+        string(REGEX REPLACE
+                "${_llvm_version_regex}"
+                "\\1"
+                LLVM_VERSION_MAJOR
+                "${LLVM_PACKAGE_VERSION}")
+        string(REGEX REPLACE
+                "${_llvm_version_regex}"
+                "\\2"
+                LLVM_VERSION_MINOR
+                "${LLVM_PACKAGE_VERSION}")
+        string(REGEX REPLACE
+                "${_llvm_version_regex}"
+                "\\3"
+                LLVM_VERSION_PATCH
+                "${LLVM_PACKAGE_VERSION}")
+    else()
+        # try x.y pattern
+        set(_llvm_version_regex "^([0-9]+)\\.([0-9]+)(svn)?$")
+        if ("${LLVM_PACKAGE_VERSION}" MATCHES "${_llvm_version_regex}")
+            string(REGEX REPLACE
+                    "${_llvm_version_regex}"
+                    "\\1"
+                    LLVM_VERSION_MAJOR
+                    "${LLVM_PACKAGE_VERSION}")
+            string(REGEX REPLACE
+                    "${_llvm_version_regex}"
+                    "\\2"
+                    LLVM_VERSION_MINOR
+                    "${LLVM_PACKAGE_VERSION}")
+            set(LLVM_VERSION_PATCH 0)
+        else()
+            message(FATAL_ERROR
+                    "Failed to parse LLVM version from \"${LLVM_PACKAGE_VERSION}\"")
+        endif()
+    endif()
 
-# If components have been specified via find_package, use them
-if (LLVM_FIND_COMPONENTS)
-    set(_llvm_components ${LLVM_FIND_COMPONENTS})
-endif (LLVM_FIND_COMPONENTS)
+    set(LLVM_DEFINITIONS "")
+    _run_llvm_config(_llvm_cpp_flags "--cppflags")
+    string_to_list("${_llvm_cpp_flags}" _llvm_cpp_flags_list)
+    foreach (flag ${_llvm_cpp_flags_list})
+        # Filter out -I flags by only looking for -D flags.
+        if ("${flag}" MATCHES "^-D" AND NOT ("${flag}" STREQUAL "-D_DEBUG"))
+            list(APPEND LLVM_DEFINITIONS "${flag}")
+        endif()
+    endforeach()
 
-if (NOT LLVM_FIND_QUIETLY)
-    message(STATUS "Looking for LLVM components: ${_llvm_components}")
-endif (NOT LLVM_FIND_QUIETLY)
+    set(LLVM_ENABLE_ASSERTIONS ON)
+    set(LLVM_ENABLE_EH ON)
+    set(LLVM_ENABLE_RTTI ON)
+    set(LLVM_ENABLE_VISIBILITY_INLINES_HIDDEN OFF)
+    _run_llvm_config(_llvm_cxx_flags "--cxxflags")
+    string_to_list("${_llvm_cxx_flags}" _llvm_cxx_flags_list)
+    foreach (flag ${_llvm_cxx_flags_list})
+        if ("${flag}" STREQUAL "-DNDEBUG")
+            # Note we don't rely on `llvm-config --build-mode` because
+            # that seems broken when LLVM is built with CMake.
+            set(LLVM_ENABLE_ASSERTIONS OFF)
+        elseif ("${flag}" STREQUAL "-fno-exceptions")
+            set(LLVM_ENABLE_EH OFF)
+        elseif ("${flag}" STREQUAL "-fno-rtti")
+            set(LLVM_ENABLE_RTTI OFF)
+        elseif ("${flag}" STREQUAL "-fvisibility-inlines-hidden")
+            set(LLVM_ENABLE_VISIBILITY_INLINES_HIDDEN ON)
+        endif()
+    endforeach()
 
-_llvm_config(LLVM_VERSION --version)
-_llvm_config(LLVM_C_FLAGS --cflags)
-_llvm_config(LLVM_CXX_FLAGS --cxxflags)
-_llvm_config(LLVM_CPP_FLAGS --cppflags)
-_llvm_config(LLVM_LD_FLAGS --ldflags)
-_llvm_config(LLVM_LIBRARY_DIRS --libdir)
-_llvm_config(LLVM_INCLUDE_DIRS --includedir)
-_llvm_config(LLVM_LIBRARIES --libs ${_llvm_components})
+    set(LLVM_INCLUDE_DIRS "")
+    foreach (flag ${_llvm_cpp_flags_list})
+        # Filter out -D flags by only looking for -I flags.
+        if ("${flag}" MATCHES "^-I")
+            string(REGEX REPLACE "^-I(.+)$" "\\1" _include_dir "${flag}")
+            list(APPEND LLVM_INCLUDE_DIRS "${_include_dir}")
+        endif()
+    endforeach()
 
-if (NOT LLVM_FIND_QUIETLY)
-    message(STATUS "Found LLVM version: ${LLVM_VERSION}")
-endif (NOT LLVM_FIND_QUIETLY)
+    _run_llvm_config(LLVM_LIBRARY_DIRS "--libdir")
+    _run_llvm_config(LLVM_TOOLS_BINARY_DIR "--bindir")
+    _run_llvm_config(TARGET_TRIPLE "--host-target")
 
-SET(libclang_llvm_header_search_paths
-        # LLVM Debian/Ubuntu nightly packages: http://llvm.org/apt/
-        "/usr/lib/llvm-${LLVM_VERSION}/include/"
-        # LLVM MacPorts
-        "/opt/local/libexec/llvm-${LLVM_VERSION}/include"
-        # LLVM Homebrew
-        "/usr/local/Cellar/llvm/${LLVM_VERSION}/include"
-        # LLVM Homebrew/versions
-        "/usr/local/lib/llvm-${LLVM_VERSION}/include"
-        # FreeBSD ports versions
-        "/usr/local/llvm${LLVM_VERSION}/include"
-)
+    # Provide function to map LLVM components to libraries.
+    function(klee_get_llvm_libs OUTPUT_VAR)
+        _run_llvm_config(_llvm_libs "--libfiles" ${ARGN})
+        string_to_list("${_llvm_libs}" _llvm_libs_list)
 
-SET(libclang_llvm_lib_search_paths
-        # LLVM Debian/Ubuntu nightly packages: http://llvm.org/apt/
-        "/usr/lib/llvm-${LLVM_VERSION}/lib/"
-        # LLVM MacPorts
-        "/opt/local/libexec/llvm-${LLVM_VERSION}/lib"
-        # LLVM Homebrew
-        "/usr/local/Cellar/llvm/${LLVM_VERSION}/lib"
-        # LLVM Homebrew/versions
-        "/usr/local/lib/llvm-${LLVM_VERSION}/lib"
-        # FreeBSD ports versions
-        "/usr/local/llvm${LLVM_VERSION}/lib"
-)
+        # Now find the system libs that are needed.
+        if (${LLVM_PACKAGE_VERSION} VERSION_LESS "3.5")
+            # For LLVM 3.4 and older system libraries
+            # appeared in the output of `--ldflags`.
+            _run_llvm_config(_system_libs "--ldflags")
+            # TODO: Filter out `-L<path>` flag.
+        else()
+            _run_llvm_config(_system_libs "--system-libs")
+        endif()
+        string_to_list("${_system_libs}" _system_libs_list)
 
-find_path(LIBCLANG_INCLUDE_DIR clang-c/Index.h
-        PATHS ${libclang_llvm_header_search_paths}
-        PATH_SUFFIXES LLVM/include #Windows package from http://llvm.org/releases/
-        DOC "The path to the directory that contains clang-c/Index.h")
-find_library(LIBCLANG_LIBRARY NAMES libclang.imp libclang clang
-        PATHS ${libclang_llvm_lib_search_paths}
-        PATH_SUFFIXES LLVM/lib #Windows package from http://llvm.org/releases/
-        DOC "The file that corresponds to the libclang library.")
+        # Create an imported target for each LLVM library
+        # if it doesn't already exist. We need to do this
+        # so we can tell CMake that these libraries depend
+        # on the necessary libraries so that CMake
+        # can get the link order right.
+        set(targets_to_return "")
+        set(created_targets "")
+        foreach (llvm_lib ${_llvm_libs_list})
+            # a bug in llvm-config from LLVM 3.9
+            string(REGEX REPLACE "lib(libLLVM[-.a-zA-Z0-9]+\\.so)\\.so$" "\\1" llvm_lib "${llvm_lib}")
 
-get_filename_component(LIBCLANG_LIBRARY_DIR ${LIBCLANG_LIBRARY} PATH)
+            get_filename_component(llvm_lib_file_name "${llvm_lib}" NAME)
 
-set(LIBCLANG_LIBRARIES ${LIBCLANG_LIBRARY})
-set(LIBCLANG_INCLUDE_DIRS ${LIBCLANG_INCLUDE_DIR})
+            string(REGEX REPLACE "^(lib)?(LLVM[-.a-zA-Z0-9]+)\\..+$" "\\2" target_name "${llvm_lib_file_name}")
+            list(APPEND targets_to_return "${target_name}")
+            if (NOT TARGET "${target_name}")
+                # DEBUG: message(STATUS "Creating imported target \"${target_name}\"" " for \"${llvm_lib}\"")
+                list(APPEND created_targets "${target_name}")
 
-# handle the QUIETLY and REQUIRED arguments and set LLVM_FOUND to TRUE if
-# all listed variables are TRUE
-include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(LLVM
-        DEFAULT_MSG
-        LLVM_LIBRARIES
-        LLVM_INCLUDE_DIRS
-        LLVM_LIBRARY_DIRS)
+                set(import_library_type "STATIC")
+                if ("${llvm_lib_file_name}" MATCHES "(so|dylib|dll)$")
+                    set(import_library_type "SHARED")
+                endif()
+                # Create an imported target for the library
+                add_library("${target_name}" "${import_library_type}" IMPORTED GLOBAL)
+                set_property(TARGET "${target_name}" PROPERTY
+                        IMPORTED_LOCATION "${llvm_lib}"
+                        )
+            endif()
+        endforeach()
+
+        # Now state the dependencies of the created imported targets which we
+        # assume to be for each imported target the libraries which appear after
+        # the library in `{_llvm_libs_list}` and then finally the system libs.
+        # It is **essential** that we do this otherwise CMake will get the
+        # link order of the imported targets wrong.
+        list(LENGTH targets_to_return length_targets_to_return)
+        if ("${length_targets_to_return}" GREATER 0)
+            math(EXPR targets_to_return_last_index "${length_targets_to_return} -1")
+            foreach (llvm_target_lib ${created_targets})
+                # DEBUG: message(STATUS "Adding deps for target ${llvm_target_lib}")
+                # Find position in `targets_to_return`
+                list(FIND targets_to_return "${llvm_target_lib}" position)
+                if ("${position}" EQUAL "-1")
+                    message(FATAL_ERROR "couldn't find \"${llvm_target_lib}\" in list of targets")
+                endif()
+                if ("${position}" LESS "${targets_to_return_last_index}")
+                    math(EXPR position_plus_one "${position} + 1")
+                    foreach (index RANGE ${position_plus_one} ${targets_to_return_last_index})
+                        # Get the target for this index
+                        list(GET targets_to_return ${index} target_for_index)
+                        # DEBUG: message(STATUS "${llvm_target_libs} depends on ${target_for_index}")
+                        set_property(TARGET "${llvm_target_lib}" APPEND PROPERTY
+                                INTERFACE_LINK_LIBRARIES "${target_for_index}"
+                                )
+                    endforeach()
+                endif()
+                # Now finally add the system library dependencies. These must be last.
+                set_property(TARGET "${target_name}" APPEND PROPERTY
+                        INTERFACE_LINK_LIBRARIES "${_system_libs_list}"
+                        )
+            endforeach()
+        endif()
+
+        set(${OUTPUT_VAR} ${targets_to_return} PARENT_SCOPE)
+    endfunction()
+endif()
+
+# Filter out `-DNEBUG` from LLVM_DEFINITIONS.  The caller can use
+# `LLVM_ENABLE_ASSERTIONS` to decide how to set their defines.
+set(_new_llvm_definitions "")
+foreach (llvm_define ${LLVM_DEFINITIONS})
+    if ("${llvm_define}" STREQUAL "-DNDEBUG")
+        # Skip
+    else()
+        list(APPEND _new_llvm_definitions "${llvm_define}")
+    endif()
+endforeach()
+set(LLVM_DEFINITIONS "${_new_llvm_definitions}")
+unset(_new_llvm_definitions)
