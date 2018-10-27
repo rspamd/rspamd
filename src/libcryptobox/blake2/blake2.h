@@ -20,13 +20,13 @@
 extern "C" {
 #endif
 
-enum blake2b_constant {
-	BLAKE2B_BLOCKBYTES = 128,
-	BLAKE2B_OUTBYTES = 64,
-	BLAKE2B_KEYBYTES = 64,
-	BLAKE2B_SALTBYTES = 16,
-	BLAKE2B_PERSONALBYTES = 16
-};
+
+#define BLAKE2B_BLOCKBYTES 128
+#define BLAKE2B_OUTBYTES 64
+#define BLAKE2B_KEYBYTES 64
+#define BLAKE2B_SALTBYTES 16
+#define BLAKE2B_PERSONALBYTES 16
+
 
 typedef struct blake2b_state_t {
 	unsigned char opaque[256];

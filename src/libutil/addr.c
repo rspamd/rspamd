@@ -1055,7 +1055,7 @@ rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
 		}
 	}
 
-	if (type != SOCK_DGRAM) {
+	if (type != (int)SOCK_DGRAM) {
 
 		if (addr->af == AF_UNIX) {
 			path = addr->u.un->addr.sun_path;
