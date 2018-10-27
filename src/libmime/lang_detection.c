@@ -784,7 +784,7 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 		});
 
 		if (!rspamd_multipattern_compile (ret->stop_words[i].mp, &err)) {
-			msg_err_config ("cannot compile stop words for %d language group: %e",
+			msg_err_config ("cannot compile stop words for %z language group: %e",
 					i, err);
 			g_error_free (err);
 		}

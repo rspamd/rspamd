@@ -1365,7 +1365,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 				symbuf->str,
 				0, nl_type, ",");
 		rspamd_printf_gstring (added_headers, "X-Spam-Symbols: %v%s",
-				folded_symbuf, line_end, ",");
+				folded_symbuf, line_end);
 
 		g_string_free (folded_symbuf, TRUE);
 		g_string_free (symbuf, TRUE);

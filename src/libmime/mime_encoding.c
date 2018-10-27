@@ -446,7 +446,7 @@ rspamd_mime_text_part_utf8_convert (struct rspamd_task *task,
 		return FALSE;
 	}
 
-	msg_info_task ("converted from %s to UTF-8 inlen: %z, outlen: %d",
+	msg_info_task ("converted from %s to UTF-8 inlen: %d, outlen: %d",
 			charset, input->len, r);
 	text_part->utf_raw_content = rspamd_mempool_alloc (task->task_pool,
 			sizeof (*text_part->utf_raw_content) + sizeof (gpointer) * 4);
