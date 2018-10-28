@@ -919,6 +919,7 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 			/* Treat it as normal symbol to allow enable/disable */
 			item->id = cache->filters->len;
 			g_ptr_array_add (cache->filters, item);
+			item->is_filter = TRUE;
 			item->specific.normal.func = NULL;
 			item->specific.normal.user_data = NULL;
 			item->specific.normal.condition_cb = -1;
