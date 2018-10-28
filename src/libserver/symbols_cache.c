@@ -916,10 +916,12 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 			g_ptr_array_add (cache->composites, item);
 		}
 		else if (item->type & SYMBOL_TYPE_CLASSIFIER) {
-			/* Treat it as virtual */
-			item->id = cache->virtual->len;
+			/* Treat it as normal symbol to allow enable/disable */
+			item->id = cache->filters->len;
+			g_ptr_array_add (cache->filters, item);
+			item->specific.normal.func = NULL;
+			item->specific.normal.user_data = NULL;
 			item->specific.normal.condition_cb = -1;
-			g_ptr_array_add (cache->virtual, item);
 		}
 		else {
 			/* Require parent */
@@ -1334,8 +1336,12 @@ rspamd_symbols_cache_check_symbol (struct rspamd_task *task,
 	lua_State *L;
 	gboolean check = TRUE;
 
-	g_assert (!item->is_virtual);
+	if (item->type & SYMBOL_TYPE_CLASSIFIER) {
+		/* Classifiers are special :( */
+		return TRUE;
+	}
 
+	g_assert (!item->is_virtual);
 	g_assert (item->specific.normal.func != NULL);
 	if (CHECK_START_BIT (checkpoint, item)) {
 		/*
