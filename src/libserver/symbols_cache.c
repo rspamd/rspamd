@@ -2242,6 +2242,12 @@ rspamd_symbols_cache_find_filter (struct symbols_cache *cache,
 	item = g_hash_table_lookup (cache->items_by_symbol, name);
 
 	if (item != NULL) {
+
+		if (item->is_virtual) {
+			item = g_ptr_array_index (cache->filters,
+					item->specific.virtual.parent);
+		}
+
 		if (!item->is_filter) {
 			return -1;
 		}
