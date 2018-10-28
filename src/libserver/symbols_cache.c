@@ -912,11 +912,13 @@ rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
 		 */
 		if (item->type & SYMBOL_TYPE_COMPOSITE) {
 			item->id = cache->composites->len;
+			item->specific.normal.condition_cb = -1;
 			g_ptr_array_add (cache->composites, item);
 		}
 		else if (item->type & SYMBOL_TYPE_CLASSIFIER) {
 			/* Treat it as virtual */
 			item->id = cache->virtual->len;
+			item->specific.normal.condition_cb = -1;
 			g_ptr_array_add (cache->virtual, item);
 		}
 		else {
