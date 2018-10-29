@@ -37,15 +37,6 @@ local local_exclusions = nil
 
 local default_monitored = '1.0.0.127'
 
-local symbols = {
-  dkim_allow_symbol = 'R_DKIM_ALLOW',
-}
-
-local dkim_config = rspamd_config:get_all_opt("dkim")
-if (dkim_config or E).symbol_allow then
-  symbols['dkim_allow_symbol'] = dkim_config['symbol_allow']
-end
-
 local function validate_dns(lstr)
   if lstr:match('%.%.') then
     return false
@@ -299,7 +290,7 @@ local function rbl_cb (task)
         return false
       end
       if not havegot['dkim'] then
-        local das = task:get_symbol(symbols['dkim_allow_symbol'])
+        local das = task:get_symbol('DKIM_TRACE')
         if ((das or E)[1] or E).options then
           havegot['dkim'] = das[1]['options']
         else
@@ -372,12 +363,38 @@ local function rbl_cb (task)
 
   -- DKIM RBLs
   fun.each(function(_, rbl)
-    for _, d in ipairs(havegot['dkim']) do
-      if rbl['dkim_domainonly'] then
-        d = rspamd_util.get_tld(d)
+    local mime_from_domain
+    if rbl['dkim_match_from'] then
+      -- We check merely mime from
+      mime_from_domain = ((task:get_from('mime') or E)[1] or E).domain
+      if mime_from_domain then
+        mime_from_domain = rspamd_util.get_tld(mime_from_domain)
       end
-      local to_resolve = d .. '.' .. rbl['rbl']
-      gen_rbl_rule(to_resolve, rbl)
+    end
+
+    for _, d in ipairs(havegot['dkim']) do
+      local domain,result = d:match('^([^%:]*):([%+%-%~])$')
+
+      -- We must ignore bad signatures, omg
+      if domain and result and result == '+' then
+
+        local to_resolve = domain .. '.' .. rbl['rbl']
+
+        if rbl['dkim_match_from'] then
+          -- We check merely mime from
+          local domain_tld = domain
+          if not rbl['dkim_domainonly'] then
+            -- Adjust
+            domain_tld = rspamd_util.get_tld(domain)
+          end
+
+          if mime_from_domain and mime_from_domain == domain_tld then
+            gen_rbl_rule(to_resolve, rbl)
+          end
+        else
+          gen_rbl_rule(to_resolve, rbl)
+        end
+      end
     end
   end,
   fun.filter(function(_, rbl)
@@ -626,7 +643,8 @@ for key,rbl in pairs(opts['rbls']) do
       end
     end
     if rbl['rbl'] then
-      if not rbl['disable_monitoring'] and not rbl['is_whitelist'] and not is_monitored[rbl['rbl']] then
+      if not rbl['disable_monitoring'] and not rbl['is_whitelist'] and
+          not is_monitored[rbl['rbl']] then
         is_monitored[rbl['rbl']] = true
         rbl.monitored = rspamd_config:register_monitored(rbl['rbl'], 'dns',
           {
@@ -652,5 +670,5 @@ for _, w in pairs(white_symbols) do
   end
 end
 if need_dkim then
-  rspamd_config:register_dependency('RBL_CALLBACK', symbols['dkim_allow_symbol'])
+  rspamd_config:register_dependency('RBL_CALLBACK', 'DKIM_CHECK')
 end
