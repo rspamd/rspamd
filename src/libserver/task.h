@@ -212,9 +212,10 @@ struct rspamd_task {
  * Construct new task for worker
  */
 struct rspamd_task *rspamd_task_new (struct rspamd_worker *worker,
-		struct rspamd_config *cfg,
-		rspamd_mempool_t *pool,
-		struct rspamd_lang_detector *lang_det);
+									 struct rspamd_config *cfg,
+									 rspamd_mempool_t *pool,
+									 struct rspamd_lang_detector *lang_det,
+									 struct event_base *ev_base);
 /**
  * Destroy task object and remove its IO dispatcher if it exists
  */

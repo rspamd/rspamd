@@ -97,9 +97,8 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 	if (cfg->finish_callbacks) {
 		ctx = worker->ctx;
 		/* Create a fake task object for async events */
-		task = rspamd_task_new (worker, cfg, NULL, NULL);
+		task = rspamd_task_new (worker, cfg, NULL, NULL, ctx->ev_base);
 		task->resolver = ctx->resolver;
-		task->ev_base = ctx->ev_base;
 		task->flags |= RSPAMD_TASK_FLAG_PROCESSING;
 		task->s = rspamd_session_create (task->task_pool,
 				rspamd_worker_finalize,
@@ -364,7 +363,7 @@ accept_socket (gint fd, short what, void *arg)
 		return;
 	}
 
-	task = rspamd_task_new (worker, ctx->cfg, NULL, ctx->lang_det);
+	task = rspamd_task_new (worker, ctx->cfg, NULL, ctx->lang_det, ctx->ev_base);
 
 	msg_info_task ("accepted connection from %s port %d, task ptr: %p",
 		rspamd_inet_address_to_string (addr),
@@ -395,7 +394,6 @@ accept_socket (gint fd, short what, void *arg)
 			ctx->keys_cache,
 			NULL);
 	rspamd_http_connection_set_max_size (task->http_conn, task->cfg->max_message);
-	task->ev_base = ctx->ev_base;
 	worker->nconns++;
 	rspamd_mempool_add_destructor (task->task_pool,
 		(rspamd_mempool_destruct_t)reduce_tasks_count, worker);

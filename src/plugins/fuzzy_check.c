@@ -3037,9 +3037,9 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	struct fuzzy_ctx *fuzzy_module_ctx;
 
 	/* Prepare task */
-	task = rspamd_task_new (session->wrk, session->cfg, NULL, session->lang_det);
+	task = rspamd_task_new (session->wrk, session->cfg, NULL,
+			session->lang_det, conn_ent->rt->ev_base);
 	task->cfg = ctx->cfg;
-	task->ev_base = conn_ent->rt->ev_base;
 	saved = rspamd_mempool_alloc0 (session->pool, sizeof (gint));
 	err = rspamd_mempool_alloc0 (session->pool, sizeof (GError *));
 	fuzzy_module_ctx = fuzzy_get_context (ctx->cfg);
