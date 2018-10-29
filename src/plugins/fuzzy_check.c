@@ -248,10 +248,10 @@ parse_flags (struct fuzzy_rule *rule,
 				/* Add flag to hash table */
 				g_hash_table_insert (rule->mappings,
 					GINT_TO_POINTER (map->fuzzy_flag), map);
-				rspamd_symbols_cache_add_symbol (cfg->cache,
+				rspamd_symcache_add_symbol (cfg->cache,
 						map->symbol, 0,
 						NULL, NULL,
-						SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+						SYMBOL_TYPE_VIRTUAL | SYMBOL_TYPE_FINE,
 						cb_id);
 			}
 			else {
@@ -686,10 +686,10 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 		g_ptr_array_add (fuzzy_module_ctx->fuzzy_rules, rule);
 
 		if (rule->symbol != fuzzy_module_ctx->default_symbol) {
-			rspamd_symbols_cache_add_symbol (cfg->cache, rule->symbol,
+			rspamd_symcache_add_symbol (cfg->cache, rule->symbol,
 					0,
 					NULL, NULL,
-					SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_FINE,
+					SYMBOL_TYPE_VIRTUAL | SYMBOL_TYPE_FINE,
 					cb_id);
 		}
 
@@ -1090,10 +1090,10 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "fuzzy_check", "rule")) != NULL) {
 
-		cb_id = rspamd_symbols_cache_add_symbol (cfg->cache,
-					"FUZZY_CALLBACK", 0, fuzzy_symbol_callback, NULL,
-					SYMBOL_TYPE_CALLBACK|SYMBOL_TYPE_FINE,
-					-1);
+		cb_id = rspamd_symcache_add_symbol (cfg->cache,
+				"FUZZY_CALLBACK", 0, fuzzy_symbol_callback, NULL,
+				SYMBOL_TYPE_CALLBACK | SYMBOL_TYPE_FINE,
+				-1);
 
 		/*
 		 * Here we can have 2 possibilities:
@@ -2885,7 +2885,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 				event_add (&session->timev, &session->tv);
 
 				rspamd_session_add_event (task->s, fuzzy_io_fin, session, M);
-				session->item = rspamd_symbols_cache_get_cur_item (task);
+				session->item = rspamd_symcache_get_cur_item (task);
 
 				if (session->item) {
 					rspamd_symcache_item_async_inc (task, session->item, M);
@@ -2907,7 +2907,7 @@ fuzzy_symbol_callback (struct rspamd_task *task,
 	struct fuzzy_ctx *fuzzy_module_ctx = fuzzy_get_context (task->cfg);
 
 	if (!fuzzy_module_ctx->enabled) {
-		rspamd_symbols_cache_finalize_item (task, item);
+		rspamd_symcache_finalize_item (task, item);
 
 		return;
 	}
@@ -2919,7 +2919,7 @@ fuzzy_symbol_callback (struct rspamd_task *task,
 			msg_info_task ("<%s>, address %s is whitelisted, skip fuzzy check",
 				task->message_id,
 				rspamd_inet_address_to_string (task->from_addr));
-			rspamd_symbols_cache_finalize_item (task, item);
+			rspamd_symcache_finalize_item (task, item);
 
 			return;
 		}

@@ -734,7 +734,7 @@ lua_util_config_from_ucl (lua_State *L)
 		cfg->lua_state = L;
 
 		cfg->rcl_obj = obj;
-		cfg->cache = rspamd_symbols_cache_new (cfg);
+		cfg->cache = rspamd_symcache_new (cfg);
 		top = rspamd_rcl_config_init (cfg, NULL);
 
 		if (!rspamd_rcl_parse (top, cfg, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {

@@ -280,7 +280,7 @@ reread_config (struct rspamd_main *rspamd_main)
 	struct rspamd_config *tmp_cfg, *old_cfg;
 	gchar *cfg_file;
 
-	rspamd_symbols_cache_save (rspamd_main->cfg->cache);
+	rspamd_symcache_save (rspamd_main->cfg->cache);
 	tmp_cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT);
 	tmp_cfg->libs_ctx = rspamd_main->cfg->libs_ctx;
 	REF_RETAIN (tmp_cfg->libs_ctx);
@@ -1323,7 +1323,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 		res = TRUE;
 
-		if (!rspamd_symbols_cache_validate (rspamd_main->cfg->cache,
+		if (!rspamd_symcache_validate (rspamd_main->cfg->cache,
 				rspamd_main->cfg,
 				FALSE)) {
 			res = FALSE;

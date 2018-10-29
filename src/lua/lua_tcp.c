@@ -574,7 +574,7 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 			TCP_RETAIN (cbd);
 
 			if (cbd->item) {
-				rspamd_symbols_cache_set_cur_item (cbd->task, cbd->item);
+				rspamd_symcache_set_cur_item (cbd->task, cbd->item);
 			}
 
 			if (lua_pcall (L, 3, 0, 0) != 0) {
@@ -657,7 +657,7 @@ lua_tcp_push_data (struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 		TCP_RETAIN (cbd);
 
 		if (cbd->item) {
-			rspamd_symbols_cache_set_cur_item (cbd->task, cbd->item);
+			rspamd_symcache_set_cur_item (cbd->task, cbd->item);
 		}
 
 		if (lua_pcall (L, arg_cnt, 0, 0) != 0) {
@@ -722,7 +722,7 @@ lua_tcp_resume_thread (struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 	lua_thread_pool_set_running_entry (cbd->cfg->lua_thread_pool, cbd->thread);
 
 	if (cbd->item) {
-		rspamd_symbols_cache_set_cur_item (cbd->task, cbd->item);
+		rspamd_symcache_set_cur_item (cbd->task, cbd->item);
 	}
 
 	lua_thread_resume (cbd->thread, 2);
@@ -1034,7 +1034,7 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 					rspamd_lua_setclass (L, "rspamd{tcp}", -1);
 
 					if (cbd->item) {
-						rspamd_symbols_cache_set_cur_item (cbd->task, cbd->item);
+						rspamd_symcache_set_cur_item (cbd->task, cbd->item);
 					}
 
 					if (lua_pcall (L, 1, 0, 0) != 0) {
@@ -1558,7 +1558,7 @@ lua_tcp_request (lua_State *L)
 	cbd->task = task;
 
 	if (task) {
-		cbd->item = rspamd_symbols_cache_get_cur_item (task);
+		cbd->item = rspamd_symcache_get_cur_item (task);
 	}
 
 	cbd->cfg = cfg;
@@ -1833,7 +1833,7 @@ lua_tcp_connect_sync (lua_State *L)
 			}
 		}
 		else {
-			cbd->item = rspamd_symbols_cache_get_cur_item (task);
+			cbd->item = rspamd_symcache_get_cur_item (task);
 
 			if (!make_dns_request_task (task, lua_tcp_dns_handler, cbd,
 										RDNS_REQUEST_A, host)) {

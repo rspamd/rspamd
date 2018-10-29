@@ -822,7 +822,7 @@ rspamd_controller_handle_symbols (struct rspamd_http_connection_entry *conn_ent,
 					"description", 0, false);
 			}
 
-			if (rspamd_symbols_cache_stat_symbol (session->ctx->cfg->cache,
+			if (rspamd_symcache_stat_symbol (session->ctx->cfg->cache,
 					sym->name, &freq, &freq_dev, &tm, NULL)) {
 				ucl_object_insert_key (sym_obj,
 						ucl_object_fromdouble (freq),
@@ -2743,7 +2743,7 @@ rspamd_controller_handle_counters (
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	ucl_object_t *top;
-	struct symbols_cache *cache;
+	struct rspamd_symcache *cache;
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
 		return 0;
@@ -2752,7 +2752,7 @@ rspamd_controller_handle_counters (
 	cache = session->ctx->cfg->cache;
 
 	if (cache != NULL) {
-		top = rspamd_symbols_cache_counters (cache);
+		top = rspamd_symcache_counters (cache);
 		rspamd_controller_send_ucl (conn_ent, top);
 		ucl_object_unref (top);
 	}
@@ -3837,7 +3837,7 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	rspamd_upstreams_library_config (worker->srv->cfg, worker->srv->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);
-	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base,
+	rspamd_symcache_start_refresh (worker->srv->cfg->cache, ctx->ev_base,
 			worker);
 	rspamd_stat_init (worker->srv->cfg, ctx->ev_base);
 

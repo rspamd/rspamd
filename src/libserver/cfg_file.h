@@ -20,7 +20,7 @@
 #include "config.h"
 #include "mem_pool.h"
 #include "upstream.h"
-#include "symbols_cache.h"
+#include "rspamd_symcache.h"
 #include "cfg_rcl.h"
 #include "ucl.h"
 #include "regexp.h"
@@ -375,7 +375,7 @@ struct rspamd_config {
 	gdouble monitored_interval;                     /**< interval between monitored checks					*/
 	gboolean disable_monitored;                     /**< disable monitoring completely						*/
 
-	struct symbols_cache *cache;                    /**< symbols cache object								*/
+	struct rspamd_symcache *cache;                    /**< symbols cache object								*/
 	gchar *cache_filename;                          /**< filename of cache file								*/
 	gdouble cache_reload_time;                      /**< how often cache reload should be performed			*/
 	gchar * checksum;                               /**< real checksum of config file						*/

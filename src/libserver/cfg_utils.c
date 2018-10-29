@@ -179,7 +179,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 		cfg->lua_thread_pool = lua_thread_pool_new (cfg->lua_state);
 	}
 
-	cfg->cache = rspamd_symbols_cache_new (cfg);
+	cfg->cache = rspamd_symcache_new (cfg);
 	cfg->ups_ctx = rspamd_upstreams_library_init ();
 	cfg->re_cache = rspamd_re_cache_new ();
 	cfg->doc_strings = ucl_object_typed_new (UCL_OBJECT);
@@ -228,7 +228,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 
 	g_list_free (cfg->classifiers);
 	g_list_free (cfg->workers);
-	rspamd_symbols_cache_destroy (cfg->cache);
+	rspamd_symcache_destroy (cfg->cache);
 	ucl_object_unref (cfg->rcl_obj);
 	ucl_object_unref (cfg->config_comments);
 	ucl_object_unref (cfg->doc_strings);
@@ -804,7 +804,7 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 		lua_settop (L, err_idx - 1);
 
 		/* Init config cache */
-		rspamd_symbols_cache_init (cfg->cache);
+		rspamd_symcache_init (cfg->cache);
 
 		/* Init re cache */
 		rspamd_re_cache_init (cfg->re_cache, cfg);
@@ -861,7 +861,7 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 			ret = FALSE;
 		}
 
-		ret = rspamd_symbols_cache_validate (cfg->cache, cfg, FALSE) && ret;
+		ret = rspamd_symcache_validate (cfg->cache, cfg, FALSE) && ret;
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_PRELOAD_MAPS) {
@@ -1229,8 +1229,8 @@ symbols_classifiers_callback (gpointer key, gpointer value, gpointer ud)
 	struct rspamd_config *cfg = ud;
 
 	/* Actually, statistics should act like any ordinary symbol */
-	rspamd_symbols_cache_add_symbol (cfg->cache, key, 0, NULL, NULL,
-			SYMBOL_TYPE_CLASSIFIER|SYMBOL_TYPE_NOSTAT, -1);
+	rspamd_symcache_add_symbol (cfg->cache, key, 0, NULL, NULL,
+			SYMBOL_TYPE_CLASSIFIER | SYMBOL_TYPE_NOSTAT, -1);
 }
 
 void

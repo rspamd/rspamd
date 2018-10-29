@@ -150,14 +150,14 @@ chartable_module_config (struct rspamd_config *cfg)
 		chartable_module_ctx->threshold = DEFAULT_THRESHOLD;
 	}
 
-	rspamd_symbols_cache_add_symbol (cfg->cache,
+	rspamd_symcache_add_symbol (cfg->cache,
 			chartable_module_ctx->symbol,
 			0,
 			chartable_symbol_callback,
 			NULL,
 			SYMBOL_TYPE_NORMAL,
 			-1);
-	rspamd_symbols_cache_add_symbol (cfg->cache,
+	rspamd_symcache_add_symbol (cfg->cache,
 			chartable_module_ctx->url_symbol,
 			0,
 			chartable_url_symbol_callback,
@@ -668,7 +668,7 @@ chartable_symbol_callback (struct rspamd_task *task,
 		utext_close (&utxt);
 	}
 
-	rspamd_symbols_cache_finalize_item (task, item);
+	rspamd_symcache_finalize_item (task, item);
 }
 
 static void
@@ -739,5 +739,5 @@ chartable_url_symbol_callback (struct rspamd_task *task,
 
 	}
 
-	rspamd_symbols_cache_finalize_item (task, item);
+	rspamd_symcache_finalize_item (task, item);
 }

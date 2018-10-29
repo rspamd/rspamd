@@ -299,38 +299,38 @@ spf_module_config (struct rspamd_config *cfg)
 				&spf_module_ctx->whitelist_ip, NULL);
 	}
 
-	cb_id = rspamd_symbols_cache_add_symbol (cfg->cache,
-		spf_module_ctx->symbol_fail,
-		0,
-		spf_symbol_callback,
-		NULL,
-		SYMBOL_TYPE_NORMAL|SYMBOL_TYPE_FINE|SYMBOL_TYPE_EMPTY, -1);
-	rspamd_symbols_cache_add_symbol (cfg->cache,
+	cb_id = rspamd_symcache_add_symbol (cfg->cache,
+			spf_module_ctx->symbol_fail,
+			0,
+			spf_symbol_callback,
+			NULL,
+			SYMBOL_TYPE_NORMAL | SYMBOL_TYPE_FINE | SYMBOL_TYPE_EMPTY, -1);
+	rspamd_symcache_add_symbol (cfg->cache,
 			spf_module_ctx->symbol_softfail, 0,
 			NULL, NULL,
 			SYMBOL_TYPE_VIRTUAL,
 			cb_id);
-	rspamd_symbols_cache_add_symbol (cfg->cache,
+	rspamd_symcache_add_symbol (cfg->cache,
 			spf_module_ctx->symbol_permfail, 0,
 			NULL, NULL,
 			SYMBOL_TYPE_VIRTUAL,
 			cb_id);
-	rspamd_symbols_cache_add_symbol (cfg->cache,
+	rspamd_symcache_add_symbol (cfg->cache,
 			spf_module_ctx->symbol_na, 0,
 			NULL, NULL,
 			SYMBOL_TYPE_VIRTUAL,
 			cb_id);
-	rspamd_symbols_cache_add_symbol (cfg->cache,
+	rspamd_symcache_add_symbol (cfg->cache,
 			spf_module_ctx->symbol_neutral, 0,
 			NULL, NULL,
 			SYMBOL_TYPE_VIRTUAL,
 			cb_id);
-	rspamd_symbols_cache_add_symbol (cfg->cache,
+	rspamd_symcache_add_symbol (cfg->cache,
 			spf_module_ctx->symbol_allow, 0,
 			NULL, NULL,
 			SYMBOL_TYPE_VIRTUAL,
 			cb_id);
-	rspamd_symbols_cache_add_symbol (cfg->cache,
+	rspamd_symcache_add_symbol (cfg->cache,
 			spf_module_ctx->symbol_dnsfail, 0,
 			NULL, NULL,
 			SYMBOL_TYPE_VIRTUAL,
@@ -596,7 +596,7 @@ spf_symbol_callback (struct rspamd_task *task,
 
 	if (rspamd_match_radix_map_addr (spf_module_ctx->whitelist_ip,
 			task->from_addr) != NULL) {
-		rspamd_symbols_cache_finalize_item (task, item);
+		rspamd_symcache_finalize_item (task, item);
 		return;
 	}
 
@@ -604,7 +604,7 @@ spf_symbol_callback (struct rspamd_task *task,
 			|| (!spf_module_ctx->check_local &&
 					rspamd_inet_address_is_local (task->from_addr, TRUE))) {
 		msg_info_task ("skip SPF checks for local networks and authorized users");
-		rspamd_symbols_cache_finalize_item (task, item);
+		rspamd_symcache_finalize_item (task, item);
 
 		return;
 	}

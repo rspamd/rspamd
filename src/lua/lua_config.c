@@ -1246,7 +1246,7 @@ rspamd_register_symbol_fromlua (lua_State *L,
 		priority = 1;
 	}
 
-	if ((ret = rspamd_symbols_cache_find_symbol (cfg->cache, name)) != -1) {
+	if ((ret = rspamd_symcache_find_symbol (cfg->cache, name)) != -1) {
 		if (optional) {
 			msg_debug_config ("duplicate symbol: %s, skip registering", name);
 
@@ -1303,7 +1303,7 @@ rspamd_register_symbol_fromlua (lua_State *L,
 					cd->symbol = rspamd_mempool_strdup (cfg->cfg_pool, name);
 				}
 
-				ret = rspamd_symbols_cache_add_symbol (cfg->cache,
+				ret = rspamd_symcache_add_symbol (cfg->cache,
 						name,
 						priority,
 						lua_metric_symbol_callback,
@@ -1327,7 +1327,7 @@ rspamd_register_symbol_fromlua (lua_State *L,
 				cd->symbol = rspamd_mempool_strdup (cfg->cfg_pool, name);
 			}
 
-			ret = rspamd_symbols_cache_add_symbol (cfg->cache,
+			ret = rspamd_symcache_add_symbol (cfg->cache,
 					name,
 					priority,
 					lua_metric_symbol_callback,
@@ -1343,7 +1343,7 @@ rspamd_register_symbol_fromlua (lua_State *L,
 		lua_settop (L, err_idx - 1);
 	}
 	else {
-		ret = rspamd_symbols_cache_add_symbol (cfg->cache,
+		ret = rspamd_symcache_add_symbol (cfg->cache,
 				name,
 				priority,
 				NULL,
@@ -1720,7 +1720,7 @@ lua_config_register_symbols (lua_State *L)
 				while (lua_next (L, -2)) {
 					lua_pushvalue (L, -2);
 					sym = luaL_checkstring (L, -2);
-					rspamd_symbols_cache_add_symbol (cfg->cache, sym,
+					rspamd_symcache_add_symbol (cfg->cache, sym,
 							0, NULL, NULL,
 							SYMBOL_TYPE_VIRTUAL, ret);
 					lua_pop (L, 2);
@@ -1729,7 +1729,7 @@ lua_config_register_symbols (lua_State *L)
 			}
 			else if (lua_type (L, i) == LUA_TSTRING) {
 				sym = luaL_checkstring (L, i);
-				rspamd_symbols_cache_add_symbol (cfg->cache, sym,
+				rspamd_symcache_add_symbol (cfg->cache, sym,
 						0, NULL, NULL,
 						SYMBOL_TYPE_VIRTUAL, ret);
 			}
@@ -1759,7 +1759,7 @@ lua_config_register_virtual_symbol (lua_State * L)
 		}
 
 		if (name) {
-			ret = rspamd_symbols_cache_add_symbol (cfg->cache, name,
+			ret = rspamd_symcache_add_symbol (cfg->cache, name,
 					weight > 0 ? 0 : -1, NULL, NULL,
 					SYMBOL_TYPE_VIRTUAL, parent);
 		}
@@ -1920,9 +1920,9 @@ lua_config_register_dependency (lua_State * L)
 		if (child_id > 0 && parent != NULL) {
 
 			if (skip_squeeze || !rspamd_lua_squeeze_dependency (L, cfg,
-					rspamd_symbols_cache_symbol_by_id (cfg->cache, child_id),
+					rspamd_symcache_symbol_by_id (cfg->cache, child_id),
 					parent)) {
-				rspamd_symbols_cache_add_dependency (cfg->cache, child_id, parent);
+				rspamd_symcache_add_dependency (cfg->cache, child_id, parent);
 			}
 		}
 	}
@@ -1937,7 +1937,7 @@ lua_config_register_dependency (lua_State * L)
 		if (child != NULL && parent != NULL) {
 
 			if (skip_squeeze || !rspamd_lua_squeeze_dependency (L, cfg, child, parent)) {
-				rspamd_symbols_cache_add_delayed_dependency (cfg->cache, child,
+				rspamd_symcache_add_delayed_dependency (cfg->cache, child,
 						parent);
 			}
 
@@ -2233,7 +2233,7 @@ lua_config_add_composite (lua_State * L)
 						composite);
 
 				if (new) {
-					rspamd_symbols_cache_add_symbol (cfg->cache, name,
+					rspamd_symcache_add_symbol (cfg->cache, name,
 							0, NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
 				}
 
@@ -2380,7 +2380,7 @@ lua_config_newindex (lua_State *L)
 					/* Here we pop function from the stack, so no lua_pop is required */
 					condref = luaL_ref (L, LUA_REGISTRYINDEX);
 					g_assert (name != NULL);
-					rspamd_symbols_cache_add_condition_delayed (cfg->cache,
+					rspamd_symcache_add_condition_delayed (cfg->cache,
 							name, L, condref);
 				}
 				else {
@@ -2496,7 +2496,7 @@ lua_config_add_condition (lua_State *L)
 		lua_pushvalue (L, 3);
 		condref = luaL_ref (L, LUA_REGISTRYINDEX);
 
-		ret = rspamd_symbols_cache_add_condition_delayed (cfg->cache, sym, L,
+		ret = rspamd_symcache_add_condition_delayed (cfg->cache, sym, L,
 				condref);
 
 		if (!ret) {
@@ -2518,7 +2518,7 @@ lua_config_set_peak_cb (lua_State *L)
 	if (cfg && lua_type (L, 2) == LUA_TFUNCTION) {
 		lua_pushvalue (L, 2);
 		condref = luaL_ref (L, LUA_REGISTRYINDEX);
-		rspamd_symbols_cache_set_peak_callback (cfg->cache,
+		rspamd_symcache_set_peak_callback (cfg->cache,
 				condref);
 	}
 
@@ -2533,7 +2533,7 @@ lua_config_enable_symbol (lua_State *L)
 	const gchar *sym = luaL_checkstring (L, 2);
 
 	if (cfg && sym) {
-		rspamd_symbols_cache_enable_symbol (cfg->cache, sym);
+		rspamd_symcache_enable_symbol (cfg->cache, sym);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -2550,7 +2550,7 @@ lua_config_disable_symbol (lua_State *L)
 	const gchar *sym = luaL_checkstring (L, 2);
 
 	if (cfg && sym) {
-		rspamd_symbols_cache_disable_symbol (cfg->cache, sym);
+		rspamd_symcache_disable_symbol (cfg->cache, sym);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -2865,7 +2865,7 @@ lua_config_get_symbols_count (lua_State *L)
 	guint res = 0;
 
 	if (cfg != NULL) {
-		res = rspamd_symbols_cache_stats_symbols_count (cfg->cache);
+		res = rspamd_symcache_stats_symbols_count (cfg->cache);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -2884,7 +2884,7 @@ lua_config_get_symbols_cksum (lua_State *L)
 	guint64 res = 0, *pres;
 
 	if (cfg != NULL) {
-		res = rspamd_symbols_cache_get_cksum (cfg->cache);
+		res = rspamd_symcache_get_cksum (cfg->cache);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -2905,7 +2905,7 @@ lua_config_get_symbols_counters (lua_State *L)
 	ucl_object_t *counters;
 
 	if (cfg != NULL) {
-		counters = rspamd_symbols_cache_counters (cfg->cache);
+		counters = rspamd_symcache_counters (cfg->cache);
 		ucl_object_push_lua (L, counters, true);
 		ucl_object_unref (counters);
 	}
@@ -2965,7 +2965,7 @@ lua_config_get_symbol_callback (lua_State *L)
 	struct lua_callback_data *cbd;
 
 	if (cfg != NULL && sym != NULL) {
-		abs_cbdata = rspamd_symbols_cache_get_cbdata (cfg->cache, sym);
+		abs_cbdata = rspamd_symcache_get_cbdata (cfg->cache, sym);
 
 		if (abs_cbdata == NULL || abs_cbdata->magic != rspamd_lua_callback_magic) {
 			lua_pushnil (L);
@@ -2998,7 +2998,7 @@ lua_config_set_symbol_callback (lua_State *L)
 	struct lua_callback_data *cbd;
 
 	if (cfg != NULL && sym != NULL && lua_type (L, 3) == LUA_TFUNCTION) {
-		abs_cbdata = rspamd_symbols_cache_get_cbdata (cfg->cache, sym);
+		abs_cbdata = rspamd_symcache_get_cbdata (cfg->cache, sym);
 
 		if (abs_cbdata == NULL || abs_cbdata->magic != rspamd_lua_callback_magic) {
 			lua_pushboolean (L, FALSE);
@@ -3035,7 +3035,7 @@ lua_config_get_symbol_stat (lua_State *L)
 	guint hits;
 
 	if (cfg != NULL && sym != NULL) {
-		if (!rspamd_symbols_cache_stat_symbol (cfg->cache, sym, &freq,
+		if (!rspamd_symcache_stat_symbol (cfg->cache, sym, &freq,
 				&stddev, &tm, &hits)) {
 			lua_pushnil (L);
 		}

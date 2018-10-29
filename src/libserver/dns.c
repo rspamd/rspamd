@@ -63,7 +63,7 @@ rspamd_dns_fin_cb (gpointer arg)
 	struct rspamd_dns_request_ud *reqdata = (struct rspamd_dns_request_ud *)arg;
 
 	if (reqdata->item) {
-		rspamd_symbols_cache_set_cur_item (reqdata->task, reqdata->item);
+		rspamd_symcache_set_cur_item (reqdata->task, reqdata->item);
 	}
 
 	if (reqdata->reply) {
@@ -198,7 +198,7 @@ make_dns_request_task_common (struct rspamd_task *task,
 		task->dns_requests ++;
 
 		reqdata->task = task;
-		reqdata->item = rspamd_symbols_cache_get_cur_item (task);
+		reqdata->item = rspamd_symcache_get_cur_item (task);
 
 		if (reqdata->item) {
 			/* We are inside some session */

@@ -7,7 +7,7 @@
 #define RSPAMD_FILTER_H
 
 #include "config.h"
-#include "symbols_cache.h"
+#include "rspamd_symcache.h"
 #include "task.h"
 #include "khash.h"
 

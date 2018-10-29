@@ -279,7 +279,7 @@ rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd
 		pworker++;
 	}
 
-	cfg->cache = rspamd_symbols_cache_new (cfg);
+	cfg->cache = rspamd_symcache_new (cfg);
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 	cfg->cfg_name = config;

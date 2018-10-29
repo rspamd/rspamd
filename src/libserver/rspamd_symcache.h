@@ -23,7 +23,7 @@
 
 struct rspamd_task;
 struct rspamd_config;
-struct symbols_cache;
+struct rspamd_symcache;
 struct rspamd_worker;
 struct rspamd_symcache_item;
 
@@ -61,24 +61,24 @@ struct rspamd_abstract_callback_data {
  * Creates new cache structure
  * @return
  */
-struct symbols_cache* rspamd_symbols_cache_new (struct rspamd_config *cfg);
+struct rspamd_symcache* rspamd_symcache_new (struct rspamd_config *cfg);
 
 /**
  * Remove the cache structure syncing data if needed
  * @param cache
  */
-void rspamd_symbols_cache_destroy (struct symbols_cache *cache);
+void rspamd_symcache_destroy (struct rspamd_symcache *cache);
 
 /**
  * Saves symbols cache to disk if possible
  * @param cache
  */
-void rspamd_symbols_cache_save (struct symbols_cache *cache);
+void rspamd_symcache_save (struct rspamd_symcache *cache);
 
 /**
  * Load symbols cache from file, must be called _after_ init_symbols_cache
  */
-gboolean rspamd_symbols_cache_init (struct symbols_cache* cache);
+gboolean rspamd_symcache_init (struct rspamd_symcache *cache);
 
 /**
  * Generic function to register a symbol
@@ -91,21 +91,21 @@ gboolean rspamd_symbols_cache_init (struct symbols_cache* cache);
  * @param type
  * @param parent
  */
-gint rspamd_symbols_cache_add_symbol (struct symbols_cache *cache,
-	const gchar *name,
-	gint priority,
-	symbol_func_t func,
-	gpointer user_data,
-	enum rspamd_symbol_type type,
-	gint parent);
+gint rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
+								 const gchar *name,
+								 gint priority,
+								 symbol_func_t func,
+								 gpointer user_data,
+								 enum rspamd_symbol_type type,
+								 gint parent);
 
 /**
  * Add callback to be executed whenever symbol has peak value
  * @param cache
  * @param cbref
  */
-void rspamd_symbols_cache_set_peak_callback (struct symbols_cache *cache,
-		gint cbref);
+void rspamd_symcache_set_peak_callback (struct rspamd_symcache *cache,
+										gint cbref);
 /**
  * Add delayed condition to the specific symbol in cache. So symbol can be absent
  * to the moment of addition
@@ -115,8 +115,9 @@ void rspamd_symbols_cache_set_peak_callback (struct symbols_cache *cache,
  * @param cbref callback reference (returned by luaL_ref)
  * @return TRUE if condition has been added
  */
-gboolean rspamd_symbols_cache_add_condition_delayed (struct symbols_cache *cache,
-		const gchar *sym, lua_State *L, gint cbref);
+gboolean rspamd_symcache_add_condition_delayed (struct rspamd_symcache *cache,
+												const gchar *sym,
+												lua_State *L, gint cbref);
 
 /**
  * Find symbol in cache by id and returns its id resolving virtual symbols if
@@ -125,8 +126,8 @@ gboolean rspamd_symbols_cache_add_condition_delayed (struct symbols_cache *cache
  * @param name
  * @return id of symbol or (-1) if a symbol has not been found
  */
-gint rspamd_symbols_cache_find_symbol (struct symbols_cache *cache,
-		const gchar *name);
+gint rspamd_symcache_find_symbol (struct rspamd_symcache *cache,
+								  const gchar *name);
 
 /**
  * Get statistics for a specific symbol
@@ -136,24 +137,27 @@ gint rspamd_symbols_cache_find_symbol (struct symbols_cache *cache,
  * @param tm
  * @return
  */
-gboolean rspamd_symbols_cache_stat_symbol (struct symbols_cache *cache,
-		const gchar *name, gdouble *frequency, gdouble *freq_stddev,
-		gdouble *tm, guint *nhits);
+gboolean rspamd_symcache_stat_symbol (struct rspamd_symcache *cache,
+									  const gchar *name,
+									  gdouble *frequency,
+									  gdouble *freq_stddev,
+									  gdouble *tm,
+									  guint *nhits);
 /**
  * Find symbol in cache by its id
  * @param cache
  * @param id
  * @return symbol's name or NULL
  */
-const gchar * rspamd_symbols_cache_symbol_by_id (struct symbols_cache *cache,
-		gint id);
+const gchar * rspamd_symcache_symbol_by_id (struct rspamd_symcache *cache,
+											gint id);
 
 /**
  * Returns number of symbols registered in symbols cache
  * @param cache
  * @return number of symbols in the cache
  */
-guint rspamd_symbols_cache_stats_symbols_count (struct symbols_cache *cache);
+guint rspamd_symcache_stats_symbols_count (struct rspamd_symcache *cache);
 
 /**
  * Call function for cached symbol using saved callback
@@ -161,8 +165,9 @@ guint rspamd_symbols_cache_stats_symbols_count (struct symbols_cache *cache);
  * @param cache symbols cache
  * @param saved_item pointer to currently saved item
  */
-gboolean rspamd_symbols_cache_process_symbols (struct rspamd_task *task,
-	struct symbols_cache *cache, gint stage);
+gboolean rspamd_symcache_process_symbols (struct rspamd_task *task,
+										  struct rspamd_symcache *cache,
+										  gint stage);
 
 /**
  * Validate cache items against theirs weights defined in metrics
@@ -170,32 +175,33 @@ gboolean rspamd_symbols_cache_process_symbols (struct rspamd_task *task,
  * @param cfg configuration
  * @param strict do strict checks - symbols MUST be described in metrics
  */
-gboolean rspamd_symbols_cache_validate (struct symbols_cache *cache,
-	struct rspamd_config *cfg,
-	gboolean strict);
+gboolean rspamd_symcache_validate (struct rspamd_symcache *cache,
+								   struct rspamd_config *cfg,
+								   gboolean strict);
 
 /**
  * Return statistics about the cache as ucl object (array of objects one per item)
  * @param cache
  * @return
  */
-ucl_object_t *rspamd_symbols_cache_counters (struct symbols_cache * cache);
+ucl_object_t *rspamd_symcache_counters (struct rspamd_symcache *cache);
 
 /**
  * Start cache reloading
  * @param cache
  * @param ev_base
  */
-void rspamd_symbols_cache_start_refresh (struct symbols_cache * cache,
-		struct event_base *ev_base, struct rspamd_worker *w);
+void rspamd_symcache_start_refresh (struct rspamd_symcache *cache,
+									struct event_base *ev_base,
+									struct rspamd_worker *w);
 
 /**
  * Increases counter for a specific symbol
  * @param cache
  * @param symbol
  */
-void rspamd_symbols_cache_inc_frequency (struct symbols_cache *cache,
-		const gchar *symbol);
+void rspamd_symcache_inc_frequency (struct rspamd_symcache *cache,
+									const gchar *symbol);
 
 /**
  * Add dependency relation between two symbols identified by id (source) and
@@ -204,8 +210,8 @@ void rspamd_symbols_cache_inc_frequency (struct symbols_cache *cache,
  * @param id_from source symbol
  * @param to destination name
  */
-void rspamd_symbols_cache_add_dependency (struct symbols_cache *cache,
-		gint id_from, const gchar *to);
+void rspamd_symcache_add_dependency (struct rspamd_symcache *cache,
+									 gint id_from, const gchar *to);
 
 /**
  * Add delayed dependency that is resolved on cache post-load routine
@@ -213,32 +219,32 @@ void rspamd_symbols_cache_add_dependency (struct symbols_cache *cache,
  * @param from
  * @param to
  */
-void rspamd_symbols_cache_add_delayed_dependency (struct symbols_cache *cache,
-		const gchar *from, const gchar *to);
+void rspamd_symcache_add_delayed_dependency (struct rspamd_symcache *cache,
+											 const gchar *from, const gchar *to);
 
 /**
  * Disable specific symbol in the cache
  * @param cache
  * @param symbol
  */
-void rspamd_symbols_cache_disable_symbol (struct symbols_cache *cache,
-		const gchar *symbol);
+void rspamd_symcache_disable_symbol (struct rspamd_symcache *cache,
+									 const gchar *symbol);
 
 /**
  * Enable specific symbol in the cache
  * @param cache
  * @param symbol
  */
-void rspamd_symbols_cache_enable_symbol (struct symbols_cache *cache,
-		const gchar *symbol);
+void rspamd_symcache_enable_symbol (struct rspamd_symcache *cache,
+									const gchar *symbol);
 /**
  * Get abstract callback data for a symbol (or its parent symbol)
  * @param cache cache object
  * @param symbol symbol name
  * @return abstract callback data or NULL if symbol is absent or has no data attached
  */
-struct rspamd_abstract_callback_data* rspamd_symbols_cache_get_cbdata (
-		struct symbols_cache *cache, const gchar *symbol);
+struct rspamd_abstract_callback_data* rspamd_symcache_get_cbdata (
+		struct rspamd_symcache *cache, const gchar *symbol);
 
 
 /**
@@ -247,8 +253,8 @@ struct rspamd_abstract_callback_data* rspamd_symbols_cache_get_cbdata (
  * @param cache
  * @return
  */
-gboolean rspamd_symbols_cache_process_settings (struct rspamd_task *task,
-		struct symbols_cache *cache);
+gboolean rspamd_symcache_process_settings (struct rspamd_task *task,
+										   struct rspamd_symcache *cache);
 
 
 /**
@@ -258,15 +264,16 @@ gboolean rspamd_symbols_cache_process_settings (struct rspamd_task *task,
  * @param symbol
  * @return
  */
-gboolean rspamd_symbols_cache_is_checked (struct rspamd_task *task,
-		struct symbols_cache *cache, const gchar *symbol);
+gboolean rspamd_symcache_is_checked (struct rspamd_task *task,
+									 struct rspamd_symcache *cache,
+									 const gchar *symbol);
 
 /**
  * Returns checksum for all cache items
  * @param cache
  * @return
  */
-guint64 rspamd_symbols_cache_get_cksum (struct symbols_cache *cache);
+guint64 rspamd_symcache_get_cksum (struct rspamd_symcache *cache);
 
 /**
  * Checks if a symbols is enabled (not checked and conditions return true if present)
@@ -275,25 +282,26 @@ guint64 rspamd_symbols_cache_get_cksum (struct symbols_cache *cache);
  * @param symbol
  * @return
  */
-gboolean rspamd_symbols_cache_is_symbol_enabled (struct rspamd_task *task,
-		struct symbols_cache *cache, const gchar *symbol);
+gboolean rspamd_symcache_is_symbol_enabled (struct rspamd_task *task,
+											struct rspamd_symcache *cache,
+											const gchar *symbol);
 /**
  * Process specific function for each cache element (in order they are added)
  * @param cache
  * @param func
  * @param ud
  */
-void rspamd_symbols_cache_foreach (struct symbols_cache *cache,
-		void (*func)(gint /* id */, const gchar * /* name */,
-				gint /* flags */, gpointer /* userdata */),
-		gpointer ud);
+void rspamd_symcache_foreach (struct rspamd_symcache *cache,
+							  void (*func) (gint /* id */, const gchar * /* name */,
+											gint /* flags */, gpointer /* userdata */),
+							  gpointer ud);
 
 /**
  * Returns the current item being processed (if any)
  * @param task
  * @return
  */
-struct rspamd_symcache_item *rspamd_symbols_cache_get_cur_item (struct rspamd_task *task);
+struct rspamd_symcache_item *rspamd_symcache_get_cur_item (struct rspamd_task *task);
 
 /**
  * Replaces the current item being processed.
@@ -302,15 +310,15 @@ struct rspamd_symcache_item *rspamd_symbols_cache_get_cur_item (struct rspamd_ta
  * @param item
  * @return
  */
-struct rspamd_symcache_item *rspamd_symbols_cache_set_cur_item (struct rspamd_task *task,
-																struct rspamd_symcache_item *item);
+struct rspamd_symcache_item *rspamd_symcache_set_cur_item (struct rspamd_task *task,
+														   struct rspamd_symcache_item *item);
 
 
 /**
  * Finalize the current async element potentially calling its deps
  */
-void rspamd_symbols_cache_finalize_item (struct rspamd_task *task,
-										 struct rspamd_symcache_item *item);
+void rspamd_symcache_finalize_item (struct rspamd_task *task,
+									struct rspamd_symcache_item *item);
 
 /*
  * Increase number of async events pending for an item

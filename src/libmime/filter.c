@@ -420,7 +420,7 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 
 	/* Process cache item */
 	if (task->cfg->cache) {
-		rspamd_symbols_cache_inc_frequency (task->cfg->cache, symbol);
+		rspamd_symcache_inc_frequency (task->cfg->cache, symbol);
 	}
 
 	return s;

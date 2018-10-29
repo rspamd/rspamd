@@ -1605,7 +1605,7 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 			rt->redis_object_expanded, learned_key) == REDIS_OK) {
 
 		rspamd_session_add_event (task->s, rspamd_redis_fin, rt, M);
-		rt->item = rspamd_symbols_cache_get_cur_item (task);
+		rt->item = rspamd_symcache_get_cur_item (task);
 		rt->has_event = TRUE;
 
 		if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
@@ -1810,7 +1810,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 		}
 
 		rspamd_session_add_event (task->s, rspamd_redis_fin_learn, rt, M);
-		rt->item = rspamd_symbols_cache_get_cur_item (task);
+		rt->item = rspamd_symcache_get_cur_item (task);
 		rt->has_event = TRUE;
 
 		/* Set timeout */

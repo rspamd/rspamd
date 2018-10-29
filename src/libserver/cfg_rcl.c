@@ -1223,7 +1223,7 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 			composite);
 
 	if (new) {
-		rspamd_symbols_cache_add_symbol (cfg->cache, composite_name, 0,
+		rspamd_symcache_add_symbol (cfg->cache, composite_name, 0,
 				NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
 	}
 

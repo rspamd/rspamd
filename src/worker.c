@@ -670,7 +670,7 @@ start_worker (struct rspamd_worker *worker)
 	ctx->cfg = worker->srv->cfg;
 	ctx->ev_base = rspamd_prepare_worker (worker, "normal", accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
-	rspamd_symbols_cache_start_refresh (worker->srv->cfg->cache, ctx->ev_base,
+	rspamd_symcache_start_refresh (worker->srv->cfg->cache, ctx->ev_base,
 			worker);
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger,

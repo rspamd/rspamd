@@ -179,7 +179,7 @@ lua_http_push_error (struct lua_http_cbdata *cbd, const char *err)
 
 
 	if (cbd->item) {
-		rspamd_symbols_cache_set_cur_item (cbd->task, cbd->item);
+		rspamd_symcache_set_cur_item (cbd->task, cbd->item);
 	}
 
 	if (lua_pcall (L, 1, 0, 0) != 0) {
@@ -267,7 +267,7 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 
 	if (cbd->item) {
 		/* Replace watcher to deal with nested calls */
-		rspamd_symbols_cache_set_cur_item (cbd->task, cbd->item);
+		rspamd_symcache_set_cur_item (cbd->task, cbd->item);
 	}
 
 	if (lua_pcall (L, 4, 0, 0) != 0) {
@@ -358,7 +358,7 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 
 	if (cbd->item) {
 		/* Replace watcher to deal with nested calls */
-		rspamd_symbols_cache_set_cur_item (cbd->task, cbd->item);
+		rspamd_symcache_set_cur_item (cbd->task, cbd->item);
 	}
 
 	lua_thread_resume (cbd->thread, 2);
@@ -895,7 +895,7 @@ lua_http_request (lua_State *L)
 	cbd->task = task;
 
 	if (task) {
-		cbd->item = rspamd_symbols_cache_get_cur_item (task);
+		cbd->item = rspamd_symcache_get_cur_item (task);
 	}
 
 	if (msg->host) {

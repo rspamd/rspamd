@@ -3609,7 +3609,7 @@ lua_task_get_symbols_numeric (lua_State *L)
 
 			kh_foreach_value_ptr (mres->symbols, s, {
 				if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
-					id = rspamd_symbols_cache_find_symbol (task->cfg->cache,
+					id = rspamd_symcache_find_symbol (task->cfg->cache,
 							s->name);
 					lua_pushinteger (L, id);
 					lua_rawseti (L, -3, i);
@@ -3683,8 +3683,8 @@ lua_task_get_symbols_tokens (lua_State *L)
 	}
 
 	lua_createtable (L,
-			rspamd_symbols_cache_stats_symbols_count (task->cfg->cache), 0);
-	rspamd_symbols_cache_foreach (task->cfg->cache, tokens_foreach_cb, &cbd);
+			rspamd_symcache_stats_symbols_count (task->cfg->cache), 0);
+	rspamd_symcache_foreach (task->cfg->cache, tokens_foreach_cb, &cbd);
 
 	return 1;
 }
@@ -4189,7 +4189,7 @@ lua_task_set_settings (lua_State *L)
 			}
 		}
 
-		rspamd_symbols_cache_process_settings (task, task->cfg->cache);
+		rspamd_symcache_process_settings (task, task->cfg->cache);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

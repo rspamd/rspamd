@@ -611,7 +611,7 @@ register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix,
 
 		while (g_hash_table_iter_next (&it, &k, &v)) {
 			bit = v;
-			rspamd_symbols_cache_add_symbol (cfg->cache, bit->symbol,
+			rspamd_symcache_add_symbol (cfg->cache, bit->symbol,
 					0, NULL, NULL,
 					SYMBOL_TYPE_VIRTUAL, parent_id);
 			msg_debug_config ("bit: %d", bit->bit);
@@ -620,13 +620,13 @@ register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix,
 	else if (suffix->bits != NULL) {
 		for (i = 0; i < suffix->bits->len; i++) {
 			bit = &g_array_index (suffix->bits, struct surbl_bit_item, i);
-			rspamd_symbols_cache_add_symbol (cfg->cache, bit->symbol,
+			rspamd_symcache_add_symbol (cfg->cache, bit->symbol,
 					0, NULL, NULL,
 					SYMBOL_TYPE_VIRTUAL, parent_id);
 		}
 	}
 	else {
-		rspamd_symbols_cache_add_symbol (cfg->cache, suffix->symbol,
+		rspamd_symcache_add_symbol (cfg->cache, suffix->symbol,
 				0, NULL, NULL,
 				SYMBOL_TYPE_VIRTUAL, parent_id);
 	}
@@ -762,9 +762,9 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 			continue;
 		}
 
-		cb_id = rspamd_symbols_cache_add_symbol (cfg->cache, "SURBL_CALLBACK",
+		cb_id = rspamd_symcache_add_symbol (cfg->cache, "SURBL_CALLBACK",
 				0, surbl_test_url, new_suffix, SYMBOL_TYPE_CALLBACK, -1);
-		rspamd_symbols_cache_add_dependency (cfg->cache, cb_id,
+		rspamd_symcache_add_dependency (cfg->cache, cb_id,
 				SURBL_REDIRECTOR_CALLBACK);
 		nrules++;
 		new_suffix->callback_id = cb_id;
@@ -895,7 +895,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 
 		if (new_suffix->symbol) {
 			/* Register just a symbol itself */
-			rspamd_symbols_cache_add_symbol (cfg->cache,
+			rspamd_symcache_add_symbol (cfg->cache,
 					new_suffix->symbol, 0,
 					NULL, NULL, SYMBOL_TYPE_VIRTUAL, cb_id);
 			nrules++;
@@ -949,7 +949,7 @@ surbl_module_config (struct rspamd_config *cfg)
 
 	lua_pop (L, 1); /* Remove global function */
 
-	(void)rspamd_symbols_cache_add_symbol (cfg->cache, SURBL_REDIRECTOR_CALLBACK,
+	(void) rspamd_symcache_add_symbol (cfg->cache, SURBL_REDIRECTOR_CALLBACK,
 			0, surbl_test_redirector, NULL,
 			SYMBOL_TYPE_CALLBACK, -1);
 
@@ -973,9 +973,9 @@ surbl_module_config (struct rspamd_config *cfg)
 		rspamd_config_get_module_opt (cfg, "surbl",
 		"redirector_symbol")) != NULL) {
 		surbl_module_ctx->redirector_symbol = ucl_obj_tostring (value);
-		rspamd_symbols_cache_add_symbol (cfg->cache,
-			surbl_module_ctx->redirector_symbol,
-			0, NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
+		rspamd_symcache_add_symbol (cfg->cache,
+				surbl_module_ctx->redirector_symbol,
+				0, NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
 	}
 	else {
 		surbl_module_ctx->redirector_symbol = NULL;
@@ -1090,7 +1090,7 @@ surbl_module_config (struct rspamd_config *cfg)
 		}
 
 		if (cur_suffix->options & SURBL_OPTION_CHECKDKIM) {
-			rspamd_symbols_cache_add_dependency (cfg->cache,
+			rspamd_symcache_add_dependency (cfg->cache,
 					cur_suffix->callback_id, "DKIM_TRACE");
 		}
 
@@ -1715,7 +1715,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 		rspamd_session_add_event (task->s,
 				free_redirector_session, param,
 				M);
-		param->item = rspamd_symbols_cache_get_cur_item (task);
+		param->item = rspamd_symcache_get_cur_item (task);
 
 		if (param->item) {
 			rspamd_symcache_item_async_inc (param->task, param->item, M);
@@ -1838,7 +1838,7 @@ surbl_tree_redirector_callback (gpointer key, gpointer value, void *data)
 				*purl = url;
 				rspamd_lua_setclass (L, "rspamd{url}", -1);
 				lua_pushlightuserdata (L, nparam);
-				rspamd_symbols_cache_set_cur_item (task, param->item);
+				rspamd_symcache_set_cur_item (task, param->item);
 
 				if (lua_pcall (L, 3, 0, 0) != 0) {
 					msg_err_task ("cannot call for redirector script: %s",
@@ -1904,7 +1904,7 @@ surbl_test_url (struct rspamd_task *task,
 	if (!rspamd_monitored_alive (suffix->m)) {
 		msg_info_surbl ("disable surbl %s as it is reported to be offline",
 				suffix->suffix);
-		rspamd_symbols_cache_finalize_item (task, item);
+		rspamd_symcache_finalize_item (task, item);
 
 		return;
 	}
@@ -1984,7 +1984,7 @@ surbl_test_redirector (struct rspamd_task *task,
 	struct surbl_ctx *surbl_module_ctx = surbl_get_context (task->cfg);
 
 	if (!surbl_module_ctx->use_redirector || !surbl_module_ctx->redirector_tlds) {
-		rspamd_symbols_cache_finalize_item (task, item);
+		rspamd_symcache_finalize_item (task, item);
 
 		return;
 	}

@@ -1570,7 +1570,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 					i = 0;
 
 					kh_foreach_value_ptr (mres->symbols, sym, {
-						id = rspamd_symbols_cache_find_symbol (task->cfg->cache,
+						id = rspamd_symcache_find_symbol (task->cfg->cache,
 								sym->name);
 
 						if (id >= 0) {

@@ -140,7 +140,7 @@ lua_dns_request (lua_State *L)
 		cbdata->s = session;
 
 		if (task) {
-			cbdata->item = rspamd_symbols_cache_get_cur_item (task);
+			cbdata->item = rspamd_symcache_get_cur_item (task);
 			rspamd_symcache_item_async_inc (task, cbdata->item, M);
 		}
 

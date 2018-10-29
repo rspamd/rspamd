@@ -188,7 +188,7 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 
 	if (cd->item) {
 		/* We also need to restore the item in case there are some chains */
-		rspamd_symbols_cache_set_cur_item (cd->task, cd->item);
+		rspamd_symcache_set_cur_item (cd->task, cd->item);
 	}
 
 	if (lua_pcall (L, 6, 0, err_idx) != 0) {
@@ -373,7 +373,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 	if (task) {
 		pool = task->task_pool;
 		session = task->s;
-		item = rspamd_symbols_cache_get_cur_item (task);
+		item = rspamd_symcache_get_cur_item (task);
 	}
 
 	if (to_resolve != NULL) {

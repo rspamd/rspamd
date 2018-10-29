@@ -16,7 +16,7 @@ SET(LIBRSPAMDSERVERSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/re_cache.c
 				${CMAKE_CURRENT_SOURCE_DIR}/roll_history.c
 				${CMAKE_CURRENT_SOURCE_DIR}/spf.c
-				${CMAKE_CURRENT_SOURCE_DIR}/symbols_cache.c
+				${CMAKE_CURRENT_SOURCE_DIR}/rspamd_symcache.c
 				${CMAKE_CURRENT_SOURCE_DIR}/task.c
 				${CMAKE_CURRENT_SOURCE_DIR}/url.c
 				${CMAKE_CURRENT_SOURCE_DIR}/worker_util.c)

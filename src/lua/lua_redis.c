@@ -283,7 +283,7 @@ lua_redis_push_error (const gchar *err,
 			lua_pushnil (cbs.L);
 
 			if (ud->item) {
-				rspamd_symbols_cache_set_cur_item (ud->task, ud->item);
+				rspamd_symcache_set_cur_item (ud->task, ud->item);
 			}
 
 			if (lua_pcall (cbs.L, 2, 0, 0) != 0) {
@@ -373,7 +373,7 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_ctx *ctx,
 			lua_redis_push_reply (cbs.L, r, ctx->flags & LUA_REDIS_TEXTDATA);
 
 			if (ud->item) {
-				rspamd_symbols_cache_set_cur_item (ud->task, ud->item);
+				rspamd_symcache_set_cur_item (ud->task, ud->item);
 			}
 
 			if (lua_pcall (cbs.L, 2, 0, 0) != 0) {
@@ -939,7 +939,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 			ud->task = task;
 
 			if (task) {
-				ud->item = rspamd_symbols_cache_get_cur_item (task);
+				ud->item = rspamd_symcache_get_cur_item (task);
 			}
 
 			ret = TRUE;

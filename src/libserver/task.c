@@ -744,7 +744,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_PRE_FILTERS:
-		rspamd_symbols_cache_process_symbols (task, task->cfg->cache,
+		rspamd_symcache_process_symbols (task, task->cfg->cache,
 				RSPAMD_TASK_STAGE_PRE_FILTERS);
 		break;
 
@@ -755,7 +755,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_FILTERS:
-		rspamd_symbols_cache_process_symbols (task, task->cfg->cache,
+		rspamd_symcache_process_symbols (task, task->cfg->cache,
 				RSPAMD_TASK_STAGE_FILTERS);
 		break;
 
@@ -776,7 +776,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_POST_FILTERS:
-		rspamd_symbols_cache_process_symbols (task, task->cfg->cache,
+		rspamd_symcache_process_symbols (task, task->cfg->cache,
 				RSPAMD_TASK_STAGE_POST_FILTERS);
 
 		if ((task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO) &&
@@ -827,7 +827,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		rspamd_make_composites (task);
 		break;
 	case RSPAMD_TASK_STAGE_IDEMPOTENT:
-		rspamd_symbols_cache_process_symbols (task, task->cfg->cache,
+		rspamd_symcache_process_symbols (task, task->cfg->cache,
 				RSPAMD_TASK_STAGE_IDEMPOTENT);
 		break;
 

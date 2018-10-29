@@ -172,7 +172,7 @@ regexp_module_config (struct rspamd_config *cfg)
 				res = FALSE;
 			}
 			else {
-				rspamd_symbols_cache_add_symbol (cfg->cache,
+				rspamd_symcache_add_symbol (cfg->cache,
 						cur_item->symbol,
 						0,
 						process_regexp_item,
@@ -189,12 +189,12 @@ regexp_module_config (struct rspamd_config *cfg)
 			cur_item->symbol = ucl_object_key (value);
 			cur_item->lua_function = ucl_object_toclosure (value);
 
-			rspamd_symbols_cache_add_symbol (cfg->cache,
-				cur_item->symbol,
-				0,
-				process_regexp_item,
-				cur_item,
-				SYMBOL_TYPE_NORMAL, -1);
+			rspamd_symcache_add_symbol (cfg->cache,
+					cur_item->symbol,
+					0,
+					process_regexp_item,
+					cur_item,
+					SYMBOL_TYPE_NORMAL, -1);
 			nlua ++;
 		}
 		else if (value->type == UCL_OBJECT) {
@@ -245,7 +245,7 @@ regexp_module_config (struct rspamd_config *cfg)
 			}
 
 			if (cur_item && (is_lua || valid_expression)) {
-				id = rspamd_symbols_cache_add_symbol (cfg->cache,
+				id = rspamd_symcache_add_symbol (cfg->cache,
 						cur_item->symbol,
 						0,
 						process_regexp_item,
@@ -259,7 +259,7 @@ regexp_module_config (struct rspamd_config *cfg)
 
 					g_assert (cur_item->symbol != NULL);
 					conddata = ucl_object_toclosure (elt);
-					rspamd_symbols_cache_add_condition_delayed (cfg->cache,
+					rspamd_symcache_add_condition_delayed (cfg->cache,
 							cur_item->symbol,
 							conddata->L, conddata->idx);
 				}
@@ -456,5 +456,5 @@ process_regexp_item (struct rspamd_task *task,
 		rspamd_task_insert_result (task, item->symbol, res, NULL);
 	}
 
-	rspamd_symbols_cache_finalize_item (task, symcache_item);
+	rspamd_symcache_finalize_item (task, symcache_item);
 }

@@ -466,7 +466,7 @@ rspamd_stat_cache_redis_check (struct rspamd_task *task,
 				rspamd_redis_cache_fin,
 				rt,
 				M);
-		rt->item = rspamd_symbols_cache_get_cur_item (task);
+		rt->item = rspamd_symcache_get_cur_item (task);
 		event_add (&rt->timeout_event, &tv);
 		rt->has_event = TRUE;
 	}
@@ -500,7 +500,7 @@ rspamd_stat_cache_redis_learn (struct rspamd_task *task,
 			rt->ctx->redis_object, h, flag) == REDIS_OK) {
 		rspamd_session_add_event (task->s,
 				rspamd_redis_cache_fin, rt, M);
-		rt->item = rspamd_symbols_cache_get_cur_item (task);
+		rt->item = rspamd_symcache_get_cur_item (task);
 		event_add (&rt->timeout_event, &tv);
 		rt->has_event = TRUE;
 	}
