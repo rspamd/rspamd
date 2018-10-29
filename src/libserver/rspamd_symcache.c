@@ -289,7 +289,7 @@ rspamd_symcache_find_filter (struct rspamd_symcache *cache,
 	if (item != NULL) {
 
 		if (item->is_virtual) {
-			item = g_ptr_array_index (cache->filters,
+			item = g_ptr_array_index (cache->items_by_id,
 					item->specific.virtual.parent);
 		}
 
@@ -521,11 +521,9 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 		cur = g_list_next (cur);
 	}
 
-	for (i = 0; i < cache->filters->len; i ++) {
-		it = g_ptr_array_index (cache->filters, i);
+	PTR_ARRAY_FOREACH (cache->items_by_id, i, it) {
 
-		for (j = 0; j < it->deps->len; j ++) {
-			dep = g_ptr_array_index (it->deps, j);
+		PTR_ARRAY_FOREACH (it->deps, j, dep) {
 			dit = rspamd_symcache_find_filter (cache, dep->sym);
 
 			if (dit != NULL) {
@@ -554,13 +552,15 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 			}
 		}
 
-		/* Reversed loop to make removal safe */
-		for (j = it->deps->len - 1; j >= 0; j --) {
-			dep = g_ptr_array_index (it->deps, j);
+		if (it->deps) {
+			/* Reversed loop to make removal safe */
+			for (j = it->deps->len - 1; j >= 0; j--) {
+				dep = g_ptr_array_index (it->deps, j);
 
-			if (dep->item == NULL) {
-				/* Remove useless dep */
-				g_ptr_array_remove_index (it->deps, j);
+				if (dep->item == NULL) {
+					/* Remove useless dep */
+					g_ptr_array_remove_index (it->deps, j);
+				}
 			}
 		}
 	}
@@ -710,8 +710,8 @@ rspamd_symcache_load_items (struct rspamd_symcache *cache, const gchar *name)
 			}
 
 			if (item->is_virtual) {
-				g_assert (item->specific.virtual.parent < (gint)cache->filters->len);
-				parent = g_ptr_array_index (cache->filters,
+				g_assert (item->specific.virtual.parent < (gint)cache->items_by_id->len);
+				parent = g_ptr_array_index (cache->items_by_id,
 						item->specific.virtual.parent);
 
 				if (parent->st->weight < item->st->weight) {
@@ -942,6 +942,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 			item->specific.virtual.parent = parent;
 			item->id = cache->virtual->len;
 			g_ptr_array_add (cache->virtual, item);
+			/* Not added to items_by_id, handled by parent */
 		}
 	}
 
@@ -1209,8 +1210,8 @@ rspamd_symcache_validate_cb (gpointer k, gpointer v, gpointer ud)
 	}
 
 	if (item->is_virtual) {
-		g_assert (item->specific.virtual.parent < (gint)cache->filters->len);
-		parent = g_ptr_array_index (cache->filters,
+		g_assert (item->specific.virtual.parent < (gint)cache->items_by_id->len);
+		parent = g_ptr_array_index (cache->items_by_id,
 				item->specific.virtual.parent);
 
 		if (fabs (parent->st->weight) < fabs (item->st->weight)) {
@@ -1939,7 +1940,7 @@ rspamd_symcache_counters_cb (gpointer k, gpointer v, gpointer ud)
 			"symbol", 0, false);
 
 	if (item->is_virtual) {
-		parent = g_ptr_array_index (cbd->cache->filters,
+		parent = g_ptr_array_index (cbd->cache->items_by_id,
 				item->specific.virtual.parent);
 		ucl_object_insert_key (obj,
 				ucl_object_fromdouble (ROUND_DOUBLE (item->st->weight)),
@@ -2155,9 +2156,9 @@ rspamd_symcache_add_dependency (struct rspamd_symcache *cache,
 	struct rspamd_symcache_item *source;
 	struct cache_dependency *dep;
 
-	g_assert (id_from >= 0 && id_from < (gint)cache->filters->len);
+	g_assert (id_from >= 0 && id_from < (gint)cache->items_by_id->len);
 
-	source = g_ptr_array_index (cache->filters, id_from);
+	source = g_ptr_array_index (cache->items_by_id, id_from);
 	dep = rspamd_mempool_alloc (cache->static_pool, sizeof (*dep));
 	dep->id = id_from;
 	dep->sym = rspamd_mempool_strdup (cache->static_pool, to);
@@ -2243,11 +2244,11 @@ rspamd_symcache_symbol_by_id (struct rspamd_symcache *cache,
 
 	g_assert (cache != NULL);
 
-	if (id < 0 || id >= (gint)cache->filters->len) {
+	if (id < 0 || id >= (gint)cache->items_by_id->len) {
 		return NULL;
 	}
 
-	item = g_ptr_array_index (cache->filters, id);
+	item = g_ptr_array_index (cache->items_by_id, id);
 
 	return item->symbol;
 }
