@@ -470,7 +470,7 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 		return tmp;
 	}
 
-	g_abort ();
+	abort ();
 }
 
 

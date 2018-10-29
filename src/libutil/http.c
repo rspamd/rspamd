@@ -2186,7 +2186,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 		}
 		else {
 			/* Invalid body for spamc method */
-			g_abort ();
+			abort ();
 		}
 	}
 
