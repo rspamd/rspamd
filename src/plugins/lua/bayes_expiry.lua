@@ -44,6 +44,10 @@ local function check_redis_classifier(cls, cfg)
   if cls.new_schema then
     local symbol_spam, symbol_ham
     local expiry = (cls.expiry or cls.expire)
+    if type(expiry) == 'table' then
+      expiry = expiry[1]
+    end
+
     if cls.lazy then settings.lazy = cls.lazy end
     -- Load symbols from statfiles
     local statfiles = cls.statfile
@@ -68,7 +72,7 @@ local function check_redis_classifier(cls, cfg)
       end
     end
 
-    if not symbol_spam or not symbol_ham or not expiry then
+    if not symbol_spam or not symbol_ham or not type(expiry) == 'number' then
       return
     end
     -- Now try to load redis_params if needed
