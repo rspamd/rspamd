@@ -41,6 +41,7 @@ pipeline:
         cmake
         -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++
         -DCMAKE_INSTALL_PREFIX=/rspamd/fedora/install
+        -DENABLE_FULL_DEBUG=ON
         -DCMAKE_RULE_MESSAGES=OFF
         $CI_WORKSPACE
       - ncpu=$(getconf _NPROCESSORS_ONLN)
