@@ -69,9 +69,6 @@ namespace rspamd {
 	static bool int32_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
 
-	static bool gboolean_arg_handler (const Expr *arg,
-			struct PrintfArgChecker *ctx);
-
 	static bool tok_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
 
