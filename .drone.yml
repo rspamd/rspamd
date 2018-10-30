@@ -32,6 +32,7 @@ pipeline:
   build-clang:
     # https://github.com/rspamd/rspamd-build-docker/blob/master/fedora-build/Dockerfile
     image: rspamd/ci-fedora-build
+    pull: true
     group: build
     commands:
       - test "$(id -un)" = nobody
@@ -39,6 +40,8 @@ pipeline:
       - export LDFLAGS='-fuse-ld=lld'
       - >
         cmake
+        -DENABLE_CLANG_PLUGIN=ON
+        -DLLVM_CONFIG_BINARY=/usr/bin/llvm-config
         -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++
         -DCMAKE_INSTALL_PREFIX=/rspamd/fedora/install
         -DENABLE_FULL_DEBUG=ON
