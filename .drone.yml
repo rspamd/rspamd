@@ -42,6 +42,7 @@ pipeline:
         cmake
         -DENABLE_CLANG_PLUGIN=ON
         -DLLVM_CONFIG_BINARY=/usr/bin/llvm-config
+        -DENABLE_TORCH=OFF
         -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++
         -DCMAKE_INSTALL_PREFIX=/rspamd/fedora/install
         -DENABLE_FULL_DEBUG=ON
