@@ -297,6 +297,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 	const gchar *start = pattern, *end, *flags_str = NULL;
 	gchar *err_str;
 	rspamd_regexp_t *res;
+	gboolean explicit_utf = FALSE;
 	PCRE_T *r;
 	gchar sep = 0, *real_pattern;
 #ifndef WITH_PCRE2
@@ -383,6 +384,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 #else
 				regexp_flags |= PCRE_FLAG(UTF);
 #endif
+				explicit_utf = TRUE;
 				break;
 			case 'O':
 				/* We optimize all regexps by default */
@@ -453,7 +455,7 @@ fin:
 	if (rspamd_flags & RSPAMD_REGEXP_FLAG_RAW) {
 		res->raw_re = r;
 	}
-	else {
+	else if (!explicit_utf) {
 #ifndef WITH_PCRE2
 		res->raw_re = pcre_compile (real_pattern, regexp_flags & ~PCRE_FLAG(UTF8),
 				(const char **)&err_str, &err_off, NULL);
