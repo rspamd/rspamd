@@ -9,7 +9,7 @@ pipeline:
     # and we need to download it anyway
     image: ubuntu:18.04
     commands:
-      - install -d -o nobody -g nogroup /rspamd/build /rspamd/install
+      - install -d -o nobody -g nogroup /rspamd/build /rspamd/install /rspamd/fedora/build /rspamd/fedora/install
       # lua-torch CMakeLists writes to src dir
       - chown nobody $CI_WORKSPACE/contrib/lua-torch/nn
       # for debug
@@ -25,6 +25,24 @@ pipeline:
       - test "$(id -un)" = nobody
       - cd /rspamd/build
       - cmake $CI_WORKSPACE -DENABLE_COVERAGE=ON -DENABLE_LIBUNWIND=ON -DCMAKE_INSTALL_PREFIX=/rspamd/install -DCMAKE_RULE_MESSAGES=OFF
+      - ncpu=$(getconf _NPROCESSORS_ONLN)
+      - make -j $ncpu install
+      - make -j $ncpu rspamd-test
+
+  build-clang:
+    # https://github.com/rspamd/rspamd-build-docker/blob/master/fedora-build/Dockerfile
+    image: rspamd/ci-fedora-build
+    group: build
+    commands:
+      - test "$(id -un)" = nobody
+      - cd /rspamd/fedora/build
+      - export LDFLAGS='-fuse-ld=lld'
+      - >
+        cmake
+        -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++
+        -DCMAKE_INSTALL_PREFIX=/rspamd/fedora/install
+        -DCMAKE_RULE_MESSAGES=OFF
+        $CI_WORKSPACE
       - ncpu=$(getconf _NPROCESSORS_ONLN)
       - make -j $ncpu install
       - make -j $ncpu rspamd-test
