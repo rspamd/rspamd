@@ -91,3 +91,36 @@ rspamd_config:register_symbol({
     return true, 'Fires always'
   end
 })
+
+rspamd_config:register_symbol({
+  name = 'POSITIVE_A',
+  score = -1.0,
+  group = "positive",
+  callback = function()
+    return true, 'Fires always'
+  end
+})
+rspamd_config:register_symbol({
+  name = 'NEGATIVE_A',
+  score = -1.0,
+  group = "negative",
+  callback = function()
+    return true, 'Fires always'
+  end
+})
+rspamd_config:register_symbol({
+  name = 'NEGATIVE_B',
+  score = 1.0,
+  group = "negative",
+  callback = function()
+    return true, 'Fires always'
+  end
+})
+rspamd_config:register_symbol({
+  name = 'ANY_A',
+  score = -1.0,
+  group = "any",
+  callback = function()
+    return true, 'Fires always'
+  end
+})

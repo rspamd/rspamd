@@ -14,7 +14,7 @@ ${RSPAMD_SCOPE}  Suite
 *** Test Cases ***
 Composites - Score
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
-  Check Rspamc  ${result}  ${SPACE}46.00 / 0.00
+  Check Rspamc  ${result}  ${SPACE}50.00 / 0.00
 
 Composites - Expressions
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
@@ -55,3 +55,11 @@ Composites - Default policy: leave
   Check Rspamc  ${result}  DEFAULT_POLICY_LEAVE (5.00)
   Should Contain  ${result.stdout}  DEFAULT_POLICY_LEAVE_A (1.00)
   Should Contain  ${result.stdout}  DEFAULT_POLICY_LEAVE_B (1.00)
+
+Composites - Symbol groups
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}
+  Check Rspamc  ${result}  SYMBOL_GROUPS (5.00)
+  Should Contain  ${result.stdout}  POSITIVE_A (-1.00)
+  Should Contain  ${result.stdout}  ANY_A (-1.00)
+  Should Contain  ${result.stdout}  NEGATIVE_B (1.00)
+  Should Not Contain  ${result.stdout}  NEGATIVE_A
