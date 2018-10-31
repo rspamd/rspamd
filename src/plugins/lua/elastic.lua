@@ -208,7 +208,9 @@ end
 
 local function elastic_collect(task)
   if not enabled then return end
+  if task:has_flag('skip') then return end
   if not settings.allow_local and lua_util.is_rspamc_or_controller(task) then return end
+
   local row = {['rspamd_meta'] = get_general_metadata(task),
     ['@timestamp'] = tostring(util.get_time() * 1000)}
   table.insert(rows, row)

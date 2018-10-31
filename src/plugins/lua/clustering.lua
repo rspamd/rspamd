@@ -186,6 +186,9 @@ local function clusterting_filter_cb(task, rule)
 end
 
 local function clusterting_idempotent_cb(task, rule)
+  if task:has_flag('skip') then return end
+  if not rule.allow_local and lua_util.is_rspamc_or_controller(task) then return end
+
   local verdict = lua_util.get_task_verdict(task)
   local score
 

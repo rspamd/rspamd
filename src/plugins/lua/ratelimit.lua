@@ -622,6 +622,8 @@ local function ratelimit_cb(task)
 end
 
 local function ratelimit_update_cb(task)
+  if task:has_flag('skip') then return end
+  if not settings.allow_local and lua_util.is_rspamc_or_controller(task) then return end
   local prefixes = task:cache_get('ratelimit_prefixes')
 
   if prefixes then

@@ -285,6 +285,7 @@ local function clickhouse_send_data(task)
 end
 
 local function clickhouse_collect(task)
+  if task:has_flag('skip') then return end
   if not settings.allow_local and rspamd_lua_utils.is_rspamc_or_controller(task) then return end
 
   for _,sym in ipairs(settings.stop_symbols) do

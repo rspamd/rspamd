@@ -688,6 +688,7 @@ end
 
 local function gen_exporter(rule)
   return function (task)
+    if task:has_flag('skip') then return end
     local selector = rule.selector or 'default'
     local selected = selectors[selector](task)
     if selected then

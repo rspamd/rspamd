@@ -904,6 +904,8 @@ local function check_anns(rule, _, ev_base)
 end
 
 local function ann_push_vector(task)
+  if task:has_flag('skip') then return end
+  if not settings.allow_local and lua_util.is_rspamc_or_controller(task) then return end
   local scores = task:get_metric_score()
   for _,rule in pairs(settings.rules) do
     local sid = "0"
