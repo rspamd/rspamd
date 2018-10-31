@@ -489,10 +489,15 @@ local function clickhouse_collect(task)
     table.insert(row, {})
   end
 
+  local flatten_urls = function(...)
+    return fun.totable(fun.map(function(k,_) return k end, ...))
+  end
+
   -- Urls step
   local urls_tlds = {}
   local urls_urls = {}
   if task:has_urls(false) then
+
     for _,u in ipairs(task:get_urls(false)) do
       urls_tlds[u:get_tld()] = true
       if settings['full_urls'] then
@@ -501,13 +506,7 @@ local function clickhouse_collect(task)
         urls_urls[u:get_host()] = true
       end
     end
-  end
 
-  local flatten_urls = function(...)
-    return fun.totable(fun.map(function(k,_) return k end, ...))
-  end
-
-  if #urls_tlds > 0 then
     table.insert(row, flatten_urls(urls_tlds))
     table.insert(row, flatten_urls(urls_urls))
   else
