@@ -1211,7 +1211,7 @@ local function parse_rule(name, tbl)
 
   local symbol = name
   if tbl.symbol then
-    symbol = name
+    symbol = tbl.symbol
   end
 
   rule.symbol = symbol
