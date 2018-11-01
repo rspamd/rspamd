@@ -1997,7 +1997,6 @@ surbl_test_redirector (struct rspamd_task *task,
 	param->redirector_requests = 0;
 	param->ctx = surbl_module_ctx;
 	param->item = item;
-	rspamd_symcache_item_async_inc (task, item, M);
 	g_hash_table_foreach (task->urls, surbl_tree_redirector_callback, param);
 
 	/* We also need to check and process img URLs */
