@@ -40,6 +40,7 @@ local policies = {
     scan_archives = true,
     short_text_direct_hash = true,
     text_shingles = true,
+    skip_images = false,
   }
 }
 
@@ -55,6 +56,7 @@ local policy_schema = ts.shape{
   scan_archives = ts.bool,
   short_text_direct_hash = ts.bool,
   text_shingles = ts.bool,
+  skip_imagess = ts.bool,
 }
 
 
@@ -155,6 +157,36 @@ local function check_text_part(task, part, rule, text)
   return allow_direct,allow_shingles
 end
 
+local function check_image_part(task, part, rule, image)
+  if rule.skip_images then
+    lua_util.debugm(N, task, 'skip image part as images are disabled')
+    return false,false
+  end
+
+  if rule.min_width or rule.min_height then
+    -- Check dimensions
+    local min_width = rule.min_width or rule.min_height
+    local min_height = rule.min_height or rule.min_width
+    local height = image:get_height()
+    local width = image:get_width()
+
+    if height and width then
+      if height < min_height or width < min_width then
+        lua_util.debugm(N, task, 'skip image part as it does not meet minimum sizes: %sx%s < %sx%s',
+          width, height, min_width, min_height)
+
+        return false, false
+      end
+    end
+  end
+
+  return check_length(task, part, rule),false
+end
+
+local function mime_types_check(task, part, rule)
+  return true,true -- TODO: add checks
+end
+
 exports.check_mime_part = function(task, part, rule_id)
   local rule = rules[rule_id]
 
@@ -167,6 +199,17 @@ exports.check_mime_part = function(task, part, rule_id)
   if part:is_text() then
     return check_text_part(task, part, rule, part:get_text())
   end
+
+  if part:is_image() then
+    return check_image_part(task, part, rule, part:get_image())
+  end
+
+  if part:is_archive() and rule.scan_archives then
+    -- Always send archives
+    return true,false
+  end
+
+  return mime_types_check(task, part, rule)
 end
 
 return exports
