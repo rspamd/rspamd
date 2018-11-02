@@ -34,10 +34,12 @@ local policies = {
     min_bytes = 1024,
     min_height = 500,
     min_width = 500,
-    min_length = 100, -- short words multiplier
+    min_length = 32,
     text_multiplier = 4.0, -- divide min_bytes by 4 for texts
-    mime_types = {"*"},
+    mime_types = {"application/*"},
+    scan_archives = true,
     short_text_direct_hash = true,
+    text_shingles = true,
   }
 }
 
@@ -50,7 +52,9 @@ local policy_schema = ts.shape{
   min_length = ts.number + ts.string / tonumber,
   text_multiplier = ts.number,
   mime_types = ts.array_of(ts.string),
+  scan_archives = ts.bool,
   short_text_direct_hash = ts.bool,
+  text_shingles = ts.bool,
 }
 
 
@@ -98,6 +102,71 @@ exports.process_rule = function(rule)
 
   table.insert(rules, processed_rule)
   return #rules
+end
+
+local function check_length(task, part, rule)
+  local length_ok = true
+
+  if rule.min_bytes then
+    local bytes = part:get_length()
+    local adjusted_bytes = bytes
+
+    if part:is_text() then
+      if rule.text_multiplier then
+        adjusted_bytes = bytes * rule.text_multiplier
+      end
+    end
+
+    if rule.min_bytes > adjusted_bytes then
+      lua_util.debugm(N, task, 'skip part of length %s (%s adjusted)' ..
+          'as it has less than %s bytes',
+          bytes, adjusted_bytes, rule.min_bytes)
+      length_ok = false
+    end
+  end
+
+  return length_ok
+end
+
+local function check_text_part(task, part, rule, text)
+  local allow_direct,allow_shingles = false,false
+
+  if rule.text_shingles then
+    -- Check number of words
+    local wcnt = text:get_words_count()
+    if rule.min_length and wcnt < rule.min_length then
+      lua_util.debugm(N, task, 'text has less than %s words: %s',
+          rule.min_length, wcnt)
+      allow_shingles = false
+    else
+      allow_shingles = true
+    end
+
+    if not rule.short_text_direct_hash and not allow_shingles then
+      allow_direct = false
+    else
+      allow_direct = check_length(task, part, rule)
+    end
+
+  else
+    allow_direct = check_length(task, part, rule)
+  end
+
+  return allow_direct,allow_shingles
+end
+
+exports.check_mime_part = function(task, part, rule_id)
+  local rule = rules[rule_id]
+
+  if not rule then
+    rspamd_logger.errx(task, 'cannot find rule with id %s', rule_id)
+
+    return false,false
+  end
+
+  if part:is_text() then
+    return check_text_part(task, part, rule, part:get_text())
+  end
 end
 
 return exports
