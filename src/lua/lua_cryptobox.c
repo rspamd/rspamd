@@ -1881,6 +1881,7 @@ lua_cryptobox_encrypt_cookie (lua_State *L)
 		/* Fill nonce */
 		ottery_rand_bytes (nonce, sizeof (guint64) + sizeof (guint32));
 		ts = (guint32)rspamd_get_calendar_ticks ();
+		ts = GUINT32_TO_LE (ts);
 		memcpy (nonce + sizeof (guint64) + sizeof (guint32), &ts, sizeof (ts));
 
 		/* Prepare padded cookie */
@@ -1933,7 +1934,7 @@ lua_cryptobox_encrypt_cookie (lua_State *L)
  * ```
  * @param {string} secret_key secret key as a hex string (must be 16 bytes in raw or 32 in hex)
  * @param {string} encrypted_cookie encrypted cookie as a base64 encoded string
- * @return {string} decrypted value of the cookie
+ * @return {string+number} decrypted value of the cookie and the cookie timestamp
  */
 static gint
 lua_cryptobox_decrypt_cookie (lua_State *L)
@@ -1942,6 +1943,7 @@ lua_cryptobox_decrypt_cookie (lua_State *L)
 	guchar nonce[RSPAMD_CRYPTOBOX_AES_BLOCKSIZE];
 	guchar aes_key[RSPAMD_CRYPTOBOX_AES_KEYSIZE];
 	guchar *src;
+	guint32 ts;
 
 	const gchar *sk, *cookie;
 	gsize sklen, cookie_len;
@@ -1981,6 +1983,9 @@ lua_cryptobox_decrypt_cookie (lua_State *L)
 		EVP_EncryptInit_ex (ctx, EVP_aes_128_ecb (), NULL, aes_key, NULL);
 		EVP_CIPHER_CTX_set_padding (ctx, 0);
 
+		/* Copy time */
+		memcpy (&ts, nonce + sizeof (guint64) + sizeof (guint32), sizeof (ts));
+		ts = GUINT32_FROM_LE (ts);
 		bklen = sizeof (nonce);
 		blk = nonce;
 		g_assert (EVP_EncryptUpdate (ctx, blk, &bklen, src,
@@ -1997,9 +2002,11 @@ lua_cryptobox_decrypt_cookie (lua_State *L)
 		if (src[RSPAMD_CRYPTOBOX_AES_BLOCKSIZE * 2 - 1] != '\0') {
 			/* Bad cookie */
 			lua_pushnil (L);
+			lua_pushnil (L);
 		}
 		else {
 			lua_pushstring (L, src + sizeof (nonce));
+			lua_pushnumber (L, ts);
 		}
 
 		rspamd_explicit_memzero (src, RSPAMD_CRYPTOBOX_AES_BLOCKSIZE * 2);
@@ -2010,7 +2017,7 @@ lua_cryptobox_decrypt_cookie (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 1;
+	return 2;
 }
 
 static gint
