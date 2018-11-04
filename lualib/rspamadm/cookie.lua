@@ -36,6 +36,8 @@ parser:option "-d --domain"
       :argname "<domain>"
 parser:flag "-D --decrypt"
       :description('Decrypt cookie instead of encrypting one')
+parser:flag "-t --timestamp"
+      :description('Show cookie timestamp (valid for decrypting only)')
 parser:argument "cookie":args "?"
       :description('Use specified cookie')
 
@@ -65,10 +67,14 @@ local function gen_cookie(args, key)
       extracted_cookie = args.cookie
     end
 
-    local dec_cookie = cr.decrypt_cookie(key, extracted_cookie)
+    local dec_cookie,ts = cr.decrypt_cookie(key, extracted_cookie)
 
     if dec_cookie then
-      print(dec_cookie)
+      if args.timestamp then
+        print(string.format('%s %s', dec_cookie, ts))
+      else
+        print(dec_cookie)
+      end
     else
       print('cannot decrypt cookie')
       os.exit(1)
