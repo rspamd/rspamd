@@ -1984,7 +1984,7 @@ lua_cryptobox_decrypt_cookie (lua_State *L)
 		EVP_CIPHER_CTX_set_padding (ctx, 0);
 
 		/* Copy time */
-		memcpy (&ts, nonce + sizeof (guint64) + sizeof (guint32), sizeof (ts));
+		memcpy (&ts, src + sizeof (guint64) + sizeof (guint32), sizeof (ts));
 		ts = GUINT32_FROM_LE (ts);
 		bklen = sizeof (nonce);
 		blk = nonce;
