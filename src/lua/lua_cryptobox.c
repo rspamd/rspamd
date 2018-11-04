@@ -1834,10 +1834,12 @@ lua_cryptobox_decrypt_file (lua_State *L)
 /***
  * @function rspamd_cryptobox.encrypt_cookie(secret_key, secret_cookie)
  * Specialised function that performs AES-CTR encryption of the provided cookie
+ * ```
  * e := base64(nonce||aesencrypt(nonce, secret_cookie))
- * nonce := int64_le(unix_timestamp)||random_64bit
+ * nonce := uint32_le(unix_timestamp)||random_64bit
  * aesencrypt := aes_ctr(nonce, secret_key) ^ pad(secret_cookie)
  * pad := secret_cookie || 0^(32-len(secret_cookie))
+ * ```
  * @param {string} secret_key secret key as a hex string (must be 16 bytes in raw or 32 in hex)
  * @param {string} secret_cookie secret cookie as a string for up to 31 character
  * @return {string} e function value for this sk and cookie
@@ -1850,7 +1852,7 @@ lua_cryptobox_encrypt_cookie (lua_State *L)
 	guchar nonce[RSPAMD_CRYPTOBOX_AES_BLOCKSIZE];
 	guchar aes_key[RSPAMD_CRYPTOBOX_AES_KEYSIZE];
 	guchar result[RSPAMD_CRYPTOBOX_AES_BLOCKSIZE * 2];
-	guint64 ts;
+	guint32 ts;
 
 	const gchar *sk, *cookie;
 	gsize sklen, cookie_len;
@@ -1877,9 +1879,9 @@ lua_cryptobox_encrypt_cookie (lua_State *L)
 		}
 
 		/* Fill nonce */
-		ottery_rand_bytes (nonce, sizeof (nonce) / 2);
-		ts = (guint64)rspamd_get_calendar_ticks ();
-		memcpy (nonce + sizeof (nonce) / 2, &ts, sizeof (ts));
+		ottery_rand_bytes (nonce, sizeof (guint64) + sizeof (guint32));
+		ts = (guint32)rspamd_get_calendar_ticks ();
+		memcpy (nonce + sizeof (guint64) + sizeof (guint32), &ts, sizeof (ts));
 
 		/* Prepare padded cookie */
 		memset (padded_cookie, 0, sizeof (padded_cookie));
@@ -1923,10 +1925,12 @@ lua_cryptobox_encrypt_cookie (lua_State *L)
 /***
  * @function rspamd_cryptobox.decrypt_cookie(secret_key, encrypted_cookie)
  * Specialised function that performs AES-CTR decryption of the provided cookie in form
+ * ```
  * e := base64(nonce||aesencrypt(nonce, secret_cookie))
- * nonce := int64_le(unix_timestamp)||random_64bit
+ * nonce := int32_le(unix_timestamp)||random_96bit
  * aesencrypt := aes_ctr(nonce, secret_key) ^ pad(secret_cookie)
  * pad := secret_cookie || 0^(32-len(secret_cookie))
+ * ```
  * @param {string} secret_key secret key as a hex string (must be 16 bytes in raw or 32 in hex)
  * @param {string} encrypted_cookie encrypted cookie as a base64 encoded string
  * @return {string} decrypted value of the cookie
@@ -1938,7 +1942,6 @@ lua_cryptobox_decrypt_cookie (lua_State *L)
 	guchar nonce[RSPAMD_CRYPTOBOX_AES_BLOCKSIZE];
 	guchar aes_key[RSPAMD_CRYPTOBOX_AES_KEYSIZE];
 	guchar *src;
-	guint64 ts;
 
 	const gchar *sk, *cookie;
 	gsize sklen, cookie_len;
@@ -1966,8 +1969,9 @@ lua_cryptobox_decrypt_cookie (lua_State *L)
 
 		if (cookie_len != RSPAMD_CRYPTOBOX_AES_BLOCKSIZE * 2) {
 			g_free (src);
+			lua_pushnil (L);
 
-			return luaL_error (L, "invalid cookie len %d", (gint)cookie_len);
+			return 1;
 		}
 
 		/* Perform AES CTR via AES ECB on nonce */
