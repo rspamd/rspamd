@@ -39,7 +39,8 @@ local settings = {
   use_local = true,
   cookie = nil,
   cookie_key = nil,
-  cookie_is_pattern = false
+  cookie_is_pattern = false,
+  cookie_valid_time = '2w', -- 2 weeks by default
 }
 
 local N = "replies"
@@ -132,12 +133,31 @@ local function replies_set(task)
 end
 
 local function replies_check_cookie(task)
-  local function cookie_matched(extra)
+  local function cookie_matched(extra, ts)
+    local dt = task:get_date{format = 'connect', gmt = true}
+
+    if dt < ts then
+      rspamd_logger.infox(task, 'ignore cookie as its date is in future')
+
+      return
+    end
+
+    if settings.cookie_valid_time then
+      if dt - ts > settings.cookie_valid_time then
+        rspamd_logger.infox(task,
+            'ignore cookie as its timestamp is too old: %s (%s current time)',
+            ts, dt)
+
+        return
+      end
+    end
 
     if extra then
-      task:insert_result(settings['symbol'], 1.0, string.format('cookie:%s', extra))
+      task:insert_result(settings['symbol'], 1.0,
+          string.format('cookie:%s:%s', extra, ts))
     else
-      task:insert_result(settings['symbol'], 1.0, 'cookie')
+      task:insert_result(settings['symbol'], 1.0,
+          string.format('cookie:%s', ts))
     end
     if settings['action'] ~= nil then
       local ip_addr = task:get_ip()
@@ -165,7 +185,7 @@ local function replies_check_cookie(task)
     extracted_cookie = irt
   end
 
-  local dec_cookie = cr.decrypt_cookie(settings.cookie_key, extracted_cookie)
+  local dec_cookie,ts = cr.decrypt_cookie(settings.cookie_key, extracted_cookie)
 
   if dec_cookie then
     -- We have something that looks like a cookie
@@ -173,12 +193,12 @@ local function replies_check_cookie(task)
       local m = dec_cookie:match(settings.cookie)
 
       if m then
-        cookie_matched(m)
+        cookie_matched(m, ts)
       end
     else
       -- Direct match
       if dec_cookie == settings.cookie then
-        cookie_matched()
+        cookie_matched(nil, ts)
       end
     end
   end
@@ -209,6 +229,11 @@ if opts then
 
         return
       end
+
+      if settings.cookie_valid_time then
+        settings.cookie_valid_time = lua_util.parse_time_interval(settings.cookie_valid_time)
+      end
+
       local id = rspamd_config:register_symbol({
         name = 'REPLIES_CHECK',
         type = 'prefilter,nostat',
