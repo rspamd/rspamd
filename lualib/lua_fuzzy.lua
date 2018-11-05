@@ -22,6 +22,8 @@ limitations under the License.
 
 local N = "lua_fuzzy"
 local lua_util = require "lua_util"
+local rspamd_regexp = require "rspamd_regexp"
+local fun = require "fun"
 local rspamd_logger = require "rspamd_logger"
 local ts = require("tableshape").types
 
@@ -101,6 +103,19 @@ exports.process_rule = function(rule)
       rspamd_logger.warnx(rspamd_config, "unknown policy %s", processed_rule.policy)
     end
   end
+
+  if processed_rule.mime_types then
+    processed_rule.mime_types = fun.totable(fun.map(function(gl)
+      return rspamd_regexp.import_glob(gl, 'i')
+    end, processed_rule.mime_types))
+  end
+
+  if processed_rule.extensions then
+    processed_rule.mime_types = fun.totable(fun.map(function(gl)
+      return rspamd_regexp.import_glob(gl, 'i')
+    end, processed_rule.extensions))
+  end
+
 
   table.insert(rules, processed_rule)
   return #rules
@@ -184,7 +199,23 @@ local function check_image_part(task, part, rule, image)
 end
 
 local function mime_types_check(task, part, rule)
-  return true,true -- TODO: add checks
+  local t,st = part:get_type()
+
+  if not t then return false, false end
+
+  local ct = string.format('%s/%s', t, st)
+
+  if rule.mime_types then
+    if fun.any(function(gl_re)
+      if gl_re:match(ct) then return true else return false end
+    end, rule.mime_types) then
+      return true, true
+    end
+
+    return false, false
+  end
+
+  return false,false
 end
 
 exports.check_mime_part = function(task, part, rule_id)
