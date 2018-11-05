@@ -402,6 +402,13 @@ LUA_FUNCTION_DEF (mimepart, get_text);
  * @return {string} 128 characters hex string with digest of the part
  */
 LUA_FUNCTION_DEF (mimepart, get_digest);
+
+/***
+ * @method mime_part:get_id()
+ * Returns the order of the part in parts list
+ * @return {number} index of the part (starting from 1 as it is Lua API)
+ */
+LUA_FUNCTION_DEF (mimepart, get_id);
 /***
  * @method mime_part:is_broken()
  * Returns true if mime part has incorrectly specified content type
@@ -444,6 +451,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, is_broken),
 	LUA_INTERFACE_DEF (mimepart, get_text),
 	LUA_INTERFACE_DEF (mimepart, get_digest),
+	LUA_INTERFACE_DEF (mimepart, get_id),
 	LUA_INTERFACE_DEF (mimepart, headers_foreach),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
@@ -1467,6 +1475,21 @@ lua_mimepart_get_digest (lua_State * L)
 	rspamd_encode_hex_buf (part->digest, sizeof (part->digest),
 			digestbuf, sizeof (digestbuf));
 	lua_pushstring (L, digestbuf);
+
+	return 1;
+}
+
+static gint
+lua_mimepart_get_id (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushnumber (L, part->id);
 
 	return 1;
 }

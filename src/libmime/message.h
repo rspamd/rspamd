@@ -51,11 +51,16 @@ struct rspamd_mime_part {
 	rspamd_ftok_t raw_data;
 	rspamd_ftok_t parsed_data;
 	struct rspamd_mime_part *parent_part;
-	GHashTable *raw_headers;
+
 	GQueue *headers_order;
+	GHashTable *raw_headers;
+
 	gchar *raw_headers_str;
 	gsize raw_headers_len;
+
 	enum rspamd_cte cte;
+	enum rspamd_mime_part_flags flags;
+	guint id;
 
 	union {
 		struct rspamd_mime_multipart mp;
@@ -64,7 +69,6 @@ struct rspamd_mime_part {
 		struct rspamd_archive *arch;
 	} specific;
 
-	enum rspamd_mime_part_flags flags;
 	guchar digest[rspamd_cryptobox_HASHBYTES];
 };
 
