@@ -167,8 +167,9 @@ struct fuzzy_learn_session {
 struct fuzzy_cmd_io {
 	guint32 tag;
 	guint32 flags;
-	struct rspamd_fuzzy_cmd cmd;
 	struct iovec io;
+	struct rspamd_mime_part *part;
+	struct rspamd_fuzzy_cmd cmd;
 };
 
 
@@ -1372,13 +1373,14 @@ fuzzy_cmd_set_cached (struct fuzzy_rule *rule,
  */
 static struct fuzzy_cmd_io *
 fuzzy_cmd_from_text_part (struct rspamd_task *task,
-		struct fuzzy_rule *rule,
-		int c,
-		gint flag,
-		guint32 weight,
-		gboolean short_text,
-		rspamd_mempool_t *pool,
-		struct rspamd_mime_text_part *part)
+						  struct fuzzy_rule *rule,
+						  int c,
+						  gint flag,
+						  guint32 weight,
+						  gboolean short_text,
+						  rspamd_mempool_t *pool,
+						  struct rspamd_mime_text_part *part,
+						  struct rspamd_mime_part *mp)
 {
 	struct rspamd_fuzzy_shingle_cmd *shcmd = NULL;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
@@ -1392,7 +1394,7 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 	GArray *words;
 	struct fuzzy_cmd_io *io;
 
-	cached = fuzzy_cmd_get_cached (rule, pool, part);
+	cached = fuzzy_cmd_get_cached (rule, pool, mp);
 
 	if (cached) {
 		/* Copy cached */
@@ -1475,10 +1477,11 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 		 * Since it is copied when obtained from the cache, it is safe to use
 		 * it this way.
 		 */
-		fuzzy_cmd_set_cached (rule, pool, part, cached);
+		fuzzy_cmd_set_cached (rule, pool, mp, cached);
 	}
 
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
+	io->part = mp;
 
 	if (!short_text) {
 		shcmd->basic.tag = ottery_rand_uint32 ();
@@ -1539,11 +1542,12 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 
 static struct fuzzy_cmd_io *
 fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
-		int c,
-		gint flag,
-		guint32 weight,
-		rspamd_mempool_t *pool,
-		struct rspamd_image *img)
+						   int c,
+						   gint flag,
+						   guint32 weight,
+						   rspamd_mempool_t *pool,
+						   struct rspamd_image *img,
+						   struct rspamd_mime_part *mp)
 {
 	struct rspamd_fuzzy_shingle_cmd *shcmd;
 	struct rspamd_fuzzy_encrypted_shingle_cmd *encshcmd;
@@ -1551,7 +1555,7 @@ fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 	struct rspamd_shingle *sh;
 	struct rspamd_cached_shingles *cached;
 
-	cached = fuzzy_cmd_get_cached (rule, pool, img);
+	cached = fuzzy_cmd_get_cached (rule, pool, mp);
 
 	if (cached) {
 		/* Copy cached */
@@ -1601,7 +1605,7 @@ fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 		cached = rspamd_mempool_alloc (pool, sizeof (*cached));
 		cached->sh = sh;
 		memcpy (cached->digest, shcmd->basic.digest, sizeof (cached->digest));
-		fuzzy_cmd_set_cached (rule, pool, img, cached);
+		fuzzy_cmd_set_cached (rule, pool, mp, cached);
 	}
 
 	shcmd->basic.tag = ottery_rand_uint32 ();
@@ -1614,6 +1618,7 @@ fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 	}
 
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
+	io->part = mp;
 	io->tag = shcmd->basic.tag;
 	io->flags = FUZZY_CMD_FLAG_IMAGE;
 	memcpy (&io->cmd, &shcmd->basic, sizeof (io->cmd));
@@ -1634,11 +1639,12 @@ fuzzy_cmd_from_image_part (struct fuzzy_rule *rule,
 
 static struct fuzzy_cmd_io *
 fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
-		int c,
-		gint flag,
-		guint32 weight,
-		rspamd_mempool_t *pool,
-		guchar digest[rspamd_cryptobox_HASHBYTES])
+						  int c,
+						  gint flag,
+						  guint32 weight,
+						  rspamd_mempool_t *pool,
+						  guchar digest[rspamd_cryptobox_HASHBYTES],
+						  struct rspamd_mime_part *mp)
 {
 	struct rspamd_fuzzy_cmd *cmd;
 	struct rspamd_fuzzy_encrypted_cmd *enccmd = NULL;
@@ -1665,6 +1671,7 @@ fuzzy_cmd_from_data_part (struct fuzzy_rule *rule,
 	io = rspamd_mempool_alloc (pool, sizeof (*io));
 	io->flags = 0;
 	io->tag = cmd->tag;
+	io->part = mp;
 	memcpy (&io->cmd, cmd, sizeof (io->cmd));
 
 	if (rule->peer_key) {
@@ -2692,7 +2699,8 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 					value,
 					short_text,
 					task->task_pool,
-					part);
+					part,
+					part->mime_part);
 
 			if (io) {
 				gboolean skip_existing = FALSE;
@@ -2737,7 +2745,8 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 								mime_part->parsed_data.len >= min_bytes)) {
 						io = fuzzy_cmd_from_data_part (rule, c, flag, value,
 								task->task_pool,
-								image->parent->digest);
+								image->parent->digest,
+								mime_part);
 						if (io) {
 							gboolean skip_existing = FALSE;
 
@@ -2765,7 +2774,8 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 							io = fuzzy_cmd_from_image_part (rule, c, flag,
 									value,
 									task->task_pool,
-									image);
+									image,
+									mime_part);
 							if (io) {
 								gboolean skip_existing = FALSE;
 
@@ -2797,7 +2807,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 				if (min_bytes == 0 || mime_part->parsed_data.len >= min_bytes) {
 					io = fuzzy_cmd_from_data_part (rule, c, flag, value,
 							task->task_pool,
-							mime_part->digest);
+							mime_part->digest, mime_part);
 					if (io) {
 						gboolean skip_existing = FALSE;
 
