@@ -240,7 +240,11 @@ exports.check_mime_part = function(task, part, rule_id)
     return true,false
   end
 
-  return mime_types_check(task, part, rule)
+  if part:get_filename() then
+    return mime_types_check(task, part, rule)
+  end
+
+  return false,false
 end
 
 return exports
