@@ -813,7 +813,7 @@ local function check_mime_type(task)
     return ext[1],ext[2],parts
   end
 
-  local function check_filename(fname, ct, is_archive)
+  local function check_filename(fname, ct, is_archive, part)
     local ext,ext2,parts = gen_extension(fname)
     -- ext is the last extension, LOWERCASED
     -- ext2 is the one before last extension LOWERCASED
@@ -834,12 +834,16 @@ local function check_mime_type(task)
           -- Double extension + bad extension == VERY bad
           task:insert_result(settings['symbol_double_extension'], badness_mult,
             string.format(".%s.%s", ext2, ext))
+          task:insert_result('MIME_TRACE', 0.0,
+              string.format("%s:%s", part:get_id(), '-'))
           return
         end
       end
       if badness_mult then
         -- Just bad extension
         task:insert_result(settings['symbol_bad_extension'], badness_mult, ext)
+        task:insert_result('MIME_TRACE', 0.0,
+            string.format("%s:%s", part:get_id(), '-'))
       end
     end
 
@@ -861,6 +865,8 @@ local function check_mime_type(task)
         if settings['archive_extensions'][ext] then
           -- Archive in archive
           task:insert_result(settings['symbol_archive_in_archive'], 1.0, ext)
+          task:insert_result('MIME_TRACE', 0.0,
+              string.format("%s:%s", part:get_id(), '-'))
         end
       else
         if ext2 then
@@ -871,7 +877,10 @@ local function check_mime_type(task)
             -- Exclude multipart archive extensions, e.g. .zip.001
             and not string.match(ext, '^%d+$')
           then
-            task:insert_result(settings['symbol_archive_in_archive'], 1.0, string.format(".%s.%s", ext2, ext))
+            task:insert_result(settings['symbol_archive_in_archive'],
+                1.0, string.format(".%s.%s", ext2, ext))
+            task:insert_result('MIME_TRACE', 0.0,
+                string.format("%s:%s", part:get_id(), '-'))
           end
         else
           check_extension(settings['bad_extensions'][ext], nil)
@@ -905,6 +914,8 @@ local function check_mime_type(task)
 
       if not mtype then
         task:insert_result(settings['symbol_unknown'], 1.0, 'missing content type')
+        task:insert_result('MIME_TRACE', 0.0,
+            string.format("%s:%s", p:get_id(), '~'))
       else
         -- Check for attachment
         local filename = p:get_filename()
@@ -912,7 +923,7 @@ local function check_mime_type(task)
 
         if filename then
           filename = filename:gsub('[^%s%g]', '?')
-          check_filename(filename, ct, false)
+          check_filename(filename, ct, false, p)
         end
 
         if p:is_archive() then
@@ -932,6 +943,8 @@ local function check_mime_type(task)
 
           if arch:is_encrypted() then
             task:insert_result(settings['symbol_encrypted_archive'], 1.0, filename)
+            task:insert_result('MIME_TRACE', 0.0,
+                string.format("%s:%s", p:get_id(), '-'))
           end
 
           if check then
@@ -944,11 +957,14 @@ local function check_mime_type(task)
               end
 
               if f['encrypted'] then
-                task:insert_result(settings['symbol_encrypted_archive'], 1.0, f['name'])
+                task:insert_result(settings['symbol_encrypted_archive'],
+                    1.0, f['name'])
+                task:insert_result('MIME_TRACE', 0.0,
+                    string.format("%s:%s", p:get_id(), '-'))
               end
 
               if f['name'] then
-                check_filename(f['name'], nil, true)
+                check_filename(f['name'], nil, true, p)
               end
             end
           end
@@ -962,8 +978,12 @@ local function check_mime_type(task)
             if n then
               if n > 0 then
                 task:insert_result(settings['symbol_bad'], n, ct)
+                task:insert_result('MIME_TRACE', 0.0,
+                    string.format("%s:%s", p:get_id(), '-'))
               elseif n < 0 then
                 task:insert_result(settings['symbol_good'], -n, ct)
+                task:insert_result('MIME_TRACE', 0.0,
+                    string.format("%s:%s", p:get_id(), '+'))
               end
             else
               logger.warnx(task, 'unknown value: "%s" for content type %s in the map',
@@ -971,6 +991,8 @@ local function check_mime_type(task)
             end
           else
             task:insert_result(settings['symbol_unknown'], 1.0, ct)
+            task:insert_result('MIME_TRACE', 0.0,
+                string.format("%s:%s", p:get_id(), '~'))
           end
         end
       end
@@ -1075,6 +1097,13 @@ if opts then
       name = settings['symbol_bad_extension'],
       parent = id,
       group = 'mime_types',
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual,nostat',
+      name = 'MIME_TRACE',
+      parent = id,
+      group = 'mime_types',
+      score = 0,
     })
   else
     lua_util.disable_module(N, "config")
