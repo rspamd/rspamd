@@ -115,13 +115,14 @@ exports.process_rule = function(rule)
 end
 
 local function check_length(task, part, rule)
-  local length_ok = true
+  local bytes = part:get_length()
+  local length_ok = bytes > 0
 
   local id = part:get_id()
   lua_util.debugm(N, task, 'check size of part %s', id)
 
-  if rule.min_bytes then
-    local bytes = part:get_length()
+  if length_ok and rule.min_bytes > 0 then
+
     local adjusted_bytes = bytes
 
     if part:is_text() then
@@ -151,18 +152,18 @@ local function check_text_part(task, part, rule, text)
 
   local id = part:get_id()
   lua_util.debugm(N, task, 'check text part %s', id)
+  local wcnt = text:get_words_count()
 
   if rule.text_shingles then
     -- Check number of words
-    local wcnt = text:get_words_count()
-    if rule.min_length and wcnt < rule.min_length then
+    if rule.min_length > 0 and wcnt < rule.min_length then
       lua_util.debugm(N, task, 'text has less than %s words: %s; disable shingles',
           rule.min_length, wcnt)
       allow_shingles = false
     else
       lua_util.debugm(N, task, 'allow shingles in text %s, %s words',
           id, wcnt)
-      allow_shingles = true
+      allow_shingles = wcnt > 0
     end
 
     if not rule.short_text_direct_hash and not allow_shingles then
@@ -173,9 +174,10 @@ local function check_text_part(task, part, rule, text)
             'allow direct hash for short text %s, %s words',
             id, wcnt)
         allow_direct = check_length(task, part, rule)
+      else
+        allow_direct = wcnt > 0
       end
     end
-
   else
     lua_util.debugm(N, task,
         'disable shingles in text %s', id)
@@ -183,6 +185,12 @@ local function check_text_part(task, part, rule, text)
   end
 
   return allow_direct,allow_shingles
+end
+
+local function has_sane_text_parts(task)
+  local text_parts = task:get_text_parts() or {}
+
+  return fun.any(function(tp) return tp:get_words_count() > 10 end, text_parts)
 end
 
 local function check_image_part(task, part, rule, image)
@@ -194,7 +202,7 @@ local function check_image_part(task, part, rule, image)
   local id = part:get_id()
   lua_util.debugm(N, task, 'check image part %s', id)
 
-  if rule.min_width or rule.min_height then
+  if rule.min_width > 0 or rule.min_height > 0 then
     -- Check dimensions
     local min_width = rule.min_width or rule.min_height
     local min_height = rule.min_height or rule.min_width
@@ -203,10 +211,19 @@ local function check_image_part(task, part, rule, image)
 
     if height and width then
       if height < min_height or width < min_width then
-        lua_util.debugm(N, task, 'skip image part %s as it does not meet minimum sizes: %sx%s < %sx%s',
-            id, width, height, min_width, min_height)
 
-        return false, false
+
+        if not has_sane_text_parts(task) then
+          lua_util.debugm(N, task, 'allow image part %s (%sx%s): no large enough text part found',
+              id, width, height)
+          return true, false
+        else
+          lua_util.debugm(N, task, 'skip image part %s as it does not meet minimum sizes: %sx%s < %sx%s',
+              id, width, height, min_width, min_height)
+          return false, false
+        end
+
+
       else
         lua_util.debugm(N, task, 'allow image part %s: %sx%s',
             id, width, height)
