@@ -55,10 +55,10 @@ local policy_schema = ts.shape{
   min_length = ts.number + ts.string / tonumber,
   text_multiplier = ts.number,
   mime_types = ts.array_of(ts.string),
-  scan_archives = ts.bool,
-  short_text_direct_hash = ts.bool,
-  text_shingles = ts.bool,
-  skip_imagess = ts.bool,
+  scan_archives = ts.boolean,
+  short_text_direct_hash = ts.boolean,
+  text_shingles = ts.boolean,
+  skip_imagess = ts.boolean,
 }
 
 
@@ -262,6 +262,10 @@ exports.check_mime_part = function(task, part, rule_id)
   end
 
   return false,false
+end
+
+exports.cleanup_rules = function()
+  rules = {}
 end
 
 return exports
