@@ -204,12 +204,29 @@ local function mime_types_check(task, part, rule)
   if not t then return false, false end
 
   local ct = string.format('%s/%s', t, st)
+  local id = part:get_id()
+
+  -- For bad mime mime parts we implicitly enable fuzzy check
+  local mime_trace = task:get_symbol('MIME_TRACE')
+  local opts = {}
+
+  if mime_trace then
+    opts = mime_trace.options
+  end
+  opts = fun.tomap(fun.map(function(opt)
+    local elts = lua_util.str_split(opt, ':')
+    return elts[1],elts[2]
+  end, opts))
+
+  if opts[id] and opts[id] == '-' then
+    return check_length(task, part, rule),false
+  end
 
   if rule.mime_types then
     if fun.any(function(gl_re)
       if gl_re:match(ct) then return true else return false end
     end, rule.mime_types) then
-      return true, true
+      return check_length(task, part, rule),false
     end
 
     return false, false
