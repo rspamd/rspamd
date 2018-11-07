@@ -996,12 +996,12 @@ local function reputation_redis_get_token(task, rule, token, continuation_cb)
       end
 
     elseif err then
-      rspamd_logger.errx(task, 'got error while getting reputation keys %s: %s',
-        key, err)
+      rspamd_logger.errx(task, 'rule %s - got error while getting reputation keys %s: %s',
+        rule['symbol'], key, err)
       continuation_cb(err, key, nil)
     else
-      rspamd_logger.errx(task, 'got error while getting reputation keys %s: %s',
-          key, "unknown error")
+      rspamd_logger.errx(task, 'rule %s - got error while getting reputation keys %s: %s',
+        rule['symbol'], key, "unknown error")
       continuation_cb("unknown error", key, nil)
     end
   end
@@ -1020,8 +1020,8 @@ local function reputation_redis_set_token(task, rule, token, values, continuatio
 
   local function redis_set_cb(err, data)
     if err then
-      rspamd_logger.errx(task, 'got error while setting reputation keys %s: %s',
-        key, err)
+      rspamd_logger.errx(task, 'rule %s - got error while setting reputation keys %s: %s',
+        rule['symbol'], key, err)
       if continuation_cb then
         continuation_cb(err, key)
       end
