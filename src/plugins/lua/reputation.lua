@@ -702,11 +702,13 @@ local function generic_reputation_filter(task, rule)
   if selector_res then
     if type(selector_res) == 'table' then
       fun.each(function(e)
-        lua_util.debugm(N, task, 'check generic reputation %s', e)
+        lua_util.debugm(N, task, 'check generic reputation (%s) %s',
+          rule['symbol'], e)
         rule.backend.get_token(task, rule, e, tokens_cb)
       end, selector_res)
     else
-      lua_util.debugm(N, task, 'check generic reputation %s', selector_res)
+      lua_util.debugm(N, task, 'check generic reputation (%s) %s',
+        rule['symbol'], selector_res)
       rule.backend.get_token(task, rule, selector_res, tokens_cb)
     end
   end
@@ -731,13 +733,13 @@ local function generic_reputation_idempotent(task, rule)
   if need_set then
     if type(selector_res) == 'table' then
       fun.each(function(e)
-        lua_util.debugm(N, task, 'set generic selector %s = %s',
-            e, token)
+        lua_util.debugm(N, task, 'set generic selector (%s) %s = %s',
+            rule['symbol'], e, token)
         rule.backend.set_token(task, rule, e, token)
       end, selector_res)
     else
-      lua_util.debugm(N, task, 'set generic selector %s = %s',
-          selector_res, token)
+      lua_util.debugm(N, task, 'set generic selector (%s) %s = %s',
+          rule['symbol'], selector_res, token)
       rule.backend.set_token(task, rule, selector_res, token)
     end
   end
@@ -984,12 +986,12 @@ local function reputation_redis_get_token(task, rule, token, continuation_cb)
             values[data[i]] = ndata
           end
         end
-        lua_util.debugm(N, task, 'got values for key %s -> %s',
-            key, values)
+        lua_util.debugm(N, task, 'rule %s - got values for key %s -> %s',
+            rule['symbol'], key, values)
         continuation_cb(nil, key, values)
       else
-        rspamd_logger.errx(task, 'invalid type while getting reputation keys %s: %s',
-          key, type(data))
+        rspamd_logger.errx(task, 'rule %s - invalid type while getting reputation keys %s: %s',
+          rule['symbol'], key, type(data))
         continuation_cb("invalid type", key, nil)
       end
 
@@ -1036,8 +1038,8 @@ local function reputation_redis_set_token(task, rule, token, values, continuatio
     table.insert(args, k)
     table.insert(args, v)
   end
-  lua_util.debugm(N, task, 'set values for key %s -> %s',
-      key, values)
+  lua_util.debugm(N, task, 'rule %s - set values for key %s -> %s',
+      rule['symbol'], key, values)
   local ret = lua_redis.exec_redis_script(rule.backend.script_set,
       {task = task, is_write = true},
       redis_set_cb,
