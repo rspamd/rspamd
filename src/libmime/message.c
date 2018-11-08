@@ -33,6 +33,7 @@
 #endif
 
 #include <math.h>
+#include <unicode/uchar.h>
 
 #define GTUBE_SYMBOL "GTUBE"
 
@@ -202,7 +203,19 @@ rspamd_mime_part_create_words (struct rspamd_task *task,
 	enum rspamd_tokenize_type tok_type;
 
 	if (IS_PART_UTF (part)) {
+
+#if U_ICU_VERSION_MAJOR_NUM < 50
+		/* Hack to prevent hang with Thai in old libicu */
+		if (part->unicode_scripts & RSPAMD_UNICODE_THAI) {
+			msg_info_task ("enable workaround for Thai characters for old libicu")
+			tok_type = RSPAMD_TOKENIZE_RAW;
+		}
+		else {
+			tok_type = RSPAMD_TOKENIZE_UTF;
+		}
+#else
 		tok_type = RSPAMD_TOKENIZE_UTF;
+#endif
 	}
 	else {
 		tok_type = RSPAMD_TOKENIZE_RAW;
