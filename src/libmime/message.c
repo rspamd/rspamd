@@ -206,12 +206,30 @@ rspamd_mime_part_create_words (struct rspamd_task *task,
 
 #if U_ICU_VERSION_MAJOR_NUM < 50
 		/* Hack to prevent hang with Thai in old libicu */
-		if (part->unicode_scripts & RSPAMD_UNICODE_THAI) {
-			msg_info_task ("enable workaround for Thai characters for old libicu")
-			tok_type = RSPAMD_TOKENIZE_RAW;
-		}
-		else {
-			tok_type = RSPAMD_TOKENIZE_UTF;
+		const gchar *p = part->utf_stripped_content->data, *end;
+		guint i = 0;
+		end = p + part->utf_stripped_content->len;
+		gint32 uc, sc;
+
+		tok_type = RSPAMD_TOKENIZE_UTF;
+
+		while (p + i < end) {
+			U8_NEXT (p, i, part->utf_stripped_content->len, uc);
+
+			if (((gint32) uc) < 0) {
+				tok_type = RSPAMD_TOKENIZE_RAW;
+				break;
+			}
+
+			if (u_isalpha (uc)) {
+				sc = ublock_getCode (uc);
+
+				if (sc == UBLOCK_THAI) {
+					msg_info_task ("enable workaround for Thai characters for old libicu");
+					tok_type = RSPAMD_TOKENIZE_RAW;
+					break;
+				}
+			}
 		}
 #else
 		tok_type = RSPAMD_TOKENIZE_UTF;
