@@ -272,7 +272,7 @@ rspamadm_execute_lua_ucl_subr (gint argc, gchar **argv,
 
 	for (i = 1; i < argc; i ++) {
 		lua_pushstring (L, argv[i]);
-		lua_rawseti (L, -1, i);
+		lua_rawseti (L, -2, i);
 	}
 
 	/* Push results */
