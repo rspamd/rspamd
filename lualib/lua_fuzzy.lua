@@ -126,13 +126,14 @@ local function check_length(task, part, rule)
     local adjusted_bytes = bytes
 
     if part:is_text() then
+      bytes = part:get_text():get_length()
       if rule.text_multiplier then
         adjusted_bytes = bytes * rule.text_multiplier
       end
     end
 
     if rule.min_bytes > adjusted_bytes then
-      lua_util.debugm(N, task, 'skip part of length %s (%s adjusted)' ..
+      lua_util.debugm(N, task, 'skip part of length %s (%s adjusted) ' ..
           'as it has less than %s bytes',
           bytes, adjusted_bytes, rule.min_bytes)
       length_ok = false
@@ -244,11 +245,11 @@ local function mime_types_check(task, part, rule)
   lua_util.debugm(N, task, 'check binary part %s: %s', id, ct)
 
   -- For bad mime mime parts we implicitly enable fuzzy check
-  local mime_trace = task:get_symbol('MIME_TRACE')
+  local mime_trace = (task:get_symbol('MIME_TRACE') or {})[1]
   local opts = {}
 
   if mime_trace then
-    opts = mime_trace.options
+    opts = mime_trace.options or opts
   end
   opts = fun.tomap(fun.map(function(opt)
     local elts = lua_util.str_split(opt, ':')
