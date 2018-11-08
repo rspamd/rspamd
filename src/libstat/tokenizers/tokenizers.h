@@ -57,6 +57,8 @@ gpointer rspamd_tokenizer_osb_get_config (rspamd_mempool_t *pool,
 		struct rspamd_tokenizer_config *cf,
 		gsize *len);
 
+
+GArray * rspamd_tokenize_subject (struct rspamd_task *task);
 #endif
 /*
  * vi:ts=4

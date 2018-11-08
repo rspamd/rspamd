@@ -313,10 +313,8 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 {
 	struct rspamd_mime_text_part *part;
 	rspamd_cryptobox_hash_state_t hst;
-	rspamd_stat_token_t *tok;
 	rspamd_token_t *st_tok;
 	GArray *words;
-	gchar *sub = NULL;
 	guint i, reserved_len = 0;
 	gdouble *pdiff;
 	guchar hout[rspamd_cryptobox_HASHBYTES];
@@ -361,29 +359,8 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	}
 
 	if (task->subject != NULL) {
-		sub = task->subject;
-	}
-
-	if (sub != NULL) {
-		UText utxt = UTEXT_INITIALIZER;
-		UErrorCode uc_err = U_ZERO_ERROR;
-		gsize slen = strlen (sub);
-
-		utext_openUTF8 (&utxt,
-				sub,
-				slen,
-				&uc_err);
-
-		words = rspamd_tokenize_text (sub, slen, &utxt, RSPAMD_TOKENIZE_UTF,
-				NULL, NULL, NULL);
-
+		words = rspamd_tokenize_subject (task);
 		if (words != NULL) {
-
-			for (i = 0; i < words->len; i ++) {
-				tok = &g_array_index (words, rspamd_stat_token_t, i);
-				tok->flags |= RSPAMD_STAT_TOKEN_FLAG_SUBJECT;
-			}
-
 			st_ctx->tokenizer->tokenize_func (st_ctx,
 					task->task_pool,
 					words,
@@ -394,8 +371,6 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 			rspamd_mempool_add_destructor (task->task_pool,
 					rspamd_array_free_hard, words);
 		}
-
-		utext_close (&utxt);
 	}
 
 	rspamd_stat_tokenize_parts_metadata (st_ctx, task);

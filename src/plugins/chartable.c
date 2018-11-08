@@ -622,24 +622,9 @@ chartable_symbol_callback (struct rspamd_task *task,
 	if (task->subject != NULL) {
 		GArray *words;
 		rspamd_stat_token_t *w;
-		guint i;
 		gdouble cur_score = 0.0;
 
-		UText utxt = UTEXT_INITIALIZER;
-		UErrorCode uc_err = U_ZERO_ERROR;
-		gsize slen = strlen (task->subject);
-
-		utext_openUTF8 (&utxt,
-				task->subject,
-				slen,
-				&uc_err);
-
-		words = rspamd_tokenize_text (task->subject, slen,
-				&utxt,
-				RSPAMD_TOKENIZE_UTF,
-				NULL,
-				NULL,
-				NULL);
+		words = rspamd_tokenize_subject (task);
 
 		if (words && words->len > 0) {
 			for (i = 0; i < words->len; i++) {
@@ -664,8 +649,6 @@ chartable_symbol_callback (struct rspamd_task *task,
 		if (words) {
 			g_array_free (words, TRUE);
 		}
-
-		utext_close (&utxt);
 	}
 
 	rspamd_symcache_finalize_item (task, item);

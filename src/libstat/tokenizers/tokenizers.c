@@ -463,6 +463,70 @@ start_over:
 
 #undef SHIFT_EX
 
-/*
- * vi:ts=4
- */
+GArray *
+rspamd_tokenize_subject (struct rspamd_task *task)
+{
+	UText utxt = UTEXT_INITIALIZER;
+	UErrorCode uc_err = U_ZERO_ERROR;
+	gsize slen;
+	gboolean valid_utf = TRUE;
+	GArray *words = NULL;
+	guint i = 0;
+	gint32 uc;
+	rspamd_stat_token_t *tok;
+
+	if (task->subject) {
+		const gchar *p = task->subject;
+
+		slen = strlen (task->subject);
+
+		while (i < slen) {
+			U8_NEXT (p, i, slen, uc);
+
+			if (((gint32) uc) < 0) {
+				valid_utf = FALSE;
+				break;
+			}
+#if U_ICU_VERSION_MAJOR_NUM < 50
+			if (u_isalpha (uc)) {
+				gint32 sc = ublock_getCode (uc);
+
+				if (sc == UBLOCK_THAI) {
+					valid_utf = FALSE;
+					msg_info_task ("enable workaround for Thai characters for old libicu");
+					break;
+				}
+			}
+#endif
+		}
+
+		if (valid_utf) {
+			utext_openUTF8 (&utxt,
+					task->subject,
+					slen,
+					&uc_err);
+
+			words = rspamd_tokenize_text (task->subject, slen,
+					&utxt, RSPAMD_TOKENIZE_UTF,
+					task->cfg, NULL, NULL);
+
+			utext_close (&utxt);
+		}
+		else {
+			words = rspamd_tokenize_text (task->subject, slen,
+					NULL, RSPAMD_TOKENIZE_RAW,
+					task->cfg, NULL, NULL);
+		}
+	}
+
+	if (words != NULL) {
+
+		for (i = 0; i < words->len; i++) {
+			tok = &g_array_index (words, rspamd_stat_token_t, i);
+			tok->flags |= RSPAMD_STAT_TOKEN_FLAG_SUBJECT;
+		}
+	}
+
+	return words;
+}
+
