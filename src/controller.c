@@ -2760,13 +2760,32 @@ rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_custom_controller_command *cmd;
 	gchar *url_str;
+	struct http_parser_url u;
+	rspamd_ftok_t lookup;
 
-	url_str = rspamd_fstring_cstr (msg->url);
+	http_parser_parse_url (msg->url->str, msg->url->len, TRUE, &u);
+
+	if (u.field_set & (1 << UF_PATH)) {
+		guint unnorm_len;
+		lookup.begin = msg->url->str + u.field_data[UF_PATH].off;
+		lookup.len = u.field_data[UF_PATH].len;
+
+		rspamd_http_normalize_path_inplace ((gchar *)lookup.begin,
+				lookup.len,
+				&unnorm_len);
+		lookup.len = unnorm_len;
+	}
+	else {
+		lookup.begin = msg->url->str;
+		lookup.len = msg->url->len;
+	}
+
+	url_str = rspamd_ftok_cstr (&lookup);
 	cmd = g_hash_table_lookup (session->ctx->custom_commands, url_str);
 	g_free (url_str);
 
 	if (cmd == NULL || cmd->handler == NULL) {
-		msg_err_session ("custom command %V has not been found", msg->url);
+		msg_err_session ("custom command %T has not been found", &lookup);
 		rspamd_controller_send_error (conn_ent, 404, "No command associated");
 		return 0;
 	}
@@ -2781,6 +2800,33 @@ rspamd_controller_handle_custom (struct rspamd_http_connection_entry *conn_ent,
 			400,
 			"Empty body is not permitted");
 		return 0;
+	}
+
+	/* Transfer query arguments to headers */
+	if (u.field_set & (1u << UF_QUERY)) {
+		GHashTable *query_args;
+		GHashTableIter it;
+		gpointer k, v;
+		rspamd_ftok_t *key, *value;
+
+		/* In case if we have a query, we need to store it somewhere */
+		query_args = rspamd_http_message_parse_query (msg);
+
+		/* Insert the rest of query params as HTTP headers */
+		g_hash_table_iter_init (&it, query_args);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			key = k;
+			value = v;
+			/* Steal strings */
+			g_hash_table_iter_steal (&it);
+			url_str = rspamd_ftok_cstr (key);
+			rspamd_http_message_add_header_len (msg, url_str,
+					value->begin, value->len);
+			g_free (url_str);
+		}
+
+		g_hash_table_unref (query_args);
 	}
 
 	return cmd->handler (conn_ent, msg, cmd->ctx);
