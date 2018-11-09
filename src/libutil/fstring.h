@@ -87,12 +87,17 @@ void rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len);
 #define rspamd_fstring_clear(s) rspamd_fstring_erase(s, 0, s->len)
 
 /**
- * Convert fixed string to a zero terminated string. This string should be
+ * Convert fixed string to a zero terminated string. This string must be
  * freed by a caller
  */
 char * rspamd_fstring_cstr (const rspamd_fstring_t *str)
 		G_GNUC_WARN_UNUSED_RESULT;
-
+/**
+ * Convert fixed string usign ftok_t to a zero terminated string. This string must be
+ * freed by a caller
+ */
+char * rspamd_ftok_cstr (const rspamd_ftok_t *str)
+		G_GNUC_WARN_UNUSED_RESULT;
 /*
  * Return fast hash value for fixed string converted to lowercase
  */

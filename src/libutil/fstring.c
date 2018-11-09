@@ -223,8 +223,6 @@ rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len)
 	}
 }
 
-char *rspamd_fstring_cstr (const rspamd_fstring_t *str);
-
 /* Compat code */
 static guint32
 fstrhash_c (gchar c, guint32 hval)
@@ -413,6 +411,22 @@ rspamd_fstring_cstr (const rspamd_fstring_t *s)
 
 	result = g_malloc (s->len + 1);
 	memcpy (result, s->str, s->len);
+	result[s->len] = '\0';
+
+	return result;
+}
+
+char *
+rspamd_ftok_cstr (const rspamd_ftok_t *s)
+{
+	char *result;
+
+	if (s == NULL) {
+		return NULL;
+	}
+
+	result = g_malloc (s->len + 1);
+	memcpy (result, s->begin, s->len);
 	result[s->len] = '\0';
 
 	return result;
