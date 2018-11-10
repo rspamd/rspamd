@@ -136,6 +136,7 @@ rspamd_redis_expand_object (const gchar *pattern,
 	GString *tb;
 	const gchar *rcpt = NULL;
 	gint err_idx;
+	gboolean expansion_errored = FALSE;
 
 	g_assert (ctx != NULL);
 	stcf = ctx->stcf;
@@ -198,6 +199,9 @@ rspamd_redis_expand_object (const gchar *pattern,
 				if (elt) {
 					tlen += strlen (elt);
 				}
+				else {
+					expansion_errored = TRUE;
+				}
 				break;
 			case 'r':
 
@@ -211,11 +215,15 @@ rspamd_redis_expand_object (const gchar *pattern,
 				if (elt) {
 					tlen += strlen (elt);
 				}
+				else {
+					expansion_errored = TRUE;
+				}
 				break;
 			case 'l':
 				if (stcf->label) {
 					tlen += strlen (stcf->label);
 				}
+				/* Label miss is OK */
 				break;
 			case 's':
 				if (ctx->new_schema) {
@@ -253,7 +261,8 @@ rspamd_redis_expand_object (const gchar *pattern,
 		}
 	}
 
-	if (target == NULL || task == NULL) {
+
+	if (target == NULL || task == NULL || expansion_errored) {
 		return tlen;
 	}
 
@@ -1495,6 +1504,7 @@ rspamd_redis_runtime (struct rspamd_task *task,
 	struct redis_stat_ctx *ctx = REDIS_CTX (c);
 	struct redis_stat_runtime *rt;
 	struct upstream *up;
+	char *object_expanded = NULL;
 	rspamd_inet_addr_t *addr;
 
 	g_assert (ctx != NULL);
@@ -1523,15 +1533,22 @@ rspamd_redis_runtime (struct rspamd_task *task,
 		return NULL;
 	}
 
+	if (rspamd_redis_expand_object (ctx->redis_object, ctx, task,
+			&object_expanded) == 0) {
+		msg_err_task ("expansion for learning failed for symbol %s "
+				 "(maybe learning per user classifier with no user or recipient)",
+				 stcf->symbol);
+		return NULL;
+	}
+
 	rt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*rt));
 	rspamd_mempool_add_destructor (task->task_pool,
 			rspamd_gerror_free_maybe, &rt->err);
-	rspamd_redis_expand_object (ctx->redis_object, ctx, task,
-			&rt->redis_object_expanded);
 	rt->selected = up;
 	rt->task = task;
 	rt->ctx = ctx;
 	rt->stcf = stcf;
+	rt->redis_object_expanded = object_expanded;
 
 	addr = rspamd_upstream_addr (up);
 	g_assert (addr != NULL);
