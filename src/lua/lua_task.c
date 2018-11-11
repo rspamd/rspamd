@@ -5229,19 +5229,16 @@ lua_text_fromstring (lua_State *L)
 	LUA_TRACE_POINT;
 	const gchar *str;
 	gsize l = 0;
-	struct rspamd_lua_text *t, **pt;
-
+	struct rspamd_lua_text *t;
 
 	str = luaL_checklstring (L, 1, &l);
 
 	if (str) {
-		t = g_malloc (sizeof (*t));
+		t = lua_newuserdata (L, sizeof (*t));
 		t->start = g_malloc (l + 1);
 		rspamd_strlcpy ((char *)t->start, str, l + 1);
 		t->len = l;
 		t->flags = RSPAMD_TEXT_FLAG_OWN;
-		pt = lua_newuserdata (L, sizeof (*pt));
-		*pt = t;
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
 	}
 	else {
@@ -5456,8 +5453,9 @@ void
 luaopen_text (lua_State *L)
 {
 	rspamd_lua_new_class (L, "rspamd{text}", textlib_m);
-	rspamd_lua_add_preload (L, "rspamd_text", lua_load_text);
 	lua_pop (L, 1);
+
+	rspamd_lua_add_preload (L, "rspamd_text", lua_load_text);
 }
 
 void
