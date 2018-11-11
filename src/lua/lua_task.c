@@ -5334,28 +5334,37 @@ lua_text_save_in_file (lua_State *L)
 	struct rspamd_lua_text *t = lua_check_text (L, 1);
 	const gchar *fname = NULL;
 	guint mode = 00644;
-	gint fd;
+	gint fd = -1;
+	gboolean need_close = FALSE;
 
 	if (t != NULL) {
 		if (lua_type (L, 2) == LUA_TSTRING) {
 			fname = luaL_checkstring (L, 2);
-		}
-		if (lua_type (L, 3) == LUA_TNUMBER) {
-			mode = lua_tonumber (L, 3);
-		}
 
-		if (fname) {
-			fd = rspamd_file_xopen (fname, O_CREAT | O_WRONLY | O_EXCL, mode, 0);
-
-			if (fd == -1) {
-				lua_pushboolean (L, false);
-				lua_pushstring (L, strerror (errno));
-
-				return 2;
+			if (lua_type (L, 3) == LUA_TNUMBER) {
+				mode = lua_tonumber (L, 3);
 			}
 		}
-		else {
-			fd = STDOUT_FILENO;
+		else if (lua_type (L, 2) == LUA_TNUMBER) {
+			/* Created fd */
+			fd = lua_tonumber (L, 2);
+		}
+
+		if (fd == -1) {
+			if (fname) {
+				fd = rspamd_file_xopen (fname, O_CREAT | O_WRONLY | O_EXCL, mode, 0);
+
+				if (fd == -1) {
+					lua_pushboolean (L, false);
+					lua_pushstring (L, strerror (errno));
+
+					return 2;
+				}
+				need_close = TRUE;
+			}
+			else {
+				fd = STDOUT_FILENO;
+			}
 		}
 
 		if (write (fd, t->start, t->len) == -1) {
@@ -5369,7 +5378,7 @@ lua_text_save_in_file (lua_State *L)
 			return 2;
 		}
 
-		if (fd != STDOUT_FILENO) {
+		if (need_close) {
 			close (fd);
 		}
 
