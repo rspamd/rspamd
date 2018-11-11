@@ -1066,12 +1066,18 @@ static const struct luaL_reg archivelib_m[] = {
 };
 
 /* Blob methods */
+LUA_FUNCTION_DEF (text, fromstring);
 LUA_FUNCTION_DEF (text, len);
 LUA_FUNCTION_DEF (text, str);
 LUA_FUNCTION_DEF (text, ptr);
 LUA_FUNCTION_DEF (text, save_in_file);
 LUA_FUNCTION_DEF (text, take_ownership);
 LUA_FUNCTION_DEF (text, gc);
+
+static const struct luaL_reg textlib_f[] = {
+	LUA_INTERFACE_DEF (text, fromstring),
+	{NULL, NULL}
+};
 
 static const struct luaL_reg textlib_m[] = {
 	LUA_INTERFACE_DEF (text, len),
@@ -5218,6 +5224,35 @@ lua_archive_get_filename (lua_State *L)
 
 /* Text methods */
 static gint
+lua_text_fromstring (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	const gchar *str;
+	gsize l = 0;
+	struct rspamd_lua_text *t, **pt;
+
+
+	str = luaL_checklstring (L, 1, &l);
+
+	if (str) {
+		t = g_malloc (sizeof (*t));
+		t->start = g_malloc (l + 1);
+		rspamd_strlcpy ((char *)t->start, str, l + 1);
+		t->len = l;
+		t->flags = RSPAMD_TEXT_FLAG_OWN;
+		pt = lua_newuserdata (L, sizeof (*pt));
+		*pt = t;
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+
+	return 1;
+}
+
+static gint
 lua_text_len (lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -5382,6 +5417,16 @@ lua_load_task (lua_State * L)
 	return 1;
 }
 
+static gint
+lua_load_text (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, textlib_f);
+
+	return 1;
+}
+
+
 static void
 luaopen_archive (lua_State * L)
 {
@@ -5411,6 +5456,7 @@ void
 luaopen_text (lua_State *L)
 {
 	rspamd_lua_new_class (L, "rspamd{text}", textlib_m);
+	rspamd_lua_add_preload (L, "rspamd_text", lua_load_text);
 	lua_pop (L, 1);
 }
 
