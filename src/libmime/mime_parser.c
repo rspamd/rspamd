@@ -1286,7 +1286,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 	if (nst->boundaries) {
 		struct rspamd_mime_boundary *boundary, *start_boundary = NULL,
 				*end_boundary = NULL;
-		goffset cur_offset = st->pos - st->start,
+		goffset cur_offset = nst->pos - nst->start,
 			end_offset = st->end - st->start;
 		guint sel_idx = 0;
 
