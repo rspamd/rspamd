@@ -770,10 +770,10 @@ exports.parse_selector = function(cfg, str)
           map_type = 'string',
           process = function(inp, t, args)
             if t == 'userdata' then
-              return inp[method_name](inp, args),string
+              return inp[method_name](inp, args),'string'
             else
               -- Table
-              return inp[method_name],string
+              return inp[method_name],'string'
             end
           end,
         }
