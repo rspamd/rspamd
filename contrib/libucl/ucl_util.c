@@ -1333,57 +1333,49 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 	res = ucl_parser_add_chunk_full (parser, buf, buflen, params->priority,
 			params->strat, params->parse_type);
 
-	if (!res) {
-		if (!params->must_exist) {
-			/* Free error */
-			utstring_free (parser->err);
-			parser->err = NULL;
-			res = true;
+	if (res) {
+		/* Stop nesting the include, take 1 level off the stack */
+		if (params->prefix != NULL && nest_obj != NULL) {
+			parser->stack = st->next;
+			UCL_FREE (sizeof (struct ucl_stack), st);
 		}
-	}
 
-	/* Stop nesting the include, take 1 level off the stack */
-	if (params->prefix != NULL && nest_obj != NULL) {
-		parser->stack = st->next;
-		UCL_FREE (sizeof (struct ucl_stack), st);
-	}
-
-	/* Remove chunk from the stack */
-	chunk = parser->chunks;
-	if (chunk != NULL) {
-		parser->chunks = chunk->next;
-		ucl_chunk_free (chunk);
-		parser->recursion --;
-	}
-
-	/* Restore old file vars */
-	if (parser->cur_file) {
-		free (parser->cur_file);
-	}
-
-	parser->cur_file = old_curfile;
-	DL_FOREACH_SAFE (parser->variables, cur_var, tmp_var) {
-		if (strcmp (cur_var->var, "CURDIR") == 0 && old_curdir) {
-			DL_DELETE (parser->variables, cur_var);
-			free (cur_var->var);
-			free (cur_var->value);
-			UCL_FREE (sizeof (struct ucl_variable), cur_var);
+		/* Remove chunk from the stack */
+		chunk = parser->chunks;
+		if (chunk != NULL) {
+			parser->chunks = chunk->next;
+			ucl_chunk_free (chunk);
+			parser->recursion--;
 		}
-		else if (strcmp (cur_var->var, "FILENAME") == 0 && old_filename) {
-			DL_DELETE (parser->variables, cur_var);
-			free (cur_var->var);
-			free (cur_var->value);
-			UCL_FREE (sizeof (struct ucl_variable), cur_var);
-		}
-	}
-	if (old_filename) {
-		DL_APPEND (parser->variables, old_filename);
-	}
-	if (old_curdir) {
-		DL_APPEND (parser->variables, old_curdir);
-	}
 
-	parser->state = prev_state;
+		/* Restore old file vars */
+		if (parser->cur_file) {
+			free (parser->cur_file);
+		}
+
+		parser->cur_file = old_curfile;
+		DL_FOREACH_SAFE (parser->variables, cur_var, tmp_var) {
+			if (strcmp (cur_var->var, "CURDIR") == 0 && old_curdir) {
+				DL_DELETE (parser->variables, cur_var);
+				free (cur_var->var);
+				free (cur_var->value);
+				UCL_FREE (sizeof (struct ucl_variable), cur_var);
+			} else if (strcmp (cur_var->var, "FILENAME") == 0 && old_filename) {
+				DL_DELETE (parser->variables, cur_var);
+				free (cur_var->var);
+				free (cur_var->value);
+				UCL_FREE (sizeof (struct ucl_variable), cur_var);
+			}
+		}
+		if (old_filename) {
+			DL_APPEND (parser->variables, old_filename);
+		}
+		if (old_curdir) {
+			DL_APPEND (parser->variables, old_curdir);
+		}
+
+		parser->state = prev_state;
+	}
 
 	if (buflen > 0) {
 		ucl_munmap (buf, buflen);
