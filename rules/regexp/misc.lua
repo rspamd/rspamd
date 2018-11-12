@@ -69,6 +69,6 @@ reconf['LEAKED_PASSWORD_SCAM'] = {
   re = string.format('(%s | %s) & %s', password_in_subject,
       password_in_body, btc_wallet),
   description = 'Contains password word and BTC wallet address',
-  score = 5.0,
+  score = 7.0,
   group = 'scams'
 }
