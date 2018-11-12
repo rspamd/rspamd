@@ -35,6 +35,7 @@ enum rspamd_re_type {
 	RSPAMD_RE_BODY, /* full in SA */
 	RSPAMD_RE_SABODY, /* body in SA */
 	RSPAMD_RE_SARAWBODY, /* rawbody in SA */
+	RSPAMD_RE_WORDS, /* normalized words */
 	RSPAMD_RE_SELECTOR, /* use lua selector to process regexp */
 	RSPAMD_RE_MAX
 };

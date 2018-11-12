@@ -23,6 +23,7 @@
 #include "libutil/util.h"
 #include "libutil/regexp.h"
 #include "lua/lua_common.h"
+#include "libstat/stat_api.h"
 
 #include "khash.h"
 
@@ -1197,6 +1198,46 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 					rspamd_regexp_get_pattern (re), ret);
 			g_free (scvec);
 			g_free (lenvec);
+		}
+		break;
+	case RSPAMD_RE_WORDS:
+		if (task->text_parts->len > 0) {
+			cnt = 0;
+
+			PTR_ARRAY_FOREACH (task->text_parts, i, part) {
+				if (part->utf_words) {
+					cnt += part->utf_words->len;
+				}
+			}
+
+			if (cnt > 0) {
+				scvec = g_malloc (sizeof (*scvec) * cnt);
+				lenvec = g_malloc (sizeof (*lenvec) * cnt);
+
+				cnt = 0;
+
+				PTR_ARRAY_FOREACH (task->text_parts, i, part) {
+					guint j;
+					rspamd_stat_token_t *tok;
+
+
+					if (part->utf_words) {
+						for (j = 0; j < part->utf_words->len; j ++) {
+							tok = &g_array_index (part->utf_words, rspamd_stat_token_t, j);
+							scvec[cnt] = tok->begin;
+							lenvec[cnt++] = tok->len;
+						}
+					}
+				}
+
+				ret = rspamd_re_cache_process_regexp_data (rt, re,
+						task, scvec, lenvec, cnt, TRUE);
+
+				msg_debug_re_task ("checking sa words regexp: %s -> %d",
+						rspamd_regexp_get_pattern (re), ret);
+				g_free (scvec);
+				g_free (lenvec);
+			}
 		}
 		break;
 	case RSPAMD_RE_SELECTOR:

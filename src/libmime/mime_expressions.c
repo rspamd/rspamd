@@ -239,6 +239,10 @@ rspamd_parse_long_option (const gchar *start, gsize len,
 		ret = TRUE;
 		a->type = RSPAMD_RE_SARAWBODY;
 	}
+	else if (TYPE_CHECK (start, "words", len)) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_WORDS;
+	}
 	else if (TYPE_CHECK (start, "selector", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_SELECTOR;
