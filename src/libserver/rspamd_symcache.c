@@ -1405,7 +1405,6 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 #endif
 		dyn_item->start_msec = (t1 - task->time_real) * 1e3;
 		dyn_item->async_events = 0;
-		g_assert (checkpoint->cur_item == NULL);
 		checkpoint->cur_item = item;
 		checkpoint->items_inflight ++;
 		/* Callback now must finalize itself */
