@@ -871,10 +871,25 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 	task = st->task;
 
 	if (G_LIKELY (p < end)) {
-		blen = rspamd_memcspn (p, "\r\n", end - p);
+		gboolean seen_non_dash = FALSE;
 
-		if (blen > 0) {
+		blen = 0;
+
+		while (p < end) {
+			if (*p == '\r' || *p == '\n') {
+				break;
+			}
+			else if (*p != '-') {
+				seen_non_dash = TRUE;
+			}
+
+			blen ++;
+			p ++;
+		}
+
+		if (blen > 0 && seen_non_dash) {
 			/* We have found something like boundary */
+			p = text + match_pos;
 			bend = p + blen - 1;
 
 			if (*bend == '-') {
