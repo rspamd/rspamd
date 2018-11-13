@@ -262,6 +262,7 @@ local function mime_types_check(task, part, rule)
   end
 
   if rule.mime_types then
+
     if fun.any(function(gl_re)
       if gl_re:match(ct) then return true else return false end
     end, rule.mime_types) then

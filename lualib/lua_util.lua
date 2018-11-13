@@ -520,7 +520,8 @@ local function override_defaults(def, override)
   end
 
   local res = {}
-  fun.each(function(k, v)
+
+  for k,v in pairs(override) do
     if type(v) == 'table' then
       if def[k] and type(def[k]) == 'table' then
         -- Recursively override elements
@@ -531,12 +532,13 @@ local function override_defaults(def, override)
     else
       res[k] = v
     end
-    end, override)
-  fun.each(function(k, v)
+  end
+
+  for k,v in pairs(def) do
     if not res[k] then
       res[k] = v
     end
-  end, def)
+  end
 
   return res
 end
