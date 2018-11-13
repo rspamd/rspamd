@@ -391,6 +391,55 @@ end
 exports.parse_time_interval = parse_time_interval
 
 --[[[
+-- @function lua_util.dehumanize_number(str)
+-- Parses human readable number
+-- Accepts 'k' for thousands, 'm' for millions, 'g' for billions, 'b' suffix for 1024 multiplier,
+-- e.g. `10mb` equal to `10 * 1024 * 1024`
+-- @param {string} str input string
+-- @return {number|nil} parsed number
+--]]
+local function dehumanize_number(str)
+  local function parse_suffix(s)
+    if s == 'k' then
+      return 1000
+    elseif s == 'm' then
+      return 1000000
+    elseif s == 'g' then
+      return 1e9
+    elseif s == 'kb' then
+      return 1024
+    elseif s == 'mb' then
+      return 1024 * 1024
+    elseif s == 'gb' then
+      return 1024 * 1024;
+    end
+  end
+
+  local digit = lpeg.R("09")
+  local parser = {}
+  parser.integer =
+  (lpeg.S("+-") ^ -1) *
+      (digit   ^  1)
+  parser.fractional =
+  (lpeg.P(".")   ) *
+      (digit ^ 1)
+  parser.number =
+  (parser.integer *
+      (parser.fractional ^ -1)) +
+      (lpeg.S("+-") * parser.fractional)
+  parser.humanized_number = lpeg.Cf(lpeg.Cc(1) *
+      (parser.number / tonumber) *
+      (((lpeg.S("kmg") * (lpeg.P("b") ^ -1)) / parse_suffix) ^ -1),
+      function (acc, val) return acc * val end)
+
+  local t = lpeg.match(parser.humanized_number, str)
+
+  return t
+end
+
+exports.dehumanize_number = dehumanize_number
+
+--[[[
 -- @function lua_util.table_cmp(t1, t2)
 -- Compare two tables deeply
 --]]
