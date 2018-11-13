@@ -105,6 +105,26 @@ pipeline:
       - luacov-coveralls -o /rspamd/build/unit_test_lua.json --dryrun
       - exit $EXIT_CODE
 
+  test-fedora-clang:
+    # https://github.com/rspamd/rspamd-build-docker/blob/master/fedora-test/Dockerfile
+    image: rspamd/ci-fedora-test
+    pull: true
+    group: tests
+    commands:
+      - test "$(id -un)" = nobody
+      - ulimit -c unlimited
+      - cd /rspamd/fedora/build/test
+      - set +e
+      - ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
+      - set -e
+      # shell sets exit status of a process terminated by a signal to '128 + signal-number'
+      # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
+      - >
+        if [ $EXIT_CODE -gt 128 ]; then
+        gdb --batch -ex 'bt' -c /var/tmp/*.rspamd-test.core ./rspamd-test;
+        fi
+      - exit $EXIT_CODE
+
   functional:
     # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-test-func/Dockerfile
     image: rspamd/ci-ubuntu-test-func
