@@ -1428,7 +1428,8 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 		got_lf,
 		got_linebreak,
 		got_linebreak_cr,
-		got_linebreak_lf
+		got_linebreak_lf,
+		obs_fws
 	} state = skip_char;
 
 	g_assert (input != NULL);
@@ -1478,7 +1479,9 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 			}
 			else if (g_ascii_isspace (*p)) {
 				/* We have \r<space>*, allow to stay in this state */
+				c = p;
 				p ++;
+				state = obs_fws;
 			}
 			else {
 				p++;
@@ -1498,7 +1501,9 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 			}
 			else if (g_ascii_isspace (*p)) {
 				/* We have \n<space>*, allow to stay in this state */
+				c = p;
 				p ++;
+				state = obs_fws;
 			}
 			else {
 				p++;
@@ -1518,7 +1523,9 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 			}
 			else if (g_ascii_isspace (*p)) {
 				/* We have <linebreak><space>*, allow to stay in this state */
+				c = p;
 				p ++;
+				state = obs_fws;
 			}
 			else {
 				p++;
@@ -1537,6 +1544,8 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 			}
 			else if (g_ascii_isspace (*p)) {
 				/* We have \r\n<space>*, allow to keep in this state */
+				c = p;
+				state = obs_fws;
 				p ++;
 			}
 			else {
@@ -1552,7 +1561,95 @@ rspamd_string_find_eoh (GString *input, goffset *body_start)
 			}
 
 			return c - input->str;
+		case obs_fws:
+			if (*p == ' ' || *p == '\t') {
+				p ++;
+			}
+			else if (*p == '\r') {
+				/* Perform lookahead due to #2349 */
+				if (end - p > 2) {
+					if (p[1] == '\n' && g_ascii_isspace (p[2])) {
+						/* Real obs_fws state, switch */
+						c = p;
+						p ++;
+						state = got_cr;
+					}
+					else if (g_ascii_isspace (p[1])) {
+						p ++;
+						state = obs_fws;
+					}
+					else {
+						/*
+						 * newline wsp+ \r <nwsp>, hence:
+						 * c -> eoh
+						 * p + 1 -> body start
+						 */
+						if (body_start) {
+							/* \r\n\r\n */
+							*body_start = p - input->str + 1;
+						}
+
+						return c - input->str;
+					}
+				}
+				else {
+					/* shortage */
+					if (body_start) {
+						*body_start = p - input->str + 1;
+					}
+
+					return p - input->str;
+				}
+			}
+			else if (*p == '\n') {
+				/* Perform lookahead due to #2349 */
+				if (end - p > 1) {
+					if (p[1] == ' ' || p[1] == '\t') {
+						c = p;
+						p ++;
+						state = obs_fws;
+					}
+					else if (p[1] == '\r') {
+						c = p;
+						p ++;
+						state = got_lf;
+					}
+					else if (p[1] == '\n') {
+						c = p;
+						p ++;
+						state = got_lf;
+					}
+					else {
+						/*
+						 * newline wsp+ \n <nwsp>, hence:
+						 * c -> eoh
+						 * p + 1 -> body start
+						 */
+						if (body_start) {
+							/* \r\n\r\n */
+							*body_start = p - input->str + 1;
+						}
+
+						return c - input->str;
+					}
+
+				}
+				else {
+					/* shortage */
+					if (body_start) {
+						*body_start = p - input->str + 1;
+					}
+
+					return p - input->str;
+				}
+			}
+			else {
+				p++;
+				state = skip_char;
+			}
+			break;
 		}
+
 	}
 
 	if (state == got_linebreak_lf) {
