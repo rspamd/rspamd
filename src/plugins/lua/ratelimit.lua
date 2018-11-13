@@ -28,6 +28,7 @@ local lua_maps = require "lua_maps"
 local lua_util = require "lua_util"
 local rspamd_hash = require "rspamd_cryptobox_hash"
 local lua_selectors = require "lua_selectors"
+local ts = require("tableshape").types
 
 -- A plugin that implements ratelimits using redis
 
@@ -264,48 +265,67 @@ local function parse_string_limit(lim, no_error)
   return nil
 end
 
+local function str_to_rate(str)
+  local divider,divisor = parse_string_limit(str, false)
+
+  if not divisor then
+    rspamd_logger.errx(rspamd_config, 'bad rate string: %s', str)
+
+    return nil
+  end
+
+  return divisor / divider
+end
+
+local bucket_schema = ts.shape{
+  burst = ts.number + ts.string / lua_util.dehumanize_number,
+  rate = ts.number + ts.string / str_to_rate
+}
+
 local function parse_limit(name, data)
-  local buckets = {}
   if type(data) == 'table' then
-    -- 3 cases here:
+    -- 2 cases here:
     --  * old limit in format [burst, rate]
-    --  * vector of strings in Andrew's string format
+    --  * vector of strings in Andrew's string format (removed from 1.8.2)
     --  * proper bucket table
     if #data == 2 and tonumber(data[1]) and tonumber(data[2]) then
       -- Old style ratelimit
       rspamd_logger.warnx(rspamd_config, 'old style ratelimit for %s', name)
       if tonumber(data[1]) > 0 and tonumber(data[2]) > 0 then
-        table.insert(buckets, {
+        return {
           burst = data[1],
           rate = data[2]
-        })
+        }
       elseif data[1] ~= 0 then
         rspamd_logger.warnx(rspamd_config, 'invalid numbers for %s', name)
       else
         rspamd_logger.infox(rspamd_config, 'disable limit %s, burst is zero', name)
       end
+
+      return nil
     else
-      -- Recursively map parse_limit and flatten the list
-      fun.each(function(l)
-        -- Flatten list
-        for _,b in ipairs(l) do table.insert(buckets, b) end
-      end, fun.map(function(d) return parse_limit(d, name) end, data))
+      local parsed_bucket,err = bucket_schema:transform(data)
+
+      if not parsed_bucket or err then
+        rspamd_logger.errx(rspamd_config, 'cannot parse bucket for %s: %s; original value: %s',
+            name, err, data)
+      else
+        return parsed_bucket
+      end
     end
   elseif type(data) == 'string' then
     local rep_rate, burst = parse_string_limit(data)
-
+    rspamd_logger.warnx(rspamd_config, 'old style rate bucket config detected for %s: %s',
+        name, data)
     if rep_rate and burst then
-      table.insert(buckets, {
+      return {
         burst = burst,
-        rate = 1.0 / rep_rate -- reciprocal
-      })
+        rate = burst / rep_rate -- reciprocal
+      }
     end
   end
 
-  -- Filter valid
-  return fun.totable(fun.filter(function(val)
-    return type(val.burst) == 'number' and type(val.rate) == 'number'
-  end, buckets))
+  return nil
 end
 
 --- Check whether this addr is bounce
@@ -496,8 +516,6 @@ local function limit_to_prefixes(task, k, v, prefixes)
         end
       end
     end
-
-
   end
 
   return n
@@ -550,8 +568,8 @@ local function ratelimit_cb(task)
 
     if ret then
       local bucket = parse_limit(k, bd)
-      if bucket[1] then
-        prefixes[redis_key] = make_prefix(redis_key, k, bucket[1])
+      if bucket then
+        prefixes[redis_key] = make_prefix(redis_key, k, bucket)
       end
       nprefixes = nprefixes + 1
     else
@@ -685,42 +703,72 @@ if opts then
   if opts['rates'] and type(opts['rates']) == 'table' then
     -- new way of setting limits
     fun.each(function(t, lim)
-      local buckets
-      if type(lim) == 'table' and lim.selector and lim.bucket then
-        local selector = lua_selectors.parse_selector(rspamd_config, lim.selector)
-        if not selector then
-          rspamd_logger.errx(rspamd_config, 'bad ratelimit selector for %s: "%s"',
-              t, lim.selector)
-          return
-        end
-        local bucket = parse_limit(t, lim.bucket)
+      local buckets = {}
 
-        if not bucket then
-          rspamd_logger.errx(rspamd_config, 'bad ratelimit bucket for %s: "%s"',
-              t, lim.bucket)
-          return
+      if type(lim) == 'table' and lim.bucket then
+
+        if lim.bucket[1] then
+          for _,bucket in ipairs(lim.bucket) do
+            local b = parse_limit(t, bucket)
+
+            if not b then
+              rspamd_logger.errx(rspamd_config, 'bad ratelimit bucket for %s: "%s"',
+                  t, b)
+              return
+            end
+
+            table.insert(buckets, b)
+          end
+        else
+          local bucket = parse_limit(t, lim.bucket)
+
+          if not bucket then
+            rspamd_logger.errx(rspamd_config, 'bad ratelimit bucket for %s: "%s"',
+                t, lim.bucket)
+            return
+          end
+
+          buckets = {bucket}
         end
+
         settings.limits[t] = {
-          selector = selector,
-          buckets = bucket
+          buckets = buckets
         }
 
+        if lim.selector then
+          local selector = lua_selectors.parse_selector(rspamd_config, lim.selector)
+          if not selector then
+            rspamd_logger.errx(rspamd_config, 'bad ratelimit selector for %s: "%s"',
+                t, lim.selector)
+            settings.limits[t] = nil
+            return
+          end
+
+          settings.limits[t].selector = selector
+        end
       else
+        rspamd_logger.warnx(rspamd_config, 'old syntax for ratelimits: %s', lim)
         buckets = parse_limit(t, lim)
-        if buckets and #buckets > 0 then
+        if buckets then
           settings.limits[t] = {
-            buckets = buckets
+            buckets = {buckets}
           }
         end
       end
     end, opts['rates'])
   end
 
-  local enabled_limits = fun.totable(fun.map(function(t)
-    return t
+  -- Display what's enabled
+  fun.each(function(s)
+    rspamd_logger.infox(rspamd_config, 'enabled ratelimit: %s', s)
+  end, fun.map(function(n,d)
+    return string.format('%s [%s]', n,
+        table.concat(fun.totable(fun.map(function(v)
+          return string.format('%s msgs burst, %s msgs/sec rate',
+              v.burst, v.rate)
+        end, d.buckets)), '; ')
+    )
   end, settings.limits))
-  rspamd_logger.infox(rspamd_config,
-          'enabled rate buckets: [%1]', table.concat(enabled_limits, ','))
 
   -- Ret, ret, ret: stupid legacy stuff:
   -- If we have a string with commas then load it as as static map
