@@ -88,20 +88,21 @@ local bucket_check_script = [[
     if dynr == 0 then dynr = 0.0001 end
     rate = rate * dynr
     leaked = ((now - last) * rate)
+    if leaked > burst then leaked = burst end
     burst = burst - leaked
     redis.call('HINCRBYFLOAT', KEYS[1], 'b', -(leaked))
     redis.call('HSET', KEYS[1], 'l', KEYS[2])
    end
+
+   dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
+   if dynb == 0 then dynb = 0.0001 end
+
+   if burst > 0 and (burst + 1) > tonumber(KEYS[4]) * dynb then
+     return {1, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
+   end
   else
    burst = 0
    redis.call('HSET', KEYS[1], 'b', '0')
-  end
-
-  dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
-  if dynb == 0 then dynb = 0.0001 end
-
-  if (burst + 1) > tonumber(KEYS[4]) * dynb then
-   return {1, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
   end
 
   return {0, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
@@ -182,6 +183,8 @@ local bucket_update_script = [[
   end
 
   local burst = tonumber(redis.call('HGET', KEYS[1], 'b'))
+  if burst < 0 then burst = 0 end
+
   redis.call('HINCRBYFLOAT', KEYS[1], 'b', 1)
   redis.call('HSET', KEYS[1], 'l', KEYS[2])
   redis.call('EXPIRE', KEYS[1], KEYS[7])
