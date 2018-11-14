@@ -354,7 +354,7 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
     else { \
         new_tok->data = hashpipe[0].h * primes[0] + hashpipe[i].h * primes[i << 1]; \
     } \
-    new_tok->window_idx = i + 1; \
+    new_tok->window_idx = i; \
     g_ptr_array_add (result, new_tok); \
   } while(0)
 
