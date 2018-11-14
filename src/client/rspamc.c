@@ -2024,5 +2024,5 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	/* Mix retcode (return from Rspamd side) and ret (return from subprocess) */
-	return ret ^ retcode;
+	return ret | retcode;
 }
