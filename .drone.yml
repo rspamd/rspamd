@@ -118,7 +118,7 @@ pipeline:
       - ulimit -c 2097152
       # disable leak sanitizer: too many leaks detected, most of them probably FP
       - export ASAN_OPTIONS="detect_leaks=0:print_stacktrace=1:disable_coredump=0"
-      - export UBSAN_OPTIONS="print_stacktrace=1:log_path=/tmp/ubsan"
+      - export UBSAN_OPTIONS="print_stacktrace=1:print_summary=0:log_path=/tmp/ubsan"
       - cd /rspamd/fedora/build/test
       - set +e
       - ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
