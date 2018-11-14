@@ -38,6 +38,8 @@ pipeline:
       - test "$(id -un)" = nobody
       - cd /rspamd/fedora/build
       - export LDFLAGS='-fuse-ld=lld'
+      - export CFLAGS='-fsanitize=address,undefined,implicit-integer-truncation'
+      - export ASAN_OPTIONS=detect_leaks=0
       - >
         cmake
         -DENABLE_CLANG_PLUGIN=ON
@@ -103,6 +105,31 @@ pipeline:
       # luacov-coveralls reads luacov.stats.out written by rspamd-test using luacov module
       # and writes json report for coveralls.io service
       - luacov-coveralls -o /rspamd/build/unit_test_lua.json --dryrun
+      - exit $EXIT_CODE
+
+  test-fedora-clang:
+    # https://github.com/rspamd/rspamd-build-docker/blob/master/fedora-test/Dockerfile
+    image: rspamd/ci-fedora-test
+    pull: true
+    group: tests
+    commands:
+      - test "$(id -un)" = nobody
+      # Asan reserves 20Tb of virtual memory, limit core size to 2 Gb to avoid writing huge core
+      - ulimit -c 2097152
+      # disable leak sanitizer: too many leaks detected, most of them probably FP
+      - export ASAN_OPTIONS="detect_leaks=0:print_stacktrace=1:disable_coredump=0"
+      - export UBSAN_OPTIONS="print_stacktrace=1:print_summary=0:log_path=/tmp/ubsan"
+      - cd /rspamd/fedora/build/test
+      - set +e
+      - ./rspamd-test -p /rspamd/lua; EXIT_CODE=$?
+      - set -e
+      # shell sets exit status of a process terminated by a signal to '128 + signal-number'
+      # if rspamd-test was terminated by a signal it should be SIGSEGV or SIGABRT, try to examine core
+      - >
+        if [ $EXIT_CODE -gt 128 ]; then
+        gdb --batch -ex 'bt' -c /var/tmp/*.rspamd-test.core ./rspamd-test;
+        fi
+      - cat /tmp/ubsan.*
       - exit $EXIT_CODE
 
   functional:
