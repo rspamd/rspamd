@@ -344,8 +344,24 @@ bayes_classify (struct rspamd_classifier * ctx,
 		return TRUE;
 	}
 
-	h = 1 - inv_chi_square (task, cl.spam_prob, cl.processed_tokens);
-	s = 1 - inv_chi_square (task, cl.ham_prob, cl.processed_tokens);
+	if (cl.spam_prob < -300 && cl.ham_prob < -300) {
+		/* Fisher value is low enough to apply inv_chi_square */
+		h = 1 - inv_chi_square (task, cl.spam_prob, cl.processed_tokens);
+		s = 1 - inv_chi_square (task, cl.ham_prob, cl.processed_tokens);
+	}
+	else {
+		/* Use naive method */
+		if (cl.spam_prob > cl.ham_prob) {
+			s = (1.0 - exp(cl.spam_prob / cl.ham_prob)) /
+					(1.0 + exp(cl.spam_prob / cl.ham_prob));
+			h = 1.0 - s;
+		}
+		else {
+			h = (1.0 - exp(cl.ham_prob / cl.spam_prob)) /
+				(1.0 + exp(cl.ham_prob / cl.spam_prob));
+			s = 1.0 - h;
+		}
+	}
 
 	if (isfinite (s) && isfinite (h)) {
 		final_prob = (s + 1.0 - h) / 2.;
