@@ -971,7 +971,10 @@ rspamd_config_new_classifier (struct rspamd_config *cfg,
 		c =
 			rspamd_mempool_alloc0 (cfg->cfg_pool,
 				sizeof (struct rspamd_classifier_config));
+		c->min_prob_strength = 0.343;
+		c->min_token_hits = 2;
 	}
+
 	if (c->labels == NULL) {
 		c->labels = g_hash_table_new_full (rspamd_str_hash,
 				rspamd_str_equal,

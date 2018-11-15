@@ -2148,6 +2148,18 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				RSPAMD_CL_FLAG_INT_32,
 				"Minimum count of tokens (words) to be considered for statistics");
 		rspamd_rcl_add_default_handler (sub,
+				"min_token_hits",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_classifier_config, min_token_hits),
+				RSPAMD_CL_FLAG_UINT,
+				"Minimum number of hits for a token to be considered");
+		rspamd_rcl_add_default_handler (sub,
+				"min_prob_strength",
+				rspamd_rcl_parse_struct_double,
+				G_STRUCT_OFFSET (struct rspamd_classifier_config, min_token_hits),
+				0,
+				"Use only tokens with probability in [0.5 - MPS, 0.5 + MPS]");
+		rspamd_rcl_add_default_handler (sub,
 				"max_tokens",
 				rspamd_rcl_parse_struct_integer,
 				G_STRUCT_OFFSET (struct rspamd_classifier_config, max_tokens),

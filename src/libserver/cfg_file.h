@@ -174,6 +174,8 @@ struct rspamd_classifier_config {
 	gchar *name;                                    /**< unique name of classifier							*/
 	guint32 min_tokens;                             /**< minimal number of tokens to process classifier 	*/
 	guint32 max_tokens;                             /**< maximum number of tokens							*/
+	guint min_token_hits;                           /**< minimum number of hits for a token to be considered */
+	gdouble min_prob_strength;                      /**< use only tokens with probability in [0.5 - MPS, 0.5 + MPS] */
 	guint min_learns;                               /**< minimum number of learns for each statfile			*/
 	guint flags;
 };
