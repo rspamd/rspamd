@@ -525,6 +525,12 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 		return;
 	}
 
+	for (i = 0; i < st_ctx->classifiers->len; i++) {
+		cl = g_ptr_array_index (st_ctx->classifiers, i);
+		cl->spam_learns = 0;
+		cl->ham_learns = 0;
+	}
+
 	for (i = 0; i < st_ctx->statfiles->len; i++) {
 		st = g_ptr_array_index (st_ctx->statfiles, i);
 		cl = st->classifier;
