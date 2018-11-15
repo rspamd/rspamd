@@ -329,6 +329,21 @@ bayes_classify (struct rspamd_classifier * ctx,
 		bayes_classify_token (ctx, tok, &cl);
 	}
 
+	if (cl.processed_tokens == 0) {
+		msg_info_bayes ("no tokens found in bayes database, ignore stats");
+
+		return TRUE;
+	}
+
+	if (ctx->cfg->min_tokens > 0 &&
+		cl.text_tokens < (gint)(ctx->cfg->min_tokens * 0.1)) {
+		msg_info_bayes ("ignore bayes probability since we have "
+						"too few text tokens: %uL, at least %d is required",
+						cl.text_tokens, (gint)(ctx->cfg->min_tokens * 0.1));
+
+		return TRUE;
+	}
+
 	h = 1 - inv_chi_square (task, cl.spam_prob, cl.processed_tokens);
 	s = 1 - inv_chi_square (task, cl.ham_prob, cl.processed_tokens);
 
@@ -366,17 +381,6 @@ bayes_classify (struct rspamd_classifier * ctx,
 			msg_warn_bayes ("<%s> spam and ham classes are both overflowed",
 					task->message_id);
 		}
-	}
-
-	if (ctx->cfg->min_tokens > 0 &&
-			cl.text_tokens < (gint)(ctx->cfg->min_tokens * 0.1)) {
-		msg_info_bayes ("ignore bayes probability %.2f since we have "
-				"too few text tokens: %uL, at least %d is required",
-				final_prob,
-				cl.text_tokens,
-				(gint)(ctx->cfg->min_tokens * 0.1));
-
-		return TRUE;
 	}
 
 	pprob = rspamd_mempool_alloc (task->task_pool, sizeof (*pprob));
