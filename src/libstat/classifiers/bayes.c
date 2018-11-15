@@ -175,7 +175,7 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 	}
 
 	/* Probability for this token */
-	if (total_count > ctx->cfg->min_token_hits) {
+	if (total_count >= ctx->cfg->min_token_hits) {
 		spam_freq = ((double)spam_count / MAX (1., (double) ctx->spam_learns));
 		ham_freq = ((double)ham_count / MAX (1., (double)ctx->ham_learns));
 		spam_prob = spam_freq / (spam_freq + ham_freq);

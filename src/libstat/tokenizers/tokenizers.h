@@ -18,13 +18,13 @@ struct rspamd_stat_ctx;
 struct rspamd_stat_tokenizer {
 	gchar *name;
 	gpointer (*get_config) (rspamd_mempool_t *pool,
-			struct rspamd_tokenizer_config *cf, gsize *len);
+							struct rspamd_tokenizer_config *cf, gsize *len);
 	gint (*tokenize_func)(struct rspamd_stat_ctx *ctx,
-			rspamd_mempool_t *pool,
-			GArray *words,
-			gboolean is_utf,
-			const gchar *prefix,
-			GPtrArray *result);
+						  struct rspamd_task *task,
+						  GArray *words,
+						  gboolean is_utf,
+						  const gchar *prefix,
+						  GPtrArray *result);
 };
 
 enum rspamd_tokenize_type {
@@ -47,11 +47,11 @@ GArray * rspamd_tokenize_text (const gchar *text, gsize len,
 
 /* OSB tokenize function */
 gint rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
-		rspamd_mempool_t *pool,
-		GArray *words,
-		gboolean is_utf,
-		const gchar *prefix,
-		GPtrArray *result);
+						   struct rspamd_task *task,
+						   GArray *words,
+						   gboolean is_utf,
+						   const gchar *prefix,
+						   GPtrArray *result);
 
 gpointer rspamd_tokenizer_osb_get_config (rspamd_mempool_t *pool,
 		struct rspamd_tokenizer_config *cf,

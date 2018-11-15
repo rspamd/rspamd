@@ -294,7 +294,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 
 	lua_settop (L, 0);
 	st_ctx->tokenizer->tokenize_func (st_ctx,
-			task->task_pool,
+			task,
 			ar,
 			TRUE,
 			"META:",
@@ -345,7 +345,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 		part = g_ptr_array_index (task->text_parts, i);
 
 		if (!IS_PART_EMPTY (part) && part->utf_words != NULL) {
-			st_ctx->tokenizer->tokenize_func (st_ctx, task->task_pool,
+			st_ctx->tokenizer->tokenize_func (st_ctx, task,
 					part->utf_words, IS_PART_UTF (part),
 					NULL, task->tokens);
 		}
@@ -362,7 +362,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 		words = rspamd_tokenize_subject (task);
 		if (words != NULL) {
 			st_ctx->tokenizer->tokenize_func (st_ctx,
-					task->task_pool,
+					task,
 					words,
 					TRUE,
 					"SUBJECT",

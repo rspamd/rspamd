@@ -17,8 +17,10 @@
  * OSB tokenizer
  */
 
+
 #include "tokenizers.h"
 #include "stat_internal.h"
+#include "libmime/lang_detection.h"
 
 /* Size for features pipe */
 #define DEFAULT_FEATURE_WINDOW_SIZE 5
@@ -259,11 +261,11 @@ struct token_pipe_entry {
 
 gint
 rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
-		rspamd_mempool_t *pool,
-		GArray *words,
-		gboolean is_utf,
-		const gchar *prefix,
-		GPtrArray *result)
+					  struct rspamd_task *task,
+					  GArray *words,
+					  gboolean is_utf,
+					  const gchar *prefix,
+					  GPtrArray *result)
 {
 	rspamd_token_t *new_tok = NULL;
 	rspamd_stat_token_t *token;
@@ -303,6 +305,14 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 		token = &g_array_index (words, rspamd_stat_token_t, w);
 		token_flags = token->flags;
 
+		if (task->lang_det) {
+			if (rspamd_language_detector_is_stop_word (task->lang_det,
+					token->begin, token->len)) {
+				/* Skip it */
+				continue;
+			}
+		}
+
 		if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) {
 			rspamd_ftok_t ftok;
 
@@ -327,7 +337,7 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 		}
 
 		if (token_flags & RSPAMD_STAT_TOKEN_FLAG_UNIGRAM) {
-			new_tok = rspamd_mempool_alloc0 (pool, token_size);
+			new_tok = rspamd_mempool_alloc0 (task->task_pool, token_size);
 			new_tok->flags = token_flags;
 			new_tok->t1 = token;
 			new_tok->t2 = token;
@@ -339,7 +349,7 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 		}
 
 #define ADD_TOKEN do {\
-    new_tok = rspamd_mempool_alloc0 (pool, token_size); \
+    new_tok = rspamd_mempool_alloc0 (task->task_pool, token_size); \
     new_tok->flags = token_flags; \
     new_tok->t1 = hashpipe[0].t; \
     new_tok->t2 = hashpipe[i].t; \
@@ -375,7 +385,9 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 			processed++;
 
 			for (i = 1; i < window_size; i++) {
-				ADD_TOKEN;
+				if (!(hashpipe[i].t->flags & RSPAMD_STAT_TOKEN_FLAG_EXCEPTION)) {
+					ADD_TOKEN;
+				}
 			}
 		}
 	}
