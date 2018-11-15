@@ -61,6 +61,8 @@ gboolean rspamd_str_equal (gconstpointer v, gconstpointer v2);
  */
 guint rspamd_ftok_icase_hash (gconstpointer key);
 gboolean rspamd_ftok_icase_equal (gconstpointer v, gconstpointer v2);
+guint rspamd_ftok_hash (gconstpointer key);
+gboolean rspamd_ftok_equal (gconstpointer v, gconstpointer v2);
 guint rspamd_gstring_icase_hash (gconstpointer key);
 gboolean rspamd_gstring_icase_equal (gconstpointer v, gconstpointer v2);
 

@@ -20,6 +20,8 @@
 #include "libutil/multipattern.h"
 #include "ucl.h"
 #include "khash.h"
+#include "libstemmer.h"
+
 #include <glob.h>
 #include <unicode/utf8.h>
 #include <unicode/ucnv.h>
@@ -172,11 +174,15 @@ KHASH_INIT (rspamd_trigram_hash, const UChar *, struct rspamd_ngramm_chain, true
 KHASH_INIT (rspamd_candidates_hash, const gchar *,
 		struct rspamd_lang_detector_res *, true,
 		rspamd_str_hash, rspamd_str_equal);
+KHASH_INIT (rspamd_stopwords_hash, rspamd_ftok_t *,
+		char, false,
+		rspamd_ftok_hash, rspamd_ftok_equal);
 
 struct rspamd_lang_detector {
 	GPtrArray *languages;
 	khash_t(rspamd_trigram_hash) *trigramms[RSPAMD_LANGUAGE_MAX]; /* trigramms frequencies */
 	struct rspamd_stop_word_elt stop_words[RSPAMD_LANGUAGE_MAX];
+	khash_t(rspamd_stopwords_hash) *stop_words_norm;
 	UConverter *uchar_converter;
 	gsize short_text_limit;
 	gsize total_occurencies; /* number of all languages found */
@@ -439,17 +445,59 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		specific_stop_words = ucl_object_lookup (stop_words, nelt->name);
 
 		if (specific_stop_words) {
+			struct sb_stemmer *stem = NULL;
 			it = NULL;
 			const ucl_object_t *w;
 			guint start, stop;
 
+			stem = sb_stemmer_new (nelt->name, "UTF_8");
 			start = rspamd_multipattern_get_npatterns (d->stop_words[cat].mp);
 
 			while ((w = ucl_object_iterate (specific_stop_words, &it, true)) != NULL) {
+				gsize wlen;
+				const char *word = ucl_object_tolstring (w, &wlen);
+				const char *saved;
+
 				rspamd_multipattern_add_pattern (d->stop_words[cat].mp,
-						ucl_object_tostring (w), 0);
+						word, wlen);
 				nelt->stop_words ++;
 				nstop ++;
+
+				/* Also lemmatise and store normalised */
+				if (stem) {
+					const char *nw = sb_stemmer_stem (stem, word, wlen);
+
+
+					if (nw) {
+						saved = nw;
+						wlen = strlen (nw);
+					}
+					else {
+						saved = word;
+					}
+				}
+				else {
+					saved = word;
+				}
+
+				if (saved) {
+					gint rc;
+					rspamd_ftok_t *tok;
+					gchar *dst;
+
+					tok = g_malloc (sizeof (*tok) + wlen + 1);
+					dst = ((gchar *)tok) + sizeof (*tok);
+					rspamd_strlcpy (dst, saved, wlen + 1);
+					tok->begin = dst;
+					tok->len = wlen;
+
+					kh_put (rspamd_stopwords_hash, d->stop_words_norm,
+							tok, &rc);
+				}
+			}
+
+			if (stem) {
+				sb_stemmer_delete (stem);
 			}
 
 			stop = rspamd_multipattern_get_npatterns (d->stop_words[cat].mp);
@@ -668,6 +716,8 @@ static void
 rspamd_language_detector_dtor (struct rspamd_lang_detector *d)
 {
 	if (d) {
+		rspamd_ftok_t *tok;
+
 		if (d->uchar_converter) {
 			ucnv_close (d->uchar_converter);
 		}
@@ -681,6 +731,10 @@ rspamd_language_detector_dtor (struct rspamd_lang_detector *d)
 		if (d->languages) {
 			g_ptr_array_free (d->languages, TRUE);
 		}
+
+		kh_foreach_key (d->stop_words_norm, tok, {
+			g_free (tok); /* String is embedded and freed automatically */
+		});
 	}
 }
 
@@ -748,6 +802,8 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 	ret->languages = g_ptr_array_sized_new (gl.gl_pathc);
 	ret->uchar_converter = ucnv_open ("UTF-8", &uc_err);
 	ret->short_text_limit = short_text_limit;
+	ret->stop_words_norm = kh_init (rspamd_stopwords_hash);
+
 	/* Map from ngramm in ucs32 to GPtrArray of rspamd_language_elt */
 	for (i = 0; i < RSPAMD_LANGUAGE_MAX; i ++) {
 		ret->trigramms[i] = kh_init (rspamd_trigram_hash);
@@ -1749,4 +1805,23 @@ void
 rspamd_language_detector_unref (struct rspamd_lang_detector* d)
 {
 	REF_RELEASE (d);
+}
+
+gboolean
+rspamd_language_detector_is_stop_word (struct rspamd_lang_detector *d,
+												const gchar *word, gsize wlen)
+{
+	khiter_t k;
+	rspamd_ftok_t search;
+
+	search.begin = word;
+	search.len = wlen;
+
+	k = kh_get (rspamd_stopwords_hash, d->stop_words_norm, &search);
+
+	if (k != kh_end (d->stop_words_norm)) {
+		return TRUE;
+	}
+
+	return FALSE;
 }

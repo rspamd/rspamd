@@ -84,4 +84,14 @@ gboolean rspamd_language_detector_detect (struct rspamd_task *task,
 		struct rspamd_lang_detector *d,
 		struct rspamd_mime_text_part *part);
 
+/**
+ * Returns TRUE if the specified word is known to be a stop word
+ * @param d
+ * @param word
+ * @param wlen
+ * @return
+ */
+gboolean rspamd_language_detector_is_stop_word (struct rspamd_lang_detector *d,
+		const gchar *word, gsize wlen);
+
 #endif
