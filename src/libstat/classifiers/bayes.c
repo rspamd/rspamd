@@ -123,7 +123,7 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 {
 	guint i;
 	gint id;
-	guint64 spam_count = 0, ham_count = 0, total_count = 0;
+	guint spam_count = 0, ham_count = 0, total_count = 0;
 	struct rspamd_statfile *st;
 	struct rspamd_task *task;
 	const gchar *token_type = "txt";
@@ -175,7 +175,7 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 	}
 
 	/* Probability for this token */
-	if (total_count > 0) {
+	if (total_count > ctx->cfg->min_token_hits) {
 		spam_freq = ((double)spam_count / MAX (1., (double) ctx->spam_learns));
 		ham_freq = ((double)ham_count / MAX (1., (double)ctx->ham_learns));
 		spam_prob = spam_freq / (spam_freq + ham_freq);
@@ -193,6 +193,18 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 		w = (fw * total_count) / (1.0 + fw * total_count);
 
 		bayes_spam_prob = PROB_COMBINE (spam_prob, total_count, w, 0.5);
+
+		if ((bayes_spam_prob > 0.5 && bayes_spam_prob < 0.5 + ctx->cfg->min_prob_strength) ||
+			(bayes_spam_prob < 0.5 && bayes_spam_prob > 0.5 - ctx->cfg->min_prob_strength)) {
+			msg_debug_bayes (
+					"token %uL <%*s:%*s> skipped, prob not in range: %f",
+					tok->data,
+					(int) tok->t1->len, tok->t1->begin,
+					(int) tok->t2->len, tok->t2->begin, bayes_spam_prob);
+
+			return;
+		}
+
 		bayes_ham_prob = PROB_COMBINE (ham_prob, total_count, w, 0.5);
 
 		cl->spam_prob += log (bayes_spam_prob);
@@ -207,8 +219,9 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 		}
 
 		if (tok->t1 && tok->t2) {
-			msg_debug_bayes ("token(%s) %uL <%*s:%*s>: weight: %f, cf: %f, total_count: %L, "
-					"spam_count: %L, ham_count: %L,"
+			msg_debug_bayes ("token(%s) %uL <%*s:%*s>: weight: %f, cf: %f, "
+					"total_count: %ud, "
+					"spam_count: %ud, ham_count: %ud,"
 					"spam_prob: %.3f, ham_prob: %.3f, "
 					"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
 					"current spam prob: %.3f, current ham prob: %.3f",
@@ -222,8 +235,9 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 					cl->spam_prob, cl->ham_prob);
 		}
 		else {
-			msg_debug_bayes ("token(%s) %uL <?:?>: weight: %f, cf: %f, total_count: %L, "
-					"spam_count: %L, ham_count: %L,"
+			msg_debug_bayes ("token(%s) %uL <?:?>: weight: %f, cf: %f, "
+					"total_count: %ud, "
+					"spam_count: %ud, ham_count: %ud,"
 					"spam_prob: %.3f, ham_prob: %.3f, "
 					"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
 					"current spam prob: %.3f, current ham prob: %.3f",

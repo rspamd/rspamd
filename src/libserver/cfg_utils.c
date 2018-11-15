@@ -971,7 +971,7 @@ rspamd_config_new_classifier (struct rspamd_config *cfg,
 		c =
 			rspamd_mempool_alloc0 (cfg->cfg_pool,
 				sizeof (struct rspamd_classifier_config));
-		c->min_prob_strength = 0.343;
+		c->min_prob_strength = 0.05;
 		c->min_token_hits = 2;
 	}
 
