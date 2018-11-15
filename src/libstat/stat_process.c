@@ -185,6 +185,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 	}
 
 	/* Use more precise headers order */
+#if 0
 	cur = g_list_first (task->headers_order->head);
 	while (cur) {
 		hdr = cur->data;
@@ -197,6 +198,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 
 		cur = g_list_next (cur);
 	}
+#endif
 
 	/* Use metatokens plugin from Lua */
 	lua_getglobal (L, "rspamd_plugins");
