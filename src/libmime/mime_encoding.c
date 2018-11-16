@@ -690,6 +690,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 			}
 
 			checked = TRUE;
+			text_part->real_charset = charset;
 		}
 		else {
 			SET_PART_UTF (text_part);
@@ -697,6 +698,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 			rspamd_mime_text_part_ucs_from_utf (task, text_part);
 			rspamd_mime_text_part_normalise (task, text_part);
 			rspamd_mime_text_part_maybe_renormalise (task, text_part);
+			text_part->real_charset = UTF8_CHARSET;
 
 			return;
 		}
@@ -710,6 +712,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 					MIN (RSPAMD_CHARSET_MAX_CONTENT, part_content->len));
 			msg_info_task ("detected charset: %s", charset);
 			checked = TRUE;
+			text_part->real_charset = charset;
 		}
 	}
 
@@ -730,6 +733,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		rspamd_mime_text_part_ucs_from_utf (task, text_part);
 		rspamd_mime_text_part_normalise (task, text_part);
 		rspamd_mime_text_part_maybe_renormalise (task, text_part);
+		text_part->real_charset = UTF8_CHARSET;
 
 		return;
 	}
@@ -748,6 +752,8 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 			text_part->utf_raw_content = part_content;
 			return;
 		}
+
+		text_part->real_charset = charset;
 	}
 
 	SET_PART_UTF (text_part);

@@ -162,6 +162,13 @@ LUA_FUNCTION_DEF (textpart, get_html);
  * @return {string} short abbreviation (such as `ru`) for the script's language
  */
 LUA_FUNCTION_DEF (textpart, get_language);
+
+/***
+ * @method text_part:get_charset()
+ * Returns part real charset
+ * @return {string} charset of the part
+ */
+LUA_FUNCTION_DEF (textpart, get_charset);
 /***
  * @method text_part:get_languages()
  * Returns array of tables of all languages detected for a part:
@@ -205,6 +212,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, is_html),
 	LUA_INTERFACE_DEF (textpart, get_html),
 	LUA_INTERFACE_DEF (textpart, get_language),
+	LUA_INTERFACE_DEF (textpart, get_charset),
 	LUA_INTERFACE_DEF (textpart, get_languages),
 	LUA_INTERFACE_DEF (textpart, get_mimepart),
 	LUA_INTERFACE_DEF (textpart, get_stats),
@@ -828,6 +836,28 @@ lua_textpart_get_language (lua_State * L)
 	if (part != NULL) {
 		if (part->language != NULL && part->language[0] != '\0') {
 			lua_pushstring (L, part->language);
+			return 1;
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_textpart_get_charset (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_text_part *part = lua_check_textpart (L);
+
+	if (part != NULL) {
+		if (part->real_charset != NULL) {
+			lua_pushstring (L, part->real_charset);
 			return 1;
 		}
 		else {
