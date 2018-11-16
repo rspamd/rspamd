@@ -32,156 +32,78 @@
 static const gdouble similarity_treshold = 80.0;
 
 static void
-rspamd_stat_tokenize_header (struct rspamd_task *task,
-		const gchar *name, const gchar *prefix, GArray *ar)
-{
-	struct rspamd_mime_header *cur;
-	GPtrArray *hdrs;
-	guint i;
-	rspamd_stat_token_t str;
-
-	hdrs = g_hash_table_lookup (task->raw_headers, name);
-	str.flags = RSPAMD_STAT_TOKEN_FLAG_META;
-
-	if (hdrs != NULL) {
-
-		PTR_ARRAY_FOREACH (hdrs, i, cur) {
-			if (cur->name != NULL) {
-				str.begin = cur->name;
-				str.len = strlen (cur->name);
-				g_array_append_val (ar, str);
-			}
-			if (cur->decoded != NULL) {
-				str.begin = cur->decoded;
-				str.len = strlen (cur->decoded);
-				g_array_append_val (ar, str);
-			}
-			else if (cur->value != NULL) {
-				str.begin = cur->value;
-				str.len = strlen (cur->value);
-				g_array_append_val (ar, str);
-			}
-		}
-
-		msg_debug_bayes ("added stat tokens for header '%s'", name);
-	}
-}
-
-static void
 rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task)
 {
-	struct rspamd_image *img;
-	struct rspamd_mime_part *part;
-	struct rspamd_mime_text_part *tp;
-	GList *cur;
 	GArray *ar;
 	rspamd_stat_token_t elt;
 	guint i;
-	gchar tmpbuf[128];
 	lua_State *L = task->cfg->lua_state;
-	const gchar *headers_hash;
-	struct rspamd_mime_header *hdr;
 
 	ar = g_array_sized_new (FALSE, FALSE, sizeof (elt), 16);
 	elt.flags = RSPAMD_STAT_TOKEN_FLAG_META;
 
-	/* Insert images */
-	for (i = 0; i < task->parts->len; i ++) {
-		part = g_ptr_array_index (task->parts, i);
+	if (st_ctx->lua_stat_tokens_ref != -1) {
+		gint err_idx, ret;
+		GString *tb;
+		struct rspamd_task **ptask;
 
-		if ((part->flags & RSPAMD_MIME_PART_IMAGE) && part->specific.img) {
-			img = part->specific.img;
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+		lua_rawgeti (L, LUA_REGISTRYINDEX, st_ctx->lua_stat_tokens_ref);
 
-			/* If an image has a linked HTML part, then we push its details to the stat */
-			if (img->html_image) {
-				elt.begin = (gchar *)"image";
-				elt.len = 5;
-				g_array_append_val (ar, elt);
-				elt.begin = (gchar *)&img->html_image->height;
-				elt.len = sizeof (img->html_image->height);
-				g_array_append_val (ar, elt);
-				elt.begin = (gchar *)&img->html_image->width;
-				elt.len = sizeof (img->html_image->width);
-				g_array_append_val (ar, elt);
-				elt.begin = (gchar *)&img->type;
-				elt.len = sizeof (img->type);
-				g_array_append_val (ar, elt);
+		ptask = lua_newuserdata (L, sizeof (*ptask));
+		*ptask = task;
+		rspamd_lua_setclass (L, "rspamd{task}", -1);
 
-				if (img->filename) {
-					elt.begin = (gchar *)img->filename;
-					elt.len = strlen (elt.begin);
-					g_array_append_val (ar, elt);
+		if ((ret = lua_pcall (L, 1, 1, err_idx)) != 0) {
+			tb = lua_touserdata (L, -1);
+			msg_err_task ("call to stat_tokens lua "
+							"script failed (%d): %v", ret, tb);
+
+			if (tb) {
+				g_string_free (tb, TRUE);
+			}
+		}
+		else {
+			if (lua_type (L, -1) != LUA_TTABLE) {
+				msg_err_task ("stat_tokens invocation must return "
+								"table and not %s",
+						lua_typename (L, lua_type (L, -1)));
+			}
+			else {
+				guint vlen;
+				rspamd_ftok_t tok;
+
+				vlen = rspamd_lua_table_size (L, -1);
+
+				for (i = 0; i < vlen; i ++) {
+					lua_rawgeti (L, -1, i + 1);
+					tok.begin = lua_tolstring (L, -1, &tok.len);
+
+					if (tok.begin && tok.len > 0) {
+						elt.begin = rspamd_mempool_ftokdup (task->task_pool, &tok);
+						elt.len = tok.len;
+
+						g_array_append_val (ar, elt);
+					}
+
+					lua_pop (L, 1);
 				}
-
-				msg_debug_bayes ("added stat tokens for image '%s'", img->html_image->src);
 			}
 		}
-		else if (part->cd && part->cd->filename.len > 0) {
-			elt.begin = (gchar *)part->cd->filename.begin;
-			elt.len = part->cd->filename.len;
-			g_array_append_val (ar, elt);
-		}
+
+		lua_settop (L, 0);
 	}
 
-	/* Process mime parts */
-	for (i = 0; i < task->parts->len; i ++) {
-		part = g_ptr_array_index (task->parts, i);
 
-		if (IS_CT_MULTIPART (part->ct)) {
-			elt.begin = (gchar *)part->ct->boundary.begin;
-			elt.len = part->ct->boundary.len;
-
-			if (elt.len) {
-				msg_debug_bayes ("added stat tokens for mime boundary '%*s'",
-						(gint)elt.len, elt.begin);
-				g_array_append_val (ar, elt);
-			}
-
-			if (part->parsed_data.len > 1) {
-				rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "mime%d:%dlog",
-						i, (gint)log2 (part->parsed_data.len));
-				elt.begin = rspamd_mempool_strdup (task->task_pool, tmpbuf);
-				elt.len = strlen (elt.begin);
-				g_array_append_val (ar, elt);
-			}
-		}
-	}
-
-	/* Process text parts metadata */
-	for (i = 0; i < task->text_parts->len; i ++) {
-		tp = g_ptr_array_index (task->text_parts, i);
-
-		if (tp->language != NULL && tp->language[0] != '\0') {
-			elt.begin = (gchar *)tp->language;
-			elt.len = strlen (elt.begin);
-			msg_debug_bayes ("added stat tokens for part language '%s'", elt.begin);
-			g_array_append_val (ar, elt);
-		}
-		if (tp->real_charset != NULL) {
-			elt.begin = (gchar *)tp->real_charset;
-			elt.len = strlen (elt.begin);
-			msg_debug_bayes ("added stat tokens for part charset '%s'", elt.begin);
-			g_array_append_val (ar, elt);
-		}
-	}
-
-	cur = g_list_first (task->cfg->classify_headers);
-
-	while (cur) {
-		rspamd_stat_tokenize_header (task, cur->data, "UA:", ar);
-
-		cur = g_list_next (cur);
-	}
-
-	/* Use headers order */
-	headers_hash = rspamd_mempool_get_variable (task->task_pool,
-			RSPAMD_MEMPOOL_HEADERS_HASH);
-
-	if (headers_hash) {
-		elt.begin = (gchar *)headers_hash;
-		elt.len = 16;
-		g_array_append_val (ar, elt);
+	if (ar->len > 0) {
+		st_ctx->tokenizer->tokenize_func (st_ctx,
+				task,
+				ar,
+				TRUE,
+				"M",
+				task->tokens);
 	}
 
 	rspamd_mempool_add_destructor (task->task_pool,

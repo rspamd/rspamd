@@ -202,7 +202,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 
 				if ((ret = lua_pcall (L, 1, 1, err_idx)) != 0) {
 					tb = lua_touserdata (L, -1);
-					msg_err_config ("call to cleanup_rules lua "
+					msg_err_config ("call to gen_stat_tokens lua "
 									"script failed (%d): %v", ret, tb);
 
 					if (tb) {
