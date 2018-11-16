@@ -337,7 +337,9 @@ bayes_classify (struct rspamd_classifier * ctx,
 	}
 
 	if (cl.processed_tokens == 0) {
-		msg_info_bayes ("no tokens found in bayes database, ignore stats");
+		msg_info_bayes ("no tokens found in bayes database "
+				  "(%ud total tokens, %ud text tokens), ignore stats",
+				tokens->len, text_tokens);
 
 		return TRUE;
 	}
@@ -345,8 +347,11 @@ bayes_classify (struct rspamd_classifier * ctx,
 	if (ctx->cfg->min_tokens > 0 &&
 		cl.text_tokens < (gint)(ctx->cfg->min_tokens * 0.1)) {
 		msg_info_bayes ("ignore bayes probability since we have "
-						"too few text tokens: %uL, at least %d is required",
-						cl.text_tokens, (gint)(ctx->cfg->min_tokens * 0.1));
+						"found too few text tokens: %uL (of %ud checked), "
+						"at least %d is required",
+						cl.text_tokens,
+						text_tokens,
+						(gint)(ctx->cfg->min_tokens * 0.1));
 
 		return TRUE;
 	}
@@ -374,7 +379,8 @@ bayes_classify (struct rspamd_classifier * ctx,
 		final_prob = (s + 1.0 - h) / 2.;
 		msg_debug_bayes (
 				"<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f,"
-						" %L tokens processed of %ud total tokens (%uL text tokens)",
+				" %L tokens processed of %ud total tokens;"
+				" %uL text tokens found of %ud text tokens)",
 				task->message_id,
 				cl.ham_prob,
 				h,
@@ -382,7 +388,8 @@ bayes_classify (struct rspamd_classifier * ctx,
 				s,
 				cl.processed_tokens,
 				tokens->len,
-				cl.text_tokens);
+				cl.text_tokens,
+				text_tokens);
 	}
 	else {
 		/*

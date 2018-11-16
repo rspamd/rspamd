@@ -621,12 +621,12 @@ local function get_mime_stat_tokens(task, res, i)
         online_text = true
       end
 
-      rawset(res, i, "#lang:" .. tp:get_language() or 'unk')
+      rawset(res, i, "#lang:" .. (tp:get_language() or 'unk'))
       lua_util.debugm("bayes", task, "added language: %s",
           res[i])
       i = i + 1
 
-      rawset(res, i, "#cs:" .. tp:get_charset() or 'unk')
+      rawset(res, i, "#cs:" .. (tp:get_charset() or 'unk'))
       lua_util.debugm("bayes", task, "added charset: %s",
           res[i])
       i = i + 1
