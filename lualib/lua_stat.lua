@@ -706,43 +706,6 @@ local function get_headers_stat_tokens(task, cf, res, i)
   return i
 end
 
-local function get_meta_stat_tokens(task, res, i)
-  local pool = task:get_mempool()
-  local asn = pool:get_variable("asn")
-  local country = pool:get_variable("country")
-  local ipnet = pool:get_variable("ipnet")
-
-  if asn and country and ipnet then
-    rawset(res, i, string.format("#asn:%s", asn))
-    lua_util.debugm("bayes", task, "added asn token: %s",
-        res[i])
-    i = i + 1
-    rawset(res, i, string.format("#cnt:%s", country))
-    lua_util.debugm("bayes", task, "added country token: %s",
-        res[i])
-    i = i + 1
-    rawset(res, i, string.format("#ipn:%s", country))
-    lua_util.debugm("bayes", task, "added ipnet token: %s",
-        res[i])
-    i = i + 1
-  end
-
-  local pol = {}
-  if task:has_symbol('R_DKIM_ALLOW') then
-    table.insert(pol, 'D')
-  end
-  if task:has_symbol('R_SPF_ALLOW') then
-    table.insert(pol, 'S')
-  end
-
-  rawset(res, i, string.format("#pol:%s", table.concat(pol, '')))
-  lua_util.debugm("bayes", task, "added policies token: %s",
-      res[i])
-  i = i + 1
-
-  return i
-end
-
 local function get_stat_tokens(task, cf)
   local res = {}
   local E = {}
@@ -792,10 +755,6 @@ local function get_stat_tokens(task, cf)
         i = i + 1
       end
     end
-  end
-
-  if cf.classify_meta then
-    i = get_meta_stat_tokens(task, res, i)
   end
 
   return res
