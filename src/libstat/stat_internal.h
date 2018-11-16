@@ -86,6 +86,9 @@ struct rspamd_stat_ctx {
 	GPtrArray *classifiers; /* struct rspamd_classifier */
 	GQueue *async_elts; /* struct rspamd_stat_async_elt */
 	struct rspamd_config *cfg;
+
+	gint lua_stat_tokens_ref;
+
 	/* Global tokenizer */
 	struct rspamd_stat_tokenizer *tokenizer;
 	gpointer tkcf;

@@ -23,6 +23,7 @@ local logger = require "rspamd_logger"
 local sqlite3 = require "rspamd_sqlite3"
 local util = require "rspamd_util"
 local lua_redis = require "lua_redis"
+local lua_util = require "lua_util"
 local exports = {}
 
 local N = "stat_tools" -- luacheck: ignore (maybe unused)
@@ -515,5 +516,41 @@ local function redis_classifier_from_sqlite(sqlite_classifier, expire)
 end
 
 exports.redis_classifier_from_sqlite = redis_classifier_from_sqlite
+
+-- Reads statistics config and return preprocessed table
+local function process_stat_config(cfg)
+  local opts_section = cfg:get_all_opt('options')
+
+  -- Check if we have a dedicated section for statistics
+  if opts_section.statistics then
+    opts_section = opts_section.statistics
+  end
+
+  -- Default
+  local res_config = {
+    classify_headers = {
+      "User-Agent",
+      "X-Mailer",
+      "Content-Type",
+      "X-MimeOLE",
+    },
+    classify_images = true,
+    classify_mime_info = true,
+    classify_headers = true,
+  }
+
+  res_config = lua_util.override_defaults(res_config, opts_section)
+
+  return res_config
+end
+
+
+exports.gen_stat_tokens = function(cfg)
+  local stat_config = process_stat_config(cfg)
+
+  return function(task)
+    return get_stat_tokens(task, stat_config)
+  end
+end
 
 return exports
