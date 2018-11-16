@@ -430,6 +430,19 @@ bayes_classify (struct rspamd_classifier * ctx,
 				(final_prob - 0.5) * 200.);
 		final_prob = rspamd_normalize_probability (final_prob, 0.5);
 		g_assert (st != NULL);
+
+		if (final_prob > 1 || final_prob < 0) {
+			msg_err_bayes ("internal error: probability %f is outside of the "
+				  "allowed range [0..1]", final_prob);
+
+			if (final_prob > 1) {
+				final_prob = 1.0;
+			}
+			else {
+				final_prob = 0.0;
+			}
+		}
+
 		rspamd_task_insert_result (task,
 				st->stcf->symbol,
 				final_prob,
