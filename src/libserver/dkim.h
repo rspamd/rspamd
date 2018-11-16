@@ -222,6 +222,7 @@ void rspamd_dkim_key_unref (rspamd_dkim_key_t *k);
 rspamd_dkim_sign_key_t * rspamd_dkim_sign_key_ref (rspamd_dkim_sign_key_t *k);
 void rspamd_dkim_sign_key_unref (rspamd_dkim_sign_key_t *k);
 const gchar* rspamd_dkim_get_domain (rspamd_dkim_context_t *ctx);
+const gchar* rspamd_dkim_get_selector (rspamd_dkim_context_t *ctx);
 const gchar* rspamd_dkim_get_dns_key (rspamd_dkim_context_t *ctx);
 guint rspamd_dkim_key_get_ttl (rspamd_dkim_key_t *k);
 

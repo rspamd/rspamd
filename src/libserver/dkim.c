@@ -2528,6 +2528,16 @@ rspamd_dkim_get_domain (rspamd_dkim_context_t *ctx)
 	return NULL;
 }
 
+const gchar*
+rspamd_dkim_get_selector (rspamd_dkim_context_t *ctx)
+{
+	if (ctx) {
+		return ctx->selector;
+	}
+
+	return NULL;
+}
+
 guint
 rspamd_dkim_key_get_ttl (rspamd_dkim_key_t *k)
 {

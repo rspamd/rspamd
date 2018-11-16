@@ -1013,21 +1013,24 @@ dkim_module_check (struct dkim_check_result *res)
 
 			if (symbol != NULL) {
 				const gchar *domain = rspamd_dkim_get_domain (cur->ctx);
+				const gchar *selector = rspamd_dkim_get_selector (cur->ctx);
 				gsize tracelen;
 				gchar *tracebuf;
 
-				tracelen = strlen (domain) + 3; /* :<trace>\0 */
+				tracelen = strlen (domain) + strlen (selector) + 4;
 				tracebuf = rspamd_mempool_alloc (cur->task->task_pool,
 						tracelen);
 				rspamd_snprintf (tracebuf, tracelen, "%s:%s", domain, trace);
 
 				rspamd_task_insert_result (cur->task,
-						symbol,
-						symbol_weight,
-						domain);
-				rspamd_task_insert_result (cur->task,
 						"DKIM_TRACE",
 						0.0,
+						tracebuf);
+
+				rspamd_snprintf (tracebuf, tracelen, "%s:s=%s", domain, selector);
+				rspamd_task_insert_result (cur->task,
+						symbol,
+						symbol_weight,
 						tracebuf);
 			}
 		}
