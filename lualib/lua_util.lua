@@ -535,7 +535,7 @@ local function override_defaults(def, override)
   end
 
   for k,v in pairs(def) do
-    if not res[k] then
+    if type(res[k]) == 'nil' then
       res[k] = v
     end
   end
