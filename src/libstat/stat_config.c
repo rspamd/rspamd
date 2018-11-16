@@ -28,6 +28,7 @@ static struct rspamd_stat_classifier lua_classifier = {
 	.init_func = lua_classifier_init,
 	.classify_func = lua_classifier_classify,
 	.learn_spam_func = lua_classifier_learn_spam,
+	.fin_func = NULL,
 };
 
 static struct rspamd_stat_classifier stat_classifiers[] = {
@@ -36,6 +37,7 @@ static struct rspamd_stat_classifier stat_classifiers[] = {
 		.init_func = bayes_init,
 		.classify_func = bayes_classify,
 		.learn_spam_func = bayes_learn_spam,
+		.fin_func = bayes_fin,
 	}
 };
 
@@ -182,7 +184,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 			continue;
 		}
 
-		if (!cl->subrs->init_func (cfg->cfg_pool, cl)) {
+		if (!cl->subrs->init_func (cfg, ev_base, cl)) {
 			g_free (cl);
 			msg_err_config ("cannot init classifier type %s", clf->name);
 			cur = g_list_next (cur);
@@ -328,6 +330,11 @@ rspamd_stat_close (void)
 		}
 
 		g_array_free (cl->statfiles_ids, TRUE);
+
+		if (cl->subrs->fin_func) {
+			cl->subrs->fin_func (cl);
+		}
+
 		g_free (cl);
 	}
 
@@ -475,11 +482,11 @@ rspamd_stat_ctx_register_async (rspamd_stat_async_handler handler,
 	g_assert (st_ctx != NULL);
 
 	elt = g_malloc0 (sizeof (*elt));
-	REF_INIT_RETAIN (elt, rspamd_async_elt_dtor);
 	elt->handler = handler;
 	elt->cleanup = cleanup;
 	elt->ud = d;
 	elt->timeout = timeout;
+	REF_INIT_RETAIN (elt, rspamd_async_elt_dtor);
 	/* Enabled by default */
 
 

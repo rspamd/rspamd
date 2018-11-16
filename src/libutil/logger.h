@@ -111,6 +111,12 @@ guint rspamd_logger_add_debug_module (const gchar *mod);
 		rspamd_##mname##_log_id = rspamd_logger_add_debug_module(#mname); \
 }
 
+#define INIT_LOG_MODULE_PUBLIC(mname) \
+	guint rspamd_##mname##_log_id = (guint)-1; \
+	RSPAMD_CONSTRUCTOR(rspamd_##mname##_log_init) { \
+		rspamd_##mname##_log_id = rspamd_logger_add_debug_module(#mname); \
+}
+
 void rspamd_logger_configure_modules (GHashTable *mods_enabled);
 
 /**

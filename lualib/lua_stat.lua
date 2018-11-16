@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+--[[[
+-- @module lua_stat
+-- This module contains helper functions for supporting statistics
+--]]
+
 local logger = require "rspamd_logger"
 local sqlite3 = require "rspamd_sqlite3"
 local util = require "rspamd_util"

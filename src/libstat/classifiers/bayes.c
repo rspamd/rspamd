@@ -38,7 +38,7 @@
         G_STRFUNC, \
         __VA_ARGS__)
 
-INIT_LOG_MODULE(bayes)
+INIT_LOG_MODULE_PUBLIC(bayes)
 
 static inline GQuark
 bayes_error_quark (void)
@@ -254,11 +254,18 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 
 
 gboolean
-bayes_init (rspamd_mempool_t *pool, struct rspamd_classifier *cl)
+bayes_init (struct rspamd_config *cfg,
+			struct event_base *ev_base,
+			struct rspamd_classifier *cl)
 {
 	cl->cfg->flags |= RSPAMD_FLAG_CLASSIFIER_INTEGER;
 
 	return TRUE;
+}
+
+void
+bayes_fin (struct rspamd_classifier *cl)
+{
 }
 
 gboolean

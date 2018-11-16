@@ -63,7 +63,7 @@ rspamd_stat_tokenize_header (struct rspamd_task *task,
 			}
 		}
 
-		msg_debug_task ("added stat tokens for header '%s'", name);
+		msg_debug_bayes ("added stat tokens for header '%s'", name);
 	}
 }
 
@@ -114,7 +114,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 					g_array_append_val (ar, elt);
 				}
 
-				msg_debug_task ("added stat tokens for image '%s'", img->html_image->src);
+				msg_debug_bayes ("added stat tokens for image '%s'", img->html_image->src);
 			}
 		}
 		else if (part->cd && part->cd->filename.len > 0) {
@@ -133,7 +133,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 			elt.len = part->ct->boundary.len;
 
 			if (elt.len) {
-				msg_debug_task ("added stat tokens for mime boundary '%*s'",
+				msg_debug_bayes ("added stat tokens for mime boundary '%*s'",
 						(gint)elt.len, elt.begin);
 				g_array_append_val (ar, elt);
 			}
@@ -155,13 +155,13 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 		if (tp->language != NULL && tp->language[0] != '\0') {
 			elt.begin = (gchar *)tp->language;
 			elt.len = strlen (elt.begin);
-			msg_debug_task ("added stat tokens for part language '%s'", elt.begin);
+			msg_debug_bayes ("added stat tokens for part language '%s'", elt.begin);
 			g_array_append_val (ar, elt);
 		}
 		if (tp->real_charset != NULL) {
 			elt.begin = (gchar *)tp->real_charset;
 			elt.len = strlen (elt.begin);
-			msg_debug_task ("added stat tokens for part charset '%s'", elt.begin);
+			msg_debug_bayes ("added stat tokens for part charset '%s'", elt.begin);
 			g_array_append_val (ar, elt);
 		}
 	}
@@ -183,124 +183,6 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 		elt.len = 16;
 		g_array_append_val (ar, elt);
 	}
-
-	/* Use more precise headers order */
-#if 0
-	cur = g_list_first (task->headers_order->head);
-	while (cur) {
-		hdr = cur->data;
-
-		if (hdr->name && hdr->type != RSPAMD_HEADER_RECEIVED) {
-			elt.begin = hdr->name;
-			elt.len = strlen (hdr->name);
-			g_array_append_val (ar, elt);
-		}
-
-		cur = g_list_next (cur);
-	}
-#endif
-
-	/* Use metatokens plugin from Lua */
-	lua_getglobal (L, "rspamd_plugins");
-
-	if (lua_type (L, -1) == LUA_TTABLE) {
-		lua_pushstring (L, "stat_metatokens");
-		lua_gettable (L, -2);
-
-		if (lua_type (L, -1) == LUA_TTABLE) {
-			gint old_top;
-
-			old_top = lua_gettop (L);
-			lua_pushstring (L, "callback");
-			lua_gettable (L, -2);
-
-			if (lua_type (L, -1) == LUA_TFUNCTION) {
-				struct rspamd_task **ptask;
-
-				ptask = lua_newuserdata (L, sizeof (*ptask));
-				rspamd_lua_setclass (L, "rspamd{task}", -1);
-				*ptask = task;
-
-				if (lua_pcall (L, 1, LUA_MULTRET, 0) != 0) {
-					msg_err_task ("stat_metatokens failed: %s",
-							lua_tostring (L, -1));
-					lua_pop (L, 1);
-				} else {
-					if (lua_gettop (L) > old_top &&
-							lua_istable (L, old_top + 1)) {
-						lua_pushvalue (L, old_top + 1);
-						/* Iterate over table of tables */
-						for (lua_pushnil (L); lua_next (L, -2);
-								lua_pop (L, 1)) {
-							elt.flags = RSPAMD_STAT_TOKEN_FLAG_META|
-									RSPAMD_STAT_TOKEN_FLAG_LUA_META;
-
-							if (lua_isnumber (L, -1)) {
-								gdouble num = lua_tonumber (L, -1);
-								guint8 *pnum = rspamd_mempool_alloc (
-										task->task_pool,
-										sizeof (num));
-
-								msg_debug_task ("got metatoken number: %.2f",
-										num);
-								memcpy (pnum, &num, sizeof (num));
-								elt.begin = (gchar *) pnum;
-								elt.len = sizeof (num);
-								g_array_append_val (ar, elt);
-							} else if (lua_isstring (L, -1)) {
-								const gchar *str;
-								gsize tlen;
-
-								str = lua_tolstring (L, -1, &tlen);
-								guint8 *pstr = rspamd_mempool_alloc (
-										task->task_pool,
-										tlen);
-								memcpy (pstr, str, tlen);
-
-								msg_debug_task ("got metatoken string: %*s",
-										(gint) tlen, str);
-								elt.begin = (gchar *) pstr;
-								elt.len = tlen;
-								g_array_append_val (ar, elt);
-							}
-							else if (lua_istable (L, -1)) {
-								/* Treat that as unigramms */
-								for (lua_pushnil (L); lua_next (L, -2);
-										lua_pop (L, 1)) {
-									if (lua_isstring (L, -1)) {
-										const gchar *str;
-										gsize tlen;
-
-										str = lua_tolstring (L, -1, &tlen);
-										guint8 *pstr = rspamd_mempool_alloc (
-												task->task_pool,
-												tlen);
-										memcpy (pstr, str, tlen);
-
-										msg_debug_task ("got unigramm "
-												"metatoken string: %*s",
-												(gint) tlen, str);
-										elt.begin = (gchar *) pstr;
-										elt.len = tlen;
-										elt.flags |= RSPAMD_STAT_TOKEN_FLAG_UNIGRAM;
-										g_array_append_val (ar, elt);
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	lua_settop (L, 0);
-	st_ctx->tokenizer->tokenize_func (st_ctx,
-			task,
-			ar,
-			TRUE,
-			"META:",
-			task->tokens);
 
 	rspamd_mempool_add_destructor (task->task_pool,
 			rspamd_array_free_hard, ar);
@@ -354,7 +236,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 
 
 		if (pdiff != NULL && (1.0 - *pdiff) * 100.0 > similarity_treshold) {
-			msg_debug_task ("message has two common parts (%.2f), so skip the last one",
+			msg_debug_bayes ("message has two common parts (%.2f), so skip the last one",
 					*pdiff);
 			break;
 		}
@@ -425,7 +307,7 @@ rspamd_stat_preprocess (struct rspamd_stat_ctx *st_ctx,
 		if (!rspamd_symcache_is_symbol_enabled (task, task->cfg->cache,
 				st->stcf->symbol)) {
 			g_ptr_array_index (task->stat_runtimes, i) = NULL;
-			msg_debug_task ("symbol %s is disabled, skip classification",
+			msg_debug_bayes ("symbol %s is disabled, skip classification",
 					st->stcf->symbol);
 			continue;
 		}
@@ -574,7 +456,7 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 
 				if (bk_run == NULL) {
 					skip = TRUE;
-					msg_debug_task ("disable classifier %s as statfile symbol %s is disabled",
+					msg_debug_bayes ("disable classifier %s as statfile symbol %s is disabled",
 							cl->cfg->name, st->stcf->symbol);
 					break;
 				}
@@ -583,7 +465,7 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 
 		if (!skip) {
 			if (cl->cfg->min_tokens > 0 && task->tokens->len < cl->cfg->min_tokens) {
-				msg_debug_task (
+				msg_debug_bayes (
 						"<%s> contains less tokens than required for %s classifier: "
 						"%ud < %ud",
 						task->message_id,
@@ -593,7 +475,7 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 				continue;
 			}
 			else if (cl->cfg->max_tokens > 0 && task->tokens->len > cl->cfg->max_tokens) {
-				msg_debug_task (
+				msg_debug_bayes (
 						"<%s> contains more tokens than allowed for %s classifier: "
 						"%ud > %ud",
 						task->message_id,
@@ -1090,7 +972,7 @@ rspamd_stat_has_classifier_symbols (struct rspamd_task *task,
 
 		if (rspamd_task_find_symbol_result (task, st->stcf->symbol)) {
 			if (is_spam == !!st->stcf->is_spam) {
-				msg_debug_task ("do not autolearn %s as symbol %s is already "
+				msg_debug_bayes ("do not autolearn %s as symbol %s is already "
 						"added", is_spam ? "spam" : "ham", st->stcf->symbol);
 
 				return TRUE;

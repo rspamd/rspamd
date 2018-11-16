@@ -47,8 +47,9 @@ static GHashTable *lua_classifiers = NULL;
 INIT_LOG_MODULE(luacl)
 
 gboolean
-lua_classifier_init (rspamd_mempool_t *pool,
-		struct rspamd_classifier *cl)
+lua_classifier_init (struct rspamd_config *cfg,
+					 struct event_base *ev_base,
+					 struct rspamd_classifier *cl)
 {
 	struct rspamd_lua_classifier_ctx *ctx;
 	lua_State *L = cl->ctx->cfg->lua_state;
@@ -62,7 +63,7 @@ lua_classifier_init (rspamd_mempool_t *pool,
 	ctx = g_hash_table_lookup (lua_classifiers, cl->subrs->name);
 
 	if (ctx != NULL) {
-		msg_err_pool ("duplicate lua classifier definition: %s",
+		msg_err_config ("duplicate lua classifier definition: %s",
 				cl->subrs->name);
 
 		return FALSE;
@@ -70,7 +71,7 @@ lua_classifier_init (rspamd_mempool_t *pool,
 
 	lua_getglobal (L, "rspamd_classifiers");
 	if (lua_type (L, -1) != LUA_TTABLE) {
-		msg_err_pool ("cannot register classifier %s: no rspamd_classifier global",
+		msg_err_config ("cannot register classifier %s: no rspamd_classifier global",
 				cl->subrs->name);
 		lua_pop (L, 1);
 
@@ -81,7 +82,7 @@ lua_classifier_init (rspamd_mempool_t *pool,
 	lua_gettable (L, -2);
 
 	if (lua_type (L, -1) != LUA_TTABLE) {
-		msg_err_pool ("cannot register classifier %s: bad lua type: %s",
+		msg_err_config ("cannot register classifier %s: bad lua type: %s",
 				cl->subrs->name, lua_typename (L, lua_type (L, -1)));
 		lua_pop (L, 2);
 
@@ -92,7 +93,7 @@ lua_classifier_init (rspamd_mempool_t *pool,
 	lua_gettable (L, -2);
 
 	if (lua_type (L, -1) != LUA_TFUNCTION) {
-		msg_err_pool ("cannot register classifier %s: bad lua type for classify: %s",
+		msg_err_config ("cannot register classifier %s: bad lua type for classify: %s",
 				cl->subrs->name, lua_typename (L, lua_type (L, -1)));
 		lua_pop (L, 3);
 
@@ -105,7 +106,7 @@ lua_classifier_init (rspamd_mempool_t *pool,
 	lua_gettable (L, -2);
 
 	if (lua_type (L, -1) != LUA_TFUNCTION) {
-		msg_err_pool ("cannot register classifier %s: bad lua type for learn: %s",
+		msg_err_config ("cannot register classifier %s: bad lua type for learn: %s",
 				cl->subrs->name, lua_typename (L, lua_type (L, -1)));
 		lua_pop (L, 3);
 

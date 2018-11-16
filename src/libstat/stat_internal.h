@@ -41,6 +41,7 @@ struct rspamd_classifier {
 	gulong ham_learns;
 	struct rspamd_classifier_config *cfg;
 	struct rspamd_stat_classifier *subrs;
+	gpointer specific;
 };
 
 struct rspamd_statfile {
