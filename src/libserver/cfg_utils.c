@@ -1558,10 +1558,12 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 	/* Search for symbol group */
 	if (group == NULL) {
 		group = "ungrouped";
-	}
-
-	if (strcmp (group, "ungrouped") == 0) {
 		sym_def->flags |= RSPAMD_SYMBOL_FLAG_UNGROUPPED;
+	}
+	else {
+		if (strcmp (group, "ungrouped") == 0) {
+			sym_def->flags |= RSPAMD_SYMBOL_FLAG_UNGROUPPED;
+		}
 	}
 
 	sym_group = g_hash_table_lookup (cfg->groups, group);
@@ -1572,6 +1574,10 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 
 	sym_def->gr = sym_group;
 	g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
+
+	if (!(sym_def->flags & RSPAMD_SYMBOL_FLAG_UNGROUPPED)) {
+		g_ptr_array_add (sym_def->groups, sym_group);
+	}
 }
 
 
