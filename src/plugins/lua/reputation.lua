@@ -354,7 +354,7 @@ local url_selector = {
     outbound = true,
     inbound = true,
   },
-  dependencies = {"SURBL_CALLBACK"},
+  dependencies = {"SURBL_REDIRECTOR_CALLBACK"},
   filter = url_reputation_filter, -- used to get scores
   idempotent = url_reputation_idempotent -- used to set scores
 }

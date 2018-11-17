@@ -762,10 +762,30 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 			continue;
 		}
 
-		cb_id = rspamd_symcache_add_symbol (cfg->cache, "SURBL_CALLBACK",
+		GString *sym = g_string_sized_new (127);
+		gchar *p;
+
+		rspamd_printf_gstring (sym, "SURBL_%s",
+				new_suffix->suffix);
+
+		p = sym->str;
+
+		while (*p) {
+			if (*p == '.') {
+				*p = '_';
+			}
+			else {
+				*p = g_ascii_toupper (*p);
+			}
+
+			p ++;
+		}
+
+		cb_id = rspamd_symcache_add_symbol (cfg->cache, sym->str,
 				0, surbl_test_url, new_suffix, SYMBOL_TYPE_CALLBACK, -1);
 		rspamd_symcache_add_dependency (cfg->cache, cb_id,
 				SURBL_REDIRECTOR_CALLBACK);
+		g_string_free (sym, TRUE);
 		nrules++;
 		new_suffix->callback_id = cb_id;
 		cur = ucl_object_lookup (cur_rule, "bits");
