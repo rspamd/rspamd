@@ -766,6 +766,25 @@ local function get_meta_stat_tokens(task, res, i)
     i = i + 1
   end
 
+  local rh = task:get_received_headers()
+
+  if rh and #rh > 0 then
+    local lim = math.min(5, #rh)
+    for j =1,lim do
+      local rcvd = rh[j]
+      local ip = rcvd.real_ip
+      if ip and ip:is_valid() and ip:get_version() == 4 then
+        local masked = ip:apply_mask(24)
+
+        rawset(res, i, string.format("#rcv:%s:%s", tostring(masked),
+            rcvd.proto))
+        lua_util.debugm("bayes", task, "added received token: %s",
+            res[i])
+        i = i + 1
+      end
+    end
+  end
+
   return i
 end
 
