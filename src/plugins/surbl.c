@@ -1014,7 +1014,7 @@ surbl_module_config (struct rspamd_config *cfg)
 		surbl_module_ctx->use_tags = ucl_obj_toboolean (value);
 	}
 	else {
-		surbl_module_ctx->use_tags = TRUE;
+		surbl_module_ctx->use_tags = FALSE;
 	}
 
 	if ((value =
@@ -1455,6 +1455,7 @@ process_dns_results (struct rspamd_task *task,
 	gboolean got_result = FALSE;
 	struct surbl_bit_item *bit;
 	struct in_addr ina;
+	struct surbl_ctx *surbl_module_ctx = surbl_get_context (task->cfg);
 
 	if (suffix->ips && g_hash_table_size (suffix->ips) > 0) {
 
@@ -1465,7 +1466,10 @@ process_dns_results (struct rspamd_task *task,
 					resolved_name, suffix->suffix,
 					bit->bit);
 			rspamd_task_insert_result (task, bit->symbol, 1, resolved_name);
-			rspamd_url_add_tag (uri, "surbl", bit->symbol, task->task_pool);
+
+			if (surbl_module_ctx->use_tags) {
+				rspamd_url_add_tag (uri, "surbl", bit->symbol, task->task_pool);
+			}
 			got_result = TRUE;
 		}
 	}
@@ -1485,7 +1489,10 @@ process_dns_results (struct rspamd_task *task,
 						resolved_name, suffix->suffix,
 						bit->bit);
 				rspamd_task_insert_result (task, bit->symbol, 1, resolved_name);
-				rspamd_url_add_tag (uri, "surbl", bit->symbol, task->task_pool);
+
+				if (surbl_module_ctx->use_tags) {
+					rspamd_url_add_tag (uri, "surbl", bit->symbol, task->task_pool);
+				}
 			}
 		}
 	}
@@ -1496,7 +1503,10 @@ process_dns_results (struct rspamd_task *task,
 					task->message_id,
 					resolved_name, suffix->suffix);
 			rspamd_task_insert_result (task, suffix->symbol, 1, resolved_name);
-			rspamd_url_add_tag (uri, "surbl", suffix->symbol, task->task_pool);
+
+			if (surbl_module_ctx->use_tags) {
+				rspamd_url_add_tag (uri, "surbl", suffix->symbol, task->task_pool);
+			}
 		}
 		else {
 			ina.s_addr = addr;
@@ -1626,12 +1636,14 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 {
 	struct redirector_param *param = (struct redirector_param *)conn->ud;
 	struct rspamd_task *task;
+	struct surbl_ctx *surbl_module_ctx;
 	gint r, urllen;
 	struct rspamd_url *redirected_url, *existing;
 	const rspamd_ftok_t *hdr;
 	gchar *urlstr;
 
 	task = param->task;
+	surbl_module_ctx = surbl_get_context (task->cfg);
 
 	if (msg->code == 200) {
 		hdr = rspamd_http_message_find_header (msg, "Uri");
@@ -1661,8 +1673,10 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 					existing->count ++;
 				}
 
-				rspamd_url_add_tag (param->url, "redirector", urlstr,
-						task->task_pool);
+				if (surbl_module_ctx->use_tags) {
+					rspamd_url_add_tag (param->url, "redirector", urlstr,
+							task->task_pool);
+				}
 			}
 			else {
 				msg_info_surbl ("cannot parse redirector reply: %s", urlstr);
@@ -1777,6 +1791,9 @@ surbl_test_tags (struct rspamd_task *task, struct redirector_param *param,
 		/* We know results for this URL */
 
 		DL_FOREACH (tag, cur) {
+			msg_info_surbl ("<%s> domain [%s] is in surbl %s (tags)",
+					task->message_id,
+					ftld, cur->data);
 			rspamd_task_insert_result (task, cur->data, 1, ftld);
 		}
 
@@ -1893,7 +1910,8 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 	task = param->task;
 	surbl_module_ctx = param->ctx;
 
-	msg_debug_surbl ("check url %*s", url->urllen, url->string);
+	msg_debug_surbl ("check url %*s in %s", url->urllen, url->string,
+			param->suffix->suffix);
 
 	if (surbl_module_ctx->use_tags && surbl_test_tags (param->task, param, url)) {
 		return;
@@ -2155,12 +2173,14 @@ surbl_continue_process_handler (lua_State *L)
 	gsize urllen;
 	struct rspamd_url *redirected_url;
 	gchar *urlstr;
+	struct surbl_ctx *surbl_module_ctx;
 
 	nurl = lua_tolstring (L, 1, &urllen);
 	param = (struct redirector_param *)lua_topointer (L, 2);
 
 	if (param != NULL) {
 		task = param->task;
+		surbl_module_ctx = surbl_get_context (task->cfg);
 
 		if (nurl != NULL) {
 			msg_info_surbl ("<%s> got reply from redirector: '%*s' -> '%*s'",
@@ -2183,8 +2203,10 @@ surbl_continue_process_handler (lua_State *L)
 					redirected_url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
 				}
 
-				rspamd_url_add_tag (param->url, "redirector", urlstr,
-						task->task_pool);
+				if (surbl_module_ctx->use_tags) {
+					rspamd_url_add_tag (param->url, "redirector", urlstr,
+							task->task_pool);
+				}
 			}
 			else {
 				msg_info_surbl ("<%s> could not resolve '%*s' on redirector",
