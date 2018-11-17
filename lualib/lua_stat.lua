@@ -541,6 +541,7 @@ local function process_stat_config(cfg)
     classify_urls = true,
     classify_meta = true,
     classify_max_tlds = 10,
+    classify_meta = true,
   }
 
   res_config = lua_util.override_defaults(res_config, opts_section)
@@ -553,9 +554,15 @@ local function process_stat_config(cfg)
 
     local hname
     if s1 and s2 then
-      hname = string.format('#h:%s-%s', s1, s2)
+      hname = string.format('%s-%s', s1, s2)
     else
-      hname = string.format('#h:%s', v:sub(1, 2):lower())
+      s1 = v:match("^X%-([A-Z].*)$")
+
+      if s1 then
+        hname = string.format('x%s', s1:sub(1, 3):lower())
+      else
+        hname = string.format('%s', v:sub(1, 3):lower())
+      end
     end
 
     if classify_headers_parsed[hname] then
@@ -706,6 +713,17 @@ local function get_headers_stat_tokens(task, cf, res, i)
   return i
 end
 
+local function get_meta_stat_tokens(task, res, i)
+  local day_and_hour = os.date('%u:%H',
+      task:get_date{format = 'message', gmt = true})
+  rawset(res, i, string.format("#dt:%s", day_and_hour))
+  lua_util.debugm("bayes", task, "added day_of_week name token: %s",
+      res[i])
+  i = i + 1
+
+  return i
+end
+
 local function get_stat_tokens(task, cf)
   local res = {}
   local E = {}
@@ -745,7 +763,7 @@ local function get_stat_tokens(task, cf)
   end
 
   if cf.classify_urls then
-    local urls = lua_util.extract_specific_urls{task = task, limit = 5}
+    local urls = lua_util.extract_specific_urls{task = task, limit = 5, esld_limit = 1}
 
     if urls then
       for _,u in ipairs(urls) do
@@ -755,6 +773,10 @@ local function get_stat_tokens(task, cf)
         i = i + 1
       end
     end
+  end
+
+  if cf.classify_meta then
+    i = get_meta_stat_tokens(task, res, i)
   end
 
   return res
