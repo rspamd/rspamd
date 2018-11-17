@@ -541,7 +541,6 @@ local function process_stat_config(cfg)
     classify_urls = true,
     classify_meta = true,
     classify_max_tlds = 10,
-    classify_meta = true,
   }
 
   res_config = lua_util.override_defaults(res_config, opts_section)
@@ -717,9 +716,55 @@ local function get_meta_stat_tokens(task, res, i)
   local day_and_hour = os.date('%u:%H',
       task:get_date{format = 'message', gmt = true})
   rawset(res, i, string.format("#dt:%s", day_and_hour))
-  lua_util.debugm("bayes", task, "added day_of_week name token: %s",
+  lua_util.debugm("bayes", task, "added day_of_week token: %s",
       res[i])
   i = i + 1
+
+  local pol = {}
+
+  -- Authentication results
+  if task:has_symbol('DKIM_TRACE') then
+    -- Autolearn or scan
+    if task:has_symbol('R_SPF_ALLOW') then
+      table.insert(pol, 's=pass')
+    end
+
+    local trace = task:get_symbol('DKIM_TRACE')
+    local dkim_opts = trace[1]['options']
+    if dkim_opts then
+      for _,o in ipairs(dkim_opts) do
+        local check_res = string.sub(o, -1)
+        local domain = string.sub(o, 1, -3)
+
+        if check_res == '+' then
+          table.insert(pol, string.format('d=%s:%s', "pass", domain))
+        end
+      end
+    end
+  else
+    -- Offline learn
+    local aur = task:get_header('Authentication-Results')
+
+    if aur then
+      local spf = aur:match('spf=([a-z]+)')
+      local dkim,dkim_domain = aur:match('dkim=([a-z]+) header.d=([a-z.%-]+)')
+
+
+      if spf then
+        table.insert(pol, 's=' .. spf)
+      end
+      if dkim and dkim_domain then
+        table.insert(pol, string.format('d=%s:%s', dkim, dkim_domain))
+      end
+    end
+  end
+
+  if #pol > 0 then
+    rawset(res, i, string.format("#aur:%s", table.concat(pol, ',')))
+    lua_util.debugm("bayes", task, "added policies token: %s",
+        res[i])
+    i = i + 1
+  end
 
   return i
 end
