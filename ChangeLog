@@ -1,3 +1,58 @@
+1.8.2: 19 Nov 2018
+  * [Conf] Add DWL support in the default configuration
+  * [Conf] Disable rspamd_update by default (again)
+  * [Conf] Fix configuration sample for ratelimit
+  * [CritFix] Disable broken url tags by default
+  * [CritFix] Fix \0 processing when doing RSA sign
+  * [CritFix] Fix adding symbols to their primary groups
+  * [Feature] Add `rspamadm cookie` utility
+  * [Feature] Add specialised functions for generating encrypted cookies
+  * [Feature] Add support of cookies in replies module
+  * [Feature] Add support of words regexps
+  * [Feature] Allow to add 3rd party clang plugins
+  * [Feature] Allow to create lua regexps from glob or plain patterns
+  * [Feature] Allow to set custom limits for upstream lists
+  * [Feature] Detect orphaned parts and attach them to message
+  * [Feature] Filter tokens in bayes
+  * [Feature] Fold b= value when doing arc sealing
+  * [Feature] Ignore cookies in the future and too old in the past
+  * [Feature] Skip stop words in statistics
+  * [Feature] Store stop words and allow to query them
+  * [Feature] Support query arguments in controller's custom commands
+  * [Feature] Tune upstream limits in Rspamd proxy
+  * [Feature] Use different callback symbols for different uribls
+  * [Feature] Write DKIM selector in dkim allow/reject symbols
+  * [Fix] Add obs_fws state support to eoh state machine
+  * [Fix] Add sanity check when applying mime boundaries heuristic
+  * [Fix] Antivirus - virus names with 0 were recognized as tables
+  * [Fix] Disable headernames in bayes temporarily
+  * [Fix] Do not allow syntax errors in include files...
+  * [Fix] Do not allow to merge an object with an array (or vice versa)
+  * [Fix] Don't perform forged recipients check for missing recipients
+  * [Fix] Fix DKIM based RBLs
+  * [Fix] Fix actrie implementation (sync from upstream), fixed OOB read
+  * [Fix] Fix explicit methods call in selectors
+  * [Fix] Fix extraction of additional parts
+  * [Fix] Fix finalization for internal plugins
+  * [Fix] Fix override_defaults function
+  * [Fix] Fix squeezed symbols when using settings
+  * [Fix] Fix urls insertion in Clickhouse module
+  * [Fix] Furhter fixes to ratelimits logic
+  * [Fix] Ignore signatures when looking for boundaries
+  * [Fix] Properly set learned count
+  * [Fix] Really fix ratelimits configuration and work
+  * [Fix] Remove ambigious format flag from printf
+  * [Fix] Restore URLs exporting in ClickHouse plugin
+  * [Fix] Rework bayes calculations...
+  * [Fix] Switch from chi-square to naive for large Fisher value
+  * [Fix] Treat normal password as enable password if there is no enable password
+  * [Fix] Use proper syntax for making DNS requests
+  * [Fix] Various fixes in embedded plugins
+  * [Project] Change fuzzy check selection logic to lua_fuzzy library
+  * [Project] Rework async events and symbols
+  * [Project] Move all metatokens in Bayes to lua_stat from C
+  * [WebUI] Add history rows per page control
+
 1.8.1: 16 Oct 2018
   * [CritFix] Fix options insertion
   * [CritFix] Fix words decay one more time (affects long messages)
