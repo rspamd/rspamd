@@ -25,18 +25,18 @@ struct f_str_s;
 #  if __has_attribute(alloc_size)
 #    define RSPAMD_ATTR_ALLOC_SIZE(pos) __attribute__((alloc_size(pos)))
 #  else
-#    #define RSPAMD_ATTR_ALLOC_SIZE(pos)
+#    define RSPAMD_ATTR_ALLOC_SIZE(pos)
 #  endif
 
 #  if __has_attribute(assume_aligned)
 #    define RSPAMD_ATTR_ALLOC_ALIGN(al) __attribute__((assume_aligned(al)))
 #  else
-#    #define RSPAMD_ATTR_ALLOC_ALIGN(al)
+#    define RSPAMD_ATTR_ALLOC_ALIGN(al)
 #  endif
 #  if __has_attribute(returns_nonnull)
 #    define RSPAMD_ATTR_RETURNS_NONNUL __attribute__((returns_nonnull))
 #  else
-#    #define RSPAMD_ATTR_RETURNS_NONNUL
+#    define RSPAMD_ATTR_RETURNS_NONNUL
 #  endif
 #else
 #define RSPAMD_ATTR_ALLOC_SIZE(pos)
