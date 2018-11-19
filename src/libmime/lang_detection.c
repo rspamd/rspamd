@@ -634,7 +634,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 	nelt->mean = mean;
 	nelt->std = std;
 
-	msg_info_config ("loaded %s language, %d trigramms, "
+	msg_debug_lang_det_cfg ("loaded %s language, %d trigramms, "
 					 "%d ngramms loaded; "
 					 "std=%.2f, mean=%.2f, skipped=%d, loaded=%d, stop_words=%d; "
 					 "(%s)",
