@@ -342,7 +342,7 @@ accept_socket (gint fd, short what, void *arg)
 	struct rspamd_worker_ctx *ctx;
 	struct rspamd_task *task;
 	rspamd_inet_addr_t *addr;
-	gint nfd;
+	gint nfd, http_opts = 0;
 
 	ctx = worker->ctx;
 
@@ -386,10 +386,14 @@ accept_socket (gint fd, short what, void *arg)
 	/* TODO: allow to disable autolearn in protocol */
 	task->flags |= RSPAMD_TASK_FLAG_LEARN_AUTO;
 
+	if (ctx->encrypted_only && !rspamd_inet_address_is_local (addr, FALSE)) {
+		http_opts = RSPAMD_HTTP_REQUIRE_ENCRYPTION;
+	}
+
 	task->http_conn = rspamd_http_connection_new (rspamd_worker_body_handler,
 			rspamd_worker_error_handler,
 			rspamd_worker_finish_handler,
-			0,
+			http_opts,
 			RSPAMD_HTTP_SERVER,
 			ctx->keys_cache,
 			NULL);
@@ -547,30 +551,13 @@ init_worker (struct rspamd_config *cfg)
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
-			"http",
+			"encrypted_only",
 			rspamd_rcl_parse_struct_boolean,
 			ctx,
-			G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_http),
+			G_STRUCT_OFFSET (struct rspamd_worker_ctx, encrypted_only),
 			0,
 			"Deprecated: always true now");
 
-	rspamd_rcl_register_worker_option (cfg,
-			type,
-			"json",
-			rspamd_rcl_parse_struct_boolean,
-			ctx,
-			G_STRUCT_OFFSET (struct rspamd_worker_ctx, is_json),
-			0,
-			"Deprecated: always true now");
-
-	rspamd_rcl_register_worker_option (cfg,
-			type,
-			"allow_learn",
-			rspamd_rcl_parse_struct_boolean,
-			ctx,
-			G_STRUCT_OFFSET (struct rspamd_worker_ctx, allow_learn),
-			0,
-			"Deprecated: disabled and forgotten");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
