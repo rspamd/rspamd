@@ -138,7 +138,7 @@ uses any type by default)]],
       local parts = task:get_parts() or E
       local digests = {}
 
-      if args ~= nil then
+      if #args > 0 then
         local rspamd_cryptobox = require "rspamd_cryptobox_hash"
         local encoding = args[1] or 'hex'
         local ht = args[2] or 'blake2'
