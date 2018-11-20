@@ -132,13 +132,35 @@ uses any type by default)]],
   },
   -- Get list of all attachments digests
   ['attachments'] = {
-    ['get_value'] = function(task)
+    ['get_value'] = function(task, args)
+
+      local s
       local parts = task:get_parts() or E
       local digests = {}
 
-      for _,p in ipairs(parts) do
-        if p:get_filename() then
-          table.insert(digests, p:get_digest())
+      if args ~= nil then
+        local rspamd_cryptobox = require "rspamd_cryptobox_hash"
+        local encoding = args[1] or 'hex'
+        local ht = args[2] or 'blake2'
+
+        for _,p in ipairs(parts) do
+          if p:get_filename() then
+            local h = rspamd_cryptobox.create_specific(ht, p:get_content('raw_parsed'))
+            if encoding == 'hex' then
+              s = h:hex()
+            elseif encoding == 'base32' then
+              s = h:base32()
+            elseif encoding == 'base64' then
+              s = h:base64()
+            end
+            table.insert(digests, s)
+          end
+        end
+      else
+        for _,p in ipairs(parts) do
+          if p:get_filename() then
+            table.insert(digests, p:get_digest())
+          end
         end
       end
 
@@ -148,7 +170,13 @@ uses any type by default)]],
 
       return nil
     end,
-    ['description'] = 'Get list of all attachments digests',
+    ['description'] = [[Get list of all attachments digests.
+The first optional argument is encoding (`hex`, `base32`, `base64`),
+the second optional argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`, `md5`)]],
+
+    ['args_schema'] = {ts.one_of{'hex', 'base32', 'base64'}:is_optional(),
+                       ts.one_of{'blake2', 'sha256', 'sha1', 'sha512', 'md5'}:is_optional()}
+
   },
   -- Get all attachments files
   ['files'] = {
