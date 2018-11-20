@@ -396,6 +396,11 @@ rspamd_str_has_8bit (const guchar *beg, gsize len)
 gboolean rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool,
 		gchar *start, guint *len);
 
+enum rspamd_regexp_escape_flags {
+	RSPAMD_REGEXP_ESCAPE_ASCII = 0,
+	RSPAMD_REGEXP_ESCAPE_UTF = 1u << 0,
+	RSPAMD_REGEXP_ESCAPE_GLOB = 1u << 1,
+};
 /**
  * Escapes special characters when reading plain data to be processed in pcre
  * @param pattern pattern to process
@@ -406,6 +411,6 @@ gboolean rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool,
  */
 gchar *
 rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
-		gsize *dst_len, gboolean allow_glob);
+		gsize *dst_len, enum rspamd_regexp_escape_flags flags);
 
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */

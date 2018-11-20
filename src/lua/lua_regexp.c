@@ -191,7 +191,8 @@ lua_regexp_import_glob (lua_State *L)
 	}
 
 	if (string) {
-		escaped = rspamd_str_regexp_escape (string, pat_len, NULL, TRUE);
+		escaped = rspamd_str_regexp_escape (string, pat_len, NULL,
+				RSPAMD_REGEXP_ESCAPE_GLOB|RSPAMD_REGEXP_ESCAPE_UTF);
 
 		re = rspamd_regexp_new (escaped, flags_str, &err);
 
@@ -249,7 +250,8 @@ lua_regexp_import_plain (lua_State *L)
 	}
 
 	if (string) {
-		escaped = rspamd_str_regexp_escape (string, pat_len, NULL, FALSE);
+		escaped = rspamd_str_regexp_escape (string, pat_len, NULL,
+				RSPAMD_REGEXP_ESCAPE_ASCII);
 
 		re = rspamd_regexp_new (escaped, flags_str, &err);
 

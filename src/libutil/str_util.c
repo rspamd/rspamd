@@ -2327,10 +2327,10 @@ out:
 
 gchar *
 rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
-		gsize *dst_len, gboolean allow_glob)
+		gsize *dst_len, enum rspamd_regexp_escape_flags flags)
 {
 	const gchar *p, *end = pattern + slen;
-	gchar *res, *d, t;
+	gchar *res, *d, t, *tmp_utf = NULL;
 	gsize len;
 	static const gchar hexdigests[16] = "0123456789abcdef";
 
@@ -2365,20 +2365,46 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 			if (g_ascii_isspace (t)) {
 				len ++;
 			}
-			else if (!g_ascii_isprint (t)) {
-				/* \\xHH -> 4 symbols */
-				len += 3;
+			else {
+				if (!(flags & RSPAMD_REGEXP_ESCAPE_UTF)) {
+					if (!g_ascii_isprint (t)) {
+						/* \\xHH -> 4 symbols */
+						len += 3;
+					}
+				}
 			}
 			break;
 		}
 	}
 
+	if (flags & RSPAMD_REGEXP_ESCAPE_UTF) {
+		if (!g_utf8_validate (pattern, slen, NULL)) {
+			tmp_utf = g_utf8_make_valid (pattern, slen);
+		}
+	}
+
 	if (slen == len) {
 		if (dst_len) {
+
+			if (tmp_utf) {
+				slen = strlen (tmp_utf);
+			}
+
 			*dst_len = slen;
 		}
 
-		return g_strdup (pattern);
+
+
+		if (tmp_utf) {
+			return tmp_utf;
+		}
+		else {
+			return g_strdup (pattern);
+		}
+	}
+
+	if (tmp_utf) {
+		pattern = tmp_utf;
 	}
 
 	res = g_malloc (len + 1);
@@ -2408,7 +2434,7 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 		case '*':
 		case '?':
 		case '+':
-			if (allow_glob) {
+			if (flags & RSPAMD_REGEXP_ESCAPE_GLOB) {
 				/* Treat * as .* and ? as .? */
 				*d++ = '.';
 			}
@@ -2420,7 +2446,7 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 			if (g_ascii_isspace (t)) {
 				*d++ = '\\';
 			}
-			else if (!g_ascii_isgraph (t)) {
+			else if (!(flags & RSPAMD_REGEXP_ESCAPE_UTF) && !g_ascii_isgraph (t)) {
 				*d++ = '\\';
 				*d++ = 'x';
 				*d++ = hexdigests[((t >> 4) & 0xF)];
@@ -2437,6 +2463,10 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 
 	if (dst_len) {
 		*dst_len = d - res;
+	}
+
+	if (tmp_utf) {
+		g_free (tmp_utf);
 	}
 
 	return res;

@@ -540,7 +540,7 @@ rspamd_map_helper_insert_re (gpointer st, gconstpointer key, gconstpointer value
 
 	if (re_map->map_flags & RSPAMD_REGEXP_MAP_FLAG_GLOB) {
 		escaped = rspamd_str_regexp_escape (key, strlen (key), &escaped_len,
-				TRUE);
+				RSPAMD_REGEXP_ESCAPE_GLOB|RSPAMD_REGEXP_ESCAPE_UTF);
 		re = rspamd_regexp_new (escaped, NULL, &err);
 		g_free (escaped);
 	}

@@ -458,8 +458,9 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 				const char *word = ucl_object_tolstring (w, &wlen);
 				const char *saved;
 
-				rspamd_multipattern_add_pattern (d->stop_words[cat].mp,
-						word, wlen);
+				rspamd_multipattern_add_pattern_len (d->stop_words[cat].mp,
+						word, wlen,
+						RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
 				nelt->stop_words ++;
 				nstop ++;
 

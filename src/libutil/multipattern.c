@@ -193,6 +193,12 @@ rspamd_multipattern_pattern_filter (const gchar *pattern, gsize len,
 	gchar *ret = NULL;
 #ifdef WITH_HYPERSCAN
 	if (rspamd_hs_check ()) {
+		gint gl_flags = RSPAMD_REGEXP_ESCAPE_ASCII;
+
+		if (flags & RSPAMD_MULTIPATTERN_UTF8) {
+			gl_flags |= RSPAMD_REGEXP_ESCAPE_UTF;
+		}
+
 		if (flags & RSPAMD_MULTIPATTERN_TLD) {
 			ret = rspamd_multipattern_escape_tld_hyperscan (pattern, len, dst_len);
 		}
@@ -201,10 +207,11 @@ rspamd_multipattern_pattern_filter (const gchar *pattern, gsize len,
 			*dst_len = rspamd_strlcpy (ret, pattern, len + 1);
 		}
 		else if (flags & RSPAMD_MULTIPATTERN_GLOB) {
-			ret = rspamd_str_regexp_escape (pattern, len, dst_len, TRUE);
+			ret = rspamd_str_regexp_escape (pattern, len, dst_len,
+					gl_flags | RSPAMD_REGEXP_ESCAPE_GLOB);
 		}
 		else {
-			ret = rspamd_str_regexp_escape (pattern, len, dst_len, FALSE);
+			ret = rspamd_str_regexp_escape (pattern, len, dst_len, gl_flags);
 		}
 
 		return ret;
