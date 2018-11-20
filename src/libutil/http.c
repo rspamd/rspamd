@@ -432,7 +432,7 @@ rspamd_http_parse_key (rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 
 	if (priv->local_key == NULL) {
 		/* In this case we cannot do anything, e.g. we cannot decrypt payload */
-		priv->flags |= RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
+		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 	}
 	else {
 		/* Check sanity of what we have */
@@ -913,6 +913,11 @@ rspamd_http_on_message_complete (http_parser * parser)
 	}
 
 	priv = conn->priv;
+
+	if ((conn->opts & RSPAMD_HTTP_REQUIRE_ENCRYPTION) && !IS_CONN_ENCRYPTED (priv)) {
+		msg_err ("unencrypted connection when encryption has been requested");
+		return -1;
+	}
 
 	if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) == 0 && IS_CONN_ENCRYPTED (priv)) {
 		mode = rspamd_keypair_alg (priv->local_key);

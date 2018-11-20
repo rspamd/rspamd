@@ -76,9 +76,10 @@ struct rspamd_storage_shmem {
  */
 enum rspamd_http_options {
 	RSPAMD_HTTP_BODY_PARTIAL = 0x1, /**< Call body handler on all body data portions *///!< RSPAMD_HTTP_BODY_PARTIAL
-	RSPAMD_HTTP_CLIENT_SIMPLE = 0x2, /**< Read HTTP client reply automatically */      //!< RSPAMD_HTTP_CLIENT_SIMPLE
-	RSPAMD_HTTP_CLIENT_ENCRYPTED = 0x4, /**< Encrypt data for client */                //!< RSPAMD_HTTP_CLIENT_ENCRYPTED
-	RSPAMD_HTTP_CLIENT_SHARED = 0x8, /**< Store reply in shared memory */              //!< RSPAMD_HTTP_CLIENT_SHARED
+	RSPAMD_HTTP_CLIENT_SIMPLE = 0x1u << 1, /**< Read HTTP client reply automatically */      //!< RSPAMD_HTTP_CLIENT_SIMPLE
+	RSPAMD_HTTP_CLIENT_ENCRYPTED = 0x1u << 2, /**< Encrypt data for client */                //!< RSPAMD_HTTP_CLIENT_ENCRYPTED
+	RSPAMD_HTTP_CLIENT_SHARED = 0x1u << 3, /**< Store reply in shared memory */              //!< RSPAMD_HTTP_CLIENT_SHARED
+	RSPAMD_HTTP_REQUIRE_ENCRYPTION = 0x1u << 4
 };
 
 typedef int (*rspamd_http_body_handler_t) (struct rspamd_http_connection *conn,
