@@ -20,6 +20,7 @@ local rspamd_regexp = require "rspamd_regexp"
 local tcp = require "rspamd_tcp"
 local upstream_list = require "rspamd_upstream_list"
 local lua_util = require "lua_util"
+local fun = require "fun"
 local redis_params
 
 local N = "antivirus"
@@ -890,21 +891,20 @@ local function add_antivirus_rule(sym, opts)
     if rule.scan_mime_parts then
       local parts = task:get_parts() or {}
 
-      for _,p in ipairs(parts) do
-        if (
-            (p:is_image() and rule.scan_image_mime)
-            or (p:is_text() and rule.scan_text_mime)
-            or (p:is_multipart() and rule.scan_text_mime)
-            or (not p:is_image() and not p:is_text() and not p:is_multipart())
-            ) then
-
-          local content = p:get_content()
-
-          if content and #content > 0 then
-            cfg.check(task, content, p:get_digest(), rule)
-          end
-        end
+      local filter_func = function(p)
+        return (rule.scan_image_mime and p:is_image())
+            or (rule.scan_text_mime and p:is_text())
+            or (p:get_filename())
       end
+
+      fun.each(function(p)
+        local content = p:get_content()
+
+        if content and #content > 0 then
+          cfg.check(task, content, p:get_digest(), rule)
+        end
+      end, fun.filter(filter_func, parts))
+
     else
       cfg.check(task, task:get_content(), task:get_digest(), rule)
     end
