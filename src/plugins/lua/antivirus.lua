@@ -262,6 +262,7 @@ local function savapi_config(opts)
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
     message = default_message,
+    tmpdir = '/tmp',
   }
 
   for k,v in pairs(opts) do
@@ -666,7 +667,21 @@ local function savapi_check(task, content, digest, rule)
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
-    local message_file = task:store_in_file(tonumber("0644", 8))
+    local fname = string.format('%s/%s.tmp',
+        rule.tmpdir, rspamd_util.random_hex(32))
+    local message_fd = rspamd_util.create_file(fname)
+
+    if not message_fd then
+      rspamd_logger.errx('cannot store file for savapi scan: %s', fname)
+      return
+    end
+
+    -- Ensure cleanup
+    task:get_mempool():add_destructor(function()
+      os.remove(fname)
+      rspamd_util.close_file(message_fd)
+    end)
+
     local vnames = {}
 
     -- Forward declaration for recursive calls
@@ -695,7 +710,8 @@ local function savapi_check(task, content, digest, rule)
 
     local function savapi_scan2_cb(err, data, conn)
       local result = tostring(data)
-      lua_util.debugm(N, task, "%s: got reply: %s", rule['type'], result)
+      lua_util.debugm(N, task, "%s: got reply: %s",
+          rule['type'], result)
 
       -- Terminal response - clean
       if string.find(result, '200') or string.find(result, '210') then
@@ -716,7 +732,8 @@ local function savapi_check(task, content, digest, rule)
         if not virus then
           virus = result:match "310%s(.*)%s+;.*;.*"
           if not virus then
-            rspamd_logger.errx(task, "%s: virus result unparseable: %s", rule['type'], result)
+            rspamd_logger.errx(task, "%s: virus result unparseable: %s",
+                rule['type'], result)
             return
           end
         end
@@ -735,10 +752,13 @@ local function savapi_check(task, content, digest, rule)
     local function savapi_greet2_cb(err, data, conn)
       local result = tostring(data)
       if string.find(result, '100 PRODUCT') then
-        lua_util.debugm(N, task, "%s: scanning file: %s", rule['type'], message_file)
-        conn:add_write(savapi_scan1_cb, {string.format('SCAN %s\n', message_file)})
+        lua_util.debugm(N, task, "%s: scanning file: %s",
+            rule['type'], fname)
+        conn:add_write(savapi_scan1_cb, {string.format('SCAN %s\n',
+            fname)})
       else
-        rspamd_logger.errx(task, '%s: invalid product id %s', rule['type'], rule['product_id'])
+        rspamd_logger.errx(task, '%s: invalid product id %s', rule['type'],
+            rule['product_id'])
         conn:add_write(savapi_fin_cb, 'QUIT\n')
       end
     end
