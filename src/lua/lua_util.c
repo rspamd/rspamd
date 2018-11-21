@@ -743,6 +743,11 @@ lua_util_config_from_ucl (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
+
+			if (int_options & RSPAMD_CONFIG_INIT_LIBS) {
+				cfg->libs_ctx = rspamd_init_libs ();
+			}
+
 			rspamd_config_post_load (cfg, int_options);
 			pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
 			rspamd_lua_setclass (L, "rspamd{config}", -1);

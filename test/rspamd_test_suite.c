@@ -1,6 +1,7 @@
 #include "config.h"
 #include "rspamd.h"
 #include "libstat/stat_api.h"
+#include "lua/lua_common.h"
 #include "tests.h"
 
 struct rspamd_main             *rspamd_main = NULL;
@@ -31,6 +32,7 @@ main (int argc, char **argv)
 	memset (rspamd_main, 0, sizeof (struct rspamd_main));
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT);
+	cfg->libs_ctx = rspamd_init_libs ();
 	rspamd_main->cfg = cfg;
 	cfg->cfg_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	cfg->log_type = RSPAMD_LOG_CONSOLE;
@@ -51,8 +53,7 @@ main (int argc, char **argv)
 		exit (1);
 	}
 
-	cfg->libs_ctx = rspamd_init_libs ();
-
+	rspamd_lua_set_path ((lua_State *)cfg->lua_state, NULL, NULL);
 	base = event_init ();
 	rspamd_stat_init (cfg, base);
 	rspamd_url_init (NULL);

@@ -519,7 +519,7 @@ exports.redis_classifier_from_sqlite = redis_classifier_from_sqlite
 
 -- Reads statistics config and return preprocessed table
 local function process_stat_config(cfg)
-  local opts_section = cfg:get_all_opt('options')
+  local opts_section = cfg:get_all_opt('options') or {}
 
   -- Check if we have a dedicated section for statistics
   if opts_section.statistics then
