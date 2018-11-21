@@ -135,7 +135,7 @@ local function clamav_config(opts)
     scan_image_mime = false;
     default_port = 3310,
     log_clean = false,
-    timeout = 15.0,
+    timeout = 15.0, -- FIXME: this will break task_timeout!
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
     message = default_message,
@@ -174,7 +174,7 @@ local function fprot_config(opts)
     scan_text_mime = false;
     scan_image_mime = false;
     default_port = 10200,
-    timeout = 15.0,
+    timeout = 15.0, -- FIXME: this will break task_timeout!
     log_clean = false,
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
@@ -258,8 +258,8 @@ local function savapi_config(opts)
     default_port = 4444, -- note: You must set ListenAddress in savapi.conf
     product_id = 0,
     log_clean = false,
-    timeout = 15.0,
-    retransmits = 2,
+    timeout = 15.0, -- FIXME: this will break task_timeout!
+    retransmits = 1, -- FIXME: useless, for local files
     cache_expire = 3600, -- expire redis in one hour
     message = default_message,
     tmpdir = '/tmp',
@@ -567,7 +567,6 @@ local function sophos_check(task, content, digest, rule)
     local function sophos_callback(err, data, conn)
 
       if err then
-
           -- set current upstream to fail because an error occurred
           upstream:fail()
 
@@ -675,6 +674,13 @@ local function savapi_check(task, content, digest, rule)
       rspamd_logger.errx('cannot store file for savapi scan: %s', fname)
       return
     end
+
+    if type(content) == 'string' then
+      -- Create rspamd_text
+      local rspamd_text = require "rspamd_text"
+      content = rspamd_text.fromstring(content)
+    end
+    content:save_in_file(message_fd)
 
     -- Ensure cleanup
     task:get_mempool():add_destructor(function()
