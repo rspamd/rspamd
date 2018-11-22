@@ -103,7 +103,7 @@ local function meta_nparts_function(task)
 
   if parts then
     for _,p in ipairs(parts) do
-      if p:get_filename() then
+      if p:is_attachment() then
         nattachments = nattachments + 1
       end
       totalparts = totalparts + 1

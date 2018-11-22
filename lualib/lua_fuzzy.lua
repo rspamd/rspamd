@@ -300,7 +300,7 @@ exports.check_mime_part = function(task, part, rule_id)
     return true,false
   end
 
-  if part:get_filename() then
+  if part:is_attachment() then
     return mime_types_check(task, part, rule)
   end
 

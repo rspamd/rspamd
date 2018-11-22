@@ -1073,7 +1073,7 @@ local function add_antivirus_rule(sym, opts)
       local filter_func = function(p)
         return (rule.scan_image_mime and p:is_image())
             or (rule.scan_text_mime and p:is_text())
-            or (p:get_filename())
+            or (p:is_attachment())
       end
 
       fun.each(function(p)
