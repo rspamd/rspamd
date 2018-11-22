@@ -832,13 +832,6 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 			}
 			lua_pop (L, 1);
 
-			lua_pushstring (L, "ev_base");
-			lua_gettable (L, -2);
-			if (lua_type (L, -1) == LUA_TUSERDATA) {
-				ev_base = lua_check_ev_base (L, -1);
-			}
-			lua_pop (L, 1);
-
 			if (cfg && ev_base) {
 				ret = TRUE;
 			}
