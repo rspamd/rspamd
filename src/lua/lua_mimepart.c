@@ -1377,7 +1377,7 @@ lua_mimepart_is_attachment (lua_State * L)
 			lua_pushboolean (L, true);
 		}
 		else {
-			if (part->cd->filename.len > 0) {
+			if (part->cd && part->cd->filename.len > 0) {
 				/* We still have filename and it is not an image */
 				lua_pushboolean (L, true);
 			}
