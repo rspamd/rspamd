@@ -895,7 +895,15 @@ lua_tcp_process_read_handler (struct lua_tcp_cbdata *cbd,
 			else {
 				/* Plan new read */
 				msg_debug_tcp ("NOT found TCP stop pattern");
-				lua_tcp_plan_read (cbd);
+
+				if (!cbd->eof) {
+					lua_tcp_plan_read (cbd);
+				}
+				else {
+					/* Got session finished but no stop pattern */
+					lua_tcp_push_error (cbd, TRUE,
+							"IO read error: connection terminated");
+				}
 			}
 		}
 	}
@@ -957,7 +965,7 @@ lua_tcp_process_read (struct lua_tcp_cbdata *cbd,
 			lua_tcp_process_read_handler (cbd, rh, TRUE);
 		}
 		else {
-			lua_tcp_push_error (cbd, FALSE, "IO read error: connection terminated");
+			lua_tcp_push_error (cbd, TRUE, "IO read error: connection terminated");
 		}
 
 		lua_tcp_plan_handler_event (cbd, FALSE, TRUE);
