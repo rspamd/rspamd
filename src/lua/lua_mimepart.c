@@ -363,6 +363,12 @@ LUA_FUNCTION_DEF (mimepart, get_image);
  * @return {bool} true if a part is an archive
  */
 LUA_FUNCTION_DEF (mimepart, is_archive);
+/***
+ * @method mime_part:is_attachment()
+ * Returns true if mime part looks like an attachment
+ * @return {bool} true if a part looks like an attachment
+ */
+LUA_FUNCTION_DEF (mimepart, is_attachment);
 
 /***
  * @method mime_part:get_archive()
@@ -457,6 +463,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_children),
 	LUA_INTERFACE_DEF (mimepart, is_text),
 	LUA_INTERFACE_DEF (mimepart, is_broken),
+	LUA_INTERFACE_DEF (mimepart, is_attachment),
 	LUA_INTERFACE_DEF (mimepart, get_text),
 	LUA_INTERFACE_DEF (mimepart, get_digest),
 	LUA_INTERFACE_DEF (mimepart, get_id),
@@ -1351,6 +1358,37 @@ lua_mimepart_is_multipart (lua_State * L)
 	}
 
 	lua_pushboolean (L, IS_CT_MULTIPART (part->ct) ? true : false);
+
+	return 1;
+}
+
+static gint
+lua_mimepart_is_attachment (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (!(part->flags & (RSPAMD_MIME_PART_IMAGE|RSPAMD_MIME_PART_TEXT))) {
+		if (part->cd && part->cd->type == RSPAMD_CT_ATTACHMENT) {
+			lua_pushboolean (L, true);
+		}
+		else {
+			if (part->cd->filename.len > 0) {
+				/* We still have filename and it is not an image */
+				lua_pushboolean (L, true);
+			}
+			else {
+				lua_pushboolean (L, false);
+			}
+		}
+	}
+	else {
+		lua_pushboolean (L, false);
+	}
 
 	return 1;
 }
