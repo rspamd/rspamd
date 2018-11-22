@@ -511,7 +511,12 @@ lua_redis_cleanup_events (struct lua_redis_ctx *ctx)
 			rspamd_symcache_item_async_dec_check (result->task, result->item, M);
 		}
 
-		rspamd_session_remove_event (result->s, lua_redis_fin, result->sp_ud);
+		if (result->s) {
+			rspamd_session_remove_event (result->s, lua_redis_fin, result->sp_ud);
+		}
+		else {
+			lua_redis_fin (result->sp_ud);
+		}
 
 		g_free (result);
 	}
@@ -1244,7 +1249,7 @@ lua_redis_make_request_sync (lua_State *L)
  * @param {task} task worker task object
  * @param {ip|string} host server address
  * @param {number} timeout timeout in seconds for request (1.0 by default)
- * @return {redis} new connection object or nil if connection failed
+ * @return {boolean,redis} new connection object or nil if connection failed
  */
 static int
 lua_redis_connect (lua_State *L)
@@ -1275,11 +1280,12 @@ lua_redis_connect (lua_State *L)
 		return 2;
 	}
 
+	lua_pushboolean (L, TRUE);
 	pctx = lua_newuserdata (L, sizeof (ctx));
 	*pctx = ctx;
 	rspamd_lua_setclass (L, "rspamd{redis}", -1);
 
-	return 1;
+	return 2;
 }
 
 /***
@@ -1293,7 +1299,6 @@ static int
 lua_redis_connect_sync (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	rspamd_inet_addr_t *ip = NULL;
 	gdouble timeout = REDIS_DEFAULT_TIMEOUT;
 	struct lua_redis_ctx *ctx, **pctx;
 
@@ -1315,13 +1320,8 @@ lua_redis_connect_sync (lua_State *L)
 		pctx = lua_newuserdata (L, sizeof (ctx));
 		*pctx = ctx;
 		rspamd_lua_setclass (L, "rspamd{redis}", -1);
-
 	}
 	else {
-		if (ip) {
-			rspamd_inet_address_free (ip);
-		}
-
 		lua_pushboolean (L, FALSE);
 		lua_pushstring (L, "bad arguments for redis request");
 		return 2;
