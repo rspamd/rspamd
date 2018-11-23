@@ -494,7 +494,9 @@ void
 rspamd_stat_cache_redis_close (gpointer c)
 {
 	struct rspamd_redis_cache_ctx *ctx = (struct rspamd_redis_cache_ctx *)c;
-	lua_State *L = ctx->L;
+	lua_State *L;
+
+	L = ctx->L;
 
 	if (ctx->conf_ref) {
 		luaL_unref (L, LUA_REGISTRYINDEX, ctx->conf_ref);
