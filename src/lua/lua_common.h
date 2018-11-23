@@ -423,6 +423,16 @@ void rspamd_lua_add_ref_dtor (lua_State *L, rspamd_mempool_t *pool,
 gboolean rspamd_lua_require_function (lua_State *L, const gchar *modname,
 		const gchar *funcname);
 
+/**
+ * Tries to load redis server definition from ucl object specified
+ * @param L
+ * @param obj
+ * @param cfg
+ * @return
+ */
+gboolean rspamd_lua_try_load_redis (lua_State *L, const ucl_object_t *obj,
+		struct rspamd_config *cfg, gint *ref_id);
+
 /* Paths defs */
 #define RSPAMD_CONFDIR_INDEX "CONFDIR"
 #define RSPAMD_LOCAL_CONFDIR_INDEX "LOCAL_CONFDIR"
