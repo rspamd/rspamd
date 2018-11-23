@@ -2373,7 +2373,7 @@ rspamd_lua_try_load_redis (lua_State *L, const ucl_object_t *obj,
 	*pcfg = cfg;
 	lua_pushvalue (L, res_pos);
 
-	if (lua_pcall (L, 0, 1, err_idx) != 0) {
+	if (lua_pcall (L, 3, 1, err_idx) != 0) {
 		GString *tb;
 
 		tb = lua_touserdata (L, -1);
