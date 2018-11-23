@@ -2367,7 +2367,7 @@ rspamd_lua_try_load_redis (lua_State *L, const ucl_object_t *obj,
 	}
 
 	/* Function arguments */
-	ucl_object_push_lua (L, obj, true);
+	ucl_object_push_lua (L, obj, false);
 	pcfg = lua_newuserdata (L, sizeof (*pcfg));
 	rspamd_lua_setclass (L, "rspamd{config}", -1);
 	*pcfg = cfg;

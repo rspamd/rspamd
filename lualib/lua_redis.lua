@@ -374,6 +374,10 @@ local function try_load_redis_servers(options, rspamd_config, result)
     return true
   end
 
+  lutil.debugm(N, rspamd_config,
+      'cannot load redis server from obj: %s, processed to %s',
+      options, result)
+
   return false
 end
 
