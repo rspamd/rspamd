@@ -50,13 +50,13 @@ local function check_redis_classifier(cls, cfg)
 
     if cls.lazy then settings.lazy = cls.lazy end
     -- Load symbols from statfiles
-    local statfiles = cls.statfile
-    for _,stf in ipairs(statfiles) do
-      local symbol = stf.symbol or 'undefined'
+
+    local function check_statfile_table(tbl, def_sym)
+      local symbol = tbl.symbol or def_sym
 
       local spam
-      if stf.spam then
-        spam = stf.spam
+      if tbl.spam then
+        spam = tbl.spam
       else
         if string.match(symbol:upper(), 'SPAM') then
           spam = true
@@ -72,7 +72,27 @@ local function check_redis_classifier(cls, cfg)
       end
     end
 
+    local statfiles = cls.statfile
+    if statfiles[1] then
+      for _,stf in ipairs(statfiles) do
+        if not stf.symbol then
+          for k,v in pairs(stf) do
+            check_statfile_table(v, k)
+          end
+        else
+          check_statfile_table(stf, 'undefined')
+        end
+      end
+    else
+      for stn,stf in pairs(statfiles) do
+        check_statfile_table(stf, stn)
+      end
+    end
+
     if not symbol_spam or not symbol_ham or type(expiry) ~= 'number' then
+      logger.debugm(N, rspamd_config,
+          'disable expiry for classifier %s: no expiry %s',
+          symbol_spam, cls)
       return
     end
     -- Now try to load redis_params if needed
@@ -91,6 +111,9 @@ local function check_redis_classifier(cls, cfg)
           symbol_spam)
       return
     end
+
+    logger.debugm(N, rspamd_config, "enabled expiry for %s/%s -> %s expiry",
+        symbol_spam, symbol_ham, expiry)
 
     table.insert(settings.classifiers, {
       symbol_spam = symbol_spam,
