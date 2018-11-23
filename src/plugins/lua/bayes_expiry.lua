@@ -418,24 +418,17 @@ rspamd_config:add_on_load(function (_, ev_base, worker)
   local unique_redis_params = {}
   -- Push redis script to all unique redis servers
   for _,cls in ipairs(settings.classifiers) do
-    local seen = false
-    for _,rp in ipairs(unique_redis_params) do
-      if lutil.table_cmp(rp, cls.redis_params) then
-        seen = true
-      end
-    end
-
-    if not seen then
-      table.insert(unique_redis_params, cls.redis_params)
+    if not unique_redis_params[cls.redis_params.hash] then
+      unique_redis_params[cls.redis_params.hash] = cls.redis_params
     end
   end
 
-  for _,rp in ipairs(unique_redis_params) do
+  for h,rp in pairs(unique_redis_params) do
     local script_id = lredis.add_redis_script(lutil.template(expiry_script,
         template), rp)
 
     for _,cls in ipairs(settings.classifiers) do
-      if lutil.table_cmp(rp, cls.redis_params) then
+      if cls.redis_params.hash == h then
         cls.script = script_id
       end
     end
