@@ -72,7 +72,7 @@ local function check_redis_classifier(cls, cfg)
       end
     end
 
-    if not symbol_spam or not symbol_ham or not type(expiry) == 'number' then
+    if not symbol_spam or not symbol_ham or type(expiry) ~= 'number' then
       return
     end
     -- Now try to load redis_params if needed
