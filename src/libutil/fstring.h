@@ -18,6 +18,7 @@
 
 #include "config.h"
 #include "mem_pool.h"
+#include <unicode/uchar.h>
 
 /**
  * Fixed strings library
@@ -37,6 +38,11 @@ typedef struct f_str_tok {
 	gsize len;
 	const gchar *begin;
 } rspamd_ftok_t;
+
+typedef struct f_str_unicode_tok {
+	gsize len; /* in uchars */
+	const UChar *begin;
+} rspamd_ftok_unicode_t;
 
 /**
  * Create new fixed length string

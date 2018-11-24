@@ -26,16 +26,21 @@
  * High level statistics API
  */
 
-#define RSPAMD_STAT_TOKEN_FLAG_TEXT (1 << 0)
-#define RSPAMD_STAT_TOKEN_FLAG_META (1 << 1)
-#define RSPAMD_STAT_TOKEN_FLAG_LUA_META (1 << 2)
-#define RSPAMD_STAT_TOKEN_FLAG_EXCEPTION (1 << 3)
-#define RSPAMD_STAT_TOKEN_FLAG_SUBJECT (1 << 4)
-#define RSPAMD_STAT_TOKEN_FLAG_UNIGRAM (1 << 5)
+#define RSPAMD_STAT_TOKEN_FLAG_TEXT (1u << 0)
+#define RSPAMD_STAT_TOKEN_FLAG_META (1u << 1)
+#define RSPAMD_STAT_TOKEN_FLAG_LUA_META (1u << 2)
+#define RSPAMD_STAT_TOKEN_FLAG_EXCEPTION (1u << 3)
+#define RSPAMD_STAT_TOKEN_FLAG_SUBJECT (1u << 4)
+#define RSPAMD_STAT_TOKEN_FLAG_UNIGRAM (1u << 5)
+#define RSPAMD_STAT_TOKEN_FLAG_UTF (1u << 6)
+#define RSPAMD_STAT_TOKEN_FLAG_NORMALISED (1u << 7)
+#define RSPAMD_STAT_TOKEN_FLAG_STEMMED (1u << 8)
 
 typedef struct rspamd_stat_token_s {
-	const gchar *begin;
-	gsize len;
+	rspamd_ftok_t original;
+	rspamd_ftok_unicode_t unicode;
+	rspamd_ftok_t normalised;
+	rspamd_ftok_t stemmed;
 	guint flags;
 } rspamd_stat_token_t;
 

@@ -80,33 +80,33 @@ rspamd_tokenizer_get_word_raw (rspamd_stat_token_t * buf,
 		ex = (*exceptions)->data;
 	}
 
-	if (token->begin == NULL || *cur == NULL) {
+	if (token->original.begin == NULL || *cur == NULL) {
 		if (ex != NULL) {
 			if (ex->pos == 0) {
-				token->begin = buf->begin + ex->len;
-				token->len = ex->len;
+				token->original.begin = buf->original.begin + ex->len;
+				token->original.len = ex->len;
 				token->flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
 			}
 			else {
-				token->begin = buf->begin;
-				token->len = 0;
+				token->original.begin = buf->original.begin;
+				token->original.len = 0;
 			}
 		}
 		else {
-			token->begin = buf->begin;
-			token->len = 0;
+			token->original.begin = buf->original.begin;
+			token->original.len = 0;
 		}
-		*cur = token->begin;
+		*cur = token->original.begin;
 	}
 
-	token->len = 0;
+	token->original.len = 0;
 
-	pos = *cur - buf->begin;
-	if (pos >= buf->len) {
+	pos = *cur - buf->original.begin;
+	if (pos >= buf->original.len) {
 		return FALSE;
 	}
 
-	remain = buf->len - pos;
+	remain = buf->original.len - pos;
 	p = *cur;
 
 	/* Skip non delimiters symbols */
@@ -122,7 +122,7 @@ rspamd_tokenizer_get_word_raw (rspamd_stat_token_t * buf,
 		remain--;
 	} while (remain > 0 && t_delimiters[(guchar)*p]);
 
-	token->begin = p;
+	token->original.begin = p;
 
 	while (remain > 0 && !t_delimiters[(guchar)*p]) {
 		if (ex != NULL && ex->pos == pos) {
@@ -130,7 +130,7 @@ rspamd_tokenizer_get_word_raw (rspamd_stat_token_t * buf,
 			*cur = p + ex->len;
 			return TRUE;
 		}
-		token->len++;
+		token->original.len++;
 		pos++;
 		remain--;
 		p++;
@@ -141,7 +141,7 @@ rspamd_tokenizer_get_word_raw (rspamd_stat_token_t * buf,
 	}
 
 	if (rl) {
-		*rl = token->len;
+		*rl = token->original.len;
 	}
 
 	token->flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
@@ -164,12 +164,12 @@ rspamd_tokenize_check_limit (gboolean decay,
 	static const gdouble avg_word_len = 6.0;
 
 	if (!decay) {
-		if (token->len >= sizeof (guint64)) {
+		if (token->original.len >= sizeof (guint64)) {
 #ifdef _MUM_UNALIGNED_ACCESS
-			*hv = mum_hash_step (*hv, *(guint64 *)token->begin);
+			*hv = mum_hash_step (*hv, *(guint64 *)token->original.begin);
 #else
 			guint64 tmp;
-			memcpy (&tmp, token->begin, sizeof (tmp));
+			memcpy (&tmp, token->original.begin, sizeof (tmp));
 			*hv = mum_hash_step (*hv, tmp);
 #endif
 		}
@@ -260,11 +260,11 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 		return NULL;
 	}
 
-	buf.begin = text;
-	buf.len = len;
+	buf.original.begin = text;
+	buf.original.len = len;
 	buf.flags = 0;
-	token.begin = NULL;
-	token.len = 0;
+	token.original.begin = NULL;
+	token.original.len = 0;
 	token.flags = 0;
 
 	if (cfg != NULL) {
@@ -281,24 +281,24 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 		while (rspamd_tokenizer_get_word_raw (&buf, &pos, &token, &cur, &l, FALSE)) {
 			if (l == 0 || (min_len > 0 && l < min_len) ||
 				(max_len > 0 && l > max_len)) {
-				token.begin = pos;
+				token.original.begin = pos;
 				continue;
 			}
 
-			if (token.len > 0 &&
+			if (token.original.len > 0 &&
 				rspamd_tokenize_check_limit (decay, word_decay, res->len,
 					&hv, &prob, &token, pos - text, len)) {
 				if (!decay) {
 					decay = TRUE;
 				}
 				else {
-					token.begin = pos;
+					token.original.begin = pos;
 					continue;
 				}
 			}
 
 			g_array_append_val (res, token);
-			token.begin = pos;
+			token.original.begin = pos;
 		}
 	}
 	else {
@@ -323,7 +323,7 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 
 		while (p != UBRK_DONE) {
 start_over:
-			token.len = 0;
+			token.original.len = 0;
 
 			if (p > last) {
 				if (ex && cur) {
@@ -336,8 +336,8 @@ start_over:
 							last += ex->len;
 
 							if (ex->type == RSPAMD_EXCEPTION_URL) {
-								token.begin = "!!EX!!";
-								token.len = sizeof ("!!EX!!") - 1;
+								token.original.begin = "!!EX!!";
+								token.original.len = sizeof ("!!EX!!") - 1;
 								token.flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
 
 								g_array_append_val (res, token);
@@ -363,8 +363,8 @@ start_over:
 							/* Append the first part */
 							if (rspamd_utf_word_valid (text, text + len, last,
 									ex->pos)) {
-								token.begin = text + last;
-								token.len = ex->pos - last;
+								token.original.begin = text + last;
+								token.original.len = ex->pos - last;
 								token.flags = 0;
 								g_array_append_val (res, token);
 							}
@@ -373,8 +373,8 @@ start_over:
 							last += ex->len + (ex->pos - last);
 
 							if (ex->type == RSPAMD_EXCEPTION_URL) {
-								token.begin = "!!EX!!";
-								token.len = sizeof ("!!EX!!") - 1;
+								token.original.begin = "!!EX!!";
+								token.original.len = sizeof ("!!EX!!") - 1;
 								token.flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
 
 								g_array_append_val (res, token);
@@ -394,9 +394,10 @@ start_over:
 						}
 						else if (p > last) {
 							if (rspamd_utf_word_valid (text, text + len, last, p)) {
-								token.begin = text + last;
-								token.len = p - last;
-								token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
+								token.original.begin = text + last;
+								token.original.len = p - last;
+								token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT |
+											  RSPAMD_STAT_TOKEN_FLAG_UTF;
 							}
 						}
 					}
@@ -408,40 +409,43 @@ start_over:
 						}
 
 						if (rspamd_utf_word_valid (text, text + len, last, p)) {
-							token.begin = text + last;
-							token.len = p - last;
-							token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
+							token.original.begin = text + last;
+							token.original.len = p - last;
+							token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT |
+										  RSPAMD_STAT_TOKEN_FLAG_UTF;
 						}
 					}
 					else {
 						/* No exceptions within boundary */
 						if (rspamd_utf_word_valid (text, text + len, last, p)) {
-							token.begin = text + last;
-							token.len = p - last;
-							token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
+							token.original.begin = text + last;
+							token.original.len = p - last;
+							token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT |
+										  RSPAMD_STAT_TOKEN_FLAG_UTF;
 						}
 					}
 				}
 				else {
 					if (rspamd_utf_word_valid (text, text + len, last, p)) {
-						token.begin = text + last;
-						token.len = p - last;
-						token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT;
+						token.original.begin = text + last;
+						token.original.len = p - last;
+						token.flags = RSPAMD_STAT_TOKEN_FLAG_TEXT |
+									  RSPAMD_STAT_TOKEN_FLAG_UTF;
 					}
 				}
 
-				if (token.len > 0 &&
+				if (token.original.len > 0 &&
 					rspamd_tokenize_check_limit (decay, word_decay, res->len,
 						&hv, &prob, &token, p, len)) {
 					if (!decay) {
 						decay = TRUE;
 					} else {
-						token.len = 0;
+						token.original.len = 0;
 					}
 				}
 			}
 
-			if (token.len > 0) {
+			if (token.original.len > 0) {
 				g_array_append_val (res, token);
 			}
 
