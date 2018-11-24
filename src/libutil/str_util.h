@@ -386,6 +386,12 @@ rspamd_str_has_8bit (const guchar *beg, gsize len)
 	return FALSE;
 }
 
+struct UConverter;
+struct UConverter *rspamd_get_utf8_converter (void);
+
+struct UNormalizer2;
+const struct UNormalizer2 *rspamd_get_unicode_normalizer (void);
+
 /**
  * Gets a string in UTF8 and normalises it to NFKC_Casefold form
  * @param pool optional memory pool used for logging purposes

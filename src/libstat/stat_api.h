@@ -35,11 +35,12 @@
 #define RSPAMD_STAT_TOKEN_FLAG_UTF (1u << 6)
 #define RSPAMD_STAT_TOKEN_FLAG_NORMALISED (1u << 7)
 #define RSPAMD_STAT_TOKEN_FLAG_STEMMED (1u << 8)
+#define RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE (1u << 9)
 
 typedef struct rspamd_stat_token_s {
 	rspamd_ftok_t original;
 	rspamd_ftok_unicode_t unicode;
-	rspamd_ftok_t normalised;
+	rspamd_ftok_t normalized;
 	rspamd_ftok_t stemmed;
 	guint flags;
 } rspamd_stat_token_t;

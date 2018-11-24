@@ -20,11 +20,17 @@
 #include "rspamd.h"
 #include "tokenizers.h"
 #include "stat_internal.h"
-#include "../../../contrib/mumhash/mum.h"
+#include "contrib/mumhash/mum.h"
+
 #include <unicode/utf8.h>
 #include <unicode/uchar.h>
 #include <unicode/uiter.h>
 #include <unicode/ubrk.h>
+#include <unicode/ucnv.h>
+#if U_ICU_VERSION_MAJOR_NUM >= 44
+#include <unicode/unorm2.h>
+#endif
+
 #include <math.h>
 
 typedef gboolean (*token_get_function) (rspamd_stat_token_t * buf, gchar const **pos,
@@ -534,3 +540,129 @@ rspamd_tokenize_subject (struct rspamd_task *task)
 	return words;
 }
 
+void
+rspamd_normalize_words (GArray *words, rspamd_mempool_t *pool)
+{
+	rspamd_stat_token_t *tok;
+	guint i;
+	UErrorCode uc_err = U_ZERO_ERROR;
+	guint clen, dlen;
+	gint r;
+	UConverter *utf8_converter;
+#if U_ICU_VERSION_MAJOR_NUM >= 44
+	const UNormalizer2 *norm = rspamd_get_unicode_normalizer ();
+	gint32 end;
+	UChar *src = NULL, *dest = NULL;
+#endif
+
+	utf8_converter = rspamd_get_utf8_converter ();
+
+	for (i = 0; i < words->len; i++) {
+		tok = &g_array_index (words, rspamd_stat_token_t, i);
+
+		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_UTF) {
+			UChar *unicode;
+			gchar *utf8;
+			gsize ulen;
+
+			uc_err = U_ZERO_ERROR;
+			ulen = tok->original.len;
+			unicode = rspamd_mempool_alloc (pool, sizeof (UChar) * (ulen + 1));
+			ulen = ucnv_toUChars (utf8_converter,
+					unicode,
+					tok->original.len + 1,
+					tok->original.begin,
+					tok->original.len,
+					&uc_err);
+
+
+			if (!U_SUCCESS (uc_err)) {
+				tok->flags |= RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE;
+				tok->unicode.begin = NULL;
+				tok->unicode.len = 0;
+				tok->normalized.begin = NULL;
+				tok->normalized.len = 0;
+			}
+			else {
+				/* Perform normalization if available and needed */
+#if U_ICU_VERSION_MAJOR_NUM >= 44
+				/* We can now check if we need to decompose */
+				end = unorm2_spanQuickCheckYes (norm, src, ulen, &uc_err);
+
+				if (!U_SUCCESS (uc_err)) {
+					tok->unicode.begin = unicode;
+					tok->unicode.len = ulen;
+					tok->normalized.begin = NULL;
+					tok->normalized.len = 0;
+					tok->flags |= RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE;
+				}
+				else {
+					if (end == ulen) {
+						/* Already normalised */
+						tok->unicode.begin = unicode;
+						tok->unicode.len = ulen;
+						tok->normalized.begin = tok->original.begin;
+						tok->normalized.len = tok->original.len;
+					}
+					else {
+						/* Perform normalization */
+
+						dest = rspamd_mempool_alloc (pool, ulen * sizeof (UChar));
+						/* First part */
+						memcpy (dest, src, end * sizeof (*dest));
+						/* Second part */
+						ulen = unorm2_normalizeSecondAndAppend (norm, dest, end,
+								ulen,
+								src + end, ulen - end, &uc_err);
+
+						if (!U_SUCCESS (uc_err)) {
+							if (uc_err != U_BUFFER_OVERFLOW_ERROR) {
+								msg_warn_pool_check ("cannot normalise text '%*s': %s",
+										(gint)tok->original.len, tok->original.begin,
+										u_errorName (uc_err));
+								tok->unicode.begin = unicode;
+								tok->unicode.len = ulen;
+								tok->normalized.begin = NULL;
+								tok->normalized.len = 0;
+								tok->flags |= RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE;
+							}
+						}
+						else {
+							/* Copy normalised back */
+							tok->unicode.begin = dest;
+							tok->unicode.len = ulen;
+							tok->flags |= RSPAMD_STAT_TOKEN_FLAG_NORMALISED;
+
+							/* Convert utf8 to produce normalized part */
+							clen = ucnv_getMaxCharSize (utf8_converter);
+							dlen = UCNV_GET_MAX_BYTES_FOR_STRING (ulen, clen);
+
+							utf8 = rspamd_mempool_alloc (pool,
+									sizeof (*utf8) * dlen + 1);
+							r = ucnv_fromUChars (utf8_converter,
+									utf8,
+									dlen,
+									dest,
+									ulen,
+									&uc_err);
+							utf8[r] = '\0';
+
+							tok->normalized.begin = utf8;
+							tok->normalized.len = r;
+						}
+					}
+				}
+#else
+				/* Legacy libicu path */
+				tok->unicode.begin = unicode;
+				tok->unicode.len = ulen;
+				tok->normalized.begin = tok->original.begin;
+				tok->normalized.len = tok->original.len;
+#endif
+			}
+		}
+	}
+}
+
+void rspamd_stem_words (GArray *words, rspamd_mempool_t *pool,
+						const gchar *language);

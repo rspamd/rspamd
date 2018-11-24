@@ -801,7 +801,7 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 
 	ret = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*ret));
 	ret->languages = g_ptr_array_sized_new (gl.gl_pathc);
-	ret->uchar_converter = ucnv_open ("UTF-8", &uc_err);
+	ret->uchar_converter = rspamd_get_utf8_converter ();
 	ret->short_text_limit = short_text_limit;
 	ret->stop_words_norm = kh_init (rspamd_stopwords_hash);
 
