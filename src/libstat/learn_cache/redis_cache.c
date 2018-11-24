@@ -44,7 +44,6 @@ struct rspamd_redis_cache_ctx {
 struct rspamd_redis_cache_runtime {
 	struct rspamd_redis_cache_ctx *ctx;
 	struct rspamd_task *task;
-	struct rspamd_symcache_item *item;
 	struct upstream *selected;
 	struct event timeout_event;
 	redisAsyncContext *redis;
@@ -171,9 +170,6 @@ rspamd_stat_cache_redis_get (redisAsyncContext *c, gpointer r, gpointer priv)
 	}
 
 	if (rt->has_event) {
-		if (rt->item) {
-			rspamd_symcache_item_async_dec_check (task, rt->item, M);
-		}
 		rspamd_session_remove_event (task->s, rspamd_redis_cache_fin, rt);
 	}
 }
@@ -196,9 +192,6 @@ rspamd_stat_cache_redis_set (redisAsyncContext *c, gpointer r, gpointer priv)
 	}
 
 	if (rt->has_event) {
-		if (rt->item) {
-			rspamd_symcache_item_async_dec_check (task, rt->item, M);
-		}
 		rspamd_session_remove_event (task->s, rspamd_redis_cache_fin, rt);
 	}
 }
@@ -447,7 +440,6 @@ rspamd_stat_cache_redis_check (struct rspamd_task *task,
 				rspamd_redis_cache_fin,
 				rt,
 				M);
-		rt->item = rspamd_symcache_get_cur_item (task);
 		event_add (&rt->timeout_event, &tv);
 		rt->has_event = TRUE;
 	}
@@ -481,7 +473,6 @@ rspamd_stat_cache_redis_learn (struct rspamd_task *task,
 			rt->ctx->redis_object, h, flag) == REDIS_OK) {
 		rspamd_session_add_event (task->s,
 				rspamd_redis_cache_fin, rt, M);
-		rt->item = rspamd_symcache_get_cur_item (task);
 		event_add (&rt->timeout_event, &tv);
 		rt->has_event = TRUE;
 	}

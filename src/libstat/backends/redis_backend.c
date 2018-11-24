@@ -69,7 +69,6 @@ enum rspamd_redis_connection_state {
 struct redis_stat_runtime {
 	struct redis_stat_ctx *ctx;
 	struct rspamd_task *task;
-	struct rspamd_symcache_item *item;
 	struct upstream *selected;
 	struct event timeout_event;
 	GArray *results;
@@ -1231,10 +1230,6 @@ rspamd_redis_processed (redisAsyncContext *c, gpointer r, gpointer priv)
 	}
 
 	if (rt->has_event) {
-		if (rt->item) {
-			rspamd_symcache_item_async_dec_check (task, rt->item, M);
-		}
-
 		rspamd_session_remove_event (task->s, rspamd_redis_fin, rt);
 	}
 }
@@ -1267,10 +1262,6 @@ rspamd_redis_learned (redisAsyncContext *c, gpointer r, gpointer priv)
 	}
 
 	if (rt->has_event) {
-		if (rt->item) {
-			rspamd_symcache_item_async_dec_check (task, rt->item, M);
-		}
-
 		rspamd_session_remove_event (task->s, rspamd_redis_fin_learn, rt);
 	}
 }
@@ -1606,7 +1597,6 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 			rt->redis_object_expanded, learned_key) == REDIS_OK) {
 
 		rspamd_session_add_event (task->s, rspamd_redis_fin, rt, M);
-		rt->item = rspamd_symcache_get_cur_item (task);
 		rt->has_event = TRUE;
 
 		if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
@@ -1817,7 +1807,6 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 		}
 
 		rspamd_session_add_event (task->s, rspamd_redis_fin_learn, rt, M);
-		rt->item = rspamd_symcache_get_cur_item (task);
 		rt->has_event = TRUE;
 
 		/* Set timeout */
