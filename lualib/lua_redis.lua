@@ -239,7 +239,7 @@ local function calculate_redis_hash(params)
     end
   end
 
-  rec_hash(params)
+  rec_hash('top', params)
 
   return h:base32()
 end
