@@ -54,13 +54,14 @@ gint rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 						   GPtrArray *result);
 
 gpointer rspamd_tokenizer_osb_get_config (rspamd_mempool_t *pool,
-		struct rspamd_tokenizer_config *cf,
-		gsize *len);
+										  struct rspamd_tokenizer_config *cf,
+										  gsize *len);
 
+struct rspamd_lang_detector;
 void rspamd_normalize_words (GArray *words, rspamd_mempool_t *pool);
-
 void rspamd_stem_words (GArray *words, rspamd_mempool_t *pool,
-		const gchar *language);
+						const gchar *language,
+						struct rspamd_lang_detector *d);
 
 GArray * rspamd_tokenize_subject (struct rspamd_task *task);
 #endif

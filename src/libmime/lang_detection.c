@@ -884,17 +884,17 @@ rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
 	UErrorCode uc_err = U_ZERO_ERROR;
 
 	ucs_token->flags = utf_token->flags;
-	out = rspamd_mempool_alloc (pool, sizeof (*out) * (utf_token->len + 1));
-	nsym = ucnv_toUChars (d->uchar_converter, out, (utf_token->len + 1),
-			utf_token->begin, utf_token->len, &uc_err);
+	out = rspamd_mempool_alloc (pool, sizeof (*out) * (utf_token->normalized.len + 1));
+	nsym = ucnv_toUChars (d->uchar_converter, out, (utf_token->normalized.len + 1),
+			utf_token->normalized.begin, utf_token->normalized.len, &uc_err);
 
 	if (nsym >= 0 && uc_err == U_ZERO_ERROR) {
 		rspamd_language_detector_ucs_lowercase (out, nsym);
-		ucs_token->begin = (const gchar *) out;
-		ucs_token->len = nsym;
+		ucs_token->normalized.begin = (const gchar *) out;
+		ucs_token->normalized.len = nsym;
 	}
 	else {
-		ucs_token->len = 0;
+		ucs_token->normalized.len = 0;
 	}
 }
 
@@ -942,8 +942,9 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 		for (;;) {
 			tok = &g_array_index (ucs_tokens, rspamd_stat_token_t, sel);
 			/* Filter bad tokens */
-			if (tok->len >= 2 && u_isalpha (*(UChar *)tok->begin)
-					&& u_isalpha (*(((UChar *)tok->begin) + (tok->len - 1)))) {
+			if (tok->normalized.len >= 2 &&
+				u_isalpha (*(UChar *)tok->normalized.begin) &&
+				u_isalpha (*(((UChar *)tok->normalized.begin) + (tok->normalized.len - 1)))) {
 				offsets_out[out_idx] = sel;
 				break;
 			}
@@ -1000,33 +1001,33 @@ rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar *window,
 			window[0] = (UChar)' ';
 
 			for (i = 0; i < wlen - 1; i ++) {
-				window[i + 1] = *(((UChar *)tok->begin) + i);
+				window[i + 1] = *(((UChar *)tok->normalized.begin) + i);
 			}
 		}
-		else if (cur_off + wlen == tok->len + 1) {
+		else if (cur_off + wlen == tok->normalized.len + 1) {
 			/* Add trailing space */
 			for (i = 0; i < wlen - 1; i ++) {
-				window[i] = *(((UChar *)tok->begin) + cur_off + i);
+				window[i] = *(((UChar *)tok->normalized.begin) + cur_off + i);
 			}
 			window[wlen - 1] = (UChar)' ';
 		}
-		else if (cur_off + wlen > tok->len + 1) {
+		else if (cur_off + wlen > tok->normalized.len + 1) {
 			/* No more fun */
 			return -1;
 		}
 		else {
 			/* Normal case */
 			for (i = 0; i < wlen; i++) {
-				window[i] = *(((UChar *) tok->begin) + cur_off + i);
+				window[i] = *(((UChar *) tok->normalized.begin) + cur_off + i);
 			}
 		}
 	}
 	else {
-		if (tok->len <= cur_off) {
+		if (tok->normalized.len <= cur_off) {
 			return -1;
 		}
 
-		window[0] = *(((UChar *)tok->begin) + cur_off);
+		window[0] = *(((UChar *)tok->normalized.begin) + cur_off);
 	}
 
 	return cur_off + 1;
@@ -1810,7 +1811,7 @@ rspamd_language_detector_unref (struct rspamd_lang_detector* d)
 
 gboolean
 rspamd_language_detector_is_stop_word (struct rspamd_lang_detector *d,
-												const gchar *word, gsize wlen)
+									   const gchar *word, gsize wlen)
 {
 	khiter_t k;
 	rspamd_ftok_t search;

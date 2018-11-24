@@ -21,6 +21,8 @@
 #include "tokenizers.h"
 #include "stat_internal.h"
 #include "contrib/mumhash/mum.h"
+#include "libmime/lang_detection.h"
+#include "libstemmer.h"
 
 #include <unicode/utf8.h>
 #include <unicode/uchar.h>
@@ -664,5 +666,99 @@ rspamd_normalize_words (GArray *words, rspamd_mempool_t *pool)
 	}
 }
 
-void rspamd_stem_words (GArray *words, rspamd_mempool_t *pool,
-						const gchar *language);
+void
+rspamd_stem_words (GArray *words, rspamd_mempool_t *pool,
+				   const gchar *language,
+				   struct rspamd_lang_detector *d)
+{
+	static GHashTable *stemmers = NULL;
+	struct sb_stemmer *stem = NULL;
+	guint i;
+	rspamd_stat_token_t *tok;
+	gchar *dest;
+	gsize dlen;
+
+	if (!stemmers) {
+		stemmers = g_hash_table_new (rspamd_strcase_hash,
+				rspamd_strcase_equal);
+	}
+
+	if (language && language[0] != '\0') {
+		stem = g_hash_table_lookup (stemmers, language);
+
+		if (stem == NULL) {
+
+			stem = sb_stemmer_new (language, "UTF_8");
+
+			if (stem == NULL) {
+				msg_debug_pool (
+						"<%s> cannot create lemmatizer for %s language",
+						language);
+				g_hash_table_insert (stemmers, g_strdup (language),
+						GINT_TO_POINTER (-1));
+			}
+			else {
+				g_hash_table_insert (stemmers, g_strdup (language),
+						stem);
+			}
+		}
+		else if (stem == GINT_TO_POINTER (-1)) {
+			/* Negative cache */
+			stem = NULL;
+		}
+	}
+	for (i = 0; i < words->len; i++) {
+		tok = &g_array_index (words, rspamd_stat_token_t, i);
+
+		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_UTF) {
+			if (stem) {
+				const gchar *stemmed;
+
+				stemmed = sb_stemmer_stem (stem,
+						tok->normalized.begin, tok->normalized.len);
+
+				dlen = strlen (stemmed);
+
+				if (dlen > 0) {
+					dest = rspamd_mempool_alloc (pool, dlen);
+					memcpy (dest, stemmed, dlen);
+					rspamd_str_lc_utf8 (dest, dlen);
+					tok->stemmed.len = dlen;
+					tok->stemmed.begin = dest;
+					tok->flags |= RSPAMD_STAT_TOKEN_FLAG_STEMMED;
+				}
+				else {
+					/* Fallback */
+					dest = rspamd_mempool_alloc (pool, tok->normalized.len);
+					memcpy (dest, tok->normalized.begin, tok->normalized.len);
+					rspamd_str_lc_utf8 (dest, tok->normalized.len);
+					tok->stemmed.len = tok->normalized.len;
+					tok->stemmed.begin = dest;
+				}
+			}
+			else {
+				/* No stemmer, utf8 lowercase */
+				dest = rspamd_mempool_alloc (pool, tok->normalized.len);
+				memcpy (dest, tok->normalized.begin, tok->normalized.len);
+				rspamd_str_lc_utf8 (dest, tok->normalized.len);
+				tok->stemmed.len = tok->normalized.len;
+				tok->stemmed.begin = dest;
+			}
+
+			if (tok->stemmed.len > 0 && rspamd_language_detector_is_stop_word (d,
+					tok->stemmed.begin, tok->stemmed.len)) {
+				tok->flags |= RSPAMD_STAT_TOKEN_FLAG_STOP_WORD;
+			}
+		}
+		else {
+			if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
+				/* Raw text, lowercase */
+				dest = rspamd_mempool_alloc (pool, tok->original.len);
+				memcpy (dest, tok->original.begin, tok->original.len);
+				rspamd_str_lc (dest, tok->original.len);
+				tok->stemmed.len = tok->original.len;
+				tok->stemmed.begin = dest;
+			}
+		}
+	}
+}

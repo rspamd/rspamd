@@ -72,7 +72,7 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 
 	if (part->utf_words) {
 #ifdef WITH_SNOWBALL
-		static GHashTable *stemmers = NULL;
+
 
 		if (part->language && part->language[0] != '\0' && IS_PART_UTF (part)) {
 

@@ -306,9 +306,8 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 		token_flags = token->flags;
 
 		if (task->lang_det) {
-			if (rspamd_language_detector_is_stop_word (task->lang_det,
-					token->begin, token->len)) {
-				/* Skip it */
+			if (token->flags & RSPAMD_STAT_TOKEN_FLAG_STOP_WORD) {
+				/* Skip stop word */
 				continue;
 			}
 		}

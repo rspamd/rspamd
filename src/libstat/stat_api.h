@@ -36,6 +36,7 @@
 #define RSPAMD_STAT_TOKEN_FLAG_NORMALISED (1u << 7)
 #define RSPAMD_STAT_TOKEN_FLAG_STEMMED (1u << 8)
 #define RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE (1u << 9)
+#define RSPAMD_STAT_TOKEN_FLAG_STOP_WORD (1u << 9)
 
 typedef struct rspamd_stat_token_s {
 	rspamd_ftok_t original;
