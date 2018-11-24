@@ -2458,7 +2458,7 @@ static gint
 lua_util_readline (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *prompt = NULL;
+	const gchar *prompt = "";
 	gchar *input;
 
 	if (lua_type (L, 1) == LUA_TSTRING) {
