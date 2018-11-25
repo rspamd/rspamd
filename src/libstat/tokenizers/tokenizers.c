@@ -745,28 +745,25 @@ rspamd_stem_words (GArray *words, rspamd_mempool_t *pool,
 
 		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_UTF) {
 			if (stem) {
-				const gchar *stemmed;
+				const gchar *stemmed = NULL;
 
 				stemmed = sb_stemmer_stem (stem,
 						tok->normalized.begin, tok->normalized.len);
 
-				dlen = strlen (stemmed);
+				dlen = stemmed ? strlen (stemmed) : 0;
 
 				if (dlen > 0) {
-					dest = rspamd_mempool_alloc (pool, dlen);
+					dest = rspamd_mempool_alloc (pool, dlen + 1);
 					memcpy (dest, stemmed, dlen);
-					rspamd_str_lc_utf8 (dest, dlen);
+					dest[dlen] = '\0';
 					tok->stemmed.len = dlen;
 					tok->stemmed.begin = dest;
 					tok->flags |= RSPAMD_STAT_TOKEN_FLAG_STEMMED;
 				}
 				else {
 					/* Fallback */
-					dest = rspamd_mempool_alloc (pool, tok->normalized.len);
-					memcpy (dest, tok->normalized.begin, tok->normalized.len);
-					rspamd_str_lc_utf8 (dest, tok->normalized.len);
 					tok->stemmed.len = tok->normalized.len;
-					tok->stemmed.begin = dest;
+					tok->stemmed.begin = tok->normalized.begin;
 				}
 			}
 			else {

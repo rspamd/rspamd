@@ -61,9 +61,6 @@ static void
 rspamd_mime_part_extract_words (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
-#ifdef WITH_SNOWBALL
-	struct sb_stemmer *stem = NULL;
-#endif
 	rspamd_stat_token_t *w;
 	gchar *temp_word;
 	const guchar *r;
@@ -71,92 +68,26 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 	gdouble avg_len = 0;
 
 	if (part->utf_words) {
-#ifdef WITH_SNOWBALL
-
-
-		if (part->language && part->language[0] != '\0' && IS_PART_UTF (part)) {
-
-			if (!stemmers) {
-				stemmers = g_hash_table_new (rspamd_strcase_hash,
-						rspamd_strcase_equal);
-			}
-
-			stem = g_hash_table_lookup (stemmers, part->language);
-
-			if (stem == NULL) {
-
-				stem = sb_stemmer_new (part->language, "UTF_8");
-
-				if (stem == NULL) {
-					msg_debug_task (
-							"<%s> cannot create lemmatizer for %s language",
-							task->message_id, part->language);
-				} else {
-					g_hash_table_insert (stemmers, g_strdup (part->language),
-							stem);
-				}
-			}
-		}
-#endif
-
+		rspamd_stem_words (part->utf_words, task->task_pool, part->language,
+					task->lang_det);
 
 		for (i = 0; i < part->utf_words->len; i++) {
 			guint64 h;
 
 			w = &g_array_index (part->utf_words, rspamd_stat_token_t, i);
-			r = NULL;
-#ifdef WITH_SNOWBALL
-			if (stem) {
-				r = sb_stemmer_stem (stem, w->begin, w->len);
-			}
-#endif
 
-			if (w->len > 0 && (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT)) {
-				avg_len = avg_len + (w->len - avg_len) / (double) (i + 1);
-
-				if (r != NULL) {
-					nlen = strlen (r);
-					nlen = MIN (nlen, w->len);
-					temp_word = rspamd_mempool_alloc (task->task_pool, nlen);
-					memcpy (temp_word, r, nlen);
-
-					if (IS_PART_UTF (part)) {
-						rspamd_str_lc_utf8 (temp_word, nlen);
-					}
-					else {
-						rspamd_str_lc (temp_word, nlen);
-					}
-
-					w->begin = temp_word;
-					w->len = nlen;
-				}
-				else {
-					temp_word = rspamd_mempool_alloc (task->task_pool, w->len);
-					memcpy (temp_word, w->begin, w->len);
-
-					if (IS_PART_UTF (part)) {
-						rspamd_str_lc_utf8 (temp_word, w->len);
-					}
-					else {
-						rspamd_str_lc (temp_word, w->len);
-					}
-
-					w->begin = temp_word;
-				}
-			}
-
-			if (w->len > 0) {
+			if (w->stemmed.len > 0) {
 				/*
 				 * We use static hash seed if we would want to use that in shingles
 				 * computation in future
 				 */
 				h = rspamd_cryptobox_fast_hash_specific (
 						RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT,
-						w->begin, w->len, words_hash_seed);
+						w->stemmed.begin, w->stemmed.len, words_hash_seed);
 				g_array_append_val (part->normalized_hashes, h);
-				total_len += w->len;
+				total_len += w->stemmed.len;
 
-				if (w->len <= 3) {
+				if (w->stemmed.len <= 3) {
 					short_len++;
 				}
 			}
@@ -251,6 +182,7 @@ rspamd_mime_part_create_words (struct rspamd_task *task,
 	if (part->utf_words) {
 		part->normalized_hashes = g_array_sized_new (FALSE, FALSE,
 				sizeof (guint64), part->utf_words->len);
+		rspamd_normalize_words (part->utf_words, task->task_pool);
 	}
 
 }
@@ -757,17 +689,9 @@ rspamd_message_process_html_text_part (struct rspamd_task *task,
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
 	}
 
-	/* Also add unicode content */
-	text_part->unicode_content =  g_array_sized_new (FALSE, FALSE,
-			sizeof (UChar), text_part->utf_content->len + 1);
-	rspamd_utf_to_unicode (text_part->utf_content, text_part->unicode_content);
-
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) free_byte_array_callback,
 			text_part->utf_content);
-	rspamd_mempool_add_destructor (task->task_pool,
-			rspamd_array_free_hard,
-			text_part->unicode_content);
 
 	return TRUE;
 }
@@ -1265,7 +1189,7 @@ rspamd_message_process (struct rspamd_task *task)
 						sel = p2;
 					}
 					else {
-						if (p1->unicode_content->len > p2->unicode_content->len) {
+						if (p1->utf_content->len > p2->utf_content->len) {
 							sel = p1;
 						}
 						else {

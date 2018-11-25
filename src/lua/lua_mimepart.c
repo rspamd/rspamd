@@ -923,8 +923,8 @@ struct lua_shingle_data {
 #define STORE_TOKEN(i, t) do { \
     if ((i) < part->utf_words->len) { \
         word = &g_array_index (part->utf_words, rspamd_stat_token_t, (i)); \
-        sd->t.begin = word->begin; \
-        sd->t.len = word->len; \
+        sd->t.begin = word->stemmed.begin; \
+        sd->t.len = word->stemmed.len; \
     } \
     }while (0)
 
