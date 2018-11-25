@@ -447,7 +447,7 @@ start_over:
 					if (!decay) {
 						decay = TRUE;
 					} else {
-						token.original.len = 0;
+						token.flags |= RSPAMD_STAT_TOKEN_FLAG_SKIPPED;
 					}
 				}
 			}
@@ -541,127 +541,161 @@ rspamd_tokenize_subject (struct rspamd_task *task)
 	return words;
 }
 
+static inline void
+rspamd_uchars_to_ucs32 (const UChar *src, gsize srclen,
+						rspamd_stat_token_t *tok,
+						rspamd_mempool_t *pool)
+{
+	UChar32 *dest, t, *d;
+	gint32 i = 0;
+
+	dest = rspamd_mempool_alloc (pool, srclen * sizeof (UChar32));
+	d = dest;
+
+	while (i < srclen) {
+		U16_NEXT_UNSAFE (src, i, t);
+		*d++ = u_tolower (t);
+	}
+
+	tok->unicode.begin = dest;
+	tok->unicode.len = d - dest;
+}
+
+static inline void
+rspamd_ucs32_to_normalised (rspamd_stat_token_t *tok,
+							rspamd_mempool_t *pool)
+{
+	guint i, doff = 0;
+	gsize utflen = 0;
+	gchar *dest;
+	UChar32 t;
+
+	for (i = 0; i < tok->unicode.len; i ++) {
+		utflen += U8_LENGTH (tok->unicode.begin[i]);
+	}
+
+	dest = rspamd_mempool_alloc (pool, utflen + 1);
+
+	for (i = 0; i < tok->unicode.len; i ++) {
+		t = tok->unicode.begin[i];
+		U8_APPEND_UNSAFE (dest, doff, t);
+	}
+
+	g_assert (doff <= utflen);
+	dest[doff] = '\0';
+
+	tok->normalized.len = doff;
+	tok->normalized.begin = dest;
+}
+
+void
+rspamd_normalize_single_word (rspamd_stat_token_t *tok, rspamd_mempool_t *pool)
+{
+	UErrorCode uc_err = U_ZERO_ERROR;
+	UConverter *utf8_converter;
+	UChar tmpbuf[1024]; /* Assume that we have no longer words... */
+	gsize ulen;
+
+	utf8_converter = rspamd_get_utf8_converter ();
+
+	if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_UTF) {
+		ulen = ucnv_toUChars (utf8_converter,
+				tmpbuf,
+				G_N_ELEMENTS (tmpbuf),
+				tok->original.begin,
+				tok->original.len,
+				&uc_err);
+
+		/* Now, we need to understand if we need to normalise the word */
+		if (!U_SUCCESS (uc_err)) {
+			tok->flags |= RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE;
+			tok->unicode.begin = NULL;
+			tok->unicode.len = 0;
+			tok->normalized.begin = NULL;
+			tok->normalized.len = 0;
+		}
+		else {
+#if U_ICU_VERSION_MAJOR_NUM >= 44
+			const UNormalizer2 *norm = rspamd_get_unicode_normalizer ();
+			gint32 end;
+
+			/* We can now check if we need to decompose */
+			end = unorm2_spanQuickCheckYes (norm, tmpbuf, ulen, &uc_err);
+
+			if (!U_SUCCESS (uc_err)) {
+				rspamd_uchars_to_ucs32 (tmpbuf, ulen, tok, pool);
+				tok->normalized.begin = NULL;
+				tok->normalized.len = 0;
+				tok->flags |= RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE;
+			}
+			else {
+				if (end == ulen) {
+					/* Already normalised, just lowercase */
+					rspamd_uchars_to_ucs32 (tmpbuf, ulen, tok, pool);
+					rspamd_ucs32_to_normalised (tok, pool);
+				}
+				else {
+					/* Perform normalization */
+					UChar normbuf[1024];
+
+					g_assert (end < G_N_ELEMENTS (normbuf));
+					/* First part */
+					memcpy (normbuf, tmpbuf, end * sizeof (UChar));
+					/* Second part */
+					ulen = unorm2_normalizeSecondAndAppend (norm,
+							normbuf, end,
+							G_N_ELEMENTS (normbuf),
+							tmpbuf + end,
+							ulen - end,
+							&uc_err);
+
+					if (!U_SUCCESS (uc_err)) {
+						if (uc_err != U_BUFFER_OVERFLOW_ERROR) {
+							msg_warn_pool_check ("cannot normalise text '%*s': %s",
+									(gint)tok->original.len, tok->original.begin,
+									u_errorName (uc_err));
+							rspamd_uchars_to_ucs32 (tmpbuf, ulen, tok, pool);
+							rspamd_ucs32_to_normalised (tok, pool);
+							tok->flags |= RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE;
+						}
+					}
+					else {
+						/* Copy normalised back */
+						rspamd_uchars_to_ucs32 (normbuf, ulen, tok, pool);
+						tok->flags |= RSPAMD_STAT_TOKEN_FLAG_NORMALISED;
+						rspamd_ucs32_to_normalised (tok, pool);
+					}
+				}
+			}
+#else
+			/* Legacy version with no unorm2 interface */
+			rspamd_uchars_to_ucs32 (tmpbuf, ulen, tok, pool);
+			rspamd_ucs32_to_normalised (tok, pool);
+#endif
+		}
+	}
+	else {
+		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
+			/* Simple lowercase */
+			gchar *dest;
+
+			dest = rspamd_mempool_alloc (pool, tok->original.len + 1);
+			rspamd_strlcpy (dest, tok->original.begin, tok->original.len + 1);
+			rspamd_str_lc (dest, tok->original.len);
+			tok->normalized.len = tok->original.len;
+		}
+	}
+}
+
 void
 rspamd_normalize_words (GArray *words, rspamd_mempool_t *pool)
 {
 	rspamd_stat_token_t *tok;
 	guint i;
-	UErrorCode uc_err = U_ZERO_ERROR;
-	guint clen, dlen;
-	gint r;
-	UConverter *utf8_converter;
-#if U_ICU_VERSION_MAJOR_NUM >= 44
-	const UNormalizer2 *norm = rspamd_get_unicode_normalizer ();
-	gint32 end;
-	UChar *src = NULL, *dest = NULL;
-#endif
-
-	utf8_converter = rspamd_get_utf8_converter ();
 
 	for (i = 0; i < words->len; i++) {
 		tok = &g_array_index (words, rspamd_stat_token_t, i);
-
-		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_UTF) {
-			UChar *unicode;
-			gchar *utf8;
-			gsize ulen;
-
-			uc_err = U_ZERO_ERROR;
-			ulen = tok->original.len;
-			unicode = rspamd_mempool_alloc (pool, sizeof (UChar) * (ulen + 1));
-			ulen = ucnv_toUChars (utf8_converter,
-					unicode,
-					tok->original.len + 1,
-					tok->original.begin,
-					tok->original.len,
-					&uc_err);
-
-
-			if (!U_SUCCESS (uc_err)) {
-				tok->flags |= RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE;
-				tok->unicode.begin = NULL;
-				tok->unicode.len = 0;
-				tok->normalized.begin = NULL;
-				tok->normalized.len = 0;
-			}
-			else {
-				/* Perform normalization if available and needed */
-#if U_ICU_VERSION_MAJOR_NUM >= 44
-				/* We can now check if we need to decompose */
-				end = unorm2_spanQuickCheckYes (norm, src, ulen, &uc_err);
-
-				if (!U_SUCCESS (uc_err)) {
-					tok->unicode.begin = unicode;
-					tok->unicode.len = ulen;
-					tok->normalized.begin = NULL;
-					tok->normalized.len = 0;
-					tok->flags |= RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE;
-				}
-				else {
-					if (end == ulen) {
-						/* Already normalised */
-						tok->unicode.begin = unicode;
-						tok->unicode.len = ulen;
-						tok->normalized.begin = tok->original.begin;
-						tok->normalized.len = tok->original.len;
-					}
-					else {
-						/* Perform normalization */
-
-						dest = rspamd_mempool_alloc (pool, ulen * sizeof (UChar));
-						/* First part */
-						memcpy (dest, src, end * sizeof (*dest));
-						/* Second part */
-						ulen = unorm2_normalizeSecondAndAppend (norm, dest, end,
-								ulen,
-								src + end, ulen - end, &uc_err);
-
-						if (!U_SUCCESS (uc_err)) {
-							if (uc_err != U_BUFFER_OVERFLOW_ERROR) {
-								msg_warn_pool_check ("cannot normalise text '%*s': %s",
-										(gint)tok->original.len, tok->original.begin,
-										u_errorName (uc_err));
-								tok->unicode.begin = unicode;
-								tok->unicode.len = ulen;
-								tok->normalized.begin = NULL;
-								tok->normalized.len = 0;
-								tok->flags |= RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE;
-							}
-						}
-						else {
-							/* Copy normalised back */
-							tok->unicode.begin = dest;
-							tok->unicode.len = ulen;
-							tok->flags |= RSPAMD_STAT_TOKEN_FLAG_NORMALISED;
-
-							/* Convert utf8 to produce normalized part */
-							clen = ucnv_getMaxCharSize (utf8_converter);
-							dlen = UCNV_GET_MAX_BYTES_FOR_STRING (ulen, clen);
-
-							utf8 = rspamd_mempool_alloc (pool,
-									sizeof (*utf8) * dlen + 1);
-							r = ucnv_fromUChars (utf8_converter,
-									utf8,
-									dlen,
-									dest,
-									ulen,
-									&uc_err);
-							utf8[r] = '\0';
-
-							tok->normalized.begin = utf8;
-							tok->normalized.len = r;
-						}
-					}
-				}
-#else
-				/* Legacy libicu path */
-				tok->unicode.begin = unicode;
-				tok->unicode.len = ulen;
-				tok->normalized.begin = tok->original.begin;
-				tok->normalized.len = tok->original.len;
-#endif
-			}
-		}
+		rspamd_normalize_single_word (tok, pool);
 	}
 }
 
@@ -736,12 +770,8 @@ rspamd_stem_words (GArray *words, rspamd_mempool_t *pool,
 				}
 			}
 			else {
-				/* No stemmer, utf8 lowercase */
-				dest = rspamd_mempool_alloc (pool, tok->normalized.len);
-				memcpy (dest, tok->normalized.begin, tok->normalized.len);
-				rspamd_str_lc_utf8 (dest, tok->normalized.len);
 				tok->stemmed.len = tok->normalized.len;
-				tok->stemmed.begin = dest;
+				tok->stemmed.begin = tok->normalized.begin;
 			}
 
 			if (tok->stemmed.len > 0 && rspamd_language_detector_is_stop_word (d,
@@ -752,11 +782,8 @@ rspamd_stem_words (GArray *words, rspamd_mempool_t *pool,
 		else {
 			if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
 				/* Raw text, lowercase */
-				dest = rspamd_mempool_alloc (pool, tok->original.len);
-				memcpy (dest, tok->original.begin, tok->original.len);
-				rspamd_str_lc (dest, tok->original.len);
-				tok->stemmed.len = tok->original.len;
-				tok->stemmed.begin = dest;
+				tok->stemmed.len = tok->normalized.len;
+				tok->stemmed.begin = tok->normalized.begin;
 			}
 		}
 	}

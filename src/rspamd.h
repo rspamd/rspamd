@@ -289,6 +289,7 @@ enum rspamd_exception_type {
 struct rspamd_process_exception {
 	goffset pos;
 	guint len;
+	gpointer ptr;
 	enum rspamd_exception_type type;
 };
 

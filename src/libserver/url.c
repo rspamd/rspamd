@@ -2546,6 +2546,7 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 	ex->pos = start_offset;
 	ex->len = end_offset - start_offset;
 	ex->type = RSPAMD_EXCEPTION_URL;
+	ex->ptr = url;
 
 	if (url->protocol == PROTOCOL_MAILTO) {
 		if (url->userlen > 0) {

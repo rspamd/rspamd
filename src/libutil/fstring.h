@@ -40,8 +40,8 @@ typedef struct f_str_tok {
 } rspamd_ftok_t;
 
 typedef struct f_str_unicode_tok {
-	gsize len; /* in uchars */
-	const UChar *begin;
+	gsize len; /* in UChar32 */
+	const UChar32 *begin;
 } rspamd_ftok_unicode_t;
 
 /**
