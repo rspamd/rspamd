@@ -560,8 +560,9 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 
 			cur_ucs = ucs_elt->s;
 			nsym = 0;
+			uc_err = U_ZERO_ERROR;
 
-			while (keylen > 0) {
+			while (cur_utf < end) {
 				*cur_ucs++ = ucnv_getNextUChar (d->uchar_converter, &cur_utf,
 						end, &uc_err);
 				if (!U_SUCCESS (uc_err)) {
@@ -569,12 +570,11 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 				}
 
 				nsym ++;
-				keylen --;
 			}
 
 			if (!U_SUCCESS (uc_err)) {
-				msg_warn_config ("cannot convert key to unicode: %s",
-						u_errorName (uc_err));
+				msg_warn_config ("cannot convert key %*s to unicode: %s",
+						(gint)keylen, key, u_errorName (uc_err));
 
 				continue;
 			}
@@ -1178,7 +1178,7 @@ rspamd_language_detector_detect_type (struct rspamd_task *task,
 {
 	guint nparts = MIN (words->len, nwords);
 	goffset *selected_words;
-	rspamd_stat_token_t *tok, ucs_w;
+	rspamd_stat_token_t *tok;
 	guint i;
 
 	selected_words = g_new0 (goffset, nparts);

@@ -147,8 +147,8 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 				msg_debug_bayes (
 						"token(meta) %uL <%*s:%*s> probabilistically skipped",
 						tok->data,
-						(int) tok->t1->len, tok->t1->begin,
-						(int) tok->t2->len, tok->t2->begin);
+						(int) tok->t1->original.len, tok->t1->original.begin,
+						(int) tok->t2->original.len, tok->t2->original.begin);
 			}
 
 			return;
@@ -199,8 +199,9 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 			msg_debug_bayes (
 					"token %uL <%*s:%*s> skipped, prob not in range: %f",
 					tok->data,
-					(int) tok->t1->len, tok->t1->begin,
-					(int) tok->t2->len, tok->t2->begin, bayes_spam_prob);
+					(int) tok->t1->stemmed.len, tok->t1->stemmed.begin,
+					(int) tok->t2->stemmed.len, tok->t2->stemmed.begin,
+					bayes_spam_prob);
 
 			return;
 		}
@@ -227,8 +228,8 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 					"current spam prob: %.3f, current ham prob: %.3f",
 					token_type,
 					tok->data,
-					(int) tok->t1->len, tok->t1->begin,
-					(int) tok->t2->len, tok->t2->begin,
+					(int) tok->t1->stemmed.len, tok->t1->stemmed.begin,
+					(int) tok->t2->stemmed.len, tok->t2->stemmed.begin,
 					fw, w, total_count, spam_count, ham_count,
 					spam_prob, ham_prob,
 					bayes_spam_prob, bayes_ham_prob,
@@ -541,8 +542,8 @@ bayes_learn_spam (struct rspamd_classifier * ctx,
 			msg_debug_bayes ("token %uL <%*s:%*s>: window: %d, total_count: %d, "
 					"spam_count: %d, ham_count: %d",
 					tok->data,
-					(int) tok->t1->len, tok->t1->begin,
-					(int) tok->t2->len, tok->t2->begin,
+					(int) tok->t1->stemmed.len, tok->t1->stemmed.begin,
+					(int) tok->t2->stemmed.len, tok->t2->stemmed.begin,
 					tok->window_idx, total_cnt, spam_cnt, ham_cnt);
 		}
 		else {

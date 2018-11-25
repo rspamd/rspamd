@@ -4757,13 +4757,13 @@ lua_push_stat_token (lua_State *L, rspamd_token_t *tok)
 
 	if (tok->t1) {
 		lua_pushstring (L, "t1");
-		lua_pushlstring (L, tok->t1->begin, tok->t1->len);
+		lua_pushlstring (L, tok->t1->stemmed.begin, tok->t1->stemmed.len);
 		lua_settable (L, -3);
 	}
 
 	if (tok->t2) {
 		lua_pushstring (L, "t2");
-		lua_pushlstring (L, tok->t2->begin, tok->t2->len);
+		lua_pushlstring (L, tok->t2->stemmed.begin, tok->t2->stemmed.len);
 		lua_settable (L, -3);
 	}
 

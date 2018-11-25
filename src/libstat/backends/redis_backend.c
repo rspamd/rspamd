@@ -527,14 +527,14 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 								"HSET %b_tokens %b %b:%b",
 								prefix, (size_t) prefix_len,
 								n0, (size_t) l0,
-								tok->t1->begin, tok->t1->len,
-								tok->t2->begin, tok->t2->len);
+								tok->t1->stemmed.begin, tok->t1->stemmed.len,
+								tok->t2->stemmed.begin, tok->t2->stemmed.len);
 					} else if (tok->t1) {
 						redisAsyncCommand (rt->redis, NULL, NULL,
 								"HSET %b_tokens %b %b",
 								prefix, (size_t) prefix_len,
 								n0, (size_t) l0,
-								tok->t1->begin, tok->t1->len);
+								tok->t1->stemmed.begin, tok->t1->stemmed.len);
 					}
 				}
 				else {
@@ -548,14 +548,14 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 								"HSET %b %s %b:%b",
 								n0, (size_t) l0,
 								"tokens",
-								tok->t1->begin, tok->t1->len,
-								tok->t2->begin, tok->t2->len);
+								tok->t1->stemmed.begin, tok->t1->stemmed.len,
+								tok->t2->stemmed.begin, tok->t2->stemmed.len);
 					} else if (tok->t1) {
 						redisAsyncCommand (rt->redis, NULL, NULL,
 								"HSET %b %s %b",
 								n0, (size_t) l0,
 								"tokens",
-								tok->t1->begin, tok->t1->len);
+								tok->t1->stemmed.begin, tok->t1->stemmed.len);
 					}
 				}
 

@@ -41,6 +41,7 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 	lua_State *L = task->cfg->lua_state;
 
 	ar = g_array_sized_new (FALSE, FALSE, sizeof (elt), 16);
+	memset (&elt, 0, sizeof (elt));
 	elt.flags = RSPAMD_STAT_TOKEN_FLAG_META;
 
 	if (st_ctx->lua_stat_tokens_ref != -1) {
@@ -82,8 +83,13 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 					tok.begin = lua_tolstring (L, -1, &tok.len);
 
 					if (tok.begin && tok.len > 0) {
-						elt.begin = rspamd_mempool_ftokdup (task->task_pool, &tok);
-						elt.len = tok.len;
+						elt.original.begin =
+								rspamd_mempool_ftokdup (task->task_pool, &tok);
+						elt.original.len = tok.len;
+						elt.stemmed.begin = elt.original.begin;
+						elt.stemmed.len = elt.original.len;
+						elt.normalized.begin = elt.original.begin;
+						elt.normalized.len = elt.original.len;
 
 						g_array_append_val (ar, elt);
 					}

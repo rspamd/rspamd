@@ -1154,7 +1154,7 @@ lua_util_tokenize_text (lua_State *L)
 
 		for (i = 0; i < res->len; i ++) {
 			w = &g_array_index (res, rspamd_stat_token_t, i);
-			lua_pushlstring (L, w->begin, w->len);
+			lua_pushlstring (L, w->stemmed.begin, w->stemmed.len);
 			lua_rawseti (L, -2, i + 1);
 		}
 	}

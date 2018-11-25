@@ -304,30 +304,40 @@ rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
 	for (w = 0; w < words->len; w ++) {
 		token = &g_array_index (words, rspamd_stat_token_t, w);
 		token_flags = token->flags;
+		const gchar *begin;
+		gsize len;
 
-		if (task->lang_det) {
-			if (token->flags & RSPAMD_STAT_TOKEN_FLAG_STOP_WORD) {
-				/* Skip stop word */
-				continue;
-			}
+		if (token->flags &
+			(RSPAMD_STAT_TOKEN_FLAG_STOP_WORD|RSPAMD_STAT_TOKEN_FLAG_SKIPPED)) {
+			/* Skip stop/skipped words */
+			continue;
+		}
+
+		if (token->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
+			begin = token->stemmed.begin;
+			len = token->stemmed.len;
+		}
+		else {
+			begin = token->original.begin;
+			len = token->original.len;
 		}
 
 		if (osb_cf->ht == RSPAMD_OSB_HASH_COMPAT) {
 			rspamd_ftok_t ftok;
 
-			ftok.begin = token->begin;
-			ftok.len = token->len;
+			ftok.begin = begin;
+			ftok.len = len;
 			cur = rspamd_fstrhash_lc (&ftok, is_utf);
 		}
 		else {
 			/* We know that the words are normalized */
 			if (osb_cf->ht == RSPAMD_OSB_HASH_XXHASH) {
 				cur = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
-						token->begin, token->len, osb_cf->seed);
+						begin, len, osb_cf->seed);
 			}
 			else {
-				rspamd_cryptobox_siphash ((guchar *)&cur, token->begin,
-						token->len, osb_cf->sk);
+				rspamd_cryptobox_siphash ((guchar *)&cur, begin,
+						len, osb_cf->sk);
 
 				if (prefix) {
 					cur ^= seed;

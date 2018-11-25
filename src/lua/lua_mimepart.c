@@ -775,7 +775,7 @@ lua_textpart_get_words (lua_State *L)
 		for (i = 0; i < part->utf_words->len; i ++) {
 			w = &g_array_index (part->utf_words, rspamd_stat_token_t, i);
 
-			lua_pushlstring (L, w->begin, w->len);
+			lua_pushlstring (L, w->stemmed.begin, w->stemmed.len);
 			lua_rawseti (L, -2, i + 1);
 		}
 	}
@@ -983,7 +983,8 @@ lua_textpart_get_fuzzy_hashes (lua_State * L)
 
 		for (i = 0; i < part->utf_words->len; i ++) {
 			word = &g_array_index (part->utf_words, rspamd_stat_token_t, i);
-			rspamd_cryptobox_hash_update (&st, word->begin, word->len);
+			rspamd_cryptobox_hash_update (&st,
+					word->stemmed.begin, word->stemmed.len);
 		}
 
 		rspamd_cryptobox_hash_final (&st, digest);

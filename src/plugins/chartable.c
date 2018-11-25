@@ -358,12 +358,12 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 								   guint *ncap,
 								   struct chartable_ctx *chartable_module_ctx)
 {
-	const gchar *p, *end;
+	const UChar32 *p, *end;
 	gdouble badness = 0.0;
 	UChar32 uc;
 	UBlockCode sc;
 	gint last_is_latin = -1;
-	guint same_script_count = 0, nsym = 0, i = 0;
+	guint same_script_count = 0, nsym = 0;
 	enum {
 		start_process = 0,
 		got_alpha,
@@ -371,13 +371,13 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 		got_unknown,
 	} state = start_process, prev_state = start_process;
 
-	p = w->begin;
-	end = p + w->len;
+	p = w->unicode.begin;
+	end = p + w->unicode.len;
 
 	/* We assume that w is normalized */
 
-	while (p + i < end) {
-		U8_NEXT (p, i, w->len, uc);
+	while (p < end) {
+		uc = *p++;
 
 		if (((gint32)uc) < 0) {
 			break;
@@ -464,7 +464,8 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 		}
 	}
 
-	msg_debug_chartable ("word %*s, badness: %.2f", (gint)w->len, w->begin,
+	msg_debug_chartable ("word %*s, badness: %.2f",
+			(gint)w->normalized.len, w->normalized.begin,
 			badness);
 
 	return badness;
@@ -490,11 +491,11 @@ rspamd_chartable_process_word_ascii (struct rspamd_task *task,
 		got_unknown,
 	} state = start_process;
 
-	p = w->begin;
-	end = p + w->len;
+	p = w->normalized.begin;
+	end = p + w->normalized.len;
 	last_sc = 0;
 
-	if (w->len > chartable_module_ctx->max_word_len) {
+	if (w->normalized.len > chartable_module_ctx->max_word_len) {
 		return 0.0;
 	}
 
@@ -549,7 +550,8 @@ rspamd_chartable_process_word_ascii (struct rspamd_task *task,
 		badness = 4.0;
 	}
 
-	msg_debug_chartable ("word %*s, badness: %.2f", (gint)w->len, w->begin,
+	msg_debug_chartable ("word %*s, badness: %.2f",
+			(gint)w->normalized.len, w->normalized.begin,
 			badness);
 
 	return badness;
@@ -572,9 +574,9 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 	for (i = 0; i < part->utf_words->len; i++) {
 		w = &g_array_index (part->utf_words, rspamd_stat_token_t, i);
 
-		if (w->len > 0 && (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT)) {
+		if ((w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT)) {
 
-			if (IS_PART_UTF (part)) {
+			if (w->flags & RSPAMD_STAT_TOKEN_FLAG_UTF) {
 				cur_score += rspamd_chartable_process_word_utf (task, w, FALSE,
 						&ncap, chartable_module_ctx);
 			}
@@ -659,6 +661,8 @@ chartable_url_symbol_callback (struct rspamd_task *task,
 		struct rspamd_symcache_item *item,
 		void *unused)
 {
+	/* XXX: TODO: unbreak module once URLs unicode project is over */
+#if 0
 	struct rspamd_url *u;
 	GHashTableIter it;
 	gpointer k, v;
@@ -677,10 +681,10 @@ chartable_url_symbol_callback (struct rspamd_task *task,
 		}
 
 		if (u->hostlen > 0) {
-			w.begin = u->host;
-			w.len = u->hostlen;
+			w.stemmed.begin = u->host;
+			w.stemmed.len = u->hostlen;
 
-			if (g_utf8_validate (w.begin, w.len, NULL)) {
+			if (g_utf8_validate (w.stemmed.begin, w.stemmed.len, NULL)) {
 				cur_score += rspamd_chartable_process_word_utf (task, &w,
 						TRUE, NULL, chartable_module_ctx);
 			}
@@ -702,10 +706,10 @@ chartable_url_symbol_callback (struct rspamd_task *task,
 		}
 
 		if (u->hostlen > 0) {
-			w.begin = u->host;
-			w.len = u->hostlen;
+			w.stemmed.begin = u->host;
+			w.stemmed.len = u->hostlen;
 
-			if (g_utf8_validate (w.begin, w.len, NULL)) {
+			if (g_utf8_validate (w.stemmed.begin, w.stemmed.len, NULL)) {
 				cur_score += rspamd_chartable_process_word_utf (task, &w,
 						TRUE, NULL, chartable_module_ctx);
 			}
@@ -721,6 +725,6 @@ chartable_url_symbol_callback (struct rspamd_task *task,
 				cur_score, NULL);
 
 	}
-
+#endif
 	rspamd_symcache_finalize_item (task, item);
 }

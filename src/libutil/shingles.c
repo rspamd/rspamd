@@ -154,7 +154,8 @@ rspamd_shingles_from_text (GArray *input,
 			if (i - beg >= SHINGLES_WINDOW || i == (gint)input->len) {
 				for (j = beg; j < i; j ++) {
 					word = &g_array_index (input, rspamd_stat_token_t, j);
-					row = rspamd_fstring_append (row, word->begin, word->len);
+					row = rspamd_fstring_append (row, word->stemmed.begin,
+							word->stemmed.len);
 				}
 
 				/* Now we need to create a new row here */
@@ -172,7 +173,7 @@ rspamd_shingles_from_text (GArray *input,
 		}
 	}
 	else {
-		guint64 res[SHINGLES_WINDOW * RSPAMD_SHINGLE_SIZE], seed;
+		guint64 window[SHINGLES_WINDOW * RSPAMD_SHINGLE_SIZE], seed;
 
 		switch (alg) {
 		case RSPAMD_SHINGLES_XXHASH:
@@ -186,27 +187,27 @@ rspamd_shingles_from_text (GArray *input,
 			break;
 		}
 
-		memset (res, 0, sizeof (res));
+		memset (window, 0, sizeof (window));
 		for (i = 0; i <= (gint)input->len; i ++) {
 			if (i - beg >= SHINGLES_WINDOW || i == (gint)input->len) {
 
 				for (j = 0; j < RSPAMD_SHINGLE_SIZE; j ++) {
 					/* Shift hashes window to right */
 					for (k = 0; k < SHINGLES_WINDOW - 1; k ++) {
-						res[j * SHINGLES_WINDOW + k] =
-								res[j * SHINGLES_WINDOW + k + 1];
+						window[j * SHINGLES_WINDOW + k] =
+								window[j * SHINGLES_WINDOW + k + 1];
 					}
 
 					word = &g_array_index (input, rspamd_stat_token_t, beg);
 					/* Insert the last element to the pipe */
 					memcpy (&seed, keys[j], sizeof (seed));
-					res[j * SHINGLES_WINDOW + SHINGLES_WINDOW - 1] =
+					window[j * SHINGLES_WINDOW + SHINGLES_WINDOW - 1] =
 							rspamd_cryptobox_fast_hash_specific (ht,
-									word->begin, word->len,
+									word->stemmed.begin, word->stemmed.len,
 									seed);
 					val = 0;
 					for (k = 0; k < SHINGLES_WINDOW; k ++) {
-						val ^= res[j * SHINGLES_WINDOW + k] >>
+						val ^= window[j * SHINGLES_WINDOW + k] >>
 								(8 * (SHINGLES_WINDOW - k - 1));
 					}
 

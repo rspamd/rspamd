@@ -1223,9 +1223,10 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 
 					if (part->utf_words) {
 						for (j = 0; j < part->utf_words->len; j ++) {
-							tok = &g_array_index (part->utf_words, rspamd_stat_token_t, j);
-							scvec[cnt] = tok->begin;
-							lenvec[cnt++] = tok->len;
+							tok = &g_array_index (part->utf_words,
+									rspamd_stat_token_t, j);
+							scvec[cnt] = tok->normalized.begin;
+							lenvec[cnt++] = tok->normalized.len;
 						}
 					}
 				}
@@ -1432,6 +1433,9 @@ rspamd_re_cache_type_to_string (enum rspamd_re_type type)
 		break;
 	case RSPAMD_RE_SELECTOR:
 		ret = "selector";
+		break;
+	case RSPAMD_RE_WORDS:
+		ret = "words";
 		break;
 	case RSPAMD_RE_MAX:
 		ret = "invalid class";
