@@ -267,9 +267,6 @@ rspamd_task_free (struct rspamd_task *task)
 			if (tp->languages) {
 				g_ptr_array_unref (tp->languages);
 			}
-			if (tp->unicode_raw_content) {
-				g_array_free (tp->unicode_raw_content, TRUE);
-			}
 		}
 
 		if (task->rcpt_envelope) {

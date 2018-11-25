@@ -24,6 +24,7 @@
 
 #include <glob.h>
 #include <unicode/utf8.h>
+#include <unicode/utf16.h>
 #include <unicode/ucnv.h>
 #include <unicode/uchar.h>
 #include <unicode/ustring.h>
@@ -873,31 +874,6 @@ end:
 	return ret;
 }
 
-
-void
-rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
-		rspamd_mempool_t *pool,
-		rspamd_stat_token_t *utf_token, rspamd_stat_token_t *ucs_token)
-{
-	UChar *out;
-	int32_t nsym;
-	UErrorCode uc_err = U_ZERO_ERROR;
-
-	ucs_token->flags = utf_token->flags;
-	out = rspamd_mempool_alloc (pool, sizeof (*out) * (utf_token->normalized.len + 1));
-	nsym = ucnv_toUChars (d->uchar_converter, out, (utf_token->normalized.len + 1),
-			utf_token->normalized.begin, utf_token->normalized.len, &uc_err);
-
-	if (nsym >= 0 && uc_err == U_ZERO_ERROR) {
-		rspamd_language_detector_ucs_lowercase (out, nsym);
-		ucs_token->normalized.begin = (const gchar *) out;
-		ucs_token->normalized.len = nsym;
-	}
-	else {
-		ucs_token->normalized.len = 0;
-	}
-}
-
 static void
 rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 		goffset *offsets_out)
@@ -905,6 +881,7 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 	guint step_len, remainder, i, out_idx;
 	guint64 coin, sel;
 	rspamd_stat_token_t *tok;
+	UChar32 first, last;
 
 	g_assert (nwords != 0);
 	g_assert (offsets_out != NULL);
@@ -942,11 +919,17 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 		for (;;) {
 			tok = &g_array_index (ucs_tokens, rspamd_stat_token_t, sel);
 			/* Filter bad tokens */
-			if (tok->normalized.len >= 2 &&
-				u_isalpha (*(UChar *)tok->normalized.begin) &&
-				u_isalpha (*(((UChar *)tok->normalized.begin) + (tok->normalized.len - 1)))) {
-				offsets_out[out_idx] = sel;
-				break;
+
+			if (tok->normalized.len >= 2) {
+				U16_GET_OR_FFFD (tok->normalized.begin, 0, 0, tok->normalized.len,
+						first);
+				U16_GET_OR_FFFD (tok->normalized.begin, 0, tok->normalized.len - 1,
+						tok->normalized.len,
+						last);
+				if (u_isalpha (first) && u_isalpha (last)) {
+					offsets_out[out_idx] = sel;
+					break;
+				}
 			}
 			else {
 				ntries ++;
@@ -965,8 +948,6 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 			}
 		}
 	}
-
-
 
 	/*
 	 * Fisher-Yates algorithm:
@@ -1001,13 +982,13 @@ rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar *window,
 			window[0] = (UChar)' ';
 
 			for (i = 0; i < wlen - 1; i ++) {
-				window[i + 1] = *(((UChar *)tok->normalized.begin) + i);
+				window[i + 1] = tok->unicode.begin[i];
 			}
 		}
 		else if (cur_off + wlen == tok->normalized.len + 1) {
 			/* Add trailing space */
 			for (i = 0; i < wlen - 1; i ++) {
-				window[i] = *(((UChar *)tok->normalized.begin) + cur_off + i);
+				window[i] = tok->unicode.begin[cur_off + i];
 			}
 			window[wlen - 1] = (UChar)' ';
 		}
@@ -1018,7 +999,7 @@ rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar *window,
 		else {
 			/* Normal case */
 			for (i = 0; i < wlen; i++) {
-				window[i] = *(((UChar *) tok->normalized.begin) + cur_off + i);
+				window[i] = tok->unicode.begin[cur_off + i];
 			}
 		}
 	}
@@ -1027,7 +1008,7 @@ rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar *window,
 			return -1;
 		}
 
-		window[0] = *(((UChar *)tok->normalized.begin) + cur_off);
+		window[0] = tok->unicode.begin[cur_off];
 	}
 
 	return cur_off + 1;
@@ -1200,10 +1181,7 @@ rspamd_language_detector_detect_type (struct rspamd_task *task,
 	for (i = 0; i < nparts; i++) {
 		tok = &g_array_index (words, rspamd_stat_token_t,
 				selected_words[i]);
-		rspamd_language_detector_to_ucs (task->lang_det,
-				task->task_pool,
-				tok, &ucs_w);
-		rspamd_language_detector_detect_word (task, d, &ucs_w, candidates,
+		rspamd_language_detector_detect_word (task, d, tok, candidates,
 				d->trigramms[cat]);
 	}
 

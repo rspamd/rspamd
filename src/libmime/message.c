@@ -711,7 +711,6 @@ rspamd_message_process_plain_text_part (struct rspamd_task *task,
 	if (text_part->utf_raw_content != NULL) {
 		/* Different from HTML, where we also parse HTML and strip tags */
 		text_part->utf_content = text_part->utf_raw_content;
-		text_part->unicode_content = text_part->unicode_raw_content;
 	}
 	else {
 		/*

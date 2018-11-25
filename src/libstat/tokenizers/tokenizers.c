@@ -271,9 +271,8 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 	buf.original.begin = text;
 	buf.original.len = len;
 	buf.flags = 0;
-	token.original.begin = NULL;
-	token.original.len = 0;
-	token.flags = 0;
+
+	memset (&token, 0, sizeof (token));
 
 	if (cfg != NULL) {
 		min_len = cfg->min_word_len;
