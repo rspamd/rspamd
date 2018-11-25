@@ -161,16 +161,17 @@ rspamd_language_search_str (const gchar *key, const gchar *elts[], size_t nelts)
 static guint
 rspamd_trigram_hash_func (gconstpointer key)
 {
-	return rspamd_cryptobox_fast_hash (key, 3 * sizeof (UChar), rspamd_hash_seed ());
+	return rspamd_cryptobox_fast_hash (key, 3 * sizeof (UChar32),
+			rspamd_hash_seed ());
 }
 
 static gboolean
 rspamd_trigram_equal_func (gconstpointer v, gconstpointer v2)
 {
-	return memcmp (v, v2, 3 * sizeof (UChar)) == 0;
+	return memcmp (v, v2, 3 * sizeof (UChar32)) == 0;
 }
 
-KHASH_INIT (rspamd_trigram_hash, const UChar *, struct rspamd_ngramm_chain, true,
+KHASH_INIT (rspamd_trigram_hash, const UChar32 *, struct rspamd_ngramm_chain, true,
 		rspamd_trigram_hash_func, rspamd_trigram_equal_func);
 KHASH_INIT (rspamd_candidates_hash, const gchar *,
 		struct rspamd_lang_detector_res *, true,
@@ -191,7 +192,7 @@ struct rspamd_lang_detector {
 };
 
 static void
-rspamd_language_detector_ucs_lowercase (UChar *s, gsize len)
+rspamd_language_detector_ucs_lowercase (UChar32 *s, gsize len)
 {
 	gsize i;
 
@@ -201,14 +202,13 @@ rspamd_language_detector_ucs_lowercase (UChar *s, gsize len)
 }
 
 static gboolean
-rspamd_language_detector_ucs_is_latin (UChar *s, gsize len)
+rspamd_language_detector_ucs_is_latin (const UChar32 *s, gsize len)
 {
 	gsize i;
 	gboolean ret = TRUE;
 
 	for (i = 0; i < len; i ++) {
-		if (!((s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z')
-				|| s[i] == ' ')) {
+		if (s[i] >= 128 || !(g_ascii_isalnum (s[i]) || s[i] == ' ')) {
 			ret = FALSE;
 			break;
 		}
@@ -220,7 +220,7 @@ rspamd_language_detector_ucs_is_latin (UChar *s, gsize len)
 struct rspamd_language_ucs_elt {
 	guint freq;
 	const gchar *utf;
-	UChar s[0];
+	UChar32 s[0];
 };
 
 static void
@@ -552,22 +552,34 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		m2 += delta * delta2;
 
 		if (key != NULL) {
+			UChar32 *cur_ucs;
+			const char *end = key + keylen, *cur_utf = key;
+
 			ucs_elt = rspamd_mempool_alloc (cfg->cfg_pool,
-					sizeof (*ucs_elt) + (keylen + 1) * sizeof (UChar));
+					sizeof (*ucs_elt) + (keylen + 1) * sizeof (UChar32));
 
-			nsym = ucnv_toUChars (d->uchar_converter,
-					ucs_elt->s, keylen + 1,
-					key,
-					keylen, &uc_err);
-			ucs_elt->utf = key;
+			cur_ucs = ucs_elt->s;
+			nsym = 0;
 
-			if (uc_err != U_ZERO_ERROR) {
+			while (keylen > 0) {
+				*cur_ucs++ = ucnv_getNextUChar (d->uchar_converter, &cur_utf,
+						end, &uc_err);
+				if (!U_SUCCESS (uc_err)) {
+					break;
+				}
+
+				nsym ++;
+				keylen --;
+			}
+
+			if (!U_SUCCESS (uc_err)) {
 				msg_warn_config ("cannot convert key to unicode: %s",
 						u_errorName (uc_err));
 
 				continue;
 			}
 
+			ucs_elt->utf = key;
 			rspamd_language_detector_ucs_lowercase (ucs_elt->s, nsym);
 
 			if (nsym == 3) {
@@ -881,7 +893,6 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 	guint step_len, remainder, i, out_idx;
 	guint64 coin, sel;
 	rspamd_stat_token_t *tok;
-	UChar32 first, last;
 
 	g_assert (nwords != 0);
 	g_assert (offsets_out != NULL);
@@ -920,13 +931,9 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 			tok = &g_array_index (ucs_tokens, rspamd_stat_token_t, sel);
 			/* Filter bad tokens */
 
-			if (tok->normalized.len >= 2) {
-				U16_GET_OR_FFFD (tok->normalized.begin, 0, 0, tok->normalized.len,
-						first);
-				U16_GET_OR_FFFD (tok->normalized.begin, 0, tok->normalized.len - 1,
-						tok->normalized.len,
-						last);
-				if (u_isalpha (first) && u_isalpha (last)) {
+			if (tok->unicode.len >= 2) {
+				if (u_isalpha (tok->unicode.begin[0]) &&
+					u_isalpha (tok->unicode.begin[tok->unicode.len - 1])) {
 					offsets_out[out_idx] = sel;
 					break;
 				}
@@ -970,7 +977,7 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 }
 
 static goffset
-rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar *window,
+rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar32 *window,
 		guint wlen, goffset cur_off)
 {
 	guint i;
@@ -979,20 +986,20 @@ rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar *window,
 		/* Deal with spaces at the beginning and ending */
 
 		if (cur_off == 0) {
-			window[0] = (UChar)' ';
+			window[0] = (UChar32)' ';
 
 			for (i = 0; i < wlen - 1; i ++) {
 				window[i + 1] = tok->unicode.begin[i];
 			}
 		}
-		else if (cur_off + wlen == tok->normalized.len + 1) {
+		else if (cur_off + wlen == tok->unicode.len + 1) {
 			/* Add trailing space */
 			for (i = 0; i < wlen - 1; i ++) {
 				window[i] = tok->unicode.begin[cur_off + i];
 			}
-			window[wlen - 1] = (UChar)' ';
+			window[wlen - 1] = (UChar32)' ';
 		}
-		else if (cur_off + wlen > tok->normalized.len + 1) {
+		else if (cur_off + wlen > tok->unicode.len + 1) {
 			/* No more fun */
 			return -1;
 		}
@@ -1020,7 +1027,7 @@ rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar *window,
 static void
 rspamd_language_detector_process_ngramm_full (struct rspamd_task *task,
 											  struct rspamd_lang_detector *d,
-											  UChar *window,
+											  UChar32 *window,
 											  khash_t(rspamd_candidates_hash) *candidates,
 											  khash_t(rspamd_trigram_hash) *trigramms)
 {
@@ -1082,7 +1089,7 @@ rspamd_language_detector_detect_word (struct rspamd_task *task,
 									  khash_t(rspamd_trigram_hash) *trigramms)
 {
 	const guint wlen = 3;
-	UChar window[3];
+	UChar32 window[3];
 	goffset cur = 0;
 
 	/* Split words */
