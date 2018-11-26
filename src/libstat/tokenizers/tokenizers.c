@@ -245,6 +245,43 @@ rspamd_utf_word_valid (const gchar *text, const gchar *end,
     } \
 } while(0)
 
+static inline void
+rspamd_tokenize_exception (struct rspamd_process_exception *ex, GArray *res)
+{
+	rspamd_stat_token_t token;
+
+	memset (&token, 0, sizeof (token));
+
+	if (ex->type == RSPAMD_EXCEPTION_GENERIC) {
+		token.original.begin = "!!EX!!";
+		token.original.len = sizeof ("!!EX!!") - 1;
+		token.flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
+
+		g_array_append_val (res, token);
+		token.flags = 0;
+	}
+	else if (ex->type == RSPAMD_EXCEPTION_URL) {
+		struct rspamd_url *uri;
+
+		uri = ex->ptr;
+
+		if (uri && uri->tldlen > 0) {
+			token.original.begin = uri->tld;
+			token.original.len = uri->tldlen;
+
+		}
+		else {
+			token.original.begin = "!!EX!!";
+			token.original.len = sizeof ("!!EX!!") - 1;
+		}
+
+		token.flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
+		g_array_append_val (res, token);
+		token.flags = 0;
+	}
+}
+
+
 GArray *
 rspamd_tokenize_text (const gchar *text, gsize len,
 					  const UText *utxt,
@@ -347,15 +384,7 @@ start_over:
 						while (cur && ex->pos <= last) {
 							/* We have an exception at the beginning, skip those */
 							last += ex->len;
-
-							if (ex->type == RSPAMD_EXCEPTION_URL) {
-								token.original.begin = "!!EX!!";
-								token.original.len = sizeof ("!!EX!!") - 1;
-								token.flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
-
-								g_array_append_val (res, token);
-								token.flags = 0;
-							}
+							rspamd_tokenize_exception (ex, res);
 
 							if (last > p) {
 								/* Exception spread over the boundaries */
@@ -385,13 +414,7 @@ start_over:
 							/* Process the current exception */
 							last += ex->len + (ex->pos - last);
 
-							if (ex->type == RSPAMD_EXCEPTION_URL) {
-								token.original.begin = "!!EX!!";
-								token.original.len = sizeof ("!!EX!!") - 1;
-								token.flags = RSPAMD_STAT_TOKEN_FLAG_EXCEPTION;
-
-								g_array_append_val (res, token);
-							}
+							rspamd_tokenize_exception (ex, res);
 
 							if (last > p) {
 								/* Exception spread over the boundaries */

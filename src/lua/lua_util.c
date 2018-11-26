@@ -1120,7 +1120,7 @@ lua_util_tokenize_text (lua_State *L)
 					ex = g_malloc0 (sizeof (*ex));
 					ex->pos = pos;
 					ex->len = ex_len;
-					ex->type = RSPAMD_EXCEPTION_URL;
+					ex->type = RSPAMD_EXCEPTION_GENERIC;
 					exceptions = g_list_prepend (exceptions, ex);
 				}
 			}
