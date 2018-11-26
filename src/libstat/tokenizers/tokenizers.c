@@ -771,8 +771,8 @@ rspamd_stem_words (GArray *words, rspamd_mempool_t *pool,
 				tok->stemmed.begin = tok->normalized.begin;
 			}
 
-			if (tok->stemmed.len > 0 && rspamd_language_detector_is_stop_word (d,
-					tok->stemmed.begin, tok->stemmed.len)) {
+			if (tok->stemmed.len > 0 && d != NULL &&
+				rspamd_language_detector_is_stop_word (d, tok->stemmed.begin, tok->stemmed.len)) {
 				tok->flags |= RSPAMD_STAT_TOKEN_FLAG_STOP_WORD;
 			}
 		}
