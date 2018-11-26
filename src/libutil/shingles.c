@@ -126,7 +126,7 @@ rspamd_shingles_from_text (GArray *input,
 	rspamd_stat_token_t *word;
 	guint64 val;
 	gint i, j, k;
-	gsize hlen, beg = 0;
+	gsize hlen, ilen = 0, beg = 0, widx = 0;
 	enum rspamd_cryptobox_fast_hash_type ht;
 
 	if (pool != NULL) {
@@ -138,10 +138,19 @@ rspamd_shingles_from_text (GArray *input,
 
 	row = rspamd_fstring_sized_new (256);
 
+	for (i = 0; i < input->len; i ++) {
+		word = &g_array_index (input, rspamd_stat_token_t, i);
+
+		if (!((word->flags & RSPAMD_STAT_TOKEN_FLAG_SKIPPED)
+			|| word->stemmed.len == 0)) {
+			ilen ++;
+		}
+	}
+
 	/* Init hashes pipes and keys */
 	hashes = g_malloc (sizeof (*hashes) * RSPAMD_SHINGLE_SIZE);
-	hlen = input->len > SHINGLES_WINDOW ?
-			(input->len - SHINGLES_WINDOW + 1) : 1;
+	hlen = ilen > SHINGLES_WINDOW ?
+			(ilen - SHINGLES_WINDOW + 1) : 1;
 	keys = rspamd_shingles_get_keys_cached (key);
 
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
@@ -150,10 +159,23 @@ rspamd_shingles_from_text (GArray *input,
 
 	/* Now parse input words into a vector of hashes using rolling window */
 	if (alg == RSPAMD_SHINGLES_OLD) {
-		for (i = 0; i <= (gint)input->len; i ++) {
-			if (i - beg >= SHINGLES_WINDOW || i == (gint)input->len) {
+		for (i = 0; i <= (gint)ilen; i ++) {
+			if (i - beg >= SHINGLES_WINDOW || i == (gint)ilen) {
 				for (j = beg; j < i; j ++) {
-					word = &g_array_index (input, rspamd_stat_token_t, j);
+
+					word = NULL;
+					while (widx < input->len) {
+						word = &g_array_index (input, rspamd_stat_token_t, widx);
+
+						if ((word->flags & RSPAMD_STAT_TOKEN_FLAG_SKIPPED)
+							|| word->stemmed.len == 0) {
+							widx++;
+						}
+						else {
+							break;
+						}
+					}
+
 					row = rspamd_fstring_append (row, word->stemmed.begin,
 							word->stemmed.len);
 				}
@@ -167,6 +189,7 @@ rspamd_shingles_from_text (GArray *input,
 				}
 
 				beg++;
+				widx ++;
 
 				row = rspamd_fstring_assign (row, "", 0);
 			}
@@ -188,8 +211,8 @@ rspamd_shingles_from_text (GArray *input,
 		}
 
 		memset (window, 0, sizeof (window));
-		for (i = 0; i <= (gint)input->len; i ++) {
-			if (i - beg >= SHINGLES_WINDOW || i == (gint)input->len) {
+		for (i = 0; i <= ilen; i ++) {
+			if (i - beg >= SHINGLES_WINDOW || i == ilen) {
 
 				for (j = 0; j < RSPAMD_SHINGLE_SIZE; j ++) {
 					/* Shift hashes window to right */
@@ -198,7 +221,20 @@ rspamd_shingles_from_text (GArray *input,
 								window[j * SHINGLES_WINDOW + k + 1];
 					}
 
-					word = &g_array_index (input, rspamd_stat_token_t, beg);
+					word = NULL;
+
+					while (widx < input->len) {
+						word = &g_array_index (input, rspamd_stat_token_t, widx);
+
+						if ((word->flags & RSPAMD_STAT_TOKEN_FLAG_SKIPPED)
+							 || word->stemmed.len == 0) {
+							widx++;
+						}
+						else {
+							break;
+						}
+					}
+
 					/* Insert the last element to the pipe */
 					memcpy (&seed, keys[j], sizeof (seed));
 					window[j * SHINGLES_WINDOW + SHINGLES_WINDOW - 1] =
@@ -214,7 +250,9 @@ rspamd_shingles_from_text (GArray *input,
 					g_assert (hlen > beg);
 					hashes[j][beg] = val;
 				}
-				beg++;
+
+				beg ++;
+				widx ++;
 			}
 		}
 	}
