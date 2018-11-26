@@ -251,7 +251,8 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 					  enum rspamd_tokenize_type how,
 					  struct rspamd_config *cfg,
 					  GList *exceptions,
-					  guint64 *hash)
+					  guint64 *hash,
+					  GArray *cur_words)
 {
 	rspamd_stat_token_t token, buf;
 	const gchar *pos = NULL;
@@ -265,7 +266,7 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 	static UBreakIterator* bi = NULL;
 
 	if (text == NULL) {
-		return NULL;
+		return cur_words;
 	}
 
 	buf.original.begin = text;
@@ -281,8 +282,13 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 		initial_size = word_decay * 2;
 	}
 
-	res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_stat_token_t),
-			initial_size);
+	if (!cur_words) {
+		res = g_array_sized_new (FALSE, FALSE, sizeof (rspamd_stat_token_t),
+				initial_size);
+	}
+	else {
+		res = cur_words;
+	}
 
 	if (G_UNLIKELY (how == RSPAMD_TOKENIZE_RAW || utxt == NULL)) {
 		while (rspamd_tokenizer_get_word_raw (&buf, &pos, &token, &cur, &l, FALSE)) {
@@ -474,71 +480,96 @@ start_over:
 
 #undef SHIFT_EX
 
-GArray *
-rspamd_tokenize_subject (struct rspamd_task *task)
+static void
+rspamd_add_metawords_from_str (const gchar *beg, gsize len,
+								struct rspamd_task *task)
 {
 	UText utxt = UTEXT_INITIALIZER;
 	UErrorCode uc_err = U_ZERO_ERROR;
-	gsize slen;
-	gboolean valid_utf = TRUE;
-	GArray *words = NULL;
 	guint i = 0;
-	gint32 uc;
+	UChar32 uc;
+	gboolean valid_utf = TRUE;
+
+	while (i < len) {
+		U8_NEXT (beg, i, len, uc);
+
+		if (((gint32) uc) < 0) {
+			valid_utf = FALSE;
+			break;
+		}
+
+#if U_ICU_VERSION_MAJOR_NUM < 50
+		if (u_isalpha (uc)) {
+			gint32 sc = ublock_getCode (uc);
+
+			if (sc == UBLOCK_THAI) {
+				valid_utf = FALSE;
+				msg_info_task ("enable workaround for Thai characters for old libicu");
+				break;
+			}
+		}
+#endif
+	}
+
+	if (valid_utf) {
+		utext_openUTF8 (&utxt,
+				beg,
+				len,
+				&uc_err);
+
+		task->meta_words = rspamd_tokenize_text (beg, len,
+				&utxt, RSPAMD_TOKENIZE_UTF,
+				task->cfg, NULL, NULL, task->meta_words);
+
+		utext_close (&utxt);
+	}
+	else {
+		task->meta_words = rspamd_tokenize_text (beg, len,
+				NULL, RSPAMD_TOKENIZE_RAW,
+				task->cfg, NULL, NULL, task->meta_words);
+	}
+}
+
+void
+rspamd_tokenize_meta_words (struct rspamd_task *task)
+{
+	guint i = 0;
 	rspamd_stat_token_t *tok;
 
 	if (task->subject) {
-		const gchar *p = task->subject;
+		rspamd_add_metawords_from_str (task->subject, strlen (task->subject), task);
+	}
 
-		slen = strlen (task->subject);
+	if (task->from_mime) {
+		struct rspamd_email_address *addr;
 
-		while (i < slen) {
-			U8_NEXT (p, i, slen, uc);
+		addr = g_ptr_array_index (task->from_mime, 0);
 
-			if (((gint32) uc) < 0) {
-				valid_utf = FALSE;
-				break;
-			}
-#if U_ICU_VERSION_MAJOR_NUM < 50
-			if (u_isalpha (uc)) {
-				gint32 sc = ublock_getCode (uc);
-
-				if (sc == UBLOCK_THAI) {
-					valid_utf = FALSE;
-					msg_info_task ("enable workaround for Thai characters for old libicu");
-					break;
-				}
-			}
-#endif
-		}
-
-		if (valid_utf) {
-			utext_openUTF8 (&utxt,
-					task->subject,
-					slen,
-					&uc_err);
-
-			words = rspamd_tokenize_text (task->subject, slen,
-					&utxt, RSPAMD_TOKENIZE_UTF,
-					task->cfg, NULL, NULL);
-
-			utext_close (&utxt);
-		}
-		else {
-			words = rspamd_tokenize_text (task->subject, slen,
-					NULL, RSPAMD_TOKENIZE_RAW,
-					task->cfg, NULL, NULL);
+		if (addr->name) {
+			rspamd_add_metawords_from_str (addr->name, strlen (addr->name), task);
 		}
 	}
 
-	if (words != NULL) {
+	if (task->meta_words != NULL) {
+		const gchar *language = NULL;
 
-		for (i = 0; i < words->len; i++) {
-			tok = &g_array_index (words, rspamd_stat_token_t, i);
-			tok->flags |= RSPAMD_STAT_TOKEN_FLAG_SUBJECT;
+		if (task->text_parts && task->text_parts->len > 0) {
+			struct rspamd_mime_text_part *tp = g_ptr_array_index (task->text_parts, 0);
+
+			if (tp->language) {
+				language = tp->language;
+			}
+		}
+
+		rspamd_normalize_words (task->meta_words, task->task_pool);
+		rspamd_stem_words (task->meta_words, task->task_pool, language,
+				task->lang_det);
+
+		for (i = 0; i < task->meta_words->len; i++) {
+			tok = &g_array_index (task->meta_words, rspamd_stat_token_t, i);
+			tok->flags |= RSPAMD_STAT_TOKEN_FLAG_HEADER;
 		}
 	}
-
-	return words;
 }
 
 static inline void

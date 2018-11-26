@@ -43,7 +43,8 @@ GArray * rspamd_tokenize_text (const gchar *text, gsize len,
 							   enum rspamd_tokenize_type how,
 							   struct rspamd_config *cfg,
 							   GList *exceptions,
-							   guint64 *hash);
+							   guint64 *hash,
+							   GArray *cur_words);
 
 /* OSB tokenize function */
 gint rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
@@ -64,7 +65,7 @@ void rspamd_stem_words (GArray *words, rspamd_mempool_t *pool,
 						const gchar *language,
 						struct rspamd_lang_detector *d);
 
-GArray * rspamd_tokenize_subject (struct rspamd_task *task);
+void rspamd_tokenize_meta_words (struct rspamd_task *task);
 #endif
 /*
  * vi:ts=4

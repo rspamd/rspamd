@@ -1144,7 +1144,7 @@ lua_util_tokenize_text (lua_State *L)
 			&utxt,
 			RSPAMD_TOKENIZE_UTF, NULL,
 			exceptions,
-			NULL);
+			NULL, NULL);
 
 	if (res == NULL) {
 		lua_pushnil (L);

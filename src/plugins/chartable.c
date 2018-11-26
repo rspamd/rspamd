@@ -621,35 +621,27 @@ chartable_symbol_callback (struct rspamd_task *task,
 		rspamd_chartable_process_part (task, part, chartable_module_ctx);
 	}
 
-	if (task->subject != NULL) {
-		GArray *words;
+	if (task->meta_words != NULL) {
 		rspamd_stat_token_t *w;
-		gdouble cur_score = 0.0;
+		gdouble cur_score = 0;
+		gsize arlen = task->meta_words->len;
 
-		words = rspamd_tokenize_subject (task);
-
-		if (words && words->len > 0) {
-			for (i = 0; i < words->len; i++) {
-				w = &g_array_index (words, rspamd_stat_token_t, i);
-				cur_score += rspamd_chartable_process_word_utf (task, w, FALSE,
-						NULL, chartable_module_ctx);
-			}
-
-			cur_score /= (gdouble)words->len;
-
-			if (cur_score > 2.0) {
-				cur_score = 2.0;
-			}
-
-			if (cur_score > chartable_module_ctx->threshold) {
-				rspamd_task_insert_result (task, chartable_module_ctx->symbol,
-						cur_score, "subject");
-
-			}
+		for (i = 0; i < arlen; i++) {
+			w = &g_array_index (task->meta_words, rspamd_stat_token_t, i);
+			cur_score += rspamd_chartable_process_word_utf (task, w, FALSE,
+					NULL, chartable_module_ctx);
 		}
 
-		if (words) {
-			g_array_free (words, TRUE);
+		cur_score /= (gdouble)arlen;
+
+		if (cur_score > 2.0) {
+			cur_score = 2.0;
+		}
+
+		if (cur_score > chartable_module_ctx->threshold) {
+			rspamd_task_insert_result (task, chartable_module_ctx->symbol,
+					cur_score, "subject");
+
 		}
 	}
 

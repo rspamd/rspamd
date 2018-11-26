@@ -173,7 +173,7 @@ rspamd_mime_part_create_words (struct rspamd_task *task,
 			&part->utf_stripped_text,
 			tok_type, task->cfg,
 			part->exceptions,
-			NULL);
+			NULL, NULL);
 
 
 	if (part->utf_words) {
@@ -1278,6 +1278,8 @@ rspamd_message_process (struct rspamd_task *task)
 			*var /= (double)total_words;
 		}
 	}
+
+	rspamd_tokenize_meta_words (task);
 }
 
 

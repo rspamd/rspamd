@@ -4796,8 +4796,8 @@ lua_push_stat_token (lua_State *L, rspamd_token_t *tok)
 			lua_pushboolean (L, true);
 			lua_settable (L, -3);
 		}
-		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_SUBJECT) {
-			lua_pushstring (L, "subject");
+		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_HEADER) {
+			lua_pushstring (L, "header");
 			lua_pushboolean (L, true);
 			lua_settable (L, -3);
 		}

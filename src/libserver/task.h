@@ -173,6 +173,8 @@ struct rspamd_task {
 	struct rspamd_metric_result *result;			/**< Metric result									*/
 	GHashTable *lua_cache;							/**< cache of lua objects							*/
 	GPtrArray *tokens;								/**< statistics tokens */
+	GArray *meta_words;								/**< rspamd_stat_token_t produced from meta headers
+														(e.g. Subject) */
 
 	GPtrArray *rcpt_mime;
 	GPtrArray *rcpt_envelope;						/**< array of rspamd_email_address					*/

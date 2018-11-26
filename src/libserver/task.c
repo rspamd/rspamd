@@ -282,6 +282,10 @@ rspamd_task_free (struct rspamd_task *task)
 			rspamd_email_address_free (task->from_envelope);
 		}
 
+		if (task->meta_words) {
+			g_array_free (task->meta_words, TRUE);
+		}
+
 		ucl_object_unref (task->messages);
 
 		if (task->re_rt) {
