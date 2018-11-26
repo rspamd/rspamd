@@ -1459,8 +1459,12 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 
 			for (i = 0; i < words->len; i ++) {
 				word = &g_array_index (words, rspamd_stat_token_t, i);
-				rspamd_cryptobox_hash_update (&st, word->stemmed.begin,
-						word->stemmed.len);
+
+				if (!((word->flags & RSPAMD_STAT_TOKEN_FLAG_SKIPPED)
+					  || word->stemmed.len == 0)) {
+					rspamd_cryptobox_hash_update (&st, word->stemmed.begin,
+							word->stemmed.len);
+				}
 			}
 
 			rspamd_cryptobox_hash_final (&st, shcmd->basic.digest);
