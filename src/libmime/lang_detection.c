@@ -931,12 +931,11 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 			tok = &g_array_index (ucs_tokens, rspamd_stat_token_t, sel);
 			/* Filter bad tokens */
 
-			if (tok->unicode.len >= 2) {
-				if (u_isalpha (tok->unicode.begin[0]) &&
+			if (tok->unicode.len >= 2 &&
+					u_isalpha (tok->unicode.begin[0]) &&
 					u_isalpha (tok->unicode.begin[tok->unicode.len - 1])) {
-					offsets_out[out_idx] = sel;
-					break;
-				}
+				offsets_out[out_idx] = sel;
+				break;
 			}
 			else {
 				ntries ++;
