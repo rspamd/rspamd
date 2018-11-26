@@ -608,7 +608,14 @@ rspamd_uchars_to_ucs32 (const UChar *src, gsize srclen,
 
 	while (i < srclen) {
 		U16_NEXT_UNSAFE (src, i, t);
-		*d++ = u_tolower (t);
+
+		if (u_isgraph (t)) {
+			*d++ = u_tolower (t);
+		}
+		else {
+			/* Invisible spaces ! */
+			tok->flags |= RSPAMD_STAT_TOKEN_FLAG_INVISIBLE_SPACES;
+		}
 	}
 
 	tok->unicode.begin = dest;
