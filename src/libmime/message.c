@@ -62,10 +62,7 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
 	rspamd_stat_token_t *w;
-	gchar *temp_word;
-	const guchar *r;
-	guint i, nlen, total_len = 0, short_len = 0;
-	gdouble avg_len = 0;
+	guint i, total_len = 0, short_len = 0;
 
 	if (part->utf_words) {
 		rspamd_stem_words (part->utf_words, task->task_pool, part->language,
