@@ -162,9 +162,11 @@ local function whitelist_cb(symbol, rule, task)
       if dkim_opts then
         fun.each(function(val)
             if val[2] == '+' then
-              find_domain(val[1], 'dkim_success')
+              local tld = rspamd_util.get_tld(val[1])
+              find_domain(tld, 'dkim_success')
             elseif val[2] == '-' then
-              find_domain(val[1], 'dkim_fail')
+              local tld = rspamd_util.get_tld(val[1])
+              find_domain(tld, 'dkim_fail')
             end
           end,
             fun.map(function(s)

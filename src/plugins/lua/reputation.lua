@@ -108,7 +108,8 @@ local function gen_dkim_queries(task, rule)
       local dom,res = lpeg.match(gr, opt)
 
       if dom and res then
-        ret[dom] = res
+        local tld = rspamd_util.get_tld(dom)
+        ret[tld] = res
       end
     end
   end
