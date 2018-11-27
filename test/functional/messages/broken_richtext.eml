@@ -1,0 +1,27 @@
+From: user@example.com
+Message-ID: <XXX@yyy>
+MIME-Version: 1.0
+To: user@example.com
+Subject: Hi
+Content-Type: multipart/mixed; boundary=
+	"xxx"
+
+
+--xxx
+Content-Type: text/plain
+Content-Transfer-Encoding: 7bit
+
+Hi
+
+--xxx
+Content-Type: text/richtext
+Content-Description: eicar.zip 
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="eicar.zip"
+
+UEsDBAoAAAAAAOCYuCg8z1FoRAAAAEQAAAAJAAAAZWljYXIuY29tWDVPIVAlQEFQ
+WzRcUFpYNTQoUF4pN0NDKTd9JEVJQ0FSLVNUQU5EQVJELUFOVElWSVJVUy1URVNU
+LUZJTEUhJEgrSCpQSwECFAAKAAAAAADgmLgoPM9RaEQAAABEAAAACQAAAAAAAAAB
+ACAA/4EAAAAAZWljYXIuY29tUEsFBgAAAAABAAEANwAAAGsAAAAAAA==
+
+--xxx--

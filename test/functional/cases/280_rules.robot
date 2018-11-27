@@ -10,6 +10,7 @@ ${CONFIG}       ${TESTDIR}/configs/plugins.conf
 ${MESSAGE1}      ${TESTDIR}/messages/fws_fn.eml
 ${MESSAGE2}      ${TESTDIR}/messages/fws_fp.eml
 ${MESSAGE3}      ${TESTDIR}/messages/fws_tp.eml
+${MESSAGE4}      ${TESTDIR}/messages/broken_richtext.eml
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 ${RSPAMD_SCOPE}  Test
 
@@ -28,6 +29,10 @@ Issue 2584
 Issue 2349
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}
   Check Rspamc  ${result}  MULTIPLE_UNIQUE_HEADERS  inverse=1
+
+Broken Rich Text
+  ${result} =  Scan Message With Rspamc  ${MESSAGE4}
+  Check Rspamc  ${result}  BROKEN_CONTENT_TYPE
 
 *** Keywords ***
 Rules Setup
