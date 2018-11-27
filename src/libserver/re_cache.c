@@ -1225,8 +1225,11 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 						for (j = 0; j < part->utf_words->len; j ++) {
 							tok = &g_array_index (part->utf_words,
 									rspamd_stat_token_t, j);
-							scvec[cnt] = tok->normalized.begin;
-							lenvec[cnt++] = tok->normalized.len;
+
+							if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_UTF) {
+								scvec[cnt] = tok->normalized.begin;
+								lenvec[cnt++] = tok->normalized.len;
+							}
 						}
 					}
 				}
