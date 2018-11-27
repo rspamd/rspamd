@@ -49,9 +49,12 @@ rspamd_images_process (struct rspamd_task *task)
 
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
-		if (rspamd_ftok_cmp (&part->ct->type, &srch) == 0 &&
+
+		if (!(part->flags & (RSPAMD_MIME_PART_TEXT|RSPAMD_MIME_PART_ARCHIVE))) {
+			if (rspamd_ftok_cmp (&part->ct->type, &srch) == 0 &&
 				part->parsed_data.len > 0) {
-			process_image (task, part);
+				process_image (task, part);
+			}
 		}
 	}
 

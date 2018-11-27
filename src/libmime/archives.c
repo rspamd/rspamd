@@ -1531,20 +1531,19 @@ rspamd_archives_process (struct rspamd_task *task)
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
 
-		if (part->parsed_data.len > 0) {
-			if (rspamd_archive_cheat_detect (part, "zip",
-					zip_magic, sizeof (zip_magic))) {
-				rspamd_archive_process_zip (task, part);
+		if (!(part->flags & (RSPAMD_MIME_PART_TEXT|RSPAMD_MIME_PART_IMAGE))) {
+			if (part->parsed_data.len > 0) {
+				if (rspamd_archive_cheat_detect (part, "zip",
+						zip_magic, sizeof (zip_magic))) {
+					rspamd_archive_process_zip (task, part);
+				} else if (rspamd_archive_cheat_detect (part, "rar",
+						rar_magic, sizeof (rar_magic))) {
+					rspamd_archive_process_rar (task, part);
+				} else if (rspamd_archive_cheat_detect (part, "7z",
+						sz_magic, sizeof (sz_magic))) {
+					rspamd_archive_process_7zip (task, part);
+				}
 			}
-			else if (rspamd_archive_cheat_detect (part, "rar",
-					rar_magic, sizeof (rar_magic))) {
-				rspamd_archive_process_rar (task, part);
-			}
-			else if (rspamd_archive_cheat_detect (part, "7z",
-					sz_magic, sizeof (sz_magic))) {
-				rspamd_archive_process_7zip (task, part);
-			}
-
 		}
 	}
 }
