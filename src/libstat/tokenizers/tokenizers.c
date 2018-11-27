@@ -563,7 +563,7 @@ rspamd_tokenize_meta_words (struct rspamd_task *task)
 		rspamd_add_metawords_from_str (task->subject, strlen (task->subject), task);
 	}
 
-	if (task->from_mime) {
+	if (task->from_mime && task->from_mime->len > 0) {
 		struct rspamd_email_address *addr;
 
 		addr = g_ptr_array_index (task->from_mime, 0);
