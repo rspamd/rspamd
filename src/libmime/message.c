@@ -731,7 +731,36 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 				found_html = TRUE;
 			}
 			else {
-				found_txt = TRUE;
+				/* We need to be extra careful with some stupid things here */
+
+				html_tok.begin = "plain";
+				html_tok.len = 5;
+
+				if (rspamd_ftok_cmp (&mime_part->ct->subtype, &html_tok) == 0) {
+					found_txt = TRUE;
+				}
+				else {
+					if (mime_part->cd && mime_part->cd->filename.len > 4) {
+						const gchar *pos = mime_part->cd->filename.begin +
+										   mime_part->cd->filename.len -
+										   sizeof (".txt") + 1;
+						if (rspamd_lc_cmp (pos, ".txt", sizeof ("txt") - 1) == 0) {
+							found_txt = TRUE;
+						}
+						else {
+							msg_info_task ("found mime part with incorrect content-type: %T/%T, "
+										   "filename: %T",
+									&mime_part->ct->type,
+									&mime_part->ct->subtype,
+									&mime_part->cd->filename);
+							mime_part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+						}
+					}
+					else {
+						/* For something like Content-Type: text */
+						found_txt = TRUE;
+					}
+				}
 			}
 
 			if (found_html) {
