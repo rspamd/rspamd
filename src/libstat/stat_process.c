@@ -526,7 +526,7 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 	if ((task->flags & RSPAMD_TASK_FLAG_ALREADY_LEARNED) && err != NULL &&
 			*err == NULL) {
 		/* Do not learn twice */
-		g_set_error (err, rspamd_stat_quark (), 404, "<%s> has been already "
+		g_set_error (err, rspamd_stat_quark (), 208, "<%s> has been already "
 				"learned as %s, ignore it", task->message_id,
 				spam ? "spam" : "ham");
 
@@ -635,7 +635,7 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 
 	if (!learned && err && *err == NULL) {
 		if (too_large) {
-			g_set_error (err, rspamd_stat_quark (), 400,
+			g_set_error (err, rspamd_stat_quark (), 204,
 					"<%s> contains more tokens than allowed for %s classifier: "
 					"%d > %d",
 					task->message_id,
@@ -644,7 +644,7 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 					cl->cfg->max_tokens);
 		}
 		else if (too_small) {
-			g_set_error (err, rspamd_stat_quark (), 400,
+			g_set_error (err, rspamd_stat_quark (), 204,
 					"<%s> contains less tokens than required for %s classifier: "
 					"%d < %d",
 					task->message_id,
@@ -653,7 +653,7 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 					cl->cfg->min_tokens);
 		}
 		else if (conditionally_skipped) {
-			g_set_error (err, rspamd_stat_quark (), 410,
+			g_set_error (err, rspamd_stat_quark (), 204,
 					"<%s> is skipped for %s classifier: "
 					"%s",
 					task->message_id,

@@ -124,7 +124,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 		return 0;
 	}
 	else {
-		if (rspamd_http_message_get_body (msg, NULL) == NULL || msg->code != 200) {
+		if (rspamd_http_message_get_body (msg, NULL) == NULL || msg->code / 100 != 2) {
 			err = g_error_new (RCLIENT_ERROR, msg->code, "HTTP error: %d, %.*s",
 					msg->code,
 					(gint)msg->status->len, msg->status->str);
