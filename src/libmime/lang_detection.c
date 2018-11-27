@@ -1187,8 +1187,11 @@ rspamd_language_detector_detect_type (struct rspamd_task *task,
 	for (i = 0; i < nparts; i++) {
 		tok = &g_array_index (words, rspamd_stat_token_t,
 				selected_words[i]);
-		rspamd_language_detector_detect_word (task, d, tok, candidates,
-				d->trigramms[cat]);
+
+		if (tok->unicode.len >= 3) {
+			rspamd_language_detector_detect_word (task, d, tok, candidates,
+					d->trigramms[cat]);
+		}
 	}
 
 	/* Filter negligible candidates */
