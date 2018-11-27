@@ -18,6 +18,7 @@
 #include "smtp_parsers.h"
 #include "mime_encoding.h"
 #include "libserver/mempool_vars_internal.h"
+#include <unicode/utf8.h>
 
 static void
 rspamd_mime_header_check_special (struct rspamd_task *task,
@@ -533,7 +534,8 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 		gsize inlen)
 {
 	GString *out;
-	const gchar *c, *p, *end, *tok_start = NULL;
+	const guchar *c, *p, *end;
+	const gchar *tok_start = NULL;
 	gsize tok_len = 0, pos;
 	GByteArray *token = NULL, *decoded;
 	rspamd_ftok_t cur_charset = {0, NULL}, old_charset = {0, NULL};
@@ -565,6 +567,28 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 				g_string_append_len (out, c, p - c);
 				c = p;
 				state = got_eqsign;
+			}
+			else if (*p >= 128) {
+				gint off = 0;
+				UChar32 uc;
+				/* Unencoded character */
+				g_string_append_len (out, c, p - c);
+				/* Check if that's valid UTF8 */
+				U8_NEXT (p, off, end - p, uc);
+
+				if (uc <= 0) {
+					c = p + 1;
+					/* 0xFFFD in UTF8 */
+					g_string_append_len (out, "   ", 3);
+					off = 0;
+					U8_APPEND_UNSAFE (out->str + out->len - 3,
+							off, 0xfffd);
+				}
+				else {
+					c = p;
+					p = p + off;
+					continue; /* To avoid p ++ after this block */
+				}
 			}
 			p ++;
 			break;

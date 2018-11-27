@@ -202,6 +202,7 @@ rspamd_email_address_check_and_add (const gchar *start, gsize len,
 	struct rspamd_email_address addr;
 
 	/* The whole email is likely address */
+	memset (&addr, 0, sizeof (addr));
 	rspamd_smtp_addr_parse (start, len, &addr);
 
 	if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
