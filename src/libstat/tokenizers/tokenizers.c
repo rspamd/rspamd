@@ -744,6 +744,7 @@ rspamd_normalize_single_word (rspamd_stat_token_t *tok, rspamd_mempool_t *pool)
 			rspamd_strlcpy (dest, tok->original.begin, tok->original.len + 1);
 			rspamd_str_lc (dest, tok->original.len);
 			tok->normalized.len = tok->original.len;
+			tok->normalized.begin = dest;
 		}
 	}
 }
