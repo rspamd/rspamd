@@ -419,11 +419,19 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
       if (coin > policy.pct) then
         if (not no_sampling_domains or
             not no_sampling_domains:get_key(policy.domain)) then
-          task:insert_result(dmarc_symbols['softfail'], 1.0,
+
+          if what == 'reject' then
+            disposition = 'quarantine'
+          else
+            disposition = 'softfail'
+          end
+
+          task:insert_result(dmarc_symbols[disposition], 1.0,
               policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "sampled_out")
           sampled_out = true
-          lua_util.debugm(N, task, 'changed dmarc policy from %s to %s, sampled out: %s < %s',
-              what, 'softfail', coin, policy.pct)
+          lua_util.debugm(N, task,
+              'changed dmarc policy from %s to %s, sampled out: %s < %s',
+              what, disposition, coin, policy.pct)
         else
           task:insert_result(dmarc_symbols[what], 1.0,
               policy.domain .. ' : ' .. reason_str, policy.dmarc_policy, "local_policy")
