@@ -379,6 +379,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 				break;
 			case 'u':
 				rspamd_flags &= ~RSPAMD_REGEXP_FLAG_RAW;
+				rspamd_flags |= RSPAMD_REGEXP_FLAG_UTF;
 #ifndef WITH_PCRE2
 				regexp_flags |= PCRE_FLAG(UTF8);
 #else
@@ -392,6 +393,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 				break;
 			case 'r':
 				rspamd_flags |= RSPAMD_REGEXP_FLAG_RAW;
+				rspamd_flags &= ~RSPAMD_REGEXP_FLAG_UTF;
 #ifndef WITH_PCRE2
 				regexp_flags &= ~PCRE_FLAG(UTF8);
 #else

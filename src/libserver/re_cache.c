@@ -78,11 +78,14 @@ static const guchar rspamd_hs_magic[] = {'r', 's', 'h', 's', 'r', 'e', '1', '1'}
 struct rspamd_re_class {
 	guint64 id;
 	enum rspamd_re_type type;
+	gboolean has_utf8; /* if there are any utf8 regexps */
 	gpointer type_data;
 	gsize type_len;
 	GHashTable *re;
-	gchar hash[rspamd_cryptobox_HASHBYTES + 1];
 	rspamd_cryptobox_hash_state_t *st;
+
+	gchar hash[rspamd_cryptobox_HASHBYTES + 1];
+
 #ifdef WITH_HYPERSCAN
 	hs_database_t *hs_db;
 	hs_scratch_t *hs_scratch;
@@ -296,6 +299,10 @@ rspamd_re_cache_add (struct rspamd_re_cache *cache, rspamd_regexp_t *re,
 		g_ptr_array_add (cache->re, elt);
 		rspamd_regexp_set_class (re, re_class);
 		g_hash_table_insert (re_class->re, rspamd_regexp_get_id (nre), nre);
+	}
+
+	if (rspamd_regexp_get_flags (re) & RSPAMD_REGEXP_FLAG_UTF) {
+		re_class->has_utf8 = TRUE;
 	}
 
 	return nre;
