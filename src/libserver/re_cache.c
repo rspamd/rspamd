@@ -701,7 +701,7 @@ rspamd_re_cache_process_regexp_data (struct rspamd_re_runtime *rt,
 	re_class = rspamd_regexp_get_class (re);
 
 	if (rt->cache->disable_hyperscan || elt->match_type == RSPAMD_RE_CACHE_PCRE ||
-			!rt->has_hs) {
+			!rt->has_hs || (is_raw && re_class->has_utf8)) {
 		for (i = 0; i < count; i++) {
 			ret = rspamd_re_cache_process_pcre (rt,
 					re,
@@ -943,8 +943,11 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 
 				if (re_class->type == RSPAMD_RE_RAWHEADER) {
 					in = rh->value;
-					raw = TRUE;
 					lenvec[i] = strlen (rh->value);
+
+					if (!g_utf8_validate (in, lenvec[i], NULL)) {
+						raw = TRUE;
+					}
 				}
 				else {
 					in = rh->decoded;
@@ -993,8 +996,11 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 
 				if (re_class->type == RSPAMD_RE_RAWHEADER) {
 					in = rh->value;
-					raw = TRUE;
 					lenvec[i] = strlen (rh->value);
+
+					if (!g_utf8_validate (in, lenvec[i], NULL)) {
+						raw = TRUE;
+					}
 				}
 				else {
 					in = rh->decoded;
@@ -1159,6 +1165,10 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			if (part->utf_stripped_content) {
 				scvec[i + 1] = (guchar *)part->utf_stripped_content->data;
 				lenvec[i + 1] = part->utf_stripped_content->len;
+
+				if (!IS_PART_UTF (part)) {
+					raw = TRUE;
+				}
 			}
 			else {
 				scvec[i + 1] = (guchar *)"";
@@ -1167,7 +1177,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		}
 
 		ret = rspamd_re_cache_process_regexp_data (rt, re,
-				task, scvec, lenvec, cnt, TRUE);
+				task, scvec, lenvec, cnt, raw);
 		msg_debug_re_task ("checking sa body regexp: %s -> %d",
 				rspamd_regexp_get_pattern (re), ret);
 		g_free (scvec);
@@ -1192,6 +1202,10 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				if (part->parsed.len > 0) {
 					scvec[i] = (guchar *)part->parsed.begin;
 					lenvec[i] = part->parsed.len;
+
+					if (!IS_PART_UTF (part)) {
+						raw = TRUE;
+					}
 				}
 				else {
 					scvec[i] = (guchar *)"";
@@ -1200,7 +1214,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			}
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
-					task, scvec, lenvec, cnt, TRUE);
+					task, scvec, lenvec, cnt, raw);
 			msg_debug_re_task ("checking sa rawbody regexp: %s -> %d",
 					rspamd_regexp_get_pattern (re), ret);
 			g_free (scvec);
@@ -1258,7 +1272,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				&lenvec, &cnt)) {
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
-					task, scvec, lenvec, cnt, TRUE);
+					task, scvec, lenvec, cnt, raw);
 			msg_debug_re_task ("checking selector (%s) regexp: %s -> %d",
 					re_class->type_data,
 					rspamd_regexp_get_pattern (re), ret);
