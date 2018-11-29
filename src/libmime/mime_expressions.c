@@ -24,62 +24,65 @@
 #include "utlist.h"
 
 gboolean rspamd_compare_encoding (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+								  GArray * args,
+								  void *unused);
 gboolean rspamd_header_exists (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+							   GArray * args,
+							   void *unused);
 gboolean rspamd_parts_distance (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+								GArray * args,
+								void *unused);
 gboolean rspamd_recipients_distance (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+									 GArray * args,
+									 void *unused);
 gboolean rspamd_has_only_html_part (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+									GArray * args,
+									void *unused);
 gboolean rspamd_is_recipients_sorted (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+									  GArray * args,
+									  void *unused);
 gboolean rspamd_compare_transfer_encoding (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+										   GArray * args,
+										   void *unused);
 gboolean rspamd_is_html_balanced (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+								  GArray * args,
+								  void *unused);
 gboolean rspamd_has_html_tag (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+							  GArray * args,
+							  void *unused);
 gboolean rspamd_has_fake_html (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+							   GArray * args,
+							   void *unused);
 static gboolean rspamd_raw_header_exists (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+										  GArray * args,
+										  void *unused);
 static gboolean rspamd_check_smtp_data (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+										GArray * args,
+										void *unused);
 static gboolean rspamd_content_type_is_type (struct rspamd_task * task,
-	GArray * args,
-	void *unused);
+											 GArray * args,
+											 void *unused);
 static gboolean rspamd_content_type_is_subtype (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+												GArray * args,
+												void *unused);
 static gboolean rspamd_content_type_has_param (struct rspamd_task * task,
-	GArray * args,
-	void *unused);
+											   GArray * args,
+											   void *unused);
 static gboolean rspamd_content_type_compare_param (struct rspamd_task * task,
-	GArray * args,
-	void *unused);
+												   GArray * args,
+												   void *unused);
 static gboolean rspamd_has_content_part (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+										 GArray * args,
+										 void *unused);
 static gboolean rspamd_has_content_part_len (struct rspamd_task *task,
-	GArray * args,
-	void *unused);
+											 GArray * args,
+											 void *unused);
 static gboolean rspamd_is_empty_body (struct rspamd_task *task,
-		GArray * args,
-		void *unused);
+									  GArray * args,
+									  void *unused);
+static gboolean rspamd_has_flag_expr (struct rspamd_task *task,
+									  GArray * args,
+									  void *unused);
 
 static rspamd_expression_atom_t * rspamd_mime_expr_parse (const gchar *line, gsize len,
 		rspamd_mempool_t *pool, gpointer ud, GError **err);
@@ -136,25 +139,26 @@ static struct _fl {
 	rspamd_internal_func_t func;
 	void *user_data;
 } rspamd_functions_list[] = {
-	{"check_smtp_data", rspamd_check_smtp_data, NULL},
-	{"compare_encoding", rspamd_compare_encoding, NULL},
-	{"compare_parts_distance", rspamd_parts_distance, NULL},
-	{"compare_recipients_distance", rspamd_recipients_distance, NULL},
-	{"compare_transfer_encoding", rspamd_compare_transfer_encoding, NULL},
-	{"content_type_compare_param", rspamd_content_type_compare_param, NULL},
-	{"content_type_has_param", rspamd_content_type_has_param, NULL},
-	{"content_type_is_subtype", rspamd_content_type_is_subtype, NULL},
-	{"content_type_is_type", rspamd_content_type_is_type, NULL},
-	{"has_content_part", rspamd_has_content_part, NULL},
-	{"has_content_part_len", rspamd_has_content_part_len, NULL},
-	{"has_fake_html", rspamd_has_fake_html, NULL},
-	{"has_html_tag", rspamd_has_html_tag, NULL},
-	{"has_only_html_part", rspamd_has_only_html_part, NULL},
-	{"header_exists", rspamd_header_exists, NULL},
-	{"is_empty_body", rspamd_is_empty_body, NULL},
-	{"is_html_balanced", rspamd_is_html_balanced, NULL},
-	{"is_recipients_sorted", rspamd_is_recipients_sorted, NULL},
-	{"raw_header_exists", rspamd_raw_header_exists, NULL}
+		{"check_smtp_data", rspamd_check_smtp_data, NULL},
+		{"compare_encoding", rspamd_compare_encoding, NULL},
+		{"compare_parts_distance", rspamd_parts_distance, NULL},
+		{"compare_recipients_distance", rspamd_recipients_distance, NULL},
+		{"compare_transfer_encoding", rspamd_compare_transfer_encoding, NULL},
+		{"content_type_compare_param", rspamd_content_type_compare_param, NULL},
+		{"content_type_has_param", rspamd_content_type_has_param, NULL},
+		{"content_type_is_subtype", rspamd_content_type_is_subtype, NULL},
+		{"content_type_is_type", rspamd_content_type_is_type, NULL},
+		{"has_content_part", rspamd_has_content_part, NULL},
+		{"has_content_part_len", rspamd_has_content_part_len, NULL},
+		{"has_fake_html", rspamd_has_fake_html, NULL},
+		{"has_html_tag", rspamd_has_html_tag, NULL},
+		{"has_only_html_part", rspamd_has_only_html_part, NULL},
+		{"header_exists", rspamd_header_exists, NULL},
+		{"is_empty_body", rspamd_is_empty_body, NULL},
+		{"is_html_balanced", rspamd_is_html_balanced, NULL},
+		{"is_recipients_sorted", rspamd_is_recipients_sorted, NULL},
+		{"raw_header_exists", rspamd_raw_header_exists, NULL},
+		{"has_flag", rspamd_has_flag_expr, NULL},
 };
 
 const struct rspamd_atom_subr mime_expr_subr = {
@@ -2060,4 +2064,63 @@ rspamd_is_empty_body (struct rspamd_task *task,
 	}
 
 	return TRUE;
+}
+
+#define TASK_FLAG_READ(flag) do { \
+	result = !!(task->flags & (flag)); \
+} while(0)
+
+#define TASK_GET_FLAG(flag, strname, macro) do { \
+	if (!found && strcmp ((flag), strname) == 0) { \
+		TASK_FLAG_READ((macro)); \
+		found = TRUE; \
+	} \
+} while(0)
+
+static gboolean
+rspamd_has_flag_expr (struct rspamd_task *task,
+					  GArray * args,
+					  void *unused)
+{
+	gboolean found = FALSE, result = FALSE;
+	struct expression_argument *flag_arg;
+	const gchar *flag_str;
+
+	if (args == NULL) {
+		msg_warn_task ("no parameters to function");
+		return FALSE;
+	}
+
+	flag_arg = &g_array_index (args, struct expression_argument, 0);
+
+	if (flag_arg->type != EXPRESSION_ARGUMENT_NORMAL) {
+		msg_warn_task ("invalid parameter to function");
+		return FALSE;
+	}
+
+	flag_str = (const gchar *)flag_arg->data;
+
+	TASK_GET_FLAG (flag_str, "pass_all", RSPAMD_TASK_FLAG_PASS_ALL);
+	TASK_GET_FLAG (flag_str, "no_log", RSPAMD_TASK_FLAG_NO_LOG);
+	TASK_GET_FLAG (flag_str, "no_stat", RSPAMD_TASK_FLAG_NO_STAT);
+	TASK_GET_FLAG (flag_str, "skip", RSPAMD_TASK_FLAG_SKIP);
+	TASK_GET_FLAG (flag_str, "extended_urls", RSPAMD_TASK_FLAG_EXT_URLS);
+	TASK_GET_FLAG (flag_str, "learn_spam", RSPAMD_TASK_FLAG_LEARN_SPAM);
+	TASK_GET_FLAG (flag_str, "learn_ham", RSPAMD_TASK_FLAG_LEARN_HAM);
+	TASK_GET_FLAG (flag_str, "greylisted", RSPAMD_TASK_FLAG_GREYLISTED);
+	TASK_GET_FLAG (flag_str, "broken_headers",
+			RSPAMD_TASK_FLAG_BROKEN_HEADERS);
+	TASK_GET_FLAG (flag_str, "skip_process",
+			RSPAMD_TASK_FLAG_SKIP_PROCESS);
+	TASK_GET_FLAG (flag_str, "milter",
+			RSPAMD_TASK_FLAG_MILTER);
+	TASK_GET_FLAG (flag_str, "bad_unicode",
+			RSPAMD_TASK_FLAG_BAD_UNICODE);
+
+	if (!found) {
+		msg_warn_task ("invalid flag name %s", flag_str);
+		return FALSE;
+	}
+
+	return result;
 }

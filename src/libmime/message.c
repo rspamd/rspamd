@@ -88,6 +88,12 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 					short_len++;
 				}
 			}
+
+			if (w->flags & (RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE|
+						RSPAMD_STAT_TOKEN_FLAG_NORMALISED|
+					RSPAMD_STAT_TOKEN_FLAG_INVISIBLE_SPACES)) {
+				task->flags |= RSPAMD_TASK_FLAG_BAD_UNICODE;
+			}
 		}
 
 		if (part->utf_words && part->utf_words->len) {

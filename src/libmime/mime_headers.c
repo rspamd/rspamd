@@ -348,8 +348,15 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 			}
 
 			nh->value = tmp;
+
+			gboolean broken_utf = FALSE;
+
 			nh->decoded = rspamd_mime_header_decode (task->task_pool,
-					nh->value, strlen (tmp));
+					nh->value, strlen (tmp), &broken_utf);
+
+			if (broken_utf) {
+				task->flags |= RSPAMD_TASK_FLAG_BAD_UNICODE;
+			}
 
 			if (nh->decoded == NULL) {
 				nh->decoded = "";
@@ -531,7 +538,7 @@ rspamd_mime_header_sanity_check (GString *str)
 
 gchar *
 rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
-		gsize inlen)
+		gsize inlen, gboolean *invalid_utf)
 {
 	GString *out;
 	const guchar *c, *p, *end;
@@ -583,6 +590,10 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 					off = 0;
 					U8_APPEND_UNSAFE (out->str + out->len - 3,
 							off, 0xfffd);
+
+					if (invalid_utf) {
+						*invalid_utf = TRUE;
+					}
 				}
 				else {
 					c = p;

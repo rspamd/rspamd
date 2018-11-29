@@ -477,7 +477,8 @@ rspamd_content_disposition_add_param (rspamd_mempool_t *pool,
 	nparam = rspamd_mempool_alloc (pool, sizeof (*nparam));
 	nparam->name.begin = name_start;
 	nparam->name.len = name_end - name_start;
-	decoded = rspamd_mime_header_decode (pool, value_start, value_end - value_start);
+	decoded = rspamd_mime_header_decode (pool, value_start,
+			value_end - value_start, NULL);
 	RSPAMD_FTOK_FROM_STR (&nparam->value, decoded);
 
 	if (!found) {

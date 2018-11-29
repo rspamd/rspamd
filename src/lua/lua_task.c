@@ -3980,6 +3980,8 @@ lua_task_has_flag (lua_State *L)
 				RSPAMD_TASK_FLAG_SKIP_PROCESS);
 		LUA_TASK_GET_FLAG (flag, "milter",
 				RSPAMD_TASK_FLAG_MILTER);
+		LUA_TASK_GET_FLAG (flag, "bad_unicode",
+				RSPAMD_TASK_FLAG_BAD_UNICODE);
 
 		if (!found) {
 			msg_warn_task ("unknown flag requested: %s", flag);

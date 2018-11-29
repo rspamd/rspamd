@@ -137,7 +137,7 @@ rspamd_email_address_add (rspamd_mempool_t *pool,
 	}
 
 	if (name->len > 0) {
-		elt->name = rspamd_mime_header_decode (pool, name->str, name->len);
+		elt->name = rspamd_mime_header_decode (pool, name->str, name->len, NULL);
 	}
 
 	g_ptr_array_add (ar, elt);
