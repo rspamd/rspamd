@@ -1222,8 +1222,11 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_RE_WORDS:
+	case RSPAMD_RE_STEMWORDS:
+	case RSPAMD_RE_RAWWORDS:
 		if (task->text_parts->len > 0) {
 			cnt = 0;
+			raw = FALSE;
 
 			PTR_ARRAY_FOREACH (task->text_parts, i, part) {
 				if (part->utf_words) {
@@ -1241,22 +1244,50 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 					guint j;
 					rspamd_stat_token_t *tok;
 
-
 					if (part->utf_words) {
 						for (j = 0; j < part->utf_words->len; j ++) {
 							tok = &g_array_index (part->utf_words,
 									rspamd_stat_token_t, j);
 
-							if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_UTF) {
-								scvec[cnt] = tok->normalized.begin;
-								lenvec[cnt++] = tok->normalized.len;
+							if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
+								if (!(tok->flags & RSPAMD_STAT_TOKEN_FLAG_UTF)) {
+									if (!re_class->has_utf8) {
+										raw = TRUE;
+									}
+									else {
+										continue; /* Skip */
+									}
+								}
+							}
+							else {
+								continue; /* Skip non text */
+							}
+
+							if (re_class->type == RSPAMD_RE_RAWWORDS) {
+								if (tok->original.len > 0) {
+									scvec[cnt] = tok->original.begin;
+									lenvec[cnt++] = tok->original.len;
+								}
+							}
+							else if (re_class->type == RSPAMD_RE_WORDS) {
+								if (tok->normalized.len > 0) {
+									scvec[cnt] = tok->normalized.begin;
+									lenvec[cnt++] = tok->normalized.len;
+								}
+							}
+							else {
+								/* Stemmed words */
+								if (tok->stemmed.len > 0) {
+									scvec[cnt] = tok->stemmed.begin;
+									lenvec[cnt++] = tok->stemmed.len;
+								}
 							}
 						}
 					}
 				}
 
 				ret = rspamd_re_cache_process_regexp_data (rt, re,
-						task, scvec, lenvec, cnt, TRUE);
+						task, scvec, lenvec, cnt, raw);
 
 				msg_debug_re_task ("checking sa words regexp: %s -> %d",
 						rspamd_regexp_get_pattern (re), ret);

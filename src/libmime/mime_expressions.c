@@ -243,6 +243,14 @@ rspamd_parse_long_option (const gchar *start, gsize len,
 		ret = TRUE;
 		a->type = RSPAMD_RE_WORDS;
 	}
+	else if (TYPE_CHECK (start, "raw_words", len)) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_RAWWORDS;
+	}
+	else if (TYPE_CHECK (start, "stem_words", len)) {
+		ret = TRUE;
+		a->type = RSPAMD_RE_STEMWORDS;
+	}
 	else if (TYPE_CHECK (start, "selector", len)) {
 		ret = TRUE;
 		a->type = RSPAMD_RE_SELECTOR;
