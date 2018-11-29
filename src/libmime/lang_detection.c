@@ -732,10 +732,6 @@ rspamd_language_detector_dtor (struct rspamd_lang_detector *d)
 	if (d) {
 		rspamd_ftok_t *tok;
 
-		if (d->uchar_converter) {
-			ucnv_close (d->uchar_converter);
-		}
-
 		for (guint i = 0; i < RSPAMD_LANGUAGE_MAX; i ++) {
 			kh_destroy (rspamd_trigram_hash, d->trigramms[i]);
 			rspamd_multipattern_destroy (d->stop_words[i].mp);
