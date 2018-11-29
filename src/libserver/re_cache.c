@@ -898,6 +898,60 @@ rspamd_re_cache_process_selector (struct rspamd_task *task,
 	return result;
 }
 
+static inline guint
+rspamd_process_words_vector (GArray *words,
+							 const guchar **scvec,
+							 guint *lenvec,
+							 struct rspamd_re_class *re_class,
+							 guint cnt,
+							 gboolean *raw)
+{
+	guint j;
+	rspamd_stat_token_t *tok;
+
+	if (words) {
+		for (j = 0; j < words->len; j ++) {
+			tok = &g_array_index (words, rspamd_stat_token_t, j);
+
+			if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
+				if (!(tok->flags & RSPAMD_STAT_TOKEN_FLAG_UTF)) {
+					if (!re_class->has_utf8) {
+						*raw = TRUE;
+					}
+					else {
+						continue; /* Skip */
+					}
+				}
+			}
+			else {
+				continue; /* Skip non text */
+			}
+
+			if (re_class->type == RSPAMD_RE_RAWWORDS) {
+				if (tok->original.len > 0) {
+					scvec[cnt] = tok->original.begin;
+					lenvec[cnt++] = tok->original.len;
+				}
+			}
+			else if (re_class->type == RSPAMD_RE_WORDS) {
+				if (tok->normalized.len > 0) {
+					scvec[cnt] = tok->normalized.begin;
+					lenvec[cnt++] = tok->normalized.len;
+				}
+			}
+			else {
+				/* Stemmed words */
+				if (tok->stemmed.len > 0) {
+					scvec[cnt] = tok->stemmed.begin;
+					lenvec[cnt++] = tok->stemmed.len;
+				}
+			}
+		}
+	}
+
+	return cnt;
+}
+
 /*
  * Calculates the specified regexp for the specified class if it's not calculated
  */
@@ -1010,6 +1064,7 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 						scvec[i] = (guchar *)"";
 						continue;
 					}
+
 					lenvec[i] = end - in;
 				}
 
@@ -1234,6 +1289,10 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				}
 			}
 
+			if (task->meta_words && task->meta_words->len > 0) {
+				cnt += task->meta_words->len;
+			}
+
 			if (cnt > 0) {
 				scvec = g_malloc (sizeof (*scvec) * cnt);
 				lenvec = g_malloc (sizeof (*lenvec) * cnt);
@@ -1241,49 +1300,15 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				cnt = 0;
 
 				PTR_ARRAY_FOREACH (task->text_parts, i, part) {
-					guint j;
-					rspamd_stat_token_t *tok;
-
 					if (part->utf_words) {
-						for (j = 0; j < part->utf_words->len; j ++) {
-							tok = &g_array_index (part->utf_words,
-									rspamd_stat_token_t, j);
-
-							if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
-								if (!(tok->flags & RSPAMD_STAT_TOKEN_FLAG_UTF)) {
-									if (!re_class->has_utf8) {
-										raw = TRUE;
-									}
-									else {
-										continue; /* Skip */
-									}
-								}
-							}
-							else {
-								continue; /* Skip non text */
-							}
-
-							if (re_class->type == RSPAMD_RE_RAWWORDS) {
-								if (tok->original.len > 0) {
-									scvec[cnt] = tok->original.begin;
-									lenvec[cnt++] = tok->original.len;
-								}
-							}
-							else if (re_class->type == RSPAMD_RE_WORDS) {
-								if (tok->normalized.len > 0) {
-									scvec[cnt] = tok->normalized.begin;
-									lenvec[cnt++] = tok->normalized.len;
-								}
-							}
-							else {
-								/* Stemmed words */
-								if (tok->stemmed.len > 0) {
-									scvec[cnt] = tok->stemmed.begin;
-									lenvec[cnt++] = tok->stemmed.len;
-								}
-							}
-						}
+						cnt = rspamd_process_words_vector (part->utf_words,
+								scvec, lenvec, re_class, cnt, &raw);
 					}
+				}
+
+				if (task->meta_words) {
+					cnt = rspamd_process_words_vector (task->meta_words,
+							scvec, lenvec, re_class, cnt, &raw);
 				}
 
 				ret = rspamd_re_cache_process_regexp_data (rt, re,
@@ -1491,6 +1516,12 @@ rspamd_re_cache_type_to_string (enum rspamd_re_type type)
 		break;
 	case RSPAMD_RE_WORDS:
 		ret = "words";
+		break;
+	case RSPAMD_RE_RAWWORDS:
+		ret = "raw_words";
+		break;
+	case RSPAMD_RE_STEMWORDS:
+		ret = "stem_words";
 		break;
 	case RSPAMD_RE_MAX:
 		ret = "invalid class";
