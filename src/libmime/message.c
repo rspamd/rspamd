@@ -89,6 +89,10 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 				}
 			}
 
+			if (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
+				part->nwords ++;
+			}
+
 			if (w->flags & (RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE|
 						RSPAMD_STAT_TOKEN_FLAG_NORMALISED|
 					RSPAMD_STAT_TOKEN_FLAG_INVISIBLE_SPACES)) {
@@ -96,7 +100,7 @@ rspamd_mime_part_extract_words (struct rspamd_task *task,
 			}
 		}
 
-		if (part->utf_words && part->utf_words->len) {
+		if (part->utf_words->len) {
 			gdouble *avg_len_p, *short_len_p;
 
 			avg_len_p = rspamd_mempool_get_variable (task->task_pool,
@@ -1294,7 +1298,7 @@ rspamd_message_process (struct rspamd_task *task)
 		rspamd_mime_part_extract_words (task, text_part);
 
 		if (text_part->utf_words) {
-			total_words += text_part->utf_words->len;
+			total_words += text_part->nwords;
 		}
 	}
 

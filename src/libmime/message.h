@@ -112,6 +112,7 @@ struct rspamd_mime_text_part {
 	guint flags;
 	guint nlines;
 	guint spaces;
+	guint nwords;
 	guint non_ascii_chars;
 	guint ascii_chars;
 	guint double_spaces;

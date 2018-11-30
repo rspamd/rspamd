@@ -594,7 +594,7 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 	 */
 	part->capital_letters += ncap;
 
-	cur_score /= (gdouble)part->utf_words->len;
+	cur_score /= (gdouble)part->nwords;
 
 	if (cur_score > 2.0) {
 		cur_score = 2.0;

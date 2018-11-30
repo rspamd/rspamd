@@ -1665,11 +1665,11 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 	}
 
 	if (!ret) {
-		if (part->utf_words->len < default_short_text_limit) {
+		if (part->nwords < default_short_text_limit) {
 			r = rs_detect_none;
 			msg_debug_lang_det ("text is too short for trigramms detection: "
 					   "%d words; at least %d words required",
-					(int)part->utf_words->len,
+					(int)part->nwords,
 					(int)default_short_text_limit);
 			rspamd_language_detector_set_language (task, part, "en");
 			candidates = kh_init (rspamd_candidates_hash);
@@ -1728,7 +1728,7 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 					cbd.std = std;
 					cbd.flags = RSPAMD_LANG_FLAG_DEFAULT;
 
-					if (part->utf_words->len < default_words / 2) {
+					if (part->nwords < default_words / 2) {
 						cbd.flags |= RSPAMD_LANG_FLAG_SHORT;
 					}
 				}

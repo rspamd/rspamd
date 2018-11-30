@@ -756,7 +756,7 @@ lua_textpart_get_words_count (lua_State *L)
 		lua_pushinteger (L, 0);
 	}
 	else {
-		lua_pushinteger (L, part->utf_words->len);
+		lua_pushinteger (L, part->nwords);
 	}
 
 	return 1;
