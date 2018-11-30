@@ -61,14 +61,14 @@ reconf['HAS_ONION_URI'] = {
     group = 'experimental'
 }
 
-local password_in_subject = [[Subject=/\bpassword\b/i]]
-local password_in_body = [[/\bpassword\b/i{sa_body}]]
+local password_in_words = [[/^password/i{words}]]
 local btc_wallet_address = [[/^[13][0-9a-zA-Z]{25,34}$/{words}]]
 local wallet_word = [[/^wallet$/i{words}]]
+local broken_unicode = [[has_flag(bad_unicode)]]
 
 reconf['LEAKED_PASSWORD_SCAM'] = {
-  re = string.format('(%s | %s) & %s & %s', password_in_subject,
-      password_in_body, btc_wallet_address, wallet_word),
+  re = string.format('%s & %s & (%s | %s)',
+      password_in_words, btc_wallet_address, wallet_word, broken_unicode),
   description = 'Contains password word and BTC wallet address',
   score = 7.0,
   group = 'scams'

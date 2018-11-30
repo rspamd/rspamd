@@ -151,6 +151,7 @@ static struct _fl {
 		{"has_content_part", rspamd_has_content_part, NULL},
 		{"has_content_part_len", rspamd_has_content_part_len, NULL},
 		{"has_fake_html", rspamd_has_fake_html, NULL},
+		{"has_flag", rspamd_has_flag_expr, NULL},
 		{"has_html_tag", rspamd_has_html_tag, NULL},
 		{"has_only_html_part", rspamd_has_only_html_part, NULL},
 		{"header_exists", rspamd_header_exists, NULL},
@@ -158,7 +159,6 @@ static struct _fl {
 		{"is_html_balanced", rspamd_is_html_balanced, NULL},
 		{"is_recipients_sorted", rspamd_is_recipients_sorted, NULL},
 		{"raw_header_exists", rspamd_raw_header_exists, NULL},
-		{"has_flag", rspamd_has_flag_expr, NULL},
 };
 
 const struct rspamd_atom_subr mime_expr_subr = {
