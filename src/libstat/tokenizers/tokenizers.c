@@ -229,7 +229,7 @@ rspamd_utf_word_valid (const gchar *text, const gchar *end,
 
 	U8_NEXT (text, start, finish, c);
 
-	if (u_isalnum (c)) {
+	if (u_isJavaIDPart (c)) {
 		return TRUE;
 	}
 
