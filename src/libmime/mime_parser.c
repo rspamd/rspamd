@@ -1294,7 +1294,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 			start_boundary = NULL;
 
 			for (i = sel_idx; i < nst->boundaries->len; i++) {
-				boundary = &g_array_index (st->boundaries,
+				boundary = &g_array_index (nst->boundaries,
 						struct rspamd_mime_boundary, i);
 
 				if (boundary->start > cur_offset &&
@@ -1310,17 +1310,17 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 				const gchar *start, *end;
 
 				if (nst->boundaries->len > sel_idx + 1) {
-					end_boundary = &g_array_index (st->boundaries,
+					end_boundary = &g_array_index (nst->boundaries,
 							struct rspamd_mime_boundary, sel_idx + 1);
-					end = st->start + end_boundary->boundary;
+					end = nst->start + end_boundary->boundary;
 				}
 				else {
-					end = st->end;
+					end = nst->end;
 				}
 
 				sel_idx ++;
 
-				start = st->start + start_boundary->start;
+				start = nst->start + start_boundary->start;
 
 				if (end > start &&
 					(ret = rspamd_mime_process_multipart_node (task, st,
