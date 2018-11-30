@@ -78,10 +78,12 @@ local function gen_auth_results(task, settings)
   local mta_hostname = task:get_request_header('MTA-Name') or
       task:get_request_header('MTA-Tag')
   if mta_hostname then
-    table.insert(hdr_parts, tostring(mta_hostname))
+    mta_hostname = tostring(mta_hostname)
   else
-    table.insert(hdr_parts, local_hostname)
+    mta_hostname = local_hostname
   end
+
+  table.insert(hdr_parts, mta_hostname)
 
   for auth_type, symbols in pairs(auth_types) do
     for key, sym in pairs(symbols) do
@@ -152,16 +154,51 @@ local function gen_auth_results(task, settings)
           end
         end
       elseif auth_type == 'spf' and key ~= 'none' then
-        hdr = hdr .. auth_type .. '=' .. key
+        -- Main type
+        local sender
+        local sender_type
         local smtp_from = task:get_from('smtp')
-        if smtp_from and smtp_from[1] and smtp_from[1]['addr'] ~= '' and smtp_from[1]['addr'] ~= nil then
-          hdr = hdr .. ' smtp.mailfrom=' .. smtp_from[1]['addr']
+
+        if smtp_from and
+            smtp_from[1] and
+            smtp_from[1]['addr'] ~= '' and
+            smtp_from[1]['addr'] ~= nil then
+          sender = smtp_from[1]['addr']
+          sender_type = 'smtp.mailfrom='
         else
           local helo = task:get_helo()
           if helo then
-            hdr = hdr .. ' smtp.helo=' .. task:get_helo()
+            sender = helo
+            sender_type = 'smtp.helo'
           end
         end
+
+        if sender and sender_type then
+          -- Comment line
+          local comment = ''
+          if key == 'pass' then
+            comment = string.format('%s: domain of %s designates %s as permitted sender',
+                mta_hostname, sender, tostring(task:get_from_ip() or 'unknown'))
+          elseif key == 'fail' then
+            comment = string.format('%s: domain of %s does not designate %s as permitted sender',
+                mta_hostname, sender, tostring(task:get_from_ip() or 'unknown'))
+          elseif key == 'neutral' or key == 'softfail' then
+            comment = string.format('%s: %s is neither permitted nor denied by domain of %s',
+                mta_hostname, tostring(task:get_from_ip() or 'unknown'), sender)
+          elseif key == 'permerror' then
+            comment = string.format('%s: domain of %s uses mechanism not recognized by this client',
+                mta_hostname, sender)
+          elseif key == 'temperror' then
+            comment = string.format('%s: error in processing during lookup of %s: DNS error',
+                mta_hostname, sender)
+          end
+          hdr = string.format('%s=%s (%s) %s=%s', auth_type, key,
+              comment, sender_type, sender)
+        else
+          hdr = string.format('%s=%s', auth_type, key)
+        end
+
+
         table.insert(hdr_parts, hdr)
       end
     end
