@@ -235,7 +235,19 @@ LUA_FUNCTION_DEF (task, get_text_parts);
  * @return {table rspamd_mime_part} list of mime parts
  */
 LUA_FUNCTION_DEF (task, get_parts);
-
+/***
+ * @method task:get_meta_words([how='stem'])
+ * Get meta words from task (subject and displayed names)
+ * - `stem`: stemmed words (default)
+ * - `norm`: normalised words (utf normalised + lowercased)
+ * - `raw`: raw words in utf (if possible)
+ * - `full`: list of tables, each table has the following fields:
+ *   - [1] - stemmed word
+ *   - [2] - normalised word
+ *   - [3] - raw word
+ *   - [4] - flags (table of strings)
+ */
+LUA_FUNCTION_DEF (task, get_meta_words);
 /***
  * @method task:get_request_header(name)
  * Get value of a HTTP request header.
@@ -1025,6 +1037,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, disable_action),
 	LUA_INTERFACE_DEF (task, get_newlines_type),
 	LUA_INTERFACE_DEF (task, get_stat_tokens),
+	LUA_INTERFACE_DEF (task, get_meta_words),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -5009,6 +5022,47 @@ lua_task_headers_foreach (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_task_get_meta_words (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	enum rspamd_lua_words_type how = RSPAMD_LUA_WORDS_STEM;
+
+	if (task == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (task->meta_words == NULL) {
+		lua_createtable (L, 0, 0);
+	}
+	else {
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			const gchar *how_str = lua_tostring (L, 2);
+
+			if (strcmp (how_str, "stem") == 0) {
+				how = RSPAMD_LUA_WORDS_STEM;
+			}
+			else if (strcmp (how_str, "norm") == 0) {
+				how = RSPAMD_LUA_WORDS_NORM;
+			}
+			else if (strcmp (how_str, "raw") == 0) {
+				how = RSPAMD_LUA_WORDS_RAW;
+			}
+			else if (strcmp (how_str, "full") == 0) {
+				how = RSPAMD_LUA_WORDS_FULL;
+			}
+			else {
+				return luaL_error (L, "unknown words type: %s", how_str);
+			}
+		}
+
+		return rspamd_lua_push_words (L, task->meta_words, how);
+	}
+
+	return 1;
 }
 
 /* Image functions */
