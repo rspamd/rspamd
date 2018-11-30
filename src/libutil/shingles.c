@@ -176,6 +176,17 @@ rspamd_shingles_from_text (GArray *input,
 						}
 					}
 
+					if (word == NULL) {
+						/* Nothing but exceptions */
+						for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+							g_free (hashes[i]);
+						}
+
+						g_free (hashes);
+
+						return NULL;
+					}
+
 					row = rspamd_fstring_append (row, word->stemmed.begin,
 							word->stemmed.len);
 				}
@@ -233,6 +244,17 @@ rspamd_shingles_from_text (GArray *input,
 						else {
 							break;
 						}
+					}
+
+					if (word == NULL) {
+						/* Nothing but exceptions */
+						for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+							g_free (hashes[i]);
+						}
+
+						g_free (hashes);
+
+						return NULL;
 					}
 
 					/* Insert the last element to the pipe */
