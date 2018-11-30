@@ -76,6 +76,16 @@ extract:flag "-p --part"
        :description "Show part info"
 extract:flag "-s --structure"
        :description "Show structure info (e.g. HTML tags)"
+extract:option "-F --words-format"
+       :description "Words format ('stem', 'norm', 'raw', 'full')"
+       :argname("<type>")
+       :convert {
+          stem = "stem",
+          norm = "norm",
+          raw = "raw",
+          full = "full",
+       }
+       :default "stem"
 
 
 local stat = parser:command "stat st s"
@@ -245,6 +255,28 @@ local function extract_handler(opts)
     end
   end
 
+  local function print_words(words, full)
+    local fun = require "fun"
+
+    if not full then
+      return table.concat(words, ' ')
+    else
+      return table.concat(
+          fun.totable(
+              fun.map(function(w)
+                -- [1] - stemmed word
+                -- [2] - normalised word
+                -- [3] - raw word
+                -- [4] - flags (table of strings)
+                return string.format('%s|%s|%s(%s)',
+                    w[3], w[2], w[1], table.concat(w[4], ','))
+              end, words)
+          ),
+          ' '
+      )
+    end
+  end
+
   for _,fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     out_elts[fname] = {}
@@ -252,6 +284,12 @@ local function extract_handler(opts)
     if not opts.text and not opts.html then
       opts.text = true
       opts.html = true
+    end
+
+    if opts.words then
+      local howw = opts['words_format'] or 'stem'
+      table.insert(out_elts[fname], 'meta_words: ' ..
+          print_words(task:get_meta_words(howw), howw == 'full'))
     end
 
     if opts.text or opts.html then
@@ -265,14 +303,18 @@ local function extract_handler(opts)
         if part and opts.text and not part:is_html() then
           maybe_print_text_part_info(part, out_elts[fname])
           if opts.words then
-            table.insert(out_elts[fname], table.concat(part:get_words(), ' '))
+            local howw = opts['words_format'] or 'stem'
+            table.insert(out_elts[fname], print_words(part:get_words(howw),
+                howw == 'full'))
           else
             table.insert(out_elts[fname], tostring(part:get_content(how)))
           end
         elseif part and opts.html and part:is_html() then
           maybe_print_text_part_info(part, out_elts[fname])
           if opts.words then
-            table.insert(out_elts[fname], table.concat(part:get_words(), ' '))
+            local howw = opts['words_format'] or 'stem'
+            table.insert(out_elts[fname], print_words(part:get_words(howw),
+                howw == 'full'))
           else
             if opts.structure then
               local hc = part:get_html()

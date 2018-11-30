@@ -2516,7 +2516,7 @@ rspamd_lua_push_words (lua_State *L, GArray *words,
 			lua_rawseti (L, -2, cnt ++);
 			break;
 		}
-
-		return 1;
 	}
+
+	return 1;
 }
