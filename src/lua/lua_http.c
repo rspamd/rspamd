@@ -420,12 +420,6 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 					cbd->auth);
 		}
 
-		rspamd_http_connection_write_message (cbd->conn, cbd->msg,
-				cbd->host, cbd->mime_type, cbd, fd,
-				&cbd->tv, cbd->ev_base);
-		/* Message is now owned by a connection object */
-		cbd->msg = NULL;
-
 		if (cbd->session) {
 			rspamd_session_add_event (cbd->session,
 					(event_finalizer_t) lua_http_fin, cbd,
@@ -436,6 +430,15 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 		if (cbd->item) {
 			rspamd_symcache_item_async_inc (cbd->task, cbd->item, M);
 		}
+
+		struct rspamd_http_message *msg = cbd->msg;
+
+		/* Message is now owned by a connection object */
+		cbd->msg = NULL;
+
+		rspamd_http_connection_write_message (cbd->conn, msg,
+				cbd->host, cbd->mime_type, cbd, fd,
+				&cbd->tv, cbd->ev_base);
 
 		return TRUE;
 	}
