@@ -2255,7 +2255,7 @@ rspamd_dkim_check_bh_cached (struct rspamd_dkim_common_ctx *ctx,
  * @param task task to check
  * @return
  */
-enum rspamd_dkim_check_result
+struct rspamd_dkim_check_result *
 rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	rspamd_dkim_key_t *key,
 	struct rspamd_task *task)
@@ -2265,21 +2265,31 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	struct rspamd_dkim_cached_hash *cached_bh = NULL;
 	EVP_MD_CTX *cpy_ctx = NULL;
 	gsize dlen = 0;
-	enum rspamd_dkim_check_result res = DKIM_CONTINUE;
+	struct rspamd_dkim_check_result *res;
 	guint i;
 	struct rspamd_dkim_header *dh;
 	gint nid;
 
-	g_return_val_if_fail (ctx != NULL,		 DKIM_ERROR);
-	g_return_val_if_fail (key != NULL,		 DKIM_ERROR);
-	g_return_val_if_fail (task->msg.len > 0, DKIM_ERROR);
+	g_return_val_if_fail (ctx != NULL,		 NULL);
+	g_return_val_if_fail (key != NULL,		 NULL);
+	g_return_val_if_fail (task->msg.len > 0, NULL);
 
 	/* First of all find place of body */
 	body_end = task->msg.begin + task->msg.len;
 	body_start = task->raw_headers_content.body_start;
 
+	res = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
+	res->ctx = ctx;
+	res->selector = ctx->selector;
+	res->domain = ctx->domain;
+	res->fail_reason = NULL;
+	res->short_b = rspamd_encode_base64 (ctx->b, 4, 0, NULL);
+	res->rcode = DKIM_CONTINUE;
+	rspamd_mempool_add_destructor (task->task_pool, g_free, (gpointer)res->short_b);
+
 	if (!body_start) {
-		return DKIM_RECORD_ERROR;
+		res->rcode = DKIM_ERROR;
+		return res;
 	}
 
 	if (ctx->common.type != RSPAMD_DKIM_ARC_SEAL) {
@@ -2291,7 +2301,8 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 			/* Start canonization of body part */
 			if (!rspamd_dkim_canonize_body (&ctx->common, body_start, body_end,
 					FALSE)) {
-				return DKIM_RECORD_ERROR;
+				res->rcode = DKIM_RECORD_ERROR;
+				return res;
 			}
 		}
 	}
@@ -2380,8 +2391,11 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 #else
 						EVP_MD_CTX_reset (cpy_ctx);
 #endif
+						res->fail_reason = "body hash did not verify";
+						res->rcode = DKIM_REJECT;
 						EVP_MD_CTX_destroy (cpy_ctx);
-						return DKIM_REJECT;
+
+						return res;
 					}
 				}
 			}
@@ -2398,11 +2412,18 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 									dlen, ctx->bh,
 									dlen, cached_bh->digest_cr);
 
-							return DKIM_REJECT;
+							res->fail_reason = "body hash did not verify";
+							res->rcode = DKIM_REJECT;
+
+							return res;
 						}
 					}
 					else {
-						return DKIM_REJECT;
+
+						res->fail_reason = "body hash did not verify";
+						res->rcode = DKIM_REJECT;
+
+						return res;
 					}
 				}
 			}
@@ -2411,8 +2432,10 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 						"bh value mismatch: %*xs versus %*xs",
 						dlen, ctx->bh,
 						dlen, cached_bh->digest_normal);
+				res->fail_reason = "body hash did not verify";
+				res->rcode = DKIM_REJECT;
 
-				return DKIM_REJECT;
+				return res;
 			}
 		}
 
@@ -2452,21 +2475,24 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 		if (RSA_verify (nid, raw_digest, dlen, ctx->b, ctx->blen,
 				key->key.key_rsa) != 1) {
 			msg_debug_dkim ("rsa verify failed");
-			res = DKIM_REJECT;
+			res->rcode = DKIM_REJECT;
+			res->fail_reason = "rsa verify failed";
 		}
 		break;
 	case RSPAMD_DKIM_KEY_ECDSA:
 		if (ECDSA_verify (nid, raw_digest, dlen, ctx->b, ctx->blen,
 				key->key.key_ecdsa) != 1) {
 			msg_debug_dkim ("ecdsa verify failed");
-			res = DKIM_REJECT;
+			res->rcode = DKIM_REJECT;
+			res->fail_reason = "ecdsa verify failed";
 		}
 		break;
 	case RSPAMD_DKIM_KEY_EDDSA:
 		if (!rspamd_cryptobox_verify (ctx->b, ctx->blen, raw_digest, dlen,
 				key->key.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519)) {
 			msg_debug_dkim ("eddsa verify failed");
-			res = DKIM_REJECT;
+			res->rcode = DKIM_REJECT;
+			res->fail_reason = "eddsa verify failed";
 		}
 		break;
 	}
@@ -2476,16 +2502,36 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 		switch (ctx->cv) {
 		case RSPAMD_ARC_INVALID:
 			msg_info_dkim ("arc seal is invalid i=%d", ctx->common.idx);
-			res = DKIM_PERM_ERROR;
+			res->rcode = DKIM_PERM_ERROR;
+			res->fail_reason = "arc seal is invalid";
 			break;
 		case RSPAMD_ARC_FAIL:
 			msg_info_dkim ("arc seal failed i=%d", ctx->common.idx);
-			res = DKIM_REJECT;
+			res->rcode = DKIM_REJECT;
+			res->fail_reason = "arc seal failed";
 			break;
 		default:
 			break;
 		}
 	}
+
+	return res;
+}
+
+struct rspamd_dkim_check_result *
+rspamd_dkim_create_result (rspamd_dkim_context_t *ctx,
+						   enum rspamd_dkim_check_rcode rcode,
+						   struct rspamd_task *task)
+{
+	struct rspamd_dkim_check_result *res;
+
+	res = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
+	res->ctx = ctx;
+	res->selector = ctx->selector;
+	res->domain = ctx->domain;
+	res->fail_reason = NULL;
+	res->short_b = rspamd_encode_base64 (ctx->b, 4, 0, NULL);
+	rspamd_mempool_add_destructor (task->task_pool, g_free, (gpointer)res->short_b);
 
 	return res;
 }

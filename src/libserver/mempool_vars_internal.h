@@ -32,6 +32,7 @@
 #define RSPAMD_MEMPOOL_DKIM_SIGNATURE "dkim-signature"
 #define RSPAMD_MEMPOOL_DMARC_CHECKS "dmarc_checks"
 #define RSPAMD_MEMPOOL_DKIM_BH_CACHE "dkim_bh_cache"
+#define RSPAMD_MEMPOOL_DKIM_CHECK_RESULTS "dkim_results"
 #define RSPAMD_MEMPOOL_DKIM_SIGN_KEY "dkim_key"
 #define RSPAMD_MEMPOOL_DKIM_SIGN_SELECTOR "dkim_selector"
 #define RSPAMD_MEMPOOL_ARC_SIGN_KEY "arc_key"

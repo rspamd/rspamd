@@ -81,7 +81,7 @@
 #define DKIM_SIGERROR_EMPTY_V       45  /* v= tag empty */
 
 /* Check results */
-enum rspamd_dkim_check_result {
+enum rspamd_dkim_check_rcode {
 	DKIM_CONTINUE = 0,
 	DKIM_REJECT,
 	DKIM_TRYAGAIN,
@@ -135,6 +135,16 @@ enum rspamd_dkim_key_type {
 	RSPAMD_DKIM_KEY_RSA = 0,
 	RSPAMD_DKIM_KEY_ECDSA,
 	RSPAMD_DKIM_KEY_EDDSA
+};
+
+struct rspamd_dkim_check_result {
+	enum rspamd_dkim_check_rcode rcode;
+	rspamd_dkim_context_t *ctx;
+	/* Processed parts */
+	const gchar *selector;
+	const gchar *domain;
+	const gchar *short_b;
+	const gchar *fail_reason;
 };
 
 
@@ -209,13 +219,23 @@ gboolean rspamd_get_dkim_key (rspamd_dkim_context_t *ctx,
  * @param task task to check
  * @return
  */
-enum rspamd_dkim_check_result rspamd_dkim_check (rspamd_dkim_context_t *ctx,
-	rspamd_dkim_key_t *key,
-	struct rspamd_task *task);
+struct rspamd_dkim_check_result * rspamd_dkim_check (rspamd_dkim_context_t *ctx,
+													 rspamd_dkim_key_t *key,
+													 struct rspamd_task *task);
 
-GString *rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
-		const gchar *domain, time_t expire, gsize len, guint idx,
-		const gchar *arc_cv, rspamd_dkim_sign_context_t *ctx);
+struct rspamd_dkim_check_result *
+rspamd_dkim_create_result (rspamd_dkim_context_t *ctx,
+						   enum rspamd_dkim_check_rcode rcode,
+						   struct rspamd_task *task);
+
+GString *rspamd_dkim_sign (struct rspamd_task *task,
+						   const gchar *selector,
+						   const gchar *domain,
+						   time_t expire,
+						   gsize len,
+						   guint idx,
+						   const gchar *arc_cv,
+						   rspamd_dkim_sign_context_t *ctx);
 
 rspamd_dkim_key_t * rspamd_dkim_key_ref (rspamd_dkim_key_t *k);
 void rspamd_dkim_key_unref (rspamd_dkim_key_t *k);

@@ -85,7 +85,7 @@ struct dkim_check_result {
 	rspamd_dkim_context_t *ctx;
 	rspamd_dkim_key_t *key;
 	struct rspamd_task *task;
-	gint res;
+	struct rspamd_dkim_check_result *res;
 	gdouble mult_allow;
 	gdouble mult_deny;
 	struct rspamd_symcache_item *item;
@@ -822,7 +822,7 @@ lua_dkim_sign_handler (lua_State *L)
 	if (pubkey != NULL) {
 		/* Also check if private and public keys match */
 		rspamd_dkim_key_t *pk;
-		gsize keylen = strlen (pubkey);
+		keylen = strlen (pubkey);
 
 		pk = rspamd_dkim_parse_key (pubkey, &keylen, NULL);
 
@@ -956,7 +956,7 @@ dkim_module_check (struct dkim_check_result *res)
 			continue;
 		}
 
-		if (cur->key != NULL && cur->res == -1) {
+		if (cur->key != NULL && cur->res == NULL) {
 			cur->res = rspamd_dkim_check (cur->ctx, cur->key, cur->task);
 
 			if (dkim_module_ctx->dkim_domains != NULL) {
@@ -978,7 +978,7 @@ dkim_module_check (struct dkim_check_result *res)
 		if (cur->ctx == NULL) {
 			continue;
 		}
-		if (cur->res == -1) {
+		if (cur->res == NULL) {
 			/* Still need a key */
 			all_done = FALSE;
 		}
@@ -989,24 +989,25 @@ dkim_module_check (struct dkim_check_result *res)
 			const gchar *symbol = NULL, *trace = NULL;
 			gdouble symbol_weight = 1.0;
 
-			if (cur->ctx == NULL) {
+			if (cur->ctx == NULL || cur->res == NULL) {
 				continue;
 			}
-			if (cur->res == DKIM_REJECT) {
+
+			if (cur->res->rcode == DKIM_REJECT) {
 				symbol = dkim_module_ctx->symbol_reject;
 				trace = "-";
 				symbol_weight = cur->mult_deny * 1.0;
 			}
-			else if (cur->res == DKIM_CONTINUE) {
+			else if (cur->res->rcode == DKIM_CONTINUE) {
 				symbol = dkim_module_ctx->symbol_allow;
 				trace = "+";
 				symbol_weight = cur->mult_allow * 1.0;
 			}
-			else if (cur->res == DKIM_PERM_ERROR) {
+			else if (cur->res->rcode == DKIM_PERM_ERROR) {
 				trace = "~";
 				symbol = dkim_module_ctx->symbol_permfail;
 			}
-			else if (cur->res == DKIM_TRYAGAIN) {
+			else if (cur->res->rcode == DKIM_TRYAGAIN) {
 				trace = "?";
 				symbol = dkim_module_ctx->symbol_tempfail;
 			}
@@ -1072,10 +1073,12 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 
 		if (err != NULL) {
 			if (err->code == DKIM_SIGERROR_NOKEY) {
-				res->res = DKIM_TRYAGAIN;
+				res->res = rspamd_dkim_create_result (ctx, DKIM_TRYAGAIN, task);
+				res->res->fail_reason = "DNS error when getting key";
 			}
 			else {
-				res->res = DKIM_PERM_ERROR;
+				res->res = rspamd_dkim_create_result (ctx, DKIM_PERM_ERROR, task);
+				res->res->fail_reason = "invalid DKIM record";
 			}
 		}
 	}
@@ -1153,7 +1156,7 @@ dkim_symbol_callback (struct rspamd_task *task,
 
 			cur = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cur));
 			cur->first = res;
-			cur->res = -1;
+			cur->res = NULL;
 			cur->task = task;
 			cur->mult_allow = 1.0;
 			cur->mult_deny = 1.0;
@@ -1492,7 +1495,7 @@ struct rspamd_dkim_lua_verify_cbdata {
 
 static void
 dkim_module_lua_push_verify_result (struct rspamd_dkim_lua_verify_cbdata *cbd,
-		gint code, GError *err)
+		struct rspamd_dkim_check_result *res, GError *err)
 {
 	struct rspamd_task **ptask, *task;
 	const gchar *error_str = "unknown error";
@@ -1500,7 +1503,7 @@ dkim_module_lua_push_verify_result (struct rspamd_dkim_lua_verify_cbdata *cbd,
 
 	task = cbd->task;
 
-	switch (code) {
+	switch (res->rcode) {
 	case DKIM_CONTINUE:
 		error_str = NULL;
 		success = TRUE;
@@ -1556,13 +1559,19 @@ dkim_module_lua_push_verify_result (struct rspamd_dkim_lua_verify_cbdata *cbd,
 	lua_pushstring (cbd->L, error_str);
 
 	if (cbd->ctx) {
-		lua_pushstring (cbd->L, rspamd_dkim_get_domain (cbd->ctx));
+		lua_pushstring (cbd->L, res->domain);
+		lua_pushstring (cbd->L, res->selector);
+		lua_pushstring (cbd->L, res->short_b);
+		lua_pushstring (cbd->L, res->fail_reason);
 	}
 	else {
 		lua_pushnil (cbd->L);
+		lua_pushnil (cbd->L);
+		lua_pushnil (cbd->L);
+		lua_pushnil (cbd->L);
 	}
 
-	if (lua_pcall (cbd->L, 4, 0, 0) != 0) {
+	if (lua_pcall (cbd->L, 7, 0, 0) != 0) {
 		msg_err_task ("call to verify callback failed: %s",
 				lua_tostring (cbd->L, -1));
 		lua_pop (cbd->L, 1);
@@ -1573,14 +1582,14 @@ dkim_module_lua_push_verify_result (struct rspamd_dkim_lua_verify_cbdata *cbd,
 
 static void
 dkim_module_lua_on_key (rspamd_dkim_key_t *key,
-		gsize keylen,
-		rspamd_dkim_context_t *ctx,
-		gpointer ud,
-		GError *err)
+						gsize keylen,
+						rspamd_dkim_context_t *ctx,
+						gpointer ud,
+						GError *err)
 {
 	struct rspamd_dkim_lua_verify_cbdata *cbd = ud;
 	struct rspamd_task *task;
-	gint ret;
+	struct rspamd_dkim_check_result *res;
 	struct dkim_ctx *dkim_module_ctx;
 
 	task = cbd->task;
@@ -1607,15 +1616,21 @@ dkim_module_lua_on_key (rspamd_dkim_key_t *key,
 
 		if (err != NULL) {
 			if (err->code == DKIM_SIGERROR_NOKEY) {
-				dkim_module_lua_push_verify_result (cbd, DKIM_TRYAGAIN, err);
+				res = rspamd_dkim_create_result (ctx, DKIM_TRYAGAIN, task);
+				res->fail_reason = "DNS error when getting key";
+
 			}
 			else {
-				dkim_module_lua_push_verify_result (cbd, DKIM_PERM_ERROR, err);
+				res = rspamd_dkim_create_result (ctx, DKIM_PERM_ERROR, task);
+				res->fail_reason = "invalid DKIM record";
 			}
 		}
 		else {
-			dkim_module_lua_push_verify_result (cbd, DKIM_TRYAGAIN, NULL);
+			res = rspamd_dkim_create_result (ctx, DKIM_TRYAGAIN, task);
+			res->fail_reason = "DNS error when getting key";
 		}
+
+		dkim_module_lua_push_verify_result (cbd, res, err);
 
 		if (err) {
 			g_error_free (err);
@@ -1624,8 +1639,8 @@ dkim_module_lua_on_key (rspamd_dkim_key_t *key,
 		return;
 	}
 
-	ret = rspamd_dkim_check (cbd->ctx, cbd->key, cbd->task);
-	dkim_module_lua_push_verify_result (cbd, ret, NULL);
+	res = rspamd_dkim_check (cbd->ctx, cbd->key, cbd->task);
+	dkim_module_lua_push_verify_result (cbd, res, NULL);
 }
 
 static gint
@@ -1636,7 +1651,7 @@ lua_dkim_verify_handler (lua_State *L)
 	rspamd_dkim_context_t *ctx;
 	struct rspamd_dkim_lua_verify_cbdata *cbd;
 	rspamd_dkim_key_t *key;
-	gint ret;
+	struct rspamd_dkim_check_result *ret;
 	GError *err = NULL;
 	const gchar *type_str = NULL;
 	enum rspamd_dkim_type type = RSPAMD_DKIM_NORMAL;
