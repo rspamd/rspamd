@@ -28,13 +28,6 @@ local default_settings = {
     none = 'R_SPF_NA',
     permerror = 'R_SPF_PERMFAIL',
   },
-  dkim_symbols = {
-    pass = 'R_DKIM_ALLOW',
-    fail = 'R_DKIM_REJECT',
-    temperror = 'R_DKIM_TEMPFAIL',
-    none = 'R_DKIM_NA',
-    permerror = 'R_DKIM_PERMFAIL',
-  },
   dmarc_symbols = {
     pass = 'DMARC_POLICY_ALLOW',
     permerror = 'DMARC_BAD_POLICY',
@@ -107,6 +100,46 @@ local function gen_auth_results(task, settings)
     end
   end
 
+  local dkim_results = task:get_dkim_results()
+  -- For each signature we set authentication results
+  -- dkim=neutral (body hash did not verify) header.d=example.com header.s=sel header.b=fA8VVvJ8;
+  -- dkim=neutral (body hash did not verify) header.d=example.com header.s=sel header.b=f8pM8o90;
+
+  for _,dres in ipairs(dkim_results) do
+    local ar_string = 'none'
+
+    if dres.result == 'reject' then
+      ar_string = 'fail' -- imply failure, not neutral
+    elseif dres.result == 'allow' then
+      ar_string = 'pass'
+    elseif dres.result == 'bad record' or dres.result == 'permerror' then
+      ar_string = 'permerror'
+    elseif dres.result == 'tempfail' then
+      ar_string = 'temperror'
+    end
+    local hdr = {}
+
+    hdr[1] = string.format('dkim=%s', ar_string)
+
+    if dres.fail_reason then
+      hdr[#hdr + 1] = string.format('(%s)', dres.fail_reason)
+    end
+
+    if dres.domain then
+      hdr[#hdr + 1] = string.format('header.d=%s', dres.domain)
+    end
+
+    if dres.selector then
+      hdr[#hdr + 1] = string.format('header.s=%s', dres.selector)
+    end
+
+    if dres.bhash then
+      hdr[#hdr + 1] = string.format('header.b=%s', dres.bhash)
+    end
+
+    table.insert(hdr_parts, table.concat(hdr, ' '))
+  end
+
   for auth_type, keys in pairs(auth_results) do
     for _, key in ipairs(keys) do
       local hdr = ''
@@ -136,15 +169,6 @@ local function gen_auth_results(task, settings)
           end
         end
         table.insert(hdr_parts, hdr)
-      elseif auth_type == 'dkim' and key ~= 'none' then
-        if common.symbols[auth_types['dkim'][key]][1] then
-          local dkim_parts = {}
-          local opts = common.symbols[auth_types['dkim'][key]][1]['options']
-          for _, v in ipairs(opts) do
-            table.insert(dkim_parts, auth_type .. '=' .. key .. ' header.d=' .. v)
-          end
-          table.insert(hdr_parts, table.concat(dkim_parts, '; '))
-        end
       elseif auth_type == 'arc' and key ~= 'none' then
         if common.symbols[auth_types['arc'][key]][1] then
           local opts = common.symbols[auth_types['arc'][key]][1]['options'] or {}
