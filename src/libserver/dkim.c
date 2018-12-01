@@ -2536,6 +2536,7 @@ rspamd_dkim_create_result (rspamd_dkim_context_t *ctx,
 	res->domain = ctx->domain;
 	res->fail_reason = NULL;
 	res->short_b = ctx->short_b;
+	res->rcode = rcode;
 
 	return res;
 }
