@@ -164,7 +164,7 @@ local function gen_auth_results(task, settings)
             smtp_from[1]['addr'] ~= '' and
             smtp_from[1]['addr'] ~= nil then
           sender = smtp_from[1]['addr']
-          sender_type = 'smtp.mailfrom='
+          sender_type = 'smtp.mailfrom'
         else
           local helo = task:get_helo()
           if helo then
