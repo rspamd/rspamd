@@ -948,6 +948,7 @@ dkim_module_check (struct dkim_check_result *res)
 	const gchar *strict_value;
 	struct dkim_check_result *first, *cur = NULL;
 	struct dkim_ctx *dkim_module_ctx = dkim_get_context (res->task->cfg);
+	struct rspamd_task *task = res->task;
 
 	first = res->first;
 
@@ -957,7 +958,7 @@ dkim_module_check (struct dkim_check_result *res)
 		}
 
 		if (cur->key != NULL && cur->res == NULL) {
-			cur->res = rspamd_dkim_check (cur->ctx, cur->key, cur->task);
+			cur->res = rspamd_dkim_check (cur->ctx, cur->key, task);
 
 			if (dkim_module_ctx->dkim_domains != NULL) {
 				/* Perform strict check */
@@ -985,6 +986,21 @@ dkim_module_check (struct dkim_check_result *res)
 	}
 
 	if (all_done) {
+		/* Create zero terminated array of results */
+		struct rspamd_dkim_check_result **pres;
+		guint nres = 0, i = 0;
+
+		DL_FOREACH (first, cur) {
+			if (cur->ctx == NULL || cur->res == NULL) {
+				continue;
+			}
+
+			nres ++;
+		}
+
+		pres = rspamd_mempool_alloc (task->task_pool, sizeof (*pres) * (nres + 1));
+		pres[nres] = NULL;
+
 		DL_FOREACH (first, cur) {
 			const gchar *symbol = NULL, *trace = NULL;
 			gdouble symbol_weight = 1.0;
@@ -992,6 +1008,8 @@ dkim_module_check (struct dkim_check_result *res)
 			if (cur->ctx == NULL || cur->res == NULL) {
 				continue;
 			}
+
+			pres[i++] = cur->res;
 
 			if (cur->res->rcode == DKIM_REJECT) {
 				symbol = dkim_module_ctx->symbol_reject;
@@ -1019,7 +1037,7 @@ dkim_module_check (struct dkim_check_result *res)
 				gchar *tracebuf;
 
 				tracelen = strlen (domain) + strlen (selector) + 4;
-				tracebuf = rspamd_mempool_alloc (cur->task->task_pool,
+				tracebuf = rspamd_mempool_alloc (task->task_pool,
 						tracelen);
 				rspamd_snprintf (tracebuf, tracelen, "%s:%s", domain, trace);
 
@@ -1029,12 +1047,17 @@ dkim_module_check (struct dkim_check_result *res)
 						tracebuf);
 
 				rspamd_snprintf (tracebuf, tracelen, "%s:s=%s", domain, selector);
-				rspamd_task_insert_result (cur->task,
+				rspamd_task_insert_result (task,
 						symbol,
 						symbol_weight,
 						tracebuf);
 			}
+
 		}
+
+		rspamd_mempool_set_variable (task->task_pool,
+				RSPAMD_MEMPOOL_DKIM_CHECK_RESULTS,
+				pres, NULL);
 	}
 }
 
