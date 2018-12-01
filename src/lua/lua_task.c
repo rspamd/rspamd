@@ -562,6 +562,7 @@ LUA_FUNCTION_DEF (task, get_archives);
  * * `domain` - dkim domain
  * * `selector` - dkim selector
  * * `bhash` - short version of b tag (8 base64 symbols)
+ * * `fail_reason` - reason of failure (if applicable)
  * @return {list of maps} dkim check results
  */
 LUA_FUNCTION_DEF (task, get_dkim_results);
@@ -3484,7 +3485,7 @@ lua_task_get_dkim_results (lua_State *L)
 					}
 
 					if (res->fail_reason) {
-						rspamd_lua_table_set (L, "fail", res->fail_reason);
+						rspamd_lua_table_set (L, "fail_reason", res->fail_reason);
 					}
 
 					lua_rawseti (L, -2, i + 1);

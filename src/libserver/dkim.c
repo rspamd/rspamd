@@ -36,6 +36,8 @@
 
 #define DKIM_CANON_DEFAULT  DKIM_CANON_SIMPLE
 
+#define RSPAMD_SHORT_BH_LEN 8
+
 /* Params */
 enum rspamd_dkim_param_type {
 	DKIM_PARAM_UNKNOWN = -1,
@@ -111,6 +113,7 @@ enum rspamd_arc_seal_cv {
 	RSPAMD_ARC_PASS
 };
 
+
 struct rspamd_dkim_context_s {
 	struct rspamd_dkim_common_ctx common;
 	rspamd_mempool_t *pool;
@@ -123,6 +126,7 @@ struct rspamd_dkim_context_s {
 	gchar *domain;
 	gchar *selector;
 	gint8 *b;
+	gchar *short_b;
 	gint8 *bh;
 	gchar *dns_key;
 	enum rspamd_arc_seal_cv cv;
@@ -264,6 +268,8 @@ rspamd_dkim_parse_signature (rspamd_dkim_context_t * ctx,
 	GError **err)
 {
 	ctx->b = rspamd_mempool_alloc0 (ctx->pool, len);
+	ctx->short_b = rspamd_mempool_alloc0 (ctx->pool, RSPAMD_SHORT_BH_LEN + 1);
+	rspamd_strlcpy (ctx->short_b, param, MIN (len, RSPAMD_SHORT_BH_LEN + 1));
 	(void)rspamd_cryptobox_base64_decode (param, len, ctx->b, &ctx->blen);
 
 	return TRUE;
@@ -2283,9 +2289,8 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 	res->selector = ctx->selector;
 	res->domain = ctx->domain;
 	res->fail_reason = NULL;
-	res->short_b = rspamd_encode_base64 (ctx->b, 4, 0, NULL);
+	res->short_b = ctx->short_b;
 	res->rcode = DKIM_CONTINUE;
-	rspamd_mempool_add_destructor (task->task_pool, g_free, (gpointer)res->short_b);
 
 	if (!body_start) {
 		res->rcode = DKIM_ERROR;
@@ -2530,8 +2535,7 @@ rspamd_dkim_create_result (rspamd_dkim_context_t *ctx,
 	res->selector = ctx->selector;
 	res->domain = ctx->domain;
 	res->fail_reason = NULL;
-	res->short_b = rspamd_encode_base64 (ctx->b, 4, 0, NULL);
-	rspamd_mempool_add_destructor (task->task_pool, g_free, (gpointer)res->short_b);
+	res->short_b = ctx->short_b;
 
 	return res;
 }
