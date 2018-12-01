@@ -25,6 +25,7 @@
 #include "libstat/stat_api.h"
 #include <math.h>
 #include <src/libserver/task.h>
+#include <src/libserver/dkim.h>
 
 /***
  * @module rspamd_task
@@ -546,6 +547,25 @@ LUA_FUNCTION_DEF (task, get_images);
  */
 LUA_FUNCTION_DEF (task, get_archives);
 /***
+ * @method task:get_dkim_results()
+ * Returns list of all dkim check results as table of maps. Callee must ensure that
+ * dkim checks have been completed by adding dependency on `DKIM_TRACE` symbol.
+ * Fields in map:
+ *
+ * * `result` - string result of check:
+ *    - `reject`
+ *    - `allow`
+ *    - `tempfail`
+ *    - `permfail`
+ *    - `not found`
+ *    - `bad record`
+ * * `domain` - dkim domain
+ * * `selector` - dkim selector
+ * * `bhash` - short version of b tag (8 base64 symbols)
+ * @return {list of maps} dkim check results
+ */
+LUA_FUNCTION_DEF (task, get_dkim_results);
+/***
  * @method task:get_symbol(name)
  * Searches for a symbol `name` in all metrics results and returns a list of tables
  * one per metric that describes the symbol inserted. Please note that this function
@@ -1002,6 +1022,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, set_hostname),
 	LUA_INTERFACE_DEF (task, get_images),
 	LUA_INTERFACE_DEF (task, get_archives),
+	LUA_INTERFACE_DEF (task, get_dkim_results),
 	LUA_INTERFACE_DEF (task, get_symbol),
 	LUA_INTERFACE_DEF (task, get_symbols),
 	LUA_INTERFACE_DEF (task, get_symbols_all),
@@ -3387,6 +3408,90 @@ lua_task_get_archives (lua_State *L)
 			}
 
 			lua_task_set_cached (L, task, "archives", -1, task->parts->len);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_dkim_results (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	guint nelt = 0, i;
+	struct rspamd_dkim_check_result **pres, **cur;
+
+	if (task) {
+		if (!lua_task_get_cached (L, task, "dkim_results", 0)) {
+			pres = rspamd_mempool_get_variable (task->task_pool,
+					RSPAMD_MEMPOOL_DKIM_CHECK_RESULTS);
+
+			if (pres == NULL) {
+				lua_newtable (L);
+			}
+			else {
+				for (cur = pres; *cur != NULL; cur ++) {
+					nelt ++;
+				}
+
+				lua_createtable (L, nelt, 0);
+
+				for (i = 0; i < nelt; i ++) {
+					struct rspamd_dkim_check_result *res = pres[i];
+					const gchar *result_str = "unknown";
+
+					lua_createtable (L, 0, 4);
+
+					switch (res->rcode) {
+					case DKIM_CONTINUE:
+						result_str = "allow";
+						break;
+					case DKIM_REJECT:
+						result_str = "reject";
+						break;
+					case DKIM_TRYAGAIN:
+						result_str = "tempfail";
+						break;
+					case DKIM_NOTFOUND:
+						result_str = "not found";
+						break;
+					case DKIM_RECORD_ERROR:
+						result_str = "bad record";
+						break;
+					case DKIM_PERM_ERROR:
+						result_str = "permanent error";
+						break;
+					default:
+						break;
+					}
+
+					rspamd_lua_table_set (L, "result", result_str);
+
+					if (res->domain) {
+						rspamd_lua_table_set (L, "domain", res->domain);
+					}
+
+					if (res->selector) {
+						rspamd_lua_table_set (L, "selector", res->selector);
+					}
+
+					if (res->short_b) {
+						rspamd_lua_table_set (L, "bhash", res->short_b);
+					}
+
+					if (res->fail_reason) {
+						rspamd_lua_table_set (L, "fail", res->fail_reason);
+					}
+
+					lua_rawseti (L, -2, i + 1);
+				}
+			}
+
+			lua_task_set_cached (L, task, "dkim_results", -1, 0);
 		}
 	}
 	else {
