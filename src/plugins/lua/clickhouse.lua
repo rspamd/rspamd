@@ -50,6 +50,7 @@ local settings = {
   full_urls = false,
   from_tables = nil,
   enable_symbols = false,
+  database = 'default',
   use_https = false,
   use_gzip = true,
   allow_local = false,
