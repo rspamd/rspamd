@@ -195,22 +195,25 @@ local function greylist_check(task)
     local greylisted_meta = false
 
     if data then
+      local end_time_body,end_time_meta
+
       if data[1] and type(data[1]) ~= 'userdata' then
+        local tm = tonumber(data[1]) or rspamd_util.get_time()
         ret_body,greylisted_body = check_time(task, data[1], 'body')
         if greylisted_body then
-          local end_time = rspamd_util.time_to_string(rspamd_util.get_time()
-            + settings['timeout'])
-          task:get_mempool():set_variable("grey_greylisted_body", end_time)
+          end_time_body = rspamd_util.time_to_string(tm + settings['timeout'])
+          task:get_mempool():set_variable("grey_greylisted_body", end_time_body)
         end
       end
+
       if data[2] and type(data[2]) ~= 'userdata' then
         if not ret_body or greylisted_body then
+          local tm = tonumber(data[2]) or rspamd_util.get_time()
           ret_meta,greylisted_meta = check_time(task, data[2], 'meta')
 
           if greylisted_meta then
-            local end_time = rspamd_util.time_to_string(rspamd_util.get_time()
-               + settings['timeout'])
-            task:get_mempool():set_variable("grey_greylisted_meta", end_time)
+            end_time_meta = rspamd_util.time_to_string(tm + settings['timeout'])
+            task:get_mempool():set_variable("grey_greylisted_meta", end_time_meta)
           end
         end
       end
@@ -220,8 +223,7 @@ local function greylist_check(task)
           + settings['timeout'])
         task:get_mempool():set_variable("grey_greylisted", end_time)
       elseif greylisted_body and greylisted_meta then
-        local end_time = rspamd_util.time_to_string(rspamd_util.get_time() +
-          settings['timeout'])
+        local end_time = math.min(end_time_body, end_time_meta)
         rspamd_logger.infox(task, 'greylisted until "%s"',
           end_time)
         greylist_message(task, end_time, 'too early')
