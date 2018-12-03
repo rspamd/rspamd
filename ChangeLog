@@ -1,3 +1,34 @@
+1.8.3: 03 Dec 2018
+  * [CritFix] Make flags mutually exclusive for mime parts
+  * [CritFix] Strictly deny unencoded bad utf8 sequences in headers
+  * [Feature] Add Kaspersky antivirus support
+  * [Feature] Add method to get dkim results
+  * [Feature] Add more words regexp classes
+  * [Feature] Allow to choose words format in `rspamadm mime`
+  * [Feature] Allow to get all types of words from Lua
+  * [Feature] Allow to get task flags in C expressions
+  * [Feature] Allow to require encryption when accepting connections
+  * [Feature] Ignore bogus whitespaces in the words
+  * [Feature] Implement more strict configuration tests
+  * [Feature] Improve SPF results in Authentication-Results
+  * [Feature] Support ClickHouse database
+  * [Fix] Add failsafety for utf8 regexps
+  * [Fix] Do not trigger BROKEN_CONTENT_TYPE on innocent text parts
+  * [Fix] Emit error if connection has been terminated with no stop pattern
+  * [Fix] Fix boundaries checks in embedded messages
+  * [Fix] Fix double free
+  * [Fix] Perform policy downgrade on sample out, add tests
+  * [Fix] Properly escape utf8 regexps in hyperscan mode
+  * [Fix] Selectors - attachments args condition
+  * [Fix] Some fixes for raw parts
+  * [Fix] Treat learning errors as non-fatal
+  * [Fix] Use tld when looking for DKIM domains
+  * [Project] Words unicode structure rework
+  * [Project] Add preliminary Redis Sentinel support
+  * [Project] Improve Authentication-Results header
+  * [Project] Rework DKIM checks results
+  * [Project] Use more generalised API to produce meta words
+
 1.8.2: 19 Nov 2018
   * [Conf] Add DWL support in the default configuration
   * [Conf] Disable rspamd_update by default (again)
