@@ -1470,6 +1470,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 	module_t *mod, **pmod;
 	guint i = 0;
 	struct module_ctx *mod_ctx, *cur_ctx;
+	gboolean ret = TRUE;
 
 	/* Init all compiled modules */
 
@@ -1504,11 +1505,19 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 			mod_ctx->enabled = rspamd_config_is_module_enabled (cfg, mod->name);
 
 			if (reconfig) {
-				(void)mod->module_reconfig_func (cfg);
-				msg_info_config ("reconfig of %s", mod->name);
+				if (!mod->module_reconfig_func (cfg)) {
+					msg_err_config ("reconfig of %s failed!", mod->name);
+				}
+				else {
+					msg_info_config ("reconfig of %s", mod->name);
+				}
+
 			}
 			else {
-				(void)mod->module_config_func (cfg);
+				if (!mod->module_config_func (cfg)) {
+					msg_info_config ("config of %s failed!", mod->name);
+					ret = FALSE;
+				}
 			}
 		}
 
@@ -1519,7 +1528,9 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 		cur = g_list_next (cur);
 	}
 
-	return rspamd_init_lua_filters (cfg, 0);
+	ret = rspamd_init_lua_filters (cfg, 0) && ret;
+
+	return ret;
 }
 
 static void

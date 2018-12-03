@@ -381,40 +381,108 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	nshots = cfg->default_max_shots;
 
 	if ((elt = ucl_object_lookup (obj, "one_shot")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"one_shot attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
 		if (ucl_object_toboolean (elt)) {
 			nshots = 1;
 		}
 	}
 
 	if ((elt = ucl_object_lookup (obj, "any_shot")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"any_shot attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
 		if (ucl_object_toboolean (elt)) {
 			nshots = -1;
 		}
 	}
 
 	if ((elt = ucl_object_lookup (obj, "one_param")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"one_param attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+
 		if (ucl_object_toboolean (elt)) {
 			flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
 		}
 	}
 
 	if ((elt = ucl_object_lookup (obj, "ignore")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"ignore attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+
 		if (ucl_object_toboolean (elt)) {
 			flags |= RSPAMD_SYMBOL_FLAG_IGNORE;
 		}
 	}
 
 	if ((elt = ucl_object_lookup (obj, "nshots")) != NULL) {
+		if (ucl_object_type (elt) != UCL_FLOAT && ucl_object_type (elt) != UCL_INT) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"nshots attribute is not numeric for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+
 		nshots = ucl_object_toint (elt);
 	}
 
 	elt = ucl_object_lookup_any (obj, "score", "weight", NULL);
 	if (elt) {
+		if (ucl_object_type (elt) != UCL_FLOAT && ucl_object_type (elt) != UCL_INT) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"score attribute is not numeric for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+
 		score = ucl_object_todouble (elt);
 	}
 
 	elt = ucl_object_lookup (obj, "priority");
 	if (elt) {
+		if (ucl_object_type (elt) != UCL_FLOAT && ucl_object_type (elt) != UCL_INT) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"priority attribute is not numeric for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+
 		priority = ucl_object_toint (elt);
 	}
 	else {

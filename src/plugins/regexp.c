@@ -279,39 +279,96 @@ regexp_module_config (struct rspamd_config *cfg)
 				elt = ucl_object_lookup (value, "score");
 
 				if (elt) {
-					score = ucl_object_todouble (elt);
+					if (ucl_object_type (elt) != UCL_FLOAT && ucl_object_type (elt) != UCL_INT) {
+						msg_err_config (
+								"score attribute is not numeric for symbol: '%s'",
+								cur_item->symbol);
+
+						res = FALSE;
+					}
+					else {
+						score = ucl_object_todouble (elt);
+					}
 				}
 
 				elt = ucl_object_lookup (value, "one_shot");
 
 				if (elt) {
-					if (ucl_object_toboolean (elt)) {
-						nshots = 1;
+					if (ucl_object_type (elt) != UCL_BOOLEAN) {
+						msg_err_config (
+								"one_shot attribute is not numeric for symbol: '%s'",
+								cur_item->symbol);
+
+						res = FALSE;
+					}
+					else {
+						if (ucl_object_toboolean (elt)) {
+							nshots = 1;
+						}
 					}
 				}
 
 				if ((elt = ucl_object_lookup (value, "any_shot")) != NULL) {
-					if (ucl_object_toboolean (elt)) {
-						nshots = -1;
+					if (ucl_object_type (elt) != UCL_BOOLEAN) {
+						msg_err_config (
+								"any_shot attribute is not numeric for symbol: '%s'",
+								cur_item->symbol);
+
+						res = FALSE;
+					}
+					else {
+						if (ucl_object_toboolean (elt)) {
+							nshots = -1;
+						}
 					}
 				}
 
 				if ((elt = ucl_object_lookup (value, "nshots")) != NULL) {
-					nshots = ucl_object_toint (elt);
+					if (ucl_object_type (elt) != UCL_FLOAT && ucl_object_type (elt) != UCL_INT) {
+						msg_err_config (
+								"nshots attribute is not numeric for symbol: '%s'",
+								cur_item->symbol);
+
+						res = FALSE;
+					}
+					else {
+						nshots = ucl_object_toint (elt);
+					}
 				}
 
 				elt = ucl_object_lookup (value, "one_param");
 
 				if (elt) {
-					if (ucl_object_toboolean (elt)) {
-						flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
+					if (ucl_object_type (elt) != UCL_BOOLEAN) {
+						msg_err_config (
+								"one_param attribute is not numeric for symbol: '%s'",
+								cur_item->symbol);
+
+						res = FALSE;
+					}
+					else {
+						if (ucl_object_toboolean (elt)) {
+							flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
+						}
 					}
 				}
 
 				elt = ucl_object_lookup (value, "priority");
 
 				if (elt) {
-					priority = ucl_object_toint (elt);
+					if (ucl_object_type (elt) != UCL_FLOAT && ucl_object_type (elt) != UCL_INT) {
+						msg_err_config (
+								"priority attribute is not numeric for symbol: '%s'",
+								cur_item->symbol);
+
+						res = FALSE;
+					}
+					else {
+						priority = ucl_object_toint (elt);
+					}
+				}
+				else {
+					priority = ucl_object_get_priority (value) + 1;
 				}
 
 				rspamd_config_add_symbol (cfg, cur_item->symbol,
