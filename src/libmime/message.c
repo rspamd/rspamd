@@ -758,12 +758,11 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 							found_txt = TRUE;
 						}
 						else {
-							msg_info_task ("found mime part with incorrect content-type: %T/%T, "
+							msg_debug_task ("found mime part with incorrect content-type: %T/%T, "
 										   "filename: %T",
 									&mime_part->ct->type,
 									&mime_part->ct->subtype,
 									&mime_part->cd->filename);
-							mime_part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
 						}
 					}
 					else {
