@@ -2425,7 +2425,7 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 
 	if (flags & RSPAMD_REGEXP_ESCAPE_UTF) {
 		if (!g_utf8_validate (pattern, slen, NULL)) {
-			tmp_utf = g_utf8_make_valid (pattern, slen);
+			tmp_utf = rspamd_str_make_utf_valid (pattern, slen, NULL);
 		}
 	}
 
@@ -2516,4 +2516,62 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 	}
 
 	return res;
+}
+
+
+gchar *
+rspamd_str_make_utf_valid (const gchar *src, gsize slen, gsize *dstlen)
+{
+	GString *dst;
+	const gchar *last;
+	gchar *dchar;
+	gsize i, valid, prev;
+	UChar32 uc;
+
+	if (src == NULL) {
+		return NULL;
+	}
+
+	if (slen == 0) {
+		slen = strlen (src);
+	}
+
+	dst = g_string_sized_new (slen);
+	i = 0;
+	last = src;
+	valid = 0;
+	prev = 0;
+
+	while (i < slen) {
+		U8_NEXT (src, i, slen, uc);
+
+		if (uc <= 0) {
+			if (valid > 0) {
+				g_string_append_len (dst, last, valid);
+			}
+			/* 0xFFFD in UTF8 */
+			g_string_append_len (dst, "\357\277\275", 3);
+			valid = 0;
+			last = &src[i];
+		}
+		else {
+			valid += i - prev;
+		}
+
+		prev = i;
+	}
+
+	if (valid > 0) {
+		g_string_append_len (dst, last, valid);
+	}
+
+	dchar = dst->str;
+
+	if (dstlen) {
+		*dstlen = dst->len;
+	}
+
+	g_string_free (dst, FALSE);
+
+	return dchar;
 }

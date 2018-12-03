@@ -419,4 +419,14 @@ gchar *
 rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 		gsize *dst_len, enum rspamd_regexp_escape_flags flags);
 
+/**
+ * Returns copy of src (zero terminated) where all unicode is made valid or replaced
+ * to FFFD characters. Caller must free string after usage
+ * @param src
+ * @param slen
+ * @param dstelen
+ * @return
+ */
+gchar * rspamd_str_make_utf_valid (const gchar *src, gsize slen, gsize *dstlen);
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */
