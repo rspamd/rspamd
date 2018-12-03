@@ -185,14 +185,15 @@ local function gen_check_emails(rule)
       end
 
       local replyto = get_raw_header('Reply-To')
-      if not replyto then return false end
-      local rt = util.parse_mail_address(replyto, task:get_mempool())
+      if replyto then
+        local rt = util.parse_mail_address(replyto, task:get_mempool())
 
-      if rt and rt[1] then
-        rspamd_lua_utils.remove_email_aliases(rt[1])
-        if not checked[rt[1].addr] then
-          check_email_rule(task, rule, rt[1])
-          checked[rt[1].addr] = true
+        if rt and rt[1] then
+          rspamd_lua_utils.remove_email_aliases(rt[1])
+          if not checked[rt[1].addr] then
+            check_email_rule(task, rule, rt[1])
+            checked[rt[1].addr] = true
+          end
         end
       end
     end
