@@ -1357,6 +1357,14 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 		return TRUE;
 	}
 
+	if (rspamd_session_blocked (task->s)) {
+		/*
+		 * We cannot add new events as session is either destroyed or
+		 * being cleaned up.
+		 */
+		return TRUE;
+	}
+
 	g_assert (!item->is_virtual);
 	g_assert (item->specific.normal.func != NULL);
 	if (CHECK_START_BIT (checkpoint, dyn_item)) {
