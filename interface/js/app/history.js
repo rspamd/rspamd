@@ -396,7 +396,7 @@ define(["jquery", "footable", "humanize"],
                 formatter: Humanize.compactInteger
             }, {
                 name: "scan_time",
-                title: "Scan time",
+                title: '<span title="real / virtual">Scan time</span>',
                 breakpoints: "xs sm md",
                 style: {
                     "font-size": "11px",
@@ -484,7 +484,7 @@ define(["jquery", "footable", "humanize"],
                 formatter: Humanize.compactInteger
             }, {
                 name: "scan_time",
-                title: "Scan time",
+                title: '<span title="real / virtual">Scan time</span>',
                 breakpoints: "xs sm",
                 style: {
                     "font-size": "11px",
