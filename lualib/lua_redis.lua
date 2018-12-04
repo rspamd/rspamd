@@ -143,6 +143,9 @@ local function redis_query_sentinel(ev_base, params, initialised)
       end
     end
 
+    table.sort(read_servers_tbl)
+    table.sort(write_servers_tbl)
+
     local read_servers_str = table.concat(read_servers_tbl, ',')
     local write_servers_str = table.concat(write_servers_tbl, ',')
 
