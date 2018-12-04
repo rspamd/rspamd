@@ -181,6 +181,31 @@ typedef void (*rspamd_upstream_traverse_func) (struct upstream *up, guint idx,
 void rspamd_upstreams_foreach (struct upstream_list *ups,
 		rspamd_upstream_traverse_func cb, void *ud);
 
+enum rspamd_upstreams_watch_event {
+	RSPAMD_UPSTREAM_WATCH_SUCCESS = 1u << 0,
+	RSPAMD_UPSTREAM_WATCH_FAILURE = 1u << 1,
+	RSPAMD_UPSTREAM_WATCH_OFFLINE = 1u << 2,
+	RSPAMD_UPSTREAM_WATCH_ONLINE = 1u << 3,
+	RSPAMD_UPSTREAM_WATCH_ALL = (1u << 0) | (1u << 1) | (1u << 2) | (1u << 3),
+};
+
+typedef void (*rspamd_upstream_watch_func) (struct upstream *up,
+											enum rspamd_upstreams_watch_event event,
+											guint cur_errors,
+											void *ud);
+
+/**
+ * Adds new watcher to the upstreams list
+ * @param ups
+ * @param events
+ * @param func
+ * @param ud
+ */
+void rspamd_upstreams_add_watch_callback (struct upstream_list *ups,
+										  enum rspamd_upstreams_watch_event events,
+										  rspamd_upstream_watch_func func,
+										  gpointer ud);
+
 /**
  * Returns the current IP address of the upstream
  * @param up
