@@ -144,10 +144,12 @@ local function redis_query_sentinel(ev_base, params, initialised)
     end
 
     local read_servers_str = table.concat(read_servers_tbl, ',')
-    local write_servers_str = table.concat(read_servers_tbl, ',')
+    local write_servers_str = table.concat(write_servers_tbl, ',')
 
     lutil.debugm(N, rspamd_config,
-        'new servers list: %s read; %s write', read_servers_str, write_servers_str)
+        'new servers list: %s read; %s write',
+        read_servers_str,
+        write_servers_str)
 
     if read_servers_str ~= params.read_servers_str then
       local upstream_list = require "rspamd_upstream_list"
