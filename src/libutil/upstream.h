@@ -204,6 +204,7 @@ typedef void (*rspamd_upstream_watch_func) (struct upstream *up,
 void rspamd_upstreams_add_watch_callback (struct upstream_list *ups,
 										  enum rspamd_upstreams_watch_event events,
 										  rspamd_upstream_watch_func func,
+										  GFreeFunc free_func,
 										  gpointer ud);
 
 /**

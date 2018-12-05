@@ -36,6 +36,7 @@ struct upstream_addr_elt {
 
 struct upstream_list_watcher {
 	rspamd_upstream_watch_func func;
+	GFreeFunc dtor;
 	gpointer ud;
 	enum rspamd_upstreams_watch_event events_mask;
 	struct upstream_list_watcher *next, *prev;
@@ -879,6 +880,9 @@ rspamd_upstreams_destroy (struct upstream_list *ups)
 		}
 
 		DL_FOREACH_SAFE (ups->watchers, w, tmp) {
+			if (w->dtor) {
+				w->dtor (w->ud);
+			}
 			g_free (w);
 		}
 
@@ -1178,6 +1182,7 @@ rspamd_upstreams_set_limits (struct upstream_list *ups,
 void rspamd_upstreams_add_watch_callback (struct upstream_list *ups,
 										  enum rspamd_upstreams_watch_event events,
 										  rspamd_upstream_watch_func func,
+										  GFreeFunc dtor,
 										  gpointer ud)
 {
 	struct upstream_list_watcher *nw;
@@ -1188,6 +1193,7 @@ void rspamd_upstreams_add_watch_callback (struct upstream_list *ups,
 	nw->func = func;
 	nw->events_mask = events;
 	nw->ud = ud;
+	nw->dtor = dtor;
 
 	DL_APPEND (ups->watchers, nw);
 }
