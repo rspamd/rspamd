@@ -21,11 +21,12 @@
 #include "unix-std.h"
 #include "libmime/smtp_parsers.h"
 #include "libserver/mempool_vars_internal.h"
+#include "libserver/dkim.h"
 #include "libserver/task.h"
 #include "libstat/stat_api.h"
+#include "libutil/map_helpers.h"
+
 #include <math.h>
-#include <src/libserver/task.h>
-#include <src/libserver/dkim.h>
 
 /***
  * @module rspamd_task
@@ -958,6 +959,17 @@ LUA_FUNCTION_DEF (task, get_newlines_type);
  */
 LUA_FUNCTION_DEF (task, get_stat_tokens);
 
+/***
+ * @method task:lookup_words(map, function({o, n, s, f}) ... end)
+ * Matches words in a task (including meta words) against some map (set, regexp and so on)
+ * and call the specified function with a table containing 4 values:
+ *   - [1] - stemmed word
+ *   - [2] - normalised word
+ *   - [3] - raw word
+ *   - [4] - flags (table of strings)
+ */
+LUA_FUNCTION_DEF (task, lookup_words);
+
 static const struct luaL_reg tasklib_f[] = {
 	LUA_INTERFACE_DEF (task, load_from_file),
 	LUA_INTERFACE_DEF (task, load_from_string),
@@ -1060,6 +1072,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_newlines_type),
 	LUA_INTERFACE_DEF (task, get_stat_tokens),
 	LUA_INTERFACE_DEF (task, get_meta_words),
+	LUA_INTERFACE_DEF (task, lookup_words),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -5170,6 +5183,111 @@ lua_task_get_meta_words (lua_State *L)
 
 	return 1;
 }
+
+static guint
+lua_lookup_words_array (lua_State *L,
+						gint cbpos,
+						struct rspamd_task *task,
+						struct rspamd_lua_map *map,
+						GArray *words)
+{
+	rspamd_stat_token_t *tok;
+	guint i, nmatched = 0;
+	gint err_idx;
+	gboolean matched;
+	const gchar *key;
+	gsize keylen;
+
+	for (i = 0; i < words->len; i ++) {
+		tok = &g_array_index (words, rspamd_stat_token_t, i);
+
+		matched = FALSE;
+
+		if (tok->normalized.len == 0) {
+			continue;
+		}
+
+		key = tok->normalized.begin;
+		keylen = tok->normalized.len;
+
+		switch (map->type) {
+		case RSPAMD_LUA_MAP_SET:
+		case RSPAMD_LUA_MAP_HASH:
+			/* We know that tok->normalized is zero terminated in fact */
+			if (rspamd_match_hash_map (map->data.hash, key)) {
+				matched = TRUE;
+			}
+			break;
+		case RSPAMD_LUA_MAP_REGEXP:
+		case RSPAMD_LUA_MAP_REGEXP_MULTIPLE:
+			if (rspamd_match_regexp_map_single (map->data.re_map, key,
+					keylen)) {
+				matched = TRUE;
+			}
+			break;
+		default:
+			g_assert_not_reached ();
+			break;
+		}
+
+		if (matched) {
+			nmatched ++;
+
+			lua_pushcfunction (L, &rspamd_lua_traceback);
+			err_idx = lua_gettop (L);
+			lua_pushvalue (L, cbpos); /* Function */
+			rspamd_lua_push_full_word (L, tok);
+
+			if (lua_pcall (L, 1, 0, err_idx) != 0) {
+				GString *tb = lua_touserdata (L, -1);
+				msg_err_task ("cannot call callback function for lookup words: %s",
+						tb->str);
+				g_string_free (tb, TRUE);
+			}
+
+			lua_settop (L, err_idx - 1);
+		}
+	}
+
+	return nmatched;
+}
+
+static gint
+lua_task_lookup_words (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_lua_map *map = lua_check_map (L, 2);
+	struct rspamd_mime_text_part *tp;
+
+	guint i, matches = 0;
+
+	if (task == NULL || map == NULL || lua_type (L, 3) != LUA_TFUNCTION) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (map->type != RSPAMD_LUA_MAP_SET &&
+		map->type != RSPAMD_LUA_MAP_REGEXP &&
+		map->type != RSPAMD_LUA_MAP_HASH &&
+		map->type != RSPAMD_LUA_MAP_REGEXP_MULTIPLE) {
+		return luaL_error (L, "invalid map type");
+	}
+
+	PTR_ARRAY_FOREACH (task->text_parts, i, tp) {
+		if (tp->utf_words) {
+			matches += lua_lookup_words_array (L, 3, task, map, tp->utf_words);
+		}
+	}
+
+	if (task->meta_words) {
+		matches += lua_lookup_words_array (L, 3, task, map, task->meta_words);
+	}
+
+	lua_pushinteger (L, matches);
+
+	return 1;
+}
+
 
 /* Image functions */
 static gint

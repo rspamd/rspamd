@@ -433,6 +433,13 @@ gboolean rspamd_lua_require_function (lua_State *L, const gchar *modname,
 gboolean rspamd_lua_try_load_redis (lua_State *L, const ucl_object_t *obj,
 		struct rspamd_config *cfg, gint *ref_id);
 
+struct rspamd_stat_token_s;
+/**
+ * Pushes a single word into Lua
+ * @param L
+ * @param word
+ */
+void rspamd_lua_push_full_word (lua_State *L, struct rspamd_stat_token_s *word);
 
 enum rspamd_lua_words_type {
 	RSPAMD_LUA_WORDS_STEM = 0,
