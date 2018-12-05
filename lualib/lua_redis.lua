@@ -137,9 +137,11 @@ local function redis_query_sentinel(ev_base, params, initialised)
       )
 
       for _,slave in ipairs(master.slaves) do
-        read_servers_tbl[#read_servers_tbl + 1] = string.format(
-            '%s:%s', slave.ip, slave.port
-        )
+        if slave['master-link-status'] == 'ok' then
+          read_servers_tbl[#read_servers_tbl + 1] = string.format(
+              '%s:%s', slave.ip, slave.port
+          )
+        end
       end
     end
 
