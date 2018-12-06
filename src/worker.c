@@ -35,14 +35,13 @@
 #include "utlist.h"
 #include "libutil/http_private.h"
 #include "libmime/lang_detection.h"
+#include <math.h>
 #include "unix-std.h"
 
 #include "lua/lua_common.h"
 
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
-/* Timeout for task processing */
-#define DEFAULT_TASK_TIMEOUT 8.0
 
 gpointer init_worker (struct rspamd_config *cfg);
 void start_worker (struct rspamd_worker *worker);
@@ -538,7 +537,7 @@ init_worker (struct rspamd_config *cfg)
 	ctx->is_mime = TRUE;
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
 	ctx->cfg = cfg;
-	ctx->task_timeout = DEFAULT_TASK_TIMEOUT;
+	ctx->task_timeout = NAN;
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -577,9 +576,7 @@ init_worker (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx,
 						task_timeout),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
-			"Maximum task processing time, default: "
-					G_STRINGIFY(DEFAULT_TASK_TIMEOUT)
-					" seconds");
+			"Maximum task processing time, default: 8.0 seconds");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -657,6 +654,15 @@ start_worker (struct rspamd_worker *worker)
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
 	rspamd_symcache_start_refresh (worker->srv->cfg->cache, ctx->ev_base,
 			worker);
+
+	if (isnan (ctx->task_timeout)) {
+		if (isnan (ctx->cfg->task_timeout)) {
+			ctx->task_timeout = 0;
+		}
+		else {
+			ctx->task_timeout = ctx->cfg->task_timeout;
+		}
+	}
 
 	ctx->resolver = dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,

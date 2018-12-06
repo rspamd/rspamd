@@ -23,6 +23,7 @@
 #include "libstat/stat_api.h"
 #include "rspamd.h"
 #include "libserver/worker_util.h"
+#include "worker_private.h"
 #include "lua/lua_common.h"
 #include "cryptobox.h"
 #include "ottery.h"
@@ -182,6 +183,7 @@ struct rspamd_controller_worker_ctx {
 	struct rspamd_rrd_file *rrd;
 	struct event save_stats_event;
 	struct rspamd_lang_detector *lang_det;
+	gdouble task_timeout;
 };
 
 struct rspamd_controller_plugin_cbdata {
@@ -2129,6 +2131,16 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 		goto end;
 	}
 
+	if (ctx->task_timeout > 0.0) {
+		struct timeval task_tv;
+
+		event_set (&task->timeout_ev, -1, EV_TIMEOUT, rspamd_task_timeout,
+				task);
+		event_base_set (ctx->ev_base, &task->timeout_ev);
+		double_to_tv (ctx->task_timeout, &task_tv);
+		event_add (&task->timeout_ev, &task_tv);
+	}
+
 end:
 	session->task = task;
 	rspamd_session_pending (task->s);
@@ -3322,6 +3334,7 @@ init_controller_worker (struct rspamd_config *cfg)
 
 	ctx->magic = rspamd_controller_ctx_magic;
 	ctx->timeout = DEFAULT_WORKER_IO_TIMEOUT;
+	ctx->task_timeout = NAN;
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -3425,6 +3438,16 @@ init_controller_worker (struct rspamd_config *cfg)
 					saved_stats_path),
 			0,
 			"Directory where controller saves server's statistics between restarts");
+
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"task_timeout",
+			rspamd_rcl_parse_struct_time,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
+					task_timeout),
+			RSPAMD_CL_FLAG_TIME_FLOAT,
+			"Maximum task processing time, default: 8.0 seconds");
 
 	return ctx;
 }
@@ -3703,6 +3726,15 @@ start_controller_worker (struct rspamd_worker *worker)
 	ctx->plugins = g_hash_table_new_full (rspamd_strcase_hash,
 				rspamd_strcase_equal, g_free,
 				rspamd_plugin_cbdata_dtor);
+
+	if (isnan (ctx->task_timeout)) {
+		if (isnan (ctx->cfg->task_timeout)) {
+			ctx->task_timeout = 0;
+		}
+		else {
+			ctx->task_timeout = ctx->cfg->task_timeout;
+		}
+	}
 
 	if (ctx->secure_ip != NULL) {
 		rspamd_config_radix_from_ucl (ctx->cfg, ctx->secure_ip,

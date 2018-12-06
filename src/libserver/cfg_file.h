@@ -318,7 +318,6 @@ struct rspamd_config {
 	gboolean disable_lua_squeeze;                   /**< Disable lua rules squeezing						*/
 	gboolean own_lua_state;                         /**< True if we have created lua_state internally		*/
 
-	gsize max_diff;                                 /**< maximum diff size for text parts					*/
 	gsize max_cores_size;                           /**< maximum size occupied by rspamd core files			*/
 	gsize max_cores_count;                          /**< maximum number of core files						*/
 	gchar *cores_dir;                               /**< directory for core files							*/
@@ -326,6 +325,7 @@ struct rspamd_config {
 	gsize max_pic_size;                             /**< maximum size for a picture to process				*/
 	gsize images_cache_size;                        /**< size of LRU cache for DCT data from images			*/
 	gint default_max_shots;                         /**< default maximum count of symbols hits permitted (-1 for unlimited) */
+	gdouble task_timeout;                           /**< maximum message processing time					*/
 
 	enum rspamd_log_type log_type;                  /**< log type											*/
 	gint log_facility;                              /**< log facility in case of syslog						*/
@@ -336,7 +336,6 @@ struct rspamd_config {
 	guint32 log_buf_size;                           /**< length of log buffer								*/
 	const ucl_object_t *debug_ip_map;               /**< turn on debugging for specified ip addresses       */
 	gboolean log_urls;                              /**< whether we should log URLs                         */
-	GList *debug_symbols;                           /**< symbols to debug									*/
 	GHashTable *debug_modules;                      /**< logging modules to debug							*/
 	struct rspamd_cryptobox_pubkey *log_encryption_key; /**< encryption key for logs						*/
 	guint log_flags;                                /**< logging flags										*/

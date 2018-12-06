@@ -1541,12 +1541,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				0,
 				"Enable debugging log for the specified IP addresses");
 		rspamd_rcl_add_default_handler (sub,
-				"debug_symbols",
-				rspamd_rcl_parse_struct_string_list,
-				G_STRUCT_OFFSET (struct rspamd_config, debug_symbols),
-				0,
-				"Enable debug for the specified symbols");
-		rspamd_rcl_add_default_handler (sub,
 				"debug_modules",
 				rspamd_rcl_parse_struct_string_list,
 				G_STRUCT_OFFSET (struct rspamd_config, debug_modules),
@@ -1738,12 +1732,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				G_STRUCT_OFFSET (struct rspamd_config, filters),
 				0,
 				"List of internal filters enabled");
-		rspamd_rcl_add_default_handler (sub,
-				"max_diff",
-				rspamd_rcl_parse_struct_integer,
-				G_STRUCT_OFFSET (struct rspamd_config, max_diff),
-				RSPAMD_CL_FLAG_INT_SIZE,
-				"Legacy option, do not use");
 		rspamd_rcl_add_default_handler (sub,
 				"map_watch_interval",
 				rspamd_rcl_parse_struct_time,
@@ -1990,6 +1978,18 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				G_STRUCT_OFFSET (struct rspamd_config, max_sessions_cache),
 				0,
 				"Maximum number of sessions in cache before warning (default: 100)");
+		rspamd_rcl_add_default_handler (sub,
+				"task_timeout",
+				rspamd_rcl_parse_struct_time,
+				G_STRUCT_OFFSET (struct rspamd_config, task_timeout),
+				RSPAMD_CL_FLAG_TIME_FLOAT,
+				"Maximum time for checking a message");
+		rspamd_rcl_add_default_handler (sub,
+				"check_timeout",
+				rspamd_rcl_parse_struct_time,
+				G_STRUCT_OFFSET (struct rspamd_config, task_timeout),
+				RSPAMD_CL_FLAG_TIME_FLOAT,
+				"Maximum time for checking a message (alias for task_timeout)");
 
 		/* Neighbours configuration */
 		rspamd_rcl_add_section_doc (&sub->subsections, "neighbours", "name",

@@ -47,6 +47,8 @@
 #define DEFAULT_MAX_SHOTS 100
 #define DEFAULT_MAX_SESSIONS 100
 #define DEFAULT_MAX_WORKERS 4
+/* Timeout for task processing */
+#define DEFAULT_TASK_TIMEOUT 8.0
 
 struct rspamd_ucl_map_cbdata {
 	struct rspamd_config *cfg;
@@ -131,8 +133,9 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	/* 16 sockets per DNS server */
 	cfg->dns_io_per_server = 16;
 
-	/* 20 Kb */
-	cfg->max_diff = 20480;
+	/* Disable timeout */
+	cfg->task_timeout = DEFAULT_TASK_TIMEOUT;
+
 
 	rspamd_config_init_metric (cfg);
 	cfg->composite_symbols =
