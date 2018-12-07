@@ -219,8 +219,10 @@ local function rbl_cb (task)
 
   local havegot = {
     emails = {},
-    received = {}
+    received = {},
+    dkim = {},
   }
+
   local notgot = {}
 
   local alive_rbls = fun.filter(function(_, rbl)
