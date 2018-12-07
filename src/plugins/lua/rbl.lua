@@ -508,26 +508,26 @@ end
 -- Plugin defaults should not be changed - override these in config
 -- New defaults should not alter behaviour
 local default_defaults = {
-  ['default_enabled'] = {[1] = true, [2] = 'enabled'},
-  ['default_ipv4'] = {[1] = true, [2] = 'ipv4'},
-  ['default_ipv6'] = {[1] = false, [2] = 'ipv6'},
-  ['default_received'] = {[1] = true, [2] = 'received'},
-  ['default_from'] = {[1] = false, [2] = 'from'},
-  ['default_unknown'] = {[1] = false, [2] = 'unknown'},
-  ['default_rdns'] = {[1] = false, [2] = 'rdns'},
-  ['default_helo'] = {[1] = false, [2] = 'helo'},
-  ['default_dkim'] = {[1] = false, [2] = 'dkim'},
-  ['default_dkim_domainonly'] = {[1] = true, [2] = 'dkim_domainonly'},
-  ['default_emails'] = {[1] = false, [2] = 'emails'},
-  ['default_exclude_private_ips'] = {[1] = true, [2] = 'exclude_private_ips'},
-  ['default_exclude_users'] = {[1] = false, [2] = 'exclude_users'},
-  ['default_exclude_local'] = {[1] = true, [2] = 'exclude_local'},
-  ['default_is_whitelist'] = {[1] = false, [2] = 'is_whitelist'},
-  ['default_ignore_whitelist'] = {[1] = false, [2] = 'ignore_whitelists'},
+  ['default_enabled'] = true,
+  ['default_ipv4'] = true,
+  ['default_ipv6'] = true,
+  ['default_received'] = false,
+  ['default_from'] = false,
+  ['default_unknown'] = false,
+  ['default_rdns'] = false,
+  ['default_helo'] = false,
+  ['default_dkim'] = false,
+  ['default_dkim_domainonly'] = true,
+  ['default_emails'] = false,
+  ['default_exclude_private_ips'] = true,
+  ['default_exclude_users'] = false,
+  ['default_exclude_local'] = true,
+  ['default_is_whitelist'] = false,
+  ['default_ignore_whitelist'] = false,
 }
 for default, default_v in pairs(default_defaults) do
   if opts[default] == nil then
-    opts[default] = default_v[1]
+    opts[default] = default_v
   end
 end
 
@@ -556,12 +556,15 @@ for key,rbl in pairs(opts['rbls']) do
       return
     end
 
-    for default, default_v in pairs(default_defaults) do
-      if(rbl[default_v[2]] == nil) then
-        rbl[default_v[2]] = opts[default]
+    for default,_ in pairs(default_defaults) do
+      local rbl_opt = default:gsub('^default_', '')
+      if rbl[rbl_opt] == nil then
+        rbl[rbl_opt] = opts[default]
       end
     end
+
     if not rbl['enabled'] then return end
+
     if type(rbl['returncodes']) == 'table' then
       for s,_ in pairs(rbl['returncodes']) do
         if type(rspamd_config.get_api_version) ~= 'nil' then
