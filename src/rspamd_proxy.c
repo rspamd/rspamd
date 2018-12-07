@@ -1748,16 +1748,14 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 		double_to_tv (session->ctx->default_upstream->timeout, &task_tv);
 		event_add (&task->timeout_ev, &task_tv);
 	}
-
-	if (session->ctx->has_self_scan) {
-		if (!isnan (session->ctx->cfg->task_timeout) &&
-				session->ctx->cfg->task_timeout > 0) {
+	else if (session->ctx->has_self_scan) {
+		if (session->ctx->cfg->task_timeout > 0) {
 			struct timeval task_tv;
 
 			event_set (&task->timeout_ev, -1, EV_TIMEOUT, rspamd_task_timeout,
 					task);
 			event_base_set (session->ctx->ev_base, &task->timeout_ev);
-			double_to_tv (session->ctx->default_upstream->timeout, &task_tv);
+			double_to_tv (session->ctx->cfg->task_timeout, &task_tv);
 			event_add (&task->timeout_ev, &task_tv);
 		}
 	}
