@@ -132,7 +132,7 @@ local function envelope_key(task)
 end
 
 -- Returns pair of booleans: found,greylisted
-local function check_time(task, tm, type)
+local function check_time(task, tm, type, now)
   local t = tonumber(tm)
 
   if not t then
@@ -140,7 +140,6 @@ local function check_time(task, tm, type)
     return false,false
   end
 
-  local now = rspamd_util.get_time()
   if now - t < settings['timeout'] then
     return true,true
   else
@@ -196,37 +195,51 @@ local function greylist_check(task)
 
     if data then
       local end_time_body,end_time_meta
+      local now = rspamd_util.get_time()
 
       if data[1] and type(data[1]) ~= 'userdata' then
-        local tm = tonumber(data[1]) or rspamd_util.get_time()
-        ret_body,greylisted_body = check_time(task, data[1], 'body')
+        local tm = tonumber(data[1]) or now
+        ret_body,greylisted_body = check_time(task, data[1], 'body', now)
         if greylisted_body then
-          end_time_body = rspamd_util.time_to_string(tm + settings['timeout'])
-          task:get_mempool():set_variable("grey_greylisted_body", end_time_body)
+          end_time_body = tm + settings['timeout']
+          task:get_mempool():set_variable("grey_greylisted_body",
+              rspamd_util.time_to_string(end_time_body))
         end
       end
 
       if data[2] and type(data[2]) ~= 'userdata' then
         if not ret_body or greylisted_body then
-          local tm = tonumber(data[2]) or rspamd_util.get_time()
-          ret_meta,greylisted_meta = check_time(task, data[2], 'meta')
+          local tm = tonumber(data[2]) or now
+          ret_meta,greylisted_meta = check_time(task, data[2], 'meta', now)
 
           if greylisted_meta then
-            end_time_meta = rspamd_util.time_to_string(tm + settings['timeout'])
-            task:get_mempool():set_variable("grey_greylisted_meta", end_time_meta)
+            end_time_meta = tm + settings['timeout']
+            task:get_mempool():set_variable("grey_greylisted_meta",
+                rspamd_util.time_to_string(end_time_meta))
           end
         end
       end
 
       if not ret_body and not ret_meta then
-        local end_time = rspamd_util.time_to_string(rspamd_util.get_time()
-          + settings['timeout'])
-        task:get_mempool():set_variable("grey_greylisted", end_time)
+        local end_time = rspamd_util.get_time() + settings['timeout']
+        task:get_mempool():set_variable("grey_greylisted",
+          rspamd_util.time_to_string(end_time))
       elseif greylisted_body and greylisted_meta then
-        local end_time = math.min(end_time_body, end_time_meta)
-        rspamd_logger.infox(task, 'greylisted until "%s"',
-          end_time)
-        greylist_message(task, end_time, 'too early')
+        local end_time_str = rspamd_util.time_to_string(
+            math.min(end_time_body, end_time_meta))
+        rspamd_logger.infox(task, 'greylisted until (meta and body) "%s"',
+            end_time_str)
+        greylist_message(task, end_time_str, 'too early')
+      elseif greylisted_body then
+        local end_time_str = rspamd_util.time_to_string(end_time_body)
+        rspamd_logger.infox(task, 'greylisted until (body only) "%s"',
+            end_time_str)
+        greylist_message(task, end_time_str, 'too early')
+      else
+        local end_time_str = rspamd_util.time_to_string(end_time_meta)
+        rspamd_logger.infox(task, 'greylisted until (meta only) "%s"',
+            end_time_str)
+        greylist_message(task, end_time_str, 'too early')
       end
     elseif err then
       rspamd_logger.errx(task, 'got error while getting greylisting keys: %1', err)
