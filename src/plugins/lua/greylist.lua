@@ -43,7 +43,7 @@ end
 
 local redis_params
 local whitelisted_ip
-local whitelist_domains_map = nil
+local whitelist_domains_map
 local toint =math.ifloor or math.floor
 local settings = {
   expire = 86400, -- 1 day by default
@@ -56,6 +56,8 @@ local settings = {
   ipv4_mask = 19, -- Mask bits for ipv4
   ipv6_mask = 64, -- Mask bits for ipv6
   report_time = false, -- Tell when greylisting is epired (appended to `message`)
+  check_local = false,
+  check_authed = false,
 }
 
 local rspamd_logger = require "rspamd_logger"
@@ -153,7 +155,10 @@ end
 local function greylist_message(task, end_time, why)
   task:insert_result(settings['symbol'], 0.0, 'greylisted', end_time, why)
 
-  if rspamd_lua_utils.is_rspamc_or_controller(task) then return end
+  if not settings.check_local and rspamd_lua_utils.is_rspamc_or_controller(task) then
+    return
+  end
+
   if settings.message_func then
     task:set_pre_result(settings['action'],
       settings.message_func(task, end_time), N)
@@ -171,7 +176,9 @@ end
 local function greylist_check(task)
   local ip = task:get_ip()
 
-  if task:get_user() or (ip and ip:is_local()) then
+  if ((not settings.check_authed and task:get_user()) or
+      (not settings.check_local and ip and ip:is_local())) then
+    rspamd_logger.infox(task, "skip greylisting for local networks and/or authorized users");
     return
   end
 
@@ -220,25 +227,32 @@ local function greylist_check(task)
         end
       end
 
+      local how
+      local end_time_str
+
       if not ret_body and not ret_meta then
+        -- should never ever happen
         local end_time = rspamd_util.get_time() + settings['timeout']
         task:get_mempool():set_variable("grey_greylisted",
-          rspamd_util.time_to_string(end_time))
+            rspamd_util.time_to_string(end_time))
+        rspamd_logger.infox(task,
+            'greylisting record contains garbadge: %s, set end time to %s',
+            data, rspamd_util.time_to_string(end_time))
       elseif greylisted_body and greylisted_meta then
-        local end_time_str = rspamd_util.time_to_string(
+        end_time_str = rspamd_util.time_to_string(
             math.min(end_time_body, end_time_meta))
-        rspamd_logger.infox(task, 'greylisted until (meta and body) "%s"',
-            end_time_str)
-        greylist_message(task, end_time_str, 'too early')
+        how = 'meta and body'
       elseif greylisted_body then
-        local end_time_str = rspamd_util.time_to_string(end_time_body)
-        rspamd_logger.infox(task, 'greylisted until (body only) "%s"',
-            end_time_str)
-        greylist_message(task, end_time_str, 'too early')
-      else
-        local end_time_str = rspamd_util.time_to_string(end_time_meta)
-        rspamd_logger.infox(task, 'greylisted until (meta only) "%s"',
-            end_time_str)
+        end_time_str = rspamd_util.time_to_string(end_time_body)
+        how = 'body only'
+      elseif greylisted_meta then
+        end_time_str = rspamd_util.time_to_string(end_time_meta)
+        how = 'meta only'
+      end
+
+      if how and end_time_str then
+        rspamd_logger.infox(task, 'greylisted until "%s" (%s)',
+            end_time_str, how)
         greylist_message(task, end_time_str, 'too early')
       end
     elseif err then
@@ -280,7 +294,8 @@ local function greylist_set(task)
     end
   end
 
-  if task:get_user() or (ip and ip:is_local()) then
+  if ((not settings.check_authed and task:get_user()) or
+      (not settings.check_local and ip and ip:is_local())) then
     if action == 'greylist' then
       -- We are going to accept message
       rspamd_logger.infox(task, 'Downgrading metric action from "greylist" to "no action"')
@@ -346,7 +361,7 @@ local function greylist_set(task)
       is_whitelisted,
       rspamd_util.time_to_string(rspamd_util.get_time() + settings['expire']))
 
-    if is_rspamc then return end
+    if not settings.check_local and is_rspamc then return end
 
     ret,conn,upstream = rspamd_redis_make_request(task,
       redis_params, -- connect params
@@ -365,7 +380,7 @@ local function greylist_set(task)
       rspamd_logger.errx(task, 'got error while connecting to redis')
     end
   elseif do_greylisting or do_greylisting_required then
-    if is_rspamc then return end
+    if not settings.check_local and is_rspamc then return end
     local t = tostring(toint(rspamd_util.get_time()))
     local end_time = rspamd_util.time_to_string(t + settings['timeout'])
     rspamd_logger.infox(task, 'greylisted until "%s", new record', end_time)
