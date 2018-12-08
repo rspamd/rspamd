@@ -426,6 +426,8 @@ rspamd_parse_kv_list (
 			}
 			break;
 		}
+
+		data->state = map_skip_spaces_before_key;
 	}
 
 	return c;
