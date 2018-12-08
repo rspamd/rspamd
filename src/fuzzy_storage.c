@@ -1116,6 +1116,8 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		else {
 			result.v1.value = 403;
 			result.v1.prob = 0.0;
+			result.v1.flag = 0;
+			rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
 		}
 	}
 	else if (cmd->cmd == FUZZY_STAT) {
