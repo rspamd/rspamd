@@ -317,6 +317,7 @@ struct rspamd_config {
 	gboolean disable_pcre_jit;                      /**< Disable pcre JIT									*/
 	gboolean disable_lua_squeeze;                   /**< Disable lua rules squeezing						*/
 	gboolean own_lua_state;                         /**< True if we have created lua_state internally		*/
+	gboolean soft_reject_on_timeout;                /**< If true emit soft reject on task timeout (if not reject) */
 
 	gsize max_cores_size;                           /**< maximum size occupied by rspamd core files			*/
 	gsize max_cores_count;                          /**< maximum number of core files						*/
@@ -324,8 +325,8 @@ struct rspamd_config {
 	gsize max_message;                              /**< maximum size for messages							*/
 	gsize max_pic_size;                             /**< maximum size for a picture to process				*/
 	gsize images_cache_size;                        /**< size of LRU cache for DCT data from images			*/
-	gint default_max_shots;                         /**< default maximum count of symbols hits permitted (-1 for unlimited) */
 	gdouble task_timeout;                           /**< maximum message processing time					*/
+	gint default_max_shots;                         /**< default maximum count of symbols hits permitted (-1 for unlimited) */
 
 	enum rspamd_log_type log_type;                  /**< log type											*/
 	gint log_facility;                              /**< log facility in case of syslog						*/

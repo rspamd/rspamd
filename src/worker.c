@@ -142,6 +142,26 @@ rspamd_task_timeout (gint fd, short what, gpointer ud)
 
 	if (!(task->processed_stages & RSPAMD_TASK_STAGE_FILTERS)) {
 		msg_info_task ("processing of task timed out, forced processing");
+
+		if (task->cfg->soft_reject_on_timeout) {
+			struct rspamd_metric_result *res = task->result;
+
+			if (rspamd_check_action_metric (task, res) != METRIC_ACTION_REJECT) {
+				rspamd_add_passthrough_result (task,
+						METRIC_ACTION_SOFT_REJECT,
+						0,
+						NAN,
+						"timeout processing message",
+						"task timeout");
+
+				ucl_object_replace_key (task->messages,
+						ucl_object_fromstring_common ("timeout processing message",
+								0, UCL_STRING_RAW),
+						"smtp_message", 0,
+						false);
+			}
+		}
+
 		task->processed_stages |= RSPAMD_TASK_STAGE_FILTERS;
 		rspamd_session_cleanup (task->s);
 		rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);

@@ -1985,6 +1985,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				RSPAMD_CL_FLAG_TIME_FLOAT,
 				"Maximum time for checking a message");
 		rspamd_rcl_add_default_handler (sub,
+				"soft_reject_on_timeout",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, soft_reject_on_timeout),
+				0,
+				"Emit soft reject if task timeout takes place");
+		rspamd_rcl_add_default_handler (sub,
 				"check_timeout",
 				rspamd_rcl_parse_struct_time,
 				G_STRUCT_OFFSET (struct rspamd_config, task_timeout),

@@ -45,3 +45,6 @@ hs_cache_dir = "${DBDIR}/";
 
 # Timeout for messages processing (must be larger than any internal timeout used)
 task_timeout = 8s;
+
+# Emit soft reject when timeout takes place
+soft_reject_on_timeout = false;
