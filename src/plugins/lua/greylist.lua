@@ -236,7 +236,7 @@ local function greylist_check(task)
         task:get_mempool():set_variable("grey_greylisted",
             rspamd_util.time_to_string(end_time))
         rspamd_logger.infox(task,
-            'greylisting record contains garbadge: %s, set end time to %s',
+            'greylisting record contains garbage: %s, set end time to %s',
             data, rspamd_util.time_to_string(end_time))
       elseif greylisted_body and greylisted_meta then
         end_time_str = rspamd_util.time_to_string(
