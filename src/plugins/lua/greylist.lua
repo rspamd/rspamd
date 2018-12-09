@@ -231,13 +231,8 @@ local function greylist_check(task)
       local end_time_str
 
       if not ret_body and not ret_meta then
-        -- should never ever happen
-        local end_time = rspamd_util.get_time() + settings['timeout']
-        task:get_mempool():set_variable("grey_greylisted",
-            rspamd_util.time_to_string(end_time))
-        rspamd_logger.infox(task,
-            'greylisting record contains garbadge: %s, set end time to %s',
-            data, rspamd_util.time_to_string(end_time))
+        -- no record found
+        task:get_mempool():set_variable("grey_greylisted", 'true')
       elseif greylisted_body and greylisted_meta then
         end_time_str = rspamd_util.time_to_string(
             math.min(end_time_body, end_time_meta))
