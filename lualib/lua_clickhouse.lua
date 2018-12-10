@@ -15,6 +15,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+--[[[
+-- @module lua_clickhouse
+-- This module contains Clickhouse access functions
+--]]
+
 local rspamd_logger = require "rspamd_logger"
 local rspamd_http = require "rspamd_http"
 local lua_util = require "lua_util"
