@@ -68,9 +68,9 @@ EOD
         my $id   = $f->{'id'};
 
         if ($f->{'brief'}) {
-            print "> [`$name`](#$id): ". $f->{'brief'} . "\n\n";
+            print "* [`$name`](#$id): ". $f->{'brief'} . "\n";
         } else {
-            print "> [`$name`](#$id)\n\n";
+            print "* [`$name`](#$id)\n";
         }
     }
 
@@ -380,11 +380,15 @@ sub parse_function {
     }
 
     if ( !$f->{'brief'} && $f->{'data'} ) {
-        $f->{'data'} =~ /^(.*?)(?:(?:[.:]\s)|\n).*/;
 
-        if ( $1 ) {
-            $f->{'brief'} = "$1.";
+
+        if ( $f->{'data'} =~ /^(.*?)(?:(?:[.:]\s|$)|\n).*/ ) {
+            $f->{'brief'} = "$1";
             chomp $f->{'brief'};
+
+            if ( $f->{'brief'} !~ /\.$/) {
+                $f->{'brief'} .= ".";
+            }
         }
     }
 
