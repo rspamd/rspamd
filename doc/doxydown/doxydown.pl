@@ -339,15 +339,15 @@ sub parse_function {
         if ( /^\s*\@param\s*(?:\{([^}]+)\})?\s*(\S+)\s*(.+)?\s*$/ ) {
             my $p = {
                 name => $2,
-                type => $1,
-                description => $3
+                type => $1 || "no type",
+                description => $3 || "no description"
             };
 
             push @{ $f->{'params'} }, $p;
         } elsif ( /^\s*\@return\s*(?:\{([^}]+)\})?\s*(.+)?\s*$/ ) {
             my $r = {
                 type => $1,
-                description => $2
+                description => $2 || "no description"
             };
 
             push @{ $f->{'returns'} }, $r;
@@ -377,6 +377,15 @@ sub parse_function {
 
     if ( $f->{'example'} ) {
         chomp $f->{'example'};
+    }
+
+    if ( !$f->{'brief'} && $f->{'data'} ) {
+        $f->{'data'} =~ /^([^.]+)\.?.*/;
+
+        if ( $1 ) {
+            $f->{'brief'} = "$1.";
+            chomp $f->{'brief'};
+        }
     }
 
     if ( $type eq "method" ) {
