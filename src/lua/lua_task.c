@@ -52,13 +52,13 @@ end
 /***
  * @function rspamd_task.load_from_file(filename[, cfg])
  * Loads a message from specific file
- * @return {boolean},{rspamd_task|error} status + new task or error message
+ * @return {boolean,rspamd_task|error} status + new task or error message
  */
 LUA_FUNCTION_DEF (task, load_from_file);
 /***
  * @function rspamd_task.load_from_string(message[, cfg])
  * Loads a message from specific file
- * @return {boolean},{rspamd_task|error} status + new task or error message
+ * @return {boolean,rspamd_task|error} status + new task or error message
  */
 LUA_FUNCTION_DEF (task, load_from_string);
 
