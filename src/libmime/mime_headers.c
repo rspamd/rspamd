@@ -53,22 +53,22 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 		break;
 	case 0x76F31A09F4352521ULL:	/* to */
 		task->rcpt_mime = rspamd_email_address_from_mime (task->task_pool,
-				rh->value, strlen (rh->value), task->rcpt_mime);
+				rh->decoded, strlen (rh->decoded), task->rcpt_mime);
 		rh->type = RSPAMD_HEADER_TO|RSPAMD_HEADER_RCPT|RSPAMD_HEADER_UNIQUE;
 		break;
 	case 0x7EB117C1480B76ULL:	/* cc */
 		task->rcpt_mime = rspamd_email_address_from_mime (task->task_pool,
-				rh->value, strlen (rh->value), task->rcpt_mime);
+				rh->decoded, strlen (rh->decoded), task->rcpt_mime);
 		rh->type = RSPAMD_HEADER_CC|RSPAMD_HEADER_RCPT|RSPAMD_HEADER_UNIQUE;
 		break;
 	case 0xE4923E11C4989C8DULL:	/* bcc */
 		task->rcpt_mime = rspamd_email_address_from_mime (task->task_pool,
-				rh->value, strlen (rh->value), task->rcpt_mime);
+				rh->decoded, strlen (rh->decoded), task->rcpt_mime);
 		rh->type = RSPAMD_HEADER_BCC|RSPAMD_HEADER_RCPT|RSPAMD_HEADER_UNIQUE;
 		break;
 	case 0x41E1985EDC1CBDE4ULL:	/* from */
 		task->from_mime = rspamd_email_address_from_mime (task->task_pool,
-				rh->value, strlen (rh->value), task->from_mime);
+				rh->decoded, strlen (rh->decoded), task->from_mime);
 		rh->type = RSPAMD_HEADER_FROM|RSPAMD_HEADER_SENDER|RSPAMD_HEADER_UNIQUE;
 		break;
 	case 0x43A558FC7C240226ULL:	/* message-id */ {
