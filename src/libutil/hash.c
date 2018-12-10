@@ -35,15 +35,27 @@ struct rspamd_lru_hash_s {
 	GHashTable *tbl;
 };
 
+enum rspamd_lru_element_flags {
+	RSPAMD_LRU_ELEMENT_NORMAL = 0,
+	RSPAMD_LRU_ELEMENT_VOLATILE = (1 << 0),
+};
+
 struct rspamd_lru_element_s {
-	guint16 ttl;
 	guint16 last;
 	guint8 lg_usages;
-	guint eviction_pos;
+	guint8 eviction_pos;
+	guint8 flags;
 	gpointer data;
 	gpointer key;
 	rspamd_lru_hash_t *hash;
 };
+
+struct rspamd_lru_volatile_element_s {
+	struct rspamd_lru_element_s e;
+	time_t creation_time;
+	time_t ttl;
+};
+typedef struct rspamd_lru_volatile_element_s rspamd_lru_vol_element_t;
 
 #define TIME_TO_TS(t) ((guint16)(((t) / 60) & 0xFFFFU))
 
@@ -141,7 +153,7 @@ rspamd_lru_hash_maybe_evict (rspamd_lru_hash_t *hash,
 	guint i;
 	rspamd_lru_element_t *cur;
 
-	if (elt->eviction_pos == -1) {
+	if (elt->eviction_pos == (guint8)-1) {
 		if (hash->eviction_used < eviction_candidates) {
 			/* There are free places in eviction pool */
 			hash->eviction_pool[hash->eviction_used] = elt;
@@ -183,24 +195,30 @@ rspamd_lru_hash_maybe_evict (rspamd_lru_hash_t *hash,
 
 static rspamd_lru_element_t *
 rspamd_lru_create_node (rspamd_lru_hash_t *hash,
-	gpointer key,
-	gpointer value,
-	time_t now,
-	guint ttl)
+						gpointer key,
+						gpointer value,
+						time_t now,
+						guint ttl)
 {
 	rspamd_lru_element_t *node;
+	rspamd_lru_vol_element_t *vnode;
 
-	node = g_malloc (sizeof (rspamd_lru_element_t));
-	node->data = value;
-	node->key = key;
-	node->ttl = TIME_TO_TS (ttl);
-
-	if (node->ttl == 0) {
-		node->ttl = 1;
+	if (ttl == 0) {
+		node = g_malloc (sizeof (rspamd_lru_element_t));
+		node->flags = RSPAMD_LRU_ELEMENT_NORMAL;
+	}
+	else {
+		vnode = g_malloc (sizeof (rspamd_lru_vol_element_t));
+		vnode->creation_time = now;
+		vnode->ttl = ttl;
+		node = &vnode->e;
+		node->flags = RSPAMD_LRU_ELEMENT_VOLATILE;
 	}
 
+	node->data = value;
+	node->key = key;
 	node->hash = hash;
-	node->lg_usages = lfu_base_value;
+	node->lg_usages = (guint8)lfu_base_value;
 	node->last = TIME_TO_TS (now);
 	node->eviction_pos = -1;
 
@@ -210,7 +228,7 @@ rspamd_lru_create_node (rspamd_lru_hash_t *hash,
 static void
 rspamd_lru_hash_remove_node (rspamd_lru_hash_t *hash, rspamd_lru_element_t *elt)
 {
-	if (elt->eviction_pos != -1) {
+	if (elt->eviction_pos != (guint8)-1) {
 		rspamd_lru_hash_remove_evicted (hash, elt);
 	}
 
@@ -280,11 +298,11 @@ rspamd_lru_hash_evict (rspamd_lru_hash_t *hash, time_t now)
 
 rspamd_lru_hash_t *
 rspamd_lru_hash_new_full (
-	gint maxsize,
-	GDestroyNotify key_destroy,
-	GDestroyNotify value_destroy,
-	GHashFunc hf,
-	GEqualFunc cmpf)
+		gint maxsize,
+		GDestroyNotify key_destroy,
+		GDestroyNotify value_destroy,
+		GHashFunc hf,
+		GEqualFunc cmpf)
 {
 	rspamd_lru_hash_t *new;
 
@@ -306,9 +324,9 @@ rspamd_lru_hash_new_full (
 
 rspamd_lru_hash_t *
 rspamd_lru_hash_new (
-	gint maxsize,
-	GDestroyNotify key_destroy,
-	GDestroyNotify value_destroy)
+		gint maxsize,
+		GDestroyNotify key_destroy,
+		GDestroyNotify value_destroy)
 {
 	return rspamd_lru_hash_new_full (maxsize,
 			key_destroy, value_destroy,
@@ -319,19 +337,23 @@ gpointer
 rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash, gconstpointer key, time_t now)
 {
 	rspamd_lru_element_t *res;
+	rspamd_lru_vol_element_t *vnode;
 
 	res = g_hash_table_lookup (hash->tbl, key);
 	if (res != NULL) {
-		now = TIME_TO_TS(now);
 
-		if (res->ttl != 0) {
-			if (now - res->last > res->ttl) {
+		if (res->flags & RSPAMD_LRU_ELEMENT_VOLATILE) {
+			/* Check ttl */
+			vnode = (rspamd_lru_vol_element_t *)res;
+
+			if (now - vnode->creation_time > vnode->ttl) {
 				rspamd_lru_hash_remove_node (hash, res);
 
 				return NULL;
 			}
 		}
 
+		now = TIME_TO_TS(now);
 		res->last = MAX (res->last, now);
 		rspamd_lru_hash_update_counter (res);
 		rspamd_lru_hash_maybe_evict (hash, res);
