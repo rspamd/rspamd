@@ -911,6 +911,7 @@ local function check_mime_type(task)
   if parts then
     for _,p in ipairs(parts) do
       local mtype,subtype = p:get_type()
+      local dtype,dsubtype = p:get_detected_type()
 
       if not mtype then
         task:insert_result(settings['symbol_unknown'], 1.0, 'missing content type')
@@ -920,6 +921,10 @@ local function check_mime_type(task)
         -- Check for attachment
         local filename = p:get_filename()
         local ct = string.format('%s/%s', mtype, subtype):lower()
+        local detected_ct
+        if dtype and dsubtype then
+          detected_ct = string.format('%s/%s', dtype, dsubtype)
+        end
 
         if filename then
           filename = filename:gsub('[^%s%g]', '?')
@@ -971,13 +976,27 @@ local function check_mime_type(task)
         end
 
         if map then
-          local v = map:get_key(ct)
+          local v
+          local detected_different = false
+          if detected_ct and detected_ct ~= ct then
+            v = map:get_key(detected_ct)
+            detected_different = true
+          else
+            v = map:get_key(ct)
+          end
           if v then
             local n = tonumber(v)
 
             if n then
               if n > 0 then
-                task:insert_result(settings['symbol_bad'], n, ct)
+                if detected_different then
+                  -- Penalize case
+                  n = n * 1.5
+                  task:insert_result(settings['symbol_bad'], n,
+                      string.format('%s:%s', ct, detected_ct))
+                else
+                  task:insert_result(settings['symbol_bad'], n, ct)
+                end
                 task:insert_result('MIME_TRACE', 0.0,
                     string.format("%s:%s", p:get_id(), '-'))
               elseif n < 0 then

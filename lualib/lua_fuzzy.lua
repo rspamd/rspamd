@@ -241,6 +241,8 @@ local function mime_types_check(task, part, rule)
   if not t then return false, false end
 
   local ct = string.format('%s/%s', t, st)
+  t,st = part:get_detected_type()
+  local detected_ct = string.format('%s/%s', t, st)
   local id = part:get_id()
   lua_util.debugm(N, task, 'check binary part %s: %s', id, ct)
 
@@ -264,9 +266,14 @@ local function mime_types_check(task, part, rule)
   if rule.mime_types then
 
     if fun.any(function(gl_re)
-      if gl_re:match(ct) then return true else return false end
+      if gl_re:match(ct) or (detected_ct and gl_re:match(detected_ct)) then
+        return true
+      else
+        return false
+      end
     end, rule.mime_types) then
-      lua_util.debugm(N, task, 'found mime type match for part %s: %s', id, ct)
+      lua_util.debugm(N, task, 'found mime type match for part %s: %s (%s detected)',
+          id, ct, detected_ct)
       return check_length(task, part, rule),false
     end
 
