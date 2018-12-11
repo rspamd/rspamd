@@ -524,6 +524,22 @@ Returns either nil or its input if input is in args list]],
 Returns either nil or its input if input is not in args list]],
     ['args_schema'] = ts.array_of(ts.string)
   },
+  ['inverse'] = {
+    ['types'] = {
+      ['string'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
+      if inp then
+        return nil
+      else
+        return (args[1] or 'true'),'string'
+      end
+    end,
+    ['description'] = [[Inverses input.
+Empty string comes the first argument or 'true', non-empty string comes nil]],
+    ['args_schema'] = {ts.string:is_optional()}
+  },
 }
 
 local function process_selector(task, sel)
