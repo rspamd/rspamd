@@ -497,6 +497,22 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
     ['description'] = 'Drops input value and return values from function\'s arguments or an empty string',
     ['args_schema'] = (ts.string + ts.array_of(ts.string)):is_optional()
   },
+  ['equal'] = {
+    ['types'] = {
+      ['string'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
+      if inp == args[1] then
+        return inp,'string'
+      end
+
+      return nil
+    end,
+    ['description'] = [[Boolean function equal.
+Returns either nil or its argument if input is equal to argument]],
+    ['args_schema'] = {ts.string}
+  },
   -- Boolean function in, returns either nil or its input if input is in args list
   ['in'] = {
     ['types'] = {
