@@ -564,7 +564,7 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
     ['process'] = function(inp, _, args)
       local rspamd_ip = require "rspamd_ip"
       -- Non optimal: convert string to an IP address
-      local ip = rspamd_ip.fromstring(inp)
+      local ip = rspamd_ip.from_string(inp)
 
       if not ip or not ip:is_valid() then
         lua_util.debugm(M, "cannot convert %s to IP", inp)
