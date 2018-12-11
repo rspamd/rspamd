@@ -2136,8 +2136,11 @@ rspamd_init_libs (void)
 
 	gint magic_flags = 0;
 
+	/* Unless trusty and other crap is supported... */
+#if 0
 #ifdef MAGIC_NO_CHECK_BUILTIN
 	magic_flags = MAGIC_NO_CHECK_BUILTIN;
+#endif
 #endif
 	magic_flags |= MAGIC_MIME|MAGIC_NO_CHECK_COMPRESS|
 				   MAGIC_NO_CHECK_ELF|MAGIC_NO_CHECK_TAR;
