@@ -443,7 +443,7 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
 
       return inp:sub(start_pos, end_pos), 'string'
     end,
-    ['description'] = 'Extracts substring',
+    ['description'] = 'Extracts substring; the first argument is start, the second is the last (like in Lua)',
     ['args_schema'] = {(ts.number + ts.string / tonumber):is_optional(),
                        (ts.number + ts.string / tonumber):is_optional()}
   },
@@ -540,7 +540,40 @@ Returns either nil or its input if input is not in args list]],
 Empty string comes the first argument or 'true', non-empty string comes nil]],
     ['args_schema'] = {ts.string:is_optional()}
   },
+  ['ipmask'] = {
+    ['types'] = {
+      ['string'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
+      local rspamd_ip = require "rspamd_ip"
+      -- Non optimal: convert string to an IP address
+      local ip = rspamd_ip.fromstring(inp)
+
+      if not ip or not ip:is_valid() then
+        lua_util.debugm(M, "cannot convert %s to IP", inp)
+        return nil
+      end
+
+      if ip:get_version() == 4 then
+        local mask = tonumber(args[1])
+
+        return ip:apply_mask(mask):to_string(),'string'
+      else
+        -- IPv6 takes the second argument or the first one...
+        local mask_str = args[2] or args[1]
+        local mask = tonumber(mask_str)
+
+        return ip:apply_mask(mask):to_string(),'string'
+      end
+    end,
+    ['description'] = 'Applies mask to IP address. The first argument is the mask for IPv4 addresses, the second is the mask for IPv6 addresses.',
+    ['args_schema'] = {(ts.number + ts.string / tonumber),
+                       (ts.number + ts.string / tonumber):is_optional()}
+  },
 }
+
+transform_function.match = transform_function.regexp
 
 local function process_selector(task, sel)
   local function allowed_type(t)
