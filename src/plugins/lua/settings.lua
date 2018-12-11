@@ -316,22 +316,8 @@ local function check_settings(task)
       end
     end
 
-    if rule['selector'] then
-      local sel = selectors_cache[rule_name]
-      if not sel then
-        sel = lua_selectors.create_selector_closure(rspamd_config, rule.selector,
-            rule.delimiter or "")
-
-        if sel then
-          selectors_cache[rule_name] = sel
-        end
-      end
-
-      if sel then
-        if sel(task) then
-          res = true
-        end
-      end
+    if rule.selector then
+      res = rule.selector(task)
     end
 
     if res then
@@ -599,6 +585,22 @@ local function process_settings_table(tbl)
         end
         if not out['header'] then out['header'] = {} end
         table.insert(out['header'], rho)
+      end
+    end
+
+    if elt['selector'] then
+      local sel = selectors_cache[name]
+      if not sel then
+        sel = lua_selectors.create_selector_closure(rspamd_config, elt.selector,
+            elt.delimiter or "")
+
+        if sel then
+          selectors_cache[name] = sel
+        end
+      end
+
+      if sel then
+        out['selector'] = sel
       end
     end
 
