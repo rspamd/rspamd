@@ -703,7 +703,7 @@ rspamd_message_process_html_text_part (struct rspamd_task *task,
 	return TRUE;
 }
 
-static void
+static gboolean
 rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 										struct rspamd_mime_part *mime_part)
 {
@@ -812,11 +812,11 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 			mime_part->cd && mime_part->cd->type == RSPAMD_CT_ATTACHMENT &&
 			(task->cfg && !task->cfg->check_text_attachements)) {
 		debug_task ("skip attachments for checking as text parts");
-		return;
+		return TRUE;
 	}
 	else if (!(found_txt || found_html)) {
 		/* Not a text part */
-		return;
+		return FALSE;
 	}
 
 	text_part = rspamd_mempool_alloc0 (task->task_pool,
@@ -830,12 +830,12 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 
 	if (found_html) {
 		if (!rspamd_message_process_html_text_part (task, text_part)) {
-			return;
+			return FALSE;
 		}
 	}
 	else {
 		if (!rspamd_message_process_plain_text_part (task, text_part)) {
-			return;
+			return FALSE;
 		}
 	}
 
@@ -866,7 +866,7 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 
 		rspamd_task_insert_result (task, GTUBE_SYMBOL, 0, NULL);
 
-		return;
+		return TRUE;
 	}
 
 	/* Post process part */
@@ -885,6 +885,8 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 	}
 
 	rspamd_mime_part_create_words (task, text_part);
+
+	return TRUE;
 }
 
 /* Creates message from various data using libmagic to detect type */
@@ -900,15 +902,18 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 
 	g_assert (start != NULL);
 
+	part = rspamd_mempool_alloc0 (task->task_pool, sizeof (*part));
+
 	tok = rspamd_task_get_request_header (task, "Content-Type");
 
 	if (tok) {
 		/* We have Content-Type defined */
 		ct = rspamd_content_type_parse (tok->begin, tok->len,
 				task->task_pool);
+		part->ct = ct;
 	}
-	else if (task->cfg && task->cfg->libs_ctx) {
-		/* Try to predict it by content (slow) */
+
+	if (task->cfg && task->cfg->libs_ctx) {
 		mb = magic_buffer (task->cfg->libs_ctx->libmagic,
 				start,
 				len);
@@ -918,12 +923,16 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 			srch.len = strlen (mb);
 			ct = rspamd_content_type_parse (srch.begin, srch.len,
 					task->task_pool);
+			msg_warn_task ("construct fake mime of type: %s", mb);
+
+			if (!part->ct) {
+				part->ct = ct;
+			}
+
+			part->detected_ct = ct;
 		}
 	}
 
-	msg_warn_task ("construct fake mime of type: %s", mb);
-	part = rspamd_mempool_alloc0 (task->task_pool, sizeof (*part));
-	part->ct = ct;
 	part->raw_data.begin = start;
 	part->raw_data.len = len;
 	part->parsed_data.begin = start;
@@ -1189,7 +1198,25 @@ rspamd_message_process (struct rspamd_task *task)
 		struct rspamd_mime_part *part;
 
 		part = g_ptr_array_index (task->parts, i);
-		rspamd_message_process_text_part_maybe (task, part);
+
+
+		if (!rspamd_message_process_text_part_maybe (task, part) &&
+				part->parsed_data.len > 0) {
+			const gchar *mb = magic_buffer (task->cfg->libs_ctx->libmagic,
+					part->parsed_data.begin,
+					part->parsed_data.len);
+
+			if (mb) {
+				rspamd_ftok_t srch;
+
+				srch.begin = mb;
+				srch.len = strlen (mb);
+				part->detected_ct = rspamd_content_type_parse (srch.begin,
+						srch.len,
+						task->task_pool);
+			}
+
+		}
 	}
 
 	rspamd_images_process (task);

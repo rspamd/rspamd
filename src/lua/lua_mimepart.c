@@ -334,6 +334,20 @@ LUA_FUNCTION_DEF (mimepart, get_type);
 LUA_FUNCTION_DEF (mimepart, get_type_full);
 
 /***
+ * @method mime_part:get_detected_type()
+ * Extract content-type string of the mime part. Use libmagic detection
+ * @return {string,string} content type in form 'type','subtype'
+ */
+LUA_FUNCTION_DEF (mimepart, get_detected_type);
+
+/***
+ * @method mime_part:get_detected_type_full()
+ * Extract content-type string of the mime part with all attributes. Use libmagic detection
+ * @return {string,string,table} content type in form 'type','subtype', {attrs}
+ */
+LUA_FUNCTION_DEF (mimepart, get_detected_type_full);
+
+/***
  * @method mime_part:get_cte()
  * Extract content-transfer-encoding for a part
  * @return {string} content transfer encoding (e.g. `base64` or `7bit`)
@@ -457,6 +471,8 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_length),
 	LUA_INTERFACE_DEF (mimepart, get_type),
 	LUA_INTERFACE_DEF (mimepart, get_type_full),
+	LUA_INTERFACE_DEF (mimepart, get_detected_type),
+	LUA_INTERFACE_DEF (mimepart, get_detected_type_full),
 	LUA_INTERFACE_DEF (mimepart, get_cte),
 	LUA_INTERFACE_DEF (mimepart, get_filename),
 	LUA_INTERFACE_DEF (mimepart, get_header),
@@ -1189,48 +1205,49 @@ lua_mimepart_get_length (lua_State * L)
 }
 
 static gint
-lua_mimepart_get_type_common (lua_State * L, gboolean full)
+lua_mimepart_get_type_common (lua_State * L, struct rspamd_content_type *ct,
+		gboolean full)
 {
-	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
 	GHashTableIter it;
 	gpointer k, v;
 	struct rspamd_content_type_param *param;
 
-	if (part == NULL) {
+	if (ct == NULL) {
 		lua_pushnil (L);
 		lua_pushnil (L);
 		return 2;
 	}
 
-	lua_pushlstring (L, part->ct->type.begin, part->ct->type.len);
-	lua_pushlstring (L, part->ct->subtype.begin, part->ct->subtype.len);
+	lua_pushlstring (L, ct->type.begin, ct->type.len);
+	lua_pushlstring (L, ct->subtype.begin, ct->subtype.len);
 
 	if (!full) {
 		return 2;
 	}
 
-	lua_createtable (L, 0, 2 + (part->ct->attrs ?
-			g_hash_table_size (part->ct->attrs) : 0));
+	lua_createtable (L, 0, 2 + (ct->attrs ?
+			g_hash_table_size (ct->attrs) : 0));
 
-	if (part->ct->charset.len > 0) {
+	if (ct->charset.len > 0) {
 		lua_pushstring (L, "charset");
-		lua_pushlstring (L, part->ct->charset.begin, part->ct->charset.len);
+		lua_pushlstring (L, ct->charset.begin, ct->charset.len);
 		lua_settable (L, -3);
 	}
 
-	if (part->ct->boundary.len > 0) {
+	if (ct->boundary.len > 0) {
 		lua_pushstring (L, "charset");
-		lua_pushlstring (L, part->ct->boundary.begin, part->ct->boundary.len);
+		lua_pushlstring (L, ct->boundary.begin, ct->boundary.len);
 		lua_settable (L, -3);
 	}
 
-	if (part->ct->attrs) {
-		g_hash_table_iter_init (&it, part->ct->attrs);
+	if (ct->attrs) {
+		g_hash_table_iter_init (&it, ct->attrs);
 
 		while (g_hash_table_iter_next (&it, &k, &v)) {
 			param = v;
 
-			if (param->name.len > 0 && param->name.len > 0) {
+			if (param->name.len > 0 && param->value.len > 0) {
 				/* TODO: think about multiple values here */
 				lua_pushlstring (L, param->name.begin, param->name.len);
 				lua_pushlstring (L, param->value.begin, param->value.len);
@@ -1246,14 +1263,52 @@ static gint
 lua_mimepart_get_type (lua_State * L)
 {
 	LUA_TRACE_POINT;
-	return lua_mimepart_get_type_common (L, FALSE);
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return lua_mimepart_get_type_common (L, part->ct, FALSE);
 }
 
 static gint
 lua_mimepart_get_type_full (lua_State * L)
 {
 	LUA_TRACE_POINT;
-	return lua_mimepart_get_type_common (L, TRUE);
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return lua_mimepart_get_type_common (L, part->ct, TRUE);
+}
+
+static gint
+lua_mimepart_get_detected_type (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return lua_mimepart_get_type_common (L, part->detected_ct, FALSE);
+}
+
+static gint
+lua_mimepart_get_detected_type_full (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return lua_mimepart_get_type_common (L, part->detected_ct, TRUE);
 }
 
 static gint

@@ -1509,8 +1509,8 @@ rspamd_archive_cheat_detect (struct rspamd_mime_part *part, const gchar *str,
 		}
 
 		if (magic_start != NULL) {
-			if (part->parsed_data.len > magic_len && memcmp (part->parsed_data.begin,
-					magic_start, magic_len) == 0) {
+			if (part->parsed_data.len > magic_len &&
+				memcmp (part->parsed_data.begin, magic_start, magic_len) == 0) {
 				return TRUE;
 			}
 		}

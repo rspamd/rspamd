@@ -47,6 +47,7 @@ struct rspamd_mime_multipart {
 
 struct rspamd_mime_part {
 	struct rspamd_content_type *ct;
+	struct rspamd_content_type *detected_ct;
 	struct rspamd_content_disposition *cd;
 	rspamd_ftok_t raw_data;
 	rspamd_ftok_t parsed_data;
