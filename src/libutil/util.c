@@ -2134,8 +2134,31 @@ rspamd_init_libs (void)
 	rlim.rlim_max = rlim.rlim_cur;
 	setrlimit (RLIMIT_STACK, &rlim);
 
-	ctx->libmagic = magic_open (MAGIC_MIME|MAGIC_NO_CHECK_COMPRESS|
-			MAGIC_NO_CHECK_ELF|MAGIC_NO_CHECK_TAR);
+	gint magic_flags = MAGIC_MIME|MAGIC_NO_CHECK_COMPRESS|
+					   MAGIC_NO_CHECK_ELF|MAGIC_NO_CHECK_TAR;
+
+#ifdef MAGIC_NO_CHECK_CDF
+	magic_flags |= MAGIC_NO_CHECK_CDF;
+#endif
+#ifdef MAGIC_NO_CHECK_ENCODING
+	magic_flags |= MAGIC_NO_CHECK_ENCODING;
+#endif
+#ifdef MAGIC_NO_CHECK_TAR
+	magic_flags |= MAGIC_NO_CHECK_TAR;
+#endif
+#ifdef MAGIC_NO_CHECK_TEXT
+	magic_flags |= MAGIC_NO_CHECK_TEXT;
+#endif
+#ifdef MAGIC_NO_CHECK_TOKENS
+	magic_flags |= MAGIC_NO_CHECK_TOKENS;
+#endif
+#ifdef MAGIC_NO_CHECK_JSON
+	magic_flags |= MAGIC_NO_CHECK_JSON;
+#endif
+#ifdef MAGIC_NO_CHECK_BUILTIN
+	magic_flags |= MAGIC_NO_CHECK_BUILTIN;
+#endif
+	ctx->libmagic = magic_open (magic_flags);
 	ctx->local_addrs = rspamd_inet_library_init ();
 	REF_INIT_RETAIN (ctx, rspamd_deinit_libs);
 
