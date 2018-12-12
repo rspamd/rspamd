@@ -214,7 +214,6 @@ local function check_settings(task)
       if ip:is_local() then
         matched[#matched + 1] = 'local'
         res = true
-        break
       else
         return nil
       end
@@ -414,18 +413,19 @@ local function check_settings(task)
         local rule = check_specific_setting(s.name, s.rule,
             ip, client_ip, from, rcpt, user, uname, hostname, matched)
 
-        if rule then
+        -- Can use xor here but more complicated for reading
+        if (rule and not s.rule.inverse) or (not rule and s.rule.inverse) then
           rspamd_logger.infox(task, "<%s> apply settings according to rule %s (%s matched)",
             task:get_message_id(), s.name, table.concat(matched, ','))
-          if rule['apply'] then
-            apply_settings(task, rule['apply'])
+          if s.rule['apply'] then
+            apply_settings(task, s.rule['apply'])
             applied = true
           end
-          if rule['symbols'] then
+          if s.rule['symbols'] then
             -- Add symbols, specified in the settings
             fun.each(function(val)
               task:insert_result(val, 1.0)
-            end, rule['symbols'])
+            end, s.rule['symbols'])
           end
         end
       end
@@ -600,6 +600,9 @@ local function process_settings_table(tbl)
     end
     if elt['local'] then
       out['local'] = true
+    end
+    if elt['inverse'] then
+      out['inverse'] = true
     end
     if elt['request_header'] then
       local rho = {}
