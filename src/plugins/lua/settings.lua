@@ -356,7 +356,7 @@ local function check_settings(task)
     end
 
     if rule.selector then
-      res = rule.selector(task)
+      res = fun.all(function(s) return s(task) end, rule.selector)
 
       if res then
         matched[#matched + 1] = 'selector'
@@ -656,7 +656,11 @@ local function process_settings_table(tbl)
       end
 
       if sel then
-        out['selector'] = sel
+        if out.selector then
+          table.insert(out['selector'], sel)
+        else
+          out['selector'] = {sel}
+        end
       end
     end
 
