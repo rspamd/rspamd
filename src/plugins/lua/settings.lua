@@ -193,12 +193,13 @@ local function check_settings(task)
   end
 
   local function check_specific_setting(rule_name, rule, ip, client_ip, from, rcpt,
-      user, auth_user)
+      user, auth_user, hostname, matched)
     local res = false
 
     if rule['authenticated'] then
       if auth_user then
         res = true
+        matched[#matched + 1] = 'authenticated'
       end
       if not res then
         return nil
@@ -212,6 +213,7 @@ local function check_settings(task)
       for _, i in ipairs(rule['ip']) do
         res = check_ip_setting(i, ip)
         if res then
+          matched[#matched + 1] = 'ip'
           break
         end
       end
@@ -227,6 +229,7 @@ local function check_settings(task)
       for _, i in ipairs(rule['client_ip']) do
         res = check_ip_setting(i, client_ip)
         if res then
+          matched[#matched + 1] = 'client_ip'
           break
         end
       end
@@ -242,6 +245,7 @@ local function check_settings(task)
       for _, i in ipairs(rule['from']) do
         res = check_addr_setting(i, from)
         if res then
+          matched[#matched + 1] = 'from'
           break
         end
       end
@@ -256,7 +260,9 @@ local function check_settings(task)
       end
       for _, i in ipairs(rule['rcpt']) do
         res = check_addr_setting(i, rcpt)
+
         if res then
+          matched[#matched + 1] = 'rcpt'
           break
         end
       end
@@ -272,6 +278,23 @@ local function check_settings(task)
       for _, i in ipairs(rule['user']) do
         res = check_addr_setting(i, user)
         if res then
+          matched[#matched + 1] = 'user'
+          break
+        end
+      end
+      if not res then
+        return nil
+      end
+    end
+
+    if rule['hostname'] then
+      if #hostname == 0 then
+        return nil
+      end
+      for _, i in ipairs(rule['hostname']) do
+        res = check_addr_setting(i, hostname)
+        if res then
+          matched[#matched + 1] = 'hostname'
           break
         end
       end
@@ -285,6 +308,7 @@ local function check_settings(task)
         local h = task:get_request_header(k)
         res = (h and v:match(h))
         if res then
+          matched[#matched + 1] = 'req_header: ' .. k
           break
         end
       end
@@ -300,6 +324,7 @@ local function check_settings(task)
             local h = task:get_header(k)
             res = (h and p:match(h))
             if res then
+              matched[#matched + 1] = 'header: ' .. k
               break
             end
           end
@@ -318,6 +343,10 @@ local function check_settings(task)
 
     if rule.selector then
       res = rule.selector(task)
+
+      if res then
+        matched[#matched + 1] = 'selector'
+      end
     end
 
     if res then
@@ -347,6 +376,7 @@ local function check_settings(task)
   local from = task:get_from()
   local rcpt = task:get_recipients()
   local uname = task:get_user()
+  local hostname = task:get_hostname() or ''
   local user = {}
   if uname then
     user[1] = {}
@@ -366,10 +396,13 @@ local function check_settings(task)
   for pri = max_pri,1,-1 do
     if not applied and settings[pri] then
       for _,s in ipairs(settings[pri]) do
-        local rule = check_specific_setting(s.name, s.rule, ip, client_ip, from, rcpt, user, uname)
+        local matched = {}
+        local rule = check_specific_setting(s.name, s.rule,
+            ip, client_ip, from, rcpt, user, uname, hostname, matched)
+
         if rule then
-          rspamd_logger.infox(task, "<%1> apply settings according to rule %2",
-            task:get_message_id(), s.name)
+          rspamd_logger.infox(task, "<%s> apply settings according to rule %s (%s matched)",
+            task:get_message_id(), s.name, table.concat(matched, ','))
           if rule['apply'] then
             apply_settings(task, rule['apply'])
             applied = true
@@ -540,6 +573,12 @@ local function process_settings_table(tbl)
       local user = process_addr(elt['user'])
       if user then
         out['user'] = check_table(elt['user'], user)
+      end
+    end
+    if elt['hostname'] then
+      local hostname = process_addr(elt['hostname'])
+      if hostname then
+        out['hostname'] = check_table(elt['hostname'], hostname)
       end
     end
     if elt['authenticated'] then
