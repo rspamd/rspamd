@@ -196,7 +196,7 @@ local function check_settings(task)
       user, auth_user, hostname, matched)
     local res = false
 
-    if rule['authenticated'] then
+    if rule.authenticated then
       if auth_user then
         res = true
         matched[#matched + 1] = 'authenticated'
@@ -206,11 +206,25 @@ local function check_settings(task)
       end
     end
 
-    if rule['ip'] then
+    if rule['local'] then
       if not ip or not ip:is_valid() then
         return nil
       end
-      for _, i in ipairs(rule['ip']) do
+
+      if ip:is_local() then
+        matched[#matched + 1] = 'local'
+        res = true
+        break
+      else
+        return nil
+      end
+    end
+
+    if rule.ip then
+      if not ip or not ip:is_valid() then
+        return nil
+      end
+      for _, i in ipairs(rule.ip) do
         res = check_ip_setting(i, ip)
         if res then
           matched[#matched + 1] = 'ip'
@@ -222,11 +236,11 @@ local function check_settings(task)
       end
     end
 
-    if rule['client_ip'] then
+    if rule.client_ip then
       if not client_ip or not client_ip:is_valid() then
         return nil
       end
-      for _, i in ipairs(rule['client_ip']) do
+      for _, i in ipairs(rule.client_ip) do
         res = check_ip_setting(i, client_ip)
         if res then
           matched[#matched + 1] = 'client_ip'
@@ -238,11 +252,11 @@ local function check_settings(task)
       end
     end
 
-    if rule['from'] then
+    if rule.from then
       if not from then
         return nil
       end
-      for _, i in ipairs(rule['from']) do
+      for _, i in ipairs(rule.from) do
         res = check_addr_setting(i, from)
         if res then
           matched[#matched + 1] = 'from'
@@ -254,11 +268,11 @@ local function check_settings(task)
       end
     end
 
-    if rule['rcpt'] then
+    if rule.rcpt then
       if not rcpt then
         return nil
       end
-      for _, i in ipairs(rule['rcpt']) do
+      for _, i in ipairs(rule.rcpt) do
         res = check_addr_setting(i, rcpt)
 
         if res then
@@ -271,11 +285,11 @@ local function check_settings(task)
       end
     end
 
-    if rule['user'] then
+    if rule.user then
       if not user then
         return nil
       end
-      for _, i in ipairs(rule['user']) do
+      for _, i in ipairs(rule.user) do
         res = check_addr_setting(i, user)
         if res then
           matched[#matched + 1] = 'user'
@@ -287,11 +301,11 @@ local function check_settings(task)
       end
     end
 
-    if rule['hostname'] then
+    if rule.hostname then
       if #hostname == 0 then
         return nil
       end
-      for _, i in ipairs(rule['hostname']) do
+      for _, i in ipairs(rule.hostname) do
         res = check_addr_setting(i, hostname)
         if res then
           matched[#matched + 1] = 'hostname'
@@ -303,8 +317,8 @@ local function check_settings(task)
       end
     end
 
-    if rule['request_header'] then
-      for k, v in pairs(rule['request_header']) do
+    if rule.request_header then
+      for k, v in pairs(rule.request_header) do
         local h = task:get_request_header(k)
         res = (h and v:match(h))
         if res then
@@ -317,8 +331,8 @@ local function check_settings(task)
       end
     end
 
-    if rule['header'] then
-      for _, e in ipairs(rule['header']) do
+    if rule.header then
+      for _, e in ipairs(rule.header) do
         for k, v in pairs(e) do
           for _, p in ipairs(v) do
             local h = task:get_header(k)
@@ -583,6 +597,9 @@ local function process_settings_table(tbl)
     end
     if elt['authenticated'] then
       out['authenticated'] = true
+    end
+    if elt['local'] then
+      out['local'] = true
     end
     if elt['request_header'] then
       local rho = {}
