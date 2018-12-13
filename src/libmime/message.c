@@ -1222,6 +1222,23 @@ rspamd_message_process (struct rspamd_task *task)
 	rspamd_images_process (task);
 	rspamd_archives_process (task);
 
+	/* Calculate average words length and number of short words */
+	struct rspamd_mime_text_part *text_part;
+	gdouble *var;
+	guint total_words = 0;
+
+	PTR_ARRAY_FOREACH (task->text_parts, i, text_part) {
+		if (!text_part->language) {
+			rspamd_mime_part_detect_language (task, text_part);
+		}
+
+		rspamd_mime_part_extract_words (task, text_part);
+
+		if (text_part->utf_words) {
+			total_words += text_part->nwords;
+		}
+	}
+
 	/* Calculate distance for 2-parts messages */
 	if (task->text_parts->len == 2) {
 		p1 = g_ptr_array_index (task->text_parts, 0);
@@ -1308,23 +1325,6 @@ rspamd_message_process (struct rspamd_task *task)
 		else {
 			debug_task (
 					"message contains two parts but they are in different multi-parts");
-		}
-	}
-
-	/* Calculate average words length and number of short words */
-	struct rspamd_mime_text_part *text_part;
-	gdouble *var;
-	guint total_words = 0;
-
-	PTR_ARRAY_FOREACH (task->text_parts, i, text_part) {
-		if (!text_part->language) {
-			rspamd_mime_part_detect_language (task, text_part);
-		}
-
-		rspamd_mime_part_extract_words (task, text_part);
-
-		if (text_part->utf_words) {
-			total_words += text_part->nwords;
 		}
 	}
 
