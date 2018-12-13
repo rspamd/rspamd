@@ -1934,6 +1934,11 @@ ucl_parser_set_filevars (struct ucl_parser *parser, const char *filename, bool n
 		ucl_parser_register_variable (parser, "FILENAME", realbuf);
 		curdir = dirname (realbuf);
 		ucl_parser_register_variable (parser, "CURDIR", curdir);
+
+		if (parser->cur_file) {
+			free (parser->cur_file);
+		}
+		parser->cur_file = strdup (filename);
 	}
 	else {
 		/* Set everything from the current dir */
