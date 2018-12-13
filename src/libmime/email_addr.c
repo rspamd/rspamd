@@ -284,7 +284,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 				state = parse_addr;
 			}
 			else if (*p == ',') {
-				if (p > c) {
+				if (p > c && seen_at) {
 					/*
 					 * Last token must be the address:
 					 * e.g. Some name name@domain.com
