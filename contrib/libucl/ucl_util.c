@@ -1149,6 +1149,7 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 	}
 
 	old_curfile = parser->cur_file;
+	parser->cur_file = NULL;
 
 	/* Store old file vars */
 	DL_FOREACH_SAFE (parser->variables, cur_var, tmp_var) {
@@ -1929,15 +1930,16 @@ ucl_parser_set_filevars (struct ucl_parser *parser, const char *filename, bool n
 			ucl_strlcpy (realbuf, filename, sizeof (realbuf));
 		}
 
+		if (parser->cur_file) {
+			free (parser->cur_file);
+		}
+
+		parser->cur_file = strdup (realbuf);
+
 		/* Define variables */
 		ucl_parser_register_variable (parser, "FILENAME", realbuf);
 		curdir = dirname (realbuf);
 		ucl_parser_register_variable (parser, "CURDIR", curdir);
-
-		if (parser->cur_file) {
-			free (parser->cur_file);
-		}
-		parser->cur_file = strdup (filename);
 	}
 	else {
 		/* Set everything from the current dir */
@@ -1970,10 +1972,6 @@ ucl_parser_add_file_full (struct ucl_parser *parser, const char *filename,
 		return false;
 	}
 
-	if (parser->cur_file) {
-		free (parser->cur_file);
-	}
-	parser->cur_file = strdup (realbuf);
 	ucl_parser_set_filevars (parser, realbuf, false);
 	ret = ucl_parser_add_chunk_full (parser, buf, len, priority, strat,
 			parse_type);
