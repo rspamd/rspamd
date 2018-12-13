@@ -25,6 +25,7 @@ local logger = require "rspamd_logger"
 local util = require "rspamd_util"
 local N = 'milter_headers'
 local lua_util = require "lua_util"
+local ts = require("tableshape").types
 local E = {}
 
 local HOSTNAME = util.get_hostname()
@@ -518,8 +519,34 @@ local function milter_headers(task)
   end
 end
 
-local opts = rspamd_config:get_all_opt(N) or rspamd_config:get_all_opt('rmilter_headers')
+local config_schema = ts.shape{
+  use = ts.array_of(ts.string) + ts.string / function(s) return {s} end,
+  remove_upstream_spam_flag = ts.boolean:is_optional(),
+  extended_spam_headers = ts.boolean:is_optional(),
+  skip_local = ts.boolean:is_optional(),
+  skip_authenticated = ts.boolean:is_optional(),
+  local_headers = ts.array_of(ts.string):is_optional(),
+  authenticated_headers = ts.array_of(ts.string):is_optional(),
+  extended_headers_rcpt =
+      (ts.array_of(ts.string) + ts.string / function(s) return {s} end):is_optional(),
+  custom = ts.map_of(ts.string, ts.string):is_optional(),
+}
+
+local opts = rspamd_config:get_all_opt(N) or
+             rspamd_config:get_all_opt('rmilter_headers')
+
 if not opts then return end
+
+-- Process config
+do
+  local res,err = config_schema:transform(opts)
+  if not res then
+    logger.errx(rspamd_config, 'invalid config for %s: %s', N, err)
+    return
+  else
+    opts = res
+  end
+end
 
 local have_routine = {}
 local function activate_routine(s)
@@ -537,33 +564,28 @@ local function activate_routine(s)
     logger.errx(rspamd_config, 'routine "%s" does not exist', s)
   end
 end
-if opts['remove_upstream_spam_flag'] then activate_routine('remove-spam-flag') end
-if opts['extended_spam_headers'] then
+
+if opts.remove_upstream_spam_flag ~= nil then
+  settings.remove_upstream_spam_flag = opts.remove_upstream_spam_flag
+end
+
+if opts.extended_spam_headers then
   activate_routine('x-spamd-result')
   activate_routine('x-rspamd-server')
   activate_routine('x-rspamd-queue-id')
 end
-if type(opts['use']) == 'string' then
-  opts['use'] = {opts['use']}
-elseif (type(opts['use']) == 'table' and not opts['use'][1] and not next(active_routines)) then
-  logger.debugm(N, rspamd_config, 'no functions are enabled')
-  return
-end
-if type(opts['use']) ~= 'table' then
-  logger.errx(rspamd_config, 'unexpected type for "use" option: %s', type(opts['use']))
-  return
-end
-if type(opts['local_headers']) == 'table' and opts['local_headers'][1] then
-  for _, h in ipairs(opts['local_headers']) do
+
+if opts.local_headers then
+  for _, h in ipairs(opts.local_headers) do
     settings.local_headers[h] = true
   end
 end
-if type(opts['authenticated_headers']) == 'table' and opts['authenticated_headers'][1] then
-  for _, h in ipairs(opts['authenticated_headers']) do
+if opts.authenticated_headers then
+  for _, h in ipairs(opts.authenticated_headers) do
     settings.authenticated_headers[h] = true
   end
 end
-if type(opts['custom']) == 'table' then
+if opts.custom then
   for k, v in pairs(opts['custom']) do
     local f, err = load(v)
     if not f then
@@ -573,27 +595,35 @@ if type(opts['custom']) == 'table' then
     end
   end
 end
+
 if type(opts['skip_local']) == 'boolean' then
   settings.skip_local = opts['skip_local']
 end
+
 if type(opts['skip_authenticated']) == 'boolean' then
   settings.skip_authenticated = opts['skip_authenticated']
 end
+
 for _, s in ipairs(opts['use']) do
   if not have_routine[s] then
     activate_routine(s)
   end
 end
+
+if settings.remove_upstream_spam_flag then
+  activate_routine('remove-spam-flag')
+end
+
 if (#active_routines < 1) then
   logger.errx(rspamd_config, 'no active routines')
   return
 end
-logger.infox(rspamd_config, 'active routines [%s]', table.concat(active_routines, ','))
-if type(opts['extended_headers_rcpt']) == 'string' then
-  opts['extended_headers_rcpt'] = {opts['extended_headers_rcpt']}
-end
-if type(opts['extended_headers_rcpt']) == 'table' and opts['extended_headers_rcpt'][1] then
-  for _, e in ipairs(opts['extended_headers_rcpt']) do
+
+logger.infox(rspamd_config, 'active routines [%s]',
+    table.concat(active_routines, ','))
+
+if opts.extended_headers_rcpt then
+  for _, e in ipairs(opts.extended_headers_rcpt) do
     if string.find(e, '^[^@]+@[^@]+$') then
       if not settings.extended_headers_rcpt.addr then
         settings.extended_headers_rcpt.addr = {}
@@ -617,6 +647,7 @@ if type(opts['extended_headers_rcpt']) == 'table' and opts['extended_headers_rcp
     end
   end
 end
+
 rspamd_config:register_symbol({
   name = 'MILTER_HEADERS',
   type = 'idempotent',
