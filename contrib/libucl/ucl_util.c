@@ -1149,7 +1149,6 @@ ucl_include_file_single (const unsigned char *data, size_t len,
 	}
 
 	old_curfile = parser->cur_file;
-	parser->cur_file = strdup (realbuf);
 
 	/* Store old file vars */
 	DL_FOREACH_SAFE (parser->variables, cur_var, tmp_var) {
