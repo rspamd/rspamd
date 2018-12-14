@@ -1907,6 +1907,11 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 		return;
 	}
 
+	if (url->flags & RSPAMD_URL_FLAG_HTML_DISPLAYED) {
+		/* Skip urls that are displayed only */
+		return;
+	}
+
 	task = param->task;
 	surbl_module_ctx = param->ctx;
 
