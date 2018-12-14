@@ -1003,6 +1003,10 @@ local function check_mime_type(task)
                 task:insert_result(settings['symbol_good'], -n, ct)
                 task:insert_result('MIME_TRACE', 0.0,
                     string.format("%s:%s", p:get_id(), '+'))
+              else
+                -- Neutral content type
+                task:insert_result('MIME_TRACE', 0.0,
+                    string.format("%s:%s", p:get_id(), '~'))
               end
             else
               logger.warnx(task, 'unknown value: "%s" for content type %s in the map',
