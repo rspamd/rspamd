@@ -193,8 +193,8 @@ local bucket_update_script = [[
 ]]
 local bucket_update_id
 
--- message_func(task, limit_type, prefix, bucket)
-local message_func = function(_, limit_type, _, _)
+-- message_func(task, limit_type, prefix, bucket, limit_key)
+local message_func = function(_, limit_type, _, _, _)
   return string.format('Ratelimit "%s" exceeded', limit_type)
 end
 
@@ -581,7 +581,7 @@ local function ratelimit_cb(task)
     end
   end
 
-  local function gen_check_cb(prefix, bucket, lim_name)
+  local function gen_check_cb(prefix, bucket, lim_name, lim_key)
     return function(err, data)
       if err then
         rspamd_logger.errx('cannot check limit %s: %s %s', prefix, err, data)
@@ -594,25 +594,26 @@ local function ratelimit_cb(task)
         if data[1] == 1 then
           -- set symbol only and do NOT soft reject
           if settings.symbol then
-            task:insert_result(settings.symbol, 0.0, lim_name .. "(" .. prefix .. ")")
+            task:insert_result(settings.symbol, 0.0,
+                string.format('%s(%s)', lim_name, lim_key))
             rspamd_logger.infox(task,
-                'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
+                'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn); redis key: %s',
                 lim_name, prefix,
                 bucket.burst, bucket.rate,
-                data[2], data[3], data[4])
+                data[2], data[3], data[4], lim_key)
             return
             -- set INFO symbol and soft reject
           elseif settings.info_symbol then
             task:insert_result(settings.info_symbol, 1.0,
-                lim_name .. "(" .. prefix .. ")")
+                string.format('%s(%s)', lim_name, lim_key))
           end
           rspamd_logger.infox(task,
-              'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
+              'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn); redis key: %s',
               lim_name, prefix,
               bucket.burst, bucket.rate,
-              data[2], data[3], data[4])
+              data[2], data[3], data[4], lim_key)
           task:set_pre_result('soft reject',
-              message_func(task, lim_name, prefix, bucket), N)
+              message_func(task, lim_name, prefix, bucket, lim_key), N)
         end
       end
     end
@@ -635,7 +636,7 @@ local function ratelimit_cb(task)
           value.name, pr, value.hash, bucket.burst, bucket.rate)
       lua_redis.exec_redis_script(bucket_check_id,
               {key = value.hash, task = task, is_write = true},
-              gen_check_cb(pr, bucket, value.name),
+              gen_check_cb(pr, bucket, value.name, value.hash),
               {value.hash, tostring(now), tostring(rate), tostring(bucket.burst),
                   tostring(settings.expire)})
     end
