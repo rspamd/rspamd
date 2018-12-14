@@ -2533,7 +2533,7 @@ lua_config_enable_symbol (lua_State *L)
 	const gchar *sym = luaL_checkstring (L, 2);
 
 	if (cfg && sym) {
-		rspamd_symcache_enable_symbol (cfg->cache, sym);
+		rspamd_symcache_enable_symbol_perm (cfg->cache, sym);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -2550,7 +2550,7 @@ lua_config_disable_symbol (lua_State *L)
 	const gchar *sym = luaL_checkstring (L, 2);
 
 	if (cfg && sym) {
-		rspamd_symcache_disable_symbol (cfg->cache, sym);
+		rspamd_symcache_disable_symbol_perm (cfg->cache, sym);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

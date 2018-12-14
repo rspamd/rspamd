@@ -227,16 +227,16 @@ void rspamd_symcache_add_delayed_dependency (struct rspamd_symcache *cache,
  * @param cache
  * @param symbol
  */
-void rspamd_symcache_disable_symbol (struct rspamd_symcache *cache,
-									 const gchar *symbol);
+void rspamd_symcache_disable_symbol_perm (struct rspamd_symcache *cache,
+										  const gchar *symbol);
 
 /**
  * Enable specific symbol in the cache
  * @param cache
  * @param symbol
  */
-void rspamd_symcache_enable_symbol (struct rspamd_symcache *cache,
-									const gchar *symbol);
+void rspamd_symcache_enable_symbol_perm (struct rspamd_symcache *cache,
+										 const gchar *symbol);
 /**
  * Get abstract callback data for a symbol (or its parent symbol)
  * @param cache cache object
@@ -285,6 +285,28 @@ guint64 rspamd_symcache_get_cksum (struct rspamd_symcache *cache);
 gboolean rspamd_symcache_is_symbol_enabled (struct rspamd_task *task,
 											struct rspamd_symcache *cache,
 											const gchar *symbol);
+
+/**
+ * Enable this symbol for task
+ * @param task
+ * @param cache
+ * @param symbol
+ * @return TRUE if a symbol has been enabled (not executed before)
+ */
+gboolean rspamd_symcache_enable_symbol (struct rspamd_task *task,
+										struct rspamd_symcache *cache,
+										const gchar *symbol);
+
+/**
+ * Enable this symbol for task
+ * @param task
+ * @param cache
+ * @param symbol
+ * @return TRUE if a symbol has been disabled (not executed before)
+ */
+gboolean rspamd_symcache_disable_symbol (struct rspamd_task *task,
+										 struct rspamd_symcache *cache,
+										 const gchar *symbol);
 /**
  * Process specific function for each cache element (in order they are added)
  * @param cache
