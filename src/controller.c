@@ -3914,6 +3914,14 @@ start_controller_worker (struct rspamd_worker *worker)
 
 		rspamd_map_watch (worker->srv->cfg, ctx->ev_base,
 				ctx->resolver, worker, TRUE);
+
+		/* Schedule periodic stats saving, see #1823 */
+		event_set (&ctx->save_stats_event, -1, EV_PERSIST,
+				rspamd_controller_stats_save_periodic,
+				ctx);
+		event_base_set (ctx->ev_base, &ctx->save_stats_event);
+		msec_to_tv (save_stats_interval, &stv);
+		evtimer_add (&ctx->save_stats_event, &stv);
 	}
 	else {
 		rspamd_map_watch (worker->srv->cfg, ctx->ev_base,
@@ -3921,13 +3929,6 @@ start_controller_worker (struct rspamd_worker *worker)
 	}
 
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base, worker);
-
-	/* Schedule periodic stats saving, see #1823 */
-	evtimer_set (&ctx->save_stats_event, rspamd_controller_stats_save_periodic,
-			ctx);
-	event_base_set (ctx->ev_base, &ctx->save_stats_event);
-	msec_to_tv (save_stats_interval, &stv);
-	evtimer_add (&ctx->save_stats_event, &stv);
 
 	/* Start event loop */
 	event_base_loop (ctx->ev_base, 0);
