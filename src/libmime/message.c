@@ -1276,8 +1276,6 @@ rspamd_message_process (struct rspamd_task *task)
 						}
 					}
 
-					rspamd_mime_part_detect_language (task, sel);
-
 					if (sel->language && sel->language[0]) {
 						/* Propagate language */
 						if (sel == p1) {
