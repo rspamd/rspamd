@@ -325,7 +325,7 @@ local function gen_rbl_callback(rule)
 
     for _,email in ipairs(emails) do
       if rule.emails_domainonly then
-        add_dns_request(email:get_tld(), fale, requests_table)
+        add_dns_request(email:get_tld(), false, requests_table)
       else
         if rule.hash then
           -- Leave @ as is
