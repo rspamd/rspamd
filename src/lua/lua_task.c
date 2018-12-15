@@ -618,6 +618,20 @@ LUA_FUNCTION_DEF (task, get_symbols_tokens);
  */
 LUA_FUNCTION_DEF (task, has_symbol);
 /***
+ * @method task:has_symbol(name)
+ * Fast path to check if a specified symbol is in the task's results
+ * @param {string} name symbol's name
+ * @return {boolean} `true` if symbol has been found
+ */
+LUA_FUNCTION_DEF (task, enable_symbol);
+/***
+ * @method task:has_symbol(name)
+ * Fast path to check if a specified symbol is in the task's results
+ * @param {string} name symbol's name
+ * @return {boolean} `true` if symbol has been found
+ */
+LUA_FUNCTION_DEF (task, disable_symbol);
+/***
  * @method task:get_date(type[, gmt])
  * Returns timestamp for a connection or for a MIME message. This function can be called with a
  * single table arguments with the following fields:
@@ -1042,6 +1056,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_symbols_numeric),
 	LUA_INTERFACE_DEF (task, get_symbols_tokens),
 	LUA_INTERFACE_DEF (task, has_symbol),
+	LUA_INTERFACE_DEF (task, enable_symbol),
+	LUA_INTERFACE_DEF (task, disable_symbol),
 	LUA_INTERFACE_DEF (task, get_date),
 	LUA_INTERFACE_DEF (task, get_message_id),
 	LUA_INTERFACE_DEF (task, get_timeval),
@@ -3645,6 +3661,48 @@ lua_task_has_symbol (lua_State *L)
 
 	if (task && symbol) {
 		found = (rspamd_task_find_symbol_result (task, symbol) != NULL);
+		lua_pushboolean (L, found);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_enable_symbol (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *symbol;
+	gboolean found = FALSE;
+
+	symbol = luaL_checkstring (L, 2);
+
+	if (task && symbol) {
+		found = rspamd_symcache_enable_symbol (task, task->cfg->cache, symbol);
+		lua_pushboolean (L, found);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_disable_symbol (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *symbol;
+	gboolean found = FALSE;
+
+	symbol = luaL_checkstring (L, 2);
+
+	if (task && symbol) {
+		found = rspamd_symcache_disable_symbol (task, task->cfg->cache, symbol);
 		lua_pushboolean (L, found);
 	}
 	else {
