@@ -119,19 +119,19 @@ lua_dns_request (lua_State *L)
 							   to_resolve) != NULL);
 	}
 	else {
-	if (forced) {
+		if (forced) {
 			ret = make_dns_request_task_forced (task,
-												lua_dns_callback,
-												cbdata,
-												type,
-												to_resolve);
+					lua_dns_callback,
+					cbdata,
+					type,
+					to_resolve);
 		}
 		else {
 			ret = make_dns_request_task (task,
-										 lua_dns_callback,
-										 cbdata,
-										 type,
-										 to_resolve);
+					lua_dns_callback,
+					cbdata,
+					type,
+					to_resolve);
 		}
 	}
 
