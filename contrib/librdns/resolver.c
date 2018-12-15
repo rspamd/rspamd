@@ -984,7 +984,7 @@ void rdns_resolver_set_fake_reply (struct rdns_resolver *resolver,
 		fake_rep->rcode = rcode;
 
 		if (reply) {
-			DL_APPEND (fake_rep->result, reply);
+			DL_CONCAT (fake_rep->result, reply);
 		}
 	}
 	else {
@@ -999,7 +999,7 @@ void rdns_resolver_set_fake_reply (struct rdns_resolver *resolver,
 		memcpy (&fake_rep->key, srch, sizeof (*srch) + len);
 
 		if (reply) {
-			DL_APPEND (fake_rep->result, reply);
+			DL_CONCAT (fake_rep->result, reply);
 		}
 
 		HASH_ADD (hh, resolver->fake_elts, key, sizeof (*srch) + len, fake_rep);
