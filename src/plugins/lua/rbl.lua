@@ -439,7 +439,7 @@ local function gen_rbl_callback(rule)
 
     -- Now check all DNS requests pending and emit them
     local r = task:get_resolver()
-    for name,p in ipairs(dns_req) do
+    for name,p in pairs(dns_req) do
       if validate_dns(p.n) then
         lua_util.debugm(N, task, "rbl %s; resolve %s -> %s",
             rule.symbol, name, p.n)
@@ -577,14 +577,14 @@ local function add_rbl(key, rbl)
           table.insert(white_symbols, s)
         end
       else
-        if rbl.ignore_whitelists == false then
+        if rbl.ignore_whitelist == false then
           table.insert(black_symbols, s)
         end
       end
     end
   end
 
-  if not rbl.is_whitelist and rbl.ignore_whitelists == false then
+  if not rbl.is_whitelist and rbl.ignore_whitelist == false then
     table.insert(black_symbols, rbl.symbol)
   end
   -- Process monitored
@@ -600,7 +600,7 @@ local function add_rbl(key, rbl)
   end
 end
 
-for key,rbl in pairs(opts['rbls']) do
+for key,rbl in pairs(opts.rbls or opts.rules) do
   if type(rbl) ~= 'table' or rbl.disabled == true or rbl.enabled == false then
     rspamd_logger.infox(rspamd_config, 'disable rbl "%s"', key)
   else
