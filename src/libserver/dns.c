@@ -499,7 +499,12 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 				ucl_object_iterate_free (rep_it);
 
 				if (replies) {
-					msg_info_config ("added fake record: %s(%s)", name, rdns_str_from_type (rtype));
+					struct rdns_reply_entry *tmp_entry;
+					guint i = 0;
+					DL_COUNT (replies, tmp_entry, i);
+
+					msg_info_config ("added fake record: %s(%s); %d replies", name,
+							rdns_str_from_type (rtype), i);
 					rdns_resolver_set_fake_reply (dns_resolver->r,
 							name, rtype, rcode, replies);
 				}

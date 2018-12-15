@@ -426,7 +426,6 @@ local function gen_rbl_callback(rule)
     local dns_req = {}
 
     local function rbl_dns_callback(_, to_resolve, results, err)
-      rspamd_logger.errx(task, 'dns results: %s', results)
       rbl_dns_process(task, rule, to_resolve, results, err)
     end
 
