@@ -534,7 +534,7 @@ local function add_rbl(key, rbl)
     rbl.symbol = key:upper()
   end
 
-  local flags_tbl = {}
+  local flags_tbl = {'no_squeeze'}
   if rbl.is_whitelist then
     flags_tbl[#flags_tbl + 1] = 'nice'
   end
@@ -655,14 +655,14 @@ rspamd_config:register_symbol{
   type = 'callback',
   callback = rbl_callback_white,
   name = 'RBL_CALLBACK_WHITE',
-  flags = 'nice,empty'
+  flags = 'nice,empty,no_squeeze'
 }
 
 rspamd_config:register_symbol{
   type = 'callback',
   callback = rbl_callback_fin,
   name = 'RBL_CALLBACK',
-  flags = 'empty'
+  flags = 'empty,no_squeeze'
 }
 
 for _, w in ipairs(white_symbols) do
