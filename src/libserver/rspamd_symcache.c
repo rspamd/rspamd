@@ -2532,7 +2532,7 @@ rspamd_symcache_enable_symbol (struct rspamd_task *task,
 		if (item) {
 			dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
 
-			if (CHECK_FINISH_BIT (checkpoint, dyn_item)) {
+			if (!CHECK_FINISH_BIT (checkpoint, dyn_item)) {
 				ret = TRUE;
 				CLR_START_BIT (checkpoint, dyn_item);
 				CLR_FINISH_BIT (checkpoint, dyn_item);
@@ -2568,13 +2568,16 @@ rspamd_symcache_disable_symbol (struct rspamd_task *task,
 		if (item) {
 			dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
 
-			if (CHECK_START_BIT (checkpoint, dyn_item)) {
+			if (!CHECK_START_BIT (checkpoint, dyn_item)) {
 				ret = TRUE;
 				SET_START_BIT (checkpoint, dyn_item);
 				SET_FINISH_BIT (checkpoint, dyn_item);
 			}
 			else {
-				msg_warn_task ("cannot disable symbol %s: already started", symbol);
+				if (!CHECK_FINISH_BIT (checkpoint, dyn_item)) {
+					msg_warn_task ("cannot disable symbol %s: already started",
+							symbol);
+				}
 			}
 		}
 	}
