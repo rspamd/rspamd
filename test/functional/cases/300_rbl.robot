@@ -28,6 +28,14 @@ RBL FROM UNKNOWN HIT
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  4.3.2.2
   Check Rspamc  ${result}  FAKE_RBL_UNKNOWN
 
+RBL RECEIVED HIT
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  8.8.8.8
+  Check Rspamc  ${result}  FAKE_RECEIVED_RBL_CODE_3
+
+RBL FROM HIT WL
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  4.3.2.4
+  Check Rspamc  ${result}  FAKE_RBL_CODE_2  inverse=True
+
 *** Keywords ***
 Rbl Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/rbl.conf
