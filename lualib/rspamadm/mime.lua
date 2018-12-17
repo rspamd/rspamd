@@ -679,8 +679,6 @@ local function modify_handler(opts)
     for _,part in ipairs(task:get_parts()) do
       local boundary = part:get_boundary()
       if part:is_multipart() then
-        local _,st = part:get_type()
-
         if cur_boundary then
           io.write(string.format('--%s%s',
               boundaries[#boundaries], newline_s))
@@ -714,6 +712,17 @@ local function modify_handler(opts)
         io.write(newline_s)
       else
         local append_footer = false
+        local skip_footer = part:is_attachment()
+
+        local parent = part:get_parent()
+        if parent then
+          local t,st = parent:get_type()
+
+          if t == 'multipart' and st == 'signed' then
+            -- Do not modify signed parts
+            skip_footer = true
+          end
+        end
         if text_footer and part:is_text() then
           local tp = part:get_text()
 
@@ -744,7 +753,7 @@ local function modify_handler(opts)
 
         io.flush()
 
-        if append_footer then
+        if append_footer and not skip_footer then
           do_append_footer(task, part, append_footer)
         else
           part:get_raw_headers():save_in_file(1)
