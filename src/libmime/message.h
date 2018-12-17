@@ -43,6 +43,7 @@ struct rspamd_mime_text_part;
 
 struct rspamd_mime_multipart {
 	GPtrArray *children;
+	rspamd_ftok_t boundary;
 };
 
 struct rspamd_mime_part {
@@ -64,7 +65,7 @@ struct rspamd_mime_part {
 	guint id;
 
 	union {
-		struct rspamd_mime_multipart mp;
+		struct rspamd_mime_multipart *mp;
 		struct rspamd_mime_text_part *txt;
 		struct rspamd_image *img;
 		struct rspamd_archive *arch;

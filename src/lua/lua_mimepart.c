@@ -1595,13 +1595,13 @@ lua_mimepart_get_children (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (!IS_CT_MULTIPART (part->ct) || part->specific.mp.children == NULL) {
+	if (!IS_CT_MULTIPART (part->ct) || part->specific.mp->children == NULL) {
 		lua_pushnil (L);
 	}
 	else {
-		lua_createtable (L, part->specific.mp.children->len, 0);
+		lua_createtable (L, part->specific.mp->children->len, 0);
 
-		PTR_ARRAY_FOREACH (part->specific.mp.children, i, cur) {
+		PTR_ARRAY_FOREACH (part->specific.mp->children, i, cur) {
 			pcur = lua_newuserdata (L, sizeof (*pcur));
 			*pcur = cur;
 			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);

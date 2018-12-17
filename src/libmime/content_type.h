@@ -41,11 +41,12 @@ struct rspamd_content_type_param {
 };
 
 struct rspamd_content_type {
-	gchar *lc_data;
+	gchar *cpy;
 	rspamd_ftok_t type;
 	rspamd_ftok_t subtype;
 	rspamd_ftok_t charset;
 	rspamd_ftok_t boundary;
+	rspamd_ftok_t orig_boundary;
 	enum rspamd_content_type_flags flags;
 	GHashTable *attrs; /* Can be empty */
 };
@@ -66,16 +67,16 @@ struct rspamd_content_disposition {
 /**
  * Adds new parameter to content type structure
  * @param ct
- * @param name_start
+ * @param name_start (can be modified)
  * @param name_end
- * @param value_start
+ * @param value_start (can be modified)
  * @param value_end
  */
 void
 rspamd_content_type_add_param (rspamd_mempool_t *pool,
-		struct rspamd_content_type *ct,
-		const gchar *name_start, const gchar *name_end,
-		const gchar *value_start, const gchar *value_end);
+							   struct rspamd_content_type *ct,
+							   gchar *name_start,  gchar *name_end,
+							   gchar *value_start,  gchar *value_end);
 
 /**
  * Parse content type from the header (performs copy + lowercase)

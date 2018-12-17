@@ -21,43 +21,28 @@
 void
 rspamd_content_type_add_param (rspamd_mempool_t *pool,
 		struct rspamd_content_type *ct,
-		const gchar *name_start, const gchar *name_end,
-		const gchar *value_start, const gchar *value_end)
+		gchar *name_start, gchar *name_end,
+		gchar *value_start, gchar *value_end)
 {
 	rspamd_ftok_t srch;
 	struct rspamd_content_type_param *found = NULL, *nparam;
 
 	g_assert (ct != NULL);
 
-	srch.begin = name_start;
-	srch.len = name_end - name_start;
-
-	if (ct->attrs) {
-		found = g_hash_table_lookup (ct->attrs, &srch);
-	}
-	else {
-		ct->attrs = g_hash_table_new (rspamd_ftok_icase_hash,
-				rspamd_ftok_icase_equal);
-	}
 
 	nparam = rspamd_mempool_alloc (pool, sizeof (*nparam));
 	nparam->name.begin = name_start;
 	nparam->name.len = name_end - name_start;
+	rspamd_str_lc (name_start, name_end - name_start);
+
 	nparam->value.begin = value_start;
 	nparam->value.len = value_end - value_start;
-
-	if (!found) {
-		DL_APPEND (found, nparam);
-		g_hash_table_insert (ct->attrs, &nparam->name, nparam);
-	}
-	else {
-		DL_APPEND (found, nparam);
-	}
 
 	RSPAMD_FTOK_ASSIGN (&srch, "charset");
 
 	if (rspamd_ftok_cmp (&nparam->name, &srch) == 0) {
 		/* Adjust charset */
+		found = nparam;
 		ct->charset.begin = nparam->value.begin;
 		ct->charset.len = nparam->value.len;
 	}
@@ -65,17 +50,47 @@ rspamd_content_type_add_param (rspamd_mempool_t *pool,
 	RSPAMD_FTOK_ASSIGN (&srch, "boundary");
 
 	if (rspamd_ftok_cmp (&nparam->name, &srch) == 0) {
+		found = nparam;
+		gchar *lc_boundary;
 		/* Adjust boundary */
-		ct->boundary.begin = nparam->value.begin;
+		lc_boundary = rspamd_mempool_alloc (pool, nparam->value.len);
+		memcpy (lc_boundary, nparam->value.begin, nparam->value.len);
+		rspamd_str_lc (lc_boundary, nparam->value.len);
+		ct->boundary.begin = lc_boundary;
 		ct->boundary.len = nparam->value.len;
+		/* Preserve original (case sensitive) boundary */
+		ct->orig_boundary.begin = nparam->value.begin;
+		ct->orig_boundary.len = nparam->value.len;
+	}
+
+	if (!found) {
+		srch.begin = nparam->name.begin;
+		srch.len = nparam->name.len;
+
+		rspamd_str_lc (value_start, value_end - value_start);
+
+		if (ct->attrs) {
+			found = g_hash_table_lookup (ct->attrs, &srch);
+		} else {
+			ct->attrs = g_hash_table_new (rspamd_ftok_icase_hash,
+					rspamd_ftok_icase_equal);
+		}
+
+		if (!found) {
+			DL_APPEND (found, nparam);
+			g_hash_table_insert (ct->attrs, &nparam->name, nparam);
+		}
+		else {
+			DL_APPEND (found, nparam);
+		}
 	}
 }
 
 static struct rspamd_content_type *
-rspamd_content_type_parser (const gchar *in, gsize len, rspamd_mempool_t *pool)
+rspamd_content_type_parser (gchar *in, gsize len, rspamd_mempool_t *pool)
 {
 	guint obraces = 0, ebraces = 0, qlen = 0;
-	const gchar *p, *c, *end, *pname_start = NULL, *pname_end = NULL;
+	gchar *p, *c, *end, *pname_start = NULL, *pname_end = NULL;
 	struct rspamd_content_type *res = NULL, val;
 	gboolean eqsign_seen = FALSE;
 	enum {
@@ -95,7 +110,7 @@ rspamd_content_type_parser (const gchar *in, gsize len, rspamd_mempool_t *pool)
 	c = p;
 	end = p + len;
 	memset (&val, 0, sizeof (val));
-	val.lc_data = (gchar *)in;
+	val.cpy = in;
 
 	while (p < end) {
 		switch (state) {
@@ -346,6 +361,9 @@ rspamd_content_type_parser (const gchar *in, gsize len, rspamd_mempool_t *pool)
 	if (val.type.len > 0) {
 		res = rspamd_mempool_alloc (pool, sizeof (val));
 		memcpy (res, &val, sizeof (val));
+
+		/* Lowercase common thingies */
+
 	}
 
 	return res;
@@ -359,9 +377,8 @@ rspamd_content_type_parse (const gchar *in,
 	rspamd_ftok_t srch;
 	gchar *lc_data;
 
-	lc_data = rspamd_mempool_alloc (pool, len);
-	memcpy (lc_data, in, len);
-	rspamd_str_lc (lc_data, len);
+	lc_data = rspamd_mempool_alloc (pool, len + 1);
+	rspamd_strlcpy (lc_data, in, len + 1);
 
 	if ((res = rspamd_content_type_parser (lc_data, len, pool)) != NULL) {
 		if (res->attrs) {

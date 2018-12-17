@@ -249,8 +249,8 @@ rspamd_task_free (struct rspamd_task *task)
 			}
 
 			if (IS_CT_MULTIPART (p->ct)) {
-				if (p->specific.mp.children) {
-					g_ptr_array_free (p->specific.mp.children, TRUE);
+				if (p->specific.mp->children) {
+					g_ptr_array_free (p->specific.mp->children, TRUE);
 				}
 			}
 		}
