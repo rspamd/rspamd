@@ -487,6 +487,13 @@ LUA_FUNCTION_DEF (mimepart, is_broken);
  * @param {table} params optional parameters
  */
 LUA_FUNCTION_DEF (mimepart, headers_foreach);
+/***
+ * @method mime_part:get_parent()
+ * Returns parent part for this part
+ * @return {rspamd_mimepart} parent part or nil
+ */
+LUA_FUNCTION_DEF (mimepart, get_parent);
+
 
 static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_content),
@@ -511,6 +518,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, is_multipart),
 	LUA_INTERFACE_DEF (mimepart, is_message),
 	LUA_INTERFACE_DEF (mimepart, get_children),
+	LUA_INTERFACE_DEF (mimepart, get_parent),
 	LUA_INTERFACE_DEF (mimepart, is_text),
 	LUA_INTERFACE_DEF (mimepart, is_broken),
 	LUA_INTERFACE_DEF (mimepart, is_attachment),
@@ -1667,6 +1675,29 @@ lua_mimepart_get_children (lua_State * L)
 			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
 			lua_rawseti (L, -2, i + 1);
 		}
+	}
+
+	return 1;
+}
+
+static gint
+lua_mimepart_get_parent (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+	struct rspamd_mime_part **pparent;
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (part->parent_part) {
+		pparent = lua_newuserdata (L, sizeof (*pparent));
+		*pparent = part->parent_part;
+		rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
+	}
+	else {
+		lua_pushnil (L);
 	}
 
 	return 1;
