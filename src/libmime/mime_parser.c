@@ -925,7 +925,7 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 				bend ++;
 			}
 
-			b.boundary = p - st->start - 3;
+			b.boundary = p - st->start - 2;
 			b.start = bend - st->start;
 
 			if (closing) {
