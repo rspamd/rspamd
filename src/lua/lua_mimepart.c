@@ -421,7 +421,12 @@ LUA_FUNCTION_DEF (mimepart, get_archive);
  * @return {bool} true if a part is is a multipart part
  */
 LUA_FUNCTION_DEF (mimepart, is_multipart);
-
+/***
+ * @method mime_part:is_message()
+ * Returns true if mime part is a message part (message/rfc822)
+ * @return {bool} true if a part is is a message part
+ */
+LUA_FUNCTION_DEF (mimepart, is_message);
 /***
  * @method mime_part:get_boundary()
  * Returns boundary for a part (extracted from parent multipart for normal parts and
@@ -504,6 +509,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, is_archive),
 	LUA_INTERFACE_DEF (mimepart, get_archive),
 	LUA_INTERFACE_DEF (mimepart, is_multipart),
+	LUA_INTERFACE_DEF (mimepart, is_message),
 	LUA_INTERFACE_DEF (mimepart, get_children),
 	LUA_INTERFACE_DEF (mimepart, is_text),
 	LUA_INTERFACE_DEF (mimepart, is_broken),
@@ -1505,6 +1511,21 @@ lua_mimepart_is_multipart (lua_State * L)
 	}
 
 	lua_pushboolean (L, IS_CT_MULTIPART (part->ct) ? true : false);
+
+	return 1;
+}
+
+static gint
+lua_mimepart_is_message (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, IS_CT_MESSAGE (part->ct) ? true : false);
 
 	return 1;
 }
