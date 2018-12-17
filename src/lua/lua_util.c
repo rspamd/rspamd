@@ -59,6 +59,14 @@ LUA_FUNCTION_DEF (util, config_from_ucl);
  */
 LUA_FUNCTION_DEF (util, encode_base64);
 /***
+ * @function util.encode_qp(input[, str_len, [newlines_type]])
+ * Encodes data in quouted printable breaking lines if needed
+ * @param {text or string} input input data
+ * @param {number} str_len optional size of lines or 0 if split is not needed
+ * @return {rspamd_text} encoded data chunk
+ */
+LUA_FUNCTION_DEF (util, encode_qp);
+/***
  * @function util.decode_base64(input)
  * Decodes data from base64 ignoring whitespace characters
  * @param {text or string} input data to decode; if `rspamd{text}` is used then the string is modified **in-place**
@@ -546,6 +554,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, config_from_ucl),
 	LUA_INTERFACE_DEF (util, process_message),
 	LUA_INTERFACE_DEF (util, encode_base64),
+	LUA_INTERFACE_DEF (util, encode_qp),
 	LUA_INTERFACE_DEF (util, decode_base64),
 	LUA_INTERFACE_DEF (util, encode_base32),
 	LUA_INTERFACE_DEF (util, decode_base32),
@@ -885,6 +894,70 @@ lua_util_encode_base64 (lua_State *L)
 
 			out = rspamd_encode_base64_fold (s, inlen, str_lim, &outlen, how);
 		}
+
+		if (out != NULL) {
+			t = lua_newuserdata (L, sizeof (*t));
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+			t->start = out;
+			t->len = outlen;
+			/* Need destruction */
+			t->flags = RSPAMD_TEXT_FLAG_OWN;
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_encode_qp (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t;
+	const gchar *s = NULL;
+	gchar *out;
+	gsize inlen, outlen;
+	guint str_lim = 0;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		s = luaL_checklstring (L, 1, &inlen);
+	}
+	else if (lua_type (L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text (L, 1);
+
+		if (t != NULL) {
+			s = t->start;
+			inlen = t->len;
+		}
+	}
+
+	if (lua_gettop (L) > 1) {
+		str_lim = luaL_checknumber (L, 2);
+	}
+
+	if (s == NULL) {
+		lua_pushnil (L);
+	}
+	else {
+		enum rspamd_newlines_type how = RSPAMD_TASK_NEWLINES_CRLF;
+
+		if (lua_type (L, 3) == LUA_TSTRING) {
+			const gchar *how_str = lua_tostring (L, 3);
+
+			if (g_ascii_strcasecmp (how_str, "cr") == 0) {
+				how = RSPAMD_TASK_NEWLINES_CR;
+			}
+			else if (g_ascii_strcasecmp (how_str, "lf") == 0) {
+				how = RSPAMD_TASK_NEWLINES_LF;
+			}
+			else if (g_ascii_strcasecmp (how_str, "crlf") != 0) {
+				return luaL_error (L, "invalid newline style: %s", how_str);
+			}
+		}
+
+		out = rspamd_encode_qp_fold (s, inlen, str_lim, &outlen, how);
 
 		if (out != NULL) {
 			t = lua_newuserdata (L, sizeof (*t));
