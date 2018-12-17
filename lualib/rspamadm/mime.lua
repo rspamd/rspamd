@@ -127,6 +127,22 @@ urls:flag "--count"
 urls:flag "-r --reverse"
     :description "Reverse sort order"
 
+local modify = parser:command "modify mod m"
+                   :description "Modifies MIME message"
+modify:argument "file"
+      :description "File to process"
+      :argname "<file>"
+      :args "+"
+
+modify:option "-a --add-header"
+      :description "Adds specific header"
+      :argname "<header=value>"
+      :count "*"
+modify:option "-r --remove-header"
+      :description "Removes specific header (all occurrences)"
+      :argname "<header>"
+      :count "*"
+
 local function load_config(opts)
   local _r,err = rspamd_config:load_ucl(opts['config'])
 
@@ -557,6 +573,126 @@ local function urls_handler(opts)
   print_elts(out_elts, opts)
 end
 
+local function modify_handler(opts)
+  local rspamd_util = require "rspamd_util"
+  load_config(opts)
+  rspamd_url.init(rspamd_config:get_tld_path())
+
+  local function newline(task)
+    local t = task:get_newlines_type()
+
+    if t == 'cr' then
+      return '\r'
+    elseif t == 'lf' then
+      return '\n'
+    end
+
+    return '\r\n'
+  end
+
+  for _,fname in ipairs(opts.file) do
+    local task = load_task(opts, fname)
+    local newline_s = newline(task)
+
+    local function process_headers_cb(name, hdr)
+      for _,h in ipairs(opts['remove_header']) do
+        if name:match(h) then
+          return
+        end
+      end
+
+      io.write(hdr.raw)
+    end
+
+    task:headers_foreach(process_headers_cb, {full = true})
+
+    for _,h in ipairs(opts['add_header']) do
+      local hname,hvalue = h:match('^([^=]+)=(.+)$')
+
+      if hname and hvalue then
+        io.write(string.format('%s: %s%s', hname,
+            rspamd_util.fold_header(hname, hvalue, task:get_newlines_type()),
+            newline_s))
+      end
+    end
+
+    -- End of headers
+    io.write(newline_s)
+
+    local boundaries = {}
+    local cur_boundary
+
+    for _,part in ipairs(task:get_parts()) do
+      local boundary = part:get_boundary()
+      if part:is_multipart() then
+        local _,st = part:get_type()
+
+        if cur_boundary then
+          io.write(string.format('--%s%s',
+              boundaries[#boundaries], newline_s))
+        end
+
+        boundaries[#boundaries + 1] = boundary or '--XXX'
+        cur_boundary = boundary
+        io.flush ()
+
+        local rh = part:get_raw_headers()
+        if #rh > 0 then
+          rh:save_in_file(1)
+          io.write(newline_s)
+          io.flush()
+        end
+      elseif part:is_message() then
+        if boundary then
+          if cur_boundary and boundary ~= cur_boundary then
+            -- Need to close boundary
+            io.write(string.format('--%s--%s%s',
+                boundaries[#boundaries], newline_s, newline_s))
+            table.remove(boundaries)
+            cur_boundary = nil
+          end
+          io.write(string.format('--%s%s',
+              boundary, newline_s))
+        end
+
+        io.flush()
+        part:get_raw_headers():save_in_file(1)
+        io.write(newline_s)
+      else
+        if boundary then
+          if cur_boundary and boundary ~= cur_boundary then
+            -- Need to close boundary
+            io.write(string.format('--%s--%s%s',
+                boundaries[#boundaries], newline_s, newline_s))
+            table.remove(boundaries)
+            cur_boundary = boundary
+          end
+          io.write(string.format('--%s%s',
+              boundary, newline_s))
+        end
+
+        io.flush()
+        part:get_raw_headers():save_in_file(1)
+        io.write(newline_s)
+        io.flush()
+        part:get_raw_content():save_in_file(1)
+      end
+    end
+
+    -- Close remaining
+    local b = table.remove(boundaries)
+    while b do
+      io.write(string.format('--%s--%s', b, newline_s))
+      if #boundaries > 0 then
+        io.write(newline_s)
+      end
+      b = table.remove(boundaries)
+    end
+
+    task:destroy() -- No automatic dtor
+  end
+end
+
 local function handler(args)
   local opts = parser:parse(args)
 
@@ -574,6 +710,8 @@ local function handler(args)
     stat_handler(opts)
   elseif command == 'urls' then
     urls_handler(opts)
+  elseif command == 'modify' then
+    modify_handler(opts)
   else
     parser:error('command %s is not implemented', command)
   end
