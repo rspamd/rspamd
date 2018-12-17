@@ -902,6 +902,128 @@ rspamd_encode_base64_fold (const guchar *in, gsize inlen, gint str_len,
 	return rspamd_encode_base64_common (in, inlen, str_len, outlen, TRUE, how);
 }
 
+gchar *
+rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
+						   gsize *outlen, enum rspamd_newlines_type how)
+{
+	gsize olen = 0, span = 0, i = 0;
+	gchar *out;
+	gint ch;
+	const guchar *end = in + inlen, *p = in;
+	static const gchar hexdigests[16] = "0123456789ABCDEF";
+
+	while (p < end) {
+		ch = *p;
+
+		if (ch < 128 && ch != '\r' && ch != '\n') {
+			olen ++;
+			span ++;
+		}
+		else {
+			if (str_len > 0 && span + 5 >= str_len) {
+				if (how == RSPAMD_TASK_NEWLINES_CRLF) {
+					/* =\r\n */
+					olen += 3;
+				}
+				else {
+					olen += 2;
+				}
+				span = 0;
+			}
+
+			olen += 3;
+			span += 3;
+		}
+
+		if (str_len > 0 && span >= str_len) {
+			if (how == RSPAMD_TASK_NEWLINES_CRLF) {
+				/* =\r\n */
+				olen += 3;
+			}
+			else {
+				olen += 2;
+			}
+			span = 0;
+		}
+
+		p ++;
+	}
+
+	out = g_malloc (olen + 1);
+	p = in;
+	i = 0;
+	span = 0;
+
+	while (p < end) {
+		ch = *p;
+
+		if (ch < 128 && ch != '\r' && ch != '\n') {
+			out[i++] = ch;
+			span ++;
+		}
+		else {
+			if (str_len > 0 && span + 5 >= str_len) {
+				/* Add new line and then continue */
+				switch (how) {
+				default:
+				case RSPAMD_TASK_NEWLINES_CRLF:
+					out[i++] = '=';
+					out[i++] = '\r';
+					out[i++] = '\n';
+					break;
+				case RSPAMD_TASK_NEWLINES_LF:
+					out[i++] = '=';
+					out[i++] = '\n';
+					break;
+				case RSPAMD_TASK_NEWLINES_CR:
+					out[i++] = '=';
+					out[i++] = '\r';
+					break;
+				}
+
+				span = 0;
+			}
+
+			out[i++] = '=';
+			out[i++] = hexdigests[((ch >> 4) & 0xF)];
+			out[i++] = hexdigests[(ch & 0xF)];
+			span += 3;
+		}
+
+		if (str_len > 0 && span + 3 >= str_len) {
+			/* Add new line and then continue */
+			switch (how) {
+			default:
+			case RSPAMD_TASK_NEWLINES_CRLF:
+				out[i++] = '=';
+				out[i++] = '\r';
+				out[i++] = '\n';
+				break;
+			case RSPAMD_TASK_NEWLINES_LF:
+				out[i++] = '=';
+				out[i++] = '\n';
+				break;
+			case RSPAMD_TASK_NEWLINES_CR:
+				out[i++] = '=';
+				out[i++] = '\r';
+				break;
+			}
+
+			span = 0;
+		}
+
+		g_assert (i <= olen);
+		p ++;
+	}
+
+	out[i] = '\0';
+
+	if (outlen) {
+		*outlen = i;
+	}
+
+	return out;
+}
 
 #define MIN3(a, b, c) ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
 

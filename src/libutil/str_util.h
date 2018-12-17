@@ -204,6 +204,16 @@ gchar * rspamd_encode_base64_fold (const guchar *in, gsize inlen, gint str_len,
 		gsize *outlen, enum rspamd_newlines_type how);
 
 /**
+ * Encode and fold string using quoted printable encoding
+ * @param in input
+ * @param inlen input length
+ * @param str_len maximum string length (if <= 0 then no lines are split)
+ * @return freshly allocated base64 encoded value or NULL if input is invalid
+ */
+gchar * rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
+								   gsize *outlen, enum rspamd_newlines_type how);
+
+/**
  * Decode quoted-printable encoded buffer, input and output must not overlap
  * @param in input
  * @param inlen length of input
