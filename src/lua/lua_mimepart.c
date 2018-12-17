@@ -421,6 +421,15 @@ LUA_FUNCTION_DEF (mimepart, get_archive);
  * @return {bool} true if a part is is a multipart part
  */
 LUA_FUNCTION_DEF (mimepart, is_multipart);
+
+/***
+ * @method mime_part:get_boundary()
+ * Returns boundary for a part (extracted from parent multipart for normal parts and
+ * from the part itself for multipart)
+ * @return {string} boundary value or nil
+ */
+LUA_FUNCTION_DEF (mimepart, get_boundary);
+
 /***
  * @method mime_part:get_children()
  * Returns rspamd_mimepart table of part's childer. Returns nil if mime part is not multipart
@@ -484,6 +493,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_detected_type_full),
 	LUA_INTERFACE_DEF (mimepart, get_cte),
 	LUA_INTERFACE_DEF (mimepart, get_filename),
+	LUA_INTERFACE_DEF (mimepart, get_boundary),
 	LUA_INTERFACE_DEF (mimepart, get_header),
 	LUA_INTERFACE_DEF (mimepart, get_header_raw),
 	LUA_INTERFACE_DEF (mimepart, get_header_full),
@@ -1349,6 +1359,35 @@ lua_mimepart_get_filename (lua_State * L)
 	}
 
 	lua_pushlstring (L, part->cd->filename.begin, part->cd->filename.len);
+
+	return 1;
+}
+
+static gint
+lua_mimepart_get_boundary (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart (L), *parent;
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (IS_CT_MULTIPART (part->ct)) {
+		lua_pushlstring (L, part->specific.mp->boundary.begin,
+				part->specific.mp->boundary.len);
+	}
+	else {
+		parent = part->parent_part;
+
+		if (!parent || !IS_CT_MULTIPART (parent->ct)) {
+			lua_pushnil (L);
+		}
+		else {
+			lua_pushlstring (L, parent->specific.mp->boundary.begin,
+					parent->specific.mp->boundary.len);
+		}
+	}
 
 	return 1;
 }
