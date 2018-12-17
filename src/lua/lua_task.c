@@ -2108,6 +2108,12 @@ rspamd_lua_push_header (lua_State *L, struct rspamd_mime_header *rh,
 			rspamd_lua_table_set (L, "value", rh->value);
 		}
 
+		if (rh->raw_len > 0) {
+			lua_pushstring (L, "raw");
+			lua_pushlstring (L, rh->raw_value, rh->raw_len);
+			lua_settable (L, -3);
+		}
+
 		if (rh->decoded) {
 			rspamd_lua_table_set (L, "decoded", rh->decoded);
 		}
