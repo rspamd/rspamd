@@ -142,6 +142,12 @@ modify:option "-r --remove-header"
       :description "Removes specific header (all occurrences)"
       :argname "<header>"
       :count "*"
+modify:option "-t --text-footer"
+      :description "Adds footer to text/plain parts from a specific file"
+      :argname "<file>"
+modify:option "-H --html-footer"
+      :description "Adds footer to text/html parts from a specific file"
+      :argname "<file>"
 
 local function load_config(opts)
   local _r,err = rspamd_config:load_ucl(opts['config'])
@@ -590,6 +596,54 @@ local function modify_handler(opts)
     return '\r\n'
   end
 
+  local function read_file(file)
+    local f = assert(io.open(file, "rb"))
+    local content = f:read("*all")
+    f:close()
+    return content
+  end
+
+  local function do_append_footer(task, part, footer)
+    local newline_s = newline(task)
+    local tp = part:get_text()
+    local ct = 'text/plain'
+
+    if tp:is_html() then
+      ct = 'text/html'
+    end
+
+    io.write(string.format('Content-Type: %s; charset=utf-8%s'..
+        'Content-Transfer-Encoding: quoted-printable%s%s',
+        ct, newline_s, newline_s, newline_s))
+    io.flush()
+    local content = tostring(tp:get_content('raw_utf') or '')
+    local double_nline = newline_s .. newline_s
+    local nlen = #double_nline
+    -- Hack, if part ends with 2 newline, then we append it after footer
+    if content:sub(-(nlen), nlen + 1) == double_nline then
+      content = string.format('%s%s',
+          content:sub(-(#newline_s), #newline_s + 1), -- content without last newline
+          footer)
+      rspamd_util.encode_qp(content,
+          80, task:get_newlines_type()):save_in_file(1)
+    else
+      rspamd_util.encode_qp(content .. footer,
+          80, task:get_newlines_type()):save_in_file(1)
+    end
+
+    io.write(double_nline)
+  end
+
+  local text_footer, html_footer
+
+  if opts['text_footer'] then
+    text_footer = read_file(opts['text_footer'])
+  end
+
+  if opts['html_footer'] then
+    html_footer = read_file(opts['html_footer'])
+  end
+
   for _,fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     local newline_s = newline(task)
@@ -659,6 +713,23 @@ local function modify_handler(opts)
         part:get_raw_headers():save_in_file(1)
         io.write(newline_s)
       else
+        local append_footer = false
+        if text_footer and part:is_text() then
+          local tp = part:get_text()
+
+          if not tp:is_html() then
+            append_footer = text_footer
+          end
+        end
+
+        if html_footer and part:is_text() then
+          local tp = part:get_text()
+
+          if tp:is_html() then
+            append_footer = html_footer
+          end
+        end
+
         if boundary then
           if cur_boundary and boundary ~= cur_boundary then
             -- Need to close boundary
@@ -672,10 +743,15 @@ local function modify_handler(opts)
         end
 
         io.flush()
-        part:get_raw_headers():save_in_file(1)
-        io.write(newline_s)
-        io.flush()
-        part:get_raw_content():save_in_file(1)
+
+        if append_footer then
+          do_append_footer(task, part, append_footer)
+        else
+          part:get_raw_headers():save_in_file(1)
+          io.write(newline_s)
+          io.flush()
+          part:get_raw_content():save_in_file(1)
+        end
       end
     end
 
