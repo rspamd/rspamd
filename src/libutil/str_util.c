@@ -935,7 +935,7 @@ rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
 			span += 3;
 		}
 
-		if (str_len > 0 && span >= str_len) {
+		if (str_len > 0 && span + 3 >= str_len) {
 			if (how == RSPAMD_TASK_NEWLINES_CRLF) {
 				/* =\r\n */
 				olen += 3;
