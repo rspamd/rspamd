@@ -1216,8 +1216,8 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 			}
 		}
 
-		pbegin = part->parsed_data.begin;
-		plen = part->parsed_data.len;
+		pbegin = part->parsed_data.begin + body_pos;
+		plen = part->parsed_data.len - body_pos;
 
 		hdrs = rspamd_message_get_header_from_hash (npart->raw_headers,
 				task->task_pool,
