@@ -18,7 +18,9 @@
 #include "tokenizers/tokenizers.h"
 #include "unix-std.h"
 #include "contrib/zstd/zstd.h"
+#include "contrib/uthash/utlist.h"
 #include "libmime/email_addr.h"
+#include "libmime/content_type.h"
 #include "linenoise.h"
 #include <math.h>
 #include <glob.h>
@@ -547,6 +549,21 @@ LUA_FUNCTION_DEF (util, caseless_hash_fast);
  */
 LUA_FUNCTION_DEF (util, get_hostname);
 
+/***
+ *  @function util.parse_content_type(ct_string, mempool)
+ * Parses content-type string to a table:
+ * - `type`
+ * - `subtype`
+ * - `charset`
+ * - `boundary`
+ * - other attributes
+ *
+ * @param {string} ct_string content type as string
+ * @param {rspamd_mempool} mempool needed to store temporary data (e.g. task pool)
+ * @return table or nil if cannot parse content type
+ */
+LUA_FUNCTION_DEF (util, parse_content_type);
+
 
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
@@ -600,6 +617,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, umask),
 	LUA_INTERFACE_DEF (util, isatty),
 	LUA_INTERFACE_DEF (util, get_hostname),
+	LUA_INTERFACE_DEF (util, parse_content_type),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
 	LUA_INTERFACE_DEF (util, packsize),
@@ -2504,6 +2522,78 @@ lua_util_get_hostname (lua_State *L)
 	gethostname (hostbuf, hostlen - 1);
 
 	lua_pushstring (L, hostbuf);
+
+	return 1;
+}
+
+static gint
+lua_util_parse_content_type (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	gsize len;
+	const gchar *ct_str = luaL_checklstring (L, 1, &len);
+	rspamd_mempool_t *pool = rspamd_lua_check_mempool (L, 2);
+	struct rspamd_content_type *ct;
+
+	if (!ct_str || !pool) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	ct = rspamd_content_type_parse (ct_str, len, pool);
+
+	if (ct == NULL) {
+		lua_pushnil (L);
+	}
+	else {
+		GHashTableIter it;
+		gpointer k, v;
+
+		lua_createtable (L, 0, 4 + (ct->attrs ? g_hash_table_size (ct->attrs) : 0));
+
+		if (ct->type.len > 0) {
+			lua_pushstring (L, "type");
+			lua_pushlstring (L, ct->type.begin, ct->type.len);
+			lua_settable (L, -3);
+		}
+
+		if (ct->subtype.len > 0) {
+			lua_pushstring (L, "subtype");
+			lua_pushlstring (L, ct->subtype.begin, ct->subtype.len);
+			lua_settable (L, -3);
+		}
+
+		if (ct->charset.len > 0) {
+			lua_pushstring (L, "charset");
+			lua_pushlstring (L, ct->charset.begin, ct->charset.len);
+			lua_settable (L, -3);
+		}
+
+		if (ct->orig_boundary.len > 0) {
+			lua_pushstring (L, "boundary");
+			lua_pushlstring (L, ct->orig_boundary.begin, ct->orig_boundary.len);
+			lua_settable (L, -3);
+		}
+
+		if (ct->attrs) {
+			g_hash_table_iter_init (&it, ct->attrs);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				struct rspamd_content_type_param *param =
+						(struct rspamd_content_type_param *)v, *cur;
+				guint i = 1;
+
+				lua_pushlstring (L, param->name.begin, param->name.len);
+				lua_createtable (L, 1, 0);
+
+				DL_FOREACH (param, cur) {
+					lua_pushlstring (L, cur->value.begin, cur->value.len);
+					lua_rawseti (L, -2, i++);
+				}
+
+				lua_settable (L, -3);
+			}
+		}
+	}
 
 	return 1;
 }
