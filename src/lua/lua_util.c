@@ -21,6 +21,7 @@
 #include "contrib/uthash/utlist.h"
 #include "libmime/email_addr.h"
 #include "libmime/content_type.h"
+#include "libmime/mime_headers.h"
 #include "linenoise.h"
 #include <math.h>
 #include <glob.h>
@@ -564,6 +565,14 @@ LUA_FUNCTION_DEF (util, get_hostname);
  */
 LUA_FUNCTION_DEF (util, parse_content_type);
 
+/***
+ *  @function util.mime_header_encode(hdr)
+ * Encodes header if needed
+ * @param {string} hdr input header
+ * @return encoded header
+ */
+LUA_FUNCTION_DEF (util, mime_header_encode);
+
 
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
@@ -618,6 +627,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, isatty),
 	LUA_INTERFACE_DEF (util, get_hostname),
 	LUA_INTERFACE_DEF (util, parse_content_type),
+	LUA_INTERFACE_DEF (util, mime_header_encode),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
 	LUA_INTERFACE_DEF (util, packsize),
@@ -2594,6 +2604,26 @@ lua_util_parse_content_type (lua_State *L)
 			}
 		}
 	}
+
+	return 1;
+}
+
+
+static gint
+lua_util_mime_header_encode (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	gsize len;
+	const gchar *hdr = luaL_checklstring (L, 1, &len);
+	gchar *encoded;
+
+	if (!hdr) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	encoded = rspamd_mime_header_encode (hdr, len);
+	lua_pushstring (L, encoded);
+	g_free (encoded);
 
 	return 1;
 }
