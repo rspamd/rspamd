@@ -603,19 +603,27 @@ local function modify_handler(opts)
     return content
   end
 
-  local function do_append_footer(task, part, footer)
+  local function do_append_footer(task, part, footer, is_multipart)
     local newline_s = newline(task)
     local tp = part:get_text()
     local ct = 'text/plain'
+    local cte = 'quoted-printable'
 
     if tp:is_html() then
       ct = 'text/html'
     end
 
-    io.write(string.format('Content-Type: %s; charset=utf-8%s'..
-        'Content-Transfer-Encoding: quoted-printable%s%s',
-        ct, newline_s, newline_s, newline_s))
-    io.flush()
+    if part:get_cte() == '7bit' then
+      cte = '7bit'
+    end
+
+    if is_multipart then
+      io.write(string.format('Content-Type: %s; charset=utf-8%s'..
+          'Content-Transfer-Encoding: %s%s%s',
+          ct, newline_s, cte, newline_s, newline_s))
+      io.flush()
+    end
+
     local content = tostring(tp:get_content('raw_utf') or '')
     local double_nline = newline_s .. newline_s
     local nlen = #double_nline
@@ -626,12 +634,15 @@ local function modify_handler(opts)
           footer)
       rspamd_util.encode_qp(content,
           80, task:get_newlines_type()):save_in_file(1)
+      io.write(double_nline)
     else
-      rspamd_util.encode_qp(content .. footer,
+      content = content .. footer
+      rspamd_util.encode_qp(content,
           80, task:get_newlines_type()):save_in_file(1)
+      io.write(double_nline)
     end
 
-    io.write(double_nline)
+
   end
 
   local text_footer, html_footer
@@ -647,15 +658,61 @@ local function modify_handler(opts)
   for _,fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     local newline_s = newline(task)
+    local need_rewrite_ct = false
+    local parsed_ct
+    local seen_cte = false
 
     local function process_headers_cb(name, hdr)
+
       for _,h in ipairs(opts['remove_header']) do
         if name:match(h) then
           return
         end
       end
 
+      if need_rewrite_ct then
+        if name:lower() == 'content-type' then
+          local nct = string.format('%s: %s/%s; charset=utf-8%s',
+              'Content-Type', parsed_ct.type, parsed_ct.subtype, newline_s)
+          io.write(nct)
+          return
+        elseif name:lower() == 'content-transfer-encoding' then
+          seen_cte = true
+          io.write(string.format('%s: %s%s',
+              'Content-Transfer-Encoding', 'quoted-printable', newline_s))
+          return
+        end
+      end
+
       io.write(hdr.raw)
+    end
+
+    if html_footer or text_footer then
+      -- We need to take extra care about content-type and cte
+      local ct = task:get_header('Content-Type')
+      if ct then
+        ct = rspamd_util.parse_content_type(ct, task:get_mempool())
+      end
+
+      if ct then
+        if ct.type and ct.type == 'text' then
+          if ct.subtype then
+            if html_footer and (ct.subtype == 'html' or ct.subtype == 'htm') then
+              need_rewrite_ct = true
+            elseif text_footer and ct.subtype == 'plain' then
+              need_rewrite_ct = true
+            end
+          else
+            if text_footer then
+              need_rewrite_ct = true
+            end
+          end
+
+          parsed_ct = ct
+        end
+      else
+        -- XXX: Write some content type based on magic?
+      end
     end
 
     task:headers_foreach(process_headers_cb, {full = true})
@@ -668,6 +725,11 @@ local function modify_handler(opts)
             rspamd_util.fold_header(hname, hvalue, task:get_newlines_type()),
             newline_s))
       end
+    end
+
+    if not seen_cte and need_rewrite_ct then
+      io.write(string.format('%s: %s%s',
+          'Content-Transfer-Encoding', 'quoted-printable', newline_s))
     end
 
     -- End of headers
@@ -754,7 +816,8 @@ local function modify_handler(opts)
         io.flush()
 
         if append_footer and not skip_footer then
-          do_append_footer(task, part, append_footer)
+          do_append_footer(task, part, append_footer,
+              parent and parent:is_multipart())
         else
           part:get_raw_headers():save_in_file(1)
           io.write(newline_s)
