@@ -142,6 +142,10 @@ modify:option "-r --remove-header"
       :description "Removes specific header (all occurrences)"
       :argname "<header>"
       :count "*"
+modify:option "-R --rewrite-header"
+      :description "Rewrites specific header, uses Lua string.format pattern"
+      :argname "<header=pattern>"
+      :count "*"
 modify:option "-t --text-footer"
       :description "Adds footer to text/plain parts from a specific file"
       :argname "<file>"
@@ -666,6 +670,20 @@ local function modify_handler(opts)
 
       for _,h in ipairs(opts['remove_header']) do
         if name:match(h) then
+          return
+        end
+      end
+
+      for _,h in ipairs(opts['rewrite_header']) do
+        local hname,hpattern = h:match('^([^=]+)=(.+)$')
+        if hname == name then
+          local new_value = string.format(hpattern, hdr.decoded)
+          new_value = string.format('%s:%s%s%s',
+              name, hdr.separator,
+              rspamd_util.fold_header(name,
+                  rspamd_util.mime_header_encode(new_value),
+                  task:get_newlines_type()), newline_s)
+          io.write(new_value)
           return
         end
       end
