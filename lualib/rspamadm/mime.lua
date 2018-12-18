@@ -711,7 +711,23 @@ local function modify_handler(opts)
           parsed_ct = ct
         end
       else
-        -- XXX: Write some content type based on magic?
+        local text_parts = task:get_text_parts()
+        if text_parts then
+
+          if #text_parts == 1 then
+            need_rewrite_ct = true
+            parsed_ct = {
+              type = 'text',
+              subtype = 'plain'
+            }
+          elseif #text_parts > 1 then
+            -- XXX: in fact, it cannot be
+            parsed_ct = {
+              type = 'multipart',
+              subtype = 'mixed'
+            }
+          end
+        end
       end
     end
 
