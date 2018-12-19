@@ -186,18 +186,21 @@ local function clusterting_filter_cb(task, rule)
 end
 
 local function clusterting_idempotent_cb(task, rule)
-  local action = task:get_action()
+  if task:has_flag('skip') then return end
+  if not rule.allow_local and lua_util.is_rspamc_or_controller(task) then return end
+
+  local verdict = lua_util.get_task_verdict(task)
   local score
 
-  if action == 'no action' then
+  if verdict == 'ham' then
     score = rule.ham_mult
-  elseif action == 'reject' then
+  elseif verdict == 'spam' then
     score = rule.spam_mult
-  elseif action == 'add header' or action == 'rewrite subject' then
+  elseif verdict == 'junk' then
     score = rule.junk_mult
   else
-    rspamd_logger.debugm(N, task, 'skip rule %s, action=%s',
-        rule.name, action)
+    rspamd_logger.debugm(N, task, 'skip rule %s, verdict=%s',
+        rule.name, verdict)
     return
   end
 

@@ -18,6 +18,7 @@
 
 #include "config.h"
 #include "mem_pool.h"
+#include <unicode/uchar.h>
 
 /**
  * Fixed strings library
@@ -37,6 +38,11 @@ typedef struct f_str_tok {
 	gsize len;
 	const gchar *begin;
 } rspamd_ftok_t;
+
+typedef struct f_str_unicode_tok {
+	gsize len; /* in UChar32 */
+	const UChar32 *begin;
+} rspamd_ftok_unicode_t;
 
 /**
  * Create new fixed length string
@@ -87,12 +93,17 @@ void rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len);
 #define rspamd_fstring_clear(s) rspamd_fstring_erase(s, 0, s->len)
 
 /**
- * Convert fixed string to a zero terminated string. This string should be
+ * Convert fixed string to a zero terminated string. This string must be
  * freed by a caller
  */
 char * rspamd_fstring_cstr (const rspamd_fstring_t *str)
 		G_GNUC_WARN_UNUSED_RESULT;
-
+/**
+ * Convert fixed string usign ftok_t to a zero terminated string. This string must be
+ * freed by a caller
+ */
+char * rspamd_ftok_cstr (const rspamd_ftok_t *str)
+		G_GNUC_WARN_UNUSED_RESULT;
 /*
  * Return fast hash value for fixed string converted to lowercase
  */

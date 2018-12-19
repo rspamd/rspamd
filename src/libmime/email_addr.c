@@ -137,7 +137,7 @@ rspamd_email_address_add (rspamd_mempool_t *pool,
 	}
 
 	if (name->len > 0) {
-		elt->name = rspamd_mime_header_decode (pool, name->str, name->len);
+		elt->name = rspamd_mime_header_decode (pool, name->str, name->len, NULL);
 	}
 
 	g_ptr_array_add (ar, elt);
@@ -202,6 +202,7 @@ rspamd_email_address_check_and_add (const gchar *start, gsize len,
 	struct rspamd_email_address addr;
 
 	/* The whole email is likely address */
+	memset (&addr, 0, sizeof (addr));
 	rspamd_smtp_addr_parse (start, len, &addr);
 
 	if (addr.flags & RSPAMD_EMAIL_ADDR_VALID) {
@@ -283,7 +284,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 				state = parse_addr;
 			}
 			else if (*p == ',') {
-				if (p > c) {
+				if (p > c && seen_at) {
 					/*
 					 * Last token must be the address:
 					 * e.g. Some name name@domain.com
@@ -484,4 +485,30 @@ rspamd_email_address_list_destroy (gpointer ptr)
 	}
 
 	g_ptr_array_free (ar, TRUE);
+}
+
+void rspamd_smtp_maybe_process_smtp_comment (struct rspamd_task *task,
+											 const char *data, size_t len,
+											 struct received_header *rh)
+{
+	if (!rh->by_hostname) {
+		/* Heuristic to detect IP addresses like in Exim received:
+		 * [xxx]:port or [xxx]
+		 */
+
+		if (*data == '[' && len > 2) {
+			const gchar *p = data + 1;
+			gsize iplen = rspamd_memcspn (p, "]", len - 1);
+
+			if (iplen > 0) {
+				guchar tbuf[sizeof(struct in6_addr) + sizeof(guint32)];
+
+				if (rspamd_parse_inet_address_ip4 (p, iplen, tbuf) ||
+						rspamd_parse_inet_address_ip6 (p, iplen, tbuf)) {
+					rh->comment_ip = rspamd_mempool_alloc (task->task_pool, iplen + 1);
+					rspamd_strlcpy (rh->comment_ip, p, iplen + 1);
+				}
+			}
+		}
+	}
 }

@@ -26,16 +26,25 @@
  * High level statistics API
  */
 
-#define RSPAMD_STAT_TOKEN_FLAG_TEXT (1 << 0)
-#define RSPAMD_STAT_TOKEN_FLAG_META (1 << 1)
-#define RSPAMD_STAT_TOKEN_FLAG_LUA_META (1 << 2)
-#define RSPAMD_STAT_TOKEN_FLAG_EXCEPTION (1 << 3)
-#define RSPAMD_STAT_TOKEN_FLAG_SUBJECT (1 << 4)
-#define RSPAMD_STAT_TOKEN_FLAG_UNIGRAM (1 << 5)
+#define RSPAMD_STAT_TOKEN_FLAG_TEXT (1u << 0)
+#define RSPAMD_STAT_TOKEN_FLAG_META (1u << 1)
+#define RSPAMD_STAT_TOKEN_FLAG_LUA_META (1u << 2)
+#define RSPAMD_STAT_TOKEN_FLAG_EXCEPTION (1u << 3)
+#define RSPAMD_STAT_TOKEN_FLAG_HEADER (1u << 4)
+#define RSPAMD_STAT_TOKEN_FLAG_UNIGRAM (1u << 5)
+#define RSPAMD_STAT_TOKEN_FLAG_UTF (1u << 6)
+#define RSPAMD_STAT_TOKEN_FLAG_NORMALISED (1u << 7)
+#define RSPAMD_STAT_TOKEN_FLAG_STEMMED (1u << 8)
+#define RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE (1u << 9)
+#define RSPAMD_STAT_TOKEN_FLAG_STOP_WORD (1u << 9)
+#define RSPAMD_STAT_TOKEN_FLAG_SKIPPED (1u << 10)
+#define RSPAMD_STAT_TOKEN_FLAG_INVISIBLE_SPACES (1u << 11)
 
 typedef struct rspamd_stat_token_s {
-	const gchar *begin;
-	gsize len;
+	rspamd_ftok_t original; /* utf8 raw */
+	rspamd_ftok_unicode_t unicode; /* array of unicode characters, normalized, lowercased */
+	rspamd_ftok_t normalized; /* normalized and lowercased utf8 */
+	rspamd_ftok_t stemmed; /* stemmed utf8 */
 	guint flags;
 } rspamd_stat_token_t;
 

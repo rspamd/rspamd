@@ -15,6 +15,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+--[[[
+-- @module lua_clickhouse
+-- This module contains Clickhouse access functions
+--]]
+
 local rspamd_logger = require "rspamd_logger"
 local rspamd_http = require "rspamd_http"
 local lua_util = require "lua_util"
@@ -222,7 +227,9 @@ exports.select = function (upstream, settings, params, query, ok_cb, fail_cb)
       connect_prefix = 'https://'
     end
     local ip_addr = upstream:get_addr():to_string(true)
-    http_params.url = connect_prefix .. ip_addr .. '/?default_format=JSONEachRow'
+    local database = params.database or 'default'
+    http_params.url = string.format('%s%s/?database=%s&default_format=JSONEachRow',
+        connect_prefix, ip_addr, escape_spaces(database))
   end
 
   return rspamd_http.request(http_params)
@@ -271,7 +278,9 @@ exports.select_sync = function (upstream, settings, params, query, ok_cb, fail_c
       connect_prefix = 'https://'
     end
     local ip_addr = upstream:get_addr():to_string(true)
-    http_params.url = connect_prefix .. ip_addr .. '/?default_format=JSONEachRow'
+    local database = params.database or 'default'
+    http_params.url = string.format('%s%s/?database=%s&default_format=JSONEachRow',
+        connect_prefix, ip_addr, escape_spaces(database))
   end
 
   local err, response = rspamd_http.request(http_params)
@@ -333,9 +342,11 @@ exports.insert = function (upstream, settings, params, query, rows,
       connect_prefix = 'https://'
     end
     local ip_addr = upstream:get_addr():to_string(true)
-    http_params.url = string.format('%s%s/?query=%s%%20FORMAT%%20TabSeparated',
+    local database = params.database or 'default'
+    http_params.url = string.format('%s%s/?database=%s&query=%s%%20FORMAT%%20TabSeparated',
         connect_prefix,
         ip_addr,
+        escape_spaces(database),
         escape_spaces(query))
   end
 
@@ -383,7 +394,9 @@ exports.generic = function (upstream, settings, params, query,
       connect_prefix = 'https://'
     end
     local ip_addr = upstream:get_addr():to_string(true)
-    http_params.url = connect_prefix .. ip_addr .. '/?default_format=JSONEachRow'
+    local database = params.database or 'default'
+    http_params.url = string.format('%s%s/?database=%s&default_format=JSONEachRow',
+        connect_prefix, ip_addr, escape_spaces(database))
   end
 
   return rspamd_http.request(http_params)
@@ -426,7 +439,9 @@ exports.generic_sync = function (upstream, settings, params, query)
       connect_prefix = 'https://'
     end
     local ip_addr = upstream:get_addr():to_string(true)
-    http_params.url = connect_prefix .. ip_addr .. '/?default_format=JSONEachRow'
+    local database = params.database or 'default'
+    http_params.url = string.format('%s%s/?database=%s&default_format=JSONEachRow',
+        connect_prefix, ip_addr, escape_spaces(database))
   end
 
   return rspamd_http.request(http_params)

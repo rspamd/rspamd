@@ -68,6 +68,8 @@ static gchar *user_agent = "rspamc";
 static GList *children;
 static GPatternSpec **exclude_compiled = NULL;
 
+static gint retcode = EXIT_SUCCESS;
+
 #define ADD_CLIENT_HEADER(o, n, v) do { \
     struct rspamd_http_client_header *nh; \
     nh = g_malloc (sizeof (*nh)); \
@@ -1365,7 +1367,7 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 				symbuf->str,
 				0, nl_type, ",");
 		rspamd_printf_gstring (added_headers, "X-Spam-Symbols: %v%s",
-				folded_symbuf, line_end, ",");
+				folded_symbuf, line_end);
 
 		g_string_free (folded_symbuf, TRUE);
 		g_string_free (symbuf, TRUE);
@@ -1588,6 +1590,10 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 	rspamd_client_destroy (conn);
 	g_free (cbdata->filename);
 	g_free (cbdata);
+
+	if (err) {
+		retcode = EXIT_FAILURE;
+	}
 }
 
 static void
@@ -2017,5 +2023,6 @@ main (gint argc, gchar **argv, gchar **env)
 		g_pattern_spec_free (exclude_compiled[i]);
 	}
 
-	return ret;
+	/* Mix retcode (return from Rspamd side) and ret (return from subprocess) */
+	return ret | retcode;
 }

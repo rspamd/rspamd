@@ -37,12 +37,13 @@ path_mapping = [
 ]
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--input', type=str, required=True, nargs='+', help='input files')
-parser.add_argument('--output', type=str, required=True, help='output file)')
-parser.add_argument('--root', type=str, required=False, default="/rspamd/src/github.com/rspamd/rspamd", help='repository root)')
-parser.add_argument('--install-dir', type=str, required=False, default="/rspamd/install", help='install root)')
-parser.add_argument('--build-dir', type=str, required=False, default="/rspamd/build", help='build root)')
-parser.add_argument('--token', type=str, help='If present, the file will be uploaded to coveralls)')
+parser.add_argument('--input', required=True, nargs='+', help='input files')
+parser.add_argument('--output', help='output file)')
+parser.add_argument('--root', default="/rspamd/src/github.com/rspamd/rspamd", help='repository root)')
+parser.add_argument('--install-dir', default="/rspamd/install", help='install root)')
+parser.add_argument('--build-dir', default="/rspamd/build", help='build root)')
+parser.add_argument('--token', help='If present, the file will be uploaded to coveralls)')
+
 
 def merge_coverage_vectors(c1, c2):
     assert(len(c1) == len(c2))
@@ -63,7 +64,6 @@ def merge_coverage_vectors(c1, c2):
 
 
 def normalize_name(name):
-    orig_name = name
     name = os.path.normpath(name)
     if not os.path.isabs(name):
         name = os.path.abspath(repository_root + "/" + name)
@@ -86,11 +86,6 @@ def merge(files, j1):
         else:
             sf['name'] = name
             files[name] = sf
-            if not ('source' in sf):
-                path = "%s/%s" % (repository_root, sf['name'])
-                if os.path.isfile(path):
-                    with open(path) as f:
-                        files[name]['source'] = f.read()
 
     return files
 
@@ -128,29 +123,49 @@ if __name__ == '__main__':
         if 'service_job_id' not in j1 and 'service_job_id' in j2:
             j1['service_job_id'] = j2['service_job_id']
 
-        if not j1['service_job_id'] and 'CIRCLE_BUILD_NUM' in os.environ:
-            j1['service_job_id'] = os.environ['CIRCLE_BUILD_NUM']
-        elif not j1['service_job_id'] and 'DRONE_PREV_BUILD_NUMBER' in os.environ:
-            j1['service_job_id'] = os.environ['DRONE_PREV_BUILD_NUMBER']
 
-        if 'CIRCLECI' in os.environ and os.environ['CIRCLECI']:
+        if os.getenv('CIRCLECI'):
             j1['service_name'] = 'circleci'
-        elif 'DRONE' in os.environ and os.environ['DRONE']:
+            j1['service_job_id'] = os.getenv('CIRCLE_BUILD_NUM')
+        elif os.getenv('CI') == 'drone':
             j1['service_name'] = 'drone'
+            j1['service_branch'] = os.getenv('CI_COMMIT_BRANCH')
+            j1['service_build_url'] = os.getenv('DRONE_BUILD_LINK')
+            j1['service_job_id'] = os.getenv('CI_JOB_NUMBER')
+            j1['service_number'] = os.getenv('CI_BUILD_NUMBER')
+            j1['commit_sha'] = os.getenv('CI_COMMIT_SHA')
+            if os.getenv('CI_BUILD_EVENT') == 'pull_request':
+                j1['service_pull_request'] = os.getenv('CI_PULL_REQUEST')
+            # git data can be filled by cpp-coveralls, but in our layout it can't find repo
+            # so we can override git info witout merging
+            j1['git'] = {
+                'head': {
+                    'id': j1['commit_sha'],
+                    'author_email': os.getenv('CI_COMMIT_AUTHOR_EMAIL'),
+                    'message': os.getenv('CI_COMMIT_MESSAGE')
+                },
+                'branch': j1['service_branch'],
+                'remotes': [{
+                    'name': 'origin',
+                    'url': os.getenv('CI_REPO_REMOTE')
+                }]
+            }
+
 
     j1['source_files'] = list(files.values())
 
-    with open(args.output, 'w') as f:
-        f.write(json.dumps(j1))
+    if args.output:
+        with open(args.output, 'w') as f:
+            f.write(json.dumps(j1))
 
     if args.token:
         j1['repo_token'] = args.token
         print("sending data to coveralls...")
         r = requests.post('https://coveralls.io/api/v1/jobs', files={"json_file": json.dumps(j1)})
-        response = json.loads(r.text)
-        print("uploaded %s\nmessage:%s" % (response['url'], response['message']))
+        response = r.json()
+        print("[coveralls] %s" % response['message'])
+        if 'url' in response:
+            print("[coveralls] Uploaded to %s" % response['url'])
 
     # post https://coveralls.io/api/v1/jobs
     # print args
-
-

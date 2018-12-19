@@ -37,6 +37,10 @@ local settings = {
   score = -4, -- Default score
   use_auth = true,
   use_local = true,
+  cookie = nil,
+  cookie_key = nil,
+  cookie_is_pattern = false,
+  cookie_valid_time = '2w', -- 2 weeks by default
 }
 
 local N = "replies"
@@ -128,16 +132,123 @@ local function replies_set(task)
   end
 end
 
+local function replies_check_cookie(task)
+  local function cookie_matched(extra, ts)
+    local dt = task:get_date{format = 'connect', gmt = true}
+
+    if dt < ts then
+      rspamd_logger.infox(task, 'ignore cookie as its date is in future')
+
+      return
+    end
+
+    if settings.cookie_valid_time then
+      if dt - ts > settings.cookie_valid_time then
+        rspamd_logger.infox(task,
+            'ignore cookie as its timestamp is too old: %s (%s current time)',
+            ts, dt)
+
+        return
+      end
+    end
+
+    if extra then
+      task:insert_result(settings['symbol'], 1.0,
+          string.format('cookie:%s:%s', extra, ts))
+    else
+      task:insert_result(settings['symbol'], 1.0,
+          string.format('cookie:%s', ts))
+    end
+    if settings['action'] ~= nil then
+      local ip_addr = task:get_ip()
+      if (settings.use_auth and
+          task:get_user()) or
+          (settings.use_local and ip_addr and ip_addr:is_local()) then
+        rspamd_logger.infox(task, "not forcing action for local network or authorized user");
+      else
+        task:set_pre_result(settings['action'], settings['message'], N)
+      end
+    end
+  end
+
+  -- If in-reply-to header not present return
+  local irt = task:get_header('in-reply-to')
+  if irt == nil then
+    return
+  end
+
+  local cr = require "rspamd_cryptobox"
+  -- Extract user part if needed
+  local extracted_cookie = irt:match('^%<?([^@]+)@.*$')
+  if not extracted_cookie then
+    -- Assume full message id as a cookie
+    extracted_cookie = irt
+  end
+
+  local dec_cookie,ts = cr.decrypt_cookie(settings.cookie_key, extracted_cookie)
+
+  if dec_cookie then
+    -- We have something that looks like a cookie
+    if settings.cookie_is_pattern then
+      local m = dec_cookie:match(settings.cookie)
+
+      if m then
+        cookie_matched(m, ts)
+      end
+    else
+      -- Direct match
+      if dec_cookie == settings.cookie then
+        cookie_matched(nil, ts)
+      end
+    end
+  end
+end
+
 local opts = rspamd_config:get_all_opt('replies')
 if not (opts and type(opts) == 'table') then
   rspamd_logger.infox(rspamd_config, 'module is unconfigured')
   return
 end
 if opts then
+  settings = lua_util.override_defaults(settings, opts)
   redis_params = lua_redis.parse_redis_server('replies')
   if not redis_params then
-    rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
-    lua_util.disable_module(N, "redis")
+    if not (settings.cookie and settings.cookie_key) then
+      rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
+      lua_util.disable_module(N, "redis")
+    else
+      -- Cookies mode
+      -- Check key sanity:
+      local pattern = {'^'}
+      for i=1,32 do pattern[i + 1] = '[a-zA-Z0-9]' end
+      pattern[34] = '$'
+      if not settings.cookie_key:match(table.concat(pattern, '')) then
+        rspamd_logger.errx(rspamd_config,
+            'invalid cookies key: %s, must be 32 hex digits', settings.cookie_key)
+        lua_util.disable_module(N, "config")
+
+        return
+      end
+
+      if settings.cookie_valid_time then
+        settings.cookie_valid_time = lua_util.parse_time_interval(settings.cookie_valid_time)
+      end
+
+      local id = rspamd_config:register_symbol({
+        name = 'REPLIES_CHECK',
+        type = 'prefilter,nostat',
+        callback = replies_check_cookie,
+        priority = 10,
+        group = "replies"
+      })
+      rspamd_config:register_symbol({
+        name = settings['symbol'],
+        parent = id,
+        type = 'virtual',
+        score = settings.score,
+        group = "replies",
+      })
+    end
   else
     rspamd_config:register_symbol({
       name = 'REPLIES_SET',
@@ -160,9 +271,5 @@ if opts then
       score = settings.score,
       group = "replies",
     })
-  end
-
-  for k,v in pairs(opts) do
-    settings[k] = v
   end
 end

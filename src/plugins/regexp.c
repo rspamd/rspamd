@@ -39,7 +39,9 @@ struct regexp_ctx {
 	gsize max_size;
 };
 
-static void process_regexp_item (struct rspamd_task *task, void *user_data);
+static void process_regexp_item (struct rspamd_task *task,
+								 struct rspamd_symcache_item *item,
+								 void *user_data);
 
 
 /* Initialization */
@@ -170,7 +172,7 @@ regexp_module_config (struct rspamd_config *cfg)
 				res = FALSE;
 			}
 			else {
-				rspamd_symbols_cache_add_symbol (cfg->cache,
+				rspamd_symcache_add_symbol (cfg->cache,
 						cur_item->symbol,
 						0,
 						process_regexp_item,
@@ -187,12 +189,12 @@ regexp_module_config (struct rspamd_config *cfg)
 			cur_item->symbol = ucl_object_key (value);
 			cur_item->lua_function = ucl_object_toclosure (value);
 
-			rspamd_symbols_cache_add_symbol (cfg->cache,
-				cur_item->symbol,
-				0,
-				process_regexp_item,
-				cur_item,
-				SYMBOL_TYPE_NORMAL, -1);
+			rspamd_symcache_add_symbol (cfg->cache,
+					cur_item->symbol,
+					0,
+					process_regexp_item,
+					cur_item,
+					SYMBOL_TYPE_NORMAL, -1);
 			nlua ++;
 		}
 		else if (value->type == UCL_OBJECT) {
@@ -243,7 +245,7 @@ regexp_module_config (struct rspamd_config *cfg)
 			}
 
 			if (cur_item && (is_lua || valid_expression)) {
-				id = rspamd_symbols_cache_add_symbol (cfg->cache,
+				id = rspamd_symcache_add_symbol (cfg->cache,
 						cur_item->symbol,
 						0,
 						process_regexp_item,
@@ -255,8 +257,10 @@ regexp_module_config (struct rspamd_config *cfg)
 				if (elt != NULL && ucl_object_type (elt) == UCL_USERDATA) {
 					struct ucl_lua_funcdata *conddata;
 
+					g_assert (cur_item->symbol != NULL);
 					conddata = ucl_object_toclosure (elt);
-					rspamd_symbols_cache_add_condition (cfg->cache, id,
+					rspamd_symcache_add_condition_delayed (cfg->cache,
+							cur_item->symbol,
 							conddata->L, conddata->idx);
 				}
 
@@ -275,39 +279,96 @@ regexp_module_config (struct rspamd_config *cfg)
 				elt = ucl_object_lookup (value, "score");
 
 				if (elt) {
-					score = ucl_object_todouble (elt);
+					if (ucl_object_type (elt) != UCL_FLOAT && ucl_object_type (elt) != UCL_INT) {
+						msg_err_config (
+								"score attribute is not numeric for symbol: '%s'",
+								cur_item->symbol);
+
+						res = FALSE;
+					}
+					else {
+						score = ucl_object_todouble (elt);
+					}
 				}
 
 				elt = ucl_object_lookup (value, "one_shot");
 
 				if (elt) {
-					if (ucl_object_toboolean (elt)) {
-						nshots = 1;
+					if (ucl_object_type (elt) != UCL_BOOLEAN) {
+						msg_err_config (
+								"one_shot attribute is not numeric for symbol: '%s'",
+								cur_item->symbol);
+
+						res = FALSE;
+					}
+					else {
+						if (ucl_object_toboolean (elt)) {
+							nshots = 1;
+						}
 					}
 				}
 
 				if ((elt = ucl_object_lookup (value, "any_shot")) != NULL) {
-					if (ucl_object_toboolean (elt)) {
-						nshots = -1;
+					if (ucl_object_type (elt) != UCL_BOOLEAN) {
+						msg_err_config (
+								"any_shot attribute is not numeric for symbol: '%s'",
+								cur_item->symbol);
+
+						res = FALSE;
+					}
+					else {
+						if (ucl_object_toboolean (elt)) {
+							nshots = -1;
+						}
 					}
 				}
 
 				if ((elt = ucl_object_lookup (value, "nshots")) != NULL) {
-					nshots = ucl_object_toint (elt);
+					if (ucl_object_type (elt) != UCL_FLOAT && ucl_object_type (elt) != UCL_INT) {
+						msg_err_config (
+								"nshots attribute is not numeric for symbol: '%s'",
+								cur_item->symbol);
+
+						res = FALSE;
+					}
+					else {
+						nshots = ucl_object_toint (elt);
+					}
 				}
 
 				elt = ucl_object_lookup (value, "one_param");
 
 				if (elt) {
-					if (ucl_object_toboolean (elt)) {
-						flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
+					if (ucl_object_type (elt) != UCL_BOOLEAN) {
+						msg_err_config (
+								"one_param attribute is not numeric for symbol: '%s'",
+								cur_item->symbol);
+
+						res = FALSE;
+					}
+					else {
+						if (ucl_object_toboolean (elt)) {
+							flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
+						}
 					}
 				}
 
 				elt = ucl_object_lookup (value, "priority");
 
 				if (elt) {
-					priority = ucl_object_toint (elt);
+					if (ucl_object_type (elt) != UCL_FLOAT && ucl_object_type (elt) != UCL_INT) {
+						msg_err_config (
+								"priority attribute is not numeric for symbol: '%s'",
+								cur_item->symbol);
+
+						res = FALSE;
+					}
+					else {
+						priority = ucl_object_toint (elt);
+					}
+				}
+				else {
+					priority = ucl_object_get_priority (value) + 1;
 				}
 
 				rspamd_config_add_symbol (cfg, cur_item->symbol,
@@ -415,7 +476,9 @@ rspamd_lua_call_expression_func (struct ucl_lua_funcdata *lua_data,
 
 
 static void
-process_regexp_item (struct rspamd_task *task, void *user_data)
+process_regexp_item (struct rspamd_task *task,
+		struct rspamd_symcache_item *symcache_item,
+		void *user_data)
 {
 	struct regexp_module_item *item = user_data;
 	gint res = FALSE;
@@ -449,4 +512,6 @@ process_regexp_item (struct rspamd_task *task, void *user_data)
 	if (res) {
 		rspamd_task_insert_result (task, item->symbol, res, NULL);
 	}
+
+	rspamd_symcache_finalize_item (task, symcache_item);
 }

@@ -37,10 +37,12 @@ local function symbol_callback(task)
 		end
 	end
 
-	task:get_resolver():resolve_a(task:get_session(), task:get_mempool(),
-		host, dns_cb)
+	task:get_resolver():resolve_a({task = task, name = host, callback = dns_cb})
 end
  */
+
+static const gchar *M = "rspamd lua dns resolver";
+
 struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L);
 void luaopen_dns_resolver (lua_State * L);
 
@@ -86,7 +88,7 @@ struct lua_dns_cbdata {
 	gint cbref;
 	gchar *to_resolve;
 	gchar *user_str;
-	struct rspamd_async_watcher *w;
+	struct rspamd_symcache_item *item;
 	struct rspamd_async_session *s;
 };
 
@@ -184,6 +186,11 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 
 	lua_pushboolean (L, reply->authenticated);
 
+	if (cd->item) {
+		/* We also need to restore the item in case there are some chains */
+		rspamd_symcache_set_cur_item (cd->task, cd->item);
+	}
+
 	if (lua_pcall (L, 6, 0, err_idx) != 0) {
 		tb = lua_touserdata (L, -1);
 
@@ -199,8 +206,8 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 	luaL_unref (L, LUA_REGISTRYINDEX, cd->cbref);
 	lua_thread_pool_restore_callback (&cbs);
 
-	if (cd->s) {
-		rspamd_session_watcher_pop (cd->s, cd->w);
+	if (cd->item) {
+		rspamd_symcache_item_async_dec_check (cd->task, cd->item, M);
 	}
 
 	if (!cd->pool) {
@@ -345,6 +352,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 	struct rspamd_task *task = NULL;
 	GError *err = NULL;
 	gboolean forced = FALSE;
+	struct rspamd_symcache_item *item = NULL;
 
 	/* Check arguments */
 	if (!rspamd_lua_parse_table_arguments (L, first, &err,
@@ -365,6 +373,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 	if (task) {
 		pool = task->task_pool;
 		session = task->s;
+		item = rspamd_symcache_get_cur_item (task);
 	}
 
 	if (to_resolve != NULL) {
@@ -432,8 +441,6 @@ lua_dns_resolver_resolve_common (lua_State *L,
 
 				if (session) {
 					cbdata->s = session;
-					cbdata->w = rspamd_session_get_watcher (session);
-					rspamd_session_watcher_push (session);
 				}
 			}
 			else {
@@ -441,6 +448,13 @@ lua_dns_resolver_resolve_common (lua_State *L,
 			}
 		}
 		else {
+			/* Fail-safety as this function can, in theory, call
+			 * lua_dns_resolver_callback without switching to the event loop
+			 */
+			if (item) {
+				rspamd_symcache_item_async_inc (task, item, M);
+			}
+
 			if (forced) {
 				ret = make_dns_request_task_forced (task,
 						lua_dns_resolver_callback,
@@ -457,12 +471,21 @@ lua_dns_resolver_resolve_common (lua_State *L,
 
 			if (ret) {
 				cbdata->s = session;
-				cbdata->w = rspamd_session_get_watcher (session);
-				rspamd_session_watcher_push (session);
+
+
+				if (item) {
+					cbdata->item = item;
+					rspamd_symcache_item_async_inc (task, item, M);
+				}
 				/* callback was set up */
 				lua_pushboolean (L, TRUE);
-			} else {
+			}
+			else {
 				lua_pushnil (L);
+			}
+
+			if (item) {
+				rspamd_symcache_item_async_dec_check (task, item, M);
 			}
 		}
 	}
@@ -484,12 +507,15 @@ err:
 }
 
 /***
- * @method resolver:resolve_a(session, pool, host, callback)
+ * @method resolver:resolve_a(table)
  * Resolve A record for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} host name to resolve
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int
@@ -511,12 +537,15 @@ lua_dns_resolver_resolve_a (lua_State *L)
 }
 
 /***
- * @method resolver:resolve_ptr(session, pool, ip, callback)
+ * @method resolver:resolve_ptr(table)
  * Resolve PTR record for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} ip name to resolve in string form (e.g. '8.8.8.8' or '2001:dead::')
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int
@@ -538,12 +567,15 @@ lua_dns_resolver_resolve_ptr (lua_State *L)
 }
 
 /***
- * @method resolver:resolve_txt(session, pool, host, callback)
+ * @method resolver:resolve_txt(table)
  * Resolve TXT record for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} host name to get TXT record for
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int
@@ -565,12 +597,15 @@ lua_dns_resolver_resolve_txt (lua_State *L)
 }
 
 /***
- * @method resolver:resolve_mx(session, pool, host, callback)
+ * @method resolver:resolve_mx(table)
  * Resolve MX record for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} host name to get MX record for
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int
@@ -592,12 +627,15 @@ lua_dns_resolver_resolve_mx (lua_State *L)
 }
 
 /***
- * @method resolver:resolve_ns(session, pool, host, callback)
+ * @method resolver:resolve_ns(table)
  * Resolve NS records for a specified host.
- * @param {async_session} session asynchronous session normally associated with rspamd task (`task:get_session()`)
- * @param {mempool} pool memory pool for storing intermediate data
- * @param {string} host name to get NS records for
- * @param {function} callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * Table elements:
+ * * `task` - task element (preferred, required to track dependencies) -or-
+ * * `session` - asynchronous session normally associated with rspamd task (`task:get_session()`)
+ * * `mempool` - pool memory pool for storing intermediate data
+ * * `name` - host name to resolve
+ * * `callback` - callback callback function to be called upon name resolution is finished; must be of type `function (resolver, to_resolve, results, err)`
+ * * `forced` - true if needed to override notmal limit for DNS requests
  * @return {boolean} `true` if DNS request has been scheduled
  */
 static int

@@ -28,6 +28,7 @@ static struct rspamd_stat_classifier lua_classifier = {
 	.init_func = lua_classifier_init,
 	.classify_func = lua_classifier_classify,
 	.learn_spam_func = lua_classifier_learn_spam,
+	.fin_func = NULL,
 };
 
 static struct rspamd_stat_classifier stat_classifiers[] = {
@@ -36,6 +37,7 @@ static struct rspamd_stat_classifier stat_classifiers[] = {
 		.init_func = bayes_init,
 		.classify_func = bayes_classify,
 		.learn_spam_func = bayes_learn_spam,
+		.fin_func = bayes_fin,
 	}
 };
 
@@ -162,6 +164,67 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 	stat_ctx->classifiers = g_ptr_array_new ();
 	stat_ctx->async_elts = g_queue_new ();
 	stat_ctx->ev_base = ev_base;
+	stat_ctx->lua_stat_tokens_ref = -1;
+
+	/* Interact with lua_stat */
+	if (luaL_dostring (L, "return require \"lua_stat\"") != 0) {
+		msg_err_config ("cannot require lua_stat: %s",
+				lua_tostring (L, -1));
+	}
+	else {
+		if (lua_type (L, -1) != LUA_TTABLE) {
+			msg_err_config ("lua stat must return "
+							"table and not %s",
+					lua_typename (L, lua_type (L, -1)));
+		}
+		else {
+			lua_pushstring (L, "gen_stat_tokens");
+			lua_gettable (L, -2);
+
+			if (lua_type (L, -1) != LUA_TFUNCTION) {
+				msg_err_config ("gen_stat_tokens must return "
+								"function and not %s",
+						lua_typename (L, lua_type (L, -1)));
+			}
+			else {
+				/* Call this function to obtain closure */
+				gint err_idx, ret;
+				GString *tb;
+				struct rspamd_config **pcfg;
+
+				lua_pushcfunction (L, &rspamd_lua_traceback);
+				err_idx = lua_gettop (L);
+				lua_pushvalue (L, err_idx - 1);
+
+				pcfg = lua_newuserdata (L, sizeof (*pcfg));
+				*pcfg = cfg;
+				rspamd_lua_setclass (L, "rspamd{config}", -1);
+
+				if ((ret = lua_pcall (L, 1, 1, err_idx)) != 0) {
+					tb = lua_touserdata (L, -1);
+					msg_err_config ("call to gen_stat_tokens lua "
+									"script failed (%d): %v", ret, tb);
+
+					if (tb) {
+						g_string_free (tb, TRUE);
+					}
+				}
+				else {
+					if (lua_type (L, -1) != LUA_TFUNCTION) {
+						msg_err_config ("gen_stat_tokens invocation must return "
+										"function and not %s",
+								lua_typename (L, lua_type (L, -1)));
+					}
+					else {
+						stat_ctx->lua_stat_tokens_ref = luaL_ref (L, LUA_REGISTRYINDEX);
+					}
+				}
+			}
+		}
+	}
+
+	/* Cleanup mess */
+	lua_settop (L, 0);
 
 	/* Create statfiles from the classifiers */
 	cur = cfg->classifiers;
@@ -182,7 +245,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 			continue;
 		}
 
-		if (!cl->subrs->init_func (cfg->cfg_pool, cl)) {
+		if (!cl->subrs->init_func (cfg, ev_base, cl)) {
 			g_free (cl);
 			msg_err_config ("cannot init classifier type %s", clf->name);
 			cur = g_list_next (cur);
@@ -328,6 +391,11 @@ rspamd_stat_close (void)
 		}
 
 		g_array_free (cl->statfiles_ids, TRUE);
+
+		if (cl->subrs->fin_func) {
+			cl->subrs->fin_func (cl);
+		}
+
 		g_free (cl);
 	}
 
@@ -342,6 +410,12 @@ rspamd_stat_close (void)
 	g_queue_free (stat_ctx->async_elts);
 	g_ptr_array_free (st_ctx->statfiles, TRUE);
 	g_ptr_array_free (st_ctx->classifiers, TRUE);
+
+	if (st_ctx->lua_stat_tokens_ref != -1) {
+		luaL_unref (st_ctx->cfg->lua_state, LUA_REGISTRYINDEX,
+				st_ctx->lua_stat_tokens_ref);
+	}
+
 	g_free (st_ctx);
 
 	/* Set global var to NULL */
@@ -475,11 +549,11 @@ rspamd_stat_ctx_register_async (rspamd_stat_async_handler handler,
 	g_assert (st_ctx != NULL);
 
 	elt = g_malloc0 (sizeof (*elt));
-	REF_INIT_RETAIN (elt, rspamd_async_elt_dtor);
 	elt->handler = handler;
 	elt->cleanup = cleanup;
 	elt->ud = d;
 	elt->timeout = timeout;
+	REF_INIT_RETAIN (elt, rspamd_async_elt_dtor);
 	/* Enabled by default */
 
 

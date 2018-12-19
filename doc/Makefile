@@ -20,8 +20,8 @@ lua-dirs:
 
 lua-doc: lua-dirs rspamd_regexp rspamd_ip rspamd_config rspamd_task ucl rspamd_http rspamd_trie \
 	rspamd_resolver rspamd_redis rspamd_upstream_list rspamd_expression rspamd_mimepart rspamd_logger rspamd_url \
-	rspamd_tcp rspamd_mempool rspamd_html rspamd_util rspamd_fann rspamd_sqlite3 rspamd_cryptobox \
-	lua_redis lua_util lua_maps
+	rspamd_tcp rspamd_mempool rspamd_html rspamd_util rspamd_fann rspamd_sqlite3 rspamd_cryptobox rspamd_map \
+	lua_redis lua_util lua_maps lua_clickhouse lua_selectors
 
 lua_redis:
 	$(LLUADOC) < ../lualib/lua_redis.lua > markdown/lua/lua_redis.md
@@ -31,6 +31,12 @@ lua_util:
 
 lua_maps:
 	$(LLUADOC) < ../lualib/lua_maps.lua > markdown/lua/lua_maps.md
+
+lua_clickhouse:
+	$(LLUADOC) < ../lualib/lua_clickhouse.lua > markdown/lua/lua_clickhouse.md
+
+lua_selectors:
+	$(LLUADOC) < ../lualib/lua_selectors.lua > markdown/lua/lua_selectors.md
 
 rspamd_regexp: ../src/lua/lua_regexp.c
 	$(LUADOC) < ../src/lua/lua_regexp.c > markdown/lua/rspamd_regexp.md
@@ -74,3 +80,5 @@ rspamd_sqlite3: ../src/lua/lua_sqlite3.c
 	$(LUADOC) < ../src/lua/lua_sqlite3.c > markdown/lua/rspamd_sqlite3.md
 rspamd_cryptobox: ../src/lua/lua_cryptobox.c
 	$(LUADOC) < ../src/lua/lua_cryptobox.c > markdown/lua/rspamd_cryptobox.md
+rspamd_map: ../src/lua/lua_map.c
+	$(LUADOC) < ../src/lua/lua_map.c > markdown/lua/rspamd_map.md

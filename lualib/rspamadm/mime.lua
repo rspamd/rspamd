@@ -76,6 +76,16 @@ extract:flag "-p --part"
        :description "Show part info"
 extract:flag "-s --structure"
        :description "Show structure info (e.g. HTML tags)"
+extract:option "-F --words-format"
+       :description "Words format ('stem', 'norm', 'raw', 'full')"
+       :argname("<type>")
+       :convert {
+          stem = "stem",
+          norm = "norm",
+          raw = "raw",
+          full = "full",
+       }
+       :default "stem"
 
 
 local stat = parser:command "stat st s"
@@ -116,6 +126,32 @@ urls:flag "--count"
     :description "Print count of each printed element"
 urls:flag "-r --reverse"
     :description "Reverse sort order"
+
+local modify = parser:command "modify mod m"
+                   :description "Modifies MIME message"
+modify:argument "file"
+      :description "File to process"
+      :argname "<file>"
+      :args "+"
+
+modify:option "-a --add-header"
+      :description "Adds specific header"
+      :argname "<header=value>"
+      :count "*"
+modify:option "-r --remove-header"
+      :description "Removes specific header (all occurrences)"
+      :argname "<header>"
+      :count "*"
+modify:option "-R --rewrite-header"
+      :description "Rewrites specific header, uses Lua string.format pattern"
+      :argname "<header=pattern>"
+      :count "*"
+modify:option "-t --text-footer"
+      :description "Adds footer to text/plain parts from a specific file"
+      :argname "<file>"
+modify:option "-H --html-footer"
+      :description "Adds footer to text/html parts from a specific file"
+      :argname "<file>"
 
 local function load_config(opts)
   local _r,err = rspamd_config:load_ucl(opts['config'])
@@ -245,6 +281,28 @@ local function extract_handler(opts)
     end
   end
 
+  local function print_words(words, full)
+    local fun = require "fun"
+
+    if not full then
+      return table.concat(words, ' ')
+    else
+      return table.concat(
+          fun.totable(
+              fun.map(function(w)
+                -- [1] - stemmed word
+                -- [2] - normalised word
+                -- [3] - raw word
+                -- [4] - flags (table of strings)
+                return string.format('%s|%s|%s(%s)',
+                    w[3], w[2], w[1], table.concat(w[4], ','))
+              end, words)
+          ),
+          ' '
+      )
+    end
+  end
+
   for _,fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     out_elts[fname] = {}
@@ -252,6 +310,12 @@ local function extract_handler(opts)
     if not opts.text and not opts.html then
       opts.text = true
       opts.html = true
+    end
+
+    if opts.words then
+      local howw = opts['words_format'] or 'stem'
+      table.insert(out_elts[fname], 'meta_words: ' ..
+          print_words(task:get_meta_words(howw), howw == 'full'))
     end
 
     if opts.text or opts.html then
@@ -265,14 +329,18 @@ local function extract_handler(opts)
         if part and opts.text and not part:is_html() then
           maybe_print_text_part_info(part, out_elts[fname])
           if opts.words then
-            table.insert(out_elts[fname], table.concat(part:get_words(), ' '))
+            local howw = opts['words_format'] or 'stem'
+            table.insert(out_elts[fname], print_words(part:get_words(howw),
+                howw == 'full'))
           else
             table.insert(out_elts[fname], tostring(part:get_content(how)))
           end
         elseif part and opts.html and part:is_html() then
           maybe_print_text_part_info(part, out_elts[fname])
           if opts.words then
-            table.insert(out_elts[fname], table.concat(part:get_words(), ' '))
+            local howw = opts['words_format'] or 'stem'
+            table.insert(out_elts[fname], print_words(part:get_words(howw),
+                howw == 'full'))
           else
             if opts.structure then
               local hc = part:get_html()
@@ -515,6 +583,298 @@ local function urls_handler(opts)
   print_elts(out_elts, opts)
 end
 
+local function modify_handler(opts)
+  local rspamd_util = require "rspamd_util"
+  load_config(opts)
+  rspamd_url.init(rspamd_config:get_tld_path())
+
+  local function newline(task)
+    local t = task:get_newlines_type()
+
+    if t == 'cr' then
+      return '\r'
+    elseif t == 'lf' then
+      return '\n'
+    end
+
+    return '\r\n'
+  end
+
+  local function read_file(file)
+    local f = assert(io.open(file, "rb"))
+    local content = f:read("*all")
+    f:close()
+    return content
+  end
+
+  local function do_append_footer(task, part, footer, is_multipart)
+    local newline_s = newline(task)
+    local tp = part:get_text()
+    local ct = 'text/plain'
+    local cte = 'quoted-printable'
+
+    if tp:is_html() then
+      ct = 'text/html'
+    end
+
+    if part:get_cte() == '7bit' then
+      cte = '7bit'
+    end
+
+    if is_multipart then
+      io.write(string.format('Content-Type: %s; charset=utf-8%s'..
+          'Content-Transfer-Encoding: %s%s%s',
+          ct, newline_s, cte, newline_s, newline_s))
+      io.flush()
+    end
+
+    local content = tostring(tp:get_content('raw_utf') or '')
+    local double_nline = newline_s .. newline_s
+    local nlen = #double_nline
+    -- Hack, if part ends with 2 newline, then we append it after footer
+    if content:sub(-(nlen), nlen + 1) == double_nline then
+      content = string.format('%s%s',
+          content:sub(-(#newline_s), #newline_s + 1), -- content without last newline
+          footer)
+      rspamd_util.encode_qp(content,
+          80, task:get_newlines_type()):save_in_file(1)
+      io.write(double_nline)
+    else
+      content = content .. footer
+      rspamd_util.encode_qp(content,
+          80, task:get_newlines_type()):save_in_file(1)
+      io.write(double_nline)
+    end
+
+
+  end
+
+  local text_footer, html_footer
+
+  if opts['text_footer'] then
+    text_footer = read_file(opts['text_footer'])
+  end
+
+  if opts['html_footer'] then
+    html_footer = read_file(opts['html_footer'])
+  end
+
+  for _,fname in ipairs(opts.file) do
+    local task = load_task(opts, fname)
+    local newline_s = newline(task)
+    local need_rewrite_ct = false
+    local parsed_ct
+    local seen_cte = false
+
+    local function process_headers_cb(name, hdr)
+
+      for _,h in ipairs(opts['remove_header']) do
+        if name:match(h) then
+          return
+        end
+      end
+
+      for _,h in ipairs(opts['rewrite_header']) do
+        local hname,hpattern = h:match('^([^=]+)=(.+)$')
+        if hname == name then
+          local new_value = string.format(hpattern, hdr.decoded)
+          new_value = string.format('%s:%s%s%s',
+              name, hdr.separator,
+              rspamd_util.fold_header(name,
+                  rspamd_util.mime_header_encode(new_value),
+                  task:get_newlines_type()), newline_s)
+          io.write(new_value)
+          return
+        end
+      end
+
+      if need_rewrite_ct then
+        if name:lower() == 'content-type' then
+          local nct = string.format('%s: %s/%s; charset=utf-8%s',
+              'Content-Type', parsed_ct.type, parsed_ct.subtype, newline_s)
+          io.write(nct)
+          return
+        elseif name:lower() == 'content-transfer-encoding' then
+          seen_cte = true
+          io.write(string.format('%s: %s%s',
+              'Content-Transfer-Encoding', 'quoted-printable', newline_s))
+          return
+        end
+      end
+
+      io.write(hdr.raw)
+    end
+
+    if html_footer or text_footer then
+      -- We need to take extra care about content-type and cte
+      local ct = task:get_header('Content-Type')
+      if ct then
+        ct = rspamd_util.parse_content_type(ct, task:get_mempool())
+      end
+
+      if ct then
+        if ct.type and ct.type == 'text' then
+          if ct.subtype then
+            if html_footer and (ct.subtype == 'html' or ct.subtype == 'htm') then
+              need_rewrite_ct = true
+            elseif text_footer and ct.subtype == 'plain' then
+              need_rewrite_ct = true
+            end
+          else
+            if text_footer then
+              need_rewrite_ct = true
+            end
+          end
+
+          parsed_ct = ct
+        end
+      else
+        local text_parts = task:get_text_parts()
+        if text_parts then
+
+          if #text_parts == 1 then
+            need_rewrite_ct = true
+            parsed_ct = {
+              type = 'text',
+              subtype = 'plain'
+            }
+          elseif #text_parts > 1 then
+            -- XXX: in fact, it cannot be
+            parsed_ct = {
+              type = 'multipart',
+              subtype = 'mixed'
+            }
+          end
+        end
+      end
+    end
+
+    task:headers_foreach(process_headers_cb, {full = true})
+
+    for _,h in ipairs(opts['add_header']) do
+      local hname,hvalue = h:match('^([^=]+)=(.+)$')
+
+      if hname and hvalue then
+        io.write(string.format('%s: %s%s', hname,
+            rspamd_util.fold_header(hname, hvalue, task:get_newlines_type()),
+            newline_s))
+      end
+    end
+
+    if not seen_cte and need_rewrite_ct then
+      io.write(string.format('%s: %s%s',
+          'Content-Transfer-Encoding', 'quoted-printable', newline_s))
+    end
+
+    -- End of headers
+    io.write(newline_s)
+
+    local boundaries = {}
+    local cur_boundary
+
+    for _,part in ipairs(task:get_parts()) do
+      local boundary = part:get_boundary()
+      if part:is_multipart() then
+        if cur_boundary then
+          io.write(string.format('--%s%s',
+              boundaries[#boundaries], newline_s))
+        end
+
+        boundaries[#boundaries + 1] = boundary or '--XXX'
+        cur_boundary = boundary
+        io.flush ()
+
+        local rh = part:get_raw_headers()
+        if #rh > 0 then
+          rh:save_in_file(1)
+          io.write(newline_s)
+          io.flush()
+        end
+      elseif part:is_message() then
+        if boundary then
+          if cur_boundary and boundary ~= cur_boundary then
+            -- Need to close boundary
+            io.write(string.format('--%s--%s%s',
+                boundaries[#boundaries], newline_s, newline_s))
+            table.remove(boundaries)
+            cur_boundary = nil
+          end
+          io.write(string.format('--%s%s',
+              boundary, newline_s))
+        end
+
+        io.flush()
+        part:get_raw_headers():save_in_file(1)
+        io.write(newline_s)
+      else
+        local append_footer = false
+        local skip_footer = part:is_attachment()
+
+        local parent = part:get_parent()
+        if parent then
+          local t,st = parent:get_type()
+
+          if t == 'multipart' and st == 'signed' then
+            -- Do not modify signed parts
+            skip_footer = true
+          end
+        end
+        if text_footer and part:is_text() then
+          local tp = part:get_text()
+
+          if not tp:is_html() then
+            append_footer = text_footer
+          end
+        end
+
+        if html_footer and part:is_text() then
+          local tp = part:get_text()
+
+          if tp:is_html() then
+            append_footer = html_footer
+          end
+        end
+
+        if boundary then
+          if cur_boundary and boundary ~= cur_boundary then
+            -- Need to close boundary
+            io.write(string.format('--%s--%s%s',
+                boundaries[#boundaries], newline_s, newline_s))
+            table.remove(boundaries)
+            cur_boundary = boundary
+          end
+          io.write(string.format('--%s%s',
+              boundary, newline_s))
+        end
+
+        io.flush()
+
+        if append_footer and not skip_footer then
+          do_append_footer(task, part, append_footer,
+              parent and parent:is_multipart())
+        else
+          part:get_raw_headers():save_in_file(1)
+          io.write(newline_s)
+          io.flush()
+          part:get_raw_content():save_in_file(1)
+        end
+      end
+    end
+
+    -- Close remaining
+    local b = table.remove(boundaries)
+    while b do
+      io.write(string.format('--%s--%s', b, newline_s))
+      if #boundaries > 0 then
+        io.write(newline_s)
+      end
+      b = table.remove(boundaries)
+    end
+
+    task:destroy() -- No automatic dtor
+  end
+end
+
 local function handler(args)
   local opts = parser:parse(args)
 
@@ -532,6 +892,8 @@ local function handler(args)
     stat_handler(opts)
   elseif command == 'urls' then
     urls_handler(opts)
+  elseif command == 'modify' then
+    modify_handler(opts)
   else
     parser:error('command %s is not implemented', command)
   end

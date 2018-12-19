@@ -40,12 +40,8 @@ struct rspamd_worker_ctx {
 	struct timeval io_tv;
 	/* Detect whether this worker is mime worker    */
 	gboolean is_mime;
-	/* HTTP worker									*/
-	gboolean is_http;
-	/* JSON output                                  */
-	gboolean is_json;
-	/* Allow learning through worker				*/
-	gboolean allow_learn;
+	/* Allow encrypted requests only using network */
+	gboolean encrypted_only;
 	/* Limit of tasks */
 	guint32 max_tasks;
 	/* Maximum time for task processing */

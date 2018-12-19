@@ -116,6 +116,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_OWN_POOL (1 << 27)
 #define RSPAMD_TASK_FLAG_MILTER (1 << 28)
 #define RSPAMD_TASK_FLAG_SSL (1 << 29)
+#define RSPAMD_TASK_FLAG_BAD_UNICODE (1 << 30)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))
@@ -173,6 +174,8 @@ struct rspamd_task {
 	struct rspamd_metric_result *result;			/**< Metric result									*/
 	GHashTable *lua_cache;							/**< cache of lua objects							*/
 	GPtrArray *tokens;								/**< statistics tokens */
+	GArray *meta_words;								/**< rspamd_stat_token_t produced from meta headers
+														(e.g. Subject) */
 
 	GPtrArray *rcpt_mime;
 	GPtrArray *rcpt_envelope;						/**< array of rspamd_email_address					*/
@@ -212,9 +215,10 @@ struct rspamd_task {
  * Construct new task for worker
  */
 struct rspamd_task *rspamd_task_new (struct rspamd_worker *worker,
-		struct rspamd_config *cfg,
-		rspamd_mempool_t *pool,
-		struct rspamd_lang_detector *lang_det);
+									 struct rspamd_config *cfg,
+									 rspamd_mempool_t *pool,
+									 struct rspamd_lang_detector *lang_det,
+									 struct event_base *ev_base);
 /**
  * Destroy task object and remove its IO dispatcher if it exists
  */

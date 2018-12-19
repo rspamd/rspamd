@@ -601,6 +601,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	wrk->finish_actions = g_ptr_array_new ();
 	wrk->ppid = getpid ();
 	wrk->pid = fork ();
+	wrk->cores_throttled = rspamd_main->cores_throttling;
 
 	switch (wrk->pid) {
 	case 0:

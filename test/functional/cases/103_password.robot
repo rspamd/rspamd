@@ -20,7 +20,7 @@ PASSWORD - PBKDF
 PASSWORD - PBKDF WRONG
   [Setup]  Password Setup  ${PBKDF_PASSWORD}
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -P  q1q1  stat
-  Check Rspamc  ${result}  Unauthorized
+  Should Be Equal As Integers  ${result.rc}  1
 
 PASSWORD - CATENA
   [Setup]  Password Setup  ${CATENA_PASSWORD}
@@ -30,7 +30,7 @@ PASSWORD - CATENA
 PASSWORD - CATENA WRONG
   [Setup]  Password Setup  ${CATENA_PASSWORD}
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -P  q  stat
-  Check Rspamc  ${result}  Unauthorized
+  Should Be Equal As Integers  ${result.rc}  1
 
 PASSWORD - ENABLE
   [Setup]  Password Setup  ${CATENA_PASSWORD}
@@ -40,12 +40,12 @@ PASSWORD - ENABLE
 PASSWORD - ENABLE WITH NORMAL
   [Setup]  Password Setup  ${CATENA_PASSWORD}
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -P  nq1  stat_reset
-  Check Rspamc  ${result}  Unauthorized
+  Should Be Equal As Integers  ${result.rc}  1
 
 PASSWORD - ENABLE INCORRECT
   [Setup]  Password Setup  ${CATENA_PASSWORD}
   ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -P  q2q2  stat_reset
-  Check Rspamc  ${result}  Unauthorized
+  Should Be Equal As Integers  ${result.rc}  1
 
 *** Keywords ***
 Password Setup

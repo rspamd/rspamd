@@ -163,6 +163,7 @@ rspamd_mempool_get_entry (const gchar *loc)
 	return rspamd_mempool_entry_new (loc);
 }
 
+
 static struct _pool_chain *
 rspamd_mempool_chain_new (gsize size, enum rspamd_mempool_chain_type pool_type)
 {
@@ -171,7 +172,7 @@ rspamd_mempool_chain_new (gsize size, enum rspamd_mempool_chain_type pool_type)
 			optimal_size = 0;
 	gpointer map;
 
-	g_return_val_if_fail (size > 0, NULL);
+	g_assert (size > 0);
 
 	if (pool_type == RSPAMD_MEMPOOL_SHARED) {
 #if defined(HAVE_MMAP_ANON)
@@ -401,6 +402,11 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
 
 static void *
 memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
+						  enum rspamd_mempool_chain_type pool_type)
+RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
+
+static void *
+memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 		enum rspamd_mempool_chain_type pool_type)
 {
 	guint8 *tmp;
@@ -464,7 +470,7 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 		return tmp;
 	}
 
-	return NULL;
+	abort ();
 }
 
 

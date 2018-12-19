@@ -105,7 +105,7 @@ union rdns_reply_element_un {
 
 struct rdns_reply_entry {
 	union rdns_reply_element_un content;
-	uint16_t type;
+	enum rdns_request_type type;
 	int32_t ttl;
 	struct rdns_reply_entry *prev, *next;
 };

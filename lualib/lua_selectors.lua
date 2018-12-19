@@ -132,13 +132,35 @@ uses any type by default)]],
   },
   -- Get list of all attachments digests
   ['attachments'] = {
-    ['get_value'] = function(task)
+    ['get_value'] = function(task, args)
+
+      local s
       local parts = task:get_parts() or E
       local digests = {}
 
-      for _,p in ipairs(parts) do
-        if p:get_filename() then
-          table.insert(digests, p:get_digest())
+      if #args > 0 then
+        local rspamd_cryptobox = require "rspamd_cryptobox_hash"
+        local encoding = args[1] or 'hex'
+        local ht = args[2] or 'blake2'
+
+        for _,p in ipairs(parts) do
+          if p:get_filename() then
+            local h = rspamd_cryptobox.create_specific(ht, p:get_content('raw_parsed'))
+            if encoding == 'hex' then
+              s = h:hex()
+            elseif encoding == 'base32' then
+              s = h:base32()
+            elseif encoding == 'base64' then
+              s = h:base64()
+            end
+            table.insert(digests, s)
+          end
+        end
+      else
+        for _,p in ipairs(parts) do
+          if p:get_filename() then
+            table.insert(digests, p:get_digest())
+          end
         end
       end
 
@@ -148,7 +170,13 @@ uses any type by default)]],
 
       return nil
     end,
-    ['description'] = 'Get list of all attachments digests',
+    ['description'] = [[Get list of all attachments digests.
+The first optional argument is encoding (`hex`, `base32`, `base64`),
+the second optional argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`, `md5`)]],
+
+    ['args_schema'] = {ts.one_of{'hex', 'base32', 'base64'}:is_optional(),
+                       ts.one_of{'blake2', 'sha256', 'sha1', 'sha512', 'md5'}:is_optional()}
+
   },
   -- Get all attachments files
   ['files'] = {
@@ -415,7 +443,7 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
 
       return inp:sub(start_pos, end_pos), 'string'
     end,
-    ['description'] = 'Extracts substring',
+    ['description'] = 'Extracts substring; the first argument is start, the second is the last (like in Lua)',
     ['args_schema'] = {(ts.number + ts.string / tonumber):is_optional(),
                        (ts.number + ts.string / tonumber):is_optional()}
   },
@@ -469,6 +497,22 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
     ['description'] = 'Drops input value and return values from function\'s arguments or an empty string',
     ['args_schema'] = (ts.string + ts.array_of(ts.string)):is_optional()
   },
+  ['equal'] = {
+    ['types'] = {
+      ['string'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
+      if inp == args[1] then
+        return inp,'string'
+      end
+
+      return nil
+    end,
+    ['description'] = [[Boolean function equal.
+Returns either nil or its argument if input is equal to argument]],
+    ['args_schema'] = {ts.string}
+  },
   -- Boolean function in, returns either nil or its input if input is in args list
   ['in'] = {
     ['types'] = {
@@ -496,7 +540,56 @@ Returns either nil or its input if input is in args list]],
 Returns either nil or its input if input is not in args list]],
     ['args_schema'] = ts.array_of(ts.string)
   },
+  ['inverse'] = {
+    ['types'] = {
+      ['string'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
+      if inp then
+        return nil
+      else
+        return (args[1] or 'true'),'string'
+      end
+    end,
+    ['description'] = [[Inverses input.
+Empty string comes the first argument or 'true', non-empty string comes nil]],
+    ['args_schema'] = {ts.string:is_optional()}
+  },
+  ['ipmask'] = {
+    ['types'] = {
+      ['string'] = true,
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
+      local rspamd_ip = require "rspamd_ip"
+      -- Non optimal: convert string to an IP address
+      local ip = rspamd_ip.from_string(inp)
+
+      if not ip or not ip:is_valid() then
+        lua_util.debugm(M, "cannot convert %s to IP", inp)
+        return nil
+      end
+
+      if ip:get_version() == 4 then
+        local mask = tonumber(args[1])
+
+        return ip:apply_mask(mask):to_string(),'string'
+      else
+        -- IPv6 takes the second argument or the first one...
+        local mask_str = args[2] or args[1]
+        local mask = tonumber(mask_str)
+
+        return ip:apply_mask(mask):to_string(),'string'
+      end
+    end,
+    ['description'] = 'Applies mask to IP address. The first argument is the mask for IPv4 addresses, the second is the mask for IPv6 addresses.',
+    ['args_schema'] = {(ts.number + ts.string / tonumber),
+                       (ts.number + ts.string / tonumber):is_optional()}
+  },
 }
+
+transform_function.match = transform_function.regexp
 
 local function process_selector(task, sel)
   local function allowed_type(t)
@@ -770,10 +863,10 @@ exports.parse_selector = function(cfg, str)
           map_type = 'string',
           process = function(inp, t, args)
             if t == 'userdata' then
-              return inp[method_name](inp, args),string
+              return inp[method_name](inp, args),'string'
             else
               -- Table
-              return inp[method_name],string
+              return inp[method_name],'string'
             end
           end,
         }

@@ -17,8 +17,8 @@
  * Rspamd fuzzy storage server
  */
 
-#include <src/libserver/fuzzy_wire.h>
 #include "config.h"
+#include "libserver/fuzzy_wire.h"
 #include "util.h"
 #include "rspamd.h"
 #include "map.h"
@@ -37,7 +37,10 @@
 #include "libutil/map_private.h"
 #include "libutil/hash.h"
 #include "libutil/http_private.h"
+#include "libutil/hash.h"
 #include "unix-std.h"
+
+#include <math.h>
 
 /* Resync value in seconds */
 #define DEFAULT_SYNC_TIMEOUT 60.0
@@ -45,6 +48,9 @@
 #define DEFAULT_MASTER_TIMEOUT 10.0
 #define DEFAULT_UPDATES_MAXFAIL 3
 #define COOKIE_SIZE 128
+#define DEFAULT_MAX_BUCKETS 2000
+#define DEFAULT_BUCKET_TTL 3600
+#define DEFAULT_BUCKET_MASK 24
 
 static const gchar *local_db_name = "local";
 
@@ -115,6 +121,12 @@ struct rspamd_fuzzy_mirror {
 	struct rspamd_cryptobox_pubkey *key;
 };
 
+struct rspamd_leaky_bucket_elt {
+	rspamd_inet_addr_t *addr;
+	gdouble last;
+	gdouble cur;
+};
+
 static const guint64 rspamd_fuzzy_storage_magic = 0x291a3253eb1b3ea5ULL;
 
 struct rspamd_fuzzy_storage_ctx {
@@ -132,6 +144,7 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_radix_map_helper *update_ips;
 	struct rspamd_radix_map_helper *master_ips;
 	struct rspamd_radix_map_helper *blocked_ips;
+	struct rspamd_radix_map_helper *ratelimit_whitelist;
 
 	struct rspamd_cryptobox_keypair *sync_keypair;
 	struct rspamd_cryptobox_pubkey *master_key;
@@ -141,6 +154,7 @@ struct rspamd_fuzzy_storage_ctx {
 	const ucl_object_t *update_map;
 	const ucl_object_t *masters_map;
 	const ucl_object_t *blocked_map;
+	const ucl_object_t *ratelimit_whitelist_map;
 
 	GHashTable *master_flags;
 	guint keypair_cache_size;
@@ -148,6 +162,7 @@ struct rspamd_fuzzy_storage_ctx {
 	struct event peer_ev;
 	struct event stat_ev;
 	struct timeval stat_tv;
+
 	/* Local keypair */
 	struct rspamd_cryptobox_keypair *default_keypair; /* Bad clash, need for parse keypair */
 	struct fuzzy_key *default_key;
@@ -160,11 +175,21 @@ struct rspamd_fuzzy_storage_ctx {
 	gchar *collection_id_file;
 	struct rspamd_keypair_cache *keypair_cache;
 	rspamd_lru_hash_t *errors_ips;
+	rspamd_lru_hash_t *ratelimit_buckets;
 	struct rspamd_fuzzy_backend *backend;
 	GArray *updates_pending;
 	guint updates_failed;
 	guint updates_maxfail;
 	guint32 collection_id;
+
+	/* Ratelimits */
+	guint leaky_bucket_ttl;
+	guint leaky_bucket_mask;
+	guint max_buckets;
+	gboolean ratelimit_log_only;
+	gdouble leaky_bucket_burst;
+	gdouble leaky_bucket_rate;
+
 	struct rspamd_worker *worker;
 	struct rspamd_http_connection_router *collection_rt;
 	const ucl_object_t *skip_map;
@@ -231,6 +256,105 @@ struct fuzzy_master_update_session {
 static void rspamd_fuzzy_write_reply (struct fuzzy_session *session);
 
 static gboolean
+rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
+{
+	rspamd_inet_addr_t *masked;
+	struct rspamd_leaky_bucket_elt *elt;
+	struct timeval tv;
+	gdouble now;
+
+	if (session->ctx->ratelimit_whitelist != NULL) {
+		if (rspamd_match_radix_map_addr (session->ctx->ratelimit_whitelist,
+				session->addr) != NULL) {
+			return TRUE;
+		}
+	}
+
+	/*
+	if (rspamd_inet_address_is_local (session->addr, TRUE)) {
+		return TRUE;
+	}
+	*/
+
+	masked = rspamd_inet_address_copy (session->addr);
+
+	if (rspamd_inet_address_get_af (masked) == AF_INET) {
+		rspamd_inet_address_apply_mask (masked,
+				MIN (session->ctx->leaky_bucket_mask, 32));
+	}
+	else {
+		/* Must be at least /64 */
+		rspamd_inet_address_apply_mask (masked,
+				MIN (MAX (session->ctx->leaky_bucket_mask * 4, 64), 128));
+	}
+
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+	event_base_gettimeofday_cached (session->ctx->ev_base, &tv);
+#else
+	gettimeofday (&tv, NULL);
+#endif
+
+	now = tv_to_double (&tv);
+	elt = rspamd_lru_hash_lookup (session->ctx->ratelimit_buckets, masked,
+			tv.tv_sec);
+
+	if (elt) {
+		gboolean ratelimited = FALSE;
+
+		if (isnan (elt->cur)) {
+			/* Ratelimit exceeded, preserve it for the whole ttl */
+			ratelimited = TRUE;
+		}
+		else {
+			/* Update bucket */
+			if (elt->last < now) {
+				elt->cur -= session->ctx->leaky_bucket_rate * (now - elt->last);
+				elt->last = now;
+
+				if (elt->cur < 0) {
+					elt->cur = 0;
+				}
+			}
+			else {
+				elt->last = now;
+			}
+
+			/* Check bucket */
+			if (elt->cur >= session->ctx->leaky_bucket_burst) {
+
+				msg_info ("ratelimiting %s (%s), %.1f max elts",
+						rspamd_inet_address_to_string (session->addr),
+						rspamd_inet_address_to_string (masked),
+						session->ctx->leaky_bucket_burst);
+				elt->cur = NAN;
+			}
+			else {
+				elt->cur ++; /* Allow one more request */
+			}
+		}
+
+		rspamd_inet_address_free (masked);
+
+		return !ratelimited;
+	}
+	else {
+		/* New bucket */
+		elt = g_malloc (sizeof (*elt));
+		elt->addr = masked; /* transfer ownership */
+		elt->cur = 1;
+		elt->last = now;
+
+		rspamd_lru_hash_insert (session->ctx->ratelimit_buckets,
+				masked,
+				elt,
+				tv.tv_sec,
+				session->ctx->leaky_bucket_ttl);
+	}
+
+	return TRUE;
+}
+
+static gboolean
 rspamd_fuzzy_check_client (struct fuzzy_session *session, gboolean is_write)
 {
 	if (session->ctx->blocked_ips != NULL) {
@@ -259,6 +383,15 @@ rspamd_fuzzy_check_client (struct fuzzy_session *session, gboolean is_write)
 	}
 
 	/* Non write */
+	if (session->ctx->ratelimit_buckets) {
+		if (session->ctx->ratelimit_log_only) {
+			(void)rspamd_fuzzy_check_ratelimit (session); /* Check but ignore */
+		}
+		else {
+			return rspamd_fuzzy_check_ratelimit (session);
+		}
+	}
+
 	return TRUE;
 }
 
@@ -298,6 +431,15 @@ struct fuzzy_slave_connection {
 	struct rspamd_fuzzy_mirror *mirror;
 	gint sock;
 };
+
+static void
+fuzzy_rl_bucket_free (gpointer p)
+{
+	struct rspamd_leaky_bucket_elt *elt = (struct rspamd_leaky_bucket_elt *)p;
+
+	rspamd_inet_address_free (elt->addr);
+	g_free (elt);
+}
 
 static void
 fuzzy_mirror_close_connection (struct fuzzy_slave_connection *conn)
@@ -974,6 +1116,8 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		else {
 			result.v1.value = 403;
 			result.v1.prob = 0.0;
+			result.v1.flag = 0;
+			rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
 		}
 	}
 	else if (cmd->cmd == FUZZY_STAT) {
@@ -2057,11 +2201,9 @@ rspamd_fuzzy_storage_stat_key (struct fuzzy_key_stat *key_stat)
 static ucl_object_t *
 rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat)
 {
-	GHashTableIter it, ip_it;
-	GHashTable *ip_hash;
 	struct fuzzy_key_stat *key_stat;
+	GHashTableIter it;
 	struct fuzzy_key *key;
-	rspamd_lru_element_t *lru_elt;
 	ucl_object_t *obj, *keys_obj, *elt, *ip_elt, *ip_cur;
 	gpointer k, v;
 	gint i;
@@ -2082,22 +2224,18 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 			elt = rspamd_fuzzy_storage_stat_key (key_stat);
 
 			if (key_stat->last_ips && ip_stat) {
-				ip_hash = rspamd_lru_hash_get_htable (key_stat->last_ips);
+				i = 0;
 
-				if (ip_hash) {
-					g_hash_table_iter_init (&ip_it, ip_hash);
-					ip_elt = ucl_object_typed_new (UCL_OBJECT);
+				ip_elt = ucl_object_typed_new (UCL_OBJECT);
 
-					while (g_hash_table_iter_next (&ip_it, &k, &v)) {
-						lru_elt = v;
-						ip_cur = rspamd_fuzzy_storage_stat_key (
-								rspamd_lru_hash_element_data (lru_elt));
-						ucl_object_insert_key (ip_elt, ip_cur,
-								rspamd_inet_address_to_string (k), 0, true);
-					}
-
-					ucl_object_insert_key (elt, ip_elt, "ips", 0, false);
+				while ((i = rspamd_lru_hash_foreach (key_stat->last_ips,
+						i, &k, &v)) != -1) {
+					ip_cur = rspamd_fuzzy_storage_stat_key (v);
+					ucl_object_insert_key (ip_elt, ip_cur,
+							rspamd_inet_address_to_string (k), 0, true);
 				}
+
+				ucl_object_insert_key (elt, ip_elt, "ips", 0, false);
 			}
 
 			ucl_object_insert_key (keys_obj, elt, keyname, 0, true);
@@ -2124,27 +2262,21 @@ rspamd_fuzzy_stat_to_ucl (struct rspamd_fuzzy_storage_ctx *ctx, gboolean ip_stat
 			false);
 
 	if (ctx->errors_ips && ip_stat) {
-		ip_hash = rspamd_lru_hash_get_htable (ctx->errors_ips);
+		i = 0;
 
-		if (ip_hash) {
-			g_hash_table_iter_init (&ip_it, ip_hash);
-			ip_elt = ucl_object_typed_new (UCL_OBJECT);
+		ip_elt = ucl_object_typed_new (UCL_OBJECT);
 
-			while (g_hash_table_iter_next (&ip_it, &k, &v)) {
-				lru_elt = v;
-
-				ucl_object_insert_key (ip_elt,
-						ucl_object_fromint (*(guint64 *)
-								rspamd_lru_hash_element_data (lru_elt)),
-						rspamd_inet_address_to_string (k), 0, true);
-			}
-
-			ucl_object_insert_key (obj,
-					ip_elt,
-					"errors_ips",
-					0,
-					false);
+		while ((i = rspamd_lru_hash_foreach (ctx->errors_ips, i, &k, &v)) != -1) {
+			ucl_object_insert_key (ip_elt,
+					ucl_object_fromint (*(guint64 *)v),
+					rspamd_inet_address_to_string (k), 0, true);
 		}
+
+		ucl_object_insert_key (obj,
+				ip_elt,
+				"errors_ips",
+				0,
+				false);
 	}
 
 	/* Checked by epoch */
@@ -2492,6 +2624,11 @@ init_fuzzy (struct rspamd_config *cfg)
 			(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ctx->mirrors);
 	ctx->updates_maxfail = DEFAULT_UPDATES_MAXFAIL;
 	ctx->collection_id_file = RSPAMD_DBDIR "/fuzzy_collection.id";
+	ctx->leaky_bucket_mask = DEFAULT_BUCKET_MASK;
+	ctx->leaky_bucket_ttl = DEFAULT_BUCKET_TTL;
+	ctx->max_buckets = DEFAULT_MAX_BUCKETS;
+	ctx->leaky_bucket_burst = NAN;
+	ctx->leaky_bucket_rate = NAN;
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -2681,6 +2818,65 @@ init_fuzzy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, skip_map),
 			0,
 			"Skip specific hashes from the map");
+
+	/* Ratelimits */
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"ratelimit_whitelist",
+			rspamd_rcl_parse_struct_ucl,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, ratelimit_whitelist_map),
+			0,
+			"Skip specific addresses from rate limiting");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"ratelimit_max_buckets",
+			rspamd_rcl_parse_struct_integer,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, max_buckets),
+			RSPAMD_CL_FLAG_UINT,
+			"Maximum number of leaky buckets (default: " G_STRINGIFY(DEFAULT_MAX_BUCKETS) ")");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"ratelimit_network_mask",
+			rspamd_rcl_parse_struct_integer,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, leaky_bucket_mask),
+			RSPAMD_CL_FLAG_UINT,
+			"Network mask to apply for IPv4 rate addresses (default: " G_STRINGIFY(DEFAULT_BUCKET_MASK) ")");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"ratelimit_bucket_ttl",
+			rspamd_rcl_parse_struct_time,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, leaky_bucket_ttl),
+			RSPAMD_CL_FLAG_TIME_INTEGER,
+			"Time to live for ratelimit element (default: " G_STRINGIFY(DEFAULT_BUCKET_TTL) ")");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"ratelimit_rate",
+			rspamd_rcl_parse_struct_double,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, leaky_bucket_rate),
+			0,
+			"Leak rate in requests per second");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"ratelimit_burst",
+			rspamd_rcl_parse_struct_double,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, leaky_bucket_burst),
+			0,
+			"Peak value for ratelimit bucket");
+	rspamd_rcl_register_worker_option (cfg,
+			type,
+			"ratelimit_log_only",
+			rspamd_rcl_parse_struct_boolean,
+			ctx,
+			G_STRUCT_OFFSET (struct rspamd_fuzzy_storage_ctx, ratelimit_log_only),
+			0,
+			"Don't really ban on ratelimit reaching, just log");
+
 
 	return ctx;
 }
@@ -2957,6 +3153,20 @@ start_fuzzy (struct rspamd_worker *worker)
 		rspamd_config_radix_from_ucl (worker->srv->cfg, ctx->blocked_map,
 				"Block fuzzy requests from the specific IPs",
 				&ctx->blocked_ips, NULL);
+	}
+
+	/* Create radix trees */
+	if (ctx->ratelimit_whitelist_map != NULL) {
+		rspamd_config_radix_from_ucl (worker->srv->cfg, ctx->ratelimit_whitelist_map,
+				"Skip ratelimits from specific ip addresses/networks",
+				&ctx->ratelimit_whitelist, NULL);
+	}
+
+	/* Ratelimits */
+	if (!isnan (ctx->leaky_bucket_rate) && !isnan (ctx->leaky_bucket_burst)) {
+		ctx->ratelimit_buckets = rspamd_lru_hash_new_full (ctx->max_buckets,
+				NULL, fuzzy_rl_bucket_free,
+				rspamd_inet_address_hash, rspamd_inet_address_equal);
 	}
 
 	/* Maps events */

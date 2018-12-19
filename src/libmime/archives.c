@@ -1176,7 +1176,7 @@ rspamd_7zip_read_archive_props (struct rspamd_task *task,
 		struct rspamd_archive *arch)
 {
 	guchar proptype;
-	uint64_t proplen;
+	guint64 proplen;
 
 	/*
 	 * for (;;)
@@ -1509,8 +1509,8 @@ rspamd_archive_cheat_detect (struct rspamd_mime_part *part, const gchar *str,
 		}
 
 		if (magic_start != NULL) {
-			if (part->parsed_data.len > magic_len && memcmp (part->parsed_data.begin,
-					magic_start, magic_len) == 0) {
+			if (part->parsed_data.len > magic_len &&
+				memcmp (part->parsed_data.begin, magic_start, magic_len) == 0) {
 				return TRUE;
 			}
 		}
@@ -1531,20 +1531,26 @@ rspamd_archives_process (struct rspamd_task *task)
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
 
-		if (part->parsed_data.len > 0) {
-			if (rspamd_archive_cheat_detect (part, "zip",
-					zip_magic, sizeof (zip_magic))) {
-				rspamd_archive_process_zip (task, part);
-			}
-			else if (rspamd_archive_cheat_detect (part, "rar",
-					rar_magic, sizeof (rar_magic))) {
-				rspamd_archive_process_rar (task, part);
-			}
-			else if (rspamd_archive_cheat_detect (part, "7z",
-					sz_magic, sizeof (sz_magic))) {
-				rspamd_archive_process_7zip (task, part);
-			}
+		if (!(part->flags & (RSPAMD_MIME_PART_TEXT|RSPAMD_MIME_PART_IMAGE))) {
+			if (part->parsed_data.len > 0) {
+				if (rspamd_archive_cheat_detect (part, "zip",
+						zip_magic, sizeof (zip_magic))) {
+					rspamd_archive_process_zip (task, part);
+				} else if (rspamd_archive_cheat_detect (part, "rar",
+						rar_magic, sizeof (rar_magic))) {
+					rspamd_archive_process_rar (task, part);
+				} else if (rspamd_archive_cheat_detect (part, "7z",
+						sz_magic, sizeof (sz_magic))) {
+					rspamd_archive_process_7zip (task, part);
+				}
 
+				if (IS_CT_TEXT (part->ct) &&
+						(part->flags & RSPAMD_MIME_PART_ARCHIVE)) {
+					msg_info_task ("found archive with incorrect content-type: %T/%T",
+							&part->ct->type, &part->ct->subtype);
+					part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+				}
+			}
 		}
 	}
 }

@@ -128,10 +128,11 @@ local function check_dcc (task)
 
       else
         rspamd_logger.errx(task, 'failed to scan, maximum retransmits exceed')
-        upstream:fail()
+        if upstream then upstream:fail() end
       end
     else
       -- Parse the response
+      if upstream then upstream:ok() end
       local _,_,result,disposition,header = tostring(data):find("(.-)\n(.-)\n(.-)\n")
       lua_util.debugm(N, task, 'DCC result=%1 disposition=%2 header="%3"',
         result, disposition, header)

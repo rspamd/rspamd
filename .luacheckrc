@@ -39,6 +39,7 @@ ignore = {
   '212', -- unused argument
   '612', -- trailing whitespace
   '631', -- line is too long
+  '311', -- value assigned to variable X is unused
 }
 
 files['/**/src/plugins/lua/spamassassin.lua'].globals = {

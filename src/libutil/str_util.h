@@ -61,6 +61,8 @@ gboolean rspamd_str_equal (gconstpointer v, gconstpointer v2);
  */
 guint rspamd_ftok_icase_hash (gconstpointer key);
 gboolean rspamd_ftok_icase_equal (gconstpointer v, gconstpointer v2);
+guint rspamd_ftok_hash (gconstpointer key);
+gboolean rspamd_ftok_equal (gconstpointer v, gconstpointer v2);
 guint rspamd_gstring_icase_hash (gconstpointer key);
 gboolean rspamd_gstring_icase_equal (gconstpointer v, gconstpointer v2);
 
@@ -200,6 +202,16 @@ gchar * rspamd_encode_base64 (const guchar *in, gsize inlen, gint str_len,
  */
 gchar * rspamd_encode_base64_fold (const guchar *in, gsize inlen, gint str_len,
 		gsize *outlen, enum rspamd_newlines_type how);
+
+/**
+ * Encode and fold string using quoted printable encoding
+ * @param in input
+ * @param inlen input length
+ * @param str_len maximum string length (if <= 0 then no lines are split)
+ * @return freshly allocated base64 encoded value or NULL if input is invalid
+ */
+gchar * rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
+								   gsize *outlen, enum rspamd_newlines_type how);
 
 /**
  * Decode quoted-printable encoded buffer, input and output must not overlap
@@ -384,6 +396,12 @@ rspamd_str_has_8bit (const guchar *beg, gsize len)
 	return FALSE;
 }
 
+struct UConverter;
+struct UConverter *rspamd_get_utf8_converter (void);
+
+struct UNormalizer2;
+const struct UNormalizer2 *rspamd_get_unicode_normalizer (void);
+
 /**
  * Gets a string in UTF8 and normalises it to NFKC_Casefold form
  * @param pool optional memory pool used for logging purposes
@@ -394,6 +412,11 @@ rspamd_str_has_8bit (const guchar *beg, gsize len)
 gboolean rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool,
 		gchar *start, guint *len);
 
+enum rspamd_regexp_escape_flags {
+	RSPAMD_REGEXP_ESCAPE_ASCII = 0,
+	RSPAMD_REGEXP_ESCAPE_UTF = 1u << 0,
+	RSPAMD_REGEXP_ESCAPE_GLOB = 1u << 1,
+};
 /**
  * Escapes special characters when reading plain data to be processed in pcre
  * @param pattern pattern to process
@@ -404,6 +427,16 @@ gboolean rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool,
  */
 gchar *
 rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
-		gsize *dst_len, gboolean allow_glob);
+		gsize *dst_len, enum rspamd_regexp_escape_flags flags);
+
+/**
+ * Returns copy of src (zero terminated) where all unicode is made valid or replaced
+ * to FFFD characters. Caller must free string after usage
+ * @param src
+ * @param slen
+ * @param dstelen
+ * @return
+ */
+gchar * rspamd_str_make_utf_valid (const gchar *src, gsize slen, gsize *dstlen);
 
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */

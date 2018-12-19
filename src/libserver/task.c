@@ -62,8 +62,9 @@ rspamd_request_header_dtor (gpointer p)
  */
 struct rspamd_task *
 rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
-		rspamd_mempool_t *pool,
-		struct rspamd_lang_detector *lang_det)
+				 rspamd_mempool_t *pool,
+				 struct rspamd_lang_detector *lang_det,
+				 struct event_base *ev_base)
 {
 	struct rspamd_task *new_task;
 
@@ -89,8 +90,23 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 		}
 	}
 
+	new_task->ev_base = ev_base;
+
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+	if (ev_base) {
+		event_base_update_cache_time (ev_base);
+		event_base_gettimeofday_cached (ev_base, &new_task->tv);
+		new_task->time_real = tv_to_double (&new_task->tv);
+	}
+	else {
+		gettimeofday (&new_task->tv, NULL);
+		new_task->time_real = tv_to_double (&new_task->tv);
+	}
+#else
 	gettimeofday (&new_task->tv, NULL);
-	new_task->time_real = rspamd_get_ticks (FALSE);
+	new_task->time_real = tv_to_double (&new_task->tv);
+#endif
+
 	new_task->time_virtual = rspamd_get_virtual_ticks ();
 	new_task->time_real_finish = NAN;
 	new_task->time_virtual_finish = NAN;
@@ -233,8 +249,8 @@ rspamd_task_free (struct rspamd_task *task)
 			}
 
 			if (IS_CT_MULTIPART (p->ct)) {
-				if (p->specific.mp.children) {
-					g_ptr_array_free (p->specific.mp.children, TRUE);
+				if (p->specific.mp->children) {
+					g_ptr_array_free (p->specific.mp->children, TRUE);
 				}
 			}
 		}
@@ -251,9 +267,6 @@ rspamd_task_free (struct rspamd_task *task)
 			if (tp->languages) {
 				g_ptr_array_unref (tp->languages);
 			}
-			if (tp->unicode_raw_content) {
-				g_array_free (tp->unicode_raw_content, TRUE);
-			}
 		}
 
 		if (task->rcpt_envelope) {
@@ -267,6 +280,10 @@ rspamd_task_free (struct rspamd_task *task)
 
 		if (task->from_envelope) {
 			rspamd_email_address_free (task->from_envelope);
+		}
+
+		if (task->meta_words) {
+			g_array_free (task->meta_words, TRUE);
 		}
 
 		ucl_object_unref (task->messages);
@@ -744,7 +761,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_PRE_FILTERS:
-		rspamd_symbols_cache_process_symbols (task, task->cfg->cache,
+		rspamd_symcache_process_symbols (task, task->cfg->cache,
 				RSPAMD_TASK_STAGE_PRE_FILTERS);
 		break;
 
@@ -755,7 +772,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_FILTERS:
-		rspamd_symbols_cache_process_symbols (task, task->cfg->cache,
+		rspamd_symcache_process_symbols (task, task->cfg->cache,
 				RSPAMD_TASK_STAGE_FILTERS);
 		break;
 
@@ -776,7 +793,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_POST_FILTERS:
-		rspamd_symbols_cache_process_symbols (task, task->cfg->cache,
+		rspamd_symcache_process_symbols (task, task->cfg->cache,
 				RSPAMD_TASK_STAGE_POST_FILTERS);
 
 		if ((task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO) &&
@@ -827,7 +844,7 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		rspamd_make_composites (task);
 		break;
 	case RSPAMD_TASK_STAGE_IDEMPOTENT:
-		rspamd_symbols_cache_process_symbols (task, task->cfg->cache,
+		rspamd_symcache_process_symbols (task, task->cfg->cache,
 				RSPAMD_TASK_STAGE_IDEMPOTENT);
 		break;
 
@@ -1645,8 +1662,24 @@ rspamd_task_profile_get (struct rspamd_task *task, const gchar *key)
 gboolean
 rspamd_task_set_finish_time (struct rspamd_task *task)
 {
+	struct timeval tv;
+
 	if (isnan (task->time_real_finish)) {
-		task->time_real_finish = rspamd_get_ticks (FALSE);
+
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+		if (task->ev_base) {
+			event_base_update_cache_time (task->ev_base);
+			event_base_gettimeofday_cached (task->ev_base, &tv);
+			task->time_real_finish = tv_to_double (&tv);
+		}
+		else {
+			gettimeofday (&tv, NULL);
+			task->time_real_finish = tv_to_double (&tv);
+		}
+#else
+		gettimeofday (&tv, NULL);
+		task->time_real_finish = tv_to_double (&tv);
+#endif
 		task->time_virtual_finish = rspamd_get_virtual_ticks ();
 
 		return TRUE;

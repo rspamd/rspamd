@@ -44,15 +44,19 @@ local function check_redis_classifier(cls, cfg)
   if cls.new_schema then
     local symbol_spam, symbol_ham
     local expiry = (cls.expiry or cls.expire)
+    if type(expiry) == 'table' then
+      expiry = expiry[1]
+    end
+
     if cls.lazy then settings.lazy = cls.lazy end
     -- Load symbols from statfiles
-    local statfiles = cls.statfile
-    for _,stf in ipairs(statfiles) do
-      local symbol = stf.symbol or 'undefined'
+
+    local function check_statfile_table(tbl, def_sym)
+      local symbol = tbl.symbol or def_sym
 
       local spam
-      if stf.spam then
-        spam = stf.spam
+      if tbl.spam then
+        spam = tbl.spam
       else
         if string.match(symbol:upper(), 'SPAM') then
           spam = true
@@ -68,7 +72,27 @@ local function check_redis_classifier(cls, cfg)
       end
     end
 
-    if not symbol_spam or not symbol_ham or not expiry then
+    local statfiles = cls.statfile
+    if statfiles[1] then
+      for _,stf in ipairs(statfiles) do
+        if not stf.symbol then
+          for k,v in pairs(stf) do
+            check_statfile_table(v, k)
+          end
+        else
+          check_statfile_table(stf, 'undefined')
+        end
+      end
+    else
+      for stn,stf in pairs(statfiles) do
+        check_statfile_table(stf, stn)
+      end
+    end
+
+    if not symbol_spam or not symbol_ham or type(expiry) ~= 'number' then
+      logger.debugm(N, rspamd_config,
+          'disable expiry for classifier %s: no expiry %s',
+          symbol_spam, cls)
       return
     end
     -- Now try to load redis_params if needed
@@ -87,6 +111,9 @@ local function check_redis_classifier(cls, cfg)
           symbol_spam)
       return
     end
+
+    logger.debugm(N, rspamd_config, "enabled expiry for %s/%s -> %s expiry",
+        symbol_spam, symbol_ham, expiry)
 
     table.insert(settings.classifiers, {
       symbol_spam = symbol_spam,
@@ -391,24 +418,17 @@ rspamd_config:add_on_load(function (_, ev_base, worker)
   local unique_redis_params = {}
   -- Push redis script to all unique redis servers
   for _,cls in ipairs(settings.classifiers) do
-    local seen = false
-    for _,rp in ipairs(unique_redis_params) do
-      if lutil.table_cmp(rp, cls.redis_params) then
-        seen = true
-      end
-    end
-
-    if not seen then
-      table.insert(unique_redis_params, cls.redis_params)
+    if not unique_redis_params[cls.redis_params.hash] then
+      unique_redis_params[cls.redis_params.hash] = cls.redis_params
     end
   end
 
-  for _,rp in ipairs(unique_redis_params) do
+  for h,rp in pairs(unique_redis_params) do
     local script_id = lredis.add_redis_script(lutil.template(expiry_script,
         template), rp)
 
     for _,cls in ipairs(settings.classifiers) do
-      if lutil.table_cmp(rp, cls.redis_params) then
+      if cls.redis_params.hash == h then
         cls.script = script_id
       end
     end

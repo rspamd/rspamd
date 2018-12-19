@@ -77,6 +77,16 @@ DMARC NA NXDOMAIN
   ...  -i  37.48.67.26  --from  foo@mom.za.org
   Check Rspamc  ${result}  DMARC_NA
 
+DMARC PCT ZERO REJECT
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/pct_none.eml
+  ...  -i  37.48.67.26  --from  foo@mom.za.org
+  Check Rspamc  ${result}  DMARC_POLICY_QUARANTINE
+
+DMARC PCT ZERO SP QUARANTINE
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/pct_none1.eml
+  ...  -i  37.48.67.26  --from  foo@mom.za.org
+  Check Rspamc  ${result}  DMARC_POLICY_SOFTFAIL
+
 DKIM PERMFAIL NXDOMAIN
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim2.eml
   ...  -i  37.48.67.26

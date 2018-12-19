@@ -29,6 +29,8 @@
  */
 
 LUA_FUNCTION_DEF (regexp, create);
+LUA_FUNCTION_DEF (regexp, import_glob);
+LUA_FUNCTION_DEF (regexp, import_plain);
 LUA_FUNCTION_DEF (regexp, create_cached);
 LUA_FUNCTION_DEF (regexp, get_cached);
 LUA_FUNCTION_DEF (regexp, get_pattern);
@@ -58,6 +60,8 @@ static const struct luaL_reg regexplib_m[] = {
 };
 static const struct luaL_reg regexplib_f[] = {
 	LUA_INTERFACE_DEF (regexp, create),
+	LUA_INTERFACE_DEF (regexp, import_glob),
+	LUA_INTERFACE_DEF (regexp, import_plain),
 	LUA_INTERFACE_DEF (regexp, get_cached),
 	LUA_INTERFACE_DEF (regexp, create_cached),
 	{NULL, NULL}
@@ -133,22 +137,144 @@ lua_regexp_create (lua_State *L)
 		flags_str = luaL_checkstring (L, 2);
 	}
 
-	re = rspamd_regexp_new (string, flags_str, &err);
-	if (re == NULL) {
-		lua_pushnil (L);
-		msg_info ("cannot parse regexp: %s, error: %s",
-			string,
-			err == NULL ? "undefined" : err->message);
-		g_error_free (err);
+	if (string) {
+		re = rspamd_regexp_new (string, flags_str, &err);
+		if (re == NULL) {
+			lua_pushnil (L);
+			msg_info ("cannot parse regexp: %s, error: %s",
+					string,
+					err == NULL ? "undefined" : err->message);
+			g_error_free (err);
+		} else {
+			new = g_malloc0 (sizeof (struct rspamd_lua_regexp));
+			new->re = re;
+			new->re_pattern = g_strdup (string);
+			new->module = rspamd_lua_get_module_name (L);
+			pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
+			rspamd_lua_setclass (L, "rspamd{regexp}", -1);
+			*pnew = new;
+		}
 	}
 	else {
-		new = g_malloc0 (sizeof (struct rspamd_lua_regexp));
-		new->re = re;
-		new->re_pattern = g_strdup (string);
-		new->module = rspamd_lua_get_module_name (L);
-		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
-		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
-		*pnew = new;
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @function rspamd_regexp.import_glob(glob_pattern[, flags])
+ * Creates new rspamd_regexp from glob
+ * @param {string} pattern pattern to build regexp.
+ * @param {string} flags optional flags to create regular expression
+ * @return {regexp} regexp argument that is *not* automatically destroyed
+ * @example
+ * local regexp = require "rspamd_regexp"
+ *
+ * local re = regexp.import_glob('ab*', 'i')
+ */
+static int
+lua_regexp_import_glob (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	rspamd_regexp_t *re;
+	struct rspamd_lua_regexp *new, **pnew;
+	const gchar *string, *flags_str = NULL;
+	gchar *escaped;
+	gsize pat_len;
+	GError *err = NULL;
+
+	string = luaL_checklstring (L, 1, &pat_len);
+
+	if (lua_gettop (L) == 2) {
+		flags_str = luaL_checkstring (L, 2);
+	}
+
+	if (string) {
+		escaped = rspamd_str_regexp_escape (string, pat_len, NULL,
+				RSPAMD_REGEXP_ESCAPE_GLOB|RSPAMD_REGEXP_ESCAPE_UTF);
+
+		re = rspamd_regexp_new (escaped, flags_str, &err);
+
+		if (re == NULL) {
+			lua_pushnil (L);
+			msg_info ("cannot parse regexp: %s, error: %s",
+					string,
+					err == NULL ? "undefined" : err->message);
+			g_error_free (err);
+			g_free (escaped);
+		}
+		else {
+			new = g_malloc0 (sizeof (struct rspamd_lua_regexp));
+			new->re = re;
+			new->re_pattern = escaped;
+			new->module = rspamd_lua_get_module_name (L);
+			pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
+			rspamd_lua_setclass (L, "rspamd{regexp}", -1);
+			*pnew = new;
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @function rspamd_regexp.import_plain(plain_string[, flags])
+ * Creates new rspamd_regexp from plain string (escaping specials)
+ * @param {string} pattern pattern to build regexp.
+ * @param {string} flags optional flags to create regular expression
+ * @return {regexp} regexp argument that is *not* automatically destroyed
+ * @example
+ * local regexp = require "rspamd_regexp"
+ *
+ * local re = regexp.import_plain('exact_string_with*', 'i')
+ */
+static int
+lua_regexp_import_plain (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	rspamd_regexp_t *re;
+	struct rspamd_lua_regexp *new, **pnew;
+	const gchar *string, *flags_str = NULL;
+	gchar *escaped;
+	gsize pat_len;
+	GError *err = NULL;
+
+	string = luaL_checklstring (L, 1, &pat_len);
+
+	if (lua_gettop (L) == 2) {
+		flags_str = luaL_checkstring (L, 2);
+	}
+
+	if (string) {
+		escaped = rspamd_str_regexp_escape (string, pat_len, NULL,
+				RSPAMD_REGEXP_ESCAPE_ASCII);
+
+		re = rspamd_regexp_new (escaped, flags_str, &err);
+
+		if (re == NULL) {
+			lua_pushnil (L);
+			msg_info ("cannot parse regexp: %s, error: %s",
+					string,
+					err == NULL ? "undefined" : err->message);
+			g_error_free (err);
+			g_free (escaped);
+		}
+		else {
+			new = g_malloc0 (sizeof (struct rspamd_lua_regexp));
+			new->re = re;
+			new->re_pattern = escaped;
+			new->module = rspamd_lua_get_module_name (L);
+			pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
+			rspamd_lua_setclass (L, "rspamd{regexp}", -1);
+			*pnew = new;
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -175,19 +301,24 @@ lua_regexp_get_cached (lua_State *L)
 		flags_str = luaL_checkstring (L, 2);
 	}
 
-	re = rspamd_regexp_cache_query (NULL, string, flags_str);
+	if (string) {
+		re = rspamd_regexp_cache_query (NULL, string, flags_str);
 
-	if (re) {
-		new = g_malloc0 (sizeof (struct rspamd_lua_regexp));
-		new->re = rspamd_regexp_ref (re);
-		new->re_pattern = g_strdup (string);
-		new->module = rspamd_lua_get_module_name (L);
-		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
-		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
-		*pnew = new;
+		if (re) {
+			new = g_malloc0 (sizeof (struct rspamd_lua_regexp));
+			new->re = rspamd_regexp_ref (re);
+			new->re_pattern = g_strdup (string);
+			new->module = rspamd_lua_get_module_name (L);
+			pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
+			rspamd_lua_setclass (L, "rspamd{regexp}", -1);
+			*pnew = new;
+		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
-		lua_pushnil (L);
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;
@@ -222,36 +353,40 @@ lua_regexp_create_cached (lua_State *L)
 		flags_str = luaL_checkstring (L, 2);
 	}
 
-	re = rspamd_regexp_cache_query (NULL, string, flags_str);
+	if (string) {
+		re = rspamd_regexp_cache_query (NULL, string, flags_str);
 
-	if (re) {
-		new = g_malloc0 (sizeof (struct rspamd_lua_regexp));
-		new->re = rspamd_regexp_ref (re);
-		new->re_pattern = g_strdup (string);
-		new->module = rspamd_lua_get_module_name (L);
-		pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
-
-		rspamd_lua_setclass (L, "rspamd{regexp}", -1);
-		*pnew = new;
-	}
-	else {
-		re = rspamd_regexp_cache_create (NULL, string, flags_str, &err);
-		if (re == NULL) {
-			lua_pushnil (L);
-			msg_info ("cannot parse regexp: %s, error: %s",
-					string,
-					err == NULL ? "undefined" : err->message);
-			g_error_free (err);
-		}
-		else {
+		if (re) {
 			new = g_malloc0 (sizeof (struct rspamd_lua_regexp));
 			new->re = rspamd_regexp_ref (re);
 			new->re_pattern = g_strdup (string);
 			new->module = rspamd_lua_get_module_name (L);
 			pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
+
 			rspamd_lua_setclass (L, "rspamd{regexp}", -1);
 			*pnew = new;
 		}
+		else {
+			re = rspamd_regexp_cache_create (NULL, string, flags_str, &err);
+			if (re == NULL) {
+				lua_pushnil (L);
+				msg_info ("cannot parse regexp: %s, error: %s",
+						string,
+						err == NULL ? "undefined" : err->message);
+				g_error_free (err);
+			} else {
+				new = g_malloc0 (sizeof (struct rspamd_lua_regexp));
+				new->re = rspamd_regexp_ref (re);
+				new->re_pattern = g_strdup (string);
+				new->module = rspamd_lua_get_module_name (L);
+				pnew = lua_newuserdata (L, sizeof (struct rspamd_lua_regexp *));
+				rspamd_lua_setclass (L, "rspamd{regexp}", -1);
+				*pnew = new;
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 1;

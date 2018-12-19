@@ -73,6 +73,7 @@ lua.
         -DRUNDIR=%{_localstatedir}/run/rspamd \
 %if 0%{?el6}
         -DWANT_SYSTEMD_UNITS=OFF \
+        -DDISABLE_PTHREAD_MUTEX=1 \
 %else
         -DWANT_SYSTEMD_UNITS=ON \
         -DSYSTEMDDIR=%{_unitdir} \

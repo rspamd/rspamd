@@ -89,6 +89,7 @@ ucl_set_err (struct ucl_parser *parser, int code, const char *str, UT_string **e
 	}
 
 	parser->err_code = code;
+	parser->state = UCL_STATE_ERROR;
 }
 
 static void
@@ -633,14 +634,26 @@ ucl_parser_add_container (ucl_object_t *obj, struct ucl_parser *parser,
 		bool is_array, uint32_t level, bool has_obrace)
 {
 	struct ucl_stack *st;
+	bool need_free = false;
 
 	if (!is_array) {
 		if (obj == NULL) {
 			obj = ucl_object_new_full (UCL_OBJECT, parser->chunks->priority);
+			need_free = true;
 		}
 		else {
+			if (obj->type == UCL_ARRAY) {
+				/* Bad combination for merge: array and object */
+				ucl_set_err (parser, UCL_EMERGE,
+						"cannot merge an array with an object",
+						&parser->err);
+
+				return NULL;
+			}
+
 			obj->type = UCL_OBJECT;
 		}
+
 		if (obj->value.ov == NULL) {
 			obj->value.ov = ucl_hash_create (parser->flags & UCL_PARSER_KEY_LOWERCASE);
 		}
@@ -649,8 +662,18 @@ ucl_parser_add_container (ucl_object_t *obj, struct ucl_parser *parser,
 	else {
 		if (obj == NULL) {
 			obj = ucl_object_new_full (UCL_ARRAY, parser->chunks->priority);
+			need_free = true;
 		}
 		else {
+			if (obj->type == UCL_OBJECT) {
+				/* Bad combination for merge: array and object */
+				ucl_set_err (parser, UCL_EMERGE,
+						"cannot merge an object with an array",
+						&parser->err);
+
+				return NULL;
+			}
+
 			obj->type = UCL_ARRAY;
 		}
 		parser->state = UCL_STATE_VALUE;
@@ -661,7 +684,10 @@ ucl_parser_add_container (ucl_object_t *obj, struct ucl_parser *parser,
 	if (st == NULL) {
 		ucl_set_err (parser, UCL_EINTERNAL, "cannot allocate memory for an object",
 				&parser->err);
-		ucl_object_unref (obj);
+		if (need_free) {
+			ucl_object_unref (obj);
+		}
+
 		return NULL;
 	}
 
@@ -671,7 +697,10 @@ ucl_parser_add_container (ucl_object_t *obj, struct ucl_parser *parser,
 		ucl_set_err (parser, UCL_ENESTED,
 				"objects are nesting too deep (over 65535 limit)",
 				&parser->err);
-		ucl_object_unref (obj);
+		if (need_free) {
+			ucl_object_unref (obj);
+		}
+
 		return NULL;
 	}
 
@@ -2404,6 +2433,7 @@ ucl_state_machine (struct ucl_parser *parser)
 				parser->state = UCL_STATE_ERROR;
 				return false;
 			}
+
 			if (end_of_object) {
 				p = chunk->pos;
 				parser->state = UCL_STATE_AFTER_VALUE;
@@ -2610,7 +2640,7 @@ ucl_state_machine (struct ucl_parser *parser)
 		}
 	}
 
-	if (parser->stack != NULL) {
+	if (parser->stack != NULL && parser->state != UCL_STATE_ERROR) {
 		struct ucl_stack *st;
 		bool has_error = false;
 

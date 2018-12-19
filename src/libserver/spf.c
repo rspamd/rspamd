@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <contrib/librdns/rdns.h>
 #include "config.h"
 #include "dns.h"
 #include "spf.h"
@@ -611,6 +612,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 	struct rspamd_task *task;
 	struct spf_addr *addr;
 	struct spf_record *rec;
+	const struct rdns_request_name *req_name;
 
 	rec = cb->rec;
 	task = rec->task;
@@ -619,6 +621,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 	addr = cb->addr;
 
 	if (reply->code == RDNS_RC_NOERROR) {
+		req_name = rdns_request_get_name (reply->request, NULL);
+
 		LL_FOREACH (reply->entries, elt_data) {
 			/* Adjust ttl if a resolved record has lower ttl than spf record itself */
 			if ((guint)elt_data->ttl < rec->ttl) {
@@ -693,6 +697,12 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				case SPF_RESOLVE_REDIRECT:
 					if (elt_data->type == RDNS_REQUEST_TXT) {
 						cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
+						if (reply->entries) {
+							msg_debug_spf ("got redirection record for %s: '%s'",
+									req_name->name,
+									reply->entries[0].content.txt.data);
+						}
+
 						if (!spf_process_txt_record (rec, cb->resolved, reply)) {
 							cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 						}
@@ -702,6 +712,12 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					break;
 				case SPF_RESOLVE_INCLUDE:
 					if (elt_data->type == RDNS_REQUEST_TXT) {
+						if (reply->entries) {
+							msg_debug_spf ("got include record for %s: '%s'",
+									req_name->name,
+									reply->entries[0].content.txt.data);
+						}
+
 						cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
 						spf_process_txt_record (rec, cb->resolved, reply);
 					}

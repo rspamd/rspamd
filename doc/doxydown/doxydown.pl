@@ -68,9 +68,9 @@ EOD
         my $id   = $f->{'id'};
 
         if ($f->{'brief'}) {
-            print "> [`$name`](#$id): ". $f->{'brief'} . "\n\n";
+            print "* [`$name`](#$id): ". $f->{'brief'} . "\n";
         } else {
-            print "> [`$name`](#$id)\n\n";
+            print "* [`$name`](#$id)\n";
         }
     }
 
@@ -339,15 +339,15 @@ sub parse_function {
         if ( /^\s*\@param\s*(?:\{([^}]+)\})?\s*(\S+)\s*(.+)?\s*$/ ) {
             my $p = {
                 name => $2,
-                type => $1,
-                description => $3
+                type => $1 || "no type",
+                description => $3 || "no description"
             };
 
             push @{ $f->{'params'} }, $p;
         } elsif ( /^\s*\@return\s*(?:\{([^}]+)\})?\s*(.+)?\s*$/ ) {
             my $r = {
                 type => $1,
-                description => $2
+                description => $2 || "no description"
             };
 
             push @{ $f->{'returns'} }, $r;
@@ -377,6 +377,19 @@ sub parse_function {
 
     if ( $f->{'example'} ) {
         chomp $f->{'example'};
+    }
+
+    if ( !$f->{'brief'} && $f->{'data'} ) {
+
+
+        if ( $f->{'data'} =~ /^(.*?)(?:(?:[.:]\s|$)|\n).*/ ) {
+            $f->{'brief'} = "$1";
+            chomp $f->{'brief'};
+
+            if ( $f->{'brief'} !~ /\.$/) {
+                $f->{'brief'} .= ".";
+            }
+        }
     }
 
     if ( $type eq "method" ) {

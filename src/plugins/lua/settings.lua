@@ -193,25 +193,40 @@ local function check_settings(task)
   end
 
   local function check_specific_setting(rule_name, rule, ip, client_ip, from, rcpt,
-      user, auth_user)
+      user, auth_user, hostname, matched)
     local res = false
 
-    if rule['authenticated'] then
+    if rule.authenticated then
       if auth_user then
         res = true
+        matched[#matched + 1] = 'authenticated'
       end
       if not res then
         return nil
       end
     end
 
-    if rule['ip'] then
+    if rule['local'] then
       if not ip or not ip:is_valid() then
         return nil
       end
-      for _, i in ipairs(rule['ip']) do
+
+      if ip:is_local() then
+        matched[#matched + 1] = 'local'
+        res = true
+      else
+        return nil
+      end
+    end
+
+    if rule.ip then
+      if not ip or not ip:is_valid() then
+        return nil
+      end
+      for _, i in ipairs(rule.ip) do
         res = check_ip_setting(i, ip)
         if res then
+          matched[#matched + 1] = 'ip'
           break
         end
       end
@@ -220,13 +235,14 @@ local function check_settings(task)
       end
     end
 
-    if rule['client_ip'] then
+    if rule.client_ip then
       if not client_ip or not client_ip:is_valid() then
         return nil
       end
-      for _, i in ipairs(rule['client_ip']) do
+      for _, i in ipairs(rule.client_ip) do
         res = check_ip_setting(i, client_ip)
         if res then
+          matched[#matched + 1] = 'client_ip'
           break
         end
       end
@@ -235,13 +251,14 @@ local function check_settings(task)
       end
     end
 
-    if rule['from'] then
+    if rule.from then
       if not from then
         return nil
       end
-      for _, i in ipairs(rule['from']) do
+      for _, i in ipairs(rule.from) do
         res = check_addr_setting(i, from)
         if res then
+          matched[#matched + 1] = 'from'
           break
         end
       end
@@ -250,13 +267,15 @@ local function check_settings(task)
       end
     end
 
-    if rule['rcpt'] then
+    if rule.rcpt then
       if not rcpt then
         return nil
       end
-      for _, i in ipairs(rule['rcpt']) do
+      for _, i in ipairs(rule.rcpt) do
         res = check_addr_setting(i, rcpt)
+
         if res then
+          matched[#matched + 1] = 'rcpt'
           break
         end
       end
@@ -265,13 +284,14 @@ local function check_settings(task)
       end
     end
 
-    if rule['user'] then
+    if rule.user then
       if not user then
         return nil
       end
-      for _, i in ipairs(rule['user']) do
+      for _, i in ipairs(rule.user) do
         res = check_addr_setting(i, user)
         if res then
+          matched[#matched + 1] = 'user'
           break
         end
       end
@@ -280,11 +300,28 @@ local function check_settings(task)
       end
     end
 
-    if rule['request_header'] then
-      for k, v in pairs(rule['request_header']) do
+    if rule.hostname then
+      if #hostname == 0 then
+        return nil
+      end
+      for _, i in ipairs(rule.hostname) do
+        res = check_addr_setting(i, hostname)
+        if res then
+          matched[#matched + 1] = 'hostname'
+          break
+        end
+      end
+      if not res then
+        return nil
+      end
+    end
+
+    if rule.request_header then
+      for k, v in pairs(rule.request_header) do
         local h = task:get_request_header(k)
         res = (h and v:match(h))
         if res then
+          matched[#matched + 1] = 'req_header: ' .. k
           break
         end
       end
@@ -293,13 +330,14 @@ local function check_settings(task)
       end
     end
 
-    if rule['header'] then
-      for _, e in ipairs(rule['header']) do
+    if rule.header then
+      for _, e in ipairs(rule.header) do
         for k, v in pairs(e) do
           for _, p in ipairs(v) do
             local h = task:get_header(k)
             res = (h and p:match(h))
             if res then
+              matched[#matched + 1] = 'header: ' .. k
               break
             end
           end
@@ -316,21 +354,11 @@ local function check_settings(task)
       end
     end
 
-    if rule['selector'] then
-      local sel = selectors_cache[rule_name]
-      if not sel then
-        sel = lua_selectors.create_selector_closure(rspamd_config, rule.selector,
-            rule.delimiter or "")
+    if rule.selector then
+      res = fun.all(function(s) return s(task) end, rule.selector)
 
-        if sel then
-          selectors_cache[rule_name] = sel
-        end
-      end
-
-      if sel then
-        if sel(task) then
-          res = true
-        end
+      if res then
+        matched[#matched + 1] = 'selector'
       end
     end
 
@@ -361,6 +389,7 @@ local function check_settings(task)
   local from = task:get_from()
   local rcpt = task:get_recipients()
   local uname = task:get_user()
+  local hostname = task:get_hostname() or ''
   local user = {}
   if uname then
     user[1] = {}
@@ -380,19 +409,23 @@ local function check_settings(task)
   for pri = max_pri,1,-1 do
     if not applied and settings[pri] then
       for _,s in ipairs(settings[pri]) do
-        local rule = check_specific_setting(s.name, s.rule, ip, client_ip, from, rcpt, user, uname)
-        if rule then
-          rspamd_logger.infox(task, "<%1> apply settings according to rule %2",
-            task:get_message_id(), s.name)
-          if rule['apply'] then
-            apply_settings(task, rule['apply'])
+        local matched = {}
+        local rule = check_specific_setting(s.name, s.rule,
+            ip, client_ip, from, rcpt, user, uname, hostname, matched)
+
+        -- Can use xor here but more complicated for reading
+        if (rule and not s.rule.inverse) or (not rule and s.rule.inverse) then
+          rspamd_logger.infox(task, "<%s> apply settings according to rule %s (%s matched)",
+            task:get_message_id(), s.name, table.concat(matched, ','))
+          if s.rule['apply'] then
+            apply_settings(task, s.rule['apply'])
             applied = true
           end
-          if rule['symbols'] then
+          if s.rule['symbols'] then
             -- Add symbols, specified in the settings
             fun.each(function(val)
               task:insert_result(val, 1.0)
-            end, rule['symbols'])
+            end, s.rule['symbols'])
           end
         end
       end
@@ -556,8 +589,20 @@ local function process_settings_table(tbl)
         out['user'] = check_table(elt['user'], user)
       end
     end
+    if elt['hostname'] then
+      local hostname = process_addr(elt['hostname'])
+      if hostname then
+        out['hostname'] = check_table(elt['hostname'], hostname)
+      end
+    end
     if elt['authenticated'] then
       out['authenticated'] = true
+    end
+    if elt['local'] then
+      out['local'] = true
+    end
+    if elt['inverse'] then
+      out['inverse'] = true
     end
     if elt['request_header'] then
       local rho = {}
@@ -599,6 +644,26 @@ local function process_settings_table(tbl)
         end
         if not out['header'] then out['header'] = {} end
         table.insert(out['header'], rho)
+      end
+    end
+
+    if elt['selector'] then
+      local sel = selectors_cache[name]
+      if not sel then
+        sel = lua_selectors.create_selector_closure(rspamd_config, elt.selector,
+            elt.delimiter or "")
+
+        if sel then
+          selectors_cache[name] = sel
+        end
+      end
+
+      if sel then
+        if out.selector then
+          table.insert(out['selector'], sel)
+        else
+          out['selector'] = {sel}
+        end
       end
     end
 

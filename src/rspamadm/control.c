@@ -132,8 +132,8 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 		}
 		else {
 			if (strcmp (cbdata->path, "/fuzzystat") == 0) {
-				rspamadm_execute_lua_ucl_subr (cbdata->argc,
-						cbdata->argv,
+				rspamadm_execute_lua_ucl_subr (cbdata->argc - 1,
+						&cbdata->argv[1],
 						obj,
 						"fuzzy_stat",
 						TRUE);

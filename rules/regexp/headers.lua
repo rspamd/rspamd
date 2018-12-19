@@ -490,7 +490,7 @@ reconf['FORGED_MUA_SEAMONKEY_MSGID'] = {
   group = 'mua'
 }
 reconf['FORGED_MUA_SEAMONKEY_MSGID_UNKNOWN'] = {
-  re = string.format('(%s) & !(%s) & !(%s) & !(%s)', user_agent_seamonkey, mozilla_msgid_common, mozilla_msgid, unusable_msgid),
+  re = string.format('(%s) & !((%s) | (%s)) & !(%s) & !(%s)', user_agent_seamonkey, mozilla_msgid_common, mozilla_msgid_common_sec, mozilla_msgid, unusable_msgid),
   score = 2.5,
   description = 'Forged mail pretending to be from Mozilla Seamonkey but has forged Message-ID',
   group = 'mua'

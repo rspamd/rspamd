@@ -16,7 +16,7 @@ for i = 1,10 do
       end
       if task:has_symbol('TEST_PRE') then
         local r = task:get_resolver()
-        r:resolve_a(task:get_session(), task:get_mempool(), 'example.com', dns_cb)
+        r:resolve_a({task = task, name = 'example.com', callback = dns_cb})
       end
     end
   })

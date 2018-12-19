@@ -510,6 +510,7 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 		g_assert_not_reached ();
 	}
 
+	part->id = task->parts->len;
 	g_ptr_array_add (task->parts, part);
 	msg_debug_mime ("parsed data part %T/%T of length %z (%z orig), %s cte",
 			&part->ct->type, &part->ct->subtype, part->parsed_data.len,
@@ -562,17 +563,20 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 		hdr_pos = rspamd_string_find_eoh (&str, &body_pos);
 	}
 
-	if (multipart->specific.mp.children == NULL) {
-		multipart->specific.mp.children = g_ptr_array_sized_new (2);
-	}
-
 	npart = rspamd_mempool_alloc0 (task->task_pool,
 			sizeof (struct rspamd_mime_part));
 	npart->parent_part = multipart;
 	npart->raw_headers =  g_hash_table_new_full (rspamd_strcase_hash,
 			rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
 	npart->headers_order = g_queue_new ();
-	g_ptr_array_add (multipart->specific.mp.children, npart);
+
+	if (multipart) {
+		if (multipart->specific.mp->children == NULL) {
+			multipart->specific.mp->children = g_ptr_array_sized_new (2);
+		}
+
+		g_ptr_array_add (multipart->specific.mp->children, npart);
+	}
 
 	if (hdr_pos > 0 && hdr_pos < str.len) {
 		npart->raw_headers_str = str.str;
@@ -631,6 +635,10 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	if (sel->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
 		st->nesting ++;
 		g_ptr_array_add (st->stack, npart);
+		npart->specific.mp = rspamd_mempool_alloc0 (task->task_pool,
+				sizeof (struct rspamd_mime_multipart));
+		memcpy (&npart->specific.mp->boundary, &sel->orig_boundary,
+				sizeof (rspamd_ftok_t));
 		ret = rspamd_mime_parse_multipart_part (task, npart, st, err);
 	}
 	else if (sel->flags & RSPAMD_CONTENT_TYPE_MESSAGE) {
@@ -812,6 +820,7 @@ rspamd_mime_parse_multipart_part (struct rspamd_task *task,
 		return RSPAMD_MIME_PARSE_NESTING;
 	}
 
+	part->id = task->parts->len;
 	g_ptr_array_add (task->parts, part);
 	st->nesting ++;
 	rspamd_mime_part_get_cte (task, part->raw_headers, part, FALSE);
@@ -866,10 +875,25 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 	task = st->task;
 
 	if (G_LIKELY (p < end)) {
-		blen = rspamd_memcspn (p, "\r\n", end - p);
+		gboolean seen_non_dash = FALSE;
 
-		if (blen > 0) {
+		blen = 0;
+
+		while (p < end) {
+			if (*p == '\r' || *p == '\n') {
+				break;
+			}
+			else if (*p != '-') {
+				seen_non_dash = TRUE;
+			}
+
+			blen ++;
+			p ++;
+		}
+
+		if (blen > 0 && seen_non_dash) {
 			/* We have found something like boundary */
+			p = text + match_pos;
 			bend = p + blen - 1;
 
 			if (*bend == '-') {
@@ -901,7 +925,7 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 				bend ++;
 			}
 
-			b.boundary = p - st->start - 3;
+			b.boundary = p - st->start - 2;
 			b.start = bend - st->start;
 
 			if (closing) {
@@ -1192,8 +1216,8 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 			}
 		}
 
-		pbegin = part->parsed_data.begin;
-		plen = part->parsed_data.len;
+		pbegin = part->parsed_data.begin + body_pos;
+		plen = part->parsed_data.len - body_pos;
 
 		hdrs = rspamd_message_get_header_from_hash (npart->raw_headers,
 				task->task_pool,
@@ -1245,6 +1269,10 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 	if (sel->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
 		g_ptr_array_add (nst->stack, npart);
 		nst->nesting ++;
+		npart->specific.mp = rspamd_mempool_alloc0 (task->task_pool,
+				sizeof (struct rspamd_mime_multipart));
+		memcpy (&npart->specific.mp->boundary, &sel->orig_boundary,
+				sizeof (rspamd_ftok_t));
 		ret = rspamd_mime_parse_multipart_part (task, npart, nst, err);
 	}
 	else if (sel->flags & RSPAMD_CONTENT_TYPE_MESSAGE) {
@@ -1260,6 +1288,58 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		/* Remove message part from the parent stack */
 		g_ptr_array_remove_index_fast (st->stack, st->stack->len - 1);
 		st->nesting --;
+	}
+
+	/* Process leftovers for boundaries */
+	if (nst->boundaries) {
+		struct rspamd_mime_boundary *boundary, *start_boundary = NULL,
+				*end_boundary = NULL;
+		goffset cur_offset = nst->pos - nst->start,
+			end_offset = st->end - st->start;
+		guint sel_idx = 0;
+
+		for (;;) {
+			start_boundary = NULL;
+
+			for (i = sel_idx; i < nst->boundaries->len; i++) {
+				boundary = &g_array_index (nst->boundaries,
+						struct rspamd_mime_boundary, i);
+
+				if (boundary->start > cur_offset &&
+					boundary->boundary < end_offset &&
+					!RSPAMD_BOUNDARY_IS_CLOSED (boundary)) {
+					start_boundary = boundary;
+					sel_idx = i;
+					break;
+				}
+			}
+
+			if (start_boundary) {
+				const gchar *start, *end;
+
+				if (nst->boundaries->len > sel_idx + 1) {
+					end_boundary = &g_array_index (nst->boundaries,
+							struct rspamd_mime_boundary, sel_idx + 1);
+					end = nst->start + end_boundary->boundary;
+				}
+				else {
+					end = nst->end;
+				}
+
+				sel_idx ++;
+
+				start = nst->start + start_boundary->start;
+
+				if (end > start &&
+					(ret = rspamd_mime_process_multipart_node (task, st,
+						NULL, start, end, err)) != RSPAMD_MIME_PARSE_OK) {
+					return ret;
+				}
+			}
+			else {
+				break;
+			}
+		}
 	}
 
 	if (nst != st) {

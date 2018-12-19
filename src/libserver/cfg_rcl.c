@@ -381,40 +381,108 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	nshots = cfg->default_max_shots;
 
 	if ((elt = ucl_object_lookup (obj, "one_shot")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"one_shot attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
 		if (ucl_object_toboolean (elt)) {
 			nshots = 1;
 		}
 	}
 
 	if ((elt = ucl_object_lookup (obj, "any_shot")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"any_shot attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
 		if (ucl_object_toboolean (elt)) {
 			nshots = -1;
 		}
 	}
 
 	if ((elt = ucl_object_lookup (obj, "one_param")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"one_param attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+
 		if (ucl_object_toboolean (elt)) {
 			flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
 		}
 	}
 
 	if ((elt = ucl_object_lookup (obj, "ignore")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"ignore attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+
 		if (ucl_object_toboolean (elt)) {
 			flags |= RSPAMD_SYMBOL_FLAG_IGNORE;
 		}
 	}
 
 	if ((elt = ucl_object_lookup (obj, "nshots")) != NULL) {
+		if (ucl_object_type (elt) != UCL_FLOAT && ucl_object_type (elt) != UCL_INT) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"nshots attribute is not numeric for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+
 		nshots = ucl_object_toint (elt);
 	}
 
 	elt = ucl_object_lookup_any (obj, "score", "weight", NULL);
 	if (elt) {
+		if (ucl_object_type (elt) != UCL_FLOAT && ucl_object_type (elt) != UCL_INT) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"score attribute is not numeric for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+
 		score = ucl_object_todouble (elt);
 	}
 
 	elt = ucl_object_lookup (obj, "priority");
 	if (elt) {
+		if (ucl_object_type (elt) != UCL_FLOAT && ucl_object_type (elt) != UCL_INT) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"priority attribute is not numeric for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+
 		priority = ucl_object_toint (elt);
 	}
 	else {
@@ -1223,7 +1291,7 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 			composite);
 
 	if (new) {
-		rspamd_symbols_cache_add_symbol (cfg->cache, composite_name, 0,
+		rspamd_symcache_add_symbol (cfg->cache, composite_name, 0,
 				NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
 	}
 
@@ -1473,12 +1541,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				0,
 				"Enable debugging log for the specified IP addresses");
 		rspamd_rcl_add_default_handler (sub,
-				"debug_symbols",
-				rspamd_rcl_parse_struct_string_list,
-				G_STRUCT_OFFSET (struct rspamd_config, debug_symbols),
-				0,
-				"Enable debug for the specified symbols");
-		rspamd_rcl_add_default_handler (sub,
 				"debug_modules",
 				rspamd_rcl_parse_struct_string_list,
 				G_STRUCT_OFFSET (struct rspamd_config, debug_modules),
@@ -1670,12 +1732,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				G_STRUCT_OFFSET (struct rspamd_config, filters),
 				0,
 				"List of internal filters enabled");
-		rspamd_rcl_add_default_handler (sub,
-				"max_diff",
-				rspamd_rcl_parse_struct_integer,
-				G_STRUCT_OFFSET (struct rspamd_config, max_diff),
-				RSPAMD_CL_FLAG_INT_SIZE,
-				"Legacy option, do not use");
 		rspamd_rcl_add_default_handler (sub,
 				"map_watch_interval",
 				rspamd_rcl_parse_struct_time,
@@ -1922,6 +1978,24 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				G_STRUCT_OFFSET (struct rspamd_config, max_sessions_cache),
 				0,
 				"Maximum number of sessions in cache before warning (default: 100)");
+		rspamd_rcl_add_default_handler (sub,
+				"task_timeout",
+				rspamd_rcl_parse_struct_time,
+				G_STRUCT_OFFSET (struct rspamd_config, task_timeout),
+				RSPAMD_CL_FLAG_TIME_FLOAT,
+				"Maximum time for checking a message");
+		rspamd_rcl_add_default_handler (sub,
+				"soft_reject_on_timeout",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, soft_reject_on_timeout),
+				0,
+				"Emit soft reject if task timeout takes place");
+		rspamd_rcl_add_default_handler (sub,
+				"check_timeout",
+				rspamd_rcl_parse_struct_time,
+				G_STRUCT_OFFSET (struct rspamd_config, task_timeout),
+				RSPAMD_CL_FLAG_TIME_FLOAT,
+				"Maximum time for checking a message (alias for task_timeout)");
 
 		/* Neighbours configuration */
 		rspamd_rcl_add_section_doc (&sub->subsections, "neighbours", "name",
@@ -2147,6 +2221,18 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				G_STRUCT_OFFSET (struct rspamd_classifier_config, min_tokens),
 				RSPAMD_CL_FLAG_INT_32,
 				"Minimum count of tokens (words) to be considered for statistics");
+		rspamd_rcl_add_default_handler (sub,
+				"min_token_hits",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_classifier_config, min_token_hits),
+				RSPAMD_CL_FLAG_UINT,
+				"Minimum number of hits for a token to be considered");
+		rspamd_rcl_add_default_handler (sub,
+				"min_prob_strength",
+				rspamd_rcl_parse_struct_double,
+				G_STRUCT_OFFSET (struct rspamd_classifier_config, min_token_hits),
+				0,
+				"Use only tokens with probability in [0.5 - MPS, 0.5 + MPS]");
 		rspamd_rcl_add_default_handler (sub,
 				"max_tokens",
 				rspamd_rcl_parse_struct_integer,
@@ -2509,7 +2595,8 @@ rspamd_rcl_parse_struct_string (rspamd_mempool_t *pool,
 		break;
 	case UCL_BOOLEAN:
 		*target = rspamd_mempool_alloc (pool, num_str_len);
-		rspamd_snprintf (*target, num_str_len, "%B", (gboolean)obj->value.iv);
+		rspamd_snprintf (*target, num_str_len, "%s",
+				((gboolean)obj->value.iv) ? "true" : "false");
 		break;
 	default:
 		g_set_error (err,
@@ -2869,7 +2956,8 @@ rspamd_rcl_parse_struct_string_list (rspamd_mempool_t *pool,
 			break;
 		case UCL_BOOLEAN:
 			val = rspamd_mempool_alloc (pool, num_str_len);
-			rspamd_snprintf (val, num_str_len, "%B", (gboolean)cur->value.iv);
+			rspamd_snprintf (val, num_str_len, "%s",
+					((gboolean)cur->value.iv) ? "true" : "false");
 			break;
 		default:
 			g_set_error (err,
@@ -3440,6 +3528,7 @@ rspamd_config_parse_ucl (struct rspamd_config *cfg, const gchar *filename,
 	parser = ucl_parser_new (UCL_PARSER_SAVE_COMMENTS);
 	rspamd_ucl_add_conf_variables (parser, vars);
 	rspamd_ucl_add_conf_macros (parser, cfg);
+	ucl_parser_set_filevars (parser, filename, true);
 
 	if (decrypt_keypair) {
 		struct ucl_parser_special_handler *decrypt_handler;

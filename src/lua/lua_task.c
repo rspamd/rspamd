@@ -21,10 +21,12 @@
 #include "unix-std.h"
 #include "libmime/smtp_parsers.h"
 #include "libserver/mempool_vars_internal.h"
+#include "libserver/dkim.h"
 #include "libserver/task.h"
 #include "libstat/stat_api.h"
+#include "libutil/map_helpers.h"
+
 #include <math.h>
-#include <src/libserver/task.h>
 
 /***
  * @module rspamd_task
@@ -50,13 +52,13 @@ end
 /***
  * @function rspamd_task.load_from_file(filename[, cfg])
  * Loads a message from specific file
- * @return {boolean},{rspamd_task|error} status + new task or error message
+ * @return {boolean,rspamd_task|error} status + new task or error message
  */
 LUA_FUNCTION_DEF (task, load_from_file);
 /***
  * @function rspamd_task.load_from_string(message[, cfg])
  * Loads a message from specific file
- * @return {boolean},{rspamd_task|error} status + new task or error message
+ * @return {boolean,rspamd_task|error} status + new task or error message
  */
 LUA_FUNCTION_DEF (task, load_from_string);
 
@@ -235,7 +237,19 @@ LUA_FUNCTION_DEF (task, get_text_parts);
  * @return {table rspamd_mime_part} list of mime parts
  */
 LUA_FUNCTION_DEF (task, get_parts);
-
+/***
+ * @method task:get_meta_words([how='stem'])
+ * Get meta words from task (subject and displayed names)
+ * - `stem`: stemmed words (default)
+ * - `norm`: normalised words (utf normalised + lowercased)
+ * - `raw`: raw words in utf (if possible)
+ * - `full`: list of tables, each table has the following fields:
+ *   - [1] - stemmed word
+ *   - [2] - normalised word
+ *   - [3] - raw word
+ *   - [4] - flags (table of strings)
+ */
+LUA_FUNCTION_DEF (task, get_meta_words);
 /***
  * @method task:get_request_header(name)
  * Get value of a HTTP request header.
@@ -534,6 +548,26 @@ LUA_FUNCTION_DEF (task, get_images);
  */
 LUA_FUNCTION_DEF (task, get_archives);
 /***
+ * @method task:get_dkim_results()
+ * Returns list of all dkim check results as table of maps. Callee must ensure that
+ * dkim checks have been completed by adding dependency on `DKIM_TRACE` symbol.
+ * Fields in map:
+ *
+ * * `result` - string result of check:
+ *    - `reject`
+ *    - `allow`
+ *    - `tempfail`
+ *    - `permfail`
+ *    - `not found`
+ *    - `bad record`
+ * * `domain` - dkim domain
+ * * `selector` - dkim selector
+ * * `bhash` - short version of b tag (8 base64 symbols)
+ * * `fail_reason` - reason of failure (if applicable)
+ * @return {list of maps} dkim check results
+ */
+LUA_FUNCTION_DEF (task, get_dkim_results);
+/***
  * @method task:get_symbol(name)
  * Searches for a symbol `name` in all metrics results and returns a list of tables
  * one per metric that describes the symbol inserted. Please note that this function
@@ -584,6 +618,20 @@ LUA_FUNCTION_DEF (task, get_symbols_tokens);
  */
 LUA_FUNCTION_DEF (task, has_symbol);
 /***
+ * @method task:has_symbol(name)
+ * Fast path to check if a specified symbol is in the task's results
+ * @param {string} name symbol's name
+ * @return {boolean} `true` if symbol has been found
+ */
+LUA_FUNCTION_DEF (task, enable_symbol);
+/***
+ * @method task:has_symbol(name)
+ * Fast path to check if a specified symbol is in the task's results
+ * @param {string} name symbol's name
+ * @return {boolean} `true` if symbol has been found
+ */
+LUA_FUNCTION_DEF (task, disable_symbol);
+/***
  * @method task:get_date(type[, gmt])
  * Returns timestamp for a connection or for a MIME message. This function can be called with a
  * single table arguments with the following fields:
@@ -620,15 +668,28 @@ LUA_FUNCTION_DEF (task, get_date);
 LUA_FUNCTION_DEF (task, get_message_id);
 LUA_FUNCTION_DEF (task, get_timeval);
 /***
+ * @method task:get_metric_result()
+ * Get full result of a metric as a table:
+ * - `score`: current score
+ * - `action`: current action as a string
+ * - `nnegative`: number of negative rules matched
+ * - `npositive`: number of positive rules matched
+ * - `positive_score`: total score for positive rules
+ * - `negative_score`: total score for negative rules
+ * - `passthrough`: set to true if message has a passthrough result
+ * @return {table} metric result
+ */
+LUA_FUNCTION_DEF (task, get_metric_result);
+/***
  * @method task:get_metric_score(name)
- * Get the current score of metric `name`. Should be used in post-filters only.
+ * Get the current score of metric `name` (must be nil or 'default') . Should be used in idempotent filters only.
  * @param {string} name name of a metric
- * @return {table} table containing the current score and required score of the metric
+ * @return {number,number} 2 numbers containing the current score and required score of the metric
  */
 LUA_FUNCTION_DEF (task, get_metric_score);
 /***
  * @method task:get_metric_action(name)
- * Get the current action of metric `name`. Should be used in post-filters only.
+ * Get the current action of metric `name` (must be nil or 'default'). Should be used in idempotent filters only.
  * @param {string} name name of a metric
  * @return {string} the current action of the metric as a string
  */
@@ -912,6 +973,17 @@ LUA_FUNCTION_DEF (task, get_newlines_type);
  */
 LUA_FUNCTION_DEF (task, get_stat_tokens);
 
+/***
+ * @method task:lookup_words(map, function({o, n, s, f}) ... end)
+ * Matches words in a task (including meta words) against some map (set, regexp and so on)
+ * and call the specified function with a table containing 4 values:
+ *   - [1] - stemmed word
+ *   - [2] - normalised word
+ *   - [3] - raw word
+ *   - [4] - flags (table of strings)
+ */
+LUA_FUNCTION_DEF (task, lookup_words);
+
 static const struct luaL_reg tasklib_f[] = {
 	LUA_INTERFACE_DEF (task, load_from_file),
 	LUA_INTERFACE_DEF (task, load_from_string),
@@ -977,15 +1049,19 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, set_hostname),
 	LUA_INTERFACE_DEF (task, get_images),
 	LUA_INTERFACE_DEF (task, get_archives),
+	LUA_INTERFACE_DEF (task, get_dkim_results),
 	LUA_INTERFACE_DEF (task, get_symbol),
 	LUA_INTERFACE_DEF (task, get_symbols),
 	LUA_INTERFACE_DEF (task, get_symbols_all),
 	LUA_INTERFACE_DEF (task, get_symbols_numeric),
 	LUA_INTERFACE_DEF (task, get_symbols_tokens),
 	LUA_INTERFACE_DEF (task, has_symbol),
+	LUA_INTERFACE_DEF (task, enable_symbol),
+	LUA_INTERFACE_DEF (task, disable_symbol),
 	LUA_INTERFACE_DEF (task, get_date),
 	LUA_INTERFACE_DEF (task, get_message_id),
 	LUA_INTERFACE_DEF (task, get_timeval),
+	LUA_INTERFACE_DEF (task, get_metric_result),
 	LUA_INTERFACE_DEF (task, get_metric_score),
 	LUA_INTERFACE_DEF (task, get_metric_action),
 	LUA_INTERFACE_DEF (task, set_metric_score),
@@ -1011,6 +1087,8 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, disable_action),
 	LUA_INTERFACE_DEF (task, get_newlines_type),
 	LUA_INTERFACE_DEF (task, get_stat_tokens),
+	LUA_INTERFACE_DEF (task, get_meta_words),
+	LUA_INTERFACE_DEF (task, lookup_words),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -1052,12 +1130,18 @@ static const struct luaL_reg archivelib_m[] = {
 };
 
 /* Blob methods */
+LUA_FUNCTION_DEF (text, fromstring);
 LUA_FUNCTION_DEF (text, len);
 LUA_FUNCTION_DEF (text, str);
 LUA_FUNCTION_DEF (text, ptr);
 LUA_FUNCTION_DEF (text, save_in_file);
 LUA_FUNCTION_DEF (text, take_ownership);
 LUA_FUNCTION_DEF (text, gc);
+
+static const struct luaL_reg textlib_f[] = {
+	LUA_INTERFACE_DEF (text, fromstring),
+	{NULL, NULL}
+};
 
 static const struct luaL_reg textlib_m[] = {
 	LUA_INTERFACE_DEF (text, len),
@@ -1289,7 +1373,7 @@ lua_task_load_from_file (lua_State * L)
 			err = strerror (errno);
 		}
 		else {
-			task = rspamd_task_new (NULL, cfg, NULL, NULL);
+			task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
 			task->msg.begin = map;
 			task->msg.len = sz;
 			rspamd_mempool_add_destructor (task->task_pool,
@@ -1342,7 +1426,7 @@ lua_task_load_from_string (lua_State * L)
 			}
 		}
 
-		task = rspamd_task_new (NULL, cfg, NULL, NULL);
+		task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
 		task->msg.begin = g_strdup (str_message);
 		task->msg.len   = message_len;
 		rspamd_mempool_add_destructor (task->task_pool, lua_task_free_dtor, task);
@@ -1591,7 +1675,8 @@ lua_task_set_pre_result (lua_State * L)
 
 			/* Keep compatibility here :( */
 			ucl_object_replace_key (task->messages,
-					ucl_object_fromstring (message), "smtp_message", 0,
+					ucl_object_fromstring_common (message, 0, UCL_STRING_RAW),
+					"smtp_message", 0,
 					false);
 		}
 		else {
@@ -1668,7 +1753,8 @@ lua_task_append_message (lua_State * L)
 		}
 
 		ucl_object_insert_key (task->messages,
-				ucl_object_fromstring (message), category, 0,
+				ucl_object_fromstring_common (message, 0, UCL_STRING_RAW),
+				category, 0,
 				true);
 	}
 	else {
@@ -2020,6 +2106,12 @@ rspamd_lua_push_header (lua_State *L, struct rspamd_mime_header *rh,
 
 		if (rh->value) {
 			rspamd_lua_table_set (L, "value", rh->value);
+		}
+
+		if (rh->raw_len > 0) {
+			lua_pushstring (L, "raw");
+			lua_pushlstring (L, rh->raw_value, rh->raw_len);
+			lua_settable (L, -3);
 		}
 
 		if (rh->decoded) {
@@ -3361,6 +3453,90 @@ lua_task_get_archives (lua_State *L)
 	return 1;
 }
 
+static gint
+lua_task_get_dkim_results (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	guint nelt = 0, i;
+	struct rspamd_dkim_check_result **pres, **cur;
+
+	if (task) {
+		if (!lua_task_get_cached (L, task, "dkim_results", 0)) {
+			pres = rspamd_mempool_get_variable (task->task_pool,
+					RSPAMD_MEMPOOL_DKIM_CHECK_RESULTS);
+
+			if (pres == NULL) {
+				lua_newtable (L);
+			}
+			else {
+				for (cur = pres; *cur != NULL; cur ++) {
+					nelt ++;
+				}
+
+				lua_createtable (L, nelt, 0);
+
+				for (i = 0; i < nelt; i ++) {
+					struct rspamd_dkim_check_result *res = pres[i];
+					const gchar *result_str = "unknown";
+
+					lua_createtable (L, 0, 4);
+
+					switch (res->rcode) {
+					case DKIM_CONTINUE:
+						result_str = "allow";
+						break;
+					case DKIM_REJECT:
+						result_str = "reject";
+						break;
+					case DKIM_TRYAGAIN:
+						result_str = "tempfail";
+						break;
+					case DKIM_NOTFOUND:
+						result_str = "not found";
+						break;
+					case DKIM_RECORD_ERROR:
+						result_str = "bad record";
+						break;
+					case DKIM_PERM_ERROR:
+						result_str = "permanent error";
+						break;
+					default:
+						break;
+					}
+
+					rspamd_lua_table_set (L, "result", result_str);
+
+					if (res->domain) {
+						rspamd_lua_table_set (L, "domain", res->domain);
+					}
+
+					if (res->selector) {
+						rspamd_lua_table_set (L, "selector", res->selector);
+					}
+
+					if (res->short_b) {
+						rspamd_lua_table_set (L, "bhash", res->short_b);
+					}
+
+					if (res->fail_reason) {
+						rspamd_lua_table_set (L, "fail_reason", res->fail_reason);
+					}
+
+					lua_rawseti (L, -2, i + 1);
+				}
+			}
+
+			lua_task_set_cached (L, task, "dkim_results", -1, 0);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
 static inline gboolean
 lua_push_symbol_result (lua_State *L,
 		struct rspamd_task *task,
@@ -3501,6 +3677,48 @@ lua_task_has_symbol (lua_State *L)
 }
 
 static gint
+lua_task_enable_symbol (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *symbol;
+	gboolean found = FALSE;
+
+	symbol = luaL_checkstring (L, 2);
+
+	if (task && symbol) {
+		found = rspamd_symcache_enable_symbol (task, task->cfg->cache, symbol);
+		lua_pushboolean (L, found);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_disable_symbol (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *symbol;
+	gboolean found = FALSE;
+
+	symbol = luaL_checkstring (L, 2);
+
+	if (task && symbol) {
+		found = rspamd_symcache_disable_symbol (task, task->cfg->cache, symbol);
+		lua_pushboolean (L, found);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
 lua_task_get_symbols (lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -3593,7 +3811,7 @@ lua_task_get_symbols_numeric (lua_State *L)
 
 			kh_foreach_value_ptr (mres->symbols, s, {
 				if (!(s->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
-					id = rspamd_symbols_cache_find_symbol (task->cfg->cache,
+					id = rspamd_symcache_find_symbol (task->cfg->cache,
 							s->name);
 					lua_pushinteger (L, id);
 					lua_rawseti (L, -3, i);
@@ -3667,8 +3885,8 @@ lua_task_get_symbols_tokens (lua_State *L)
 	}
 
 	lua_createtable (L,
-			rspamd_symbols_cache_stats_symbols_count (task->cfg->cache), 0);
-	rspamd_symbols_cache_foreach (task->cfg->cache, tokens_foreach_cb, &cbd);
+			rspamd_symcache_stats_symbols_count (task->cfg->cache), 0);
+	rspamd_symcache_foreach (task->cfg->cache, tokens_foreach_cb, &cbd);
 
 	return 1;
 }
@@ -3958,6 +4176,8 @@ lua_task_has_flag (lua_State *L)
 				RSPAMD_TASK_FLAG_SKIP_PROCESS);
 		LUA_TASK_GET_FLAG (flag, "milter",
 				RSPAMD_TASK_FLAG_MILTER);
+		LUA_TASK_GET_FLAG (flag, "bad_unicode",
+				RSPAMD_TASK_FLAG_BAD_UNICODE);
 
 		if (!found) {
 			msg_warn_task ("unknown flag requested: %s", flag);
@@ -4173,7 +4393,7 @@ lua_task_set_settings (lua_State *L)
 			}
 		}
 
-		rspamd_symbols_cache_process_settings (task, task->cfg->cache);
+		rspamd_symcache_process_settings (task, task->cfg->cache);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -4514,6 +4734,63 @@ lua_task_process_regexp (lua_State *L)
 }
 
 static gint
+lua_task_get_metric_result (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_metric_result *metric_res;
+
+	if (task) {
+		metric_res = task->result;
+
+		/* Fields added:
+		 * - `score`: current score
+		 * - `action`: current action as a string
+		 * - `nnegative`: number of negative rules matched
+		 * - `npositive`: number of positive rules matched
+		 * - `positive_score`: total score for positive rules
+		 * - `negative_score`: total score for negative rules
+		 * - `passthrough`: set to true if message has a passthrough result
+		 */
+		lua_createtable (L, 0, 7);
+
+		lua_pushstring (L, "score");
+		lua_pushnumber (L, metric_res->score);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "action");
+		lua_pushstring (L, rspamd_action_to_str (
+				rspamd_check_action_metric (task, metric_res)));
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "nnegative");
+		lua_pushnumber (L, metric_res->nnegative);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "npositive");
+		lua_pushnumber (L, metric_res->npositive);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "positive_score");
+		lua_pushnumber (L, metric_res->positive_score);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "negative_score");
+		lua_pushnumber (L, metric_res->negative_score);
+		lua_settable (L, -3);
+
+		lua_pushstring (L, "passthrough");
+		lua_pushboolean (L, !!(metric_res->passthrough_result != NULL));
+		lua_settable (L, -3);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
 lua_task_get_metric_score (lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -4678,13 +4955,13 @@ lua_push_stat_token (lua_State *L, rspamd_token_t *tok)
 
 	if (tok->t1) {
 		lua_pushstring (L, "t1");
-		lua_pushlstring (L, tok->t1->begin, tok->t1->len);
+		lua_pushlstring (L, tok->t1->stemmed.begin, tok->t1->stemmed.len);
 		lua_settable (L, -3);
 	}
 
 	if (tok->t2) {
 		lua_pushstring (L, "t2");
-		lua_pushlstring (L, tok->t2->begin, tok->t2->len);
+		lua_pushlstring (L, tok->t2->stemmed.begin, tok->t2->stemmed.len);
 		lua_settable (L, -3);
 	}
 
@@ -4717,8 +4994,8 @@ lua_push_stat_token (lua_State *L, rspamd_token_t *tok)
 			lua_pushboolean (L, true);
 			lua_settable (L, -3);
 		}
-		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_SUBJECT) {
-			lua_pushstring (L, "subject");
+		if (tok->flags & RSPAMD_STAT_TOKEN_FLAG_HEADER) {
+			lua_pushstring (L, "header");
 			lua_pushboolean (L, true);
 			lua_settable (L, -3);
 		}
@@ -4929,6 +5206,152 @@ lua_task_headers_foreach (lua_State *L)
 
 	return 0;
 }
+
+static gint
+lua_task_get_meta_words (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	enum rspamd_lua_words_type how = RSPAMD_LUA_WORDS_STEM;
+
+	if (task == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (task->meta_words == NULL) {
+		lua_createtable (L, 0, 0);
+	}
+	else {
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			const gchar *how_str = lua_tostring (L, 2);
+
+			if (strcmp (how_str, "stem") == 0) {
+				how = RSPAMD_LUA_WORDS_STEM;
+			}
+			else if (strcmp (how_str, "norm") == 0) {
+				how = RSPAMD_LUA_WORDS_NORM;
+			}
+			else if (strcmp (how_str, "raw") == 0) {
+				how = RSPAMD_LUA_WORDS_RAW;
+			}
+			else if (strcmp (how_str, "full") == 0) {
+				how = RSPAMD_LUA_WORDS_FULL;
+			}
+			else {
+				return luaL_error (L, "unknown words type: %s", how_str);
+			}
+		}
+
+		return rspamd_lua_push_words (L, task->meta_words, how);
+	}
+
+	return 1;
+}
+
+static guint
+lua_lookup_words_array (lua_State *L,
+						gint cbpos,
+						struct rspamd_task *task,
+						struct rspamd_lua_map *map,
+						GArray *words)
+{
+	rspamd_stat_token_t *tok;
+	guint i, nmatched = 0;
+	gint err_idx;
+	gboolean matched;
+	const gchar *key;
+	gsize keylen;
+
+	for (i = 0; i < words->len; i ++) {
+		tok = &g_array_index (words, rspamd_stat_token_t, i);
+
+		matched = FALSE;
+
+		if (tok->normalized.len == 0) {
+			continue;
+		}
+
+		key = tok->normalized.begin;
+		keylen = tok->normalized.len;
+
+		switch (map->type) {
+		case RSPAMD_LUA_MAP_SET:
+		case RSPAMD_LUA_MAP_HASH:
+			/* We know that tok->normalized is zero terminated in fact */
+			if (rspamd_match_hash_map (map->data.hash, key)) {
+				matched = TRUE;
+			}
+			break;
+		case RSPAMD_LUA_MAP_REGEXP:
+		case RSPAMD_LUA_MAP_REGEXP_MULTIPLE:
+			if (rspamd_match_regexp_map_single (map->data.re_map, key,
+					keylen)) {
+				matched = TRUE;
+			}
+			break;
+		default:
+			g_assert_not_reached ();
+			break;
+		}
+
+		if (matched) {
+			nmatched ++;
+
+			lua_pushcfunction (L, &rspamd_lua_traceback);
+			err_idx = lua_gettop (L);
+			lua_pushvalue (L, cbpos); /* Function */
+			rspamd_lua_push_full_word (L, tok);
+
+			if (lua_pcall (L, 1, 0, err_idx) != 0) {
+				GString *tb = lua_touserdata (L, -1);
+				msg_err_task ("cannot call callback function for lookup words: %s",
+						tb->str);
+				g_string_free (tb, TRUE);
+			}
+
+			lua_settop (L, err_idx - 1);
+		}
+	}
+
+	return nmatched;
+}
+
+static gint
+lua_task_lookup_words (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_lua_map *map = lua_check_map (L, 2);
+	struct rspamd_mime_text_part *tp;
+
+	guint i, matches = 0;
+
+	if (task == NULL || map == NULL || lua_type (L, 3) != LUA_TFUNCTION) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (map->type != RSPAMD_LUA_MAP_SET &&
+		map->type != RSPAMD_LUA_MAP_REGEXP &&
+		map->type != RSPAMD_LUA_MAP_HASH &&
+		map->type != RSPAMD_LUA_MAP_REGEXP_MULTIPLE) {
+		return luaL_error (L, "invalid map type");
+	}
+
+	PTR_ARRAY_FOREACH (task->text_parts, i, tp) {
+		if (tp->utf_words) {
+			matches += lua_lookup_words_array (L, 3, task, map, tp->utf_words);
+		}
+	}
+
+	if (task->meta_words) {
+		matches += lua_lookup_words_array (L, 3, task, map, task->meta_words);
+	}
+
+	lua_pushinteger (L, matches);
+
+	return 1;
+}
+
 
 /* Image functions */
 static gint
@@ -5145,6 +5568,32 @@ lua_archive_get_filename (lua_State *L)
 
 /* Text methods */
 static gint
+lua_text_fromstring (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	const gchar *str;
+	gsize l = 0;
+	struct rspamd_lua_text *t;
+
+	str = luaL_checklstring (L, 1, &l);
+
+	if (str) {
+		t = lua_newuserdata (L, sizeof (*t));
+		t->start = g_malloc (l + 1);
+		rspamd_strlcpy ((char *)t->start, str, l + 1);
+		t->len = l;
+		t->flags = RSPAMD_TEXT_FLAG_OWN;
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+
+	return 1;
+}
+
+static gint
 lua_text_len (lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -5229,28 +5678,37 @@ lua_text_save_in_file (lua_State *L)
 	struct rspamd_lua_text *t = lua_check_text (L, 1);
 	const gchar *fname = NULL;
 	guint mode = 00644;
-	gint fd;
+	gint fd = -1;
+	gboolean need_close = FALSE;
 
 	if (t != NULL) {
 		if (lua_type (L, 2) == LUA_TSTRING) {
 			fname = luaL_checkstring (L, 2);
-		}
-		if (lua_type (L, 3) == LUA_TNUMBER) {
-			mode = lua_tonumber (L, 3);
-		}
 
-		if (fname) {
-			fd = rspamd_file_xopen (fname, O_CREAT | O_WRONLY | O_EXCL, mode, 0);
-
-			if (fd == -1) {
-				lua_pushboolean (L, false);
-				lua_pushstring (L, strerror (errno));
-
-				return 2;
+			if (lua_type (L, 3) == LUA_TNUMBER) {
+				mode = lua_tonumber (L, 3);
 			}
 		}
-		else {
-			fd = STDOUT_FILENO;
+		else if (lua_type (L, 2) == LUA_TNUMBER) {
+			/* Created fd */
+			fd = lua_tonumber (L, 2);
+		}
+
+		if (fd == -1) {
+			if (fname) {
+				fd = rspamd_file_xopen (fname, O_CREAT | O_WRONLY | O_EXCL, mode, 0);
+
+				if (fd == -1) {
+					lua_pushboolean (L, false);
+					lua_pushstring (L, strerror (errno));
+
+					return 2;
+				}
+				need_close = TRUE;
+			}
+			else {
+				fd = STDOUT_FILENO;
+			}
 		}
 
 		if (write (fd, t->start, t->len) == -1) {
@@ -5264,7 +5722,7 @@ lua_text_save_in_file (lua_State *L)
 			return 2;
 		}
 
-		if (fd != STDOUT_FILENO) {
+		if (need_close) {
 			close (fd);
 		}
 
@@ -5309,6 +5767,16 @@ lua_load_task (lua_State * L)
 	return 1;
 }
 
+static gint
+lua_load_text (lua_State * L)
+{
+	lua_newtable (L);
+	luaL_register (L, NULL, textlib_f);
+
+	return 1;
+}
+
+
 static void
 luaopen_archive (lua_State * L)
 {
@@ -5339,6 +5807,8 @@ luaopen_text (lua_State *L)
 {
 	rspamd_lua_new_class (L, "rspamd{text}", textlib_m);
 	lua_pop (L, 1);
+
+	rspamd_lua_add_preload (L, "rspamd_text", lua_load_text);
 }
 
 void

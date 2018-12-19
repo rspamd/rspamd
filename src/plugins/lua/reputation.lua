@@ -38,10 +38,9 @@ local redis_params = nil
 local default_expiry = 864000 -- 10 day by default
 
 local keymap_schema = ts.shape{
-  ['reject'] = ts.string,
-  ['add header'] = ts.string,
-  ['rewrite subject'] = ts.string,
-  ['no action'] = ts.string
+  ['spam'] = ts.string,
+  ['junk'] = ts.string,
+  ['ham'] = ts.string,
 }
 
 -- Get reputation from ham/spam/probable hits
@@ -109,7 +108,8 @@ local function gen_dkim_queries(task, rule)
       local dom,res = lpeg.match(gr, opt)
 
       if dom and res then
-        ret[dom] = res
+        local tld = rspamd_util.get_tld(dom)
+        ret[tld] = res
       end
     end
   end
@@ -165,14 +165,14 @@ local function dkim_reputation_filter(task, rule)
 end
 
 local function dkim_reputation_idempotent(task, rule)
-  local action = task:get_metric_action()
+  local verdict = lua_util.get_task_verdict(task)
   local token = {
   }
   local cfg = rule.selector.config
   local need_set = false
 
   -- TODO: take metric score into consideration
-  local k = cfg.keys_map[action]
+  local k = cfg.keys_map[verdict]
 
   if k then
     token[k] = 1.0
@@ -218,10 +218,9 @@ local dkim_selector = {
     -- s is for spam,
     -- p is for probable spam
     keys_map = {
-      ['reject'] = 's',
-      ['add header'] = 'p',
-      ['rewrite subject'] = 'p',
-      ['no action'] = 'h'
+      ['spam'] = 's',
+      ['junk'] = 'p',
+      ['ham'] = 'h'
     },
     symbol = 'DKIM_SCORE', -- symbol to be inserted
     lower_bound = 10, -- minimum number of messages to be scored
@@ -312,14 +311,14 @@ local function url_reputation_filter(task, rule)
 end
 
 local function url_reputation_idempotent(task, rule)
-  local action = task:get_metric_action()
+  local verdict = lua_util.get_task_verdict(task)
   local token = {
   }
   local cfg = rule.selector.config
   local need_set = false
 
   -- TODO: take metric score into consideration
-  local k = cfg.keys_map[action]
+  local k = cfg.keys_map[verdict]
 
   if k then
     token[k] = 1.0
@@ -343,10 +342,9 @@ local url_selector = {
     -- s is for spam,
     -- p is for probable spam
     keys_map = {
-      ['reject'] = 's',
-      ['add header'] = 'p',
-      ['rewrite subject'] = 'p',
-      ['no action'] = 'h'
+      ['spam'] = 's',
+      ['junk'] = 'p',
+      ['ham'] = 'h'
     },
     symbol = 'URL_SCORE', -- symbol to be inserted
     lower_bound = 10, -- minimum number of messages to be scored
@@ -357,7 +355,7 @@ local url_selector = {
     outbound = true,
     inbound = true,
   },
-  dependencies = {"SURBL_CALLBACK"},
+  dependencies = {"SURBL_REDIRECTOR_CALLBACK"},
   filter = url_reputation_filter, -- used to get scores
   idempotent = url_reputation_idempotent -- used to set scores
 }
@@ -509,13 +507,13 @@ local function ip_reputation_idempotent(task, rule)
     end
   end
 
-  local action = task:get_metric_action()
+  local verdict = lua_util.get_task_verdict(task)
   local token = {
   }
   local need_set = false
 
   -- TODO: take metric score into consideration
-  local k = cfg.keys_map[action]
+  local k = cfg.keys_map[verdict]
 
   if k then
     token[k] = 1.0
@@ -545,10 +543,9 @@ local ip_selector = {
     -- s is for spam,
     -- p is for probable spam
     keys_map = {
-      ['reject'] = 's',
-      ['add header'] = 'p',
-      ['rewrite subject'] = 'p',
-      ['no action'] = 'h'
+      ['spam'] = 's',
+      ['junk'] = 'p',
+      ['ham'] = 'h'
     },
     scores = { -- how each component is evaluated
       ['asn'] = 0.4,
@@ -603,7 +600,7 @@ local function spf_reputation_filter(task, rule)
 end
 
 local function spf_reputation_idempotent(task, rule)
-  local action = task:get_metric_action()
+  local verdict = lua_util.get_task_verdict(task)
   local spf_record = task:get_mempool():get_variable('spf_record')
   local spf_allow = task:has_symbol('R_SPF_ALLOW')
   local token = {
@@ -614,7 +611,7 @@ local function spf_reputation_idempotent(task, rule)
   if not spf_record or not spf_allow then return end
 
   -- TODO: take metric score into consideration
-  local k = cfg.keys_map[action]
+  local k = cfg.keys_map[verdict]
 
   if k then
     token[k] = 1.0
@@ -639,10 +636,9 @@ local spf_selector = {
     -- s is for spam,
     -- p is for probable spam
     keys_map = {
-      ['reject'] = 's',
-      ['add header'] = 'p',
-      ['rewrite subject'] = 'p',
-      ['no action'] = 'h'
+      ['spam'] = 's',
+      ['junk'] = 'p',
+      ['ham'] = 'h'
     },
     symbol = 'SPF_SCORE', -- symbol to be inserted
     lower_bound = 10, -- minimum number of messages to be scored
@@ -707,18 +703,20 @@ local function generic_reputation_filter(task, rule)
   if selector_res then
     if type(selector_res) == 'table' then
       fun.each(function(e)
-        lua_util.debugm(N, task, 'check generic reputation %s', e)
+        lua_util.debugm(N, task, 'check generic reputation (%s) %s',
+          rule['symbol'], e)
         rule.backend.get_token(task, rule, e, tokens_cb)
       end, selector_res)
     else
-      lua_util.debugm(N, task, 'check generic reputation %s', selector_res)
+      lua_util.debugm(N, task, 'check generic reputation (%s) %s',
+        rule['symbol'], selector_res)
       rule.backend.get_token(task, rule, selector_res, tokens_cb)
     end
   end
 end
 
 local function generic_reputation_idempotent(task, rule)
-  local action = task:get_metric_action()
+  local verdict = lua_util.get_task_verdict(task)
   local cfg = rule.selector.config
   local need_set = false
   local token = {}
@@ -726,7 +724,7 @@ local function generic_reputation_idempotent(task, rule)
   local selector_res = cfg.selector(task)
   if not selector_res then return end
 
-  local k = cfg.keys_map[action]
+  local k = cfg.keys_map[verdict]
 
   if k then
     token[k] = 1.0
@@ -736,13 +734,13 @@ local function generic_reputation_idempotent(task, rule)
   if need_set then
     if type(selector_res) == 'table' then
       fun.each(function(e)
-        lua_util.debugm(N, task, 'set generic selector %s = %s',
-            e, token)
+        lua_util.debugm(N, task, 'set generic selector (%s) %s = %s',
+            rule['symbol'], e, token)
         rule.backend.set_token(task, rule, e, token)
       end, selector_res)
     else
-      lua_util.debugm(N, task, 'set generic selector %s = %s',
-          selector_res, token)
+      lua_util.debugm(N, task, 'set generic selector (%s) %s = %s',
+          rule['symbol'], selector_res, token)
       rule.backend.set_token(task, rule, selector_res, token)
     end
   end
@@ -767,10 +765,9 @@ local generic_selector = {
     -- s is for spam,
     -- p is for probable spam
     keys_map = {
-      ['reject'] = 's',
-      ['add header'] = 'p',
-      ['rewrite subject'] = 'p',
-      ['no action'] = 'h'
+      ['spam'] = 's',
+      ['junk'] = 'p',
+      ['ham'] = 'h'
     },
     lower_bound = 10, -- minimum number of messages to be scored
     min_score = nil,
@@ -990,22 +987,22 @@ local function reputation_redis_get_token(task, rule, token, continuation_cb)
             values[data[i]] = ndata
           end
         end
-        lua_util.debugm(N, task, 'got values for key %s -> %s',
-            key, values)
+        lua_util.debugm(N, task, 'rule %s - got values for key %s -> %s',
+            rule['symbol'], key, values)
         continuation_cb(nil, key, values)
       else
-        rspamd_logger.errx(task, 'invalid type while getting reputation keys %s: %s',
-          key, type(data))
+        rspamd_logger.errx(task, 'rule %s - invalid type while getting reputation keys %s: %s',
+          rule['symbol'], key, type(data))
         continuation_cb("invalid type", key, nil)
       end
 
     elseif err then
-      rspamd_logger.errx(task, 'got error while getting reputation keys %s: %s',
-        key, err)
+      rspamd_logger.errx(task, 'rule %s - got error while getting reputation keys %s: %s',
+        rule['symbol'], key, err)
       continuation_cb(err, key, nil)
     else
-      rspamd_logger.errx(task, 'got error while getting reputation keys %s: %s',
-          key, "unknown error")
+      rspamd_logger.errx(task, 'rule %s - got error while getting reputation keys %s: %s',
+        rule['symbol'], key, "unknown error")
       continuation_cb("unknown error", key, nil)
     end
   end
@@ -1024,8 +1021,8 @@ local function reputation_redis_set_token(task, rule, token, values, continuatio
 
   local function redis_set_cb(err, data)
     if err then
-      rspamd_logger.errx(task, 'got error while setting reputation keys %s: %s',
-        key, err)
+      rspamd_logger.errx(task, 'rule %s - got error while setting reputation keys %s: %s',
+        rule['symbol'], key, err)
       if continuation_cb then
         continuation_cb(err, key)
       end
@@ -1042,8 +1039,8 @@ local function reputation_redis_set_token(task, rule, token, values, continuatio
     table.insert(args, k)
     table.insert(args, v)
   end
-  lua_util.debugm(N, task, 'set values for key %s -> %s',
-      key, values)
+  lua_util.debugm(N, task, 'rule %s - set values for key %s -> %s',
+      rule['symbol'], key, values)
   local ret = lua_redis.exec_redis_script(rule.backend.script_set,
       {task = task, is_write = true},
       redis_set_cb,
@@ -1217,7 +1214,7 @@ local function parse_rule(name, tbl)
 
   local symbol = name
   if tbl.symbol then
-    symbol = name
+    symbol = tbl.symbol
   end
 
   rule.symbol = symbol

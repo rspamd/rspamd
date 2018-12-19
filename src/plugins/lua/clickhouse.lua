@@ -50,6 +50,7 @@ local settings = {
   full_urls = false,
   from_tables = nil,
   enable_symbols = false,
+  database = 'default',
   use_https = false,
   use_gzip = true,
   allow_local = false,
@@ -285,6 +286,7 @@ local function clickhouse_send_data(task)
 end
 
 local function clickhouse_collect(task)
+  if task:has_flag('skip') then return end
   if not settings.allow_local and rspamd_lua_utils.is_rspamc_or_controller(task) then return end
 
   for _,sym in ipairs(settings.stop_symbols) do
@@ -488,27 +490,26 @@ local function clickhouse_collect(task)
     table.insert(row, {})
   end
 
+  local flatten_urls = function(f, ...)
+    return fun.totable(fun.map(function(k,v) return f(k,v) end, ...))
+  end
+
   -- Urls step
-  local urls_tlds = {}
   local urls_urls = {}
   if task:has_urls(false) then
+
     for _,u in ipairs(task:get_urls(false)) do
-      urls_tlds[u:get_tld()] = true
       if settings['full_urls'] then
-        urls_urls[u:get_text()] = true
+        urls_urls[u:get_text()] = u
       else
-        urls_urls[u:get_host()] = true
+        urls_urls[u:get_host()] = u
       end
     end
-  end
 
-  local flatten_urls = function(...)
-    return fun.totable(fun.map(function(k,_) return k end, ...))
-  end
-
-  if #urls_tlds > 0 then
-    table.insert(row, flatten_urls(urls_tlds))
-    table.insert(row, flatten_urls(urls_urls))
+    -- Get tlds
+    table.insert(row, flatten_urls(function(_,u) return u:get_tld() end, urls_urls))
+    -- Get hosts/full urls
+    table.insert(row, flatten_urls(function(k, _) return k end, urls_urls))
   else
     table.insert(row, {})
     table.insert(row, {})
@@ -516,9 +517,10 @@ local function clickhouse_collect(task)
 
   -- Emails step
   if task:has_urls(true) then
-    table.insert(row, flatten_urls(fun.map(function(u)
-      return string.format('%s@%s', u:get_user(), u:get_host()),true
-    end, task:get_emails())))
+    table.insert(row, flatten_urls(function(k, _) return k end,
+        fun.map(function(u)
+          return string.format('%s@%s', u:get_user(), u:get_host()),true
+        end, task:get_emails())))
   else
     table.insert(row, {})
   end

@@ -136,7 +136,7 @@ rspamadm_configtest (gint argc, gchar **argv, const struct rspamadm_command *cmd
 		(void) g_quark_from_static_string ((*pworker)->name);
 		pworker++;
 	}
-	cfg->cache = rspamd_symbols_cache_new (cfg);
+	cfg->cache = rspamd_symcache_new (cfg);
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 	cfg->cfg_name = config;
@@ -156,7 +156,7 @@ rspamadm_configtest (gint argc, gchar **argv, const struct rspamadm_command *cmd
 			ret = rspamd_config_post_load (cfg, RSPAMD_CONFIG_INIT_SYMCACHE);
 		}
 
-		if (!rspamd_symbols_cache_validate (rspamd_main->cfg->cache,
+		if (ret && !rspamd_symcache_validate (rspamd_main->cfg->cache,
 				rspamd_main->cfg,
 				FALSE)) {
 			ret = FALSE;

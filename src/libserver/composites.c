@@ -424,7 +424,7 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 	task = cd->task;
 
 	if (!isset (cd->checked, cd->composite->id * 2)) {
-		if (rspamd_symbols_cache_is_checked (cd->task, cd->task->cfg->cache,
+		if (rspamd_symcache_is_checked (cd->task, cd->task->cfg->cache,
 				key)) {
 			msg_debug_composites ("composite %s is checked in symcache but not "
 					"in composites bitfield", cd->composite->sym);

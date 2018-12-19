@@ -69,9 +69,6 @@ namespace rspamd {
 	static bool int32_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
 
-	static bool gboolean_arg_handler (const Expr *arg,
-			struct PrintfArgChecker *ctx);
-
 	static bool tok_arg_handler (const Expr *arg,
 			struct PrintfArgChecker *ctx);
 
@@ -186,9 +183,6 @@ namespace rspamd {
 						this->pcontext, this->ci);
 			case 'D':
 				return llvm::make_unique<PrintfArgChecker> (int32_arg_handler,
-						this->pcontext, this->ci);
-			case 'B':
-				return llvm::make_unique<PrintfArgChecker> (gboolean_arg_handler,
 						this->pcontext, this->ci);
 			case 'T':
 				return llvm::make_unique<PrintfArgChecker> (tok_arg_handler,
@@ -369,7 +363,7 @@ namespace rspamd {
 
 			format_specs = {
 					's', 'd', 'l', 'L', 'v', 'V', 'f', 'F', 'g', 'G',
-					'T', 'z', 'D', 'c', 'p', 'P', 'e', 'B'
+					'T', 'z', 'D', 'c', 'p', 'P', 'e'
 			};
 		};
 
@@ -717,15 +711,6 @@ namespace rspamd {
 				"%D");
 
 		return true;
-	}
-
-	static bool
-	gboolean_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
-	{
-		return check_builtin_type (arg,
-				ctx,
-				{BuiltinType::Kind::Int}, // gboolean is int in fact
-				"%b");
 	}
 
 	static bool

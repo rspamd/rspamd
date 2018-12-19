@@ -26,9 +26,8 @@
 #ifndef CHACHA_H_
 #define CHACHA_H_
 
-enum chacha_constants {
-	CHACHA_BLOCKBYTES = 64,
-};
+
+#define CHACHA_BLOCKBYTES 64
 
 typedef struct chacha_state_internal_t {
 	unsigned char s[48];

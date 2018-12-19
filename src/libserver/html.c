@@ -2177,6 +2177,7 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 		ex->pos = href_offset;
 		ex->len = dest->len - href_offset;
 		ex->type = RSPAMD_EXCEPTION_URL;
+		ex->ptr = url;
 
 		*exceptions = g_list_prepend (*exceptions,
 				ex);

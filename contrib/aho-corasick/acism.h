@@ -25,9 +25,11 @@
 // "acism" uses MEMREF {ptr,len} bytevec structs for "string" args,
 // rather than NUL-terminated "C" strings.
 
-typedef struct { char const *ptr; size_t len; } ac_trie_pat_t;
+typedef struct ac_trie_pat_s { char const *ptr; size_t len; } ac_trie_pat_t;
 
 typedef struct acism ac_trie_t;
+typedef struct acism ACISM;
+typedef struct ac_trie_pat_s MEMREF;
 
 ac_trie_t* acism_create(ac_trie_pat_t const *strv, int nstrs);
 void   acism_destroy(ac_trie_t*);

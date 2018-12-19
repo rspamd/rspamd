@@ -63,17 +63,6 @@ struct rspamd_lang_detector* rspamd_language_detector_ref (struct rspamd_lang_de
 void rspamd_language_detector_unref (struct rspamd_lang_detector* d);
 
 /**
- * Convert string from utf8 to ucs32
- * @param d
- * @param utf_token
- * @param ucs_token
- */
-void rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
-		rspamd_mempool_t *pool,
-		rspamd_stat_token_t *utf_token,
-		rspamd_stat_token_t *ucs_token);
-
-/**
  * Try to detect language of words
  * @param d
  * @param ucs_tokens
@@ -83,5 +72,15 @@ void rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
 gboolean rspamd_language_detector_detect (struct rspamd_task *task,
 		struct rspamd_lang_detector *d,
 		struct rspamd_mime_text_part *part);
+
+/**
+ * Returns TRUE if the specified word is known to be a stop word
+ * @param d
+ * @param word
+ * @param wlen
+ * @return
+ */
+gboolean rspamd_language_detector_is_stop_word (struct rspamd_lang_detector *d,
+		const gchar *word, gsize wlen);
 
 #endif

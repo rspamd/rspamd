@@ -51,3 +51,25 @@ reconf['INTRODUCTION'] = {
   group = 'scams'
 }
 
+-- Message contains a link to a .onion URI (Tor hidden service)
+local onion_uri_v2 = '/[a-z0-9]{16}\\.onion?/{url}i'
+local onion_uri_v3 = '/[a-z0-9]{56}\\.onion?/{url}i'
+reconf['HAS_ONION_URI'] = {
+    re = string.format('(%s | %s)', onion_uri_v2, onion_uri_v3),
+    description = 'Contains .onion hidden service URI',
+    score = 0.0,
+    group = 'experimental'
+}
+
+local password_in_words = [[/^password/i{words}]]
+local btc_wallet_address = [[/^[13][0-9a-zA-Z]{25,34}$/{words}]]
+local wallet_word = [[/^wallet$/i{words}]]
+local broken_unicode = [[has_flag(bad_unicode)]]
+
+reconf['LEAKED_PASSWORD_SCAM'] = {
+  re = string.format('%s & %s & (%s | %s)',
+      password_in_words, btc_wallet_address, wallet_word, broken_unicode),
+  description = 'Contains password word and BTC wallet address',
+  score = 7.0,
+  group = 'scams'
+}

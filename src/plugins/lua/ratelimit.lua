@@ -28,6 +28,7 @@ local lua_maps = require "lua_maps"
 local lua_util = require "lua_util"
 local rspamd_hash = require "rspamd_cryptobox_hash"
 local lua_selectors = require "lua_selectors"
+local ts = require("tableshape").types
 
 -- A plugin that implements ratelimits using redis
 
@@ -84,21 +85,24 @@ local bucket_check_script = [[
    if last < tonumber(KEYS[2]) then
     local rate = tonumber(KEYS[3])
     dynr = tonumber(redis.call('HGET', KEYS[1], 'dr')) / 10000.0
+    if dynr == 0 then dynr = 0.0001 end
     rate = rate * dynr
     leaked = ((now - last) * rate)
+    if leaked > burst then leaked = burst end
     burst = burst - leaked
     redis.call('HINCRBYFLOAT', KEYS[1], 'b', -(leaked))
     redis.call('HSET', KEYS[1], 'l', KEYS[2])
    end
+
+   dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
+   if dynb == 0 then dynb = 0.0001 end
+
+   if burst > 0 and (burst + 1) > tonumber(KEYS[4]) * dynb then
+     return {1, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
+   end
   else
    burst = 0
    redis.call('HSET', KEYS[1], 'b', '0')
-  end
-
-  dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
-
-  if (burst + 1) > tonumber(KEYS[4]) * dynb then
-   return {1, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
   end
 
   return {0, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
@@ -132,19 +136,54 @@ local bucket_update_script = [[
     return {1, 1, 1}
   end
 
+  local dr, db = 1.0, 1.0
+
+  if tonumber(KEYS[5]) > 1 then
+    local rate_mult = tonumber(KEYS[3])
+    local rate_limit = tonumber(KEYS[5])
+    dr = tonumber(redis.call('HGET', KEYS[1], 'dr')) / 10000
+
+    if rate_mult > 1.0 and dr < rate_limit then
+      dr = dr * rate_mult
+      if dr > 0.0001 then
+        redis.call('HSET', KEYS[1], 'dr', tostring(math.floor(dr * 10000)))
+      else
+        redis.call('HSET', KEYS[1], 'dr', '1')
+      end
+    elseif rate_mult < 1.0 and dr > (1.0 / rate_limit) then
+      dr = dr * rate_mult
+      if dr > 0.0001 then
+        redis.call('HSET', KEYS[1], 'dr', tostring(math.floor(dr * 10000)))
+      else
+        redis.call('HSET', KEYS[1], 'dr', '1')
+      end
+    end
+  end
+
+  if tonumber(KEYS[6]) > 1 then
+    local rate_mult = tonumber(KEYS[4])
+    local rate_limit = tonumber(KEYS[6])
+    db = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000
+
+    if rate_mult > 1.0 and db < rate_limit then
+      db = db * rate_mult
+      if db > 0.0001 then
+        redis.call('HSET', KEYS[1], 'db', tostring(math.floor(db * 10000)))
+      else
+        redis.call('HSET', KEYS[1], 'db', '1')
+      end
+    elseif rate_mult < 1.0 and db > (1.0 / rate_limit) then
+      db = db * rate_mult
+      if db > 0.0001 then
+        redis.call('HSET', KEYS[1], 'db', tostring(math.floor(db * 10000)))
+      else
+        redis.call('HSET', KEYS[1], 'db', '1')
+      end
+    end
+  end
+
   local burst = tonumber(redis.call('HGET', KEYS[1], 'b'))
-  local db = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000
-  local dr = tonumber(redis.call('HGET', KEYS[1], 'dr')) / 10000
-
-  if dr < tonumber(KEYS[5]) and dr > 1.0 / tonumber(KEYS[5]) then
-    dr = dr * tonumber(KEYS[3])
-    redis.call('HSET', KEYS[1], 'dr', tostring(math.floor(dr * 10000)))
-  end
-
-  if db < tonumber(KEYS[6]) and db > 1.0 / tonumber(KEYS[6]) then
-    db = db * tonumber(KEYS[4])
-    redis.call('HSET', KEYS[1], 'db', tostring(math.floor(db * 10000)))
-  end
+  if burst < 0 then burst = 0 end
 
   redis.call('HINCRBYFLOAT', KEYS[1], 'b', 1)
   redis.call('HSET', KEYS[1], 'l', KEYS[2])
@@ -154,8 +193,8 @@ local bucket_update_script = [[
 ]]
 local bucket_update_id
 
--- message_func(task, limit_type, prefix, bucket)
-local message_func = function(_, limit_type, _, _)
+-- message_func(task, limit_type, prefix, bucket, limit_key)
+local message_func = function(_, limit_type, _, _, _)
   return string.format('Ratelimit "%s" exceeded', limit_type)
 end
 
@@ -229,48 +268,67 @@ local function parse_string_limit(lim, no_error)
   return nil
 end
 
+local function str_to_rate(str)
+  local divider,divisor = parse_string_limit(str, false)
+
+  if not divisor then
+    rspamd_logger.errx(rspamd_config, 'bad rate string: %s', str)
+
+    return nil
+  end
+
+  return divisor / divider
+end
+
+local bucket_schema = ts.shape{
+  burst = ts.number + ts.string / lua_util.dehumanize_number,
+  rate = ts.number + ts.string / str_to_rate
+}
+
 local function parse_limit(name, data)
-  local buckets = {}
   if type(data) == 'table' then
-    -- 3 cases here:
+    -- 2 cases here:
     --  * old limit in format [burst, rate]
-    --  * vector of strings in Andrew's string format
+    --  * vector of strings in Andrew's string format (removed from 1.8.2)
     --  * proper bucket table
     if #data == 2 and tonumber(data[1]) and tonumber(data[2]) then
       -- Old style ratelimit
       rspamd_logger.warnx(rspamd_config, 'old style ratelimit for %s', name)
       if tonumber(data[1]) > 0 and tonumber(data[2]) > 0 then
-        table.insert(buckets, {
+        return {
           burst = data[1],
           rate = data[2]
-        })
+        }
       elseif data[1] ~= 0 then
         rspamd_logger.warnx(rspamd_config, 'invalid numbers for %s', name)
       else
         rspamd_logger.infox(rspamd_config, 'disable limit %s, burst is zero', name)
       end
+
+      return nil
     else
-      -- Recursively map parse_limit and flatten the list
-      fun.each(function(l)
-        -- Flatten list
-        for _,b in ipairs(l) do table.insert(buckets, b) end
-      end, fun.map(function(d) return parse_limit(d, name) end, data))
+      local parsed_bucket,err = bucket_schema:transform(data)
+
+      if not parsed_bucket or err then
+        rspamd_logger.errx(rspamd_config, 'cannot parse bucket for %s: %s; original value: %s',
+            name, err, data)
+      else
+        return parsed_bucket
+      end
     end
   elseif type(data) == 'string' then
     local rep_rate, burst = parse_string_limit(data)
-
+    rspamd_logger.warnx(rspamd_config, 'old style rate bucket config detected for %s: %s',
+        name, data)
     if rep_rate and burst then
-      table.insert(buckets, {
+      return {
         burst = burst,
-        rate = 1.0 / rep_rate -- reciprocal
-      })
+        rate = burst / rep_rate -- reciprocal
+      }
     end
   end
 
-  -- Filter valid
-  return fun.totable(fun.filter(function(val)
-    return type(val.burst) == 'number' and type(val.rate) == 'number'
-  end, buckets))
+  return nil
 end
 
 --- Check whether this addr is bounce
@@ -461,8 +519,6 @@ local function limit_to_prefixes(task, k, v, prefixes)
         end
       end
     end
-
-
   end
 
   return n
@@ -515,8 +571,8 @@ local function ratelimit_cb(task)
 
     if ret then
       local bucket = parse_limit(k, bd)
-      if bucket[1] then
-        prefixes[redis_key] = make_prefix(redis_key, k, bucket[1])
+      if bucket then
+        prefixes[redis_key] = make_prefix(redis_key, k, bucket)
       end
       nprefixes = nprefixes + 1
     else
@@ -525,7 +581,7 @@ local function ratelimit_cb(task)
     end
   end
 
-  local function gen_check_cb(prefix, bucket, lim_name)
+  local function gen_check_cb(prefix, bucket, lim_name, lim_key)
     return function(err, data)
       if err then
         rspamd_logger.errx('cannot check limit %s: %s %s', prefix, err, data)
@@ -538,25 +594,26 @@ local function ratelimit_cb(task)
         if data[1] == 1 then
           -- set symbol only and do NOT soft reject
           if settings.symbol then
-            task:insert_result(settings.symbol, 0.0, lim_name .. "(" .. prefix .. ")")
+            task:insert_result(settings.symbol, 0.0,
+                string.format('%s(%s)', lim_name, lim_key))
             rspamd_logger.infox(task,
-                'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
+                'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn); redis key: %s',
                 lim_name, prefix,
                 bucket.burst, bucket.rate,
-                data[2], data[3], data[4])
+                data[2], data[3], data[4], lim_key)
             return
             -- set INFO symbol and soft reject
           elseif settings.info_symbol then
             task:insert_result(settings.info_symbol, 1.0,
-                lim_name .. "(" .. prefix .. ")")
+                string.format('%s(%s)', lim_name, lim_key))
           end
           rspamd_logger.infox(task,
-              'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn)',
+              'ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn); redis key: %s',
               lim_name, prefix,
               bucket.burst, bucket.rate,
-              data[2], data[3], data[4])
+              data[2], data[3], data[4], lim_key)
           task:set_pre_result('soft reject',
-              message_func(task, lim_name, prefix, bucket), N)
+              message_func(task, lim_name, prefix, bucket, lim_key), N)
         end
       end
     end
@@ -579,7 +636,7 @@ local function ratelimit_cb(task)
           value.name, pr, value.hash, bucket.burst, bucket.rate)
       lua_redis.exec_redis_script(bucket_check_id,
               {key = value.hash, task = task, is_write = true},
-              gen_check_cb(pr, bucket, value.name),
+              gen_check_cb(pr, bucket, value.name, value.hash),
               {value.hash, tostring(now), tostring(rate), tostring(bucket.burst),
                   tostring(settings.expire)})
     end
@@ -587,6 +644,8 @@ local function ratelimit_cb(task)
 end
 
 local function ratelimit_update_cb(task)
+  if task:has_flag('skip') then return end
+  if not settings.allow_local and lua_util.is_rspamc_or_controller(task) then return end
   local prefixes = task:cache_get('ratelimit_prefixes')
 
   if prefixes then
@@ -596,7 +655,7 @@ local function ratelimit_update_cb(task)
       return
     end
 
-    local is_spam = not (task:get_metric_action() == 'no action')
+    local verdict = lua_util.get_task_verdict(task)
 
     -- Update each bucket
     for k, v in pairs(prefixes) do
@@ -615,12 +674,15 @@ local function ratelimit_update_cb(task)
       end
       local now = rspamd_util.get_time()
       now = lua_util.round(now * 1000.0) -- Get milliseconds
-      local mult_burst = bucket.ham_factor_burst or 1.0
-      local mult_rate = bucket.ham_factor_burst or 1.0
+      local mult_burst = 1.0
+      local mult_rate = 1.0
 
-      if is_spam then
+      if verdict == 'spam' or verdict == 'junk' then
         mult_burst = bucket.spam_factor_burst or 1.0
         mult_rate = bucket.spam_factor_rate or 1.0
+      elseif verdict == 'ham' then
+        mult_burst = bucket.ham_factor_burst or 1.0
+        mult_rate = bucket.ham_factor_rate or 1.0
       end
 
       lua_redis.exec_redis_script(bucket_update_id,
@@ -645,42 +707,72 @@ if opts then
   if opts['rates'] and type(opts['rates']) == 'table' then
     -- new way of setting limits
     fun.each(function(t, lim)
-      local buckets
-      if type(lim) == 'table' and lim.selector and lim.bucket then
-        local selector = lua_selectors.parse_selector(rspamd_config, lim.selector)
-        if not selector then
-          rspamd_logger.errx(rspamd_config, 'bad ratelimit selector for %s: "%s"',
-              t, lim.selector)
-          return
-        end
-        local bucket = parse_limit(t, lim.bucket)
+      local buckets = {}
 
-        if not bucket then
-          rspamd_logger.errx(rspamd_config, 'bad ratelimit bucket for %s: "%s"',
-              t, lim.bucket)
-          return
+      if type(lim) == 'table' and lim.bucket then
+
+        if lim.bucket[1] then
+          for _,bucket in ipairs(lim.bucket) do
+            local b = parse_limit(t, bucket)
+
+            if not b then
+              rspamd_logger.errx(rspamd_config, 'bad ratelimit bucket for %s: "%s"',
+                  t, b)
+              return
+            end
+
+            table.insert(buckets, b)
+          end
+        else
+          local bucket = parse_limit(t, lim.bucket)
+
+          if not bucket then
+            rspamd_logger.errx(rspamd_config, 'bad ratelimit bucket for %s: "%s"',
+                t, lim.bucket)
+            return
+          end
+
+          buckets = {bucket}
         end
+
         settings.limits[t] = {
-          selector = selector,
-          buckets = bucket
+          buckets = buckets
         }
 
+        if lim.selector then
+          local selector = lua_selectors.parse_selector(rspamd_config, lim.selector)
+          if not selector then
+            rspamd_logger.errx(rspamd_config, 'bad ratelimit selector for %s: "%s"',
+                t, lim.selector)
+            settings.limits[t] = nil
+            return
+          end
+
+          settings.limits[t].selector = selector
+        end
       else
+        rspamd_logger.warnx(rspamd_config, 'old syntax for ratelimits: %s', lim)
         buckets = parse_limit(t, lim)
-        if buckets and #buckets > 0 then
+        if buckets then
           settings.limits[t] = {
-            buckets = buckets
+            buckets = {buckets}
           }
         end
       end
     end, opts['rates'])
   end
 
-  local enabled_limits = fun.totable(fun.map(function(t)
-    return t
+  -- Display what's enabled
+  fun.each(function(s)
+    rspamd_logger.infox(rspamd_config, 'enabled ratelimit: %s', s)
+  end, fun.map(function(n,d)
+    return string.format('%s [%s]', n,
+        table.concat(fun.totable(fun.map(function(v)
+          return string.format('%s msgs burst, %s msgs/sec rate',
+              v.burst, v.rate)
+        end, d.buckets)), '; ')
+    )
   end, settings.limits))
-  rspamd_logger.infox(rspamd_config,
-          'enabled rate buckets: [%1]', table.concat(enabled_limits, ','))
 
   -- Ret, ret, ret: stupid legacy stuff:
   -- If we have a string with commas then load it as as static map

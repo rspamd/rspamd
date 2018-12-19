@@ -52,7 +52,7 @@ define(["jquery"],
                 headers: headers,
                 success: function (json) {
                     cleanTextUpload(source);
-                    if (json[0].data.success) {
+                    if (json[0].status === true) {
                         rspamd.alertMessage("alert-success", "Data successfully uploaded");
                     }
                 }

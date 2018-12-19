@@ -1,0 +1,30 @@
+From: <admin@aaa.example.com>
+To: <ragamuffin@bbb.example.com>
+Subject: Test content type
+Date: Tue, 17 Jul 2018 18:06:01 +0200 (CEST)
+Message-ID: <20180717160601.B25511E37E7@aaa.example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="sd8f70as98f70as98f70as98f70as98df70as98df7as90f87as90d8f7"
+ 
+--sd8f70as98f70as98f70as98f70as98df70as98df7as90f87as90d8f7
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/html; charset=utf-8
+Content-Disposition: inline
+
+<html>
+<body style=3D"font-family:arial">
+Hello world
+</body>
+</html>
+
+--sd8f70as98f70as98f70as98f70as98df70as98df7as90f87as90d8f7
+Content-ID: <qrcode>
+Content-Transfer-Encoding: base64
+Content-Type: image/jpeg
+Content-Disposition: inline
+
+alskfhaslkfjhlaskfjhlaskjfhlaskjfhlaksjfhklasjfhklasdjfhlask
+lksjdfhalskjfhklasjfhlaskfhlaskfhklasfhklasdjfhlkasdjfhklasd
+
+--sd8f70as98f70as98f70as98f70as98df70as98df7as90f87as90d8f7--
+

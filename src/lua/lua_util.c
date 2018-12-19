@@ -18,7 +18,10 @@
 #include "tokenizers/tokenizers.h"
 #include "unix-std.h"
 #include "contrib/zstd/zstd.h"
+#include "contrib/uthash/utlist.h"
 #include "libmime/email_addr.h"
+#include "libmime/content_type.h"
+#include "libmime/mime_headers.h"
 #include "linenoise.h"
 #include <math.h>
 #include <glob.h>
@@ -58,6 +61,14 @@ LUA_FUNCTION_DEF (util, config_from_ucl);
  * @return {rspamd_text} encoded data chunk
  */
 LUA_FUNCTION_DEF (util, encode_base64);
+/***
+ * @function util.encode_qp(input[, str_len, [newlines_type]])
+ * Encodes data in quouted printable breaking lines if needed
+ * @param {text or string} input input data
+ * @param {number} str_len optional size of lines or 0 if split is not needed
+ * @return {rspamd_text} encoded data chunk
+ */
+LUA_FUNCTION_DEF (util, encode_qp);
 /***
  * @function util.decode_base64(input)
  * Decodes data from base64 ignoring whitespace characters
@@ -539,6 +550,29 @@ LUA_FUNCTION_DEF (util, caseless_hash_fast);
  */
 LUA_FUNCTION_DEF (util, get_hostname);
 
+/***
+ *  @function util.parse_content_type(ct_string, mempool)
+ * Parses content-type string to a table:
+ * - `type`
+ * - `subtype`
+ * - `charset`
+ * - `boundary`
+ * - other attributes
+ *
+ * @param {string} ct_string content type as string
+ * @param {rspamd_mempool} mempool needed to store temporary data (e.g. task pool)
+ * @return table or nil if cannot parse content type
+ */
+LUA_FUNCTION_DEF (util, parse_content_type);
+
+/***
+ *  @function util.mime_header_encode(hdr)
+ * Encodes header if needed
+ * @param {string} hdr input header
+ * @return encoded header
+ */
+LUA_FUNCTION_DEF (util, mime_header_encode);
+
 
 static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, create_event_base),
@@ -546,6 +580,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, config_from_ucl),
 	LUA_INTERFACE_DEF (util, process_message),
 	LUA_INTERFACE_DEF (util, encode_base64),
+	LUA_INTERFACE_DEF (util, encode_qp),
 	LUA_INTERFACE_DEF (util, decode_base64),
 	LUA_INTERFACE_DEF (util, encode_base32),
 	LUA_INTERFACE_DEF (util, decode_base32),
@@ -591,6 +626,8 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, umask),
 	LUA_INTERFACE_DEF (util, isatty),
 	LUA_INTERFACE_DEF (util, get_hostname),
+	LUA_INTERFACE_DEF (util, parse_content_type),
+	LUA_INTERFACE_DEF (util, mime_header_encode),
 	LUA_INTERFACE_DEF (util, pack),
 	LUA_INTERFACE_DEF (util, unpack),
 	LUA_INTERFACE_DEF (util, packsize),
@@ -734,7 +771,7 @@ lua_util_config_from_ucl (lua_State *L)
 		cfg->lua_state = L;
 
 		cfg->rcl_obj = obj;
-		cfg->cache = rspamd_symbols_cache_new (cfg);
+		cfg->cache = rspamd_symcache_new (cfg);
 		top = rspamd_rcl_config_init (cfg, NULL);
 
 		if (!rspamd_rcl_parse (top, cfg, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
@@ -743,6 +780,11 @@ lua_util_config_from_ucl (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
+
+			if (int_options & RSPAMD_CONFIG_INIT_LIBS) {
+				cfg->libs_ctx = rspamd_init_libs ();
+			}
+
 			rspamd_config_post_load (cfg, int_options);
 			pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
 			rspamd_lua_setclass (L, "rspamd{config}", -1);
@@ -780,8 +822,7 @@ lua_util_process_message (lua_State *L)
 	if (cfg != NULL && message != NULL) {
 		base = event_init ();
 		rspamd_init_filters (cfg, FALSE);
-		task = rspamd_task_new (NULL, cfg, NULL, NULL);
-		task->ev_base = base;
+		task = rspamd_task_new (NULL, cfg, NULL, NULL, base);
 		task->msg.begin = rspamd_mempool_alloc (task->task_pool, mlen);
 		rspamd_strlcpy ((gpointer)task->msg.begin, message, mlen);
 		task->msg.len = mlen;
@@ -881,6 +922,70 @@ lua_util_encode_base64 (lua_State *L)
 
 			out = rspamd_encode_base64_fold (s, inlen, str_lim, &outlen, how);
 		}
+
+		if (out != NULL) {
+			t = lua_newuserdata (L, sizeof (*t));
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+			t->start = out;
+			t->len = outlen;
+			/* Need destruction */
+			t->flags = RSPAMD_TEXT_FLAG_OWN;
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_encode_qp (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t;
+	const gchar *s = NULL;
+	gchar *out;
+	gsize inlen, outlen;
+	guint str_lim = 0;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		s = luaL_checklstring (L, 1, &inlen);
+	}
+	else if (lua_type (L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text (L, 1);
+
+		if (t != NULL) {
+			s = t->start;
+			inlen = t->len;
+		}
+	}
+
+	if (lua_gettop (L) > 1) {
+		str_lim = luaL_checknumber (L, 2);
+	}
+
+	if (s == NULL) {
+		lua_pushnil (L);
+	}
+	else {
+		enum rspamd_newlines_type how = RSPAMD_TASK_NEWLINES_CRLF;
+
+		if (lua_type (L, 3) == LUA_TSTRING) {
+			const gchar *how_str = lua_tostring (L, 3);
+
+			if (g_ascii_strcasecmp (how_str, "cr") == 0) {
+				how = RSPAMD_TASK_NEWLINES_CR;
+			}
+			else if (g_ascii_strcasecmp (how_str, "lf") == 0) {
+				how = RSPAMD_TASK_NEWLINES_LF;
+			}
+			else if (g_ascii_strcasecmp (how_str, "crlf") != 0) {
+				return luaL_error (L, "invalid newline style: %s", how_str);
+			}
+		}
+
+		out = rspamd_encode_qp_fold (s, inlen, str_lim, &outlen, how);
 
 		if (out != NULL) {
 			t = lua_newuserdata (L, sizeof (*t));
@@ -1116,7 +1221,7 @@ lua_util_tokenize_text (lua_State *L)
 					ex = g_malloc0 (sizeof (*ex));
 					ex->pos = pos;
 					ex->len = ex_len;
-					ex->type = RSPAMD_EXCEPTION_URL;
+					ex->type = RSPAMD_EXCEPTION_GENERIC;
 					exceptions = g_list_prepend (exceptions, ex);
 				}
 			}
@@ -1140,7 +1245,7 @@ lua_util_tokenize_text (lua_State *L)
 			&utxt,
 			RSPAMD_TOKENIZE_UTF, NULL,
 			exceptions,
-			NULL);
+			NULL, NULL);
 
 	if (res == NULL) {
 		lua_pushnil (L);
@@ -1150,7 +1255,7 @@ lua_util_tokenize_text (lua_State *L)
 
 		for (i = 0; i < res->len; i ++) {
 			w = &g_array_index (res, rspamd_stat_token_t, i);
-			lua_pushlstring (L, w->begin, w->len);
+			lua_pushlstring (L, w->original.begin, w->original.len);
 			lua_rawseti (L, -2, i + 1);
 		}
 	}
@@ -1873,7 +1978,7 @@ lua_util_create_file (lua_State *L)
 			mode = lua_tointeger (L, 2);
 		}
 
-		fd = rspamd_file_xopen (fpath, O_RDWR | O_CREAT | O_EXCL, mode, 0);
+		fd = rspamd_file_xopen (fpath, O_RDWR | O_CREAT | O_TRUNC, mode, 0);
 
 		if (fd == -1) {
 			lua_pushnil (L);
@@ -2432,6 +2537,98 @@ lua_util_get_hostname (lua_State *L)
 }
 
 static gint
+lua_util_parse_content_type (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	gsize len;
+	const gchar *ct_str = luaL_checklstring (L, 1, &len);
+	rspamd_mempool_t *pool = rspamd_lua_check_mempool (L, 2);
+	struct rspamd_content_type *ct;
+
+	if (!ct_str || !pool) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	ct = rspamd_content_type_parse (ct_str, len, pool);
+
+	if (ct == NULL) {
+		lua_pushnil (L);
+	}
+	else {
+		GHashTableIter it;
+		gpointer k, v;
+
+		lua_createtable (L, 0, 4 + (ct->attrs ? g_hash_table_size (ct->attrs) : 0));
+
+		if (ct->type.len > 0) {
+			lua_pushstring (L, "type");
+			lua_pushlstring (L, ct->type.begin, ct->type.len);
+			lua_settable (L, -3);
+		}
+
+		if (ct->subtype.len > 0) {
+			lua_pushstring (L, "subtype");
+			lua_pushlstring (L, ct->subtype.begin, ct->subtype.len);
+			lua_settable (L, -3);
+		}
+
+		if (ct->charset.len > 0) {
+			lua_pushstring (L, "charset");
+			lua_pushlstring (L, ct->charset.begin, ct->charset.len);
+			lua_settable (L, -3);
+		}
+
+		if (ct->orig_boundary.len > 0) {
+			lua_pushstring (L, "boundary");
+			lua_pushlstring (L, ct->orig_boundary.begin, ct->orig_boundary.len);
+			lua_settable (L, -3);
+		}
+
+		if (ct->attrs) {
+			g_hash_table_iter_init (&it, ct->attrs);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				struct rspamd_content_type_param *param =
+						(struct rspamd_content_type_param *)v, *cur;
+				guint i = 1;
+
+				lua_pushlstring (L, param->name.begin, param->name.len);
+				lua_createtable (L, 1, 0);
+
+				DL_FOREACH (param, cur) {
+					lua_pushlstring (L, cur->value.begin, cur->value.len);
+					lua_rawseti (L, -2, i++);
+				}
+
+				lua_settable (L, -3);
+			}
+		}
+	}
+
+	return 1;
+}
+
+
+static gint
+lua_util_mime_header_encode (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	gsize len;
+	const gchar *hdr = luaL_checklstring (L, 1, &len);
+	gchar *encoded;
+
+	if (!hdr) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	encoded = rspamd_mime_header_encode (hdr, len);
+	lua_pushstring (L, encoded);
+	g_free (encoded);
+
+	return 1;
+}
+
+static gint
 lua_util_is_valid_utf8 (lua_State *L)
 {
 	LUA_TRACE_POINT;
@@ -2454,7 +2651,7 @@ static gint
 lua_util_readline (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *prompt = NULL;
+	const gchar *prompt = "";
 	gchar *input;
 
 	if (lua_type (L, 1) == LUA_TSTRING) {

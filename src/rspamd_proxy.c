@@ -38,6 +38,8 @@
 #include "libmime/lang_detection.h"
 #include "contrib/zstd/zstd.h"
 
+#include <math.h>
+
 #ifdef HAVE_NETINET_TCP_H
 #include <netinet/tcp.h> /* for TCP_NODELAY */
 #endif
@@ -416,6 +418,7 @@ rspamd_proxy_parse_upstream (rspamd_mempool_t *pool,
 
 	if (elt) {
 		up->u = rspamd_upstreams_create (ctx->cfg->ups_ctx);
+
 		if (!rspamd_upstreams_from_ucl (up->u, elt, 11333, NULL)) {
 			g_set_error (err, rspamd_proxy_quark (), 100,
 					"upstream has bad hosts definition");
@@ -1691,7 +1694,8 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 
 	msg = session->client_message;
 	task = rspamd_task_new (session->worker, session->ctx->cfg,
-			session->pool, session->ctx->lang_det);
+			session->pool, session->ctx->lang_det,
+			session->ctx->ev_base);
 	task->flags |= RSPAMD_TASK_FLAG_MIME;
 	task->sock = -1;
 
@@ -1707,7 +1711,6 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 	task->resolver = session->ctx->resolver;
 	/* TODO: allow to disable autolearn in protocol */
 	task->flags |= RSPAMD_TASK_FLAG_LEARN_AUTO;
-	task->ev_base = session->ctx->ev_base;
 	task->s = rspamd_session_create (task->task_pool, rspamd_proxy_task_fin,
 			NULL, (event_finalizer_t )rspamd_task_free, task);
 	data = rspamd_http_message_get_body (msg, &len);
@@ -1744,6 +1747,17 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 		event_base_set (session->ctx->ev_base, &task->timeout_ev);
 		double_to_tv (session->ctx->default_upstream->timeout, &task_tv);
 		event_add (&task->timeout_ev, &task_tv);
+	}
+	else if (session->ctx->has_self_scan) {
+		if (session->ctx->cfg->task_timeout > 0) {
+			struct timeval task_tv;
+
+			event_set (&task->timeout_ev, -1, EV_TIMEOUT, rspamd_task_timeout,
+					task);
+			event_base_set (session->ctx->ev_base, &task->timeout_ev);
+			double_to_tv (session->ctx->cfg->task_timeout, &task_tv);
+			event_add (&task->timeout_ev, &task_tv);
+		}
 	}
 
 	session->master_conn->task = task;
@@ -2157,6 +2171,34 @@ proxy_rotate_key (gint fd, short what, void *arg)
 	rspamd_keypair_unref (kp);
 }
 
+static void
+adjust_upstreams_limits (struct rspamd_proxy_ctx *ctx)
+{
+	struct rspamd_http_upstream *backend;
+	gpointer k, v;
+	GHashTableIter it;
+
+	/*
+	 * We set error time equal to max_retries * backend_timeout and max_errors
+	 * to max_retries - 1
+	 *
+	 * So if we failed to scan a message on a backend for some reasons, we
+	 * will try to re-resolve it faster
+	 */
+
+	g_hash_table_iter_init (&it, ctx->upstreams);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		backend = (struct rspamd_http_upstream *)v;
+
+		if (!backend->self_scan && backend->u) {
+			rspamd_upstreams_set_limits (backend->u,
+					NAN, NAN, ctx->max_retries * backend->timeout, NAN,
+					ctx->max_retries - 1, 0);
+		}
+	}
+}
+
 void
 start_rspamd_proxy (struct rspamd_worker *worker) {
 	struct rspamd_proxy_ctx *ctx = worker->ctx;
@@ -2207,6 +2249,7 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
 			worker);
+	adjust_upstreams_limits (ctx);
 
 	event_base_loop (ctx->ev_base, 0);
 	rspamd_worker_block_signals ();

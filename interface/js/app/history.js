@@ -27,7 +27,22 @@
 define(["jquery", "footable", "humanize"],
     function ($, _, Humanize) {
         "use strict";
-        var rows_per_page = 25;
+        var page_size = {
+            errors: 25,
+            history: 25
+        };
+
+        function set_page_size(n, callback) {
+            if (n !== page_size.history && n > 0) {
+                page_size.history = n;
+                if (callback) {
+                    return callback(n);
+                }
+            }
+            return null;
+        }
+
+        set_page_size($("#history_page_size").val());
 
         var ui = {};
         var prevVersion = null;
@@ -177,24 +192,36 @@ define(["jquery", "footable", "humanize"],
                         return {full:full, shrt:shrt};
                     }
 
+                    function get_symbol_class(name, score) {
+                        if (name.match(/^GREYLIST$/)) {
+                            return "symbol-special";
+                        }
+
+                        if (score < 0) {
+                            return "symbol-negative";
+                        } else if (score > 0) {
+                            return "symbol-positive";
+                        }
+                        return null;
+                    }
+
                     preprocess_item(item);
                     Object.keys(item.symbols).forEach(function (key) {
-                        var str = null;
                         var sym = item.symbols[key];
+                        sym.str = '<span class="symbol-default ' + get_symbol_class(sym.name, sym.score) + '"><strong>';
 
                         if (sym.description) {
-                            str = "<strong><abbr data-sym-key=\"" + key + "\">" + sym.name + "</abbr></strong>(" + sym.score + ")";
-
+                            sym.str += '<abbr data-sym-key="' + key + '">' +
+                                sym.name + "</abbr></strong> (" + sym.score + ")</span>";
                             // Store description for tooltip
                             symbolDescriptions[key] = sym.description;
                         } else {
-                            str = "<strong>" + sym.name + "</strong>(" + sym.score + ")";
+                            sym.str += sym.name + "</strong> (" + sym.score + ")</span>";
                         }
 
                         if (sym.options) {
-                            str += "[" + sym.options.join(",") + "]";
+                            sym.str += " [" + sym.options.join(",") + "]";
                         }
-                        sym.str = str;
                     });
                     unsorted_symbols.push(item.symbols);
                     item.symbols = sort_symbols(item.symbols, compare_function);
@@ -204,8 +231,7 @@ define(["jquery", "footable", "humanize"],
                             sortValue: item.unix_time
                         }
                     };
-                    var scan_time = item.time_real.toFixed(3) + " / " +
-                item.time_virtual.toFixed(3);
+                    var scan_time = item.time_real.toFixed(3) + " / " + item.time_virtual.toFixed(3);
                     item.scan_time = {
                         options: {
                             sortValue: item.time_real
@@ -370,7 +396,7 @@ define(["jquery", "footable", "humanize"],
                 formatter: Humanize.compactInteger
             }, {
                 name: "scan_time",
-                title: "Scan time",
+                title: '<span title="real / virtual">Scan time</span>',
                 breakpoints: "xs sm md",
                 style: {
                     "font-size": "11px",
@@ -458,7 +484,7 @@ define(["jquery", "footable", "humanize"],
                 formatter: Humanize.compactInteger
             }, {
                 name: "scan_time",
-                title: "Scan time",
+                title: '<span title="real / virtual">Scan time</span>',
                 breakpoints: "xs sm",
                 style: {
                     "font-size": "11px",
@@ -600,7 +626,7 @@ define(["jquery", "footable", "humanize"],
                 paging: {
                     enabled: true,
                     limit: 5,
-                    size: rows_per_page
+                    size: page_size.history
                 },
                 filtering: {
                     enabled: true,
@@ -641,7 +667,7 @@ define(["jquery", "footable", "humanize"],
             function waitForRowsDisplayed(rows_total, callback, iteration) {
                 var i = (typeof iteration === "undefined") ? 10 : iteration;
                 var num_rows = $("#historyTable > tbody > tr").length;
-                if (num_rows === rows_per_page ||
+                if (num_rows === page_size.history ||
                     num_rows === rows_total) {
                     return callback();
                 } else if (--i) {
@@ -731,6 +757,9 @@ define(["jquery", "footable", "humanize"],
                 var order = this.value;
                 change_symbols_order(order);
             });
+            $("#history_page_size").change(function () {
+                set_page_size(this.value, function (n) { tables.history.pageSize(n); });
+            });
             $(document).on("click", ".btn-sym-order button", function () {
                 var order = this.value;
                 $("#selSymOrder").val(order);
@@ -771,7 +800,7 @@ define(["jquery", "footable", "humanize"],
                 paging: {
                     enabled: true,
                     limit: 5,
-                    size: rows_per_page
+                    size: page_size.errors
                 },
                 filtering: {
                     enabled: true,

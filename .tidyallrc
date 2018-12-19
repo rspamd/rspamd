@@ -1,0 +1,25 @@
+; Run "tidyall -a" to process all files.
+; Run "tidyall -g" to process all added or modified files in the current git working directory.
+
+; Ignore third-party code
+ignore = contrib/**/* doc/doxydown/doxydown.pl
+
+;[PerlCritic]
+;select = **/*.{pl,pl.in,pm,t}
+
+[PerlTidy]
+select = **/*.{pl,pl.in,pm,t}
+argv = -l=120
+
+[PodChecker]
+select = **/*.{pl,pl.in,pm,pod}
+
+;[PodSpell]
+;select = **/*.{pl,pl.in,pm,pod}
+
+[PodTidy]
+select = **/*.{pl,pl.in,pm,pod}
+columns = 120
+
+[Test::Vars]
+select = **/*.{pl,pl.in,pm,t}

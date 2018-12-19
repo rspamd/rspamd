@@ -29,6 +29,8 @@
 #include "libutil/regexp.h"
 #include "libserver/url.h"
 
+#include <openssl/err.h>
+
 #define ENCRYPTED_VERSION " HTTP/1.0"
 
 struct _rspamd_http_privbuf {
@@ -43,6 +45,7 @@ enum rspamd_http_priv_flags {
 	RSPAMD_HTTP_CONN_FLAG_NEW_HEADER = 1 << 1,
 	RSPAMD_HTTP_CONN_FLAG_RESETED = 1 << 2,
 	RSPAMD_HTTP_CONN_FLAG_TOO_LARGE = 1 << 3,
+	RSPAMD_HTTP_CONN_FLAG_ENCRYPTION_NEEDED = 1 << 4,
 };
 
 #define IS_CONN_ENCRYPTED(c) ((c)->flags & RSPAMD_HTTP_CONN_FLAG_ENCRYPTED)
@@ -430,7 +433,7 @@ rspamd_http_parse_key (rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 
 	if (priv->local_key == NULL) {
 		/* In this case we cannot do anything, e.g. we cannot decrypt payload */
-		priv->flags |= RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
+		priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_ENCRYPTED;
 	}
 	else {
 		/* Check sanity of what we have */
@@ -912,6 +915,12 @@ rspamd_http_on_message_complete (http_parser * parser)
 
 	priv = conn->priv;
 
+	if ((conn->opts & RSPAMD_HTTP_REQUIRE_ENCRYPTION) && !IS_CONN_ENCRYPTED (priv)) {
+		priv->flags |= RSPAMD_HTTP_CONN_FLAG_ENCRYPTION_NEEDED;
+		msg_err ("unencrypted connection when encryption has been requested");
+		return -1;
+	}
+
 	if ((conn->opts & RSPAMD_HTTP_BODY_PARTIAL) == 0 && IS_CONN_ENCRYPTED (priv)) {
 		mode = rspamd_keypair_alg (priv->local_key);
 
@@ -1178,8 +1187,12 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 							"Request entity too large: %zu",
 							(size_t)priv->parser.content_length);
 				}
+				else if (priv->flags & RSPAMD_HTTP_CONN_FLAG_ENCRYPTION_NEEDED) {
+					err = g_error_new (HTTP_ERROR, 400,
+							"Encryption required");
+				}
 				else {
-					err = g_error_new (HTTP_ERROR, priv->parser.http_errno,
+					err = g_error_new (HTTP_ERROR, 500 + priv->parser.http_errno,
 							"HTTP parser error: %s",
 							http_errno_description (priv->parser.http_errno));
 				}
@@ -2184,7 +2197,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 		}
 		else {
 			/* Invalid body for spamc method */
-			g_assert (0);
+			abort ();
 		}
 	}
 
@@ -2327,7 +2340,10 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 					priv->ptv, rspamd_http_event_handler,
 					rspamd_http_ssl_err_handler, conn)) {
 
-				err = g_error_new (HTTP_ERROR, errno, "ssl connection error");
+				err = g_error_new (HTTP_ERROR, errno,
+						"ssl connection error: ssl error=%s, errno=%s",
+						ERR_error_string (ERR_get_error (), NULL),
+						strerror (errno));
 				rspamd_http_connection_ref (conn);
 				conn->error_handler (conn, err);
 				rspamd_http_connection_unref (conn);

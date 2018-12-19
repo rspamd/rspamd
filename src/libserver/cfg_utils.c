@@ -47,6 +47,8 @@
 #define DEFAULT_MAX_SHOTS 100
 #define DEFAULT_MAX_SESSIONS 100
 #define DEFAULT_MAX_WORKERS 4
+/* Timeout for task processing */
+#define DEFAULT_TASK_TIMEOUT 8.0
 
 struct rspamd_ucl_map_cbdata {
 	struct rspamd_config *cfg;
@@ -131,8 +133,9 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	/* 16 sockets per DNS server */
 	cfg->dns_io_per_server = 16;
 
-	/* 20 Kb */
-	cfg->max_diff = 20480;
+	/* Disable timeout */
+	cfg->task_timeout = DEFAULT_TASK_TIMEOUT;
+
 
 	rspamd_config_init_metric (cfg);
 	cfg->composite_symbols =
@@ -179,7 +182,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 		cfg->lua_thread_pool = lua_thread_pool_new (cfg->lua_state);
 	}
 
-	cfg->cache = rspamd_symbols_cache_new (cfg);
+	cfg->cache = rspamd_symcache_new (cfg);
 	cfg->ups_ctx = rspamd_upstreams_library_init ();
 	cfg->re_cache = rspamd_re_cache_new ();
 	cfg->doc_strings = ucl_object_typed_new (UCL_OBJECT);
@@ -228,7 +231,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 
 	g_list_free (cfg->classifiers);
 	g_list_free (cfg->workers);
-	rspamd_symbols_cache_destroy (cfg->cache);
+	rspamd_symcache_destroy (cfg->cache);
 	ucl_object_unref (cfg->rcl_obj);
 	ucl_object_unref (cfg->config_comments);
 	ucl_object_unref (cfg->doc_strings);
@@ -804,7 +807,7 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 		lua_settop (L, err_idx - 1);
 
 		/* Init config cache */
-		rspamd_symbols_cache_init (cfg->cache);
+		rspamd_symcache_init (cfg->cache);
 
 		/* Init re cache */
 		rspamd_re_cache_init (cfg->re_cache, cfg);
@@ -861,7 +864,7 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 			ret = FALSE;
 		}
 
-		ret = rspamd_symbols_cache_validate (cfg->cache, cfg, FALSE) && ret;
+		ret = rspamd_symcache_validate (cfg->cache, cfg, FALSE) && ret;
 	}
 
 	if (opts & RSPAMD_CONFIG_INIT_PRELOAD_MAPS) {
@@ -971,7 +974,10 @@ rspamd_config_new_classifier (struct rspamd_config *cfg,
 		c =
 			rspamd_mempool_alloc0 (cfg->cfg_pool,
 				sizeof (struct rspamd_classifier_config));
+		c->min_prob_strength = 0.05;
+		c->min_token_hits = 2;
 	}
+
 	if (c->labels == NULL) {
 		c->labels = g_hash_table_new_full (rspamd_str_hash,
 				rspamd_str_equal,
@@ -1229,8 +1235,8 @@ symbols_classifiers_callback (gpointer key, gpointer value, gpointer ud)
 	struct rspamd_config *cfg = ud;
 
 	/* Actually, statistics should act like any ordinary symbol */
-	rspamd_symbols_cache_add_symbol (cfg->cache, key, 0, NULL, NULL,
-			SYMBOL_TYPE_CLASSIFIER|SYMBOL_TYPE_NOSTAT, -1);
+	rspamd_symcache_add_symbol (cfg->cache, key, 0, NULL, NULL,
+			SYMBOL_TYPE_CLASSIFIER | SYMBOL_TYPE_NOSTAT, -1);
 }
 
 void
@@ -1467,6 +1473,7 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 	module_t *mod, **pmod;
 	guint i = 0;
 	struct module_ctx *mod_ctx, *cur_ctx;
+	gboolean ret = TRUE;
 
 	/* Init all compiled modules */
 
@@ -1501,11 +1508,19 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 			mod_ctx->enabled = rspamd_config_is_module_enabled (cfg, mod->name);
 
 			if (reconfig) {
-				(void)mod->module_reconfig_func (cfg);
-				msg_info_config ("reconfig of %s", mod->name);
+				if (!mod->module_reconfig_func (cfg)) {
+					msg_err_config ("reconfig of %s failed!", mod->name);
+				}
+				else {
+					msg_info_config ("reconfig of %s", mod->name);
+				}
+
 			}
 			else {
-				(void)mod->module_config_func (cfg);
+				if (!mod->module_config_func (cfg)) {
+					msg_info_config ("config of %s failed!", mod->name);
+					ret = FALSE;
+				}
 			}
 		}
 
@@ -1516,7 +1531,9 @@ rspamd_init_filters (struct rspamd_config *cfg, bool reconfig)
 		cur = g_list_next (cur);
 	}
 
-	return rspamd_init_lua_filters (cfg, 0);
+	ret = rspamd_init_lua_filters (cfg, 0) && ret;
+
+	return ret;
 }
 
 static void
@@ -1555,10 +1572,12 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 	/* Search for symbol group */
 	if (group == NULL) {
 		group = "ungrouped";
-	}
-
-	if (strcmp (group, "ungrouped") == 0) {
 		sym_def->flags |= RSPAMD_SYMBOL_FLAG_UNGROUPPED;
+	}
+	else {
+		if (strcmp (group, "ungrouped") == 0) {
+			sym_def->flags |= RSPAMD_SYMBOL_FLAG_UNGROUPPED;
+		}
 	}
 
 	sym_group = g_hash_table_lookup (cfg->groups, group);
@@ -1569,6 +1588,10 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 
 	sym_def->gr = sym_group;
 	g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
+
+	if (!(sym_def->flags & RSPAMD_SYMBOL_FLAG_UNGROUPPED)) {
+		g_ptr_array_add (sym_def->groups, sym_group);
+	}
 }
 
 

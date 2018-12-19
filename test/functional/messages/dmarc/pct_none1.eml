@@ -1,0 +1,17 @@
+Date: Tue, 09 Aug 2016 10:01:27 +0200
+Message-ID: <20160809100128@rspamd.tk>
+From: Rspamd <foo@subdomain.zero_pct.com>
+To: foo@rspamd.tk
+Subject: hello
+Content-Type: text/plain; charset=utf-8; format=flowed; DelSp=Yes
+MIME-Version: 1.0
+Content-Disposition: inline
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=rspamd.tk; s=testdkim;
+	t=1470729879; h=from:subject:date:message-id:to:mime-version:content-type;
+	bh=7HkRgYnNru3SR2EWfgWU8yhM0MOH6ZZrPoEIgNIh8wc=;
+	b=kTIV4jcgv9sWFh2JFrS/+PcNxiloituqjmHHqeJOTfa+/9C+Er8BjnMysTJyYVq36Gnv0OZDgLr3Yy4YP5Lzbt1M9ZdN5cJqO7yn1N7wyaGfkt++b09rIYBy5Dkk7OWyP3cDThqDzv8C9heSvqBSEsirFsbt3Wx2g/hWiJlnjew=
+
+
+hello
+
+

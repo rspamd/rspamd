@@ -20,7 +20,7 @@
 #include "config.h"
 #include "mem_pool.h"
 #include "upstream.h"
-#include "symbols_cache.h"
+#include "rspamd_symcache.h"
 #include "cfg_rcl.h"
 #include "ucl.h"
 #include "regexp.h"
@@ -174,6 +174,8 @@ struct rspamd_classifier_config {
 	gchar *name;                                    /**< unique name of classifier							*/
 	guint32 min_tokens;                             /**< minimal number of tokens to process classifier 	*/
 	guint32 max_tokens;                             /**< maximum number of tokens							*/
+	guint min_token_hits;                           /**< minimum number of hits for a token to be considered */
+	gdouble min_prob_strength;                      /**< use only tokens with probability in [0.5 - MPS, 0.5 + MPS] */
 	guint min_learns;                               /**< minimum number of learns for each statfile			*/
 	guint flags;
 };
@@ -315,14 +317,15 @@ struct rspamd_config {
 	gboolean disable_pcre_jit;                      /**< Disable pcre JIT									*/
 	gboolean disable_lua_squeeze;                   /**< Disable lua rules squeezing						*/
 	gboolean own_lua_state;                         /**< True if we have created lua_state internally		*/
+	gboolean soft_reject_on_timeout;                /**< If true emit soft reject on task timeout (if not reject) */
 
-	gsize max_diff;                                 /**< maximum diff size for text parts					*/
 	gsize max_cores_size;                           /**< maximum size occupied by rspamd core files			*/
 	gsize max_cores_count;                          /**< maximum number of core files						*/
 	gchar *cores_dir;                               /**< directory for core files							*/
 	gsize max_message;                              /**< maximum size for messages							*/
 	gsize max_pic_size;                             /**< maximum size for a picture to process				*/
 	gsize images_cache_size;                        /**< size of LRU cache for DCT data from images			*/
+	gdouble task_timeout;                           /**< maximum message processing time					*/
 	gint default_max_shots;                         /**< default maximum count of symbols hits permitted (-1 for unlimited) */
 
 	enum rspamd_log_type log_type;                  /**< log type											*/
@@ -334,7 +337,6 @@ struct rspamd_config {
 	guint32 log_buf_size;                           /**< length of log buffer								*/
 	const ucl_object_t *debug_ip_map;               /**< turn on debugging for specified ip addresses       */
 	gboolean log_urls;                              /**< whether we should log URLs                         */
-	GList *debug_symbols;                           /**< symbols to debug									*/
 	GHashTable *debug_modules;                      /**< logging modules to debug							*/
 	struct rspamd_cryptobox_pubkey *log_encryption_key; /**< encryption key for logs						*/
 	guint log_flags;                                /**< logging flags										*/
@@ -375,7 +377,7 @@ struct rspamd_config {
 	gdouble monitored_interval;                     /**< interval between monitored checks					*/
 	gboolean disable_monitored;                     /**< disable monitoring completely						*/
 
-	struct symbols_cache *cache;                    /**< symbols cache object								*/
+	struct rspamd_symcache *cache;                    /**< symbols cache object								*/
 	gchar *cache_filename;                          /**< filename of cache file								*/
 	gdouble cache_reload_time;                      /**< how often cache reload should be performed			*/
 	gchar * checksum;                               /**< real checksum of config file						*/

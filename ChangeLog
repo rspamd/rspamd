@@ -1,3 +1,134 @@
+1.8.3: 03 Dec 2018
+  * [CritFix] Make flags mutually exclusive for mime parts
+  * [CritFix] Strictly deny unencoded bad utf8 sequences in headers
+  * [Feature] Add Kaspersky antivirus support
+  * [Feature] Add method to get dkim results
+  * [Feature] Add more words regexp classes
+  * [Feature] Allow to choose words format in `rspamadm mime`
+  * [Feature] Allow to get all types of words from Lua
+  * [Feature] Allow to get task flags in C expressions
+  * [Feature] Allow to require encryption when accepting connections
+  * [Feature] Ignore bogus whitespaces in the words
+  * [Feature] Implement more strict configuration tests
+  * [Feature] Improve SPF results in Authentication-Results
+  * [Feature] Support ClickHouse database
+  * [Fix] Add failsafety for utf8 regexps
+  * [Fix] Do not trigger BROKEN_CONTENT_TYPE on innocent text parts
+  * [Fix] Emit error if connection has been terminated with no stop pattern
+  * [Fix] Fix boundaries checks in embedded messages
+  * [Fix] Fix double free
+  * [Fix] Perform policy downgrade on sample out, add tests
+  * [Fix] Properly escape utf8 regexps in hyperscan mode
+  * [Fix] Selectors - attachments args condition
+  * [Fix] Some fixes for raw parts
+  * [Fix] Treat learning errors as non-fatal
+  * [Fix] Use tld when looking for DKIM domains
+  * [Project] Words unicode structure rework
+  * [Project] Add preliminary Redis Sentinel support
+  * [Project] Improve Authentication-Results header
+  * [Project] Rework DKIM checks results
+  * [Project] Use more generalised API to produce meta words
+
+1.8.2: 19 Nov 2018
+  * [Conf] Add DWL support in the default configuration
+  * [Conf] Disable rspamd_update by default (again)
+  * [Conf] Fix configuration sample for ratelimit
+  * [CritFix] Disable broken url tags by default
+  * [CritFix] Fix \0 processing when doing RSA sign
+  * [CritFix] Fix adding symbols to their primary groups
+  * [Feature] Add `rspamadm cookie` utility
+  * [Feature] Add specialised functions for generating encrypted cookies
+  * [Feature] Add support of cookies in replies module
+  * [Feature] Add support of words regexps
+  * [Feature] Allow to add 3rd party clang plugins
+  * [Feature] Allow to create lua regexps from glob or plain patterns
+  * [Feature] Allow to set custom limits for upstream lists
+  * [Feature] Detect orphaned parts and attach them to message
+  * [Feature] Filter tokens in bayes
+  * [Feature] Fold b= value when doing arc sealing
+  * [Feature] Ignore cookies in the future and too old in the past
+  * [Feature] Skip stop words in statistics
+  * [Feature] Store stop words and allow to query them
+  * [Feature] Support query arguments in controller's custom commands
+  * [Feature] Tune upstream limits in Rspamd proxy
+  * [Feature] Use different callback symbols for different uribls
+  * [Feature] Write DKIM selector in dkim allow/reject symbols
+  * [Fix] Add obs_fws state support to eoh state machine
+  * [Fix] Add sanity check when applying mime boundaries heuristic
+  * [Fix] Antivirus - virus names with 0 were recognized as tables
+  * [Fix] Disable headernames in bayes temporarily
+  * [Fix] Do not allow syntax errors in include files...
+  * [Fix] Do not allow to merge an object with an array (or vice versa)
+  * [Fix] Don't perform forged recipients check for missing recipients
+  * [Fix] Fix DKIM based RBLs
+  * [Fix] Fix actrie implementation (sync from upstream), fixed OOB read
+  * [Fix] Fix explicit methods call in selectors
+  * [Fix] Fix extraction of additional parts
+  * [Fix] Fix finalization for internal plugins
+  * [Fix] Fix override_defaults function
+  * [Fix] Fix squeezed symbols when using settings
+  * [Fix] Fix urls insertion in Clickhouse module
+  * [Fix] Furhter fixes to ratelimits logic
+  * [Fix] Ignore signatures when looking for boundaries
+  * [Fix] Properly set learned count
+  * [Fix] Really fix ratelimits configuration and work
+  * [Fix] Remove ambigious format flag from printf
+  * [Fix] Restore URLs exporting in ClickHouse plugin
+  * [Fix] Rework bayes calculations...
+  * [Fix] Switch from chi-square to naive for large Fisher value
+  * [Fix] Treat normal password as enable password if there is no enable password
+  * [Fix] Use proper syntax for making DNS requests
+  * [Fix] Various fixes in embedded plugins
+  * [Project] Change fuzzy check selection logic to lua_fuzzy library
+  * [Project] Rework async events and symbols
+  * [Project] Move all metatokens in Bayes to lua_stat from C
+  * [WebUI] Add history rows per page control
+
+1.8.1: 16 Oct 2018
+  * [CritFix] Fix options insertion
+  * [CritFix] Fix words decay one more time (affects long messages)
+  * [CritFix] Increase default words_decay
+  * [CritFix] Plug memory leak in redis pool
+  * [Feature] Add `check_violation` feature to DKIM/ARC signing
+  * [Feature] Add only unique elements to Clickhouse url arrays
+  * [Feature] Allow `g+:` and `g-:` composite atoms
+  * [Feature] Allow dkim domains check in surbl
+  * [Feature] Allow maps with HTTP auth
+  * [Feature] Allow to disable actions by users settings
+  * [Feature] Extend whitelisting options
+  * [Feature] Store url object in images
+  * [Feature] Use verdict instead of the plain action in plugins
+  * [Fix] Allow to call fstring append with NULL string
+  * [Fix] DCC - luacheck
+  * [Fix] Do not load torch on each rspamadm invocation
+  * [Fix] Fix boundaries detection and rework stop words algorithm
+  * [Fix] Fix dependencies for DNS_SIGNED symbol
+  * [Fix] Fix errors when dealing with dynamic rates/bursts in Ratelimit
+  * [Fix] Fix groups mess
+  * [Fix] Fix groups mess
+  * [Fix] Fix parsing address with comments
+  * [Fix] Fix resolving in DMARC reports
+  * [Fix] Fix various issues with parsing of the received headers
+  * [Fix] Fix watchers issue in lua_tcp when doing no resolving
+  * [Fix] Plug memory leak in language detector (affects reloads)
+  * [Fix] Remove one letter stop words
+  * [Fix] Slashing: backport chunk logic from libucl
+  * [Fix] Stop libevent from using cached time in rspamadm
+  * [Fix] Try to fix watchers chaining
+  * [Fix] Various fixes in redis sync interface
+  * [Fix] ip_score - respect check_authed and check_local settings from config
+  * [Project] Rework passthrough actions
+  * [Project] Clustering module
+  * [Rework] Always create result for a task
+  * [Rework] Completely rewrite DMARC checks logic
+  * [Rework] Rework and fix whitelist plugin
+  * [WebUI] Add symbols sorting buttons
+  * [WebUI] Change symbols order without updating history
+  * [WebUI] Colorize symbols
+  * [WebUI] Do not display password form when secure_ip is set
+  * [WebUI] Fix symbol description tooltips display
+  * [WebUI] History: add sorting by symbol score value
+
 1.8.0: 24 Sep 2018
   * [Feature] Add arguments schemas to processors and extractors
   * [Feature] Add functional selectors library

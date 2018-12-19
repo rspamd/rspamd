@@ -602,7 +602,6 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 	rspamd_ftok_t *tok;
 	GString *gs;
 	GError *err;
-	gboolean bv;
 
 	while (*fmt) {
 
@@ -966,12 +965,6 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 				g_ascii_formatd (numbuf, sizeof (numbuf), dtoabuf, (double)f);
 				slen = strlen (numbuf);
 				RSPAMD_PRINTF_APPEND (numbuf, slen);
-
-				continue;
-
-			case 'B':
-				bv = (gboolean) va_arg (args, double);
-				RSPAMD_PRINTF_APPEND (bv ? "true" : "false", bv ? 4 : 5);
 
 				continue;
 

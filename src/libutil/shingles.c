@@ -126,7 +126,7 @@ rspamd_shingles_from_text (GArray *input,
 	rspamd_stat_token_t *word;
 	guint64 val;
 	gint i, j, k;
-	gsize hlen, beg = 0;
+	gsize hlen, ilen = 0, beg = 0, widx = 0;
 	enum rspamd_cryptobox_fast_hash_type ht;
 
 	if (pool != NULL) {
@@ -138,10 +138,19 @@ rspamd_shingles_from_text (GArray *input,
 
 	row = rspamd_fstring_sized_new (256);
 
+	for (i = 0; i < input->len; i ++) {
+		word = &g_array_index (input, rspamd_stat_token_t, i);
+
+		if (!((word->flags & RSPAMD_STAT_TOKEN_FLAG_SKIPPED)
+			|| word->stemmed.len == 0)) {
+			ilen ++;
+		}
+	}
+
 	/* Init hashes pipes and keys */
 	hashes = g_malloc (sizeof (*hashes) * RSPAMD_SHINGLE_SIZE);
-	hlen = input->len > SHINGLES_WINDOW ?
-			(input->len - SHINGLES_WINDOW + 1) : 1;
+	hlen = ilen > SHINGLES_WINDOW ?
+			(ilen - SHINGLES_WINDOW + 1) : 1;
 	keys = rspamd_shingles_get_keys_cached (key);
 
 	for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
@@ -150,11 +159,36 @@ rspamd_shingles_from_text (GArray *input,
 
 	/* Now parse input words into a vector of hashes using rolling window */
 	if (alg == RSPAMD_SHINGLES_OLD) {
-		for (i = 0; i <= (gint)input->len; i ++) {
-			if (i - beg >= SHINGLES_WINDOW || i == (gint)input->len) {
+		for (i = 0; i <= (gint)ilen; i ++) {
+			if (i - beg >= SHINGLES_WINDOW || i == (gint)ilen) {
 				for (j = beg; j < i; j ++) {
-					word = &g_array_index (input, rspamd_stat_token_t, j);
-					row = rspamd_fstring_append (row, word->begin, word->len);
+
+					word = NULL;
+					while (widx < input->len) {
+						word = &g_array_index (input, rspamd_stat_token_t, widx);
+
+						if ((word->flags & RSPAMD_STAT_TOKEN_FLAG_SKIPPED)
+							|| word->stemmed.len == 0) {
+							widx++;
+						}
+						else {
+							break;
+						}
+					}
+
+					if (word == NULL) {
+						/* Nothing but exceptions */
+						for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+							g_free (hashes[i]);
+						}
+
+						g_free (hashes);
+
+						return NULL;
+					}
+
+					row = rspamd_fstring_append (row, word->stemmed.begin,
+							word->stemmed.len);
 				}
 
 				/* Now we need to create a new row here */
@@ -166,13 +200,14 @@ rspamd_shingles_from_text (GArray *input,
 				}
 
 				beg++;
+				widx ++;
 
 				row = rspamd_fstring_assign (row, "", 0);
 			}
 		}
 	}
 	else {
-		guint64 res[SHINGLES_WINDOW * RSPAMD_SHINGLE_SIZE], seed;
+		guint64 window[SHINGLES_WINDOW * RSPAMD_SHINGLE_SIZE], seed;
 
 		switch (alg) {
 		case RSPAMD_SHINGLES_XXHASH:
@@ -186,34 +221,60 @@ rspamd_shingles_from_text (GArray *input,
 			break;
 		}
 
-		memset (res, 0, sizeof (res));
-		for (i = 0; i <= (gint)input->len; i ++) {
-			if (i - beg >= SHINGLES_WINDOW || i == (gint)input->len) {
+		memset (window, 0, sizeof (window));
+		for (i = 0; i <= ilen; i ++) {
+			if (i - beg >= SHINGLES_WINDOW || i == ilen) {
 
 				for (j = 0; j < RSPAMD_SHINGLE_SIZE; j ++) {
 					/* Shift hashes window to right */
 					for (k = 0; k < SHINGLES_WINDOW - 1; k ++) {
-						res[j * SHINGLES_WINDOW + k] =
-								res[j * SHINGLES_WINDOW + k + 1];
+						window[j * SHINGLES_WINDOW + k] =
+								window[j * SHINGLES_WINDOW + k + 1];
 					}
 
-					word = &g_array_index (input, rspamd_stat_token_t, beg);
+					word = NULL;
+
+					while (widx < input->len) {
+						word = &g_array_index (input, rspamd_stat_token_t, widx);
+
+						if ((word->flags & RSPAMD_STAT_TOKEN_FLAG_SKIPPED)
+							 || word->stemmed.len == 0) {
+							widx++;
+						}
+						else {
+							break;
+						}
+					}
+
+					if (word == NULL) {
+						/* Nothing but exceptions */
+						for (i = 0; i < RSPAMD_SHINGLE_SIZE; i ++) {
+							g_free (hashes[i]);
+						}
+
+						g_free (hashes);
+
+						return NULL;
+					}
+
 					/* Insert the last element to the pipe */
 					memcpy (&seed, keys[j], sizeof (seed));
-					res[j * SHINGLES_WINDOW + SHINGLES_WINDOW - 1] =
+					window[j * SHINGLES_WINDOW + SHINGLES_WINDOW - 1] =
 							rspamd_cryptobox_fast_hash_specific (ht,
-									word->begin, word->len,
+									word->stemmed.begin, word->stemmed.len,
 									seed);
 					val = 0;
 					for (k = 0; k < SHINGLES_WINDOW; k ++) {
-						val ^= res[j * SHINGLES_WINDOW + k] >>
+						val ^= window[j * SHINGLES_WINDOW + k] >>
 								(8 * (SHINGLES_WINDOW - k - 1));
 					}
 
 					g_assert (hlen > beg);
 					hashes[j][beg] = val;
 				}
-				beg++;
+
+				beg ++;
+				widx ++;
 			}
 		}
 	}

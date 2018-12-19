@@ -143,8 +143,8 @@ rspamadm_add_doc_elt (const ucl_object_t *obj, const ucl_object_t *doc_obj,
 
 	elt = ucl_object_lookup (doc_obj, "required");
 	if (elt) {
-		rspamd_printf_fstring (&comment, " * Required: %B",
-				ucl_object_toboolean (elt));
+		rspamd_printf_fstring (&comment, " * Required: %s",
+				ucl_object_toboolean (elt) ? "true" : "false");
 		cur_comment = ucl_object_fromstring_common (comment->str, comment->len, 0);
 		rspamd_fstring_erase (comment, 0, comment->len);
 		DL_APPEND (nobj, cur_comment);
@@ -279,7 +279,7 @@ rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd
 		pworker++;
 	}
 
-	cfg->cache = rspamd_symbols_cache_new (cfg);
+	cfg->cache = rspamd_symcache_new (cfg);
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 	cfg->cfg_name = config;

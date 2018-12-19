@@ -7,9 +7,8 @@
 #include "config.h"
 #include "poly1305.h"
 #include "poly1305_internal.h"
-enum {
-	POLY1305_BLOCK_SIZE = 16
-};
+
+#define POLY1305_BLOCK_SIZE 16
 
 typedef struct poly1305_state_ref_t {
 	uint64_t r[3];

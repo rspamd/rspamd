@@ -24,6 +24,9 @@
  * This module is used to manage rspamd maps and map like objects
  *
  * @module rspamd_map
+ *
+ * All maps could be obtained by function `rspamd_config:get_maps()`
+ * Also see [`lua_maps` module description](lua_maps.html).
  */
 
 /***

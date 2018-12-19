@@ -7,6 +7,7 @@
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
+#include <stdbool.h>
 
 #include "rspamd.h"
 #include "ucl.h"
@@ -422,6 +423,39 @@ void rspamd_lua_add_ref_dtor (lua_State *L, rspamd_mempool_t *pool,
  */
 gboolean rspamd_lua_require_function (lua_State *L, const gchar *modname,
 		const gchar *funcname);
+
+/**
+ * Tries to load redis server definition from ucl object specified
+ * @param L
+ * @param obj
+ * @param cfg
+ * @return
+ */
+gboolean rspamd_lua_try_load_redis (lua_State *L, const ucl_object_t *obj,
+		struct rspamd_config *cfg, gint *ref_id);
+
+struct rspamd_stat_token_s;
+/**
+ * Pushes a single word into Lua
+ * @param L
+ * @param word
+ */
+void rspamd_lua_push_full_word (lua_State *L, struct rspamd_stat_token_s *word);
+
+enum rspamd_lua_words_type {
+	RSPAMD_LUA_WORDS_STEM = 0,
+	RSPAMD_LUA_WORDS_NORM,
+	RSPAMD_LUA_WORDS_RAW,
+	RSPAMD_LUA_WORDS_FULL
+};
+/**
+ * Pushes words (rspamd_stat_token_t) to Lua
+ * @param L
+ * @param words
+ * @param how
+ */
+gint rspamd_lua_push_words (lua_State *L, GArray *words,
+		enum rspamd_lua_words_type how);
 
 /* Paths defs */
 #define RSPAMD_CONFDIR_INDEX "CONFDIR"

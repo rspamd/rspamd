@@ -297,6 +297,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 	const gchar *start = pattern, *end, *flags_str = NULL;
 	gchar *err_str;
 	rspamd_regexp_t *res;
+	gboolean explicit_utf = FALSE;
 	PCRE_T *r;
 	gchar sep = 0, *real_pattern;
 #ifndef WITH_PCRE2
@@ -378,11 +379,13 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 				break;
 			case 'u':
 				rspamd_flags &= ~RSPAMD_REGEXP_FLAG_RAW;
+				rspamd_flags |= RSPAMD_REGEXP_FLAG_UTF;
 #ifndef WITH_PCRE2
 				regexp_flags |= PCRE_FLAG(UTF8);
 #else
 				regexp_flags |= PCRE_FLAG(UTF);
 #endif
+				explicit_utf = TRUE;
 				break;
 			case 'O':
 				/* We optimize all regexps by default */
@@ -390,6 +393,7 @@ rspamd_regexp_new (const gchar *pattern, const gchar *flags,
 				break;
 			case 'r':
 				rspamd_flags |= RSPAMD_REGEXP_FLAG_RAW;
+				rspamd_flags &= ~RSPAMD_REGEXP_FLAG_UTF;
 #ifndef WITH_PCRE2
 				regexp_flags &= ~PCRE_FLAG(UTF8);
 #else
@@ -453,7 +457,7 @@ fin:
 	if (rspamd_flags & RSPAMD_REGEXP_FLAG_RAW) {
 		res->raw_re = r;
 	}
-	else {
+	else if (!explicit_utf) {
 #ifndef WITH_PCRE2
 		res->raw_re = pcre_compile (real_pattern, regexp_flags & ~PCRE_FLAG(UTF8),
 				(const char **)&err_str, &err_off, NULL);
@@ -568,7 +572,11 @@ rspamd_regexp_search (rspamd_regexp_t *re, const gchar *text, gsize len,
 #endif
 	}
 
-	g_assert (r != NULL);
+	if (r == NULL) {
+		/* Invalid regexp type for the specified input */
+		return FALSE;
+	}
+
 	ncaptures = (re->ncaptures + 1) * 3;
 	ovec = g_alloca (sizeof (gint) * ncaptures);
 

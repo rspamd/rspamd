@@ -221,6 +221,8 @@ rspamd_stat_cache_sqlite3_check (struct rspamd_task *task,
 			/* We have some existing record in the table */
 			if (!!flag == !!is_spam) {
 				/* Already learned */
+				msg_warn_task ("already seen stat hash: %*bs",
+						rspamd_cryptobox_HASHBYTES, out);
 				return RSPAMD_LEARN_INGORE;
 			}
 			else {

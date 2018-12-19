@@ -42,3 +42,9 @@ rrd = "${DBDIR}/rspamd.rrd";
 # Local networks
 local_addrs = [192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, fd00::/8, 169.254.0.0/16, fe80::/10];
 hs_cache_dir = "${DBDIR}/";
+
+# Timeout for messages processing (must be larger than any internal timeout used)
+task_timeout = 8s;
+
+# Emit soft reject when timeout takes place
+soft_reject_on_timeout = false;

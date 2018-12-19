@@ -14,10 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
+--[[[
+-- @module lua_stat
+-- This module contains helper functions for supporting statistics
+--]]
+
 local logger = require "rspamd_logger"
 local sqlite3 = require "rspamd_sqlite3"
 local util = require "rspamd_util"
 local lua_redis = require "lua_redis"
+local lua_util = require "lua_util"
 local exports = {}
 
 local N = "stat_tools" -- luacheck: ignore (maybe unused)
@@ -101,30 +107,30 @@ return nconverted
 local keys = redis.call('SMEMBERS', KEYS[1]..'_keys')
 
 for _,k in ipairs(keys) do
-  local learns = redis.call('HGET', k, 'learns')
+  local learns = redis.call('HGET', k, 'learns') or 0
   local neutral_prefix = string.gsub(k, KEYS[1], 'RS')
 
   redis.call('HSET', neutral_prefix, KEYS[2], learns)
   redis.call('SADD', KEYS[1]..'_keys', neutral_prefix)
   redis.call('SREM', KEYS[1]..'_keys', k)
-  redis.call('DEL', k)
-  redis.call('SET', KEYS[1]..'_version', '2')
+  redis.call('DEL', KEYS[1])
+  redis.call('SET', k ..'_version', '2')
 end
 ]]
 
   conn:add_cmd('EVAL', {lua_script, '2', symbol_spam, 'learns_spam'})
-  ret = conn:exec()
+  ret,res = conn:exec()
 
   if not ret then
-    logger.errx('error converting metadata for symbol %s', symbol_spam)
+    logger.errx('error converting metadata for symbol %s: %s', symbol_spam, res)
     return false
   end
 
   conn:add_cmd('EVAL', {lua_script, '2', symbol_ham, 'learns_ham'})
-  ret = conn:exec()
+  ret, res = conn:exec()
 
   if not ret then
-    logger.errx('error converting metadata for symbol %s', symbol_ham)
+    logger.errx('error converting metadata for symbol %s', symbol_ham, res)
     return false
   end
 
@@ -510,5 +516,342 @@ local function redis_classifier_from_sqlite(sqlite_classifier, expire)
 end
 
 exports.redis_classifier_from_sqlite = redis_classifier_from_sqlite
+
+-- Reads statistics config and return preprocessed table
+local function process_stat_config(cfg)
+  local opts_section = cfg:get_all_opt('options') or {}
+
+  -- Check if we have a dedicated section for statistics
+  if opts_section.statistics then
+    opts_section = opts_section.statistics
+  end
+
+  -- Default
+  local res_config = {
+    classify_headers = {
+      "User-Agent",
+      "X-Mailer",
+      "Content-Type",
+      "X-MimeOLE",
+      "Organization",
+      "Organisation"
+    },
+    classify_images = true,
+    classify_mime_info = true,
+    classify_urls = true,
+    classify_meta = true,
+    classify_max_tlds = 10,
+  }
+
+  res_config = lua_util.override_defaults(res_config, opts_section)
+
+  -- Postprocess classify_headers
+  local classify_headers_parsed = {}
+
+  for _,v in ipairs(res_config.classify_headers) do
+    local s1, s2 = v:match("^([A-Z])[^%-]+%-([A-Z]).*$")
+
+    local hname
+    if s1 and s2 then
+      hname = string.format('%s-%s', s1, s2)
+    else
+      s1 = v:match("^X%-([A-Z].*)$")
+
+      if s1 then
+        hname = string.format('x%s', s1:sub(1, 3):lower())
+      else
+        hname = string.format('%s', v:sub(1, 3):lower())
+      end
+    end
+
+    if classify_headers_parsed[hname] then
+      table.insert(classify_headers_parsed[hname], v)
+    else
+      classify_headers_parsed[hname] = {v}
+    end
+  end
+
+  res_config.classify_headers_parsed = classify_headers_parsed
+
+  return res_config
+end
+
+local function get_mime_stat_tokens(task, res, i)
+  local parts = task:get_parts() or {}
+  local seen_multipart = false
+  local seen_plain = false
+  local seen_html = false
+  local empty_plain = false
+  local empty_html = false
+  local online_text = false
+
+  for _,part in ipairs(parts) do
+    local fname = part:get_filename()
+
+    local sz = part:get_length()
+
+    if sz > 0 then
+      rawset(res, i, string.format("#ps:%d",
+          math.floor(math.log(sz))))
+      lua_util.debugm("bayes", task, "part size: %s",
+          res[i])
+      i = i + 1
+    end
+
+    if fname then
+      rawset(res, i, "#f:" .. fname)
+      i = i + 1
+
+      lua_util.debugm("bayes", task, "added attachment: #f:%s",
+          fname)
+    end
+
+    if part:is_text() then
+      local tp = part:get_text()
+
+      if tp:is_html() then
+        seen_html = true
+
+        if tp:get_length() == 0 then
+          empty_html = true
+        end
+      else
+        seen_plain = true
+
+        if tp:get_length() == 0 then
+          empty_plain = true
+        end
+      end
+
+      if tp:get_lines_count() < 2 then
+        online_text = true
+      end
+
+      rawset(res, i, "#lang:" .. (tp:get_language() or 'unk'))
+      lua_util.debugm("bayes", task, "added language: %s",
+          res[i])
+      i = i + 1
+
+      rawset(res, i, "#cs:" .. (tp:get_charset() or 'unk'))
+      lua_util.debugm("bayes", task, "added charset: %s",
+          res[i])
+      i = i + 1
+
+    elseif part:is_multipart() then
+      seen_multipart = true;
+    end
+  end
+
+  -- Create a special token depending on parts structure
+  local st_tok = "#unk"
+  if seen_multipart and seen_html and seen_plain then
+    st_tok = '#mpth'
+  end
+
+  if seen_html and not seen_plain then
+    st_tok = "#ho"
+  end
+
+  if seen_plain and not seen_html then
+    st_tok = "#to"
+  end
+
+  local spec_tok = ""
+  if online_text then
+    spec_tok = "#ot"
+  end
+
+  if empty_plain then
+    spec_tok = spec_tok .. "#ep"
+  end
+
+  if empty_html then
+    spec_tok = spec_tok .. "#eh"
+  end
+
+  rawset(res, i, string.format("#m:%s%s", st_tok, spec_tok))
+  lua_util.debugm("bayes", task, "added mime token: %s",
+      res[i])
+  i = i + 1
+
+  return i
+end
+
+local function get_headers_stat_tokens(task, cf, res, i)
+  local hdrs_cksum = task:get_mempool():get_variable("headers_hash")
+
+  if hdrs_cksum then
+    rawset(res, i, string.format("#hh:%s", hdrs_cksum:sub(1, 7)))
+    lua_util.debugm("bayes", task, "added hdrs hash token: %s",
+        res[i])
+    i = i + 1
+  end
+
+  for k,hdrs in pairs(cf.classify_headers_parsed) do
+    for _,hname in ipairs(hdrs) do
+      local value = task:get_header(hname)
+
+      if value then
+        rawset(res, i, string.format("#h:%s:%s", k, value))
+        lua_util.debugm("bayes", task, "added hdrs token: %s",
+            res[i])
+        i = i + 1
+      end
+    end
+  end
+
+  local from = (task:get_from('mime') or {})[1]
+
+  if from and from.name then
+    rawset(res, i, string.format("#F:%s", from.name))
+    lua_util.debugm("bayes", task, "added from name token: %s",
+        res[i])
+    i = i + 1
+  end
+
+  return i
+end
+
+local function get_meta_stat_tokens(task, res, i)
+  local day_and_hour = os.date('%u:%H',
+      task:get_date{format = 'message', gmt = true})
+  rawset(res, i, string.format("#dt:%s", day_and_hour))
+  lua_util.debugm("bayes", task, "added day_of_week token: %s",
+      res[i])
+  i = i + 1
+
+  local pol = {}
+
+  -- Authentication results
+  if task:has_symbol('DKIM_TRACE') then
+    -- Autolearn or scan
+    if task:has_symbol('R_SPF_ALLOW') then
+      table.insert(pol, 's=pass')
+    end
+
+    local trace = task:get_symbol('DKIM_TRACE')
+    local dkim_opts = trace[1]['options']
+    if dkim_opts then
+      for _,o in ipairs(dkim_opts) do
+        local check_res = string.sub(o, -1)
+        local domain = string.sub(o, 1, -3)
+
+        if check_res == '+' then
+          table.insert(pol, string.format('d=%s:%s', "pass", domain))
+        end
+      end
+    end
+  else
+    -- Offline learn
+    local aur = task:get_header('Authentication-Results')
+
+    if aur then
+      local spf = aur:match('spf=([a-z]+)')
+      local dkim,dkim_domain = aur:match('dkim=([a-z]+) header.d=([a-z.%-]+)')
+
+
+      if spf then
+        table.insert(pol, 's=' .. spf)
+      end
+      if dkim and dkim_domain then
+        table.insert(pol, string.format('d=%s:%s', dkim, dkim_domain))
+      end
+    end
+  end
+
+  if #pol > 0 then
+    rawset(res, i, string.format("#aur:%s", table.concat(pol, ',')))
+    lua_util.debugm("bayes", task, "added policies token: %s",
+        res[i])
+    i = i + 1
+  end
+
+  local rh = task:get_received_headers()
+
+  if rh and #rh > 0 then
+    local lim = math.min(5, #rh)
+    for j =1,lim do
+      local rcvd = rh[j]
+      local ip = rcvd.real_ip
+      if ip and ip:is_valid() and ip:get_version() == 4 then
+        local masked = ip:apply_mask(24)
+
+        rawset(res, i, string.format("#rcv:%s:%s", tostring(masked),
+            rcvd.proto))
+        lua_util.debugm("bayes", task, "added received token: %s",
+            res[i])
+        i = i + 1
+      end
+    end
+  end
+
+  return i
+end
+
+local function get_stat_tokens(task, cf)
+  local res = {}
+  local E = {}
+  local i = 1
+
+  if cf.classify_images then
+    local images = task:get_images() or E
+
+    for _,img in ipairs(images) do
+      rawset(res, i, "image")
+      i = i + 1
+      rawset(res, i, tostring(img:get_height()))
+      i = i + 1
+      rawset(res, i, tostring(img:get_width()))
+      i = i + 1
+      rawset(res, i, tostring(img:get_type()))
+      i = i + 1
+
+      local fname = img:get_filename()
+
+      if fname then
+        rawset(res, i, tostring(img:get_filename()))
+        i = i + 1
+      end
+
+      lua_util.debugm("bayes", task, "added image: %s",
+          fname)
+    end
+  end
+
+  if cf.classify_mime_info then
+    i = get_mime_stat_tokens(task, res, i)
+  end
+
+  if cf.classify_headers and #cf.classify_headers > 0 then
+    i = get_headers_stat_tokens(task, cf, res, i)
+  end
+
+  if cf.classify_urls then
+    local urls = lua_util.extract_specific_urls{task = task, limit = 5, esld_limit = 1}
+
+    if urls then
+      for _,u in ipairs(urls) do
+        rawset(res, i, string.format("#u:%s", u:get_tld()))
+        lua_util.debugm("bayes", task, "added url token: %s",
+            res[i])
+        i = i + 1
+      end
+    end
+  end
+
+  if cf.classify_meta then
+    i = get_meta_stat_tokens(task, res, i)
+  end
+
+  return res
+end
+
+exports.gen_stat_tokens = function(cfg)
+  local stat_config = process_stat_config(cfg)
+
+  return function(task)
+    return get_stat_tokens(task, stat_config)
+  end
+end
 
 return exports

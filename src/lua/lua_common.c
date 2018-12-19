@@ -21,9 +21,12 @@
 #include "ottery.h"
 #include "rspamd_control.h"
 #include "lua_thread_pool.h"
+#include "libstat/stat_api.h"
+#include "libserver/rspamd_control.h"
+
 #include <math.h>
 #include <sys/wait.h>
-#include <src/libserver/rspamd_control.h>
+
 
 /* Lua module init function */
 #define MODULE_INIT_FUNC "module_init"
@@ -2342,4 +2345,185 @@ rspamd_lua_require_function (lua_State *L, const gchar *modname,
 	lua_pop (L, 2);
 
 	return FALSE;
+}
+
+
+gboolean
+rspamd_lua_try_load_redis (lua_State *L, const ucl_object_t *obj,
+									struct rspamd_config *cfg, gint *ref_id)
+{
+	gint res_pos, err_idx;
+	struct rspamd_config **pcfg;
+
+	/* Create results table */
+	lua_createtable (L, 0, 0);
+	res_pos = lua_gettop (L);
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	/* Obtain function */
+	if (!rspamd_lua_require_function (L, "lua_redis", "try_load_redis_servers")) {
+		msg_err_config ("cannot require lua_redis");
+		lua_pop (L, 2);
+
+		return FALSE;
+	}
+
+	/* Function arguments */
+	ucl_object_push_lua (L, obj, false);
+	pcfg = lua_newuserdata (L, sizeof (*pcfg));
+	rspamd_lua_setclass (L, "rspamd{config}", -1);
+	*pcfg = cfg;
+	lua_pushvalue (L, res_pos);
+
+	if (lua_pcall (L, 3, 1, err_idx) != 0) {
+		GString *tb;
+
+		tb = lua_touserdata (L, -1);
+		msg_err_config ("cannot call lua try_load_redis_servers script: %s", tb->str);
+		g_string_free (tb, TRUE);
+		lua_settop (L, 0);
+
+		return FALSE;
+	}
+
+	if (lua_toboolean (L, -1)) {
+		if (ref_id) {
+			/* Ref table */
+			lua_pushvalue (L, res_pos);
+			*ref_id = luaL_ref (L, LUA_REGISTRYINDEX);
+			lua_settop (L, 0);
+		}
+		else {
+			/* Leave it on the stack */
+			lua_settop (L, res_pos);
+		}
+
+		return TRUE;
+	}
+	else {
+		lua_settop (L, 0);
+	}
+
+	return FALSE;
+}
+
+void
+rspamd_lua_push_full_word (lua_State *L, rspamd_stat_token_t *w)
+{
+	gint fl_cnt;
+
+	lua_createtable (L, 4, 0);
+
+	if (w->stemmed.len > 0) {
+		lua_pushlstring (L, w->stemmed.begin, w->stemmed.len);
+		lua_rawseti (L, -2, 1);
+	}
+	else {
+		lua_pushstring (L, "");
+		lua_rawseti (L, -2, 1);
+	}
+
+	if (w->normalized.len > 0) {
+		lua_pushlstring (L, w->normalized.begin, w->normalized.len);
+		lua_rawseti (L, -2, 2);
+	}
+	else {
+		lua_pushstring (L, "");
+		lua_rawseti (L, -2, 2);
+	}
+
+	if (w->original.len > 0) {
+		lua_pushlstring (L, w->original.begin, w->original.len);
+		lua_rawseti (L, -2, 3);
+	}
+	else {
+		lua_pushstring (L, "");
+		lua_rawseti (L, -2, 3);
+	}
+
+	/* Flags part */
+	fl_cnt = 1;
+	lua_createtable (L, 4, 0);
+
+	if (w->flags & RSPAMD_STAT_TOKEN_FLAG_NORMALISED) {
+		lua_pushstring (L, "normalised");
+		lua_rawseti (L, -2, fl_cnt ++);
+	}
+	if (w->flags & RSPAMD_STAT_TOKEN_FLAG_BROKEN_UNICODE) {
+		lua_pushstring (L, "broken_unicode");
+		lua_rawseti (L, -2, fl_cnt ++);
+	}
+	if (w->flags & RSPAMD_STAT_TOKEN_FLAG_UTF) {
+		lua_pushstring (L, "utf");
+		lua_rawseti (L, -2, fl_cnt ++);
+	}
+	if (w->flags & RSPAMD_STAT_TOKEN_FLAG_TEXT) {
+		lua_pushstring (L, "text");
+		lua_rawseti (L, -2, fl_cnt ++);
+	}
+	if (w->flags & RSPAMD_STAT_TOKEN_FLAG_HEADER) {
+		lua_pushstring (L, "header");
+		lua_rawseti (L, -2, fl_cnt ++);
+	}
+	if (w->flags & (RSPAMD_STAT_TOKEN_FLAG_META|RSPAMD_STAT_TOKEN_FLAG_LUA_META)) {
+		lua_pushstring (L, "meta");
+		lua_rawseti (L, -2, fl_cnt ++);
+	}
+	if (w->flags & RSPAMD_STAT_TOKEN_FLAG_STOP_WORD) {
+		lua_pushstring (L, "stop_word");
+		lua_rawseti (L, -2, fl_cnt ++);
+	}
+	if (w->flags & RSPAMD_STAT_TOKEN_FLAG_INVISIBLE_SPACES) {
+		lua_pushstring (L, "invisible_spaces");
+		lua_rawseti (L, -2, fl_cnt ++);
+	}
+	if (w->flags & RSPAMD_STAT_TOKEN_FLAG_STEMMED) {
+		lua_pushstring (L, "stemmed");
+		lua_rawseti (L, -2, fl_cnt ++);
+	}
+
+	lua_rawseti (L, -2, 4);
+}
+
+gint
+rspamd_lua_push_words (lua_State *L, GArray *words,
+							enum rspamd_lua_words_type how)
+{
+	rspamd_stat_token_t *w;
+	guint i, cnt;
+
+	lua_createtable (L, words->len, 0);
+
+	for (i = 0, cnt = 1; i < words->len; i ++) {
+		w = &g_array_index (words, rspamd_stat_token_t, i);
+
+		switch (how) {
+		case RSPAMD_LUA_WORDS_STEM:
+			if (w->stemmed.len > 0) {
+				lua_pushlstring (L, w->stemmed.begin, w->stemmed.len);
+				lua_rawseti (L, -2, cnt ++);
+			}
+			break;
+		case RSPAMD_LUA_WORDS_NORM:
+			if (w->normalized.len > 0) {
+				lua_pushlstring (L, w->normalized.begin, w->normalized.len);
+				lua_rawseti (L, -2, cnt ++);
+			}
+			break;
+		case RSPAMD_LUA_WORDS_RAW:
+			if (w->original.len > 0) {
+				lua_pushlstring (L, w->original.begin, w->original.len);
+				lua_rawseti (L, -2, cnt ++);
+			}
+			break;
+		case RSPAMD_LUA_WORDS_FULL:
+			rspamd_lua_push_full_word (L, w);
+			/* Push to the resulting vector */
+			lua_rawseti (L, -2, cnt ++);
+			break;
+		}
+	}
+
+	return 1;
 }

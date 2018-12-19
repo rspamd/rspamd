@@ -8,12 +8,12 @@ Rspamd was created by [Vsevolod Stakhov](https://github.com/vstakov) while worki
 
 ## Developers
 
-* [Mikhail Galanin](https://github.com/negram)
 * [Alexander Moisseev](https://github.com/moisseev)
 
 ## Alumni Developers
 
 * [Andrew Lewis](https://github.com/fatalbanana)
+* [Mikhail Galanin](https://github.com/negram)
 
 ## Significant contributors
 

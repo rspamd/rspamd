@@ -72,6 +72,7 @@ struct rspamd_worker {
 	guint index;                    /**< index number									*/
 	guint nconns;                   /**< current connections count						*/
 	gboolean wanna_die;             /**< worker is terminating							*/
+	gboolean cores_throttled;       /**< set to true if cores throttling took place		*/
 	gdouble start_time;             /**< start time										*/
 	struct rspamd_main *srv;        /**< pointer to server structure					*/
 	GQuark type;                    /**< process type									*/
@@ -281,6 +282,7 @@ struct rspamd_main {
 enum rspamd_exception_type {
 	RSPAMD_EXCEPTION_NEWLINE = 0,
 	RSPAMD_EXCEPTION_URL,
+	RSPAMD_EXCEPTION_GENERIC,
 };
 /**
  * Structure to point exception in text from processing
@@ -288,6 +290,7 @@ enum rspamd_exception_type {
 struct rspamd_process_exception {
 	goffset pos;
 	guint len;
+	gpointer ptr;
 	enum rspamd_exception_type type;
 };
 

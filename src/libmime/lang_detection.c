@@ -20,8 +20,11 @@
 #include "libutil/multipattern.h"
 #include "ucl.h"
 #include "khash.h"
+#include "libstemmer.h"
+
 #include <glob.h>
 #include <unicode/utf8.h>
+#include <unicode/utf16.h>
 #include <unicode/ucnv.h>
 #include <unicode/uchar.h>
 #include <unicode/ustring.h>
@@ -158,25 +161,30 @@ rspamd_language_search_str (const gchar *key, const gchar *elts[], size_t nelts)
 static guint
 rspamd_trigram_hash_func (gconstpointer key)
 {
-	return rspamd_cryptobox_fast_hash (key, 3 * sizeof (UChar), rspamd_hash_seed ());
+	return rspamd_cryptobox_fast_hash (key, 3 * sizeof (UChar32),
+			rspamd_hash_seed ());
 }
 
 static gboolean
 rspamd_trigram_equal_func (gconstpointer v, gconstpointer v2)
 {
-	return memcmp (v, v2, 3 * sizeof (UChar)) == 0;
+	return memcmp (v, v2, 3 * sizeof (UChar32)) == 0;
 }
 
-KHASH_INIT (rspamd_trigram_hash, const UChar *, struct rspamd_ngramm_chain, true,
+KHASH_INIT (rspamd_trigram_hash, const UChar32 *, struct rspamd_ngramm_chain, true,
 		rspamd_trigram_hash_func, rspamd_trigram_equal_func);
 KHASH_INIT (rspamd_candidates_hash, const gchar *,
 		struct rspamd_lang_detector_res *, true,
 		rspamd_str_hash, rspamd_str_equal);
+KHASH_INIT (rspamd_stopwords_hash, rspamd_ftok_t *,
+		char, false,
+		rspamd_ftok_hash, rspamd_ftok_equal);
 
 struct rspamd_lang_detector {
 	GPtrArray *languages;
 	khash_t(rspamd_trigram_hash) *trigramms[RSPAMD_LANGUAGE_MAX]; /* trigramms frequencies */
 	struct rspamd_stop_word_elt stop_words[RSPAMD_LANGUAGE_MAX];
+	khash_t(rspamd_stopwords_hash) *stop_words_norm;
 	UConverter *uchar_converter;
 	gsize short_text_limit;
 	gsize total_occurencies; /* number of all languages found */
@@ -184,7 +192,7 @@ struct rspamd_lang_detector {
 };
 
 static void
-rspamd_language_detector_ucs_lowercase (UChar *s, gsize len)
+rspamd_language_detector_ucs_lowercase (UChar32 *s, gsize len)
 {
 	gsize i;
 
@@ -194,14 +202,13 @@ rspamd_language_detector_ucs_lowercase (UChar *s, gsize len)
 }
 
 static gboolean
-rspamd_language_detector_ucs_is_latin (UChar *s, gsize len)
+rspamd_language_detector_ucs_is_latin (const UChar32 *s, gsize len)
 {
 	gsize i;
 	gboolean ret = TRUE;
 
 	for (i = 0; i < len; i ++) {
-		if (!((s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= 'a' && s[i] <= 'z')
-				|| s[i] == ' ')) {
+		if (s[i] >= 128 || !(g_ascii_isalnum (s[i]) || s[i] == ' ')) {
 			ret = FALSE;
 			break;
 		}
@@ -213,7 +220,7 @@ rspamd_language_detector_ucs_is_latin (UChar *s, gsize len)
 struct rspamd_language_ucs_elt {
 	guint freq;
 	const gchar *utf;
-	UChar s[0];
+	UChar32 s[0];
 };
 
 static void
@@ -439,17 +446,60 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		specific_stop_words = ucl_object_lookup (stop_words, nelt->name);
 
 		if (specific_stop_words) {
+			struct sb_stemmer *stem = NULL;
 			it = NULL;
 			const ucl_object_t *w;
 			guint start, stop;
 
+			stem = sb_stemmer_new (nelt->name, "UTF_8");
 			start = rspamd_multipattern_get_npatterns (d->stop_words[cat].mp);
 
 			while ((w = ucl_object_iterate (specific_stop_words, &it, true)) != NULL) {
-				rspamd_multipattern_add_pattern (d->stop_words[cat].mp,
-						ucl_object_tostring (w), 0);
+				gsize wlen;
+				const char *word = ucl_object_tolstring (w, &wlen);
+				const char *saved;
+
+				rspamd_multipattern_add_pattern_len (d->stop_words[cat].mp,
+						word, wlen,
+						RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
 				nelt->stop_words ++;
 				nstop ++;
+
+				/* Also lemmatise and store normalised */
+				if (stem) {
+					const char *nw = sb_stemmer_stem (stem, word, wlen);
+
+
+					if (nw) {
+						saved = nw;
+						wlen = strlen (nw);
+					}
+					else {
+						saved = word;
+					}
+				}
+				else {
+					saved = word;
+				}
+
+				if (saved) {
+					gint rc;
+					rspamd_ftok_t *tok;
+					gchar *dst;
+
+					tok = g_malloc (sizeof (*tok) + wlen + 1);
+					dst = ((gchar *)tok) + sizeof (*tok);
+					rspamd_strlcpy (dst, saved, wlen + 1);
+					tok->begin = dst;
+					tok->len = wlen;
+
+					kh_put (rspamd_stopwords_hash, d->stop_words_norm,
+							tok, &rc);
+				}
+			}
+
+			if (stem) {
+				sb_stemmer_delete (stem);
 			}
 
 			stop = rspamd_multipattern_get_npatterns (d->stop_words[cat].mp);
@@ -502,22 +552,34 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 		m2 += delta * delta2;
 
 		if (key != NULL) {
+			UChar32 *cur_ucs;
+			const char *end = key + keylen, *cur_utf = key;
+
 			ucs_elt = rspamd_mempool_alloc (cfg->cfg_pool,
-					sizeof (*ucs_elt) + (keylen + 1) * sizeof (UChar));
+					sizeof (*ucs_elt) + (keylen + 1) * sizeof (UChar32));
 
-			nsym = ucnv_toUChars (d->uchar_converter,
-					ucs_elt->s, keylen + 1,
-					key,
-					keylen, &uc_err);
-			ucs_elt->utf = key;
+			cur_ucs = ucs_elt->s;
+			nsym = 0;
+			uc_err = U_ZERO_ERROR;
 
-			if (uc_err != U_ZERO_ERROR) {
-				msg_warn_config ("cannot convert key to unicode: %s",
-						u_errorName (uc_err));
+			while (cur_utf < end) {
+				*cur_ucs++ = ucnv_getNextUChar (d->uchar_converter, &cur_utf,
+						end, &uc_err);
+				if (!U_SUCCESS (uc_err)) {
+					break;
+				}
+
+				nsym ++;
+			}
+
+			if (!U_SUCCESS (uc_err)) {
+				msg_warn_config ("cannot convert key %*s to unicode: %s",
+						(gint)keylen, key, u_errorName (uc_err));
 
 				continue;
 			}
 
+			ucs_elt->utf = key;
 			rspamd_language_detector_ucs_lowercase (ucs_elt->s, nsym);
 
 			if (nsym == 3) {
@@ -586,7 +648,7 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 	nelt->mean = mean;
 	nelt->std = std;
 
-	msg_info_config ("loaded %s language, %d trigramms, "
+	msg_debug_lang_det_cfg ("loaded %s language, %d trigramms, "
 					 "%d ngramms loaded; "
 					 "std=%.2f, mean=%.2f, skipped=%d, loaded=%d, stop_words=%d; "
 					 "(%s)",
@@ -668,9 +730,7 @@ static void
 rspamd_language_detector_dtor (struct rspamd_lang_detector *d)
 {
 	if (d) {
-		if (d->uchar_converter) {
-			ucnv_close (d->uchar_converter);
-		}
+		rspamd_ftok_t *tok;
 
 		for (guint i = 0; i < RSPAMD_LANGUAGE_MAX; i ++) {
 			kh_destroy (rspamd_trigram_hash, d->trigramms[i]);
@@ -681,6 +741,10 @@ rspamd_language_detector_dtor (struct rspamd_lang_detector *d)
 		if (d->languages) {
 			g_ptr_array_free (d->languages, TRUE);
 		}
+
+		kh_foreach_key (d->stop_words_norm, tok, {
+			g_free (tok); /* String is embedded and freed automatically */
+		});
 	}
 }
 
@@ -746,8 +810,10 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 
 	ret = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*ret));
 	ret->languages = g_ptr_array_sized_new (gl.gl_pathc);
-	ret->uchar_converter = ucnv_open ("UTF-8", &uc_err);
+	ret->uchar_converter = rspamd_get_utf8_converter ();
 	ret->short_text_limit = short_text_limit;
+	ret->stop_words_norm = kh_init (rspamd_stopwords_hash);
+
 	/* Map from ngramm in ucs32 to GPtrArray of rspamd_language_elt */
 	for (i = 0; i < RSPAMD_LANGUAGE_MAX; i ++) {
 		ret->trigramms[i] = kh_init (rspamd_trigram_hash);
@@ -784,7 +850,7 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 		});
 
 		if (!rspamd_multipattern_compile (ret->stop_words[i].mp, &err)) {
-			msg_err_config ("cannot compile stop words for %d language group: %e",
+			msg_err_config ("cannot compile stop words for %z language group: %e",
 					i, err);
 			g_error_free (err);
 		}
@@ -814,31 +880,6 @@ end:
 	g_string_free (languages_pattern, TRUE);
 
 	return ret;
-}
-
-
-void
-rspamd_language_detector_to_ucs (struct rspamd_lang_detector *d,
-		rspamd_mempool_t *pool,
-		rspamd_stat_token_t *utf_token, rspamd_stat_token_t *ucs_token)
-{
-	UChar *out;
-	int32_t nsym;
-	UErrorCode uc_err = U_ZERO_ERROR;
-
-	ucs_token->flags = utf_token->flags;
-	out = rspamd_mempool_alloc (pool, sizeof (*out) * (utf_token->len + 1));
-	nsym = ucnv_toUChars (d->uchar_converter, out, (utf_token->len + 1),
-			utf_token->begin, utf_token->len, &uc_err);
-
-	if (nsym >= 0 && uc_err == U_ZERO_ERROR) {
-		rspamd_language_detector_ucs_lowercase (out, nsym);
-		ucs_token->begin = (const gchar *) out;
-		ucs_token->len = nsym;
-	}
-	else {
-		ucs_token->len = 0;
-	}
 }
 
 static void
@@ -885,8 +926,10 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 		for (;;) {
 			tok = &g_array_index (ucs_tokens, rspamd_stat_token_t, sel);
 			/* Filter bad tokens */
-			if (tok->len >= 2 && u_isalpha (*(UChar *)tok->begin)
-					&& u_isalpha (*(((UChar *)tok->begin) + (tok->len - 1)))) {
+
+			if (tok->unicode.len >= 2 &&
+					u_isalpha (tok->unicode.begin[0]) &&
+					u_isalpha (tok->unicode.begin[tok->unicode.len - 1])) {
 				offsets_out[out_idx] = sel;
 				break;
 			}
@@ -907,8 +950,6 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 			}
 		}
 	}
-
-
 
 	/*
 	 * Fisher-Yates algorithm:
@@ -931,7 +972,7 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 }
 
 static goffset
-rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar *window,
+rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar32 *window,
 		guint wlen, goffset cur_off)
 {
 	guint i;
@@ -940,36 +981,36 @@ rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar *window,
 		/* Deal with spaces at the beginning and ending */
 
 		if (cur_off == 0) {
-			window[0] = (UChar)' ';
+			window[0] = (UChar32)' ';
 
 			for (i = 0; i < wlen - 1; i ++) {
-				window[i + 1] = *(((UChar *)tok->begin) + i);
+				window[i + 1] = tok->unicode.begin[i];
 			}
 		}
-		else if (cur_off + wlen == tok->len + 1) {
+		else if (cur_off + wlen == tok->unicode.len + 1) {
 			/* Add trailing space */
 			for (i = 0; i < wlen - 1; i ++) {
-				window[i] = *(((UChar *)tok->begin) + cur_off + i);
+				window[i] = tok->unicode.begin[cur_off + i];
 			}
-			window[wlen - 1] = (UChar)' ';
+			window[wlen - 1] = (UChar32)' ';
 		}
-		else if (cur_off + wlen > tok->len + 1) {
+		else if (cur_off + wlen > tok->unicode.len + 1) {
 			/* No more fun */
 			return -1;
 		}
 		else {
 			/* Normal case */
 			for (i = 0; i < wlen; i++) {
-				window[i] = *(((UChar *) tok->begin) + cur_off + i);
+				window[i] = tok->unicode.begin[cur_off + i];
 			}
 		}
 	}
 	else {
-		if (tok->len <= cur_off) {
+		if (tok->normalized.len <= cur_off) {
 			return -1;
 		}
 
-		window[0] = *(((UChar *)tok->begin) + cur_off);
+		window[0] = tok->unicode.begin[cur_off];
 	}
 
 	return cur_off + 1;
@@ -981,7 +1022,7 @@ rspamd_language_detector_next_ngramm (rspamd_stat_token_t *tok, UChar *window,
 static void
 rspamd_language_detector_process_ngramm_full (struct rspamd_task *task,
 											  struct rspamd_lang_detector *d,
-											  UChar *window,
+											  UChar32 *window,
 											  khash_t(rspamd_candidates_hash) *candidates,
 											  khash_t(rspamd_trigram_hash) *trigramms)
 {
@@ -1043,7 +1084,7 @@ rspamd_language_detector_detect_word (struct rspamd_task *task,
 									  khash_t(rspamd_trigram_hash) *trigramms)
 {
 	const guint wlen = 3;
-	UChar window[3];
+	UChar32 window[3];
 	goffset cur = 0;
 
 	/* Split words */
@@ -1132,7 +1173,7 @@ rspamd_language_detector_detect_type (struct rspamd_task *task,
 {
 	guint nparts = MIN (words->len, nwords);
 	goffset *selected_words;
-	rspamd_stat_token_t *tok, ucs_w;
+	rspamd_stat_token_t *tok;
 	guint i;
 
 	selected_words = g_new0 (goffset, nparts);
@@ -1142,11 +1183,11 @@ rspamd_language_detector_detect_type (struct rspamd_task *task,
 	for (i = 0; i < nparts; i++) {
 		tok = &g_array_index (words, rspamd_stat_token_t,
 				selected_words[i]);
-		rspamd_language_detector_to_ucs (task->lang_det,
-				task->task_pool,
-				tok, &ucs_w);
-		rspamd_language_detector_detect_word (task, d, &ucs_w, candidates,
-				d->trigramms[cat]);
+
+		if (tok->unicode.len >= 3) {
+			rspamd_language_detector_detect_word (task, d, tok, candidates,
+					d->trigramms[cat]);
+		}
 	}
 
 	/* Filter negligible candidates */
@@ -1624,11 +1665,11 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 	}
 
 	if (!ret) {
-		if (part->utf_words->len < default_short_text_limit) {
+		if (part->nwords < default_short_text_limit) {
 			r = rs_detect_none;
 			msg_debug_lang_det ("text is too short for trigramms detection: "
 					   "%d words; at least %d words required",
-					(int)part->utf_words->len,
+					(int)part->nwords,
 					(int)default_short_text_limit);
 			rspamd_language_detector_set_language (task, part, "en");
 			candidates = kh_init (rspamd_candidates_hash);
@@ -1687,7 +1728,7 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 					cbd.std = std;
 					cbd.flags = RSPAMD_LANG_FLAG_DEFAULT;
 
-					if (part->utf_words->len < default_words / 2) {
+					if (part->nwords < default_words / 2) {
 						cbd.flags |= RSPAMD_LANG_FLAG_SHORT;
 					}
 				}
@@ -1749,4 +1790,23 @@ void
 rspamd_language_detector_unref (struct rspamd_lang_detector* d)
 {
 	REF_RELEASE (d);
+}
+
+gboolean
+rspamd_language_detector_is_stop_word (struct rspamd_lang_detector *d,
+									   const gchar *word, gsize wlen)
+{
+	khiter_t k;
+	rspamd_ftok_t search;
+
+	search.begin = word;
+	search.len = wlen;
+
+	k = kh_get (rspamd_stopwords_hash, d->stop_words_norm, &search);
+
+	if (k != kh_end (d->stop_words_norm)) {
+		return TRUE;
+	}
+
+	return FALSE;
 }

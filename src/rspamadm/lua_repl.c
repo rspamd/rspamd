@@ -431,7 +431,7 @@ rspamadm_lua_message_handler (lua_State *L, gint argc, gchar **argv)
 			rspamd_printf ("cannot open %s: %s\n", argv[i], strerror (errno));
 		}
 		else {
-			task = rspamd_task_new (NULL, rspamd_main->cfg, NULL, NULL);
+			task = rspamd_task_new (NULL, rspamd_main->cfg, NULL, NULL, NULL);
 
 			if (!rspamd_task_load_message (task, NULL, map, len)) {
 				rspamd_printf ("cannot load %s\n", argv[i]);

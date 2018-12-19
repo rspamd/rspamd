@@ -395,6 +395,13 @@ local function check_redis_classifier(cls, changes)
   end
 
   local function get_version(conn)
+    conn:add_cmd("SMEMBERS", {"RS_keys"})
+
+    local ret,members = conn:exec()
+
+    -- Empty db
+    if not ret or #members == 0 then return false,0 end
+
     -- We still need to check versions
     local lua_script = [[
 local ver = 0
@@ -469,8 +476,8 @@ return ttl
     local r,ver = get_version(conn)
     if not r then return false end
     if ver ~= 2 then
-      printf("You have configured new schema for %s/%s but your DB has old data",
-        symbol_spam, symbol_ham)
+      printf("You have configured new schema for %s/%s but your DB has old version: %s",
+        symbol_spam, symbol_ham, ver)
       try_convert(false)
     else
       printf("You have configured new schema for %s/%s and your DB already has new layout (v. %s). DB conversion is not needed.",

@@ -5,15 +5,11 @@ import os.path
 import psutil
 import glob
 import pwd
-import re
 import shutil
 import signal
 import socket
-import errno
 import sys
 import tempfile
-import time
-import subprocess
 from robot.libraries.BuiltIn import BuiltIn
 from robot.api import logger
 
@@ -163,41 +159,45 @@ def spamc(addr, port, filename):
     return r.decode('utf-8')
 
 def TCP_Connect(addr, port):
+    """Attempts to open a TCP connection to specified address:port
+
+    Example:
+    | Wait Until Keyword Succeeds | 5s | 10ms | TCP Connect | localhost | 8080 |
+    """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(5) # seconds
     s.connect((addr, port))
+    s.close()
 
 def update_dictionary(a, b):
     a.update(b)
     return a
 
+
+TERM_TIMEOUT = 10  # wait after sending a SIGTERM signal
+KILL_WAIT = 20  # additional wait after sending a SIGKILL signal
+
 def shutdown_process(process):
-    i = 0
-    while i < 100:
+    # send SIGTERM
+    process.terminate()
+
+    try:
+        process.wait(TERM_TIMEOUT)
+        return
+    except psutil.TimeoutExpired:
+        logger.info( "PID {} is not termianated in {} seconds, sending SIGKILL..." %
+            (process.pid, TERM_TIMEOUT))
         try:
-            os.kill(process.pid, signal.SIGTERM)
-        except OSError as e:
-            assert e.errno == errno.ESRCH
+            # send SIGKILL
+            process.kill()
+        except psutil.NoSuchProcess:
+            # process exited just befor we tried to kill
             return
 
-        if process.status() == psutil.STATUS_ZOMBIE:
-            return
-
-        i += 1
-        time.sleep(0.1)
-
-    while i < 200:
-        try:
-            os.kill(process.pid, signal.SIGKILL)
-        except OSError as e:
-            assert e.errno == errno.ESRCH
-            return
-
-        if process.status() == psutil.STATUS_ZOMBIE:
-            return
-
-        i += 1
-        time.sleep(0.1)
-    assert False, "Failed to shutdown process %d (%s)" % (process.pid, process.name())
+    try:
+        process.wait(KILL_WAIT)
+    except psutil.TimeoutExpired:
+        raise RuntimeError("Failed to shutdown process %d (%s)" % (process.pid, process.name()))
 
 
 def shutdown_process_with_children(pid):
@@ -295,41 +295,79 @@ def python3_which(cmd, mode=os.F_OK | os.X_OK, path=None):
     return None
 
 
-def collect_lua_coverage():
-    if python3_which("luacov-coveralls") is None:
-        logger.info("luacov-coveralls not found, will not collect Lua coverage")
-        return
+def _merge_luacov_stats(statsfile, coverage):
+    """
+    Reads a coverage stats file written by luacov and merges coverage data to
+    'coverage' dict: { src_file: hits_list }
 
+    Format of the file defined in:
+    https://github.com/keplerproject/luacov/blob/master/src/luacov/stats.lua
+    """
+    with open(statsfile, 'rb') as fh:
+        while True:
+            # max_line:filename
+            line = fh.readline().rstrip()
+            if not line:
+                break
+
+            max_line, src_file = line.split(':')
+            counts = [int(x) for x in fh.readline().split()]
+            assert len(counts) == int(max_line)
+
+            if src_file in coverage:
+                # enlarge list if needed: lenght of list in different luacov.stats.out files may differ
+                old_len = len(coverage[src_file])
+                new_len = len(counts)
+                if new_len > old_len:
+                    coverage[src_file].extend([0] * (new_len - old_len))
+                # sum execution counts for each line
+                for l, exe_cnt in enumerate(counts):
+                    coverage[src_file][l] += exe_cnt
+            else:
+                coverage[src_file] = counts
+
+
+def _dump_luacov_stats(statsfile, coverage):
+    """
+    Saves data to the luacov stats file. Existing file is overwritted if exists.
+    """
+    src_files = sorted(coverage)
+
+    with open(statsfile, 'wb') as fh:
+        for src in src_files:
+            stats = " ".join(str(n) for n in coverage[src])
+            fh.write("%s:%s\n%s\n" % (len(coverage[src]), src, stats))
+
+
+# File used by luacov to collect coverage stats
+LUA_STATSFILE = "luacov.stats.out"
+
+
+def collect_lua_coverage():
+    """
+    Merges ${TMPDIR}/*.luacov.stats.out into luacov.stats.out
+
+    Example:
+    | Collect Lua Coverage |
+    """
     # decided not to do optional coverage so far
     #if not 'ENABLE_LUA_COVERAGE' in os.environ['HOME']:
     #    logger.info("ENABLE_LUA_COVERAGE is not present in env, will not collect Lua coverage")
     #    return
 
-    current_directory = os.getcwd()
-    report_file = current_directory + "/lua_coverage_report.json"
-    old_report = current_directory + "/lua_coverage_report.json.old"
-
     tmp_dir = BuiltIn().get_variable_value("${TMPDIR}")
-    coverage_files = glob.glob('%s/*.luacov.stats.out' % (tmp_dir))
 
-    for stat_file in coverage_files:
-        shutil.move(stat_file, "luacov.stats.out")
-        # logger.console("statfile: " + stat_file)
+    coverage = {}
+    input_files = []
 
-        if (os.path.isfile(report_file)):
-            shutil.move(report_file, old_report)
-            p = subprocess.Popen(["luacov-coveralls", "-o", report_file, "-j", old_report, "--merge", "--dryrun"], 
-                                 stdout = subprocess.PIPE, stderr= subprocess.PIPE)
-            output,error = p.communicate()
+    for f in glob.iglob("%s/*.luacov.stats.out" % tmp_dir):
+        _merge_luacov_stats(f, coverage)
+        input_files.append(f)
 
-            logger.info("luacov-coveralls stdout: " + output)
-            logger.info("luacov-coveralls stderr: " + error)
-            os.remove(old_report)
-        else:
-            p = subprocess.Popen(["luacov-coveralls", "-o", report_file, "--dryrun"], stdout = subprocess.PIPE, stderr= subprocess.PIPE)
-            output,error = p.communicate()
-
-            logger.info("luacov-coveralls stdout: " + output)
-            logger.info("luacov-coveralls stderr: " + error)
-        os.remove("luacov.stats.out")
-
+    if input_files:
+        if os.path.isfile(LUA_STATSFILE):
+            _merge_luacov_stats(LUA_STATSFILE, coverage)
+        _dump_luacov_stats(LUA_STATSFILE, coverage)
+        logger.info("%s merged into %s" % (", ".join(input_files), LUA_STATSFILE))
+    else:
+        logger.info("no *.luacov.stats.out files found in %s" % tmp_dir)

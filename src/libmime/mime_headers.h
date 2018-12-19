@@ -76,7 +76,7 @@ void rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
  * @return
  */
 gchar * rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
-		gsize inlen);
+		gsize inlen, gboolean *invalid_utf);
 
 /**
  * Encode mime header if needed

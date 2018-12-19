@@ -391,6 +391,55 @@ end
 exports.parse_time_interval = parse_time_interval
 
 --[[[
+-- @function lua_util.dehumanize_number(str)
+-- Parses human readable number
+-- Accepts 'k' for thousands, 'm' for millions, 'g' for billions, 'b' suffix for 1024 multiplier,
+-- e.g. `10mb` equal to `10 * 1024 * 1024`
+-- @param {string} str input string
+-- @return {number|nil} parsed number
+--]]
+local function dehumanize_number(str)
+  local function parse_suffix(s)
+    if s == 'k' then
+      return 1000
+    elseif s == 'm' then
+      return 1000000
+    elseif s == 'g' then
+      return 1e9
+    elseif s == 'kb' then
+      return 1024
+    elseif s == 'mb' then
+      return 1024 * 1024
+    elseif s == 'gb' then
+      return 1024 * 1024;
+    end
+  end
+
+  local digit = lpeg.R("09")
+  local parser = {}
+  parser.integer =
+  (lpeg.S("+-") ^ -1) *
+      (digit   ^  1)
+  parser.fractional =
+  (lpeg.P(".")   ) *
+      (digit ^ 1)
+  parser.number =
+  (parser.integer *
+      (parser.fractional ^ -1)) +
+      (lpeg.S("+-") * parser.fractional)
+  parser.humanized_number = lpeg.Cf(lpeg.Cc(1) *
+      (parser.number / tonumber) *
+      (((lpeg.S("kmg") * (lpeg.P("b") ^ -1)) / parse_suffix) ^ -1),
+      function (acc, val) return acc * val end)
+
+  local t = lpeg.match(parser.humanized_number, str)
+
+  return t
+end
+
+exports.dehumanize_number = dehumanize_number
+
+--[[[
 -- @function lua_util.table_cmp(t1, t2)
 -- Compare two tables deeply
 --]]
@@ -471,7 +520,8 @@ local function override_defaults(def, override)
   end
 
   local res = {}
-  fun.each(function(k, v)
+
+  for k,v in pairs(override) do
     if type(v) == 'table' then
       if def[k] and type(def[k]) == 'table' then
         -- Recursively override elements
@@ -482,12 +532,13 @@ local function override_defaults(def, override)
     else
       res[k] = v
     end
-    end, override)
-  fun.each(function(k, v)
-    if not res[k] then
+  end
+
+  for k,v in pairs(def) do
+    if type(res[k]) == 'nil' then
       res[k] = v
     end
-  end, def)
+  end
 
   return res
 end
@@ -742,15 +793,59 @@ if type(rspamd_config) == 'userdata' then
   end
 end
 
+--[[[
+-- @function lua_util.debugm(module, [log_object], format, ...)
+-- Performs fast debug log for a specific module
+--]]
 exports.debugm = function(mod, obj_or_fmt, fmt_or_something, ...)
   local logger = require "rspamd_logger"
   if unconditional_debug or debug_modules[mod] then
     if type(obj_or_fmt) == 'string' then
-      logger.logx(log_level, mod, 2, obj_or_fmt, fmt_or_something, ...)
+      logger.logx(log_level, mod, '', 2, obj_or_fmt, fmt_or_something, ...)
     else
       logger.logx(log_level, mod, obj_or_fmt, 2, fmt_or_something, ...)
     end
   end
+end
+
+---[[[
+-- @function lua_util.get_task_verdict(task)
+-- Returns verdict for a task, must be called from idempotent filters only
+-- Returns string:
+-- * `spam`: if message have over reject threshold and has more than one positive rule
+-- * `junk`: if a message has between score between [add_header/rewrite subject] to reject thresholds and has more than two positive rules
+-- * `passthrough`: if a message has been passed through some short-circuit rule
+-- * `ham`: if a message has overall score below junk level **and** more than three negative rule, or negative total score
+-- * `uncertain`: all other cases
+--]]
+exports.get_task_verdict = function(task)
+  local result = task:get_metric_result()
+
+  if result then
+
+    if result.passthrough then
+      return 'passthrough'
+    end
+
+    local action = result.action
+
+    if action == 'reject' and result.npositive > 1 then
+      return 'spam'
+    elseif action == 'no action' then
+      if result.score < 0 or result.nnegative > 3 then
+        return 'ham'
+      end
+    else
+      -- All colors of junk
+      if action == 'add header' or action == 'rewrite subject' then
+        if result.npositive > 2 then
+          return 'junk'
+        end
+      end
+    end
+  end
+
+  return 'uncertain'
 end
 
 

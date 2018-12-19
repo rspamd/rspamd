@@ -1794,6 +1794,16 @@ restart:
 #endif
 }
 
+#ifdef HAVE_CLOCK_GETTIME
+# ifdef CLOCK_MONOTONIC_COARSE
+#  define RSPAMD_FAST_MONOTONIC_CLOCK CLOCK_MONOTONIC_COARSE
+# elif defined(CLOCK_MONOTONIC_FAST)
+#  define RSPAMD_FAST_MONOTONIC_CLOCK CLOCK_MONOTONIC_FAST
+# else
+#  define RSPAMD_FAST_MONOTONIC_CLOCK CLOCK_MONOTONIC
+# endif
+#endif
+
 gdouble
 rspamd_get_ticks (gboolean rdtsc_ok)
 {
@@ -1814,7 +1824,7 @@ rspamd_get_ticks (gboolean rdtsc_ok)
 #endif
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
-	gint clk_id = CLOCK_MONOTONIC;
+	gint clk_id = RSPAMD_FAST_MONOTONIC_CLOCK;
 
 	clock_gettime (clk_id, &ts);
 
@@ -2124,8 +2134,35 @@ rspamd_init_libs (void)
 	rlim.rlim_max = rlim.rlim_cur;
 	setrlimit (RLIMIT_STACK, &rlim);
 
-	ctx->libmagic = magic_open (MAGIC_MIME|MAGIC_NO_CHECK_COMPRESS|
-			MAGIC_NO_CHECK_ELF|MAGIC_NO_CHECK_TAR);
+	gint magic_flags = 0;
+
+	/* Unless trusty and other crap is supported... */
+#if 0
+#ifdef MAGIC_NO_CHECK_BUILTIN
+	magic_flags = MAGIC_NO_CHECK_BUILTIN;
+#endif
+#endif
+	magic_flags |= MAGIC_MIME|MAGIC_NO_CHECK_COMPRESS|
+				   MAGIC_NO_CHECK_ELF|MAGIC_NO_CHECK_TAR;
+#ifdef MAGIC_NO_CHECK_CDF
+	magic_flags |= MAGIC_NO_CHECK_CDF;
+#endif
+#ifdef MAGIC_NO_CHECK_ENCODING
+	magic_flags |= MAGIC_NO_CHECK_ENCODING;
+#endif
+#ifdef MAGIC_NO_CHECK_TAR
+	magic_flags |= MAGIC_NO_CHECK_TAR;
+#endif
+#ifdef MAGIC_NO_CHECK_TEXT
+	magic_flags |= MAGIC_NO_CHECK_TEXT;
+#endif
+#ifdef MAGIC_NO_CHECK_TOKENS
+	magic_flags |= MAGIC_NO_CHECK_TOKENS;
+#endif
+#ifdef MAGIC_NO_CHECK_JSON
+	magic_flags |= MAGIC_NO_CHECK_JSON;
+#endif
+	ctx->libmagic = magic_open (magic_flags);
 	ctx->local_addrs = rspamd_inet_library_init ();
 	REF_INIT_RETAIN (ctx, rspamd_deinit_libs);
 

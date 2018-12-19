@@ -28,13 +28,6 @@ local default_settings = {
     none = 'R_SPF_NA',
     permerror = 'R_SPF_PERMFAIL',
   },
-  dkim_symbols = {
-    pass = 'R_DKIM_ALLOW',
-    fail = 'R_DKIM_REJECT',
-    temperror = 'R_DKIM_TEMPFAIL',
-    none = 'R_DKIM_NA',
-    permerror = 'R_DKIM_PERMFAIL',
-  },
   dmarc_symbols = {
     pass = 'DMARC_POLICY_ALLOW',
     permerror = 'DMARC_BAD_POLICY',
@@ -78,10 +71,12 @@ local function gen_auth_results(task, settings)
   local mta_hostname = task:get_request_header('MTA-Name') or
       task:get_request_header('MTA-Tag')
   if mta_hostname then
-    table.insert(hdr_parts, tostring(mta_hostname))
+    mta_hostname = tostring(mta_hostname)
   else
-    table.insert(hdr_parts, local_hostname)
+    mta_hostname = local_hostname
   end
+
+  table.insert(hdr_parts, mta_hostname)
 
   for auth_type, symbols in pairs(auth_types) do
     for key, sym in pairs(symbols) do
@@ -103,6 +98,46 @@ local function gen_auth_results(task, settings)
         end
       end
     end
+  end
+
+  local dkim_results = task:get_dkim_results()
+  -- For each signature we set authentication results
+  -- dkim=neutral (body hash did not verify) header.d=example.com header.s=sel header.b=fA8VVvJ8;
+  -- dkim=neutral (body hash did not verify) header.d=example.com header.s=sel header.b=f8pM8o90;
+
+  for _,dres in ipairs(dkim_results) do
+    local ar_string = 'none'
+
+    if dres.result == 'reject' then
+      ar_string = 'fail' -- imply failure, not neutral
+    elseif dres.result == 'allow' then
+      ar_string = 'pass'
+    elseif dres.result == 'bad record' or dres.result == 'permerror' then
+      ar_string = 'permerror'
+    elseif dres.result == 'tempfail' then
+      ar_string = 'temperror'
+    end
+    local hdr = {}
+
+    hdr[1] = string.format('dkim=%s', ar_string)
+
+    if dres.fail_reason then
+      hdr[#hdr + 1] = string.format('(%s)', dres.fail_reason)
+    end
+
+    if dres.domain then
+      hdr[#hdr + 1] = string.format('header.d=%s', dres.domain)
+    end
+
+    if dres.selector then
+      hdr[#hdr + 1] = string.format('header.s=%s', dres.selector)
+    end
+
+    if dres.bhash then
+      hdr[#hdr + 1] = string.format('header.b=%s', dres.bhash)
+    end
+
+    table.insert(hdr_parts, table.concat(hdr, ' '))
   end
 
   for auth_type, keys in pairs(auth_results) do
@@ -134,15 +169,6 @@ local function gen_auth_results(task, settings)
           end
         end
         table.insert(hdr_parts, hdr)
-      elseif auth_type == 'dkim' and key ~= 'none' then
-        if common.symbols[auth_types['dkim'][key]][1] then
-          local dkim_parts = {}
-          local opts = common.symbols[auth_types['dkim'][key]][1]['options']
-          for _, v in ipairs(opts) do
-            table.insert(dkim_parts, auth_type .. '=' .. key .. ' header.d=' .. v)
-          end
-          table.insert(hdr_parts, table.concat(dkim_parts, '; '))
-        end
       elseif auth_type == 'arc' and key ~= 'none' then
         if common.symbols[auth_types['arc'][key]][1] then
           local opts = common.symbols[auth_types['arc'][key]][1]['options'] or {}
@@ -152,16 +178,51 @@ local function gen_auth_results(task, settings)
           end
         end
       elseif auth_type == 'spf' and key ~= 'none' then
-        hdr = hdr .. auth_type .. '=' .. key
+        -- Main type
+        local sender
+        local sender_type
         local smtp_from = task:get_from('smtp')
-        if smtp_from and smtp_from[1] and smtp_from[1]['addr'] ~= '' and smtp_from[1]['addr'] ~= nil then
-          hdr = hdr .. ' smtp.mailfrom=' .. smtp_from[1]['addr']
+
+        if smtp_from and
+            smtp_from[1] and
+            smtp_from[1]['addr'] ~= '' and
+            smtp_from[1]['addr'] ~= nil then
+          sender = smtp_from[1]['addr']
+          sender_type = 'smtp.mailfrom'
         else
           local helo = task:get_helo()
           if helo then
-            hdr = hdr .. ' smtp.helo=' .. task:get_helo()
+            sender = helo
+            sender_type = 'smtp.helo'
           end
         end
+
+        if sender and sender_type then
+          -- Comment line
+          local comment = ''
+          if key == 'pass' then
+            comment = string.format('%s: domain of %s designates %s as permitted sender',
+                mta_hostname, sender, tostring(task:get_from_ip() or 'unknown'))
+          elseif key == 'fail' then
+            comment = string.format('%s: domain of %s does not designate %s as permitted sender',
+                mta_hostname, sender, tostring(task:get_from_ip() or 'unknown'))
+          elseif key == 'neutral' or key == 'softfail' then
+            comment = string.format('%s: %s is neither permitted nor denied by domain of %s',
+                mta_hostname, tostring(task:get_from_ip() or 'unknown'), sender)
+          elseif key == 'permerror' then
+            comment = string.format('%s: domain of %s uses mechanism not recognized by this client',
+                mta_hostname, sender)
+          elseif key == 'temperror' then
+            comment = string.format('%s: error in processing during lookup of %s: DNS error',
+                mta_hostname, sender)
+          end
+          hdr = string.format('%s=%s (%s) %s=%s', auth_type, key,
+              comment, sender_type, sender)
+        else
+          hdr = string.format('%s=%s', auth_type, key)
+        end
+
+
         table.insert(hdr_parts, hdr)
       end
     end

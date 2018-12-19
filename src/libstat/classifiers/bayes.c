@@ -38,7 +38,7 @@
         G_STRFUNC, \
         __VA_ARGS__)
 
-INIT_LOG_MODULE(bayes)
+INIT_LOG_MODULE_PUBLIC(bayes)
 
 static inline GQuark
 bayes_error_quark (void)
@@ -80,6 +80,8 @@ inv_chi_square (struct rspamd_task *task, gdouble value, gint freedom_deg)
 
 	sum = prob;
 
+	msg_debug_bayes ("m: %f, prob: %g", m, prob);
+
 	/*
 	 * m is our confidence in class
 	 * prob is e ^ x (small value since x is normally less than zero
@@ -89,7 +91,7 @@ inv_chi_square (struct rspamd_task *task, gdouble value, gint freedom_deg)
 	for (i = 1; i < freedom_deg; i++) {
 		prob *= m / (gdouble)i;
 		sum += prob;
-		msg_debug_bayes ("prob: %.6f, sum: %.6f", prob, sum);
+		msg_debug_bayes ("i=%d, prob: %g, sum: %g", i, prob, sum);
 	}
 
 	return MIN (1.0, sum);
@@ -109,7 +111,7 @@ struct bayes_task_closure {
  * Mathematically we use pow(complexity, complexity), where complexity is the
  * window index
  */
-static const double feature_weight[] = { 0, 1, 4, 27, 256, 3125, 46656, 823543 };
+static const double feature_weight[] = { 0, 3125, 256, 27, 1, 0, 0, 0 };
 
 #define PROB_COMBINE(prob, cnt, weight, assumed) (((weight) * (assumed) + (cnt) * (prob)) / ((weight) + (cnt)))
 /*
@@ -121,12 +123,12 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 {
 	guint i;
 	gint id;
-	guint64 spam_count = 0, ham_count = 0, total_count = 0;
+	guint spam_count = 0, ham_count = 0, total_count = 0;
 	struct rspamd_statfile *st;
 	struct rspamd_task *task;
 	const gchar *token_type = "txt";
 	double spam_prob, spam_freq, ham_freq, bayes_spam_prob, bayes_ham_prob,
-		ham_prob, fw, w, norm_sum, norm_sub, val;
+		ham_prob, fw, w, val;
 
 	task = cl->task;
 
@@ -145,8 +147,8 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 				msg_debug_bayes (
 						"token(meta) %uL <%*s:%*s> probabilistically skipped",
 						tok->data,
-						(int) tok->t1->len, tok->t1->begin,
-						(int) tok->t2->len, tok->t2->begin);
+						(int) tok->t1->original.len, tok->t1->original.begin,
+						(int) tok->t2->original.len, tok->t2->original.begin);
 			}
 
 			return;
@@ -173,7 +175,7 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 	}
 
 	/* Probability for this token */
-	if (total_count > 0) {
+	if (total_count >= ctx->cfg->min_token_hits) {
 		spam_freq = ((double)spam_count / MAX (1., (double) ctx->spam_learns));
 		ham_freq = ((double)ham_count / MAX (1., (double)ctx->ham_learns));
 		spam_prob = spam_freq / (spam_freq + ham_freq);
@@ -187,19 +189,27 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 					G_N_ELEMENTS (feature_weight)];
 		}
 
-		norm_sum = (spam_freq + ham_freq) * (spam_freq + ham_freq);
-		norm_sub = (spam_freq - ham_freq) * (spam_freq - ham_freq);
 
-		w = (norm_sub) / (norm_sum) *
-				(fw * total_count) / (4.0 * (1.0 + fw * total_count));
+		w = (fw * total_count) / (1.0 + fw * total_count);
+
 		bayes_spam_prob = PROB_COMBINE (spam_prob, total_count, w, 0.5);
-		norm_sub = (ham_freq - spam_freq) * (ham_freq - spam_freq);
-		w = (norm_sub) / (norm_sum) *
-				(fw * total_count) / (4.0 * (1.0 + fw * total_count));
+
+		if ((bayes_spam_prob > 0.5 && bayes_spam_prob < 0.5 + ctx->cfg->min_prob_strength) ||
+			(bayes_spam_prob < 0.5 && bayes_spam_prob > 0.5 - ctx->cfg->min_prob_strength)) {
+			msg_debug_bayes (
+					"token %uL <%*s:%*s> skipped, prob not in range: %f",
+					tok->data,
+					(int) tok->t1->stemmed.len, tok->t1->stemmed.begin,
+					(int) tok->t2->stemmed.len, tok->t2->stemmed.begin,
+					bayes_spam_prob);
+
+			return;
+		}
+
 		bayes_ham_prob = PROB_COMBINE (ham_prob, total_count, w, 0.5);
 
-		cl->spam_prob += log2 (bayes_spam_prob);
-		cl->ham_prob += log2 (bayes_ham_prob);
+		cl->spam_prob += log (bayes_spam_prob);
+		cl->ham_prob += log (bayes_ham_prob);
 		cl->processed_tokens ++;
 
 		if (!(tok->flags & RSPAMD_STAT_TOKEN_FLAG_META)) {
@@ -210,29 +220,31 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 		}
 
 		if (tok->t1 && tok->t2) {
-			msg_debug_bayes ("token(%s) %uL <%*s:%*s>: weight: %f, total_count: %L, "
-					"spam_count: %L, ham_count: %L,"
+			msg_debug_bayes ("token(%s) %uL <%*s:%*s>: weight: %f, cf: %f, "
+					"total_count: %ud, "
+					"spam_count: %ud, ham_count: %ud,"
 					"spam_prob: %.3f, ham_prob: %.3f, "
 					"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
 					"current spam prob: %.3f, current ham prob: %.3f",
 					token_type,
 					tok->data,
-					(int) tok->t1->len, tok->t1->begin,
-					(int) tok->t2->len, tok->t2->begin,
-					fw, total_count, spam_count, ham_count,
+					(int) tok->t1->stemmed.len, tok->t1->stemmed.begin,
+					(int) tok->t2->stemmed.len, tok->t2->stemmed.begin,
+					fw, w, total_count, spam_count, ham_count,
 					spam_prob, ham_prob,
 					bayes_spam_prob, bayes_ham_prob,
 					cl->spam_prob, cl->ham_prob);
 		}
 		else {
-			msg_debug_bayes ("token(%s) %uL <?:?>: weight: %f, total_count: %L, "
-					"spam_count: %L, ham_count: %L,"
+			msg_debug_bayes ("token(%s) %uL <?:?>: weight: %f, cf: %f, "
+					"total_count: %ud, "
+					"spam_count: %ud, ham_count: %ud,"
 					"spam_prob: %.3f, ham_prob: %.3f, "
 					"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
 					"current spam prob: %.3f, current ham prob: %.3f",
 					token_type,
 					tok->data,
-					fw, total_count, spam_count, ham_count,
+					fw, w, total_count, spam_count, ham_count,
 					spam_prob, ham_prob,
 					bayes_spam_prob, bayes_ham_prob,
 					cl->spam_prob, cl->ham_prob);
@@ -243,11 +255,18 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 
 
 gboolean
-bayes_init (rspamd_mempool_t *pool, struct rspamd_classifier *cl)
+bayes_init (struct rspamd_config *cfg,
+			struct event_base *ev_base,
+			struct rspamd_classifier *cl)
 {
 	cl->cfg->flags |= RSPAMD_FLAG_CLASSIFIER_INTEGER;
 
 	return TRUE;
+}
+
+void
+bayes_fin (struct rspamd_classifier *cl)
+{
 }
 
 gboolean
@@ -318,14 +337,51 @@ bayes_classify (struct rspamd_classifier * ctx,
 		bayes_classify_token (ctx, tok, &cl);
 	}
 
-	h = 1 - inv_chi_square (task, cl.spam_prob, cl.processed_tokens);
-	s = 1 - inv_chi_square (task, cl.ham_prob, cl.processed_tokens);
+	if (cl.processed_tokens == 0) {
+		msg_info_bayes ("no tokens found in bayes database "
+				  "(%ud total tokens, %ud text tokens), ignore stats",
+				tokens->len, text_tokens);
+
+		return TRUE;
+	}
+
+	if (ctx->cfg->min_tokens > 0 &&
+		cl.text_tokens < (gint)(ctx->cfg->min_tokens * 0.1)) {
+		msg_info_bayes ("ignore bayes probability since we have "
+						"found too few text tokens: %uL (of %ud checked), "
+						"at least %d is required",
+						cl.text_tokens,
+						text_tokens,
+						(gint)(ctx->cfg->min_tokens * 0.1));
+
+		return TRUE;
+	}
+
+	if (cl.spam_prob > -300 && cl.ham_prob > -300) {
+		/* Fisher value is low enough to apply inv_chi_square */
+		h = 1 - inv_chi_square (task, cl.spam_prob, cl.processed_tokens);
+		s = 1 - inv_chi_square (task, cl.ham_prob, cl.processed_tokens);
+	}
+	else {
+		/* Use naive method */
+		if (cl.spam_prob < cl.ham_prob) {
+			h = (1.0 - exp(cl.spam_prob - cl.ham_prob)) /
+					(1.0 + exp(cl.spam_prob - cl.ham_prob));
+			s = 1.0 - h;
+		}
+		else {
+			s = (1.0 - exp(cl.ham_prob - cl.spam_prob)) /
+				(1.0 + exp(cl.ham_prob - cl.spam_prob));
+			h = 1.0 - s;
+		}
+	}
 
 	if (isfinite (s) && isfinite (h)) {
 		final_prob = (s + 1.0 - h) / 2.;
 		msg_debug_bayes (
 				"<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f,"
-						" %L tokens processed of %ud total tokens (%uL text tokens)",
+				" %L tokens processed of %ud total tokens;"
+				" %uL text tokens found of %ud text tokens)",
 				task->message_id,
 				cl.ham_prob,
 				h,
@@ -333,7 +389,8 @@ bayes_classify (struct rspamd_classifier * ctx,
 				s,
 				cl.processed_tokens,
 				tokens->len,
-				cl.text_tokens);
+				cl.text_tokens,
+				text_tokens);
 	}
 	else {
 		/*
@@ -355,17 +412,6 @@ bayes_classify (struct rspamd_classifier * ctx,
 			msg_warn_bayes ("<%s> spam and ham classes are both overflowed",
 					task->message_id);
 		}
-	}
-
-	if (ctx->cfg->min_tokens > 0 &&
-			cl.text_tokens < (gint)(ctx->cfg->min_tokens * 0.1)) {
-		msg_info_bayes ("ignore bayes probability %.2f since we have "
-				"too few text tokens: %uL, at least %d is required",
-				final_prob,
-				cl.text_tokens,
-				(gint)(ctx->cfg->min_tokens * 0.1));
-
-		return TRUE;
 	}
 
 	pprob = rspamd_mempool_alloc (task->task_pool, sizeof (*pprob));
@@ -399,6 +445,19 @@ bayes_classify (struct rspamd_classifier * ctx,
 				(final_prob - 0.5) * 200.);
 		final_prob = rspamd_normalize_probability (final_prob, 0.5);
 		g_assert (st != NULL);
+
+		if (final_prob > 1 || final_prob < 0) {
+			msg_err_bayes ("internal error: probability %f is outside of the "
+				  "allowed range [0..1]", final_prob);
+
+			if (final_prob > 1) {
+				final_prob = 1.0;
+			}
+			else {
+				final_prob = 0.0;
+			}
+		}
+
 		rspamd_task_insert_result (task,
 				st->stcf->symbol,
 				final_prob,
@@ -483,8 +542,8 @@ bayes_learn_spam (struct rspamd_classifier * ctx,
 			msg_debug_bayes ("token %uL <%*s:%*s>: window: %d, total_count: %d, "
 					"spam_count: %d, ham_count: %d",
 					tok->data,
-					(int) tok->t1->len, tok->t1->begin,
-					(int) tok->t2->len, tok->t2->begin,
+					(int) tok->t1->stemmed.len, tok->t1->stemmed.begin,
+					(int) tok->t2->stemmed.len, tok->t2->stemmed.begin,
 					tok->window_idx, total_cnt, spam_cnt, ham_cnt);
 		}
 		else {
