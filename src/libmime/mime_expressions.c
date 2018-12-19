@@ -1627,12 +1627,45 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 	return FALSE;
 }
 
+static inline gboolean
+rspamd_check_ct_attr (const gchar *begin, gsize len,
+		struct expression_argument *arg_pattern)
+{
+	rspamd_regexp_t *re;
+	gboolean r = FALSE;
+
+	if (arg_pattern->type == EXPRESSION_ARGUMENT_REGEXP) {
+		re = arg_pattern->data;
+
+		if (len > 0) {
+			r = rspamd_regexp_search (re,
+					begin, len,
+					NULL, NULL, FALSE, NULL);
+		}
+
+		if (r) {
+			return TRUE;
+		}
+	}
+	else {
+		/* Just do strcasecmp */
+		gsize plen = strlen (arg_pattern->data);
+
+		if (plen == len &&
+			g_ascii_strncasecmp (arg_pattern->data, begin, len) == 0) {
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 static gboolean
 rspamd_content_type_compare_param (struct rspamd_task * task,
 	GArray * args,
 	void *unused)
 {
-	rspamd_regexp_t *re;
+
 	struct expression_argument *arg, *arg1, *arg_pattern;
 	gboolean recursive = FALSE;
 	struct rspamd_mime_part *cur_part;
@@ -1640,7 +1673,6 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 	rspamd_ftok_t srch;
 	struct rspamd_content_type_param *found = NULL, *cur;
 	const gchar *param_name;
-	gboolean r = FALSE;
 
 	if (args == NULL || args->len < 2) {
 		msg_warn_task ("no parameters to function");
@@ -1672,32 +1704,33 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 			}
 		}
 
-		if (cur_part->ct->attrs) {
-			RSPAMD_FTOK_FROM_STR (&srch, param_name);
+		rspamd_ftok_t lit;
+		RSPAMD_FTOK_FROM_STR (&srch, param_name);
+		RSPAMD_FTOK_FROM_STR (&lit, "charset");
 
+		if (rspamd_ftok_equal (&srch, &lit)) {
+			if (rspamd_check_ct_attr (cur_part->ct->charset.begin,
+					cur_part->ct->charset.len, arg_pattern)) {
+				return TRUE;
+			}
+		}
+
+		RSPAMD_FTOK_FROM_STR (&lit, "boundary");
+		if (rspamd_ftok_equal (&srch, &lit)) {
+			if (rspamd_check_ct_attr (cur_part->ct->orig_boundary.begin,
+					cur_part->ct->orig_boundary.len, arg_pattern)) {
+				return TRUE;
+			}
+		}
+
+		if (cur_part->ct->attrs) {
 			found = g_hash_table_lookup (cur_part->ct->attrs, &srch);
 
 			if (found) {
 				DL_FOREACH (found, cur) {
-					if (arg_pattern->type == EXPRESSION_ARGUMENT_REGEXP) {
-						re = arg_pattern->data;
-
-						if (cur->value.len > 0) {
-							r = rspamd_regexp_search (re,
-									cur->value.begin, cur->value.len,
-									NULL, NULL, FALSE, NULL);
-						}
-
-						if (r) {
-							return TRUE;
-						}
-					}
-					else {
-						/* Just do strcasecmp */
-						RSPAMD_FTOK_FROM_STR (&srch, arg_pattern->data);
-						if (rspamd_ftok_casecmp (&srch, &cur->value) == 0) {
-							return TRUE;
-						}
+					if (rspamd_check_ct_attr (cur->value.begin,
+							cur->value.len, arg_pattern)) {
+						return TRUE;
 					}
 				}
 			}
@@ -1753,9 +1786,21 @@ rspamd_content_type_has_param (struct rspamd_task * task,
 			}
 		}
 
-		if (cur_part->ct->attrs) {
-			RSPAMD_FTOK_FROM_STR (&srch, param_name);
 
+		rspamd_ftok_t lit;
+		RSPAMD_FTOK_FROM_STR (&srch, param_name);
+		RSPAMD_FTOK_FROM_STR (&lit, "charset");
+
+		if (rspamd_ftok_equal (&srch, &lit)) {
+			return cur_part->ct->charset.len > 0;
+		}
+
+		RSPAMD_FTOK_FROM_STR (&lit, "boundary");
+		if (rspamd_ftok_equal (&srch, &lit)) {
+			return cur_part->ct->orig_boundary.len > 0;
+		}
+
+		if (cur_part->ct->attrs) {
 			found = g_hash_table_lookup (cur_part->ct->attrs, &srch);
 
 			if (found) {
