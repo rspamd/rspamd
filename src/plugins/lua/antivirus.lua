@@ -18,7 +18,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local lua_util = require "lua_util"
 local fun = require "fun"
-local lua_antivirus = require "lua_antivirus"
+local lua_antivirus = require("lua_scanners").antivirus
 local redis_params
 
 local N = "antivirus"
