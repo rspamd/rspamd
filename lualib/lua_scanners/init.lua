@@ -20,7 +20,7 @@ limitations under the License.
 --]]
 
 local exports = {
-  antivirus = require "lua_antivirus",
+  antivirus = require "lua_scanners/lua_antivirus",
 }
 
 return exports
