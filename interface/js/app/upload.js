@@ -50,10 +50,11 @@ define(["jquery"],
                 },
                 method: "POST",
                 headers: headers,
-                success: function (json) {
+                success: function (json, jqXHR) {
                     cleanTextUpload(source);
-                    if (json[0].status === true) {
-                        rspamd.alertMessage("alert-success", "Data successfully uploaded");
+                    rspamd.alertMessage("alert-success", "Data successfully uploaded");
+                    if (jqXHR.status !== 200) {
+                        rspamd.alertMessage("alert-info", jqXHR.statusText);
                     }
                 }
             });
