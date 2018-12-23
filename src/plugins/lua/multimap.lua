@@ -724,9 +724,12 @@ local function multimap_callback(task, rule)
             name = to_resolve,
           })
 
-          lua_util.debugm(N, rspamd_config, 'resolve() finished: results=%1, is_ok=%2, to_resolve=%3', results, is_ok, to_resolve)
+          lua_util.debugm(N, rspamd_config,
+              'resolve() finished: results=%1, is_ok=%2, to_resolve=%3',
+              results, is_ok, to_resolve)
 
-          if not is_ok and (results ~= 'requested record is not found' and results ~= 'no records with this name') then
+          if not is_ok and
+              (results ~= 'requested record is not found' and results ~= 'no records with this name') then
             rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, results)
           elseif is_ok then
             task:insert_result(rule['symbol'], 1, rule['map'])

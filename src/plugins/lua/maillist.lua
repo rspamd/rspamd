@@ -85,7 +85,8 @@ local function check_ml_mailman(task)
   -- For reminders we have other headers than for normal messages
   header = task:get_header('x-list-administrivia')
   local subject = task:get_header('subject')
-  if (header and string.find(header, 'yes')) or (subject and string.find(subject, 'mailing list memberships reminder$')) then
+  if (header and string.find(header, 'yes')) or
+      (subject and string.find(subject, 'mailing list memberships reminder$')) then
     if not task:get_header('errors-to') or not task:get_header('x-beenthere') then
       return false
     end
@@ -202,7 +203,8 @@ end
 -- And nothing more can be extracted :(
 local function check_ml_majordomo(task)
   local header = task:get_header('Sender')
-  if not header or (not string.find(header, '^owner-.*$') and not string.find(header, '^.*-owner@.*$')) then
+  if not header or
+      (not string.find(header, '^owner-.*$') and not string.find(header, '^.*-owner@.*$')) then
     return false
   end
 

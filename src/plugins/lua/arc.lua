@@ -562,7 +562,8 @@ local function arc_signing_cb(task)
       rspamd_logger.infox(rspamd_config, "Using selector prefix %s for domain %s", settings.selector_prefix, p.domain);
       local function redis_selector_cb(err, data)
         if err or type(data) ~= 'string' then
-          rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM selector for domain %s: %s", p.domain, err)
+          rspamd_logger.infox(rspamd_config, "cannot make request to load DKIM selector for domain %s: %s",
+              p.domain, err)
         else
           try_redis_key(data)
         end
@@ -640,7 +641,8 @@ if settings.use_redis then
   redis_params = rspamd_parse_redis_server('arc')
 
   if not redis_params then
-    rspamd_logger.errx(rspamd_config, 'no servers are specified, but module is configured to load keys from redis, disable arc signing')
+    rspamd_logger.errx(rspamd_config, 'no servers are specified, '..
+        'but module is configured to load keys from redis, disable arc signing')
     return
   end
 end

@@ -213,7 +213,8 @@ local function handle_history_request(task, conn, from, to, reset)
           elseif settings.subject_privacy then
             local hash_alg = settings.subject_privacy_alg
             local subject_hash = hash.create_specific(hash_alg, e.subject)
-            e.subject = settings.subject_privacy_prefix .. ':' .. subject_hash:hex():sub(1,settings.subject_privacy_length)
+            e.subject = settings.subject_privacy_prefix .. ':' ..
+                subject_hash:hex():sub(1,settings.subject_privacy_length)
           end
         end, data)
         reply.rows = data

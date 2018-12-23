@@ -305,7 +305,12 @@ local full_extensions_map = {
   {"dlm", "text/dlm"},
   {"doc", "application/msword"},
   {"docm", "application/vnd.ms-word.document.macroEnabled.12"},
-  {"docx", {"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword", "application/vnd.ms-word.document.12", "application/octet-stream"}},
+  {"docx", {
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/msword",
+    "application/vnd.ms-word.document.12",
+    "application/octet-stream",
+  }},
   {"dot", "application/msword"},
   {"dotm", "application/vnd.ms-word.template.macroEnabled.12"},
   {"dotx", "application/vnd.openxmlformats-officedocument.wordprocessingml.template"},
@@ -770,10 +775,19 @@ local full_extensions_map = {
   {"xlk", "application/vnd.ms-excel"},
   {"xll", "application/vnd.ms-excel"},
   {"xlm", "application/vnd.ms-excel"},
-  {"xls", {"application/vnd.ms-excel", "application/vnd.ms-office", "application/x-excel", "application/octet-stream"}},
+  {"xls", {
+    "application/vnd.ms-excel",
+    "application/vnd.ms-office",
+    "application/x-excel",
+    "application/octet-stream"
+  }},
   {"xlsb", "application/vnd.ms-excel.sheet.binary.macroEnabled.12"},
   {"xlsm", "application/vnd.ms-excel.sheet.macroEnabled.12"},
-  {"xlsx", {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel.12", "application/octet-stream"}},
+  {"xlsx", {
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel.12",
+    "application/octet-stream"
+  }},
   {"xlt", "application/vnd.ms-excel"},
   {"xltm", "application/vnd.ms-excel.template.macroEnabled.12"},
   {"xltx", "application/vnd.openxmlformats-officedocument.spreadsheetml.template"},
@@ -797,7 +811,11 @@ local full_extensions_map = {
   {"xtp", "application/octet-stream"},
   {"xwd", "image/x-xwindowdump"},
   {"z", "application/x-compress"},
-  {"zip", {"application/zip", "application/x-zip-compressed", "application/octet-stream"}},
+  {"zip", {
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/octet-stream"
+  }},
   {"zlib", "application/zlib"},
 }
 

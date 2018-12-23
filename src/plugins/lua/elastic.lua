@@ -99,7 +99,8 @@ local function elastic_send_data(task)
         push_url, err, failed_sends, settings.max_fail)
   else
     if response.code ~= 200 then
-      rspamd_logger.infox(task, "cannot push data to elastic backend (%s): wrong http code %s (%s); failed attempts: %s/%s",
+      rspamd_logger.infox(task,
+          "cannot push data to elastic backend (%s): wrong http code %s (%s); failed attempts: %s/%s",
           push_url, err, response.code, failed_sends, settings.max_fail)
     else
       lua_util.debugm(N, task, "successfully sent %s (%s bytes) rows to ES",

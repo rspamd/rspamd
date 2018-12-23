@@ -247,7 +247,8 @@ local expiry_script = [[
   local tokens = {}
 
   -- Expiry step statistics counters
-  local nelts, extended, discriminated, sum, sum_squares, common, significant, infrequent, infrequent_ttls_set, insignificant, insignificant_ttls_set =
+  local nelts, extended, discriminated, sum, sum_squares, common, significant,
+   infrequent, infrequent_ttls_set, insignificant, insignificant_ttls_set =
     0,0,0,0,0,0,0,0,0,0,0
 
   for _,key in ipairs(keys) do
@@ -348,8 +349,10 @@ local expiry_script = [[
 
   return {
     next, step,
-    {nelts, extended, discriminated, mean, stddev, common, significant, infrequent, infrequent_ttls_set, insignificant, insignificant_ttls_set},
-    {c.nelts, c.extended, c.discriminated, c.sum, c.sum_squares, c.common, c.significant, c.infrequent, c.infrequent_ttls_set, c.insignificant, c.insignificant_ttls_set}
+    {nelts, extended, discriminated, mean, stddev, common, significant, infrequent,
+     infrequent_ttls_set, insignificant, insignificant_ttls_set},
+    {c.nelts, c.extended, c.discriminated, c.sum, c.sum_squares, c.common,
+     c.significant, c.infrequent, c.infrequent_ttls_set, c.insignificant, c.insignificant_ttls_set}
   }
 ]]
 
@@ -393,7 +396,9 @@ local function expire_step(cls, ev_base, worker)
           data[5]
         }
         logger.infox(rspamd_config,
-                [[finished expiry %s%s: %s items checked, %s significant (%s %s), %s insignificant (%s %s), %s common (%s discriminated), %s infrequent (%s %s), %s mean, %s std]],
+                'finished expiry %s%s: %s items checked, %s significant (%s %s), ' ..
+                    '%s insignificant (%s %s), %s common (%s discriminated), ' ..
+                    '%s infrequent (%s %s), %s mean, %s std',
                 lutil.unpack(d))
       end
       log_stat(false)

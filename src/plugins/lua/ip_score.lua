@@ -148,11 +148,13 @@ local ip_score_set = function(task)
         ipnet_score,total_ipnet,
         ip_score, total_ip = pool:get_variable('ip_score',
         'double,double,double,double,double,double,double,double')
-  lua_util.debugm(M, task, "raw scores: asn: %s, total_asn: %s, country: %s, total_country: %s, ipnet: %s, total_ipnet: %s, ip:%s, total_ip: %s",
-    asn_score,total_asn,
-    country_score,total_country,
-    ipnet_score,total_ipnet,
-    ip_score, total_ip)
+  lua_util.debugm(M, task,
+      'raw scores: asn: %s, total_asn: %s, country: %s, ' ..
+          'total_country: %s, ipnet: %s, total_ipnet: %s, ip:%s, total_ip: %s',
+      asn_score, total_asn,
+      country_score, total_country,
+      ipnet_score, total_ipnet,
+      ip_score, total_ip)
 
   local score_mult = 0
   if options['actions'][action] then
@@ -171,7 +173,9 @@ local ip_score_set = function(task)
   country_score,total_country = new_score_set(score, country_score, total_country)
   ipnet_score,total_ipnet = new_score_set(score, ipnet_score, total_ipnet)
   ip_score,total_ip = new_score_set(score, ip_score, total_ip)
-  lua_util.debugm(M, task, "processed scores: asn: %s, total_asn: %s, country: %s, total_country: %s, ipnet: %s, total_ipnet: %s, ip:%s, total_ip: %s",
+  lua_util.debugm(M, task,
+      'processed scores: asn: %s, total_asn: %s, country: %s, total_country: %s,' ..
+          ' ipnet: %s, total_ipnet: %s, ip:%s, total_ip: %s',
     asn_score,total_asn,
     country_score,total_country,
     ipnet_score,total_ipnet,
@@ -208,19 +212,23 @@ local ip_score_set = function(task)
 
   if ip_score ~= 0 then
     total_score = total_score + ip_score
-    table.insert(description_t, 'ip: ' .. '(' .. string.format('%.2f', ip_score * 10) .. ')')
+    table.insert(description_t,
+        'ip: ' .. '(' .. string.format('%.2f', ip_score * 10) .. ')')
   end
   if ipnet_score ~= 0 then
     total_score = total_score + ipnet_score
-    table.insert(description_t, 'ipnet: ' .. ipnet .. '(' .. string.format('%.2f', ipnet_score * 10) .. ')')
+    table.insert(description_t,
+        'ipnet: ' .. ipnet .. '(' .. string.format('%.2f', ipnet_score * 10) .. ')')
   end
   if asn_score ~= 0 then
     total_score = total_score + asn_score
-    table.insert(description_t, 'asn: ' .. asn .. '(' .. string.format('%.2f', asn_score * 10) .. ')')
+    table.insert(description_t,
+        'asn: ' .. asn .. '(' .. string.format('%.2f', asn_score * 10) .. ')')
   end
   if country_score ~= 0 then
     total_score = total_score + country_score
-    table.insert(description_t, 'country: ' .. country .. '(' .. string.format('%.2f', country_score * 10) .. ')')
+    table.insert(description_t,
+        'country: ' .. country .. '(' .. string.format('%.2f', country_score * 10) .. ')')
   end
 
   if options['max_score'] and (total_score*10) > options['max_score'] then
