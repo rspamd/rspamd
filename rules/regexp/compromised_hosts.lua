@@ -140,7 +140,8 @@ reconf['HIDDEN_SOURCE_OBJ'] = {
   group = "compromised_hosts"
 }
 
-local hidden_uri_re = rspamd_regexp.create_cached('/(?!\\/\\.well[-_]known\\/)(?:^\\.[A-Za-z0-9]|\\/\\.[A-Za-z0-9]|\\/\\.\\.\\/)/i')
+local hidden_uri_re = rspamd_regexp.create_cached('/(?!\\/\\.well[-_]known\\/)(?:^\\.[A-Za-z0-9]|\\/'..
+    '\\.[A-Za-z0-9]|\\/\\.\\.\\/)/i')
 rspamd_config.URI_HIDDEN_PATH = {
   callback = function (task)
     local urls = task:get_urls(false)

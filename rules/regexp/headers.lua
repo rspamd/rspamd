@@ -118,7 +118,8 @@ reconf['MISSING_MID'] = {
 
 -- Received seems to be fake
 reconf['R_RCVD_SPAMBOTS'] = {
-  re = 'Received=/^from \\[\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\] by [-.\\w+]{5,255}; [SMTWF][a-z][a-z], [\\s\\d]?\\d [JFMAJSOND][a-z][a-z] \\d{4} \\d{2}:\\d{2}:\\d{2} [-+]\\d{4}$/mH',
+  re = 'Received=/^from \\[\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\] by [-.\\w+]{5,255}; [SMTWF][a-z][a-z],' ..
+      ' [\\s\\d]?\\d [JFMAJSOND][a-z][a-z] \\d{4} \\d{2}:\\d{2}:\\d{2} [-+]\\d{4}$/mH',
   score = 3.0,
   description = 'Spambots signatures in received headers',
   group = 'headers'

@@ -68,5 +68,8 @@ files['test/functional/lua/test_coverage.lua'].globals = {
   '__GLOBAL_COVERAGE_WATCHDOG'
 }
 
+files['/**/rules/'].ignore = {'631'}
+files['/**/test/functional/'].ignore = {'631'}
+
 max_string_line_length = 500
 max_comment_line_length = 500
