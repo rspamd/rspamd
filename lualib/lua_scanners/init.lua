@@ -19,8 +19,37 @@ limitations under the License.
 -- This module contains external scanners functions
 --]]
 
+local fun = require "fun"
+
 local exports = {
-  antivirus = require "lua_scanners/lua_antivirus",
 }
+
+local function require_scanner(name)
+  local sc = require ("lua_scanners/" .. name)
+
+  exports[sc.name or name] = sc
+end
+
+require_scanner('clamav')
+require_scanner('fprot')
+require_scanner('kaspersky_av')
+require_scanner('savapi')
+require_scanner('sophos')
+
+exports.add_scanner = function(name, t, conf_func, check_func)
+  assert(type(conf_func) == 'function' and type(check_func) == 'function',
+      'bad arguments')
+  exports[name] = {
+    type = t,
+    configure = conf_func,
+    check = check_func,
+  }
+end
+
+exports.filter = function(t)
+  return fun.tomap(fun.filter(function(_, elt)
+    return type(elt) == 'table' and elt.type and elt.type == t
+  end, exports))
+end
 
 return exports

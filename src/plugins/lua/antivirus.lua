@@ -18,7 +18,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local lua_util = require "lua_util"
 local fun = require "fun"
-local lua_antivirus = require("lua_scanners").antivirus
+local lua_antivirus = require("lua_scanners").filter('antivirus')
 local redis_params
 
 local N = "antivirus"
@@ -76,7 +76,7 @@ local function add_antivirus_rule(sym, opts)
   end
 
   if not opts['symbol'] then opts['symbol'] = sym:upper() end
-  local cfg = lua_antivirus.av_types[opts['type']]
+  local cfg = lua_antivirus[opts['type']]
 
   if not cfg then
     rspamd_logger.errx(rspamd_config, 'unknown antivirus type: %s',
