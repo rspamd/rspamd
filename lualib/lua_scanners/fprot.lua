@@ -22,7 +22,6 @@ limitations under the License.
 local lua_util = require "lua_util"
 local tcp = require "rspamd_tcp"
 local upstream_list = require "rspamd_upstream_list"
-local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
 
