@@ -332,14 +332,11 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 				"%s/?.lua;"
 				"%s/?.lua;"
 				"%s/?/init.lua;"
-				"%s/rspamd/?.lua;"
 				"%s;"
 				"%s",
 				RSPAMD_CONFDIR,
 				rulesdir,
 				lualibdir, lualibdir,
-				/* Rspamd specific: lualib/rspamd */
-				lualibdir,
 				additional_path, old_path);
 	}
 	else {
@@ -348,12 +345,10 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 				"%s/?.lua;"
 				"%s/?.lua;"
 				"%s/?/init.lua;"
-				"%s/rspamd/?.lua;"
 				"%s",
-				RSPAMD_CONFDIR, rulesdir,
+				RSPAMD_CONFDIR,
+				rulesdir,
 				lualibdir, lualibdir,
-				/* Rspamd specific: lualib/rspamd */
-				lualibdir,
 				old_path);
 	}
 

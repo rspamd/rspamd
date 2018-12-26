@@ -794,22 +794,31 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 gboolean
 rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 		const gchar *path,
+		GHashTable *modules_seen,
 		GError **err)
 {
 	struct stat st;
-	struct script_module *cur_mod;
+	struct script_module *cur_mod, *seen_mod;
 	GPtrArray *paths;
 	gchar *fname, *ext_pos;
 	guint i;
 
 	if (stat (path, &st) == -1) {
-		g_set_error (err,
-			CFG_RCL_ERROR,
-			errno,
-			"cannot stat path %s, %s",
-			path,
-			strerror (errno));
-		return FALSE;
+
+		if (errno != ENOENT) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					errno,
+					"cannot stat path %s, %s",
+					path,
+					strerror (errno));
+			return FALSE;
+		}
+		else {
+			msg_info_config ("plugins path %s is absent, skip it", path);
+
+			return TRUE;
+		}
 	}
 
 	/* Handle directory */
@@ -834,6 +843,16 @@ rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 				*ext_pos = '\0';
 			}
 
+			if (modules_seen) {
+				seen_mod = g_hash_table_lookup (modules_seen, cur_mod->name);
+
+				if (seen_mod != NULL) {
+					msg_info_config ("already seen module %s at %s, skip %s",
+							cur_mod->name, seen_mod->path, cur_mod->path);
+					continue;
+				}
+			}
+
 			if (cfg->script_modules == NULL) {
 				cfg->script_modules = g_list_append (cfg->script_modules,
 						cur_mod);
@@ -843,6 +862,10 @@ rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 			} else {
 				cfg->script_modules = g_list_append (cfg->script_modules,
 						cur_mod);
+			}
+
+			if (modules_seen) {
+				g_hash_table_insert (modules_seen, cur_mod->name, cur_mod);
 			}
 		}
 
@@ -862,6 +885,17 @@ rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 			*ext_pos = '\0';
 		}
 
+		if (modules_seen) {
+			seen_mod = g_hash_table_lookup (modules_seen, cur_mod->name);
+
+			if (seen_mod != NULL) {
+				msg_info_config ("already seen module %s at %s, skip %s",
+						cur_mod->name, seen_mod->path, cur_mod->path);
+
+				return TRUE;
+			}
+		}
+
 		if (cfg->script_modules == NULL) {
 			cfg->script_modules = g_list_append (cfg->script_modules,
 					cur_mod);
@@ -872,6 +906,10 @@ rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 		else {
 			cfg->script_modules = g_list_append (cfg->script_modules,
 					cur_mod);
+		}
+
+		if (modules_seen) {
+			g_hash_table_insert (modules_seen, cur_mod->name, cur_mod);
 		}
 	}
 
@@ -888,21 +926,48 @@ rspamd_rcl_modules_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	const gchar *data;
 
 	if (obj->type == UCL_OBJECT) {
+		GHashTable *mods_seen = g_hash_table_new (rspamd_strcase_hash,
+				rspamd_strcase_equal);
 		val = ucl_object_lookup (obj, "path");
 
-		LL_FOREACH (val, cur)
-		{
-			if (ucl_object_tostring_safe (cur, &data)) {
-				if (!rspamd_rcl_add_lua_plugins_path (cfg,
-						rspamd_mempool_strdup (cfg->cfg_pool, data), err)) {
-					return FALSE;
+		if (val) {
+			LL_FOREACH (val, cur) {
+				if (ucl_object_tostring_safe (cur, &data)) {
+					if (!rspamd_rcl_add_lua_plugins_path (cfg,
+							rspamd_mempool_strdup (cfg->cfg_pool, data),
+							mods_seen,
+							err)) {
+						return FALSE;
+					}
+				}
+			}
+		}
+		else {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"path attribute is missing");
+			return FALSE;
+		}
+
+		val = ucl_object_lookup (obj, "fallback_path");
+
+		if (val) {
+			LL_FOREACH (val, cur) {
+				if (ucl_object_tostring_safe (cur, &data)) {
+					if (!rspamd_rcl_add_lua_plugins_path (cfg,
+							rspamd_mempool_strdup (cfg->cfg_pool, data),
+							mods_seen,
+							err)) {
+						return FALSE;
+					}
 				}
 			}
 		}
 	}
 	else if (ucl_object_tostring_safe (obj, &data)) {
 		if (!rspamd_rcl_add_lua_plugins_path (cfg,
-				rspamd_mempool_strdup (cfg->cfg_pool, data), err)) {
+				rspamd_mempool_strdup (cfg->cfg_pool, data), NULL, err)) {
 			return FALSE;
 		}
 	}

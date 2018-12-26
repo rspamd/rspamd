@@ -445,6 +445,7 @@ ucl_object_t *rspamd_rcl_add_doc_by_example (struct rspamd_config *cfg,
  */
 gboolean rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 		const gchar *path,
+		GHashTable *modules_seen,
 		GError **err);
 
 
