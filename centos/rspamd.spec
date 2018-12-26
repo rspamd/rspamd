@@ -88,7 +88,7 @@ lua.
 %endif
         -DLOGDIR=%{_localstatedir}/log/rspamd \
         -DEXAMPLESDIR=%{_datadir}/examples/rspamd \
-        -DPLUGINSDIR=%{_datadir}/rspamd \
+        -DSHAREDIR=%{_datadir}/rspamd \
         -DLIBDIR=%{_libdir}/rspamd/ \
         -DINCLUDEDIR=%{_includedir} \
         -DNO_SHARED=ON \
