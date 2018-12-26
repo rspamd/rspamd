@@ -78,7 +78,7 @@ local function print_help(key, value, tabs)
       local nv = string.match(value['data'], '^#%s*(.*)%s*$') or value.data
       print(string.format('%s\tDescription: %s', tabs, nv))
     end
-    if value['type'] then
+    if type(value['type']) == 'string' then
       print(string.format('%s\tType: %s', tabs, value['type']))
     end
     if type(value['required']) == 'boolean' then
