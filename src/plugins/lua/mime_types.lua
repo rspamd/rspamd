@@ -821,7 +821,7 @@ local full_extensions_map = {
 
 local function check_mime_type(task)
   local function gen_extension(fname)
-    local parts = rspamd_str_split(fname, '.')
+    local parts = lua_util.str_split(fname, '.')
 
     local ext = {}
     for n = 1, 2 do
@@ -889,7 +889,7 @@ local function check_mime_type(task)
       else
         if ext2 then
           check_extension(settings['bad_extensions'][ext],
-            settings['bad_extensions'][ext2])
+              settings['bad_extensions'][ext2])
           -- Check for archive cloaking like .zip.gz
           if settings['archive_extensions'][ext2]
             -- Exclude multipart archive extensions, e.g. .zip.001
@@ -973,6 +973,8 @@ local function check_mime_type(task)
           if check then
             local fl = arch:get_files_full()
 
+            local nfiles = #fl
+
             for _,f in ipairs(fl) do
               -- Strip bad characters
               if f['name'] then
@@ -988,6 +990,21 @@ local function check_mime_type(task)
 
               if f['name'] then
                 check_filename(f['name'], nil, true, p)
+              end
+            end
+
+            if nfiles == 1 and fl[1].name then
+              -- We check that extension of the file inside archive is
+              -- the same as double extension of the file
+              local _,ext2 = gen_extension(filename)
+
+              if ext2 then
+                local enc_ext = gen_extension(fl[1].name)
+
+                if enc_ext and enc_ext ~= ext2 then
+                  task:insert_result(settings['symbol_double_extension'], 2.0,
+                      string.format("%s!=%s", ext2, enc_ext))
+                end
               end
             end
           end
