@@ -436,6 +436,14 @@ const struct rdns_request_name* rdns_request_get_name (struct rdns_request *req,
 		unsigned int *count);
 
 /**
+ * Return a DNS server name associated with the request
+ * @param req request object
+ * @return name of a DNS server
+ */
+const char* rdns_request_get_server (struct rdns_request *req);
+
+
+/**
  * Return PTR string for a request (ipv4 or ipv6) addresses
  * @param str string representation of IP address
  * @return name to resolve or NULL if `str` is not an IP address; caller must free result when it is unused

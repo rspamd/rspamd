@@ -663,6 +663,16 @@ rdns_request_get_name (struct rdns_request *req, unsigned int *count)
 	return req->requested_names;
 }
 
+const char*
+rdns_request_get_server (struct rdns_request *req)
+{
+	if (req && req->io) {
+		return req->io->srv->name;
+	}
+
+	return NULL;
+}
+
 char *
 rdns_generate_ptr_from_str (const char *str)
 {
