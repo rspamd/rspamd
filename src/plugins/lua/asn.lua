@@ -31,8 +31,6 @@ local options = {
     ip6 = 'asn6.rspamd.com',
   },
   symbol = 'ASN',
-  expire = 86400, -- 1 day by default
-  key_prefix = 'rasn',
   check_local = false,
 }
 
@@ -42,16 +40,17 @@ local function asn_check(task)
 
   local function asn_set(asn, ipnet, country)
     local descr_t = {}
+    local mempool = task:get_mempool()
     if asn then
-      task:get_mempool():set_variable("asn", asn)
+      mempool:set_variable("asn", asn)
       table.insert(descr_t, "asn:" .. asn)
     end
     if ipnet then
-      task:get_mempool():set_variable("ipnet", ipnet)
+      mempool:set_variable("ipnet", ipnet)
       table.insert(descr_t, "ipnet:" .. ipnet)
     end
     if country then
-      task:get_mempool():set_variable("country", country)
+      mempool:set_variable("country", country)
       table.insert(descr_t, "country:" .. country)
     end
     if options['symbol'] then
@@ -60,27 +59,42 @@ local function asn_check(task)
   end
 
   local asn_check_func = {}
-  function asn_check_func.rspamd(ip)
+  asn_check_func.rspamd = function(ip)
     local dnsbl = options['provider_info']['ip' .. ip:get_version()]
-    local req_name = rspamd_logger.slog("%1.%2",
+    local req_name = string.format("%s.%s",
         table.concat(ip:inversed_str_octets(), '.'), dnsbl)
-    local function rspamd_dns_cb(_, _, results, dns_err)
+    local function rspamd_dns_cb(_, _, results, dns_err, _, _, serv)
       if dns_err and (dns_err ~= 'requested record is not found' and dns_err ~= 'no records with this name') then
-        rspamd_logger.errx(task, 'error querying dns (%s): %s', req_name, dns_err)
+        rspamd_logger.errx(task, 'error querying dns "%s" on %s: %s',
+            req_name, serv, dns_err)
       end
-      if not (results and results[1]) then return end
+      if not (results and results[1]) then
+        rspamd_logger.infox(task, 'cannot query ip %s on %s: no results',
+            req_name, serv)
+        return
+      end
+
+      lua_util.debugm(N, task, 'got reply from %s when requesting %s: %s',
+        serv, req_name, results[1])
+
       local parts = rspamd_re:split(results[1])
       -- "15169 | 8.8.8.0/24 | US | arin |" for 8.8.8.8
       asn_set(parts[1], parts[2], parts[3])
     end
 
-    task:get_resolver():resolve_txt({task = task,
-                                     name = req_name,
-                                     callback = rspamd_dns_cb})
+    task:get_resolver():resolve_txt({
+      task = task,
+      name = req_name,
+      callback = rspamd_dns_cb
+    })
   end
 
   local ip = task:get_from_ip()
-  if not (ip and ip:is_valid()) or (not options.check_local and ip:is_local()) then return end
+  if not (ip and ip:is_valid()) or
+      (not options.check_local and ip:is_local()) then
+    return
+  end
+
   asn_check_func[options['provider_type']](ip)
 end
 
