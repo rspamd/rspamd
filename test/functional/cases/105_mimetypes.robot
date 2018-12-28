@@ -39,7 +39,7 @@ Rar4
 
 Cloaked Archive Extension
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/f.zip.gz.eml
-  Check Rspamc  ${result}  MIME_ARCHIVE_IN_ARCHIVE \\(\\d+\\.\\d+\\)\\[\\.zip\\.gz\\]\\n  re=1
+  Check Rspamc  ${result}  MIME_ARCHIVE_IN_ARCHIVE \\(\\d+\\.\\d+\\)\\[\\.zip\\.gz  re=1
 
 Multipart Archive Extension
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/f.zip.001.eml
