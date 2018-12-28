@@ -98,7 +98,7 @@ rspamd_converter_dtor (gpointer p)
 	g_free (c);
 }
 
-static int32_t
+int32_t
 rspamd_converter_to_uchars (struct rspamd_charset_converter *cnv,
 							UChar *dest,
 							int32_t destCapacity,
@@ -132,7 +132,7 @@ rspamd_converter_to_uchars (struct rspamd_charset_converter *cnv,
 }
 
 
-static struct rspamd_charset_converter *
+struct rspamd_charset_converter *
 rspamd_mime_get_converter_cached (const gchar *enc, UErrorCode *err)
 {
 	const gchar *canon_name;
@@ -497,8 +497,8 @@ rspamd_mime_charset_utf_enforce (gchar *in, gsize len)
 	}
 }
 
-static const char *
-rspamd_mime_charset_find_by_content (gchar *in, gsize inlen)
+const char *
+rspamd_mime_charset_find_by_content (const gchar *in, gsize inlen)
 {
 	static UCharsetDetector *csd;
 	const UCharsetMatch **csm, *sel = NULL;
@@ -524,7 +524,7 @@ rspamd_mime_charset_find_by_content (gchar *in, gsize inlen)
 detect:
 
 	ucsdet_setText (csd, in, inlen, &uc_err);
-	csm = ucsdet_detectAll(csd, &matches, &uc_err);
+	csm = ucsdet_detectAll (csd, &matches, &uc_err);
 
 	for (i = 0; i < matches; i ++) {
 		if ((conf = ucsdet_getConfidence (csm[i], &uc_err)) > max_conf) {

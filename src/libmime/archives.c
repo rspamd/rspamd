@@ -18,9 +18,12 @@
 #include "message.h"
 #include "task.h"
 #include "archives.h"
+#include "libmime/mime_encoding.h"
 #include <unicode/uchar.h>
 #include <unicode/utf8.h>
 #include <unicode/utf16.h>
+#include <unicode/ucnv.h>
+
 
 static void
 rspamd_archive_dtor (gpointer p)
@@ -40,6 +43,79 @@ rspamd_archive_dtor (gpointer p)
 	}
 
 	g_ptr_array_free (arch->files, TRUE);
+}
+
+static GString *
+rspamd_archive_file_try_utf (const gchar *in, gsize inlen)
+{
+	const gchar *charset = NULL, *p, *end;
+	GString *res;
+
+	charset = rspamd_mime_charset_find_by_content (in, inlen);
+
+	if (charset) {
+		UChar *tmp;
+		UErrorCode uc_err = U_ZERO_ERROR;
+		gint32 r, clen, dlen;
+		struct rspamd_charset_converter *conv;
+		UConverter *utf8_converter;
+
+		conv = rspamd_mime_get_converter_cached (charset, &uc_err);
+		utf8_converter = rspamd_get_utf8_converter ();
+
+		if (conv == NULL) {
+			msg_err ("cannot open converter for %s: %s",
+					charset, u_errorName (uc_err));
+
+			return NULL;
+		}
+
+		tmp = g_malloc (sizeof (*tmp) * (inlen + 1));
+		r = rspamd_converter_to_uchars (conv, tmp, inlen + 1,
+				in, inlen, &uc_err);
+		if (!U_SUCCESS (uc_err)) {
+			msg_err ("cannot convert data to unicode from %s: %s",
+					charset, u_errorName (uc_err));
+			g_free (tmp);
+
+			return NULL;
+		}
+
+		clen = ucnv_getMaxCharSize (utf8_converter);
+		dlen = UCNV_GET_MAX_BYTES_FOR_STRING (r, clen);
+		res = g_string_sized_new (dlen);
+		r = ucnv_fromUChars (utf8_converter, res->str, dlen, tmp, r, &uc_err);
+
+		if (!U_SUCCESS (uc_err)) {
+			msg_err ("cannot convert data from unicode from %s: %s",
+					charset, u_errorName (uc_err));
+			g_free (tmp);
+			g_string_free (res, TRUE);
+
+			return NULL;
+		}
+
+		res->len = r;
+	}
+	else {
+		/* Convert unsafe characters to '?' */
+		res = g_string_sized_new (inlen);
+		p = in;
+		end = in + inlen;
+
+		while (p < end) {
+			if (g_ascii_isgraph (*p)) {
+				g_string_append_c (res, *p);
+			}
+			else {
+				g_string_append_c (res, '?');
+			}
+
+			p ++;
+		}
+	}
+
+	return res;
 }
 
 static void
@@ -147,11 +223,17 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 		}
 
 		f = g_malloc0 (sizeof (*f));
-		f->fname = g_string_new_len (cd + cd_basic_len, fname_len);
+		f->fname = rspamd_archive_file_try_utf (cd + cd_basic_len, fname_len);
 		f->compressed_size = comp_size;
 		f->uncompressed_size = uncomp_size;
-		g_ptr_array_add (arch->files, f);
-		msg_debug_task ("found file in zip archive: %v", f->fname);
+
+		if (f->fname) {
+			g_ptr_array_add (arch->files, f);
+			msg_debug_task ("found file in zip archive: %v", f->fname);
+		}
+		else {
+			g_free (f);
+		}
 
 		cd += fname_len + comment_len + extra_len + cd_basic_len;
 	}
@@ -1227,7 +1309,10 @@ rspamd_7zip_ucs2_to_utf8 (struct rspamd_task *task, const guchar *p,
 
 	while (src_pos < len) {
 		U16_NEXT (up, src_pos, len, wc);
-		U8_APPEND (res->str, dest_pos, res->allocated_len, wc, is_error);
+
+		if (wc > 0) {
+			U8_APPEND (res->str, dest_pos, res->allocated_len, wc, is_error);
+		}
 
 		if (is_error) {
 			g_string_free (res, TRUE);
@@ -1519,18 +1604,13 @@ rspamd_archive_process_gzip (struct rspamd_task *task,
 					struct rspamd_archive_file *f;
 
 					f = g_malloc0 (sizeof (*f));
-					f->fname = g_string_new (fname_start);
+					f->fname = rspamd_archive_file_try_utf (fname_start,
+							p - fname_start);
 
 					g_ptr_array_add (arch->files, f);
 
 					goto set;
 				}
-			}
-			else if (!g_ascii_isgraph (*p)) {
-				msg_debug_task ("gzip archive is invalid, bad filename at pos %d",
-						(int)(p - start));
-
-				return;
 			}
 
 			p ++;
