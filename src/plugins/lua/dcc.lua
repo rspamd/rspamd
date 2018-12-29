@@ -21,6 +21,7 @@ local N = 'dcc'
 local symbol_bulk = "DCC_BULK"
 local symbol = "DCC_REJECT"
 local opts = rspamd_config:get_all_opt(N)
+local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local dcc = require("lua_scanners").filter('dcc').dcc
 
