@@ -104,7 +104,10 @@ local function dcc_check(task, content, _, rule)
             timeout = rule.timeout or 2.0,
             shutdown = true,
             data = request_data,
-            callback = dcc_callback
+            callback = dcc_callback,
+            body_max = 999999,
+            fuz1_max = 999999,
+            fuz2_max = 999999,
           })
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits exceed', rule['symbol'], rule['type'])
@@ -117,25 +120,75 @@ local function dcc_check(task, content, _, rule)
         lua_util.debugm(N, task, 'DCC result=%1 disposition=%2 header="%3"',
             result, disposition, header)
 
-        --[[
-        @todo: Implement math function to calc the score dynamically based on return values. Maybe check spamassassin implementation.
-        ]] --
-
         if header then
           local _,_,info = header:find("; (.-)$")
+
           if (result == 'R') then
             -- Reject
             common.yield_result(task, rule, info, rule.default_score)
           elseif (result == 'T') then
             -- Temporary failure
             rspamd_logger.warnx(task, 'DCC returned a temporary failure result: %s', result)
-            task:insert_result(rule['symbol_fail'], 0.0, 'DCC returned a temporary failure result:' .. result)
+            task:insert_result(rule.symbol_fail,
+                0.0,
+                'tempfail:' .. result)
           elseif result == 'A' then
-            -- do nothing
             if rule.log_clean then
-              rspamd_logger.infox(task, '%s: clean, returned result A - info: %s', rule.log_prefix, info)
+              rspamd_logger.infox(task, '%s: clean, returned result A - info: %s',
+                  rule.log_prefix, info)
             else
-              lua_util.debugm(N, task, '%s: returned result A - info: %s', rule.log_prefix, info)
+              lua_util.debugm(N, task, '%s: returned result A - info: %s',
+                  rule.log_prefix, info)
+
+              local opts = {}
+              local score = 0.0
+              info = info:lower()
+              local rep = info:match('rep=([^=%s]+)')
+
+              -- Adjust reputation if available
+              if rep then rep = tonumber(rep) end
+              if not rep then
+                rep = 1.0
+              end
+
+              local function check_threshold(what, num, lim)
+                local rnum
+                if num == 'many' then
+                  rnum = lim
+                else
+                  rnum = tonumber(num)
+                end
+
+                if rnum and rnum >= lim then
+                  opts[#opts + 1] = string.format('%s=%s', what, num)
+                  score = score + rep / 3.0
+                end
+              end
+
+              info = info:lower()
+              local body = info:match('body=([^=%s]+)')
+
+              if body then
+                check_threshold('body', body, rule.body_max)
+              end
+
+              local fuz1 = info:match('fuz1=([^=%s]+)')
+
+              if fuz1 then
+                check_threshold('fuz1', fuz1, rule.fuz1_max)
+              end
+
+              local fuz2 = info:match('fuz2=([^=%s]+)')
+
+              if fuz2 then
+                check_threshold('fuz2', fuz2, rule.fuz2_max)
+              end
+
+              if #opts > 0 and score > 0 then
+                task:insert_result(rule.symbol_bulk,
+                    score,
+                    opts)
+              end
             end
           elseif result == 'G' then
             -- do nothing
@@ -154,7 +207,9 @@ local function dcc_check(task, content, _, rule)
           else
             -- Unknown result
             rspamd_logger.warnx(task, 'DCC result error: %1', result);
-            task:insert_result(rule['symbol_fail'], 0.0, 'DCC result error: ' .. result)
+            task:insert_result(rule.symbol_fail,
+                0.0,
+                'error: ' .. result)
           end
         end
       end
@@ -187,6 +242,12 @@ local function dcc_config(opts)
     default_score = 1,
     action = false,
     client = '0.0.0.0',
+    symbol_fail = 'DCC_FAIL',
+    symbol = 'DCC_REJECT',
+    symbol_bulk = 'DCC_BULK',
+    body_max = 999999,
+    fuz1_max = 999999,
+    fuz2_max = 999999,
   }
 
   dcc_conf = lua_util.override_defaults(dcc_conf, opts)

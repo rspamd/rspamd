@@ -19,6 +19,7 @@ limitations under the License.
 
 local N = 'dcc'
 local symbol_bulk = "DCC_BULK"
+local symbol = "DCC_REJECT"
 local opts = rspamd_config:get_all_opt(N)
 local rspamd_logger = require "rspamd_logger"
 local dcc = require("lua_scanners").filter('dcc').dcc
@@ -32,6 +33,9 @@ dcc {
   socket = "/var/dcc/dccifd"; # Unix socket
   servers = "127.0.0.1:10045" # OR TCP upstreams
   timeout = 2s; # Timeout to wait for checks
+  body_max = 999999; # Bulkness threshold for body
+  fuz1_max = 999999; # Bulkness threshold for fuz1
+  fuz2_max = 999999; # Bulkness threshold for fuz2
 }
 ]])
   return
@@ -58,20 +62,51 @@ if opts['host'] ~= nil and not opts['port'] then
 end
 -- WORKAROUND for deprecated host and port settings
 
-if not opts.symbol then opts.symbol = symbol_bulk end
+if not opts.symbol_bulk then opts.symbol_bulk = symbol_bulk end
+if not opts.symbol then opts.symbol = symbol end
+
 rule = dcc.configure(opts)
 
 if rule then
-  rspamd_config:register_symbol({
-    name = opts.symbol,
+  local id = rspamd_config:register_symbol({
+    name = 'DCC_CHECK',
     callback = check_dcc
+  })
+  rspamd_config:register_symbol{
+    type = 'virtual',
+    parent = id,
+    name = opts.symbol
+  }
+  rspamd_config:register_symbol{
+    type = 'virtual',
+    parent = id,
+    name = opts.symbol_bulk
+  }
+  rspamd_config:register_symbol{
+    type = 'virtual',
+    parent = id,
+    name = 'DCC_FAIL'
+  }
+  rspamd_config:set_metric_symbol({
+    group = N,
+    score = 1.0,
+    description = 'Detected as bulk mail by DCC',
+    one_shot = true,
+    name = opts.symbol_bulk,
   })
   rspamd_config:set_metric_symbol({
     group = N,
     score = 2.0,
-    description = 'Detected as bulk mail by DCC',
+    description = 'Rejected by DCC',
     one_shot = true,
     name = opts.symbol,
+  })
+  rspamd_config:set_metric_symbol({
+    group = N,
+    score = 0.0,
+    description = 'DCC failure',
+    one_shot = true,
+    name = 'DCC_FAIL',
   })
 else
   lua_util.disable_module(N, "config")
