@@ -58,6 +58,7 @@ local function kaspersky_config(opts)
       kaspersky_conf['servers'], 0)
 
   if kaspersky_conf['upstreams'] then
+    lua_util.add_debug_alias('antivirus', N)
     return kaspersky_conf
   end
 

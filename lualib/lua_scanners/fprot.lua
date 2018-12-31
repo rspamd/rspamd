@@ -62,6 +62,7 @@ local function fprot_config(opts)
       fprot_conf.default_port)
 
   if fprot_conf['upstreams'] then
+    lua_util.add_debug_alias('antivirus', N)
     return fprot_conf
   end
 

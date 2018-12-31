@@ -65,6 +65,7 @@ local function savapi_config(opts)
       savapi_conf.default_port)
 
   if savapi_conf['upstreams'] then
+    lua_util.add_debug_alias('antivirus', N)
     return savapi_conf
   end
 

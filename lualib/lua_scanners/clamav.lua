@@ -63,6 +63,7 @@ local function clamav_config(opts)
       clamav_conf.default_port)
 
   if clamav_conf['upstreams'] then
+    lua_util.add_debug_alias('antivirus', N)
     return clamav_conf
   end
 

@@ -84,7 +84,7 @@ local function yield_result(task, rule, vname, N, dyn_weight)
   end
 end
 
-local function message_not_too_large(task, content, rule)
+local function message_not_too_large(task, content, rule, N)
   local max_size = tonumber(rule.max_size)
   if not max_size then return true end
   if #content > max_size then
@@ -176,18 +176,11 @@ local function save_av_cache(task, digest, rule, to_save, N)
 end
 
 local function text_parts_min_words(task, min_words)
-  local text_parts_empty = true
-  local text_parts = task:get_text_parts()
-
   local filter_func = function(p)
     return p:get_words_count() >= min_words
   end
 
-  fun.each(function(p)
-    text_parts_empty = false
-  end, fun.filter(filter_func, text_parts))
-
-  return text_parts_empty
+  return fun.any(filter_func, task:get_text_parts())
 
 end
 

@@ -64,6 +64,7 @@ local function sophos_config(opts)
       sophos_conf.default_port)
 
   if sophos_conf['upstreams'] then
+    lua_util.add_debug_alias('antivirus', N)
     return sophos_conf
   end
 
