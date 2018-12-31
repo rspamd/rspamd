@@ -280,7 +280,7 @@ local function dcc_config(opts)
 end
 
 return {
-  type = {'dcc','spam scan'},
+  type = {'dcc','bulk_scanner', 'scanner'},
   description = 'dcc bulk scanner',
   configure = dcc_config,
   check = dcc_check,
