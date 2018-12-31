@@ -770,6 +770,7 @@ end
 -- Debugging support
 local unconditional_debug = false
 local debug_modules = {}
+local debug_aliases = {}
 local log_level = 384 -- debug + forced (1 << 7 | 1 << 8)
 
 if type(rspamd_config) == 'userdata' then
@@ -784,10 +785,22 @@ if type(rspamd_config) == 'userdata' then
       end
     end
 
-    if not unconditional_debug and logging.debug_modules then
-      for _,m in ipairs(logging.debug_modules) do
-        debug_modules[m] = true
-        logger.infox(rspamd_config, 'enable debug for Lua module %s', m)
+    if not unconditional_debug then
+      if logging.debug_modules then
+        for _,m in ipairs(logging.debug_modules) do
+          debug_modules[m] = true
+          logger.infox(rspamd_config, 'enable debug for Lua module %s', m)
+        end
+      end
+
+      if #debug_aliases > 0 then
+        for alias,mod in pairs(debug_aliases) do
+          if debug_modules[mod] then
+            debug_modules[alias] = true
+            logger.infox(rspamd_config, 'enable debug for Lua module %s (%s aliased)',
+                alias, mod)
+          end
+        end
       end
     end
   end
@@ -808,6 +821,20 @@ exports.debugm = function(mod, obj_or_fmt, fmt_or_something, ...)
   end
 end
 
+--[[[
+-- @function lua_util.add_debug_alias(mod, alias)
+-- Add debugging alias so logging to `alias` will be treated as logging to `mod`
+--]]
+exports.add_debug_alias = function(mod, alias)
+  local logger = require "rspamd_logger"
+  debug_aliases[alias] = mod
+
+  if debug_modules[mod] then
+    debug_modules[alias] = true
+    logger.infox(rspamd_config, 'enable debug for Lua module %s (%s aliased)',
+        alias, mod)
+  end
+end
 ---[[[
 -- @function lua_util.get_task_verdict(task)
 -- Returns verdict for a task, must be called from idempotent filters only
