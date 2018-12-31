@@ -25,7 +25,7 @@ local upstream_list = require "rspamd_upstream_list"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
 
-local N = "antivirus"
+local N = "fprot"
 
 local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
@@ -35,8 +35,9 @@ local function fprot_config(opts)
     scan_text_mime = false;
     scan_image_mime = false;
     default_port = 10200,
-    timeout = 15.0, -- FIXME: this will break task_timeout!
+    timeout = 5.0, -- FIXME: this will break task_timeout!
     log_clean = false,
+    detection_category = "virus",
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
     message = default_message,
@@ -152,7 +153,7 @@ local function fprot_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule) then
+  if common.need_av_check(task, content, rule, N) then
     if common.check_av_cache(task, digest, rule, fprot_check_uncached, N) then
       return
     else

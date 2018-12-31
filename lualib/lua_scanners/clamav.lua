@@ -26,7 +26,7 @@ local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
 
-local N = "antivirus"
+local N = "clamav"
 
 local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
@@ -37,7 +37,8 @@ local function clamav_config(opts)
     scan_image_mime = false;
     default_port = 3310,
     log_clean = false,
-    timeout = 15.0, -- FIXME: this will break task_timeout!
+    timeout = 5.0, -- FIXME: this will break task_timeout!
+    detection_category = "virus",
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
     message = default_message,
@@ -149,7 +150,7 @@ local function clamav_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule) then
+  if common.need_av_check(task, content, rule, N) then
     if common.check_av_cache(task, digest, rule, clamav_check_uncached, N) then
       return
     else

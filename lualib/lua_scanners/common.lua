@@ -22,6 +22,7 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
+local fun = require "fun"
 
 local exports = {}
 
@@ -46,36 +47,38 @@ local function match_patterns(default_sym, found, patterns)
   end
 end
 
-local function yield_result(task, rule, vname, N)
+local function yield_result(task, rule, vname, N, dyn_weight)
   local all_whitelisted = true
+  if not dyn_weight then dyn_weight = 1.0 end
   if type(vname) == 'string' then
-    local symname = match_patterns(rule['symbol'], vname, rule['patterns'])
-    if rule['whitelist'] and rule['whitelist']:get_key(vname) then
-      rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule['type'], vname)
+    local symname = match_patterns(rule.symbol, vname, rule.patterns)
+    if rule.whitelist and rule.whitelist:get_key(vname) then
+      rspamd_logger.infox(task, '%s: "%s" is in whitelist', N, vname)
       return
     end
     task:insert_result(symname, 1.0, vname)
-    rspamd_logger.infox(task, '%s: virus found: "%s"', rule['type'], vname)
+    rspamd_logger.infox(task, '%s: %s found: "%s"', N, rule.detection_category, vname)
   elseif type(vname) == 'table' then
     for _, vn in ipairs(vname) do
-      local symname = match_patterns(rule['symbol'], vn, rule['patterns'])
-      if rule['whitelist'] and rule['whitelist']:get_key(vn) then
-        rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule['type'], vn)
+      local symname = match_patterns(rule.symbol, vn, rule.patterns)
+      if rule.whitelist and rule.whitelist:get_key(vn) then
+        rspamd_logger.infox(task, '%s: "%s" is in whitelist', N, vn)
       else
         all_whitelisted = false
-        task:insert_result(symname, 1.0, vn)
-        rspamd_logger.infox(task, '%s: virus found: "%s"', rule['type'], vn)
+        task:insert_result(symname, dyn_weight, vn)
+        rspamd_logger.infox(task, '%s: %s found: "%s"',
+            N, rule.detection_category, vn)
       end
     end
   end
-  if rule['action'] then
+  if rule.action then
     if type(vname) == 'table' then
       if all_whitelisted then return end
       vname = table.concat(vname, '; ')
     end
     task:set_pre_result(rule['action'],
         lua_util.template(rule.message or 'Rejected', {
-          SCANNER = rule['type'],
+          SCANNER = N,
           VIRUS = vname,
         }), N)
   end
@@ -85,15 +88,15 @@ local function message_not_too_large(task, content, rule)
   local max_size = tonumber(rule.max_size)
   if not max_size then return true end
   if #content > max_size then
-    rspamd_logger.infox(task, "skip %s AV check as it is too large: %s (%s is allowed)",
-        rule.type, #content, max_size)
+    rspamd_logger.infox(task, "skip %s check as it is too large: %s (%s is allowed)",
+        N, #content, max_size)
     return false
   end
   return true
 end
 
-local function need_av_check(task, content, rule)
-  return message_not_too_large(task, content, rule)
+local function need_av_check(task, content, rule, N)
+  return message_not_too_large(task, content, rule, N)
 end
 
 local function check_av_cache(task, digest, rule, fn, N)
@@ -144,8 +147,8 @@ local function save_av_cache(task, digest, rule, to_save, N)
   local function redis_set_cb(err)
     -- Do nothing
     if err then
-      rspamd_logger.errx(task, 'failed to save virus cache for %s -> "%s": %s',
-          to_save, key, err)
+      rspamd_logger.errx(task, 'failed to save %s cache for %s -> "%s": %s',
+          rule.detection_category, to_save, key, err)
     else
       lua_util.debugm(N, task, 'saved cached result for %s: %s',
           key, to_save)
@@ -156,8 +159,8 @@ local function save_av_cache(task, digest, rule, to_save, N)
     to_save = table.concat(to_save, '\v')
   end
 
-  if rule.redis_params then
-    key = rule['prefix'] .. key
+  if rule.redis_params and rule.prefix then
+    key = rule.prefix .. key
 
     lua_redis.redis_make_request(task,
         rule.redis_params, -- connect params
@@ -165,18 +168,36 @@ local function save_av_cache(task, digest, rule, to_save, N)
         true, -- is write
         redis_set_cb, --callback
         'SETEX', -- command
-        { key, rule['cache_expire'], to_save }
+        { key, rule.cache_expire or 0, to_save }
     )
   end
 
   return false
 end
 
+local function text_parts_min_words(task, min_words)
+  local text_parts_empty = true
+  local text_parts = task:get_text_parts()
+
+  local filter_func = function(p)
+    return p:get_words_count() >= min_words
+  end
+
+  fun.each(function(p)
+    text_parts_empty = false
+  end, fun.filter(filter_func, text_parts))
+
+  return text_parts_empty
+
+end
+
+
 exports.yield_result = yield_result
 exports.match_patterns = match_patterns
 exports.need_av_check = need_av_check
 exports.check_av_cache = check_av_cache
 exports.save_av_cache = save_av_cache
+exports.text_parts_min_words = text_parts_min_words
 
 setmetatable(exports, {
   __call = function(t, override)

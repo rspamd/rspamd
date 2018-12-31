@@ -25,7 +25,7 @@ local upstream_list = require "rspamd_upstream_list"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
 
-local N = "antivirus"
+local N = "sophos"
 
 local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
@@ -41,6 +41,7 @@ local function sophos_config(opts)
     cache_expire = 3600, -- expire redis in one hour
     message = default_message,
     savdi_report_encrypted = false,
+    detection_category = "virus",
     savdi_report_oversize = false,
   }
 
@@ -168,7 +169,7 @@ local function sophos_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule) then
+  if common.need_av_check(task, content, rule, N) then
     if common.check_av_cache(task, digest, rule, sophos_check_uncached, N) then
       return
     else

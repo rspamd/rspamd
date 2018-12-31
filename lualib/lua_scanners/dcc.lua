@@ -16,7 +16,7 @@ limitations under the License.
 ]]--
 
 --[[[
--- @module fprot
+-- @module dcc
 -- This module contains dcc access functions
 --]]
 
@@ -225,7 +225,7 @@ local function dcc_check(task, content, _, rule)
       callback = dcc_callback
     })
   end
-  if common.need_av_check(task, content, rule) then
+  if common.need_av_check(task, content, rule, N) then
     dcc_check_uncached()
   end
 end
@@ -280,7 +280,7 @@ local function dcc_config(opts)
 end
 
 return {
-  type = {'dcc','bulk_scanner', 'scanner'},
+  type = {'dcc','bulk', 'hash', 'scanner'},
   description = 'dcc bulk scanner',
   configure = dcc_config,
   check = dcc_check,

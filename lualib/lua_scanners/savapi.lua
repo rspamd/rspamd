@@ -26,7 +26,7 @@ local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
 
-local N = "antivirus"
+local N = "savapi"
 
 local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
@@ -42,6 +42,7 @@ local function savapi_config(opts)
     retransmits = 1, -- FIXME: useless, for local files
     cache_expire = 3600, -- expire redis in one hour
     message = default_message,
+    detection_category = "virus",
     tmpdir = '/tmp',
   }
 
@@ -234,7 +235,7 @@ local function savapi_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule) then
+  if common.need_av_check(task, content, rule, N) then
     if common.check_av_cache(task, digest, rule, savapi_check_uncached, N) then
       return
     else
