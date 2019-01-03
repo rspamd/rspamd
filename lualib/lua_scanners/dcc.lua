@@ -271,7 +271,7 @@ local function dcc_config(opts)
       dcc_conf.default_port)
 
   if dcc_conf.upstreams then
-    lua_util.add_debug_alias('ext_scanners', N)
+    lua_util.add_debug_alias('external_services', N)
     return dcc_conf
   end
 

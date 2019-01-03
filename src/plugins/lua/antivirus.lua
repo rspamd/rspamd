@@ -157,9 +157,9 @@ local function add_antivirus_rule(sym, opts)
 end
 
 -- Registration
-local opts = rspamd_config:get_all_opt('antivirus')
+local opts = rspamd_config:get_all_opt(N)
 if opts and type(opts) == 'table' then
-  redis_params = rspamd_parse_redis_server('antivirus')
+  redis_params = rspamd_parse_redis_server(N)
   local has_valid = false
   for k, m in pairs(opts) do
     if type(m) == 'table' and m.servers then
@@ -174,14 +174,14 @@ if opts and type(opts) == 'table' then
           name = m['symbol'],
           callback = cb,
           score = 0.0,
-          group = 'antivirus'
+          group = N
         })
         rspamd_config:register_symbol({
           type = 'virtual',
           name = m['symbol_fail'],
           parent = id,
           score = 0.0,
-          group = 'antivirus'
+          group = N
         })
         has_valid = true
         if type(m['patterns']) == 'table' then
@@ -194,11 +194,13 @@ if opts and type(opts) == 'table' then
                     name = sym,
                     parent = m['symbol'],
                     parent_id = id,
+                    group = N
                   })
                   rspamd_config:register_symbol({
                     type = 'virtual',
                     name = sym,
-                    parent = id
+                    parent = id,
+                    group = N
                   })
                 end
               end
@@ -208,7 +210,8 @@ if opts and type(opts) == 'table' then
               rspamd_config:register_symbol({
                 type = 'virtual',
                 name = sym,
-                parent = id
+                parent = id,
+                group = N
               })
             end
           end
@@ -216,7 +219,7 @@ if opts and type(opts) == 'table' then
         if m['score'] then
           -- Register metric symbol
           local description = 'antivirus symbol'
-          local group = 'antivirus'
+          local group = N
           if m['description'] then
             description = m['description']
           end
