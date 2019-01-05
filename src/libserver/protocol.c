@@ -351,8 +351,16 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 
 					msg_debug_protocol ("read rcpt header, value: %V", hv);
 				}
-				else {
-					msg_debug_protocol ("wrong header: %V", hn);
+				IF_HEADER (RAW_DATA_HEADER) {
+					srch.begin = "yes";
+					srch.len = 3;
+
+					msg_debug_protocol ("read raw data header, value: %V", hv);
+
+					if (rspamd_ftok_casecmp (hv_tok, &srch) == 0) {
+						task->flags &= ~RSPAMD_TASK_FLAG_MIME;
+						msg_debug_protocol ("disable mime parsing");
+					}
 				}
 				break;
 			case 'i':
