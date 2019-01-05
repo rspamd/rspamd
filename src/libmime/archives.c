@@ -497,7 +497,8 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 			rar_v4_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00};
 	const guint rar_encrypted_header = 4, rar_main_header = 1,
 			rar_file_header = 2;
-	guint64 vint, sz, comp_sz = 0, uncomp_sz = 0, flags = 0, type = 0;
+	guint64 vint, sz, comp_sz = 0, uncomp_sz = 0, flags = 0, type = 0,
+			extra_sz = 0;
 	struct rspamd_archive *arch;
 	struct rspamd_archive_file *f;
 	gint r;
@@ -573,6 +574,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 	RAR_SKIP_BYTES (sz);
 
 	while (p < end) {
+		gboolean has_extra = FALSE;
 		/* Read the next header */
 		/* Crc 32 */
 		RAR_SKIP_BYTES (sizeof (guint32));
@@ -598,7 +600,10 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 		if (flags & 0x1) {
 			/* Have extra zone */
 			RAR_READ_VINT_SKIP ();
+			extra_sz = vint;
+			has_extra = TRUE;
 		}
+
 		if (flags & 0x2) {
 			/* Data zone is presented */
 			RAR_READ_VINT_SKIP ();
@@ -658,6 +663,40 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 			}
 			else {
 				g_free (f);
+				f = NULL;
+			}
+
+			if (f && has_extra && extra_sz > 0 &&
+				p + fname_len + extra_sz < end) {
+				/* Try to find encryption record in extra field */
+				const guchar *ex = p + fname_len;
+
+				while (ex < p + extra_sz) {
+					const guchar *t;
+					gint64 cur_sz = 0, sec_type = 0;
+
+					r = rspamd_archive_rar_read_vint (ex, extra_sz, &cur_sz);
+					if (r == -1) {
+						msg_debug_archive ("rar archive is invalid (bad vint)");
+						return;
+					}
+
+					t = ex + r;
+
+					r = rspamd_archive_rar_read_vint (t, extra_sz - r, &sec_type);
+					if (r == -1) {
+						msg_debug_archive ("rar archive is invalid (bad vint)");
+						return;
+					}
+
+					if (sec_type == 0x01) {
+						f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+						arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+						break;
+					}
+
+					ex += cur_sz;
+				}
 			}
 
 			/* Restore p to the beginning of the header */
