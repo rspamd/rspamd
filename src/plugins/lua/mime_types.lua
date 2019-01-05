@@ -821,7 +821,7 @@ local full_extensions_map = {
 
 local function check_mime_type(task)
   local function gen_extension(fname)
-    local parts = lua_util.str_split(fname, '.')
+    local parts = lua_util.str_split(fname or '', '.')
 
     local ext = {}
     for n = 1, 2 do
