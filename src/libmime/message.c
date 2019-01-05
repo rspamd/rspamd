@@ -712,7 +712,8 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 	gboolean found_html = FALSE, found_txt = FALSE;
 	enum rspamd_action_type act;
 
-	if (IS_CT_TEXT (mime_part->ct)) {
+	if (IS_CT_TEXT (mime_part->ct) && (!mime_part->detected_ct ||
+									   IS_CT_TEXT (mime_part->detected_ct))) {
 		html_tok.begin = "html";
 		html_tok.len = 4;
 		xhtml_tok.begin = "xhtml";
@@ -899,6 +900,7 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 	const char *mb = NULL;
 	gchar *mid;
 	rspamd_ftok_t srch, *tok;
+	gchar cdbuf[1024];
 
 	g_assert (start != NULL);
 
@@ -923,10 +925,25 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 			srch.len = strlen (mb);
 			ct = rspamd_content_type_parse (srch.begin, srch.len,
 					task->task_pool);
-			msg_warn_task ("construct fake mime of type: %s", mb);
 
 			if (!part->ct) {
+				msg_info_task ("construct fake mime of type: %s", mb);
 				part->ct = ct;
+			}
+			else {
+				/* Check sanity */
+				if (IS_CT_TEXT (part->ct)) {
+					RSPAMD_FTOK_FROM_STR (&srch, "application");
+
+					if (rspamd_ftok_cmp (&ct->type, &srch) == 0) {
+						msg_info_task ("construct fake mime of type: %s", mb);
+						part->ct = ct;
+					}
+				}
+				else {
+					msg_info_task ("construct fake mime of type: %T/%T, detected %s",
+							&part->ct->type, &part->ct->subtype, mb);
+				}
 			}
 
 			part->detected_ct = ct;
@@ -937,6 +954,27 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 	part->raw_data.len = len;
 	part->parsed_data.begin = start;
 	part->parsed_data.len = len;
+	part->id = task->parts->len;
+	part->raw_headers =  g_hash_table_new_full (rspamd_strcase_hash,
+			rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
+	part->headers_order = g_queue_new ();
+
+
+
+	tok = rspamd_task_get_request_header (task, "Filename");
+
+	if (tok) {
+		rspamd_snprintf (cdbuf, sizeof (cdbuf), "inline; filename=\"%T\"", tok);
+	}
+	else {
+		rspamd_snprintf (cdbuf, sizeof (cdbuf), "inline");
+	}
+
+	part->cd = rspamd_content_disposition_parse (cdbuf, strlen (cdbuf),
+			task->task_pool);
+
+	g_ptr_array_add (task->parts, part);
+	rspamd_mime_parser_calc_digest (part);
 
 	/* Generate message ID */
 	mid = rspamd_mime_message_id_generate ("localhost.localdomain");
@@ -1041,7 +1079,6 @@ rspamd_message_parse (struct rspamd_task *task)
 		}
 	}
 	else {
-		task->flags &= ~RSPAMD_TASK_FLAG_MIME;
 		rspamd_message_from_data (task, p, len);
 	}
 
