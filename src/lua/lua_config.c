@@ -1501,6 +1501,9 @@ lua_parse_symbol_flags (const gchar *str)
 		if (strstr (str, "trivial") != NULL) {
 			ret |= SYMBOL_TYPE_TRIVIAL;
 		}
+		if (strstr (str, "mime") != NULL) {
+			ret |= SYMBOL_TYPE_MIME_ONLY;
+		}
 	}
 
 	return ret;
