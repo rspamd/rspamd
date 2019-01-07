@@ -65,7 +65,8 @@ rspamd_config.MISSING_DATE = {
   end,
   score = 1.0,
   description = 'Message date is missing',
-  group = 'headers'
+  group = 'headers',
+  type = 'mime',
 }
 
 rspamd_config.DATE_IN_FUTURE = {
@@ -80,7 +81,8 @@ rspamd_config.DATE_IN_FUTURE = {
   end,
   score = 4.0,
   description = 'Message date is in future',
-  group = 'headers'
+  group = 'headers',
+  type = 'mime',
 }
 
 rspamd_config.DATE_IN_PAST = {
@@ -95,7 +97,8 @@ rspamd_config.DATE_IN_PAST = {
   end,
   score = 1.0,
   description = 'Message date is in past',
-  group = 'headers'
+  group = 'headers',
+  type = 'mime',
 }
 
 rspamd_config.R_SUSPICIOUS_URL = {
@@ -157,7 +160,8 @@ rspamd_config.ENVFROM_PRVS = {
   end,
   score = 0.0,
   description = "Envelope From is a PRVS address that matches the From address",
-  group = 'headers'
+  group = 'headers',
+  type = 'mime',
 }
 
 rspamd_config.ENVFROM_VERP = {
@@ -185,7 +189,8 @@ rspamd_config.ENVFROM_VERP = {
   end,
   score = 0.0,
   description = "Envelope From is a VERP address",
-  group = "headers"
+  group = "headers",
+  type = 'mime',
 }
 
 local check_rcvd = rspamd_config:register_symbol{
@@ -224,7 +229,8 @@ local check_rcvd = rspamd_config:register_symbol{
     if auth then
       task:insert_result('RCVD_VIA_SMTP_AUTH', 1.0)
     end
-  end
+  end,
+  type = 'callback,mime',
 }
 
 rspamd_config:register_symbol{
@@ -282,6 +288,7 @@ rspamd_config.RCVD_HELO_USER = {
   end,
   description = 'HELO User spam pattern',
   group = 'headers',
+  type = 'mime',
   score = 3.0
 }
 
@@ -415,6 +422,7 @@ rspamd_config.URL_IN_SUBJECT = {
   end,
   score = 4.0,
   group = 'subject',
+  type = 'mime',
   description = 'URL found in Subject'
 
 }
@@ -486,7 +494,7 @@ rspamd_config:register_symbol{
 }
 
 local check_from_display_name = rspamd_config:register_symbol{
-  type = 'callback',
+  type = 'callback,mime',
   name = 'FROM_DISPLAY_CALLBACK',
   callback = function (task)
     local from = task:get_from(2)
@@ -582,6 +590,7 @@ rspamd_config.SPOOF_REPLYTO = {
     return false
   end,
   group = 'headers',
+  type = 'mime',
   description = 'Reply-To is being used to spoof and trick the recipient to send an off-domain reply',
   score = 6.0
 }
@@ -607,7 +616,8 @@ rspamd_config.INFO_TO_INFO_LU = {
   end,
   description = 'info@ From/To address with List-Unsubscribe headers',
   group = 'headers',
-  score = 2.0
+  score = 2.0,
+  type = 'mime',
 }
 
 -- Detects bad content-transfer-encoding for text parts
@@ -639,7 +649,8 @@ rspamd_config.R_BAD_CTE_7BIT = {
   end,
   score = 3.5,
   description = 'Detects bad content-transfer-encoding for text parts',
-  group = 'headers'
+  group = 'headers',
+  type = 'mime',
 }
 
 
@@ -696,7 +707,7 @@ local check_encrypted_name = rspamd_config:register_symbol{
   end,
   score = 10.0,
   description = 'Bogus mix of encrypted and text/html payloads',
-  group = 'mime_types'
+  group = 'mime_types',
 }
 
 rspamd_config:register_symbol{

@@ -52,6 +52,7 @@ rspamd_config.SUBJ_ALL_CAPS = {
   end,
   score = 3.0,
   group = 'subject',
+  type = 'mime',
   description = 'All capital letters in subject'
 }
 
@@ -64,5 +65,6 @@ rspamd_config.LONG_SUBJ = {
   end,
   score = 3.0,
   group = 'subject',
+  type = 'mime',
   description = 'Subject is too long'
 }

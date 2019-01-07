@@ -71,7 +71,7 @@ local check_mid_id = rspamd_config:register_symbol({
   name = 'CHECK_MID',
   score = 0.0,
   group = 'mid',
-  type = 'callback',
+  type = 'callback,mime',
   callback = mid_check_func
 })
 rspamd_config:register_virtual_symbol('MID_BARE_IP', 1.0, check_mid_id)
