@@ -323,7 +323,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
 end
 
 --
-local function hfilter(task)
+local function hfilter_callback(task)
   -- Links checks
   if config['url_enabled'] then
     local parts = task:get_text_parts()
@@ -626,16 +626,26 @@ end
 
 --dumper(symbols_enabled)
 if #symbols_enabled > 0 then
-  rspamd_config:register_symbols(hfilter, 1.0, "HFILTER", symbols_enabled);
+  local id = rspamd_config:register_symbol{
+    name = 'HFILTER',
+    callback = hfilter_callback,
+    type = 'callback,mime',
+    score = 0.0,
+  }
   rspamd_config:set_metric_symbol({
     name = 'HFILTER',
     score = 0.0,
     group = 'hfilter'
   })
-
-  for _,s in ipairs(symbols_enabled) do
+  for _,sym in ipairs(symbols_enabled) do
+    rspamd_config:register_symbol{
+      type = 'virtual,mime',
+      score = 1.0,
+      parent = id,
+      name = sym,
+    }
     rspamd_config:set_metric_symbol({
-      name = s,
+      name = sym,
       score = 0.0,
       group = 'hfilter'
     })
