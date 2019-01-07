@@ -1278,8 +1278,27 @@ rspamd_register_symbol_fromlua (lua_State *L,
 			/* Push function reference */
 			lua_rawgeti (L, LUA_REGISTRYINDEX, ref);
 
+			/* Flags */
+			lua_createtable (L, 0, 0);
+
+			if (type & SYMBOL_TYPE_MIME_ONLY) {
+				lua_pushstring (L, "mime");
+				lua_pushboolean (L, true);
+				lua_settable (L, -3);
+			}
+			if (type & SYMBOL_TYPE_FINE) {
+				lua_pushstring (L, "fine");
+				lua_pushboolean (L, true);
+				lua_settable (L, -3);
+			}
+			if (type & SYMBOL_TYPE_NOSTAT) {
+				lua_pushstring (L, "nostat");
+				lua_pushboolean (L, true);
+				lua_settable (L, -3);
+			}
+
 			/* Now call for squeeze function */
-			if (lua_pcall (L, 2, 1, err_idx) != 0) {
+			if (lua_pcall (L, 3, 1, err_idx) != 0) {
 				GString *tb = lua_touserdata (L, -1);
 				msg_err_config ("call to squeeze_rule failed: %v", tb);
 
