@@ -218,15 +218,6 @@ LUA_FUNCTION_DEF (util, parse_mail_address);
  */
 LUA_FUNCTION_DEF (util, strlen_utf8);
 
-/***
- * @function util.strcasecmp(str1, str2)
- * Compares two utf8 strings regardless of their case. Return value >0, 0 and <0
- * if `str1` is more, equal or less than `str2`
- * @param {string} str1 utf8 encoded string
- * @param {string} str2 utf8 encoded string
- * @return {number} result of comparison
- */
-LUA_FUNCTION_DEF (util, strcasecmp_utf8);
 
 /***
  * @function util.strcasecmp(str1, str2)
@@ -597,7 +588,6 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, glob),
 	LUA_INTERFACE_DEF (util, parse_mail_address),
 	LUA_INTERFACE_DEF (util, strlen_utf8),
-	LUA_INTERFACE_DEF (util, strcasecmp_utf8),
 	LUA_INTERFACE_DEF (util, strcasecmp_ascii),
 	LUA_INTERFACE_DEF (util, strequal_caseless),
 	LUA_INTERFACE_DEF (util, get_ticks),
@@ -1631,34 +1621,6 @@ lua_util_strlen_utf8 (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 1;
-}
-
-static gint
-lua_util_strcasecmp_utf8 (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	const gchar *str1, *str2;
-	gsize len1, len2;
-	gint ret = -1;
-
-	str1 = lua_tolstring (L, 1, &len1);
-	str2 = lua_tolstring (L, 2, &len2);
-
-	if (str1 && str2) {
-
-		if (len1 == len2) {
-			ret = rspamd_lc_cmp (str1, str2, len1);
-		}
-		else {
-			ret = len1 - len2;
-		}
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	lua_pushinteger (L, ret);
 	return 1;
 }
 
