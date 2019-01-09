@@ -958,6 +958,7 @@ rspamd_config:register_symbol{
   description = 'Some of the recipients match the envelope',
 }
 
+-- TODO: rewrite this rule, it should not touch headers directly
 rspamd_config.CTYPE_MISSING_DISPOSITION = {
   callback = function(task)
     local parts = task:get_parts()
@@ -972,6 +973,18 @@ rspamd_config.CTYPE_MISSING_DISPOSITION = {
           then
             return false
           end
+
+          local parent = p:get_parent()
+
+          if parent then
+            local t,st = parent:get_type()
+
+            if t == 'multipart' and st == 'encrypted' then
+              -- Special case
+              return false
+            end
+          end
+
           return true
         end
       end
