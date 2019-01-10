@@ -1154,13 +1154,16 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	}
 
 	if (flags & RSPAMD_PROTOCOL_URLS) {
-		if (task->cfg->log_urls || (task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
+		if (task->flags & RSPAMD_TASK_FLAG_EXT_URLS) {
 			if (g_hash_table_size (task->urls) > 0) {
-				ucl_object_insert_key (top, rspamd_urls_tree_ucl (task->urls,
-						task), "urls", 0, false);
+				ucl_object_insert_key (top,
+						rspamd_urls_tree_ucl (task->urls, task),
+						"urls", 0, false);
 			}
+
 			if (g_hash_table_size (task->emails) > 0) {
-				ucl_object_insert_key (top, rspamd_emails_tree_ucl (task->emails, task),
+				ucl_object_insert_key (top,
+						rspamd_emails_tree_ucl (task->emails, task),
 						"emails", 0, false);
 			}
 		}
