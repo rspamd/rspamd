@@ -995,7 +995,7 @@ end:
 static const guchar *
 rspamd_7zip_read_folder (struct rspamd_task *task,
 		const guchar *p, const guchar *end,
-		struct rspamd_archive *arch, guint *pnstreams)
+		struct rspamd_archive *arch, guint *pnstreams, guint *ndigests)
 {
 	guint64 ncoders = 0, i, j, noutstreams = 0, ninstreams = 0;
 
@@ -1086,6 +1086,7 @@ rspamd_7zip_read_folder (struct rspamd_task *task,
 	}
 
 	*pnstreams = noutstreams;
+	(*ndigests) += npacked;
 
 	return p;
 }
@@ -1149,9 +1150,7 @@ rspamd_7zip_read_coders_info (struct rspamd_task *task,
 
 				for (i = 0; i < num_folders && p != NULL && p < end; i++) {
 					p = rspamd_7zip_read_folder (task, p, end, arch,
-							&folder_nstreams[i]);
-
-					num_digests += folder_nstreams[i];
+							&folder_nstreams[i], &num_digests);
 				}
 			}
 			break;
