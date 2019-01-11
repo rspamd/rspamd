@@ -801,7 +801,7 @@ rspamd_archive_7zip_read_vint (const guchar *start, gsize remain, guint64 *res)
 
 #define SZ_READ_UINT64(n) do { \
 	if (end - p < (goffset)sizeof (guint64)) { \
-		msg_debug_archive ("7zip archive is invalid (bad vint): %s", G_STRLOC); \
+		msg_debug_archive ("7zip archive is invalid (bad uint64): %s", G_STRLOC); \
 		return; \
 	} \
 	memcpy (&(n), p, sizeof (guint64)); \
@@ -846,6 +846,15 @@ enum rspamd_7zip_header_mark {
 	kStartPos = 0x18,
 	kDummy = 0x19,
 };
+
+
+#define _7Z_CRYPTO_MAIN_ZIP			0x06F10101 /* Main Zip crypto algo */
+#define _7Z_CRYPTO_RAR_29			0x06F10303 /* Rar29 AES-128 + (modified SHA-1) */
+#define _7Z_CRYPTO_AES_256_SHA_256	0x06F10701 /* AES-256 + SHA-256 */
+
+#define IS_SZ_ENCRYPTED(codec_id) (((codec_id) == _7Z_CRYPTO_MAIN_ZIP) || \
+	((codec_id) == _7Z_CRYPTO_RAR_29) || \
+	((codec_id) == _7Z_CRYPTO_AES_256_SHA_256))
 
 static const guchar *
 rspamd_7zip_read_bits (struct rspamd_task *task,
@@ -988,7 +997,7 @@ rspamd_7zip_read_folder (struct rspamd_task *task,
 		const guchar *p, const guchar *end,
 		struct rspamd_archive *arch, guint *pnstreams)
 {
-	guint64 ncoders = 0, i, noutstreams = 0, ninstreams = 0;
+	guint64 ncoders = 0, i, j, noutstreams = 0, ninstreams = 0;
 
 	SZ_READ_VINT (ncoders);
 
@@ -1021,12 +1030,17 @@ rspamd_7zip_read_folder (struct rspamd_task *task,
 		sz = t & 0xF;
 		/* Codec ID */
 		tmp = 0;
-		for (i = 0; i < sz; i++) {
+		for (j = 0; j < sz; j++) {
 			tmp <<= 8;
-			tmp += p[i];
+			tmp += p[j];
 		}
 
 		msg_debug_archive ("7zip: read codec id: %L", tmp);
+
+		if (IS_SZ_ENCRYPTED (tmp)) {
+			arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+		}
+
 		SZ_SKIP_BYTES (sz);
 
 		if (t & (1u << 4)) {
