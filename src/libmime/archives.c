@@ -809,7 +809,7 @@ rspamd_archive_7zip_read_vint (const guchar *start, gsize remain, guint64 *res)
 	p += sizeof (guint64); \
 } while (0)
 #define SZ_SKIP_BYTES(n) do { \
-	if (end - p > (n)) { \
+	if (end - p >= (n)) { \
 		p += (n); \
 	} \
 	else { \
@@ -1463,10 +1463,7 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 		case kATime:
 		case kMTime:
 			/* We don't care of these guys, but we still have to parse them, gah */
-			if (sz == 0) {
-				goto end;
-			}
-			else {
+			if (sz > 0) {
 				SZ_SKIP_BYTES (sz);
 			}
 			break;
@@ -1507,9 +1504,10 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 					res = rspamd_7zip_ucs2_to_utf8 (task, p, fend);
 
 					if (res != NULL) {
-						fentry = g_malloc0 (sizeof (fentry));
+						fentry = g_malloc0 (sizeof (*fentry));
 						fentry->fname = res;
 						g_ptr_array_add (arch->files, fentry);
+						msg_debug_archive ("7zip: found file %v", res);
 					}
 					else {
 						msg_debug_archive ("bad 7zip name; %s", G_STRLOC);
@@ -1521,10 +1519,7 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 			break;
 		case kDummy:
 		case kWinAttributes:
-			if (sz == 0) {
-				goto end;
-			}
-			else {
+			if (sz > 0) {
 				SZ_SKIP_BYTES (sz);
 			}
 			break;
