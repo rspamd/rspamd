@@ -953,6 +953,7 @@ rspamd_7zip_read_pack_info (struct rspamd_task *task,
 	while (p != NULL && p < end) {
 		t = *p;
 		SZ_SKIP_BYTES(1);
+		msg_debug_archive ("7zip: read pack info %xc", t);
 
 		switch (t) {
 		case kSize:
@@ -971,7 +972,7 @@ rspamd_7zip_read_pack_info (struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive ("bad 7zip type: %c; %s", t, G_STRLOC);
+			msg_debug_archive ("bad 7zip type: %xc; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1016,9 +1017,16 @@ rspamd_7zip_read_folder (struct rspamd_task *task,
 		 * }
 		 */
 		t = *p;
-		SZ_SKIP_BYTES(1);
-		sz = t & 0x7;
+		SZ_SKIP_BYTES (1);
+		sz = t & 0xF;
 		/* Codec ID */
+		tmp = 0;
+		for (i = 0; i < sz; i++) {
+			tmp <<= 8;
+			tmp += p[i];
+		}
+
+		msg_debug_archive ("7zip: read codec id: %L", tmp);
 		SZ_SKIP_BYTES (sz);
 
 		if (t & (1u << 4)) {
@@ -1051,6 +1059,8 @@ rspamd_7zip_read_folder (struct rspamd_task *task,
 	}
 
 	gint64 npacked = (gint64)ninstreams - (gint64)noutstreams + 1;
+	msg_debug_archive ("7zip: instreams=%L, outstreams=%L, packed=%L",
+			ninstreams, noutstreams, npacked);
 
 	if (npacked > 1) {
 		/* Gah... */
@@ -1101,10 +1111,13 @@ rspamd_7zip_read_coders_info (struct rspamd_task *task,
 
 		t = *p;
 		SZ_SKIP_BYTES(1);
+		msg_debug_archive ("7zip: read coders info %xc", t);
 
 		switch (t) {
 		case kFolder:
 			SZ_READ_VINT (num_folders);
+			msg_debug_archive ("7zip: nfolders=%L", num_folders);
+
 			if (*p != 0) {
 				/* External folders */
 				SZ_SKIP_BYTES(1);
@@ -1135,6 +1148,8 @@ rspamd_7zip_read_coders_info (struct rspamd_task *task,
 						guint64 tmp;
 
 						SZ_READ_VINT (tmp); /* Unpacked size */
+						msg_debug_archive ("7zip: unpacked size (folder=%d, stream=%d) = %L",
+								i, j, tmp);
 					}
 				}
 				else {
@@ -1164,7 +1179,7 @@ rspamd_7zip_read_coders_info (struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive ("bad 7zip type: %c; %s", t, G_STRLOC);
+			msg_debug_archive ("bad 7zip type: %xc; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1221,6 +1236,8 @@ rspamd_7zip_read_substreams_info (struct rspamd_task *task,
 		t = *p;
 		SZ_SKIP_BYTES(1);
 
+		msg_debug_archive ("7zip: read substream info %xc", t);
+
 		switch (t) {
 		case kNumUnPackStream:
 			for (i = 0; i < num_folders; i ++) {
@@ -1256,7 +1273,7 @@ rspamd_7zip_read_substreams_info (struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive ("bad 7zip type: %c; %s", t, G_STRLOC);
+			msg_debug_archive ("bad 7zip type: %xc; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1277,6 +1294,7 @@ rspamd_7zip_read_main_streams_info (struct rspamd_task *task,
 	while (p != NULL && p < end) {
 		t = *p;
 		SZ_SKIP_BYTES(1);
+		msg_debug_archive ("7zip: read main streams info %xc", t);
 
 		/*
 		 *
@@ -1312,7 +1330,7 @@ rspamd_7zip_read_main_streams_info (struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive ("bad 7zip type: %c; %s", t, G_STRLOC);
+			msg_debug_archive ("bad 7zip type: %xc; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1414,6 +1432,8 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 		t = *p;
 		SZ_SKIP_BYTES (1);
 
+		msg_debug_archive ("7zip: read file data type %xc", t);
+
 		if (t == kEnd) {
 			goto end;
 		}
@@ -1497,7 +1517,7 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_archive ("bad 7zip type: %c; %s", t, G_STRLOC);
+			msg_debug_archive ("bad 7zip type: %xc; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1515,6 +1535,8 @@ rspamd_7zip_read_next_section (struct rspamd_task *task,
 	guchar t = *p;
 
 	SZ_SKIP_BYTES(1);
+
+	msg_debug_archive ("7zip: read section %xc", t);
 
 	switch (t) {
 	case kHeader:
@@ -1540,9 +1562,13 @@ rspamd_7zip_read_next_section (struct rspamd_task *task,
 	case kFilesInfo:
 		p = rspamd_7zip_read_files_info (task, p, end, arch);
 		break;
+	case kEnd:
+		p = NULL;
+		msg_debug_archive ("7zip: read final section");
+		break;
 	default:
 		p = NULL;
-		msg_debug_archive ("bad 7zip type: %c; %s", t, G_STRLOC);
+		msg_debug_archive ("bad 7zip type: %xc; %s", t, G_STRLOC);
 		break;
 	}
 
