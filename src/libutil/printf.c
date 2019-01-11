@@ -979,7 +979,17 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 			case 'c':
 				c = va_arg (args, gint);
 				c &= 0xff;
-				RSPAMD_PRINTF_APPEND (&c, 1);
+				if (G_UNLIKELY (hex)) {
+					gchar hexbuf[2];
+					hexbuf[0] = hex == 2 ? _HEX[(c >> 4) & 0xf] :
+								_hex[(c >> 4) & 0xf];
+					hexbuf[1] = hex == 2 ? _HEX[c & 0xf] : _hex[c & 0xf];
+
+					RSPAMD_PRINTF_APPEND (hexbuf, 2);
+				}
+				else {
+					RSPAMD_PRINTF_APPEND (&c, 1);
+				}
 
 				continue;
 
