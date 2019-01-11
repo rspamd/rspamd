@@ -58,6 +58,12 @@ static const gchar default_sign_headers[] = ""
 		"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
 		"(o)in-reply-to:(o)references:list-id:list-owner:list-unsubscribe:"
 		"list-subscribe:list-post";
+static const gchar default_arc_sign_headers[] = ""
+		"(o)from:(o)sender:(o)reply-to:(o)subject:(o)date:(o)message-id:"
+		"(o)to:(o)cc:(o)mime-version:(o)content-type:(o)content-transfer-encoding:"
+		"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
+		"(o)in-reply-to:(o)references:list-id:list-owner:list-unsubscribe:"
+		"list-subscribe:list-post:dkim-signature";
 
 struct dkim_ctx {
 	struct module_ctx ctx;
@@ -74,6 +80,7 @@ struct dkim_ctx {
 	rspamd_lru_hash_t *dkim_hash;
 	rspamd_lru_hash_t *dkim_sign_hash;
 	const gchar *sign_headers;
+	const gchar *arc_sign_headers;
 	gint sign_condition_ref;
 	guint max_sigs;
 	gboolean trusted_only;
@@ -141,6 +148,7 @@ dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 	dkim_module_ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
 			sizeof (*dkim_module_ctx));
 	dkim_module_ctx->sign_headers = default_sign_headers;
+	dkim_module_ctx->arc_sign_headers = default_arc_sign_headers;
 	dkim_module_ctx->sign_condition_ref = -1;
 	dkim_module_ctx->max_sigs = DEFAULT_MAX_SIGS;
 
@@ -479,6 +487,11 @@ dkim_module_config (struct rspamd_config *cfg)
 		dkim_module_ctx->sign_headers = ucl_object_tostring (value);
 	}
 
+	if ((value =
+				 rspamd_config_get_module_opt (cfg, "arc", "sign_headers")) != NULL) {
+		dkim_module_ctx->arc_sign_headers = ucl_object_tostring (value);
+	}
+
 	dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (
 			cache_size,
 			g_free,
@@ -698,10 +711,6 @@ lua_dkim_sign_handler (lua_State *L)
 
 	dkim_module_ctx = dkim_get_context (task->cfg);
 
-	if (headers == NULL) {
-		headers = dkim_module_ctx->sign_headers;
-	}
-
 	if (dkim_module_ctx->dkim_sign_hash == NULL) {
 		dkim_module_ctx->dkim_sign_hash = rspamd_lru_hash_new (
 				128,
@@ -793,9 +802,18 @@ lua_dkim_sign_handler (lua_State *L)
 	if (sign_type_str) {
 		if (strcmp (sign_type_str, "dkim") == 0) {
 			sign_type = RSPAMD_DKIM_NORMAL;
+
+			if (headers == NULL) {
+				headers = dkim_module_ctx->sign_headers;
+			}
 		}
 		else if (strcmp (sign_type_str, "arc-sign") == 0) {
 			sign_type = RSPAMD_DKIM_ARC_SIG;
+
+			if (headers == NULL) {
+				headers = dkim_module_ctx->arc_sign_headers;
+			}
+
 			if (arc_idx == 0) {
 				lua_settop (L, 0);
 				return luaL_error (L, "no arc idx specified");
@@ -816,6 +834,12 @@ lua_dkim_sign_handler (lua_State *L)
 			lua_settop (L, 0);
 			return luaL_error (L, "unknown sign type: %s",
 					sign_type_str);
+		}
+	}
+	else {
+		/* Unspecified sign type, assume plain dkim */
+		if (headers == NULL) {
+			headers = dkim_module_ctx->sign_headers;
 		}
 	}
 
