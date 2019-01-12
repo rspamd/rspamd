@@ -241,6 +241,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 					if (uc == 0x200b) {
 						/* Invisible space ! */
 						task->flags |= RSPAMD_TASK_FLAG_BAD_UNICODE;
+						part->spaces ++;
 
 						if (p > c) {
 							g_byte_array_append (part->utf_stripped_content,
@@ -255,6 +256,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 							break;
 						}
 
+						part->double_spaces ++;
 						p = begin + off;
 						c = p;
 					}
