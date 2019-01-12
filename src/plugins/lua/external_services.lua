@@ -118,6 +118,7 @@ if opts and type(opts) == 'table' then
   for k, m in pairs(opts) do
     if type(m) == 'table' and m.servers then
       if not m.type then m.type = k end
+      if not m.name then m.name = k end
       local cb = add_scanner_rule(k, m)
 
       if not cb then

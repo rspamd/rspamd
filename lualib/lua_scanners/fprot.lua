@@ -25,15 +25,16 @@ local upstream_list = require "rspamd_upstream_list"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
 
-local N = "fprot"
+local module_name = "fprot"
 
 local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
 local function fprot_config(opts)
   local fprot_conf = {
-    scan_mime_parts = true;
-    scan_text_mime = false;
-    scan_image_mime = false;
+    module_name = module_name,
+    scan_mime_parts = true,
+    scan_text_mime = false,
+    scan_image_mime = false,
     default_port = 10200,
     timeout = 5.0, -- FIXME: this will break task_timeout!
     log_clean = false,
@@ -51,6 +52,14 @@ local function fprot_config(opts)
     fprot_conf.prefix = 'rs_fp'
   end
 
+  if not fprot_conf.log_prefix then
+    if fprot_conf.name:lower() == fprot_conf.type:lower() then
+      fprot_conf.log_prefix = fprot_conf.name
+    else
+      fprot_conf.log_prefix = fprot_conf.name .. ' (' .. fprot_conf.type .. ')'
+    end
+  end
+
   if not fprot_conf['servers'] then
     rspamd_logger.errx(rspamd_config, 'no servers defined')
 
@@ -62,7 +71,7 @@ local function fprot_config(opts)
       fprot_conf.default_port)
 
   if fprot_conf['upstreams'] then
-    lua_util.add_debug_alias('antivirus', N)
+    lua_util.add_debug_alias('antivirus', fprot_conf.module_name)
     return fprot_conf
   end
 
@@ -96,7 +105,7 @@ local function fprot_check(task, content, digest, rule)
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(N, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
+          lua_util.debugm(rule.module_name, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
 
           tcp.request({
             task = task,
@@ -133,12 +142,12 @@ local function fprot_check(task, content, digest, rule)
           if not vname then
             rspamd_logger.errx(task, 'Unhandled response: %s', data)
           else
-            common.yield_result(task, rule, vname, N)
+            common.yield_result(task, rule, vname)
             cached = vname
           end
         end
         if cached then
-          common.save_av_cache(task, digest, rule, cached, N)
+          common.save_av_cache(task, digest, rule, cached)
         end
       end
     end
@@ -154,8 +163,8 @@ local function fprot_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule, N) then
-    if common.check_av_cache(task, digest, rule, fprot_check_uncached, N) then
+  if common.need_av_check(task, content, rule) then
+    if common.check_av_cache(task, digest, rule, fprot_check_uncached) then
       return
     else
       fprot_check_uncached()
@@ -168,5 +177,5 @@ return {
   description = 'fprot antivirus',
   configure = fprot_config,
   check = fprot_check,
-  name = 'fprot'
+  name = module_name
 }
