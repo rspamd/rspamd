@@ -39,6 +39,7 @@ require_scanner('sophos')
 
 -- Other scanners
 require_scanner('dcc')
+require_scanner('oletools')
 
 exports.add_scanner = function(name, t, conf_func, check_func)
   assert(type(conf_func) == 'function' and type(check_func) == 'function',
