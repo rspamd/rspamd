@@ -26,24 +26,24 @@ local fun = require "fun"
 
 local exports = {}
 
-local function match_patterns(default_sym, found, patterns)
-  if type(patterns) ~= 'table' then return default_sym end
+local function match_patterns(default_sym, found, patterns, dyn_weight)
+  if type(patterns) ~= 'table' then return default_sym, dyn_weight end
   if not patterns[1] then
     for sym, pat in pairs(patterns) do
       if pat:match(found) then
-        return sym
+        return sym, '1'
       end
     end
-    return default_sym
+    return default_sym, dyn_weight
   else
     for _, p in ipairs(patterns) do
       for sym, pat in pairs(p) do
         if pat:match(found) then
-          return sym
+          return sym, '1'
         end
       end
     end
-    return default_sym
+    return default_sym, dyn_weight
   end
 end
 
@@ -51,23 +51,23 @@ local function yield_result(task, rule, vname, N, dyn_weight)
   local all_whitelisted = true
   if not dyn_weight then dyn_weight = 1.0 end
   if type(vname) == 'string' then
-    local symname = match_patterns(rule.symbol, vname, rule.patterns)
+    local symname, symscore = match_patterns(rule.symbol, vname, rule.patterns, dyn_weight)
     if rule.whitelist and rule.whitelist:get_key(vname) then
-      rspamd_logger.infox(task, '%s: "%s" is in whitelist', N, vname)
+      rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule.log_prefix, vname)
       return
     end
-    task:insert_result(symname, 1.0, vname)
-    rspamd_logger.infox(task, '%s: %s found: "%s"', N, rule.detection_category, vname)
+    task:insert_result(symname, symscore, vname)
+    rspamd_logger.infox(task, '%s: %s found: "%s"', rule.log_prefix, rule.detection_category, vname)
   elseif type(vname) == 'table' then
     for _, vn in ipairs(vname) do
-      local symname = match_patterns(rule.symbol, vn, rule.patterns)
+      local symname, symscore = match_patterns(rule.symbol, vn, rule.patterns, dyn_weight)
       if rule.whitelist and rule.whitelist:get_key(vn) then
-        rspamd_logger.infox(task, '%s: "%s" is in whitelist', N, vn)
+        rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule.log_prefix, vn)
       else
         all_whitelisted = false
-        task:insert_result(symname, dyn_weight, vn)
+        task:insert_result(symname, symscore, vn)
         rspamd_logger.infox(task, '%s: %s found: "%s"',
-            N, rule.detection_category, vn)
+            rule.log_prefix, rule.detection_category, vn)
       end
     end
   end
@@ -76,43 +76,45 @@ local function yield_result(task, rule, vname, N, dyn_weight)
       if all_whitelisted then return end
       vname = table.concat(vname, '; ')
     end
-    task:set_pre_result(rule['action'],
+    task:set_pre_result(rule.action,
         lua_util.template(rule.message or 'Rejected', {
-          SCANNER = N,
+          SCANNER = rule.name,
           VIRUS = vname,
         }), N)
   end
 end
 
-local function message_not_too_large(task, content, rule, N)
+local function message_not_too_large(task, content, rule)
   local max_size = tonumber(rule.max_size)
   if not max_size then return true end
   if #content > max_size then
     rspamd_logger.infox(task, "skip %s check as it is too large: %s (%s is allowed)",
-        N, #content, max_size)
+        rule.log_prefix, #content, max_size)
     return false
   end
   return true
 end
 
-local function need_av_check(task, content, rule, N)
-  return message_not_too_large(task, content, rule, N)
+local function need_av_check(task, content, rule)
+  return message_not_too_large(task, content, rule)
 end
 
-local function check_av_cache(task, digest, rule, fn, N)
+local function check_av_cache(task, digest, rule, fn)
   local key = digest
 
   local function redis_av_cb(err, data)
     if data and type(data) == 'string' then
       -- Cached
-      if data ~= 'OK' then
-        lua_util.debugm(N, task, 'got cached result for %s: %s',
-            key, data)
-        data = lua_util.str_split(data, '\v')
-        yield_result(task, rule, data, N)
+      data = rspamd_str_split(data, '\t')
+      local threat_string = rspamd_str_split(data[1], '\v')
+      local score = data[2] or rule.default_score
+      if threat_string[1] ~= 'OK' then
+        lua_util.debugm(rule.module_name, task, '%s: got cached threat result for %s: %s',
+          rule.log_prefix, key, threat_string[1])
+        yield_result(task, rule, threat_string, score)
       else
-        lua_util.debugm(N, task, 'got cached result for %s: %s',
-            key, data)
+        lua_util.debugm(rule.module_name, task, '%s: got cached negative result for %s: %s',
+          rule.log_prefix, key, threat_string[1])
       end
     else
       if err then
@@ -124,7 +126,7 @@ local function check_av_cache(task, digest, rule, fn, N)
 
   if rule.redis_params then
 
-    key = rule['prefix'] .. key
+    key = rule.prefix .. key
 
     if lua_redis.redis_make_request(task,
         rule.redis_params, -- connect params
@@ -141,7 +143,7 @@ local function check_av_cache(task, digest, rule, fn, N)
   return false
 end
 
-local function save_av_cache(task, digest, rule, to_save, N)
+local function save_av_cache(task, digest, rule, to_save, dyn_weight)
   local key = digest
 
   local function redis_set_cb(err)
@@ -150,14 +152,15 @@ local function save_av_cache(task, digest, rule, to_save, N)
       rspamd_logger.errx(task, 'failed to save %s cache for %s -> "%s": %s',
           rule.detection_category, to_save, key, err)
     else
-      lua_util.debugm(N, task, 'saved cached result for %s: %s',
-          key, to_save)
+      lua_util.debugm(rule.module_name, task, '%s: saved cached result for %s: %s', rule.log_prefix, key, to_save)
     end
   end
 
   if type(to_save) == 'table' then
     to_save = table.concat(to_save, '\v')
   end
+
+  local value = table.concat({to_save, dyn_weight}, '\t')
 
   if rule.redis_params and rule.prefix then
     key = rule.prefix .. key
@@ -168,7 +171,7 @@ local function save_av_cache(task, digest, rule, to_save, N)
         true, -- is write
         redis_set_cb, --callback
         'SETEX', -- command
-        { key, rule.cache_expire or 0, to_save }
+        { key, rule.cache_expire or 0, value }
     )
   end
 
