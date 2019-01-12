@@ -215,13 +215,15 @@ rspamd_mime_part_detect_language (struct rspamd_task *task,
 }
 
 static void
-rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
+rspamd_strip_newlines_parse (struct rspamd_task *task,
+		const gchar *begin, const gchar *pe,
 		struct rspamd_mime_text_part *part)
 {
 	const gchar *p = begin, *c = begin;
 	gchar last_c = '\0';
 	gboolean crlf_added = FALSE;
 	gboolean url_open_bracket = FALSE;
+	UChar32 uc;
 
 	enum {
 		normal_char,
@@ -230,6 +232,39 @@ rspamd_strip_newlines_parse (const gchar *begin, const gchar *pe,
 	} state = normal_char;
 
 	while (p < pe) {
+		if (IS_PART_UTF (part)) {
+			gint32 off = p - begin;
+			U8_NEXT (begin, off, pe - begin, uc);
+
+			if (uc != -1) {
+				while (p < pe) {
+					if (uc == 0x200b) {
+						/* Invisible space ! */
+						task->flags |= RSPAMD_TASK_FLAG_BAD_UNICODE;
+
+						if (p > c) {
+							g_byte_array_append (part->utf_stripped_content,
+									(const guint8 *) c, p - c);
+							c = begin + off;
+							p = c;
+						}
+
+						U8_NEXT (begin, off, pe - begin, uc);
+
+						if (uc != 0x200b) {
+							break;
+						}
+
+						p = begin + off;
+						c = p;
+					}
+					else {
+						break;
+					}
+				}
+			}
+		}
+
 		if (G_UNLIKELY (*p) == '\r') {
 			switch (state) {
 			case normal_char:
@@ -469,7 +504,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		p = (const gchar *)part->utf_content->data;
 		end = p + part->utf_content->len;
 
-		rspamd_strip_newlines_parse (p, end, part);
+		rspamd_strip_newlines_parse (task, p, end, part);
 
 		for (i = 0; i < part->newlines->len; i ++) {
 			ex = rspamd_mempool_alloc (task->task_pool, sizeof (*ex));
