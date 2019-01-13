@@ -668,7 +668,8 @@ local function clickhouse_remove_old_partitions(cfg, ev_base)
   end
 
   local upstream = settings.upstream:get_upstream_round_robin()
-  local partition_to_remove_sql = "SELECT distinct partition, table FROM system.parts WHERE table in ('${tables}') and max_date <= toDate(now() - interval ${month} month);"
+  local partition_to_remove_sql = "SELECT distinct partition, table FROM system.parts WHERE " ..
+      "table in ('${tables}') and max_date <= toDate(now() - interval ${month} month);"
 
   local table_names = {'rspamd'}
   local tables = table.concat(table_names, "', '")
@@ -811,7 +812,8 @@ local function check_clickhouse_upstream(upstream, ev_base, cfg)
       local sql = rspamd_lua_utils.template(rule.schema, settings)
       local err, _ = lua_clickhouse.generic_sync(upstream, settings, ch_params, sql)
       if err then
-        rspamd_logger.errx(rspamd_config, "cannot send custom schema %s to clickhouse server %s: cannot make request (%s)",
+        rspamd_logger.errx(rspamd_config, 'cannot send custom schema %s to clickhouse server %s: ' ..
+        'cannot make request (%s)',
             k, upstream:get_addr():to_string(true), err)
       end
     end
@@ -919,14 +921,18 @@ if opts then
             check_clickhouse_upstream(up, ev_base, cfg)
           end
 
-          if settings.retention.enable and settings.retention.method ~= 'drop' and settings.retention.method ~= 'detach' then
-            rspamd_logger.errx(rspamd_config, "retention.method should be either 'drop' or 'detach' (now: %s). Disabling retention",
-                    settings.retention.method)
+          if settings.retention.enable and settings.retention.method ~= 'drop' and
+              settings.retention.method ~= 'detach' then
+            rspamd_logger.errx(rspamd_config,
+                "retention.method should be either 'drop' or 'detach' (now: %s). Disabling retention",
+                settings.retention.method)
             settings.retention.enable = false
           end
-          if settings.retention.enable and settings.retention.period_months < 1 or settings.retention.period_months > 1000 then
-            rspamd_logger.errx(rspamd_config, "please, set retention.period_months between 1 and 1000 (now: %s). Disabling retention",
-                    settings.retention.period_months)
+          if settings.retention.enable and settings.retention.period_months < 1 or
+              settings.retention.period_months > 1000 then
+            rspamd_logger.errx(rspamd_config,
+                "please, set retention.period_months between 1 and 1000 (now: %s). Disabling retention",
+                settings.retention.period_months)
             settings.retention.enable = false
           end
           local period = lua_util.parse_time_interval(settings.retention.run_every)
@@ -938,8 +944,9 @@ if opts then
 
           if settings.retention.enable then
             settings.retention.period = period
-            rspamd_logger.infox(rspamd_config, "retention will be performed each %s seconds for %s month with method %s",
-                    period, settings.retention.period_months, settings.retention.method)
+            rspamd_logger.infox(rspamd_config,
+                "retention will be performed each %s seconds for %s month with method %s",
+                period, settings.retention.period_months, settings.retention.method)
             rspamd_config:add_periodic(ev_base, 0, clickhouse_remove_old_partitions, false)
           end
         end

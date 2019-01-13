@@ -172,6 +172,7 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 	 * 4 - error | nil
 	 * 5 - user_str
 	 * 6 - reply->authenticated
+	 * 7 - server
 	 */
 	if (reply->code != RDNS_RC_NOERROR) {
 		lua_pushnil (L);
@@ -186,12 +187,21 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 
 	lua_pushboolean (L, reply->authenticated);
 
+	const gchar *servname = rdns_request_get_server (reply->request);
+
+	if (servname) {
+		lua_pushstring (L, servname);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
 	if (cd->item) {
 		/* We also need to restore the item in case there are some chains */
 		rspamd_symcache_set_cur_item (cd->task, cd->item);
 	}
 
-	if (lua_pcall (L, 6, 0, err_idx) != 0) {
+	if (lua_pcall (L, 7, 0, err_idx) != 0) {
 		tb = lua_touserdata (L, -1);
 
 		if (tb) {

@@ -123,7 +123,8 @@ local function configure_module()
               for _, a in ipairs(atoms) do
                 rspamd_config:register_dependency(name, a)
               end
-              rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> with dependencies [%3]', name, expr, table.concat(atoms, ','))
+              rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> with dependencies [%3]',
+                  name, expr, table.concat(atoms, ','))
             end
           end
         end
@@ -157,7 +158,8 @@ local function configure_module()
             for _, a in ipairs(atoms) do
               rspamd_config:register_dependency(t.name, a)
             end
-            rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> with dependencies [%3]', name, expr, table.concat(atoms, ','))
+            rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> with dependencies [%3]',
+                name, expr, table.concat(atoms, ','))
           else
             rspamd_logger.infox(rspamd_config, 'Registered symbol %1 <%2> as postfilter', name, expr)
           end

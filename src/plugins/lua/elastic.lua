@@ -39,8 +39,8 @@ local enabled = true
 local settings = {
   limit = 500,
   index_pattern = 'rspamd-%Y.%m.%d',
-  template_file = rspamd_paths['PLUGINSDIR'] .. '/elastic/rspamd_template.json',
-  kibana_file = rspamd_paths['PLUGINSDIR'] ..'/elastic/kibana.json',
+  template_file = rspamd_paths['SHAREDIR'] .. '/elastic/rspamd_template.json',
+  kibana_file = rspamd_paths['SHAREDIR'] ..'/elastic/kibana.json',
   key_prefix = 'elastic-',
   expire = 3600,
   timeout = 5.0,
@@ -99,7 +99,8 @@ local function elastic_send_data(task)
         push_url, err, failed_sends, settings.max_fail)
   else
     if response.code ~= 200 then
-      rspamd_logger.infox(task, "cannot push data to elastic backend (%s): wrong http code %s (%s); failed attempts: %s/%s",
+      rspamd_logger.infox(task,
+          "cannot push data to elastic backend (%s): wrong http code %s (%s); failed attempts: %s/%s",
           push_url, err, response.code, failed_sends, settings.max_fail)
     else
       lua_util.debugm(N, task, "successfully sent %s (%s bytes) rows to ES",

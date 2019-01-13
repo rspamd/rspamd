@@ -480,7 +480,9 @@ return ttl
         symbol_spam, symbol_ham, ver)
       try_convert(false)
     else
-      printf("You have configured new schema for %s/%s and your DB already has new layout (v. %s). DB conversion is not needed.",
+      printf(
+          'You have configured new schema for %s/%s and your DB already has new layout (v. %s).' ..
+              ' DB conversion is not needed.',
         symbol_spam, symbol_ham, ver)
     end
   end

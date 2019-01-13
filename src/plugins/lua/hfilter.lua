@@ -27,11 +27,11 @@ local rspamd_regexp = require "rspamd_regexp"
 local lua_util = require "lua_util"
 local rspamc_local_helo = "rspamc.local"
 local checks_hellohost = [[
-/[0-9][.-]?nat/i 5
+/[-.0-9][0-9][.-]?nat/i 5
 /homeuser[.-][0-9]/i 5
-/[0-9][.-]?unused-addr/i 3
-/[0-9][.-]?pppoe/i 5
-/[0-9][.-]?dynamic/i 5
+/[-.0-9][0-9][.-]?unused-addr/i 3
+/[-.0-9][0-9][.-]?pppoe/i 5
+/[-.0-9][0-9][.-]?dynamic/i 5
 /[.-]catv[.-]/i 5
 /unused-addr[.-][0-9]/i 3
 /comcast[.-][0-9]/i 5
@@ -39,44 +39,44 @@ local checks_hellohost = [[
 /[0-9][.-]?fbx/i 4
 /[.-]peer[.-]/i 1
 /[.-]homeuser[.-]/i 5
-/[0-9][.-]?catv/i 5
+/[-.0-9][0-9][.-]?catv/i 5
 /customers?[.-][0-9]/i 1
 /[.-]wifi[.-]/i 5
 /[0-9][.-]?kabel/i 3
 /dynip[.-][0-9]/i 5
 /[.-]broad[.-]/i 5
 /[a|x]?dsl-line[.-]?[0-9]/i 4
-/[0-9][.-]?ppp/i 5
+/[-.0-9][0-9][.-]?ppp/i 5
 /pool[.-][0-9]/i 4
 /[.-]nat[.-]/i 5
 /gprs[.-][0-9]/i 5
 /brodband[.-][0-9]/i 5
 /[.-]gprs[.-]/i 5
 /[.-]user[.-]/i 1
-/[0-9][.-]?in-?addr/i 4
+/[-.0-9][0-9][.-]?in-?addr/i 4
 /[.-]host[.-]/i 2
 /[.-]fbx[.-]/i 4
 /dynamic[.-][0-9]/i 5
-/[0-9][.-]?peer/i 1
-/[0-9][.-]?pool/i 4
-/[0-9][.-]?user/i 1
+/[-.0-9][0-9][.-]?peer/i 1
+/[-.0-9][0-9][.-]?pool/i 4
+/[-.0-9][0-9][.-]?user/i 1
 /[.-]cdma[.-]/i 5
 /user[.-][0-9]/i 1
-/[0-9][.-]?customers?/i 1
+/[-.0-9][0-9][.-]?customers?/i 1
 /ppp[.-][0-9]/i 5
 /kabel[.-][0-9]/i 3
 /dhcp[.-][0-9]/i 5
 /peer[.-][0-9]/i 1
-/[0-9][.-]?host/i 2
+/[-.0-9][0-9][.-]?host/i 2
 /clients?[.-][0-9]{2,}/i 5
 /host[.-][0-9]/i 2
 /[.-]ppp[.-]/i 5
 /[.-]dhcp[.-]/i 5
 /[.-]comcast[.-]/i 5
 /cable[.-][0-9]/i 3
-/[0-9][.-]?dial-?up/i 5
-/[0-9][.-]?bredband/i 5
-/[0-9][.-]?[a|x]?dsl-line/i 4
+/[-.0-9][0-9][.-]?dial-?up/i 5
+/[-.0-9][0-9][.-]?bredband/i 5
+/[-.0-9][0-9][.-]?[a|x]?dsl-line/i 4
 /[.-]dial-?up[.-]/i 5
 /[.-]cablemodem[.-]/i 5
 /pppoe[.-][0-9]/i 5
@@ -85,42 +85,42 @@ local checks_hellohost = [[
 /broadband[.-][0-9]/i 5
 /[.-][a|x]?dsl-line[.-]/i 4
 /[.-]customers?[.-]/i 1
-/[0-9][.-]?fibertel/i 4
-/[0-9][.-]?comcast/i 5
+/[-.0-9][0-9][.-]?fibertel/i 4
+/[-.0-9][0-9][.-]?comcast/i 5
 /[.-]dynamic[.-]/i 5
 /cdma[.-][0-9]/i 5
 /[0-9][.-]?broad/i 5
 /fbx[.-][0-9]/i 4
 /catv[.-][0-9]/i 5
-/[0-9][.-]?homeuser/i 5
-/[.-]pppoe[.-]/i 5
-/[.-]dynip[.-]/i 5
-/[0-9][.-]?[a|x]?dsl/i 4
-/[0-9]{3,}[.-]?clients?/i 5
-/[0-9][.-]?pptp/i 5
+/[-.0-9][0-9][.-]?homeuser/i 5
+/[-.0-9][.-]pppoe[.-]/i 5
+/[-.0-9][.-]dynip[.-]/i 5
+/[-.0-9][0-9][.-]?[a|x]?dsl/i 4
+/[-.0-9][0-9]{3,}[.-]?clients?/i 5
+/[-.0-9][0-9][.-]?pptp/i 5
 /[.-]clients?[.-]/i 1
 /[.-]in-?addr[.-]/i 4
 /[.-]pool[.-]/i 4
 /[a|x]?dsl[.-]?[0-9]/i 4
 /[.-][a|x]?dsl[.-]/i 4
-/[0-9][.-]?[a|x]?dsl-dynamic/i 5
+/[-.0-9][0-9][.-]?[a|x]?dsl-dynamic/i 5
 /dial-?up[.-][0-9]/i 5
-/[0-9][.-]?cablemodem/i 5
+/[-.0-9][0-9][.-]?cablemodem/i 5
 /[a|x]?dsl-dynamic[.-]?[0-9]/i 5
 /[.-]pptp[.-]/i 5
 /[.-][a|x]?dsl-dynamic[.-]/i 5
 /[0-9][.-]?wifi/i 5
 /fibertel[.-][0-9]/i 4
-/dyn[.-][0-9]/i 5
-/[0-9][.-]?broadband/i 5
-/[0-9][.-]?cable/i 3
+/dyn[.-][0-9][-.0-9]/i 5
+/[-.0-9][0-9][.-]broadband/i 5
+/[-.0-9][0-9][.-]cable/i 3
 /broad[.-][0-9]/i 5
-/[0-9][.-]?gprs/i 5
+/[-.0-9][0-9][.-]gprs/i 5
 /cablemodem[.-][0-9]/i 5
-/[0-9][.-]?modem/i 5
-/[0-9][.-]?dyn/i 5
-/[0-9][.-]?dynip/i 5
-/[0-9][.-]?cdma/i 5
+/[-.0-9][0-9][.-]modem/i 5
+/[-.0-9][0-9][.-]dyn/i 5
+/[-.0-9][0-9][.-]dynip/i 5
+/[-.0-9][0-9][.-]cdma/i 5
 /[.-]modem[.-]/i 5
 /[.-]kabel[.-]/i 3
 /[.-]cable[.-]/i 3
@@ -129,7 +129,6 @@ local checks_hellohost = [[
 /[.-]fibertel[.-]/i 4
 /[.-]bredband[.-]/i 5
 /modem[.-][0-9]/i 5
-/[.-]dyn[.-]/i 5
 /[0-9][.-]?dhcp/i 5
 /wifi[.-][0-9]/i 5
 ]]
@@ -323,7 +322,7 @@ local function check_host(task, host, symbol_suffix, eq_ip, eq_host)
 end
 
 --
-local function hfilter(task)
+local function hfilter_callback(task)
   -- Links checks
   if config['url_enabled'] then
     local parts = task:get_text_parts()
@@ -626,16 +625,26 @@ end
 
 --dumper(symbols_enabled)
 if #symbols_enabled > 0 then
-  rspamd_config:register_symbols(hfilter, 1.0, "HFILTER", symbols_enabled);
+  local id = rspamd_config:register_symbol{
+    name = 'HFILTER',
+    callback = hfilter_callback,
+    type = 'callback,mime',
+    score = 0.0,
+  }
   rspamd_config:set_metric_symbol({
     name = 'HFILTER',
     score = 0.0,
     group = 'hfilter'
   })
-
-  for _,s in ipairs(symbols_enabled) do
+  for _,sym in ipairs(symbols_enabled) do
+    rspamd_config:register_symbol{
+      type = 'virtual,mime',
+      score = 1.0,
+      parent = id,
+      name = sym,
+    }
     rspamd_config:set_metric_symbol({
-      name = s,
+      name = sym,
       score = 0.0,
       group = 'hfilter'
     })

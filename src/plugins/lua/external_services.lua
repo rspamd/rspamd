@@ -1,5 +1,5 @@
 --[[
-Copyright (c) 2016, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2019, Vsevolod Stakhov <vsevolod@highsecure.ru>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,42 +17,23 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local lua_util = require "lua_util"
-local fun = require "fun"
-local lua_antivirus = require("lua_scanners").filter('antivirus')
+local lua_scanners = require("lua_scanners").filter('scanner')
 local redis_params
 
-local N = "antivirus"
+local N = "external_services"
 
 if confighelp then
-  rspamd_config:add_example(nil, 'antivirus',
-    "Check messages for viruses",
+  rspamd_config:add_example(nil, 'external_services',
+    "Check messages using external services (e.g. OEM AS engines, DCC, Pyzor etc)",
     [[
-antivirus {
+external_services {
   # multiple scanners could be checked, for each we create a configuration block with an arbitrary name
-  clamav {
+  dcc {
     # If set force this action if any virus is found (default unset: no action is forced)
     # action = "reject";
     # If set, then rejection message is set to this value (mention single quotes)
-    # message = '${SCANNER}: virus found: "${VIRUS}"';
-    # Scan mime_parts seperately - otherwise the complete mail will be transfered to AV Scanner
-    #scan_mime_parts = true;
-    # Scanning Text is suitable for some av scanner databases (e.g. Sanesecurity)
-    #scan_text_mime = false;
-    #scan_image_mime = false;
     # If `max_size` is set, messages > n bytes in size are not scanned
     max_size = 20000000;
-    # symbol to add (add it to metric if you want non-zero weight)
-    symbol = "CLAM_VIRUS";
-    # type of scanner: "clamav", "fprot", "sophos" or "savapi"
-    type = "clamav";
-    # For "savapi" you must also specify the following variable
-    product_id = 12345;
-    # You can enable logging for clean messages
-    log_clean = true;
-    # servers to query (if port is unspecified, scanner-specific default is used)
-    # can be specified multiple times to pool servers
-    # can be set to a path to a unix socket
-    # Enable this in local.d/antivirus.conf
     servers = "127.0.0.1:3310";
     # if `patterns` is specified virus name will be matched against provided regexes and the related
     # symbol will be yielded if a match is found. If no match is found, default symbol is yielded.
@@ -69,14 +50,14 @@ antivirus {
 end
 
 
-local function add_antivirus_rule(sym, opts)
+local function add_scanner_rule(sym, opts)
   if not opts['type'] then
-    rspamd_logger.errx(rspamd_config, 'unknown type for AV rule %s', sym)
+    rspamd_logger.errx(rspamd_config, 'unknown type for external scanner rule %s', sym)
     return nil
   end
 
   if not opts['symbol'] then opts['symbol'] = sym:upper() end
-  local cfg = lua_antivirus[opts['type']]
+  local cfg = lua_scanners[opts['type']]
 
   if not cfg then
     rspamd_logger.errx(rspamd_config, 'unknown antivirus type: %s',
@@ -87,14 +68,6 @@ local function add_antivirus_rule(sym, opts)
   if not opts['symbol_fail'] then
     opts['symbol_fail'] = string.upper(opts['type']) .. '_FAIL'
   end
-
-  -- WORKAROUND for deprecated attachments_only
-  if opts['attachments_only'] ~= nil then
-    opts['scan_mime_parts'] = opts['attachments_only']
-    rspamd_logger.warnx(rspamd_config, '%s [%s]: Using attachments_only is deprecated. '..
-     'Please use scan_mime_parts = %s instead', opts['symbol'], opts['type'], opts['attachments_only'])
-  end
-  -- WORKAROUND for deprecated attachments_only
 
   local rule = cfg.configure(opts)
   rule.type = opts.type
@@ -133,26 +106,7 @@ local function add_antivirus_rule(sym, opts)
   end
 
   return function(task)
-    if rule.scan_mime_parts then
-      local parts = task:get_parts() or {}
-
-      local filter_func = function(p)
-        return (rule.scan_image_mime and p:is_image())
-            or (rule.scan_text_mime and p:is_text())
-            or (p:is_attachment())
-      end
-
-      fun.each(function(p)
-        local content = p:get_content()
-
-        if content and #content > 0 then
-          cfg.check(task, content, p:get_digest(), rule)
-        end
-      end, fun.filter(filter_func, parts))
-
-    else
-      cfg.check(task, task:get_content(), task:get_digest(), rule)
-    end
+    cfg.check(task, task:get_content(), task:get_digest(), rule)
   end
 end
 
@@ -164,7 +118,7 @@ if opts and type(opts) == 'table' then
   for k, m in pairs(opts) do
     if type(m) == 'table' and m.servers then
       if not m.type then m.type = k end
-      local cb = add_antivirus_rule(k, m)
+      local cb = add_scanner_rule(k, m)
 
       if not cb then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
@@ -194,7 +148,6 @@ if opts and type(opts) == 'table' then
                     name = sym,
                     parent = m['symbol'],
                     parent_id = id,
-                    group = N
                   })
                   rspamd_config:register_symbol({
                     type = 'virtual',
@@ -218,7 +171,7 @@ if opts and type(opts) == 'table' then
         end
         if m['score'] then
           -- Register metric symbol
-          local description = 'antivirus symbol'
+          local description = 'external services symbol'
           local group = N
           if m['description'] then
             description = m['description']
@@ -230,7 +183,7 @@ if opts and type(opts) == 'table' then
             name = m['symbol'],
             score = m['score'],
             description = description,
-            group = group or 'antivirus'
+            group = group
           })
         end
       end

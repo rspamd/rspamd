@@ -19,10 +19,12 @@
 #include "config.h"
 #include "mem_pool.h"
 #include "fstring.h"
+#include <unicode/uchar.h>
 
 struct rspamd_task;
 struct rspamd_mime_part;
 struct rspamd_mime_text_part;
+struct rspamd_charset_converter;
 
 /**
  * Convert charset to a valid iconv charset
@@ -86,6 +88,42 @@ gboolean rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
  * @param len
  */
 void rspamd_mime_charset_utf_enforce (gchar *in, gsize len);
+
+/**
+ * Gets cached converter
+ * @param enc
+ * @param err
+ * @return
+ */
+struct rspamd_charset_converter *rspamd_mime_get_converter_cached (
+		const gchar *enc,
+		UErrorCode *err);
+
+/**
+ * Performs charset->utf16 conversion
+ * @param cnv
+ * @param dest
+ * @param destCapacity
+ * @param src
+ * @param srcLength
+ * @param pErrorCode
+ * @return
+ */
+gint32
+rspamd_converter_to_uchars (struct rspamd_charset_converter *cnv,
+							UChar *dest,
+							gint32 destCapacity,
+							const char *src,
+							gint32 srcLength,
+							UErrorCode *pErrorCode);
+
+/**
+ * Detect charset in text
+ * @param in
+ * @param inlen
+ * @return detected charset name or NULL
+ */
+const char *rspamd_mime_charset_find_by_content (const gchar *in, gsize inlen);
 
 
 #endif /* SRC_LIBMIME_MIME_ENCODING_H_ */

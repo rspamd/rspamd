@@ -1382,7 +1382,8 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 	SET_START_BIT (checkpoint, dyn_item);
 
 	if (!item->enabled ||
-		(RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY))) {
+		(RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY)) ||
+		(item->type & SYMBOL_TYPE_MIME_ONLY && !RSPAMD_TASK_IS_MIME(task))) {
 		check = FALSE;
 	}
 	else if (item->specific.normal.condition_cb != -1) {

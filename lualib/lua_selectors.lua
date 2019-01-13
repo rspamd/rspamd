@@ -583,7 +583,8 @@ Empty string comes the first argument or 'true', non-empty string comes nil]],
         return ip:apply_mask(mask):to_string(),'string'
       end
     end,
-    ['description'] = 'Applies mask to IP address. The first argument is the mask for IPv4 addresses, the second is the mask for IPv6 addresses.',
+    ['description'] = 'Applies mask to IP address.' ..
+        ' The first argument is the mask for IPv4 addresses, the second is the mask for IPv6 addresses.',
     ['args_schema'] = {(ts.number + ts.string / tonumber),
                        (ts.number + ts.string / tonumber):is_optional()}
   },

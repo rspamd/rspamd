@@ -237,7 +237,8 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 	const gchar *pluginsdir = RSPAMD_PLUGINSDIR,
 			*rulesdir = RSPAMD_RULESDIR,
 			*lualibdir = RSPAMD_LUALIBDIR,
-			*libdir = RSPAMD_LIBDIR;
+			*libdir = RSPAMD_LIBDIR,
+			*sharedir = RSPAMD_SHAREDIR;
 	const gchar *t;
 
 	gchar path_buf[PATH_MAX];
@@ -246,7 +247,7 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 	lua_getfield (L, -1, "path");
 	old_path = luaL_checkstring (L, -1);
 
-	if (strstr (old_path, RSPAMD_PLUGINSDIR) != NULL) {
+	if (strstr (old_path, RSPAMD_LUALIBDIR) != NULL) {
 		/* Path has been already set, do not touch it */
 		lua_pop (L, 2);
 		return;
@@ -263,6 +264,11 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 	}
 
 	/* Try environment */
+	t = getenv ("SHAREDIR");
+	if (t) {
+		sharedir = t;
+	}
+
 	t = getenv ("PLUGINSDIR");
 	if (t) {
 		pluginsdir = t;
@@ -294,6 +300,11 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 			pluginsdir = t;
 		}
 
+		t = g_hash_table_lookup (vars, "SHAREDIR");
+		if (t) {
+			sharedir = t;
+		}
+
 		t = g_hash_table_lookup (vars, "RULESDIR");
 		if (t) {
 			rulesdir = t;
@@ -318,25 +329,25 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 	if (additional_path) {
 		rspamd_snprintf (path_buf, sizeof (path_buf),
 				"%s/lua/?.lua;"
-						"%s/lua/?.lua;"
-						"%s/?.lua;"
-						"%s/?.lua;"
-						"%s/?/init.lua;"
-						"%s;"
-						"%s",
-				pluginsdir, RSPAMD_CONFDIR, rulesdir,
+				"%s/?.lua;"
+				"%s/?.lua;"
+				"%s/?/init.lua;"
+				"%s;"
+				"%s",
+				RSPAMD_CONFDIR,
+				rulesdir,
 				lualibdir, lualibdir,
 				additional_path, old_path);
 	}
 	else {
 		rspamd_snprintf (path_buf, sizeof (path_buf),
 				"%s/lua/?.lua;"
-						"%s/lua/?.lua;"
-						"%s/?.lua;"
-						"%s/?.lua;"
-						"%s/?/init.lua;"
-						"%s",
-				pluginsdir, RSPAMD_CONFDIR, rulesdir,
+				"%s/?.lua;"
+				"%s/?.lua;"
+				"%s/?/init.lua;"
+				"%s",
+				RSPAMD_CONFDIR,
+				rulesdir,
 				lualibdir, lualibdir,
 				old_path);
 	}
@@ -592,10 +603,16 @@ rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L,
 				*pluginsdir = RSPAMD_PLUGINSDIR,
 				*rulesdir = RSPAMD_RULESDIR,
 				*lualibdir = RSPAMD_LUALIBDIR,
-				*prefix = RSPAMD_PREFIX;
+				*prefix = RSPAMD_PREFIX,
+				*sharedir = RSPAMD_SHAREDIR;
 		const gchar *t;
 
 		/* Try environment */
+		t = getenv ("SHAREDIR");
+		if (t) {
+			sharedir = t;
+		}
+
 		t = getenv ("PLUGINSDIR");
 		if (t) {
 			pluginsdir = t;
@@ -643,6 +660,11 @@ rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L,
 
 
 		if (vars) {
+			t = g_hash_table_lookup (vars, "SHAREDIR");
+			if (t) {
+				sharedir = t;
+			}
+
 			t = g_hash_table_lookup (vars, "PLUGINSDIR");
 			if (t) {
 				pluginsdir = t;
@@ -691,6 +713,7 @@ rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L,
 
 		lua_createtable (L, 0, 9);
 
+		rspamd_lua_table_set (L, RSPAMD_SHAREDIR_INDEX, sharedir);
 		rspamd_lua_table_set (L, RSPAMD_CONFDIR_INDEX, confdir);
 		rspamd_lua_table_set (L, RSPAMD_LOCAL_CONFDIR_INDEX, local_confdir);
 		rspamd_lua_table_set (L, RSPAMD_RUNDIR_INDEX, rundir);

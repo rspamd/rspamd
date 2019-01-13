@@ -83,5 +83,6 @@
 #define FILENAME_HEADER "Filename"
 #define CERT_ISSUER_HEADER "TLS-Cert-Issuer"
 #define MAILER_HEADER "Mailer"
+#define RAW_DATA_HEADER "Raw"
 
 #endif //RSPAMD_PROTOCOL_INTERNAL_H

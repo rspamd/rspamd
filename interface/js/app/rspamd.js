@@ -219,11 +219,11 @@ function ($, D3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
                     errorMessage();
                 }
             },
-            complete: function () {
+            complete: function (jqXHR) {
                 if (neighbours_status.every(function (elt) { return elt.checked; })) {
                     if (neighbours_status.some(function (elt) { return elt.status; })) {
                         if (o.success) {
-                            o.success(neighbours_status);
+                            o.success(neighbours_status, jqXHR);
                         } else {
                             alertMessage("alert-success", "Request completed");
                         }

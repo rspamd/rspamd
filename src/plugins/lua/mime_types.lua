@@ -305,7 +305,12 @@ local full_extensions_map = {
   {"dlm", "text/dlm"},
   {"doc", "application/msword"},
   {"docm", "application/vnd.ms-word.document.macroEnabled.12"},
-  {"docx", {"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword", "application/vnd.ms-word.document.12", "application/octet-stream"}},
+  {"docx", {
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/msword",
+    "application/vnd.ms-word.document.12",
+    "application/octet-stream",
+  }},
   {"dot", "application/msword"},
   {"dotm", "application/vnd.ms-word.template.macroEnabled.12"},
   {"dotx", "application/vnd.openxmlformats-officedocument.wordprocessingml.template"},
@@ -770,10 +775,19 @@ local full_extensions_map = {
   {"xlk", "application/vnd.ms-excel"},
   {"xll", "application/vnd.ms-excel"},
   {"xlm", "application/vnd.ms-excel"},
-  {"xls", {"application/vnd.ms-excel", "application/vnd.ms-office", "application/x-excel", "application/octet-stream"}},
+  {"xls", {
+    "application/vnd.ms-excel",
+    "application/vnd.ms-office",
+    "application/x-excel",
+    "application/octet-stream"
+  }},
   {"xlsb", "application/vnd.ms-excel.sheet.binary.macroEnabled.12"},
   {"xlsm", "application/vnd.ms-excel.sheet.macroEnabled.12"},
-  {"xlsx", {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel.12", "application/octet-stream"}},
+  {"xlsx", {
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel.12",
+    "application/octet-stream"
+  }},
   {"xlt", "application/vnd.ms-excel"},
   {"xltm", "application/vnd.ms-excel.template.macroEnabled.12"},
   {"xltx", "application/vnd.openxmlformats-officedocument.spreadsheetml.template"},
@@ -797,13 +811,17 @@ local full_extensions_map = {
   {"xtp", "application/octet-stream"},
   {"xwd", "image/x-xwindowdump"},
   {"z", "application/x-compress"},
-  {"zip", {"application/zip", "application/x-zip-compressed", "application/octet-stream"}},
+  {"zip", {
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/octet-stream"
+  }},
   {"zlib", "application/zlib"},
 }
 
 local function check_mime_type(task)
   local function gen_extension(fname)
-    local parts = rspamd_str_split(fname, '.')
+    local parts = lua_util.str_split(fname or '', '.')
 
     local ext = {}
     for n = 1, 2 do
@@ -871,7 +889,7 @@ local function check_mime_type(task)
       else
         if ext2 then
           check_extension(settings['bad_extensions'][ext],
-            settings['bad_extensions'][ext2])
+              settings['bad_extensions'][ext2])
           -- Check for archive cloaking like .zip.gz
           if settings['archive_extensions'][ext2]
             -- Exclude multipart archive extensions, e.g. .zip.001
@@ -955,6 +973,8 @@ local function check_mime_type(task)
           if check then
             local fl = arch:get_files_full()
 
+            local nfiles = #fl
+
             for _,f in ipairs(fl) do
               -- Strip bad characters
               if f['name'] then
@@ -970,6 +990,23 @@ local function check_mime_type(task)
 
               if f['name'] then
                 check_filename(f['name'], nil, true, p)
+              end
+            end
+
+            if nfiles == 1 and fl[1].name then
+              -- We check that extension of the file inside archive is
+              -- the same as double extension of the file
+              local _,ext2 = gen_extension(filename)
+
+              if ext2 then
+                local enc_ext = gen_extension(fl[1].name)
+
+                if enc_ext and
+                    not string.match(ext2, '^%d+$')
+                    and enc_ext ~= ext2 then
+                  task:insert_result(settings['symbol_double_extension'], 2.0,
+                      string.format("%s!=%s", ext2, enc_ext))
+                end
               end
             end
           end

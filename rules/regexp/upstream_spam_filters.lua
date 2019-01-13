@@ -40,6 +40,13 @@ reconf['AOL_SPAM'] = {
   group = 'upstream_spam_filters'
 }
 
+reconf['KLMS_SPAM'] = {
+  re = 'X-KLMS-AntiSpam-Status=/^spam/H',
+  score = 5,
+  description = "Kaspersky Security for Mail Server says this message is spam",
+  group = 'upstream_spam_filters'
+}
+
 reconf['SPAM_FLAG'] = {
   re = string.format('%s || %s || %s',
       'X-Spam-Flag=/^(?:yes|true)/Hi',

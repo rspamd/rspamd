@@ -125,6 +125,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_IS_CLASSIFIED(task) (((task)->processed_stages & RSPAMD_TASK_STAGE_CLASSIFIERS))
 #define RSPAMD_TASK_IS_EMPTY(task) (((task)->flags & RSPAMD_TASK_FLAG_EMPTY))
 #define RSPAMD_TASK_IS_PROFILING(task) (((task)->flags & RSPAMD_TASK_FLAG_PROFILE))
+#define RSPAMD_TASK_IS_MIME(task) (((task)->flags & RSPAMD_TASK_FLAG_MIME))
 
 struct rspamd_email_address;
 struct rspamd_lang_detector;

@@ -1792,12 +1792,16 @@ rspamd_content_type_has_param (struct rspamd_task * task,
 		RSPAMD_FTOK_FROM_STR (&lit, "charset");
 
 		if (rspamd_ftok_equal (&srch, &lit)) {
-			return cur_part->ct->charset.len > 0;
+			if (cur_part->ct->charset.len > 0) {
+				return TRUE;
+			}
 		}
 
 		RSPAMD_FTOK_FROM_STR (&lit, "boundary");
 		if (rspamd_ftok_equal (&srch, &lit)) {
-			return cur_part->ct->orig_boundary.len > 0;
+			if (cur_part->ct->boundary.len > 0) {
+				return TRUE;
+			}
 		}
 
 		if (cur_part->ct->attrs) {

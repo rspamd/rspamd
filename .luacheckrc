@@ -38,7 +38,6 @@ globals = {
 ignore = {
   '212', -- unused argument
   '612', -- trailing whitespace
-  '631', -- line is too long
   '311', -- value assigned to variable X is unused
 }
 
@@ -68,3 +67,9 @@ files['/**/src/rspamadm/*'].globals = {
 files['test/functional/lua/test_coverage.lua'].globals = {
   '__GLOBAL_COVERAGE_WATCHDOG'
 }
+
+files['/**/rules/'].ignore = {'631'}
+files['/**/test/functional/'].ignore = {'631'}
+
+max_string_line_length = 500
+max_comment_line_length = 500

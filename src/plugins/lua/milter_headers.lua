@@ -519,7 +519,7 @@ local function milter_headers(task)
   end
 end
 
-local config_schema = ts.shape{
+local config_schema = ts.shape({
   use = ts.array_of(ts.string) + ts.string / function(s) return {s} end,
   remove_upstream_spam_flag = ts.boolean:is_optional(),
   extended_spam_headers = ts.boolean:is_optional(),
@@ -530,7 +530,9 @@ local config_schema = ts.shape{
   extended_headers_rcpt =
       (ts.array_of(ts.string) + ts.string / function(s) return {s} end):is_optional(),
   custom = ts.map_of(ts.string, ts.string):is_optional(),
-}
+}, {
+  extra_fields = ts.map_of(ts.string, ts.any)
+})
 
 local opts = rspamd_config:get_all_opt(N) or
              rspamd_config:get_all_opt('rmilter_headers')

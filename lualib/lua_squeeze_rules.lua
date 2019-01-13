@@ -31,8 +31,20 @@ local squeezed_groups = {}
 local function gen_lua_squeeze_function(order)
   return function(task)
     local symbols_disabled = task:cache_get('squeezed_disable')
+    local mime_task = task:has_flag('mime')
     for _,data in ipairs(squeezed_rules[order]) do
-      if not symbols_disabled or not symbols_disabled[data[2]] then
+      local disable = false
+      if symbols_disabled and symbols_disabled[data[2]] then
+        disable = true
+      end
+
+      if data[3] and data[3].flags.mime then
+        if not mime_task then
+          disable = true
+        end
+      end
+
+      if not disable then
         local function real_call()
           return {data[1](task)}
         end
@@ -99,13 +111,14 @@ local function gen_lua_squeeze_function(order)
   end
 end
 
-exports.squeeze_rule = function(s, func)
+exports.squeeze_rule = function(s, func, flags)
   if s then
     if not squeezed_symbols[s] then
       squeezed_symbols[s] = {
         cb = func,
         order = 0,
         sym = s,
+        flags = flags or {}
       }
       lua_util.debugm(SN, rspamd_config, 'squeezed rule: %s', s)
     else
@@ -115,7 +128,7 @@ exports.squeeze_rule = function(s, func)
     -- Unconditionally add function to the squeezed rules
     local id = tostring(#squeezed_rules)
     lua_util.debugm(SN, rspamd_config, 'squeezed unnamed rule: %s', id)
-    table.insert(squeezed_rules[1], {func, 'unnamed: ' .. id})
+    table.insert(squeezed_rules[1], {func, 'unnamed: ' .. id, squeezed_symbols[s]})
   end
 
   if not squeeze_function_ids[1] then

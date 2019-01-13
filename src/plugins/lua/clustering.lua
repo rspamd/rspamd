@@ -152,7 +152,8 @@ local function clusterting_filter_cb(task, rule)
       -- We have seen this element in ham mostly, so subtract average it from the size score
       final_score = math.min(1.0, size_score - cluster_score / cur_elts)
     end
-    rspamd_logger.debugm(N, task, 'processed rule %s, selectors: source="%s", cluster="%s"; data: %s elts, %s score, %s elt score',
+    rspamd_logger.debugm(N, task,
+        'processed rule %s, selectors: source="%s", cluster="%s"; data: %s elts, %s score, %s elt score',
         rule.name, source_selector, cluster_selector, cur_elts, total_score, element_score)
     if final_score > 0.1 then
       task:insert_result(rule.symbol, final_score, {source_selector,

@@ -731,7 +731,7 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 			/* Try to guess tld file */
 			GString *fpath = g_string_new (NULL);
 
-			rspamd_printf_gstring (fpath, "%s%c%s", RSPAMD_PLUGINSDIR,
+			rspamd_printf_gstring (fpath, "%s%c%s", RSPAMD_SHAREDIR,
 					G_DIR_SEPARATOR, "effective_tld_names.dat");
 
 			if (access (fpath->str, R_OK) != -1) {
@@ -1135,6 +1135,7 @@ rspamd_include_map_handler (const guchar *data, gsize len,
 #define RSPAMD_DBDIR_MACRO "DBDIR"
 #define RSPAMD_LOGDIR_MACRO "LOGDIR"
 #define RSPAMD_PLUGINSDIR_MACRO "PLUGINSDIR"
+#define RSPAMD_SHAREDIR_MACRO "SHAREDIR"
 #define RSPAMD_RULESDIR_MACRO "RULESDIR"
 #define RSPAMD_WWWDIR_MACRO "WWWDIR"
 #define RSPAMD_PREFIX_MACRO "PREFIX"
@@ -1168,6 +1169,9 @@ rspamd_ucl_add_conf_variables (struct ucl_parser *parser, GHashTable *vars)
 	ucl_parser_register_variable (parser,
 			RSPAMD_PLUGINSDIR_MACRO,
 			RSPAMD_PLUGINSDIR);
+	ucl_parser_register_variable (parser,
+			RSPAMD_SHAREDIR_MACRO,
+			RSPAMD_SHAREDIR);
 	ucl_parser_register_variable (parser,
 			RSPAMD_RULESDIR_MACRO,
 			RSPAMD_RULESDIR);

@@ -18,9 +18,18 @@
 #include "message.h"
 #include "task.h"
 #include "archives.h"
+#include "libmime/mime_encoding.h"
 #include <unicode/uchar.h>
 #include <unicode/utf8.h>
 #include <unicode/utf16.h>
+#include <unicode/ucnv.h>
+
+#define msg_debug_archive(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_archive_log_id, "archive", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
+INIT_LOG_MODULE(archive)
 
 static void
 rspamd_archive_dtor (gpointer p)
@@ -40,6 +49,84 @@ rspamd_archive_dtor (gpointer p)
 	}
 
 	g_ptr_array_free (arch->files, TRUE);
+}
+
+static GString *
+rspamd_archive_file_try_utf (struct rspamd_task *task,
+		const gchar *in, gsize inlen)
+{
+	const gchar *charset = NULL, *p, *end;
+	GString *res;
+
+	charset = rspamd_mime_charset_find_by_content (in, inlen);
+
+	if (charset) {
+		UChar *tmp;
+		UErrorCode uc_err = U_ZERO_ERROR;
+		gint32 r, clen, dlen;
+		struct rspamd_charset_converter *conv;
+		UConverter *utf8_converter;
+
+		conv = rspamd_mime_get_converter_cached (charset, &uc_err);
+		utf8_converter = rspamd_get_utf8_converter ();
+
+		if (conv == NULL) {
+			msg_err_task ("cannot open converter for %s: %s",
+					charset, u_errorName (uc_err));
+
+			return NULL;
+		}
+
+		tmp = g_malloc (sizeof (*tmp) * (inlen + 1));
+		r = rspamd_converter_to_uchars (conv, tmp, inlen + 1,
+				in, inlen, &uc_err);
+		if (!U_SUCCESS (uc_err)) {
+			msg_err_task ("cannot convert data to unicode from %s: %s",
+					charset, u_errorName (uc_err));
+			g_free (tmp);
+
+			return NULL;
+		}
+
+		clen = ucnv_getMaxCharSize (utf8_converter);
+		dlen = UCNV_GET_MAX_BYTES_FOR_STRING (r, clen);
+		res = g_string_sized_new (dlen);
+		r = ucnv_fromUChars (utf8_converter, res->str, dlen, tmp, r, &uc_err);
+
+		if (!U_SUCCESS (uc_err)) {
+			msg_err_task ("cannot convert data from unicode from %s: %s",
+					charset, u_errorName (uc_err));
+			g_free (tmp);
+			g_string_free (res, TRUE);
+
+			return NULL;
+		}
+
+		g_free (tmp);
+		res->len = r;
+
+		msg_debug_archive ("converted from %s to UTF-8 inlen: %z, outlen: %d",
+				charset, inlen, r);
+	}
+	else {
+		/* Convert unsafe characters to '?' */
+		res = g_string_sized_new (inlen);
+		p = in;
+		end = in + inlen;
+
+		while (p < end) {
+			if (g_ascii_isgraph (*p)) {
+				g_string_append_c (res, *p);
+			}
+			else {
+				g_string_append_c (res, '?');
+			}
+
+			p ++;
+		}
+	}
+
+	return res;
 }
 
 static void
@@ -88,13 +175,13 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 
 	if (eocd == NULL) {
 		/* Not a zip file */
-		msg_debug_task ("zip archive is invalid (no EOCD)");
+		msg_debug_archive ("zip archive is invalid (no EOCD)");
 
 		return;
 	}
 
 	if (end - eocd < 21) {
-		msg_debug_task ("zip archive is invalid (short EOCD)");
+		msg_debug_archive ("zip archive is invalid (short EOCD)");
 
 		return;
 	}
@@ -107,7 +194,7 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 
 	/* We need to check sanity as well */
 	if (cd_offset + cd_size != (guint)(eocd - start)) {
-		msg_debug_task ("zip archive is invalid (bad size/offset for CD)");
+		msg_debug_archive ("zip archive is invalid (bad size/offset for CD)");
 
 		return;
 	}
@@ -124,7 +211,7 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 		/* Read central directory record */
 		if (eocd - cd < cd_basic_len ||
 				memcmp (cd, cd_magic, sizeof (cd_magic)) != 0) {
-			msg_debug_task ("zip archive is invalid (bad cd record)");
+			msg_debug_archive ("zip archive is invalid (bad cd record)");
 
 			return;
 		}
@@ -141,17 +228,24 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 		comment_len = GUINT16_FROM_LE (comment_len);
 
 		if (cd + fname_len + comment_len + extra_len + cd_basic_len > eocd) {
-			msg_debug_task ("zip archive is invalid (too large cd record)");
+			msg_debug_archive ("zip archive is invalid (too large cd record)");
 
 			return;
 		}
 
 		f = g_malloc0 (sizeof (*f));
-		f->fname = g_string_new_len (cd + cd_basic_len, fname_len);
+		f->fname = rspamd_archive_file_try_utf (task,
+				cd + cd_basic_len, fname_len);
 		f->compressed_size = comp_size;
 		f->uncompressed_size = uncomp_size;
-		g_ptr_array_add (arch->files, f);
-		msg_debug_task ("found file in zip archive: %v", f->fname);
+
+		if (f->fname) {
+			g_ptr_array_add (arch->files, f);
+			msg_debug_archive ("found file in zip archive: %v", f->fname);
+		}
+		else {
+			g_free (f);
+		}
 
 		cd += fname_len + comment_len + extra_len + cd_basic_len;
 	}
@@ -208,11 +302,11 @@ rspamd_archive_rar_read_vint (const guchar *start, gsize remain, guint64 *res)
 
 #define RAR_SKIP_BYTES(n) do { \
 	if ((n) <= 0) { \
-		msg_debug_task ("rar archive is invalid (bad skip value)"); \
+		msg_debug_archive ("rar archive is invalid (bad skip value)"); \
 		return; \
 	} \
 	if ((gsize)(end - p) < (n)) { \
-		msg_debug_task ("rar archive is invalid (truncated)"); \
+		msg_debug_archive ("rar archive is invalid (truncated)"); \
 		return; \
 	} \
 	p += (n); \
@@ -221,11 +315,11 @@ rspamd_archive_rar_read_vint (const guchar *start, gsize remain, guint64 *res)
 #define RAR_READ_VINT() do { \
 	r = rspamd_archive_rar_read_vint (p, end - p, &vint); \
 	if (r == -1) { \
-		msg_debug_task ("rar archive is invalid (bad vint)"); \
+		msg_debug_archive ("rar archive is invalid (bad vint)"); \
 		return; \
 	} \
 	else if (r == 0) { \
-		msg_debug_task ("rar archive is invalid (BAD vint offset)"); \
+		msg_debug_archive ("rar archive is invalid (BAD vint offset)"); \
 		return; \
 	}\
 } while (0)
@@ -233,7 +327,7 @@ rspamd_archive_rar_read_vint (const guchar *start, gsize remain, guint64 *res)
 #define RAR_READ_VINT_SKIP() do { \
 	r = rspamd_archive_rar_read_vint (p, end - p, &vint); \
 	if (r == -1) { \
-		msg_debug_task ("rar archive is invalid (bad vint)"); \
+		msg_debug_archive ("rar archive is invalid (bad vint)"); \
 		return; \
 	} \
 	p += r; \
@@ -241,7 +335,7 @@ rspamd_archive_rar_read_vint (const guchar *start, gsize remain, guint64 *res)
 
 #define RAR_READ_UINT16(n) do { \
 	if (end - p < (glong)sizeof (guint16)) { \
-		msg_debug_task ("rar archive is invalid (bad int16)"); \
+		msg_debug_archive ("rar archive is invalid (bad int16)"); \
 		return; \
 	} \
 	n = p[0] + (p[1] << 8); \
@@ -250,7 +344,7 @@ rspamd_archive_rar_read_vint (const guchar *start, gsize remain, guint64 *res)
 
 #define RAR_READ_UINT32(n) do { \
 	if (end - p < (glong)sizeof (guint32)) { \
-		msg_debug_task ("rar archive is invalid (bad int32)"); \
+		msg_debug_archive ("rar archive is invalid (bad int32)"); \
 		return; \
 	} \
 	n = (guint)p[0] + ((guint)p[1] << 8) + ((guint)p[2] << 16) + ((guint)p[3] << 24); \
@@ -304,7 +398,7 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 
 		if (sz == 0) {
 			/* Zero sized block - error */
-			msg_debug_task ("rar archive is invalid (zero size block)");
+			msg_debug_archive ("rar archive is invalid (zero size block)");
 
 			return;
 		}
@@ -320,7 +414,8 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 			RAR_READ_UINT16 (fname_len);
 
 			if (fname_len == 0 || fname_len > (gsize)(end - p)) {
-				msg_debug_task ("rar archive is invalid (bad fileame size)");
+				msg_debug_archive ("rar archive is invalid (bad filename size: %d)",
+						fname_len);
 
 				return;
 			}
@@ -350,15 +445,21 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 
 				if (tmp != NULL) {
 					/* Just use ASCII version */
-					f->fname = g_string_new_len (p, tmp - p);
+					f->fname = rspamd_archive_file_try_utf (task, p, tmp - p);
+					msg_debug_archive ("found ascii filename in rarv4 archive: %v",
+							f->fname);
 				}
 				else {
 					/* We have UTF8 filename, use it as is */
-					f->fname = g_string_new_len (p, fname_len);
+					f->fname = rspamd_archive_file_try_utf (task, p, fname_len);
+					msg_debug_archive ("found utf filename in rarv4 archive: %v",
+							f->fname);
 				}
 			}
 			else {
-				f->fname = g_string_new_len (p, fname_len);
+				f->fname = rspamd_archive_file_try_utf (task, p, fname_len);
+				msg_debug_archive ("found ascii (old) filename in rarv4 archive: %v",
+						f->fname);
 			}
 
 			f->compressed_size = comp_sz;
@@ -368,7 +469,12 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 				f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
 			}
 
-			g_ptr_array_add (arch->files, f);
+			if (f->fname) {
+				g_ptr_array_add (arch->files, f);
+			}
+			else {
+				g_free (f);
+			}
 		}
 
 		p = start_section;
@@ -391,7 +497,8 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 			rar_v4_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00};
 	const guint rar_encrypted_header = 4, rar_main_header = 1,
 			rar_file_header = 2;
-	guint64 vint, sz, comp_sz = 0, uncomp_sz = 0, flags = 0, type = 0;
+	guint64 vint, sz, comp_sz = 0, uncomp_sz = 0, flags = 0, type = 0,
+			extra_sz = 0;
 	struct rspamd_archive *arch;
 	struct rspamd_archive_file *f;
 	gint r;
@@ -400,7 +507,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 	end = p + part->parsed_data.len;
 
 	if ((gsize)(end - p) <= sizeof (rar_v5_magic)) {
-		msg_debug_task ("rar archive is invalid (too small)");
+		msg_debug_archive ("rar archive is invalid (too small)");
 
 		return;
 	}
@@ -415,7 +522,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 		return;
 	}
 	else {
-		msg_debug_task ("rar archive is invalid (no rar magic)");
+		msg_debug_archive ("rar archive is invalid (no rar magic)");
 
 		return;
 	}
@@ -457,7 +564,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 		goto end;
 	}
 	else if (type != rar_main_header) {
-		msg_debug_task ("rar archive is invalid (bad main header)");
+		msg_debug_archive ("rar archive is invalid (bad main header)");
 
 		return;
 	}
@@ -467,6 +574,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 	RAR_SKIP_BYTES (sz);
 
 	while (p < end) {
+		gboolean has_extra = FALSE;
 		/* Read the next header */
 		/* Crc 32 */
 		RAR_SKIP_BYTES (sizeof (guint32));
@@ -476,7 +584,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 		sz = vint;
 		if (sz == 0) {
 			/* Zero sized block - error */
-			msg_debug_task ("rar archive is invalid (zero size block)");
+			msg_debug_archive ("rar archive is invalid (zero size block)");
 
 			return;
 		}
@@ -492,7 +600,10 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 		if (flags & 0x1) {
 			/* Have extra zone */
 			RAR_READ_VINT_SKIP ();
+			extra_sz = vint;
+			has_extra = TRUE;
 		}
+
 		if (flags & 0x2) {
 			/* Data zone is presented */
 			RAR_READ_VINT_SKIP ();
@@ -536,7 +647,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 			fname_len = vint;
 
 			if (fname_len == 0 || fname_len > (gsize)(end - p)) {
-				msg_debug_task ("rar archive is invalid (bad fileame size)");
+				msg_debug_archive ("rar archive is invalid (bad filename size)");
 
 				return;
 			}
@@ -544,8 +655,49 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 			f = g_malloc0 (sizeof (*f));
 			f->uncompressed_size = uncomp_sz;
 			f->compressed_size = comp_sz;
-			f->fname = g_string_new_len (p, fname_len);
-			g_ptr_array_add (arch->files, f);
+			f->fname = rspamd_archive_file_try_utf (task, p, fname_len);
+
+			if (f->fname) {
+				msg_debug_archive ("added rarv5 file: %v", f->fname);
+				g_ptr_array_add (arch->files, f);
+			}
+			else {
+				g_free (f);
+				f = NULL;
+			}
+
+			if (f && has_extra && extra_sz > 0 &&
+				p + fname_len + extra_sz < end) {
+				/* Try to find encryption record in extra field */
+				const guchar *ex = p + fname_len;
+
+				while (ex < p + extra_sz) {
+					const guchar *t;
+					gint64 cur_sz = 0, sec_type = 0;
+
+					r = rspamd_archive_rar_read_vint (ex, extra_sz, &cur_sz);
+					if (r == -1) {
+						msg_debug_archive ("rar archive is invalid (bad vint)");
+						return;
+					}
+
+					t = ex + r;
+
+					r = rspamd_archive_rar_read_vint (t, extra_sz - r, &sec_type);
+					if (r == -1) {
+						msg_debug_archive ("rar archive is invalid (bad vint)");
+						return;
+					}
+
+					if (sec_type == 0x01) {
+						f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+						arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+						break;
+					}
+
+					ex += cur_sz;
+				}
+			}
 
 			/* Restore p to the beginning of the header */
 			p = section_start;
@@ -632,7 +784,7 @@ rspamd_archive_7zip_read_vint (const guchar *start, gsize remain, guint64 *res)
 #define SZ_READ_VINT_SKIP() do { \
 	r = rspamd_archive_7zip_read_vint (p, end - p, &vint); \
 	if (r == -1) { \
-		msg_debug_task ("7z archive is invalid (bad vint)"); \
+		msg_debug_archive ("7z archive is invalid (bad vint)"); \
 		return; \
 	} \
 	p += r; \
@@ -641,7 +793,7 @@ rspamd_archive_7zip_read_vint (const guchar *start, gsize remain, guint64 *res)
 	int r; \
 	r = rspamd_archive_7zip_read_vint (p, end - p, &(var)); \
 	if (r == -1) { \
-		msg_debug_task ("7z archive is invalid (bad vint): %s", G_STRLOC); \
+		msg_debug_archive ("7z archive is invalid (bad vint): %s", G_STRLOC); \
 		return NULL; \
 	} \
 	p += r; \
@@ -649,19 +801,19 @@ rspamd_archive_7zip_read_vint (const guchar *start, gsize remain, guint64 *res)
 
 #define SZ_READ_UINT64(n) do { \
 	if (end - p < (goffset)sizeof (guint64)) { \
-		msg_debug_task ("7zip archive is invalid (bad vint): %s", G_STRLOC); \
+		msg_debug_archive ("7zip archive is invalid (bad uint64): %s", G_STRLOC); \
 		return; \
 	} \
-	n = *(guint64 *)p; \
+	memcpy (&(n), p, sizeof (guint64)); \
 	n = GUINT64_FROM_LE(n); \
 	p += sizeof (guint64); \
 } while (0)
 #define SZ_SKIP_BYTES(n) do { \
-	if (end - p > (n)) { \
+	if (end - p >= (n)) { \
 		p += (n); \
 	} \
 	else { \
-		msg_debug_task ("7zip archive is invalid (truncated); wanted to read %d bytes, %d avail: %s", (gint)(n), (gint)(end - p), G_STRLOC); \
+		msg_debug_archive ("7zip archive is invalid (truncated); wanted to read %d bytes, %d avail: %s", (gint)(n), (gint)(end - p), G_STRLOC); \
 		return NULL; \
 	} \
 } while (0)
@@ -694,6 +846,15 @@ enum rspamd_7zip_header_mark {
 	kStartPos = 0x18,
 	kDummy = 0x19,
 };
+
+
+#define _7Z_CRYPTO_MAIN_ZIP			0x06F10101 /* Main Zip crypto algo */
+#define _7Z_CRYPTO_RAR_29			0x06F10303 /* Rar29 AES-128 + (modified SHA-1) */
+#define _7Z_CRYPTO_AES_256_SHA_256	0x06F10701 /* AES-256 + SHA-256 */
+
+#define IS_SZ_ENCRYPTED(codec_id) (((codec_id) == _7Z_CRYPTO_MAIN_ZIP) || \
+	((codec_id) == _7Z_CRYPTO_RAR_29) || \
+	((codec_id) == _7Z_CRYPTO_AES_256_SHA_256))
 
 static const guchar *
 rspamd_7zip_read_bits (struct rspamd_task *task,
@@ -801,6 +962,7 @@ rspamd_7zip_read_pack_info (struct rspamd_task *task,
 	while (p != NULL && p < end) {
 		t = *p;
 		SZ_SKIP_BYTES(1);
+		msg_debug_archive ("7zip: read pack info %xc", t);
 
 		switch (t) {
 		case kSize:
@@ -819,7 +981,7 @@ rspamd_7zip_read_pack_info (struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
+			msg_debug_archive ("bad 7zip type: %xc; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -833,9 +995,9 @@ end:
 static const guchar *
 rspamd_7zip_read_folder (struct rspamd_task *task,
 		const guchar *p, const guchar *end,
-		struct rspamd_archive *arch, guint *pnstreams)
+		struct rspamd_archive *arch, guint *pnstreams, guint *ndigests)
 {
-	guint64 ncoders = 0, i, noutstreams = 0, ninstreams = 0;
+	guint64 ncoders = 0, i, j, noutstreams = 0, ninstreams = 0;
 
 	SZ_READ_VINT (ncoders);
 
@@ -864,9 +1026,21 @@ rspamd_7zip_read_folder (struct rspamd_task *task,
 		 * }
 		 */
 		t = *p;
-		SZ_SKIP_BYTES(1);
-		sz = t & 0x7;
+		SZ_SKIP_BYTES (1);
+		sz = t & 0xF;
 		/* Codec ID */
+		tmp = 0;
+		for (j = 0; j < sz; j++) {
+			tmp <<= 8;
+			tmp += p[j];
+		}
+
+		msg_debug_archive ("7zip: read codec id: %L", tmp);
+
+		if (IS_SZ_ENCRYPTED (tmp)) {
+			arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+		}
+
 		SZ_SKIP_BYTES (sz);
 
 		if (t & (1u << 4)) {
@@ -899,6 +1073,8 @@ rspamd_7zip_read_folder (struct rspamd_task *task,
 	}
 
 	gint64 npacked = (gint64)ninstreams - (gint64)noutstreams + 1;
+	msg_debug_archive ("7zip: instreams=%L, outstreams=%L, packed=%L",
+			ninstreams, noutstreams, npacked);
 
 	if (npacked > 1) {
 		/* Gah... */
@@ -910,6 +1086,7 @@ rspamd_7zip_read_folder (struct rspamd_task *task,
 	}
 
 	*pnstreams = noutstreams;
+	(*ndigests) += npacked;
 
 	return p;
 }
@@ -949,10 +1126,13 @@ rspamd_7zip_read_coders_info (struct rspamd_task *task,
 
 		t = *p;
 		SZ_SKIP_BYTES(1);
+		msg_debug_archive ("7zip: read coders info %xc", t);
 
 		switch (t) {
 		case kFolder:
 			SZ_READ_VINT (num_folders);
+			msg_debug_archive ("7zip: nfolders=%L", num_folders);
+
 			if (*p != 0) {
 				/* External folders */
 				SZ_SKIP_BYTES(1);
@@ -970,9 +1150,7 @@ rspamd_7zip_read_coders_info (struct rspamd_task *task,
 
 				for (i = 0; i < num_folders && p != NULL && p < end; i++) {
 					p = rspamd_7zip_read_folder (task, p, end, arch,
-							&folder_nstreams[i]);
-
-					num_digests += folder_nstreams[i];
+							&folder_nstreams[i], &num_digests);
 				}
 			}
 			break;
@@ -983,6 +1161,8 @@ rspamd_7zip_read_coders_info (struct rspamd_task *task,
 						guint64 tmp;
 
 						SZ_READ_VINT (tmp); /* Unpacked size */
+						msg_debug_archive ("7zip: unpacked size (folder=%d, stream=%d) = %L",
+								i, j, tmp);
 					}
 				}
 				else {
@@ -1012,7 +1192,7 @@ rspamd_7zip_read_coders_info (struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
+			msg_debug_archive ("bad 7zip type: %xc; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1069,6 +1249,8 @@ rspamd_7zip_read_substreams_info (struct rspamd_task *task,
 		t = *p;
 		SZ_SKIP_BYTES(1);
 
+		msg_debug_archive ("7zip: read substream info %xc", t);
+
 		switch (t) {
 		case kNumUnPackStream:
 			for (i = 0; i < num_folders; i ++) {
@@ -1104,7 +1286,7 @@ rspamd_7zip_read_substreams_info (struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
+			msg_debug_archive ("bad 7zip type: %xc; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1125,6 +1307,7 @@ rspamd_7zip_read_main_streams_info (struct rspamd_task *task,
 	while (p != NULL && p < end) {
 		t = *p;
 		SZ_SKIP_BYTES(1);
+		msg_debug_archive ("7zip: read main streams info %xc", t);
 
 		/*
 		 *
@@ -1160,7 +1343,7 @@ rspamd_7zip_read_main_streams_info (struct rspamd_task *task,
 			break;
 		default:
 			p = NULL;
-			msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
+			msg_debug_archive ("bad 7zip type: %xc; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1227,7 +1410,10 @@ rspamd_7zip_ucs2_to_utf8 (struct rspamd_task *task, const guchar *p,
 
 	while (src_pos < len) {
 		U16_NEXT (up, src_pos, len, wc);
-		U8_APPEND (res->str, dest_pos, res->allocated_len, wc, is_error);
+
+		if (wc > 0) {
+			U8_APPEND (res->str, dest_pos, res->allocated_len, wc, is_error);
+		}
 
 		if (is_error) {
 			g_string_free (res, TRUE);
@@ -1259,6 +1445,8 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 		t = *p;
 		SZ_SKIP_BYTES (1);
 
+		msg_debug_archive ("7zip: read file data type %xc", t);
+
 		if (t == kEnd) {
 			goto end;
 		}
@@ -1275,10 +1463,7 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 		case kATime:
 		case kMTime:
 			/* We don't care of these guys, but we still have to parse them, gah */
-			if (sz == 0) {
-				goto end;
-			}
-			else {
+			if (sz > 0) {
 				SZ_SKIP_BYTES (sz);
 			}
 			break;
@@ -1313,18 +1498,19 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 
 					if (fend == NULL || fend - p == 0) {
 						/* Crap instead of fname */
-						msg_debug_task ("bad 7zip name; %s", G_STRLOC);
+						msg_debug_archive ("bad 7zip name; %s", G_STRLOC);
 					}
 
 					res = rspamd_7zip_ucs2_to_utf8 (task, p, fend);
 
 					if (res != NULL) {
-						fentry = g_malloc0 (sizeof (fentry));
+						fentry = g_malloc0 (sizeof (*fentry));
 						fentry->fname = res;
 						g_ptr_array_add (arch->files, fentry);
+						msg_debug_archive ("7zip: found file %v", res);
 					}
 					else {
-						msg_debug_task ("bad 7zip name; %s", G_STRLOC);
+						msg_debug_archive ("bad 7zip name; %s", G_STRLOC);
 					}
 					/* Skip zero terminating character */
 					p = fend + 2;
@@ -1333,16 +1519,13 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 			break;
 		case kDummy:
 		case kWinAttributes:
-			if (sz == 0) {
-				goto end;
-			}
-			else {
+			if (sz > 0) {
 				SZ_SKIP_BYTES (sz);
 			}
 			break;
 		default:
 			p = NULL;
-			msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
+			msg_debug_archive ("bad 7zip type: %xc; %s", t, G_STRLOC);
 			goto end;
 			break;
 		}
@@ -1360,6 +1543,8 @@ rspamd_7zip_read_next_section (struct rspamd_task *task,
 	guchar t = *p;
 
 	SZ_SKIP_BYTES(1);
+
+	msg_debug_archive ("7zip: read section %xc", t);
 
 	switch (t) {
 	case kHeader:
@@ -1385,9 +1570,13 @@ rspamd_7zip_read_next_section (struct rspamd_task *task,
 	case kFilesInfo:
 		p = rspamd_7zip_read_files_info (task, p, end, arch);
 		break;
+	case kEnd:
+		p = NULL;
+		msg_debug_archive ("7zip: read final section");
+		break;
 	default:
 		p = NULL;
-		msg_debug_task ("bad 7zip type: %c; %s", t, G_STRLOC);
+		msg_debug_archive ("bad 7zip type: %xc; %s", t, G_STRLOC);
 		break;
 	}
 
@@ -1409,7 +1598,7 @@ rspamd_archive_process_7zip (struct rspamd_task *task,
 
 	if (end - p <= sizeof (guint64) + sizeof (guint32) ||
 			memcmp (p, sz_magic, sizeof (sz_magic)) != 0) {
-		msg_debug_task ("7z archive is invalid (no 7z magic)");
+		msg_debug_archive ("7z archive is invalid (no 7z magic)");
 
 		return;
 	}
@@ -1430,7 +1619,7 @@ rspamd_archive_process_7zip (struct rspamd_task *task,
 		p += sizeof (guint32);
 	}
 	else {
-		msg_debug_task ("7z archive is invalid (truncated crc)");
+		msg_debug_archive ("7z archive is invalid (truncated crc)");
 
 		return;
 	}
@@ -1439,7 +1628,7 @@ rspamd_archive_process_7zip (struct rspamd_task *task,
 		p += section_offset;
 	}
 	else {
-		msg_debug_task ("7z archive is invalid (incorrect section offset)");
+		msg_debug_archive ("7z archive is invalid (incorrect section offset)");
 
 		return;
 	}
@@ -1451,6 +1640,148 @@ rspamd_archive_process_7zip (struct rspamd_task *task,
 	if (part->cd != NULL) {
 		arch->archive_name = &part->cd->filename;
 	}
+	arch->size = part->parsed_data.len;
+}
+
+static void
+rspamd_archive_process_gzip (struct rspamd_task *task,
+							 struct rspamd_mime_part *part) {
+	struct rspamd_archive *arch;
+	const guchar *start, *p, *end;
+	const guchar gz_magic[] = {0x1F, 0x8B};
+	guchar flags;
+
+	start = part->parsed_data.begin;
+	p = start;
+	end = p + part->parsed_data.len;
+
+	if (end - p <= 10 || memcmp (p, gz_magic, sizeof (gz_magic)) != 0) {
+		msg_debug_archive ("gzip archive is invalid (no gzip magic)");
+
+		return;
+	}
+
+	arch = rspamd_mempool_alloc0 (task->task_pool, sizeof (*arch));
+	arch->files = g_ptr_array_sized_new (1);
+	arch->type = RSPAMD_ARCHIVE_GZIP;
+	rspamd_mempool_add_destructor (task->task_pool, rspamd_archive_dtor,
+			arch);
+
+	flags = p[3];
+
+	if (flags & (1u << 5)) {
+		arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+	}
+
+	if (flags & (1u << 3)) {
+		/* We have file name presented in archive, try to use it */
+		if (flags & (1u << 1)) {
+			/* Multipart */
+			p += 12;
+		}
+		else {
+			p += 10;
+		}
+
+		if (flags & (1u << 2)) {
+			/* Optional section */
+			guint16 optlen = 0;
+
+			RAR_READ_UINT16 (optlen);
+
+			if (end <= p + optlen) {
+				msg_debug_archive ("gzip archive is invalid, bad extra length: %d",
+						(int)optlen);
+
+				return;
+			}
+
+			p += optlen;
+		}
+
+		/* Read file name */
+		const guchar *fname_start = p;
+
+		while (p < end) {
+			if (*p == '\0') {
+				if (p > fname_start) {
+					struct rspamd_archive_file *f;
+
+					f = g_malloc0 (sizeof (*f));
+					f->fname = rspamd_archive_file_try_utf (task, fname_start,
+							p - fname_start);
+
+					g_ptr_array_add (arch->files, f);
+
+					goto set;
+				}
+			}
+
+			p ++;
+		}
+
+		/* Wrong filename, not zero terminated */
+		msg_debug_archive ("gzip archive is invalid, bad filename at pos %d",
+				(int)(p - start));
+
+		return;
+	}
+
+	/* Fallback, we need to extract file name from archive name if possible */
+	if (part->cd->filename.len > 0) {
+		const gchar *dot_pos, *slash_pos;
+
+		dot_pos = rspamd_memrchr (part->cd->filename.begin, '.',
+				part->cd->filename.len);
+
+		if (dot_pos) {
+			struct rspamd_archive_file *f;
+
+			slash_pos = rspamd_memrchr (part->cd->filename.begin, '/',
+					part->cd->filename.len);
+
+			if (slash_pos && slash_pos < dot_pos) {
+				f = g_malloc0 (sizeof (*f));
+				f->fname = g_string_sized_new (dot_pos - slash_pos);
+				g_string_append_len (f->fname, slash_pos + 1,
+						dot_pos - slash_pos - 1);
+
+				msg_debug_archive ("fallback to gzip filename based on cd: %v",
+						f->fname);
+
+				g_ptr_array_add (arch->files, f);
+
+				goto set;
+			}
+			else {
+				const gchar *fname_start = part->cd->filename.begin;
+
+				f = g_malloc0 (sizeof (*f));
+				f->fname = g_string_sized_new (dot_pos - slash_pos);
+				g_string_append_len (f->fname, fname_start,
+						dot_pos - fname_start);
+
+				msg_debug_archive ("fallback to gzip filename based on cd: %v",
+						f->fname);
+
+				g_ptr_array_add (arch->files, f);
+
+				goto set;
+			}
+		}
+	}
+
+	return;
+
+set:
+	/* Set archive data */
+	part->flags |= RSPAMD_MIME_PART_ARCHIVE;
+	part->specific.arch = arch;
+
+	if (part->cd) {
+		arch->archive_name = &part->cd->filename;
+	}
+
 	arch->size = part->parsed_data.len;
 }
 
@@ -1527,6 +1858,7 @@ rspamd_archives_process (struct rspamd_task *task)
 	const guchar rar_magic[] = {0x52, 0x61, 0x72, 0x21, 0x1A, 0x07};
 	const guchar zip_magic[] = {0x50, 0x4b, 0x03, 0x04};
 	const guchar sz_magic[] = {'7', 'z', 0xBC, 0xAF, 0x27, 0x1C};
+	const guchar gz_magic[] = {0x1F, 0x8B};
 
 	for (i = 0; i < task->parts->len; i ++) {
 		part = g_ptr_array_index (task->parts, i);
@@ -1536,12 +1868,18 @@ rspamd_archives_process (struct rspamd_task *task)
 				if (rspamd_archive_cheat_detect (part, "zip",
 						zip_magic, sizeof (zip_magic))) {
 					rspamd_archive_process_zip (task, part);
-				} else if (rspamd_archive_cheat_detect (part, "rar",
+				}
+				else if (rspamd_archive_cheat_detect (part, "rar",
 						rar_magic, sizeof (rar_magic))) {
 					rspamd_archive_process_rar (task, part);
-				} else if (rspamd_archive_cheat_detect (part, "7z",
+				}
+				else if (rspamd_archive_cheat_detect (part, "7z",
 						sz_magic, sizeof (sz_magic))) {
 					rspamd_archive_process_7zip (task, part);
+				}
+				else if (rspamd_archive_cheat_detect (part, "gz",
+						gz_magic, sizeof (gz_magic))) {
+					rspamd_archive_process_gzip (task, part);
 				}
 
 				if (IS_CT_TEXT (part->ct) &&
@@ -1570,6 +1908,9 @@ rspamd_archive_type_str (enum rspamd_archive_type type)
 		break;
 	case RSPAMD_ARCHIVE_7ZIP:
 		ret = "7z";
+		break;
+	case RSPAMD_ARCHIVE_GZIP:
+		ret = "gz";
 		break;
 	}
 

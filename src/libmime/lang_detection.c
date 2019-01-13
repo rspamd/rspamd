@@ -33,7 +33,7 @@
 static const gsize default_short_text_limit = 20;
 static const gsize default_words = 80;
 static const gdouble update_prob = 0.6;
-static const gchar *default_languages_path = RSPAMD_PLUGINSDIR "/languages";
+static const gchar *default_languages_path = RSPAMD_SHAREDIR "/languages";
 
 #undef EXTRA_LANGDET_DEBUG
 

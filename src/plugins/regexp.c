@@ -245,12 +245,34 @@ regexp_module_config (struct rspamd_config *cfg)
 			}
 
 			if (cur_item && (is_lua || valid_expression)) {
+
+				flags = SYMBOL_TYPE_NORMAL;
+				elt = ucl_object_lookup (value, "mime_only");
+
+				if (elt) {
+					if (ucl_object_type (elt) != UCL_BOOLEAN) {
+						msg_err_config (
+								"mime_only attribute is not boolean for symbol: '%s'",
+								cur_item->symbol);
+
+						res = FALSE;
+					}
+					else {
+						if (ucl_object_toboolean (elt)) {
+							flags |= SYMBOL_TYPE_MIME_ONLY;
+						}
+					}
+				}
+
 				id = rspamd_symcache_add_symbol (cfg->cache,
 						cur_item->symbol,
 						0,
 						process_regexp_item,
 						cur_item,
-						SYMBOL_TYPE_NORMAL, -1);
+						flags, -1);
+
+				/* Reset flags */
+				flags = 0;
 
 				elt = ucl_object_lookup (value, "condition");
 
@@ -296,7 +318,7 @@ regexp_module_config (struct rspamd_config *cfg)
 				if (elt) {
 					if (ucl_object_type (elt) != UCL_BOOLEAN) {
 						msg_err_config (
-								"one_shot attribute is not numeric for symbol: '%s'",
+								"one_shot attribute is not boolean for symbol: '%s'",
 								cur_item->symbol);
 
 						res = FALSE;
@@ -311,7 +333,7 @@ regexp_module_config (struct rspamd_config *cfg)
 				if ((elt = ucl_object_lookup (value, "any_shot")) != NULL) {
 					if (ucl_object_type (elt) != UCL_BOOLEAN) {
 						msg_err_config (
-								"any_shot attribute is not numeric for symbol: '%s'",
+								"any_shot attribute is not boolean for symbol: '%s'",
 								cur_item->symbol);
 
 						res = FALSE;
@@ -341,7 +363,7 @@ regexp_module_config (struct rspamd_config *cfg)
 				if (elt) {
 					if (ucl_object_type (elt) != UCL_BOOLEAN) {
 						msg_err_config (
-								"one_param attribute is not numeric for symbol: '%s'",
+								"one_param attribute is not boolean for symbol: '%s'",
 								cur_item->symbol);
 
 						res = FALSE;

@@ -351,8 +351,16 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 
 					msg_debug_protocol ("read rcpt header, value: %V", hv);
 				}
-				else {
-					msg_debug_protocol ("wrong header: %V", hn);
+				IF_HEADER (RAW_DATA_HEADER) {
+					srch.begin = "yes";
+					srch.len = 3;
+
+					msg_debug_protocol ("read raw data header, value: %V", hv);
+
+					if (rspamd_ftok_casecmp (hv_tok, &srch) == 0) {
+						task->flags &= ~RSPAMD_TASK_FLAG_MIME;
+						msg_debug_protocol ("disable mime parsing");
+					}
 				}
 				break;
 			case 'i':
@@ -1146,13 +1154,16 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	}
 
 	if (flags & RSPAMD_PROTOCOL_URLS) {
-		if (task->cfg->log_urls || (task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
+		if (task->flags & RSPAMD_TASK_FLAG_EXT_URLS) {
 			if (g_hash_table_size (task->urls) > 0) {
-				ucl_object_insert_key (top, rspamd_urls_tree_ucl (task->urls,
-						task), "urls", 0, false);
+				ucl_object_insert_key (top,
+						rspamd_urls_tree_ucl (task->urls, task),
+						"urls", 0, false);
 			}
+
 			if (g_hash_table_size (task->emails) > 0) {
-				ucl_object_insert_key (top, rspamd_emails_tree_ucl (task->emails, task),
+				ucl_object_insert_key (top,
+						rspamd_emails_tree_ucl (task->emails, task),
 						"emails", 0, false);
 			}
 		}

@@ -401,7 +401,8 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     table.insert(reason, "No valid DKIM")
   end
 
-  lua_util.debugm(N, task, "validated dmarc policy for %s: %s; dkim_ok=%s, dkim_tempfail=%s, spf_ok=%s, spf_tempfail=%s",
+  lua_util.debugm(N, task,
+      "validated dmarc policy for %s: %s; dkim_ok=%s, dkim_tempfail=%s, spf_ok=%s, spf_tempfail=%s",
       policy.domain, policy.dmarc_policy,
       dkim_ok, dkim_tmpfail,
       spf_ok, spf_tmpfail)
@@ -1041,7 +1042,8 @@ if opts['reporting'] == true then
         if type(report_settings.additional_address) == 'string' then
           reporting_addr[report_settings.additional_address] = true
         end
-        rspamd_logger.infox(ev_base, 'sending report for %s <%s>', reporting_domain, table.concat(reporting_addr, ','))
+        rspamd_logger.infox(ev_base, 'sending report for %s <%s>',
+            reporting_domain, table.concat(reporting_addr, ','))
         local dmarc_xml = dmarc_report_xml()
         local dmarc_push_cb
         dmarc_push_cb = function(err, data)
@@ -1197,7 +1199,8 @@ if opts['reporting'] == true then
                   callback = check_addr_cb,
                 })
               else
-                rspamd_logger.errx(rspamd_config, "Couldn't get reporting address for %s: retries exceeded", reporting_domain)
+                rspamd_logger.errx(rspamd_config, "Couldn't get reporting address for %s: retries exceeded",
+                    reporting_domain)
                 delete_reports()
               end
             end
@@ -1316,8 +1319,16 @@ if opts['reporting'] == true then
         pool:set_variable(VAR_NAME, time)
         local yesterday = os.date('!*t', rspamd_util.get_time() - INTERVAL)
         local today = os.date('!*t', rspamd_util.get_time())
-        report_start = os.time({year = yesterday.year, month = yesterday.month, day = yesterday.day, hour = 0}) + tz_offset
-        report_end = os.time({year = today.year, month = today.month, day = today.day, hour = 0}) + tz_offset
+        report_start = os.time({
+          year = yesterday.year,
+          month = yesterday.month,
+          day = yesterday.day,
+          hour = 0}) + tz_offset
+        report_end = os.time({
+          year = today.year,
+          month = today.month,
+          day = today.day,
+          hour = 0}) + tz_offset
         want_period = table.concat({
           yesterday.year,
           string.format('%02d', yesterday.month),

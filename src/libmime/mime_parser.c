@@ -405,7 +405,7 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 	part->cd = cd;
 }
 
-static void
+void
 rspamd_mime_parser_calc_digest (struct rspamd_mime_part *part)
 {
 	/* Blake2b applied to string 'rspamd' */

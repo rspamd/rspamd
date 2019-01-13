@@ -51,6 +51,33 @@ struct rspamd_charset_substitution {
 
 static GHashTable *sub_hash = NULL;
 
+static const UChar iso_8859_16_map[] = {
+		0x0080, 0x0081, 0x0082, 0x0083, 0x0084, 0x0085, 0x0086, 0x0087,
+		0x0088, 0x0089, 0x008A, 0x008B, 0x008C, 0x008D, 0x008E, 0x008F,
+		0x0090, 0x0091, 0x0092, 0x0093, 0x0094, 0x0095, 0x0096, 0x0097,
+		0x0098, 0x0099, 0x009A, 0x009B, 0x009C, 0x009D, 0x009E, 0x009F,
+		0x00A0, 0x0104, 0x0105, 0x0141, 0x20AC, 0x201E, 0x0160, 0x00A7,
+		0x0161, 0x00A9, 0x0218, 0x00AB, 0x0179, 0x00AD, 0x017A, 0x017B,
+		0x00B0, 0x00B1, 0x010C, 0x0142, 0x017D, 0x201D, 0x00B6, 0x00B7,
+		0x017E, 0x010D, 0x0219, 0x00BB, 0x0152, 0x0153, 0x0178, 0x017C,
+		0x00C0, 0x00C1, 0x00C2, 0x0102, 0x00C4, 0x0106, 0x00C6, 0x00C7,
+		0x00C8, 0x00C9, 0x00CA, 0x00CB, 0x00CC, 0x00CD, 0x00CE, 0x00CF,
+		0x0110, 0x0143, 0x00D2, 0x00D3, 0x00D4, 0x0150, 0x00D6, 0x015A,
+		0x0170, 0x00D9, 0x00DA, 0x00DB, 0x00DC, 0x0118, 0x021A, 0x00DF,
+		0x00E0, 0x00E1, 0x00E2, 0x0103, 0x00E4, 0x0107, 0x00E6, 0x00E7,
+		0x00E8, 0x00E9, 0x00EA, 0x00EB, 0x00EC, 0x00ED, 0x00EE, 0x00EF,
+		0x0111, 0x0144, 0x00F2, 0x00F3, 0x00F4, 0x0151, 0x00F6, 0x015B,
+		0x0171, 0x00F9, 0x00FA, 0x00FB, 0x00FC, 0x0119, 0x021B, 0x00FF
+};
+
+struct rspamd_charset_converter {
+	gchar *canon_name;
+	union {
+		UConverter *conv;
+		const UChar *cnv_table;
+	} d;
+	gboolean is_internal;
+};
 
 static GQuark
 rspamd_iconv_error_quark (void)
@@ -58,16 +85,63 @@ rspamd_iconv_error_quark (void)
 	return g_quark_from_static_string ("iconv error");
 }
 
-static UConverter *
+static void
+rspamd_converter_dtor (gpointer p)
+{
+	struct rspamd_charset_converter *c = (struct rspamd_charset_converter *)p;
+
+	if (!c->is_internal) {
+		ucnv_close (c->d.conv);
+	}
+
+	g_free (c->canon_name);
+	g_free (c);
+}
+
+int32_t
+rspamd_converter_to_uchars (struct rspamd_charset_converter *cnv,
+							UChar *dest,
+							int32_t destCapacity,
+							const char *src,
+							int32_t srcLength,
+							UErrorCode *pErrorCode)
+{
+	if (!cnv->is_internal) {
+		return ucnv_toUChars (cnv->d.conv,
+				dest, destCapacity,
+				src, srcLength,
+				pErrorCode);
+	}
+	else {
+		UChar *d = dest, *dend = dest + destCapacity;
+		const guchar *p = src, *end = src + srcLength;
+
+		while (p < end && d < dend) {
+			if (*p <= 127) {
+				*d++ = (UChar)*p;
+			}
+			else {
+				*d++ = cnv->d.cnv_table[*p - 128];
+			}
+
+			p ++;
+		}
+
+		return d - dest;
+	}
+}
+
+
+struct rspamd_charset_converter *
 rspamd_mime_get_converter_cached (const gchar *enc, UErrorCode *err)
 {
 	const gchar *canon_name;
 	static rspamd_lru_hash_t *cache;
-	UConverter *conv;
+	struct rspamd_charset_converter *conv;
 
 	if (cache == NULL) {
-		cache = rspamd_lru_hash_new_full (RSPAMD_CHARSET_CACHE_SIZE, g_free,
-				(GDestroyNotify)ucnv_close, rspamd_str_hash,
+		cache = rspamd_lru_hash_new_full (RSPAMD_CHARSET_CACHE_SIZE, NULL,
+				rspamd_converter_dtor, rspamd_str_hash,
 				rspamd_str_equal);
 	}
 
@@ -80,16 +154,32 @@ rspamd_mime_get_converter_cached (const gchar *enc, UErrorCode *err)
 	conv = rspamd_lru_hash_lookup (cache, (gpointer)canon_name, 0);
 
 	if (conv == NULL) {
-		conv = ucnv_open (canon_name, err);
+		if (!(strcmp (canon_name, "ISO-8859-16") == 0 ||
+				strcmp (canon_name, "latin10") == 0 ||
+				strcmp (canon_name, "iso-ir-226") == 0)) {
+			conv = g_malloc0 (sizeof (*conv));
+			conv->d.conv = ucnv_open (canon_name, err);
+			conv->canon_name = g_strdup (canon_name);
 
-		if (conv != NULL) {
-			ucnv_setToUCallBack (conv,
-					UCNV_TO_U_CALLBACK_SUBSTITUTE,
-					NULL,
-					NULL,
-					NULL,
-					err);
-			rspamd_lru_hash_insert (cache, g_strdup (canon_name), conv, 0, 0);
+			if (conv->d.conv != NULL) {
+				ucnv_setToUCallBack (conv->d.conv,
+						UCNV_TO_U_CALLBACK_SUBSTITUTE,
+						NULL,
+						NULL,
+						NULL,
+						err);
+				rspamd_lru_hash_insert (cache, conv->canon_name, conv, 0, 0);
+			}
+			else {
+				g_free (conv);
+				conv = NULL;
+			}
+		}
+		else {
+			/* ISO-8859-16 */
+			conv = g_malloc0 (sizeof (*conv));
+			conv->is_internal = TRUE;
+			conv->d.cnv_table = iso_8859_16_map;
 		}
 	}
 
@@ -189,7 +279,8 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 	UChar *tmp_buf;
 
 	UErrorCode uc_err = U_ZERO_ERROR;
-	UConverter *conv, *utf8_converter;
+	UConverter *utf8_converter;
+	struct rspamd_charset_converter *conv;
 
 	conv = rspamd_mime_get_converter_cached (in_enc, &uc_err);
 	utf8_converter = rspamd_get_utf8_converter ();
@@ -204,7 +295,7 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 
 	tmp_buf = g_new (UChar, len + 1);
 	uc_err = U_ZERO_ERROR;
-	r = ucnv_toUChars (conv, tmp_buf, len + 1, input, len, &uc_err);
+	r = rspamd_converter_to_uchars (conv, tmp_buf, len + 1, input, len, &uc_err);
 
 	if (!U_SUCCESS (uc_err)) {
 		g_set_error (err, rspamd_iconv_error_quark (), EINVAL,
@@ -252,7 +343,8 @@ rspamd_mime_text_part_utf8_convert (struct rspamd_task *task,
 	gint32 r, clen, dlen, uc_len;
 	UChar *tmp_buf;
 	UErrorCode uc_err = U_ZERO_ERROR;
-	UConverter *conv, *utf8_converter;
+	UConverter *utf8_converter;
+	struct rspamd_charset_converter *conv;
 
 	conv = rspamd_mime_get_converter_cached (charset, &uc_err);
 	utf8_converter = rspamd_get_utf8_converter ();
@@ -267,7 +359,7 @@ rspamd_mime_text_part_utf8_convert (struct rspamd_task *task,
 
 	tmp_buf = g_new (UChar, input->len + 1);
 	uc_err = U_ZERO_ERROR;
-	uc_len = ucnv_toUChars (conv,
+	uc_len = rspamd_converter_to_uchars (conv,
 			tmp_buf,
 			input->len + 1,
 			input->data,
@@ -318,7 +410,8 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 	gint32 r, clen, dlen;
 	UChar *tmp_buf;
 	UErrorCode uc_err = U_ZERO_ERROR;
-	UConverter *conv, *utf8_converter;
+	UConverter *utf8_converter;
+	struct rspamd_charset_converter *conv;
 	rspamd_ftok_t charset_tok;
 
 	RSPAMD_FTOK_FROM_STR (&charset_tok, enc);
@@ -340,7 +433,9 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 
 	tmp_buf = g_new (UChar, in->len + 1);
 	uc_err = U_ZERO_ERROR;
-	r = ucnv_toUChars (conv, tmp_buf, in->len + 1, in->data, in->len, &uc_err);
+	r = rspamd_converter_to_uchars (conv,
+			tmp_buf, in->len + 1,
+			in->data, in->len, &uc_err);
 
 	if (!U_SUCCESS (uc_err)) {
 		g_free (tmp_buf);
@@ -402,8 +497,8 @@ rspamd_mime_charset_utf_enforce (gchar *in, gsize len)
 	}
 }
 
-static const char *
-rspamd_mime_charset_find_by_content (gchar *in, gsize inlen)
+const char *
+rspamd_mime_charset_find_by_content (const gchar *in, gsize inlen)
 {
 	static UCharsetDetector *csd;
 	const UCharsetMatch **csm, *sel = NULL;
@@ -429,7 +524,7 @@ rspamd_mime_charset_find_by_content (gchar *in, gsize inlen)
 detect:
 
 	ucsdet_setText (csd, in, inlen, &uc_err);
-	csm = ucsdet_detectAll(csd, &matches, &uc_err);
+	csm = ucsdet_detectAll (csd, &matches, &uc_err);
 
 	for (i = 0; i < matches; i ++) {
 		if ((conf = ucsdet_getConfidence (csm[i], &uc_err)) > max_conf) {

@@ -71,13 +71,14 @@ local check_mid_id = rspamd_config:register_symbol({
   name = 'CHECK_MID',
   score = 0.0,
   group = 'mid',
-  type = 'callback',
+  type = 'callback,mime',
   callback = mid_check_func
 })
 rspamd_config:register_virtual_symbol('MID_BARE_IP', 1.0, check_mid_id)
 rspamd_config:set_metric_symbol('MID_BARE_IP', 2.0, 'Message-ID RHS is a bare IP address', 'default', 'Message ID')
 rspamd_config:register_virtual_symbol('MID_RHS_NOT_FQDN', 1.0, check_mid_id)
-rspamd_config:set_metric_symbol('MID_RHS_NOT_FQDN', 0.5, 'Message-ID RHS is not a fully-qualified domain name', 'default', 'Message ID')
+rspamd_config:set_metric_symbol('MID_RHS_NOT_FQDN', 0.5,
+    'Message-ID RHS is not a fully-qualified domain name', 'default', 'Message ID')
 rspamd_config:register_virtual_symbol('MID_MISSING_BRACKETS', 1.0, check_mid_id)
 rspamd_config:set_metric_symbol('MID_MISSING_BRACKETS', 0.5, 'Message-ID is missing <>\'s', 'default', 'Message ID')
 rspamd_config:register_virtual_symbol('MID_RHS_IP_LITERAL', 1.0, check_mid_id)
@@ -85,7 +86,8 @@ rspamd_config:set_metric_symbol('MID_RHS_IP_LITERAL', 0.5, 'Message-ID RHS is an
 rspamd_config:register_virtual_symbol('MID_CONTAINS_FROM', 1.0, check_mid_id)
 rspamd_config:set_metric_symbol('MID_CONTAINS_FROM', 1.0, 'Message-ID contains From address', 'default', 'Message ID')
 rspamd_config:register_virtual_symbol('MID_RHS_MATCH_FROM', 1.0, check_mid_id)
-rspamd_config:set_metric_symbol('MID_RHS_MATCH_FROM', 0.0, 'Message-ID RHS matches From domain', 'default', 'Message ID')
+rspamd_config:set_metric_symbol('MID_RHS_MATCH_FROM', 0.0,
+    'Message-ID RHS matches From domain', 'default', 'Message ID')
 rspamd_config:register_virtual_symbol('MID_CONTAINS_TO', 1.0, check_mid_id)
 rspamd_config:set_metric_symbol('MID_CONTAINS_TO', 1.0, 'Message-ID contains To address', 'default', 'Message ID')
 rspamd_config:register_virtual_symbol('MID_RHS_MATCH_TO', 1.0, check_mid_id)
