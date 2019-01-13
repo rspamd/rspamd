@@ -27,7 +27,6 @@ local upstream_list = require "rspamd_upstream_list"
 local rspamd_logger = require "rspamd_logger"
 local ucl = require "ucl"
 local common = require "lua_scanners/common"
-local fun = require "fun"
 
 local module_name = 'oletools'
 

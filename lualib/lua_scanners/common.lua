@@ -180,7 +180,7 @@ local function save_av_cache(task, digest, rule, to_save, dyn_weight)
   return false
 end
 
-local function create_regex_table(task, patterns)
+local function create_regex_table(patterns)
   local regex_table = {}
   if patterns[1] then
     for i, p in ipairs(patterns) do

@@ -129,9 +129,9 @@ local function sophos_check(task, content, digest, rule)
         else
           if string.find(data, 'DONE OK') then
             if rule['log_clean'] then
-              rspamd_logger.infox(task, '%s [%s]: message or mime_part is clean', rule['symbol'], rule['type'])
+              rspamd_logger.infox(task, '%s: message or mime_part is clean', rule.log_prefix)
             else
-              lua_util.debugm(rule.module_name, task, '%s [%s]: message or mime_part is clean', rule['symbol'], rule['type'])
+              lua_util.debugm(rule.module_name, task, '%s: message or mime_part is clean', rule.log_prefix)
             end
             common.save_av_cache(task, digest, rule, 'OK')
             -- not finished - continue

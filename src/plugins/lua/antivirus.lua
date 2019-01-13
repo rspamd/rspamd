@@ -15,7 +15,6 @@ limitations under the License.
 ]] --
 
 local rspamd_logger = require "rspamd_logger"
-local rspamd_regexp = require "rspamd_regexp"
 local lua_util = require "lua_util"
 local fun = require "fun"
 local lua_antivirus = require("lua_scanners").filter('antivirus')
@@ -108,7 +107,7 @@ local function add_antivirus_rule(sym, opts)
     return nil
   end
 
-  rule.patterns = common.create_regex_table(task, opts.patterns or {})
+  rule.patterns = common.create_regex_table(opts.patterns or {})
 
   if opts['whitelist'] then
     rule['whitelist'] = rspamd_config:add_hash_map(opts['whitelist'])

@@ -147,11 +147,11 @@ local function add_scanner_rule(sym, opts)
       rule.scan_all_mime_parts = false
   end
 
-  rule.patterns = common.create_regex_table(task, opts.patterns or {})
+  rule.patterns = common.create_regex_table(opts.patterns or {})
 
-  rule.mime_parts_filter_regex = common.create_regex_table(task, opts.mime_parts_filter_regex or {})
+  rule.mime_parts_filter_regex = common.create_regex_table(opts.mime_parts_filter_regex or {})
 
-  rule.mime_parts_filter_ext = common.create_regex_table(task, opts.mime_parts_filter_ext or {})
+  rule.mime_parts_filter_ext = common.create_regex_table(opts.mime_parts_filter_ext or {})
 
   if opts['whitelist'] then
     rule['whitelist'] = rspamd_config:add_hash_map(opts['whitelist'])
