@@ -53,10 +53,6 @@ local function savapi_config(opts)
     savapi_conf.prefix = 'rs_' .. savapi_conf.name .. '_'
   end
 
-  if not savapi_conf.prefix then
-    savapi_conf.prefix = 'rs_ap'
-  end
-
   if not savapi_conf.log_prefix then
     if savapi_conf.name:lower() == savapi_conf.type:lower() then
       savapi_conf.log_prefix = savapi_conf.name
