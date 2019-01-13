@@ -16,8 +16,8 @@ limitations under the License.
 ]]--
 
 --[[[
--- @module dcc
--- This module contains dcc access functions
+-- @module oletools
+-- This module contains oletools access functions
 --]]
 
 local lua_util = require "lua_util"
@@ -83,7 +83,6 @@ local function oletools_check(task, content, digest, rule)
         if upstream then upstream:ok() end
 
         data = tostring(data)
-        lua_util.debugm(rule.module_name, task, 'data: %s', tostring(data))
 
         local ucl_parser = ucl.parser()
         local ok, ucl_err = ucl_parser:parse_string(tostring(data))
@@ -119,10 +118,10 @@ local function oletools_check(task, content, digest, rule)
         elseif result[3]['return_code'] == 9 then
           rspamd_logger.warnx(task, '%s: File is encrypted.', rule.log_prefix)
         elseif result[3]['return_code'] > 6 then
-          rspamd_logger.errx(task, '%s: Oletools Error Returned: %s',
+          rspamd_logger.errx(task, '%s: Error Returned: %s',
             rule.log_prefix, oletools_rc[result[3]['return_code']])
         elseif result[3]['return_code'] > 1 then
-          rspamd_logger.errx(task, '%s: Oletools Error Returned: %s',
+          rspamd_logger.errx(task, '%s: Error Returned: %s',
             rule.log_prefix, oletools_rc[result[3]['return_code']])
           oletools_requery()
         elseif result[2]['analysis'] == 'null' and #result[2]['macros'] == 0 then
