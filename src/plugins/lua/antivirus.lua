@@ -19,6 +19,7 @@ local rspamd_regexp = require "rspamd_regexp"
 local lua_util = require "lua_util"
 local fun = require "fun"
 local lua_antivirus = require("lua_scanners").filter('antivirus')
+local common = require "lua_scanners/common"
 local redis_params
 
 local N = "antivirus"
@@ -107,26 +108,7 @@ local function add_antivirus_rule(sym, opts)
     return nil
   end
 
-  if type(opts['patterns']) == 'table' then
-    rule['patterns'] = {}
-    if opts['patterns'][1] then
-      for i, p in ipairs(opts['patterns']) do
-        if type(p) == 'table' then
-          local new_set = {}
-          for k, v in pairs(p) do
-            new_set[k] = rspamd_regexp.create_cached(v)
-          end
-          rule['patterns'][i] = new_set
-        else
-          rule['patterns'][i] = {}
-        end
-      end
-    else
-      for k, v in pairs(opts['patterns']) do
-        rule['patterns'][k] = rspamd_regexp.create_cached(v)
-      end
-    end
-  end
+  rule.patterns = common.create_regex_table(task, opts.patterns or {})
 
   if opts['whitelist'] then
     rule['whitelist'] = rspamd_config:add_hash_map(opts['whitelist'])
@@ -134,21 +116,13 @@ local function add_antivirus_rule(sym, opts)
 
   return function(task)
     if rule.scan_mime_parts then
-      local parts = task:get_parts() or {}
-
-      local filter_func = function(p)
-        return (rule.scan_image_mime and p:is_image())
-            or (rule.scan_text_mime and p:is_text())
-            or (p:is_attachment())
-      end
 
       fun.each(function(p)
         local content = p:get_content()
-
         if content and #content > 0 then
           cfg.check(task, content, p:get_digest(), rule)
         end
-      end, fun.filter(filter_func, parts))
+      end, common.check_parts_match(task, rule))
 
     else
       cfg.check(task, task:get_content(), task:get_digest(), rule)
