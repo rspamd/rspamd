@@ -30,13 +30,72 @@ if confighelp then
     [[
 external_services {
   # multiple scanners could be checked, for each we create a configuration block with an arbitrary name
+
+  oletools {
+    # If set force this action if any virus is found (default unset: no action is forced)
+    # action = "reject";
+    # If set, then rejection message is set to this value (mention single quotes)
+    # If `max_size` is set, messages > n bytes in size are not scanned
+    # max_size = 20000000;
+    # log_clean = true;
+    # servers = "127.0.0.1:10050";
+    # cache_expire = 86400;
+    # scan_mime_parts = true;
+    # extended = false;
+    # if `patterns` is specified virus name will be matched against provided regexes and the related
+    # symbol will be yielded if a match is found. If no match is found, default symbol is yielded.
+    patterns {
+      # symbol_name = "pattern";
+      JUST_EICAR = "^Eicar-Test-Signature$";
+    }
+    # mime-part regex matching in content-type or filename
+    mime_parts_filter_regex {
+      #GEN1 = "application\/octet-stream";
+      DOC2 = "application\/msword";
+      DOC3 = "application\/vnd\.ms-word.*";
+      XLS = "application\/vnd\.ms-excel.*";
+      PPT = "application\/vnd\.ms-powerpoint.*";
+      GEN2 = "application\/vnd\.openxmlformats-officedocument.*";
+    }
+    # Mime-Part filename extension matching (no regex)
+    mime_parts_filter_ext {
+      doc = "doc";
+      dot = "dot";
+      docx = "docx";
+      dotx = "dotx";
+      docm = "docm";
+      dotm = "dotm";
+      xls = "xls";
+      xlt = "xlt";
+      xla = "xla";
+      xlsx = "xlsx";
+      xltx = "xltx";
+      xlsm = "xlsm";
+      xltm = "xltm";
+      xlam = "xlam";
+      xlsb = "xlsb";
+      ppt = "ppt";
+      pot = "pot";
+      pps = "pps";
+      ppa = "ppa";
+      pptx = "pptx";
+      potx = "potx";
+      ppsx = "ppsx";
+      ppam = "ppam";
+      pptm = "pptm";
+      potm = "potm";
+      ppsm = "ppsm";
+    }
+    # `whitelist` points to a map of IP addresses. Mail from these addresses is not scanned.
+    whitelist = "/etc/rspamd/antivirus.wl";
+  }
   dcc {
     # If set force this action if any virus is found (default unset: no action is forced)
     # action = "reject";
     # If set, then rejection message is set to this value (mention single quotes)
     # If `max_size` is set, messages > n bytes in size are not scanned
     max_size = 20000000;
-    servers = "127.0.0.1:3310";
+    #servers = "127.0.0.1:10045;
     # if `patterns` is specified virus name will be matched against provided regexes and the related
     # symbol will be yielded if a match is found. If no match is found, default symbol is yielded.
     patterns {
