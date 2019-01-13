@@ -17,7 +17,8 @@ limitations under the License.
 
 --[[[
 -- @module oletools
--- This module contains oletools access functions
+-- This module contains oletools access functions.
+-- Olefy is needed: https://github.com/HeinleinSupport/olefy
 --]]
 
 local lua_util = require "lua_util"
@@ -61,7 +62,7 @@ local function oletools_check(task, content, digest, rule)
             task = task,
             host = addr:to_string(),
             port = addr:get_port(),
-            timeout = rule['timeout'],
+            timeout = rule.timeout,
             shutdown = true,
             data = content,
             callback = oletools_callback,
@@ -69,7 +70,7 @@ local function oletools_check(task, content, digest, rule)
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
             'exceed', rule.log_prefix)
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and '..
+          task:insert_result(rule.symbol_fail, 0.0, 'failed to scan and '..
             'retransmits exceed')
         end
       end
@@ -107,7 +108,6 @@ local function oletools_check(task, content, digest, rule)
           [9] = 'RETURN_ENCRYPTED',
         }
 
-        --lua_util.debugm(rule.module_name, task, '%s: result: %s', rule.log_prefix, result)
         lua_util.debugm(rule.module_name, task, '%s: filename: %s', rule.log_prefix, result[2]['file'])
         lua_util.debugm(rule.module_name, task, '%s: type: %s', rule.log_prefix, result[2]['type'])
 
@@ -170,6 +170,7 @@ local function oletools_check(task, content, digest, rule)
           end
 
           lua_util.debugm(rule.module_name, task, '%s: extended: %s', rule.log_prefix, rule.extended)
+
           if rule.extended == false and macro_autoexec and macro_suspicious then
 
             lua_util.debugm(rule.module_name, task, '%s: found macro_autoexec and '..
@@ -197,7 +198,7 @@ local function oletools_check(task, content, digest, rule)
       task = task,
       host = addr:to_string(),
       port = addr:get_port(),
-      timeout = rule['timeout'],
+      timeout = rule.timeout,
       shutdown = true,
       data = content,
       callback = oletools_callback,
@@ -224,7 +225,7 @@ local function oletools_config(opts)
     timeout = 15.0,
     log_clean = false,
     retransmits = 2,
-    cache_expire = 7200, -- expire redis in 2h
+    cache_expire = 86400, -- expire redis in 1d
     message = '${SCANNER}: Oletools threat message found: "${VIRUS}"',
     detection_category = "office macro",
     default_score = 1,
@@ -267,7 +268,7 @@ local function oletools_config(opts)
 end
 
 return {
-  type = {module_name,'office macro scanner', 'hash', 'scanner'},
+  type = {module_name,'attachment scanner', 'hash', 'scanner'},
   description = 'oletools office macro scanner',
   configure = oletools_config,
   check = oletools_check,
