@@ -46,9 +46,7 @@ local function sophos_config(opts)
     savdi_report_oversize = false,
   }
 
-  for k,v in pairs(opts) do
-    sophos_conf[k] = v
-  end
+  sophos_conf = lua_util.override_defaults(sophos_conf, opts)
 
   if not sophos_conf.prefix then
     sophos_conf.prefix = 'rs_' .. sophos_conf.name .. '_'

@@ -45,9 +45,7 @@ local function clamav_config(opts)
     message = default_message,
   }
 
-  for k,v in pairs(opts) do
-    clamav_conf[k] = v
-  end
+  clamav_conf = lua_util.override_defaults(clamav_conf, opts)
 
   if not clamav_conf.prefix then
     clamav_conf.prefix = 'rs_' .. clamav_conf.name .. '_'

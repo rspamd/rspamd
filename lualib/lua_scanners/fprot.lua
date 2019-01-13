@@ -44,9 +44,7 @@ local function fprot_config(opts)
     message = default_message,
   }
 
-  for k,v in pairs(opts) do
-    fprot_conf[k] = v
-  end
+  fprot_conf = lua_util.override_defaults(fprot_conf, opts)
 
   if not fprot_conf.prefix then
     fprot_conf.prefix = 'rs_' .. fprot_conf.name .. '_'

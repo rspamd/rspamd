@@ -47,9 +47,7 @@ local function savapi_config(opts)
     tmpdir = '/tmp',
   }
 
-  for k,v in pairs(opts) do
-    savapi_conf[k] = v
-  end
+  savapi_conf = lua_util.override_defaults(savapi_conf, opts)
 
   if not savapi_conf.prefix then
     savapi_conf.prefix = 'rs_' .. savapi_conf.name .. '_'
