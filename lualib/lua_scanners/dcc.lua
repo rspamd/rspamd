@@ -29,7 +29,7 @@ local fun = require "fun"
 
 local module_name = 'dcc'
 
-local function dcc_check(task, content, _, rule)
+local function dcc_check(task, content, digest, rule)
   local function dcc_check_uncached ()
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
@@ -81,8 +81,7 @@ local function dcc_check(task, content, _, rule)
 
     local function dcc_callback(err, data, conn)
 
-      if err then
-
+      local function dcc_requery()
         -- set current upstream to fail because an error occurred
         upstream:fail()
 
@@ -91,11 +90,15 @@ local function dcc_check(task, content, _, rule)
 
           retransmits = retransmits - 1
 
+          lua_util.debugm(rule.module_name, task, '%s: Request Error: %s - retries left: %s',
+            rule.log_prefix, err, retransmits)
+
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(rule.module_name, task, '%s: retry IP: %s', rule.log_prefix, addr)
+          lua_util.debugm(rule.module_name, task, '%s: retry IP: %s:%s',
+            rule.log_prefix, addr, addr:get_port())
 
           tcp.request({
             task = task,
@@ -110,9 +113,17 @@ local function dcc_check(task, content, _, rule)
             fuz2_max = 999999,
           })
         else
-          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits exceed', rule['symbol'], rule['type'])
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and retransmits exceed')
+          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
+            'exceed', rule.log_prefix)
+          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and '..
+            'retransmits exceed')
         end
+      end
+
+      if err then
+
+        dcc_requery()
+
       else
         -- Parse the response
         if upstream then upstream:ok() end
@@ -126,12 +137,11 @@ local function dcc_check(task, content, _, rule)
           if (result == 'R') then
             -- Reject
             common.yield_result(task, rule, info, rule.default_score)
+            common.save_av_cache(task, digest, rule, info, rule.default_score)
           elseif (result == 'T') then
             -- Temporary failure
             rspamd_logger.warnx(task, 'DCC returned a temporary failure result: %s', result)
-            task:insert_result(rule.symbol_fail,
-                0.0,
-                'tempfail:' .. result)
+            dcc_requery()
           elseif result == 'A' then
             if rule.log_clean then
               rspamd_logger.infox(task, '%s: clean, returned result A - info: %s',
@@ -188,6 +198,7 @@ local function dcc_check(task, content, _, rule)
                 task:insert_result(rule.symbol_bulk,
                     score,
                     opts)
+                common.save_av_cache(task, digest, rule, opts, score)
               end
             end
           elseif result == 'G' then
@@ -195,7 +206,7 @@ local function dcc_check(task, content, _, rule)
             if rule.log_clean then
               rspamd_logger.infox(task, '%s: clean, returned result G - info: %s', rule.log_prefix, info)
             else
-              lua_util.debugm(N, task, '%s: returned result G - info: %s', rule.log_prefix, info)
+              lua_util.debugm(rule.module_name, task, '%s: returned result G - info: %s', rule.log_prefix, info)
             end
           elseif result == 'S' then
             -- do nothing
@@ -222,7 +233,10 @@ local function dcc_check(task, content, _, rule)
       timeout = rule.timeout or 2.0,
       shutdown = true,
       data = request_data,
-      callback = dcc_callback
+      callback = dcc_callback,
+      body_max = 999999,
+      fuz1_max = 999999,
+      fuz2_max = 999999,
     })
   end
   if common.need_av_check(task, content, rule) then
@@ -238,6 +252,7 @@ local function dcc_config(opts)
     timeout = 5.0,
     log_clean = false,
     retransmits = 2,
+    cache_expire = 7200, -- expire redis in 2h
     message = '${SCANNER}: bulk message found: "${VIRUS}"',
     detection_category = "hash",
     default_score = 1,
