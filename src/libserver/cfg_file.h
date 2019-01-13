@@ -29,6 +29,7 @@
 #include "libutil/radix.h"
 #include "monitored.h"
 #include "redis_pool.h"
+#include "contrib/uthash/uthash.h"
 
 #define DEFAULT_BIND_PORT 11333
 #define DEFAULT_CONTROL_PORT 11334
@@ -115,7 +116,7 @@ struct rspamd_symbols_group {
 #define RSPAMD_SYMBOL_FLAG_UNGROUPPED (1 << 3)
 
 /**
- * Symbol definition
+ * Symbol config definition
  */
 struct rspamd_symbol {
 	gchar *name;
@@ -258,6 +259,9 @@ struct rspamd_log_format {
 	struct rspamd_log_format *prev, *next;
 };
 
+/**
+ * Standard actions
+ */
 enum rspamd_action_type {
 	METRIC_ACTION_REJECT = 0,
 	METRIC_ACTION_SOFT_REJECT,
@@ -265,13 +269,28 @@ enum rspamd_action_type {
 	METRIC_ACTION_ADD_HEADER,
 	METRIC_ACTION_GREYLIST,
 	METRIC_ACTION_NOACTION,
-	METRIC_ACTION_MAX
+	METRIC_ACTION_MAX,
+	METRIC_ACTION_CUSTOM = 999,
 };
 
+enum rspamd_action_flags {
+	RSPAMD_ACTION_NORMAL = 0,
+	RSPAMD_ACTION_NO_THRESHOLD = (1u << 0),
+	RSPAMD_ACTION_THRESHOLD_ONLY = (1u << 1),
+	RSPAMD_ACTION_HAM = (1u << 2),
+};
+
+/**
+ * Action config definition
+ */
 struct rspamd_action {
 	enum rspamd_action_type action;
-	gdouble score;
+	enum rspamd_action_flags flags;
 	guint priority;
+	gint lua_handler_ref; /* If special handling is needed */
+	gdouble threshold;
+	gchar *name;
+	UT_hash_handle hh; /* Index by name */
 };
 
 struct rspamd_config_post_load_script {
@@ -300,8 +319,8 @@ struct rspamd_config {
 	gdouble grow_factor;                            /**< grow factor for metric							*/
 	GHashTable *symbols;                            /**< weights of symbols in metric					*/
 	const gchar *subject;                           /**< subject rewrite string							*/
-	GHashTable * groups; 		                    /**< groups of symbols								*/
-	struct rspamd_action actions[METRIC_ACTION_MAX]; /**< all actions of the metric						*/
+	GHashTable * groups;                            /**< groups of symbols								*/
+	struct rspamd_action *actions;                  /**< all actions of the metric						*/
 
 	gboolean raw_mode;                              /**< work in raw mode instead of utf one				*/
 	gboolean one_shot_mode;                         /**< rules add only one symbol							*/
@@ -626,14 +645,12 @@ gboolean rspamd_config_add_symbol_group (struct rspamd_config *cfg,
  * @param cfg config file
  * @param metric metric name (or NULL for default metric)
  * @param action_name symbolic name of action
- * @param score score limit
- * @param priority priority for action
+ * @param obj data to set for action
  * @return TRUE if symbol has been inserted or FALSE if action already exists with higher priority
  */
 gboolean rspamd_config_set_action_score (struct rspamd_config *cfg,
 		const gchar *action_name,
-		gdouble score,
-		guint priority);
+		const ucl_object_t *obj);
 
 /**
  * Checks if a specified C or lua module is enabled or disabled in the config.
@@ -661,6 +678,11 @@ gboolean rspamd_action_from_str (const gchar *data, gint *result);
  */
 const gchar * rspamd_action_to_str (enum rspamd_action_type action);
 const gchar * rspamd_action_to_str_alt (enum rspamd_action_type action);
+
+/*
+ * Resort all actions (needed to operate with thresholds)
+ */
+void rspamd_actions_sort (struct rspamd_config *cfg);
 
 /**
  * Parse radix tree or radix map from ucl object

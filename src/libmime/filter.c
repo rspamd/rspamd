@@ -71,7 +71,7 @@ rspamd_create_metric_result (struct rspamd_task *task)
 
 	if (task->cfg) {
 		for (i = 0; i < METRIC_ACTION_MAX; i++) {
-			metric_res->actions_limits[i] = task->cfg->actions[i].score;
+			metric_res->actions_limits[i] = task->cfg->actions[i].threshold;
 		}
 	}
 	else {

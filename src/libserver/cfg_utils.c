@@ -133,6 +133,29 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	/* 16 sockets per DNS server */
 	cfg->dns_io_per_server = 16;
 
+	/* Add all internal actions to keep compatibility */
+	for (int i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+		struct rspamd_action *action;
+
+		action = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*action));
+		action->threshold = NAN;
+		action->name = rspamd_mempool_strdup (cfg->cfg_pool,
+				rspamd_action_to_str (i));
+		action->action = i;
+
+		if (i == METRIC_ACTION_SOFT_REJECT) {
+			action->flags |= RSPAMD_ACTION_NO_THRESHOLD;
+		}
+		else if (i == METRIC_ACTION_GREYLIST) {
+			action->flags |= RSPAMD_ACTION_THRESHOLD_ONLY;
+		}
+		else if (i == METRIC_ACTION_NOACTION) {
+			action->flags |= RSPAMD_ACTION_HAM;
+		}
+
+		HASH_ADD_STR (cfg->actions, name, action);
+	}
+
 	/* Disable timeout */
 	cfg->task_timeout = DEFAULT_TASK_TIMEOUT;
 
@@ -264,6 +287,8 @@ rspamd_config_free (struct rspamd_config *cfg)
 	if (cfg->monitored_ctx) {
 		rspamd_monitored_ctx_destroy (cfg->monitored_ctx);
 	}
+
+	HASH_CLEAR (hh, cfg->actions);
 
 	rspamd_mempool_delete (cfg->cfg_pool);
 
@@ -828,17 +853,17 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 		struct rspamd_worker_conf *wcf;
 
 		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
-			if (!isnan (prev_score) && !isnan (cfg->actions[i].score)) {
-				if (prev_score <= isnan (cfg->actions[i].score)) {
+			if (!isnan (prev_score) && !isnan (cfg->actions[i].threshold)) {
+				if (prev_score <= isnan (cfg->actions[i].threshold)) {
 					msg_warn_config ("incorrect metrics scores: action %s"
 							" has lower score: %.2f than action %s: %.2f",
 							rspamd_action_to_str (prev_act), prev_score,
-							rspamd_action_to_str (i), cfg->actions[i].score);
+							rspamd_action_to_str (i), cfg->actions[i].threshold);
 					ret = FALSE;
 				}
 			}
 
-			if (!isnan (cfg->actions[i].score)) {
+			if (!isnan (cfg->actions[i].threshold)) {
 				prev_score = cfg->actions[i].score;
 				prev_act = i;
 			}
@@ -1890,25 +1915,26 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 gboolean
 rspamd_config_set_action_score (struct rspamd_config *cfg,
 		const gchar *action_name,
-		gdouble score,
-		guint priority)
+		const ucl_object_t *obj)
 {
 	struct rspamd_action *act;
-	gint act_num;
+	const ucl_object_t *elt;
 
 	g_assert (cfg != NULL);
 	g_assert (action_name != NULL);
 
-	if (!rspamd_action_from_str (action_name, &act_num)) {
-		msg_err_config ("invalid action name: %s", action_name);
-		return FALSE;
+	HASH_FIND_STR (cfg->actions, action_name, act);
+
+	if (act) {
+		/* Existing element */
 	}
-
-	g_assert (act_num >= METRIC_ACTION_REJECT && act_num < METRIC_ACTION_MAX);
-
+	else {
+		/* Add new element */
+		act = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*act));
+	}
 	act = &cfg->actions[act_num];
 
-	if (isnan (act->score)) {
+	if (isnan (act->threshold)) {
 		act->score = score;
 		act->priority = priority;
 	}
@@ -1928,7 +1954,7 @@ rspamd_config_set_action_score (struct rspamd_config *cfg,
 					action_name,
 					act->priority,
 					priority,
-					act->score,
+					act->threshold,
 					score);
 
 			act->score = score;
@@ -2118,4 +2144,35 @@ rspamd_action_to_str_alt (enum rspamd_action_type action)
 	}
 
 	return "unknown action";
+}
+
+static int
+rspamd_actions_cmp (const struct rspamd_action *a1, const struct rspamd_action *a2)
+{
+	if (!isnan (a1->threshold) && !isnan (a2->threshold)) {
+		if (a1->threshold < a2->threshold) {
+			return -1;
+		}
+		else if (a1->threshold > a2->threshold) {
+			return 1;
+		}
+
+		return 0;
+	}
+
+	if (isnan (a1->threshold) && isnan (a2->threshold)) {
+		return 0;
+	}
+	else if (isnan (a1->threshold)) {
+		return 1;
+	}
+	else {
+		return -1;
+	}
+}
+
+void
+rspamd_actions_sort (struct rspamd_config *cfg)
+{
+	HASH_SORT (cfg->actions, rspamd_actions_cmp);
 }

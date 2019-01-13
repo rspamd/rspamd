@@ -882,7 +882,7 @@ rspamd_controller_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 				ucl_object_fromstring (rspamd_action_to_str (
 						act->action)), "action", 0, false);
 		ucl_object_insert_key (obj, ucl_object_fromdouble (
-				act->score), "value", 0, false);
+				act->threshold), "value", 0, false);
 		ucl_array_append (top, obj);
 	}
 
@@ -2238,8 +2238,8 @@ rspamd_controller_handle_saveactions (
 			score = ucl_object_todouble (cur);
 		}
 
-		if ((isnan (session->cfg->actions[act].score) != isnan (score)) ||
-				(session->cfg->actions[act].score != score)) {
+		if ((isnan (session->cfg->actions[act].threshold) != isnan (score)) ||
+				(session->cfg->actions[act].threshold != score)) {
 			add_dynamic_action (ctx->cfg, DEFAULT_METRIC, act, score);
 			added ++;
 		}

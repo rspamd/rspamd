@@ -2170,8 +2170,8 @@ lua_config_get_metric_action (lua_State * L)
 
 	if (cfg && act_name) {
 		if (rspamd_action_from_str (act_name, &act)) {
-			if (!isnan (cfg->actions[act].score)) {
-				lua_pushnumber (L, cfg->actions[act].score);
+			if (!isnan (cfg->actions[act].threshold)) {
+				lua_pushnumber (L, cfg->actions[act].threshold);
 			}
 			else {
 				lua_pushnil (L);
@@ -2199,9 +2199,9 @@ lua_config_get_all_actions (lua_State * L)
 		lua_newtable (L);
 
 		for (act = METRIC_ACTION_REJECT; act < METRIC_ACTION_MAX; act ++) {
-			if (!isnan (cfg->actions[act].score)) {
+			if (!isnan (cfg->actions[act].threshold)) {
 				lua_pushstring (L, rspamd_action_to_str (act));
-				lua_pushnumber (L, cfg->actions[act].score);
+				lua_pushnumber (L, cfg->actions[act].threshold);
 				lua_settable (L, -3);
 			}
 		}
