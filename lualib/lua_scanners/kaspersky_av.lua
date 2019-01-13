@@ -44,10 +44,13 @@ local function kaspersky_config(opts)
     message = default_message,
     detection_category = "virus",
     tmpdir = '/tmp',
-    prefix = 'rs_ak',
   }
 
   kaspersky_conf = lua_util.override_defaults(kaspersky_conf, opts)
+
+  if not kaspersky_conf.prefix then
+    kaspersky_conf.prefix = 'rs_' .. kaspersky_conf.name .. '_'
+  end
 
   if not kaspersky_conf.log_prefix then
     if kaspersky_conf.name:lower() == kaspersky_conf.type:lower() then

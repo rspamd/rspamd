@@ -236,7 +236,7 @@ local function oletools_config(opts)
   oletools_conf = lua_util.override_defaults(oletools_conf, opts)
 
   if not oletools_conf.prefix then
-    oletools_conf.prefix = 'rs_av_' .. oletools_conf.name .. '_'
+    oletools_conf.prefix = 'rs_' .. oletools_conf.name .. '_'
   end
 
   if not oletools_conf.log_prefix then

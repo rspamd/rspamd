@@ -51,7 +51,7 @@ local function sophos_config(opts)
   end
 
   if not sophos_conf.prefix then
-    sophos_conf.prefix = 'rs_sp'
+    sophos_conf.prefix = 'rs_' .. sophos_conf.name .. '_'
   end
 
   if not sophos_conf.log_prefix then

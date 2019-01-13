@@ -52,6 +52,10 @@ local function savapi_config(opts)
   end
 
   if not savapi_conf.prefix then
+    savapi_conf.prefix = 'rs_' .. savapi_conf.name .. '_'
+  end
+
+  if not savapi_conf.prefix then
     savapi_conf.prefix = 'rs_ap'
   end
 

@@ -253,6 +253,10 @@ local function dcc_config(opts)
 
   dcc_conf = lua_util.override_defaults(dcc_conf, opts)
 
+  if not dcc_conf.prefix then
+    dcc_conf.prefix = 'rs_' .. dcc_conf.name .. '_'
+  end
+
   if not dcc_conf.log_prefix then
     if dcc_conf.name:lower() == dcc_conf.type:lower() then
       dcc_conf.log_prefix = dcc_conf.name

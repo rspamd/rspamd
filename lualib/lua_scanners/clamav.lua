@@ -50,7 +50,7 @@ local function clamav_config(opts)
   end
 
   if not clamav_conf.prefix then
-    clamav_conf.prefix = 'rs_cl'
+    clamav_conf.prefix = 'rs_' .. clamav_conf.name .. '_'
   end
 
   if not clamav_conf.log_prefix then

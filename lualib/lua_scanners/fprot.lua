@@ -49,7 +49,7 @@ local function fprot_config(opts)
   end
 
   if not fprot_conf.prefix then
-    fprot_conf.prefix = 'rs_fp'
+    fprot_conf.prefix = 'rs_' .. fprot_conf.name .. '_'
   end
 
   if not fprot_conf.log_prefix then
