@@ -257,7 +257,7 @@ local function oletools_config(opts)
     oletools_conf.default_port)
 
   if oletools_conf.upstreams then
-    lua_util.add_debug_alias('antivirus', oletools_conf.module_name)
+    lua_util.add_debug_alias('external_services', oletools_conf.module_name)
     return oletools_conf
   end
 

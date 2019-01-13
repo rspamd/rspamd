@@ -70,29 +70,29 @@ end
 
 
 local function add_antivirus_rule(sym, opts)
-  if not opts['type'] then
+  if not opts.type then
     rspamd_logger.errx(rspamd_config, 'unknown type for AV rule %s', sym)
     return nil
   end
 
-  if not opts['symbol'] then opts['symbol'] = sym:upper() end
-  local cfg = lua_antivirus[opts['type']]
+  if not opts.symbol then opts.symbol = sym:upper() end
+  local cfg = lua_antivirus[opts.type]
 
   if not cfg then
     rspamd_logger.errx(rspamd_config, 'unknown antivirus type: %s',
-        opts['type'])
+        opts.type)
     return nil
   end
 
-  if not opts['symbol_fail'] then
-    opts['symbol_fail'] = string.upper(opts['type']) .. '_FAIL'
+  if not opts.symbol_fail then
+    opts.symbol_fail = opts.symbol .. '_FAIL'
   end
 
   -- WORKAROUND for deprecated attachments_only
-  if opts['attachments_only'] ~= nil then
-    opts['scan_mime_parts'] = opts['attachments_only']
+  if opts.attachments_only ~= nil then
+    opts.scan_mime_parts = opts.attachments_only
     rspamd_logger.warnx(rspamd_config, '%s [%s]: Using attachments_only is deprecated. '..
-     'Please use scan_mime_parts = %s instead', opts['symbol'], opts['type'], opts['attachments_only'])
+     'Please use scan_mime_parts = %s instead', opts.symbol, opts.type, opts.attachments_only)
   end
   -- WORKAROUND for deprecated attachments_only
 
@@ -103,14 +103,14 @@ local function add_antivirus_rule(sym, opts)
 
   if not rule then
     rspamd_logger.errx(rspamd_config, 'cannot configure %s for %s',
-      opts['type'], opts['symbol'])
+      opts.type, opts.symbol)
     return nil
   end
 
   rule.patterns = common.create_regex_table(opts.patterns or {})
 
-  if opts['whitelist'] then
-    rule['whitelist'] = rspamd_config:add_hash_map(opts['whitelist'])
+  if opts.whitelist then
+    rule.whitelist = rspamd_config:add_hash_map(opts.whitelist)
   end
 
   return function(task)

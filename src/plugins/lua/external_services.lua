@@ -112,22 +112,22 @@ end
 
 
 local function add_scanner_rule(sym, opts)
-  if not opts['type'] then
+  if not opts.type then
     rspamd_logger.errx(rspamd_config, 'unknown type for external scanner rule %s', sym)
     return nil
   end
 
-  if not opts['symbol'] then opts['symbol'] = sym:upper() end
-  local cfg = lua_scanners[opts['type']]
+  if not opts.symbol then opts.symbol = sym:upper() end
+  local cfg = lua_scanners[opts.type]
 
   if not cfg then
     rspamd_logger.errx(rspamd_config, 'unknown external scanner type: %s',
-        opts['type'])
+        opts.type)
     return nil
   end
 
-  if not opts['symbol_fail'] then
-    opts['symbol_fail'] = string.upper(opts['type']) .. '_FAIL'
+  if not opts.symbol_fail then
+    opts.symbol_fail = opts.symbol .. '_FAIL'
   end
 
   local rule = cfg.configure(opts)
@@ -137,7 +137,7 @@ local function add_scanner_rule(sym, opts)
 
   if not rule then
     rspamd_logger.errx(rspamd_config, 'cannot configure %s for %s',
-      opts['type'], opts['symbol'])
+      opts.type, opts.symbol)
     return nil
   end
 
@@ -153,8 +153,8 @@ local function add_scanner_rule(sym, opts)
 
   rule.mime_parts_filter_ext = common.create_regex_table(opts.mime_parts_filter_ext or {})
 
-  if opts['whitelist'] then
-    rule['whitelist'] = rspamd_config:add_hash_map(opts['whitelist'])
+  if opts.whitelist then
+    rule.whitelist = rspamd_config:add_hash_map(opts.whitelist)
   end
 
   return function(task)
