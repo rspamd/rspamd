@@ -35,6 +35,7 @@ local function oletools_check(task, content, digest, rule)
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
+    local protocol = 'OLEFY/1.0\n'
 
     local function oletools_callback(err, data, conn)
 
@@ -63,7 +64,7 @@ local function oletools_check(task, content, digest, rule)
             port = addr:get_port(),
             timeout = rule.timeout,
             shutdown = true,
-            data = content,
+            data = { protocol, content },
             callback = oletools_callback,
           })
         else
@@ -107,13 +108,15 @@ local function oletools_check(task, content, digest, rule)
           [9] = 'RETURN_ENCRYPTED',
         }
 
-        lua_util.debugm(rule.module_name, task, '%s: filename: %s', rule.log_prefix, result[2]['file'])
-        lua_util.debugm(rule.module_name, task, '%s: type: %s', rule.log_prefix, result[2]['type'])
-
         if result[1].error ~= nil then
           rspamd_logger.errx(task, '%s: ERROR found: %s', rule.log_prefix,
             result[1].error)
-          oletools_requery()
+            if result[1].error == 'File too small' then
+              common.save_av_cache(task, digest, rule, 'OK')
+              common.log_clean(task, rule, 'File too small to be scanned for macros')
+            else
+              oletools_requery()
+            end
         elseif result[3]['return_code'] == 9 then
           rspamd_logger.warnx(task, '%s: File is encrypted.', rule.log_prefix)
         elseif result[3]['return_code'] > 6 then
@@ -124,12 +127,12 @@ local function oletools_check(task, content, digest, rule)
             rule.log_prefix, oletools_rc[result[3]['return_code']])
           oletools_requery()
         elseif result[2]['analysis'] == 'null' and #result[2]['macros'] == 0 then
-          if rule.log_clean == true then
-            rspamd_logger.infox(task, '%s: Scanned Macro is OK', rule.log_prefix)
-          else
-            lua_util.debugm(rule.module_name, task, '%s: No Macro found', rule.log_prefix)
-          end
+          common.save_av_cache(task, digest, rule, 'OK')
+          common.log_clean(task, rule, 'No macro found')
         elseif #result[2]['macros'] > 0 then
+
+          lua_util.debugm(rule.module_name, task, '%s: filename: %s', rule.log_prefix, result[2]['file'])
+          lua_util.debugm(rule.module_name, task, '%s: type: %s', rule.log_prefix, result[2]['type'])
 
           for _,m in ipairs(result[2]['macros']) do
             lua_util.debugm(rule.module_name, task, '%s: macros found - code: %s, ole_stream: %s, '..
@@ -183,8 +186,9 @@ local function oletools_check(task, content, digest, rule)
             common.yield_result(task, rule, macro_keyword_table, rule.default_score)
             common.save_av_cache(task, digest, rule, macro_keyword_table, rule.default_score)
 
-          elseif rule.log_clean == true then
-            rspamd_logger.infox(task, '%s: Scanned Macro is OK', rule.log_prefix)
+          else
+            common.save_av_cache(task, digest, rule, 'OK')
+            common.log_clean(task, rule, 'Scanned Macro is OK')
           end
 
         else
@@ -199,7 +203,7 @@ local function oletools_check(task, content, digest, rule)
       port = addr:get_port(),
       timeout = rule.timeout,
       shutdown = true,
-      data = content,
+      data = { protocol, content },
       callback = oletools_callback,
     })
 
