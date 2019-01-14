@@ -499,7 +499,7 @@ rspamd_check_action_metric (struct rspamd_task *task)
 
 	/* We are not certain about the results during processing */
 	if (mres->passthrough_result == NULL) {
-		for (i = 0; i < mres->nactions; i++) {
+		for (i = mres->nactions - 1; i >= 0; i--) {
 			action_lim = &mres->actions_limits[i];
 			sc = action_lim->cur_limit;
 
@@ -517,7 +517,7 @@ rspamd_check_action_metric (struct rspamd_task *task)
 			}
 		}
 
-		if (set_action && selected_action == NULL) {
+		if (selected_action == NULL) {
 			selected_action = noaction->action;
 		}
 	}

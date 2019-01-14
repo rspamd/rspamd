@@ -1673,6 +1673,12 @@ lua_task_set_pre_result (lua_State * L)
 		}
 
 		if (action == NULL) {
+			struct rspamd_action *tmp;
+
+			HASH_ITER (hh, task->cfg->actions, action, tmp) {
+				msg_err ("known action: %s = %f", action->name, action->threshold);
+			}
+
 			return luaL_error (L, "unknown action %s", lua_tostring (L, 2));
 		}
 

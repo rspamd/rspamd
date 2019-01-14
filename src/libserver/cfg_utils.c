@@ -153,7 +153,8 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 			action->flags |= RSPAMD_ACTION_HAM;
 		}
 
-		HASH_ADD_STR (cfg->actions, name, action);
+		HASH_ADD_KEYPTR (hh, cfg->actions,
+				action->name, strlen (action->name), action);
 	}
 
 	/* Disable timeout */
@@ -1952,8 +1953,6 @@ rspamd_config_action_from_ucl (struct rspamd_config *cfg,
 		act->action_type = METRIC_ACTION_CUSTOM;
 	}
 
-	rspamd_actions_sort (cfg);
-
 	return TRUE;
 }
 
@@ -1963,6 +1962,7 @@ rspamd_config_set_action_score (struct rspamd_config *cfg,
 		const ucl_object_t *obj)
 {
 	struct rspamd_action *act;
+	enum rspamd_action_type std_act;
 	const ucl_object_t *elt;
 	guint priority = ucl_object_get_priority (obj), obj_type;
 
@@ -1979,6 +1979,17 @@ rspamd_config_set_action_score (struct rspamd_config *cfg,
 		}
 	}
 
+	/* Here are dragons:
+	 * We have `canonical` name for actions, such as `soft reject` and
+	 * configuration names for actions (used to be more convenient), such
+	 * as `soft_reject`. Unfortunately, we must have heuristic for this
+	 * variance of names.
+	 */
+
+	if (rspamd_action_from_str (action_name, (gint *)&std_act)) {
+		action_name = rspamd_action_to_str (std_act);
+	}
+
 	HASH_FIND_STR (cfg->actions, action_name, act);
 
 	if (act) {
@@ -1992,7 +2003,12 @@ rspamd_config_set_action_score (struct rspamd_config *cfg,
 					act->priority,
 					priority,
 					act->threshold);
-			return rspamd_config_action_from_ucl (cfg, act, obj, priority);
+			if (rspamd_config_action_from_ucl (cfg, act, obj, priority)) {
+				rspamd_actions_sort (cfg);
+			}
+			else {
+				return FALSE;
+			}
 		}
 		else {
 			msg_info_config ("action %s has been already registered with "
@@ -2008,7 +2024,9 @@ rspamd_config_set_action_score (struct rspamd_config *cfg,
 		act->name = rspamd_mempool_strdup (cfg->cfg_pool, action_name);
 
 		if (rspamd_config_action_from_ucl (cfg, act, obj, priority)) {
-			HASH_ADD_STR (cfg->actions, name, act);
+			HASH_ADD_KEYPTR (hh, cfg->actions,
+					act->name, strlen (act->name), act);
+			rspamd_actions_sort (cfg);
 		}
 		else {
 			return FALSE;
