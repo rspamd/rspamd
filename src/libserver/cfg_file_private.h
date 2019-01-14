@@ -26,7 +26,7 @@
  * Action config definition
  */
 struct rspamd_action {
-	enum rspamd_action_type action;
+	enum rspamd_action_type action_type;
 	enum rspamd_action_flags flags;
 	guint priority;
 	gint lua_handler_ref; /* If special handling is needed */

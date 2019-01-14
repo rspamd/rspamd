@@ -16,6 +16,7 @@
 #include "config.h"
 #include "rspamd.h"
 #include "contrib/uthash/utlist.h"
+#include "contrib/libucl/khash.h"
 #include "events.h"
 #include "cryptobox.h"
 

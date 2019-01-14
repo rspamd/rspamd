@@ -22,6 +22,8 @@
 #include "html_colors.h"
 #include "html_entities.h"
 #include "url.h"
+#include "contrib/libucl/khash.h"
+
 #include <unicode/uversion.h>
 #include <unicode/ucnv.h>
 #if U_ICU_VERSION_MAJOR_NUM >= 46

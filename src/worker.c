@@ -36,6 +36,7 @@
 #include "libutil/http_private.h"
 #include "libmime/lang_detection.h"
 #include <math.h>
+#include <src/libserver/cfg_file_private.h>
 #include "unix-std.h"
 
 #include "lua/lua_common.h"
@@ -144,11 +145,15 @@ rspamd_task_timeout (gint fd, short what, gpointer ud)
 		msg_info_task ("processing of task timed out, forced processing");
 
 		if (task->cfg->soft_reject_on_timeout) {
-			struct rspamd_metric_result *res = task->result;
+			struct rspamd_action *action, *soft_reject;
 
-			if (rspamd_check_action_metric (task, res) != METRIC_ACTION_REJECT) {
+			action = rspamd_check_action_metric (task);
+
+			if (action->action_type != METRIC_ACTION_REJECT) {
+				soft_reject = rspamd_config_get_action_by_type (task->cfg,
+						METRIC_ACTION_SOFT_REJECT);
 				rspamd_add_passthrough_result (task,
-						METRIC_ACTION_SOFT_REJECT,
+						soft_reject,
 						0,
 						NAN,
 						"timeout processing message",

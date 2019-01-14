@@ -708,6 +708,9 @@ gboolean rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 struct rspamd_action * rspamd_config_get_action (struct rspamd_config *cfg,
 												 const gchar *name);
 
+struct rspamd_action * rspamd_config_get_action_by_type (struct rspamd_config *cfg,
+												 enum rspamd_action_type type);
+
 #define msg_err_config(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         cfg->cfg_pool->tag.tagname, cfg->checksum, \
         G_STRFUNC, \

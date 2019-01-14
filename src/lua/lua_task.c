@@ -23,6 +23,8 @@
 #include "libserver/mempool_vars_internal.h"
 #include "libserver/dkim.h"
 #include "libserver/task.h"
+#include "libserver/cfg_file_private.h"
+#include "libmime/filter_private.h"
 #include "libstat/stat_api.h"
 #include "libutil/map_helpers.h"
 
@@ -1653,7 +1655,7 @@ lua_task_set_pre_result (lua_State * L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *message = NULL, *module = NULL;
 	gdouble score = NAN;
-	gint action = METRIC_ACTION_MAX;
+	struct rspamd_action *action;
 	guint priority = RSPAMD_PASSTHROUGH_NORMAL;
 
 	if (task != NULL) {
@@ -1663,11 +1665,15 @@ lua_task_set_pre_result (lua_State * L)
 			return 0;
 		}
 
-		if (lua_type (L, 2) == LUA_TNUMBER) {
-			action = lua_tointeger (L, 2);
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			action = rspamd_config_get_action (task->cfg, lua_tostring (L, 2));
 		}
-		else if (lua_type (L, 2) == LUA_TSTRING) {
-			rspamd_action_from_str (lua_tostring (L, 2), &action);
+		else {
+			return luaL_error (L, "invalid arguments");
+		}
+
+		if (action == NULL) {
+			return luaL_error (L, "unknown action %s", lua_tostring (L, 2));
 		}
 
 		if (lua_type (L, 3) == LUA_TSTRING) {
@@ -1698,21 +1704,16 @@ lua_task_set_pre_result (lua_State * L)
 			priority = lua_tonumber (L, 6);
 		}
 
-		if (action < METRIC_ACTION_MAX && action >= METRIC_ACTION_REJECT) {
 
-			rspamd_add_passthrough_result (task, action, priority,
-					score, rspamd_mempool_strdup (task->task_pool, message),
-					rspamd_mempool_strdup (task->task_pool, module));
+		rspamd_add_passthrough_result (task, action, priority,
+				score, rspamd_mempool_strdup (task->task_pool, message),
+				rspamd_mempool_strdup (task->task_pool, module));
 
-			/* Don't classify or filter message if pre-filter sets results */
-			task->processed_stages |= (RSPAMD_TASK_STAGE_FILTERS |
-					RSPAMD_TASK_STAGE_CLASSIFIERS |
-					RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |
-					RSPAMD_TASK_STAGE_CLASSIFIERS_POST);
-		}
-		else {
-			return luaL_error (L, "invalid arguments");
-		}
+		/* Don't classify or filter message if pre-filter sets results */
+		task->processed_stages |= (RSPAMD_TASK_STAGE_FILTERS |
+								   RSPAMD_TASK_STAGE_CLASSIFIERS |
+								   RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |
+								   RSPAMD_TASK_STAGE_CLASSIFIERS_POST);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -4360,20 +4361,23 @@ lua_task_set_settings (lua_State *L)
 			/* Adjust desired actions */
 			mres = task->result;
 
-			for (i = 0; i < METRIC_ACTION_MAX; i++) {
-				elt = ucl_object_lookup_any (act, rspamd_action_to_str (i),
-						rspamd_action_to_str_alt (i), NULL);
+			for (i = 0; i < mres->nactions; i++) {
+				struct rspamd_action_result *act_res = &mres->actions_limits[i];
+				elt = ucl_object_lookup (act, act_res->action->name);
 
 				if (elt) {
-
 					if (ucl_object_type (elt) == UCL_FLOAT ||
 								ucl_object_type (elt) == UCL_INT) {
-						mres->actions_limits[i] = ucl_object_todouble (elt);
-						msg_debug_task ("adjusted action %s to %.2f",
-								ucl_object_key (elt), mres->actions_limits[i]);
+						gdouble nscore =  ucl_object_todouble (elt);
+
+						msg_debug_task ("adjusted action %s: %.2f -> %.2f",
+								ucl_object_key (elt),
+								act_res->cur_limit,
+								nscore);
+						act_res->cur_limit = nscore;
 					}
 					else if (ucl_object_type (elt) == UCL_NULL) {
-						mres->actions_limits[i] = NAN;
+						act_res->cur_limit = NAN;
 						msg_info_task ("disabled action %s due to settings",
 								ucl_object_key (elt));
 					}
@@ -4384,6 +4388,8 @@ lua_task_set_settings (lua_State *L)
 		vars = ucl_object_lookup (task->settings, "variables");
 		if (vars && ucl_object_type (vars) == UCL_OBJECT) {
 			/* Set memory pool variables */
+			it = NULL;
+
 			while ((cur = ucl_object_iterate (vars, &it, true)) != NULL) {
 				if (ucl_object_type (cur) == UCL_STRING) {
 					rspamd_mempool_set_variable (task->task_pool,
@@ -4741,6 +4747,7 @@ lua_task_get_metric_result (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_metric_result *metric_res;
+	struct rspamd_action *action;
 
 	if (task) {
 		metric_res = task->result;
@@ -4760,10 +4767,13 @@ lua_task_get_metric_result (lua_State *L)
 		lua_pushnumber (L, metric_res->score);
 		lua_settable (L, -3);
 
-		lua_pushstring (L, "action");
-		lua_pushstring (L, rspamd_action_to_str (
-				rspamd_check_action_metric (task, metric_res)));
-		lua_settable (L, -3);
+		action = rspamd_check_action_metric (task);
+
+		if (action) {
+			lua_pushstring (L, "action");
+			lua_pushstring (L, action->name);
+			lua_settable (L, -3);
+		}
 
 		lua_pushstring (L, "nnegative");
 		lua_pushnumber (L, metric_res->nnegative);
@@ -4826,13 +4836,13 @@ lua_task_get_metric_action (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_metric_result *metric_res;
-	enum rspamd_action_type action;
+	struct rspamd_action *action;
 
 	if (task) {
 		metric_res = task->result;
 
-		action = rspamd_check_action_metric (task, metric_res);
-		lua_pushstring (L, rspamd_action_to_str (action));
+		action = rspamd_check_action_metric (task);
+		lua_pushstring (L, action->name);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -4880,21 +4890,29 @@ lua_task_disable_action (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *action_name;
-	gint action;
+	struct rspamd_action_result *action_res;
 
 	action_name = luaL_checkstring (L, 2);
 
-	if (task && action_name && rspamd_action_from_str (action_name, &action)) {
-		if (!task->result) {
-			task->result = rspamd_create_metric_result (task);
+	if (task && action_name) {
+
+		for (guint i = 0; i < task->result->nactions; i ++) {
+			action_res = &task->result->actions_limits[i];
+
+			if (strcmp (action_name, action_res->action->name) == 0) {
+				if (isnan (action_res->cur_limit)) {
+					lua_pushboolean (L, false);
+				}
+				else {
+					action_res->cur_limit = NAN;
+					lua_pushboolean (L, true);
+				}
+
+				break;
+			}
 		}
-		if (isnan (task->result->actions_limits[action])) {
-			lua_pushboolean (L, false);
-		}
-		else {
-			task->result->actions_limits[action] = NAN;
-			lua_pushboolean (L, true);
-		}
+
+
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

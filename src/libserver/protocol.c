@@ -19,6 +19,8 @@
 #include "utlist.h"
 #include "http_private.h"
 #include "worker_private.h"
+#include "libserver/cfg_file_private.h"
+#include "libmime/filter_private.h"
 #include "contrib/zstd/zstd.h"
 #include "lua/lua_common.h"
 #include "unix-std.h"
@@ -922,12 +924,12 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 {
 	struct rspamd_symbol_result *sym;
 	gboolean is_spam;
-	enum rspamd_action_type action = METRIC_ACTION_NOACTION;
+	struct rspamd_action *action;
 	ucl_object_t *obj = NULL, *sobj;
 	const gchar *subject;
 
-	action = rspamd_check_action_metric (task, mres);
-	is_spam = (action < METRIC_ACTION_GREYLIST);
+	action = rspamd_check_action_metric (task);
+	is_spam = !(action->flags & RSPAMD_ACTION_HAM);
 
 	if (task->cmd != CMD_CHECK_V2) {
 		obj = ucl_object_typed_new (UCL_OBJECT);
@@ -955,10 +957,10 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 			ucl_object_fromdouble (rspamd_task_get_required_score (task, mres)),
 			"required_score", 0, false);
 	ucl_object_insert_key (obj,
-			ucl_object_fromstring (rspamd_action_to_str (action)),
+			ucl_object_fromstring (action->name),
 			"action", 0, false);
 
-	if (action == METRIC_ACTION_REWRITE_SUBJECT) {
+	if (action->action_type == METRIC_ACTION_REWRITE_SUBJECT) {
 		subject = rspamd_protocol_rewrite_subject (task);
 
 		if (subject) {
@@ -1253,7 +1255,8 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	gpointer h, v;
 	ucl_object_t *top = NULL;
 	rspamd_fstring_t *reply;
-	gint action, flags = RSPAMD_PROTOCOL_DEFAULT;
+	gint flags = RSPAMD_PROTOCOL_DEFAULT;
+	struct rspamd_action *action;
 
 	/* Write custom headers */
 	g_hash_table_iter_init (&hiter, task->reply_headers);
@@ -1376,19 +1379,24 @@ end:
 
 		if (metric_res != NULL) {
 
-			action = rspamd_check_action_metric (task, metric_res);
+			action = rspamd_check_action_metric (task);
 
-			if (action == METRIC_ACTION_SOFT_REJECT &&
+			/* TODO: handle custom actions in stats */
+			if (action->action_type == METRIC_ACTION_SOFT_REJECT &&
 					(task->flags & RSPAMD_TASK_FLAG_GREYLISTED)) {
 				/* Set stat action to greylist to display greylisted messages */
-				action = METRIC_ACTION_GREYLIST;
-			}
-
-			if (action < METRIC_ACTION_MAX) {
 #ifndef HAVE_ATOMIC_BUILTINS
-				task->worker->srv->stat->actions_stat[action]++;
+				task->worker->srv->stat->actions_stat[METRIC_ACTION_GREYLIST]++;
 #else
-				__atomic_add_fetch (&task->worker->srv->stat->actions_stat[action],
+				__atomic_add_fetch (&task->worker->srv->stat->actions_stat[METRIC_ACTION_GREYLIST],
+						1, __ATOMIC_RELEASE);
+#endif
+			}
+			else if (action->action_type < METRIC_ACTION_MAX) {
+#ifndef HAVE_ATOMIC_BUILTINS
+				task->worker->srv->stat->actions_stat[action->action_type]++;
+#else
+				__atomic_add_fetch (&task->worker->srv->stat->actions_stat[action->action_type],
 						1, __ATOMIC_RELEASE);
 #endif
 			}

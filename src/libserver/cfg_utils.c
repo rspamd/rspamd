@@ -141,7 +141,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 		action->threshold = NAN;
 		action->name = rspamd_mempool_strdup (cfg->cfg_pool,
 				rspamd_action_to_str (i));
-		action->action = i;
+		action->action_type = i;
 
 		if (i == METRIC_ACTION_SOFT_REJECT) {
 			action->flags |= RSPAMD_ACTION_NO_THRESHOLD;
@@ -1946,10 +1946,10 @@ rspamd_config_action_from_ucl (struct rspamd_config *cfg,
 	act->flags = flags;
 
 	if (rspamd_action_from_str (act->name, &std_act)) {
-		act->action = std_act;
+		act->action_type = std_act;
 	}
 	else {
-		act->action = METRIC_ACTION_CUSTOM;
+		act->action_type = METRIC_ACTION_CUSTOM;
 	}
 
 	rspamd_actions_sort (cfg);
@@ -2058,6 +2058,21 @@ rspamd_config_get_action (struct rspamd_config *cfg, const gchar *name)
 	HASH_FIND_STR (cfg->actions, name, res);
 
 	return res;
+}
+
+struct rspamd_action *
+rspamd_config_get_action_by_type (struct rspamd_config *cfg,
+								  enum rspamd_action_type type)
+{
+	struct rspamd_action *cur, *tmp;
+
+	HASH_ITER (hh, cfg->actions, cur, tmp) {
+		if (cur->action_type == type) {
+			return cur;
+		}
+	}
+
+	return NULL;
 }
 
 gboolean

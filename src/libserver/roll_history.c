@@ -17,6 +17,7 @@
 #include "rspamd.h"
 #include "lua/lua_common.h"
 #include "unix-std.h"
+#include "cfg_file_private.h"
 
 static const gchar rspamd_history_magic_old[] = {'r', 's', 'h', '1'};
 
@@ -101,6 +102,7 @@ rspamd_roll_history_update (struct roll_history *history,
 	struct roll_history_row *row;
 	struct rspamd_metric_result *metric_res;
 	struct history_metric_callback_data cbdata;
+	struct rspamd_action *action;
 
 	if (history->disabled) {
 		return;
@@ -155,7 +157,8 @@ rspamd_roll_history_update (struct roll_history *history,
 	}
 	else {
 		row->score = metric_res->score;
-		row->action = rspamd_check_action_metric (task, metric_res);
+		action = rspamd_check_action_metric (task);
+		row->action = action->action_type;
 		row->required_score = rspamd_task_get_required_score (task, metric_res);
 		cbdata.pos = row->symbols;
 		cbdata.remain = sizeof (row->symbols);
