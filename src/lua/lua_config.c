@@ -2127,9 +2127,10 @@ lua_config_set_metric_action (lua_State * L)
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name = NULL;
-	double weight;
+	double threshold = NAN;
 	GError *err = NULL;
 	gdouble priority = 0.0;
+	ucl_object_t *obj_tbl = NULL;
 
 	if (cfg) {
 
@@ -2137,7 +2138,7 @@ lua_config_set_metric_action (lua_State * L)
 			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 					"*action=S;score=N;"
 					"priority=N",
-					&name, &weight,
+					&name, &threshold,
 					&priority)) {
 				msg_err_config ("bad arguments: %e", err);
 				g_error_free (err);
@@ -2145,12 +2146,36 @@ lua_config_set_metric_action (lua_State * L)
 				return 0;
 			}
 		}
+		else if (lua_type (L, 2) == LUA_TSTRING && lua_type (L, 3) == LUA_TTABLE) {
+			name = lua_tostring (L, 2);
+			obj_tbl = ucl_object_lua_import (L, 3);
+
+			if (obj_tbl) {
+				if (name) {
+					rspamd_config_set_action_score (cfg, name, obj_tbl);
+					ucl_object_unref (obj_tbl);
+				}
+				else {
+					ucl_object_unref (obj_tbl);
+					return luaL_error (L, "invalid first argument, action name expected");
+				}
+			}
+			else {
+				return luaL_error (L, "invalid second argument, table expected");
+			}
+		}
 		else {
 			return luaL_error (L, "invalid arguments, table expected");
 		}
 
-		if (name != NULL && weight != 0) {
-			rspamd_config_set_action_score (cfg, name, weight, (guint)priority);
+		if (name != NULL && !isnan (threshold) && threshold != 0) {
+			obj_tbl = ucl_object_typed_new (UCL_OBJECT);
+			ucl_object_insert_key (obj_tbl, ucl_object_fromdouble (threshold),
+					"score", 0, false);
+			ucl_object_insert_key (obj_tbl, ucl_object_fromdouble (priority),
+					"priority", 0, false);
+			rspamd_config_set_action_score (cfg, name, obj_tbl);
+			ucl_object_unref (obj_tbl);
 		}
 	}
 	else {
@@ -2166,12 +2191,14 @@ lua_config_get_metric_action (lua_State * L)
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *act_name = luaL_checkstring (L, 2);
-	gint act = 0;
+	struct rspamd_action *act;
 
 	if (cfg && act_name) {
-		if (rspamd_action_from_str (act_name, &act)) {
-			if (!isnan (cfg->actions[act].threshold)) {
-				lua_pushnumber (L, cfg->actions[act].threshold);
+		act = rspamd_config_get_action (cfg, act_name);
+
+		if (act) {
+			if (!isnan (act->threshold)) {
+				lua_pushnumber (L, act->threshold);
 			}
 			else {
 				lua_pushnil (L);

@@ -29,7 +29,6 @@
 #include "libutil/radix.h"
 #include "monitored.h"
 #include "redis_pool.h"
-#include "contrib/uthash/uthash.h"
 
 #define DEFAULT_BIND_PORT 11333
 #define DEFAULT_CONTROL_PORT 11334
@@ -280,6 +279,7 @@ enum rspamd_action_flags {
 	RSPAMD_ACTION_HAM = (1u << 2),
 };
 
+struct UT_hash_handle;
 /**
  * Action config definition
  */
@@ -290,7 +290,7 @@ struct rspamd_action {
 	gint lua_handler_ref; /* If special handling is needed */
 	gdouble threshold;
 	gchar *name;
-	UT_hash_handle hh; /* Index by name */
+	struct UT_hash_handle hh; /* Index by name */
 };
 
 struct rspamd_config_post_load_script {
@@ -698,6 +698,15 @@ gboolean rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 		const gchar *description,
 		struct rspamd_radix_map_helper **target,
 		GError **err);
+
+/**
+ * Returns action object by name
+ * @param cfg
+ * @param name
+ * @return
+ */
+struct rspamd_action * rspamd_config_get_action (struct rspamd_config *cfg,
+												 const gchar *name);
 
 #define msg_err_config(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         cfg->cfg_pool->tag.tagname, cfg->checksum, \

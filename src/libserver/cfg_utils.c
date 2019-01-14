@@ -17,6 +17,8 @@
 
 #include "cfg_file.h"
 #include "rspamd.h"
+#include "../../contrib/mumhash/mum.h"
+#define HASH_CASELESS
 #include "uthash_strcase.h"
 #include "filter.h"
 #include "lua/lua_common.h"
@@ -1038,12 +1040,6 @@ rspamd_config_init_metric (struct rspamd_config *cfg)
 	cfg->symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->groups = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
 
-	for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
-		cfg->actions[i].score = NAN;
-		cfg->actions[i].action = i;
-		cfg->actions[i].priority = 0;
-	}
-
 	cfg->subject = SPAM_SUBJECT;
 	rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t) g_hash_table_unref,
@@ -1912,6 +1908,72 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 	return TRUE;
 }
 
+static gboolean
+rspamd_config_action_from_ucl (struct rspamd_config *cfg,
+							   struct rspamd_action *act,
+							   const ucl_object_t *obj,
+							   guint priority)
+{
+	const ucl_object_t *elt;
+	gdouble threshold = NAN;
+	guint flags = 0, std_act;
+
+	elt = ucl_object_lookup_any (obj, "score", "threshold", NULL);
+
+	if (elt) {
+		threshold = ucl_object_todouble (elt);
+	}
+
+	elt = ucl_object_lookup_any (obj, "flags");
+
+	if (elt && ucl_object_type (elt) == UCL_ARRAY) {
+		const ucl_object_t *cur;
+		ucl_object_iter_t it = NULL;
+
+		while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+			if (ucl_object_type (cur) == UCL_STRING) {
+				const gchar *fl_str = ucl_object_tostring (cur);
+
+				if (g_ascii_strcasecmp (fl_str, "no_threshold") == 0) {
+					flags |= RSPAMD_ACTION_NO_THRESHOLD;
+				}
+				else if (g_ascii_strcasecmp (fl_str, "threshold_only") == 0) {
+					flags |= RSPAMD_ACTION_THRESHOLD_ONLY;
+				}
+				else if (g_ascii_strcasecmp (fl_str, "ham") == 0) {
+					flags |= RSPAMD_ACTION_HAM;
+				}
+				else {
+					msg_warn_config ("unknown action flag: %s", fl_str);
+				}
+			}
+		}
+	}
+
+	/* TODO: add lua references support */
+
+	if (isnan (threshold) && !(flags & RSPAMD_ACTION_NO_THRESHOLD)) {
+		msg_err_config ("action %s has no threshold being set and it is not"
+				  " a no threshold action", act->name);
+
+		return FALSE;
+	}
+
+	act->threshold = threshold;
+	act->flags = flags;
+
+	if (rspamd_action_from_str (act->name, &std_act)) {
+		act->action = std_act;
+	}
+	else {
+		act->action = METRIC_ACTION_CUSTOM;
+	}
+
+	rspamd_actions_sort (cfg);
+
+	return TRUE;
+}
+
 gboolean
 rspamd_config_set_action_score (struct rspamd_config *cfg,
 		const gchar *action_name,
@@ -1919,52 +1981,67 @@ rspamd_config_set_action_score (struct rspamd_config *cfg,
 {
 	struct rspamd_action *act;
 	const ucl_object_t *elt;
+	guint priority = ucl_object_get_priority (obj);
 
 	g_assert (cfg != NULL);
 	g_assert (action_name != NULL);
+
+	elt = ucl_object_lookup (obj, "priority");
+
+	if (elt) {
+		priority = ucl_object_toint (elt);
+	}
 
 	HASH_FIND_STR (cfg->actions, action_name, act);
 
 	if (act) {
 		/* Existing element */
-	}
-	else {
-		/* Add new element */
-		act = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*act));
-	}
-	act = &cfg->actions[act_num];
-
-	if (isnan (act->threshold)) {
-		act->score = score;
-		act->priority = priority;
-	}
-	else {
-		if (act->priority > priority) {
+		if (act->priority <= priority) {
+			/* We can replace data */
 			msg_info_config ("action %s has been already registered with "
-					"priority %ud, do not override (new priority: %ud)",
-					action_name,
-					act->priority,
-					priority);
-			return FALSE;
-		}
-		else {
-			msg_info_config ("action %s has been already registered with "
-					"priority %ud, override it with new priority: %ud, "
-					"old score: %.2f, new score: %.2f",
+							 "priority %ud, override it with new priority: %ud, "
+							 "old score: %.2f, new score: %.2f",
 					action_name,
 					act->priority,
 					priority,
 					act->threshold,
-					score);
+					ucl_object_todouble (
+							ucl_object_lookup_any (obj, "score", "threshold", NULL)));
+			return rspamd_config_action_from_ucl (cfg, act, obj, priority);
+		}
+		else {
+			msg_info_config ("action %s has been already registered with "
+							 "priority %ud, do not override (new priority: %ud)",
+					action_name,
+					act->priority,
+					priority);
+		}
+	}
+	else {
+		/* Add new element */
+		act = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*act));
+		act->name = rspamd_mempool_strdup (cfg->cfg_pool, action_name);
 
-			act->score = score;
-			act->priority = priority;
+		if (rspamd_config_action_from_ucl (cfg, act, obj, priority)) {
+			HASH_ADD_STR (cfg->actions, name, act);
+		}
+		else {
+			return FALSE;
 		}
 	}
 
 	return TRUE;
 }
 
+struct rspamd_action *
+rspamd_config_get_action (struct rspamd_config *cfg, const gchar *name)
+{
+	struct rspamd_action *res = NULL;
+
+	HASH_FIND_STR (cfg->actions, name, res);
+
+	return res;
+}
 
 gboolean
 rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
