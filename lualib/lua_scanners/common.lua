@@ -28,6 +28,18 @@ local fun = require "fun"
 
 local exports = {}
 
+local function log_clean(task, rule, msg)
+
+  msg = msg or 'message or mime_part is clean'
+
+  if rule.log_clean then
+    rspamd_logger.infox(task, '%s: %s', rule.log_prefix, msg)
+  else
+    lua_util.debugm(rule.module_name, task, '%s: %s', rule.log_prefix, msg)
+  end
+
+end
+
 local function match_patterns(default_sym, found, patterns, dyn_weight)
   if type(patterns) ~= 'table' then return default_sym, dyn_weight end
   if not patterns[1] then
@@ -286,6 +298,7 @@ local function check_parts_match(task, rule)
   return fun.filter(filter_func, task:get_parts())
 end
 
+exports.log_clean = log_clean
 exports.yield_result = yield_result
 exports.match_patterns = match_patterns
 exports.need_av_check = need_av_check
