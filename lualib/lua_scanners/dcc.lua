@@ -133,7 +133,6 @@ local function dcc_check(task, content, digest, rule)
 
         if header then
           local _,_,info = header:find("; (.-)$")
-
           if (result == 'R') then
             -- Reject
             common.yield_result(task, rule, info, rule.default_score)
@@ -143,12 +142,6 @@ local function dcc_check(task, content, digest, rule)
             rspamd_logger.warnx(task, 'DCC returned a temporary failure result: %s', result)
             dcc_requery()
           elseif result == 'A' then
-            if rule.log_clean then
-              rspamd_logger.infox(task, '%s: clean, returned result A - info: %s',
-                  rule.log_prefix, info)
-            else
-              lua_util.debugm(rule.module_name, task, '%s: returned result A - info: %s',
-                  rule.log_prefix, info)
 
               local opts = {}
               local score = 0.0
@@ -199,10 +192,19 @@ local function dcc_check(task, content, digest, rule)
                     score,
                     opts)
                 common.save_av_cache(task, digest, rule, opts, score)
+              else
+                common.save_av_cache(task, digest, rule, 'OK')
+                if rule.log_clean then
+                  rspamd_logger.infox(task, '%s: clean, returned result A - info: %s',
+                      rule.log_prefix, info)
+                else
+                  lua_util.debugm(rule.module_name, task, '%s: returned result A - info: %s',
+                      rule.log_prefix, info)
               end
             end
           elseif result == 'G' then
             -- do nothing
+            common.save_av_cache(task, digest, rule, 'OK')
             if rule.log_clean then
               rspamd_logger.infox(task, '%s: clean, returned result G - info: %s', rule.log_prefix, info)
             else
@@ -210,6 +212,7 @@ local function dcc_check(task, content, digest, rule)
             end
           elseif result == 'S' then
             -- do nothing
+            common.save_av_cache(task, digest, rule, 'OK')
             if rule.log_clean then
               rspamd_logger.infox(task, '%s: clean, returned result S - info: %s', rule.log_prefix, info)
             else
@@ -240,7 +243,11 @@ local function dcc_check(task, content, digest, rule)
     })
   end
   if common.need_av_check(task, content, rule) then
-    dcc_check_uncached()
+    if common.check_av_cache(task, digest, rule, dcc_check_uncached) then
+      return
+    else
+      dcc_check_uncached()
+    end
   end
 end
 
