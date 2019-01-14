@@ -238,7 +238,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 
 			if (uc != -1) {
 				while (p < pe) {
-					if (uc == 0x200b) {
+					if (uc == 0x200b || uc == 0x200c) {
 						/* Invisible space ! */
 						task->flags |= RSPAMD_TASK_FLAG_BAD_UNICODE;
 						part->spaces ++;
