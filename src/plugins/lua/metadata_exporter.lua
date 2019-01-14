@@ -74,6 +74,7 @@ local function get_general_metadata(task, flatten, no_content)
   end
   r.user = task:get_user() or 'unknown'
   r.qid = task:get_queue_id() or 'unknown'
+  r.subject = task:get_subject() or 'unknown'
   r.action = task:get_metric_action('default')
 
   local s = task:get_metric_score('default')[1]
