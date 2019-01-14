@@ -279,19 +279,8 @@ enum rspamd_action_flags {
 	RSPAMD_ACTION_HAM = (1u << 2),
 };
 
-struct UT_hash_handle;
-/**
- * Action config definition
- */
-struct rspamd_action {
-	enum rspamd_action_type action;
-	enum rspamd_action_flags flags;
-	guint priority;
-	gint lua_handler_ref; /* If special handling is needed */
-	gdouble threshold;
-	gchar *name;
-	struct UT_hash_handle hh; /* Index by name */
-};
+
+struct rspamd_action;
 
 struct rspamd_config_post_load_script {
 	gint cbref;

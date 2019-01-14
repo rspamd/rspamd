@@ -17,9 +17,7 @@
 
 #include "cfg_file.h"
 #include "rspamd.h"
-#include "../../contrib/mumhash/mum.h"
-#define HASH_CASELESS
-#include "uthash_strcase.h"
+#include "cfg_file_private.h"
 #include "filter.h"
 #include "lua/lua_common.h"
 #include "lua/lua_thread_pool.h"
@@ -848,28 +846,9 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 	/* Validate cache */
 	if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
 		/* Check for actions sanity */
-		int i, prev_act = 0;
-		gdouble prev_score = NAN;
 		gboolean seen_controller = FALSE;
 		GList *cur;
 		struct rspamd_worker_conf *wcf;
-
-		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
-			if (!isnan (prev_score) && !isnan (cfg->actions[i].threshold)) {
-				if (prev_score <= isnan (cfg->actions[i].threshold)) {
-					msg_warn_config ("incorrect metrics scores: action %s"
-							" has lower score: %.2f than action %s: %.2f",
-							rspamd_action_to_str (prev_act), prev_score,
-							rspamd_action_to_str (i), cfg->actions[i].threshold);
-					ret = FALSE;
-				}
-			}
-
-			if (!isnan (cfg->actions[i].threshold)) {
-				prev_score = cfg->actions[i].score;
-				prev_act = i;
-			}
-		}
 
 		cur = cfg->workers;
 		while (cur) {
@@ -1034,8 +1013,6 @@ rspamd_config_new_statfile (struct rspamd_config *cfg,
 void
 rspamd_config_init_metric (struct rspamd_config *cfg)
 {
-	int i;
-
 	cfg->grow_factor = 1.0;
 	cfg->symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->groups = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
@@ -2195,6 +2172,8 @@ rspamd_action_to_str (enum rspamd_action_type action)
 		return "no action";
 	case METRIC_ACTION_MAX:
 		return "invalid max action";
+	case METRIC_ACTION_CUSTOM:
+		return "custom";
 	}
 
 	return "unknown action";
@@ -2218,6 +2197,8 @@ rspamd_action_to_str_alt (enum rspamd_action_type action)
 		return "no action";
 	case METRIC_ACTION_MAX:
 		return "invalid max action";
+	case METRIC_ACTION_CUSTOM:
+		return "custom";
 	}
 
 	return "unknown action";

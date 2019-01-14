@@ -17,6 +17,7 @@
 #include "libmime/message.h"
 #include "libutil/expression.h"
 #include "libserver/composites.h"
+#include "libserver/cfg_file_private.h"
 #include "libmime/lang_detection.h"
 #include "lua/lua_map.h"
 #include "lua/lua_thread_pool.h"
@@ -2220,15 +2221,15 @@ lua_config_get_all_actions (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	gint act = 0;
+	struct rspamd_action *act, *tmp;
 
 	if (cfg) {
-		lua_newtable (L);
+		lua_createtable (L, 0, HASH_COUNT (cfg->actions));
 
-		for (act = METRIC_ACTION_REJECT; act < METRIC_ACTION_MAX; act ++) {
-			if (!isnan (cfg->actions[act].threshold)) {
-				lua_pushstring (L, rspamd_action_to_str (act));
-				lua_pushnumber (L, cfg->actions[act].threshold);
+		HASH_ITER (hh, cfg->actions, act, tmp) {
+			if (!isnan (act->threshold)) {
+				lua_pushstring (L, act->name);
+				lua_pushnumber (L, act->threshold);
 				lua_settable (L, -3);
 			}
 		}
