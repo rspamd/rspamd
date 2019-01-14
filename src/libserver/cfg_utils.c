@@ -1277,7 +1277,7 @@ gboolean
 rspamd_config_check_statfiles (struct rspamd_classifier_config *cf)
 {
 	struct rspamd_statfile_config *st;
-	gboolean has_other = FALSE, res = FALSE, cur_class;
+	gboolean has_other = FALSE, res = FALSE, cur_class = FALSE;
 	GList *cur;
 
 	/* First check classes directly */
@@ -1893,38 +1893,44 @@ rspamd_config_action_from_ucl (struct rspamd_config *cfg,
 {
 	const ucl_object_t *elt;
 	gdouble threshold = NAN;
-	guint flags = 0, std_act;
+	guint flags = 0, std_act, obj_type;
 
-	elt = ucl_object_lookup_any (obj, "score", "threshold", NULL);
+	obj_type = ucl_object_type (obj);
 
-	if (elt) {
-		threshold = ucl_object_todouble (elt);
-	}
+	if (obj_type == UCL_OBJECT) {
+		obj_type = ucl_object_type (obj);
 
-	elt = ucl_object_lookup_any (obj, "flags");
+		elt = ucl_object_lookup_any (obj, "score", "threshold", NULL);
 
-	if (elt && ucl_object_type (elt) == UCL_ARRAY) {
-		const ucl_object_t *cur;
-		ucl_object_iter_t it = NULL;
+		if (elt) {
+			threshold = ucl_object_todouble (elt);
+		}
 
-		while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
-			if (ucl_object_type (cur) == UCL_STRING) {
-				const gchar *fl_str = ucl_object_tostring (cur);
+		elt = ucl_object_lookup_any (obj, "flags");
 
-				if (g_ascii_strcasecmp (fl_str, "no_threshold") == 0) {
-					flags |= RSPAMD_ACTION_NO_THRESHOLD;
-				}
-				else if (g_ascii_strcasecmp (fl_str, "threshold_only") == 0) {
-					flags |= RSPAMD_ACTION_THRESHOLD_ONLY;
-				}
-				else if (g_ascii_strcasecmp (fl_str, "ham") == 0) {
-					flags |= RSPAMD_ACTION_HAM;
-				}
-				else {
-					msg_warn_config ("unknown action flag: %s", fl_str);
+		if (elt && ucl_object_type (elt) == UCL_ARRAY) {
+			const ucl_object_t *cur;
+			ucl_object_iter_t it = NULL;
+
+			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+				if (ucl_object_type (cur) == UCL_STRING) {
+					const gchar *fl_str = ucl_object_tostring (cur);
+
+					if (g_ascii_strcasecmp (fl_str, "no_threshold") == 0) {
+						flags |= RSPAMD_ACTION_NO_THRESHOLD;
+					} else if (g_ascii_strcasecmp (fl_str, "threshold_only") == 0) {
+						flags |= RSPAMD_ACTION_THRESHOLD_ONLY;
+					} else if (g_ascii_strcasecmp (fl_str, "ham") == 0) {
+						flags |= RSPAMD_ACTION_HAM;
+					} else {
+						msg_warn_config ("unknown action flag: %s", fl_str);
+					}
 				}
 			}
 		}
+	}
+	else if (obj_type == UCL_FLOAT || obj_type == UCL_INT) {
+		threshold = ucl_object_todouble (obj);
 	}
 
 	/* TODO: add lua references support */
@@ -1958,15 +1964,19 @@ rspamd_config_set_action_score (struct rspamd_config *cfg,
 {
 	struct rspamd_action *act;
 	const ucl_object_t *elt;
-	guint priority = ucl_object_get_priority (obj);
+	guint priority = ucl_object_get_priority (obj), obj_type;
 
 	g_assert (cfg != NULL);
 	g_assert (action_name != NULL);
 
-	elt = ucl_object_lookup (obj, "priority");
+	obj_type = ucl_object_type (obj);
 
-	if (elt) {
-		priority = ucl_object_toint (elt);
+	if (obj_type == UCL_OBJECT) {
+		elt = ucl_object_lookup (obj, "priority");
+
+		if (elt) {
+			priority = ucl_object_toint (elt);
+		}
 	}
 
 	HASH_FIND_STR (cfg->actions, action_name, act);
@@ -1977,13 +1987,11 @@ rspamd_config_set_action_score (struct rspamd_config *cfg,
 			/* We can replace data */
 			msg_info_config ("action %s has been already registered with "
 							 "priority %ud, override it with new priority: %ud, "
-							 "old score: %.2f, new score: %.2f",
+							 "old score: %.2f",
 					action_name,
 					act->priority,
 					priority,
-					act->threshold,
-					ucl_object_todouble (
-							ucl_object_lookup_any (obj, "score", "threshold", NULL)));
+					act->threshold);
 			return rspamd_config_action_from_ucl (cfg, act, obj, priority);
 		}
 		else {
@@ -2008,6 +2016,38 @@ rspamd_config_set_action_score (struct rspamd_config *cfg,
 	}
 
 	return TRUE;
+}
+
+gboolean
+rspamd_config_maybe_disable_action (struct rspamd_config *cfg,
+											 const gchar *action_name,
+											 guint priority)
+{
+	struct rspamd_action *act;
+
+	HASH_FIND_STR (cfg->actions, action_name, act);
+
+	if (act) {
+		if (priority >= act->priority) {
+			msg_info_config ("disable action %s; old priority: %ud, new priority: %ud",
+					action_name,
+					act->priority,
+					priority);
+
+			HASH_DEL (cfg->actions, act);
+
+			return TRUE;
+		}
+		else {
+			msg_info_config ("action %s has been already registered with "
+							 "priority %ud, cannot disable it with new priority: %ud",
+					action_name,
+					act->priority,
+					priority);
+		}
+	}
+
+	return FALSE;
 }
 
 struct rspamd_action *

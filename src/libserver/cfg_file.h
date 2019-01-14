@@ -642,6 +642,17 @@ gboolean rspamd_config_set_action_score (struct rspamd_config *cfg,
 		const ucl_object_t *obj);
 
 /**
+ * Check priority and maybe disable action completely
+ * @param cfg
+ * @param action_name
+ * @param priority
+ * @return
+ */
+gboolean rspamd_config_maybe_disable_action (struct rspamd_config *cfg,
+											 const gchar *action_name,
+											 guint priority);
+
+/**
  * Checks if a specified C or lua module is enabled or disabled in the config.
  * The logic of check is the following:
  *
