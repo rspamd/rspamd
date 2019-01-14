@@ -1553,7 +1553,11 @@ rspamd_task_get_required_score (struct rspamd_task *task, struct rspamd_metric_r
 	}
 
 	for (i = m->nactions - 1; i >= 0; i --) {
-		if (!isnan (m->actions_limits[i].cur_limit)) {
+		struct rspamd_action_result *action_lim = &m->actions_limits[i];
+
+
+		if (!isnan (action_lim->cur_limit) &&
+				!(action_lim->action->flags & (RSPAMD_ACTION_NO_THRESHOLD|RSPAMD_ACTION_HAM))) {
 			return m->actions_limits[i].cur_limit;
 		}
 	}

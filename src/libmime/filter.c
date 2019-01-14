@@ -494,7 +494,6 @@ rspamd_check_action_metric (struct rspamd_task *task)
 	struct rspamd_passthrough_result *pr;
 	double max_score = -(G_MAXDOUBLE), sc;
 	int i;
-	gboolean set_action = FALSE;
 	struct rspamd_metric_result *mres = task->result;
 
 	/* We are not certain about the results during processing */
@@ -507,7 +506,8 @@ rspamd_check_action_metric (struct rspamd_task *task)
 				noaction = action_lim;
 			}
 
-			if (isnan (sc)) {
+			if (isnan (sc) ||
+			 	(action_lim->action->flags & (RSPAMD_ACTION_NO_THRESHOLD|RSPAMD_ACTION_HAM))) {
 				continue;
 			}
 
