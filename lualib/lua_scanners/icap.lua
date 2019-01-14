@@ -1,0 +1,284 @@
+--[[
+Copyright (c) 2018, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2019, Carsten Rosenberg <c.rosenberg@heinlein-support.de>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+]]--
+
+--[[[
+-- @module icap
+-- This module contains icap access functions.
+-- Currently tested with Symantec, Sophos Savdi, ClamAV/c-icap
+--]]
+
+local lua_util = require "lua_util"
+local tcp = require "rspamd_tcp"
+local upstream_list = require "rspamd_upstream_list"
+local rspamd_logger = require "rspamd_logger"
+local common = require "lua_scanners/common"
+
+local module_name = 'icap'
+
+local function icap_check(task, content, digest, rule)
+  local function icap_check_uncached ()
+    local upstream = rule.upstreams:get_upstream_round_robin()
+    local addr = upstream:get_addr()
+    local retransmits = rule.retransmits
+
+    -- Build the icap queries
+    local options_request = {
+      "OPTIONS icap://" .. addr:to_string() .. ":" .. addr:get_port() .. "/" .. rule.scheme .. " ICAP/1.0\r\n",
+      "Host:" .. addr:to_string() .. "\r\n",
+      "User-Agent: Rspamd\r\n",
+      "Encapsulated: null-body=0\r\n\r\n",
+    }
+    local size = string.format("%x", tonumber(#content))
+    local respond_request = {
+      "RESPMOD icap://" .. addr:to_string() .. ":" .. addr:get_port() .. "/" .. rule.scheme .. " ICAP/1.0\r\n",
+      "Encapsulated: res-body=0\r\n",
+      "\r\n",
+      size .. "\r\n",
+      content,
+      "\r\n0\r\n\r\n",
+    }
+
+    local function icap_result_header_table(result)
+      local icap_headers = {}
+      for s in result:gmatch("[^\r\n]+") do
+        if string.find(s, '^ICAP%/1%.. [1245]%d%d') then
+          icap_headers['icap'] = s
+        end
+        if string.find(s, '[%a%d-+]-: ') then
+          local _,_,key,value = tostring(s):find("([%a%d-+]-):%s(.+)")
+          icap_headers[key] = value
+        end
+      end
+      lua_util.debugm(rule.module_name, task, '%s: icap_headers: %s', rule.log_prefix, icap_headers)
+      return icap_headers
+    end
+
+    local function icap_parse_result(icap_headers)
+
+      local threat_string = {}
+
+      --[[
+      @ToDo: handle type in response
+
+      Generic Strings:
+        X-Infection-Found: Type=0; Resolution=2; Threat=Troj/DocDl-OYC;
+        X-Infection-Found: Type=0; Resolution=2; Threat=W97M.Downloader;
+      Symantec String:
+        X-Infection-Found: Type=2; Resolution=2; Threat=Container size violation
+        X-Infection-Found: Type=2; Resolution=2; Threat=Encrypted container violation;
+      Sophos Strings:
+        X-Virus-ID: Troj/DocDl-OYC
+      ]] --
+
+      local pattern_symbols
+      local match
+
+      if icap_headers['X-Infection-Found'] ~= nil then
+        pattern_symbols = "(Type%=%d; .* Threat%=)(.*)([;]+)"
+        match = string.gsub(icap_headers['X-Infection-Found'], pattern_symbols, "%2")
+        lua_util.debugm(rule.module_name, task, '%s: icap X-Infection-Found: %s', rule.log_prefix, match)
+        table.insert(threat_string, match)
+      elseif icap_headers['X-Virus-ID'] then
+        lua_util.debugm(rule.module_name, task, '%s: icap X-Virus-ID: %s', rule.log_prefix, icap_headers['X-Virus-ID'])
+        table.insert(threat_string, icap_headers['X-Virus-ID'])
+      end
+
+      if #threat_string > 0 then
+        common.yield_result(task, rule, threat_string, rule.default_score)
+        common.save_av_cache(task, digest, rule, threat_string, rule.default_score)
+      else
+        common.save_av_cache(task, digest, rule, 'OK', 0)
+        common.log_clean(task, rule)
+      end
+    end
+
+    local function icap_r_respond_cb(err, data, conn)
+      local result = tostring(data)
+      conn:close()
+
+      local icap_headers = icap_result_header_table(result)
+      -- Find ICAP/1.x 2xx response
+      if string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
+        icap_parse_result(icap_headers)
+      -- Find ICAP/1.x 5/4xx response
+      --[[
+      Symantec String:
+        ICAP/1.0 539 Aborted - No AV scanning license
+      SquidClamAV/C-ICAP:
+        ICAP/1.0 500 Server error
+      ]]--
+      elseif string.find(icap_headers.icap, 'ICAP%/1%.. [45]%d%d') then
+        rspamd_logger.errx(task, '%s: ICAP ERROR: %s', rule.log_prefix, icap_headers.icap)
+        task:insert_result(rule.symbol_fail, 0.0, icap_headers.icap)
+        return false
+      else
+        rspamd_logger.errx(task, '%s: unhandled response |%s|',
+          rule.log_prefix, string.gsub(result, "\r\n", ", "))
+        task:insert_result(rule.symbol_fail, 0.0, 'unhandled icap response: %s', icap_headers.icap)
+      end
+    end
+
+    local function icap_w_respond_cb(err, conn)
+      conn:add_read(icap_r_respond_cb, '\r\n\r\n')
+    end
+
+    local function icap_r_options_cb(err, data, conn)
+      local result = tostring(data)
+      -- @Todo: add Allow: 204 recognition
+      if string.find(result, 'ICAP%/1%.0 200 OK.*RESPMOD') then
+        conn:add_write(icap_w_respond_cb, respond_request)
+      else
+        rspamd_logger.errx(task, '%s: ERROR - non 2xx icap return code: %s',
+          rule.log_prefix, string.gsub(result, "\r\n", ""))
+        task:insert_result(rule.symbol_fail, 0.0, 'unhandled icap response')
+      end
+    end
+
+    local function icap_callback(err, conn)
+
+      local function icap_requery()
+        -- set current upstream to fail because an error occurred
+        upstream:fail()
+
+        -- retry with another upstream until retransmits exceeds
+        if retransmits > 0 then
+
+          retransmits = retransmits - 1
+
+          lua_util.debugm(rule.module_name, task, '%s: Request Error: %s - retries left: %s',
+            rule.log_prefix, err, retransmits)
+
+          -- Select a different upstream!
+          upstream = rule.upstreams:get_upstream_round_robin()
+          addr = upstream:get_addr()
+
+          lua_util.debugm(rule.module_name, task, '%s: retry IP: %s:%s',
+            rule.log_prefix, addr, addr:get_port())
+
+          tcp.request({
+            task = task,
+            host = addr:to_string(),
+            port = addr:get_port(),
+            timeout = rule.timeout,
+            stop_pattern = '\r\n',
+            data = options_request,
+            read = false,
+            callback = icap_callback,
+          })
+        else
+          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
+            'exceed', rule.log_prefix)
+          task:insert_result(rule.symbol_fail, 0.0, 'failed to scan and '..
+            'retransmits exceed')
+        end
+      end
+
+      if err then
+        icap_requery()
+      else
+        -- set upstream ok
+        if upstream then upstream:ok() end
+        conn:add_read(icap_r_options_cb, '\r\n\r\n')
+      end
+    end
+
+    tcp.request({
+      task = task,
+      host = addr:to_string(),
+      port = addr:get_port(),
+      timeout = rule.timeout,
+      stop_pattern = '\r\n',
+      data = options_request,
+      read = false,
+      callback = icap_callback,
+    })
+  end
+  if common.need_av_check(task, content, rule) then
+    if common.check_av_cache(task, digest, rule, icap_check_uncached) then
+      return
+    else
+      icap_check_uncached()
+    end
+  end
+end
+
+
+local function icap_config(opts)
+
+  local icap_conf = {
+    module_name = module_name,
+    scan_mime_parts = true,
+    scan_all_mime_parts = true,
+    scan_text_mime = false,
+    scan_image_mime = false,
+    scheme = "scan",
+    default_port = 4020,
+    timeout = 10.0,
+    log_clean = false,
+    retransmits = 2,
+    cache_expire = 7200, -- expire redis in one hour
+    message = '${SCANNER}: threat found with icap scanner: "${VIRUS}"',
+    detection_category = "virus",
+    default_score = 1,
+    action = false,
+  }
+
+  icap_conf = lua_util.override_defaults(icap_conf, opts)
+
+  if not icap_conf.prefix then
+    icap_conf.prefix = 'rs_' .. icap_conf.name .. '_'
+  end
+
+  if not icap_conf.log_prefix then
+    icap_conf.log_prefix = icap_conf.name .. ' (' .. icap_conf.type .. ')'
+  end
+
+  if not icap_conf.log_prefix then
+    if icap_conf.name:lower() == icap_conf.type:lower() then
+      icap_conf.log_prefix = icap_conf.name
+    else
+      icap_conf.log_prefix = icap_conf.name .. ' (' .. icap_conf.type .. ')'
+    end
+  end
+
+  if not icap_conf.servers then
+    rspamd_logger.errx(rspamd_config, 'no servers defined')
+
+    return nil
+  end
+
+  icap_conf.upstreams = upstream_list.create(rspamd_config,
+    icap_conf.servers,
+    icap_conf.default_port)
+
+  if icap_conf.upstreams then
+    lua_util.add_debug_alias('external_services', icap_conf.module_name)
+    return icap_conf
+  end
+
+  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
+    icap_conf.servers)
+  return nil
+end
+
+return {
+  type = {module_name,'virus', 'virus', 'scanner'},
+  description = 'generic icap antivirus',
+  configure = icap_config,
+  check = icap_check,
+  name = module_name
+}
