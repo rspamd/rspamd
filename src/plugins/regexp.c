@@ -223,7 +223,7 @@ regexp_module_config (struct rspamd_config *cfg)
 					cur_item->symbol = ucl_object_key (value);
 					cur_item->magic = rspamd_regexp_cb_magic;
 					ud.cfg = cfg;
-					ud.conf_obj = elt;
+					ud.conf_obj = value;
 
 					if (!read_regexp_expression (cfg->cfg_pool,
 							cur_item, ucl_object_key (value),

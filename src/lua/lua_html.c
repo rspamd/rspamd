@@ -315,6 +315,7 @@ lua_html_push_image (lua_State *L, struct html_image *img)
 	lua_settable (L, -3);
 	lua_pushstring (L, "embedded");
 	lua_pushboolean (L, img->flags & RSPAMD_HTML_FLAG_IMAGE_EMBEDDED);
+	lua_settable (L, -3);
 	lua_pushstring (L, "data");
 	lua_pushboolean (L, img->flags & RSPAMD_HTML_FLAG_IMAGE_DATA);
 	lua_settable (L, -3);

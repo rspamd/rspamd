@@ -640,7 +640,7 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 {
 	rspamd_expression_atom_t *a = NULL;
 	struct rspamd_mime_atom *mime_atom = NULL;
-	const gchar *p, *end;
+	const gchar *p, *end, *c = NULL;
 	struct rspamd_mime_expr_ud *real_ud = (struct rspamd_mime_expr_ud *)ud;
 	struct rspamd_config *cfg;
 	rspamd_regexp_t *own_re;
@@ -656,6 +656,7 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 		in_flags_brace,
 		got_obrace,
 		in_function,
+		in_local_function,
 		got_ebrace,
 		end_atom,
 		bad_atom
@@ -682,9 +683,8 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 				if (t == ':') {
 					if (p - line == 3 && memcmp (line, "lua", 3) == 0) {
 						type = MIME_ATOM_LOCAL_LUA_FUNCTION;
-						state = end_atom;
-						p ++;
-						continue;
+						state = in_local_function;
+						c = p + 1;
 					}
 				}
 				else {
@@ -759,6 +759,15 @@ rspamd_mime_expr_parse (const gchar *line, gsize len,
 			}
 			p ++;
 			break;
+		case in_local_function:
+			if (!(g_ascii_isalnum (t) || t == '-' || t == '_')) {
+				g_assert (c != NULL);
+				state = end_atom;
+			}
+			else {
+				p++;
+			}
+			break;
 		case got_ebrace:
 			state = end_atom;
 			break;
@@ -783,15 +792,8 @@ set:
 
 	mime_atom = rspamd_mempool_alloc (pool, sizeof (*mime_atom));
 	mime_atom->type = type;
-
-	if (type != MIME_ATOM_LOCAL_LUA_FUNCTION) {
-		mime_atom->str = rspamd_mempool_alloc (pool, p - line + 1);
-		rspamd_strlcpy (mime_atom->str, line, p - line + 1);
-	}
-	else {
-		mime_atom->str = rspamd_mempool_alloc (pool, end - p + 1);
-		rspamd_strlcpy (mime_atom->str, p, end - p + 1);
-	}
+	mime_atom->str = rspamd_mempool_alloc (pool, p - line + 1);
+	rspamd_strlcpy (mime_atom->str, line, p - line + 1);
 
 	if (type == MIME_ATOM_REGEXP) {
 		mime_atom->d.re = rspamd_mime_expr_parse_regexp_atom (pool,
@@ -905,20 +907,20 @@ set:
 
 		const ucl_object_t *function_obj;
 
-		function_obj = ucl_object_lookup_len (functions, p,
-				end - p);
+		function_obj = ucl_object_lookup_len (functions, c,
+				p - c);
 
 		if (function_obj == NULL) {
 			g_set_error (err, rspamd_mime_expr_quark(), 320,
 					"function %*.s is not found for '%s'",
-					(int)(end - p), p, mime_atom->str);
+					(int)(p - c), c, mime_atom->str);
 			goto err;
 		}
 
 		if (ucl_object_type (function_obj) != UCL_USERDATA) {
 			g_set_error (err, rspamd_mime_expr_quark(), 320,
 					"function %*.s has invalid type for '%s'",
-					(int)(end - p), p, mime_atom->str);
+					(int)(p - c), c, mime_atom->str);
 			goto err;
 		}
 
@@ -1111,15 +1113,24 @@ rspamd_mime_expr_process (struct rspamd_expr_process_data *process_data, rspamd_
 		}
 	}
 	else if (mime_atom->type == MIME_ATOM_LOCAL_LUA_FUNCTION) {
+		gint err_idx;
+		GString *tb;
+
 		L = task->cfg->lua_state;
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		err_idx = lua_gettop (L);
+
 		lua_rawgeti (L, LUA_REGISTRYINDEX, mime_atom->d.lua_cbref);
 		rspamd_lua_task_push (L, task);
 
-		if (lua_pcall (L, 1, 1, 0) != 0) {
-			msg_info_task ("lua call to local function for atom '%s' failed: %s",
+		if (lua_pcall (L, 1, 1, err_idx) != 0) {
+			tb = lua_touserdata (L, -1);
+			msg_info_task ("lua call to local function for atom '%s' failed: %v",
 					mime_atom->str,
-					lua_tostring (L, -1));
-			lua_pop (L, 1);
+					tb);
+			if (tb) {
+				g_string_free (tb, TRUE);
+			}
 		}
 		else {
 			if (lua_type (L, -1) == LUA_TBOOLEAN) {
@@ -1132,9 +1143,9 @@ rspamd_mime_expr_process (struct rspamd_expr_process_data *process_data, rspamd_
 				msg_err_task ("%s returned wrong return type: %s",
 						mime_atom->str, lua_typename (L, lua_type (L, -1)));
 			}
-			/* Remove result */
-			lua_pop (L, 1);
 		}
+
+		lua_settop (L, 0);
 	}
 	else {
 		ret = rspamd_mime_expr_process_function (mime_atom->d.func, task,
