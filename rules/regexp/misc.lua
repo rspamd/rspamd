@@ -67,9 +67,26 @@ local wallet_word = [[/^wallet$/i{words}]]
 local broken_unicode = [[has_flag(bad_unicode)]]
 
 reconf['LEAKED_PASSWORD_SCAM'] = {
-  re = string.format('%s & (%s | %s | %s)',
+  re = string.format('%s & (%s | %s | %s | lua:check_data_images)',
       btc_wallet_address, password_in_words, wallet_word, broken_unicode),
   description = 'Contains password word and BTC wallet address',
+  functions = {
+    check_data_images = function(task)
+      local tp = task:get_text_parts() or {}
+
+      for _,p in ipairs(tp) do
+        if p:is_html() then
+          local hc = p:get_html()
+
+          if hc and hc:has_property('data_urls') then
+            return true
+          end
+        end
+      end
+
+      return false
+    end
+  },
   score = 7.0,
   group = 'scams'
 }
