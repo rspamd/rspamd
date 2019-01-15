@@ -24,6 +24,7 @@
  */
 #define RSPAMD_HTML_FLAG_IMAGE_EMBEDDED (1 << 0)
 #define RSPAMD_HTML_FLAG_IMAGE_EXTERNAL (1 << 1)
+#define RSPAMD_HTML_FLAG_IMAGE_DATA (1 << 2)
 
 enum html_component_type {
 	RSPAMD_HTML_COMPONENT_NAME = 0,
@@ -43,12 +44,16 @@ struct html_tag_component {
 	const guchar *start;
 };
 
+
+struct rspamd_image;
+
 struct html_image {
 	guint height;
 	guint width;
 	guint flags;
 	gchar *src;
 	struct rspamd_url *url;
+	struct rspamd_image *embedded_image;
 	struct html_tag *tag;
 };
 
