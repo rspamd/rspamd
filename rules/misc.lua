@@ -198,7 +198,7 @@ local check_rcvd = rspamd_config:register_symbol{
   group = 'headers',
   callback = function (task)
     local rcvds = task:get_received_headers()
-    if not rcvds then return false end
+    if not rcvds or #rcvds == 0 then return false end
 
     local all_tls = fun.all(function(rc)
       return rc.flags and rc.flags['ssl']
