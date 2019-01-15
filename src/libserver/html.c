@@ -23,6 +23,7 @@
 #include "html_entities.h"
 #include "url.h"
 #include "contrib/libucl/khash.h"
+#include "libmime/images.h"
 
 #include <unicode/uversion.h>
 #include <unicode/ucnv.h>
@@ -1483,6 +1484,58 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 }
 
 static void
+rspamd_html_process_data_image (rspamd_mempool_t *pool,
+								struct html_image *img,
+								struct html_tag_component *src)
+{
+	/*
+	 * Here, we do very basic processing of the data:
+	 * detect if we have something like: `data:image/xxx;base64,yyyzzz==`
+	 * We only parse base64 encoded data.
+	 * We ignore content type so far
+	 */
+	struct rspamd_image *parsed_image;
+	const gchar *semicolon_pos = NULL, *end = src->start + src->len;
+
+	semicolon_pos = src->start;
+
+	while ((semicolon_pos = memchr (semicolon_pos, ';', end - semicolon_pos)) != NULL) {
+		if (end - semicolon_pos > sizeof ("base64,")) {
+			if (memcmp (semicolon_pos + 1, "base64,", sizeof ("base64,") - 1) == 0) {
+				const gchar *data_pos = semicolon_pos + sizeof ("base64,");
+				gchar *decoded;
+				gsize encoded_len = end - data_pos, decoded_len;
+				rspamd_ftok_t inp;
+
+				decoded_len = (encoded_len / 4 * 3) + 12;
+				decoded = rspamd_mempool_alloc (pool, decoded_len);
+				rspamd_cryptobox_base64_decode (data_pos, encoded_len,
+						decoded, &decoded_len);
+				inp.begin = decoded;
+				inp.len = decoded_len;
+
+				parsed_image = rspamd_maybe_process_image (pool, &inp);
+
+				if (parsed_image) {
+					msg_debug_html ("detected %s image of size %ud x %ud in data url",
+							rspamd_image_type_str (parsed_image->type),
+							parsed_image->width, parsed_image->height);
+					img->embedded_image = parsed_image;
+				}
+			}
+
+			break;
+		}
+		else {
+			/* Nothing useful */
+			return;
+		}
+
+		semicolon_pos ++;
+	}
+}
+
+static void
 rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		struct html_content *hc)
 {
@@ -1517,7 +1570,7 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				/* We have an embedded image in HTML tag */
 				img->flags |=
 						(RSPAMD_HTML_FLAG_IMAGE_EMBEDDED|RSPAMD_HTML_FLAG_IMAGE_DATA);
-
+				rspamd_html_process_data_image (pool, img, comp);
 			}
 			else {
 				img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
@@ -1591,6 +1644,15 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		hc->images = g_ptr_array_sized_new (4);
 		rspamd_mempool_add_destructor (pool, rspamd_ptr_array_free_hard,
 				hc->images);
+	}
+
+	if (img->embedded_image) {
+		if (!seen_height) {
+			img->height = img->embedded_image->height;
+		}
+		if (!seen_width) {
+			img->width = img->embedded_image->width;
+		}
 	}
 
 	g_ptr_array_add (hc->images, img);
