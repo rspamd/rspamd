@@ -148,15 +148,9 @@ local function kaspersky_check(task, content, digest, rule)
         local cached
         lua_util.debugm(rule.module_name, task, '%s [%s]: got reply: %s',
             rule['symbol'], rule['type'], data)
-        if data == 'stream: OK' then
+        if data == 'stream: OK' or data == fname .. ': OK' then
           cached = 'OK'
-          if rule['log_clean'] then
-            rspamd_logger.infox(task, '%s [%s]: message or mime_part is clean',
-                rule['symbol'], rule['type'])
-          else
-            lua_util.debugm(rule.module_name, task, '%s [%s]: message or mime_part is clean',
-                rule['symbol'], rule['type'])
-          end
+          common.log_clean(task, rule)
         else
           local vname = string.match(data, ': (.+) FOUND')
           if vname then
