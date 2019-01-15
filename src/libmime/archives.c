@@ -1757,9 +1757,19 @@ rspamd_archive_process_gzip (struct rspamd_task *task,
 				const gchar *fname_start = part->cd->filename.begin;
 
 				f = g_malloc0 (sizeof (*f));
-				f->fname = g_string_sized_new (dot_pos - slash_pos);
-				g_string_append_len (f->fname, fname_start,
-						dot_pos - fname_start);
+
+				if (memchr (fname_start, '.', part->cd->filename.len) != dot_pos) {
+					/* Double dots, something like foo.exe.gz */
+					f->fname = g_string_sized_new (dot_pos - fname_start);
+					g_string_append_len (f->fname, fname_start,
+							dot_pos - fname_start);
+				}
+				else {
+					/* Single dot, something like foo.gzz */
+					f->fname = g_string_sized_new (part->cd->filename.len);
+					g_string_append_len (f->fname, fname_start,
+							part->cd->filename.len);
+				}
 
 				msg_debug_archive ("fallback to gzip filename based on cd: %v",
 						f->fname);
