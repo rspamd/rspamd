@@ -1571,6 +1571,7 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				img->flags |=
 						(RSPAMD_HTML_FLAG_IMAGE_EMBEDDED|RSPAMD_HTML_FLAG_IMAGE_DATA);
 				rspamd_html_process_data_image (pool, img, comp);
+				hc->flags |= RSPAMD_HTML_FLAG_HAS_DATA_URLS;
 			}
 			else {
 				img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
