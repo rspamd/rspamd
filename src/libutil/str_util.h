@@ -439,4 +439,6 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
  */
 gchar * rspamd_str_make_utf_valid (const gchar *src, gsize slen, gsize *dstlen);
 
+#define IS_ZERO_WIDTH_SPACE(uc) ((uc) == 0x200b || (uc) == 0x200c)
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */
