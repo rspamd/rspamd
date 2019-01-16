@@ -25,13 +25,13 @@ local upstream_list = require "rspamd_upstream_list"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
 
-local module_name = "sophos"
+local N = "sophos"
 
 local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
 local function sophos_config(opts)
   local sophos_conf = {
-    module_name = module_name,
+    N = N,
     scan_mime_parts = true,
     scan_text_mime = false,
     scan_image_mime = false,
@@ -71,7 +71,7 @@ local function sophos_config(opts)
       sophos_conf.default_port)
 
   if sophos_conf['upstreams'] then
-    lua_util.add_debug_alias('antivirus', sophos_conf.module_name)
+    lua_util.add_debug_alias('antivirus', sophos_conf.N)
     return sophos_conf
   end
 
@@ -104,7 +104,7 @@ local function sophos_check(task, content, digest, rule)
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(rule.module_name, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
+          lua_util.debugm(rule.N, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
 
           tcp.request({
             task = task,
@@ -121,7 +121,7 @@ local function sophos_check(task, content, digest, rule)
       else
         upstream:ok()
         data = tostring(data)
-        lua_util.debugm(rule.module_name, task, '%s [%s]: got reply: %s', rule['symbol'], rule['type'], data)
+        lua_util.debugm(rule.N, task, '%s [%s]: got reply: %s', rule['symbol'], rule['type'], data)
         local vname = string.match(data, 'VIRUS (%S+) ')
         if vname then
           common.yield_result(task, rule, vname)
@@ -131,7 +131,7 @@ local function sophos_check(task, content, digest, rule)
             if rule['log_clean'] then
               rspamd_logger.infox(task, '%s: message or mime_part is clean', rule.log_prefix)
             else
-              lua_util.debugm(rule.module_name, task, '%s: message or mime_part is clean', rule.log_prefix)
+              lua_util.debugm(rule.N, task, '%s: message or mime_part is clean', rule.log_prefix)
             end
             common.save_av_cache(task, digest, rule, 'OK')
             -- not finished - continue
@@ -191,5 +191,5 @@ return {
   description = 'sophos antivirus',
   configure = sophos_config,
   check = sophos_check,
-  name = module_name
+  name = N
 }

@@ -25,13 +25,13 @@ local upstream_list = require "rspamd_upstream_list"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
 
-local module_name = "fprot"
+local N = "fprot"
 
 local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
 local function fprot_config(opts)
   local fprot_conf = {
-    module_name = module_name,
+    N = N,
     scan_mime_parts = true,
     scan_text_mime = false,
     scan_image_mime = false,
@@ -69,7 +69,7 @@ local function fprot_config(opts)
       fprot_conf.default_port)
 
   if fprot_conf['upstreams'] then
-    lua_util.add_debug_alias('antivirus', fprot_conf.module_name)
+    lua_util.add_debug_alias('antivirus', fprot_conf.N)
     return fprot_conf
   end
 
@@ -103,7 +103,7 @@ local function fprot_check(task, content, digest, rule)
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(rule.module_name, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
+          lua_util.debugm(rule.N, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
 
           tcp.request({
             task = task,
@@ -175,5 +175,5 @@ return {
   description = 'fprot antivirus',
   configure = fprot_config,
   check = fprot_check,
-  name = module_name
+  name = N
 }

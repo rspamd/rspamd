@@ -28,7 +28,7 @@ local rspamd_logger = require "rspamd_logger"
 local ucl = require "ucl"
 local common = require "lua_scanners/common"
 
-local module_name = 'oletools'
+local N = 'oletools'
 
 local function oletools_check(task, content, digest, rule)
   local function oletools_check_uncached ()
@@ -48,14 +48,14 @@ local function oletools_check(task, content, digest, rule)
 
           retransmits = retransmits - 1
 
-          lua_util.debugm(rule.module_name, task, '%s: Request Error: %s - retries left: %s',
+          lua_util.debugm(rule.N, task, '%s: Request Error: %s - retries left: %s',
             rule.log_prefix, error, retransmits)
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(rule.module_name, task, '%s: retry IP: %s:%s',
+          lua_util.debugm(rule.N, task, '%s: retry IP: %s:%s',
             rule.log_prefix, addr, addr:get_port())
 
           tcp.request({
@@ -146,18 +146,18 @@ local function oletools_check(task, content, digest, rule)
           local m_dridex = '-'
           local m_vba = '-'
 
-          lua_util.debugm(rule.module_name, task, '%s: filename: %s', rule.log_prefix, result[2]['file'])
-          lua_util.debugm(rule.module_name, task, '%s: type: %s', rule.log_prefix, result[2]['type'])
+          lua_util.debugm(rule.N, task, '%s: filename: %s', rule.log_prefix, result[2]['file'])
+          lua_util.debugm(rule.N, task, '%s: type: %s', rule.log_prefix, result[2]['type'])
 
           for _,m in ipairs(result[2]['macros']) do
-            lua_util.debugm(rule.module_name, task, '%s: macros found - code: %s, ole_stream: %s, '..
+            lua_util.debugm(rule.N, task, '%s: macros found - code: %s, ole_stream: %s, '..
               'vba_filename: %s', rule.log_prefix, m.code, m.ole_stream, m.vba_filename)
           end
 
           local analysis_keyword_table = {}
 
           for _,a in ipairs(result[2]['analysis']) do
-            lua_util.debugm(rule.module_name, task, '%s: threat found - type: %s, keyword: %s, '..
+            lua_util.debugm(rule.N, task, '%s: threat found - type: %s, keyword: %s, '..
               'description: %s', rule.log_prefix, a.type, a.keyword, a.description)
             if a.type == 'AutoExec' then
               m_autoexec = 'A'
@@ -186,7 +186,7 @@ local function oletools_check(task, content, digest, rule)
           if rule.extended == false and m_autoexec == 'A' and m_suspicious == 'S' then
             -- use single string as virus name
             local threat = 'AutoExec + Suspicious (' .. table.concat(analysis_keyword_table, ',') .. ')'
-            lua_util.debugm(rule.module_name, task, '%s: threat result: %s', rule.log_prefix, threat)
+            lua_util.debugm(rule.N, task, '%s: threat result: %s', rule.log_prefix, threat)
             common.yield_result(task, rule, threat, rule.default_score)
             common.save_av_cache(task, digest, rule, threat, rule.default_score)
 
@@ -203,7 +203,7 @@ local function oletools_check(task, content, digest, rule)
                           m_vba
             table.insert(analysis_keyword_table, 1, flags)
 
-            lua_util.debugm(rule.module_name, task, '%s: extended threat result: %s',
+            lua_util.debugm(rule.N, task, '%s: extended threat result: %s',
               rule.log_prefix, table.concat(analysis_keyword_table, ','))
 
             common.yield_result(task, rule, analysis_keyword_table, rule.default_score)
@@ -243,7 +243,7 @@ end
 local function oletools_config(opts)
 
   local oletools_conf = {
-    module_name = module_name,
+    N = N,
     scan_mime_parts = false,
     scan_text_mime = false,
     scan_image_mime = false,
@@ -284,7 +284,7 @@ local function oletools_config(opts)
     oletools_conf.default_port)
 
   if oletools_conf.upstreams then
-    lua_util.add_debug_alias('external_services', oletools_conf.module_name)
+    lua_util.add_debug_alias('external_services', oletools_conf.N)
     return oletools_conf
   end
 
@@ -294,9 +294,9 @@ local function oletools_config(opts)
 end
 
 return {
-  type = {module_name,'attachment scanner', 'hash', 'scanner'},
+  type = {N,'attachment scanner', 'hash', 'scanner'},
   description = 'oletools office macro scanner',
   configure = oletools_config,
   check = oletools_check,
-  name = module_name
+  name = N
 }

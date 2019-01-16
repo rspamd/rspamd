@@ -26,13 +26,13 @@ local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
 
-local module_name = "savapi"
+local N = "savapi"
 
 local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
 local function savapi_config(opts)
   local savapi_conf = {
-    module_name = module_name,
+    N = N,
     scan_mime_parts = true,
     scan_text_mime = false,
     scan_image_mime = false,
@@ -72,7 +72,7 @@ local function savapi_config(opts)
       savapi_conf.default_port)
 
   if savapi_conf['upstreams'] then
-    lua_util.add_debug_alias('antivirus', savapi_conf.module_name)
+    lua_util.add_debug_alias('antivirus', savapi_conf.N)
     return savapi_conf
   end
 
@@ -119,7 +119,7 @@ local function savapi_check(task, content, digest, rule)
       for virus,_ in pairs(vnames) do
         table.insert(vnames_reordered, virus)
       end
-      lua_util.debugm(rule.module_name, task, "%s: number of virus names found %s", rule['type'], #vnames_reordered)
+      lua_util.debugm(rule.N, task, "%s: number of virus names found %s", rule['type'], #vnames_reordered)
       if #vnames_reordered > 0 then
         local vname = {}
         for _,virus in ipairs(vnames_reordered) do
@@ -136,7 +136,7 @@ local function savapi_check(task, content, digest, rule)
 
     local function savapi_scan2_cb(err, data, conn)
       local result = tostring(data)
-      lua_util.debugm(rule.module_name, task, "%s: got reply: %s",
+      lua_util.debugm(rule.N, task, "%s: got reply: %s",
           rule['type'], result)
 
       -- Terminal response - clean
@@ -178,7 +178,7 @@ local function savapi_check(task, content, digest, rule)
     local function savapi_greet2_cb(err, data, conn)
       local result = tostring(data)
       if string.find(result, '100 PRODUCT') then
-        lua_util.debugm(rule.module_name, task, "%s: scanning file: %s",
+        lua_util.debugm(rule.N, task, "%s: scanning file: %s",
             rule['type'], fname)
         conn:add_write(savapi_scan1_cb, {string.format('SCAN %s\n',
             fname)})
@@ -208,7 +208,7 @@ local function savapi_check(task, content, digest, rule)
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(rule.module_name, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
+          lua_util.debugm(rule.N, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
 
           tcp.request({
             task = task,
@@ -257,5 +257,5 @@ return {
   description = 'savapi avira antivirus',
   configure = savapi_config,
   check = savapi_check,
-  name = module_name
+  name = N
 }

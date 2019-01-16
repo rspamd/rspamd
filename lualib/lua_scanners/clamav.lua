@@ -26,13 +26,13 @@ local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
 
-local module_name = "clamav"
+local N = "clamav"
 
 local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
 local function clamav_config(opts)
   local clamav_conf = {
-    module_name = module_name,
+    N = N,
     scan_mime_parts = true,
     scan_text_mime = false,
     scan_image_mime = false,
@@ -70,7 +70,7 @@ local function clamav_config(opts)
       clamav_conf.default_port)
 
   if clamav_conf['upstreams'] then
-    lua_util.add_debug_alias('antivirus', clamav_conf.module_name)
+    lua_util.add_debug_alias('antivirus', clamav_conf.N)
     return clamav_conf
   end
 
@@ -103,7 +103,7 @@ local function clamav_check(task, content, digest, rule)
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(rule.module_name, task, '%s: retry IP: %s', rule.log_prefix, addr)
+          lua_util.debugm(rule.N, task, '%s: retry IP: %s', rule.log_prefix, addr)
 
           tcp.request({
             task = task,
@@ -123,13 +123,13 @@ local function clamav_check(task, content, digest, rule)
         upstream:ok()
         data = tostring(data)
         local cached
-        lua_util.debugm(rule.module_name, task, '%s: got reply: %s', rule.log_prefix, data)
+        lua_util.debugm(rule.N, task, '%s: got reply: %s', rule.log_prefix, data)
         if data == 'stream: OK' then
           cached = 'OK'
           if rule['log_clean'] then
             rspamd_logger.infox(task, '%s: message or mime_part is clean', rule.log_prefix)
           else
-            lua_util.debugm(rule.module_name, task, '%s: message or mime_part is clean', rule.log_prefix)
+            lua_util.debugm(rule.N, task, '%s: message or mime_part is clean', rule.log_prefix)
           end
         else
           local vname = string.match(data, 'stream: (.+) FOUND')
@@ -172,5 +172,5 @@ return {
   description = 'clamav antivirus',
   configure = clamav_config,
   check = clamav_check,
-  name = module_name
+  name = N
 }

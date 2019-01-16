@@ -26,13 +26,13 @@ local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
 
-local module_name = "kaspersky"
+local N = "kaspersky"
 
 local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
 local function kaspersky_config(opts)
   local kaspersky_conf = {
-    module_name = module_name,
+    N = N,
     scan_mime_parts = true,
     scan_text_mime = false,
     scan_image_mime = false,
@@ -70,7 +70,7 @@ local function kaspersky_config(opts)
       kaspersky_conf['servers'], 0)
 
   if kaspersky_conf['upstreams'] then
-    lua_util.add_debug_alias('antivirus', kaspersky_conf.module_name)
+    lua_util.add_debug_alias('antivirus', kaspersky_conf.N)
     return kaspersky_conf
   end
 
@@ -122,7 +122,7 @@ local function kaspersky_check(task, content, digest, rule)
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(rule.module_name, task,
+          lua_util.debugm(rule.N, task,
               '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
 
           tcp.request({
@@ -146,7 +146,7 @@ local function kaspersky_check(task, content, digest, rule)
         upstream:ok()
         data = tostring(data)
         local cached
-        lua_util.debugm(rule.module_name, task, '%s [%s]: got reply: %s',
+        lua_util.debugm(rule.N, task, '%s [%s]: got reply: %s',
             rule['symbol'], rule['type'], data)
         if data == 'stream: OK' or data == fname .. ': OK' then
           cached = 'OK'
@@ -192,5 +192,5 @@ return {
   description = 'kaspersky antivirus',
   configure = kaspersky_config,
   check = kaspersky_check,
-  name = module_name
+  name = N
 }

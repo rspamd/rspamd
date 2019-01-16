@@ -27,7 +27,7 @@ local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
 local fun = require "fun"
 
-local module_name = 'dcc'
+local N = 'dcc'
 
 local function dcc_check(task, content, digest, rule)
   local function dcc_check_uncached ()
@@ -90,14 +90,14 @@ local function dcc_check(task, content, digest, rule)
 
           retransmits = retransmits - 1
 
-          lua_util.debugm(rule.module_name, task, '%s: Request Error: %s - retries left: %s',
+          lua_util.debugm(rule.N, task, '%s: Request Error: %s - retries left: %s',
             rule.log_prefix, err, retransmits)
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(rule.module_name, task, '%s: retry IP: %s:%s',
+          lua_util.debugm(rule.N, task, '%s: retry IP: %s:%s',
             rule.log_prefix, addr, addr:get_port())
 
           tcp.request({
@@ -128,7 +128,7 @@ local function dcc_check(task, content, digest, rule)
         -- Parse the response
         if upstream then upstream:ok() end
         local _,_,result,disposition,header = tostring(data):find("(.-)\n(.-)\n(.-)\n")
-        lua_util.debugm(rule.module_name, task, 'DCC result=%1 disposition=%2 header="%3"',
+        lua_util.debugm(rule.N, task, 'DCC result=%1 disposition=%2 header="%3"',
             result, disposition, header)
 
         if header then
@@ -198,7 +198,7 @@ local function dcc_check(task, content, digest, rule)
                   rspamd_logger.infox(task, '%s: clean, returned result A - info: %s',
                       rule.log_prefix, info)
                 else
-                  lua_util.debugm(rule.module_name, task, '%s: returned result A - info: %s',
+                  lua_util.debugm(rule.N, task, '%s: returned result A - info: %s',
                       rule.log_prefix, info)
               end
             end
@@ -208,7 +208,7 @@ local function dcc_check(task, content, digest, rule)
             if rule.log_clean then
               rspamd_logger.infox(task, '%s: clean, returned result G - info: %s', rule.log_prefix, info)
             else
-              lua_util.debugm(rule.module_name, task, '%s: returned result G - info: %s', rule.log_prefix, info)
+              lua_util.debugm(rule.N, task, '%s: returned result G - info: %s', rule.log_prefix, info)
             end
           elseif result == 'S' then
             -- do nothing
@@ -216,7 +216,7 @@ local function dcc_check(task, content, digest, rule)
             if rule.log_clean then
               rspamd_logger.infox(task, '%s: clean, returned result S - info: %s', rule.log_prefix, info)
             else
-              lua_util.debugm(rule.module_name, task, '%s: returned result S - info: %s', rule.log_prefix, info)
+              lua_util.debugm(rule.N, task, '%s: returned result S - info: %s', rule.log_prefix, info)
             end
           else
             -- Unknown result
@@ -254,7 +254,7 @@ end
 local function dcc_config(opts)
 
   local dcc_conf = {
-    module_name = module_name,
+    N = N,
     default_port = 10045,
     timeout = 5.0,
     log_clean = false,
@@ -302,7 +302,7 @@ local function dcc_config(opts)
       dcc_conf.default_port)
 
   if dcc_conf.upstreams then
-    lua_util.add_debug_alias('external_services', dcc_conf.module_name)
+    lua_util.add_debug_alias('external_services', dcc_conf.N)
     return dcc_conf
   end
 
@@ -316,5 +316,5 @@ return {
   description = 'dcc bulk scanner',
   configure = dcc_config,
   check = dcc_check,
-  name = module_name
+  name = N
 }
