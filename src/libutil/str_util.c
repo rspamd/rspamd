@@ -1931,7 +1931,7 @@ rspamd_decode_qp_buf (const gchar *in, gsize inlen,
 	gchar *o, *end, *pos, c;
 	const gchar *p;
 	guchar ret;
-	gsize remain, processed;
+	gssize remain, processed;
 
 	p = in;
 	o = out;
@@ -1963,6 +1963,14 @@ decode:
 				while (remain > 0 && (*p == '\r' || *p == '\n')) {
 					remain --;
 					p ++;
+				}
+
+				continue;
+			}
+			else {
+				/* Hack, hack, hack, treat =<garbadge> as =<garbadge> */
+				if (remain > 0) {
+					*o++ = *(p - 1);
 				}
 
 				continue;
