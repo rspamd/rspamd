@@ -402,6 +402,14 @@ struct UConverter *rspamd_get_utf8_converter (void);
 struct UNormalizer2;
 const struct UNormalizer2 *rspamd_get_unicode_normalizer (void);
 
+enum rspamd_normalise_result {
+	RSPAMD_UNICODE_NORM_NORMAL = 0,
+	RSPAMD_UNICODE_NORM_UNNORMAL = (1 << 0),
+	RSPAMD_UNICODE_NORM_ZERO_SPACES = (1 << 1),
+	RSPAMD_UNICODE_NORM_ERROR = (1 << 2),
+	RSPAMD_UNICODE_NORM_OVERFLOW = (1 << 3)
+};
+
 /**
  * Gets a string in UTF8 and normalises it to NFKC_Casefold form
  * @param pool optional memory pool used for logging purposes
@@ -409,7 +417,7 @@ const struct UNormalizer2 *rspamd_get_unicode_normalizer (void);
  * @param len
  * @return TRUE if a string has been normalised
  */
-gboolean rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool,
+enum rspamd_normalise_result rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool,
 		gchar *start, guint *len);
 
 enum rspamd_regexp_escape_flags {

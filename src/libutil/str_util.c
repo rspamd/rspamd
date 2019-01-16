@@ -2420,7 +2420,7 @@ rspamd_get_unicode_normalizer (void)
 }
 
 
-gboolean
+enum rspamd_normalise_result
 rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
 		guint *len)
 {
@@ -2430,7 +2430,8 @@ rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
 	const UNormalizer2 *norm = rspamd_get_unicode_normalizer ();
 	gint32 nsym, end;
 	UChar *src = NULL, *dest = NULL;
-	gboolean ret = FALSE;
+	enum rspamd_normalise_result ret = 0;
+	gboolean has_invisible = FALSE;
 
 	/* We first need to convert data to UChars :( */
 	src = g_malloc ((*len + 1) * sizeof (*src));
@@ -2440,6 +2441,7 @@ rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
 	if (!U_SUCCESS (uc_err)) {
 		msg_warn_pool_check ("cannot normalise URL, cannot convert to unicode: %s",
 				u_errorName (uc_err));
+		ret |= RSPAMD_UNICODE_NORM_ERROR;
 		goto out;
 	}
 
@@ -2449,36 +2451,81 @@ rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
 	if (!U_SUCCESS (uc_err)) {
 		msg_warn_pool_check ("cannot normalise URL, cannot check normalisation: %s",
 				u_errorName (uc_err));
+		ret |= RSPAMD_UNICODE_NORM_ERROR;
 		goto out;
 	}
 
-	if (end == nsym) {
-		/* No normalisation needed */
-		goto out;
+	for (gint32 i = 0; i < nsym; i ++) {
+		if (IS_ZERO_WIDTH_SPACE (src[i])) {
+			has_invisible = TRUE;
+			break;
+		}
 	}
 
-	/* We copy sub(src, 0, end) to dest and normalise the rest */
-	ret = TRUE;
-	dest = g_malloc (nsym * sizeof (*dest));
-	memcpy (dest, src, end * sizeof (*dest));
-	nsym = unorm2_normalizeSecondAndAppend (norm, dest, end, nsym,
-			src + end, nsym - end, &uc_err);
+	uc_err = U_ZERO_ERROR;
 
-	if (!U_SUCCESS (uc_err)) {
-		if (uc_err != U_BUFFER_OVERFLOW_ERROR) {
-			msg_warn_pool_check ("cannot normalise URL: %s",
-					u_errorName (uc_err));
+	if (end != nsym) {
+		/* No normalisation needed, but we may still have invisible spaces */
+		/* We copy sub(src, 0, end) to dest and normalise the rest */
+		ret |= RSPAMD_UNICODE_NORM_UNNORMAL;
+		dest = g_malloc (nsym * sizeof (*dest));
+		memcpy (dest, src, end * sizeof (*dest));
+		nsym = unorm2_normalizeSecondAndAppend (norm, dest, end, nsym,
+				src + end, nsym - end, &uc_err);
+
+		if (!U_SUCCESS (uc_err)) {
+			if (uc_err != U_BUFFER_OVERFLOW_ERROR) {
+				msg_warn_pool_check ("cannot normalise URL: %s",
+						u_errorName (uc_err));
+				ret |= RSPAMD_UNICODE_NORM_ERROR;
+			}
+
+			goto out;
+		}
+	}
+	else if (!has_invisible) {
+		goto out;
+	}
+	else {
+		dest = src;
+		src = NULL;
+	}
+
+	if (has_invisible) {
+		/* Also filter zero width spaces */
+		gint32 new_len = 0;
+		UChar *t = dest, *h = dest;
+
+		ret |= RSPAMD_UNICODE_NORM_ZERO_SPACES;
+
+		for (gint32 i = 0; i < nsym; i ++) {
+			if (!IS_ZERO_WIDTH_SPACE (*h)) {
+				*t++ = *h++;
+				new_len ++;
+			}
+			else {
+				h ++;
+			}
 		}
 
-		goto out;
+		nsym = new_len;
 	}
 
 	/* We now convert it back to utf */
 	nsym = ucnv_fromUChars (utf8_conv, start, *len, dest, nsym, &uc_err);
 
 	if (!U_SUCCESS (uc_err)) {
-		msg_warn_pool_check ("cannot normalise URL, cannot convert to UTF8: %s",
-				u_errorName (uc_err));
+		msg_warn_pool_check ("cannot normalise URL, cannot convert to UTF8: %s"
+					   " input length: %d chars, unicode length: %d utf16 symbols",
+				u_errorName (uc_err), (gint)*len, (gint)nsym);
+
+		if (uc_err == U_BUFFER_OVERFLOW_ERROR) {
+			ret |= RSPAMD_UNICODE_NORM_OVERFLOW;
+		}
+		else {
+			ret |= RSPAMD_UNICODE_NORM_ERROR;
+		}
+
 		goto out;
 	}
 
