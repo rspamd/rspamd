@@ -34,6 +34,7 @@ local function icap_check(task, content, digest, rule)
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
+    local respond_headers = {}
 
     -- Build the icap queries
     local options_request = {
@@ -43,19 +44,27 @@ local function icap_check(task, content, digest, rule)
       "Encapsulated: null-body=0\r\n\r\n",
     }
     local size = string.format("%x", tonumber(#content))
-    local respond_request = {
-      "RESPMOD icap://" .. addr:to_string() .. ":" .. addr:get_port() .. "/" .. rule.scheme .. " ICAP/1.0\r\n",
-      "Encapsulated: res-body=0\r\n",
-      "\r\n",
-      size .. "\r\n",
-      content,
-      "\r\n0\r\n\r\n",
-    }
+    lua_util.debugm(rule.module_name, task, '%s: size: %s', rule.log_prefix, size)
+
+    local function get_respond_query()
+      table.insert(respond_headers, 1, 'RESPMOD icap://' .. addr:to_string() .. ':' .. addr:get_port() .. '/'
+        .. rule.scheme .. ' ICAP/1.0\r\n')
+      table.insert(respond_headers, 'Encapsulated: res-body=0\r\n')
+      table.insert(respond_headers, '\r\n')
+      table.insert(respond_headers, size .. '\r\n')
+      table.insert(respond_headers, content)
+      table.insert(respond_headers, '\r\n0\r\n\r\n')
+      return respond_headers
+    end
+
+    local function add_respond_header(name, value)
+      table.insert(respond_headers, name .. ': ' .. value .. '\r\n' )
+    end
 
     local function icap_result_header_table(result)
       local icap_headers = {}
       for s in result:gmatch("[^\r\n]+") do
-        if string.find(s, '^ICAP%/1%.. [1245]%d%d') then
+        if string.find(s, '^ICAP') then
           icap_headers['icap'] = s
         end
         if string.find(s, '[%a%d-+]-: ') then
@@ -92,7 +101,7 @@ local function icap_check(task, content, digest, rule)
         match = string.gsub(icap_headers['X-Infection-Found'], pattern_symbols, "%2")
         lua_util.debugm(rule.module_name, task, '%s: icap X-Infection-Found: %s', rule.log_prefix, match)
         table.insert(threat_string, match)
-      elseif icap_headers['X-Virus-ID'] then
+      elseif icap_headers['X-Virus-ID'] ~= nil then
         lua_util.debugm(rule.module_name, task, '%s: icap X-Virus-ID: %s', rule.log_prefix, icap_headers['X-Virus-ID'])
         table.insert(threat_string, icap_headers['X-Virus-ID'])
       end
@@ -114,21 +123,21 @@ local function icap_check(task, content, digest, rule)
       -- Find ICAP/1.x 2xx response
       if string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
         icap_parse_result(icap_headers)
-      -- Find ICAP/1.x 5/4xx response
-      --[[
-      Symantec String:
-        ICAP/1.0 539 Aborted - No AV scanning license
-      SquidClamAV/C-ICAP:
-        ICAP/1.0 500 Server error
-      ]]--
       elseif string.find(icap_headers.icap, 'ICAP%/1%.. [45]%d%d') then
+        -- Find ICAP/1.x 5/4xx response
+        --[[
+        Symantec String:
+          ICAP/1.0 539 Aborted - No AV scanning license
+        SquidClamAV/C-ICAP:
+          ICAP/1.0 500 Server error
+        ]]--
         rspamd_logger.errx(task, '%s: ICAP ERROR: %s', rule.log_prefix, icap_headers.icap)
         task:insert_result(rule.symbol_fail, 0.0, icap_headers.icap)
         return false
       else
         rspamd_logger.errx(task, '%s: unhandled response |%s|',
           rule.log_prefix, string.gsub(result, "\r\n", ", "))
-        task:insert_result(rule.symbol_fail, 0.0, 'unhandled icap response: %s', icap_headers.icap)
+        task:insert_result(rule.symbol_fail, 0.0, 'unhandled icap response: ' .. icap_headers.icap)
       end
     end
 
@@ -137,20 +146,29 @@ local function icap_check(task, content, digest, rule)
     end
 
     local function icap_r_options_cb(err, data, conn)
-      local result = tostring(data)
-      -- @Todo: add Allow: 204 recognition
-      if string.find(result, 'ICAP%/1%.0 200 OK.*RESPMOD') then
-        conn:add_write(icap_w_respond_cb, respond_request)
+      local icap_headers = icap_result_header_table(tostring(data))
+
+      if string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
+        if icap_headers['Methods'] ~= nil and string.find(icap_headers['Methods'], 'RESPMOD') then
+          if icap_headers['Allow'] ~= nil and string.find(icap_headers['Allow'], '204') then
+            add_respond_header('Allow', '204')
+          end
+          conn:add_write(icap_w_respond_cb, get_respond_query())
+        else
+          rspamd_logger.errx(task, '%s: RESPMOD method not advertised: Methods: %s',
+            rule.log_prefix, icap_headers['Methods'])
+          task:insert_result(rule.symbol_fail, 0.0, 'NO RESPMOD')
+        end
       else
-        rspamd_logger.errx(task, '%s: ERROR - non 2xx icap return code: %s',
-          rule.log_prefix, string.gsub(result, "\r\n", ""))
-        task:insert_result(rule.symbol_fail, 0.0, 'unhandled icap response')
+        rspamd_logger.errx(task, '%s: OPTIONS query failed: %s',
+          rule.log_prefix, icap_headers.icap)
+        task:insert_result(rule.symbol_fail, 0.0, 'OPTIONS query failed')
       end
     end
 
     local function icap_callback(err, conn)
 
-      local function icap_requery()
+      local function icap_requery(error)
         -- set current upstream to fail because an error occurred
         upstream:fail()
 
@@ -160,7 +178,7 @@ local function icap_check(task, content, digest, rule)
           retransmits = retransmits - 1
 
           lua_util.debugm(rule.module_name, task, '%s: Request Error: %s - retries left: %s',
-            rule.log_prefix, err, retransmits)
+            rule.log_prefix, error, retransmits)
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
@@ -181,14 +199,13 @@ local function icap_check(task, content, digest, rule)
           })
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
-            'exceed', rule.log_prefix)
-          task:insert_result(rule.symbol_fail, 0.0, 'failed to scan and '..
-            'retransmits exceed')
+            'exceed - err: %s', rule.log_prefix, error)
+          task:insert_result(rule.symbol_fail, 0.0, 'failed - err: ' .. error)
         end
       end
 
       if err then
-        icap_requery()
+        icap_requery(err)
       else
         -- set upstream ok
         if upstream then upstream:ok() end
