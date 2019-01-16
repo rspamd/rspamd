@@ -35,11 +35,11 @@ local function oletools_check(task, content, digest, rule)
     local upstream = rule.upstreams:get_upstream_round_robin()
     local addr = upstream:get_addr()
     local retransmits = rule.retransmits
-    local protocol = 'OLEFY/1.0\n'
+    local protocol = 'OLEFY/1.0\nMethod: oletools\nRspamd-ID: ' .. task:get_uid() .. '\n\n'
 
-    local function oletools_callback(err, data, conn)
+    local function oletools_callback(err, data)
 
-      local function oletools_requery()
+      local function oletools_requery(error)
         -- set current upstream to fail because an error occurred
         upstream:fail()
 
@@ -49,7 +49,7 @@ local function oletools_check(task, content, digest, rule)
           retransmits = retransmits - 1
 
           lua_util.debugm(rule.module_name, task, '%s: Request Error: %s - retries left: %s',
-            rule.log_prefix, err, retransmits)
+            rule.log_prefix, error, retransmits)
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
@@ -69,15 +69,14 @@ local function oletools_check(task, content, digest, rule)
           })
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
-            'exceed', rule.log_prefix)
-          task:insert_result(rule.symbol_fail, 0.0, 'failed to scan and '..
-            'retransmits exceed')
+            'exceed - err: %s', rule.log_prefix, error)
+          task:insert_result(rule.symbol_fail, 0.0, 'failed - err: ' .. error)
         end
       end
 
       if err then
 
-        oletools_requery()
+        oletools_requery(err)
 
       else
         -- Parse the response
@@ -115,21 +114,37 @@ local function oletools_check(task, content, digest, rule)
               common.save_av_cache(task, digest, rule, 'OK')
               common.log_clean(task, rule, 'File too small to be scanned for macros')
             else
-              oletools_requery()
+              oletools_requery(result[1].error)
             end
         elseif result[3]['return_code'] == 9 then
           rspamd_logger.warnx(task, '%s: File is encrypted.', rule.log_prefix)
         elseif result[3]['return_code'] > 6 then
           rspamd_logger.errx(task, '%s: Error Returned: %s',
             rule.log_prefix, oletools_rc[result[3]['return_code']])
+          rspamd_logger.errx(task, '%s: Error message: %s',
+            rule.log_prefix, result[2]['message'])
+          task:insert_result(rule.symbol_fail, 0.0, 'failed - err: ' .. oletools_rc[result[3]['return_code']])
         elseif result[3]['return_code'] > 1 then
-          rspamd_logger.errx(task, '%s: Error Returned: %s',
-            rule.log_prefix, oletools_rc[result[3]['return_code']])
-          oletools_requery()
+          rspamd_logger.errx(task, '%s: Error message: %s',
+            rule.log_prefix, result[2]['message'])
+          oletools_requery(oletools_rc[result[3]['return_code']])
+        elseif #result[2]['analysis'] == 0 and #result[2]['macros'] == 0 then
+          rspamd_logger.warnx(task, '%s: maybe unhandled python or oletools error', rule.log_prefix)
+          task:insert_result(rule.symbol_fail, 0.0, 'oletools unhandled error')
         elseif result[2]['analysis'] == 'null' and #result[2]['macros'] == 0 then
           common.save_av_cache(task, digest, rule, 'OK')
           common.log_clean(task, rule, 'No macro found')
         elseif #result[2]['macros'] > 0 then
+          -- M=Macros, A=Auto-executable, S=Suspicious keywords, I=IOCs,
+          -- H=Hex strings, B=Base64 strings, D=Dridex strings, V=VBA strings
+          local m_exist = 'M'
+          local m_autoexec = '-'
+          local m_suspicious = '-'
+          local m_iocs = '-'
+          local m_hex = '-'
+          local m_base64 = '-'
+          local m_dridex = '-'
+          local m_vba = '-'
 
           lua_util.debugm(rule.module_name, task, '%s: filename: %s', rule.log_prefix, result[2]['file'])
           lua_util.debugm(rule.module_name, task, '%s: type: %s', rule.log_prefix, result[2]['type'])
@@ -139,53 +154,60 @@ local function oletools_check(task, content, digest, rule)
               'vba_filename: %s', rule.log_prefix, m.code, m.ole_stream, m.vba_filename)
           end
 
-          local macro_autoexec = false
-          local macro_suspicious = false
-          local macro_keyword_table = {}
+          local analysis_keyword_table = {}
 
           for _,a in ipairs(result[2]['analysis']) do
-            if a.type ~= 'AutoExec' or a.type ~= 'Suspicious' then
-              lua_util.debugm(rule.module_name, task, '%s: threat found - type: %s, keyword: %s, '..
-                'description: %s', rule.log_prefix, a.type, a.keyword, a.description)
-            end
+            lua_util.debugm(rule.module_name, task, '%s: threat found - type: %s, keyword: %s, '..
+              'description: %s', rule.log_prefix, a.type, a.keyword, a.description)
             if a.type == 'AutoExec' then
-              macro_autoexec = true
-              if rule.extended == true then
-                table.insert(macro_keyword_table, a.keyword)
+              m_autoexec = 'A'
+              table.insert(analysis_keyword_table, a.keyword)
+            elseif a.type == 'Suspicious' then
+              m_suspicious = 'S'
+              if a.keyword ~= 'Base64 Strings' and a.keyword ~= 'Hex Strings'
+              then
+                table.insert(analysis_keyword_table, a.keyword)
               end
-            elseif a.type == 'Suspicious'
-              and a.keyword ~= 'Base64 Strings'
-              and a.keyword ~= 'Hex Strings'
-            then
-              macro_suspicious = true
-              if rule.extended == true then
-                table.insert(macro_keyword_table, a.keyword)
-              end
+            elseif a.type == 'IOCs' then
+              m_iocs = 'I'
+            elseif a.type == 'Hex strings' then
+              m_hex = 'H'
+            elseif a.type == 'Base64 strings' then
+              m_base64 = 'B'
+            elseif a.type == 'Dridex strings' then
+              m_dridex = 'D'
+            elseif a.type == 'VBA strings' then
+              m_vba = 'V'
             end
           end
 
-          if macro_autoexec then
-            table.insert(macro_keyword_table, 'AutoExec')
-          end
-          if macro_suspicious then
-            table.insert(macro_keyword_table, 'Suspicious')
-          end
+         --lua_util.debugm(N, task, '%s: analysis_keyword_table: %s', rule.log_prefix, analysis_keyword_table)
 
-          lua_util.debugm(rule.module_name, task, '%s: extended: %s', rule.log_prefix, rule.extended)
-
-          if rule.extended == false and macro_autoexec and macro_suspicious then
-
-            lua_util.debugm(rule.module_name, task, '%s: found macro_autoexec and '..
-              'macro_suspicious', rule.log_prefix)
-            local threat = 'AutoExec+Suspicious'
+          if rule.extended == false and m_autoexec == 'A' and m_suspicious == 'S' then
+            -- use single string as virus name
+            local threat = 'AutoExec + Suspicious (' .. table.concat(analysis_keyword_table, ',') .. ')'
+            lua_util.debugm(rule.module_name, task, '%s: threat result: %s', rule.log_prefix, threat)
             common.yield_result(task, rule, threat, rule.default_score)
             common.save_av_cache(task, digest, rule, threat, rule.default_score)
 
-          elseif rule.extended == true and #macro_keyword_table > 0 then
+          elseif rule.extended == true and #analysis_keyword_table > 0 then
+            -- report any flags (types) and any most keywords as individual virus name
 
-            common.yield_result(task, rule, macro_keyword_table, rule.default_score)
-            common.save_av_cache(task, digest, rule, macro_keyword_table, rule.default_score)
+            local flags = m_exist ..
+                          m_autoexec ..
+                          m_suspicious ..
+                          m_iocs ..
+                          m_hex ..
+                          m_base64 ..
+                          m_dridex ..
+                          m_vba
+            table.insert(analysis_keyword_table, 1, flags)
 
+            lua_util.debugm(rule.module_name, task, '%s: extended threat result: %s',
+              rule.log_prefix, table.concat(analysis_keyword_table, ','))
+
+            common.yield_result(task, rule, analysis_keyword_table, rule.default_score)
+            common.save_av_cache(task, digest, rule, analysis_keyword_table, rule.default_score)
           else
             common.save_av_cache(task, digest, rule, 'OK')
             common.log_clean(task, rule, 'Scanned Macro is OK')
@@ -193,6 +215,7 @@ local function oletools_check(task, content, digest, rule)
 
         else
           rspamd_logger.warnx(task, '%s: unhandled response', rule.log_prefix)
+          task:insert_result(rule.symbol_fail, 0.0, 'unhandled response')
         end
       end
     end
