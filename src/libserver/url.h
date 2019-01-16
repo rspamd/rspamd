@@ -104,6 +104,12 @@ void rspamd_url_text_extract (rspamd_mempool_t *pool,
 	struct rspamd_mime_text_part *part,
 	gboolean is_html);
 
+enum rspamd_url_parse_flags {
+	RSPAMD_URL_PARSE_TEXT = 0,
+	RSPAMD_URL_PARSE_HREF = (1u << 0),
+	RSPAMD_URL_PARSE_CHECK = (1 << 1),
+};
+
 /*
  * Parse a single url into an uri structure
  * @param pool memory pool
@@ -111,9 +117,10 @@ void rspamd_url_text_extract (rspamd_mempool_t *pool,
  * @param uri url object, must be pre allocated
  */
 enum uri_errno rspamd_url_parse (struct rspamd_url *uri,
-	gchar *uristring,
-	gsize len,
-	rspamd_mempool_t *pool);
+								 gchar *uristring,
+								 gsize len,
+								 rspamd_mempool_t *pool,
+								 enum rspamd_url_parse_flags flags);
 
 /*
  * Try to extract url from a text

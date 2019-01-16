@@ -1660,7 +1660,7 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 					sizeof (*redirected_url));
 			rspamd_strlcpy (urlstr, hdr->begin, urllen + 1);
 			r = rspamd_url_parse (redirected_url, urlstr, urllen,
-					task->task_pool);
+					task->task_pool, RSPAMD_URL_PARSE_TEXT);
 
 			if (r == URI_ERRNO_OK) {
 				if ((existing = g_hash_table_lookup (task->urls, redirected_url)) == NULL) {
@@ -2120,7 +2120,7 @@ surbl_is_redirector_handler (lua_State *L)
 		url_cpy = rspamd_mempool_alloc (task->task_pool, len);
 		memcpy (url_cpy, url, len);
 
-		if (rspamd_url_parse (&uri, url_cpy, len, task->task_pool)) {
+		if (rspamd_url_parse (&uri, url_cpy, len, task->task_pool, RSPAMD_URL_PARSE_TEXT)) {
 			msg_debug_surbl ("check url redirection %*s", uri.urllen,
 					uri.string);
 
@@ -2198,7 +2198,7 @@ surbl_continue_process_handler (lua_State *L)
 					sizeof (*redirected_url));
 			rspamd_strlcpy (urlstr, nurl, urllen + 1);
 			r = rspamd_url_parse (redirected_url, urlstr, urllen,
-					task->task_pool);
+					task->task_pool, RSPAMD_URL_PARSE_TEXT);
 
 			if (r == URI_ERRNO_OK) {
 				if (!g_hash_table_lookup (task->urls, redirected_url)) {
