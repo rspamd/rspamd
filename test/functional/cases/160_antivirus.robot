@@ -25,18 +25,18 @@ CLAMAV HIT
   Run Dummy Clam  ${PORT_CLAM}  1
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}
   Check Rspamc  ${result}  CLAM_VIRUS
-  Should Not Contain  ${result.stdout}  CLAMAV_FAIL
+  Should Not Contain  ${result.stdout}  CLAMAV_VIRUS_FAIL
   Shutdown clamav
 
 CLAMAV CACHE HIT
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}
   Check Rspamc  ${result}  CLAM_VIRUS
-  Should Not Contain  ${result.stdout}  CLAMAV_FAIL
+  Should Not Contain  ${result.stdout}  CLAMAV_VIRUS_FAIL
 
 CLAMAV CACHE MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
   Check Rspamc  ${result}  CLAM_VIRUS  inverse=1
-  Should Not Contain  ${result.stdout}  CLAMAV_FAIL
+  Should Not Contain  ${result.stdout}  CLAMAV_VIRUS_FAIL
 
 FPROT MISS
   Run Dummy Fprot  ${PORT_FPROT}
