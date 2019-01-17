@@ -32,9 +32,10 @@ local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
 local function clamav_config(opts)
   local clamav_conf = {
-    scan_mime_parts = true;
-    scan_text_mime = false;
-    scan_image_mime = false;
+    N = N,
+    scan_mime_parts = true,
+    scan_text_mime = false,
+    scan_image_mime = false,
     default_port = 3310,
     log_clean = false,
     timeout = 5.0, -- FIXME: this will break task_timeout!
@@ -44,12 +45,18 @@ local function clamav_config(opts)
     message = default_message,
   }
 
-  for k,v in pairs(opts) do
-    clamav_conf[k] = v
-  end
+  clamav_conf = lua_util.override_defaults(clamav_conf, opts)
 
   if not clamav_conf.prefix then
-    clamav_conf.prefix = 'rs_cl'
+    clamav_conf.prefix = 'rs_' .. clamav_conf.name .. '_'
+  end
+
+  if not clamav_conf.log_prefix then
+    if clamav_conf.name:lower() == clamav_conf.type:lower() then
+      clamav_conf.log_prefix = clamav_conf.name
+    else
+      clamav_conf.log_prefix = clamav_conf.name .. ' (' .. clamav_conf.type .. ')'
+    end
   end
 
   if not clamav_conf['servers'] then
@@ -63,7 +70,7 @@ local function clamav_config(opts)
       clamav_conf.default_port)
 
   if clamav_conf['upstreams'] then
-    lua_util.add_debug_alias('antivirus', N)
+    lua_util.add_debug_alias('antivirus', clamav_conf.N)
     return clamav_conf
   end
 
@@ -96,7 +103,7 @@ local function clamav_check(task, content, digest, rule)
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(N, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
+          lua_util.debugm(rule.N, task, '%s: retry IP: %s', rule.log_prefix, addr)
 
           tcp.request({
             task = task,
@@ -108,7 +115,7 @@ local function clamav_check(task, content, digest, rule)
             stop_pattern = '\0'
           })
         else
-          rspamd_logger.errx(task, '%s [%s]: failed to scan, maximum retransmits exceed', rule['symbol'], rule['type'])
+          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits exceed', rule.log_prefix)
           task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and retransmits exceed')
         end
 
@@ -116,26 +123,26 @@ local function clamav_check(task, content, digest, rule)
         upstream:ok()
         data = tostring(data)
         local cached
-        lua_util.debugm(N, task, '%s [%s]: got reply: %s', rule['symbol'], rule['type'], data)
+        lua_util.debugm(rule.N, task, '%s: got reply: %s', rule.log_prefix, data)
         if data == 'stream: OK' then
           cached = 'OK'
           if rule['log_clean'] then
-            rspamd_logger.infox(task, '%s [%s]: message or mime_part is clean', rule['symbol'], rule['type'])
+            rspamd_logger.infox(task, '%s: message or mime_part is clean', rule.log_prefix)
           else
-            lua_util.debugm(N, task, '%s [%s]: message or mime_part is clean', rule['symbol'], rule['type'])
+            lua_util.debugm(rule.N, task, '%s: message or mime_part is clean', rule.log_prefix)
           end
         else
           local vname = string.match(data, 'stream: (.+) FOUND')
           if vname then
-            common.yield_result(task, rule, vname, N)
+            common.yield_result(task, rule, vname)
             cached = vname
           else
-            rspamd_logger.errx(task, 'unhandled response: %s', data)
+            rspamd_logger.errx(task, '%s: unhandled response: %s', rule.log_prefix, data)
             task:insert_result(rule['symbol_fail'], 0.0, 'unhandled response')
           end
         end
         if cached then
-          common.save_av_cache(task, digest, rule, cached, N)
+          common.save_av_cache(task, digest, rule, cached)
         end
       end
     end
@@ -151,8 +158,8 @@ local function clamav_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule, N) then
-    if common.check_av_cache(task, digest, rule, clamav_check_uncached, N) then
+  if common.need_av_check(task, content, rule) then
+    if common.check_av_cache(task, digest, rule, clamav_check_uncached) then
       return
     else
       clamav_check_uncached()
@@ -165,5 +172,5 @@ return {
   description = 'clamav antivirus',
   configure = clamav_config,
   check = clamav_check,
-  name = 'clamav'
+  name = N
 }

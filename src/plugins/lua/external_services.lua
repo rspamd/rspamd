@@ -1,5 +1,6 @@
 --[[
 Copyright (c) 2019, Vsevolod Stakhov <vsevolod@highsecure.ru>
+Copyright (c) 2019, Carsten Rosenberg <c.rosenberg@heinlein-support.de>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,9 +16,10 @@ limitations under the License.
 ]] --
 
 local rspamd_logger = require "rspamd_logger"
-local rspamd_regexp = require "rspamd_regexp"
 local lua_util = require "lua_util"
+local fun = require "fun"
 local lua_scanners = require("lua_scanners").filter('scanner')
+local common = require "lua_scanners/common"
 local redis_params
 
 local N = "external_services"
@@ -28,13 +30,72 @@ if confighelp then
     [[
 external_services {
   # multiple scanners could be checked, for each we create a configuration block with an arbitrary name
+
+  oletools {
+    # If set force this action if any virus is found (default unset: no action is forced)
+    # action = "reject";
+    # If set, then rejection message is set to this value (mention single quotes)
+    # If `max_size` is set, messages > n bytes in size are not scanned
+    # max_size = 20000000;
+    # log_clean = true;
+    # servers = "127.0.0.1:10050";
+    # cache_expire = 86400;
+    # scan_mime_parts = true;
+    # extended = false;
+    # if `patterns` is specified virus name will be matched against provided regexes and the related
+    # symbol will be yielded if a match is found. If no match is found, default symbol is yielded.
+    patterns {
+      # symbol_name = "pattern";
+      JUST_EICAR = "^Eicar-Test-Signature$";
+    }
+    # mime-part regex matching in content-type or filename
+    mime_parts_filter_regex {
+      #GEN1 = "application\/octet-stream";
+      DOC2 = "application\/msword";
+      DOC3 = "application\/vnd\.ms-word.*";
+      XLS = "application\/vnd\.ms-excel.*";
+      PPT = "application\/vnd\.ms-powerpoint.*";
+      GEN2 = "application\/vnd\.openxmlformats-officedocument.*";
+    }
+    # Mime-Part filename extension matching (no regex)
+    mime_parts_filter_ext {
+      doc = "doc";
+      dot = "dot";
+      docx = "docx";
+      dotx = "dotx";
+      docm = "docm";
+      dotm = "dotm";
+      xls = "xls";
+      xlt = "xlt";
+      xla = "xla";
+      xlsx = "xlsx";
+      xltx = "xltx";
+      xlsm = "xlsm";
+      xltm = "xltm";
+      xlam = "xlam";
+      xlsb = "xlsb";
+      ppt = "ppt";
+      pot = "pot";
+      pps = "pps";
+      ppa = "ppa";
+      pptx = "pptx";
+      potx = "potx";
+      ppsx = "ppsx";
+      ppam = "ppam";
+      pptm = "pptm";
+      potm = "potm";
+      ppsm = "ppsm";
+    }
+    # `whitelist` points to a map of IP addresses. Mail from these addresses is not scanned.
+    whitelist = "/etc/rspamd/antivirus.wl";
+  }
   dcc {
     # If set force this action if any virus is found (default unset: no action is forced)
     # action = "reject";
     # If set, then rejection message is set to this value (mention single quotes)
     # If `max_size` is set, messages > n bytes in size are not scanned
     max_size = 20000000;
-    servers = "127.0.0.1:3310";
+    #servers = "127.0.0.1:10045;
     # if `patterns` is specified virus name will be matched against provided regexes and the related
     # symbol will be yielded if a match is found. If no match is found, default symbol is yielded.
     patterns {
@@ -51,22 +112,22 @@ end
 
 
 local function add_scanner_rule(sym, opts)
-  if not opts['type'] then
+  if not opts.type then
     rspamd_logger.errx(rspamd_config, 'unknown type for external scanner rule %s', sym)
     return nil
   end
 
-  if not opts['symbol'] then opts['symbol'] = sym:upper() end
-  local cfg = lua_scanners[opts['type']]
+  if not opts.symbol then opts.symbol = sym:upper() end
+  local cfg = lua_scanners[opts.type]
 
   if not cfg then
-    rspamd_logger.errx(rspamd_config, 'unknown antivirus type: %s',
-        opts['type'])
+    rspamd_logger.errx(rspamd_config, 'unknown external scanner type: %s',
+        opts.type)
     return nil
   end
 
-  if not opts['symbol_fail'] then
-    opts['symbol_fail'] = string.upper(opts['type']) .. '_FAIL'
+  if not opts.symbol_fail then
+    opts.symbol_fail = opts.symbol .. '_FAIL'
   end
 
   local rule = cfg.configure(opts)
@@ -76,37 +137,39 @@ local function add_scanner_rule(sym, opts)
 
   if not rule then
     rspamd_logger.errx(rspamd_config, 'cannot configure %s for %s',
-      opts['type'], opts['symbol'])
+      opts.type, opts.symbol)
     return nil
   end
 
-  if type(opts['patterns']) == 'table' then
-    rule['patterns'] = {}
-    if opts['patterns'][1] then
-      for i, p in ipairs(opts['patterns']) do
-        if type(p) == 'table' then
-          local new_set = {}
-          for k, v in pairs(p) do
-            new_set[k] = rspamd_regexp.create_cached(v)
-          end
-          rule['patterns'][i] = new_set
-        else
-          rule['patterns'][i] = {}
-        end
-      end
-    else
-      for k, v in pairs(opts['patterns']) do
-        rule['patterns'][k] = rspamd_regexp.create_cached(v)
-      end
-    end
+  -- if any mime_part filter defined, do not scan all attachments
+  if opts.mime_parts_filter_regex ~= nil
+    or opts.mime_parts_filter_ext ~= nil then
+      rule.scan_all_mime_parts = false
   end
 
-  if opts['whitelist'] then
-    rule['whitelist'] = rspamd_config:add_hash_map(opts['whitelist'])
+  rule.patterns = common.create_regex_table(opts.patterns or {})
+
+  rule.mime_parts_filter_regex = common.create_regex_table(opts.mime_parts_filter_regex or {})
+
+  rule.mime_parts_filter_ext = common.create_regex_table(opts.mime_parts_filter_ext or {})
+
+  if opts.whitelist then
+    rule.whitelist = rspamd_config:add_hash_map(opts.whitelist)
   end
 
   return function(task)
-    cfg.check(task, task:get_content(), task:get_digest(), rule)
+    if rule.scan_mime_parts then
+
+      fun.each(function(p)
+        local content = p:get_content()
+        if content and #content > 0 then
+          cfg.check(task, content, p:get_digest(), rule)
+        end
+      end, common.check_parts_match(task, rule))
+
+    else
+      cfg.check(task, task:get_content(), task:get_digest(), rule)
+    end
   end
 end
 
@@ -118,6 +181,7 @@ if opts and type(opts) == 'table' then
   for k, m in pairs(opts) do
     if type(m) == 'table' and m.servers then
       if not m.type then m.type = k end
+      if not m.name then m.name = k end
       local cb = add_scanner_rule(k, m)
 
       if not cb then
