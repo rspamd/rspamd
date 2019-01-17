@@ -44,10 +44,12 @@ local function icap_check(task, content, digest, rule)
       "Encapsulated: null-body=0\r\n\r\n",
     }
     local size = string.format("%x", tonumber(#content))
-    lua_util.debugm(rule.N, task, '%s: size: %s', rule.log_prefix, size)
+    lua_util.debugm(rule.name, task, '%s: size: %s',
+        rule.log_prefix, size)
 
     local function get_respond_query()
-      table.insert(respond_headers, 1, 'RESPMOD icap://' .. addr:to_string() .. ':' .. addr:get_port() .. '/'
+      table.insert(respond_headers, 1,
+          'RESPMOD icap://' .. addr:to_string() .. ':' .. addr:get_port() .. '/'
         .. rule.scheme .. ' ICAP/1.0\r\n')
       table.insert(respond_headers, 'Encapsulated: res-body=0\r\n')
       table.insert(respond_headers, '\r\n')
@@ -72,7 +74,8 @@ local function icap_check(task, content, digest, rule)
           icap_headers[key] = value
         end
       end
-      lua_util.debugm(rule.N, task, '%s: icap_headers: %s', rule.log_prefix, icap_headers)
+      lua_util.debugm(rule.name, task, '%s: icap_headers: %s',
+          rule.log_prefix, icap_headers)
       return icap_headers
     end
 
@@ -99,10 +102,12 @@ local function icap_check(task, content, digest, rule)
       if icap_headers['X-Infection-Found'] ~= nil then
         pattern_symbols = "(Type%=%d; .* Threat%=)(.*)([;]+)"
         match = string.gsub(icap_headers['X-Infection-Found'], pattern_symbols, "%2")
-        lua_util.debugm(rule.N, task, '%s: icap X-Infection-Found: %s', rule.log_prefix, match)
+        lua_util.debugm(rule.name, task,
+            '%s: icap X-Infection-Found: %s', rule.log_prefix, match)
         table.insert(threat_string, match)
       elseif icap_headers['X-Virus-ID'] ~= nil then
-        lua_util.debugm(rule.N, task, '%s: icap X-Virus-ID: %s', rule.log_prefix, icap_headers['X-Virus-ID'])
+        lua_util.debugm(rule.name, task,
+            '%s: icap X-Virus-ID: %s', rule.log_prefix, icap_headers['X-Virus-ID'])
         table.insert(threat_string, icap_headers['X-Virus-ID'])
       end
 
@@ -177,14 +182,15 @@ local function icap_check(task, content, digest, rule)
 
           retransmits = retransmits - 1
 
-          lua_util.debugm(rule.N, task, '%s: Request Error: %s - retries left: %s',
-            rule.log_prefix, error, retransmits)
+          lua_util.debugm(rule.name, task,
+              '%s: Request Error: %s - retries left: %s',
+              rule.log_prefix, error, retransmits)
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(rule.N, task, '%s: retry IP: %s:%s',
+          lua_util.debugm(rule.name, task, '%s: retry IP: %s:%s',
             rule.log_prefix, addr, addr:get_port())
 
           tcp.request({
@@ -237,7 +243,7 @@ end
 local function icap_config(opts)
 
   local icap_conf = {
-    N = N,
+    name = N,
     scan_mime_parts = true,
     scan_all_mime_parts = true,
     scan_text_mime = false,
@@ -283,7 +289,7 @@ local function icap_config(opts)
     icap_conf.default_port)
 
   if icap_conf.upstreams then
-    lua_util.add_debug_alias('external_services', icap_conf.N)
+    lua_util.add_debug_alias('external_services', icap_conf.name)
     return icap_conf
   end
 
@@ -293,7 +299,7 @@ local function icap_config(opts)
 end
 
 return {
-  type = {N,'virus', 'virus', 'scanner'},
+  type = {N, 'virus', 'virus', 'scanner'},
   description = 'generic icap antivirus',
   configure = icap_config,
   check = icap_check,

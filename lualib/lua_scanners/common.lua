@@ -61,17 +61,21 @@ local function match_patterns(default_sym, found, patterns, dyn_weight)
   end
 end
 
-local function yield_result(task, rule, vname, N, dyn_weight)
+local function yield_result(task, rule, vname, dyn_weight)
   local all_whitelisted = true
   if not dyn_weight then dyn_weight = 1.0 end
   if type(vname) == 'string' then
-    local symname, symscore = match_patterns(rule.symbol, vname, rule.patterns, dyn_weight)
+    local symname, symscore = match_patterns(rule.symbol,
+        vname,
+        rule.patterns,
+        dyn_weight)
     if rule.whitelist and rule.whitelist:get_key(vname) then
       rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule.log_prefix, vname)
       return
     end
     task:insert_result(symname, symscore, vname)
-    rspamd_logger.infox(task, '%s: %s found: "%s"', rule.log_prefix, rule.detection_category, vname)
+    rspamd_logger.infox(task, '%s: %s found: "%s"', rule.log_prefix,
+        rule.detection_category, vname)
   elseif type(vname) == 'table' then
     for _, vn in ipairs(vname) do
       local symname, symscore = match_patterns(rule.symbol, vn, rule.patterns, dyn_weight)
@@ -94,7 +98,7 @@ local function yield_result(task, rule, vname, N, dyn_weight)
         lua_util.template(rule.message or 'Rejected', {
           SCANNER = rule.name,
           VIRUS = vname,
-        }), N)
+        }), rule.name)
   end
 end
 

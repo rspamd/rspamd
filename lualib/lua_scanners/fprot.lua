@@ -31,7 +31,7 @@ local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
 local function fprot_config(opts)
   local fprot_conf = {
-    N = N,
+    name = N,
     scan_mime_parts = true,
     scan_text_mime = false,
     scan_image_mime = false,
