@@ -35,7 +35,7 @@ local function log_clean(task, rule, msg)
   if rule.log_clean then
     rspamd_logger.infox(task, '%s: %s', rule.log_prefix, msg)
   else
-    lua_util.debugm(rule.module_name, task, '%s: %s', rule.log_prefix, msg)
+    lua_util.debugm(rule.name, task, '%s: %s', rule.log_prefix, msg)
   end
 
 end
@@ -74,8 +74,8 @@ local function yield_result(task, rule, vname, dyn_weight)
       return
     end
     task:insert_result(symname, symscore, vname)
-    rspamd_logger.infox(task, '%s: %s found: "%s"', rule.log_prefix,
-        rule.detection_category, vname)
+    rspamd_logger.infox(task, '%s: %s found: "%s - score: %s"',
+        rule.log_prefix, rule.detection_category, vname, symscore)
   elseif type(vname) == 'table' then
     for _, vn in ipairs(vname) do
       local symname, symscore = match_patterns(rule.symbol, vn, rule.patterns, dyn_weight)
@@ -84,8 +84,8 @@ local function yield_result(task, rule, vname, dyn_weight)
       else
         all_whitelisted = false
         task:insert_result(symname, symscore, vn)
-        rspamd_logger.infox(task, '%s: %s found: "%s"',
-            rule.log_prefix, rule.detection_category, vn)
+        rspamd_logger.infox(task, '%s: %s found: "%s - score: %s"',
+            rule.log_prefix, rule.detection_category, vn, symscore)
       end
     end
   end
@@ -127,11 +127,11 @@ local function check_av_cache(task, digest, rule, fn)
       local threat_string = rspamd_str_split(data[1], '\v')
       local score = data[2] or rule.default_score
       if threat_string[1] ~= 'OK' then
-        lua_util.debugm(rule.module_name, task, '%s: got cached threat result for %s: %s',
-          rule.log_prefix, key, threat_string[1])
+        lua_util.debugm(rule.name, task, '%s: got cached threat result for %s: %s - score: %s',
+          rule.log_prefix, key, threat_string[1], score)
         yield_result(task, rule, threat_string, score)
       else
-        lua_util.debugm(rule.module_name, task, '%s: got cached negative result for %s: %s',
+        lua_util.debugm(rule.name, task, '%s: got cached negative result for %s: %s',
           rule.log_prefix, key, threat_string[1])
       end
     else
@@ -163,6 +163,7 @@ end
 
 local function save_av_cache(task, digest, rule, to_save, dyn_weight)
   local key = digest
+  if not dyn_weight then dyn_weight = 1.0 end
 
   local function redis_set_cb(err)
     -- Do nothing
@@ -170,7 +171,8 @@ local function save_av_cache(task, digest, rule, to_save, dyn_weight)
       rspamd_logger.errx(task, 'failed to save %s cache for %s -> "%s": %s',
           rule.detection_category, to_save, key, err)
     else
-      lua_util.debugm(rule.module_name, task, '%s: saved cached result for %s: %s', rule.log_prefix, key, to_save)
+      lua_util.debugm(rule.name, task, '%s: saved cached result for %s: %s - score %s',
+        rule.log_prefix, key, to_save, dyn_weight)
     end
   end
 
@@ -266,11 +268,11 @@ local function check_parts_match(task, rule)
     -- check file extension and filename regex matching
       if fname ~= nil then
         ext,ext2,part_table = gen_extension(fname)
-        lua_util.debugm(rule.module_name, task, '%s: extension found: %s - 2.ext: %s - parts: %s',
+        lua_util.debugm(rule.name, task, '%s: extension found: %s - 2.ext: %s - parts: %s',
           rule.log_prefix, ext, ext2, part_table)
         if match_filter(task, ext, rule.mime_parts_filter_ext)
           or match_filter(task, ext2, rule.mime_parts_filter_ext) then
-          lua_util.debugm(rule.module_name, task, '%s: extension matched: %s', rule.log_prefix, ext)
+          lua_util.debugm(rule.name, task, '%s: extension matched: %s', rule.log_prefix, ext)
           extension_check = true
         end
         if match_filter(task, fname, rule.mime_parts_filter_regex) then
@@ -280,7 +282,7 @@ local function check_parts_match(task, rule)
       -- check content type regex matching
       if content_type ~= nil and content_subtype ~= nil then
         if match_filter(task, content_type..'/'..content_subtype, rule.mime_parts_filter_regex) then
-          lua_util.debugm(rule.module_name, task, '%s: regex ct: %s', rule.log_prefix,
+          lua_util.debugm(rule.name, task, '%s: regex ct: %s', rule.log_prefix,
             content_type..'/'..content_subtype)
           content_type_check = true
         end
