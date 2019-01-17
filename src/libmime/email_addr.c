@@ -137,6 +137,7 @@ rspamd_email_address_add (rspamd_mempool_t *pool,
 	}
 
 	if (name->len > 0) {
+		rspamd_gstring_strip (name, " \t\v");
 		elt->name = rspamd_mime_header_decode (pool, name->str, name->len, NULL);
 	}
 
@@ -233,13 +234,12 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 	gboolean seen_at = FALSE;
 
 	const gchar *p = hdr, *end = hdr + len, *c = hdr, *t;
-	GString *ns;
+	GString *ns, *cpy;
 	gint obraces, ebraces;
 	enum {
 		parse_name = 0,
 		parse_quoted,
 		parse_addr,
-		skip_comment,
 		skip_spaces
 	} state = parse_name, next_state = parse_name;
 
@@ -249,7 +249,70 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 				res);
 	}
 
-	ns = g_string_sized_new (127);
+	ns = g_string_sized_new (len);
+	cpy = g_string_sized_new (len);
+
+	rspamd_mempool_add_destructor (pool, rspamd_gstring_free_hard, cpy);
+
+	/* First, we need to remove all comments as they are terrible */
+	obraces = 0;
+	ebraces = 0;
+
+	while (p < end) {
+		if (state == parse_name) {
+			if (*p == '\\') {
+				if (obraces == 0) {
+					g_string_append_c (cpy, *p);
+				}
+
+				p++;
+			}
+			else {
+				if (*p == '"') {
+					state = parse_quoted;
+				}
+				else if (*p == '(') {
+					obraces ++;
+				}
+				else if (*p == ')') {
+					ebraces ++;
+				}
+
+				if (obraces == ebraces) {
+					obraces = 0;
+					ebraces = 0;
+				}
+			}
+
+			if (p < end && obraces == 0) {
+				g_string_append_c (cpy, *p);
+			}
+		}
+		else {
+			/* Quoted elt */
+			if (*p == '\\') {
+				g_string_append_c (cpy, *p);
+				p++;
+			}
+			else {
+				if (*p == '"') {
+					state = parse_name;
+				}
+			}
+
+			if (p < end) {
+				g_string_append_c (cpy, *p);
+			}
+		}
+
+		p++;
+	}
+
+	state = parse_name;
+
+	p = cpy->str;
+	c = p;
+	end = p + cpy->len;
 
 	while (p < end) {
 		switch (state) {
@@ -257,13 +320,20 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 			if (*p == '"') {
 				/* We need to strip last spaces and update `ns` */
 				if (p > c) {
+					guint nspaces = 0;
+
 					t = p - 1;
 
 					while (t > c && g_ascii_isspace (*t)) {
 						t --;
+						nspaces ++;
 					}
 
 					g_string_append_len (ns, c, t - c + 1);
+
+					if (nspaces > 0) {
+						g_string_append_c (ns, ' ');
+					}
 				}
 
 				state = parse_quoted;
@@ -311,39 +381,17 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 			else if (*p == '@') {
 				seen_at = TRUE;
 			}
-			else if (*p == '(') {
-				if (p > c) {
-					t = p - 1;
 
-					while (t > c && g_ascii_isspace (*t)) {
-						t --;
-					}
-
-					g_string_append_len (ns, c, t - c + 1);
-
-					if (seen_at) {
-						if (!rspamd_email_address_check_and_add (c, t - c + 1,
-								res, pool, ns)) {
-							rspamd_email_address_add (pool, res, NULL, ns);
-						}
-
-						g_string_set_size (ns, 0);
-						seen_at = FALSE;
-					}
-				}
-
-				c = p;
-				obraces = 1;
-				ebraces = 0;
-				state = skip_comment;
-				next_state = parse_name;
-			}
 			p ++;
 			break;
 		case parse_quoted:
 			if (*p == '"') {
 				if (p > c) {
 					g_string_append_len (ns, c, p - c);
+				}
+
+				if (p + 1 < end && g_ascii_isspace (p[1])) {
+					g_string_append_c (ns, ' ');
 				}
 
 				state = skip_spaces;
@@ -367,12 +415,6 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 			else if (*p == '@') {
 				seen_at = TRUE;
 			}
-			else if (*p == '(') {
-				obraces = 1;
-				ebraces = 0;
-				state = skip_comment;
-				next_state = parse_addr;
-			}
 			p ++;
 			break;
 		case skip_spaces:
@@ -383,36 +425,6 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 			else {
 				p ++;
 			}
-			break;
-		case skip_comment:
-			if (*p == '(') {
-				obraces ++;
-			}
-			else if (*p == ')') {
-				ebraces ++;
-			}
-
-			if (obraces == ebraces) {
-				if (next_state == parse_name) {
-					if (ns->len > 0) {
-						/* Include comment in name if it has been seen */
-						if (p > c) {
-							t = p - 1;
-
-							while (t > c && g_ascii_isspace (*t)) {
-								t --;
-							}
-
-							g_string_append_len (ns, c, t - c + 1);
-						}
-					}
-
-					c = p + 1;
-				}
-
-				state = next_state;
-			}
-			p ++;
 			break;
 		}
 	}
@@ -460,7 +472,6 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 		}
 		break;
 	case parse_quoted:
-	case skip_comment:
 		/* Unfinished quoted string or a comment */
 		break;
 	default:
