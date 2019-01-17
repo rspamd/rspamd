@@ -2752,3 +2752,52 @@ rspamd_str_make_utf_valid (const gchar *src, gsize slen, gsize *dstlen)
 
 	return dchar;
 }
+
+gsize
+rspamd_gstring_strip (GString *s, const gchar *strip_chars)
+{
+	const gchar *p, *sc;
+	gsize strip_len = 0, total = 0;
+
+	p = s->str + s->len - 1;
+
+	while (p >= s->str) {
+		gboolean seen = FALSE;
+
+		sc = strip_chars;
+
+		while (*sc != '\0') {
+			if (*p == *sc) {
+				strip_len ++;
+				seen = TRUE;
+				break;
+			}
+
+			sc ++;
+		}
+
+		if (!seen) {
+			break;
+		}
+
+		p --;
+	}
+
+	if (strip_len > 0) {
+		s->len -= strip_len;
+		s->str[s->len] = '\0';
+		total += strip_len;
+	}
+
+	if (s->len > 0) {
+		strip_len = rspamd_memspn (s->str, strip_chars, s->len);
+
+		if (strip_len > 0) {
+			memmove (s->str, s->str + strip_len, s->len - strip_len);
+			s->len -= strip_len;
+			total += strip_len;
+		}
+	}
+
+	return total;
+}
