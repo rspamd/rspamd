@@ -157,7 +157,7 @@ local function add_scanner_rule(sym, opts)
     rule.whitelist = rspamd_config:add_hash_map(opts.whitelist)
   end
 
-  return function(task)
+  local function scan_cb(task)
     if rule.scan_mime_parts then
 
       fun.each(function(p)
@@ -171,6 +171,8 @@ local function add_scanner_rule(sym, opts)
       cfg.check(task, task:get_content(), task:get_digest(), rule)
     end
   end
+
+  return scan_cb, rule
 end
 
 -- Registration
@@ -182,11 +184,12 @@ if opts and type(opts) == 'table' then
     if type(m) == 'table' and m.servers then
       if not m.type then m.type = k end
       if not m.name then m.name = k end
-      local cb = add_scanner_rule(k, m)
+      local cb, nrule = add_scanner_rule(k, m)
 
       if not cb then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
       else
+        m = nrule
         local id = rspamd_config:register_symbol({
           type = 'normal',
           name = m['symbol'],
@@ -233,6 +236,26 @@ if opts and type(opts) == 'table' then
             end
           end
         end
+
+        if m.symbols then
+          local function reg_symbols(tbl)
+            for _,sym in pairs(tbl) do
+              if type(sym) == 'string' then
+                rspamd_config:register_symbol({
+                  type = 'virtual',
+                  name = sym,
+                  parent = id,
+                  group = N
+                })
+              elseif type(sym) == 'table' then
+                reg_symbols(sym)
+              end
+            end
+          end
+
+          reg_symbols(m.symbols)
+        end
+
         if m['score'] then
           -- Register metric symbol
           local description = 'external services symbol'
