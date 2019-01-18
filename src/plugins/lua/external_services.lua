@@ -172,6 +172,9 @@ local function add_scanner_rule(sym, opts)
     end
   end
 
+  rspamd_logger.infox(rspamd_config, 'registered external services rule: %s',
+      rule.name)
+
   return scan_cb, rule
 end
 
