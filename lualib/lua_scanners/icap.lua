@@ -137,12 +137,12 @@ local function icap_check(task, content, digest, rule)
           ICAP/1.0 500 Server error
         ]]--
         rspamd_logger.errx(task, '%s: ICAP ERROR: %s', rule.log_prefix, icap_headers.icap)
-        task:insert_result(rule.symbol_fail, 0.0, icap_headers.icap)
+        common.yield_result(task, rule, icap_headers.icap, 0.0, 'fail')
         return false
       else
         rspamd_logger.errx(task, '%s: unhandled response |%s|',
           rule.log_prefix, string.gsub(result, "\r\n", ", "))
-        task:insert_result(rule.symbol_fail, 0.0, 'unhandled icap response: ' .. icap_headers.icap)
+        common.yield_result(task, rule, 'unhandled icap response: ' .. icap_headers.icap, 0.0, 'fail')
       end
     end
 
@@ -162,12 +162,12 @@ local function icap_check(task, content, digest, rule)
         else
           rspamd_logger.errx(task, '%s: RESPMOD method not advertised: Methods: %s',
             rule.log_prefix, icap_headers['Methods'])
-          task:insert_result(rule.symbol_fail, 0.0, 'NO RESPMOD')
+          common.yield_result(task, rule, 'NO RESPMOD', 0.0, 'fail')
         end
       else
         rspamd_logger.errx(task, '%s: OPTIONS query failed: %s',
           rule.log_prefix, icap_headers.icap)
-        task:insert_result(rule.symbol_fail, 0.0, 'OPTIONS query failed')
+        common.yield_result(task, rule, 'OPTIONS query failed', 0.0, 'fail')
       end
     end
 
@@ -206,7 +206,7 @@ local function icap_check(task, content, digest, rule)
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
             'exceed - err: %s', rule.log_prefix, error)
-          task:insert_result(rule.symbol_fail, 0.0, 'failed - err: ' .. error)
+          common.yield_result(task, rule, 'failed - err: ' .. error, 0.0, 'fail')
         end
       end
 

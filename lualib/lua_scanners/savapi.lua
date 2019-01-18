@@ -160,6 +160,7 @@ local function savapi_check(task, content, digest, rule)
           if not virus then
             rspamd_logger.errx(task, "%s: virus result unparseable: %s",
                 rule['type'], result)
+            common.yield_result(task, rule, 'virus result unparseable: ' .. result, 0.0, 'fail')
             return
           end
         end
@@ -185,6 +186,7 @@ local function savapi_check(task, content, digest, rule)
       else
         rspamd_logger.errx(task, '%s: invalid product id %s', rule['type'],
             rule['product_id'])
+        common.yield_result(task, rule, 'invalid product id: ' .. result, 0.0, 'fail')
         conn:add_write(savapi_fin_cb, 'QUIT\n')
       end
     end
@@ -222,7 +224,7 @@ local function savapi_check(task, content, digest, rule)
           })
         else
           rspamd_logger.errx(task, '%s [%s]: failed to scan, maximum retransmits exceed', rule['symbol'], rule['type'])
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and retransmits exceed')
+          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
         end
       else
         upstream:ok()

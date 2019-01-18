@@ -138,8 +138,7 @@ local function kaspersky_check(task, content, digest, rule)
           rspamd_logger.errx(task,
               '%s [%s]: failed to scan, maximum retransmits exceed',
               rule['symbol'], rule['type'])
-          task:insert_result(rule['symbol_fail'], 0.0,
-              'failed to scan and retransmits exceed')
+          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
         end
 
       else
@@ -159,7 +158,7 @@ local function kaspersky_check(task, content, digest, rule)
             cached = vname
           else
             rspamd_logger.errx(task, 'unhandled response: %s', data)
-            task:insert_result(rule['symbol_fail'], 0.0, 'unhandled response')
+            common.yield_result(task, rule, 'unhandled response', 0.0, 'fail')
           end
         end
         if cached then

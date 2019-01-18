@@ -108,6 +108,7 @@ local function add_antivirus_rule(sym, opts)
   end
 
   rule.patterns = common.create_regex_table(opts.patterns or {})
+  rule.patterns_fail = common.create_regex_table(opts.patterns_fail or {})
 
   if opts.whitelist then
     rule.whitelist = rspamd_config:add_hash_map(opts.whitelist)

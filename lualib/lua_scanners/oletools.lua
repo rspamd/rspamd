@@ -71,7 +71,7 @@ local function oletools_check(task, content, digest, rule)
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
               'exceed - err: %s', rule.log_prefix, error)
-          task:insert_result(rule.symbol_fail, 0.0, 'failed - err: ' .. error)
+          common.yield_result(task, rule, 'failed to scan, maximum retransmits exceed - err: ' .. error, 0.0, 'fail')
         end
       end
 
@@ -119,19 +119,20 @@ local function oletools_check(task, content, digest, rule)
           end
         elseif result[3]['return_code'] == 9 then
           rspamd_logger.warnx(task, '%s: File is encrypted.', rule.log_prefix)
+          common.yield_result(task, rule, 'failed - err: ' .. oletools_rc[result[3]['return_code']], 0.0, 'fail')
         elseif result[3]['return_code'] > 6 then
           rspamd_logger.errx(task, '%s: Error Returned: %s',
               rule.log_prefix, oletools_rc[result[3]['return_code']])
           rspamd_logger.errx(task, '%s: Error message: %s',
               rule.log_prefix, result[2]['message'])
-          task:insert_result(rule.symbol_fail, 0.0, 'failed - err: ' .. oletools_rc[result[3]['return_code']])
+          common.yield_result(task, rule, 'failed - err: ' .. oletools_rc[result[3]['return_code']], 0.0, 'fail')
         elseif result[3]['return_code'] > 1 then
           rspamd_logger.errx(task, '%s: Error message: %s',
               rule.log_prefix, result[2]['message'])
           oletools_requery(oletools_rc[result[3]['return_code']])
         elseif #result[2]['analysis'] == 0 and #result[2]['macros'] == 0 then
           rspamd_logger.warnx(task, '%s: maybe unhandled python or oletools error', rule.log_prefix)
-          task:insert_result(rule.symbol_fail, 0.0, 'oletools unhandled error')
+          common.yield_result(task, rule, 'oletools unhandled error', 0.0, 'fail')
         elseif result[2]['analysis'] == 'null' and #result[2]['macros'] == 0 then
           common.save_av_cache(task, digest, rule, 'OK')
           common.log_clean(task, rule, 'No macro found')
@@ -218,7 +219,7 @@ local function oletools_check(task, content, digest, rule)
 
         else
           rspamd_logger.warnx(task, '%s: unhandled response', rule.log_prefix)
-          task:insert_result(rule.symbol_fail, 0.0, 'unhandled response')
+          common.yield_result(task, rule, 'unhandled error', 0.0, 'fail')
         end
       end
     end
