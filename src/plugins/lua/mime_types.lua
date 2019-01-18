@@ -21,6 +21,7 @@ end
 -- This plugin implements mime types checks for mail messages
 local logger = require "rspamd_logger"
 local lua_util = require "lua_util"
+local rspamd_util = require "rspamd_util"
 local N = "mime_types"
 local settings = {
   file = '',
@@ -32,6 +33,7 @@ local settings = {
   symbol_archive_in_archive = 'MIME_ARCHIVE_IN_ARCHIVE',
   symbol_double_extension = 'MIME_DOUBLE_BAD_EXTENSION',
   symbol_bad_extension = 'MIME_BAD_EXTENSION',
+  symbol_bad_unicode = 'MIME_BAD_UNICODE',
   regexp = false,
   extension_map = { -- extension -> mime_type
     html = 'text/html',
@@ -832,6 +834,17 @@ local function check_mime_type(task)
   end
 
   local function check_filename(fname, ct, is_archive, part)
+
+    local has_bad_unicode, char, ch_pos = rspamd_util.has_obscured_unicode(fname)
+    if has_bad_unicode then
+      task:insert_result(settings.symbol_bad_unicode, 1.0,
+          string.format("0x%xd after %s", char,
+              fname:sub(1, ch_pos)))
+    end
+
+    -- Replace potentially bad characters with '?'
+    fname = fname:gsub('[^%s%g]', '?')
+
     local ext,ext2,parts = gen_extension(fname)
     -- ext is the last extension, LOWERCASED
     -- ext2 is the one before last extension LOWERCASED
@@ -945,7 +958,6 @@ local function check_mime_type(task)
         end
 
         if filename then
-          filename = filename:gsub('[^%s%g]', '?')
           check_filename(filename, ct, false, p)
         end
 
@@ -976,11 +988,6 @@ local function check_mime_type(task)
             local nfiles = #fl
 
             for _,f in ipairs(fl) do
-              -- Strip bad characters
-              if f['name'] then
-                f['name'] = f['name']:gsub('[\128-\255%s%G]', '?')
-              end
-
               if f['encrypted'] then
                 task:insert_result(settings['symbol_encrypted_archive'],
                     1.0, f['name'])
@@ -1155,6 +1162,12 @@ if opts then
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_bad_extension'],
+      parent = id,
+      group = 'mime_types',
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      name = settings['symbol_bad_unicode'],
       parent = id,
       group = 'mime_types',
     })

@@ -400,11 +400,11 @@ LUA_FUNCTION_DEF (util, is_utf_spoofed);
 LUA_FUNCTION_DEF (util, is_valid_utf8);
 
 /***
- * @function util.has_obscured_utf(str)
+ * @function util.has_obscured_unicode(str)
  * Returns true if a string has obscure UTF symbols (zero width spaces, order marks), ignores invalid utf characters
- * @return {boolean} true if a has obscured utf characters
+ * @return {boolean} true if a has obscured unicode characters (+ character and offset if found)
  */
-LUA_FUNCTION_DEF (util, has_obscured_utf);
+LUA_FUNCTION_DEF (util, has_obscured_unicode);
 
 /***
  * @function util.readline([prompt])
@@ -616,7 +616,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, caseless_hash_fast),
 	LUA_INTERFACE_DEF (util, is_utf_spoofed),
 	LUA_INTERFACE_DEF (util, is_valid_utf8),
-	LUA_INTERFACE_DEF (util, has_obscured_utf),
+	LUA_INTERFACE_DEF (util, has_obscured_unicode),
 	LUA_INTERFACE_DEF (util, readline),
 	LUA_INTERFACE_DEF (util, readpassphrase),
 	LUA_INTERFACE_DEF (util, file_exists),
@@ -2618,24 +2618,25 @@ lua_util_is_valid_utf8 (lua_State *L)
 }
 
 static gint
-lua_util_has_obscured_utf (lua_State *L)
+lua_util_has_obscured_unicode (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	const gchar *str;
 	gsize len;
-	gint32 i = 0;
+	gint32 i = 0, prev_i;
 	UChar32 uc;
 
 	str = lua_tolstring (L, 1, &len);
 
 	while (i < len) {
+		prev_i = i;
 		U8_NEXT (str, i, len, uc);
 
 		if (uc > 0) {
 			if (IS_OBSCURED_CHAR (uc)) {
 				lua_pushboolean (L, true);
 				lua_pushnumber (L, uc); /* Character */
-				lua_pushnumber (L, i); /* Offset */
+				lua_pushnumber (L, prev_i); /* Offset */
 
 				return 3;
 			}
