@@ -251,7 +251,25 @@ if opts and type(opts) == 'table' then
                   group = N
                 })
               elseif type(sym) == 'table' then
-                reg_symbols(sym)
+                if sym.symbol then
+                  rspamd_config:register_symbol({
+                    type = 'virtual',
+                    name = sym.symbol,
+                    parent = id,
+                    group = N
+                  })
+
+                  if sym.score then
+                    rspamd_config:set_metric_symbol({
+                      name = sym.symbol,
+                      score = sym.score,
+                      description = sym.description,
+                      group = sym.group or N,
+                    })
+                  end
+                else
+                  reg_symbols(sym)
+                end
               end
             end
           end

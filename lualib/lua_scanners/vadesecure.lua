@@ -31,10 +31,10 @@ local function vade_check(task, content, digest, rule)
   local function vade_url(addr)
     local url
     if rule.use_https then
-      url = string.format('https://%s:%d/%s', tostring(addr),
+      url = string.format('https://%s:%d%s', tostring(addr),
           rule.default_port, rule.url)
     else
-      url = string.format('http://%s:%d/%s', tostring(addr),
+      url = string.format('http://%s:%d%s', tostring(addr),
           rule.default_port, rule.url)
     end
 
@@ -117,20 +117,21 @@ local function vade_check(task, content, digest, rule)
       -- Parse the response
       if upstream then upstream:ok() end
       if code ~= 200 then
+        rspamd_logger.errx(task, 'invalid HTTP code: %s, body: %s, headers: %s', code, body, headers)
         task:insert_result(rule.symbol_fail, 1.0, 'Bad HTTP code: ' .. code)
         return
       end
       local parser = ucl.parser()
       local ret, err = parser:parse_string(body)
       if not ret then
-        rspamd_logger.errx(task, 'Weird response body (raw): %s', body)
+        rspamd_logger.errx(task, 'vade: bad response body (raw): %s', body)
         task:insert_result(rule.symbol_fail, 1.0, 'Parser error: ' .. err)
         return
       end
       local obj = parser:get_object()
       local verdict = obj.verdict
       if not verdict then
-        rspamd_logger.errx(task, 'Weird response JSON: %s', obj)
+        rspamd_logger.errx(task, 'vade: bad response JSON (no verdict): %s', obj)
         task:insert_result(rule.symbol_fail, 1.0, 'No verdict/unknown verdict')
         return
       end
@@ -142,7 +143,8 @@ local function vade_check(task, content, digest, rule)
         sym = rule.symbols.other
       end
 
-      if type(sym) == 'table' then
+      if not sym.symbol then
+        -- Subcategory match
         local lvl = 'low'
         if vparts and vparts[1] then
           lvl = vparts[1]
@@ -166,13 +168,16 @@ local function vade_check(task, content, digest, rule)
       if rule.log_spamcause and obj.spamcause then
         rspamd_logger.infox(task, 'vadesecure returned verdict="%s", score=%s, spamcause="%s"',
             verdict, obj.score, obj.spamcause)
+      else
+        lua_util.debugm(rule.name, task, 'vadesecure returned verdict="%s", score=%s, spamcause="%s"',
+            verdict, obj.score, obj.spamcause)
       end
 
       if #vparts > 0 then
         table.insert(opts, 'verdict=' .. verdict .. ';' .. table.concat(vparts, ':'))
       end
 
-      task:insert_result(sym, 1.0, opts)
+      task:insert_result(sym.symbol, 1.0, opts)
     end
   end
 
@@ -200,18 +205,68 @@ local function vade_config(opts)
     symbol_fail = 'VADE_FAIL',
     symbol = 'VADE_CHECK',
     symbols = {
-      clean = 'VADE_CLEAN',
-      spam = {
-        high = 'VADE_SPAM_HIGH',
-        medium = 'VADE_SPAM_MEDIUM',
-        low = 'VADE_SPAM_LOW'
+      clean = {
+        symbol = 'VADE_CLEAN',
+        score = -0.5,
+        description = 'VadeSecure decided message to be clean'
       },
-      malware = 'VADE_MALWARE',
-      scam = 'VADE_SCAM',
-      phishing = 'VADE_PHISHING',
-      ['commercial:dce'] = 'VADE_DCE',
-      suspect = 'VADE_SUSPECT',
-      bounce = 'VADE_BOUNCE',
+      spam = {
+        high = {
+          symbol = 'VADE_SPAM_HIGH',
+          score = 8.0,
+          description = 'VadeSecure decided message to be clearly spam'
+        },
+        medium = {
+          symbol = 'VADE_SPAM_MEDIUM',
+          score = 5.0,
+          description = 'VadeSecure decided message to be highly likely spam'
+        },
+        low = {
+          symbol = 'VADE_SPAM_LOW',
+          score = 2.0,
+          description = 'VadeSecure decided message to be likely spam'
+        },
+      },
+      malware = {
+        symbol = 'VADE_MALWARE',
+        score = 8.0,
+        description = 'VadeSecure decided message to be malware'
+      },
+      scam = {
+        symbol = 'VADE_SCAM',
+        score = 7.0,
+        description = 'VadeSecure decided message to be scam'
+      },
+      phishing = {
+        symbol = 'VADE_PHISHING',
+        score = 8.0,
+        description = 'VadeSecure decided message to be phishing'
+      },
+      commercial =  {
+        symbol = 'VADE_COMMERCIAL',
+        score = 0.0,
+        description = 'VadeSecure decided message to be commercial message'
+      },
+      community =  {
+        symbol = 'VADE_COMMUNITY',
+        score = 0.0,
+        description = 'VadeSecure decided message to be community message'
+      },
+      transactional =  {
+        symbol = 'VADE_TRANSACTIONAL',
+        score = 0.0,
+        description = 'VadeSecure decided message to be transactional message'
+      },
+      suspect = {
+        symbol = 'VADE_SUSPECT',
+        score = 3.0,
+        description = 'VadeSecure decided message to be suspicious message'
+      },
+      bounce = {
+        symbol = 'VADE_BOUNCE',
+        score = 0.0,
+        description = 'VadeSecure decided message to be bounce message'
+      },
       other = 'VADE_OTHER',
     }
   }
