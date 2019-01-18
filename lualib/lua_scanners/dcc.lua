@@ -115,8 +115,7 @@ local function dcc_check(task, content, digest, rule)
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
             'exceed', rule.log_prefix)
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and '..
-            'retransmits exceed')
+          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
         end
       end
 
@@ -221,9 +220,7 @@ local function dcc_check(task, content, digest, rule)
           else
             -- Unknown result
             rspamd_logger.warnx(task, '%s: result error: %1', rule.log_prefix, result);
-            task:insert_result(rule.symbol_fail,
-                0.0,
-                'error: ' .. result)
+            common.yield_result(task, rule, 'error: ' .. result, 0.0, 'fail')
           end
         end
       end

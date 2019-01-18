@@ -118,8 +118,7 @@ local function fprot_check(task, content, digest, rule)
           rspamd_logger.errx(task,
               '%s [%s]: failed to scan, maximum retransmits exceed',
               rule['symbol'], rule['type'])
-          task:insert_result(rule['symbol_fail'], 0.0,
-              'failed to scan and retransmits exceed')
+          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
         end
       else
         upstream:ok()

@@ -148,6 +148,7 @@ local function add_scanner_rule(sym, opts)
   end
 
   rule.patterns = common.create_regex_table(opts.patterns or {})
+  rule.patterns_fail = common.create_regex_table(opts.patterns_fail or {})
 
   rule.mime_parts_filter_regex = common.create_regex_table(opts.mime_parts_filter_regex or {})
 

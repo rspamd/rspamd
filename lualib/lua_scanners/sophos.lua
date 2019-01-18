@@ -117,7 +117,7 @@ local function sophos_check(task, content, digest, rule)
           })
         else
           rspamd_logger.errx(task, '%s [%s]: failed to scan, maximum retransmits exceed', rule['symbol'], rule['type'])
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and retransmits exceed')
+          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
         end
       else
         upstream:ok()
@@ -140,30 +140,19 @@ local function sophos_check(task, content, digest, rule)
             -- not finished - continue
           elseif string.find(data, 'ACC') or string.find(data, 'OK SSSP') then
             conn:add_read(sophos_callback)
-            -- set pseudo virus if configured, else do nothing since it's no fatal
           elseif string.find(data, 'FAIL 0212') then
-            rspamd_logger.infox(task, 'Message is ENCRYPTED (0212 SOPHOS_SAVI_ERROR_FILE_ENCRYPTED): %s', data)
-            if rule['savdi_report_encrypted'] then
-              common.yield_result(task, rule, "SAVDI_FILE_ENCRYPTED")
-              common.save_av_cache(task, digest, rule, "SAVDI_FILE_ENCRYPTED")
-            end
-            -- set pseudo virus if configured, else set fail since part was not scanned
+            rspamd_logger.warnx(task, 'Message is encrypted (FAIL 0212): %s', data)
+            common.yield_result(task, rule, 'SAVDI: Message is encrypted (FAIL 0212)', 0.0, 'fail')
           elseif string.find(data, 'REJ 4') then
-            if rule['savdi_report_oversize'] then
-              rspamd_logger.infox(task, 'SAVDI: Message is OVERSIZED (SSSP reject code 4): %s', data)
-              common.yield_result(task, rule, "SAVDI_FILE_OVERSIZED")
-              common.save_av_cache(task, digest, rule, "SAVDI_FILE_OVERSIZED")
-            else
-              rspamd_logger.errx(task, 'SAVDI: Message is OVERSIZED (SSSP reject code 4): %s', data)
-              task:insert_result(rule['symbol_fail'], 0.0, 'Message is OVERSIZED (SSSP reject code 4):' .. data)
-            end
+            rspamd_logger.warnx(task, 'Message is oversized (REJ 4): %s', data)
+            common.yield_result(task, rule, 'SAVDI: Message oversized (REJ 4)', 0.0, 'fail')
             -- excplicitly set REJ1 message when SAVDIreports a protocol error
           elseif string.find(data, 'REJ 1') then
             rspamd_logger.errx(task, 'SAVDI (Protocol error (REJ 1)): %s', data)
-            task:insert_result(rule['symbol_fail'], 0.0, 'SAVDI (Protocol error (REJ 1)):' .. data)
+            common.yield_result(task, rule, 'SAVDI: Protocol error (REJ 1)', 0.0, 'fail')
           else
             rspamd_logger.errx(task, 'unhandled response: %s', data)
-            task:insert_result(rule['symbol_fail'], 0.0, 'unhandled response')
+            common.yield_result(task, rule, 'unhandled response: ' .. data, 0.0, 'fail')
           end
 
         end

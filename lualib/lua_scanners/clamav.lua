@@ -117,7 +117,7 @@ local function clamav_check(task, content, digest, rule)
           })
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits exceed', rule.log_prefix)
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and retransmits exceed')
+          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
         end
 
       else
@@ -136,12 +136,18 @@ local function clamav_check(task, content, digest, rule)
           end
         else
           local vname = string.match(data, 'stream: (.+) FOUND')
-          if vname then
+          if string.find(vname, '^Heuristics%.Encrypted') then
+            rspamd_logger.errx(task, '%s: File is encrypted', rule.log_prefix)
+            common.yield_result(task, rule, 'File is encrypted: '.. vname, 0.0, 'fail')
+          elseif string.find(vname, '^Heuristics%.Limits%.Exceeded') then
+            rspamd_logger.errx(task, '%s: ClamAV Limits Exceeded', rule.log_prefix)
+            common.yield_result(task, rule, 'Limits Exceeded: '.. vname, 0.0, 'fail')
+          elseif vname then
             common.yield_result(task, rule, vname)
             cached = vname
           else
             rspamd_logger.errx(task, '%s: unhandled response: %s', rule.log_prefix, data)
-            task:insert_result(rule['symbol_fail'], 0.0, 'unhandled response')
+            common.yield_result(task, rule, 'unhandled response:' .. vname, 0.0, 'fail')
           end
         end
         if cached then
