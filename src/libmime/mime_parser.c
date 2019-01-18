@@ -1215,13 +1215,16 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 						FALSE);
 			}
 		}
+		else {
+			body_pos = 0;
+
+			hdrs = rspamd_message_get_header_from_hash (npart->raw_headers,
+					task->task_pool,
+					"Content-Type", FALSE);
+		}
 
 		pbegin = part->parsed_data.begin + body_pos;
 		plen = part->parsed_data.len - body_pos;
-
-		hdrs = rspamd_message_get_header_from_hash (npart->raw_headers,
-				task->task_pool,
-				"Content-Type", FALSE);
 	}
 
 	npart->raw_data.begin = pbegin;
