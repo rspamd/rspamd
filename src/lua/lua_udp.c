@@ -359,5 +359,5 @@ lua_load_udp (lua_State * L)
 void
 luaopen_udp (lua_State * L)
 {
-	rspamd_lua_add_preload (L, "rspamd_tcp", lua_load_udp);
+	rspamd_lua_add_preload (L, "rspamd_udp", lua_load_udp);
 }
