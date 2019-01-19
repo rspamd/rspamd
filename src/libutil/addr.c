@@ -1659,6 +1659,22 @@ rspamd_inet_address_get_af (const rspamd_inet_addr_t *addr)
 	return addr->af;
 }
 
+struct sockaddr*
+rspamd_inet_address_get_sa (const rspamd_inet_addr_t *addr,
+							socklen_t *sz)
+{
+	g_assert (addr != NULL);
+
+	if (addr->af == AF_UNIX) {
+		*sz = addr->slen;
+		return (struct sockaddr *)&addr->u.un->addr;
+	}
+	else {
+		*sz = addr->slen;
+		return (struct sockaddr *)&addr->u.in.addr.sa;
+	}
+}
+
 
 guint
 rspamd_inet_address_hash (gconstpointer a)

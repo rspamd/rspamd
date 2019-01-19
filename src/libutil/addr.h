@@ -140,6 +140,14 @@ uint16_t rspamd_inet_address_get_port (const rspamd_inet_addr_t *addr);
  */
 gint rspamd_inet_address_get_af (const rspamd_inet_addr_t *addr);
 
+/**
+ * Returns sockaddr and size for this address
+ * @param addr
+ * @param sz
+ * @return
+ */
+struct sockaddr* rspamd_inet_address_get_sa (const rspamd_inet_addr_t *addr,
+		socklen_t *sz);
 
 /**
  * Makes a radix key from inet address
