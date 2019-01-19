@@ -66,16 +66,15 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail)
   local patterns
   local symbol
 
+  -- This should be more generic
   if not is_fail then
     patterns = rule.patterns
     symbol = rule.symbol
     if not dyn_weight then dyn_weight = 1.0 end
-    lua_util.debugm(rule.name, task, '%s: no fail: %s',rule.log_prefix, symbol)
   elseif is_fail == 'fail' then
     patterns = rule.patterns_fail
     symbol = rule.symbol_fail
     dyn_weight = 0.0
-    lua_util.debugm(rule.name, task, '%s: FAIL: %s',rule.log_prefix, symbol)
   end
 
   if type(vname) == 'string' then
@@ -103,7 +102,7 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail)
       end
     end
   end
-  if rule.action then
+  if rule.action and is_fail ~= 'fail' then
     if type(vname) == 'table' then
       if all_whitelisted then return end
       vname = table.concat(vname, '; ')
