@@ -96,15 +96,21 @@ local function icap_check(task, content, digest, rule)
         X-Virus-ID: Troj/DocDl-OYC
       ]] --
 
-      local pattern_symbols
-      local match
-
       if icap_headers['X-Infection-Found'] ~= nil then
-        pattern_symbols = "(Type%=%d; .* Threat%=)(.*)([;]+)"
-        match = string.gsub(icap_headers['X-Infection-Found'], pattern_symbols, "%2")
-        lua_util.debugm(rule.name, task,
-            '%s: icap X-Infection-Found: %s', rule.log_prefix, match)
-        table.insert(threat_string, match)
+        local _,_,icap_type,_,icap_threat =
+          icap_headers['X-Infection-Found']:find("Type=(.-); Resolution=(.-); Threat=(.-);$")
+
+        if not icap_type or icap_type == 2 then
+          -- error returned
+          lua_util.debugm(rule.name, task,
+              '%s: icap error X-Infection-Found: %s', rule.log_prefix, icap_threat)
+          common.yield_result(task, rule, icap_threat, 0, 'fail')
+        else
+          lua_util.debugm(rule.name, task,
+              '%s: icap X-Infection-Found: %s', rule.log_prefix, icap_threat)
+          table.insert(threat_string, icap_threat)
+        end
+
       elseif icap_headers['X-Virus-ID'] ~= nil then
         lua_util.debugm(rule.name, task,
             '%s: icap X-Virus-ID: %s', rule.log_prefix, icap_headers['X-Virus-ID'])
