@@ -167,9 +167,10 @@ local function oletools_check(task, content, digest, rule)
               m_autoexec = 'A'
               table.insert(analysis_keyword_table, a.keyword)
             elseif a.type == 'Suspicious' then
-              m_suspicious = 'S'
+              if rule.extended == true then m_suspicious = 'S' end
               if a.keyword ~= 'Base64 Strings' and a.keyword ~= 'Hex Strings'
               then
+                m_suspicious = 'S'
                 table.insert(analysis_keyword_table, a.keyword)
               end
             elseif a.type == 'IOCs' then
@@ -251,11 +252,12 @@ local function oletools_config(opts)
     scan_mime_parts = false,
     scan_text_mime = false,
     scan_image_mime = false,
-    default_port = 5954,
+    default_port = 10050,
     timeout = 15.0,
     log_clean = false,
     retransmits = 2,
     cache_expire = 86400, -- expire redis in 1d
+    symbol = "OLETOOLS",
     message = '${SCANNER}: Oletools threat message found: "${VIRUS}"',
     detection_category = "office macro",
     default_score = 1,
