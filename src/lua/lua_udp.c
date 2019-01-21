@@ -109,6 +109,10 @@ lua_udp_cbd_fin (gpointer p)
 	struct lua_udp_cbdata *cbd = (struct lua_udp_cbdata *)p;
 
 	if (cbd->sock != -1) {
+		if (rspamd_event_pending (&cbd->io, EV_READ|EV_WRITE)) {
+			event_del (&cbd->io);
+		}
+
 		close (cbd->sock);
 	}
 
@@ -228,7 +232,7 @@ lua_udp_push_data (struct lua_udp_cbdata *cbd, const gchar *data,
 static gboolean
 lua_udp_maybe_register_event (struct lua_udp_cbdata *cbd)
 {
-	if (cbd->s) {
+	if (cbd->s && !cbd->async_ev) {
 		cbd->async_ev = rspamd_session_add_event (cbd->s, lua_udp_cbd_fin,
 				cbd, M);
 
@@ -237,7 +241,7 @@ lua_udp_maybe_register_event (struct lua_udp_cbdata *cbd)
 		}
 	}
 
-	if (cbd->task) {
+	if (cbd->task && !cbd->item) {
 		cbd->item = rspamd_symcache_get_cur_item (cbd->task);
 		rspamd_symcache_item_async_inc (cbd->task, cbd->item, M);
 	}
@@ -254,8 +258,10 @@ lua_udp_io_handler (gint fd, short what, gpointer p)
 
 	L = cbd->L;
 
+	event_del (&cbd->io);
+
 	if (what == EV_TIMEOUT) {
-		if (cbd->sent  && cbd->retransmits > 0) {
+		if (cbd->sent && cbd->retransmits > 0) {
 			r = lua_try_send_request (cbd);
 
 			if (r == RSPAMD_SENT_OK) {
@@ -263,6 +269,7 @@ lua_udp_io_handler (gint fd, short what, gpointer p)
 				event_base_set (cbd->ev_base, &cbd->io);
 				event_add (&cbd->io, &cbd->tv);
 				lua_udp_maybe_register_event (cbd);
+				cbd->retransmits --;
 			}
 			else if (r == RSPAMD_SENT_FAILURE) {
 				lua_udp_maybe_push_error (cbd, "write error");
@@ -445,7 +452,7 @@ lua_udp_sendto (lua_State *L) {
 		lua_pushstring (L, "timeout");
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TNUMBER) {
-			timeout = lua_tonumber (L, -1) * 1000.;
+			timeout = lua_tonumber (L, -1);
 		}
 		lua_pop (L, 1);
 
