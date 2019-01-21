@@ -454,9 +454,13 @@ gchar * rspamd_str_make_utf_valid (const gchar *src, gsize slen, gsize *dstlen);
  */
 gsize rspamd_gstring_strip (GString *s, const gchar *strip_chars);
 
-#define IS_ZERO_WIDTH_SPACE(uc) ((uc) == 0x200b || (uc) == 0x200c)
+#define IS_ZERO_WIDTH_SPACE(uc) ((uc) == 0x200B || \
+								(uc) == 0x200C || \
+								(uc) == 0x200D || \
+								(uc) == 0xFEFF)
 #define IS_OBSCURED_CHAR(uc) (((uc) >= 0x200B && (uc) <= 0x200F) || \
 								((uc) >= 0x2028 && (uc) <= 0x202F) || \
-								((uc) >= 0x205F && (uc) <= 0x206F))
+								((uc) >= 0x205F && (uc) <= 0x206F) || \
+								(uc) == 0xFEFF)
 
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */
