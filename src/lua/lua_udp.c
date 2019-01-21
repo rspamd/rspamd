@@ -23,7 +23,8 @@ static const gchar *M = "rspamd lua udp";
 
 /***
  * @module rspamd_udp
- * Rspamd UDP module represents generic UDP asynchronous client available from LUA code.
+ * Rspamd UDP module is available from the version 1.9.0 and represents a generic
+ * UDP asynchronous client available from the LUA code.
  * This module is quite simple: it can either send requests to some address or
  * it can send requests and wait for replies, potentially handling retransmits.
  * @example
@@ -31,14 +32,19 @@ local logger = require "rspamd_logger"
 local udp = require "rspamd_udp"
 
 rspamd_config.SYM = function(task)
-  udp.sento({
+  udp.sento{
     host = addr, -- must be ip address object (e.g. received by upstream module)
     port = 500,
-    data = data, -- can be table, string or rspamd_text
+    data = {'str1, 'str2'}, -- can be table, string or rspamd_text
     timeout = 0.5, -- default = 1s
     task = task, -- if has task
     session = session, -- optional
     ev_base = ev_base, -- if no task available
+    -- You can include callback and then Rspamd will try to read replies
+    callback = function(success, data)
+      -- success is bool, data is either data or an error (string)
+    end,
+    retransmits = 0, -- Or more if retransmitting is necessary
   }
 end
  */
@@ -336,12 +342,15 @@ lua_udp_io_handler (gint fd, short what, gpointer p)
  * @function rspamd_udp.sendto({params})
  * This function simply sends data to an external UDP service
  *
- * - `task`: rspamd task objects (implies `pool`, `session`, `ev_base` and `resolver` arguments)
+ * - `task`: rspamd task objects (implies `pool`, `session` and `ev_base` arguments)
  * - `ev_base`: event base (if no task specified)
- * - `session`: events session (no task)
+ * - `session`: events session (no task, optional)
+ * - `pool`: memory pool (if no task specified)
  * - `host`: IP or name of the peer (required)
  * - `port`: remote port to use (if `host` has no port part this is required)
  * - `data`: a table of strings or `rspamd_text` objects that contains data pieces
+ * - `retransmits`: number of retransmits if needed
+ * - `callback`: optional callback if reply should be read
  * @return {boolean} true if request has been sent (additional string if it has not)
  */
 static gint
@@ -439,7 +448,7 @@ lua_udp_sendto (lua_State *L) {
 			}
 			lua_pop (L, 1);
 
-			lua_pushstring (L, "session");
+			lua_pushstring (L, "pool");
 			lua_gettable (L, -2);
 			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{mempool}")) {
 				pool = *(rspamd_mempool_t **) lua_touserdata (L, -1);
