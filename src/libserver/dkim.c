@@ -2736,11 +2736,16 @@ rspamd_dkim_sign_key_maybe_invalidate (rspamd_dkim_sign_key_t *key,
 	if (type == RSPAMD_DKIM_SIGN_KEY_FILE) {
 		gchar fpath[PATH_MAX];
 
+		if (len >= PATH_MAX) {
+			/* Bad thing */
+			return TRUE;
+		}
+
 		rspamd_snprintf (fpath, sizeof (fpath), "%*s", (gint) len, what);
 
 		if (stat (fpath, &st) == -1) {
-			/* Prefer to use cached key since it is absent on FS */
-			return FALSE;
+			/* Wrong: do NOT prefer to use cached key since it is absent on FS */
+			return TRUE;
 		}
 
 		if (st.st_mtime > key->mtime) {
