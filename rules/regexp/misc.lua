@@ -61,14 +61,18 @@ reconf['HAS_ONION_URI'] = {
     group = 'experimental'
 }
 
+local my_victim = [[/(?:victim|prey)/{words}]]
+local your_webcam = [[/webcam/{words}]]
+local your_onan = [[/(?:mast[ur]{2}bati(?:on|ng)|onanism|solitary)/{words}]]
 local password_in_words = [[/^pass(?:(?:word)|(?:phrase))/i{words}]]
 local btc_wallet_address = [[/^[13][0-9a-zA-Z]{25,34}$/{words}]]
-local wallet_word = [[/^wallet$/i{words}]]
+local wallet_word = [[/^wallet$/{words}]]
 local broken_unicode = [[has_flag(bad_unicode)]]
 
 reconf['LEAKED_PASSWORD_SCAM'] = {
-  re = string.format('%s & (%s | %s | %s | lua:check_data_images)',
-      btc_wallet_address, password_in_words, wallet_word, broken_unicode),
+  re = string.format('%s & (%s | %s | %s | %s | %s | %s | lua:check_data_images)',
+      btc_wallet_address, password_in_words, wallet_word,
+      my_victim, your_webcam, your_onan, broken_unicode),
   description = 'Contains password word and BTC wallet address',
   functions = {
     check_data_images = function(task)
