@@ -875,6 +875,7 @@ lua_url_all (lua_State *L)
  * - `has_user`: URL has user part
  * - `schemaless`: URL has no schema
  * - `unnormalised`: URL has some unicode unnormalities
+ * - `zw_spaces`: URL has some zero width spaces
  * @return {table} URL flags
  */
 #define PUSH_FLAG(fl, name) do { \
@@ -914,6 +915,7 @@ lua_url_get_flags (lua_State *L)
 		PUSH_FLAG (RSPAMD_URL_FLAG_HAS_USER, "has_user");
 		PUSH_FLAG (RSPAMD_URL_FLAG_SCHEMALESS, "schemaless");
 		PUSH_FLAG (RSPAMD_URL_FLAG_UNNORMALISED, "unnormalised");
+		PUSH_FLAG (RSPAMD_URL_FLAG_ZW_SPACES, "zw_spaces");
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

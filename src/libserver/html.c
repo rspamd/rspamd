@@ -1351,6 +1351,10 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 
 	if (norm_res & (RSPAMD_UNICODE_NORM_ZERO_SPACES|RSPAMD_UNICODE_NORM_ERROR)) {
 		saved_flags |= RSPAMD_URL_FLAG_OBSCURED;
+
+		if (norm_res & RSPAMD_UNICODE_NORM_ZERO_SPACES) {
+			saved_flags |= RSPAMD_URL_FLAG_ZW_SPACES;
+		}
 	}
 
 	rc = rspamd_url_parse (url, decoded, dlen, pool, RSPAMD_URL_PARSE_HREF);

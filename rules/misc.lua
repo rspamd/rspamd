@@ -101,23 +101,39 @@ rspamd_config.DATE_IN_PAST = {
   type = 'mime',
 }
 
-rspamd_config.R_SUSPICIOUS_URL = {
+local obscured_id = rspamd_config:register_symbol{
   callback = function(task)
     local urls = task:get_urls()
 
     if urls then
       for _,u in ipairs(urls) do
-        if u:is_obscured() then
+        local fl = u:get_flags()
+        if fl.obscured then
           task:insert_result('R_SUSPICIOUS_URL', 1.0, u:get_host())
+        end
+        if fl.zw_spaces then
+          task:insert_result('ZERO_WIDTH_SPACE_URL', 1.0, u:get_host())
         end
       end
     end
+
     return false
   end,
+  name = 'R_SUSPICIOUS_URL',
   score = 5.0,
   one_shot = true,
   description = 'Obfusicated or suspicious URL has been found in a message',
   group = 'url'
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  name = 'ZERO_WIDTH_SPACE_URL',
+  score = 7.0,
+  one_shot = true,
+  description = 'Zero width space in url',
+  group = 'url',
+  parent = obscured_id,
 }
 
 

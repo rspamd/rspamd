@@ -27,6 +27,7 @@ enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_HAS_USER = 1 << 14,
 	RSPAMD_URL_FLAG_SCHEMALESS = 1 << 15,
 	RSPAMD_URL_FLAG_UNNORMALISED = 1 << 16,
+	RSPAMD_URL_FLAG_ZW_SPACES = 1 << 17,
 };
 
 struct rspamd_url_tag {
