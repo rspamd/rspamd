@@ -1903,6 +1903,9 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 		res->type = FUZZY_RESULT_IMG;
 	}
 	else {
+		/* Calc real probability */
+		nval *= sqrtf (rep->v1.prob);
+
 		if (cmd->shingles_count > 0) {
 			type = "txt";
 			res->type = FUZZY_RESULT_TXT;
@@ -1910,8 +1913,6 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 		else {
 			res->type = FUZZY_RESULT_BIN;
 		}
-
-		nval *= rspamd_normalize_probability (rep->v1.prob, 0.5);
 	}
 
 	res->score = nval;
