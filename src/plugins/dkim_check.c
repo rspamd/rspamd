@@ -1606,10 +1606,33 @@ dkim_module_lua_push_verify_result (struct rspamd_dkim_lua_verify_cbdata *cbd,
 	lua_pushstring (cbd->L, error_str);
 
 	if (cbd->ctx) {
-		lua_pushstring (cbd->L, res->domain);
-		lua_pushstring (cbd->L, res->selector);
-		lua_pushstring (cbd->L, res->short_b);
-		lua_pushstring (cbd->L, res->fail_reason);
+		if (res->domain) {
+			lua_pushstring (cbd->L, res->domain);
+		}
+		else {
+			lua_pushnil (cbd->L);
+		}
+
+		if (res->selector) {
+			lua_pushstring (cbd->L, res->selector);
+		}
+		else {
+			lua_pushnil (cbd->L);
+		}
+
+		if (res->short_b) {
+			lua_pushstring (cbd->L, res->short_b);
+		}
+		else {
+			lua_pushnil (cbd->L);
+		}
+
+		if (res->fail_reason) {
+			lua_pushstring (cbd->L, res->fail_reason);
+		}
+		else {
+			lua_pushnil (cbd->L);
+		}
 	}
 	else {
 		lua_pushnil (cbd->L);
