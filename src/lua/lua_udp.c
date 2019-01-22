@@ -115,7 +115,7 @@ lua_udp_cbd_fin (gpointer p)
 	struct lua_udp_cbdata *cbd = (struct lua_udp_cbdata *)p;
 
 	if (cbd->sock != -1) {
-		if (rspamd_event_pending (&cbd->io, EV_READ|EV_WRITE)) {
+		if (cbd->io.ev_base != NULL) {
 			event_del (&cbd->io);
 		}
 
