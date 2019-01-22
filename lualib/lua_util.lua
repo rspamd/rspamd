@@ -593,7 +593,8 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
   if params.prefix then
     cache_key = params.prefix
   else
-    cache_key = string.format('sp_urls_%d%s', params.limit, params.need_emails)
+    cache_key = string.format('sp_urls_%d%s', params.limit,
+        tostring(params.need_emails))
   end
 
 
