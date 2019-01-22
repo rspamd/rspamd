@@ -1794,10 +1794,17 @@ rspamd_url_parse (struct rspamd_url *uri,
 				uri->host, uri->hostlen,
 				rspamd_tld_trie_callback, uri, NULL);
 
-	if (!(parse_flags & RSPAMD_URL_PARSE_HREF) && uri->tldlen == 0) {
-		/* Ignore URL's without TLD if it is not a numeric URL */
-		if (!rspamd_url_is_ip (uri, pool)) {
-			return URI_ERRNO_TLD_MISSING;
+	if (uri->tldlen == 0) {
+		if (!(parse_flags & RSPAMD_URL_PARSE_HREF)) {
+			/* Ignore URL's without TLD if it is not a numeric URL */
+			if (!rspamd_url_is_ip (uri, pool)) {
+				return URI_ERRNO_TLD_MISSING;
+			}
+		}
+		else {
+			/* Assume tld equal to host */
+			uri->tld = uri->host;
+			uri->tldlen = uri->hostlen;
 		}
 	}
 
