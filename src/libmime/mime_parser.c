@@ -1214,13 +1214,13 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 						npart->raw_headers_len,
 						FALSE);
 			}
-		}
-		else {
-			body_pos = 0;
 
 			hdrs = rspamd_message_get_header_from_hash (npart->raw_headers,
 					task->task_pool,
 					"Content-Type", FALSE);
+		}
+		else {
+			body_pos = 0;
 		}
 
 		pbegin = part->parsed_data.begin + body_pos;
