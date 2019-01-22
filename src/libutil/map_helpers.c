@@ -640,12 +640,14 @@ rspamd_map_helper_new_hash (struct rspamd_map *map)
 void
 rspamd_map_helper_destroy_hash (struct rspamd_hash_map_helper *r)
 {
-	if (r == NULL) {
+	if (r == NULL || r->pool == NULL) {
 		return;
 	}
 
+	rspamd_mempool_t *pool = r->pool;
 	kh_destroy (rspamd_map_hash, r->htb);
-	rspamd_mempool_delete (r->pool);
+	memset (r, 0, sizeof (*r));
+	rspamd_mempool_delete (pool);
 }
 
 static void
@@ -696,12 +698,14 @@ rspamd_map_helper_new_radix (struct rspamd_map *map)
 void
 rspamd_map_helper_destroy_radix (struct rspamd_radix_map_helper *r)
 {
-	if (r == NULL) {
+	if (r == NULL || !r->pool) {
 		return;
 	}
 
 	kh_destroy (rspamd_map_hash, r->htb);
-	rspamd_mempool_delete (r->pool);
+	rspamd_mempool_t *pool = r->pool;
+	memset (r, 0, sizeof (*r));
+	rspamd_mempool_delete (pool);
 }
 
 static void
@@ -754,7 +758,7 @@ rspamd_map_helper_destroy_regexp (struct rspamd_regexp_map_helper *re_map)
 	rspamd_regexp_t *re;
 	guint i;
 
-	if (!re_map) {
+	if (!re_map || !re_map->regexps) {
 		return;
 	}
 
@@ -785,7 +789,9 @@ rspamd_map_helper_destroy_regexp (struct rspamd_regexp_map_helper *re_map)
 	}
 #endif
 
-	rspamd_mempool_delete (re_map->pool);
+	rspamd_mempool_t *pool = re_map->pool;
+	memset (re_map, 0, sizeof (*re_map));
+	rspamd_mempool_delete (pool);
 }
 
 gchar *
