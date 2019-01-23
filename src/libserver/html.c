@@ -1148,18 +1148,15 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 			store = TRUE;
 			state = parse_end_dquote;
 		}
+
 		if (store) {
 			if (*savep != NULL) {
-				gchar *s;
-
 				g_assert (tag->params != NULL);
 				comp = g_queue_peek_tail (tag->params);
 				g_assert (comp != NULL);
 				comp->len = in - *savep;
-				s = rspamd_mempool_alloc (pool, comp->len);
-				memcpy (s, *savep, comp->len);
-				comp->len = rspamd_html_decode_entitles_inplace (s, comp->len);
-				comp->start = s;
+				comp->start = *savep;
+				/* We cannot use entities inside tag values ! */
 				*savep = NULL;
 			}
 		}
@@ -1172,16 +1169,11 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		}
 		if (store) {
 			if (*savep != NULL) {
-				gchar *s;
-
 				g_assert (tag->params != NULL);
 				comp = g_queue_peek_tail (tag->params);
 				g_assert (comp != NULL);
 				comp->len = in - *savep;
-				s = rspamd_mempool_alloc (pool, comp->len);
-				memcpy (s, *savep, comp->len);
-				comp->len = rspamd_html_decode_entitles_inplace (s, comp->len);
-				comp->start = s;
+				comp->start = *savep;
 				*savep = NULL;
 			}
 		}
@@ -1199,16 +1191,11 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 
 		if (store) {
 			if (*savep != NULL) {
-				gchar *s;
-
 				g_assert (tag->params != NULL);
 				comp = g_queue_peek_tail (tag->params);
 				g_assert (comp != NULL);
 				comp->len = in - *savep;
-				s = rspamd_mempool_alloc (pool, comp->len);
-				memcpy (s, *savep, comp->len);
-				comp->len = rspamd_html_decode_entitles_inplace (s, comp->len);
-				comp->start = s;
+				comp->start = *savep;
 				*savep = NULL;
 			}
 		}
@@ -1319,9 +1306,12 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 		}
 	}
 
-	/* We also need to remove all internal newlines and encode unsafe characters */
+	/*
+	 * We also need to remove all internal newlines, spaces
+	 * and encode unsafe characters
+	 */
 	for (i = 0; i < len; i ++) {
-		if (G_UNLIKELY (s[i] == '\r' || s[i] == '\n')) {
+		if (G_UNLIKELY (g_ascii_isspace (s[i]))) {
 			continue;
 		}
 		else if (G_UNLIKELY (((guint)s[i]) < 0x80 && !g_ascii_isgraph (s[i]))) {
