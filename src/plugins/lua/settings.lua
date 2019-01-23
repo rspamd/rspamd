@@ -383,7 +383,7 @@ local function check_settings(task)
     return
   end
 
-  rspamd_logger.infox(task, "check for settings")
+  lua_util.debugm(N, task, "check for settings")
   local ip = task:get_from_ip()
   local client_ip = task:get_client_ip()
   local from = task:get_from()
