@@ -97,10 +97,11 @@ struct suffix_item {
 	const gchar *monitored_domain;
 	const gchar *suffix;
 	const gchar *symbol;
-	guint32 options;
 	GArray *bits;
 	GHashTable *ips;
 	struct rspamd_monitored *m;
+	guint32 options;
+	gboolean reported_offline;
 	gint callback_id;
 	gint url_process_cbref;
 };
@@ -1945,13 +1946,17 @@ surbl_test_url (struct rspamd_task *task,
 	struct surbl_ctx *surbl_module_ctx = surbl_get_context (task->cfg);
 
 	if (!rspamd_monitored_alive (suffix->m)) {
-		msg_info_surbl ("disable surbl %s as it is reported to be offline",
-				suffix->suffix);
+		if (!suffix->reported_offline) {
+			msg_info_surbl ("disable surbl %s as it is reported to be offline",
+					suffix->suffix);
+			suffix->reported_offline = TRUE;
+		}
 		rspamd_symcache_finalize_item (task, item);
 
 		return;
 	}
 
+	suffix->reported_offline = FALSE;
 	param = rspamd_mempool_alloc0 (task->task_pool, sizeof (*param));
 	param->task = task;
 	param->suffix = suffix;
