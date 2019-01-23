@@ -1666,7 +1666,19 @@ lua_task_set_pre_result (lua_State * L)
 		}
 
 		if (lua_type (L, 2) == LUA_TSTRING) {
-			action = rspamd_config_get_action (task->cfg, lua_tostring (L, 2));
+			const gchar *act_name = lua_tostring (L, 2);
+			gint internal_type;
+
+			if (strcmp (act_name, "accept") == 0) {
+				/* Compatibility! */
+				act_name = "no action";
+			}
+			else if (rspamd_action_from_str (act_name, &internal_type)) {
+				/* Compatibility! */
+				act_name = rspamd_action_to_str (internal_type);
+			}
+
+			action = rspamd_config_get_action (task->cfg, act_name);
 		}
 		else {
 			return luaL_error (L, "invalid arguments");
@@ -1676,7 +1688,8 @@ lua_task_set_pre_result (lua_State * L)
 			struct rspamd_action *tmp;
 
 			HASH_ITER (hh, task->cfg->actions, action, tmp) {
-				msg_err ("known action: %s = %f", action->name, action->threshold);
+				msg_err_task ("known defined action: %s = %f",
+						action->name, action->threshold);
 			}
 
 			return luaL_error (L, "unknown action %s", lua_tostring (L, 2));
