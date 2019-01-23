@@ -1142,7 +1142,7 @@ rspamd_match_regexp_map_single (struct rspamd_regexp_map_helper *map,
 
 	g_assert (in != NULL);
 
-	if (map == NULL || len == 0) {
+	if (map == NULL || len == 0 || map->regexps == NULL) {
 		return NULL;
 	}
 
@@ -1233,7 +1233,7 @@ rspamd_match_regexp_map_all (struct rspamd_regexp_map_helper *map,
 
 	g_assert (in != NULL);
 
-	if (map == NULL || len == 0) {
+	if (map == NULL || map->regexps == NULL || len == 0) {
 		return NULL;
 	}
 
@@ -1294,7 +1294,7 @@ rspamd_match_hash_map (struct rspamd_hash_map_helper *map, const gchar *in)
 	khiter_t k;
 	struct rspamd_map_helper_value *val;
 
-	if (map == NULL) {
+	if (map == NULL || map->htb == NULL) {
 		return NULL;
 	}
 
@@ -1316,7 +1316,7 @@ rspamd_match_radix_map (struct rspamd_radix_map_helper *map,
 {
 	struct rspamd_map_helper_value *val;
 
-	if (map == NULL) {
+	if (map == NULL || map->trie == NULL) {
 		return NULL;
 	}
 
@@ -1338,7 +1338,7 @@ rspamd_match_radix_map_addr (struct rspamd_radix_map_helper *map,
 {
 	struct rspamd_map_helper_value *val;
 
-	if (map == NULL) {
+	if (map == NULL || map->trie == NULL) {
 		return NULL;
 	}
 
