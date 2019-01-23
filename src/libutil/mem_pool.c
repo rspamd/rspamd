@@ -853,7 +853,7 @@ __mutex_spin (rspamd_mempool_mutex_t * mutex)
 	/* Spin */
 	while (nanosleep (&ts, &ts) == -1 && errno == EINTR) ;
 #else
-#       error No methods to spin are defined
+#error No methods to spin are defined
 #endif
 	return 1;
 }
