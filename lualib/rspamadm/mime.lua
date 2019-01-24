@@ -170,7 +170,7 @@ end
 
 local function load_task(opts, fname)
   if not fname then
-    parser:error('no file specified')
+    fname = '-'
   end
 
   local res,task = rspamd_task.load_from_file(fname, rspamd_config)

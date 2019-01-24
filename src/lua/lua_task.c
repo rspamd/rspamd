@@ -1369,18 +1369,49 @@ lua_task_load_from_file (lua_State * L)
 			}
 		}
 
-		map = rspamd_file_xmap (fname, PROT_READ, &sz, TRUE);
+		if (strcmp (fname, "-") == 0) {
+			/* Read from stdin */
+			gint fd = STDIN_FILENO;
+			GString *data = g_string_sized_new (BUFSIZ);
+			gchar buf[BUFSIZ];
+			gssize r;
 
-		if (!map) {
-			err = strerror (errno);
+			for (;;) {
+				r = read (fd, buf, sizeof (buf));
+
+				if (r == -1) {
+					err = strerror (errno);
+					break;
+				}
+				else if (r == 0) {
+					break;
+				}
+				else {
+					g_string_append_len (data, buf, r);
+				}
+
+				task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
+				task->msg.begin = data->str;
+				task->msg.len = data->len;
+				rspamd_mempool_add_destructor (task->task_pool,
+						lua_task_free_dtor, task);
+				res = TRUE;
+				g_string_free (data, FALSE); /* Buffer is still valid */
+			}
 		}
 		else {
-			task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
-			task->msg.begin = map;
-			task->msg.len = sz;
-			rspamd_mempool_add_destructor (task->task_pool,
-					lua_task_unmap_dtor, task);
-			res = TRUE;
+			map = rspamd_file_xmap (fname, PROT_READ, &sz, TRUE);
+
+			if (!map) {
+				err = strerror (errno);
+			} else {
+				task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
+				task->msg.begin = map;
+				task->msg.len = sz;
+				rspamd_mempool_add_destructor (task->task_pool,
+						lua_task_unmap_dtor, task);
+				res = TRUE;
+			}
 		}
 	}
 	else {
