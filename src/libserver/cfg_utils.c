@@ -1907,7 +1907,7 @@ rspamd_config_action_from_ucl (struct rspamd_config *cfg,
 			threshold = ucl_object_todouble (elt);
 		}
 
-		elt = ucl_object_lookup_any (obj, "flags");
+		elt = ucl_object_lookup (obj, "flags");
 
 		if (elt && ucl_object_type (elt) == UCL_ARRAY) {
 			const ucl_object_t *cur;
