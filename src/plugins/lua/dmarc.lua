@@ -962,7 +962,7 @@ if opts['reporting'] == true then
                 table.insert(atmp, k)
               end
               local addr_string = table.concat(atmp, ', ')
-              local rhead = string.format(report_template,
+              local rhead = string.format(report_template:gsub("\n", "\r\n"),
 		  report_settings.from_name,
                   report_settings.email,
                   addr_string,
