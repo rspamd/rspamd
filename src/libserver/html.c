@@ -343,7 +343,8 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 	gchar *t = s, *h = s, *e = s, *end_ptr;
 	const gchar *end;
 	const gchar *entity;
-	gint state = 0, val, base;
+	gint state = 0, base;
+	UChar32 uc;
 	khiter_t k;
 
 	if (len == 0) {
@@ -409,10 +410,10 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 						base = 10;
 					}
 					if (base == 10) {
-						val = strtoul ((e + 2), &end_ptr, base);
+						uc = strtoul ((e + 2), &end_ptr, base);
 					}
 					else {
-						val = strtoul ((e + 3), &end_ptr, base);
+						uc = strtoul ((e + 3), &end_ptr, base);
 					}
 
 					if (end_ptr != NULL && *end_ptr != '\0') {
@@ -424,7 +425,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 					}
 					else {
 						/* Search for a replacement */
-						k = kh_get (entity_by_number, html_entity_by_number, val);
+						k = kh_get (entity_by_number, html_entity_by_number, uc);
 
 						if (k != kh_end (html_entity_by_number)) {
 							if (kh_val (html_entity_by_number, k)) {
@@ -444,11 +445,15 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 						}
 						else {
 							/* Unicode point */
-							if (g_unichar_isgraph (val)) {
-								t += g_unichar_to_utf8 (val, t);
+							goffset off = t - s;
+							UBool is_error = 0;
+
+							U8_APPEND (s, off, len, uc, is_error);
+							if (!is_error) {
+								t = s + off;
 							}
 							else {
-								/* Leave unknown entities as is */
+								/* Leave invalid entities as is */
 								if (end - t >= h - e) {
 									memmove (t, e, h - e);
 									t += h - e;
