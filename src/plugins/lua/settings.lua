@@ -127,10 +127,17 @@ local function check_query_settings(task)
     -- settings_id is rspamd text, so need to convert it to string for lua
     local id_str = tostring(settings_id)
     local elt = settings_ids[id_str]
-    if elt and elt['apply'] then
-      apply_settings(task, elt['apply'])
-      rspamd_logger.infox(task, "applying settings id %s", id_str)
-      return true
+
+    if elt then
+      if elt['whitelist'] then
+        elt['apply'] = {whitelist = true}
+      end
+
+      if elt.apply then
+        apply_settings(task, elt['apply'])
+        rspamd_logger.infox(task, "applying settings id %s", id_str)
+        return true
+      end
     end
   end
 
