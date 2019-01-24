@@ -1389,15 +1389,15 @@ lua_task_load_from_file (lua_State * L)
 				else {
 					g_string_append_len (data, buf, r);
 				}
-
-				task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
-				task->msg.begin = data->str;
-				task->msg.len = data->len;
-				rspamd_mempool_add_destructor (task->task_pool,
-						lua_task_free_dtor, task);
-				res = TRUE;
-				g_string_free (data, FALSE); /* Buffer is still valid */
 			}
+
+			task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
+			task->msg.begin = data->str;
+			task->msg.len = data->len;
+			rspamd_mempool_add_destructor (task->task_pool,
+					lua_task_free_dtor, task);
+			res = TRUE;
+			g_string_free (data, FALSE); /* Buffer is still valid */
 		}
 		else {
 			map = rspamd_file_xmap (fname, PROT_READ, &sz, TRUE);
