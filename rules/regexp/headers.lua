@@ -958,6 +958,13 @@ reconf['HAS_XOIP'] = {
   group = 'headers'
 }
 
+reconf['HAS_X_TICKET_ID'] = {
+  re = string.format('%s', 'header_exists(X-Ticket-Id)'),
+  description = 'Has X-Ticket-Id header',
+  score = 0.0,
+  group = 'headers'
+}
+
 reconf['HAS_LIST_UNSUB'] = {
   re = string.format('%s', 'header_exists(List-Unsubscribe)'),
   description = 'Has List-Unsubscribe header',
