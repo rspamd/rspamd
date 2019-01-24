@@ -965,6 +965,13 @@ reconf['HAS_LIST_UNSUB'] = {
   group = 'headers'
 }
 
+reconf['HAS_X_REPORT_ABUSE'] = {
+  re = string.format('%s', 'header_exists(X-Report-Abuse)'),
+  description = 'Has X-Report-Abuse header',
+  score = 0.0,
+  group = 'headers'
+}
+
 reconf['HAS_GUC_PROXY_URI'] = {
    re = '/\\.googleusercontent\\.com\\/proxy/{url}i',
    description = 'Has googleusercontent.com proxy URI',
