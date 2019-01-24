@@ -6,12 +6,13 @@ Resource        ${TESTDIR}/lib/rspamd.robot
 Variables       ${TESTDIR}/lib/vars.py
 
 *** Variables ***
-${CONFIG}       ${TESTDIR}/configs/plugins.conf
+${CONFIG}        ${TESTDIR}/configs/plugins.conf
+${MESSAGE}       ${TESTDIR}/messages/newlines.eml
 ${MESSAGE1}      ${TESTDIR}/messages/fws_fn.eml
 ${MESSAGE2}      ${TESTDIR}/messages/fws_fp.eml
 ${MESSAGE3}      ${TESTDIR}/messages/fws_tp.eml
 ${MESSAGE4}      ${TESTDIR}/messages/broken_richtext.eml
-${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
+${URL_TLD}       ${TESTDIR}/../lua/unit/test_tld.dat
 ${RSPAMD_SCOPE}  Test
 
 
@@ -33,6 +34,11 @@ Issue 2349
 Broken Rich Text
   ${result} =  Scan Message With Rspamc  ${MESSAGE4}
   Check Rspamc  ${result}  BROKEN_CONTENT_TYPE
+
+Dynamic Config
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}
+  Check Rspamc  ${result}  SA_BODY_WORD (10
+  Check Rspamc  ${result}  \/ 20
 
 *** Keywords ***
 Rules Setup
