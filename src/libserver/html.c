@@ -378,9 +378,11 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 				/* First find in entities table */
 				*h = '\0';
 				entity = e + 1;
+				uc = 0;
 
 				if (*entity != '#') {
 					k = kh_get (entity_by_name, html_entity_by_name, entity);
+					*h = ';';
 
 					if (k != kh_end (html_entity_by_name)) {
 						if (kh_val (html_entity_by_name, k)) {
@@ -392,10 +394,16 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 								t += rep_len;
 							}
 						} else {
-							if (end - t >= h - e) {
-								memmove (t, e, h - e);
-								t += h - e;
+							if (end - t > h - e + 1) {
+								memmove (t, e, h - e + 1);
+								t += h - e + 1;
 							}
+						}
+					}
+					else {
+						if (end - t > h - e + 1) {
+							memmove (t, e, h - e + 1);
+							t += h - e + 1;
 						}
 					}
 				}
@@ -409,6 +417,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 					else {
 						base = 10;
 					}
+
 					if (base == 10) {
 						uc = strtoul ((e + 2), &end_ptr, base);
 					}
@@ -418,13 +427,16 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 
 					if (end_ptr != NULL && *end_ptr != '\0') {
 						/* Skip undecoded */
-						if (end - t >= h - e) {
-							memmove (t, e, h - e);
-							t += h - e;
+						*h = ';';
+
+						if (end - t > h - e + 1) {
+							memmove (t, e, h - e + 1);
+							t += h - e + 1;
 						}
 					}
 					else {
 						/* Search for a replacement */
+						*h = ';';
 						k = kh_get (entity_by_number, html_entity_by_number, uc);
 
 						if (k != kh_end (html_entity_by_number)) {
@@ -437,9 +449,9 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 									t += rep_len;
 								}
 							} else {
-								if (end - t >= h - e) {
-									memmove (t, e, h - e);
-									t += h - e;
+								if (end - t > h - e + 1) {
+									memmove (t, e, h - e + 1);
+									t += h - e + 1;
 								}
 							}
 						}
@@ -448,24 +460,41 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 							goffset off = t - s;
 							UBool is_error = 0;
 
-							U8_APPEND (s, off, len, uc, is_error);
-							if (!is_error) {
-								t = s + off;
-							}
-							else {
-								/* Leave invalid entities as is */
-								if (end - t >= h - e) {
-									memmove (t, e, h - e);
-									t += h - e;
+							if (uc > 0) {
+								U8_APPEND (s, off, len, uc, is_error);
+								if (!is_error) {
+									t = s + off;
 								}
+								else {
+									/* Leave invalid entities as is */
+									if (end - t > h - e + 1) {
+										memmove (t, e, h - e + 1);
+										t += h - e + 1;
+									}
+								}
+							}
+							else if (end - t > h - e + 1) {
+								memmove (t, e, h - e + 1);
+								t += h - e + 1;
 							}
 						}
 					}
 				}
 
-				*h = ';';
 				state = 0;
 			}
+			else if (*h == '&') {
+				/* Previous `&` was bogus */
+				state = 1;
+
+				if (end - t > h - e) {
+					memmove (t, e, h - e);
+					t += h - e;
+				}
+
+				e = h;
+			}
+
 			h++;
 
 			break;
@@ -475,7 +504,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 	/* Leftover */
 	if (state == 1 && h > e) {
 		/* Unfinished entity, copy as is */
-		if (end - t >= h - e) {
+		if (end - t > h - e) {
 			memmove (t, e, h - e);
 			t += h - e;
 		}
