@@ -1101,16 +1101,6 @@ rspamd_config.INVALID_RCPT_8BIT = {
   type = 'mime',
 }
 
-rspamd_config.HAS_X_REPORT_ABUSE = {
-  callback = function (task)
-    local xtid = task:get_header('X-Report-Abuse', true)
-    if (xtid) then return true end
-  end,
-  description = 'Has X-Report-Abuse header',
-  score = 0.0,
-  group = 'headers',
-}
-
 rspamd_config.XM_CASE = {
   callback = function (task)
     local xm = task:get_header('X-mailer', true)
