@@ -1111,13 +1111,3 @@ rspamd_config.XM_CASE = {
   group = 'headers',
   type = 'mime',
 }
-
-rspamd_config.HAS_X_TICKET_ID = {
-  callback = function (task)
-    local xtid = task:get_header('X-Ticket-Id', true)
-    if (xtid) then return true end
-  end,
-  description = 'Has X-Ticket-Id header',
-  score = 0.0,
-  group = 'headers',	
-}
