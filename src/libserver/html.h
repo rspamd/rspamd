@@ -127,7 +127,7 @@ struct html_content {
 /*
  * Decode HTML entitles in text. Text is modified in place.
  */
-guint rspamd_html_decode_entitles_inplace (gchar *s, guint len);
+guint rspamd_html_decode_entitles_inplace (gchar *s, gsize len);
 
 GByteArray* rspamd_html_process_part (rspamd_mempool_t *pool,
 		struct html_content *hc,

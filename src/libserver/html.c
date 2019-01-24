@@ -337,9 +337,9 @@ rspamd_html_tag_by_id (gint id)
 
 /* Decode HTML entitles in text */
 guint
-rspamd_html_decode_entitles_inplace (gchar *s, guint len)
+rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 {
-	guint l, rep_len;
+	goffset l, rep_len;
 	gchar *t = s, *h = s, *e = s, *end_ptr;
 	const gchar *end;
 	const gchar *entity;
@@ -355,7 +355,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 
 	end = s + l;
 
-	while (h - s < (gint)l) {
+	while (h - s < l) {
 		switch (state) {
 		/* Out of entity */
 		case 0:
@@ -448,7 +448,11 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 								t += g_unichar_to_utf8 (val, t);
 							}
 							else {
-								/* Remove unknown entities */
+								/* Leave unknown entities as is */
+								if (end - t >= h - e) {
+									memmove (t, e, h - e);
+									t += h - e;
+								}
 							}
 						}
 					}
@@ -460,6 +464,15 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 			h++;
 
 			break;
+		}
+	}
+
+	/* Leftover */
+	if (state == 1 && h > e) {
+		/* Unfinished entity, copy as is */
+		if (end - t >= h - e) {
+			memmove (t, e, h - e);
+			t += h - e;
 		}
 	}
 
@@ -898,7 +911,7 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 	return ret;
 }
 
-static void
+static inline void
 rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		struct html_content *hc, struct html_tag *tag, const guchar *in,
 		gint *statep, guchar const **savep)
@@ -1151,12 +1164,16 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 
 		if (store) {
 			if (*savep != NULL) {
+				gchar *s;
+
 				g_assert (tag->params != NULL);
 				comp = g_queue_peek_tail (tag->params);
 				g_assert (comp != NULL);
 				comp->len = in - *savep;
-				comp->start = *savep;
-				/* We cannot use entities inside tag values ! */
+				s = rspamd_mempool_alloc (pool, comp->len);
+				memcpy (s, *savep, comp->len);
+				comp->len = rspamd_html_decode_entitles_inplace (s, comp->len);
+				comp->start = s;
 				*savep = NULL;
 			}
 		}
@@ -1169,11 +1186,16 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		}
 		if (store) {
 			if (*savep != NULL) {
+				gchar *s;
+
 				g_assert (tag->params != NULL);
 				comp = g_queue_peek_tail (tag->params);
 				g_assert (comp != NULL);
 				comp->len = in - *savep;
-				comp->start = *savep;
+				s = rspamd_mempool_alloc (pool, comp->len);
+				memcpy (s, *savep, comp->len);
+				comp->len = rspamd_html_decode_entitles_inplace (s, comp->len);
+				comp->start = s;
 				*savep = NULL;
 			}
 		}
@@ -1191,11 +1213,16 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 
 		if (store) {
 			if (*savep != NULL) {
+				gchar *s;
+
 				g_assert (tag->params != NULL);
 				comp = g_queue_peek_tail (tag->params);
 				g_assert (comp != NULL);
 				comp->len = in - *savep;
-				comp->start = *savep;
+				s = rspamd_mempool_alloc (pool, comp->len);
+				memcpy (s, *savep, comp->len);
+				comp->len = rspamd_html_decode_entitles_inplace (s, comp->len);
+				comp->start = s;
 				*savep = NULL;
 			}
 		}
