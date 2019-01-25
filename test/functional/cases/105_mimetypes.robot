@@ -33,6 +33,16 @@ Dotted file name is followed by Bad Extension
   Check Rspamc  ${result}  MIME_BAD_EXTENSION \\(\\d+\\.\\d+\\)\\[exe\\]\\n  re=1
   Should Not Contain  ${result.stdout}  MIME_DOUBLE_BAD_EXTENSION
 
+Dotted numbers in parentheses is followed by Bad Extension
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/next2last-digits_in_parens.eml
+  Check Rspamc  ${result}  MIME_BAD_EXTENSION \\(\\d+\\.\\d+\\)\\[msi\\]\\n  re=1
+  Should Not Contain  ${result.stdout}  MIME_DOUBLE_BAD_EXTENSION
+
+Dotted numbers in square brackets is followed by Bad Extension
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/next2last-digits_in_brackets.eml
+  Check Rspamc  ${result}  MIME_BAD_EXTENSION \\(\\d+\\.\\d+\\)\\[msi\\]\\n  re=1
+  Should Not Contain  ${result.stdout}  MIME_DOUBLE_BAD_EXTENSION
+
 Rar4
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/rar4.eml
   Check Rspamc  ${result}  MIME_BAD_EXTENSION \\(\\d+\\.\\d+\\)\\[exe\\]\\n  re=1
