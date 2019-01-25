@@ -479,7 +479,7 @@ local full_extensions_map = {
   {"mqv", "video/quicktime"},
   {"ms", "application/x-troff-ms"},
   {"msg", "application/vnd.ms-outlook"},
-  {"msi", "application/octet-stream"},
+  {"msi", {"application/x-msi", "application/octet-stream"}},
   {"mso", "application/octet-stream"},
   {"mts", "video/vnd.dlna.mpeg-tts"},
   {"mtx", "application/xml"},
