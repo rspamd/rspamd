@@ -854,7 +854,7 @@ local function check_mime_type(task)
       if #parts > 2 then
         -- We need to ensure that next-to-last extension is an extension,
         -- so we check for its length and if it is not a number or date
-        if #ext2 <= 4 and not string.match(ext2, '^%d+$') then
+        if #ext2 <= 4 and not string.match(ext2, '^%d+[%]%)]?$') then
 
           -- Use the greatest badness multiplier
           if not badness_mult or
