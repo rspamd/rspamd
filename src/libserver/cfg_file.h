@@ -270,6 +270,8 @@ enum rspamd_action_type {
 	METRIC_ACTION_NOACTION,
 	METRIC_ACTION_MAX,
 	METRIC_ACTION_CUSTOM = 999,
+	METRIC_ACTION_MILTER_DISCARD,
+	METRIC_ACTION_MILTER_QUARANTINE
 };
 
 enum rspamd_action_flags {
@@ -277,6 +279,7 @@ enum rspamd_action_flags {
 	RSPAMD_ACTION_NO_THRESHOLD = (1u << 0),
 	RSPAMD_ACTION_THRESHOLD_ONLY = (1u << 1),
 	RSPAMD_ACTION_HAM = (1u << 2),
+	RSPAMD_ACTION_MILTER = (1u << 3),
 };
 
 

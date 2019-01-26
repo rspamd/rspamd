@@ -1929,6 +1929,24 @@ rspamd_config_action_from_ucl (struct rspamd_config *cfg,
 				}
 			}
 		}
+
+		elt = ucl_object_lookup (obj, "milter");
+
+		if (elt) {
+			const gchar *milter_action = ucl_object_tostring (elt);
+
+			if (strcmp (milter_action, "discard") == 0) {
+				flags |= RSPAMD_ACTION_MILTER;
+				act->action_type = METRIC_ACTION_MILTER_DISCARD;
+			}
+			else if (strcmp (milter_action, "quarantine") == 0) {
+				flags |= RSPAMD_ACTION_MILTER;
+				act->action_type = METRIC_ACTION_MILTER_QUARANTINE;
+			}
+			else {
+				msg_warn_config ("unknown milter action: %s", milter_action);
+			}
+		}
 	}
 	else if (obj_type == UCL_FLOAT || obj_type == UCL_INT) {
 		threshold = ucl_object_todouble (obj);
@@ -1946,11 +1964,12 @@ rspamd_config_action_from_ucl (struct rspamd_config *cfg,
 	act->threshold = threshold;
 	act->flags = flags;
 
-	if (rspamd_action_from_str (act->name, &std_act)) {
-		act->action_type = std_act;
-	}
-	else {
-		act->action_type = METRIC_ACTION_CUSTOM;
+	if (!(flags & RSPAMD_ACTION_MILTER)) {
+		if (rspamd_action_from_str (act->name, &std_act)) {
+			act->action_type = std_act;
+		} else {
+			act->action_type = METRIC_ACTION_CUSTOM;
+		}
 	}
 
 	return TRUE;
