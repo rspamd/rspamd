@@ -514,6 +514,16 @@ local function arc_signing_cb(task)
     return
   end
 
+  -- TODO: support multiple signatures here and not this hack
+  if #p.keys > 0 then
+    p.selector = p.keys[1].selector
+    if p.keys[1].type == "raw" then
+      p.rawkey = p.keys[1].key
+    else
+      p.key = p.keys[1].key
+    end
+  end
+
   p.arc_cv = 'none'
   p.arc_idx = 1
   p.no_cache = true

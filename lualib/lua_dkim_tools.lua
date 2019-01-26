@@ -22,19 +22,55 @@ local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
 local logger = require "rspamd_logger"
 
-local function check_violation(N, task, domain, selector)
+local function check_violation(N, task, domain)
   -- Check for DKIM_REJECT
   local sym_check = 'R_DKIM_REJECT'
 
   if N == 'arc' then sym_check = 'ARC_REJECT' end
   if task:has_symbol(sym_check) then
     local sym = task:get_symbol(sym_check)
-    logger.infox(task, 'skip signing for %s:%s: violation %s found: %s',
-        domain, selector, sym_check, sym.options)
+    logger.infox(task, 'skip signing for %s: violation %s found: %s',
+        domain, sym_check, sym.options)
     return false
   end
 
   return true
+end
+
+local function insert_or_update_prop(N, task, p, prop, origin, data)
+  if #p.keys == 0 then
+    local k = {}
+    k[prop] = data
+    table.insert(p.keys, k)
+    lua_util.debugm(N, task, 'add %s "%s" using %s', prop, data, origin)
+  else
+    for _, k in ipairs(p.keys) do
+      if not k[prop] then
+        k[prop] = data
+        lua_util.debugm(N, task, 'set %s to "%s" using %s', prop, data, origin)
+      end
+    end
+  end
+end
+
+local function get_mempool_selectors(N, task)
+  local p = {}
+  local key_var = "dkim_key"
+  local selector_var = "dkim_selector"
+  if N == "arc" then
+    key_var = "arc_key"
+    selector_var = "arc_selector"
+  end
+
+  p.key = task:get_mempool():get_variable(key_var)
+  p.selector = task:get_mempool():get_variable(selector_var)
+
+  if (not p.key or not p.selector) then
+    return false, {}
+  end
+
+  lua_util.debugm(N, task, 'override selector and key to %s:%s', p.key, p.selector)
+  return true, p
 end
 
 local function parse_dkim_http_headers(N, task, settings)
@@ -66,11 +102,17 @@ local function parse_dkim_http_headers(N, task, settings)
       end
     end
 
-    return true,{
-      rawkey = tostring(key),
+    local p = {
       domain = tostring(domain),
-      selector = tostring(selector)
+      keys = {}
     }
+    local k = {
+      key = tostring(key),
+      selector = tostring(selector),
+      type = 'raw'
+    }
+    table.insert(p.keys, k)
+    return true, p
   end
 
   lua_util.debugm(N, task, 'no sign header %s', headers.sign_header)
@@ -216,81 +258,65 @@ local function prepare_dkim_signing(N, task, settings)
   }
 
   if settings.domain[dkim_domain] then
-    p.selector = settings.domain[dkim_domain].selector
-    p.key = settings.domain[dkim_domain].path
-    for _, s in ipairs(settings.domain[dkim_domain].selectors) do
+    -- support old style selector/paths
+    if settings.domain[dkim_domain].selector or
+       settings.domain[dkim_domain].path then
+      local k = {}
+      k.selector = settings.domain[dkim_domain].selector
+      k.key = settings.domain[dkim_domain].path
+      table.insert(p.keys, k)
+    end
+    for _, s in ipairs((settings.domain[dkim_domain].selectors or {})) do
       lua_util.debugm(N, task, 'adding selector: %1', s)
       local k = {}
       k.selector = s.selector
       k.key = s.path
-      --bit of a hack to make other code play nice
-      p.selector = s.selector
-      p.key = s.path
       table.insert(p.keys, k)
     end
   end
 
-  if not p.key and p.selector then
-    local key_var = "dkim_key"
-    local selector_var = "dkim_selector"
-    if N == "arc" then
-      key_var = "arc_key"
-      selector_var = "arc_selector"
+  if #p.keys == 0 then
+    local ret, k = get_mempool_selectors(N, task)
+    if ret then
+      table.insert(p.keys, k)
+      lua_util.debugm(N, task, 'using mempool selector %s with key %s',
+                      k.selector, k.key)
     end
-
-    p.key = task:get_mempool():get_variable(key_var)
-    local selector_override = task:get_mempool():get_variable(selector_var)
-
-    if selector_override then
-      p.selector = selector_override
-    end
-
-    if (not p.key or not p.selector) and (not (settings.try_fallback or
-        settings.use_redis or settings.selector_map
-        or settings.path_map)) then
-      lua_util.debugm(N, task, 'dkim unconfigured and fallback disabled')
-      return false,{}
-    end
-
-    lua_util.debugm(N, task, 'override selector and key to %s:%s', p.key, p.selector)
   end
 
-  if not p.selector and settings.selector_map then
+  if settings.selector_map then
     local data = settings.selector_map:get_key(dkim_domain)
     if data then
-      p.selector = data
-      lua_util.debugm(N, task, 'override selector to "%s" using selector_map', p.selector)
-    elseif not settings.try_fallback then
-      lua_util.debugm(N, task, 'no selector for %s', dkim_domain)
-      return false,{}
+      insert_or_update_prop(N, task, p, 'selector', 'selector_map', data)
+    else
+      lua_util.debugm(N, task, 'no selector in map for %s', dkim_domain)
     end
   end
 
-  if not p.key and settings.path_map then
+  if settings.path_map then
     local data = settings.path_map:get_key(dkim_domain)
     if data then
-      p.key = data
-      lua_util.debugm(N, task, 'override key to "%s" using path_map', p.key)
-    elseif not settings.try_fallback then
-      lua_util.debugm(N, task, 'no key for %s', dkim_domain)
-      return false,{}
+      insert_or_update_prop(N, task, p, 'key', 'path_map', data)
+    else
+      lua_util.debugm(N, task, 'no key in map for %s', dkim_domain)
     end
   end
 
-  if not p.key then
-    if not settings.use_redis then
-      p.key = settings.path
-      lua_util.debugm(N, task, 'use default key "%s" from path', p.key)
-    end
+  if #p.keys == 0 and not settings.try_fallback then
+    lua_util.debugm(N, task, 'dkim unconfigured and fallback disabled')
+    return false,{}
   end
 
-  if not p.selector then
-    p.selector = settings.selector
-    lua_util.debugm(N, task, 'use default selector "%s"', p.selector)
+  if not settings.use_redis then
+    insert_or_update_prop(N, task, p, 'key',
+        'default path', settings.path)
   end
+
+  insert_or_update_prop(N, task, p, 'selector',
+        'default selector', settings.selector)
 
   if settings.check_violation then
-    if not check_violation(N, task, p.domain, p.selector) then
+    if not check_violation(N, task, p.domain) then
       return false,{}
     end
   end
