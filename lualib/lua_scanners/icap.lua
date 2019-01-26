@@ -69,7 +69,9 @@ local function icap_check(task, content, digest, rule)
         end
         if string.find(s, '[%a%d-+]-:') then
           local _,_,key,value = tostring(s):find("([%a%d-+]-):%s?(.+)")
-          icap_headers[key] = value
+          if key ~= nil then
+            icap_headers[key] = value
+          end
         end
       end
       lua_util.debugm(rule.name, task, '%s: icap_headers: %s',
