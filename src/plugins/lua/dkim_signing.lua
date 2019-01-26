@@ -171,8 +171,17 @@ local function dkim_signing_cb(task)
         lua_util.debugm(N, task, 'key found at "%s", use selector "%s" for domain "%s"',
             p.key, p.selector, p.domain)
       end
-
-      do_sign()
+      -- TODO: push handling of multiples keys into sign code
+      if #p.keys > 0 then
+        lua_util.debugm(N, task, 'signing for multiple selectors, %1', #p.keys);
+        for _, k in ipairs(p.keys) do
+          p.selector = k.selector
+          p.key = k.key
+          do_sign()
+        end
+      else
+        do_sign()
+      end
     else
       rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
       return false

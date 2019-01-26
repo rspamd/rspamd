@@ -141,6 +141,12 @@ dkim_module_key_dtor (gpointer k)
 	rspamd_dkim_key_unref (key);
 }
 
+static void
+dkim_module_free_list (gpointer k)
+{
+	g_list_free_full ((GList *)k, rspamd_gstring_free_hard);
+}
+
 gint
 dkim_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 {
@@ -792,6 +798,7 @@ lua_dkim_sign_handler (lua_State *L)
 	enum rspamd_dkim_type sign_type = RSPAMD_DKIM_NORMAL;
 	GError *err = NULL;
 	GString *hdr;
+	GList *sigs = NULL;
 	const gchar *selector = NULL, *domain = NULL, *key = NULL, *rawkey = NULL,
 			*headers = NULL, *sign_type_str = NULL, *arc_cv = NULL,
 			*pubkey = NULL;
@@ -962,8 +969,14 @@ lua_dkim_sign_handler (lua_State *L)
 	if (hdr) {
 
 		if (!no_cache) {
-			rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
-					hdr, rspamd_gstring_free_hard);
+			sigs = rspamd_mempool_get_variable (task->task_pool, "dkim-signature");
+			if (sigs == NULL) {
+				sigs = g_list_append (sigs, hdr);
+				rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
+						sigs, dkim_module_free_list);
+			} else {
+				(void) g_list_append (sigs, hdr);
+			}
 		}
 
 		lua_pushboolean (L, TRUE);
@@ -1362,6 +1375,7 @@ dkim_sign_callback (struct rspamd_task *task,
 	gint64 arc_idx = 0;
 	gsize len;
 	GString *tb, *hdr;
+	GList *sigs = NULL;
 	GError *err = NULL;
 	const gchar *selector = NULL, *domain = NULL, *key = NULL, *key_type = NULL,
 			*sign_type_str = NULL, *arc_cv = NULL;
@@ -1506,9 +1520,9 @@ dkim_sign_callback (struct rspamd_task *task,
 					ctx);
 
 			if (hdr) {
-				rspamd_mempool_set_variable (task->task_pool,
-						"dkim-signature",
-						hdr, rspamd_gstring_free_hard);
+				sigs = g_list_append (sigs, hdr);
+				rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
+						sigs, dkim_module_free_list);
 			}
 
 			sign = TRUE;

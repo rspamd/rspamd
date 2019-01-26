@@ -211,11 +211,23 @@ local function prepare_dkim_signing(N, task, settings)
     end
   end
 
-  local p = {}
+  local p = {
+    keys = {}
+  }
 
   if settings.domain[dkim_domain] then
     p.selector = settings.domain[dkim_domain].selector
     p.key = settings.domain[dkim_domain].path
+    for _, s in ipairs(settings.domain[dkim_domain].selectors) do
+      lua_util.debugm(N, task, 'adding selector: %1', s)
+      local k = {}
+      k.selector = s.selector
+      k.key = s.path
+      --bit of a hack to make other code play nice
+      p.selector = s.selector
+      p.key = s.path
+      table.insert(p.keys, k)
+    end
   end
 
   if not p.key and p.selector then
