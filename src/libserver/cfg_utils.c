@@ -2266,6 +2266,10 @@ rspamd_action_to_str (enum rspamd_action_type action)
 		return "invalid max action";
 	case METRIC_ACTION_CUSTOM:
 		return "custom";
+	case METRIC_ACTION_MILTER_DISCARD:
+		return "discard";
+	case METRIC_ACTION_MILTER_QUARANTINE:
+		return "quarantine";
 	}
 
 	return "unknown action";
@@ -2291,6 +2295,10 @@ rspamd_action_to_str_alt (enum rspamd_action_type action)
 		return "invalid max action";
 	case METRIC_ACTION_CUSTOM:
 		return "custom";
+	case METRIC_ACTION_MILTER_DISCARD:
+		return "discard";
+	case METRIC_ACTION_MILTER_QUARANTINE:
+		return "quarantine";
 	}
 
 	return "unknown action";
