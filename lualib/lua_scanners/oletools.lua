@@ -167,8 +167,8 @@ local function oletools_check(task, content, digest, rule)
               m_autoexec = 'A'
               table.insert(analysis_keyword_table, a.keyword)
             elseif a.type == 'Suspicious' then
-              if rule.extended == true then m_suspicious = 'S' end
-              if a.keyword ~= 'Base64 Strings' and a.keyword ~= 'Hex Strings'
+              if rule.extended == true or
+                (a.keyword ~= 'Base64 Strings' and a.keyword ~= 'Hex Strings')
               then
                 m_suspicious = 'S'
                 table.insert(analysis_keyword_table, a.keyword)
