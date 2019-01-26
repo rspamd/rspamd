@@ -25,6 +25,7 @@
 #include "libutil/http.h"
 #include "libutil/http_private.h"
 #include "libserver/protocol_internal.h"
+#include "libserver/cfg_file_private.h"
 #include "libmime/filter.h"
 #include "libserver/worker_util.h"
 #include "utlist.h"
@@ -1557,7 +1558,7 @@ rspamd_milter_remove_header_safe (struct rspamd_milter_session *session,
  */
 static gboolean
 rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
-		const ucl_object_t *obj, gint action)
+		const ucl_object_t *obj, struct rspamd_action *action)
 {
 	const ucl_object_t *elt, *cur, *cur_elt;
 	ucl_object_iter_t it;
@@ -1731,7 +1732,7 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 		}
 	}
 
-	if (action == METRIC_ACTION_ADD_HEADER) {
+	if (action->action_type == METRIC_ACTION_ADD_HEADER) {
 		elt = ucl_object_lookup (obj, "spam_header");
 
 		if (elt) {
@@ -1783,7 +1784,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 	const ucl_object_t *elt;
 	struct rspamd_milter_private *priv = session->priv;
 	const gchar *str_action;
-	gint action = METRIC_ACTION_REJECT;
+	struct rspamd_action *action;
 	rspamd_fstring_t *xcode = NULL, *rcode = NULL, *reply = NULL;
 	GString *hname, *hvalue;
 	gboolean processed = FALSE;
@@ -1805,7 +1806,14 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 	}
 
 	str_action = ucl_object_tostring (elt);
-	rspamd_action_from_str (str_action, &action);
+	action = rspamd_config_get_action (milter_ctx->cfg, str_action);
+
+	if (action == NULL) {
+		msg_err_milter ("action %s has not been registered", str_action);
+		rspamd_milter_send_action (session, RSPAMD_MILTER_TEMPFAIL);
+
+		goto cleanup;
+	}
 
 	elt = ucl_object_lookup (results, "messages");
 	if (elt) {
@@ -1860,7 +1868,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		goto cleanup;
 	}
 
-	switch (action) {
+	switch (action->action_type) {
 	case METRIC_ACTION_REJECT:
 		if (priv->discard_on_reject) {
 			rspamd_milter_send_action (session, RSPAMD_MILTER_DISCARD);
@@ -1939,6 +1947,17 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		rspamd_milter_send_action (session, RSPAMD_MILTER_ACCEPT);
 		break;
 
+	case METRIC_ACTION_MILTER_QUARANTINE:
+		/* TODO: be more flexible about SMTP messages */
+		rspamd_milter_send_action (session, RSPAMD_MILTER_QUARANTINE,
+				RSPAMD_MILTER_QUARANTINE_MESSAGE);
+
+		/* Quarantine also requires accept action, all hail Sendmail */
+		rspamd_milter_send_action (session, RSPAMD_MILTER_ACCEPT);
+		break;
+	case METRIC_ACTION_MILTER_DISCARD:
+		rspamd_milter_send_action (session, RSPAMD_MILTER_DISCARD);
+		break;
 	case METRIC_ACTION_GREYLIST:
 	case METRIC_ACTION_NOACTION:
 	default:

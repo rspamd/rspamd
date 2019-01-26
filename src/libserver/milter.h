@@ -43,12 +43,14 @@ enum rspamd_milter_reply {
 struct rspamd_email_address;
 struct event_base;
 struct rspamd_http_message;
+struct rspamd_config;
 
 struct rspamd_milter_context {
 	const gchar *spam_header;
 	const gchar *client_ca_name;
 	const gchar *reject_message;
 	void *sessions_cache;
+	struct rspamd_config *cfg;
 	gboolean discard_on_reject;
 	gboolean quarantine_on_reject;
 };

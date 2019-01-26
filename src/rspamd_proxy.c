@@ -2245,6 +2245,7 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 	ctx->milter_ctx.sessions_cache = ctx->sessions_cache;
 	ctx->milter_ctx.client_ca_name = ctx->client_ca_name;
 	ctx->milter_ctx.reject_message = ctx->reject_message;
+	ctx->milter_ctx.cfg = ctx->cfg;
 	rspamd_milter_init_library (&ctx->milter_ctx);
 
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
