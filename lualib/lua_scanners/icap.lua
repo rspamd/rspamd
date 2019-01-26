@@ -44,8 +44,6 @@ local function icap_check(task, content, digest, rule)
       "Encapsulated: null-body=0\r\n\r\n",
     }
     local size = string.format("%x", tonumber(#content))
-    lua_util.debugm(rule.name, task, '%s: size: %s',
-        rule.log_prefix, size)
 
     local function get_respond_query()
       table.insert(respond_headers, 1,
@@ -69,8 +67,8 @@ local function icap_check(task, content, digest, rule)
         if string.find(s, '^ICAP') then
           icap_headers['icap'] = s
         end
-        if string.find(s, '[%a%d-+]-: ') then
-          local _,_,key,value = tostring(s):find("([%a%d-+]-):%s(.+)")
+        if string.find(s, '[%a%d-+]-:') then
+          local _,_,key,value = tostring(s):find("([%a%d-+]-):%s?(.+)")
           icap_headers[key] = value
         end
       end
@@ -94,6 +92,14 @@ local function icap_check(task, content, digest, rule)
         X-Infection-Found: Type=2; Resolution=2; Threat=Encrypted container violation;
       Sophos Strings:
         X-Virus-ID: Troj/DocDl-OYC
+      Kaspersky Strings:
+        X-Virus-ID: HEUR:Backdoor.Java.QRat.gen
+        X-Response-Info: blocked
+
+        X-Virus-ID: no threats
+        X-Response-Info: blocked
+
+        X-Response-Info: passed
       ]] --
 
       if icap_headers['X-Infection-Found'] ~= nil then
@@ -111,10 +117,19 @@ local function icap_check(task, content, digest, rule)
           table.insert(threat_string, icap_threat)
         end
 
-      elseif icap_headers['X-Virus-ID'] ~= nil then
+      elseif icap_headers['X-Virus-ID'] ~= nil and icap_headers['X-Virus-ID'] ~= "no threats" then
         lua_util.debugm(rule.name, task,
             '%s: icap X-Virus-ID: %s', rule.log_prefix, icap_headers['X-Virus-ID'])
-        table.insert(threat_string, icap_headers['X-Virus-ID'])
+
+        if string.find(icap_headers['X-Virus-ID'], ', ') then
+          local vnames = rspamd_str_split(string.gsub(icap_headers['X-Virus-ID'], "%s", ""), ',') or {}
+
+          for _,v in ipairs(vnames) do
+            table.insert(threat_string, v)
+          end
+        else
+          table.insert(threat_string, icap_headers['X-Virus-ID'])
+        end
       end
 
       if #threat_string > 0 then
