@@ -1947,7 +1947,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		rspamd_milter_send_action (session, RSPAMD_MILTER_ACCEPT);
 		break;
 
-	case METRIC_ACTION_MILTER_QUARANTINE:
+	case METRIC_ACTION_QUARANTINE:
 		/* TODO: be more flexible about SMTP messages */
 		rspamd_milter_send_action (session, RSPAMD_MILTER_QUARANTINE,
 				RSPAMD_MILTER_QUARANTINE_MESSAGE);
@@ -1955,7 +1955,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 		/* Quarantine also requires accept action, all hail Sendmail */
 		rspamd_milter_send_action (session, RSPAMD_MILTER_ACCEPT);
 		break;
-	case METRIC_ACTION_MILTER_DISCARD:
+	case METRIC_ACTION_DISCARD:
 		rspamd_milter_send_action (session, RSPAMD_MILTER_DISCARD);
 		break;
 	case METRIC_ACTION_GREYLIST:

@@ -1937,11 +1937,11 @@ rspamd_config_action_from_ucl (struct rspamd_config *cfg,
 
 			if (strcmp (milter_action, "discard") == 0) {
 				flags |= RSPAMD_ACTION_MILTER;
-				act->action_type = METRIC_ACTION_MILTER_DISCARD;
+				act->action_type = METRIC_ACTION_DISCARD;
 			}
 			else if (strcmp (milter_action, "quarantine") == 0) {
 				flags |= RSPAMD_ACTION_MILTER;
-				act->action_type = METRIC_ACTION_MILTER_QUARANTINE;
+				act->action_type = METRIC_ACTION_QUARANTINE;
 			}
 			else {
 				msg_warn_config ("unknown milter action: %s", milter_action);
@@ -2239,6 +2239,12 @@ rspamd_action_from_str (const gchar *data, gint *result)
 	case 0x167C0DF4BAA9BCECULL: /* accept */
 		*result = METRIC_ACTION_NOACTION;
 		break;
+	case 0x4E9666ECCD3FC314ULL: /* quarantine */
+		*result = METRIC_ACTION_QUARANTINE;
+		break;
+	case 0x93B346242F7F69B3ULL: /* discard */
+		*result = METRIC_ACTION_DISCARD;
+		break;
 	default:
 		return FALSE;
 	}
@@ -2266,9 +2272,9 @@ rspamd_action_to_str (enum rspamd_action_type action)
 		return "invalid max action";
 	case METRIC_ACTION_CUSTOM:
 		return "custom";
-	case METRIC_ACTION_MILTER_DISCARD:
+	case METRIC_ACTION_DISCARD:
 		return "discard";
-	case METRIC_ACTION_MILTER_QUARANTINE:
+	case METRIC_ACTION_QUARANTINE:
 		return "quarantine";
 	}
 
@@ -2295,9 +2301,9 @@ rspamd_action_to_str_alt (enum rspamd_action_type action)
 		return "invalid max action";
 	case METRIC_ACTION_CUSTOM:
 		return "custom";
-	case METRIC_ACTION_MILTER_DISCARD:
+	case METRIC_ACTION_DISCARD:
 		return "discard";
-	case METRIC_ACTION_MILTER_QUARANTINE:
+	case METRIC_ACTION_QUARANTINE:
 		return "quarantine";
 	}
 

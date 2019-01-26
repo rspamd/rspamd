@@ -970,11 +970,11 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	}
 	if (action->flags & RSPAMD_ACTION_MILTER) {
 		/* Treat milter action specially */
-		if (action->action_type == METRIC_ACTION_MILTER_DISCARD) {
+		if (action->action_type == METRIC_ACTION_DISCARD) {
 			ucl_object_insert_key (obj, ucl_object_fromstring ("discard"),
 					"reject", 0, false);
 		}
-		else if (action->action_type == METRIC_ACTION_MILTER_QUARANTINE) {
+		else if (action->action_type == METRIC_ACTION_QUARANTINE) {
 			ucl_object_insert_key (obj, ucl_object_fromstring ("quarantine"),
 					"reject", 0, false);
 		}
