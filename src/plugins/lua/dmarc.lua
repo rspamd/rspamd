@@ -977,7 +977,7 @@ if opts['reporting'] == true then
                   report_start, report_end)
               conn:add_write(pre_quit_cb, {rhead,
                                            encoded,
-                                           report_footer,
+                                           report_footer:gsub("\n", "\r\n"),
                                            '\r\n.\r\n'})
             end
           end
