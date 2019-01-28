@@ -24,6 +24,7 @@ local http = require "rspamd_http"
 local upstream_list = require "rspamd_upstream_list"
 local rspamd_logger = require "rspamd_logger"
 local ucl = require "ucl"
+local common = require "lua_scanners/common"
 
 local N = 'vadesecure'
 
@@ -178,6 +179,14 @@ local function vade_check(task, content, digest, rule)
       end
 
       task:insert_result(sym.symbol, 1.0, opts)
+    end
+  end
+
+  if rule.dynamic_scan then
+    local pre_check, pre_check_msg = common.check_metric_results(task, rule)
+    if pre_check then
+      rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, pre_check_msg)
+      return true
     end
   end
 

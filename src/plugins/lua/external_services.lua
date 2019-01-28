@@ -194,13 +194,23 @@ if opts and type(opts) == 'table' then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
       else
         m = nrule
-        local id = rspamd_config:register_symbol({
-          type = 'normal',
-          name = m['symbol'],
+
+        local t = {
+          name = m.symbol,
           callback = cb,
           score = 0.0,
           group = N
-        })
+        }
+
+        if m.symbol_type == 'postfilter' then
+          t.type = 'postfilter'
+          t.priority = 3
+        else
+          t.type = 'normal'
+        end
+
+        local id = rspamd_config:register_symbol(t)
+
         rspamd_config:register_symbol({
           type = 'virtual,nostat',
           name = m['symbol_fail'],
