@@ -270,9 +270,10 @@ end
 local function check_parts_match(task, rule)
 
   local filter_func = function(p)
-    local content_type,content_subtype = p:get_type()
+    local mtype,msubtype = p:get_type()
+    local dmtype,dmsubtype = p:get_detected_type()
     local fname = p:get_filename()
-    local ext, ext2, part_table
+    local ext, ext2
     local extension_check = false
     local content_type_check = false
     local text_part_min_words_check = true
@@ -280,9 +281,7 @@ local function check_parts_match(task, rule)
     if rule.scan_all_mime_parts == false then
     -- check file extension and filename regex matching
       if fname ~= nil then
-        ext,ext2,part_table = gen_extension(fname)
-        lua_util.debugm(rule.name, task, '%s: extension found: %s - 2.ext: %s - parts: %s',
-          rule.log_prefix, ext, ext2, part_table)
+        ext,ext2 = gen_extension(fname)
         if match_filter(task, ext, rule.mime_parts_filter_ext)
           or match_filter(task, ext2, rule.mime_parts_filter_ext) then
           lua_util.debugm(rule.name, task, '%s: extension matched: %s', rule.log_prefix, ext)
@@ -292,12 +291,36 @@ local function check_parts_match(task, rule)
           content_type_check = true
         end
       end
-      -- check content type regex matching
-      if content_type ~= nil and content_subtype ~= nil then
-        if match_filter(task, content_type..'/'..content_subtype, rule.mime_parts_filter_regex) then
-          lua_util.debugm(rule.name, task, '%s: regex ct: %s', rule.log_prefix,
-            content_type..'/'..content_subtype)
+      -- check content type string regex matching
+      if mtype ~= nil and msubtype ~= nil then
+        local ct = string.format('%s/%s', mtype, msubtype):lower()
+        if match_filter(task, ct, rule.mime_parts_filter_regex) then
+          lua_util.debugm(rule.name, task, '%s: regex content-type: %s', rule.log_prefix, ct)
           content_type_check = true
+        end
+      end
+      -- check detected content type (libmagic) regex matching
+      if dmtype ~= nil and dmsubtype ~= nil then
+        local ct = string.format('%s/%s', mtype, msubtype):lower()
+        if match_filter(task, ct, rule.mime_parts_filter_regex) then
+          lua_util.debugm(rule.name, task, '%s: regex detected libmagic content-type: %s', rule.log_prefix, ct)
+          content_type_check = true
+        end
+      end
+      -- check filenames in archives
+      if p:is_archive() then
+        local arch = p:get_archive()
+        local filelist = arch:get_files_full()
+        for _,f in ipairs(filelist) do
+          ext,ext2 = gen_extension(f.name)
+          if match_filter(task, ext, rule.mime_parts_filter_ext)
+            or match_filter(task, ext2, rule.mime_parts_filter_ext) then
+            lua_util.debugm(rule.name, task, '%s: extension matched in archive: %s', rule.log_prefix, ext)
+            extension_check = true
+          end
+          if match_filter(task, f.name, rule.mime_parts_filter_regex) then
+            content_type_check = true
+          end
         end
       end
     end
