@@ -376,9 +376,6 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 					task->task_pool);
 
 			if (cd) {
-				msg_debug_mime ("processed content disposition: %s",
-						cd->lc_data);
-
 				/* We still need to check filename */
 				if (cd->filename.len == 0) {
 					if (part->ct && part->ct->attrs) {
@@ -397,6 +394,9 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 						}
 					}
 				}
+
+				msg_debug_mime ("processed content disposition: %s, file: \"%T\"",
+						cd->lc_data, &cd->filename);
 				break;
 			}
 		}

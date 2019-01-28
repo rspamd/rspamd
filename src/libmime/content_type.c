@@ -17,6 +17,270 @@
 #include "libmime/content_type.h"
 #include "smtp_parsers.h"
 #include "utlist.h"
+#include "libserver/url.h"
+#include "libmime/mime_encoding.h"
+
+static gboolean
+rspamd_rfc2231_decode (rspamd_mempool_t *pool,
+		struct rspamd_content_type_param *param,
+		gchar *value_start, gchar *value_end)
+{
+	gchar *quote_pos;
+
+	quote_pos = memchr (value_start, '\'', value_end - value_start);
+
+	if (quote_pos == NULL) {
+		/* Plain percent encoding */
+		gsize r = rspamd_url_decode (value_start, value_start,
+				value_end - value_start);
+		param->value.begin = value_start;
+		param->value.len = r;
+	}
+	else {
+		/*
+		 * We can have encoding'language'data, or
+		 * encoding'data (in theory).
+		 * Try to handle both...
+		 */
+		const gchar *charset = NULL;
+		rspamd_ftok_t ctok;
+
+		ctok.begin = value_start;
+		ctok.len = quote_pos - value_start;
+
+		charset = rspamd_mime_detect_charset (&ctok, pool);
+
+		if (charset == NULL) {
+			msg_warn_pool ("cannot convert parameter from charset %T", &ctok);
+
+			return FALSE;
+		}
+
+		/* Now, we can check for either next quote sign or, eh, ignore that */
+		value_start = quote_pos + 1;
+
+		quote_pos = memchr (value_start, '\'', value_end - value_start);
+
+		if (quote_pos) {
+			/* Ignore language */
+			value_start = quote_pos + 1;
+		}
+
+		/* Perform percent decoding */
+		gsize r = rspamd_url_decode (value_start, value_start,
+				value_end - value_start);
+		GError *err = NULL;
+
+		param->value.begin = rspamd_mime_text_to_utf8 (pool,
+				value_start, r,
+				charset, &param->value.len, &err);
+
+		if (param->value.begin == NULL) {
+			msg_warn_pool ("cannot convert parameter from charset %s: %e",
+					charset, err);
+
+			if (err) {
+				g_error_free (err);
+			}
+
+			return FALSE;
+		}
+	}
+
+	param->flags |= RSPAMD_CONTENT_PARAM_RFC2231;
+
+	return TRUE;
+}
+
+static gboolean
+rspamd_param_maybe_rfc2231_process (rspamd_mempool_t *pool,
+									struct rspamd_content_type_param *param,
+									gchar *name_start, gchar *name_end,
+									gchar *value_start, gchar *value_end)
+{
+	const gchar *star_pos;
+
+	star_pos = memchr (name_start, '*', name_end - name_start);
+
+	if (star_pos == NULL) {
+		return FALSE;
+	}
+
+	/* We have three possibilities here:
+	 * 1. name* (just name + 2231 encoding)
+	 * 2. name*(\d+) (piecewise stuff but no rfc2231 encoding)
+	 * 3. name*(\d+)* (piecewise stuff and rfc2231 encoding)
+	 */
+
+	if (star_pos == name_end - 1) {
+		/* First */
+		if (rspamd_rfc2231_decode (pool, param, value_start, value_end)) {
+			param->name.begin = name_start;
+			param->name.len = name_end - name_start - 1;
+		}
+	}
+	else if (*(name_end - 1) == '*') {
+		/* Third */
+		/* Check number */
+		gulong tmp;
+
+		if (!rspamd_strtoul (star_pos + 1, name_end - star_pos - 2, &tmp)) {
+			return FALSE;
+		}
+
+		param->flags |= RSPAMD_CONTENT_PARAM_PIECEWISE|RSPAMD_CONTENT_PARAM_RFC2231;
+		param->rfc2231_id = tmp;
+		param->name.begin = name_start;
+		param->name.len = star_pos - name_start;
+		param->value.begin = value_start;
+		param->value.len = value_end - value_start;
+
+		/* Deal with that later... */
+	}
+	else {
+		/* Second case */
+		gulong tmp;
+
+		if (!rspamd_strtoul (star_pos + 1, name_end - star_pos - 1, &tmp)) {
+			return FALSE;
+		}
+
+		param->flags |= RSPAMD_CONTENT_PARAM_PIECEWISE;
+		param->rfc2231_id = tmp;
+		param->name.begin = name_start;
+		param->name.len = star_pos - name_start;
+		param->value.begin = value_start;
+		param->value.len = value_end - value_start;
+	}
+
+	return TRUE;
+}
+
+static gint32
+rspamd_cmp_pieces (struct rspamd_content_type_param *p1, struct rspamd_content_type_param *p2)
+{
+	return p1->rfc2231_id - p2->rfc2231_id;
+}
+
+static void
+rspamd_postprocess_ct_attributes (rspamd_mempool_t *pool,
+								  GHashTable *htb,
+								  void (*proc)(rspamd_mempool_t *, struct rspamd_content_type_param *, gpointer ud),
+								  gpointer procd)
+{
+	GHashTableIter it;
+	gpointer k, v;
+	struct rspamd_content_type_param *param, *sorted, *cur;
+
+	if (htb == NULL) {
+		return;
+	}
+
+	g_hash_table_iter_init (&it, htb);
+
+	while (g_hash_table_iter_next (&it, &k, &v)) {
+		param = (struct rspamd_content_type_param *)v;
+
+		if (param->flags & RSPAMD_CONTENT_PARAM_PIECEWISE) {
+			/* Reconstruct param */
+			gsize tlen = 0;
+			gchar *ndata, *pos;
+
+			sorted = param;
+			DL_SORT (sorted, rspamd_cmp_pieces);
+
+			DL_FOREACH (sorted, cur) {
+				tlen += cur->value.len;
+			}
+
+			ndata = rspamd_mempool_alloc (pool, tlen);
+			pos = ndata;
+
+			DL_FOREACH (sorted, cur) {
+				memcpy (pos, cur->value.begin, cur->value.len);
+				pos += cur->value.len;
+			}
+
+			if (param->flags & RSPAMD_CONTENT_PARAM_RFC2231) {
+				if (!rspamd_rfc2231_decode (pool, param,
+						ndata, pos)) {
+					param->flags |= RSPAMD_CONTENT_PARAM_BROKEN;
+					param->value.begin = ndata;
+					param->value.len = tlen;
+				}
+			}
+			else {
+				param->value.begin = ndata;
+				param->value.len = tlen;
+			}
+
+			/* Detach from list */
+			param->next = NULL;
+			param->prev = param;
+		}
+
+		proc (pool, param, procd);
+	}
+}
+
+static void
+rspamd_content_type_postprocess (rspamd_mempool_t *pool,
+								 struct rspamd_content_type_param *param,
+								 gpointer ud)
+{
+	rspamd_ftok_t srch;
+	struct rspamd_content_type_param *found = NULL;
+
+	struct rspamd_content_type *ct = (struct rspamd_content_type *)ud;
+
+	RSPAMD_FTOK_ASSIGN (&srch, "charset");
+
+	if (rspamd_ftok_cmp (&param->name, &srch) == 0) {
+		/* Adjust charset */
+		found = param;
+		ct->charset.begin = param->value.begin;
+		ct->charset.len = param->value.len;
+	}
+
+	RSPAMD_FTOK_ASSIGN (&srch, "boundary");
+
+	if (rspamd_ftok_cmp (&param->name, &srch) == 0) {
+		found = param;
+		gchar *lc_boundary;
+		/* Adjust boundary */
+		lc_boundary = rspamd_mempool_alloc (pool, param->value.len);
+		memcpy (lc_boundary, param->value.begin, param->value.len);
+		rspamd_str_lc (lc_boundary, param->value.len);
+		ct->boundary.begin = lc_boundary;
+		ct->boundary.len = param->value.len;
+		/* Preserve original (case sensitive) boundary */
+		ct->orig_boundary.begin = param->value.begin;
+		ct->orig_boundary.len = param->value.len;
+	}
+
+	if (!found) {
+		/* Just lowercase */
+		rspamd_str_lc ((gchar *)param->value.begin, param->value.len);
+	}
+}
+
+static void
+rspamd_content_disposition_postprocess (rspamd_mempool_t *pool,
+										struct rspamd_content_type_param *param,
+										gpointer ud)
+{
+	rspamd_ftok_t srch;
+	struct rspamd_content_disposition *cd = (struct rspamd_content_disposition *)ud;
+
+	srch.begin = "filename";
+	srch.len = 8;
+
+	if (rspamd_ftok_cmp (&param->name, &srch) == 0) {
+		/* Adjust filename */
+		cd->filename.begin = param->value.begin;
+		cd->filename.len = param->value.len;
+	}
+}
 
 void
 rspamd_content_type_add_param (rspamd_mempool_t *pool,
@@ -24,65 +288,41 @@ rspamd_content_type_add_param (rspamd_mempool_t *pool,
 		gchar *name_start, gchar *name_end,
 		gchar *value_start, gchar *value_end)
 {
+	struct rspamd_content_type_param *nparam;
 	rspamd_ftok_t srch;
-	struct rspamd_content_type_param *found = NULL, *nparam;
+	struct rspamd_content_type_param *found = NULL;
 
 	g_assert (ct != NULL);
 
-
-	nparam = rspamd_mempool_alloc (pool, sizeof (*nparam));
-	nparam->name.begin = name_start;
-	nparam->name.len = name_end - name_start;
+	nparam = rspamd_mempool_alloc0 (pool, sizeof (*nparam));
 	rspamd_str_lc (name_start, name_end - name_start);
 
-	nparam->value.begin = value_start;
-	nparam->value.len = value_end - value_start;
+	if (!rspamd_param_maybe_rfc2231_process (pool, nparam, name_start,
+			name_end, value_start, value_end)) {
+		nparam->name.begin = name_start;
+		nparam->name.len = name_end - name_start;
+		nparam->value.begin = value_start;
+		nparam->value.len = value_end - value_start;
+	}
 
 	RSPAMD_FTOK_ASSIGN (&srch, "charset");
 
-	if (rspamd_ftok_cmp (&nparam->name, &srch) == 0) {
-		/* Adjust charset */
-		found = nparam;
-		ct->charset.begin = nparam->value.begin;
-		ct->charset.len = nparam->value.len;
-	}
+	srch.begin = nparam->name.begin;
+	srch.len = nparam->name.len;
 
-	RSPAMD_FTOK_ASSIGN (&srch, "boundary");
-
-	if (rspamd_ftok_cmp (&nparam->name, &srch) == 0) {
-		found = nparam;
-		gchar *lc_boundary;
-		/* Adjust boundary */
-		lc_boundary = rspamd_mempool_alloc (pool, nparam->value.len);
-		memcpy (lc_boundary, nparam->value.begin, nparam->value.len);
-		rspamd_str_lc (lc_boundary, nparam->value.len);
-		ct->boundary.begin = lc_boundary;
-		ct->boundary.len = nparam->value.len;
-		/* Preserve original (case sensitive) boundary */
-		ct->orig_boundary.begin = nparam->value.begin;
-		ct->orig_boundary.len = nparam->value.len;
+	if (ct->attrs) {
+		found = g_hash_table_lookup (ct->attrs, &srch);
+	} else {
+		ct->attrs = g_hash_table_new (rspamd_ftok_icase_hash,
+				rspamd_ftok_icase_equal);
 	}
 
 	if (!found) {
-		srch.begin = nparam->name.begin;
-		srch.len = nparam->name.len;
-
-		rspamd_str_lc (value_start, value_end - value_start);
-
-		if (ct->attrs) {
-			found = g_hash_table_lookup (ct->attrs, &srch);
-		} else {
-			ct->attrs = g_hash_table_new (rspamd_ftok_icase_hash,
-					rspamd_ftok_icase_equal);
-		}
-
-		if (!found) {
-			DL_APPEND (found, nparam);
-			g_hash_table_insert (ct->attrs, &nparam->name, nparam);
-		}
-		else {
-			DL_APPEND (found, nparam);
-		}
+		DL_APPEND (found, nparam);
+		g_hash_table_insert (ct->attrs, &nparam->name, nparam);
+	}
+	else {
+		DL_APPEND (found, nparam);
 	}
 }
 
@@ -361,9 +601,6 @@ rspamd_content_type_parser (gchar *in, gsize len, rspamd_mempool_t *pool)
 	if (val.type.len > 0) {
 		res = rspamd_mempool_alloc (pool, sizeof (val));
 		memcpy (res, &val, sizeof (val));
-
-		/* Lowercase common thingies */
-
 	}
 
 	return res;
@@ -384,6 +621,9 @@ rspamd_content_type_parse (const gchar *in,
 		if (res->attrs) {
 			rspamd_mempool_add_destructor (pool,
 					(rspamd_mempool_destruct_t)g_hash_table_unref, res->attrs);
+
+			rspamd_postprocess_ct_attributes (pool, res->attrs,
+					rspamd_content_type_postprocess, res);
 		}
 
 		/* Now do some hacks to work with broken content types */
@@ -491,7 +731,7 @@ rspamd_content_disposition_add_param (rspamd_mempool_t *pool,
 				(rspamd_mempool_destruct_t)g_hash_table_unref, cd->attrs);
 	}
 
-	nparam = rspamd_mempool_alloc (pool, sizeof (*nparam));
+	nparam = rspamd_mempool_alloc0 (pool, sizeof (*nparam));
 	nparam->name.begin = name_start;
 	nparam->name.len = name_end - name_start;
 	decoded = rspamd_mime_header_decode (pool, value_start,
@@ -503,15 +743,6 @@ rspamd_content_disposition_add_param (rspamd_mempool_t *pool,
 	}
 
 	DL_APPEND (found, nparam);
-
-	srch.begin = "filename";
-	srch.len = 8;
-
-	if (rspamd_ftok_cmp (&nparam->name, &srch) == 0) {
-		/* Adjust filename */
-		cd->filename.begin = nparam->value.begin;
-		cd->filename.len = nparam->value.len;
-	}
 }
 
 struct rspamd_content_disposition *
@@ -526,6 +757,8 @@ rspamd_content_disposition_parse (const gchar *in,
 		res->lc_data = rspamd_mempool_alloc (pool, len + 1);
 		rspamd_strlcpy (res->lc_data, in, len + 1);
 		rspamd_str_lc (res->lc_data, len);
+		rspamd_postprocess_ct_attributes (pool, res->attrs,
+				rspamd_content_disposition_postprocess, res);
 	}
 	else {
 		msg_warn_pool ("cannot parse content disposition: %*s",

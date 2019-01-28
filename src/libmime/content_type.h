@@ -34,9 +34,18 @@ enum rspamd_content_type_flags {
 #define IS_CT_TEXT(ct) ((ct) && ((ct)->flags & RSPAMD_CONTENT_TYPE_TEXT))
 #define IS_CT_MESSAGE(ct) ((ct) &&((ct)->flags & RSPAMD_CONTENT_TYPE_MESSAGE))
 
+enum rspamd_content_param_flags {
+	RSPAMD_CONTENT_PARAM_NORMAL = 0,
+	RSPAMD_CONTENT_PARAM_RFC2231 = (1 << 0),
+	RSPAMD_CONTENT_PARAM_PIECEWISE = (1 << 1),
+	RSPAMD_CONTENT_PARAM_BROKEN = (1 << 2),
+};
+
 struct rspamd_content_type_param {
 	rspamd_ftok_t name;
 	rspamd_ftok_t value;
+	guint rfc2231_id;
+	enum rspamd_content_param_flags flags;
 	struct rspamd_content_type_param *prev, *next;
 };
 
