@@ -562,8 +562,8 @@ rspamd_words_levenshtein_distance (struct rspamd_task *task,
 	s2len = w2->len;
 
 	if (s1len + s2len > max_words) {
-		msg_err_task ("cannot compare parts with more than %ud words: %ud",
-				max_words, s1len);
+		msg_err_task ("cannot compare parts with more than %ud words: (%ud + %ud)",
+				max_words, s1len, s2len);
 		return 0;
 	}
 
