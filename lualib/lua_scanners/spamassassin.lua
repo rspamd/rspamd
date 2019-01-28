@@ -136,6 +136,14 @@ local function spamassassin_check(task, content, digest, rule)
       end
     end
 
+    if rule.dynamic_scan then
+      local pre_check, pre_check_msg = common.check_metric_results(task, rule)
+      if pre_check then
+        rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, pre_check_msg)
+        return true
+      end
+    end
+
     tcp.request({
       task = task,
       host = addr:to_string(),
@@ -172,6 +180,8 @@ local function spamassassin_config(opts)
     default_score = 1,
     action = false,
     extended = false,
+    symbol_type = 'postfilter',
+    dynamic_scan = true,
   }
 
   spamassassin_conf = lua_util.override_defaults(spamassassin_conf, opts)
