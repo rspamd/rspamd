@@ -2427,13 +2427,6 @@ lua_util_is_utf_spoofed (lua_State *L)
 	else if (s1) {
 		/* We have just s1, not s2 */
 		if (spc_sgl == NULL) {
-			USet *allowed = uset_openEmpty ();
-
-#if U_ICU_VERSION_MAJOR_NUM >= 51
-			uset_addAll (allowed, uspoof_getRecommendedSet (&uc_err));
-			uset_addAll (allowed, uspoof_getInclusionSet (&uc_err));
-#endif
-
 			spc_sgl = uspoof_open (&uc_err);
 
 			if (uc_err != U_ZERO_ERROR) {
@@ -2442,14 +2435,6 @@ lua_util_is_utf_spoofed (lua_State *L)
 
 				return 1;
 			}
-
-			uspoof_setChecks (spc_sgl,
-					USPOOF_ALL_CHECKS & ~USPOOF_WHOLE_SCRIPT_CONFUSABLE,
-					&uc_err);
-#if U_ICU_VERSION_MAJOR_NUM >= 51
-			uspoof_setAllowedChars (spc_sgl, allowed, &uc_err);
-			uspoof_setRestrictionLevel (spc_sgl, USPOOF_MODERATELY_RESTRICTIVE);
-#endif
 		}
 
 		ret = uspoof_checkUTF8 (spc_sgl, s1, l1, NULL, &uc_err);
