@@ -286,7 +286,7 @@ local full_extensions_map = {
   {"csh", "application/x-csh"},
   {"csproj", "text/plain"},
   {"css", "text/css"},
-  {"csv", "text/csv"},
+  {"csv", {"text/csv", "text/plain"}},
   {"cur", "application/octet-stream"},
   {"cxx", "text/plain"},
   {"dat", {"application/octet-stream", "application/ms-tnef"}},
