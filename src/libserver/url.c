@@ -98,6 +98,11 @@ static const struct {
 				.len = 6
 		},
 		{
+				.proto = PROTOCOL_TELEPHONE,
+				.name = "tel",
+				.len = 3
+		},
+		{
 				.proto = PROTOCOL_UNKNOWN,
 				.name = NULL,
 				.len = 0
@@ -120,36 +125,44 @@ struct url_matcher {
 };
 
 static gboolean url_file_start (struct url_callback_data *cb,
-		const gchar *pos,
-		url_match_t *match);
+								const gchar *pos,
+								url_match_t *match);
 
 static gboolean url_file_end (struct url_callback_data *cb,
-		const gchar *pos,
-		url_match_t *match);
+							  const gchar *pos,
+							  url_match_t *match);
 
 static gboolean url_web_start (struct url_callback_data *cb,
-		const gchar *pos,
-		url_match_t *match);
+							   const gchar *pos,
+							   url_match_t *match);
 
 static gboolean url_web_end (struct url_callback_data *cb,
-		const gchar *pos,
-		url_match_t *match);
+							 const gchar *pos,
+							 url_match_t *match);
 
 static gboolean url_tld_start (struct url_callback_data *cb,
-		const gchar *pos,
-		url_match_t *match);
+							   const gchar *pos,
+							   url_match_t *match);
 
 static gboolean url_tld_end (struct url_callback_data *cb,
-		const gchar *pos,
-		url_match_t *match);
+							 const gchar *pos,
+							 url_match_t *match);
 
 static gboolean url_email_start (struct url_callback_data *cb,
-		const gchar *pos,
-		url_match_t *match);
+								 const gchar *pos,
+								 url_match_t *match);
 
 static gboolean url_email_end (struct url_callback_data *cb,
-		const gchar *pos,
-		url_match_t *match);
+							   const gchar *pos,
+							   url_match_t *match);
+
+static gboolean url_tel_start (struct url_callback_data *cb,
+							   const gchar *pos,
+							   url_match_t *match);
+
+static gboolean url_tel_end (struct url_callback_data *cb,
+							 const gchar *pos,
+							 url_match_t *match);
 
 struct url_matcher static_matchers[] = {
 		/* Common prefixes */
@@ -172,6 +185,8 @@ struct url_matcher static_matchers[] = {
 		{"nntp://",   "",          url_web_start,   url_web_end,
 				0, 0},
 		{"telnet://", "",          url_web_start,   url_web_end,
+				0, 0},
+		{"tel:", "",               url_tel_start,   url_tel_end,
 				0, 0},
 		{"webcal://", "",          url_web_start,   url_web_end,
 				0, 0},
@@ -1646,6 +1661,76 @@ rspamd_url_parse (struct rspamd_url *uri,
 			ret = rspamd_mailto_parse (&u, uristring, len, &end, parse_flags,
 					&flags);
 		}
+		else if (g_ascii_strncasecmp (p, "tel:", sizeof ("tel:") - 1) == 0) {
+			/* Telephone url */
+			gint nlen = 0;
+			gboolean has_plus = FALSE;
+			end = p + len;
+			gchar *t, *tend;
+			UChar32 uc;
+
+			uri->raw = p;
+			uri->rawlen = len;
+			uri->string = rspamd_mempool_alloc (pool, len + 1);
+			t = uri->string;
+			tend = t + len;
+			i = 4;
+
+			memcpy (t, "tel:", 4);
+			t += 4;
+			p += 4;
+			nlen = 4;
+
+			if (*p == '+') {
+				has_plus = TRUE;
+				*t++ = *p++;
+				nlen ++;
+				i ++;
+			}
+
+			while (t < tend && i < len) {
+				U8_NEXT (uristring, i, len, uc);
+
+				if (u_isdigit (uc)) {
+					if (g_ascii_isdigit (uc)) {
+						*t++ = uc;
+						nlen ++;
+					}
+					else {
+						/* Obfuscated number */
+						uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+					}
+				}
+				else if (IS_OBSCURED_CHAR (uc)) {
+					uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+				}
+			}
+
+			*t = '\0';
+
+			if (rspamd_normalise_unicode_inplace (pool, uri->string, &nlen)) {
+				uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
+			}
+
+			uri->urllen = nlen;
+
+			uri->protocol = PROTOCOL_TELEPHONE;
+			uri->protocollen = 4;
+
+			uri->host = uri->string + 4;
+			uri->hostlen = nlen - 4;
+
+			if (has_plus) {
+				uri->tld = uri->string + 5;
+				uri->tldlen = nlen - 5;
+			}
+			else {
+				uri->tld = uri->string + 4;
+				uri->tldlen = nlen - 4;
+			}
+
+			return URI_ERRNO_OK;
+		}
 		else {
 			ret = rspamd_web_parse (&u, uristring, len, &end, parse_flags,
 					&flags);
@@ -2275,6 +2360,54 @@ url_email_end (struct url_callback_data *cb,
 
 	return FALSE;
 }
+
+static gboolean
+url_tel_start (struct url_callback_data *cb,
+			   const gchar *pos,
+			   url_match_t *match)
+{
+	if (!(*pos == '+' || g_ascii_isdigit (*pos))) {
+		/* Urls cannot start with . */
+		return FALSE;
+	}
+
+	match->m_begin = pos;
+
+	return TRUE;
+}
+
+static gboolean
+url_tel_end (struct url_callback_data *cb,
+			 const gchar *pos,
+			 url_match_t *match)
+{
+	UChar32 uc;
+	gint len = cb->end - pos, i = 0;
+
+	if (match->newline_pos && match->st != '<') {
+		/* We should also limit our match end to the newline */
+		len = MIN (len, match->newline_pos - pos);
+	}
+
+	while (i < len) {
+		U8_NEXT (pos, i, len, uc);
+
+		if (uc < 0) {
+			break;
+		}
+
+		if (!(u_isdigit (uc) || u_isspace (uc) ||
+			  IS_OBSCURED_CHAR (uc) || uc == '+' ||
+			  uc == '-' || uc == '.')) {
+			break;
+		}
+	}
+
+	match->m_len = i;
+
+	return TRUE;
+}
+
 
 static gboolean
 rspamd_url_trie_is_match (struct url_matcher *matcher, const gchar *pos,
