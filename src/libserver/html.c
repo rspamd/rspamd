@@ -1536,7 +1536,7 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 
 	if (url->querylen > 0) {
 
-		if (rspamd_url_find (pool, url->query, url->querylen, &url_str, TRUE,
+		if (rspamd_url_find (pool, url->query, url->querylen, &url_str, FALSE,
 				NULL, &prefix_added)) {
 			query_url = rspamd_mempool_alloc0 (pool,
 					sizeof (struct rspamd_url));
