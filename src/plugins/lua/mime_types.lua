@@ -22,6 +22,7 @@ end
 local logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
+local lua_maps = require "lua_maps"
 local N = "mime_types"
 local settings = {
   file = '',
@@ -845,6 +846,13 @@ local function check_mime_type(task)
     -- Replace potentially bad characters with '?'
     fname = fname:gsub('[^%s%g]', '?')
 
+    -- Check file is in filename whitelist
+    if settings.filename_whitelist:get_key(fname) then
+      logger.debugm("mime_types", task, "skip checking of %s - file is in filename whitelist",
+        fname)
+      return
+    end
+
     local ext,ext2,parts = gen_extension(fname)
     -- ext is the last extension, LOWERCASED
     -- ext2 is the one before last extension LOWERCASED
@@ -1072,6 +1080,9 @@ if opts then
   for k,v in pairs(opts) do
     settings[k] = v
   end
+
+  settings.filename_whitelist = lua_maps.rspamd_map_add('mime_types', 'filename_whitelist', 'regexp',
+    'filename whitelist')
 
   local function change_extension_map_entry(ext, ct, mult)
     if type(ct) == 'table' then
