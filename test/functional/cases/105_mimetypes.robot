@@ -55,6 +55,12 @@ Multipart Archive Extension
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/f.zip.001.eml
   Should Not Contain  ${result.stdout}  MIME_ARCHIVE_IN_ARCHIVE
 
+Exe file, but name in filename_whitelist
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/exe_attm.eml
+  Should Not Contain  ${result.stdout}  MIME_BAD_EXTENSION
+  Should Not Contain  ${result.stdout}  MIME_BAD_ATTACHMENT
+  Should Not Contain  ${result.stdout}  MIME_DOUBLE_BAD_EXTENSION
+
 Empty text part should not be treat as html
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/empty-plain-text.eml
   Should Not Contain  ${result.stdout}  FORGED_OUTLOOK_HTML

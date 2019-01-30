@@ -1,0 +1,22 @@
+Return-Path: <root@srv.example.com>
+To: test@example.com
+From: root@srv.example.com
+Subject: test Sat, 26 Jan 2019 12:04:58 +0100
+Message-Id: <20190126120458.015328@srv.example.com>
+Date: Sat, 26 Jan 2019 12:04:58 +0100
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_MIME_BOUNDARY_000_15328"
+
+------=_MIME_BOUNDARY_000_15328
+Content-Type: text/plain
+
+This is a test mailing
+------=_MIME_BOUNDARY_000_15328
+Content-Type: application/octet-stream; name="hello_world.exe"
+Content-Description: hello_world.exe
+Content-Disposition: attachment; filename="hello_world.exe"
+Content-Transfer-Encoding: BASE64
+
+f0VMRgIBAQAAAAAAAAAAAAMAPgABAAAAUBAAAAAAAABAAAAAAAAAAGA5AAAAAAAAAAAAAEAAOAAL
+
+------=_MIME_BOUNDARY_000_15328--
