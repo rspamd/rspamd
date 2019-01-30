@@ -2435,6 +2435,10 @@ lua_util_is_utf_spoofed (lua_State *L)
 
 				return 1;
 			}
+
+			uspoof_setChecks (spc_sgl,
+					USPOOF_INVISIBLE | USPOOF_MIXED_SCRIPT_CONFUSABLE | USPOOF_ANY_CASE,
+					&uc_err);
 		}
 
 		ret = uspoof_checkUTF8 (spc_sgl, s1, l1, NULL, &uc_err);
