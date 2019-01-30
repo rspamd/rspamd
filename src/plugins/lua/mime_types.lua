@@ -847,7 +847,8 @@ local function check_mime_type(task)
     fname = fname:gsub('[^%s%g]', '?')
 
     -- Check file is in filename whitelist
-    if settings.filename_whitelist:get_key(fname) then
+    if settings.filename_whitelist and
+        settings.filename_whitelist:get_key(fname) then
       logger.debugm("mime_types", task, "skip checking of %s - file is in filename whitelist",
         fname)
       return
