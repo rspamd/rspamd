@@ -144,10 +144,10 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 		action->action_type = i;
 
 		if (i == METRIC_ACTION_SOFT_REJECT) {
-			action->flags |= RSPAMD_ACTION_NO_THRESHOLD;
+			action->flags |= RSPAMD_ACTION_NO_THRESHOLD|RSPAMD_ACTION_HAM;
 		}
 		else if (i == METRIC_ACTION_GREYLIST) {
-			action->flags |= RSPAMD_ACTION_THRESHOLD_ONLY;
+			action->flags |= RSPAMD_ACTION_THRESHOLD_ONLY|RSPAMD_ACTION_HAM;
 		}
 		else if (i == METRIC_ACTION_NOACTION) {
 			action->flags |= RSPAMD_ACTION_HAM;
