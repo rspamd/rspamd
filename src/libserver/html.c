@@ -2673,7 +2673,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 			if (t == '-') {
 				ebrace ++;
 			}
-			else if (t == '>' && ebrace == 2) {
+			else if (t == '>' && ebrace >= 2) {
 				state = tag_end;
 				continue;
 			}
