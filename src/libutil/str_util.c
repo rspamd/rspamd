@@ -1394,7 +1394,33 @@ rspamd_header_value_fold (const gchar *name,
 	case after_quote:
 		g_string_append_len (res, c, p - c);
 		break;
-
+	case fold_token:
+		/* Here, we have token start at 'c' and token end at 'p' */
+		if (g_ascii_isspace (res->str[res->len - 1])) {
+			g_string_append_len (res, c, p - c);
+		}
+		else {
+			if (*c != '\r' && *c != '\n') {
+				/* We need to add folding as well */
+				switch (how) {
+				case RSPAMD_TASK_NEWLINES_LF:
+					g_string_append_len (res, "\n\t", 2);
+					break;
+				case RSPAMD_TASK_NEWLINES_CR:
+					g_string_append_len (res, "\r\t", 2);
+					break;
+				case RSPAMD_TASK_NEWLINES_CRLF:
+				default:
+					g_string_append_len (res, "\r\n\t", 3);
+					break;
+				}
+				g_string_append_len (res, c, p - c);
+			}
+			else {
+				g_string_append_len (res, c, p - c);
+			}
+		}
+		break;
 	default:
 		g_assert (p == c);
 		break;
