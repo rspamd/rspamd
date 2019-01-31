@@ -1216,7 +1216,8 @@ lua_task_set_cached (lua_State *L, struct rspamd_task *task, const gchar *key,
 	}
 	else {
 		entry = rspamd_mempool_alloc (task->task_pool, sizeof (*entry));
-		g_hash_table_insert (task->lua_cache, (void *)key, entry);
+		g_hash_table_insert (task->lua_cache,
+				rspamd_mempool_strdup (task->task_pool, key), entry);
 	}
 
 	entry->ref = luaL_ref (L, LUA_REGISTRYINDEX);
