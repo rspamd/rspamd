@@ -607,7 +607,7 @@ local full_extensions_map = {
   {"roff", "application/x-troff"},
   {"rpm", "audio/x-pn-realaudio-plugin"},
   {"rqy", "text/x-ms-rqy"},
-  {"rtf", {"application/rtf","application/msword", "text/richtext"}},
+  {"rtf", {"application/rtf","application/msword", "text/richtext", "text/rtf"}},
   {"rtx", "text/richtext"},
   {"rvt", "application/octet-stream" },
   {"ruleset", "application/xml"},
