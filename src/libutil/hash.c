@@ -48,6 +48,7 @@ struct rspamd_lru_hash_s {
 enum rspamd_lru_element_flags {
 	RSPAMD_LRU_ELEMENT_NORMAL = 0,
 	RSPAMD_LRU_ELEMENT_VOLATILE = (1 << 0),
+	RSPAMD_LRU_ELEMENT_IMMORTAL = (1 << 1),
 };
 
 struct rspamd_lru_element_s {
@@ -444,7 +445,6 @@ rspamd_lru_hash_evict (rspamd_lru_hash_t *hash, time_t now)
 	 * or, at some probability scan all table and update eviction
 	 * list first
 	 */
-
 	r = rspamd_random_double_fast ();
 
 	if (r < ((double)eviction_candidates) / hash->maxsize) {
@@ -454,6 +454,10 @@ rspamd_lru_hash_evict (rspamd_lru_hash_t *hash, time_t now)
 
 		kh_foreach_value_ptr (hash, cur, {
 			rspamd_lru_element_t *node = &cur->e;
+
+			if (node->flags & RSPAMD_LRU_ELEMENT_IMMORTAL) {
+				continue;
+			}
 
 			if (node->flags & RSPAMD_LRU_ELEMENT_VOLATILE) {
 				/* If element is expired, just remove it */
@@ -596,7 +600,7 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash,
 	node = &vnode->e;
 
 	if (ret == 0) {
-		/* Existing element, be carefull about destructors */
+		/* Existing element, be careful about destructors */
 		if (hash->value_destroy) {
 			/* Remove old data */
 			hash->value_destroy (vnode->e.data);
@@ -629,7 +633,9 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash,
 	if (ret != 0) {
 		/* Also need to check maxsize */
 		if (kh_size (hash) >= hash->maxsize) {
+			node->flags |= RSPAMD_LRU_ELEMENT_IMMORTAL;
 			rspamd_lru_hash_evict (hash, now);
+			node->flags &= ~RSPAMD_LRU_ELEMENT_IMMORTAL;
 		}
 	}
 
