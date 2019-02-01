@@ -1100,6 +1100,8 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 	dkim_module_ctx = dkim_get_context (task->cfg);
 
 	if (key != NULL) {
+		/* Another ref belongs to the check context */
+		res->key = rspamd_dkim_key_ref (key);
 		/*
 		 * We actually receive key with refcount = 1, so we just assume that
 		 * lru hash owns this object now
@@ -1107,8 +1109,6 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 		rspamd_lru_hash_insert (dkim_module_ctx->dkim_hash,
 			g_strdup (rspamd_dkim_get_dns_key (ctx)),
 			key, res->task->tv.tv_sec, rspamd_dkim_key_get_ttl (key));
-		/* Another ref belongs to the check context */
-		 res->key = rspamd_dkim_key_ref (key);
 		/* Release key when task is processed */
 		rspamd_mempool_add_destructor (res->task->task_pool,
 				dkim_module_key_dtor, res->key);
@@ -1454,10 +1454,11 @@ dkim_sign_callback (struct rspamd_task *task,
 
 						return;
 					}
-
-					rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
-							g_strdup (lru_key), dkim_key,
-							time (NULL), 0);
+					else {
+						rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
+								g_strdup (lru_key), dkim_key,
+								time (NULL), 0);
+					}
 				}
 				else if (rspamd_dkim_sign_key_maybe_invalidate (dkim_key,
 						key_sign_type, key, len)) {
@@ -1479,10 +1480,11 @@ dkim_sign_callback (struct rspamd_task *task,
 
 						return;
 					}
-
-					rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
-							g_strdup (lru_key), dkim_key,
-							time (NULL), 0);
+					else {
+						rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
+								g_strdup (lru_key), dkim_key,
+								time (NULL), 0);
+					}
 				}
 
 				ctx = rspamd_create_dkim_sign_context (task, dkim_key,
@@ -1666,6 +1668,8 @@ dkim_module_lua_on_key (rspamd_dkim_key_t *key,
 	dkim_module_ctx = dkim_get_context (task->cfg);
 
 	if (key != NULL) {
+		/* Another ref belongs to the check context */
+		cbd->key = rspamd_dkim_key_ref (key);
 		/*
 		 * We actually receive key with refcount = 1, so we just assume that
 		 * lru hash owns this object now
@@ -1673,8 +1677,6 @@ dkim_module_lua_on_key (rspamd_dkim_key_t *key,
 		rspamd_lru_hash_insert (dkim_module_ctx->dkim_hash,
 				g_strdup (rspamd_dkim_get_dns_key (ctx)),
 				key, cbd->task->tv.tv_sec, rspamd_dkim_key_get_ttl (key));
-		/* Another ref belongs to the check context */
-		cbd->key = rspamd_dkim_key_ref (key);
 		/* Release key when task is processed */
 		rspamd_mempool_add_destructor (cbd->task->task_pool,
 				dkim_module_key_dtor, cbd->key);

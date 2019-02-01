@@ -543,6 +543,8 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 	}
 	else if (record && record->domain) {
 
+		spf_record_ref (record);
+
 		if ((l = rspamd_lru_hash_lookup (spf_module_ctx->spf_hash,
 					record->domain, task->tv.tv_sec)) == NULL) {
 			l = record;
@@ -562,6 +564,8 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 		spf_record_ref (l);
 		spf_check_list (l, task);
 		spf_record_unref (l);
+
+		spf_record_unref (record);
 	}
 
 	rspamd_symcache_item_async_dec_check (task, item, M);
