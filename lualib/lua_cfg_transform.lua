@@ -16,6 +16,7 @@ limitations under the License.
 
 local logger = require "rspamd_logger"
 local lua_util = require "lua_util"
+local rspamd_util = require "rspamd_util"
 
 local function is_implicit(t)
   local mt = getmetatable(t)
@@ -216,6 +217,21 @@ local function merge_groups(groups)
   return ret
 end
 
+-- Checks configuration files for statistics
+local function check_statistics_sanity()
+  local local_conf = rspamd_paths['LOCAL_CONFDIR']
+  local local_stat = string.format('%s/local.d/%s', local_conf,
+      'statistic.conf')
+  local local_bayes = string.format('%s/local.d/%s', local_conf,
+      'classifier-bayes.conf')
+
+  if rspamd_util.file_exists(local_stat) and
+      rspamd_util.file_exists(local_bayes) then
+    logger.warnx(rspamd_config, 'conflicting files %s and %s are found: '..
+        'Rspamd classifier configuration might be broken!', local_stat, local_bayes)
+  end
+end
+
 return function(cfg)
   local ret = false
 
@@ -225,6 +241,8 @@ return function(cfg)
     end
     ret = true
   end
+
+  check_statistics_sanity()
 
   if not cfg.actions then
     logger.errx('no actions defined')
