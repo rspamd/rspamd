@@ -180,6 +180,9 @@ rspamd_mime_get_converter_cached (const gchar *enc, UErrorCode *err)
 			conv = g_malloc0 (sizeof (*conv));
 			conv->is_internal = TRUE;
 			conv->d.cnv_table = iso_8859_16_map;
+			conv->canon_name = g_strdup (canon_name);
+
+			rspamd_lru_hash_insert (cache, conv->canon_name, conv, 0, 0);
 		}
 	}
 
