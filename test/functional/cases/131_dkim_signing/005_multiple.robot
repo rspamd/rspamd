@@ -16,7 +16,7 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 *** Test Cases ***
 TEST DOUBLE SIGNED
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  -u  bob@cacophony.za.org
-  Check Rspamc  ${result}  (?s:DKIM-Signature.+DKIM-Signature)  re=1
+  Check Rspamc  ${result}  (?s)DKIM-Signature.+DKIM-Signature  re=1
   Should Contain  ${result.stdout}  DKIM_SIGNED
 
 *** Keywords ***
