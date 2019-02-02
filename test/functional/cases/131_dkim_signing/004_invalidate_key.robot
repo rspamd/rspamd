@@ -1,4 +1,5 @@
 *** Settings ***
+Force Tags 	isbroken
 Suite Setup     Key Invalidation Setup
 Suite Teardown  Key Invalidation Teardown
 Library         ${TESTDIR}/lib/rspamd.py
