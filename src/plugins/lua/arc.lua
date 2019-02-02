@@ -508,21 +508,14 @@ end
 local function arc_signing_cb(task)
   local arc_seals = task:cache_get('arc-seals')
 
-  local ret,p = dkim_sign_tools.prepare_dkim_signing(N, task, settings)
+  local ret, selectors = dkim_sign_tools.prepare_dkim_signing(N, task, settings)
 
   if not ret then
     return
   end
 
-  -- TODO: support multiple signatures here and not this hack
-  if #p.keys > 0 then
-    p.selector = p.keys[1].selector
-    if p.keys[1].type == "raw" then
-      p.rawkey = p.keys[1].key
-    else
-      p.key = p.keys[1].key
-    end
-  end
+  -- TODO: support multiple signatures here
+  local p = selectors[1]
 
   p.arc_cv = 'none'
   p.arc_idx = 1

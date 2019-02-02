@@ -38,13 +38,13 @@ local function check_violation(N, task, domain)
 end
 
 local function insert_or_update_prop(N, task, p, prop, origin, data)
-  if #p.keys == 0 then
+  if #p == 0 then
     local k = {}
     k[prop] = data
-    table.insert(p.keys, k)
+    table.insert(p, k)
     lua_util.debugm(N, task, 'add %s "%s" using %s', prop, data, origin)
   else
-    for _, k in ipairs(p.keys) do
+    for _, k in ipairs(p) do
       if not k[prop] then
         k[prop] = data
         lua_util.debugm(N, task, 'set %s to "%s" using %s', prop, data, origin)
@@ -102,16 +102,13 @@ local function parse_dkim_http_headers(N, task, settings)
       end
     end
 
-    local p = {
-      domain = tostring(domain),
-      keys = {}
-    }
+    local p = {}
     local k = {
-      key = tostring(key),
+      domain = tostring(domain),
+      rawkey = tostring(key),
       selector = tostring(selector),
-      type = 'raw'
     }
-    table.insert(p.keys, k)
+    table.insert(p, k)
     return true, p
   end
 
@@ -253,9 +250,7 @@ local function prepare_dkim_signing(N, task, settings)
     end
   end
 
-  local p = {
-    keys = {}
-  }
+  local p = {}
 
   if settings.domain[dkim_domain] then
     -- support old style selector/paths
@@ -264,21 +259,21 @@ local function prepare_dkim_signing(N, task, settings)
       local k = {}
       k.selector = settings.domain[dkim_domain].selector
       k.key = settings.domain[dkim_domain].path
-      table.insert(p.keys, k)
+      table.insert(p, k)
     end
     for _, s in ipairs((settings.domain[dkim_domain].selectors or {})) do
       lua_util.debugm(N, task, 'adding selector: %1', s)
       local k = {}
       k.selector = s.selector
       k.key = s.path
-      table.insert(p.keys, k)
+      table.insert(p, k)
     end
   end
 
-  if #p.keys == 0 then
+  if #p == 0 then
     local ret, k = get_mempool_selectors(N, task)
     if ret then
-      table.insert(p.keys, k)
+      table.insert(p, k)
       lua_util.debugm(N, task, 'using mempool selector %s with key %s',
                       k.selector, k.key)
     end
@@ -302,7 +297,7 @@ local function prepare_dkim_signing(N, task, settings)
     end
   end
 
-  if #p.keys == 0 and not settings.try_fallback then
+  if #p == 0 and not settings.try_fallback then
     lua_util.debugm(N, task, 'dkim unconfigured and fallback disabled')
     return false,{}
   end
@@ -321,7 +316,8 @@ local function prepare_dkim_signing(N, task, settings)
     end
   end
 
-  p.domain = dkim_domain
+  insert_or_update_prop(N, task, p, 'domain', 'dkim_domain',
+    dkim_domain)
 
   return true,p
 end
