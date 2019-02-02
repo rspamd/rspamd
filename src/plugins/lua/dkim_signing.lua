@@ -18,7 +18,6 @@ limitations under the License.
 local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local dkim_sign_tools = require "lua_dkim_tools"
-local rspamd_util = require "rspamd_util"
 local lua_redis = require "lua_redis"
 
 if confighelp then
