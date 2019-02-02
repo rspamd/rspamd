@@ -83,7 +83,7 @@ enum rspamd_dkim_param_type {
         rspamd_dkim_log_id, "dkim", ctx->pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
-#define msg_debug2_dkim(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+#define msg_debug_dkim_taskless(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_dkim_log_id, "dkim", "", \
         G_STRFUNC, \
         __VA_ARGS__)
@@ -2626,7 +2626,7 @@ rspamd_dkim_sign_key_load (const gchar *key, gsize len,
 	nkey = g_malloc0 (sizeof (*nkey));
 	nkey->mtime = mtime;
 
-	msg_debug2_dkim("got public key with length %d and type %d", len, type);
+	msg_debug_dkim_taskless ("got public key with length %d and type %d", len, type);
 	if (type == RSPAMD_DKIM_KEY_RAW && len == 32) {
 		unsigned char pk[32];
 		nkey->type = RSPAMD_DKIM_KEY_EDDSA;
