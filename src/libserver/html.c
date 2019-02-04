@@ -2589,8 +2589,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				/* Empty tag */
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 				state = tag_end;
-				p ++;
-				break;
+				continue;
 			default:
 				state = tag_content;
 				substate = 0;
@@ -2640,6 +2639,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 		case xml_tag_end:
 			if (t == '>') {
 				state = tag_end;
+				continue;
 			}
 			else {
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
@@ -2656,6 +2656,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 			}
 			else if (t == '>' && obrace == ebrace) {
 				state = tag_end;
+				continue;
 			}
 			p ++;
 			break;
