@@ -26,6 +26,7 @@ typedef struct ed25519_impl_s {
 	const char *desc;
 
 	void (*keypair) (unsigned char *pk, unsigned char *sk);
+	void (*seed_keypair) (unsigned char *pk, unsigned char *sk, unsigned char *seed);
 	void (*sign) (unsigned char *sig, size_t *siglen_p,
 			const unsigned char *m, size_t mlen,
 			const unsigned char *sk);
@@ -37,6 +38,7 @@ typedef struct ed25519_impl_s {
 
 #define ED25519_DECLARE(ext) \
     void ed_keypair_##ext(unsigned char *pk, unsigned char *sk); \
+    void ed_seed_keypair_##ext(unsigned char *pk, unsigned char *sk, unsigned char *seed); \
     void ed_sign_##ext(unsigned char *sig, size_t *siglen_p, \
         const unsigned char *m, size_t mlen, \
         const unsigned char *sk); \
@@ -46,7 +48,7 @@ typedef struct ed25519_impl_s {
         const unsigned char *pk)
 
 #define ED25519_IMPL(cpuflags, desc, ext) \
-    {(cpuflags), desc, ed_keypair_##ext, ed_sign_##ext, ed_verify_##ext}
+    {(cpuflags), desc, ed_keypair_##ext, ed_seed_keypair_##ext, ed_sign_##ext, ed_verify_##ext}
 
 ED25519_DECLARE(ref);
 #define ED25519_REF ED25519_IMPL(0, "ref", ref)
@@ -76,6 +78,12 @@ ed25519_load (void)
 	g_assert (ed25519_test (ed25519_opt));
 
 	return ed25519_opt->desc;
+}
+
+void
+ed25519_seed_keypair (unsigned char *pk, unsigned char *sk, unsigned char *seed)
+{
+	ed25519_opt->seed_keypair (pk, sk, seed);
 }
 
 void

@@ -1132,6 +1132,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 {
 	ucl_object_t *top = NULL;
 	GString *dkim_sig;
+	GList *dkim_sigs;
 	const ucl_object_t *milter_reply;
 
 	rspamd_task_set_finish_time (task);
@@ -1200,11 +1201,12 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	}
 
 	if (flags & RSPAMD_PROTOCOL_DKIM) {
-		dkim_sig = rspamd_mempool_get_variable (task->task_pool,
+		dkim_sigs = rspamd_mempool_get_variable (task->task_pool,
 				RSPAMD_MEMPOOL_DKIM_SIGNATURE);
 
-		if (dkim_sig) {
+		for (; dkim_sigs != NULL; dkim_sigs = dkim_sigs->next) {
 			GString *folded_header;
+			dkim_sig = (GString *) dkim_sigs->data;
 
 			if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
 				folded_header = rspamd_header_value_fold ("DKIM-Signature",

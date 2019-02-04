@@ -38,6 +38,7 @@
 #include "libutil/map_helpers.h"
 #include "rspamd.h"
 #include "utlist.h"
+#include "unix-std.h"
 #include "lua/lua_common.h"
 #include "libserver/mempool_vars_internal.h"
 
@@ -138,6 +139,12 @@ dkim_module_key_dtor (gpointer k)
 	rspamd_dkim_key_t *key = k;
 
 	rspamd_dkim_key_unref (key);
+}
+
+static void
+dkim_module_free_list (gpointer k)
+{
+	g_list_free_full ((GList *)k, rspamd_gstring_free_hard);
 }
 
 gint
@@ -634,16 +641,58 @@ dkim_module_config (struct rspamd_config *cfg)
 	return res;
 }
 
+/**
+ * helper to see if valid base64, minus newline
+ */
+static gboolean
+is_valid_base64(const uint8_t *in, size_t len) {
+	int i;
+	if (in[len - 1] == '\n')
+		len--;
+	if (in[len - 1] == '\r')
+		len--;
+	if (len % 4 != 0)
+		return FALSE;
+
+	if (in[len - 1] == '=')
+		len--;
+	if (in[len - 1] == '=')
+		len--;
+
+	for (i = 0; i < len; i++) {
+		if ('a' <= in[i] && in[i] <= 'z')
+			continue;
+		if ('A' <= in[i] && in[i] <= 'Z')
+			continue;
+		if ('0' <= in[i] && in[i] <= '9')
+			continue;
+		if (in[i] == '/')
+			continue;
+		if (in[i] == '+')
+			continue;
+		return FALSE;
+	}
+	return TRUE;
+}
+
+
+#define PEM_SIG "-----BEGIN"
+/**
+ * Grab a private key from the cache
+ * or from the key content provided
+ */
 rspamd_dkim_sign_key_t *
-dkim_module_load_key_format (lua_State *L, struct rspamd_task *task,
-		const gchar *key, gsize keylen,
-		enum rspamd_dkim_sign_key_type kt)
+dkim_module_load_key_format (struct rspamd_task *task, struct dkim_ctx *dkim_module_ctx,
+		const gchar *key, gsize keylen, enum rspamd_dkim_key_format key_format)
+
 {
 	guchar h[rspamd_cryptobox_HASHBYTES],
 			hex_hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
 	rspamd_dkim_sign_key_t *ret;
 	GError *err = NULL;
-	struct dkim_ctx *dkim_module_ctx = dkim_get_context (task->cfg);
+	gpointer map = NULL, tmp = NULL;
+	struct stat st;
+	ssize_t maplen;
 
 	memset (hex_hash, 0, sizeof (hex_hash));
 	rspamd_cryptobox_hash (h, key, keylen, NULL, 0);
@@ -651,23 +700,95 @@ dkim_module_load_key_format (lua_State *L, struct rspamd_task *task,
 	ret = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_sign_hash,
 				hex_hash, time (NULL));
 
-	if (ret == NULL) {
-			ret = rspamd_dkim_sign_key_load (key, keylen, kt, &err);
+	/*
+	 * This fails for paths that are also valid base64.
+	 * Maybe the caller should have specified a format.
+	 */
+	if (key_format == RSPAMD_DKIM_KEY_UNKNOWN &&
+		(key[0] == '.' || key[0] == '/')) {
+		if (!is_valid_base64 (key, keylen))
+			key_format = RSPAMD_DKIM_KEY_FILE;
+	}
 
-			if (ret == NULL) {
-				msg_err_task ("cannot load private key: %e", err);
-				g_error_free (err);
-
-				return NULL;
-			}
-
-			rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
-					g_strdup (hex_hash), ret,
-					time (NULL), 0);
+	if (ret != NULL && key_format == RSPAMD_DKIM_KEY_FILE) {
+		msg_debug_task("checking for stale file key");
+		if (stat (key, &st) != 0) {
+			msg_err_task("cannot stat key file: %s", strerror (errno));
+			return NULL;
 		}
+		if (rspamd_dkim_sign_key_maybe_invalidate (ret, st.st_mtime)) {
+			msg_debug_task("removing stale file key");
+			/*
+			 * Invalidate DKIM key
+			 * removal from lru cache also cleanup the key and value
+			 */
+			rspamd_lru_hash_remove (dkim_module_ctx->dkim_sign_hash,
+					hex_hash);
+			ret = NULL;
+		}
+	}
+
+	/* found key; done */
+	if (ret != NULL)
+		return ret;
+
+	if (key_format == RSPAMD_DKIM_KEY_FILE) {
+		if (stat (key, &st) != 0) {
+			msg_err_task("cannot stat key file: %s", strerror (errno));
+			return NULL;
+		}
+		map = rspamd_file_xmap (key, PROT_READ, &maplen, TRUE);
+		if (map == NULL) {
+			msg_err_task("cannot open key file \'%s\'", key);
+			return NULL;
+		}
+		key = map;
+		keylen = maplen;
+		if (maplen > sizeof (PEM_SIG) &&
+				strncmp (map, PEM_SIG, sizeof (PEM_SIG) - 1) == 0) {
+			key_format = RSPAMD_DKIM_KEY_PEM;
+		} else if (is_valid_base64 ((uint8_t *)map, maplen)) {
+			key_format = RSPAMD_DKIM_KEY_BASE64;
+		} else {
+			key_format = RSPAMD_DKIM_KEY_RAW;
+		}
+	}
+	if (key_format == RSPAMD_DKIM_KEY_UNKNOWN) {
+		if (keylen > sizeof (PEM_SIG) &&
+				strncmp (key, PEM_SIG, sizeof (PEM_SIG) - 1) == 0) {
+			key_format = RSPAMD_DKIM_KEY_PEM;
+		} else {
+			key_format = RSPAMD_DKIM_KEY_RAW;
+		}
+	}
+	if (key_format == RSPAMD_DKIM_KEY_BASE64) {
+		key_format = RSPAMD_DKIM_KEY_RAW;
+		tmp = g_malloc (keylen);
+		rspamd_cryptobox_base64_decode (key, keylen, tmp, &keylen);
+		key = tmp;
+	}
+
+	ret = rspamd_dkim_sign_key_load (key, keylen, key_format, &err);
+
+	if (ret == NULL) {
+		msg_err_task ("cannot load dkim key %s: %e",
+				key, err);
+		g_error_free (err);
+	} else {
+		rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
+				g_strdup (hex_hash), ret, time (NULL), 0);
+	}
+
+	if (map != NULL)
+		munmap (map, maplen);
+	if (tmp != NULL) {
+		rspamd_explicit_memzero (tmp, keylen);
+		g_free (tmp);
+	}
 
 	return ret;
 }
+#undef PEM_SIG
 
 static gint
 lua_dkim_sign_handler (lua_State *L)
@@ -677,6 +798,7 @@ lua_dkim_sign_handler (lua_State *L)
 	enum rspamd_dkim_type sign_type = RSPAMD_DKIM_NORMAL;
 	GError *err = NULL;
 	GString *hdr;
+	GList *sigs = NULL;
 	const gchar *selector = NULL, *domain = NULL, *key = NULL, *rawkey = NULL,
 			*headers = NULL, *sign_type_str = NULL, *arc_cv = NULL,
 			*pubkey = NULL;
@@ -718,86 +840,24 @@ lua_dkim_sign_handler (lua_State *L)
 				(GDestroyNotify)rspamd_dkim_sign_key_unref);
 	}
 
-#define PEM_SIG "-----BEGIN"
 
 	if (key) {
-		if (key[0] == '.' || key[0] == '/') {
-			/* Likely raw path */
-			dkim_key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_sign_hash,
-					key, time (NULL));
-
-			if (dkim_key == NULL) {
-				dkim_key = rspamd_dkim_sign_key_load (key, strlen (key),
-						RSPAMD_DKIM_SIGN_KEY_FILE, &err);
-
-				if (dkim_key == NULL) {
-					msg_err_task ("cannot load dkim key %s: %e",
-							key, err);
-					g_error_free (err);
-
-					lua_pushboolean (L, FALSE);
-					return 1;
-				}
-
-				rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
-						g_strdup (key), dkim_key,
-						time (NULL), 0);
-			}
-		}
-		else if (keylen > sizeof (PEM_SIG) &&
-				strncmp (key, PEM_SIG, sizeof (PEM_SIG) - 1) == 0) {
-			/* Pem header found */
-			dkim_key = dkim_module_load_key_format (L, task, key, keylen,
-					RSPAMD_DKIM_SIGN_KEY_PEM);
-
-			if (dkim_key == NULL) {
-				lua_pushboolean (L, FALSE);
-				return 1;
-			}
-		}
-		else {
-			dkim_key = dkim_module_load_key_format (L, task, key, keylen,
-					RSPAMD_DKIM_SIGN_KEY_BASE64);
-
-			if (dkim_key == NULL) {
-				lua_pushboolean (L, FALSE);
-				return 1;
-			}
-		}
-	}
-	else if (rawkey) {
-		key = rawkey;
-		keylen = rawlen;
-
-		if (keylen > sizeof (PEM_SIG) &&
-				strncmp (key, PEM_SIG, sizeof (PEM_SIG) - 1) == 0) {
-			/* Pem header found */
-			dkim_key = dkim_module_load_key_format (L, task, key, keylen,
-					RSPAMD_DKIM_SIGN_KEY_PEM);
-
-			if (dkim_key == NULL) {
-				lua_pushboolean (L, FALSE);
-				return 1;
-			}
-		}
-		else {
-			dkim_key = dkim_module_load_key_format (L, task, key, keylen,
-					RSPAMD_DKIM_SIGN_KEY_BASE64);
-
-			if (dkim_key == NULL) {
-				lua_pushboolean (L, FALSE);
-				return 1;
-			}
-		}
-	}
-	else {
+		dkim_key = dkim_module_load_key_format (task, dkim_module_ctx, key,
+				keylen, RSPAMD_DKIM_KEY_UNKNOWN);
+	} else if(rawkey) {
+		dkim_key = dkim_module_load_key_format (task, dkim_module_ctx, rawkey,
+				rawlen, RSPAMD_DKIM_KEY_UNKNOWN);
+	} else {
 		msg_err_task ("neither key nor rawkey are specified");
 		lua_pushboolean (L, FALSE);
 
 		return 1;
 	}
 
-#undef PEM_SIG
+	if (dkim_key == NULL) {
+		lua_pushboolean (L, FALSE);
+		return 1;
+	}
 
 	if (sign_type_str) {
 		if (strcmp (sign_type_str, "dkim") == 0) {
@@ -909,8 +969,14 @@ lua_dkim_sign_handler (lua_State *L)
 	if (hdr) {
 
 		if (!no_cache) {
-			rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
-					hdr, rspamd_gstring_free_hard);
+			sigs = rspamd_mempool_get_variable (task->task_pool, "dkim-signature");
+			if (sigs == NULL) {
+				sigs = g_list_append (sigs, hdr);
+				rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
+						sigs, dkim_module_free_list);
+			} else {
+				(void) g_list_append (sigs, hdr);
+			}
 		}
 
 		lua_pushboolean (L, TRUE);
@@ -1309,228 +1375,170 @@ dkim_sign_callback (struct rspamd_task *task,
 	gint64 arc_idx = 0;
 	gsize len;
 	GString *tb, *hdr;
+	GList *sigs = NULL;
 	GError *err = NULL;
 	const gchar *selector = NULL, *domain = NULL, *key = NULL, *key_type = NULL,
-			*sign_type_str = NULL, *lru_key, *arc_cv = NULL;
+			*sign_type_str = NULL, *arc_cv = NULL;
 	rspamd_dkim_sign_context_t *ctx;
-	rspamd_dkim_sign_key_t *dkim_key;
-	enum rspamd_dkim_sign_key_type key_sign_type = RSPAMD_DKIM_SIGN_KEY_FILE;
+	rspamd_dkim_key_t *dkim_key;
+	enum rspamd_dkim_key_format key_format = RSPAMD_DKIM_KEY_FILE;
 	enum rspamd_dkim_type sign_type = RSPAMD_DKIM_NORMAL;
-	guchar h[rspamd_cryptobox_HASHBYTES],
-		hex_hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
 	struct dkim_ctx *dkim_module_ctx = dkim_get_context (task->cfg);
 
-	if (dkim_module_ctx->sign_condition_ref != -1) {
-		sign = FALSE;
-		L = task->cfg->lua_state;
-		lua_pushcfunction (L, &rspamd_lua_traceback);
-		err_idx = lua_gettop (L);
+	if (dkim_module_ctx->sign_condition_ref == -1) {
+		rspamd_symcache_finalize_item (task, item);
+		return;
+	}
 
-		lua_rawgeti (L, LUA_REGISTRYINDEX, dkim_module_ctx->sign_condition_ref);
-		ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-		*ptask = task;
-		rspamd_lua_setclass (L, "rspamd{task}", -1);
+	sign = FALSE;
+	L = task->cfg->lua_state;
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
 
-		if (lua_pcall (L, 1, 1, err_idx) != 0) {
-			tb = lua_touserdata (L, -1);
-			msg_err_task ("call to user extraction script failed: %v", tb);
-			g_string_free (tb, TRUE);
-		}
-		else {
-			if (lua_istable (L, -1)) {
-				/*
-				 * Get the following elements:
-				 * - selector
-				 * - domain
-				 * - key
-				 */
-				if (!rspamd_lua_parse_table_arguments (L, -1, &err,
-						"*key=V;*domain=S;*selector=S;type=S;key_type=S;"
-								"sign_type=S;arc_cv=S;arc_idx=I",
-						&len, &key, &domain, &selector,
-						&key_type, &key_type, &sign_type_str, &arc_cv,
-						&arc_idx)) {
-					msg_err_task ("invalid return value from sign condition: %e",
-							err);
-					g_error_free (err);
-					rspamd_symcache_finalize_item (task, item);
+	lua_rawgeti (L, LUA_REGISTRYINDEX, dkim_module_ctx->sign_condition_ref);
+	ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+	*ptask = task;
+	rspamd_lua_setclass (L, "rspamd{task}", -1);
 
-					return;
+	if (lua_pcall (L, 1, 1, err_idx) != 0) {
+		tb = lua_touserdata (L, -1);
+		msg_err_task ("call to user extraction script failed: %v", tb);
+		g_string_free (tb, TRUE);
+	}
+	else {
+		if (lua_istable (L, -1)) {
+			/*
+			 * Get the following elements:
+			 * - selector
+			 * - domain
+			 * - key
+			 */
+			if (!rspamd_lua_parse_table_arguments (L, -1, &err,
+					"*key=V;*domain=S;*selector=S;type=S;key_type=S;"
+							"sign_type=S;arc_cv=S;arc_idx=I",
+					&len, &key, &domain, &selector,
+					&key_type, &key_type, &sign_type_str, &arc_cv,
+					&arc_idx)) {
+				msg_err_task ("invalid return value from sign condition: %e",
+						err);
+				g_error_free (err);
+				rspamd_symcache_finalize_item (task, item);
+
+				return;
+			}
+
+			if (key_type) {
+				if (strcmp (key_type, "file") == 0) {
+					key_format = RSPAMD_DKIM_KEY_FILE;
 				}
-
-				if (key_type) {
-					if (strcmp (key_type, "file") == 0) {
-						key_sign_type = RSPAMD_DKIM_SIGN_KEY_FILE;
-					}
-					else if (strcmp (key_type, "base64") == 0) {
-						key_sign_type = RSPAMD_DKIM_SIGN_KEY_BASE64;
-					}
-					else if (strcmp (key_type, "pem") == 0) {
-						key_sign_type = RSPAMD_DKIM_SIGN_KEY_PEM;
-					}
-					else if (strcmp (key_type, "der") == 0 ||
-							strcmp (key_type, "raw") == 0) {
-						key_sign_type = RSPAMD_DKIM_SIGN_KEY_DER;
-					}
-					else {
-						lua_settop (L, 0);
-						luaL_error (L, "unknown key type: %s",
-								key_type);
-						rspamd_symcache_finalize_item (task, item);
-
-						return;
-					}
+				else if (strcmp (key_type, "base64") == 0) {
+					key_format = RSPAMD_DKIM_KEY_BASE64;
 				}
-
-				if (sign_type_str) {
-					if (strcmp (sign_type_str, "dkim") == 0) {
-						sign_type = RSPAMD_DKIM_NORMAL;
-					}
-					else if (strcmp (sign_type_str, "arc-sign") == 0) {
-						sign_type = RSPAMD_DKIM_ARC_SIG;
-						if (arc_idx == 0) {
-							lua_settop (L, 0);
-							luaL_error (L, "no arc idx specified");
-							rspamd_symcache_finalize_item (task, item);
-
-							return;
-						}
-					}
-					else if (strcmp (sign_type_str, "arc-seal") == 0) {
-						sign_type = RSPAMD_DKIM_ARC_SEAL;
-						if (arc_cv == NULL) {
-							lua_settop (L, 0);
-							luaL_error (L, "no arc cv specified");
-							rspamd_symcache_finalize_item (task, item);
-
-							return;
-						}
-						if (arc_idx == 0) {
-							lua_settop (L, 0);
-							luaL_error (L, "no arc idx specified");
-							rspamd_symcache_finalize_item (task, item);
-
-							return;
-						}
-					}
-					else {
-						lua_settop (L, 0);
-						luaL_error (L, "unknown sign type: %s",
-								sign_type_str);
-						rspamd_symcache_finalize_item (task, item);
-
-						return;
-					}
+				else if (strcmp (key_type, "pem") == 0) {
+					key_format = RSPAMD_DKIM_KEY_PEM;
 				}
-
-				if (key_sign_type == RSPAMD_DKIM_SIGN_KEY_FILE) {
-
-					dkim_key = rspamd_lru_hash_lookup (
-							dkim_module_ctx->dkim_sign_hash,
-							key, time (NULL));
-					lru_key = key;
+				else if (strcmp (key_type, "der") == 0 ||
+						strcmp (key_type, "raw") == 0) {
+					key_format = RSPAMD_DKIM_KEY_RAW;
 				}
 				else {
-					/* Prehash */
-					memset (hex_hash, 0, sizeof (hex_hash));
-					rspamd_cryptobox_hash (h, key, len, NULL, 0);
-					rspamd_encode_hex_buf (h, sizeof (h),
-							hex_hash, sizeof (hex_hash));
-					dkim_key = rspamd_lru_hash_lookup (
-							dkim_module_ctx->dkim_sign_hash,
-							hex_hash, time (NULL));
-					lru_key = hex_hash;
-				}
-
-				if (dkim_key == NULL) {
-					dkim_key = rspamd_dkim_sign_key_load (key, len,
-							key_sign_type, &err);
-
-					if (dkim_key == NULL) {
-						msg_err_task ("cannot load dkim key %s: %e",
-								lru_key, err);
-						g_error_free (err);
-						rspamd_symcache_finalize_item (task, item);
-
-						return;
-					}
-					else {
-						rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
-								g_strdup (lru_key), dkim_key,
-								time (NULL), 0);
-					}
-				}
-				else if (rspamd_dkim_sign_key_maybe_invalidate (dkim_key,
-						key_sign_type, key, len)) {
-					/*
-					 * Invalidate and reload DKIM key,
-					 * removal from lru cache also cleanup the key and value
-					 */
-
-					rspamd_lru_hash_remove (dkim_module_ctx->dkim_sign_hash,
-							lru_key);
-					dkim_key = rspamd_dkim_sign_key_load (key, len,
-							key_sign_type, &err);
-
-					if (dkim_key == NULL) {
-						msg_err_task ("cannot load dkim key %s: %e",
-								lru_key, err);
-						g_error_free (err);
-						rspamd_symcache_finalize_item (task, item);
-
-						return;
-					}
-					else {
-						rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
-								g_strdup (lru_key), dkim_key,
-								time (NULL), 0);
-					}
-				}
-
-				ctx = rspamd_create_dkim_sign_context (task, dkim_key,
-						DKIM_CANON_RELAXED, DKIM_CANON_RELAXED,
-						dkim_module_ctx->sign_headers,
-						sign_type,
-						&err);
-
-				if (ctx == NULL) {
-					msg_err_task ("cannot create sign context: %e",
-							err);
-					g_error_free (err);
+					lua_settop (L, 0);
+					luaL_error (L, "unknown key type: %s",
+							key_type);
 					rspamd_symcache_finalize_item (task, item);
 
 					return;
 				}
+			}
 
-				hdr = rspamd_dkim_sign (task, selector, domain, 0, 0,
-						arc_idx, arc_cv,
-						ctx);
-
-				if (hdr) {
-					rspamd_mempool_set_variable (task->task_pool,
-							"dkim-signature",
-							hdr, rspamd_gstring_free_hard);
+			if (sign_type_str) {
+				if (strcmp (sign_type_str, "dkim") == 0) {
+					sign_type = RSPAMD_DKIM_NORMAL;
 				}
+				else if (strcmp (sign_type_str, "arc-sign") == 0) {
+					sign_type = RSPAMD_DKIM_ARC_SIG;
+					if (arc_idx == 0) {
+						lua_settop (L, 0);
+						luaL_error (L, "no arc idx specified");
+						rspamd_symcache_finalize_item (task, item);
 
-				sign = TRUE;
+						return;
+					}
+				}
+				else if (strcmp (sign_type_str, "arc-seal") == 0) {
+					sign_type = RSPAMD_DKIM_ARC_SEAL;
+					if (arc_cv == NULL) {
+						lua_settop (L, 0);
+						luaL_error (L, "no arc cv specified");
+						rspamd_symcache_finalize_item (task, item);
+
+						return;
+					}
+					if (arc_idx == 0) {
+						lua_settop (L, 0);
+						luaL_error (L, "no arc idx specified");
+						rspamd_symcache_finalize_item (task, item);
+
+						return;
+					}
+				}
+				else {
+					lua_settop (L, 0);
+					luaL_error (L, "unknown sign type: %s",
+							sign_type_str);
+					rspamd_symcache_finalize_item (task, item);
+
+					return;
+				}
 			}
-			else {
-				sign = FALSE;
+
+			dkim_key = dkim_module_load_key_format (task, dkim_module_ctx,
+					key, len, key_format);
+
+			if (dkim_key == NULL) {
+				rspamd_symcache_finalize_item (task, item);
+				return;
 			}
+
+			ctx = rspamd_create_dkim_sign_context (task, dkim_key,
+					DKIM_CANON_RELAXED, DKIM_CANON_RELAXED,
+					dkim_module_ctx->sign_headers,
+					sign_type,
+					&err);
+
+			if (ctx == NULL) {
+				msg_err_task ("cannot create sign context: %e",
+						err);
+				g_error_free (err);
+				rspamd_symcache_finalize_item (task, item);
+
+				return;
+			}
+
+			hdr = rspamd_dkim_sign (task, selector, domain, 0, 0,
+					arc_idx, arc_cv,
+					ctx);
+
+			if (hdr) {
+				sigs = g_list_append (sigs, hdr);
+				rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
+						sigs, dkim_module_free_list);
+			}
+
+			sign = TRUE;
 		}
-
-		/* Result + error function */
-		lua_settop (L, 0);
-
-		if (!sign) {
-			msg_debug_task ("skip signing as dkim condition callback returned"
-					" false");
-			rspamd_symcache_finalize_item (task, item);
-
-			return;
+		else {
+			sign = FALSE;
 		}
 	}
 
+	/* Result + error function */
+	lua_settop (L, 0);
+
+	if (!sign) {
+		msg_debug_task ("skip signing as dkim condition callback returned"
+				" false");
+	}
 	rspamd_symcache_finalize_item (task, item);
 }
 

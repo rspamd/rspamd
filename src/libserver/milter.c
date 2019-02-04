@@ -1841,12 +1841,35 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 
 	if (elt) {
 		hname = g_string_new (RSPAMD_MILTER_DKIM_HEADER);
-		hvalue = g_string_new (ucl_object_tostring (elt));
 
-		rspamd_milter_send_action (session, RSPAMD_MILTER_INSHEADER,
-				1, hname, hvalue);
+		if (ucl_object_type (elt) == UCL_STRING) {
+			hvalue = g_string_new (ucl_object_tostring (elt));
+
+			rspamd_milter_send_action (session, RSPAMD_MILTER_INSHEADER,
+					1, hname, hvalue);
+
+			g_string_free (hvalue, TRUE);
+		}
+		else {
+			ucl_object_iter_t it;
+			const ucl_object_t *cur;
+			int i = 1;
+
+			it = ucl_object_iterate_new (elt);
+
+			while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
+				hvalue = g_string_new (ucl_object_tostring (cur));
+
+				rspamd_milter_send_action (session, RSPAMD_MILTER_INSHEADER,
+						i++, hname, hvalue);
+
+				g_string_free (hvalue, TRUE);
+			}
+
+			ucl_object_iterate_free (it);
+		}
+
 		g_string_free (hname, TRUE);
-		g_string_free (hvalue, TRUE);
 	}
 
 	if (processed) {
