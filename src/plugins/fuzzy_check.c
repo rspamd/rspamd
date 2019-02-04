@@ -1416,13 +1416,16 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 					sizeof (cached->digest));
 			cmd->shingles_count = 0;
 		}
-		else {
+		else if (cached->sh) {
 			encshcmd = rspamd_mempool_alloc0 (pool, sizeof (*encshcmd));
 			shcmd = &encshcmd->cmd;
 			memcpy (&shcmd->sgl, cached->sh, sizeof (struct rspamd_shingle));
 			memcpy (shcmd->basic.digest, cached->digest,
 					sizeof (cached->digest));
 			shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
+		}
+		else {
+			return NULL;
 		}
 	}
 	else {
