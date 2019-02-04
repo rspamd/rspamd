@@ -2971,15 +2971,26 @@ guint
 rspamd_url_hash (gconstpointer u)
 {
 	const struct rspamd_url *url = u;
-	rspamd_cryptobox_fast_hash_state_t st;
-
-	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
 
 	if (url->urllen > 0) {
-		rspamd_cryptobox_fast_hash_update (&st, url->string, url->urllen);
+		return rspamd_cryptobox_fast_hash (url->string, url->urllen,
+				rspamd_hash_seed ());
 	}
 
-	return rspamd_cryptobox_fast_hash_final (&st);
+	return 0;
+}
+
+guint
+rspamd_url_host_hash (gconstpointer u)
+{
+	const struct rspamd_url *url = u;
+
+	if (url->hostlen > 0) {
+		return rspamd_cryptobox_fast_hash (url->host, url->hostlen,
+				rspamd_hash_seed ());
+	}
+
+	return 0;
 }
 
 guint
@@ -3040,6 +3051,22 @@ rspamd_urls_cmp (gconstpointer a, gconstpointer b)
 	}
 	else {
 		r = memcmp (u1->string, u2->string, u1->urllen);
+	}
+
+	return r == 0;
+}
+
+gboolean
+rspamd_urls_host_cmp (gconstpointer a, gconstpointer b)
+{
+	const struct rspamd_url *u1 = a, *u2 = b;
+	int r = 0;
+
+	if (u1->hostlen != u2->hostlen) {
+		return FALSE;
+	}
+	else {
+		r = memcmp (u1->host, u2->host, u1->hostlen);
 	}
 
 	return r == 0;
@@ -3255,8 +3282,15 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 	dest = rspamd_mempool_alloc (pool, dlen + 1);
 	d = dest;
 	dend = d + dlen;
-	d += rspamd_snprintf ((gchar *)d, dend - d,
-			"%*s://", url->protocollen, rspamd_url_protocols[url->protocol].name);
+
+	if (url->protocollen > 0 &&
+		(url->protocol >= 0 && url->protocol < G_N_ELEMENTS (rspamd_url_protocols))) {
+		d += rspamd_snprintf ((gchar *) d, dend - d,
+				"%*s://", url->protocollen, rspamd_url_protocols[url->protocol].name);
+	}
+	else {
+		d += rspamd_snprintf ((gchar *) d, dend - d, "http://");
+	}
 
 	if (url->userlen > 0) {
 		ENCODE_URL_COMPONENT ((guchar *)url->user, url->userlen,

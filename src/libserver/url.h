@@ -203,12 +203,15 @@ void rspamd_url_add_tag (struct rspamd_url *url, const gchar *tag,
 
 guint rspamd_url_hash (gconstpointer u);
 guint rspamd_email_hash (gconstpointer u);
+guint rspamd_url_host_hash (gconstpointer u);
+
 
 /* Compare two emails for building emails hash */
 gboolean rspamd_emails_cmp (gconstpointer a, gconstpointer b);
 
 /* Compare two urls for building emails hash */
 gboolean rspamd_urls_cmp (gconstpointer a, gconstpointer b);
+gboolean rspamd_urls_host_cmp (gconstpointer a, gconstpointer b);
 
 /**
  * Decode URL encoded string in-place and return new length of a string, src and dst are NULL terminated
