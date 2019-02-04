@@ -16,7 +16,7 @@ limitations under the License.
 
 local argparse = require "argparse"
 local ansicolors = require "ansicolors"
---local rspamd_util = require "rspamd_util"
+local rspamd_util = require "rspamd_util"
 local rspamd_task = require "rspamd_task"
 local rspamd_logger = require "rspamd_logger"
 local lua_meta = require "lua_meta"
@@ -584,7 +584,6 @@ local function urls_handler(opts)
 end
 
 local function modify_handler(opts)
-  local rspamd_util = require "rspamd_util"
   load_config(opts)
   rspamd_url.init(rspamd_config:get_tld_path())
 
@@ -607,7 +606,7 @@ local function modify_handler(opts)
     return content
   end
 
-  local function do_append_footer(task, part, footer, is_multipart)
+  local function do_append_footer(task, part, footer, is_multipart, out)
     local newline_s = newline(task)
     local tp = part:get_text()
     local ct = 'text/plain'
@@ -622,10 +621,10 @@ local function modify_handler(opts)
     end
 
     if is_multipart then
-      io.write(string.format('Content-Type: %s; charset=utf-8%s'..
-          'Content-Transfer-Encoding: %s%s%s',
-          ct, newline_s, cte, newline_s, newline_s))
-      io.flush()
+      out[#out + 1] = string.format('Content-Type: %s; charset=utf-8%s'..
+          'Content-Transfer-Encoding: %s',
+          ct, newline_s, cte)
+      out[#out + 1] = ''
     end
 
     local content = tostring(tp:get_content('raw_utf') or '')
@@ -636,16 +635,15 @@ local function modify_handler(opts)
       content = string.format('%s%s',
           content:sub(-(#newline_s), #newline_s + 1), -- content without last newline
           footer)
-      rspamd_util.encode_qp(content,
-          80, task:get_newlines_type()):save_in_file(1)
-      io.write(double_nline)
+      out[#out + 1] = {rspamd_util.encode_qp(content,
+          80, task:get_newlines_type()), true}
+      out[#out + 1] = ''
     else
       content = content .. footer
-      rspamd_util.encode_qp(content,
-          80, task:get_newlines_type()):save_in_file(1)
-      io.write(double_nline)
+      out[#out + 1] = {rspamd_util.encode_qp(content,
+          80, task:get_newlines_type()), true}
+      out[#out + 1] = ''
     end
-
 
   end
 
@@ -665,6 +663,7 @@ local function modify_handler(opts)
     local need_rewrite_ct = false
     local parsed_ct
     local seen_cte = false
+    local out = {}
 
     local function process_headers_cb(name, hdr)
 
@@ -678,31 +677,31 @@ local function modify_handler(opts)
         local hname,hpattern = h:match('^([^=]+)=(.+)$')
         if hname == name then
           local new_value = string.format(hpattern, hdr.decoded)
-          new_value = string.format('%s:%s%s%s',
+          new_value = string.format('%s:%s%s',
               name, hdr.separator,
               rspamd_util.fold_header(name,
                   rspamd_util.mime_header_encode(new_value),
-                  task:get_newlines_type()), newline_s)
-          io.write(new_value)
+                  task:get_newlines_type()))
+          out[#out + 1] = new_value
           return
         end
       end
 
       if need_rewrite_ct then
         if name:lower() == 'content-type' then
-          local nct = string.format('%s: %s/%s; charset=utf-8%s',
-              'Content-Type', parsed_ct.type, parsed_ct.subtype, newline_s)
-          io.write(nct)
+          local nct = string.format('%s: %s/%s; charset=utf-8',
+              'Content-Type', parsed_ct.type, parsed_ct.subtype)
+          out[#out + 1] = nct
           return
         elseif name:lower() == 'content-transfer-encoding' then
           seen_cte = true
-          io.write(string.format('%s: %s%s',
-              'Content-Transfer-Encoding', 'quoted-printable', newline_s))
+          out[#out + 1] = string.format('%s: %s',
+              'Content-Transfer-Encoding', 'quoted-printable')
           return
         end
       end
 
-      io.write(hdr.raw)
+      out[#out + 1] = hdr.raw:gsub('\r?\n?$', '')
     end
 
     if html_footer or text_footer then
@@ -755,19 +754,19 @@ local function modify_handler(opts)
       local hname,hvalue = h:match('^([^=]+)=(.+)$')
 
       if hname and hvalue then
-        io.write(string.format('%s: %s%s', hname,
-            rspamd_util.fold_header(hname, hvalue, task:get_newlines_type()),
-            newline_s))
+        out[#out + 1] = string.format('%s: %s', hname,
+            rspamd_util.fold_header(hname, hvalue, task:get_newlines_type()))
       end
     end
 
     if not seen_cte and need_rewrite_ct then
-      io.write(string.format('%s: %s%s',
-          'Content-Transfer-Encoding', 'quoted-printable', newline_s))
+      out[#out + 1] = string.format('%s: %s',
+          'Content-Transfer-Encoding', 'quoted-printable')
     end
 
     -- End of headers
-    io.write(newline_s)
+    local eoh_pos = #out
+    out[#out + 1] = ''
 
     local boundaries = {}
     local cur_boundary
@@ -776,36 +775,31 @@ local function modify_handler(opts)
       local boundary = part:get_boundary()
       if part:is_multipart() then
         if cur_boundary then
-          io.write(string.format('--%s%s',
-              boundaries[#boundaries], newline_s))
+          out[#out + 1] = string.format('--%s',
+              boundaries[#boundaries])
         end
 
         boundaries[#boundaries + 1] = boundary or '--XXX'
         cur_boundary = boundary
-        io.flush ()
 
         local rh = part:get_raw_headers()
         if #rh > 0 then
-          rh:save_in_file(1)
-          io.write(newline_s)
-          io.flush()
+          out[#out + 1] = {rh, true}
         end
       elseif part:is_message() then
         if boundary then
           if cur_boundary and boundary ~= cur_boundary then
             -- Need to close boundary
-            io.write(string.format('--%s--%s%s',
-                boundaries[#boundaries], newline_s, newline_s))
+            out[#out + 1] = string.format('--%s--%s',
+                boundaries[#boundaries], newline_s)
             table.remove(boundaries)
             cur_boundary = nil
           end
-          io.write(string.format('--%s%s',
-              boundary, newline_s))
+          out[#out + 1] = string.format('--%s',
+              boundary)
         end
 
-        io.flush()
-        part:get_raw_headers():save_in_file(1)
-        io.write(newline_s)
+        out[#out + 1] = {part:get_raw_headers(), true}
       else
         local append_footer = false
         local skip_footer = part:is_attachment()
@@ -838,25 +832,23 @@ local function modify_handler(opts)
         if boundary then
           if cur_boundary and boundary ~= cur_boundary then
             -- Need to close boundary
-            io.write(string.format('--%s--%s%s',
-                boundaries[#boundaries], newline_s, newline_s))
+            out[#out + 1] = string.format('--%s--%s',
+                boundaries[#boundaries], newline_s)
             table.remove(boundaries)
             cur_boundary = boundary
           end
-          io.write(string.format('--%s%s',
-              boundary, newline_s))
+          out[#out + 1] = string.format('--%s',
+              boundary)
         end
 
         io.flush()
 
         if append_footer and not skip_footer then
           do_append_footer(task, part, append_footer,
-              parent and parent:is_multipart())
+              parent and parent:is_multipart(), out)
         else
-          part:get_raw_headers():save_in_file(1)
-          io.write(newline_s)
-          io.flush()
-          part:get_raw_content():save_in_file(1)
+          out[#out + 1] = {part:get_raw_headers(), true}
+          out[#out + 1] = {part:get_raw_content(), false}
         end
       end
     end
@@ -864,11 +856,25 @@ local function modify_handler(opts)
     -- Close remaining
     local b = table.remove(boundaries)
     while b do
-      io.write(string.format('--%s--%s', b, newline_s))
+      out[#out + 1] = string.format('--%s--', b)
       if #boundaries > 0 then
-        io.write(newline_s)
+        out[#out + 1] = ''
       end
       b = table.remove(boundaries)
+    end
+
+    for _,o in ipairs(out) do
+      if type(o) == 'string' then
+        io.write(o)
+        io.write(newline_s)
+      else
+        io.flush()
+        o[1]:save_in_file(1)
+
+        if o[2] then
+          io.write(newline_s)
+        end
+      end
     end
 
     task:destroy() -- No automatic dtor
