@@ -86,7 +86,7 @@
     }
   }
 
-  include smtp_whitespace "smtp_whitespace.rl";
+  include smtp_base "smtp_base.rl";
   include content_disposition "content_disposition.rl";
 
   main := content_disposition;

@@ -1,7 +1,7 @@
 %%{
 
   machine smtp_date_parser;
-  include smtp_whitespace "smtp_whitespace.rl";
+  include smtp_base "smtp_base.rl";
   include smtp_date "smtp_date.rl";
 
   main := date_time;

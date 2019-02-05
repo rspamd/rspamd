@@ -226,13 +226,14 @@
     cstart = NULL;
   }
 
-  include smtp_whitespace "smtp_whitespace.rl";
+  include smtp_base "smtp_base.rl";
   include smtp_ip "smtp_ip.rl";
   include smtp_date "smtp_date.rl";
   include smtp_address"smtp_address.rl";
   include smtp_received "smtp_received.rl";
 
   main := Received;
+  retarded := Received_retarded;
 
 }%%
 
@@ -259,6 +260,7 @@ rspamd_smtp_received_parse (struct rspamd_task *task, const char *data, size_t l
     gsize size;
   } st_storage;
   guint tmplen;
+  gboolean retarded_checked = FALSE;
 
   memset (&st_storage, 0, sizeof (st_storage));
   memset (rh, 0, sizeof (*rh));
@@ -283,7 +285,15 @@ rspamd_smtp_received_parse (struct rspamd_task *task, const char *data, size_t l
   eof = pe;
 
   %% write init;
+reexec_retarded:
   %% write exec;
+  %% write exports;
+
+  if (!real_ip_end && !retarded_checked) {
+    cs = smtp_received_parser_en_retarded;
+    retarded_checked = TRUE;
+    goto reexec_retarded;
+  }
 
   if (real_ip_end && real_ip_start && real_ip_end > real_ip_start) {
     tmplen = real_ip_end - real_ip_start;

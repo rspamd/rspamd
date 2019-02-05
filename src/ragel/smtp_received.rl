@@ -25,11 +25,14 @@
 
   ccontent = ctext | FWS | '(' @{ fcall balanced_ccontent; };
   balanced_ccontent := ccontent* ')' @{ fret; };
-  comment        =   "(" ((FWS? ccontent)* FWS?) >Comment_Start %Comment_End ")";
-  CFWS           =   ((FWS? comment)+ FWS?) | FWS;
+  comment        =   "(" ((WSP* ccontent)* WSP*) >Comment_Start %Comment_End ")";
+  CFWS           =   WSP* (comment+ WSP*)*;
 
   From_domain    = "FROM"i FWS Extended_Domain >From_Start %From_End;
   By_domain      = "BY"i FWS Extended_Domain >By_Start %By_End;
+
+  Retarded_Domain = TCP_info;
+  From_domain_retarded = "FROM"i FWS Retarded_Domain >From_Start %From_End;
 
   Via            = CFWS "VIA"i FWS Link;
   With           = CFWS "WITH"i FWS Protocol;
@@ -45,6 +48,7 @@
   Opt_info       = Via? With? ID? For? Additional_Registered_Clauses?;
   # Here we make From part optional just because many received headers lack it
   Received       = From_domain? CFWS? By_domain? CFWS? Opt_info CFWS? ";" FWS date_time >Date_Start %Date_End CFWS?;
+  Received_retarded = From_domain_retarded CFWS? By_domain? CFWS? Opt_info CFWS? ";" FWS date_time >Date_Start %Date_End CFWS?;
 
   prepush {
     if (top >= st_storage.size) {
