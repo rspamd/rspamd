@@ -3323,3 +3323,9 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 
 	return (const gchar *)dest;
 }
+
+gboolean
+rspamd_url_is_domain (int c)
+{
+	return is_domain ((guchar)c);
+}

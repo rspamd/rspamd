@@ -232,4 +232,12 @@ gsize rspamd_url_decode (gchar *dst, const gchar *src, gsize size);
 const gchar * rspamd_url_encode (struct rspamd_url *url, gsize *dlen,
 		rspamd_mempool_t *pool);
 
+
+/**
+ * Returns if a character is domain character
+ * @param c
+ * @return
+ */
+gboolean rspamd_url_is_domain (int c);
+
 #endif
