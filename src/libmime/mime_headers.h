@@ -72,13 +72,12 @@ enum rspamd_received_type {
 #define RSPAMD_RECEIVED_FLAG_AUTHENTICATED (1 << 2)
 
 struct received_header {
-	gchar *from_hostname;
-	gchar *from_ip;
-	gchar *real_hostname;
-	gchar *real_ip;
-	gchar *by_hostname;
-	gchar *for_mbox;
-	gchar *comment_ip;
+	const gchar *from_hostname;
+	const gchar *from_ip;
+	const gchar *real_hostname;
+	const gchar *real_ip;
+	const gchar *by_hostname;
+	const gchar *for_mbox;
 	rspamd_inet_addr_t *addr;
 	struct rspamd_mime_header *hdr;
 	time_t timestamp;

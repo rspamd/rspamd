@@ -150,7 +150,7 @@ struct rspamd_task {
 	gchar *deliver_to;								/**< address to deliver								*/
 	gchar *user;									/**< user to deliver								*/
 	gchar *subject;									/**< subject (for non-mime)							*/
-	gchar *hostname;								/**< hostname reported by MTA						*/
+	const gchar *hostname;							/**< hostname reported by MTA						*/
 	GHashTable *request_headers;					/**< HTTP headers in a request						*/
 	GHashTable *reply_headers;						/**< Custom reply headers							*/
 	struct {

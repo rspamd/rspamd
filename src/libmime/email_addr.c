@@ -497,29 +497,3 @@ rspamd_email_address_list_destroy (gpointer ptr)
 
 	g_ptr_array_free (ar, TRUE);
 }
-
-void rspamd_smtp_maybe_process_smtp_comment (struct rspamd_task *task,
-											 const char *data, size_t len,
-											 struct received_header *rh)
-{
-	if (!rh->by_hostname) {
-		/* Heuristic to detect IP addresses like in Exim received:
-		 * [xxx]:port or [xxx]
-		 */
-
-		if (*data == '[' && len > 2) {
-			const gchar *p = data + 1;
-			gsize iplen = rspamd_memcspn (p, "]", len - 1);
-
-			if (iplen > 0) {
-				guchar tbuf[sizeof(struct in6_addr) + sizeof(guint32)];
-
-				if (rspamd_parse_inet_address_ip4 (p, iplen, tbuf) ||
-						rspamd_parse_inet_address_ip6 (p, iplen, tbuf)) {
-					rh->comment_ip = rspamd_mempool_alloc (task->task_pool, iplen + 1);
-					rspamd_strlcpy (rh->comment_ip, p, iplen + 1);
-				}
-			}
-		}
-	}
-}

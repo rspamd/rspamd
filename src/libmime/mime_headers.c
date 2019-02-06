@@ -19,6 +19,7 @@
 #include "mime_encoding.h"
 #include "contrib/uthash/utlist.h"
 #include "libserver/mempool_vars_internal.h"
+#include "libserver/url.h"
 #include <unicode/utf8.h>
 
 static void
@@ -37,19 +38,22 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 		recv = rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (struct received_header));
 		recv->hdr = rh;
-		rspamd_smtp_received_parse (task, rh->decoded,
-				strlen (rh->decoded), recv);
-		/* Set flags */
-		if (recv->type == RSPAMD_RECEIVED_ESMTPA ||
+
+		if (rspamd_smtp_received_parse (task, rh->decoded,
+				strlen (rh->decoded), recv) != -1) {
+			/* Set flags */
+			if (recv->type == RSPAMD_RECEIVED_ESMTPA ||
 				recv->type == RSPAMD_RECEIVED_ESMTPSA) {
-			recv->flags |= RSPAMD_RECEIVED_FLAG_AUTHENTICATED;
-		}
-		if (recv->type == RSPAMD_RECEIVED_ESMTPS ||
+				recv->flags |= RSPAMD_RECEIVED_FLAG_AUTHENTICATED;
+			}
+			if (recv->type == RSPAMD_RECEIVED_ESMTPS ||
 				recv->type == RSPAMD_RECEIVED_ESMTPSA) {
-			recv->flags |= RSPAMD_RECEIVED_FLAG_SSL;
+				recv->flags |= RSPAMD_RECEIVED_FLAG_SSL;
+			}
+
+			g_ptr_array_add (task->received, recv);
 		}
 
-		g_ptr_array_add (task->received, recv);
 		rh->type = RSPAMD_HEADER_RECEIVED;
 		break;
 	case 0x76F31A09F4352521ULL:	/* to */
@@ -931,6 +935,8 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 							memcpy (comment->data, c, p - c);
 							rspamd_str_lc (comment->data, p - c);
 							comment->dlen = p - c;
+							comment->data = (gchar *)rspamd_string_len_strip (
+									comment->data, &comment->dlen, " \t");
 
 							if (!npart->head_comment) {
 								comment->prev = NULL;
@@ -964,6 +970,8 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 						memcpy (npart->data, c, p - c);
 						rspamd_str_lc (npart->data, p - c);
 						npart->dlen = p - c;
+						npart->data = (gchar *)rspamd_string_len_strip (
+								npart->data, &npart->dlen, " \t");
 					}
 				}
 
@@ -997,6 +1005,8 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 						memcpy (npart->data, c, p - c);
 						rspamd_str_lc (npart->data, p - c);
 						npart->dlen = p - c;
+						npart->data = (gchar *)rspamd_string_len_strip (
+								npart->data, &npart->dlen, " \t");
 					}
 				}
 
@@ -1029,6 +1039,8 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 				memcpy (npart->data, c, p - c);
 				rspamd_str_lc (npart->data, p - c);
 				npart->dlen = p - c;
+				npart->data = (gchar *)rspamd_string_len_strip (npart->data,
+						&npart->dlen, " \t");
 			}
 
 			return npart;
@@ -1161,13 +1173,205 @@ rspamd_smtp_received_spill (struct rspamd_task *task,
 	return head;
 }
 
+static gboolean
+rspamd_smtp_received_process_rdns (struct rspamd_task *task,
+								   const gchar *begin,
+								   gsize len,
+								   struct received_header *rh,
+								   gboolean is_real)
+{
+	const gchar *p, *end;
+	gsize hlen = 0;
+
+	p = begin;
+	end = begin + len;
+
+	while (p < end) {
+		if (rspamd_url_is_domain (*p)) {
+			hlen ++;
+		}
+
+		p ++;
+	}
+
+	if (hlen > 0) {
+		if (p == end || g_ascii_isspace (*p) || *p == '[' || *p == '(') {
+			/* We have some hostname, accept it */
+			gchar *dest;
+
+			dest = rspamd_mempool_alloc (task->task_pool,
+					hlen + 1);
+			rspamd_strlcpy (dest, begin, hlen + 1);
+
+			if (is_real) {
+				rh->real_hostname = dest;
+			}
+			else {
+				rh->from_hostname = dest;
+			}
+
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+static gboolean
+rspamd_smtp_received_process_from_comment (struct rspamd_task *task,
+										   struct received_header *rh,
+										   struct rspamd_received_comment *comment)
+{
+	rspamd_inet_addr_t *addr;
+	gboolean ret = FALSE;
+
+	if (comment->data[0] == '[') {
+		/* Likely Exim version */
+
+		const gchar *brace_pos = memchr (comment->data, ']', comment->dlen);
+
+		if (brace_pos) {
+			addr = rspamd_parse_smtp_ip (comment->data,
+					brace_pos - comment->data,
+					task->task_pool);
+
+			if (addr) {
+				rh->addr = addr;
+				rh->real_ip = rspamd_inet_address_to_string (addr);
+				rh->from_ip = rh->real_ip;
+			}
+		}
+	}
+	else if (g_ascii_isxdigit (comment->data[0])) {
+		/* Try to parse IP address */
+		addr = rspamd_parse_inet_address_pool (comment->data,
+				comment->dlen, task->task_pool);
+		if (addr) {
+			rh->addr = addr;
+			rh->real_ip = rspamd_inet_address_to_string (addr);
+			rh->from_ip = rh->real_ip;
+		}
+	}
+	else {
+		/* Try canonical Postfix version: rdns [ip] */
+		const gchar *obrace_pos = memchr (comment->data, '[', comment->dlen),
+				*ebrace_pos, *dend;
+
+		if (obrace_pos) {
+			dend = comment->data + comment->dlen;
+			ebrace_pos = memchr (obrace_pos, ']', dend - obrace_pos);
+
+			if (ebrace_pos) {
+				addr = rspamd_parse_smtp_ip (obrace_pos,
+						ebrace_pos - obrace_pos + 1, task->task_pool);
+
+				if (addr) {
+					rh->addr = addr;
+					rh->real_ip = rspamd_inet_address_to_string (addr);
+					rh->from_ip = rh->real_ip;
+
+					/* Process with rDNS */
+					if (rspamd_smtp_received_process_rdns (task,
+							comment->data,
+							obrace_pos - comment->data,
+							rh,
+							TRUE)) {
+						ret = TRUE;
+					}
+				}
+			}
+		}
+		else {
+			/* Hostname or some crap, sigh... */
+			if (rspamd_smtp_received_process_rdns (task,
+					comment->data,
+					comment->dlen,
+					rh,
+					TRUE)) {
+				ret = TRUE;
+			}
+		}
+	}
+
+	return ret;
+}
+
+static void
+rspamd_smtp_received_process_from (struct rspamd_task *task,
+								   struct rspamd_received_part *rpart,
+								   struct received_header *rh)
+{
+	if (rpart->dlen > 0) {
+		/* We have seen multiple cases:
+		 * - [ip] (hostname/unknown [real_ip])
+		 * - helo (hostname/unknown [real_ip])
+		 * - [ip]
+		 * - hostname
+		 * - hostname ([ip]:port helo=xxx)
+		 * Maybe more...
+		 */
+		gboolean seen_ip_in_data = FALSE, seen_rdns_in_comment = FALSE;
+
+		if (rpart->head_comment && rpart->head_comment->dlen > 0) {
+			/* We can have info within comment as part of RFC */
+			seen_rdns_in_comment = rspamd_smtp_received_process_from_comment (
+					task, rh, rpart->head_comment);
+		}
+		else if (rpart->data[0] == '[') {
+			/* No comment, just something that looks like SMTP IP */
+			const gchar *brace_pos = memchr (rpart->data, ']', rpart->dlen);
+			rspamd_inet_addr_t *addr;
+
+			if (brace_pos) {
+				addr = rspamd_parse_smtp_ip (rpart->data, brace_pos -
+						rpart->data, task->task_pool);
+
+				if (addr) {
+					seen_ip_in_data = TRUE;
+					rh->addr = addr;
+					rh->real_ip = rspamd_inet_address_to_string (addr);
+					rh->from_ip = rh->real_ip;
+				}
+			}
+		}
+		else if (g_ascii_isxdigit (rpart->data[0])) {
+			/* Try to parse IP address */
+			rspamd_inet_addr_t *addr;
+			addr = rspamd_parse_inet_address_pool (rpart->data,
+					rpart->dlen, task->task_pool);
+			if (addr) {
+				seen_ip_in_data = TRUE;
+				rh->addr = addr;
+				rh->real_ip = rspamd_inet_address_to_string (addr);
+				rh->from_ip = rh->real_ip;
+			}
+		}
+
+		if (!seen_ip_in_data && !seen_rdns_in_comment) {
+			/* Get rDNS */
+			rspamd_smtp_received_process_rdns (task,
+					rpart->data,
+					rpart->dlen,
+					rh,
+					FALSE);
+		}
+	}
+	else {
+		/* rpart->dlen = 0 */
+
+		if (rpart->head_comment && rpart->head_comment->dlen > 0) {
+			rspamd_smtp_received_process_from_comment (task,
+					rh, rpart->head_comment);
+		}
+	}
+}
+
 int
 rspamd_smtp_received_parse (struct rspamd_task *task,
 							const char *data,
 							size_t len,
 							struct received_header *rh)
 {
-	const gchar *p, *c, *end;
 	goffset date_pos = 0;
 	struct rspamd_received_part *head, *cur;
 
@@ -1175,6 +1379,14 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 
 	if (head == NULL) {
 		return -1;
+	}
+
+	DL_FOREACH (head, cur) {
+		switch (cur->type) {
+		case RSPAMD_RECEIVED_PART_FROM:
+			rspamd_smtp_received_process_from (task, cur, rh);
+			break;
+		}
 	}
 
 	return 0;
