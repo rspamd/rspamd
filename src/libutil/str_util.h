@@ -454,6 +454,14 @@ gchar * rspamd_str_make_utf_valid (const gchar *src, gsize slen, gsize *dstlen);
  */
 gsize rspamd_gstring_strip (GString *s, const gchar *strip_chars);
 
+/**
+ * Strips characters in `strip_chars` from start and end of the sized string
+ * @param s
+ * @param strip_chars
+ */
+const gchar* rspamd_string_len_strip (const gchar *in,
+		gsize *len, const gchar *strip_chars);
+
 #define IS_ZERO_WIDTH_SPACE(uc) ((uc) == 0x200B || \
 								(uc) == 0x200C || \
 								(uc) == 0x200D || \

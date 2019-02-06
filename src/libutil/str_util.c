@@ -2827,3 +2827,55 @@ rspamd_gstring_strip (GString *s, const gchar *strip_chars)
 
 	return total;
 }
+
+const gchar* rspamd_string_len_strip (const gchar *in,
+									  gsize *len,
+									  const gchar *strip_chars)
+{
+	const gchar *p, *sc;
+	gsize strip_len = 0, old_len = *len;
+
+	p = in + old_len - 1;
+
+	/* Trail */
+	while (p >= in) {
+		gboolean seen = FALSE;
+
+		sc = strip_chars;
+
+		while (*sc != '\0') {
+			if (*p == *sc) {
+				strip_len ++;
+				seen = TRUE;
+				break;
+			}
+
+			sc ++;
+		}
+
+		if (!seen) {
+			break;
+		}
+
+		p --;
+	}
+
+	if (strip_len > 0) {
+		*len -= strip_len;
+	}
+
+	/* Head */
+	old_len = *len;
+
+	if (old_len > 0) {
+		strip_len = rspamd_memspn (in, strip_chars, old_len);
+
+		if (strip_len > 0) {
+			*len -= strip_len;
+
+			return in + strip_len;
+		}
+	}
+
+	return in;
+}
