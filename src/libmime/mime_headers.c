@@ -17,6 +17,7 @@
 #include "mime_headers.h"
 #include "smtp_parsers.h"
 #include "mime_encoding.h"
+#include "contrib/uthash/utlist.h"
 #include "libserver/mempool_vars_internal.h"
 #include <unicode/utf8.h>
 
@@ -847,4 +848,334 @@ rspamd_mime_message_id_generate (const gchar *fqdn)
 			fqdn);
 
 	return g_string_free (out, FALSE);
+}
+
+enum rspamd_received_part_type {
+	RSPAMD_RECEIVED_PART_FROM,
+	RSPAMD_RECEIVED_PART_BY,
+	RSPAMD_RECEIVED_PART_FOR,
+	RSPAMD_RECEIVED_PART_WITH,
+	RSPAMD_RECEIVED_PART_UNKNOWN,
+};
+
+struct rspamd_received_comment {
+	gchar *data;
+	gsize dlen;
+	struct rspamd_received_comment *prev;
+};
+
+struct rspamd_received_part {
+	enum rspamd_received_part_type type;
+	gchar *data;
+	gsize dlen;
+	struct rspamd_received_comment *tail_comment;
+	struct rspamd_received_comment *head_comment;
+	struct rspamd_received_part *prev, *next;
+};
+
+static struct rspamd_received_part *
+rspamd_smtp_received_process_part (struct rspamd_task *task,
+								   const char *data,
+								   size_t len,
+								   enum rspamd_received_part_type type,
+								   goffset *last)
+{
+	struct rspamd_received_part *npart;
+	const guchar *p, *c, *end;
+	guint obraces = 0, ebraces = 0;
+	enum _parse_state {
+		skip_spaces,
+		in_comment,
+		read_data,
+		all_done
+	} state, next_state;
+
+	npart = rspamd_mempool_alloc0 (task->task_pool, sizeof (*npart));
+	npart->type = type;
+
+	/* In this function, we just process comments and data separately */
+	p = data;
+	end = data + len;
+	c = data;
+	state = skip_spaces;
+	next_state = read_data;
+
+	while (p < end) {
+		switch (state) {
+		case skip_spaces:
+			if (!g_ascii_isspace (*p)) {
+				c = p;
+				state = next_state;
+			}
+			else {
+				p ++;
+			}
+			break;
+		case in_comment:
+			if (*p == '(') {
+				obraces ++;
+			}
+			else if (*p == ')') {
+				ebraces ++;
+
+				if (ebraces >= obraces) {
+					if (type != RSPAMD_RECEIVED_PART_UNKNOWN) {
+						if (p > c) {
+							struct rspamd_received_comment *comment;
+
+							comment = rspamd_mempool_alloc (task->task_pool,
+									sizeof (*comment));
+
+							comment->data = rspamd_mempool_alloc (task->task_pool,
+									p - c);
+							memcpy (comment->data, c, p - c);
+							rspamd_str_lc (comment->data, p - c);
+							comment->dlen = p - c;
+
+							if (!npart->head_comment) {
+								comment->prev = NULL;
+								npart->head_comment = comment;
+								npart->tail_comment = comment;
+							}
+							else {
+								comment->prev = npart->tail_comment;
+								npart->tail_comment = comment;
+							}
+						}
+					}
+
+					p ++;
+					c = p;
+					state = skip_spaces;
+					next_state = read_data;
+
+					continue;
+				}
+			}
+
+			p ++;
+			break;
+		case read_data:
+			if (*p == '(') {
+				if (p > c) {
+					if (type != RSPAMD_RECEIVED_PART_UNKNOWN) {
+						npart->data = rspamd_mempool_alloc (task->task_pool,
+								p - c);
+						memcpy (npart->data, c, p - c);
+						rspamd_str_lc (npart->data, p - c);
+						npart->dlen = p - c;
+					}
+				}
+
+				state = in_comment;
+				obraces = 1;
+				ebraces = 0;
+				p ++;
+				c = p;
+			}
+			else if (g_ascii_isspace (*p)) {
+				if (p > c) {
+					if (type != RSPAMD_RECEIVED_PART_UNKNOWN) {
+						npart->data = rspamd_mempool_alloc (task->task_pool,
+								p - c);
+						memcpy (npart->data, c, p - c);
+						rspamd_str_lc (npart->data, p - c);
+						npart->dlen = p - c;
+					}
+				}
+
+				state = skip_spaces;
+				next_state = read_data;
+				c = p;
+			}
+			else if (*p == ';') {
+				/* It is actually delimiter of date part if not in the comments */
+				if (p > c) {
+					if (type != RSPAMD_RECEIVED_PART_UNKNOWN) {
+						npart->data = rspamd_mempool_alloc (task->task_pool,
+								p - c);
+						memcpy (npart->data, c, p - c);
+						rspamd_str_lc (npart->data, p - c);
+						npart->dlen = p - c;
+					}
+				}
+
+				state = all_done;
+				continue;
+			}
+			else if (npart->dlen > 0) {
+				/* We have already received data and find something with no ( */
+				state = all_done;
+				continue;
+			}
+			else {
+				p ++;
+			}
+			break;
+		case all_done:
+			*last = p - (const guchar *)data;
+			return npart;
+			break;
+		}
+	}
+
+	/* Leftover */
+	switch (state) {
+	case read_data:
+		if (p > c) {
+			if (type != RSPAMD_RECEIVED_PART_UNKNOWN) {
+				npart->data = rspamd_mempool_alloc (task->task_pool,
+						p - c);
+				memcpy (npart->data, c, p - c);
+				rspamd_str_lc (npart->data, p - c);
+				npart->dlen = p - c;
+			}
+
+			return npart;
+		}
+		break;
+	case skip_spaces:
+		return npart;
+	default:
+		break;
+	}
+
+	return NULL;
+}
+
+static struct rspamd_received_part *
+rspamd_smtp_received_spill (struct rspamd_task *task,
+							const char *data,
+							size_t len,
+							goffset *date_pos)
+{
+	const guchar *p, *end;
+	struct rspamd_received_part *cur_part, *head = NULL;
+	goffset pos = 0;
+
+	p = data;
+	end = data + len;
+
+	while (p < end && g_ascii_isspace (*p)) {
+		p ++;
+	}
+
+	len = end - p;
+
+	/* Ignore all received but those started from from part */
+	if (len <= 4 || (lc_map[p[0]] != 'f' &&
+					 lc_map[p[1]] != 'r' &&
+					 lc_map[p[2]] != 'o' &&
+					 lc_map[p[3]] != 'm')) {
+		return NULL;
+	}
+
+	p += sizeof ("from") - 1;
+
+	/* We can now store from part */
+	cur_part = rspamd_smtp_received_process_part (task, p, end - p,
+			RSPAMD_RECEIVED_PART_FROM, &pos);
+
+	if (!cur_part) {
+		return NULL;
+	}
+
+	p += pos;
+	len = end > p ? end - p : 0;
+	DL_APPEND (head, cur_part);
+
+
+	if (len > 2 && (lc_map[p[0]] == 'b' &&
+					lc_map[p[1]] == 'y')) {
+		p += sizeof ("by") - 1;
+
+		cur_part = rspamd_smtp_received_process_part (task, p, end - p,
+				RSPAMD_RECEIVED_PART_BY, &pos);
+
+		if (!cur_part) {
+			return NULL;
+		}
+
+		p += pos;
+		len = end > p ? end - p : 0;
+		DL_APPEND (head, cur_part);
+	}
+
+	while (p > end) {
+		if (*p == ';') {
+			/* We are at the date separator, stop here */
+			*date_pos = p - (const guchar *)data + 1;
+			break;
+		}
+		else {
+			if (len > sizeof ("with") && (lc_map[p[0]] == 'w' &&
+										  lc_map[p[1]] == 'i' &&
+										  lc_map[p[2]] == 't' &&
+										  lc_map[p[3]] == 'h')) {
+				p += sizeof ("with") - 1;
+
+				cur_part = rspamd_smtp_received_process_part (task, p, end - p,
+						RSPAMD_RECEIVED_PART_WITH, &pos);
+			}
+			else if (len > sizeof ("for") && (lc_map[p[0]] == 'f' &&
+											  lc_map[p[1]] == 'o' &&
+											  lc_map[p[2]] == 'r')) {
+				p += sizeof ("for") - 1;
+				cur_part = rspamd_smtp_received_process_part (task, p, end - p,
+						RSPAMD_RECEIVED_PART_FOR, &pos);
+			}
+			else {
+				while (p < end) {
+					if (!(g_ascii_isspace (*p) || *p == '(' || *p == ';')) {
+						p ++;
+					}
+					else {
+						break;
+					}
+				}
+
+				if (p == end) {
+					return NULL;
+				}
+				else if (*p == ';') {
+					*date_pos = p - (const guchar *)data + 1;
+					break;
+				}
+				else {
+					cur_part = rspamd_smtp_received_process_part (task, p, end - p,
+							RSPAMD_RECEIVED_PART_UNKNOWN, &pos);
+				}
+			}
+
+			if (!cur_part) {
+				return NULL;
+			}
+			else {
+				p += pos;
+				len = end > p ? end - p : 0;
+				DL_APPEND (head, cur_part);
+			}
+		}
+	}
+
+	return head;
+}
+
+int
+rspamd_smtp_received_parse (struct rspamd_task *task,
+							const char *data,
+							size_t len,
+							struct received_header *rh)
+{
+	const gchar *p, *c, *end;
+	goffset date_pos = 0;
+	struct rspamd_received_part *head, *cur;
+
+	head = rspamd_smtp_received_spill (task, data, len, &date_pos);
+
+	if (head == NULL) {
+		return -1;
+	}
+
+	return 0;
 }
