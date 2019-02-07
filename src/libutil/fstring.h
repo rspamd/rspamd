@@ -140,6 +140,15 @@ gint rspamd_ftok_cmp (const rspamd_ftok_t *s1,
 		const rspamd_ftok_t *s2);
 
 /**
+ * Returns true if `s1` starts with `s2`
+ * @param s1
+ * @param s2
+ * @return
+ */
+gboolean rspamd_ftok_starts_with (const rspamd_ftok_t *s1,
+								  const rspamd_ftok_t *s2);
+
+/**
  * Return TRUE if ftok is equal to specified C string
  */
 gboolean rspamd_ftok_cstr_equal (const rspamd_ftok_t *s,
