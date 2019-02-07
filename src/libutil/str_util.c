@@ -391,6 +391,32 @@ rspamd_strlcpy_fast (gchar *dst, const gchar *src, gsize siz)
 	return (d - dst);
 }
 
+gsize
+rspamd_null_safe_copy (const gchar *src, gsize srclen,
+					   gchar *dest, gsize destlen)
+{
+	gsize copied = 0, si = 0, di = 0;
+
+	if (destlen == 0) {
+		return 0;
+	}
+
+	while (si < srclen && di + 1 < destlen) {
+		if (src[si] != '\0') {
+			dest[di++] = src[si++];
+			copied ++;
+		}
+		else {
+			si ++;
+		}
+	}
+
+	dest[di] = '\0';
+
+	return copied;
+}
+
+
 size_t
 rspamd_strlcpy_safe (gchar *dst, const gchar *src, gsize siz)
 {

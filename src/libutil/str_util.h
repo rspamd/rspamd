@@ -89,6 +89,18 @@ gsize rspamd_strlcpy_safe (gchar *dst, const gchar *src, gsize siz);
 #  define rspamd_strlcpy rspamd_strlcpy_fast
 #endif
 
+/**
+ * Copies `srclen` characters from `src` to `dst` ignoring \0
+ * @param src
+ * @param srclen
+ * @param dest
+ * @param destlen
+ * @return number of bytes copied
+ */
+gsize
+rspamd_null_safe_copy (const gchar *src, gsize srclen,
+					   gchar *dest, gsize destlen);
+
 /*
  * Try to convert string of length to long
  */
