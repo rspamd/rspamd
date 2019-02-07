@@ -87,15 +87,17 @@ rspamd_email_address_from_smtp (const gchar *str, guint len)
 void
 rspamd_email_address_free (struct rspamd_email_address *addr)
 {
-	if (addr->flags & RSPAMD_EMAIL_ADDR_ADDR_ALLOCATED) {
-		g_free ((void *)addr->addr);
-	}
+	if (addr) {
+		if (addr->flags & RSPAMD_EMAIL_ADDR_ADDR_ALLOCATED) {
+			g_free ((void *) addr->addr);
+		}
 
-	if (addr->flags & RSPAMD_EMAIL_ADDR_USER_ALLOCATED) {
-		g_free ((void *)addr->user);
-	}
+		if (addr->flags & RSPAMD_EMAIL_ADDR_USER_ALLOCATED) {
+			g_free ((void *) addr->user);
+		}
 
-	g_free (addr);
+		g_free (addr);
+	}
 }
 
 static inline void

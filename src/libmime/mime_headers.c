@@ -41,16 +41,6 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 
 		if (rspamd_smtp_received_parse (task, rh->decoded,
 				strlen (rh->decoded), recv) != -1) {
-			/* Set flags */
-			if (recv->type == RSPAMD_RECEIVED_ESMTPA ||
-				recv->type == RSPAMD_RECEIVED_ESMTPSA) {
-				recv->flags |= RSPAMD_RECEIVED_FLAG_AUTHENTICATED;
-			}
-			if (recv->type == RSPAMD_RECEIVED_ESMTPS ||
-				recv->type == RSPAMD_RECEIVED_ESMTPSA) {
-				recv->flags |= RSPAMD_RECEIVED_FLAG_SSL;
-			}
-
 			g_ptr_array_add (task->received, recv);
 		}
 
@@ -1177,8 +1167,7 @@ static gboolean
 rspamd_smtp_received_process_rdns (struct rspamd_task *task,
 								   const gchar *begin,
 								   gsize len,
-								   struct received_header *rh,
-								   gboolean is_real)
+								   const gchar **pdest)
 {
 	const gchar *p, *end;
 	gsize hlen = 0;
@@ -1202,13 +1191,7 @@ rspamd_smtp_received_process_rdns (struct rspamd_task *task,
 			dest = rspamd_mempool_alloc (task->task_pool,
 					hlen + 1);
 			rspamd_strlcpy (dest, begin, hlen + 1);
-
-			if (is_real) {
-				rh->real_hostname = dest;
-			}
-			else {
-				rh->from_hostname = dest;
-			}
+			*pdest = dest;
 
 			return TRUE;
 		}
@@ -1232,7 +1215,7 @@ rspamd_smtp_received_process_from_comment (struct rspamd_task *task,
 
 		if (brace_pos) {
 			addr = rspamd_parse_smtp_ip (comment->data,
-					brace_pos - comment->data,
+					brace_pos - comment->data + 1,
 					task->task_pool);
 
 			if (addr) {
@@ -1263,7 +1246,8 @@ rspamd_smtp_received_process_from_comment (struct rspamd_task *task,
 
 			if (ebrace_pos) {
 				addr = rspamd_parse_smtp_ip (obrace_pos,
-						ebrace_pos - obrace_pos + 1, task->task_pool);
+						ebrace_pos - obrace_pos + 1,
+						task->task_pool);
 
 				if (addr) {
 					rh->addr = addr;
@@ -1274,8 +1258,7 @@ rspamd_smtp_received_process_from_comment (struct rspamd_task *task,
 					if (rspamd_smtp_received_process_rdns (task,
 							comment->data,
 							obrace_pos - comment->data,
-							rh,
-							TRUE)) {
+							&rh->real_hostname)) {
 						ret = TRUE;
 					}
 				}
@@ -1286,8 +1269,7 @@ rspamd_smtp_received_process_from_comment (struct rspamd_task *task,
 			if (rspamd_smtp_received_process_rdns (task,
 					comment->data,
 					comment->dlen,
-					rh,
-					TRUE)) {
+					&rh->real_hostname)) {
 				ret = TRUE;
 			}
 		}
@@ -1317,15 +1299,30 @@ rspamd_smtp_received_process_from (struct rspamd_task *task,
 			seen_rdns_in_comment = rspamd_smtp_received_process_from_comment (
 					task, rh, rpart->head_comment);
 		}
-		else if (rpart->data[0] == '[') {
-			/* No comment, just something that looks like SMTP IP */
-			const gchar *brace_pos = memchr (rpart->data, ']', rpart->dlen);
-			rspamd_inet_addr_t *addr;
 
-			if (brace_pos) {
-				addr = rspamd_parse_smtp_ip (rpart->data, brace_pos -
-						rpart->data, task->task_pool);
+		if (!rh->real_ip) {
+			if (rpart->data[0] == '[') {
+				/* No comment, just something that looks like SMTP IP */
+				const gchar *brace_pos = memchr (rpart->data, ']', rpart->dlen);
+				rspamd_inet_addr_t *addr;
 
+				if (brace_pos) {
+					addr = rspamd_parse_smtp_ip (rpart->data,
+							brace_pos - rpart->data + 1,
+							task->task_pool);
+
+					if (addr) {
+						seen_ip_in_data = TRUE;
+						rh->addr = addr;
+						rh->real_ip = rspamd_inet_address_to_string (addr);
+						rh->from_ip = rh->real_ip;
+					}
+				}
+			} else if (g_ascii_isxdigit (rpart->data[0])) {
+				/* Try to parse IP address */
+				rspamd_inet_addr_t *addr;
+				addr = rspamd_parse_inet_address_pool (rpart->data,
+						rpart->dlen, task->task_pool);
 				if (addr) {
 					seen_ip_in_data = TRUE;
 					rh->addr = addr;
@@ -1334,26 +1331,13 @@ rspamd_smtp_received_process_from (struct rspamd_task *task,
 				}
 			}
 		}
-		else if (g_ascii_isxdigit (rpart->data[0])) {
-			/* Try to parse IP address */
-			rspamd_inet_addr_t *addr;
-			addr = rspamd_parse_inet_address_pool (rpart->data,
-					rpart->dlen, task->task_pool);
-			if (addr) {
-				seen_ip_in_data = TRUE;
-				rh->addr = addr;
-				rh->real_ip = rspamd_inet_address_to_string (addr);
-				rh->from_ip = rh->real_ip;
-			}
-		}
 
-		if (!seen_ip_in_data && !seen_rdns_in_comment) {
-			/* Get rDNS */
+		if (!seen_ip_in_data) {
+			/* Get anounced hostname (usually helo) */
 			rspamd_smtp_received_process_rdns (task,
 					rpart->data,
 					rpart->dlen,
-					rh,
-					FALSE);
+					&rh->from_hostname);
 		}
 	}
 	else {
@@ -1374,6 +1358,7 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 {
 	goffset date_pos = 0;
 	struct rspamd_received_part *head, *cur;
+	rspamd_ftok_t t1, t2;
 
 	head = rspamd_smtp_received_spill (task, data, len, &date_pos);
 
@@ -1381,12 +1366,102 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 		return -1;
 	}
 
+	rh->type = RSPAMD_RECEIVED_UNKNOWN;
+
 	DL_FOREACH (head, cur) {
 		switch (cur->type) {
 		case RSPAMD_RECEIVED_PART_FROM:
 			rspamd_smtp_received_process_from (task, cur, rh);
 			break;
+		case RSPAMD_RECEIVED_PART_BY:
+			rspamd_smtp_received_process_rdns (task,
+					cur->data,
+					cur->dlen,
+					&rh->by_hostname);
+			break;
+		case RSPAMD_RECEIVED_PART_WITH:
+			t1.begin = cur->data;
+			t1.len = cur->dlen;
+
+			if (t1.len > 0) {
+				RSPAMD_FTOK_ASSIGN (&t2, "smtp");
+
+				if (rspamd_ftok_cmp (&t1, &t2) == 0) {
+					rh->type = RSPAMD_RECEIVED_SMTP;
+				}
+
+				RSPAMD_FTOK_ASSIGN (&t2, "esmtp");
+
+				if (rspamd_ftok_starts_with (&t1, &t2) == 0) {
+					/*
+					 * esmtp, esmtps, esmtpsa
+					 */
+					if (t1.len == t2.len + 1) {
+						if (t1.begin[t2.len] == 'a') {
+							rh->type = RSPAMD_RECEIVED_ESMTPA;
+							rh->flags |= RSPAMD_RECEIVED_FLAG_AUTHENTICATED;
+						}
+						else if (t1.begin[t2.len] == 's') {
+							rh->type = RSPAMD_RECEIVED_ESMTPS;
+							rh->flags |= RSPAMD_RECEIVED_FLAG_SSL;
+						}
+					}
+					else if (t1.len == t2.len + 2) {
+						if (t1.begin[t2.len - 1] == 's' &&
+								t1.begin[t2.len] == 'a') {
+							rh->type = RSPAMD_RECEIVED_ESMTPSA;
+							rh->flags |= RSPAMD_RECEIVED_FLAG_AUTHENTICATED;
+							rh->flags |= RSPAMD_RECEIVED_FLAG_SSL;
+						}
+					}
+					else if (t1.len == t2.len) {
+						rh->type = RSPAMD_RECEIVED_ESMTP;
+					}
+				}
+
+				RSPAMD_FTOK_ASSIGN (&t2, "lmtp");
+
+				if (rspamd_ftok_cmp (&t1, &t2) == 0) {
+					rh->type = RSPAMD_RECEIVED_LMTP;
+				}
+
+				RSPAMD_FTOK_ASSIGN (&t2, "imap");
+
+				if (rspamd_ftok_cmp (&t1, &t2) == 0) {
+					rh->type = RSPAMD_RECEIVED_IMAP;
+				}
+
+				RSPAMD_FTOK_ASSIGN (&t2, "local");
+
+				if (rspamd_ftok_cmp (&t1, &t2) == 0) {
+					rh->type = RSPAMD_RECEIVED_LOCAL;
+				}
+
+				RSPAMD_FTOK_ASSIGN (&t2, "http");
+
+				if (rspamd_ftok_starts_with (&t1, &t2) == 0) {
+					if (t1.len == t2.len + 1) {
+						if (t1.begin[t2.len] == 's') {
+							rh->type = RSPAMD_RECEIVED_HTTP;
+							rh->flags |= RSPAMD_RECEIVED_FLAG_SSL;
+						}
+					}
+					else if (t1.len == t2.len) {
+						rh->type = RSPAMD_RECEIVED_HTTP;
+					}
+				}
+			}
+
+			break;
 		}
+	}
+
+	if (rh->real_ip && !rh->from_ip) {
+		rh->from_ip = rh->real_ip;
+	}
+
+	if (rh->real_hostname && !rh->from_hostname) {
+		rh->from_hostname = rh->real_hostname;
 	}
 
 	return 0;
