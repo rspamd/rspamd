@@ -382,7 +382,7 @@ rspamd_ftok_starts_with (const rspamd_ftok_t *s1,
 	g_assert (s1 != NULL && s2 != NULL);
 
 	if (s1->len >= s2->len) {
-		return !!(memcmp (s1->begin, s2->begin, s1->len) == 0);
+		return !!(memcmp (s1->begin, s2->begin, s2->len) == 0);
 	}
 
 	return FALSE;
