@@ -2410,6 +2410,15 @@ lua_task_get_received_headers (lua_State * L)
 				case RSPAMD_RECEIVED_IMAP:
 					proto = "imap";
 					break;
+				case RSPAMD_RECEIVED_HTTP:
+					proto = "http";
+					break;
+				case RSPAMD_RECEIVED_LOCAL:
+					proto = "local";
+					break;
+				case RSPAMD_RECEIVED_MAPI:
+					proto = "mapi";
+					break;
 				case RSPAMD_RECEIVED_UNKNOWN:
 				default:
 					proto = "unknown";
