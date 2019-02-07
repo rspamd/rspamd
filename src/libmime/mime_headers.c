@@ -1255,7 +1255,8 @@ rspamd_smtp_received_process_from_comment (struct rspamd_task *task,
 
 			if (addr) {
 				rh->addr = addr;
-				rh->real_ip = rspamd_inet_address_to_string (addr);
+				rh->real_ip = rspamd_mempool_strdup (task->task_pool,
+						rspamd_inet_address_to_string (addr));
 				rh->from_ip = rh->real_ip;
 			}
 		}
@@ -1266,7 +1267,8 @@ rspamd_smtp_received_process_from_comment (struct rspamd_task *task,
 				comment->dlen, task->task_pool);
 		if (addr) {
 			rh->addr = addr;
-			rh->real_ip = rspamd_inet_address_to_string (addr);
+			rh->real_ip = rspamd_mempool_strdup (task->task_pool,
+					rspamd_inet_address_to_string (addr));
 			rh->from_ip = rh->real_ip;
 		}
 	}
@@ -1286,7 +1288,8 @@ rspamd_smtp_received_process_from_comment (struct rspamd_task *task,
 
 				if (addr) {
 					rh->addr = addr;
-					rh->real_ip = rspamd_inet_address_to_string (addr);
+					rh->real_ip = rspamd_mempool_strdup (task->task_pool,
+							rspamd_inet_address_to_string (addr));
 					rh->from_ip = rh->real_ip;
 
 					/* Process with rDNS */
@@ -1349,7 +1352,8 @@ rspamd_smtp_received_process_from (struct rspamd_task *task,
 					if (addr) {
 						seen_ip_in_data = TRUE;
 						rh->addr = addr;
-						rh->real_ip = rspamd_inet_address_to_string (addr);
+						rh->real_ip = rspamd_mempool_strdup (task->task_pool,
+								rspamd_inet_address_to_string (addr));
 						rh->from_ip = rh->real_ip;
 					}
 				}
@@ -1361,7 +1365,8 @@ rspamd_smtp_received_process_from (struct rspamd_task *task,
 				if (addr) {
 					seen_ip_in_data = TRUE;
 					rh->addr = addr;
-					rh->real_ip = rspamd_inet_address_to_string (addr);
+					rh->real_ip = rspamd_mempool_strdup (task->task_pool,
+							rspamd_inet_address_to_string (addr));
 					rh->from_ip = rh->real_ip;
 				}
 			}
@@ -1443,8 +1448,8 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 						continue;
 					}
 					else if (t1.len == t2.len + 2) {
-						if (t1.begin[t2.len - 1] == 's' &&
-								t1.begin[t2.len] == 'a') {
+						if (t1.begin[t2.len] == 's' &&
+								t1.begin[t2.len + 1] == 'a') {
 							rh->type = RSPAMD_RECEIVED_ESMTPSA;
 							rh->flags |= RSPAMD_RECEIVED_FLAG_AUTHENTICATED;
 							rh->flags |= RSPAMD_RECEIVED_FLAG_SSL;
