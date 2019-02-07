@@ -118,7 +118,6 @@ SET(RAGEL_DEPENDS "${CMAKE_SOURCE_DIR}/src/ragel/smtp_address.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_date.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_ip.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_base.rl"
-	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_received.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/content_disposition.rl")
 RAGEL_TARGET(ragel_smtp_addr
 	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/smtp_addr_parser.rl
