@@ -280,11 +280,12 @@ MAP - RECEIVED - IP MINMAX POS - ONE
   Check Rspamc  ${result}  RCVD_TEST_01
   Check Rspamc  ${result}  RCVD_TEST_02  inverse=1
 
-MAP - RECEIVED - IP MINMAX POS - TWO / RCVD_AUTHED_ONE HIT
-  ${result} =  Scan Message With Rspamc  ${RCVD2}
-  Check Rspamc  ${result}  RCVD_TEST_02
-  Should Not Contain  ${result.stdout}  RCVD_TEST_01
-  Should Contain  ${result.stdout}  RCVD_AUTHED_ONE
+# Relies on parsing of shitty received
+#MAP - RECEIVED - IP MINMAX POS - TWO / RCVD_AUTHED_ONE HIT
+#  ${result} =  Scan Message With Rspamc  ${RCVD2}
+#  Check Rspamc  ${result}  RCVD_TEST_02
+#  Should Not Contain  ${result.stdout}  RCVD_TEST_01
+#  Should Contain  ${result.stdout}  RCVD_AUTHED_ONE
 
 MAP - RECEIVED - REDIS
   Redis HSET  RCVD_TEST  2a01:7c8:aab6:26d:5054:ff:fed1:1da2  ${EMPTY}

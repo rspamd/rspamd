@@ -765,7 +765,7 @@ local function modify_handler(opts)
     end
 
     -- End of headers
-    local eoh_pos = #out
+    --local eoh_pos = #out
     out[#out + 1] = ''
 
     local boundaries = {}
