@@ -28,10 +28,8 @@
   QcontentSMTP   = qtextSMTP | quoted_pairSMTP %User_has_backslash;
   Quoted_string  = ( DQUOTE QcontentSMTP* >User_start %User_end DQUOTE ) %Quoted_addr;
   Local_part     = Dot_string >User_start %User_end | Quoted_string;
-  String         = Atom | Quoted_string;
-
   Mailbox        = Local_part "@" (address_literal | Domain >Domain_start %Domain_end);
-  UnangledPath = ( Adl ":" )? Mailbox >Domain_start %Addr_end "."?;
+  UnangledPath = ( Adl ":" )? Mailbox >Addr_start %Addr_end "."?;
   AngledPath = "<" UnangledPath ">" %Addr_has_angle;
   Path = AngledPath | UnangledPath;
   SMTPAddr = space* (Path | "<>" %Empty_addr ) %Valid_addr space*;

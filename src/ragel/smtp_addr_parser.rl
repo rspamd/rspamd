@@ -2,8 +2,6 @@
 
   machine smtp_addr_parser;
 
-
-
   action IP6_start {}
   action IP6_end {}
   action IP4_start {}
