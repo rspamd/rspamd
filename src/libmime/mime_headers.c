@@ -159,6 +159,7 @@ rspamd_mime_header_add (struct rspamd_task *task,
 	}
 }
 
+
 /* Convert raw headers to a list of struct raw_header * */
 void
 rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
@@ -202,7 +203,7 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 						sizeof (struct rspamd_mime_header));
 				l = p - c;
 				tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
-				rspamd_strlcpy (tmp, c, l + 1);
+				rspamd_null_safe_copy (c, l, tmp, l + 1);
 				nh->name = tmp;
 				nh->empty_separator = TRUE;
 				nh->raw_value = c;
@@ -251,7 +252,7 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 				l = p - c;
 				if (l > 0) {
 					tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
-					rspamd_strlcpy (tmp, c, l + 1);
+					rspamd_null_safe_copy (c, l, tmp, l + 1);
 					nh->separator = tmp;
 				}
 				next_state = 3;
@@ -263,7 +264,7 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 				l = p - c;
 				if (l >= 0) {
 					tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
-					rspamd_strlcpy (tmp, c, l + 1);
+					rspamd_null_safe_copy (c, l, tmp, l + 1);
 					nh->separator = tmp;
 				}
 				c = p;
@@ -297,6 +298,12 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 			break;
 		case 4:
 			/* Copy header's value */
+
+			/*
+			 * XXX:
+			 * The original decision to use here null terminated
+			 * strings was extremely poor!
+			 */
 			l = p - c;
 			tmp = rspamd_mempool_alloc (task->task_pool, l + 1);
 			tp = tmp;
@@ -310,7 +317,12 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 						*tp++ = ' ';
 					}
 					else {
-						*tp++ = *c++;
+						if (*c != '\0') {
+							*tp++ = *c++;
+						}
+						else {
+							c++;
+						}
 					}
 				}
 				else if (t_state == 1) {
@@ -320,7 +332,12 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 					}
 					else {
 						t_state = 0;
-						*tp++ = *c++;
+						if (*c != '\0') {
+							*tp++ = *c++;
+						}
+						else {
+							c++;
+						}
 					}
 				}
 			}
