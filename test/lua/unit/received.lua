@@ -56,8 +56,8 @@ context("Received headers parser", function()
  for exim-dev@exim.org; Sat, 30 Jun 2018 02:54:24 +0100]],
      {
        from_hostname = 'smtp.spodhuis.org',
-       from_ip = '2a02:898:31:0:48:4558:736d:7470',
-       real_ip = '2a02:898:31:0:48:4558:736d:7470',
+       from_ip = '2a02:898:31::48:4558:736d:7470',
+       real_ip = '2a02:898:31::48:4558:736d:7470',
        by_hostname = 'hummus.csx.cam.ac.uk',
      }
     },
@@ -68,12 +68,29 @@ context("Received headers parser", function()
        real_ip = '1.1.1.1',
      }
     },
-    {'from [192.83.172.101] by (HELLO 148.251.238.35 ) (148.251.238.35) by guovswzqkvry051@sohu.com with gg login by AOL 6.0 for Windows US sub 008 SMTP  ; Tue, 03 Jul 2018 09:01:47 -0300',
+    {'from [192.83.172.101] (HELLO 148.251.238.35) (148.251.238.35) by guovswzqkvry051@sohu.com with gg login by AOL 6.0 for Windows US sub 008 SMTP  ; Tue, 03 Jul 2018 09:01:47 -0300',
      {
        from_ip = '192.83.172.101',
        by_hostname = '',
-     }
+     },
     },
+    {'from [61.174.163.26] (helo=host) by sc8-sf-list1.sourceforge.net with smtp (Exim 3.31-VA-mm2 #1 (Debian)) id 18t2z0-0001NX-00 for <razor-users@lists.sourceforge.net>; Wed, 12 Mar 2003 01:57:10 -0800',
+     {
+       from_ip = '61.174.163.26',
+       by_hostname = 'sc8-sf-list1.sourceforge.net',
+     },
+    },
+    {[[from [127.0.0.1] (unknown [65.19.167.131])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+	(Client did not present a certificate)
+	by mail01.someotherdomain.org (Postfix) with ESMTPSA id 43tYMW2yKHz50MHS
+	for <user2@somedomain.com>; Mon,  4 Feb 2019 16:39:35 +0000 (GMT)]],
+     {
+       from_ip = '65.19.167.131',
+       real_ip = '65.19.167.131',
+       by_hostname = 'mail01.someotherdomain.org',
+     }
+    }
   }
 
   local task = ffi.C.rspamd_task_new(nil, nil)

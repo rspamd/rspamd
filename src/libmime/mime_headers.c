@@ -1103,7 +1103,7 @@ rspamd_smtp_received_spill (struct rspamd_task *task,
 		DL_APPEND (head, cur_part);
 	}
 
-	while (p > end) {
+	while (p < end) {
 		if (*p == ';') {
 			/* We are at the date separator, stop here */
 			*date_pos = p - (const guchar *)data + 1;
@@ -1171,21 +1171,39 @@ rspamd_smtp_received_process_rdns (struct rspamd_task *task,
 {
 	const gchar *p, *end;
 	gsize hlen = 0;
+	gboolean seen_dot = FALSE;
 
 	p = begin;
 	end = begin + len;
 
 	while (p < end) {
-		if (rspamd_url_is_domain (*p)) {
+		if (!g_ascii_isspace (*p) && rspamd_url_is_domain (*p)) {
+			if (*p == '.') {
+				seen_dot = TRUE;
+			}
+
 			hlen ++;
+		}
+		else {
+			break;
 		}
 
 		p ++;
 	}
 
 	if (hlen > 0) {
-		if (p == end || g_ascii_isspace (*p) || *p == '[' || *p == '(') {
-			/* We have some hostname, accept it */
+		if (p == end) {
+			/* All data looks like a hostname */
+			gchar *dest;
+
+			dest = rspamd_mempool_alloc (task->task_pool,
+					hlen + 1);
+			rspamd_strlcpy (dest, begin, hlen + 1);
+			*pdest = dest;
+
+			return TRUE;
+		}
+		else if (seen_dot && (g_ascii_isspace (*p) || *p == '[' || *p == '(')) {
 			gchar *dest;
 
 			dest = rspamd_mempool_alloc (task->task_pool,
@@ -1214,8 +1232,8 @@ rspamd_smtp_received_process_from_comment (struct rspamd_task *task,
 		const gchar *brace_pos = memchr (comment->data, ']', comment->dlen);
 
 		if (brace_pos) {
-			addr = rspamd_parse_smtp_ip (comment->data,
-					brace_pos - comment->data + 1,
+			addr = rspamd_parse_inet_address_pool (comment->data + 1,
+					brace_pos - comment->data - 1,
 					task->task_pool);
 
 			if (addr) {
@@ -1245,8 +1263,8 @@ rspamd_smtp_received_process_from_comment (struct rspamd_task *task,
 			ebrace_pos = memchr (obrace_pos, ']', dend - obrace_pos);
 
 			if (ebrace_pos) {
-				addr = rspamd_parse_smtp_ip (obrace_pos,
-						ebrace_pos - obrace_pos + 1,
+				addr = rspamd_parse_inet_address_pool (obrace_pos + 1,
+						ebrace_pos - obrace_pos - 1,
 						task->task_pool);
 
 				if (addr) {
@@ -1307,8 +1325,8 @@ rspamd_smtp_received_process_from (struct rspamd_task *task,
 				rspamd_inet_addr_t *addr;
 
 				if (brace_pos) {
-					addr = rspamd_parse_smtp_ip (rpart->data,
-							brace_pos - rpart->data + 1,
+					addr = rspamd_parse_inet_address_pool (rpart->data + 1,
+							brace_pos - rpart->data - 1,
 							task->task_pool);
 
 					if (addr) {
@@ -1356,7 +1374,7 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 							size_t len,
 							struct received_header *rh)
 {
-	goffset date_pos = 0;
+	goffset date_pos = -1;
 	struct rspamd_received_part *head, *cur;
 	rspamd_ftok_t t1, t2;
 
@@ -1453,6 +1471,9 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 			}
 
 			break;
+		default:
+			/* Do nothing */
+			break;
 		}
 	}
 
@@ -1462,6 +1483,11 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 
 	if (rh->real_hostname && !rh->from_hostname) {
 		rh->from_hostname = rh->real_hostname;
+	}
+
+	if (date_pos > 0 && date_pos < len) {
+		rh->timestamp = rspamd_parse_smtp_date (data + date_pos,
+				len - date_pos);
 	}
 
 	return 0;
