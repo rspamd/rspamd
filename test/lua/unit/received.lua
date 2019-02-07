@@ -25,6 +25,19 @@ context("Received headers parser", function()
   ]]
 
   local cases = {
+    {[[from server.chat-met-vreemden.nl (unknown [IPv6:2a01:7c8:aab6:26d:5054:ff:fed1:1da2])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+	(Client did not present a certificate)
+	by mx1.freebsd.org (Postfix) with ESMTPS id CF0171862
+	for <test@example.com>; Mon,  6 Jul 2015 09:01:20 +0000 (UTC)
+	(envelope-from upwest201diana@outlook.com)]],
+      {
+        real_ip = '2a01:7c8:aab6:26d:5054:ff:fed1:1da2',
+        from_hostname = 'server.chat-met-vreemden.nl',
+        real_hostname = '',
+        by_hostname = 'mx1.freebsd.org',
+      },
+    },
     {[[from out-9.smtp.github.com (out-9.smtp.github.com [192.30.254.192])
  (using TLSv1.2 with cipher AECDH-AES256-SHA (256/256 bits))
  (No client certificate requested)
@@ -91,7 +104,7 @@ context("Received headers parser", function()
        real_ip = '65.19.167.131',
        by_hostname = 'mail01.someotherdomain.org',
      }
-    }
+    },
   }
 
   local task = ffi.C.rspamd_task_new(nil, nil)
@@ -120,7 +133,7 @@ context("Received headers parser", function()
           end
         elseif k == 'from_ip' then
           if #v > 0 then
-            local got_string = tostring(rspamd_ip.from_string(ffi_string(hdr.from_ip)))
+            local got_string = tostring((rspamd_ip.from_string(ffi_string(hdr.from_ip) or '')) or '')
             local expected_string = tostring(rspamd_ip.from_string(v))
             assert_equal(expected_string, got_string,
                 string.format('%s: from_ip: %s, expected: %s',
@@ -132,7 +145,7 @@ context("Received headers parser", function()
           end
         elseif k == 'real_ip' then
           if #v > 0 then
-            local got_string = tostring(rspamd_ip.from_string(ffi_string(hdr.from_ip)))
+            local got_string = tostring((rspamd_ip.from_string(ffi_string(hdr.from_ip) or '')) or '')
             local expected_string = tostring(rspamd_ip.from_string(v))
             assert_equal(expected_string, got_string,
                 string.format('%s: real_ip: %s, expected: %s',

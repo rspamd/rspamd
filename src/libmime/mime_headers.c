@@ -1427,7 +1427,7 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 
 				RSPAMD_FTOK_ASSIGN (&t2, "esmtp");
 
-				if (rspamd_ftok_starts_with (&t1, &t2) == 0) {
+				if (rspamd_ftok_starts_with (&t1, &t2)) {
 					/*
 					 * esmtp, esmtps, esmtpsa
 					 */
@@ -1440,6 +1440,7 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 							rh->type = RSPAMD_RECEIVED_ESMTPS;
 							rh->flags |= RSPAMD_RECEIVED_FLAG_SSL;
 						}
+						continue;
 					}
 					else if (t1.len == t2.len + 2) {
 						if (t1.begin[t2.len - 1] == 's' &&
@@ -1448,9 +1449,11 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 							rh->flags |= RSPAMD_RECEIVED_FLAG_AUTHENTICATED;
 							rh->flags |= RSPAMD_RECEIVED_FLAG_SSL;
 						}
+						continue;
 					}
 					else if (t1.len == t2.len) {
 						rh->type = RSPAMD_RECEIVED_ESMTP;
+						continue;
 					}
 				}
 
@@ -1458,23 +1461,26 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 
 				if (rspamd_ftok_cmp (&t1, &t2) == 0) {
 					rh->type = RSPAMD_RECEIVED_LMTP;
+					continue;
 				}
 
 				RSPAMD_FTOK_ASSIGN (&t2, "imap");
 
 				if (rspamd_ftok_cmp (&t1, &t2) == 0) {
 					rh->type = RSPAMD_RECEIVED_IMAP;
+					continue;
 				}
 
 				RSPAMD_FTOK_ASSIGN (&t2, "local");
 
 				if (rspamd_ftok_cmp (&t1, &t2) == 0) {
 					rh->type = RSPAMD_RECEIVED_LOCAL;
+					continue;
 				}
 
 				RSPAMD_FTOK_ASSIGN (&t2, "http");
 
-				if (rspamd_ftok_starts_with (&t1, &t2) == 0) {
+				if (rspamd_ftok_starts_with (&t1, &t2)) {
 					if (t1.len == t2.len + 1) {
 						if (t1.begin[t2.len] == 's') {
 							rh->type = RSPAMD_RECEIVED_HTTP;
@@ -1484,6 +1490,8 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 					else if (t1.len == t2.len) {
 						rh->type = RSPAMD_RECEIVED_HTTP;
 					}
+
+					continue;
 				}
 			}
 
