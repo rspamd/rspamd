@@ -2,6 +2,7 @@
 
 context("Received headers parser", function()
   local ffi = require("ffi")
+  local rspamd_ip = require "rspamd_ip"
 
   ffi.cdef[[
     struct received_header {
@@ -119,9 +120,11 @@ context("Received headers parser", function()
           end
         elseif k == 'from_ip' then
           if #v > 0 then
-            assert_equal(v, ffi_string(hdr.from_ip),
+            local got_string = tostring(rspamd_ip.from_string(ffi_string(hdr.from_ip)))
+            local expected_string = tostring(rspamd_ip.from_string(v))
+            assert_equal(expected_string, got_string,
                 string.format('%s: from_ip: %s, expected: %s',
-                    c[1], ffi_string(hdr.from_ip), v))
+                    expected_string, got_string, v))
           else
             assert_nil(hdr.from_ip,
                 string.format('%s: from_ip: %s, expected: nil',
@@ -129,9 +132,11 @@ context("Received headers parser", function()
           end
         elseif k == 'real_ip' then
           if #v > 0 then
-            assert_equal(v, ffi_string(hdr.real_ip),
+            local got_string = tostring(rspamd_ip.from_string(ffi_string(hdr.from_ip)))
+            local expected_string = tostring(rspamd_ip.from_string(v))
+            assert_equal(expected_string, got_string,
                 string.format('%s: real_ip: %s, expected: %s',
-                    c[1], ffi_string(hdr.real_ip), v))
+                    expected_string, got_string, v))
           else
             assert_nil(hdr.real_ip,
                 string.format('%s: real_ip: %s, expected: nil',
