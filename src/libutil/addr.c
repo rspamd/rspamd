@@ -721,6 +721,7 @@ rspamd_parse_inet_address_common (rspamd_inet_addr_t **target,
 	}
 
 	if (src[0] == '[') {
+		const gchar *ip_start;
 		/* Ipv6 address in format [::1]:port or just [::1] */
 		end = memchr (src + 1, ']', srclen - 1);
 
@@ -734,7 +735,17 @@ rspamd_parse_inet_address_common (rspamd_inet_addr_t **target,
 			return FALSE;
 		}
 
-		rspamd_strlcpy (ipbuf, src + 1, iplen + 1);
+		if (iplen > sizeof ("IPv6:") - 1 &&
+			g_ascii_strncasecmp (src + 1, "IPv6:", sizeof ("IPv6:") - 1) == 0) {
+			/* Special case, SMTP conformant IPv6 address */
+			ip_start = src + 1 + sizeof ("IPv6:") - 1;
+			iplen -= sizeof ("IPv6:") - 1;
+		}
+		else {
+			ip_start = src + 1;
+		}
+
+		rspamd_strlcpy (ipbuf, ip_start, iplen + 1);
 
 		if (rspamd_parse_inet_address_ip6 (ipbuf, iplen,
 						&su.s6.sin6_addr)) {
