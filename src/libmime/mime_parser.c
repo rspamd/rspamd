@@ -680,16 +680,17 @@ rspamd_mime_parse_multipart_cb (struct rspamd_task *task,
 			/* We should have seen some boundary */
 			g_assert (cb->cur_boundary != NULL);
 
-
 			if ((ret = rspamd_mime_process_multipart_node (task, cb->st,
 					cb->multipart, cb->part_start, pos, cb->err))
 					!= RSPAMD_MIME_PARSE_OK) {
 				return ret;
 			}
 
-			/* Go towards the next part */
-			cb->part_start = st->start + b->start;
-			cb->st->pos = cb->part_start;
+			if (b->start > 0) {
+				/* Go towards the next part */
+				cb->part_start = st->start + b->start;
+				cb->st->pos = cb->part_start;
+			}
 		}
 		else {
 			/* We have an empty boundary, do nothing */
@@ -795,6 +796,7 @@ rspamd_multipart_boundaries_filter (struct rspamd_task *task,
 		struct rspamd_mime_boundary fb;
 
 		fb.boundary = last_offset;
+		fb.start = -1;
 
 		if ((ret = rspamd_mime_parse_multipart_cb (task, multipart, st,
 				cb, &fb)) != RSPAMD_MIME_PARSE_OK) {
@@ -941,15 +943,18 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 
 			rspamd_cryptobox_siphash ((guchar *)&b.hash, lc_copy, blen,
 					lib_ctx->hkey);
-			msg_debug_mime ("normal hash: %*s -> %L", (gint)blen, lc_copy, b.hash);
+			msg_debug_mime ("normal hash: %*s -> %L, %d boffset, %d data offset",
+					(gint)blen, lc_copy, b.hash, (int)b.boundary, (int)b.start);
 
 			if (closing) {
 				b.flags = RSPAMD_MIME_BOUNDARY_FLAG_CLOSED;
 				rspamd_cryptobox_siphash ((guchar *)&b.closed_hash, lc_copy,
 						blen + 2,
 						lib_ctx->hkey);
-				msg_debug_mime ("closing hash: %*s -> %L", (gint)blen + 2, lc_copy,
-						b.closed_hash);
+				msg_debug_mime ("closing hash: %*s -> %L, %d boffset, %d data offset",
+						(gint)blen + 2, lc_copy,
+						b.closed_hash,
+						(int)b.boundary, (int)b.start);
 			}
 			else {
 				b.flags = 0;
@@ -1183,8 +1188,6 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		 */
 		nst = g_malloc0 (sizeof (*st));
 		nst->stack = g_ptr_array_sized_new (4);
-		nst->pos = task->raw_headers_content.body_start;
-		nst->end = task->msg.begin + task->msg.len;
 		nst->boundaries = g_array_sized_new (FALSE, FALSE,
 				sizeof (struct rspamd_mime_boundary), 8);
 		nst->start = part->parsed_data.begin;
