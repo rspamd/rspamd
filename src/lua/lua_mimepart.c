@@ -1785,7 +1785,7 @@ lua_mimepart_get_id (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnumber (L, part->id);
+	lua_pushinteger (L, part->id);
 
 	return 1;
 }
