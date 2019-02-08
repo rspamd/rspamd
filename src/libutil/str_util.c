@@ -2754,8 +2754,9 @@ rspamd_str_make_utf_valid (const gchar *src, gsize slen, gsize *dstlen)
 	GString *dst;
 	const gchar *last;
 	gchar *dchar;
-	gsize i, valid, prev;
+	gsize valid, prev;
 	UChar32 uc;
+	gint32 i;
 
 	if (src == NULL) {
 		return NULL;

@@ -1875,7 +1875,7 @@ lua_cryptobox_encrypt_cookie (lua_State *L)
 		}
 
 		if (cookie_len > sizeof (padded_cookie) - 1) {
-			return luaL_error (L, "cookie is too long %d", (gint)padded_cookie);
+			return luaL_error (L, "cookie is too long %d", (gint)cookie_len);
 		}
 
 		/* Fill nonce */

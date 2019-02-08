@@ -758,7 +758,7 @@ lua_util_config_from_ucl (lua_State *L)
 			int_options = parse_config_options(str_options);
 		}
 		else {
-			msg_err_config ("config_from_ucl: second parameter is expected to be string");
+			msg_err ("config_from_ucl: second parameter is expected to be string");
 			ucl_object_unref (obj);
 			lua_pushnil (L);
 		}
@@ -773,7 +773,7 @@ lua_util_config_from_ucl (lua_State *L)
 		top = rspamd_rcl_config_init (cfg, NULL);
 
 		if (!rspamd_rcl_parse (top, cfg, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
-			msg_err_config ("rcl parse error: %s", err->message);
+			msg_err ("rcl parse error: %s", err->message);
 			ucl_object_unref (obj);
 			lua_pushnil (L);
 		}
