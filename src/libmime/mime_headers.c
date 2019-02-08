@@ -884,6 +884,39 @@ struct rspamd_received_part {
 	struct rspamd_received_part *prev, *next;
 };
 
+static void
+rspamd_smtp_received_part_set_or_append (struct rspamd_task *task,
+										 const gchar *begin,
+										 gsize len,
+										 gchar **dest,
+										 gsize *destlen)
+{
+	if (len == 0) {
+		return;
+	}
+
+	if (*dest) {
+		/* Append */
+		gsize total_len = *destlen + len;
+		gchar *new_dest;
+
+		new_dest = rspamd_mempool_alloc (task->task_pool, total_len);
+		memcpy (new_dest, *dest, *destlen);
+		memcpy (new_dest + *destlen, begin, len);
+		rspamd_str_lc (new_dest + *destlen, len);
+		*dest = new_dest;
+		*destlen = total_len;
+	}
+	else {
+		/* Set */
+		*dest = rspamd_mempool_alloc (task->task_pool, len);
+		memcpy (*dest, begin, len);
+		rspamd_str_lc (*dest, len);
+		*dest = (gchar *)rspamd_string_len_strip (*dest, &len, " \t");
+		*destlen = len;
+	}
+}
+
 static struct rspamd_received_part *
 rspamd_smtp_received_process_part (struct rspamd_task *task,
 								   const char *data,
@@ -894,10 +927,12 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 	struct rspamd_received_part *npart;
 	const guchar *p, *c, *end;
 	guint obraces = 0, ebraces = 0;
+	gboolean seen_tcpinfo = FALSE;
 	enum _parse_state {
 		skip_spaces,
 		in_comment,
 		read_data,
+		read_tcpinfo,
 		all_done
 	} state, next_state;
 
@@ -934,16 +969,12 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 						if (p > c) {
 							struct rspamd_received_comment *comment;
 
-							comment = rspamd_mempool_alloc (task->task_pool,
-									sizeof (*comment));
 
-							comment->data = rspamd_mempool_alloc (task->task_pool,
-									p - c);
-							memcpy (comment->data, c, p - c);
-							rspamd_str_lc (comment->data, p - c);
-							comment->dlen = p - c;
-							comment->data = (gchar *)rspamd_string_len_strip (
-									comment->data, &comment->dlen, " \t");
+							comment = rspamd_mempool_alloc0 (task->task_pool,
+									sizeof (*comment));
+							rspamd_smtp_received_part_set_or_append (task,
+									c, p - c,
+									&comment->data, &comment->dlen);
 
 							if (!npart->head_comment) {
 								comment->prev = NULL;
@@ -972,13 +1003,9 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 			if (*p == '(') {
 				if (p > c) {
 					if (type != RSPAMD_RECEIVED_PART_UNKNOWN) {
-						npart->data = rspamd_mempool_alloc (task->task_pool,
-								p - c);
-						memcpy (npart->data, c, p - c);
-						rspamd_str_lc (npart->data, p - c);
-						npart->dlen = p - c;
-						npart->data = (gchar *)rspamd_string_len_strip (
-								npart->data, &npart->dlen, " \t");
+						rspamd_smtp_received_part_set_or_append (task,
+								c, p - c,
+								&npart->data, &npart->dlen);
 					}
 				}
 
@@ -991,11 +1018,9 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 			else if (g_ascii_isspace (*p)) {
 				if (p > c) {
 					if (type != RSPAMD_RECEIVED_PART_UNKNOWN) {
-						npart->data = rspamd_mempool_alloc (task->task_pool,
-								p - c);
-						memcpy (npart->data, c, p - c);
-						rspamd_str_lc (npart->data, p - c);
-						npart->dlen = p - c;
+						rspamd_smtp_received_part_set_or_append (task,
+								c, p - c,
+								&npart->data, &npart->dlen);
 					}
 				}
 
@@ -1007,13 +1032,9 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 				/* It is actually delimiter of date part if not in the comments */
 				if (p > c) {
 					if (type != RSPAMD_RECEIVED_PART_UNKNOWN) {
-						npart->data = rspamd_mempool_alloc (task->task_pool,
-								p - c);
-						memcpy (npart->data, c, p - c);
-						rspamd_str_lc (npart->data, p - c);
-						npart->dlen = p - c;
-						npart->data = (gchar *)rspamd_string_len_strip (
-								npart->data, &npart->dlen, " \t");
+						rspamd_smtp_received_part_set_or_append (task,
+								c, p - c,
+								&npart->data, &npart->dlen);
 					}
 				}
 
@@ -1022,12 +1043,37 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 			}
 			else if (npart->dlen > 0) {
 				/* We have already received data and find something with no ( */
-				state = all_done;
-				continue;
+				if (!seen_tcpinfo && type == RSPAMD_RECEIVED_PART_FROM) {
+					/* Check if we have something special here, such as TCPinfo */
+					if (*c == '[') {
+						state = read_tcpinfo;
+						p ++;
+					}
+					else {
+						state = all_done;
+						continue;
+					}
+				}
+				else {
+					state = all_done;
+					continue;
+				}
 			}
 			else {
 				p ++;
 			}
+			break;
+		case read_tcpinfo:
+			if (*p == ']') {
+				rspamd_smtp_received_part_set_or_append (task,
+						c, p - c + 1,
+						&npart->data, &npart->dlen);
+				seen_tcpinfo = TRUE;
+				state = skip_spaces;
+				next_state = read_data;
+				c = p;
+			}
+			p ++;
 			break;
 		case all_done:
 			*last = p - (const guchar *)data;
@@ -1041,13 +1087,9 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 	case read_data:
 		if (p > c) {
 			if (type != RSPAMD_RECEIVED_PART_UNKNOWN) {
-				npart->data = rspamd_mempool_alloc (task->task_pool,
-						p - c);
-				memcpy (npart->data, c, p - c);
-				rspamd_str_lc (npart->data, p - c);
-				npart->dlen = p - c;
-				npart->data = (gchar *)rspamd_string_len_strip (npart->data,
-						&npart->dlen, " \t");
+				rspamd_smtp_received_part_set_or_append (task,
+						c, p - c,
+						&npart->data, &npart->dlen);
 			}
 
 			return npart;
@@ -1236,21 +1278,22 @@ rspamd_smtp_received_process_rdns (struct rspamd_task *task,
 }
 
 static gboolean
-rspamd_smtp_received_process_from_comment (struct rspamd_task *task,
+rspamd_smtp_received_process_host_tcpinfo (struct rspamd_task *task,
 										   struct received_header *rh,
-										   struct rspamd_received_comment *comment)
+										   const gchar *data,
+										   gsize len)
 {
-	rspamd_inet_addr_t *addr;
+	rspamd_inet_addr_t *addr = NULL;
 	gboolean ret = FALSE;
 
-	if (comment->data[0] == '[') {
+	if (data[0] == '[') {
 		/* Likely Exim version */
 
-		const gchar *brace_pos = memchr (comment->data, ']', comment->dlen);
+		const gchar *brace_pos = memchr (data, ']', len);
 
 		if (brace_pos) {
-			addr = rspamd_parse_inet_address_pool (comment->data + 1,
-					brace_pos - comment->data - 1,
+			addr = rspamd_parse_inet_address_pool (data + 1,
+					brace_pos - data - 1,
 					task->task_pool);
 
 			if (addr) {
@@ -1261,54 +1304,57 @@ rspamd_smtp_received_process_from_comment (struct rspamd_task *task,
 			}
 		}
 	}
-	else if (g_ascii_isxdigit (comment->data[0])) {
-		/* Try to parse IP address */
-		addr = rspamd_parse_inet_address_pool (comment->data,
-				comment->dlen, task->task_pool);
-		if (addr) {
-			rh->addr = addr;
-			rh->real_ip = rspamd_mempool_strdup (task->task_pool,
-					rspamd_inet_address_to_string (addr));
-			rh->from_ip = rh->real_ip;
-		}
-	}
 	else {
-		/* Try canonical Postfix version: rdns [ip] */
-		const gchar *obrace_pos = memchr (comment->data, '[', comment->dlen),
-				*ebrace_pos, *dend;
+		if (g_ascii_isxdigit (data[0])) {
+			/* Try to parse IP address */
+			addr = rspamd_parse_inet_address_pool (data,
+					len, task->task_pool);
+			if (addr) {
+				rh->addr = addr;
+				rh->real_ip = rspamd_mempool_strdup (task->task_pool,
+						rspamd_inet_address_to_string (addr));
+				rh->from_ip = rh->real_ip;
+			}
+		}
 
-		if (obrace_pos) {
-			dend = comment->data + comment->dlen;
-			ebrace_pos = memchr (obrace_pos, ']', dend - obrace_pos);
+		if (!addr) {
+			/* Try canonical Postfix version: rdns [ip] */
+			const gchar *obrace_pos = memchr (data, '[', len),
+					*ebrace_pos, *dend;
 
-			if (ebrace_pos) {
-				addr = rspamd_parse_inet_address_pool (obrace_pos + 1,
-						ebrace_pos - obrace_pos - 1,
-						task->task_pool);
+			if (obrace_pos) {
+				dend = data + len;
+				ebrace_pos = memchr (obrace_pos, ']', dend - obrace_pos);
 
-				if (addr) {
-					rh->addr = addr;
-					rh->real_ip = rspamd_mempool_strdup (task->task_pool,
-							rspamd_inet_address_to_string (addr));
-					rh->from_ip = rh->real_ip;
+				if (ebrace_pos) {
+					addr = rspamd_parse_inet_address_pool (obrace_pos + 1,
+							ebrace_pos - obrace_pos - 1,
+							task->task_pool);
 
-					/* Process with rDNS */
-					if (rspamd_smtp_received_process_rdns (task,
-							comment->data,
-							obrace_pos - comment->data,
-							&rh->real_hostname)) {
-						ret = TRUE;
+					if (addr) {
+						rh->addr = addr;
+						rh->real_ip = rspamd_mempool_strdup (task->task_pool,
+								rspamd_inet_address_to_string (addr));
+						rh->from_ip = rh->real_ip;
+
+						/* Process with rDNS */
+						if (rspamd_smtp_received_process_rdns (task,
+								data,
+								obrace_pos - data,
+								&rh->real_hostname)) {
+							ret = TRUE;
+						}
 					}
 				}
 			}
-		}
-		else {
-			/* Hostname or some crap, sigh... */
-			if (rspamd_smtp_received_process_rdns (task,
-					comment->data,
-					comment->dlen,
-					&rh->real_hostname)) {
-				ret = TRUE;
+			else {
+				/* Hostname or some crap, sigh... */
+				if (rspamd_smtp_received_process_rdns (task,
+						data,
+						len,
+						&rh->real_hostname)) {
+					ret = TRUE;
+				}
 			}
 		}
 	}
@@ -1334,8 +1380,9 @@ rspamd_smtp_received_process_from (struct rspamd_task *task,
 
 		if (rpart->head_comment && rpart->head_comment->dlen > 0) {
 			/* We can have info within comment as part of RFC */
-			seen_rdns_in_comment = rspamd_smtp_received_process_from_comment (
-					task, rh, rpart->head_comment);
+			seen_rdns_in_comment = rspamd_smtp_received_process_host_tcpinfo (
+					task, rh,
+					rpart->head_comment->data, rpart->head_comment->dlen);
 		}
 
 		if (!rh->real_ip) {
@@ -1373,19 +1420,27 @@ rspamd_smtp_received_process_from (struct rspamd_task *task,
 		}
 
 		if (!seen_ip_in_data) {
-			/* Get anounced hostname (usually helo) */
-			rspamd_smtp_received_process_rdns (task,
-					rpart->data,
-					rpart->dlen,
-					&rh->from_hostname);
+			if (rh->real_ip) {
+				/* Get anounced hostname (usually helo) */
+				rspamd_smtp_received_process_rdns (task,
+						rpart->data,
+						rpart->dlen,
+						&rh->from_hostname);
+			}
+			else {
+				rspamd_smtp_received_process_host_tcpinfo (task,
+						rh, rpart->data, rpart->dlen);
+			}
 		}
 	}
 	else {
 		/* rpart->dlen = 0 */
 
 		if (rpart->head_comment && rpart->head_comment->dlen > 0) {
-			rspamd_smtp_received_process_from_comment (task,
-					rh, rpart->head_comment);
+			rspamd_smtp_received_process_host_tcpinfo (task,
+					rh,
+					rpart->head_comment->data,
+					rpart->head_comment->dlen);
 		}
 	}
 }
