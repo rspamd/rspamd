@@ -1092,10 +1092,14 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 						&npart->data, &npart->dlen);
 			}
 
+			*last = p - (const guchar *)data;
+
 			return npart;
 		}
 		break;
 	case skip_spaces:
+		*last = p - (const guchar *)data;
+
 		return npart;
 	default:
 		break;
@@ -1141,6 +1145,7 @@ rspamd_smtp_received_spill (struct rspamd_task *task,
 		return NULL;
 	}
 
+	g_assert (pos != 0);
 	p += pos;
 	len = end > p ? end - p : 0;
 	DL_APPEND (head, cur_part);
@@ -1157,6 +1162,7 @@ rspamd_smtp_received_spill (struct rspamd_task *task,
 			return NULL;
 		}
 
+		g_assert (pos != 0);
 		p += pos;
 		len = end > p ? end - p : 0;
 		DL_APPEND (head, cur_part);
@@ -1212,6 +1218,7 @@ rspamd_smtp_received_spill (struct rspamd_task *task,
 				return NULL;
 			}
 			else {
+				g_assert (pos != 0);
 				p += pos;
 				len = end > p ? end - p : 0;
 				DL_APPEND (head, cur_part);

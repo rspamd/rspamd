@@ -25,6 +25,12 @@ context("Received headers parser", function()
   ]]
 
   local cases = {
+    {[[from smtp11.mailtrack.pl (smtp11.mailtrack.pl [185.243.30.90])]],
+     {
+       real_ip = '185.243.30.90',
+       real_hostname = 'smtp11.mailtrack.pl'
+     },
+    },
     {[[from asx121.turbo-inline.com [7.165.23.113] by mx.reskind.net with QMQP; Fri, 08 Feb 2019 06:56:18 -0500]],
      {
        real_ip = '7.165.23.113',
