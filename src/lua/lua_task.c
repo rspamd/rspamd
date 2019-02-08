@@ -1133,6 +1133,7 @@ static const struct luaL_reg archivelib_m[] = {
 
 /* Blob methods */
 LUA_FUNCTION_DEF (text, fromstring);
+LUA_FUNCTION_DEF (text, fromtable);
 LUA_FUNCTION_DEF (text, len);
 LUA_FUNCTION_DEF (text, str);
 LUA_FUNCTION_DEF (text, ptr);
@@ -1142,6 +1143,7 @@ LUA_FUNCTION_DEF (text, gc);
 
 static const struct luaL_reg textlib_f[] = {
 	LUA_INTERFACE_DEF (text, fromstring),
+	LUA_INTERFACE_DEF (text, fromtable),
 	{NULL, NULL}
 };
 
@@ -5669,6 +5671,83 @@ lua_text_fromstring (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
+
+	return 1;
+}
+
+static gint
+lua_text_fromtable (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	const gchar *delim = "", *st;
+	struct rspamd_lua_text *t, *elt;
+	gsize textlen = 0, dlen, stlen, tblen;
+	gchar *dest;
+
+	if (!lua_istable (L, 1)) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (lua_type (L, 2) == LUA_TSTRING) {
+		delim = lua_tolstring (L, 2, &dlen);
+	}
+	else {
+		dlen = strlen (delim);
+	}
+
+	/* Calculate length needed */
+	tblen = rspamd_lua_table_size (L, 1);
+
+	for (guint i = 0; i < tblen; i ++) {
+		lua_rawgeti (L, 1, i + 1);
+
+		if (lua_type (L, -1) == LUA_TSTRING) {
+#if LUA_VERSION_NUM >= 502
+			stlen = lua_rawlen (L, -1);
+#else
+			stlen = lua_objlen (L, -1);
+#endif
+			textlen += stlen;
+		}
+		else {
+			elt = lua_check_text (L, -1);
+
+			if (elt) {
+				textlen += elt->len;
+			}
+		}
+
+		lua_pop (L, 1);
+		textlen += dlen;
+	}
+
+	/* Allocate new text */
+	t = lua_newuserdata (L, sizeof (*t));
+	dest = g_malloc (textlen);
+	t->start = dest;
+	t->len = textlen;
+	t->flags = RSPAMD_TEXT_FLAG_OWN;
+	rspamd_lua_setclass (L, "rspamd{text}", -1);
+
+	for (guint i = 0; i < tblen; i ++) {
+		lua_rawgeti (L, 1, i + 1);
+
+		if (lua_type (L, -1) == LUA_TSTRING) {
+			st = lua_tolstring (L, -1, &stlen);
+			memcpy (dest, st, stlen);
+			dest += stlen;
+		}
+		else {
+			elt = lua_check_text (L, -1);
+
+			if (elt) {
+				memcpy (dest, elt->start, elt->len);
+			}
+		}
+
+		memcpy (dest, delim, dlen);
+		lua_pop (L, 1);
+	}
 
 	return 1;
 }
