@@ -25,6 +25,12 @@ context("Received headers parser", function()
   ]]
 
   local cases = {
+    {[[from asx121.turbo-inline.com [7.165.23.113] by mx.reskind.net with QMQP; Fri, 08 Feb 2019 06:56:18 -0500]],
+     {
+       real_ip = '7.165.23.113',
+       real_hostname = 'asx121.turbo-inline.com',
+     }
+    },
     {[[from server.chat-met-vreemden.nl (unknown [IPv6:2a01:7c8:aab6:26d:5054:ff:fed1:1da2])
 	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
 	(Client did not present a certificate)
@@ -113,6 +119,16 @@ context("Received headers parser", function()
     if fs ~= NULL then return ffi.string(fs) end
     return nil
   end
+  local function ip_check(ret)
+    local sret = ffi_string(ret)
+
+    if not sret then return 'null' end
+    local ip = rspamd_ip.from_string(sret)
+
+    if not ip then return 'not ip' end
+    if not ip:is_valid() then return 'unparsed' end
+    return tostring(ip)
+  end
 
   for i,c in ipairs(cases) do
     test("Parse received " .. i, function()
@@ -133,7 +149,7 @@ context("Received headers parser", function()
           end
         elseif k == 'from_ip' then
           if #v > 0 then
-            local got_string = tostring((rspamd_ip.from_string(ffi_string(hdr.from_ip) or '')) or '')
+            local got_string = ip_check(hdr.from_ip)
             local expected_string = tostring(rspamd_ip.from_string(v))
             assert_equal(expected_string, got_string,
                 string.format('%s: from_ip: %s, expected: %s',
@@ -145,7 +161,7 @@ context("Received headers parser", function()
           end
         elseif k == 'real_ip' then
           if #v > 0 then
-            local got_string = tostring((rspamd_ip.from_string(ffi_string(hdr.from_ip) or '')) or '')
+            local got_string = ip_check(hdr.real_ip)
             local expected_string = tostring(rspamd_ip.from_string(v))
             assert_equal(expected_string, got_string,
                 string.format('%s: real_ip: %s, expected: %s',
