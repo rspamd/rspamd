@@ -101,8 +101,6 @@ typedef struct rspamd_dkim_sign_context_s rspamd_dkim_sign_context_t;
 
 struct rspamd_dkim_key_s;
 typedef struct rspamd_dkim_key_s rspamd_dkim_key_t;
-
-struct rspamd_dkim_key_s;
 typedef struct rspamd_dkim_key_s rspamd_dkim_sign_key_t;
 
 struct rspamd_task;

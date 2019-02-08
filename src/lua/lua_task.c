@@ -986,6 +986,13 @@ LUA_FUNCTION_DEF (task, get_stat_tokens);
  */
 LUA_FUNCTION_DEF (task, lookup_words);
 
+/**
+ * @method task:topointer()
+ *
+ * Returns raw C pointer (lightuserdata) associated with task
+ */
+LUA_FUNCTION_DEF (task, topointer);
+
 static const struct luaL_reg tasklib_f[] = {
 	LUA_INTERFACE_DEF (task, load_from_file),
 	LUA_INTERFACE_DEF (task, load_from_string),
@@ -1091,6 +1098,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_stat_tokens),
 	LUA_INTERFACE_DEF (task, get_meta_words),
 	LUA_INTERFACE_DEF (task, lookup_words),
+	LUA_INTERFACE_DEF (task, topointer),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -5430,6 +5438,22 @@ lua_task_lookup_words (lua_State *L)
 	}
 
 	lua_pushinteger (L, matches);
+
+	return 1;
+}
+
+static gint
+lua_task_topointer (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task) {
+		lua_pushlightuserdata (L, task);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }
