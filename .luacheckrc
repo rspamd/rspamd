@@ -33,6 +33,7 @@ globals = {
   'loadstring',
   'rspamadm_ev_base',
   'rspamadm_session',
+  'jit'
 }
 
 ignore = {
