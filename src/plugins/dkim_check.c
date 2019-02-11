@@ -641,58 +641,23 @@ dkim_module_config (struct rspamd_config *cfg)
 	return res;
 }
 
-/**
- * helper to see if valid base64, minus newline
- */
-static gboolean
-is_valid_base64(const uint8_t *in, size_t len) {
-	int i;
-	if (in[len - 1] == '\n')
-		len--;
-	if (in[len - 1] == '\r')
-		len--;
-	if (len % 4 != 0)
-		return FALSE;
 
-	if (in[len - 1] == '=')
-		len--;
-	if (in[len - 1] == '=')
-		len--;
-
-	for (i = 0; i < len; i++) {
-		if ('a' <= in[i] && in[i] <= 'z')
-			continue;
-		if ('A' <= in[i] && in[i] <= 'Z')
-			continue;
-		if ('0' <= in[i] && in[i] <= '9')
-			continue;
-		if (in[i] == '/')
-			continue;
-		if (in[i] == '+')
-			continue;
-		return FALSE;
-	}
-	return TRUE;
-}
-
-
-#define PEM_SIG "-----BEGIN"
 /**
  * Grab a private key from the cache
  * or from the key content provided
  */
 rspamd_dkim_sign_key_t *
-dkim_module_load_key_format (struct rspamd_task *task, struct dkim_ctx *dkim_module_ctx,
-		const gchar *key, gsize keylen, enum rspamd_dkim_key_format key_format)
+dkim_module_load_key_format (struct rspamd_task *task,
+							 struct dkim_ctx *dkim_module_ctx,
+							 const gchar *key, gsize keylen,
+							 enum rspamd_dkim_key_format key_format)
 
 {
 	guchar h[rspamd_cryptobox_HASHBYTES],
 			hex_hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
 	rspamd_dkim_sign_key_t *ret;
 	GError *err = NULL;
-	gpointer map = NULL, tmp = NULL;
 	struct stat st;
-	ssize_t maplen;
 
 	memset (hex_hash, 0, sizeof (hex_hash));
 	rspamd_cryptobox_hash (h, key, keylen, NULL, 0);
@@ -706,16 +671,19 @@ dkim_module_load_key_format (struct rspamd_task *task, struct dkim_ctx *dkim_mod
 	 */
 	if (key_format == RSPAMD_DKIM_KEY_UNKNOWN &&
 		(key[0] == '.' || key[0] == '/')) {
-		if (!is_valid_base64 (key, keylen))
+		if (!rspamd_cryptobox_base64_is_valid (key, keylen)) {
 			key_format = RSPAMD_DKIM_KEY_FILE;
+		}
 	}
 
 	if (ret != NULL && key_format == RSPAMD_DKIM_KEY_FILE) {
 		msg_debug_task("checking for stale file key");
+
 		if (stat (key, &st) != 0) {
 			msg_err_task("cannot stat key file: %s", strerror (errno));
 			return NULL;
 		}
+
 		if (rspamd_dkim_sign_key_maybe_invalidate (ret, st.st_mtime)) {
 			msg_debug_task("removing stale file key");
 			/*
@@ -729,43 +697,8 @@ dkim_module_load_key_format (struct rspamd_task *task, struct dkim_ctx *dkim_mod
 	}
 
 	/* found key; done */
-	if (ret != NULL)
+	if (ret != NULL) {
 		return ret;
-
-	if (key_format == RSPAMD_DKIM_KEY_FILE) {
-		if (stat (key, &st) != 0) {
-			msg_err_task("cannot stat key file: %s", strerror (errno));
-			return NULL;
-		}
-		map = rspamd_file_xmap (key, PROT_READ, &maplen, TRUE);
-		if (map == NULL) {
-			msg_err_task("cannot open key file \'%s\'", key);
-			return NULL;
-		}
-		key = map;
-		keylen = maplen;
-		if (maplen > sizeof (PEM_SIG) &&
-				strncmp (map, PEM_SIG, sizeof (PEM_SIG) - 1) == 0) {
-			key_format = RSPAMD_DKIM_KEY_PEM;
-		} else if (is_valid_base64 ((uint8_t *)map, maplen)) {
-			key_format = RSPAMD_DKIM_KEY_BASE64;
-		} else {
-			key_format = RSPAMD_DKIM_KEY_RAW;
-		}
-	}
-	if (key_format == RSPAMD_DKIM_KEY_UNKNOWN) {
-		if (keylen > sizeof (PEM_SIG) &&
-				strncmp (key, PEM_SIG, sizeof (PEM_SIG) - 1) == 0) {
-			key_format = RSPAMD_DKIM_KEY_PEM;
-		} else {
-			key_format = RSPAMD_DKIM_KEY_RAW;
-		}
-	}
-	if (key_format == RSPAMD_DKIM_KEY_BASE64) {
-		key_format = RSPAMD_DKIM_KEY_RAW;
-		tmp = g_malloc (keylen);
-		rspamd_cryptobox_base64_decode (key, keylen, tmp, &keylen);
-		key = tmp;
 	}
 
 	ret = rspamd_dkim_sign_key_load (key, keylen, key_format, &err);
@@ -779,16 +712,8 @@ dkim_module_load_key_format (struct rspamd_task *task, struct dkim_ctx *dkim_mod
 				g_strdup (hex_hash), ret, time (NULL), 0);
 	}
 
-	if (map != NULL)
-		munmap (map, maplen);
-	if (tmp != NULL) {
-		rspamd_explicit_memzero (tmp, keylen);
-		g_free (tmp);
-	}
-
 	return ret;
 }
-#undef PEM_SIG
 
 static gint
 lua_dkim_sign_handler (lua_State *L)
@@ -844,10 +769,12 @@ lua_dkim_sign_handler (lua_State *L)
 	if (key) {
 		dkim_key = dkim_module_load_key_format (task, dkim_module_ctx, key,
 				keylen, RSPAMD_DKIM_KEY_UNKNOWN);
-	} else if(rawkey) {
+	}
+	else if(rawkey) {
 		dkim_key = dkim_module_load_key_format (task, dkim_module_ctx, rawkey,
 				rawlen, RSPAMD_DKIM_KEY_UNKNOWN);
-	} else {
+	}
+	else {
 		msg_err_task ("neither key nor rawkey are specified");
 		lua_pushboolean (L, FALSE);
 
