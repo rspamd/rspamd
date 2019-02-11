@@ -153,6 +153,42 @@ modify:option "-H --html-footer"
       :description "Adds footer to text/html parts from a specific file"
       :argname "<file>"
 
+local sign = parser:command "sign"
+                     :description "Performs DKIM signing"
+sign:argument "file"
+      :description "File to process"
+      :argname "<file>"
+      :args "+"
+
+sign:option "-d --domain"
+    :description "Use specific domain"
+    :argname "<domain>"
+    :count "1"
+sign:option "-s --selector"
+    :description "Use specific selector"
+    :argname "<selector>"
+    :count "1"
+sign:option "-k --key"
+    :description "Use specific key of file"
+    :argname "<key>"
+    :count "1"
+sign:option "-t type"
+    :description "ARC or DKIM signing"
+    :argname("<arc|dkim>")
+    :convert {
+      ['arc'] = 'arc',
+      ['dkim'] = 'dkim',
+    }
+    :default 'dkim'
+sign:option "-o --output"
+    :description "Output format"
+    :argname("<message|signature>")
+    :convert {
+      ['message'] = 'message',
+      ['signature'] = 'signature',
+    }
+    :default 'message'
+
 local function load_config(opts)
   local _r,err = rspamd_config:load_ucl(opts['config'])
 
@@ -583,21 +619,21 @@ local function urls_handler(opts)
   print_elts(out_elts, opts)
 end
 
+local function newline(task)
+  local t = task:get_newlines_type()
+
+  if t == 'cr' then
+    return '\r'
+  elseif t == 'lf' then
+    return '\n'
+  end
+
+  return '\r\n'
+end
+
 local function modify_handler(opts)
   load_config(opts)
   rspamd_url.init(rspamd_config:get_tld_path())
-
-  local function newline(task)
-    local t = task:get_newlines_type()
-
-    if t == 'cr' then
-      return '\r'
-    elseif t == 'lf' then
-      return '\n'
-    end
-
-    return '\r\n'
-  end
 
   local function read_file(file)
     local f = assert(io.open(file, "rb"))
@@ -765,7 +801,7 @@ local function modify_handler(opts)
     end
 
     -- End of headers
-    --local eoh_pos = #out
+    local eoh_pos = #out
     out[#out + 1] = ''
 
     local boundaries = {}
@@ -881,6 +917,59 @@ local function modify_handler(opts)
   end
 end
 
+local function sign_handler(opts)
+  load_config(opts)
+  rspamd_url.init(rspamd_config:get_tld_path())
+
+  local lua_dkim = require("lua_ffi").dkim
+
+  local sign_key
+  if rspamd_util.file_exists(opts.key) then
+    sign_key = lua_dkim.load_sign_key(opts.key, 'file')
+  else
+    sign_key = lua_dkim.load_sign_key(opts.key, 'base64')
+  end
+
+  if not sign_key then
+    io.stderr:write('Cannot load key: ' .. opts.key .. '\n')
+    os.exit(1)
+  end
+
+  for _,fname in ipairs(opts.file) do
+    local task = load_task(opts, fname)
+    local ctx = lua_dkim.create_sign_context(task, sign_key, nil, opts.algorithm)
+
+    if not ctx then
+      io.stderr:write('Cannot init signing\n')
+      os.exit(1)
+    end
+
+    local sig = lua_dkim.do_sign(task, ctx, opts.selector, opts.domain)
+
+    if not sig then
+
+    end
+
+    if opts.output == 'signature' then
+      io.write(sig)
+      io.write('\n')
+      io.flush()
+    else
+      local dkim_hdr = string.format('%s: %s%s',
+          'DKIM-Signature',
+          rspamd_util.fold_header('DKIM-Signature',
+              rspamd_util.mime_header_encode(sig),
+              task:get_newlines_type()),
+          newline(task))
+      io.write(dkim_hdr)
+      io.flush()
+      task:get_content():save_in_file(1)
+    end
+
+    task:destroy() -- No automatic dtor
+  end
+end
+
 local function handler(args)
   local opts = parser:parse(args)
 
@@ -900,6 +989,8 @@ local function handler(args)
     urls_handler(opts)
   elseif command == 'modify' then
     modify_handler(opts)
+  elseif command == 'sign' then
+    sign_handler(opts)
   else
     parser:error('command %s is not implemented', command)
   end
