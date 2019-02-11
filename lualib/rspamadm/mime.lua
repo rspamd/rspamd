@@ -801,7 +801,7 @@ local function modify_handler(opts)
     end
 
     -- End of headers
-    local eoh_pos = #out
+    --local eoh_pos = #out
     out[#out + 1] = ''
 
     local boundaries = {}
@@ -947,7 +947,8 @@ local function sign_handler(opts)
     local sig = lua_dkim.do_sign(task, ctx, opts.selector, opts.domain)
 
     if not sig then
-
+      io.stderr:write('Cannot create signature\n')
+      os.exit(1)
     end
 
     if opts.output == 'signature' then
