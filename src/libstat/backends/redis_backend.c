@@ -151,7 +151,6 @@ rspamd_redis_expand_object (const gchar *pattern,
 	GString *tb;
 	const gchar *rcpt = NULL;
 	gint err_idx;
-	gboolean expansion_errored = FALSE;
 
 	g_assert (ctx != NULL);
 	stcf = ctx->stcf;
@@ -214,9 +213,6 @@ rspamd_redis_expand_object (const gchar *pattern,
 				if (elt) {
 					tlen += strlen (elt);
 				}
-				else {
-					expansion_errored = TRUE;
-				}
 				break;
 			case 'r':
 
@@ -229,9 +225,6 @@ rspamd_redis_expand_object (const gchar *pattern,
 
 				if (elt) {
 					tlen += strlen (elt);
-				}
-				else {
-					expansion_errored = TRUE;
 				}
 				break;
 			case 'l':
@@ -277,8 +270,8 @@ rspamd_redis_expand_object (const gchar *pattern,
 	}
 
 
-	if (target == NULL || task == NULL || expansion_errored) {
-		return tlen;
+	if (target == NULL || task == NULL) {
+		return -1;
 	}
 
 	*target = rspamd_mempool_alloc (task->task_pool, tlen + 1);
@@ -1305,6 +1298,7 @@ rspamd_redis_parse_classifier_opts (struct redis_stat_ctx *backend,
 	}
 	else {
 		backend->enable_users = FALSE;
+		backend->cbref_user = -1;
 	}
 
 	elt = ucl_object_lookup (obj, "prefix");
