@@ -166,6 +166,7 @@ rspamd_cryptobox_base64_is_valid (const gchar *in, gsize inlen)
 				return FALSE;
 			}
 		}
+		p ++;
 	}
 
 	return TRUE;
