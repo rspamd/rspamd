@@ -1310,7 +1310,7 @@ rspamd_redis_parse_classifier_opts (struct redis_stat_ctx *backend,
 	elt = ucl_object_lookup (obj, "prefix");
 	if (elt == NULL || ucl_object_type (elt) != UCL_STRING) {
 		/* Default non-users statistics */
-		if (backend->enable_users && backend->cbref_user == -1) {
+		if (backend->enable_users || backend->cbref_user != -1) {
 			backend->redis_object = REDIS_DEFAULT_USERS_OBJECT;
 		}
 		else {
