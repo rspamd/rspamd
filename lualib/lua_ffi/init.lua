@@ -24,7 +24,7 @@ local ffi
 local exports = {}
 
 if type(jit) == 'table' then
-  ffi = require "jit"
+  ffi = require "ffi"
   local NULL = ffi.new 'void*'
 
   exports.is_null = function(o)
@@ -46,6 +46,7 @@ else
   end
 end
 
+exports.common = require "lua_ffi/common"
 exports.dkim = require "lua_ffi/dkim"
 
 return exports

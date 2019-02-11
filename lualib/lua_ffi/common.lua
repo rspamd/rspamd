@@ -30,3 +30,5 @@ struct GString {
 
 void g_string_free (struct GString *st, int free_data);
 ]]
+
+return {}

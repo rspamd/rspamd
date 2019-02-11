@@ -31,18 +31,10 @@ enum rspamd_dkim_key_format {
   RSPAMD_DKIM_KEY_BASE64,
   RSPAMD_DKIM_KEY_RAW,
 };
-enum rspamd_sign_type {
-  DKIM_SIGN_RSASHA1 = 0,
-  DKIM_SIGN_RSASHA256,
-  DKIM_SIGN_RSASHA512,
-  DKIM_SIGN_ECDSASHA256,
-  DKIM_SIGN_ECDSASHA512,
-  DKIM_SIGN_EDDSASHA256,
-};
-enum rspamd_dkim_key_type {
-  RSPAMD_DKIM_KEY_RSA = 0,
-  RSPAMD_DKIM_KEY_ECDSA,
-  RSPAMD_DKIM_KEY_EDDSA
+enum rspamd_dkim_type {
+	RSPAMD_DKIM_NORMAL,
+	RSPAMD_DKIM_ARC_SIG,
+	RSPAMD_DKIM_ARC_SEAL
 };
 struct rspamd_dkim_sign_context_s*
 rspamd_create_dkim_sign_context (struct rspamd_task *task,
@@ -53,7 +45,7 @@ rspamd_create_dkim_sign_context (struct rspamd_task *task,
     enum rspamd_dkim_type type,
     void *unused);
 struct rspamd_dkim_key_s* rspamd_dkim_sign_key_load (const char *what, size_t len,
-    enum rspamd_dkim_key_format type,
+    enum rspamd_dkim_key_format,
     void *err);
 void rspamd_dkim_key_unref (struct rspamd_dkim_key_s *k);
 struct GString *rspamd_dkim_sign (struct rspamd_task *task,
@@ -74,7 +66,7 @@ local function load_sign_key(what, format)
       format = ffi.C.RSPAMD_DKIM_KEY_FILE
     elseif format == 'base64' then
       format = ffi.C.RSPAMD_DKIM_KEY_BASE64
-    elseif format == 'base64' then
+    elseif format == 'raw' then
       format = ffi.C.RSPAMD_DKIM_KEY_RAW
     else
       return nil,'unknown key format'
@@ -101,23 +93,21 @@ local function create_sign_context(task, privkey, dkim_headers, sign_type)
   end
 
   if not sign_type then
-    sign_type = 'rsa-sha-256'
+    sign_type = 'dkim'
   end
 
-  if sign_type == 'rsa-sha256' then
-    sign_type = ffi.C.DKIM_SIGN_RSASHA256
-  elseif sign_type == 'rsa-sha1' then
-    sign_type = ffi.C.DKIM_SIGN_RSASHA1
-  elseif sign_type == 'rsa-sha512' then
-    sign_type = ffi.C.DKIM_SIGN_RSASHA512
-  elseif sign_type == 'eddsa' or sign_type == 'eddsa-sha256' then
-    sign_type = ffi.C.DKIM_SIGN_EDDSASHA256
+  if sign_type == 'dkim' then
+    sign_type = ffi.C.RSPAMD_DKIM_NORMAL
+  elseif sign_type == 'arc-sig' then
+    sign_type = ffi.C.RSPAMD_DKIM_ARC_SIG
+  elseif sign_type == 'arc-seal' then
+    sign_type = ffi.C.RSPAMD_DKIM_ARC_SEAL
   else
     return nil,'invalid sign type'
   end
 
 
-  return ffi.C.rspamd_create_dkim_sign_context(task, privkey,
+  return ffi.C.rspamd_create_dkim_sign_context(task:topointer(), privkey,
       1, 1, dkim_headers, sign_type, nil)
 end
 
@@ -131,7 +121,7 @@ local function do_sign(task, sign_context, selector, domain,
   if not len then len = 0 end
   if not arc_idx then arc_idx = 0 end
 
-  local gstring = ffi.C.rspamd_dkim_sign(task, selector, domain, expire, len, arc_idx, nil, sign_context)
+  local gstring = ffi.C.rspamd_dkim_sign(task:topointer(), selector, domain, expire, len, arc_idx, nil, sign_context)
 
   if not gstring then
     return nil,'cannot sign'
