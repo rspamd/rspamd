@@ -230,8 +230,8 @@ local function check_settings(task)
       if not ip or not ip:is_valid() then
         return nil
       end
-      for _, i in ipairs(rule.ip) do
-        res = check_ip_setting(i, ip)
+      for _, ip_check in ipairs(rule.ip) do
+        res = check_ip_setting(ip_check, ip)
         if res then
           matched[#matched + 1] = 'ip'
           break
@@ -246,8 +246,8 @@ local function check_settings(task)
       if not client_ip or not client_ip:is_valid() then
         return nil
       end
-      for _, i in ipairs(rule.client_ip) do
-        res = check_ip_setting(i, client_ip)
+      for _, ip_check in ipairs(rule.client_ip) do
+        res = check_ip_setting(ip_check, client_ip)
         if res then
           matched[#matched + 1] = 'client_ip'
           break
@@ -262,8 +262,8 @@ local function check_settings(task)
       if not from then
         return nil
       end
-      for _, i in ipairs(rule.from) do
-        res = check_addr_setting(i, from)
+      for _, from_check in ipairs(rule.from) do
+        res = check_addr_setting(from_check, from)
         if res then
           matched[#matched + 1] = 'from'
           break
@@ -278,8 +278,8 @@ local function check_settings(task)
       if not rcpt then
         return nil
       end
-      for _, i in ipairs(rule.rcpt) do
-        res = check_addr_setting(i, rcpt)
+      for _, rcpt_check in ipairs(rule.rcpt) do
+        res = check_addr_setting(rcpt_check, rcpt)
 
         if res then
           matched[#matched + 1] = 'rcpt'
@@ -295,8 +295,8 @@ local function check_settings(task)
       if not user then
         return nil
       end
-      for _, i in ipairs(rule.user) do
-        res = check_addr_setting(i, user)
+      for _, user_check in ipairs(rule.user) do
+        res = check_addr_setting(user_check, user)
         if res then
           matched[#matched + 1] = 'user'
           break
@@ -311,8 +311,8 @@ local function check_settings(task)
       if #hostname == 0 then
         return nil
       end
-      for _, i in ipairs(rule.hostname) do
-        res = check_addr_setting(i, hostname)
+      for _, hname_check in ipairs(rule.hostname) do
+        res = check_addr_setting(hname_check, hostname)
         if res then
           matched[#matched + 1] = 'hostname'
           break
@@ -324,11 +324,11 @@ local function check_settings(task)
     end
 
     if rule.request_header then
-      for k, v in pairs(rule.request_header) do
-        local h = task:get_request_header(k)
-        res = (h and v:match(h))
+      for hname, pattern in pairs(rule.request_header) do
+        local hvalue = task:get_request_header(hname)
+        res = (hvalue and pattern:match(hvalue))
         if res then
-          matched[#matched + 1] = 'req_header: ' .. k
+          matched[#matched + 1] = 'req_header: ' .. hname
           break
         end
       end
@@ -338,13 +338,13 @@ local function check_settings(task)
     end
 
     if rule.header then
-      for _, e in ipairs(rule.header) do
-        for k, v in pairs(e) do
-          for _, p in ipairs(v) do
-            local h = task:get_header(k)
-            res = (h and p:match(h))
+      for _,elt in ipairs(rule.header) do
+        for hname,patterns in pairs(elt) do
+          for _,pattern in ipairs(patterns) do
+            local hvalue = task:get_header(hname)
+            res = (hvalue and pattern:match(hvalue))
             if res then
-              matched[#matched + 1] = 'header: ' .. k
+              matched[#matched + 1] = 'header: ' .. hname
               break
             end
           end
