@@ -664,9 +664,10 @@ read_data:
 			if (cbd->data->etag) {
 				/* Remove old etag */
 				rspamd_fstring_free (cbd->data->etag);
-				cbd->data->etag = rspamd_fstring_new_init (etag_hdr->begin,
-						etag_hdr->len);
 			}
+
+			cbd->data->etag = rspamd_fstring_new_init (etag_hdr->begin,
+					etag_hdr->len);
 		}
 		else {
 			if (cbd->data->etag) {
