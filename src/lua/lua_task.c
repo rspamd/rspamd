@@ -1771,10 +1771,12 @@ lua_task_set_pre_result (lua_State * L)
 				rspamd_mempool_strdup (task->task_pool, module));
 
 		/* Don't classify or filter message if pre-filter sets results */
-		task->processed_stages |= (RSPAMD_TASK_STAGE_FILTERS |
-								   RSPAMD_TASK_STAGE_CLASSIFIERS |
+		task->processed_stages |= (RSPAMD_TASK_STAGE_CLASSIFIERS |
 								   RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |
 								   RSPAMD_TASK_STAGE_CLASSIFIERS_POST);
+		rspamd_symcache_disable_all_symbols (task, task->cfg->cache,
+				SYMBOL_TYPE_IDEMPOTENT|SYMBOL_TYPE_IGNORE_PASSTHROUGH|
+				SYMBOL_TYPE_POSTFILTER);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

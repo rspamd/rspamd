@@ -48,6 +48,8 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_SQUEEZED = (1 << 13), /* Symbol is squeezed inside Lua */
 	SYMBOL_TYPE_TRIVIAL = (1 << 14), /* Symbol is trivial */
 	SYMBOL_TYPE_MIME_ONLY = (1 << 15), /* Symbol is mime only */
+	SYMBOL_TYPE_EXPLICIT_DISABLE = (1 << 16), /* Symbol should be disabled explicitly only */
+	SYMBOL_TYPE_IGNORE_PASSTHROUGH = (1 << 17), /* Symbol ignores passthrough result */
 };
 
 /**
@@ -374,4 +376,14 @@ gboolean rspamd_symcache_item_async_dec_check_full (struct rspamd_task *task,
 											   const gchar *loc);
 #define rspamd_symcache_item_async_dec_check(task, item, subsystem) \
 	rspamd_symcache_item_async_dec_check_full(task, item, subsystem, G_STRLOC)
+
+/**
+ * Disables execution of all symbols, excluding those specified in `skip_mask`
+ * @param task
+ * @param cache
+ * @param skip_mask
+ */
+void rspamd_symcache_disable_all_symbols (struct rspamd_task *task,
+										  struct rspamd_symcache *cache,
+										  guint skip_mask);
 #endif
