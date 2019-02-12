@@ -905,7 +905,7 @@ if opts then
         type = 'idempotent',
         callback = clickhouse_collect,
         priority = 10,
-        flags = 'empty',
+        flags = 'empty,explicit_disable,ignore_passthrough',
       })
       rspamd_config:register_finish_script(function(task)
         if nrows > 0 then

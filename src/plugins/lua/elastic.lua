@@ -474,7 +474,7 @@ if redis_params and opts then
       type = 'idempotent',
       callback = elastic_collect,
       priority = 10,
-      flags = 'empty',
+      flags = 'empty,explicit_disable,ignore_passthrough',
     })
 
     rspamd_config:add_on_load(function(cfg, ev_base,worker)
