@@ -229,7 +229,7 @@ local function check_settings(task)
         end
 
         local ret = fun.any(function(d)
-          return check_func(value, d)
+          return check_func(d, value)
         end, to_check)
         if ret then
           res = true
