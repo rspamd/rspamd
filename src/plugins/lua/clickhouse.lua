@@ -30,7 +30,7 @@ end
 local data_rows = {}
 local custom_rows = {}
 local nrows = 0
-local schema_version = 2 -- Current schema version
+local schema_version = 3 -- Current schema version
 
 local settings = {
   limit = 1000,
@@ -54,6 +54,11 @@ local settings = {
   use_https = false,
   use_gzip = true,
   allow_local = false,
+  insert_subject = false,
+  subject_privacy = false, -- subject privacy is off
+  subject_privacy_alg = 'blake2', -- default hash-algorithm to obfuscate subject
+  subject_privacy_prefix = 'obf', -- prefix to show it's obfuscated
+  subject_privacy_length = 16, -- cut the length of the hash
   user = nil,
   password = nil,
   no_ssl_verify = false,
@@ -91,6 +96,7 @@ CREATE TABLE rspamd
     RcptUser String,
     RcptDomain String,
     ListId String,
+    Subject String,
     `Attachments.FileName` Array(String),
     `Attachments.ContentType` Array(String),
     `Attachments.Length` Array(UInt32),
@@ -132,6 +138,13 @@ local migrations = {
     -- Add explicit version
     [[CREATE TABLE rspamd_version ( Version UInt32) ENGINE = TinyLog]],
     [[INSERT INTO rspamd_version (Version) Values (2)]],
+  },
+  [2] = {
+    -- Add `Subject` column
+    [[ALTER TABLE rspamd
+      ADD COLUMN Subject String AFTER ListId]],
+    -- New version
+    [[INSERT INTO rspamd_version (Version) Values (3)]],
   }
 }
 
@@ -159,7 +172,8 @@ local function clickhouse_main_row(res)
     'RcptUser',
     'RcptDomain',
     'ListId',
-    'Digest'
+    'Subject',
+    'Digest',
   }
 
   for _,v in ipairs(fields) do table.insert(res, v) end
@@ -435,6 +449,11 @@ local function clickhouse_collect(task)
   local action = task:get_metric_action('default')
   local digest = task:get_digest()
 
+  local subject = ''
+  if settings.insert_subject then
+    subject = lua_util.maybe_obfuscate_subject(task:get_subject() or '', settings)
+  end
+
   local row = {
     today(timestamp),
     timestamp,
@@ -457,6 +476,7 @@ local function clickhouse_collect(task)
     rcpt_user,
     rcpt_domain,
     list_id,
+    subject,
     digest
   }
 
