@@ -322,12 +322,13 @@ exports.handle_settings = function(task, settings)
   local symbols_disabled = {}
   local symbols_enabled = {}
   local found = false
+  local disabled = false
 
   if settings.default then settings = settings.default end
 
   local function disable_all()
-    for k,_ in pairs(squeezed_symbols) do
-      if not symbols_enabled[k] then
+    for k,sym in pairs(squeezed_symbols) do
+      if not symbols_enabled[k] and not (sym.flags and sym.flags.explicit_disable) then
         symbols_disabled[k] = true
       end
     end
@@ -336,6 +337,7 @@ exports.handle_settings = function(task, settings)
   if settings.symbols_enabled then
     disable_all()
     found = true
+    disabled = true
     for _,s in ipairs(settings.symbols_enabled) do
       if squeezed_symbols[s] then
         lua_util.debugm(SN, task, 'enable symbol %s as it is in `symbols_enabled`', s)
@@ -346,7 +348,9 @@ exports.handle_settings = function(task, settings)
   end
 
   if settings.groups_enabled then
-    disable_all()
+    if not disabled then
+      disable_all()
+    end
     found = true
     for _,gr in ipairs(settings.groups_enabled) do
       if squeezed_groups[gr] then
