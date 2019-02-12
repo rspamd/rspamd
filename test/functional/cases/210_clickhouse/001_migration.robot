@@ -20,7 +20,7 @@ Initial schema
   Column should exist  rspamd  Symbols.Scores
   Column should exist  rspamd  Attachments.Digest
   Column should exist  rspamd  Symbols.Scores
-  Schema version should be  2
+  Schema version should be  3
 
 
 Migration
@@ -39,7 +39,7 @@ Migration
   Column should exist  rspamd  Symbols.Scores
   Column should exist  rspamd  Attachments.Digest
   Column should exist  rspamd  Symbols.Scores
-  Schema version should be  2
+  Schema version should be  3
 
 
 Retention
