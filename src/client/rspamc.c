@@ -887,7 +887,15 @@ rspamc_symbols_output (FILE *out, ucl_object_t *obj)
 		}
 	}
 
-	PRINT_PROTOCOL_STRING ("dkim-signature", "DKIM-Signature");
+	elt = ucl_object_lookup (obj, "dkim-signature");
+	if (elt && elt->type == UCL_STRING) {
+		rspamd_fprintf (out, "DKIM-Signature: %s\n", ucl_object_tostring (elt));
+	} else if (elt && elt->type == UCL_ARRAY) {
+		mit = NULL;
+		while ((cmesg = ucl_object_iterate (elt, &mit, true)) != NULL) {
+			rspamd_fprintf (out, "DKIM-Signature: %s\n", ucl_object_tostring (cmesg));
+		}
+	}
 
 	elt = ucl_object_lookup (obj, "profile");
 
@@ -1372,11 +1380,16 @@ rspamc_mime_output (FILE *out, ucl_object_t *result, GString *input,
 		g_string_free (folded_symbuf, TRUE);
 		g_string_free (symbuf, TRUE);
 
-		if (ucl_object_lookup (result, "dkim-signature")) {
+		res = ucl_object_lookup (result, "dkim-signature");
+		if (res && res->type == UCL_STRING) {
 			rspamd_printf_gstring (added_headers, "DKIM-Signature: %s%s",
-					ucl_object_tostring (
-							ucl_object_lookup (result, "dkim-signature")),
-					line_end);
+					ucl_object_tostring (res), line_end);
+		} else if (res && res->type == UCL_ARRAY) {
+			it = NULL;
+			while ((cur = ucl_object_iterate (res, &it, true)) != NULL) {
+				rspamd_printf_gstring (added_headers, "DKIM-Signature: %s%s",
+					ucl_object_tostring (cur), line_end);
+			}
 		}
 
 		if (json || raw || compact) {

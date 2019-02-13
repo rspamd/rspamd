@@ -101,23 +101,39 @@ rspamd_config.DATE_IN_PAST = {
   type = 'mime',
 }
 
-rspamd_config.R_SUSPICIOUS_URL = {
+local obscured_id = rspamd_config:register_symbol{
   callback = function(task)
     local urls = task:get_urls()
 
     if urls then
       for _,u in ipairs(urls) do
-        if u:is_obscured() then
+        local fl = u:get_flags()
+        if fl.obscured then
           task:insert_result('R_SUSPICIOUS_URL', 1.0, u:get_host())
+        end
+        if fl.zw_spaces then
+          task:insert_result('ZERO_WIDTH_SPACE_URL', 1.0, u:get_host())
         end
       end
     end
+
     return false
   end,
+  name = 'R_SUSPICIOUS_URL',
   score = 5.0,
   one_shot = true,
   description = 'Obfusicated or suspicious URL has been found in a message',
   group = 'url'
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  name = 'ZERO_WIDTH_SPACE_URL',
+  score = 7.0,
+  one_shot = true,
+  description = 'Zero width space in url',
+  group = 'url',
+  parent = obscured_id,
 }
 
 
@@ -198,7 +214,7 @@ local check_rcvd = rspamd_config:register_symbol{
   group = 'headers',
   callback = function (task)
     local rcvds = task:get_received_headers()
-    if not rcvds then return false end
+    if not rcvds or #rcvds == 0 then return false end
 
     local all_tls = fun.all(function(rc)
       return rc.flags and rc.flags['ssl']
@@ -357,26 +373,31 @@ rspamd_config.OMOGRAPH_URL = {
       local bad_omographs = 0
       local single_bad_omograps = 0
       local bad_urls = {}
+      local seen = {}
 
       fun.each(function(u)
         if u:is_phished() then
+
           local h1 = u:get_host()
           local h2 = u:get_phished():get_host()
           if h1 and h2 then
-            if util.is_utf_spoofed(h1, h2) then
-              table.insert(bad_urls, string.format('%s->%s', h1, h2))
+            local selt = string.format('%s->%s', h1, h2)
+            if not seen[selt] and util.is_utf_spoofed(h1, h2) then
+              bad_urls[#bad_urls + 1] = selt
               bad_omographs = bad_omographs + 1
             end
+            seen[selt] = true
           end
         end
         if not u:is_html_displayed() then
           local h = u:get_tld()
 
           if h then
-            if util.is_utf_spoofed(h) then
-              table.insert(bad_urls, string.format('%s', h))
+            if not seen[h] and util.is_utf_spoofed(h) then
+              bad_urls[#bad_urls + 1] = h
               single_bad_omograps = single_bad_omograps + 1
             end
+            seen[h] = true
           end
         end
       end, urls)

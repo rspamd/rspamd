@@ -39,6 +39,9 @@ require_scanner('sophos')
 
 -- Other scanners
 require_scanner('dcc')
+require_scanner('oletools')
+require_scanner('icap')
+require_scanner('vadesecure')
 
 exports.add_scanner = function(name, t, conf_func, check_func)
   assert(type(conf_func) == 'function' and type(check_func) == 'function',

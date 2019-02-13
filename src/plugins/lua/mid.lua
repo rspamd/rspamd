@@ -49,18 +49,20 @@ local function known_mid_cb(task)
   local das = task:get_symbol(settings['symbol_dkim_allow'])
   if ((das or E)[1] or E).options then
     for _,dkim_domain in ipairs(das[1]['options']) do
-      local v = map:get_key(dkim_domain)
-      if v then
-        if v == '' then
-          if not header then
-            task:insert_result(settings['symbol_known_no_mid'], 1, dkim_domain)
-            return
-          end
-        else
-          re[dkim_domain] = rspamd_regexp.create_cached(v)
-          if header and re[dkim_domain] and re[dkim_domain]:match(header) then
+      if dkim_domain then
+        local v = map:get_key(dkim_domain:match "[^:]+")
+        if v then
+          if v == '' then
+            if not header then
+              task:insert_result(settings['symbol_known_no_mid'], 1, dkim_domain)
+              return
+            end
+          else
+            re[dkim_domain] = rspamd_regexp.create_cached(v)
+            if header and re[dkim_domain] and re[dkim_domain]:match(header) then
               task:insert_result(settings['symbol_known_mid'], 1, dkim_domain)
               return
+            end
           end
         end
       end

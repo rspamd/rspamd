@@ -235,8 +235,6 @@ static void rspamd_symcache_disable_symbol_checkpoint (struct rspamd_task *task,
 		struct rspamd_symcache *cache, const gchar *symbol);
 static void rspamd_symcache_enable_symbol_checkpoint (struct rspamd_task *task,
 		struct rspamd_symcache *cache, const gchar *symbol);
-static void rspamd_symcache_disable_all_symbols (struct rspamd_task *task,
-		struct rspamd_symcache *cache);
 
 static void
 rspamd_symcache_order_dtor (gpointer p)
@@ -1598,7 +1596,8 @@ rspamd_symcache_process_settings (struct rspamd_task *task,
 
 	if (enabled) {
 		/* Disable all symbols but selected */
-		rspamd_symcache_disable_all_symbols (task, cache);
+		rspamd_symcache_disable_all_symbols (task, cache,
+				SYMBOL_TYPE_EXPLICIT_DISABLE);
 		already_disabled = TRUE;
 		it = NULL;
 
@@ -1615,7 +1614,8 @@ rspamd_symcache_process_settings (struct rspamd_task *task,
 		it = NULL;
 
 		if (!already_disabled) {
-			rspamd_symcache_disable_all_symbols (task, cache);
+			rspamd_symcache_disable_all_symbols (task, cache,
+					SYMBOL_TYPE_EXPLICIT_DISABLE);
 		}
 
 		while ((cur = ucl_iterate_object (enabled, &it, true)) != NULL) {
@@ -2274,9 +2274,10 @@ rspamd_symcache_stats_symbols_count (struct rspamd_symcache *cache)
 }
 
 
-static void
+void
 rspamd_symcache_disable_all_symbols (struct rspamd_task *task,
-		struct rspamd_symcache *cache)
+									 struct rspamd_symcache *cache,
+									 guint skip_mask)
 {
 	struct cache_savepoint *checkpoint;
 	guint i;
@@ -2295,7 +2296,7 @@ rspamd_symcache_disable_all_symbols (struct rspamd_task *task,
 	PTR_ARRAY_FOREACH (cache->items_by_id, i, item) {
 		dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
 
-		if (!(item->type & SYMBOL_TYPE_SQUEEZED)) {
+		if (!(item->type & (SYMBOL_TYPE_SQUEEZED|skip_mask))) {
 			SET_FINISH_BIT (checkpoint, dyn_item);
 			SET_START_BIT (checkpoint, dyn_item);
 		}
@@ -2426,7 +2427,7 @@ rspamd_symcache_disable_symbol_perm (struct rspamd_symcache *cache,
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
 
-	item = g_hash_table_lookup (cache->items_by_symbol, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol);
 
 	if (item) {
 		item->enabled = FALSE;
@@ -2442,7 +2443,7 @@ rspamd_symcache_enable_symbol_perm (struct rspamd_symcache *cache,
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
 
-	item = g_hash_table_lookup (cache->items_by_symbol, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol);
 
 	if (item) {
 		item->enabled = TRUE;
@@ -2773,4 +2774,64 @@ rspamd_symcache_item_async_dec_check_full (struct rspamd_task *task,
 	}
 
 	return FALSE;
+}
+
+gboolean
+rspamd_symcache_add_symbol_flags (struct rspamd_symcache *cache,
+										   const gchar *symbol,
+										   guint flags)
+{
+	struct rspamd_symcache_item *item;
+
+	g_assert (cache != NULL);
+	g_assert (symbol != NULL);
+
+	item = rspamd_symcache_find_filter (cache, symbol);
+
+	if (item) {
+		item->type |= flags;
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+gboolean
+rspamd_symcache_set_symbol_flags (struct rspamd_symcache *cache,
+										   const gchar *symbol,
+										   guint flags)
+{
+	struct rspamd_symcache_item *item;
+
+	g_assert (cache != NULL);
+	g_assert (symbol != NULL);
+
+	item = rspamd_symcache_find_filter (cache, symbol);
+
+	if (item) {
+		item->type = flags;
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+guint
+rspamd_symcache_get_symbol_flags (struct rspamd_symcache *cache,
+										const gchar *symbol)
+{
+	struct rspamd_symcache_item *item;
+
+	g_assert (cache != NULL);
+	g_assert (symbol != NULL);
+
+	item = rspamd_symcache_find_filter (cache, symbol);
+
+	if (item) {
+		return item->type;
+	}
+
+	return 0;
 }

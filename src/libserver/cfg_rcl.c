@@ -15,9 +15,7 @@
  */
 #include "cfg_rcl.h"
 #include "rspamd.h"
-#include "../../contrib/mumhash/mum.h"
-#define HASH_CASELESS
-#include "uthash_strcase.h"
+#include "cfg_file_private.h"
 #include "utlist.h"
 #include "cfg_file.h"
 #include "lua/lua_common.h"
@@ -541,7 +539,8 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 		else {
 			if (ucl_object_type (cur) == UCL_NULL) {
-				action_score = NAN;
+				rspamd_config_maybe_disable_action (cfg, ucl_object_key (cur),
+						ucl_object_get_priority (cur));
 			}
 			else {
 				if (!ucl_object_todouble_safe (cur, &action_score)) {
@@ -558,8 +557,7 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 			rspamd_config_set_action_score (cfg,
 					ucl_object_key (cur),
-					action_score,
-					ucl_object_get_priority (cur));
+					cur);
 		}
 	}
 

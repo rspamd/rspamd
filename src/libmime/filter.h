@@ -9,7 +9,6 @@
 #include "config.h"
 #include "rspamd_symcache.h"
 #include "task.h"
-#include "khash.h"
 
 struct rspamd_task;
 struct rspamd_settings;
@@ -25,14 +24,14 @@ enum rspamd_symbol_result_flags {
 	RSPAMD_SYMBOL_RESULT_IGNORED = (1 << 0)
 };
 
+struct kh_rspamd_options_hash_s;
+
 /**
  * Rspamd symbol
  */
-
-KHASH_MAP_INIT_STR (rspamd_options_hash, struct rspamd_symbol_option *);
 struct rspamd_symbol_result {
 	double score;                                  /**< symbol's score							*/
-	khash_t(rspamd_options_hash) *options;         /**< list of symbol's options				*/
+	struct kh_rspamd_options_hash_s *options;         /**< list of symbol's options				*/
 	struct rspamd_symbol_option *opts_head;        /**< head of linked list of options			*/
 	const gchar *name;
 	struct rspamd_symbol *sym;                     /**< symbol configuration					*/
@@ -40,24 +39,6 @@ struct rspamd_symbol_result {
 	enum rspamd_symbol_result_flags flags;
 };
 
-/**
- * Result of metric processing
- */
-KHASH_MAP_INIT_STR (rspamd_symbols_hash, struct rspamd_symbol_result);
-#if UINTPTR_MAX <= UINT_MAX
-/* 32 bit */
-#define rspamd_ptr_hash_func(key) (khint32_t)(((uintptr_t)(key))>>1)
-#else
-/* likely 64 bit */
-#define rspamd_ptr_hash_func(key) (khint32_t)(((uintptr_t)(key))>>3)
-#endif
-#define rspamd_ptr_equal_func(a, b) ((a) == (b))
-KHASH_INIT (rspamd_symbols_group_hash,
-		void *,
-		double,
-		1,
-		rspamd_ptr_hash_func,
-		rspamd_ptr_equal_func);
 
 #define RSPAMD_PASSTHROUGH_NORMAL 1
 #define RSPAMD_PASSTHROUGH_LOW 0
@@ -65,13 +46,22 @@ KHASH_INIT (rspamd_symbols_group_hash,
 #define RSPAMD_PASSTHROUGH_CRITICAL 3
 
 struct rspamd_passthrough_result {
-	enum rspamd_action_type action;
+	struct rspamd_action *action;
 	guint priority;
 	double target_score;
 	const gchar *message;
 	const gchar *module;
 	struct rspamd_passthrough_result *prev, *next;
 };
+
+struct rspamd_action_result {
+	gdouble cur_limit;
+	struct rspamd_action *action;
+};
+
+struct kh_rspamd_symbols_hash_s;
+struct kh_rspamd_symbols_group_hash_s;
+
 
 struct rspamd_metric_result {
 	double score;									/**< total score							*/
@@ -81,9 +71,10 @@ struct rspamd_metric_result {
 	guint nnegative;
 	double positive_score;
 	double negative_score;
-	khash_t(rspamd_symbols_hash) *symbols;			/**< symbols of metric						*/
-	khash_t(rspamd_symbols_group_hash) *sym_groups; /**< groups of symbols						*/
-	gdouble actions_limits[METRIC_ACTION_MAX];		/**< set of actions for this metric			*/
+	struct kh_rspamd_symbols_hash_s *symbols;			/**< symbols of metric						*/
+	struct kh_rspamd_symbols_group_hash_s *sym_groups; /**< groups of symbols						*/
+	struct rspamd_action_result *actions_limits;
+	guint nactions;
 };
 
 /**
@@ -103,7 +94,7 @@ struct rspamd_metric_result * rspamd_create_metric_result (struct rspamd_task *t
  * @param module
  */
 void rspamd_add_passthrough_result (struct rspamd_task *task,
-									enum rspamd_action_type action,
+									struct rspamd_action *action,
 									guint priority,
 									double target_score,
 									const gchar *message,
@@ -175,10 +166,11 @@ double rspamd_factor_consolidation_func (struct rspamd_task *task,
 	const gchar *unused);
 
 
-/*
- * Get action for specific metric
+/**
+ * Check thresholds and return action for a task
+ * @param task
+ * @return
  */
-enum rspamd_action_type rspamd_check_action_metric (struct rspamd_task *task,
-	struct rspamd_metric_result *mres);
+struct rspamd_action* rspamd_check_action_metric (struct rspamd_task *task);
 
 #endif

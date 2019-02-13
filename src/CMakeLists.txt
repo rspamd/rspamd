@@ -117,19 +117,13 @@ LIST(LENGTH PLUGINSSRC RSPAMD_MODULES_NUM)
 SET(RAGEL_DEPENDS "${CMAKE_SOURCE_DIR}/src/ragel/smtp_address.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_date.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_ip.rl"
-	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_whitespace.rl"
-	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_received.rl"
+	"${CMAKE_SOURCE_DIR}/src/ragel/smtp_base.rl"
 	"${CMAKE_SOURCE_DIR}/src/ragel/content_disposition.rl")
 RAGEL_TARGET(ragel_smtp_addr
 	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/smtp_addr_parser.rl
 	DEPENDS ${RAGEL_DEPENDS}
 	COMPILE_FLAGS -T1
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/smtp_addr_parser.rl.c)
-RAGEL_TARGET(ragel_smtp_received
-	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/smtp_received_parser.rl
-	DEPENDS ${RAGEL_DEPENDS}
-	COMPILE_FLAGS -T1
-	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/smtp_received_parser.rl.c)
 RAGEL_TARGET(ragel_content_disposition
 	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/content_disposition_parser.rl
 	DEPENDS ${RAGEL_DEPENDS}
@@ -145,24 +139,49 @@ RAGEL_TARGET(ragel_smtp_date
 	DEPENDS ${RAGEL_DEPENDS}
 	COMPILE_FLAGS -G2
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/date_parser.rl.c)
+RAGEL_TARGET(ragel_smtp_ip
+	INPUTS ${CMAKE_SOURCE_DIR}/src/ragel/smtp_ip_parser.rl
+	DEPENDS ${RAGEL_DEPENDS}
+	COMPILE_FLAGS -G2
+	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ip_parser.rl.c)
 ######################### LINK SECTION ###############################
 
-ADD_LIBRARY(rspamd-server STATIC
-		${RSPAMD_CRYPTOBOX}
-		${RSPAMD_UTIL}
-		${RSPAMD_LUA}
-		${RSPAMD_SERVER}
-		${RSPAMD_STAT}
-		${RSPAMD_MIME}
-		${CMAKE_CURRENT_BINARY_DIR}/modules.c
-		${PLUGINSSRC}
-		"${RAGEL_ragel_smtp_addr_OUTPUTS}"
-		"${RAGEL_ragel_smtp_received_OUTPUTS}"
-		"${RAGEL_ragel_newlines_strip_OUTPUTS}"
-		"${RAGEL_ragel_content_type_OUTPUTS}"
-		"${RAGEL_ragel_content_disposition_OUTPUTS}"
-		"${RAGEL_ragel_rfc2047_OUTPUTS}"
-		"${RAGEL_ragel_smtp_date_OUTPUTS}")
+IF(ENABLE_STATIC MATCHES "ON")
+	ADD_LIBRARY(rspamd-server STATIC
+			${RSPAMD_CRYPTOBOX}
+			${RSPAMD_UTIL}
+			${RSPAMD_LUA}
+			${RSPAMD_SERVER}
+			${RSPAMD_STAT}
+			${RSPAMD_MIME}
+			${CMAKE_CURRENT_BINARY_DIR}/modules.c
+			${PLUGINSSRC}
+			"${RAGEL_ragel_smtp_addr_OUTPUTS}"
+			"${RAGEL_ragel_newlines_strip_OUTPUTS}"
+			"${RAGEL_ragel_content_type_OUTPUTS}"
+			"${RAGEL_ragel_content_disposition_OUTPUTS}"
+			"${RAGEL_ragel_rfc2047_OUTPUTS}"
+			"${RAGEL_ragel_smtp_date_OUTPUTS}"
+			"${RAGEL_ragel_smtp_ip_OUTPUTS}")
+ELSE()
+	ADD_LIBRARY(rspamd-server SHARED
+			${RSPAMD_CRYPTOBOX}
+			${RSPAMD_UTIL}
+			${RSPAMD_LUA}
+			${RSPAMD_SERVER}
+			${RSPAMD_STAT}
+			${RSPAMD_MIME}
+			${CMAKE_CURRENT_BINARY_DIR}/modules.c
+			${PLUGINSSRC}
+			"${RAGEL_ragel_smtp_addr_OUTPUTS}"
+			"${RAGEL_ragel_newlines_strip_OUTPUTS}"
+			"${RAGEL_ragel_content_type_OUTPUTS}"
+			"${RAGEL_ragel_content_disposition_OUTPUTS}"
+			"${RAGEL_ragel_rfc2047_OUTPUTS}"
+			"${RAGEL_ragel_smtp_date_OUTPUTS}"
+			"${RAGEL_ragel_smtp_ip_OUTPUTS}")
+ENDIF()
+
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-cdb)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-lpeg)
@@ -173,6 +192,28 @@ IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_DEPENDENCIES(rspamd-server rspamd-clang)
 ENDIF()
 
+IF (ENABLE_SNOWBALL MATCHES "ON")
+	TARGET_LINK_LIBRARIES(rspamd-server stemmer)
+ENDIF()
+TARGET_LINK_LIBRARIES(rspamd-server rspamd-hiredis)
+
+IF (ENABLE_FANN MATCHES "ON")
+	TARGET_LINK_LIBRARIES(rspamd-server fann)
+ENDIF ()
+
+IF (ENABLE_HYPERSCAN MATCHES "ON")
+	TARGET_LINK_LIBRARIES(rspamd-server hs)
+ENDIF()
+
+TARGET_LINK_LIBRARIES(rspamd-server rspamd-linenoise)
+
+IF(USE_CXX_LINKER)
+	SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE CXX)
+	SET_TARGET_PROPERTIES(rspamd-server PROPERTIES LINKER_LANGUAGE CXX)
+ENDIF()
+
+TARGET_LINK_LIBRARIES(rspamd-server ${RSPAMD_REQUIRED_LIBRARIES})
+
 ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CMAKE_CURRENT_BINARY_DIR}/workers.c)
 SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)
 SET_TARGET_PROPERTIES(rspamd PROPERTIES COMPILE_FLAGS "-DRSPAMD_MAIN")
@@ -181,25 +222,6 @@ IF(NOT DEBIAN_BUILD)
 ENDIF(NOT DEBIAN_BUILD)
 
 TARGET_LINK_LIBRARIES(rspamd rspamd-server)
-IF (ENABLE_SNOWBALL MATCHES "ON")
-	TARGET_LINK_LIBRARIES(rspamd stemmer)
-ENDIF()
-TARGET_LINK_LIBRARIES(rspamd rspamd-hiredis)
-
-IF (ENABLE_FANN MATCHES "ON")
-	TARGET_LINK_LIBRARIES(rspamd fann)
-ENDIF ()
-
-IF (ENABLE_HYPERSCAN MATCHES "ON")
-	TARGET_LINK_LIBRARIES(rspamd hs)
-ENDIF()
-
-TARGET_LINK_LIBRARIES(rspamd rspamd-linenoise)
-
-IF(USE_CXX_LINKER)
-	SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE CXX)
-ENDIF()
-
-TARGET_LINK_LIBRARIES(rspamd ${RSPAMD_REQUIRED_LIBRARIES})
 
 INSTALL(TARGETS rspamd RUNTIME DESTINATION bin)
+INSTALL(TARGETS rspamd-server LIBRARY DESTINATION ${RSPAMD_LIBDIR})

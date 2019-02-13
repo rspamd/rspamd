@@ -19,6 +19,8 @@
 #include "utlist.h"
 #include "http_private.h"
 #include "worker_private.h"
+#include "libserver/cfg_file_private.h"
+#include "libmime/filter_private.h"
 #include "contrib/zstd/zstd.h"
 #include "lua/lua_common.h"
 #include "unix-std.h"
@@ -433,14 +435,17 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					}
 				}
 				IF_HEADER (URLS_HEADER) {
+					msg_debug_protocol ("read urls header, value: %V", hv);
+
 					srch.begin = "extended";
 					srch.len = 8;
 
-					msg_debug_protocol ("read urls header, value: %V", hv);
 					if (rspamd_ftok_casecmp (hv_tok, &srch) == 0) {
 						task->flags |= RSPAMD_TASK_FLAG_EXT_URLS;
 						msg_debug_protocol ("extended urls information");
 					}
+
+					/* TODO: add more formats there */
 				}
 				IF_HEADER (USER_AGENT_HEADER) {
 					msg_debug_protocol ("read user-agent header, value: %V", hv);
@@ -663,6 +668,7 @@ rspamd_protocol_handle_request (struct rspamd_task *task,
 /* Structure for writing tree data */
 struct tree_cb_data {
 	ucl_object_t *top;
+	GHashTable *seen;
 	struct rspamd_task *task;
 };
 
@@ -713,17 +719,37 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 	struct rspamd_url *url = value;
 	ucl_object_t *obj;
 	struct rspamd_task *task = cb->task;
-	const gchar *user_field = "unknown", *encoded;
+	const gchar *user_field = "unknown", *encoded = NULL;
 	gboolean has_user = FALSE;
 	guint len = 0;
-	gsize enclen;
-
-	encoded = rspamd_url_encode (url, &enclen, task->task_pool);
+	gsize enclen = 0;
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
-		obj = ucl_object_fromlstring (encoded, enclen);
+		if (url->hostlen > 0) {
+			if (g_hash_table_lookup (cb->seen, url)) {
+				return;
+			}
+
+			const gchar *end = NULL;
+
+			if (g_utf8_validate (url->host, url->hostlen, &end)) {
+				obj = ucl_object_fromlstring (url->host, url->hostlen);
+			}
+			else if (end - url->host > 0) {
+				obj = ucl_object_fromlstring (url->host, end - url->host);
+			}
+			else {
+				return;
+			}
+		}
+		else {
+			return;
+		}
+
+		g_hash_table_insert (cb->seen, url, url);
 	}
 	else {
+		encoded = rspamd_url_encode (url, &enclen, task->task_pool);
 		obj = rspamd_protocol_extended_url (task, url, encoded, enclen);
 	}
 
@@ -738,6 +764,10 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 		else if (task->from_envelope) {
 			user_field = task->from_envelope->addr;
 			len = task->from_envelope->addr_len;
+		}
+
+		if (!encoded) {
+			encoded = rspamd_url_encode (url, &enclen, task->task_pool);
 		}
 
 		msg_notice_task_encrypted ("<%s> %s: %*s; ip: %s; URL: %*s",
@@ -758,8 +788,11 @@ rspamd_urls_tree_ucl (GHashTable *input, struct rspamd_task *task)
 	obj = ucl_object_typed_new (UCL_ARRAY);
 	cb.top = obj;
 	cb.task = task;
+	cb.seen = g_hash_table_new (rspamd_url_host_hash, rspamd_urls_host_cmp);
 
 	g_hash_table_foreach (input, urls_protocol_cb, &cb);
+
+	g_hash_table_unref (cb.seen);
 
 	return obj;
 }
@@ -922,12 +955,12 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 {
 	struct rspamd_symbol_result *sym;
 	gboolean is_spam;
-	enum rspamd_action_type action = METRIC_ACTION_NOACTION;
+	struct rspamd_action *action;
 	ucl_object_t *obj = NULL, *sobj;
 	const gchar *subject;
 
-	action = rspamd_check_action_metric (task, mres);
-	is_spam = (action < METRIC_ACTION_GREYLIST);
+	action = rspamd_check_action_metric (task);
+	is_spam = !(action->flags & RSPAMD_ACTION_HAM);
 
 	if (task->cmd != CMD_CHECK_V2) {
 		obj = ucl_object_typed_new (UCL_OBJECT);
@@ -955,15 +988,26 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 			ucl_object_fromdouble (rspamd_task_get_required_score (task, mres)),
 			"required_score", 0, false);
 	ucl_object_insert_key (obj,
-			ucl_object_fromstring (rspamd_action_to_str (action)),
+			ucl_object_fromstring (action->name),
 			"action", 0, false);
 
-	if (action == METRIC_ACTION_REWRITE_SUBJECT) {
+	if (action->action_type == METRIC_ACTION_REWRITE_SUBJECT) {
 		subject = rspamd_protocol_rewrite_subject (task);
 
 		if (subject) {
 			ucl_object_insert_key (obj, ucl_object_fromstring (subject),
 				"subject", 0, false);
+		}
+	}
+	if (action->flags & RSPAMD_ACTION_MILTER) {
+		/* Treat milter action specially */
+		if (action->action_type == METRIC_ACTION_DISCARD) {
+			ucl_object_insert_key (obj, ucl_object_fromstring ("discard"),
+					"reject", 0, false);
+		}
+		else if (action->action_type == METRIC_ACTION_QUARANTINE) {
+			ucl_object_insert_key (obj, ucl_object_fromstring ("quarantine"),
+					"reject", 0, false);
 		}
 	}
 
@@ -1119,6 +1163,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 {
 	ucl_object_t *top = NULL;
 	GString *dkim_sig;
+	GList *dkim_sigs;
 	const ucl_object_t *milter_reply;
 
 	rspamd_task_set_finish_time (task);
@@ -1154,18 +1199,16 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	}
 
 	if (flags & RSPAMD_PROTOCOL_URLS) {
-		if (task->flags & RSPAMD_TASK_FLAG_EXT_URLS) {
-			if (g_hash_table_size (task->urls) > 0) {
-				ucl_object_insert_key (top,
-						rspamd_urls_tree_ucl (task->urls, task),
-						"urls", 0, false);
-			}
+		if (g_hash_table_size (task->urls) > 0) {
+			ucl_object_insert_key (top,
+					rspamd_urls_tree_ucl (task->urls, task),
+					"urls", 0, false);
+		}
 
-			if (g_hash_table_size (task->emails) > 0) {
-				ucl_object_insert_key (top,
-						rspamd_emails_tree_ucl (task->emails, task),
-						"emails", 0, false);
-			}
+		if (g_hash_table_size (task->emails) > 0) {
+			ucl_object_insert_key (top,
+					rspamd_emails_tree_ucl (task->emails, task),
+					"emails", 0, false);
 		}
 	}
 
@@ -1187,11 +1230,12 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	}
 
 	if (flags & RSPAMD_PROTOCOL_DKIM) {
-		dkim_sig = rspamd_mempool_get_variable (task->task_pool,
+		dkim_sigs = rspamd_mempool_get_variable (task->task_pool,
 				RSPAMD_MEMPOOL_DKIM_SIGNATURE);
 
-		if (dkim_sig) {
+		for (; dkim_sigs != NULL; dkim_sigs = dkim_sigs->next) {
 			GString *folded_header;
+			dkim_sig = (GString *) dkim_sigs->data;
 
 			if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
 				folded_header = rspamd_header_value_fold ("DKIM-Signature",
@@ -1253,7 +1297,8 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	gpointer h, v;
 	ucl_object_t *top = NULL;
 	rspamd_fstring_t *reply;
-	gint action, flags = RSPAMD_PROTOCOL_DEFAULT;
+	gint flags = RSPAMD_PROTOCOL_DEFAULT;
+	struct rspamd_action *action;
 
 	/* Write custom headers */
 	g_hash_table_iter_init (&hiter, task->reply_headers);
@@ -1263,9 +1308,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		rspamd_http_message_add_header (msg, hn->begin, hv->begin);
 	}
 
-	if (task->cfg->log_urls || (task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
-		flags |= RSPAMD_PROTOCOL_URLS;
-	}
+	flags |= RSPAMD_PROTOCOL_URLS;
 
 	top = rspamd_protocol_write_ucl (task, flags);
 
@@ -1376,19 +1419,24 @@ end:
 
 		if (metric_res != NULL) {
 
-			action = rspamd_check_action_metric (task, metric_res);
+			action = rspamd_check_action_metric (task);
 
-			if (action == METRIC_ACTION_SOFT_REJECT &&
+			/* TODO: handle custom actions in stats */
+			if (action->action_type == METRIC_ACTION_SOFT_REJECT &&
 					(task->flags & RSPAMD_TASK_FLAG_GREYLISTED)) {
 				/* Set stat action to greylist to display greylisted messages */
-				action = METRIC_ACTION_GREYLIST;
-			}
-
-			if (action < METRIC_ACTION_MAX) {
 #ifndef HAVE_ATOMIC_BUILTINS
-				task->worker->srv->stat->actions_stat[action]++;
+				task->worker->srv->stat->actions_stat[METRIC_ACTION_GREYLIST]++;
 #else
-				__atomic_add_fetch (&task->worker->srv->stat->actions_stat[action],
+				__atomic_add_fetch (&task->worker->srv->stat->actions_stat[METRIC_ACTION_GREYLIST],
+						1, __ATOMIC_RELEASE);
+#endif
+			}
+			else if (action->action_type < METRIC_ACTION_MAX) {
+#ifndef HAVE_ATOMIC_BUILTINS
+				task->worker->srv->stat->actions_stat[action->action_type]++;
+#else
+				__atomic_add_fetch (&task->worker->srv->stat->actions_stat[action->action_type],
 						1, __ATOMIC_RELEASE);
 #endif
 			}

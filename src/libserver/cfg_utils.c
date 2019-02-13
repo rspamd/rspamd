@@ -17,7 +17,7 @@
 
 #include "cfg_file.h"
 #include "rspamd.h"
-#include "uthash_strcase.h"
+#include "cfg_file_private.h"
 #include "filter.h"
 #include "lua/lua_common.h"
 #include "lua/lua_thread_pool.h"
@@ -132,6 +132,30 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->dns_throttling_time = 10000;
 	/* 16 sockets per DNS server */
 	cfg->dns_io_per_server = 16;
+
+	/* Add all internal actions to keep compatibility */
+	for (int i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
+		struct rspamd_action *action;
+
+		action = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*action));
+		action->threshold = NAN;
+		action->name = rspamd_mempool_strdup (cfg->cfg_pool,
+				rspamd_action_to_str (i));
+		action->action_type = i;
+
+		if (i == METRIC_ACTION_SOFT_REJECT) {
+			action->flags |= RSPAMD_ACTION_NO_THRESHOLD|RSPAMD_ACTION_HAM;
+		}
+		else if (i == METRIC_ACTION_GREYLIST) {
+			action->flags |= RSPAMD_ACTION_THRESHOLD_ONLY|RSPAMD_ACTION_HAM;
+		}
+		else if (i == METRIC_ACTION_NOACTION) {
+			action->flags |= RSPAMD_ACTION_HAM;
+		}
+
+		HASH_ADD_KEYPTR (hh, cfg->actions,
+				action->name, strlen (action->name), action);
+	}
 
 	/* Disable timeout */
 	cfg->task_timeout = DEFAULT_TASK_TIMEOUT;
@@ -264,6 +288,8 @@ rspamd_config_free (struct rspamd_config *cfg)
 	if (cfg->monitored_ctx) {
 		rspamd_monitored_ctx_destroy (cfg->monitored_ctx);
 	}
+
+	HASH_CLEAR (hh, cfg->actions);
 
 	rspamd_mempool_delete (cfg->cfg_pool);
 
@@ -821,28 +847,9 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 	/* Validate cache */
 	if (opts & RSPAMD_CONFIG_INIT_VALIDATE) {
 		/* Check for actions sanity */
-		int i, prev_act = 0;
-		gdouble prev_score = NAN;
 		gboolean seen_controller = FALSE;
 		GList *cur;
 		struct rspamd_worker_conf *wcf;
-
-		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i ++) {
-			if (!isnan (prev_score) && !isnan (cfg->actions[i].score)) {
-				if (prev_score <= isnan (cfg->actions[i].score)) {
-					msg_warn_config ("incorrect metrics scores: action %s"
-							" has lower score: %.2f than action %s: %.2f",
-							rspamd_action_to_str (prev_act), prev_score,
-							rspamd_action_to_str (i), cfg->actions[i].score);
-					ret = FALSE;
-				}
-			}
-
-			if (!isnan (cfg->actions[i].score)) {
-				prev_score = cfg->actions[i].score;
-				prev_act = i;
-			}
-		}
 
 		cur = cfg->workers;
 		while (cur) {
@@ -1007,17 +1014,9 @@ rspamd_config_new_statfile (struct rspamd_config *cfg,
 void
 rspamd_config_init_metric (struct rspamd_config *cfg)
 {
-	int i;
-
 	cfg->grow_factor = 1.0;
 	cfg->symbols = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 	cfg->groups = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
-
-	for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
-		cfg->actions[i].score = NAN;
-		cfg->actions[i].action = i;
-		cfg->actions[i].priority = 0;
-	}
 
 	cfg->subject = SPAM_SUBJECT;
 	rspamd_mempool_add_destructor (cfg->cfg_pool,
@@ -1279,7 +1278,7 @@ gboolean
 rspamd_config_check_statfiles (struct rspamd_classifier_config *cf)
 {
 	struct rspamd_statfile_config *st;
-	gboolean has_other = FALSE, res = FALSE, cur_class;
+	gboolean has_other = FALSE, res = FALSE, cur_class = FALSE;
 	GList *cur;
 
 	/* First check classes directly */
@@ -1887,58 +1886,231 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 	return TRUE;
 }
 
-gboolean
-rspamd_config_set_action_score (struct rspamd_config *cfg,
-		const gchar *action_name,
-		gdouble score,
-		guint priority)
+static gboolean
+rspamd_config_action_from_ucl (struct rspamd_config *cfg,
+							   struct rspamd_action *act,
+							   const ucl_object_t *obj,
+							   guint priority)
 {
-	struct rspamd_action *act;
-	gint act_num;
+	const ucl_object_t *elt;
+	gdouble threshold = NAN;
+	guint flags = 0, std_act, obj_type;
 
-	g_assert (cfg != NULL);
-	g_assert (action_name != NULL);
+	obj_type = ucl_object_type (obj);
 
-	if (!rspamd_action_from_str (action_name, &act_num)) {
-		msg_err_config ("invalid action name: %s", action_name);
+	if (obj_type == UCL_OBJECT) {
+		obj_type = ucl_object_type (obj);
+
+		elt = ucl_object_lookup_any (obj, "score", "threshold", NULL);
+
+		if (elt) {
+			threshold = ucl_object_todouble (elt);
+		}
+
+		elt = ucl_object_lookup (obj, "flags");
+
+		if (elt && ucl_object_type (elt) == UCL_ARRAY) {
+			const ucl_object_t *cur;
+			ucl_object_iter_t it = NULL;
+
+			while ((cur = ucl_object_iterate (elt, &it, true)) != NULL) {
+				if (ucl_object_type (cur) == UCL_STRING) {
+					const gchar *fl_str = ucl_object_tostring (cur);
+
+					if (g_ascii_strcasecmp (fl_str, "no_threshold") == 0) {
+						flags |= RSPAMD_ACTION_NO_THRESHOLD;
+					} else if (g_ascii_strcasecmp (fl_str, "threshold_only") == 0) {
+						flags |= RSPAMD_ACTION_THRESHOLD_ONLY;
+					} else if (g_ascii_strcasecmp (fl_str, "ham") == 0) {
+						flags |= RSPAMD_ACTION_HAM;
+					} else {
+						msg_warn_config ("unknown action flag: %s", fl_str);
+					}
+				}
+			}
+		}
+
+		elt = ucl_object_lookup (obj, "milter");
+
+		if (elt) {
+			const gchar *milter_action = ucl_object_tostring (elt);
+
+			if (strcmp (milter_action, "discard") == 0) {
+				flags |= RSPAMD_ACTION_MILTER;
+				act->action_type = METRIC_ACTION_DISCARD;
+			}
+			else if (strcmp (milter_action, "quarantine") == 0) {
+				flags |= RSPAMD_ACTION_MILTER;
+				act->action_type = METRIC_ACTION_QUARANTINE;
+			}
+			else {
+				msg_warn_config ("unknown milter action: %s", milter_action);
+			}
+		}
+	}
+	else if (obj_type == UCL_FLOAT || obj_type == UCL_INT) {
+		threshold = ucl_object_todouble (obj);
+	}
+
+	/* TODO: add lua references support */
+
+	if (isnan (threshold) && !(flags & RSPAMD_ACTION_NO_THRESHOLD)) {
+		msg_err_config ("action %s has no threshold being set and it is not"
+				  " a no threshold action", act->name);
+
 		return FALSE;
 	}
 
-	g_assert (act_num >= METRIC_ACTION_REJECT && act_num < METRIC_ACTION_MAX);
+	act->threshold = threshold;
+	act->flags = flags;
 
-	act = &cfg->actions[act_num];
-
-	if (isnan (act->score)) {
-		act->score = score;
-		act->priority = priority;
-	}
-	else {
-		if (act->priority > priority) {
-			msg_info_config ("action %s has been already registered with "
-					"priority %ud, do not override (new priority: %ud)",
-					action_name,
-					act->priority,
-					priority);
-			return FALSE;
-		}
-		else {
-			msg_info_config ("action %s has been already registered with "
-					"priority %ud, override it with new priority: %ud, "
-					"old score: %.2f, new score: %.2f",
-					action_name,
-					act->priority,
-					priority,
-					act->score,
-					score);
-
-			act->score = score;
-			act->priority = priority;
+	if (!(flags & RSPAMD_ACTION_MILTER)) {
+		if (rspamd_action_from_str (act->name, &std_act)) {
+			act->action_type = std_act;
+		} else {
+			act->action_type = METRIC_ACTION_CUSTOM;
 		}
 	}
 
 	return TRUE;
 }
 
+gboolean
+rspamd_config_set_action_score (struct rspamd_config *cfg,
+		const gchar *action_name,
+		const ucl_object_t *obj)
+{
+	struct rspamd_action *act;
+	enum rspamd_action_type std_act;
+	const ucl_object_t *elt;
+	guint priority = ucl_object_get_priority (obj), obj_type;
+
+	g_assert (cfg != NULL);
+	g_assert (action_name != NULL);
+
+	obj_type = ucl_object_type (obj);
+
+	if (obj_type == UCL_OBJECT) {
+		elt = ucl_object_lookup (obj, "priority");
+
+		if (elt) {
+			priority = ucl_object_toint (elt);
+		}
+	}
+
+	/* Here are dragons:
+	 * We have `canonical` name for actions, such as `soft reject` and
+	 * configuration names for actions (used to be more convenient), such
+	 * as `soft_reject`. Unfortunately, we must have heuristic for this
+	 * variance of names.
+	 */
+
+	if (rspamd_action_from_str (action_name, (gint *)&std_act)) {
+		action_name = rspamd_action_to_str (std_act);
+	}
+
+	HASH_FIND_STR (cfg->actions, action_name, act);
+
+	if (act) {
+		/* Existing element */
+		if (act->priority <= priority) {
+			/* We can replace data */
+			msg_info_config ("action %s has been already registered with "
+							 "priority %ud, override it with new priority: %ud, "
+							 "old score: %.2f",
+					action_name,
+					act->priority,
+					priority,
+					act->threshold);
+			if (rspamd_config_action_from_ucl (cfg, act, obj, priority)) {
+				rspamd_actions_sort (cfg);
+			}
+			else {
+				return FALSE;
+			}
+		}
+		else {
+			msg_info_config ("action %s has been already registered with "
+							 "priority %ud, do not override (new priority: %ud)",
+					action_name,
+					act->priority,
+					priority);
+		}
+	}
+	else {
+		/* Add new element */
+		act = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*act));
+		act->name = rspamd_mempool_strdup (cfg->cfg_pool, action_name);
+
+		if (rspamd_config_action_from_ucl (cfg, act, obj, priority)) {
+			HASH_ADD_KEYPTR (hh, cfg->actions,
+					act->name, strlen (act->name), act);
+			rspamd_actions_sort (cfg);
+		}
+		else {
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+gboolean
+rspamd_config_maybe_disable_action (struct rspamd_config *cfg,
+											 const gchar *action_name,
+											 guint priority)
+{
+	struct rspamd_action *act;
+
+	HASH_FIND_STR (cfg->actions, action_name, act);
+
+	if (act) {
+		if (priority >= act->priority) {
+			msg_info_config ("disable action %s; old priority: %ud, new priority: %ud",
+					action_name,
+					act->priority,
+					priority);
+
+			HASH_DEL (cfg->actions, act);
+
+			return TRUE;
+		}
+		else {
+			msg_info_config ("action %s has been already registered with "
+							 "priority %ud, cannot disable it with new priority: %ud",
+					action_name,
+					act->priority,
+					priority);
+		}
+	}
+
+	return FALSE;
+}
+
+struct rspamd_action *
+rspamd_config_get_action (struct rspamd_config *cfg, const gchar *name)
+{
+	struct rspamd_action *res = NULL;
+
+	HASH_FIND_STR (cfg->actions, name, res);
+
+	return res;
+}
+
+struct rspamd_action *
+rspamd_config_get_action_by_type (struct rspamd_config *cfg,
+								  enum rspamd_action_type type)
+{
+	struct rspamd_action *cur, *tmp;
+
+	HASH_ITER (hh, cfg->actions, cur, tmp) {
+		if (cur->action_type == type) {
+			return cur;
+		}
+	}
+
+	return NULL;
+}
 
 gboolean
 rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
@@ -2067,6 +2239,12 @@ rspamd_action_from_str (const gchar *data, gint *result)
 	case 0x167C0DF4BAA9BCECULL: /* accept */
 		*result = METRIC_ACTION_NOACTION;
 		break;
+	case 0x4E9666ECCD3FC314ULL: /* quarantine */
+		*result = METRIC_ACTION_QUARANTINE;
+		break;
+	case 0x93B346242F7F69B3ULL: /* discard */
+		*result = METRIC_ACTION_DISCARD;
+		break;
 	default:
 		return FALSE;
 	}
@@ -2092,6 +2270,12 @@ rspamd_action_to_str (enum rspamd_action_type action)
 		return "no action";
 	case METRIC_ACTION_MAX:
 		return "invalid max action";
+	case METRIC_ACTION_CUSTOM:
+		return "custom";
+	case METRIC_ACTION_DISCARD:
+		return "discard";
+	case METRIC_ACTION_QUARANTINE:
+		return "quarantine";
 	}
 
 	return "unknown action";
@@ -2115,7 +2299,44 @@ rspamd_action_to_str_alt (enum rspamd_action_type action)
 		return "no action";
 	case METRIC_ACTION_MAX:
 		return "invalid max action";
+	case METRIC_ACTION_CUSTOM:
+		return "custom";
+	case METRIC_ACTION_DISCARD:
+		return "discard";
+	case METRIC_ACTION_QUARANTINE:
+		return "quarantine";
 	}
 
 	return "unknown action";
+}
+
+static int
+rspamd_actions_cmp (const struct rspamd_action *a1, const struct rspamd_action *a2)
+{
+	if (!isnan (a1->threshold) && !isnan (a2->threshold)) {
+		if (a1->threshold < a2->threshold) {
+			return -1;
+		}
+		else if (a1->threshold > a2->threshold) {
+			return 1;
+		}
+
+		return 0;
+	}
+
+	if (isnan (a1->threshold) && isnan (a2->threshold)) {
+		return 0;
+	}
+	else if (isnan (a1->threshold)) {
+		return 1;
+	}
+	else {
+		return -1;
+	}
+}
+
+void
+rspamd_actions_sort (struct rspamd_config *cfg)
+{
+	HASH_SORT (cfg->actions, rspamd_actions_cmp);
 }

@@ -44,7 +44,6 @@ end
 static const gchar *M = "rspamd lua dns resolver";
 
 struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L);
-void luaopen_dns_resolver (lua_State * L);
 
 /* Lua bindings */
 LUA_FUNCTION_DEF (dns_resolver, init);

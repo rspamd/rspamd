@@ -229,6 +229,7 @@ lua_html_has_property (lua_State *L)
 		 * - `unknown_element`
 		 * - `duplicate_element`
 		 * - `unbalanced`
+		 * - `data_urls`
 		 */
 		if (strcmp (propname, "no_html") == 0) {
 			ret = hc->flags & RSPAMD_HTML_FLAG_BAD_START;
@@ -248,6 +249,12 @@ lua_html_has_property (lua_State *L)
 		else if (strcmp (propname, "unbalanced") == 0) {
 			ret = hc->flags & RSPAMD_HTML_FLAG_UNBALANCED;
 		}
+		else if (strcmp (propname, "unbalanced") == 0) {
+			ret = hc->flags & RSPAMD_HTML_FLAG_UNBALANCED;
+		}
+		else if (strcmp (propname, "data_urls") == 0) {
+			ret = hc->flags & RSPAMD_HTML_FLAG_HAS_DATA_URLS;
+		}
 	}
 
 	lua_pushboolean (L, ret);
@@ -266,7 +273,21 @@ lua_html_push_image (lua_State *L, struct html_image *img)
 
 	if (img->src) {
 		lua_pushstring (L, "src");
-		lua_pushstring (L, img->src);
+
+		if (img->flags & RSPAMD_HTML_FLAG_IMAGE_DATA) {
+			struct rspamd_lua_text *t;
+
+			t = lua_newuserdata (L, sizeof (*t));
+			t->start = img->src;
+			t->len = strlen (img->src);
+			t->flags = 0;
+
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+		}
+		else {
+			lua_pushstring (L, img->src);
+		}
+
 		lua_settable (L, -3);
 	}
 
@@ -294,6 +315,9 @@ lua_html_push_image (lua_State *L, struct html_image *img)
 	lua_settable (L, -3);
 	lua_pushstring (L, "embedded");
 	lua_pushboolean (L, img->flags & RSPAMD_HTML_FLAG_IMAGE_EMBEDDED);
+	lua_settable (L, -3);
+	lua_pushstring (L, "data");
+	lua_pushboolean (L, img->flags & RSPAMD_HTML_FLAG_IMAGE_DATA);
 	lua_settable (L, -3);
 }
 

@@ -962,7 +962,7 @@ if opts['reporting'] == true then
                 table.insert(atmp, k)
               end
               local addr_string = table.concat(atmp, ', ')
-              local rhead = string.format(report_template,
+              local rhead = string.format(report_template:gsub("\n", "\r\n"),
 		  report_settings.from_name,
                   report_settings.email,
                   addr_string,
@@ -977,7 +977,7 @@ if opts['reporting'] == true then
                   report_start, report_end)
               conn:add_write(pre_quit_cb, {rhead,
                                            encoded,
-                                           report_footer,
+                                           report_footer:gsub("\n", "\r\n"),
                                            '\r\n.\r\n'})
             end
           end

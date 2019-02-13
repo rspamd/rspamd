@@ -21,7 +21,7 @@ lua-dirs:
 lua-doc: lua-dirs rspamd_regexp rspamd_ip rspamd_config rspamd_task ucl rspamd_http rspamd_trie \
 	rspamd_resolver rspamd_redis rspamd_upstream_list rspamd_expression rspamd_mimepart rspamd_logger rspamd_url \
 	rspamd_tcp rspamd_mempool rspamd_html rspamd_util rspamd_fann rspamd_sqlite3 rspamd_cryptobox rspamd_map \
-	lua_redis lua_util lua_maps lua_clickhouse lua_selectors
+	lua_redis lua_util lua_maps lua_clickhouse lua_selectors rspamd_udp
 
 lua_redis:
 	$(LLUADOC) < ../lualib/lua_redis.lua > markdown/lua/lua_redis.md
@@ -82,3 +82,5 @@ rspamd_cryptobox: ../src/lua/lua_cryptobox.c
 	$(LUADOC) < ../src/lua/lua_cryptobox.c > markdown/lua/rspamd_cryptobox.md
 rspamd_map: ../src/lua/lua_map.c
 	$(LUADOC) < ../src/lua/lua_map.c > markdown/lua/rspamd_map.md
+rspamd_udp: ../src/lua/lua_udp.c
+	$(LUADOC) < ../src/lua/lua_udp.c > markdown/lua/rspamd_udp.md

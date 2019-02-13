@@ -32,9 +32,10 @@ local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
 local function savapi_config(opts)
   local savapi_conf = {
-    scan_mime_parts = true;
-    scan_text_mime = false;
-    scan_image_mime = false;
+    name = N,
+    scan_mime_parts = true,
+    scan_text_mime = false,
+    scan_image_mime = false,
     default_port = 4444, -- note: You must set ListenAddress in savapi.conf
     product_id = 0,
     log_clean = false,
@@ -46,12 +47,18 @@ local function savapi_config(opts)
     tmpdir = '/tmp',
   }
 
-  for k,v in pairs(opts) do
-    savapi_conf[k] = v
-  end
+  savapi_conf = lua_util.override_defaults(savapi_conf, opts)
 
   if not savapi_conf.prefix then
-    savapi_conf.prefix = 'rs_ap'
+    savapi_conf.prefix = 'rs_' .. savapi_conf.name .. '_'
+  end
+
+  if not savapi_conf.log_prefix then
+    if savapi_conf.name:lower() == savapi_conf.type:lower() then
+      savapi_conf.log_prefix = savapi_conf.name
+    else
+      savapi_conf.log_prefix = savapi_conf.name .. ' (' .. savapi_conf.type .. ')'
+    end
   end
 
   if not savapi_conf['servers'] then
@@ -65,7 +72,7 @@ local function savapi_config(opts)
       savapi_conf.default_port)
 
   if savapi_conf['upstreams'] then
-    lua_util.add_debug_alias('antivirus', N)
+    lua_util.add_debug_alias('antivirus', savapi_conf.name)
     return savapi_conf
   end
 
@@ -112,15 +119,15 @@ local function savapi_check(task, content, digest, rule)
       for virus,_ in pairs(vnames) do
         table.insert(vnames_reordered, virus)
       end
-      lua_util.debugm(N, task, "%s: number of virus names found %s", rule['type'], #vnames_reordered)
+      lua_util.debugm(rule.name, task, "%s: number of virus names found %s", rule['type'], #vnames_reordered)
       if #vnames_reordered > 0 then
         local vname = {}
         for _,virus in ipairs(vnames_reordered) do
           table.insert(vname, virus)
         end
 
-        common.yield_result(task, rule, vname, N)
-        common.save_av_cache(task, digest, rule, vname, N)
+        common.yield_result(task, rule, vname)
+        common.save_av_cache(task, digest, rule, vname)
       end
       if conn then
         conn:close()
@@ -129,15 +136,15 @@ local function savapi_check(task, content, digest, rule)
 
     local function savapi_scan2_cb(err, data, conn)
       local result = tostring(data)
-      lua_util.debugm(N, task, "%s: got reply: %s",
-          rule['type'], result)
+      lua_util.debugm(rule.name, task, "%s: got reply: %s",
+          rule.type, result)
 
       -- Terminal response - clean
       if string.find(result, '200') or string.find(result, '210') then
         if rule['log_clean'] then
           rspamd_logger.infox(task, '%s: message or mime_part is clean', rule['type'])
         end
-        common.save_av_cache(task, digest, rule, 'OK', N)
+        common.save_av_cache(task, digest, rule, 'OK')
         conn:add_write(savapi_fin_cb, 'QUIT\n')
 
         -- Terminal response - infected
@@ -153,6 +160,7 @@ local function savapi_check(task, content, digest, rule)
           if not virus then
             rspamd_logger.errx(task, "%s: virus result unparseable: %s",
                 rule['type'], result)
+            common.yield_result(task, rule, 'virus result unparseable: ' .. result, 0.0, 'fail')
             return
           end
         end
@@ -171,13 +179,14 @@ local function savapi_check(task, content, digest, rule)
     local function savapi_greet2_cb(err, data, conn)
       local result = tostring(data)
       if string.find(result, '100 PRODUCT') then
-        lua_util.debugm(N, task, "%s: scanning file: %s",
+        lua_util.debugm(rule.name, task, "%s: scanning file: %s",
             rule['type'], fname)
         conn:add_write(savapi_scan1_cb, {string.format('SCAN %s\n',
             fname)})
       else
         rspamd_logger.errx(task, '%s: invalid product id %s', rule['type'],
             rule['product_id'])
+        common.yield_result(task, rule, 'invalid product id: ' .. result, 0.0, 'fail')
         conn:add_write(savapi_fin_cb, 'QUIT\n')
       end
     end
@@ -201,7 +210,9 @@ local function savapi_check(task, content, digest, rule)
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(N, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
+          lua_util.debugm(rule.name, task,
+              '%s [%s]: retry IP: %s', rule['symbol'],
+              rule['type'], addr)
 
           tcp.request({
             task = task,
@@ -213,7 +224,7 @@ local function savapi_check(task, content, digest, rule)
           })
         else
           rspamd_logger.errx(task, '%s [%s]: failed to scan, maximum retransmits exceed', rule['symbol'], rule['type'])
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and retransmits exceed')
+          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
         end
       else
         upstream:ok()
@@ -236,8 +247,8 @@ local function savapi_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule, N) then
-    if common.check_av_cache(task, digest, rule, savapi_check_uncached, N) then
+  if common.need_av_check(task, content, rule) then
+    if common.check_av_cache(task, digest, rule, savapi_check_uncached) then
       return
     else
       savapi_check_uncached()
@@ -250,5 +261,5 @@ return {
   description = 'savapi avira antivirus',
   configure = savapi_config,
   check = savapi_check,
-  name = 'savapi'
+  name = N
 }

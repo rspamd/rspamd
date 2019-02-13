@@ -16,6 +16,9 @@
 #ifndef UTHASH_STRCASE_H_
 #define UTHASH_STRCASE_H_
 
+#ifdef UTHASH_H
+#error Invalid include order: uthash is already included
+#endif
 
 /* Utils for uthash tuning */
 #ifndef HASH_CASELESS

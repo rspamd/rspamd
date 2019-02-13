@@ -20,7 +20,6 @@
 #include "dns.h"
 #include "rspamd.h"
 #include "utlist.h"
-#include "uthash.h"
 #include "rdns_event.h"
 #include "unix-std.h"
 

@@ -400,6 +400,13 @@ LUA_FUNCTION_DEF (util, is_utf_spoofed);
 LUA_FUNCTION_DEF (util, is_valid_utf8);
 
 /***
+ * @function util.has_obscured_unicode(str)
+ * Returns true if a string has obscure UTF symbols (zero width spaces, order marks), ignores invalid utf characters
+ * @return {boolean} true if a has obscured unicode characters (+ character and offset if found)
+ */
+LUA_FUNCTION_DEF (util, has_obscured_unicode);
+
+/***
  * @function util.readline([prompt])
  * Returns string read from stdin with history and editing support
  * @return {string} string read from the input (with line endings stripped)
@@ -609,6 +616,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, caseless_hash_fast),
 	LUA_INTERFACE_DEF (util, is_utf_spoofed),
 	LUA_INTERFACE_DEF (util, is_valid_utf8),
+	LUA_INTERFACE_DEF (util, has_obscured_unicode),
 	LUA_INTERFACE_DEF (util, readline),
 	LUA_INTERFACE_DEF (util, readpassphrase),
 	LUA_INTERFACE_DEF (util, file_exists),
@@ -750,7 +758,7 @@ lua_util_config_from_ucl (lua_State *L)
 			int_options = parse_config_options(str_options);
 		}
 		else {
-			msg_err_config ("config_from_ucl: second parameter is expected to be string");
+			msg_err ("config_from_ucl: second parameter is expected to be string");
 			ucl_object_unref (obj);
 			lua_pushnil (L);
 		}
@@ -765,7 +773,7 @@ lua_util_config_from_ucl (lua_State *L)
 		top = rspamd_rcl_config_init (cfg, NULL);
 
 		if (!rspamd_rcl_parse (top, cfg, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
-			msg_err_config ("rcl parse error: %s", err->message);
+			msg_err ("rcl parse error: %s", err->message);
 			ucl_object_unref (obj);
 			lua_pushnil (L);
 		}
@@ -2419,13 +2427,6 @@ lua_util_is_utf_spoofed (lua_State *L)
 	else if (s1) {
 		/* We have just s1, not s2 */
 		if (spc_sgl == NULL) {
-			USet *allowed = uset_openEmpty ();
-
-#if U_ICU_VERSION_MAJOR_NUM >= 51
-			uset_addAll (allowed, uspoof_getRecommendedSet (&uc_err));
-			uset_addAll (allowed, uspoof_getInclusionSet (&uc_err));
-#endif
-
 			spc_sgl = uspoof_open (&uc_err);
 
 			if (uc_err != U_ZERO_ERROR) {
@@ -2436,12 +2437,8 @@ lua_util_is_utf_spoofed (lua_State *L)
 			}
 
 			uspoof_setChecks (spc_sgl,
-					USPOOF_ALL_CHECKS & ~USPOOF_WHOLE_SCRIPT_CONFUSABLE,
+					USPOOF_INVISIBLE | USPOOF_MIXED_SCRIPT_CONFUSABLE | USPOOF_ANY_CASE,
 					&uc_err);
-#if U_ICU_VERSION_MAJOR_NUM >= 51
-			uspoof_setAllowedChars (spc_sgl, allowed, &uc_err);
-			uspoof_setRestrictionLevel (spc_sgl, USPOOF_MODERATELY_RESTRICTIVE);
-#endif
 		}
 
 		ret = uspoof_checkUTF8 (spc_sgl, s1, l1, NULL, &uc_err);
@@ -2605,6 +2602,37 @@ lua_util_is_valid_utf8 (lua_State *L)
 	else {
 		return luaL_error (L, "invalid arguments");
 	}
+
+	return 1;
+}
+
+static gint
+lua_util_has_obscured_unicode (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	const gchar *str;
+	gsize len;
+	gint32 i = 0, prev_i;
+	UChar32 uc;
+
+	str = lua_tolstring (L, 1, &len);
+
+	while (i < len) {
+		prev_i = i;
+		U8_NEXT (str, i, len, uc);
+
+		if (uc > 0) {
+			if (IS_OBSCURED_CHAR (uc)) {
+				lua_pushboolean (L, true);
+				lua_pushnumber (L, uc); /* Character */
+				lua_pushnumber (L, prev_i); /* Offset */
+
+				return 3;
+			}
+		}
+	}
+
+	lua_pushboolean (L, false);
 
 	return 1;
 }

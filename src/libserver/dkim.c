@@ -21,6 +21,7 @@
 #include "utlist.h"
 #include "unix-std.h"
 #include "mempool_vars_internal.h"
+#include "libcryptobox/ed25519/ed25519.h"
 
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
@@ -28,6 +29,10 @@
 
 /* special DNS tokens */
 #define DKIM_DNSKEYNAME     "_domainkey"
+
+/* ed25519 key lengths */
+#define ED25519_B64_BYTES	45
+#define ED25519_BYTES		32
 
 /* Canonization methods */
 #define DKIM_CANON_UNKNOWN  (-1)    /* unknown method */
@@ -76,6 +81,10 @@ enum rspamd_dkim_param_type {
         __VA_ARGS__)
 #define msg_debug_dkim(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_dkim_log_id, "dkim", ctx->pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+#define msg_debug_dkim_taskless(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_dkim_log_id, "dkim", "", \
         G_STRFUNC, \
         __VA_ARGS__)
 
@@ -135,7 +144,7 @@ struct rspamd_dkim_context_s {
 
 struct rspamd_dkim_key_s {
 	guint8 *keydata;
-	guint keylen;
+	gsize keylen;
 	gsize decoded_len;
 	guint ttl;
 	union {
@@ -146,6 +155,7 @@ struct rspamd_dkim_key_s {
 	enum rspamd_dkim_key_type type;
 	BIO *key_bio;
 	EVP_PKEY *key_evp;
+	time_t mtime;
 	ref_entry_t ref;
 };
 
@@ -153,18 +163,6 @@ struct rspamd_dkim_sign_context_s {
 	struct rspamd_dkim_common_ctx common;
 	rspamd_dkim_sign_key_t *key;
 };
-
-struct rspamd_dkim_sign_key_s {
-	enum rspamd_dkim_sign_key_type type;
-	guint8 *keydata;
-	gsize keylen;
-	RSA *key_rsa;
-	BIO *key_bio;
-	EVP_PKEY *key_evp;
-	time_t mtime;
-	ref_entry_t ref;
-};
-
 
 struct rspamd_dkim_header {
 	const gchar *name;
@@ -1342,21 +1340,18 @@ rspamd_dkim_sign_key_free (rspamd_dkim_sign_key_t *key)
 	if (key->key_evp) {
 		EVP_PKEY_free (key->key_evp);
 	}
-	if (key->key_rsa) {
-		RSA_free (key->key_rsa);
+	if (key->type == RSPAMD_DKIM_KEY_RSA) {
+		if (key->key.key_rsa) {
+			RSA_free (key->key.key_rsa);
+		}
 	}
 	if (key->key_bio) {
 		BIO_free (key->key_bio);
 	}
 
-	if (key->keydata && key->keylen > 0) {
-
-		if (key->type == RSPAMD_DKIM_SIGN_KEY_FILE) {
-			munmap (key->keydata, key->keylen);
-		}
-		else {
-			g_free (key->keydata);
-		}
+	if (key->type == RSPAMD_DKIM_KEY_EDDSA) {
+		rspamd_explicit_memzero (key->key.key_eddsa, key->keylen);
+		g_free (key->keydata);
 	}
 
 	g_free (key);
@@ -2609,145 +2604,156 @@ rspamd_dkim_get_dns_key (rspamd_dkim_context_t *ctx)
 	return NULL;
 }
 
+#define PEM_SIG "-----BEGIN"
+
 rspamd_dkim_sign_key_t*
-rspamd_dkim_sign_key_load (const gchar *what, gsize len,
-		enum rspamd_dkim_sign_key_type type,
+rspamd_dkim_sign_key_load (const gchar *key, gsize len,
+		enum rspamd_dkim_key_format type,
 		GError **err)
 {
-	gpointer map;
-	gsize map_len = 0;
+	guchar *map = NULL, *tmp = NULL;
+	gsize maplen;
 	rspamd_dkim_sign_key_t *nkey;
-	struct stat st;
-	time_t mtime = 0;
+	time_t mtime = time (NULL);
 
-	if (type == RSPAMD_DKIM_SIGN_KEY_FILE) {
-		gchar fpath[PATH_MAX];
-
-		rspamd_snprintf (fpath, sizeof (fpath), "%*s", (gint)len, what);
-
-		if (stat (fpath, &st) == -1) {
-			g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
-					"cannot stat private key %s: %s",
-					fpath, strerror (errno));
-
-			return NULL;
-		}
-
-		mtime = st.st_mtime;
-		map = rspamd_file_xmap (fpath, PROT_READ, &map_len, TRUE);
-
-		if (map == NULL) {
-			g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
-					"cannot map private key %s: %s",
-					fpath, strerror (errno));
-
-			return NULL;
-		}
+	if (type < 0 || type > RSPAMD_DKIM_KEY_UNKNOWN || len == 0 || key == NULL) {
+		g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
+				"invalid key type to load: %d", type);
+		return NULL;
 	}
 
 	nkey = g_malloc0 (sizeof (*nkey));
-	nkey->type = type;
 	nkey->mtime = mtime;
 
-	switch (type) {
-	case RSPAMD_DKIM_SIGN_KEY_FILE:
-		(void)mlock (map, len);
-		nkey->keydata = map;
-		nkey->keylen = map_len;
-		break;
-	case RSPAMD_DKIM_SIGN_KEY_BASE64:
-		nkey->keydata = g_malloc (len);
-		nkey->keylen = len;
-		rspamd_cryptobox_base64_decode (what, len, nkey->keydata,
-				&nkey->keylen);
-		break;
-	case RSPAMD_DKIM_SIGN_KEY_DER:
-	case RSPAMD_DKIM_SIGN_KEY_PEM:
-		nkey->keydata = g_malloc (len);
-		memcpy (nkey->keydata, what, len);
-		nkey->keylen = len;
-	}
+	msg_debug_dkim_taskless ("got public key with length %d and type %d",
+			len, type);
 
-	(void)mlock (nkey->keydata, nkey->keylen);
-	nkey->key_bio = BIO_new_mem_buf (nkey->keydata, nkey->keylen);
+	/* Load key file if needed */
+	if (type == RSPAMD_DKIM_KEY_FILE) {
+		struct stat st;
 
-	if (type == RSPAMD_DKIM_SIGN_KEY_DER || type == RSPAMD_DKIM_SIGN_KEY_BASE64) {
-		if (d2i_PrivateKey_bio (nkey->key_bio, &nkey->key_evp) == NULL) {
-			if (type == RSPAMD_DKIM_SIGN_KEY_FILE) {
-				g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
-						"cannot read private key from %*s: %s",
-						(gint)len, what,
-						ERR_error_string (ERR_get_error (), NULL));
-			}
-			else {
-				g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
-						"cannot read private key from string: %s",
-						ERR_error_string (ERR_get_error (), NULL));
-			}
-
-			rspamd_dkim_sign_key_free (nkey);
+		if (stat (key, &st) != 0) {
+			g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
+					"cannot stat key file: '%s' %s", key, strerror (errno));
 
 			return NULL;
 		}
+
+		nkey->mtime = st.st_mtime;
+		map = rspamd_file_xmap (key, PROT_READ, &maplen, TRUE);
+
+		if (map == NULL) {
+			g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
+					"cannot map key file: '%s' %s", key, strerror (errno));
+
+			return NULL;
+		}
+
+		key = map;
+		len = maplen;
+
+		if (maplen > sizeof (PEM_SIG) &&
+			strncmp (map, PEM_SIG, sizeof (PEM_SIG) - 1) == 0) {
+			type = RSPAMD_DKIM_KEY_PEM;
+		}
+		else if (rspamd_cryptobox_base64_is_valid (map, maplen)) {
+			type = RSPAMD_DKIM_KEY_BASE64;
+		}
+		else {
+			type = RSPAMD_DKIM_KEY_RAW;
+		}
+	}
+
+	if (type == RSPAMD_DKIM_KEY_UNKNOWN) {
+		if (len > sizeof (PEM_SIG) &&
+			memcmp (key, PEM_SIG, sizeof (PEM_SIG) - 1) == 0) {
+			type = RSPAMD_DKIM_KEY_PEM;
+		}
+		else {
+			type = RSPAMD_DKIM_KEY_RAW;
+		}
+	}
+
+	if (type == RSPAMD_DKIM_KEY_BASE64) {
+		type = RSPAMD_DKIM_KEY_RAW;
+		tmp = g_malloc (len);
+		rspamd_cryptobox_base64_decode (key, len, tmp, &len);
+		key = tmp;
+	}
+
+	if (type == RSPAMD_DKIM_KEY_RAW && len == 32) {
+		unsigned char pk[32];
+		nkey->type = RSPAMD_DKIM_KEY_EDDSA;
+		nkey->key.key_eddsa = g_malloc (
+				rspamd_cryptobox_sk_sig_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
+		ed25519_seed_keypair (pk, nkey->key.key_eddsa, (char *)key);
+		nkey->keylen = rspamd_cryptobox_sk_sig_bytes (RSPAMD_CRYPTOBOX_MODE_25519);
 	}
 	else {
-		if (!PEM_read_bio_PrivateKey (nkey->key_bio, &nkey->key_evp, NULL, NULL)) {
-			if (type == RSPAMD_DKIM_SIGN_KEY_FILE) {
-				g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
-						"cannot read private key from %*s: %s",
-						(gint)len, what,
-						ERR_error_string (ERR_get_error (), NULL));
-			}
-			else {
-				g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
-						"cannot read private key from string: %s",
-						ERR_error_string (ERR_get_error (), NULL));
-			}
+		nkey->key_bio = BIO_new_mem_buf (key, len);
 
-			rspamd_dkim_sign_key_free (nkey);
+		if (type == RSPAMD_DKIM_KEY_RAW) {
+			if (d2i_PrivateKey_bio (nkey->key_bio, &nkey->key_evp) == NULL) {
+				g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
+						"cannot parse raw private key: %s",
+						ERR_error_string (ERR_get_error (), NULL));
 
-			return NULL;
+				rspamd_dkim_sign_key_free (nkey);
+				nkey = NULL;
+
+				goto end;
+			}
 		}
-	}
+		else {
+			if (!PEM_read_bio_PrivateKey (nkey->key_bio, &nkey->key_evp, NULL, NULL)) {
+				g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
+						"cannot parse pem private key: %s",
+						ERR_error_string (ERR_get_error (), NULL));
+				rspamd_dkim_sign_key_free (nkey);
+				nkey = NULL;
 
-	nkey->key_rsa = EVP_PKEY_get1_RSA (nkey->key_evp);
-	if (nkey->key_rsa == NULL) {
-		g_set_error (err,
-				DKIM_ERROR,
-				DKIM_SIGERROR_KEYFAIL,
-				"cannot extract rsa key from evp key");
-		rspamd_dkim_sign_key_free (nkey);
+				goto end;
+			}
 
-		return NULL;
+		}
+		nkey->key.key_rsa = EVP_PKEY_get1_RSA (nkey->key_evp);
+		if (nkey->key.key_rsa == NULL) {
+			g_set_error (err,
+					DKIM_ERROR,
+					DKIM_SIGERROR_KEYFAIL,
+					"cannot extract rsa key from evp key");
+			rspamd_dkim_sign_key_free (nkey);
+			nkey = NULL;
+
+			goto end;
+		}
+		nkey->type = RSPAMD_DKIM_KEY_RSA;
 	}
 
 	REF_INIT_RETAIN (nkey, rspamd_dkim_sign_key_free);
 
+end:
+
+	if (map != NULL) {
+		munmap (map, maplen);
+	}
+
+	if (tmp != NULL) {
+		rspamd_explicit_memzero (tmp, len);
+		g_free (tmp);
+	}
+
 	return nkey;
 }
 
+#undef PEM_SIG
+
 gboolean
-rspamd_dkim_sign_key_maybe_invalidate (rspamd_dkim_sign_key_t *key,
-		enum rspamd_dkim_sign_key_type type,
-		const gchar *what, gsize len)
+rspamd_dkim_sign_key_maybe_invalidate (rspamd_dkim_sign_key_t *key, time_t mtime)
 {
-	struct stat st;
-
-	if (type == RSPAMD_DKIM_SIGN_KEY_FILE) {
-		gchar fpath[PATH_MAX];
-
-		rspamd_snprintf (fpath, sizeof (fpath), "%*s", (gint) len, what);
-
-		if (stat (fpath, &st) == -1) {
-			/* Prefer to use cached key since it is absent on FS */
-			return FALSE;
-		}
-
-		if (st.st_mtime > key->mtime) {
+	if (mtime > key->mtime) {
 			return TRUE;
-		}
 	}
-
 	return FALSE;
 }
 
@@ -2779,7 +2785,7 @@ rspamd_create_dkim_sign_context (struct rspamd_task *task,
 		return NULL;
 	}
 
-	if (!priv_key || !priv_key->key_rsa) {
+	if (!priv_key || (!priv_key->key.key_rsa && !priv_key->key.key_eddsa)) {
 		g_set_error (err,
 				DKIM_ERROR,
 				DKIM_SIGERROR_KEYFAIL,
@@ -2847,8 +2853,8 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 	gsize dlen = 0;
 	guint i, j;
 	gchar *b64_data;
-	guchar *rsa_buf;
-	guint rsa_len;
+	guchar *sig_buf;
+	guint sig_len;
 	guint headers_len = 0, cur_len = 0;
 	union rspamd_dkim_header_stat hstat;
 
@@ -2884,7 +2890,9 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 	hdr = g_string_sized_new (255);
 
 	if (ctx->common.type == RSPAMD_DKIM_NORMAL) {
-		rspamd_printf_gstring (hdr, "v=1; a=rsa-sha256; c=%s/%s; d=%s; s=%s; ",
+		rspamd_printf_gstring (hdr, "v=1; a=%s; c=%s/%s; d=%s; s=%s; ",
+				ctx->key->type == RSPAMD_DKIM_KEY_RSA ?
+						"rsa-sha256" : "ed25519-sha256",
 				ctx->common.header_canon_type == DKIM_CANON_RELAXED ?
 						"relaxed" : "simple",
 				ctx->common.body_canon_type == DKIM_CANON_RELAXED ?
@@ -2892,8 +2900,10 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 				domain, selector);
 	}
 	else if (ctx->common.type == RSPAMD_DKIM_ARC_SIG) {
-		rspamd_printf_gstring (hdr, "i=%d; a=rsa-sha256; c=%s/%s; d=%s; s=%s; ",
+		rspamd_printf_gstring (hdr, "i=%d; a=%s; c=%s/%s; d=%s; s=%s; ",
 				idx,
+				ctx->key->type == RSPAMD_DKIM_KEY_RSA ?
+						"rsa-sha256" : "ed25519-sha256",
 				ctx->common.header_canon_type == DKIM_CANON_RELAXED ?
 						"relaxed" : "simple",
 				ctx->common.body_canon_type == DKIM_CANON_RELAXED ?
@@ -2902,8 +2912,10 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 	}
 	else {
 		g_assert (arc_cv != NULL);
-		rspamd_printf_gstring (hdr, "i=%d; a=rsa-sha256; c=%s/%s; d=%s; s=%s; cv=%s; ",
+		rspamd_printf_gstring (hdr, "i=%d; a=%s; c=%s/%s; d=%s; s=%s; cv=%s; ",
 				arc_cv,
+				ctx->key->type == RSPAMD_DKIM_KEY_RSA ?
+						"rsa-sha256" : "ed25519-sha256",
 				idx,
 				domain, selector);
 	}
@@ -3035,24 +3047,37 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 
 	dlen = EVP_MD_CTX_size (ctx->common.headers_hash);
 	EVP_DigestFinal_ex (ctx->common.headers_hash, raw_digest, NULL);
-	rsa_len = RSA_size (ctx->key->key_rsa);
-	rsa_buf = g_alloca (rsa_len);
+	if (ctx->key->type == RSPAMD_DKIM_KEY_RSA) {
+		sig_len = RSA_size (ctx->key->key.key_rsa);
+		sig_buf = g_alloca (sig_len);
 
-	if (RSA_sign (NID_sha256, raw_digest, dlen, rsa_buf, &rsa_len,
-			ctx->key->key_rsa) != 1) {
+		if (RSA_sign (NID_sha256, raw_digest, dlen, sig_buf, &sig_len,
+				ctx->key->key.key_rsa) != 1) {
+			g_string_free (hdr, TRUE);
+			msg_err_task ("rsa sign error: %s",
+					ERR_error_string (ERR_get_error (), NULL));
+
+			return NULL;
+		}
+	} else if (ctx->key->type == RSPAMD_DKIM_KEY_EDDSA) {
+		sig_len = rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519);
+		sig_buf = g_alloca (sig_len);
+
+		rspamd_cryptobox_sign (sig_buf, NULL, raw_digest, dlen,
+				ctx->key->key.key_eddsa, RSPAMD_CRYPTOBOX_MODE_25519);
+	} else {
 		g_string_free (hdr, TRUE);
-		msg_err_task ("rsa sign error: %s",
-				ERR_error_string (ERR_get_error (), NULL));
+		msg_err_task ("unsupported key type for signing");
 
 		return NULL;
 	}
 
 	if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
-		b64_data = rspamd_encode_base64_fold (rsa_buf, rsa_len, 70, NULL,
+		b64_data = rspamd_encode_base64_fold (sig_buf, sig_len, 70, NULL,
 				RSPAMD_TASK_NEWLINES_LF);
 	}
 	else {
-		b64_data = rspamd_encode_base64_fold (rsa_buf, rsa_len, 70, NULL,
+		b64_data = rspamd_encode_base64_fold (sig_buf, sig_len, 70, NULL,
 				task->nlines_type);
 	}
 
@@ -3067,29 +3092,26 @@ rspamd_dkim_match_keys (rspamd_dkim_key_t *pk,
 								 rspamd_dkim_sign_key_t *sk,
 								 GError **err)
 {
-	const BIGNUM *n1, *n2;
-
 	if (pk == NULL || sk == NULL) {
 		g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
 				"missing public or private key");
 		return FALSE;
 	}
-
-	if (pk->type != RSPAMD_DKIM_KEY_RSA) {
+	if (pk->type != sk->type) {
 		g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
-				"pubkey is not RSA key");
+				"public and private key types do not match");
 		return FALSE;
 	}
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
-	RSA_get0_key (pk->key.key_rsa, &n1, NULL, NULL);
-	RSA_get0_key (sk->key_rsa, &n2, NULL, NULL);
-#else
-	n1 = pk->key.key_rsa->n;
-	n2 = sk->key_rsa->n;
-#endif
+	if (pk->type == RSPAMD_DKIM_KEY_EDDSA) {
+		if (memcmp(sk->key.key_eddsa + 32, pk->key.key_eddsa, 32) != 0) {
+			g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYHASHMISMATCH,
+					"pubkey does not match private key");
+			return FALSE;
+		}
 
-	if (BN_cmp (n1, n2) != 0) {
+	}
+	else if (EVP_PKEY_cmp (pk->key_evp, sk->key_evp) != 1) {
 		g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYHASHMISMATCH,
 				"pubkey does not match private key");
 		return FALSE;

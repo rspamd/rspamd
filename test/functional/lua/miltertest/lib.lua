@@ -108,3 +108,12 @@ function check_subject_rw(subj, tmpl)
     error "subject not rewritten"
   end
 end
+
+function check_headers(count)
+  for i=0, count-1 do
+    local hdr = mt.getheader(conn, "DKIM-Signature", i)
+    if not hdr then
+      error (string.format("Signature %s not added", i))
+    end
+  end
+end

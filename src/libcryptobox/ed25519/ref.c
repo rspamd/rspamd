@@ -23,7 +23,7 @@
 #include "ottery.h"
 #include <openssl/evp.h> /* SHA512 */
 
-static int
+int
 ed_seed_keypair_ref (unsigned char *pk, unsigned char *sk,
 		const unsigned char *seed)
 {

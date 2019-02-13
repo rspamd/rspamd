@@ -391,6 +391,32 @@ rspamd_strlcpy_fast (gchar *dst, const gchar *src, gsize siz)
 	return (d - dst);
 }
 
+gsize
+rspamd_null_safe_copy (const gchar *src, gsize srclen,
+					   gchar *dest, gsize destlen)
+{
+	gsize copied = 0, si = 0, di = 0;
+
+	if (destlen == 0) {
+		return 0;
+	}
+
+	while (si < srclen && di + 1 < destlen) {
+		if (src[si] != '\0') {
+			dest[di++] = src[si++];
+			copied ++;
+		}
+		else {
+			si ++;
+		}
+	}
+
+	dest[di] = '\0';
+
+	return copied;
+}
+
+
 size_t
 rspamd_strlcpy_safe (gchar *dst, const gchar *src, gsize siz)
 {
@@ -1394,7 +1420,33 @@ rspamd_header_value_fold (const gchar *name,
 	case after_quote:
 		g_string_append_len (res, c, p - c);
 		break;
-
+	case fold_token:
+		/* Here, we have token start at 'c' and token end at 'p' */
+		if (g_ascii_isspace (res->str[res->len - 1])) {
+			g_string_append_len (res, c, p - c);
+		}
+		else {
+			if (*c != '\r' && *c != '\n') {
+				/* We need to add folding as well */
+				switch (how) {
+				case RSPAMD_TASK_NEWLINES_LF:
+					g_string_append_len (res, "\n\t", 2);
+					break;
+				case RSPAMD_TASK_NEWLINES_CR:
+					g_string_append_len (res, "\r\t", 2);
+					break;
+				case RSPAMD_TASK_NEWLINES_CRLF:
+				default:
+					g_string_append_len (res, "\r\n\t", 3);
+					break;
+				}
+				g_string_append_len (res, c, p - c);
+			}
+			else {
+				g_string_append_len (res, c, p - c);
+			}
+		}
+		break;
 	default:
 		g_assert (p == c);
 		break;
@@ -1931,7 +1983,7 @@ rspamd_decode_qp_buf (const gchar *in, gsize inlen,
 	gchar *o, *end, *pos, c;
 	const gchar *p;
 	guchar ret;
-	gsize remain, processed;
+	gssize remain, processed;
 
 	p = in;
 	o = out;
@@ -1963,6 +2015,14 @@ decode:
 				while (remain > 0 && (*p == '\r' || *p == '\n')) {
 					remain --;
 					p ++;
+				}
+
+				continue;
+			}
+			else {
+				/* Hack, hack, hack, treat =<garbadge> as =<garbadge> */
+				if (remain > 0) {
+					*o++ = *(p - 1);
 				}
 
 				continue;
@@ -2412,7 +2472,7 @@ rspamd_get_unicode_normalizer (void)
 }
 
 
-gboolean
+enum rspamd_normalise_result
 rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
 		guint *len)
 {
@@ -2422,7 +2482,8 @@ rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
 	const UNormalizer2 *norm = rspamd_get_unicode_normalizer ();
 	gint32 nsym, end;
 	UChar *src = NULL, *dest = NULL;
-	gboolean ret = FALSE;
+	enum rspamd_normalise_result ret = 0;
+	gboolean has_invisible = FALSE;
 
 	/* We first need to convert data to UChars :( */
 	src = g_malloc ((*len + 1) * sizeof (*src));
@@ -2432,6 +2493,7 @@ rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
 	if (!U_SUCCESS (uc_err)) {
 		msg_warn_pool_check ("cannot normalise URL, cannot convert to unicode: %s",
 				u_errorName (uc_err));
+		ret |= RSPAMD_UNICODE_NORM_ERROR;
 		goto out;
 	}
 
@@ -2441,36 +2503,81 @@ rspamd_normalise_unicode_inplace (rspamd_mempool_t *pool, gchar *start,
 	if (!U_SUCCESS (uc_err)) {
 		msg_warn_pool_check ("cannot normalise URL, cannot check normalisation: %s",
 				u_errorName (uc_err));
+		ret |= RSPAMD_UNICODE_NORM_ERROR;
 		goto out;
 	}
 
-	if (end == nsym) {
-		/* No normalisation needed */
-		goto out;
+	for (gint32 i = 0; i < nsym; i ++) {
+		if (IS_ZERO_WIDTH_SPACE (src[i])) {
+			has_invisible = TRUE;
+			break;
+		}
 	}
 
-	/* We copy sub(src, 0, end) to dest and normalise the rest */
-	ret = TRUE;
-	dest = g_malloc (nsym * sizeof (*dest));
-	memcpy (dest, src, end * sizeof (*dest));
-	nsym = unorm2_normalizeSecondAndAppend (norm, dest, end, nsym,
-			src + end, nsym - end, &uc_err);
+	uc_err = U_ZERO_ERROR;
 
-	if (!U_SUCCESS (uc_err)) {
-		if (uc_err != U_BUFFER_OVERFLOW_ERROR) {
-			msg_warn_pool_check ("cannot normalise URL: %s",
-					u_errorName (uc_err));
+	if (end != nsym) {
+		/* No normalisation needed, but we may still have invisible spaces */
+		/* We copy sub(src, 0, end) to dest and normalise the rest */
+		ret |= RSPAMD_UNICODE_NORM_UNNORMAL;
+		dest = g_malloc (nsym * sizeof (*dest));
+		memcpy (dest, src, end * sizeof (*dest));
+		nsym = unorm2_normalizeSecondAndAppend (norm, dest, end, nsym,
+				src + end, nsym - end, &uc_err);
+
+		if (!U_SUCCESS (uc_err)) {
+			if (uc_err != U_BUFFER_OVERFLOW_ERROR) {
+				msg_warn_pool_check ("cannot normalise URL: %s",
+						u_errorName (uc_err));
+				ret |= RSPAMD_UNICODE_NORM_ERROR;
+			}
+
+			goto out;
+		}
+	}
+	else if (!has_invisible) {
+		goto out;
+	}
+	else {
+		dest = src;
+		src = NULL;
+	}
+
+	if (has_invisible) {
+		/* Also filter zero width spaces */
+		gint32 new_len = 0;
+		UChar *t = dest, *h = dest;
+
+		ret |= RSPAMD_UNICODE_NORM_ZERO_SPACES;
+
+		for (gint32 i = 0; i < nsym; i ++) {
+			if (!IS_ZERO_WIDTH_SPACE (*h)) {
+				*t++ = *h++;
+				new_len ++;
+			}
+			else {
+				h ++;
+			}
 		}
 
-		goto out;
+		nsym = new_len;
 	}
 
 	/* We now convert it back to utf */
 	nsym = ucnv_fromUChars (utf8_conv, start, *len, dest, nsym, &uc_err);
 
 	if (!U_SUCCESS (uc_err)) {
-		msg_warn_pool_check ("cannot normalise URL, cannot convert to UTF8: %s",
-				u_errorName (uc_err));
+		msg_warn_pool_check ("cannot normalise URL, cannot convert to UTF8: %s"
+					   " input length: %d chars, unicode length: %d utf16 symbols",
+				u_errorName (uc_err), (gint)*len, (gint)nsym);
+
+		if (uc_err == U_BUFFER_OVERFLOW_ERROR) {
+			ret |= RSPAMD_UNICODE_NORM_OVERFLOW;
+		}
+		else {
+			ret |= RSPAMD_UNICODE_NORM_ERROR;
+		}
+
 		goto out;
 	}
 
@@ -2647,8 +2754,9 @@ rspamd_str_make_utf_valid (const gchar *src, gsize slen, gsize *dstlen)
 	GString *dst;
 	const gchar *last;
 	gchar *dchar;
-	gsize i, valid, prev;
+	gsize valid, prev;
 	UChar32 uc;
+	gint32 i;
 
 	if (src == NULL) {
 		return NULL;
@@ -2696,4 +2804,105 @@ rspamd_str_make_utf_valid (const gchar *src, gsize slen, gsize *dstlen)
 	g_string_free (dst, FALSE);
 
 	return dchar;
+}
+
+gsize
+rspamd_gstring_strip (GString *s, const gchar *strip_chars)
+{
+	const gchar *p, *sc;
+	gsize strip_len = 0, total = 0;
+
+	p = s->str + s->len - 1;
+
+	while (p >= s->str) {
+		gboolean seen = FALSE;
+
+		sc = strip_chars;
+
+		while (*sc != '\0') {
+			if (*p == *sc) {
+				strip_len ++;
+				seen = TRUE;
+				break;
+			}
+
+			sc ++;
+		}
+
+		if (!seen) {
+			break;
+		}
+
+		p --;
+	}
+
+	if (strip_len > 0) {
+		s->len -= strip_len;
+		s->str[s->len] = '\0';
+		total += strip_len;
+	}
+
+	if (s->len > 0) {
+		strip_len = rspamd_memspn (s->str, strip_chars, s->len);
+
+		if (strip_len > 0) {
+			memmove (s->str, s->str + strip_len, s->len - strip_len);
+			s->len -= strip_len;
+			total += strip_len;
+		}
+	}
+
+	return total;
+}
+
+const gchar* rspamd_string_len_strip (const gchar *in,
+									  gsize *len,
+									  const gchar *strip_chars)
+{
+	const gchar *p, *sc;
+	gsize strip_len = 0, old_len = *len;
+
+	p = in + old_len - 1;
+
+	/* Trail */
+	while (p >= in) {
+		gboolean seen = FALSE;
+
+		sc = strip_chars;
+
+		while (*sc != '\0') {
+			if (*p == *sc) {
+				strip_len ++;
+				seen = TRUE;
+				break;
+			}
+
+			sc ++;
+		}
+
+		if (!seen) {
+			break;
+		}
+
+		p --;
+	}
+
+	if (strip_len > 0) {
+		*len -= strip_len;
+	}
+
+	/* Head */
+	old_len = *len;
+
+	if (old_len > 0) {
+		strip_len = rspamd_memspn (in, strip_chars, old_len);
+
+		if (strip_len > 0) {
+			*len -= strip_len;
+
+			return in + strip_len;
+		}
+	}
+
+	return in;
 }

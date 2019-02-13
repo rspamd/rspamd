@@ -16,7 +16,7 @@ limitations under the License.
 
 local argparse = require "argparse"
 local ansicolors = require "ansicolors"
---local rspamd_util = require "rspamd_util"
+local rspamd_util = require "rspamd_util"
 local rspamd_task = require "rspamd_task"
 local rspamd_logger = require "rspamd_logger"
 local lua_meta = require "lua_meta"
@@ -153,6 +153,42 @@ modify:option "-H --html-footer"
       :description "Adds footer to text/html parts from a specific file"
       :argname "<file>"
 
+local sign = parser:command "sign"
+                     :description "Performs DKIM signing"
+sign:argument "file"
+      :description "File to process"
+      :argname "<file>"
+      :args "+"
+
+sign:option "-d --domain"
+    :description "Use specific domain"
+    :argname "<domain>"
+    :count "1"
+sign:option "-s --selector"
+    :description "Use specific selector"
+    :argname "<selector>"
+    :count "1"
+sign:option "-k --key"
+    :description "Use specific key of file"
+    :argname "<key>"
+    :count "1"
+sign:option "-t type"
+    :description "ARC or DKIM signing"
+    :argname("<arc|dkim>")
+    :convert {
+      ['arc'] = 'arc',
+      ['dkim'] = 'dkim',
+    }
+    :default 'dkim'
+sign:option "-o --output"
+    :description "Output format"
+    :argname("<message|signature>")
+    :convert {
+      ['message'] = 'message',
+      ['signature'] = 'signature',
+    }
+    :default 'message'
+
 local function load_config(opts)
   local _r,err = rspamd_config:load_ucl(opts['config'])
 
@@ -170,7 +206,7 @@ end
 
 local function load_task(opts, fname)
   if not fname then
-    parser:error('no file specified')
+    fname = '-'
   end
 
   local res,task = rspamd_task.load_from_file(fname, rspamd_config)
@@ -583,22 +619,21 @@ local function urls_handler(opts)
   print_elts(out_elts, opts)
 end
 
+local function newline(task)
+  local t = task:get_newlines_type()
+
+  if t == 'cr' then
+    return '\r'
+  elseif t == 'lf' then
+    return '\n'
+  end
+
+  return '\r\n'
+end
+
 local function modify_handler(opts)
-  local rspamd_util = require "rspamd_util"
   load_config(opts)
   rspamd_url.init(rspamd_config:get_tld_path())
-
-  local function newline(task)
-    local t = task:get_newlines_type()
-
-    if t == 'cr' then
-      return '\r'
-    elseif t == 'lf' then
-      return '\n'
-    end
-
-    return '\r\n'
-  end
 
   local function read_file(file)
     local f = assert(io.open(file, "rb"))
@@ -607,7 +642,7 @@ local function modify_handler(opts)
     return content
   end
 
-  local function do_append_footer(task, part, footer, is_multipart)
+  local function do_append_footer(task, part, footer, is_multipart, out)
     local newline_s = newline(task)
     local tp = part:get_text()
     local ct = 'text/plain'
@@ -622,10 +657,10 @@ local function modify_handler(opts)
     end
 
     if is_multipart then
-      io.write(string.format('Content-Type: %s; charset=utf-8%s'..
-          'Content-Transfer-Encoding: %s%s%s',
-          ct, newline_s, cte, newline_s, newline_s))
-      io.flush()
+      out[#out + 1] = string.format('Content-Type: %s; charset=utf-8%s'..
+          'Content-Transfer-Encoding: %s',
+          ct, newline_s, cte)
+      out[#out + 1] = ''
     end
 
     local content = tostring(tp:get_content('raw_utf') or '')
@@ -636,16 +671,15 @@ local function modify_handler(opts)
       content = string.format('%s%s',
           content:sub(-(#newline_s), #newline_s + 1), -- content without last newline
           footer)
-      rspamd_util.encode_qp(content,
-          80, task:get_newlines_type()):save_in_file(1)
-      io.write(double_nline)
+      out[#out + 1] = {rspamd_util.encode_qp(content,
+          80, task:get_newlines_type()), true}
+      out[#out + 1] = ''
     else
       content = content .. footer
-      rspamd_util.encode_qp(content,
-          80, task:get_newlines_type()):save_in_file(1)
-      io.write(double_nline)
+      out[#out + 1] = {rspamd_util.encode_qp(content,
+          80, task:get_newlines_type()), true}
+      out[#out + 1] = ''
     end
-
 
   end
 
@@ -665,6 +699,7 @@ local function modify_handler(opts)
     local need_rewrite_ct = false
     local parsed_ct
     local seen_cte = false
+    local out = {}
 
     local function process_headers_cb(name, hdr)
 
@@ -678,31 +713,31 @@ local function modify_handler(opts)
         local hname,hpattern = h:match('^([^=]+)=(.+)$')
         if hname == name then
           local new_value = string.format(hpattern, hdr.decoded)
-          new_value = string.format('%s:%s%s%s',
+          new_value = string.format('%s:%s%s',
               name, hdr.separator,
               rspamd_util.fold_header(name,
                   rspamd_util.mime_header_encode(new_value),
-                  task:get_newlines_type()), newline_s)
-          io.write(new_value)
+                  task:get_newlines_type()))
+          out[#out + 1] = new_value
           return
         end
       end
 
       if need_rewrite_ct then
         if name:lower() == 'content-type' then
-          local nct = string.format('%s: %s/%s; charset=utf-8%s',
-              'Content-Type', parsed_ct.type, parsed_ct.subtype, newline_s)
-          io.write(nct)
+          local nct = string.format('%s: %s/%s; charset=utf-8',
+              'Content-Type', parsed_ct.type, parsed_ct.subtype)
+          out[#out + 1] = nct
           return
         elseif name:lower() == 'content-transfer-encoding' then
           seen_cte = true
-          io.write(string.format('%s: %s%s',
-              'Content-Transfer-Encoding', 'quoted-printable', newline_s))
+          out[#out + 1] = string.format('%s: %s',
+              'Content-Transfer-Encoding', 'quoted-printable')
           return
         end
       end
 
-      io.write(hdr.raw)
+      out[#out + 1] = hdr.raw:gsub('\r?\n?$', '')
     end
 
     if html_footer or text_footer then
@@ -755,19 +790,19 @@ local function modify_handler(opts)
       local hname,hvalue = h:match('^([^=]+)=(.+)$')
 
       if hname and hvalue then
-        io.write(string.format('%s: %s%s', hname,
-            rspamd_util.fold_header(hname, hvalue, task:get_newlines_type()),
-            newline_s))
+        out[#out + 1] = string.format('%s: %s', hname,
+            rspamd_util.fold_header(hname, hvalue, task:get_newlines_type()))
       end
     end
 
     if not seen_cte and need_rewrite_ct then
-      io.write(string.format('%s: %s%s',
-          'Content-Transfer-Encoding', 'quoted-printable', newline_s))
+      out[#out + 1] = string.format('%s: %s',
+          'Content-Transfer-Encoding', 'quoted-printable')
     end
 
     -- End of headers
-    io.write(newline_s)
+    --local eoh_pos = #out
+    out[#out + 1] = ''
 
     local boundaries = {}
     local cur_boundary
@@ -776,36 +811,31 @@ local function modify_handler(opts)
       local boundary = part:get_boundary()
       if part:is_multipart() then
         if cur_boundary then
-          io.write(string.format('--%s%s',
-              boundaries[#boundaries], newline_s))
+          out[#out + 1] = string.format('--%s',
+              boundaries[#boundaries])
         end
 
         boundaries[#boundaries + 1] = boundary or '--XXX'
         cur_boundary = boundary
-        io.flush ()
 
         local rh = part:get_raw_headers()
         if #rh > 0 then
-          rh:save_in_file(1)
-          io.write(newline_s)
-          io.flush()
+          out[#out + 1] = {rh, true}
         end
       elseif part:is_message() then
         if boundary then
           if cur_boundary and boundary ~= cur_boundary then
             -- Need to close boundary
-            io.write(string.format('--%s--%s%s',
-                boundaries[#boundaries], newline_s, newline_s))
+            out[#out + 1] = string.format('--%s--%s',
+                boundaries[#boundaries], newline_s)
             table.remove(boundaries)
             cur_boundary = nil
           end
-          io.write(string.format('--%s%s',
-              boundary, newline_s))
+          out[#out + 1] = string.format('--%s',
+              boundary)
         end
 
-        io.flush()
-        part:get_raw_headers():save_in_file(1)
-        io.write(newline_s)
+        out[#out + 1] = {part:get_raw_headers(), true}
       else
         local append_footer = false
         local skip_footer = part:is_attachment()
@@ -838,25 +868,23 @@ local function modify_handler(opts)
         if boundary then
           if cur_boundary and boundary ~= cur_boundary then
             -- Need to close boundary
-            io.write(string.format('--%s--%s%s',
-                boundaries[#boundaries], newline_s, newline_s))
+            out[#out + 1] = string.format('--%s--%s',
+                boundaries[#boundaries], newline_s)
             table.remove(boundaries)
             cur_boundary = boundary
           end
-          io.write(string.format('--%s%s',
-              boundary, newline_s))
+          out[#out + 1] = string.format('--%s',
+              boundary)
         end
 
         io.flush()
 
         if append_footer and not skip_footer then
           do_append_footer(task, part, append_footer,
-              parent and parent:is_multipart())
+              parent and parent:is_multipart(), out)
         else
-          part:get_raw_headers():save_in_file(1)
-          io.write(newline_s)
-          io.flush()
-          part:get_raw_content():save_in_file(1)
+          out[#out + 1] = {part:get_raw_headers(), true}
+          out[#out + 1] = {part:get_raw_content(), false}
         end
       end
     end
@@ -864,11 +892,79 @@ local function modify_handler(opts)
     -- Close remaining
     local b = table.remove(boundaries)
     while b do
-      io.write(string.format('--%s--%s', b, newline_s))
+      out[#out + 1] = string.format('--%s--', b)
       if #boundaries > 0 then
-        io.write(newline_s)
+        out[#out + 1] = ''
       end
       b = table.remove(boundaries)
+    end
+
+    for _,o in ipairs(out) do
+      if type(o) == 'string' then
+        io.write(o)
+        io.write(newline_s)
+      else
+        io.flush()
+        o[1]:save_in_file(1)
+
+        if o[2] then
+          io.write(newline_s)
+        end
+      end
+    end
+
+    task:destroy() -- No automatic dtor
+  end
+end
+
+local function sign_handler(opts)
+  load_config(opts)
+  rspamd_url.init(rspamd_config:get_tld_path())
+
+  local lua_dkim = require("lua_ffi").dkim
+
+  local sign_key
+  if rspamd_util.file_exists(opts.key) then
+    sign_key = lua_dkim.load_sign_key(opts.key, 'file')
+  else
+    sign_key = lua_dkim.load_sign_key(opts.key, 'base64')
+  end
+
+  if not sign_key then
+    io.stderr:write('Cannot load key: ' .. opts.key .. '\n')
+    os.exit(1)
+  end
+
+  for _,fname in ipairs(opts.file) do
+    local task = load_task(opts, fname)
+    local ctx = lua_dkim.create_sign_context(task, sign_key, nil, opts.algorithm)
+
+    if not ctx then
+      io.stderr:write('Cannot init signing\n')
+      os.exit(1)
+    end
+
+    local sig = lua_dkim.do_sign(task, ctx, opts.selector, opts.domain)
+
+    if not sig then
+      io.stderr:write('Cannot create signature\n')
+      os.exit(1)
+    end
+
+    if opts.output == 'signature' then
+      io.write(sig)
+      io.write('\n')
+      io.flush()
+    else
+      local dkim_hdr = string.format('%s: %s%s',
+          'DKIM-Signature',
+          rspamd_util.fold_header('DKIM-Signature',
+              rspamd_util.mime_header_encode(sig),
+              task:get_newlines_type()),
+          newline(task))
+      io.write(dkim_hdr)
+      io.flush()
+      task:get_content():save_in_file(1)
     end
 
     task:destroy() -- No automatic dtor
@@ -894,6 +990,8 @@ local function handler(args)
     urls_handler(opts)
   elseif command == 'modify' then
     modify_handler(opts)
+  elseif command == 'sign' then
+    sign_handler(opts)
   else
     parser:error('command %s is not implemented', command)
   end

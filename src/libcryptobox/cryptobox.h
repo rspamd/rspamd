@@ -399,4 +399,13 @@ guint64 rspamd_cryptobox_fast_hash_specific (
  */
 gboolean rspamd_cryptobox_base64_decode (const gchar *in, gsize inlen,
 		guchar *out, gsize *outlen);
+
+/**
+ * Returns TRUE if data looks like a valid base64 string
+ * @param in
+ * @param inlen
+ * @return
+ */
+gboolean rspamd_cryptobox_base64_is_valid (const gchar *in, gsize inlen);
+
 #endif /* CRYPTOBOX_H_ */

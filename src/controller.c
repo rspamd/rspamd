@@ -15,6 +15,7 @@
  */
 #include "config.h"
 #include "libserver/dynamic_cfg.h"
+#include "libserver/cfg_file_private.h"
 #include "libutil/rrd.h"
 #include "libutil/map.h"
 #include "libutil/map_helpers.h"
@@ -864,8 +865,7 @@ rspamd_controller_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_http_message *msg)
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
-	struct rspamd_action *act;
-	gint i;
+	struct rspamd_action *act, *tmp;
 	ucl_object_t *obj, *top;
 
 	if (!rspamd_controller_check_password (conn_ent, session, msg, FALSE)) {
@@ -874,15 +874,14 @@ rspamd_controller_handle_actions (struct rspamd_http_connection_entry *conn_ent,
 
 	top = ucl_object_typed_new (UCL_ARRAY);
 
-	/* Get actions for default metric */
-	for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
-		act = &session->cfg->actions[i];
+	HASH_ITER (hh, session->cfg->actions, act, tmp) {
 		obj = ucl_object_typed_new (UCL_OBJECT);
 		ucl_object_insert_key (obj,
-				ucl_object_fromstring (rspamd_action_to_str (
-						act->action)), "action", 0, false);
-		ucl_object_insert_key (obj, ucl_object_fromdouble (
-				act->score), "value", 0, false);
+				ucl_object_fromstring (act->name),
+				"action", 0, false);
+		ucl_object_insert_key (obj,
+				ucl_object_fromdouble (act->threshold),
+				"value", 0, false);
 		ucl_array_append (top, obj);
 	}
 
@@ -2238,8 +2237,8 @@ rspamd_controller_handle_saveactions (
 			score = ucl_object_todouble (cur);
 		}
 
-		if ((isnan (session->cfg->actions[act].score) != isnan (score)) ||
-				(session->cfg->actions[act].score != score)) {
+		if ((isnan (session->cfg->actions[act].threshold) != isnan (score)) ||
+				(session->cfg->actions[act].threshold != score)) {
 			add_dynamic_action (ctx->cfg, DEFAULT_METRIC, act, score);
 			added ++;
 		}

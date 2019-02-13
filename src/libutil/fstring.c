@@ -375,6 +375,19 @@ rspamd_ftok_cmp (const rspamd_ftok_t *s1,
 	return s1->len - s2->len;
 }
 
+gboolean
+rspamd_ftok_starts_with (const rspamd_ftok_t *s1,
+						 const rspamd_ftok_t *s2)
+{
+	g_assert (s1 != NULL && s2 != NULL);
+
+	if (s1->len >= s2->len) {
+		return !!(memcmp (s1->begin, s2->begin, s2->len) == 0);
+	}
+
+	return FALSE;
+}
+
 void
 rspamd_fstring_mapped_ftok_free (gpointer p)
 {

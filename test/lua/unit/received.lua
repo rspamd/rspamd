@@ -2,6 +2,7 @@
 
 context("Received headers parser", function()
   local ffi = require("ffi")
+  local rspamd_ip = require "rspamd_ip"
 
   ffi.cdef[[
     struct received_header {
@@ -24,6 +25,31 @@ context("Received headers parser", function()
   ]]
 
   local cases = {
+    {[[from smtp11.mailtrack.pl (smtp11.mailtrack.pl [185.243.30.90])]],
+     {
+       real_ip = '185.243.30.90',
+       real_hostname = 'smtp11.mailtrack.pl'
+     },
+    },
+    {[[from asx121.turbo-inline.com [7.165.23.113] by mx.reskind.net with QMQP; Fri, 08 Feb 2019 06:56:18 -0500]],
+     {
+       real_ip = '7.165.23.113',
+       real_hostname = 'asx121.turbo-inline.com',
+     }
+    },
+    {[[from server.chat-met-vreemden.nl (unknown [IPv6:2a01:7c8:aab6:26d:5054:ff:fed1:1da2])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+	(Client did not present a certificate)
+	by mx1.freebsd.org (Postfix) with ESMTPS id CF0171862
+	for <test@example.com>; Mon,  6 Jul 2015 09:01:20 +0000 (UTC)
+	(envelope-from upwest201diana@outlook.com)]],
+      {
+        real_ip = '2a01:7c8:aab6:26d:5054:ff:fed1:1da2',
+        from_hostname = 'server.chat-met-vreemden.nl',
+        real_hostname = '',
+        by_hostname = 'mx1.freebsd.org',
+      },
+    },
     {[[from out-9.smtp.github.com (out-9.smtp.github.com [192.30.254.192])
  (using TLSv1.2 with cipher AECDH-AES256-SHA (256/256 bits))
  (No client certificate requested)
@@ -56,8 +82,8 @@ context("Received headers parser", function()
  for exim-dev@exim.org; Sat, 30 Jun 2018 02:54:24 +0100]],
      {
        from_hostname = 'smtp.spodhuis.org',
-       from_ip = '2a02:898:31:0:48:4558:736d:7470',
-       real_ip = '2a02:898:31:0:48:4558:736d:7470',
+       from_ip = '2a02:898:31::48:4558:736d:7470',
+       real_ip = '2a02:898:31::48:4558:736d:7470',
        by_hostname = 'hummus.csx.cam.ac.uk',
      }
     },
@@ -68,10 +94,27 @@ context("Received headers parser", function()
        real_ip = '1.1.1.1',
      }
     },
-    {'from [192.83.172.101] by (HELLO 148.251.238.35 ) (148.251.238.35) by guovswzqkvry051@sohu.com with gg login by AOL 6.0 for Windows US sub 008 SMTP  ; Tue, 03 Jul 2018 09:01:47 -0300',
+    {'from [192.83.172.101] (HELLO 148.251.238.35) (148.251.238.35) by guovswzqkvry051@sohu.com with gg login by AOL 6.0 for Windows US sub 008 SMTP  ; Tue, 03 Jul 2018 09:01:47 -0300',
      {
        from_ip = '192.83.172.101',
        by_hostname = '',
+     },
+    },
+    {'from [61.174.163.26] (helo=host) by sc8-sf-list1.sourceforge.net with smtp (Exim 3.31-VA-mm2 #1 (Debian)) id 18t2z0-0001NX-00 for <razor-users@lists.sourceforge.net>; Wed, 12 Mar 2003 01:57:10 -0800',
+     {
+       from_ip = '61.174.163.26',
+       by_hostname = 'sc8-sf-list1.sourceforge.net',
+     },
+    },
+    {[[from [127.0.0.1] (unknown [65.19.167.131])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+	(Client did not present a certificate)
+	by mail01.someotherdomain.org (Postfix) with ESMTPSA id 43tYMW2yKHz50MHS
+	for <user2@somedomain.com>; Mon,  4 Feb 2019 16:39:35 +0000 (GMT)]],
+     {
+       from_ip = '65.19.167.131',
+       real_ip = '65.19.167.131',
+       by_hostname = 'mail01.someotherdomain.org',
      }
     },
   }
@@ -81,6 +124,16 @@ context("Received headers parser", function()
   local function ffi_string(fs)
     if fs ~= NULL then return ffi.string(fs) end
     return nil
+  end
+  local function ip_check(ret)
+    local sret = ffi_string(ret)
+
+    if not sret then return 'null' end
+    local ip = rspamd_ip.from_string(sret)
+
+    if not ip then return 'not ip' end
+    if not ip:is_valid() then return 'unparsed' end
+    return tostring(ip)
   end
 
   for i,c in ipairs(cases) do
@@ -102,9 +155,11 @@ context("Received headers parser", function()
           end
         elseif k == 'from_ip' then
           if #v > 0 then
-            assert_equal(v, ffi_string(hdr.from_ip),
+            local got_string = ip_check(hdr.from_ip)
+            local expected_string = tostring(rspamd_ip.from_string(v))
+            assert_equal(expected_string, got_string,
                 string.format('%s: from_ip: %s, expected: %s',
-                    c[1], ffi_string(hdr.from_ip), v))
+                    expected_string, got_string, v))
           else
             assert_nil(hdr.from_ip,
                 string.format('%s: from_ip: %s, expected: nil',
@@ -112,9 +167,11 @@ context("Received headers parser", function()
           end
         elseif k == 'real_ip' then
           if #v > 0 then
-            assert_equal(v, ffi_string(hdr.real_ip),
+            local got_string = ip_check(hdr.real_ip)
+            local expected_string = tostring(rspamd_ip.from_string(v))
+            assert_equal(expected_string, got_string,
                 string.format('%s: real_ip: %s, expected: %s',
-                    c[1], ffi_string(hdr.real_ip), v))
+                    expected_string, got_string, v))
           else
             assert_nil(hdr.real_ip,
                 string.format('%s: real_ip: %s, expected: nil',

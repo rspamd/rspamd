@@ -17,6 +17,7 @@
 #include "libmime/message.h"
 #include "libutil/expression.h"
 #include "libserver/composites.h"
+#include "libserver/cfg_file_private.h"
 #include "libmime/lang_detection.h"
 #include "lua/lua_map.h"
 #include "lua/lua_thread_pool.h"
@@ -207,6 +208,8 @@ LUA_FUNCTION_DEF (config, get_classifier);
  *     + `skip` if symbol should be skipped now
  *     + `nostat` if symbol should be excluded from stat tokens
  *     + `trivial` symbol is trivial (e.g. no network requests)
+ *     + `explicit_disable` requires explicit disabling (e.g. via settings)
+ *     + `ignore_passthrough` executed even if passthrough result has been set
  * - `parent`: id of parent symbol (useful for virtual symbols)
  *
  * @return {number} id of symbol registered
@@ -260,6 +263,23 @@ rspamd_config:register_dependency(id, 'OTHER_SYM')
 rspamd_config:register_dependency('SYMBOL_FROM', 'SYMBOL_TO')
  */
 LUA_FUNCTION_DEF (config, register_dependency);
+
+/***
+ * @method rspamd_config:get_symbol_flags(name)
+ * Returns symbol flags
+ * @param {string} name symbols's name
+ * @return {table|string} list of flags for symbol or nil
+ */
+LUA_FUNCTION_DEF (config, get_symbol_flags);
+
+/***
+ * @method rspamd_config:add_symbol_flags(name, flags)
+ * Adds flags to a symbol
+ * @param {string} name symbols's name
+ * @param {table|string} flags flags to add
+ * @return {table|string} new set of flags
+ */
+LUA_FUNCTION_DEF (config, add_symbol_flags);
 
 /**
  * @method rspamd_config:register_re_selector(name, selector_str)
@@ -760,6 +780,8 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_callback_symbol),
 	LUA_INTERFACE_DEF (config, register_callback_symbol_priority),
 	LUA_INTERFACE_DEF (config, register_dependency),
+	LUA_INTERFACE_DEF (config, get_symbol_flags),
+	LUA_INTERFACE_DEF (config, add_symbol_flags),
 	LUA_INTERFACE_DEF (config, set_metric_symbol),
 	{"set_symbol", lua_config_set_metric_symbol},
 	LUA_INTERFACE_DEF (config, set_metric_action),
@@ -1296,6 +1318,11 @@ rspamd_register_symbol_fromlua (lua_State *L,
 				lua_pushboolean (L, true);
 				lua_settable (L, -3);
 			}
+			if (type & SYMBOL_TYPE_EXPLICIT_DISABLE) {
+				lua_pushstring (L, "explicit_disable");
+				lua_pushboolean (L, true);
+				lua_settable (L, -3);
+			}
 
 			/* Now call for squeeze function */
 			if (lua_pcall (L, 3, 1, err_idx) != 0) {
@@ -1523,6 +1550,12 @@ lua_parse_symbol_flags (const gchar *str)
 		if (strstr (str, "mime") != NULL) {
 			ret |= SYMBOL_TYPE_MIME_ONLY;
 		}
+		if (strstr (str, "ignore_passthrough") != NULL) {
+			ret |= SYMBOL_TYPE_IGNORE_PASSTHROUGH;
+		}
+		if (strstr (str, "explicit_disable") != NULL) {
+			ret |= SYMBOL_TYPE_EXPLICIT_DISABLE;
+		}
 	}
 
 	return ret;
@@ -1576,6 +1609,121 @@ lua_parse_symbol_type (const gchar *str)
 	}
 
 	return ret;
+}
+
+static void
+lua_push_symbol_flags (lua_State *L, guint flags)
+{
+	guint i = 1;
+
+	lua_newtable (L);
+
+	if (flags & SYMBOL_TYPE_FINE) {
+		lua_pushstring (L, "fine");
+		lua_rawseti (L, -2, i++);
+	}
+
+	if (flags & SYMBOL_TYPE_EMPTY) {
+		lua_pushstring (L, "empty");
+		lua_rawseti (L, -2, i++);
+	}
+
+	if (flags & SYMBOL_TYPE_SQUEEZED) {
+		lua_pushstring (L, "squeezed");
+		lua_rawseti (L, -2, i++);
+	}
+
+	if (flags & SYMBOL_TYPE_EXPLICIT_DISABLE) {
+		lua_pushstring (L, "explicit_disable");
+		lua_rawseti (L, -2, i++);
+	}
+
+	if (flags & SYMBOL_TYPE_IGNORE_PASSTHROUGH) {
+		lua_pushstring (L, "ignore_passthrough");
+		lua_rawseti (L, -2, i++);
+	}
+
+	if (flags & SYMBOL_TYPE_NOSTAT) {
+		lua_pushstring (L, "nostat");
+		lua_rawseti (L, -2, i++);
+	}
+
+	if (flags & SYMBOL_TYPE_IDEMPOTENT) {
+		lua_pushstring (L, "idempotent");
+		lua_rawseti (L, -2, i++);
+	}
+
+	if (flags & SYMBOL_TYPE_MIME_ONLY) {
+		lua_pushstring (L, "mime");
+		lua_rawseti (L, -2, i++);
+	}
+
+	if (flags & SYMBOL_TYPE_TRIVIAL) {
+		lua_pushstring (L, "trivial");
+		lua_rawseti (L, -2, i++);
+	}
+
+	if (flags & SYMBOL_TYPE_SKIPPED) {
+		lua_pushstring (L, "skip");
+		lua_rawseti (L, -2, i++);
+	}
+}
+
+static gint
+lua_config_get_symbol_flags (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *name = luaL_checkstring (L, 2);
+	guint flags;
+
+	if (cfg && name) {
+		flags = rspamd_symcache_get_symbol_flags (cfg->cache,
+				name);
+
+		if (flags != 0) {
+			lua_push_symbol_flags (L, flags);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_config_add_symbol_flags (lua_State *L)
+{
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *name = luaL_checkstring (L, 2);
+	guint flags, new_flags = 0;
+
+	if (cfg && name && lua_istable (L, 3)) {
+
+		for (lua_pushnil (L); lua_next (L, 3); lua_pop (L, 1)) {
+			new_flags |= lua_parse_symbol_flags (lua_tostring (L, -1));
+		}
+
+		flags = rspamd_symcache_get_symbol_flags (cfg->cache,
+				name);
+
+		if (flags != 0) {
+			rspamd_symcache_add_symbol_flags (cfg->cache, name, new_flags);
+			/* Push old flags */
+			lua_push_symbol_flags (L, flags);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 static gint
@@ -2127,9 +2275,10 @@ lua_config_set_metric_action (lua_State * L)
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name = NULL;
-	double weight;
+	double threshold = NAN;
 	GError *err = NULL;
 	gdouble priority = 0.0;
+	ucl_object_t *obj_tbl = NULL;
 
 	if (cfg) {
 
@@ -2137,7 +2286,7 @@ lua_config_set_metric_action (lua_State * L)
 			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 					"*action=S;score=N;"
 					"priority=N",
-					&name, &weight,
+					&name, &threshold,
 					&priority)) {
 				msg_err_config ("bad arguments: %e", err);
 				g_error_free (err);
@@ -2145,12 +2294,36 @@ lua_config_set_metric_action (lua_State * L)
 				return 0;
 			}
 		}
+		else if (lua_type (L, 2) == LUA_TSTRING && lua_type (L, 3) == LUA_TTABLE) {
+			name = lua_tostring (L, 2);
+			obj_tbl = ucl_object_lua_import (L, 3);
+
+			if (obj_tbl) {
+				if (name) {
+					rspamd_config_set_action_score (cfg, name, obj_tbl);
+					ucl_object_unref (obj_tbl);
+				}
+				else {
+					ucl_object_unref (obj_tbl);
+					return luaL_error (L, "invalid first argument, action name expected");
+				}
+			}
+			else {
+				return luaL_error (L, "invalid second argument, table expected");
+			}
+		}
 		else {
 			return luaL_error (L, "invalid arguments, table expected");
 		}
 
-		if (name != NULL && weight != 0) {
-			rspamd_config_set_action_score (cfg, name, weight, (guint)priority);
+		if (name != NULL && !isnan (threshold) && threshold != 0) {
+			obj_tbl = ucl_object_typed_new (UCL_OBJECT);
+			ucl_object_insert_key (obj_tbl, ucl_object_fromdouble (threshold),
+					"score", 0, false);
+			ucl_object_insert_key (obj_tbl, ucl_object_fromdouble (priority),
+					"priority", 0, false);
+			rspamd_config_set_action_score (cfg, name, obj_tbl);
+			ucl_object_unref (obj_tbl);
 		}
 	}
 	else {
@@ -2166,12 +2339,14 @@ lua_config_get_metric_action (lua_State * L)
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *act_name = luaL_checkstring (L, 2);
-	gint act = 0;
+	struct rspamd_action *act;
 
 	if (cfg && act_name) {
-		if (rspamd_action_from_str (act_name, &act)) {
-			if (!isnan (cfg->actions[act].score)) {
-				lua_pushnumber (L, cfg->actions[act].score);
+		act = rspamd_config_get_action (cfg, act_name);
+
+		if (act) {
+			if (!isnan (act->threshold)) {
+				lua_pushnumber (L, act->threshold);
 			}
 			else {
 				lua_pushnil (L);
@@ -2193,15 +2368,15 @@ lua_config_get_all_actions (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	gint act = 0;
+	struct rspamd_action *act, *tmp;
 
 	if (cfg) {
-		lua_newtable (L);
+		lua_createtable (L, 0, HASH_COUNT (cfg->actions));
 
-		for (act = METRIC_ACTION_REJECT; act < METRIC_ACTION_MAX; act ++) {
-			if (!isnan (cfg->actions[act].score)) {
-				lua_pushstring (L, rspamd_action_to_str (act));
-				lua_pushnumber (L, cfg->actions[act].score);
+		HASH_ITER (hh, cfg->actions, act, tmp) {
+			if (!isnan (act->threshold)) {
+				lua_pushstring (L, act->name);
+				lua_pushnumber (L, act->threshold);
 				lua_settable (L, -3);
 			}
 		}

@@ -18,12 +18,14 @@
 #define RSPAMD_HTML_FLAG_UNKNOWN_ELEMENTS (1 << 4)
 #define RSPAMD_HTML_FLAG_DUPLICATE_ELEMENTS (1 << 5)
 #define RSPAMD_HTML_FLAG_TOO_MANY_TAGS (1 << 6)
+#define RSPAMD_HTML_FLAG_HAS_DATA_URLS (1 << 7)
 
 /*
  * Image flags
  */
 #define RSPAMD_HTML_FLAG_IMAGE_EMBEDDED (1 << 0)
 #define RSPAMD_HTML_FLAG_IMAGE_EXTERNAL (1 << 1)
+#define RSPAMD_HTML_FLAG_IMAGE_DATA (1 << 2)
 
 enum html_component_type {
 	RSPAMD_HTML_COMPONENT_NAME = 0,
@@ -43,12 +45,16 @@ struct html_tag_component {
 	const guchar *start;
 };
 
+
+struct rspamd_image;
+
 struct html_image {
 	guint height;
 	guint width;
 	guint flags;
 	gchar *src;
 	struct rspamd_url *url;
+	struct rspamd_image *embedded_image;
 	struct html_tag *tag;
 };
 
@@ -121,7 +127,7 @@ struct html_content {
 /*
  * Decode HTML entitles in text. Text is modified in place.
  */
-guint rspamd_html_decode_entitles_inplace (gchar *s, guint len);
+guint rspamd_html_decode_entitles_inplace (gchar *s, gsize len);
 
 GByteArray* rspamd_html_process_part (rspamd_mempool_t *pool,
 		struct html_content *hc,

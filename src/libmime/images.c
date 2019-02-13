@@ -92,14 +92,14 @@ detect_image_type (rspamd_ftok_t *data)
 
 
 static struct rspamd_image *
-process_png_image (struct rspamd_task *task, rspamd_ftok_t *data)
+process_png_image (rspamd_mempool_t *pool, rspamd_ftok_t *data)
 {
 	struct rspamd_image *img;
 	guint32 t;
 	const guint8 *p;
 
 	if (data->len < 24) {
-		msg_info_task ("bad png detected (maybe striped)");
+		msg_info_pool ("bad png detected (maybe striped)");
 		return NULL;
 	}
 
@@ -107,11 +107,11 @@ process_png_image (struct rspamd_task *task, rspamd_ftok_t *data)
 	/* Skip signature and read header section */
 	p = data->begin + 12;
 	if (memcmp (p, "IHDR", 4) != 0) {
-		msg_info_task ("png doesn't begins with IHDR section");
+		msg_info_pool ("png doesn't begins with IHDR section");
 		return NULL;
 	}
 
-	img = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_image));
 	img->type = IMAGE_TYPE_PNG;
 	img->data = data;
 
@@ -126,13 +126,13 @@ process_png_image (struct rspamd_task *task, rspamd_ftok_t *data)
 }
 
 static struct rspamd_image *
-process_jpg_image (struct rspamd_task *task, rspamd_ftok_t *data)
+process_jpg_image (rspamd_mempool_t *pool, rspamd_ftok_t *data)
 {
 	const guint8 *p, *end;
 	guint16 h, w;
 	struct rspamd_image *img;
 
-	img = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_image));
 	img->type = IMAGE_TYPE_JPG;
 	img->data = data;
 
@@ -169,18 +169,18 @@ process_jpg_image (struct rspamd_task *task, rspamd_ftok_t *data)
 }
 
 static struct rspamd_image *
-process_gif_image (struct rspamd_task *task, rspamd_ftok_t *data)
+process_gif_image (rspamd_mempool_t *pool, rspamd_ftok_t *data)
 {
 	struct rspamd_image *img;
 	const guint8 *p;
 	guint16 t;
 
 	if (data->len < 10) {
-		msg_info_task ("bad gif detected (maybe striped)");
+		msg_info_pool ("bad gif detected (maybe striped)");
 		return NULL;
 	}
 
-	img = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_image));
 	img->type = IMAGE_TYPE_GIF;
 	img->data = data;
 
@@ -194,18 +194,18 @@ process_gif_image (struct rspamd_task *task, rspamd_ftok_t *data)
 }
 
 static struct rspamd_image *
-process_bmp_image (struct rspamd_task *task, rspamd_ftok_t *data)
+process_bmp_image (rspamd_mempool_t *pool, rspamd_ftok_t *data)
 {
 	struct rspamd_image *img;
 	gint32 t;
 	const guint8 *p;
 
 	if (data->len < 28) {
-		msg_info_task ("bad bmp detected (maybe striped)");
+		msg_info_pool ("bad bmp detected (maybe striped)");
 		return NULL;
 	}
 
-	img = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct rspamd_image));
+	img = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_image));
 	img->type = IMAGE_TYPE_BMP;
 	img->data = data;
 	p = data->begin + 18;
@@ -558,37 +558,49 @@ rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img)
 #endif
 }
 
-static void
-process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
+struct rspamd_image*
+rspamd_maybe_process_image (rspamd_mempool_t *pool,
+							rspamd_ftok_t *data)
 {
 	enum rspamd_image_type type;
 	struct rspamd_image *img = NULL;
-	struct rspamd_mime_header *rh;
-	struct rspamd_mime_text_part *tp;
-	struct html_image *himg;
-	const gchar *cid, *html_cid;
-	guint cid_len, i, j;
-	GPtrArray *ar;
 
-	if ((type = detect_image_type (&part->parsed_data)) != IMAGE_TYPE_UNKNOWN) {
+	if ((type = detect_image_type (data)) != IMAGE_TYPE_UNKNOWN) {
 		switch (type) {
 		case IMAGE_TYPE_PNG:
-			img = process_png_image (task, &part->parsed_data);
+			img = process_png_image (pool, data);
 			break;
 		case IMAGE_TYPE_JPG:
-			img = process_jpg_image (task, &part->parsed_data);
+			img = process_jpg_image (pool, data);
 			break;
 		case IMAGE_TYPE_GIF:
-			img = process_gif_image (task, &part->parsed_data);
+			img = process_gif_image (pool, data);
 			break;
 		case IMAGE_TYPE_BMP:
-			img = process_bmp_image (task, &part->parsed_data);
+			img = process_bmp_image (pool, data);
 			break;
 		default:
 			img = NULL;
 			break;
 		}
 	}
+
+	return img;
+}
+
+static void
+process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
+{
+	struct rspamd_mime_header *rh;
+	struct rspamd_mime_text_part *tp;
+	struct html_image *himg;
+	const gchar *cid, *html_cid;
+	guint cid_len, i, j;
+	GPtrArray *ar;
+	struct rspamd_image *img;
+
+
+	img = rspamd_maybe_process_image (task->task_pool, &part->parsed_data);
 
 	if (img != NULL) {
 		debug_task ("detected %s image of size %ud x %ud in message <%s>",
@@ -643,6 +655,7 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 								if (strlen (html_cid) == cid_len &&
 										memcmp (html_cid, cid, cid_len) == 0) {
 									img->html_image = himg;
+									himg->embedded_image = img;
 
 									debug_task ("found linked image by cid: <%s>",
 											cid);

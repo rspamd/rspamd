@@ -2,8 +2,6 @@
 
   machine smtp_addr_parser;
 
-
-
   action IP6_start {}
   action IP6_end {}
   action IP4_start {}
@@ -75,8 +73,8 @@
     }
   }
 
+  include smtp_base "smtp_base.rl";
   include smtp_ip "smtp_ip.rl";
-  include smtp_whitespace "smtp_whitespace.rl";
   include smtp_address "smtp_address.rl";
 
   main := SMTPAddr;

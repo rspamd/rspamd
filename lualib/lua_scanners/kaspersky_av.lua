@@ -32,9 +32,10 @@ local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
 local function kaspersky_config(opts)
   local kaspersky_conf = {
-    scan_mime_parts = true;
-    scan_text_mime = false;
-    scan_image_mime = false;
+    name = N,
+    scan_mime_parts = true,
+    scan_text_mime = false,
+    scan_image_mime = false,
     product_id = 0,
     log_clean = false,
     timeout = 5.0,
@@ -43,10 +44,21 @@ local function kaspersky_config(opts)
     message = default_message,
     detection_category = "virus",
     tmpdir = '/tmp',
-    prefix = 'rs_ak',
   }
 
   kaspersky_conf = lua_util.override_defaults(kaspersky_conf, opts)
+
+  if not kaspersky_conf.prefix then
+    kaspersky_conf.prefix = 'rs_' .. kaspersky_conf.name .. '_'
+  end
+
+  if not kaspersky_conf.log_prefix then
+    if kaspersky_conf.name:lower() == kaspersky_conf.type:lower() then
+      kaspersky_conf.log_prefix = kaspersky_conf.name
+    else
+      kaspersky_conf.log_prefix = kaspersky_conf.name .. ' (' .. kaspersky_conf.type .. ')'
+    end
+  end
 
   if not kaspersky_conf['servers'] then
     rspamd_logger.errx(rspamd_config, 'no servers defined')
@@ -58,7 +70,7 @@ local function kaspersky_config(opts)
       kaspersky_conf['servers'], 0)
 
   if kaspersky_conf['upstreams'] then
-    lua_util.add_debug_alias('antivirus', N)
+    lua_util.add_debug_alias('antivirus', kaspersky_conf.name)
     return kaspersky_conf
   end
 
@@ -110,7 +122,7 @@ local function kaspersky_check(task, content, digest, rule)
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(N, task,
+          lua_util.debugm(rule.name, task,
               '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
 
           tcp.request({
@@ -126,37 +138,31 @@ local function kaspersky_check(task, content, digest, rule)
           rspamd_logger.errx(task,
               '%s [%s]: failed to scan, maximum retransmits exceed',
               rule['symbol'], rule['type'])
-          task:insert_result(rule['symbol_fail'], 0.0,
-              'failed to scan and retransmits exceed')
+          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
         end
 
       else
         upstream:ok()
         data = tostring(data)
         local cached
-        lua_util.debugm(N, task, '%s [%s]: got reply: %s',
+        lua_util.debugm(rule.name, task,
+            '%s [%s]: got reply: %s',
             rule['symbol'], rule['type'], data)
-        if data == 'stream: OK' then
+        if data == 'stream: OK' or data == fname .. ': OK' then
           cached = 'OK'
-          if rule['log_clean'] then
-            rspamd_logger.infox(task, '%s [%s]: message or mime_part is clean',
-                rule['symbol'], rule['type'])
-          else
-            lua_util.debugm(N, task, '%s [%s]: message or mime_part is clean',
-                rule['symbol'], rule['type'])
-          end
+          common.log_clean(task, rule)
         else
           local vname = string.match(data, ': (.+) FOUND')
           if vname then
-            common.yield_result(task, rule, vname, N)
+            common.yield_result(task, rule, vname)
             cached = vname
           else
             rspamd_logger.errx(task, 'unhandled response: %s', data)
-            task:insert_result(rule['symbol_fail'], 0.0, 'unhandled response')
+            common.yield_result(task, rule, 'unhandled response', 0.0, 'fail')
           end
         end
         if cached then
-          common.save_av_cache(task, digest, rule, cached, N)
+          common.save_av_cache(task, digest, rule, cached)
         end
       end
     end
@@ -172,8 +178,8 @@ local function kaspersky_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule, N) then
-    if common.check_av_cache(task, digest, rule, kaspersky_check_uncached, N) then
+  if common.need_av_check(task, content, rule) then
+    if common.check_av_cache(task, digest, rule, kaspersky_check_uncached) then
       return
     else
       kaspersky_check_uncached()
@@ -186,5 +192,5 @@ return {
   description = 'kaspersky antivirus',
   configure = kaspersky_config,
   check = kaspersky_check,
-  name = 'kaspersky'
+  name = N
 }

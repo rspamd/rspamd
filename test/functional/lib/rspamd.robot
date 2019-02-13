@@ -144,7 +144,7 @@ Run Nginx
 
 Run Rspamc
   [Arguments]  @{args}
-  ${result} =  Run Process  ${RSPAMC}  -t  60  @{args}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
+  ${result} =  Run Process  ${RSPAMC}  -t  60  --header  Queue-ID\=${TEST NAME}  @{args}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
   Log  ${result.stdout}
   [Return]  ${result}
 

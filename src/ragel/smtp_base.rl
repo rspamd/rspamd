@@ -1,5 +1,9 @@
 %%{
-  machine smtp_whitespace;
+  machine smtp_base;
+
+  # Base SMTP definitions
+  # Dependencies: none
+  # Required actions: none
 
   WSP             =   " ";
   CRLF            =   "\r\n" | ("\r" [^\n]) | ([^\r] "\n");
@@ -25,4 +29,11 @@
   dot_atom_text  = atext+ ("." atext+)*;
   #FWS            =   ((WSP* CRLF)? WSP+);
   FWS            = WSP+; # We work with unfolded headers, so we can simplify machine
+
+  sub_domain     = Let_dig Ldh_str?;
+  Domain = sub_domain ("." sub_domain)*;
+  Atdomain = "@" Domain;
+  Adl = Atdomain ( "," Atdomain )*;
+
+  Standardized_tag = Ldh_str;
 }%%

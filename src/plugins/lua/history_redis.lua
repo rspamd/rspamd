@@ -19,7 +19,6 @@ if confighelp then
 end
 
 local redis_params
-local hash = require 'rspamd_cryptobox_hash'
 
 local settings = {
   key_prefix = 'rs_history', -- default key name
@@ -208,14 +207,7 @@ local function handle_history_request(task, conn, from, to, reset)
         collectgarbage()
         t1 = rspamd_util:get_ticks()
         fun.each(function(e)
-          if e.subject and not rspamd_util.is_valid_utf8(e.subject) then
-            e.subject = '???'
-          elseif settings.subject_privacy then
-            local hash_alg = settings.subject_privacy_alg
-            local subject_hash = hash.create_specific(hash_alg, e.subject)
-            e.subject = settings.subject_privacy_prefix .. ':' ..
-                subject_hash:hex():sub(1,settings.subject_privacy_length)
-          end
+          e.subject = lua_util.maybe_obfuscate_subject(e.subject, settings)
         end, data)
         reply.rows = data
         conn:send_ucl(reply)
@@ -255,7 +247,7 @@ if opts then
       name = 'HISTORY_SAVE',
       type = 'idempotent',
       callback = history_save,
-      flags = 'empty',
+      flags = 'empty,explicit_disable,ignore_passthrough',
       priority = 150
     })
     rspamd_plugins['history'] = {

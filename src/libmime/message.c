@@ -34,6 +34,7 @@
 
 #include <math.h>
 #include <unicode/uchar.h>
+#include <src/libserver/cfg_file_private.h>
 
 #define GTUBE_SYMBOL "GTUBE"
 
@@ -238,7 +239,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 
 			if (uc != -1) {
 				while (p < pe) {
-					if (uc == 0x200b) {
+					if (IS_ZERO_WIDTH_SPACE (uc)) {
 						/* Invisible space ! */
 						task->flags |= RSPAMD_TASK_FLAG_BAD_UNICODE;
 						part->spaces ++;
@@ -252,7 +253,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 
 						U8_NEXT (begin, off, pe - begin, uc);
 
-						if (uc != 0x200b) {
+						if (!IS_ZERO_WIDTH_SPACE (uc)) {
 							break;
 						}
 
@@ -561,8 +562,8 @@ rspamd_words_levenshtein_distance (struct rspamd_task *task,
 	s2len = w2->len;
 
 	if (s1len + s2len > max_words) {
-		msg_err_task ("cannot compare parts with more than %ud words: %ud",
-				max_words, s1len);
+		msg_err_task ("cannot compare parts with more than %ud words: (%ud + %ud)",
+				max_words, s1len, s2len);
 		return 0;
 	}
 
@@ -883,23 +884,23 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 
 	act = rspamd_check_gtube (task, text_part);
 	if (act != METRIC_ACTION_NOACTION) {
-		struct rspamd_metric_result *mres = task->result;
+		struct rspamd_action *action;
 		gdouble score = NAN;
 
-		if (act == METRIC_ACTION_REJECT) {
-			score = rspamd_task_get_required_score (task, mres);
-		}
-		else {
-			score = mres->actions_limits[act];
-		}
+		action = rspamd_config_get_action_by_type (task->cfg, act);
 
-		rspamd_add_passthrough_result (task, act, RSPAMD_PASSTHROUGH_CRITICAL,
-				score, "Gtube pattern", "GTUBE");
+		if (action) {
+			score = action->threshold;
 
-		if (ucl_object_lookup (task->messages, "smtp_message") == NULL) {
-			ucl_object_replace_key (task->messages,
-					ucl_object_fromstring ("Gtube pattern"), "smtp_message", 0,
-					false);
+			rspamd_add_passthrough_result (task, action,
+					RSPAMD_PASSTHROUGH_CRITICAL,
+					score, "Gtube pattern", "GTUBE");
+
+			if (ucl_object_lookup (task->messages, "smtp_message") == NULL) {
+				ucl_object_replace_key (task->messages,
+						ucl_object_fromstring ("Gtube pattern"),
+						"smtp_message", 0, false);
+			}
 		}
 
 		rspamd_task_insert_result (task, GTUBE_SYMBOL, 0, NULL);

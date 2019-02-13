@@ -73,12 +73,12 @@ read_regexp_expression (rspamd_mempool_t * pool,
 	struct regexp_module_item *chain,
 	const gchar *symbol,
 	const gchar *line,
-	struct rspamd_config *cfg)
+	struct rspamd_mime_expr_ud *ud)
 {
 	struct rspamd_expression *e = NULL;
 	GError *err = NULL;
 
-	if (!rspamd_parse_expression (line, 0, &mime_expr_subr, cfg, pool, &err,
+	if (!rspamd_parse_expression (line, 0, &mime_expr_subr, ud, pool, &err,
 			&e)) {
 		msg_warn_pool ("%s = \"%s\" is invalid regexp expression: %e", symbol,
 				line,
@@ -161,14 +161,19 @@ regexp_module_config (struct rspamd_config *cfg)
 			msg_warn_config ("regexp module is now single threaded, max_threads is ignored");
 		}
 		else if (value->type == UCL_STRING) {
+			struct rspamd_mime_expr_ud ud;
+
 			cur_item = rspamd_mempool_alloc0 (cfg->cfg_pool,
 					sizeof (struct regexp_module_item));
 			cur_item->symbol = ucl_object_key (value);
 			cur_item->magic = rspamd_regexp_cb_magic;
 
+			ud.conf_obj = NULL;
+			ud.cfg = cfg;
+
 			if (!read_regexp_expression (cfg->cfg_pool,
-				cur_item, ucl_object_key (value),
-				ucl_obj_tostring (value), cfg)) {
+					cur_item, ucl_object_key (value),
+					ucl_obj_tostring (value), &ud)) {
 				res = FALSE;
 			}
 			else {
@@ -202,6 +207,7 @@ regexp_module_config (struct rspamd_config *cfg)
 			gdouble score = 0.0;
 			guint flags = 0, priority = 0;
 			gboolean is_lua = FALSE, valid_expression = TRUE;
+			struct rspamd_mime_expr_ud ud;
 
 			/* We have some lua table, extract its arguments */
 			elt = ucl_object_lookup (value, "callback");
@@ -216,10 +222,12 @@ regexp_module_config (struct rspamd_config *cfg)
 							sizeof (struct regexp_module_item));
 					cur_item->symbol = ucl_object_key (value);
 					cur_item->magic = rspamd_regexp_cb_magic;
+					ud.cfg = cfg;
+					ud.conf_obj = value;
 
 					if (!read_regexp_expression (cfg->cfg_pool,
 							cur_item, ucl_object_key (value),
-							ucl_obj_tostring (elt), cfg)) {
+							ucl_obj_tostring (elt), &ud)) {
 						res = FALSE;
 					}
 					else {

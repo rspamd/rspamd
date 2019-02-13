@@ -21,6 +21,8 @@ end
 -- This plugin implements mime types checks for mail messages
 local logger = require "rspamd_logger"
 local lua_util = require "lua_util"
+local rspamd_util = require "rspamd_util"
+local lua_maps = require "lua_maps"
 local N = "mime_types"
 local settings = {
   file = '',
@@ -32,6 +34,7 @@ local settings = {
   symbol_archive_in_archive = 'MIME_ARCHIVE_IN_ARCHIVE',
   symbol_double_extension = 'MIME_DOUBLE_BAD_EXTENSION',
   symbol_bad_extension = 'MIME_BAD_EXTENSION',
+  symbol_bad_unicode = 'MIME_BAD_UNICODE',
   regexp = false,
   extension_map = { -- extension -> mime_type
     html = 'text/html',
@@ -284,7 +287,7 @@ local full_extensions_map = {
   {"csh", "application/x-csh"},
   {"csproj", "text/plain"},
   {"css", "text/css"},
-  {"csv", "text/csv"},
+  {"csv", {"application/vnd.ms-excel", "text/csv", "text/plain"}},
   {"cur", "application/octet-stream"},
   {"cxx", "text/plain"},
   {"dat", {"application/octet-stream", "application/ms-tnef"}},
@@ -477,7 +480,7 @@ local full_extensions_map = {
   {"mqv", "video/quicktime"},
   {"ms", "application/x-troff-ms"},
   {"msg", "application/vnd.ms-outlook"},
-  {"msi", "application/octet-stream"},
+  {"msi", {"application/x-msi", "application/octet-stream"}},
   {"mso", "application/octet-stream"},
   {"mts", "video/vnd.dlna.mpeg-tts"},
   {"mtx", "application/xml"},
@@ -604,7 +607,7 @@ local full_extensions_map = {
   {"roff", "application/x-troff"},
   {"rpm", "audio/x-pn-realaudio-plugin"},
   {"rqy", "text/x-ms-rqy"},
-  {"rtf", {"application/rtf","application/msword", "text/richtext"}},
+  {"rtf", {"application/rtf","application/msword", "text/richtext", "text/rtf"}},
   {"rtx", "text/richtext"},
   {"rvt", "application/octet-stream" },
   {"ruleset", "application/xml"},
@@ -832,6 +835,25 @@ local function check_mime_type(task)
   end
 
   local function check_filename(fname, ct, is_archive, part)
+
+    local has_bad_unicode, char, ch_pos = rspamd_util.has_obscured_unicode(fname)
+    if has_bad_unicode then
+      task:insert_result(settings.symbol_bad_unicode, 1.0,
+          string.format("0x%xd after %s", char,
+              fname:sub(1, ch_pos)))
+    end
+
+    -- Replace potentially bad characters with '?'
+    fname = fname:gsub('[^%s%g]', '?')
+
+    -- Check file is in filename whitelist
+    if settings.filename_whitelist and
+        settings.filename_whitelist:get_key(fname) then
+      logger.debugm("mime_types", task, "skip checking of %s - file is in filename whitelist",
+        fname)
+      return
+    end
+
     local ext,ext2,parts = gen_extension(fname)
     -- ext is the last extension, LOWERCASED
     -- ext2 is the one before last extension LOWERCASED
@@ -841,7 +863,7 @@ local function check_mime_type(task)
       if #parts > 2 then
         -- We need to ensure that next-to-last extension is an extension,
         -- so we check for its length and if it is not a number or date
-        if #ext2 <= 4 and not string.match(ext2, '^%d+$') then
+        if #ext2 <= 4 and not string.match(ext2, '^%d+[%]%)]?$') then
 
           -- Use the greatest badness multiplier
           if not badness_mult or
@@ -945,7 +967,6 @@ local function check_mime_type(task)
         end
 
         if filename then
-          filename = filename:gsub('[^%s%g]', '?')
           check_filename(filename, ct, false, p)
         end
 
@@ -976,11 +997,6 @@ local function check_mime_type(task)
             local nfiles = #fl
 
             for _,f in ipairs(fl) do
-              -- Strip bad characters
-              if f['name'] then
-                f['name'] = f['name']:gsub('[\128-\255%s%G]', '?')
-              end
-
               if f['encrypted'] then
                 task:insert_result(settings['symbol_encrypted_archive'],
                     1.0, f['name'])
@@ -1065,6 +1081,9 @@ if opts then
   for k,v in pairs(opts) do
     settings[k] = v
   end
+
+  settings.filename_whitelist = lua_maps.rspamd_map_add('mime_types', 'filename_whitelist', 'regexp',
+    'filename whitelist')
 
   local function change_extension_map_entry(ext, ct, mult)
     if type(ct) == 'table' then
@@ -1155,6 +1174,12 @@ if opts then
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_bad_extension'],
+      parent = id,
+      group = 'mime_types',
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      name = settings['symbol_bad_unicode'],
       parent = id,
       group = 'mime_types',
     })

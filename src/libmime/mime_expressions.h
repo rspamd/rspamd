@@ -8,8 +8,15 @@
 
 #include "config.h"
 #include "expression.h"
+#include "contrib/libucl/ucl.h"
 
 struct rspamd_task;
+struct rspamd_config;
+
+struct rspamd_mime_expr_ud {
+	struct rspamd_config *cfg;
+	const ucl_object_t *conf_obj;
+};
 
 extern const struct rspamd_atom_subr mime_expr_subr;
 

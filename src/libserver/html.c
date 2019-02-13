@@ -22,6 +22,9 @@
 #include "html_colors.h"
 #include "html_entities.h"
 #include "url.h"
+#include "contrib/libucl/khash.h"
+#include "libmime/images.h"
+
 #include <unicode/uversion.h>
 #include <unicode/ucnv.h>
 #if U_ICU_VERSION_MAJOR_NUM >= 46
@@ -334,13 +337,14 @@ rspamd_html_tag_by_id (gint id)
 
 /* Decode HTML entitles in text */
 guint
-rspamd_html_decode_entitles_inplace (gchar *s, guint len)
+rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 {
-	guint l, rep_len;
+	goffset l, rep_len;
 	gchar *t = s, *h = s, *e = s, *end_ptr;
 	const gchar *end;
 	const gchar *entity;
-	gint state = 0, val, base;
+	gint state = 0, base;
+	UChar32 uc;
 	khiter_t k;
 
 	if (len == 0) {
@@ -352,7 +356,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 
 	end = s + l;
 
-	while (h - s < (gint)l) {
+	while (h - s < l) {
 		switch (state) {
 		/* Out of entity */
 		case 0:
@@ -374,9 +378,11 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 				/* First find in entities table */
 				*h = '\0';
 				entity = e + 1;
+				uc = 0;
 
 				if (*entity != '#') {
 					k = kh_get (entity_by_name, html_entity_by_name, entity);
+					*h = ';';
 
 					if (k != kh_end (html_entity_by_name)) {
 						if (kh_val (html_entity_by_name, k)) {
@@ -388,10 +394,16 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 								t += rep_len;
 							}
 						} else {
-							if (end - t >= h - e) {
-								memmove (t, e, h - e);
-								t += h - e;
+							if (end - t > h - e + 1) {
+								memmove (t, e, h - e + 1);
+								t += h - e + 1;
 							}
+						}
+					}
+					else {
+						if (end - t > h - e + 1) {
+							memmove (t, e, h - e + 1);
+							t += h - e + 1;
 						}
 					}
 				}
@@ -405,23 +417,27 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 					else {
 						base = 10;
 					}
+
 					if (base == 10) {
-						val = strtoul ((e + 2), &end_ptr, base);
+						uc = strtoul ((e + 2), &end_ptr, base);
 					}
 					else {
-						val = strtoul ((e + 3), &end_ptr, base);
+						uc = strtoul ((e + 3), &end_ptr, base);
 					}
 
 					if (end_ptr != NULL && *end_ptr != '\0') {
 						/* Skip undecoded */
-						if (end - t >= h - e) {
-							memmove (t, e, h - e);
-							t += h - e;
+						*h = ';';
+
+						if (end - t > h - e + 1) {
+							memmove (t, e, h - e + 1);
+							t += h - e + 1;
 						}
 					}
 					else {
 						/* Search for a replacement */
-						k = kh_get (entity_by_number, html_entity_by_number, val);
+						*h = ';';
+						k = kh_get (entity_by_number, html_entity_by_number, uc);
 
 						if (k != kh_end (html_entity_by_number)) {
 							if (kh_val (html_entity_by_number, k)) {
@@ -433,30 +449,64 @@ rspamd_html_decode_entitles_inplace (gchar *s, guint len)
 									t += rep_len;
 								}
 							} else {
-								if (end - t >= h - e) {
-									memmove (t, e, h - e);
-									t += h - e;
+								if (end - t > h - e + 1) {
+									memmove (t, e, h - e + 1);
+									t += h - e + 1;
 								}
 							}
 						}
 						else {
 							/* Unicode point */
-							if (g_unichar_isgraph (val)) {
-								t += g_unichar_to_utf8 (val, t);
+							goffset off = t - s;
+							UBool is_error = 0;
+
+							if (uc > 0) {
+								U8_APPEND (s, off, len, uc, is_error);
+								if (!is_error) {
+									t = s + off;
+								}
+								else {
+									/* Leave invalid entities as is */
+									if (end - t > h - e + 1) {
+										memmove (t, e, h - e + 1);
+										t += h - e + 1;
+									}
+								}
 							}
-							else {
-								/* Remove unknown entities */
+							else if (end - t > h - e + 1) {
+								memmove (t, e, h - e + 1);
+								t += h - e + 1;
 							}
 						}
 					}
 				}
 
-				*h = ';';
 				state = 0;
 			}
+			else if (*h == '&') {
+				/* Previous `&` was bogus */
+				state = 1;
+
+				if (end - t > h - e) {
+					memmove (t, e, h - e);
+					t += h - e;
+				}
+
+				e = h;
+			}
+
 			h++;
 
 			break;
+		}
+	}
+
+	/* Leftover */
+	if (state == 1 && h > e) {
+		/* Unfinished entity, copy as is */
+		if (end - t > h - e) {
+			memmove (t, e, h - e);
+			t += h - e;
 		}
 	}
 
@@ -568,7 +618,8 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 			}
 		}
 		text_url = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
-		rc = rspamd_url_parse (text_url, url_str, strlen (url_str), pool);
+		rc = rspamd_url_parse (text_url, url_str, strlen (url_str), pool,
+				RSPAMD_URL_PARSE_TEXT);
 
 		if (rc == URI_ERRNO_OK) {
 			disp_tok.len = text_url->hostlen;
@@ -894,7 +945,7 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 	return ret;
 }
 
-static void
+static inline void
 rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 		struct html_content *hc, struct html_tag *tag, const guchar *in,
 		gint *statep, guchar const **savep)
@@ -988,8 +1039,27 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 			state = ignore_bad_tag;
 		}
 		else {
+			const guchar *attr_name_end = in;
+
 			if (*in == '=') {
 				state = parse_equal;
+			}
+			else if (*in == '"') {
+				/* No equal or something sane but we have quote character */
+				state = parse_start_dquote;
+				attr_name_end = in - 1;
+
+				while (attr_name_end > *savep) {
+					if (!g_ascii_isalnum (*attr_name_end)) {
+						attr_name_end --;
+					}
+					else {
+						break;
+					}
+				}
+
+				/* One character forward to obtain length */
+				attr_name_end ++;
 			}
 			else if (g_ascii_isspace (*in)) {
 				state = spaces_before_eq;
@@ -997,13 +1067,32 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 			else if (*in == '/') {
 				tag->flags |= FL_CLOSED;
 			}
+			else if (!g_ascii_isgraph (*in)) {
+				state = parse_value;
+				attr_name_end = in - 1;
+
+				while (attr_name_end > *savep) {
+					if (!g_ascii_isalnum (*attr_name_end)) {
+						attr_name_end --;
+					}
+					else {
+						break;
+					}
+				}
+
+				/* One character forward to obtain length */
+				attr_name_end ++;
+			}
 			else {
 				return;
 			}
 
-			if (!rspamd_html_parse_tag_component (pool, *savep, in, tag)) {
+			if (!rspamd_html_parse_tag_component (pool, *savep, attr_name_end, tag)) {
 				/* Ignore unknown params */
 				*savep = NULL;
+			}
+			else if (state == parse_value) {
+				*savep = in + 1;
 			}
 		}
 
@@ -1106,6 +1195,7 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 			store = TRUE;
 			state = parse_end_dquote;
 		}
+
 		if (store) {
 			if (*savep != NULL) {
 				gchar *s;
@@ -1150,7 +1240,7 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 			tag->flags |= FL_CLOSED;
 			store = TRUE;
 		}
-		else if (g_ascii_isspace (*in) || *in == '>') {
+		else if (g_ascii_isspace (*in) || *in == '>' || *in == '"') {
 			store = TRUE;
 			state = spaces_after_param;
 		}
@@ -1207,6 +1297,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 		struct html_tag_component *comp)
 {
 	struct rspamd_url *url;
+	guint saved_flags = 0;
 	gchar *decoded;
 	gint rc;
 	gsize decoded_len;
@@ -1276,9 +1367,12 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 		}
 	}
 
-	/* We also need to remove all internal newlines and encode unsafe characters */
+	/*
+	 * We also need to remove all internal newlines, spaces
+	 * and encode unsafe characters
+	 */
 	for (i = 0; i < len; i ++) {
-		if (G_UNLIKELY (s[i] == '\r' || s[i] == '\n')) {
+		if (G_UNLIKELY (g_ascii_isspace (s[i]))) {
 			continue;
 		}
 		else if (G_UNLIKELY (((guint)s[i]) < 0x80 && !g_ascii_isgraph (s[i]))) {
@@ -1298,13 +1392,27 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 
 	url = rspamd_mempool_alloc0 (pool, sizeof (*url));
 
-	if (rspamd_normalise_unicode_inplace (pool, decoded, &dlen)) {
-		url->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
+	enum rspamd_normalise_result norm_res;
+
+	norm_res = rspamd_normalise_unicode_inplace (pool, decoded, &dlen);
+
+	if (norm_res & RSPAMD_UNICODE_NORM_UNNORMAL) {
+		saved_flags |= RSPAMD_URL_FLAG_UNNORMALISED;
 	}
 
-	rc = rspamd_url_parse (url, decoded, dlen, pool);
+	if (norm_res & (RSPAMD_UNICODE_NORM_ZERO_SPACES|RSPAMD_UNICODE_NORM_ERROR)) {
+		saved_flags |= RSPAMD_URL_FLAG_OBSCURED;
+
+		if (norm_res & RSPAMD_UNICODE_NORM_ZERO_SPACES) {
+			saved_flags |= RSPAMD_URL_FLAG_ZW_SPACES;
+		}
+	}
+
+	rc = rspamd_url_parse (url, decoded, dlen, pool, RSPAMD_URL_PARSE_HREF);
 
 	if (rc == URI_ERRNO_OK) {
+		url->flags |= saved_flags;
+
 		if (has_bad_chars) {
 			url->flags |= RSPAMD_URL_FLAG_OBSCURED;
 		}
@@ -1428,7 +1536,7 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 
 	if (url->querylen > 0) {
 
-		if (rspamd_url_find (pool, url->query, url->querylen, &url_str, TRUE,
+		if (rspamd_url_find (pool, url->query, url->querylen, &url_str, FALSE,
 				NULL, &prefix_added)) {
 			query_url = rspamd_mempool_alloc0 (pool,
 					sizeof (struct rspamd_url));
@@ -1436,7 +1544,8 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 			rc = rspamd_url_parse (query_url,
 					url_str,
 					strlen (url_str),
-					pool);
+					pool,
+					RSPAMD_URL_PARSE_TEXT);
 
 			if (rc == URI_ERRNO_OK &&
 					query_url->hostlen > 0) {
@@ -1481,6 +1590,58 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 }
 
 static void
+rspamd_html_process_data_image (rspamd_mempool_t *pool,
+								struct html_image *img,
+								struct html_tag_component *src)
+{
+	/*
+	 * Here, we do very basic processing of the data:
+	 * detect if we have something like: `data:image/xxx;base64,yyyzzz==`
+	 * We only parse base64 encoded data.
+	 * We ignore content type so far
+	 */
+	struct rspamd_image *parsed_image;
+	const gchar *semicolon_pos = NULL, *end = src->start + src->len;
+
+	semicolon_pos = src->start;
+
+	while ((semicolon_pos = memchr (semicolon_pos, ';', end - semicolon_pos)) != NULL) {
+		if (end - semicolon_pos > sizeof ("base64,")) {
+			if (memcmp (semicolon_pos + 1, "base64,", sizeof ("base64,") - 1) == 0) {
+				const gchar *data_pos = semicolon_pos + sizeof ("base64,");
+				gchar *decoded;
+				gsize encoded_len = end - data_pos, decoded_len;
+				rspamd_ftok_t inp;
+
+				decoded_len = (encoded_len / 4 * 3) + 12;
+				decoded = rspamd_mempool_alloc (pool, decoded_len);
+				rspamd_cryptobox_base64_decode (data_pos, encoded_len,
+						decoded, &decoded_len);
+				inp.begin = decoded;
+				inp.len = decoded_len;
+
+				parsed_image = rspamd_maybe_process_image (pool, &inp);
+
+				if (parsed_image) {
+					msg_debug_html ("detected %s image of size %ud x %ud in data url",
+							rspamd_image_type_str (parsed_image->type),
+							parsed_image->width, parsed_image->height);
+					img->embedded_image = parsed_image;
+				}
+			}
+
+			break;
+		}
+		else {
+			/* Nothing useful */
+			return;
+		}
+
+		semicolon_pos ++;
+	}
+}
+
+static void
 rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		struct html_content *hc)
 {
@@ -1509,6 +1670,14 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 					"cid:", sizeof ("cid:") - 1) == 0) {
 				/* We have an embedded image */
 				img->flags |= RSPAMD_HTML_FLAG_IMAGE_EMBEDDED;
+			}
+			if (comp->len > sizeof ("data:") - 1 && memcmp (comp->start,
+					"data:", sizeof ("data:") - 1) == 0) {
+				/* We have an embedded image in HTML tag */
+				img->flags |=
+						(RSPAMD_HTML_FLAG_IMAGE_EMBEDDED|RSPAMD_HTML_FLAG_IMAGE_DATA);
+				rspamd_html_process_data_image (pool, img, comp);
+				hc->flags |= RSPAMD_HTML_FLAG_HAS_DATA_URLS;
 			}
 			else {
 				img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
@@ -1582,6 +1751,15 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 		hc->images = g_ptr_array_sized_new (4);
 		rspamd_mempool_add_destructor (pool, rspamd_ptr_array_free_hard,
 				hc->images);
+	}
+
+	if (img->embedded_image) {
+		if (!seen_height) {
+			img->height = img->embedded_image->height;
+		}
+		if (!seen_width) {
+			img->width = img->embedded_image->width;
+		}
 	}
 
 	g_ptr_array_add (hc->images, img);
@@ -2411,8 +2589,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				/* Empty tag */
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
 				state = tag_end;
-				p ++;
-				break;
+				continue;
 			default:
 				state = tag_content;
 				substate = 0;
@@ -2462,6 +2639,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 		case xml_tag_end:
 			if (t == '>') {
 				state = tag_end;
+				continue;
 			}
 			else {
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
@@ -2478,6 +2656,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 			}
 			else if (t == '>' && obrace == ebrace) {
 				state = tag_end;
+				continue;
 			}
 			p ++;
 			break;
@@ -2495,7 +2674,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 			if (t == '-') {
 				ebrace ++;
 			}
-			else if (t == '>' && ebrace == 2) {
+			else if (t == '>' && ebrace >= 2) {
 				state = tag_end;
 				continue;
 			}

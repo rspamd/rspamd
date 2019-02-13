@@ -27,6 +27,7 @@ enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_HAS_USER = 1 << 14,
 	RSPAMD_URL_FLAG_SCHEMALESS = 1 << 15,
 	RSPAMD_URL_FLAG_UNNORMALISED = 1 << 16,
+	RSPAMD_URL_FLAG_ZW_SPACES = 1 << 17,
 };
 
 struct rspamd_url_tag {
@@ -83,6 +84,7 @@ enum rspamd_url_protocol {
 	PROTOCOL_HTTP,
 	PROTOCOL_HTTPS,
 	PROTOCOL_MAILTO,
+	PROTOCOL_TELEPHONE,
 	PROTOCOL_UNKNOWN
 };
 
@@ -104,6 +106,12 @@ void rspamd_url_text_extract (rspamd_mempool_t *pool,
 	struct rspamd_mime_text_part *part,
 	gboolean is_html);
 
+enum rspamd_url_parse_flags {
+	RSPAMD_URL_PARSE_TEXT = 0,
+	RSPAMD_URL_PARSE_HREF = (1u << 0),
+	RSPAMD_URL_PARSE_CHECK = (1 << 1),
+};
+
 /*
  * Parse a single url into an uri structure
  * @param pool memory pool
@@ -111,9 +119,10 @@ void rspamd_url_text_extract (rspamd_mempool_t *pool,
  * @param uri url object, must be pre allocated
  */
 enum uri_errno rspamd_url_parse (struct rspamd_url *uri,
-	gchar *uristring,
-	gsize len,
-	rspamd_mempool_t *pool);
+								 gchar *uristring,
+								 gsize len,
+								 rspamd_mempool_t *pool,
+								 enum rspamd_url_parse_flags flags);
 
 /*
  * Try to extract url from a text
@@ -194,12 +203,15 @@ void rspamd_url_add_tag (struct rspamd_url *url, const gchar *tag,
 
 guint rspamd_url_hash (gconstpointer u);
 guint rspamd_email_hash (gconstpointer u);
+guint rspamd_url_host_hash (gconstpointer u);
+
 
 /* Compare two emails for building emails hash */
 gboolean rspamd_emails_cmp (gconstpointer a, gconstpointer b);
 
 /* Compare two urls for building emails hash */
 gboolean rspamd_urls_cmp (gconstpointer a, gconstpointer b);
+gboolean rspamd_urls_host_cmp (gconstpointer a, gconstpointer b);
 
 /**
  * Decode URL encoded string in-place and return new length of a string, src and dst are NULL terminated
@@ -219,5 +231,13 @@ gsize rspamd_url_decode (gchar *dst, const gchar *src, gsize size);
  */
 const gchar * rspamd_url_encode (struct rspamd_url *url, gsize *dlen,
 		rspamd_mempool_t *pool);
+
+
+/**
+ * Returns if a character is domain character
+ * @param c
+ * @return
+ */
+gboolean rspamd_url_is_domain (int c);
 
 #endif

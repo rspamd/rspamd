@@ -113,6 +113,17 @@ gboolean rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 		gsize srclen);
 
 /**
+ * Use memory pool allocated inet address
+ * @param src
+ * @param srclen
+ * @param pool
+ * @return
+ */
+rspamd_inet_addr_t* rspamd_parse_inet_address_pool (const char *src,
+													 gsize srclen,
+													 rspamd_mempool_t *pool);
+
+/**
  * Returns string representation of inet address
  * @param addr
  * @return statically allocated string pointer (not thread safe)
@@ -140,6 +151,14 @@ uint16_t rspamd_inet_address_get_port (const rspamd_inet_addr_t *addr);
  */
 gint rspamd_inet_address_get_af (const rspamd_inet_addr_t *addr);
 
+/**
+ * Returns sockaddr and size for this address
+ * @param addr
+ * @param sz
+ * @return
+ */
+struct sockaddr* rspamd_inet_address_get_sa (const rspamd_inet_addr_t *addr,
+		socklen_t *sz);
 
 /**
  * Makes a radix key from inet address

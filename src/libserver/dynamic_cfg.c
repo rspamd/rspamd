@@ -118,7 +118,13 @@ apply_dynamic_conf (const ucl_object_t *top, struct rspamd_config *cfg)
 						nscore = ucl_object_todouble (v);
 					}
 
-					rspamd_config_set_action_score (cfg, name, nscore, priority);
+					ucl_object_t *obj_tbl = ucl_object_typed_new (UCL_OBJECT);
+					ucl_object_insert_key (obj_tbl, ucl_object_fromdouble (nscore),
+							"score", 0, false);
+					ucl_object_insert_key (obj_tbl, ucl_object_fromdouble (priority),
+							"priority", 0, false);
+					rspamd_config_set_action_score (cfg, name, obj_tbl);
+					ucl_object_unref (obj_tbl);
 				}
 				else {
 					msg_info (

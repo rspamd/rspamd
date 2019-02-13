@@ -593,7 +593,8 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
   if params.prefix then
     cache_key = params.prefix
   else
-    cache_key = string.format('sp_urls_%d%s', params.limit, params.need_emails)
+    cache_key = string.format('sp_urls_%d%s', params.limit,
+        tostring(params.need_emails))
   end
 
 
@@ -875,5 +876,35 @@ exports.get_task_verdict = function(task)
   return 'uncertain'
 end
 
+---[[[
+-- @function lua_util.maybe_obfuscate_subject(subject, settings)
+-- Obfuscate subject if enabled in settings. Also checks utf8 validity.
+-- Supported settings:
+-- * subject_privacy = false - subject privacy is off
+-- * subject_privacy_alg = 'blake2' - default hash-algorithm to obfuscate subject
+-- * subject_privacy_prefix = 'obf' - prefix to show it's obfuscated
+-- * subject_privacy_length = 16 - cut the length of the hash
+-- @return obfuscated or validated subject
+--]]
+
+exports.maybe_obfuscate_subject = function(subject, settings)
+  local hash = require 'rspamd_cryptobox_hash'
+  if subject and not rspamd_util.is_valid_utf8(subject) then
+    subject = '???'
+  elseif settings.subject_privacy then
+    local hash_alg = settings.subject_privacy_alg or 'blake2'
+    local subject_hash = hash.create_specific(hash_alg, subject)
+
+    if settings.subject_privacy_length then
+      subject = (settings.subject_privacy_prefix or 'obf') .. ':' ..
+          subject_hash:hex():sub(1, settings.subject_privacy_length)
+    else
+      subject = (settings.subject_privacy_prefix or '') .. ':' ..
+          subject_hash:hex()
+    end
+  end
+
+  return subject
+end
 
 return exports

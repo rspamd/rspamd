@@ -25,18 +25,18 @@ CLAMAV HIT
   Run Dummy Clam  ${PORT_CLAM}  1
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}
   Check Rspamc  ${result}  CLAM_VIRUS
-  Should Not Contain  ${result.stdout}  CLAMAV_FAIL
+  Should Not Contain  ${result.stdout}  CLAMAV_VIRUS_FAIL
   Shutdown clamav
 
 CLAMAV CACHE HIT
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}
   Check Rspamc  ${result}  CLAM_VIRUS
-  Should Not Contain  ${result.stdout}  CLAMAV_FAIL
+  Should Not Contain  ${result.stdout}  CLAMAV_VIRUS_FAIL
 
 CLAMAV CACHE MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
   Check Rspamc  ${result}  CLAM_VIRUS  inverse=1
-  Should Not Contain  ${result.stdout}  CLAMAV_FAIL
+  Should Not Contain  ${result.stdout}  CLAMAV_VIRUS_FAIL
 
 FPROT MISS
   Run Dummy Fprot  ${PORT_FPROT}
@@ -47,14 +47,14 @@ FPROT MISS
 
 FPROT HIT - PATTERN
   Run Dummy Fprot  ${PORT_FPROT}  1
-  Run Dummy Fprot  ${PORT_FPROT_DUPLICATE}  1  /tmp/dummy_fprot_dupe.pid
+  Run Dummy Fprot  ${PORT_FPROT2_DUPLICATE}  1  /tmp/dummy_fprot_dupe.pid
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
   Check Rspamc  ${result}  FPROT_EICAR
   Should Not Contain  ${result.stdout}  CLAMAV_VIRUS
   # Also check ordered pattern match
-  Should Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_PATTERN
-  Should Not Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_DEFAULT
-  Should Not Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_NOPE
+  Should Contain  ${result.stdout}  FPROT2_VIRUS_DUPLICATE_PATTERN
+  Should Not Contain  ${result.stdout}  FPROT2_VIRUS_DUPLICATE_DEFAULT
+  Should Not Contain  ${result.stdout}  FPROT2_VIRUS_DUPLICATE_NOPE
   Shutdown fport
   Shutdown fport duplicate
 
@@ -63,8 +63,8 @@ FPROT CACHE HIT
   Check Rspamc  ${result}  FPROT_EICAR
   Should Not Contain  ${result.stdout}  CLAMAV_VIRUS
   # Also check ordered pattern match
-  Should Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_PATTERN
-  Should Not Contain  ${result.stdout}  FPROT_VIRUS_DUPLICATE_DEFAULT
+  Should Contain  ${result.stdout}  FPROT2_VIRUS_DUPLICATE_PATTERN
+  Should Not Contain  ${result.stdout}  FPROT2_VIRUS_DUPLICATE_DEFAULT
 
 FPROT CACHE MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE2}

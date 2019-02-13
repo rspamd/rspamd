@@ -33,6 +33,16 @@ Dotted file name is followed by Bad Extension
   Check Rspamc  ${result}  MIME_BAD_EXTENSION \\(\\d+\\.\\d+\\)\\[exe\\]\\n  re=1
   Should Not Contain  ${result.stdout}  MIME_DOUBLE_BAD_EXTENSION
 
+Dotted numbers in parentheses is followed by Bad Extension
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/next2last-digits_in_parens.eml
+  Check Rspamc  ${result}  MIME_BAD_EXTENSION \\(\\d+\\.\\d+\\)\\[msi\\]\\n  re=1
+  Should Not Contain  ${result.stdout}  MIME_DOUBLE_BAD_EXTENSION
+
+Dotted numbers in square brackets is followed by Bad Extension
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/next2last-digits_in_brackets.eml
+  Check Rspamc  ${result}  MIME_BAD_EXTENSION \\(\\d+\\.\\d+\\)\\[msi\\]\\n  re=1
+  Should Not Contain  ${result.stdout}  MIME_DOUBLE_BAD_EXTENSION
+
 Rar4
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/rar4.eml
   Check Rspamc  ${result}  MIME_BAD_EXTENSION \\(\\d+\\.\\d+\\)\\[exe\\]\\n  re=1
@@ -44,6 +54,12 @@ Cloaked Archive Extension
 Multipart Archive Extension
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/f.zip.001.eml
   Should Not Contain  ${result.stdout}  MIME_ARCHIVE_IN_ARCHIVE
+
+Exe file, but name in filename_whitelist
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/exe_attm.eml
+  Should Not Contain  ${result.stdout}  MIME_BAD_EXTENSION
+  Should Not Contain  ${result.stdout}  MIME_BAD_ATTACHMENT
+  Should Not Contain  ${result.stdout}  MIME_DOUBLE_BAD_EXTENSION
 
 Empty text part should not be treat as html
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/empty-plain-text.eml

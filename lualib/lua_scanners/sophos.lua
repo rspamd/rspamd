@@ -31,9 +31,10 @@ local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
 local function sophos_config(opts)
   local sophos_conf = {
-    scan_mime_parts = true;
-    scan_text_mime = false;
-    scan_image_mime = false;
+    name = N,
+    scan_mime_parts = true,
+    scan_text_mime = false,
+    scan_image_mime = false,
     default_port = 4010,
     timeout = 15.0,
     log_clean = false,
@@ -45,12 +46,18 @@ local function sophos_config(opts)
     savdi_report_oversize = false,
   }
 
-  for k,v in pairs(opts) do
-    sophos_conf[k] = v
-  end
+  sophos_conf = lua_util.override_defaults(sophos_conf, opts)
 
   if not sophos_conf.prefix then
-    sophos_conf.prefix = 'rs_sp'
+    sophos_conf.prefix = 'rs_' .. sophos_conf.name .. '_'
+  end
+
+  if not sophos_conf.log_prefix then
+    if sophos_conf.name:lower() == sophos_conf.type:lower() then
+      sophos_conf.log_prefix = sophos_conf.name
+    else
+      sophos_conf.log_prefix = sophos_conf.name .. ' (' .. sophos_conf.type .. ')'
+    end
   end
 
   if not sophos_conf['servers'] then
@@ -64,7 +71,7 @@ local function sophos_config(opts)
       sophos_conf.default_port)
 
   if sophos_conf['upstreams'] then
-    lua_util.add_debug_alias('antivirus', N)
+    lua_util.add_debug_alias('antivirus', sophos_conf.name)
     return sophos_conf
   end
 
@@ -97,7 +104,8 @@ local function sophos_check(task, content, digest, rule)
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(N, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
+          lua_util.debugm(rule.name, task,
+              '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
 
           tcp.request({
             task = task,
@@ -109,51 +117,42 @@ local function sophos_check(task, content, digest, rule)
           })
         else
           rspamd_logger.errx(task, '%s [%s]: failed to scan, maximum retransmits exceed', rule['symbol'], rule['type'])
-          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and retransmits exceed')
+          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
         end
       else
         upstream:ok()
         data = tostring(data)
-        lua_util.debugm(N, task, '%s [%s]: got reply: %s', rule['symbol'], rule['type'], data)
+        lua_util.debugm(rule.name, task,
+            '%s [%s]: got reply: %s', rule['symbol'], rule['type'], data)
         local vname = string.match(data, 'VIRUS (%S+) ')
         if vname then
-          common.yield_result(task, rule, vname, N)
-          common.save_av_cache(task, digest, rule, vname, N)
+          common.yield_result(task, rule, vname)
+          common.save_av_cache(task, digest, rule, vname)
         else
           if string.find(data, 'DONE OK') then
             if rule['log_clean'] then
-              rspamd_logger.infox(task, '%s [%s]: message or mime_part is clean', rule['symbol'], rule['type'])
+              rspamd_logger.infox(task, '%s: message or mime_part is clean', rule.log_prefix)
             else
-              lua_util.debugm(N, task, '%s [%s]: message or mime_part is clean', rule['symbol'], rule['type'])
+              lua_util.debugm(rule.name, task,
+                  '%s: message or mime_part is clean', rule.log_prefix)
             end
-            common.save_av_cache(task, digest, rule, 'OK', N)
+            common.save_av_cache(task, digest, rule, 'OK')
             -- not finished - continue
           elseif string.find(data, 'ACC') or string.find(data, 'OK SSSP') then
             conn:add_read(sophos_callback)
-            -- set pseudo virus if configured, else do nothing since it's no fatal
           elseif string.find(data, 'FAIL 0212') then
-            rspamd_logger.infox(task, 'Message is ENCRYPTED (0212 SOPHOS_SAVI_ERROR_FILE_ENCRYPTED): %s', data)
-            if rule['savdi_report_encrypted'] then
-              common.yield_result(task, rule, "SAVDI_FILE_ENCRYPTED", N)
-              common.save_av_cache(task, digest, rule, "SAVDI_FILE_ENCRYPTED", N)
-            end
-            -- set pseudo virus if configured, else set fail since part was not scanned
+            rspamd_logger.warnx(task, 'Message is encrypted (FAIL 0212): %s', data)
+            common.yield_result(task, rule, 'SAVDI: Message is encrypted (FAIL 0212)', 0.0, 'fail')
           elseif string.find(data, 'REJ 4') then
-            if rule['savdi_report_oversize'] then
-              rspamd_logger.infox(task, 'SAVDI: Message is OVERSIZED (SSSP reject code 4): %s', data)
-              common.yield_result(task, rule, "SAVDI_FILE_OVERSIZED", N)
-              common.save_av_cache(task, digest, rule, "SAVDI_FILE_OVERSIZED", N)
-            else
-              rspamd_logger.errx(task, 'SAVDI: Message is OVERSIZED (SSSP reject code 4): %s', data)
-              task:insert_result(rule['symbol_fail'], 0.0, 'Message is OVERSIZED (SSSP reject code 4):' .. data)
-            end
+            rspamd_logger.warnx(task, 'Message is oversized (REJ 4): %s', data)
+            common.yield_result(task, rule, 'SAVDI: Message oversized (REJ 4)', 0.0, 'fail')
             -- excplicitly set REJ1 message when SAVDIreports a protocol error
           elseif string.find(data, 'REJ 1') then
             rspamd_logger.errx(task, 'SAVDI (Protocol error (REJ 1)): %s', data)
-            task:insert_result(rule['symbol_fail'], 0.0, 'SAVDI (Protocol error (REJ 1)):' .. data)
+            common.yield_result(task, rule, 'SAVDI: Protocol error (REJ 1)', 0.0, 'fail')
           else
             rspamd_logger.errx(task, 'unhandled response: %s', data)
-            task:insert_result(rule['symbol_fail'], 0.0, 'unhandled response')
+            common.yield_result(task, rule, 'unhandled response: ' .. data, 0.0, 'fail')
           end
 
         end
@@ -170,8 +169,8 @@ local function sophos_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule, N) then
-    if common.check_av_cache(task, digest, rule, sophos_check_uncached, N) then
+  if common.need_av_check(task, content, rule) then
+    if common.check_av_cache(task, digest, rule, sophos_check_uncached) then
       return
     else
       sophos_check_uncached()
@@ -184,5 +183,5 @@ return {
   description = 'sophos antivirus',
   configure = sophos_config,
   check = sophos_check,
-  name = 'sophos'
+  name = N
 }

@@ -146,3 +146,28 @@ base64_test (bool generic, size_t niters, size_t len)
 
 	return cycles;
 }
+
+
+gboolean
+rspamd_cryptobox_base64_is_valid (const gchar *in, gsize inlen)
+{
+	const guchar *p, *end;
+
+	if (inlen == 0) {
+		return FALSE;
+	}
+
+	p = in;
+	end = in + inlen;
+
+	while (p < end && *p != '=') {
+		if (!g_ascii_isspace (*p)) {
+			if (base64_table_dec[*p] == 255) {
+				return FALSE;
+			}
+		}
+		p ++;
+	}
+
+	return TRUE;
+}

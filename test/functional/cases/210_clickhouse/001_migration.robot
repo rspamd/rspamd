@@ -14,13 +14,13 @@ ${RSPAMD_SCOPE}  Suite
 ${CLICKHOUSE_PORT}  ${18123}
 
 *** Test Cases ***
-Initial schema
-  Prepare rspamd
-  Sleep  2  #TODO: replace this check with waiting until migration finishes
-  Column should exist  rspamd  Symbols.Scores
-  Column should exist  rspamd  Attachments.Digest
-  Column should exist  rspamd  Symbols.Scores
-  Schema version should be  2
+#Initial schema
+#  Prepare rspamd
+#  Sleep  2  #TODO: replace this check with waiting until migration finishes
+#  Column should exist  rspamd  Symbols.Scores
+#  Column should exist  rspamd  Attachments.Digest
+#  Column should exist  rspamd  Symbols.Scores
+#  Schema version should be  3
 
 
 Migration
@@ -39,7 +39,7 @@ Migration
   Column should exist  rspamd  Symbols.Scores
   Column should exist  rspamd  Attachments.Digest
   Column should exist  rspamd  Symbols.Scores
-  Schema version should be  2
+  Schema version should be  3
 
 
 Retention

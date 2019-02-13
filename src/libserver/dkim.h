@@ -101,17 +101,16 @@ typedef struct rspamd_dkim_sign_context_s rspamd_dkim_sign_context_t;
 
 struct rspamd_dkim_key_s;
 typedef struct rspamd_dkim_key_s rspamd_dkim_key_t;
-
-struct rspamd_dkim_sign_key_s;
-typedef struct rspamd_dkim_sign_key_s rspamd_dkim_sign_key_t;
+typedef struct rspamd_dkim_key_s rspamd_dkim_sign_key_t;
 
 struct rspamd_task;
 
-enum rspamd_dkim_sign_key_type {
-	RSPAMD_DKIM_SIGN_KEY_FILE = 0,
-	RSPAMD_DKIM_SIGN_KEY_PEM,
-	RSPAMD_DKIM_SIGN_KEY_BASE64,
-	RSPAMD_DKIM_SIGN_KEY_DER
+enum rspamd_dkim_key_format {
+	RSPAMD_DKIM_KEY_FILE = 0,
+	RSPAMD_DKIM_KEY_PEM,
+	RSPAMD_DKIM_KEY_BASE64,
+	RSPAMD_DKIM_KEY_RAW,
+	RSPAMD_DKIM_KEY_UNKNOWN
 };
 
 enum rspamd_dkim_type {
@@ -188,17 +187,16 @@ rspamd_dkim_sign_context_t * rspamd_create_dkim_sign_context (struct rspamd_task
  * @return
  */
 rspamd_dkim_sign_key_t* rspamd_dkim_sign_key_load (const gchar *what, gsize len,
-		enum rspamd_dkim_sign_key_type type,
+		enum rspamd_dkim_key_format type,
 		GError **err);
 
 /**
  * Invalidate modified sign key
  * @param key
  * @return
- */
+*/
 gboolean rspamd_dkim_sign_key_maybe_invalidate (rspamd_dkim_sign_key_t *key,
-		enum rspamd_dkim_sign_key_type type,
-		const gchar *what, gsize len);
+		time_t mtime);
 
 /**
  * Make DNS request for specified context and obtain and parse key

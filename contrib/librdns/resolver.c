@@ -605,6 +605,33 @@ rdns_make_request_full (
 				return NULL;
 			}
 
+			if (cur_name[0] == '.') {
+				/* Skip dots at the begin */
+				unsigned int ndots = strspn (cur_name, ".");
+
+				cur_name += ndots;
+				clen -= ndots;
+
+				if (clen == 0) {
+					rdns_warn ("got empty name to resolve");
+					rdns_request_free (req);
+					return NULL;
+				}
+			}
+
+			if (cur_name[clen - 1] == '.') {
+				/* Skip trailing dots */
+				while (clen >= 1 && cur_name[clen - 1] == '.') {
+					clen --;
+				}
+
+				if (clen == 0) {
+					rdns_warn ("got empty name to resolve");
+					rdns_request_free (req);
+					return NULL;
+				}
+			}
+
 			if (last_name == NULL && queries == 1 && clen < MAX_FAKE_NAME) {
 				/* We allocate structure in the static space */
 				idx = (struct rdns_fake_reply_idx *)align_ptr (fake_buf, 16);

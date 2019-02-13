@@ -31,9 +31,10 @@ local default_message = '${SCANNER}: virus found: "${VIRUS}"'
 
 local function fprot_config(opts)
   local fprot_conf = {
-    scan_mime_parts = true;
-    scan_text_mime = false;
-    scan_image_mime = false;
+    name = N,
+    scan_mime_parts = true,
+    scan_text_mime = false,
+    scan_image_mime = false,
     default_port = 10200,
     timeout = 5.0, -- FIXME: this will break task_timeout!
     log_clean = false,
@@ -43,12 +44,18 @@ local function fprot_config(opts)
     message = default_message,
   }
 
-  for k,v in pairs(opts) do
-    fprot_conf[k] = v
-  end
+  fprot_conf = lua_util.override_defaults(fprot_conf, opts)
 
   if not fprot_conf.prefix then
-    fprot_conf.prefix = 'rs_fp'
+    fprot_conf.prefix = 'rs_' .. fprot_conf.name .. '_'
+  end
+
+  if not fprot_conf.log_prefix then
+    if fprot_conf.name:lower() == fprot_conf.type:lower() then
+      fprot_conf.log_prefix = fprot_conf.name
+    else
+      fprot_conf.log_prefix = fprot_conf.name .. ' (' .. fprot_conf.type .. ')'
+    end
   end
 
   if not fprot_conf['servers'] then
@@ -62,7 +69,7 @@ local function fprot_config(opts)
       fprot_conf.default_port)
 
   if fprot_conf['upstreams'] then
-    lua_util.add_debug_alias('antivirus', N)
+    lua_util.add_debug_alias('antivirus', fprot_conf.name)
     return fprot_conf
   end
 
@@ -96,7 +103,7 @@ local function fprot_check(task, content, digest, rule)
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(N, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
+          lua_util.debugm(rule.name, task, '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
 
           tcp.request({
             task = task,
@@ -111,8 +118,7 @@ local function fprot_check(task, content, digest, rule)
           rspamd_logger.errx(task,
               '%s [%s]: failed to scan, maximum retransmits exceed',
               rule['symbol'], rule['type'])
-          task:insert_result(rule['symbol_fail'], 0.0,
-              'failed to scan and retransmits exceed')
+          common.yield_result(task, rule, 'failed to scan and retransmits exceed', 0.0, 'fail')
         end
       else
         upstream:ok()
@@ -133,12 +139,12 @@ local function fprot_check(task, content, digest, rule)
           if not vname then
             rspamd_logger.errx(task, 'Unhandled response: %s', data)
           else
-            common.yield_result(task, rule, vname, N)
+            common.yield_result(task, rule, vname)
             cached = vname
           end
         end
         if cached then
-          common.save_av_cache(task, digest, rule, cached, N)
+          common.save_av_cache(task, digest, rule, cached)
         end
       end
     end
@@ -154,8 +160,8 @@ local function fprot_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule, N) then
-    if common.check_av_cache(task, digest, rule, fprot_check_uncached, N) then
+  if common.need_av_check(task, content, rule) then
+    if common.check_av_cache(task, digest, rule, fprot_check_uncached) then
       return
     else
       fprot_check_uncached()
@@ -168,5 +174,5 @@ return {
   description = 'fprot antivirus',
   configure = fprot_config,
   check = fprot_check,
-  name = 'fprot'
+  name = N
 }

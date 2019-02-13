@@ -18,6 +18,7 @@
 
 #include "config.h"
 #include "libutil/mem_pool.h"
+#include "libutil/addr.h"
 
 struct rspamd_task;
 
@@ -53,6 +54,38 @@ struct rspamd_mime_header {
 	enum rspamd_mime_header_special_type type;
 	gchar *separator;
 	gchar *decoded;
+};
+
+enum rspamd_received_type {
+	RSPAMD_RECEIVED_SMTP = 0,
+	RSPAMD_RECEIVED_ESMTP,
+	RSPAMD_RECEIVED_ESMTPA,
+	RSPAMD_RECEIVED_ESMTPS,
+	RSPAMD_RECEIVED_ESMTPSA,
+	RSPAMD_RECEIVED_LMTP,
+	RSPAMD_RECEIVED_IMAP,
+	RSPAMD_RECEIVED_LOCAL,
+	RSPAMD_RECEIVED_HTTP,
+	RSPAMD_RECEIVED_MAPI,
+	RSPAMD_RECEIVED_UNKNOWN
+};
+
+#define RSPAMD_RECEIVED_FLAG_ARTIFICIAL (1 << 0)
+#define RSPAMD_RECEIVED_FLAG_SSL (1 << 1)
+#define RSPAMD_RECEIVED_FLAG_AUTHENTICATED (1 << 2)
+
+struct received_header {
+	const gchar *from_hostname;
+	const gchar *from_ip;
+	const gchar *real_hostname;
+	const gchar *real_ip;
+	const gchar *by_hostname;
+	const gchar *for_mbox;
+	rspamd_inet_addr_t *addr;
+	struct rspamd_mime_header *hdr;
+	time_t timestamp;
+	enum rspamd_received_type type;
+	gint flags;
 };
 
 /**

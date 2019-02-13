@@ -1416,13 +1416,16 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 					sizeof (cached->digest));
 			cmd->shingles_count = 0;
 		}
-		else {
+		else if (cached->sh) {
 			encshcmd = rspamd_mempool_alloc0 (pool, sizeof (*encshcmd));
 			shcmd = &encshcmd->cmd;
 			memcpy (&shcmd->sgl, cached->sh, sizeof (struct rspamd_shingle));
 			memcpy (shcmd->basic.digest, cached->digest,
 					sizeof (cached->digest));
 			shcmd->basic.shingles_count = RSPAMD_SHINGLE_SIZE;
+		}
+		else {
+			return NULL;
 		}
 	}
 	else {
@@ -1903,6 +1906,9 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 		res->type = FUZZY_RESULT_IMG;
 	}
 	else {
+		/* Calc real probability */
+		nval *= sqrtf (rep->v1.prob);
+
 		if (cmd->shingles_count > 0) {
 			type = "txt";
 			res->type = FUZZY_RESULT_TXT;
@@ -1910,8 +1916,6 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 		else {
 			res->type = FUZZY_RESULT_BIN;
 		}
-
-		nval *= rspamd_normalize_probability (rep->v1.prob, 0.5);
 	}
 
 	res->score = nval;

@@ -35,6 +35,15 @@ struct rspamd_image {
  */
 void rspamd_images_process (struct rspamd_task *task);
 
+/**
+ * Processes image in raw data
+ * @param task
+ * @param data
+ * @return
+ */
+struct rspamd_image* rspamd_maybe_process_image (rspamd_mempool_t *pool,
+		rspamd_ftok_t *data);
+
 /*
  * Get textual representation of an image's type
  */

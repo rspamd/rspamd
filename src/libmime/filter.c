@@ -19,6 +19,8 @@
 #include "rspamd.h"
 #include "message.h"
 #include "lua/lua_common.h"
+#include "libserver/cfg_file_private.h"
+#include "libmime/filter_private.h"
 #include <math.h>
 #include "contrib/uthash/utlist.h"
 
@@ -70,14 +72,22 @@ rspamd_create_metric_result (struct rspamd_task *task)
 	}
 
 	if (task->cfg) {
-		for (i = 0; i < METRIC_ACTION_MAX; i++) {
-			metric_res->actions_limits[i] = task->cfg->actions[i].score;
+		struct rspamd_action *act, *tmp;
+
+		metric_res->actions_limits = rspamd_mempool_alloc0 (task->task_pool,
+			sizeof (struct rspamd_action_result) * HASH_COUNT (task->cfg->actions));
+		i = 0;
+
+		HASH_ITER (hh, task->cfg->actions, act, tmp) {
+			if (!(act->flags & RSPAMD_ACTION_NO_THRESHOLD)) {
+				metric_res->actions_limits[i].cur_limit = act->threshold;
+			}
+			metric_res->actions_limits[i].action = act;
+
+			i ++;
 		}
-	}
-	else {
-		for (i = 0; i < METRIC_ACTION_MAX; i++) {
-			metric_res->actions_limits[i] = NAN;
-		}
+
+		metric_res->nactions = i;
 	}
 
 	rspamd_mempool_add_destructor (task->task_pool,
@@ -96,7 +106,7 @@ rspamd_pr_sort (const struct rspamd_passthrough_result *pra,
 
 void
 rspamd_add_passthrough_result (struct rspamd_task *task,
-									enum rspamd_action_type action,
+									struct rspamd_action *action,
 									guint priority,
 									double target_score,
 									const gchar *message,
@@ -119,13 +129,13 @@ rspamd_add_passthrough_result (struct rspamd_task *task,
 
 	if (!isnan (target_score)) {
 		msg_info_task ("<%s>: set pre-result to %s (%.2f): '%s' from %s(%d)",
-				task->message_id, rspamd_action_to_str (action), target_score,
+				task->message_id, action->name, target_score,
 				message, module, priority);
 	}
 
 	else {
 		msg_info_task ("<%s>: set pre-result to %s (no score): '%s' from %s(%d)",
-				task->message_id, rspamd_action_to_str (action),
+				task->message_id, action->name,
 				message, module, priority);
 	}
 }
@@ -475,43 +485,50 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 	return ret;
 }
 
-enum rspamd_action_type
-rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_result *mres)
+struct rspamd_action*
+rspamd_check_action_metric (struct rspamd_task *task)
 {
-	struct rspamd_action *action, *selected_action = NULL;
+	struct rspamd_action_result *action_lim,
+			*noaction = NULL;
+	struct rspamd_action *selected_action = NULL;
 	struct rspamd_passthrough_result *pr;
 	double max_score = -(G_MAXDOUBLE), sc;
 	int i;
-	gboolean set_action = FALSE;
+	struct rspamd_metric_result *mres = task->result;
 
 	/* We are not certain about the results during processing */
-	if (task->result->passthrough_result == NULL) {
-		for (i = METRIC_ACTION_REJECT; i < METRIC_ACTION_MAX; i++) {
-			action = &task->cfg->actions[i];
-			sc = mres->actions_limits[i];
+	if (mres->passthrough_result == NULL) {
+		for (i = mres->nactions - 1; i >= 0; i--) {
+			action_lim = &mres->actions_limits[i];
+			sc = action_lim->cur_limit;
 
-			if (isnan (sc)) {
+			if (action_lim->action->action_type == METRIC_ACTION_NOACTION) {
+				noaction = action_lim;
+			}
+
+			if (isnan (sc) ||
+			 	(action_lim->action->flags & (RSPAMD_ACTION_NO_THRESHOLD|RSPAMD_ACTION_HAM))) {
 				continue;
 			}
 
 			if (mres->score >= sc && sc > max_score) {
-				selected_action = action;
+				selected_action = action_lim->action;
 				max_score = sc;
 			}
 		}
 
-		if (set_action && selected_action == NULL) {
-			selected_action = &task->cfg->actions[METRIC_ACTION_NOACTION];
+		if (selected_action == NULL) {
+			selected_action = noaction->action;
 		}
 	}
 	else {
 		/* Peek the highest priority result */
-		pr = task->result->passthrough_result;
+		pr = mres->passthrough_result;
 		sc = pr->target_score;
-		selected_action = &task->cfg->actions[pr->action];
+		selected_action = pr->action;
 
 		if (!isnan (sc)) {
-			if (pr->action == METRIC_ACTION_NOACTION) {
+			if (pr->action->action_type == METRIC_ACTION_NOACTION) {
 				mres->score = MIN (sc, mres->score);
 			}
 			else {
@@ -521,10 +538,10 @@ rspamd_check_action_metric (struct rspamd_task *task, struct rspamd_metric_resul
 	}
 
 	if (selected_action) {
-		return selected_action->action;
+		return selected_action;
 	}
 
-	return METRIC_ACTION_NOACTION;
+	return noaction ? noaction->action : NULL;
 }
 
 struct rspamd_symbol_result*

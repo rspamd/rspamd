@@ -617,7 +617,7 @@ lua_textpart_get_content (lua_State * L)
 	gsize len;
 	const gchar *start, *type = NULL;
 
-	if (part == NULL || IS_PART_EMPTY (part)) {
+	if (part == NULL) {
 		lua_pushnil (L);
 		return 1;
 	}
@@ -626,36 +626,65 @@ lua_textpart_get_content (lua_State * L)
 		type = lua_tostring (L, 2);
 	}
 
-	t = lua_newuserdata (L, sizeof (*t));
-	rspamd_lua_setclass (L, "rspamd{text}", -1);
-
 	if (!type) {
+		if (IS_PART_EMPTY (part)) {
+			lua_pushnil (L);
+			return 1;
+		}
 		start = part->utf_content->data;
 		len = part->utf_content->len;
 	}
 	else if (strcmp (type, "content") == 0) {
+		if (IS_PART_EMPTY (part)) {
+			lua_pushnil (L);
+			return 1;
+		}
+
 		start = part->utf_content->data;
 		len = part->utf_content->len;
 	}
 	else if (strcmp (type, "content_oneline") == 0) {
+		if (IS_PART_EMPTY (part)) {
+			lua_pushnil (L);
+			return 1;
+		}
+
 		start = part->utf_stripped_content->data;
 		len = part->utf_stripped_content->len;
 	}
 	else if (strcmp (type, "raw_parsed") == 0) {
+		if (part->parsed.len == 0) {
+			lua_pushnil (L);
+			return 1;
+		}
+
 		start = part->parsed.begin;
 		len = part->parsed.len;
 	}
 	else if (strcmp (type, "raw_utf") == 0) {
+		if (part->utf_raw_content == NULL || part->utf_raw_content->len == 0) {
+			lua_pushnil (L);
+			return 1;
+		}
+
 		start = part->utf_raw_content->data;
 		len = part->utf_raw_content->len;
 	}
 	else if (strcmp (type, "raw") == 0) {
+		if (part->raw.len == 0) {
+			lua_pushnil (L);
+			return 1;
+		}
+
 		start = part->raw.begin;
 		len = part->raw.len;
 	}
 	else {
 		return luaL_error (L, "invalid content type: %s", type);
 	}
+
+	t = lua_newuserdata (L, sizeof (*t));
+	rspamd_lua_setclass (L, "rspamd{text}", -1);
 
 	t->start = start;
 	t->len = len;
@@ -1756,7 +1785,7 @@ lua_mimepart_get_id (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnumber (L, part->id);
+	lua_pushinteger (L, part->id);
 
 	return 1;
 }
