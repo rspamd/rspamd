@@ -21,6 +21,7 @@ CREATE TABLE rspamd
     RcptUser String,
     RcptDomain String,
     ListId String,
+    Subject String,
     `Attachments.FileName` Array(String),
     `Attachments.ContentType` Array(String),
     `Attachments.Length` Array(UInt32),
@@ -39,4 +40,4 @@ CREATE TABLE rspamd
 
 CREATE TABLE rspamd_version ( Version UInt32) ENGINE = TinyLog;
 
-INSERT INTO rspamd_version (Version) Values (2);
+INSERT INTO rspamd_version (Version) Values (3);
