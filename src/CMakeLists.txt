@@ -146,22 +146,42 @@ RAGEL_TARGET(ragel_smtp_ip
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ip_parser.rl.c)
 ######################### LINK SECTION ###############################
 
-ADD_LIBRARY(rspamd-server STATIC
-		${RSPAMD_CRYPTOBOX}
-		${RSPAMD_UTIL}
-		${RSPAMD_LUA}
-		${RSPAMD_SERVER}
-		${RSPAMD_STAT}
-		${RSPAMD_MIME}
-		${CMAKE_CURRENT_BINARY_DIR}/modules.c
-		${PLUGINSSRC}
-		"${RAGEL_ragel_smtp_addr_OUTPUTS}"
-		"${RAGEL_ragel_newlines_strip_OUTPUTS}"
-		"${RAGEL_ragel_content_type_OUTPUTS}"
-		"${RAGEL_ragel_content_disposition_OUTPUTS}"
-		"${RAGEL_ragel_rfc2047_OUTPUTS}"
-		"${RAGEL_ragel_smtp_date_OUTPUTS}"
-		"${RAGEL_ragel_smtp_ip_OUTPUTS}")
+IF(ENABLE_STATIC MATCHES "ON")
+	ADD_LIBRARY(rspamd-server STATIC
+			${RSPAMD_CRYPTOBOX}
+			${RSPAMD_UTIL}
+			${RSPAMD_LUA}
+			${RSPAMD_SERVER}
+			${RSPAMD_STAT}
+			${RSPAMD_MIME}
+			${CMAKE_CURRENT_BINARY_DIR}/modules.c
+			${PLUGINSSRC}
+			"${RAGEL_ragel_smtp_addr_OUTPUTS}"
+			"${RAGEL_ragel_newlines_strip_OUTPUTS}"
+			"${RAGEL_ragel_content_type_OUTPUTS}"
+			"${RAGEL_ragel_content_disposition_OUTPUTS}"
+			"${RAGEL_ragel_rfc2047_OUTPUTS}"
+			"${RAGEL_ragel_smtp_date_OUTPUTS}"
+			"${RAGEL_ragel_smtp_ip_OUTPUTS}")
+ELSE()
+	ADD_LIBRARY(rspamd-server SHARED
+			${RSPAMD_CRYPTOBOX}
+			${RSPAMD_UTIL}
+			${RSPAMD_LUA}
+			${RSPAMD_SERVER}
+			${RSPAMD_STAT}
+			${RSPAMD_MIME}
+			${CMAKE_CURRENT_BINARY_DIR}/modules.c
+			${PLUGINSSRC}
+			"${RAGEL_ragel_smtp_addr_OUTPUTS}"
+			"${RAGEL_ragel_newlines_strip_OUTPUTS}"
+			"${RAGEL_ragel_content_type_OUTPUTS}"
+			"${RAGEL_ragel_content_disposition_OUTPUTS}"
+			"${RAGEL_ragel_rfc2047_OUTPUTS}"
+			"${RAGEL_ragel_smtp_date_OUTPUTS}"
+			"${RAGEL_ragel_smtp_ip_OUTPUTS}")
+ENDIF()
+
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-http-parser)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-cdb)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-lpeg)
@@ -172,6 +192,28 @@ IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_DEPENDENCIES(rspamd-server rspamd-clang)
 ENDIF()
 
+IF (ENABLE_SNOWBALL MATCHES "ON")
+	TARGET_LINK_LIBRARIES(rspamd-server stemmer)
+ENDIF()
+TARGET_LINK_LIBRARIES(rspamd-server rspamd-hiredis)
+
+IF (ENABLE_FANN MATCHES "ON")
+	TARGET_LINK_LIBRARIES(rspamd-server fann)
+ENDIF ()
+
+IF (ENABLE_HYPERSCAN MATCHES "ON")
+	TARGET_LINK_LIBRARIES(rspamd-server hs)
+ENDIF()
+
+TARGET_LINK_LIBRARIES(rspamd-server rspamd-linenoise)
+
+IF(USE_CXX_LINKER)
+	SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE CXX)
+	SET_TARGET_PROPERTIES(rspamd-server PROPERTIES LINKER_LANGUAGE CXX)
+ENDIF()
+
+TARGET_LINK_LIBRARIES(rspamd-server ${RSPAMD_REQUIRED_LIBRARIES})
+
 ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CMAKE_CURRENT_BINARY_DIR}/workers.c)
 SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE C)
 SET_TARGET_PROPERTIES(rspamd PROPERTIES COMPILE_FLAGS "-DRSPAMD_MAIN")
@@ -180,25 +222,6 @@ IF(NOT DEBIAN_BUILD)
 ENDIF(NOT DEBIAN_BUILD)
 
 TARGET_LINK_LIBRARIES(rspamd rspamd-server)
-IF (ENABLE_SNOWBALL MATCHES "ON")
-	TARGET_LINK_LIBRARIES(rspamd stemmer)
-ENDIF()
-TARGET_LINK_LIBRARIES(rspamd rspamd-hiredis)
-
-IF (ENABLE_FANN MATCHES "ON")
-	TARGET_LINK_LIBRARIES(rspamd fann)
-ENDIF ()
-
-IF (ENABLE_HYPERSCAN MATCHES "ON")
-	TARGET_LINK_LIBRARIES(rspamd hs)
-ENDIF()
-
-TARGET_LINK_LIBRARIES(rspamd rspamd-linenoise)
-
-IF(USE_CXX_LINKER)
-	SET_TARGET_PROPERTIES(rspamd PROPERTIES LINKER_LANGUAGE CXX)
-ENDIF()
-
-TARGET_LINK_LIBRARIES(rspamd ${RSPAMD_REQUIRED_LIBRARIES})
 
 INSTALL(TARGETS rspamd RUNTIME DESTINATION bin)
+INSTALL(TARGETS rspamd-server LIBRARY DESTINATION ${RSPAMD_LIBDIR})
