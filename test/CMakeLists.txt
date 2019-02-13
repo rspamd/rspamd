@@ -24,6 +24,7 @@ IF(USE_CXX_LINKER)
 	SET_TARGET_PROPERTIES(rspamd-test PROPERTIES LINKER_LANGUAGE CXX)
 ENDIF()
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-actrie)
+TARGET_LINK_LIBRARIES(rspamd-test rspamd-server)
 
 IF(NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
 	# Also add dependencies for convenience
