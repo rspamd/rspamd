@@ -1,20 +1,4 @@
-SECTION_RODATA
-
-.globl v0_0
-.globl v1_0
-.globl v2_1
-.globl v19_19
-.globl v38_1
-.globl v38_38
-.globl v121666_121666
-.globl m25
-.globl m26
-.globl subc0
-.globl subc2
-.globl v9_0
-.globl v9_9
-.globl base64_table_dec
-.globl REDMASK51
+.data
 
 .p2align 4
 
