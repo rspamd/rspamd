@@ -1502,7 +1502,7 @@ rspamd_is_html_balanced (struct rspamd_task * task, GArray * args, void *unused)
 	for (i = 0; i < task->text_parts->len; i ++) {
 
 		p = g_ptr_array_index (task->text_parts, i);
-		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p)) {
+		if (IS_PART_HTML (p)) {
 			if (p->flags & RSPAMD_MIME_TEXT_PART_FLAG_BALANCED) {
 				res = TRUE;
 			}
@@ -1539,7 +1539,7 @@ rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 	for (i = 0; i < task->text_parts->len; i ++) {
 		p = g_ptr_array_index (task->text_parts, i);
 
-		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p) && p->html) {
+		if (IS_PART_HTML (p) && p->html) {
 			res = rspamd_html_tag_seen (p->html, arg->data);
 		}
 
@@ -1562,7 +1562,7 @@ rspamd_has_fake_html (struct rspamd_task * task, GArray * args, void *unused)
 	for (i = 0; i < task->text_parts->len; i ++) {
 		p = g_ptr_array_index (task->text_parts, i);
 
-		if (!IS_PART_EMPTY (p) && IS_PART_HTML (p) && p->html->html_tags == NULL) {
+		if (IS_PART_HTML (p) && (p->html == NULL || p->html->html_tags == NULL)) {
 			res = TRUE;
 		}
 
