@@ -43,23 +43,23 @@ local settings = {
     },
     ['add-headers'] = {
       headers = {},
-      remove = 1,
+      remove = 0,
     },
     ['remove-header'] = {
-      remove = 1,
+      remove = 0,
     },
     ['x-spamd-result'] = {
       header = 'X-Spamd-Result',
-      remove = 1,
+      remove = 0,
       stop_chars = ' '
     },
     ['x-rspamd-server'] = {
       header = 'X-Rspamd-Server',
-      remove = 1,
+      remove = 0,
     },
     ['x-rspamd-queue-id'] = {
       header = 'X-Rspamd-Queue-Id',
-      remove = 1,
+      remove = 0,
     },
     ['remove-spam-flag'] = {
       header = 'X-Spam',
@@ -67,11 +67,11 @@ local settings = {
     ['spam-header'] = {
       header = 'Deliver-To',
       value = 'Junk',
-      remove = 1,
+      remove = 0,
     },
     ['x-virus'] = {
       header = 'X-Virus',
-      remove = 1,
+      remove = 0,
       status_clean = nil,
       status_infected = nil,
       status_fail = nil,
@@ -83,20 +83,20 @@ local settings = {
       positive = '+',
       negative = '-',
       neutral = '/',
-      remove = 1,
+      remove = 0,
     },
     ['x-spam-level'] = {
       header = 'X-Spam-Level',
       char = '*',
-      remove = 1,
+      remove = 0,
     },
     ['x-spam-status'] = {
       header = 'X-Spam-Status',
-      remove = 1,
+      remove = 0,
     },
     ['authentication-results'] = {
       header = 'Authentication-Results',
-      remove = 1,
+      remove = 0,
       spf_symbols = {
         pass = 'R_SPF_ALLOW',
         fail = 'R_SPF_FAIL',
@@ -127,7 +127,7 @@ local settings = {
     },
     ['stat-signature'] = {
       header = 'X-Stat-Signature',
-      remove = 1,
+      remove = 0,
     },
     ['fuzzy-hashes'] = {
       header = 'X-Rspamd-Fuzzy',
@@ -353,7 +353,7 @@ local function milter_headers(task)
   end
 
   routines['remove-spam-flag'] = function()
-    remove[settings.routines['remove-spam-flag'].header] = 1
+    remove[settings.routines['remove-spam-flag'].header] = 0
   end
 
   routines['x-virus'] = function()
