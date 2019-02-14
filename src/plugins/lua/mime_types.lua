@@ -142,7 +142,6 @@ local settings = {
     scf = 2,
     shs = 2,
     theme = 2,
-    tmp = 2,
     url = 2,
     vbp = 2,
     vsmacros = 2,
