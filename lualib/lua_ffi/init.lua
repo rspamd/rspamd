@@ -46,6 +46,7 @@ else
   end
 end
 
+pcall(ffi.load, "rspamd-server", true)
 exports.common = require "lua_ffi/common"
 exports.dkim = require "lua_ffi/dkim"
 
