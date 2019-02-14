@@ -454,7 +454,7 @@ rspamd_url_parse_tld_file (const gchar *fname,
 
 		m.flags = flags;
 		rspamd_multipattern_add_pattern (url_scanner->search_trie, p,
-				RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE);
+				RSPAMD_MULTIPATTERN_TLD|RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
 		m.pattern = rspamd_multipattern_get_pattern (url_scanner->search_trie,
 				rspamd_multipattern_get_npatterns (url_scanner->search_trie) - 1);
 		m.patlen = strlen (m.pattern);
@@ -517,13 +517,13 @@ rspamd_url_init (const gchar *tld_file)
 		url_scanner->matchers = g_array_sized_new (FALSE, TRUE,
 				sizeof (struct url_matcher), 13000);
 		url_scanner->search_trie = rspamd_multipattern_create_sized (13000,
-				RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE);
+				RSPAMD_MULTIPATTERN_TLD|RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
 	}
 	else {
 		url_scanner->matchers = g_array_sized_new (FALSE, TRUE,
 				sizeof (struct url_matcher), 128);
 		url_scanner->search_trie = rspamd_multipattern_create_sized (128,
-				RSPAMD_MULTIPATTERN_TLD | RSPAMD_MULTIPATTERN_ICASE);
+				RSPAMD_MULTIPATTERN_TLD|RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
 	}
 
 	rspamd_url_add_static_matchers (url_scanner);

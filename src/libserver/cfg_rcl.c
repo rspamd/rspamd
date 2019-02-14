@@ -1314,7 +1314,9 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 		}
 
 		rspamd_config_add_symbol (cfg, composite_name, score,
-				description, group, FALSE, FALSE,
+				description, group,
+				0,
+				ucl_object_get_priority (obj) + 1,
 				1);
 
 		elt = ucl_object_lookup (obj, "groups");
