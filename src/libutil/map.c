@@ -19,7 +19,7 @@
 #include "config.h"
 #include "map.h"
 #include "map_private.h"
-#include "http.h"
+#include "http_connection.h"
 #include "http_private.h"
 #include "rspamd.h"
 #include "contrib/zstd/zstd.h"

@@ -15,7 +15,7 @@
  */
 #include "rspamdclient.h"
 #include "libutil/util.h"
-#include "libutil/http.h"
+#include "libutil/http_connection.h"
 #include "libutil/http_private.h"
 #include "unix-std.h"
 #include "contrib/zstd/zstd.h"

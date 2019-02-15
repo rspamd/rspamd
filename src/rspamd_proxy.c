@@ -17,7 +17,7 @@
 #include "libutil/util.h"
 #include "libutil/map.h"
 #include "libutil/upstream.h"
-#include "libutil/http.h"
+#include "libutil/http_connection.h"
 #include "libutil/http_private.h"
 #include "libserver/protocol.h"
 #include "libserver/protocol_internal.h"

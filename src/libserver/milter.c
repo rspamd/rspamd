@@ -22,7 +22,7 @@
 #include "unix-std.h"
 #include "logger.h"
 #include "ottery.h"
-#include "libutil/http.h"
+#include "libutil/http_connection.h"
 #include "libutil/http_private.h"
 #include "libserver/protocol_internal.h"
 #include "libserver/cfg_file_private.h"

@@ -18,7 +18,7 @@
 
 #include "config.h"
 #include "util.h"
-#include "http.h"
+#include "http_connection.h"
 #include "rspamd.h"
 
 #ifndef HAVE_SA_SIGINFO

@@ -17,7 +17,7 @@
 #include "rspamadm.h"
 #include "cryptobox.h"
 #include "printf.h"
-#include "libutil/http.h"
+#include "libutil/http_connection.h"
 #include "libutil/http_private.h"
 #include "addr.h"
 #include "unix-std.h"

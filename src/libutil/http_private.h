@@ -16,7 +16,7 @@
 #ifndef SRC_LIBUTIL_HTTP_PRIVATE_H_
 #define SRC_LIBUTIL_HTTP_PRIVATE_H_
 
-#include "http.h"
+#include "http_connection.h"
 #include "str_util.h"
 #include "ref.h"
 #define HASH_CASELESS
