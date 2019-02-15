@@ -21,6 +21,7 @@
 #include "libutil/map_helpers.h"
 #include "libutil/map_private.h"
 #include "libutil/http_private.h"
+#include "libutil/http_router.h"
 #include "libstat/stat_api.h"
 #include "rspamd.h"
 #include "libserver/worker_util.h"

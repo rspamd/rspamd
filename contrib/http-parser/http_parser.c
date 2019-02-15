@@ -122,6 +122,7 @@ do {                                                                 \
 #define KEEP_ALIVE "keep-alive"
 #define CLOSE "close"
 
+enum rspamd_http_message_type { HTTP_REQUEST, HTTP_RESPONSE, HTTP_BOTH };
 
 static const char *method_strings[] =
   {
@@ -1981,7 +1982,7 @@ http_method_str (enum http_method m)
 
 
 void
-http_parser_init (http_parser *parser, enum http_parser_type t)
+http_parser_init (http_parser *parser, int t)
 {
   void *data = parser->data; /* preserve application data */
   memset(parser, 0, sizeof(*parser));

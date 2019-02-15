@@ -43,6 +43,7 @@
 #include "lua/lua_common.h"
 #include "unix-std.h"
 #include "libutil/http_private.h"
+#include "libutil/http_router.h"
 #include "libstat/stat_api.h"
 #include <math.h>
 #include <src/libmime/message.h>

@@ -46,6 +46,7 @@
 #include "message.h"
 #include "multipattern.h"
 #include "contrib/uthash/utlist.h"
+#include "contrib/http-parser/http_parser.h"
 #include <unicode/utf8.h>
 #include <unicode/uchar.h>
 

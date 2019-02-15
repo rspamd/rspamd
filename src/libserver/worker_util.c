@@ -24,6 +24,7 @@
 #include "libutil/map.h"
 #include "libutil/map_private.h"
 #include "libutil/http_private.h"
+#include "libutil/http_router.h"
 
 #ifdef WITH_GPERF_TOOLS
 #include <gperftools/profiler.h>

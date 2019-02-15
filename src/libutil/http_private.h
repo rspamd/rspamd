@@ -17,6 +17,7 @@
 #define SRC_LIBUTIL_HTTP_PRIVATE_H_
 
 #include "http_connection.h"
+#include "http_parser.h"
 #include "str_util.h"
 #include "ref.h"
 #define HASH_CASELESS
@@ -66,12 +67,18 @@ struct rspamd_http_message {
 	time_t date;
 	time_t last_modified;
 	unsigned port;
-	enum http_parser_type type;
+	int type;
 	gint code;
 	enum http_method method;
 	gint flags;
 	ref_entry_t ref;
 };
 
+#define HTTP_ERROR http_error_quark ()
+GQuark http_error_quark (void);
+
+void rspamd_http_message_storage_cleanup (struct rspamd_http_message *msg);
+gboolean rspamd_http_message_grow_body (struct rspamd_http_message *msg,
+										gsize len);
 
 #endif /* SRC_LIBUTIL_HTTP_PRIVATE_H_ */

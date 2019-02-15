@@ -34,10 +34,10 @@
 #include "libcryptobox/keypairs_cache.h"
 #include "libcryptobox/keypair.h"
 #include "libserver/rspamd_control.h"
+#include "libutil/hash.h"
 #include "libutil/map_private.h"
-#include "libutil/hash.h"
 #include "libutil/http_private.h"
-#include "libutil/hash.h"
+#include "libutil/http_router.h"
 #include "unix-std.h"
 
 #include <math.h>

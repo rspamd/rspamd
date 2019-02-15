@@ -18,6 +18,7 @@
 #include "rspamadm.h"
 #include "libutil/http_connection.h"
 #include "libutil/http_private.h"
+#include "libutil/http_router.h"
 #include "printf.h"
 #include "lua/lua_common.h"
 #include "lua/lua_thread_pool.h"
