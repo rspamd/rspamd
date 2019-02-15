@@ -174,6 +174,8 @@ local function prepare_dkim_signing(N, task, settings)
       return udom
     elseif settings[dtype] == 'recipient' then
       return tdom
+    else
+      return settings[dtype]:lower()
     end
   end
 
