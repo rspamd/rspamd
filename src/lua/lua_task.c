@@ -1900,7 +1900,7 @@ lua_task_get_urls (lua_State * L)
 						protocols_mask |= nmask;
 					}
 					else {
-						msg_info ("bad url protocol: %s", cvec);
+						msg_info ("bad url protocol: %s", *cvec);
 					}
 
 					cvec ++;
