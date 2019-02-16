@@ -720,28 +720,7 @@ lua_url_to_table (lua_State *L)
 
 
 		lua_pushstring (L, "protocol");
-
-		switch (u->protocol) {
-		case PROTOCOL_FILE:
-			lua_pushstring (L, "file");
-			break;
-		case PROTOCOL_FTP:
-			lua_pushstring (L, "ftp");
-			break;
-		case PROTOCOL_HTTP:
-			lua_pushstring (L, "http");
-			break;
-		case PROTOCOL_HTTPS:
-			lua_pushstring (L, "https");
-			break;
-		case PROTOCOL_MAILTO:
-			lua_pushstring (L, "mailto");
-			break;
-		case PROTOCOL_UNKNOWN:
-		default:
-			lua_pushstring (L, "unknown");
-			break;
-		}
+		lua_pushstring (L, rspamd_url_protocol_name (u->protocol));
 		lua_settable (L, -3);
 	}
 	else {

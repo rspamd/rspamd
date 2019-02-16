@@ -2072,6 +2072,7 @@ lua_task_get_emails (lua_State * L)
 		lua_createtable (L, g_hash_table_size (task->emails), 0);
 		cb.i = 1;
 		cb.L = L;
+		cb.mask = PROTOCOL_MAILTO;
 		g_hash_table_foreach (task->emails, lua_tree_url_callback, &cb);
 	}
 	else {
