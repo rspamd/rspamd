@@ -3330,3 +3330,61 @@ rspamd_url_is_domain (int c)
 {
 	return is_domain ((guchar)c);
 }
+
+const gchar*
+rspamd_url_protocol_name (enum rspamd_url_protocol proto)
+{
+	const gchar *ret = "unknown";
+
+	switch (proto) {
+	case PROTOCOL_HTTP:
+		ret = "http";
+		break;
+	case PROTOCOL_HTTPS:
+		ret = "https";
+		break;
+	case PROTOCOL_FTP:
+		ret = "ftp";
+		break;
+	case PROTOCOL_FILE:
+		ret = "file";
+		break;
+	case PROTOCOL_MAILTO:
+		ret = "mailto";
+		break;
+	case PROTOCOL_TELEPHONE:
+		ret = "telephone";
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
+enum rspamd_url_protocol
+rspamd_url_protocol_from_string (const gchar *str)
+{
+	enum rspamd_url_protocol ret = PROTOCOL_UNKNOWN;
+
+	if (strcmp (str, "http") == 0) {
+		ret = PROTOCOL_HTTP;
+	}
+	else if (strcmp (str, "https") == 0) {
+		ret = PROTOCOL_HTTPS;
+	}
+	else if (strcmp (str, "mailto") == 0) {
+		ret = PROTOCOL_MAILTO;
+	}
+	else if (strcmp (str, "ftp") == 0) {
+		ret = PROTOCOL_FTP;
+	}
+	else if (strcmp (str, "file") == 0) {
+		ret = PROTOCOL_FILE;
+	}
+	else if (strcmp (str, "telephone") == 0) {
+		ret = PROTOCOL_TELEPHONE;
+	}
+
+	return ret;
+}
