@@ -51,6 +51,7 @@ LUA_FUNCTION_DEF (url, tostring);
 LUA_FUNCTION_DEF (url, get_raw);
 LUA_FUNCTION_DEF (url, get_tld);
 LUA_FUNCTION_DEF (url, get_flags);
+LUA_FUNCTION_DEF (url, get_protocol);
 LUA_FUNCTION_DEF (url, to_table);
 LUA_FUNCTION_DEF (url, is_phished);
 LUA_FUNCTION_DEF (url, is_redirected);
@@ -77,6 +78,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_text),
 	LUA_INTERFACE_DEF (url, get_tld),
 	LUA_INTERFACE_DEF (url, get_raw),
+	LUA_INTERFACE_DEF (url, get_protocol),
 	LUA_INTERFACE_DEF (url, to_table),
 	LUA_INTERFACE_DEF (url, is_phished),
 	LUA_INTERFACE_DEF (url, is_redirected),
@@ -598,6 +600,27 @@ lua_url_get_tld (lua_State *L)
 
 	if (url != NULL && url->url->tldlen > 0) {
 		lua_pushlstring (L, url->url->tld, url->url->tldlen);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
+ * @method url:get_protocol()
+ * Get protocol name
+ * @return {string} protocol as a string
+ */
+static gint
+lua_url_get_protocol (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url != NULL && url->url->protocol != PROTOCOL_UNKNOWN) {
+		lua_pushstring (L, rspamd_url_protocol_name (url->url->protocol));
 	}
 	else {
 		lua_pushnil (L);
