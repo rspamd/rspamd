@@ -1867,9 +1867,9 @@ rspamd_url_parse (struct rspamd_url *uri,
 
 	for (i = 0; i < G_N_ELEMENTS (rspamd_url_protocols); i++) {
 		if (uri->protocollen == rspamd_url_protocols[i].len) {
-			if (memcmp (uri->string, rspamd_url_protocols[i].name, uri->protocollen) ==
-				0) {
-				uri->protocol = i;
+			if (memcmp (uri->string,
+					rspamd_url_protocols[i].name, uri->protocollen) == 0) {
+				uri->protocol = rspamd_url_protocols[i].proto;
 				break;
 			}
 		}
