@@ -639,68 +639,69 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 				if (qmarks < 3) {
 					state = got_encoded_start;
 				}
-				/* Finished encoded boundary */
-				else if (rspamd_rfc2047_parser (c, p - c + 1, &encoding,
-						&cur_charset.begin, &cur_charset.len,
-						&tok_start, &tok_len)) {
-					/* We have a token, so we can decode it from `encoding` */
-					if (token->len > 0) {
-						if (old_charset.len == 0) {
-							memcpy (&old_charset, &cur_charset,
-									sizeof (old_charset));
-						}
-
-						rspamd_mime_header_maybe_save_token (pool, out,
-								token, decoded,
-								&old_charset, &cur_charset);
-					}
-
-					qmarks = 0;
-					pos = token->len;
-					g_byte_array_set_size (token, pos + tok_len);
-
-					if (encoding == RSPAMD_RFC2047_QP) {
-						r = rspamd_decode_qp2047_buf (tok_start, tok_len,
-								token->data + pos, tok_len);
-
-						if (r != -1) {
-							token->len = pos + r;
-						}
-						else {
-							/* Cannot decode qp */
-							token->len -= tok_len;
-						}
-					}
-					else {
-						if (rspamd_cryptobox_base64_decode (tok_start, tok_len,
-								token->data + pos, &tok_len)) {
-							token->len = pos + tok_len;
-						}
-						else {
-							/* Cannot decode */
-							token->len -= tok_len;
-						}
-					}
-
-					c = p + 1;
-					state = skip_spaces;
-				}
 				else {
-					/* Not encoded-word */
-					old_charset.len = 0;
-
-					if (token->len > 0) {
-						rspamd_mime_header_maybe_save_token (pool, out,
-								token, decoded,
-								&old_charset, &cur_charset);
+					/* Finished encoded boundary */
+					if (*c == '"') {
+						/* Quoted string, non-RFC conformant but used by retards */
+						c ++;
 					}
+					if (rspamd_rfc2047_parser (c, p - c + 1, &encoding,
+							&cur_charset.begin, &cur_charset.len,
+							&tok_start, &tok_len)) {
+						/* We have a token, so we can decode it from `encoding` */
+						if (token->len > 0) {
+							if (old_charset.len == 0) {
+								memcpy (&old_charset, &cur_charset,
+										sizeof (old_charset));
+							}
 
-					g_string_append_len (out, c, p - c);
-					c = p;
-					state = parse_normal;
-				}
+							rspamd_mime_header_maybe_save_token (pool, out,
+									token, decoded,
+									&old_charset, &cur_charset);
+						}
 
-			}
+						qmarks = 0;
+						pos = token->len;
+						g_byte_array_set_size (token, pos + tok_len);
+
+						if (encoding == RSPAMD_RFC2047_QP) {
+							r = rspamd_decode_qp2047_buf (tok_start, tok_len,
+									token->data + pos, tok_len);
+
+							if (r != -1) {
+								token->len = pos + r;
+							} else {
+								/* Cannot decode qp */
+								token->len -= tok_len;
+							}
+						} else {
+							if (rspamd_cryptobox_base64_decode (tok_start, tok_len,
+									token->data + pos, &tok_len)) {
+								token->len = pos + tok_len;
+							} else {
+								/* Cannot decode */
+								token->len -= tok_len;
+							}
+						}
+
+						c = p + 1;
+						state = skip_spaces;
+					} else {
+						/* Not encoded-word */
+						old_charset.len = 0;
+
+						if (token->len > 0) {
+							rspamd_mime_header_maybe_save_token (pool, out,
+									token, decoded,
+									&old_charset, &cur_charset);
+						}
+
+						g_string_append_len (out, c, p - c);
+						c = p;
+						state = parse_normal;
+					}
+				} /* qmarks >= 3 */
+			} /* p == '=' */
 			else {
 				state = got_encoded_start;
 			}

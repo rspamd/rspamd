@@ -609,7 +609,7 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 
 		for (i = 0; i < hdrs->len; i ++) {
 			hdr = g_ptr_array_index (hdrs, i);
-			ct = rspamd_content_type_parse (hdr->value, strlen (hdr->value),
+			ct = rspamd_content_type_parse (hdr->decoded, strlen (hdr->decoded),
 					task->task_pool);
 
 			/* Here we prefer multipart content-type or any content-type */
@@ -1240,7 +1240,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 	else {
 		for (i = 0; i < hdrs->len; i ++) {
 			hdr = g_ptr_array_index (hdrs, i);
-			ct = rspamd_content_type_parse (hdr->value, strlen (hdr->value),
+			ct = rspamd_content_type_parse (hdr->decoded, strlen (hdr->decoded),
 					task->task_pool);
 
 			/* Here we prefer multipart content-type or any content-type */
