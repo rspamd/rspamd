@@ -242,6 +242,12 @@ return function(cfg)
     ret = true
   end
 
+  if cfg.symbols then
+    for k, v in metric_pairs(cfg.symbols) do
+      symbol_transform(cfg, k, v)
+    end
+  end
+
   check_statistics_sanity()
 
   if not cfg.actions then
