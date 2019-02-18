@@ -98,6 +98,13 @@ enum lua_var_type {
 	LUA_VAR_UNKNOWN
 };
 
+enum rspamd_symbol_group_flags {
+	RSPAMD_SYMBOL_GROUP_NORMAL = 0,
+	RSPAMD_SYMBOL_GROUP_DISABLED = (1 << 0),
+	RSPAMD_SYMBOL_GROUP_ONE_SHOT = (1 << 1),
+	RSPAMD_SYMBOL_GROUP_UNGROUPED = (1 << 2),
+};
+
 /**
  * Symbols group
  */
@@ -106,13 +113,15 @@ struct rspamd_symbols_group {
 	gchar *name;
 	GHashTable *symbols;
 	gdouble max_score;
-	gboolean disabled;
-	gboolean one_shot;
+	enum rspamd_symbol_group_flags flags;
 };
 
-#define RSPAMD_SYMBOL_FLAG_IGNORE (1 << 1)
-#define RSPAMD_SYMBOL_FLAG_ONEPARAM (1 << 2)
-#define RSPAMD_SYMBOL_FLAG_UNGROUPPED (1 << 3)
+enum rspamd_symbol_flags {
+	RSPAMD_SYMBOL_FLAG_NORMAL = 0,
+	RSPAMD_SYMBOL_FLAG_IGNORE = (1 << 1),
+	RSPAMD_SYMBOL_FLAG_ONEPARAM = (1 << 2),
+	RSPAMD_SYMBOL_FLAG_UNGROUPPED = (1 << 3),
+};
 
 /**
  * Symbol config definition
@@ -125,7 +134,7 @@ struct rspamd_symbol {
 	guint priority;
 	struct rspamd_symbols_group *gr; /* Main group */
 	GPtrArray *groups; /* Other groups */
-	guint flags;
+	enum rspamd_symbol_flags flags;
 	gint nshots;
 };
 

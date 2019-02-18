@@ -1039,6 +1039,10 @@ rspamd_config_new_group (struct rspamd_config *cfg, const gchar *name)
 			(rspamd_mempool_destruct_t)g_hash_table_unref, gr->symbols);
 	gr->name = rspamd_mempool_strdup (cfg->cfg_pool, name);
 
+	if (strcmp (gr->name, "ungrouped") == 0) {
+		gr->flags |= RSPAMD_SYMBOL_GROUP_UNGROUPED;
+	}
+
 	g_hash_table_insert (cfg->groups, gr->name, gr);
 
 	return gr;
@@ -1684,10 +1688,7 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 			/* We also check group information in this case */
 			if (group != NULL && sym_def->gr != NULL &&
 					strcmp (group, sym_def->gr->name) != 0) {
-				msg_debug_config ("move symbol %s from group %s to %s",
-						sym_def->gr->name, group);
 
-				g_hash_table_remove (sym_def->gr->symbols, sym_def->name);
 				sym_group = g_hash_table_lookup (cfg->groups, group);
 
 				if (sym_group == NULL) {
@@ -1695,8 +1696,13 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 					sym_group = rspamd_config_new_group (cfg, group);
 				}
 
-				sym_def->gr = sym_group;
-				g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
+				if (!(sym_group->flags & RSPAMD_SYMBOL_GROUP_UNGROUPED)) {
+					msg_debug_config ("move symbol %s from group %s to %s",
+							sym_def->gr->name, group);
+					g_hash_table_remove (sym_def->gr->symbols, sym_def->name);
+					sym_def->gr = sym_group;
+					g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
+				}
 			}
 
 			return TRUE;
@@ -1870,7 +1876,7 @@ rspamd_config_is_module_enabled (struct rspamd_config *cfg,
 	gr = g_hash_table_lookup (cfg->groups, module_name);
 
 	if (gr) {
-		if (gr->disabled) {
+		if (gr->flags & RSPAMD_SYMBOL_GROUP_DISABLED) {
 			rspamd_plugins_table_push_elt (L,
 					"disabled_explicitly", module_name);
 			msg_info_config ("%s module %s is disabled in the configuration as "
