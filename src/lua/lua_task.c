@@ -1908,6 +1908,9 @@ lua_task_get_urls (lua_State * L)
 
 				g_strfreev (strvec);
 			}
+			else {
+				protocols_mask = default_mask;
+			}
 		}
 		else {
 			protocols_mask = default_mask;
