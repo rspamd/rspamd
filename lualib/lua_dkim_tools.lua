@@ -122,10 +122,14 @@ local function prepare_dkim_signing(N, task, settings)
   if settings.use_http_headers then
     local res,tbl = parse_dkim_http_headers(N, task, settings)
 
-    if not res and settings.allow_headers_fallback then
-      return res,{}
+    if not res then
+      if not settings.allow_headers_fallback then
+        return res,{}
+      else
+        lua_util.debugm(N, task, 'failed to read http headers, fallback to normal schema')
+      end
     else
-      lua_util.debugm(N, task, 'failed to read http headers, fallback to normal schema')
+      return res,tbl
     end
   end
 
