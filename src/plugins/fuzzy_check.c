@@ -2209,7 +2209,7 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 		msg_err_task ("got error on IO with server %s(%s), on %s, %d, %s",
 			rspamd_upstream_name (session->server),
 				rspamd_inet_address_to_string_pretty (
-						rspamd_upstream_addr (session->server)),
+						rspamd_upstream_addr_cur (session->server)),
 			session->state == 1 ? "read" : "write",
 			errno,
 			strerror (errno));
@@ -2255,7 +2255,7 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 		msg_err_task ("got IO timeout with server %s(%s), after %d retransmits",
 				rspamd_upstream_name (session->server),
 				rspamd_inet_address_to_string_pretty (
-						rspamd_upstream_addr (session->server)),
+						rspamd_upstream_addr_cur (session->server)),
 				session->retransmits);
 		rspamd_upstream_fail (session->server, FALSE);
 		if (session->item) {
@@ -2464,7 +2464,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 		msg_err_task ("got error in IO with server %s(%s), %d, %s",
 				rspamd_upstream_name (session->server),
 				rspamd_inet_address_to_string_pretty (
-						rspamd_upstream_addr (session->server)),
+						rspamd_upstream_addr_cur (session->server)),
 				errno, strerror (errno));
 		rspamd_upstream_fail (session->server, FALSE);
 	}
@@ -2568,7 +2568,7 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 				"after %d retransmits",
 				rspamd_upstream_name (session->server),
 				rspamd_inet_address_to_string_pretty (
-						rspamd_upstream_addr (session->server)),
+						rspamd_upstream_addr_cur (session->server)),
 				session->retransmits);
 
 		if (session->session) {
@@ -2725,7 +2725,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 		selected = rspamd_upstream_get (rule->servers, RSPAMD_UPSTREAM_ROUND_ROBIN,
 				NULL, 0);
 		if (selected) {
-			addr = rspamd_upstream_addr (selected);
+			addr = rspamd_upstream_addr_next (selected);
 			if ((sock = rspamd_inet_address_connect (addr, SOCK_DGRAM, TRUE)) == -1) {
 				msg_warn_task ("cannot connect to %s(%s), %d, %s",
 						rspamd_upstream_name (selected),
@@ -2853,7 +2853,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 	while ((selected = rspamd_upstream_get (rule->servers,
 			RSPAMD_UPSTREAM_SEQUENTIAL, NULL, 0))) {
 		/* Create UDP socket */
-		addr = rspamd_upstream_addr (selected);
+		addr = rspamd_upstream_addr_next (selected);
 
 		if ((sock = rspamd_inet_address_connect (addr,
 				SOCK_DGRAM, TRUE)) == -1) {
@@ -3216,7 +3216,7 @@ fuzzy_check_send_lua_learn (struct fuzzy_rule *rule,
 		while ((selected = rspamd_upstream_get (rule->servers,
 				RSPAMD_UPSTREAM_SEQUENTIAL, NULL, 0))) {
 			/* Create UDP socket */
-			addr = rspamd_upstream_addr (selected);
+			addr = rspamd_upstream_addr_next (selected);
 
 			if ((sock = rspamd_inet_address_connect (addr,
 					SOCK_DGRAM, TRUE)) == -1) {

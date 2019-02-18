@@ -630,7 +630,7 @@ rspamd_upstream_dtor (struct upstream *up)
 }
 
 rspamd_inet_addr_t*
-rspamd_upstream_addr (struct upstream *up)
+rspamd_upstream_addr_next (struct upstream *up)
 {
 	guint idx, next_idx;
 	struct upstream_addr_elt *e1, *e2;
@@ -644,6 +644,12 @@ rspamd_upstream_addr (struct upstream *up)
 	} while (e2->errors > e1->errors);
 
 	return e2->addr;
+}
+
+rspamd_inet_addr_t*
+rspamd_upstream_addr_cur (const struct upstream *up)
+{
+	return g_ptr_array_index (up->addrs.addr, up->addrs.cur);
 }
 
 const gchar*

@@ -256,7 +256,7 @@ rspamd_dns_server_init (struct upstream *up, guint idx, gpointer ud)
 	void *serv;
 	struct rdns_upstream_elt *elt;
 
-	addr = rspamd_upstream_addr (up);
+	addr = rspamd_upstream_addr_next (up);
 
 	if (r->cfg) {
 		serv = rdns_resolver_add_server (r->r, rspamd_inet_address_to_string (addr),

@@ -568,7 +568,7 @@ fuzzy_mirror_error_handler (struct rspamd_http_connection *conn, GError *err)
 	msg_info ("abnormally closing connection from backend: %s:%s, "
 			"error: %e",
 			bk_conn->mirror->name,
-			rspamd_inet_address_to_string (rspamd_upstream_addr (bk_conn->up)),
+			rspamd_inet_address_to_string (rspamd_upstream_addr_cur (bk_conn->up)),
 			err);
 
 	fuzzy_mirror_close_connection (bk_conn);
@@ -604,7 +604,7 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 	}
 
 	conn->sock = rspamd_inet_address_connect (
-			rspamd_upstream_addr (conn->up),
+			rspamd_upstream_addr_next (conn->up),
 			SOCK_STREAM, TRUE);
 
 	if (conn->sock == -1) {

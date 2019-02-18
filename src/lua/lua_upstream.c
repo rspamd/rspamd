@@ -110,7 +110,7 @@ lua_upstream_get_addr (lua_State *L)
 	struct upstream *up = lua_check_upstream (L);
 
 	if (up) {
-		rspamd_lua_ip_push (L, rspamd_upstream_addr (up));
+		rspamd_lua_ip_push (L, rspamd_upstream_addr_next (up));
 	}
 	else {
 		lua_pushnil (L);

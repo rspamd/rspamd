@@ -1624,7 +1624,8 @@ surbl_redirector_error (struct rspamd_http_connection *conn,
 
 	task = param->task;
 	msg_err_surbl ("connection with http server %s terminated incorrectly: %e",
-		rspamd_inet_address_to_string (rspamd_upstream_addr (param->redirector)),
+		rspamd_inet_address_to_string (
+				rspamd_upstream_addr_cur (param->redirector)),
 		err);
 	rspamd_upstream_fail (param->redirector, FALSE);
 	rspamd_session_remove_event (param->task->s, free_redirector_session,
@@ -1715,7 +1716,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 				RSPAMD_UPSTREAM_ROUND_ROBIN, url->host, url->hostlen);
 
 		if (selected) {
-			s = rspamd_inet_address_connect (rspamd_upstream_addr (selected),
+			s = rspamd_inet_address_connect (rspamd_upstream_addr_next (selected),
 					SOCK_STREAM, TRUE);
 		}
 

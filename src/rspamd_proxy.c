@@ -1309,7 +1309,8 @@ proxy_backend_mirror_error_handler (struct rspamd_http_connection *conn, GError 
 	msg_info_session ("abnormally closing connection from backend: %s:%s, "
 			"error: %e",
 			bk_conn->name,
-			rspamd_inet_address_to_string (rspamd_upstream_addr (bk_conn->up)),
+			rspamd_inet_address_to_string (
+					rspamd_upstream_addr_cur (bk_conn->up)),
 			err);
 
 	if (err) {
@@ -1337,7 +1338,8 @@ proxy_backend_mirror_finish_handler (struct rspamd_http_connection *conn,
 			bk_conn->parser_from_ref, msg->body_buf.begin, msg->body_buf.len)) {
 		msg_warn_session ("cannot parse results from the mirror backend %s:%s",
 				bk_conn->name,
-				rspamd_inet_address_to_string (rspamd_upstream_addr (bk_conn->up)));
+				rspamd_inet_address_to_string (
+						rspamd_upstream_addr_cur (bk_conn->up)));
 		bk_conn->err = "cannot parse ucl";
 	}
 
@@ -1387,7 +1389,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 		}
 
 		bk_conn->backend_sock = rspamd_inet_address_connect (
-				rspamd_upstream_addr (bk_conn->up),
+				rspamd_upstream_addr_next (bk_conn->up),
 				SOCK_STREAM, TRUE);
 
 		if (bk_conn->backend_sock == -1) {
@@ -1432,7 +1434,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 
 		if (m->local ||
 				rspamd_inet_address_is_local (
-						rspamd_upstream_addr (bk_conn->up), FALSE)) {
+						rspamd_upstream_addr_cur (bk_conn->up), FALSE)) {
 
 			if (session->fname) {
 				rspamd_http_message_add_header (msg, "File", session->fname);
@@ -1509,7 +1511,8 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 	session = bk_conn->s;
 	msg_info_session ("abnormally closing connection from backend: %s, error: %e,"
 			" retries left: %d",
-		rspamd_inet_address_to_string (rspamd_upstream_addr (session->master_conn->up)),
+		rspamd_inet_address_to_string (
+				rspamd_upstream_addr_cur (session->master_conn->up)),
 		err,
 		session->ctx->max_retries - session->retries);
 	session->retries ++;
@@ -1531,7 +1534,7 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 			msg_info_session ("retry connection to: %s"
 					" retries left: %d",
 					rspamd_inet_address_to_string (
-							rspamd_upstream_addr (session->master_conn->up)),
+							rspamd_upstream_addr_cur (session->master_conn->up)),
 					session->ctx->max_retries - session->retries);
 		}
 	}
@@ -1821,14 +1824,15 @@ retry:
 		}
 
 		session->master_conn->backend_sock = rspamd_inet_address_connect (
-				rspamd_upstream_addr (session->master_conn->up),
+				rspamd_upstream_addr_next (session->master_conn->up),
 				SOCK_STREAM, TRUE);
 
 		if (session->master_conn->backend_sock == -1) {
 			msg_err_session ("cannot connect upstream: %s(%s)",
 					host ? hostbuf : "default",
-							rspamd_inet_address_to_string (rspamd_upstream_addr (
-									session->master_conn->up)));
+							rspamd_inet_address_to_string (
+									rspamd_upstream_addr_cur (
+											session->master_conn->up)));
 			rspamd_upstream_fail (session->master_conn->up, TRUE);
 			session->retries ++;
 			goto retry;
@@ -1872,7 +1876,8 @@ retry:
 
 		if (backend->local ||
 				rspamd_inet_address_is_local (
-						rspamd_upstream_addr (session->master_conn->up), FALSE)) {
+						rspamd_upstream_addr_cur (
+								session->master_conn->up), FALSE)) {
 
 			if (session->fname) {
 				rspamd_http_message_add_header (msg, "File", session->fname);
