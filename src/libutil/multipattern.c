@@ -99,8 +99,8 @@ rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern, gsize slen,
 
 	/*
 	 * We understand the following cases
-	 * 1) blah -> \\.blah
-	 * 2) *.blah -> \\..*\\.blah
+	 * 1) blah -> .blah
+	 * 2) *.blah -> ..*\\.blah
 	 * 3) ???
 	 */
 
@@ -116,10 +116,10 @@ rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern, gsize slen,
 			p ++;
 		}
 
-		prefix = ".*";
+		prefix = ".*.";
 	}
 	else {
-		len = slen + 2;
+		len = slen + 1;
 		prefix = ".";
 		p = pattern;
 	}
