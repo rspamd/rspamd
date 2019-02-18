@@ -529,24 +529,31 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 			dit = rspamd_symcache_find_filter (cache, dep->sym);
 
 			if (dit != NULL) {
-				if (dit->id == i) {
-					msg_err_cache ("cannot add dependency on self: %s -> %s "
-							"(resolved to %s)",
-							it->symbol, dep->sym, dit->symbol);
+				if (!dit->is_filter) {
+					msg_err_cache ("cannot depend on non filter symbol "
+								   "(%s wants to add dependency on %s)",
+							dep->sym, dit->symbol);
 				}
 				else {
-					rdep = rspamd_mempool_alloc (cache->static_pool,
-							sizeof (*rdep));
+					if (dit->id == i) {
+						msg_err_cache ("cannot add dependency on self: %s -> %s "
+									   "(resolved to %s)",
+								it->symbol, dep->sym, dit->symbol);
+					} else {
+						rdep = rspamd_mempool_alloc (cache->static_pool,
+								sizeof (*rdep));
 
-					rdep->sym = dep->sym;
-					rdep->item = it;
-					rdep->id = i;
-					g_ptr_array_add (dit->rdeps, rdep);
-					dep->item = dit;
-					dep->id = dit->id;
+						rdep->sym = dep->sym;
+						rdep->item = it;
+						rdep->id = i;
+						g_assert (dit->rdeps != NULL);
+						g_ptr_array_add (dit->rdeps, rdep);
+						dep->item = dit;
+						dep->id = dit->id;
 
-					msg_debug_cache ("add dependency from %d on %d", it->id,
-							dit->id);
+						msg_debug_cache ("add dependency from %d on %d", it->id,
+								dit->id);
+					}
 				}
 			}
 			else {
