@@ -151,12 +151,15 @@ local function dkim_signing_cb(task)
     if #selectors > 0 then
       for _, k in ipairs(selectors) do
         -- templates
-        k.key = lua_util.template(k.key, {
-          domain = k.domain,
-          selector = k.selector
-        })
-        lua_util.debugm(N, task, 'using key "%s", use selector "%s" for domain "%s"',
-            k.key, k.selector, k.domain)
+        if k.key then
+          k.key = lua_util.template(k.key, {
+            domain = k.domain,
+            selector = k.selector
+          })
+          lua_util.debugm(N, task, 'using key "%s", use selector "%s" for domain "%s"',
+              k.key, k.selector, k.domain)
+        end
+
         do_sign(k)
       end
     else

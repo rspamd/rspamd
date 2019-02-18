@@ -669,12 +669,20 @@ dkim_module_load_key_format (struct rspamd_task *task,
 	 * This fails for paths that are also valid base64.
 	 * Maybe the caller should have specified a format.
 	 */
-	if (key_format == RSPAMD_DKIM_KEY_UNKNOWN &&
-		(key[0] == '.' || key[0] == '/')) {
-		if (!rspamd_cryptobox_base64_is_valid (key, keylen)) {
-			key_format = RSPAMD_DKIM_KEY_FILE;
+	if (key_format == RSPAMD_DKIM_KEY_UNKNOWN) {
+		if (key[0] == '.' || key[0] == '/') {
+			if (!rspamd_cryptobox_base64_is_valid (key, keylen)) {
+				key_format = RSPAMD_DKIM_KEY_FILE;
+			}
+		}
+		else if (rspamd_cryptobox_base64_is_valid (key, keylen)) {
+			key_format = RSPAMD_DKIM_KEY_BASE64;
+		}
+		else {
+			key_format = RSPAMD_DKIM_KEY_RAW;
 		}
 	}
+
 
 	if (ret != NULL && key_format == RSPAMD_DKIM_KEY_FILE) {
 		msg_debug_task("checking for stale file key");
@@ -770,7 +778,7 @@ lua_dkim_sign_handler (lua_State *L)
 		dkim_key = dkim_module_load_key_format (task, dkim_module_ctx, key,
 				keylen, RSPAMD_DKIM_KEY_UNKNOWN);
 	}
-	else if(rawkey) {
+	else if (rawkey) {
 		dkim_key = dkim_module_load_key_format (task, dkim_module_ctx, rawkey,
 				rawlen, RSPAMD_DKIM_KEY_UNKNOWN);
 	}
