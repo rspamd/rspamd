@@ -2213,11 +2213,12 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 			session->state == 1 ? "read" : "write",
 			errno,
 			strerror (errno));
-		rspamd_upstream_fail (session->server, FALSE);
+		rspamd_upstream_fail (session->server, TRUE);
 
 		if (session->item) {
 			rspamd_symcache_item_async_dec_check (session->task, session->item, M);
 		}
+
 		rspamd_session_remove_event (session->task->s, fuzzy_io_fin, session);
 	}
 	else {
@@ -2257,7 +2258,8 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 				rspamd_inet_address_to_string_pretty (
 						rspamd_upstream_addr_cur (session->server)),
 				session->retransmits);
-		rspamd_upstream_fail (session->server, FALSE);
+		rspamd_upstream_fail (session->server, TRUE);
+
 		if (session->item) {
 			rspamd_symcache_item_async_dec_check (session->task, session->item, M);
 		}
@@ -2563,7 +2565,7 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 	task = session->task;
 
 	if (session->retransmits >= session->rule->ctx->retransmits) {
-		rspamd_upstream_fail (session->server, FALSE);
+		rspamd_upstream_fail (session->server, TRUE);
 		msg_err_task_check ("got IO timeout with server %s(%s), "
 				"after %d retransmits",
 				rspamd_upstream_name (session->server),
