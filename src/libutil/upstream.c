@@ -649,7 +649,11 @@ rspamd_upstream_addr_next (struct upstream *up)
 rspamd_inet_addr_t*
 rspamd_upstream_addr_cur (const struct upstream *up)
 {
-	return g_ptr_array_index (up->addrs.addr, up->addrs.cur);
+	struct upstream_addr_elt *elt;
+
+	elt = g_ptr_array_index (up->addrs.addr, up->addrs.cur);
+
+	return elt->addr;
 }
 
 const gchar*
