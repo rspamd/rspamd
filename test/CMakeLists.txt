@@ -8,7 +8,6 @@ SET(TESTSRC		rspamd_mem_pool_test.c
 				rspamd_radix_test.c
 				rspamd_shingles_test.c
 				rspamd_upstream_test.c
-				rspamd_http_test.c
 				rspamd_lua_pcall_vs_resume_test.c
 				rspamd_lua_test.c
 				rspamd_cryptobox_test.c

@@ -17,6 +17,7 @@
 #include "rspamd.h"
 #include "util.h"
 #include "libutil/http_connection.h"
+#include "libutil/http_router.h"
 #include "libutil/http_private.h"
 #include "tests.h"
 #include "ottery.h"
