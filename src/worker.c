@@ -414,13 +414,13 @@ accept_socket (gint fd, short what, void *arg)
 		http_opts = RSPAMD_HTTP_REQUIRE_ENCRYPTION;
 	}
 
-	task->http_conn = rspamd_http_connection_new (rspamd_worker_body_handler,
+	task->http_conn = rspamd_http_connection_new (
+			ctx->http_ctx,
+			rspamd_worker_body_handler,
 			rspamd_worker_error_handler,
 			rspamd_worker_finish_handler,
 			http_opts,
-			RSPAMD_HTTP_SERVER,
-			ctx->keys_cache,
-			NULL);
+			RSPAMD_HTTP_SERVER);
 	rspamd_http_connection_set_max_size (task->http_conn, task->cfg->max_message);
 	worker->nconns++;
 	rspamd_mempool_add_destructor (task->task_pool,
@@ -696,8 +696,7 @@ start_worker (struct rspamd_worker *worker)
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);
 
-	/* XXX: stupid default */
-	ctx->keys_cache = rspamd_keypair_cache_new (256);
+	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->ev_base);
 	rspamd_worker_init_scanner (worker, ctx->ev_base, ctx->resolver,
 			&ctx->lang_det);
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,
@@ -707,7 +706,7 @@ start_worker (struct rspamd_worker *worker)
 	rspamd_worker_block_signals ();
 
 	rspamd_stat_close ();
-	rspamd_keypair_cache_destroy (ctx->keys_cache);
+	rspamd_http_context_free (ctx->http_ctx);
 	REF_RELEASE (ctx->cfg);
 	rspamd_log_close (worker->srv->logger, TRUE);
 

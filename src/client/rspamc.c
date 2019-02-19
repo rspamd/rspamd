@@ -67,6 +67,7 @@ static gchar *key = NULL;
 static gchar *user_agent = "rspamc";
 static GList *children;
 static GPatternSpec **exclude_compiled = NULL;
+static struct rspamd_http_context *http_ctx;
 
 static gint retcode = EXIT_SUCCESS;
 
@@ -1668,7 +1669,7 @@ rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
 
 	}
 
-	conn = rspamd_client_init (ev_base, hostbuf, port, timeout, key);
+	conn = rspamd_client_init (http_ctx, ev_base, hostbuf, port, timeout, key);
 
 	if (conn != NULL) {
 		cbdata = g_malloc0 (sizeof (struct rspamc_callback_data));
@@ -1893,6 +1894,15 @@ main (gint argc, gchar **argv, gchar **env)
 
 	rspamd_init_libs ();
 	ev_base = event_base_new ();
+
+	struct rspamd_http_context_cfg http_config;
+
+	memset (&http_config, 0, sizeof (http_config));
+	http_config.kp_cache_size_client = 32;
+	http_config.kp_cache_size_server = 0;
+	http_config.user_agent = user_agent;
+	http_ctx = rspamd_http_context_create_config (&http_config,
+			ev_base);
 
 	/* Ignore sigpipe */
 	sigemptyset (&sigpipe_act.sa_mask);

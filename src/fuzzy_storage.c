@@ -173,6 +173,7 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_cryptobox_keypair *collection_keypair;
 	struct rspamd_cryptobox_pubkey *collection_sign_key;
 	gchar *collection_id_file;
+	struct rspamd_http_context *http_ctx;
 	struct rspamd_keypair_cache *keypair_cache;
 	rspamd_lru_hash_t *errors_ips;
 	rspamd_lru_hash_t *ratelimit_buckets;
@@ -616,13 +617,13 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	rspamd_printf_fstring (&msg->url, "/update_v1/%s", m->name);
 
-	conn->http_conn = rspamd_http_connection_new (NULL,
+	conn->http_conn = rspamd_http_connection_new (
+			ctx->http_ctx,
+			NULL,
 			fuzzy_mirror_error_handler,
 			fuzzy_mirror_finish_handler,
 			RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT,
-			ctx->keypair_cache,
-			NULL);
+			RSPAMD_HTTP_CLIENT);
 
 	rspamd_http_connection_set_key (conn->http_conn,
 			ctx->sync_keypair);
@@ -1994,13 +1995,13 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 	session->name = rspamd_inet_address_to_string (addr);
 	rspamd_random_hex (session->uid, sizeof (session->uid) - 1);
 	session->uid[sizeof (session->uid) - 1] = '\0';
-	http_conn = rspamd_http_connection_new (NULL,
+	http_conn = rspamd_http_connection_new (
+			ctx->http_ctx,
+			NULL,
 			rspamd_fuzzy_mirror_error_handler,
 			rspamd_fuzzy_mirror_finish_handler,
 			0,
-			RSPAMD_HTTP_SERVER,
-			ctx->keypair_cache,
-			NULL);
+			RSPAMD_HTTP_SERVER);
 
 	rspamd_http_connection_set_key (http_conn, ctx->sync_keypair);
 	session->ctx = ctx;
@@ -3004,6 +3005,8 @@ start_fuzzy (struct rspamd_worker *worker)
 		ctx->keypair_cache = rspamd_keypair_cache_new (ctx->keypair_cache_size);
 	}
 
+	ctx->http_ctx = rspamd_http_context_create (cfg, ctx->ev_base);
+
 	if (!ctx->collection_mode) {
 		/*
 		 * Open DB and perform VACUUM
@@ -3058,8 +3061,8 @@ start_fuzzy (struct rspamd_worker *worker)
 					rspamd_fuzzy_collection_error_handler,
 					rspamd_fuzzy_collection_finish_handler,
 					&ctx->stat_tv,
-					ctx->ev_base,
-					NULL, ctx->keypair_cache);
+					NULL,
+					ctx->http_ctx);
 
 			if (ctx->collection_keypair) {
 				rspamd_http_router_set_key (ctx->collection_rt,
@@ -3202,8 +3205,6 @@ start_fuzzy (struct rspamd_worker *worker)
 	else if (worker->index == 0) {
 		gint fd;
 
-		/* Steal keypairs cache... */
-		ctx->collection_rt->cache = NULL;
 		rspamd_http_router_free (ctx->collection_rt);
 
 		/* Try to save collection id */
@@ -3240,8 +3241,8 @@ start_fuzzy (struct rspamd_worker *worker)
 		rspamd_keypair_cache_destroy (ctx->keypair_cache);
 	}
 
+	rspamd_http_context_free (ctx->http_ctx);
 	REF_RELEASE (ctx->cfg);
-
 	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);

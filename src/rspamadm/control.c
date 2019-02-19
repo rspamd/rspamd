@@ -234,13 +234,13 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 		exit (1);
 	}
 
-	conn = rspamd_http_connection_new (NULL,
+	conn = rspamd_http_connection_new (
+			NULL, /* Default context */
+			NULL,
 			rspamd_control_error_handler,
 			rspamd_control_finish_handler,
 			RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT,
-			NULL,
-			NULL);
+			RSPAMD_HTTP_CLIENT);
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	msg->url = rspamd_fstring_new_init (path, strlen (path));
 	double_to_tv (timeout, &tv);

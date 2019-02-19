@@ -808,8 +808,9 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 		ctx = g_malloc0  (sizeof (*ctx));
 		http = rspamd_http_router_new (rspamadm_lua_error_handler,
 						rspamadm_lua_finish_handler,
-						NULL, ev_base,
-						NULL, NULL);
+						NULL,
+						NULL,
+						rspamd_main->http_ctx);
 		ctx->L = L;
 		ctx->rt = http;
 		rspamd_http_router_add_path (http,

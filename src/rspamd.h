@@ -277,6 +277,7 @@ struct rspamd_main {
 	gboolean cores_throttling;                                  /**< turn off cores when limits are exceeded		*/
 	struct roll_history *history;                               /**< rolling history								*/
 	struct event_base *ev_base;
+	struct rspamd_http_context *http_ctx;
 };
 
 enum rspamd_exception_type {

@@ -241,8 +241,9 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 }
 
 struct rspamd_client_connection *
-rspamd_client_init (struct event_base *ev_base, const gchar *name,
-	guint16 port, gdouble timeout, const gchar *key)
+rspamd_client_init (struct rspamd_http_context *http_ctx,
+					struct event_base *ev_base, const gchar *name,
+					guint16 port, gdouble timeout, const gchar *key)
 {
 	struct rspamd_client_connection *conn;
 	gint fd;
@@ -256,14 +257,12 @@ rspamd_client_init (struct event_base *ev_base, const gchar *name,
 	conn->ev_base = ev_base;
 	conn->fd = fd;
 	conn->req_sent = FALSE;
-	conn->keys_cache = rspamd_keypair_cache_new (32);
-	conn->http_conn = rspamd_http_connection_new (rspamd_client_body_handler,
+	conn->http_conn = rspamd_http_connection_new (http_ctx,
+			rspamd_client_body_handler,
 			rspamd_client_error_handler,
 			rspamd_client_finish_handler,
 			0,
-			RSPAMD_HTTP_CLIENT,
-			conn->keys_cache,
-			NULL);
+			RSPAMD_HTTP_CLIENT);
 
 	conn->server_name = g_string_new (name);
 	if (port != 0) {

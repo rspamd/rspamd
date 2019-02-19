@@ -123,18 +123,14 @@ struct rspamd_proxy_ctx {
 	struct timeval io_tv;
 	/* Encryption key for clients */
 	struct rspamd_cryptobox_keypair *key;
-	/* Keys cache */
-	struct rspamd_keypair_cache *keys_cache;
+	/* HTTP context */
+	struct rspamd_http_context *http_ctx;
 	/* Upstreams to use */
 	GHashTable *upstreams;
 	/* Mirrors to send traffic to */
 	GPtrArray *mirrors;
 	/* Default upstream */
 	struct rspamd_http_upstream *default_upstream;
-	/* Local rotating keypair for upstreams */
-	struct rspamd_cryptobox_keypair *local_key;
-	struct event rotate_ev;
-	gdouble rotate_tm;
 	lua_State *lua_state;
 	/* Array of callback functions called on end of scan to compare results */
 	GArray *cmp_refs;
@@ -746,7 +742,6 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 	ctx->mirrors = g_ptr_array_new ();
 	rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ctx->mirrors);
-	ctx->rotate_tm = DEFAULT_ROTATION_TIME;
 	ctx->cfg = cfg;
 	ctx->lua_state = cfg->lua_state;
 	ctx->cmp_refs = g_array_new (FALSE, FALSE, sizeof (gint));
@@ -763,15 +758,6 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, timeout),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
 			"IO timeout");
-	rspamd_rcl_register_worker_option (cfg,
-			type,
-			"rotate",
-			rspamd_rcl_parse_struct_time,
-			ctx,
-			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, rotate_tm),
-			RSPAMD_CL_FLAG_TIME_FLOAT,
-			"Rotation keys time, default: "
-			G_STRINGIFY (DEFAULT_ROTATION_TIME) " seconds");
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"keypair",
@@ -1418,17 +1404,15 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 			rspamd_http_message_add_header (msg, "Settings-ID", m->settings_id);
 		}
 
-		bk_conn->backend_conn = rspamd_http_connection_new (NULL,
+		bk_conn->backend_conn = rspamd_http_connection_new (
+				session->ctx->http_ctx,
+				NULL,
 				proxy_backend_mirror_error_handler,
 				proxy_backend_mirror_finish_handler,
 				RSPAMD_HTTP_CLIENT_SIMPLE,
-				RSPAMD_HTTP_CLIENT,
-				session->ctx->keys_cache,
-				NULL);
+				RSPAMD_HTTP_CLIENT);
 
 		if (m->key) {
-			rspamd_http_connection_set_key (bk_conn->backend_conn,
-					session->ctx->local_key);
 			msg->peer_key = rspamd_pubkey_ref (m->key);
 		}
 
@@ -1851,21 +1835,18 @@ retry:
 		}
 
 		session->master_conn->backend_conn = rspamd_http_connection_new (
+				session->ctx->http_ctx,
 				NULL,
 				proxy_backend_master_error_handler,
 				proxy_backend_master_finish_handler,
 				RSPAMD_HTTP_CLIENT_SIMPLE,
-				RSPAMD_HTTP_CLIENT,
-				session->ctx->keys_cache,
-				NULL);
+				RSPAMD_HTTP_CLIENT);
 		session->master_conn->flags &= ~RSPAMD_BACKEND_CLOSED;
 		session->master_conn->parser_from_ref = backend->parser_from_ref;
 		session->master_conn->parser_to_ref = backend->parser_to_ref;
 
 		if (backend->key) {
 			msg->peer_key = rspamd_pubkey_ref (backend->key);
-			rspamd_http_connection_set_key (session->master_conn->backend_conn,
-					session->ctx->local_key);
 		}
 
 		if (backend->settings_id != NULL) {
@@ -2105,13 +2086,13 @@ proxy_accept_socket (gint fd, short what, void *arg)
 	}
 
 	if (!ctx->milter) {
-		session->client_conn = rspamd_http_connection_new (NULL,
+		session->client_conn = rspamd_http_connection_new (
+				ctx->http_ctx,
+				NULL,
 				proxy_client_error_handler,
 				proxy_client_finish_handler,
 				0,
-				RSPAMD_HTTP_SERVER,
-				ctx->keys_cache,
-				NULL);
+				RSPAMD_HTTP_SERVER);
 
 		if (ctx->key) {
 			rspamd_http_connection_set_key (session->client_conn, ctx->key);
@@ -2159,24 +2140,6 @@ proxy_accept_socket (gint fd, short what, void *arg)
 }
 
 static void
-proxy_rotate_key (gint fd, short what, void *arg)
-{
-	struct timeval rot_tv;
-	struct rspamd_proxy_ctx *ctx = arg;
-	gpointer kp;
-
-	double_to_tv (ctx->rotate_tm, &rot_tv);
-	rot_tv.tv_sec += ottery_rand_range (rot_tv.tv_sec);
-	event_del (&ctx->rotate_ev);
-	event_add (&ctx->rotate_ev, &rot_tv);
-
-	kp = ctx->local_key;
-	ctx->local_key = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
-			RSPAMD_CRYPTOBOX_MODE_25519);
-	rspamd_keypair_unref (kp);
-}
-
-static void
 adjust_upstreams_limits (struct rspamd_proxy_ctx *ctx)
 {
 	struct rspamd_http_upstream *backend;
@@ -2205,9 +2168,9 @@ adjust_upstreams_limits (struct rspamd_proxy_ctx *ctx)
 }
 
 void
-start_rspamd_proxy (struct rspamd_worker *worker) {
+start_rspamd_proxy (struct rspamd_worker *worker)
+{
 	struct rspamd_proxy_ctx *ctx = worker->ctx;
-	struct timeval rot_tv;
 
 	ctx->cfg = worker->srv->cfg;
 	ctx->ev_base = rspamd_prepare_worker (worker, "rspamd_proxy",
@@ -2222,16 +2185,7 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);
 
-	/* XXX: stupid default */
-	ctx->keys_cache = rspamd_keypair_cache_new (256);
-	ctx->local_key = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
-			RSPAMD_CRYPTOBOX_MODE_25519);
-
-	double_to_tv (ctx->rotate_tm, &rot_tv);
-	rot_tv.tv_sec += ottery_rand_range (rot_tv.tv_sec);
-	event_set (&ctx->rotate_ev, -1, EV_TIMEOUT, proxy_rotate_key, ctx);
-	event_base_set (ctx->ev_base, &ctx->rotate_ev);
-	event_add (&ctx->rotate_ev, &rot_tv);
+	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->ev_base);
 
 	if (ctx->has_self_scan) {
 		/* Additional initialisation needed */
@@ -2264,7 +2218,7 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 		rspamd_stat_close ();
 	}
 
-	rspamd_keypair_cache_destroy (ctx->keys_cache);
+	rspamd_http_context_free (ctx->http_ctx);
 	REF_RELEASE (ctx->cfg);
 	rspamd_log_close (worker->srv->logger, TRUE);
 

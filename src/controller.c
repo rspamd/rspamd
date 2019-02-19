@@ -150,6 +150,7 @@ struct rspamd_controller_worker_ctx {
 	rspamd_ftok_t cached_password;
 	rspamd_ftok_t cached_enable_password;
 	/* HTTP server */
+	struct rspamd_http_context *http_ctx;
 	struct rspamd_http_connection_router *http;
 	/* Server's start time */
 	time_t start_time;
@@ -3707,7 +3708,6 @@ start_controller_worker (struct rspamd_worker *worker)
 	GHashTableIter iter;
 	gpointer key, value;
 	guint i;
-	struct rspamd_keypair_cache *cache;
 	struct timeval stv;
 	const guint save_stats_interval = 60 * 1000; /* 1 minute */
 	gpointer m;
@@ -3783,10 +3783,10 @@ start_controller_worker (struct rspamd_worker *worker)
 			"password");
 
 	/* Accept event */
-	cache = rspamd_keypair_cache_new (256);
+	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->ev_base);
 	ctx->http = rspamd_http_router_new (rspamd_controller_error_handler,
-			rspamd_controller_finish_handler, &ctx->io_tv, ctx->ev_base,
-			ctx->static_files_dir, cache);
+			rspamd_controller_finish_handler, &ctx->io_tv,
+			ctx->static_files_dir, ctx->http_ctx);
 
 	/* Add callbacks for different methods */
 	rspamd_http_router_add_path (ctx->http,
@@ -3949,6 +3949,7 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	g_hash_table_unref (ctx->plugins);
 	g_hash_table_unref (ctx->custom_commands);
+	rspamd_http_context_free (ctx->http_ctx);
 	REF_RELEASE (ctx->cfg);
 	rspamd_log_close (worker->srv->logger, TRUE);
 
