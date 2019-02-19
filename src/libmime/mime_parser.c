@@ -535,6 +535,7 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 		struct rspamd_mime_parser_ctx *st,
 		struct rspamd_mime_part *multipart,
 		const gchar *start, const gchar *end,
+		gboolean is_finished,
 		GError **err)
 {
 	struct rspamd_content_type *ct, *sel = NULL;
@@ -558,6 +559,24 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 		 */
 		hdr_pos = 0;
 		body_pos = 0;
+
+		if (!is_finished) {
+			/* Ignore garbage */
+			const gchar *p = start;
+			gboolean seen_something = FALSE;
+
+			while (p < end) {
+				if (g_ascii_isalnum (*p)) {
+					seen_something = TRUE;
+					break;
+				}
+				p ++;
+			}
+
+			if (!seen_something) {
+				return RSPAMD_MIME_PARSE_NO_PART;
+			}
+		}
 	}
 	else {
 		hdr_pos = rspamd_string_find_eoh (&str, &body_pos);
@@ -681,8 +700,8 @@ rspamd_mime_parse_multipart_cb (struct rspamd_task *task,
 			g_assert (cb->cur_boundary != NULL);
 
 			if ((ret = rspamd_mime_process_multipart_node (task, cb->st,
-					cb->multipart, cb->part_start, pos, cb->err))
-					!= RSPAMD_MIME_PARSE_OK) {
+					cb->multipart, cb->part_start, pos, TRUE, cb->err))
+						!= RSPAMD_MIME_PARSE_OK) {
 				return ret;
 			}
 
@@ -1338,7 +1357,16 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 
 				if (end > start &&
 					(ret = rspamd_mime_process_multipart_node (task, st,
-						NULL, start, end, err)) != RSPAMD_MIME_PARSE_OK) {
+						NULL, start, end, FALSE, err)) != RSPAMD_MIME_PARSE_OK) {
+
+					if (nst != st) {
+						rspamd_mime_parse_stack_free (nst);
+					}
+
+					if (ret == RSPAMD_MIME_PARSE_NO_PART) {
+						return RSPAMD_MIME_PARSE_OK;
+					}
+
 					return ret;
 				}
 			}
