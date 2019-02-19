@@ -1277,12 +1277,11 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 				if (cbd->fd != -1) {
 					cbd->stage = map_load_file;
 					cbd->conn = rspamd_http_connection_new (NULL,
+							NULL,
 							http_map_error,
 							http_map_finish,
 							flags,
-							RSPAMD_HTTP_CLIENT,
-							NULL,
-							cbd->map->cfg->libs_ctx->ssl_ctx);
+							RSPAMD_HTTP_CLIENT);
 
 					write_http_request (cbd);
 				}
@@ -1649,13 +1648,13 @@ check:
 
 		if (cbd->fd != -1) {
 			cbd->stage = map_load_file;
-			cbd->conn = rspamd_http_connection_new (NULL,
+			cbd->conn = rspamd_http_connection_new (
+					NULL,
+					NULL,
 					http_map_error,
 					http_map_finish,
 					flags,
-					RSPAMD_HTTP_CLIENT,
-					NULL,
-					cbd->map->cfg->libs_ctx->ssl_ctx);
+					RSPAMD_HTTP_CLIENT);
 
 			write_http_request (cbd);
 			MAP_RELEASE (cbd, "http_callback_data");

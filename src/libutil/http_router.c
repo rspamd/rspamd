@@ -373,9 +373,9 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 struct rspamd_http_connection_router *
 rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 						rspamd_http_router_finish_handler_t fh,
-						struct timeval *timeout, struct event_base *base,
+						struct timeval *timeout,
 						const char *default_fs_path,
-						struct rspamd_keypair_cache *cache)
+						struct rspamd_http_context *ctx)
 {
 	struct rspamd_http_connection_router * new;
 	struct stat st;
@@ -387,7 +387,6 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 	new->conns = NULL;
 	new->error_handler = eh;
 	new->finish_handler = fh;
-	new->ev_base = base;
 	new->response_headers = g_hash_table_new_full (rspamd_strcase_hash,
 			rspamd_strcase_equal, g_free, g_free);
 
@@ -415,7 +414,7 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 		}
 	}
 
-	new->cache = cache;
+	new->ctx = ctx;
 
 	return new;
 }
@@ -510,13 +509,12 @@ rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 	conn->ud = ud;
 	conn->is_reply = FALSE;
 
-	conn->conn = rspamd_http_connection_new (NULL,
+	conn->conn = rspamd_http_connection_new (router->ctx,
+			NULL,
 			rspamd_http_router_error_handler,
 			rspamd_http_router_finish_handler,
 			0,
-			RSPAMD_HTTP_SERVER,
-			router->cache,
-			NULL);
+			RSPAMD_HTTP_SERVER);
 
 	if (router->key) {
 		rspamd_http_connection_set_key (conn->conn, router->key);
@@ -541,10 +539,6 @@ rspamd_http_router_free (struct rspamd_http_connection_router *router)
 
 		if (router->key) {
 			rspamd_keypair_unref (router->key);
-		}
-
-		if (router->cache) {
-			rspamd_keypair_cache_destroy (router->cache);
 		}
 
 		if (router->default_fs_path != NULL) {

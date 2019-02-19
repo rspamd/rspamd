@@ -47,7 +47,7 @@ struct rspamd_http_connection_router {
 	struct timeval tv;
 	struct timeval *ptv;
 	struct event_base *ev_base;
-	struct rspamd_keypair_cache *cache;
+	struct rspamd_http_context *ctx;
 	gchar *default_fs_path;
 	rspamd_http_router_handler_t unknown_method_handler;
 	struct rspamd_cryptobox_keypair *key;
@@ -67,9 +67,8 @@ struct rspamd_http_connection_router * rspamd_http_router_new (
 		rspamd_http_router_error_handler_t eh,
 		rspamd_http_router_finish_handler_t fh,
 		struct timeval *timeout,
-		struct event_base *base,
 		const char *default_fs_path,
-		struct rspamd_keypair_cache *cache);
+		struct rspamd_http_context *ctx);
 
 /**
  * Set encryption key for the HTTP router

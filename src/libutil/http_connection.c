@@ -55,9 +55,10 @@ enum rspamd_http_priv_flags {
 #define IS_CONN_RESETED(c) ((c)->flags & RSPAMD_HTTP_CONN_FLAG_RESETED)
 
 struct rspamd_http_connection_private {
-	gpointer ssl_ctx;
+	struct rspamd_http_context *ctx;
 	struct rspamd_ssl_connection *ssl;
 	struct _rspamd_http_privbuf *buf;
+	struct rspamd_keypair_cache *cache;
 	struct rspamd_cryptobox_pubkey *peer_key;
 	struct rspamd_cryptobox_keypair *local_key;
 	struct rspamd_http_header *header;
@@ -133,272 +134,6 @@ rspamd_http_code_to_str (gint code)
 	return "Unknown error";
 }
 
-/*
- * Obtained from nginx
- * Copyright (C) Igor Sysoev
- */
-static guint mday[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-
-time_t
-rspamd_http_parse_date (const gchar *header, gsize len)
-{
-	const gchar *p, *end;
-	gint month;
-	guint day, year, hour, min, sec;
-	guint64 time;
-	enum {
-		no = 0, rfc822, /* Tue, 10 Nov 2002 23:50:13   */
-		rfc850, /* Tuesday, 10-Dec-02 23:50:13 */
-		isoc /* Tue Dec 10 23:50:13 2002    */
-	} fmt;
-
-	fmt = 0;
-	if (len > 0) {
-		end = header + len;
-	}
-	else {
-		end = header + strlen (header);
-	}
-
-	day = 32;
-	year = 2038;
-
-	for (p = header; p < end; p++) {
-		if (*p == ',') {
-			break;
-		}
-
-		if (*p == ' ') {
-			fmt = isoc;
-			break;
-		}
-	}
-
-	for (p++; p < end; p++)
-		if (*p != ' ') {
-			break;
-		}
-
-	if (end - p < 18) {
-		return (time_t)-1;
-	}
-
-	if (fmt != isoc) {
-		if (*p < '0' || *p > '9' || *(p + 1) < '0' || *(p + 1) > '9') {
-			return (time_t)-1;
-		}
-
-		day = (*p - '0') * 10 + *(p + 1) - '0';
-		p += 2;
-
-		if (*p == ' ') {
-			if (end - p < 18) {
-				return (time_t)-1;
-			}
-			fmt = rfc822;
-
-		}
-		else if (*p == '-') {
-			fmt = rfc850;
-
-		}
-		else {
-			return (time_t)-1;
-		}
-
-		p++;
-	}
-
-	switch (*p) {
-
-	case 'J':
-		month = *(p + 1) == 'a' ? 0 : *(p + 2) == 'n' ? 5 : 6;
-		break;
-
-	case 'F':
-		month = 1;
-		break;
-
-	case 'M':
-		month = *(p + 2) == 'r' ? 2 : 4;
-		break;
-
-	case 'A':
-		month = *(p + 1) == 'p' ? 3 : 7;
-		break;
-
-	case 'S':
-		month = 8;
-		break;
-
-	case 'O':
-		month = 9;
-		break;
-
-	case 'N':
-		month = 10;
-		break;
-
-	case 'D':
-		month = 11;
-		break;
-
-	default:
-		return (time_t)-1;
-	}
-
-	p += 3;
-
-	if ((fmt == rfc822 && *p != ' ') || (fmt == rfc850 && *p != '-')) {
-		return (time_t)-1;
-	}
-
-	p++;
-
-	if (fmt == rfc822) {
-		if (*p < '0' || *p > '9' || *(p + 1) < '0' || *(p + 1) > '9'
-			|| *(p + 2) < '0' || *(p + 2) > '9' || *(p + 3) < '0'
-			|| *(p + 3) > '9') {
-			return (time_t)-1;
-		}
-
-		year = (*p - '0') * 1000 + (*(p + 1) - '0') * 100
-			+ (*(p + 2) - '0') * 10 + *(p + 3) - '0';
-		p += 4;
-
-	}
-	else if (fmt == rfc850) {
-		if (*p < '0' || *p > '9' || *(p + 1) < '0' || *(p + 1) > '9') {
-			return (time_t)-1;
-		}
-
-		year = (*p - '0') * 10 + *(p + 1) - '0';
-		year += (year < 70) ? 2000 : 1900;
-		p += 2;
-	}
-
-	if (fmt == isoc) {
-		if (*p == ' ') {
-			p++;
-		}
-
-		if (*p < '0' || *p > '9') {
-			return (time_t)-1;
-		}
-
-		day = *p++ - '0';
-
-		if (*p != ' ') {
-			if (*p < '0' || *p > '9') {
-				return (time_t)-1;
-			}
-
-			day = day * 10 + *p++ - '0';
-		}
-
-		if (end - p < 14) {
-			return (time_t)-1;
-		}
-	}
-
-	if (*p++ != ' ') {
-		return (time_t)-1;
-	}
-
-	if (*p < '0' || *p > '9' || *(p + 1) < '0' || *(p + 1) > '9') {
-		return (time_t)-1;
-	}
-
-	hour = (*p - '0') * 10 + *(p + 1) - '0';
-	p += 2;
-
-	if (*p++ != ':') {
-		return (time_t)-1;
-	}
-
-	if (*p < '0' || *p > '9' || *(p + 1) < '0' || *(p + 1) > '9') {
-		return (time_t)-1;
-	}
-
-	min = (*p - '0') * 10 + *(p + 1) - '0';
-	p += 2;
-
-	if (*p++ != ':') {
-		return (time_t)-1;
-	}
-
-	if (*p < '0' || *p > '9' || *(p + 1) < '0' || *(p + 1) > '9') {
-		return (time_t)-1;
-	}
-
-	sec = (*p - '0') * 10 + *(p + 1) - '0';
-
-	if (fmt == isoc) {
-		p += 2;
-
-		if (*p++ != ' ') {
-			return (time_t)-1;
-		}
-
-		if (*p < '0' || *p > '9' || *(p + 1) < '0' || *(p + 1) > '9'
-			|| *(p + 2) < '0' || *(p + 2) > '9' || *(p + 3) < '0'
-			|| *(p + 3) > '9') {
-			return (time_t)-1;
-		}
-
-		year = (*p - '0') * 1000 + (*(p + 1) - '0') * 100
-			+ (*(p + 2) - '0') * 10 + *(p + 3) - '0';
-	}
-
-	if (hour > 23 || min > 59 || sec > 59) {
-		return (time_t)-1;
-	}
-
-	if (day == 29 && month == 1) {
-		if ((year & 3) || ((year % 100 == 0) && (year % 400) != 0)) {
-			return (time_t)-1;
-		}
-
-	}
-	else if (day > mday[month]) {
-		return (time_t)-1;
-	}
-
-	/*
-	 * shift new year to March 1 and start months from 1 (not 0),
-	 * it is needed for Gauss' formula
-	 */
-
-	if (--month <= 0) {
-		month += 12;
-		year -= 1;
-	}
-
-	/* Gauss' formula for Gregorian days since March 1, 1 BC */
-
-	time = (guint64) (
-	    /* days in years including leap years since March 1, 1 BC */
-
-		365 * year + year / 4 - year / 100 + year / 400
-
-	    /* days before the month */
-
-		+ 367 * month / 12 - 30
-
-	    /* days before the day */
-
-		+ day - 1
-
-	    /*
-	     * 719527 days were between March 1, 1 BC and March 1, 1970,
-	     * 31 and 28 days were in January and February 1970
-	     */
-
-		- 719527 + 31 + 28) * 86400 + hour * 3600 + min * 60 + sec;
-
-	return (time_t) time;
-}
-
 static void
 rspamd_http_parse_key (rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 		struct rspamd_http_connection_private *priv)
@@ -430,9 +165,10 @@ rspamd_http_parse_key (rspamd_ftok_t *data, struct rspamd_http_connection *conn,
 							RSPAMD_KEYPAIR_SHORT_ID_LEN) == 0) {
 						priv->msg->peer_key = pk;
 
-						if (conn->cache && priv->msg->peer_key) {
-							rspamd_keypair_cache_process (conn->cache,
-									priv->local_key, priv->msg->peer_key);
+						if (priv->cache && priv->msg->peer_key) {
+							rspamd_keypair_cache_process (priv->cache,
+									priv->local_key,
+									priv->msg->peer_key);
 						}
 					}
 					else {
@@ -1299,13 +1035,12 @@ rspamd_http_parser_reset (struct rspamd_http_connection *conn)
 
 struct rspamd_http_connection *
 rspamd_http_connection_new (
+		struct rspamd_http_context *ctx,
 		rspamd_http_body_handler_t body_handler,
 		rspamd_http_error_handler_t error_handler,
 		rspamd_http_finish_handler_t finish_handler,
 		unsigned opts,
-		enum rspamd_http_connection_type type,
-		struct rspamd_keypair_cache *cache,
-		gpointer ssl_ctx)
+		enum rspamd_http_connection_type type)
 {
 	struct rspamd_http_connection *conn;
 	struct rspamd_http_connection_private *priv;
@@ -1323,12 +1058,25 @@ rspamd_http_connection_new (
 	conn->fd = -1;
 	conn->ref = 1;
 	conn->finished = FALSE;
-	conn->cache = cache;
 
 	/* Init priv */
+	if (ctx == NULL) {
+		ctx = rspamd_http_context_default ();
+	}
+
 	priv = g_malloc0 (sizeof (struct rspamd_http_connection_private));
 	conn->priv = priv;
-	priv->ssl_ctx = ssl_ctx;
+	priv->ctx = ctx;
+
+	if (conn->type == RSPAMD_HTTP_CLIENT) {
+		priv->cache = ctx->client_kp_cache;
+		if (ctx->client_kp) {
+			priv->local_key = rspamd_keypair_ref (ctx->client_kp);
+		}
+	}
+	else {
+		priv->cache = ctx->server_kp_cache;
+	}
 
 	rspamd_http_parser_reset (conn);
 	priv->parser.data = conn;
@@ -2022,8 +1770,8 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 
 		encrypted = TRUE;
 
-		if (conn->cache) {
-			rspamd_keypair_cache_process (conn->cache,
+		if (priv->cache) {
+			rspamd_keypair_cache_process (priv->cache,
 					priv->local_key, priv->msg->peer_key);
 		}
 	}
@@ -2287,10 +2035,14 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 	}
 
 	if (msg->flags & RSPAMD_HTTP_FLAG_SSL) {
+		gpointer ssl_ctx = (msg->flags & RSPAMD_HTTP_FLAG_SSL_NOVERIFY) ?
+				priv->ctx->ssl_ctx_noverify : priv->ctx->ssl_ctx;
+
 		if (base != NULL) {
 			event_base_set (base, &priv->ev);
 		}
-		if (!priv->ssl_ctx) {
+
+		if (!ssl_ctx) {
 			err = g_error_new (HTTP_ERROR, errno, "ssl message requested "
 					"with no ssl ctx");
 			rspamd_http_connection_ref (conn);
@@ -2305,7 +2057,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 				rspamd_ssl_connection_free (priv->ssl);
 			}
 
-			priv->ssl = rspamd_ssl_connection_new (priv->ssl_ctx, base,
+			priv->ssl = rspamd_ssl_connection_new (ssl_ctx, base,
 					!(msg->flags & RSPAMD_HTTP_FLAG_SSL_NOVERIFY));
 			g_assert (priv->ssl != NULL);
 

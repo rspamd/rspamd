@@ -24,8 +24,7 @@
  */
 
 #include "config.h"
-#include "keypair.h"
-#include "keypairs_cache.h"
+#include "http_context.h"
 #include "fstring.h"
 #include "ref.h"
 #include "http_message.h"
@@ -104,7 +103,6 @@ struct rspamd_http_connection {
 	rspamd_http_body_handler_t body_handler;
 	rspamd_http_error_handler_t error_handler;
 	rspamd_http_finish_handler_t finish_handler;
-	struct rspamd_keypair_cache *cache;
 	gpointer ud;
 	gsize max_size;
 	unsigned opts;
@@ -121,13 +119,12 @@ struct rspamd_http_connection {
  * @return new connection structure
  */
 struct rspamd_http_connection *rspamd_http_connection_new (
+		struct rspamd_http_context *ctx,
 		rspamd_http_body_handler_t body_handler,
 		rspamd_http_error_handler_t error_handler,
 		rspamd_http_finish_handler_t finish_handler,
 		unsigned opts,
-		enum rspamd_http_connection_type type,
-		struct rspamd_keypair_cache *cache,
-		gpointer ssl_ctx);
+		enum rspamd_http_connection_type type);
 
 
 /**
