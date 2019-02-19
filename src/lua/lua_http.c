@@ -379,23 +379,22 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 	cbd->fd = fd;
 
 	if (cbd->cfg) {
-		cbd->conn = rspamd_http_connection_new (NULL,
+		cbd->conn = rspamd_http_connection_new (
+				NULL,
+				NULL,
 				lua_http_error_handler,
 				lua_http_finish_handler,
 				RSPAMD_HTTP_CLIENT_SIMPLE,
-				RSPAMD_HTTP_CLIENT,
-				NULL,
-				(cbd->flags & RSPAMD_LUA_HTTP_FLAG_NOVERIFY) ?
-				cbd->cfg->libs_ctx->ssl_ctx_noverify : cbd->cfg->libs_ctx->ssl_ctx);
+				RSPAMD_HTTP_CLIENT);
 	}
 	else {
-		cbd->conn = rspamd_http_connection_new (NULL,
+		cbd->conn = rspamd_http_connection_new (
+				NULL,
+				NULL,
 				lua_http_error_handler,
 				lua_http_finish_handler,
 				RSPAMD_HTTP_CLIENT_SIMPLE,
-				RSPAMD_HTTP_CLIENT,
-				NULL,
-				NULL);
+				RSPAMD_HTTP_CLIENT);
 	}
 
 	if (cbd->conn) {
