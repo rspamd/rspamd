@@ -678,9 +678,6 @@ dkim_module_load_key_format (struct rspamd_task *task,
 		else if (rspamd_cryptobox_base64_is_valid (key, keylen)) {
 			key_format = RSPAMD_DKIM_KEY_BASE64;
 		}
-		else {
-			key_format = RSPAMD_DKIM_KEY_RAW;
-		}
 	}
 
 
