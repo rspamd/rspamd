@@ -50,11 +50,13 @@ rspamd_http_context_new_default (struct rspamd_config *cfg,
 
 	static const int default_kp_size = 1024;
 	static const gdouble default_rotate_time = 120;
+	static const gchar *default_user_agent = "rspamd-" RSPAMD_VERSION_FULL;
 
 	ctx = g_malloc0 (sizeof (*ctx));
 	ctx->config.kp_cache_size_client = default_kp_size;
 	ctx->config.kp_cache_size_server = default_kp_size;
 	ctx->config.client_key_rotate_time = default_rotate_time;
+	ctx->config.user_agent = default_user_agent;
 
 	if (cfg) {
 		ctx->ssl_ctx = cfg->libs_ctx->ssl_ctx;
@@ -126,6 +128,18 @@ rspamd_http_context_create (struct rspamd_config *cfg,
 
 			if (rotate_time) {
 				ctx->config.client_key_rotate_time = ucl_object_todouble (rotate_time);
+			}
+
+			const ucl_object_t *user_agent;
+
+			user_agent = ucl_object_lookup (client_obj, "user_agent");
+
+			if (user_agent) {
+				ctx->config.user_agent = ucl_object_tostring (user_agent);
+
+				if (ctx->config.user_agent && strlen (ctx->config.user_agent) == 0) {
+					ctx->config.user_agent = NULL;
+				}
 			}
 		}
 

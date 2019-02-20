@@ -1545,7 +1545,13 @@ dkim_module_lua_push_verify_result (struct rspamd_dkim_lua_verify_cbdata *cbd,
 	ptask = lua_newuserdata (cbd->L, sizeof (*ptask));
 	*ptask = task;
 	lua_pushboolean (cbd->L, success);
-	lua_pushstring (cbd->L, error_str);
+
+	if (error_str) {
+		lua_pushstring (cbd->L, error_str);
+	}
+	else {
+		lua_pushnil (cbd->L);
+	}
 
 	if (cbd->ctx) {
 		if (res->domain) {

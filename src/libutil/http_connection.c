@@ -1805,6 +1805,11 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 		}
 	}
 
+	if (priv->ctx->config.user_agent) {
+		rspamd_http_message_add_header (msg, "User-Agent",
+				priv->ctx->config.user_agent);
+	}
+
 	if (encrypted) {
 		mode = rspamd_keypair_alg (priv->local_key);
 

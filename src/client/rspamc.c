@@ -554,10 +554,6 @@ add_options (GQueue *opts)
 	GString *numbuf;
 	gchar **hdr, **rcpt;
 
-	if (user_agent) {
-		ADD_CLIENT_HEADER (opts, "User-Agent", user_agent);
-	}
-
 	if (ip != NULL) {
 		rspamd_inet_addr_t *addr = NULL;
 
