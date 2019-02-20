@@ -178,6 +178,7 @@ read_cmd_line (gint *argc, gchar ***argv, struct rspamd_config *cfg)
 	else {
 		cfg->cfg_name = cfg_names[0];
 	}
+
 	for (i = 1; i < cfg_num; i++) {
 		r = fork ();
 		if (r == 0) {
@@ -313,6 +314,9 @@ reread_config (struct rspamd_main *rspamd_main)
 		REF_RELEASE (old_cfg);
 		msg_info_main ("config has been reread successfully");
 		rspamd_map_preload (rspamd_main->cfg);
+
+		rspamd_main->cfg->rspamd_user = rspamd_user;
+		rspamd_main->cfg->rspamd_group = rspamd_group;
 	}
 }
 
