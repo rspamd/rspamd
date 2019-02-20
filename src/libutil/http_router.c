@@ -389,6 +389,7 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 	new->finish_handler = fh;
 	new->response_headers = g_hash_table_new_full (rspamd_strcase_hash,
 			rspamd_strcase_equal, g_free, g_free);
+	new->ev_base = ctx->ev_base;
 
 	if (timeout) {
 		new->tv = *timeout;
