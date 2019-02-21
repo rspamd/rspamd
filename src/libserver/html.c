@@ -1301,7 +1301,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	gchar *decoded;
 	gint rc;
 	gsize decoded_len;
-	const gchar *p, *s;
+	const gchar *p, *s, *prefix = "http://";
 	gchar *d;
 	guint i, dlen;
 	gboolean has_bad_chars = FALSE, no_prefix = FALSE;
@@ -1347,44 +1347,50 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	}
 
 	if (rspamd_substring_search (start, len, "://", 3) == -1) {
-		/* We have no prefix */
-		dlen += sizeof ("http://") - 1;
-		no_prefix = TRUE;
+		if (len >= sizeof ("mailto:") &&
+				(memcmp (start, "mailto:", sizeof ("mailto:") - 1) == 0 ||
+						memcmp (start, "tel:", sizeof ("tel:") - 1) == 0)) {
+			/* Exclusion, has valid but 'strange' prefix */
+		}
+		else {
+			for (i = 0; i < len; i ++) {
+				if (!((s[i] & 0x80) || g_ascii_isalnum (s[i]))) {
+					if (i == 0 && len > 2 && s[i] == '/'  && s[i + 1] == '/') {
+						prefix = "http:";
+						dlen += sizeof ("http:") - 1;
+						no_prefix = TRUE;
+					}
+					else if (s[i] == '@') {
+						/* Likely email prefix */
+						prefix = "mailto://";
+						dlen += sizeof ("mailto://") - 1;
+						no_prefix = TRUE;
+					}
+					else {
+						if (i == 0) {
+							/* No valid data */
+							return NULL;
+						}
+					}
+
+					break;
+				}
+			}
+
+			if (!no_prefix) {
+				no_prefix = TRUE;
+				dlen += strlen (prefix);
+			}
+		}
 	}
 
 	decoded = rspamd_mempool_alloc (pool, dlen + 1);
 	d = decoded;
 
 	if (no_prefix) {
-		if (s[0] == '/' && (len > 2 && s[1] == '/')) {
-			/* //bla case */
-			memcpy (d, "http:", sizeof ("http:") - 1);
-			d += sizeof ("http:") - 1;
-		}
-		else if (s[0] == '\\' && (len > 2 && s[1] == '\\')) {
-			/* Likely SMB share, ignore */
-			return NULL;
-		}
-		else {
-			if (s[0] == '.') {
-				/*
-				 * We have relative URL without base URL:
-				 * the former is covered by caller function which
-				 * checks for the base URL.
-				 *
-				 * In the most cases, it is caused by a broken client
-				 */
-				return NULL;
-			}
-			else if ((s[0] & 0x80) || g_ascii_isalnum (s[0])) {
-				memcpy (d, "http://", sizeof ("http://") - 1);
-				d += sizeof ("http://") - 1;
-			}
-			else {
-				/* Some crap */
-				return NULL;
-			}
-		}
+		gsize plen = strlen (prefix);
+		memcpy (d, prefix, plen);
+		d += plen;
 	}
 
 	/*
