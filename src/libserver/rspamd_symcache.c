@@ -931,6 +931,8 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 		 */
 		if (item->type & SYMBOL_TYPE_COMPOSITE) {
 			item->specific.normal.condition_cb = -1;
+			item->specific.normal.user_data = user_data;
+			g_assert (user_data != NULL);
 			g_ptr_array_add (cache->composites, item);
 
 			item->id = cache->items_by_id->len;

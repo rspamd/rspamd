@@ -2431,7 +2431,7 @@ lua_config_add_composite (lua_State * L)
 
 				if (new) {
 					rspamd_symcache_add_symbol (cfg->cache, name,
-							0, NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
+							0, NULL, composite, SYMBOL_TYPE_COMPOSITE, -1);
 				}
 
 				ret = TRUE;
