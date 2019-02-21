@@ -1346,7 +1346,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 		}
 	}
 
-	if (memchr (s, ':', len) == NULL) {
+	if (rspamd_substring_search (start, len, "://", 3) == -1) {
 		/* We have no prefix */
 		dlen += sizeof ("http://") - 1;
 		no_prefix = TRUE;
@@ -1361,9 +1361,25 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 			memcpy (d, "http:", sizeof ("http:") - 1);
 			d += sizeof ("http:") - 1;
 		}
+		else if (s[0] == '\\' && (len > 2 && s[1] == '\\')) {
+			/* Likely SMB share, ignore */
+			return NULL;
+		}
 		else {
-			memcpy (d, "http://", sizeof ("http://") - 1);
-			d += sizeof ("http://") - 1;
+			if (s[0] == '.') {
+				/*
+				 * We have relative URL without base URL:
+				 * the former is covered by caller function which
+				 * checks for the base URL.
+				 *
+				 * In the most cases, it is caused by a broken client
+				 */
+				return NULL;
+			}
+			else if ((s[0] & 0x80) || g_ascii_isalnum (s[0])) {
+				memcpy (d, "http://", sizeof ("http://") - 1);
+				d += sizeof ("http://") - 1;
+			}
 		}
 	}
 
