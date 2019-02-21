@@ -2860,7 +2860,8 @@ rspamd_symcache_composites_foreach (struct rspamd_task *task,
 		dyn_item = rspamd_symcache_get_dynamic (task->checkpoint, item);
 
 		if (!CHECK_START_BIT (task->checkpoint, dyn_item)) {
-			SET_START_BIT (task->checkpoint, dyn_item);
+			/* Cannot do it due to 2 passes */
+			/* SET_START_BIT (task->checkpoint, dyn_item); */
 			func (item->symbol, item->specific.normal.user_data, fd);
 			SET_FINISH_BIT (task->checkpoint, dyn_item);
 		}
