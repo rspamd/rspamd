@@ -1380,6 +1380,10 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 				memcpy (d, "http://", sizeof ("http://") - 1);
 				d += sizeof ("http://") - 1;
 			}
+			else {
+				/* Some crap */
+				return NULL;
+			}
 		}
 	}
 
