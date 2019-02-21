@@ -23,6 +23,7 @@
 #include "unix-std.h"
 #include "contrib/t1ha/t1ha.h"
 #include "libserver/worker_util.h"
+#include "khash.h"
 #include <math.h>
 
 #if defined(__STDC_VERSION__) &&  __STDC_VERSION__ >= 201112L
@@ -81,51 +82,6 @@ struct symcache_order {
 	ref_entry_t ref;
 };
 
-struct rspamd_symcache {
-	/* Hash table for fast access */
-	GHashTable *items_by_symbol;
-	GPtrArray *items_by_id;
-	struct symcache_order *items_by_order;
-	GPtrArray *filters;
-	GPtrArray *prefilters;
-	GPtrArray *postfilters;
-	GPtrArray *composites;
-	GPtrArray *idempotent;
-	GPtrArray *virtual;
-	GPtrArray *squeezed;
-	GList *delayed_deps;
-	GList *delayed_conditions;
-	rspamd_mempool_t *static_pool;
-	guint64 cksum;
-	gdouble total_weight;
-	guint used_items;
-	guint stats_symbols_count;
-	guint64 total_hits;
-	guint id;
-	struct rspamd_config *cfg;
-	gdouble reload_time;
-	gint peak_cb;
-};
-
-struct item_stat {
-	struct rspamd_counter_data time_counter;
-	gdouble avg_time;
-	gdouble weight;
-	guint hits;
-	guint64 total_hits;
-	struct rspamd_counter_data frequency_counter;
-	gdouble avg_frequency;
-	gdouble stddev_frequency;
-};
-
-struct rspamd_symcache_dynamic_item {
-	guint16 start_msec; /* Relative to task time */
-	unsigned started:1;
-	unsigned finished:1;
-	/* unsigned pad:14; */
-	guint32 async_events;
-};
-
 struct rspamd_symcache_item {
 	/* This block is likely shared */
 	struct item_stat *st;
@@ -164,6 +120,53 @@ struct rspamd_symcache_item {
 	GPtrArray *deps;
 	GPtrArray *rdeps;
 };
+
+struct item_stat {
+	struct rspamd_counter_data time_counter;
+	gdouble avg_time;
+	gdouble weight;
+	guint hits;
+	guint64 total_hits;
+	struct rspamd_counter_data frequency_counter;
+	gdouble avg_frequency;
+	gdouble stddev_frequency;
+};
+
+struct rspamd_symcache {
+	/* Hash table for fast access */
+	GHashTable *items_by_symbol;
+	GPtrArray *items_by_id;
+	struct symcache_order *items_by_order;
+	GPtrArray *filters;
+	GPtrArray *prefilters;
+	GPtrArray *postfilters;
+	GPtrArray *composites;
+	GPtrArray *idempotent;
+	GPtrArray *virtual;
+	GPtrArray *squeezed;
+	GList *delayed_deps;
+	GList *delayed_conditions;
+	rspamd_mempool_t *static_pool;
+	guint64 cksum;
+	gdouble total_weight;
+	guint used_items;
+	guint stats_symbols_count;
+	guint64 total_hits;
+	guint id;
+	struct rspamd_config *cfg;
+	gdouble reload_time;
+	gint peak_cb;
+};
+
+struct rspamd_symcache_dynamic_item {
+	guint16 start_msec; /* Relative to task time */
+	unsigned started:1;
+	unsigned finished:1;
+	/* unsigned pad:14; */
+	guint32 async_events;
+};
+
+
 
 struct cache_dependency {
 	struct rspamd_symcache_item *item;
@@ -2841,4 +2844,25 @@ rspamd_symcache_get_symbol_flags (struct rspamd_symcache *cache,
 	}
 
 	return 0;
+}
+
+void
+rspamd_symcache_composites_foreach (struct rspamd_task *task,
+										 struct rspamd_symcache *cache,
+										 GHFunc func,
+										 gpointer fd)
+{
+	guint i;
+	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_dynamic_item *dyn_item;
+
+	PTR_ARRAY_FOREACH (cache->composites, i, item) {
+		dyn_item = rspamd_symcache_get_dynamic (task->checkpoint, item);
+
+		if (!CHECK_START_BIT (task->checkpoint, dyn_item)) {
+			SET_START_BIT (task->checkpoint, dyn_item);
+			func (item->symbol, item->specific.normal.user_data, fd);
+			SET_FINISH_BIT (task->checkpoint, dyn_item);
+		}
+	}
 }

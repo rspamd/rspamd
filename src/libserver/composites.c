@@ -559,9 +559,10 @@ composites_metric_callback (struct rspamd_metric_result *metric_res,
 			NBYTES (g_hash_table_size (task->cfg->composite_symbols) * 2));
 
 	/* Process hash table */
-	g_hash_table_foreach (task->cfg->composite_symbols,
-		composites_foreach_callback,
-		cd);
+	rspamd_symcache_composites_foreach (task,
+			task->cfg->cache,
+			composites_foreach_callback,
+			cd);
 
 	/* Remove symbols that are in composites */
 	g_hash_table_foreach (cd->symbols_to_remove, composites_remove_symbols, cd);

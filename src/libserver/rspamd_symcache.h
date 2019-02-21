@@ -402,4 +402,16 @@ gboolean rspamd_symcache_item_async_dec_check_full (struct rspamd_task *task,
 void rspamd_symcache_disable_all_symbols (struct rspamd_task *task,
 										  struct rspamd_symcache *cache,
 										  guint skip_mask);
+
+/**
+ * Iterates over the list of the enabled composites calling specified function
+ * @param task
+ * @param cache
+ * @param func
+ * @param fd
+ */
+void rspamd_symcache_composites_foreach (struct rspamd_task *task,
+										 struct rspamd_symcache *cache,
+										 GHFunc func,
+										 gpointer fd);
 #endif
