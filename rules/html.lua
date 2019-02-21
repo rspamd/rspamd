@@ -23,6 +23,20 @@ reconf['MIME_HTML_ONLY'] = {
   group = 'headers'
 }
 
+local function has_anchor_parent(tag)
+  local parent = tag
+  repeat
+    parent = parent:get_parent()
+    if parent then
+      if parent:get_type() == 'a' then
+        return true
+      end
+    end
+  until not parent
+
+  return false
+end
+
 local function check_html_image(task, min, max)
   local tp = task:get_text_parts()
 
@@ -38,13 +52,10 @@ local function check_html_image(task, min, max)
           for _,i in ipairs(images) do
             local tag = i['tag']
             if tag then
-              local parent = tag:get_parent()
-              if parent then
-                if parent:get_type() == 'a' then
-                  -- do not trigger on small and unknown size images
-                  if i['height'] + i['width'] >= 210 or not i['embedded'] then
-                    return true
-                  end
+              if has_anchor_parent(tag) then
+                -- do not trigger on small and unknown size images
+                if i['height'] + i['width'] >= 210 or not i['embedded'] then
+                  return true
                 end
               end
             end
@@ -81,6 +92,7 @@ rspamd_config.HTML_SHORT_LINK_IMG_3 = {
   group = 'html',
   description = 'Short html part (1.5K..2K) with a link to an image'
 }
+
 rspamd_config.R_EMPTY_IMAGE = {
   callback = function(task)
     local tp = task:get_text_parts() -- get text parts in a message
@@ -98,11 +110,8 @@ rspamd_config.R_EMPTY_IMAGE = {
               if i['height'] + i['width'] >= 400 then -- if we have a large image
                 local tag = i['tag']
                 if tag then
-                  local parent = tag:get_parent()
-                  if parent then
-                    if parent:get_type() ~= 'a' then
-                      return true
-                    end
+                  if not has_anchor_parent(tag) then
+                    return true
                   end
                 end
               end
@@ -136,14 +145,10 @@ rspamd_config.R_SUSPICIOUS_IMAGES = {
             local tag = i['tag']
 
             if tag then
-              local parent = tag:get_parent()
-              if parent then
-                if parent:get_type() == 'a' then
-                  -- do not trigger on small and large images
-                  if dim > 100 and dim < 3000 then
-                    -- We assume that a single picture 100x200 contains approx 3 words of text
-                    pic_words = pic_words + dim / 100
-                  end
+              if has_anchor_parent(tag) then
+                if dim > 100 and dim < 3000 then
+                  -- We assume that a single picture 100x200 contains approx 3 words of text
+                  pic_words = pic_words + dim / 100
                 end
               end
             end
