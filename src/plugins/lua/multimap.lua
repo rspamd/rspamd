@@ -260,9 +260,15 @@ local function apply_addr_filter(task, filter, input, rule)
     if addr and addr[1] then
       return addr[1]['name']
     end
+  elseif filter == 'ip_addr' then
+    local ip_addr = rspamd_ip.from_string(input)
+
+    if ip_addr and ip_addr:is_valid() then
+      return ip_addr
+    end
   else
     -- regexp case
-    if not rule['re_filter'] then
+  if not rule['re_filter'] then
       local type,pat = string.match(filter, '(regexp:)(.+)')
       if type and pat then
         rule['re_filter'] = regexp.create(pat)
@@ -397,15 +403,14 @@ local function multimap_callback(task, rule)
 
     if r['cdb'] then
       local srch = value
-      if r['type'] == 'ip' then
+      if type(value) == 'userdata' then
         srch = value:to_string()
       end
       ret = r['cdb']:lookup(srch)
     elseif r['redis_key'] then
       local srch = {value}
       local cmd = 'HGET'
-      if r['type'] == 'ip' or (r['type'] == 'received' and
-        (r['filter'] == 'real_ip' or r['filter'] == 'from_ip' or not r['filter'])) then
+      if type(value) == 'userdata' then
         srch = {value:to_string()}
         cmd = 'HMGET'
         local maxbits = 128
@@ -434,6 +439,9 @@ local function multimap_callback(task, rule)
     elseif r['radix'] then
       ret = r['radix']:get_key(value)
     elseif r['hash'] then
+      if type(value) == 'userdata' then
+        value = value:to_string()
+      end
       ret = r['hash']:get_key(value)
     end
 
@@ -990,7 +998,7 @@ local function add_multimap_rule(key, newrule)
       local map = urls[newrule['map']]
       if map and map['regexp'] == newrule['regexp'] and
           map['glob'] == newrule['glob'] then
-        if newrule['type'] == 'ip' then
+        if newrule['type'] == 'ip' or newrule['filter'] == 'ip_addr' then
           newrule['radix'] = map['map']
         else
           newrule['hash'] = map['map']
@@ -1072,14 +1080,22 @@ local function add_multimap_rule(key, newrule)
           or newrule['type'] == 'mempool'
           or newrule['type'] == 'selector'then
 
-        multimap_load_hash(newrule)
+        if newrule.filter == 'ip_addr' then
+          newrule['radix'] = rspamd_config:add_map ({
+            url = newrule['map'],
+            description = newrule['description'],
+            type = 'radix'
+          })
+        else
+          multimap_load_hash(newrule)
+        end
 
-        if newrule['hash'] then
+        if newrule.hash or newrule.radix then
           ret = true
           if type(newrule['map']) == 'string' then
             urls[newrule['map']] = {
               type = newrule['type'],
-              map = newrule['hash'],
+              map = newrule.hash or newrule.radix,
               regexp = newrule['regexp']
             }
           end
