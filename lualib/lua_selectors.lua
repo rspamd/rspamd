@@ -199,6 +199,27 @@ the second optional argument is optional hash type (`blake2`, `sha256`, `sha1`, 
     end,
     ['description'] = 'Get all attachments files',
   },
+  -- Get languages for text parts
+  ['languages'] = {
+    ['get_value'] = function(task)
+      local text_parts = task:get_text_parts() or E
+      local languages = {}
+
+      for _,p in ipairs(text_parts) do
+        local lang = p:get_language()
+        if lang then
+          table.insert(languages, lang)
+        end
+      end
+
+      if #languages > 0 then
+        return languages,'string_list'
+      end
+
+      return nil
+    end,
+    ['description'] = 'Get languages for text parts',
+  },
   -- Get helo value
   ['helo'] = {
     ['get_value'] = function(task)
