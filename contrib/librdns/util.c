@@ -537,8 +537,9 @@ rdns_resolver_conf_process_line (struct rdns_resolver *resolver,
 		const char *line, rdns_resolv_conf_cb cb, void *ud)
 {
 	const char *p, *c, *end;
-	bool has_obrace = false;
+	bool has_obrace = false, ret;
 	unsigned int port = dns_port;
+	char *cpy_buf;
 
 	end = line + strlen (line);
 
@@ -546,7 +547,7 @@ rdns_resolver_conf_process_line (struct rdns_resolver *resolver,
 			strncmp (line, "nameserver", sizeof ("nameserver") - 1) == 0) {
 		p = line + sizeof ("nameserver") - 1;
 		/* Skip spaces */
-		while (*p == ' ' || *p == '\t') {
+		while (isspace (*p)) {
 			p ++;
 		}
 
@@ -578,14 +579,23 @@ rdns_resolver_conf_process_line (struct rdns_resolver *resolver,
 				}
 			}
 
+			cpy_buf = malloc (p - c + 1);
+			assert (cpy_buf != NULL);
+			memcpy (cpy_buf, c, p - c);
+			cpy_buf[p - c] = '\0';
+
 			if (cb == NULL) {
-				return rdns_resolver_add_server (resolver, c, port, 0,
+				ret = rdns_resolver_add_server (resolver, cpy_buf, port, 0,
 						default_io_cnt) != NULL;
 			}
 			else {
-				return cb (resolver, c, port, 0,
+				ret = cb (resolver, cpy_buf, port, 0,
 						default_io_cnt, ud);
 			}
+
+			free (cpy_buf);
+
+			return ret;
 		}
 		else {
 			return false;
