@@ -1163,7 +1163,7 @@ rspamd_control_handler (gint fd, short what, gpointer arg)
 	msg_info_main ("accepted control connection from %s",
 			rspamd_inet_address_to_string (addr));
 
-	rspamd_control_process_client_socket (rspamd_main, nfd);
+	rspamd_control_process_client_socket (rspamd_main, nfd, addr);
 }
 
 static guint

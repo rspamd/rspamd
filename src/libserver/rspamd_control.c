@@ -16,6 +16,7 @@
 #include "config.h"
 #include "rspamd.h"
 #include "rspamd_control.h"
+#include "worker_util.h"
 #include "libutil/http_connection.h"
 #include "libutil/http_private.h"
 #include "unix-std.h"
@@ -51,6 +52,7 @@ struct rspamd_control_session {
 	struct rspamd_http_connection *conn;
 	struct rspamd_control_command cmd;
 	struct rspamd_control_reply_elt *replies;
+	rspamd_inet_addr_t *addr;
 	guint replies_remain;
 	gboolean is_reply;
 };
@@ -159,12 +161,18 @@ static void
 rspamd_control_connection_close (struct rspamd_control_session *session)
 {
 	struct rspamd_control_reply_elt *elt, *telt;
+	struct rspamd_main *rspamd_main;
+
+	rspamd_main = session->rspamd_main;
+	msg_info_main ("finished connection from %s",
+			rspamd_inet_address_to_string (session->addr));
 
 	DL_FOREACH_SAFE (session->replies, elt, telt) {
 		event_del (&elt->io_ev);
 		g_free (elt);
 	}
 
+	rspamd_inet_address_free (session->addr);
 	rspamd_http_connection_unref (session->conn);
 	close (session->fd);
 	g_free (session);
@@ -361,9 +369,12 @@ static void
 rspamd_control_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
 	struct rspamd_control_session *session = conn->ud;
+	struct rspamd_main *rspamd_main;
+
+	rspamd_main = session->rspamd_main;
 
 	if (!session->is_reply) {
-		msg_info ("abnormally closing control connection: %e", err);
+		msg_info_main ("abnormally closing control connection: %e", err);
 		session->is_reply = TRUE;
 		rspamd_control_send_error (session, err->code, "%s", err->message);
 	}
@@ -433,7 +444,7 @@ rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
 			DL_APPEND (res, rep_elt);
 		}
 		else {
-			msg_err ("cannot write command %d(%z) to the worker %P(%s), fd: %d: %s",
+			msg_err_main ("cannot write command %d(%z) to the worker %P(%s), fd: %d: %s",
 					(int)cmd->type, iov.iov_len,
 					wrk->pid,
 					g_quark_to_string (wrk->type),
@@ -500,7 +511,7 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 
 void
 rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
-		gint fd)
+		gint fd, rspamd_inet_addr_t *addr)
 {
 	struct rspamd_control_session *session;
 
@@ -515,6 +526,7 @@ rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
 			0,
 			RSPAMD_HTTP_SERVER);
 	session->rspamd_main = rspamd_main;
+	session->addr = addr;
 	rspamd_http_connection_read_message (session->conn, session,
 			&io_timeout);
 }
@@ -539,14 +551,16 @@ rspamd_control_default_cmd_handler (gint fd,
 	gssize r;
 	struct rusage rusg;
 	struct rspamd_config *cfg;
+	struct rspamd_main *rspamd_main;
 
 	memset (&rep, 0, sizeof (rep));
 	rep.type = cmd->type;
+	rspamd_main = cd->worker->srv;
 
 	switch (cmd->type) {
 	case RSPAMD_CONTROL_STAT:
 		if (getrusage (RUSAGE_SELF, &rusg) == -1) {
-			msg_err ("cannot get rusage stats: %s",
+			msg_err_main ("cannot get rusage stats: %s",
 					strerror (errno));
 		}
 		else {
@@ -590,7 +604,7 @@ rspamd_control_default_cmd_handler (gint fd,
 	r = write (fd, &rep, sizeof (rep));
 
 	if (r != sizeof (rep)) {
-		msg_err ("cannot write reply to the control socket: %s",
+		msg_err_main ("cannot write reply to the control socket: %s",
 				strerror (errno));
 	}
 

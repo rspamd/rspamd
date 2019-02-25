@@ -193,7 +193,7 @@ typedef void (*rspamd_srv_reply_handler) (struct rspamd_worker *worker,
  * Process client socket connection
  */
 void rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
-		gint fd);
+		gint fd, rspamd_inet_addr_t *addr);
 
 /**
  * Register default handlers for a worker
