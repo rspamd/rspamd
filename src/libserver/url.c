@@ -539,8 +539,10 @@ rspamd_url_init (const gchar *tld_file)
 		g_error_free (err);
 	}
 
-	msg_debug ("initialized trie of %ud elements",
-			url_scanner->matchers->len);
+	if (tld_file != NULL) {
+		msg_info ("initialized %ud url tld suffixes from '%s'",
+				url_scanner->matchers->len, tld_file);
+	}
 }
 
 #define SET_U(u, field) do {                                                \
