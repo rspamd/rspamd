@@ -1021,11 +1021,13 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 									(*flags) |= RSPAMD_URL_FLAG_OBSCURED;
 								}
 								else {
-									if (!(parse_flags & RSPAMD_URL_PARSE_CHECK)) {
-										goto out;
-									}
-									else {
-										goto set;
+									if (!u_isgraph (uc)) {
+										if (!(parse_flags & RSPAMD_URL_PARSE_CHECK)) {
+											goto out;
+										}
+										else {
+											goto set;
+										}
 									}
 								}
 							}
@@ -3284,10 +3286,11 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 	d = dest;
 	dend = d + dlen;
 
-	if (url->protocollen > 0 &&
-		(url->protocol >= 0 && url->protocol < G_N_ELEMENTS (rspamd_url_protocols))) {
+	if (url->protocollen > 0) {
 		d += rspamd_snprintf ((gchar *) d, dend - d,
-				"%*s://", url->protocollen, rspamd_url_protocols[url->protocol].name);
+				"%*s://",
+				url->protocollen,
+				rspamd_url_protocol_name (url->protocol));
 	}
 	else {
 		d += rspamd_snprintf ((gchar *) d, dend - d, "http://");
