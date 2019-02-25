@@ -404,14 +404,16 @@ local function multimap_callback(task, rule)
     if r['cdb'] then
       local srch = value
       if type(value) == 'userdata' then
-        srch = value:to_string()
+        if value.class == 'rspamd{ip}' then
+          srch = value:tostring()
+        end
       end
       ret = r['cdb']:lookup(srch)
     elseif r['redis_key'] then
       local srch = {value}
       local cmd = 'HGET'
-      if type(value) == 'userdata' then
-        srch = {value:to_string()}
+      if type(value) == 'userdata' and value.class == 'rspamd{ip}' then
+        srch = {value:tostring()}
         cmd = 'HMGET'
         local maxbits = 128
         local minbits = 32
@@ -420,7 +422,7 @@ local function multimap_callback(task, rule)
             minbits = 8
         end
         for i=maxbits,minbits,-1 do
-            local nip = value:apply_mask(i):to_string() .. "/" .. i
+            local nip = value:apply_mask(i):tostring() .. "/" .. i
             table.insert(srch, nip)
         end
       end
@@ -440,7 +442,9 @@ local function multimap_callback(task, rule)
       ret = r['radix']:get_key(value)
     elseif r['hash'] then
       if type(value) == 'userdata' then
-        value = value:to_string()
+        if value.class == 'rspamd{ip}' then
+          value = value:tostring()
+        end
       end
       ret = r['hash']:get_key(value)
     end
