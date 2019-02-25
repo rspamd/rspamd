@@ -331,9 +331,7 @@ rspamd_worker_error_handler (struct rspamd_http_connection *conn, GError *err)
 				NULL,
 				"application/json",
 				task,
-				task->http_conn->fd,
-				&task->tv,
-				task->ev_base);
+				&task->tv);
 	}
 }
 
@@ -416,6 +414,7 @@ accept_socket (gint fd, short what, void *arg)
 
 	task->http_conn = rspamd_http_connection_new (
 			ctx->http_ctx,
+			nfd,
 			rspamd_worker_body_handler,
 			rspamd_worker_error_handler,
 			rspamd_worker_finish_handler,
@@ -436,9 +435,7 @@ accept_socket (gint fd, short what, void *arg)
 
 	rspamd_http_connection_read_message (task->http_conn,
 			task,
-			nfd,
-			&ctx->io_tv,
-			ctx->ev_base);
+			&ctx->io_tv);
 }
 
 #ifdef WITH_HYPERSCAN

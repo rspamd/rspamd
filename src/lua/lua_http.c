@@ -381,6 +381,7 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 	if (cbd->cfg) {
 		cbd->conn = rspamd_http_connection_new (
 				NULL,
+				fd,
 				NULL,
 				lua_http_error_handler,
 				lua_http_finish_handler,
@@ -390,6 +391,7 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 	else {
 		cbd->conn = rspamd_http_connection_new (
 				NULL,
+				fd,
 				NULL,
 				lua_http_error_handler,
 				lua_http_finish_handler,
@@ -436,8 +438,8 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 		cbd->msg = NULL;
 
 		rspamd_http_connection_write_message (cbd->conn, msg,
-				cbd->host, cbd->mime_type, cbd, fd,
-				&cbd->tv, cbd->ev_base);
+				cbd->host, cbd->mime_type, cbd,
+				&cbd->tv);
 
 		return TRUE;
 	}

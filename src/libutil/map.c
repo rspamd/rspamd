@@ -138,9 +138,7 @@ write_http_request (struct http_callback_data *cbd)
 				cbd->data->host,
 				NULL,
 				cbd,
-				cbd->fd,
-				&cbd->tv,
-				cbd->ev_base);
+				&cbd->tv);
 	}
 	else {
 		msg_err_map ("cannot connect to %s: %s", cbd->data->host,
@@ -1277,6 +1275,7 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 				if (cbd->fd != -1) {
 					cbd->stage = map_load_file;
 					cbd->conn = rspamd_http_connection_new (NULL,
+							cbd->fd,
 							NULL,
 							http_map_error,
 							http_map_finish,
@@ -1651,6 +1650,7 @@ check:
 			cbd->conn = rspamd_http_connection_new (
 					NULL,
 					NULL,
+					cbd->fd,
 					http_map_error,
 					http_map_finish,
 					flags,

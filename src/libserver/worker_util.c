@@ -435,9 +435,7 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 		NULL,
 		"application/json",
 		entry,
-		entry->conn->fd,
-		entry->rt->ptv,
-		entry->rt->ev_base);
+		entry->rt->ptv);
 	entry->is_reply = TRUE;
 }
 
@@ -469,9 +467,7 @@ rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
 		NULL,
 		"application/json",
 		entry,
-		entry->conn->fd,
-		entry->rt->ptv,
-		entry->rt->ev_base);
+		entry->rt->ptv);
 	entry->is_reply = TRUE;
 }
 
@@ -497,9 +493,7 @@ rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
 		NULL,
 		"application/json",
 		entry,
-		entry->conn->fd,
-		entry->rt->ptv,
-		entry->rt->ev_base);
+		entry->rt->ptv);
 	entry->is_reply = TRUE;
 }
 

@@ -1406,6 +1406,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 
 		bk_conn->backend_conn = rspamd_http_connection_new (
 				session->ctx->http_ctx,
+				bk_conn->backend_sock,
 				NULL,
 				proxy_backend_mirror_error_handler,
 				proxy_backend_mirror_finish_handler,
@@ -1427,8 +1428,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 			msg->method = HTTP_GET;
 			rspamd_http_connection_write_message_shared (bk_conn->backend_conn,
 					msg, NULL, NULL, bk_conn,
-					bk_conn->backend_sock,
-					bk_conn->io_tv, session->ctx->ev_base);
+					bk_conn->io_tv);
 		}
 		else {
 			if (session->fname) {
@@ -1455,8 +1455,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 
 			rspamd_http_connection_write_message (bk_conn->backend_conn,
 					msg, NULL, NULL, bk_conn,
-					bk_conn->backend_sock,
-					bk_conn->io_tv, session->ctx->ev_base);
+					bk_conn->io_tv);
 		}
 
 		g_ptr_array_add (session->mirror_conns, bk_conn);
@@ -1481,8 +1480,8 @@ proxy_client_write_error (struct rspamd_proxy_session *session, gint code,
 		reply->code = code;
 		reply->status = rspamd_fstring_new_init (status, strlen (status));
 		rspamd_http_connection_write_message (session->client_conn,
-				reply, NULL, NULL, session, session->client_sock,
-				&session->ctx->io_tv, session->ctx->ev_base);
+				reply, NULL, NULL, session,
+				&session->ctx->io_tv);
 	}
 }
 
@@ -1579,8 +1578,8 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 	}
 	else {
 		rspamd_http_connection_write_message (session->client_conn,
-				msg, NULL, NULL, session, session->client_sock,
-				bk_conn->io_tv, session->ctx->ev_base);
+				msg, NULL, NULL, session,
+				bk_conn->io_tv);
 	}
 
 	return 0;
@@ -1639,9 +1638,7 @@ rspamd_proxy_scan_self_reply (struct rspamd_task *task)
 				NULL,
 				ctype,
 				session,
-				session->client_sock,
-				NULL,
-				session->ctx->ev_base);
+				NULL);
 	}
 }
 
@@ -1836,6 +1833,7 @@ retry:
 
 		session->master_conn->backend_conn = rspamd_http_connection_new (
 				session->ctx->http_ctx,
+				session->master_conn->backend_sock,
 				NULL,
 				proxy_backend_master_error_handler,
 				proxy_backend_master_finish_handler,
@@ -1869,8 +1867,7 @@ retry:
 			rspamd_http_connection_write_message_shared (
 					session->master_conn->backend_conn,
 					msg, NULL, NULL, session->master_conn,
-					session->master_conn->backend_sock,
-					session->master_conn->io_tv, session->ctx->ev_base);
+					session->master_conn->io_tv);
 		}
 		else {
 			if (session->fname) {
@@ -1898,8 +1895,7 @@ retry:
 			rspamd_http_connection_write_message (
 					session->master_conn->backend_conn,
 					msg, NULL, NULL, session->master_conn,
-					session->master_conn->backend_sock,
-					session->master_conn->io_tv, session->ctx->ev_base);
+					session->master_conn->io_tv);
 		}
 	}
 
@@ -2088,6 +2084,7 @@ proxy_accept_socket (gint fd, short what, void *arg)
 	if (!ctx->milter) {
 		session->client_conn = rspamd_http_connection_new (
 				ctx->http_ctx,
+				nfd,
 				NULL,
 				proxy_client_error_handler,
 				proxy_client_finish_handler,
@@ -2104,9 +2101,7 @@ proxy_accept_socket (gint fd, short what, void *arg)
 
 		rspamd_http_connection_read_message_shared (session->client_conn,
 				session,
-				nfd,
-				&ctx->io_tv,
-				ctx->ev_base);
+				&ctx->io_tv);
 	}
 	else {
 		msg_info_session ("accepted milter connection from %s port %d",

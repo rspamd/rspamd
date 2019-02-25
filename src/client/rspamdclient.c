@@ -118,9 +118,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 		rspamd_http_connection_reset (c->http_conn);
 		rspamd_http_connection_read_message (c->http_conn,
 			c->req,
-			c->fd,
-			&c->timeout,
-			c->ev_base);
+			&c->timeout);
 		return 0;
 	}
 	else {
@@ -258,6 +256,7 @@ rspamd_client_init (struct rspamd_http_context *http_ctx,
 	conn->fd = fd;
 	conn->req_sent = FALSE;
 	conn->http_conn = rspamd_http_connection_new (http_ctx,
+			fd,
 			rspamd_client_body_handler,
 			rspamd_client_error_handler,
 			rspamd_client_finish_handler,
@@ -443,12 +442,12 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 
 	if (compressed) {
 		rspamd_http_connection_write_message (conn->http_conn, req->msg, NULL,
-				"application/x-compressed", req, conn->fd,
-				&conn->timeout, conn->ev_base);
+				"application/x-compressed", req,
+				&conn->timeout);
 	}
 	else {
 		rspamd_http_connection_write_message (conn->http_conn, req->msg, NULL,
-				"text/plain", req, conn->fd, &conn->timeout, conn->ev_base);
+				"text/plain", req, &conn->timeout);
 	}
 
 	return TRUE;

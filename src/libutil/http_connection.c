@@ -687,13 +687,11 @@ rspamd_http_on_message_complete (http_parser * parser)
 static void
 rspamd_http_simple_client_helper (struct rspamd_http_connection *conn)
 {
-	struct event_base *base;
 	struct rspamd_http_connection_private *priv;
 	gpointer ssl;
 	gint request_method;
 
 	priv = conn->priv;
-	base = conn->priv->ev.ev_base;
 	ssl = priv->ssl;
 	priv->ssl = NULL;
 	request_method = priv->msg->method;
@@ -702,12 +700,12 @@ rspamd_http_simple_client_helper (struct rspamd_http_connection *conn)
 	/* Plan read message */
 
 	if (conn->opts & RSPAMD_HTTP_CLIENT_SHARED) {
-		rspamd_http_connection_read_message_shared (conn, conn->ud, conn->fd,
-				conn->priv->ptv, base);
+		rspamd_http_connection_read_message_shared (conn, conn->ud,
+				conn->priv->ptv);
 	}
 	else {
-		rspamd_http_connection_read_message (conn, conn->ud, conn->fd,
-				conn->priv->ptv, base);
+		rspamd_http_connection_read_message (conn, conn->ud,
+				conn->priv->ptv);
 	}
 
 	priv->msg->method = request_method;
@@ -1036,6 +1034,7 @@ rspamd_http_parser_reset (struct rspamd_http_connection *conn)
 struct rspamd_http_connection *
 rspamd_http_connection_new (
 		struct rspamd_http_context *ctx,
+		gint fd,
 		rspamd_http_body_handler_t body_handler,
 		rspamd_http_error_handler_t error_handler,
 		rspamd_http_finish_handler_t finish_handler,
@@ -1055,7 +1054,7 @@ rspamd_http_connection_new (
 	conn->body_handler = body_handler;
 	conn->error_handler = error_handler;
 	conn->finish_handler = finish_handler;
-	conn->fd = -1;
+	conn->fd = fd;
 	conn->ref = 1;
 	conn->finished = FALSE;
 
@@ -1303,13 +1302,12 @@ rspamd_http_connection_free (struct rspamd_http_connection *conn)
 
 static void
 rspamd_http_connection_read_message_common (struct rspamd_http_connection *conn,
-		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base,
+		gpointer ud, struct timeval *timeout,
 		gint flags)
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
 	struct rspamd_http_message *req;
 
-	conn->fd = fd;
 	conn->ud = ud;
 	req = rspamd_http_new_message (
 		conn->type == RSPAMD_HTTP_SERVER ? HTTP_REQUEST : HTTP_RESPONSE);
@@ -1341,13 +1339,12 @@ rspamd_http_connection_read_message_common (struct rspamd_http_connection *conn,
 	priv->flags |= RSPAMD_HTTP_CONN_FLAG_NEW_HEADER;
 
 	event_set (&priv->ev,
-		fd,
+		conn->fd,
 		EV_READ | EV_PERSIST,
 		rspamd_http_event_handler,
 		conn);
-	if (base != NULL) {
-		event_base_set (base, &priv->ev);
-	}
+
+	event_base_set (priv->ctx->ev_base, &priv->ev);
 
 	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
 	event_add (&priv->ev, priv->ptv);
@@ -1355,16 +1352,16 @@ rspamd_http_connection_read_message_common (struct rspamd_http_connection *conn,
 
 void
 rspamd_http_connection_read_message (struct rspamd_http_connection *conn,
-		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+		gpointer ud, struct timeval *timeout)
 {
-	rspamd_http_connection_read_message_common (conn, ud, fd, timeout, base, 0);
+	rspamd_http_connection_read_message_common (conn, ud, timeout, 0);
 }
 
 void
 rspamd_http_connection_read_message_shared (struct rspamd_http_connection *conn,
-		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+		gpointer ud, struct timeval *timeout)
 {
-	rspamd_http_connection_read_message_common (conn, ud, fd, timeout, base,
+	rspamd_http_connection_read_message_common (conn, ud, timeout,
 			RSPAMD_HTTP_FLAG_SHMEM);
 }
 
@@ -1720,9 +1717,12 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 
 static void
 rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn,
-		struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
-		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base,
-		gboolean allow_shared)
+											 struct rspamd_http_message *msg,
+											 const gchar *host,
+											 const gchar *mime_type,
+											 gpointer ud,
+											 struct timeval *timeout,
+											 gboolean allow_shared)
 {
 	struct rspamd_http_connection_private *priv = conn->priv;
 	struct rspamd_http_header *hdr, *htmp, *hcur;
@@ -1737,7 +1737,6 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 	enum rspamd_cryptobox_mode mode;
 	GError *err;
 
-	conn->fd = fd;
 	conn->ud = ud;
 	priv->msg = msg;
 
@@ -2043,9 +2042,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 		gpointer ssl_ctx = (msg->flags & RSPAMD_HTTP_FLAG_SSL_NOVERIFY) ?
 				priv->ctx->ssl_ctx_noverify : priv->ctx->ssl_ctx;
 
-		if (base != NULL) {
-			event_base_set (base, &priv->ev);
-		}
+		event_base_set (priv->ctx->ev_base, &priv->ev);
 
 		if (!ssl_ctx) {
 			err = g_error_new (HTTP_ERROR, errno, "ssl message requested "
@@ -2062,11 +2059,11 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 				rspamd_ssl_connection_free (priv->ssl);
 			}
 
-			priv->ssl = rspamd_ssl_connection_new (ssl_ctx, base,
+			priv->ssl = rspamd_ssl_connection_new (ssl_ctx, priv->ctx->ev_base,
 					!(msg->flags & RSPAMD_HTTP_FLAG_SSL_NOVERIFY));
 			g_assert (priv->ssl != NULL);
 
-			if (!rspamd_ssl_connect_fd (priv->ssl, fd, host, &priv->ev,
+			if (!rspamd_ssl_connect_fd (priv->ssl, conn->fd, host, &priv->ev,
 					priv->ptv, rspamd_http_event_handler,
 					rspamd_http_ssl_err_handler, conn)) {
 
@@ -2083,11 +2080,8 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 		}
 	}
 	else {
-		event_set (&priv->ev, fd, EV_WRITE, rspamd_http_event_handler, conn);
-
-		if (base != NULL) {
-			event_base_set (base, &priv->ev);
-		}
+		event_set (&priv->ev, conn->fd, EV_WRITE, rspamd_http_event_handler, conn);
+		event_base_set (priv->ctx->ev_base, &priv->ev);
 
 		event_add (&priv->ev, priv->ptv);
 	}
@@ -2095,20 +2089,26 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 
 void
 rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
-		struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
-		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+									  struct rspamd_http_message *msg,
+									  const gchar *host,
+									  const gchar *mime_type,
+									  gpointer ud,
+									  struct timeval *timeout)
 {
 	rspamd_http_connection_write_message_common (conn, msg, host, mime_type,
-			ud, fd, timeout, base, FALSE);
+			ud, timeout, FALSE);
 }
 
 void
 rspamd_http_connection_write_message_shared (struct rspamd_http_connection *conn,
-		struct rspamd_http_message *msg, const gchar *host, const gchar *mime_type,
-		gpointer ud, gint fd, struct timeval *timeout, struct event_base *base)
+											 struct rspamd_http_message *msg,
+											 const gchar *host,
+											 const gchar *mime_type,
+											 gpointer ud,
+											 struct timeval *timeout)
 {
 	rspamd_http_connection_write_message_common (conn, msg, host, mime_type,
-			ud, fd, timeout, base, TRUE);
+			ud, timeout, TRUE);
 }
 
 
@@ -2133,7 +2133,6 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 			g_free (hcur);
 		}
 	}
-
 
 	rspamd_http_message_storage_cleanup (msg);
 

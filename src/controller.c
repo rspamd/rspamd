@@ -1078,8 +1078,8 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	rspamd_http_connection_reset (conn_ent->conn);
 	rspamd_http_router_insert_headers (conn_ent->rt, reply);
 	rspamd_http_connection_write_message (conn_ent->conn, reply, NULL,
-		"text/plain", conn_ent, conn_ent->conn->fd,
-		conn_ent->rt->ptv, conn_ent->rt->ev_base);
+			"text/plain", conn_ent,
+			conn_ent->rt->ptv);
 	conn_ent->is_reply = TRUE;
 
 	return 0;
@@ -1942,8 +1942,7 @@ rspamd_controller_scan_reply (struct rspamd_task *task)
 	rspamd_http_connection_reset (conn_ent->conn);
 	rspamd_http_router_insert_headers (conn_ent->rt, msg);
 	rspamd_http_connection_write_message (conn_ent->conn, msg, NULL,
-			"application/json", conn_ent, conn_ent->conn->fd, conn_ent->rt->ptv,
-			conn_ent->rt->ev_base);
+			"application/json", conn_ent, conn_ent->rt->ptv);
 	conn_ent->is_reply = TRUE;
 }
 
@@ -2911,9 +2910,7 @@ rspamd_controller_handle_ping (struct rspamd_http_connection_entry *conn_ent,
 			NULL,
 			"text/plain",
 			conn_ent,
-			conn_ent->conn->fd,
-			conn_ent->rt->ptv,
-			conn_ent->rt->ev_base);
+			conn_ent->rt->ptv);
 	conn_ent->is_reply = TRUE;
 
 	return 0;
@@ -2947,9 +2944,7 @@ rspamd_controller_handle_unknown (struct rspamd_http_connection_entry *conn_ent,
 				NULL,
 				"text/plain",
 				conn_ent,
-				conn_ent->conn->fd,
-				conn_ent->rt->ptv,
-				conn_ent->rt->ev_base);
+				conn_ent->rt->ptv);
 		conn_ent->is_reply = TRUE;
 	}
 	else {
@@ -2965,9 +2960,7 @@ rspamd_controller_handle_unknown (struct rspamd_http_connection_entry *conn_ent,
 				NULL,
 				"text/plain",
 				conn_ent,
-				conn_ent->conn->fd,
-				conn_ent->rt->ptv,
-				conn_ent->rt->ev_base);
+				conn_ent->rt->ptv);
 		conn_ent->is_reply = TRUE;
 	}
 

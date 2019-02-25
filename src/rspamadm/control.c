@@ -236,6 +236,7 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 
 	conn = rspamd_http_connection_new (
 			NULL, /* Default context */
+			sock,
 			NULL,
 			rspamd_control_error_handler,
 			rspamd_control_finish_handler,
@@ -249,8 +250,8 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 	cbdata.argv = argv;
 	cbdata.path = path;
 
-	rspamd_http_connection_write_message (conn, msg, NULL, NULL, &cbdata, sock,
-			&tv, ev_base);
+	rspamd_http_connection_write_message (conn, msg, NULL, NULL, &cbdata,
+			&tv);
 
 	event_base_loop (ev_base, 0);
 

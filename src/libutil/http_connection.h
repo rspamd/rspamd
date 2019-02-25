@@ -74,14 +74,19 @@ struct rspamd_storage_shmem {
  */
 #define RSPAMD_HTTP_FLAG_SSL_NOVERIFY (1 << 6)
 /**
+ * Do not verify server's certificate
+ */
+#define RSPAMD_HTTP_FLAG_KEEPALIVE (1 << 7)
+/**
  * Options for HTTP connection
  */
 enum rspamd_http_options {
-	RSPAMD_HTTP_BODY_PARTIAL = 0x1, /**< Call body handler on all body data portions *///!< RSPAMD_HTTP_BODY_PARTIAL
-	RSPAMD_HTTP_CLIENT_SIMPLE = 0x1u << 1, /**< Read HTTP client reply automatically */      //!< RSPAMD_HTTP_CLIENT_SIMPLE
-	RSPAMD_HTTP_CLIENT_ENCRYPTED = 0x1u << 2, /**< Encrypt data for client */                //!< RSPAMD_HTTP_CLIENT_ENCRYPTED
-	RSPAMD_HTTP_CLIENT_SHARED = 0x1u << 3, /**< Store reply in shared memory */              //!< RSPAMD_HTTP_CLIENT_SHARED
-	RSPAMD_HTTP_REQUIRE_ENCRYPTION = 0x1u << 4
+	RSPAMD_HTTP_BODY_PARTIAL = 1, /**< Call body handler on all body data portions */
+	RSPAMD_HTTP_CLIENT_SIMPLE = 1u << 1, /**< Read HTTP client reply automatically */
+	RSPAMD_HTTP_CLIENT_ENCRYPTED = 1u << 2, /**< Encrypt data for client */
+	RSPAMD_HTTP_CLIENT_SHARED = 1u << 3, /**< Store reply in shared memory */
+	RSPAMD_HTTP_REQUIRE_ENCRYPTION = 1u << 4,
+	RSPAMD_HTTP_CLIENT_KEEP_ALIVE = 1u << 5,
 };
 
 typedef int (*rspamd_http_body_handler_t) (struct rspamd_http_connection *conn,
@@ -120,6 +125,7 @@ struct rspamd_http_connection {
  */
 struct rspamd_http_connection *rspamd_http_connection_new (
 		struct rspamd_http_context *ctx,
+		gint fd,
 		rspamd_http_body_handler_t body_handler,
 		rspamd_http_error_handler_t error_handler,
 		rspamd_http_finish_handler_t finish_handler,
@@ -159,16 +165,12 @@ gboolean rspamd_http_connection_is_encrypted (struct rspamd_http_connection *con
 void rspamd_http_connection_read_message (
 		struct rspamd_http_connection *conn,
 		gpointer ud,
-		gint fd,
-		struct timeval *timeout,
-		struct event_base *base);
+		struct timeval *timeout);
 
 void rspamd_http_connection_read_message_shared (
 		struct rspamd_http_connection *conn,
 		gpointer ud,
-		gint fd,
-		struct timeval *timeout,
-		struct event_base *base);
+		struct timeval *timeout);
 
 /**
  * Send reply using initialised connection
@@ -183,9 +185,7 @@ void rspamd_http_connection_write_message (
 		const gchar *host,
 		const gchar *mime_type,
 		gpointer ud,
-		gint fd,
-		struct timeval *timeout,
-		struct event_base *base);
+		struct timeval *timeout);
 
 void rspamd_http_connection_write_message_shared (
 		struct rspamd_http_connection *conn,
@@ -193,9 +193,7 @@ void rspamd_http_connection_write_message_shared (
 		const gchar *host,
 		const gchar *mime_type,
 		gpointer ud,
-		gint fd,
-		struct timeval *timeout,
-		struct event_base *base);
+		struct timeval *timeout);
 
 /**
  * Free connection structure

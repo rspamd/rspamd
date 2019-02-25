@@ -129,9 +129,7 @@ rspamd_control_send_error (struct rspamd_control_session *session,
 			NULL,
 			"application/json",
 			session,
-			session->fd,
-			&io_timeout,
-			session->rspamd_main->ev_base);
+			&io_timeout);
 }
 
 static void
@@ -154,9 +152,7 @@ rspamd_control_send_ucl (struct rspamd_control_session *session,
 			NULL,
 			"application/json",
 			session,
-			session->fd,
-			&io_timeout,
-			session->rspamd_main->ev_base);
+			&io_timeout);
 }
 
 static void
@@ -512,14 +508,15 @@ rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
 
 	session->fd = fd;
 	session->conn = rspamd_http_connection_new (rspamd_main->http_ctx,
+			fd,
 			NULL,
 			rspamd_control_error_handler,
 			rspamd_control_finish_handler,
 			0,
 			RSPAMD_HTTP_SERVER);
 	session->rspamd_main = rspamd_main;
-	rspamd_http_connection_read_message (session->conn, session, session->fd,
-			&io_timeout, rspamd_main->ev_base);
+	rspamd_http_connection_read_message (session->conn, session,
+			&io_timeout);
 }
 
 struct rspamd_worker_control_data {

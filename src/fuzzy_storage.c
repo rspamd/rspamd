@@ -531,8 +531,7 @@ fuzzy_mirror_updates_version_cb (guint64 rev64, void *ud)
 	double_to_tv (ctx->sync_timeout, &tv);
 	rspamd_http_connection_write_message (conn->http_conn,
 			msg, NULL, NULL, conn,
-			conn->sock,
-			&tv, ctx->ev_base);
+			&tv);
 	msg_info ("send update request to %s", m->name);
 
 	g_array_free (cbdata->updates_pending, TRUE);
@@ -619,6 +618,7 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 
 	conn->http_conn = rspamd_http_connection_new (
 			ctx->http_ctx,
+			conn->sock,
 			NULL,
 			fuzzy_mirror_error_handler,
 			fuzzy_mirror_finish_handler,
@@ -1570,8 +1570,7 @@ rspamd_fuzzy_mirror_send_reply (struct fuzzy_master_update_session *session,
 
 	rspamd_http_connection_reset (session->conn);
 	rspamd_http_connection_write_message (session->conn, msg, NULL, "text/plain",
-			session, session->sock, &session->ctx->master_io_tv,
-			session->ctx->ev_base);
+			session, &session->ctx->master_io_tv);
 }
 
 static void
@@ -1712,9 +1711,7 @@ rspamd_fuzzy_collection_send_error (struct rspamd_http_connection_entry *entry,
 		NULL,
 		"text/plain",
 		entry,
-		entry->conn->fd,
-		entry->rt->ptv,
-		entry->rt->ev_base);
+		entry->rt->ptv);
 	entry->is_reply = TRUE;
 }
 
@@ -1739,9 +1736,7 @@ rspamd_fuzzy_collection_send_fstring (struct rspamd_http_connection_entry *entry
 		NULL,
 		"application/octet-stream",
 		entry,
-		entry->conn->fd,
-		entry->rt->ptv,
-		entry->rt->ev_base);
+		entry->rt->ptv);
 	entry->is_reply = TRUE;
 }
 
@@ -1997,6 +1992,7 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 	session->uid[sizeof (session->uid) - 1] = '\0';
 	http_conn = rspamd_http_connection_new (
 			ctx->http_ctx,
+			nfd,
 			NULL,
 			rspamd_fuzzy_mirror_error_handler,
 			rspamd_fuzzy_mirror_finish_handler,
@@ -2011,9 +2007,7 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 
 	rspamd_http_connection_read_message (http_conn,
 			session,
-			nfd,
-			&ctx->master_io_tv,
-			ctx->ev_base);
+			&ctx->master_io_tv);
 }
 
 /*

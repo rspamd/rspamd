@@ -1734,6 +1734,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 		param->url = url;
 		param->task = task;
 		param->conn = rspamd_http_connection_new (NULL,
+				s,
 				NULL,
 				surbl_redirector_error,
 				surbl_redirector_finish,
@@ -1757,7 +1758,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 		}
 
 		rspamd_http_connection_write_message (param->conn, msg, NULL,
-				NULL, param, s, timeout, task->ev_base);
+				NULL, param, timeout);
 
 		msg_info_surbl (
 				"<%s> registered redirector call for %*s to %s, according to rule: %s",

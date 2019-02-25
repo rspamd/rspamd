@@ -92,9 +92,7 @@ rspamd_http_router_error_handler (struct rspamd_http_connection *conn,
 				NULL,
 				"text/plain",
 				entry,
-				entry->conn->fd,
-				entry->rt->ptv,
-				entry->rt->ev_base);
+				entry->rt->ptv);
 		entry->is_reply = TRUE;
 	}
 }
@@ -211,8 +209,8 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 
 	msg_debug ("requested file %s", realbuf);
 	rspamd_http_connection_write_message (entry->conn, reply_msg, NULL,
-			rspamd_http_router_detect_ct (realbuf), entry, entry->conn->fd,
-			entry->rt->ptv, entry->rt->ev_base);
+			rspamd_http_router_detect_ct (realbuf), entry,
+			entry->rt->ptv);
 
 	return TRUE;
 }
@@ -237,9 +235,7 @@ rspamd_http_router_send_error (GError *err,
 			NULL,
 			"text/plain",
 			entry,
-			entry->conn->fd,
-			entry->rt->ptv,
-			entry->rt->ev_base);
+			entry->rt->ptv);
 }
 
 
@@ -511,6 +507,7 @@ rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 	conn->is_reply = FALSE;
 
 	conn->conn = rspamd_http_connection_new (router->ctx,
+			fd,
 			NULL,
 			rspamd_http_router_error_handler,
 			rspamd_http_router_finish_handler,
@@ -521,8 +518,7 @@ rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 		rspamd_http_connection_set_key (conn->conn, router->key);
 	}
 
-	rspamd_http_connection_read_message (conn->conn, conn, fd, router->ptv,
-			router->ev_base);
+	rspamd_http_connection_read_message (conn->conn, conn, router->ptv);
 	DL_PREPEND (router->conns, conn);
 }
 
