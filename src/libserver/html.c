@@ -1366,20 +1366,23 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 						dlen += sizeof ("mailto://") - 1;
 						no_prefix = TRUE;
 					}
+					else if (s[i] == ':' && i != 0) {
+						/* Special case */
+						no_prefix = FALSE;
+					}
 					else {
 						if (i == 0) {
 							/* No valid data */
 							return NULL;
 						}
+						else {
+							no_prefix = TRUE;
+							dlen += strlen (prefix);
+						}
 					}
 
 					break;
 				}
-			}
-
-			if (!no_prefix) {
-				no_prefix = TRUE;
-				dlen += strlen (prefix);
 			}
 		}
 	}
