@@ -2690,10 +2690,33 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 		case comment_tag:
 			if (t != '-')  {
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				state = tag_end;
 			}
-			p ++;
-			ebrace = 0;
-			state = comment_content;
+			else {
+				p++;
+				ebrace = 0;
+				/*
+				 * https://www.w3.org/TR/2012/WD-html5-20120329/syntax.html#syntax-comments
+				 *  ... the text must not start with a single
+				 *  U+003E GREATER-THAN SIGN character (>),
+				 *  nor start with a "-" (U+002D) character followed by
+				 *  a U+003E GREATER-THAN SIGN (>) character,
+				 *  nor contain two consecutive U+002D HYPHEN-MINUS
+				 *  characters (--), nor end with a "-" (U+002D) character.
+				 */
+				if (p[0] == '-' && p + 1 < end && p[1] == '>') {
+					hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+					p ++;
+					state = tag_end;
+				}
+				else if (*p == '>') {
+					hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+					state = tag_end;
+				}
+				else {
+					state = comment_content;
+				}
+			}
 			break;
 
 		case comment_content:
