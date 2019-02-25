@@ -39,6 +39,7 @@
 #define RSPAMD_STAT_TOKEN_FLAG_STOP_WORD (1u << 10)
 #define RSPAMD_STAT_TOKEN_FLAG_SKIPPED (1u << 11)
 #define RSPAMD_STAT_TOKEN_FLAG_INVISIBLE_SPACES (1u << 12)
+#define RSPAMD_STAT_TOKEN_FLAG_EMOJI (1u << 13)
 
 typedef struct rspamd_stat_token_s {
 	rspamd_ftok_t original; /* utf8 raw */
