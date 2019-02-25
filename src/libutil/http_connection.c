@@ -1327,8 +1327,8 @@ rspamd_http_connection_read_message_common (struct rspamd_http_connection *conn,
 	if (timeout == NULL) {
 		priv->ptv = NULL;
 	}
-	else if (&priv->tv != timeout) {
-		memcpy (&priv->tv, timeout, sizeof (struct timeval));
+	else {
+		memmove (&priv->tv, timeout, sizeof (struct timeval));
 		priv->ptv = &priv->tv;
 	}
 

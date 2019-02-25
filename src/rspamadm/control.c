@@ -111,6 +111,7 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 	const gchar *body;
 	gsize body_len;
 	struct rspamadm_control_cbdata *cbdata = conn->ud;
+	struct timeval exit_tv;
 
 	body = rspamd_http_message_get_body (msg, &body_len);
 	parser = ucl_parser_new (0);
@@ -141,7 +142,7 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 				rspamd_fstring_free (out);
 				ucl_object_unref (obj);
 				ucl_parser_free (parser);
-				return 0;
+				goto end;
 			}
 			else {
 				rspamd_ucl_emit_fstring (obj, UCL_EMIT_CONFIG, &out);
@@ -155,6 +156,11 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 		ucl_parser_free (parser);
 	}
 
+end:
+	exit_tv.tv_sec = 0;
+	exit_tv.tv_usec = 0;
+	event_base_loopexit (rspamd_main->ev_base, &exit_tv);
+
 	return 0;
 }
 
@@ -163,7 +169,6 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 {
 	GOptionContext *context;
 	GError *error = NULL;
-	struct event_base *ev_base;
 	const gchar *cmd, *path = NULL;
 	struct rspamd_http_connection *conn;
 	struct rspamd_http_message *msg;
@@ -225,7 +230,6 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 		exit (1);
 	}
 
-	ev_base = event_init ();
 	sock = rspamd_inet_address_connect (addr, SOCK_STREAM, TRUE);
 
 	if (sock == -1) {
@@ -235,7 +239,7 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 	}
 
 	conn = rspamd_http_connection_new (
-			NULL, /* Default context */
+			rspamd_main->http_ctx, /* Default context */
 			sock,
 			NULL,
 			rspamd_control_error_handler,
@@ -253,7 +257,7 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 	rspamd_http_connection_write_message (conn, msg, NULL, NULL, &cbdata,
 			&tv);
 
-	event_base_loop (ev_base, 0);
+	event_base_loop (rspamd_main->ev_base, 0);
 
 	rspamd_http_connection_unref (conn);
 	rspamd_inet_address_free (addr);
