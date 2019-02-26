@@ -3235,8 +3235,9 @@ start_fuzzy (struct rspamd_worker *worker)
 		rspamd_keypair_cache_destroy (ctx->keypair_cache);
 	}
 
+	struct rspamd_http_context *http_ctx = ctx->http_ctx;
 	REF_RELEASE (ctx->cfg);
-	rspamd_http_context_free (ctx->http_ctx);
+	rspamd_http_context_free (http_ctx);
 	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);
