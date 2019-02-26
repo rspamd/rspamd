@@ -177,7 +177,8 @@ rspamd_http_context_free (struct rspamd_http_context *ctx)
 	}
 
 	if (ctx->config.client_key_rotate_time > 0) {
-		event_del (&ctx->client_rotate_ev);
+		/* Event is removed on base event loop termination */
+		/* event_del (&ctx->client_rotate_ev); */
 
 		if (ctx->client_kp) {
 			rspamd_keypair_unref (ctx->client_kp);
