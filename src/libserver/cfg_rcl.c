@@ -570,20 +570,20 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		const gchar *key, gpointer ud,
 		struct rspamd_rcl_section *section, GError **err)
 {
-	gdouble action_score;
 	struct rspamd_config *cfg = ud;
-	gint action_value;
 	const ucl_object_t *cur;
 	ucl_object_iter_t it;
 
 	it = ucl_object_iterate_new (obj);
 
 	while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
-		if (ucl_object_type (cur) == UCL_NULL) {
+		gint type = ucl_object_type (cur);
+
+		if (type == UCL_NULL) {
 			rspamd_config_maybe_disable_action (cfg, ucl_object_key (cur),
 					ucl_object_get_priority (cur));
 		}
-		else {
+		else if (type == UCL_OBJECT || type == UCL_FLOAT || type == UCL_INT) {
 			if (!rspamd_config_set_action_score (cfg,
 					ucl_object_key (cur),
 					cur)) {
