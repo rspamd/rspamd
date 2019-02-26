@@ -703,8 +703,8 @@ start_worker (struct rspamd_worker *worker)
 	rspamd_worker_block_signals ();
 
 	rspamd_stat_close ();
-	rspamd_http_context_free (ctx->http_ctx);
 	REF_RELEASE (ctx->cfg);
+	rspamd_http_context_free (ctx->http_ctx);
 	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);
