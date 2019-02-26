@@ -1471,7 +1471,10 @@ rspamd_language_detector_set_language (struct rspamd_task *task,
 	r->prob = 1.0;
 	r->lang = code;
 
-	part->languages = g_ptr_array_sized_new (1);
+	if (part->languages == NULL) {
+		part->languages = g_ptr_array_sized_new (1);
+	}
+
 	g_ptr_array_add (part->languages, r);
 	part->language = code;
 }
