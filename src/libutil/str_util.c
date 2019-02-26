@@ -734,18 +734,7 @@ rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
 }
 
 
-
-/**
- * Decode string using base32 encoding
- * @param in input
- * @param inlen input length
- * @param out output buf (may overlap with `in`)
- * @param outlen output buf len
- * @return TRUE if in is valid base32 and `outlen` is enough to encode `inlen`
- */
-
-
-static gchar *
+gchar *
 rspamd_encode_base64_common (const guchar *in, gsize inlen, gint str_len,
 		gsize *outlen, gboolean fold, enum rspamd_newlines_type how)
 {
