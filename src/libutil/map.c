@@ -1649,8 +1649,8 @@ check:
 			cbd->stage = map_load_file;
 			cbd->conn = rspamd_http_connection_new (
 					NULL,
-					NULL,
 					cbd->fd,
+					NULL,
 					http_map_error,
 					http_map_finish,
 					flags,
