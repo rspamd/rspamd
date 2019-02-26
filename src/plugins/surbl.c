@@ -270,10 +270,14 @@ read_exceptions_list (gchar * chunk,
 }
 
 static void
-fin_exceptions_list (struct map_cb_data *data)
+fin_exceptions_list (struct map_cb_data *data, void **target)
 {
 	GHashTable **t;
 	gint i;
+
+	if (target) {
+		*target = data->cur_data;
+	}
 
 	if (data->prev_data) {
 		t = data->prev_data;
@@ -385,10 +389,14 @@ read_redirectors_list (gchar * chunk,
 			   final);
 }
 
-void
-fin_redirectors_list (struct map_cb_data *data)
+static void
+fin_redirectors_list (struct map_cb_data *data, void **target)
 {
 	GHashTable *tld_hash;
+
+	if (target) {
+		*target = data->cur_data;
+	}
 
 	if (data->prev_data) {
 		tld_hash = data->prev_data;
@@ -397,7 +405,7 @@ fin_redirectors_list (struct map_cb_data *data)
 	}
 }
 
-void
+static void
 dtor_redirectors_list (struct map_cb_data *data)
 {
 	GHashTable *tld_hash;

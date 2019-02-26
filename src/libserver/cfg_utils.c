@@ -58,7 +58,7 @@ static gchar * rspamd_ucl_read_cb (gchar * chunk,
 	gint len,
 	struct map_cb_data *data,
 	gboolean final);
-static void rspamd_ucl_fin_cb (struct map_cb_data *data);
+static void rspamd_ucl_fin_cb (struct map_cb_data *data, void **target);
 static void rspamd_ucl_dtor_cb (struct map_cb_data *data);
 
 guint rspamd_config_log_id = (guint)-1;
@@ -1358,7 +1358,7 @@ rspamd_ucl_read_cb (gchar * chunk,
 }
 
 static void
-rspamd_ucl_fin_cb (struct map_cb_data *data)
+rspamd_ucl_fin_cb (struct map_cb_data *data, void **target)
 {
 	struct rspamd_ucl_map_cbdata *cbdata = data->cur_data, *prev =
 		data->prev_data;
@@ -1367,13 +1367,6 @@ rspamd_ucl_fin_cb (struct map_cb_data *data)
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur;
 	struct rspamd_config *cfg = data->map->cfg;
-
-	if (prev != NULL) {
-		if (prev->buf != NULL) {
-			g_string_free (prev->buf, TRUE);
-		}
-		g_free (prev);
-	}
 
 	if (cbdata == NULL) {
 		msg_err_config ("map fin error: new data is NULL");
@@ -1399,6 +1392,17 @@ rspamd_ucl_fin_cb (struct map_cb_data *data)
 					cur->key, cur->keylen, false);
 		}
 		ucl_object_unref (obj);
+	}
+
+	if (target) {
+		*target = data->cur_data;
+	}
+
+	if (prev != NULL) {
+		if (prev->buf != NULL) {
+			g_string_free (prev->buf, TRUE);
+		}
+		g_free (prev);
 	}
 }
 

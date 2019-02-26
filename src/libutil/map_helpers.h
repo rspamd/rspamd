@@ -52,7 +52,7 @@ gchar * rspamd_radix_read (
 		gint len,
 		struct map_cb_data *data,
 		gboolean final);
-void rspamd_radix_fin (struct map_cb_data *data);
+void rspamd_radix_fin (struct map_cb_data *data, void **target);
 void rspamd_radix_dtor (struct map_cb_data *data);
 
 /**
@@ -63,7 +63,7 @@ gchar * rspamd_kv_list_read (
 		gint len,
 		struct map_cb_data *data,
 		gboolean final);
-void rspamd_kv_list_fin (struct map_cb_data *data);
+void rspamd_kv_list_fin (struct map_cb_data *data, void **target);
 void rspamd_kv_list_dtor (struct map_cb_data *data);
 
 /**
@@ -91,7 +91,7 @@ gchar * rspamd_glob_list_read_multiple (
 		gint len,
 		struct map_cb_data *data,
 		gboolean final);
-void rspamd_regexp_list_fin (struct map_cb_data *data);
+void rspamd_regexp_list_fin (struct map_cb_data *data, void **target);
 void rspamd_regexp_list_dtor (struct map_cb_data *data);
 
 /**

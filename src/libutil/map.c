@@ -1153,11 +1153,7 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 
 	if (periodic->need_modify) {
 		/* We are done */
-		periodic->map->fin_callback (&periodic->cbdata);
-
-		if (periodic->cbdata.cur_data) {
-			*periodic->map->user_data = periodic->cbdata.cur_data;
-		}
+		periodic->map->fin_callback (&periodic->cbdata, periodic->map->user_data);
 	}
 	else {
 		/* Not modified */
@@ -2038,11 +2034,7 @@ rspamd_map_preload (struct rspamd_config *cfg)
 			}
 
 			if (succeed) {
-				map->fin_callback (&fake_cbd.cbdata);
-
-				if (fake_cbd.cbdata.cur_data) {
-					*map->user_data = fake_cbd.cbdata.cur_data;
-				}
+				map->fin_callback (&fake_cbd.cbdata, map->user_data);
 			}
 			else {
 				msg_info_map ("preload of %s failed", map->name);

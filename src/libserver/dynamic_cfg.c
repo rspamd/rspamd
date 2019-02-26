@@ -175,21 +175,11 @@ json_config_read_cb (gchar * chunk,
 }
 
 static void
-json_config_fin_cb (struct map_cb_data *data)
+json_config_fin_cb (struct map_cb_data *data, void **target)
 {
 	struct config_json_buf *jb;
 	ucl_object_t *top;
 	struct ucl_parser *parser;
-
-	if (data->cur_data && data->prev_data) {
-		jb = data->prev_data;
-		/* Clean prev data */
-		if (jb->buf) {
-			g_string_free (jb->buf, TRUE);
-		}
-
-		g_free (jb);
-	}
 
 	/* Now parse json */
 	if (data->cur_data) {
@@ -201,6 +191,7 @@ json_config_fin_cb (struct map_cb_data *data)
 
 	if (jb->buf == NULL) {
 		msg_err ("no data read");
+
 		return;
 	}
 
@@ -225,6 +216,20 @@ json_config_fin_cb (struct map_cb_data *data)
 	ucl_object_unref (jb->cfg->current_dynamic_conf);
 	apply_dynamic_conf (top, jb->cfg);
 	jb->cfg->current_dynamic_conf = top;
+
+	if (target) {
+		*target = data->cur_data;
+	}
+
+	if (data->prev_data) {
+		jb = data->prev_data;
+		/* Clean prev data */
+		if (jb->buf) {
+			g_string_free (jb->buf, TRUE);
+		}
+
+		g_free (jb);
+	}
 }
 
 static void
