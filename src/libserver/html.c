@@ -2384,6 +2384,9 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 			dest->len - href_offset,
 			&url_found, &displayed_url);
 
+	if (url_found) {
+		url->flags |= RSPAMD_URL_FLAG_DISPLAY_URL;
+	}
 	if (exceptions && url_found) {
 		ex = rspamd_mempool_alloc (pool,
 				sizeof (*ex));
