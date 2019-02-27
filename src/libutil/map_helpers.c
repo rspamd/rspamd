@@ -504,17 +504,25 @@ rspamd_map_helper_insert_hash (gpointer st, gconstpointer key, gconstpointer val
 	gsize vlen;
 	gint r;
 
-	vlen = strlen (value);
-	val = rspamd_mempool_alloc0 (ht->pool, sizeof (*val) +
-			vlen + 1);
-	memcpy (val->value, value, vlen);
-
 	k = kh_get (rspamd_map_hash, ht->htb, key);
+	vlen = strlen (value);
 
 	if (k == kh_end (ht->htb)) {
 		nk = rspamd_mempool_strdup (ht->pool, key);
 		k = kh_put (rspamd_map_hash, ht->htb, nk, &r);
 	}
+	else {
+		val = kh_value (ht->htb, k);
+
+		if (strcmp (value, val->value) == 0) {
+			/* Same element, skip */
+			return;
+		}
+	}
+
+	/* Null termination due to alloc0 */
+	val = rspamd_mempool_alloc0 (ht->pool, sizeof (*val) + vlen + 1);
+	memcpy (val->value, value, vlen);
 
 	nk = kh_key (ht->htb, k);
 	val->key = nk;
