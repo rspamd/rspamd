@@ -48,6 +48,7 @@ struct rspamd_url {
 	gchar *fragment;
 	gchar *surbl;
 	gchar *tld;
+	gchar *visible_part;
 
 	struct rspamd_url *phished_url;
 
@@ -61,6 +62,7 @@ struct rspamd_url {
 	guint tldlen;
 	guint urllen;
 	guint rawlen;
+	guint visible_partlen;
 
 	enum rspamd_url_flags flags;
 	guint count;

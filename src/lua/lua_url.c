@@ -63,6 +63,7 @@ LUA_FUNCTION_DEF (url, get_tag);
 LUA_FUNCTION_DEF (url, get_count);
 LUA_FUNCTION_DEF (url, get_tags);
 LUA_FUNCTION_DEF (url, add_tag);
+LUA_FUNCTION_DEF (url, get_visible);
 LUA_FUNCTION_DEF (url, create);
 LUA_FUNCTION_DEF (url, init);
 LUA_FUNCTION_DEF (url, all);
@@ -89,6 +90,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_tag),
 	LUA_INTERFACE_DEF (url, get_tags),
 	LUA_INTERFACE_DEF (url, add_tag),
+	LUA_INTERFACE_DEF (url, get_visible),
 	LUA_INTERFACE_DEF (url, get_count),
 	LUA_INTERFACE_DEF (url, get_flags),
 	{"get_redirected", lua_url_get_phished},
@@ -648,6 +650,27 @@ lua_url_get_count (lua_State *L)
 	}
 
 	return 1;
+}
+
+ /***
+* @method url:get_visible()
+* Get visible part of the url with html tags stripped
+* @return {string} url string
+*/
+static gint
+lua_url_get_visible (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url != NULL) {
+		lua_pushlstring (L, url->url->visible_part, url->url->visible_partlen);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+return 1;
 }
 
 /***

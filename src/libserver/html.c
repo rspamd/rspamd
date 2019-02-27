@@ -2373,6 +2373,12 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 		return;
 	}
 
+	gint visible_part_len = dest->len - href_offset;
+	url->visible_part = rspamd_mempool_alloc0(pool, visible_part_len +1);
+	url->visible_partlen = visible_part_len;
+	gchar *visible_part = g_strndup(dest->data + href_offset, visible_part_len);
+	g_stpcpy(url->visible_part, visible_part);
+
 	rspamd_html_url_is_phished (pool, url,
 			dest->data + href_offset,
 			dest->len - href_offset,
