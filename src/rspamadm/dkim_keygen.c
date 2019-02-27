@@ -188,7 +188,7 @@ rspamd_dkim_generate_rsa_keypair (const gchar *domain, const gchar *selector,
 static void
 rspamd_dkim_generate_ed25519_keypair (const gchar *domain, const gchar *selector,
 								  const gchar *priv_fname, const gchar *pub_fname,
-								  guint keylen)
+								  guint keylen, gboolean seeded)
 {
 	rspamd_sig_sk_t ed_sk;
 	rspamd_sig_pk_t ed_pk;
@@ -196,9 +196,17 @@ rspamd_dkim_generate_ed25519_keypair (const gchar *domain, const gchar *selector
 	FILE *pubfile = NULL, *privfile = NULL;
 
 	rspamd_cryptobox_keypair_sig (ed_pk, ed_sk, RSPAMD_CRYPTOBOX_MODE_25519);
-	/* Just encode seed, not the full sk */
-	base64_sk = rspamd_encode_base64_common (ed_sk, 32, 0, NULL, FALSE,
-			RSPAMD_TASK_NEWLINES_LF);
+	if (seeded) {
+		/* Just encode seed, not the full sk */
+		base64_sk = rspamd_encode_base64_common (ed_sk, 32, 0, NULL, FALSE,
+				RSPAMD_TASK_NEWLINES_LF);
+	}
+	else {
+		base64_sk = rspamd_encode_base64_common (ed_sk,
+				rspamd_cryptobox_sk_sig_bytes (RSPAMD_CRYPTOBOX_MODE_25519),
+				0, NULL, FALSE,
+				RSPAMD_TASK_NEWLINES_LF);
+	}
 	base64_pk = rspamd_encode_base64_common (ed_pk, sizeof (ed_pk), 0, NULL, FALSE,
 			RSPAMD_TASK_NEWLINES_LF);
 
@@ -279,7 +287,11 @@ rspamadm_dkim_generate_keypair (const gchar *domain, const gchar *selector,
 	}
 	else if (strcmp (type, "ed25519") == 0) {
 		rspamd_dkim_generate_ed25519_keypair (domain, selector, priv_fname,
-				pub_fname, keylen);
+				pub_fname, keylen, FALSE);
+	}
+	else if (strcmp (type, "ed25519-seed") == 0) {
+		rspamd_dkim_generate_ed25519_keypair (domain, selector, priv_fname,
+				pub_fname, keylen, TRUE);
 	}
 	else {
 		fprintf (stderr, "invalid key type: %s\n", type);
