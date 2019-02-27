@@ -334,7 +334,7 @@ local full_extensions_map = {
   {"etl", "application/etl"},
   {"etx", "text/x-setext"},
   {"evy", "application/envoy"},
-  {"exe", "application/x-dosexec"},
+  {"exe", {"application/x-dosexec", "application/x-msdownload"}},
   {"exe.config", "text/xml"},
   {"fdf", "application/vnd.fdf"},
   {"fif", "application/fractals"},
