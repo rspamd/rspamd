@@ -1113,140 +1113,113 @@ rspamd_compare_order_func (gconstpointer a, gconstpointer b)
 	return cb2->order - cb1->order;
 }
 
-static void lua_metric_symbol_callback_return (struct thread_entry *thread_entry,
-											   int ret);
-
-static void lua_metric_symbol_callback_error (struct thread_entry *thread_entry,
-											  int ret,
-											  const char *msg);
-
 static void
 lua_metric_symbol_callback (struct rspamd_task *task,
-		struct rspamd_symcache_item *item,
-		gpointer ud)
+							struct rspamd_symcache_item *item,
+							gpointer ud)
 {
 	struct lua_callback_data *cd = ud;
 	struct rspamd_task **ptask;
-	struct thread_entry *thread_entry;
-
-	rspamd_symcache_item_async_inc (task, item, "lua symbol");
-	thread_entry = lua_thread_pool_get_for_task (task);
-
-	g_assert(thread_entry->cd == NULL);
-	thread_entry->cd = cd;
-
-	lua_State *thread = thread_entry->lua_state;
-	cd->stack_level = lua_gettop (thread);
-	cd->item = item;
-
-	if (cd->cb_is_ref) {
-		lua_rawgeti (thread, LUA_REGISTRYINDEX, cd->callback.ref);
-	}
-	else {
-		lua_getglobal (thread, cd->callback.name);
-	}
-
-	ptask = lua_newuserdata (thread, sizeof (struct rspamd_task *));
-	rspamd_lua_setclass (thread, "rspamd{task}", -1);
-	*ptask = task;
-
-	thread_entry->finish_callback = lua_metric_symbol_callback_return;
-	thread_entry->error_callback = lua_metric_symbol_callback_error;
-
-	lua_thread_call (thread_entry, 1);
-}
-
-static void
-lua_metric_symbol_callback_error (struct thread_entry *thread_entry,
-								  int ret,
-								  const char *msg)
-{
-	struct lua_callback_data *cd = thread_entry->cd;
-	struct rspamd_task *task = thread_entry->task;
-	msg_err_task ("call to (%s) failed (%d): %s", cd->symbol, ret, msg);
-
-	rspamd_symcache_item_async_dec_check (task, cd->item, "lua symbol");
-}
-
-static void
-lua_metric_symbol_callback_return (struct thread_entry *thread_entry, int ret)
-{
-	struct lua_callback_data *cd = thread_entry->cd;
-	struct rspamd_task *task = thread_entry->task;
-	int nresults;
+	gint level = lua_gettop (cd->L), nresults, err_idx, ret;
+	lua_State *L = cd->L;
+	GString *tb;
 	struct rspamd_symbol_result *s;
 
-	(void)ret;
+	cd->item = item;
+	rspamd_symcache_item_async_inc (task, item, "lua symbol");
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
 
-	lua_State *L = thread_entry->lua_state;
+	level ++;
 
-	nresults = lua_gettop (L) - cd->stack_level;
+	if (cd->cb_is_ref) {
+		lua_rawgeti (L, LUA_REGISTRYINDEX, cd->callback.ref);
+	}
+	else {
+		lua_getglobal (L, cd->callback.name);
+	}
 
-	if (nresults >= 1) {
-		/* Function returned boolean, so maybe we need to insert result? */
-		gint res = 0;
-		gint i;
-		gdouble flag = 1.0;
-		gint type;
+	ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+	rspamd_lua_setclass (L, "rspamd{task}", -1);
+	*ptask = task;
 
-		type = lua_type (L, cd->stack_level + 1);
+	if ((ret = lua_pcall (L, 1, LUA_MULTRET, err_idx)) != 0) {
+		tb = lua_touserdata (L, -1);
+		msg_err_task ("call to (%s) failed (%d): %v", cd->symbol, ret, tb);
 
-		if (type == LUA_TBOOLEAN) {
-			res = lua_toboolean (L, cd->stack_level + 1);
+		if (tb) {
+			g_string_free (tb, TRUE);
+			lua_pop (L, 1);
 		}
-		else if (type == LUA_TFUNCTION) {
-			g_assert_not_reached ();
-		}
-		else {
-			res = lua_tonumber (L, cd->stack_level + 1);
-		}
+	}
+	else {
+		nresults = lua_gettop (L) - level;
 
-		if (res) {
-			gint first_opt = 2;
+		if (nresults >= 1) {
+			/* Function returned boolean, so maybe we need to insert result? */
+			gint res = 0;
+			gint i;
+			gdouble flag = 1.0;
+			gint type;
 
-			if (lua_type (L, cd->stack_level + 2) == LUA_TNUMBER) {
-				flag = lua_tonumber (L, cd->stack_level + 2);
-				/* Shift opt index */
-				first_opt = 3;
+			type = lua_type (cd->L, level + 1);
+
+			if (type == LUA_TBOOLEAN) {
+				res = lua_toboolean (L, level + 1);
+			}
+			else if (type == LUA_TNUMBER) {
+				res = lua_tonumber (L, level + 1);
 			}
 			else {
-				flag = res;
+				g_assert_not_reached ();
 			}
 
-			s = rspamd_task_insert_result (task, cd->symbol, flag, NULL);
+			if (res) {
+				gint first_opt = 2;
 
-			if (s) {
-				guint last_pos = lua_gettop (L);
+				if (lua_type (L, level + 2) == LUA_TNUMBER) {
+					flag = lua_tonumber (L, level + 2);
+					/* Shift opt index */
+					first_opt = 3;
+				}
+				else {
+					flag = res;
+				}
 
-				for (i = cd->stack_level + first_opt; i <= last_pos; i++) {
-					if (lua_type (L, i) == LUA_TSTRING) {
-						const char *opt = lua_tostring (L, i);
+				s = rspamd_task_insert_result (task, cd->symbol, flag, NULL);
 
-						rspamd_task_add_result_option (task, s, opt);
-					}
-					else if (lua_type (L, i) == LUA_TTABLE) {
-						lua_pushvalue (L, i);
+				if (s) {
+					guint last_pos = lua_gettop (L);
 
-						for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
-							const char *opt = lua_tostring (L, -1);
+					for (i = level + first_opt; i <= last_pos; i++) {
+						if (lua_type (L, i) == LUA_TSTRING) {
+							const char *opt = lua_tostring (L, i);
 
 							rspamd_task_add_result_option (task, s, opt);
 						}
+						else if (lua_type (L, i) == LUA_TTABLE) {
+							lua_pushvalue (L, i);
 
-						lua_pop (L, 1);
+							for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+								const char *opt = lua_tostring (L, -1);
+
+								rspamd_task_add_result_option (task, s, opt);
+							}
+
+							lua_pop (L, 1);
+						}
 					}
 				}
+
 			}
 
+			lua_pop (L, nresults);
 		}
-
-		lua_pop (L, nresults);
 	}
 
-	g_assert (lua_gettop (L) == cd->stack_level); /* we properly cleaned up the stack */
-
-	cd->stack_level = 0;
+	lua_pop (L, 1); /* Error function */
 	rspamd_symcache_item_async_dec_check (task, cd->item, "lua symbol");
+	g_assert (lua_gettop (L) == level - 1);
 }
 
 static gint
