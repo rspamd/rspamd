@@ -43,7 +43,7 @@ local function http_symbol(task)
     callback = http_dns_callback,
     timeout = 1,
   })
-
+--[[
   rspamd_logger.errx(task, 'rspamd_http.request[before]')
 
   local err, response = rspamd_http.request({
@@ -73,6 +73,7 @@ local function http_symbol(task)
   else
     task:insert_result('HTTP_CORO_DNS_ERROR', 1.0, err)
   end
+  --]]
 end
 
 
