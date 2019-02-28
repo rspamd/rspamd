@@ -28,7 +28,6 @@ local regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
 local rspamd_ip = require "rspamd_ip"
 local lua_util = require "lua_util"
-local rspamd_dns = require "rspamd_dns"
 local lua_selectors = require "lua_selectors"
 local redis_params
 local fun = require "fun"
@@ -733,26 +732,30 @@ local function multimap_callback(task, rule)
       local ip = task:get_from_ip()
       if ip:is_valid() then
         local to_resolve = ip_to_rbl(ip, rule['map'])
+        local function dns_cb(_, _, results, err)
+          lua_util.debugm(N, rspamd_config,
+              'resolve() finished: results=%1, err=%2, to_resolve=%3',
+              results, err, to_resolve)
 
-        local is_ok, results = rspamd_dns.request({
-          type = "a",
-          task = task,
-          name = to_resolve,
-        })
-
-        lua_util.debugm(N, rspamd_config,
-            'resolve() finished: results=%1, is_ok=%2, to_resolve=%3',
-            results, is_ok, to_resolve)
-
-        if not is_ok and
-            (results ~= 'requested record is not found' and results ~= 'no records with this name') then
-          rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, results)
-        elseif is_ok then
-          task:insert_result(rule['symbol'], 1, rule['map'])
-          if pre_filter then
-            task:set_pre_result(rule['action'], 'Matched map: ' .. rule['symbol'], N)
+          if err and
+              (err ~= 'requested record is not found' and
+                  err ~= 'no records with this name') then
+            rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, results)
+          elseif results then
+            task:insert_result(rule['symbol'], 1, rule['map'])
+            if pre_filter then
+              task:set_pre_result(rule['action'],
+                  'Matched map: ' .. rule['symbol'], N)
+            end
           end
         end
+
+        task:get_resolver():resolve_a({
+          task= task,
+          name = to_resolve,
+          callback = dns_cb,
+          forced = true
+        })
       end
     end,
     header = function()
