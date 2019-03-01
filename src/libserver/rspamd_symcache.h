@@ -50,6 +50,7 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_MIME_ONLY = (1 << 15), /* Symbol is mime only */
 	SYMBOL_TYPE_EXPLICIT_DISABLE = (1 << 16), /* Symbol should be disabled explicitly only */
 	SYMBOL_TYPE_IGNORE_PASSTHROUGH = (1 << 17), /* Symbol ignores passthrough result */
+	SYMBOL_TYPE_USE_CORO = (1 << 18), /* Symbol uses lua coroutines */
 };
 
 /**
