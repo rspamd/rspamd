@@ -1349,7 +1349,8 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	if (rspamd_substring_search (start, len, "://", 3) == -1) {
 		if (len >= sizeof ("mailto:") &&
 				(memcmp (start, "mailto:", sizeof ("mailto:") - 1) == 0 ||
-						memcmp (start, "tel:", sizeof ("tel:") - 1) == 0)) {
+				 memcmp (start, "tel:", sizeof ("tel:") - 1) == 0 ||
+				 memcmp (start, "callto:", sizeof ("callto:") - 1) == 0)) {
 			/* Exclusion, has valid but 'strange' prefix */
 		}
 		else {

@@ -2619,7 +2619,6 @@ lua_config_newindex (lua_State *L)
 			gint type = SYMBOL_TYPE_NORMAL, priority = 0, idx;
 			gdouble weight = 1.0, score = NAN;
 			const char *type_str, *group = NULL, *description = NULL;
-			guint flags = 0;
 
 			no_squeeze = cfg->disable_lua_squeeze;
 			/*

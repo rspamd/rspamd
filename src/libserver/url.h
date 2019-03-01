@@ -85,7 +85,7 @@ enum rspamd_url_protocol {
 	PROTOCOL_HTTPS = 1u << 3,
 	PROTOCOL_MAILTO = 1u << 4,
 	PROTOCOL_TELEPHONE = 1u << 5,
-	PROTOCOL_UNKNOWN = -1,
+	PROTOCOL_UNKNOWN = 1u << 31,
 };
 
 /**
