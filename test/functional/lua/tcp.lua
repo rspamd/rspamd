@@ -31,7 +31,7 @@ local function http_simple_tcp_async_symbol(task)
     port = 18080,
   })
 end
---[[
+
 local function http_simple_tcp_symbol(task)
   logger.errx(task, 'connect_sync, before')
 
@@ -171,25 +171,26 @@ local function http_tcp_symbol(task)
   end
   logger.errx(task, '(is_ok: %1) content [%2 bytes] %3', is_ok, content_length, content)
 end
---]]
+
 rspamd_config:register_symbol({
   name = 'SIMPLE_TCP_ASYNC_TEST',
   score = 1.0,
   callback = http_simple_tcp_async_symbol,
   no_squeeze = true
 })
---[[
 rspamd_config:register_symbol({
   name = 'SIMPLE_TCP_TEST',
   score = 1.0,
   callback = http_simple_tcp_symbol,
-  no_squeeze = true
+  no_squeeze = true,
+  flags = 'coro',
 })
 
 rspamd_config:register_symbol({
   name = 'HTTP_TCP_TEST',
   score = 1.0,
   callback = http_tcp_symbol,
-  no_squeeze = true
+  no_squeeze = true,
+  flags = 'coro',
 })
 -- ]]

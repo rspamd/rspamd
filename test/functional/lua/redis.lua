@@ -2,10 +2,16 @@
 -- Just a test for Redis API
 --]]
 
+local logger = require "rspamd_logger"
 local redis_lua = require "lua_redis"
 
 local redis_params
 local N = 'redis_test'
+
+local lua_script = [[
+local f = function() end
+return "hello from lua on redis"
+]]
 
 local function redis_simple_async_symbol(task)
   local function redis_cb(err, data)
@@ -46,7 +52,7 @@ local function redis_simple_async_api201809(task)
   }
   redis_lua.request(redis_params, attrs, request)
 end
---[[
+
 local function redis_symbol(task)
 
   local attrs = {task = task}
@@ -81,7 +87,7 @@ local function redis_symbol(task)
   task:insert_result('REDIS', 1.0, data)
 
 end
---]]
+
 redis_params = rspamd_parse_redis_server(N)
 
 rspamd_config:register_symbol({
@@ -97,11 +103,11 @@ rspamd_config:register_symbol({
   callback = redis_simple_async_api201809,
   no_squeeze = true
 })
---[[
+
 rspamd_config:register_symbol({
   name = 'REDIS_TEST',
   score = 1.0,
   callback = redis_symbol,
-  no_squeeze = true
+  flags = 'coro',
 })
 -- ]]

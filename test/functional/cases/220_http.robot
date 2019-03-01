@@ -15,25 +15,25 @@ ${RSPAMD_SCOPE}  Test
 
 *** Test Cases ***
 Simple HTTP request
-  Check url  /request  get  HTTP_DNS_200  HTTP_200  method_get  hello world
-  Check url  /request  post  HTTP_DNS_200  HTTP_200  method_post  hello post
+  Check url  /request  get  HTTP_DNS_200  HTTP_200  HTTP_CORO_DNS_200  HTTP_CORO_200  method_get  hello world  HTTP_CORO_200 (0.00)[hello world]
+  Check url  /request  post  HTTP_DNS_200  HTTP_200  HTTP_CORO_DNS_200  HTTP_CORO_200  method_post  hello post  HTTP_CORO_DNS_200 (0.00)[hello post]
 
 *** Test Cases ***
 HTTP request 403
-  Check url  /error_403  get  HTTP_DNS_403  HTTP_403  method_get
-  Check url  /error_403  post  HTTP_DNS_403  HTTP_403  method_post
+  Check url  /error_403  get  HTTP_DNS_403  HTTP_403  HTTP_CORO_DNS_403  HTTP_CORO_403  method_get
+  Check url  /error_403  post  HTTP_DNS_403  HTTP_403  HTTP_CORO_DNS_403  HTTP_CORO_403  method_post
 
 
 *** Test Cases ***
 HTTP timeout
-  Check url  /timeout  get  HTTP_ERROR  HTTP_ERROR  method_get  IO timeout
-  Check url  /timeout  post  HTTP_DNS_ERROR  HTTP_ERROR  method_post  IO timeout
+  Check url  /timeout  get  HTTP_ERROR  HTTP_ERROR  HTTP_CORO_DNS_ERROR  HTTP_CORO_ERROR  method_get  IO timeout
+  Check url  /timeout  post  HTTP_DNS_ERROR  HTTP_ERROR  HTTP_CORO_DNS_ERROR  HTTP_CORO_ERROR  method_post  IO timeout
 
 
 *** Test Cases ***
 HTTP empty response
-  Check url  /empty  get  HTTP_ERROR  HTTP_ERROR  method_get  IO read error: unexpected EOF
-  Check url  /empty  post  HTTP_DNS_ERROR  HTTP_ERROR  method_post  IO read error: unexpected EOF
+  Check url  /empty  get  HTTP_ERROR  HTTP_ERROR  HTTP_CORO_DNS_ERROR  HTTP_CORO_ERROR  method_get  IO read error: unexpected EOF
+  Check url  /empty  post  HTTP_DNS_ERROR  HTTP_ERROR  HTTP_CORO_DNS_ERROR  HTTP_CORO_ERROR  method_post  IO read error: unexpected EOF
 
 
 *** Keywords ***

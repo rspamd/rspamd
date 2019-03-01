@@ -19,6 +19,22 @@ Simple TCP request
   Check Rspamc  ${result}  HTTP_ASYNC_RESPONSE
   Check Rspamc  ${result}  HTTP_ASYNC_RESPONSE_2
 
+
+Sync API TCP request
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}
+  Check Rspamc  ${result}  HTTP_SYNC_RESPONSE
+  Check Rspamc  ${result}  HTTP_SYNC_RESPONSE_2
+  Check Rspamc  ${result}  hello world
+  Check Rspamc  ${result}  hello post
+
+Sync API TCP get request
+  Check url  /request  get  HTTP_SYNC_EOF_get (0.00)[hello world]
+  Check url  /content-length  get  HTTP_SYNC_CONTENT_get (0.00)[hello world]
+
+Sync API TCP post request
+  Check url  /request  post  HTTP_SYNC_EOF_post (0.00)[hello post]
+  Check url  /content-length  post  HTTP_SYNC_CONTENT_post (0.00)[hello post]
+
 *** Keywords ***
 Lua Setup
   [Arguments]  ${LUA_SCRIPT}
