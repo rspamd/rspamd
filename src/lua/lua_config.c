@@ -1170,6 +1170,10 @@ lua_metric_symbol_callback (struct rspamd_task *task,
 			else if (type == LUA_TNUMBER) {
 				res = lua_tonumber (L, level + 1);
 			}
+			else if (type == LUA_TNIL) {
+				/* Can happen sometimes... */
+				res = FALSE;
+			}
 			else {
 				g_assert_not_reached ();
 			}
