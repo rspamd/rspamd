@@ -51,7 +51,6 @@ struct rspamd_monitored_ctx {
 
 struct rspamd_monitored {
 	gchar *url;
-	gdouble monitoring_interval;
 	gdouble monitoring_mult;
 	gdouble offline_time;
 	gdouble total_offline_time;
@@ -173,7 +172,7 @@ rspamd_monitored_periodic (gint fd, short what, gpointer ud)
 	gdouble jittered;
 	gboolean ret = FALSE;
 
-	jittered = rspamd_time_jitter (m->monitoring_interval * m->monitoring_mult,
+	jittered = rspamd_time_jitter (m->ctx->monitoring_interval * m->monitoring_mult,
 			0.0);
 	double_to_tv (jittered, &tv);
 
@@ -480,7 +479,6 @@ rspamd_monitored_create_ (struct rspamd_monitored_ctx *ctx,
 	m->flags = flags;
 	m->url = g_strdup (line);
 	m->ctx = ctx;
-	m->monitoring_interval = ctx->monitoring_interval;
 	m->monitoring_mult = 1.0;
 	m->max_errors = ctx->max_errors;
 	m->alive = TRUE;
@@ -602,7 +600,7 @@ rspamd_monitored_start (struct rspamd_monitored *m)
 
 	g_assert (m != NULL);
 	msg_debug_mon ("started monitored object %s", m->url);
-	jittered = rspamd_time_jitter (m->monitoring_interval * m->monitoring_mult,
+	jittered = rspamd_time_jitter (m->ctx->monitoring_interval * m->monitoring_mult,
 			0.0);
 	double_to_tv (jittered, &tv);
 
