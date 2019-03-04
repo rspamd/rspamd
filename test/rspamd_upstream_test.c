@@ -110,7 +110,7 @@ rspamd_upstream_test_func (void)
 		next_addr = rspamd_upstream_addr_next (up);
 		g_assert (rspamd_inet_address_get_af (addr) == AF_INET);
 		g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET);
-		g_assert (rspamd_inet_address_compare (addr, next_addr) != 0);
+		g_assert (rspamd_inet_address_compare (addr, next_addr, FALSE) != 0);
 		addr = next_addr;
 	}
 	rspamd_upstreams_destroy (nls);
