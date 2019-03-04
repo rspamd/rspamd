@@ -1544,9 +1544,9 @@ rspamd_milter_remove_header_safe (struct rspamd_milter_session *session,
 					RSPAMD_MILTER_CHGHEADER,
 					nhdr, hname, hvalue);
 		}
-		else if (nhdr == 0) {
+		else if (nhdr == 0 && ar->len > 0) {
 			/* We need to clear all headers */
-			for (i = 1; i <= ar->len; i ++) {
+			for (i = ar->len; i > 0; i --) {
 				rspamd_milter_send_action (session,
 						RSPAMD_MILTER_CHGHEADER,
 						i, hname, hvalue);
