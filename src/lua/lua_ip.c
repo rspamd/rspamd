@@ -490,7 +490,7 @@ lua_ip_equal (lua_State *L)
 	gboolean res = FALSE;
 
 	if (ip1 && ip2 && ip1->addr && ip2->addr) {
-		res = rspamd_inet_address_compare (ip1->addr, ip2->addr);
+		res = rspamd_inet_address_compare (ip1->addr, ip2->addr, TRUE);
 	}
 
 	lua_pushboolean (L, res);

@@ -1636,7 +1636,7 @@ rspamd_inet_address_af_order (const rspamd_inet_addr_t *addr)
 
 gint
 rspamd_inet_address_compare (const rspamd_inet_addr_t *a1,
-		const rspamd_inet_addr_t *a2)
+		const rspamd_inet_addr_t *a2, gboolean compare_ports)
 {
 	g_assert (a1 != NULL);
 	g_assert (a2 != NULL);
@@ -1648,11 +1648,33 @@ rspamd_inet_address_compare (const rspamd_inet_addr_t *a1,
 	else {
 		switch (a1->af) {
 		case AF_INET:
-			return memcmp (&a1->u.in.addr.s4.sin_addr,
-					&a2->u.in.addr.s4.sin_addr, sizeof (struct in_addr));
+			if (!compare_ports) {
+				return memcmp (&a1->u.in.addr.s4.sin_addr,
+						&a2->u.in.addr.s4.sin_addr, sizeof (struct in_addr));
+			}
+			else {
+				if (a1->u.in.addr.s4.sin_port == a2->u.in.addr.s4.sin_port) {
+					return memcmp (&a1->u.in.addr.s4.sin_addr,
+							&a2->u.in.addr.s4.sin_addr, sizeof (struct in_addr));
+				}
+				else {
+					return a1->u.in.addr.s4.sin_port - a2->u.in.addr.s4.sin_port;
+				}
+			}
 		case AF_INET6:
-			return memcmp (&a1->u.in.addr.s6.sin6_addr,
-				&a2->u.in.addr.s6.sin6_addr, sizeof (struct in6_addr));
+			if (!compare_ports) {
+				return memcmp (&a1->u.in.addr.s6.sin6_addr,
+						&a2->u.in.addr.s6.sin6_addr, sizeof (struct in6_addr));
+			}
+			else {
+				if (a1->u.in.addr.s6.sin6_port == a2->u.in.addr.s6.sin6_port) {
+					return memcmp (&a1->u.in.addr.s6.sin6_addr,
+							&a2->u.in.addr.s6.sin6_addr, sizeof (struct in6_addr));
+				}
+				else {
+					return a1->u.in.addr.s6.sin6_port - a2->u.in.addr.s6.sin6_port;
+				}
+			}
 		case AF_UNIX:
 			return strncmp (a1->u.un->addr.sun_path,
 				a2->u.un->addr.sun_path, sizeof (a1->u.un->addr.sun_path));
@@ -1671,7 +1693,7 @@ rspamd_inet_address_compare_ptr (gconstpointer a1,
 	const rspamd_inet_addr_t **i1 = (const rspamd_inet_addr_t **)a1,
 			**i2 = (const rspamd_inet_addr_t **)a2;
 
-	return rspamd_inet_address_compare (*i1, *i2);
+	return rspamd_inet_address_compare (*i1, *i2, FALSE);
 }
 
 rspamd_inet_addr_t *
@@ -1724,28 +1746,85 @@ guint
 rspamd_inet_address_hash (gconstpointer a)
 {
 	const rspamd_inet_addr_t *addr = a;
-	rspamd_cryptobox_fast_hash_state_t st;
+	struct {
+		gchar buf[sizeof(struct in6_addr)]; /* 16 bytes */
+		int af;
+	} layout;
 
-	rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
-	rspamd_cryptobox_fast_hash_update (&st, &addr->af, sizeof (addr->af));
-
+	gint32 k;
 
 	if (addr->af == AF_UNIX && addr->u.un) {
+		rspamd_cryptobox_fast_hash_state_t st;
+
+		rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
+		rspamd_cryptobox_fast_hash_update (&st, &addr->af, sizeof (addr->af));
 		rspamd_cryptobox_fast_hash_update (&st, addr->u.un, sizeof (*addr->u.un));
+
+		return rspamd_cryptobox_fast_hash_final (&st);
 	}
 	else {
+		memset (&layout, 0, sizeof (layout));
+		layout.af = addr->af;
+
 		/* We ignore port part here */
 		if (addr->af == AF_INET) {
-			rspamd_cryptobox_fast_hash_update (&st, &addr->u.in.addr.s4.sin_addr,
+			memcpy (layout.buf, &addr->u.in.addr.s4.sin_addr,
 					sizeof (addr->u.in.addr.s4.sin_addr));
 		}
 		else {
-			rspamd_cryptobox_fast_hash_update (&st, &addr->u.in.addr.s6.sin6_addr,
+			memcpy (layout.buf, &addr->u.in.addr.s6.sin6_addr,
 					sizeof (addr->u.in.addr.s6.sin6_addr));
 		}
+
+		k = rspamd_cryptobox_fast_hash (&layout, sizeof (layout),
+				rspamd_hash_seed ());
 	}
 
-	return rspamd_cryptobox_fast_hash_final (&st);
+	return k;
+}
+
+guint
+rspamd_inet_address_port_hash (gconstpointer a)
+{
+	const rspamd_inet_addr_t *addr = a;
+	struct {
+		gchar buf[sizeof(struct in6_addr)]; /* 16 bytes */
+		int port;
+		int af;
+	} layout;
+
+	gint32 k;
+
+	if (addr->af == AF_UNIX && addr->u.un) {
+		rspamd_cryptobox_fast_hash_state_t st;
+
+		rspamd_cryptobox_fast_hash_init (&st, rspamd_hash_seed ());
+		rspamd_cryptobox_fast_hash_update (&st, &addr->af, sizeof (addr->af));
+		rspamd_cryptobox_fast_hash_update (&st, addr->u.un, sizeof (*addr->u.un));
+
+		return rspamd_cryptobox_fast_hash_final (&st);
+	}
+	else {
+		memset (&layout, 0, sizeof (layout));
+		layout.af = addr->af;
+
+		/* We consider port part here */
+		if (addr->af == AF_INET) {
+			memcpy (layout.buf, &addr->u.in.addr.s4.sin_addr,
+					sizeof (addr->u.in.addr.s4.sin_addr));
+			layout.port = addr->u.in.addr.s4.sin_port;
+		}
+		else {
+			memcpy (layout.buf, &addr->u.in.addr.s6.sin6_addr,
+					sizeof (addr->u.in.addr.s6.sin6_addr));
+			layout.port = addr->u.in.addr.s6.sin6_port;
+		}
+
+		k = rspamd_cryptobox_fast_hash (&layout, sizeof (layout),
+				rspamd_hash_seed ());
+	}
+
+	return k;
 }
 
 gboolean
@@ -1753,7 +1832,15 @@ rspamd_inet_address_equal (gconstpointer a, gconstpointer b)
 {
 	const rspamd_inet_addr_t *a1 = a, *a2 = b;
 
-	return rspamd_inet_address_compare (a1, a2) == 0;
+	return rspamd_inet_address_compare (a1, a2, FALSE) == 0;
+}
+
+gboolean
+rspamd_inet_address_port_equal (gconstpointer a, gconstpointer b)
+{
+	const rspamd_inet_addr_t *a1 = a, *a2 = b;
+
+	return rspamd_inet_address_compare (a1, a2, TRUE) == 0;
 }
 
 #ifndef IN6_IS_ADDR_LOOPBACK

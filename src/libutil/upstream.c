@@ -289,7 +289,7 @@ rspamd_upstream_update_addrs (struct upstream *up)
 			rspamd_inet_address_set_port (cur->addr, port);
 
 			PTR_ARRAY_FOREACH (up->addrs.addr, i, addr_elt) {
-				if (rspamd_inet_address_compare (addr_elt->addr, cur->addr) == 0) {
+				if (rspamd_inet_address_compare (addr_elt->addr, cur->addr, FALSE) == 0) {
 					naddr = g_malloc0 (sizeof (*naddr));
 					naddr->addr = cur->addr;
 					naddr->errors = reset_errors ? 0 : addr_elt->errors;

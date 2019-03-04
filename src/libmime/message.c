@@ -1150,7 +1150,7 @@ rspamd_message_parse (struct rspamd_task *task)
 				need_recv_correction = TRUE;
 			}
 			else {
-				if (rspamd_inet_address_compare (raddr, task->from_addr) != 0) {
+				if (rspamd_inet_address_compare (raddr, task->from_addr, FALSE) != 0) {
 					need_recv_correction = TRUE;
 				}
 			}

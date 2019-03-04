@@ -263,7 +263,7 @@ void rspamd_inet_address_apply_mask (rspamd_inet_addr_t *addr, guint mask);
  * @return
  */
 gint rspamd_inet_address_compare (const rspamd_inet_addr_t *a1,
-		const rspamd_inet_addr_t *a2);
+		const rspamd_inet_addr_t *a2, gboolean compare_ports);
 
 /**
  * Utility function to compare addresses by in g_ptr_array
@@ -281,15 +281,16 @@ gint rspamd_inet_address_compare_ptr (gconstpointer a1,
 rspamd_inet_addr_t *rspamd_inet_address_copy (const rspamd_inet_addr_t *addr);
 
 /**
- * Returns hash for inet address
+ * Returns hash for inet address (ignoring port)
  */
 guint rspamd_inet_address_hash (gconstpointer a);
-
+guint rspamd_inet_address_port_hash (gconstpointer a);
 
 /**
  * Returns true if two address are equal
  */
 gboolean rspamd_inet_address_equal (gconstpointer a, gconstpointer b);
+gboolean rspamd_inet_address_port_equal (gconstpointer a, gconstpointer b);
 
 /**
  * Returns TRUE if an address belongs to some local address
