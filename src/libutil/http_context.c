@@ -24,6 +24,34 @@
 
 static struct rspamd_http_context *default_ctx = NULL;
 
+struct rspamd_http_keepalive_cbdata {
+	struct rspamd_http_connection *conn;
+	GQueue *queue;
+	GList *link;
+	struct event ev;
+};
+
+static void
+rspamd_http_keepalive_queue_cleanup (GQueue *conns)
+{
+	GList *cur;
+
+	cur = conns->head;
+
+	while (cur) {
+		struct rspamd_http_keepalive_cbdata *cbd;
+
+		cbd = (struct rspamd_http_keepalive_cbdata *)cur->data;
+		rspamd_http_connection_unref (cbd->conn);
+		event_del (&cbd->ev);
+		g_free (cbd);
+
+		cur = cur->next;
+	}
+
+	g_queue_clear (conns);
+}
+
 static void
 rspamd_http_context_client_rotate_ev (gint fd, short what, void *arg)
 {
@@ -68,6 +96,8 @@ rspamd_http_context_new_default (struct rspamd_config *cfg,
 	}
 
 	ctx->ev_base = ev_base;
+
+	ctx->keep_alive_hash = kh_init (rspamd_keep_alive_hash);
 
 	return ctx;
 }
@@ -161,6 +191,7 @@ rspamd_http_context_create (struct rspamd_config *cfg,
 	return ctx;
 }
 
+
 void
 rspamd_http_context_free (struct rspamd_http_context *ctx)
 {
@@ -184,6 +215,20 @@ rspamd_http_context_free (struct rspamd_http_context *ctx)
 			rspamd_keypair_unref (ctx->client_kp);
 		}
 	}
+
+	struct rspamd_keepalive_hash_key *hk;
+
+	kh_foreach_key (ctx->keep_alive_hash, hk, {
+		if (hk->host) {
+			g_free (hk->host);
+		}
+
+		rspamd_inet_address_free (hk->addr);
+		rspamd_http_keepalive_queue_cleanup (&hk->conns);
+		g_free (hk);
+	});
+
+	kh_destroy (rspamd_keep_alive_hash, ctx->keep_alive_hash);
 
 	g_free (ctx);
 }
@@ -210,32 +255,178 @@ rspamd_http_context_default (void)
 }
 
 gint32
-rspamd_keep_alive_key_hash (struct rspamd_keepalive_hash_key k)
+rspamd_keep_alive_key_hash (struct rspamd_keepalive_hash_key *k)
 {
 	gint32 h;
 
-	h = rspamd_inet_address_port_hash (k.addr);
+	h = rspamd_inet_address_port_hash (k->addr);
 
-	if (k.host) {
-		h = rspamd_cryptobox_fast_hash (k.host, strlen (k.host), h);
+	if (k->host) {
+		h = rspamd_cryptobox_fast_hash (k->host, strlen (k->host), h);
 	}
 
 	return h;
 }
 
 bool
-rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key k1,
-								  struct rspamd_keepalive_hash_key k2)
+rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key *k1,
+								  struct rspamd_keepalive_hash_key *k2)
 {
-	if (k1.host && k2.host) {
-		if (rspamd_inet_address_port_equal (k1.addr, k2.addr)) {
-			return strcmp (k1.host, k2.host);
+	if (k1->host && k2->host) {
+		if (rspamd_inet_address_port_equal (k1->addr, k2->addr)) {
+			return strcmp (k1->host, k2->host);
 		}
 	}
-	else if (!k1.host && !k2.host) {
-		return rspamd_inet_address_port_equal (k1.addr, k2.addr);
+	else if (!k1->host && !k2->host) {
+		return rspamd_inet_address_port_equal (k1->addr, k2->addr);
 	}
 
 	/* One has host and another has no host */
 	return false;
+}
+
+struct rspamd_http_connection*
+rspamd_http_context_check_keepalive (struct rspamd_http_context *ctx,
+		const rspamd_inet_addr_t *addr,
+		const gchar *host)
+{
+	struct rspamd_keepalive_hash_key hk, *phk;
+	khiter_t k;
+
+	hk.addr = (rspamd_inet_addr_t *)addr;
+	hk.host = (gchar *)host;
+
+	k = kh_get (rspamd_keep_alive_hash, ctx->keep_alive_hash, &hk);
+
+	if (k != kh_end (ctx->keep_alive_hash)) {
+		phk = kh_key (ctx->keep_alive_hash, k);
+		GQueue *conns = &phk->conns;
+
+		/* Use stack based approach */
+
+		if (g_queue_get_length (conns) > 0) {
+			struct rspamd_http_keepalive_cbdata *cbd;
+			struct rspamd_http_connection *conn;
+
+			cbd = g_queue_pop_head (conns);
+			event_del (&cbd->ev);
+			conn = cbd->conn;
+			g_free (cbd);
+
+			/* We transfer refcount here! */
+			return conn;
+		}
+	}
+
+	return NULL;
+}
+
+void
+rspamd_http_context_prepare_keepalive (struct rspamd_http_context *ctx,
+											struct rspamd_http_connection *conn,
+											const rspamd_inet_addr_t *addr,
+											const gchar *host)
+{
+	struct rspamd_keepalive_hash_key hk, *phk;
+	khiter_t k;
+
+	hk.addr = (rspamd_inet_addr_t *)addr;
+	hk.host = (gchar *)host;
+
+	k = kh_get (rspamd_keep_alive_hash, ctx->keep_alive_hash, &hk);
+
+	if (k != kh_end (ctx->keep_alive_hash)) {
+		/* Reuse existing */
+		conn->keepalive_hash_key = kh_key (ctx->keep_alive_hash, k);
+	}
+	else {
+		/* Create new one */
+		GQueue empty_init = G_QUEUE_INIT;
+		gint r;
+
+		phk = g_malloc (sizeof (*phk));
+		phk->conns = empty_init;
+		phk->host = g_strdup (host);
+		phk->addr = rspamd_inet_address_copy (addr);
+
+		kh_put (rspamd_keep_alive_hash, ctx->keep_alive_hash, phk, &r);
+		conn->keepalive_hash_key = phk;
+	}
+}
+
+static void
+rspamd_http_keepalive_handler (gint fd, short what, gpointer ud)
+{
+	struct rspamd_http_keepalive_cbdata *cbdata =
+			(struct rspamd_http_keepalive_cbdata *)ud;
+	/*
+	 * We can get here if a remote side reported something or it has
+	 * timed out. In both cases we just terminate keepalive connection.
+	 */
+
+	g_queue_delete_link (cbdata->queue, cbdata->link);
+	rspamd_http_connection_unref (cbdata->conn);
+	g_free (cbdata);
+}
+
+void
+rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
+									struct rspamd_http_connection *conn,
+									struct rspamd_http_message *msg,
+									struct event_base *ev_base)
+{
+	struct rspamd_http_keepalive_cbdata *cbdata;
+	struct timeval tv;
+	gdouble timeout = ctx->config.keepalive_interval;
+
+	g_assert (conn->keepalive_hash_key != NULL);
+
+	/* Move connection to the keepalive pool */
+	cbdata = g_malloc0 (sizeof (*cbdata));
+
+	cbdata->conn = rspamd_http_connection_ref (conn);
+	g_queue_push_tail (&conn->keepalive_hash_key->conns, cbdata);
+	cbdata->link = conn->keepalive_hash_key->conns.tail;
+	cbdata->queue = &conn->keepalive_hash_key->conns;
+
+	event_set (&cbdata->ev, conn->fd, EV_READ|EV_TIMEOUT,
+			rspamd_http_keepalive_handler,
+			&cbdata);
+
+	if (msg) {
+		const rspamd_ftok_t *tok;
+
+		tok = rspamd_http_message_find_header (msg, "Keep-Alive");
+
+		if (tok) {
+			goffset pos = rspamd_substring_search_caseless (tok->begin,
+					tok->len, "timeout=", sizeof ("timeout=") - 1);
+
+			if (pos != -1) {
+				pos += sizeof ("timeout=");
+
+				gchar *end_pos = memchr (tok->begin + pos, ',', tok->len - pos);
+				glong real_timeout;
+
+				if (end_pos) {
+					if (rspamd_strtol (tok->begin + pos + 1,
+							(end_pos - tok->begin) - pos - 1, &real_timeout) &&
+							real_timeout > 0) {
+						timeout = real_timeout;
+					}
+				}
+				else {
+					if (rspamd_strtol (tok->begin + pos + 1,
+							tok->len - pos - 1, &real_timeout) &&
+						real_timeout > 0) {
+						timeout = real_timeout;
+					}
+				}
+			}
+		}
+	}
+
+	double_to_tv (timeout, &tv);
+	event_base_set (ev_base, &cbdata->ev);
+	event_add (&cbdata->ev, &tv);
 }

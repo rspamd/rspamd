@@ -80,14 +80,15 @@ struct rspamd_http_message {
 struct rspamd_keepalive_hash_key {
 	rspamd_inet_addr_t *addr;
 	gchar *host;
+	GQueue conns;
 };
 
-gint32 rspamd_keep_alive_key_hash (struct rspamd_keepalive_hash_key k);
-bool rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key k1,
-								  struct rspamd_keepalive_hash_key k2);
+gint32 rspamd_keep_alive_key_hash (struct rspamd_keepalive_hash_key* k);
+bool rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key* k1,
+								  struct rspamd_keepalive_hash_key* k2);
 
-KHASH_INIT (rspamd_keep_alive_hash, struct rspamd_keepalive_hash_key,
-		GQueue, true, rspamd_keep_alive_key_hash, rspamd_keep_alive_key_equal);
+KHASH_INIT (rspamd_keep_alive_hash, struct rspamd_keepalive_hash_key *,
+		char, 0, rspamd_keep_alive_key_hash, rspamd_keep_alive_key_equal);
 
 struct rspamd_http_context {
 	struct rspamd_http_context_cfg config;

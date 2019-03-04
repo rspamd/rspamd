@@ -44,6 +44,7 @@ struct rspamd_http_connection_private;
 struct rspamd_http_connection;
 struct rspamd_http_connection_router;
 struct rspamd_http_connection_entry;
+struct rspamd_keepalive_hash_key;
 
 struct rspamd_storage_shmem {
 	gchar *shm_name;
@@ -106,6 +107,8 @@ struct rspamd_http_connection {
 	rspamd_http_error_handler_t error_handler;
 	rspamd_http_finish_handler_t finish_handler;
 	gpointer ud;
+	/* Used for keepalive */
+	struct rspamd_keepalive_hash_key *keepalive_hash_key;
 	gsize max_size;
 	unsigned opts;
 	enum rspamd_http_connection_type type;
