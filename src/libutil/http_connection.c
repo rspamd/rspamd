@@ -1646,7 +1646,7 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 				rspamd_printf_fstring (buf,
 						"%s %s HTTP/1.0\r\n"
 						"Content-Length: %z\r\n"
-						"Content-Type: application/octet-stream\r\n",
+						"Content-Type: application/octet-stream\r\n"
 						"Connection: %s\r\n",
 						"POST",
 						"/post",
@@ -1658,7 +1658,9 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 						"%s %V HTTP/1.0\r\n"
 						"Content-Length: %z\r\n"
 						"Connection: %s\r\n",
-						http_method_str (msg->method), msg->url, bodylen,
+						http_method_str (msg->method),
+						msg->url,
+						bodylen,
 						conn_type);
 
 				if (bodylen > 0) {
