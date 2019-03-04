@@ -22,6 +22,7 @@
 #include "keypair.h"
 #include "keypairs_cache.h"
 #include "ref.h"
+#include "khash.h"
 #define HASH_CASELESS
 #include "uthash_strcase.h"
 
@@ -76,6 +77,18 @@ struct rspamd_http_message {
 	ref_entry_t ref;
 };
 
+struct rspamd_keepalive_hash_key {
+	rspamd_inet_addr_t *addr;
+	gchar *host;
+};
+
+gint32 rspamd_keep_alive_key_hash (struct rspamd_keepalive_hash_key k);
+bool rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key k1,
+								  struct rspamd_keepalive_hash_key k2);
+
+KHASH_INIT (rspamd_keep_alive_hash, struct rspamd_keepalive_hash_key,
+		GQueue, true, rspamd_keep_alive_key_hash, rspamd_keep_alive_key_equal);
+
 struct rspamd_http_context {
 	struct rspamd_http_context_cfg config;
 	struct rspamd_keypair_cache *client_kp_cache;
@@ -85,6 +98,7 @@ struct rspamd_http_context {
 	gpointer ssl_ctx_noverify;
 	struct event_base *ev_base;
 	struct event client_rotate_ev;
+	khash_t (rspamd_keep_alive_hash) *keep_alive_hash;
 };
 
 #define HTTP_ERROR http_error_quark ()

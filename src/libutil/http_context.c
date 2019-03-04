@@ -208,3 +208,34 @@ rspamd_http_context_default (void)
 
 	return default_ctx;
 }
+
+gint32
+rspamd_keep_alive_key_hash (struct rspamd_keepalive_hash_key k)
+{
+	gint32 h;
+
+	h = rspamd_inet_address_port_hash (k.addr);
+
+	if (k.host) {
+		h = rspamd_cryptobox_fast_hash (k.host, strlen (k.host), h);
+	}
+
+	return h;
+}
+
+bool
+rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key k1,
+								  struct rspamd_keepalive_hash_key k2)
+{
+	if (k1.host && k2.host) {
+		if (rspamd_inet_address_port_equal (k1.addr, k2.addr)) {
+			return strcmp (k1.host, k2.host);
+		}
+	}
+	else if (!k1.host && !k2.host) {
+		return rspamd_inet_address_port_equal (k1.addr, k2.addr);
+	}
+
+	/* One has host and another has no host */
+	return false;
+}

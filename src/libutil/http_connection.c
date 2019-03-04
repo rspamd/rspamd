@@ -1489,6 +1489,7 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 {
 	gchar datebuf[64];
 	gint meth_len = 0;
+	const gchar *conn_type = "close";
 
 	if (conn->type == RSPAMD_HTTP_SERVER) {
 		/* Format reply */
@@ -1619,6 +1620,10 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 		}
 	}
 	else {
+		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
+			conn_type = "keep-alive";
+		}
+
 		/* Format request */
 		enclen += msg->url->len + strlen (http_method_str (msg->method)) + 1;
 
@@ -1629,14 +1634,20 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 						"%s %s HTTP/1.0\r\n"
 						"Content-Length: %z\r\n"
 						"Content-Type: application/octet-stream\r\n",
+						"Connection: %s\r\n",
 						"POST",
-						"/post", enclen);
+						"/post",
+						enclen,
+						conn_type);
 			}
 			else {
 				rspamd_printf_fstring (buf,
 						"%s %V HTTP/1.0\r\n"
-						"Content-Length: %z\r\n",
-						http_method_str (msg->method), msg->url, bodylen);
+						"Content-Length: %z\r\n"
+						"Connection: %s\r\n",
+						http_method_str (msg->method), msg->url, bodylen,
+						conn_type);
+
 				if (bodylen > 0) {
 					if (mime_type == NULL) {
 						mime_type = "text/plain";
@@ -1653,38 +1664,53 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 				if (host != NULL) {
 					rspamd_printf_fstring (buf,
 							"%s %s HTTP/1.1\r\n"
-							"Connection: close\r\n"
+							"Connection: %s\r\n"
 							"Host: %s\r\n"
 							"Content-Length: %z\r\n"
 							"Content-Type: application/octet-stream\r\n",
-							"POST", "/post", host, enclen);
+							"POST",
+							"/post",
+							conn_type,
+							host,
+							enclen);
 				}
 				else {
 					rspamd_printf_fstring (buf,
 							"%s %s HTTP/1.1\r\n"
-							"Connection: close\r\n"
+							"Connection: %s\r\n"
 							"Host: %V\r\n"
 							"Content-Length: %z\r\n"
 							"Content-Type: application/octet-stream\r\n",
-							"POST", "/post", msg->host, enclen);
+							"POST",
+							"/post",
+							conn_type,
+							msg->host,
+							enclen);
 				}
 			}
 			else {
 				if (host != NULL) {
 					rspamd_printf_fstring (buf,
-							"%s %V HTTP/1.1\r\nConnection: close\r\n"
+							"%s %V HTTP/1.1\r\n"
+							"Connection: %s\r\n"
 							"Host: %s\r\n"
 							"Content-Length: %z\r\n",
-							http_method_str (msg->method), msg->url, host,
+							http_method_str (msg->method),
+							msg->url,
+							conn_type,
+							host,
 							bodylen);
 				}
 				else {
 					rspamd_printf_fstring (buf,
 							"%s %V HTTP/1.1\r\n"
-							"Connection: close\r\n"
+							"Connection: %s\r\n"
 							"Host: %V\r\n"
 							"Content-Length: %z\r\n",
-							http_method_str (msg->method), msg->url, msg->host,
+							http_method_str (msg->method),
+							msg->url,
+							conn_type,
+							msg->host,
 							bodylen);
 				}
 

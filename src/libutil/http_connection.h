@@ -29,6 +29,7 @@
 #include "ref.h"
 #include "http_message.h"
 #include "http_util.h"
+#include "addr.h"
 
 #include <event.h>
 
@@ -73,10 +74,6 @@ struct rspamd_storage_shmem {
  * Do not verify server's certificate
  */
 #define RSPAMD_HTTP_FLAG_SSL_NOVERIFY (1 << 6)
-/**
- * Do not verify server's certificate
- */
-#define RSPAMD_HTTP_FLAG_KEEPALIVE (1 << 7)
 /**
  * Options for HTTP connection
  */
@@ -131,6 +128,14 @@ struct rspamd_http_connection *rspamd_http_connection_new (
 		rspamd_http_finish_handler_t finish_handler,
 		unsigned opts,
 		enum rspamd_http_connection_type type);
+
+struct rspamd_http_connection *rspamd_http_connection_new_keepalive (
+		struct rspamd_http_context *ctx,
+		rspamd_http_body_handler_t body_handler,
+		rspamd_http_error_handler_t error_handler,
+		rspamd_http_finish_handler_t finish_handler,
+		rspamd_inet_addr_t *addr,
+		const gchar *host);
 
 
 /**
