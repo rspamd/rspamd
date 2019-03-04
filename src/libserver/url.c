@@ -1388,7 +1388,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 	/* Parse remaining */
 	switch (st) {
 		case parse_domain:
-			if (p - c == 0) {
+			if (p - c == 0 || !is_domain (*(p - 1)) || !is_domain (*c)) {
 				goto out;
 			}
 			SET_U (u, UF_HOST);
@@ -2032,7 +2032,7 @@ rspamd_url_parse (struct rspamd_url *uri,
 		}
 		else {
 			/* Hack, hack, hack */
-			uri->protocol = PROTOCOL_HTTP;
+			uri->protocol = PROTOCOL_UNKNOWN;
 		}
 	}
 

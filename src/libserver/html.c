@@ -1441,7 +1441,9 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 
 	rc = rspamd_url_parse (url, decoded, dlen, pool, RSPAMD_URL_PARSE_HREF);
 
-	if (rc == URI_ERRNO_OK) {
+	/* Filter some completely damaged urls */
+	if (rc == URI_ERRNO_OK && url->hostlen > 0 &&
+		!((url->flags & RSPAMD_URL_FLAG_OBSCURED) && (url->protocol & PROTOCOL_UNKNOWN))) {
 		url->flags |= saved_flags;
 
 		if (has_bad_chars) {
