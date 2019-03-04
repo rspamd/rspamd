@@ -664,7 +664,8 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 				}
 			}
 #endif
-			if (rspamd_ftok_casecmp (&disp_tok, &href_tok) != 0) {
+			if (rspamd_ftok_casecmp (&disp_tok, &href_tok) != 0 &&
+					text_url->tldlen > 0 && href_url->tldlen > 0) {
 
 				/* Apply the same logic for TLD */
 				disp_tok.len = text_url->tldlen;
