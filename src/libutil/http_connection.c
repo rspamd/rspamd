@@ -356,6 +356,7 @@ rspamd_http_on_headers_complete (http_parser * parser)
 		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
 			rspamd_http_context_push_keepalive (conn->priv->ctx, conn,
 					msg, conn->priv->ctx->ev_base);
+			rspamd_http_connection_reset (conn);
 		}
 		else {
 			conn->finished = TRUE;
@@ -539,6 +540,7 @@ rspamd_http_on_headers_complete_decrypted (http_parser *parser)
 		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
 			rspamd_http_context_push_keepalive (conn->priv->ctx, conn,
 					msg, conn->priv->ctx->ev_base);
+			rspamd_http_connection_reset (conn);
 		}
 		else {
 			conn->finished = TRUE;
@@ -697,6 +699,7 @@ rspamd_http_on_message_complete (http_parser * parser)
 		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
 			rspamd_http_context_push_keepalive (conn->priv->ctx, conn,
 					priv->msg, conn->priv->ctx->ev_base);
+			rspamd_http_connection_reset (conn);
 		}
 		else {
 			conn->finished = TRUE;
@@ -1133,6 +1136,10 @@ rspamd_http_connection_new_keepalive (struct rspamd_http_context *ctx,
 
 	if (error_handler == NULL || finish_handler == NULL) {
 		return NULL;
+	}
+
+	if (ctx == NULL) {
+		ctx = rspamd_http_context_default ();
 	}
 
 	conn = rspamd_http_context_check_keepalive (ctx, addr, host);

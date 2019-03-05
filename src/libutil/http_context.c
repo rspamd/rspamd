@@ -78,6 +78,7 @@ rspamd_http_context_new_default (struct rspamd_config *cfg,
 
 	static const int default_kp_size = 1024;
 	static const gdouble default_rotate_time = 120;
+	static const gdouble default_keepalive_interval = 65;
 	static const gchar *default_user_agent = "rspamd-" RSPAMD_VERSION_FULL;
 
 	ctx = g_malloc0 (sizeof (*ctx));
@@ -85,6 +86,7 @@ rspamd_http_context_new_default (struct rspamd_config *cfg,
 	ctx->config.kp_cache_size_server = default_kp_size;
 	ctx->config.client_key_rotate_time = default_rotate_time;
 	ctx->config.user_agent = default_user_agent;
+	ctx->config.keepalive_interval = default_keepalive_interval;
 
 	if (cfg) {
 		ctx->ssl_ctx = cfg->libs_ctx->ssl_ctx;
@@ -170,6 +172,14 @@ rspamd_http_context_create (struct rspamd_config *cfg,
 				if (ctx->config.user_agent && strlen (ctx->config.user_agent) == 0) {
 					ctx->config.user_agent = NULL;
 				}
+			}
+
+			const ucl_object_t *keepalive_interval;
+
+			keepalive_interval = ucl_object_lookup (client_obj, "keepalive_interval");
+
+			if (keepalive_interval) {
+				ctx->config.keepalive_interval = ucl_object_todouble (keepalive_interval);
 			}
 		}
 
@@ -443,7 +453,7 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 
 	event_set (&cbdata->ev, conn->fd, EV_READ|EV_TIMEOUT,
 			rspamd_http_keepalive_handler,
-			&cbdata);
+			cbdata);
 
 	double_to_tv (timeout, &tv);
 	event_base_set (ev_base, &cbdata->ev);
