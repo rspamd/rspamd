@@ -2734,7 +2734,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 						rspamd_inet_address_to_string_pretty (addr),
 						errno,
 						strerror (errno));
-				rspamd_upstream_fail (selected, FALSE);
+				rspamd_upstream_fail (selected, TRUE);
 				g_ptr_array_free (commands, TRUE);
 			} else {
 				/* Create session for a socket */
