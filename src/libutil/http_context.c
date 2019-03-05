@@ -388,6 +388,7 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 	g_queue_push_tail (&conn->keepalive_hash_key->conns, cbdata);
 	cbdata->link = conn->keepalive_hash_key->conns.tail;
 	cbdata->queue = &conn->keepalive_hash_key->conns;
+	conn->finished = FALSE;
 
 	event_set (&cbdata->ev, conn->fd, EV_READ|EV_TIMEOUT,
 			rspamd_http_keepalive_handler,

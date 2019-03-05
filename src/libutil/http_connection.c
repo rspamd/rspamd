@@ -352,7 +352,15 @@ rspamd_http_on_headers_complete (http_parser * parser)
 		msg->code = parser->status_code;
 		rspamd_http_connection_ref (conn);
 		ret = conn->finish_handler (conn, msg);
-		conn->finished = TRUE;
+
+		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
+			rspamd_http_context_push_keepalive (conn->priv->ctx, conn,
+					msg, conn->priv->ctx->ev_base);
+		}
+		else {
+			conn->finished = TRUE;
+		}
+
 		rspamd_http_connection_unref (conn);
 
 		return ret;
@@ -527,7 +535,15 @@ rspamd_http_on_headers_complete_decrypted (http_parser *parser)
 		msg->code = parser->status_code;
 		rspamd_http_connection_ref (conn);
 		ret = conn->finish_handler (conn, msg);
-		conn->finished = TRUE;
+
+		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
+			rspamd_http_context_push_keepalive (conn->priv->ctx, conn,
+					msg, conn->priv->ctx->ev_base);
+		}
+		else {
+			conn->finished = TRUE;
+		}
+
 		rspamd_http_connection_unref (conn);
 
 		return ret;
@@ -677,7 +693,15 @@ rspamd_http_on_message_complete (http_parser * parser)
 
 		rspamd_http_connection_ref (conn);
 		ret = conn->finish_handler (conn, priv->msg);
-		conn->finished = TRUE;
+
+		if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
+			rspamd_http_context_push_keepalive (conn->priv->ctx, conn,
+					priv->msg, conn->priv->ctx->ev_base);
+		}
+		else {
+			conn->finished = TRUE;
+		}
+
 		rspamd_http_connection_unref (conn);
 	}
 
@@ -1096,6 +1120,47 @@ rspamd_http_connection_new (
 	return conn;
 }
 
+struct rspamd_http_connection *
+rspamd_http_connection_new_keepalive (struct rspamd_http_context *ctx,
+		rspamd_http_body_handler_t body_handler,
+		rspamd_http_error_handler_t error_handler,
+		rspamd_http_finish_handler_t finish_handler,
+		rspamd_inet_addr_t *addr,
+		const gchar *host)
+{
+	struct rspamd_http_connection *conn;
+	gint fd;
+
+	if (error_handler == NULL || finish_handler == NULL) {
+		return NULL;
+	}
+
+	conn = rspamd_http_context_check_keepalive (ctx, addr, host);
+
+	if (conn) {
+		return conn;
+	}
+
+	fd = rspamd_inet_address_connect (addr, SOCK_STREAM, TRUE);
+
+	if (fd == -1) {
+		msg_info ("cannot connect to %s: %s", rspamd_inet_address_to_string (addr),
+				host);
+		return NULL;
+	}
+
+	conn = rspamd_http_connection_new (ctx, fd, body_handler, error_handler,
+			finish_handler,
+			RSPAMD_HTTP_CLIENT_SIMPLE|RSPAMD_HTTP_CLIENT_KEEP_ALIVE,
+			RSPAMD_HTTP_CLIENT);
+
+	if (conn) {
+		rspamd_http_context_prepare_keepalive (ctx, conn, addr, host);
+	}
+
+	return conn;
+}
+
 void
 rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 {
@@ -1308,6 +1373,11 @@ rspamd_http_connection_free (struct rspamd_http_connection *conn)
 		}
 
 		g_free (priv);
+	}
+
+	if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
+		/* Fd is owned by a connection */
+		close (conn->fd);
 	}
 
 	g_free (conn);
