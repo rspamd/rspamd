@@ -22,10 +22,18 @@
 #include "contrib/libottery/ottery.h"
 #include "rspamd.h"
 
+INIT_LOG_MODULE(http_context)
+
+#define msg_debug_http_context(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_http_context_log_id, "http_context", NULL, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
 static struct rspamd_http_context *default_ctx = NULL;
 
 struct rspamd_http_keepalive_cbdata {
 	struct rspamd_http_connection *conn;
+	struct rspamd_http_context *ctx;
 	GQueue *queue;
 	GList *link;
 	struct event ev;
@@ -61,6 +69,10 @@ rspamd_http_context_client_rotate_ev (gint fd, short what, void *arg)
 
 	double_to_tv (ctx->config.client_key_rotate_time, &rot_tv);
 	rot_tv.tv_sec += ottery_rand_range (rot_tv.tv_sec);
+
+	msg_debug_http_context ("rotate local keypair, next rotate in %d seconds",
+			(int)rot_tv.tv_sec);
+
 	event_del (&ctx->client_rotate_ev);
 	event_add (&ctx->client_rotate_ev, &rot_tv);
 
@@ -229,6 +241,10 @@ rspamd_http_context_free (struct rspamd_http_context *ctx)
 	struct rspamd_keepalive_hash_key *hk;
 
 	kh_foreach_key (ctx->keep_alive_hash, hk, {
+		msg_debug_http_context ("cleanup keepalive elt %s (%s)",
+				rspamd_inet_address_to_string_pretty (hk->addr),
+				hk->host);
+
 		if (hk->host) {
 			g_free (hk->host);
 		}
@@ -314,6 +330,10 @@ rspamd_http_context_check_keepalive (struct rspamd_http_context *ctx,
 
 		/* Use stack based approach */
 
+		msg_debug_http_context ("check keepalive element %s (%s), %d elts",
+				rspamd_inet_address_to_string_pretty (phk->addr),
+				phk->host, conns->length);
+
 		if (g_queue_get_length (conns) > 0) {
 			struct rspamd_http_keepalive_cbdata *cbd;
 			struct rspamd_http_connection *conn;
@@ -348,6 +368,9 @@ rspamd_http_context_prepare_keepalive (struct rspamd_http_context *ctx,
 	if (k != kh_end (ctx->keep_alive_hash)) {
 		/* Reuse existing */
 		conn->keepalive_hash_key = kh_key (ctx->keep_alive_hash, k);
+		msg_debug_http_context ("use existing keepalive element %s (%s)",
+				rspamd_inet_address_to_string_pretty (conn->keepalive_hash_key->addr),
+				conn->keepalive_hash_key->host);
 	}
 	else {
 		/* Create new one */
@@ -361,6 +384,10 @@ rspamd_http_context_prepare_keepalive (struct rspamd_http_context *ctx,
 
 		kh_put (rspamd_keep_alive_hash, ctx->keep_alive_hash, phk, &r);
 		conn->keepalive_hash_key = phk;
+
+		msg_debug_http_context ("create new keepalive element %s (%s)",
+				rspamd_inet_address_to_string_pretty (conn->keepalive_hash_key->addr),
+				conn->keepalive_hash_key->host);
 	}
 }
 
@@ -369,12 +396,18 @@ rspamd_http_keepalive_handler (gint fd, short what, gpointer ud)
 {
 	struct rspamd_http_keepalive_cbdata *cbdata =
 			(struct rspamd_http_keepalive_cbdata *)ud;
+	struct rspamd_http_context *ctx;
 	/*
 	 * We can get here if a remote side reported something or it has
 	 * timed out. In both cases we just terminate keepalive connection.
 	 */
 
+	ctx = cbdata->ctx;
 	g_queue_delete_link (cbdata->queue, cbdata->link);
+	msg_debug_http_context ("remove keepalive element %s (%s), %d connections left",
+			rspamd_inet_address_to_string_pretty (cbdata->conn->keepalive_hash_key->addr),
+			cbdata->conn->keepalive_hash_key->host,
+			cbdata->queue->length);
 	rspamd_http_connection_unref (cbdata->conn);
 	g_free (cbdata);
 }
@@ -400,6 +433,7 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 		if (!tok) {
 			/* Server has not stated that it can do keep alive */
 			conn->finished = TRUE;
+			msg_debug_http_context ("no Connection header");
 			return;
 		}
 
@@ -407,6 +441,7 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 
 		if (rspamd_ftok_casecmp (&cmp, tok) != 0) {
 			conn->finished = TRUE;
+			msg_debug_http_context ("connection header is not `keep-alive`");
 			return;
 		}
 
@@ -429,6 +464,7 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 							(end_pos - tok->begin) - pos - 1, &real_timeout) &&
 						real_timeout > 0) {
 						timeout = real_timeout;
+						msg_debug_http_context ("got timeout attr %.2f", timeout);
 					}
 				}
 				else {
@@ -436,6 +472,7 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 							tok->len - pos - 1, &real_timeout) &&
 						real_timeout > 0) {
 						timeout = real_timeout;
+						msg_debug_http_context ("got timeout attr %.2f", timeout);
 					}
 				}
 			}
@@ -449,11 +486,18 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 	g_queue_push_tail (&conn->keepalive_hash_key->conns, cbdata);
 	cbdata->link = conn->keepalive_hash_key->conns.tail;
 	cbdata->queue = &conn->keepalive_hash_key->conns;
+	cbdata->ctx = ctx;
 	conn->finished = FALSE;
 
 	event_set (&cbdata->ev, conn->fd, EV_READ|EV_TIMEOUT,
 			rspamd_http_keepalive_handler,
 			cbdata);
+
+	msg_debug_http_context ("push keepalive element %s (%s), %d connections left, %.1f timeout",
+			rspamd_inet_address_to_string_pretty (cbdata->conn->keepalive_hash_key->addr),
+			cbdata->conn->keepalive_hash_key->host,
+			cbdata->queue->length,
+			timeout);
 
 	double_to_tv (timeout, &tv);
 	event_base_set (ev_base, &cbdata->ev);
