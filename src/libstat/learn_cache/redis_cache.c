@@ -385,7 +385,7 @@ rspamd_stat_cache_redis_runtime (struct rspamd_task *task,
 	rt->task = task;
 	rt->ctx = ctx;
 
-	addr = rspamd_upstream_addr (up);
+	addr = rspamd_upstream_addr_next (up);
 	g_assert (addr != NULL);
 
 	if (rspamd_inet_address_get_af (addr) == AF_UNIX) {

@@ -176,6 +176,9 @@ static const struct luaL_reg iplib_m[] = {
 	LUA_INTERFACE_DEF (ip, apply_mask),
 	LUA_INTERFACE_DEF (ip, copy),
 	LUA_INTERFACE_DEF (ip, is_local),
+	{"tostring", lua_ip_to_string},
+	{"totable", lua_ip_to_table},
+	{"tonumber", lua_ip_to_number},
 	{"__tostring", lua_ip_to_string},
 	{"__eq", lua_ip_equal},
 	{"__gc", lua_ip_destroy},
@@ -487,7 +490,7 @@ lua_ip_equal (lua_State *L)
 	gboolean res = FALSE;
 
 	if (ip1 && ip2 && ip1->addr && ip2->addr) {
-		res = rspamd_inet_address_compare (ip1->addr, ip2->addr);
+		res = rspamd_inet_address_compare (ip1->addr, ip2->addr, TRUE);
 	}
 
 	lua_pushboolean (L, res);

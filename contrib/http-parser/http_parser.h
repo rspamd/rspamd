@@ -124,8 +124,6 @@ enum http_method
   };
 
 
-enum http_parser_type { HTTP_REQUEST, HTTP_RESPONSE, HTTP_BOTH };
-
 
 /* Flag values for http_parser.flags field */
 enum flags
@@ -280,7 +278,7 @@ struct http_parser_url {
  */
 unsigned long http_parser_version(void);
 
-void http_parser_init(http_parser *parser, enum http_parser_type type);
+void http_parser_init(http_parser *parser, int type);
 
 
 size_t http_parser_execute(http_parser *parser,

@@ -17,7 +17,7 @@
 #include "libutil/util.h"
 #include "libutil/map.h"
 #include "libutil/upstream.h"
-#include "libutil/http.h"
+#include "libutil/http_connection.h"
 #include "libutil/http_private.h"
 #include "libserver/protocol.h"
 #include "libserver/protocol_internal.h"
@@ -123,18 +123,14 @@ struct rspamd_proxy_ctx {
 	struct timeval io_tv;
 	/* Encryption key for clients */
 	struct rspamd_cryptobox_keypair *key;
-	/* Keys cache */
-	struct rspamd_keypair_cache *keys_cache;
+	/* HTTP context */
+	struct rspamd_http_context *http_ctx;
 	/* Upstreams to use */
 	GHashTable *upstreams;
 	/* Mirrors to send traffic to */
 	GPtrArray *mirrors;
 	/* Default upstream */
 	struct rspamd_http_upstream *default_upstream;
-	/* Local rotating keypair for upstreams */
-	struct rspamd_cryptobox_keypair *local_key;
-	struct event rotate_ev;
-	gdouble rotate_tm;
 	lua_State *lua_state;
 	/* Array of callback functions called on end of scan to compare results */
 	GArray *cmp_refs;
@@ -746,7 +742,6 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 	ctx->mirrors = g_ptr_array_new ();
 	rspamd_mempool_add_destructor (cfg->cfg_pool,
 			(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ctx->mirrors);
-	ctx->rotate_tm = DEFAULT_ROTATION_TIME;
 	ctx->cfg = cfg;
 	ctx->lua_state = cfg->lua_state;
 	ctx->cmp_refs = g_array_new (FALSE, FALSE, sizeof (gint));
@@ -763,15 +758,6 @@ init_rspamd_proxy (struct rspamd_config *cfg)
 			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, timeout),
 			RSPAMD_CL_FLAG_TIME_FLOAT,
 			"IO timeout");
-	rspamd_rcl_register_worker_option (cfg,
-			type,
-			"rotate",
-			rspamd_rcl_parse_struct_time,
-			ctx,
-			G_STRUCT_OFFSET (struct rspamd_proxy_ctx, rotate_tm),
-			RSPAMD_CL_FLAG_TIME_FLOAT,
-			"Rotation keys time, default: "
-			G_STRINGIFY (DEFAULT_ROTATION_TIME) " seconds");
 	rspamd_rcl_register_worker_option (cfg,
 			type,
 			"keypair",
@@ -1309,7 +1295,8 @@ proxy_backend_mirror_error_handler (struct rspamd_http_connection *conn, GError 
 	msg_info_session ("abnormally closing connection from backend: %s:%s, "
 			"error: %e",
 			bk_conn->name,
-			rspamd_inet_address_to_string (rspamd_upstream_addr (bk_conn->up)),
+			rspamd_inet_address_to_string (
+					rspamd_upstream_addr_cur (bk_conn->up)),
 			err);
 
 	if (err) {
@@ -1337,7 +1324,8 @@ proxy_backend_mirror_finish_handler (struct rspamd_http_connection *conn,
 			bk_conn->parser_from_ref, msg->body_buf.begin, msg->body_buf.len)) {
 		msg_warn_session ("cannot parse results from the mirror backend %s:%s",
 				bk_conn->name,
-				rspamd_inet_address_to_string (rspamd_upstream_addr (bk_conn->up)));
+				rspamd_inet_address_to_string (
+						rspamd_upstream_addr_cur (bk_conn->up)));
 		bk_conn->err = "cannot parse ucl";
 	}
 
@@ -1387,7 +1375,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 		}
 
 		bk_conn->backend_sock = rspamd_inet_address_connect (
-				rspamd_upstream_addr (bk_conn->up),
+				rspamd_upstream_addr_next (bk_conn->up),
 				SOCK_STREAM, TRUE);
 
 		if (bk_conn->backend_sock == -1) {
@@ -1416,23 +1404,22 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 			rspamd_http_message_add_header (msg, "Settings-ID", m->settings_id);
 		}
 
-		bk_conn->backend_conn = rspamd_http_connection_new (NULL,
+		bk_conn->backend_conn = rspamd_http_connection_new (
+				session->ctx->http_ctx,
+				bk_conn->backend_sock,
+				NULL,
 				proxy_backend_mirror_error_handler,
 				proxy_backend_mirror_finish_handler,
 				RSPAMD_HTTP_CLIENT_SIMPLE,
-				RSPAMD_HTTP_CLIENT,
-				session->ctx->keys_cache,
-				NULL);
+				RSPAMD_HTTP_CLIENT);
 
 		if (m->key) {
-			rspamd_http_connection_set_key (bk_conn->backend_conn,
-					session->ctx->local_key);
 			msg->peer_key = rspamd_pubkey_ref (m->key);
 		}
 
 		if (m->local ||
 				rspamd_inet_address_is_local (
-						rspamd_upstream_addr (bk_conn->up), FALSE)) {
+						rspamd_upstream_addr_cur (bk_conn->up), FALSE)) {
 
 			if (session->fname) {
 				rspamd_http_message_add_header (msg, "File", session->fname);
@@ -1441,8 +1428,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 			msg->method = HTTP_GET;
 			rspamd_http_connection_write_message_shared (bk_conn->backend_conn,
 					msg, NULL, NULL, bk_conn,
-					bk_conn->backend_sock,
-					bk_conn->io_tv, session->ctx->ev_base);
+					bk_conn->io_tv);
 		}
 		else {
 			if (session->fname) {
@@ -1469,8 +1455,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 
 			rspamd_http_connection_write_message (bk_conn->backend_conn,
 					msg, NULL, NULL, bk_conn,
-					bk_conn->backend_sock,
-					bk_conn->io_tv, session->ctx->ev_base);
+					bk_conn->io_tv);
 		}
 
 		g_ptr_array_add (session->mirror_conns, bk_conn);
@@ -1495,8 +1480,8 @@ proxy_client_write_error (struct rspamd_proxy_session *session, gint code,
 		reply->code = code;
 		reply->status = rspamd_fstring_new_init (status, strlen (status));
 		rspamd_http_connection_write_message (session->client_conn,
-				reply, NULL, NULL, session, session->client_sock,
-				&session->ctx->io_tv, session->ctx->ev_base);
+				reply, NULL, NULL, session,
+				&session->ctx->io_tv);
 	}
 }
 
@@ -1509,7 +1494,8 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 	session = bk_conn->s;
 	msg_info_session ("abnormally closing connection from backend: %s, error: %e,"
 			" retries left: %d",
-		rspamd_inet_address_to_string (rspamd_upstream_addr (session->master_conn->up)),
+		rspamd_inet_address_to_string (
+				rspamd_upstream_addr_cur (session->master_conn->up)),
 		err,
 		session->ctx->max_retries - session->retries);
 	session->retries ++;
@@ -1531,7 +1517,7 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 			msg_info_session ("retry connection to: %s"
 					" retries left: %d",
 					rspamd_inet_address_to_string (
-							rspamd_upstream_addr (session->master_conn->up)),
+							rspamd_upstream_addr_cur (session->master_conn->up)),
 					session->ctx->max_retries - session->retries);
 		}
 	}
@@ -1592,8 +1578,8 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 	}
 	else {
 		rspamd_http_connection_write_message (session->client_conn,
-				msg, NULL, NULL, session, session->client_sock,
-				bk_conn->io_tv, session->ctx->ev_base);
+				msg, NULL, NULL, session,
+				bk_conn->io_tv);
 	}
 
 	return 0;
@@ -1652,9 +1638,7 @@ rspamd_proxy_scan_self_reply (struct rspamd_task *task)
 				NULL,
 				ctype,
 				session,
-				session->client_sock,
-				NULL,
-				session->ctx->ev_base);
+				NULL);
 	}
 }
 
@@ -1821,14 +1805,15 @@ retry:
 		}
 
 		session->master_conn->backend_sock = rspamd_inet_address_connect (
-				rspamd_upstream_addr (session->master_conn->up),
+				rspamd_upstream_addr_next (session->master_conn->up),
 				SOCK_STREAM, TRUE);
 
 		if (session->master_conn->backend_sock == -1) {
 			msg_err_session ("cannot connect upstream: %s(%s)",
 					host ? hostbuf : "default",
-							rspamd_inet_address_to_string (rspamd_upstream_addr (
-									session->master_conn->up)));
+							rspamd_inet_address_to_string (
+									rspamd_upstream_addr_cur (
+											session->master_conn->up)));
 			rspamd_upstream_fail (session->master_conn->up, TRUE);
 			session->retries ++;
 			goto retry;
@@ -1847,21 +1832,19 @@ retry:
 		}
 
 		session->master_conn->backend_conn = rspamd_http_connection_new (
+				session->ctx->http_ctx,
+				session->master_conn->backend_sock,
 				NULL,
 				proxy_backend_master_error_handler,
 				proxy_backend_master_finish_handler,
 				RSPAMD_HTTP_CLIENT_SIMPLE,
-				RSPAMD_HTTP_CLIENT,
-				session->ctx->keys_cache,
-				NULL);
+				RSPAMD_HTTP_CLIENT);
 		session->master_conn->flags &= ~RSPAMD_BACKEND_CLOSED;
 		session->master_conn->parser_from_ref = backend->parser_from_ref;
 		session->master_conn->parser_to_ref = backend->parser_to_ref;
 
 		if (backend->key) {
 			msg->peer_key = rspamd_pubkey_ref (backend->key);
-			rspamd_http_connection_set_key (session->master_conn->backend_conn,
-					session->ctx->local_key);
 		}
 
 		if (backend->settings_id != NULL) {
@@ -1872,7 +1855,8 @@ retry:
 
 		if (backend->local ||
 				rspamd_inet_address_is_local (
-						rspamd_upstream_addr (session->master_conn->up), FALSE)) {
+						rspamd_upstream_addr_cur (
+								session->master_conn->up), FALSE)) {
 
 			if (session->fname) {
 				rspamd_http_message_add_header (msg, "File", session->fname);
@@ -1883,8 +1867,7 @@ retry:
 			rspamd_http_connection_write_message_shared (
 					session->master_conn->backend_conn,
 					msg, NULL, NULL, session->master_conn,
-					session->master_conn->backend_sock,
-					session->master_conn->io_tv, session->ctx->ev_base);
+					session->master_conn->io_tv);
 		}
 		else {
 			if (session->fname) {
@@ -1912,8 +1895,7 @@ retry:
 			rspamd_http_connection_write_message (
 					session->master_conn->backend_conn,
 					msg, NULL, NULL, session->master_conn,
-					session->master_conn->backend_sock,
-					session->master_conn->io_tv, session->ctx->ev_base);
+					session->master_conn->io_tv);
 		}
 	}
 
@@ -2100,13 +2082,14 @@ proxy_accept_socket (gint fd, short what, void *arg)
 	}
 
 	if (!ctx->milter) {
-		session->client_conn = rspamd_http_connection_new (NULL,
+		session->client_conn = rspamd_http_connection_new (
+				ctx->http_ctx,
+				nfd,
+				NULL,
 				proxy_client_error_handler,
 				proxy_client_finish_handler,
 				0,
-				RSPAMD_HTTP_SERVER,
-				ctx->keys_cache,
-				NULL);
+				RSPAMD_HTTP_SERVER);
 
 		if (ctx->key) {
 			rspamd_http_connection_set_key (session->client_conn, ctx->key);
@@ -2118,9 +2101,7 @@ proxy_accept_socket (gint fd, short what, void *arg)
 
 		rspamd_http_connection_read_message_shared (session->client_conn,
 				session,
-				nfd,
-				&ctx->io_tv,
-				ctx->ev_base);
+				&ctx->io_tv);
 	}
 	else {
 		msg_info_session ("accepted milter connection from %s port %d",
@@ -2154,24 +2135,6 @@ proxy_accept_socket (gint fd, short what, void *arg)
 }
 
 static void
-proxy_rotate_key (gint fd, short what, void *arg)
-{
-	struct timeval rot_tv;
-	struct rspamd_proxy_ctx *ctx = arg;
-	gpointer kp;
-
-	double_to_tv (ctx->rotate_tm, &rot_tv);
-	rot_tv.tv_sec += ottery_rand_range (rot_tv.tv_sec);
-	event_del (&ctx->rotate_ev);
-	event_add (&ctx->rotate_ev, &rot_tv);
-
-	kp = ctx->local_key;
-	ctx->local_key = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
-			RSPAMD_CRYPTOBOX_MODE_25519);
-	rspamd_keypair_unref (kp);
-}
-
-static void
 adjust_upstreams_limits (struct rspamd_proxy_ctx *ctx)
 {
 	struct rspamd_http_upstream *backend;
@@ -2200,9 +2163,9 @@ adjust_upstreams_limits (struct rspamd_proxy_ctx *ctx)
 }
 
 void
-start_rspamd_proxy (struct rspamd_worker *worker) {
+start_rspamd_proxy (struct rspamd_worker *worker)
+{
 	struct rspamd_proxy_ctx *ctx = worker->ctx;
-	struct timeval rot_tv;
 
 	ctx->cfg = worker->srv->cfg;
 	ctx->ev_base = rspamd_prepare_worker (worker, "rspamd_proxy",
@@ -2217,16 +2180,7 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);
 
-	/* XXX: stupid default */
-	ctx->keys_cache = rspamd_keypair_cache_new (256);
-	ctx->local_key = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
-			RSPAMD_CRYPTOBOX_MODE_25519);
-
-	double_to_tv (ctx->rotate_tm, &rot_tv);
-	rot_tv.tv_sec += ottery_rand_range (rot_tv.tv_sec);
-	event_set (&ctx->rotate_ev, -1, EV_TIMEOUT, proxy_rotate_key, ctx);
-	event_base_set (ctx->ev_base, &ctx->rotate_ev);
-	event_add (&ctx->rotate_ev, &rot_tv);
+	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->ev_base);
 
 	if (ctx->has_self_scan) {
 		/* Additional initialisation needed */
@@ -2259,8 +2213,9 @@ start_rspamd_proxy (struct rspamd_worker *worker) {
 		rspamd_stat_close ();
 	}
 
-	rspamd_keypair_cache_destroy (ctx->keys_cache);
+	struct rspamd_http_context *http_ctx = ctx->http_ctx;
 	REF_RELEASE (ctx->cfg);
+	rspamd_http_context_free (http_ctx);
 	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);

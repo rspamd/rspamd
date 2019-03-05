@@ -504,17 +504,25 @@ rspamd_map_helper_insert_hash (gpointer st, gconstpointer key, gconstpointer val
 	gsize vlen;
 	gint r;
 
-	vlen = strlen (value);
-	val = rspamd_mempool_alloc0 (ht->pool, sizeof (*val) +
-			vlen + 1);
-	memcpy (val->value, value, vlen);
-
 	k = kh_get (rspamd_map_hash, ht->htb, key);
+	vlen = strlen (value);
 
 	if (k == kh_end (ht->htb)) {
 		nk = rspamd_mempool_strdup (ht->pool, key);
 		k = kh_put (rspamd_map_hash, ht->htb, nk, &r);
 	}
+	else {
+		val = kh_value (ht->htb, k);
+
+		if (strcmp (value, val->value) == 0) {
+			/* Same element, skip */
+			return;
+		}
+	}
+
+	/* Null termination due to alloc0 */
+	val = rspamd_mempool_alloc0 (ht->pool, sizeof (*val) + vlen + 1);
+	memcpy (val->value, value, vlen);
 
 	nk = kh_key (ht->htb, k);
 	val->key = nk;
@@ -815,15 +823,10 @@ rspamd_kv_list_read (
 }
 
 void
-rspamd_kv_list_fin (struct map_cb_data *data)
+rspamd_kv_list_fin (struct map_cb_data *data, void **target)
 {
 	struct rspamd_map *map = data->map;
 	struct rspamd_hash_map_helper *htb;
-
-	if (data->prev_data) {
-		htb = (struct rspamd_hash_map_helper *)data->prev_data;
-		rspamd_map_helper_destroy_hash (htb);
-	}
 
 	if (data->cur_data) {
 		htb = (struct rspamd_hash_map_helper *)data->cur_data;
@@ -831,6 +834,15 @@ rspamd_kv_list_fin (struct map_cb_data *data)
 		data->map->traverse_function = rspamd_map_helper_traverse_hash;
 		data->map->nelts = kh_size (htb->htb);
 		data->map->digest = rspamd_cryptobox_fast_hash_final (&htb->hst);
+	}
+
+	if (target) {
+		*target = data->cur_data;
+	}
+
+	if (data->prev_data) {
+		htb = (struct rspamd_hash_map_helper *)data->prev_data;
+		rspamd_map_helper_destroy_hash (htb);
 	}
 }
 
@@ -870,15 +882,10 @@ rspamd_radix_read (
 }
 
 void
-rspamd_radix_fin (struct map_cb_data *data)
+rspamd_radix_fin (struct map_cb_data *data, void **target)
 {
 	struct rspamd_map *map = data->map;
 	struct rspamd_radix_map_helper *r;
-
-	if (data->prev_data) {
-		r = (struct rspamd_radix_map_helper *)data->prev_data;
-		rspamd_map_helper_destroy_radix (r);
-	}
 
 	if (data->cur_data) {
 		r = (struct rspamd_radix_map_helper *)data->cur_data;
@@ -887,6 +894,15 @@ rspamd_radix_fin (struct map_cb_data *data)
 		data->map->traverse_function = rspamd_map_helper_traverse_radix;
 		data->map->nelts = kh_size (r->htb);
 		data->map->digest = rspamd_cryptobox_fast_hash_final (&r->hst);
+	}
+
+	if (target) {
+		*target = data->cur_data;
+	}
+
+	if (data->prev_data) {
+		r = (struct rspamd_radix_map_helper *)data->prev_data;
+		rspamd_map_helper_destroy_radix (r);
 	}
 }
 
@@ -1088,14 +1104,11 @@ rspamd_glob_list_read_multiple (
 
 
 void
-rspamd_regexp_list_fin (struct map_cb_data *data)
+rspamd_regexp_list_fin (struct map_cb_data *data, void **target)
 {
 	struct rspamd_regexp_map_helper *re_map;
 	struct rspamd_map *map = data->map;
 
-	if (data->prev_data) {
-		rspamd_map_helper_destroy_regexp (data->prev_data);
-	}
 	if (data->cur_data) {
 		re_map = data->cur_data;
 		rspamd_re_map_finalize (re_map);
@@ -1104,6 +1117,14 @@ rspamd_regexp_list_fin (struct map_cb_data *data)
 		data->map->traverse_function = rspamd_map_helper_traverse_regexp;
 		data->map->nelts = kh_size (re_map->htb);
 		data->map->digest = rspamd_cryptobox_fast_hash_final (&re_map->hst);
+	}
+
+	if (target) {
+		*target = data->cur_data;
+	}
+
+	if (data->prev_data) {
+		rspamd_map_helper_destroy_regexp (data->prev_data);
 	}
 }
 void

@@ -124,21 +124,25 @@ end
 
 -- Configuration part
 local section = rspamd_config:get_all_opt("rspamd_update")
-if section then
+if section and section.rules then
   local trusted_key
-  fun.each(function(k, elt)
-    if k == 'key' then
-      trusted_key = elt
+  if section.key then
+    trusted_key = section.key
+  end
+
+  if type(section.rules) ~= 'table' then
+    section.rules = {section.rules}
+  end
+
+  fun.each(function(elt)
+    local map = rspamd_config:add_map(elt, "rspamd updates map", nil, "callback")
+    if not map then
+      rspamd_logger.errx(rspamd_config, 'cannot load updates from %1', elt)
     else
-      local map = rspamd_config:add_map(elt, "rspamd updates map", nil, "callback")
-      if not map then
-        rspamd_logger.errx(rspamd_config, 'cannot load updates from %1', elt)
-      else
-        map:set_callback(gen_callback(map))
-        maps['elt'] = map
-      end
+      map:set_callback(gen_callback(map))
+      maps['elt'] = map
     end
-  end, section)
+  end, section.rules)
 
   fun.each(function(k, map)
     -- Check sanity for maps

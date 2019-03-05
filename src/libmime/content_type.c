@@ -305,8 +305,6 @@ rspamd_content_type_add_param (rspamd_mempool_t *pool,
 		nparam->value.len = value_end - value_start;
 	}
 
-	RSPAMD_FTOK_ASSIGN (&srch, "charset");
-
 	srch.begin = nparam->name.begin;
 	srch.len = nparam->name.len;
 
@@ -713,36 +711,47 @@ rspamd_content_disposition_add_param (rspamd_mempool_t *pool,
 		const gchar *value_start, const gchar *value_end)
 {
 	rspamd_ftok_t srch;
-	gchar *decoded;
+	gchar *name_cpy, *value_cpy, *name_cpy_end, *value_cpy_end;
 	struct rspamd_content_type_param *found = NULL, *nparam;
 
 	g_assert (cd != NULL);
 
-	srch.begin = name_start;
-	srch.len = name_end - name_start;
+	name_cpy = rspamd_mempool_alloc (pool, name_end - name_start);
+	memcpy (name_cpy, name_start, name_end - name_start);
+	name_cpy_end = name_cpy + (name_end - name_start);
+
+	value_cpy = rspamd_mempool_alloc (pool, value_end - value_start);
+	memcpy (value_cpy, value_start, value_end - value_start);
+	value_cpy_end = value_cpy + (value_end - value_start);
+
+	nparam = rspamd_mempool_alloc0 (pool, sizeof (*nparam));
+	rspamd_str_lc (name_cpy, name_cpy_end - name_cpy);
+
+	if (!rspamd_param_maybe_rfc2231_process (pool, nparam, name_cpy,
+			name_cpy_end, value_cpy, value_cpy_end)) {
+		nparam->name.begin = name_cpy;
+		nparam->name.len = name_cpy_end - name_cpy;
+		nparam->value.begin = value_cpy;
+		nparam->value.len = value_cpy_end - value_cpy;
+	}
+
+	srch.begin = nparam->name.begin;
+	srch.len = nparam->name.len;
 
 	if (cd->attrs) {
 		found = g_hash_table_lookup (cd->attrs, &srch);
-	}
-	else {
+	} else {
 		cd->attrs = g_hash_table_new (rspamd_ftok_icase_hash,
 				rspamd_ftok_icase_equal);
-		rspamd_mempool_add_destructor (pool,
-				(rspamd_mempool_destruct_t)g_hash_table_unref, cd->attrs);
 	}
-
-	nparam = rspamd_mempool_alloc0 (pool, sizeof (*nparam));
-	nparam->name.begin = name_start;
-	nparam->name.len = name_end - name_start;
-	decoded = rspamd_mime_header_decode (pool, value_start,
-			value_end - value_start, NULL);
-	RSPAMD_FTOK_FROM_STR (&nparam->value, decoded);
 
 	if (!found) {
+		DL_APPEND (found, nparam);
 		g_hash_table_insert (cd->attrs, &nparam->name, nparam);
 	}
-
-	DL_APPEND (found, nparam);
+	else {
+		DL_APPEND (found, nparam);
+	}
 }
 
 struct rspamd_content_disposition *
@@ -757,8 +766,13 @@ rspamd_content_disposition_parse (const gchar *in,
 		res->lc_data = rspamd_mempool_alloc (pool, len + 1);
 		rspamd_strlcpy (res->lc_data, in, len + 1);
 		rspamd_str_lc (res->lc_data, len);
-		rspamd_postprocess_ct_attributes (pool, res->attrs,
-				rspamd_content_disposition_postprocess, res);
+
+		if (res->attrs) {
+			rspamd_postprocess_ct_attributes (pool, res->attrs,
+					rspamd_content_disposition_postprocess, res);
+			rspamd_mempool_add_destructor (pool,
+					(rspamd_mempool_destruct_t)g_hash_table_unref, res->attrs);
+		}
 	}
 	else {
 		msg_warn_pool ("cannot parse content disposition: %*s",

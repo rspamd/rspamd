@@ -16,7 +16,7 @@ ${RSPAMD_SCOPE}  Test
 *** Test Cases ***
 
 Sync API TCP get request when server is down
-  [Documentation]  We don't create HTTP server here, that's why 
+  [Documentation]  We don't create HTTP server here, that's why
   ...              all requests fail with "connection refused"
   Check url  /request  get  HTTP_ASYNC_RESPONSE (0.00)[Socket error detected: Connection refused]
   Check url  /content-length  HTTP_SYNC_WRITE_ERROR (0.00)[Socket error detected: Connection refused]

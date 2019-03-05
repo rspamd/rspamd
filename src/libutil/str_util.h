@@ -184,6 +184,7 @@ gint rspamd_decode_base32_buf (const gchar *in, gsize inlen,
 gint rspamd_encode_hex_buf (const guchar *in, gsize inlen, gchar *out,
 		gsize outlen);
 
+
 /**
  * Decode string using hex encoding
  * @param in input
@@ -195,6 +196,23 @@ gint rspamd_encode_hex_buf (const guchar *in, gsize inlen, gchar *out,
 gssize rspamd_decode_hex_buf (const gchar *in, gsize inlen,
 		guchar *out, gsize outlen);
 
+/**
+ * Common version of base64 encoder
+ * @param in
+ * @param inlen
+ * @param str_len
+ * @param outlen
+ * @param fold
+ * @param how
+ * @return
+ */
+gchar *
+rspamd_encode_base64_common (const guchar *in,
+							 gsize inlen,
+							 gint str_len,
+							 gsize *outlen,
+							 gboolean fold,
+							 enum rspamd_newlines_type how);
 /**
  * Encode string using base64 encoding
  * @param in input
@@ -436,6 +454,7 @@ enum rspamd_regexp_escape_flags {
 	RSPAMD_REGEXP_ESCAPE_ASCII = 0,
 	RSPAMD_REGEXP_ESCAPE_UTF = 1u << 0,
 	RSPAMD_REGEXP_ESCAPE_GLOB = 1u << 1,
+	RSPAMD_REGEXP_ESCAPE_RE = 1u << 2,
 };
 /**
  * Escapes special characters when reading plain data to be processed in pcre

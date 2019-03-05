@@ -664,7 +664,8 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 				}
 			}
 #endif
-			if (rspamd_ftok_casecmp (&disp_tok, &href_tok) != 0) {
+			if (rspamd_ftok_casecmp (&disp_tok, &href_tok) != 0 &&
+					text_url->tldlen > 0 && href_url->tldlen > 0) {
 
 				/* Apply the same logic for TLD */
 				disp_tok.len = text_url->tldlen;
@@ -1301,7 +1302,7 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 	gchar *decoded;
 	gint rc;
 	gsize decoded_len;
-	const gchar *p, *s;
+	const gchar *p, *s, *prefix = "http://";
 	gchar *d;
 	guint i, dlen;
 	gboolean has_bad_chars = FALSE, no_prefix = FALSE;
@@ -1346,25 +1347,55 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 		}
 	}
 
-	if (memchr (s, ':', len) == NULL) {
-		/* We have no prefix */
-		dlen += sizeof ("http://") - 1;
-		no_prefix = TRUE;
+	if (rspamd_substring_search (start, len, "://", 3) == -1) {
+		if (len >= sizeof ("mailto:") &&
+				(memcmp (start, "mailto:", sizeof ("mailto:") - 1) == 0 ||
+				 memcmp (start, "tel:", sizeof ("tel:") - 1) == 0 ||
+				 memcmp (start, "callto:", sizeof ("callto:") - 1) == 0)) {
+			/* Exclusion, has valid but 'strange' prefix */
+		}
+		else {
+			for (i = 0; i < len; i ++) {
+				if (!((s[i] & 0x80) || g_ascii_isalnum (s[i]))) {
+					if (i == 0 && len > 2 && s[i] == '/'  && s[i + 1] == '/') {
+						prefix = "http:";
+						dlen += sizeof ("http:") - 1;
+						no_prefix = TRUE;
+					}
+					else if (s[i] == '@') {
+						/* Likely email prefix */
+						prefix = "mailto://";
+						dlen += sizeof ("mailto://") - 1;
+						no_prefix = TRUE;
+					}
+					else if (s[i] == ':' && i != 0) {
+						/* Special case */
+						no_prefix = FALSE;
+					}
+					else {
+						if (i == 0) {
+							/* No valid data */
+							return NULL;
+						}
+						else {
+							no_prefix = TRUE;
+							dlen += strlen (prefix);
+						}
+					}
+
+					break;
+				}
+			}
+		}
 	}
 
 	decoded = rspamd_mempool_alloc (pool, dlen + 1);
 	d = decoded;
 
 	if (no_prefix) {
-		if (s[0] == '/' && (len > 2 && s[1] == '/')) {
-			/* //bla case */
-			memcpy (d, "http:", sizeof ("http:") - 1);
-			d += sizeof ("http:") - 1;
-		}
-		else {
-			memcpy (d, "http://", sizeof ("http://") - 1);
-			d += sizeof ("http://") - 1;
-		}
+		gsize plen = strlen (prefix);
+		memcpy (d, prefix, plen);
+		d += plen;
 	}
 
 	/*
@@ -1410,7 +1441,9 @@ rspamd_html_process_url (rspamd_mempool_t *pool, const gchar *start, guint len,
 
 	rc = rspamd_url_parse (url, decoded, dlen, pool, RSPAMD_URL_PARSE_HREF);
 
-	if (rc == URI_ERRNO_OK) {
+	/* Filter some completely damaged urls */
+	if (rc == URI_ERRNO_OK && url->hostlen > 0 &&
+		!((url->flags & RSPAMD_URL_FLAG_OBSCURED) && (url->protocol & PROTOCOL_UNKNOWN))) {
 		url->flags |= saved_flags;
 
 		if (has_bad_chars) {
@@ -2664,10 +2697,33 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 		case comment_tag:
 			if (t != '-')  {
 				hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+				state = tag_end;
 			}
-			p ++;
-			ebrace = 0;
-			state = comment_content;
+			else {
+				p++;
+				ebrace = 0;
+				/*
+				 * https://www.w3.org/TR/2012/WD-html5-20120329/syntax.html#syntax-comments
+				 *  ... the text must not start with a single
+				 *  U+003E GREATER-THAN SIGN character (>),
+				 *  nor start with a "-" (U+002D) character followed by
+				 *  a U+003E GREATER-THAN SIGN (>) character,
+				 *  nor contain two consecutive U+002D HYPHEN-MINUS
+				 *  characters (--), nor end with a "-" (U+002D) character.
+				 */
+				if (p[0] == '-' && p + 1 < end && p[1] == '>') {
+					hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+					p ++;
+					state = tag_end;
+				}
+				else if (*p == '>') {
+					hc->flags |= RSPAMD_HTML_FLAG_BAD_ELEMENTS;
+					state = tag_end;
+				}
+				else {
+					state = comment_content;
+				}
+			}
 			break;
 
 		case comment_content:

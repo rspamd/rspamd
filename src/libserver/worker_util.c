@@ -24,6 +24,7 @@
 #include "libutil/map.h"
 #include "libutil/map_private.h"
 #include "libutil/http_private.h"
+#include "libutil/http_router.h"
 
 #ifdef WITH_GPERF_TOOLS
 #include <gperftools/profiler.h>
@@ -434,9 +435,7 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 		NULL,
 		"application/json",
 		entry,
-		entry->conn->fd,
-		entry->rt->ptv,
-		entry->rt->ev_base);
+		entry->rt->ptv);
 	entry->is_reply = TRUE;
 }
 
@@ -468,9 +467,7 @@ rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
 		NULL,
 		"application/json",
 		entry,
-		entry->conn->fd,
-		entry->rt->ptv,
-		entry->rt->ev_base);
+		entry->rt->ptv);
 	entry->is_reply = TRUE;
 }
 
@@ -496,9 +493,7 @@ rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
 		NULL,
 		"application/json",
 		entry,
-		entry->conn->fd,
-		entry->rt->ptv,
-		entry->rt->ev_base);
+		entry->rt->ptv);
 	entry->is_reply = TRUE;
 }
 
@@ -512,12 +507,14 @@ rspamd_worker_drop_priv (struct rspamd_main *rspamd_main)
 					strerror (errno));
 			exit (-errno);
 		}
+
 		if (rspamd_main->cfg->rspamd_user &&
-				initgroups (rspamd_main->cfg->rspamd_user, rspamd_main->workers_gid) ==
-						-1) {
+				initgroups (rspamd_main->cfg->rspamd_user,
+						rspamd_main->workers_gid) == -1) {
 			msg_err_main ("initgroups failed (%s), aborting", strerror (errno));
 			exit (-errno);
 		}
+
 		if (setuid (rspamd_main->workers_uid) == -1) {
 			msg_err_main ("cannot setuid to %d (%s), aborting",
 					(gint) rspamd_main->workers_uid,

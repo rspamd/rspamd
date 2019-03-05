@@ -610,7 +610,25 @@ rspamd_uchars_to_ucs32 (const UChar *src, gsize srclen,
 		U16_NEXT_UNSAFE (src, i, t);
 
 		if (u_isgraph (t)) {
-			*d++ = u_tolower (t);
+			UCharCategory cat;
+
+			cat = u_charType (t);
+#if U_ICU_VERSION_MAJOR_NUM >= 57
+			if (u_hasBinaryProperty (t, UCHAR_EMOJI)) {
+				tok->flags |= RSPAMD_STAT_TOKEN_FLAG_EMOJI;
+			}
+#endif
+
+			if (cat == U_UPPERCASE_LETTER ||
+					cat == U_LOWERCASE_LETTER ||
+					cat == U_DECIMAL_DIGIT_NUMBER ||
+					cat == U_CONNECTOR_PUNCTUATION ||
+					cat == U_MATH_SYMBOL ||
+					cat == U_CURRENCY_SYMBOL ||
+					cat == U_INITIAL_PUNCTUATION ||
+					cat == U_FINAL_PUNCTUATION) {
+				*d++ = u_tolower (t);
+			}
 		}
 		else {
 			/* Invisible spaces ! */

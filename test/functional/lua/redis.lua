@@ -23,12 +23,12 @@ local function redis_simple_async_symbol(task)
   end
 
   redis_lua.rspamd_redis_make_request(
-    task, 
+    task,
     redis_params,
     "test_key",
     false,
     redis_cb,
-    'GET', 
+    'GET',
     {'test_key'}
   )
 end
@@ -47,7 +47,7 @@ local function redis_simple_async_api201809(task)
     callback = redis_cb
   }
   local request = {
-    'GET', 
+    'GET',
     'test_key'
   }
   redis_lua.request(redis_params, attrs, request)
@@ -108,6 +108,6 @@ rspamd_config:register_symbol({
   name = 'REDIS_TEST',
   score = 1.0,
   callback = redis_symbol,
-  no_squeeze = true
+  flags = 'coro',
 })
 -- ]]

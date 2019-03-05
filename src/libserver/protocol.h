@@ -8,7 +8,7 @@
 
 #include "config.h"
 #include "filter.h"
-#include "http.h"
+#include "http_connection.h"
 #include "task.h"
 
 #define RSPAMD_BASE_ERROR 500

@@ -326,7 +326,7 @@ rspamd_rcl_group_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 {
 	struct rspamd_config *cfg = ud;
 	struct rspamd_symbols_group *gr;
-	const ucl_object_t *val;
+	const ucl_object_t *val, *elt;
 	struct rspamd_rcl_section *subsection;
 	struct rspamd_rcl_symbol_data sd;
 
@@ -341,6 +341,51 @@ rspamd_rcl_group_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	if (!rspamd_rcl_section_parse_defaults (cfg, section, pool, obj,
 			gr, err)) {
 		return FALSE;
+	}
+
+	if ((elt = ucl_object_lookup (obj, "one_shot")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"one_shot attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+		if (ucl_object_toboolean (elt)) {
+			gr->flags |= RSPAMD_SYMBOL_GROUP_ONE_SHOT;
+		}
+	}
+
+	if ((elt = ucl_object_lookup (obj, "disabled")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"disabled attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+		if (ucl_object_toboolean (elt)) {
+			gr->flags |= RSPAMD_SYMBOL_GROUP_DISABLED;
+		}
+	}
+
+	if ((elt = ucl_object_lookup (obj, "enabled")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"enabled attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+		if (!ucl_object_toboolean (elt)) {
+			gr->flags |= RSPAMD_SYMBOL_GROUP_DISABLED;
+		}
 	}
 
 	sd.gr = gr;
@@ -525,39 +570,32 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		const gchar *key, gpointer ud,
 		struct rspamd_rcl_section *section, GError **err)
 {
-	gdouble action_score;
 	struct rspamd_config *cfg = ud;
-	gint action_value;
 	const ucl_object_t *cur;
 	ucl_object_iter_t it;
 
 	it = ucl_object_iterate_new (obj);
 
 	while ((cur = ucl_object_iterate_safe (it, true)) != NULL) {
-		if (!rspamd_action_from_str (ucl_object_key (cur), &action_value)) {
-			continue;
+		gint type = ucl_object_type (cur);
+
+		if (type == UCL_NULL) {
+			rspamd_config_maybe_disable_action (cfg, ucl_object_key (cur),
+					ucl_object_get_priority (cur));
 		}
-		else {
-			if (ucl_object_type (cur) == UCL_NULL) {
-				rspamd_config_maybe_disable_action (cfg, ucl_object_key (cur),
-						ucl_object_get_priority (cur));
-			}
-			else {
-				if (!ucl_object_todouble_safe (cur, &action_score)) {
-					g_set_error (err,
-							CFG_RCL_ERROR,
-							EINVAL,
-							"invalid action definition: '%s'",
-							ucl_object_key (cur));
-					ucl_object_iterate_free (it);
-
-					return FALSE;
-				}
-			}
-
-			rspamd_config_set_action_score (cfg,
+		else if (type == UCL_OBJECT || type == UCL_FLOAT || type == UCL_INT) {
+			if (!rspamd_config_set_action_score (cfg,
 					ucl_object_key (cur),
-					cur);
+					cur)) {
+				g_set_error (err,
+						CFG_RCL_ERROR,
+						EINVAL,
+						"invalid action definition for: '%s'",
+						ucl_object_key (cur));
+				ucl_object_iterate_free (it);
+
+				return FALSE;
+			}
 		}
 	}
 
@@ -1314,7 +1352,9 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 		}
 
 		rspamd_config_add_symbol (cfg, composite_name, score,
-				description, group, FALSE, FALSE,
+				description, group,
+				0,
+				ucl_object_get_priority (obj), /* No +1 as it is default... */
 				1);
 
 		elt = ucl_object_lookup (obj, "groups");
@@ -1355,7 +1395,7 @@ rspamd_rcl_composite_handler (rspamd_mempool_t *pool,
 
 	if (new) {
 		rspamd_symcache_add_symbol (cfg->cache, composite_name, 0,
-				NULL, NULL, SYMBOL_TYPE_COMPOSITE, -1);
+				NULL, composite, SYMBOL_TYPE_COMPOSITE, -1);
 	}
 
 	return TRUE;
@@ -1767,12 +1807,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				"Add all symbols only once per message");
 		rspamd_rcl_add_default_handler (sub,
 				"check_attachements",
-				rspamd_rcl_parse_struct_boolean,
-				G_STRUCT_OFFSET (struct rspamd_config, check_text_attachements),
-				0,
-				"Treat text attachments as normal text parts");
-		rspamd_rcl_add_default_handler (sub,
-				"check_attachments",
 				rspamd_rcl_parse_struct_boolean,
 				G_STRUCT_OFFSET (struct rspamd_config, check_text_attachements),
 				0,
@@ -2191,18 +2225,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				"Symbols configuration");
 
 		/* Group part */
-		rspamd_rcl_add_default_handler (sub,
-				"disabled",
-				rspamd_rcl_parse_struct_boolean,
-				G_STRUCT_OFFSET (struct rspamd_symbols_group, disabled),
-				0,
-				"Disable symbols group");
-		rspamd_rcl_add_default_handler (sub,
-				"enabled",
-				rspamd_rcl_parse_struct_boolean,
-				G_STRUCT_OFFSET (struct rspamd_symbols_group, disabled),
-				RSPAMD_CL_FLAG_BOOLEAN_INVERSE,
-				"Enable or disable symbols group");
 		rspamd_rcl_add_default_handler (sub,
 				"max_score",
 				rspamd_rcl_parse_struct_double,

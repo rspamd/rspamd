@@ -2,9 +2,7 @@
 
 * [x] Crash/Hang/Data loss
 * [ ] WebUI/Usability
-* [ ] Serious bug
-* [ ] Ordinary bug
-* [ ] Feature
+* [ ] Unintended behaviour (bug)
 * [ ] Enhancement
 
 ### Reproducibility (Please choose *one* option):
@@ -18,7 +16,7 @@
 
 ### Rspamd version:
 
-### Operation system, CPU:
+### Operation system (the exact version), CPU (including architecture and processor family):
 
 ### Description (Please provide a descriptive summary of the issue):
 

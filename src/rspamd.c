@@ -178,6 +178,7 @@ read_cmd_line (gint *argc, gchar ***argv, struct rspamd_config *cfg)
 	else {
 		cfg->cfg_name = cfg_names[0];
 	}
+
 	for (i = 1; i < cfg_num; i++) {
 		r = fork ();
 		if (r == 0) {
@@ -313,6 +314,9 @@ reread_config (struct rspamd_main *rspamd_main)
 		REF_RELEASE (old_cfg);
 		msg_info_main ("config has been reread successfully");
 		rspamd_map_preload (rspamd_main->cfg);
+
+		rspamd_main->cfg->rspamd_user = rspamd_user;
+		rspamd_main->cfg->rspamd_group = rspamd_group;
 	}
 }
 
@@ -1159,7 +1163,7 @@ rspamd_control_handler (gint fd, short what, gpointer arg)
 	msg_info_main ("accepted control connection from %s",
 			rspamd_inet_address_to_string (addr));
 
-	rspamd_control_process_client_socket (rspamd_main, nfd);
+	rspamd_control_process_client_socket (rspamd_main, nfd, addr);
 }
 
 static guint
@@ -1484,6 +1488,9 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_mempool_lock_mutex (rspamd_main->start_mtx);
 	spawn_workers (rspamd_main, ev_base);
 	rspamd_mempool_unlock_mutex (rspamd_main->start_mtx);
+
+	rspamd_main->http_ctx = rspamd_http_context_create (rspamd_main->cfg,
+			ev_base);
 
 	if (control_fd != -1) {
 		msg_info_main ("listening for control commands on %s",

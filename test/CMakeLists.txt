@@ -8,7 +8,6 @@ SET(TESTSRC		rspamd_mem_pool_test.c
 				rspamd_radix_test.c
 				rspamd_shingles_test.c
 				rspamd_upstream_test.c
-				rspamd_http_test.c
 				rspamd_lua_pcall_vs_resume_test.c
 				rspamd_lua_test.c
 				rspamd_cryptobox_test.c
@@ -19,11 +18,9 @@ ADD_EXECUTABLE(rspamd-test EXCLUDE_FROM_ALL ${TESTSRC})
 SET_TARGET_PROPERTIES(rspamd-test PROPERTIES LINKER_LANGUAGE C)
 SET_TARGET_PROPERTIES(rspamd-test PROPERTIES COMPILE_FLAGS "-DRSPAMD_TEST")
 ADD_DEPENDENCIES(rspamd-test rspamd-server)
-TARGET_LINK_LIBRARIES(rspamd-test ${RSPAMD_REQUIRED_LIBRARIES})
 IF(USE_CXX_LINKER)
 	SET_TARGET_PROPERTIES(rspamd-test PROPERTIES LINKER_LANGUAGE CXX)
 ENDIF()
-TARGET_LINK_LIBRARIES(rspamd-test rspamd-actrie)
 TARGET_LINK_LIBRARIES(rspamd-test rspamd-server)
 
 IF(NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")

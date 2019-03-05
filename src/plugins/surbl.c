@@ -270,10 +270,14 @@ read_exceptions_list (gchar * chunk,
 }
 
 static void
-fin_exceptions_list (struct map_cb_data *data)
+fin_exceptions_list (struct map_cb_data *data, void **target)
 {
 	GHashTable **t;
 	gint i;
+
+	if (target) {
+		*target = data->cur_data;
+	}
 
 	if (data->prev_data) {
 		t = data->prev_data;
@@ -385,10 +389,14 @@ read_redirectors_list (gchar * chunk,
 			   final);
 }
 
-void
-fin_redirectors_list (struct map_cb_data *data)
+static void
+fin_redirectors_list (struct map_cb_data *data, void **target)
 {
 	GHashTable *tld_hash;
+
+	if (target) {
+		*target = data->cur_data;
+	}
 
 	if (data->prev_data) {
 		tld_hash = data->prev_data;
@@ -397,7 +405,7 @@ fin_redirectors_list (struct map_cb_data *data)
 	}
 }
 
-void
+static void
 dtor_redirectors_list (struct map_cb_data *data)
 {
 	GHashTable *tld_hash;
@@ -1624,7 +1632,8 @@ surbl_redirector_error (struct rspamd_http_connection *conn,
 
 	task = param->task;
 	msg_err_surbl ("connection with http server %s terminated incorrectly: %e",
-		rspamd_inet_address_to_string (rspamd_upstream_addr (param->redirector)),
+		rspamd_inet_address_to_string (
+				rspamd_upstream_addr_cur (param->redirector)),
 		err);
 	rspamd_upstream_fail (param->redirector, FALSE);
 	rspamd_session_remove_event (param->task->s, free_redirector_session,
@@ -1715,7 +1724,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 				RSPAMD_UPSTREAM_ROUND_ROBIN, url->host, url->hostlen);
 
 		if (selected) {
-			s = rspamd_inet_address_connect (rspamd_upstream_addr (selected),
+			s = rspamd_inet_address_connect (rspamd_upstream_addr_next (selected),
 					SOCK_STREAM, TRUE);
 		}
 
@@ -1733,12 +1742,12 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 		param->url = url;
 		param->task = task;
 		param->conn = rspamd_http_connection_new (NULL,
+				s,
+				NULL,
 				surbl_redirector_error,
 				surbl_redirector_finish,
 				RSPAMD_HTTP_CLIENT_SIMPLE,
-				RSPAMD_HTTP_CLIENT,
-				NULL,
-				NULL);
+				RSPAMD_HTTP_CLIENT);
 		param->ctx = surbl_module_ctx;
 		msg = rspamd_http_new_message (HTTP_REQUEST);
 		msg->url = rspamd_fstring_assign (msg->url, url->string, url->urllen);
@@ -1757,7 +1766,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 		}
 
 		rspamd_http_connection_write_message (param->conn, msg, NULL,
-				NULL, param, s, timeout, task->ev_base);
+				NULL, param, timeout);
 
 		msg_info_surbl (
 				"<%s> registered redirector call for %*s to %s, according to rule: %s",

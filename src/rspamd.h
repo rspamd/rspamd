@@ -22,7 +22,7 @@
 #include "libutil/mem_pool.h"
 #include "libutil/util.h"
 #include "libutil/logger.h"
-#include "libutil/http.h"
+#include "libutil/http_connection.h"
 #include "libutil/upstream.h"
 #include "libutil/radix.h"
 #include "libserver/url.h"
@@ -277,6 +277,7 @@ struct rspamd_main {
 	gboolean cores_throttling;                                  /**< turn off cores when limits are exceeded		*/
 	struct roll_history *history;                               /**< rolling history								*/
 	struct event_base *ev_base;
+	struct rspamd_http_context *http_ctx;
 };
 
 enum rspamd_exception_type {

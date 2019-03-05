@@ -19,7 +19,7 @@
 #include "config.h"
 #include "map.h"
 #include "map_private.h"
-#include "http.h"
+#include "http_connection.h"
 #include "http_private.h"
 #include "rspamd.h"
 #include "contrib/zstd/zstd.h"
@@ -138,9 +138,7 @@ write_http_request (struct http_callback_data *cbd)
 				cbd->data->host,
 				NULL,
 				cbd,
-				cbd->fd,
-				&cbd->tv,
-				cbd->ev_base);
+				&cbd->tv);
 	}
 	else {
 		msg_err_map ("cannot connect to %s: %s", cbd->data->host,
@@ -1155,11 +1153,7 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 
 	if (periodic->need_modify) {
 		/* We are done */
-		periodic->map->fin_callback (&periodic->cbdata);
-
-		if (periodic->cbdata.cur_data) {
-			*periodic->map->user_data = periodic->cbdata.cur_data;
-		}
+		periodic->map->fin_callback (&periodic->cbdata, periodic->map->user_data);
 	}
 	else {
 		/* Not modified */
@@ -1277,12 +1271,12 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 				if (cbd->fd != -1) {
 					cbd->stage = map_load_file;
 					cbd->conn = rspamd_http_connection_new (NULL,
+							cbd->fd,
+							NULL,
 							http_map_error,
 							http_map_finish,
 							flags,
-							RSPAMD_HTTP_CLIENT,
-							NULL,
-							cbd->map->cfg->libs_ctx->ssl_ctx);
+							RSPAMD_HTTP_CLIENT);
 
 					write_http_request (cbd);
 				}
@@ -1649,13 +1643,14 @@ check:
 
 		if (cbd->fd != -1) {
 			cbd->stage = map_load_file;
-			cbd->conn = rspamd_http_connection_new (NULL,
+			cbd->conn = rspamd_http_connection_new (
+					NULL,
+					cbd->fd,
+					NULL,
 					http_map_error,
 					http_map_finish,
 					flags,
-					RSPAMD_HTTP_CLIENT,
-					NULL,
-					cbd->map->cfg->libs_ctx->ssl_ctx);
+					RSPAMD_HTTP_CLIENT);
 
 			write_http_request (cbd);
 			MAP_RELEASE (cbd, "http_callback_data");
@@ -2039,11 +2034,7 @@ rspamd_map_preload (struct rspamd_config *cfg)
 			}
 
 			if (succeed) {
-				map->fin_callback (&fake_cbd.cbdata);
-
-				if (fake_cbd.cbdata.cur_data) {
-					*map->user_data = fake_cbd.cbdata.cur_data;
-				}
+				map->fin_callback (&fake_cbd.cbdata, map->user_data);
 			}
 			else {
 				msg_info_map ("preload of %s failed", map->name);

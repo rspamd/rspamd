@@ -459,9 +459,16 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 				const char *word = ucl_object_tolstring (w, &wlen);
 				const char *saved;
 
+#ifdef WITH_HYPERSCAN
+				rspamd_multipattern_add_pattern_len (d->stop_words[cat].mp,
+						word, wlen,
+						RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8
+						|RSPAMD_MULTIPATTERN_RE);
+#else
 				rspamd_multipattern_add_pattern_len (d->stop_words[cat].mp,
 						word, wlen,
 						RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
+#endif
 				nelt->stop_words ++;
 				nstop ++;
 
@@ -817,8 +824,15 @@ rspamd_language_detector_init (struct rspamd_config *cfg)
 	/* Map from ngramm in ucs32 to GPtrArray of rspamd_language_elt */
 	for (i = 0; i < RSPAMD_LANGUAGE_MAX; i ++) {
 		ret->trigramms[i] = kh_init (rspamd_trigram_hash);
+#ifdef WITH_HYPERSCAN
+		ret->stop_words[i].mp = rspamd_multipattern_create (
+				RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8|
+				RSPAMD_MULTIPATTERN_RE);
+#else
 		ret->stop_words[i].mp = rspamd_multipattern_create (
 				RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_UTF8);
+#endif
+
 		ret->stop_words[i].ranges = g_array_new (FALSE, FALSE,
 				sizeof (struct rspamd_stop_word_range));
 	}
@@ -1457,7 +1471,10 @@ rspamd_language_detector_set_language (struct rspamd_task *task,
 	r->prob = 1.0;
 	r->lang = code;
 
-	part->languages = g_ptr_array_sized_new (1);
+	if (part->languages == NULL) {
+		part->languages = g_ptr_array_sized_new (1);
+	}
+
 	g_ptr_array_add (part->languages, r);
 	part->language = code;
 }

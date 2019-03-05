@@ -21,7 +21,7 @@ struct map_cb_data;
  */
 typedef gchar * (*map_cb_t)(gchar *chunk, gint len,
 	struct map_cb_data *data, gboolean final);
-typedef void (*map_fin_cb_t)(struct map_cb_data *data);
+typedef void (*map_fin_cb_t)(struct map_cb_data *data, void **target);
 typedef void (*map_dtor_t)(struct map_cb_data *data);
 
 typedef gboolean (*rspamd_map_traverse_cb)(gconstpointer key,

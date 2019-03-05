@@ -301,6 +301,8 @@ lua_push_dns_reply (lua_State *L, const struct rdns_reply *reply)
 
 				lua_rawseti (L, -2, ++i);
 				break;
+			default:
+				continue;
 			}
 		}
 		lua_pushnil (L);

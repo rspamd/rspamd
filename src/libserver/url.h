@@ -79,13 +79,13 @@ enum uri_errno {
 };
 
 enum rspamd_url_protocol {
-	PROTOCOL_FILE = 0,
-	PROTOCOL_FTP,
-	PROTOCOL_HTTP,
-	PROTOCOL_HTTPS,
-	PROTOCOL_MAILTO,
-	PROTOCOL_TELEPHONE,
-	PROTOCOL_UNKNOWN
+	PROTOCOL_FILE = 1u << 0,
+	PROTOCOL_FTP = 1u << 1,
+	PROTOCOL_HTTP = 1u << 2,
+	PROTOCOL_HTTPS = 1u << 3,
+	PROTOCOL_MAILTO = 1u << 4,
+	PROTOCOL_TELEPHONE = 1u << 5,
+	PROTOCOL_UNKNOWN = 1u << 31,
 };
 
 /**
@@ -240,4 +240,18 @@ const gchar * rspamd_url_encode (struct rspamd_url *url, gsize *dlen,
  */
 gboolean rspamd_url_is_domain (int c);
 
+/**
+ * Returns symbolic name for protocol
+ * @param proto
+ * @return
+ */
+const gchar* rspamd_url_protocol_name (enum rspamd_url_protocol proto);
+
+
+/**
+ * Converts string to a numeric protocol
+ * @param str
+ * @return
+ */
+enum rspamd_url_protocol rspamd_url_protocol_from_string (const gchar *str);
 #endif

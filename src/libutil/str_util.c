@@ -734,18 +734,7 @@ rspamd_decode_base32 (const gchar *in, gsize inlen, gsize *outlen)
 }
 
 
-
-/**
- * Decode string using base32 encoding
- * @param in input
- * @param inlen input length
- * @param out output buf (may overlap with `in`)
- * @param outlen output buf len
- * @return TRUE if in is valid base32 and `outlen` is enough to encode `inlen`
- */
-
-
-static gchar *
+gchar *
 rspamd_encode_base64_common (const guchar *in, gsize inlen, gint str_len,
 		gsize *outlen, gboolean fold, enum rspamd_newlines_type how)
 {
@@ -2605,7 +2594,7 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 		gsize *dst_len, enum rspamd_regexp_escape_flags flags)
 {
 	const gchar *p, *end = pattern + slen;
-	gchar *res, *d, t, *tmp_utf = NULL;
+	gchar *res, *d, t, *tmp_utf = NULL, *dend;
 	gsize len;
 	static const gchar hexdigests[16] = "0123456789abcdef";
 
@@ -2634,15 +2623,22 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 		case '$':
 		case '|':
 		case '#':
-			len ++;
+			if (!(flags & RSPAMD_REGEXP_ESCAPE_RE)) {
+				len++;
+			}
 			break;
 		default:
 			if (g_ascii_isspace (t)) {
 				len ++;
 			}
 			else {
-				if (!(flags & RSPAMD_REGEXP_ESCAPE_UTF)) {
-					if (!g_ascii_isprint (t)) {
+				if (!g_ascii_isprint (t) || (t & 0x80)) {
+
+					if (flags & RSPAMD_REGEXP_ESCAPE_UTF) {
+						/* \x{code}, where code can be up to 5 digits */
+						len += 4;
+					}
+					else {
 						/* \\xHH -> 4 symbols */
 						len += 3;
 					}
@@ -2668,8 +2664,6 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 			*dst_len = slen;
 		}
 
-
-
 		if (tmp_utf) {
 			return tmp_utf;
 		}
@@ -2685,8 +2679,10 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 	res = g_malloc (len + 1);
 	p = pattern;
 	d = res;
+	dend = d + len;
 
 	while (p < end) {
+		g_assert (d < dend);
 		t = *p ++;
 
 		switch (t) {
@@ -2704,7 +2700,9 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 		case '$':
 		case '|':
 		case '#':
-			*d++ = '\\';
+			if (!(flags & RSPAMD_REGEXP_ESCAPE_RE)) {
+				*d++ = '\\';
+			}
 			break;
 		case '*':
 		case '?':
@@ -2714,19 +2712,40 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 				*d++ = '.';
 			}
 			else {
-				*d++ = '\\';
+				if (!(flags & RSPAMD_REGEXP_ESCAPE_RE)) {
+					*d++ = '\\';
+				}
 			}
 			break;
 		default:
 			if (g_ascii_isspace (t)) {
-				*d++ = '\\';
+				if (!(flags & RSPAMD_REGEXP_ESCAPE_RE)) {
+					*d++ = '\\';
+				}
 			}
-			else if (!(flags & RSPAMD_REGEXP_ESCAPE_UTF) && !g_ascii_isgraph (t)) {
-				*d++ = '\\';
-				*d++ = 'x';
-				*d++ = hexdigests[((t >> 4) & 0xF)];
-				*d++ = hexdigests[((t) & 0xF)];
-				continue; /* To avoid *d++ = t; */
+			else if (t & 0x80 || !g_ascii_isprint (t)) {
+				if (!(flags & RSPAMD_REGEXP_ESCAPE_UTF)) {
+					*d++ = '\\';
+					*d++ = 'x';
+					*d++ = hexdigests[((t >> 4) & 0xF)];
+					*d++ = hexdigests[((t) & 0xF)];
+					continue; /* To avoid *d++ = t; */
+				}
+				else {
+					if (flags & (RSPAMD_REGEXP_ESCAPE_RE|RSPAMD_REGEXP_ESCAPE_GLOB)) {
+						UChar32 uc;
+						gint32 off = p - pattern - 1;
+						U8_NEXT (pattern, off, slen, uc);
+
+						if (uc > 0) {
+							d += rspamd_snprintf (d, dend - d,
+									"\\x{%xd}", uc);
+							p = pattern + off;
+						}
+
+						continue; /* To avoid *d++ = t; */
+					}
+				}
 			}
 			break;
 		}

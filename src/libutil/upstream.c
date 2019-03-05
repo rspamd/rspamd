@@ -289,7 +289,7 @@ rspamd_upstream_update_addrs (struct upstream *up)
 			rspamd_inet_address_set_port (cur->addr, port);
 
 			PTR_ARRAY_FOREACH (up->addrs.addr, i, addr_elt) {
-				if (rspamd_inet_address_compare (addr_elt->addr, cur->addr) == 0) {
+				if (rspamd_inet_address_compare (addr_elt->addr, cur->addr, FALSE) == 0) {
 					naddr = g_malloc0 (sizeof (*naddr));
 					naddr->addr = cur->addr;
 					naddr->errors = reset_errors ? 0 : addr_elt->errors;
@@ -630,7 +630,7 @@ rspamd_upstream_dtor (struct upstream *up)
 }
 
 rspamd_inet_addr_t*
-rspamd_upstream_addr (struct upstream *up)
+rspamd_upstream_addr_next (struct upstream *up)
 {
 	guint idx, next_idx;
 	struct upstream_addr_elt *e1, *e2;
@@ -644,6 +644,16 @@ rspamd_upstream_addr (struct upstream *up)
 	} while (e2->errors > e1->errors);
 
 	return e2->addr;
+}
+
+rspamd_inet_addr_t*
+rspamd_upstream_addr_cur (const struct upstream *up)
+{
+	struct upstream_addr_elt *elt;
+
+	elt = g_ptr_array_index (up->addrs.addr, up->addrs.cur);
+
+	return elt->addr;
 }
 
 const gchar*

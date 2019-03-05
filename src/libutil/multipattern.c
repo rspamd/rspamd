@@ -99,8 +99,8 @@ rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern, gsize slen,
 
 	/*
 	 * We understand the following cases
-	 * 1) blah -> \\.blah
-	 * 2) *.blah -> \\..*\\.blah
+	 * 1) blah -> .blah
+	 * 2) *.blah -> ..*\\.blah
 	 * 3) ???
 	 */
 
@@ -116,11 +116,11 @@ rspamd_multipattern_escape_tld_hyperscan (const gchar *pattern, gsize slen,
 			p ++;
 		}
 
-		prefix = "\\..*\\.";
+		prefix = ".*.";
 	}
 	else {
-		len = slen + 2;
-		prefix = "\\.";
+		len = slen + 1;
+		prefix = ".";
 		p = pattern;
 	}
 
@@ -200,11 +200,18 @@ rspamd_multipattern_pattern_filter (const gchar *pattern, gsize len,
 		}
 
 		if (flags & RSPAMD_MULTIPATTERN_TLD) {
-			ret = rspamd_multipattern_escape_tld_hyperscan (pattern, len, dst_len);
+			gchar *tmp;
+			gsize tlen;
+			tmp = rspamd_multipattern_escape_tld_hyperscan (pattern, len, &tlen);
+
+			ret = rspamd_str_regexp_escape (tmp, tlen, dst_len,
+					gl_flags|RSPAMD_REGEXP_ESCAPE_GLOB);
+			g_free (tmp);
 		}
 		else if (flags & RSPAMD_MULTIPATTERN_RE) {
 			ret = malloc (len + 1);
-			*dst_len = rspamd_strlcpy (ret, pattern, len + 1);
+			ret = rspamd_str_regexp_escape (pattern, len, dst_len, gl_flags |
+					RSPAMD_REGEXP_ESCAPE_RE);
 		}
 		else if (flags & RSPAMD_MULTIPATTERN_GLOB) {
 			ret = rspamd_str_regexp_escape (pattern, len, dst_len,

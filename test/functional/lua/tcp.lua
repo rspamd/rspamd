@@ -61,7 +61,7 @@ local function http_simple_tcp_symbol(task)
   local data
   local got_content = ''
   repeat
-    is_ok, data = connection:read_once(); 
+    is_ok, data = connection:read_once();
     logger.errx(task, 'read_once: is_ok: %1, data: %2', is_ok, data)
     if not is_ok then
       task:insert_result('HTTP_SYNC_ERROR', 1.0, data)
@@ -147,7 +147,7 @@ local function http_tcp_symbol(task)
     end
 
     local value
-    local header = header_line:gsub("([%w-]+): (.*)", 
+    local header = header_line:gsub("([%w-]+): (.*)",
         function (h, v) value = v; return h:lower() end)
 
     logger.errx(task, 'parsed header: %1 -> "%2"', header, value)
@@ -182,13 +182,15 @@ rspamd_config:register_symbol({
   name = 'SIMPLE_TCP_TEST',
   score = 1.0,
   callback = http_simple_tcp_symbol,
-  no_squeeze = true
+  no_squeeze = true,
+  flags = 'coro',
 })
 
 rspamd_config:register_symbol({
   name = 'HTTP_TCP_TEST',
   score = 1.0,
   callback = http_tcp_symbol,
-  no_squeeze = true
+  no_squeeze = true,
+  flags = 'coro',
 })
 -- ]]

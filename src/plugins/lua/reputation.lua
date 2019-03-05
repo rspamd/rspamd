@@ -25,7 +25,6 @@ local N = 'reputation'
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
-local rspamd_dns = require "rspamd_dns"
 local lua_util = require "lua_util"
 local lua_maps = require "lua_maps"
 local hash = require 'rspamd_cryptobox_hash'
@@ -857,39 +856,42 @@ local function reputation_dns_get_token(task, rule, token, continuation_cb)
   local key = gen_token_key(token, rule)
   local dns_name = key .. '.' .. rule.backend.config.list
 
-  local is_ok, results = rspamd_dns.request({
-    type = 'a',
+  local function dns_cb(_, _, results, err)
+    if err and (err ~= 'requested record is not found' and
+        err ~= 'no records with this name') then
+      rspamd_logger.errx(task, 'error looking up %s: %s', dns_name, err)
+    end
+
+    lua_util.debugm(N, task, 'DNS RESPONSE: label=%1 results=%2 err=%3 list=%4',
+        dns_name, results, err, rule.backend.config.list)
+
+    -- Now split tokens to list of values
+    if results  then
+      local values = {}
+      -- Format: key1=num1;key2=num2...keyn=numn
+      fun.each(function(e)
+        local vals = lua_util.rspamd_str_split(e, "=")
+        if vals and #vals == 2 then
+          local nv = tonumber(vals[2])
+          if nv then
+            values[vals[1]] = nv
+          end
+        end
+      end,
+          lua_util.rspamd_str_split(results[1], ";"))
+
+      continuation_cb(nil, dns_name, values)
+    else
+      continuation_cb(results, dns_name, nil)
+    end
+  end
+
+ task:get_resolver():resolve_a({
     task = task,
     name = dns_name,
+    callback = dns_cb,
     forced = true,
   })
-
-  if not is_ok and (results ~= 'requested record is not found' and results ~= 'no records with this name') then
-    rspamd_logger.errx(task, 'error looking up %s: %s', dns_name, results)
-  end
-
-  lua_util.debugm(N, task, 'DNS RESPONSE: label=%1 results=%2 is_ok=%3 list=%4',
-    dns_name, results, is_ok, rule.backend.config.list)
-
-  -- Now split tokens to list of values
-  if is_ok  then
-    local values = {}
-    -- Format: key1=num1;key2=num2...keyn=numn
-    fun.each(function(e)
-      local vals = lua_util.rspamd_str_split(e, "=")
-      if vals and #vals == 2 then
-        local nv = tonumber(vals[2])
-        if nv then
-          values[vals[1]] = nv
-        end
-      end
-    end,
-    lua_util.rspamd_str_split(results[1], ";"))
-
-    continuation_cb(nil, dns_name, values)
-  else
-    continuation_cb(results, dns_name, nil)
-  end
 end
 
 local function reputation_redis_init(rule, cfg, ev_base, worker)

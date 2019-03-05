@@ -21,6 +21,7 @@
 #include "libutil/map_helpers.h"
 #include "libutil/map_private.h"
 #include "libutil/http_private.h"
+#include "libutil/http_router.h"
 #include "libstat/stat_api.h"
 #include "rspamd.h"
 #include "libserver/worker_util.h"
@@ -149,6 +150,7 @@ struct rspamd_controller_worker_ctx {
 	rspamd_ftok_t cached_password;
 	rspamd_ftok_t cached_enable_password;
 	/* HTTP server */
+	struct rspamd_http_context *http_ctx;
 	struct rspamd_http_connection_router *http;
 	/* Server's start time */
 	time_t start_time;
@@ -1076,8 +1078,8 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	rspamd_http_connection_reset (conn_ent->conn);
 	rspamd_http_router_insert_headers (conn_ent->rt, reply);
 	rspamd_http_connection_write_message (conn_ent->conn, reply, NULL,
-		"text/plain", conn_ent, conn_ent->conn->fd,
-		conn_ent->rt->ptv, conn_ent->rt->ev_base);
+			"text/plain", conn_ent,
+			conn_ent->rt->ptv);
 	conn_ent->is_reply = TRUE;
 
 	return 0;
@@ -1940,8 +1942,7 @@ rspamd_controller_scan_reply (struct rspamd_task *task)
 	rspamd_http_connection_reset (conn_ent->conn);
 	rspamd_http_router_insert_headers (conn_ent->rt, msg);
 	rspamd_http_connection_write_message (conn_ent->conn, msg, NULL,
-			"application/json", conn_ent, conn_ent->conn->fd, conn_ent->rt->ptv,
-			conn_ent->rt->ev_base);
+			"application/json", conn_ent, conn_ent->rt->ptv);
 	conn_ent->is_reply = TRUE;
 }
 
@@ -2909,9 +2910,7 @@ rspamd_controller_handle_ping (struct rspamd_http_connection_entry *conn_ent,
 			NULL,
 			"text/plain",
 			conn_ent,
-			conn_ent->conn->fd,
-			conn_ent->rt->ptv,
-			conn_ent->rt->ev_base);
+			conn_ent->rt->ptv);
 	conn_ent->is_reply = TRUE;
 
 	return 0;
@@ -2945,9 +2944,7 @@ rspamd_controller_handle_unknown (struct rspamd_http_connection_entry *conn_ent,
 				NULL,
 				"text/plain",
 				conn_ent,
-				conn_ent->conn->fd,
-				conn_ent->rt->ptv,
-				conn_ent->rt->ev_base);
+				conn_ent->rt->ptv);
 		conn_ent->is_reply = TRUE;
 	}
 	else {
@@ -2963,9 +2960,7 @@ rspamd_controller_handle_unknown (struct rspamd_http_connection_entry *conn_ent,
 				NULL,
 				"text/plain",
 				conn_ent,
-				conn_ent->conn->fd,
-				conn_ent->rt->ptv,
-				conn_ent->rt->ev_base);
+				conn_ent->rt->ptv);
 		conn_ent->is_reply = TRUE;
 	}
 
@@ -3706,7 +3701,6 @@ start_controller_worker (struct rspamd_worker *worker)
 	GHashTableIter iter;
 	gpointer key, value;
 	guint i;
-	struct rspamd_keypair_cache *cache;
 	struct timeval stv;
 	const guint save_stats_interval = 60 * 1000; /* 1 minute */
 	gpointer m;
@@ -3782,10 +3776,10 @@ start_controller_worker (struct rspamd_worker *worker)
 			"password");
 
 	/* Accept event */
-	cache = rspamd_keypair_cache_new (256);
+	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->ev_base);
 	ctx->http = rspamd_http_router_new (rspamd_controller_error_handler,
-			rspamd_controller_finish_handler, &ctx->io_tv, ctx->ev_base,
-			ctx->static_files_dir, cache);
+			rspamd_controller_finish_handler, &ctx->io_tv,
+			ctx->static_files_dir, ctx->http_ctx);
 
 	/* Add callbacks for different methods */
 	rspamd_http_router_add_path (ctx->http,
@@ -3948,7 +3942,10 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	g_hash_table_unref (ctx->plugins);
 	g_hash_table_unref (ctx->custom_commands);
+
+	struct rspamd_http_context *http_ctx = ctx->http_ctx;
 	REF_RELEASE (ctx->cfg);
+	rspamd_http_context_free (http_ctx);
 	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);

@@ -109,7 +109,8 @@ rspamd_config:register_symbol({
 name = 'SIMPLE_TEST',
 score = 1.0,
 callback = http_symbol,
-no_squeeze = true
+no_squeeze = true,
+flags = 'coro'
 })
 
 

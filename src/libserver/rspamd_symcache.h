@@ -50,6 +50,7 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_MIME_ONLY = (1 << 15), /* Symbol is mime only */
 	SYMBOL_TYPE_EXPLICIT_DISABLE = (1 << 16), /* Symbol should be disabled explicitly only */
 	SYMBOL_TYPE_IGNORE_PASSTHROUGH = (1 << 17), /* Symbol ignores passthrough result */
+	SYMBOL_TYPE_USE_CORO = (1 << 18), /* Symbol uses lua coroutines */
 };
 
 /**
@@ -402,4 +403,16 @@ gboolean rspamd_symcache_item_async_dec_check_full (struct rspamd_task *task,
 void rspamd_symcache_disable_all_symbols (struct rspamd_task *task,
 										  struct rspamd_symcache *cache,
 										  guint skip_mask);
+
+/**
+ * Iterates over the list of the enabled composites calling specified function
+ * @param task
+ * @param cache
+ * @param func
+ * @param fd
+ */
+void rspamd_symcache_composites_foreach (struct rspamd_task *task,
+										 struct rspamd_symcache *cache,
+										 GHFunc func,
+										 gpointer fd);
 #endif

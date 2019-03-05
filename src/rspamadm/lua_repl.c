@@ -16,8 +16,9 @@
 
 #include "config.h"
 #include "rspamadm.h"
-#include "libutil/http.h"
+#include "libutil/http_connection.h"
 #include "libutil/http_private.h"
+#include "libutil/http_router.h"
 #include "printf.h"
 #include "lua/lua_common.h"
 #include "lua/lua_thread_pool.h"
@@ -807,8 +808,9 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 		ctx = g_malloc0  (sizeof (*ctx));
 		http = rspamd_http_router_new (rspamadm_lua_error_handler,
 						rspamadm_lua_finish_handler,
-						NULL, ev_base,
-						NULL, NULL);
+						NULL,
+						NULL,
+						rspamd_main->http_ctx);
 		ctx->L = L;
 		ctx->rt = http;
 		rspamd_http_router_add_path (http,

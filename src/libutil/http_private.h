@@ -16,9 +16,13 @@
 #ifndef SRC_LIBUTIL_HTTP_PRIVATE_H_
 #define SRC_LIBUTIL_HTTP_PRIVATE_H_
 
-#include "http.h"
+#include "http_connection.h"
+#include "http_parser.h"
 #include "str_util.h"
+#include "keypair.h"
+#include "keypairs_cache.h"
 #include "ref.h"
+#include "khash.h"
 #define HASH_CASELESS
 #include "uthash_strcase.h"
 
@@ -66,12 +70,43 @@ struct rspamd_http_message {
 	time_t date;
 	time_t last_modified;
 	unsigned port;
-	enum http_parser_type type;
+	int type;
 	gint code;
 	enum http_method method;
 	gint flags;
 	ref_entry_t ref;
 };
 
+struct rspamd_keepalive_hash_key {
+	rspamd_inet_addr_t *addr;
+	gchar *host;
+	GQueue conns;
+};
+
+gint32 rspamd_keep_alive_key_hash (struct rspamd_keepalive_hash_key* k);
+bool rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key* k1,
+								  struct rspamd_keepalive_hash_key* k2);
+
+KHASH_INIT (rspamd_keep_alive_hash, struct rspamd_keepalive_hash_key *,
+		char, 0, rspamd_keep_alive_key_hash, rspamd_keep_alive_key_equal);
+
+struct rspamd_http_context {
+	struct rspamd_http_context_cfg config;
+	struct rspamd_keypair_cache *client_kp_cache;
+	struct rspamd_cryptobox_keypair *client_kp;
+	struct rspamd_keypair_cache *server_kp_cache;
+	gpointer ssl_ctx;
+	gpointer ssl_ctx_noverify;
+	struct event_base *ev_base;
+	struct event client_rotate_ev;
+	khash_t (rspamd_keep_alive_hash) *keep_alive_hash;
+};
+
+#define HTTP_ERROR http_error_quark ()
+GQuark http_error_quark (void);
+
+void rspamd_http_message_storage_cleanup (struct rspamd_http_message *msg);
+gboolean rspamd_http_message_grow_body (struct rspamd_http_message *msg,
+										gsize len);
 
 #endif /* SRC_LIBUTIL_HTTP_PRIVATE_H_ */

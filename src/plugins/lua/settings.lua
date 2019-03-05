@@ -78,6 +78,10 @@ local function apply_settings(task, to_apply)
               to_apply.symbols))
     end
   end
+
+  if to_apply.subject then
+    task:set_metric_subject(to_apply.subject)
+  end
 end
 
 -- Checks for overridden settings within query params and returns 'true' if

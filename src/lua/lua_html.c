@@ -594,6 +594,9 @@ lua_html_tag_get_parent (lua_State *L)
 			*ptag = node->data;
 			rspamd_lua_setclass (L, "rspamd{html_tag}", -1);
 		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

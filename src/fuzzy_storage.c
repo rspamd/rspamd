@@ -34,10 +34,10 @@
 #include "libcryptobox/keypairs_cache.h"
 #include "libcryptobox/keypair.h"
 #include "libserver/rspamd_control.h"
+#include "libutil/hash.h"
 #include "libutil/map_private.h"
-#include "libutil/hash.h"
 #include "libutil/http_private.h"
-#include "libutil/hash.h"
+#include "libutil/http_router.h"
 #include "unix-std.h"
 
 #include <math.h>
@@ -173,6 +173,7 @@ struct rspamd_fuzzy_storage_ctx {
 	struct rspamd_cryptobox_keypair *collection_keypair;
 	struct rspamd_cryptobox_pubkey *collection_sign_key;
 	gchar *collection_id_file;
+	struct rspamd_http_context *http_ctx;
 	struct rspamd_keypair_cache *keypair_cache;
 	rspamd_lru_hash_t *errors_ips;
 	rspamd_lru_hash_t *ratelimit_buckets;
@@ -530,8 +531,7 @@ fuzzy_mirror_updates_version_cb (guint64 rev64, void *ud)
 	double_to_tv (ctx->sync_timeout, &tv);
 	rspamd_http_connection_write_message (conn->http_conn,
 			msg, NULL, NULL, conn,
-			conn->sock,
-			&tv, ctx->ev_base);
+			&tv);
 	msg_info ("send update request to %s", m->name);
 
 	g_array_free (cbdata->updates_pending, TRUE);
@@ -568,7 +568,7 @@ fuzzy_mirror_error_handler (struct rspamd_http_connection *conn, GError *err)
 	msg_info ("abnormally closing connection from backend: %s:%s, "
 			"error: %e",
 			bk_conn->mirror->name,
-			rspamd_inet_address_to_string (rspamd_upstream_addr (bk_conn->up)),
+			rspamd_inet_address_to_string (rspamd_upstream_addr_cur (bk_conn->up)),
 			err);
 
 	fuzzy_mirror_close_connection (bk_conn);
@@ -604,7 +604,7 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 	}
 
 	conn->sock = rspamd_inet_address_connect (
-			rspamd_upstream_addr (conn->up),
+			rspamd_upstream_addr_next (conn->up),
 			SOCK_STREAM, TRUE);
 
 	if (conn->sock == -1) {
@@ -616,13 +616,14 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	rspamd_printf_fstring (&msg->url, "/update_v1/%s", m->name);
 
-	conn->http_conn = rspamd_http_connection_new (NULL,
+	conn->http_conn = rspamd_http_connection_new (
+			ctx->http_ctx,
+			conn->sock,
+			NULL,
 			fuzzy_mirror_error_handler,
 			fuzzy_mirror_finish_handler,
 			RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT,
-			ctx->keypair_cache,
-			NULL);
+			RSPAMD_HTTP_CLIENT);
 
 	rspamd_http_connection_set_key (conn->http_conn,
 			ctx->sync_keypair);
@@ -1569,8 +1570,7 @@ rspamd_fuzzy_mirror_send_reply (struct fuzzy_master_update_session *session,
 
 	rspamd_http_connection_reset (session->conn);
 	rspamd_http_connection_write_message (session->conn, msg, NULL, "text/plain",
-			session, session->sock, &session->ctx->master_io_tv,
-			session->ctx->ev_base);
+			session, &session->ctx->master_io_tv);
 }
 
 static void
@@ -1711,9 +1711,7 @@ rspamd_fuzzy_collection_send_error (struct rspamd_http_connection_entry *entry,
 		NULL,
 		"text/plain",
 		entry,
-		entry->conn->fd,
-		entry->rt->ptv,
-		entry->rt->ev_base);
+		entry->rt->ptv);
 	entry->is_reply = TRUE;
 }
 
@@ -1738,9 +1736,7 @@ rspamd_fuzzy_collection_send_fstring (struct rspamd_http_connection_entry *entry
 		NULL,
 		"application/octet-stream",
 		entry,
-		entry->conn->fd,
-		entry->rt->ptv,
-		entry->rt->ev_base);
+		entry->rt->ptv);
 	entry->is_reply = TRUE;
 }
 
@@ -1994,13 +1990,14 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 	session->name = rspamd_inet_address_to_string (addr);
 	rspamd_random_hex (session->uid, sizeof (session->uid) - 1);
 	session->uid[sizeof (session->uid) - 1] = '\0';
-	http_conn = rspamd_http_connection_new (NULL,
+	http_conn = rspamd_http_connection_new (
+			ctx->http_ctx,
+			nfd,
+			NULL,
 			rspamd_fuzzy_mirror_error_handler,
 			rspamd_fuzzy_mirror_finish_handler,
 			0,
-			RSPAMD_HTTP_SERVER,
-			ctx->keypair_cache,
-			NULL);
+			RSPAMD_HTTP_SERVER);
 
 	rspamd_http_connection_set_key (http_conn, ctx->sync_keypair);
 	session->ctx = ctx;
@@ -2010,9 +2007,7 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 
 	rspamd_http_connection_read_message (http_conn,
 			session,
-			nfd,
-			&ctx->master_io_tv,
-			ctx->ev_base);
+			&ctx->master_io_tv);
 }
 
 /*
@@ -3004,6 +2999,8 @@ start_fuzzy (struct rspamd_worker *worker)
 		ctx->keypair_cache = rspamd_keypair_cache_new (ctx->keypair_cache_size);
 	}
 
+	ctx->http_ctx = rspamd_http_context_create (cfg, ctx->ev_base);
+
 	if (!ctx->collection_mode) {
 		/*
 		 * Open DB and perform VACUUM
@@ -3058,8 +3055,8 @@ start_fuzzy (struct rspamd_worker *worker)
 					rspamd_fuzzy_collection_error_handler,
 					rspamd_fuzzy_collection_finish_handler,
 					&ctx->stat_tv,
-					ctx->ev_base,
-					NULL, ctx->keypair_cache);
+					NULL,
+					ctx->http_ctx);
 
 			if (ctx->collection_keypair) {
 				rspamd_http_router_set_key (ctx->collection_rt,
@@ -3202,8 +3199,6 @@ start_fuzzy (struct rspamd_worker *worker)
 	else if (worker->index == 0) {
 		gint fd;
 
-		/* Steal keypairs cache... */
-		ctx->collection_rt->cache = NULL;
 		rspamd_http_router_free (ctx->collection_rt);
 
 		/* Try to save collection id */
@@ -3240,8 +3235,9 @@ start_fuzzy (struct rspamd_worker *worker)
 		rspamd_keypair_cache_destroy (ctx->keypair_cache);
 	}
 
+	struct rspamd_http_context *http_ctx = ctx->http_ctx;
 	REF_RELEASE (ctx->cfg);
-
+	rspamd_http_context_free (http_ctx);
 	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);

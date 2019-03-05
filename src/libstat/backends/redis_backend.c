@@ -975,7 +975,7 @@ rspamd_redis_async_stat_cb (struct rspamd_stat_async_elt *elt, gpointer d)
 					0);
 
 	g_assert (cbdata->selected != NULL);
-	addr = rspamd_upstream_addr (cbdata->selected);
+	addr = rspamd_upstream_addr_next (cbdata->selected);
 	g_assert (addr != NULL);
 
 	if (rspamd_inet_address_get_af (addr) == AF_UNIX) {
@@ -1522,7 +1522,7 @@ rspamd_redis_runtime (struct rspamd_task *task,
 	rt->stcf = stcf;
 	rt->redis_object_expanded = object_expanded;
 
-	addr = rspamd_upstream_addr (up);
+	addr = rspamd_upstream_addr_next (up);
 	g_assert (addr != NULL);
 
 	if (rspamd_inet_address_get_af (addr) == AF_UNIX) {
@@ -1693,7 +1693,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 		}
 	}
 
-	addr = rspamd_upstream_addr (up);
+	addr = rspamd_upstream_addr_next (up);
 	g_assert (addr != NULL);
 
 	if (rspamd_inet_address_get_af (addr) == AF_UNIX) {

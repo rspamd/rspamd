@@ -2035,13 +2035,102 @@ void rspamd_gerror_free_maybe (gpointer p)
 	}
 }
 
+
+
+static void
+rspamd_openssl_maybe_init (void)
+{
+	static gboolean openssl_initialized = FALSE;
+
+	if (!openssl_initialized) {
+		ERR_load_crypto_strings ();
+		SSL_load_error_strings ();
+
+		OpenSSL_add_all_algorithms ();
+		OpenSSL_add_all_digests ();
+		OpenSSL_add_all_ciphers ();
+
+#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && !defined(LIBRESSL_VERSION_NUMBER)
+		ENGINE_load_builtin_engines ();
+#endif
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+		SSL_library_init ();
+#else
+		OPENSSL_init_ssl (0, NULL);
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+		OPENSSL_config (NULL);
+#endif
+		if (RAND_status () == 0) {
+			guchar seed[128];
+
+			/* Try to use ottery to seed rand */
+			ottery_rand_bytes (seed, sizeof (seed));
+			RAND_seed (seed, sizeof (seed));
+			rspamd_explicit_memzero (seed, sizeof (seed));
+		}
+
+		openssl_initialized = TRUE;
+	}
+}
+
+gpointer
+rspamd_init_ssl_ctx (void)
+{
+	SSL_CTX *ssl_ctx;
+	gint ssl_options;
+
+	rspamd_openssl_maybe_init ();
+
+	ssl_ctx = SSL_CTX_new (SSLv23_method ());
+	SSL_CTX_set_verify (ssl_ctx, SSL_VERIFY_PEER, NULL);
+	SSL_CTX_set_verify_depth (ssl_ctx, 4);
+	ssl_options = SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3;
+
+#ifdef SSL_OP_NO_COMPRESSION
+	ssl_options |= SSL_OP_NO_COMPRESSION;
+#elif OPENSSL_VERSION_NUMBER >= 0x00908000L
+	sk_SSL_COMP_zero (SSL_COMP_get_compression_methods ());
+#endif
+
+	SSL_CTX_set_options (ssl_ctx, ssl_options);
+
+	return ssl_ctx;
+}
+
+gpointer rspamd_init_ssl_ctx_noverify (void)
+{
+	SSL_CTX *ssl_ctx_noverify;
+	gint ssl_options;
+
+	rspamd_openssl_maybe_init ();
+
+	ssl_options = SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3;
+
+#ifdef SSL_OP_NO_COMPRESSION
+	ssl_options |= SSL_OP_NO_COMPRESSION;
+#elif OPENSSL_VERSION_NUMBER >= 0x00908000L
+	sk_SSL_COMP_zero (SSL_COMP_get_compression_methods ());
+#endif
+
+	ssl_ctx_noverify = SSL_CTX_new (SSLv23_method ());
+	SSL_CTX_set_verify (ssl_ctx_noverify, SSL_VERIFY_NONE, NULL);
+	SSL_CTX_set_options (ssl_ctx_noverify, ssl_options);
+#ifdef SSL_SESS_CACHE_BOTH
+	SSL_CTX_set_session_cache_mode (ssl_ctx_noverify, SSL_SESS_CACHE_BOTH);
+#endif
+
+	return ssl_ctx_noverify;
+}
+
+
 struct rspamd_external_libs_ctx *
 rspamd_init_libs (void)
 {
 	struct rlimit rlim;
 	struct rspamd_external_libs_ctx *ctx;
 	struct ottery_config *ottery_cfg;
-	gint ssl_options;
 
 	ctx = g_malloc0 (sizeof (*ctx));
 	ctx->crypto_ctx = rspamd_cryptobox_init ();
@@ -2049,10 +2138,15 @@ rspamd_init_libs (void)
 	ottery_config_init (ottery_cfg);
 	ctx->ottery_cfg = ottery_cfg;
 
+	rspamd_openssl_maybe_init ();
+
 	/* Check if we have rdrand */
 	if ((ctx->crypto_ctx->cpu_config & CPUID_RDRAND) == 0) {
 		ottery_config_disable_entropy_sources (ottery_cfg,
 				OTTERY_ENTROPY_SRC_RDRAND);
+#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && !defined(LIBRESSL_VERSION_NUMBER)
+		RAND_set_rand_engine (NULL);
+#endif
 	}
 
 	g_assert (ottery_init (ottery_cfg) == 0);
@@ -2072,60 +2166,8 @@ rspamd_init_libs (void)
 	}
 #endif
 
-#ifdef HAVE_OPENSSL
-	ERR_load_crypto_strings ();
-	SSL_load_error_strings ();
-
-	OpenSSL_add_all_algorithms ();
-	OpenSSL_add_all_digests ();
-	OpenSSL_add_all_ciphers ();
-
-#if OPENSSL_VERSION_NUMBER >= 0x1000104fL && !defined(LIBRESSL_VERSION_NUMBER)
-	ENGINE_load_builtin_engines ();
-
-	if ((ctx->crypto_ctx->cpu_config & CPUID_RDRAND) == 0) {
-		RAND_set_rand_engine (NULL);
-	}
-#endif
-
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-	SSL_library_init ();
-#else
-	OPENSSL_init_ssl (0, NULL);
-#endif
-
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-	OPENSSL_config (NULL);
-#endif
-
-	if (RAND_poll () == 0) {
-		guchar seed[128];
-
-		/* Try to use ottery to seed rand */
-		ottery_rand_bytes (seed, sizeof (seed));
-		RAND_seed (seed, sizeof (seed));
-		rspamd_explicit_memzero (seed, sizeof (seed));
-	}
-
-	ctx->ssl_ctx = SSL_CTX_new (SSLv23_method ());
-	SSL_CTX_set_verify (ctx->ssl_ctx, SSL_VERIFY_PEER, NULL);
-	SSL_CTX_set_verify_depth (ctx->ssl_ctx, 4);
-	ssl_options = SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3;
-
-#ifdef SSL_OP_NO_COMPRESSION
-	ssl_options |= SSL_OP_NO_COMPRESSION;
-#elif OPENSSL_VERSION_NUMBER >= 0x00908000L
-	sk_SSL_COMP_zero (SSL_COMP_get_compression_methods ());
-#endif
-
-	SSL_CTX_set_options (ctx->ssl_ctx, ssl_options);
-	ctx->ssl_ctx_noverify = SSL_CTX_new (SSLv23_method ());
-	SSL_CTX_set_verify (ctx->ssl_ctx_noverify, SSL_VERIFY_NONE, NULL);
-	SSL_CTX_set_options (ctx->ssl_ctx_noverify, ssl_options);
-#endif
-#ifdef SSL_SESS_CACHE_BOTH
-	SSL_CTX_set_session_cache_mode (ctx->ssl_ctx, SSL_SESS_CACHE_BOTH);
-#endif
+	ctx->ssl_ctx = rspamd_init_ssl_ctx ();
+	ctx->ssl_ctx_noverify = rspamd_init_ssl_ctx_noverify ();
 	rspamd_random_seed_fast ();
 
 	/* Set stack size for pcre */

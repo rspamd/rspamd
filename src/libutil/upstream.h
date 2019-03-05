@@ -208,11 +208,18 @@ void rspamd_upstreams_add_watch_callback (struct upstream_list *ups,
 										  gpointer ud);
 
 /**
+ * Returns the next IP address of the upstream (internal rotation)
+ * @param up
+ * @return
+ */
+rspamd_inet_addr_t* rspamd_upstream_addr_next (struct upstream *up);
+
+/**
  * Returns the current IP address of the upstream
  * @param up
  * @return
  */
-rspamd_inet_addr_t* rspamd_upstream_addr (struct upstream *up);
+rspamd_inet_addr_t* rspamd_upstream_addr_cur (const struct upstream *up);
 
 /**
  * Add custom address for an upstream (ownership of addr is transferred to upstream)

@@ -51,6 +51,7 @@ LUA_FUNCTION_DEF (url, tostring);
 LUA_FUNCTION_DEF (url, get_raw);
 LUA_FUNCTION_DEF (url, get_tld);
 LUA_FUNCTION_DEF (url, get_flags);
+LUA_FUNCTION_DEF (url, get_protocol);
 LUA_FUNCTION_DEF (url, to_table);
 LUA_FUNCTION_DEF (url, is_phished);
 LUA_FUNCTION_DEF (url, is_redirected);
@@ -77,6 +78,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_text),
 	LUA_INTERFACE_DEF (url, get_tld),
 	LUA_INTERFACE_DEF (url, get_raw),
+	LUA_INTERFACE_DEF (url, get_protocol),
 	LUA_INTERFACE_DEF (url, to_table),
 	LUA_INTERFACE_DEF (url, is_phished),
 	LUA_INTERFACE_DEF (url, is_redirected),
@@ -607,6 +609,27 @@ lua_url_get_tld (lua_State *L)
 }
 
 /***
+ * @method url:get_protocol()
+ * Get protocol name
+ * @return {string} protocol as a string
+ */
+static gint
+lua_url_get_protocol (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url != NULL && url->url->protocol != PROTOCOL_UNKNOWN) {
+		lua_pushstring (L, rspamd_url_protocol_name (url->url->protocol));
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+/***
  * @method url:get_count()
  * Return number of occurrencies for this particular URL
  * @return {number} number of occurrencies
@@ -697,28 +720,7 @@ lua_url_to_table (lua_State *L)
 
 
 		lua_pushstring (L, "protocol");
-
-		switch (u->protocol) {
-		case PROTOCOL_FILE:
-			lua_pushstring (L, "file");
-			break;
-		case PROTOCOL_FTP:
-			lua_pushstring (L, "ftp");
-			break;
-		case PROTOCOL_HTTP:
-			lua_pushstring (L, "http");
-			break;
-		case PROTOCOL_HTTPS:
-			lua_pushstring (L, "https");
-			break;
-		case PROTOCOL_MAILTO:
-			lua_pushstring (L, "mailto");
-			break;
-		case PROTOCOL_UNKNOWN:
-		default:
-			lua_pushstring (L, "unknown");
-			break;
-		}
+		lua_pushstring (L, rspamd_url_protocol_name (u->protocol));
 		lua_settable (L, -3);
 	}
 	else {

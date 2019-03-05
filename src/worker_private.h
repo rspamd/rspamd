@@ -49,7 +49,7 @@ struct rspamd_worker_ctx {
 	/* Encryption key */
 	struct rspamd_cryptobox_keypair *key;
 	/* Keys cache */
-	struct rspamd_keypair_cache *keys_cache;
+	struct rspamd_http_context *http_ctx;
 	/* Language detector */
 	struct rspamd_lang_detector *lang_det;
 };

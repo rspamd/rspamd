@@ -22,7 +22,8 @@ rspamd_config:register_symbol({
   name = 'SIMPLE_DNS_SYNC',
   score = 1.0,
   callback = dns_sync_symbol,
-  no_squeeze = true
+  no_squeeze = true,
+  flags = 'coro',
 })
 
 

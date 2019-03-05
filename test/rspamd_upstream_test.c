@@ -87,30 +87,30 @@ rspamd_upstream_test_func (void)
 	rspamd_parse_inet_address (&paddr, "::1", 0);
 	g_assert (rspamd_upstream_add_addr (up, paddr));
 	/* Rewind to start */
-	addr = rspamd_upstream_addr (up);
-	addr = rspamd_upstream_addr (up);
+	addr = rspamd_upstream_addr_next (up);
+	addr = rspamd_upstream_addr_next (up);
 	/* cur should be zero here */
-	addr = rspamd_upstream_addr (up);
-	next_addr = rspamd_upstream_addr (up);
+	addr = rspamd_upstream_addr_next (up);
+	next_addr = rspamd_upstream_addr_next (up);
 	g_assert (rspamd_inet_address_get_af (addr) == AF_INET);
 	g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET);
-	next_addr = rspamd_upstream_addr (up);
+	next_addr = rspamd_upstream_addr_next (up);
 	g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET6);
-	next_addr = rspamd_upstream_addr (up);
+	next_addr = rspamd_upstream_addr_next (up);
 	g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET);
-	next_addr = rspamd_upstream_addr (up);
+	next_addr = rspamd_upstream_addr_next (up);
 	g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET);
-	next_addr = rspamd_upstream_addr (up);
+	next_addr = rspamd_upstream_addr_next (up);
 	g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET6);
 	/* Test errors with IPv6 */
 	rspamd_upstream_fail (up, TRUE);
 	/* Now we should have merely IPv4 addresses in rotation */
-	addr = rspamd_upstream_addr (up);
+	addr = rspamd_upstream_addr_next (up);
 	for (i = 0; i < 256; i++) {
-		next_addr = rspamd_upstream_addr (up);
+		next_addr = rspamd_upstream_addr_next (up);
 		g_assert (rspamd_inet_address_get_af (addr) == AF_INET);
 		g_assert (rspamd_inet_address_get_af (next_addr) == AF_INET);
-		g_assert (rspamd_inet_address_compare (addr, next_addr) != 0);
+		g_assert (rspamd_inet_address_compare (addr, next_addr, FALSE) != 0);
 		addr = next_addr;
 	}
 	rspamd_upstreams_destroy (nls);

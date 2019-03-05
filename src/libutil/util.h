@@ -349,6 +349,9 @@ struct rspamd_external_libs_ctx;
  */
 struct rspamd_external_libs_ctx* rspamd_init_libs (void);
 
+gpointer rspamd_init_ssl_ctx (void);
+gpointer rspamd_init_ssl_ctx_noverify (void);
+
 /**
  * Configure libraries
  */
