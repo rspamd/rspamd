@@ -51,7 +51,8 @@ rspamd_http_keepalive_queue_cleanup (GQueue *conns)
 
 		cbd = (struct rspamd_http_keepalive_cbdata *)cur->data;
 		rspamd_http_connection_unref (cbd->conn);
-		event_del (&cbd->ev);
+		/* Event is deleted here by deletion of the ev_base */
+		/* event_del (&cbd->ev); */
 		g_free (cbd);
 
 		cur = cur->next;
