@@ -682,7 +682,7 @@ local check_from_id = rspamd_config:register_symbol{
 
 rspamd_config:register_symbol{
   name = 'FROM_NO_DN',
-  score = 0,
+  score = 0.0,
   group = 'headers',
   parent = check_from_id,
   type = 'virtual',

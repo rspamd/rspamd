@@ -503,7 +503,7 @@ rspamd_config:register_symbol{
   name = 'TAGGED_RCPT',
   description = 'SMTP recipients have plus tags',
   group = 'headers',
-  score = 0,
+  score = 0.0,
 }
 rspamd_config:register_symbol{
   type = 'virtual',
@@ -511,7 +511,7 @@ rspamd_config:register_symbol{
   name = 'TAGGED_FROM',
   description = 'SMTP from has plus tags',
   group = 'headers',
-  score = 0,
+  score = 0.0,
 }
 
 local check_from_display_name = rspamd_config:register_symbol{
@@ -560,7 +560,7 @@ rspamd_config:register_symbol{
   name = 'SPOOF_DISPLAY_NAME',
   description = 'Display name is being used to spoof and trick the recipient',
   group = 'headers',
-  score = 8,
+  score = 8.0,
 }
 
 rspamd_config:register_symbol{
@@ -569,7 +569,7 @@ rspamd_config:register_symbol{
   name = 'FROM_NEQ_DISPLAY_NAME',
   group = 'headers',
   description = 'Display name contains an email address different to the From address',
-  score = 4,
+  score = 4.0,
 }
 
 rspamd_config.SPOOF_REPLYTO = {
