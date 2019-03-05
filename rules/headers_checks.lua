@@ -60,7 +60,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = rcvd_cb_id,
   type = 'virtual',
-  description = 'No received',
+  description = 'Message has no Received headers',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -68,7 +68,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = rcvd_cb_id,
   type = 'virtual',
-  description = 'One received',
+  description = 'Message has one Received header',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -76,7 +76,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = rcvd_cb_id,
   type = 'virtual',
-  description = 'Two received',
+  description = 'Message has two Received headers',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -84,7 +84,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = rcvd_cb_id,
   type = 'virtual',
-  description = '3-5 received',
+  description = 'Message has 3-5 Received headers',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -92,7 +92,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = rcvd_cb_id,
   type = 'virtual',
-  description = '5-7 received',
+  description = 'Message has 5-7 Received headers',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -100,7 +100,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = rcvd_cb_id,
   type = 'virtual',
-  description = '7-11 received',
+  description = 'Message has 7-11 Received headers',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -108,7 +108,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = rcvd_cb_id,
   type = 'virtual',
-  description = '12+ received',
+  description = 'Message has 12 or more Received headers',
   group = 'headers',
 }
 
