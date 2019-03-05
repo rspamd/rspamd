@@ -300,7 +300,7 @@ rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key *k1,
 {
 	if (k1->host && k2->host) {
 		if (rspamd_inet_address_port_equal (k1->addr, k2->addr)) {
-			return strcmp (k1->host, k2->host);
+			return strcmp (k1->host, k2->host) == 0;
 		}
 	}
 	else if (!k1->host && !k2->host) {
@@ -330,10 +330,6 @@ rspamd_http_context_check_keepalive (struct rspamd_http_context *ctx,
 
 		/* Use stack based approach */
 
-		msg_debug_http_context ("check keepalive element %s (%s), %d elts",
-				rspamd_inet_address_to_string_pretty (phk->addr),
-				phk->host, conns->length);
-
 		if (g_queue_get_length (conns) > 0) {
 			struct rspamd_http_keepalive_cbdata *cbd;
 			struct rspamd_http_connection *conn;
@@ -343,8 +339,17 @@ rspamd_http_context_check_keepalive (struct rspamd_http_context *ctx,
 			conn = cbd->conn;
 			g_free (cbd);
 
+			msg_debug_http_context ("reused keepalive element %s (%s), %d connections queued",
+					rspamd_inet_address_to_string_pretty (phk->addr),
+					phk->host, conns->length);
+
 			/* We transfer refcount here! */
 			return conn;
+		}
+		else {
+			msg_debug_http_context ("found empty keepalive element %s (%s), cannot reuse",
+					rspamd_inet_address_to_string_pretty (phk->addr),
+					phk->host);
 		}
 	}
 
@@ -493,7 +498,7 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 			rspamd_http_keepalive_handler,
 			cbdata);
 
-	msg_debug_http_context ("push keepalive element %s (%s), %d connections left, %.1f timeout",
+	msg_debug_http_context ("push keepalive element %s (%s), %d connections queued, %.1f timeout",
 			rspamd_inet_address_to_string_pretty (cbdata->conn->keepalive_hash_key->addr),
 			cbdata->conn->keepalive_hash_key->host,
 			cbdata->queue->length,
