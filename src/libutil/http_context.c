@@ -381,21 +381,26 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 
 	g_assert (conn->keepalive_hash_key != NULL);
 
-	/* Move connection to the keepalive pool */
-	cbdata = g_malloc0 (sizeof (*cbdata));
-
-	cbdata->conn = rspamd_http_connection_ref (conn);
-	g_queue_push_tail (&conn->keepalive_hash_key->conns, cbdata);
-	cbdata->link = conn->keepalive_hash_key->conns.tail;
-	cbdata->queue = &conn->keepalive_hash_key->conns;
-	conn->finished = FALSE;
-
-	event_set (&cbdata->ev, conn->fd, EV_READ|EV_TIMEOUT,
-			rspamd_http_keepalive_handler,
-			&cbdata);
-
 	if (msg) {
 		const rspamd_ftok_t *tok;
+		rspamd_ftok_t cmp;
+
+		tok = rspamd_http_message_find_header (msg, "Connection");
+
+		if (!tok) {
+			/* Server has not stated that it can do keep alive */
+			conn->finished = TRUE;
+			return;
+		}
+
+		RSPAMD_FTOK_ASSIGN (&cmp, "keep-alive");
+
+		if (rspamd_ftok_casecmp (&cmp, tok) != 0) {
+			conn->finished = TRUE;
+			return;
+		}
+
+		/* We can proceed, check timeout */
 
 		tok = rspamd_http_message_find_header (msg, "Keep-Alive");
 
@@ -412,7 +417,7 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 				if (end_pos) {
 					if (rspamd_strtol (tok->begin + pos + 1,
 							(end_pos - tok->begin) - pos - 1, &real_timeout) &&
-							real_timeout > 0) {
+						real_timeout > 0) {
 						timeout = real_timeout;
 					}
 				}
@@ -426,6 +431,19 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 			}
 		}
 	}
+
+	/* Move connection to the keepalive pool */
+	cbdata = g_malloc0 (sizeof (*cbdata));
+
+	cbdata->conn = rspamd_http_connection_ref (conn);
+	g_queue_push_tail (&conn->keepalive_hash_key->conns, cbdata);
+	cbdata->link = conn->keepalive_hash_key->conns.tail;
+	cbdata->queue = &conn->keepalive_hash_key->conns;
+	conn->finished = FALSE;
+
+	event_set (&cbdata->ev, conn->fd, EV_READ|EV_TIMEOUT,
+			rspamd_http_keepalive_handler,
+			&cbdata);
 
 	double_to_tv (timeout, &tv);
 	event_base_set (ev_base, &cbdata->ev);
