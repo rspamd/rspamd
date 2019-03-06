@@ -2429,13 +2429,21 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 guint64
 rspamd_hash_seed (void)
 {
+#if 0
 	static guint64 seed;
 
 	if (seed == 0) {
 		seed = ottery_rand_uint64 ();
 	}
+#endif
 
-	return seed;
+	/* Proved to be random, I promise! */
+	/*
+	 * TODO: discover if it worth to use random seed on run
+	 * with ordinary hash function or we need to switch to
+	 * siphash1-3 or other slow cooker function...
+	 */
+	return 0xabf9727ba290690bULL;
 }
 
 static inline gdouble
