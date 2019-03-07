@@ -1280,6 +1280,13 @@ UCL_EXTERN bool ucl_parser_set_filevars (struct ucl_parser *parser, const char *
 		bool need_expand);
 
 /**
+ * Returns current file for the parser
+ * @param parser parser object
+ * @return current file or NULL if parsing memory
+ */
+UCL_EXTERN const char *ucl_parser_get_cur_file (struct ucl_parser *parser);
+
+/**
  * Defines special handler for certain types of data (identified by magic)
  */
 typedef bool (*ucl_parser_special_handler_t) (struct ucl_parser *parser,
@@ -1300,12 +1307,38 @@ struct ucl_parser_special_handler {
 };
 
 /**
- * Add special handler for a parser
+ * Add special handler for a parser, handles special sequences identified by magic
  * @param parser parser structure
  * @param handler handler structure
  */
 UCL_EXTERN void ucl_parser_add_special_handler (struct ucl_parser *parser,
 		struct ucl_parser_special_handler *handler);
+
+/**
+ * Handler for include traces:
+ * @param parser parser object
+ * @param parent where include is done from
+ * @param args arguments to an include
+ * @param path path of the include
+ * @param pathlen length of the path
+ * @param user_data opaque userdata
+ */
+typedef void (ucl_include_trace_func_t) (struct ucl_parser *parser,
+		const ucl_object_t *parent,
+		const ucl_object_t *args,
+		const char *path,
+		size_t pathlen,
+		void *user_data);
+
+/**
+ * Register trace function for an include handler
+ * @param parser parser object
+ * @param func function to trace includes
+ * @param user_data opaque data
+ */
+UCL_EXTERN void ucl_parser_set_include_tracer (struct ucl_parser *parser,
+											   ucl_include_trace_func_t func,
+											   void *user_data);
 
 /** @} */
 

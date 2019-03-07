@@ -1490,6 +1490,17 @@ ucl_include_common (const unsigned char *data, size_t len,
 	params.strat = UCL_DUPLICATE_APPEND;
 	params.must_exist = !default_try;
 
+	if (parser->include_trace_func) {
+		const ucl_object_t *parent = NULL;
+
+		if (parser->stack) {
+			parent = parser->stack->obj;
+		}
+
+		parser->include_trace_func (parser, parent, args,
+				data, len, parser->include_trace_ud);
+	}
+
 	/* Process arguments */
 	if (args != NULL && args->type == UCL_OBJECT) {
 		while ((param = ucl_object_iterate (args, &it, true)) != NULL) {
@@ -3839,4 +3850,19 @@ ucl_comments_add (ucl_object_t *comments, const ucl_object_t *obj,
 		ucl_object_insert_key (comments, ucl_object_fromstring (comment),
 				(const char *)&obj, sizeof (void *), true);
 	}
+}
+
+void
+ucl_parser_set_include_tracer (struct ucl_parser *parser,
+							   ucl_include_trace_func_t func,
+							   void *user_data)
+{
+	parser->include_trace_func = func;
+	parser->include_trace_ud = user_data;
+}
+
+const char *
+ucl_parser_get_cur_file (struct ucl_parser *parser)
+{
+	return parser->cur_file;
 }

@@ -255,7 +255,9 @@ struct ucl_parser {
 	struct ucl_stack *stack;
 	struct ucl_chunk *chunks;
 	struct ucl_pubkey *keys;
-    struct ucl_parser_special_handler *special_handlers;
+	struct ucl_parser_special_handler *special_handlers;
+	ucl_include_trace_func_t *include_trace_func;
+	void *include_trace_ud;
 	struct ucl_variable *variables;
 	ucl_variable_handler var_handler;
 	void *var_data;
