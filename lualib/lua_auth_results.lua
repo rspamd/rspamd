@@ -15,9 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
-local global = require "global_functions"
 local rspamd_util = require "rspamd_util"
-local fun = require "fun"
 
 local default_settings = {
   spf_symbols = {
