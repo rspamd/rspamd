@@ -2373,11 +2373,28 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 		return;
 	}
 
-	gint visible_part_len = dest->len - href_offset;
-	url->visible_part = rspamd_mempool_alloc0(pool, visible_part_len +1);
-	url->visible_partlen = visible_part_len;
-	gchar *visible_part = g_strndup(dest->data + href_offset, visible_part_len);
-	g_stpcpy(url->visible_part, visible_part);
+	url->visible_part = rspamd_mempool_alloc0(pool, dest->len - href_offset+1);
+	gchar *current_processed_char = dest->data + href_offset;
+	gchar *current_char_in_struct = url->visible_part;
+	gboolean previous_char_was_space = false;
+
+	while (current_processed_char < (gchar*) dest->data + dest->len) {
+		if (g_ascii_isspace(*current_processed_char)) {
+			if (previous_char_was_space) {
+				current_processed_char++;
+				continue;
+			}
+			previous_char_was_space = true;
+			*current_char_in_struct = ' ';
+		} else {
+			*current_char_in_struct = *current_processed_char;
+			previous_char_was_space = false;
+		}
+		current_char_in_struct++;
+		current_processed_char++;
+	}
+	*current_char_in_struct = '\0';
+	url->visible_partlen = current_char_in_struct - url->visible_part;
 
 	rspamd_html_url_is_phished (pool, url,
 			dest->data + href_offset,
