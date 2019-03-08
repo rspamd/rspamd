@@ -1016,8 +1016,9 @@ local function check_mime_type(task)
               if ext2 then
                 local enc_ext = gen_extension(fl[1].name)
 
-                if enc_ext and
-                    not string.match(ext2, '^%d+$')
+                if enc_ext
+                    and settings['bad_extensions'][enc_ext]
+                    and not string.match(ext2, '^%d+$')
                     and enc_ext ~= ext2 then
                   task:insert_result(settings['symbol_double_extension'], 2.0,
                       string.format("%s!=%s", ext2, enc_ext))
