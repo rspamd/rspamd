@@ -721,7 +721,7 @@ LUA_FUNCTION_DEF (config, has_torch);
 LUA_FUNCTION_DEF (config, experimental_enabled);
 
 /***
- * @method rspamd_config:load_ucl(filename)
+ * @method rspamd_config:load_ucl(filename[, include_trace])
  * Loads config from the UCL file (but does not perform parsing using rcl)
  * @param {string} filename file to load
  * @return true or false + error message
@@ -3705,7 +3705,7 @@ lua_config_load_ucl (lua_State *L)
 
 		lua_pop (L, 1);
 
-		if (!rspamd_config_parse_ucl (cfg, filename, paths, &err)) {
+		if (!rspamd_config_parse_ucl (cfg, filename, paths, NULL, NULL, &err)) {
 			lua_pushboolean (L, false);
 			lua_pushfstring (L, "failed to load config: %s", err->message);
 			g_error_free (err);

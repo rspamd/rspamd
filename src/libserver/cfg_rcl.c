@@ -3541,8 +3541,12 @@ rspamd_config_calculate_cksum (struct rspamd_config *cfg)
 }
 
 gboolean
-rspamd_config_parse_ucl (struct rspamd_config *cfg, const gchar *filename,
-					GHashTable *vars, GError **err)
+rspamd_config_parse_ucl (struct rspamd_config *cfg,
+						 const gchar *filename,
+						 GHashTable *vars,
+						 ucl_include_trace_func_t inc_trace,
+						 void *trace_data,
+						 GError **err)
 {
 	struct stat st;
 	gint fd;
@@ -3615,6 +3619,10 @@ rspamd_config_parse_ucl (struct rspamd_config *cfg, const gchar *filename,
 	rspamd_ucl_add_conf_macros (parser, cfg);
 	ucl_parser_set_filevars (parser, filename, true);
 
+	if (inc_trace) {
+		ucl_parser_set_include_tracer (parser, inc_trace, trace_data);
+	}
+
 	if (decrypt_keypair) {
 		struct ucl_parser_special_handler *decrypt_handler;
 
@@ -3655,7 +3663,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	struct rspamd_rcl_section *top, *logger_section;
 	const ucl_object_t *logger_obj;
 
-	if (!rspamd_config_parse_ucl (cfg, filename, vars, &err)) {
+	if (!rspamd_config_parse_ucl (cfg, filename, vars, NULL, NULL, &err)) {
 		msg_err_config_forced ("failed to load config: %e", err);
 		g_error_free (err);
 

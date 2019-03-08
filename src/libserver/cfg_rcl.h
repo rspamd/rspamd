@@ -479,6 +479,8 @@ void rspamd_config_calculate_cksum (struct rspamd_config *cfg);
 gboolean rspamd_config_parse_ucl (struct rspamd_config *cfg,
 								  const gchar *filename,
 								  GHashTable *vars,
+								  ucl_include_trace_func_t inc_trace,
+								  void *trace_data,
 								  GError **err);
 gboolean rspamd_config_read (struct rspamd_config *cfg,
 							 const gchar *filename,
