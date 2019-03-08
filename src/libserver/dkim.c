@@ -999,11 +999,24 @@ rspamd_create_dkim_context (const gchar *sig,
 				}
 			}
 			else if (p == end) {
-				if (param == DKIM_PARAM_UNKNOWN ||
-					!parser_funcs[param](ctx, c, p - c, err)) {
+				if (param == DKIM_PARAM_UNKNOWN) {
 					state = DKIM_STATE_ERROR;
 				}
 				else {
+					gint tlen = p - c;
+					const gchar *tmp = p - 1;
+
+					while (tlen > 0) {
+						if (!g_ascii_isspace (*tmp)) {
+							break;
+						}
+						tlen --;
+						tmp --;
+					}
+
+					if (!parser_funcs[param](ctx, c, tlen, err)) {
+						state = DKIM_STATE_ERROR;
+					}
 					/* Finish processing */
 					p++;
 				}
