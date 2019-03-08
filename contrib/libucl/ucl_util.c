@@ -1394,7 +1394,9 @@ ucl_include_file_single (const unsigned char *data, size_t len,
  */
 static bool
 ucl_include_file (const unsigned char *data, size_t len,
-		struct ucl_parser *parser, struct ucl_include_params *params)
+				  struct ucl_parser *parser,
+				  struct ucl_include_params *params,
+				  const ucl_object_t *args)
 {
 	const unsigned char *p = data, *end = data + len;
 	bool need_glob = false;
@@ -1424,6 +1426,20 @@ ucl_include_file (const unsigned char *data, size_t len,
 				return (!params->must_exist || false);
 			}
 			for (i = 0; i < globbuf.gl_pathc; i ++) {
+
+				if (parser->include_trace_func) {
+					const ucl_object_t *parent = NULL;
+
+					if (parser->stack) {
+						parent = parser->stack->obj;
+					}
+
+					parser->include_trace_func (parser, parent, NULL,
+							globbuf.gl_pathv[i],
+							strlen (globbuf.gl_pathv[i]),
+							parser->include_trace_ud);
+				}
+
 				if (!ucl_include_file_single ((unsigned char *)globbuf.gl_pathv[i],
 						strlen (globbuf.gl_pathv[i]), parser, params)) {
 					if (params->soft_fail) {
@@ -1565,7 +1581,7 @@ ucl_include_common (const unsigned char *data, size_t len,
 		}
 		else if (data != NULL) {
 			/* Try to load a file */
-			return ucl_include_file (data, len, parser, &params);
+			return ucl_include_file (data, len, parser, &params, args);
 		}
 	}
 	else {
@@ -1580,7 +1596,7 @@ ucl_include_common (const unsigned char *data, size_t len,
 				snprintf (ipath, sizeof (ipath), "%s/%.*s", ucl_object_tostring(param),
 						(int)len, data);
 				if ((search = ucl_include_file (ipath, strlen (ipath),
-						parser, &params))) {
+						parser, &params, args))) {
 					if (!params.allow_glob) {
 						break;
 					}
