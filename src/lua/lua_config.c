@@ -3661,6 +3661,60 @@ lua_config_experimental_enabled (lua_State *L)
 	return 1;
 }
 
+struct rspamd_lua_include_trace_cbdata {
+	lua_State *L;
+	gint cbref;
+};
+
+static void
+lua_include_trace_cb (struct ucl_parser *parser,
+					  const ucl_object_t *parent,
+					  const ucl_object_t *args,
+					  const char *path,
+					  size_t pathlen,
+					  void *user_data)
+{
+	struct rspamd_lua_include_trace_cbdata *cbdata =
+			(struct rspamd_lua_include_trace_cbdata *)user_data;
+	gint err_idx;
+	GString *tb;
+	lua_State *L;
+
+	L = cbdata->L;
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	lua_rawgeti (L, LUA_REGISTRYINDEX, cbdata->cbref);
+	/* Current filename */
+	lua_pushstring (L, ucl_parser_get_cur_file (parser));
+	/* Included filename */
+	lua_pushlstring (L, path, pathlen);
+	/* Params */
+	if (args) {
+		ucl_object_push_lua (L, args, true);
+	}
+	else {
+		lua_newtable (L);
+	}
+	/* Parent */
+	if (parent) {
+		lua_pushstring (L, ucl_object_key (parent));
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	if (lua_pcall (L, 4, 0, err_idx) != 0) {
+		tb = lua_touserdata (L, -1);
+		msg_err ("lua call to local include trace failed: %v", tb);
+		if (tb) {
+			g_string_free (tb, TRUE);
+		}
+	}
+
+	lua_settop (L, err_idx - 1);
+}
+
 #define LUA_TABLE_TO_HASH(htb, idx) do { \
 	lua_pushstring (L, (idx)); \
 	lua_gettable (L, -2); \
@@ -3705,13 +3759,35 @@ lua_config_load_ucl (lua_State *L)
 
 		lua_pop (L, 1);
 
-		if (!rspamd_config_parse_ucl (cfg, filename, paths, NULL, NULL, &err)) {
-			lua_pushboolean (L, false);
-			lua_pushfstring (L, "failed to load config: %s", err->message);
-			g_error_free (err);
-			g_hash_table_unref (paths);
+		if (lua_isfunction (L, 3)) {
+			struct rspamd_lua_include_trace_cbdata cbd;
 
-			return 2;
+			lua_pushvalue (L, 3);
+			cbd.cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+			cbd.L = L;
+
+			if (!rspamd_config_parse_ucl (cfg, filename, paths,
+					lua_include_trace_cb, &cbd, &err)) {
+				luaL_unref (L, LUA_REGISTRYINDEX, cbd.cbref);
+				lua_pushboolean (L, false);
+				lua_pushfstring (L, "failed to load config: %s", err->message);
+				g_error_free (err);
+				g_hash_table_unref (paths);
+
+				return 2;
+			}
+
+			luaL_unref (L, LUA_REGISTRYINDEX, cbd.cbref);
+		}
+		else {
+			if (!rspamd_config_parse_ucl (cfg, filename, paths, NULL, NULL, &err)) {
+				lua_pushboolean (L, false);
+				lua_pushfstring (L, "failed to load config: %s", err->message);
+				g_error_free (err);
+				g_hash_table_unref (paths);
+
+				return 2;
+			}
 		}
 
 		rspamd_rcl_maybe_apply_lua_transform (cfg);
