@@ -971,15 +971,31 @@ rspamd_create_dkim_context (const gchar *sig,
 		case DKIM_STATE_VALUE:
 			if (*p == ';') {
 				if (param == DKIM_PARAM_UNKNOWN ||
-					p - c == 0 ||
-					!parser_funcs[param](ctx, c, p - c, err)) {
+					p - c == 0) {
 					state = DKIM_STATE_ERROR;
 				}
 				else {
-					state = DKIM_STATE_SKIP_SPACES;
-					next_state = DKIM_STATE_TAG;
-					p++;
-					taglen = 0;
+					/* Cut trailing spaces for value */
+					gint tlen = p - c;
+					const gchar *tmp = p - 1;
+
+					while (tlen > 0) {
+						if (!g_ascii_isspace (*tmp)) {
+							break;
+						}
+						tlen --;
+						tmp --;
+					}
+
+					if (!parser_funcs[param](ctx, c, tlen, err)) {
+						state = DKIM_STATE_ERROR;
+					}
+					else {
+						state = DKIM_STATE_SKIP_SPACES;
+						next_state = DKIM_STATE_TAG;
+						p++;
+						taglen = 0;
+					}
 				}
 			}
 			else if (p == end) {
