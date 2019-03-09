@@ -663,8 +663,8 @@ lua_url_get_visible (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_url *url = lua_check_url (L, 1);
 
-	if (url != NULL) {
-		lua_pushlstring (L, url->url->visible_part, url->url->visible_partlen);
+	if (url != NULL && url->url->visible_part) {
+		lua_pushstring (L, url->url->visible_part);
 	}
 	else {
 		lua_pushnil (L);

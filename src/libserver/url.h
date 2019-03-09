@@ -63,7 +63,6 @@ struct rspamd_url {
 	guint tldlen;
 	guint urllen;
 	guint rawlen;
-	guint visible_partlen;
 
 	enum rspamd_url_flags flags;
 	guint count;
