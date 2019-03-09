@@ -28,6 +28,7 @@ enum rspamd_url_flags {
 	RSPAMD_URL_FLAG_SCHEMALESS = 1 << 15,
 	RSPAMD_URL_FLAG_UNNORMALISED = 1 << 16,
 	RSPAMD_URL_FLAG_ZW_SPACES = 1 << 17,
+	RSPAMD_URL_FLAG_DISPLAY_URL = 1 << 18,
 };
 
 struct rspamd_url_tag {
@@ -48,6 +49,7 @@ struct rspamd_url {
 	gchar *fragment;
 	gchar *surbl;
 	gchar *tld;
+	gchar *visible_part;
 
 	struct rspamd_url *phished_url;
 
@@ -61,6 +63,7 @@ struct rspamd_url {
 	guint tldlen;
 	guint urllen;
 	guint rawlen;
+	guint visible_partlen;
 
 	enum rspamd_url_flags flags;
 	guint count;
