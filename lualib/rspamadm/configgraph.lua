@@ -46,6 +46,8 @@ local function output_dot(opts, nodes, adjastency)
     if node.exists then
       if node.priority >= 10 then
         attrs[#attrs + 1] = "color=red"
+      elseif node.priority > 0 then
+        attrs[#attrs + 1] = "color=blue"
       end
     else
       if opts.all then
