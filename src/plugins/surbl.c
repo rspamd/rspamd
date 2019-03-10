@@ -641,6 +641,42 @@ register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix,
 	}
 }
 
+static void
+surbl_module_add_ip (const ucl_object_t *ip, const gchar *symbol,
+					 struct suffix_item* suffix,
+					 struct rspamd_config* cfg)
+{
+	gchar* p;
+	guint32 bit;
+	const gchar* ip_val;
+	struct surbl_bit_item* new_bit;
+
+	ip_val = ucl_obj_tostring (ip);
+	new_bit = rspamd_mempool_alloc (
+			cfg->cfg_pool,
+			sizeof(struct surbl_bit_item));
+	if (inet_pton (AF_INET, ip_val, &bit) != 1) {
+		msg_err_config ("cannot parse ip %s: %s", ip_val,
+				strerror (errno));
+		return;
+	}
+
+	new_bit->bit = bit;
+	new_bit->symbol = rspamd_mempool_strdup (
+			cfg->cfg_pool,
+			symbol);
+	/* Convert to uppercase */
+	p = new_bit->symbol;
+	while (*p) {
+		*p = g_ascii_toupper (*p);
+		p++;
+	}
+	msg_debug_config ("add new IP suffix: %d with symbol: %s",
+			(gint)new_bit->bit, new_bit->symbol);
+	g_hash_table_insert (suffix->ips, &new_bit->bit,
+			new_bit);
+}
+
 static gint
 surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 {
@@ -649,7 +685,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 	gint cb_id;
 	gint nrules = 0;
 	struct suffix_item* new_suffix;
-	const gchar* ip_val, *monitored_domain = NULL;
+	const gchar *monitored_domain = NULL;
 	struct surbl_bit_item* new_bit;
 	ucl_object_t *ropts;
 	struct surbl_ctx *surbl_module_ctx = surbl_get_context (cfg);
@@ -835,7 +871,6 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 		if (cur != NULL && cur->type == UCL_OBJECT) {
 			ucl_object_iter_t it = NULL;
 			const ucl_object_t* cur_bit;
-			guint32 bit;
 
 			new_suffix->ips = g_hash_table_new (g_int_hash, g_int_equal);
 			rspamd_mempool_add_destructor (cfg->cfg_pool,
@@ -844,30 +879,28 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 
 			while ((cur_bit = ucl_object_iterate (cur, &it, true)) != NULL) {
 				if (ucl_object_key (cur_bit) != NULL) {
-					gchar* p;
-					ip_val = ucl_obj_tostring (cur_bit);
-					new_bit = rspamd_mempool_alloc (
-							cfg->cfg_pool,
-							sizeof(struct surbl_bit_item));
-					if (inet_pton (AF_INET, ip_val, &bit) != 1) {
-						msg_err_config ("cannot parse ip %s: %s", ip_val,
-								strerror (errno));
-						continue;
+					if (ucl_object_type (cur_bit) == UCL_STRING) {
+						/* Single IP */
+						surbl_module_add_ip (cur_bit, ucl_object_key (cur_bit),
+								new_suffix, cfg);
 					}
-					new_bit->bit = bit;
-					new_bit->symbol = rspamd_mempool_strdup (
-							cfg->cfg_pool,
-							ucl_object_key (cur_bit));
-					/* Convert to uppercase */
-					p = new_bit->symbol;
-					while (*p) {
-						*p = g_ascii_toupper (*p);
-						p++;
+					else if (ucl_object_type (cur_bit) == UCL_ARRAY) {
+						ucl_object_iter_t ar_it = NULL;
+						const ucl_object_t* cur_ar;
+
+						/* Array of IPs */
+						while ((cur_ar = ucl_object_iterate (cur_bit, &ar_it,
+								true)) != NULL) {
+							if (ucl_object_type (cur_ar) == UCL_STRING) {
+								surbl_module_add_ip (cur_ar,
+										ucl_object_key (cur_bit),
+										new_suffix, cfg);
+							}
+							else {
+								msg_err_config ("garbadge in ips element");
+							}
+						}
 					}
-					msg_debug_config ("add new IP suffix: %d with symbol: %s",
-							(gint)new_bit->bit, new_bit->symbol);
-					g_hash_table_insert (new_suffix->ips, &new_bit->bit,
-							new_bit);
 				}
 			}
 		}
