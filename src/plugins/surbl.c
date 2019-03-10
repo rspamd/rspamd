@@ -620,9 +620,16 @@ register_bit_symbols (struct rspamd_config *cfg, struct suffix_item *suffix,
 
 		while (g_hash_table_iter_next (&it, &k, &v)) {
 			bit = v;
-			rspamd_symcache_add_symbol (cfg->cache, bit->symbol,
-					0, NULL, NULL,
-					SYMBOL_TYPE_VIRTUAL, parent_id);
+
+			/*
+			 * We can have multiple IPs mapped to a single symbol,
+			 * so skip symbol's registration to avoid duplicates
+			 */
+			if (rspamd_symcache_find_symbol (cfg->cache, bit->symbol) == -1) {
+				rspamd_symcache_add_symbol (cfg->cache, bit->symbol,
+						0, NULL, NULL,
+						SYMBOL_TYPE_VIRTUAL, parent_id);
+			}
 			msg_debug_config ("bit: %d", bit->bit);
 		}
 	}
