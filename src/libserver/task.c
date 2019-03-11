@@ -822,7 +822,12 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 								"Unknown statistics error");
 					}
 
-					msg_err_task ("learn error: %e", stat_error);
+					if (stat_error->code >= 400) {
+						msg_err_task ("learn error: %e", stat_error);
+					}
+					else {
+						msg_notice_task ("skip learning: %e", stat_error);
+					}
 
 					if (!(task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO)) {
 						task->err = stat_error;
