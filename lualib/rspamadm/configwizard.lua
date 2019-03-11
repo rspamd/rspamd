@@ -23,6 +23,7 @@ local lua_stat_tools = require "lua_stat"
 local lua_redis = require "lua_redis"
 local ucl = require "ucl"
 local argparse = require "argparse"
+local fun = require "fun"
 
 local plugins_stat = require "plugins_stats"
 
@@ -51,7 +52,9 @@ parser:argument "checks"
 local redis_params
 
 local function printf(fmt, ...)
-  io.write(string.format(fmt, ...))
+  if fmt then
+    io.write(string.format(fmt, ...))
+  end
   io.write('\n')
 end
 
@@ -264,6 +267,70 @@ local function setup_dkim_signing(cfg, changes)
     return string.sub(path, 1, string.len(path) - 1)
   end
 
+  printf('How would you like to set up DKIM signing?')
+  printf('1. Use domain from %s for sign', highlight('mime from header'))
+  printf('2. Use domain from %s for sign', highlight('SMTP envelope from'))
+  printf('3. Use domain from %s for sign', highlight('authenticated user'))
+  printf('4. Sign all mail from %s', highlight('specific networks'))
+  printf()
+
+  local sign_type = readline_default('Enter your choice (1, 2, 3, 4) [default: 1]: ', '1')
+  local sign_networks
+  local allow_mismatch
+  local auth_only
+  local use_esld
+  local sign_domain
+
+  local defined_auth_types = {'header', 'envelope', 'auth', 'recipient'}
+
+  if sign_type == '4' then
+    repeat
+      sign_networks = readline_default('Enter list of networks to perform dkim signing: ',
+          '')
+    until #sign_networks ~= 0
+
+    sign_networks = fun.totable(fun.map(lua_util.rspamd_str_trim,
+        lua_util.str_split(sign_networks, ',; ')))
+    printf('What domain would you like to use for signing?')
+    printf('* %s to use mime from domain', highlight('header'))
+    printf('* %s to use SMTP from domain', highlight('envelope'))
+    printf('* %s to use domain from SMTP auth', highlight('auth'))
+    printf('* %s to use domain from SMTP recipient', highlight('recipient'))
+    printf('* anything else to use as a %s domain (e.g. `example.com`)', highlight('static'))
+    printf()
+
+    sign_domain = readline_default('Enter your choice [default: header]: ', 'header')
+  else
+    if sign_type == '1' then
+      sign_domain = 'header'
+    elseif sign_domain == '2' then
+      sign_domain = 'envelope'
+    else
+      sign_domain = 'auth'
+    end
+  end
+
+  if sign_type ~= '3' then
+    auth_only = ask_yes_no(
+        string.format('Do you want to sign mail from %s only? ',
+            highlight('authenticated users')), true)
+  else
+    auth_only = true
+  end
+
+  if fun.any(function(s) return s == sign_domain end, defined_auth_types) then
+    -- Allow mismatch
+    allow_mismatch = ask_yes_no(
+        string.format('Allow data %s, e.g. if mime from domain is not equal to authenticated user domain? ',
+            highlight('mismatch')), true)
+    -- ESLD check
+    use_esld = ask_yes_no(
+        string.format('Do you want to use %s domain (e.g. example.com instead of foo.example.com)? ',
+            highlight('effective')), true)
+  else
+    allow_mismatch = true
+  end
+
   local domains = {}
   local has_domains = false
 
@@ -281,12 +348,12 @@ local function setup_dkim_signing(cfg, changes)
   end
 
   local function print_domains()
-    print("Domains configured:")
+    printf("Domains configured:")
     for k,v in pairs(domains) do
       printf("Domain: %s, selector: %s, privkey: %s", highlight(k),
           v.selector, v.privkey)
     end
-    print("--")
+    printf("--")
   end
 
   repeat
@@ -333,6 +400,23 @@ local function setup_dkim_signing(cfg, changes)
   until not ask_yes_no("Do you wish to add another DKIM domain?")
 
   changes.l['dkim_signing.conf'] = {domain = domains}
+  local res_tbl = changes.l['dkim_signing.conf']
+
+  if sign_networks then
+    res_tbl.sign_networks = sign_networks
+    res_tbl.use_domain_sign_networks = sign_domain
+  else
+    res_tbl.use_domain = sign_domain
+  end
+
+  if allow_mismatch then
+    res_tbl.allow_hdrfrom_mismatch = true
+    res_tbl.allow_hdrfrom_mismatch_sign_networks = true
+    res_tbl.allow_username_mismatch = true
+  end
+
+  res_tbl.use_esld = use_esld
+  res_tbl.auth_only = auth_only
 end
 
 local function check_redis_classifier(cls, changes)
