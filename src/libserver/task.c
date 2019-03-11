@@ -819,7 +819,9 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 					if (stat_error == NULL) {
 						g_set_error (&stat_error,
 								g_quark_from_static_string ("stat"), 500,
-								"Unknown statistics error");
+								"Unknown statistics error, found on stage %s;"
+								" classifier: %s",
+								rspamd_task_stage_name (st), task->classifier);
 					}
 
 					if (stat_error->code >= 400) {
@@ -1701,4 +1703,71 @@ rspamd_task_set_finish_time (struct rspamd_task *task)
 	}
 
 	return FALSE;
+}
+
+const gchar *
+rspamd_task_stage_name (enum rspamd_task_stage stg)
+{
+	const gchar *ret = "unknown stage";
+
+	switch (stg) {
+	case RSPAMD_TASK_STAGE_CONNECT:
+		ret = "connect";
+		break;
+	case RSPAMD_TASK_STAGE_ENVELOPE:
+		ret = "envelope";
+		break;
+	case RSPAMD_TASK_STAGE_READ_MESSAGE:
+		ret = "read_message";
+		break;
+	case RSPAMD_TASK_STAGE_PRE_FILTERS:
+		ret = "prefilters";
+		break;
+	case RSPAMD_TASK_STAGE_PROCESS_MESSAGE:
+		ret = "process_message";
+		break;
+	case RSPAMD_TASK_STAGE_FILTERS:
+		ret = "filters";
+		break;
+	case RSPAMD_TASK_STAGE_CLASSIFIERS_PRE:
+		ret = "classifiers_pre";
+		break;
+	case RSPAMD_TASK_STAGE_CLASSIFIERS:
+		ret = "classifiers";
+		break;
+	case RSPAMD_TASK_STAGE_CLASSIFIERS_POST:
+		ret = "classifiers_post";
+		break;
+	case RSPAMD_TASK_STAGE_COMPOSITES:
+		ret = "composites";
+		break;
+	case RSPAMD_TASK_STAGE_POST_FILTERS:
+		ret = "postfilters";
+		break;
+	case RSPAMD_TASK_STAGE_LEARN_PRE:
+		ret = "learn_pre";
+		break;
+	case RSPAMD_TASK_STAGE_LEARN:
+		ret = "learn";
+		break;
+	case RSPAMD_TASK_STAGE_LEARN_POST:
+		ret = "learn_post";
+		break;
+	case RSPAMD_TASK_STAGE_COMPOSITES_POST:
+		ret = "composites_post";
+		break;
+	case RSPAMD_TASK_STAGE_IDEMPOTENT:
+		ret = "idempotent";
+		break;
+	case RSPAMD_TASK_STAGE_DONE:
+		ret = "done";
+		break;
+	case RSPAMD_TASK_STAGE_REPLIED:
+		ret = "replied";
+		break;
+	default:
+		break;
+	}
+
+	return ret;
 }

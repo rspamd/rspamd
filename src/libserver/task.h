@@ -357,4 +357,11 @@ gdouble* rspamd_task_profile_get (struct rspamd_task *task, const gchar *key);
  */
 gboolean rspamd_task_set_finish_time (struct rspamd_task *task);
 
+/**
+ * Returns task processing stage name
+ * @param stg
+ * @return
+ */
+const gchar *rspamd_task_stage_name (enum rspamd_task_stage stg);
+
 #endif /* TASK_H_ */
