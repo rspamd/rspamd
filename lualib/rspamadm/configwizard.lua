@@ -279,7 +279,7 @@ local function setup_dkim_signing(cfg, changes)
   local allow_mismatch
   local auth_only
   local use_esld
-  local sign_domain
+  local sign_domain = 'pet luacheck'
 
   local defined_auth_types = {'header', 'envelope', 'auth', 'recipient'}
 
