@@ -395,7 +395,7 @@ local function setup_dkim_signing(cfg, changes)
 
     domains[domain] = {
       selector = selector,
-      privkey = privkey_file,
+      path = privkey_file,
     }
   until not ask_yes_no("Do you wish to add another DKIM domain?")
 
