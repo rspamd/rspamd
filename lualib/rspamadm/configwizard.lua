@@ -303,7 +303,7 @@ local function setup_dkim_signing(cfg, changes)
   else
     if sign_type == '1' then
       sign_domain = 'header'
-    elseif sign_domain == '2' then
+    elseif sign_type == '2' then
       sign_domain = 'envelope'
     else
       sign_domain = 'auth'
