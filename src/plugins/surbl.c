@@ -73,6 +73,7 @@ static const gchar *M = "surbl";
 #define SURBL_OPTION_RESOLVEIP (1 << 1)
 #define SURBL_OPTION_CHECKIMAGES (1 << 2)
 #define SURBL_OPTION_CHECKDKIM (1 << 3)
+#define SURBL_OPTION_FULLDOMAIN (1 << 4)
 #define MAX_LEVELS 10
 
 struct surbl_ctx {
@@ -599,6 +600,15 @@ surbl_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			0,
 			NULL,
 			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"surbl.rule",
+			"Check full domain name instead of eSLD",
+			"full_domain",
+			UCL_BOOLEAN,
+			NULL,
+			0,
+			NULL,
+			0);
 
 	return 0;
 }
@@ -802,6 +812,13 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
 			if (ucl_object_toboolean (cur)) {
 				new_suffix->options |= SURBL_OPTION_CHECKDKIM;
+			}
+		}
+
+		cur = ucl_object_lookup (cur_rule, "full_domain");
+		if (cur != NULL && cur->type == UCL_BOOLEAN) {
+			if (ucl_object_toboolean (cur)) {
+				new_suffix->options |= SURBL_OPTION_FULLDOMAIN;
 			}
 		}
 
@@ -1279,62 +1296,76 @@ format_surbl_request (rspamd_mempool_t * pool,
 	else {
 		/* Not a numeric url */
 		result = rspamd_mempool_alloc (pool, len);
-		/* Now we should try to check for exceptions */
-		if (!forced && surbl_module_ctx->exceptions) {
-			for (i = MAX_LEVELS - 1; i >= 0; i--) {
-				t = surbl_module_ctx->exceptions[i];
-				if (t != NULL && dots_num >= i + 1) {
-					f.begin = dots[dots_num - i - 1] + 1;
-					f.len = hostname->len -
-						(dots[dots_num - i - 1] - hostname->begin + 1);
-					if (g_hash_table_lookup (t, &f) != NULL) {
-						level = dots_num - i - 1;
-						found_exception = TRUE;
-						break;
+
+		if (suffix->options & SURBL_OPTION_FULLDOMAIN) {
+			/* Full domain case */
+			r = rspamd_snprintf (result,
+					len,
+					"%*s",
+					url->hostlen,
+					url->host);
+		}
+		else {
+			/* Now we should try to check for exceptions */
+			if (!forced && surbl_module_ctx->exceptions) {
+				for (i = MAX_LEVELS - 1; i >= 0; i--) {
+					t = surbl_module_ctx->exceptions[i];
+					if (t != NULL && dots_num >= i + 1) {
+						f.begin = dots[dots_num - i - 1] + 1;
+						f.len = hostname->len -
+								(dots[dots_num - i - 1] - hostname->begin + 1);
+						if (g_hash_table_lookup (t, &f) != NULL) {
+							level = dots_num - i - 1;
+							found_exception = TRUE;
+							break;
+						}
 					}
 				}
 			}
-		}
 
-		if (found_exception || url->tldlen == 0) {
-			if (level != MAX_LEVELS) {
-				if (level == 0) {
+			if (found_exception || url->tldlen == 0) {
+				if (level != MAX_LEVELS) {
+					if (level == 0) {
+						r = rspamd_snprintf (result,
+								len,
+								"%T",
+								hostname);
+					}
+					else {
+						r = rspamd_snprintf (result, len, "%*s",
+								(gint) (hostname->len -
+										(dots[level - 1] - hostname->begin + 1)),
+								dots[level - 1] + 1);
+					}
+				}
+				else if (dots_num >= 2) {
+					r = rspamd_snprintf (result, len, "%*s",
+							(gint) (hostname->len -
+									(dots[dots_num - 2] - hostname->begin + 1)),
+							dots[dots_num - 2] + 1);
+				}
+				else {
 					r = rspamd_snprintf (result,
 							len,
 							"%T",
 							hostname);
 				}
-				else {
-					r = rspamd_snprintf (result, len, "%*s",
-							(gint)(hostname->len -
-									(dots[level - 1] - hostname->begin + 1)),
-									dots[level - 1] + 1);
-				}
-			}
-			else if (dots_num >= 2) {
-				r = rspamd_snprintf (result, len, "%*s",
-						(gint)(hostname->len -
-								(dots[dots_num - 2] - hostname->begin + 1)),
-								dots[dots_num - 2] + 1);
 			}
 			else {
+				/* No exception */
 				r = rspamd_snprintf (result,
-						len,
-						"%T",
-						hostname);
-			}
-		}
-		else {
-			r = rspamd_snprintf (result,
 						len,
 						"%*s",
 						url->tldlen,
 						url->tld);
+			}
 		}
 	}
 
-	url->surbl = result;
-	url->surbllen = r;
+	if (url->surbl == NULL) {
+		url->surbl = result;
+		url->surbllen = r;
+	}
 
 	if (!forced &&
 			rspamd_match_hash_map (surbl_module_ctx->whitelist, result) != NULL) {
@@ -1383,11 +1414,11 @@ format_surbl_request (rspamd_mempool_t * pool,
 	}
 
 	msg_debug_pool ("request: %s, dots: %d, level: %d, orig: %*s",
-		result,
-		dots_num,
-		level,
-		(gint)hostname->len,
-		hostname->begin);
+			result,
+			dots_num,
+			level,
+			(gint)hostname->len,
+			hostname->begin);
 
 	return result;
 }
