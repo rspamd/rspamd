@@ -35,7 +35,7 @@ rspamd_config.SYM = function(task)
   udp.sento{
     host = addr, -- must be ip address object (e.g. received by upstream module)
     port = 500,
-    data = {'str1, 'str2'}, -- can be table, string or rspamd_text
+    data = {'str1', 'str2'}, -- can be table, string or rspamd_text
     timeout = 0.5, -- default = 1s
     task = task, -- if has task
     session = session, -- optional
