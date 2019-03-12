@@ -680,6 +680,8 @@ local function train_ann(rule, _, ev_base, elt, worker)
             return st
           end
 
+          rule.learning_spawned = true
+
           worker:spawn_process{
             func = train_torch,
             on_complete = ann_trained_torch,
