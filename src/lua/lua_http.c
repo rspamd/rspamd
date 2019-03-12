@@ -536,6 +536,7 @@ lua_http_push_headers (lua_State *L, struct rspamd_http_message *msg)
  * @param {resolver} resolver to perform DNS-requests. Usually got from either `task` or `config`
  * @param {boolean} gzip if true, body of the requests will be compressed
  * @param {boolean} no_ssl_verify disable SSL peer checks
+ * @param {boolean} keepalive enable keep-alive pool
  * @param {string} user for HTTP authentication
  * @param {string} password for HTTP authentication, only if "user" present
  * @return {boolean} `true`, in **async** mode, if a request has been successfully scheduled. If this value is `false` then some error occurred, the callback thus will not be called.
