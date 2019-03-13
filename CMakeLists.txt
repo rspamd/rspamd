@@ -1414,8 +1414,12 @@ ENDIF(NOT DEBIAN_BUILD)
 
 
 # PVS Studio
-include(${CMAKE_SOURCE_DIR}/PVS-Studio.cmake)
-pvs_studio_add_target(TARGET ${PROJECT_NAME}.analyze
-		ANALYZE ${PROJECT_NAME} rspamd-server rspamadm rspamc
-		OUTPUT FORMAT errorfile
-		LOG target_${PROJECT_NAME}.err)
+find_program(_PVS_STUDIO "pvs-studio-analyzer")
+
+if(_PVS_STUDIO)
+	include(${CMAKE_SOURCE_DIR}/PVS-Studio.cmake)
+	pvs_studio_add_target(TARGET ${PROJECT_NAME}.analyze
+			ANALYZE ${PROJECT_NAME} rspamd-server rspamadm rspamc
+			OUTPUT FORMAT errorfile
+			LOG target_${PROJECT_NAME}.err)
+endif()
