@@ -1362,10 +1362,8 @@ format_surbl_request (rspamd_mempool_t * pool,
 		}
 	}
 
-	if (url->surbl == NULL) {
-		url->surbl = result;
-		url->surbllen = r;
-	}
+	url->surbl = result;
+	url->surbllen = r;
 
 	if (!forced &&
 			rspamd_match_hash_map (surbl_module_ctx->whitelist, result) != NULL) {
