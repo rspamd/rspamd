@@ -392,6 +392,23 @@ LUA_FUNCTION_DEF (util, normalize_prob);
  */
 LUA_FUNCTION_DEF (util, is_utf_spoofed);
 
+/**
+* @function util.is_utf_outside_range(str, range_start, range_end)
+* Returns true if a string contains chars outside range
+* @param {string} String to check
+* @param {number} start of character range similar to uset_addRange
+* @param {number} end of character range similar to uset_addRange
+* @return {boolean} true if a string contains chars outside selected utf range
+*/
+LUA_FUNCTION_DEF (util, is_utf_outside_range);
+
+/***
+* @function util.get_string_stats(str)
+* Returns table with number of letters and digits in string
+* @return {table} with string stats keys are "digits" and "letters"
+*/
+LUA_FUNCTION_DEF (util, get_string_stats);
+
 /***
  * @function util.is_valid_utf8(str)
  * Returns true if a string is valid UTF8 string
@@ -615,6 +632,8 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, caseless_hash),
 	LUA_INTERFACE_DEF (util, caseless_hash_fast),
 	LUA_INTERFACE_DEF (util, is_utf_spoofed),
+	LUA_INTERFACE_DEF (util, is_utf_outside_range),
+	LUA_INTERFACE_DEF (util, get_string_stats),
 	LUA_INTERFACE_DEF (util, is_valid_utf8),
 	LUA_INTERFACE_DEF (util, has_obscured_unicode),
 	LUA_INTERFACE_DEF (util, readline),
@@ -2469,6 +2488,83 @@ lua_util_is_utf_spoofed (lua_State *L)
 
 	return nres;
 }
+
+static gint
+lua_util_get_string_stats (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	gsize len_of_string;
+	gint num_of_digits = 0, num_of_letters = 0;
+	const gchar *string_to_check = lua_tolstring (L, 1, &len_of_string);
+
+	if (string_to_check) {
+		while (*string_to_check != '\0') {
+			if (g_ascii_isdigit(*string_to_check)) {
+				num_of_digits++;
+			} else if (g_ascii_isalpha(*string_to_check)) {
+				num_of_letters++;
+			}
+			string_to_check++;
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_createtable(L, 0, 2);
+	lua_pushstring(L, "digits");
+	lua_pushinteger(L, num_of_digits);
+	lua_settable(L, -3);
+	lua_pushstring(L, "letters");
+	lua_pushinteger(L, num_of_letters);
+	lua_settable(L, -3);
+
+	return 1;
+}
+
+
+static gint
+lua_util_is_utf_outside_range(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	gsize len_of_string;
+	gint ret;
+	const gchar *string_to_check = lua_tolstring (L, 1, &len_of_string);
+	guint32 range_start = lua_tointeger (L, 2);
+	guint32 range_end = lua_tointeger (L, 3);
+
+	USpoofChecker *spc_sgl;
+	USet * allowed_chars;
+	UErrorCode uc_err = U_ZERO_ERROR;
+
+	if (string_to_check) {
+		spc_sgl = uspoof_open (&uc_err);
+		if (uc_err != U_ZERO_ERROR) {
+			msg_err ("cannot init spoof checker: %s", u_errorName (uc_err));
+			lua_pushboolean (L, false);
+			uspoof_close(spc_sgl);
+			return 1;
+		}
+
+		allowed_chars = uset_openEmpty();
+		uset_addRange(allowed_chars, range_start, range_end);
+		uspoof_setAllowedChars(spc_sgl, allowed_chars, &uc_err);
+
+		uspoof_setChecks (spc_sgl,
+			USPOOF_CHAR_LIMIT | USPOOF_ANY_CASE, &uc_err);
+		ret = uspoof_checkUTF8 (spc_sgl, string_to_check, len_of_string, NULL, &uc_err);
+		uset_close(allowed_chars);
+		uspoof_close(spc_sgl);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, !!(ret != 0));
+
+	return 1;
+}
+
 
 static gint
 lua_util_get_hostname (lua_State *L)
