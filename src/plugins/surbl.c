@@ -1864,9 +1864,6 @@ surbl_test_tags (struct rspamd_task *task, struct redirector_param *param,
 		tld.len = url->tldlen;
 
 		ftld = rspamd_mempool_ftokdup (task->task_pool, &tld);
-	}
-
-	if (tag) {
 		/* We know results for this URL */
 
 		DL_FOREACH (tag, cur) {

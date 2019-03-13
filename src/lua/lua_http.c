@@ -752,6 +752,10 @@ lua_http_request (lua_State *L)
 							rspamd_fstring_free (body);
 						}
 
+						if (mime_type) {
+							g_free (mime_type);
+						}
+
 						return luaL_error (L, "invalid body argument: %s",
 								lua_typename (L, lua_type (L, -1)));
 					}

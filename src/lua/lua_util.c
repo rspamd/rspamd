@@ -1177,7 +1177,7 @@ lua_util_tokenize_text (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	const gchar *in = NULL;
-	gsize len, pos, ex_len, i;
+	gsize len = 0, pos, ex_len, i;
 	GList *exceptions = NULL, *cur;
 	struct rspamd_lua_text *t;
 	struct rspamd_process_exception *ex;
@@ -2242,6 +2242,8 @@ lua_util_gzip_decompress (lua_State *L)
 	if (t == NULL || t->start == NULL) {
 		return luaL_error (L, "invalid arguments");
 	}
+
+	sz = t->len;
 
 	memset (&strm, 0, sizeof (strm));
 	/* windowBits +16 to decode gzip, zlib 1.2.0.4+ */

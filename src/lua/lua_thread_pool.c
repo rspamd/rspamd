@@ -305,7 +305,7 @@ lua_resume_thread_internal_full (struct thread_entry *thread_entry,
 		}
 		else {
 			tb = rspamd_lua_get_traceback_string (thread_entry->lua_state);
-			if (thread_entry->error_callback) {
+			if (tb && thread_entry->error_callback) {
 				thread_entry->error_callback (thread_entry, ret, tb->str);
 			}
 			else if (thread_entry->task) {

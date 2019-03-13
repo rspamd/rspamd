@@ -722,10 +722,15 @@ rspamd_http_simple_client_helper (struct rspamd_http_connection *conn)
 	priv = conn->priv;
 	ssl = priv->ssl;
 	priv->ssl = NULL;
-	request_method = priv->msg->method;
-	/* Preserve host for keepalive */
-	prev_host = priv->msg->host;
-	priv->msg->host = NULL;
+
+	/* Preserve data */
+	if (priv->msg) {
+		request_method = priv->msg->method;
+		/* Preserve host for keepalive */
+		prev_host = priv->msg->host;
+		priv->msg->host = NULL;
+	}
+
 	rspamd_http_connection_reset (conn);
 	priv->ssl = ssl;
 
@@ -1988,12 +1993,6 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 							""
 							"\r\n", ENCRYPTED_VERSION, bodylen);
 				}
-
-				preludelen = rspamd_snprintf (repbuf, sizeof (repbuf), "%s\r\n"
-						"Content-Length: %z\r\n"
-						"Content-Type: %s\r\n"
-						"\r\n", ENCRYPTED_VERSION, bodylen,
-						mime_type);
 			}
 			else {
 				preludelen = rspamd_snprintf (repbuf, sizeof (repbuf),

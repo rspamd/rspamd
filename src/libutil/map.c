@@ -2685,7 +2685,7 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 			}
 		}
 
-		if (map->backends->len == 0) {
+		if (!map->backends || map->backends->len == 0) {
 			msg_err_config ("map has no urls to be loaded: no valid backends");
 			goto err;
 		}

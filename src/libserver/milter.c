@@ -1301,7 +1301,7 @@ rspamd_milter_del_header (struct rspamd_milter_session *session,
 	value.len = 0;
 
 	return rspamd_milter_send_action (session, RSPAMD_MILTER_CHGHEADER,
-			idx, name, value);
+			idx, name, &value);
 }
 
 void
@@ -1935,7 +1935,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 				}
 			}
 
-			rspamd_milter_set_reply (session, rcode, xcode, reply);
+			rspamd_milter_set_reply (session, xcode, rcode, reply);
 		}
 		break;
 	case METRIC_ACTION_SOFT_REJECT:
@@ -1949,7 +1949,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 					sizeof (RSPAMD_MILTER_TEMPFAIL_MESSAGE) - 1);
 		}
 
-		rspamd_milter_set_reply (session, rcode, xcode, reply);
+		rspamd_milter_set_reply (session, xcode, rcode, reply);
 		break;
 
 	case METRIC_ACTION_REWRITE_SUBJECT:

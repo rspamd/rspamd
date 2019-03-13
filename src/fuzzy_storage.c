@@ -599,6 +599,7 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 	conn->mirror = m;
 
 	if (conn->up == NULL) {
+		g_free (conn);
 		msg_err ("cannot select upstream for %s", m->name);
 		return;
 	}
@@ -608,6 +609,7 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 			SOCK_STREAM, TRUE);
 
 	if (conn->sock == -1) {
+		g_free (conn);
 		msg_err ("cannot connect upstream for %s", m->name);
 		rspamd_upstream_fail (conn->up, TRUE);
 		return;

@@ -2664,6 +2664,7 @@ rspamd_dkim_sign_key_load (const gchar *key, gsize len,
 		if (stat (key, &st) != 0) {
 			g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
 					"cannot stat key file: '%s' %s", key, strerror (errno));
+			g_free (nkey);
 
 			return NULL;
 		}
@@ -2674,6 +2675,7 @@ rspamd_dkim_sign_key_load (const gchar *key, gsize len,
 		if (map == NULL) {
 			g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
 					"cannot map key file: '%s' %s", key, strerror (errno));
+			g_free (nkey);
 
 			return NULL;
 		}

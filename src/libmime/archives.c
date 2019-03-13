@@ -1146,12 +1146,14 @@ rspamd_7zip_read_coders_info (struct rspamd_task *task,
 					return NULL;
 				}
 
-				folder_nstreams = g_alloca (sizeof (int) * num_folders);
+				folder_nstreams = g_malloc (sizeof (int) * num_folders);
 
 				for (i = 0; i < num_folders && p != NULL && p < end; i++) {
 					p = rspamd_7zip_read_folder (task, p, end, arch,
 							&folder_nstreams[i], &num_digests);
 				}
+
+				g_free (folder_nstreams);
 			}
 			break;
 		case kCodersUnPackSize:
@@ -1499,6 +1501,7 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 					if (fend == NULL || fend - p == 0) {
 						/* Crap instead of fname */
 						msg_debug_archive ("bad 7zip name; %s", G_STRLOC);
+						goto end;
 					}
 
 					res = rspamd_7zip_ucs2_to_utf8 (task, p, fend);

@@ -680,13 +680,13 @@ add_options (GQueue *opts)
 
 		if (kv == NULL || kv[1] == NULL) {
 			ADD_CLIENT_HEADER (opts, *hdr, "");
-
-			if (kv) {
-				g_strfreev (kv);
-			}
 		}
 		else {
 			ADD_CLIENT_HEADER (opts, kv[0], kv[1]);
+		}
+
+		if (kv) {
+			g_strfreev (kv);
 		}
 
 		hdr ++;
@@ -1006,9 +1006,9 @@ rspamc_counters_sort (const ucl_object_t **o1, const ucl_object_t **o2)
 					order2 = ucl_object_toint (elt2);
 				}
 			}
-
-			g_strfreev (args);
 		}
+
+		g_strfreev (args);
 	}
 
 	return (inverse ? (order2 - order1) : (order1 - order2));
@@ -2008,7 +2008,7 @@ main (gint argc, gchar **argv, gchar **env)
 	g_queue_free_full (kwattrs, g_free);
 
 	/* Wait for children processes */
-	cur = g_list_first (children);
+	cur = children ? g_list_first (children) : NULL;
 	ret = 0;
 
 	while (cur) {
