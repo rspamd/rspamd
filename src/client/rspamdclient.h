@@ -24,8 +24,8 @@ struct rspamd_client_connection;
 struct rspamd_http_message;
 
 struct rspamd_http_client_header {
-	const gchar *name;
-	const gchar *value;
+	gchar *name;
+	gchar *value;
 };
 
 /**

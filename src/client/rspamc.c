@@ -74,8 +74,8 @@ static gint retcode = EXIT_SUCCESS;
 #define ADD_CLIENT_HEADER(o, n, v) do { \
     struct rspamd_http_client_header *nh; \
     nh = g_malloc (sizeof (*nh)); \
-    nh->name = (n); \
-    nh->value = (v); \
+    nh->name = g_strdup (n); \
+    nh->value = g_strdup (v); \
     g_queue_push_tail ((o), nh); \
 } while (0)
 
@@ -645,6 +645,7 @@ add_options (GQueue *opts)
 		numbuf = g_string_sized_new (8);
 		rspamd_printf_gstring (numbuf, "%d", weight);
 		ADD_CLIENT_HEADER (opts, "Weight", numbuf->str);
+		g_string_free (numbuf, TRUE);
 	}
 
 	if (fuzzy_symbol != NULL) {
@@ -655,6 +656,7 @@ add_options (GQueue *opts)
 		numbuf = g_string_sized_new (8);
 		rspamd_printf_gstring (numbuf, "%d", flag);
 		ADD_CLIENT_HEADER (opts, "Flag", numbuf->str);
+		g_string_free (numbuf, TRUE);
 	}
 
 	if (extended_urls) {
@@ -1841,6 +1843,17 @@ rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
 	event_base_loop (ev_base, 0);
 }
 
+
+static void
+rspamc_kwattr_free (gpointer p)
+{
+	struct rspamd_http_client_header *h = (struct rspamd_http_client_header *)p;
+
+	g_free (h->value);
+	g_free (h->name);
+	g_free (h);
+}
+
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
@@ -2005,7 +2018,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	event_base_loop (ev_base, 0);
 
-	g_queue_free_full (kwattrs, g_free);
+	g_queue_free_full (kwattrs, rspamc_kwattr_free);
 
 	/* Wait for children processes */
 	cur = children ? g_list_first (children) : NULL;
