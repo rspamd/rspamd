@@ -1138,8 +1138,8 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 
 gboolean
 rspamd_milter_set_reply (struct rspamd_milter_session *session,
-		rspamd_fstring_t *xcode,
 		rspamd_fstring_t *rcode,
+		rspamd_fstring_t *xcode,
 		rspamd_fstring_t *reply)
 {
 	GString *buf;
@@ -1935,7 +1935,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 				}
 			}
 
-			rspamd_milter_set_reply (session, xcode, rcode, reply);
+			rspamd_milter_set_reply (session, rcode, xcode, reply);
 		}
 		break;
 	case METRIC_ACTION_SOFT_REJECT:
@@ -1949,7 +1949,7 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 					sizeof (RSPAMD_MILTER_TEMPFAIL_MESSAGE) - 1);
 		}
 
-		rspamd_milter_set_reply (session, xcode, rcode, reply);
+		rspamd_milter_set_reply (session, rcode, xcode, reply);
 		break;
 
 	case METRIC_ACTION_REWRITE_SUBJECT:
