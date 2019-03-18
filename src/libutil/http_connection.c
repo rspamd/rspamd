@@ -1862,6 +1862,7 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 			}
 
 			if (encrypted) {
+				/* TODO: Add proxy support to HTTPCrypt */
 				rspamd_printf_fstring (buf,
 						"%s %s HTTP/1.1\r\n"
 						"Connection: %s\r\n"
@@ -1875,16 +1876,32 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 						enclen);
 			}
 			else {
-				rspamd_printf_fstring (buf,
-						"%s %V HTTP/1.1\r\n"
-						"Connection: %s\r\n"
-						"Host: %s\r\n"
-						"Content-Length: %z\r\n",
-						http_method_str (msg->method),
-						msg->url,
-						conn_type,
-						host,
-						bodylen);
+				if (conn->priv->flags & RSPAMD_HTTP_CONN_FLAG_PROXY) {
+					rspamd_printf_fstring (buf,
+							"%s http://%s:%d/%V HTTP/1.1\r\n"
+							"Connection: %s\r\n"
+							"Host: %s\r\n"
+							"Content-Length: %z\r\n",
+							http_method_str (msg->method),
+							host,
+							msg->port,
+							msg->url,
+							conn_type,
+							host,
+							bodylen);
+				}
+				else {
+					rspamd_printf_fstring (buf,
+							"%s %V HTTP/1.1\r\n"
+							"Connection: %s\r\n"
+							"Host: %s\r\n"
+							"Content-Length: %z\r\n",
+							http_method_str (msg->method),
+							msg->url,
+							conn_type,
+							host,
+							bodylen);
+				}
 
 				if (bodylen > 0) {
 					if (mime_type != NULL) {
