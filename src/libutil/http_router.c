@@ -506,13 +506,12 @@ rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 	conn->ud = ud;
 	conn->is_reply = FALSE;
 
-	conn->conn = rspamd_http_connection_new (router->ctx,
+	conn->conn = rspamd_http_connection_new_server (router->ctx,
 			fd,
 			NULL,
 			rspamd_http_router_error_handler,
 			rspamd_http_router_finish_handler,
-			0,
-			RSPAMD_HTTP_SERVER);
+			0);
 
 	if (router->key) {
 		rspamd_http_connection_set_key (conn->conn, router->key);

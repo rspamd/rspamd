@@ -125,7 +125,6 @@ struct redirector_param {
 	GHashTable *tree;
 	struct suffix_item *suffix;
 	struct rspamd_symcache_item *item;
-	gint sock;
 	guint redirector_requests;
 };
 
@@ -1689,7 +1688,6 @@ free_redirector_session (void *ud)
 	}
 
 	rspamd_http_connection_unref (param->conn);
-	close (param->sock);
 }
 
 static void
@@ -1780,7 +1778,6 @@ static void
 register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 	const gchar *rule)
 {
-	gint s = -1;
 	struct redirector_param *param;
 	struct timeval *timeout;
 	struct upstream *selected;
@@ -1793,11 +1790,15 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 				RSPAMD_UPSTREAM_ROUND_ROBIN, url->host, url->hostlen);
 
 		if (selected) {
-			s = rspamd_inet_address_connect (rspamd_upstream_addr_next (selected),
-					SOCK_STREAM, TRUE);
+			param->conn = rspamd_http_connection_new_client (NULL,
+					NULL,
+					surbl_redirector_error,
+					surbl_redirector_finish,
+					RSPAMD_HTTP_CLIENT_SIMPLE,
+					rspamd_upstream_addr_next (selected));
 		}
 
-		if (s == -1) {
+		if (param->conn == NULL) {
 			msg_info_surbl ("<%s> cannot create tcp socket failed: %s",
 					task->message_id,
 					strerror (errno));
@@ -1810,17 +1811,9 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 						sizeof (struct redirector_param));
 		param->url = url;
 		param->task = task;
-		param->conn = rspamd_http_connection_new (NULL,
-				s,
-				NULL,
-				surbl_redirector_error,
-				surbl_redirector_finish,
-				RSPAMD_HTTP_CLIENT_SIMPLE,
-				RSPAMD_HTTP_CLIENT);
 		param->ctx = surbl_module_ctx;
 		msg = rspamd_http_new_message (HTTP_REQUEST);
 		msg->url = rspamd_fstring_assign (msg->url, url->string, url->urllen);
-		param->sock = s;
 		param->redirector = selected;
 		timeout = rspamd_mempool_alloc (task->task_pool, sizeof (struct timeval));
 		double_to_tv (surbl_module_ctx->read_timeout, timeout);

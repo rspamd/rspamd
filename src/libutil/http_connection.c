@@ -1077,14 +1077,12 @@ rspamd_http_parser_reset (struct rspamd_http_connection *conn)
 }
 
 struct rspamd_http_connection *
-rspamd_http_connection_new (
-		struct rspamd_http_context *ctx,
-		gint fd,
-		rspamd_http_body_handler_t body_handler,
-		rspamd_http_error_handler_t error_handler,
-		rspamd_http_finish_handler_t finish_handler,
-		unsigned opts,
-		enum rspamd_http_connection_type type)
+rspamd_http_connection_new_server (struct rspamd_http_context *ctx,
+								   gint fd,
+								   rspamd_http_body_handler_t body_handler,
+								   rspamd_http_error_handler_t error_handler,
+								   rspamd_http_finish_handler_t finish_handler,
+								   unsigned opts)
 {
 	struct rspamd_http_connection *conn;
 	struct rspamd_http_connection_private *priv;
@@ -1095,7 +1093,7 @@ rspamd_http_connection_new (
 
 	conn = g_malloc0 (sizeof (struct rspamd_http_connection));
 	conn->opts = opts;
-	conn->type = type;
+	conn->type = RSPAMD_HTTP_SERVER;
 	conn->body_handler = body_handler;
 	conn->error_handler = error_handler;
 	conn->finish_handler = finish_handler;
@@ -1112,14 +1110,49 @@ rspamd_http_connection_new (
 	conn->priv = priv;
 	priv->ctx = ctx;
 
-	if (conn->type == RSPAMD_HTTP_CLIENT) {
-		priv->cache = ctx->client_kp_cache;
-		if (ctx->client_kp) {
-			priv->local_key = rspamd_keypair_ref (ctx->client_kp);
-		}
+	priv->cache = ctx->server_kp_cache;
+
+	rspamd_http_parser_reset (conn);
+	priv->parser.data = conn;
+
+	return conn;
+}
+
+struct rspamd_http_connection *
+rspamd_http_connection_new_client_socket (struct rspamd_http_context *ctx,
+								   rspamd_http_body_handler_t body_handler,
+								   rspamd_http_error_handler_t error_handler,
+								   rspamd_http_finish_handler_t finish_handler,
+								   unsigned opts,
+								   gint fd)
+{
+	struct rspamd_http_connection *conn;
+	struct rspamd_http_connection_private *priv;
+
+	g_assert (error_handler != NULL && finish_handler == NULL);
+
+	conn = g_malloc0 (sizeof (struct rspamd_http_connection));
+	conn->opts = opts;
+	conn->type = RSPAMD_HTTP_CLIENT;
+	conn->body_handler = body_handler;
+	conn->error_handler = error_handler;
+	conn->finish_handler = finish_handler;
+	conn->fd = fd;
+	conn->ref = 1;
+	conn->finished = FALSE;
+
+	/* Init priv */
+	if (ctx == NULL) {
+		ctx = rspamd_http_context_default ();
 	}
-	else {
-		priv->cache = ctx->server_kp_cache;
+
+	priv = g_malloc0 (sizeof (struct rspamd_http_connection_private));
+	conn->priv = priv;
+	priv->ctx = ctx;
+
+	priv->cache = ctx->client_kp_cache;
+	if (ctx->client_kp) {
+		priv->local_key = rspamd_keypair_ref (ctx->client_kp);
 	}
 
 	rspamd_http_parser_reset (conn);
@@ -1129,15 +1162,41 @@ rspamd_http_connection_new (
 }
 
 struct rspamd_http_connection *
+rspamd_http_connection_new_client (struct rspamd_http_context *ctx,
+								   rspamd_http_body_handler_t body_handler,
+								   rspamd_http_error_handler_t error_handler,
+								   rspamd_http_finish_handler_t finish_handler,
+								   unsigned opts,
+								   rspamd_inet_addr_t *addr)
+{
+	gint fd;
+
+	if (error_handler == NULL || finish_handler == NULL) {
+		return NULL;
+	}
+
+	fd = rspamd_inet_address_connect (addr, SOCK_STREAM, TRUE);
+
+	if (fd == -1) {
+		msg_info ("cannot connect to %s: %s", rspamd_inet_address_to_string (addr),
+				strerror (errno));
+		return NULL;
+	}
+
+	return rspamd_http_connection_new_client_socket (ctx,
+			body_handler, error_handler, finish_handler,
+			opts | RSPAMD_HTTP_OWN_SOCKET, fd);
+}
+
+struct rspamd_http_connection *
 rspamd_http_connection_new_keepalive (struct rspamd_http_context *ctx,
-		rspamd_http_body_handler_t body_handler,
-		rspamd_http_error_handler_t error_handler,
-		rspamd_http_finish_handler_t finish_handler,
-		rspamd_inet_addr_t *addr,
-		const gchar *host)
+									  rspamd_http_body_handler_t body_handler,
+									  rspamd_http_error_handler_t error_handler,
+									  rspamd_http_finish_handler_t finish_handler,
+									  rspamd_inet_addr_t *addr,
+									  const gchar *host)
 {
 	struct rspamd_http_connection *conn;
-	gint fd;
 
 	if (error_handler == NULL || finish_handler == NULL) {
 		return NULL;
@@ -1153,18 +1212,10 @@ rspamd_http_connection_new_keepalive (struct rspamd_http_context *ctx,
 		return conn;
 	}
 
-	fd = rspamd_inet_address_connect (addr, SOCK_STREAM, TRUE);
-
-	if (fd == -1) {
-		msg_info ("cannot connect to %s: %s", rspamd_inet_address_to_string (addr),
-				host);
-		return NULL;
-	}
-
-	conn = rspamd_http_connection_new (ctx, fd, body_handler, error_handler,
-			finish_handler,
+	conn = rspamd_http_connection_new_client (ctx,
+			body_handler, error_handler, finish_handler,
 			RSPAMD_HTTP_CLIENT_SIMPLE|RSPAMD_HTTP_CLIENT_KEEP_ALIVE,
-			RSPAMD_HTTP_CLIENT);
+			addr);
 
 	if (conn) {
 		rspamd_http_context_prepare_keepalive (ctx, conn, addr, host);
@@ -1387,7 +1438,7 @@ rspamd_http_connection_free (struct rspamd_http_connection *conn)
 		g_free (priv);
 	}
 
-	if (conn->opts & RSPAMD_HTTP_CLIENT_KEEP_ALIVE) {
+	if (conn->opts & RSPAMD_HTTP_OWN_SOCKET) {
 		/* Fd is owned by a connection */
 		close (conn->fd);
 	}

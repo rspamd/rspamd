@@ -175,7 +175,6 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 	rspamd_inet_addr_t *addr;
 	struct timeval tv;
 	static struct rspamadm_control_cbdata cbdata;
-	gint sock;
 
 	context = g_option_context_new (
 			"control - manage rspamd main control interface");
@@ -230,22 +229,14 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 		exit (1);
 	}
 
-	sock = rspamd_inet_address_connect (addr, SOCK_STREAM, TRUE);
 
-	if (sock == -1) {
-		rspamd_fprintf (stderr, "cannot connect to: %s\n", control_path);
-		rspamd_inet_address_free (addr);
-		exit (1);
-	}
-
-	conn = rspamd_http_connection_new (
+	conn = rspamd_http_connection_new_client (
 			rspamd_main->http_ctx, /* Default context */
-			sock,
 			NULL,
 			rspamd_control_error_handler,
 			rspamd_control_finish_handler,
 			RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT);
+			addr);
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	msg->url = rspamd_fstring_new_init (path, strlen (path));
 	double_to_tv (timeout, &tv);
@@ -261,5 +252,4 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 
 	rspamd_http_connection_unref (conn);
 	rspamd_inet_address_free (addr);
-	close (sock);
 }

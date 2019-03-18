@@ -368,8 +368,6 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 static gboolean
 lua_http_make_connection (struct lua_http_cbdata *cbd)
 {
-	int fd;
-
 	rspamd_inet_address_set_port (cbd->addr, cbd->msg->port);
 
 	if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE) {
@@ -384,22 +382,14 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 				cbd->host);
 	}
 	else {
-		fd = rspamd_inet_address_connect (cbd->addr, SOCK_STREAM, TRUE);
-
-		if (fd == -1) {
-			msg_info ("cannot connect to %V", cbd->msg->host);
-			return FALSE;
-		}
-
-		cbd->fd = fd;
-		cbd->conn = rspamd_http_connection_new (
+		cbd->fd = -1;
+		cbd->conn = rspamd_http_connection_new_client (
 				NULL, /* Default context */
-				fd,
 				NULL,
 				lua_http_error_handler,
 				lua_http_finish_handler,
 				RSPAMD_HTTP_CLIENT_SIMPLE,
-				RSPAMD_HTTP_CLIENT);
+				cbd->addr);
 	}
 
 	if (cbd->conn) {

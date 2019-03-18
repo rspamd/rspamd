@@ -618,14 +618,13 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	rspamd_printf_fstring (&msg->url, "/update_v1/%s", m->name);
 
-	conn->http_conn = rspamd_http_connection_new (
+	conn->http_conn = rspamd_http_connection_new_client_socket (
 			ctx->http_ctx,
-			conn->sock,
 			NULL,
 			fuzzy_mirror_error_handler,
 			fuzzy_mirror_finish_handler,
 			RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT);
+			conn->sock);
 
 	rspamd_http_connection_set_key (conn->http_conn,
 			ctx->sync_keypair);
@@ -1992,14 +1991,13 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 	session->name = rspamd_inet_address_to_string (addr);
 	rspamd_random_hex (session->uid, sizeof (session->uid) - 1);
 	session->uid[sizeof (session->uid) - 1] = '\0';
-	http_conn = rspamd_http_connection_new (
+	http_conn = rspamd_http_connection_new_server (
 			ctx->http_ctx,
 			nfd,
 			NULL,
 			rspamd_fuzzy_mirror_error_handler,
 			rspamd_fuzzy_mirror_finish_handler,
-			0,
-			RSPAMD_HTTP_SERVER);
+			0);
 
 	rspamd_http_connection_set_key (http_conn, ctx->sync_keypair);
 	session->ctx = ctx;

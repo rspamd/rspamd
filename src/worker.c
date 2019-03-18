@@ -412,14 +412,13 @@ accept_socket (gint fd, short what, void *arg)
 		http_opts = RSPAMD_HTTP_REQUIRE_ENCRYPTION;
 	}
 
-	task->http_conn = rspamd_http_connection_new (
+	task->http_conn = rspamd_http_connection_new_server (
 			ctx->http_ctx,
 			nfd,
 			rspamd_worker_body_handler,
 			rspamd_worker_error_handler,
 			rspamd_worker_finish_handler,
-			http_opts,
-			RSPAMD_HTTP_SERVER);
+			http_opts);
 	rspamd_http_connection_set_max_size (task->http_conn, task->cfg->max_message);
 	worker->nconns++;
 	rspamd_mempool_add_destructor (task->task_pool,
