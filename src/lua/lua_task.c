@@ -433,7 +433,7 @@ LUA_FUNCTION_DEF (task, get_principal_recipient);
  * - smtp from as a last resort
  * @return {address} email address
  */
-LUA_FUNCTION_DEF (task, get_sender);
+LUA_FUNCTION_DEF (task, get_reply_sender);
 
 /***
  * @method task:set_recipients([type], {rcpt1, rcpt2...})
