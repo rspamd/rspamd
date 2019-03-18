@@ -43,7 +43,7 @@ struct rspamd_http_header {
  */
 struct rspamd_http_message {
 	rspamd_fstring_t *url;
-	rspamd_fstring_t *host;
+	GString *host;
 	rspamd_fstring_t *status;
 	struct rspamd_http_header *headers;
 

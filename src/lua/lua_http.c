@@ -127,10 +127,6 @@ lua_http_fin (gpointer arg)
 		g_free (cbd->mime_type);
 	}
 
-	if (cbd->host) {
-		g_free (cbd->host);
-	}
-
 	if (cbd->auth) {
 		g_free (cbd->auth);
 	}
@@ -935,7 +931,7 @@ lua_http_request (lua_State *L)
 	}
 
 	if (msg->host) {
-		cbd->host = rspamd_fstring_cstr (msg->host);
+		cbd->host = msg->host->str;
 	}
 
 	if (body) {
