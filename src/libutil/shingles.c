@@ -184,6 +184,10 @@ rspamd_shingles_from_text (GArray *input,
 
 						g_free (hashes);
 
+						if (pool != NULL) {
+							g_free (res);
+						}
+
 						return NULL;
 					}
 

@@ -1231,7 +1231,7 @@ rspamd_task_write_ialist (struct rspamd_task *task,
 	struct rspamd_email_address *addr;
 	gint i, nchars = 0, cur_chars;
 
-	if (lim <= 0) {
+	if (addrs && lim <= 0) {
 		lim = addrs->len;
 	}
 

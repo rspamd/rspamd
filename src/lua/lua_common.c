@@ -1940,7 +1940,6 @@ rspamd_lua_execute_lua_subprocess (lua_State *L,
 		msg_err ("call to subprocess failed: %v", tb);
 		/* Indicate error */
 		wlen = (1ULL << 63) + tb->len;
-		g_string_free (tb, TRUE);
 
 		r = write (cbdata->sp[1], &wlen, sizeof (wlen));
 		if (r == -1) {
@@ -1951,6 +1950,7 @@ rspamd_lua_execute_lua_subprocess (lua_State *L,
 		if (r == -1) {
 			msg_err ("write failed: %s", strerror (errno));
 		}
+		g_string_free (tb, TRUE);
 
 		lua_pop (L, 1);
 	}
@@ -2205,9 +2205,9 @@ lua_worker_spawn_process (lua_State *L)
 
 	if (rspamd_socketpair (cbdata->sp, TRUE) == -1) {
 		msg_err ("cannot spawn socketpair: %s", strerror (errno));
-		g_free (cbdata);
 		luaL_unref (L, LUA_REGISTRYINDEX, cbdata->func_cbref);
 		luaL_unref (L, LUA_REGISTRYINDEX, cbdata->cb_cbref);
+		g_free (cbdata);
 
 		return 0;
 	}

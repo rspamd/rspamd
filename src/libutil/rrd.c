@@ -228,12 +228,6 @@ rspamd_rrd_check_file (const gchar *filename, gboolean need_data, GError **err)
 		close (fd);
 		return FALSE;
 	}
-	if (memcmp (head.version, RRD_VERSION, sizeof (head.version)) != 0) {
-		g_set_error (err,
-				rrd_error_quark (), EINVAL, "rrd head error: invalid version");
-		close (fd);
-		return FALSE;
-	}
 	if (head.float_cookie != RRD_FLOAT_COOKIE) {
 		g_set_error (err,
 				rrd_error_quark (), EINVAL, "rrd head error: another architecture "
@@ -409,16 +403,12 @@ rspamd_rrd_open_common (const gchar *filename, gboolean completed, GError **err)
 
 	file = g_malloc0 (sizeof (struct rspamd_rrd_file));
 
-	if (file == NULL) {
-		g_set_error (err, rrd_error_quark (), ENOMEM, "not enough memory");
-		return NULL;
-	}
-
 	/* Open file */
 	fd = rspamd_rrd_open_exclusive (filename);
 	if (fd == -1) {
 		g_set_error (err,
 			rrd_error_quark (), errno, "rrd open error: %s", strerror (errno));
+		g_free (file);
 		return FALSE;
 	}
 
@@ -426,6 +416,7 @@ rspamd_rrd_open_common (const gchar *filename, gboolean completed, GError **err)
 		g_set_error (err,
 			rrd_error_quark (), errno, "rrd stat error: %s", strerror (errno));
 		rspamd_file_unlock (fd, FALSE);
+		g_free (file);
 		close (fd);
 		return FALSE;
 	}

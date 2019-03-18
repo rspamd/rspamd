@@ -209,7 +209,6 @@ rspamd_multipattern_pattern_filter (const gchar *pattern, gsize len,
 			g_free (tmp);
 		}
 		else if (flags & RSPAMD_MULTIPATTERN_RE) {
-			ret = malloc (len + 1);
 			ret = rspamd_str_regexp_escape (pattern, len, dst_len, gl_flags |
 					RSPAMD_REGEXP_ESCAPE_RE);
 		}

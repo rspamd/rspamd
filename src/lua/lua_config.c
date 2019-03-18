@@ -3900,13 +3900,19 @@ lua_config_init_subsystem (lua_State *L)
 							cfg);
 				}
 				else {
+					g_strfreev (parts);
+
 					return luaL_error (L, "no event base specified");
 				}
 			}
 			else {
+				g_strfreev (parts);
+
 				return luaL_error (L, "invalid param: %s", parts[i]);
 			}
 		}
+
+		g_strfreev (parts);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

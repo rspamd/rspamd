@@ -925,7 +925,7 @@ file_log_function (const gchar *module, const gchar *id,
 	gchar *m;
 	gdouble now;
 
-	struct iovec iov[5];
+	struct iovec iov[6];
 	gulong r = 0, mr = 0;
 	guint64 cksum;
 	size_t mlen, mremain;

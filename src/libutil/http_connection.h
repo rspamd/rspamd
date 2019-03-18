@@ -118,20 +118,33 @@ struct rspamd_http_connection {
 };
 
 /**
- * Create new http connection
- * @param handler_t handler_t for body
- * @param opts options
- * @return new connection structure
+ * Creates a new HTTP server connection from an opened FD returned by accept function
+ * @param ctx
+ * @param fd
+ * @param body_handler
+ * @param error_handler
+ * @param finish_handler
+ * @param opts
+ * @return
  */
-struct rspamd_http_connection *rspamd_http_connection_new (
+struct rspamd_http_connection *rspamd_http_connection_new_server (
 		struct rspamd_http_context *ctx,
 		gint fd,
 		rspamd_http_body_handler_t body_handler,
 		rspamd_http_error_handler_t error_handler,
 		rspamd_http_finish_handler_t finish_handler,
-		unsigned opts,
-		enum rspamd_http_connection_type type);
+		unsigned opts);
 
+/**
+ * Creates or reuses a new keepalive client connection identified by hostname and inet_addr
+ * @param ctx
+ * @param body_handler
+ * @param error_handler
+ * @param finish_handler
+ * @param addr
+ * @param host
+ * @return
+ */
 struct rspamd_http_connection *rspamd_http_connection_new_keepalive (
 		struct rspamd_http_context *ctx,
 		rspamd_http_body_handler_t body_handler,
@@ -140,6 +153,41 @@ struct rspamd_http_connection *rspamd_http_connection_new_keepalive (
 		rspamd_inet_addr_t *addr,
 		const gchar *host);
 
+/**
+ * Creates an ordinary connection using the address specified (if proxy is not set)
+ * @param ctx
+ * @param body_handler
+ * @param error_handler
+ * @param finish_handler
+ * @param opts
+ * @param addr
+ * @return
+ */
+struct rspamd_http_connection *rspamd_http_connection_new_client (
+		struct rspamd_http_context *ctx,
+		rspamd_http_body_handler_t body_handler,
+		rspamd_http_error_handler_t error_handler,
+		rspamd_http_finish_handler_t finish_handler,
+		unsigned opts,
+		rspamd_inet_addr_t *addr);
+
+/**
+ * Creates an ordinary client connection using ready file descriptor (ignores proxy)
+ * @param ctx
+ * @param body_handler
+ * @param error_handler
+ * @param finish_handler
+ * @param opts
+ * @param addr
+ * @return
+ */
+struct rspamd_http_connection *rspamd_http_connection_new_client_socket (
+		struct rspamd_http_context *ctx,
+		rspamd_http_body_handler_t body_handler,
+		rspamd_http_error_handler_t error_handler,
+		rspamd_http_finish_handler_t finish_handler,
+		unsigned opts,
+		gint fd);
 
 /**
  * Set key pointed by an opaque pointer

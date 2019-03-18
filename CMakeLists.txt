@@ -12,7 +12,7 @@ ENABLE_LANGUAGE(ASM)
 
 SET(RSPAMD_VERSION_MAJOR 1)
 SET(RSPAMD_VERSION_MINOR 9)
-SET(RSPAMD_VERSION_PATCH 0)
+SET(RSPAMD_VERSION_PATCH 1)
 
 # Keep two digits all the time
 SET(RSPAMD_VERSION_MAJOR_NUM ${RSPAMD_VERSION_MAJOR}0)
@@ -1411,3 +1411,15 @@ IF(NOT DEBIAN_BUILD)
 	ADD_CUSTOM_TARGET(check DEPENDS rspamd-test)
 	ADD_CUSTOM_TARGET(run-test DEPENDS check COMMAND test/rspamd-test)
 ENDIF(NOT DEBIAN_BUILD)
+
+
+# PVS Studio
+find_program(_PVS_STUDIO "pvs-studio-analyzer")
+
+if(_PVS_STUDIO)
+	include(${CMAKE_SOURCE_DIR}/PVS-Studio.cmake)
+	pvs_studio_add_target(TARGET ${PROJECT_NAME}.analyze
+			ANALYZE ${PROJECT_NAME} rspamd-server rspamadm rspamc
+			OUTPUT FORMAT errorfile
+			LOG target_${PROJECT_NAME}.err)
+endif()

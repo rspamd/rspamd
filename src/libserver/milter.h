@@ -98,14 +98,14 @@ void * rspamd_milter_update_userdata (struct rspamd_milter_session *session,
 /**
  * Sets SMTP reply string
  * @param session
- * @param xcode
  * @param rcode
+ * @param xcode
  * @param reply
  * @return
  */
 gboolean rspamd_milter_set_reply (struct rspamd_milter_session *session,
-		rspamd_fstring_t *xcode,
 		rspamd_fstring_t *rcode,
+		rspamd_fstring_t *xcode,
 		rspamd_fstring_t *reply);
 
 /**

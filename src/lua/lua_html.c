@@ -249,9 +249,6 @@ lua_html_has_property (lua_State *L)
 		else if (strcmp (propname, "unbalanced") == 0) {
 			ret = hc->flags & RSPAMD_HTML_FLAG_UNBALANCED;
 		}
-		else if (strcmp (propname, "unbalanced") == 0) {
-			ret = hc->flags & RSPAMD_HTML_FLAG_UNBALANCED;
-		}
 		else if (strcmp (propname, "data_urls") == 0) {
 			ret = hc->flags & RSPAMD_HTML_FLAG_HAS_DATA_URLS;
 		}

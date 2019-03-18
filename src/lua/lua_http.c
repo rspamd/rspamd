@@ -127,10 +127,6 @@ lua_http_fin (gpointer arg)
 		g_free (cbd->mime_type);
 	}
 
-	if (cbd->host) {
-		g_free (cbd->host);
-	}
-
 	if (cbd->auth) {
 		g_free (cbd->auth);
 	}
@@ -368,8 +364,6 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 static gboolean
 lua_http_make_connection (struct lua_http_cbdata *cbd)
 {
-	int fd;
-
 	rspamd_inet_address_set_port (cbd->addr, cbd->msg->port);
 
 	if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE) {
@@ -384,22 +378,14 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 				cbd->host);
 	}
 	else {
-		fd = rspamd_inet_address_connect (cbd->addr, SOCK_STREAM, TRUE);
-
-		if (fd == -1) {
-			msg_info ("cannot connect to %V", cbd->msg->host);
-			return FALSE;
-		}
-
-		cbd->fd = fd;
-		cbd->conn = rspamd_http_connection_new (
+		cbd->fd = -1;
+		cbd->conn = rspamd_http_connection_new_client (
 				NULL, /* Default context */
-				fd,
 				NULL,
 				lua_http_error_handler,
 				lua_http_finish_handler,
 				RSPAMD_HTTP_CLIENT_SIMPLE,
-				RSPAMD_HTTP_CLIENT);
+				cbd->addr);
 	}
 
 	if (cbd->conn) {
@@ -536,6 +522,7 @@ lua_http_push_headers (lua_State *L, struct rspamd_http_message *msg)
  * @param {resolver} resolver to perform DNS-requests. Usually got from either `task` or `config`
  * @param {boolean} gzip if true, body of the requests will be compressed
  * @param {boolean} no_ssl_verify disable SSL peer checks
+ * @param {boolean} keepalive enable keep-alive pool
  * @param {string} user for HTTP authentication
  * @param {string} password for HTTP authentication, only if "user" present
  * @return {boolean} `true`, in **async** mode, if a request has been successfully scheduled. If this value is `false` then some error occurred, the callback thus will not be called.
@@ -751,6 +738,10 @@ lua_http_request (lua_State *L)
 							rspamd_fstring_free (body);
 						}
 
+						if (mime_type) {
+							g_free (mime_type);
+						}
+
 						return luaL_error (L, "invalid body argument: %s",
 								lua_typename (L, lua_type (L, -1)));
 					}
@@ -940,7 +931,7 @@ lua_http_request (lua_State *L)
 	}
 
 	if (msg->host) {
-		cbd->host = rspamd_fstring_cstr (msg->host);
+		cbd->host = msg->host->str;
 	}
 
 	if (body) {

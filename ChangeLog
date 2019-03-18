@@ -1,3 +1,142 @@
+1.9.0: 12 Mar 2019
+  * [Conf] Add missing includes
+  * [Conf] Move to options
+  * [Conf] Rbl: DWL is actually special whitelist
+  * [Conf] Relax some uribl rules
+  * [Conf] Remove abuse.ch
+  * [CritFix] Html: Entities are not valid within tag params values
+  * [Feature] Add `rspamadm mime sign` tool
+  * [Feature] Add configgraph utility
+  * [Feature] Add dedicated ZW spaces detection for URLs
+  * [Feature] Add flag to url object when visible part is url_like
+  * [Feature] Add method task:lookup_words
+  * [Feature] Add pyzor support (by crosenberg)
+  * [Feature] Allow to add upstream watchers to Lua API
+  * [Feature] Allow to set rewrite subject pattern from settings
+  * [Feature] Better escaping of unicode
+  * [Feature] Clickhouse: Allow to store subject in Clickhouse
+  * [Feature] Core: Add QP encoding utility
+  * [Feature] Core: Add libmagic detection for all parts
+  * [Feature] Core: Add support for gzip archives
+  * [Feature] Core: Allow to construct scan tasks from raw data
+  * [Feature] Core: Detect charset in archived files
+  * [Feature] Core: Ignore and mark invisible spaces
+  * [Feature] Core: Normalise zero-width spaces in urls
+  * [Feature] Core: Process data urls for images
+  * [Feature] Core: Relax quoted-printable encoding
+  * [Feature] Core: Support RFC2231 encoding in headers
+  * [Feature] Core: Support telephone URLs
+  * [Feature] Core: allow to emit soft reject on task timeout
+  * [Feature] DCC: Add bulkness and reputation checks to dcc
+  * [Feature] Elastic: Modernize plugin
+  * [Feature] Export visible part of url to lua
+  * [Feature] Fuzzy_storage: add preliminary support of rate limits
+  * [Feature] HTML: Specially treat data urls in HTML
+  * [Feature] Implement event watchers for upstreams
+  * [Feature] Implement includes tracing in Lua
+  * [Feature] Improve dkim part in configwizard
+  * [Feature] Lua_scanners: Add VadeSecure engine support
+  * [Feature] Lua_task: Add flexible method to get specific urls
+  * [Feature] Mime_types: Add MIME_BAD_UNICODE rule
+  * [Feature] Mime_types: Use detected content type as well
+  * [Feature] Plugins: Add preliminary version of the external services plugin
+  * [Feature] Query sentinel on master errors
+  * [Feature] Regexp: Allow local lua functions in Rspamd regexp module
+  * [Feature] Rspamadm: Allow to append footers to plain messages
+  * [Feature] Rspamadm: Allow to rewrite headers in messages
+  * [Feature] Selectors: Add `ipmask` processor
+  * [Feature] Settings: Allow hostname match
+  * [Feature] Settings: Allow local when selecting settings
+  * [Feature] Settings: Allow multiple selectors
+  * [Feature] Settings: Allow to inverse conditions
+  * [Feature] Support User-Agent in HTTP requests
+  * [Feature] Support ed25519 dkim keys generation
+  * [Feature] Try to filter bad unicode types during normalisation
+  * [Feature] external_services - oletools (olefy) support
+  * [Feature] lua_scanners - icap protocol support
+  * [Feature] lua_scanners - spamassassin spam scanner
+  * [Fix] Add filter for absurdic URLs
+  * [Fix] Add some more cases for Received header
+  * [Fix] Allow to disable/enable composite symbols
+  * [Fix] Arc: Use a separated list of headers for arc signing
+  * [Fix] Archive: Final fixes for 7z archives
+  * [Fix] Clickhouse: Fix database usage
+  * [Fix] Controller: Make save stats timer persistent
+  * [Fix] Core: Detect encrypted rarv5 archives
+  * [Fix] Core: Don't detect language twice
+  * [Fix] Core: Fix address rotation bug
+  * [Fix] Core: Fix content calculations for message parts
+  * [Fix] Core: Fix emails comments parsing and other issues
+  * [Fix] Core: Fix etags support
+  * [Fix] Core: Fix headers folding on the last token
+  * [Fix] Core: Fix iso-8859-16 encoding
+  * [Fix] Core: Fix log_urls flag (and encrypted logging)
+  * [Fix] Core: Fix part length when dealing with boundaries
+  * [Fix] Core: Fix parts distance calculations
+  * [Fix] Core: Fix processing of NDNs of certain type
+  * [Fix] Core: Implement logic to find some bad characters in URLs
+  * [Fix] Core: treat nodes with ttl properly in lru cache
+  * [Fix] Fix Content-Type parsing
+  * [Fix] Fix HTTP headers signing case
+  * [Fix] Fix control interface
+  * [Fix] Fix deletion of the duplicate headers
+  * [Fix] Fix emails filtering in emails module
+  * [Fix] Fix greylisting log message and logic
+  * [Fix] Fix issues with storing of the accepted addr in rspamd control
+  * [Fix] Fix maps object update race condition
+  * [Fix] Fix memor leaks and whitespace processing
+  * [Fix] Fix processing of null bytes in headers
+  * [Fix] Fix rcpt_mime and from_mime in user settings
+  * [Fix] Fix rfc2047 decoding for CD headers
+  * [Fix] Fix rfc2231 for Content-Disposition header
+  * [Fix] Fix setting of the subject pattern in config
+  * [Fix] Greylist: fix records checking
+  * [Fix] HTML: Another HTML comments exception fix
+  * [Fix] HTML: Another entities decoding logic fix
+  * [Fix] HTML: Fix HTML comments with many dashes
+  * [Fix] HTML: Fix entities in HTML attributes
+  * [Fix] HTML: Fix some more SGML tags issues
+  * [Fix] Ignore whitespaces at the end of value in DKIM records
+  * [Fix] MID module: Fix DKIM domain matching
+  * [Fix] Milter_headers: Fix remove_upstream_spam_flag and modernise config
+  * [Fix] Mime_parser: Fix issue with parsing of the trailing garbadge
+  * [Fix] Mime_parser: Fix parsing of mime parts without closing boundary
+  * [Fix] Multimap: Fix operating with userdata
+  * [Fix] Process orphaned `symbols` section
+  * [Fix] Rdns: Fix multiple replies in fake replies
+  * [Fix] Rework groups scores definitions
+  * [Fix] Set proper element when reading data from Sentinel
+  * [Fix] Set rspamd user to initialise supplementary groups on reload
+  * [Fix] Settings: Fix selectors usage
+  * [Fix] Sort data received from Sentinel to avoid constant replacing
+  * [Fix] groups.conf - filename typo
+  * [Fix] lua_scanner - oletools typos, logging
+  * [Fix] lua_scanners - actions and symbol_fail
+  * [Fix] lua_scanners - fix luacheck
+  * [Fix] lua_scanners - kaspersky - response with fname
+  * [Fix] lua_scanners - savapi redis prefix
+  * [Fix] tests - antivirus - fprot symbols
+  * [Project] Add concept of flexible actions
+  * [Project] Add heuristical from parser to received parser
+  * [Project] Add new flags to clickhouse, redis and elastic exporters
+  * [Project] Attach new received parser
+  * [Project] Fallback to callbacks from coroutines
+  * [Project] Implement keep-alive support in lua_http
+  * [Project] Lua_udp: Implement fully functional client
+  * [Project] Plug keepalive knobs into http connection handling
+  * [Project] Rspamadm: Add `modify` tool
+  * [Rework] Convert rspamd-server to a shared library
+  * [Rework] Dcc: Rework DCC plugin
+  * [Rework] Enable explicit coroutines symbols
+  * [Rework] Rework telephone urls parsing logic
+  * [Rework] Rewrite RBL module
+  * [Rework] Settings: Rework settings check
+  * [Rework] Slashing: Distinguish lualibdir, pluginsdir and sharedir
+  * [Rework] Unify task_timeout
+  * [Rework] Use VEX instructions in assembly, relocate
+  * [WebUI] Notify user if uploaded data was not learned
+  * [WebUI] Remove redundant condition
+
 1.8.3: 03 Dec 2018
   * [CritFix] Make flags mutually exclusive for mime parts
   * [CritFix] Strictly deny unencoded bad utf8 sequences in headers

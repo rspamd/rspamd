@@ -75,76 +75,62 @@ write_http_request (struct http_callback_data *cbd)
 	struct rspamd_map *map;
 
 	map = cbd->map;
+	msg = rspamd_http_new_message (HTTP_REQUEST);
 
-	if (cbd->fd != -1) {
-		close (cbd->fd);
+	if (cbd->bk->protocol == MAP_PROTO_HTTPS) {
+		msg->flags |= RSPAMD_HTTP_FLAG_SSL;
 	}
 
-	cbd->fd = rspamd_inet_address_connect (cbd->addr, SOCK_STREAM, TRUE);
+	if (cbd->check) {
+		msg->method = HTTP_HEAD;
+	}
 
-	if (cbd->fd != -1) {
-		msg = rspamd_http_new_message (HTTP_REQUEST);
+	if (cbd->stage == map_load_file) {
+		msg->url = rspamd_fstring_append (msg->url,
+				cbd->data->path, strlen (cbd->data->path));
 
-		if (cbd->bk->protocol == MAP_PROTO_HTTPS) {
-			msg->flags |= RSPAMD_HTTP_FLAG_SSL;
-		}
-
-		if (cbd->check) {
-			msg->method = HTTP_HEAD;
-		}
-
-		if (cbd->stage == map_load_file) {
-			msg->url = rspamd_fstring_append (msg->url,
-					cbd->data->path, strlen (cbd->data->path));
-
-			if (cbd->check && cbd->stage == map_load_file) {
-				if (cbd->data->last_modified != 0) {
-					rspamd_http_date_format (datebuf, sizeof (datebuf),
-							cbd->data->last_modified);
-					rspamd_http_message_add_header (msg, "If-Modified-Since",
-							datebuf);
-				}
-				if (cbd->data->etag) {
-					rspamd_http_message_add_header_len (msg, "If-None-Match",
-							cbd->data->etag->str, cbd->data->etag->len);
-				}
+		if (cbd->check && cbd->stage == map_load_file) {
+			if (cbd->data->last_modified != 0) {
+				rspamd_http_date_format (datebuf, sizeof (datebuf),
+						cbd->data->last_modified);
+				rspamd_http_message_add_header (msg, "If-Modified-Since",
+						datebuf);
+			}
+			if (cbd->data->etag) {
+				rspamd_http_message_add_header_len (msg, "If-None-Match",
+						cbd->data->etag->str, cbd->data->etag->len);
 			}
 		}
-		else if (cbd->stage == map_load_pubkey) {
-			msg->url = rspamd_fstring_append (msg->url,
-					cbd->data->path, strlen (cbd->data->path));
-			msg->url = rspamd_fstring_append (msg->url, ".pub", 4);
-		}
-		else if (cbd->stage == map_load_signature) {
-			msg->url = rspamd_fstring_append (msg->url,
-					cbd->data->path, strlen (cbd->data->path));
-			msg->url = rspamd_fstring_append (msg->url, ".sig", 4);
-		}
-		else {
-			g_assert_not_reached ();
-		}
-
-		msg->url = rspamd_fstring_append (msg->url, cbd->data->rest,
-					strlen (cbd->data->rest));
-
-		if (cbd->data->userinfo) {
-			rspamd_http_message_add_header (msg, "Authorization",
-					cbd->data->userinfo);
-		}
-
-		MAP_RETAIN (cbd, "http_callback_data");
-		rspamd_http_connection_write_message (cbd->conn,
-				msg,
-				cbd->data->host,
-				NULL,
-				cbd,
-				&cbd->tv);
+	}
+	else if (cbd->stage == map_load_pubkey) {
+		msg->url = rspamd_fstring_append (msg->url,
+				cbd->data->path, strlen (cbd->data->path));
+		msg->url = rspamd_fstring_append (msg->url, ".pub", 4);
+	}
+	else if (cbd->stage == map_load_signature) {
+		msg->url = rspamd_fstring_append (msg->url,
+				cbd->data->path, strlen (cbd->data->path));
+		msg->url = rspamd_fstring_append (msg->url, ".sig", 4);
 	}
 	else {
-		msg_err_map ("cannot connect to %s: %s", cbd->data->host,
-				strerror (errno));
-		cbd->periodic->errored = TRUE;
+		g_assert_not_reached ();
 	}
+
+	msg->url = rspamd_fstring_append (msg->url, cbd->data->rest,
+			strlen (cbd->data->rest));
+
+	if (cbd->data->userinfo) {
+		rspamd_http_message_add_header (msg, "Authorization",
+				cbd->data->userinfo);
+	}
+
+	MAP_RETAIN (cbd, "http_callback_data");
+	rspamd_http_connection_write_message (cbd->conn,
+			msg,
+			cbd->data->host,
+			NULL,
+			cbd,
+			&cbd->tv);
 }
 
 static gboolean
@@ -280,10 +266,6 @@ free_http_cbdata_common (struct http_callback_data *cbd, gboolean plan_new)
 	if (cbd->conn) {
 		rspamd_http_connection_unref (cbd->conn);
 		cbd->conn = NULL;
-	}
-
-	if (cbd->fd != -1) {
-		close (cbd->fd);
 	}
 
 	if (cbd->addr) {
@@ -517,7 +499,13 @@ http_map_finish (struct rspamd_http_connection *conn,
 					}
 				}
 
-				rspamd_http_connection_reset (cbd->conn);
+				rspamd_http_connection_unref (cbd->conn);
+				cbd->conn = rspamd_http_connection_new_client (NULL,
+						NULL,
+						http_map_error,
+						http_map_finish,
+						RSPAMD_HTTP_CLIENT_SIMPLE|RSPAMD_HTTP_CLIENT_SHARED,
+						cbd->addr);
 				write_http_request (cbd);
 				MAP_RELEASE (cbd, "http_callback_data");
 
@@ -563,7 +551,13 @@ http_map_finish (struct rspamd_http_connection *conn,
 			}
 
 			cbd->stage = map_load_signature;
-			rspamd_http_connection_reset (cbd->conn);
+			rspamd_http_connection_unref (cbd->conn);
+			cbd->conn = rspamd_http_connection_new_client (NULL,
+					NULL,
+					http_map_error,
+					http_map_finish,
+					RSPAMD_HTTP_CLIENT_SIMPLE|RSPAMD_HTTP_CLIENT_SHARED,
+					cbd->addr);
 			write_http_request (cbd);
 			MAP_RELEASE (cbd, "http_callback_data");
 
@@ -1264,20 +1258,15 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 
 			if (cbd->addr != NULL) {
 				rspamd_inet_address_set_port (cbd->addr, cbd->data->port);
-				/* Try to open a socket */
-				cbd->fd = rspamd_inet_address_connect (cbd->addr, SOCK_STREAM,
-						TRUE);
+				cbd->conn = rspamd_http_connection_new_client (NULL,
+						NULL,
+						http_map_error,
+						http_map_finish,
+						flags,
+						cbd->addr);
 
-				if (cbd->fd != -1) {
+				if (cbd->conn != NULL) {
 					cbd->stage = map_load_file;
-					cbd->conn = rspamd_http_connection_new (NULL,
-							cbd->fd,
-							NULL,
-							http_map_error,
-							http_map_finish,
-							flags,
-							RSPAMD_HTTP_CLIENT);
-
 					write_http_request (cbd);
 				}
 				else {
@@ -1623,7 +1612,6 @@ check:
 	cbd->ev_base = map->ev_base;
 	cbd->map = map;
 	cbd->data = data;
-	cbd->fd = -1;
 	cbd->check = check;
 	cbd->periodic = periodic;
 	MAP_RETAIN (periodic, "periodic");
@@ -1638,20 +1626,16 @@ check:
 	/* Send both A and AAAA requests */
 	if (rspamd_parse_inet_address (&cbd->addr, data->host, strlen (data->host))) {
 		rspamd_inet_address_set_port (cbd->addr, cbd->data->port);
-		cbd->fd = rspamd_inet_address_connect (cbd->addr, SOCK_STREAM,
-				TRUE);
+		cbd->conn = rspamd_http_connection_new_client (
+				NULL,
+				NULL,
+				http_map_error,
+				http_map_finish,
+				flags,
+				cbd->addr);
 
-		if (cbd->fd != -1) {
+		if (cbd->conn != NULL) {
 			cbd->stage = map_load_file;
-			cbd->conn = rspamd_http_connection_new (
-					NULL,
-					cbd->fd,
-					NULL,
-					http_map_error,
-					http_map_finish,
-					flags,
-					RSPAMD_HTTP_CLIENT);
-
 			write_http_request (cbd);
 			MAP_RELEASE (cbd, "http_callback_data");
 		}
@@ -2685,7 +2669,7 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 			}
 		}
 
-		if (map->backends->len == 0) {
+		if (!map->backends || map->backends->len == 0) {
 			msg_err_config ("map has no urls to be loaded: no valid backends");
 			goto err;
 		}

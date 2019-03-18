@@ -1138,15 +1138,15 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 
 gboolean
 rspamd_milter_set_reply (struct rspamd_milter_session *session,
-		rspamd_fstring_t *xcode,
 		rspamd_fstring_t *rcode,
+		rspamd_fstring_t *xcode,
 		rspamd_fstring_t *reply)
 {
 	GString *buf;
 	gboolean ret;
 
 	buf = g_string_sized_new (xcode->len + rcode->len + reply->len + 2);
-	rspamd_printf_gstring (buf, "%V %V %V", xcode, rcode, reply);
+	rspamd_printf_gstring (buf, "%V %V %V", rcode, xcode, reply);
 	ret = rspamd_milter_send_action (session, RSPAMD_MILTER_REPLYCODE,
 		buf);
 	g_string_free (buf, TRUE);
@@ -1301,7 +1301,7 @@ rspamd_milter_del_header (struct rspamd_milter_session *session,
 	value.len = 0;
 
 	return rspamd_milter_send_action (session, RSPAMD_MILTER_CHGHEADER,
-			idx, name, value);
+			idx, name, &value);
 }
 
 void

@@ -3776,7 +3776,8 @@ start_controller_worker (struct rspamd_worker *worker)
 			"password");
 
 	/* Accept event */
-	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->ev_base);
+	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->ev_base,
+			ctx->cfg->ups_ctx);
 	ctx->http = rspamd_http_router_new (rspamd_controller_error_handler,
 			rspamd_controller_finish_handler, &ctx->io_tv,
 			ctx->static_files_dir, ctx->http_ctx);

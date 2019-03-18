@@ -1580,7 +1580,6 @@ rspamd_symcache_make_checkpoint (struct rspamd_task *task,
 	checkpoint->pass = RSPAMD_CACHE_PASS_INIT;
 	task->checkpoint = checkpoint;
 
-	task->result = task->result;
 
 	return checkpoint;
 }
