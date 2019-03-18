@@ -22,6 +22,7 @@
 #include "libmime/email_addr.h"
 #include "libmime/content_type.h"
 #include "libmime/mime_headers.h"
+#include "libutil/hash.h"
 #include "linenoise.h"
 #include <math.h>
 #include <glob.h>
@@ -2458,6 +2459,12 @@ lua_util_is_utf_spoofed (lua_State *L)
 			uspoof_setChecks (spc_sgl,
 					USPOOF_INVISIBLE | USPOOF_MIXED_SCRIPT_CONFUSABLE | USPOOF_ANY_CASE,
 					&uc_err);
+			if (uc_err != U_ZERO_ERROR) {
+				msg_err ("Cannot set proper checks for uspoof: %s", u_errorName (uc_err));
+				lua_pushboolean (L, false);
+				uspoof_close(spc);
+				return 1;
+			}
 		}
 
 		ret = uspoof_checkUTF8 (spc_sgl, s1, l1, NULL, &uc_err);
@@ -2533,28 +2540,52 @@ lua_util_is_utf_outside_range(lua_State *L)
 	guint32 range_start = lua_tointeger (L, 2);
 	guint32 range_end = lua_tointeger (L, 3);
 
-	USpoofChecker *spc_sgl;
-	USet * allowed_chars;
-	UErrorCode uc_err = U_ZERO_ERROR;
+	static rspamd_lru_hash_t *validators;
+
+	if (validators == NULL) {
+		validators = rspamd_lru_hash_new(16, g_free, (GDestroyNotify)uspoof_close);
+	}
 
 	if (string_to_check) {
-		spc_sgl = uspoof_open (&uc_err);
-		if (uc_err != U_ZERO_ERROR) {
-			msg_err ("cannot init spoof checker: %s", u_errorName (uc_err));
-			lua_pushboolean (L, false);
-			uspoof_close(spc_sgl);
-			return 1;
+		guint64 hash_key = (guint64)range_end << 32 || range_start;
+
+		USpoofChecker *validator = rspamd_lru_hash_lookup(validators, &hash_key, time(NULL));
+
+		UErrorCode uc_err = U_ZERO_ERROR;
+
+		if (validator == NULL) {
+			USet * allowed_chars;
+			guint64 * creation_hash_key = g_malloc(sizeof(guint64));
+			*creation_hash_key = hash_key;
+
+			validator = uspoof_open (&uc_err);
+			if (uc_err != U_ZERO_ERROR) {
+				msg_err ("cannot init spoof checker: %s", u_errorName (uc_err));
+				lua_pushboolean (L, false);
+				uspoof_close(validator);
+				return 1;
+			}
+
+			allowed_chars = uset_openEmpty();
+			uset_addRange(allowed_chars, range_start, range_end);
+			uspoof_setAllowedChars(validator, allowed_chars, &uc_err);
+
+			uspoof_setChecks (validator,
+				USPOOF_CHAR_LIMIT | USPOOF_ANY_CASE, &uc_err);
+
+			uset_close(allowed_chars);
+
+			if (uc_err != U_ZERO_ERROR) {
+				msg_err ("Cannot configure uspoof: %s", u_errorName (uc_err));
+				lua_pushboolean (L, false);
+				uspoof_close(validator);
+				return 1;
+			}
+
+			rspamd_lru_hash_insert(validators, creation_hash_key, validator, time(NULL), 0);
 		}
 
-		allowed_chars = uset_openEmpty();
-		uset_addRange(allowed_chars, range_start, range_end);
-		uspoof_setAllowedChars(spc_sgl, allowed_chars, &uc_err);
-
-		uspoof_setChecks (spc_sgl,
-			USPOOF_CHAR_LIMIT | USPOOF_ANY_CASE, &uc_err);
-		ret = uspoof_checkUTF8 (spc_sgl, string_to_check, len_of_string, NULL, &uc_err);
-		uset_close(allowed_chars);
-		uspoof_close(spc_sgl);
+		ret = uspoof_checkUTF8 (validator, string_to_check, len_of_string, NULL, &uc_err);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
