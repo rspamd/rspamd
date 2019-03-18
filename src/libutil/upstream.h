@@ -157,6 +157,10 @@ gboolean rspamd_upstreams_parse_line (struct upstream_list *ups,
 		const gchar *str, guint16 def_port, void *data);
 
 
+gboolean rspamd_upstreams_parse_line_len (struct upstream_list *ups,
+										  const gchar *str, gsize len,
+										  guint16 def_port,
+										  void *data);
 /**
  * Parse upstreams list from the UCL object
  * @param ups

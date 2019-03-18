@@ -1911,7 +1911,7 @@ main (gint argc, gchar **argv, gchar **env)
 	http_config.kp_cache_size_server = 0;
 	http_config.user_agent = user_agent;
 	http_ctx = rspamd_http_context_create_config (&http_config,
-			ev_base);
+			ev_base, NULL);
 
 	/* Ignore sigpipe */
 	sigemptyset (&sigpipe_act.sa_mask);

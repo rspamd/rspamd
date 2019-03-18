@@ -2177,7 +2177,8 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);
 
-	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->ev_base);
+	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->ev_base,
+			ctx->cfg->ups_ctx);
 
 	if (ctx->has_self_scan) {
 		/* Additional initialisation needed */

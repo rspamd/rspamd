@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
+#include <contrib/http-parser/http_parser.h>
 #include "http_context.h"
 #include "http_private.h"
 #include "keypair.h"
 #include "keypairs_cache.h"
 #include "cfg_file.h"
 #include "contrib/libottery/ottery.h"
+#include "contrib/http-parser/http_parser.h"
 #include "rspamd.h"
 
 INIT_LOG_MODULE(http_context)
@@ -85,7 +87,8 @@ rspamd_http_context_client_rotate_ev (gint fd, short what, void *arg)
 
 static struct rspamd_http_context*
 rspamd_http_context_new_default (struct rspamd_config *cfg,
-								 struct event_base *ev_base)
+								 struct event_base *ev_base,
+								 struct upstream_ctx *ups_ctx)
 {
 	struct rspamd_http_context *ctx;
 
@@ -100,6 +103,7 @@ rspamd_http_context_new_default (struct rspamd_config *cfg,
 	ctx->config.client_key_rotate_time = default_rotate_time;
 	ctx->config.user_agent = default_user_agent;
 	ctx->config.keepalive_interval = default_keepalive_interval;
+	ctx->ups_ctx = ups_ctx;
 
 	if (cfg) {
 		ctx->ssl_ctx = cfg->libs_ctx->ssl_ctx;
@@ -118,8 +122,62 @@ rspamd_http_context_new_default (struct rspamd_config *cfg,
 }
 
 static void
+rspamd_http_context_parse_proxy (struct rspamd_http_context *ctx,
+								 const gchar *name,
+								 struct upstream_list **pls)
+{
+	struct http_parser_url u;
+	struct upstream_list *uls;
+
+	if (!ctx->ups_ctx) {
+		msg_err ("cannot parse http_proxy %s - upstreams context is udefined", name);
+		return;
+	}
+
+	memset (&u, 0, sizeof (u));
+
+	if (http_parser_parse_url (name, strlen (name), 1, &u) == 0) {
+		if (!(u.field_set & (1u << UF_HOST)) || u.port == 0) {
+			msg_err ("cannot parse http(s) proxy %s - invalid host or port", name);
+
+			return;
+		}
+
+		uls = rspamd_upstreams_create (ctx->ups_ctx);
+
+		if (!rspamd_upstreams_parse_line_len (uls,
+				name + u.field_data[UF_HOST].off,
+				u.field_data[UF_HOST].len, u.port, NULL)) {
+			msg_err ("cannot parse http(s) proxy %s - invalid data", name);
+
+			rspamd_upstreams_destroy (uls);
+		}
+		else {
+			*pls = uls;
+			msg_info ("set http(s) proxy to %s", name);
+		}
+	}
+	else {
+		uls = rspamd_upstreams_create (ctx->ups_ctx);
+
+		if (!rspamd_upstreams_parse_line (uls,
+				name, 3128, NULL)) {
+			msg_err ("cannot parse http(s) proxy %s - invalid data", name);
+
+			rspamd_upstreams_destroy (uls);
+		}
+		else {
+			*pls = uls;
+			msg_info ("set http(s) proxy to %s", name);
+		}
+	}
+}
+
+static void
 rspamd_http_context_init (struct rspamd_http_context *ctx)
 {
+
+
 	if (ctx->config.kp_cache_size_client > 0) {
 		ctx->client_kp_cache = rspamd_keypair_cache_new (ctx->config.kp_cache_size_client);
 	}
@@ -140,17 +198,28 @@ rspamd_http_context_init (struct rspamd_http_context *ctx)
 		event_add (&ctx->client_rotate_ev, &tv);
 	}
 
+	if (ctx->config.http_proxy) {
+		rspamd_http_context_parse_proxy (ctx, ctx->config.http_proxy,
+				&ctx->http_proxies);
+	}
+
+	if (ctx->config.https_proxy) {
+		rspamd_http_context_parse_proxy (ctx, ctx->config.https_proxy,
+				&ctx->https_proxies);
+	}
+
 	default_ctx = ctx;
 }
 
 struct rspamd_http_context*
 rspamd_http_context_create (struct rspamd_config *cfg,
-							struct event_base *ev_base)
+							struct event_base *ev_base,
+							struct upstream_ctx *ups_ctx)
 {
 	struct rspamd_http_context *ctx;
 	const ucl_object_t *http_obj;
 
-	ctx = rspamd_http_context_new_default (cfg, ev_base);
+	ctx = rspamd_http_context_new_default (cfg, ev_base, ups_ctx);
 	http_obj = ucl_object_lookup (cfg->rcl_obj, "http");
 
 	if (http_obj) {
@@ -193,6 +262,20 @@ rspamd_http_context_create (struct rspamd_config *cfg,
 
 			if (keepalive_interval) {
 				ctx->config.keepalive_interval = ucl_object_todouble (keepalive_interval);
+			}
+
+			const ucl_object_t *http_proxy;
+			http_proxy = ucl_object_lookup (client_obj, "http_proxy");
+
+			if (http_proxy) {
+				ctx->config.http_proxy = ucl_object_tostring (http_proxy);
+			}
+
+			const ucl_object_t *https_proxy;
+			https_proxy = ucl_object_lookup (client_obj, "https_proxy");
+
+			if (https_proxy) {
+				ctx->config.https_proxy = ucl_object_tostring (https_proxy);
 			}
 		}
 
@@ -262,11 +345,12 @@ rspamd_http_context_free (struct rspamd_http_context *ctx)
 
 struct rspamd_http_context*
 rspamd_http_context_create_config (struct rspamd_http_context_cfg *cfg,
-		struct event_base *ev_base)
+								   struct event_base *ev_base,
+								   struct upstream_ctx *ups_ctx)
 {
 	struct rspamd_http_context *ctx;
 
-	ctx = rspamd_http_context_new_default (NULL, ev_base);
+	ctx = rspamd_http_context_new_default (NULL, ev_base, ups_ctx);
 	memcpy (&ctx->config, cfg, sizeof (*cfg));
 	rspamd_http_context_init (ctx);
 

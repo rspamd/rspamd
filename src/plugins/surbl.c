@@ -2187,9 +2187,9 @@ surbl_is_redirector_handler (lua_State *L)
 
 	task = lua_check_task (L, 1);
 	url = luaL_checklstring (L, 2, &len);
-	surbl_module_ctx = surbl_get_context (task->cfg);
 
 	if (task && url) {
+		surbl_module_ctx = surbl_get_context (task->cfg);
 		url_cpy = rspamd_mempool_alloc (task->task_pool, len);
 		memcpy (url_cpy, url, len);
 

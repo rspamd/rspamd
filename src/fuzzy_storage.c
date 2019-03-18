@@ -2999,7 +2999,7 @@ start_fuzzy (struct rspamd_worker *worker)
 		ctx->keypair_cache = rspamd_keypair_cache_new (ctx->keypair_cache_size);
 	}
 
-	ctx->http_ctx = rspamd_http_context_create (cfg, ctx->ev_base);
+	ctx->http_ctx = rspamd_http_context_create (cfg, ctx->ev_base, ctx->cfg->ups_ctx);
 
 	if (!ctx->collection_mode) {
 		/*

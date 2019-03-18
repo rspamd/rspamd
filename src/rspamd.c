@@ -1490,7 +1490,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_mempool_unlock_mutex (rspamd_main->start_mtx);
 
 	rspamd_main->http_ctx = rspamd_http_context_create (rspamd_main->cfg,
-			ev_base);
+			ev_base, rspamd_main->cfg->ups_ctx);
 
 	if (control_fd != -1) {
 		msg_info_main ("listening for control commands on %s",
