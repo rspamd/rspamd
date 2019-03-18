@@ -1095,6 +1095,10 @@ rspamd_http_connection_new_common (struct rspamd_http_context *ctx,
 
 	g_assert (error_handler != NULL && finish_handler != NULL);
 
+	if (ctx == NULL) {
+		ctx = rspamd_http_context_default ();
+	}
+
 	conn = g_malloc0 (sizeof (struct rspamd_http_connection));
 	conn->opts = opts;
 	conn->type = type;
@@ -1106,10 +1110,6 @@ rspamd_http_connection_new_common (struct rspamd_http_context *ctx,
 	conn->finished = FALSE;
 
 	/* Init priv */
-	if (ctx == NULL) {
-		ctx = rspamd_http_context_default ();
-	}
-
 	priv = g_malloc0 (sizeof (struct rspamd_http_connection_private));
 	conn->priv = priv;
 	priv->ctx = ctx;
@@ -1164,6 +1164,10 @@ rspamd_http_connection_new_client (struct rspamd_http_context *ctx,
 								   rspamd_inet_addr_t *addr)
 {
 	gint fd;
+
+	if (ctx == NULL) {
+		ctx = rspamd_http_context_default ();
+	}
 
 	if (ctx->http_proxies) {
 		struct upstream *up = rspamd_upstream_get (ctx->http_proxies,
