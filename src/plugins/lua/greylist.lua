@@ -66,7 +66,7 @@ local rspamd_util = require "rspamd_util"
 local fun = require "fun"
 local hash = require "rspamd_cryptobox_hash"
 local rspamd_lua_utils = require "lua_util"
-local lua_map = require "lua_map"
+local lua_map = require "lua_maps"
 local N = "greylist"
 
 local function data_key(task)
