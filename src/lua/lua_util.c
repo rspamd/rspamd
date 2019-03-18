@@ -2543,13 +2543,13 @@ lua_util_is_utf_outside_range(lua_State *L)
 	static rspamd_lru_hash_t *validators;
 
 	if (validators == NULL) {
-		validators = rspamd_lru_hash_new(16, g_free, (GDestroyNotify)uspoof_close);
+		validators = rspamd_lru_hash_new_full(16, g_free, (GDestroyNotify)uspoof_close, g_int64_hash, g_int64_equal);
 	}
 
 	if (string_to_check) {
 		guint64 hash_key = (guint64)range_end << 32 || range_start;
 
-		USpoofChecker *validator = rspamd_lru_hash_lookup(validators, &hash_key, time(NULL));
+		USpoofChecker *validator = rspamd_lru_hash_lookup(validators, &hash_key, 0);
 
 		UErrorCode uc_err = U_ZERO_ERROR;
 
@@ -2563,6 +2563,7 @@ lua_util_is_utf_outside_range(lua_State *L)
 				msg_err ("cannot init spoof checker: %s", u_errorName (uc_err));
 				lua_pushboolean (L, false);
 				uspoof_close(validator);
+				g_free(creation_hash_key);
 				return 1;
 			}
 
@@ -2579,10 +2580,11 @@ lua_util_is_utf_outside_range(lua_State *L)
 				msg_err ("Cannot configure uspoof: %s", u_errorName (uc_err));
 				lua_pushboolean (L, false);
 				uspoof_close(validator);
+				g_free(creation_hash_key);
 				return 1;
 			}
 
-			rspamd_lru_hash_insert(validators, creation_hash_key, validator, time(NULL), 0);
+			rspamd_lru_hash_insert(validators, creation_hash_key, validator, 0, 0);
 		}
 
 		ret = uspoof_checkUTF8 (validator, string_to_check, len_of_string, NULL, &uc_err);
