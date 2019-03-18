@@ -32,6 +32,7 @@ local settings = {
   action = nil,
   expire = 86400, -- 1 day by default
   key_prefix = 'rr',
+  key_size = 20,
   message = 'Message is reply to one we originated',
   symbol = 'REPLY',
   score = -4, -- Default score
@@ -45,21 +46,49 @@ local settings = {
 
 local N = "replies"
 
-local function make_key(goop)
+local function make_key(goop, sz, prefix)
   local h = hash.create()
   h:update(goop)
-  local key = h:base32():sub(1, 20)
-  key = settings['key_prefix'] .. key
+  local key
+  if sz then
+    key = h:base32():sub(1, sz)
+  else
+    key = h:base32()
+  end
+
+  if prefix then
+    key = prefix .. key
+  end
+
   return key
 end
 
 local function replies_check(task)
+  local function check_recipient(stored_rcpt)
+    local real_rcpt = task:get_principal_recipient()
+
+    if real_rcpt then
+      local real_rcpt_h = make_key(real_rcpt:lower(), 8)
+      if real_rcpt_h == stored_rcpt then
+        return true
+      end
+
+      rspamd_logger.infox(task, 'ignoring reply as recipient %s is not matching hash %s',
+          real_rcpt, stored_rcpt)
+    else
+      rspamd_logger.infox(task, 'ignoring reply as recipient cannot be detected for hash %s',
+          stored_rcpt)
+    end
+
+    return false
+  end
+
   local function redis_get_cb(err, data)
     if err ~= nil then
       rspamd_logger.errx(task, 'redis_get_cb received error: %1', err)
       return
     end
-    if data == '1' then
+    if data and check_recipient(data) then
       -- Hash was found
       task:insert_result(settings['symbol'], 1.0)
       if settings['action'] ~= nil then
@@ -80,7 +109,7 @@ local function replies_check(task)
     return
   end
   -- Create hash of in-reply-to and query redis
-  local key = make_key(irt)
+  local key = make_key(irt, settings.key_size, settings.key_prefix)
 
   local ret = lua_redis.redis_make_request(task,
     redis_params, -- connect params
@@ -117,18 +146,26 @@ local function replies_set(task)
     return
   end
   -- Create hash of message-id and store to redis
-  local key = make_key(msg_id)
+  local key = make_key(msg_id, settings.key_size, settings.key_prefix)
   lua_util.debugm(N, task, 'storing message-id for replies check')
-  local ret = lua_redis.redis_make_request(task,
-    redis_params, -- connect params
-    key, -- hash key
-    true, -- is write
-    redis_set_cb, --callback
-    'SETEX', -- command
-    {key, tostring(settings['expire']), "1"} -- arguments
-  )
-  if not ret then
-    rspamd_logger.errx(task, "redis request wasn't scheduled")
+
+  local value = task:get_reply_sender()
+
+  if value then
+    value = make_key(value:lower(), 8)
+    local ret = lua_redis.redis_make_request(task,
+        redis_params, -- connect params
+        key, -- hash key
+        true, -- is write
+        redis_set_cb, --callback
+        'SETEX', -- command
+        {key, tostring(settings['expire']), value:lower()} -- arguments
+    )
+    if not ret then
+      rspamd_logger.errx(task, "redis request wasn't scheduled")
+    end
+  else
+    rspamd_logger.infox(task, "cannot find reply sender address")
   end
 end
 
