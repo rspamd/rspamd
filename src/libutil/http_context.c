@@ -203,11 +203,6 @@ rspamd_http_context_init (struct rspamd_http_context *ctx)
 				&ctx->http_proxies);
 	}
 
-	if (ctx->config.https_proxy) {
-		rspamd_http_context_parse_proxy (ctx, ctx->config.https_proxy,
-				&ctx->https_proxies);
-	}
-
 	default_ctx = ctx;
 }
 
@@ -269,13 +264,6 @@ rspamd_http_context_create (struct rspamd_config *cfg,
 
 			if (http_proxy) {
 				ctx->config.http_proxy = ucl_object_tostring (http_proxy);
-			}
-
-			const ucl_object_t *https_proxy;
-			https_proxy = ucl_object_lookup (client_obj, "https_proxy");
-
-			if (https_proxy) {
-				ctx->config.https_proxy = ucl_object_tostring (https_proxy);
 			}
 		}
 
@@ -339,6 +327,10 @@ rspamd_http_context_free (struct rspamd_http_context *ctx)
 	});
 
 	kh_destroy (rspamd_keep_alive_hash, ctx->keep_alive_hash);
+
+	if (ctx->http_proxies) {
+		rspamd_upstreams_destroy (ctx->http_proxies);
+	}
 
 	g_free (ctx);
 }

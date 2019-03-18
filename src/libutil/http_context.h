@@ -36,7 +36,6 @@ struct rspamd_http_context_cfg {
 	gdouble client_key_rotate_time;
 	const gchar *user_agent;
 	const gchar *http_proxy;
-	const gchar *https_proxy;
 };
 
 /**

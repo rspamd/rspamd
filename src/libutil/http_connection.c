@@ -1165,58 +1165,29 @@ rspamd_http_connection_new_client (struct rspamd_http_context *ctx,
 {
 	gint fd;
 
-	if (opts & RSPAMD_HTTP_CLIENT_ENCRYPTED) {
-		if (ctx->https_proxies) {
-			struct upstream *up = rspamd_upstream_get (ctx->https_proxies,
-					RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
+	if (ctx->http_proxies) {
+		struct upstream *up = rspamd_upstream_get (ctx->http_proxies,
+				RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
 
-			if (up) {
-				rspamd_inet_addr_t *proxy_addr = rspamd_upstream_addr_next (up);
+		if (up) {
+			rspamd_inet_addr_t *proxy_addr = rspamd_upstream_addr_next (up);
 
-				fd = rspamd_inet_address_connect (proxy_addr, SOCK_STREAM, TRUE);
+			fd = rspamd_inet_address_connect (proxy_addr, SOCK_STREAM, TRUE);
 
-				if (fd == -1) {
-					msg_info ("cannot connect to https proxy %s: %s",
-							rspamd_inet_address_to_string (proxy_addr),
-							strerror (errno));
-					rspamd_upstream_fail (up, TRUE);
+			if (fd == -1) {
+				msg_info ("cannot connect to http proxy %s: %s",
+						rspamd_inet_address_to_string (proxy_addr),
+						strerror (errno));
+				rspamd_upstream_fail (up, TRUE);
 
-					return NULL;
-				}
-
-				return rspamd_http_connection_new_common (ctx, fd, body_handler,
-						error_handler, finish_handler, opts,
-						RSPAMD_HTTP_CLIENT,
-						RSPAMD_HTTP_CONN_OWN_SOCKET|RSPAMD_HTTP_CONN_FLAG_PROXY,
-						up);
+				return NULL;
 			}
-		}
-	}
-	else {
-		if (ctx->http_proxies) {
-			struct upstream *up = rspamd_upstream_get (ctx->http_proxies,
-					RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
 
-			if (up) {
-				rspamd_inet_addr_t *proxy_addr = rspamd_upstream_addr_next (up);
-
-				fd = rspamd_inet_address_connect (proxy_addr, SOCK_STREAM, TRUE);
-
-				if (fd == -1) {
-					msg_info ("cannot connect to http proxy %s: %s",
-							rspamd_inet_address_to_string (proxy_addr),
-							strerror (errno));
-					rspamd_upstream_fail (up, TRUE);
-
-					return NULL;
-				}
-
-				return rspamd_http_connection_new_common (ctx, fd, body_handler,
-						error_handler, finish_handler, opts,
-						RSPAMD_HTTP_CLIENT,
-						RSPAMD_HTTP_CONN_OWN_SOCKET|RSPAMD_HTTP_CONN_FLAG_PROXY,
-						up);
-			}
+			return rspamd_http_connection_new_common (ctx, fd, body_handler,
+					error_handler, finish_handler, opts,
+					RSPAMD_HTTP_CLIENT,
+					RSPAMD_HTTP_CONN_OWN_SOCKET|RSPAMD_HTTP_CONN_FLAG_PROXY,
+					up);
 		}
 	}
 
@@ -1878,11 +1849,12 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 			else {
 				if (conn->priv->flags & RSPAMD_HTTP_CONN_FLAG_PROXY) {
 					rspamd_printf_fstring (buf,
-							"%s http://%s:%d/%V HTTP/1.1\r\n"
+							"%s %s://%s:%d/%V HTTP/1.1\r\n"
 							"Connection: %s\r\n"
 							"Host: %s\r\n"
 							"Content-Length: %z\r\n",
 							http_method_str (msg->method),
+							(msg->flags & RSPAMD_HTTP_FLAG_SSL) ? "https" : "http",
 							host,
 							msg->port,
 							msg->url,
@@ -2242,6 +2214,11 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 	}
 
 	priv->flags &= ~RSPAMD_HTTP_CONN_FLAG_RESETED;
+
+	if (priv->flags & RSPAMD_HTTP_CONN_FLAG_PROXY) {
+		/* We need to disable SSL flag! */
+		msg->flags &=~ RSPAMD_HTTP_FLAG_SSL;
+	}
 
 	if (rspamd_event_pending (&priv->ev, EV_TIMEOUT|EV_WRITE|EV_READ)) {
 		event_del (&priv->ev);

@@ -98,7 +98,6 @@ struct rspamd_http_context {
 	struct rspamd_keypair_cache *server_kp_cache;
 	struct upstream_ctx *ups_ctx;
 	struct upstream_list *http_proxies;
-	struct upstream_list *https_proxies;
 	gpointer ssl_ctx;
 	gpointer ssl_ctx_noverify;
 	struct event_base *ev_base;
