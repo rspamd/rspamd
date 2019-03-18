@@ -424,6 +424,16 @@ LUA_FUNCTION_DEF (task, get_recipients);
  * @return {string} principal recipient
  */
 LUA_FUNCTION_DEF (task, get_principal_recipient);
+/***
+ * @method task:get_reply_sender()
+ * Returns a single string with address that should be used to reply on a message
+ *
+ * - reply-to header
+ * - from header
+ * - smtp from as a last resort
+ * @return {address} email address
+ */
+LUA_FUNCTION_DEF (task, get_sender);
 
 /***
  * @method task:set_recipients([type], {rcpt1, rcpt2...})
@@ -1039,6 +1049,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_recipients),
 	LUA_INTERFACE_DEF (task, set_recipients),
 	LUA_INTERFACE_DEF (task, get_principal_recipient),
+	LUA_INTERFACE_DEF (task, get_reply_sender),
 	LUA_INTERFACE_DEF (task, has_from),
 	LUA_INTERFACE_DEF (task, get_from),
 	LUA_INTERFACE_DEF (task, set_from),
@@ -3262,6 +3273,44 @@ lua_task_get_principal_recipient (lua_State *L)
 		r = rspamd_task_get_principal_recipient (task);
 		if (r != NULL) {
 			lua_pushstring (L, r);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_reply_sender (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_mime_header *rh;
+
+	if (task) {
+		GPtrArray *ar;
+
+		ar = rspamd_message_get_header_array (task, "Reply-To", false);
+
+		if (ar && ar->len == 1) {
+			rh = (struct rspamd_mime_header *)g_ptr_array_index (ar, 0);
+			lua_pushstring (L, rh->decoded);
+		}
+		else if (task->from_mime && task->from_mime->len == 1) {
+			struct rspamd_email_address *addr;
+
+			addr = (struct rspamd_email_address *)g_ptr_array_index (task->from_mime, 0);
+
+			lua_pushlstring (L, addr->addr, addr->addr_len);
+		}
+		else if (task->from_envelope) {
+			lua_pushlstring (L, task->from_envelope->addr,
+					task->from_envelope->addr_len);
 		}
 		else {
 			lua_pushnil (L);
