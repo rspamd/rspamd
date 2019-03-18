@@ -1093,7 +1093,7 @@ rspamd_http_connection_new_common (struct rspamd_http_context *ctx,
 	struct rspamd_http_connection *conn;
 	struct rspamd_http_connection_private *priv;
 
-	g_assert (error_handler != NULL && finish_handler == NULL);
+	g_assert (error_handler != NULL && finish_handler != NULL);
 
 	conn = g_malloc0 (sizeof (struct rspamd_http_connection));
 	conn->opts = opts;
