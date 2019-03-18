@@ -51,6 +51,7 @@ enum rspamd_http_priv_flags {
 	RSPAMD_HTTP_CONN_FLAG_ENCRYPTION_NEEDED = 1 << 4,
 	RSPAMD_HTTP_CONN_FLAG_PROXY = 1 << 5,
 	RSPAMD_HTTP_CONN_FLAG_PROXY_REQUEST = 1 << 6,
+	RSPAMD_HTTP_CONN_OWN_SOCKET = 1 << 7,
 };
 
 #define IS_CONN_ENCRYPTED(c) ((c)->flags & RSPAMD_HTTP_CONN_FLAG_ENCRYPTED)
@@ -1078,24 +1079,25 @@ rspamd_http_parser_reset (struct rspamd_http_connection *conn)
 	priv->parser_cb.on_message_complete = rspamd_http_on_message_complete;
 }
 
-struct rspamd_http_connection *
-rspamd_http_connection_new_server (struct rspamd_http_context *ctx,
+static struct rspamd_http_connection *
+rspamd_http_connection_new_common (struct rspamd_http_context *ctx,
 								   gint fd,
 								   rspamd_http_body_handler_t body_handler,
 								   rspamd_http_error_handler_t error_handler,
 								   rspamd_http_finish_handler_t finish_handler,
-								   unsigned opts)
+								   unsigned opts,
+								   enum rspamd_http_connection_type type,
+								   enum rspamd_http_priv_flags priv_flags,
+								   struct upstream *proxy_upstream)
 {
 	struct rspamd_http_connection *conn;
 	struct rspamd_http_connection_private *priv;
 
-	if (error_handler == NULL || finish_handler == NULL) {
-		return NULL;
-	}
+	g_assert (error_handler != NULL && finish_handler == NULL);
 
 	conn = g_malloc0 (sizeof (struct rspamd_http_connection));
 	conn->opts = opts;
-	conn->type = RSPAMD_HTTP_SERVER;
+	conn->type = type;
 	conn->body_handler = body_handler;
 	conn->error_handler = error_handler;
 	conn->finish_handler = finish_handler;
@@ -1111,13 +1113,34 @@ rspamd_http_connection_new_server (struct rspamd_http_context *ctx,
 	priv = g_malloc0 (sizeof (struct rspamd_http_connection_private));
 	conn->priv = priv;
 	priv->ctx = ctx;
+	priv->flags = priv_flags;
 
-	priv->cache = ctx->server_kp_cache;
+	if (type == RSPAMD_HTTP_SERVER) {
+		priv->cache = ctx->server_kp_cache;
+	}
+	else {
+		priv->cache = ctx->client_kp_cache;
+		if (ctx->client_kp) {
+			priv->local_key = rspamd_keypair_ref (ctx->client_kp);
+		}
+	}
 
 	rspamd_http_parser_reset (conn);
 	priv->parser.data = conn;
 
 	return conn;
+}
+
+struct rspamd_http_connection *
+rspamd_http_connection_new_server (struct rspamd_http_context *ctx,
+								   gint fd,
+								   rspamd_http_body_handler_t body_handler,
+								   rspamd_http_error_handler_t error_handler,
+								   rspamd_http_finish_handler_t finish_handler,
+								   unsigned opts)
+{
+	return rspamd_http_connection_new_common (ctx, fd, body_handler,
+			error_handler, finish_handler, opts, RSPAMD_HTTP_SERVER, 0, NULL);
 }
 
 struct rspamd_http_connection *
@@ -1128,39 +1151,8 @@ rspamd_http_connection_new_client_socket (struct rspamd_http_context *ctx,
 								   unsigned opts,
 								   gint fd)
 {
-	struct rspamd_http_connection *conn;
-	struct rspamd_http_connection_private *priv;
-
-	g_assert (error_handler != NULL && finish_handler == NULL);
-
-	conn = g_malloc0 (sizeof (struct rspamd_http_connection));
-	conn->opts = opts;
-	conn->type = RSPAMD_HTTP_CLIENT;
-	conn->body_handler = body_handler;
-	conn->error_handler = error_handler;
-	conn->finish_handler = finish_handler;
-	conn->fd = fd;
-	conn->ref = 1;
-	conn->finished = FALSE;
-
-	/* Init priv */
-	if (ctx == NULL) {
-		ctx = rspamd_http_context_default ();
-	}
-
-	priv = g_malloc0 (sizeof (struct rspamd_http_connection_private));
-	conn->priv = priv;
-	priv->ctx = ctx;
-
-	priv->cache = ctx->client_kp_cache;
-	if (ctx->client_kp) {
-		priv->local_key = rspamd_keypair_ref (ctx->client_kp);
-	}
-
-	rspamd_http_parser_reset (conn);
-	priv->parser.data = conn;
-
-	return conn;
+	return rspamd_http_connection_new_common (ctx, fd, body_handler,
+			error_handler, finish_handler, opts, RSPAMD_HTTP_CLIENT, 0, NULL);
 }
 
 struct rspamd_http_connection *
@@ -1173,21 +1165,77 @@ rspamd_http_connection_new_client (struct rspamd_http_context *ctx,
 {
 	gint fd;
 
-	if (error_handler == NULL || finish_handler == NULL) {
-		return NULL;
+	if (opts & RSPAMD_HTTP_CLIENT_ENCRYPTED) {
+		if (ctx->https_proxies) {
+			struct upstream *up = rspamd_upstream_get (ctx->https_proxies,
+					RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
+
+			if (up) {
+				rspamd_inet_addr_t *proxy_addr = rspamd_upstream_addr_next (up);
+
+				fd = rspamd_inet_address_connect (proxy_addr, SOCK_STREAM, TRUE);
+
+				if (fd == -1) {
+					msg_info ("cannot connect to https proxy %s: %s",
+							rspamd_inet_address_to_string (proxy_addr),
+							strerror (errno));
+					rspamd_upstream_fail (up, TRUE);
+
+					return NULL;
+				}
+
+				return rspamd_http_connection_new_common (ctx, fd, body_handler,
+						error_handler, finish_handler, opts,
+						RSPAMD_HTTP_CLIENT,
+						RSPAMD_HTTP_CONN_OWN_SOCKET|RSPAMD_HTTP_CONN_FLAG_PROXY,
+						up);
+			}
+		}
+	}
+	else {
+		if (ctx->http_proxies) {
+			struct upstream *up = rspamd_upstream_get (ctx->http_proxies,
+					RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
+
+			if (up) {
+				rspamd_inet_addr_t *proxy_addr = rspamd_upstream_addr_next (up);
+
+				fd = rspamd_inet_address_connect (proxy_addr, SOCK_STREAM, TRUE);
+
+				if (fd == -1) {
+					msg_info ("cannot connect to http proxy %s: %s",
+							rspamd_inet_address_to_string (proxy_addr),
+							strerror (errno));
+					rspamd_upstream_fail (up, TRUE);
+
+					return NULL;
+				}
+
+				return rspamd_http_connection_new_common (ctx, fd, body_handler,
+						error_handler, finish_handler, opts,
+						RSPAMD_HTTP_CLIENT,
+						RSPAMD_HTTP_CONN_OWN_SOCKET|RSPAMD_HTTP_CONN_FLAG_PROXY,
+						up);
+			}
+		}
 	}
 
+	/* Unproxied version */
 	fd = rspamd_inet_address_connect (addr, SOCK_STREAM, TRUE);
 
 	if (fd == -1) {
-		msg_info ("cannot connect to %s: %s", rspamd_inet_address_to_string (addr),
+		msg_info ("cannot connect to proxy %s: %s",
+				rspamd_inet_address_to_string (addr),
 				strerror (errno));
+
 		return NULL;
 	}
 
-	return rspamd_http_connection_new_client_socket (ctx,
-			body_handler, error_handler, finish_handler,
-			opts | RSPAMD_HTTP_OWN_SOCKET, fd);
+	return rspamd_http_connection_new_common (ctx, fd, body_handler,
+			error_handler, finish_handler, opts,
+			RSPAMD_HTTP_CLIENT,
+			RSPAMD_HTTP_CONN_OWN_SOCKET,
+			NULL);
 }
 
 struct rspamd_http_connection *
@@ -1199,10 +1247,6 @@ rspamd_http_connection_new_keepalive (struct rspamd_http_context *ctx,
 									  const gchar *host)
 {
 	struct rspamd_http_connection *conn;
-
-	if (error_handler == NULL || finish_handler == NULL) {
-		return NULL;
-	}
 
 	if (ctx == NULL) {
 		ctx = rspamd_http_context_default ();
@@ -1437,12 +1481,12 @@ rspamd_http_connection_free (struct rspamd_http_connection *conn)
 			rspamd_pubkey_unref (priv->peer_key);
 		}
 
-		g_free (priv);
-	}
+		if (priv->flags & RSPAMD_HTTP_CONN_OWN_SOCKET) {
+			/* Fd is owned by a connection */
+			close (conn->fd);
+		}
 
-	if (conn->opts & RSPAMD_HTTP_OWN_SOCKET) {
-		/* Fd is owned by a connection */
-		close (conn->fd);
+		g_free (priv);
 	}
 
 	g_free (conn);
@@ -1810,6 +1854,7 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 			}
 		}
 		else {
+			/* Normal HTTP/1.1 with Host */
 			if (encrypted) {
 				if (host != NULL) {
 					rspamd_printf_fstring (buf,

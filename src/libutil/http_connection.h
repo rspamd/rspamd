@@ -85,7 +85,6 @@ enum rspamd_http_options {
 	RSPAMD_HTTP_CLIENT_SHARED = 1u << 3, /**< Store reply in shared memory */
 	RSPAMD_HTTP_REQUIRE_ENCRYPTION = 1u << 4,
 	RSPAMD_HTTP_CLIENT_KEEP_ALIVE = 1u << 5,
-	RSPAMD_HTTP_OWN_SOCKET = 1u << 6,
 };
 
 typedef int (*rspamd_http_body_handler_t) (struct rspamd_http_connection *conn,

@@ -1788,6 +1788,8 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 
 		selected = rspamd_upstream_get (surbl_module_ctx->redirectors,
 				RSPAMD_UPSTREAM_ROUND_ROBIN, url->host, url->hostlen);
+		param = rspamd_mempool_alloc0 (task->task_pool,
+						sizeof (struct redirector_param));
 
 		if (selected) {
 			param->conn = rspamd_http_connection_new_client (NULL,
@@ -1806,9 +1808,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 			return;
 		}
 
-		param =
-				rspamd_mempool_alloc (task->task_pool,
-						sizeof (struct redirector_param));
+
 		param->url = url;
 		param->task = task;
 		param->ctx = surbl_module_ctx;
