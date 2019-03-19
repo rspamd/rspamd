@@ -60,6 +60,7 @@ static const struct luaL_reg httplib_m[] = {
 #define RSPAMD_LUA_HTTP_FLAG_NOVERIFY (1 << 1)
 #define RSPAMD_LUA_HTTP_FLAG_RESOLVED (1 << 2)
 #define RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE (1 << 3)
+#define RSPAMD_LUA_HTTP_FLAG_YIELDED (1 << 4)
 
 struct lua_http_cbdata {
 	struct rspamd_http_connection *conn;
@@ -197,7 +198,14 @@ lua_http_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)conn->ud;
 	if (cbd->cbref == -1) {
-		lua_http_resume_handler (conn, NULL, err->message);
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_YIELDED) {
+			cbd->flags &= ~RSPAMD_LUA_HTTP_FLAG_YIELDED;
+			lua_http_resume_handler (conn, NULL, err->message);
+		}
+		else {
+			/* TODO: kill me please */
+			msg_info ("lost HTTP error in coroutines mess: %s", err->message);
+		}
 	}
 	else {
 		lua_http_push_error (cbd, err->message);
@@ -219,7 +227,15 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 	lua_State *L;
 
 	if (cbd->cbref == -1) {
-		lua_http_resume_handler (conn, msg, NULL);
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_YIELDED) {
+			cbd->flags &= ~RSPAMD_LUA_HTTP_FLAG_YIELDED;
+			lua_http_resume_handler (conn, msg, NULL);
+		}
+		else {
+			/* TODO: kill me please */
+			msg_err ("lost HTTP data in coroutines mess");
+		}
+
 		REF_RELEASE (cbd);
 
 		return 0;
@@ -1036,6 +1052,7 @@ lua_http_request (lua_State *L)
 
 	if (cbd->cbref == -1) {
 		cbd->thread = lua_thread_pool_get_running_entry (cfg->lua_thread_pool);
+		cbd->flags |= RSPAMD_LUA_HTTP_FLAG_YIELDED;
 
 		return lua_thread_yield (cbd->thread, 0);
 	}

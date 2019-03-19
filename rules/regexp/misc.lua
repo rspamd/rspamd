@@ -111,7 +111,6 @@ local id = rspamd_config:register_symbol{
   callback = function(task)
     local rspamd_re = require "rspamd_regexp"
     local hash = require "rspamd_cryptobox_hash"
-    local rspamd_logger = require "rspamd_logger"
 
     if task:has_symbol('LEAKED_PASSWORD_SCAM') then
       -- Perform BTC wallet check (quite expensive)
