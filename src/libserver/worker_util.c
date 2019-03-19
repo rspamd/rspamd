@@ -535,7 +535,7 @@ rspamd_worker_set_limits (struct rspamd_main *rspamd_main,
 		rlmt.rlim_max = (rlim_t) cf->rlimit_nofile;
 
 		if (setrlimit (RLIMIT_NOFILE, &rlmt) == -1) {
-			msg_warn_main ("cannot set files rlimit: %d, %s",
+			msg_warn_main ("cannot set files rlimit: %L, %s",
 					cf->rlimit_nofile,
 					strerror (errno));
 		}
