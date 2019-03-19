@@ -60,14 +60,14 @@ rspamd_humanize_number (gchar *buf, gchar *last, gint64 num, gboolean bytes)
 
 	if (!bytes) {
 		divisor = 1000;
-		prefixes = "\0\0\0k\0\0M\0\0G\0\0T\0\0P\0\0E";
+		prefixes = "\0\0\0\0k\0\0\0M\0\0\0G\0\0\0T\0\0\0P\0\0\0E";
 	}
 	else {
 		divisor = 1024;
-		prefixes = "B\0\0k\0\0M\0\0G\0\0T\0\0P\0\0E";
+		prefixes = "B\0\0\0KiB\0MiB\0GiB\0TiB\0PiB\0EiB";
 	}
 
-#define SCALE2PREFIX(scale)     (&prefixes[(scale) * 3])
+#define SCALE2PREFIX(scale)     (&prefixes[(scale) * 4])
 
 	if (num < 0) {
 		sign = -1;
