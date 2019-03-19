@@ -16,6 +16,7 @@
 #include "lua_common.h"
 #include "lua_thread_pool.h"
 #include "http_private.h"
+#include "ref.h"
 #include "unix-std.h"
 #include "zlib.h"
 
@@ -81,6 +82,7 @@ struct lua_http_cbdata {
 	gint fd;
 	gint cbref;
 	struct thread_entry *thread;
+	ref_entry_t ref;
 };
 
 static const int default_http_timeout = 5000;
@@ -143,7 +145,7 @@ lua_http_fin (gpointer arg)
 }
 
 static void
-lua_http_maybe_free (struct lua_http_cbdata *cbd)
+lua_http_cbd_dtor (struct lua_http_cbdata *cbd)
 {
 	if (cbd->session) {
 
@@ -200,7 +202,8 @@ lua_http_error_handler (struct rspamd_http_connection *conn, GError *err)
 	else {
 		lua_http_push_error (cbd, err->message);
 	}
-	lua_http_maybe_free (cbd);
+
+	REF_RELEASE (cbd);
 }
 
 static int
@@ -217,7 +220,8 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 
 	if (cbd->cbref == -1) {
 		lua_http_resume_handler (conn, msg, NULL);
-		lua_http_maybe_free (cbd);
+		REF_RELEASE (cbd);
+
 		return 0;
 	}
 	lua_thread_pool_prepare_callback (cbd->cfg->lua_thread_pool, &lcbd);
@@ -272,7 +276,7 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 		lua_pop (L, 1);
 	}
 
-	lua_http_maybe_free (cbd);
+	REF_RELEASE (cbd);
 
 	lua_thread_pool_restore_callback (&lcbd);
 
@@ -443,7 +447,7 @@ lua_http_dns_handler (struct rdns_reply *reply, gpointer ud)
 
 	if (reply->code != RDNS_RC_NOERROR) {
 		lua_http_push_error (cbd, "unable to resolve host");
-		lua_http_maybe_free (cbd);
+		REF_RELEASE (cbd);
 	}
 	else {
 		if (reply->entries->type == RDNS_REQUEST_A) {
@@ -455,12 +459,19 @@ lua_http_dns_handler (struct rdns_reply *reply, gpointer ud)
 					&reply->entries->content.aaa.addr);
 		}
 
+		REF_RETAIN (cbd);
 		if (!lua_http_make_connection (cbd)) {
 			lua_http_push_error (cbd, "unable to make connection to the host");
-			lua_http_maybe_free (cbd);
+
+			if (cbd->ref.refcount > 1) {
+				REF_RELEASE (cbd);
+			}
+
+			REF_RELEASE (cbd);
 
 			return;
 		}
+		REF_RELEASE (cbd);
 	}
 
 	if (cbd->item) {
@@ -926,6 +937,8 @@ lua_http_request (lua_State *L)
 	cbd->auth = auth;
 	cbd->task = task;
 
+	REF_INIT_RETAIN (cbd, lua_http_cbd_dtor);
+
 	if (task) {
 		cbd->item = rspamd_symcache_get_cur_item (task);
 	}
@@ -950,34 +963,61 @@ lua_http_request (lua_State *L)
 
 	if (rspamd_parse_inet_address (&cbd->addr, msg->host->str, msg->host->len)) {
 		/* Host is numeric IP, no need to resolve */
-		if (!lua_http_make_connection (cbd)) {
-			lua_http_maybe_free (cbd);
+		gboolean ret;
+
+		REF_RETAIN (cbd);
+		ret = lua_http_make_connection (cbd);
+
+		if (!ret) {
+			if (cbd->ref.refcount > 1) {
+				/* Not released by make_connection */
+				REF_RELEASE (cbd);
+			}
+
+			REF_RELEASE (cbd);
 			lua_pushboolean (L, FALSE);
 
 			return 1;
 		}
+
+		REF_RELEASE (cbd);
 	}
 	else {
 		if (!cbd->host) {
-			lua_http_maybe_free (cbd);
+			REF_RELEASE (cbd);
 
 			return luaL_error (L, "no host has been specified");
 		}
 		if (task == NULL) {
 
+			REF_RETAIN (cbd);
 			if (!make_dns_request (resolver, session, NULL, lua_http_dns_handler, cbd,
 					RDNS_REQUEST_A,
 					cbd->host)) {
-				lua_http_maybe_free (cbd);
+				if (cbd->ref.refcount > 1) {
+					/* Not released by make_connection */
+					REF_RELEASE (cbd);
+				}
+
+				REF_RELEASE (cbd);
 				lua_pushboolean (L, FALSE);
 
 				return 1;
 			}
+
+			REF_RELEASE (cbd);
 		}
 		else {
+			REF_RETAIN (cbd);
+
 			if (!make_dns_request_task_forced (task, lua_http_dns_handler, cbd,
 					RDNS_REQUEST_A, cbd->host)) {
-				lua_http_maybe_free (cbd);
+				if (cbd->ref.refcount > 1) {
+					/* Not released by make_connection */
+					REF_RELEASE (cbd);
+				}
+
+				REF_RELEASE (cbd);
 				lua_pushboolean (L, FALSE);
 
 				return 1;
@@ -985,6 +1025,8 @@ lua_http_request (lua_State *L)
 			else if (cbd->item) {
 				rspamd_symcache_item_async_inc (cbd->task, cbd->item, M);
 			}
+
+			REF_RELEASE (cbd);
 		}
 	}
 
