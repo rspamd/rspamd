@@ -539,6 +539,19 @@ rspamd_worker_set_limits (struct rspamd_main *rspamd_main,
 					cf->rlimit_nofile,
 					strerror (errno));
 		}
+
+		memset (&rlmt, 0, sizeof (rlmt));
+
+		if (getrlimit (RLIMIT_NOFILE, &rlmt) == -1) {
+			msg_warn_main ("cannot get max files rlimit: %HL, %s",
+					cf->rlimit_maxcore,
+					strerror (errno));
+		}
+		else {
+			msg_info_main ("set max file descriptors limit: %HL cur and %HL max",
+					(guint64) rlmt.rlim_cur,
+					(guint64) rlmt.rlim_max);
+		}
 	}
 
 	if (rspamd_main->cores_throttling) {
@@ -570,14 +583,20 @@ rspamd_worker_set_limits (struct rspamd_main *rspamd_main,
 						cf->rlimit_maxcore,
 						strerror (errno));
 			}
-
-			if (rlmt.rlim_cur != cf->rlimit_maxcore ||
+			else {
+				if (rlmt.rlim_cur != cf->rlimit_maxcore ||
 					rlmt.rlim_max != cf->rlimit_maxcore) {
-				msg_warn_main ("setting of limits was unsuccessful: %HL was wanted, "
-							   "but we have %HL cur and %HL max",
-						cf->rlimit_maxcore,
-						(guint64)rlmt.rlim_cur,
-						(guint64)rlmt.rlim_max);
+					msg_warn_main ("setting of limits was unsuccessful: %HL was wanted, "
+								   "but we have %HL cur and %HL max",
+							cf->rlimit_maxcore,
+							(guint64) rlmt.rlim_cur,
+							(guint64) rlmt.rlim_max);
+				}
+				else {
+					msg_info_main ("set core file limit: %HL cur and %HL max",
+							(guint64) rlmt.rlim_cur,
+							(guint64) rlmt.rlim_max);
+				}
 			}
 		}
 	}
