@@ -212,8 +212,8 @@ struct rspamd_worker_conf {
 	struct rspamd_worker_bind_conf *bind_conf;      /**< bind configuration									*/
 	gint16 count;                                   /**< number of workers									*/
 	GList *listen_socks;                            /**< listening sockets descriptors						*/
-	guint32 rlimit_nofile;                          /**< max files limit									*/
-	guint32 rlimit_maxcore;                         /**< maximum core file size								*/
+	guint64 rlimit_nofile;                          /**< max files limit									*/
+	guint64 rlimit_maxcore;                         /**< maximum core file size								*/
 	GHashTable *params;                             /**< params for worker									*/
 	GQueue *active_workers;                         /**< linked list of spawned workers						*/
 	gboolean has_socket;                            /**< whether we should make listening socket in main process */

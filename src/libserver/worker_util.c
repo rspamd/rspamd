@@ -557,9 +557,27 @@ rspamd_worker_set_limits (struct rspamd_main *rspamd_main,
 			rlmt.rlim_max = (rlim_t) cf->rlimit_maxcore;
 
 			if (setrlimit (RLIMIT_CORE, &rlmt) == -1) {
-				msg_warn_main ("cannot set max core rlimit: %d, %s",
+				msg_warn_main ("cannot set max core rlimit: %HL, %s",
 						cf->rlimit_maxcore,
 						strerror (errno));
+			}
+
+			/* Ensure that we did it */
+			memset (&rlmt, 0, sizeof (rlmt));
+
+			if (getrlimit (RLIMIT_CORE, &rlmt) == -1) {
+				msg_warn_main ("cannot get max core rlimit: %HL, %s",
+						cf->rlimit_maxcore,
+						strerror (errno));
+			}
+
+			if (rlmt.rlim_cur != cf->rlimit_maxcore ||
+					rlmt.rlim_max != cf->rlimit_maxcore) {
+				msg_warn_main ("setting of limits was unsuccessful: %HL was wanted, "
+							   "but we have %HL cur and %HL max",
+						cf->rlimit_maxcore,
+						(guint64)rlmt.rlim_cur,
+						(guint64)rlmt.rlim_max);
 			}
 		}
 	}

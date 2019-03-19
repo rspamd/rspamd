@@ -2255,13 +2255,13 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				"max_files",
 				rspamd_rcl_parse_struct_integer,
 				G_STRUCT_OFFSET (struct rspamd_worker_conf, rlimit_nofile),
-				RSPAMD_CL_FLAG_INT_32,
+				RSPAMD_CL_FLAG_INT_64,
 				"Maximum number of opened files per worker");
 		rspamd_rcl_add_default_handler (sub,
 				"max_core",
 				rspamd_rcl_parse_struct_integer,
 				G_STRUCT_OFFSET (struct rspamd_worker_conf, rlimit_maxcore),
-				RSPAMD_CL_FLAG_INT_32,
+				RSPAMD_CL_FLAG_INT_64,
 				"Max size of core file in bytes");
 		rspamd_rcl_add_default_handler (sub,
 				"enabled",
