@@ -223,7 +223,7 @@ local function clusterting_idempotent_cb(task, rule)
       rspamd_logger.errx(task, 'got error while getting clustering keys %s: %s',
           source_selector, err)
     else
-      rspamd_logger.debugm(task, 'set clustering key for %s: %s{%s} = %s',
+      rspamd_logger.debugm(N, task, 'set clustering key for %s: %s{%s} = %s',
           source_selector, "unknown error")
     end
   end
@@ -296,7 +296,7 @@ if opts['rules'] then
         callback = callback_gen(clusterting_filter_cb, rule),
       }
       rspamd_config:register_symbol{
-        name = rule.symbol + '_STORE',
+        name = rule.symbol .. '_STORE',
         type = 'idempotent',
         callback = callback_gen(clusterting_idempotent_cb, rule),
       }
