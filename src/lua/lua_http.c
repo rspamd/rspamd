@@ -937,6 +937,10 @@ lua_http_request (lua_State *L)
 	cbd->auth = auth;
 	cbd->task = task;
 
+	if (cbd->cbref == -1) {
+		cbd->thread = lua_thread_pool_get_running_entry (cfg->lua_thread_pool);
+	}
+
 	REF_INIT_RETAIN (cbd, lua_http_cbd_dtor);
 
 	if (task) {
