@@ -616,6 +616,10 @@ lua_html_tag_get_flags (lua_State *L)
 			lua_pushstring (L, "closing");
 			lua_rawseti (L, -2, i++);
 		}
+		if (tag->flags & FL_HREF) {
+			lua_pushstring (L, "href");
+			lua_rawseti (L, -2, i++);
+		}
 		if (tag->flags & FL_CLOSED) {
 			lua_pushstring (L, "closed");
 			lua_rawseti (L, -2, i++);
@@ -692,7 +696,7 @@ lua_html_tag_get_extra (lua_State *L)
 
 	if (tag) {
 		if (tag->extra) {
-			if (tag->id == Tag_A || tag->id == Tag_IFRAME || tag->id == Tag_LINK) {
+			if (tag->flags & FL_HREF) {
 				/* For A that's URL */
 				purl = lua_newuserdata (L, sizeof (gpointer));
 				*purl = tag->extra;
