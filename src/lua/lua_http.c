@@ -204,7 +204,9 @@ lua_http_error_handler (struct rspamd_http_connection *conn, GError *err)
 		}
 		else {
 			/* TODO: kill me please */
-			msg_info ("lost HTTP error in coroutines mess: %s", err->message);
+			msg_info ("lost HTTP error from %s in coroutines mess: %s",
+					rspamd_inet_address_to_string_pretty (cbd->addr),
+					err->message);
 		}
 	}
 	else {
@@ -233,7 +235,8 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 		}
 		else {
 			/* TODO: kill me please */
-			msg_err ("lost HTTP data in coroutines mess");
+			msg_err ("lost HTTP data from %s in coroutines mess",
+					rspamd_inet_address_to_string_pretty (cbd->addr));
 		}
 
 		REF_RELEASE (cbd);
