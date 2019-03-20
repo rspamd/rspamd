@@ -1702,7 +1702,7 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 
 				if (!(sym_group->flags & RSPAMD_SYMBOL_GROUP_UNGROUPED)) {
 					msg_debug_config ("move symbol %s from group %s to %s",
-							sym_def->gr->name, group);
+							sym_def->name, sym_def->gr->name, group);
 					g_hash_table_remove (sym_def->gr->symbols, sym_def->name);
 					sym_def->gr = sym_group;
 					g_hash_table_insert (sym_group->symbols, sym_def->name, sym_def);
