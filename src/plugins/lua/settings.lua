@@ -82,6 +82,14 @@ local function apply_settings(task, to_apply)
   if to_apply.subject then
     task:set_metric_subject(to_apply.subject)
   end
+
+  -- E.g.
+  -- messages = { smtp_message = "5.3.1 Go away" }
+  if to_apply.messages and type(to_apply.messages) == 'table' then
+    fun.each(function(category, message)
+      task:append_message(message, category)
+    end, to_apply.messages)
+  end
 end
 
 -- Checks for overridden settings within query params and returns 'true' if
