@@ -420,7 +420,7 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Setup logger */
 	if (verbose) {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
-		cfg->log_flags |= RSPAMD_LOG_FLAG_USEC;
+		cfg->log_flags |= RSPAMD_LOG_FLAG_USEC|RSPAMD_LOG_FLAG_ENFORCED;
 	}
 	else {
 		cfg->log_level = G_LOG_LEVEL_MESSAGE;
