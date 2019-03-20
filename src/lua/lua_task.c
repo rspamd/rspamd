@@ -164,9 +164,10 @@ LUA_FUNCTION_DEF (task, set_pre_result);
  */
 LUA_FUNCTION_DEF (task, has_pre_result);
 /***
- * @method task:append_message(message)
+ * @method task:append_message(message, [category])
  * Adds a message to scanning output.
  * @param {string} message
+ * @param {category} message category
 @example
 local function cb(task)
 	task:append_message('Example message')

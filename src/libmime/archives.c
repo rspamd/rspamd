@@ -1163,8 +1163,9 @@ rspamd_7zip_read_coders_info (struct rspamd_task *task,
 						guint64 tmp;
 
 						SZ_READ_VINT (tmp); /* Unpacked size */
-						msg_debug_archive ("7zip: unpacked size (folder=%d, stream=%d) = %L",
-								i, j, tmp);
+						msg_debug_archive ("7zip: unpacked size "
+										   "(folder=%d, stream=%d) = %L",
+								(gint)i, j, tmp);
 					}
 				}
 				else {
