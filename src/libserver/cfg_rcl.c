@@ -584,6 +584,21 @@ rspamd_rcl_actions_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 					ucl_object_get_priority (cur));
 		}
 		else if (type == UCL_OBJECT || type == UCL_FLOAT || type == UCL_INT) {
+			/* Exceptions */
+			struct rspamd_rcl_default_handler_data *sec_cur, *sec_tmp;
+			gboolean default_elt = FALSE;
+
+			HASH_ITER (hh, section->default_parser, sec_cur, sec_tmp) {
+				if (strcmp (ucl_object_key (cur), sec_cur->key) == 0) {
+					default_elt = TRUE;
+				}
+			}
+
+			if (default_elt) {
+				continue;
+			}
+
+			/* Something non-default */
 			if (!rspamd_config_set_action_score (cfg,
 					ucl_object_key (cur),
 					cur)) {
