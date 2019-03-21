@@ -96,7 +96,7 @@ local function elastic_send_data(task)
     end
   end
 
-  rspamd_http.request({
+  return rspamd_http.request({
     url = push_url,
     headers = {
       ['Content-Type'] = 'application/x-ndjson',
