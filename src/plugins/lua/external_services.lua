@@ -202,7 +202,7 @@ if opts and type(opts) == 'table' then
           group = N
         })
         rspamd_config:register_symbol({
-          type = 'virtual',
+          type = 'virtual,nostat',
           name = m['symbol_fail'],
           parent = id,
           score = 0.0,
