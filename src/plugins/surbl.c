@@ -853,7 +853,14 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 				0, surbl_test_url, new_suffix, SYMBOL_TYPE_CALLBACK, -1);
 		rspamd_symcache_add_dependency (cfg->cache, cb_id,
 				SURBL_REDIRECTOR_CALLBACK);
+		/* Failure symbol */
+		g_string_append (sym, "_FAIL");
+		rspamd_symcache_add_symbol (cfg->cache, sym->str,
+				0, NULL, NULL, SYMBOL_TYPE_VIRTUAL|SYMBOL_TYPE_NOSTAT, cb_id);
+		rspamd_config_add_symbol (cfg, sym->str, 0.0, "SURBL failure symbol",
+				"surbl", 0, 0, 0);
 		g_string_free (sym, TRUE);
+
 		nrules++;
 		new_suffix->callback_id = cb_id;
 		cur = ucl_object_lookup (cur_rule, "bits");
@@ -1617,9 +1624,19 @@ surbl_dns_callback (struct rdns_reply *reply, gpointer arg)
 		}
 	}
 	else {
-		msg_debug_surbl ("<%s> domain [%s] is not in surbl %s",
-			param->task->message_id, param->host_resolve,
-			param->suffix->suffix);
+		if (reply->code == RDNS_RC_NXDOMAIN || reply->code == RDNS_RC_NOREC) {
+			msg_debug_surbl ("<%s> domain [%s] is not in surbl %s",
+					param->task->message_id, param->host_resolve,
+					param->suffix->suffix);
+		}
+		else {
+			/* Insert failure symbol */
+			GString *sym = g_string_new (param->suffix->symbol);
+
+			g_string_append (sym, "_FAIL");
+			rspamd_task_insert_result (task, sym->str, 1.0,
+					rdns_strerror (reply->code));
+		}
 	}
 
 	rspamd_symcache_item_async_dec_check (param->task, param->item, M);

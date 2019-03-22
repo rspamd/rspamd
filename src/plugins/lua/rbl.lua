@@ -560,7 +560,7 @@ local function add_rbl(key, rbl)
 
   -- Failure symbol
   rspamd_config:register_symbol{
-    type = 'virtual',
+    type = 'virtual,nostat',
     name = rbl.symbol .. '_FAIL',
     parent = id,
     score = 0.0,
