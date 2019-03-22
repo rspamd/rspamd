@@ -251,6 +251,15 @@ struct rspamd_abstract_callback_data* rspamd_symcache_get_cbdata (
 		struct rspamd_symcache *cache, const gchar *symbol);
 
 /**
+ * Returns symbol's parent name (or symbol name itself)
+ * @param cache
+ * @param symbol
+ * @return
+ */
+const gchar *rspamd_symcache_get_parent (struct rspamd_symcache *cache,
+		const gchar *symbol);
+
+/**
  * Adds flags to a symbol
  * @param cache
  * @param symbol
