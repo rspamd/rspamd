@@ -65,7 +65,7 @@ local my_victim = [[/(?:victim|prey)/{words}]]
 local your_webcam = [[/webcam/{words}]]
 local your_onan = [[/(?:mast[ur]{2}bati(?:on|ng)|onanism|solitary)/{words}]]
 local password_in_words = [[/^pass(?:(?:word)|(?:phrase))$/i{words}]]
-local btc_wallet_address = [[/^[13][1-9a-km-zA-HJ-NP-Z]{25,34}$/]]
+local btc_wallet_address = [[/^[13][1-9A-Za-z]{25,34}$/]]
 local wallet_word = [[/^wallet$/{words}]]
 local broken_unicode = [[has_flag(bad_unicode)]]
 
