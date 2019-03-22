@@ -59,6 +59,7 @@ local settings = {
   subject_privacy_alg = 'blake2', -- default hash-algorithm to obfuscate subject
   subject_privacy_prefix = 'obf', -- prefix to show it's obfuscated
   subject_privacy_length = 16, -- cut the length of the hash
+  schema_additions = {}, -- additional SQL statements to be executed when schema is uploaded
   user = nil,
   password = nil,
   no_ssl_verify = false,
@@ -731,7 +732,7 @@ local function upload_clickhouse_schema(upstream, ev_base, cfg)
   }
 
   -- Apply schema sequentially
-  for i,v in ipairs(clickhouse_schema) do
+  fun.each(function(v)
     local sql = v
     local err, _ = lua_clickhouse.generic_sync(upstream, settings, ch_params, sql)
 
@@ -740,9 +741,9 @@ local function upload_clickhouse_schema(upstream, ev_base, cfg)
         sql, upstream:get_addr():to_string(true), err)
       return
     end
-    rspamd_logger.infox(rspamd_config, 'uploaded clickhouse schema element %s to %s',
-      i, upstream:get_addr():to_string(true))
-  end
+    rspamd_logger.debugm(N, rspamd_config, 'uploaded clickhouse schema element %s to %s',
+        v, upstream:get_addr():to_string(true))
+  end, fun.chain(clickhouse_schema, settings.schema_additions))
 end
 
 local function maybe_apply_migrations(upstream, ev_base, cfg, version)
