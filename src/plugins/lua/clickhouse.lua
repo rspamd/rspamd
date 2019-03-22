@@ -115,7 +115,7 @@ CREATE TABLE rspamd
 ) ENGINE = MergeTree(Date, (TS, From), 8192)
 ]],
 [[CREATE TABLE rspamd_version ( Version UInt32) ENGINE = TinyLog]],
-[[INSERT INTO rspamd_version (Version) Values (2)]],
+[[INSERT INTO rspamd_version (Version) Values (${SCHEMA_VERSION})]],
 }
 
 -- This describes SQL queries to migrate between versions
@@ -743,7 +743,11 @@ local function upload_clickhouse_schema(upstream, ev_base, cfg)
     end
     rspamd_logger.debugm(N, rspamd_config, 'uploaded clickhouse schema element %s to %s',
         v, upstream:get_addr():to_string(true))
-  end, fun.chain(clickhouse_schema, settings.schema_additions))
+  end,
+      -- Also template schema version
+      fun.map(function(v)
+        return lua_util.template(v, {SCHEMA_VERSION = tostring(schema_version)})
+      end, fun.chain(clickhouse_schema, settings.schema_additions)))
 end
 
 local function maybe_apply_migrations(upstream, ev_base, cfg, version)
