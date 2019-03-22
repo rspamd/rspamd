@@ -23,6 +23,8 @@ local logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
 local lua_maps = require "lua_maps"
+local fun = require "fun"
+
 local N = "mime_types"
 local settings = {
   file = '',
@@ -886,18 +888,56 @@ local function check_mime_type(task)
       end
     end
 
+    -- Process settings
+    local extra_table = {}
+    local extra_archive_table = {}
+    local user_settings = task:get_settings()
+    if user_settings and user_settings.plugins then
+      user_settings = user_settings.plugins.mime_types
+    end
+
+    if user_settings then
+      logger.infox(task, 'using special tables from user settings')
+      if user_settings.bad_extensions then
+        if user_settings.bad_extensions[1] then
+          -- Convert to a key-value map
+          extra_table = fun.tomap(
+              fun.map(function(e) return e,1.0 end,
+              user_settings.bad_extensions))
+        else
+          extra_table = user_settings.bad_extensions
+        end
+      end
+      if user_settings.bad_archive_extensions then
+        if user_settings.bad_archive_extensions[1] then
+          -- Convert to a key-value map
+          extra_archive_table = fun.tomap(fun.map(
+              function(e) return e,1.0 end,
+              user_settings.bad_archive_extensions))
+        else
+          extra_archive_table = user_settings.bad_archive_extensions
+        end
+      end
+    end
+
+    local function check_tables(e)
+      if is_archive then
+        return extra_archive_table[e] or settings.bad_archive_extensions[e] or
+          extra_table[e] or settings.bad_extensions[e]
+      end
+
+      return extra_table[e] or settings.bad_extensions[e]
+    end
+
     if ext then
       -- Also check for archive bad extension
       if is_archive then
         if ext2 then
-          local score1 = settings['bad_archive_extensions'][ext] or
-              settings['bad_extensions'][ext]
-          local score2 = settings['bad_archive_extensions'][ext2] or
-              settings['bad_extensions'][ext2]
+          local score1 = check_tables(ext)
+          local score2 = check_tables(ext2)
           check_extension(score1, score2)
         else
-          local score1 = settings['bad_archive_extensions'][ext] or
-              settings['bad_extensions'][ext]
+          local score1 = check_tables(ext)
           check_extension(score1, nil)
         end
 
@@ -909,8 +949,9 @@ local function check_mime_type(task)
         end
       else
         if ext2 then
-          check_extension(settings['bad_extensions'][ext],
-              settings['bad_extensions'][ext2])
+          local score1 = check_tables(ext)
+          local score2 = check_tables(ext2)
+          check_extension(score1, score2)
           -- Check for archive cloaking like .zip.gz
           if settings['archive_extensions'][ext2]
             -- Exclude multipart archive extensions, e.g. .zip.001
@@ -922,7 +963,8 @@ local function check_mime_type(task)
                 string.format("%s:%s", part:get_id(), '-'))
           end
         else
-          check_extension(settings['bad_extensions'][ext], nil)
+          local score1 = check_tables(ext)
+          check_extension(score1, nil)
         end
       end
 
@@ -966,7 +1008,7 @@ local function check_mime_type(task)
         end
 
         if filename then
-          check_filename(filename, ct, false, p)
+          check_filename(filename, ct, false, p, detected_ct)
         end
 
         if p:is_archive() then
@@ -1004,7 +1046,7 @@ local function check_mime_type(task)
               end
 
               if f['name'] then
-                check_filename(f['name'], nil, true, p)
+                check_filename(f['name'], nil, true, p, nil)
               end
             end
 
