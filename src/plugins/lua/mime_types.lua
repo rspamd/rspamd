@@ -823,6 +823,9 @@ local full_extensions_map = {
   {"zlib", "application/zlib"},
 }
 
+-- Used to match extension by content type
+local reversed_extensions_map = {}
+
 local function check_mime_type(task)
   local function gen_extension(fname)
     local parts = lua_util.str_split(fname or '', '.')
@@ -835,7 +838,7 @@ local function check_mime_type(task)
     return ext[1],ext[2],parts
   end
 
-  local function check_filename(fname, ct, is_archive, part)
+  local function check_filename(fname, ct, is_archive, part, detected_ct)
 
     local has_bad_unicode, char, ch_pos = rspamd_util.has_obscured_unicode(fname)
     if has_bad_unicode then
@@ -858,6 +861,11 @@ local function check_mime_type(task)
     local ext,ext2,parts = gen_extension(fname)
     -- ext is the last extension, LOWERCASED
     -- ext2 is the one before last extension LOWERCASED
+
+    if not ext and detected_ct then
+      -- Try to find extension by real content type
+      ext = reversed_extensions_map[detected_ct]
+    end
 
     local function check_extension(badness_mult, badness_mult2)
       if not badness_mult and not badness_mult2 then return end
@@ -1155,6 +1163,12 @@ if opts then
     local ext, ct = pair[1], pair[2]
     if not settings.extension_map[ext] then
         change_extension_map_entry(ext, ct, settings.other_extensions_mult)
+    end
+  end
+
+  for ext,inner_tbl in pairs(settings.extension_map) do
+    for _,elt in ipairs(inner_tbl) do
+      reversed_extensions_map[elt.ct] = ext
     end
   end
 
