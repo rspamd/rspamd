@@ -1411,7 +1411,7 @@ rspamd_lua_squeeze_rule (lua_State *L,
 							" is likely corrupted!");
 		}
 	}
-	else {
+	else if (type & (SYMBOL_TYPE_CALLBACK|SYMBOL_TYPE_NORMAL)) {
 		if (rspamd_lua_require_function (L, "lua_squeeze_rules", "squeeze_rule")) {
 			if (name) {
 				lua_pushstring (L, name);
@@ -1465,6 +1465,7 @@ rspamd_lua_squeeze_rule (lua_State *L,
 							" is likely corrupted!");
 		}
 	}
+	/* No squeeze for everything else */
 
 	/* Cleanup lua stack */
 	lua_settop (L, err_idx - 1);
