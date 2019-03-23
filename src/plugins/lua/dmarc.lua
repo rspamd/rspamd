@@ -1432,7 +1432,6 @@ local id = rspamd_config:register_symbol({
 })
 rspamd_config:register_symbol({
   name = dmarc_symbols['allow'],
-  flags = 'nice',
   parent = id,
   group = 'policies',
   groups = {'dmarc'},

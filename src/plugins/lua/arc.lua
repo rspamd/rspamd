@@ -352,7 +352,6 @@ local id = rspamd_config:register_symbol({
 
 rspamd_config:register_symbol({
   name = arc_symbols['allow'],
-  flags = 'nice',
   parent = id,
   type = 'virtual',
   score = -1.0,
