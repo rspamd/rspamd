@@ -151,8 +151,11 @@ end
 
 -- TODO: poor approach, we register all virtual symbols with the previous real squeezed symbol
 exports.squeeze_virtual = function(id, name)
+
   if squeeze_function_ids[1] and id == squeeze_function_ids[1] and last_rule then
     virtual_symbols[name] = last_rule
+    lua_util.debugm(SN, rspamd_config, 'add virtual symbol %s -> %s',
+        name, last_rule)
 
     return id
   end
