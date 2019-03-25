@@ -464,12 +464,13 @@ reconf['FORGED_MUA_OPERA_MSGID'] = {
   group = 'mua'
 }
 
--- Detect forged Mozilla Mail/Thunderbird/Seamonkey headers
+-- Detect forged Mozilla Mail/Thunderbird/Seamonkey/Postbox headers
 -- Mozilla based X-Mailer
 local user_agent_mozilla5	= 'User-Agent=/^\\s*Mozilla\\/5\\.0/H'
 local user_agent_thunderbird	= 'User-Agent=/^\\s*(Thunderbird|Mozilla Thunderbird|Mozilla\\/.*Gecko\\/.*(Thunderbird|Icedove)\\/)/H'
 local user_agent_seamonkey	= 'User-Agent=/^\\s*Mozilla\\/5\\.0\\s.+\\sSeaMonkey\\/\\d+\\.\\d+/H'
-local user_agent_mozilla	= string.format('(%s) & !(%s) & !(%s)', user_agent_mozilla5, user_agent_thunderbird, user_agent_seamonkey)
+local user_agent_postbox	= [[User-Agent=/^\s*Mozilla\/5\.0\s\([^)]+\)\sGecko\/\d+\sPostboxApp\/\d+(?:\.\d+){2,3}$/H]]
+local user_agent_mozilla	= string.format('(%s) & !(%s) & !(%s) & !(%s)', user_agent_mozilla5, user_agent_thunderbird, user_agent_seamonkey, user_agent_postbox)
 -- Mozilla based common Message-ID template
 local mozilla_msgid_common	= 'Message-ID=/^\\s*<[\\dA-F]{8}\\.\\d{1,7}\\@([^>\\.]+\\.)+[^>\\.]+>$/H'
 local mozilla_msgid_common_sec	= 'Message-ID=/^\\s*<[\\da-f]{8}-([\\da-f]{4}-){3}[\\da-f]{12}\\@([^>\\.]+\\.)+[^>\\.]+>$/H'
@@ -512,6 +513,19 @@ reconf['FORGED_MUA_SEAMONKEY_MSGID_UNKNOWN'] = {
   re = string.format('(%s) & !((%s) | (%s)) & !(%s) & !(%s)', user_agent_seamonkey, mozilla_msgid_common, mozilla_msgid_common_sec, mozilla_msgid, unusable_msgid),
   score = 2.5,
   description = 'Forged mail pretending to be from Mozilla Seamonkey but has forged Message-ID',
+  group = 'mua'
+}
+-- Summary rule for forged Postbox Message-ID header
+reconf['FORGED_MUA_POSTBOX_MSGID'] = {
+  re = string.format('(%s) & (%s) & !(%s) & !(%s)', user_agent_postbox, mozilla_msgid_common, mozilla_msgid, unusable_msgid),
+  score = 4.0,
+  description = 'Forged mail pretending to be from Postbox but has forged Message-ID',
+  group = 'mua'
+}
+reconf['FORGED_MUA_POSTBOX_MSGID_UNKNOWN'] = {
+  re = string.format('(%s) & !((%s) | (%s)) & !(%s) & !(%s)', user_agent_postbox, mozilla_msgid_common, mozilla_msgid_common_sec, mozilla_msgid, unusable_msgid),
+  score = 2.5,
+  description = 'Forged mail pretending to be from Postbox but has forged Message-ID',
   group = 'mua'
 }
 
