@@ -88,7 +88,7 @@ local function replies_check(task)
       rspamd_logger.errx(task, 'redis_get_cb received error: %1', err)
       return
     end
-    if data and check_recipient(data) then
+    if data and type(data) == 'string' and check_recipient(data) then
       -- Hash was found
       task:insert_result(settings['symbol'], 1.0)
       if settings['action'] ~= nil then
