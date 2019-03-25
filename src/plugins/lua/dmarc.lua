@@ -901,7 +901,7 @@ if opts['reporting'] == true then
               table.concat(
                 {xmlf('header'),
                  xmlf('entries'),
-                 xmlf('footer')})), 78)
+                 xmlf('footer')})), 73)
         local function mail_cb(err, data, conn)
           local function no_error(merr, mdata, wantcode)
             wantcode = wantcode or '2'
