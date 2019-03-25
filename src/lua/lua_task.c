@@ -5653,8 +5653,13 @@ lua_image_get_filename (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_image *img = lua_check_image (L);
 
-	if (img != NULL && img->filename != NULL) {
-		lua_pushlstring (L, img->filename->begin, img->filename->len);
+	if (img != NULL) {
+		if (img->filename != NULL) {
+			lua_pushlstring (L, img->filename->begin, img->filename->len);
+		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
