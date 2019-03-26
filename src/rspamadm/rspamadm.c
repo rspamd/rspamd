@@ -60,7 +60,7 @@ static GOptionEntry entries[] = {
 	{"list-commands", 'l', 0, G_OPTION_ARG_NONE, &list_commands,
 			"List available commands", NULL},
 	{"var", 0, 0, G_OPTION_ARG_CALLBACK, (gpointer)&rspamadm_parse_ucl_var,
-			"Redefine UCL variable", NULL},
+			"Redefine/define environment variable", NULL},
 	{"help", 'h', 0, G_OPTION_ARG_NONE, &show_help,
 			"Show help", NULL},
 	{"version", 'V', 0, G_OPTION_ARG_NONE, &show_version,

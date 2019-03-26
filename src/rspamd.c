@@ -108,7 +108,10 @@ static GHashTable *listen_sockets = NULL;
 extern module_t *modules[];
 extern worker_t *workers[];
 
-/* Commandline options */
+/* Command line options */
+static gboolean rspamd_parse_var (const gchar *option_name,
+								  const gchar *value, gpointer data,
+								  GError **error);
 static GOptionEntry entries[] =
 {
 	{ "config-test", 't', 0, G_OPTION_ARG_NONE, &config_test,
@@ -141,9 +144,36 @@ static GOptionEntry entries[] =
 	  "controller password to store in the configuration file", NULL },
 	{ "version", 'v', 0, G_OPTION_ARG_NONE, &show_version,
 	  "Show version and exit", NULL },
+	{"var", 0, 0, G_OPTION_ARG_CALLBACK, (gpointer)&rspamd_parse_var,
+			"Redefine/define environment variable", NULL},
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
+static gboolean
+rspamd_parse_var (const gchar *option_name,
+						const gchar *value, gpointer data,
+						GError **error)
+{
+	gchar *k, *v, *t;
+
+	t = strchr (value, '=');
+
+	if (t != NULL) {
+		k = g_strdup (value);
+		t = k + (t - value);
+		v = g_strdup (t + 1);
+		*t = '\0';
+
+		g_hash_table_insert (ucl_vars, k, v);
+	}
+	else {
+		g_set_error (error, g_quark_try_string ("main"), EINVAL,
+				"Bad variable format: %s", value);
+		return FALSE;
+	}
+
+	return TRUE;
+}
 
 static void
 read_cmd_line (gint *argc, gchar ***argv, struct rspamd_config *cfg)
