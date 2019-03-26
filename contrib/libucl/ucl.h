@@ -1295,11 +1295,20 @@ typedef bool (*ucl_parser_special_handler_t) (struct ucl_parser *parser,
 		void *user_data);
 
 /**
+ * Special handler flags
+ */
+enum ucl_special_handler_flags {
+	UCL_SPECIAL_HANDLER_DEFAULT = 0,
+	UCL_SPECIAL_HANDLER_PREPROCESS_ALL = (1u << 0),
+};
+
+/**
  * Special handler structure
  */
 struct ucl_parser_special_handler {
 	const unsigned char *magic;
 	size_t magic_len;
+	enum ucl_special_handler_flags flags;
 	ucl_parser_special_handler_t handler;
 	void (*free_function) (unsigned char *data, size_t len, void *user_data);
 	void *user_data;

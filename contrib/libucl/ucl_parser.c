@@ -2862,8 +2862,9 @@ ucl_parser_add_chunk_full (struct ucl_parser *parser, const unsigned char *data,
 		memset (chunk, 0, sizeof (*chunk));
 
 		LL_FOREACH (parser->special_handlers, special_handler) {
-			if (len >= special_handler->magic_len &&
-					memcmp (data, special_handler->magic, special_handler->magic_len) == 0) {
+			if ((special_handler->flags & UCL_SPECIAL_HANDLER_PREPROCESS_ALL) ||
+					(len >= special_handler->magic_len &&
+					 memcmp (data, special_handler->magic, special_handler->magic_len) == 0)) {
 				unsigned char *ndata = NULL;
 				size_t nlen = 0;
 
