@@ -22,6 +22,7 @@ globals = {
   'rspamd_gen_metatokens',
   'rspamd_parse_redis_server',
   'rspamd_paths',
+  'rspamd_env',
   'rspamd_plugins',
   'rspamd_redis_make_request',
   'rspamd_str_split',

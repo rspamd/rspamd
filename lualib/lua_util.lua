@@ -113,6 +113,55 @@ exports.template = function(tmpl, keys)
   return lpeg.match(template_grammar, tmpl)
 end
 
+local function enrich_template_with_globals(env)
+  local newenv = exports.shallowcopy(env)
+  newenv.paths = rspamd_paths
+  newenv.env = rspamd_env
+
+  return newenv
+end
+--[[[
+-- @function lua_util.jinja_template(text, env[, skip_global_env])
+-- Replaces values in a text template according to jinja2 syntax
+-- @param {string} text text containing variables
+-- @param {table} replacements key/value pairs for replacements
+-- @param {boolean} skip_global_env don't export Rspamd superglobals
+-- @return {string} string containing replaced values
+-- @example
+-- lua_util.jinja_template("HELLO {{FOO}} {{BAR}}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
+-- "HELLO LUA WORLD!"
+--]]
+exports.jinja_template = function(text, env, skip_global_env)
+  local lupa = require "lupa"
+
+  if not skip_global_env then
+    env = enrich_template_with_globals(env)
+  end
+
+  return lupa.expand(text, env)
+end
+
+--[[[
+-- @function lua_util.jinja_file(filename, env[, skip_global_env])
+-- Replaces values in a text template according to jinja2 syntax
+-- @param {string} filename name of file to expand
+-- @param {table} replacements key/value pairs for replacements
+-- @param {boolean} skip_global_env don't export Rspamd superglobals
+-- @return {string} string containing replaced values
+-- @example
+-- lua_util.jinja_template("HELLO {{FOO}} {{BAR}}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
+-- "HELLO LUA WORLD!"
+--]]
+exports.jinja_template_file = function(filename, env, skip_global_env)
+  local lupa = require "lupa"
+
+  if not skip_global_env then
+    env = enrich_template_with_globals(env)
+  end
+
+  return lupa.expand_file(filename, env)
+end
+
 exports.remove_email_aliases = function(email_addr)
   local function check_gmail_user(addr)
     -- Remove all points
