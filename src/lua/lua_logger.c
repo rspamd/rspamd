@@ -357,16 +357,14 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len,
 		}
 	}
 	else {
+		lua_pop (L, 1);
 		lua_pushstring (L, "class");
 		lua_gettable (L, -2);
 
-		if (!lua_isstring (L, -1)) {
-			lua_settop (L, top);
-
-			return 0;
+		if (lua_isstring (L, -1)) {
+			str = lua_tostring (L, -1);
+			converted_to_str = TRUE;
 		}
-
-		str = lua_tostring (L, -1);
 	}
 
 	if (converted_to_str) {
