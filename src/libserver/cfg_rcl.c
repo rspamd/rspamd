@@ -3678,6 +3678,8 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	struct rspamd_rcl_section *top, *logger_section;
 	const ucl_object_t *logger_obj;
 
+	rspamd_lua_set_env (cfg->lua_state, vars);
+
 	if (!rspamd_config_parse_ucl (cfg, filename, vars, NULL, NULL, &err)) {
 		msg_err_config_forced ("failed to load config: %e", err);
 		g_error_free (err);
@@ -3687,7 +3689,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 
 	top = rspamd_rcl_config_init (cfg, NULL);
 	rspamd_lua_set_path (cfg->lua_state, cfg->rcl_obj, vars);
-	rspamd_lua_set_globals (cfg, cfg->lua_state, vars);
+	rspamd_lua_set_globals (cfg, cfg->lua_state);
 	rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_rcl_section_free, top);
 	err = NULL;
 

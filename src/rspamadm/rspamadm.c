@@ -458,8 +458,9 @@ main (gint argc, gchar **argv, gchar **env)
 	setproctitle ("rspamdadm");
 
 	L = cfg->lua_state;
+	rspamd_lua_set_env (L, ucl_vars);
 	rspamd_lua_set_path (L, NULL, ucl_vars);
-	rspamd_lua_set_globals (cfg, L, ucl_vars);
+	rspamd_lua_set_globals (cfg, L);
 	rspamadm_add_lua_globals ();
 
 #ifdef WITH_HIREDIS

@@ -538,58 +538,9 @@ rspamd_lua_rspamd_version (lua_State *L)
 }
 
 void
-rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L,
-							GHashTable *vars)
+rspamd_lua_set_env (lua_State *L, GHashTable *vars)
 {
-	struct rspamd_config **pcfg;
 	gint orig_top = lua_gettop (L);
-
-	/* First check for global variable 'config' */
-	lua_getglobal (L, "config");
-	if (lua_isnil (L, -1)) {
-		/* Assign global table to set up attributes */
-		lua_newtable (L);
-		lua_setglobal (L, "config");
-	}
-
-	lua_getglobal (L, "metrics");
-	if (lua_isnil (L, -1)) {
-		lua_newtable (L);
-		lua_setglobal (L, "metrics");
-	}
-
-	lua_getglobal (L, "composites");
-	if (lua_isnil (L, -1)) {
-		lua_newtable (L);
-		lua_setglobal (L, "composites");
-	}
-
-	lua_getglobal (L, "rspamd_classifiers");
-	if (lua_isnil (L, -1)) {
-		lua_newtable (L);
-		lua_setglobal (L, "rspamd_classifiers");
-	}
-
-	lua_getglobal (L, "classifiers");
-	if (lua_isnil (L, -1)) {
-		lua_newtable (L);
-		lua_setglobal (L, "classifiers");
-	}
-
-	lua_getglobal (L, "rspamd_version");
-	if (lua_isnil (L, -1)) {
-		lua_pushcfunction (L, rspamd_lua_rspamd_version);
-		lua_setglobal (L, "rspamd_version");
-	}
-
-	if (cfg != NULL) {
-		pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
-		rspamd_lua_setclass (L, "rspamd{config}", -1);
-		*pcfg = cfg;
-		lua_setglobal (L, "rspamd_config");
-	}
-
-	lua_settop (L, orig_top);
 
 	/* Set known paths as rspamd_paths global */
 	lua_getglobal (L, "rspamd_paths");
@@ -726,6 +677,102 @@ rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L,
 		rspamd_lua_table_set (L, RSPAMD_PREFIX_INDEX, prefix);
 
 		lua_setglobal (L, "rspamd_paths");
+	}
+
+	lua_getglobal (L, "rspamd_env");
+	if (lua_isnil (L, -1)) {
+		lua_newtable (L);
+
+		if (vars != NULL) {
+			GHashTableIter it;
+			gpointer k, v;
+
+			g_hash_table_iter_init (&it, vars);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				rspamd_lua_table_set (L, k, v);
+			}
+		}
+
+		gint hostlen = sysconf (_SC_HOST_NAME_MAX);
+
+		if (hostlen <= 0) {
+			hostlen = 256;
+		}
+		else {
+			hostlen ++;
+		}
+
+		gchar *hostbuf = g_alloca (hostlen);
+		memset (hostbuf, 0, hostlen);
+		gethostname (hostbuf, hostlen - 1);
+
+		rspamd_lua_table_set (L, "hostname", hostbuf);
+
+		rspamd_lua_table_set (L, "version", RVERSION);
+		rspamd_lua_table_set (L, "ver_major", RSPAMD_VERSION_MAJOR);
+		rspamd_lua_table_set (L, "ver_minor", RSPAMD_VERSION_MINOR);
+		rspamd_lua_table_set (L, "ver_patch", RSPAMD_VERSION_PATCH);
+		rspamd_lua_table_set (L, "ver_id", RID);
+		lua_pushstring (L, "ver_num");
+		lua_pushinteger (L, RSPAMD_VERSION_NUM);
+		lua_settable (L, -3);
+
+		lua_setglobal (L, "rspamd_env");
+	}
+
+	lua_settop (L, orig_top);
+}
+
+void
+rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L)
+{
+	struct rspamd_config **pcfg;
+	gint orig_top = lua_gettop (L);
+
+	/* First check for global variable 'config' */
+	lua_getglobal (L, "config");
+	if (lua_isnil (L, -1)) {
+		/* Assign global table to set up attributes */
+		lua_newtable (L);
+		lua_setglobal (L, "config");
+	}
+
+	lua_getglobal (L, "metrics");
+	if (lua_isnil (L, -1)) {
+		lua_newtable (L);
+		lua_setglobal (L, "metrics");
+	}
+
+	lua_getglobal (L, "composites");
+	if (lua_isnil (L, -1)) {
+		lua_newtable (L);
+		lua_setglobal (L, "composites");
+	}
+
+	lua_getglobal (L, "rspamd_classifiers");
+	if (lua_isnil (L, -1)) {
+		lua_newtable (L);
+		lua_setglobal (L, "rspamd_classifiers");
+	}
+
+	lua_getglobal (L, "classifiers");
+	if (lua_isnil (L, -1)) {
+		lua_newtable (L);
+		lua_setglobal (L, "classifiers");
+	}
+
+	lua_getglobal (L, "rspamd_version");
+	if (lua_isnil (L, -1)) {
+		lua_pushcfunction (L, rspamd_lua_rspamd_version);
+		lua_setglobal (L, "rspamd_version");
+	}
+
+	if (cfg != NULL) {
+		pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
+		rspamd_lua_setclass (L, "rspamd{config}", -1);
+		*pcfg = cfg;
+		lua_setglobal (L, "rspamd_config");
 	}
 
 	lua_settop (L, orig_top);
