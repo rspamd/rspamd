@@ -205,6 +205,13 @@ struct ucl_stack {
 	struct ucl_chunk *chunk;
 };
 
+struct ucl_parser_special_handler_chain {
+	unsigned char *begin;
+	size_t len;
+	struct ucl_parser_special_handler *special_handler;
+	struct ucl_parser_special_handler_chain *next;
+};
+
 struct ucl_chunk {
 	const unsigned char *begin;
 	const unsigned char *end;
@@ -216,7 +223,7 @@ struct ucl_chunk {
 	unsigned priority;
 	enum ucl_duplicate_strategy strategy;
 	enum ucl_parse_type parse_type;
-	struct ucl_parser_special_handler *special_handler;
+	struct ucl_parser_special_handler_chain *special_handlers;
 	struct ucl_chunk *next;
 };
 

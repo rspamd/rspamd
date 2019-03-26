@@ -2861,6 +2861,7 @@ ucl_parser_add_chunk_full (struct ucl_parser *parser, const unsigned char *data,
 
 		memset (chunk, 0, sizeof (*chunk));
 
+		/* Apply all matching handlers from the first to the last */
 		LL_FOREACH (parser->special_handlers, special_handler) {
 			if ((special_handler->flags & UCL_SPECIAL_HANDLER_PREPROCESS_ALL) ||
 					(len >= special_handler->magic_len &&
@@ -2874,11 +2875,17 @@ ucl_parser_add_chunk_full (struct ucl_parser *parser, const unsigned char *data,
 					return false;
 				}
 
+				struct ucl_parser_special_handler_chain *nchain;
+				nchain = UCL_ALLOC (sizeof (*nchain));
+				nchain->begin = ndata;
+				nchain->len = nlen;
+				nchain->special_handler = special_handler;
+
+				/* Free order is reversed */
+				LL_PREPEND (chunk->special_handlers, nchain);
+
 				data = ndata;
 				len = nlen;
-				chunk->special_handler = special_handler;
-
-				break;
 			}
 		}
 

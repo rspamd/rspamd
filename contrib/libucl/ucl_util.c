@@ -520,17 +520,22 @@ void
 ucl_chunk_free (struct ucl_chunk *chunk)
 {
 	if (chunk) {
-		if (chunk->special_handler) {
-			if (chunk->special_handler->free_function) {
-				chunk->special_handler->free_function (
-						(unsigned char *) chunk->begin,
-						chunk->end - chunk->begin,
-						chunk->special_handler->user_data);
+		struct ucl_parser_special_handler_chain *chain, *tmp;
+
+		LL_FOREACH_SAFE (chunk->special_handlers, chain, tmp) {
+			if (chain->special_handler->free_function) {
+				chain->special_handler->free_function (
+						chain->begin,
+						chain->len,
+						chain->special_handler->user_data);
 			} else {
-				UCL_FREE (chunk->end - chunk->begin,
-						(unsigned char *) chunk->begin);
+				UCL_FREE (chain->len, chain->begin);
 			}
+
+			UCL_FREE (sizeof (*chain), chain);
 		}
+
+		chunk->special_handlers = NULL;
 
 		if (chunk->fname) {
 			free (chunk->fname);
