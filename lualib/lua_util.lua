@@ -23,6 +23,7 @@ local exports = {}
 local lpeg = require 'lpeg'
 local rspamd_util = require "rspamd_util"
 local fun = require "fun"
+local lupa = require "lupa"
 
 local split_grammar = {}
 local spaces_split_grammar
@@ -30,6 +31,10 @@ local space = lpeg.S' \t\n\v\f\r'
 local nospace = 1 - space
 local ptrim = space^0 * lpeg.C((space^0 * nospace^1)^0)
 local match = lpeg.match
+lupa.configure{
+  keep_trailing_newline = true,
+  autoescape = false,
+}
 
 local function rspamd_str_split(s, sep)
   local gr
@@ -132,8 +137,6 @@ end
 -- "HELLO LUA WORLD!"
 --]]
 exports.jinja_template = function(text, env, skip_global_env)
-  local lupa = require "lupa"
-
   if not skip_global_env then
     env = enrich_template_with_globals(env)
   end
@@ -153,8 +156,6 @@ end
 -- "HELLO LUA WORLD!"
 --]]
 exports.jinja_template_file = function(filename, env, skip_global_env)
-  local lupa = require "lupa"
-
   if not skip_global_env then
     env = enrich_template_with_globals(env)
   end
