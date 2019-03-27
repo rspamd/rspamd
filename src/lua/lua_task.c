@@ -631,15 +631,15 @@ LUA_FUNCTION_DEF (task, get_symbols_tokens);
  */
 LUA_FUNCTION_DEF (task, has_symbol);
 /***
- * @method task:has_symbol(name)
- * Fast path to check if a specified symbol is in the task's results
+ * @method task:enable_symbol(name)
+ * Enable specified symbol for this particular task
  * @param {string} name symbol's name
  * @return {boolean} `true` if symbol has been found
  */
 LUA_FUNCTION_DEF (task, enable_symbol);
 /***
- * @method task:has_symbol(name)
- * Fast path to check if a specified symbol is in the task's results
+ * @method task:disable_symbol(name)
+ * Disable specified symbol for this particular task
  * @param {string} name symbol's name
  * @return {boolean} `true` if symbol has been found
  */
