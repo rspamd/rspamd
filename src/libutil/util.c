@@ -1487,6 +1487,29 @@ g_ptr_array_insert (GPtrArray *array, gint index_, gpointer data)
 }
 #endif
 
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 32))
+const gchar *
+g_environ_getenv (gchar **envp, const gchar *variable)
+{
+	gsize len;
+	gint i;
+
+	if (envp == NULL) {
+		return NULL;
+	}
+
+	len = strlen (variable);
+
+	for (i = 0; envp[i]; i++) {
+		if (strncmp (envp[i], variable, len) == 0 && envp[i][len] == '=') {
+			return envp[i] + len + 1;
+		}
+	}
+
+	return NULL;
+}
+#endif
+
 gint
 rspamd_fallocate (gint fd, off_t offset, off_t len)
 {
