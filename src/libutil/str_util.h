@@ -502,4 +502,7 @@ const gchar* rspamd_string_len_strip (const gchar *in,
 								((uc) >= 0x205F && (uc) <= 0x206F) || \
 								(uc) == 0xFEFF)
 
+#define RSPAMD_LEN_CHECK_STARTS_WITH(s, len, lit) \
+	((len) >= sizeof(lit) - 1 && g_ascii_strncasecmp ((s), (lit), sizeof(lit) - 1) == 0)
+
 #endif /* SRC_LIBUTIL_STR_UTIL_H_ */

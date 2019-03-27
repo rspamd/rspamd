@@ -541,6 +541,7 @@ void
 rspamd_lua_set_env (lua_State *L, GHashTable *vars)
 {
 	gint orig_top = lua_gettop (L);
+	gchar **env = g_get_environ ();
 
 	/* Set known paths as rspamd_paths global */
 	lua_getglobal (L, "rspamd_paths");
@@ -559,52 +560,52 @@ rspamd_lua_set_env (lua_State *L, GHashTable *vars)
 		const gchar *t;
 
 		/* Try environment */
-		t = getenv ("SHAREDIR");
+		t = g_environ_getenv (env, "SHAREDIR");
 		if (t) {
 			sharedir = t;
 		}
 
-		t = getenv ("PLUGINSDIR");
+		t = g_environ_getenv (env, "PLUGINSDIR");
 		if (t) {
 			pluginsdir = t;
 		}
 
-		t = getenv ("RULESDIR");
+		t = g_environ_getenv (env, "RULESDIR");
 		if (t) {
 			rulesdir = t;
 		}
 
-		t = getenv ("DBDIR");
+		t = g_environ_getenv (env, "DBDIR");
 		if (t) {
 			dbdir = t;
 		}
 
-		t = getenv ("RUNDIR");
+		t = g_environ_getenv (env, "RUNDIR");
 		if (t) {
 			rundir = t;
 		}
 
-		t = getenv ("LUALIBDIR");
+		t = g_environ_getenv (env, "LUALIBDIR");
 		if (t) {
 			lualibdir = t;
 		}
 
-		t = getenv ("LOGDIR");
+		t = g_environ_getenv (env, "LOGDIR");
 		if (t) {
 			logdir = t;
 		}
 
-		t = getenv ("WWWDIR");
+		t = g_environ_getenv (env, "WWWDIR");
 		if (t) {
 			wwwdir = t;
 		}
 
-		t = getenv ("CONFDIR");
+		t = g_environ_getenv (env, "CONFDIR");
 		if (t) {
 			confdir = t;
 		}
 
-		t = getenv ("LOCAL_CONFDIR");
+		t = g_environ_getenv (env, "LOCAL_CONFDIR");
 		if (t) {
 			local_confdir = t;
 		}
@@ -717,6 +718,29 @@ rspamd_lua_set_env (lua_State *L, GHashTable *vars)
 		lua_pushstring (L, "ver_num");
 		lua_pushinteger (L, RSPAMD_VERSION_NUM);
 		lua_settable (L, -3);
+
+		if (env) {
+			gint lim = g_strv_length (env);
+
+			for (gint i = 0; i < lim; i++) {
+				if (RSPAMD_LEN_CHECK_STARTS_WITH(env[i], strlen (env[i]), "RSPAMD_")) {
+					const char *var = env[i] + sizeof ("RSPAMD_") - 1, *value;
+					gint varlen;
+
+					varlen = strcspn (var, "=");
+					value = var + varlen;
+
+					if (*value == '=') {
+						value ++;
+
+						lua_pushlstring (L, var, varlen);
+						lua_pushstring (L, value);
+						lua_settable (L, -3);
+					}
+
+				}
+			}
+		}
 
 		lua_setglobal (L, "rspamd_env");
 	}

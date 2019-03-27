@@ -788,8 +788,6 @@ rspamd_upstream_add_addr (struct upstream *up, rspamd_inet_addr_t *addr)
 	return TRUE;
 }
 
-#define LEN_CHECK_STARTS_WITH(s, len, lit) \
-	((len) >= sizeof(lit) - 1 && g_ascii_strncasecmp ((s), (lit), sizeof(lit) - 1) == 0)
 gboolean
 rspamd_upstreams_parse_line_len (struct upstream_list *ups,
 		const gchar *str, gsize len, guint16 def_port, void *data)
@@ -800,23 +798,23 @@ rspamd_upstreams_parse_line_len (struct upstream_list *ups,
 	guint span_len;
 	gboolean ret = FALSE;
 
-	if (LEN_CHECK_STARTS_WITH(p, len, "random:")) {
+	if (RSPAMD_LEN_CHECK_STARTS_WITH(p, len, "random:")) {
 		ups->rot_alg = RSPAMD_UPSTREAM_RANDOM;
 		p += sizeof ("random:") - 1;
 	}
-	else if (LEN_CHECK_STARTS_WITH(p, len, "master-slave:")) {
+	else if (RSPAMD_LEN_CHECK_STARTS_WITH(p, len, "master-slave:")) {
 		ups->rot_alg = RSPAMD_UPSTREAM_MASTER_SLAVE;
 		p += sizeof ("master-slave:") - 1;
 	}
-	else if (LEN_CHECK_STARTS_WITH(p, len, "round-robin:")) {
+	else if (RSPAMD_LEN_CHECK_STARTS_WITH(p, len, "round-robin:")) {
 		ups->rot_alg = RSPAMD_UPSTREAM_ROUND_ROBIN;
 		p += sizeof ("round-robin:") - 1;
 	}
-	else if (LEN_CHECK_STARTS_WITH(p, len, "hash:")) {
+	else if (RSPAMD_LEN_CHECK_STARTS_WITH(p, len, "hash:")) {
 		ups->rot_alg = RSPAMD_UPSTREAM_HASHED;
 		p += sizeof ("hash:") - 1;
 	}
-	else if (LEN_CHECK_STARTS_WITH(p, len, "sequential:")) {
+	else if (RSPAMD_LEN_CHECK_STARTS_WITH(p, len, "sequential:")) {
 		ups->rot_alg = RSPAMD_UPSTREAM_SEQUENTIAL;
 		p += sizeof ("sequential:") - 1;
 	}
@@ -847,7 +845,6 @@ rspamd_upstreams_parse_line_len (struct upstream_list *ups,
 	return ret;
 }
 
-#undef LEN_CHECK_STARTS_WITH
 
 gboolean
 rspamd_upstreams_parse_line (struct upstream_list *ups,
