@@ -29,6 +29,7 @@
 #include <zlib.h>
 
 #include "unicode/uspoof.h"
+#include "unicode/uscript.h"
 
 /***
  * @module rspamd_util
@@ -394,6 +395,14 @@ LUA_FUNCTION_DEF (util, normalize_prob);
 LUA_FUNCTION_DEF (util, is_utf_spoofed);
 
 /**
+* @function util.is_utf_mixed_script(str)
+* Returns true if a string contains mixed unicode scripts
+* @param {string} String to check
+* @return {boolean} true if a string contains chars with mixed unicode script
+*/
+LUA_FUNCTION_DEF (util, is_utf_mixed_script);
+
+/**
 * @function util.is_utf_outside_range(str, range_start, range_end)
 * Returns true if a string contains chars outside range
 * @param {string} String to check
@@ -633,6 +642,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, caseless_hash),
 	LUA_INTERFACE_DEF (util, caseless_hash_fast),
 	LUA_INTERFACE_DEF (util, is_utf_spoofed),
+	LUA_INTERFACE_DEF (util, is_utf_mixed_script),
 	LUA_INTERFACE_DEF (util, is_utf_outside_range),
 	LUA_INTERFACE_DEF (util, get_string_stats),
 	LUA_INTERFACE_DEF (util, is_valid_utf8),
@@ -2496,6 +2506,50 @@ lua_util_is_utf_spoofed (lua_State *L)
 	}
 
 	return nres;
+}
+
+static gint
+lua_util_is_utf_mixed_script(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	gsize len_of_string;
+	const gchar *string_to_check = lua_tolstring (L, 1, &len_of_string);
+	UScriptCode last_script_code = USCRIPT_INVALID_CODE;
+	UErrorCode uc_err = U_ZERO_ERROR;
+
+	if (string_to_check) {
+		uint index = 0;
+		UChar32 char_to_check = 0;
+		while(index < len_of_string) {
+			U8_NEXT(string_to_check, index, len_of_string, char_to_check);
+			if (char_to_check < 0 ) {
+				return luaL_error (L, "passed string is not valid utf");
+			}
+			UScriptCode current_script_code = uscript_getScript(char_to_check, &uc_err);
+			if (uc_err != U_ZERO_ERROR){
+				msg_err ("cannot get unicode script for character, error: %s", u_errorName (uc_err));
+				lua_pushboolean (L, false);
+				return 1;
+			}
+			if ( current_script_code != USCRIPT_COMMON && current_script_code != USCRIPT_INHERITED ){
+				if (last_script_code == USCRIPT_INVALID_CODE ){
+					last_script_code = current_script_code;
+				} else {
+					if ( last_script_code != current_script_code ){
+						lua_pushboolean (L, true);
+						return 1;
+					}
+				}
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, false);
+
+	return 1;
 }
 
 static gint
