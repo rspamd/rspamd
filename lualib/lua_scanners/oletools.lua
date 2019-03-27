@@ -173,7 +173,7 @@ local function oletools_check(task, content, digest, rule)
                 m_suspicious = 'S'
                 table.insert(analysis_keyword_table, a.keyword)
               end
-            elseif a.type == 'IOCs' then
+            elseif a.type == 'IOC' then
               m_iocs = 'I'
             elseif a.type == 'Hex strings' then
               m_hex = 'H'
