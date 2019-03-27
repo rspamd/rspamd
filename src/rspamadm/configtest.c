@@ -23,6 +23,7 @@
 static gboolean quiet = FALSE;
 static gchar *config = NULL;
 static gboolean strict = FALSE;
+static gboolean skip_template = FALSE;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
 extern module_t *modules[];
@@ -48,6 +49,8 @@ static GOptionEntry entries[] = {
 				"Config file to test",     NULL},
 		{"strict", 's', 0, G_OPTION_ARG_NONE, &strict,
 				"Stop on any error in config", NULL},
+		{"skip-template", 'T', 0, G_OPTION_ARG_NONE, &skip_template,
+				"Do not apply Jinja templates", NULL},
 		{NULL,  0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -141,7 +144,8 @@ rspamadm_configtest (gint argc, gchar **argv, const struct rspamadm_command *cmd
 	cfg->compiled_workers = workers;
 	cfg->cfg_name = config;
 
-	if (!rspamd_config_read (cfg, cfg->cfg_name, config_logger, rspamd_main, ucl_vars)) {
+	if (!rspamd_config_read (cfg, cfg->cfg_name, config_logger, rspamd_main,
+			ucl_vars, skip_template, lua_env)) {
 		ret = FALSE;
 	}
 	else {

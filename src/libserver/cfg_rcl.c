@@ -3506,7 +3506,7 @@ rspamd_rcl_maybe_apply_lua_transform (struct rspamd_config *cfg)
 }
 
 static bool
-rspamd_rcl_decrypt_handler(struct ucl_parser *parser,
+rspamd_rcl_decrypt_handler (struct ucl_parser *parser,
 						   const unsigned char *source, size_t source_len,
 						   unsigned char **destination, size_t *dest_len,
 						   void *user_data)
@@ -3521,6 +3521,64 @@ rspamd_rcl_decrypt_handler(struct ucl_parser *parser,
 
 		return false;
 	}
+
+	return true;
+}
+
+static bool
+rspamd_rcl_jinja_handler (struct ucl_parser *parser,
+						   const unsigned char *source, size_t source_len,
+						   unsigned char **destination, size_t *dest_len,
+						   void *user_data)
+{
+	struct rspamd_config *cfg = (struct rspamd_config *)user_data;
+	lua_State *L = cfg->lua_state;
+	gint err_idx;
+
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	/* Obtain function */
+	if (!rspamd_lua_require_function (L, "lua_util", "jinja_template")) {
+		msg_err_config ("cannot require lua_util.jinja_template");
+		lua_settop (L, err_idx - 1);
+
+		return false;
+	}
+
+	lua_pushlstring (L, source, source_len);
+	lua_getglobal (L, "rspamd_env");
+	lua_pushboolean (L, false);
+
+	if (lua_pcall (L, 3, 1, err_idx) != 0) {
+		GString *tb;
+
+		tb = lua_touserdata (L, -1);
+		msg_err_config ("cannot call lua try_load_redis_servers script: %s", tb->str);
+		g_string_free (tb, TRUE);
+		lua_settop (L, err_idx - 1);
+
+		return false;
+	}
+
+	if (lua_type (L, -1) == LUA_TSTRING) {
+		const char *ndata;
+		gsize nsize;
+
+		ndata = lua_tolstring (L, -1, &nsize);
+		*destination = UCL_ALLOC (nsize);
+		memcpy (*destination, ndata, nsize);
+		*dest_len = nsize;
+	}
+	else {
+		msg_err_config ("invalid return type when templating jinja %s",
+				lua_typename (L, lua_type (L, -1)));
+		lua_settop (L, err_idx - 1);
+
+		return false;
+	}
+
+	lua_settop (L, err_idx - 1);
 
 	return true;
 }
@@ -3561,6 +3619,7 @@ rspamd_config_parse_ucl (struct rspamd_config *cfg,
 						 GHashTable *vars,
 						 ucl_include_trace_func_t inc_trace,
 						 void *trace_data,
+						 gboolean skip_jinja,
 						 GError **err)
 {
 	struct stat st;
@@ -3652,6 +3711,18 @@ rspamd_config_parse_ucl (struct rspamd_config *cfg,
 		ucl_parser_add_special_handler (parser, decrypt_handler);
 	}
 
+	if (!skip_jinja) {
+		struct ucl_parser_special_handler *jinja_handler;
+
+		jinja_handler = rspamd_mempool_alloc0 (cfg->cfg_pool,
+				sizeof (*jinja_handler));
+		jinja_handler->user_data = cfg;
+		jinja_handler->flags = UCL_SPECIAL_HANDLER_PREPROCESS_ALL;
+		jinja_handler->handler = rspamd_rcl_jinja_handler;
+
+		ucl_parser_add_special_handler (parser, jinja_handler);
+	}
+
 	if (!ucl_parser_add_chunk (parser, data, st.st_size)) {
 		g_set_error (err, cfg_rcl_error_quark (), errno,
 				"ucl parser error: %s", ucl_parser_get_error (parser));
@@ -3670,17 +3741,28 @@ rspamd_config_parse_ucl (struct rspamd_config *cfg,
 }
 
 gboolean
-rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
+rspamd_config_read (struct rspamd_config *cfg,
+					const gchar *filename,
 					rspamd_rcl_section_fin_t logger_fin,
-					gpointer logger_ud, GHashTable *vars)
+					gpointer logger_ud,
+					GHashTable *vars,
+					gboolean skip_jinja,
+					gchar **lua_env)
 {
 	GError *err = NULL;
 	struct rspamd_rcl_section *top, *logger_section;
 	const ucl_object_t *logger_obj;
 
-	rspamd_lua_set_env (cfg->lua_state, vars);
+	rspamd_lua_set_path (cfg->lua_state, NULL, vars);
 
-	if (!rspamd_config_parse_ucl (cfg, filename, vars, NULL, NULL, &err)) {
+	if (!rspamd_lua_set_env (cfg->lua_state, vars, lua_env, &err)) {
+		msg_err_config_forced ("failed to set up environment: %e", err);
+		g_error_free (err);
+
+		return FALSE;
+	}
+
+	if (!rspamd_config_parse_ucl (cfg, filename, vars, NULL, NULL, skip_jinja, &err)) {
 		msg_err_config_forced ("failed to load config: %e", err);
 		g_error_free (err);
 
@@ -3688,6 +3770,7 @@ rspamd_config_read (struct rspamd_config *cfg, const gchar *filename,
 	}
 
 	top = rspamd_rcl_config_init (cfg, NULL);
+	/* Add new paths if defined in options */
 	rspamd_lua_set_path (cfg->lua_state, cfg->rcl_obj, vars);
 	rspamd_lua_set_globals (cfg, cfg->lua_state);
 	rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_rcl_section_free, top);

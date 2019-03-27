@@ -3819,7 +3819,7 @@ lua_config_load_ucl (lua_State *L)
 			cbd.L = L;
 
 			if (!rspamd_config_parse_ucl (cfg, filename, paths,
-					lua_include_trace_cb, &cbd, &err)) {
+					lua_include_trace_cb, &cbd, lua_toboolean (L, 4), &err)) {
 				luaL_unref (L, LUA_REGISTRYINDEX, cbd.cbref);
 				lua_pushboolean (L, false);
 				lua_pushfstring (L, "failed to load config: %s", err->message);
@@ -3832,7 +3832,8 @@ lua_config_load_ucl (lua_State *L)
 			luaL_unref (L, LUA_REGISTRYINDEX, cbd.cbref);
 		}
 		else {
-			if (!rspamd_config_parse_ucl (cfg, filename, paths, NULL, NULL, &err)) {
+			if (!rspamd_config_parse_ucl (cfg, filename, paths, NULL, NULL,
+					lua_toboolean (L, 3), &err)) {
 				lua_pushboolean (L, false);
 				lua_pushfstring (L, "failed to load config: %s", err->message);
 				g_error_free (err);

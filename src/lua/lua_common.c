@@ -263,83 +263,76 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 		}
 	}
 
-	/* Try environment */
-	t = getenv ("SHAREDIR");
-	if (t) {
-		sharedir = t;
+	if (additional_path) {
+		rspamd_snprintf (path_buf, sizeof (path_buf),
+				"%s;"
+				"%s",
+				additional_path, old_path);
 	}
-
-	t = getenv ("PLUGINSDIR");
-	if (t) {
-		pluginsdir = t;
-	}
-
-	t = getenv ("RULESDIR");
-	if (t) {
-		rulesdir = t;
-	}
-
-	t = getenv ("LUALIBDIR");
-	if (t) {
-		lualibdir = t;
-	}
-
-	t = getenv ("LIBDIR");
-	if (t) {
-		libdir = t;
-	}
-
-	t = getenv ("RSPAMD_LIBDIR");
-	if (t) {
-		libdir = t;
-	}
-
-	if (vars) {
-		t = g_hash_table_lookup (vars, "PLUGINSDIR");
-		if (t) {
-			pluginsdir = t;
-		}
-
-		t = g_hash_table_lookup (vars, "SHAREDIR");
+	else {
+		/* Try environment */
+		t = getenv ("SHAREDIR");
 		if (t) {
 			sharedir = t;
 		}
 
-		t = g_hash_table_lookup (vars, "RULESDIR");
+		t = getenv ("PLUGINSDIR");
+		if (t) {
+			pluginsdir = t;
+		}
+
+		t = getenv ("RULESDIR");
 		if (t) {
 			rulesdir = t;
 		}
 
-		t = g_hash_table_lookup (vars, "LUALIBDIR");
+		t = getenv ("LUALIBDIR");
 		if (t) {
 			lualibdir = t;
 		}
 
-		t = g_hash_table_lookup (vars, "LIBDIR");
+		t = getenv ("LIBDIR");
 		if (t) {
 			libdir = t;
 		}
 
-		t = g_hash_table_lookup (vars, "RSPAMD_LIBDIR");
+		t = getenv ("RSPAMD_LIBDIR");
 		if (t) {
 			libdir = t;
 		}
-	}
 
-	if (additional_path) {
-		rspamd_snprintf (path_buf, sizeof (path_buf),
-				"%s/lua/?.lua;"
-				"%s/?.lua;"
-				"%s/?.lua;"
-				"%s/?/init.lua;"
-				"%s;"
-				"%s",
-				RSPAMD_CONFDIR,
-				rulesdir,
-				lualibdir, lualibdir,
-				additional_path, old_path);
-	}
-	else {
+		if (vars) {
+			t = g_hash_table_lookup (vars, "PLUGINSDIR");
+			if (t) {
+				pluginsdir = t;
+			}
+
+			t = g_hash_table_lookup (vars, "SHAREDIR");
+			if (t) {
+				sharedir = t;
+			}
+
+			t = g_hash_table_lookup (vars, "RULESDIR");
+			if (t) {
+				rulesdir = t;
+			}
+
+			t = g_hash_table_lookup (vars, "LUALIBDIR");
+			if (t) {
+				lualibdir = t;
+			}
+
+			t = g_hash_table_lookup (vars, "LIBDIR");
+			if (t) {
+				libdir = t;
+			}
+
+			t = g_hash_table_lookup (vars, "RSPAMD_LIBDIR");
+			if (t) {
+				libdir = t;
+			}
+		}
+
 		rspamd_snprintf (path_buf, sizeof (path_buf),
 				"%s/lua/?.lua;"
 				"%s/?.lua;"
@@ -372,11 +365,9 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 	if (additional_path) {
 		rspamd_snprintf (path_buf, sizeof (path_buf),
 				"%s/?%s;"
-				"%s;"
 				"%s",
-				libdir,
-				OS_SO_SUFFIX,
 				additional_path,
+				OS_SO_SUFFIX,
 				old_path);
 	}
 	else {
@@ -387,6 +378,7 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 				OS_SO_SUFFIX,
 				old_path);
 	}
+
 	lua_pop (L, 1);
 	lua_pushstring (L, path_buf);
 	lua_setfield (L, -2, "cpath");
@@ -537,8 +529,56 @@ rspamd_lua_rspamd_version (lua_State *L)
 	return 1;
 }
 
-void
-rspamd_lua_set_env (lua_State *L, GHashTable *vars)
+static gboolean
+rspamd_lua_load_env (lua_State *L, const char *fname, gint tbl_pos, GError **err)
+{
+	gint orig_top = lua_gettop (L), err_idx;
+	gboolean ret = TRUE;
+
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	if (luaL_loadfile (L, fname) != 0) {
+		g_set_error (err, g_quark_from_static_string ("lua_env"), errno,
+				"cannot load lua file %s: %s",
+				fname,
+				lua_tostring (L, -1));
+		ret = FALSE;
+	}
+
+	if (ret && lua_pcall (L, 0, 1, err_idx) != 0) {
+		GString *tb = lua_touserdata (L, -1);
+		g_set_error (err, g_quark_from_static_string ("lua_env"), errno,
+				"cannot init lua file %s: %s",
+				fname,
+				tb->str);
+		g_string_free (tb, TRUE);
+
+		ret = FALSE;
+	}
+
+	if (ret && lua_type (L, -1) == LUA_TTABLE) {
+		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+			lua_pushvalue (L, -2); /* Store key */
+			lua_pushvalue (L, -2); /* Store value */
+			lua_settable (L, tbl_pos);
+		}
+	}
+	else if (ret) {
+		g_set_error (err, g_quark_from_static_string ("lua_env"), errno,
+				"invalid return type when loading env from %s: %s",
+				fname,
+				lua_typename (L, lua_type (L, -1)));
+		ret = FALSE;
+	}
+
+	lua_settop (L, orig_top);
+
+	return ret;
+}
+
+gboolean
+rspamd_lua_set_env (lua_State *L, GHashTable *vars, char **lua_env, GError **err)
 {
 	gint orig_top = lua_gettop (L);
 	gchar **env = g_get_environ ();
@@ -742,10 +782,23 @@ rspamd_lua_set_env (lua_State *L, GHashTable *vars)
 			}
 		}
 
+		if (lua_env) {
+			gint lim = g_strv_length (lua_env);
+
+			for (gint i = 0; i < lim; i ++) {
+				if (!rspamd_lua_load_env (L, lua_env[i], lua_gettop (L), err)) {
+					return FALSE;
+				}
+			}
+		}
+
 		lua_setglobal (L, "rspamd_env");
 	}
 
 	lua_settop (L, orig_top);
+	g_strfreev (env);
+
+	return TRUE;
 }
 
 void

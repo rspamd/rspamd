@@ -31,6 +31,7 @@ static gboolean list_commands = FALSE;
 static gboolean show_help = FALSE;
 static gboolean show_version = FALSE;
 GHashTable *ucl_vars = NULL;
+gchar **lua_env = NULL;
 struct rspamd_main *rspamd_main = NULL;
 struct rspamd_async_session *rspamadm_session = NULL;
 lua_State *L = NULL;
@@ -65,6 +66,8 @@ static GOptionEntry entries[] = {
 			"Show help", NULL},
 	{"version", 'V', 0, G_OPTION_ARG_NONE, &show_version,
 			"Show version", NULL},
+	{"lua-env", '\0', 0, G_OPTION_ARG_FILENAME_ARRAY, &lua_env,
+			"Load lua environment from the specified files", NULL},
 	{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -458,8 +461,15 @@ main (gint argc, gchar **argv, gchar **env)
 	setproctitle ("rspamdadm");
 
 	L = cfg->lua_state;
-	rspamd_lua_set_env (L, ucl_vars);
 	rspamd_lua_set_path (L, NULL, ucl_vars);
+
+	if (!rspamd_lua_set_env (L, ucl_vars, lua_env, &error)) {
+		rspamd_fprintf (stderr, "Cannot load lua environment: %e", error);
+		g_error_free (error);
+
+		exit (EXIT_FAILURE);
+	}
+
 	rspamd_lua_set_globals (cfg, L);
 	rspamadm_add_lua_globals ();
 

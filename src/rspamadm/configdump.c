@@ -27,6 +27,7 @@ static gboolean compact = FALSE;
 static gboolean show_help = FALSE;
 static gboolean show_comments = FALSE;
 static gboolean modules_state = FALSE;
+static gboolean skip_template = FALSE;
 static gchar *config = NULL;
 extern struct rspamd_main *rspamd_main;
 /* Defined in modules.c */
@@ -57,6 +58,8 @@ static GOptionEntry entries[] = {
 				"Show saved comments from the configuration file", NULL },
 		{"modules-state", 'm', 0, G_OPTION_ARG_NONE, &modules_state,
 				"Show modules state only", NULL},
+		{"skip-template", 'T', 0, G_OPTION_ARG_NONE, &skip_template,
+				"Do not apply Jinja templates", NULL},
 		{NULL,  0,   0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -284,7 +287,8 @@ rspamadm_configdump (gint argc, gchar **argv, const struct rspamadm_command *cmd
 	cfg->compiled_workers = workers;
 	cfg->cfg_name = config;
 
-	if (!rspamd_config_read (cfg, cfg->cfg_name, config_logger, rspamd_main, ucl_vars)) {
+	if (!rspamd_config_read (cfg, cfg->cfg_name, config_logger, rspamd_main,
+			ucl_vars, skip_template, lua_env)) {
 		ret = FALSE;
 	}
 	else {

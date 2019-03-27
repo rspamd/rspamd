@@ -95,6 +95,8 @@ static gboolean is_insecure = FALSE;
 static gboolean gen_keypair = FALSE;
 static gboolean encrypt_password = FALSE;
 static GHashTable *ucl_vars = NULL;
+static gchar **lua_env = NULL;
+static gboolean skip_template = FALSE;
 
 static gint term_attempts = 0;
 
@@ -146,6 +148,10 @@ static GOptionEntry entries[] =
 	  "Show version and exit", NULL },
 	{"var", 0, 0, G_OPTION_ARG_CALLBACK, (gpointer)&rspamd_parse_var,
 			"Redefine/define environment variable", NULL},
+	{"skip-template", 'T', 0, G_OPTION_ARG_NONE, &skip_template,
+			"Do not apply Jinja templates", NULL},
+	{"lua-env", '\0', 0, G_OPTION_ARG_FILENAME_ARRAY, &lua_env,
+			"Load lua environment from the specified files", NULL},
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -923,7 +929,8 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 
-	if (!rspamd_config_read (cfg, cfg->cfg_name, config_logger, rspamd_main, ucl_vars)) {
+	if (!rspamd_config_read (cfg, cfg->cfg_name, config_logger, rspamd_main,
+			ucl_vars, skip_template, lua_env)) {
 		return FALSE;
 	}
 
