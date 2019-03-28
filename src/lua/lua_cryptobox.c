@@ -79,6 +79,7 @@ LUA_FUNCTION_DEF (cryptobox, decrypt_memory);
 LUA_FUNCTION_DEF (cryptobox, decrypt_file);
 LUA_FUNCTION_DEF (cryptobox, encrypt_cookie);
 LUA_FUNCTION_DEF (cryptobox, decrypt_cookie);
+LUA_FUNCTION_DEF (cryptobox, pbkdf);
 
 static const struct luaL_reg cryptoboxlib_f[] = {
 	LUA_INTERFACE_DEF (cryptobox, verify_memory),
@@ -91,6 +92,7 @@ static const struct luaL_reg cryptoboxlib_f[] = {
 	LUA_INTERFACE_DEF (cryptobox, decrypt_file),
 	LUA_INTERFACE_DEF (cryptobox, encrypt_cookie),
 	LUA_INTERFACE_DEF (cryptobox, decrypt_cookie),
+	LUA_INTERFACE_DEF (cryptobox, pbkdf),
 	{NULL, NULL}
 };
 
@@ -2018,6 +2020,88 @@ lua_cryptobox_decrypt_cookie (lua_State *L)
 	}
 
 	return 2;
+}
+
+/***
+ * @function rspamd_cryptobox.pbkdf([password, [kdf_alg]])
+ * Function that encrypts password using PBKDF function.
+ * This function either reads password from STDIN or accepts prepared password as
+ * an argument
+ * @param {string} password optional password string
+ * @param {string} kdf_alg algorithm to use (catena or pbkdf2)
+ * @return {string} encrypted password or nil if error occurs
+ */
+static gint
+lua_cryptobox_pbkdf (lua_State *L)
+{
+	const struct rspamd_controller_pbkdf *pbkdf = NULL;
+	const gchar *pbkdf_str = "catena";
+	gchar *password;
+	gsize pwlen;
+
+	if (lua_type (L, 2) == LUA_TSTRING) {
+		pbkdf_str = lua_tostring (L, 2);
+	}
+
+	for (guint i = 0; i < RSPAMD_PBKDF_ID_MAX - 1; i ++) {
+		pbkdf = &pbkdf_list[i];
+
+		if (g_ascii_strcasecmp (pbkdf_str, pbkdf->alias) == 0) {
+			break;
+		}
+		if (g_ascii_strcasecmp (pbkdf_str, pbkdf->name) == 0) {
+			break;
+		}
+
+		pbkdf = NULL;
+	}
+
+	if (pbkdf == NULL) {
+		return luaL_error (L, "invalid pbkdf algorithm: %s", pbkdf_str);
+	}
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		password = g_strdup (lua_tolstring (L, 1, &pwlen));
+	}
+	else {
+		pwlen = 8192;
+		password = g_malloc0 (pwlen);
+		pwlen = rspamd_read_passphrase (password, pwlen, 0, NULL);
+	}
+
+	if (pwlen == 0) {
+		lua_pushnil (L);
+
+		return 1;
+	}
+
+	guchar *salt, *key;
+	gchar *encoded_salt, *encoded_key;
+	GString *result;
+
+	salt = g_alloca (pbkdf->salt_len);
+	key = g_alloca (pbkdf->key_len);
+	ottery_rand_bytes (salt, pbkdf->salt_len);
+	/* Derive key */
+	rspamd_cryptobox_pbkdf (password, pwlen,
+			salt, pbkdf->salt_len, key, pbkdf->key_len, pbkdf->complexity,
+			pbkdf->type);
+
+	encoded_salt = rspamd_encode_base32 (salt, pbkdf->salt_len);
+	encoded_key = rspamd_encode_base32 (key, pbkdf->key_len);
+
+	result = g_string_new ("");
+	rspamd_printf_gstring (result, "$%d$%s$%s", pbkdf->id, encoded_salt,
+			encoded_key);
+
+	g_free (encoded_salt);
+	g_free (encoded_key);
+	rspamd_explicit_memzero (password, pwlen);
+	g_free (password);
+	lua_pushlstring (L, result->str, result->len);
+	g_string_free (result, TRUE);
+
+	return 1;
 }
 
 static gint
