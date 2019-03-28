@@ -620,7 +620,10 @@ local function train_ann(rule, _, ev_base, elt, worker)
       local n = rspamd_config:get_symbols_count() +
           meta_functions.rspamd_count_metatokens()
       local filt = function(elts)
-        return #elts == n
+        -- Basic sanity checks: vector has good length + there are no
+        -- 'bad' values such as NaNs or infinities in its elements
+        return #elts == n and
+            not fun.any(function(e) return e ~= e or e == math.huge or e == -math.huge end, elts)
       end
 
       -- Now we can train ann
