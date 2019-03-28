@@ -671,11 +671,13 @@ local function train_ann(rule, _, ev_base, elt, worker)
             trainer.learning_rate = rule.train.learning_rate
             trainer.verbose = false
             trainer.maxIteration = rule.train.max_iterations
-            trainer.hookIteration = function(self, iteration, currentError)
+            trainer.hookIteration = function(_, iteration, currentError)
               rspamd_logger.infox(rspamd_config, "learned %s iterations, error: %s",
                   iteration, currentError)
             end
-
+            trainer.logger = function(s)
+              rspamd_logger.infox(rspamd_config, 'training: %s', s)
+            end
             trainer:train(dataset)
             local out = torch.MemoryFile()
             out:writeObject(rule.anns[elt].ann_train)

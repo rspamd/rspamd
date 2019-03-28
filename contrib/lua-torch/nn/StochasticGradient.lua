@@ -8,6 +8,9 @@ function StochasticGradient:__init(module, criterion)
    self.module = module
    self.criterion = criterion
    self.verbose = true
+   self.logger = function(s)
+      print(s)
+   end
 end
 
 function StochasticGradient:train(dataset)
@@ -23,7 +26,7 @@ function StochasticGradient:train(dataset)
       end
    end
 
-   print("# StochasticGradient: training")
+   self.logger("# StochasticGradient: training")
 
    while true do
       local currentError = 0
@@ -49,13 +52,13 @@ function StochasticGradient:train(dataset)
       end
 
       if self.verbose then
-         print("# current error = " .. currentError)
+         self.logger("# current error = " .. currentError)
       end
       iteration = iteration + 1
       currentLearningRate = self.learningRate/(1+iteration*self.learningRateDecay)
       if self.maxIteration > 0 and iteration > self.maxIteration then
-         print("# StochasticGradient: you have reached the maximum number of iterations")
-         print("# training error = " .. currentError)
+         self.logger("# StochasticGradient: you have reached the maximum number of iterations")
+         self.logger("# training error = " .. currentError)
          break
       end
    end
