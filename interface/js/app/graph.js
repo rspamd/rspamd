@@ -119,16 +119,18 @@ define(["jquery", "d3evolution", "footable"],
             var xExtents = d3.extent(d3.merge(json), function (d) { return d.x; });
             var timeInterval = xExtents[1] - xExtents[0];
 
-            return json.map(function (curr, i) {
+            var total = 0;
+            var rows = json.map(function (curr, i) {
                 // Time intervals that don't have data are excluded from average calculation as d3.mean()ignores nulls
                 var avg = d3.mean(curr, function (d) { return d.y; });
                 // To find an integral on the whole time interval we need to convert nulls to zeroes
-                var value = d3.mean(curr, function (d) { return Number(d.y); }) * timeInterval / scaleFactor;
+                var value = d3.mean(curr, function (d) { return Number(d.y); }) * timeInterval / scaleFactor ^ 0; // eslint-disable-line no-bitwise
                 var yExtents = d3.extent(curr, function (d) { return d.y; });
 
+                total += value;
                 return {
                     label: graph_options.legend.entries[i].label,
-                    value: value ^ 0, // eslint-disable-line no-bitwise
+                    value: value,
                     min: Number(yExtents[0].toFixed(6)),
                     avg: Number(avg.toFixed(6)),
                     max: Number(yExtents[1].toFixed(6)),
@@ -136,6 +138,11 @@ define(["jquery", "d3evolution", "footable"],
                     color: graph_options.legend.entries[i].color,
                 };
             }, []);
+
+            return {
+                rows: rows,
+                total: total
+            };
         }
 
         function initSummaryTable(tables, rows, unit) {
@@ -151,28 +158,24 @@ define(["jquery", "d3evolution", "footable"],
                     {name:"max", title:"Maximum, <span class=\"unit\">" + unit + "</span>", defaultContent:""},
                     {name:"last", title:"Last, " + unit},
                 ],
-                rows: rows
+                rows: rows.map(function (curr, i) {
+                    return {
+                        options: {
+                            style: {
+                                color: graph_options.legend.entries[i].color
+                            }
+                        },
+                        value: curr
+                    };
+                }, [])
             });
         }
 
-        function drawRrdTable(tables, data, unit) {
-            var total_messages = 0;
-            var rows = data.map(function (curr, i) {
-                total_messages += curr.value;
-                return {
-                    options: {
-                        style: {
-                            color: graph_options.legend.entries[i].color
-                        }
-                    },
-                    value: curr
-                };
-            }, []);
-
-            document.getElementById("rrd-total-value").innerHTML = total_messages;
-
+        function drawRrdTable(tables, rows, unit) {
             if (Object.prototype.hasOwnProperty.call(tables, "rrd_summary")) {
-                tables.rrd_summary.rows.load(rows);
+                $.each(tables.rrd_summary.rows.all, function (i, row) {
+                    row.val(rows[i], false, true);
+                });
             } else {
                 initSummaryTable(tables, rows, unit);
             }
@@ -183,7 +186,7 @@ define(["jquery", "d3evolution", "footable"],
 
         ui.draw = function (rspamd, graphs, tables, neighbours, checked_server, type) {
             function updateWidgets(data) {
-                var rrd_summary = [];
+                var rrd_summary = {rows:[]};
                 var unit = "msg/s";
 
                 if (data) {
@@ -201,12 +204,40 @@ define(["jquery", "d3evolution", "footable"],
                     }
 
                     rrd_summary = getRrdSummary(data, scaleFactor);
+                }
+
+                if (graphs.rrd_pie) {
+                    graphs.rrd_pie.destroy();
+                    delete graphs.rrd_pie;
+                }
+                if (rrd_summary.total) {
                     graphs.rrd_pie = rspamd.drawPie(graphs.rrd_pie,
                         "rrd-pie",
-                        rrd_summary,
+                        rrd_summary.rows,
                         rrd_pie_config);
-                } else if (graphs.rrd_pie) {
-                    graphs.rrd_pie.destroy();
+                } else {
+                    // Show grayed out pie as percentage is undefined
+                    graphs.rrd_pie = rspamd.drawPie(graphs.rrd_pie,
+                        "rrd-pie",
+                        [{
+                            value: 1,
+                            color: "#FFFFFF",
+                        }],
+                        $.extend({}, rrd_pie_config, {
+                            labels: {
+                                outer: {
+                                    format: "none"
+                                },
+                                inner: {
+                                    format: "none"
+                                },
+                            },
+                            tooltips: {
+                                enabled: true,
+                                string: "Undefined"
+                            },
+                        })
+                    );
                 }
 
                 graphs.graph.data(data);
@@ -215,7 +246,8 @@ define(["jquery", "d3evolution", "footable"],
                     $(".unit").text(unit);
                     prevUnit = unit;
                 }
-                drawRrdTable(tables, rrd_summary, unit);
+                drawRrdTable(tables, rrd_summary.rows, unit);
+                document.getElementById("rrd-total-value").innerHTML = rrd_summary.total;
             }
 
             if (!graphs.graph) {
