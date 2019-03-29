@@ -204,12 +204,40 @@ define(["jquery", "d3evolution", "footable"],
                     }
 
                     rrd_summary = getRrdSummary(data, scaleFactor);
+                }
+
+                if (graphs.rrd_pie) {
+                    graphs.rrd_pie.destroy();
+                    delete graphs.rrd_pie;
+                }
+                if (rrd_summary.total) {
                     graphs.rrd_pie = rspamd.drawPie(graphs.rrd_pie,
                         "rrd-pie",
                         rrd_summary.rows,
                         rrd_pie_config);
-                } else if (graphs.rrd_pie) {
-                    graphs.rrd_pie.destroy();
+                } else {
+                    // Show grayed out pie as percentage is undefined
+                    graphs.rrd_pie = rspamd.drawPie(graphs.rrd_pie,
+                        "rrd-pie",
+                        [{
+                            value: 1,
+                            color: "#FFFFFF",
+                        }],
+                        $.extend({}, rrd_pie_config, {
+                            labels: {
+                                outer: {
+                                    format: "none"
+                                },
+                                inner: {
+                                    format: "none"
+                                },
+                            },
+                            tooltips: {
+                                enabled: true,
+                                string: "Undefined"
+                            },
+                        })
+                    );
                 }
 
                 graphs.graph.data(data);
