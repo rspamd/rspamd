@@ -32,10 +32,10 @@ local nospace = 1 - space
 local ptrim = space^0 * lpeg.C((space^0 * nospace^1)^0)
 local match = lpeg.match
 
-lupa.configure{
+lupa.configure('{%', '%}', '{=', '=}', '{#', '#}', {
   keep_trailing_newline = true,
   autoescape = false,
-}
+})
 
 lupa.filters.pbkdf = function(s)
   local cr = require "rspamd_cryptobox"
