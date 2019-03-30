@@ -718,7 +718,7 @@ rdns_make_request_full (
 	}
 
 	req->async = resolver->async;
-retry:
+
 	if (resolver->ups) {
 		struct rdns_upstream_elt *elt;
 
@@ -757,8 +757,16 @@ retry:
 		r = rdns_send_request (req, req->io->sock, true);
 
 		if (r == -1) {
-			rdns_info ("cannot send DNS request");
+			rdns_info ("cannot send DNS request: %s", strerror (errno));
 			REF_RELEASE (req);
+
+			if (resolver->ups && serv->ups_elt) {
+				resolver->ups->fail (serv->ups_elt, resolver->ups->data);
+			}
+			else {
+				UPSTREAM_FAIL (serv, time (NULL));
+			}
+
 			return NULL;
 		}
 	}
