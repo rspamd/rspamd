@@ -178,9 +178,12 @@ enum rdns_plugin_type {
 	RDNS_PLUGIN_CURVE = 0
 };
 
-typedef ssize_t (*rdns_network_send_callback) (struct rdns_request *req, void *plugin_data);
+typedef ssize_t (*rdns_network_send_callback) (struct rdns_request *req, void *plugin_data,
+											   struct sockaddr *saddr, socklen_t slen);
 typedef ssize_t (*rdns_network_recv_callback) (struct rdns_io_channel *ioc, void *buf,
-		size_t len, void *plugin_data, struct rdns_request **req_out);
+											   size_t len, void *plugin_data,
+											   struct rdns_request **req_out,
+											   struct sockaddr *saddr, socklen_t slen);
 typedef void (*rdns_network_finish_callback) (struct rdns_request *req, void *plugin_data);
 typedef void (*rdns_plugin_dtor_callback) (struct rdns_resolver *resolver, void *plugin_data);
 

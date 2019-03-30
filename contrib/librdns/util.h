@@ -32,8 +32,11 @@
  * @param type of socket (SOCK_STREAM or SOCK_DGRAM)
  */
 int
-rdns_make_client_socket (const char *credits, uint16_t port,
-		int type);
+rdns_make_client_socket (const char *credits,
+						 uint16_t port,
+						 int type,
+						 struct sockaddr **psockaddr,
+						 socklen_t *psocklen);
 
 /**
  * Generate new random DNS id

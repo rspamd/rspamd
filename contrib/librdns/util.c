@@ -53,7 +53,8 @@ rdns_make_socket_nonblocking (int fd)
 }
 
 static int
-rdns_make_inet_socket (int type, struct addrinfo *addr)
+rdns_make_inet_socket (int type, struct addrinfo *addr, struct sockaddr **psockaddr,
+		socklen_t *psocklen)
 {
 	int fd, r, s_error;
 	socklen_t optlen;
@@ -76,21 +77,9 @@ rdns_make_inet_socket (int type, struct addrinfo *addr)
 			goto out;
 		}
 
-		r = connect (fd, cur->ai_addr, cur->ai_addrlen);
-
-		if (r == -1) {
-			if (errno != EINPROGRESS) {
-				goto out;
-			}
-		}
-		else {
-			/* Still need to check SO_ERROR on socket */
-			optlen = sizeof (s_error);
-			getsockopt (fd, SOL_SOCKET, SO_ERROR, (void *)&s_error, &optlen);
-			if (s_error) {
-				errno = s_error;
-				goto out;
-			}
+		if (psockaddr) {
+			*psockaddr = cur->ai_addr;
+			*psocklen = cur->ai_addrlen;
 		}
 		break;
 out:
@@ -100,6 +89,7 @@ out:
 		fd = -1;
 		cur = cur->ai_next;
 	}
+
 	return (fd);
 }
 
@@ -136,23 +126,6 @@ rdns_make_unix_socket (const char *path, struct sockaddr_un *addr, int type)
 		goto out;
 	}
 
-	r = connect (fd, (struct sockaddr *)addr, SUN_LEN (addr));
-
-	if (r == -1) {
-		if (errno != EINPROGRESS) {
-			goto out;
-		}
-	}
-	else {
-		/* Still need to check SO_ERROR on socket */
-		optlen = sizeof (s_error);
-		getsockopt (fd, SOL_SOCKET, SO_ERROR, (void *)&s_error, &optlen);
-		if (s_error) {
-			errno = s_error;
-			goto out;
-		}
-	}
-
 	return (fd);
 
   out:
@@ -173,8 +146,11 @@ rdns_make_unix_socket (const char *path, struct sockaddr_un *addr, int type)
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
 int
-rdns_make_client_socket (const char *credits, uint16_t port,
-		int type)
+rdns_make_client_socket (const char *credits,
+						 uint16_t port,
+						 int type,
+						 struct sockaddr **psockaddr,
+						 socklen_t *psocklen)
 {
 	struct sockaddr_un              un;
 	struct stat                     st;
@@ -196,7 +172,25 @@ rdns_make_client_socket (const char *credits, uint16_t port,
 				return -1;
 			}
 			else {
-				return rdns_make_unix_socket (credits, &un, type);
+				r = rdns_make_unix_socket (credits, &un, type);
+
+				if (r != -1 && psockaddr) {
+					struct sockaddr *cpy;
+
+					cpy = calloc (1, sizeof (un));
+					*psockaddr = sizeof (un);
+
+					if (cpy == NULL) {
+						close (r);
+
+						return -1;
+					}
+
+					memcpy (cpy, &un, *psocklen);
+					*psockaddr = cpy;
+				}
+
+				return r;
 			}
 		}
 	}
@@ -215,7 +209,23 @@ rdns_make_client_socket (const char *credits, uint16_t port,
 
 		snprintf (portbuf, sizeof (portbuf), "%d", (int)port);
 		if ((r = getaddrinfo (credits, portbuf, &hints, &res)) == 0) {
-			r = rdns_make_inet_socket (type, res);
+			r = rdns_make_inet_socket (type, res, psockaddr, psocklen);
+
+			if (r != -1 && psockaddr) {
+				struct sockaddr *cpy;
+
+				cpy = calloc (1, *psocklen);
+
+				if (cpy == NULL) {
+					close (r);
+
+					return -1;
+				}
+
+				memcpy (cpy, *psockaddr, *psocklen);
+				*psockaddr = cpy;
+			}
+
 			freeaddrinfo (res);
 			return r;
 		}
