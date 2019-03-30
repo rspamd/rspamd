@@ -308,7 +308,7 @@ rspamd_dns_resolv_conf_on_server (struct rdns_resolver *resolver,
 	rspamd_inet_address_set_port (addr, port);
 	test_fd = rspamd_inet_address_connect (addr, SOCK_DGRAM, TRUE);
 
-	if (test_fd == -1) {
+	if (test_fd == -1 && (errno != EINTR || errno != ECONNREFUSED || errno != ECONNRESET)) {
 		msg_warn_config ("cannot open connection to nameserver at address %s: %s",
 				name, strerror (errno));
 		rspamd_inet_address_free (addr);
