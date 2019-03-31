@@ -63,11 +63,13 @@ textarea {
 	display:inline;
 	}
 
+input[type="number"] {
+    width:4em !important;
+    padding:2px 0;
+    text-align:center;
+}
 input.action-scores {
-  width:4em;
-  margin:5px -7em 5px 0;
-  padding:2px 0;
-  text-align:center;
+    margin:5px -7em 5px 0;
 }
 
 /* history table */
@@ -191,16 +193,6 @@ input.action-scores {
     background-color: #CDDBFF;
 }
 
-.upload-textarea,
-.scan-textarea {
-	width:100% !important;
-	}
-.upload-textarea {
-	height:200px;
-	}
-.scan-textarea {
-	height:300px;
-	}
  .stat-boxes {
 	padding-left: 0;
   margin-right: -10px !important;
@@ -499,19 +491,6 @@ td.maps-cell {
 .notification-area div > button:not(.close) {
 	margin-right: 9px;
 }
-
-#learning p > button {
-    margin-top: 10px;
-    }
-#learning div.widget-content:last-child > div.row {
-    padding: 0 0 15px 15px;
-    }
-#learning form div.row {
-    padding-left: 15px;
-    }
-#scanForm button {
-    margin-top: 10px;
-    }
 
 #throughput div.widget-content {
     text-align: center;

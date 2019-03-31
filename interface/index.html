@@ -31,8 +31,7 @@
 
 			<li role="presentation"><a id="configuration_nav" aria-controls="configuration" role="tab" href="#configuration" data-toggle="tab">Configuration</a></li>
 			<li role="presentation"><a id="symbols_nav" aria-controls="symbols" role="tab" href="#symbols" data-toggle="tab">Symbols</a></li>
-			<li role="presentation"><a id="learning_nav" aria-controls="learning" role="tab" href="#learning" data-toggle="tab" style="display: none;">Learning</a></li>
-			<li role="presentation"><a id="scan_nav" aria-controls="scan" role="tab" href="#scan" data-toggle="tab">Scan</a></li>
+			<li role="presentation"><a id="scan_nav" aria-controls="scan" role="tab" href="#scan" data-toggle="tab">Scan<span class="learn" style="display:none">/Learn</span></a></li>
 			<li role="presentation"><a id="history_nav" aria-controls="history" role="tab" href="#history" data-toggle="tab">History</a></li>
 		</ul>
     <ul class="nav navbar-nav nav-pills pull-right" style="display:none">
@@ -201,68 +200,23 @@
 				</div>
 			</div>
 
-			<div class="tab-pane" id="learning">
-				<div class="widget-box">
-					<div class="widget-title">
-						<span class="icon"><i class="glyphicon glyphicon-file"></i></span>
-						<h5>Learn RSPAMD</h5>
-					</div>
-					<div class="widget-content">
-						<div class="row">
-							<form class="col-md-6">
-								<h5>Insert raw SPAM source:</h5>
-								<textarea class="col-md-5 upload-textarea" id="spamTextSource" value=""></textarea>
-								<p><button class="btn btn-default pull-right" data-upload="spam" disabled><i class="glyphicon glyphicon-upload"></i> Upload text</button></p>
-							</form>
-							<form class="col-md-6">
-								<h5>Insert raw HAM source:</h5>
-								<textarea class="col-md-5 upload-textarea" id="hamTextSource" value=""></textarea>
-								<p><button class="btn btn-default pull-right" data-upload="ham" disabled><i class="glyphicon glyphicon-upload"></i> Upload text</button></p>
-							</form>
-						</div>
-						<div class="row">
-							<form class="col-md-6">
-								<h5>Insert raw Fuzzy storage:</h5>
-								<textarea class="col-md-5 upload-textarea" id="fuzzyTextSource" value=""></textarea>
-							<div class="row">
-								<label class="pull-left">
-										Flag
-								</label>
-									<div class="pull-right col-md-10">
-										<input id="fuzzyFlagText" class="slider" type="slider" value="1"/>
-									</div>
-							</div>
-							<div class="row">
-								<label class="pull-left">
-										Weight
-								</label>
-									<div class="pull-right col-md-10">
-										<input id="fuzzyWeightText" class="slider" type="slider" value="1"/>
-									</div>
-							</div>
-								<p><button class="btn btn-default pull-right" data-upload="fuzzy" disabled><i class="glyphicon glyphicon-upload"></i> Upload text</button></p>
-							</form>
-						</div>
-					</div>
-				</div>
-			</div>
-
 			<div class="tab-pane" id="scan">
 				<div class="widget-box">
 					<div class="widget-title">
-						<span class="icon"><i class="glyphicon glyphicon-info-sign"></i></span>
-						<h5>Online scan suspected message</h5>
+						<span class="icon"><i class="glyphicon glyphicon-envelope"></i></span>
+						<h5>Scan suspected message</h5>
 					</div>
 					<div class="widget-content">
-						<h5>Paste and scan suspicious message</h5>
+						<h5>Message source:</h5>
 						<div class="row">
-							<form class="col-md-12 nomargin" id="scanForm">
-								<textarea class="col-md-12 scan-textarea" id="scanTextSource"></textarea>
-                <button type="submit" class="btn btn-default btn-primary" data-upload="scan">Scan message</button>
-                   <!--span class="btn btn-default btn-file" style="margin-top:10px; margin-left:5px;">
-                       <i class="glyphicon glyphicon-upload"></i> Upload file <input type="file" class="btn btn-default" id="inputFile">
-                   </span-->
-									 <button class="btn btn-default pull-right" id="scanClean">Clean form</button>
+							<form class="col-md-12" id="scanForm">
+								<div class="form-group">
+									<textarea class="form-control" id="scanMsgSource" rows="10" placeholder="Paste raw message source"></textarea>
+								</div>
+								<div class="form-group">
+									<button type="submit" class="btn btn-default btn-primary" data-upload="scan"><i class="glyphicon glyphicon-search"></i> Scan message</button>
+									<button class="btn btn-default pull-right" id="scanClean"><i class="glyphicon glyphicon-trash"></i> Clean form</button>
+								</div>
 							</form>
 						</div>
 						<div id="scanResult" style="display:none">
@@ -277,6 +231,45 @@
 										</tr>
 									</thead>
 								</table>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="widget-box learn" style="display: none;">
+					<div class="widget-title">
+						<span class="icon"><i class="glyphicon glyphicon-education"></i></span>
+						<h5>Learn Rspamd</h5>
+					</div>
+					<div class="widget-content">
+						<div class="row">
+							<div class="col-md-6">
+								<div class="well well-sm">
+									<form class="form-inline" role="form">
+										<h5>Learn Bayessian classifier:</h5>
+										<div class="form-group">
+											<div class="btn-group">
+												<button class="btn btn-success" type="button" data-upload="ham" disabled><i class="glyphicon glyphicon-thumbs-up"></i> Upload HAM</button>
+												<button class="btn btn-danger" type="button" data-upload="spam" disabled><i class="glyphicon glyphicon-thumbs-down"></i> Upload SPAM</button>
+											</div>
+										</div>
+									</form>
+								</div>
+							</div>
+							<div class="col-md-6">
+								<div class="well well-sm">
+									<form class="form-inline" role="form">
+										<h5>Learn Fuzzy storage:</h5>
+										<div class="form-group">
+											<label for="fuzzyFlagText">Flag:</label>
+											<input name="fuzzyFlagText" id="fuzzyFlagText" class="form-control" type="number" value="1"/>
+										</div>
+										<div class="form-group">
+											<label for="fuzzyWeightText">Weight:</label>
+											<input name="fuzzyWeightText" id="fuzzyWeightText" class="form-control" type="number" value="1"/>
+										</div>
+										<button class="btn btn-warning" data-upload="fuzzy" disabled><i class="glyphicon glyphicon-upload"></i> Upload FUZZY</button>
+									</form>
+								</div>
 							</div>
 						</div>
 					</div>
