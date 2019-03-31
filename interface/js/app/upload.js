@@ -150,14 +150,15 @@ define(["jquery"],
                 return e.options[e.selectedIndex].value;
             }
 
+            $("#scan button").attr("disabled", true);
             $("textarea").keyup(function () {
                 var $this = $(this);
-                $this.closest("form").find("button")
+                $("#scan button")
                     .prop("disabled", ($.trim($this.val()).length === 0));
             });
-
             $("#scanClean").on("click", function () {
-                $("#scanTextSource").val("");
+                $("#scan button").attr("disabled", true);
+                $("#scanMsgSource").val("");
                 $("#scanResult").hide();
                 $("#scanOutput tbody").remove();
                 $("html, body").animate({scrollTop:0}, 1000);
@@ -166,7 +167,7 @@ define(["jquery"],
             // @init upload
             $("[data-upload]").on("click", function () {
                 var source = $(this).data("upload");
-                var data = $("#" + source + "TextSource").val();
+                var data = $("#scanMsgSource").val();
                 var headers = (source === "fuzzy")
                     ? {
                         flag: $("#fuzzyFlagText").val(),
