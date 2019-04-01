@@ -2500,12 +2500,9 @@ gboolean
 rspamd_lua_try_load_redis (lua_State *L, const ucl_object_t *obj,
 									struct rspamd_config *cfg, gint *ref_id)
 {
-	gint res_pos, err_idx;
+	gint err_idx;
 	struct rspamd_config **pcfg;
 
-	/* Create results table */
-	lua_createtable (L, 0, 0);
-	res_pos = lua_gettop (L);
 	lua_pushcfunction (L, &rspamd_lua_traceback);
 	err_idx = lua_gettop (L);
 
@@ -2522,7 +2519,7 @@ rspamd_lua_try_load_redis (lua_State *L, const ucl_object_t *obj,
 	pcfg = lua_newuserdata (L, sizeof (*pcfg));
 	rspamd_lua_setclass (L, "rspamd{config}", -1);
 	*pcfg = cfg;
-	lua_pushvalue (L, res_pos);
+	lua_pushboolean (L, false); /* no_fallback */
 
 	if (lua_pcall (L, 3, 1, err_idx) != 0) {
 		GString *tb;
@@ -2535,16 +2532,17 @@ rspamd_lua_try_load_redis (lua_State *L, const ucl_object_t *obj,
 		return FALSE;
 	}
 
-	if (lua_toboolean (L, -1)) {
+	if (lua_istable (L, -1)) {
 		if (ref_id) {
 			/* Ref table */
-			lua_pushvalue (L, res_pos);
+			lua_pushvalue (L, -1);
 			*ref_id = luaL_ref (L, LUA_REGISTRYINDEX);
 			lua_settop (L, 0);
 		}
 		else {
 			/* Leave it on the stack */
-			lua_settop (L, res_pos);
+			lua_insert (L, err_idx);
+			lua_settop (L, err_idx);
 		}
 
 		return TRUE;

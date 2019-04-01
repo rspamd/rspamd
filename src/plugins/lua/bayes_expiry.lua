@@ -97,10 +97,13 @@ local function check_redis_classifier(cls, cfg)
     end
     -- Now try to load redis_params if needed
 
-    local redis_params = {}
-    if not lredis.try_load_redis_servers(cls, rspamd_config, redis_params) then
-      if not lredis.try_load_redis_servers(cfg[N] or E, rspamd_config, redis_params) then
-        if not lredis.try_load_redis_servers(cfg['redis'] or E, rspamd_config, redis_params) then
+    local redis_params
+    redis_params = lredis.try_load_redis_servers(cls, rspamd_config, false, 'bayes')
+    if not redis_params then
+      redis_params = lredis.try_load_redis_servers(cfg[N] or E, rspamd_config, false, 'bayes')
+      if not redis_params then
+        redis_params = lredis.try_load_redis_servers(cfg[N] or E, rspamd_config, true)
+        if not redis_params then
           return false
         end
       end

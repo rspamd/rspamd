@@ -3554,7 +3554,7 @@ rspamd_rcl_jinja_handler (struct ucl_parser *parser,
 		GString *tb;
 
 		tb = lua_touserdata (L, -1);
-		msg_err_config ("cannot call lua try_load_redis_servers script: %s", tb->str);
+		msg_err_config ("cannot call lua jinja_template script: %s", tb->str);
 		g_string_free (tb, TRUE);
 		lua_settop (L, err_idx - 1);
 

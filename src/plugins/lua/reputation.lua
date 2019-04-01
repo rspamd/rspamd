@@ -897,8 +897,9 @@ end
 local function reputation_redis_init(rule, cfg, ev_base, worker)
   local our_redis_params = {}
 
-  if not lua_redis.try_load_redis_servers(rule.backend.config,
-      rspamd_config, our_redis_params) then
+  our_redis_params = lua_redis.try_load_redis_servers(rule.backend.config, rspamd_config,
+      true)
+  if not our_redis_params then
     our_redis_params = redis_params
   end
   if not our_redis_params then

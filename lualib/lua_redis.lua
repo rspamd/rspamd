@@ -313,8 +313,10 @@ local function enrich_defaults(rspamd_config, module, redis_params)
   local opts = rspamd_config:get_all_opt('redis')
 
   if opts then
-    if opts[module] then
-      process_redis_opts(opts[module], redis_params)
+    if module then
+      if opts[module] then
+        process_redis_opts(opts[module], redis_params)
+      end
     end
 
     process_redis_opts(opts, redis_params)
@@ -344,7 +346,7 @@ end
 -- @module lua_redis
 -- This module contains helper functions for working with Redis
 --]]
-local function try_load_redis_servers(options, rspamd_config, result)
+local function process_redis_options(options, rspamd_config, result)
   local default_port = 6379
   local upstream_list = require "rspamd_upstream_list"
   local read_only = true
@@ -427,7 +429,22 @@ local function try_load_redis_servers(options, rspamd_config, result)
   return false
 end
 
-exports.try_load_redis_servers = try_load_redis_servers
+--[[[
+@function try_load_redis_servers(options, rspamd_config, no_fallback)
+Tries to load redis servers from the specified `options` object.
+Returns `redis_params` table or nil in case of failure
+
+--]]
+exports.try_load_redis_servers = function(options, rspamd_config, no_fallback, module_name)
+  local result = {}
+
+  if process_redis_options(options, rspamd_config, result) then
+    if not no_fallback then
+      enrich_defaults(rspamd_config, module_name, result)
+    end
+    return maybe_return_cached(result)
+  end
+end
 
 -- This function parses redis server definition using either
 -- specific server string for this module or global
@@ -448,7 +465,7 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
     local ret
 
     if opts.redis then
-      ret = try_load_redis_servers(opts.redis, rspamd_config, result)
+      ret = process_redis_options(opts.redis, rspamd_config, result)
 
       if ret then
         if not no_fallback then
@@ -458,7 +475,7 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
       end
     end
 
-    ret = try_load_redis_servers(opts, rspamd_config, result)
+    ret = process_redis_options(opts, rspamd_config, result)
 
     if ret then
       if not no_fallback then
@@ -482,13 +499,13 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
     local ret
 
     if opts[module_name] then
-      ret = try_load_redis_servers(opts[module_name], rspamd_config, result)
+      ret = process_redis_options(opts[module_name], rspamd_config, result)
 
       if ret then
         return maybe_return_cached(result)
       end
     else
-      ret = try_load_redis_servers(opts, rspamd_config, result)
+      ret = process_redis_options(opts, rspamd_config, result)
 
       -- Exclude disabled
       if opts['disabled_modules'] then

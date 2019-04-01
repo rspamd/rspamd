@@ -449,9 +449,11 @@ local function check_redis_classifier(cls, changes)
     return
   end
 
-  local parsed_redis = {}
-  if not lua_redis.try_load_redis_servers(cls, nil, parsed_redis) then
-    if not lua_redis.try_load_redis_servers(redis_params, nil, parsed_redis) then
+  local parsed_redis = lua_redis.try_load_redis_servers(cls, nil)
+
+  if not parsed_redis then
+    parsed_redis = lua_redis.try_load_redis_servers(redis_params, nil)
+    if not parsed_redis then
       printf("Cannot parse Redis params")
       return
     end
@@ -583,8 +585,8 @@ local function setup_statistic(cfg, changes)
       return false
     end
 
-    local parsed_redis = {}
-    if lua_redis.try_load_redis_servers(redis_params, nil, parsed_redis) then
+    local parsed_redis = lua_redis.try_load_redis_servers(redis_params, nil)
+    if parsed_redis then
       printf('You have %d sqlite classifiers', #sqlite_configs)
       local expire = readline_expire()
 
