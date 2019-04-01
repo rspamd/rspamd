@@ -236,7 +236,7 @@ static gint
 lua_do_resume_full (lua_State *L, gint narg, const gchar *loc)
 {
 	msg_debug_lua_threads ("%s: lua_do_resume_full", loc);
-#if LUA_VERSION_NUM < 503
+#if LUA_VERSION_NUM < 502
 	return lua_resume (L, narg);
 #else
 	return lua_resume (L, NULL, narg);
