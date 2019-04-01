@@ -402,7 +402,7 @@ rspamd_url_strerror (enum uri_errno err)
 	return NULL;
 }
 
-static void
+static gboolean
 rspamd_url_parse_tld_file (const gchar *fname,
 		struct url_match_scanner *scanner)
 {
@@ -417,7 +417,7 @@ rspamd_url_parse_tld_file (const gchar *fname,
 
 	if (f == NULL) {
 		msg_err ("cannot open TLD file %s: %s", fname, strerror (errno));
-		return;
+		return FALSE;
 	}
 
 	m.end = url_tld_end;
@@ -469,6 +469,8 @@ rspamd_url_parse_tld_file (const gchar *fname,
 
 	free (linebuf);
 	fclose (f);
+
+	return TRUE;
 }
 
 static void
@@ -511,6 +513,7 @@ void
 rspamd_url_init (const gchar *tld_file)
 {
 	GError *err = NULL;
+	gboolean ret = TRUE;
 
 	if (url_scanner != NULL) {
 		rspamd_url_deinit ();
@@ -535,18 +538,26 @@ rspamd_url_init (const gchar *tld_file)
 	rspamd_url_add_static_matchers (url_scanner);
 
 	if (tld_file != NULL) {
-		rspamd_url_parse_tld_file (tld_file, url_scanner);
+		ret = rspamd_url_parse_tld_file (tld_file, url_scanner);
 	}
 
 	if (!rspamd_multipattern_compile (url_scanner->search_trie, &err)) {
 		msg_err ("cannot compile tld patterns, url matching will be "
 				 "broken completely: %e", err);
 		g_error_free (err);
+		ret = FALSE;
 	}
 
 	if (tld_file != NULL) {
-		msg_info ("initialized %ud url tld suffixes from '%s'",
-				url_scanner->matchers->len, tld_file);
+		if (ret) {
+			msg_info ("initialized %ud url match suffixes from '%s'",
+					url_scanner->matchers->len, tld_file);
+		}
+		else {
+			msg_err ("failed to initialize url tld suffixes from '%s', "
+					 "use %ud internal match suffixes",
+					tld_file, url_scanner->matchers->len);
+		}
 	}
 }
 
