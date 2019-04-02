@@ -3796,6 +3796,41 @@ rspamd_config_read (struct rspamd_config *cfg,
 				} else {
 					logger_fin (cfg->cfg_pool, logger_ud);
 				}
+
+				/* Init lua logging */
+				lua_State *L = cfg->lua_state;
+				gint err_idx;
+				struct rspamd_config **pcfg;
+
+				lua_pushcfunction (L, &rspamd_lua_traceback);
+				err_idx = lua_gettop (L);
+
+				/* Obtain function */
+				if (!rspamd_lua_require_function (L, "lua_util",
+						"init_debug_logging")) {
+					msg_err_config ("cannot require lua_util.init_debug_logging");
+					lua_settop (L, err_idx - 1);
+
+					return FALSE;
+				}
+
+				pcfg = lua_newuserdata (L, sizeof (*pcfg));
+				*pcfg = cfg;
+				rspamd_lua_setclass (L, "rspamd{config}", -1);
+
+				if (lua_pcall (L, 1, 0, err_idx) != 0) {
+					GString *tb;
+
+					tb = lua_touserdata (L, -1);
+					msg_err_config ("cannot call lua init_debug_logging script: %s",
+							tb->str);
+					g_string_free (tb, TRUE);
+					lua_settop (L, err_idx - 1);
+
+					return FALSE;
+				}
+
+				lua_settop (L, err_idx - 1);
 			}
 
 			HASH_DEL (top, logger_section);

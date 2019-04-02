@@ -830,10 +830,11 @@ local debug_modules = {}
 local debug_aliases = {}
 local log_level = 384 -- debug + forced (1 << 7 | 1 << 8)
 
-if type(rspamd_config) == 'userdata' then
+
+exports.init_debug_logging = function(config)
   local logger = require "rspamd_logger"
   -- Fill debug modules from the config
-  local logging = rspamd_config:get_all_opt('logging')
+  local logging = config:get_all_opt('logging')
   if logging then
     local log_level_str = logging.level
     if log_level_str then
@@ -846,7 +847,7 @@ if type(rspamd_config) == 'userdata' then
       if logging.debug_modules then
         for _,m in ipairs(logging.debug_modules) do
           debug_modules[m] = true
-          logger.infox(rspamd_config, 'enable debug for Lua module %s', m)
+          logger.infox(config, 'enable debug for Lua module %s', m)
         end
       end
 
@@ -854,7 +855,7 @@ if type(rspamd_config) == 'userdata' then
         for alias,mod in pairs(debug_aliases) do
           if debug_modules[mod] then
             debug_modules[alias] = true
-            logger.infox(rspamd_config, 'enable debug for Lua module %s (%s aliased)',
+            logger.infox(config, 'enable debug for Lua module %s (%s aliased)',
                 alias, mod)
           end
         end
