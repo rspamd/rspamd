@@ -932,6 +932,7 @@ rspamd_task_get_principal_recipient (struct rspamd_task *task)
 {
 	const gchar *val;
 	struct rspamd_email_address *addr;
+	guint i;
 
 	val = rspamd_mempool_get_variable (task->task_pool,
 			RSPAMD_MEMPOOL_PRINCIPAL_RECIPIENT);
@@ -945,20 +946,21 @@ rspamd_task_get_principal_recipient (struct rspamd_task *task)
 				strlen (task->deliver_to));
 	}
 	if (task->rcpt_envelope != NULL) {
-		addr = g_ptr_array_index (task->rcpt_envelope, 0);
 
-		if (addr->addr) {
-			return rspamd_task_cache_principal_recipient (task, addr->addr,
-					addr->addr_len);
+		PTR_ARRAY_FOREACH (task->rcpt_envelope, i, addr) {
+			if (addr->addr && !(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
+				return rspamd_task_cache_principal_recipient (task, addr->addr,
+						addr->addr_len);
+			}
 		}
 	}
 
 	if (task->rcpt_mime != NULL && task->rcpt_mime->len > 0) {
-		addr = g_ptr_array_index (task->rcpt_mime, 0);
-
-		if (addr->addr) {
-			return rspamd_task_cache_principal_recipient (task, addr->addr,
-					addr->addr_len);
+		PTR_ARRAY_FOREACH (task->rcpt_mime, i, addr) {
+			if (addr->addr && !(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
+				return rspamd_task_cache_principal_recipient (task, addr->addr,
+						addr->addr_len);
+			}
 		}
 	}
 

@@ -1416,7 +1416,7 @@ lua_util_parse_addr (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
-			lua_push_emails_address_list (L, addrs);
+			lua_push_emails_address_list (L, addrs, 0);
 		}
 
 		if (own_pool) {
@@ -1621,7 +1621,7 @@ lua_util_parse_mail_address (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
-			lua_push_emails_address_list (L, addrs);
+			lua_push_emails_address_list (L, addrs, 0);
 		}
 
 		if (own_pool) {

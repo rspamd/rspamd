@@ -353,7 +353,7 @@ rspamd_lua_get_traceback_string (lua_State *L);
  */
 guint rspamd_lua_table_size (lua_State *L, gint tbl_pos);
 
-void lua_push_emails_address_list (lua_State *L, GPtrArray *addrs);
+void lua_push_emails_address_list (lua_State *L, GPtrArray *addrs, int flags);
 
 
 #define TRACE_POINTS 6

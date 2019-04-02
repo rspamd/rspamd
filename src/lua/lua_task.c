@@ -2640,10 +2640,10 @@ enum rspamd_address_type {
 	RSPAMD_ADDRESS_ANY = 0,
 	RSPAMD_ADDRESS_SMTP = 1,
 	RSPAMD_ADDRESS_MIME = 2,
-	RSPAMD_ADDRESS_RAW_ANY = 3,
-	RSPAMD_ADDRESS_RAW_SMTP = 4,
-	RSPAMD_ADDRESS_RAW_MIME = 5,
-	RSPAMD_ADDRESS_MAX
+	RSPAMD_ADDRESS_MASK = 0x3FF,
+	RSPAMD_ADDRESS_RAW = (1u << 10),
+	RSPAMD_ADDRESS_ORIGINAL = (1u << 11),
+	RSPAMD_ADDRESS_MAX = RSPAMD_ADDRESS_MASK,
 };
 
 /*
@@ -2651,7 +2651,7 @@ enum rspamd_address_type {
  * for get_from/get_recipients
  */
 static enum rspamd_address_type
-lua_task_str_to_get_type (lua_State *L, gint pos)
+lua_task_str_to_get_type (lua_State *L, struct rspamd_task *task, gint pos)
 {
 	const gchar *type = NULL;
 	gint ret = RSPAMD_ADDRESS_ANY;
@@ -2687,16 +2687,42 @@ lua_task_str_to_get_type (lua_State *L, gint pos)
 			case 0xEFE0F586CC9F14A9ULL: /* envelope */
 				ret = RSPAMD_ADDRESS_SMTP;
 				break;
-			case 0x9DA887501690DE20ULL: /* raw_mime */
-				ret = RSPAMD_ADDRESS_RAW_MIME;
+			default:
+				msg_err_task ("invalid email type: %*s", (gint)sz, type);
 				break;
-			case 0x6B54FE02DEB595A4ULL: /* raw_smtp */
-			case 0xE0E596C861777B02ULL: /* raw_envelope */
-				ret = RSPAMD_ADDRESS_RAW_SMTP;
-				break;
-			case 0x2C49DBE3A10A0197ULL: /* raw_any */
-				ret = RSPAMD_ADDRESS_RAW_ANY;
-				break;
+			}
+		}
+	}
+	else if (lua_type (L, pos) == LUA_TTABLE) {
+		for (lua_pushnil (L); lua_next (L, pos); lua_pop (L, 1)) {
+			type = lua_tolstring (L, pos, &sz);
+
+			if (type && sz > 0) {
+				h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+						type, sz, 0xdeadbabe);
+
+				switch (h) {
+				case 0xDA081341FB600389ULL: /* mime */
+					ret |= RSPAMD_ADDRESS_MIME;
+					break;
+				case 0xEEC8A7832F8C43ACULL: /* any */
+					ret |= RSPAMD_ADDRESS_ANY;
+					break;
+				case 0x472274D5193B2A80ULL: /* smtp */
+				case 0xEFE0F586CC9F14A9ULL: /* envelope */
+					ret |= RSPAMD_ADDRESS_SMTP;
+					break;
+				case 0xAF4DE083D9AD0132: /* raw */
+					ret |= RSPAMD_ADDRESS_RAW;
+					break;
+				case 0xC7AB6C7B7B0F5A8A: /* orig */
+				case 0x1778AE905589E431: /* original */
+					ret |= RSPAMD_ADDRESS_ORIGINAL;
+					break;
+				default:
+					msg_err_task ("invalid email type: %*s", (gint)sz, type);
+					break;
+				}
 			}
 		}
 	}
@@ -2776,17 +2802,29 @@ lua_push_email_address (lua_State *L, struct rspamd_email_address *addr)
 }
 
 void
-lua_push_emails_address_list (lua_State *L, GPtrArray *addrs)
+lua_push_emails_address_list (lua_State *L, GPtrArray *addrs, int flags)
 {
 	struct rspamd_email_address *addr;
-	guint i;
+	guint i, pos = 1;
 
 	lua_createtable (L, addrs->len, 0);
 
 	for (i = 0; i < addrs->len; i ++) {
 		addr = g_ptr_array_index (addrs, i);
-		lua_push_email_address (L, addr);
-		lua_rawseti (L, -2, i + 1);
+
+
+		if (addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL) {
+			if (flags & RSPAMD_ADDRESS_ORIGINAL) {
+				lua_push_email_address (L, addr);
+				lua_rawseti (L, -2, pos);
+				pos++;
+			}
+		}
+		else {
+			lua_push_email_address (L, addr);
+			lua_rawseti (L, -2, pos);
+			pos++;
+		}
 	}
 }
 
@@ -2916,10 +2954,10 @@ lua_task_get_recipients (lua_State *L)
 	if (task) {
 		if (lua_gettop (L) == 2) {
 			/* Get what value */
-			what = lua_task_str_to_get_type (L, 2);
+			what = lua_task_str_to_get_type (L, task, 2);
 		}
 
-		switch (what) {
+		switch (what & RSPAMD_ADDRESS_MASK) {
 		case RSPAMD_ADDRESS_SMTP:
 			/* Here we check merely envelope rcpt */
 			ptrs = task->rcpt_envelope;
@@ -2939,7 +2977,7 @@ lua_task_get_recipients (lua_State *L)
 			break;
 		}
 		if (ptrs) {
-			lua_push_emails_address_list (L, ptrs);
+			lua_push_emails_address_list (L, ptrs, what & ~RSPAMD_ADDRESS_MASK);
 		}
 		else {
 			lua_pushnil (L);
@@ -2960,14 +2998,15 @@ lua_task_set_recipients (lua_State *L)
 	GPtrArray *ptrs = NULL;
 	struct rspamd_email_address *addr = NULL;
 	gint what = 0, pos = 3;
+	const gchar *how = "rewrite";
 
-	if (task) {
-		if (lua_isstring (L, 2) || lua_isnumber (L, 2)) {
-			/* Get what value */
-			what = lua_task_str_to_get_type (L, 2);
-		}
-		else if (lua_istable (L, 2)) {
-			pos = 2;
+	if (task && lua_gettop (L) >= 3) {
+
+		/* Get what value */
+		what = lua_task_str_to_get_type (L, task, 2);
+
+		if (lua_isstring (L, 4)) {
+			how = lua_tostring (L, 4);
 		}
 
 		switch (what) {
@@ -2990,14 +3029,17 @@ lua_task_set_recipients (lua_State *L)
 			break;
 		}
 		if (ptrs) {
-			guint i;
+			guint i, flags_add = RSPAMD_EMAIL_ADDR_ORIGINAL;
 			struct rspamd_email_address *tmp;
 
-			PTR_ARRAY_FOREACH (ptrs, i, tmp) {
-				rspamd_email_address_free (tmp);
+			if (strcmp (how, "alias") == 0) {
+				flags_add |= RSPAMD_EMAIL_ADDR_ALIASED;
 			}
 
-			g_ptr_array_set_size (ptrs, 0);
+			PTR_ARRAY_FOREACH (ptrs, i, tmp) {
+				tmp->flags |= flags_add;
+			}
+
 			lua_pushvalue (L, pos);
 
 			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
@@ -3050,10 +3092,10 @@ lua_task_has_from (lua_State *L)
 	if (task) {
 		if (lua_gettop (L) == 2) {
 			/* Get what value */
-			what = lua_task_str_to_get_type (L, 2);
+			what = lua_task_str_to_get_type (L, task, 2);
 		}
 
-		switch (what) {
+		switch (what & RSPAMD_ADDRESS_MASK) {
 		case RSPAMD_ADDRESS_SMTP:
 			/* Here we check merely envelope rcpt */
 			CHECK_EMAIL_ADDR (task->from_envelope);
@@ -3092,10 +3134,10 @@ lua_task_has_recipients (lua_State *L)
 	if (task) {
 		if (lua_gettop (L) == 2) {
 			/* Get what value */
-			what = lua_task_str_to_get_type (L, 2);
+			what = lua_task_str_to_get_type (L, task, 2);
 		}
 
-		switch (what) {
+		switch (what & RSPAMD_ADDRESS_MASK) {
 		case RSPAMD_ADDRESS_SMTP:
 			/* Here we check merely envelope rcpt */
 			CHECK_EMAIL_ADDR_LIST (task->rcpt_envelope);
@@ -3135,10 +3177,10 @@ lua_task_get_from (lua_State *L)
 	if (task) {
 		if (lua_gettop (L) == 2) {
 			/* Get what value */
-			what = lua_task_str_to_get_type (L, 2);
+			what = lua_task_str_to_get_type (L, task, 2);
 		}
 
-		switch (what) {
+		switch (what & RSPAMD_ADDRESS_MASK) {
 		case RSPAMD_ADDRESS_SMTP:
 			/* Here we check merely envelope rcpt */
 			addr = task->from_envelope;
@@ -3159,7 +3201,7 @@ lua_task_get_from (lua_State *L)
 		}
 
 		if (addrs) {
-			lua_push_emails_address_list (L, addrs);
+			lua_push_emails_address_list (L, addrs, what & ~RSPAMD_ADDRESS_MASK);
 		}
 		else if (addr) {
 			/* Create table to preserve compatibility */
@@ -3188,20 +3230,19 @@ lua_task_set_from (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
+	const gchar *how = "rewrite";
 	GPtrArray *addrs = NULL;
 	struct rspamd_email_address **paddr = NULL, *addr;
-	gint what = 0, pos = 3;
+	gint what = 0;
 
-	if (task) {
-		if (lua_isstring (L, 2) || lua_isnumber (L, 2)) {
-			/* Get what value */
-			what = lua_task_str_to_get_type (L, 2);
-		}
-		else if (lua_istable (L, 2)) {
-			pos = 2;
+	if (task && lua_gettop (L) >= 3) {
+		what = lua_task_str_to_get_type (L, task, 2);
+
+		if (lua_isstring (L, 4)) {
+			how = lua_tostring (L, 4);
 		}
 
-		switch (what) {
+		switch (what & RSPAMD_ADDRESS_MASK) {
 		case RSPAMD_ADDRESS_SMTP:
 			/* Here we check merely envelope rcpt */
 			paddr = &task->from_envelope;
@@ -3222,15 +3263,18 @@ lua_task_set_from (lua_State *L)
 		}
 
 		if (addrs) {
-			if (lua_import_email_address (L, task, pos, &addr)) {
-				guint i;
+			if (lua_import_email_address (L, task, 3, &addr)) {
+				guint i, flags_add = RSPAMD_EMAIL_ADDR_ORIGINAL;
 				struct rspamd_email_address *tmp;
 
-				PTR_ARRAY_FOREACH (addrs, i, tmp) {
-					rspamd_email_address_free (tmp);
+				if (strcmp (how, "alias") == 0) {
+					flags_add |= RSPAMD_EMAIL_ADDR_ALIASED;
 				}
 
-				g_ptr_array_set_size (addrs, 0);
+				PTR_ARRAY_FOREACH (addrs, i, tmp) {
+					tmp->flags |= flags_add;
+				}
+
 				g_ptr_array_add (addrs, addr);
 				lua_pushboolean (L, true);
 			}
@@ -3239,7 +3283,7 @@ lua_task_set_from (lua_State *L)
 			}
 		}
 		else if (paddr) {
-			if (lua_import_email_address (L, task, pos, &addr)) {
+			if (lua_import_email_address (L, task, 3, &addr)) {
 
 				if (paddr) {
 					rspamd_email_address_free (*paddr);
