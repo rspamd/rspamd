@@ -799,7 +799,7 @@ lua_url_create (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 	else {
-		rspamd_url_find_single (pool, text, length, FALSE,
+		rspamd_url_find_single (pool, text, length, RSPAMD_URL_FIND_ALL,
 				lua_url_single_inserter, L);
 
 		if (lua_type (L, -1) != LUA_TUSERDATA) {
@@ -867,7 +867,8 @@ lua_url_all (lua_State *L)
 
 		if (text != NULL) {
 			lua_newtable (L);
-			rspamd_url_find_multiple (pool, text, length, FALSE, NULL,
+			rspamd_url_find_multiple (pool, text, length,
+					RSPAMD_URL_FIND_ALL, NULL,
 					lua_url_table_inserter, L);
 
 		}

@@ -598,7 +598,8 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 	}
 
 	if (end > url_text + 4 &&
-			rspamd_url_find (pool, url_text, end - url_text, &url_str, FALSE,
+			rspamd_url_find (pool, url_text, end - url_text, &url_str,
+					RSPAMD_URL_FIND_ALL,
 					&url_pos, NULL) &&
 			url_str != NULL) {
 		if (url_pos > 0) {
@@ -1569,7 +1570,8 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 
 	if (url->querylen > 0) {
 
-		if (rspamd_url_find (pool, url->query, url->querylen, &url_str, FALSE,
+		if (rspamd_url_find (pool, url->query, url->querylen, &url_str,
+				RSPAMD_URL_FIND_ALL,
 				NULL, &prefix_added)) {
 			query_url = rspamd_mempool_alloc0 (pool,
 					sizeof (struct rspamd_url));

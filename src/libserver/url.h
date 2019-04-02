@@ -90,6 +90,17 @@ enum rspamd_url_protocol {
 	PROTOCOL_UNKNOWN = 1u << 31,
 };
 
+enum rspamd_url_parse_flags {
+	RSPAMD_URL_PARSE_TEXT = 0,
+	RSPAMD_URL_PARSE_HREF = (1u << 0),
+	RSPAMD_URL_PARSE_CHECK = (1 << 1),
+};
+
+enum rspamd_url_find_type {
+	RSPAMD_URL_FIND_ALL = 0,
+	RSPAMD_URL_FIND_STRICT,
+};
+
 /**
  * Initialize url library
  * @param cfg
@@ -104,15 +115,9 @@ void rspamd_url_deinit (void);
  * @param is_html turn on html euristic
  */
 void rspamd_url_text_extract (rspamd_mempool_t *pool,
-	struct rspamd_task *task,
-	struct rspamd_mime_text_part *part,
-	gboolean is_html);
-
-enum rspamd_url_parse_flags {
-	RSPAMD_URL_PARSE_TEXT = 0,
-	RSPAMD_URL_PARSE_HREF = (1u << 0),
-	RSPAMD_URL_PARSE_CHECK = (1 << 1),
-};
+							  struct rspamd_task *task,
+							  struct rspamd_mime_text_part *part,
+							  enum rspamd_url_find_type how);
 
 /*
  * Parse a single url into an uri structure
@@ -136,9 +141,12 @@ enum uri_errno rspamd_url_parse (struct rspamd_url *uri,
  * @param url_str storage for url string(or NULL)
  * @return TRUE if url is found in specified text
  */
-gboolean rspamd_url_find (rspamd_mempool_t *pool, const gchar *begin, gsize len,
-		gchar **url_str, gboolean is_html, goffset *url_pos,
-		gboolean *prefix_added);
+gboolean rspamd_url_find (rspamd_mempool_t *pool,
+						  const gchar *begin, gsize len,
+						  gchar **url_str,
+						  enum rspamd_url_find_type how,
+						  goffset *url_pos,
+						  gboolean *prefix_added);
 /*
  * Return text representation of url parsing error
  */
@@ -166,9 +174,12 @@ typedef void (*url_insert_function) (struct rspamd_url *url,
  * @param func
  * @param ud
  */
-void rspamd_url_find_multiple (rspamd_mempool_t *pool, const gchar *in,
-		gsize inlen, gboolean is_html, GPtrArray *nlines,
-		url_insert_function func, gpointer ud);
+void rspamd_url_find_multiple (rspamd_mempool_t *pool,
+							   const gchar *in, gsize inlen,
+							   enum rspamd_url_find_type how,
+							   GPtrArray *nlines,
+							   url_insert_function func,
+							   gpointer ud);
 /**
  * Search for a single url in text and call `func` for each url found
  * @param pool
@@ -178,9 +189,11 @@ void rspamd_url_find_multiple (rspamd_mempool_t *pool, const gchar *in,
  * @param func
  * @param ud
  */
-void rspamd_url_find_single (rspamd_mempool_t *pool, const gchar *in,
-		gsize inlen, gboolean is_html,
-		url_insert_function func, gpointer ud);
+void rspamd_url_find_single (rspamd_mempool_t *pool,
+							 const gchar *in, gsize inlen,
+							 enum rspamd_url_find_type how,
+							 url_insert_function func,
+							 gpointer ud);
 
 /**
  * Generic callback to insert URLs into rspamd_task
@@ -190,8 +203,8 @@ void rspamd_url_find_single (rspamd_mempool_t *pool, const gchar *in,
  * @param ud
  */
 void rspamd_url_task_subject_callback (struct rspamd_url *url,
-		gsize start_offset,
-		gsize end_offset, gpointer ud);
+									   gsize start_offset,
+									   gsize end_offset, gpointer ud);
 
 /**
  * Adds a tag for url
@@ -200,8 +213,8 @@ void rspamd_url_task_subject_callback (struct rspamd_url *url,
  * @param pool
  */
 void rspamd_url_add_tag (struct rspamd_url *url, const gchar *tag,
-		const gchar *value,
-		rspamd_mempool_t *pool);
+						 const gchar *value,
+						 rspamd_mempool_t *pool);
 
 guint rspamd_url_hash (gconstpointer u);
 guint rspamd_email_hash (gconstpointer u);
@@ -232,7 +245,7 @@ gsize rspamd_url_decode (gchar *dst, const gchar *src, gsize size);
  * @return
  */
 const gchar * rspamd_url_encode (struct rspamd_url *url, gsize *dlen,
-		rspamd_mempool_t *pool);
+								 rspamd_mempool_t *pool);
 
 
 /**
