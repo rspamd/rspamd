@@ -273,12 +273,57 @@ static gsize
 lua_logger_out_str (lua_State *L, gint pos, gchar *outbuf, gsize len,
 					struct lua_logger_trace *trace)
 {
-	gsize slen;
+	gsize slen, flen;
 	const gchar *str = lua_tolstring (L, pos, &slen);
-	gsize r = 0;
+	static const gchar hexdigests[16] = "0123456789abcdef";
+	gsize r = 0, s;
 
 	if (str) {
-		r = rspamd_strlcpy (outbuf, str, MIN (slen, len) + 1);
+		gboolean normal = TRUE;
+		flen = MIN (slen, len - 1);
+
+		for (r = 0; r < flen; r ++) {
+			if (!(g_ascii_isprint (str[r]) || (str[r] & 0x80))) {
+				normal = FALSE;
+				break;
+			}
+		}
+
+		if (normal) {
+			r = rspamd_strlcpy (outbuf, str, flen + 1);
+		}
+		else {
+			/* Need to escape non printed characters */
+			r = 0;
+			s = 0;
+
+			while (slen > 0 && len > 1) {
+				if (!g_ascii_isprint (str[s])) {
+					if (str[s] & 0x80) {
+						outbuf[r++] = str[s];
+					}
+					else if (len >= 3) {
+						outbuf[r++] = '\\';
+						outbuf[r++] = hexdigests[((str[s] >> 4) & 0xF)];
+						outbuf[r++] = hexdigests[((str[s]) & 0xF)];
+
+						len -= 2;
+					}
+					else {
+						outbuf[r++] = '?';
+					}
+				}
+				else {
+					outbuf[r++] = str[s];
+				}
+
+				s++;
+				slen --;
+				len --;
+			}
+
+			outbuf[r] = '\0';
+		}
 	}
 
 	return r;
