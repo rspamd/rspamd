@@ -340,7 +340,7 @@ local function clickhouse_collect(task)
   local mime_domain = ''
   local mime_user = ''
   if task:has_from('mime') then
-    local from = task:get_from('mime')[1]
+    local from = task:get_from({'mime','orig'})[1]
     if from then
       mime_domain = from['domain']
       mime_user = from['user']

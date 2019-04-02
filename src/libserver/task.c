@@ -1231,22 +1231,39 @@ rspamd_task_write_ialist (struct rspamd_task *task,
 	rspamd_fstring_t *res = logbuf, *varbuf;
 	rspamd_ftok_t var = {.begin = NULL, .len = 0};
 	struct rspamd_email_address *addr;
-	gint i, nchars = 0, cur_chars;
+	gint i, nchars = 0, wr = 0, cur_chars;
+	gboolean has_orig = FALSE;
 
 	if (addrs && lim <= 0) {
 		lim = addrs->len;
 	}
 
+	PTR_ARRAY_FOREACH (addrs, i, addr) {
+		if (addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL) {
+			has_orig = TRUE;
+			break;
+		}
+	}
+
 	varbuf = rspamd_fstring_new ();
 
 	PTR_ARRAY_FOREACH (addrs, i, addr) {
-		if (i >= lim) {
+		if (wr >= lim) {
 			break;
 		}
+
+		if (has_orig) {
+			/* Report merely original addresses */
+			if (!(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
+				continue;
+			}
+		}
+
 		cur_chars = addr->addr_len;
 		varbuf = rspamd_fstring_append (varbuf, addr->addr,
 				cur_chars);
 		nchars += cur_chars;
+		wr ++;
 
 		if (varbuf->len > 0) {
 			if (i != lim - 1) {
@@ -1254,7 +1271,7 @@ rspamd_task_write_ialist (struct rspamd_task *task,
 			}
 		}
 
-		if (i >= max_log_elts || nchars >= max_log_elts * 10) {
+		if (wr >= max_log_elts || nchars >= max_log_elts * 10) {
 			varbuf = rspamd_fstring_append (varbuf, "...", 3);
 			break;
 		}
