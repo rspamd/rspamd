@@ -28,6 +28,7 @@ a {
 	}
 textarea {
 	font-family:"Courier New", Courier, monospace;
+    resize: vertical;
 	}
 
 /* local overrides */
