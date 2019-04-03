@@ -63,13 +63,17 @@ textarea {
 	display:inline;
 	}
 
-input[type="number"] {
-    width:4em !important;
+input.form-control[type="number"] {
+    width:4em;
     padding:2px 0;
     text-align:center;
 }
 input.action-scores {
     margin:5px -7em 5px 0;
+}
+table#symbolsTable input[type="number"] {
+    width:6em;
+    font-size:11px;
 }
 
 /* history table */
@@ -553,13 +557,11 @@ td.maps-cell {
 
 .scorebar-spam {
 	background-color: rgba(240, 0, 0, 0.1);
-  font-size:11px;
 }
-
 .scorebar-ham {
 	background: rgba(100, 230, 80, 0.1);
-  font-size:11px;
 }
+
 /*btn-file for upload file button*/
 .btn-file {
     position: relative;

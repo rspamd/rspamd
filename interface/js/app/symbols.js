@@ -87,7 +87,7 @@ define(["jquery", "footable"],
                         label_class = "scorebar-spam";
                     }
                     item.weight = "<input class=\"form-control input-sm mb-disabled " + label_class +
-                    "\" data-role=\"numerictextbox\" autocomplete=\"off\" \"type=\"number\" class=\"input\" min=\"" +
+                    "\" data-role=\"numerictextbox\" autocomplete=\"off\" type=\"number\" class=\"input\" min=\"" +
                     min + "\" max=\"" +
                     max + "\" step=\"" + decimalStep(item.weight) +
                     "\" tabindex=\"1\" value=\"" + Number(item.weight).toFixed(3) +
