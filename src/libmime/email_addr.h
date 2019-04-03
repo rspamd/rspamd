@@ -49,8 +49,8 @@ struct rspamd_email_address {
 	guint raw_len;
 	guint addr_len;
 	guint domain_len;
-	guint16 user_len;
-	guchar flags;
+	guint user_len;
+	guint flags;
 };
 
 struct received_header;
