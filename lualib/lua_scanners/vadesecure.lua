@@ -166,8 +166,8 @@ local function vade_check(task, content, digest, rule)
       end
 
       if rule.log_spamcause and obj.spamcause then
-        rspamd_logger.infox(task, 'vadesecure returned verdict="%s", score=%s, spamcause="%s"',
-            verdict, obj.score, obj.spamcause)
+        rspamd_logger.infox(task, 'vadesecure verdict="%s", score=%s, spamcause="%s", message-id="%s"',
+            verdict, obj.score, obj.spamcause, task:get_message_id())
       else
         lua_util.debugm(rule.name, task, 'vadesecure returned verdict="%s", score=%s, spamcause="%s"',
             verdict, obj.score, obj.spamcause)
