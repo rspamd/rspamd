@@ -106,6 +106,7 @@ struct rspamd_dkim_common_ctx {
 	gsize len;
 	gint header_canon_type;
 	gint body_canon_type;
+	gboolean is_sign;
 	GPtrArray *hlist;
 	GHashTable *htable; /* header -> count mapping */
 	EVP_MD_CTX *headers_hash;
@@ -2195,6 +2196,33 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 						(gint)rh->raw_len, rh->raw_value);
 			}
 			else {
+				if (ctx->is_sign && (rh->type & RSPAMD_HEADER_FROM)) {
+					/* Special handling of the From handling when rewrite is done */
+					gboolean has_rewrite = FALSE;
+					guint i;
+					struct rspamd_email_address *addr;
+
+					PTR_ARRAY_FOREACH (task->from_mime, i, addr) {
+						if ((addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)
+							&& !(addr->flags & RSPAMD_EMAIL_ADDR_ALIASED)) {
+							has_rewrite = TRUE;
+						}
+					}
+
+					if (has_rewrite) {
+						PTR_ARRAY_FOREACH (task->from_mime, i, addr) {
+							if (!(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
+								if (!rspamd_dkim_canonize_header_relaxed (ctx, addr->raw,
+										header_name, FALSE)) {
+									return FALSE;
+								}
+
+								return TRUE;
+							}
+						}
+					}
+				}
+
 				if (!rspamd_dkim_canonize_header_relaxed (ctx, rh->value,
 						header_name, FALSE)) {
 					return FALSE;
@@ -2842,6 +2870,7 @@ rspamd_create_dkim_sign_context (struct rspamd_task *task,
 	nctx->common.header_canon_type = headers_canon;
 	nctx->common.body_canon_type = body_canon;
 	nctx->common.type = type;
+	nctx->common.is_sign = TRUE;
 
 	if (type != RSPAMD_DKIM_ARC_SEAL) {
 		if (!rspamd_dkim_parse_hdrlist_common (&nctx->common, headers,

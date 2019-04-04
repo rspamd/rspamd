@@ -2906,10 +2906,13 @@ lua_import_email_address (lua_State *L, struct rspamd_task *task,
 	lua_gettable (L, pos);
 
 	if (lua_type (L, -1) == LUA_TSTRING) {
+		gchar *cpy;
 		p = lua_tolstring (L, -1, &len);
-		addr->raw = (const gchar *)rspamd_mempool_alloc (task->task_pool, len);
-		memcpy ((gchar *)addr->raw, p, len);
+		cpy = rspamd_mempool_alloc (task->task_pool, len + 1);
+		memcpy (cpy, p, len);
+		cpy[len] = '\0';
 		addr->raw_len = len;
+		addr->raw = cpy;
 	}
 	else {
 		/* Construct raw addr */
