@@ -698,3 +698,20 @@ rspamd_lru_hash_foreach (rspamd_lru_hash_t *h, int it, gpointer *k,
 
 	return i;
 }
+
+
+guint
+rspamd_lru_hash_size (rspamd_lru_hash_t *hash)
+{
+	return kh_size (hash);
+}
+
+/**
+ * Returns hash capacity
+ * @param hash hash object
+ */
+guint
+rspamd_lru_hash_capacity (rspamd_lru_hash_t *hash)
+{
+	return hash->n_buckets;
+}
