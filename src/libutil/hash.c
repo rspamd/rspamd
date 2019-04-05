@@ -713,5 +713,5 @@ rspamd_lru_hash_size (rspamd_lru_hash_t *hash)
 guint
 rspamd_lru_hash_capacity (rspamd_lru_hash_t *hash)
 {
-	return hash->n_buckets;
+	return hash->maxsize;
 }
