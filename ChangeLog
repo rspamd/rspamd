@@ -1,3 +1,40 @@
+1.9.1: 5 Apr 2019
+  * [Conf] Add vendor groups for symbols
+  * [Feature] Add `rspamadm template` command
+  * [Feature] Allow to add messages from settings
+  * [Feature] Allow unconnected DNS servers operations
+  * [Feature] Check limits after being set, migrate to uint64
+  * [Feature] Greylist: Allow to disable greylisting depending on symbols
+  * [Feature] Improve lua binary strings output
+  * [Feature] Mime_types: Implement user configurable extension filters
+  * [Feature] Mime_types: When no extension defined, detect it by content
+  * [Feature] Preprocess config files using jinja templates
+  * [Feature] Replies: Filter replies sender to limit whitelisting to direct messages
+  * [Feature] Treat all tags with HREF as a potential hyperlinks
+  * [Feature] Validate BTC addresses in LEAKED_PASSWORD_SCAM
+  * [Fix] Add crash safety for HTTP async routines
+  * [Fix] Another fix for Redis sentinel
+  * [Fix] Clickhouse: Fix table schema upload
+  * [Fix] Core: Fix squeezed dependencies handling for virtual symbols
+  * [Fix] Finally fix default parameters parsing in actions section
+  * [Fix] Fix ES sending logic (restore from coroutines mess)
+  * [Fix] Fix finishing script for clickhouse collection
+  * [Fix] Fix priority for regexp symbols registriation
+  * [Fix] Fix various issues found by PVS Studio
+  * [Fix] Initialize lua debugging earlier
+  * [Fix] Neural: Fix training
+  * [Fix] Rework cached Redis logic to avoid sentinels breaking
+  * [Fix] SURBL: Fix regression in surbl module
+  * [Fix] Fix double signing in the milter
+  * [Project] Add support of HTTP proxy in requests
+  * [Rework] Change lua global variables registration
+  * [Rework] Rework HTML content urls extraction
+  * [Rework] Start rework of aliasing in Rspamd
+  * [WebUI] Combine Scan and Learning into one tab
+  * [WebUI] Fix symbol score input type
+  * [WebUI] Show grayed out pie
+  * [WebUI] Update Throughput summary values dynamically
+
 1.9.0: 12 Mar 2019
   * [Conf] Add missing includes
   * [Conf] Move to options
