@@ -104,7 +104,9 @@ table#symbolsTable input[type="number"] {
 		font-size:10px;
 		color:#666666;
 		white-space:nowrap;
+		background-color:#efefef;
 		border-bottom:1px solid #ddd;
+		border-left:1px solid #CDCDCD;
 		}
 	.table-log thead th,
 	.table-log tbody td {
@@ -126,10 +128,6 @@ table#symbolsTable input[type="number"] {
 		overflow:hidden;
 		-o-text-overflow:ellipsis;
 		text-overflow:ellipsis;
-		}
-	.table-log th {
-		background-color:#efefef;
-		border-left:1px solid #CDCDCD;
 		}
 	.table-log th.header {
 		cursor:pointer;
