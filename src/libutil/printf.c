@@ -40,6 +40,7 @@
 
 #include "printf.h"
 #include "str_util.h"
+#include "contrib/fpconv/fpconv.h"
 
 /**
  * From FreeBSD libutil code
@@ -590,7 +591,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 	const gchar *fmt,
 	va_list args)
 {
-	gchar zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], dtoabuf[8], *p, *last, c;
+	gchar zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], dtoabuf[24], *p, *last, c;
 	const gchar *buf_start = fmt, *fmt_start = NULL;
 	gint d;
 	gdouble f;
@@ -948,23 +949,52 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 			case 'f':
 			case 'g':
 				f = (gdouble) va_arg (args, double);
-				rspamd_strlcpy (dtoabuf, fmt_start, MIN (sizeof (dtoabuf),
-						(fmt - fmt_start + 2)));
-				g_ascii_formatd (numbuf, sizeof (numbuf), dtoabuf, (double)f);
-				slen = strlen (numbuf);
-				RSPAMD_PRINTF_APPEND (numbuf, slen);
+				slen = fpconv_dtoa (f, dtoabuf);
+
+				if (frac_width != 0) {
+					const gchar *dot_pos = memchr (dtoabuf, '.', slen);
+
+					if (dot_pos) {
+						if (frac_width < (slen - ((dot_pos - dtoabuf) + 1))) {
+							/* Truncate */
+							slen = (dot_pos - dtoabuf) + 1 + /* xxx. */
+								   frac_width; /* .yyy */
+						}
+						else if (frac_width + dot_pos + 1 < dtoabuf + sizeof (dtoabuf)) {
+							/* Expand */
+							frac_width -= slen - ((dot_pos - dtoabuf) + 1);
+							memset (dtoabuf + slen, '0', frac_width);
+							slen += frac_width;
+						}
+					}
+					else {
+						/* Expand */
+						frac_width = MIN (frac_width, sizeof (dtoabuf) - slen - 1);
+						dtoabuf[slen ++] = '.';
+						memset (dtoabuf + slen, '0', frac_width);
+						slen += frac_width;
+					}
+				}
+
+				RSPAMD_PRINTF_APPEND (dtoabuf, slen);
 
 				continue;
 
 			case 'F':
 			case 'G':
 				f = (gdouble) va_arg (args, long double);
-				slen = rspamd_strlcpy (dtoabuf, fmt_start, MIN (sizeof (dtoabuf),
-						(fmt - fmt_start + 2)));
-				dtoabuf[slen - 1] = g_ascii_tolower (dtoabuf[slen - 1]);
-				g_ascii_formatd (numbuf, sizeof (numbuf), dtoabuf, (double)f);
-				slen = strlen (numbuf);
-				RSPAMD_PRINTF_APPEND (numbuf, slen);
+				slen = fpconv_dtoa (f, dtoabuf);
+
+				if (frac_width != 0) {
+					const gchar *dot_pos = memchr (dtoabuf, '.', slen);
+
+					if (dot_pos && frac_width < (slen - ((dot_pos - dtoabuf) + 1))) {
+						slen = (dot_pos - dtoabuf) + 1 + /* xxx. */
+								frac_width; /* .yyy */
+					}
+				}
+
+				RSPAMD_PRINTF_APPEND (dtoabuf, slen);
 
 				continue;
 
