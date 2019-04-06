@@ -988,9 +988,25 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 				if (frac_width != 0) {
 					const gchar *dot_pos = memchr (dtoabuf, '.', slen);
 
-					if (dot_pos && frac_width < (slen - ((dot_pos - dtoabuf) + 1))) {
-						slen = (dot_pos - dtoabuf) + 1 + /* xxx. */
-								frac_width; /* .yyy */
+					if (dot_pos) {
+						if (frac_width < (slen - ((dot_pos - dtoabuf) + 1))) {
+							/* Truncate */
+							slen = (dot_pos - dtoabuf) + 1 + /* xxx. */
+								   frac_width; /* .yyy */
+						}
+						else if (frac_width + dot_pos + 1 < dtoabuf + sizeof (dtoabuf)) {
+							/* Expand */
+							frac_width -= slen - ((dot_pos - dtoabuf) + 1);
+							memset (dtoabuf + slen, '0', frac_width);
+							slen += frac_width;
+						}
+					}
+					else {
+						/* Expand */
+						frac_width = MIN (frac_width, sizeof (dtoabuf) - slen - 1);
+						dtoabuf[slen ++] = '.';
+						memset (dtoabuf + slen, '0', frac_width);
+						slen += frac_width;
 					}
 				}
 
