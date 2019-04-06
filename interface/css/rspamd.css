@@ -214,6 +214,7 @@ table#symbolsTable input[type="number"] {
     background-image: -ms-linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
     background-image: -o-linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
     background-image: -linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
+    /* stylelint-disable-next-line function-name-case */
     filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#fdfdfd', endColorstr='#eaeaea', GradientType=0); /* IE6-9 */
     border-bottom: 1px solid #cdcdcd;
     height: 36px;
