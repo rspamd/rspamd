@@ -174,9 +174,9 @@ table#symbolsTable input[type="number"] {
     padding: 5px 14px;
     background-color: #fff;
     border: 1px solid #ddd;
-    -webkit-border-radius: 0px;
-    -moz-border-radius: 0px;
-    border-radius: 0px;
+    -webkit-border-radius: 0;
+    -moz-border-radius: 0;
+    border-radius: 0;
 }
 
 /* widget */
