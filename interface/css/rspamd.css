@@ -266,7 +266,7 @@ table#symbolsTable input[type="number"] {
 		background-image:-moz-linear-gradient(top, #F9F9F9 0%, #EDEDED 100%);
 		background-image:-ms-linear-gradient(top, #F9F9F9 0%, #EDEDED 100%);
 		background-image:-o-linear-gradient(top, #F9F9F9 0%, #EDEDED 100%);
-		background-image:linear-gradient(top, #F9F9F9 0%, #EDEDED 100%);
+		background-image:linear-gradient(to bottom, #F9F9F9 0%, #EDEDED 100%);
 		border:1px solid #d5d5d5;
 		border-radius:4px 4px 4px 4px;
 		box-shadow:0 1px 0 0 #FFFFFF inset, 0 1px 0 rgba(255,255,255,0.4);
