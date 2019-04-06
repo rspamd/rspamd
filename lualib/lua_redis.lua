@@ -310,16 +310,18 @@ local function process_redis_opts(options, redis_params)
 end
 
 local function enrich_defaults(rspamd_config, module, redis_params)
-  local opts = rspamd_config:get_all_opt('redis')
+  if rspamd_config then
+    local opts = rspamd_config:get_all_opt('redis')
 
-  if opts then
-    if module then
-      if opts[module] then
-        process_redis_opts(opts[module], redis_params)
+    if opts then
+      if module then
+        if opts[module] then
+          process_redis_opts(opts[module], redis_params)
+        end
       end
-    end
 
-    process_redis_opts(opts, redis_params)
+      process_redis_opts(opts, redis_params)
+    end
   end
 end
 
