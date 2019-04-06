@@ -7,7 +7,6 @@ IF (NOT MSVC)
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror=implicit-function-declaration -Werror=format")
   ENDIF(MINGW)
 ENDIF(NOT MSVC)
-
 IF (WITH_OPENMP)
   FIND_PACKAGE(OpenMP)
   IF(OPENMP_FOUND)
