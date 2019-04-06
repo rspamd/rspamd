@@ -181,10 +181,10 @@ table#symbolsTable input[type="number"] {
 
 /* widget */
 .widget-box {
-    background: none repeat scroll 0 0 #F9F9F9;
-    border-top: 1px solid #CDCDCD;
-    border-left: 1px solid #CDCDCD;
-    border-right: 1px solid #CDCDCD;
+    background: none repeat scroll 0 0 #f9f9f9;
+    border-top: 1px solid #cdcdcd;
+    border-left: 1px solid #cdcdcd;
+    border-right: 1px solid #cdcdcd;
     clear: both;
     margin-top: 16px;
     margin-bottom: 16px;
@@ -215,7 +215,7 @@ table#symbolsTable input[type="number"] {
     background-image: -o-linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
     background-image: -linear-gradient(top, #fdfdfd 0%, #eaeaea 100%);
     filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#fdfdfd', endColorstr='#eaeaea', GradientType=0); /* IE6-9 */
-    border-bottom: 1px solid #CDCDCD;
+    border-bottom: 1px solid #cdcdcd;
     height: 36px;
 }
 .widget-title span.icon {
@@ -265,16 +265,16 @@ table#symbolsTable input[type="number"] {
     margin: 0;
 }
 .stat-box {
-    background-color: #F6F6F6;
-    background-image: -webkit-gradient(linear, 0 0%, 0 100%, from(#F9F9F9), to(#EDEDED));
-    background-image: -webkit-linear-gradient(top, #F9F9F9 0%, #EDEDED 100%);
-    background-image: -moz-linear-gradient(top, #F9F9F9 0%, #EDEDED 100%);
-    background-image: -ms-linear-gradient(top, #F9F9F9 0%, #EDEDED 100%);
-    background-image: -o-linear-gradient(top, #F9F9F9 0%, #EDEDED 100%);
-    background-image: linear-gradient(to bottom, #F9F9F9 0%, #EDEDED 100%);
+    background-color: #f6f6f6;
+    background-image: -webkit-gradient(linear, 0 0%, 0 100%, from(#f9f9f9), to(#ededed));
+    background-image: -webkit-linear-gradient(top, #f9f9f9 0%, #ededed 100%);
+    background-image: -moz-linear-gradient(top, #f9f9f9 0%, #ededed 100%);
+    background-image: -ms-linear-gradient(top, #f9f9f9 0%, #ededed 100%);
+    background-image: -o-linear-gradient(top, #f9f9f9 0%, #ededed 100%);
+    background-image: linear-gradient(to bottom, #f9f9f9 0%, #ededed 100%);
     border: 1px solid #d5d5d5;
     border-radius: 4px 4px 4px 4px;
-    box-shadow: 0 1px 0 0 #FFFFFF inset, 0 1px 0 rgba(255, 255, 255, 0.4);
+    box-shadow: 0 1px 0 0 #ffffff inset, 0 1px 0 rgba(255, 255, 255, 0.4);
     display: inline-block;
     line-height: 18px;
     margin: 0 10px 10px 0;
@@ -336,7 +336,7 @@ table#symbolsTable input[type="number"] {
 .modal-header h3 {
     margin: 7px;
     font-size: 12px;
-    text-shadow: 0 1px 0 #FFFFFF;
+    text-shadow: 0 1px 0 #ffffff;
 }
 
 .table-log {
@@ -367,7 +367,7 @@ table#symbolsTable input[type="number"] {
     white-space: nowrap;
     background-color: #efefef;
     border-bottom: 1px solid #ddd;
-    border-left: 1px solid #CDCDCD;
+    border-left: 1px solid #cdcdcd;
 }
 .table-log td,
 .table-log td .label {
@@ -416,25 +416,25 @@ table#symbolsTable input[type="number"] {
     padding-right: 2px;
 }
 .symbol-default:hover {
-    background-color: #E6E6E6;
+    background-color: #e6e6e6;
 }
 .symbol-negative {
-    background-color: #EEF9E7;
+    background-color: #eef9e7;
 }
 .symbol-positive {
-    background-color: #FBE9E5;
+    background-color: #fbe9e5;
 }
 .symbol-special {
-    background-color: #E2E9FE;
+    background-color: #e2e9fe;
 }
 .symbol-negative:hover {
-    background-color: #DCF9D3;
+    background-color: #dcf9d3;
 }
 .symbol-positive:hover {
-    background-color: #FBD6D1;
+    background-color: #fbd6d1;
 }
 .symbol-special:hover {
-    background-color: #CDDBFF;
+    background-color: #cddbff;
 }
 
 .stat-boxes {
