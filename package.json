@@ -1,6 +1,8 @@
 {
     "devDependencies": {
-        "eslint": "*"
+        "eslint": "*",
+        "stylelint": "*",
+        "stylelint-config-standard": "*"
     },
     "eslintIgnore": [
         "*.min.js",

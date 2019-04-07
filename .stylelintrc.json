@@ -1,0 +1,17 @@
+{
+    "extends": "stylelint-config-standard",
+    "ignoreFiles": [
+        "**/*.min.css",
+        "**/*.min.js",
+        "interface/css/d3evolution.css",
+        "interface/css/nprogress.css"
+    ],
+    "rules": {
+        "at-rule-empty-line-before": null,
+        "color-hex-length": null,
+        "comment-empty-line-before": null,
+        "indentation": 4,
+        "number-leading-zero": null,
+        "rule-empty-line-before": null
+    }
+}
