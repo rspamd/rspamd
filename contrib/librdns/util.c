@@ -56,8 +56,7 @@ static int
 rdns_make_inet_socket (int type, struct addrinfo *addr, struct sockaddr **psockaddr,
 		socklen_t *psocklen)
 {
-	int fd, r, s_error;
-	socklen_t optlen;
+	int fd = -1;
 	struct addrinfo *cur;
 
 	cur = addr;
@@ -96,8 +95,7 @@ out:
 static int
 rdns_make_unix_socket (const char *path, struct sockaddr_un *addr, int type)
 {
-	int fd = -1, s_error, r, serrno;
-	socklen_t optlen;
+	int fd = -1, serrno;
 
 	if (path == NULL) {
 		return -1;
@@ -178,7 +176,7 @@ rdns_make_client_socket (const char *credits,
 					struct sockaddr *cpy;
 
 					cpy = calloc (1, sizeof (un));
-					*psockaddr = sizeof (un);
+					*psocklen = sizeof (un);
 
 					if (cpy == NULL) {
 						close (r);
@@ -423,6 +421,8 @@ rdns_reply_free (struct rdns_reply *rep)
 			case RDNS_REQUEST_SOA:
 				free (entry->content.soa.mname);
 				free (entry->content.soa.admin);
+				break;
+			default:
 				break;
 			}
 			free (entry);

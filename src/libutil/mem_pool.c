@@ -75,7 +75,7 @@ struct rspamd_mempool_entry_point {
 static inline uint32_t
 rspamd_entry_hash (const char *str)
 {
-	return rspamd_cryptobox_fast_hash (str, strlen (str), rspamd_hash_seed ());
+	return (guint)rspamd_cryptobox_fast_hash (str, strlen (str), rspamd_hash_seed ());
 }
 
 static inline int

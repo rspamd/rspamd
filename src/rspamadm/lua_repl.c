@@ -619,8 +619,6 @@ static void
 rspamadm_lua_error_handler (struct rspamd_http_connection_entry *conn_ent,
 	GError *err)
 {
-	struct rspamadm_lua_repl_session *session = conn_ent->ud;
-
 	rspamd_fprintf (stderr, "http error occurred: %s\n", err->message);
 }
 
