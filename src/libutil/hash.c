@@ -628,7 +628,7 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash,
 	node->data = value;
 	node->lg_usages = (guint8)lfu_base_value;
 	node->last = TIME_TO_TS (now);
-	node->eviction_pos = -1;
+	node->eviction_pos = (guint8)-1;
 
 	if (ret != 0) {
 		/* Also need to check maxsize */

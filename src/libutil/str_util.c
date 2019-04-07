@@ -334,7 +334,7 @@ rspamd_gstring_icase_hash (gconstpointer key)
 {
 	const GString *f = key;
 
-	return rspamd_icase_hash (f->str, f->len, rspamd_hash_seed ());
+	return (guint)rspamd_icase_hash (f->str, f->len, rspamd_hash_seed ());
 }
 
 /* https://graphics.stanford.edu/~seander/bithacks.html#ZeroInWord */

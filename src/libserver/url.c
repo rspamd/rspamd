@@ -3126,7 +3126,7 @@ rspamd_url_hash (gconstpointer u)
 	const struct rspamd_url *url = u;
 
 	if (url->urllen > 0) {
-		return rspamd_cryptobox_fast_hash (url->string, url->urllen,
+		return (guint)rspamd_cryptobox_fast_hash (url->string, url->urllen,
 				rspamd_hash_seed ());
 	}
 
@@ -3139,7 +3139,7 @@ rspamd_url_host_hash (gconstpointer u)
 	const struct rspamd_url *url = u;
 
 	if (url->hostlen > 0) {
-		return rspamd_cryptobox_fast_hash (url->host, url->hostlen,
+		return (guint)rspamd_cryptobox_fast_hash (url->host, url->hostlen,
 				rspamd_hash_seed ());
 	}
 
@@ -3162,7 +3162,7 @@ rspamd_email_hash (gconstpointer u)
 		rspamd_cryptobox_fast_hash_update (&st, url->user, url->userlen);
 	}
 
-	return rspamd_cryptobox_fast_hash_final (&st);
+	return (guint)rspamd_cryptobox_fast_hash_final (&st);
 }
 
 /* Compare two emails for building emails tree */

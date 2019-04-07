@@ -2513,30 +2513,41 @@ lua_util_is_utf_mixed_script(lua_State *L)
 {
 	LUA_TRACE_POINT;
 	gsize len_of_string;
-	const gchar *string_to_check = lua_tolstring (L, 1, &len_of_string);
+	const guchar *string_to_check = lua_tolstring (L, 1, &len_of_string);
 	UScriptCode last_script_code = USCRIPT_INVALID_CODE;
 	UErrorCode uc_err = U_ZERO_ERROR;
 
 	if (string_to_check) {
 		uint index = 0;
 		UChar32 char_to_check = 0;
-		while(index < len_of_string) {
-			U8_NEXT(string_to_check, index, len_of_string, char_to_check);
-			if (char_to_check < 0 ) {
+
+		while (index < len_of_string) {
+			U8_NEXT (string_to_check, index, len_of_string, char_to_check);
+
+			if (char_to_check < 0) {
 				return luaL_error (L, "passed string is not valid utf");
 			}
-			UScriptCode current_script_code = uscript_getScript(char_to_check, &uc_err);
-			if (uc_err != U_ZERO_ERROR){
-				msg_err ("cannot get unicode script for character, error: %s", u_errorName (uc_err));
+
+			UScriptCode current_script_code = uscript_getScript (char_to_check, &uc_err);
+
+			if (uc_err != U_ZERO_ERROR) {
+				msg_err ("cannot get unicode script for character, error: %s",
+						u_errorName (uc_err));
 				lua_pushboolean (L, false);
+
 				return 1;
 			}
-			if ( current_script_code != USCRIPT_COMMON && current_script_code != USCRIPT_INHERITED ){
-				if (last_script_code == USCRIPT_INVALID_CODE ){
+
+			if (current_script_code != USCRIPT_COMMON &&
+				current_script_code != USCRIPT_INHERITED) {
+
+				if (last_script_code == USCRIPT_INVALID_CODE) {
 					last_script_code = current_script_code;
-				} else {
-					if ( last_script_code != current_script_code ){
+				}
+				else {
+					if (last_script_code != current_script_code) {
 						lua_pushboolean (L, true);
+
 						return 1;
 					}
 				}
