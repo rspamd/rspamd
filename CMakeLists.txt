@@ -1379,6 +1379,7 @@ INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${LUALIBDIR})
 INSTALL(FILES "contrib/lua-argparse/argparse.lua" DESTINATION ${LUALIBDIR})
 INSTALL(FILES "contrib/lua-tableshape/tableshape.lua" DESTINATION ${LUALIBDIR})
 INSTALL(FILES "contrib/lua-lupa/lupa.lua" DESTINATION ${LUALIBDIR})
+INSTALL(FILES "contrib/lua-lpeg/lpegre.lua" DESTINATION ${LUALIBDIR})
 
 IF(ENABLE_TORCH MATCHES "ON")
 	INSTALL(FILES "contrib/lua-moses/moses.lua" DESTINATION ${LUALIBDIR})
