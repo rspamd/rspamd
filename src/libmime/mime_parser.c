@@ -148,9 +148,12 @@ rspamd_mime_parser_init_lib (void)
 static enum rspamd_cte
 rspamd_mime_parse_cte (const gchar *in, gsize len)
 {
-	guint64 h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
-			in, len, 0xdeadbabe);
+	guint64 h;
 	enum rspamd_cte ret = RSPAMD_CTE_UNKNOWN;
+
+	in = rspamd_string_len_strip (in, &len, " \t;,.+-#!`~'");
+	h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+			in, len, 0xdeadbabe);
 
 	switch (h) {
 	case 0xCEDAA7056B4753F7ULL: /* 7bit */

@@ -690,6 +690,11 @@ rspamd_message_process_plain_text_part (struct rspamd_task *task,
 		/* Check for ical */
 		rspamd_ftok_t cal_ct;
 
+		/*
+		 * TODO: If we want to process more than that, we need
+		 * to create some generic framework that accepts a part
+		 * and returns a processed data
+		 */
 		RSPAMD_FTOK_ASSIGN (&cal_ct, "calendar");
 
 		if (rspamd_ftok_casecmp (&cal_ct, &text_part->mime_part->ct->subtype) == 0) {
