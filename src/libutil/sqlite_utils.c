@@ -297,8 +297,10 @@ rspamd_sqlite3_open_or_create (rspamd_mempool_t *pool, const gchar *path, const
 
 			foreign_keys[] = 		"PRAGMA foreign_keys=\"ON\";",
 
+#if defined(__LP64__) || defined(_LP64)
 			enable_mmap[] = 		"PRAGMA mmap_size="
 									G_STRINGIFY(RSPAMD_SQLITE_MMAP_LIMIT) ";",
+#endif
 
 			other_pragmas[] = 		"PRAGMA read_uncommitted=\"ON\";"
 									"PRAGMA cache_size="
