@@ -8,10 +8,12 @@ The following is a set of guidelines for contributing to Rspamd and its packages
 
 
 [I don't want to read this whole thing, I just have a question](#i-dont-want-to-read-this-whole-thing-i-just-have-a-question)
+
 [How Can I Contribute?](#how-can-i-contribute)
   * [Reporting Bugs](#reporting-bugs)
-  * [Pull Requests](#pull-requests)
+
 [Styleguides](#styleguides)
+  * [Git Commit Messages](#git-commit-messages)
   * [Lua style guide](#lua-styleguide)
   
 ## I don't want to read this whole thing I just have a question
@@ -78,6 +80,23 @@ Include details about your configuration and environment:
 * **What's the name and version of the OS you're using**?
 * **What hardware are you using, including CPU generation**, e.g. Intel Haswell or ArmV7? If you have `gcc` installed, that could be achieved by the following command: `gcc -march=native -Q --help=target|grep march`. In Linux, you can also check `/proc/cpuinfo` file for the required details.
 
-### Pull Requests
-
 ## Styleguides
+
+### Git Commit Messages
+
+* Use the present tense ("Add feature" not "Added feature")
+* Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
+* Limit the first line to 72 characters or less (without tag)
+* Reference issues and pull requests liberally after the first line
+* Consider starting the commit message with an applicable tag:
+    * [Minor] - minor issue/improvement not worth to mention in ChangeLog
+    * [Feature] - a significant feature
+    * [Fix] - bug fix
+    * [CritFix] - critical bug fix
+    * [Rework] - some significant logic rework
+    * [Config] - configuration change
+    * [Rules] - rules change
+    
+### Lua styleguide
+
+Please use the following [Lua style guide](lua_style.md) when contributing changes to Lua code. This guide is both applicable for rules, libraries and plugins. 
