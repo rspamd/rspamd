@@ -19,6 +19,7 @@ local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local dkim_sign_tools = require "lua_dkim_tools"
 local lua_redis = require "lua_redis"
+local lua_maps = require "lua_maps"
 
 if confighelp then
   return
@@ -173,21 +174,27 @@ local opts =  rspamd_config:get_all_opt('dkim_signing')
 if not opts then return end
 for k,v in pairs(opts) do
   if k == 'sign_networks' then
-    settings[k] = rspamd_map_add(N, k, 'radix', 'DKIM signing networks')
+    settings[k] = lua_maps.map_add(N, k, 'radix', 'DKIM signing networks')
   elseif k == 'path_map' then
-    settings[k] = rspamd_map_add(N, k, 'map', 'Paths to DKIM signing keys')
+    settings[k] = lua_maps.map_add(N, k, 'map', 'Paths to DKIM signing keys')
   elseif k == 'selector_map' then
-    settings[k] = rspamd_map_add(N, k, 'map', 'DKIM selectors')
+    settings[k] = lua_maps.map_add(N, k, 'map', 'DKIM selectors')
+  elseif k == 'signing_table' then
+    settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM signing table')
+  elseif k == 'key_table' then
+    settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM keys table')
   else
     settings[k] = v
   end
 end
+
 if not (settings.use_redis or
     settings.path or
     settings.domain or
     settings.path_map or
     settings.selector_map or
-    settings.use_http_headers) then
+    settings.use_http_headers or
+    (settings.signing_table and settings.key_table)) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable dkim signing')
   lua_util.disable_module(N, "config")
   return
