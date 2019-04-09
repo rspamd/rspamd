@@ -504,6 +504,17 @@ spf_check_list (struct spf_resolved *rec, struct rspamd_task *task, gboolean cac
 {
 	guint i;
 	struct spf_addr *addr;
+	struct spf_ctx *spf_module_ctx = spf_get_context (task->cfg);
+
+	if (cached) {
+		msg_info_task ("use cached record for %s (0x%xuL) in LRU cache for %d seconds, "
+					   "%d/%d elements in the cache",
+				rec->domain,
+				rec->digest,
+				rec->ttl,
+				rspamd_lru_hash_size (spf_module_ctx->spf_hash),
+				rspamd_lru_hash_capacity (spf_module_ctx->spf_hash));
+	}
 
 	for (i = 0; i < rec->elts->len; i ++) {
 		addr = &g_array_index (rec->elts, struct spf_addr, i);
@@ -562,9 +573,10 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 						record->domain, spf_record_ref (l),
 						task->tv.tv_sec, record->ttl);
 
-				msg_info_task ("stored record for %s in LRU cache for %d seconds, "
+				msg_info_task ("stored record for %s (0x%xuL) in LRU cache for %d seconds, "
 							   "%d/%d elements in the cache",
 						record->domain,
+						record->digest,
 						record->ttl,
 						rspamd_lru_hash_size (spf_module_ctx->spf_hash),
 						rspamd_lru_hash_capacity (spf_module_ctx->spf_hash));

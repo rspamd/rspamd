@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <contrib/librdns/rdns.h>
+
 #include "config.h"
 #include "dns.h"
 #include "spf.h"
@@ -21,6 +21,8 @@
 #include "message.h"
 #include "utlist.h"
 #include "libserver/mempool_vars_internal.h"
+#include "contrib/librdns/rdns.h"
+#include "contrib/mumhash/mum.h"
 
 #define SPF_VER1_STR "v=spf1"
 #define SPF_VER2_STR "spf2."
@@ -369,6 +371,34 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 			DL_FOREACH (cur, cur_addr) {
 				memcpy (&taddr, cur_addr, sizeof (taddr));
 				taddr.spf_string = g_strdup (cur_addr->spf_string);
+
+				if (cur_addr->flags & RSPAMD_SPF_FLAG_IPV6) {
+					guint64 t[3];
+
+					memcpy (t, cur_addr->addr6, sizeof (guint64) * 2);
+					t[2] = ((guint64)(cur_addr->mech)) << 48;
+					t[2] |= cur_addr->m.dual.mask_v6;
+
+					for (guint j = 0; j < G_N_ELEMENTS (t); j ++) {
+						target->digest = mum_hash_step (target->digest, t[j]);
+					}
+				}
+				else if (cur_addr->flags & RSPAMD_SPF_FLAG_IPV4) {
+					guint64 t;
+
+					memcpy (&t, cur_addr->addr4, sizeof (guint32));
+					t |= ((guint64)(cur_addr->mech)) << 48;
+					t |= ((guint64)cur_addr->m.dual.mask_v4) << 32;
+
+					target->digest = mum_hash_step (target->digest, t);
+				}
+				else {
+					guint64 t = 0;
+
+					t |= ((guint64)(cur_addr->mech)) << 48;
+					target->digest = mum_hash_step (target->digest, t);
+				}
+
 				g_array_append_val (target->elts, taddr);
 			}
 		}
@@ -391,17 +421,21 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 				rec->resolved->len);
 		res->domain = g_strdup (rec->sender_domain);
 		res->ttl = rec->ttl;
+		res->digest = mum_hash_init (0xa4aa40bbeec59e2bULL);
 		REF_INIT_RETAIN (res, rspamd_flatten_record_dtor);
 
 		if (rec->resolved->len > 0) {
 			rspamd_spf_process_reference (res, NULL, rec, TRUE);
 		}
+
+		res->digest = mum_hash_finish (res->digest);
 	}
 	else {
 		res = g_malloc0 (sizeof (*res));
 		res->elts = g_array_new (FALSE, FALSE, sizeof (struct spf_addr));
 		res->domain = g_strdup (rec->sender_domain);
 		res->ttl = rec->ttl;
+		res->digest = mum_hash_init (0xa4aa40bbeec59e2bULL);
 		REF_INIT_RETAIN (res, rspamd_flatten_record_dtor);
 	}
 

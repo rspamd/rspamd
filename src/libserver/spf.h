@@ -64,6 +64,7 @@ struct spf_resolved {
 	gboolean temp_failed;
 	gboolean na;
 	gboolean perm_failed;
+	guint64 digest;
 	GArray *elts; /* Flat list of struct spf_addr */
 	ref_entry_t ref; /* Refcounting */
 };
