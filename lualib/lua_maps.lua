@@ -94,7 +94,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
             return ret
           end
         end
-      elseif mtype == 'regexp' then
+      elseif mtype == 'regexp' or mtype == 'glob' then
         -- Plain table
         local map = rspamd_config:add_map{
           type = mtype,
@@ -165,7 +165,7 @@ end
 -- Returns true if map was added or nil
 -- @param {string} mname config section to use
 -- @param {string} optname option name to use
--- @param {string} mtype type of map ('set', 'hash', 'radix', 'regexp')
+-- @param {string} mtype type of map ('set', 'hash', 'radix', 'regexp', 'glob')
 -- @param {string} description human-readable description of map
 -- @return {bool} true on success, or `nil`
 --]]
