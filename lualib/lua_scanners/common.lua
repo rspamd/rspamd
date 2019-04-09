@@ -79,6 +79,11 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail)
     symbol = rule.symbol_fail
     threat_info = "FAILED with error"
     dyn_weight = 0.0
+  elseif is_fail == 'encrypted' then
+    patterns = rule.patterns
+    symbol = rule.symbol_encrypted
+    threat_info = "Scan has returned that input was encrypted"
+    dyn_weight = 1.0
   end
 
   if type(vname) == 'string' then
