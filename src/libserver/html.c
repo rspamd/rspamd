@@ -1706,19 +1706,21 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				/* We have an embedded image */
 				img->flags |= RSPAMD_HTML_FLAG_IMAGE_EMBEDDED;
 			}
-			if (comp->len > sizeof ("data:") - 1 && memcmp (comp->start,
-					"data:", sizeof ("data:") - 1) == 0) {
-				/* We have an embedded image in HTML tag */
-				img->flags |=
-						(RSPAMD_HTML_FLAG_IMAGE_EMBEDDED|RSPAMD_HTML_FLAG_IMAGE_DATA);
-				rspamd_html_process_data_image (pool, img, comp);
-				hc->flags |= RSPAMD_HTML_FLAG_HAS_DATA_URLS;
-			}
 			else {
-				img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
-				if (img->src) {
-					img->url = rspamd_html_process_url (pool,
-							img->src, fstr.len, NULL);
+				if (comp->len > sizeof ("data:") - 1 && memcmp (comp->start,
+						"data:", sizeof ("data:") - 1) == 0) {
+					/* We have an embedded image in HTML tag */
+					img->flags |=
+							(RSPAMD_HTML_FLAG_IMAGE_EMBEDDED | RSPAMD_HTML_FLAG_IMAGE_DATA);
+					rspamd_html_process_data_image (pool, img, comp);
+					hc->flags |= RSPAMD_HTML_FLAG_HAS_DATA_URLS;
+				}
+				else {
+					img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
+					if (img->src) {
+						img->url = rspamd_html_process_url (pool,
+								img->src, fstr.len, NULL);
+					}
 				}
 			}
 		}
