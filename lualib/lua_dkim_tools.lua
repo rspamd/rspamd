@@ -204,6 +204,12 @@ local function prepare_dkim_signing(N, task, settings)
 
   if settings.signing_table and settings.key_table then
     -- OpenDKIM style
+    if settings.sign_networks and not is_sign_networks then
+      lua_util.debugm(N, task,
+          'signing_table: sign networks specified but IP is not from that network, skip signing')
+      return false,{}
+    end
+
     if not hfrom or not hfrom[1] or not hfrom[1].addr then
       lua_util.debugm(N, task,
           'signing_table: cannot get data when no header from is presented')
