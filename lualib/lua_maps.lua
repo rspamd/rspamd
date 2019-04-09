@@ -95,16 +95,32 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
           end
         end
       elseif mtype == 'regexp' or mtype == 'glob' then
-        -- Plain table
-        local map = rspamd_config:add_map{
-          type = mtype,
-          description = description,
-          url = opt,
-        }
-        if map then
-          ret.__data = map
-          setmetatable(ret, ret_mt)
-          return ret
+        if string.find(opt[1], '^/%a') or string.find(opt[1], '^http') then
+          -- Plain table
+          local map = rspamd_config:add_map{
+            type = mtype,
+            description = description,
+            url = opt,
+          }
+          if map then
+            ret.__data = map
+            setmetatable(ret, ret_mt)
+            return ret
+          end
+        else
+          local map = rspamd_config:add_map{
+            type = mtype,
+            description = description,
+            url = {
+              url = 'static',
+              data = opt,
+            }
+          }
+          if map then
+            ret.__data = map
+            setmetatable(ret, ret_mt)
+            return ret
+          end
         end
       else
         if string.find(opt[1], '^/%a') or string.find(opt[1], '^http') then
