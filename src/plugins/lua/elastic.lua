@@ -36,6 +36,7 @@ local N = "elastic"
 local E = {}
 local connect_prefix = 'http://'
 local enabled = true
+local ingest_geoip_type = 'plugins'
 local settings = {
   limit = 500,
   index_pattern = 'rspamd-%Y.%m.%d',
@@ -448,8 +449,6 @@ if redis_params and opts then
 
     if settings.ingest_module then
       ingest_geoip_type = 'modules'
-    else
-      ingest_geoip_type = 'plugins'
     end
 
     settings.upstream = upstream_list.create(rspamd_config,
