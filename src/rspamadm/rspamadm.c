@@ -326,10 +326,11 @@ rspamadm_command_maybe_match_name (const gchar *cmd, const gchar *input)
 
 
 static void
-rspamadm_add_lua_globals (void)
+rspamadm_add_lua_globals (struct rspamd_dns_resolver *resolver)
 {
 	struct rspamd_async_session  **psession;
 	struct event_base **pev_base;
+	struct rspamd_dns_resolver **presolver;
 
 	rspamadm_session = rspamd_session_create (rspamd_main->cfg->cfg_pool, NULL,
 			NULL, (event_finalizer_t )NULL, NULL);
@@ -343,6 +344,11 @@ rspamadm_add_lua_globals (void)
 	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
 	*pev_base = rspamd_main->ev_base;
 	lua_setglobal (L, "rspamadm_ev_base");
+
+	presolver = lua_newuserdata (L, sizeof (struct rspamd_dns_resolver *));
+	rspamd_lua_setclass (L, "rspamd{resolver}", -1);
+	*presolver = resolver;
+	lua_setglobal (L, "rspamadm_resolver");
 }
 
 gint
@@ -356,6 +362,7 @@ main (gint argc, gchar **argv, gchar **env)
 	gchar **nargv, **targv;
 	const gchar *cmd_name;
 	const struct rspamadm_command *cmd;
+	struct rspamd_dns_resolver *resolver;
 	GPtrArray *all_commands = g_ptr_array_new (); /* Discovered during check */
 	gint i, nargc, targc;
 	worker_t **pworker;
@@ -436,7 +443,7 @@ main (gint argc, gchar **argv, gchar **env)
 			rspamd_main->server_pool);
 	(void) rspamd_log_open (rspamd_main->logger);
 
-	(void) dns_resolver_init (rspamd_main->logger,
+	resolver = rspamd_dns_resolver_init (rspamd_main->logger,
 			rspamd_main->ev_base,
 			cfg);
 	rspamd_main->http_ctx = rspamd_http_context_create (cfg, rspamd_main->ev_base,
@@ -471,7 +478,7 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	rspamd_lua_set_globals (cfg, L);
-	rspamadm_add_lua_globals ();
+	rspamadm_add_lua_globals (resolver);
 
 #ifdef WITH_HIREDIS
 	rspamd_redis_pool_config (cfg->redis_pool, cfg, rspamd_main->ev_base);
