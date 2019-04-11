@@ -108,6 +108,7 @@ struct rdns_io_channel {
 	socklen_t slen;
 	int sock; /**< persistent socket                                          */
 	bool active;
+	bool connected;
 	void *async_io; /** async opaque ptr */
 	struct rdns_request *requests; /**< requests in flight                                         */
 	uint64_t uses;

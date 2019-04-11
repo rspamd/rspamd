@@ -782,7 +782,7 @@ rdns_curve_recv (struct rdns_io_channel *ioc, void *buf, size_t len, void *plugi
 	struct rdns_resolver *resolver;
 
 	resolver = ctx->resolver;
-	ret = recvfrom (ioc->sock, buf, len, 0, saddr, &slen);
+	ret = recv (ioc->sock, buf, len, 0);
 
 	if (ret <= 0 || ret < 64) {
 		/* Definitely not a DNSCurve packet */

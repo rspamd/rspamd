@@ -68,15 +68,28 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 	}
 
 	if (resolver->curve_plugin == NULL) {
-		r = sendto (fd, req->packet, req->pos, 0,
-				req->io->saddr,
-				req->io->slen);
+		if (!req->io->connected) {
+			r = sendto (fd, req->packet, req->pos, 0,
+					req->io->saddr,
+					req->io->slen);
+		}
+		else {
+			r = send (fd, req->packet, req->pos, 0);
+		}
 	}
 	else {
-		r = resolver->curve_plugin->cb.curve_plugin.send_cb (req,
-				resolver->curve_plugin->data,
-				req->io->saddr,
-				req->io->slen);
+		if (!req->io->connected) {
+			r = resolver->curve_plugin->cb.curve_plugin.send_cb (req,
+					resolver->curve_plugin->data,
+					req->io->saddr,
+					req->io->slen);
+		}
+		else {
+			r = resolver->curve_plugin->cb.curve_plugin.send_cb (req,
+					resolver->curve_plugin->data,
+					NULL,
+					0);
+		}
 	}
 	if (r == -1) {
 		if (errno == EAGAIN || errno == EINTR) {
@@ -96,6 +109,18 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 		else {
 			rdns_debug ("send failed: %s for server %s", strerror (errno), serv->name);
 			return -1;
+		}
+	}
+	else if (!req->io->connected) {
+		/* Connect socket */
+		r = connect (fd, req->io->saddr, req->io->slen);
+
+		if (r == -1) {
+			rdns_err ("cannot connect after sending request: %s for server %s",
+					strerror (errno), serv->name);
+		}
+		else {
+			req->io->connected = true;
 		}
 	}
 
@@ -257,7 +282,7 @@ rdns_process_read (int fd, void *arg)
 
 	/* First read packet from socket */
 	if (resolver->curve_plugin == NULL) {
-		r = recvfrom (fd, in, sizeof (in), 0, ioc->saddr, &ioc->slen);
+		r = recv (fd, in, sizeof (in), 0);
 		if (r > (int)(sizeof (struct dns_header) + sizeof (struct dns_query))) {
 			req = rdns_find_dns_request (in, ioc);
 		}
