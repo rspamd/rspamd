@@ -40,8 +40,8 @@ struct rspamd_dns_resolver {
 /**
  * Init DNS resolver, params are obtained from a config file or system file /etc/resolv.conf
  */
-struct rspamd_dns_resolver * dns_resolver_init (rspamd_logger_t *logger,
-	struct event_base *ev_base, struct rspamd_config *cfg);
+struct rspamd_dns_resolver * rspamd_dns_resolver_init (rspamd_logger_t *logger,
+													   struct event_base *ev_base, struct rspamd_config *cfg);
 
 struct rspamd_dns_request_ud;
 /**
@@ -55,24 +55,24 @@ struct rspamd_dns_request_ud;
  * @param ... string or ip address based on a request type
  * @return TRUE if request was sent.
  */
-struct rspamd_dns_request_ud * make_dns_request (struct rspamd_dns_resolver *resolver,
-	struct rspamd_async_session *session,
-	rspamd_mempool_t *pool,
-	dns_callback_type cb,
-	gpointer ud,
-	enum rdns_request_type type,
-	const char *name);
+struct rspamd_dns_request_ud * rspamd_dns_resolver_request (struct rspamd_dns_resolver *resolver,
+															struct rspamd_async_session *session,
+															rspamd_mempool_t *pool,
+															dns_callback_type cb,
+															gpointer ud,
+															enum rdns_request_type type,
+															const char *name);
 
-gboolean make_dns_request_task (struct rspamd_task *task,
-	dns_callback_type cb,
-	gpointer ud,
-	enum rdns_request_type type,
-	const char *name);
+gboolean rspamd_dns_resolver_request_task (struct rspamd_task *task,
+										   dns_callback_type cb,
+										   gpointer ud,
+										   enum rdns_request_type type,
+										   const char *name);
 
-gboolean make_dns_request_task_forced (struct rspamd_task *task,
-	dns_callback_type cb,
-	gpointer ud,
-	enum rdns_request_type type,
-	const char *name);
+gboolean rspamd_dns_resolver_request_task_forced (struct rspamd_task *task,
+												  dns_callback_type cb,
+												  gpointer ud,
+												  enum rdns_request_type type,
+												  const char *name);
 
 #endif

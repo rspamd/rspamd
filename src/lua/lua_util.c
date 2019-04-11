@@ -856,7 +856,7 @@ lua_util_process_message (lua_State *L)
 		task->msg.len = mlen;
 		task->fin_callback = lua_util_task_fin;
 		task->fin_arg = &res;
-		task->resolver = dns_resolver_init (NULL, base, cfg);
+		task->resolver = rspamd_dns_resolver_init (NULL, base, cfg);
 		task->s = rspamd_session_create (task->task_pool, rspamd_task_fin,
 					rspamd_task_restore, (event_finalizer_t)rspamd_task_free, task);
 

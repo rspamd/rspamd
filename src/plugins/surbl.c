@@ -1483,7 +1483,7 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 			msg_debug_surbl ("send surbl dns ip request %s to %s", surbl_req,
 					suffix->suffix);
 
-			if (make_dns_request_task (task,
+			if (rspamd_dns_resolver_request_task (task,
 					surbl_dns_ip_callback,
 					(void *) param, RDNS_REQUEST_A, surbl_req)) {
 				param->item = item;
@@ -1510,7 +1510,7 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 			rspamd_mempool_strdup (task->task_pool, url->surbl);
 		msg_debug_surbl ("send surbl dns request %s", surbl_req);
 
-		if (make_dns_request_task (task,
+		if (rspamd_dns_resolver_request_task (task,
 				surbl_dns_callback,
 				(void *) param, RDNS_REQUEST_A, surbl_req)) {
 			param->item = item;
@@ -1675,7 +1675,7 @@ surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg)
 						param->host_resolve,
 						to_resolve);
 
-				if (make_dns_request_task (task,
+				if (rspamd_dns_resolver_request_task (task,
 						surbl_dns_callback,
 						param, RDNS_REQUEST_A, to_resolve->str)) {
 					rspamd_symcache_item_async_inc (param->task, param->item, M);

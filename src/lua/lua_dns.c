@@ -110,24 +110,24 @@ lua_dns_request (lua_State *L)
 
 
 	if (task == NULL) {
-		ret = (make_dns_request (cfg->dns_resolver,
-							   session,
-							   pool,
-							   lua_dns_callback,
-							   cbdata,
-							   type,
-							   to_resolve) != NULL);
+		ret = (rspamd_dns_resolver_request (cfg->dns_resolver,
+				session,
+				pool,
+				lua_dns_callback,
+				cbdata,
+				type,
+				to_resolve) != NULL);
 	}
 	else {
 		if (forced) {
-			ret = make_dns_request_task_forced (task,
+			ret = rspamd_dns_resolver_request_task_forced (task,
 					lua_dns_callback,
 					cbdata,
 					type,
 					to_resolve);
 		}
 		else {
-			ret = make_dns_request_task (task,
+			ret = rspamd_dns_resolver_request_task (task,
 					lua_dns_callback,
 					cbdata,
 					type,

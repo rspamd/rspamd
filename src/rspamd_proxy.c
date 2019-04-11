@@ -2168,7 +2168,7 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 	ctx->ev_base = rspamd_prepare_worker (worker, "rspamd_proxy",
 			proxy_accept_socket);
 
-	ctx->resolver = dns_resolver_init (worker->srv->logger,
+	ctx->resolver = rspamd_dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
 			worker->srv->cfg);
 	double_to_tv (ctx->timeout, &ctx->io_tv);

@@ -3891,7 +3891,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_http_router_set_unknown_handler (ctx->http,
 			rspamd_controller_handle_unknown);
 
-	ctx->resolver = dns_resolver_init (worker->srv->logger,
+	ctx->resolver = rspamd_dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
 			worker->srv->cfg);
 

@@ -94,7 +94,7 @@ lua_http_global_resolver (struct event_base *ev_base)
 	static struct rspamd_dns_resolver *global_resolver;
 
 	if (global_resolver == NULL) {
-		global_resolver = dns_resolver_init (NULL, ev_base, NULL);
+		global_resolver = rspamd_dns_resolver_init (NULL, ev_base, NULL);
 	}
 
 	return global_resolver;
@@ -1014,7 +1014,7 @@ lua_http_request (lua_State *L)
 		if (task == NULL) {
 
 			REF_RETAIN (cbd);
-			if (!make_dns_request (resolver, session, NULL, lua_http_dns_handler, cbd,
+			if (!rspamd_dns_resolver_request (resolver, session, NULL, lua_http_dns_handler, cbd,
 					RDNS_REQUEST_A,
 					cbd->host)) {
 				if (cbd->ref.refcount > 1) {
@@ -1033,7 +1033,7 @@ lua_http_request (lua_State *L)
 		else {
 			REF_RETAIN (cbd);
 
-			if (!make_dns_request_task_forced (task, lua_http_dns_handler, cbd,
+			if (!rspamd_dns_resolver_request_task_forced (task, lua_http_dns_handler, cbd,
 					RDNS_REQUEST_A, cbd->host)) {
 				if (cbd->ref.refcount > 1) {
 					/* Not released by make_connection */

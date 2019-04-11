@@ -71,7 +71,7 @@ rspamd_upstream_test_func (void)
 	cfg->upstream_revive_time = 0.5;
 	cfg->upstream_error_time = 2;
 
-	resolver = dns_resolver_init (NULL, ev_base, cfg);
+	resolver = rspamd_dns_resolver_init (NULL, ev_base, cfg);
 	rspamd_upstreams_library_config (cfg, cfg->ups_ctx, ev_base, resolver->r);
 
 	/*

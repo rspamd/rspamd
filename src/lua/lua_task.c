@@ -2677,7 +2677,7 @@ lua_task_inc_dns_req (lua_State *L)
 	}
 
 	if (task != NULL) {
-		/* Deprecation: already done in make_dns_request */
+		/* Deprecation: already done in rspamd_dns_resolver_request */
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

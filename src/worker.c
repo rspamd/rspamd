@@ -685,7 +685,7 @@ start_worker (struct rspamd_worker *worker)
 		}
 	}
 
-	ctx->resolver = dns_resolver_init (worker->srv->logger,
+	ctx->resolver = rspamd_dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
 			worker->srv->cfg);
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, worker, 0);

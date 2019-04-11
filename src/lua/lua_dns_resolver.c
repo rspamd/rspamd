@@ -331,7 +331,7 @@ lua_dns_resolver_init (lua_State *L)
 	cfg = pcfg ? *(pcfg) : NULL;
 
 	if (base != NULL && cfg != NULL) {
-		resolver = dns_resolver_init (NULL, base, cfg);
+		resolver = rspamd_dns_resolver_init (NULL, base, cfg);
 		if (resolver) {
 			presolver = lua_newuserdata (L, sizeof (gpointer));
 			rspamd_lua_setclass (L, "rspamd{resolver}", -1);
@@ -440,7 +440,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 		cbdata->pool = pool;
 
 		if (task == NULL) {
-			if (make_dns_request (resolver,
+			if (rspamd_dns_resolver_request (resolver,
 					session,
 					pool,
 					lua_dns_resolver_callback,
@@ -467,13 +467,13 @@ lua_dns_resolver_resolve_common (lua_State *L,
 			}
 
 			if (forced) {
-				ret = make_dns_request_task_forced (task,
+				ret = rspamd_dns_resolver_request_task_forced (task,
 						lua_dns_resolver_callback,
 						cbdata,
 						type,
 						to_resolve);
 			} else {
-				ret = make_dns_request_task (task,
+				ret = rspamd_dns_resolver_request_task (task,
 						lua_dns_resolver_callback,
 						cbdata,
 						type,

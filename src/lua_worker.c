@@ -358,7 +358,7 @@ start_lua_worker (struct rspamd_worker *worker)
 	ctx->L = L;
 	ctx->cfg = worker->srv->cfg;
 
-	ctx->resolver = dns_resolver_init (worker->srv->logger,
+	ctx->resolver = rspamd_dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
 			worker->srv->cfg);
 

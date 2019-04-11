@@ -671,14 +671,14 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 						/* Now resolve A record for this MX */
 						msg_debug_spf ("resolve %s after resolving of MX",
 								elt_data->content.mx.name);
-						if (make_dns_request_task_forced (task,
+						if (rspamd_dns_resolver_request_task_forced (task,
 								spf_record_dns_callback, (void *) cb,
 								RDNS_REQUEST_A,
 								elt_data->content.mx.name)) {
 							cb->rec->requests_inflight++;
 						}
 
-						if (make_dns_request_task_forced (task,
+						if (rspamd_dns_resolver_request_task_forced (task,
 								spf_record_dns_callback, (void *) cb,
 								RDNS_REQUEST_AAAA,
 								elt_data->content.mx.name)) {
@@ -704,13 +704,13 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 								elt_data->content.ptr.name)) {
 							msg_debug_spf ("resolve %s after resolving of PTR",
 									elt_data->content.ptr.name);
-							if (make_dns_request_task_forced (task,
+							if (rspamd_dns_resolver_request_task_forced (task,
 									spf_record_dns_callback, (void *) cb,
 									RDNS_REQUEST_A,
 									elt_data->content.ptr.name)) {
 								cb->rec->requests_inflight++;
 							}
-							if (make_dns_request_task_forced (task,
+							if (rspamd_dns_resolver_request_task_forced (task,
 									spf_record_dns_callback, (void *) cb,
 									RDNS_REQUEST_AAAA,
 									elt_data->content.ptr.name)) {
@@ -1056,7 +1056,7 @@ parse_spf_a (struct spf_record *rec,
 	cb->resolved = resolved;
 	msg_debug_spf ("resolve a %s", host);
 
-	if (make_dns_request_task_forced (task,
+	if (rspamd_dns_resolver_request_task_forced (task,
 			spf_record_dns_callback, (void *) cb, RDNS_REQUEST_A, host)) {
 		rec->requests_inflight++;
 
@@ -1068,7 +1068,7 @@ parse_spf_a (struct spf_record *rec,
 		cb->resolved = resolved;
 		msg_debug_spf ("resolve aaa %s", host);
 
-		if (make_dns_request_task_forced (task,
+		if (rspamd_dns_resolver_request_task_forced (task,
 				spf_record_dns_callback, (void *) cb, RDNS_REQUEST_AAAA, host)) {
 			rec->requests_inflight++;
 		}
@@ -1114,7 +1114,7 @@ parse_spf_ptr (struct spf_record *rec,
 	rec->ttl = 0;
 	msg_debug_spf ("disable SPF caching as there is PTR expansion");
 
-	if (make_dns_request_task_forced (task,
+	if (rspamd_dns_resolver_request_task_forced (task,
 			spf_record_dns_callback, (void *) cb, RDNS_REQUEST_PTR, ptr)) {
 		rec->requests_inflight++;
 
@@ -1149,7 +1149,7 @@ parse_spf_mx (struct spf_record *rec,
 	cb->resolved = resolved;
 
 	msg_debug_spf ("resolve mx for %s", host);
-	if (make_dns_request_task_forced (task,
+	if (rspamd_dns_resolver_request_task_forced (task,
 			spf_record_dns_callback, (void *) cb, RDNS_REQUEST_MX, host)) {
 		rec->requests_inflight++;
 
@@ -1324,7 +1324,7 @@ parse_spf_include (struct spf_record *rec, struct spf_addr *addr)
 	addr->flags |= RSPAMD_SPF_FLAG_REFERENCE;
 	msg_debug_spf ("resolve include %s", domain);
 
-	if (make_dns_request_task_forced (task,
+	if (rspamd_dns_resolver_request_task_forced (task,
 			spf_record_dns_callback, (void *) cb, RDNS_REQUEST_TXT, domain)) {
 		rec->requests_inflight++;
 
@@ -1375,7 +1375,7 @@ parse_spf_redirect (struct spf_record *rec,
 	cb->ptr_host = domain;
 	msg_debug_spf ("resolve redirect %s", domain);
 
-	if (make_dns_request_task_forced (task,
+	if (rspamd_dns_resolver_request_task_forced (task,
 			spf_record_dns_callback, (void *) cb, RDNS_REQUEST_TXT, domain)) {
 		rec->requests_inflight++;
 
@@ -1413,7 +1413,7 @@ parse_spf_exists (struct spf_record *rec, struct spf_addr *addr)
 	cb->ptr_host = host;
 
 	msg_debug_spf ("resolve exists %s", host);
-	if (make_dns_request_task_forced (task,
+	if (rspamd_dns_resolver_request_task_forced (task,
 			spf_record_dns_callback, (void *) cb, RDNS_REQUEST_A, host)) {
 		rec->requests_inflight++;
 
@@ -2257,7 +2257,7 @@ rspamd_spf_resolve (struct rspamd_task *task, spf_cb_t callback,
 	rec->local_part = cred->local_part;
 	rec->sender_domain = cred->domain;
 
-	if (make_dns_request_task_forced (task,
+	if (rspamd_dns_resolver_request_task_forced (task,
 			spf_dns_callback,
 			(void *) rec, RDNS_REQUEST_TXT, rec->sender_domain)) {
 		rec->requests_inflight++;
