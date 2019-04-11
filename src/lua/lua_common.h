@@ -486,7 +486,7 @@ extern ucl_object_t *lua_traces;
  func_obj->value.iv ++; \
 } while(0)
 #else
-#define LUA_TRACE_POINT
+#define LUA_TRACE_POINT do {} while(0)
 #endif
 
 #endif /* WITH_LUA */

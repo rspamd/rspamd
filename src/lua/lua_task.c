@@ -100,6 +100,11 @@ LUA_FUNCTION_DEF (task, get_mempool);
  */
 LUA_FUNCTION_DEF (task, get_session);
 /***
+ * @method task:set_session(session)
+ * Sets new async session for a task
+ */
+LUA_FUNCTION_DEF (task, set_session);
+/***
  * @method task:get_ev_base()
  * Return asynchronous event base for using in callbacks and resolver.
  * @return {rspamd_ev_base} event base
@@ -1026,6 +1031,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_cfg),
 	LUA_INTERFACE_DEF (task, get_mempool),
 	LUA_INTERFACE_DEF (task, get_session),
+	LUA_INTERFACE_DEF (task, set_session),
 	LUA_INTERFACE_DEF (task, get_ev_base),
 	LUA_INTERFACE_DEF (task, get_worker),
 	LUA_INTERFACE_DEF (task, insert_result),
@@ -1514,6 +1520,7 @@ lua_task_create (lua_State * L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = NULL, **ptask;
 	struct rspamd_config *cfg = NULL;
+	struct event_base *ev_base = NULL;
 
 	if (lua_type (L, 1) == LUA_TUSERDATA) {
 		gpointer p;
@@ -1524,7 +1531,16 @@ lua_task_create (lua_State * L)
 		}
 	}
 
-	task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
+	if (lua_type (L, 2) == LUA_TUSERDATA) {
+		gpointer p;
+		p = rspamd_lua_check_udata_maybe (L, 2, "rspamd{ev_base}");
+
+		if (p) {
+			ev_base = *(struct event_base **)p;
+		}
+	}
+
+	task = rspamd_task_new (NULL, cfg, NULL, NULL, ev_base);
 	task->flags |= RSPAMD_TASK_FLAG_EMPTY;
 
 	ptask = lua_newuserdata (L, sizeof (*ptask));
@@ -1564,6 +1580,22 @@ lua_task_get_session (lua_State * L)
 		psession = lua_newuserdata (L, sizeof (void *));
 		rspamd_lua_setclass (L, "rspamd{session}", -1);
 		*psession = task->s;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+	return 1;
+}
+
+static int
+lua_task_set_session (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_async_session *session = lua_check_session (L, 2);
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task != NULL && session != NULL) {
+		task->s = session;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
