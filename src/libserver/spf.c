@@ -2309,3 +2309,73 @@ spf_addr_mask_to_string (struct spf_addr *addr)
 
 	return s;
 }
+
+struct spf_addr*
+spf_addr_match_task (struct rspamd_task *task, struct spf_resolved *rec)
+{
+	const guint8 *s, *d;
+	guint af, mask, bmask, addrlen;
+	struct spf_addr *selected = NULL, *addr, *any_addr = NULL;
+	guint i;
+
+	if (task->from_addr == NULL) {
+		return FALSE;
+	}
+
+	for (i = 0; i < rec->elts->len; i ++) {
+		addr = &g_array_index (rec->elts, struct spf_addr, i);
+		if (addr->flags & RSPAMD_SPF_FLAG_TEMPFAIL) {
+			continue;
+		}
+
+		af = rspamd_inet_address_get_af (task->from_addr);
+		/* Basic comparing algorithm */
+		if (((addr->flags & RSPAMD_SPF_FLAG_IPV6) && af == AF_INET6) ||
+			((addr->flags & RSPAMD_SPF_FLAG_IPV4) && af == AF_INET)) {
+			d = rspamd_inet_address_get_hash_key (task->from_addr, &addrlen);
+
+			if (af == AF_INET6) {
+				s = (const guint8 *) addr->addr6;
+				mask = addr->m.dual.mask_v6;
+			}
+			else {
+				s = (const guint8 *) addr->addr4;
+				mask = addr->m.dual.mask_v4;
+			}
+
+			/* Compare the first bytes */
+			bmask = mask / CHAR_BIT;
+			if (mask > addrlen * CHAR_BIT) {
+				msg_info_task ("bad mask length: %d", mask);
+			}
+			else if (memcmp (s, d, bmask) == 0) {
+				if (bmask * CHAR_BIT < mask) {
+					/* Compare the remaining bits */
+					s += bmask;
+					d += bmask;
+					mask = (0xffu << (CHAR_BIT - (mask - bmask * 8u))) & 0xffu;
+
+					if ((*s & mask) == (*d & mask)) {
+						selected = addr;
+						break;
+					}
+				}
+				else {
+					selected = addr;
+					break;
+				}
+			}
+		}
+		else {
+			if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
+				any_addr = addr;
+			}
+		}
+	}
+
+	if (selected) {
+		return selected;
+	}
+
+	return any_addr;
+}

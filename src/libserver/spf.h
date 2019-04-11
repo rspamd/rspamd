@@ -98,4 +98,13 @@ void spf_record_unref (struct spf_resolved *rec);
  * @return
  */
 gchar *spf_addr_mask_to_string (struct spf_addr *addr);
+
+/**
+ * Returns spf address that matches the specific task (or nil if not matched)
+ * @param task
+ * @param rec
+ * @return
+ */
+struct spf_addr * spf_addr_match_task (struct rspamd_task *task,
+									   struct spf_resolved *rec);
 #endif
