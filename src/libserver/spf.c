@@ -2279,3 +2279,33 @@ spf_record_unref (struct spf_resolved *rec)
 {
 	REF_RELEASE (rec);
 }
+
+gchar *
+spf_addr_mask_to_string (struct spf_addr *addr)
+{
+	GString *res;
+	gchar *s, ipstr[INET6_ADDRSTRLEN + 1];
+
+	if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
+		res = g_string_new ("any");
+	}
+	else if (addr->flags & RSPAMD_SPF_FLAG_IPV4) {
+		(void)inet_ntop (AF_INET, addr->addr4, ipstr, sizeof (ipstr));
+		res = g_string_sized_new (sizeof (ipstr));
+		rspamd_printf_gstring (res, "%s/%d", ipstr, addr->m.dual.mask_v4);
+	}
+	else if (addr->flags & RSPAMD_SPF_FLAG_IPV6) {
+		(void)inet_ntop (AF_INET6, addr->addr6, ipstr, sizeof (ipstr));
+		res = g_string_sized_new (sizeof (ipstr));
+		rspamd_printf_gstring (res, "%s/%d", ipstr, addr->m.dual.mask_v6);
+	}
+	else {
+		res = g_string_new ("unknown");
+	}
+
+	s = res->str;
+	g_string_free (res, FALSE);
+
+
+	return s;
+}
