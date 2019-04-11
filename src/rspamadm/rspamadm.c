@@ -348,7 +348,7 @@ rspamadm_add_lua_globals (struct rspamd_dns_resolver *resolver)
 	presolver = lua_newuserdata (L, sizeof (struct rspamd_dns_resolver *));
 	rspamd_lua_setclass (L, "rspamd{resolver}", -1);
 	*presolver = resolver;
-	lua_setglobal (L, "rspamadm_resolver");
+	lua_setglobal (L, "rspamadm_dns_resolver");
 }
 
 gint

@@ -394,9 +394,14 @@ end
  */
 LUA_FUNCTION_DEF (task, get_resolver);
 /***
- * @method task:inc_dns_req()
- * Increment number of DNS requests for the task. Is used just for logging purposes.
+ * @method task:set_resolver(resolver)
+ * Sets rspamd_resolver for a specified task.
  */
+LUA_FUNCTION_DEF (task, set_resolver);
+/***
+* @method task:inc_dns_req()
+* Increment number of DNS requests for the task. Is used just for logging purposes.
+*/
 LUA_FUNCTION_DEF (task, inc_dns_req);
 /***
  * @method task:get_dns_req()
@@ -1058,6 +1063,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_queue_id),
 	LUA_INTERFACE_DEF (task, get_uid),
 	LUA_INTERFACE_DEF (task, get_resolver),
+	LUA_INTERFACE_DEF (task, set_resolver),
 	LUA_INTERFACE_DEF (task, inc_dns_req),
 	LUA_INTERFACE_DEF (task, get_dns_req),
 	LUA_INTERFACE_DEF (task, has_recipients),
@@ -2662,6 +2668,23 @@ lua_task_get_resolver (lua_State *L)
 	}
 
 	return 1;
+}
+
+static gint
+lua_task_set_resolver (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_dns_resolver *resolver = lua_check_dns_resolver (L, 2);
+
+	if (task != NULL && resolver != NULL) {
+		task->resolver = resolver;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
 }
 
 static gint

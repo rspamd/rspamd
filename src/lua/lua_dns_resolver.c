@@ -43,8 +43,6 @@ end
 
 static const gchar *M = "rspamd lua dns resolver";
 
-struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L);
-
 /* Lua bindings */
 LUA_FUNCTION_DEF (dns_resolver, init);
 LUA_FUNCTION_DEF (dns_resolver, resolve_a);
@@ -73,10 +71,10 @@ static const struct luaL_reg dns_resolverlib_m[] = {
 };
 
 struct rspamd_dns_resolver *
-lua_check_dns_resolver (lua_State * L)
+lua_check_dns_resolver (lua_State * L, gint pos)
 {
-	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{resolver}");
-	luaL_argcheck (L, ud != NULL, 1, "'resolver' expected");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{resolver}");
+	luaL_argcheck (L, ud != NULL, pos, "'resolver' expected");
 	return ud ? *((struct rspamd_dns_resolver **)ud) : NULL;
 }
 
@@ -532,7 +530,7 @@ err:
 static int
 lua_dns_resolver_resolve_a (lua_State *L)
 {
-	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L);
+	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L, 1);
 
 	if (dns_resolver) {
 		return lua_dns_resolver_resolve_common (L,
@@ -562,7 +560,7 @@ lua_dns_resolver_resolve_a (lua_State *L)
 static int
 lua_dns_resolver_resolve_ptr (lua_State *L)
 {
-	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L);
+	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L, 1);
 
 	if (dns_resolver) {
 		return lua_dns_resolver_resolve_common (L,
@@ -592,7 +590,7 @@ lua_dns_resolver_resolve_ptr (lua_State *L)
 static int
 lua_dns_resolver_resolve_txt (lua_State *L)
 {
-	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L);
+	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L, 1);
 
 	if (dns_resolver) {
 		return lua_dns_resolver_resolve_common (L,
@@ -622,7 +620,7 @@ lua_dns_resolver_resolve_txt (lua_State *L)
 static int
 lua_dns_resolver_resolve_mx (lua_State *L)
 {
-	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L);
+	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L, 1);
 
 	if (dns_resolver) {
 		return lua_dns_resolver_resolve_common (L,
@@ -652,7 +650,7 @@ lua_dns_resolver_resolve_mx (lua_State *L)
 static int
 lua_dns_resolver_resolve_ns (lua_State *L)
 {
-	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L);
+	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L, 1);
 
 	if (dns_resolver) {
 		return lua_dns_resolver_resolve_common (L,
@@ -671,7 +669,7 @@ lua_dns_resolver_resolve_ns (lua_State *L)
 static int
 lua_dns_resolver_resolve (lua_State *L)
 {
-	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L);
+	struct rspamd_dns_resolver *dns_resolver = lua_check_dns_resolver (L, 1);
 	int type;
 
 	type = lua_dns_get_type (L, 2);

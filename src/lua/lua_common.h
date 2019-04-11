@@ -314,6 +314,7 @@ struct memory_pool_s * rspamd_lua_check_mempool (lua_State * L, gint pos);
 struct rspamd_config * lua_check_config (lua_State * L, gint pos);
 struct rspamd_async_session* lua_check_session (lua_State * L, gint pos);
 struct event_base* lua_check_ev_base (lua_State * L, gint pos);
+struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L, gint pos);
 
 /**
  * Extract an arguments from lua table according to format string. Supported arguments are:
