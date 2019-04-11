@@ -51,6 +51,13 @@ end
  */
 
 /* Task methods */
+
+/***
+ * @function rspamd_task.create([cfg])
+ * Create a new empty task
+ * @return {rspamd_task} new task
+ */
+LUA_FUNCTION_DEF (task, create);
 /***
  * @function rspamd_task.load_from_file(filename[, cfg])
  * Loads a message from specific file
@@ -1005,6 +1012,7 @@ LUA_FUNCTION_DEF (task, lookup_words);
 LUA_FUNCTION_DEF (task, topointer);
 
 static const struct luaL_reg tasklib_f[] = {
+	LUA_INTERFACE_DEF (task, create),
 	LUA_INTERFACE_DEF (task, load_from_file),
 	LUA_INTERFACE_DEF (task, load_from_string),
 	{NULL, NULL}
@@ -1498,6 +1506,32 @@ lua_task_load_from_string (lua_State * L)
 	rspamd_lua_setclass (L, "rspamd{task}", -1);
 
 	return 2;
+}
+
+static gint
+lua_task_create (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = NULL, **ptask;
+	struct rspamd_config *cfg = NULL;
+
+	if (lua_type (L, 1) == LUA_TUSERDATA) {
+		gpointer p;
+		p = rspamd_lua_check_udata_maybe (L, 2, "rspamd{config}");
+
+		if (p) {
+			cfg = *(struct rspamd_config **)p;
+		}
+	}
+
+	task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
+	task->flags |= RSPAMD_TASK_FLAG_EMPTY;
+
+	ptask = lua_newuserdata (L, sizeof (*ptask));
+	*ptask = task;
+	rspamd_lua_setclass (L, "rspamd{task}", -1);
+
+	return 1;
 }
 
 static int
