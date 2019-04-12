@@ -449,7 +449,7 @@ local function clickhouse_collect(task)
 
   local timestamp = task:get_date({
     format = 'connect',
-    gmt = false
+    gmt = true, -- The only sane way to sync stuff with different timezones
   })
 
   local action = task:get_metric_action('default')
