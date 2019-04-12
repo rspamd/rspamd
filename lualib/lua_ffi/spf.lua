@@ -82,6 +82,8 @@ local function convert_mech(mech)
   end
 end
 
+local NULL = ffi.new 'void*'
+
 local function spf_addr_tolua(ffi_spf_addr)
   local ipstr = ffi.C.spf_addr_mask_to_string(ffi_spf_addr)
   local ret = {
@@ -89,7 +91,7 @@ local function spf_addr_tolua(ffi_spf_addr)
     ipnet = ffi.string(ipstr),
   }
 
-  if ffi_spf_addr.spf_string then
+  if ffi_spf_addr.spf_string ~= NULL then
     ret.spf_str = ffi.string(ffi_spf_addr.spf_string)
   end
 
@@ -116,7 +118,7 @@ local function spf_resolve(task, cb)
 
       local matched = ffi.C.spf_addr_match_task(task:topointer(), rec)
 
-      if matched then
+      if matched ~= NULL then
         cb(true, res, spf_addr_tolua(matched))
       else
         cb(true, res, nil)
