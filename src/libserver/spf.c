@@ -371,34 +371,6 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 			DL_FOREACH (cur, cur_addr) {
 				memcpy (&taddr, cur_addr, sizeof (taddr));
 				taddr.spf_string = g_strdup (cur_addr->spf_string);
-
-				if (cur_addr->flags & RSPAMD_SPF_FLAG_IPV6) {
-					guint64 t[3];
-
-					memcpy (t, cur_addr->addr6, sizeof (guint64) * 2);
-					t[2] = ((guint64)(cur_addr->mech)) << 48;
-					t[2] |= cur_addr->m.dual.mask_v6;
-
-					for (guint j = 0; j < G_N_ELEMENTS (t); j ++) {
-						target->digest = mum_hash_step (target->digest, t[j]);
-					}
-				}
-				else if (cur_addr->flags & RSPAMD_SPF_FLAG_IPV4) {
-					guint64 t;
-
-					memcpy (&t, cur_addr->addr4, sizeof (guint32));
-					t |= ((guint64)(cur_addr->mech)) << 48;
-					t |= ((guint64)cur_addr->m.dual.mask_v4) << 32;
-
-					target->digest = mum_hash_step (target->digest, t);
-				}
-				else {
-					guint64 t = 0;
-
-					t |= ((guint64)(cur_addr->mech)) << 48;
-					target->digest = mum_hash_step (target->digest, t);
-				}
-
 				g_array_append_val (target->elts, taddr);
 			}
 		}
@@ -427,8 +399,6 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 		if (rec->resolved->len > 0) {
 			rspamd_spf_process_reference (res, NULL, rec, TRUE);
 		}
-
-		res->digest = mum_hash_finish (res->digest);
 	}
 	else {
 		res = g_malloc0 (sizeof (*res));
@@ -442,6 +412,77 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 	return res;
 }
 
+static gint
+rspamd_spf_elts_cmp (gconstpointer a, gconstpointer b)
+{
+	struct spf_addr *addr_a, *addr_b;
+
+	addr_a = (struct spf_addr *)a;
+	addr_b = (struct spf_addr *)b;
+
+	if (addr_a->flags == addr_b->flags) {
+		if (addr_a->flags & RSPAMD_SPF_FLAG_ANY) {
+			return 0;
+		}
+		else if (addr_a->flags & RSPAMD_SPF_FLAG_IPV4) {
+			return (addr_a->m.dual.mask_v4 - addr_b->m.dual.mask_v4) ||
+				memcmp (addr_a->addr4, addr_b->addr4, sizeof (addr_a->addr4));
+		}
+		else if (addr_a->flags & RSPAMD_SPF_FLAG_IPV6) {
+			return (addr_a->m.dual.mask_v6 - addr_b->m.dual.mask_v6) ||
+			 memcmp (addr_a->addr6, addr_b->addr6, sizeof (addr_a->addr6));
+		}
+		else {
+			return 0;
+		}
+	}
+	else {
+		if (addr_a->flags & RSPAMD_SPF_FLAG_ANY) {
+			return 1;
+		}
+		else if (addr_b->flags & RSPAMD_SPF_FLAG_ANY) {
+			return -1;
+		}
+		else if (addr_a->flags & RSPAMD_SPF_FLAG_IPV4) {
+			return -1;
+		}
+
+		return 1;
+	}
+}
+
+static void
+rspamd_spf_record_postprocess (struct spf_resolved *rec)
+{
+	g_array_sort (rec->elts, rspamd_spf_elts_cmp);
+
+	for (guint i = 0; i < rec->elts->len; i ++) {
+		struct spf_addr *cur_addr = &g_array_index (rec->elts, struct spf_addr, i);
+
+		if (cur_addr->flags & RSPAMD_SPF_FLAG_IPV6) {
+			guint64 t[3];
+
+			memcpy (t, cur_addr->addr6, sizeof (guint64) * 2);
+			t[2] = 0;
+			t[2] = ((guint64) (cur_addr->mech)) << 48u;
+			t[2] |= cur_addr->m.dual.mask_v6;
+
+			for (guint j = 0; j < G_N_ELEMENTS (t); j++) {
+				rec->digest = mum_hash_step (rec->digest, t[j]);
+			}
+		}
+		else if (cur_addr->flags & RSPAMD_SPF_FLAG_IPV4) {
+			guint64 t = 0;
+
+			memcpy (&t, cur_addr->addr4, sizeof (guint32));
+			t |= ((guint64) (cur_addr->mech)) << 48u;
+			t |= ((guint64) cur_addr->m.dual.mask_v4) << 32u;
+
+			rec->digest = mum_hash_step (rec->digest, t);
+		}
+	}
+}
+
 static void
 rspamd_spf_maybe_return (struct spf_record *rec)
 {
@@ -449,6 +490,7 @@ rspamd_spf_maybe_return (struct spf_record *rec)
 
 	if (rec->requests_inflight == 0 && !rec->done) {
 		flat = rspamd_spf_record_flatten (rec);
+		rspamd_spf_record_postprocess (flat);
 		rec->callback (flat, rec->task, rec->cbdata);
 		REF_RELEASE (flat);
 		rec->done = TRUE;
@@ -688,6 +730,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 					else {
 						cb->addr->flags |= RSPAMD_SPF_FLAG_RESOLVED;
 						cb->addr->flags &= ~RSPAMD_SPF_FLAG_PERMFAIL;
+						msg_debug_spf ("resolved MX addr");
 						spf_record_process_addr (rec, addr, elt_data);
 					}
 					break;
@@ -2107,7 +2150,6 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 			&& rec->dns_requests == 0) {
 		resolved = rspamd_spf_new_addr_list (rec, rec->sender_domain);
 		addr = g_malloc0 (sizeof(*addr));
-		addr->flags = 0;
 		addr->flags |= RSPAMD_SPF_FLAG_NA;
 		g_ptr_array_insert (resolved->elts, 0, addr);
 	}
@@ -2115,7 +2157,6 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 			&& rec->dns_requests == 0) {
 		resolved = rspamd_spf_new_addr_list (rec, rec->sender_domain);
 		addr = g_malloc0 (sizeof(*addr));
-		addr->flags = 0;
 		addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
 		g_ptr_array_insert (resolved->elts, 0, addr);
 	}
@@ -2135,7 +2176,7 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 			}
 			else {
 				addr = g_malloc0 (sizeof(*addr));
-				addr->flags = 0;
+
 				if (reply->code == RDNS_RC_NOREC || reply->code == RDNS_RC_NXDOMAIN
 						|| reply->code == RDNS_RC_NOERROR) {
 					addr->flags |= RSPAMD_SPF_FLAG_NA;
@@ -2300,7 +2341,8 @@ spf_addr_mask_to_string (struct spf_addr *addr)
 		rspamd_printf_gstring (res, "%s/%d", ipstr, addr->m.dual.mask_v6);
 	}
 	else {
-		res = g_string_new ("unknown");
+		res = g_string_new (NULL);
+		rspamd_printf_gstring (res, "unknown, flags = %d", addr->flags);
 	}
 
 	s = res->str;
