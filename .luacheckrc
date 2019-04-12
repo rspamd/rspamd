@@ -34,6 +34,7 @@ globals = {
   'loadstring',
   'rspamadm_ev_base',
   'rspamadm_session',
+  'rspamadm_dns_resolver',
   'jit'
 }
 
