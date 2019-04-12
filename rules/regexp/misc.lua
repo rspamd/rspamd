@@ -130,10 +130,10 @@ local id = rspamd_config:register_symbol{
               local acc = base58_dec[ch] or 0
               for i=25,1,-1 do
                 acc = acc + (58 * bytes[i]);
-                bytes[i] = math.fmod(acc, 256);
-                acc = math.modf(acc / 256);
+                bytes[i] = acc % 256
+                acc = math.floor(acc / 256);
               end
-            end, fun.tail(word)) -- Tail due to first byte is version
+            end, word)
             -- Now create a validation tag
             local sha256 = hash.create_specific('sha256')
             for i=1,21 do
