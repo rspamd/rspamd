@@ -136,7 +136,7 @@ local function parse_clickhouse_response_json(params, data)
     return 'bad json', {}
   end
 
-  return parsed_rows
+  return nil,json
 end
 
 -- Helper to generate HTTP closure
