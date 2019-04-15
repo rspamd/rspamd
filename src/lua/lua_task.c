@@ -696,7 +696,20 @@ LUA_FUNCTION_DEF (task, get_date);
  * @return {string} if of a message
  */
 LUA_FUNCTION_DEF (task, get_message_id);
+/***
+ * @method task:get_timeval()
+ * Returns the timestamp for a task start processing time.
+ * @return {table} table with fields as described in `struct timeval` in C
+ */
 LUA_FUNCTION_DEF (task, get_timeval);
+/***
+ * @method task:get_scan_time([set])
+ * Returns 2 floating point numbers: scan real time and scan virtual time.
+ * If `set` is `true`, then the finishing time is also set (enabled by default).
+ * This function should be normally called on idempotent phase.
+ * @return {number,number} real and virtual times in seconds with floating point
+ */
+LUA_FUNCTION_DEF (task, get_scan_time);
 /***
  * @method task:get_metric_result()
  * Get full result of a metric as a table:
@@ -1102,6 +1115,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_date),
 	LUA_INTERFACE_DEF (task, get_message_id),
 	LUA_INTERFACE_DEF (task, get_timeval),
+	LUA_INTERFACE_DEF (task, get_scan_time),
 	LUA_INTERFACE_DEF (task, get_metric_result),
 	LUA_INTERFACE_DEF (task, get_metric_score),
 	LUA_INTERFACE_DEF (task, get_metric_action),
@@ -4393,6 +4407,34 @@ lua_task_get_timeval (lua_State *L)
 		lua_pushstring (L, "tv_usec");
 		lua_pushinteger (L, (lua_Integer)task->tv.tv_usec);
 		lua_settable (L, -3);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_get_scan_time (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	gboolean set = TRUE;
+
+	if (task != NULL) {
+		if (lua_isboolean (L, 2)) {
+			set = lua_toboolean (L, 2);
+		}
+
+		rspamd_task_set_finish_time (task);
+		lua_pushnumber (L, task->time_real_finish - task->time_real);
+		lua_pushnumber (L, task->time_virtual_finish - task->time_virtual);
+
+		if (!set) {
+			/* Reset to nan to allow further calcs in rspamd_task_set_finish_time */
+			task->time_real_finish = NAN;
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
