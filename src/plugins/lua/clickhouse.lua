@@ -30,7 +30,7 @@ end
 local data_rows = {}
 local custom_rows = {}
 local nrows = 0
-local schema_version = 3 -- Current schema version
+local schema_version = 4 -- Current schema version
 
 local settings = {
   limit = 1000,
@@ -42,8 +42,18 @@ local settings = {
   whitelist_symbols = {'WHITELIST_DKIM', 'WHITELIST_SPF_DKIM', 'WHITELIST_DMARC'},
   dkim_allow_symbols = {'R_DKIM_ALLOW'},
   dkim_reject_symbols = {'R_DKIM_REJECT'},
+  dkim_dnsfail_symbols = {'R_DKIM_TEMPFAIL', 'R_DKIM_PERMFAIL'},
+  dkim_na_symbol = {'R_DKIM_NA'},
   dmarc_allow_symbols = {'DMARC_POLICY_ALLOW'},
-  dmarc_reject_symbols = {'DMARC_POLICY_REJECT', 'DMARC_POLICY_QUARANTINE'},
+  dmarc_reject_symbols = {'DMARC_POLICY_REJECT'},
+  dmarc_quarantine_symbols = {'DMARC_POLICY_QUARANTINE'},
+  dmarc_softfail_symbols = {'DMARC_POLICY_SOFTFAIL'},
+  dmarc_dnsfail_symbols = {'DMARC_FAIL'},
+  spf_allow_symbols = {'R_SPF_ALLOW'},
+  spf_reject_symbols = {'R_SPF_FAIL'},
+  spf_dnsfail_symbols = {'R_SPF_DNSFAIL', 'R_SPF_PERMFAIL'},
+  spf_neutral_symbols = {'R_DKIM_TEMPFAIL', 'R_DKIM_PERMFAIL'},
+  spf_na_symbol = {'R_SPF_NA'},
   stop_symbols = {},
   ipmask = 19,
   ipmask6 = 48,
@@ -84,18 +94,21 @@ CREATE TABLE rspamd
     Score Float64,
     NRcpt UInt8,
     Size UInt32,
-    IsWhitelist Enum8('blacklist' = 0, 'whitelist' = 1, 'unknown' = 2) DEFAULT CAST('unknown' AS Enum8('blacklist' = 0, 'whitelist' = 1, 'unknown' = 2)),
-    IsBayes Enum8('ham' = 0, 'spam' = 1, 'unknown' = 2) DEFAULT CAST('unknown' AS Enum8('ham' = 0, 'spam' = 1, 'unknown' = 2)),
-    IsFuzzy Enum8('whitelist' = 0, 'deny' = 1, 'unknown' = 2) DEFAULT CAST('unknown' AS Enum8('whitelist' = 0, 'deny' = 1, 'unknown' = 2)),
-    IsFann Enum8('ham' = 0, 'spam' = 1, 'unknown' = 2) DEFAULT CAST('unknown' AS Enum8('ham' = 0, 'spam' = 1, 'unknown' = 2)),
-    IsDkim Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2) DEFAULT CAST('unknown' AS Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2)),
-    IsDmarc Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2) DEFAULT CAST('unknown' AS Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2)),
+    IsWhitelist Enum8('blacklist' = 0, 'whitelist' = 1, 'unknown' = 2) DEFAULT 'unknown',
+    IsBayes Enum8('ham' = 0, 'spam' = 1, 'unknown' = 2) DEFAULT 'unknown',
+    IsFuzzy Enum8('whitelist' = 0, 'deny' = 1, 'unknown' = 2) DEFAULT 'unknown',
+    IsFann Enum8('ham' = 0, 'spam' = 1, 'unknown' = 2) DEFAULT 'unknown',
+    IsDkim Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2, 'dnsfail' = 3, 'na' = 4) DEFAULT 'unknown',
+    IsDmarc Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2, 'softfail' = 3, 'na' = 4, 'quarantine' = 5) DEFAULT 'unknown',
+    IsSpf Enum8('reject' = 0, 'allow' = 1, 'neutral' = 2, 'dnsfail' = 3, 'na' = 4, 'unknown' = 5) DEFAULT 'unknown',
     NUrls Int32,
-    Action Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4, 'soft reject' = 5) DEFAULT CAST('no action' AS Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4, 'soft reject' = 5)),
+    Action Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4, 'soft reject' = 5) DEFAULT 'no action',
     FromUser String,
     MimeUser String,
     RcptUser String,
     RcptDomain String,
+    MimeRecipients Array(String),
+    MessageId String,
     ListId String,
     Subject String,
     `Attachments.FileName` Array(String),
@@ -111,7 +124,13 @@ CREATE TABLE rspamd
     `Symbols.Names` Array(String),
     `Symbols.Scores` Array(Float64),
     `Symbols.Options` Array(String),
-    Digest FixedString(32)
+    ScanTimeReal UInt32,
+    ScanTimeVirtual UInt32,
+    Digest FixedString(32),
+    SMTPFrom ALIAS if(From = '', '', concat(FromUser, '@', From)),
+    SMTPRcpt ALIAS if(RcptDomain = '', '', concat(RcptUser, '@', RcptDomain)),
+    MIMEFrom ALIAS if(MimeFrom = '', '', concat(MimeUser, '@', MimeFrom)),
+    MIMERcpt ALIAS MimeRecipients[1]
 ) ENGINE = MergeTree(Date, (TS, From), 8192)
 ]],
 [[CREATE TABLE rspamd_version ( Version UInt32) ENGINE = TinyLog]],
@@ -146,7 +165,26 @@ local migrations = {
       ADD COLUMN Subject String AFTER ListId]],
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (3)]],
-  }
+  },
+  [3] = {
+    [[ALTER TABLE rspamd
+      ADD COLUMN IsSpf Enum8('reject' = 0, 'allow' = 1, 'neutral' = 2, 'dnsfail' = 3, 'na' = 4, 'unknown' = 5) DEFAULT 'unknown' AFTER IsDmarc,
+      MODIFY COLUMN IsDkim Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2, 'dnsfail' = 3, 'na' = 4) DEFAULT 'unknown',
+      MODIFY COLUMN IsDmarc Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2, 'softfail' = 3, 'na' = 4, 'quarantine' = 5) DEFAULT 'unknown',
+      ADD COLUMN MimeRecipients Array(String) AFTER RcptDomain,
+      ADD COLUMN MessageId String AFTER MimeRecipients,
+      ADD COLUMN ScanTimeReal UInt32 AFTER `Symbols.Options`,
+      ADD COLUMN ScanTimeVirtual UInt32 AFTER ScanTimeReal]],
+    -- Add aliases
+    [[ALTER TABLE rspamd
+      ADD COLUMN SMTPFrom ALIAS if(From = '', '', concat(FromUser, '@', From)),
+      ADD COLUMN SMTPRcpt ALIAS if(RcptDomain = '', '', concat(RcptUser, '@', RcptDomain)),
+      ADD COLUMN MIMEFrom ALIAS if(MimeFrom = '', '', concat(MimeUser, '@', MimeFrom)),
+      ADD COLUMN MIMERcpt ALIAS MimeRecipients[1]
+    ]],
+    -- New version
+    [[INSERT INTO rspamd_version (Version) Values (4)]],
+  },
 }
 
 
@@ -175,6 +213,12 @@ local function clickhouse_main_row(res)
     'ListId',
     'Subject',
     'Digest',
+    -- 1.9.2 +
+    'IsSpf',
+    'MimeRecipients',
+    'MessageId',
+    'ScanTimeReal',
+    'ScanTimeVirtual',
   }
 
   for _,v in ipairs(fields) do table.insert(res, v) end
@@ -347,6 +391,12 @@ local function clickhouse_collect(task)
     end
   end
 
+  local mime_rcpt = {}
+  if task:has_recipients('mime') then
+    local from = task:get_recipients({'mime','orig'})
+    mime_rcpt = fun.totable(fun.map(function (f) return f.addr or '' end, from))
+  end
+
   local ip_str = 'undefined'
   local ip = task:get_from_ip()
   if ip and ip:is_valid() then
@@ -367,11 +417,8 @@ local function clickhouse_collect(task)
     rcpt_domain = rcpt['domain']
   end
 
-  local list_id = ''
-  local lh = task:get_header('List-Id')
-  if lh then
-    list_id = lh
-  end
+  local list_id = task:get_header('List-Id') or ''
+  local message_id = task:get_message_id() or ''
 
   local score = task:get_metric_score('default')[1];
   local bayes = 'unknown';
@@ -380,6 +427,7 @@ local function clickhouse_collect(task)
   local whitelist = 'unknown';
   local dkim = 'unknown';
   local dmarc = 'unknown';
+  local spf = 'unknown'
 
   local ret
 
@@ -388,7 +436,7 @@ local function clickhouse_collect(task)
     bayes = 'spam'
   end
 
-  ret = clickhouse_check_symbol(task, settings['bayes_ham_symbols'], false)
+  ret = ret or clickhouse_check_symbol(task, settings['bayes_ham_symbols'], false)
   if ret then
     bayes = 'ham'
   end
@@ -422,9 +470,22 @@ local function clickhouse_collect(task)
     dkim = 'allow'
   end
 
-  ret = clickhouse_check_symbol(task, settings['dkim_reject_symbols'], false)
+  ret = ret or
+      clickhouse_check_symbol(task, settings['dkim_reject_symbols'], false)
   if ret then
     dkim = 'reject'
+  end
+
+  ret = ret or
+      clickhouse_check_symbol(task, settings.dkim_dnsfail_symbols, false)
+  if ret then
+    dkim = 'dnsfail'
+  end
+
+  ret = ret or
+      clickhouse_check_symbol(task, settings.dkim_na_symbols, false)
+  if ret then
+    dkim = 'na'
   end
 
   ret = clickhouse_check_symbol(task, settings['dmarc_allow_symbols'], false)
@@ -432,9 +493,49 @@ local function clickhouse_collect(task)
     dmarc = 'allow'
   end
 
-  ret = clickhouse_check_symbol(task, settings['dmarc_reject_symbols'], false)
+  ret = ret or clickhouse_check_symbol(task, settings['dmarc_reject_symbols'], false)
   if ret then
     dmarc = 'reject'
+  end
+
+  ret = ret or clickhouse_check_symbol(task, settings.dmarc_quarantine_symbols, false)
+  if ret then
+    dmarc = 'quarantine'
+  end
+
+  ret = ret or clickhouse_check_symbol(task, settings.dmarc_softfail_symbols, false)
+  if ret then
+    dmarc = 'softfail'
+  end
+
+  ret = ret or clickhouse_check_symbol(task, settings.dmarc_dnsfail_symbols, false)
+  if ret then
+    dmarc = 'dnsfail'
+  end
+
+  ret = clickhouse_check_symbol(task, settings.spf_allow_symbols, false)
+  if ret then
+    spf = 'allow'
+  end
+
+  ret = ret or clickhouse_check_symbol(task, settings.spf_reject_symbols, false)
+  if ret then
+    spf = 'reject'
+  end
+
+  ret = ret or clickhouse_check_symbol(task, settings.spf_neutral_symbols, false)
+  if ret then
+    spf = 'neutral'
+  end
+
+  ret = ret or clickhouse_check_symbol(task, settings.spf_dnsfail_symbols, false)
+  if ret then
+    spf = 'dnsfail'
+  end
+
+  ret = ret or clickhouse_check_symbol(task, settings.spf_na_symbols, false)
+  if ret then
+    spf = 'na'
   end
 
   local nrcpts = 0
@@ -460,6 +561,9 @@ local function clickhouse_collect(task)
     subject = lua_util.maybe_obfuscate_subject(task:get_subject() or '', settings)
   end
 
+  local scan_real,scan_virtual = task:get_scan_time()
+  scan_real,scan_virtual = math.floor(scan_real * 1000), math.floor(scan_virtual * 1000)
+
   local row = {
     today(timestamp),
     timestamp,
@@ -483,7 +587,12 @@ local function clickhouse_collect(task)
     rcpt_domain,
     list_id,
     subject,
-    digest
+    digest,
+    spf,
+    mime_rcpt,
+    message_id,
+    scan_real,
+    scan_virtual
   }
 
   -- Attachments step
