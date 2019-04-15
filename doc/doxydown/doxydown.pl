@@ -68,9 +68,9 @@ EOD
         my $id   = $f->{'id'};
 
         if ($f->{'brief'}) {
-            print "* [`$name`](#$id): ". $f->{'brief'} . "\n";
+            print "[`$name`](#$id) | ". $f->{'brief'} . "\n";
         } else {
-            print "* [`$name`](#$id)\n";
+            print "[`$name`](#$id) | No description\n";
         }
     }
 
@@ -93,6 +93,8 @@ EOD
         if (scalar(@{ $m->{'functions'} }) > 0) {
             print "**Functions**:\n\n";
 
+            print " Function | Description\n";
+            print "----------|------------\n";
             foreach ( @{ $m->{'functions'} } ) {
                 print_func($_);
             }
@@ -102,7 +104,8 @@ EOD
     if ($m->{'methods'}) {
         if (scalar(@{ $m->{'methods'} }) > 0) {
             print "\n\n**Methods**:\n\n";
-
+            print " Method | Description\n";
+            print "----------|------------\n";
             foreach ( @{ $m->{'methods'} } ) {
                 print_func($_);
             }
