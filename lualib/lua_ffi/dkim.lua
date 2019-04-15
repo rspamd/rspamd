@@ -81,7 +81,7 @@ local default_dkim_headers =
 "(o)to:(o)cc:(o)mime-version:(o)content-type:(o)content-transfer-encoding:" ..
 "resent-to:resent-cc:resent-from:resent-sender:resent-message-id:" ..
 "(o)in-reply-to:(o)references:list-id:list-owner:list-unsubscribe:" ..
-"list-subscribe:list-post"
+"list-subscribe:list-post:(o)openpgp:(o)autocrypt"
 
 local function create_sign_context(task, privkey, dkim_headers, sign_type)
   if not task or not privkey then
