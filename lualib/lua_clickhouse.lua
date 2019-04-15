@@ -116,8 +116,8 @@ local function parse_clickhouse_response_json(params, data)
   local ucl = require "ucl"
 
   if data == nil then
-    -- clickhouse returned no data (i.e. empty result set): exiting
-    return 'no data', {}
+    -- clickhouse returned no data (i.e. empty result set) considered valid!
+    return nil, {}
   end
 
   if data:match('DB::Exception') then
