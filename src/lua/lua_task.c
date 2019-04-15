@@ -4440,7 +4440,7 @@ lua_task_get_scan_time (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 1;
+	return 2;
 }
 
 static gint
