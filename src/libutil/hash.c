@@ -628,7 +628,7 @@ rspamd_lru_hash_insert (rspamd_lru_hash_t *hash,
 	node->data = value;
 	node->lg_usages = (guint8)lfu_base_value;
 	node->last = TIME_TO_TS (now);
-	node->eviction_pos = -1;
+	node->eviction_pos = (guint8)-1;
 
 	if (ret != 0) {
 		/* Also need to check maxsize */
@@ -697,4 +697,21 @@ rspamd_lru_hash_foreach (rspamd_lru_hash_t *h, int it, gpointer *k,
 	}
 
 	return i;
+}
+
+
+guint
+rspamd_lru_hash_size (rspamd_lru_hash_t *hash)
+{
+	return kh_size (hash);
+}
+
+/**
+ * Returns hash capacity
+ * @param hash hash object
+ */
+guint
+rspamd_lru_hash_capacity (rspamd_lru_hash_t *hash)
+{
+	return hash->maxsize;
 }

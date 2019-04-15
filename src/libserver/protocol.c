@@ -1233,38 +1233,56 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 		dkim_sigs = rspamd_mempool_get_variable (task->task_pool,
 				RSPAMD_MEMPOOL_DKIM_SIGNATURE);
 
-		for (; dkim_sigs != NULL; dkim_sigs = dkim_sigs->next) {
-			GString *folded_header;
-			dkim_sig = (GString *) dkim_sigs->data;
 
-			if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
-				folded_header = rspamd_header_value_fold ("DKIM-Signature",
-						dkim_sig->str, 80, RSPAMD_TASK_NEWLINES_LF, NULL);
+		if (dkim_sigs) {
+			if (dkim_sigs->next) {
+				/* Multiple DKIM signatures */
+				ucl_object_t *ar = ucl_object_typed_new (UCL_ARRAY);
+
+				for (; dkim_sigs != NULL; dkim_sigs = dkim_sigs->next) {
+					GString *folded_header;
+					dkim_sig = (GString *) dkim_sigs->data;
+
+					if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
+						folded_header = rspamd_header_value_fold ("DKIM-Signature",
+								dkim_sig->str, 80, RSPAMD_TASK_NEWLINES_LF, NULL);
+					}
+					else {
+						folded_header = rspamd_header_value_fold ("DKIM-Signature",
+								dkim_sig->str, 80, task->nlines_type, NULL);
+					}
+
+					ucl_array_append (ar,
+							ucl_object_fromstring_common (folded_header->str,
+									folded_header->len, UCL_STRING_RAW));
+					g_string_free (folded_header, TRUE);
+				}
+
+				ucl_object_insert_key (top,
+						ar,
+						"dkim-signature", 0,
+						false);
 			}
 			else {
-				folded_header = rspamd_header_value_fold ("DKIM-Signature",
-						dkim_sig->str, 80, task->nlines_type, NULL);
+				/* Single DKIM signature */
+				GString *folded_header;
+				dkim_sig = (GString *) dkim_sigs->data;
+
+				if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
+					folded_header = rspamd_header_value_fold ("DKIM-Signature",
+							dkim_sig->str, 80, RSPAMD_TASK_NEWLINES_LF, NULL);
+				}
+				else {
+					folded_header = rspamd_header_value_fold ("DKIM-Signature",
+							dkim_sig->str, 80, task->nlines_type, NULL);
+				}
+
+				ucl_object_insert_key (top,
+						ucl_object_fromstring_common (folded_header->str,
+								folded_header->len, UCL_STRING_RAW),
+						"dkim-signature", 0, false);
+				g_string_free (folded_header, TRUE);
 			}
-			/*
-			 * According to milter docs, we need to be extra careful
-			 * when folding headers:
-			 * Neither the name nor the value of the header is checked for standards
-			 * compliance. However, each line of the header must be under 2048
-			 * characters and should be under 998 characters.
-			 * If longer headers are needed, make them multi-line.
-			 * To make a multi-line header, insert a line feed (ASCII 0x0a, or \n
-			 * in C) followed by at least one whitespace character such as a
-			 * space (ASCII 0x20) or tab (ASCII 0x09, or \t in C).
-			 * The line feed should NOT be preceded by a carriage return (ASCII 0x0d);
-			 * the MTA will add this automatically.
-			 * It is the filter writer's responsibility to ensure that no
-			 * standards are violated.
-			 */
-			ucl_object_insert_key (top,
-					ucl_object_fromstring_common (folded_header->str,
-							folded_header->len, UCL_STRING_RAW),
-							"dkim-signature", 0, false);
-			g_string_free (folded_header, TRUE);
 		}
 	}
 
@@ -1328,7 +1346,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		msg_notice_task (
 				"regexp statistics: %ud pcre regexps scanned, %ud regexps matched,"
 				" %ud regexps total, %ud regexps cached,"
-				" %HL bytes scanned using pcre, %HL bytes scanned total",
+				" %HL scanned using pcre, %HL scanned total",
 				restat->regexp_checked,
 				restat->regexp_matched,
 				restat->regexp_total,

@@ -34,7 +34,8 @@
 
 #include <math.h>
 #include <unicode/uchar.h>
-#include <src/libserver/cfg_file_private.h>
+#include "libserver/cfg_file_private.h"
+#include "lua/lua_common.h"
 
 #define GTUBE_SYMBOL "GTUBE"
 
@@ -686,8 +687,74 @@ rspamd_message_process_plain_text_part (struct rspamd_task *task,
 	rspamd_mime_text_part_maybe_convert (task, text_part);
 
 	if (text_part->utf_raw_content != NULL) {
-		/* Different from HTML, where we also parse HTML and strip tags */
-		text_part->utf_content = text_part->utf_raw_content;
+		/* Check for ical */
+		rspamd_ftok_t cal_ct;
+
+		/*
+		 * TODO: If we want to process more than that, we need
+		 * to create some generic framework that accepts a part
+		 * and returns a processed data
+		 */
+		RSPAMD_FTOK_ASSIGN (&cal_ct, "calendar");
+
+		if (rspamd_ftok_casecmp (&cal_ct, &text_part->mime_part->ct->subtype) == 0) {
+			lua_State *L = task->cfg->lua_state;
+			gint err_idx;
+
+			lua_pushcfunction (L, &rspamd_lua_traceback);
+			err_idx = lua_gettop (L);
+
+			/* Obtain function */
+			if (!rspamd_lua_require_function (L, "lua_ical", "ical_txt_values")) {
+				msg_err_task ("cannot require lua_ical.ical_txt_values");
+				lua_settop (L, err_idx - 1);
+
+				return FALSE;
+			}
+
+			lua_pushlstring (L, text_part->utf_raw_content->data,
+					text_part->utf_raw_content->len);
+
+			if (lua_pcall (L, 1, 1, err_idx) != 0) {
+				GString *tb;
+
+				tb = lua_touserdata (L, -1);
+				msg_err_task ("cannot call lua lua_ical.ical_txt_values: %s", tb->str);
+				g_string_free (tb, TRUE);
+				lua_settop (L, err_idx - 1);
+
+				return FALSE;
+			}
+
+			if (lua_type (L, -1) == LUA_TSTRING) {
+				const char *ndata;
+				gsize nsize;
+
+				ndata = lua_tolstring (L, -1, &nsize);
+				text_part->utf_content = g_byte_array_sized_new (nsize);
+				g_byte_array_append (text_part->utf_content, ndata, nsize);
+				rspamd_mempool_add_destructor (task->task_pool,
+						(rspamd_mempool_destruct_t) free_byte_array_callback,
+						text_part->utf_content);
+			}
+			else if (lua_type (L, -1) == LUA_TNIL) {
+				msg_info_task ("cannot convert text/calendar to plain text");
+				text_part->utf_content = text_part->utf_raw_content;
+			}
+			else {
+				msg_err_task ("invalid return type when calling lua_ical.ical_txt_values: %s",
+						lua_typename (L, lua_type (L, -1)));
+				lua_settop (L, err_idx - 1);
+
+				return FALSE;
+			}
+
+			lua_settop (L, err_idx - 1);
+		}
+		else {
+			/* Just have the same content */
+			text_part->utf_content = text_part->utf_raw_content;
+		}
 	}
 	else {
 		/*
@@ -912,7 +979,12 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 	rspamd_normalize_text_part (task, text_part);
 
 	if (!IS_PART_HTML (text_part)) {
-		rspamd_url_text_extract (task->task_pool, task, text_part, FALSE);
+		rspamd_url_text_extract (task->task_pool, task, text_part,
+				RSPAMD_URL_FIND_ALL);
+	}
+	else {
+		rspamd_url_text_extract (task->task_pool, task, text_part,
+				RSPAMD_URL_FIND_STRICT);
 	}
 
 	if (text_part->exceptions) {
@@ -1231,7 +1303,8 @@ rspamd_message_parse (struct rspamd_task *task)
 		p = task->subject;
 		len = strlen (p);
 		rspamd_cryptobox_hash_update (&st, p, len);
-		rspamd_url_find_multiple (task->task_pool, p, len, FALSE, NULL,
+		rspamd_url_find_multiple (task->task_pool, p, len,
+				RSPAMD_URL_FIND_STRICT, NULL,
 				rspamd_url_task_subject_callback, task);
 	}
 

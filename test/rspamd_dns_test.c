@@ -82,24 +82,25 @@ rspamd_dns_test_func ()
 
 	s = rspamd_session_create (pool, session_fin, NULL, NULL, NULL);
 
-	resolver = dns_resolver_init (NULL, base, cfg);
+	resolver = rspamd_dns_resolver_init (NULL, base, cfg);
 
 	requests ++;
-	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_A, "google.com"));
+	g_assert (rspamd_dns_resolver_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_A, "google.com"));
 	requests ++;
-	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_PTR, "81.19.70.3"));
+	g_assert (rspamd_dns_resolver_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_PTR, "81.19.70.3"));
 	requests ++;
-	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_MX, "rambler.ru"));
+	g_assert (rspamd_dns_resolver_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_MX, "rambler.ru"));
 	requests ++;
-	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_TXT, "rambler.ru"));
+	g_assert (rspamd_dns_resolver_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_TXT, "rambler.ru"));
 	requests ++;
-	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_TXT, "google.com"));
+	g_assert (rspamd_dns_resolver_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_TXT, "google.com"));
 	requests ++;
-	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_SPF, "rambler.ru"));
+	g_assert (rspamd_dns_resolver_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_SPF, "rambler.ru"));
 	requests ++;
-	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_SRV, "_xmpp-server._tcp.jabber.org"));
+	g_assert (rspamd_dns_resolver_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_SRV,
+			"_xmpp-server._tcp.jabber.org"));
 	requests ++;
-	g_assert (make_dns_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_TXT, "non-existent.arpa"));
+	g_assert (rspamd_dns_resolver_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_TXT, "non-existent.arpa"));
 
 	g_assert (resolver != NULL);
 

@@ -205,7 +205,7 @@ struct url_matcher static_matchers[] = {
 		{"sip:",      "",          url_web_start,   url_web_end,
 				0, 0},
 		{"www.",      "http://",   url_web_start,   url_web_end,
-				0, 0},
+				URL_FLAG_NOHTML, 0},
 		{"ftp.",      "ftp://",    url_web_start,   url_web_end,
 				URL_FLAG_NOHTML, 0},
 		/* Likely emails */
@@ -218,7 +218,7 @@ struct url_callback_data {
 	gchar *url_str;
 	rspamd_mempool_t *pool;
 	gint len;
-	gboolean is_html;
+	enum rspamd_url_find_type how;
 	gboolean prefix_added;
 	guint newline_idx;
 	GPtrArray *newlines;
@@ -402,7 +402,7 @@ rspamd_url_strerror (enum uri_errno err)
 	return NULL;
 }
 
-static void
+static gboolean
 rspamd_url_parse_tld_file (const gchar *fname,
 		struct url_match_scanner *scanner)
 {
@@ -417,7 +417,7 @@ rspamd_url_parse_tld_file (const gchar *fname,
 
 	if (f == NULL) {
 		msg_err ("cannot open TLD file %s: %s", fname, strerror (errno));
-		return;
+		return FALSE;
 	}
 
 	m.end = url_tld_end;
@@ -469,6 +469,8 @@ rspamd_url_parse_tld_file (const gchar *fname,
 
 	free (linebuf);
 	fclose (f);
+
+	return TRUE;
 }
 
 static void
@@ -511,6 +513,7 @@ void
 rspamd_url_init (const gchar *tld_file)
 {
 	GError *err = NULL;
+	gboolean ret = TRUE;
 
 	if (url_scanner != NULL) {
 		rspamd_url_deinit ();
@@ -535,18 +538,26 @@ rspamd_url_init (const gchar *tld_file)
 	rspamd_url_add_static_matchers (url_scanner);
 
 	if (tld_file != NULL) {
-		rspamd_url_parse_tld_file (tld_file, url_scanner);
+		ret = rspamd_url_parse_tld_file (tld_file, url_scanner);
 	}
 
 	if (!rspamd_multipattern_compile (url_scanner->search_trie, &err)) {
 		msg_err ("cannot compile tld patterns, url matching will be "
 				 "broken completely: %e", err);
 		g_error_free (err);
+		ret = FALSE;
 	}
 
 	if (tld_file != NULL) {
-		msg_info ("initialized %ud url tld suffixes from '%s'",
-				url_scanner->matchers->len, tld_file);
+		if (ret) {
+			msg_info ("initialized %ud url match suffixes from '%s'",
+					url_scanner->matchers->len, tld_file);
+		}
+		else {
+			msg_err ("failed to initialize url tld suffixes from '%s', "
+					 "use %ud internal match suffixes",
+					tld_file, url_scanner->matchers->len);
+		}
 	}
 }
 
@@ -2573,12 +2584,12 @@ rspamd_url_trie_is_match (struct url_matcher *matcher, const gchar *pos,
 
 static gint
 rspamd_url_trie_callback (struct rspamd_multipattern *mp,
-		guint strnum,
-		gint match_start,
-		gint match_pos,
-		const gchar *text,
-		gsize len,
-		void *context)
+						  guint strnum,
+						  gint match_start,
+						  gint match_pos,
+						  const gchar *text,
+						  gsize len,
+						  void *context)
 {
 	struct url_matcher *matcher;
 	url_match_t m;
@@ -2588,7 +2599,7 @@ rspamd_url_trie_callback (struct rspamd_multipattern *mp,
 	matcher = &g_array_index (url_scanner->matchers, struct url_matcher,
 			strnum);
 
-	if ((matcher->flags & URL_FLAG_NOHTML) && cb->is_html) {
+	if ((matcher->flags & URL_FLAG_NOHTML) && cb->how == RSPAMD_URL_FIND_STRICT) {
 		/* Do not try to match non-html like urls in html texts */
 		return 0;
 	}
@@ -2658,9 +2669,12 @@ rspamd_url_trie_callback (struct rspamd_multipattern *mp,
 }
 
 gboolean
-rspamd_url_find (rspamd_mempool_t *pool, const gchar *begin, gsize len,
-		gchar **url_str, gboolean is_html, goffset *url_pos,
-		gboolean *prefix_added)
+rspamd_url_find (rspamd_mempool_t *pool,
+				 const gchar *begin, gsize len,
+				 gchar **url_str,
+				 enum rspamd_url_find_type how,
+				 goffset *url_pos,
+				 gboolean *prefix_added)
 {
 	struct url_callback_data cb;
 	gint ret;
@@ -2668,7 +2682,7 @@ rspamd_url_find (rspamd_mempool_t *pool, const gchar *begin, gsize len,
 	memset (&cb, 0, sizeof (cb));
 	cb.begin = begin;
 	cb.end = begin + len;
-	cb.is_html = is_html;
+	cb.how = how;
 	cb.pool = pool;
 
 	ret = rspamd_multipattern_lookup (url_scanner->search_trie, begin, len,
@@ -2695,13 +2709,13 @@ rspamd_url_find (rspamd_mempool_t *pool, const gchar *begin, gsize len,
 
 static gint
 rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
-		guint strnum,
-		gint match_start,
-		gint match_pos,
-		const gchar *text,
-		gsize len,
-		void *context,
-		gboolean multiple)
+										 guint strnum,
+										 gint match_start,
+										 gint match_pos,
+										 const gchar *text,
+										 gsize len,
+										 void *context,
+										 gboolean multiple)
 {
 	struct rspamd_url *url;
 	struct url_matcher *matcher;
@@ -2715,7 +2729,7 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 			strnum);
 	pool = cb->pool;
 
-	if ((matcher->flags & URL_FLAG_NOHTML) && cb->is_html) {
+	if ((matcher->flags & URL_FLAG_NOHTML) && cb->how == RSPAMD_URL_FIND_STRICT) {
 		/* Do not try to match non-html like urls in html texts */
 		return 0;
 	}
@@ -2883,7 +2897,7 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 	/* We also search the query for additional url inside */
 	if (url->querylen > 0) {
 		if (rspamd_url_find (task->task_pool, url->query, url->querylen,
-				&url_str, IS_PART_HTML (cbd->part), NULL, &prefix_added)) {
+				&url_str, RSPAMD_URL_FIND_ALL, NULL, &prefix_added)) {
 
 			query_url = rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (struct rspamd_url));
@@ -2927,9 +2941,9 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 
 void
 rspamd_url_text_extract (rspamd_mempool_t *pool,
-		struct rspamd_task *task,
-		struct rspamd_mime_text_part *part,
-		gboolean is_html)
+						 struct rspamd_task *task,
+						 struct rspamd_mime_text_part *part,
+						 enum rspamd_url_find_type how)
 {
 	struct rspamd_url_mimepart_cbdata mcbd;
 
@@ -2942,14 +2956,18 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 	mcbd.part = part;
 
 	rspamd_url_find_multiple (task->task_pool, part->utf_stripped_content->data,
-			part->utf_stripped_content->len, is_html, part->newlines,
+			part->utf_stripped_content->len, how, part->newlines,
 			rspamd_url_text_part_callback, &mcbd);
 }
 
 void
-rspamd_url_find_multiple (rspamd_mempool_t *pool, const gchar *in,
-		gsize inlen, gboolean is_html, GPtrArray *nlines,
-		url_insert_function func, gpointer ud)
+rspamd_url_find_multiple (rspamd_mempool_t *pool,
+						  const gchar *in,
+						  gsize inlen,
+						  enum rspamd_url_find_type how,
+						  GPtrArray *nlines,
+						  url_insert_function func,
+						  gpointer ud)
 {
 	struct url_callback_data cb;
 
@@ -2962,7 +2980,7 @@ rspamd_url_find_multiple (rspamd_mempool_t *pool, const gchar *in,
 	memset (&cb, 0, sizeof (cb));
 	cb.begin = in;
 	cb.end = in + inlen;
-	cb.is_html = is_html;
+	cb.how = how;
 	cb.pool = pool;
 
 	cb.funcd = ud;
@@ -2975,9 +2993,12 @@ rspamd_url_find_multiple (rspamd_mempool_t *pool, const gchar *in,
 }
 
 void
-rspamd_url_find_single (rspamd_mempool_t *pool, const gchar *in,
-		gsize inlen, gboolean is_html,
-		url_insert_function func, gpointer ud)
+rspamd_url_find_single (rspamd_mempool_t *pool,
+						const gchar *in,
+						gsize inlen,
+						enum rspamd_url_find_type how,
+						url_insert_function func,
+						gpointer ud)
 {
 	struct url_callback_data cb;
 
@@ -2990,7 +3011,7 @@ rspamd_url_find_single (rspamd_mempool_t *pool, const gchar *in,
 	memset (&cb, 0, sizeof (cb));
 	cb.begin = in;
 	cb.end = in + inlen;
-	cb.is_html = is_html;
+	cb.how = how;
 	cb.pool = pool;
 
 	cb.funcd = ud;
@@ -3038,7 +3059,7 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 	/* We also search the query for additional url inside */
 	if (url->querylen > 0) {
 		if (rspamd_url_find (task->task_pool, url->query, url->querylen,
-				&url_str, FALSE, NULL, &prefix_added)) {
+				&url_str, RSPAMD_URL_FIND_ALL, NULL, &prefix_added)) {
 
 			query_url = rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (struct rspamd_url));
@@ -3105,7 +3126,7 @@ rspamd_url_hash (gconstpointer u)
 	const struct rspamd_url *url = u;
 
 	if (url->urllen > 0) {
-		return rspamd_cryptobox_fast_hash (url->string, url->urllen,
+		return (guint)rspamd_cryptobox_fast_hash (url->string, url->urllen,
 				rspamd_hash_seed ());
 	}
 
@@ -3118,7 +3139,7 @@ rspamd_url_host_hash (gconstpointer u)
 	const struct rspamd_url *url = u;
 
 	if (url->hostlen > 0) {
-		return rspamd_cryptobox_fast_hash (url->host, url->hostlen,
+		return (guint)rspamd_cryptobox_fast_hash (url->host, url->hostlen,
 				rspamd_hash_seed ());
 	}
 
@@ -3141,7 +3162,7 @@ rspamd_email_hash (gconstpointer u)
 		rspamd_cryptobox_fast_hash_update (&st, url->user, url->userlen);
 	}
 
-	return rspamd_cryptobox_fast_hash_final (&st);
+	return (guint)rspamd_cryptobox_fast_hash_final (&st);
 }
 
 /* Compare two emails for building emails tree */

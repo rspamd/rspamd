@@ -438,6 +438,13 @@ LUA_FUNCTION_DEF (config, enable_symbol);
 LUA_FUNCTION_DEF (config, disable_symbol);
 
 /***
+ * @method rspamd_config:get_symbol_parent(symbol)
+ * Returns a parent symbol for specific symbol (or symbol itself if top level)
+ * @param {string} symbol symbol's name
+ */
+LUA_FUNCTION_DEF (config, get_symbol_parent);
+
+/***
  * @method rspamd_config:__newindex(name, callback)
  * This metamethod is called if new indicies are added to the `rspamd_config` object.
  * Technically, it is the equivalent of @see rspamd_config:register_symbol where `weight` is 1.0.
@@ -721,7 +728,7 @@ LUA_FUNCTION_DEF (config, has_torch);
 LUA_FUNCTION_DEF (config, experimental_enabled);
 
 /***
- * @method rspamd_config:load_ucl(filename)
+ * @method rspamd_config:load_ucl(filename[, include_trace])
  * Loads config from the UCL file (but does not perform parsing using rcl)
  * @param {string} filename file to load
  * @return true or false + error message
@@ -813,6 +820,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_symbol_callback),
 	LUA_INTERFACE_DEF (config, set_symbol_callback),
 	LUA_INTERFACE_DEF (config, get_symbol_stat),
+	LUA_INTERFACE_DEF (config, get_symbol_parent),
 	LUA_INTERFACE_DEF (config, register_finish_script),
 	LUA_INTERFACE_DEF (config, register_monitored),
 	LUA_INTERFACE_DEF (config, add_doc),
@@ -1363,50 +1371,48 @@ lua_metric_symbol_callback_return (struct thread_entry *thread_entry, int ret)
 }
 
 static gint
-rspamd_register_symbol_fromlua (lua_State *L,
-		struct rspamd_config *cfg,
-		const gchar *name,
-		gint ref,
-		gdouble weight,
-		gint priority,
-		enum rspamd_symbol_type type,
-		gint parent,
-		gboolean optional,
-		gboolean no_squeeze)
+rspamd_lua_squeeze_rule (lua_State *L,
+						 struct rspamd_config *cfg,
+						 const gchar *name,
+						 gint cbref,
+						 enum rspamd_symbol_type type,
+						 gint parent)
 {
-	struct lua_callback_data *cd;
 	gint ret = -1, err_idx;
 
-	if (priority == 0 && weight < 0) {
-		priority = 1;
-	}
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
 
-	if ((ret = rspamd_symcache_find_symbol (cfg->cache, name)) != -1) {
-		if (optional) {
-			msg_debug_config ("duplicate symbol: %s, skip registering", name);
+	if (type & SYMBOL_TYPE_VIRTUAL) {
+		if (rspamd_lua_require_function (L, "lua_squeeze_rules", "squeeze_virtual")) {
+			lua_pushnumber (L, parent);
+			if (name) {
+				lua_pushstring (L, name);
+			}
+			else {
+				lua_pushnil (L);
+			}
 
-			return ret;
+			/* Now call for squeeze function */
+			if (lua_pcall (L, 2, 1, err_idx) != 0) {
+				GString *tb = lua_touserdata (L, -1);
+				msg_err_config ("call to squeeze_virtual failed: %v", tb);
+
+				if (tb) {
+					g_string_free (tb, TRUE);
+				}
+			}
+
+			ret = lua_tonumber (L, -1);
 		}
 		else {
-			msg_err_config ("duplicate symbol: %s, skip registering", name);
-
-			return -1;
+			msg_err_config ("lua_squeeze is absent or bad (missing squeeze_virtual),"
+							" your Rspamd installation"
+							" is likely corrupted!");
 		}
 	}
-
-	if (ref != -1) {
-		if (type & SYMBOL_TYPE_USE_CORO) {
-			/* Coroutines are incompatible with squeezing */
-			no_squeeze = TRUE;
-		}
-		/*
-		 * We call for routine called lua_squeeze_rules.squeeze_rule if it exists
-		 */
-		lua_pushcfunction (L, &rspamd_lua_traceback);
-		err_idx = lua_gettop (L);
-
-		if (!no_squeeze && (type & (SYMBOL_TYPE_CALLBACK|SYMBOL_TYPE_NORMAL)) &&
-				rspamd_lua_require_function (L, "lua_squeeze_rules", "squeeze_rule")) {
+	else if (type & (SYMBOL_TYPE_CALLBACK|SYMBOL_TYPE_NORMAL)) {
+		if (rspamd_lua_require_function (L, "lua_squeeze_rules", "squeeze_rule")) {
 			if (name) {
 				lua_pushstring (L, name);
 			}
@@ -1415,7 +1421,7 @@ rspamd_register_symbol_fromlua (lua_State *L,
 			}
 
 			/* Push function reference */
-			lua_rawgeti (L, LUA_REGISTRYINDEX, ref);
+			lua_rawgeti (L, LUA_REGISTRYINDEX, cbref);
 
 			/* Flags */
 			lua_createtable (L, 0, 0);
@@ -1452,45 +1458,63 @@ rspamd_register_symbol_fromlua (lua_State *L,
 			}
 
 			ret = lua_tonumber (L, -1);
-
-			if (ret == -1) {
-				/* Do direct registration */
-				cd = rspamd_mempool_alloc0 (cfg->cfg_pool,
-						sizeof (struct lua_callback_data));
-				cd->magic = rspamd_lua_callback_magic;
-				cd->cb_is_ref = TRUE;
-				cd->callback.ref = ref;
-				cd->L = L;
-
-				if (name) {
-					cd->symbol = rspamd_mempool_strdup (cfg->cfg_pool, name);
-				}
-
-				if (type & SYMBOL_TYPE_USE_CORO) {
-					ret = rspamd_symcache_add_symbol (cfg->cache,
-							name,
-							priority,
-							lua_metric_symbol_callback_coro,
-							cd,
-							type,
-							parent);
-				}
-				else {
-					ret = rspamd_symcache_add_symbol (cfg->cache,
-							name,
-							priority,
-							lua_metric_symbol_callback,
-							cd,
-							type,
-							parent);
-				}
-
-				rspamd_mempool_add_destructor (cfg->cfg_pool,
-						(rspamd_mempool_destruct_t) lua_destroy_cfg_symbol,
-						cd);
-			}
 		}
 		else {
+			msg_err_config ("lua_squeeze is absent or bad (missing squeeze_rule),"
+							" your Rspamd installation"
+							" is likely corrupted!");
+		}
+	}
+	/* No squeeze for everything else */
+
+	/* Cleanup lua stack */
+	lua_settop (L, err_idx - 1);
+
+	return ret;
+}
+
+static gint
+rspamd_register_symbol_fromlua (lua_State *L,
+		struct rspamd_config *cfg,
+		const gchar *name,
+		gint ref,
+		gdouble weight,
+		gint priority,
+		enum rspamd_symbol_type type,
+		gint parent,
+		gboolean optional,
+		gboolean no_squeeze)
+{
+	struct lua_callback_data *cd;
+	gint ret = -1;
+
+	if (priority == 0 && weight < 0) {
+		priority = 1;
+	}
+
+	if ((ret = rspamd_symcache_find_symbol (cfg->cache, name)) != -1) {
+		if (optional) {
+			msg_debug_config ("duplicate symbol: %s, skip registering", name);
+
+			return ret;
+		}
+		else {
+			msg_err_config ("duplicate symbol: %s, skip registering", name);
+
+			return -1;
+		}
+	}
+
+	if (ref != -1) {
+		if (type & SYMBOL_TYPE_USE_CORO) {
+			/* Coroutines are incompatible with squeezing */
+			no_squeeze = TRUE;
+		}
+		/*
+		 * We call for routine called lua_squeeze_rules.squeeze_rule if it exists
+		 */
+		if (no_squeeze || (ret = rspamd_lua_squeeze_rule (L, cfg, name, ref,
+				type, parent)) == -1) {
 			cd = rspamd_mempool_alloc0 (cfg->cfg_pool,
 					sizeof (struct lua_callback_data));
 			cd->magic = rspamd_lua_callback_magic;
@@ -1524,11 +1548,13 @@ rspamd_register_symbol_fromlua (lua_State *L,
 					(rspamd_mempool_destruct_t)lua_destroy_cfg_symbol,
 					cd);
 		}
-
-		/* Cleanup lua stack */
-		lua_settop (L, err_idx - 1);
 	}
 	else {
+		if (!no_squeeze) {
+			rspamd_lua_squeeze_rule (L, cfg, name, ref,
+					type, parent);
+		}
+		/* Not a squeezed symbol */
 		ret = rspamd_symcache_add_symbol (cfg->cache,
 				name,
 				priority,
@@ -2196,6 +2222,9 @@ rspamd_lua_squeeze_dependency (lua_State *L, struct rspamd_config *cfg,
 		else {
 			ret = lua_toboolean (L, -1);
 		}
+	}
+	else {
+		msg_err_config ("cannot get lua_squeeze_rules.squeeze_dependency function");
 	}
 
 	lua_settop (L, err_idx - 1);
@@ -3411,6 +3440,29 @@ lua_config_get_symbol_stat (lua_State *L)
 	return 1;
 }
 
+static gint
+lua_config_get_symbol_parent (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *sym = luaL_checkstring (L, 2), *parent;
+
+	if (cfg != NULL && sym != NULL) {
+		parent = rspamd_symcache_get_parent (cfg->cache, sym);
+
+		if (parent) {
+			lua_pushstring (L, parent);
+		}
+		else {
+			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
 
 static gint
 lua_config_register_finish_script (lua_State *L)
@@ -3661,6 +3713,60 @@ lua_config_experimental_enabled (lua_State *L)
 	return 1;
 }
 
+struct rspamd_lua_include_trace_cbdata {
+	lua_State *L;
+	gint cbref;
+};
+
+static void
+lua_include_trace_cb (struct ucl_parser *parser,
+					  const ucl_object_t *parent,
+					  const ucl_object_t *args,
+					  const char *path,
+					  size_t pathlen,
+					  void *user_data)
+{
+	struct rspamd_lua_include_trace_cbdata *cbdata =
+			(struct rspamd_lua_include_trace_cbdata *)user_data;
+	gint err_idx;
+	GString *tb;
+	lua_State *L;
+
+	L = cbdata->L;
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (L);
+
+	lua_rawgeti (L, LUA_REGISTRYINDEX, cbdata->cbref);
+	/* Current filename */
+	lua_pushstring (L, ucl_parser_get_cur_file (parser));
+	/* Included filename */
+	lua_pushlstring (L, path, pathlen);
+	/* Params */
+	if (args) {
+		ucl_object_push_lua (L, args, true);
+	}
+	else {
+		lua_newtable (L);
+	}
+	/* Parent */
+	if (parent) {
+		lua_pushstring (L, ucl_object_key (parent));
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	if (lua_pcall (L, 4, 0, err_idx) != 0) {
+		tb = lua_touserdata (L, -1);
+		msg_err ("lua call to local include trace failed: %v", tb);
+		if (tb) {
+			g_string_free (tb, TRUE);
+		}
+	}
+
+	lua_settop (L, err_idx - 1);
+}
+
 #define LUA_TABLE_TO_HASH(htb, idx) do { \
 	lua_pushstring (L, (idx)); \
 	lua_gettable (L, -2); \
@@ -3705,13 +3811,36 @@ lua_config_load_ucl (lua_State *L)
 
 		lua_pop (L, 1);
 
-		if (!rspamd_config_parse_ucl (cfg, filename, paths, &err)) {
-			lua_pushboolean (L, false);
-			lua_pushfstring (L, "failed to load config: %s", err->message);
-			g_error_free (err);
-			g_hash_table_unref (paths);
+		if (lua_isfunction (L, 3)) {
+			struct rspamd_lua_include_trace_cbdata cbd;
 
-			return 2;
+			lua_pushvalue (L, 3);
+			cbd.cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+			cbd.L = L;
+
+			if (!rspamd_config_parse_ucl (cfg, filename, paths,
+					lua_include_trace_cb, &cbd, lua_toboolean (L, 4), &err)) {
+				luaL_unref (L, LUA_REGISTRYINDEX, cbd.cbref);
+				lua_pushboolean (L, false);
+				lua_pushfstring (L, "failed to load config: %s", err->message);
+				g_error_free (err);
+				g_hash_table_unref (paths);
+
+				return 2;
+			}
+
+			luaL_unref (L, LUA_REGISTRYINDEX, cbd.cbref);
+		}
+		else {
+			if (!rspamd_config_parse_ucl (cfg, filename, paths, NULL, NULL,
+					lua_toboolean (L, 3), &err)) {
+				lua_pushboolean (L, false);
+				lua_pushfstring (L, "failed to load config: %s", err->message);
+				g_error_free (err);
+				g_hash_table_unref (paths);
+
+				return 2;
+			}
 		}
 
 		rspamd_rcl_maybe_apply_lua_transform (cfg);
@@ -3819,18 +3948,24 @@ lua_config_init_subsystem (lua_State *L)
 				struct event_base *ev_base = lua_check_ev_base (L, 3);
 
 				if (ev_base) {
-					cfg->dns_resolver = dns_resolver_init (rspamd_logger_get_singleton(),
+					cfg->dns_resolver = rspamd_dns_resolver_init (rspamd_logger_get_singleton (),
 							ev_base,
 							cfg);
 				}
 				else {
+					g_strfreev (parts);
+
 					return luaL_error (L, "no event base specified");
 				}
 			}
 			else {
+				g_strfreev (parts);
+
 				return luaL_error (L, "invalid param: %s", parts[i]);
 			}
 		}
+
+		g_strfreev (parts);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

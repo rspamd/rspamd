@@ -255,13 +255,12 @@ rspamd_client_init (struct rspamd_http_context *http_ctx,
 	conn->ev_base = ev_base;
 	conn->fd = fd;
 	conn->req_sent = FALSE;
-	conn->http_conn = rspamd_http_connection_new (http_ctx,
-			fd,
+	conn->http_conn = rspamd_http_connection_new_client_socket (http_ctx,
 			rspamd_client_body_handler,
 			rspamd_client_error_handler,
 			rspamd_client_finish_handler,
 			0,
-			RSPAMD_HTTP_CLIENT);
+			fd);
 
 	conn->server_name = g_string_new (name);
 	if (port != 0) {

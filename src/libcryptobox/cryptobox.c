@@ -245,6 +245,8 @@ rspamd_cryptobox_test_instr (gint instr)
 	signal (SIGILL, old_handler);
 #endif
 
+	(void)rd; /* Silence warning */
+
 	/* We actually never return here if SIGILL has been caught */
 	return ok == 1;
 }
@@ -354,6 +356,8 @@ rspamd_cryptobox_init (void)
 			case CPUID_RDRAND:
 				rspamd_printf_gstring (buf, "rdrand, ");
 				break;
+			default:
+				break; /* Silence warning */
 			}
 		}
 	}

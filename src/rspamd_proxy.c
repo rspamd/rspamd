@@ -1404,14 +1404,13 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 			rspamd_http_message_add_header (msg, "Settings-ID", m->settings_id);
 		}
 
-		bk_conn->backend_conn = rspamd_http_connection_new (
+		bk_conn->backend_conn = rspamd_http_connection_new_client_socket (
 				session->ctx->http_ctx,
-				bk_conn->backend_sock,
 				NULL,
 				proxy_backend_mirror_error_handler,
 				proxy_backend_mirror_finish_handler,
 				RSPAMD_HTTP_CLIENT_SIMPLE,
-				RSPAMD_HTTP_CLIENT);
+				bk_conn->backend_sock);
 
 		if (m->key) {
 			msg->peer_key = rspamd_pubkey_ref (m->key);
@@ -1831,14 +1830,13 @@ retry:
 			goto err; /* No fallback here */
 		}
 
-		session->master_conn->backend_conn = rspamd_http_connection_new (
+		session->master_conn->backend_conn = rspamd_http_connection_new_client_socket (
 				session->ctx->http_ctx,
-				session->master_conn->backend_sock,
 				NULL,
 				proxy_backend_master_error_handler,
 				proxy_backend_master_finish_handler,
 				RSPAMD_HTTP_CLIENT_SIMPLE,
-				RSPAMD_HTTP_CLIENT);
+				session->master_conn->backend_sock);
 		session->master_conn->flags &= ~RSPAMD_BACKEND_CLOSED;
 		session->master_conn->parser_from_ref = backend->parser_from_ref;
 		session->master_conn->parser_to_ref = backend->parser_to_ref;
@@ -2082,14 +2080,13 @@ proxy_accept_socket (gint fd, short what, void *arg)
 	}
 
 	if (!ctx->milter) {
-		session->client_conn = rspamd_http_connection_new (
+		session->client_conn = rspamd_http_connection_new_server (
 				ctx->http_ctx,
 				nfd,
 				NULL,
 				proxy_client_error_handler,
 				proxy_client_finish_handler,
-				0,
-				RSPAMD_HTTP_SERVER);
+				0);
 
 		if (ctx->key) {
 			rspamd_http_connection_set_key (session->client_conn, ctx->key);
@@ -2171,7 +2168,7 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 	ctx->ev_base = rspamd_prepare_worker (worker, "rspamd_proxy",
 			proxy_accept_socket);
 
-	ctx->resolver = dns_resolver_init (worker->srv->logger,
+	ctx->resolver = rspamd_dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
 			worker->srv->cfg);
 	double_to_tv (ctx->timeout, &ctx->io_tv);
@@ -2180,7 +2177,8 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);
 
-	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->ev_base);
+	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->ev_base,
+			ctx->cfg->ups_ctx);
 
 	if (ctx->has_self_scan) {
 		/* Additional initialisation needed */

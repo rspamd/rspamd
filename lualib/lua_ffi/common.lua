@@ -27,8 +27,19 @@ struct GString {
   size_t len;
   size_t allocated_len;
 };
+struct GArray {
+  char *data;
+  unsigned len;
+};
+typedef void (*ref_dtor_cb_t)(void *data);
+struct ref_entry_s {
+	unsigned int refcount;
+	ref_dtor_cb_t dtor;
+};
 
 void g_string_free (struct GString *st, int free_data);
+void g_free (void *p);
+long rspamd_snprintf (char *buf, long max, const char *fmt, ...);
 ]]
 
 return {}

@@ -457,7 +457,7 @@ local aliases_id = rspamd_config:register_symbol{
         local addr = task:get_from(type)[1]
         local na,tags = rspamd_lua_utils.remove_email_aliases(addr)
         if na then
-          task:set_from(type, addr)
+          task:set_from(type, addr, 'alias')
           task:insert_result('TAGGED_FROM', 1.0, fun.totable(
             fun.filter(function(t) return t and #t > 0 end, tags)))
         end

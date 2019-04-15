@@ -43,7 +43,7 @@ parser:mutex(
           :description "UCL output"
 )
 parser:flag "-C --compact"
-      :description "Use compactl format"
+      :description "Use compact format"
 parser:flag "--no-file"
       :description "Do not print filename"
 

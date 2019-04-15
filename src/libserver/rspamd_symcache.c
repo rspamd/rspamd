@@ -304,6 +304,33 @@ rspamd_symcache_find_filter (struct rspamd_symcache *cache,
 	return NULL;
 }
 
+const gchar *
+rspamd_symcache_get_parent (struct rspamd_symcache *cache,
+										 const gchar *symbol)
+{
+	struct rspamd_symcache_item *item;
+
+	g_assert (cache != NULL);
+
+	if (symbol == NULL) {
+		return NULL;
+	}
+
+	item = g_hash_table_lookup (cache->items_by_symbol, symbol);
+
+	if (item != NULL) {
+
+		if (item->is_virtual) {
+			item = g_ptr_array_index (cache->items_by_id,
+					item->specific.virtual.parent);
+		}
+
+		return item->symbol;
+	}
+
+	return NULL;
+}
+
 static gint
 postfilters_cmp (const void *p1, const void *p2, gpointer ud)
 {
@@ -1580,7 +1607,6 @@ rspamd_symcache_make_checkpoint (struct rspamd_task *task,
 	checkpoint->pass = RSPAMD_CACHE_PASS_INIT;
 	task->checkpoint = checkpoint;
 
-	task->result = task->result;
 
 	return checkpoint;
 }

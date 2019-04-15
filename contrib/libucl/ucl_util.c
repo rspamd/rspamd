@@ -520,17 +520,22 @@ void
 ucl_chunk_free (struct ucl_chunk *chunk)
 {
 	if (chunk) {
-		if (chunk->special_handler) {
-			if (chunk->special_handler->free_function) {
-				chunk->special_handler->free_function (
-						(unsigned char *) chunk->begin,
-						chunk->end - chunk->begin,
-						chunk->special_handler->user_data);
+		struct ucl_parser_special_handler_chain *chain, *tmp;
+
+		LL_FOREACH_SAFE (chunk->special_handlers, chain, tmp) {
+			if (chain->special_handler->free_function) {
+				chain->special_handler->free_function (
+						chain->begin,
+						chain->len,
+						chain->special_handler->user_data);
 			} else {
-				UCL_FREE (chunk->end - chunk->begin,
-						(unsigned char *) chunk->begin);
+				UCL_FREE (chain->len, chain->begin);
 			}
+
+			UCL_FREE (sizeof (*chain), chain);
 		}
+
+		chunk->special_handlers = NULL;
 
 		if (chunk->fname) {
 			free (chunk->fname);
@@ -1394,7 +1399,9 @@ ucl_include_file_single (const unsigned char *data, size_t len,
  */
 static bool
 ucl_include_file (const unsigned char *data, size_t len,
-		struct ucl_parser *parser, struct ucl_include_params *params)
+				  struct ucl_parser *parser,
+				  struct ucl_include_params *params,
+				  const ucl_object_t *args)
 {
 	const unsigned char *p = data, *end = data + len;
 	bool need_glob = false;
@@ -1424,6 +1431,20 @@ ucl_include_file (const unsigned char *data, size_t len,
 				return (!params->must_exist || false);
 			}
 			for (i = 0; i < globbuf.gl_pathc; i ++) {
+
+				if (parser->include_trace_func) {
+					const ucl_object_t *parent = NULL;
+
+					if (parser->stack) {
+						parent = parser->stack->obj;
+					}
+
+					parser->include_trace_func (parser, parent, NULL,
+							globbuf.gl_pathv[i],
+							strlen (globbuf.gl_pathv[i]),
+							parser->include_trace_ud);
+				}
+
 				if (!ucl_include_file_single ((unsigned char *)globbuf.gl_pathv[i],
 						strlen (globbuf.gl_pathv[i]), parser, params)) {
 					if (params->soft_fail) {
@@ -1490,6 +1511,17 @@ ucl_include_common (const unsigned char *data, size_t len,
 	params.strat = UCL_DUPLICATE_APPEND;
 	params.must_exist = !default_try;
 
+	if (parser->include_trace_func) {
+		const ucl_object_t *parent = NULL;
+
+		if (parser->stack) {
+			parent = parser->stack->obj;
+		}
+
+		parser->include_trace_func (parser, parent, args,
+				data, len, parser->include_trace_ud);
+	}
+
 	/* Process arguments */
 	if (args != NULL && args->type == UCL_OBJECT) {
 		while ((param = ucl_object_iterate (args, &it, true)) != NULL) {
@@ -1554,7 +1586,7 @@ ucl_include_common (const unsigned char *data, size_t len,
 		}
 		else if (data != NULL) {
 			/* Try to load a file */
-			return ucl_include_file (data, len, parser, &params);
+			return ucl_include_file (data, len, parser, &params, args);
 		}
 	}
 	else {
@@ -1569,7 +1601,7 @@ ucl_include_common (const unsigned char *data, size_t len,
 				snprintf (ipath, sizeof (ipath), "%s/%.*s", ucl_object_tostring(param),
 						(int)len, data);
 				if ((search = ucl_include_file (ipath, strlen (ipath),
-						parser, &params))) {
+						parser, &params, args))) {
 					if (!params.allow_glob) {
 						break;
 					}
@@ -3839,4 +3871,19 @@ ucl_comments_add (ucl_object_t *comments, const ucl_object_t *obj,
 		ucl_object_insert_key (comments, ucl_object_fromstring (comment),
 				(const char *)&obj, sizeof (void *), true);
 	}
+}
+
+void
+ucl_parser_set_include_tracer (struct ucl_parser *parser,
+							   ucl_include_trace_func_t func,
+							   void *user_data)
+{
+	parser->include_trace_func = func;
+	parser->include_trace_ud = user_data;
+}
+
+const char *
+ucl_parser_get_cur_file (struct ucl_parser *parser)
+{
+	return parser->cur_file;
 }

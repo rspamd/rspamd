@@ -104,7 +104,7 @@ rspamd_http_message_from_url (const gchar *url)
 		}
 	}
 
-	msg->host = rspamd_fstring_new_init (host, pu.field_data[UF_HOST].len);
+	msg->host = g_string_new_len (host, pu.field_data[UF_HOST].len);
 	msg->url = rspamd_fstring_append (msg->url, path, pathlen);
 
 	REF_INIT_RETAIN (msg, rspamd_http_message_free);
@@ -489,7 +489,7 @@ rspamd_http_message_free (struct rspamd_http_message *msg)
 		rspamd_fstring_free (msg->status);
 	}
 	if (msg->host != NULL) {
-		rspamd_fstring_free (msg->host);
+		g_string_free (msg->host, TRUE);
 	}
 	if (msg->peer_key != NULL) {
 		rspamd_pubkey_unref (msg->peer_key);

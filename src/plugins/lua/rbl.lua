@@ -159,8 +159,12 @@ end
 local function rbl_dns_process(task, rbl, to_resolve, results, err)
   if err and (err ~= 'requested record is not found' and
       err ~= 'no records with this name') then
-    rspamd_logger.errx(task, 'error looking up %s: %s', to_resolve, err)
+    rspamd_logger.infox(task, 'error looking up %s: %s', to_resolve, err)
+    task:insert_result(rbl.symbol .. '_FAIL', 1, string.format('%s:%s',
+        to_resolve, err))
+    return
   end
+
   if not results then
     lua_util.debugm(N, task,
         'DNS RESPONSE: label=%1 results=%2 error=%3 rbl=%4',
@@ -553,6 +557,14 @@ local function add_rbl(key, rbl)
   if rbl.dkim then
     rspamd_config:register_dependency(rbl.symbol, 'DKIM_CHECK')
   end
+
+  -- Failure symbol
+  rspamd_config:register_symbol{
+    type = 'virtual,nostat',
+    name = rbl.symbol .. '_FAIL',
+    parent = id,
+    score = 0.0,
+  }
 
   if rbl.returncodes then
     for s,_ in pairs(rbl['returncodes']) do

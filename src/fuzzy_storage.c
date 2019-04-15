@@ -599,6 +599,7 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 	conn->mirror = m;
 
 	if (conn->up == NULL) {
+		g_free (conn);
 		msg_err ("cannot select upstream for %s", m->name);
 		return;
 	}
@@ -608,6 +609,7 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 			SOCK_STREAM, TRUE);
 
 	if (conn->sock == -1) {
+		g_free (conn);
 		msg_err ("cannot connect upstream for %s", m->name);
 		rspamd_upstream_fail (conn->up, TRUE);
 		return;
@@ -616,14 +618,13 @@ rspamd_fuzzy_send_update_mirror (struct rspamd_fuzzy_storage_ctx *ctx,
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	rspamd_printf_fstring (&msg->url, "/update_v1/%s", m->name);
 
-	conn->http_conn = rspamd_http_connection_new (
+	conn->http_conn = rspamd_http_connection_new_client_socket (
 			ctx->http_ctx,
-			conn->sock,
 			NULL,
 			fuzzy_mirror_error_handler,
 			fuzzy_mirror_finish_handler,
 			RSPAMD_HTTP_CLIENT_SIMPLE,
-			RSPAMD_HTTP_CLIENT);
+			conn->sock);
 
 	rspamd_http_connection_set_key (conn->http_conn,
 			ctx->sync_keypair);
@@ -1990,14 +1991,13 @@ accept_fuzzy_mirror_socket (gint fd, short what, void *arg)
 	session->name = rspamd_inet_address_to_string (addr);
 	rspamd_random_hex (session->uid, sizeof (session->uid) - 1);
 	session->uid[sizeof (session->uid) - 1] = '\0';
-	http_conn = rspamd_http_connection_new (
+	http_conn = rspamd_http_connection_new_server (
 			ctx->http_ctx,
 			nfd,
 			NULL,
 			rspamd_fuzzy_mirror_error_handler,
 			rspamd_fuzzy_mirror_finish_handler,
-			0,
-			RSPAMD_HTTP_SERVER);
+			0);
 
 	rspamd_http_connection_set_key (http_conn, ctx->sync_keypair);
 	session->ctx = ctx;
@@ -2989,7 +2989,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	ctx->cfg = worker->srv->cfg;
 	double_to_tv (ctx->master_timeout, &ctx->master_io_tv);
 
-	ctx->resolver = dns_resolver_init (worker->srv->logger,
+	ctx->resolver = rspamd_dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
 			worker->srv->cfg);
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
@@ -2999,7 +2999,7 @@ start_fuzzy (struct rspamd_worker *worker)
 		ctx->keypair_cache = rspamd_keypair_cache_new (ctx->keypair_cache_size);
 	}
 
-	ctx->http_ctx = rspamd_http_context_create (cfg, ctx->ev_base);
+	ctx->http_ctx = rspamd_http_context_create (cfg, ctx->ev_base, ctx->cfg->ups_ctx);
 
 	if (!ctx->collection_mode) {
 		/*
@@ -3167,9 +3167,9 @@ start_fuzzy (struct rspamd_worker *worker)
 	}
 
 	/* Maps events */
-	ctx->resolver = dns_resolver_init (worker->srv->logger,
-				ctx->ev_base,
-				worker->srv->cfg);
+	ctx->resolver = rspamd_dns_resolver_init (worker->srv->logger,
+			ctx->ev_base,
+			worker->srv->cfg);
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, worker, 0);
 
 	/* Get peer pipe */

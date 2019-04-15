@@ -479,10 +479,15 @@ void rspamd_config_calculate_cksum (struct rspamd_config *cfg);
 gboolean rspamd_config_parse_ucl (struct rspamd_config *cfg,
 								  const gchar *filename,
 								  GHashTable *vars,
+								  ucl_include_trace_func_t inc_trace,
+								  void *trace_data,
+								  gboolean skip_jinja,
 								  GError **err);
 gboolean rspamd_config_read (struct rspamd_config *cfg,
 							 const gchar *filename,
 							 rspamd_rcl_section_fin_t logger_fin,
 							 gpointer logger_ud,
-							 GHashTable *vars);
+							 GHashTable *vars,
+							 gboolean skip_jinja,
+							 gchar **lua_env);
 #endif /* CFG_RCL_H_ */

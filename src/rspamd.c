@@ -95,6 +95,8 @@ static gboolean is_insecure = FALSE;
 static gboolean gen_keypair = FALSE;
 static gboolean encrypt_password = FALSE;
 static GHashTable *ucl_vars = NULL;
+static gchar **lua_env = NULL;
+static gboolean skip_template = FALSE;
 
 static gint term_attempts = 0;
 
@@ -108,7 +110,10 @@ static GHashTable *listen_sockets = NULL;
 extern module_t *modules[];
 extern worker_t *workers[];
 
-/* Commandline options */
+/* Command line options */
+static gboolean rspamd_parse_var (const gchar *option_name,
+								  const gchar *value, gpointer data,
+								  GError **error);
 static GOptionEntry entries[] =
 {
 	{ "config-test", 't', 0, G_OPTION_ARG_NONE, &config_test,
@@ -141,9 +146,40 @@ static GOptionEntry entries[] =
 	  "controller password to store in the configuration file", NULL },
 	{ "version", 'v', 0, G_OPTION_ARG_NONE, &show_version,
 	  "Show version and exit", NULL },
+	{"var", 0, 0, G_OPTION_ARG_CALLBACK, (gpointer)&rspamd_parse_var,
+			"Redefine/define environment variable", NULL},
+	{"skip-template", 'T', 0, G_OPTION_ARG_NONE, &skip_template,
+			"Do not apply Jinja templates", NULL},
+	{"lua-env", '\0', 0, G_OPTION_ARG_FILENAME_ARRAY, &lua_env,
+			"Load lua environment from the specified files", NULL},
 	{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
+static gboolean
+rspamd_parse_var (const gchar *option_name,
+						const gchar *value, gpointer data,
+						GError **error)
+{
+	gchar *k, *v, *t;
+
+	t = strchr (value, '=');
+
+	if (t != NULL) {
+		k = g_strdup (value);
+		t = k + (t - value);
+		v = g_strdup (t + 1);
+		*t = '\0';
+
+		g_hash_table_insert (ucl_vars, k, v);
+	}
+	else {
+		g_set_error (error, g_quark_try_string ("main"), EINVAL,
+				"Bad variable format: %s", value);
+		return FALSE;
+	}
+
+	return TRUE;
+}
 
 static void
 read_cmd_line (gint *argc, gchar ***argv, struct rspamd_config *cfg)
@@ -893,7 +929,8 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 
-	if (!rspamd_config_read (cfg, cfg->cfg_name, config_logger, rspamd_main, ucl_vars)) {
+	if (!rspamd_config_read (cfg, cfg->cfg_name, config_logger, rspamd_main,
+			ucl_vars, skip_template, lua_env)) {
 		return FALSE;
 	}
 
@@ -1490,7 +1527,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_mempool_unlock_mutex (rspamd_main->start_mtx);
 
 	rspamd_main->http_ctx = rspamd_http_context_create (rspamd_main->cfg,
-			ev_base);
+			ev_base, rspamd_main->cfg->ups_ctx);
 
 	if (control_fd != -1) {
 		msg_info_main ("listening for control commands on %s",

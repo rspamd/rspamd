@@ -64,7 +64,8 @@ rspamd_lua_test_func (void)
 	glob_t globbuf;
 	gint i, len;
 
-	rspamd_lua_set_globals (rspamd_main->cfg, L, NULL);
+	rspamd_lua_set_env (L, NULL, NULL, NULL);
+	rspamd_lua_set_globals (rspamd_main->cfg, L);
 
 	if (lua_test_case) {
 		lua_pushstring (L, lua_test_case);

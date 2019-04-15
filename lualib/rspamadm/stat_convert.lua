@@ -5,11 +5,11 @@ local logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 
 return function (_, res)
-  local redis_params = {}
+  local redis_params = lua_redis.try_load_redis_servers(res.redis, nil)
   if res.expire then
     res.expire = lua_util.parse_time_interval(res.expire)
   end
-  if not lua_redis.try_load_redis_servers(res.redis, nil, redis_params) then
+  if not redis_params then
     logger.errx('cannot load redis server definition')
 
     return false

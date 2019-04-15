@@ -53,12 +53,12 @@ INIT_LOG_MODULE(html)
 
 static struct html_tag_def tag_defs[] = {
 	/* W3C defined elements */
-	TAG_DEF(Tag_A, "a", 0),
+	TAG_DEF(Tag_A, "a", FL_HREF),
 	TAG_DEF(Tag_ABBR, "abbr", (CM_INLINE)),
 	TAG_DEF(Tag_ACRONYM, "acronym", (CM_INLINE)),
 	TAG_DEF(Tag_ADDRESS, "address", (CM_BLOCK)),
 	TAG_DEF(Tag_APPLET, "applet", (CM_OBJECT | CM_IMG | CM_INLINE | CM_PARAM)),
-	TAG_DEF(Tag_AREA, "area", (CM_BLOCK | CM_EMPTY)),
+	TAG_DEF(Tag_AREA, "area", (CM_BLOCK | CM_EMPTY | FL_HREF)),
 	TAG_DEF(Tag_B, "b", (CM_INLINE|FL_BLOCK)),
 	TAG_DEF(Tag_BASE, "base", (CM_HEAD | CM_EMPTY)),
 	TAG_DEF(Tag_BASEFONT, "basefont", (CM_INLINE | CM_EMPTY)),
@@ -85,7 +85,7 @@ static struct html_tag_def tag_defs[] = {
 	TAG_DEF(Tag_FIELDSET, "fieldset", (CM_BLOCK)),
 	TAG_DEF(Tag_FONT, "font", (FL_BLOCK)),
 	TAG_DEF(Tag_FORM, "form", (CM_BLOCK)),
-	TAG_DEF(Tag_FRAME, "frame", (CM_FRAMES | CM_EMPTY)),
+	TAG_DEF(Tag_FRAME, "frame", (CM_FRAMES | CM_EMPTY | FL_HREF)),
 	TAG_DEF(Tag_FRAMESET, "frameset", (CM_HTML | CM_FRAMES)),
 	TAG_DEF(Tag_H1, "h1", (CM_BLOCK | CM_HEADING)),
 	TAG_DEF(Tag_H2, "h2", (CM_BLOCK | CM_HEADING)),
@@ -97,7 +97,7 @@ static struct html_tag_def tag_defs[] = {
 	TAG_DEF(Tag_HR, "hr", (CM_BLOCK | CM_EMPTY)),
 	TAG_DEF(Tag_HTML, "html", (CM_HTML | CM_OPT | CM_OMITST | CM_UNIQUE)),
 	TAG_DEF(Tag_I, "i", (CM_INLINE)),
-	TAG_DEF(Tag_IFRAME, "iframe", (0)),
+	TAG_DEF(Tag_IFRAME, "iframe", (FL_HREF)),
 	TAG_DEF(Tag_IMG, "img", (CM_INLINE | CM_IMG | CM_EMPTY)),
 	TAG_DEF(Tag_INPUT, "input", (CM_INLINE | CM_IMG | CM_EMPTY)),
 	TAG_DEF(Tag_INS, "ins", (CM_INLINE | CM_BLOCK | CM_MIXED)),
@@ -106,9 +106,9 @@ static struct html_tag_def tag_defs[] = {
 	TAG_DEF(Tag_LABEL, "label", (CM_INLINE)),
 	TAG_DEF(Tag_LEGEND, "legend", (CM_INLINE)),
 	TAG_DEF(Tag_LI, "li", (CM_LIST | CM_OPT | CM_NO_INDENT | FL_BLOCK)),
-	TAG_DEF(Tag_LINK, "link", (CM_HEAD | CM_EMPTY)),
+	TAG_DEF(Tag_LINK, "link", (CM_HEAD | CM_EMPTY|FL_HREF)),
 	TAG_DEF(Tag_LISTING, "listing", (CM_BLOCK | CM_OBSOLETE)),
-	TAG_DEF(Tag_MAP, "map", (CM_INLINE)),
+	TAG_DEF(Tag_MAP, "map", (CM_INLINE|FL_HREF)),
 	TAG_DEF(Tag_MENU, "menu", (CM_BLOCK | CM_OBSOLETE)),
 	TAG_DEF(Tag_META, "meta", (CM_HEAD | CM_INLINE | CM_EMPTY)),
 	TAG_DEF(Tag_NOFRAMES, "noframes", (CM_BLOCK | CM_FRAMES)),
@@ -598,7 +598,8 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 	}
 
 	if (end > url_text + 4 &&
-			rspamd_url_find (pool, url_text, end - url_text, &url_str, FALSE,
+			rspamd_url_find (pool, url_text, end - url_text, &url_str,
+					RSPAMD_URL_FIND_ALL,
 					&url_pos, NULL) &&
 			url_str != NULL) {
 		if (url_pos > 0) {
@@ -1569,7 +1570,8 @@ rspamd_process_html_url (rspamd_mempool_t *pool, struct rspamd_url *url,
 
 	if (url->querylen > 0) {
 
-		if (rspamd_url_find (pool, url->query, url->querylen, &url_str, FALSE,
+		if (rspamd_url_find (pool, url->query, url->querylen, &url_str,
+				RSPAMD_URL_FIND_ALL,
 				NULL, &prefix_added)) {
 			query_url = rspamd_mempool_alloc0 (pool,
 					sizeof (struct rspamd_url));
@@ -1704,19 +1706,21 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				/* We have an embedded image */
 				img->flags |= RSPAMD_HTML_FLAG_IMAGE_EMBEDDED;
 			}
-			if (comp->len > sizeof ("data:") - 1 && memcmp (comp->start,
-					"data:", sizeof ("data:") - 1) == 0) {
-				/* We have an embedded image in HTML tag */
-				img->flags |=
-						(RSPAMD_HTML_FLAG_IMAGE_EMBEDDED|RSPAMD_HTML_FLAG_IMAGE_DATA);
-				rspamd_html_process_data_image (pool, img, comp);
-				hc->flags |= RSPAMD_HTML_FLAG_HAS_DATA_URLS;
-			}
 			else {
-				img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
-				if (img->src) {
-					img->url = rspamd_html_process_url (pool,
-							img->src, fstr.len, NULL);
+				if (comp->len > sizeof ("data:") - 1 && memcmp (comp->start,
+						"data:", sizeof ("data:") - 1) == 0) {
+					/* We have an embedded image in HTML tag */
+					img->flags |=
+							(RSPAMD_HTML_FLAG_IMAGE_EMBEDDED | RSPAMD_HTML_FLAG_IMAGE_DATA);
+					rspamd_html_process_data_image (pool, img, comp);
+					hc->flags |= RSPAMD_HTML_FLAG_HAS_DATA_URLS;
+				}
+				else {
+					img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
+					if (img->src) {
+						img->url = rspamd_html_process_url (pool,
+								img->src, fstr.len, NULL);
+					}
 				}
 			}
 		}
@@ -2377,11 +2381,19 @@ rspamd_html_check_displayed_url (rspamd_mempool_t *pool,
 		return;
 	}
 
+	url->visible_part = rspamd_mempool_alloc (pool, dest->len - href_offset + 1);
+	rspamd_strlcpy (url->visible_part, dest->data + href_offset,
+			dest->len - href_offset + 1);
+	g_strstrip (url->visible_part);
+
 	rspamd_html_url_is_phished (pool, url,
 			dest->data + href_offset,
 			dest->len - href_offset,
 			&url_found, &displayed_url);
 
+	if (url_found) {
+		url->flags |= RSPAMD_URL_FLAG_DISPLAY_URL;
+	}
 	if (exceptions && url_found) {
 		ex = rspamd_mempool_alloc (pool,
 				sizeof (*ex));
@@ -2934,7 +2946,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 					save_space = FALSE;
 				}
 
-				if (cur_tag->id == Tag_A || cur_tag->id == Tag_IFRAME) {
+				if (cur_tag->flags & FL_HREF) {
 					if (!(cur_tag->flags & (FL_CLOSING))) {
 						url = rspamd_html_process_url_tag (pool, cur_tag, hc);
 
@@ -3003,9 +3015,6 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 							url = NULL;
 						}
 					}
-				}
-				else if (cur_tag->id == Tag_LINK) {
-					url = rspamd_html_process_url_tag (pool, cur_tag, hc);
 				}
 				else if (cur_tag->id == Tag_BASE && !(cur_tag->flags & (FL_CLOSING))) {
 					struct html_tag *prev_tag = NULL;

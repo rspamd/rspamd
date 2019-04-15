@@ -265,7 +265,7 @@ rspamd_str_hash (gconstpointer key)
 
 	len = strlen ((const gchar *)key);
 
-	return rspamd_cryptobox_fast_hash (key, len, rspamd_hash_seed ());
+	return (guint)rspamd_cryptobox_fast_hash (key, len, rspamd_hash_seed ());
 }
 
 gboolean
@@ -314,7 +314,7 @@ rspamd_ftok_hash (gconstpointer key)
 {
 	const rspamd_ftok_t *f = key;
 
-	return t1ha (f->begin, f->len, rspamd_hash_seed ());
+	return (guint)rspamd_cryptobox_fast_hash (f->begin, f->len, rspamd_hash_seed ());
 }
 
 gboolean
@@ -334,7 +334,7 @@ rspamd_gstring_icase_hash (gconstpointer key)
 {
 	const GString *f = key;
 
-	return rspamd_icase_hash (f->str, f->len, rspamd_hash_seed ());
+	return (guint)rspamd_icase_hash (f->str, f->len, rspamd_hash_seed ());
 }
 
 /* https://graphics.stanford.edu/~seander/bithacks.html#ZeroInWord */
@@ -2768,7 +2768,7 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 
 
 gchar *
-rspamd_str_make_utf_valid (const gchar *src, gsize slen, gsize *dstlen)
+rspamd_str_make_utf_valid (const guchar *src, gsize slen, gsize *dstlen)
 {
 	GString *dst;
 	const gchar *last;

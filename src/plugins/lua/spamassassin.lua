@@ -1616,13 +1616,18 @@ if type(section) == "table" then
         for _, elt in ipairs(fn) do
           local files = util.glob(elt)
 
-          for _,matched in ipairs(files) do
-            local f = io.open(matched, "r")
-            if f then
-              process_sa_conf(f)
-              has_rules = true
-            else
-              rspamd_logger.errx(rspamd_config, "cannot open %1", matched)
+          if not files or #files == 0 then
+            rspamd_logger.errx(rspamd_config, "cannot find any files matching pattern %s", elt)
+          else
+            for _,matched in ipairs(files) do
+              local f = io.open(matched, "r")
+              if f then
+                rspamd_logger.infox(rspamd_config, 'loading SA rules from %s', matched)
+                process_sa_conf(f)
+                has_rules = true
+              else
+                rspamd_logger.errx(rspamd_config, "cannot open %1", matched)
+              end
             end
           end
         end
@@ -1630,14 +1635,20 @@ if type(section) == "table" then
         -- assume string
         local files = util.glob(fn)
 
-        for _,matched in ipairs(files) do
-          local f = io.open(matched, "r")
-          if f then
-            process_sa_conf(f)
-            has_rules = true
-          else
-            rspamd_logger.errx(rspamd_config, "cannot open %1", matched)
+        if not files or #files == 0 then
+          rspamd_logger.errx(rspamd_config, "cannot find any files matching pattern %s", fn)
+        else
+          for _,matched in ipairs(files) do
+            local f = io.open(matched, "r")
+            if f then
+              rspamd_logger.infox(rspamd_config, 'loading SA rules from %s', matched)
+              process_sa_conf(f)
+              has_rules = true
+            else
+              rspamd_logger.errx(rspamd_config, "cannot open %1", matched)
+            end
           end
+
         end
       end
     end

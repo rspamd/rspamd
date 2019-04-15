@@ -106,6 +106,7 @@ struct rspamd_dkim_common_ctx {
 	gsize len;
 	gint header_canon_type;
 	gint body_canon_type;
+	gboolean is_sign;
 	GPtrArray *hlist;
 	GHashTable *htable; /* header -> count mapping */
 	EVP_MD_CTX *headers_hash;
@@ -971,23 +972,52 @@ rspamd_create_dkim_context (const gchar *sig,
 		case DKIM_STATE_VALUE:
 			if (*p == ';') {
 				if (param == DKIM_PARAM_UNKNOWN ||
-					p - c == 0 ||
-					!parser_funcs[param](ctx, c, p - c, err)) {
+					p - c == 0) {
 					state = DKIM_STATE_ERROR;
 				}
 				else {
-					state = DKIM_STATE_SKIP_SPACES;
-					next_state = DKIM_STATE_TAG;
-					p++;
-					taglen = 0;
+					/* Cut trailing spaces for value */
+					gint tlen = p - c;
+					const gchar *tmp = p - 1;
+
+					while (tlen > 0) {
+						if (!g_ascii_isspace (*tmp)) {
+							break;
+						}
+						tlen --;
+						tmp --;
+					}
+
+					if (!parser_funcs[param](ctx, c, tlen, err)) {
+						state = DKIM_STATE_ERROR;
+					}
+					else {
+						state = DKIM_STATE_SKIP_SPACES;
+						next_state = DKIM_STATE_TAG;
+						p++;
+						taglen = 0;
+					}
 				}
 			}
 			else if (p == end) {
-				if (param == DKIM_PARAM_UNKNOWN ||
-					!parser_funcs[param](ctx, c, p - c, err)) {
+				if (param == DKIM_PARAM_UNKNOWN) {
 					state = DKIM_STATE_ERROR;
 				}
 				else {
+					gint tlen = p - c;
+					const gchar *tmp = p - 1;
+
+					while (tlen > 0) {
+						if (!g_ascii_isspace (*tmp)) {
+							break;
+						}
+						tlen --;
+						tmp --;
+					}
+
+					if (!parser_funcs[param](ctx, c, tlen, err)) {
+						state = DKIM_STATE_ERROR;
+					}
 					/* Finish processing */
 					p++;
 				}
@@ -1545,11 +1575,11 @@ rspamd_get_dkim_key (rspamd_dkim_context_t *ctx,
 	cbdata->handler = handler;
 	cbdata->ud = ud;
 
-	return make_dns_request_task_forced (task,
-			   rspamd_dkim_dns_cb,
-			   cbdata,
-			   RDNS_REQUEST_TXT,
-			   ctx->dns_key);
+	return rspamd_dns_resolver_request_task_forced (task,
+			rspamd_dkim_dns_cb,
+			cbdata,
+			RDNS_REQUEST_TXT,
+			ctx->dns_key);
 }
 
 static gboolean
@@ -2166,6 +2196,33 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 						(gint)rh->raw_len, rh->raw_value);
 			}
 			else {
+				if (ctx->is_sign && (rh->type & RSPAMD_HEADER_FROM)) {
+					/* Special handling of the From handling when rewrite is done */
+					gboolean has_rewrite = FALSE;
+					guint i;
+					struct rspamd_email_address *addr;
+
+					PTR_ARRAY_FOREACH (task->from_mime, i, addr) {
+						if ((addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)
+							&& !(addr->flags & RSPAMD_EMAIL_ADDR_ALIASED)) {
+							has_rewrite = TRUE;
+						}
+					}
+
+					if (has_rewrite) {
+						PTR_ARRAY_FOREACH (task->from_mime, i, addr) {
+							if (!(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
+								if (!rspamd_dkim_canonize_header_relaxed (ctx, addr->raw,
+										header_name, FALSE)) {
+									return FALSE;
+								}
+
+								return TRUE;
+							}
+						}
+					}
+				}
+
 				if (!rspamd_dkim_canonize_header_relaxed (ctx, rh->value,
 						header_name, FALSE)) {
 					return FALSE;
@@ -2635,6 +2692,7 @@ rspamd_dkim_sign_key_load (const gchar *key, gsize len,
 		if (stat (key, &st) != 0) {
 			g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
 					"cannot stat key file: '%s' %s", key, strerror (errno));
+			g_free (nkey);
 
 			return NULL;
 		}
@@ -2645,6 +2703,7 @@ rspamd_dkim_sign_key_load (const gchar *key, gsize len,
 		if (map == NULL) {
 			g_set_error (err, dkim_error_quark (), DKIM_SIGERROR_KEYFAIL,
 					"cannot map key file: '%s' %s", key, strerror (errno));
+			g_free (nkey);
 
 			return NULL;
 		}
@@ -2811,6 +2870,7 @@ rspamd_create_dkim_sign_context (struct rspamd_task *task,
 	nctx->common.header_canon_type = headers_canon;
 	nctx->common.body_canon_type = body_canon;
 	nctx->common.type = type;
+	nctx->common.is_sign = TRUE;
 
 	if (type != RSPAMD_DKIM_ARC_SEAL) {
 		if (!rspamd_dkim_parse_hdrlist_common (&nctx->common, headers,

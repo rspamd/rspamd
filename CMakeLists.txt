@@ -11,8 +11,8 @@ PROJECT(rspamd C)
 ENABLE_LANGUAGE(ASM)
 
 SET(RSPAMD_VERSION_MAJOR 1)
-SET(RSPAMD_VERSION_MINOR 8)
-SET(RSPAMD_VERSION_PATCH 4)
+SET(RSPAMD_VERSION_MINOR 9)
+SET(RSPAMD_VERSION_PATCH 2)
 
 # Keep two digits all the time
 SET(RSPAMD_VERSION_MAJOR_NUM ${RSPAMD_VERSION_MAJOR}0)
@@ -499,6 +499,7 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/"
 		"${CMAKE_SOURCE_DIR}/contrib/linenoise"
 		"${CMAKE_SOURCE_DIR}/contrib/uthash"
 		"${CMAKE_SOURCE_DIR}/contrib/http-parser"
+		"${CMAKE_SOURCE_DIR}/contrib/fpconv"
 		"${CMAKE_SOURCE_DIR}/contrib/libottery"
 		"${CMAKE_SOURCE_DIR}/contrib/xxhash"
 		"${CMAKE_SOURCE_DIR}/contrib/cdb"
@@ -627,8 +628,8 @@ ELSE(ENABLE_LUAJIT MATCHES "ON")
 ENDIF(ENABLE_LUAJIT MATCHES "ON")
 
 IF(ENABLE_JEMALLOC MATCHES "ON")
-	ProcessPackage(JEMALLOC LIBRARY jemalloc INCLUDE jemalloc.h INCLUDE_SUFFIXES include/jemalloc
-		ROOT ${JEMALLOC_ROOT_DIR} MODULES jemalloc)
+	ProcessPackage(JEMALLOC LIBRARY jemalloc_pic jemalloc INCLUDE jemalloc.h INCLUDE_SUFFIXES include/jemalloc
+		ROOT ${JEMALLOC_ROOT_DIR})
 	SET(WITH_JEMALLOC "1")
 	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES "-lpthread")
 ENDIF()
@@ -1247,6 +1248,7 @@ ENDIF(GLIB_COMPAT)
 ADD_SUBDIRECTORY(contrib/xxhash)
 ADD_SUBDIRECTORY(contrib/cdb)
 ADD_SUBDIRECTORY(contrib/http-parser)
+ADD_SUBDIRECTORY(contrib/fpconv)
 ADD_SUBDIRECTORY(contrib/lc-btrie)
 ADD_SUBDIRECTORY(contrib/libottery)
 ADD_SUBDIRECTORY(contrib/zstd)
@@ -1376,6 +1378,8 @@ ENDFOREACH(LUA_LIB)
 INSTALL(FILES "contrib/lua-fun/fun.lua" DESTINATION ${LUALIBDIR})
 INSTALL(FILES "contrib/lua-argparse/argparse.lua" DESTINATION ${LUALIBDIR})
 INSTALL(FILES "contrib/lua-tableshape/tableshape.lua" DESTINATION ${LUALIBDIR})
+INSTALL(FILES "contrib/lua-lupa/lupa.lua" DESTINATION ${LUALIBDIR})
+INSTALL(FILES "contrib/lua-lpeg/lpegre.lua" DESTINATION ${LUALIBDIR})
 
 IF(ENABLE_TORCH MATCHES "ON")
 	INSTALL(FILES "contrib/lua-moses/moses.lua" DESTINATION ${LUALIBDIR})
@@ -1411,3 +1415,15 @@ IF(NOT DEBIAN_BUILD)
 	ADD_CUSTOM_TARGET(check DEPENDS rspamd-test)
 	ADD_CUSTOM_TARGET(run-test DEPENDS check COMMAND test/rspamd-test)
 ENDIF(NOT DEBIAN_BUILD)
+
+
+# PVS Studio
+find_program(_PVS_STUDIO "pvs-studio-analyzer")
+
+if(_PVS_STUDIO)
+	include(${CMAKE_SOURCE_DIR}/PVS-Studio.cmake)
+	pvs_studio_add_target(TARGET ${PROJECT_NAME}.analyze
+			ANALYZE ${PROJECT_NAME} rspamd-server rspamadm rspamc
+			OUTPUT FORMAT errorfile
+			LOG target_${PROJECT_NAME}.err)
+endif()

@@ -14,18 +14,28 @@
  * limitations under the License.
  */
 
+#include <contrib/http-parser/http_parser.h>
 #include "http_context.h"
 #include "http_private.h"
 #include "keypair.h"
 #include "keypairs_cache.h"
 #include "cfg_file.h"
 #include "contrib/libottery/ottery.h"
+#include "contrib/http-parser/http_parser.h"
 #include "rspamd.h"
+
+INIT_LOG_MODULE(http_context)
+
+#define msg_debug_http_context(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_http_context_log_id, "http_context", NULL, \
+        G_STRFUNC, \
+        __VA_ARGS__)
 
 static struct rspamd_http_context *default_ctx = NULL;
 
 struct rspamd_http_keepalive_cbdata {
 	struct rspamd_http_connection *conn;
+	struct rspamd_http_context *ctx;
 	GQueue *queue;
 	GList *link;
 	struct event ev;
@@ -43,7 +53,8 @@ rspamd_http_keepalive_queue_cleanup (GQueue *conns)
 
 		cbd = (struct rspamd_http_keepalive_cbdata *)cur->data;
 		rspamd_http_connection_unref (cbd->conn);
-		event_del (&cbd->ev);
+		/* Event is deleted here by deletion of the ev_base */
+		/* event_del (&cbd->ev); */
 		g_free (cbd);
 
 		cur = cur->next;
@@ -61,6 +72,10 @@ rspamd_http_context_client_rotate_ev (gint fd, short what, void *arg)
 
 	double_to_tv (ctx->config.client_key_rotate_time, &rot_tv);
 	rot_tv.tv_sec += ottery_rand_range (rot_tv.tv_sec);
+
+	msg_debug_http_context ("rotate local keypair, next rotate in %d seconds",
+			(int)rot_tv.tv_sec);
+
 	event_del (&ctx->client_rotate_ev);
 	event_add (&ctx->client_rotate_ev, &rot_tv);
 
@@ -72,12 +87,14 @@ rspamd_http_context_client_rotate_ev (gint fd, short what, void *arg)
 
 static struct rspamd_http_context*
 rspamd_http_context_new_default (struct rspamd_config *cfg,
-								 struct event_base *ev_base)
+								 struct event_base *ev_base,
+								 struct upstream_ctx *ups_ctx)
 {
 	struct rspamd_http_context *ctx;
 
 	static const int default_kp_size = 1024;
 	static const gdouble default_rotate_time = 120;
+	static const gdouble default_keepalive_interval = 65;
 	static const gchar *default_user_agent = "rspamd-" RSPAMD_VERSION_FULL;
 
 	ctx = g_malloc0 (sizeof (*ctx));
@@ -85,6 +102,8 @@ rspamd_http_context_new_default (struct rspamd_config *cfg,
 	ctx->config.kp_cache_size_server = default_kp_size;
 	ctx->config.client_key_rotate_time = default_rotate_time;
 	ctx->config.user_agent = default_user_agent;
+	ctx->config.keepalive_interval = default_keepalive_interval;
+	ctx->ups_ctx = ups_ctx;
 
 	if (cfg) {
 		ctx->ssl_ctx = cfg->libs_ctx->ssl_ctx;
@@ -103,8 +122,62 @@ rspamd_http_context_new_default (struct rspamd_config *cfg,
 }
 
 static void
+rspamd_http_context_parse_proxy (struct rspamd_http_context *ctx,
+								 const gchar *name,
+								 struct upstream_list **pls)
+{
+	struct http_parser_url u;
+	struct upstream_list *uls;
+
+	if (!ctx->ups_ctx) {
+		msg_err ("cannot parse http_proxy %s - upstreams context is udefined", name);
+		return;
+	}
+
+	memset (&u, 0, sizeof (u));
+
+	if (http_parser_parse_url (name, strlen (name), 1, &u) == 0) {
+		if (!(u.field_set & (1u << UF_HOST)) || u.port == 0) {
+			msg_err ("cannot parse http(s) proxy %s - invalid host or port", name);
+
+			return;
+		}
+
+		uls = rspamd_upstreams_create (ctx->ups_ctx);
+
+		if (!rspamd_upstreams_parse_line_len (uls,
+				name + u.field_data[UF_HOST].off,
+				u.field_data[UF_HOST].len, u.port, NULL)) {
+			msg_err ("cannot parse http(s) proxy %s - invalid data", name);
+
+			rspamd_upstreams_destroy (uls);
+		}
+		else {
+			*pls = uls;
+			msg_info ("set http(s) proxy to %s", name);
+		}
+	}
+	else {
+		uls = rspamd_upstreams_create (ctx->ups_ctx);
+
+		if (!rspamd_upstreams_parse_line (uls,
+				name, 3128, NULL)) {
+			msg_err ("cannot parse http(s) proxy %s - invalid data", name);
+
+			rspamd_upstreams_destroy (uls);
+		}
+		else {
+			*pls = uls;
+			msg_info ("set http(s) proxy to %s", name);
+		}
+	}
+}
+
+static void
 rspamd_http_context_init (struct rspamd_http_context *ctx)
 {
+
+
 	if (ctx->config.kp_cache_size_client > 0) {
 		ctx->client_kp_cache = rspamd_keypair_cache_new (ctx->config.kp_cache_size_client);
 	}
@@ -125,17 +198,23 @@ rspamd_http_context_init (struct rspamd_http_context *ctx)
 		event_add (&ctx->client_rotate_ev, &tv);
 	}
 
+	if (ctx->config.http_proxy) {
+		rspamd_http_context_parse_proxy (ctx, ctx->config.http_proxy,
+				&ctx->http_proxies);
+	}
+
 	default_ctx = ctx;
 }
 
 struct rspamd_http_context*
 rspamd_http_context_create (struct rspamd_config *cfg,
-							struct event_base *ev_base)
+							struct event_base *ev_base,
+							struct upstream_ctx *ups_ctx)
 {
 	struct rspamd_http_context *ctx;
 	const ucl_object_t *http_obj;
 
-	ctx = rspamd_http_context_new_default (cfg, ev_base);
+	ctx = rspamd_http_context_new_default (cfg, ev_base, ups_ctx);
 	http_obj = ucl_object_lookup (cfg->rcl_obj, "http");
 
 	if (http_obj) {
@@ -170,6 +249,21 @@ rspamd_http_context_create (struct rspamd_config *cfg,
 				if (ctx->config.user_agent && strlen (ctx->config.user_agent) == 0) {
 					ctx->config.user_agent = NULL;
 				}
+			}
+
+			const ucl_object_t *keepalive_interval;
+
+			keepalive_interval = ucl_object_lookup (client_obj, "keepalive_interval");
+
+			if (keepalive_interval) {
+				ctx->config.keepalive_interval = ucl_object_todouble (keepalive_interval);
+			}
+
+			const ucl_object_t *http_proxy;
+			http_proxy = ucl_object_lookup (client_obj, "http_proxy");
+
+			if (http_proxy) {
+				ctx->config.http_proxy = ucl_object_tostring (http_proxy);
 			}
 		}
 
@@ -219,6 +313,10 @@ rspamd_http_context_free (struct rspamd_http_context *ctx)
 	struct rspamd_keepalive_hash_key *hk;
 
 	kh_foreach_key (ctx->keep_alive_hash, hk, {
+		msg_debug_http_context ("cleanup keepalive elt %s (%s)",
+				rspamd_inet_address_to_string_pretty (hk->addr),
+				hk->host);
+
 		if (hk->host) {
 			g_free (hk->host);
 		}
@@ -230,16 +328,21 @@ rspamd_http_context_free (struct rspamd_http_context *ctx)
 
 	kh_destroy (rspamd_keep_alive_hash, ctx->keep_alive_hash);
 
+	if (ctx->http_proxies) {
+		rspamd_upstreams_destroy (ctx->http_proxies);
+	}
+
 	g_free (ctx);
 }
 
 struct rspamd_http_context*
 rspamd_http_context_create_config (struct rspamd_http_context_cfg *cfg,
-		struct event_base *ev_base)
+								   struct event_base *ev_base,
+								   struct upstream_ctx *ups_ctx)
 {
 	struct rspamd_http_context *ctx;
 
-	ctx = rspamd_http_context_new_default (NULL, ev_base);
+	ctx = rspamd_http_context_new_default (NULL, ev_base, ups_ctx);
 	memcpy (&ctx->config, cfg, sizeof (*cfg));
 	rspamd_http_context_init (ctx);
 
@@ -274,7 +377,7 @@ rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key *k1,
 {
 	if (k1->host && k2->host) {
 		if (rspamd_inet_address_port_equal (k1->addr, k2->addr)) {
-			return strcmp (k1->host, k2->host);
+			return strcmp (k1->host, k2->host) == 0;
 		}
 	}
 	else if (!k1->host && !k2->host) {
@@ -313,8 +416,17 @@ rspamd_http_context_check_keepalive (struct rspamd_http_context *ctx,
 			conn = cbd->conn;
 			g_free (cbd);
 
+			msg_debug_http_context ("reused keepalive element %s (%s), %d connections queued",
+					rspamd_inet_address_to_string_pretty (phk->addr),
+					phk->host, conns->length);
+
 			/* We transfer refcount here! */
 			return conn;
+		}
+		else {
+			msg_debug_http_context ("found empty keepalive element %s (%s), cannot reuse",
+					rspamd_inet_address_to_string_pretty (phk->addr),
+					phk->host);
 		}
 	}
 
@@ -338,6 +450,9 @@ rspamd_http_context_prepare_keepalive (struct rspamd_http_context *ctx,
 	if (k != kh_end (ctx->keep_alive_hash)) {
 		/* Reuse existing */
 		conn->keepalive_hash_key = kh_key (ctx->keep_alive_hash, k);
+		msg_debug_http_context ("use existing keepalive element %s (%s)",
+				rspamd_inet_address_to_string_pretty (conn->keepalive_hash_key->addr),
+				conn->keepalive_hash_key->host);
 	}
 	else {
 		/* Create new one */
@@ -351,6 +466,10 @@ rspamd_http_context_prepare_keepalive (struct rspamd_http_context *ctx,
 
 		kh_put (rspamd_keep_alive_hash, ctx->keep_alive_hash, phk, &r);
 		conn->keepalive_hash_key = phk;
+
+		msg_debug_http_context ("create new keepalive element %s (%s)",
+				rspamd_inet_address_to_string_pretty (conn->keepalive_hash_key->addr),
+				conn->keepalive_hash_key->host);
 	}
 }
 
@@ -359,12 +478,18 @@ rspamd_http_keepalive_handler (gint fd, short what, gpointer ud)
 {
 	struct rspamd_http_keepalive_cbdata *cbdata =
 			(struct rspamd_http_keepalive_cbdata *)ud;
+	struct rspamd_http_context *ctx;
 	/*
 	 * We can get here if a remote side reported something or it has
 	 * timed out. In both cases we just terminate keepalive connection.
 	 */
 
+	ctx = cbdata->ctx;
 	g_queue_delete_link (cbdata->queue, cbdata->link);
+	msg_debug_http_context ("remove keepalive element %s (%s), %d connections left",
+			rspamd_inet_address_to_string_pretty (cbdata->conn->keepalive_hash_key->addr),
+			cbdata->conn->keepalive_hash_key->host,
+			cbdata->queue->length);
 	rspamd_http_connection_unref (cbdata->conn);
 	g_free (cbdata);
 }
@@ -381,21 +506,28 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 
 	g_assert (conn->keepalive_hash_key != NULL);
 
-	/* Move connection to the keepalive pool */
-	cbdata = g_malloc0 (sizeof (*cbdata));
-
-	cbdata->conn = rspamd_http_connection_ref (conn);
-	g_queue_push_tail (&conn->keepalive_hash_key->conns, cbdata);
-	cbdata->link = conn->keepalive_hash_key->conns.tail;
-	cbdata->queue = &conn->keepalive_hash_key->conns;
-	conn->finished = FALSE;
-
-	event_set (&cbdata->ev, conn->fd, EV_READ|EV_TIMEOUT,
-			rspamd_http_keepalive_handler,
-			&cbdata);
-
 	if (msg) {
 		const rspamd_ftok_t *tok;
+		rspamd_ftok_t cmp;
+
+		tok = rspamd_http_message_find_header (msg, "Connection");
+
+		if (!tok) {
+			/* Server has not stated that it can do keep alive */
+			conn->finished = TRUE;
+			msg_debug_http_context ("no Connection header");
+			return;
+		}
+
+		RSPAMD_FTOK_ASSIGN (&cmp, "keep-alive");
+
+		if (rspamd_ftok_casecmp (&cmp, tok) != 0) {
+			conn->finished = TRUE;
+			msg_debug_http_context ("connection header is not `keep-alive`");
+			return;
+		}
+
+		/* We can proceed, check timeout */
 
 		tok = rspamd_http_message_find_header (msg, "Keep-Alive");
 
@@ -412,8 +544,9 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 				if (end_pos) {
 					if (rspamd_strtol (tok->begin + pos + 1,
 							(end_pos - tok->begin) - pos - 1, &real_timeout) &&
-							real_timeout > 0) {
+						real_timeout > 0) {
 						timeout = real_timeout;
+						msg_debug_http_context ("got timeout attr %.2f", timeout);
 					}
 				}
 				else {
@@ -421,11 +554,32 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 							tok->len - pos - 1, &real_timeout) &&
 						real_timeout > 0) {
 						timeout = real_timeout;
+						msg_debug_http_context ("got timeout attr %.2f", timeout);
 					}
 				}
 			}
 		}
 	}
+
+	/* Move connection to the keepalive pool */
+	cbdata = g_malloc0 (sizeof (*cbdata));
+
+	cbdata->conn = rspamd_http_connection_ref (conn);
+	g_queue_push_tail (&conn->keepalive_hash_key->conns, cbdata);
+	cbdata->link = conn->keepalive_hash_key->conns.tail;
+	cbdata->queue = &conn->keepalive_hash_key->conns;
+	cbdata->ctx = ctx;
+	conn->finished = FALSE;
+
+	event_set (&cbdata->ev, conn->fd, EV_READ|EV_TIMEOUT,
+			rspamd_http_keepalive_handler,
+			cbdata);
+
+	msg_debug_http_context ("push keepalive element %s (%s), %d connections queued, %.1f timeout",
+			rspamd_inet_address_to_string_pretty (cbdata->conn->keepalive_hash_key->addr),
+			cbdata->conn->keepalive_hash_key->host,
+			cbdata->queue->length,
+			timeout);
 
 	double_to_tv (timeout, &tv);
 	event_base_set (ev_base, &cbdata->ev);

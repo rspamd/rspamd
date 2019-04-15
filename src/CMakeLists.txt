@@ -183,6 +183,7 @@ ELSE()
 ENDIF()
 
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-http-parser)
+TARGET_LINK_LIBRARIES(rspamd-server rspamd-fpconv)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-cdb)
 TARGET_LINK_LIBRARIES(rspamd-server rspamd-lpeg)
 TARGET_LINK_LIBRARIES(rspamd-server lcbtrie)

@@ -22,6 +22,7 @@
 #include "keypair.h"
 #include "keypairs_cache.h"
 #include "ref.h"
+#include "upstream.h"
 #include "khash.h"
 #define HASH_CASELESS
 #include "uthash_strcase.h"
@@ -42,7 +43,7 @@ struct rspamd_http_header {
  */
 struct rspamd_http_message {
 	rspamd_fstring_t *url;
-	rspamd_fstring_t *host;
+	GString *host;
 	rspamd_fstring_t *status;
 	struct rspamd_http_header *headers;
 
@@ -95,6 +96,8 @@ struct rspamd_http_context {
 	struct rspamd_keypair_cache *client_kp_cache;
 	struct rspamd_cryptobox_keypair *client_kp;
 	struct rspamd_keypair_cache *server_kp_cache;
+	struct upstream_ctx *ups_ctx;
+	struct upstream_list *http_proxies;
 	gpointer ssl_ctx;
 	gpointer ssl_ctx_noverify;
 	struct event_base *ev_base;

@@ -184,7 +184,7 @@ if opts then
 
   local id = rspamd_config:register_symbol({
     name = "SPAMTRAP_CHECK",
-    type = "postfilter",
+    type = "callback,postfilter",
     callback = spamtrap_cb
   })
   rspamd_config:register_symbol({

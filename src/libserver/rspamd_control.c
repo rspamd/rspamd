@@ -518,13 +518,12 @@ rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
 	session = g_malloc0 (sizeof (*session));
 
 	session->fd = fd;
-	session->conn = rspamd_http_connection_new (rspamd_main->http_ctx,
+	session->conn = rspamd_http_connection_new_server (rspamd_main->http_ctx,
 			fd,
 			NULL,
 			rspamd_control_error_handler,
 			rspamd_control_finish_handler,
-			0,
-			RSPAMD_HTTP_SERVER);
+			0);
 	session->rspamd_main = rspamd_main;
 	session->addr = addr;
 	rspamd_http_connection_read_message (session->conn, session,

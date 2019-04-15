@@ -200,7 +200,6 @@ struct http_callback_data {
 	gsize pubkey_len;
 
 	enum rspamd_map_http_stage stage;
-	gint fd;
 	struct timeval tv;
 
 	ref_entry_t ref;

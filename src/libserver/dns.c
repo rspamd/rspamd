@@ -117,13 +117,13 @@ rspamd_dns_callback (struct rdns_reply *reply, gpointer ud)
 }
 
 struct rspamd_dns_request_ud *
-make_dns_request (struct rspamd_dns_resolver *resolver,
-	struct rspamd_async_session *session,
-	rspamd_mempool_t *pool,
-	dns_callback_type cb,
-	gpointer ud,
-	enum rdns_request_type type,
-	const char *name)
+rspamd_dns_resolver_request (struct rspamd_dns_resolver *resolver,
+							 struct rspamd_async_session *session,
+							 rspamd_mempool_t *pool,
+							 dns_callback_type cb,
+							 gpointer ud,
+							 enum rdns_request_type type,
+							 const char *name)
 {
 	struct rdns_request *req;
 	struct rspamd_dns_request_ud *reqdata = NULL;
@@ -190,7 +190,7 @@ make_dns_request_task_common (struct rspamd_task *task,
 		return FALSE;
 	}
 
-	reqdata = make_dns_request (task->resolver, task->s, task->task_pool, cb, ud,
+	reqdata = rspamd_dns_resolver_request (task->resolver, task->s, task->task_pool, cb, ud,
 			type, name);
 
 	if (reqdata) {
@@ -216,21 +216,21 @@ make_dns_request_task_common (struct rspamd_task *task,
 }
 
 gboolean
-make_dns_request_task (struct rspamd_task *task,
-	dns_callback_type cb,
-	gpointer ud,
-	enum rdns_request_type type,
-	const char *name)
+rspamd_dns_resolver_request_task (struct rspamd_task *task,
+								  dns_callback_type cb,
+								  gpointer ud,
+								  enum rdns_request_type type,
+								  const char *name)
 {
 	return make_dns_request_task_common (task, cb, ud, type, name, FALSE);
 }
 
 gboolean
-make_dns_request_task_forced (struct rspamd_task *task,
-	dns_callback_type cb,
-	gpointer ud,
-	enum rdns_request_type type,
-	const char *name)
+rspamd_dns_resolver_request_task_forced (struct rspamd_task *task,
+										 dns_callback_type cb,
+										 gpointer ud,
+										 enum rdns_request_type type,
+										 const char *name)
 {
 	return make_dns_request_task_common (task, cb, ud, type, name, TRUE);
 }
@@ -308,7 +308,7 @@ rspamd_dns_resolv_conf_on_server (struct rdns_resolver *resolver,
 	rspamd_inet_address_set_port (addr, port);
 	test_fd = rspamd_inet_address_connect (addr, SOCK_DGRAM, TRUE);
 
-	if (test_fd == -1) {
+	if (test_fd == -1 && (errno != EINTR || errno != ECONNREFUSED || errno != ECONNRESET)) {
 		msg_warn_config ("cannot open connection to nameserver at address %s: %s",
 				name, strerror (errno));
 		rspamd_inet_address_free (addr);
@@ -531,9 +531,9 @@ rspamd_dns_resolver_config_ucl (struct rspamd_config *cfg,
 }
 
 struct rspamd_dns_resolver *
-dns_resolver_init (rspamd_logger_t *logger,
-	struct event_base *ev_base,
-	struct rspamd_config *cfg)
+rspamd_dns_resolver_init (rspamd_logger_t *logger,
+						  struct event_base *ev_base,
+						  struct rspamd_config *cfg)
 {
 	struct rspamd_dns_resolver *dns_resolver;
 

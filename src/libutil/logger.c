@@ -459,7 +459,11 @@ rspamd_set_logger (struct rspamd_config *cfg,
 
 	logger->log_type = cfg->log_type;
 	logger->log_facility = cfg->log_facility;
-	logger->log_level = cfg->log_level;
+
+	if (!(logger->flags & RSPAMD_LOG_FLAG_ENFORCED)) {
+		logger->log_level = cfg->log_level;
+	}
+
 	logger->log_buffered = cfg->log_buffered;
 	logger->log_silent_workers = cfg->log_silent_workers;
 	logger->log_buf_size = cfg->log_buf_size;
@@ -925,7 +929,7 @@ file_log_function (const gchar *module, const gchar *id,
 	gchar *m;
 	gdouble now;
 
-	struct iovec iov[5];
+	struct iovec iov[6];
 	gulong r = 0, mr = 0;
 	guint64 cksum;
 	size_t mlen, mremain;

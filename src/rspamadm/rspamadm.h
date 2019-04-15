@@ -23,6 +23,7 @@
 #include <lualib.h>
 
 extern GHashTable *ucl_vars;
+extern gchar **lua_env;
 extern struct rspamd_main *rspamd_main;
 
 GQuark rspamadm_error (void);

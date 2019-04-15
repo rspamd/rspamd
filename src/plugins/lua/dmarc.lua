@@ -901,7 +901,7 @@ if opts['reporting'] == true then
               table.concat(
                 {xmlf('header'),
                  xmlf('entries'),
-                 xmlf('footer')})), 78)
+                 xmlf('footer')})), 73)
         local function mail_cb(err, data, conn)
           local function no_error(merr, mdata, wantcode)
             wantcode = wantcode or '2'
@@ -1432,7 +1432,6 @@ local id = rspamd_config:register_symbol({
 })
 rspamd_config:register_symbol({
   name = dmarc_symbols['allow'],
-  flags = 'nice',
   parent = id,
   group = 'policies',
   groups = {'dmarc'},

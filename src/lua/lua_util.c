@@ -22,12 +22,14 @@
 #include "libmime/email_addr.h"
 #include "libmime/content_type.h"
 #include "libmime/mime_headers.h"
+#include "libutil/hash.h"
 #include "linenoise.h"
 #include <math.h>
 #include <glob.h>
 #include <zlib.h>
 
 #include "unicode/uspoof.h"
+#include "unicode/uscript.h"
 
 /***
  * @module rspamd_util
@@ -392,6 +394,31 @@ LUA_FUNCTION_DEF (util, normalize_prob);
  */
 LUA_FUNCTION_DEF (util, is_utf_spoofed);
 
+/**
+* @function util.is_utf_mixed_script(str)
+* Returns true if a string contains mixed unicode scripts
+* @param {string} String to check
+* @return {boolean} true if a string contains chars with mixed unicode script
+*/
+LUA_FUNCTION_DEF (util, is_utf_mixed_script);
+
+/**
+* @function util.is_utf_outside_range(str, range_start, range_end)
+* Returns true if a string contains chars outside range
+* @param {string} String to check
+* @param {number} start of character range similar to uset_addRange
+* @param {number} end of character range similar to uset_addRange
+* @return {boolean} true if a string contains chars outside selected utf range
+*/
+LUA_FUNCTION_DEF (util, is_utf_outside_range);
+
+/***
+* @function util.get_string_stats(str)
+* Returns table with number of letters and digits in string
+* @return {table} with string stats keys are "digits" and "letters"
+*/
+LUA_FUNCTION_DEF (util, get_string_stats);
+
 /***
  * @function util.is_valid_utf8(str)
  * Returns true if a string is valid UTF8 string
@@ -615,6 +642,9 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, caseless_hash),
 	LUA_INTERFACE_DEF (util, caseless_hash_fast),
 	LUA_INTERFACE_DEF (util, is_utf_spoofed),
+	LUA_INTERFACE_DEF (util, is_utf_mixed_script),
+	LUA_INTERFACE_DEF (util, is_utf_outside_range),
+	LUA_INTERFACE_DEF (util, get_string_stats),
 	LUA_INTERFACE_DEF (util, is_valid_utf8),
 	LUA_INTERFACE_DEF (util, has_obscured_unicode),
 	LUA_INTERFACE_DEF (util, readline),
@@ -687,7 +717,7 @@ lua_util_load_rspamd_config (lua_State *L)
 		cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_SKIP_LUA);
 		cfg->lua_state = L;
 
-		if (rspamd_config_read (cfg, cfg_name, NULL, NULL, NULL)) {
+		if (rspamd_config_read (cfg, cfg_name, NULL, NULL, NULL, FALSE, NULL)) {
 			msg_err_config ("cannot load config from %s", cfg_name);
 			lua_pushnil (L);
 		}
@@ -826,7 +856,7 @@ lua_util_process_message (lua_State *L)
 		task->msg.len = mlen;
 		task->fin_callback = lua_util_task_fin;
 		task->fin_arg = &res;
-		task->resolver = dns_resolver_init (NULL, base, cfg);
+		task->resolver = rspamd_dns_resolver_init (NULL, base, cfg);
 		task->s = rspamd_session_create (task->task_pool, rspamd_task_fin,
 					rspamd_task_restore, (event_finalizer_t)rspamd_task_free, task);
 
@@ -1177,7 +1207,7 @@ lua_util_tokenize_text (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	const gchar *in = NULL;
-	gsize len, pos, ex_len, i;
+	gsize len = 0, pos, ex_len, i;
 	GList *exceptions = NULL, *cur;
 	struct rspamd_lua_text *t;
 	struct rspamd_process_exception *ex;
@@ -1386,7 +1416,7 @@ lua_util_parse_addr (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
-			lua_push_emails_address_list (L, addrs);
+			lua_push_emails_address_list (L, addrs, 0);
 		}
 
 		if (own_pool) {
@@ -1591,7 +1621,7 @@ lua_util_parse_mail_address (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
-			lua_push_emails_address_list (L, addrs);
+			lua_push_emails_address_list (L, addrs, 0);
 		}
 
 		if (own_pool) {
@@ -2243,6 +2273,8 @@ lua_util_gzip_decompress (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
+	sz = t->len;
+
 	memset (&strm, 0, sizeof (strm));
 	/* windowBits +16 to decode gzip, zlib 1.2.0.4+ */
 	rc = inflateInit2 (&strm, MAX_WBITS + 16);
@@ -2439,6 +2471,12 @@ lua_util_is_utf_spoofed (lua_State *L)
 			uspoof_setChecks (spc_sgl,
 					USPOOF_INVISIBLE | USPOOF_MIXED_SCRIPT_CONFUSABLE | USPOOF_ANY_CASE,
 					&uc_err);
+			if (uc_err != U_ZERO_ERROR) {
+				msg_err ("Cannot set proper checks for uspoof: %s", u_errorName (uc_err));
+				lua_pushboolean (L, false);
+				uspoof_close(spc);
+				return 1;
+			}
 		}
 
 		ret = uspoof_checkUTF8 (spc_sgl, s1, l1, NULL, &uc_err);
@@ -2469,6 +2507,164 @@ lua_util_is_utf_spoofed (lua_State *L)
 
 	return nres;
 }
+
+static gint
+lua_util_is_utf_mixed_script(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	gsize len_of_string;
+	const guchar *string_to_check = lua_tolstring (L, 1, &len_of_string);
+	UScriptCode last_script_code = USCRIPT_INVALID_CODE;
+	UErrorCode uc_err = U_ZERO_ERROR;
+
+	if (string_to_check) {
+		uint index = 0;
+		UChar32 char_to_check = 0;
+
+		while (index < len_of_string) {
+			U8_NEXT (string_to_check, index, len_of_string, char_to_check);
+
+			if (char_to_check < 0) {
+				return luaL_error (L, "passed string is not valid utf");
+			}
+
+			UScriptCode current_script_code = uscript_getScript (char_to_check, &uc_err);
+
+			if (uc_err != U_ZERO_ERROR) {
+				msg_err ("cannot get unicode script for character, error: %s",
+						u_errorName (uc_err));
+				lua_pushboolean (L, false);
+
+				return 1;
+			}
+
+			if (current_script_code != USCRIPT_COMMON &&
+				current_script_code != USCRIPT_INHERITED) {
+
+				if (last_script_code == USCRIPT_INVALID_CODE) {
+					last_script_code = current_script_code;
+				}
+				else {
+					if (last_script_code != current_script_code) {
+						lua_pushboolean (L, true);
+
+						return 1;
+					}
+				}
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, false);
+
+	return 1;
+}
+
+static gint
+lua_util_get_string_stats (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	gsize len_of_string;
+	gint num_of_digits = 0, num_of_letters = 0;
+	const gchar *string_to_check = lua_tolstring (L, 1, &len_of_string);
+
+	if (string_to_check) {
+		while (*string_to_check != '\0') {
+			if (g_ascii_isdigit(*string_to_check)) {
+				num_of_digits++;
+			} else if (g_ascii_isalpha(*string_to_check)) {
+				num_of_letters++;
+			}
+			string_to_check++;
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_createtable(L, 0, 2);
+	lua_pushstring(L, "digits");
+	lua_pushinteger(L, num_of_digits);
+	lua_settable(L, -3);
+	lua_pushstring(L, "letters");
+	lua_pushinteger(L, num_of_letters);
+	lua_settable(L, -3);
+
+	return 1;
+}
+
+
+static gint
+lua_util_is_utf_outside_range(lua_State *L)
+{
+	LUA_TRACE_POINT;
+	gsize len_of_string;
+	gint ret;
+	const gchar *string_to_check = lua_tolstring (L, 1, &len_of_string);
+	guint32 range_start = lua_tointeger (L, 2);
+	guint32 range_end = lua_tointeger (L, 3);
+
+	static rspamd_lru_hash_t *validators;
+
+	if (validators == NULL) {
+		validators = rspamd_lru_hash_new_full(16, g_free, (GDestroyNotify)uspoof_close, g_int64_hash, g_int64_equal);
+	}
+
+	if (string_to_check) {
+		guint64 hash_key = (guint64)range_end << 32 || range_start;
+
+		USpoofChecker *validator = rspamd_lru_hash_lookup(validators, &hash_key, 0);
+
+		UErrorCode uc_err = U_ZERO_ERROR;
+
+		if (validator == NULL) {
+			USet * allowed_chars;
+			guint64 * creation_hash_key = g_malloc(sizeof(guint64));
+			*creation_hash_key = hash_key;
+
+			validator = uspoof_open (&uc_err);
+			if (uc_err != U_ZERO_ERROR) {
+				msg_err ("cannot init spoof checker: %s", u_errorName (uc_err));
+				lua_pushboolean (L, false);
+				uspoof_close(validator);
+				g_free(creation_hash_key);
+				return 1;
+			}
+
+			allowed_chars = uset_openEmpty();
+			uset_addRange(allowed_chars, range_start, range_end);
+			uspoof_setAllowedChars(validator, allowed_chars, &uc_err);
+
+			uspoof_setChecks (validator,
+				USPOOF_CHAR_LIMIT | USPOOF_ANY_CASE, &uc_err);
+
+			uset_close(allowed_chars);
+
+			if (uc_err != U_ZERO_ERROR) {
+				msg_err ("Cannot configure uspoof: %s", u_errorName (uc_err));
+				lua_pushboolean (L, false);
+				uspoof_close(validator);
+				g_free(creation_hash_key);
+				return 1;
+			}
+
+			rspamd_lru_hash_insert(validators, creation_hash_key, validator, 0, 0);
+		}
+
+		ret = uspoof_checkUTF8 (validator, string_to_check, len_of_string, NULL, &uc_err);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, !!(ret != 0));
+
+	return 1;
+}
+
 
 static gint
 lua_util_get_hostname (lua_State *L)
@@ -2929,7 +3125,12 @@ typedef enum KOption {
 	Knop        /* no-op (configuration or spaces) */
 } KOption;
 
-#if LUA_VERSION_NUM < 503
+#if LUA_VERSION_NUM <= 502
+#define lua_Unsigned size_t
+#endif
+
+#if LUA_VERSION_NUM < 502
+
 #define lua_Unsigned size_t
 
 typedef struct luaL_Buffer_53 {
@@ -2943,6 +3144,7 @@ typedef struct luaL_Buffer_53 {
 #define luaL_Buffer luaL_Buffer_53
 #define COMPAT53_PREFIX lua
 #undef COMPAT53_API
+
 #if defined(__GNUC__) || defined(__clang__)
 # define COMPAT53_API __attribute__((__unused__)) static
 #else
@@ -2991,19 +3193,14 @@ COMPAT53_API void
 luaL_buffinit (lua_State *L, luaL_Buffer_53 *B)
 {
 	/* make it crash if used via pointer to a 5.1-style luaL_Buffer */
-#if LUA_VERSION_NUM < 502
 	B->b.p = NULL;
 	B->b.L = NULL;
 	B->b.lvl = 0;
 	/* reuse the buffer from the 5.1-style luaL_Buffer though! */
 	B->ptr = B->b.buffer;
 	B->nelems = 0;
-#elif LUA_VERSION_NUM == 502
-        B->ptr = B->b.b;
-	B->nelems = B->b.n;
-#endif
 	B->capacity = LUAL_BUFFERSIZE;
-        B->L2 = L;
+	B->L2 = L;
 }
 
 
@@ -3019,12 +3216,9 @@ luaL_prepbuffsize (luaL_Buffer_53 *B, size_t s)
 			luaL_error (B->L2, "buffer too large");
 		newptr = (char *) lua_newuserdata (B->L2, newcap);
 		memcpy(newptr, B->ptr, B->nelems);
-#if LUA_VERSION_NUM < 502
-		if (B->ptr != B->b.buffer)
-#elif LUA_VERSION_NUM == 502
-		if (B->ptr != B->b.b)
-#endif
+		if (B->ptr != B->b.buffer) {
 			lua_replace (B->L2, -2); /* remove old buffer */
+		}
 		B->ptr = newptr;
 		B->capacity = newcap;
 	}
@@ -3047,18 +3241,11 @@ luaL_addvalue (luaL_Buffer_53 *B)
 	const char *s = lua_tolstring (B->L2, -1, &len);
 	if (!s)
 		luaL_error (B->L2, "cannot convert value to string");
-#if LUA_VERSION_NUM < 502
-	if (B->ptr != B->b.buffer)
-#elif LUA_VERSION_NUM == 502
-	if (B->ptr != B->b.b)
-#endif
+	if (B->ptr != B->b.buffer) {
 		lua_insert (B->L2, -2); /* userdata buffer must be at stack top */
+	}
 	luaL_addlstring (B, s, len);
-#if LUA_VERSION_NUM < 502
 	lua_remove (B->L2, B->ptr != B->b.buffer ? -2 : -1);
-#elif LUA_VERSION_NUM == 502
-	lua_remove (B->L2, B->ptr != B->b.b ? -2 : -1);
-#endif
 }
 
 
@@ -3066,12 +3253,9 @@ COMPAT53_API void
 luaL_pushresult (luaL_Buffer_53 *B)
 {
 	lua_pushlstring (B->L2, B->ptr, B->nelems);
-#if LUA_VERSION_NUM < 502
-	if (B->ptr != B->b.buffer)
-#elif LUA_VERSION_NUM == 502
-	if (B->ptr != B->b.b)
-#endif
+	if (B->ptr != B->b.buffer) {
 		lua_replace (B->L2, -2); /* remove userdata buffer */
+	}
 }
 
 #endif

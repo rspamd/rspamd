@@ -63,6 +63,7 @@ LUA_FUNCTION_DEF (url, get_tag);
 LUA_FUNCTION_DEF (url, get_count);
 LUA_FUNCTION_DEF (url, get_tags);
 LUA_FUNCTION_DEF (url, add_tag);
+LUA_FUNCTION_DEF (url, get_visible);
 LUA_FUNCTION_DEF (url, create);
 LUA_FUNCTION_DEF (url, init);
 LUA_FUNCTION_DEF (url, all);
@@ -89,6 +90,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_tag),
 	LUA_INTERFACE_DEF (url, get_tags),
 	LUA_INTERFACE_DEF (url, add_tag),
+	LUA_INTERFACE_DEF (url, get_visible),
 	LUA_INTERFACE_DEF (url, get_count),
 	LUA_INTERFACE_DEF (url, get_flags),
 	{"get_redirected", lua_url_get_phished},
@@ -650,6 +652,27 @@ lua_url_get_count (lua_State *L)
 	return 1;
 }
 
+ /***
+* @method url:get_visible()
+* Get visible part of the url with html tags stripped
+* @return {string} url string
+*/
+static gint
+lua_url_get_visible (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url (L, 1);
+
+	if (url != NULL && url->url->visible_part) {
+		lua_pushstring (L, url->url->visible_part);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+return 1;
+}
+
 /***
  * @method url:to_table()
  * Return url as a table with the following fields:
@@ -776,7 +799,7 @@ lua_url_create (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 	else {
-		rspamd_url_find_single (pool, text, length, FALSE,
+		rspamd_url_find_single (pool, text, length, RSPAMD_URL_FIND_ALL,
 				lua_url_single_inserter, L);
 
 		if (lua_type (L, -1) != LUA_TUSERDATA) {
@@ -844,7 +867,8 @@ lua_url_all (lua_State *L)
 
 		if (text != NULL) {
 			lua_newtable (L);
-			rspamd_url_find_multiple (pool, text, length, FALSE, NULL,
+			rspamd_url_find_multiple (pool, text, length,
+					RSPAMD_URL_FIND_ALL, NULL,
 					lua_url_table_inserter, L);
 
 		}
@@ -878,6 +902,7 @@ lua_url_all (lua_State *L)
  * - `schemaless`: URL has no schema
  * - `unnormalised`: URL has some unicode unnormalities
  * - `zw_spaces`: URL has some zero width spaces
+ * - `url_displayed`: URL has some other url-like string in visible part
  * @return {table} URL flags
  */
 #define PUSH_FLAG(fl, name) do { \
@@ -918,6 +943,7 @@ lua_url_get_flags (lua_State *L)
 		PUSH_FLAG (RSPAMD_URL_FLAG_SCHEMALESS, "schemaless");
 		PUSH_FLAG (RSPAMD_URL_FLAG_UNNORMALISED, "unnormalised");
 		PUSH_FLAG (RSPAMD_URL_FLAG_ZW_SPACES, "zw_spaces");
+		PUSH_FLAG (RSPAMD_URL_FLAG_DISPLAY_URL, "url_displayed");
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

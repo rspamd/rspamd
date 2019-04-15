@@ -59,6 +59,7 @@ local settings = {
   subject_privacy_alg = 'blake2', -- default hash-algorithm to obfuscate subject
   subject_privacy_prefix = 'obf', -- prefix to show it's obfuscated
   subject_privacy_length = 16, -- cut the length of the hash
+  schema_additions = {}, -- additional SQL statements to be executed when schema is uploaded
   user = nil,
   password = nil,
   no_ssl_verify = false,
@@ -114,7 +115,7 @@ CREATE TABLE rspamd
 ) ENGINE = MergeTree(Date, (TS, From), 8192)
 ]],
 [[CREATE TABLE rspamd_version ( Version UInt32) ENGINE = TinyLog]],
-[[INSERT INTO rspamd_version (Version) Values (2)]],
+[[INSERT INTO rspamd_version (Version) Values (${SCHEMA_VERSION})]],
 }
 
 -- This describes SQL queries to migrate between versions
@@ -242,13 +243,14 @@ local function clickhouse_check_symbol(task, symbols, need_score)
   return false
 end
 
-local function clickhouse_send_data(task)
+local function clickhouse_send_data(task, ev_base)
+  local log_object = task or rspamd_config
   local upstream = settings.upstream:get_upstream_round_robin()
   local ip_addr = upstream:get_addr():to_string(true)
 
   local function gen_success_cb(what, how_many)
     return function (_, _)
-      rspamd_logger.infox(task, "sent %s rows of %s to clickhouse server %s",
+      rspamd_logger.infox(log_object, "sent %s rows of %s to clickhouse server %s",
           how_many, what, ip_addr)
       upstream:ok()
     end
@@ -256,23 +258,27 @@ local function clickhouse_send_data(task)
 
   local function gen_fail_cb(what, how_many)
     return function (_, err)
-      rspamd_logger.errx(task, "cannot send %s rows of %s data to clickhouse server %s: %s",
+      rspamd_logger.errx(log_object, "cannot send %s rows of %s data to clickhouse server %s: %s",
           how_many, what, ip_addr, err)
       upstream:fail()
     end
   end
 
   local function send_data(what, tbl, query)
-    local ch_params = {
-      task = task,
-    }
+    local ch_params = {}
+    if task then
+      ch_params.task = task
+    else
+      ch_params.config = rspamd_config
+      ch_params.ev_base = ev_base
+    end
 
     local ret = lua_clickhouse.insert(upstream, settings, ch_params,
         query, tbl,
         gen_success_cb(what, #tbl),
         gen_fail_cb(what, #tbl))
     if not ret then
-      rspamd_logger.errx(task, "cannot send %s rows of %s data to clickhouse server %s: %s",
+      rspamd_logger.errx(log_object, "cannot send %s rows of %s data to clickhouse server %s: %s",
           #tbl, what, ip_addr, 'cannot make HTTP request')
     end
   end
@@ -334,7 +340,7 @@ local function clickhouse_collect(task)
   local mime_domain = ''
   local mime_user = ''
   if task:has_from('mime') then
-    local from = task:get_from('mime')[1]
+    local from = task:get_from({'mime','orig'})[1]
     if from then
       mime_domain = from['domain']
       mime_user = from['user']
@@ -443,7 +449,7 @@ local function clickhouse_collect(task)
 
   local timestamp = task:get_date({
     format = 'connect',
-    gmt = false
+    gmt = true, -- The only sane way to sync stuff with different timezones
   })
 
   local action = task:get_metric_action('default')
@@ -726,7 +732,7 @@ local function upload_clickhouse_schema(upstream, ev_base, cfg)
   }
 
   -- Apply schema sequentially
-  for i,v in ipairs(clickhouse_schema) do
+  fun.each(function(v)
     local sql = v
     local err, _ = lua_clickhouse.generic_sync(upstream, settings, ch_params, sql)
 
@@ -735,9 +741,13 @@ local function upload_clickhouse_schema(upstream, ev_base, cfg)
         sql, upstream:get_addr():to_string(true), err)
       return
     end
-    rspamd_logger.infox(rspamd_config, 'uploaded clickhouse schema element %s to %s',
-      i, upstream:get_addr():to_string(true))
-  end
+    rspamd_logger.debugm(N, rspamd_config, 'uploaded clickhouse schema element %s to %s',
+        v, upstream:get_addr():to_string(true))
+  end,
+      -- Also template schema version
+      fun.map(function(v)
+        return lua_util.template(v, {SCHEMA_VERSION = tostring(schema_version)})
+      end, fun.chain(clickhouse_schema, settings.schema_additions)))
 end
 
 local function maybe_apply_migrations(upstream, ev_base, cfg, version)
@@ -927,9 +937,9 @@ if opts then
         priority = 10,
         flags = 'empty,explicit_disable,ignore_passthrough',
       })
-      rspamd_config:register_finish_script(function(task)
+      rspamd_config:register_finish_script(function(_, ev_base, _)
         if nrows > 0 then
-          clickhouse_send_data(task)
+          clickhouse_send_data(nil, ev_base)
         end
       end)
       -- Create tables on load

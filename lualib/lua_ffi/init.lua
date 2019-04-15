@@ -49,5 +49,6 @@ end
 pcall(ffi.load, "rspamd-server", true)
 exports.common = require "lua_ffi/common"
 exports.dkim = require "lua_ffi/dkim"
+exports.spf = require "lua_ffi/spf"
 
 return exports

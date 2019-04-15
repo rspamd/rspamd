@@ -1,7 +1,7 @@
 #ifndef RSPAMD_LUA_DNS_H
 #define RSPAMD_LUA_DNS_H
 
-typedef struct lua_State lua_State;
+struct lua_State;
 struct rdns_reply;
 
 /**
@@ -11,6 +11,6 @@ struct rdns_reply;
  * @param reply
  */
 void
-lua_push_dns_reply (lua_State *L, const struct rdns_reply *reply);
+lua_push_dns_reply (struct lua_State *L, const struct rdns_reply *reply);
 
-#endif //RSPAMD_LUA_DNS_H
+#endif

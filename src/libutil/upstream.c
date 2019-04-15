@@ -789,50 +789,42 @@ rspamd_upstream_add_addr (struct upstream *up, rspamd_inet_addr_t *addr)
 }
 
 gboolean
-rspamd_upstreams_parse_line (struct upstream_list *ups,
-		const gchar *str, guint16 def_port, void *data)
+rspamd_upstreams_parse_line_len (struct upstream_list *ups,
+		const gchar *str, gsize len, guint16 def_port, void *data)
 {
-	const gchar *end = str + strlen (str), *p = str;
+	const gchar *end = str + len, *p = str;
 	const gchar *separators = ";, \n\r\t";
 	gchar *tmp;
-	guint len;
+	guint span_len;
 	gboolean ret = FALSE;
 
-	if (g_ascii_strncasecmp (p, "random:", sizeof ("random:") - 1) == 0) {
+	if (RSPAMD_LEN_CHECK_STARTS_WITH(p, len, "random:")) {
 		ups->rot_alg = RSPAMD_UPSTREAM_RANDOM;
 		p += sizeof ("random:") - 1;
 	}
-	else if (g_ascii_strncasecmp (p,
-			"master-slave:",
-			sizeof ("master-slave:") - 1) == 0) {
+	else if (RSPAMD_LEN_CHECK_STARTS_WITH(p, len, "master-slave:")) {
 		ups->rot_alg = RSPAMD_UPSTREAM_MASTER_SLAVE;
 		p += sizeof ("master-slave:") - 1;
 	}
-	else if (g_ascii_strncasecmp (p,
-			"round-robin:",
-			sizeof ("round-robin:") - 1) == 0) {
+	else if (RSPAMD_LEN_CHECK_STARTS_WITH(p, len, "round-robin:")) {
 		ups->rot_alg = RSPAMD_UPSTREAM_ROUND_ROBIN;
 		p += sizeof ("round-robin:") - 1;
 	}
-	else if (g_ascii_strncasecmp (p,
-			"hash:",
-			sizeof ("hash:") - 1) == 0) {
+	else if (RSPAMD_LEN_CHECK_STARTS_WITH(p, len, "hash:")) {
 		ups->rot_alg = RSPAMD_UPSTREAM_HASHED;
 		p += sizeof ("hash:") - 1;
 	}
-	else if (g_ascii_strncasecmp (p,
-			"sequential:",
-			sizeof ("sequential:") - 1) == 0) {
+	else if (RSPAMD_LEN_CHECK_STARTS_WITH(p, len, "sequential:")) {
 		ups->rot_alg = RSPAMD_UPSTREAM_SEQUENTIAL;
 		p += sizeof ("sequential:") - 1;
 	}
 
 	while (p < end) {
-		len = strcspn (p, separators);
+		span_len = rspamd_memcspn (p, separators, end - p);
 
-		if (len > 0) {
-			tmp = g_malloc (len + 1);
-			rspamd_strlcpy (tmp, p, len + 1);
+		if (span_len > 0) {
+			tmp = g_malloc (span_len + 1);
+			rspamd_strlcpy (tmp, p, span_len + 1);
 
 			if (rspamd_upstreams_add_upstream (ups, tmp, def_port,
 					RSPAMD_UPSTREAM_PARSE_DEFAULT,
@@ -843,12 +835,23 @@ rspamd_upstreams_parse_line (struct upstream_list *ups,
 			g_free (tmp);
 		}
 
-		p += len;
+		p += span_len;
 		/* Skip separators */
-		p += strspn (p, separators);
+		if (p < end) {
+			p += rspamd_memspn (p, separators, end - p);
+		}
 	}
 
 	return ret;
+}
+
+
+gboolean
+rspamd_upstreams_parse_line (struct upstream_list *ups,
+							 const gchar *str, guint16 def_port, void *data)
+{
+	return rspamd_upstreams_parse_line_len (ups, str, strlen (str),
+			def_port, data);
 }
 
 gboolean

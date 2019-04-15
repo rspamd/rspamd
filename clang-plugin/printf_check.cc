@@ -353,12 +353,13 @@ namespace rspamd {
 		{
 			/* name -> format string position */
 			printf_functions = {
-					{"rspamd_printf",               0},
-					{"rspamd_default_log_function", 4},
-					{"rspamd_snprintf",             2},
-					{"rspamd_fprintf",              1},
-					{"rspamd_printf_gstring",       1},
-					{"rspamd_printf_fstring",       1}
+					{"rspamd_printf",                 0},
+					{"rspamd_default_log_function",   4},
+					{"rspamd_snprintf",               2},
+					{"rspamd_fprintf",                1},
+					{"rspamd_printf_gstring",         1},
+					{"rspamd_printf_fstring",         1},
+					{"rspamd_conditional_debug_fast", 6},
 			};
 
 			format_specs = {

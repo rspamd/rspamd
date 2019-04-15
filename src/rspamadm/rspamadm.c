@@ -31,6 +31,7 @@ static gboolean list_commands = FALSE;
 static gboolean show_help = FALSE;
 static gboolean show_version = FALSE;
 GHashTable *ucl_vars = NULL;
+gchar **lua_env = NULL;
 struct rspamd_main *rspamd_main = NULL;
 struct rspamd_async_session *rspamadm_session = NULL;
 lua_State *L = NULL;
@@ -60,11 +61,13 @@ static GOptionEntry entries[] = {
 	{"list-commands", 'l', 0, G_OPTION_ARG_NONE, &list_commands,
 			"List available commands", NULL},
 	{"var", 0, 0, G_OPTION_ARG_CALLBACK, (gpointer)&rspamadm_parse_ucl_var,
-			"Redefine UCL variable", NULL},
+			"Redefine/define environment variable", NULL},
 	{"help", 'h', 0, G_OPTION_ARG_NONE, &show_help,
 			"Show help", NULL},
 	{"version", 'V', 0, G_OPTION_ARG_NONE, &show_version,
 			"Show version", NULL},
+	{"lua-env", '\0', 0, G_OPTION_ARG_FILENAME_ARRAY, &lua_env,
+			"Load lua environment from the specified files", NULL},
 	{NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL}
 };
 
@@ -323,10 +326,11 @@ rspamadm_command_maybe_match_name (const gchar *cmd, const gchar *input)
 
 
 static void
-rspamadm_add_lua_globals (void)
+rspamadm_add_lua_globals (struct rspamd_dns_resolver *resolver)
 {
 	struct rspamd_async_session  **psession;
 	struct event_base **pev_base;
+	struct rspamd_dns_resolver **presolver;
 
 	rspamadm_session = rspamd_session_create (rspamd_main->cfg->cfg_pool, NULL,
 			NULL, (event_finalizer_t )NULL, NULL);
@@ -340,6 +344,11 @@ rspamadm_add_lua_globals (void)
 	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
 	*pev_base = rspamd_main->ev_base;
 	lua_setglobal (L, "rspamadm_ev_base");
+
+	presolver = lua_newuserdata (L, sizeof (struct rspamd_dns_resolver *));
+	rspamd_lua_setclass (L, "rspamd{resolver}", -1);
+	*presolver = resolver;
+	lua_setglobal (L, "rspamadm_dns_resolver");
 }
 
 gint
@@ -353,6 +362,7 @@ main (gint argc, gchar **argv, gchar **env)
 	gchar **nargv, **targv;
 	const gchar *cmd_name;
 	const struct rspamadm_command *cmd;
+	struct rspamd_dns_resolver *resolver;
 	GPtrArray *all_commands = g_ptr_array_new (); /* Discovered during check */
 	gint i, nargc, targc;
 	worker_t **pworker;
@@ -420,7 +430,7 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Setup logger */
 	if (verbose) {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
-		cfg->log_flags |= RSPAMD_LOG_FLAG_USEC;
+		cfg->log_flags |= RSPAMD_LOG_FLAG_USEC|RSPAMD_LOG_FLAG_ENFORCED;
 	}
 	else {
 		cfg->log_level = G_LOG_LEVEL_MESSAGE;
@@ -433,10 +443,11 @@ main (gint argc, gchar **argv, gchar **env)
 			rspamd_main->server_pool);
 	(void) rspamd_log_open (rspamd_main->logger);
 
-	(void) dns_resolver_init (rspamd_main->logger,
+	resolver = rspamd_dns_resolver_init (rspamd_main->logger,
 			rspamd_main->ev_base,
 			cfg);
-	rspamd_main->http_ctx = rspamd_http_context_create (cfg, rspamd_main->ev_base);
+	rspamd_main->http_ctx = rspamd_http_context_create (cfg, rspamd_main->ev_base,
+			NULL);
 
 	g_log_set_default_handler (rspamd_glib_log_function, rspamd_main->logger);
 	g_set_printerr_handler (rspamd_glib_printerr_function);
@@ -458,8 +469,16 @@ main (gint argc, gchar **argv, gchar **env)
 
 	L = cfg->lua_state;
 	rspamd_lua_set_path (L, NULL, ucl_vars);
-	rspamd_lua_set_globals (cfg, L, ucl_vars);
-	rspamadm_add_lua_globals ();
+
+	if (!rspamd_lua_set_env (L, ucl_vars, lua_env, &error)) {
+		rspamd_fprintf (stderr, "Cannot load lua environment: %e", error);
+		g_error_free (error);
+
+		exit (EXIT_FAILURE);
+	}
+
+	rspamd_lua_set_globals (cfg, L);
+	rspamadm_add_lua_globals (resolver);
 
 #ifdef WITH_HIREDIS
 	rspamd_redis_pool_config (cfg->redis_pool, cfg, rspamd_main->ev_base);

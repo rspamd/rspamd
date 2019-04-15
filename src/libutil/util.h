@@ -195,6 +195,9 @@ void g_ptr_array_insert (GPtrArray *array, gint index_, gpointer data);
 GPtrArray* g_ptr_array_new_full (guint reserved_size,
 		GDestroyNotify element_free_func);
 #endif
+#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION < 32))
+const gchar *g_environ_getenv (gchar **envp, const gchar *variable);
+#endif
 
 /*
  * Convert milliseconds to timeval fields

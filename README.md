@@ -32,7 +32,7 @@ If that is not enough, Rspamd provides an extensive [Lua API](https://rspamd.com
 
 ## Contributing
 
-Please read [CONTRIBUTIONS.md](CONTRIBUTIONS.md) for details on the process for submitting pull requests to us.
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on the process for submitting pull requests to us.
 
 ## Authors
 

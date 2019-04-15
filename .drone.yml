@@ -61,6 +61,10 @@ pipeline:
       - npm install
       - ./node_modules/.bin/eslint -v
       - ./node_modules/.bin/eslint ./
+      # Run stylelint checks
+      - ./node_modules/.bin/stylelint -v
+      - npm show stylelint-config-standard version
+      - ./node_modules/.bin/stylelint ./**/*.css ./**/*.html ./**/*.js
 
   # Run checks on perl source using tidyall
   perl-tidyall:

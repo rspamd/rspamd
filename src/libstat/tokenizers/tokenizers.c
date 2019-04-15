@@ -217,10 +217,10 @@ rspamd_tokenize_check_limit (gboolean decay,
 }
 
 static inline gboolean
-rspamd_utf_word_valid (const gchar *text, const gchar *end,
+rspamd_utf_word_valid (const guchar *text, const guchar *end,
 		gint32 start, gint32 finish)
 {
-	const gchar *st = text + start, *fin = text + finish;
+	const guchar *st = text + start, *fin = text + finish;
 	UChar32 c;
 
 	if (st >= end || fin > end || st >= fin) {

@@ -378,7 +378,7 @@ lua_tcp_global_resolver (struct event_base *ev_base,
 	}
 
 	if (global_resolver == NULL) {
-		global_resolver = dns_resolver_init (NULL, ev_base, cfg);
+		global_resolver = rspamd_dns_resolver_init (NULL, ev_base, cfg);
 	}
 
 	return global_resolver;
@@ -1659,7 +1659,7 @@ lua_tcp_request (lua_State *L)
 	}
 	else {
 		if (task == NULL) {
-			if (!make_dns_request (resolver, session, NULL, lua_tcp_dns_handler, cbd,
+			if (!rspamd_dns_resolver_request (resolver, session, NULL, lua_tcp_dns_handler, cbd,
 					RDNS_REQUEST_A, host)) {
 				lua_tcp_push_error (cbd, TRUE, "cannot resolve host: %s", host);
 				lua_pushboolean (L, FALSE);
@@ -1673,7 +1673,7 @@ lua_tcp_request (lua_State *L)
 			}
 		}
 		else {
-			if (!make_dns_request_task (task, lua_tcp_dns_handler, cbd,
+			if (!rspamd_dns_resolver_request_task (task, lua_tcp_dns_handler, cbd,
 					RDNS_REQUEST_A, host)) {
 				lua_tcp_push_error (cbd, TRUE, "cannot resolve host: %s", host);
 				lua_pushboolean (L, FALSE);
@@ -1827,8 +1827,8 @@ lua_tcp_connect_sync (lua_State *L)
 	}
 	else {
 		if (task == NULL) {
-			if (!make_dns_request (resolver, session, NULL, lua_tcp_dns_handler, cbd,
-								RDNS_REQUEST_A, host)) {
+			if (!rspamd_dns_resolver_request (resolver, session, NULL, lua_tcp_dns_handler, cbd,
+					RDNS_REQUEST_A, host)) {
 				lua_pushboolean (L, FALSE);
 				lua_pushliteral (L, "Failed to initiate dns request");
 
@@ -1843,8 +1843,8 @@ lua_tcp_connect_sync (lua_State *L)
 		else {
 			cbd->item = rspamd_symcache_get_cur_item (task);
 
-			if (!make_dns_request_task (task, lua_tcp_dns_handler, cbd,
-										RDNS_REQUEST_A, host)) {
+			if (!rspamd_dns_resolver_request_task (task, lua_tcp_dns_handler, cbd,
+					RDNS_REQUEST_A, host)) {
 				lua_pushboolean (L, FALSE);
 				lua_pushliteral (L, "Failed to initiate dns request");
 				TCP_RELEASE (cbd);

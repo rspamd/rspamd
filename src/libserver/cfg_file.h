@@ -71,6 +71,7 @@ enum rspamd_log_cfg_flags {
 	RSPAMD_LOG_FLAG_RE_CACHE = (1 << 2),
 	RSPAMD_LOG_FLAG_USEC = (1 << 3),
 	RSPAMD_LOG_FLAG_RSPAMADM = (1 << 4),
+	RSPAMD_LOG_FLAG_ENFORCED = (1 << 5),
 };
 
 struct rspamd_worker_log_pipe {
@@ -212,8 +213,8 @@ struct rspamd_worker_conf {
 	struct rspamd_worker_bind_conf *bind_conf;      /**< bind configuration									*/
 	gint16 count;                                   /**< number of workers									*/
 	GList *listen_socks;                            /**< listening sockets descriptors						*/
-	guint32 rlimit_nofile;                          /**< max files limit									*/
-	guint32 rlimit_maxcore;                         /**< maximum core file size								*/
+	guint64 rlimit_nofile;                          /**< max files limit									*/
+	guint64 rlimit_maxcore;                         /**< maximum core file size								*/
 	GHashTable *params;                             /**< params for worker									*/
 	GQueue *active_workers;                         /**< linked list of spawned workers						*/
 	gboolean has_socket;                            /**< whether we should make listening socket in main process */

@@ -1875,6 +1875,8 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	struct fuzzy_client_result *res;
 	gboolean is_fuzzy = FALSE;
 	gchar hexbuf[rspamd_cryptobox_HASHBYTES * 2 + 1];
+	/* Discriminate scores for small images */
+	static const guint short_image_limit = 32 * 1024;
 
 	/* Get mapping by flag */
 	if ((map =
@@ -1902,7 +1904,10 @@ fuzzy_insert_result (struct fuzzy_client_session *session,
 	nval = fuzzy_normalize (rep->v1.value, weight);
 
 	if (io && (io->flags & FUZZY_CMD_FLAG_IMAGE)) {
-		nval *= rspamd_normalize_probability (rep->v1.prob, 0.5);
+		if (!io->part || io->part->parsed_data.len <= short_image_limit) {
+			nval *= rspamd_normalize_probability (rep->v1.prob, 0.5);
+		}
+
 		type = "img";
 		res->type = FUZZY_RESULT_IMG;
 	}
@@ -2734,7 +2739,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 						rspamd_inet_address_to_string_pretty (addr),
 						errno,
 						strerror (errno));
-				rspamd_upstream_fail (selected, FALSE);
+				rspamd_upstream_fail (selected, TRUE);
 				g_ptr_array_free (commands, TRUE);
 			} else {
 				/* Create session for a socket */

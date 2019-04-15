@@ -306,13 +306,15 @@ void rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj,
 		GHashTable *vars);
 
 /* Set some lua globals */
-void rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L,
-							 GHashTable *vars);
+gboolean rspamd_lua_set_env (lua_State *L, GHashTable *vars, char **lua_env,
+		GError **err);
+void rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L);
 
 struct memory_pool_s * rspamd_lua_check_mempool (lua_State * L, gint pos);
 struct rspamd_config * lua_check_config (lua_State * L, gint pos);
 struct rspamd_async_session* lua_check_session (lua_State * L, gint pos);
 struct event_base* lua_check_ev_base (lua_State * L, gint pos);
+struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L, gint pos);
 
 /**
  * Extract an arguments from lua table according to format string. Supported arguments are:
@@ -352,7 +354,7 @@ rspamd_lua_get_traceback_string (lua_State *L);
  */
 guint rspamd_lua_table_size (lua_State *L, gint tbl_pos);
 
-void lua_push_emails_address_list (lua_State *L, GPtrArray *addrs);
+void lua_push_emails_address_list (lua_State *L, GPtrArray *addrs, int flags);
 
 
 #define TRACE_POINTS 6
@@ -485,7 +487,7 @@ extern ucl_object_t *lua_traces;
  func_obj->value.iv ++; \
 } while(0)
 #else
-#define LUA_TRACE_POINT
+#define LUA_TRACE_POINT do {} while(0)
 #endif
 
 #endif /* WITH_LUA */

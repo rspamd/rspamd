@@ -208,6 +208,8 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 			arch);
 
 	while (cd < eocd) {
+		guint16 flags;
+
 		/* Read central directory record */
 		if (eocd - cd < cd_basic_len ||
 				memcmp (cd, cd_magic, sizeof (cd_magic)) != 0) {
@@ -216,6 +218,8 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 			return;
 		}
 
+		memcpy (&flags, cd + 8, sizeof (guint16));
+		flags = GUINT16_FROM_LE (flags);
 		memcpy (&comp_size, cd + 20, sizeof (guint32));
 		comp_size = GUINT32_FROM_LE (comp_size);
 		memcpy (&uncomp_size, cd + 24, sizeof (guint32));
@@ -239,12 +243,35 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 		f->compressed_size = comp_size;
 		f->uncompressed_size = uncomp_size;
 
+		if (flags & 0x41u) {
+			f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+		}
+
 		if (f->fname) {
 			g_ptr_array_add (arch->files, f);
 			msg_debug_archive ("found file in zip archive: %v", f->fname);
 		}
 		else {
 			g_free (f);
+		}
+
+		/* Process extra fields */
+		const guchar *extra = cd + fname_len + cd_basic_len;
+		p = extra;
+
+		while (p + sizeof (guint16) * 2 < extra + extra_len) {
+			guint16 hid, hlen;
+
+			memcpy (&hid, p, sizeof (guint16));
+			hid = GUINT16_FROM_LE (hid);
+			memcpy (&hlen, p + sizeof (guint16), sizeof (guint16));
+			hlen = GUINT16_FROM_LE (hlen);
+
+			if (hid == 0x0017) {
+				f->flags |= RSPAMD_ARCHIVE_FILE_ENCRYPTED;
+			}
+
+			p += hlen + sizeof (guint16) * 2;
 		}
 
 		cd += fname_len + comment_len + extra_len + cd_basic_len;
@@ -1146,12 +1173,14 @@ rspamd_7zip_read_coders_info (struct rspamd_task *task,
 					return NULL;
 				}
 
-				folder_nstreams = g_alloca (sizeof (int) * num_folders);
+				folder_nstreams = g_malloc (sizeof (int) * num_folders);
 
 				for (i = 0; i < num_folders && p != NULL && p < end; i++) {
 					p = rspamd_7zip_read_folder (task, p, end, arch,
 							&folder_nstreams[i], &num_digests);
 				}
+
+				g_free (folder_nstreams);
 			}
 			break;
 		case kCodersUnPackSize:
@@ -1161,8 +1190,9 @@ rspamd_7zip_read_coders_info (struct rspamd_task *task,
 						guint64 tmp;
 
 						SZ_READ_VINT (tmp); /* Unpacked size */
-						msg_debug_archive ("7zip: unpacked size (folder=%d, stream=%d) = %L",
-								i, j, tmp);
+						msg_debug_archive ("7zip: unpacked size "
+										   "(folder=%d, stream=%d) = %L",
+								(gint)i, j, tmp);
 					}
 				}
 				else {
@@ -1499,6 +1529,7 @@ rspamd_7zip_read_files_info (struct rspamd_task *task,
 					if (fend == NULL || fend - p == 0) {
 						/* Crap instead of fname */
 						msg_debug_archive ("bad 7zip name; %s", G_STRLOC);
+						goto end;
 					}
 
 					res = rspamd_7zip_ucs2_to_utf8 (task, p, fend);

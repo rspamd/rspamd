@@ -44,7 +44,7 @@ end
 local redis_params
 local whitelisted_ip
 local whitelist_domains_map
-local toint =math.ifloor or math.floor
+local toint = math.ifloor or math.floor
 local settings = {
   expire = 86400, -- 1 day by default
   timeout = 300, -- 5 minutes by default
@@ -53,6 +53,7 @@ local settings = {
   message = 'Try again later', -- default greylisted message
   symbol = 'GREYLIST',
   action = 'soft reject', -- default greylisted action
+  whitelist_symbols = {}, -- whitelist when specific symbols have been found
   ipv4_mask = 19, -- Mask bits for ipv4
   ipv6_mask = 64, -- Mask bits for ipv6
   report_time = false, -- Tell when greylisting is epired (appended to `message`)
@@ -65,6 +66,7 @@ local rspamd_util = require "rspamd_util"
 local fun = require "fun"
 local hash = require "rspamd_cryptobox_hash"
 local rspamd_lua_utils = require "lua_util"
+local lua_map = require "lua_maps"
 local N = "greylist"
 
 local function data_key(task)
@@ -276,6 +278,19 @@ local function greylist_set(task)
   -- Don't do anything if pre-result has been already set
   if task:has_pre_result() then return end
 
+  -- Check whitelist_symbols
+  for _,sym in ipairs(settings.whitelist_symbols) do
+    if task:has_symbol(sym) then
+      rspamd_logger.infox(task, 'skip greylisting as we have found symbol %s', sym)
+      if action == 'greylist' then
+        -- We are going to accept message
+        rspamd_logger.infox(task, 'downgrading metric action from "greylist" to "no action"')
+        task:disable_action('greylist')
+      end
+      return
+    end
+  end
+
   if settings.greylist_min_score then
     local score = task:get_metric_score('default')[1]
     if score < settings.greylist_min_score then
@@ -438,12 +453,12 @@ if opts then
     end
   end
 
-  whitelisted_ip = rspamd_map_add('greylist', 'whitelisted_ip', 'radix',
+  whitelisted_ip = lua_map.rspamd_map_add(N, 'whitelisted_ip', 'radix',
     'Greylist whitelist ip map')
-  whitelist_domains_map = rspamd_map_add('greylist', 'whitelist_domains_url',
+  whitelist_domains_map = lua_map.rspamd_map_add(N, 'whitelist_domains_url',
     'map', 'Greylist whitelist domains map')
 
-  redis_params = rspamd_parse_redis_server('greylist')
+  redis_params = rspamd_parse_redis_server(N)
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
     rspamd_lua_utils.disable_module(N, "redis")

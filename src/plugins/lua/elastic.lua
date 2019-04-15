@@ -36,6 +36,7 @@ local N = "elastic"
 local E = {}
 local connect_prefix = 'http://'
 local enabled = true
+local ingest_geoip_type = 'plugins'
 local settings = {
   limit = 500,
   index_pattern = 'rspamd-%Y.%m.%d',
@@ -53,6 +54,7 @@ local settings = {
   password = nil,
   no_ssl_verify = false,
   max_fail = 3,
+  ingest_module = false,
 }
 
 local function read_file(path)
@@ -96,7 +98,7 @@ local function elastic_send_data(task)
     end
   end
 
-  rspamd_http.request({
+  return rspamd_http.request({
     url = push_url,
     headers = {
       ['Content-Type'] = 'application/x-ndjson',
@@ -234,8 +236,7 @@ local opts = rspamd_config:get_all_opt('elastic')
 local function check_elastic_server(cfg, ev_base, _)
   local upstream = settings.upstream:get_upstream_round_robin()
   local ip_addr = upstream:get_addr():to_string(true)
-
-  local plugins_url = connect_prefix .. ip_addr .. '/_nodes/plugins'
+  local plugins_url = connect_prefix .. ip_addr .. '/_nodes/' .. ingest_geoip_type
   local function http_callback(err, code, body, _)
     if code == 200 then
       local parser = ucl.parser()
@@ -444,6 +445,10 @@ if redis_params and opts then
   else
     if settings.use_https then
       connect_prefix = 'https://'
+    end
+
+    if settings.ingest_module then
+      ingest_geoip_type = 'modules'
     end
 
     settings.upstream = upstream_list.create(rspamd_config,

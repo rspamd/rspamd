@@ -25,6 +25,7 @@
 
 #include <sys/types.h>
 #include <sys/uio.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "rdns.h"
@@ -448,9 +449,11 @@ rdns_curve_dtor (struct rdns_resolver *resolver, void *plugin_data)
 #define crypto_box_ZEROBYTES 32
 #define crypto_box_BOXZEROBYTES 16
 
-ssize_t rdns_curve_send (struct rdns_request *req, void *plugin_data);
+ssize_t rdns_curve_send (struct rdns_request *req, void *plugin_data,
+						 struct sockaddr *saddr, socklen_t slen);
 ssize_t rdns_curve_recv (struct rdns_io_channel *ioc, void *buf, size_t len,
-		void *plugin_data, struct rdns_request **req_out);
+						 void *plugin_data, struct rdns_request **req_out,
+						 struct sockaddr *saddr, socklen_t slen);
 void rdns_curve_finish_request (struct rdns_request *req, void *plugin_data);
 void rdns_curve_dtor (struct rdns_resolver *resolver, void *plugin_data);
 
@@ -683,7 +686,8 @@ rdns_curve_register_plugin (struct rdns_resolver *resolver,
 }
 
 ssize_t
-rdns_curve_send (struct rdns_request *req, void *plugin_data)
+rdns_curve_send (struct rdns_request *req, void *plugin_data,
+				 struct sockaddr *saddr, socklen_t slen)
 {
 	struct rdns_curve_ctx *ctx = (struct rdns_curve_ctx *)plugin_data;
 	struct rdns_curve_entry *entry;
@@ -746,12 +750,19 @@ rdns_curve_send (struct rdns_request *req, void *plugin_data)
 		iov[3].iov_base = m + crypto_box_BOXZEROBYTES;
 		iov[3].iov_len = boxed_len - crypto_box_BOXZEROBYTES;
 
-		ret = writev (req->io->sock, iov, sizeof (iov) / sizeof (iov[0]));
+		struct msghdr msg;
+
+		memset (&msg, 0, sizeof (msg));
+		msg.msg_namelen = slen;
+		msg.msg_name = saddr;
+		msg.msg_iov = iov;
+		msg.msg_iovlen = sizeof (iov) / sizeof (iov[0]);
+		ret = sendmsg (req->io->sock, &msg, 0);
 		rspamd_explicit_memzero (m, boxed_len);
 		free (m);
 	}
 	else {
-		ret = write (req->io->sock, req->packet, req->pos);
+		ret = sendto (req->io->sock, req->packet, req->pos, 0, saddr, slen);
 		req->curve_plugin_data = NULL;
 	}
 
@@ -760,7 +771,7 @@ rdns_curve_send (struct rdns_request *req, void *plugin_data)
 
 ssize_t
 rdns_curve_recv (struct rdns_io_channel *ioc, void *buf, size_t len, void *plugin_data,
-		struct rdns_request **req_out)
+		struct rdns_request **req_out, struct sockaddr *saddr, socklen_t slen)
 {
 	struct rdns_curve_ctx *ctx = (struct rdns_curve_ctx *)plugin_data;
 	ssize_t ret, boxlen;
@@ -771,7 +782,7 @@ rdns_curve_recv (struct rdns_io_channel *ioc, void *buf, size_t len, void *plugi
 	struct rdns_resolver *resolver;
 
 	resolver = ctx->resolver;
-	ret = read (ioc->sock, buf, len);
+	ret = recv (ioc->sock, buf, len, 0);
 
 	if (ret <= 0 || ret < 64) {
 		/* Definitely not a DNSCurve packet */

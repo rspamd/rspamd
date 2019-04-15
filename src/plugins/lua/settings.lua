@@ -82,6 +82,14 @@ local function apply_settings(task, to_apply)
   if to_apply.subject then
     task:set_metric_subject(to_apply.subject)
   end
+
+  -- E.g.
+  -- messages = { smtp_message = "5.3.1 Go away" }
+  if to_apply.messages and type(to_apply.messages) == 'table' then
+    fun.each(function(category, message)
+      task:append_message(message, category)
+    end, to_apply.messages)
+  end
 end
 
 -- Checks for overridden settings within query params and returns 'true' if
@@ -584,6 +592,19 @@ local function process_settings_table(tbl)
         out['rcpt'] = check_table(elt['rcpt'], rcpt)
       end
     end
+    if elt['from_mime'] then
+      local from_mime = process_addr(elt['from_mime'])
+
+      if from_mime then
+        out['from_mime'] = check_table(elt['from_mime'], from_mime)
+      end
+    end
+    if elt['rcpt_mime'] then
+      local rcpt_mime = process_addr(elt['rcpt_mime'])
+      if rcpt_mime then
+        out['rcpt_mime'] = check_table(elt['rcpt_mime'], rcpt_mime)
+      end
+    end
     if elt['user'] then
       local user = process_addr(elt['user'])
       if user then
@@ -608,10 +629,7 @@ local function process_settings_table(tbl)
     if elt['request_header'] then
       local rho = {}
       for k, v in pairs(elt['request_header']) do
-        local re = rspamd_regexp.get_cached(v)
-        if not re then
-          re = rspamd_regexp.create_cached(v)
-        end
+        local re = rspamd_regexp.create(v)
         if re then
           rho[k] = re
         end

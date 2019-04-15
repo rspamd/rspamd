@@ -97,14 +97,18 @@ struct rdns_request {
 	ref_entry_t ref;
 };
 
+
 /**
  * IO channel for a specific DNS server
  */
 struct rdns_io_channel {
 	struct rdns_server *srv;
 	struct rdns_resolver *resolver;
+	struct sockaddr *saddr;
+	socklen_t slen;
 	int sock; /**< persistent socket                                          */
 	bool active;
+	bool connected;
 	void *async_io; /** async opaque ptr */
 	struct rdns_request *requests; /**< requests in flight                                         */
 	uint64_t uses;

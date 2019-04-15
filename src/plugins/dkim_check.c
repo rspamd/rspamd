@@ -1110,6 +1110,12 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 		/* Release key when task is processed */
 		rspamd_mempool_add_destructor (res->task->task_pool,
 				dkim_module_key_dtor, res->key);
+		msg_info_task ("stored DKIM key for %s in LRU cache for %d seconds, "
+					   "%d/%d elements in the cache",
+				rspamd_dkim_get_dns_key (ctx),
+				rspamd_dkim_key_get_ttl (key),
+				rspamd_lru_hash_size (dkim_module_ctx->dkim_hash),
+				rspamd_lru_hash_capacity (dkim_module_ctx->dkim_hash));
 	}
 	else {
 		/* Insert tempfail symbol */

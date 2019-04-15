@@ -819,10 +819,17 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 					if (stat_error == NULL) {
 						g_set_error (&stat_error,
 								g_quark_from_static_string ("stat"), 500,
-								"Unknown statistics error");
+								"Unknown statistics error, found on stage %s;"
+								" classifier: %s",
+								rspamd_task_stage_name (st), task->classifier);
 					}
 
-					msg_err_task ("learn error: %e", stat_error);
+					if (stat_error->code >= 400) {
+						msg_err_task ("learn error: %e", stat_error);
+					}
+					else {
+						msg_notice_task ("skip learning: %e", stat_error);
+					}
 
 					if (!(task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO)) {
 						task->err = stat_error;
@@ -925,6 +932,7 @@ rspamd_task_get_principal_recipient (struct rspamd_task *task)
 {
 	const gchar *val;
 	struct rspamd_email_address *addr;
+	guint i;
 
 	val = rspamd_mempool_get_variable (task->task_pool,
 			RSPAMD_MEMPOOL_PRINCIPAL_RECIPIENT);
@@ -938,20 +946,21 @@ rspamd_task_get_principal_recipient (struct rspamd_task *task)
 				strlen (task->deliver_to));
 	}
 	if (task->rcpt_envelope != NULL) {
-		addr = g_ptr_array_index (task->rcpt_envelope, 0);
 
-		if (addr->addr) {
-			return rspamd_task_cache_principal_recipient (task, addr->addr,
-					addr->addr_len);
+		PTR_ARRAY_FOREACH (task->rcpt_envelope, i, addr) {
+			if (addr->addr && !(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
+				return rspamd_task_cache_principal_recipient (task, addr->addr,
+						addr->addr_len);
+			}
 		}
 	}
 
 	if (task->rcpt_mime != NULL && task->rcpt_mime->len > 0) {
-		addr = g_ptr_array_index (task->rcpt_mime, 0);
-
-		if (addr->addr) {
-			return rspamd_task_cache_principal_recipient (task, addr->addr,
-					addr->addr_len);
+		PTR_ARRAY_FOREACH (task->rcpt_mime, i, addr) {
+			if (addr->addr && !(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
+				return rspamd_task_cache_principal_recipient (task, addr->addr,
+						addr->addr_len);
+			}
 		}
 	}
 
@@ -1222,22 +1231,39 @@ rspamd_task_write_ialist (struct rspamd_task *task,
 	rspamd_fstring_t *res = logbuf, *varbuf;
 	rspamd_ftok_t var = {.begin = NULL, .len = 0};
 	struct rspamd_email_address *addr;
-	gint i, nchars = 0, cur_chars;
+	gint i, nchars = 0, wr = 0, cur_chars;
+	gboolean has_orig = FALSE;
 
-	if (lim <= 0) {
+	if (addrs && lim <= 0) {
 		lim = addrs->len;
+	}
+
+	PTR_ARRAY_FOREACH (addrs, i, addr) {
+		if (addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL) {
+			has_orig = TRUE;
+			break;
+		}
 	}
 
 	varbuf = rspamd_fstring_new ();
 
 	PTR_ARRAY_FOREACH (addrs, i, addr) {
-		if (i >= lim) {
+		if (wr >= lim) {
 			break;
 		}
+
+		if (has_orig) {
+			/* Report merely original addresses */
+			if (!(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
+				continue;
+			}
+		}
+
 		cur_chars = addr->addr_len;
 		varbuf = rspamd_fstring_append (varbuf, addr->addr,
 				cur_chars);
 		nchars += cur_chars;
+		wr ++;
 
 		if (varbuf->len > 0) {
 			if (i != lim - 1) {
@@ -1245,7 +1271,7 @@ rspamd_task_write_ialist (struct rspamd_task *task,
 			}
 		}
 
-		if (i >= max_log_elts || nchars >= max_log_elts * 10) {
+		if (wr >= max_log_elts || nchars >= max_log_elts * 10) {
 			varbuf = rspamd_fstring_append (varbuf, "...", 3);
 			break;
 		}
@@ -1696,4 +1722,71 @@ rspamd_task_set_finish_time (struct rspamd_task *task)
 	}
 
 	return FALSE;
+}
+
+const gchar *
+rspamd_task_stage_name (enum rspamd_task_stage stg)
+{
+	const gchar *ret = "unknown stage";
+
+	switch (stg) {
+	case RSPAMD_TASK_STAGE_CONNECT:
+		ret = "connect";
+		break;
+	case RSPAMD_TASK_STAGE_ENVELOPE:
+		ret = "envelope";
+		break;
+	case RSPAMD_TASK_STAGE_READ_MESSAGE:
+		ret = "read_message";
+		break;
+	case RSPAMD_TASK_STAGE_PRE_FILTERS:
+		ret = "prefilters";
+		break;
+	case RSPAMD_TASK_STAGE_PROCESS_MESSAGE:
+		ret = "process_message";
+		break;
+	case RSPAMD_TASK_STAGE_FILTERS:
+		ret = "filters";
+		break;
+	case RSPAMD_TASK_STAGE_CLASSIFIERS_PRE:
+		ret = "classifiers_pre";
+		break;
+	case RSPAMD_TASK_STAGE_CLASSIFIERS:
+		ret = "classifiers";
+		break;
+	case RSPAMD_TASK_STAGE_CLASSIFIERS_POST:
+		ret = "classifiers_post";
+		break;
+	case RSPAMD_TASK_STAGE_COMPOSITES:
+		ret = "composites";
+		break;
+	case RSPAMD_TASK_STAGE_POST_FILTERS:
+		ret = "postfilters";
+		break;
+	case RSPAMD_TASK_STAGE_LEARN_PRE:
+		ret = "learn_pre";
+		break;
+	case RSPAMD_TASK_STAGE_LEARN:
+		ret = "learn";
+		break;
+	case RSPAMD_TASK_STAGE_LEARN_POST:
+		ret = "learn_post";
+		break;
+	case RSPAMD_TASK_STAGE_COMPOSITES_POST:
+		ret = "composites_post";
+		break;
+	case RSPAMD_TASK_STAGE_IDEMPOTENT:
+		ret = "idempotent";
+		break;
+	case RSPAMD_TASK_STAGE_DONE:
+		ret = "done";
+		break;
+	case RSPAMD_TASK_STAGE_REPLIED:
+		ret = "replied";
+		break;
+	default:
+		break;
+	}
+
+	return ret;
 }

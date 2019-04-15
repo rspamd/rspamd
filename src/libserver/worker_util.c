@@ -535,19 +535,45 @@ rspamd_worker_set_limits (struct rspamd_main *rspamd_main,
 		rlmt.rlim_max = (rlim_t) cf->rlimit_nofile;
 
 		if (setrlimit (RLIMIT_NOFILE, &rlmt) == -1) {
-			msg_warn_main ("cannot set files rlimit: %d, %s",
+			msg_warn_main ("cannot set files rlimit: %L, %s",
 					cf->rlimit_nofile,
 					strerror (errno));
+		}
+
+		memset (&rlmt, 0, sizeof (rlmt));
+
+		if (getrlimit (RLIMIT_NOFILE, &rlmt) == -1) {
+			msg_warn_main ("cannot get max files rlimit: %HL, %s",
+					cf->rlimit_maxcore,
+					strerror (errno));
+		}
+		else {
+			msg_info_main ("set max file descriptors limit: %HL cur and %HL max",
+					(guint64) rlmt.rlim_cur,
+					(guint64) rlmt.rlim_max);
+		}
+	}
+	else {
+		/* Just report */
+		if (getrlimit (RLIMIT_NOFILE, &rlmt) == -1) {
+			msg_warn_main ("cannot get max files rlimit: %HL, %s",
+					cf->rlimit_maxcore,
+					strerror (errno));
+		}
+		else {
+			msg_info_main ("use system max file descriptors limit: %HL cur and %HL max",
+					(guint64) rlmt.rlim_cur,
+					(guint64) rlmt.rlim_max);
 		}
 	}
 
 	if (rspamd_main->cores_throttling) {
-		msg_info_main ("disable core files for the new worker, as limits are reached");
+		msg_info_main ("disable core files for the new worker as limits are reached");
 		rlmt.rlim_cur = 0;
 		rlmt.rlim_max = 0;
 
 		if (setrlimit (RLIMIT_CORE, &rlmt) == -1) {
-			msg_warn_main ("cannot disable core: %s",
+			msg_warn_main ("cannot disable core dumps: error when setting limits: %s",
 					strerror (errno));
 		}
 	}
@@ -557,9 +583,47 @@ rspamd_worker_set_limits (struct rspamd_main *rspamd_main,
 			rlmt.rlim_max = (rlim_t) cf->rlimit_maxcore;
 
 			if (setrlimit (RLIMIT_CORE, &rlmt) == -1) {
-				msg_warn_main ("cannot set max core rlimit: %d, %s",
+				msg_warn_main ("cannot set max core size limit: %HL, %s",
 						cf->rlimit_maxcore,
 						strerror (errno));
+			}
+
+			/* Ensure that we did it */
+			memset (&rlmt, 0, sizeof (rlmt));
+
+			if (getrlimit (RLIMIT_CORE, &rlmt) == -1) {
+				msg_warn_main ("cannot get max core size rlimit: %HL, %s",
+						cf->rlimit_maxcore,
+						strerror (errno));
+			}
+			else {
+				if (rlmt.rlim_cur != cf->rlimit_maxcore ||
+					rlmt.rlim_max != cf->rlimit_maxcore) {
+					msg_warn_main ("setting of core file limits was unsuccessful: "
+								   "%HL was wanted, "
+								   "but we have %HL cur and %HL max",
+							cf->rlimit_maxcore,
+							(guint64) rlmt.rlim_cur,
+							(guint64) rlmt.rlim_max);
+				}
+				else {
+					msg_info_main ("set max core size limit: %HL cur and %HL max",
+							(guint64) rlmt.rlim_cur,
+							(guint64) rlmt.rlim_max);
+				}
+			}
+		}
+		else {
+			/* Just report */
+			if (getrlimit (RLIMIT_CORE, &rlmt) == -1) {
+				msg_warn_main ("cannot get max core size limit: %HL, %s",
+						cf->rlimit_maxcore,
+						strerror (errno));
+			}
+			else {
+				msg_info_main ("use system max core size limit: %HL cur and %HL max",
+						(guint64) rlmt.rlim_cur,
+						(guint64) rlmt.rlim_max);
 			}
 		}
 	}

@@ -16,6 +16,7 @@
 #include "lua_common.h"
 #include "lua_thread_pool.h"
 #include "http_private.h"
+#include "ref.h"
 #include "unix-std.h"
 #include "zlib.h"
 
@@ -58,6 +59,8 @@ static const struct luaL_reg httplib_m[] = {
 #define RSPAMD_LUA_HTTP_FLAG_TEXT (1 << 0)
 #define RSPAMD_LUA_HTTP_FLAG_NOVERIFY (1 << 1)
 #define RSPAMD_LUA_HTTP_FLAG_RESOLVED (1 << 2)
+#define RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE (1 << 3)
+#define RSPAMD_LUA_HTTP_FLAG_YIELDED (1 << 4)
 
 struct lua_http_cbdata {
 	struct rspamd_http_connection *conn;
@@ -80,6 +83,7 @@ struct lua_http_cbdata {
 	gint fd;
 	gint cbref;
 	struct thread_entry *thread;
+	ref_entry_t ref;
 };
 
 static const int default_http_timeout = 5000;
@@ -90,7 +94,7 @@ lua_http_global_resolver (struct event_base *ev_base)
 	static struct rspamd_dns_resolver *global_resolver;
 
 	if (global_resolver == NULL) {
-		global_resolver = dns_resolver_init (NULL, ev_base, NULL);
+		global_resolver = rspamd_dns_resolver_init (NULL, ev_base, NULL);
 	}
 
 	return global_resolver;
@@ -126,10 +130,6 @@ lua_http_fin (gpointer arg)
 		g_free (cbd->mime_type);
 	}
 
-	if (cbd->host) {
-		g_free (cbd->host);
-	}
-
 	if (cbd->auth) {
 		g_free (cbd->auth);
 	}
@@ -146,7 +146,7 @@ lua_http_fin (gpointer arg)
 }
 
 static void
-lua_http_maybe_free (struct lua_http_cbdata *cbd)
+lua_http_cbd_dtor (struct lua_http_cbdata *cbd)
 {
 	if (cbd->session) {
 
@@ -198,12 +198,22 @@ lua_http_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)conn->ud;
 	if (cbd->cbref == -1) {
-		lua_http_resume_handler (conn, NULL, err->message);
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_YIELDED) {
+			cbd->flags &= ~RSPAMD_LUA_HTTP_FLAG_YIELDED;
+			lua_http_resume_handler (conn, NULL, err->message);
+		}
+		else {
+			/* TODO: kill me please */
+			msg_info ("lost HTTP error from %s in coroutines mess: %s",
+					rspamd_inet_address_to_string_pretty (cbd->addr),
+					err->message);
+		}
 	}
 	else {
 		lua_http_push_error (cbd, err->message);
 	}
-	lua_http_maybe_free (cbd);
+
+	REF_RELEASE (cbd);
 }
 
 static int
@@ -219,8 +229,18 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 	lua_State *L;
 
 	if (cbd->cbref == -1) {
-		lua_http_resume_handler (conn, msg, NULL);
-		lua_http_maybe_free (cbd);
+		if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_YIELDED) {
+			cbd->flags &= ~RSPAMD_LUA_HTTP_FLAG_YIELDED;
+			lua_http_resume_handler (conn, msg, NULL);
+		}
+		else {
+			/* TODO: kill me please */
+			msg_err ("lost HTTP data from %s in coroutines mess",
+					rspamd_inet_address_to_string_pretty (cbd->addr));
+		}
+
+		REF_RELEASE (cbd);
+
 		return 0;
 	}
 	lua_thread_pool_prepare_callback (cbd->cfg->lua_thread_pool, &lcbd);
@@ -275,7 +295,7 @@ lua_http_finish_handler (struct rspamd_http_connection *conn,
 		lua_pop (L, 1);
 	}
 
-	lua_http_maybe_free (cbd);
+	REF_RELEASE (cbd);
 
 	lua_thread_pool_restore_callback (&lcbd);
 
@@ -367,36 +387,28 @@ lua_http_resume_handler (struct rspamd_http_connection *conn,
 static gboolean
 lua_http_make_connection (struct lua_http_cbdata *cbd)
 {
-	int fd;
-
 	rspamd_inet_address_set_port (cbd->addr, cbd->msg->port);
-	fd = rspamd_inet_address_connect (cbd->addr, SOCK_STREAM, TRUE);
 
-	if (fd == -1) {
-		msg_info ("cannot connect to %V", cbd->msg->host);
-		return FALSE;
-	}
-	cbd->fd = fd;
+	if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE) {
+		cbd->fd = -1; /* FD is owned by keepalive connection */
 
-	if (cbd->cfg) {
-		cbd->conn = rspamd_http_connection_new (
-				NULL,
-				fd,
+		cbd->conn = rspamd_http_connection_new_keepalive (
+				NULL, /* Default context */
 				NULL,
 				lua_http_error_handler,
 				lua_http_finish_handler,
-				RSPAMD_HTTP_CLIENT_SIMPLE,
-				RSPAMD_HTTP_CLIENT);
+				cbd->addr,
+				cbd->host);
 	}
 	else {
-		cbd->conn = rspamd_http_connection_new (
-				NULL,
-				fd,
+		cbd->fd = -1;
+		cbd->conn = rspamd_http_connection_new_client (
+				NULL, /* Default context */
 				NULL,
 				lua_http_error_handler,
 				lua_http_finish_handler,
 				RSPAMD_HTTP_CLIENT_SIMPLE,
-				RSPAMD_HTTP_CLIENT);
+				cbd->addr);
 	}
 
 	if (cbd->conn) {
@@ -454,7 +466,7 @@ lua_http_dns_handler (struct rdns_reply *reply, gpointer ud)
 
 	if (reply->code != RDNS_RC_NOERROR) {
 		lua_http_push_error (cbd, "unable to resolve host");
-		lua_http_maybe_free (cbd);
+		REF_RELEASE (cbd);
 	}
 	else {
 		if (reply->entries->type == RDNS_REQUEST_A) {
@@ -466,12 +478,19 @@ lua_http_dns_handler (struct rdns_reply *reply, gpointer ud)
 					&reply->entries->content.aaa.addr);
 		}
 
+		REF_RETAIN (cbd);
 		if (!lua_http_make_connection (cbd)) {
 			lua_http_push_error (cbd, "unable to make connection to the host");
-			lua_http_maybe_free (cbd);
+
+			if (cbd->ref.refcount > 1) {
+				REF_RELEASE (cbd);
+			}
+
+			REF_RELEASE (cbd);
 
 			return;
 		}
+		REF_RELEASE (cbd);
 	}
 
 	if (cbd->item) {
@@ -533,6 +552,7 @@ lua_http_push_headers (lua_State *L, struct rspamd_http_message *msg)
  * @param {resolver} resolver to perform DNS-requests. Usually got from either `task` or `config`
  * @param {boolean} gzip if true, body of the requests will be compressed
  * @param {boolean} no_ssl_verify disable SSL peer checks
+ * @param {boolean} keepalive enable keep-alive pool
  * @param {string} user for HTTP authentication
  * @param {string} password for HTTP authentication, only if "user" present
  * @return {boolean} `true`, in **async** mode, if a request has been successfully scheduled. If this value is `false` then some error occurred, the callback thus will not be called.
@@ -554,7 +574,6 @@ lua_http_request (lua_State *L)
 	struct rspamd_cryptobox_keypair *local_kp = NULL;
 	const gchar *url, *lua_body;
 	rspamd_fstring_t *body = NULL;
-	gchar *to_resolve;
 	gint cbref = -1;
 	gsize bodylen;
 	gdouble timeout = default_http_timeout;
@@ -722,6 +741,9 @@ lua_http_request (lua_State *L)
 				body = rspamd_fstring_new_init (t->start, t->len);
 			}
 			else {
+				rspamd_http_message_unref (msg);
+				g_free (mime_type);
+
 				return luaL_error (L, "invalid body argument type: %s",
 						lua_typename (L, lua_type (L, -1)));
 			}
@@ -741,17 +763,32 @@ lua_http_request (lua_State *L)
 						body = rspamd_fstring_append (body, t->start, t->len);
 					}
 					else {
+						rspamd_http_message_unref (msg);
+						if (body) {
+							rspamd_fstring_free (body);
+						}
+
+						if (mime_type) {
+							g_free (mime_type);
+						}
+
 						return luaL_error (L, "invalid body argument: %s",
 								lua_typename (L, lua_type (L, -1)));
 					}
 				}
 				else {
+					rspamd_http_message_unref (msg);
+					if (body) {
+						rspamd_fstring_free (body);
+					}
+
 					return luaL_error (L, "invalid body argument type: %s",
 							lua_typename (L, lua_type (L, -1)));
 				}
 			}
 		}
 		else if (lua_type (L, -1) != LUA_TNONE && lua_type (L, -1) != LUA_TNIL) {
+			rspamd_http_message_unref (msg);
 			return luaL_error (L, "invalid body argument type: %s",
 					lua_typename (L, lua_type (L, -1)));
 		}
@@ -806,6 +843,15 @@ lua_http_request (lua_State *L)
 
 		if (!!lua_toboolean (L, -1)) {
 			flags |= RSPAMD_LUA_HTTP_FLAG_NOVERIFY;
+		}
+
+		lua_pop (L, 1);
+
+		lua_pushstring (L, "keepalive");
+		lua_gettable (L, 1);
+
+		if (!!lua_toboolean (L, -1)) {
+			flags |= RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE;
 		}
 
 		lua_pop (L, 1);
@@ -870,9 +916,21 @@ lua_http_request (lua_State *L)
 	if (session && rspamd_session_blocked (session)) {
 		lua_pushboolean (L, FALSE);
 
+		g_free (auth);
+		rspamd_http_message_unref (msg);
+		if (body) {
+			rspamd_fstring_free (body);
+		}
+
 		return 1;
 	}
 	if (task == NULL && cfg == NULL) {
+		g_free (auth);
+		rspamd_http_message_unref (msg);
+		if (body) {
+			rspamd_fstring_free (body);
+		}
+
 		return luaL_error (L,
 				"Bad params to rspamd_http:request(): either task or config should be set");
 	}
@@ -898,12 +956,18 @@ lua_http_request (lua_State *L)
 	cbd->auth = auth;
 	cbd->task = task;
 
+	if (cbd->cbref == -1) {
+		cbd->thread = lua_thread_pool_get_running_entry (cfg->lua_thread_pool);
+	}
+
+	REF_INIT_RETAIN (cbd, lua_http_cbd_dtor);
+
 	if (task) {
 		cbd->item = rspamd_symcache_get_cur_item (task);
 	}
 
 	if (msg->host) {
-		cbd->host = rspamd_fstring_cstr (msg->host);
+		cbd->host = msg->host->str;
 	}
 
 	if (body) {
@@ -922,37 +986,61 @@ lua_http_request (lua_State *L)
 
 	if (rspamd_parse_inet_address (&cbd->addr, msg->host->str, msg->host->len)) {
 		/* Host is numeric IP, no need to resolve */
-		if (!lua_http_make_connection (cbd)) {
-			lua_http_maybe_free (cbd);
+		gboolean ret;
+
+		REF_RETAIN (cbd);
+		ret = lua_http_make_connection (cbd);
+
+		if (!ret) {
+			if (cbd->ref.refcount > 1) {
+				/* Not released by make_connection */
+				REF_RELEASE (cbd);
+			}
+
+			REF_RELEASE (cbd);
 			lua_pushboolean (L, FALSE);
 
 			return 1;
 		}
+
+		REF_RELEASE (cbd);
 	}
 	else {
-		if (task == NULL) {
-			to_resolve = g_malloc (msg->host->len + 1);
-			rspamd_strlcpy (to_resolve, msg->host->str, msg->host->len + 1);
+		if (!cbd->host) {
+			REF_RELEASE (cbd);
 
-			if (!make_dns_request (resolver, session, NULL, lua_http_dns_handler, cbd,
+			return luaL_error (L, "no host has been specified");
+		}
+		if (task == NULL) {
+
+			REF_RETAIN (cbd);
+			if (!rspamd_dns_resolver_request (resolver, session, NULL, lua_http_dns_handler, cbd,
 					RDNS_REQUEST_A,
-					to_resolve)) {
-				lua_http_maybe_free (cbd);
+					cbd->host)) {
+				if (cbd->ref.refcount > 1) {
+					/* Not released by make_connection */
+					REF_RELEASE (cbd);
+				}
+
+				REF_RELEASE (cbd);
 				lua_pushboolean (L, FALSE);
-				g_free (to_resolve);
 
 				return 1;
 			}
 
-
-			g_free (to_resolve);
+			REF_RELEASE (cbd);
 		}
 		else {
-			to_resolve = rspamd_mempool_fstrdup (task->task_pool, msg->host);
+			REF_RETAIN (cbd);
 
-			if (!make_dns_request_task_forced (task, lua_http_dns_handler, cbd,
-					RDNS_REQUEST_A, to_resolve)) {
-				lua_http_maybe_free (cbd);
+			if (!rspamd_dns_resolver_request_task_forced (task, lua_http_dns_handler, cbd,
+					RDNS_REQUEST_A, cbd->host)) {
+				if (cbd->ref.refcount > 1) {
+					/* Not released by make_connection */
+					REF_RELEASE (cbd);
+				}
+
+				REF_RELEASE (cbd);
 				lua_pushboolean (L, FALSE);
 
 				return 1;
@@ -960,11 +1048,14 @@ lua_http_request (lua_State *L)
 			else if (cbd->item) {
 				rspamd_symcache_item_async_inc (cbd->task, cbd->item, M);
 			}
+
+			REF_RELEASE (cbd);
 		}
 	}
 
 	if (cbd->cbref == -1) {
 		cbd->thread = lua_thread_pool_get_running_entry (cfg->lua_thread_pool);
+		cbd->flags |= RSPAMD_LUA_HTTP_FLAG_YIELDED;
 
 		return lua_thread_yield (cbd->thread, 0);
 	}

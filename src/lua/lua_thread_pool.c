@@ -236,7 +236,7 @@ static gint
 lua_do_resume_full (lua_State *L, gint narg, const gchar *loc)
 {
 	msg_debug_lua_threads ("%s: lua_do_resume_full", loc);
-#if LUA_VERSION_NUM < 503
+#if LUA_VERSION_NUM < 502
 	return lua_resume (L, narg);
 #else
 	return lua_resume (L, NULL, narg);
@@ -305,7 +305,7 @@ lua_resume_thread_internal_full (struct thread_entry *thread_entry,
 		}
 		else {
 			tb = rspamd_lua_get_traceback_string (thread_entry->lua_state);
-			if (thread_entry->error_callback) {
+			if (tb && thread_entry->error_callback) {
 				thread_entry->error_callback (thread_entry, ret, tb->str);
 			}
 			else if (thread_entry->task) {

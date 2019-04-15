@@ -202,47 +202,143 @@ local function prepare_dkim_signing(N, task, settings)
     tdom = tdom:lower()
   end
 
-  if settings.use_domain_sign_networks and is_sign_networks then
-    dkim_domain = get_dkim_domain('use_domain_sign_networks')
-    lua_util.debugm(N, task, 'sign_networks: use domain(%s) for signature: %s',
-      settings.use_domain_sign_networks, dkim_domain)
-  elseif settings.use_domain_sign_local and is_local then
-    dkim_domain = get_dkim_domain('use_domain_sign_local')
-    lua_util.debugm(N, task, 'local: use domain(%s) for signature: %s',
-      settings.use_domain_sign_local, dkim_domain)
-  elseif settings.use_domain_sign_inbound and not is_local and not auser then
-    dkim_domain = get_dkim_domain('use_domain_sign_inbound')
-    lua_util.debugm(N, task, 'inbound: use domain(%s) for signature: %s',
-      settings.use_domain_sign_inbound, dkim_domain)
-  elseif settings.use_domain_custom then
-    if type(settings.use_domain_custom) == 'string' then
-      -- Load custom function
-      local loadstring = loadstring or load
-      local ret, res_or_err = pcall(loadstring(settings.use_domain_custom))
-      if ret then
-        if type(res_or_err) == 'function' then
-          settings.use_domain_custom = res_or_err
-          dkim_domain = settings.use_domain_custom(task)
-          lua_util.debugm(N, task, 'use custom domain for signing: %s',
-              dkim_domain)
+  if settings.signing_table and settings.key_table then
+    -- OpenDKIM style
+    if settings.sign_networks and not is_sign_networks then
+      lua_util.debugm(N, task,
+          'signing_table: sign networks specified but IP is not from that network, skip signing')
+      return false,{}
+    end
+
+    if not hfrom or not hfrom[1] or not hfrom[1].addr then
+      lua_util.debugm(N, task,
+          'signing_table: cannot get data when no header from is presented')
+      return false,{}
+    end
+    local sign_entry = settings.signing_table:get_key(hfrom[1].addr)
+
+    if sign_entry then
+      lua_util.debugm(N, task,
+          'signing_table: found entry for %s: %s', hfrom[1].addr, sign_entry)
+      if sign_entry == '%' then
+        sign_entry = hdom
+      end
+
+      -- Now search in key table
+      local key_entry = settings.key_table:get_key(sign_entry)
+
+      if key_entry then
+        local parts = lua_util.str_split(key_entry, ':')
+
+        if #parts == 2 then
+          -- domain + key
+          local selector = settings.selector
+
+          if not selector then
+            logger.errx(task, 'no selector defined for sign_entry %s, key_entry %s',
+                sign_entry, key_entry)
+            return false,{}
+          end
+
+          local res = {
+            selector = selector,
+            domain = parts[1]:gsub('%%', hdom)
+          }
+
+          local st = parts[2]:sub(1, 2)
+
+          if st:sub(1, 1) == '/' or st == './' or st == '..' then
+            res.key = parts[2]:gsub('%%', hdom)
+            lua_util.debugm(N, task, 'perform dkim signing for %s, selector=%s, domain=%s, key file=%s',
+                hdom, selector, res.domain, res.key)
+          else
+            res.rawkey = parts[2] -- No sanity check here
+            lua_util.debugm(N, task, 'perform dkim signing for %s, selector=%s, domain=%s, raw key used',
+                hdom, selector, res.domain)
+          end
+
+          return true,{res}
+        elseif #parts == 3 then
+          -- domain, selector, key
+          local selector = parts[2]
+
+          local res = {
+            selector = selector,
+            domain = parts[1]:gsub('%%', hdom)
+          }
+
+          local st = parts[3]:sub(1, 2)
+
+          if st:sub(1, 1) == '/' or st == './' or st == '..' then
+            res.key = parts[3]:gsub('%%', hdom)
+            lua_util.debugm(N, task, 'perform dkim signing for %s, selector=%s, domain=%s, key file=%s',
+                hdom, selector, res.domain, res.key)
+          else
+            res.rawkey = parts[3] -- No sanity check here
+            lua_util.debugm(N, task, 'perform dkim signing for %s, selector=%s, domain=%s, raw key used',
+                hdom, selector, res.domain)
+          end
+
+          return true,{res}
         else
-          logger.errx(task, 'cannot load dkim domain custom script: invalid type: %s, expected function',
-              type(res_or_err))
+          logger.errx(task, 'invalid key entry for sign entry %s: %s; when signing %s domain',
+              sign_entry, key_entry, hdom)
+          return false,{}
+        end
+      else
+        logger.errx(task, 'cannot get key entry for signing entry %s, when signing %s domain',
+            sign_entry, hdom)
+        return false,{}
+      end
+    else
+      lua_util.debugm(N, task,
+          'signing_table: no entry for %s', hfrom[1].addr)
+      return false,{}
+    end
+  else
+    if settings.use_domain_sign_networks and is_sign_networks then
+      dkim_domain = get_dkim_domain('use_domain_sign_networks')
+      lua_util.debugm(N, task,
+          'sign_networks: use domain(%s) for signature: %s',
+          settings.use_domain_sign_networks, dkim_domain)
+    elseif settings.use_domain_sign_local and is_local then
+      dkim_domain = get_dkim_domain('use_domain_sign_local')
+      lua_util.debugm(N, task, 'local: use domain(%s) for signature: %s',
+          settings.use_domain_sign_local, dkim_domain)
+    elseif settings.use_domain_sign_inbound and not is_local and not auser then
+      dkim_domain = get_dkim_domain('use_domain_sign_inbound')
+      lua_util.debugm(N, task, 'inbound: use domain(%s) for signature: %s',
+          settings.use_domain_sign_inbound, dkim_domain)
+    elseif settings.use_domain_custom then
+      if type(settings.use_domain_custom) == 'string' then
+        -- Load custom function
+        local loadstring = loadstring or load
+        local ret, res_or_err = pcall(loadstring(settings.use_domain_custom))
+        if ret then
+          if type(res_or_err) == 'function' then
+            settings.use_domain_custom = res_or_err
+            dkim_domain = settings.use_domain_custom(task)
+            lua_util.debugm(N, task, 'use custom domain for signing: %s',
+                dkim_domain)
+          else
+            logger.errx(task, 'cannot load dkim domain custom script: invalid type: %s, expected function',
+                type(res_or_err))
+            settings.use_domain_custom = nil
+          end
+        else
+          logger.errx(task, 'cannot load dkim domain custom script: %s', res_or_err)
           settings.use_domain_custom = nil
         end
       else
-        logger.errx(task, 'cannot load dkim domain custom script: %s', res_or_err)
-        settings.use_domain_custom = nil
+        dkim_domain = settings.use_domain_custom(task)
+        lua_util.debugm(N, task, 'use custom domain for signing: %s',
+            dkim_domain)
       end
     else
-      dkim_domain = settings.use_domain_custom(task)
-      lua_util.debugm(N, task, 'use custom domain for signing: %s',
-          dkim_domain)
+      dkim_domain = get_dkim_domain('use_domain')
+      lua_util.debugm(N, task, 'use domain(%s) for signature: %s',
+          settings.use_domain, dkim_domain)
     end
-  else
-    dkim_domain = get_dkim_domain('use_domain')
-    lua_util.debugm(N, task, 'use domain(%s) for signature: %s',
-      settings.use_domain, dkim_domain)
   end
 
   if not dkim_domain then

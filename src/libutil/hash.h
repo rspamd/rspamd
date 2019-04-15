@@ -89,4 +89,16 @@ void rspamd_lru_hash_destroy (rspamd_lru_hash_t *hash);
  */
 int rspamd_lru_hash_foreach (rspamd_lru_hash_t *hash, int it, gpointer *k,
 		gpointer *v);
+
+/**
+ * Returns number of elements in a hash
+ * @param hash hash object
+ */
+guint rspamd_lru_hash_size (rspamd_lru_hash_t *hash);
+
+/**
+ * Returns hash capacity
+ * @param hash hash object
+ */
+guint rspamd_lru_hash_capacity (rspamd_lru_hash_t *hash);
 #endif

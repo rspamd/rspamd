@@ -26,11 +26,11 @@ enum rspamd_archive_type {
 };
 
 enum rspamd_archive_flags {
-	RSPAMD_ARCHIVE_ENCRYPTED = (1 << 0),
+	RSPAMD_ARCHIVE_ENCRYPTED = (1u << 0u),
 };
 
 enum rspamd_archive_file_flags {
-	RSPAMD_ARCHIVE_FILE_ENCRYPTED = (1 << 0),
+	RSPAMD_ARCHIVE_FILE_ENCRYPTED = (1u << 0u),
 };
 
 struct rspamd_archive_file {

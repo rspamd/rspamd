@@ -412,14 +412,13 @@ accept_socket (gint fd, short what, void *arg)
 		http_opts = RSPAMD_HTTP_REQUIRE_ENCRYPTION;
 	}
 
-	task->http_conn = rspamd_http_connection_new (
+	task->http_conn = rspamd_http_connection_new_server (
 			ctx->http_ctx,
 			nfd,
 			rspamd_worker_body_handler,
 			rspamd_worker_error_handler,
 			rspamd_worker_finish_handler,
-			http_opts,
-			RSPAMD_HTTP_SERVER);
+			http_opts);
 	rspamd_http_connection_set_max_size (task->http_conn, task->cfg->max_message);
 	worker->nconns++;
 	rspamd_mempool_add_destructor (task->task_pool,
@@ -686,14 +685,15 @@ start_worker (struct rspamd_worker *worker)
 		}
 	}
 
-	ctx->resolver = dns_resolver_init (worker->srv->logger,
+	ctx->resolver = rspamd_dns_resolver_init (worker->srv->logger,
 			ctx->ev_base,
 			worker->srv->cfg);
 	rspamd_map_watch (worker->srv->cfg, ctx->ev_base, ctx->resolver, worker, 0);
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->ev_base, ctx->resolver->r);
 
-	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->ev_base);
+	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->ev_base,
+			ctx->cfg->ups_ctx);
 	rspamd_worker_init_scanner (worker, ctx->ev_base, ctx->resolver,
 			&ctx->lang_det);
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base,

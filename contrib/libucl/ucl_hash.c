@@ -65,7 +65,7 @@ extern const guchar lc_map[256];
 static inline uint32_t
 ucl_hash_func (const ucl_object_t *o)
 {
-	return rspamd_cryptobox_fast_hash (o->key, o->keylen, ucl_hash_seed ());
+	return rspamd_cryptobox_fast_hash (o->key, o->keylen, 0xb9a1ef83c4561c95ULL);
 }
 
 static inline int
@@ -94,9 +94,11 @@ ucl_hash_caseless_func (const ucl_object_t *o)
 		} c;
 		uint32_t pp;
 	} u;
-	uint64_t h = ucl_hash_seed ();
+	uint64_t h = 0xe5ae6ab1ef9f3b54ULL;
+	rspamd_cryptobox_fast_hash_state_t hst;
 
 	fp = len - leftover;
+	rspamd_cryptobox_fast_hash_init (&hst, h);
 
 	for (i = 0; i != fp; i += 4) {
 		u.c.c1 = s[i], u.c.c2 = s[i + 1], u.c.c3 = s[i + 2], u.c.c4 = s[i + 3];
@@ -104,7 +106,7 @@ ucl_hash_caseless_func (const ucl_object_t *o)
 		u.c.c2 = lc_map[u.c.c2];
 		u.c.c3 = lc_map[u.c.c3];
 		u.c.c4 = lc_map[u.c.c4];
-		h = rspamd_cryptobox_fast_hash (&u.pp, sizeof (u), h);
+		rspamd_cryptobox_fast_hash_update (&hst, &u, sizeof (u));
 	}
 
 	u.pp = 0;
@@ -112,25 +114,27 @@ ucl_hash_caseless_func (const ucl_object_t *o)
 	case 3:
 		u.c.c3 = lc_map[(unsigned char)s[i++]];
 	case 2:
+		/* fallthrough */
 		u.c.c2 = lc_map[(unsigned char)s[i++]];
 	case 1:
+		/* fallthrough */
 		u.c.c1 = lc_map[(unsigned char)s[i]];
-		rspamd_cryptobox_fast_hash (&u.pp, leftover, h);
+		rspamd_cryptobox_fast_hash_update (&hst, &u, sizeof (u));
 		break;
 	}
 
-	return h;
+	return rspamd_cryptobox_fast_hash_final (&hst);
 }
 
 
-static inline int
+static inline bool
 ucl_hash_caseless_equal (const ucl_object_t *k1, const ucl_object_t *k2)
 {
 	if (k1->keylen == k2->keylen) {
 		return rspamd_lc_cmp (k1->key, k2->key, k1->keylen) == 0;
 	}
 
-	return 0;
+	return false;
 }
 
 KHASH_INIT (ucl_hash_caseless_node, const ucl_object_t *, struct ucl_hash_elt, 1,

@@ -130,10 +130,10 @@ local function oletools_check(task, content, digest, rule)
           rspamd_logger.errx(task, '%s: Error message: %s',
               rule.log_prefix, result[2]['message'])
           oletools_requery(oletools_rc[result[3]['return_code']])
-        elseif #result[2]['analysis'] == 0 and #result[2]['macros'] == 0 then
+        elseif type(result[2]['analysis']) == 'table' and #result[2]['analysis'] == 0 and #result[2]['macros'] == 0 then
           rspamd_logger.warnx(task, '%s: maybe unhandled python or oletools error', rule.log_prefix)
           common.yield_result(task, rule, 'oletools unhandled error', 0.0, 'fail')
-        elseif result[2]['analysis'] == 'null' and #result[2]['macros'] == 0 then
+        elseif type(result[2]['analysis']) ~= 'table' and #result[2]['macros'] == 0 then
           common.save_av_cache(task, digest, rule, 'OK')
           common.log_clean(task, rule, 'No macro found')
         elseif #result[2]['macros'] > 0 then
@@ -173,7 +173,7 @@ local function oletools_check(task, content, digest, rule)
                 m_suspicious = 'S'
                 table.insert(analysis_keyword_table, a.keyword)
               end
-            elseif a.type == 'IOCs' then
+            elseif a.type == 'IOC' then
               m_iocs = 'I'
             elseif a.type == 'Hex strings' then
               m_hex = 'H'

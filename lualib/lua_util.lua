@@ -23,6 +23,7 @@ local exports = {}
 local lpeg = require 'lpeg'
 local rspamd_util = require "rspamd_util"
 local fun = require "fun"
+local lupa = require "lupa"
 
 local split_grammar = {}
 local spaces_split_grammar
@@ -30,6 +31,16 @@ local space = lpeg.S' \t\n\v\f\r'
 local nospace = 1 - space
 local ptrim = space^0 * lpeg.C((space^0 * nospace^1)^0)
 local match = lpeg.match
+
+lupa.configure('{%', '%}', '{=', '=}', '{#', '#}', {
+  keep_trailing_newline = true,
+  autoescape = false,
+})
+
+lupa.filters.pbkdf = function(s)
+  local cr = require "rspamd_cryptobox"
+  return cr.pbkdf(s)
+end
 
 local function rspamd_str_split(s, sep)
   local gr
@@ -111,6 +122,51 @@ exports.template = function(tmpl, keys)
   local template_grammar = lpeg.Cs((var + var_braced + 1)^0)
 
   return lpeg.match(template_grammar, tmpl)
+end
+
+local function enrich_template_with_globals(env)
+  local newenv = exports.shallowcopy(env)
+  newenv.paths = rspamd_paths
+  newenv.env = rspamd_env
+
+  return newenv
+end
+--[[[
+-- @function lua_util.jinja_template(text, env[, skip_global_env])
+-- Replaces values in a text template according to jinja2 syntax
+-- @param {string} text text containing variables
+-- @param {table} replacements key/value pairs for replacements
+-- @param {boolean} skip_global_env don't export Rspamd superglobals
+-- @return {string} string containing replaced values
+-- @example
+-- lua_util.jinja_template("HELLO {{FOO}} {{BAR}}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
+-- "HELLO LUA WORLD!"
+--]]
+exports.jinja_template = function(text, env, skip_global_env)
+  if not skip_global_env then
+    env = enrich_template_with_globals(env)
+  end
+
+  return lupa.expand(text, env)
+end
+
+--[[[
+-- @function lua_util.jinja_file(filename, env[, skip_global_env])
+-- Replaces values in a text template according to jinja2 syntax
+-- @param {string} filename name of file to expand
+-- @param {table} replacements key/value pairs for replacements
+-- @param {boolean} skip_global_env don't export Rspamd superglobals
+-- @return {string} string containing replaced values
+-- @example
+-- lua_util.jinja_template("HELLO {{FOO}} {{BAR}}!", {['FOO'] = 'LUA', ['BAR'] = 'WORLD'})
+-- "HELLO LUA WORLD!"
+--]]
+exports.jinja_template_file = function(filename, env, skip_global_env)
+  if not skip_global_env then
+    env = enrich_template_with_globals(env)
+  end
+
+  return lupa.expand_file(filename, env)
 end
 
 exports.remove_email_aliases = function(email_addr)
@@ -774,10 +830,11 @@ local debug_modules = {}
 local debug_aliases = {}
 local log_level = 384 -- debug + forced (1 << 7 | 1 << 8)
 
-if type(rspamd_config) == 'userdata' then
+
+exports.init_debug_logging = function(config)
   local logger = require "rspamd_logger"
   -- Fill debug modules from the config
-  local logging = rspamd_config:get_all_opt('logging')
+  local logging = config:get_all_opt('logging')
   if logging then
     local log_level_str = logging.level
     if log_level_str then
@@ -790,7 +847,7 @@ if type(rspamd_config) == 'userdata' then
       if logging.debug_modules then
         for _,m in ipairs(logging.debug_modules) do
           debug_modules[m] = true
-          logger.infox(rspamd_config, 'enable debug for Lua module %s', m)
+          logger.infox(config, 'enable debug for Lua module %s', m)
         end
       end
 
@@ -798,7 +855,7 @@ if type(rspamd_config) == 'userdata' then
         for alias,mod in pairs(debug_aliases) do
           if debug_modules[mod] then
             debug_modules[alias] = true
-            logger.infox(rspamd_config, 'enable debug for Lua module %s (%s aliased)',
+            logger.infox(config, 'enable debug for Lua module %s (%s aliased)',
                 alias, mod)
           end
         end

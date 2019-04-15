@@ -32,25 +32,25 @@ typedef void (*symbol_func_t)(struct rspamd_task *task,
 							  gpointer user_data);
 
 enum rspamd_symbol_type {
-	SYMBOL_TYPE_NORMAL = (1 << 0),
-	SYMBOL_TYPE_VIRTUAL = (1 << 1),
-	SYMBOL_TYPE_CALLBACK = (1 << 2),
-	SYMBOL_TYPE_GHOST = (1 << 3),
-	SYMBOL_TYPE_SKIPPED = (1 << 4),
-	SYMBOL_TYPE_COMPOSITE = (1 << 5),
-	SYMBOL_TYPE_CLASSIFIER = (1 << 6),
-	SYMBOL_TYPE_FINE = (1 << 7),
-	SYMBOL_TYPE_EMPTY = (1 << 8), /* Allow execution on empty tasks */
-	SYMBOL_TYPE_PREFILTER = (1 << 9),
-	SYMBOL_TYPE_POSTFILTER = (1 << 10),
-	SYMBOL_TYPE_NOSTAT = (1 << 11), /* Skip as statistical symbol */
-	SYMBOL_TYPE_IDEMPOTENT = (1 << 12), /* Symbol cannot change metric */
-	SYMBOL_TYPE_SQUEEZED = (1 << 13), /* Symbol is squeezed inside Lua */
-	SYMBOL_TYPE_TRIVIAL = (1 << 14), /* Symbol is trivial */
-	SYMBOL_TYPE_MIME_ONLY = (1 << 15), /* Symbol is mime only */
-	SYMBOL_TYPE_EXPLICIT_DISABLE = (1 << 16), /* Symbol should be disabled explicitly only */
-	SYMBOL_TYPE_IGNORE_PASSTHROUGH = (1 << 17), /* Symbol ignores passthrough result */
-	SYMBOL_TYPE_USE_CORO = (1 << 18), /* Symbol uses lua coroutines */
+	SYMBOL_TYPE_NORMAL = (1u << 0u),
+	SYMBOL_TYPE_VIRTUAL = (1u << 1u),
+	SYMBOL_TYPE_CALLBACK = (1u << 2u),
+	SYMBOL_TYPE_GHOST = (1u << 3u),
+	SYMBOL_TYPE_SKIPPED = (1u << 4u),
+	SYMBOL_TYPE_COMPOSITE = (1u << 5u),
+	SYMBOL_TYPE_CLASSIFIER = (1u << 6u),
+	SYMBOL_TYPE_FINE = (1u << 7u),
+	SYMBOL_TYPE_EMPTY = (1u << 8u), /* Allow execution on empty tasks */
+	SYMBOL_TYPE_PREFILTER = (1u << 9u),
+	SYMBOL_TYPE_POSTFILTER = (1u << 10u),
+	SYMBOL_TYPE_NOSTAT = (1u << 11u), /* Skip as statistical symbol */
+	SYMBOL_TYPE_IDEMPOTENT = (1u << 12u), /* Symbol cannot change metric */
+	SYMBOL_TYPE_SQUEEZED = (1u << 13u), /* Symbol is squeezed inside Lua */
+	SYMBOL_TYPE_TRIVIAL = (1u << 14u), /* Symbol is trivial */
+	SYMBOL_TYPE_MIME_ONLY = (1u << 15u), /* Symbol is mime only */
+	SYMBOL_TYPE_EXPLICIT_DISABLE = (1u << 16u), /* Symbol should be disabled explicitly only */
+	SYMBOL_TYPE_IGNORE_PASSTHROUGH = (1u << 17u), /* Symbol ignores passthrough result */
+	SYMBOL_TYPE_USE_CORO = (1u << 18u), /* Symbol uses lua coroutines */
 };
 
 /**
@@ -249,6 +249,15 @@ void rspamd_symcache_enable_symbol_perm (struct rspamd_symcache *cache,
  */
 struct rspamd_abstract_callback_data* rspamd_symcache_get_cbdata (
 		struct rspamd_symcache *cache, const gchar *symbol);
+
+/**
+ * Returns symbol's parent name (or symbol name itself)
+ * @param cache
+ * @param symbol
+ * @return
+ */
+const gchar *rspamd_symcache_get_parent (struct rspamd_symcache *cache,
+		const gchar *symbol);
 
 /**
  * Adds flags to a symbol

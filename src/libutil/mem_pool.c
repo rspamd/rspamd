@@ -75,7 +75,7 @@ struct rspamd_mempool_entry_point {
 static inline uint32_t
 rspamd_entry_hash (const char *str)
 {
-	return rspamd_cryptobox_fast_hash (str, strlen (str), rspamd_hash_seed ());
+	return (guint)rspamd_cryptobox_fast_hash (str, strlen (str), rspamd_hash_seed ());
 }
 
 static inline int
@@ -490,9 +490,9 @@ void *
 rspamd_mempool_alloc0 (rspamd_mempool_t * pool, gsize size)
 {
 	void *pointer = rspamd_mempool_alloc (pool, size);
-	if (pointer) {
-		memset (pointer, 0, size);
-	}
+
+	memset (pointer, 0, size);
+
 	return pointer;
 }
 
@@ -500,9 +500,9 @@ void *
 rspamd_mempool_alloc0_tmp (rspamd_mempool_t * pool, gsize size)
 {
 	void *pointer = rspamd_mempool_alloc_tmp (pool, size);
-	if (pointer) {
-		memset (pointer, 0, size);
-	}
+
+	memset (pointer, 0, size);
+
 	return pointer;
 }
 
@@ -510,9 +510,8 @@ void *
 rspamd_mempool_alloc0_shared (rspamd_mempool_t * pool, gsize size)
 {
 	void *pointer = rspamd_mempool_alloc_shared (pool, size);
-	if (pointer) {
-		memset (pointer, 0, size);
-	}
+
+	memset (pointer, 0, size);
 	return pointer;
 }
 
@@ -800,7 +799,6 @@ rspamd_mempool_stat (rspamd_mempool_stat_t * st)
 		st->shared_chunks_allocated = mem_pool_stat->shared_chunks_allocated;
 		st->bytes_allocated = mem_pool_stat->bytes_allocated;
 		st->chunks_allocated = mem_pool_stat->chunks_allocated;
-		st->shared_chunks_allocated = mem_pool_stat->shared_chunks_allocated;
 		st->chunks_freed = mem_pool_stat->chunks_freed;
 		st->oversized_chunks = mem_pool_stat->oversized_chunks;
 	}

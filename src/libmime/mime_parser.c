@@ -148,9 +148,12 @@ rspamd_mime_parser_init_lib (void)
 static enum rspamd_cte
 rspamd_mime_parse_cte (const gchar *in, gsize len)
 {
-	guint64 h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
-			in, len, 0xdeadbabe);
+	guint64 h;
 	enum rspamd_cte ret = RSPAMD_CTE_UNKNOWN;
+
+	in = rspamd_string_len_strip (in, &len, " \t;,.+-#!`~'");
+	h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+			in, len, 0xdeadbabe);
 
 	switch (h) {
 	case 0xCEDAA7056B4753F7ULL: /* 7bit */
@@ -371,9 +374,13 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 			gsize hlen;
 
 			hdr = g_ptr_array_index (hdrs, i);
-			hlen = strlen (hdr->value);
-			cd = rspamd_content_disposition_parse (hdr->value, hlen,
-					task->task_pool);
+			cd = NULL;
+
+			if (hdr->decoded) {
+				hlen = strlen (hdr->decoded);
+				cd = rspamd_content_disposition_parse (hdr->decoded, hlen,
+						task->task_pool);
+			}
 
 			if (cd) {
 				/* We still need to check filename */

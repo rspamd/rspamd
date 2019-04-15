@@ -27,6 +27,8 @@ local SN = 'lua_squeeze'
 local squeeze_sym = 'LUA_SQUEEZE'
 local squeeze_function_ids = {}
 local squeezed_groups = {}
+local last_rule
+local virtual_symbols = {}
 
 local function gen_lua_squeeze_function(order)
   return function(task)
@@ -142,7 +144,23 @@ exports.squeeze_rule = function(s, func, flags)
     }
   end
 
+  last_rule = s
+
   return squeeze_function_ids[1]
+end
+
+-- TODO: poor approach, we register all virtual symbols with the previous real squeezed symbol
+exports.squeeze_virtual = function(id, name)
+
+  if squeeze_function_ids[1] and id == squeeze_function_ids[1] and last_rule then
+    virtual_symbols[name] = last_rule
+    lua_util.debugm(SN, rspamd_config, 'add virtual symbol %s -> %s',
+        name, last_rule)
+
+    return id
+  end
+
+  return -1
 end
 
 exports.squeeze_dependency = function(child, parent)
@@ -222,6 +240,13 @@ exports.squeeze_init = function()
   end
 
   for parent,children in pairs(squeezed_deps) do
+    if not squeezed_symbols[parent] then
+      local real_parent = virtual_symbols[parent]
+      if real_parent then
+        parent = real_parent
+      end
+    end
+
     if not squeezed_symbols[parent] then
       -- Trivial case, external dependnency
 

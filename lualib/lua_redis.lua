@@ -269,14 +269,87 @@ local function calculate_redis_hash(params)
   return h:base32()
 end
 
+local function process_redis_opts(options, redis_params)
+  local default_timeout = 1.0
+  local default_expand_keys = false
+
+  if not redis_params['timeout'] or redis_params['timeout'] == default_timeout then
+    if options['timeout'] then
+      redis_params['timeout'] = tonumber(options['timeout'])
+    else
+      redis_params['timeout'] = default_timeout
+    end
+  end
+
+  if options['prefix'] and not redis_params['prefix'] then
+    redis_params['prefix'] = options['prefix']
+  end
+
+  if type(options['expand_keys']) == 'boolean' then
+    redis_params['expand_keys'] = options['expand_keys']
+  else
+    redis_params['expand_keys'] = default_expand_keys
+  end
+
+  if not redis_params['db'] then
+    if options['db'] then
+      redis_params['db'] = tostring(options['db'])
+    elseif options['dbname'] then
+      redis_params['db'] = tostring(options['dbname'])
+    elseif options['database'] then
+      redis_params['db'] = tostring(options['database'])
+    end
+  end
+  if options['password'] and not redis_params['password'] then
+    redis_params['password'] = options['password']
+  end
+
+  if not redis_params.sentinel and options.sentinel then
+    redis_params.sentinel = options.sentinel
+  end
+end
+
+local function enrich_defaults(rspamd_config, module, redis_params)
+  if rspamd_config then
+    local opts = rspamd_config:get_all_opt('redis')
+
+    if opts then
+      if module then
+        if opts[module] then
+          process_redis_opts(opts[module], redis_params)
+        end
+      end
+
+      process_redis_opts(opts, redis_params)
+    end
+  end
+end
+
+local function maybe_return_cached(redis_params)
+  local h = calculate_redis_hash(redis_params)
+
+  if cached_results[h] then
+    lutil.debugm(N, 'reused redis server: %s', redis_params)
+    return cached_results[h]
+  end
+
+  redis_params.hash = h
+  cached_results[h] = redis_params
+
+  if not redis_params.read_only and redis_params.sentinels then
+    add_redis_sentinels(redis_params)
+  end
+
+  lutil.debugm(N, 'loaded new redis server: %s', redis_params)
+  return redis_params
+end
+
 --[[[
 -- @module lua_redis
 -- This module contains helper functions for working with Redis
 --]]
-local function try_load_redis_servers(options, rspamd_config, result)
+local function process_redis_options(options, rspamd_config, result)
   local default_port = 6379
-  local default_timeout = 1.0
-  local default_expand_keys = false
   local upstream_list = require "rspamd_upstream_list"
   local read_only = true
 
@@ -333,36 +406,7 @@ local function try_load_redis_servers(options, rspamd_config, result)
   end
 
   -- Store options
-  if not result['timeout'] or result['timeout'] == default_timeout then
-    if options['timeout'] then
-      result['timeout'] = tonumber(options['timeout'])
-    else
-      result['timeout'] = default_timeout
-    end
-  end
-
-  if options['prefix'] and not result['prefix'] then
-    result['prefix'] = options['prefix']
-  end
-
-  if type(options['expand_keys']) == 'boolean' then
-    result['expand_keys'] = options['expand_keys']
-  else
-    result['expand_keys'] = default_expand_keys
-  end
-
-  if not result['db'] then
-    if options['db'] then
-      result['db'] = tostring(options['db'])
-    elseif options['dbname'] then
-      result['db'] = tostring(options['dbname'])
-    elseif options['database'] then
-      result['db'] = tostring(options['database'])
-    end
-  end
-  if options['password'] and not result['password'] then
-    result['password'] = options['password']
-  end
+  process_redis_opts(options, result)
 
   if read_only and not upstreams_write then
     result.read_only = true
@@ -377,25 +421,6 @@ local function try_load_redis_servers(options, rspamd_config, result)
       result.write_servers = upstreams_write
     end
 
-    local h = calculate_redis_hash(result)
-
-    if cached_results[h] then
-      for k,v in pairs(cached_results[h]) do
-        result[k] = v
-      end
-      lutil.debugm(N, 'reused redis server: %s', result)
-      return true
-    end
-
-    result.hash = h
-    cached_results[h] = result
-
-    if not result.read_only and options.sentinels then
-      result.sentinels = options.sentinels
-      add_redis_sentinels(result)
-    end
-
-    lutil.debugm(N, 'loaded redis server: %s', result)
     return true
   end
 
@@ -406,7 +431,22 @@ local function try_load_redis_servers(options, rspamd_config, result)
   return false
 end
 
-exports.try_load_redis_servers = try_load_redis_servers
+--[[[
+@function try_load_redis_servers(options, rspamd_config, no_fallback)
+Tries to load redis servers from the specified `options` object.
+Returns `redis_params` table or nil in case of failure
+
+--]]
+exports.try_load_redis_servers = function(options, rspamd_config, no_fallback, module_name)
+  local result = {}
+
+  if process_redis_options(options, rspamd_config, result) then
+    if not no_fallback then
+      enrich_defaults(rspamd_config, module_name, result)
+    end
+    return maybe_return_cached(result)
+  end
+end
 
 -- This function parses redis server definition using either
 -- specific server string for this module or global
@@ -427,17 +467,23 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
     local ret
 
     if opts.redis then
-      ret = try_load_redis_servers(opts.redis, rspamd_config, result)
+      ret = process_redis_options(opts.redis, rspamd_config, result)
 
       if ret then
-        return result
+        if not no_fallback then
+          enrich_defaults(rspamd_config, module_name, result)
+        end
+        return maybe_return_cached(result)
       end
     end
 
-    ret = try_load_redis_servers(opts, rspamd_config, result)
+    ret = process_redis_options(opts, rspamd_config, result)
 
     if ret then
-      return result
+      if not no_fallback then
+        enrich_defaults(rspamd_config, module_name, result)
+      end
+      return maybe_return_cached(result)
     end
   end
 
@@ -455,13 +501,13 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
     local ret
 
     if opts[module_name] then
-      ret = try_load_redis_servers(opts[module_name], rspamd_config, result)
+      ret = process_redis_options(opts[module_name], rspamd_config, result)
 
       if ret then
-        return result
+        return maybe_return_cached(result)
       end
     else
-      ret = try_load_redis_servers(opts, rspamd_config, result)
+      ret = process_redis_options(opts, rspamd_config, result)
 
       -- Exclude disabled
       if opts['disabled_modules'] then
@@ -478,13 +524,13 @@ local function rspamd_parse_redis_server(module_name, module_opts, no_fallback)
       if ret then
         logger.infox(rspamd_config, "use default Redis settings for %s",
             module_name)
-        return result
+        return maybe_return_cached(result)
       end
     end
   end
 
   if result.read_servers then
-      return result
+      return maybe_return_cached(result)
   end
 
   return nil

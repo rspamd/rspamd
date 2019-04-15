@@ -15,7 +15,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
-local global = require "global_functions"
 local rspamd_util = require "rspamd_util"
 
 local default_settings = {
@@ -43,6 +42,9 @@ local default_settings = {
     temperror = 'ARC_DNSFAIL',
     none = 'ARC_NA',
     reject = 'ARC_REJECT',
+  },
+  dkim_symbols = {
+    none = 'R_DKIM_NA',
   },
   add_smtp_user = true,
 }
@@ -140,10 +142,17 @@ local function gen_auth_results(task, settings)
     table.insert(hdr_parts, table.concat(hdr, ' '))
   end
 
+  if #dkim_results == 0 then
+    -- We have no dkim results, so check for DKIM_NA symbol
+    if common.symbols[settings.dkim_symbols.none] then
+      table.insert(hdr_parts, 'dkim=none')
+    end
+  end
+
   for auth_type, keys in pairs(auth_results) do
     for _, key in ipairs(keys) do
       local hdr = ''
-      if auth_type == 'dmarc' and key ~= 'none' then
+      if auth_type == 'dmarc' then
         local opts = common.symbols[auth_types['dmarc'][key]][1]['options'] or {}
         hdr = hdr .. 'dmarc='
         if key == 'reject' or key == 'quarantine' or key == 'softfail' then
@@ -155,13 +164,15 @@ local function gen_auth_results(task, settings)
           hdr = hdr .. ' (policy=' .. opts[2] .. ')'
           hdr = hdr .. ' header.from=' .. opts[1]
         elseif key ~= 'none' then
-          local t = global.rspamd_str_split(opts[1], ' : ')
-          local dom = t[1]
-          local rsn = t[2]
-          if rsn then
-            hdr = hdr .. ' reason="' .. rsn .. '"'
+          local t = {opts[1]:match('^([^%s]+) : (.*)$')}
+          if #t > 0 then
+            local dom = t[1]
+            local rsn = t[2]
+            if rsn then
+              hdr = hdr .. ' reason="' .. rsn .. '"'
+            end
+            hdr = hdr .. ' header.from=' .. dom
           end
-          hdr = hdr .. ' header.from=' .. dom
           if key == 'softfail' then
             hdr = hdr .. ' (policy=none)'
           else
@@ -169,7 +180,7 @@ local function gen_auth_results(task, settings)
           end
         end
         table.insert(hdr_parts, hdr)
-      elseif auth_type == 'arc' and key ~= 'none' then
+      elseif auth_type == 'arc' then
         if common.symbols[auth_types['arc'][key]][1] then
           local opts = common.symbols[auth_types['arc'][key]][1]['options'] or {}
           for _, v in ipairs(opts) do
@@ -177,7 +188,7 @@ local function gen_auth_results(task, settings)
             table.insert(hdr_parts, hdr)
           end
         end
-      elseif auth_type == 'spf' and key ~= 'none' then
+      elseif auth_type == 'spf' then
         -- Main type
         local sender
         local sender_type
@@ -215,6 +226,9 @@ local function gen_auth_results(task, settings)
           elseif key == 'temperror' then
             comment = string.format('%s: error in processing during lookup of %s: DNS error',
                 mta_hostname, sender)
+          elseif key == 'none' then
+            comment = string.format('%s: domain of %s has no SPF policy when checking %s',
+                mta_hostname, sender, tostring(task:get_from_ip() or 'unknown'))
           end
           hdr = string.format('%s=%s (%s) %s=%s', auth_type, key,
               comment, sender_type, sender)
@@ -245,6 +259,9 @@ local function gen_auth_results(task, settings)
   end
 
   if #hdr_parts > 0 then
+    if #hdr_parts == 1 then
+      hdr_parts[2] = 'none'
+    end
     return table.concat(hdr_parts, '; ')
   end
 

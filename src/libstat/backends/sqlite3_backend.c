@@ -84,8 +84,10 @@ enum rspamd_stat_sqlite3_stmt_idx {
 	RSPAMD_STAT_BACKEND_TRANSACTION_ROLLBACK,
 	RSPAMD_STAT_BACKEND_GET_TOKEN,
 	RSPAMD_STAT_BACKEND_SET_TOKEN,
-	RSPAMD_STAT_BACKEND_INC_LEARNS,
-	RSPAMD_STAT_BACKEND_DEC_LEARNS,
+	RSPAMD_STAT_BACKEND_INC_LEARNS_LANG,
+	RSPAMD_STAT_BACKEND_INC_LEARNS_USER,
+	RSPAMD_STAT_BACKEND_DEC_LEARNS_LANG,
+	RSPAMD_STAT_BACKEND_DEC_LEARNS_USER,
 	RSPAMD_STAT_BACKEND_GET_LEARNS,
 	RSPAMD_STAT_BACKEND_GET_LANGUAGE,
 	RSPAMD_STAT_BACKEND_GET_USER,
@@ -149,10 +151,8 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 	[RSPAMD_STAT_BACKEND_GET_TOKEN] = {
 		.idx = RSPAMD_STAT_BACKEND_GET_TOKEN,
 		.sql = "SELECT value FROM tokens "
-				"LEFT JOIN languages ON tokens.language=languages.id "
-				"LEFT JOIN users ON tokens.user=users.id "
-				"WHERE token=?1 AND (users.id=?2) "
-				"AND (languages.id=?3 OR languages.id=0);",
+				"WHERE token=?1 AND users=?2 "
+				"AND (language=?3 OR language=0);",
 		.stmt = NULL,
 		.args = "III",
 		.result = SQLITE_ROW,
@@ -169,22 +169,38 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 		.flags = 0,
 		.ret = ""
 	},
-	[RSPAMD_STAT_BACKEND_INC_LEARNS] = {
-		.idx = RSPAMD_STAT_BACKEND_INC_LEARNS,
-		.sql = "UPDATE languages SET learns=learns + 1 WHERE id=?1;"
-				"UPDATE users SET learns=learns + 1 WHERE id=?2;",
+	[RSPAMD_STAT_BACKEND_INC_LEARNS_LANG] = {
+		.idx = RSPAMD_STAT_BACKEND_INC_LEARNS_LANG,
+		.sql = "UPDATE languages SET learns=learns + 1 WHERE id=?1;",
 		.stmt = NULL,
-		.args = "II",
+		.args = "I",
 		.result = SQLITE_DONE,
 		.flags = 0,
 		.ret = ""
 	},
-	[RSPAMD_STAT_BACKEND_DEC_LEARNS] = {
-		.idx = RSPAMD_STAT_BACKEND_DEC_LEARNS,
-		.sql = "UPDATE languages SET learns=MAX(0, learns - 1) WHERE id=?1;"
-				"UPDATE users SET learns=MAX(0, learns - 1) WHERE id=?2;",
+	[RSPAMD_STAT_BACKEND_INC_LEARNS_USER] = {
+		.idx = RSPAMD_STAT_BACKEND_INC_LEARNS_USER,
+		.sql = "UPDATE users SET learns=learns + 1 WHERE id=?1;",
 		.stmt = NULL,
-		.args = "II",
+		.args = "I",
+		.result = SQLITE_DONE,
+		.flags = 0,
+		.ret = ""
+	},
+	[RSPAMD_STAT_BACKEND_DEC_LEARNS_LANG] = {
+		.idx = RSPAMD_STAT_BACKEND_DEC_LEARNS_LANG,
+		.sql = "UPDATE languages SET learns=MAX(0, learns - 1) WHERE id=?1;",
+		.stmt = NULL,
+		.args = "I",
+		.result = SQLITE_DONE,
+		.flags = 0,
+		.ret = ""
+	},
+	[RSPAMD_STAT_BACKEND_DEC_LEARNS_USER] = {
+		.idx = RSPAMD_STAT_BACKEND_DEC_LEARNS_USER,
+		.sql = "UPDATE users SET learns=MAX(0, learns - 1) WHERE id=?1;",
+		.stmt = NULL,
+		.args = "I",
 		.result = SQLITE_DONE,
 		.flags = 0,
 		.ret = ""
@@ -890,8 +906,11 @@ rspamd_sqlite3_inc_learns (struct rspamd_task *task, gpointer runtime,
 	g_assert (rt != NULL);
 	bk = rt->db;
 	rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
-			RSPAMD_STAT_BACKEND_INC_LEARNS,
-			rt->lang_id, rt->user_id);
+			RSPAMD_STAT_BACKEND_INC_LEARNS_LANG,
+			rt->lang_id);
+	rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_INC_LEARNS_USER,
+			rt->user_id);
 
 	if (bk->in_transaction) {
 		rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
@@ -916,8 +935,11 @@ rspamd_sqlite3_dec_learns (struct rspamd_task *task, gpointer runtime,
 	g_assert (rt != NULL);
 	bk = rt->db;
 	rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
-			RSPAMD_STAT_BACKEND_DEC_LEARNS,
-			rt->lang_id, rt->user_id);
+			RSPAMD_STAT_BACKEND_DEC_LEARNS_LANG,
+			rt->lang_id);
+	rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,
+			RSPAMD_STAT_BACKEND_DEC_LEARNS_USER,
+			rt->user_id);
 
 	if (bk->in_transaction) {
 		rspamd_sqlite3_run_prstmt (task->task_pool, bk->sqlite, bk->prstmt,

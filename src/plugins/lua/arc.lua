@@ -23,6 +23,7 @@ local rspamd_rsa = require "rspamd_rsa"
 local fun = require "fun"
 local auth_results = require "lua_auth_results"
 local hash = require "rspamd_cryptobox_hash"
+local lua_maps = require "lua_maps"
 
 if confighelp then
   return
@@ -352,7 +353,6 @@ local id = rspamd_config:register_symbol({
 
 rspamd_config:register_symbol({
   name = arc_symbols['allow'],
-  flags = 'nice',
   parent = id,
   type = 'virtual',
   score = -1.0,
@@ -623,21 +623,27 @@ end
 
 for k,v in pairs(opts) do
   if k == 'sign_networks' then
-    settings[k] = rspamd_map_add(N, k, 'radix', 'DKIM signing networks')
+    settings[k] = lua_maps.map_add(N, k, 'radix', 'DKIM signing networks')
   elseif k == 'path_map' then
-    settings[k] = rspamd_map_add(N, k, 'map', 'Paths to DKIM signing keys')
+    settings[k] = lua_maps.map_add(N, k, 'map', 'Paths to DKIM signing keys')
   elseif k == 'selector_map' then
-    settings[k] = rspamd_map_add(N, k, 'map', 'DKIM selectors')
+    settings[k] = lua_maps.map_add(N, k, 'map', 'DKIM selectors')
+  elseif k == 'signing_table' then
+    settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM signing table')
+  elseif k == 'key_table' then
+    settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM keys table')
   else
     settings[k] = v
   end
 end
+
 if not (settings.use_redis or
     settings.path or
     settings.domain or
     settings.path_map or
     settings.selector_map or
-    settings.use_http_headers) then
+    settings.use_http_headers or
+    (settings.signing_table and settings.key_table)) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable arc signing')
   return
 end

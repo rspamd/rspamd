@@ -65,14 +65,15 @@ local my_victim = [[/(?:victim|prey)/{words}]]
 local your_webcam = [[/webcam/{words}]]
 local your_onan = [[/(?:mast[ur]{2}bati(?:on|ng)|onanism|solitary)/{words}]]
 local password_in_words = [[/^pass(?:(?:word)|(?:phrase))$/i{words}]]
-local btc_wallet_address = [[/^[13][0-9a-zA-Z]{25,34}$/{words}]]
+local btc_wallet_address = [[/^[13][1-9A-Za-z]{25,34}$/]]
 local wallet_word = [[/^wallet$/{words}]]
 local broken_unicode = [[has_flag(bad_unicode)]]
+local list_unsub = [[header_exists(List-Unsubscribe)]]
 
 reconf['LEAKED_PASSWORD_SCAM'] = {
-  re = string.format('%s & (%s | %s | %s | %s | %s | %s | lua:check_data_images)',
+  re = string.format('%s{words} & (%s | %s | %s | %s | %s | %s | %s | lua:check_data_images)',
       btc_wallet_address, password_in_words, wallet_word,
-      my_victim, your_webcam, your_onan, broken_unicode),
+      my_victim, your_webcam, your_onan, broken_unicode, list_unsub),
   description = 'Contains password word and BTC wallet address',
   functions = {
     check_data_images = function(task)
@@ -94,3 +95,84 @@ reconf['LEAKED_PASSWORD_SCAM'] = {
   score = 7.0,
   group = 'scams'
 }
+
+-- Special routine to validate bitcoin wallets
+-- Prepare base58 alphabet
+local fun = require "fun"
+local off = 0
+local base58_dec = fun.tomap(fun.map(
+    function(c)
+      off = off + 1
+      return c,(off - 1)
+    end,
+    "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"))
+
+local id = rspamd_config:register_symbol{
+  name = 'LEAKED_PASSWORD_SCAM_VALIDATED',
+  callback = function(task)
+    local rspamd_re = require "rspamd_regexp"
+    local hash = require "rspamd_cryptobox_hash"
+
+    if task:has_symbol('LEAKED_PASSWORD_SCAM') then
+      -- Perform BTC wallet check (quite expensive)
+      local wallet_re = rspamd_re.create_cached(btc_wallet_address)
+      local seen_valid = false
+      for _,tp in ipairs(task:get_text_parts()) do
+
+        local words = tp:get_words('raw') or {}
+
+        for _,word in ipairs(words) do
+          if wallet_re:match(word) then
+            -- We have something that looks like a BTC address
+            local bytes = {}
+            for i=1,25 do bytes[i] = 0 end
+            -- Base58 decode loop
+            fun.each(function(ch)
+              local acc = base58_dec[ch] or 0
+              for i=25,1,-1 do
+                acc = acc + (58 * bytes[i]);
+                bytes[i] = acc % 256
+                acc = math.floor(acc / 256);
+              end
+            end, word)
+            -- Now create a validation tag
+            local sha256 = hash.create_specific('sha256')
+            for i=1,21 do
+              sha256:update(string.char(bytes[i]))
+            end
+            sha256 = hash.create_specific('sha256', sha256:bin()):bin()
+
+            -- Compare tags
+            local valid = true
+            for i=1,4 do
+              if string.sub(sha256, i, i) ~= string.char(bytes[21 + i]) then
+                valid = false
+              end
+            end
+
+            if valid then
+              task:insert_result('LEAKED_PASSWORD_SCAM_VALIDATED', 1.0, word)
+              seen_valid = true
+            end
+          end
+        end
+      end
+
+      if not seen_valid then
+        task:insert_result('LEAKED_PASSWORD_SCAM_INVALID', 1.0)
+      end
+    end
+  end,
+  score = 0.0,
+  group = 'scams'
+}
+
+rspamd_config:register_symbol{
+  type = 'virtual',
+  name = 'LEAKED_PASSWORD_SCAM_INVALID',
+  parent = id,
+  score = 0.0,
+}
+
+rspamd_config:register_dependency('LEAKED_PASSWORD_SCAM_VALIDATED',
+    'LEAKED_PASSWORD_SCAM')

@@ -68,11 +68,28 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 	}
 
 	if (resolver->curve_plugin == NULL) {
-		r = send (fd, req->packet, req->pos, 0);
+		if (!req->io->connected) {
+			r = sendto (fd, req->packet, req->pos, 0,
+					req->io->saddr,
+					req->io->slen);
+		}
+		else {
+			r = send (fd, req->packet, req->pos, 0);
+		}
 	}
 	else {
-		r = resolver->curve_plugin->cb.curve_plugin.send_cb (req,
-				resolver->curve_plugin->data);
+		if (!req->io->connected) {
+			r = resolver->curve_plugin->cb.curve_plugin.send_cb (req,
+					resolver->curve_plugin->data,
+					req->io->saddr,
+					req->io->slen);
+		}
+		else {
+			r = resolver->curve_plugin->cb.curve_plugin.send_cb (req,
+					resolver->curve_plugin->data,
+					NULL,
+					0);
+		}
 	}
 	if (r == -1) {
 		if (errno == EAGAIN || errno == EINTR) {
@@ -92,6 +109,18 @@ rdns_send_request (struct rdns_request *req, int fd, bool new_req)
 		else {
 			rdns_debug ("send failed: %s for server %s", strerror (errno), serv->name);
 			return -1;
+		}
+	}
+	else if (!req->io->connected) {
+		/* Connect socket */
+		r = connect (fd, req->io->saddr, req->io->slen);
+
+		if (r == -1) {
+			rdns_err ("cannot connect after sending request: %s for server %s",
+					strerror (errno), serv->name);
+		}
+		else {
+			req->io->connected = true;
 		}
 	}
 
@@ -253,14 +282,15 @@ rdns_process_read (int fd, void *arg)
 
 	/* First read packet from socket */
 	if (resolver->curve_plugin == NULL) {
-		r = read (fd, in, sizeof (in));
+		r = recv (fd, in, sizeof (in), 0);
 		if (r > (int)(sizeof (struct dns_header) + sizeof (struct dns_query))) {
 			req = rdns_find_dns_request (in, ioc);
 		}
 	}
 	else {
 		r = resolver->curve_plugin->cb.curve_plugin.recv_cb (ioc, in,
-				sizeof (in), resolver->curve_plugin->data, &req);
+				sizeof (in), resolver->curve_plugin->data, &req,
+				ioc->saddr, ioc->slen);
 		if (req == NULL &&
 				r > (int)(sizeof (struct dns_header) + sizeof (struct dns_query))) {
 			req = rdns_find_dns_request (in, ioc);
@@ -446,7 +476,7 @@ rdns_process_ioc_refresh (void *arg)
 						continue;
 					}
 					nioc->sock = rdns_make_client_socket (serv->name, serv->port,
-							SOCK_DGRAM);
+							SOCK_DGRAM, &nioc->saddr, &nioc->slen);
 					if (nioc->sock == -1) {
 						rdns_err ("cannot open socket to %s: %s", serv->name,
 								strerror (errno));
@@ -752,8 +782,16 @@ rdns_make_request_full (
 		r = rdns_send_request (req, req->io->sock, true);
 
 		if (r == -1) {
-			rdns_info ("cannot send DNS request");
+			rdns_info ("cannot send DNS request: %s", strerror (errno));
 			REF_RELEASE (req);
+
+			if (resolver->ups && serv->ups_elt) {
+				resolver->ups->fail (serv->ups_elt, resolver->ups->data);
+			}
+			else {
+				UPSTREAM_FAIL (serv, time (NULL));
+			}
+
 			return NULL;
 		}
 	}
@@ -791,7 +829,8 @@ rdns_resolver_init (struct rdns_resolver *resolver)
 				return false;
 			}
 
-			ioc->sock = rdns_make_client_socket (serv->name, serv->port, SOCK_DGRAM);
+			ioc->sock = rdns_make_client_socket (serv->name, serv->port, SOCK_DGRAM,
+					&ioc->saddr, &ioc->slen);
 
 			if (ioc->sock == -1) {
 				ioc->active = false;

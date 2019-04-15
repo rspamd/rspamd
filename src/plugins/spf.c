@@ -361,7 +361,7 @@ spf_module_reconfig (struct rspamd_config *cfg)
 
 static gboolean
 spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
-		struct rspamd_task *task)
+		struct rspamd_task *task, gboolean cached)
 {
 	gboolean res = FALSE;
 	const guint8 *s, *d;
@@ -426,7 +426,7 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 
 	if (res) {
 		spf_result = rspamd_mempool_alloc (task->task_pool,
-				strlen (addr->spf_string) + 2);
+				strlen (addr->spf_string) + 5);
 
 		switch (addr->mech) {
 		case SPF_FAIL:
@@ -478,8 +478,12 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 			break;
 		}
 
-		rspamd_strlcpy (spf_result + 1, addr->spf_string,
+		gint r = rspamd_strlcpy (spf_result + 1, addr->spf_string,
 				strlen (addr->spf_string) + 1);
+
+		if (cached) {
+			rspamd_strlcpy (spf_result + r + 1, ":c", 3);
+		}
 
 		rspamd_task_insert_result (task,
 				spf_symbol,
@@ -496,14 +500,25 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 }
 
 static void
-spf_check_list (struct spf_resolved *rec, struct rspamd_task *task)
+spf_check_list (struct spf_resolved *rec, struct rspamd_task *task, gboolean cached)
 {
 	guint i;
 	struct spf_addr *addr;
+	struct spf_ctx *spf_module_ctx = spf_get_context (task->cfg);
+
+	if (cached) {
+		msg_info_task ("use cached record for %s (0x%xuL) in LRU cache for %d seconds, "
+					   "%d/%d elements in the cache",
+				rec->domain,
+				rec->digest,
+				rec->ttl,
+				rspamd_lru_hash_size (spf_module_ctx->spf_hash),
+				rspamd_lru_hash_capacity (spf_module_ctx->spf_hash));
+	}
 
 	for (i = 0; i < rec->elts->len; i ++) {
 		addr = &g_array_index (rec->elts, struct spf_addr, i);
-		if (spf_check_element (rec, addr, task)) {
+		if (spf_check_element (rec, addr, task, cached)) {
 			break;
 		}
 	}
@@ -557,12 +572,20 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 				rspamd_lru_hash_insert (spf_module_ctx->spf_hash,
 						record->domain, spf_record_ref (l),
 						task->tv.tv_sec, record->ttl);
+
+				msg_info_task ("stored record for %s (0x%xuL) in LRU cache for %d seconds, "
+							   "%d/%d elements in the cache",
+						record->domain,
+						record->digest,
+						record->ttl,
+						rspamd_lru_hash_size (spf_module_ctx->spf_hash),
+						rspamd_lru_hash_capacity (spf_module_ctx->spf_hash));
 			}
 
 		}
 
 		spf_record_ref (l);
-		spf_check_list (l, task);
+		spf_check_list (l, task, FALSE);
 		spf_record_unref (l);
 
 		spf_record_unref (record);
@@ -621,7 +644,7 @@ spf_symbol_callback (struct rspamd_task *task,
 			rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, domain,
 			task->tv.tv_sec)) != NULL) {
 			spf_record_ref (l);
-			spf_check_list (l, task);
+			spf_check_list (l, task, TRUE);
 			spf_record_unref (l);
 		}
 		else {

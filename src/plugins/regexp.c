@@ -398,7 +398,7 @@ regexp_module_config (struct rspamd_config *cfg)
 					}
 				}
 				else {
-					priority = ucl_object_get_priority (value) + 1;
+					priority = 0;
 				}
 
 				rspamd_config_add_symbol (cfg, cur_item->symbol,

@@ -21,7 +21,7 @@ ENDIF(MSVC)
 IF(MSVC)
   ADD_DEFINITIONS(-D_CRT_SECURE_NO_DEPRECATE=1)  # respect the standard
 ENDIF(MSVC)
-
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -w")
 IF(UNIX)
   # prevent Unknown CMake command "check_function_exists".
   INCLUDE(CheckFunctionExists)
