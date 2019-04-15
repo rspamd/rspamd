@@ -120,10 +120,6 @@ local function parse_clickhouse_response_json(params, data)
     return nil, {}
   end
 
-  if data:match('DB::Exception') then
-    return data, {}
-  end
-
   local function parse_string(s)
     local parser = ucl.parser()
     local res, err = parser:parse_string(s)
