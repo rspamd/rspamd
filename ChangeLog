@@ -1,3 +1,28 @@
+1.9.2: 16 Apr 2019
+  * [Conf] Allow to load users plugins from plugins.d
+  * [Conf] oversign openpgp and autocrypt headers
+  * [Feature] Add SPF FFI library for Lua
+  * [Feature] Add more verbosity for SPF caching
+  * [Feature] Antivirus: Handle encrypted files specially
+  * [Feature] Clickhouse: Slashing - add new fields to CH
+  * [Feature] Dkim_signing: Add OpenDKIM like signing_table and key_table
+  * [Feature] Dkim_signing: Allow to use new options as maps
+  * [Feature] Import fpconv library
+  * [Feature] Lua_maps: Allow static regexp and glob maps
+  * [Feature] Parse ical files
+  * [Feature] Rspamadm: Add dns_tool utility
+  * [Feature] Store SPF records digests
+  * [Feature] Use fpconv girsu2 implementation for printing floats
+  * [Fix] Clickhouse: Use integer seconds when inserting rows
+  * [Fix] Fix floating point printing
+  * [Fix] Fix processing of embedded urls
+  * [Fix] Lua_clickhouse: Fix CH errors processing
+  * [Fix] Make spf digest stable
+  * [Fix] Properly detect encrypted files in zip archives
+  * [Fix] Slashing: Store times in GMT timezone in ClickHouse
+  * [Rules] Add additional conditions to perform BTC checks
+  * [Rules] Fix pay-to-hash addresses validation
+
 1.9.1: 5 Apr 2019
   * [Conf] Add vendor groups for symbols
   * [Feature] Add `rspamadm template` command
