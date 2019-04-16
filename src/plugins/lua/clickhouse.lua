@@ -48,7 +48,7 @@ local settings = {
   dmarc_reject_symbols = {'DMARC_POLICY_REJECT'},
   dmarc_quarantine_symbols = {'DMARC_POLICY_QUARANTINE'},
   dmarc_softfail_symbols = {'DMARC_POLICY_SOFTFAIL'},
-  dmarc_dnsfail_symbols = {'DMARC_FAIL'},
+  dmarc_na_symbols = {'DMARC_NA'},
   spf_allow_symbols = {'R_SPF_ALLOW'},
   spf_reject_symbols = {'R_SPF_FAIL'},
   spf_dnsfail_symbols = {'R_SPF_DNSFAIL', 'R_SPF_PERMFAIL'},
@@ -508,9 +508,9 @@ local function clickhouse_collect(task)
     dmarc = 'softfail'
   end
 
-  ret = ret or clickhouse_check_symbol(task, settings.dmarc_dnsfail_symbols, false)
+  ret = ret or clickhouse_check_symbol(task, settings.dmarc_na_symbols, false)
   if ret then
-    dmarc = 'dnsfail'
+    dmarc = 'na'
   end
 
   ret = clickhouse_check_symbol(task, settings.spf_allow_symbols, false)
