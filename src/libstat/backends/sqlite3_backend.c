@@ -151,8 +151,10 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 	[RSPAMD_STAT_BACKEND_GET_TOKEN] = {
 		.idx = RSPAMD_STAT_BACKEND_GET_TOKEN,
 		.sql = "SELECT value FROM tokens "
-				"WHERE token=?1 AND users=?2 "
-				"AND (language=?3 OR language=0);",
+				"LEFT JOIN languages ON tokens.language=languages.id "
+				"LEFT JOIN users ON tokens.user=users.id "
+				"WHERE token=?1 AND (users.id=?2) "
+				"AND (languages.id=?3 OR languages.id=0);",
 		.stmt = NULL,
 		.args = "III",
 		.result = SQLITE_ROW,
