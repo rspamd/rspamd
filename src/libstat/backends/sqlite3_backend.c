@@ -554,7 +554,7 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 
 	if ((bk = rspamd_sqlite3_opendb (cfg->cfg_pool, stf, filename,
 			stf->opts, TRUE, &err)) == NULL) {
-		msg_err_config ("cannot open sqlite3 db: %e", err);
+		msg_err_config ("cannot open sqlite3 db %s: %e", filename, err);
 		g_error_free (err);
 		return NULL;
 	}
