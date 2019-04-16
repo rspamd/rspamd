@@ -851,6 +851,9 @@ local function check_mime_type(task)
               fname:sub(1, ch_pos)))
     end
 
+    -- Decode hex encoded characters
+    fname = string.gsub(fname, '%%(%x%x)', function (hex) return string.char(tonumber(hex,16)) end )
+
     -- Replace potentially bad characters with '?'
     fname = fname:gsub('[^%s%g]', '?')
 
@@ -1083,13 +1086,12 @@ local function check_mime_type(task)
         end
 
         if map then
-          local v
+          local v = map:get_key(ct)
           local detected_different = false
           if detected_ct and detected_ct ~= ct then
-            v = map:get_key(detected_ct)
+            local v_detected = map:get_key(detected_ct)
+	    if v_detected > v then v = v_detected end
             detected_different = true
-          else
-            v = map:get_key(ct)
           end
           if v then
             local n = tonumber(v)
