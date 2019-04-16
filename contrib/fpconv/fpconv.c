@@ -99,7 +99,7 @@ static Fp multiply(Fp* a, Fp* b)
     uint64_t al_bl = (a->frac & lomask) * (b->frac & lomask);
     uint64_t ah_bh = (a->frac >> 32)    * (b->frac >> 32);
 
-    uint64_t tmp = (ah_bl & lomask) + (al_bh & lomask) + (al_bl >> 32); 
+    uint64_t tmp = (ah_bl & lomask) + (al_bh & lomask) + (al_bl >> 32);
     /* round up */
     tmp += 1U << 31;
 
@@ -206,7 +206,8 @@ static int grisu2(double d, char* digits, int* K)
     return generate_digits(&w, &upper, &lower, digits, K);
 }
 
-static int emit_digits(char* digits, int ndigits, char* dest, int K, bool neg)
+static int emit_digits(char* digits, int ndigits, char* dest, int K, bool neg,
+		bool scientific)
 {
     int exp = absv(K + ndigits - 1);
 
@@ -219,7 +220,7 @@ static int emit_digits(char* digits, int ndigits, char* dest, int K, bool neg)
     }
 
     /* write decimal w/o scientific notation */
-    if(K < 0 && (K > -7 || exp < 4)) {
+    if(scientific && (K < 0 && (K > -7 || exp < 4))) {
         int offset = ndigits - absv(K);
         /* fp < 1.0 -> write leading zero */
         if(offset <= 0) {
@@ -304,7 +305,7 @@ static int filter_special(double fp, char* dest)
     return 3;
 }
 
-int fpconv_dtoa(double d, char dest[24])
+int fpconv_dtoa(double d, char dest[24], bool scientific)
 {
     char digits[18];
 
@@ -326,7 +327,7 @@ int fpconv_dtoa(double d, char dest[24])
     int K = 0;
     int ndigits = grisu2(d, digits, &K);
 
-    str_len += emit_digits(digits, ndigits, dest + str_len, K, neg);
+    str_len += emit_digits(digits, ndigits, dest + str_len, K, neg, scientific);
 
     return str_len;
 }

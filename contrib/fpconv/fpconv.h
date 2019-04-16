@@ -26,7 +26,7 @@
  *
  */
 
-int fpconv_dtoa(double fp, char dest[24]);
+int fpconv_dtoa(double fp, char dest[24], bool scientific);
 
 #endif
 

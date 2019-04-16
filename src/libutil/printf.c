@@ -947,9 +947,8 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 
 			case 'f':
-			case 'g':
 				f = (gdouble) va_arg (args, double);
-				slen = fpconv_dtoa (f, dtoabuf);
+				slen = fpconv_dtoa (f, dtoabuf, false);
 
 				if (frac_width != 0) {
 					const gchar *dot_pos = memchr (dtoabuf, '.', slen);
@@ -980,10 +979,16 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 				continue;
 
+			case 'g':
+				f = (gdouble) va_arg (args, double);
+				slen = fpconv_dtoa (f, dtoabuf, true);
+				RSPAMD_PRINTF_APPEND (dtoabuf, slen);
+
+				continue;
+
 			case 'F':
-			case 'G':
 				f = (gdouble) va_arg (args, long double);
-				slen = fpconv_dtoa (f, dtoabuf);
+				slen = fpconv_dtoa (f, dtoabuf, false);
 
 				if (frac_width != 0) {
 					const gchar *dot_pos = memchr (dtoabuf, '.', slen);
@@ -1010,6 +1015,13 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 					}
 				}
 
+				RSPAMD_PRINTF_APPEND (dtoabuf, slen);
+
+				continue;
+
+			case 'G':
+				f = (gdouble) va_arg (args, long double);
+				slen = fpconv_dtoa (f, dtoabuf, true);
 				RSPAMD_PRINTF_APPEND (dtoabuf, slen);
 
 				continue;
