@@ -52,6 +52,8 @@
 
 #define DEFAULT_IO_TIMEOUT 500
 #define DEFAULT_RETRANSMITS 3
+#define DEFAULT_MAX_ERRORS 4
+#define DEFAULT_REVIVE_TIME 60
 #define DEFAULT_PORT 11335
 
 #define RSPAMD_FUZZY_PLUGIN_VERSION RSPAMD_FUZZY_VERSION
@@ -98,6 +100,8 @@ struct fuzzy_ctx {
 	struct rspamd_keypair_cache *keypairs_cache;
 	guint32 io_timeout;
 	guint32 retransmits;
+	guint   max_errors;
+	gdouble revive_time;
 	gint check_mime_part_ref; /* Lua callback */
 	gint process_rule_ref; /* Lua callback */
 	gint cleanup_rules_ref;
@@ -461,6 +465,10 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 
 	if ((value = ucl_object_lookup (obj, "servers")) != NULL) {
 		rule->servers = rspamd_upstreams_create (cfg->ups_ctx);
+		/* pass max_error and revive_time configuration in upstream for fuzzy storage
+		 * it allows to configure error_rate threshold and upstream dead timer
+		 */
+		rspamd_upstreams_set_limits (rule->servers, (gdouble) fuzzy_module_ctx->revive_time, NAN, NAN, NAN, (guint) fuzzy_module_ctx->max_errors, NAN);
 
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
 				(rspamd_mempool_destruct_t)rspamd_upstreams_destroy,
@@ -712,6 +720,24 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			"Maximum number of retransmits for a single request",
 			"retransmits",
 			UCL_INT,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check",
+			"Maximum number of upstream errors, affects error rate threshold",
+			"max_errors",
+			UCL_INT,
+			NULL,
+			0,
+			NULL,
+			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"fuzzy_check",
+			"Time to lapse before re-resolve faulty upstream",
+			"revive_time",
+			UCL_FLOAT,
 			NULL,
 			0,
 			NULL,
@@ -996,6 +1022,24 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 	}
 	else {
 		fuzzy_module_ctx->retransmits = DEFAULT_RETRANSMITS;
+	}
+
+	if ((value =
+		rspamd_config_get_module_opt (cfg, "fuzzy_check",
+		"max_errors")) != NULL) {
+		fuzzy_module_ctx->max_errors = ucl_obj_toint (value);
+	}
+	else {
+		fuzzy_module_ctx->max_errors = DEFAULT_MAX_ERRORS;
+	}
+
+	if ((value =
+		rspamd_config_get_module_opt (cfg, "fuzzy_check",
+		"revive_time")) != NULL) {
+		fuzzy_module_ctx->revive_time = ucl_obj_todouble (value);
+	}
+	else {
+		fuzzy_module_ctx->revive_time = DEFAULT_REVIVE_TIME;
 	}
 
 	if ((value =
