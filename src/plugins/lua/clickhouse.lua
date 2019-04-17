@@ -1054,9 +1054,9 @@ if opts then
         priority = 10,
         flags = 'empty,explicit_disable,ignore_passthrough',
       })
-      rspamd_config:register_finish_script(function(_, ev_base, _)
+      rspamd_config:register_finish_script(function(task)
         if nrows > 0 then
-          clickhouse_send_data(nil, ev_base)
+          clickhouse_send_data(task, nil)
         end
       end)
       -- Create tables on load
