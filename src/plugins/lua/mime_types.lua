@@ -1090,7 +1090,7 @@ local function check_mime_type(task)
           local detected_different = false
           if detected_ct and detected_ct ~= ct then
             local v_detected = map:get_key(detected_ct)
-	    if v_detected > v then v = v_detected end
+            if not v or v_detected and v_detected > v then v = v_detected end
             detected_different = true
           end
           if v then
