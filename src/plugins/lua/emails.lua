@@ -49,6 +49,8 @@ local function check_email_rule(task, rule, addr)
       email = string.format('%s%s%s', addr.user, rule.delimiter, addr.domain)
     end
 
+    email = email:lower()
+
     local function emails_dns_cb(_, _, results, err)
       if err and (err ~= 'requested record is not found'
           and err ~= 'no records with this name') then
@@ -190,6 +192,7 @@ local function gen_check_emails(rule)
 
         if rt and rt[1] then
           rspamd_lua_utils.remove_email_aliases(rt[1])
+          rt[1].addr = rt[1].addr:lower()
           if not checked[rt[1].addr] then
             check_email_rule(task, rule, rt[1])
             checked[rt[1].addr] = true
