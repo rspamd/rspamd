@@ -30,7 +30,7 @@ end
 local data_rows = {}
 local custom_rows = {}
 local nrows = 0
-local schema_version = 4 -- Current schema version
+local schema_version = 5 -- Current schema version
 
 local settings = {
   limit = 1000,
@@ -102,7 +102,8 @@ CREATE TABLE rspamd
     IsDmarc Enum8('reject' = 0, 'allow' = 1, 'unknown' = 2, 'softfail' = 3, 'na' = 4, 'quarantine' = 5) DEFAULT 'unknown',
     IsSpf Enum8('reject' = 0, 'allow' = 1, 'neutral' = 2, 'dnsfail' = 3, 'na' = 4, 'unknown' = 5) DEFAULT 'unknown',
     NUrls Int32,
-    Action Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4, 'soft reject' = 5) DEFAULT 'no action',
+    Action Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4, 'soft reject' = 5, 'custom' = 6) DEFAULT 'no action',
+    CustomAction String,
     FromUser String,
     MimeUser String,
     RcptUser String,
@@ -185,8 +186,24 @@ local migrations = {
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (4)]],
   },
+  [4] = {
+    [[ALTER TABLE rspamd
+      Action Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4, 'soft reject' = 5, 'custom' = 6) DEFAULT 'no action',
+      ADD COLUMN CustomAction String AFTER Action
+    ]],
+    -- New version
+    [[INSERT INTO rspamd_version (Version) Values (5)]],
+  },
 }
 
+local predefined_actions = {
+  ['reject'] = true,
+  ['rewrite subject'] = true,
+  ['add header'] = true,
+  ['greylist'] = true,
+  ['no action'] = true,
+  ['soft reject'] = true
+}
 
 local function clickhouse_main_row(res)
   local fields = {
@@ -219,6 +236,8 @@ local function clickhouse_main_row(res)
     'MessageId',
     'ScanTimeReal',
     'ScanTimeVirtual',
+    -- 1.9.3 +
+    'CustomAction',
   }
 
   for _,v in ipairs(fields) do table.insert(res, v) end
@@ -554,6 +573,13 @@ local function clickhouse_collect(task)
   }))
 
   local action = task:get_metric_action('default')
+  local custom_action = ''
+
+  if not predefined_actions[action] then
+    custom_action = action
+    action = 'custom'
+  end
+
   local digest = task:get_digest()
 
   local subject = ''
@@ -592,7 +618,8 @@ local function clickhouse_collect(task)
     mime_rcpt,
     message_id,
     scan_real,
-    scan_virtual
+    scan_virtual,
+    custom_action
   }
 
   -- Attachments step
