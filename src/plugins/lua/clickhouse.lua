@@ -188,7 +188,7 @@ local migrations = {
   },
   [4] = {
     [[ALTER TABLE rspamd
-      Action Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4, 'soft reject' = 5, 'custom' = 6) DEFAULT 'no action',
+      MODIFY COLUMN Action Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4, 'soft reject' = 5, 'custom' = 6) DEFAULT 'no action',
       ADD COLUMN CustomAction String AFTER Action
     ]],
     -- New version
