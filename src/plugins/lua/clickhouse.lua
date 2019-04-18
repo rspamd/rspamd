@@ -74,6 +74,7 @@ local settings = {
   password = nil,
   no_ssl_verify = false,
   custom_rules = {},
+  enable_digest = false,
   retention = {
     enable = false,
     method = 'detach',
@@ -580,7 +581,11 @@ local function clickhouse_collect(task)
     action = 'custom'
   end
 
-  local digest = task:get_digest()
+  local digest = ''
+
+  if settings.enable_digest then
+    digest = task:get_digest()
+  end
 
   local subject = ''
   if settings.insert_subject then
