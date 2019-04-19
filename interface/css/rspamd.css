@@ -113,17 +113,6 @@ table#symbolsTable input[type="number"] {
     right: 9px;
     line-height: 20px;
 }
-.alert-block {
-    position: static;
-    padding: 8px 14px;
-    border: 1px solid #fbeed5;
-    -webkit-border-radius: 4px;
-    -moz-border-radius: 4px;
-    border-radius: 4px;
-    -moz-text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
-    -webkit-text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
-}
 .alert-success {
     color: #468847;
     background: #dff0d8;
@@ -153,19 +142,9 @@ table#symbolsTable input[type="number"] {
 .alert-block .close {
     right: -1px;
 }
-.alert-block h4 {
-    margin: 5px 0 10px;
-}
 .alert-block > p,
 .alert-block > ul {
     margin-bottom: 0;
-}
-.alert-block p + p {
-    margin-top: 10px;
-}
-.alert-block code {
-    display: block;
-    white-space: normal;
 }
 
 .pager li > a,
@@ -251,16 +230,7 @@ table#symbolsTable input[type="number"] {
     -moz-box-shadow: 0 1px 2px -1px rgba(0, 0, 0, 0.2);
     box-shadow: 0 1px 2px -1px rgba(0, 0, 0, 0.2);
 }
-.widget-inner {
-    padding: 12px 15px;
-}
-.stats-plain {
-    width: 100%;
-}
-.stat-boxes,
-.quick-actions,
-.quick-actions-horizontal,
-.stats-plain {
+.stat-boxes {
     display: block;
     list-style: none outside none;
     margin: 0;
@@ -356,11 +326,6 @@ table#symbolsTable input[type="number"] {
 .table-log .col5 {
     width: 100px;
 }
-.table-log .col7,
-.table-log .col8,
-.table-log .col9 {
-    width: 50px;
-}
 .table-log th {
     padding: 4px 10px;
     font-size: 10px;
@@ -446,9 +411,6 @@ table#symbolsTable input[type="number"] {
 .list-textarea {
     width: 100%;
     height: 360px;
-}
-.align-right {
-    text-align: right !important;
 }
 td.maps-cell {
     vertical-align: middle;
@@ -568,27 +530,6 @@ td.maps-cell {
 }
 .scorebar-ham {
     background: rgba(100, 230, 80, 0.1);
-}
-
-/* btn-file for upload file button */
-.btn-file {
-    position: relative;
-    overflow: hidden;
-}
-.btn-file input[type=file] {
-    position: absolute;
-    top: 0;
-    right: 0;
-    min-width: 100%;
-    min-height: 100%;
-    font-size: 100px;
-    text-align: right;
-    filter: alpha(opacity=0);
-    opacity: 0;
-    outline: none;
-    background: white;
-    cursor: inherit;
-    display: block;
 }
 
 input.radio {
