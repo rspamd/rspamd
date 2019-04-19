@@ -231,9 +231,9 @@ table#symbolsTable input[type="number"] {
     box-shadow: 0 1px 2px -1px rgba(0, 0, 0, 0.2);
 }
 .stat-boxes {
-    display: block;
-    list-style: none outside none;
     margin: 0;
+    margin-right: -10px !important;
+    padding-left: 0;
 }
 .stat-box {
     background-color: #f6f6f6;
@@ -254,11 +254,6 @@ table#symbolsTable input[type="number"] {
 .stat-box:not(.pull-right) {
     min-width: 90px;
 }
-/*
-.stat-boxes .stat-box: first-child {
-    margin-right: 0;
-}
-*/
 .stat-box .widget {
     overflow: hidden;
     margin: 0 12px;
@@ -401,11 +396,6 @@ table#symbolsTable input[type="number"] {
 }
 .symbol-special:hover {
     background-color: #cddbff;
-}
-
-.stat-boxes {
-    padding-left: 0;
-    margin-right: -10px !important;
 }
 
 .list-textarea {
