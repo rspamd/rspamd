@@ -66,6 +66,10 @@ Content-Transfer-Encoding: 7bit
 
 This is an aggregate report from %s.
 
+Report domain: %s
+Submitter: %s
+Report ID: %s
+
 ------=_NextPart_000_024E_01CC9B0A.AFE54C00
 Content-Type: application/gzip
 Content-Transfer-Encoding: base64
@@ -962,16 +966,20 @@ if opts['reporting'] == true then
                 table.insert(atmp, k)
               end
               local addr_string = table.concat(atmp, ', ')
+              -- TODO: migrate to templates and remove this shit
               local rhead = string.format(report_template:gsub("\n", "\r\n"),
-		  report_settings.from_name,
+                  report_settings.from_name,
                   report_settings.email,
                   addr_string,
                   reporting_domain,
                   report_settings.domain,
                   report_id,
                   rspamd_util.time_to_string(rspamd_util.get_time()),
-                  rspamd_util.random_hex(12) .. '@rspamd',
-                  report_settings.domain,
+                  rspamd_util.random_hex(12) .. '@rspamd', -- Message-id
+                  report_settings.domain, -- Plain text part
+                  reporting_domain,
+                  addr_string,
+                  report_id,
                   report_settings.domain,
                   reporting_domain,
                   report_start, report_end)
