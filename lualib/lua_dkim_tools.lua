@@ -521,4 +521,14 @@ exports.sign_using_redis = function(N, task, settings, selectors, sign_func, err
   end
 end
 
+exports.validate_signing_settings = function(settings)
+  return settings.use_redis or
+      settings.path or
+      settings.domain or
+      settings.path_map or
+      settings.selector_map or
+      settings.use_http_headers or
+      (settings.signing_table and settings.key_table)
+end
+
 return exports

@@ -138,17 +138,12 @@ for k,v in pairs(opts) do
   end
 end
 
-if not (settings.use_redis or
-    settings.path or
-    settings.domain or
-    settings.path_map or
-    settings.selector_map or
-    settings.use_http_headers or
-    (settings.signing_table and settings.key_table)) then
+if not dkim_sign_tools.validate_signing_settings(settings) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable dkim signing')
   lua_util.disable_module(N, "config")
   return
 end
+
 if settings.use_redis then
   redis_params = lua_redis.parse_redis_server('dkim_signing')
 
