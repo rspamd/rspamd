@@ -457,4 +457,68 @@ end
 
 exports.prepare_dkim_signing = prepare_dkim_signing
 
+exports.sign_using_redis = function(N, task, settings, selectors, sign_func, err_func)
+  local lua_redis = require "lua_redis"
+
+  local function try_redis_key(selector, p)
+    p.key = nil
+    p.selector = selector
+    local rk = string.format('%s.%s', p.selector, p.domain)
+    local function redis_key_cb(err, data)
+      if err then
+        err_func(string.format("cannot make request to load DKIM key for %s: %s",
+            rk, err))
+      elseif type(data) ~= 'string' then
+        lua_util.debugm(N, task, "missing DKIM key for %s", rk)
+      else
+        p.rawkey = data
+        lua_util.debugm(N, task, 'found and parsed key for %s:%s in Redis',
+            p.domain, p.selector)
+        sign_func(task, p)
+      end
+    end
+    local rret = lua_redis.redis_make_request(task,
+        settings.redis_params, -- connect params
+        rk, -- hash key
+        false, -- is write
+        redis_key_cb, --callback
+        'HGET', -- command
+        {settings.key_prefix, rk} -- arguments
+    )
+    if not rret then
+      err_func(task,
+          string.format( "cannot make request to load DKIM key for %s", rk))
+    end
+  end
+
+  for _, p in ipairs(selectors) do
+    if settings.selector_prefix then
+      logger.infox(task, "using selector prefix '%s' for domain '%s'",
+          settings.selector_prefix, p.domain);
+      local function redis_selector_cb(err, data)
+        if err or type(data) ~= 'string' then
+          err_func(task, string.format("cannot make request to load DKIM selector for domain %s: %s",
+              p.domain, err))
+        else
+          try_redis_key(data, p)
+        end
+      end
+      local rret = lua_redis.redis_make_request(task,
+          settings.redis_params, -- connect params
+          p.domain, -- hash key
+          false, -- is write
+          redis_selector_cb, --callback
+          'HGET', -- command
+          {settings.selector_prefix, p.domain} -- arguments
+      )
+      if not rret then
+        err_func(task, string.format("cannot make Redis request to load DKIM selector for domain %s: %s",
+            p.domain))
+      end
+    else
+      try_redis_key(p.selector, p)
+    end
+  end
+end
+
 return exports
