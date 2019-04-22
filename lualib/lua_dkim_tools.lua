@@ -620,7 +620,7 @@ exports.validate_signing_settings = function(settings)
       (settings.use_vault and settings.vault_url and settings.vault_token)
 end
 
-exports.process_signing_settings = function(settings, opts)
+exports.process_signing_settings = function(N, settings, opts)
   local lua_maps = require "lua_maps"
   for k,v in pairs(opts) do
     if k == 'sign_networks' then

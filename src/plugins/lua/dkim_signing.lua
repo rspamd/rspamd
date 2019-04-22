@@ -127,7 +127,7 @@ end
 local opts =  rspamd_config:get_all_opt('dkim_signing')
 if not opts then return end
 
-dkim_sign_tools.process_signing_settings(settings, opts)
+dkim_sign_tools.process_signing_settings(N, settings, opts)
 
 if not dkim_sign_tools.validate_signing_settings(settings) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable dkim signing')

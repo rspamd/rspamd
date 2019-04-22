@@ -615,7 +615,7 @@ local function arc_signing_cb(task)
   end
 end
 
-dkim_sign_tools.process_signing_settings(settings, opts)
+dkim_sign_tools.process_signing_settings(N, settings, opts)
 
 if not dkim_sign_tools.validate_signing_settings(settings) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable arc signing')
