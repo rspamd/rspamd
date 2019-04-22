@@ -611,21 +611,7 @@ local function arc_signing_cb(task)
   end
 end
 
-for k,v in pairs(opts) do
-  if k == 'sign_networks' then
-    settings[k] = lua_maps.map_add(N, k, 'radix', 'DKIM signing networks')
-  elseif k == 'path_map' then
-    settings[k] = lua_maps.map_add(N, k, 'map', 'Paths to DKIM signing keys')
-  elseif k == 'selector_map' then
-    settings[k] = lua_maps.map_add(N, k, 'map', 'DKIM selectors')
-  elseif k == 'signing_table' then
-    settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM signing table')
-  elseif k == 'key_table' then
-    settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM keys table')
-  else
-    settings[k] = v
-  end
-end
+dkim_sign_tools.process_signing_settings(settings, opts)
 
 if not dkim_sign_tools.validate_signing_settings(settings) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable arc signing')
