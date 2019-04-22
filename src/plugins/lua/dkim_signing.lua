@@ -19,7 +19,6 @@ local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local dkim_sign_tools = require "lua_dkim_tools"
 local lua_redis = require "lua_redis"
-local lua_maps = require "lua_maps"
 
 if confighelp then
   return

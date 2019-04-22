@@ -23,7 +23,6 @@ local rspamd_rsa = require "rspamd_rsa"
 local fun = require "fun"
 local auth_results = require "lua_auth_results"
 local hash = require "rspamd_cryptobox_hash"
-local lua_maps = require "lua_maps"
 
 if confighelp then
   return
