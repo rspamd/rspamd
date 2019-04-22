@@ -99,23 +99,27 @@ local function dkim_signing_cb(task)
   if settings.use_redis then
     dkim_sign_tools.sign_using_redis(N, task, settings, selectors, do_sign, sign_error)
   else
-    if #selectors > 0 then
-      for _, k in ipairs(selectors) do
-        -- templates
-        if k.key then
-          k.key = lua_util.template(k.key, {
-            domain = k.domain,
-            selector = k.selector
-          })
-          lua_util.debugm(N, task, 'using key "%s", use selector "%s" for domain "%s"',
-              k.key, k.selector, k.domain)
-        end
-
-        do_sign(task, k)
-      end
+    if selectors.vault then
+      dkim_sign_tools.sign_using_vault(N, task, settings, selectors, do_sign, sign_error)
     else
-      rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
-      return false
+      if #selectors > 0 then
+        for _, k in ipairs(selectors) do
+          -- templates
+          if k.key then
+            k.key = lua_util.template(k.key, {
+              domain = k.domain,
+              selector = k.selector
+            })
+            lua_util.debugm(N, task, 'using key "%s", use selector "%s" for domain "%s"',
+                k.key, k.selector, k.domain)
+          end
+
+          do_sign(task, k)
+        end
+      else
+        rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
+        return false
+      end
     end
   end
 end

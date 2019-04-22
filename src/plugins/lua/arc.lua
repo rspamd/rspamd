@@ -582,31 +582,35 @@ local function arc_signing_cb(task)
   if settings.use_redis then
     dkim_sign_tools.sign_using_redis(N, task, settings, selectors, do_sign, sign_error)
   else
-    if ((p.key or p.rawkey) and p.selector) then
-      if p.key then
-        p.key = lua_util.template(p.key, {
-          domain = p.domain,
-          selector = p.selector
-        })
-
-        local exists,err = rspamd_util.file_exists(p.key)
-        if not exists then
-          if err and err == 'No such file or directory' then
-            lua_util.debugm(N, task, 'cannot read key from %s: %s', p.key, err)
-          else
-            rspamd_logger.warnx(task, 'cannot read key from %s: %s', p.key, err)
-          end
-          return false
-        end
-      end
-
-      local dret, hdr = dkim_sign(task, p)
-      if dret then
-        return arc_sign_seal(task, p, hdr)
-      end
+    if selectors.vault then
+      dkim_sign_tools.sign_using_vault(N, task, settings, selectors, do_sign, sign_error)
     else
-      rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
-      return false
+      if ((p.key or p.rawkey) and p.selector) then
+        if p.key then
+          p.key = lua_util.template(p.key, {
+            domain = p.domain,
+            selector = p.selector
+          })
+
+          local exists,err = rspamd_util.file_exists(p.key)
+          if not exists then
+            if err and err == 'No such file or directory' then
+              lua_util.debugm(N, task, 'cannot read key from %s: %s', p.key, err)
+            else
+              rspamd_logger.warnx(task, 'cannot read key from %s: %s', p.key, err)
+            end
+            return false
+          end
+        end
+
+        local dret, hdr = dkim_sign(task, p)
+        if dret then
+          return arc_sign_seal(task, p, hdr)
+        end
+      else
+        rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
+        return false
+      end
     end
   end
 end

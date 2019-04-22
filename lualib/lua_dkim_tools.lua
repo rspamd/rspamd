@@ -542,12 +542,70 @@ exports.sign_using_redis = function(N, task, settings, selectors, sign_func, err
           {settings.selector_prefix, p.domain} -- arguments
       )
       if not rret then
-        err_func(task, string.format("cannot make Redis request to load DKIM selector for domain %s: %s",
+        err_func(task, string.format("cannot make Redis request to load DKIM selector for domain %s",
             p.domain))
       end
     else
       try_redis_key(p.selector, p)
     end
+  end
+end
+
+exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err_func)
+  local http = require "rspamd_http"
+  local ucl = require "ucl"
+
+  local full_url = settings.vault_url .. '/' .. selectors.domain
+
+  local function vault_callback(err, code, body, _)
+    if code ~= 200 then
+      err_func(task, string.format('cannot request data from the vault url: %s; %s (%s)',
+          full_url, err, body))
+    else
+      local parser = ucl.parser()
+      local res,parser_err = parser:parse_string(body)
+      if not res then
+        err_func(task, string.format('vault reply for %s (data=%s) cannot be parsed: %s',
+            full_url, body, parser_err))
+      else
+        local obj = parser:get_object()
+
+        if not obj or not obj.data then
+          err_func(task, string.format('vault reply for %s (data=%s) is invalid, no data',
+              full_url, body))
+        else
+          local elts = obj.data.selectors or {}
+
+          for _,p in ipairs(elts) do
+            local dkim_sign_data = {
+              rawkey = p.key,
+              selector = p.selector,
+              domain = selectors.domain
+            }
+            lua_util.debugm(N, task, 'found and parsed key for %s:%s in Vault',
+                dkim_sign_data.domain, dkim_sign_data.selector)
+            sign_func(task, dkim_sign_data)
+          end
+        end
+      end
+    end
+  end
+
+  local ret = http.request{
+    task = task,
+    url = full_url,
+    callback = vault_callback,
+    timeout = settings.http_timeout or 5.0,
+    no_ssl_verify = settings.no_ssl_verify,
+    keepalive = true,
+    headers = {
+      ['X-Vault-Token'] = settings.vault_token,
+    },
+  }
+
+  if not ret then
+    err_func(task, string.format("cannot make HTTP request to load DKIM data domain %s",
+        selectors.domain))
   end
 end
 
