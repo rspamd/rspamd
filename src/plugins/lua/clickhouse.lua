@@ -438,7 +438,8 @@ local function clickhouse_collect(task)
   end
 
   local list_id = task:get_header('List-Id') or ''
-  local message_id = task:get_message_id() or ''
+  local message_id = lua_util.maybe_obfuscate_string(task:get_message_id() or '',
+      settings, 'mid')
 
   local score = task:get_metric_score('default')[1];
   local bayes = 'unknown';
@@ -589,7 +590,7 @@ local function clickhouse_collect(task)
 
   local subject = ''
   if settings.insert_subject then
-    subject = lua_util.maybe_obfuscate_subject(task:get_subject() or '', settings)
+    subject = lua_util.maybe_obfuscate_string(task:get_subject() or '', settings, 'subject')
   end
 
   local scan_real,scan_virtual = task:get_scan_time()
