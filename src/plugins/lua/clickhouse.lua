@@ -745,7 +745,7 @@ local function clickhouse_collect(task)
   table.insert(data_rows, row)
   lua_util.debugm(N, task, "add clickhouse row %s / %s", nrows, settings.limit)
 
-  if nrows > settings['limit'] then
+  if nrows >= settings['limit'] then
     clickhouse_send_data(task)
     nrows = 0
     data_rows = {}
