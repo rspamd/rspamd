@@ -934,7 +934,7 @@ lua_cryptobox_hash_dtor (struct rspamd_lua_cryptobox_hash *h)
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 		EVP_MD_CTX_cleanup (h->content.c);
 #else
-		EVP_MD_CTX_reset (h->content.c));
+		EVP_MD_CTX_reset (h->content.c);
 #endif
 		EVP_MD_CTX_destroy (h->content.c);
 	}
