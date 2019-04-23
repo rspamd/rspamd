@@ -21,6 +21,7 @@ local E = {}
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
 local logger = require "rspamd_logger"
+local fun = require "fun"
 
 local function check_violation(N, task, domain)
   -- Check for DKIM_REJECT
@@ -576,16 +577,37 @@ exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err
         else
           local elts = obj.data.selectors or {}
 
-          for _,p in ipairs(elts) do
+          -- Filter selectors by time/sanity
+          local function is_selector_valid(p)
+            if not p.key or not p.selector then
+              return false
+            end
+
+            if p.valid_start then
+              -- Check start time
+              if rspamd_util.get_time() < tonumber(p.valid_start) then
+                return false
+              end
+            end
+
+            if p.valid_end then
+              if rspamd_util.get_time() >= tonumber(p.valid_end) then
+                return false
+              end
+            end
+
+            return true
+          end
+          fun.each(function(p)
             local dkim_sign_data = {
               rawkey = p.key,
               selector = p.selector,
-              domain = selectors.domain
+              domain = p.domain or selectors.domain
             }
             lua_util.debugm(N, task, 'found and parsed key for %s:%s in Vault',
                 dkim_sign_data.domain, dkim_sign_data.selector)
             sign_func(task, dkim_sign_data)
-          end
+          end, fun.filter(is_selector_valid, elts))
         end
       end
     end
