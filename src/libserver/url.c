@@ -2004,7 +2004,7 @@ rspamd_url_parse (struct rspamd_url *uri,
 		}
 	}
 
-	if (uri->protocol & (PROTOCOL_HTTP|PROTOCOL_HTTPS|PROTOCOL_MAILTO|PROTOCOL_FTP)) {
+	if (uri->protocol & (PROTOCOL_HTTP|PROTOCOL_HTTPS|PROTOCOL_MAILTO|PROTOCOL_FTP|PROTOCOL_FILE)) {
 		/* Find TLD part */
 		rspamd_multipattern_lookup (url_scanner->search_trie,
 				uri->host, uri->hostlen,
@@ -2017,9 +2017,11 @@ rspamd_url_parse (struct rspamd_url *uri,
 					return URI_ERRNO_TLD_MISSING;
 				}
 			} else {
-				/* Assume tld equal to host */
-				uri->tld = uri->host;
-				uri->tldlen = uri->hostlen;
+				if (!rspamd_url_is_ip (uri, pool)) {
+					/* Assume tld equal to host */
+					uri->tld = uri->host;
+					uri->tldlen = uri->hostlen;
+				}
 			}
 		}
 	}

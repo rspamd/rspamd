@@ -39,7 +39,7 @@ struct rspamd_url_tag {
 struct rspamd_url {
 	gchar *raw;
 	gchar *string;
-	gint protocol;
+	guint protocol;
 	guint port;
 
 	gchar *user;
