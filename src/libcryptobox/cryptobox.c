@@ -1492,13 +1492,6 @@ G_STATIC_ASSERT (sizeof (t1ha_context_t) <=
 G_STATIC_ASSERT (sizeof (XXH64_state_t) <=
 				 sizeof (((rspamd_cryptobox_fast_hash_state_t *)NULL)->opaque));
 
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wgnu"
-G_STATIC_ASSERT(G_ALIGNOF (t1ha_context_t) <=
-		G_ALIGNOF (((rspamd_cryptobox_fast_hash_state_t *)NULL)->opaque));
-#pragma GCC diagnostic pop
-#endif
 
 struct RSPAMD_ALIGNED(16) _mum_iuf {
 	union {
