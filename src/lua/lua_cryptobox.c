@@ -33,6 +33,7 @@
 #include "libcryptobox/keypair_private.h"
 #include "unix-std.h"
 #include "contrib/libottery/ottery.h"
+#include "libutil/ref.h"
 
 enum lua_cryptobox_hash_type {
 	LUA_CRYPTOBOX_HASH_BLAKE2,
@@ -52,6 +53,8 @@ struct rspamd_lua_cryptobox_hash {
 
 	unsigned type:7;
 	unsigned is_finished:1;
+
+	ref_entry_t ref;
 };
 
 LUA_FUNCTION_DEF (cryptobox_pubkey,	 load);
@@ -924,12 +927,35 @@ rspamd_lua_hash_update (struct rspamd_lua_cryptobox_hash *h,
 	}
 }
 
+static void
+lua_cryptobox_hash_dtor (struct rspamd_lua_cryptobox_hash *h)
+{
+	if (h->type == LUA_CRYPTOBOX_HASH_SSL) {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+		EVP_MD_CTX_cleanup (h->content.c);
+#else
+		EVP_MD_CTX_reset (h->c);
+#endif
+		EVP_MD_CTX_destroy (h->content.c);
+	}
+	else if (h->type == LUA_CRYPTOBOX_HASH_BLAKE2) {
+		rspamd_explicit_memzero (h->content.h, sizeof (*h->content.h));
+		g_free (h->content.h);
+	}
+	else {
+		g_free (h->content.fh);
+	}
+
+	g_free (h);
+}
+
 static struct rspamd_lua_cryptobox_hash *
 rspamd_lua_hash_create (const gchar *type)
 {
 	struct rspamd_lua_cryptobox_hash *h;
 
 	h = g_malloc0 (sizeof (*h));
+	REF_INIT_RETAIN (h, lua_cryptobox_hash_dtor);
 
 	if (type) {
 		if (g_ascii_strcasecmp (type, "md5") == 0) {
@@ -1155,7 +1181,7 @@ static gint
 lua_cryptobox_hash_update (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
+	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1), **ph;
 	const gchar *data;
 	struct rspamd_lua_text *t;
 	gsize len;
@@ -1192,7 +1218,12 @@ lua_cryptobox_hash_update (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 0;
+	ph = lua_newuserdata (L, sizeof (void *));
+	*ph = h;
+	REF_RETAIN (h);
+	rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
+
+	return 1;
 }
 
 /***
@@ -1203,7 +1234,7 @@ static gint
 lua_cryptobox_hash_reset (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
+	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1), **ph;
 
 	if (h) {
 		switch (h->type) {
@@ -1239,7 +1270,12 @@ lua_cryptobox_hash_reset (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 0;
+	ph = lua_newuserdata (L, sizeof (void *));
+	*ph = h;
+	REF_RETAIN (h);
+	rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
+
+	return 1;
 }
 
 static void
@@ -1388,23 +1424,7 @@ lua_cryptobox_hash_gc (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
 
-	if (h->type == LUA_CRYPTOBOX_HASH_SSL) {
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-		EVP_MD_CTX_cleanup (h->content.c);
-#else
-		EVP_MD_CTX_reset (h->c);
-#endif
-		EVP_MD_CTX_destroy (h->content.c);
-	}
-	else if (h->type == LUA_CRYPTOBOX_HASH_BLAKE2) {
-		rspamd_explicit_memzero (h->content.h, sizeof (*h->content.h));
-		g_free (h->content.h);
-	}
-	else {
-		g_free (h->content.fh);
-	}
-
-	g_free (h);
+	REF_RELEASE (h);
 
 	return 0;
 }
