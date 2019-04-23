@@ -343,9 +343,19 @@ void rspamd_cryptobox_hash (guchar *out,
 		const guchar *key,
 		gsize keylen);
 
+enum rspamd_cryptobox_fast_hash_type {
+	RSPAMD_CRYPTOBOX_XXHASH64 = 0,
+	RSPAMD_CRYPTOBOX_XXHASH32,
+	RSPAMD_CRYPTOBOX_MUMHASH,
+	RSPAMD_CRYPTOBOX_T1HA,
+	RSPAMD_CRYPTOBOX_HASHFAST,
+	RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT
+};
+
 /* Non crypto hash IUF interface */
 typedef struct RSPAMD_ALIGNED(16) rspamd_cryptobox_fast_hash_state_s  {
-	unsigned char opaque[64 + sizeof (size_t) + sizeof (uint64_t)];
+	RSPAMD_ALIGNED(16) guint64 opaque[11];
+	enum rspamd_cryptobox_fast_hash_type type;
 } rspamd_cryptobox_fast_hash_state_t;
 
 /**
@@ -355,6 +365,15 @@ typedef struct RSPAMD_ALIGNED(16) rspamd_cryptobox_fast_hash_state_s  {
  */
 void rspamd_cryptobox_fast_hash_init (rspamd_cryptobox_fast_hash_state_t *st,
 		guint64 seed);
+
+/**
+ * Init cryptobox hash state using key if needed, `st` must point to the buffer
+ * with at least rspamd_cryptobox_HASHSTATEBYTES bytes length. If keylen == 0, then
+ * non-keyed hash is generated
+ */
+void rspamd_cryptobox_fast_hash_init_specific (rspamd_cryptobox_fast_hash_state_t *st,
+											   enum rspamd_cryptobox_fast_hash_type type,
+											   guint64 seed);
 
 /**
  * Update hash with data portion
@@ -373,14 +392,6 @@ guint64 rspamd_cryptobox_fast_hash_final (rspamd_cryptobox_fast_hash_state_t *st
 guint64 rspamd_cryptobox_fast_hash (const void *data,
 		gsize len, guint64 seed);
 
-enum rspamd_cryptobox_fast_hash_type {
-	RSPAMD_CRYPTOBOX_XXHASH64 = 0,
-	RSPAMD_CRYPTOBOX_XXHASH32,
-	RSPAMD_CRYPTOBOX_MUMHASH,
-	RSPAMD_CRYPTOBOX_T1HA,
-	RSPAMD_CRYPTOBOX_HASHFAST,
-	RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT
-};
 /**
  * Platform independent version
  */
