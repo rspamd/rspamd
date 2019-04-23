@@ -674,7 +674,9 @@ local function clickhouse_collect(task)
     end
 
     -- Get tlds
-    table.insert(row, flatten_urls(function(_,u) return u:get_tld() end, urls_urls))
+    table.insert(row, flatten_urls(function(_, u)
+      return u:get_tld() or u:get_host()
+    end, urls_urls))
     -- Get hosts/full urls
     table.insert(row, flatten_urls(function(k, _) return k end, urls_urls))
   else
