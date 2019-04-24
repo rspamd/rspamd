@@ -514,13 +514,13 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     elseif spf_tmpfail then
       spf_result = 'temperror'
     else
-      if task:get_symbol(symbols.spf_deny_symbol) then
+      if task:has_symbol(symbols.spf_deny_symbol) then
         spf_result = 'fail'
-      elseif task:get_symbol(symbols.spf_softfail_symbol) then
+      elseif task:has_symbol(symbols.spf_softfail_symbol) then
         spf_result = 'softfail'
-      elseif task:get_symbol(symbols.spf_neutral_symbol) then
+      elseif task:has_symbol(symbols.spf_neutral_symbol) then
         spf_result = 'neutral'
-      elseif task:get_symbol(symbols.spf_permfail_symbol) then
+      elseif task:has_symbol(symbols.spf_permfail_symbol) then
         spf_result = 'permerror'
       else
         spf_result = 'none'
