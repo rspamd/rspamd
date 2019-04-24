@@ -182,8 +182,8 @@ rspamd_http_context_init (struct rspamd_http_context *ctx)
 		ctx->client_kp_cache = rspamd_keypair_cache_new (ctx->config.kp_cache_size_client);
 	}
 
-	if (ctx->config.kp_cache_size_client > 0) {
-		ctx->client_kp_cache = rspamd_keypair_cache_new (ctx->config.kp_cache_size_client);
+	if (ctx->config.kp_cache_size_server > 0) {
+		ctx->server_kp_cache = rspamd_keypair_cache_new (ctx->config.kp_cache_size_server);
 	}
 
 	if (ctx->config.client_key_rotate_time > 0 && ctx->ev_base) {

@@ -576,7 +576,7 @@ init_worker (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx, encrypted_only),
 			0,
-			"Deprecated: always true now");
+			"Allow only encrypted connections");
 
 
 	rspamd_rcl_register_worker_option (cfg,
