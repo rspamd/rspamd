@@ -321,11 +321,12 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 					}
 					else {
 						msg_notice_mon ("DNS reply returned '%s' for %s while '%s' "
-									  "was expected "
+									  "was expected when querying for '%s'"
 									  "(likely DNS spoofing or BL internal issues)",
 								rdns_strerror (reply->code),
 								m->url,
-								rdns_strerror (conf->expected_code));
+								rdns_strerror (conf->expected_code),
+								conf->request->str);
 					}
 
 					rspamd_monitored_propagate_error (m, "invalid return");
