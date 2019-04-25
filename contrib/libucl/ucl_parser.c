@@ -1810,8 +1810,8 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)
 					}
 					if (*p =='\n') {
 						/* Set chunk positions and start multiline parsing */
+						chunk->remain -= p - c + 1;
 						c += 2;
-						chunk->remain -= p - c;
 						chunk->pos = p + 1;
 						chunk->column = 0;
 						chunk->line ++;
