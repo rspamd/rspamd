@@ -591,7 +591,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 	const gchar *fmt,
 	va_list args)
 {
-	gchar zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], dtoabuf[24], *p, *last, c;
+	gchar zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], dtoabuf[32], *p, *last, c;
 	const gchar *buf_start = fmt, *fmt_start = NULL;
 	gint d;
 	gdouble f;
