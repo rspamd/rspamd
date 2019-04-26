@@ -6232,6 +6232,10 @@ lua_text_gc (lua_State *L)
 
 	if (t != NULL) {
 		if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
+			if (t->flags & RSPAMD_TEXT_FLAG_WIPE) {
+				rspamd_explicit_memzero ((guchar *)t->start, t->len);
+			}
+
 			if (t->flags & RSPAMD_TEXT_FLAG_MMAPED) {
 				munmap ((gpointer)t->start, t->len);
 			}
