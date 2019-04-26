@@ -96,6 +96,7 @@ LUA_FUNCTION_DEF (cryptobox, decrypt_file);
 LUA_FUNCTION_DEF (cryptobox, encrypt_cookie);
 LUA_FUNCTION_DEF (cryptobox, decrypt_cookie);
 LUA_FUNCTION_DEF (cryptobox, pbkdf);
+LUA_FUNCTION_DEF (cryptobox, gen_dkim_keypair);
 
 static const struct luaL_reg cryptoboxlib_f[] = {
 	LUA_INTERFACE_DEF (cryptobox, verify_memory),
@@ -109,6 +110,7 @@ static const struct luaL_reg cryptoboxlib_f[] = {
 	LUA_INTERFACE_DEF (cryptobox, encrypt_cookie),
 	LUA_INTERFACE_DEF (cryptobox, decrypt_cookie),
 	LUA_INTERFACE_DEF (cryptobox, pbkdf),
+	LUA_INTERFACE_DEF (cryptobox, gen_dkim_keypair),
 	{NULL, NULL}
 };
 
@@ -2195,6 +2197,139 @@ lua_cryptobox_pbkdf (lua_State *L)
 	g_string_free (result, TRUE);
 
 	return 1;
+}
+
+/***
+ * @function rspamd_cryptobox.gen_dkim_keypair([alg, [nbits]])
+ * Generates DKIM keypair. Returns 2 base64 strings as rspamd_text: privkey and pubkey
+ * @param {string} alg optional algorithm (rsa default, can be ed25519)
+ * @param {number} nbits optional number of bits for rsa (default 1024)
+ * @return {rspamd_text,rspamd_text} private key and public key as base64 encoded strings
+ */
+static gint
+lua_cryptobox_gen_dkim_keypair (lua_State *L)
+{
+	const gchar *alg_str = "rsa";
+	guint nbits = 1024;
+	struct rspamd_lua_text *priv_out, *pub_out;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		alg_str = lua_tostring (L, 1);
+	}
+
+	if (lua_type (L, 2) == LUA_TNUMBER) {
+		nbits = lua_tointeger (L, 2);
+	}
+
+	if (strcmp (alg_str, "rsa") == 0) {
+		BIGNUM *e;
+		RSA *r;
+		EVP_PKEY *pk;
+
+		e = BN_new ();
+		r = RSA_new ();
+		pk = EVP_PKEY_new ();
+
+		if (BN_set_word (e, RSA_F4) != 1) {
+			BN_free (e);
+			RSA_free (r);
+			EVP_PKEY_free (pk);
+
+			return luaL_error (L, "BN_set_word failed");
+		}
+
+		if (RSA_generate_key_ex (r, nbits, e, NULL) != 1) {
+			BN_free (e);
+			RSA_free (r);
+			EVP_PKEY_free (pk);
+
+			return luaL_error (L, "RSA_generate_key_ex failed");
+		}
+
+		if (EVP_PKEY_set1_RSA (pk, r) != 1) {
+			BN_free (e);
+			RSA_free (r);
+			EVP_PKEY_free (pk);
+
+			return luaL_error (L, "EVP_PKEY_set1_RSA failed");
+		}
+
+		BIO *mbio;
+		gint rc, len;
+		guchar *data;
+		gchar *b64_data;
+		gsize b64_len;
+
+		mbio = BIO_new (BIO_s_mem ());
+
+		/* Process private key */
+		rc = i2d_RSAPrivateKey_bio (mbio, r);
+		len = BIO_get_mem_data (mbio, &data);
+
+		b64_data = rspamd_encode_base64 (data, len, -1, &b64_len);
+
+		priv_out = lua_newuserdata (L, sizeof (*priv_out));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		priv_out->start = b64_data;
+		priv_out->len = b64_len;
+		priv_out->flags = RSPAMD_TEXT_FLAG_OWN|RSPAMD_TEXT_FLAG_WIPE;
+
+		/* Process public key */
+		BIO_reset (mbio);
+		rc = i2d_RSA_PUBKEY_bio (mbio, r);
+		len = BIO_get_mem_data (mbio, &data);
+
+		b64_data = rspamd_encode_base64 (data, len, -1, &b64_len);
+
+		pub_out = lua_newuserdata (L, sizeof (*pub_out));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		pub_out->start = b64_data;
+		pub_out->len = b64_len;
+		pub_out->flags = RSPAMD_TEXT_FLAG_OWN;
+
+		BN_free (e);
+		RSA_free (r);
+		EVP_PKEY_free (pk);
+		BIO_free (mbio);
+	}
+	else if (strcmp (alg_str, "ed25519") == 0) {
+		rspamd_sig_pk_t pk;
+		rspamd_sig_sk_t sk;
+		gchar *b64_data;
+		gsize b64_len;
+
+		rspamd_cryptobox_keypair_sig (pk, sk, RSPAMD_CRYPTOBOX_MODE_25519);
+
+		/* Process private key */
+		b64_data = rspamd_encode_base64 (sk,
+				rspamd_cryptobox_sk_sig_bytes (RSPAMD_CRYPTOBOX_MODE_25519),
+				-1, &b64_len);
+
+		priv_out = lua_newuserdata (L, sizeof (*priv_out));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		priv_out->start = b64_data;
+		priv_out->len = b64_len;
+		priv_out->flags = RSPAMD_TEXT_FLAG_OWN|RSPAMD_TEXT_FLAG_WIPE;
+
+		/* Process public key */
+		b64_data = rspamd_encode_base64 (pk,
+				rspamd_cryptobox_pk_sig_bytes (RSPAMD_CRYPTOBOX_MODE_25519),
+				-1, &b64_len);
+
+		pub_out = lua_newuserdata (L, sizeof (*pub_out));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		pub_out->start = b64_data;
+		pub_out->len = b64_len;
+		pub_out->flags = RSPAMD_TEXT_FLAG_OWN;
+
+		rspamd_explicit_memzero (pk, sizeof (pk));
+		rspamd_explicit_memzero (sk, sizeof (sk));
+	}
+	else {
+		return luaL_error (L, "invalid algorithm %s", alg_str);
+	}
+
+	return 2;
 }
 
 static gint
