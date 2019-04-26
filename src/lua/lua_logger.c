@@ -413,11 +413,11 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len,
 	}
 
 	if (converted_to_str) {
-		r = rspamd_snprintf (outbuf, len + 1, "%s", str);
+		r = rspamd_snprintf (outbuf, len, "%s", str);
 	}
 	else {
 		/* Print raw pointer */
-		r = rspamd_snprintf (outbuf, len + 1, "%s(%p)", str, lua_touserdata (L, pos));
+		r = rspamd_snprintf (outbuf, len, "%s(%p)", str, lua_touserdata (L, pos));
 	}
 
 	lua_settop (L, top);
