@@ -55,18 +55,25 @@ parser:command "list ls l"
 
 local show = parser:command "show get"
       :description "Extract element from the vault"
-show:option "-d --domain"
+show:argument "domain"
       :description "Domain to create key for"
-      :count "1"
+      :args "+"
+
+local delete = parser:command "delete del rm remove"
+      :description "Delete element from the vault"
+delete:argument "domain"
+    :description "Domain to create delete key(s) for"
+    :args "+"
+
 
 local newkey = parser:command "newkey new create"
                      :description "Add new key to the vault"
-newkey:option "-d --domain"
+newkey:argument "domain"
       :description "Domain to create key for"
-      :count "1"
+      :args "+"
 newkey:option "-s --selector"
       :description "Selector to use"
-      :count "1"
+      :count "?"
 newkey:option "-A --algorithm"
       :argname("<type>")
       :convert {
@@ -106,37 +113,45 @@ local function vault_url(opts, path)
   return string.format('%s/v1/%s', opts.addr, opts.path)
 end
 
+local function is_http_error(err, data)
+  return err or (math.floor(data.code / 100) ~= 2)
+end
+
 local function maybe_print_vault_data(opts, data, func)
-  local p = ucl.parser()
-  local res,parser_err = p:parse_string(data)
+  if data then
+    local p = ucl.parser()
+    local res,parser_err = p:parse_string(data)
 
-  if not res then
-    printf('vault reply for cannot be parsed: %s', parser_err)
-  else
-    local obj = p:get_object()
-
-    if func then
-      printf(ucl.to_format(func(obj), opts.output))
+    if not res then
+      printf('vault reply for cannot be parsed: %s', parser_err)
     else
-      printf(ucl.to_format(obj, opts.output))
+      local obj = p:get_object()
+
+      if func then
+        printf(ucl.to_format(func(obj), opts.output))
+      else
+        printf(ucl.to_format(obj, opts.output))
+      end
     end
+  else
+    printf('no data received')
   end
 end
 
-local function show_handler(opts)
-  local uri = vault_url(opts, opts.domain)
+local function show_handler(opts, domain)
+  local uri = vault_url(opts, domain)
   local err,data = rspamd_http.request{
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
     session = rspamadm_session,
-    resolver = rspamadm_resolver,
+    resolver = rspamadm_dns_resolver,
     url = uri,
     headers = {
       ['X-Vault-Token'] = opts.token
     }
   }
 
-  if err then
+  if is_http_error(err, data) then
     printf('cannot get request to the vault (%s), HTTP error code %s', uri, data.code)
     maybe_print_vault_data(opts, err)
     os.exit(1)
@@ -147,20 +162,43 @@ local function show_handler(opts)
   end
 end
 
+local function delete_handler(opts, domain)
+  local uri = vault_url(opts, domain)
+  local err,data = rspamd_http.request{
+    config = rspamd_config,
+    ev_base = rspamadm_ev_base,
+    session = rspamadm_session,
+    resolver = rspamadm_dns_resolver,
+    url = uri,
+    method = 'delete',
+    headers = {
+      ['X-Vault-Token'] = opts.token
+    }
+  }
+
+  if is_http_error(err, data) then
+    printf('cannot get request to the vault (%s), HTTP error code %s', uri, data.code)
+    maybe_print_vault_data(opts, err)
+    os.exit(1)
+  else
+    printf('deleted key(s) for %s', domain)
+  end
+end
+
 local function list_handler(opts)
   local uri = vault_url(opts)
   local err,data = rspamd_http.request{
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
     session = rspamadm_session,
-    resolver = rspamadm_resolver,
+    resolver = rspamadm_dns_resolver,
     url = uri .. '?list=true',
     headers = {
       ['X-Vault-Token'] = opts.token
     }
   }
 
-  if err then
+  if is_http_error(err, data) then
     printf('cannot get request to the vault (%s), HTTP error code %s', uri, data.code)
     maybe_print_vault_data(opts, err)
     os.exit(1)
@@ -176,13 +214,18 @@ local function genkey(opts)
   return cr.gen_dkim_keypair(opts.algorithm, opts.bits)
 end
 
-local function newkey_handler(opts)
-  local uri = vault_url(opts, opts.domain)
+local function newkey_handler(opts, domain)
+  local uri = vault_url(opts, domain)
+
+  if not opts.selector then
+    opts.selector = os.date("%Y%m%d")
+  end
+
   local err,data = rspamd_http.request{
     config = rspamd_config,
     ev_base = rspamadm_ev_base,
     session = rspamadm_session,
-    resolver = rspamadm_resolver,
+    resolver = rspamadm_dns_resolver,
     url = uri,
     method = 'get',
     headers = {
@@ -190,24 +233,24 @@ local function newkey_handler(opts)
     }
   }
 
-  if err or not data.content.data then
+  if is_http_error(err, data) or not data.content.data then
     local sk,pk = genkey(opts)
 
     local res = {
       selectors = {
         [1] = {
           selector = opts.selector,
-          domain = opts.domain,
-          key = sk
+          domain = domain,
+          key = tostring(sk)
         }
       }
     }
 
-    ret,data = rspamd_http.request{
+    err,data = rspamd_http.request{
       config = rspamd_config,
       ev_base = rspamadm_ev_base,
       session = rspamadm_session,
-      resolver = rspamadm_resolver,
+      resolver = rspamadm_dns_resolver,
       url = uri,
       method = 'put',
       headers = {
@@ -218,13 +261,15 @@ local function newkey_handler(opts)
       },
     }
 
-    if not ret then
+    if is_http_error(err, data) then
       printf('cannot get request to the vault (%s), HTTP error code %s', uri, data.code)
       maybe_print_vault_data(opts, data.content)
       os.exit(1)
+    else
+      maybe_printf(opts,'stored key for: %s, selector: %s', domain, opts.selector)
+      maybe_printf(opts, 'please place the corresponding public key as following:')
+      printf('%s', pk)
     end
-  else
-    -- Existing data
   end
 end
 
@@ -252,9 +297,11 @@ local function handler(args)
   if command == 'list' then
     list_handler(opts)
   elseif command == 'show' then
-    show_handler(opts)
+    fun.each(function(d) show_handler(opts, d) end, opts.domain)
   elseif command == 'newkey' then
-    newkey_handler(opts)
+    fun.each(function(d) newkey_handler(opts, d) end, opts.domain)
+  elseif command == 'delete' then
+    fun.each(function(d) delete_handler(opts, d) end, opts.domain)
   else
     parser:error(string.format('command %s is not implemented', command))
   end
