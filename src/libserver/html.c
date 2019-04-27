@@ -2339,11 +2339,10 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				msg_debug_html ("got class: %s", bl->class);
 				break;
 			case RSPAMD_HTML_COMPONENT_SIZE:
-				fstr.begin = (gchar *) comp->start;
-				fstr.len = comp->len;
-				rspamd_html_process_color (comp->start, comp->len,
-						&bl->font_color);
-				msg_debug_html ("got color: %xd", bl->font_color.d.val);
+				/* Not supported by html5 */
+				/* FIXME maybe support it */
+				bl->font_size = 16;
+				msg_debug_html ("got size: %*s", (gint)comp->len, comp->start);
 				break;
 			default:
 				/* NYI */
