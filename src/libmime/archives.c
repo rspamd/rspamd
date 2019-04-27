@@ -1173,22 +1173,22 @@ rspamd_7zip_read_coders_info (struct rspamd_task *task,
 					return NULL;
 				}
 
+				if (folder_nstreams) {
+					g_free (folder_nstreams);
+				}
+
 				folder_nstreams = g_malloc (sizeof (int) * num_folders);
 
 				for (i = 0; i < num_folders && p != NULL && p < end; i++) {
 					p = rspamd_7zip_read_folder (task, p, end, arch,
 							&folder_nstreams[i], &num_digests);
 				}
-
-				g_free (folder_nstreams);
 			}
 			break;
 		case kCodersUnPackSize:
 			for (i = 0; i < num_folders && p != NULL && p < end; i++) {
 				if (folder_nstreams) {
 					for (guint j = 0; j < folder_nstreams[i]; j++) {
-						guint64 tmp;
-
 						SZ_READ_VINT (tmp); /* Unpacked size */
 						msg_debug_archive ("7zip: unpacked size "
 										   "(folder=%d, stream=%d) = %L",
@@ -1235,6 +1235,10 @@ end:
 	}
 	if (pnum_folders) {
 		*pnum_folders = num_folders;
+	}
+
+	if (folder_nstreams) {
+		g_free (folder_nstreams);
 	}
 
 	return p;
