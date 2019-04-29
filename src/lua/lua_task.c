@@ -1809,11 +1809,14 @@ lua_task_set_pre_result (lua_State * L)
 		if (lua_type (L, 3) == LUA_TSTRING) {
 			message = lua_tostring (L, 3);
 
-			/* Keep compatibility here :( */
-			ucl_object_replace_key (task->messages,
-					ucl_object_fromstring_common (message, 0, UCL_STRING_RAW),
-					"smtp_message", 0,
-					false);
+			if (lua_type (L, 7) != LUA_TSTRING) {
+				/* Keep compatibility here :( */
+
+				ucl_object_replace_key (task->messages,
+						ucl_object_fromstring_common (message, 0, UCL_STRING_RAW),
+						"smtp_message", 0,
+						false);
+			}
 		}
 		else {
 			message = "unknown reason";

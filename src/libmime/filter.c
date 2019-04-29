@@ -503,25 +503,33 @@ rspamd_check_action_metric (struct rspamd_task *task)
 	gboolean seen_least = FALSE;
 
 	if (mres->passthrough_result != NULL)  {
-		/* Peek the highest priority result */
-		pr = mres->passthrough_result;
-		sc = pr->target_score;
-		selected_action = pr->action;
+		DL_FOREACH (mres->passthrough_result, pr) {
+			if (!seen_least || !(pr->flags & RSPAMD_PASSTHROUGH_LEAST)) {
+				sc = pr->target_score;
+				selected_action = pr->action;
 
-		if (!(pr->flags & RSPAMD_PASSTHROUGH_LEAST)) {
-			if (!isnan (sc)) {
-				if (pr->action->action_type == METRIC_ACTION_NOACTION) {
-					mres->score = MIN (sc, mres->score);
+				if (!(pr->flags & RSPAMD_PASSTHROUGH_LEAST)) {
+					if (!isnan (sc)) {
+						if (pr->action->action_type == METRIC_ACTION_NOACTION) {
+							mres->score = MIN (sc, mres->score);
+						}
+						else {
+							mres->score = sc;
+						}
+					}
+
+					return selected_action;
 				}
 				else {
-					mres->score = sc;
+					seen_least = true;
+
+					if (isnan (sc)) {
+						sc = selected_action->threshold;
+					}
+
+					max_score = sc;
 				}
 			}
-
-			return selected_action;
-		}
-		else {
-			seen_least = true;
 		}
 	}
 	/* We are not certain about the results during processing */
@@ -555,7 +563,7 @@ rspamd_check_action_metric (struct rspamd_task *task)
 	if (selected_action) {
 
 		if (seen_least) {
-			mres->score = MIN (sc, mres->score);
+			mres->score = MAX (max_score, mres->score);
 		}
 
 		return selected_action;
