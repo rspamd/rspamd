@@ -495,7 +495,7 @@ rspamd_check_action_metric (struct rspamd_task *task)
 {
 	struct rspamd_action_result *action_lim,
 			*noaction = NULL;
-	struct rspamd_action *selected_action = NULL;
+	struct rspamd_action *selected_action = NULL, *least_action = NULL;
 	struct rspamd_passthrough_result *pr;
 	double max_score = -(G_MAXDOUBLE), sc;
 	int i;
@@ -522,12 +522,32 @@ rspamd_check_action_metric (struct rspamd_task *task)
 				}
 				else {
 					seen_least = true;
+					least_action = selected_action;
 
 					if (isnan (sc)) {
-						sc = selected_action->threshold;
-					}
 
-					max_score = sc;
+						if (selected_action->flags & RSPAMD_ACTION_NO_THRESHOLD) {
+							/*
+							 * In this case, we have a passthrough action that
+							 * is `least` action, however, there is no threshold
+							 * on it.
+							 *
+							 * Hence, we imply the following logic:
+							 *
+							 * - we leave score unchanged
+							 * - we apply passthrough no threshold action unless
+							 *   score based action *is not* reject, otherwise
+							 *   we apply reject action
+							 */
+						}
+						else {
+							sc = selected_action->threshold;
+							max_score = sc;
+						}
+					}
+					else {
+						max_score = sc;
+					}
 				}
 			}
 		}
@@ -563,7 +583,18 @@ rspamd_check_action_metric (struct rspamd_task *task)
 	if (selected_action) {
 
 		if (seen_least) {
-			mres->score = MAX (max_score, mres->score);
+
+			if (least_action->flags & RSPAMD_ACTION_NO_THRESHOLD) {
+				if (selected_action->action_type != METRIC_ACTION_REJECT &&
+						selected_action->action_type != METRIC_ACTION_DISCARD) {
+					/* Override score based action with least action */
+					selected_action = least_action;
+				}
+			}
+			else {
+				/* Adjust score if needed */
+				mres->score = MAX (max_score, mres->score);
+			}
 		}
 
 		return selected_action;

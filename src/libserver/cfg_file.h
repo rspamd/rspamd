@@ -285,11 +285,11 @@ enum rspamd_action_type {
 };
 
 enum rspamd_action_flags {
-	RSPAMD_ACTION_NORMAL = 0,
-	RSPAMD_ACTION_NO_THRESHOLD = (1u << 0),
-	RSPAMD_ACTION_THRESHOLD_ONLY = (1u << 1),
-	RSPAMD_ACTION_HAM = (1u << 2),
-	RSPAMD_ACTION_MILTER = (1u << 3),
+	RSPAMD_ACTION_NORMAL = 0u,
+	RSPAMD_ACTION_NO_THRESHOLD = (1u << 0u),
+	RSPAMD_ACTION_THRESHOLD_ONLY = (1u << 1u),
+	RSPAMD_ACTION_HAM = (1u << 2u),
+	RSPAMD_ACTION_MILTER = (1u << 3u),
 };
 
 
