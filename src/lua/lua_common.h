@@ -365,6 +365,16 @@ struct lua_logger_trace {
 	gconstpointer traces[TRACE_POINTS];
 };
 
+enum lua_logger_escape_type {
+	LUA_ESCAPE_NONE = (0u),
+	LUA_ESCAPE_UNPRINTABLE = (1u << 0u),
+	LUA_ESCAPE_NEWLINES = (1u << 1u),
+	LUA_ESCAPE_8BIT = (1u << 2u),
+};
+
+#define LUA_ESCAPE_LOG (LUA_ESCAPE_UNPRINTABLE|LUA_ESCAPE_NEWLINES)
+#define LUA_ESCAPE_ALL (LUA_ESCAPE_UNPRINTABLE|LUA_ESCAPE_NEWLINES|LUA_ESCAPE_8BIT)
+
 /**
  * Log lua object to string
  * @param L
@@ -374,7 +384,8 @@ struct lua_logger_trace {
  * @return
  */
 gsize lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf,
-		gsize len, struct lua_logger_trace *trace);
+						   gsize len, struct lua_logger_trace *trace,
+						   enum lua_logger_escape_type esc_type);
 
 /**
  * Safely checks userdata to match specified class
