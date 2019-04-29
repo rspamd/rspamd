@@ -121,20 +121,28 @@ local function is_http_error(err, data)
   return err or (math.floor(data.code / 100) ~= 2)
 end
 
+local function parse_vault_reply(data)
+  local p = ucl.parser()
+  local res,parser_err = p:parse_string(data)
+
+  if not res then
+    return nil,parser_err
+  else
+    return p:get_object(),nil
+  end
+end
+
 local function maybe_print_vault_data(opts, data, func)
   if data then
-    local p = ucl.parser()
-    local res,parser_err = p:parse_string(data)
+    local res,parser_err = parse_vault_reply(data)
 
     if not res then
       printf('vault reply for cannot be parsed: %s', parser_err)
     else
-      local obj = p:get_object()
-
       if func then
-        printf(ucl.to_format(func(obj), opts.output))
+        printf(ucl.to_format(func(res), opts.output))
       else
-        printf(ucl.to_format(obj, opts.output))
+        printf(ucl.to_format(res, opts.output))
       end
     end
   else
@@ -149,7 +157,7 @@ local function print_dkim_txt_record(b64, selector, alg)
   if #b64 < 255 then
     labels = {'"' .. b64 .. '"'}
   else
-    for sl=1,#b64,255 do
+    for sl=1,#b64,256 do
       table.insert(labels, '"' .. b64:sub(sl, sl + 255) .. '"')
     end
   end
@@ -234,6 +242,60 @@ local function genkey(opts)
   return cr.gen_dkim_keypair(opts.algorithm, opts.bits)
 end
 
+local function create_and_push_key(opts, domain, existing)
+  local uri = vault_url(opts, domain)
+  local sk,pk = genkey(opts)
+
+  local res = {
+    selectors = {
+      [1] = {
+        selector = opts.selector,
+        domain = domain,
+        key = tostring(sk),
+        alg = opts.algorithm,
+      }
+    }
+  }
+
+  for _,sel in ipairs(existing) do
+    res.selectors[#res.selectors + 1] = sel
+  end
+
+  if opts.expire then
+    res.selectors[1].valid_end = os.time() + opts.expire * 3600 * 24
+  end
+
+  local err,data = rspamd_http.request{
+    config = rspamd_config,
+    ev_base = rspamadm_ev_base,
+    session = rspamadm_session,
+    resolver = rspamadm_dns_resolver,
+    url = uri,
+    method = 'put',
+    headers = {
+      ['X-Vault-Token'] = opts.token
+    },
+    body = {
+      ucl.to_format(res, 'json-compact')
+    },
+  }
+
+  if is_http_error(err, data) then
+    printf('cannot get request to the vault (%s), HTTP error code %s', uri, data.code)
+    maybe_print_vault_data(opts, data.content)
+    os.exit(1)
+  else
+    maybe_printf(opts,'stored key for: %s, selector: %s', domain, opts.selector)
+    maybe_printf(opts, 'please place the corresponding public key as following:')
+
+    if opts.silent then
+      printf('%s', pk)
+    else
+      print_dkim_txt_record(tostring(pk), opts.selector, opts.algorithm)
+    end
+  end
+end
+
 local function newkey_handler(opts, domain)
   local uri = vault_url(opts, domain)
 
@@ -254,51 +316,31 @@ local function newkey_handler(opts, domain)
     }
   }
 
-  if is_http_error(err, data) or not data.content.data then
-    local sk,pk = genkey(opts)
+  if is_http_error(err, data) or not data.content then
+    create_and_push_key(opts, domain,{})
+  else
+    -- Key exists
+    local rep = parse_vault_reply(data.content)
 
-    local res = {
-      selectors = {
-        [1] = {
-          selector = opts.selector,
-          domain = domain,
-          key = tostring(sk),
-          alg = opts.algorithm,
-        }
-      }
-    }
-
-    if opts.expire then
-      res.selectors[1].valid_end = os.time() + opts.expire * 3600 * 24
+    if not rep or not rep.data then
+      printf('cannot parse reply for %s: %s', uri, data.content)
+      os.exit(1)
     end
 
-    err,data = rspamd_http.request{
-      config = rspamd_config,
-      ev_base = rspamadm_ev_base,
-      session = rspamadm_session,
-      resolver = rspamadm_dns_resolver,
-      url = uri,
-      method = 'put',
-      headers = {
-        ['X-Vault-Token'] = opts.token
-      },
-      body = {
-        ucl.to_format(res, 'json-compact')
-      },
-    }
+    local elts = rep.data.selectors
 
-    if is_http_error(err, data) then
-      printf('cannot get request to the vault (%s), HTTP error code %s', uri, data.code)
-      maybe_print_vault_data(opts, data.content)
-      os.exit(1)
-    else
-      maybe_printf(opts,'stored key for: %s, selector: %s', domain, opts.selector)
-      maybe_printf(opts, 'please place the corresponding public key as following:')
+    if not elts then
+      create_and_push_key(opts, domain,{})
+      os.exit(0)
+    end
 
-      if opts.silent then
-        printf('%s', pk)
+    for _,sel in ipairs(elts) do
+      if sel.alg == opts.algorithm then
+        printf('key with the specific algorithm %s is already presented at %s selector for %s domain',
+            opts.algorithm, sel.selector, domain)
+        os.exit(1)
       else
-        print_dkim_txt_record(tostring(pk), opts.selector, opts.algorithm)
+        create_and_push_key(opts, domain, elts)
       end
     end
   end
