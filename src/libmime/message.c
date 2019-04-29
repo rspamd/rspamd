@@ -961,7 +961,7 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 
 			rspamd_add_passthrough_result (task, action,
 					RSPAMD_PASSTHROUGH_CRITICAL,
-					score, "Gtube pattern", "GTUBE");
+					score, "Gtube pattern", "GTUBE", 0);
 
 			if (ucl_object_lookup (task->messages, "smtp_message") == NULL) {
 				ucl_object_replace_key (task->messages,

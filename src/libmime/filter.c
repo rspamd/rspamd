@@ -110,7 +110,8 @@ rspamd_add_passthrough_result (struct rspamd_task *task,
 									guint priority,
 									double target_score,
 									const gchar *message,
-									const gchar *module)
+									const gchar *module,
+									guint flags)
 {
 	struct rspamd_metric_result *metric_res;
 	struct rspamd_passthrough_result *pr;
@@ -123,19 +124,23 @@ rspamd_add_passthrough_result (struct rspamd_task *task,
 	pr->message = message;
 	pr->module = module;
 	pr->target_score = target_score;
+	pr->flags = flags;
 
 	DL_APPEND (metric_res->passthrough_result, pr);
 	DL_SORT (metric_res->passthrough_result, rspamd_pr_sort);
 
 	if (!isnan (target_score)) {
-		msg_info_task ("<%s>: set pre-result to %s (%.2f): '%s' from %s(%d)",
-				task->message_id, action->name, target_score,
+
+		msg_info_task ("<%s>: set pre-result to '%s' %s(%.2f): '%s' from %s(%d)",
+				task->message_id, action->name,
+				flags & RSPAMD_PASSTHROUGH_LEAST ? "*least " : "",
+				target_score,
 				message, module, priority);
 	}
-
 	else {
-		msg_info_task ("<%s>: set pre-result to %s (no score): '%s' from %s(%d)",
+		msg_info_task ("<%s>: set pre-result to '%s' %s(no score): '%s' from %s(%d)",
 				task->message_id, action->name,
+				flags & RSPAMD_PASSTHROUGH_LEAST ? "*least " : "",
 				message, module, priority);
 	}
 }
@@ -495,53 +500,68 @@ rspamd_check_action_metric (struct rspamd_task *task)
 	double max_score = -(G_MAXDOUBLE), sc;
 	int i;
 	struct rspamd_metric_result *mres = task->result;
+	gboolean seen_least = FALSE;
 
-	/* We are not certain about the results during processing */
-	if (mres->passthrough_result == NULL) {
-		for (i = mres->nactions - 1; i >= 0; i--) {
-			action_lim = &mres->actions_limits[i];
-			sc = action_lim->cur_limit;
-
-			if (action_lim->action->action_type == METRIC_ACTION_NOACTION) {
-				noaction = action_lim;
-			}
-
-			if (isnan (sc) ||
-			 	(action_lim->action->flags & (RSPAMD_ACTION_NO_THRESHOLD|RSPAMD_ACTION_HAM))) {
-				continue;
-			}
-
-			if (mres->score >= sc && sc > max_score) {
-				selected_action = action_lim->action;
-				max_score = sc;
-			}
-		}
-
-		if (selected_action == NULL) {
-			selected_action = noaction->action;
-		}
-	}
-	else {
+	if (mres->passthrough_result != NULL)  {
 		/* Peek the highest priority result */
 		pr = mres->passthrough_result;
 		sc = pr->target_score;
 		selected_action = pr->action;
 
-		if (!isnan (sc)) {
-			if (pr->action->action_type == METRIC_ACTION_NOACTION) {
-				mres->score = MIN (sc, mres->score);
+		if (!(pr->flags & RSPAMD_PASSTHROUGH_LEAST)) {
+			if (!isnan (sc)) {
+				if (pr->action->action_type == METRIC_ACTION_NOACTION) {
+					mres->score = MIN (sc, mres->score);
+				}
+				else {
+					mres->score = sc;
+				}
 			}
-			else {
-				mres->score = sc;
-			}
+
+			return selected_action;
+		}
+		else {
+			seen_least = true;
+		}
+	}
+	/* We are not certain about the results during processing */
+
+	/*
+	 * Select result by score
+	 */
+	for (i = mres->nactions - 1; i >= 0; i--) {
+		action_lim = &mres->actions_limits[i];
+		sc = action_lim->cur_limit;
+
+		if (action_lim->action->action_type == METRIC_ACTION_NOACTION) {
+			noaction = action_lim;
+		}
+
+		if (isnan (sc) ||
+			(action_lim->action->flags & (RSPAMD_ACTION_NO_THRESHOLD|RSPAMD_ACTION_HAM))) {
+			continue;
+		}
+
+		if (mres->score >= sc && sc > max_score) {
+			selected_action = action_lim->action;
+			max_score = sc;
 		}
 	}
 
+	if (selected_action == NULL) {
+		selected_action = noaction->action;
+	}
+
 	if (selected_action) {
+
+		if (seen_least) {
+			mres->score = MIN (sc, mres->score);
+		}
+
 		return selected_action;
 	}
 
-	return noaction ? noaction->action : NULL;
+	return noaction->action;
 }
 
 struct rspamd_symbol_result*

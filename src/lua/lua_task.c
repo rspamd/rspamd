@@ -1767,7 +1767,7 @@ lua_task_set_pre_result (lua_State * L)
 	const gchar *message = NULL, *module = NULL;
 	gdouble score = NAN;
 	struct rspamd_action *action;
-	guint priority = RSPAMD_PASSTHROUGH_NORMAL;
+	guint priority = RSPAMD_PASSTHROUGH_NORMAL, flags = 0;
 
 	if (task != NULL) {
 
@@ -1834,18 +1834,33 @@ lua_task_set_pre_result (lua_State * L)
 			priority = lua_tonumber (L, 6);
 		}
 
+		if (lua_type (L, 7) == LUA_TSTRING) {
+			const gchar *fl_str = lua_tostring (L, 7);
 
-		rspamd_add_passthrough_result (task, action, priority,
-				score, rspamd_mempool_strdup (task->task_pool, message),
-				rspamd_mempool_strdup (task->task_pool, module));
+			if (strstr (fl_str, "least") != NULL) {
+				flags |= RSPAMD_PASSTHROUGH_LEAST;
+			}
+		}
+
+
+		rspamd_add_passthrough_result (task,
+				action,
+				priority,
+				score,
+				rspamd_mempool_strdup (task->task_pool, message),
+				rspamd_mempool_strdup (task->task_pool, module),
+				flags);
 
 		/* Don't classify or filter message if pre-filter sets results */
-		task->processed_stages |= (RSPAMD_TASK_STAGE_CLASSIFIERS |
-								   RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |
-								   RSPAMD_TASK_STAGE_CLASSIFIERS_POST);
-		rspamd_symcache_disable_all_symbols (task, task->cfg->cache,
-				SYMBOL_TYPE_IDEMPOTENT|SYMBOL_TYPE_IGNORE_PASSTHROUGH|
-				SYMBOL_TYPE_POSTFILTER);
+
+		if (!(flags & RSPAMD_PASSTHROUGH_LEAST)) {
+			task->processed_stages |= (RSPAMD_TASK_STAGE_CLASSIFIERS |
+									   RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |
+									   RSPAMD_TASK_STAGE_CLASSIFIERS_POST);
+			rspamd_symcache_disable_all_symbols (task, task->cfg->cache,
+					SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_IGNORE_PASSTHROUGH |
+					SYMBOL_TYPE_POSTFILTER);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

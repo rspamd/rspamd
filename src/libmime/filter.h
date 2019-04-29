@@ -45,9 +45,12 @@ struct rspamd_symbol_result {
 #define RSPAMD_PASSTHROUGH_HIGH 2
 #define RSPAMD_PASSTHROUGH_CRITICAL 3
 
+#define RSPAMD_PASSTHROUGH_LEAST (1u << 0u)
+
 struct rspamd_passthrough_result {
 	struct rspamd_action *action;
 	guint priority;
+	guint flags;
 	double target_score;
 	const gchar *message;
 	const gchar *module;
@@ -98,7 +101,8 @@ void rspamd_add_passthrough_result (struct rspamd_task *task,
 									guint priority,
 									double target_score,
 									const gchar *message,
-									const gchar *module);
+									const gchar *module,
+									guint flags);
 
 enum rspamd_symbol_insert_flags {
 	RSPAMD_SYMBOL_INSERT_DEFAULT = 0,

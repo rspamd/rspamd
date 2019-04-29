@@ -157,7 +157,8 @@ rspamd_task_timeout (gint fd, short what, gpointer ud)
 						0,
 						NAN,
 						"timeout processing message",
-						"task timeout");
+						"task timeout",
+						0);
 
 				ucl_object_replace_key (task->messages,
 						ucl_object_fromstring_common ("timeout processing message",
