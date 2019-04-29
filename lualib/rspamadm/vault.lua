@@ -79,12 +79,16 @@ newkey:option "-A --algorithm"
       :convert {
         rsa = "rsa",
         ed25519 = "ed25519",
+        eddsa = "ed25519",
       }
       :default "rsa"
 newkey:option "-b --bits"
       :argname("<nbits>")
       :convert(tonumber)
       :default "1024"
+newkey:option "-x --expire"
+      :argname("<days>")
+      :convert(tonumber)
 newkey:flag "-r --rewrite"
 
 
@@ -136,6 +140,22 @@ local function maybe_print_vault_data(opts, data, func)
   else
     printf('no data received')
   end
+end
+
+local function print_dkim_txt_record(b64, selector, alg)
+  local labels = {}
+  local prefix = string.format("v=DKIM1; k=%s; p=", alg)
+  b64 = prefix .. b64
+  if #b64 < 255 then
+    labels = {'"' .. b64 .. '"'}
+  else
+    for sl=1,#b64,255 do
+      table.insert(labels, '"' .. b64:sub(sl, sl + 255) .. '"')
+    end
+  end
+
+  printf("%s._domainkey IN TXT ( %s )", selector,
+      table.concat(labels, "\n\t"))
 end
 
 local function show_handler(opts, domain)
@@ -218,7 +238,8 @@ local function newkey_handler(opts, domain)
   local uri = vault_url(opts, domain)
 
   if not opts.selector then
-    opts.selector = os.date("%Y%m%d")
+    opts.selector = string.format('%s-%s', opts.algorithm,
+        os.date("%Y%m%d"))
   end
 
   local err,data = rspamd_http.request{
@@ -241,10 +262,15 @@ local function newkey_handler(opts, domain)
         [1] = {
           selector = opts.selector,
           domain = domain,
-          key = tostring(sk)
+          key = tostring(sk),
+          alg = opts.algorithm,
         }
       }
     }
+
+    if opts.expire then
+      res.selectors[1].valid_end = os.time() + opts.expire * 3600 * 24
+    end
 
     err,data = rspamd_http.request{
       config = rspamd_config,
@@ -268,7 +294,12 @@ local function newkey_handler(opts, domain)
     else
       maybe_printf(opts,'stored key for: %s, selector: %s', domain, opts.selector)
       maybe_printf(opts, 'please place the corresponding public key as following:')
-      printf('%s', pk)
+
+      if opts.silent then
+        printf('%s', pk)
+      else
+        print_dkim_txt_record(tostring(pk), opts.selector, opts.algorithm)
+      end
     end
   end
 end
