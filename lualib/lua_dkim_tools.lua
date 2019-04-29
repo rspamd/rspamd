@@ -287,12 +287,18 @@ local function prepare_dkim_signing(N, task, settings)
                 sign_entry, key_entry, hdom)
             return false,{}
           end
-        else
+        elseif settings.use_vault then
           -- Sign table is presented, the rest is covered by vault
+          lua_util.debugm(N, task, 'check vault for %s, by sign entry %s, key entry is missing',
+              hdom, sign_entry)
           return true, {
             domain = sign_entry,
             vault = true
           }
+        else
+          logger.errx(task, 'missing key entry for sign entry %s; when signing %s domain',
+              sign_entry, hdom)
+          return false,{}
         end
       else
         logger.errx(task, 'cannot get key entry for signing entry %s, when signing %s domain',
