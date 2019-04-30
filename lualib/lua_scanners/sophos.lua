@@ -41,9 +41,7 @@ local function sophos_config(opts)
     retransmits = 2,
     cache_expire = 3600, -- expire redis in one hour
     message = default_message,
-    savdi_report_encrypted = false,
     detection_category = "virus",
-    savdi_report_oversize = false,
   }
 
   sophos_conf = lua_util.override_defaults(sophos_conf, opts)
@@ -156,6 +154,14 @@ local function sophos_check(task, content, digest, rule)
           end
 
         end
+      end
+    end
+
+    if rule.dynamic_scan then
+      local pre_check, pre_check_msg = common.check_metric_results(task, rule)
+      if pre_check then
+        rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, pre_check_msg)
+        return true
       end
     end
 
