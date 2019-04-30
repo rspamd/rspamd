@@ -562,8 +562,8 @@ exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err
   local http = require "rspamd_http"
   local ucl = require "ucl"
 
-  local full_url = string.format('%s/v1/%s',
-      settings.vault_url, selectors.domain)
+  local full_url = string.format('%s/v1/%s/%s',
+      settings.vault_url, settings.vault_path or 'dkim', selectors.domain)
 
   local function vault_callback(err, code, body, _)
     if code ~= 200 then
