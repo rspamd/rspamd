@@ -370,7 +370,7 @@ main (gint argc, gchar **argv, gchar **env)
 	ucl_vars = g_hash_table_new_full (rspamd_strcase_hash,
 		rspamd_strcase_equal, g_free, g_free);
 	process_quark = g_quark_from_static_string ("rspamadm");
-	cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT);
+	cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT|RSPAMD_CONFIG_INIT_WIPE_LUA_MEM);
 	cfg->libs_ctx = rspamd_init_libs ();
 	rspamd_main = g_malloc0 (sizeof (*rspamd_main));
 	rspamd_main->cfg = cfg;

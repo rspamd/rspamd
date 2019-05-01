@@ -474,8 +474,9 @@ gboolean rspamd_parse_bind_line (struct rspamd_config *cfg,
 
 
 enum rspamd_config_init_flags {
-	RSPAMD_CONFIG_INIT_DEFAULT = 0,
-	RSPAMD_CONFIG_INIT_SKIP_LUA = (1 << 0)
+	RSPAMD_CONFIG_INIT_DEFAULT = 0u,
+	RSPAMD_CONFIG_INIT_SKIP_LUA = (1u << 0u),
+	RSPAMD_CONFIG_INIT_WIPE_LUA_MEM = (1u << 1u),
 };
 /**
  * Init default values

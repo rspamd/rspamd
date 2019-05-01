@@ -201,7 +201,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->max_word_len = DEFAULT_MAX_WORD;
 
 	if (!(flags & RSPAMD_CONFIG_INIT_SKIP_LUA)) {
-		cfg->lua_state = rspamd_lua_init ();
+		cfg->lua_state = rspamd_lua_init (flags & RSPAMD_CONFIG_INIT_WIPE_LUA_MEM);
 		cfg->own_lua_state = TRUE;
 		cfg->lua_thread_pool = lua_thread_pool_new (cfg->lua_state);
 	}

@@ -165,7 +165,7 @@ gpointer rspamd_lua_check_class (lua_State *L, gint index, const gchar *name);
 /**
  * Initialize lua and bindings
  */
-lua_State *rspamd_lua_init (void);
+lua_State *rspamd_lua_init (bool wipe_mem);
 
 
 /**

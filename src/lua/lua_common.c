@@ -870,12 +870,48 @@ lua_push_trace_data (lua_State *L)
 }
 #endif
 
+
+
+static void *
+rspamd_lua_wipe_realloc (void *ud,
+						 void *ptr,
+						 size_t osize,
+						 size_t nsize) RSPAMD_ATTR_ALLOC_SIZE(4);
+static void *
+rspamd_lua_wipe_realloc (void *ud,
+						 void *ptr,
+						 size_t osize,
+						 size_t nsize)
+{
+	if (nsize == 0) {
+		if (ptr) {
+			rspamd_explicit_memzero (ptr, osize);
+		}
+
+		free (ptr);
+	}
+	else if (ptr == NULL) {
+		return malloc (nsize);
+	}
+	else {
+		return realloc (ptr, nsize);
+	}
+
+	return NULL;
+}
+
 lua_State *
-rspamd_lua_init ()
+rspamd_lua_init (bool wipe_mem)
 {
 	lua_State *L;
 
-	L = luaL_newstate ();
+	if (wipe_mem) {
+		L = lua_newstate (rspamd_lua_wipe_realloc, NULL);
+	}
+	else {
+		L = luaL_newstate ();
+	}
+
 	luaL_openlibs (L);
 	luaopen_logger (L);
 	luaopen_mempool (L);
@@ -984,7 +1020,7 @@ rspamd_init_lua_locked (struct rspamd_config *cfg)
 	struct lua_locked_state *new;
 
 	new = g_malloc0 (sizeof (struct lua_locked_state));
-	new->L = rspamd_lua_init ();
+	new->L = rspamd_lua_init (false);
 	new->m = rspamd_mutex_new ();
 
 	return new;
