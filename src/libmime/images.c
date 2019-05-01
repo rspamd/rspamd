@@ -19,6 +19,13 @@
 #include "message.h"
 #include "html.h"
 
+#define msg_debug_images(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_images_log_id, "images", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
+INIT_LOG_MODULE(images)
+
 #ifdef USABLE_GD
 #include "gd.h"
 #include "hash.h"
@@ -603,7 +610,7 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 	img = rspamd_maybe_process_image (task->task_pool, &part->parsed_data);
 
 	if (img != NULL) {
-		debug_task ("detected %s image of size %ud x %ud in message <%s>",
+		msg_debug_images ("detected %s image of size %ud x %ud in message <%s>",
 			rspamd_image_type_str (img->type),
 			img->width, img->height,
 			task->message_id);
@@ -657,8 +664,15 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 									img->html_image = himg;
 									himg->embedded_image = img;
 
-									debug_task ("found linked image by cid: <%s>",
+									msg_debug_images ("found linked image by cid: <%s>",
 											cid);
+
+									if (himg->height == 0) {
+										himg->height = img->height;
+									}
+									if (himg->width == 0) {
+										himg->width = img->width;
+									}
 								}
 							}
 						}
