@@ -894,6 +894,11 @@ rspamd_lua_wipe_realloc (void *ud,
 		return malloc (nsize);
 	}
 	else {
+		if (nsize < osize) {
+			/* Wipe on shrinking (actually never used) */
+			rspamd_explicit_memzero (((unsigned char *)ptr) + nsize, osize - nsize);
+		}
+
 		return realloc (ptr, nsize);
 	}
 
