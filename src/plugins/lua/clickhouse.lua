@@ -289,7 +289,7 @@ local function clickhouse_asn_row(res)
 end
 
 local function today(ts)
-  return os.date('%Y-%m-%d', ts)
+  return os.date('!%Y-%m-%d', ts)
 end
 
 local function clickhouse_check_symbol(task, symbols, need_score)

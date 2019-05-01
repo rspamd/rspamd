@@ -318,7 +318,7 @@ local function newkey_handler(opts, domain)
 
   if not opts.selector then
     opts.selector = string.format('%s-%s', opts.algorithm,
-        os.date("%Y%m%d"))
+        os.date("!%Y%m%d"))
   end
 
   local err,data = rspamd_http.request{
@@ -458,7 +458,7 @@ local function roll_handler(opts, domain)
       -- Insert keys for each algorithm in pairs <old_key(s)>, <new_key>
       local sk,pk = genkey({algorithm = alg, bits = keys[1].bits})
       local selector = string.format('%s-%s', alg,
-          os.date("%Y%m%d"))
+          os.date("!%Y%m%d"))
 
       if selector == keys[1].selector then
         selector = selector .. '-1'
