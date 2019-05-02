@@ -3439,10 +3439,10 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 	dend = d + dlen;
 
 	if (url->protocollen > 0) {
+		const gchar *known_proto = rspamd_url_protocol_name (url->protocol);
 		d += rspamd_snprintf ((gchar *) d, dend - d,
-				"%*s://",
-				url->protocollen,
-				rspamd_url_protocol_name (url->protocol));
+				"%s://",
+				known_proto);
 	}
 	else {
 		d += rspamd_snprintf ((gchar *) d, dend - d, "http://");
