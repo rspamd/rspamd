@@ -911,7 +911,12 @@ rspamd_lua_init (bool wipe_mem)
 	lua_State *L;
 
 	if (wipe_mem) {
+#ifdef WITH_LUAJIT
+		/* TODO: broken on luajit without GC64 */
+		L = luaL_newstate ();
+#else
 		L = lua_newstate (rspamd_lua_wipe_realloc, NULL);
+#endif
 	}
 	else {
 		L = luaL_newstate ();
