@@ -392,7 +392,8 @@ namespace rspamd {
 				if (!query->isEvaluatable (*pcontext)) {
 					print_warning (std::string ("cannot evaluate query"),
 							E, this->pcontext, this->ci);
-					return false;
+					/* It is not assumed to be an error */
+					return true;
 				}
 
 				clang::Expr::EvalResult r;
