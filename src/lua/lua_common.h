@@ -284,6 +284,7 @@ void luaopen_sqlite3 (lua_State *L);
 void luaopen_cryptobox (lua_State *L);
 void luaopen_dns (lua_State *L);
 void luaopen_udp (lua_State * L);
+void luaopen_worker (lua_State * L);
 
 void rspamd_lua_dostring (const gchar *line);
 
