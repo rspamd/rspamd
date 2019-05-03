@@ -902,6 +902,7 @@ lua_dkim_sign_handler (lua_State *L)
 
 		if (!no_cache) {
 			sigs = rspamd_mempool_get_variable (task->task_pool, "dkim-signature");
+
 			if (sigs == NULL) {
 				sigs = g_list_append (sigs, hdr);
 				rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
@@ -913,6 +914,10 @@ lua_dkim_sign_handler (lua_State *L)
 
 		lua_pushboolean (L, TRUE);
 		lua_pushlstring (L, hdr->str, hdr->len);
+
+		if (no_cache) {
+			g_string_free (hdr, TRUE);
+		}
 
 		return 2;
 	}
