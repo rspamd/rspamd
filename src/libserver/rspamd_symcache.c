@@ -1444,7 +1444,15 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 
 	if (check) {
 		msg_debug_cache_task ("execute %s, %d", item->symbol, item->id);
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+		struct timeval tv;
+
+		event_base_update_cache_time (task->ev_base);
+		event_base_gettimeofday_cached (task->ev_base, &tv);
+		t1 = tv_to_double (&tv);
+#else
 		t1 = rspamd_get_ticks (FALSE);
+#endif
 		dyn_item->start_msec = (t1 - task->time_real) * 1e3;
 		dyn_item->async_events = 0;
 		checkpoint->cur_item = item;
@@ -2707,7 +2715,14 @@ rspamd_symcache_finalize_item (struct rspamd_task *task,
 	checkpoint->items_inflight --;
 	checkpoint->cur_item = NULL;
 
+#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+	event_base_update_cache_time (task->ev_base);
+	event_base_gettimeofday_cached (task->ev_base, &tv);
+	t2 = tv_to_double (&tv);
+#else
 	t2 = rspamd_get_ticks (FALSE);
+#endif
+
 	diff = ((t2 - task->time_real) * 1e3 - dyn_item->start_msec);
 
 	if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {
