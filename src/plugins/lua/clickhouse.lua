@@ -37,7 +37,8 @@ local settings = {
   timeout = 5.0,
   bayes_spam_symbols = {'BAYES_SPAM'},
   bayes_ham_symbols = {'BAYES_HAM'},
-  fann_symbols = {'FANN_SCORE'},
+  ann_spam_symbols = {'NEURAL_SPAM'},
+  ann_ham_symbols = {'NEURAL_HAM'},
   fuzzy_symbols = {'FUZZY_DENIED'},
   whitelist_symbols = {'WHITELIST_DKIM', 'WHITELIST_SPF_DKIM', 'WHITELIST_DMARC'},
   dkim_allow_symbols = {'R_DKIM_ALLOW'},
@@ -294,15 +295,22 @@ local function today(ts)
   return os.date('!%Y-%m-%d', ts)
 end
 
-local function clickhouse_check_symbol(task, symbols, need_score)
-  for _,s in ipairs(symbols) do
+local function clickhouse_check_symbol(task, settings_field_name, fields_table,
+                                       field_name, value, value_negative)
+  for _,s in ipairs(settings[settings_field_name] or {}) do
     if task:has_symbol(s) then
-      if need_score then
+      if value_negative then
         local sym = task:get_symbol(s)[1]
-        return sym['score']
+        if sym['score'] > 0 then
+          fields_table[field_name] = value
+        else
+          fields_table[field_name] = value_negative
+        end
       else
-        return true
+        fields_table[field_name] = value
       end
+
+      return true
     end
   end
 
@@ -444,121 +452,92 @@ local function clickhouse_collect(task)
       settings, 'mid')
 
   local score = task:get_metric_score('default')[1];
-  local bayes = 'unknown';
-  local fuzzy = 'unknown';
-  local fann = 'unknown';
-  local whitelist = 'unknown';
-  local dkim = 'unknown';
-  local dmarc = 'unknown';
-  local spf = 'unknown'
+  local fields = {
+    bayes = 'unknown',
+    fuzzy = 'unknown',
+    ann = 'unknown',
+    whitelist = 'unknown',
+    dkim = 'unknown',
+    dmarc = 'unknown',
+    spf = 'unknown',
+  }
 
   local ret
 
-  ret = clickhouse_check_symbol(task, settings['bayes_spam_symbols'], false)
-  if ret then
-    bayes = 'spam'
+  ret = clickhouse_check_symbol(task,'bayes_spam_symbols', fields,
+      'bayes', 'spam')
+  if not ret then
+    clickhouse_check_symbol(task,'bayes_ham_symbols', fields,
+        'bayes', 'ham')
   end
 
-  ret = ret or clickhouse_check_symbol(task, settings['bayes_ham_symbols'], false)
-  if ret then
-    bayes = 'ham'
+  clickhouse_check_symbol(task,'ann_symbols_spam', fields,
+      'ann', 'spam')
+  if not ret then
+    clickhouse_check_symbol(task,'ann_symbols_ham', fields,
+        'ann', 'ham')
   end
 
-  ret = clickhouse_check_symbol(task, settings['fann_symbols'], true)
-  if ret then
-    if ret > 0 then
-      fann = 'spam'
-    else
-      fann = 'ham'
-    end
+  clickhouse_check_symbol(task,'whitelist_symbols', fields,
+      'whitelist', 'blacklist', 'whitelist')
+
+  clickhouse_check_symbol(task,'fuzzy_symbols', fields,
+      'fuzzy', 'deny')
+
+
+  ret = clickhouse_check_symbol(task,'dkim_allow_symbols', fields,
+      'dkim', 'allow')
+  if not ret then
+    ret = clickhouse_check_symbol(task,'dkim_reject_symbols', fields,
+        'dkim', 'reject')
+  end
+  if not ret then
+    ret = clickhouse_check_symbol(task,'dkim_dnsfail_symbols', fields,
+        'dkim', 'dnsfail')
+  end
+  if not ret then
+    clickhouse_check_symbol(task,'dkim_na_symbols', fields,
+        'dkim', 'na')
   end
 
 
-  ret = clickhouse_check_symbol(task, settings['whitelist_symbols'], true)
-  if ret then
-    if ret < 0 then
-      whitelist = 'whitelist'
-    else
-      whitelist = 'blacklist'
-    end
+  ret = clickhouse_check_symbol(task,'dmarc_allow_symbols', fields,
+      'dmarc', 'allow')
+  if not ret then
+    ret = clickhouse_check_symbol(task,'dmarc_reject_symbols', fields,
+        'dmarc', 'reject')
+  end
+  if not ret then
+    ret = clickhouse_check_symbol(task,'dmarc_quarantine_symbols', fields,
+        'dmarc', 'quarantine')
+  end
+  if not ret then
+    ret = clickhouse_check_symbol(task,'dmarc_softfail_symbols', fields,
+        'dmarc', 'softfail')
+  end
+  if not ret then
+    clickhouse_check_symbol(task,'dmarc_na_symbols', fields,
+        'dmarc', 'na')
   end
 
-  ret = clickhouse_check_symbol(task, settings['fuzzy_symbols'], false)
-  if ret then
-    fuzzy = 'deny'
-  end
 
-  ret = clickhouse_check_symbol(task, settings['dkim_allow_symbols'], false)
-  if ret then
-    dkim = 'allow'
+  ret = clickhouse_check_symbol(task,'spf_allow_symbols', fields,
+      'spf', 'allow')
+  if not ret then
+    ret = clickhouse_check_symbol(task,'spf_reject_symbols', fields,
+        'spf', 'reject')
   end
-
-  ret = ret or
-      clickhouse_check_symbol(task, settings['dkim_reject_symbols'], false)
-  if ret then
-    dkim = 'reject'
+  if not ret then
+    ret = clickhouse_check_symbol(task,'spf_neutral_symbols', fields,
+        'spf', 'neutral')
   end
-
-  ret = ret or
-      clickhouse_check_symbol(task, settings.dkim_dnsfail_symbols, false)
-  if ret then
-    dkim = 'dnsfail'
+  if not ret then
+    ret = clickhouse_check_symbol(task,'spf_dnsfail_symbols', fields,
+        'spf', 'dnsfail')
   end
-
-  ret = ret or
-      clickhouse_check_symbol(task, settings.dkim_na_symbols, false)
-  if ret then
-    dkim = 'na'
-  end
-
-  ret = clickhouse_check_symbol(task, settings['dmarc_allow_symbols'], false)
-  if ret then
-    dmarc = 'allow'
-  end
-
-  ret = ret or clickhouse_check_symbol(task, settings['dmarc_reject_symbols'], false)
-  if ret then
-    dmarc = 'reject'
-  end
-
-  ret = ret or clickhouse_check_symbol(task, settings.dmarc_quarantine_symbols, false)
-  if ret then
-    dmarc = 'quarantine'
-  end
-
-  ret = ret or clickhouse_check_symbol(task, settings.dmarc_softfail_symbols, false)
-  if ret then
-    dmarc = 'softfail'
-  end
-
-  ret = ret or clickhouse_check_symbol(task, settings.dmarc_na_symbols, false)
-  if ret then
-    dmarc = 'na'
-  end
-
-  ret = clickhouse_check_symbol(task, settings.spf_allow_symbols, false)
-  if ret then
-    spf = 'allow'
-  end
-
-  ret = ret or clickhouse_check_symbol(task, settings.spf_reject_symbols, false)
-  if ret then
-    spf = 'reject'
-  end
-
-  ret = ret or clickhouse_check_symbol(task, settings.spf_neutral_symbols, false)
-  if ret then
-    spf = 'neutral'
-  end
-
-  ret = ret or clickhouse_check_symbol(task, settings.spf_dnsfail_symbols, false)
-  if ret then
-    spf = 'dnsfail'
-  end
-
-  ret = ret or clickhouse_check_symbol(task, settings.spf_na_symbols, false)
-  if ret then
-    spf = 'na'
+  if not ret then
+    clickhouse_check_symbol(task,'spf_na_symbols', fields,
+        'spf', 'na')
   end
 
   local nrcpts = 0
@@ -607,12 +586,12 @@ local function clickhouse_collect(task)
     score,
     nrcpts,
     task:get_size(),
-    whitelist,
-    bayes,
-    fuzzy,
-    fann,
-    dkim,
-    dmarc,
+    fields.whitelist,
+    fields.bayes,
+    fields.fuzzy,
+    fields.ann,
+    fields.dkim,
+    fields.dmarc,
     nurls,
     action,
     from_user,
@@ -622,7 +601,7 @@ local function clickhouse_collect(task)
     list_id,
     subject,
     digest,
-    spf,
+    fields.spf,
     mime_rcpt,
     message_id,
     scan_real,
