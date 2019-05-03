@@ -341,7 +341,7 @@ rspamd_lua_cld_handler (struct rspamd_worker_signal_handler *sigh, void *ud)
 	}
 
 	L = cbdata->L;
-	msg_info ("handled SIGCHLD from %p", cbdata->cpid);
+	msg_info ("handled SIGCHLD from %P", cbdata->cpid);
 
 	if (!cbdata->replied) {
 		/* We still need to call on_complete callback */
