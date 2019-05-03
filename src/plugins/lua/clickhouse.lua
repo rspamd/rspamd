@@ -92,7 +92,7 @@ CREATE TABLE rspamd
     From String,
     MimeFrom String,
     IP String,
-    Score Float64,
+    Score Float32,
     NRcpt UInt8,
     Size UInt32,
     IsWhitelist Enum8('blacklist' = 0, 'whitelist' = 1, 'unknown' = 2) DEFAULT 'unknown',
@@ -133,7 +133,9 @@ CREATE TABLE rspamd
     SMTPRcpt ALIAS if(RcptDomain = '', '', concat(RcptUser, '@', RcptDomain)),
     MIMEFrom ALIAS if(MimeFrom = '', '', concat(MimeUser, '@', MimeFrom)),
     MIMERcpt ALIAS MimeRecipients[1]
-) ENGINE = MergeTree(Date, (TS, From), 8192)
+) ENGINE = MergeTree()
+PARTITION BY Date
+ORDER BY TS
 ]],
 [[CREATE TABLE rspamd_version ( Version UInt32) ENGINE = TinyLog]],
 [[INSERT INTO rspamd_version (Version) Values (${SCHEMA_VERSION})]],
