@@ -752,6 +752,8 @@ rspamd_language_detector_dtor (struct rspamd_lang_detector *d)
 		kh_foreach_key (d->stop_words_norm, tok, {
 			g_free (tok); /* String is embedded and freed automatically */
 		});
+
+		kh_destroy (rspamd_stopwords_hash, d->stop_words_norm);
 	}
 }
 
