@@ -2729,9 +2729,9 @@ lua_task_get_dns_req (lua_State *L)
 }
 
 enum rspamd_address_type {
-	RSPAMD_ADDRESS_ANY = 0,
-	RSPAMD_ADDRESS_SMTP = 1,
-	RSPAMD_ADDRESS_MIME = 2,
+	RSPAMD_ADDRESS_ANY = 0u,
+	RSPAMD_ADDRESS_SMTP = 1u << 0u,
+	RSPAMD_ADDRESS_MIME = 1u << 2u,
 	RSPAMD_ADDRESS_MASK = 0x3FF,
 	RSPAMD_ADDRESS_RAW = (1u << 10),
 	RSPAMD_ADDRESS_ORIGINAL = (1u << 11),
@@ -2787,7 +2787,7 @@ lua_task_str_to_get_type (lua_State *L, struct rspamd_task *task, gint pos)
 	}
 	else if (lua_type (L, pos) == LUA_TTABLE) {
 		for (lua_pushnil (L); lua_next (L, pos); lua_pop (L, 1)) {
-			type = lua_tolstring (L, pos, &sz);
+			type = lua_tolstring (L, -1, &sz);
 
 			if (type && sz > 0) {
 				h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
