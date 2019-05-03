@@ -576,6 +576,11 @@ local function clickhouse_collect(task)
 
   local scan_real,scan_virtual = task:get_scan_time()
   scan_real,scan_virtual = math.floor(scan_real * 1000), math.floor(scan_virtual * 1000)
+  if scan_real < 0 then
+    rspamd_logger.messagex(task, 'clock skew detected for message: %s ms real scan time (reset to 0), %s virtual scan time',
+        scan_real, scan_virtual)
+    scan_real = 0
+  end
 
   local row = {
     today(timestamp),
