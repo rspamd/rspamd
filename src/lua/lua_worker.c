@@ -20,6 +20,8 @@
 #include "rspamd_control.h"
 #include "ottery.h"
 
+#include <sys/wait.h>
+
 /***
  * @module rspamd_worker
  * This module provides methods to access worker related functions in various

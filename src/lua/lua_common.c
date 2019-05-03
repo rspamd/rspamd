@@ -23,7 +23,6 @@
 #include "libserver/rspamd_control.h"
 
 #include <math.h>
-#include <sys/wait.h>
 
 
 /* Lua module init function */
