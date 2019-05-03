@@ -2730,8 +2730,8 @@ lua_task_get_dns_req (lua_State *L)
 
 enum rspamd_address_type {
 	RSPAMD_ADDRESS_ANY = 0u,
-	RSPAMD_ADDRESS_SMTP = 1u << 0u,
-	RSPAMD_ADDRESS_MIME = 1u << 2u,
+	RSPAMD_ADDRESS_SMTP = 1,
+	RSPAMD_ADDRESS_MIME = 2,
 	RSPAMD_ADDRESS_MASK = 0x3FF,
 	RSPAMD_ADDRESS_RAW = (1u << 10),
 	RSPAMD_ADDRESS_ORIGINAL = (1u << 11),
