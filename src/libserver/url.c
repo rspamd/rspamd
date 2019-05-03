@@ -569,7 +569,7 @@ rspamd_url_init (const gchar *tld_file)
     }                                                                        \
 } while (0)
 
-static gboolean
+static bool
 is_url_start (gchar c)
 {
 	if (c == '(' ||
@@ -583,7 +583,7 @@ is_url_start (gchar c)
 	return FALSE;
 }
 
-static gboolean
+static bool
 is_url_end (gchar c)
 {
 	if (c == ')' ||
@@ -591,6 +591,19 @@ is_url_end (gchar c)
 			c == ']' ||
 			c == '>' ||
 			c == '\'') {
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+static bool
+is_domain_start (int p)
+{
+	if (g_ascii_isalnum (p) ||
+		p == '[' ||
+		p == '%' ||
+		(p & 0x80)) {
 		return TRUE;
 	}
 
@@ -1115,7 +1128,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 			}
 			break;
 		case parse_domain_start:
-			if (g_ascii_isalnum (t) || t & 0x80) {
+			if (is_domain_start (t)) {
 				st = parse_domain;
 			}
 			else {
@@ -1963,6 +1976,11 @@ rspamd_url_parse (struct rspamd_url *uri,
 
 	if (rspamd_normalise_unicode_inplace (pool, uri->host, &unquoted_len)) {
 		uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
+	}
+
+	/* Ensure that hostname starts with something sane (exclude numeric urls) */
+	if (!(is_domain_start (uri->host[0]) || uri->host[0] == ':')) {
+		return URI_ERRNO_BAD_FORMAT;
 	}
 
 	rspamd_url_shift (uri, unquoted_len, UF_HOST);
