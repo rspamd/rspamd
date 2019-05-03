@@ -339,6 +339,27 @@ local function check_parts_match(task, rule)
   return fun.filter(filter_func, task:get_parts())
 end
 
+local function check_metric_results(task, rule)
+
+  if rule.action ~= 'reject' then
+    local metric_result = task:get_metric_score('default')
+    local metric_action = task:get_metric_action('default')
+    local has_pre_result = task:has_pre_result()
+
+    if rule.symbol_type == 'postfilter' and metric_action == 'reject' then
+      return true, 'result is already reject'
+    elseif metric_result[1] > metric_result[2]*2 then
+      return true, 'score > 2 * reject_level: ' .. metric_result[1]
+    elseif has_pre_result and metric_action == 'reject' then
+      return true, 'pre_result reject is set'
+    else
+      return false, 'undecided'
+    end
+  else
+    return false, 'dynamic_scan is not possible with config `action=reject;`'
+  end
+end
+
 exports.log_clean = log_clean
 exports.yield_result = yield_result
 exports.match_patterns = match_patterns
@@ -347,6 +368,7 @@ exports.check_av_cache = check_av_cache
 exports.save_av_cache = save_av_cache
 exports.create_regex_table = create_regex_table
 exports.check_parts_match = check_parts_match
+exports.check_metric_results = check_metric_results
 
 setmetatable(exports, {
   __call = function(t, override)
