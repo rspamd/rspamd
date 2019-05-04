@@ -564,13 +564,13 @@ local function dmarc_callback(task)
   local seen_invalid = false
 
   if dmarc_checks ~= 2 then
-    rspamd_logger.infox(task, "skip DMARC checks as either SPF or DKIM were not checked");
+    rspamd_logger.infox(task, "skip DMARC checks as either SPF or DKIM were not checked")
     return
   end
 
   if ((not check_authed and task:get_user()) or
       (not check_local and ip_addr and ip_addr:is_local())) then
-    rspamd_logger.infox(task, "skip DMARC checks for local networks and authorized users");
+    rspamd_logger.infox(task, "skip DMARC checks for local networks and authorized users")
     return
   end
 

@@ -29,7 +29,8 @@ local options = {
   dmarc_allow_symbol = 'DMARC_POLICY_ALLOW',
   spf_allow_symbol = 'R_SPF_ALLOW',
   dkim_allow_symbol = 'R_DKIM_ALLOW',
-
+  check_local = false,
+  check_authed = false,
   rules = {}
 }
 
@@ -127,6 +128,7 @@ local function whitelist_cb(symbol, rule, task)
 
   local spf_violated = false
   local dmarc_violated = false
+  local ip_addr = task:get_ip()
 
   if rule['valid_spf'] then
     if not task:has_symbol(options['spf_allow_symbol']) then
@@ -243,6 +245,7 @@ local function whitelist_cb(symbol, rule, task)
   end
 
   if rule.valid_dmarc then
+
     found_wl = false
 
     for dom,val in pairs(domains.dmarc or E) do
@@ -281,7 +284,16 @@ local function whitelist_cb(symbol, rule, task)
   end
 
   if found_bl then
-    add_symbol(true, final_mult)
+    if not ((not options.check_authed and task:get_user()) or
+        (not options.check_local and ip_addr and ip_addr:is_local())) then
+      add_symbol(true, final_mult)
+    else
+      if rule.valid_spf or rule.valid_dmarc then
+        rspamd_logger.infox(task, "skip DMARC/SPF blacklists for local networks and/or authorized users")
+      else
+        add_symbol(true, final_mult)
+      end
+    end
   elseif found_wl then
     add_symbol(false, final_mult)
   end
@@ -295,11 +307,30 @@ local function gen_whitelist_cb(symbol, rule)
 end
 
 local configure_whitelist_module = function()
-  local opts =  rspamd_config:get_all_opt('whitelist')
+  local opts = rspamd_config:get_all_opt('whitelist')
   if opts then
     for k,v in pairs(opts) do
       options[k] = v
     end
+
+    local function try_opts(where)
+      local ret = false
+      local opts = rspamd_config:get_all_opt(where)
+      if type(opts) == 'table' then
+        if type(opts['check_local']) == 'boolean' then
+          options.check_local = opts['check_local']
+          ret = true
+        end
+        if type(opts['check_authed']) == 'boolean' then
+          options.check_authed = opts['check_authed']
+          ret = true
+        end
+      end
+
+      return ret
+    end
+
+    if not try_opts(N) then try_opts('options') end
   else
     rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
     return
