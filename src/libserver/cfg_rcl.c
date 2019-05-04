@@ -845,6 +845,7 @@ rspamd_rcl_lua_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 gboolean
 rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 		const gchar *path,
+		gboolean main_path,
 		GHashTable *modules_seen,
 		GError **err)
 {
@@ -856,7 +857,7 @@ rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 
 	if (stat (path, &st) == -1) {
 
-		if (errno != ENOENT) {
+		if (errno != ENOENT || main_path) {
 			g_set_error (err,
 					CFG_RCL_ERROR,
 					errno,
@@ -866,7 +867,7 @@ rspamd_rcl_add_lua_plugins_path (struct rspamd_config *cfg,
 			return FALSE;
 		}
 		else {
-			msg_info_config ("plugins path %s is absent, skip it", path);
+			msg_debug_config ("optional plugins path %s is absent, skip it", path);
 
 			return TRUE;
 		}
@@ -986,6 +987,7 @@ rspamd_rcl_modules_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 				if (ucl_object_tostring_safe (cur, &data)) {
 					if (!rspamd_rcl_add_lua_plugins_path (cfg,
 							rspamd_mempool_strdup (cfg->cfg_pool, data),
+							TRUE,
 							mods_seen,
 							err)) {
 						return FALSE;
@@ -1008,6 +1010,23 @@ rspamd_rcl_modules_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 				if (ucl_object_tostring_safe (cur, &data)) {
 					if (!rspamd_rcl_add_lua_plugins_path (cfg,
 							rspamd_mempool_strdup (cfg->cfg_pool, data),
+							FALSE,
+							mods_seen,
+							err)) {
+						return FALSE;
+					}
+				}
+			}
+		}
+
+		val = ucl_object_lookup (obj, "try_path");
+
+		if (val) {
+			LL_FOREACH (val, cur) {
+				if (ucl_object_tostring_safe (cur, &data)) {
+					if (!rspamd_rcl_add_lua_plugins_path (cfg,
+							rspamd_mempool_strdup (cfg->cfg_pool, data),
+							FALSE,
 							mods_seen,
 							err)) {
 						return FALSE;
@@ -1018,7 +1037,7 @@ rspamd_rcl_modules_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	}
 	else if (ucl_object_tostring_safe (obj, &data)) {
 		if (!rspamd_rcl_add_lua_plugins_path (cfg,
-				rspamd_mempool_strdup (cfg->cfg_pool, data), NULL, err)) {
+				rspamd_mempool_strdup (cfg->cfg_pool, data), TRUE, NULL, err)) {
 			return FALSE;
 		}
 	}

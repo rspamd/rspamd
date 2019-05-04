@@ -79,6 +79,10 @@ struct rspamd_monitored {
 		"monitored", m->tag, \
         G_STRFUNC, \
         __VA_ARGS__)
+#define msg_notice_mon(...)   rspamd_default_log_function (G_LOG_LEVEL_MESSAGE, \
+		"monitored", m->tag, \
+        G_STRFUNC, \
+        __VA_ARGS__)
 #define msg_debug_mon(...)  rspamd_conditional_debug_fast (NULL, NULL, \
         rspamd_monitored_log_id, "monitored", m->tag, \
         G_STRFUNC, \
@@ -105,7 +109,7 @@ rspamd_monitored_propagate_error (struct rspamd_monitored *m,
 			rspamd_monitored_start (m);
 		}
 		else {
-			msg_info_mon ("%s on resolving %s, disable object",
+			msg_notice_mon ("%s on resolving %s, disable object",
 					error, m->url);
 			m->alive = FALSE;
 			m->offline_time = rspamd_get_calendar_ticks ();
@@ -145,7 +149,7 @@ rspamd_monitored_propagate_success (struct rspamd_monitored *m, gdouble lat)
 		t = rspamd_get_calendar_ticks ();
 		m->total_offline_time += t - m->offline_time;
 		m->alive = TRUE;
-		msg_info_mon ("restoring %s after %.1f seconds of downtime, "
+		msg_notice_mon ("restoring %s after %.1f seconds of downtime, "
 				"total downtime: %.1f",
 				m->url, t - m->offline_time, m->total_offline_time);
 		m->offline_time = 0;
@@ -310,18 +314,19 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 					}
 
 					if (is_special_reply) {
-						msg_info_mon ("DNS query blocked on %s "
+						msg_notice_mon ("DNS query blocked on %s "
 									  "(127.0.0.1 returned), "
 									  "possibly due to high volume",
 								m->url);
 					}
 					else {
-						msg_info_mon ("DNS reply returned '%s' for %s while '%s' "
-									  "was expected "
+						msg_notice_mon ("DNS reply returned '%s' for %s while '%s' "
+									  "was expected when querying for '%s'"
 									  "(likely DNS spoofing or BL internal issues)",
 								rdns_strerror (reply->code),
 								m->url,
-								rdns_strerror (conf->expected_code));
+								rdns_strerror (conf->expected_code),
+								conf->request->str);
 					}
 
 					rspamd_monitored_propagate_error (m, "invalid return");
@@ -346,7 +351,7 @@ rspamd_monitored_dns_cb (struct rdns_reply *reply, void *arg)
 							"unreadable address");
 				}
 				else if (radix_find_compressed_addr (conf->expected, addr)) {
-					msg_info_mon ("bad address %s is returned when monitoring %s",
+					msg_notice_mon ("bad address %s is returned when monitoring %s",
 							rspamd_inet_address_to_string (addr),
 							conf->request->str);
 					rspamd_monitored_propagate_error (m,
@@ -375,7 +380,7 @@ rspamd_monitored_dns_mon (struct rspamd_monitored *m,
 	if (!rdns_make_request_full (ctx->resolver, rspamd_monitored_dns_cb,
 			conf, ctx->cfg->dns_timeout, ctx->cfg->dns_retransmits,
 			1, conf->request->str, conf->rt)) {
-		msg_info_mon ("cannot make request to resolve %s", conf->request->str);
+		msg_notice_mon ("cannot make request to resolve %s", conf->request->str);
 
 		m->cur_errors ++;
 		rspamd_monitored_propagate_error (m, "failed to make DNS request");

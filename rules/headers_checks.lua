@@ -60,7 +60,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = rcvd_cb_id,
   type = 'virtual',
-  description = 'No received',
+  description = 'Message has no Received headers',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -68,7 +68,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = rcvd_cb_id,
   type = 'virtual',
-  description = 'One received',
+  description = 'Message has one Received header',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -76,7 +76,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = rcvd_cb_id,
   type = 'virtual',
-  description = 'Two received',
+  description = 'Message has two Received headers',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -84,7 +84,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = rcvd_cb_id,
   type = 'virtual',
-  description = '3-5 received',
+  description = 'Message has 3-5 Received headers',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -92,7 +92,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = rcvd_cb_id,
   type = 'virtual',
-  description = '5-7 received',
+  description = 'Message has 5-7 Received headers',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -100,7 +100,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = rcvd_cb_id,
   type = 'virtual',
-  description = '7-11 received',
+  description = 'Message has 7-11 Received headers',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -108,7 +108,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = rcvd_cb_id,
   type = 'virtual',
-  description = '12+ received',
+  description = 'Message has 12 or more Received headers',
   group = 'headers',
 }
 
@@ -144,7 +144,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = prio_cb_id,
   type = 'virtual',
-  description = 'Priority 0',
+  description = 'Message has X-Priority header set to 0',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -152,7 +152,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = prio_cb_id,
   type = 'virtual',
-  description = 'Priority 1',
+  description = 'Message has X-Priority header set to 1',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -160,7 +160,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = prio_cb_id,
   type = 'virtual',
-  description = 'Priority 2',
+  description = 'Message has X-Priority header set to 2',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -168,7 +168,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = prio_cb_id,
   type = 'virtual',
-  description = 'Priority 3-4',
+  description = 'Message has X-Priority header set to 3 or 4',
   group = 'headers',
 }
 rspamd_config:register_symbol{
@@ -176,7 +176,7 @@ rspamd_config:register_symbol{
   score = 0.0,
   parent = prio_cb_id,
   type = 'virtual',
-  description = 'Priority 5+',
+  description = 'Message has X-Priority header set to 5 or higher',
   group = 'headers',
 }
 
@@ -682,7 +682,7 @@ local check_from_id = rspamd_config:register_symbol{
 
 rspamd_config:register_symbol{
   name = 'FROM_NO_DN',
-  score = 0,
+  score = 0.0,
   group = 'headers',
   parent = check_from_id,
   type = 'virtual',

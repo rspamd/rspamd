@@ -285,11 +285,11 @@ enum rspamd_action_type {
 };
 
 enum rspamd_action_flags {
-	RSPAMD_ACTION_NORMAL = 0,
-	RSPAMD_ACTION_NO_THRESHOLD = (1u << 0),
-	RSPAMD_ACTION_THRESHOLD_ONLY = (1u << 1),
-	RSPAMD_ACTION_HAM = (1u << 2),
-	RSPAMD_ACTION_MILTER = (1u << 3),
+	RSPAMD_ACTION_NORMAL = 0u,
+	RSPAMD_ACTION_NO_THRESHOLD = (1u << 0u),
+	RSPAMD_ACTION_THRESHOLD_ONLY = (1u << 1u),
+	RSPAMD_ACTION_HAM = (1u << 2u),
+	RSPAMD_ACTION_MILTER = (1u << 3u),
 };
 
 
@@ -474,8 +474,9 @@ gboolean rspamd_parse_bind_line (struct rspamd_config *cfg,
 
 
 enum rspamd_config_init_flags {
-	RSPAMD_CONFIG_INIT_DEFAULT = 0,
-	RSPAMD_CONFIG_INIT_SKIP_LUA = (1 << 0)
+	RSPAMD_CONFIG_INIT_DEFAULT = 0u,
+	RSPAMD_CONFIG_INIT_SKIP_LUA = (1u << 0u),
+	RSPAMD_CONFIG_INIT_WIPE_LUA_MEM = (1u << 1u),
 };
 /**
  * Init default values

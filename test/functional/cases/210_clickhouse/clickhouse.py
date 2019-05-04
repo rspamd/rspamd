@@ -66,8 +66,8 @@ def schema_version_should_be(version):
     sql = "select max(Version) as version from rspamd_version"
     r = client().query(sql)
     logger.info("response: %s" % str(r))
-    if r[0]['version'] != 3:
-        raise Exception("Failed asseting that schema version is '%d'" % r[0]['version'])
+    if r[0]['version'] != int(version):
+        raise Exception("Failed asseting that schema version is %d, %d schema version in ClickHouse" % (int(version), int(r[0]['version'])))
 
 
 def assert_rows_count(table_name, number):

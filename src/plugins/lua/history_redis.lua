@@ -207,7 +207,7 @@ local function handle_history_request(task, conn, from, to, reset)
         collectgarbage()
         t1 = rspamd_util:get_ticks()
         fun.each(function(e)
-          e.subject = lua_util.maybe_obfuscate_subject(e.subject, settings)
+          e.subject = lua_util.maybe_obfuscate_string(e.subject, settings, 'subject')
         end, data)
         reply.rows = data
         conn:send_ucl(reply)

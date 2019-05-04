@@ -1487,31 +1487,177 @@ void rspamd_cryptobox_hash (guchar *out,
 	rspamd_cryptobox_hash_final (&st, out);
 }
 
-G_STATIC_ASSERT (sizeof (t1ha_context_t) ==
-		sizeof (rspamd_cryptobox_fast_hash_state_t));
+G_STATIC_ASSERT (sizeof (t1ha_context_t) <=
+		sizeof (((rspamd_cryptobox_fast_hash_state_t *)NULL)->opaque));
+G_STATIC_ASSERT (sizeof (XXH64_state_t) <=
+				 sizeof (((rspamd_cryptobox_fast_hash_state_t *)NULL)->opaque));
+
+
+struct RSPAMD_ALIGNED(16) _mum_iuf {
+	union {
+		gint64 ll;
+		unsigned char b[sizeof (guint64)];
+	} buf;
+	gint64 h;
+	unsigned rem;
+};
 
 void
 rspamd_cryptobox_fast_hash_init (rspamd_cryptobox_fast_hash_state_t *st,
 		guint64 seed)
 {
-	t1ha_context_t *rst = (t1ha_context_t *)st;
+	t1ha_context_t *rst = (t1ha_context_t *)st->opaque;
+	st->type = RSPAMD_CRYPTOBOX_T1HA;
 	t1ha2_init (rst, seed, 0);
+}
+
+void
+rspamd_cryptobox_fast_hash_init_specific (rspamd_cryptobox_fast_hash_state_t *st,
+										  enum rspamd_cryptobox_fast_hash_type type,
+										  guint64 seed)
+{
+	switch (type) {
+	case RSPAMD_CRYPTOBOX_T1HA:
+	case RSPAMD_CRYPTOBOX_HASHFAST:
+	case RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT: {
+		t1ha_context_t *rst = (t1ha_context_t *) st->opaque;
+		st->type = RSPAMD_CRYPTOBOX_T1HA;
+		t1ha2_init (rst, seed, 0);
+		break;
+	}
+	case RSPAMD_CRYPTOBOX_XXHASH64: {
+		XXH64_state_t *xst = (XXH64_state_t *)  st->opaque;
+		st->type = RSPAMD_CRYPTOBOX_XXHASH64;
+		XXH64_reset (xst, seed);
+		break;
+	}
+	case RSPAMD_CRYPTOBOX_XXHASH32:
+	{
+		XXH32_state_t *xst = (XXH32_state_t *)  st->opaque;
+		st->type = RSPAMD_CRYPTOBOX_XXHASH32;
+		XXH32_reset (xst, seed);
+		break;
+	}
+	case RSPAMD_CRYPTOBOX_MUMHASH: {
+		struct _mum_iuf *iuf = (struct _mum_iuf *)  st->opaque;
+		st->type = RSPAMD_CRYPTOBOX_MUMHASH;
+		iuf->h = seed;
+		iuf->buf.ll = 0;
+		iuf->rem = 0;
+		break;
+	}
+	}
 }
 
 void
 rspamd_cryptobox_fast_hash_update (rspamd_cryptobox_fast_hash_state_t *st,
 		const void *data, gsize len)
 {
-	t1ha_context_t *rst = (t1ha_context_t *)st;
-	t1ha2_update (rst, data, len);
+	if (G_LIKELY (st->type) == RSPAMD_CRYPTOBOX_T1HA) {
+		t1ha_context_t *rst = (t1ha_context_t *) st->opaque;
+		t1ha2_update (rst, data, len);
+	}
+	else {
+		switch (st->type) {
+		case RSPAMD_CRYPTOBOX_XXHASH64: {
+			XXH64_state_t *xst = (XXH64_state_t *)  st->opaque;
+			XXH64_update (xst, data, len);
+			break;
+		}
+		case RSPAMD_CRYPTOBOX_XXHASH32:
+		{
+			XXH32_state_t *xst = (XXH32_state_t *)  st->opaque;
+			XXH32_update (xst, data, len);
+			break;
+		}
+		case RSPAMD_CRYPTOBOX_MUMHASH: {
+			struct _mum_iuf *iuf = (struct _mum_iuf *)  st->opaque;
+			gsize drem = len;
+			const guchar *p = data;
+
+			if (iuf->rem > 0) {
+				/* Process remainder */
+				if (drem >= iuf->rem) {
+					memcpy (iuf->buf.b + sizeof (iuf->buf.ll) - iuf->rem,
+							p, iuf->rem);
+					drem -= iuf->rem;
+					p += iuf->rem;
+					iuf->h = mum_hash_step (iuf->h, iuf->buf.ll);
+					iuf->rem = 0;
+				}
+				else {
+					memcpy (iuf->buf.b + sizeof (iuf->buf.ll) - iuf->rem, p, drem);
+					iuf->rem -= drem;
+					drem = 0;
+				}
+			}
+
+			while (drem >= sizeof (iuf->buf.ll)) {
+				memcpy (iuf->buf.b, p, sizeof (iuf->buf.ll));
+				iuf->h = mum_hash_step (iuf->h, iuf->buf.ll);
+				drem -= sizeof (iuf->buf.ll);
+				p += sizeof (iuf->buf.ll);
+			}
+
+			/* Leftover */
+			if (drem > 0) {
+				iuf->rem = sizeof (guint64) - drem;
+				iuf->buf.ll = 0;
+				memcpy (iuf->buf.b, p, drem);
+			}
+			break;
+		}
+		case RSPAMD_CRYPTOBOX_T1HA:
+		case RSPAMD_CRYPTOBOX_HASHFAST:
+		case RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT: {
+			t1ha_context_t *rst = (t1ha_context_t *)  st->opaque;
+			t1ha2_update (rst, data, len);
+			break;
+		}
+		}
+	}
 }
 
 guint64
 rspamd_cryptobox_fast_hash_final (rspamd_cryptobox_fast_hash_state_t *st)
 {
-	t1ha_context_t *rst = (t1ha_context_t *)st;
+	guint64 ret;
 
-	return t1ha2_final (rst, NULL);
+	if (G_LIKELY (st->type) == RSPAMD_CRYPTOBOX_T1HA) {
+		t1ha_context_t *rst = (t1ha_context_t *) st->opaque;
+
+		return t1ha2_final (rst, NULL);
+	}
+	else {
+		switch (st->type) {
+		case RSPAMD_CRYPTOBOX_XXHASH64: {
+			XXH64_state_t *xst = (XXH64_state_t *)  st->opaque;
+			ret = XXH64_digest (xst);
+			break;
+		}
+		case RSPAMD_CRYPTOBOX_XXHASH32: {
+			XXH32_state_t *xst = (XXH32_state_t *)  st->opaque;
+			ret = XXH32_digest (xst);
+			break;
+		}
+		case RSPAMD_CRYPTOBOX_MUMHASH: {
+			struct _mum_iuf *iuf = (struct _mum_iuf *)  st->opaque;
+			iuf->h = mum_hash_step (iuf->h, iuf->buf.ll);
+			ret = mum_hash_finish (iuf->h);
+			break;
+		}
+		case RSPAMD_CRYPTOBOX_T1HA:
+		case RSPAMD_CRYPTOBOX_HASHFAST:
+		case RSPAMD_CRYPTOBOX_HASHFAST_INDEPENDENT: {
+			t1ha_context_t *rst = (t1ha_context_t *) st->opaque;
+
+			ret = t1ha2_final (rst, NULL);
+			break;
+		}
+		}
+	}
+
+	return ret;
 }
 
 /**

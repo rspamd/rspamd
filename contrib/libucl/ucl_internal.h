@@ -472,12 +472,24 @@ ucl_hash_insert_object (ucl_hash_t *hashlin,
 		const ucl_object_t *obj,
 		bool ignore_case)
 {
-	if (hashlin == NULL) {
-		hashlin = ucl_hash_create (ignore_case);
-	}
-	ucl_hash_insert (hashlin, obj, obj->key, obj->keylen);
+	ucl_hash_t *nhp;
 
-	return hashlin;
+	if (hashlin == NULL) {
+		nhp = ucl_hash_create (ignore_case);
+		if (nhp == NULL) {
+			return NULL;
+		}
+	} else {
+		nhp = hashlin;
+	}
+	if (!ucl_hash_insert (nhp, obj, obj->key, obj->keylen)) {
+		if (nhp != hashlin) {
+			ucl_hash_destroy(nhp, NULL);
+		}
+		return NULL;
+	}
+
+	return nhp;
 }
 
 /**

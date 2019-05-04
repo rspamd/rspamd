@@ -65,8 +65,9 @@ struct rspamd_lua_ip {
 	rspamd_inet_addr_t *addr;
 };
 
-#define RSPAMD_TEXT_FLAG_OWN (1 << 0)
-#define RSPAMD_TEXT_FLAG_MMAPED (1 << 1)
+#define RSPAMD_TEXT_FLAG_OWN (1u << 0u)
+#define RSPAMD_TEXT_FLAG_MMAPED (1u << 1u)
+#define RSPAMD_TEXT_FLAG_WIPE (1u << 2u)
 struct rspamd_lua_text {
 	const gchar *start;
 	guint len;
@@ -164,7 +165,7 @@ gpointer rspamd_lua_check_class (lua_State *L, gint index, const gchar *name);
 /**
  * Initialize lua and bindings
  */
-lua_State *rspamd_lua_init (void);
+lua_State *rspamd_lua_init (bool wipe_mem);
 
 
 /**
@@ -283,6 +284,7 @@ void luaopen_sqlite3 (lua_State *L);
 void luaopen_cryptobox (lua_State *L);
 void luaopen_dns (lua_State *L);
 void luaopen_udp (lua_State * L);
+void luaopen_worker (lua_State * L);
 
 void rspamd_lua_dostring (const gchar *line);
 
@@ -364,6 +366,16 @@ struct lua_logger_trace {
 	gconstpointer traces[TRACE_POINTS];
 };
 
+enum lua_logger_escape_type {
+	LUA_ESCAPE_NONE = (0u),
+	LUA_ESCAPE_UNPRINTABLE = (1u << 0u),
+	LUA_ESCAPE_NEWLINES = (1u << 1u),
+	LUA_ESCAPE_8BIT = (1u << 2u),
+};
+
+#define LUA_ESCAPE_LOG (LUA_ESCAPE_UNPRINTABLE|LUA_ESCAPE_NEWLINES)
+#define LUA_ESCAPE_ALL (LUA_ESCAPE_UNPRINTABLE|LUA_ESCAPE_NEWLINES|LUA_ESCAPE_8BIT)
+
 /**
  * Log lua object to string
  * @param L
@@ -373,7 +385,8 @@ struct lua_logger_trace {
  * @return
  */
 gsize lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf,
-		gsize len, struct lua_logger_trace *trace);
+						   gsize len, struct lua_logger_trace *trace,
+						   enum lua_logger_escape_type esc_type);
 
 /**
  * Safely checks userdata to match specified class

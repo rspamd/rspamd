@@ -58,7 +58,7 @@ traceback (lua_State *L)
 void
 rspamd_lua_test_func (void)
 {
-	lua_State *L = rspamd_lua_init ();
+	lua_State *L = rspamd_lua_init (false);
 	gchar *rp, rp_buf[PATH_MAX], path_buf[PATH_MAX], *tmp, *dir, *pattern;
 	const gchar *old_path;
 	glob_t globbuf;

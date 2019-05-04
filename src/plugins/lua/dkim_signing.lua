@@ -19,7 +19,6 @@ local lua_util = require "lua_util"
 local rspamd_logger = require "rspamd_logger"
 local dkim_sign_tools = require "lua_dkim_tools"
 local lua_redis = require "lua_redis"
-local lua_maps = require "lua_maps"
 
 if confighelp then
   return
@@ -51,6 +50,44 @@ local N = 'dkim_signing'
 local redis_params
 local sign_func = rspamd_plugins.dkim.sign
 
+local function do_sign(task, p)
+  if settings.check_pubkey then
+    local resolve_name = p.selector .. "._domainkey." .. p.domain
+    task:get_resolver():resolve_txt({
+      task = task,
+      name = resolve_name,
+      callback = function(_, _, results, err)
+        if not err and results and results[1] then
+          p.pubkey = results[1]
+          p.strict_pubkey_check = not settings.allow_pubkey_mismatch
+        elseif not settings.allow_pubkey_mismatch then
+          rspamd_logger.errx('public key for domain %s/%s is not found: %s, skip signing',
+              p.domain, p.selector, err)
+          return
+        else
+          rspamd_logger.infox('public key for domain %s/%s is not found: %s',
+              p.domain, p.selector, err)
+        end
+
+        local sret, _ = sign_func(task, p)
+        if sret then
+          task:insert_result(settings.symbol, 1.0)
+        end
+      end,
+      forced = true
+    })
+  else
+    local sret, _ = sign_func(task, p)
+    if sret then
+      task:insert_result(settings.symbol, 1.0)
+    end
+  end
+end
+
+local function sign_error(task, msg)
+  rspamd_logger.errx(task, 'signing failure: %s', msg)
+end
+
 local function dkim_signing_cb(task)
   local ret,selectors = dkim_sign_tools.prepare_dkim_signing(N, task, settings)
 
@@ -58,147 +95,45 @@ local function dkim_signing_cb(task)
     return
   end
 
-  local function do_sign(p)
-    if settings.check_pubkey then
-      local resolve_name = p.selector .. "._domainkey." .. p.domain
-      task:get_resolver():resolve_txt({
-        task = task,
-        name = resolve_name,
-        callback = function(_, _, results, err)
-          if not err and results and results[1] then
-            p.pubkey = results[1]
-            p.strict_pubkey_check = not settings.allow_pubkey_mismatch
-          elseif not settings.allow_pubkey_mismatch then
-            rspamd_logger.errx('public key for domain %s/%s is not found: %s, skip signing',
-                p.domain, p.selector, err)
-            return
-          else
-            rspamd_logger.infox('public key for domain %s/%s is not found: %s',
-                p.domain, p.selector, err)
-          end
-
-          local sret, _ = sign_func(task, p)
-          if sret then
-            task:insert_result(settings.symbol, 1.0)
-          end
-        end,
-        forced = true
-      })
-    else
-      local sret, _ = sign_func(task, p)
-      if sret then
-        task:insert_result(settings.symbol, 1.0)
-      end
-    end
-  end
-
   if settings.use_redis then
-    local function try_redis_key(selector, p)
-      p.key = nil
-      p.selector = selector
-      local rk = string.format('%s.%s', p.selector, p.domain)
-      local function redis_key_cb(err, data)
-        if err then
-          rspamd_logger.infox(task, "cannot make request to load DKIM key for %s: %s",
-              rk, err)
-        elseif type(data) ~= 'string' then
-          lua_util.debugm(N, task, "missing DKIM key for %s", rk)
-        else
-          p.rawkey = data
-          lua_util.debugm(N, task, 'found and parsed key for %s:%s in Redis',
-              p.domain, p.selector)
-          do_sign(p)
-        end
-      end
-      local rret = rspamd_redis_make_request(task,
-        redis_params, -- connect params
-        rk, -- hash key
-        false, -- is write
-        redis_key_cb, --callback
-        'HGET', -- command
-        {settings.key_prefix, rk} -- arguments
-      )
-      if not rret then
-        rspamd_logger.infox(task, "cannot make request to load DKIM key for %s", rk)
-      end
-    end
-    for _, p in ipairs(selectors) do
-      if settings.selector_prefix then
-        rspamd_logger.infox(task, "Using selector prefix '%s' for domain '%s'",
-            settings.selector_prefix, p.domain);
-        local function redis_selector_cb(err, data)
-          if err or type(data) ~= 'string' then
-            rspamd_logger.infox(task, "cannot make request to load DKIM selector for domain %s: %s", p.domain, err)
-          else
-            try_redis_key(data, p)
+    dkim_sign_tools.sign_using_redis(N, task, settings, selectors, do_sign, sign_error)
+  else
+    if selectors.vault then
+      dkim_sign_tools.sign_using_vault(N, task, settings, selectors, do_sign, sign_error)
+    else
+      if #selectors > 0 then
+        for _, k in ipairs(selectors) do
+          -- templates
+          if k.key then
+            k.key = lua_util.template(k.key, {
+              domain = k.domain,
+              selector = k.selector
+            })
+            lua_util.debugm(N, task, 'using key "%s", use selector "%s" for domain "%s"',
+                k.key, k.selector, k.domain)
           end
-        end
-        local rret = lua_redis.redis_make_request(task,
-          redis_params, -- connect params
-          p.domain, -- hash key
-          false, -- is write
-          redis_selector_cb, --callback
-          'HGET', -- command
-          {settings.selector_prefix, p.domain} -- arguments
-        )
-        if not rret then
-          rspamd_logger.infox(task, "cannot make request to load DKIM selector for '%s'", p.domain)
+
+          do_sign(task, k)
         end
       else
-        try_redis_key(p.selector, p)
+        rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
+        return false
       end
-    end
-  else
-    if #selectors > 0 then
-      for _, k in ipairs(selectors) do
-        -- templates
-        if k.key then
-          k.key = lua_util.template(k.key, {
-            domain = k.domain,
-            selector = k.selector
-          })
-          lua_util.debugm(N, task, 'using key "%s", use selector "%s" for domain "%s"',
-              k.key, k.selector, k.domain)
-        end
-
-        do_sign(k)
-      end
-    else
-      rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
-      return false
     end
   end
 end
 
 local opts =  rspamd_config:get_all_opt('dkim_signing')
 if not opts then return end
-for k,v in pairs(opts) do
-  if k == 'sign_networks' then
-    settings[k] = lua_maps.map_add(N, k, 'radix', 'DKIM signing networks')
-  elseif k == 'path_map' then
-    settings[k] = lua_maps.map_add(N, k, 'map', 'Paths to DKIM signing keys')
-  elseif k == 'selector_map' then
-    settings[k] = lua_maps.map_add(N, k, 'map', 'DKIM selectors')
-  elseif k == 'signing_table' then
-    settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM signing table')
-  elseif k == 'key_table' then
-    settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM keys table')
-  else
-    settings[k] = v
-  end
-end
 
-if not (settings.use_redis or
-    settings.path or
-    settings.domain or
-    settings.path_map or
-    settings.selector_map or
-    settings.use_http_headers or
-    (settings.signing_table and settings.key_table)) then
+dkim_sign_tools.process_signing_settings(N, settings, opts)
+
+if not dkim_sign_tools.validate_signing_settings(settings) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable dkim signing')
   lua_util.disable_module(N, "config")
   return
 end
+
 if settings.use_redis then
   redis_params = lua_redis.parse_redis_server('dkim_signing')
 
@@ -208,6 +143,8 @@ if settings.use_redis then
     lua_util.disable_module(N, "redis")
     return
   end
+
+  settings.redis_params = redis_params
 end
 
 

@@ -824,8 +824,8 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 		xhtml_tok.begin = "xhtml";
 		xhtml_tok.len = 5;
 
-		if (rspamd_ftok_cmp (&mime_part->ct->subtype, &html_tok) == 0 ||
-				rspamd_ftok_cmp (&mime_part->ct->subtype, &xhtml_tok) == 0) {
+		if (rspamd_ftok_casecmp (&mime_part->ct->subtype, &html_tok) == 0 ||
+				rspamd_ftok_casecmp (&mime_part->ct->subtype, &xhtml_tok) == 0) {
 			found_html = TRUE;
 		}
 		else {
@@ -852,7 +852,7 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 				html_tok.begin = "plain";
 				html_tok.len = 5;
 
-				if (rspamd_ftok_cmp (&mime_part->ct->subtype, &html_tok) == 0) {
+				if (rspamd_ftok_casecmp (&mime_part->ct->subtype, &html_tok) == 0) {
 					found_txt = TRUE;
 				}
 				else {
@@ -961,7 +961,7 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 
 			rspamd_add_passthrough_result (task, action,
 					RSPAMD_PASSTHROUGH_CRITICAL,
-					score, "Gtube pattern", "GTUBE");
+					score, "Gtube pattern", "GTUBE", 0);
 
 			if (ucl_object_lookup (task->messages, "smtp_message") == NULL) {
 				ucl_object_replace_key (task->messages,

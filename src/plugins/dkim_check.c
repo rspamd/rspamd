@@ -58,13 +58,13 @@ static const gchar default_sign_headers[] = ""
 		"(o)to:(o)cc:(o)mime-version:(o)content-type:(o)content-transfer-encoding:"
 		"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
 		"(o)in-reply-to:(o)references:list-id:list-owner:list-unsubscribe:"
-		"list-subscribe:list-post";
+		"list-subscribe:list-post:(o)openpgp:(o)autocrypt";
 static const gchar default_arc_sign_headers[] = ""
 		"(o)from:(o)sender:(o)reply-to:(o)subject:(o)date:(o)message-id:"
 		"(o)to:(o)cc:(o)mime-version:(o)content-type:(o)content-transfer-encoding:"
 		"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
 		"(o)in-reply-to:(o)references:list-id:list-owner:list-unsubscribe:"
-		"list-subscribe:list-post:dkim-signature";
+		"list-subscribe:list-post:dkim-signature:(o)openpgp:(o)autocrypt";
 
 struct dkim_ctx {
 	struct module_ctx ctx;
@@ -902,6 +902,7 @@ lua_dkim_sign_handler (lua_State *L)
 
 		if (!no_cache) {
 			sigs = rspamd_mempool_get_variable (task->task_pool, "dkim-signature");
+
 			if (sigs == NULL) {
 				sigs = g_list_append (sigs, hdr);
 				rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
@@ -913,6 +914,10 @@ lua_dkim_sign_handler (lua_State *L)
 
 		lua_pushboolean (L, TRUE);
 		lua_pushlstring (L, hdr->str, hdr->len);
+
+		if (no_cache) {
+			g_string_free (hdr, TRUE);
+		}
 
 		return 2;
 	}

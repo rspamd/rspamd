@@ -28,21 +28,21 @@ reconf['PRECEDENCE_BULK'] = {
 reconf['MICROSOFT_SPAM'] = {
   -- https://technet.microsoft.com/en-us/library/dn205071(v=exchg.150).aspx
   re = 'X-Forefront-Antispam-Report=/SFV:SPM/H',
-  score = 4,
+  score = 4.0,
   description = "Microsoft says the message is spam",
   group = 'upstream_spam_filters'
 }
 
 reconf['AOL_SPAM'] = {
   re = 'X-AOL-Global-Disposition=/^S/H',
-  score = 5,
+  score = 5.0,
   description = "AOL says this message is spam",
   group = 'upstream_spam_filters'
 }
 
 reconf['KLMS_SPAM'] = {
   re = 'X-KLMS-AntiSpam-Status=/^spam/H',
-  score = 5,
+  score = 5.0,
   description = "Kaspersky Security for Mail Server says this message is spam",
   group = 'upstream_spam_filters'
 }
@@ -52,14 +52,14 @@ reconf['SPAM_FLAG'] = {
       'X-Spam-Flag=/^(?:yes|true)/Hi',
       'X-Spam=/^(?:yes|true)/Hi',
       'X-Spam-Status=/^(?:yes|true)/Hi'),
-  score = 5,
+  score = 5.0,
   description = "Message was already marked as spam",
   group = 'upstream_spam_filters'
 }
 
 reconf['UNITEDINTERNET_SPAM'] = {
   re = 'X-UI-Out-Filterresults=/^junk:/H',
-  score = 5,
+  score = 5.0,
   description = "United Internet says this message is spam",
   group = 'upstream_spam_filters'
 }

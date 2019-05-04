@@ -44,14 +44,14 @@ struct _rspamd_http_privbuf {
 };
 
 enum rspamd_http_priv_flags {
-	RSPAMD_HTTP_CONN_FLAG_ENCRYPTED = 1 << 0,
-	RSPAMD_HTTP_CONN_FLAG_NEW_HEADER = 1 << 1,
-	RSPAMD_HTTP_CONN_FLAG_RESETED = 1 << 2,
-	RSPAMD_HTTP_CONN_FLAG_TOO_LARGE = 1 << 3,
-	RSPAMD_HTTP_CONN_FLAG_ENCRYPTION_NEEDED = 1 << 4,
-	RSPAMD_HTTP_CONN_FLAG_PROXY = 1 << 5,
-	RSPAMD_HTTP_CONN_FLAG_PROXY_REQUEST = 1 << 6,
-	RSPAMD_HTTP_CONN_OWN_SOCKET = 1 << 7,
+	RSPAMD_HTTP_CONN_FLAG_ENCRYPTED = 1u << 0u,
+	RSPAMD_HTTP_CONN_FLAG_NEW_HEADER = 1u << 1u,
+	RSPAMD_HTTP_CONN_FLAG_RESETED = 1u << 2u,
+	RSPAMD_HTTP_CONN_FLAG_TOO_LARGE = 1u << 3u,
+	RSPAMD_HTTP_CONN_FLAG_ENCRYPTION_NEEDED = 1u << 4u,
+	RSPAMD_HTTP_CONN_FLAG_PROXY = 1u << 5u,
+	RSPAMD_HTTP_CONN_FLAG_PROXY_REQUEST = 1u << 6u,
+	RSPAMD_HTTP_CONN_OWN_SOCKET = 1u << 7u,
 };
 
 #define IS_CONN_ENCRYPTED(c) ((c)->flags & RSPAMD_HTTP_CONN_FLAG_ENCRYPTED)
@@ -1995,7 +1995,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 		}
 	}
 
-	if (priv->ctx->config.user_agent) {
+	if (priv->ctx->config.user_agent && conn->type == RSPAMD_HTTP_CLIENT) {
 		rspamd_http_message_add_header (msg, "User-Agent",
 				priv->ctx->config.user_agent);
 	}

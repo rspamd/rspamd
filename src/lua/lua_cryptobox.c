@@ -33,12 +33,28 @@
 #include "libcryptobox/keypair_private.h"
 #include "unix-std.h"
 #include "contrib/libottery/ottery.h"
+#include "libutil/ref.h"
+
+enum lua_cryptobox_hash_type {
+	LUA_CRYPTOBOX_HASH_BLAKE2,
+	LUA_CRYPTOBOX_HASH_SSL,
+	LUA_CRYPTOBOX_HASH_XXHASH64,
+	LUA_CRYPTOBOX_HASH_XXHASH32,
+	LUA_CRYPTOBOX_HASH_MUM,
+	LUA_CRYPTOBOX_HASH_T1HA,
+};
 
 struct rspamd_lua_cryptobox_hash {
-	rspamd_cryptobox_hash_state_t *h;
-	EVP_MD_CTX *c;
-	gboolean is_ssl;
-	gboolean is_finished;
+	union {
+		rspamd_cryptobox_hash_state_t *h;
+		EVP_MD_CTX *c;
+		rspamd_cryptobox_fast_hash_state_t *fh;
+	} content;
+
+	unsigned type:7;
+	unsigned is_finished:1;
+
+	ref_entry_t ref;
 };
 
 LUA_FUNCTION_DEF (cryptobox_pubkey,	 load);
@@ -80,6 +96,7 @@ LUA_FUNCTION_DEF (cryptobox, decrypt_file);
 LUA_FUNCTION_DEF (cryptobox, encrypt_cookie);
 LUA_FUNCTION_DEF (cryptobox, decrypt_cookie);
 LUA_FUNCTION_DEF (cryptobox, pbkdf);
+LUA_FUNCTION_DEF (cryptobox, gen_dkim_keypair);
 
 static const struct luaL_reg cryptoboxlib_f[] = {
 	LUA_INTERFACE_DEF (cryptobox, verify_memory),
@@ -93,6 +110,7 @@ static const struct luaL_reg cryptoboxlib_f[] = {
 	LUA_INTERFACE_DEF (cryptobox, encrypt_cookie),
 	LUA_INTERFACE_DEF (cryptobox, decrypt_cookie),
 	LUA_INTERFACE_DEF (cryptobox, pbkdf),
+	LUA_INTERFACE_DEF (cryptobox, gen_dkim_keypair),
 	{NULL, NULL}
 };
 
@@ -892,13 +910,45 @@ rspamd_lua_hash_update (struct rspamd_lua_cryptobox_hash *h,
 		const void *p, gsize len)
 {
 	if (h) {
-		if (h->is_ssl) {
-			EVP_DigestUpdate (h->c, p, len);
-		}
-		else {
-			rspamd_cryptobox_hash_update (h->h, p, len);
+		switch (h->type) {
+		case LUA_CRYPTOBOX_HASH_BLAKE2:
+			rspamd_cryptobox_hash_update (h->content.h, p, len);
+			break;
+		case LUA_CRYPTOBOX_HASH_SSL:
+			EVP_DigestUpdate (h->content.c, p, len);
+			break;
+		case LUA_CRYPTOBOX_HASH_XXHASH64:
+		case LUA_CRYPTOBOX_HASH_XXHASH32:
+		case LUA_CRYPTOBOX_HASH_MUM:
+		case LUA_CRYPTOBOX_HASH_T1HA:
+			rspamd_cryptobox_fast_hash_update (h->content.fh, p, len);
+			break;
+		default:
+			g_assert_not_reached ();
 		}
 	}
+}
+
+static void
+lua_cryptobox_hash_dtor (struct rspamd_lua_cryptobox_hash *h)
+{
+	if (h->type == LUA_CRYPTOBOX_HASH_SSL) {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
+		EVP_MD_CTX_cleanup (h->content.c);
+#else
+		EVP_MD_CTX_reset (h->content.c);
+#endif
+		EVP_MD_CTX_destroy (h->content.c);
+	}
+	else if (h->type == LUA_CRYPTOBOX_HASH_BLAKE2) {
+		rspamd_explicit_memzero (h->content.h, sizeof (*h->content.h));
+		g_free (h->content.h);
+	}
+	else {
+		g_free (h->content.fh);
+	}
+
+	g_free (h);
 }
 
 static struct rspamd_lua_cryptobox_hash *
@@ -907,50 +957,76 @@ rspamd_lua_hash_create (const gchar *type)
 	struct rspamd_lua_cryptobox_hash *h;
 
 	h = g_malloc0 (sizeof (*h));
+	REF_INIT_RETAIN (h, lua_cryptobox_hash_dtor);
 
 	if (type) {
 		if (g_ascii_strcasecmp (type, "md5") == 0) {
-			h->is_ssl = TRUE;
-			h->c = EVP_MD_CTX_create ();
-			EVP_DigestInit (h->c, EVP_md5 ());
-
-			goto ret;
+			h->type = LUA_CRYPTOBOX_HASH_SSL;
+			h->content.c = EVP_MD_CTX_create ();
+			EVP_DigestInit (h->content.c, EVP_md5 ());
 		}
 		else if (g_ascii_strcasecmp (type, "sha1") == 0 ||
 					g_ascii_strcasecmp (type, "sha") == 0) {
-			h->is_ssl = TRUE;
-			h->c = EVP_MD_CTX_create ();
-			EVP_DigestInit (h->c, EVP_sha1 ());
-
-			goto ret;
+			h->type = LUA_CRYPTOBOX_HASH_SSL;
+			h->content.c = EVP_MD_CTX_create ();
+			EVP_DigestInit (h->content.c, EVP_sha1 ());
 		}
 		else if (g_ascii_strcasecmp (type, "sha256") == 0) {
-			h->is_ssl = TRUE;
-			h->c = EVP_MD_CTX_create ();
-			EVP_DigestInit (h->c, EVP_sha256 ());
-
-			goto ret;
+			h->type = LUA_CRYPTOBOX_HASH_SSL;
+			h->content.c = EVP_MD_CTX_create ();
+			EVP_DigestInit (h->content.c, EVP_sha256 ());
 		}
 		else if (g_ascii_strcasecmp (type, "sha512") == 0) {
-			h->is_ssl = TRUE;
-			h->c = EVP_MD_CTX_create ();
-			EVP_DigestInit (h->c, EVP_sha512 ());
-
-			goto ret;
+			h->type = LUA_CRYPTOBOX_HASH_SSL;
+			h->content.c = EVP_MD_CTX_create ();
+			EVP_DigestInit (h->content.c, EVP_sha512 ());
 		}
 		else if (g_ascii_strcasecmp (type, "sha384") == 0) {
-			h->is_ssl = TRUE;
-			h->c = EVP_MD_CTX_create ();
-			EVP_DigestInit (h->c, EVP_sha384 ());
+			h->type = LUA_CRYPTOBOX_HASH_SSL;
+			h->content.c = EVP_MD_CTX_create ();
+			EVP_DigestInit (h->content.c, EVP_sha384 ());
+		}
+		else if (g_ascii_strcasecmp (type, "blake2") == 0) {
+			h->type = LUA_CRYPTOBOX_HASH_BLAKE2;
+			h->content.h = g_malloc0 (sizeof (*h->content.h));
+			rspamd_cryptobox_hash_init (h->content.h, NULL, 0);
+		}
+		else if (g_ascii_strcasecmp (type, "xxh64") == 0) {
+			h->type = LUA_CRYPTOBOX_HASH_XXHASH64;
+			h->content.fh = g_malloc0 (sizeof (*h->content.fh));
+			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
+					RSPAMD_CRYPTOBOX_XXHASH64, 0);
+		}
+		else if (g_ascii_strcasecmp (type, "xxh32") == 0) {
+			h->type = LUA_CRYPTOBOX_HASH_XXHASH32;
+			h->content.fh = g_malloc0 (sizeof (*h->content.fh));
+			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
+					RSPAMD_CRYPTOBOX_XXHASH32, 0);
+		}
+		else if (g_ascii_strcasecmp (type, "mum") == 0) {
+			h->type = LUA_CRYPTOBOX_HASH_MUM;
+			h->content.fh = g_malloc0 (sizeof (*h->content.fh));
+			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
+					RSPAMD_CRYPTOBOX_MUMHASH, 0);
+		}
+		else if (g_ascii_strcasecmp (type, "t1ha") == 0) {
+			h->type = LUA_CRYPTOBOX_HASH_T1HA;
+			h->content.fh = g_malloc0 (sizeof (*h->content.fh));
+			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
+					RSPAMD_CRYPTOBOX_T1HA, 0);
+		}
+		else {
+			g_free (h);
 
-			goto ret;
+			return NULL;
 		}
 	}
+	else {
+		h->type = LUA_CRYPTOBOX_HASH_BLAKE2;
+		h->content.h = g_malloc0 (sizeof (*h->content.h));
+		rspamd_cryptobox_hash_init (h->content.h, NULL, 0);
+	}
 
-	h->h = g_malloc0 (sizeof (*h->h));
-	rspamd_cryptobox_hash_init (h->h, NULL, 0);
-
-ret:
 	return h;
 }
 
@@ -1018,6 +1094,10 @@ lua_cryptobox_hash_create_specific (lua_State *L)
 
 	h = rspamd_lua_hash_create (type);
 
+	if (h == NULL) {
+		return luaL_error (L, "invalid hash type: %s", type);
+	}
+
 	if (lua_type (L, 2) == LUA_TSTRING) {
 		s = lua_tolstring (L, 2, &len);
 	}
@@ -1063,7 +1143,7 @@ lua_cryptobox_hash_create_keyed (lua_State *L)
 
 	if (key != NULL) {
 		h = rspamd_lua_hash_create (NULL);
-		rspamd_cryptobox_hash_init (h->h, key, keylen);
+		rspamd_cryptobox_hash_init (h->content.h, key, keylen);
 
 		if (lua_type (L, 2) == LUA_TSTRING) {
 			s = lua_tolstring (L, 2, &len);
@@ -1103,7 +1183,7 @@ static gint
 lua_cryptobox_hash_update (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
+	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1), **ph;
 	const gchar *data;
 	struct rspamd_lua_text *t;
 	gsize len;
@@ -1140,7 +1220,12 @@ lua_cryptobox_hash_update (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 0;
+	ph = lua_newuserdata (L, sizeof (void *));
+	*ph = h;
+	REF_RETAIN (h);
+	rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
+
+	return 1;
 }
 
 /***
@@ -1151,15 +1236,35 @@ static gint
 lua_cryptobox_hash_reset (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
+	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1), **ph;
 
 	if (h) {
-		if (h->is_ssl) {
-			EVP_DigestInit (h->c, EVP_MD_CTX_md (h->c));
-		}
-		else {
-			memset (h->h, 0, sizeof (*h->h));
-			rspamd_cryptobox_hash_init (h->h, NULL, 0);
+		switch (h->type) {
+		case LUA_CRYPTOBOX_HASH_BLAKE2:
+			memset (h->content.h, 0, sizeof (*h->content.h));
+			rspamd_cryptobox_hash_init (h->content.h, NULL, 0);
+			break;
+		case LUA_CRYPTOBOX_HASH_SSL:
+			EVP_DigestInit (h->content.c, EVP_MD_CTX_md (h->content.c));
+			break;
+		case LUA_CRYPTOBOX_HASH_XXHASH64:
+			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
+					RSPAMD_CRYPTOBOX_XXHASH64, 0);
+			break;
+		case LUA_CRYPTOBOX_HASH_XXHASH32:
+			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
+					RSPAMD_CRYPTOBOX_XXHASH32, 0);
+			break;
+		case LUA_CRYPTOBOX_HASH_MUM:
+			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
+					RSPAMD_CRYPTOBOX_MUMHASH, 0);
+			break;
+		case LUA_CRYPTOBOX_HASH_T1HA:
+			rspamd_cryptobox_fast_hash_init_specific (h->content.fh,
+					RSPAMD_CRYPTOBOX_T1HA, 0);
+			break;
+		default:
+			g_assert_not_reached ();
 		}
 		h->is_finished = FALSE;
 	}
@@ -1167,7 +1272,42 @@ lua_cryptobox_hash_reset (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 0;
+	ph = lua_newuserdata (L, sizeof (void *));
+	*ph = h;
+	REF_RETAIN (h);
+	rspamd_lua_setclass (L, "rspamd{cryptobox_hash}", -1);
+
+	return 1;
+}
+
+static void
+lua_cryptobox_hash_finish (struct rspamd_lua_cryptobox_hash *h,
+		guchar out[rspamd_cryptobox_HASHBYTES], guint *dlen)
+{
+	guint64 ll;
+
+	switch (h->type) {
+	case LUA_CRYPTOBOX_HASH_BLAKE2:
+		*dlen = rspamd_cryptobox_HASHBYTES;
+		rspamd_cryptobox_hash_final (h->content.h, out);
+		break;
+	case LUA_CRYPTOBOX_HASH_SSL:
+
+		EVP_DigestFinal_ex (h->content.c, out, dlen);
+		break;
+	case LUA_CRYPTOBOX_HASH_XXHASH64:
+	case LUA_CRYPTOBOX_HASH_XXHASH32:
+	case LUA_CRYPTOBOX_HASH_MUM:
+	case LUA_CRYPTOBOX_HASH_T1HA:
+		ll = rspamd_cryptobox_fast_hash_final (h->content.fh);
+		memcpy (out, &ll, sizeof (ll));
+		*dlen = sizeof (ll);
+		break;
+	default:
+		g_assert_not_reached ();
+	}
+
+	h->is_finished = TRUE;
 }
 
 /***
@@ -1187,18 +1327,10 @@ lua_cryptobox_hash_hex (lua_State *L)
 	if (h && !h->is_finished) {
 		memset (out_hex, 0, sizeof (out_hex));
 
-		if (h->is_ssl) {
-			dlen = sizeof (out);
-			EVP_DigestFinal_ex (h->c, out, &dlen);
-		}
-		else {
-			dlen = sizeof (out);
-			rspamd_cryptobox_hash_final (h->h, out);
-		}
-
+		lua_cryptobox_hash_finish (h, out, &dlen);
 		rspamd_encode_hex_buf (out, dlen, out_hex, sizeof (out_hex));
 		lua_pushstring (L, out_hex);
-		h->is_finished = TRUE;
+
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -1223,15 +1355,7 @@ lua_cryptobox_hash_base32 (lua_State *L)
 
 	if (h && !h->is_finished) {
 		memset (out_b32, 0, sizeof (out_b32));
-		if (h->is_ssl) {
-			dlen = sizeof (out);
-			EVP_DigestFinal_ex (h->c, out, &dlen);
-		}
-		else {
-			dlen = sizeof (out);
-			rspamd_cryptobox_hash_final (h->h, out);
-		}
-
+		lua_cryptobox_hash_finish (h, out, &dlen);
 		rspamd_encode_base32_buf (out, dlen, out_b32, sizeof (out_b32));
 		lua_pushstring (L, out_b32);
 		h->is_finished = TRUE;
@@ -1258,15 +1382,7 @@ lua_cryptobox_hash_base64 (lua_State *L)
 	guint dlen;
 
 	if (h && !h->is_finished) {
-		if (h->is_ssl) {
-			dlen = sizeof (out);
-			EVP_DigestFinal_ex (h->c, out, &dlen);
-		}
-		else {
-			dlen = sizeof (out);
-			rspamd_cryptobox_hash_final (h->h, out);
-		}
-
+		lua_cryptobox_hash_finish (h, out, &dlen);
 		b64 = rspamd_encode_base64 (out, dlen, 0, &len);
 		lua_pushlstring (L, b64, len);
 		g_free (b64);
@@ -1293,15 +1409,7 @@ lua_cryptobox_hash_bin (lua_State *L)
 	guint dlen;
 
 	if (h && !h->is_finished) {
-		if (h->is_ssl) {
-			dlen = sizeof (out);
-			EVP_DigestFinal_ex (h->c, out, &dlen);
-		}
-		else {
-			dlen = sizeof (out);
-			rspamd_cryptobox_hash_final (h->h, out);
-		}
-
+		lua_cryptobox_hash_finish (h, out, &dlen);
 		lua_pushlstring (L, out, dlen);
 		h->is_finished = TRUE;
 	}
@@ -1318,20 +1426,7 @@ lua_cryptobox_hash_gc (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
 
-	if (h->is_ssl) {
-#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-		EVP_MD_CTX_cleanup (h->c);
-#else
-		EVP_MD_CTX_reset (h->c);
-#endif
-		EVP_MD_CTX_destroy (h->c);
-	}
-	else {
-		rspamd_explicit_memzero (h->h, sizeof (*h->h));
-		g_free (h->h);
-	}
-
-	g_free (h);
+	REF_RELEASE (h);
 
 	return 0;
 }
@@ -2102,6 +2197,139 @@ lua_cryptobox_pbkdf (lua_State *L)
 	g_string_free (result, TRUE);
 
 	return 1;
+}
+
+/***
+ * @function rspamd_cryptobox.gen_dkim_keypair([alg, [nbits]])
+ * Generates DKIM keypair. Returns 2 base64 strings as rspamd_text: privkey and pubkey
+ * @param {string} alg optional algorithm (rsa default, can be ed25519)
+ * @param {number} nbits optional number of bits for rsa (default 1024)
+ * @return {rspamd_text,rspamd_text} private key and public key as base64 encoded strings
+ */
+static gint
+lua_cryptobox_gen_dkim_keypair (lua_State *L)
+{
+	const gchar *alg_str = "rsa";
+	guint nbits = 1024;
+	struct rspamd_lua_text *priv_out, *pub_out;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		alg_str = lua_tostring (L, 1);
+	}
+
+	if (lua_type (L, 2) == LUA_TNUMBER) {
+		nbits = lua_tointeger (L, 2);
+	}
+
+	if (strcmp (alg_str, "rsa") == 0) {
+		BIGNUM *e;
+		RSA *r;
+		EVP_PKEY *pk;
+
+		e = BN_new ();
+		r = RSA_new ();
+		pk = EVP_PKEY_new ();
+
+		if (BN_set_word (e, RSA_F4) != 1) {
+			BN_free (e);
+			RSA_free (r);
+			EVP_PKEY_free (pk);
+
+			return luaL_error (L, "BN_set_word failed");
+		}
+
+		if (RSA_generate_key_ex (r, nbits, e, NULL) != 1) {
+			BN_free (e);
+			RSA_free (r);
+			EVP_PKEY_free (pk);
+
+			return luaL_error (L, "RSA_generate_key_ex failed");
+		}
+
+		if (EVP_PKEY_set1_RSA (pk, r) != 1) {
+			BN_free (e);
+			RSA_free (r);
+			EVP_PKEY_free (pk);
+
+			return luaL_error (L, "EVP_PKEY_set1_RSA failed");
+		}
+
+		BIO *mbio;
+		gint rc, len;
+		guchar *data;
+		gchar *b64_data;
+		gsize b64_len;
+
+		mbio = BIO_new (BIO_s_mem ());
+
+		/* Process private key */
+		rc = i2d_RSAPrivateKey_bio (mbio, r);
+		len = BIO_get_mem_data (mbio, &data);
+
+		b64_data = rspamd_encode_base64 (data, len, -1, &b64_len);
+
+		priv_out = lua_newuserdata (L, sizeof (*priv_out));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		priv_out->start = b64_data;
+		priv_out->len = b64_len;
+		priv_out->flags = RSPAMD_TEXT_FLAG_OWN|RSPAMD_TEXT_FLAG_WIPE;
+
+		/* Process public key */
+		BIO_reset (mbio);
+		rc = i2d_RSA_PUBKEY_bio (mbio, r);
+		len = BIO_get_mem_data (mbio, &data);
+
+		b64_data = rspamd_encode_base64 (data, len, -1, &b64_len);
+
+		pub_out = lua_newuserdata (L, sizeof (*pub_out));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		pub_out->start = b64_data;
+		pub_out->len = b64_len;
+		pub_out->flags = RSPAMD_TEXT_FLAG_OWN;
+
+		BN_free (e);
+		RSA_free (r);
+		EVP_PKEY_free (pk);
+		BIO_free (mbio);
+	}
+	else if (strcmp (alg_str, "ed25519") == 0) {
+		rspamd_sig_pk_t pk;
+		rspamd_sig_sk_t sk;
+		gchar *b64_data;
+		gsize b64_len;
+
+		rspamd_cryptobox_keypair_sig (pk, sk, RSPAMD_CRYPTOBOX_MODE_25519);
+
+		/* Process private key */
+		b64_data = rspamd_encode_base64 (sk,
+				rspamd_cryptobox_sk_sig_bytes (RSPAMD_CRYPTOBOX_MODE_25519),
+				-1, &b64_len);
+
+		priv_out = lua_newuserdata (L, sizeof (*priv_out));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		priv_out->start = b64_data;
+		priv_out->len = b64_len;
+		priv_out->flags = RSPAMD_TEXT_FLAG_OWN|RSPAMD_TEXT_FLAG_WIPE;
+
+		/* Process public key */
+		b64_data = rspamd_encode_base64 (pk,
+				rspamd_cryptobox_pk_sig_bytes (RSPAMD_CRYPTOBOX_MODE_25519),
+				-1, &b64_len);
+
+		pub_out = lua_newuserdata (L, sizeof (*pub_out));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		pub_out->start = b64_data;
+		pub_out->len = b64_len;
+		pub_out->flags = RSPAMD_TEXT_FLAG_OWN;
+
+		rspamd_explicit_memzero (pk, sizeof (pk));
+		rspamd_explicit_memzero (sk, sizeof (sk));
+	}
+	else {
+		return luaL_error (L, "invalid algorithm %s", alg_str);
+	}
+
+	return 2;
 }
 
 static gint

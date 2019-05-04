@@ -21,6 +21,7 @@ local E = {}
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
 local logger = require "rspamd_logger"
+local fun = require "fun"
 
 local function check_violation(N, task, domain)
   -- Check for DKIM_REJECT
@@ -202,7 +203,7 @@ local function prepare_dkim_signing(N, task, settings)
     tdom = tdom:lower()
   end
 
-  if settings.signing_table and settings.key_table then
+  if settings.signing_table and (settings.key_table or settings.use_vault) then
     -- OpenDKIM style
     if settings.sign_networks and not is_sign_networks then
       lua_util.debugm(N, task,
@@ -224,65 +225,79 @@ local function prepare_dkim_signing(N, task, settings)
         sign_entry = hdom
       end
 
+      if settings.key_table then
       -- Now search in key table
       local key_entry = settings.key_table:get_key(sign_entry)
 
-      if key_entry then
-        local parts = lua_util.str_split(key_entry, ':')
+        if key_entry then
+          local parts = lua_util.str_split(key_entry, ':')
 
-        if #parts == 2 then
-          -- domain + key
-          local selector = settings.selector
+          if #parts == 2 then
+            -- domain + key
+            local selector = settings.selector
 
-          if not selector then
-            logger.errx(task, 'no selector defined for sign_entry %s, key_entry %s',
-                sign_entry, key_entry)
+            if not selector then
+              logger.errx(task, 'no selector defined for sign_entry %s, key_entry %s',
+                  sign_entry, key_entry)
+              return false,{}
+            end
+
+            local res = {
+              selector = selector,
+              domain = parts[1]:gsub('%%', hdom)
+            }
+
+            local st = parts[2]:sub(1, 2)
+
+            if st:sub(1, 1) == '/' or st == './' or st == '..' then
+              res.key = parts[2]:gsub('%%', hdom)
+              lua_util.debugm(N, task, 'perform dkim signing for %s, selector=%s, domain=%s, key file=%s',
+                  hdom, selector, res.domain, res.key)
+            else
+              res.rawkey = parts[2] -- No sanity check here
+              lua_util.debugm(N, task, 'perform dkim signing for %s, selector=%s, domain=%s, raw key used',
+                  hdom, selector, res.domain)
+            end
+
+            return true,{res}
+          elseif #parts == 3 then
+            -- domain, selector, key
+            local selector = parts[2]
+
+            local res = {
+              selector = selector,
+              domain = parts[1]:gsub('%%', hdom)
+            }
+
+            local st = parts[3]:sub(1, 2)
+
+            if st:sub(1, 1) == '/' or st == './' or st == '..' then
+              res.key = parts[3]:gsub('%%', hdom)
+              lua_util.debugm(N, task, 'perform dkim signing for %s, selector=%s, domain=%s, key file=%s',
+                  hdom, selector, res.domain, res.key)
+            else
+              res.rawkey = parts[3] -- No sanity check here
+              lua_util.debugm(N, task, 'perform dkim signing for %s, selector=%s, domain=%s, raw key used',
+                  hdom, selector, res.domain)
+            end
+
+            return true,{res}
+          else
+            logger.errx(task, 'invalid key entry for sign entry %s: %s; when signing %s domain',
+                sign_entry, key_entry, hdom)
             return false,{}
           end
-
-          local res = {
-            selector = selector,
-            domain = parts[1]:gsub('%%', hdom)
+        elseif settings.use_vault then
+          -- Sign table is presented, the rest is covered by vault
+          lua_util.debugm(N, task, 'check vault for %s, by sign entry %s, key entry is missing',
+              hdom, sign_entry)
+          return true, {
+            domain = sign_entry,
+            vault = true
           }
-
-          local st = parts[2]:sub(1, 2)
-
-          if st:sub(1, 1) == '/' or st == './' or st == '..' then
-            res.key = parts[2]:gsub('%%', hdom)
-            lua_util.debugm(N, task, 'perform dkim signing for %s, selector=%s, domain=%s, key file=%s',
-                hdom, selector, res.domain, res.key)
-          else
-            res.rawkey = parts[2] -- No sanity check here
-            lua_util.debugm(N, task, 'perform dkim signing for %s, selector=%s, domain=%s, raw key used',
-                hdom, selector, res.domain)
-          end
-
-          return true,{res}
-        elseif #parts == 3 then
-          -- domain, selector, key
-          local selector = parts[2]
-
-          local res = {
-            selector = selector,
-            domain = parts[1]:gsub('%%', hdom)
-          }
-
-          local st = parts[3]:sub(1, 2)
-
-          if st:sub(1, 1) == '/' or st == './' or st == '..' then
-            res.key = parts[3]:gsub('%%', hdom)
-            lua_util.debugm(N, task, 'perform dkim signing for %s, selector=%s, domain=%s, key file=%s',
-                hdom, selector, res.domain, res.key)
-          else
-            res.rawkey = parts[3] -- No sanity check here
-            lua_util.debugm(N, task, 'perform dkim signing for %s, selector=%s, domain=%s, raw key used',
-                hdom, selector, res.domain)
-          end
-
-          return true,{res}
         else
-          logger.errx(task, 'invalid key entry for sign entry %s: %s; when signing %s domain',
-              sign_entry, key_entry, hdom)
+          logger.errx(task, 'missing key entry for sign entry %s; when signing %s domain',
+              sign_entry, hdom)
           return false,{}
         end
       else
@@ -358,6 +373,7 @@ local function prepare_dkim_signing(N, task, settings)
 
   lua_util.debugm(N, task, 'final DKIM domain: %s', dkim_domain)
 
+  -- Sanity checks
   if edom and hdom and not settings.allow_hdrfrom_mismatch and hdom ~= edom then
     if settings.allow_hdrfrom_mismatch_local and is_local then
       lua_util.debugm(N, task, 'domain mismatch allowed for local IP: %1 != %2', hdom, edom)
@@ -384,6 +400,27 @@ local function prepare_dkim_signing(N, task, settings)
   end
 
   local p = {}
+
+  if settings.use_vault then
+    if settings.vault_domains then
+      if settings.vault_domains:get_key(dkim_domain) then
+        return true, {
+          domain = dkim_domain,
+          vault = true,
+        }
+      else
+        lua_util.debugm(N, task, 'domain %s is not designated for vault',
+          dkim_domain)
+        return false,{}
+      end
+    else
+      -- TODO: try every domain in the vault
+      return true, {
+        domain = dkim_domain,
+        vault = true,
+      }
+    end
+  end
 
   if settings.domain[dkim_domain] then
     -- support old style selector/paths
@@ -456,5 +493,181 @@ local function prepare_dkim_signing(N, task, settings)
 end
 
 exports.prepare_dkim_signing = prepare_dkim_signing
+
+exports.sign_using_redis = function(N, task, settings, selectors, sign_func, err_func)
+  local lua_redis = require "lua_redis"
+
+  local function try_redis_key(selector, p)
+    p.key = nil
+    p.selector = selector
+    local rk = string.format('%s.%s', p.selector, p.domain)
+    local function redis_key_cb(err, data)
+      if err then
+        err_func(string.format("cannot make request to load DKIM key for %s: %s",
+            rk, err))
+      elseif type(data) ~= 'string' then
+        lua_util.debugm(N, task, "missing DKIM key for %s", rk)
+      else
+        p.rawkey = data
+        lua_util.debugm(N, task, 'found and parsed key for %s:%s in Redis',
+            p.domain, p.selector)
+        sign_func(task, p)
+      end
+    end
+    local rret = lua_redis.redis_make_request(task,
+        settings.redis_params, -- connect params
+        rk, -- hash key
+        false, -- is write
+        redis_key_cb, --callback
+        'HGET', -- command
+        {settings.key_prefix, rk} -- arguments
+    )
+    if not rret then
+      err_func(task,
+          string.format( "cannot make request to load DKIM key for %s", rk))
+    end
+  end
+
+  for _, p in ipairs(selectors) do
+    if settings.selector_prefix then
+      logger.infox(task, "using selector prefix '%s' for domain '%s'",
+          settings.selector_prefix, p.domain);
+      local function redis_selector_cb(err, data)
+        if err or type(data) ~= 'string' then
+          err_func(task, string.format("cannot make request to load DKIM selector for domain %s: %s",
+              p.domain, err))
+        else
+          try_redis_key(data, p)
+        end
+      end
+      local rret = lua_redis.redis_make_request(task,
+          settings.redis_params, -- connect params
+          p.domain, -- hash key
+          false, -- is write
+          redis_selector_cb, --callback
+          'HGET', -- command
+          {settings.selector_prefix, p.domain} -- arguments
+      )
+      if not rret then
+        err_func(task, string.format("cannot make Redis request to load DKIM selector for domain %s",
+            p.domain))
+      end
+    else
+      try_redis_key(p.selector, p)
+    end
+  end
+end
+
+exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err_func)
+  local http = require "rspamd_http"
+  local ucl = require "ucl"
+
+  local full_url = string.format('%s/v1/%s/%s',
+      settings.vault_url, settings.vault_path or 'dkim', selectors.domain)
+
+  local function vault_callback(err, code, body, _)
+    if code ~= 200 then
+      err_func(task, string.format('cannot request data from the vault url: %s; %s (%s)',
+          full_url, err, body))
+    else
+      local parser = ucl.parser()
+      local res,parser_err = parser:parse_string(body)
+      if not res then
+        err_func(task, string.format('vault reply for %s (data=%s) cannot be parsed: %s',
+            full_url, body, parser_err))
+      else
+        local obj = parser:get_object()
+
+        if not obj or not obj.data then
+          err_func(task, string.format('vault reply for %s (data=%s) is invalid, no data',
+              full_url, body))
+        else
+          local elts = obj.data.selectors or {}
+
+          -- Filter selectors by time/sanity
+          local function is_selector_valid(p)
+            if not p.key or not p.selector then
+              return false
+            end
+
+            if p.valid_start then
+              -- Check start time
+              if rspamd_util.get_time() < tonumber(p.valid_start) then
+                return false
+              end
+            end
+
+            if p.valid_end then
+              if rspamd_util.get_time() >= tonumber(p.valid_end) then
+                return false
+              end
+            end
+
+            return true
+          end
+          fun.each(function(p)
+            local dkim_sign_data = {
+              rawkey = p.key,
+              selector = p.selector,
+              domain = p.domain or selectors.domain
+            }
+            lua_util.debugm(N, task, 'found and parsed key for %s:%s in Vault',
+                dkim_sign_data.domain, dkim_sign_data.selector)
+            sign_func(task, dkim_sign_data)
+          end, fun.filter(is_selector_valid, elts))
+        end
+      end
+    end
+  end
+
+  local ret = http.request{
+    task = task,
+    url = full_url,
+    callback = vault_callback,
+    timeout = settings.http_timeout or 5.0,
+    no_ssl_verify = settings.no_ssl_verify,
+    keepalive = true,
+    headers = {
+      ['X-Vault-Token'] = settings.vault_token,
+    },
+  }
+
+  if not ret then
+    err_func(task, string.format("cannot make HTTP request to load DKIM data domain %s",
+        selectors.domain))
+  end
+end
+
+exports.validate_signing_settings = function(settings)
+  return settings.use_redis or
+      settings.path or
+      settings.domain or
+      settings.path_map or
+      settings.selector_map or
+      settings.use_http_headers or
+      (settings.signing_table and settings.key_table) or
+      (settings.use_vault and settings.vault_url and settings.vault_token)
+end
+
+exports.process_signing_settings = function(N, settings, opts)
+  local lua_maps = require "lua_maps"
+  for k,v in pairs(opts) do
+    if k == 'sign_networks' then
+      settings[k] = lua_maps.map_add(N, k, 'radix', 'DKIM signing networks')
+    elseif k == 'path_map' then
+      settings[k] = lua_maps.map_add(N, k, 'map', 'Paths to DKIM signing keys')
+    elseif k == 'selector_map' then
+      settings[k] = lua_maps.map_add(N, k, 'map', 'DKIM selectors')
+    elseif k == 'signing_table' then
+      settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM signing table')
+    elseif k == 'key_table' then
+      settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM keys table')
+    elseif k == 'vault_domains' then
+      settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM signing domains in vault')
+    else
+      settings[k] = v
+    end
+  end
+end
 
 return exports

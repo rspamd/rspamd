@@ -66,6 +66,10 @@ Content-Transfer-Encoding: 7bit
 
 This is an aggregate report from %s.
 
+Report domain: %s
+Submitter: %s
+Report ID: %s
+
 ------=_NextPart_000_024E_01CC9B0A.AFE54C00
 Content-Type: application/gzip
 Content-Transfer-Encoding: base64
@@ -201,7 +205,7 @@ local function maybe_force_action(task, disposition)
     if force_action then
       -- Don't do anything if pre-result has been already set
       if task:has_pre_result() then return end
-      task:set_pre_result(force_action, 'Action set by DMARC', N)
+      task:set_pre_result(force_action, 'Action set by DMARC', N, nil, nil, 'least')
     end
   end
 end
@@ -510,13 +514,13 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     elseif spf_tmpfail then
       spf_result = 'temperror'
     else
-      if task:get_symbol(symbols.spf_deny_symbol) then
+      if task:has_symbol(symbols.spf_deny_symbol) then
         spf_result = 'fail'
-      elseif task:get_symbol(symbols.spf_softfail_symbol) then
+      elseif task:has_symbol(symbols.spf_softfail_symbol) then
         spf_result = 'softfail'
-      elseif task:get_symbol(symbols.spf_neutral_symbol) then
+      elseif task:has_symbol(symbols.spf_neutral_symbol) then
         spf_result = 'neutral'
-      elseif task:get_symbol(symbols.spf_permfail_symbol) then
+      elseif task:has_symbol(symbols.spf_permfail_symbol) then
         spf_result = 'permerror'
       else
         spf_result = 'none'
@@ -524,7 +528,7 @@ local function dmarc_validate_policy(task, policy, hdrfromdom, dmarc_esld)
     end
 
     -- Prepare and send redis report element
-    local period = os.date('%Y%m%d',
+    local period = os.date('!%Y%m%d',
         task:get_date({format = 'connect', gmt = true}))
     local dmarc_domain_key = table.concat(
         {redis_keys.report_prefix, hdrfromdom, period}, redis_keys.join_char)
@@ -560,13 +564,13 @@ local function dmarc_callback(task)
   local seen_invalid = false
 
   if dmarc_checks ~= 2 then
-    rspamd_logger.infox(task, "skip DMARC checks as either SPF or DKIM were not checked");
+    rspamd_logger.infox(task, "skip DMARC checks as either SPF or DKIM were not checked")
     return
   end
 
   if ((not check_authed and task:get_user()) or
       (not check_local and ip_addr and ip_addr:is_local())) then
-    rspamd_logger.infox(task, "skip DMARC checks for local networks and authorized users");
+    rspamd_logger.infox(task, "skip DMARC checks for local networks and authorized users")
     return
   end
 
@@ -962,16 +966,20 @@ if opts['reporting'] == true then
                 table.insert(atmp, k)
               end
               local addr_string = table.concat(atmp, ', ')
+              -- TODO: migrate to templates and remove this shit
               local rhead = string.format(report_template:gsub("\n", "\r\n"),
-		  report_settings.from_name,
+                  report_settings.from_name,
                   report_settings.email,
                   addr_string,
                   reporting_domain,
                   report_settings.domain,
                   report_id,
                   rspamd_util.time_to_string(rspamd_util.get_time()),
-                  rspamd_util.random_hex(12) .. '@rspamd',
-                  report_settings.domain,
+                  rspamd_util.random_hex(12) .. '@rspamd', -- Message-id
+                  report_settings.domain, -- Plain text part
+                  reporting_domain,
+                  addr_string,
+                  report_id,
                   report_settings.domain,
                   reporting_domain,
                   report_start, report_end)

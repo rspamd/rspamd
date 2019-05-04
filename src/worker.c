@@ -157,7 +157,8 @@ rspamd_task_timeout (gint fd, short what, gpointer ud)
 						0,
 						NAN,
 						"timeout processing message",
-						"task timeout");
+						"task timeout",
+						0);
 
 				ucl_object_replace_key (task->messages,
 						ucl_object_fromstring_common ("timeout processing message",
@@ -576,7 +577,7 @@ init_worker (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_worker_ctx, encrypted_only),
 			0,
-			"Deprecated: always true now");
+			"Allow only encrypted connections");
 
 
 	rspamd_rcl_register_worker_option (cfg,

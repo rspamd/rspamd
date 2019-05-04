@@ -28,6 +28,8 @@ SET(LUASRC			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_common.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_map.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_thread_pool.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_dns.c
-					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_udp.c)
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_udp.c
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_text.c
+		 			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_worker.c)
 
 SET(RSPAMD_LUA ${LUASRC} PARENT_SCOPE)

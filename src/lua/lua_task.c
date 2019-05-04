@@ -1185,35 +1185,6 @@ static const struct luaL_reg archivelib_m[] = {
 	{NULL, NULL}
 };
 
-/* Blob methods */
-LUA_FUNCTION_DEF (text, fromstring);
-LUA_FUNCTION_DEF (text, fromtable);
-LUA_FUNCTION_DEF (text, len);
-LUA_FUNCTION_DEF (text, str);
-LUA_FUNCTION_DEF (text, ptr);
-LUA_FUNCTION_DEF (text, save_in_file);
-LUA_FUNCTION_DEF (text, take_ownership);
-LUA_FUNCTION_DEF (text, gc);
-
-static const struct luaL_reg textlib_f[] = {
-	LUA_INTERFACE_DEF (text, fromstring),
-	LUA_INTERFACE_DEF (text, fromtable),
-	{NULL, NULL}
-};
-
-static const struct luaL_reg textlib_m[] = {
-	LUA_INTERFACE_DEF (text, len),
-	LUA_INTERFACE_DEF (text, str),
-	LUA_INTERFACE_DEF (text, ptr),
-	LUA_INTERFACE_DEF (text, take_ownership),
-	LUA_INTERFACE_DEF (text, save_in_file),
-	{"write", lua_text_save_in_file},
-	{"__len", lua_text_len},
-	{"__tostring", lua_text_str},
-	{"__gc", lua_text_gc},
-	{NULL, NULL}
-};
-
 /* Utility functions */
 struct rspamd_task *
 lua_check_task (lua_State * L, gint pos)
@@ -1796,7 +1767,7 @@ lua_task_set_pre_result (lua_State * L)
 	const gchar *message = NULL, *module = NULL;
 	gdouble score = NAN;
 	struct rspamd_action *action;
-	guint priority = RSPAMD_PASSTHROUGH_NORMAL;
+	guint priority = RSPAMD_PASSTHROUGH_NORMAL, flags = 0;
 
 	if (task != NULL) {
 
@@ -1838,11 +1809,14 @@ lua_task_set_pre_result (lua_State * L)
 		if (lua_type (L, 3) == LUA_TSTRING) {
 			message = lua_tostring (L, 3);
 
-			/* Keep compatibility here :( */
-			ucl_object_replace_key (task->messages,
-					ucl_object_fromstring_common (message, 0, UCL_STRING_RAW),
-					"smtp_message", 0,
-					false);
+			if (lua_type (L, 7) != LUA_TSTRING) {
+				/* Keep compatibility here :( */
+
+				ucl_object_replace_key (task->messages,
+						ucl_object_fromstring_common (message, 0, UCL_STRING_RAW),
+						"smtp_message", 0,
+						false);
+			}
 		}
 		else {
 			message = "unknown reason";
@@ -1863,18 +1837,33 @@ lua_task_set_pre_result (lua_State * L)
 			priority = lua_tonumber (L, 6);
 		}
 
+		if (lua_type (L, 7) == LUA_TSTRING) {
+			const gchar *fl_str = lua_tostring (L, 7);
 
-		rspamd_add_passthrough_result (task, action, priority,
-				score, rspamd_mempool_strdup (task->task_pool, message),
-				rspamd_mempool_strdup (task->task_pool, module));
+			if (strstr (fl_str, "least") != NULL) {
+				flags |= RSPAMD_PASSTHROUGH_LEAST;
+			}
+		}
+
+
+		rspamd_add_passthrough_result (task,
+				action,
+				priority,
+				score,
+				rspamd_mempool_strdup (task->task_pool, message),
+				rspamd_mempool_strdup (task->task_pool, module),
+				flags);
 
 		/* Don't classify or filter message if pre-filter sets results */
-		task->processed_stages |= (RSPAMD_TASK_STAGE_CLASSIFIERS |
-								   RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |
-								   RSPAMD_TASK_STAGE_CLASSIFIERS_POST);
-		rspamd_symcache_disable_all_symbols (task, task->cfg->cache,
-				SYMBOL_TYPE_IDEMPOTENT|SYMBOL_TYPE_IGNORE_PASSTHROUGH|
-				SYMBOL_TYPE_POSTFILTER);
+
+		if (!(flags & RSPAMD_PASSTHROUGH_LEAST)) {
+			task->processed_stages |= (RSPAMD_TASK_STAGE_CLASSIFIERS |
+									   RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |
+									   RSPAMD_TASK_STAGE_CLASSIFIERS_POST);
+			rspamd_symcache_disable_all_symbols (task, task->cfg->cache,
+					SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_IGNORE_PASSTHROUGH |
+					SYMBOL_TYPE_POSTFILTER);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -2740,7 +2729,7 @@ lua_task_get_dns_req (lua_State *L)
 }
 
 enum rspamd_address_type {
-	RSPAMD_ADDRESS_ANY = 0,
+	RSPAMD_ADDRESS_ANY = 0u,
 	RSPAMD_ADDRESS_SMTP = 1,
 	RSPAMD_ADDRESS_MIME = 2,
 	RSPAMD_ADDRESS_MASK = 0x3FF,
@@ -2798,7 +2787,7 @@ lua_task_str_to_get_type (lua_State *L, struct rspamd_task *task, gint pos)
 	}
 	else if (lua_type (L, pos) == LUA_TTABLE) {
 		for (lua_pushnil (L); lua_next (L, pos); lua_pop (L, 1)) {
-			type = lua_tolstring (L, pos, &sz);
+			type = lua_tolstring (L, -1, &sz);
 
 			if (type && sz > 0) {
 				h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
@@ -4440,7 +4429,7 @@ lua_task_get_scan_time (lua_State *L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	return 1;
+	return 2;
 }
 
 static gint
@@ -5978,273 +5967,6 @@ lua_archive_get_filename (lua_State *L)
 	return 1;
 }
 
-/* Text methods */
-static gint
-lua_text_fromstring (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	const gchar *str;
-	gsize l = 0;
-	struct rspamd_lua_text *t;
-
-	str = luaL_checklstring (L, 1, &l);
-
-	if (str) {
-		t = lua_newuserdata (L, sizeof (*t));
-		t->start = g_malloc (l + 1);
-		rspamd_strlcpy ((char *)t->start, str, l + 1);
-		t->len = l;
-		t->flags = RSPAMD_TEXT_FLAG_OWN;
-		rspamd_lua_setclass (L, "rspamd{text}", -1);
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-
-	return 1;
-}
-
-static gint
-lua_text_fromtable (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	const gchar *delim = "", *st;
-	struct rspamd_lua_text *t, *elt;
-	gsize textlen = 0, dlen, stlen, tblen;
-	gchar *dest;
-
-	if (!lua_istable (L, 1)) {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	if (lua_type (L, 2) == LUA_TSTRING) {
-		delim = lua_tolstring (L, 2, &dlen);
-	}
-	else {
-		dlen = strlen (delim);
-	}
-
-	/* Calculate length needed */
-	tblen = rspamd_lua_table_size (L, 1);
-
-	for (guint i = 0; i < tblen; i ++) {
-		lua_rawgeti (L, 1, i + 1);
-
-		if (lua_type (L, -1) == LUA_TSTRING) {
-#if LUA_VERSION_NUM >= 502
-			stlen = lua_rawlen (L, -1);
-#else
-			stlen = lua_objlen (L, -1);
-#endif
-			textlen += stlen;
-		}
-		else {
-			elt = lua_check_text (L, -1);
-
-			if (elt) {
-				textlen += elt->len;
-			}
-		}
-
-		lua_pop (L, 1);
-		textlen += dlen;
-	}
-
-	/* Allocate new text */
-	t = lua_newuserdata (L, sizeof (*t));
-	dest = g_malloc (textlen);
-	t->start = dest;
-	t->len = textlen;
-	t->flags = RSPAMD_TEXT_FLAG_OWN;
-	rspamd_lua_setclass (L, "rspamd{text}", -1);
-
-	for (guint i = 0; i < tblen; i ++) {
-		lua_rawgeti (L, 1, i + 1);
-
-		if (lua_type (L, -1) == LUA_TSTRING) {
-			st = lua_tolstring (L, -1, &stlen);
-			memcpy (dest, st, stlen);
-			dest += stlen;
-		}
-		else {
-			elt = lua_check_text (L, -1);
-
-			if (elt) {
-				memcpy (dest, elt->start, elt->len);
-			}
-		}
-
-		memcpy (dest, delim, dlen);
-		lua_pop (L, 1);
-	}
-
-	return 1;
-}
-
-static gint
-lua_text_len (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	struct rspamd_lua_text *t = lua_check_text (L, 1);
-	gsize l = 0;
-
-	if (t != NULL) {
-		l = t->len;
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	lua_pushinteger (L, l);
-
-	return 1;
-}
-
-static gint
-lua_text_str (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	struct rspamd_lua_text *t = lua_check_text (L, 1);
-
-	if (t != NULL) {
-		lua_pushlstring (L, t->start, t->len);
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	return 1;
-}
-
-static gint
-lua_text_ptr (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	struct rspamd_lua_text *t = lua_check_text (L, 1);
-
-	if (t != NULL) {
-		lua_pushlightuserdata (L, (gpointer)t->start);
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	return 1;
-}
-
-static gint
-lua_text_take_ownership (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	struct rspamd_lua_text *t = lua_check_text (L, 1);
-	gchar *dest;
-
-	if (t != NULL) {
-		if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
-			/* We already own it */
-			lua_pushboolean (L, true);
-		}
-		else {
-			dest = g_malloc (t->len);
-			memcpy (dest, t->start, t->len);
-			t->start = dest;
-			t->flags |= RSPAMD_TEXT_FLAG_OWN;
-			lua_pushboolean (L, true);
-		}
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	return 1;
-}
-
-static gint
-lua_text_save_in_file (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	struct rspamd_lua_text *t = lua_check_text (L, 1);
-	const gchar *fname = NULL;
-	guint mode = 00644;
-	gint fd = -1;
-	gboolean need_close = FALSE;
-
-	if (t != NULL) {
-		if (lua_type (L, 2) == LUA_TSTRING) {
-			fname = luaL_checkstring (L, 2);
-
-			if (lua_type (L, 3) == LUA_TNUMBER) {
-				mode = lua_tonumber (L, 3);
-			}
-		}
-		else if (lua_type (L, 2) == LUA_TNUMBER) {
-			/* Created fd */
-			fd = lua_tonumber (L, 2);
-		}
-
-		if (fd == -1) {
-			if (fname) {
-				fd = rspamd_file_xopen (fname, O_CREAT | O_WRONLY | O_EXCL, mode, 0);
-
-				if (fd == -1) {
-					lua_pushboolean (L, false);
-					lua_pushstring (L, strerror (errno));
-
-					return 2;
-				}
-				need_close = TRUE;
-			}
-			else {
-				fd = STDOUT_FILENO;
-			}
-		}
-
-		if (write (fd, t->start, t->len) == -1) {
-			if (fd != STDOUT_FILENO) {
-				close (fd);
-			}
-
-			lua_pushboolean (L, false);
-			lua_pushstring (L, strerror (errno));
-
-			return 2;
-		}
-
-		if (need_close) {
-			close (fd);
-		}
-
-		lua_pushboolean (L, true);
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	return 1;
-}
-
-static gint
-lua_text_gc (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	struct rspamd_lua_text *t = lua_check_text (L, 1);
-
-	if (t != NULL) {
-		if (t->flags & RSPAMD_TEXT_FLAG_OWN) {
-			if (t->flags & RSPAMD_TEXT_FLAG_MMAPED) {
-				munmap ((gpointer)t->start, t->len);
-			}
-			else {
-				g_free ((gpointer)t->start);
-			}
-		}
-
-	}
-
-	return 0;
-}
-
 /* Init part */
 
 static gint
@@ -6255,16 +5977,6 @@ lua_load_task (lua_State * L)
 
 	return 1;
 }
-
-static gint
-lua_load_text (lua_State * L)
-{
-	lua_newtable (L);
-	luaL_register (L, NULL, textlib_f);
-
-	return 1;
-}
-
 
 static void
 luaopen_archive (lua_State * L)
@@ -6289,15 +6001,6 @@ luaopen_image (lua_State * L)
 {
 	rspamd_lua_new_class (L, "rspamd{image}", imagelib_m);
 	lua_pop (L, 1);
-}
-
-void
-luaopen_text (lua_State *L)
-{
-	rspamd_lua_new_class (L, "rspamd{text}", textlib_m);
-	lua_pop (L, 1);
-
-	rspamd_lua_add_preload (L, "rspamd_text", lua_load_text);
 }
 
 void

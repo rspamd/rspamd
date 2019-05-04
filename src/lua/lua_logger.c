@@ -269,9 +269,37 @@ lua_logger_debug (lua_State *L)
 	return 0;
 }
 
+static inline bool
+lua_logger_char_safe (int t, unsigned int esc_type)
+{
+	if (t & 0x80) {
+		if (esc_type & LUA_ESCAPE_8BIT) {
+			return false;
+		}
+
+		return true;
+	}
+
+	if (esc_type & LUA_ESCAPE_UNPRINTABLE) {
+		if (!g_ascii_isprint (t) && !g_ascii_isspace (t)) {
+			return false;
+		}
+	}
+
+	if (esc_type & LUA_ESCAPE_NEWLINES) {
+		if (t == '\r' || t == '\n') {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static gsize
-lua_logger_out_str (lua_State *L, gint pos, gchar *outbuf, gsize len,
-					struct lua_logger_trace *trace)
+lua_logger_out_str (lua_State *L, gint pos,
+					gchar *outbuf, gsize len,
+					struct lua_logger_trace *trace,
+					enum lua_logger_escape_type esc_type)
 {
 	gsize slen, flen;
 	const gchar *str = lua_tolstring (L, pos, &slen);
@@ -283,7 +311,7 @@ lua_logger_out_str (lua_State *L, gint pos, gchar *outbuf, gsize len,
 		flen = MIN (slen, len - 1);
 
 		for (r = 0; r < flen; r ++) {
-			if (!(g_ascii_isprint (str[r]) || (str[r] & 0x80))) {
+			if (!lua_logger_char_safe (str[r], esc_type)) {
 				normal = FALSE;
 				break;
 			}
@@ -298,11 +326,8 @@ lua_logger_out_str (lua_State *L, gint pos, gchar *outbuf, gsize len,
 			s = 0;
 
 			while (slen > 0 && len > 1) {
-				if (!g_ascii_isprint (str[s])) {
-					if (str[s] & 0x80) {
-						outbuf[r++] = str[s];
-					}
-					else if (len >= 3) {
+				if (!lua_logger_char_safe (str[r], esc_type)) {
+					if (len >= 3) {
 						outbuf[r++] = '\\';
 						outbuf[r++] = hexdigests[((str[s] >> 4) & 0xF)];
 						outbuf[r++] = hexdigests[((str[s]) & 0xF)];
@@ -413,11 +438,11 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len,
 	}
 
 	if (converted_to_str) {
-		r = rspamd_snprintf (outbuf, len + 1, "%s", str);
+		r = rspamd_snprintf (outbuf, len, "%s", str);
 	}
 	else {
 		/* Print raw pointer */
-		r = rspamd_snprintf (outbuf, len + 1, "%s(%p)", str, lua_touserdata (L, pos));
+		r = rspamd_snprintf (outbuf, len, "%s(%p)", str, lua_touserdata (L, pos));
 	}
 
 	lua_settop (L, top);
@@ -431,7 +456,8 @@ lua_logger_out_userdata (lua_State *L, gint pos, gchar *outbuf, gsize len,
 
 static gsize
 lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len,
-					  struct lua_logger_trace *trace)
+					  struct lua_logger_trace *trace,
+					  enum lua_logger_escape_type esc_type)
 {
 	gchar *d = outbuf;
 	gsize remain = len, r;
@@ -485,7 +511,7 @@ lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len,
 			r = rspamd_snprintf (d, remain + 1, "__self");
 		}
 		else {
-			r = lua_logger_out_type (L, tpos, d, remain, trace);
+			r = lua_logger_out_type (L, tpos, d, remain, trace, esc_type);
 		}
 		MOVE_BUF(d, remain, r);
 
@@ -515,7 +541,7 @@ lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len,
 			r = rspamd_snprintf (d, remain + 1, "__self");
 		}
 		else {
-			r = lua_logger_out_type (L, tpos, d, remain, trace);
+			r = lua_logger_out_type (L, tpos, d, remain, trace, esc_type);
 		}
 		MOVE_BUF(d, remain, r);
 
@@ -533,8 +559,10 @@ lua_logger_out_table (lua_State *L, gint pos, gchar *outbuf, gsize len,
 #undef MOVE_BUF
 
 gsize
-lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len,
-					 struct lua_logger_trace *trace)
+lua_logger_out_type (lua_State *L, gint pos,
+					 gchar *outbuf, gsize len,
+					 struct lua_logger_trace *trace,
+					 enum lua_logger_escape_type esc_type)
 {
 	gint type;
 	gsize r = 0;
@@ -554,7 +582,7 @@ lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len,
 			r = lua_logger_out_boolean (L, pos, outbuf, len, trace);
 			break;
 		case LUA_TTABLE:
-			r = lua_logger_out_table (L, pos, outbuf, len, trace);
+			r = lua_logger_out_table (L, pos, outbuf, len, trace, esc_type);
 			break;
 		case LUA_TUSERDATA:
 			r = lua_logger_out_userdata (L, pos, outbuf, len, trace);
@@ -570,7 +598,7 @@ lua_logger_out_type (lua_State *L, gint pos, gchar *outbuf, gsize len,
 			break;
 		default:
 			/* Try to push everything as string using tostring magic */
-			r = lua_logger_out_str (L, pos, outbuf, len, trace);
+			r = lua_logger_out_str (L, pos, outbuf, len, trace, esc_type);
 			break;
 	}
 
@@ -747,7 +775,8 @@ lua_logger_log_format (lua_State *L, gint fmt_pos, gboolean is_string,
 				}
 
 				memset (&tr, 0, sizeof (tr));
-				r = lua_logger_out_type (L, arg_num + 1, d, remain, &tr);
+				r = lua_logger_out_type (L, arg_num + 1, d, remain, &tr,
+						is_string ? LUA_ESCAPE_UNPRINTABLE : LUA_ESCAPE_LOG);
 				g_assert (r <= remain);
 				remain -= r;
 				d += r;
@@ -775,7 +804,8 @@ lua_logger_log_format (lua_State *L, gint fmt_pos, gboolean is_string,
 		}
 
 		memset (&tr, 0, sizeof (tr));
-		r = lua_logger_out_type (L, arg_num + 1, d, remain, &tr);
+		r = lua_logger_out_type (L, arg_num + 1, d, remain, &tr,
+				is_string ? LUA_ESCAPE_UNPRINTABLE : LUA_ESCAPE_LOG);
 		g_assert (r <= remain);
 		remain -= r;
 		d += r;

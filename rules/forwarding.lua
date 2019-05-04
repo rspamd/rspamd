@@ -103,7 +103,7 @@ rspamd_config.FWD_SRS = {
     return false
   end,
   score = 0.0,
-  description = "Message was forwarded using SRS",
+  description = "Message was forwarded using Sender Rewriting Scheme (SRS)",
   group = "forwarding"
 }
 

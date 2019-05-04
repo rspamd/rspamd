@@ -934,29 +934,31 @@ exports.get_task_verdict = function(task)
 end
 
 ---[[[
--- @function lua_util.maybe_obfuscate_subject(subject, settings)
--- Obfuscate subject if enabled in settings. Also checks utf8 validity.
+-- @function lua_util.maybe_obfuscate_string(subject, settings, prefix)
+-- Obfuscate string if enabled in settings. Also checks utf8 validity.
 -- Supported settings:
--- * subject_privacy = false - subject privacy is off
--- * subject_privacy_alg = 'blake2' - default hash-algorithm to obfuscate subject
--- * subject_privacy_prefix = 'obf' - prefix to show it's obfuscated
--- * subject_privacy_length = 16 - cut the length of the hash
+-- * <prefix>_privacy = false - subject privacy is off
+-- * <prefix>_privacy_alg = 'blake2' - default hash-algorithm to obfuscate subject
+-- * <prefix>_privacy_prefix = 'obf' - prefix to show it's obfuscated
+-- * <prefix>_privacy_length = 16 - cut the length of the hash
 -- @return obfuscated or validated subject
 --]]
 
-exports.maybe_obfuscate_subject = function(subject, settings)
+exports.maybe_obfuscate_string = function(subject, settings, prefix)
   local hash = require 'rspamd_cryptobox_hash'
   if subject and not rspamd_util.is_valid_utf8(subject) then
     subject = '???'
-  elseif settings.subject_privacy then
-    local hash_alg = settings.subject_privacy_alg or 'blake2'
+  elseif settings[prefix .. '_privacy'] then
+    local hash_alg = settings[prefix .. '_privacy_alg'] or 'blake2'
     local subject_hash = hash.create_specific(hash_alg, subject)
+    local strip_len = settings[prefix .. '_privacy_length']
+    local privacy_prefix = settings[prefix .. '_privacy_prefix'] or ''
 
-    if settings.subject_privacy_length then
-      subject = (settings.subject_privacy_prefix or 'obf') .. ':' ..
-          subject_hash:hex():sub(1, settings.subject_privacy_length)
+    if strip_len then
+      subject = privacy_prefix .. ':' ..
+          subject_hash:hex():sub(1, strip_len)
     else
-      subject = (settings.subject_privacy_prefix or '') .. ':' ..
+      subject = privacy_prefix .. ':' ..
           subject_hash:hex()
     end
   end

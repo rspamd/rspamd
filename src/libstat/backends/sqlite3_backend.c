@@ -151,8 +151,10 @@ static struct rspamd_sqlite3_prstmt prepared_stmts[RSPAMD_STAT_BACKEND_MAX] =
 	[RSPAMD_STAT_BACKEND_GET_TOKEN] = {
 		.idx = RSPAMD_STAT_BACKEND_GET_TOKEN,
 		.sql = "SELECT value FROM tokens "
-				"WHERE token=?1 AND users=?2 "
-				"AND (language=?3 OR language=0);",
+				"LEFT JOIN languages ON tokens.language=languages.id "
+				"LEFT JOIN users ON tokens.user=users.id "
+				"WHERE token=?1 AND (users.id=?2) "
+				"AND (languages.id=?3 OR languages.id=0);",
 		.stmt = NULL,
 		.args = "III",
 		.result = SQLITE_ROW,
@@ -554,7 +556,7 @@ rspamd_sqlite3_init (struct rspamd_stat_ctx *ctx,
 
 	if ((bk = rspamd_sqlite3_opendb (cfg->cfg_pool, stf, filename,
 			stf->opts, TRUE, &err)) == NULL) {
-		msg_err_config ("cannot open sqlite3 db: %e", err);
+		msg_err_config ("cannot open sqlite3 db %s: %e", filename, err);
 		g_error_free (err);
 		return NULL;
 	}
