@@ -77,7 +77,7 @@ local function load_sign_key(what, format)
 end
 
 local default_dkim_headers =
-"(o)from:(o)sender:(o)reply-to:(o)subject:(o)date:(o)message-id:" ..
+"(o)from:sender:(o)reply-to:(o)subject:(o)date:(o)message-id:" ..
 "(o)to:(o)cc:(o)mime-version:(o)content-type:(o)content-transfer-encoding:" ..
 "resent-to:resent-cc:resent-from:resent-sender:resent-message-id:" ..
 "(o)in-reply-to:(o)references:list-id:list-owner:list-unsubscribe:list-help:" ..
