@@ -36,6 +36,7 @@
 LUA_FUNCTION_DEF (worker, get_name);
 LUA_FUNCTION_DEF (worker, get_stat);
 LUA_FUNCTION_DEF (worker, get_index);
+LUA_FUNCTION_DEF (worker, get_count);
 LUA_FUNCTION_DEF (worker, get_pid);
 LUA_FUNCTION_DEF (worker, is_scanner);
 LUA_FUNCTION_DEF (worker, is_primary_controller);
@@ -46,6 +47,7 @@ const luaL_reg worker_reg[] = {
 		LUA_INTERFACE_DEF (worker, get_name),
 		LUA_INTERFACE_DEF (worker, get_stat),
 		LUA_INTERFACE_DEF (worker, get_index),
+		LUA_INTERFACE_DEF (worker, get_count),
 		LUA_INTERFACE_DEF (worker, get_pid),
 		LUA_INTERFACE_DEF (worker, spawn_process),
 		LUA_INTERFACE_DEF (worker, is_scanner),
@@ -169,6 +171,21 @@ lua_worker_get_index (lua_State *L)
 
 	if (w) {
 		lua_pushinteger (L, w->index);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_worker_get_count (lua_State *L)
+{
+	struct rspamd_worker *w = lua_check_worker (L, 1);
+
+	if (w) {
+		lua_pushinteger (L, w->cf->count);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
