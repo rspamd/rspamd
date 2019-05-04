@@ -54,17 +54,17 @@
 static const gchar *M = "rspamd dkim plugin";
 
 static const gchar default_sign_headers[] = ""
-		"(o)from:sender:(o)reply-to:(o)subject:(o)date:(o)message-id:"
-		"(o)to:(o)cc:(o)mime-version:(o)content-type:(o)content-transfer-encoding:"
-		"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
-		"(o)in-reply-to:(o)references:list-id:list-owner:list-unsubscribe:list-help:"
-		"list-subscribe:list-post:(o)openpgp:(o)autocrypt";
+		"(o)autocrypt:(o)cc:(o)content-transfer-encoding:(o)content-type:"
+		"(o)date:(o)from:(o)in-reply-to:list-help:list-id:list-owner:"
+		"list-post:list-subscribe:list-unsubscribe:(o)message-id:(o)mime-version:"
+		"(o)openpgp:(o)references:(o)reply-to:resent-cc:resent-from:"
+		"resent-message-id:resent-sender:resent-to:sender:(o)subject:(o)to";
 static const gchar default_arc_sign_headers[] = ""
-		"(o)from:sender:(o)reply-to:(o)subject:(o)date:(o)message-id:"
-		"(o)to:(o)cc:(o)mime-version:(o)content-type:(o)content-transfer-encoding:"
-		"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
-		"(o)in-reply-to:(o)references:list-id:list-owner:list-unsubscribe:list-help:"
-		"list-subscribe:list-post:dkim-signature:(o)openpgp:(o)autocrypt";
+		"(o)autocrypt:(o)cc:(o)content-transfer-encoding:(o)content-type:"
+		"(o)date:dkim-signature:(o)from:(o)in-reply-to:list-help:list-id:list-owner:"
+		"list-post:list-subscribe:list-unsubscribe:(o)message-id:(o)mime-version:"
+		"(o)openpgp:(o)references:(o)reply-to:resent-cc:resent-from:"
+		"resent-message-id:resent-sender:resent-to:sender:(o)subject:(o)to";
 
 struct dkim_ctx {
 	struct module_ctx ctx;
