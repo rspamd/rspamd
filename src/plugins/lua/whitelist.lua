@@ -315,14 +315,14 @@ local configure_whitelist_module = function()
 
     local function try_opts(where)
       local ret = false
-      local opts = rspamd_config:get_all_opt(where)
-      if type(opts) == 'table' then
-        if type(opts['check_local']) == 'boolean' then
-          options.check_local = opts['check_local']
+      local test_opts = rspamd_config:get_all_opt(where)
+      if type(test_opts) == 'table' then
+        if type(test_opts.check_local) == 'boolean' then
+          options.check_local = test_opts.check_local
           ret = true
         end
-        if type(opts['check_authed']) == 'boolean' then
-          options.check_authed = opts['check_authed']
+        if type(test_opts.check_authed) == 'boolean' then
+          options.check_authed = test_opts.check_authed
           ret = true
         end
       end
