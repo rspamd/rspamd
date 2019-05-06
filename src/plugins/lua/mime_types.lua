@@ -535,7 +535,7 @@ local full_extensions_map = {
   {"p7c", "application/pkcs7-mime"},
   {"p7m", "application/pkcs7-mime"},
   {"p7r", "application/x-pkcs7-certreqresp"},
-  {"p7s", "application/pkcs7-signature"},
+  {"p7s", {"application/pkcs7-signature", "text/plain"}},
   {"pbm", "image/x-portable-bitmap"},
   {"pcast", "application/x-podcast"},
   {"pct", "image/pict"},
