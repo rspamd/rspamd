@@ -135,7 +135,7 @@ CREATE TABLE rspamd
     MIMEFrom ALIAS if(MimeFrom = '', '', concat(MimeUser, '@', MimeFrom)),
     MIMERcpt ALIAS MimeRecipients[1]
 ) ENGINE = MergeTree()
-PARTITION BY Date
+PARTITION BY toMonday(Date)
 ORDER BY TS
 ]],
 [[CREATE TABLE rspamd_version ( Version UInt32) ENGINE = TinyLog]],
