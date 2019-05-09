@@ -485,7 +485,7 @@ function ($, D3pie, visibility, NProgress, tab_stat, tab_graph, tab_config,
                         neighbours = {
                             local: {
                                 host: window.location.host,
-                                url: window.location.href
+                                url: window.location.origin + window.location.pathname
                             }
                         };
                     } else {
