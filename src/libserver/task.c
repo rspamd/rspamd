@@ -355,6 +355,7 @@ rspamd_task_free (struct rspamd_task *task)
 struct rspamd_task_map {
 	gpointer begin;
 	gulong len;
+	gint fd;
 };
 
 static void
@@ -363,6 +364,7 @@ rspamd_task_unmapper (gpointer ud)
 	struct rspamd_task_map *m = ud;
 
 	munmap (m->begin, m->len);
+	close (m->fd);
 }
 
 gboolean
@@ -437,8 +439,6 @@ rspamd_task_load_message (struct rspamd_task *task,
 			return FALSE;
 		}
 
-		close (fd);
-
 		tok = rspamd_task_get_request_header (task, "shm-offset");
 
 		if (tok) {
@@ -448,6 +448,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 				msg_err_task ("invalid offset %ul (%ul available) for shm "
 						"segment %s", offset, st.st_size, fp);
 				munmap (map, st.st_size);
+				close (fd);
 
 				return FALSE;
 			}
@@ -464,6 +465,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 				msg_err_task ("invalid length %ul (%ul available) for %s "
 						"segment %s", shmem_size, st.st_size, ft, fp);
 				munmap (map, st.st_size);
+				close (fd);
 
 				return FALSE;
 			}
@@ -474,9 +476,10 @@ rspamd_task_load_message (struct rspamd_task *task,
 		m = rspamd_mempool_alloc (task->task_pool, sizeof (*m));
 		m->begin = map;
 		m->len = st.st_size;
+		m->fd = fd;
 
-		msg_info_task ("loaded message from shared memory %s (%ul size, %ul offset)",
-				fp, shmem_size, offset);
+		msg_info_task ("loaded message from shared memory %s (%ul size, %ul offset), fd=%d",
+				fp, shmem_size, offset, fd);
 
 		rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, m);
 
@@ -540,12 +543,12 @@ rspamd_task_load_message (struct rspamd_task *task,
 				return FALSE;
 			}
 
-			close (fd);
 			task->msg.begin = map;
 			task->msg.len = st.st_size;
 			m = rspamd_mempool_alloc (task->task_pool, sizeof (*m));
 			m->begin = map;
 			m->len = st.st_size;
+			m->fd = fd;
 
 			rspamd_mempool_add_destructor (task->task_pool, rspamd_task_unmapper, m);
 		}
