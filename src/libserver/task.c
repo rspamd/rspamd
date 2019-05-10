@@ -354,7 +354,11 @@ rspamd_task_free (struct rspamd_task *task)
 			if (++free_iters > free_iters_limit) {
 				/* Perform more expensive cleanup cycle */
 				gsize allocated = 0, active = 0, metadata = 0,
-						resident = 0, mapped = 0;
+						resident = 0, mapped = 0, old_lua_mem = 0;
+				gdouble t1, t2;
+
+				old_lua_mem = lua_gc (task->cfg->lua_state, LUA_GCCOUNT, 0);
+				t1 = rspamd_get_ticks (TRUE);
 
 #ifdef WITH_JEMALLOC
 				gsize sz = sizeof (gsize);
@@ -368,13 +372,16 @@ rspamd_task_free (struct rspamd_task *task)
 				malloc_trim (0);
 # endif
 #endif
+				lua_gc (task->cfg->lua_state, LUA_GCCOLLECT, 0);
+				t2 = rspamd_get_ticks (TRUE);
+
 				msg_notice_task ("perform full gc cycle; memory stats: "
 								 "%z allocated, %z active, %z metadata, %z resident, %z mapped;"
-								 " lua memory: %d kb",
+								 " lua memory: %d kb -> %d kb; %f ticks for gc iter",
 						allocated, active, metadata, resident, mapped,
-						lua_gc (task->cfg->lua_state, LUA_GCCOUNT, 0));
+						old_lua_mem, lua_gc (task->cfg->lua_state, LUA_GCCOUNT, 0),
+						t2 - t1);
 				free_iters = 0;
-				lua_gc (task->cfg->lua_state, LUA_GCCOLLECT, 0);
 			}
 
 			REF_RELEASE (task->cfg);
