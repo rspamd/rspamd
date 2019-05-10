@@ -358,7 +358,7 @@ rspamd_task_free (struct rspamd_task *task)
 				gdouble t1, t2;
 
 				old_lua_mem = lua_gc (task->cfg->lua_state, LUA_GCCOUNT, 0);
-				t1 = rspamd_get_ticks (TRUE);
+				t1 = rspamd_get_ticks (FALSE);
 
 #ifdef WITH_JEMALLOC
 				gsize sz = sizeof (gsize);
@@ -373,14 +373,14 @@ rspamd_task_free (struct rspamd_task *task)
 # endif
 #endif
 				lua_gc (task->cfg->lua_state, LUA_GCCOLLECT, 0);
-				t2 = rspamd_get_ticks (TRUE);
+				t2 = rspamd_get_ticks (FALSE);
 
 				msg_notice_task ("perform full gc cycle; memory stats: "
-								 "%z allocated, %z active, %z metadata, %z resident, %z mapped;"
-								 " lua memory: %z kb -> %d kb; %f ticks for gc iter",
+								 "%Hz allocated, %Hz active, %Hz metadata, %Hz resident, %Hz mapped;"
+								 " lua memory: %z kb -> %d kb; %f ms for gc iter",
 						allocated, active, metadata, resident, mapped,
 						old_lua_mem, lua_gc (task->cfg->lua_state, LUA_GCCOUNT, 0),
-						t2 - t1);
+						(t2 - t1) * 1000.0);
 				free_iters = rspamd_time_jitter (0, (gdouble)free_iters_limit / 2);
 			}
 
