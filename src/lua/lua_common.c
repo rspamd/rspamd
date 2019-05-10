@@ -898,6 +898,7 @@ rspamd_lua_init (bool wipe_mem)
 		L = luaL_newstate ();
 	}
 
+	lua_gc (L, LUA_GCSTOP, 0);
 	luaL_openlibs (L);
 	luaopen_logger (L);
 	luaopen_mempool (L);
@@ -993,6 +994,12 @@ rspamd_lua_init (bool wipe_mem)
 	lua_pushcfunction (L, lua_push_trace_data);
 	lua_setglobal (L, "get_traces");
 #endif
+
+	/* Set up GC */
+	lua_gc (L, LUA_GCCOLLECT, 0);
+	lua_gc (L, LUA_GCSETSTEPMUL, 50);
+	lua_gc (L, LUA_GCSETPAUSE, 400);
+	lua_gc (L, LUA_GCRESTART, 0);
 
 	return L;
 }

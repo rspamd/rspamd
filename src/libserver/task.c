@@ -30,6 +30,14 @@
 #include "libmime/lang_detection.h"
 #include "libmime/filter_private.h"
 
+#ifdef WITH_JEMALLOC
+#include <jemalloc/jemalloc.h>
+#else
+# if defined(__GLIBC__) && defined(_GNU_SOURCE)
+#  include <malloc.h>
+# endif
+#endif
+
 #include <math.h>
 
 /*
@@ -233,6 +241,8 @@ rspamd_task_free (struct rspamd_task *task)
 	struct rspamd_mime_text_part *tp;
 	struct rspamd_email_address *addr;
 	struct rspamd_lua_cached_entry *entry;
+	static guint free_iters = 0;
+	const guint free_iters_limit = 5000;
 	GHashTableIter it;
 	gpointer k, v;
 	guint i;
@@ -341,6 +351,32 @@ rspamd_task_free (struct rspamd_task *task)
 				g_hash_table_unref (task->lua_cache);
 			}
 
+			if (++free_iters > free_iters_limit) {
+				/* Perform more expensive cleanup cycle */
+				gsize allocated = 0, active = 0, metadata = 0,
+						resident = 0, mapped = 0;
+
+#ifdef WITH_JEMALLOC
+				gsize sz = sizeof (gsize);
+				mallctl ("stats.allocated", &allocated, &sz, NULL, 0);
+				mallctl ("stats.active", &active, &sz, NULL, 0);
+				mallctl ("stats.metadata", &metadata, &sz, NULL, 0);
+				mallctl ("stats.resident", &resident, &sz, NULL, 0);
+				mallctl ("stats.mapped", &mapped, &sz, NULL, 0);
+#else
+# if defined(__GLIBC__) && defined(_GNU_SOURCE)
+				malloc_trim (0);
+# endif
+#endif
+				msg_notice_task ("perform full gc cycle; memory stats: "
+								 "%z allocated, %z active, %z metadata, %z rezident, %z mapped;"
+								 " lua memory: %d kb",
+						allocated, active, metadata, resident, mapped,
+						lua_gc (task->cfg->lua_state, LUA_GCCOUNT, 0));
+				free_iters = 0;
+				lua_gc (task->cfg->lua_state, LUA_GCCOLLECT, 0);
+			}
+
 			REF_RELEASE (task->cfg);
 		}
 
@@ -369,7 +405,7 @@ rspamd_task_unmapper (gpointer ud)
 
 gboolean
 rspamd_task_load_message (struct rspamd_task *task,
-	struct rspamd_http_message *msg, const gchar *start, gsize len)
+						  struct rspamd_http_message *msg, const gchar *start, gsize len)
 {
 	guint control_len, r;
 	struct ucl_parser *parser;
@@ -446,7 +482,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 
 			if (offset > (gulong)st.st_size) {
 				msg_err_task ("invalid offset %ul (%ul available) for shm "
-						"segment %s", offset, st.st_size, fp);
+							  "segment %s", offset, st.st_size, fp);
 				munmap (map, st.st_size);
 				close (fd);
 
@@ -463,7 +499,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 
 			if (shmem_size > (gulong)st.st_size) {
 				msg_err_task ("invalid length %ul (%ul available) for %s "
-						"segment %s", shmem_size, st.st_size, ft, fp);
+							  "segment %s", shmem_size, st.st_size, ft, fp);
 				munmap (map, st.st_size);
 				close (fd);
 
@@ -655,7 +691,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 			task->flags |= RSPAMD_TASK_FLAG_COMPRESSED;
 
 			msg_info_task ("loaded message from zstd compressed stream; "
-					"compressed: %ul; uncompressed: %ul",
+						   "compressed: %ul; uncompressed: %ul",
 					(gulong)zin.size, (gulong)zout.pos);
 
 		}
