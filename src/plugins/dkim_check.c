@@ -54,17 +54,17 @@
 static const gchar *M = "rspamd dkim plugin";
 
 static const gchar default_sign_headers[] = ""
-		"(o)from:(o)sender:(o)reply-to:(o)subject:(o)date:(o)message-id:"
-		"(o)to:(o)cc:(o)mime-version:(o)content-type:(o)content-transfer-encoding:"
+		"(o)from:(x)sender:(x)reply-to:(x)subject:(x)date:(x)message-id:"
+		"(o)to:(o)cc:(x)mime-version:(x)content-type:(x)content-transfer-encoding:"
 		"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
-		"(o)in-reply-to:(o)references:list-id:list-owner:list-unsubscribe:"
-		"list-subscribe:list-post:(o)openpgp:(o)autocrypt";
+		"(x)in-reply-to:(x)references:list-id:list-owner:list-unsubscribe:"
+		"list-subscribe:list-post:(x)openpgp:(x)autocrypt";
 static const gchar default_arc_sign_headers[] = ""
-		"(o)from:(o)sender:(o)reply-to:(o)subject:(o)date:(o)message-id:"
-		"(o)to:(o)cc:(o)mime-version:(o)content-type:(o)content-transfer-encoding:"
+		"(o)from:(x)sender:(x)reply-to:(x)subject:(x)date:(x)message-id:"
+		"(o)to:(o)cc:(x)mime-version:(x)content-type:(x)content-transfer-encoding:"
 		"resent-to:resent-cc:resent-from:resent-sender:resent-message-id:"
-		"(o)in-reply-to:(o)references:list-id:list-owner:list-unsubscribe:"
-		"list-subscribe:list-post:dkim-signature:(o)openpgp:(o)autocrypt";
+		"(x)in-reply-to:(x)references:list-id:list-owner:list-unsubscribe:"
+		"list-subscribe:list-post:dkim-signature:(x)openpgp:(x)autocrypt";
 
 struct dkim_ctx {
 	struct module_ctx ctx;
