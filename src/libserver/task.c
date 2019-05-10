@@ -369,7 +369,7 @@ rspamd_task_free (struct rspamd_task *task)
 # endif
 #endif
 				msg_notice_task ("perform full gc cycle; memory stats: "
-								 "%z allocated, %z active, %z metadata, %z rezident, %z mapped;"
+								 "%z allocated, %z active, %z metadata, %z resident, %z mapped;"
 								 " lua memory: %d kb",
 						allocated, active, metadata, resident, mapped,
 						lua_gc (task->cfg->lua_state, LUA_GCCOUNT, 0));
