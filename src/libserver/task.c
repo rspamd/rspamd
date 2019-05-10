@@ -377,11 +377,11 @@ rspamd_task_free (struct rspamd_task *task)
 
 				msg_notice_task ("perform full gc cycle; memory stats: "
 								 "%z allocated, %z active, %z metadata, %z resident, %z mapped;"
-								 " lua memory: %d kb -> %d kb; %f ticks for gc iter",
+								 " lua memory: %z kb -> %d kb; %f ticks for gc iter",
 						allocated, active, metadata, resident, mapped,
 						old_lua_mem, lua_gc (task->cfg->lua_state, LUA_GCCOUNT, 0),
 						t2 - t1);
-				free_iters = 0;
+				free_iters = rspamd_time_jitter (0, (gdouble)free_iters_limit / 2);
 			}
 
 			REF_RELEASE (task->cfg);
