@@ -2127,6 +2127,24 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				G_STRUCT_OFFSET (struct rspamd_config, task_timeout),
 				RSPAMD_CL_FLAG_TIME_FLOAT,
 				"Maximum time for checking a message (alias for task_timeout)");
+		rspamd_rcl_add_default_handler (sub,
+				"lua_gc_step",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, lua_gc_step),
+				RSPAMD_CL_FLAG_UINT,
+				"Lua garbage-collector step (default: 200)");
+		rspamd_rcl_add_default_handler (sub,
+				"lua_gc_pause",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, lua_gc_pause),
+				RSPAMD_CL_FLAG_UINT,
+				"Lua garbage-collector pause (default: 200)");
+		rspamd_rcl_add_default_handler (sub,
+				"full_gc_iters",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, full_gc_iters),
+				RSPAMD_CL_FLAG_UINT,
+				"Task scanned before memory gc is performed (default: 0 - disabled)");
 
 		/* Neighbours configuration */
 		rspamd_rcl_add_section_doc (&sub->subsections, "neighbours", "name",

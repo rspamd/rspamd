@@ -498,6 +498,7 @@ main (gint argc, gchar **argv, gchar **env)
 	lua_setglobal (L, "rspamadm");
 
 	rspamadm_fill_lua_commands (L, all_commands);
+	rspamd_lua_start_gc (cfg);
 	g_ptr_array_sort (all_commands, rspamdadm_commands_sort_func);
 
 	g_strfreev (nargv);

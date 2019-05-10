@@ -432,6 +432,9 @@ struct rspamd_config {
 	guint words_decay;								/**< limit for words for starting adaptive ignoring		*/
 	guint history_rows;								/**< number of history rows stored						*/
 	guint max_sessions_cache;                        /**< maximum number of sessions cache elts				*/
+	guint lua_gc_step;								/**< lua gc step 										*/
+	guint lua_gc_pause;								/**< lua gc pause										*/
+	guint full_gc_iters;							/**< iterations between full gc cycle					*/
 
 	GList *classify_headers;						/**< list of headers using for statistics				*/
 	struct module_s **compiled_modules;				/**< list of compiled C modules							*/

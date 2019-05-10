@@ -167,7 +167,7 @@ gpointer rspamd_lua_check_class (lua_State *L, gint index, const gchar *name);
  */
 lua_State *rspamd_lua_init (bool wipe_mem);
 
-
+void rspamd_lua_start_gc (struct rspamd_config *cfg);
 /**
  * Sets field in a global variable
  * @param L

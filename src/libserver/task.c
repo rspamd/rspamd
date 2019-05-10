@@ -242,7 +242,6 @@ rspamd_task_free (struct rspamd_task *task)
 	struct rspamd_email_address *addr;
 	struct rspamd_lua_cached_entry *entry;
 	static guint free_iters = 0;
-	const guint free_iters_limit = 5000;
 	GHashTableIter it;
 	gpointer k, v;
 	guint i;
@@ -351,7 +350,7 @@ rspamd_task_free (struct rspamd_task *task)
 				g_hash_table_unref (task->lua_cache);
 			}
 
-			if (++free_iters > free_iters_limit) {
+			if (task->cfg->full_gc_iters && (++free_iters > task->cfg->full_gc_iters)) {
 				/* Perform more expensive cleanup cycle */
 				gsize allocated = 0, active = 0, metadata = 0,
 						resident = 0, mapped = 0, old_lua_mem = 0;
@@ -381,7 +380,8 @@ rspamd_task_free (struct rspamd_task *task)
 						allocated, active, metadata, resident, mapped,
 						old_lua_mem, lua_gc (task->cfg->lua_state, LUA_GCCOUNT, 0),
 						(t2 - t1) * 1000.0);
-				free_iters = rspamd_time_jitter (0, (gdouble)free_iters_limit / 2);
+				free_iters = rspamd_time_jitter (0,
+						(gdouble)task->cfg->full_gc_iters / 2);
 			}
 
 			REF_RELEASE (task->cfg);

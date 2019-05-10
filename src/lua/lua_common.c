@@ -995,13 +995,20 @@ rspamd_lua_init (bool wipe_mem)
 	lua_setglobal (L, "get_traces");
 #endif
 
+	return L;
+}
+
+void
+rspamd_lua_start_gc (struct rspamd_config *cfg)
+{
+	lua_State *L = (lua_State *)cfg->lua_state;
+
+	lua_settop (L, 0);
 	/* Set up GC */
 	lua_gc (L, LUA_GCCOLLECT, 0);
-	lua_gc (L, LUA_GCSETSTEPMUL, 50);
-	lua_gc (L, LUA_GCSETPAUSE, 400);
+	lua_gc (L, LUA_GCSETSTEPMUL, cfg->lua_gc_step);
+	lua_gc (L, LUA_GCSETPAUSE, cfg->lua_gc_pause);
 	lua_gc (L, LUA_GCRESTART, 0);
-
-	return L;
 }
 
 /**

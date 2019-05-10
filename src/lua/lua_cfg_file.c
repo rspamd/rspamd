@@ -137,4 +137,6 @@ rspamd_lua_post_load_config (struct rspamd_config *cfg)
 	}
 
 	lua_settop (L, 0);
+
+	rspamd_lua_start_gc (cfg);
 }
