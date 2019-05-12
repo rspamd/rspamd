@@ -34,7 +34,7 @@ antivirus {
     # action = "reject";
     # If set, then rejection message is set to this value (mention single quotes)
     # message = '${SCANNER}: virus found: "${VIRUS}"';
-    # Scan mime_parts seperately - otherwise the complete mail will be transfered to AV Scanner
+    # Scan mime_parts separately - otherwise the complete mail will be transferred to AV Scanner
     #scan_mime_parts = true;
     # Scanning Text is suitable for some av scanner databases (e.g. Sanesecurity)
     #scan_text_mime = false;
