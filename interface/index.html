@@ -24,8 +24,8 @@
 		<form class="navbar-form navbar-left">
 			<select id="selSrv" class="form-control"></select>
 		</form>
-		<ul class="nav navbar-nav nav-pills" role="tablist">
-			<li role="presentation" class="active"><a id="status_nav" aria-controls="status" role="tab" href="#status" data-toggle="tab">Status</a></li>
+		<ul class="nav navbar-nav nav-pills nav-tabs-sticky" role="tablist">
+			<li role="presentation"><a id="status_nav" aria-controls="status" role="tab" href="#status" data-toggle="tab">Status</a></li>
 
 			<li role="presentation"><a id="throughput_nav" aria-controls="throughput" role="tab" href="#throughput" data-toggle="tab">Throughput</a></li>
 
@@ -35,8 +35,8 @@
 			<li role="presentation"><a id="history_nav" aria-controls="history" role="tab" href="#history" data-toggle="tab">History</a></li>
 		</ul>
     <ul class="nav navbar-nav nav-pills pull-right" style="display: none;">
-      <li><a href="#" data-toggle="tab" id="refresh"><i class="glyphicon glyphicon-refresh glyphicon-spin"></i> Refresh</a></li>
-      <li><a href="#" data-toggle="tab" id="disconnect"><i class="glyphicon glyphicon-off"></i> Disconnect</a></li>
+      <li><a href="#" role="button" data-toggle="button" id="refresh"><i class="glyphicon glyphicon-refresh glyphicon-spin"></i> Refresh</a></li>
+      <li><a href="#" role="button" data-toggle="button" id="disconnect"><i class="glyphicon glyphicon-off"></i> Disconnect</a></li>
     </ul>
 	</div>
 </nav>
