@@ -13,12 +13,14 @@ requirejs.config({
         d3pie: "d3pie.min",
         footable: "footable.min",
         nprogress: "nprogress.min",
+        stickytabs: "jquery.stickytabs.min"
     },
     shim: {
         bootstrap: {exports:"bootstrap", deps:["jquery"]},
         d3pie: {exports:"d3pie", deps:["d3.global", "jquery"]},
         d3evolution: {exports:"D3Evolution", deps:["d3", "jquery"]},
-        footable: {deps:["bootstrap", "jquery"]}
+        footable: {deps:["bootstrap", "jquery"]},
+        stickytabs: {deps:["jquery"]}
     }
 });
 
