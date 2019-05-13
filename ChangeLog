@@ -1,3 +1,47 @@
+1.9.3: 13 May 2019
+  * [Conf] Add IP_SCORE_FREEMAIL composite rule
+  * [Feature] Add cryptobox method to generate dkim keypairs
+  * [Feature] Add fast hashes to lua cryptobox hash
+  * [Feature] Add least passthrough results
+  * [Feature] Allow oversign if exists mode
+  * [Feature] Clickhouse: Modernise table initial schema
+  * [Feature] Implement IUF interface for specific fast hashes
+  * [Feature] Lua_util: Allow to obfuscate different fields
+  * [Feature] Tune memory management in Rspamd and Lua
+  * [Fix] Avoid buffer overflow when printing long lua strings
+  * [Fix] Change the default oversigning headers to a more sane list
+  * [Fix] Clickhouse: Do not store digest as it is not needed now
+  * [Fix] Clickhouse: Fix lots of storage issues
+  * [Fix] Clickhouse: Support custom actions
+  * [Fix] Deny URLs where hostname is bogus
+  * [Fix] Do not blacklist mail by SPF/DMARC for local/authed users
+  * [Fix] Fix DoS caused by bug in glib
+  * [Fix] Fix UCL parsing of the multiline strings
+  * [Fix] Fix buffer overflow when printing small floats
+  * [Fix] Fix init code for servers keypairs cache
+  * [Fix] Fix issue with urls with no tld (e.g. IP)
+  * [Fix] Fix memory in arc signing logic
+  * [Fix] Fix memory leak in language detector during reloads
+  * [Fix] Fix mixed case content type processing
+  * [Fix] Fix processing of the ip urls in file
+  * [Fix] Fix use after free
+  * [Fix] HTML: Fix `size` attribute processing
+  * [Fix] Hum, it seems that 99ff1c8 was not correct
+  * [Fix] Lua_task: Fix task:get_from method
+  * [Fix] Preserve fd when mapping file to scan
+  * [Fix] Re-use milter_headers settings when doing arc signing
+  * [Fix] Set dmarc force action as least action
+  * [Fix] Switch to GMT
+  * [Fix] allow PKCS7 signatures to be text/plain, too
+  * [Project] Add initial version of the vault management tool
+  * [Project] Add vault support for DKIM and ARC signing
+  * [Project] Implement keys rotation in the vault
+  * [Project] Improve dkim keys generation for vault
+  * [Project] Improve keys creation in rspamadm vault
+  * [Rework] Move lua_worker to a dedicated unit
+  * [WebUI] Add URL fragments (#) support
+  * [WebUI] Fix AJAX request URL
+
 1.9.2: 16 Apr 2019
   * [Conf] Allow to load users plugins from plugins.d
   * [Conf] oversign openpgp and autocrypt headers
