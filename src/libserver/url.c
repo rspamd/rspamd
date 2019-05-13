@@ -49,6 +49,8 @@
 #include "contrib/http-parser/http_parser.h"
 #include <unicode/utf8.h>
 #include <unicode/uchar.h>
+#include <unicode/usprep.h>
+#include <unicode/ucnv.h>
 
 typedef struct url_match_s {
 	const gchar *m_begin;
@@ -1985,6 +1987,53 @@ rspamd_url_parse (struct rspamd_url *uri,
 
 	rspamd_url_shift (uri, unquoted_len, UF_HOST);
 
+	/* Apply nameprep algorithm */
+	static UStringPrepProfile *nameprep = NULL;
+	UErrorCode uc_err = U_ZERO_ERROR;
+
+	if (nameprep == NULL) {
+		/* Open and cache profile */
+		nameprep = usprep_openByType (USPREP_RFC3491_NAMEPREP, &uc_err);
+
+		g_assert (U_SUCCESS (uc_err));
+	}
+
+	UChar *utf16_hostname, *norm_utf16;
+	gint32 utf16_len, norm_utf16_len, norm_utf8_len;
+
+	utf16_hostname = rspamd_mempool_alloc (pool, uri->hostlen * sizeof (UChar));
+	struct UConverter *utf8_conv = rspamd_get_utf8_converter ();
+
+	utf16_len = ucnv_toUChars (utf8_conv, utf16_hostname, uri->hostlen,
+			uri->host, uri->hostlen, &uc_err);
+
+	if (!U_SUCCESS (uc_err)) {
+
+		return URI_ERRNO_BAD_FORMAT;
+	}
+
+	norm_utf16 = rspamd_mempool_alloc (pool, utf16_len * sizeof (UChar));
+	norm_utf16_len = usprep_prepare (nameprep, utf16_hostname, utf16_len,
+			norm_utf16, utf16_len, USPREP_DEFAULT, NULL, &uc_err);
+
+	if (!U_SUCCESS (uc_err)) {
+
+		return URI_ERRNO_BAD_FORMAT;
+	}
+
+	/* Convert back to utf8, sigh... */
+	norm_utf8_len = ucnv_fromUChars (utf8_conv, uri->host, uri->hostlen,
+			norm_utf16, norm_utf16_len, &uc_err);
+
+	if (!U_SUCCESS (uc_err)) {
+
+		return URI_ERRNO_BAD_FORMAT;
+	}
+
+	/* Final shift of lengths */
+	rspamd_url_shift (uri, norm_utf8_len, UF_HOST);
+
+	/* Process data part */
 	if (uri->datalen) {
 		unquoted_len = rspamd_url_decode (uri->data, uri->data, uri->datalen);
 		if (rspamd_normalise_unicode_inplace (pool, uri->data, &unquoted_len)) {
