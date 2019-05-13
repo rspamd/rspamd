@@ -90,6 +90,12 @@ local settings = {
   reuse_auth_results = false, -- Reuse the existing authentication results
 }
 
+-- To match normal AR
+local ar_settings = {
+  add_smtp_user = true,
+  stop_chars = ';'
+}
+
 local function parse_arc_header(hdr, target)
   -- Split elements by ';' and trim spaces
   local arr = fun.totable(fun.map(
@@ -425,10 +431,10 @@ local function arc_sign_seal(task, params, header)
       cur_auth_results = ar_header
     else
       rspamd_logger.debugm(N, task, 'cannot reuse authentication results, header is missing')
-      cur_auth_results = auth_results.gen_auth_results(task) or ''
+      cur_auth_results = auth_results.gen_auth_results(task, ar_settings) or ''
     end
   else
-    cur_auth_results = auth_results.gen_auth_results(task) or ''
+    cur_auth_results = auth_results.gen_auth_results(task, ar_settings) or ''
   end
 
   local sha_ctx = hash.create_specific('sha256')
@@ -619,6 +625,17 @@ dkim_sign_tools.process_signing_settings(N, settings, opts)
 if not dkim_sign_tools.validate_signing_settings(settings) then
   rspamd_logger.infox(rspamd_config, 'mandatory parameters missing, disable arc signing')
   return
+end
+
+local ar_opts = rspamd_config:get_all_opt('milter_headers')
+
+if ar_opts and ar_opts.routines then
+  local routines = ar_opts.routines
+
+  if routines['authentication-results'] then
+    ar_settings = lua_util.override_defaults(ar_settings,
+        routines['authentication-results'])
+  end
 end
 
 if settings.use_redis then
