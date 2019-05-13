@@ -49,7 +49,10 @@ local default_settings = {
   add_smtp_user = true,
 }
 
-local exports = {}
+local exports = {
+  default_settings = default_settings
+}
+
 local local_hostname = rspamd_util.get_hostname()
 
 local function gen_auth_results(task, settings)

@@ -91,10 +91,7 @@ local settings = {
 }
 
 -- To match normal AR
-local ar_settings = {
-  add_smtp_user = true,
-  stop_chars = ';'
-}
+local ar_settings = auth_results.default_settings
 
 local function parse_arc_header(hdr, target)
   -- Split elements by ';' and trim spaces
