@@ -594,7 +594,7 @@ local function ratelimit_cb(task)
         if data[1] == 1 then
           -- set symbol only and do NOT soft reject
           if settings.symbol then
-            task:insert_result(settings.symbol, 0.0,
+            task:insert_result(settings.symbol, 1.0,
                 string.format('%s(%s)', lim_name, lim_key))
             rspamd_logger.infox(task,
                 'set_symbol_only: ratelimit "%s(%s)" exceeded, (%s / %s): %s (%s:%s dyn); redis key: %s',
