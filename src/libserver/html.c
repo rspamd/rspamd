@@ -60,7 +60,7 @@ static struct html_tag_def tag_defs[] = {
 	TAG_DEF(Tag_APPLET, "applet", (CM_OBJECT | CM_IMG | CM_INLINE | CM_PARAM)),
 	TAG_DEF(Tag_AREA, "area", (CM_BLOCK | CM_EMPTY | FL_HREF)),
 	TAG_DEF(Tag_B, "b", (CM_INLINE|FL_BLOCK)),
-	TAG_DEF(Tag_BASE, "base", (CM_HEAD | CM_EMPTY)),
+	TAG_DEF(Tag_BASE, "base", (CM_HEAD | CM_EMPTY | FL_HREF)),
 	TAG_DEF(Tag_BASEFONT, "basefont", (CM_INLINE | CM_EMPTY)),
 	TAG_DEF(Tag_BDO, "bdo", (CM_INLINE)),
 	TAG_DEF(Tag_BIG, "big", (CM_INLINE)),
@@ -3030,9 +3030,13 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 						prev_tag->id == Tag_HTML) {
 						url = rspamd_html_process_url_tag (pool, cur_tag, hc);
 
-						if (url != NULL && hc->base_url == NULL) {
-							/* We have a base tag available */
-							hc->base_url = url;
+						if (url != NULL) {
+							if (hc->base_url == NULL) {
+								/* We have a base tag available */
+								hc->base_url = url;
+							}
+
+							cur_tag->extra = url;
 						}
 					}
 				}
