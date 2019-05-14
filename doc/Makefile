@@ -52,8 +52,8 @@ rspamd_http: ../src/lua/lua_http.c
 	$(LUADOC) < ../src/lua/lua_http.c > markdown/lua/rspamd_http.md
 rspamd_trie: ../src/lua/lua_trie.c
 	$(LUADOC) < ../src/lua/lua_trie.c > markdown/lua/rspamd_trie.md
-rspamd_resolver: ../src/lua/lua_dns.c
-	$(LUADOC) < ../src/lua/lua_dns.c > markdown/lua/rspamd_resolver.md
+rspamd_resolver: ../src/lua/lua_dns_resolver.c
+	$(LUADOC) < ../src/lua/lua_dns_resolver.c > markdown/lua/rspamd_resolver.md
 rspamd_redis: ../src/lua/lua_redis.c
 	$(LUADOC) < ../src/lua/lua_redis.c > markdown/lua/rspamd_redis.md
 rspamd_upstream_list: ../src/lua/lua_upstream.c
