@@ -895,7 +895,7 @@ exports.add_debug_alias = function(mod, alias)
 end
 ---[[[
 -- @function lua_util.get_task_verdict(task)
--- Returns verdict for a task, must be called from idempotent filters only
+-- Returns verdict for a task + score if certain, must be called from idempotent filters only
 -- Returns string:
 -- * `spam`: if message have over reject threshold and has more than one positive rule
 -- * `junk`: if a message has between score between [add_header/rewrite subject] to reject thresholds and has more than two positive rules
@@ -909,28 +909,30 @@ exports.get_task_verdict = function(task)
   if result then
 
     if result.passthrough then
-      return 'passthrough'
+      return 'passthrough',nil
     end
+
+    local score = result.score
 
     local action = result.action
 
     if action == 'reject' and result.npositive > 1 then
-      return 'spam'
+      return 'spam',score
     elseif action == 'no action' then
-      if result.score < 0 or result.nnegative > 3 then
-        return 'ham'
+      if score < 0 or result.nnegative > 3 then
+        return 'ham',score
       end
     else
       -- All colors of junk
       if action == 'add header' or action == 'rewrite subject' then
         if result.npositive > 2 then
-          return 'junk'
+          return 'junk',score
         end
       end
     end
-  end
 
-  return 'uncertain'
+    return 'uncertain',score
+  end
 end
 
 ---[[[
