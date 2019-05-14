@@ -509,7 +509,33 @@ local function arc_sign_seal(task, params, header)
   task:insert_result(settings.sign_symbol, 1.0, string.format('i=%d', cur_idx))
 end
 
+local function prepare_arc_selector(task, sel)
+  local arc_seals = task:cache_get('arc-seals')
+
+  sel.arc_cv = 'none'
+  sel.arc_idx = 1
+  sel.no_cache = true
+  sel.sign_type = 'arc-sign'
+
+  if arc_seals then
+    sel.arc_idx = #arc_seals + 1
+
+    if task:has_symbol(arc_symbols.allow) then
+      sel.arc_cv = 'pass'
+    else
+      sel.arc_cv = 'fail'
+    end
+  end
+end
+
 local function do_sign(task, p)
+  if p.alg and p.alg ~= 'rsa' then
+    -- No support for ed25519 keys
+    return
+  end
+
+  prepare_arc_selector(task, p)
+
   if settings.check_pubkey then
     local resolve_name = p.selector .. "._domainkey." .. p.domain
     task:get_resolver():resolve_txt({
@@ -555,30 +581,10 @@ local function sign_error(task, msg)
 end
 
 local function arc_signing_cb(task)
-  local arc_seals = task:cache_get('arc-seals')
-
   local ret, selectors = dkim_sign_tools.prepare_dkim_signing(N, task, settings)
 
   if not ret then
     return
-  end
-
-  -- TODO: support multiple signatures here
-  local p = selectors[1]
-
-  p.arc_cv = 'none'
-  p.arc_idx = 1
-  p.no_cache = true
-  p.sign_type = 'arc-sign'
-
-  if arc_seals then
-    p.arc_idx = #arc_seals + 1
-
-    if task:has_symbol(arc_symbols.allow) then
-      p.arc_cv = 'pass'
-    else
-      p.arc_cv = 'fail'
-    end
   end
 
   if settings.use_redis then
@@ -587,6 +593,9 @@ local function arc_signing_cb(task)
     if selectors.vault then
       dkim_sign_tools.sign_using_vault(N, task, settings, selectors, do_sign, sign_error)
     else
+      -- TODO: no support for multiple sigs
+      local p = selectors[1]
+      prepare_arc_selector(task, p)
       if ((p.key or p.rawkey) and p.selector) then
         if p.key then
           p.key = lua_util.template(p.key, {

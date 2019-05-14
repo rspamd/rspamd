@@ -609,7 +609,8 @@ exports.sign_using_vault = function(N, task, settings, selectors, sign_func, err
             local dkim_sign_data = {
               rawkey = p.key,
               selector = p.selector,
-              domain = p.domain or selectors.domain
+              domain = p.domain or selectors.domain,
+              alg = p.alg,
             }
             lua_util.debugm(N, task, 'found and parsed key for %s:%s in Vault',
                 dkim_sign_data.domain, dkim_sign_data.selector)
