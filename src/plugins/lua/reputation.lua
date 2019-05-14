@@ -385,7 +385,6 @@ local function ip_reputation_filter(task, rule)
   local pool = task:get_mempool()
   local asn = pool:get_variable("asn")
   local country = pool:get_variable("country")
-  local ipnet = pool:get_variable("ipnet")
 
   if country and cfg.asn_cc_whitelist then
     if cfg.asn_cc_whitelist:get_key(country) then
@@ -399,10 +398,9 @@ local function ip_reputation_filter(task, rule)
   -- These variables are used to define if we have some specific token
   local has_asn = not asn
   local has_country = not country
-  local has_ipnet = not ipnet
   local has_ip = false
 
-  local asn_stats, country_stats, ipnet_stats, ip_stats
+  local asn_stats, country_stats, ip_stats
 
   local function ipstats_check()
     local score = 0.0
@@ -417,11 +415,6 @@ local function ip_reputation_filter(task, rule)
       local country_score = generic_reputation_calc(country_stats, rule, cfg.scores.country)
       score = score + country_score
       table.insert(description_t, string.format('country: %s(%.2f)', country, country_score))
-    end
-    if ipnet_stats then
-      local ipnet_score = generic_reputation_calc(ipnet_stats, rule, cfg.scores.ipnet)
-      score = score + ipnet_score
-      table.insert(description_t, string.format('ipnet: %s(%.2f)', ipnet, ipnet_score))
     end
     if ip_stats then
       local ip_score = generic_reputation_calc(ip_stats, rule, cfg.scores.ip)
@@ -443,9 +436,6 @@ local function ip_reputation_filter(task, rule)
         elseif what == 'country' then
           has_country = true
           country_stats = values
-        elseif what == 'ipnet' then
-          has_ipnet = true
-          ipnet_stats = values
         elseif what == 'ip' then
           has_ip = true
           ip_stats = values
@@ -455,14 +445,12 @@ local function ip_reputation_filter(task, rule)
           has_asn = true
         elseif what == 'country' then
           has_country = true
-        elseif what == 'ipnet' then
-          has_ipnet = true
         elseif what == 'ip' then
           has_ip = true
         end
       end
 
-      if has_asn and has_country and has_ipnet and has_ip then
+      if has_asn and has_country and has_ip then
         -- Check reputation
         ipstats_check()
       end
@@ -474,9 +462,6 @@ local function ip_reputation_filter(task, rule)
   end
   if country then
     rule.backend.get_token(task, rule, cfg.country_prefix .. country, gen_token_callback('country'))
-  end
-  if ipnet then
-    rule.backend.get_token(task, rule, cfg.ipnet_prefix .. ipnet, gen_token_callback('ipnet'))
   end
 
   rule.backend.get_token(task, rule, cfg.ip_prefix .. tostring(ip), gen_token_callback('ip'))
@@ -495,7 +480,6 @@ local function ip_reputation_idempotent(task, rule)
   local pool = task:get_mempool()
   local asn = pool:get_variable("asn")
   local country = pool:get_variable("country")
-  local ipnet = pool:get_variable("ipnet")
 
   if country and cfg.asn_cc_whitelist then
     if cfg.asn_cc_whitelist:get_key(country) then
@@ -526,9 +510,6 @@ local function ip_reputation_idempotent(task, rule)
     if country then
       rule.backend.set_token(task, rule, cfg.country_prefix .. country, token)
     end
-    if ipnet then
-      rule.backend.set_token(task, rule, cfg.ipnet_prefix .. ipnet, token)
-    end
 
     rule.backend.set_token(task, rule, cfg.ip_prefix .. tostring(ip), token)
   end
@@ -549,13 +530,11 @@ local ip_selector = {
     scores = { -- how each component is evaluated
       ['asn'] = 0.4,
       ['country'] = 0.01,
-      ['ipnet'] = 0.5,
       ['ip'] = 1.0
     },
     symbol = 'IP_SCORE', -- symbol to be inserted
     asn_prefix = 'a:', -- prefix for ASN hashes
     country_prefix = 'c:', -- prefix for country hashes
-    ipnet_prefix = 'n:', -- prefix for ipnet hashes
     ip_prefix = 'i:',
     lower_bound = 10, -- minimum number of messages to be scored
     min_score = nil,
