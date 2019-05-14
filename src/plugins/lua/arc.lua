@@ -614,10 +614,7 @@ local function arc_signing_cb(task)
           end
         end
 
-        local dret, hdr = dkim_sign(task, p)
-        if dret then
-          return arc_sign_seal(task, p, hdr)
-        end
+        do_sign(task, p)
       else
         rspamd_logger.infox(task, 'key path or dkim selector unconfigured; no signing')
         return false
@@ -652,6 +649,8 @@ if settings.use_redis then
         'but module is configured to load keys from redis, disable arc signing')
     return
   end
+
+  settings.redis_params = redis_params
 end
 
 rspamd_config:register_symbol({
