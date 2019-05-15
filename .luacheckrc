@@ -52,6 +52,9 @@ files['/**/src/plugins/lua/spamassassin.lua'].globals = {
 files['/**/src/plugins/lua/greylist.lua'].globals = {
   'math.ifloor',
 }
+files['/**/src/plugins/lua/reputation.lua'].globals = {
+  'math.tanh',
+}
 
 files['/**/lualib/lua_util.lua'].globals = {
   'table.unpack',
