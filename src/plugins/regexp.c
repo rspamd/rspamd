@@ -442,7 +442,7 @@ regexp_module_reconfig (struct rspamd_config *cfg)
 static gboolean
 rspamd_lua_call_expression_func (struct ucl_lua_funcdata *lua_data,
 		struct rspamd_task *task,
-		GArray *args, gint *res,
+		GArray *args, gdouble *res,
 		const gchar *symbol)
 {
 	lua_State *L = lua_data->L;
@@ -511,7 +511,7 @@ process_regexp_item (struct rspamd_task *task,
 		void *user_data)
 {
 	struct regexp_module_item *item = user_data;
-	gint res = FALSE;
+	gdouble res = FALSE;
 
 	/* Non-threaded version */
 	if (item->lua_function) {
@@ -526,12 +526,7 @@ process_regexp_item (struct rspamd_task *task,
 	else {
 		/* Process expression */
 		if (item->expr) {
-			struct rspamd_expr_process_data process_data;
-			memset (&process_data, 0, sizeof process_data);
-
-			process_data.task = task;
-
-			res = rspamd_process_expression (item->expr, &process_data);
+			res = rspamd_process_expression (item->expr, 0, task);
 		}
 		else {
 			msg_warn_task ("FIXME: %s symbol is broken with new expressions",
@@ -539,7 +534,7 @@ process_regexp_item (struct rspamd_task *task,
 		}
 	}
 
-	if (res) {
+	if (res != 0) {
 		rspamd_task_insert_result (task, item->symbol, res, NULL);
 	}
 

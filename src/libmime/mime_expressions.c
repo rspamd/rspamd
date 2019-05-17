@@ -87,7 +87,7 @@ static gboolean rspamd_has_flag_expr (struct rspamd_task *task,
 
 static rspamd_expression_atom_t * rspamd_mime_expr_parse (const gchar *line, gsize len,
 		rspamd_mempool_t *pool, gpointer ud, GError **err);
-static gdouble rspamd_mime_expr_process (struct rspamd_expr_process_data *process_data, rspamd_expression_atom_t *atom);
+static gdouble rspamd_mime_expr_process (void *ud, rspamd_expression_atom_t *atom);
 static gint rspamd_mime_expr_priority (rspamd_expression_atom_t *atom);
 static void rspamd_mime_expr_destroy (rspamd_expression_atom_t *atom);
 
@@ -1070,9 +1070,9 @@ rspamd_mime_expr_process_function (struct rspamd_function_atom * func,
 }
 
 static gdouble
-rspamd_mime_expr_process (struct rspamd_expr_process_data *process_data, rspamd_expression_atom_t *atom)
+rspamd_mime_expr_process (void *ud, rspamd_expression_atom_t *atom)
 {
-	struct rspamd_task *task = process_data->task;
+	struct rspamd_task *task = (struct rspamd_task *)ud;
 	struct rspamd_mime_atom *mime_atom;
 	lua_State *L;
 	gdouble ret = 0;

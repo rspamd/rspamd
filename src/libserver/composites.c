@@ -68,7 +68,7 @@ struct symbol_remove_data {
 
 static rspamd_expression_atom_t * rspamd_composite_expr_parse (const gchar *line, gsize len,
 		rspamd_mempool_t *pool, gpointer ud, GError **err);
-static gdouble rspamd_composite_expr_process (struct rspamd_expr_process_data *process_data, rspamd_expression_atom_t *atom);
+static gdouble rspamd_composite_expr_process (void *ud, rspamd_expression_atom_t *atom);
 static gint rspamd_composite_expr_priority (rspamd_expression_atom_t *atom);
 static void rspamd_composite_expr_destroy (rspamd_expression_atom_t *atom);
 static void composites_foreach_callback (gpointer key, gpointer value, void *data);
@@ -253,10 +253,10 @@ rspamd_composite_process_symbol_removal (rspamd_expression_atom_t *atom,
 }
 
 static gdouble
-rspamd_composite_expr_process (struct rspamd_expr_process_data *process_data,
+rspamd_composite_expr_process (void *ud,
 		rspamd_expression_atom_t *atom)
 {
-	struct composites_data *cd = process_data->cd;
+	struct composites_data *cd = (struct composites_data *)ud;
 	const gchar *beg = atom->data, *sym = NULL;
 
 	struct rspamd_symbol_result *ms = NULL;
@@ -442,13 +442,8 @@ composites_foreach_callback (gpointer key, gpointer value, void *data)
 				return;
 			}
 
-			struct rspamd_expr_process_data process_data;
-			memset (&process_data, 0, sizeof process_data);
-
-			process_data.flags = RSPAMD_EXPRESSION_FLAG_NOOPT;
-			process_data.cd = cd;
-
-			rc = rspamd_process_expression (comp->expr, &process_data);
+			rc = rspamd_process_expression (comp->expr, RSPAMD_EXPRESSION_FLAG_NOOPT,
+					cd);
 
 			/* Checked bit */
 			setbit (cd->checked, comp->id * 2);

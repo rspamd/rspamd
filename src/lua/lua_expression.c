@@ -23,10 +23,10 @@
  */
 
 /***
- * @function rspamd_expression.create(line, {parse_func, process_func}, pool)
+ * @function rspamd_expression.create(line, {parse_func, [process_func]}, pool)
  * Create expression from the line using atom parsing routines and the specified memory pool
  * @param {string} line expression line
- * @param {table} atom_functions parse_atom function and process_atom function
+ * @param {table} atom_functions parse_atom function and optional process_atom function
  * @param {rspamd_mempool} memory pool to use for this function
  * @return {expr, err} expression object and error message of `expr` is nil
  * @example
@@ -60,16 +60,18 @@ LUA_FUNCTION_DEF (expr, create);
 LUA_FUNCTION_DEF (expr, to_string);
 
 /***
- * @method rspamd_expression:process(input)
+ * @method rspamd_expression:process([callback, ]input[, flags])
  * Executes the expression and pass input to process atom callbacks
+ * @param {function} callback if not specified on process, then callback must be here
  * @param {any} input input data for processing callbacks
  * @return {number} result of the expression evaluation
  */
 LUA_FUNCTION_DEF (expr, process);
 
 /***
- * @method rspamd_expression:process_traced(input)
+ * @method rspamd_expression:process_traced([callback, ]input[, flags])
  * Executes the expression and pass input to process atom callbacks. This function also saves the full trace
+ * @param {function} callback if not specified on process, then callback must be here
  * @param {any} input input data for processing callbacks
  * @return {number, table of matched atoms} result of the expression evaluation
  */
@@ -98,7 +100,7 @@ static const struct luaL_reg exprlib_f[] = {
 
 static rspamd_expression_atom_t * lua_atom_parse (const gchar *line, gsize len,
 			rspamd_mempool_t *pool, gpointer ud, GError **err);
-static gdouble lua_atom_process (struct rspamd_expr_process_data *process_data, rspamd_expression_atom_t *atom);
+static gdouble lua_atom_process (gpointer runtime_ud, rspamd_expression_atom_t *atom);
 
 static const struct rspamd_atom_subr lua_atom_subr = {
 	.parse = lua_atom_parse,
@@ -129,6 +131,19 @@ rspamd_lua_expression (lua_State * L, gint pos)
 	return ud ? *((struct lua_expression **)ud) : NULL;
 }
 
+static void
+lua_expr_dtor (gpointer p)
+{
+	struct lua_expression *e = (struct lua_expression *)p;
+
+	if (e->parse_idx != -1) {
+		luaL_unref (e->L, LUA_REGISTRYINDEX, e->parse_idx);
+	}
+
+	if (e->process_idx != -1) {
+		luaL_unref (e->L, LUA_REGISTRYINDEX, e->process_idx);
+	}
+}
 
 static rspamd_expression_atom_t *
 lua_atom_parse (const gchar *line, gsize len,
@@ -165,24 +180,51 @@ lua_atom_parse (const gchar *line, gsize len,
 	return atom;
 }
 
+struct lua_atom_process_data {
+	lua_State *L;
+	struct lua_expression *e;
+	gint process_cb_pos;
+	gint stack_item;
+};
+
 static gdouble
-lua_atom_process (struct rspamd_expr_process_data *process_data, rspamd_expression_atom_t *atom)
+lua_atom_process (gpointer runtime_ud, rspamd_expression_atom_t *atom)
 {
-	struct lua_expression *e = (struct lua_expression *)atom->data;
+	struct lua_atom_process_data *pd = (struct lua_atom_process_data *)runtime_ud;
 	gdouble ret = 0;
+	guint nargs;
+	gint err_idx;
 
-	lua_rawgeti (process_data->L, LUA_REGISTRYINDEX, e->process_idx);
-	lua_pushlstring (process_data->L, atom->str, atom->len);
-	lua_pushvalue (process_data->L, process_data->stack_item);
-
-	if (lua_pcall (process_data->L, 2, 1, 0) != 0) {
-		msg_info ("callback call failed: %s", lua_tostring (process_data->L, -1));
-		lua_pop (process_data->L, 1);
+	if (pd->stack_item != -1) {
+		nargs = 2;
 	}
 	else {
-		ret = lua_tonumber (process_data->L, -1);
-		lua_pop (process_data->L, 1);
+		nargs = 1;
 	}
+
+	lua_pushcfunction (pd->L, &rspamd_lua_traceback);
+	err_idx = lua_gettop (pd->L);
+
+	/* Function position */
+	lua_pushvalue (pd->L, pd->process_cb_pos);
+	/* Atom name */
+	lua_pushlstring (pd->L, atom->str, atom->len);
+
+	/* If we have data passed */
+	if (pd->stack_item != -1) {
+		lua_pushvalue (pd->L, pd->stack_item);
+	}
+
+	if (lua_pcall (pd->L, nargs, 1, err_idx) != 0) {
+		GString *tb = lua_touserdata (pd->L, -1);
+		msg_info ("expression process callback failed: %s", tb->str);
+		g_string_free (tb, TRUE);
+	}
+	else {
+		ret = lua_tonumber (pd->L, -1);
+	}
+
+	lua_settop (pd->L, err_idx - 1);
 
 	return ret;
 }
@@ -192,20 +234,51 @@ lua_expr_process (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct lua_expression *e = rspamd_lua_expression (L, 1);
+	struct lua_atom_process_data pd;
 	gdouble res;
-	gint flags = 0;
+	gint flags = 0, old_top;
 
-	struct rspamd_expr_process_data process_data;
-	memset (&process_data, 0, sizeof process_data);
-	process_data.L = L;
-	process_data.stack_item = 2;
+	pd.L = L;
+	pd.e = e;
+	old_top = lua_gettop (L);
 
-	if (lua_gettop (L) >= 3) {
-		process_data.flags = flags;
+	if (e->process_idx == -1) {
+		if (!lua_isfunction (L, 2)) {
+			return luaL_error (L, "expression process is called with no callback function");
+		}
+
+		pd.process_cb_pos = 2;
+
+		if (lua_type (L, 3) != LUA_TNONE && lua_type (L, 3) != LUA_TNIL) {
+			pd.stack_item = 3;
+		}
+		else {
+			pd.stack_item = -1;
+		}
+
+		if (lua_isnumber (L, 4)) {
+			flags = lua_tointeger (L, 4);
+		}
+	}
+	else {
+		lua_rawgeti (L, LUA_REGISTRYINDEX, e->process_idx);
+		pd.process_cb_pos = lua_gettop (L);
+
+		if (lua_type (L, 2) != LUA_TNONE && lua_type (L, 2) != LUA_TNIL) {
+			pd.stack_item = 2;
+		}
+		else {
+			pd.stack_item = -1;
+		}
+
+		if (lua_isnumber (L, 3)) {
+			flags = lua_tointeger (L, 3);
+		}
 	}
 
-	res = rspamd_process_expression (e->expr, &process_data);
+	res = rspamd_process_expression (e->expr, flags, &pd);
 
+	lua_settop (L, old_top);
 	lua_pushnumber (L, res);
 
 	return 1;
@@ -216,39 +289,52 @@ lua_expr_process_traced (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct lua_expression *e = rspamd_lua_expression (L, 1);
-	rspamd_expression_atom_t *atom;
-	gint res;
-	guint i;
-	struct rspamd_expr_process_data process_data;
-	memset (&process_data, 0, sizeof process_data);
+	struct lua_atom_process_data pd;
+	gdouble res;
+	gint flags = 0, old_top;
+	GPtrArray *trace;
 
-	process_data.L = L;
-	/*
-	 * stack:1 - self
-	 * stack:2 - data, see process_traced() definition for details
-	 */
-	process_data.stack_item = 2;
+	pd.L = L;
+	pd.e = e;
+	old_top = lua_gettop (L);
 
-	if (lua_gettop (L) >= 3) {
-		process_data.flags = lua_tonumber (L, 3);
+	if (e->process_idx == -1) {
+		if (!lua_isfunction (L, 2)) {
+			return luaL_error (L, "expression process is called with no callback function");
+		}
+
+		pd.process_cb_pos = 2;
+		pd.stack_item = 3;
+
+		if (lua_isnumber (L, 4)) {
+			flags = lua_tointeger (L, 4);
+		}
+	}
+	else {
+		lua_rawgeti (L, LUA_REGISTRYINDEX, e->process_idx);
+		pd.process_cb_pos = lua_gettop (L);
+		pd.stack_item = 2;
+
+		if (lua_isnumber (L, 3)) {
+			flags = lua_tointeger (L, 3);
+		}
 	}
 
-	process_data.trace = g_ptr_array_sized_new (32);
+	res = rspamd_process_expression_track (e->expr, flags, &pd, &trace);
 
-	res = rspamd_process_expression_track (e->expr, &process_data);
-
+	lua_settop (L, old_top);
 	lua_pushnumber (L, res);
 
-	lua_createtable (L, process_data.trace->len, 0);
+	lua_createtable (L, trace->len, 0);
 
-	for (i = 0; i < process_data.trace->len; i ++) {
-		atom = g_ptr_array_index (process_data.trace, i);
+	for (guint i = 0; i < trace->len; i ++) {
+		struct rspamd_expression_atom_s *atom = g_ptr_array_index (trace, i);
 
 		lua_pushlstring (L, atom->str, atom->len);
 		lua_rawseti (L, -2, i + 1);
 	}
 
-	g_ptr_array_free (process_data.trace, TRUE);
+	g_ptr_array_free (trace, TRUE);
 
 	return 2;
 }
@@ -260,6 +346,7 @@ lua_expr_create (lua_State *L)
 	struct lua_expression *e, **pe;
 	const char *line;
 	gsize len;
+	gboolean no_process = FALSE;
 	GError *err = NULL;
 	rspamd_mempool_t *pool;
 
@@ -293,11 +380,16 @@ lua_expr_create (lua_State *L)
 		lua_gettable (L, -2);
 
 		if (lua_type (L, -1) != LUA_TFUNCTION) {
-			lua_pop (L, 2);
-			lua_pushnil (L);
-			lua_pushstring (L, "bad process callback");
+			if (lua_type (L, -1) != LUA_TNIL && lua_type (L, -1) != LUA_TNONE) {
+				lua_pop (L, 2);
+				lua_pushnil (L);
+				lua_pushstring (L, "bad process callback");
 
-			return 2;
+				return 2;
+			}
+			else {
+				no_process = TRUE;
+			}
 		}
 
 		lua_pop (L, 1);
@@ -312,9 +404,15 @@ lua_expr_create (lua_State *L)
 		lua_gettable (L, -2);
 		e->parse_idx = luaL_ref (L, LUA_REGISTRYINDEX);
 
-		lua_pushnumber (L, 2);
-		lua_gettable (L, -2);
-		e->process_idx = luaL_ref (L, LUA_REGISTRYINDEX);
+		if (!no_process) {
+			lua_pushnumber (L, 2);
+			lua_gettable (L, -2);
+			e->process_idx = luaL_ref (L, LUA_REGISTRYINDEX);
+		}
+		else {
+			e->process_idx = -1;
+		}
+
 		lua_pop (L, 1); /* Table */
 
 		if (!rspamd_parse_expression (line, len, &lua_atom_subr, e, pool, &err,
@@ -322,10 +420,12 @@ lua_expr_create (lua_State *L)
 			lua_pushnil (L);
 			lua_pushstring (L, err->message);
 			g_error_free (err);
+			lua_expr_dtor (e);
 
 			return 2;
 		}
 
+		rspamd_mempool_add_destructor (pool, lua_expr_dtor, e);
 		pe = lua_newuserdata (L, sizeof (struct lua_expression *));
 		rspamd_lua_setclass (L, "rspamd{expr}", -1);
 		*pe = e;

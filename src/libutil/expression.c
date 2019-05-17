@@ -57,6 +57,14 @@ struct rspamd_expression {
 	guint evals;
 };
 
+struct rspamd_expr_process_data {
+	gpointer *ud;
+	gint flags;
+	/* != NULL if trace is collected */
+	GPtrArray *trace;
+	rspamd_expression_process_cb process_closure;
+};
+
 static GQuark
 rspamd_expr_quark (void)
 {
@@ -1021,7 +1029,7 @@ rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
 				t1 = rspamd_get_ticks (TRUE);
 			}
 
-			elt->value = process_data->process_closure (process_data, elt->p.atom);
+			elt->value = process_data->process_closure (process_data->ud, elt->p.atom);
 
 			if (fabs (elt->value) > 1e-9) {
 				elt->p.atom->hits ++;
@@ -1103,8 +1111,11 @@ rspamd_ast_cleanup_traverse (GNode *n, gpointer d)
 gdouble
 rspamd_process_expression_closure (struct rspamd_expression *expr,
 								   rspamd_expression_process_cb cb,
-								   struct rspamd_expr_process_data *process_data)
+								   gint flags,
+								   gpointer runtime_ud,
+								   GPtrArray **track)
 {
+	struct rspamd_expr_process_data pd;
 	gdouble ret = 0;
 
 	g_assert (expr != NULL);
@@ -1113,8 +1124,16 @@ rspamd_process_expression_closure (struct rspamd_expression *expr,
 
 	expr->evals ++;
 
-	process_data->process_closure = cb;
-	ret = rspamd_ast_process_node (expr, expr->ast, process_data);
+	pd.process_closure = cb;
+	pd.flags = flags;
+	pd.ud = runtime_ud;
+
+	if (track) {
+		pd.trace = g_ptr_array_sized_new (32);
+		*track = pd.trace;
+	}
+
+	ret = rspamd_ast_process_node (expr, expr->ast, &pd);
 
 	/* Cleanup */
 	g_node_traverse (expr->ast, G_IN_ORDER, G_TRAVERSE_ALL, -1,
@@ -1138,18 +1157,21 @@ rspamd_process_expression_closure (struct rspamd_expression *expr,
 
 gdouble
 rspamd_process_expression_track (struct rspamd_expression *expr,
-						   struct rspamd_expr_process_data *process_data)
+								 gint flags,
+								 gpointer runtime_ud,
+								 GPtrArray **track)
 {
 	return rspamd_process_expression_closure (expr,
-			expr->subr->process, process_data);
+			expr->subr->process, flags, runtime_ud, track);
 }
 
 gdouble
 rspamd_process_expression (struct rspamd_expression *expr,
-		struct rspamd_expr_process_data *process_data)
+						   gint flags,
+						   gpointer runtime_ud)
 {
 	return rspamd_process_expression_closure (expr,
-			expr->subr->process, process_data);
+			expr->subr->process, flags, runtime_ud, NULL);
 }
 
 static gboolean

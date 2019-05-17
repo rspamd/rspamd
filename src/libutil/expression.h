@@ -56,23 +56,8 @@ typedef struct rspamd_expression_atom_s {
 	gint priority;
 } rspamd_expression_atom_t;
 
-struct rspamd_expr_process_data;
-
-typedef gdouble (*rspamd_expression_process_cb)(struct rspamd_expr_process_data *process_data,
+typedef gdouble (*rspamd_expression_process_cb)(gpointer runtime_data,
 												rspamd_expression_atom_t *atom);
-
-struct rspamd_expr_process_data {
-	/* Current Lua state to run atom processing */
-	struct lua_State *L;
-	/* Parameter of lua-function processing atom*/
-	gint stack_item;
-	gint flags;
-	/* != NULL if trace is collected */
-	GPtrArray *trace;
-	struct composites_data *cd;
-	struct rspamd_task *task;
-	rspamd_expression_process_cb process_closure;
-};
 
 struct rspamd_atom_subr {
 	/* Parses atom from string and returns atom structure */
@@ -111,7 +96,8 @@ gboolean rspamd_parse_expression (const gchar *line, gsize len,
  * @return the value of expression
  */
 gdouble rspamd_process_expression (struct rspamd_expression *expr,
-		struct rspamd_expr_process_data *process_data);
+								   gint flags,
+								   gpointer runtime_ud);
 
 /**
  * Process the expression and return its value using atom 'process' functions with the specified data pointer.
@@ -122,7 +108,9 @@ gdouble rspamd_process_expression (struct rspamd_expression *expr,
  * @return the value of expression
  */
 gdouble rspamd_process_expression_track (struct rspamd_expression *expr,
-		struct rspamd_expr_process_data *process_data);
+										 gint flags,
+										 gpointer runtime_ud,
+										 GPtrArray **track);
 
 /**
  * Process the expression with the custom processor
@@ -133,7 +121,9 @@ gdouble rspamd_process_expression_track (struct rspamd_expression *expr,
  */
 gdouble rspamd_process_expression_closure (struct rspamd_expression *expr,
 										   rspamd_expression_process_cb cb,
-										   struct rspamd_expr_process_data *process_data);
+										   gint flags,
+										   gpointer runtime_ud,
+										   GPtrArray **track);
 /**
  * Shows string representation of an expression
  * @param expr expression to show
