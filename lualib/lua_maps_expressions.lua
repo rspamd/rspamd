@@ -85,6 +85,27 @@ local function process_func(elt, task)
   return nil
 end
 
+--[[[
+-- @function lua_maps_expression.create(config, object, module_name)
+-- Creates a new maps combination from `object` for `module_name`.
+-- The input should be table with the following fields:
+--
+-- * `rules` - kv map of rules where each rule has `map` and `selector` mandatory attribute, also `type` for map type, e.g. `regexp`
+-- * `expression` - Rspamd expression where elements are names from `rules` field, e.g. `ip & from`
+--
+-- This function returns an object with public method `process(task)` that checks
+-- a task for the conditions defined in `expression` and `rules` and returns 2 values:
+--
+-- 1. value returned by an expression (e.g. 1 or 0)
+-- 2. an map (rule_name -> table) of matches, where each element has the following fields:
+--   * `matched` - selector's value
+--   * `value` - map's result
+--
+-- In case if `expression` is false a `nil` value is returned.
+-- @param {rspamd_config} cfg rspamd config
+-- @param {table} obj configuration table
+--
+--]]
 local function create(cfg, obj, module_name)
   if not module_name then module_name = 'lua_maps_expressions' end
 
