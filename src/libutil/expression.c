@@ -1124,6 +1124,7 @@ rspamd_process_expression_closure (struct rspamd_expression *expr,
 
 	expr->evals ++;
 
+	memset (&pd, 0, sizeof (pd));
 	pd.process_closure = cb;
 	pd.flags = flags;
 	pd.ud = runtime_ud;
