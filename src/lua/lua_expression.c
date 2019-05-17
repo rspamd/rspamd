@@ -351,7 +351,8 @@ lua_expr_create (lua_State *L)
 	rspamd_mempool_t *pool;
 
 	/* Check sanity of the arguments */
-	if (lua_type (L, 1) != LUA_TSTRING || lua_type (L, 2) != LUA_TTABLE ||
+	if (lua_type (L, 1) != LUA_TSTRING ||
+			(lua_type (L, 2) != LUA_TTABLE || lua_type (L, 2) != LUA_TFUNCTION) ||
 			rspamd_lua_check_mempool (L, 3) == NULL) {
 		msg_info ("bad arguments to lua_expr_create");
 		lua_pushnil (L);
@@ -361,59 +362,66 @@ lua_expr_create (lua_State *L)
 		line = lua_tolstring (L, 1, &len);
 		pool = rspamd_lua_check_mempool (L, 3);
 
-		/* Check callbacks */
-		lua_pushvalue (L, 2);
-		lua_pushnumber (L, 1);
-		lua_gettable (L, -2);
-
-		if (lua_type (L, -1) != LUA_TFUNCTION) {
-			lua_pop (L, 2);
-			lua_pushnil (L);
-			lua_pushstring (L, "bad parse callback");
-
-			return 2;
-		}
-
-		lua_pop (L, 1);
-
-		lua_pushnumber (L, 2);
-		lua_gettable (L, -2);
-
-		if (lua_type (L, -1) != LUA_TFUNCTION) {
-			if (lua_type (L, -1) != LUA_TNIL && lua_type (L, -1) != LUA_TNONE) {
-				lua_pop (L, 2);
-				lua_pushnil (L);
-				lua_pushstring (L, "bad process callback");
-
-				return 2;
-			}
-			else {
-				no_process = TRUE;
-			}
-		}
-
-		lua_pop (L, 1);
-
-		/* Table is still on the top of stack */
-
 		e = rspamd_mempool_alloc (pool, sizeof (*e));
 		e->L = L;
 		e->pool = pool;
 
-		lua_pushnumber (L, 1);
-		lua_gettable (L, -2);
-		e->parse_idx = luaL_ref (L, LUA_REGISTRYINDEX);
+		/* Check callbacks */
+		if (lua_istable (L, 2)) {
+			lua_pushvalue (L, 2);
+			lua_pushnumber (L, 1);
+			lua_gettable (L, -2);
 
-		if (!no_process) {
+			if (lua_type (L, -1) != LUA_TFUNCTION) {
+				lua_pop (L, 2);
+				lua_pushnil (L);
+				lua_pushstring (L, "bad parse callback");
+
+				return 2;
+			}
+
+			lua_pop (L, 1);
+
 			lua_pushnumber (L, 2);
 			lua_gettable (L, -2);
-			e->process_idx = luaL_ref (L, LUA_REGISTRYINDEX);
+
+			if (lua_type (L, -1) != LUA_TFUNCTION) {
+				if (lua_type (L, -1) != LUA_TNIL && lua_type (L, -1) != LUA_TNONE) {
+					lua_pop (L, 2);
+					lua_pushnil (L);
+					lua_pushstring (L, "bad process callback");
+
+					return 2;
+				}
+				else {
+					no_process = TRUE;
+				}
+			}
+
+			lua_pop (L, 1);
+			/* Table is still on the top of stack */
+
+			lua_pushnumber (L, 1);
+			lua_gettable (L, -2);
+			e->parse_idx = luaL_ref (L, LUA_REGISTRYINDEX);
+
+			if (!no_process) {
+				lua_pushnumber (L, 2);
+				lua_gettable (L, -2);
+				e->process_idx = luaL_ref (L, LUA_REGISTRYINDEX);
+			}
+			else {
+				e->process_idx = -1;
+			}
+
+			lua_pop (L, 1); /* Table */
 		}
 		else {
+			/* Process function is just a function, not a table */
+			lua_pushvalue (L, 2);
+			e->parse_idx = luaL_ref (L, LUA_REGISTRYINDEX);
 			e->process_idx = -1;
 		}
-
-		lua_pop (L, 1); /* Table */
 
 		if (!rspamd_parse_expression (line, len, &lua_atom_subr, e, pool, &err,
 				&e->expr)) {
