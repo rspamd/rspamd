@@ -501,7 +501,8 @@ local ip_selector = {
       ['country'] = 0.01,
       ['ip'] = 1.0
     },
-    symbol = 'IP_SCORE', -- symbol to be inserted
+    symbol_spam = 'SENDER_REP', -- symbol to be inserted
+    split_symbols = true,
     asn_prefix = 'a:', -- prefix for ASN hashes
     country_prefix = 'c:', -- prefix for country hashes
     ip_prefix = 'i:',
@@ -564,7 +565,8 @@ end
 
 local spf_selector = {
   config = {
-    symbol = 'SPF_SCORE', -- symbol to be inserted
+    symbol = 'SPF_REP', -- symbol to be inserted
+    split_symbols = true,
     lower_bound = 10, -- minimum number of messages to be scored
     min_score = nil,
     max_score = nil,
@@ -692,6 +694,7 @@ local generic_selector = {
 
 local selectors = {
   ip = ip_selector,
+  sender = ip_selector, -- Better name
   url = url_selector,
   dkim = dkim_selector,
   spf = spf_selector,
