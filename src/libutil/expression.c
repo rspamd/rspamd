@@ -1021,7 +1021,7 @@ rspamd_ast_process_node (struct rspamd_expression *expr, GNode *node,
 				t1 = rspamd_get_ticks (TRUE);
 			}
 
-			elt->value = expr->subr->process (process_data, elt->p.atom);
+			elt->value = process_data->process_closure (process_data, elt->p.atom);
 
 			if (fabs (elt->value) > 1e-9) {
 				elt->p.atom->hits ++;
@@ -1101,7 +1101,9 @@ rspamd_ast_cleanup_traverse (GNode *n, gpointer d)
 }
 
 gdouble
-rspamd_process_expression_track (struct rspamd_expression *expr, struct rspamd_expr_process_data *process_data)
+rspamd_process_expression_closure (struct rspamd_expression *expr,
+								   rspamd_expression_process_cb cb,
+								   struct rspamd_expr_process_data *process_data)
 {
 	gdouble ret = 0;
 
@@ -1110,6 +1112,8 @@ rspamd_process_expression_track (struct rspamd_expression *expr, struct rspamd_e
 	g_assert (expr->expression_stack->len == 0);
 
 	expr->evals ++;
+
+	process_data->process_closure = cb;
 	ret = rspamd_ast_process_node (expr, expr->ast, process_data);
 
 	/* Cleanup */
@@ -1133,9 +1137,19 @@ rspamd_process_expression_track (struct rspamd_expression *expr, struct rspamd_e
 }
 
 gdouble
-rspamd_process_expression (struct rspamd_expression *expr, struct rspamd_expr_process_data *process_data)
+rspamd_process_expression_track (struct rspamd_expression *expr,
+						   struct rspamd_expr_process_data *process_data)
 {
-	return rspamd_process_expression_track (expr, process_data);
+	return rspamd_process_expression_closure (expr,
+			expr->subr->process, process_data);
+}
+
+gdouble
+rspamd_process_expression (struct rspamd_expression *expr,
+		struct rspamd_expr_process_data *process_data)
+{
+	return rspamd_process_expression_closure (expr,
+			expr->subr->process, process_data);
 }
 
 static gboolean

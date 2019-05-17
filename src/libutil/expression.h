@@ -56,6 +56,11 @@ typedef struct rspamd_expression_atom_s {
 	gint priority;
 } rspamd_expression_atom_t;
 
+struct rspamd_expr_process_data;
+
+typedef gdouble (*rspamd_expression_process_cb)(struct rspamd_expr_process_data *process_data,
+												rspamd_expression_atom_t *atom);
+
 struct rspamd_expr_process_data {
 	/* Current Lua state to run atom processing */
 	struct lua_State *L;
@@ -66,6 +71,7 @@ struct rspamd_expr_process_data {
 	GPtrArray *trace;
 	struct composites_data *cd;
 	struct rspamd_task *task;
+	rspamd_expression_process_cb process_closure;
 };
 
 struct rspamd_atom_subr {
@@ -73,7 +79,7 @@ struct rspamd_atom_subr {
 	rspamd_expression_atom_t * (*parse)(const gchar *line, gsize len,
 			rspamd_mempool_t *pool, gpointer ud, GError **err);
 	/* Process atom via the opaque pointer (e.g. struct rspamd_task *) */
-	gdouble (*process) (struct rspamd_expr_process_data *process_data, rspamd_expression_atom_t *atom);
+	rspamd_expression_process_cb process;
 	/* Calculates the relative priority of the expression */
 	gint (*priority) (rspamd_expression_atom_t *atom);
 	void (*destroy) (rspamd_expression_atom_t *atom);
@@ -118,6 +124,16 @@ gdouble rspamd_process_expression (struct rspamd_expression *expr,
 gdouble rspamd_process_expression_track (struct rspamd_expression *expr,
 		struct rspamd_expr_process_data *process_data);
 
+/**
+ * Process the expression with the custom processor
+ * @param expr
+ * @param cb
+ * @param process_data
+ * @return
+ */
+gdouble rspamd_process_expression_closure (struct rspamd_expression *expr,
+										   rspamd_expression_process_cb cb,
+										   struct rspamd_expr_process_data *process_data);
 /**
  * Shows string representation of an expression
  * @param expr expression to show
