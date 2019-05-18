@@ -352,7 +352,7 @@ lua_expr_create (lua_State *L)
 
 	/* Check sanity of the arguments */
 	if (lua_type (L, 1) != LUA_TSTRING ||
-			(lua_type (L, 2) != LUA_TTABLE || lua_type (L, 2) != LUA_TFUNCTION) ||
+			(lua_type (L, 2) != LUA_TTABLE && lua_type (L, 2) != LUA_TFUNCTION) ||
 			rspamd_lua_check_mempool (L, 3) == NULL) {
 		msg_info ("bad arguments to lua_expr_create");
 		lua_pushnil (L);
