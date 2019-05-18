@@ -129,7 +129,19 @@ local function create(cfg, obj, module_name)
           name, module_name)
     end
 
-    local map = lua_maps.map_add_from_ucl(rule.map, rule.type or 'set',
+    if not rule.type then
+      -- Guess type
+      if name:find('ip') or name:find('ipnet') then
+        rule.type = 'radix'
+      elseif name:find('regexp') or name:find('re_') then
+        rule.type = 'regexp'
+      elseif name:find('glob') then
+        rule.type = 'regexp'
+      else
+        rule.type = 'set'
+      end
+    end
+    local map = lua_maps.map_add_from_ucl(rule.map, rule.type,
         obj.description or module_name)
     if not map then
       rspamd_logger.errx(cfg, 'cannot add map for element %s in module %s',
@@ -173,6 +185,14 @@ local function create(cfg, obj, module_name)
   end
 
   ret.expr = expr
+
+  if obj.symbol then
+    rspamd_config:register_symbol{
+      type = 'virtual,ghost',
+      name = obj.symbol,
+      score = 0.0,
+    }
+  end
 
   return ret
 end
