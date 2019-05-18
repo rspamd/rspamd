@@ -227,18 +227,32 @@ static int emit_digits(char* digits, int ndigits, char* dest, int K, bool neg,
             offset = -offset;
             dest[0] = '0';
             dest[1] = '.';
-            memset(dest + 2, '0', offset);
-            memcpy(dest + offset + 2, digits, ndigits);
 
-            return ndigits + 2 + offset;
+            /* We have up to 21 characters in output available */
+            if (offset + ndigits <= 21) {
+            	memset(dest + 2, '0', offset);
+            	memcpy(dest + offset + 2, digits, ndigits);
+
+            	return ndigits + 2 + offset;
+            }
+            else {
+            	/* Overflow */
+            	dest[2] = '0';
+            	return 3;
+            }
 
         /* fp > 1.0 */
         } else {
             memcpy(dest, digits, offset);
-            dest[offset] = '.';
-            memcpy(dest + offset + 1, digits + offset, ndigits - offset);
 
-            return ndigits + 1;
+            /* Overflow check */
+            if (ndigits <= 23) {
+            	dest[offset] = '.';
+            	memcpy(dest + offset + 1, digits + offset, ndigits - offset);
+            	return ndigits + 1;
+            }
+
+            return offset;
         }
     }
 
