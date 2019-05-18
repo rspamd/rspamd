@@ -1153,7 +1153,6 @@ rspamd_include_map_handler (const guchar *data, gsize len,
 #define RSPAMD_VERSION_MACRO "VERSION"
 #define RSPAMD_VERSION_MAJOR_MACRO "VERSION_MAJOR"
 #define RSPAMD_VERSION_MINOR_MACRO "VERSION_MINOR"
-#define RSPAMD_VERSION_PATCH_MACRO "VERSION_PATCH"
 #define RSPAMD_BRANCH_VERSION_MACRO "BRANCH_VERSION"
 #define RSPAMD_HOSTNAME_MACRO "HOSTNAME"
 
@@ -1195,8 +1194,6 @@ rspamd_ucl_add_conf_variables (struct ucl_parser *parser, GHashTable *vars)
 			RSPAMD_VERSION_MAJOR);
 	ucl_parser_register_variable (parser, RSPAMD_VERSION_MINOR_MACRO,
 			RSPAMD_VERSION_MINOR);
-	ucl_parser_register_variable (parser, RSPAMD_VERSION_PATCH_MACRO,
-			RSPAMD_VERSION_PATCH);
 	ucl_parser_register_variable (parser, RSPAMD_BRANCH_VERSION_MACRO,
 			RSPAMD_VERSION_BRANCH);
 

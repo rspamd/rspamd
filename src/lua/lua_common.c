@@ -407,11 +407,6 @@ rspamd_lua_rspamd_version_cmp (lua_State *L)
 			goto set;
 		}
 
-		if (components[2]) {
-			ret = rspamd_lua_cmp_version_components (components[2],
-					RSPAMD_VERSION_PATCH);
-		}
-
 		/*
 		 * XXX: we don't compare git releases assuming that it is meaningless
 		 */
@@ -437,8 +432,7 @@ rspamd_lua_rspamd_version_numeric (lua_State *L)
 		type = lua_tostring (L, 1);
 		if (g_ascii_strcasecmp (type, "short") == 0) {
 			version_num = RSPAMD_VERSION_MAJOR_NUM * 1000 +
-						  RSPAMD_VERSION_MINOR_NUM * 100 +
-						  RSPAMD_VERSION_PATCH_NUM * 10;
+						  RSPAMD_VERSION_MINOR_NUM * 100;
 		}
 		else if (g_ascii_strcasecmp (type, "main") == 0) {
 			version_num = RSPAMD_VERSION_MAJOR_NUM * 1000 +
@@ -449,9 +443,6 @@ rspamd_lua_rspamd_version_numeric (lua_State *L)
 		}
 		else if (g_ascii_strcasecmp (type, "minor") == 0) {
 			version_num = RSPAMD_VERSION_MINOR_NUM;
-		}
-		else if (g_ascii_strcasecmp (type, "patch") == 0) {
-			version_num = RSPAMD_VERSION_PATCH_NUM;
 		}
 	}
 
@@ -474,8 +465,7 @@ rspamd_lua_rspamd_version (lua_State *L)
 
 		if (g_ascii_strcasecmp (type, "short") == 0) {
 			result = RSPAMD_VERSION_MAJOR
-					 "." RSPAMD_VERSION_MINOR
-					 "." RSPAMD_VERSION_PATCH;
+					 "." RSPAMD_VERSION_MINOR;
 		}
 		else if (g_ascii_strcasecmp (type, "main") == 0) {
 			result = RSPAMD_VERSION_MAJOR "." RSPAMD_VERSION_MINOR;
@@ -485,9 +475,6 @@ rspamd_lua_rspamd_version (lua_State *L)
 		}
 		else if (g_ascii_strcasecmp (type, "minor") == 0) {
 			result = RSPAMD_VERSION_MINOR;
-		}
-		else if (g_ascii_strcasecmp (type, "patch") == 0) {
-			result = RSPAMD_VERSION_PATCH;
 		}
 		else if (g_ascii_strcasecmp (type, "id") == 0) {
 			result = RID;
@@ -729,7 +716,6 @@ rspamd_lua_set_env (lua_State *L, GHashTable *vars, char **lua_env, GError **err
 		rspamd_lua_table_set (L, "version", RVERSION);
 		rspamd_lua_table_set (L, "ver_major", RSPAMD_VERSION_MAJOR);
 		rspamd_lua_table_set (L, "ver_minor", RSPAMD_VERSION_MINOR);
-		rspamd_lua_table_set (L, "ver_patch", RSPAMD_VERSION_PATCH);
 		rspamd_lua_table_set (L, "ver_id", RID);
 		lua_pushstring (L, "ver_num");
 		lua_pushinteger (L, RSPAMD_VERSION_NUM);
