@@ -1683,10 +1683,10 @@ lua_config_get_key (lua_State *L)
 	return 1;
 }
 
-static gint
+static guint
 lua_parse_symbol_flags (const gchar *str)
 {
-	int ret = 0;
+	guint ret = 0;
 
 	if (str) {
 		if (strstr (str, "fine") != NULL) {
@@ -1713,6 +1713,9 @@ lua_parse_symbol_flags (const gchar *str)
 		if (strstr (str, "trivial") != NULL) {
 			ret |= SYMBOL_TYPE_TRIVIAL;
 		}
+		if (strstr (str, "ghost") != NULL) {
+			ret |= SYMBOL_TYPE_GHOST;
+		}
 		if (strstr (str, "mime") != NULL) {
 			ret |= SYMBOL_TYPE_MIME_ONLY;
 		}
@@ -1730,10 +1733,10 @@ lua_parse_symbol_flags (const gchar *str)
 	return ret;
 }
 
-static gint
+static guint
 lua_parse_symbol_type (const gchar *str)
 {
-	gint ret = SYMBOL_TYPE_NORMAL;
+	guint ret = SYMBOL_TYPE_NORMAL;
 	gchar **vec;
 	guint i, l;
 

@@ -886,7 +886,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 	if (name == NULL && !(type & SYMBOL_TYPE_CALLBACK)) {
 		msg_warn_cache ("no name for non-callback symbol!");
 	}
-	else if ((type & SYMBOL_TYPE_VIRTUAL) && parent == -1) {
+	else if ((type & SYMBOL_TYPE_VIRTUAL & (~SYMBOL_TYPE_GHOST)) && parent == -1) {
 		msg_warn_cache ("no parent symbol is associated with virtual symbol %s",
 			name);
 	}
@@ -976,9 +976,6 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 			item->specific.normal.condition_cb = -1;
 		}
 		else {
-			/* Require parent */
-			g_assert (parent != -1);
-
 			item->is_virtual = TRUE;
 			item->specific.virtual.parent = parent;
 			item->id = cache->virtual->len;
