@@ -124,7 +124,7 @@ if configure_asn_module() then
     name = 'ASN_CHECK',
     type = 'prefilter,nostat',
     callback = asn_check,
-    priority = 5,
+    priority = 8,
     flags = 'empty',
   })
   if options['symbol'] then
