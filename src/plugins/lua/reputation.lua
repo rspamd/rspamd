@@ -27,6 +27,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
 local lua_util = require "lua_util"
 local lua_maps = require "lua_maps"
+local lua_maps_exprs = require "lua_maps_expressions"
 local hash = require 'rspamd_cryptobox_hash'
 local lua_redis = require "lua_redis"
 local fun = require "fun"
@@ -1022,8 +1023,8 @@ local function is_rule_applicable(task, rule)
     end
   end
 
-  if rule.selector.config.whitelisted_ip_map then
-    if rule.config.whitelisted_ip_map:get_key(ip) then
+  if rule.config.whitelist_map then
+    if rule.config.whitelist_map:process(task) then
       return false
     end
   end
@@ -1114,10 +1115,9 @@ local function parse_rule(name, tbl)
   tbl.backend = nil
   rule.config = lua_util.override_defaults(rule.config, tbl)
 
-  if rule.config.whitelisted_ip then
-    rule.config.whitelisted_ip_map = lua_maps.rspamd_map_add_from_ucl(rule.whitelisted_ip,
-      'radix',
-      'Reputation whitelist for ' .. name)
+  if rule.config.whitelist then
+    rule.config.whitelist_map = lua_maps_exprs.create(rspamd_config,
+        rule.config.whitelist, N)
   end
 
   local symbol = name
