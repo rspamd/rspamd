@@ -591,7 +591,8 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 	const gchar *fmt,
 	va_list args)
 {
-	gchar zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], dtoabuf[32], *p, *last, c;
+	gchar zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], dtoabuf[32], *p, *last;
+	guchar c;
 	const gchar *buf_start = fmt, *fmt_start = NULL;
 	gint d;
 	gdouble f;
@@ -839,9 +840,9 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 					}
 
 					while (slen) {
-						hexbuf[0] = hex == 2 ? _HEX[(*p >> 4) & 0xf] :
-								_hex[(*p >> 4) & 0xf];
-						hexbuf[1] = hex == 2 ? _HEX[*p & 0xf] : _hex[*p & 0xf];
+						hexbuf[0] = hex == 2 ? _HEX[(*p >> 4u) & 0xfu] :
+								_hex[(*p >> 4u) & 0xfu];
+						hexbuf[1] = hex == 2 ? _HEX[*p & 0xfu] : _hex[*p & 0xfu];
 						RSPAMD_PRINTF_APPEND_BUF (hexbuf, 2);
 						p++;
 						slen--;
@@ -948,32 +949,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 			case 'f':
 				f = (gdouble) va_arg (args, double);
-				slen = fpconv_dtoa (f, dtoabuf, false);
-
-				if (frac_width != 0) {
-					const gchar *dot_pos = memchr (dtoabuf, '.', slen);
-
-					if (dot_pos) {
-						if (frac_width < (slen - ((dot_pos - dtoabuf) + 1))) {
-							/* Truncate */
-							slen = (dot_pos - dtoabuf) + 1 + /* xxx. */
-								   frac_width; /* .yyy */
-						}
-						else if (frac_width + dot_pos + 1 < dtoabuf + sizeof (dtoabuf)) {
-							/* Expand */
-							frac_width -= slen - ((dot_pos - dtoabuf) + 1);
-							memset (dtoabuf + slen, '0', frac_width);
-							slen += frac_width;
-						}
-					}
-					else {
-						/* Expand */
-						frac_width = MIN (frac_width, sizeof (dtoabuf) - slen - 1);
-						dtoabuf[slen ++] = '.';
-						memset (dtoabuf + slen, '0', frac_width);
-						slen += frac_width;
-					}
-				}
+				slen = fpconv_dtoa (f, dtoabuf, frac_width, false);
 
 				RSPAMD_PRINTF_APPEND (dtoabuf, slen);
 
@@ -981,39 +957,14 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 			case 'g':
 				f = (gdouble) va_arg (args, double);
-				slen = fpconv_dtoa (f, dtoabuf, true);
+				slen = fpconv_dtoa (f, dtoabuf, 0, true);
 				RSPAMD_PRINTF_APPEND (dtoabuf, slen);
 
 				continue;
 
 			case 'F':
 				f = (gdouble) va_arg (args, long double);
-				slen = fpconv_dtoa (f, dtoabuf, false);
-
-				if (frac_width != 0) {
-					const gchar *dot_pos = memchr (dtoabuf, '.', slen);
-
-					if (dot_pos) {
-						if (frac_width < (slen - ((dot_pos - dtoabuf) + 1))) {
-							/* Truncate */
-							slen = (dot_pos - dtoabuf) + 1 + /* xxx. */
-								   frac_width; /* .yyy */
-						}
-						else if (frac_width + dot_pos + 1 < dtoabuf + sizeof (dtoabuf)) {
-							/* Expand */
-							frac_width -= slen - ((dot_pos - dtoabuf) + 1);
-							memset (dtoabuf + slen, '0', frac_width);
-							slen += frac_width;
-						}
-					}
-					else {
-						/* Expand */
-						frac_width = MIN (frac_width, sizeof (dtoabuf) - slen - 1);
-						dtoabuf[slen ++] = '.';
-						memset (dtoabuf + slen, '0', frac_width);
-						slen += frac_width;
-					}
-				}
+				slen = fpconv_dtoa (f, dtoabuf, frac_width, false);
 
 				RSPAMD_PRINTF_APPEND (dtoabuf, slen);
 
@@ -1021,7 +972,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 			case 'G':
 				f = (gdouble) va_arg (args, long double);
-				slen = fpconv_dtoa (f, dtoabuf, true);
+				slen = fpconv_dtoa (f, dtoabuf, 0, true);
 				RSPAMD_PRINTF_APPEND (dtoabuf, slen);
 
 				continue;
@@ -1036,12 +987,12 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 
 			case 'c':
 				c = va_arg (args, gint);
-				c &= 0xff;
+				c &= 0xffu;
 				if (G_UNLIKELY (hex)) {
 					gchar hexbuf[2];
-					hexbuf[0] = hex == 2 ? _HEX[(c >> 4) & 0xf] :
-								_hex[(c >> 4) & 0xf];
-					hexbuf[1] = hex == 2 ? _HEX[c & 0xf] : _hex[c & 0xf];
+					hexbuf[0] = hex == 2 ? _HEX[(c >> 4u) & 0xfu] :
+								_hex[(c >> 4u) & 0xfu];
+					hexbuf[1] = hex == 2 ? _HEX[c & 0xfu] : _hex[c & 0xfu];
 
 					RSPAMD_PRINTF_APPEND (hexbuf, 2);
 				}

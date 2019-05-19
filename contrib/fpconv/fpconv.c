@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <string.h>
+#include <sys/param.h>
 
 #include "fpconv.h"
 #include "powers.h"
@@ -199,54 +200,32 @@ static int grisu2 (double d, char *digits, int *K) {
 	return generate_digits (&w, &upper, &lower, digits, K);
 }
 
-static int emit_digits (char *digits, int ndigits, char *dest, int K, bool neg,
-						bool scientific) {
-	int exp = absv(K + ndigits - 1);
+static inline int emit_integer (char *digits, int ndigits,
+								char *dest, int K, bool neg,
+								unsigned precision)
+{
+	char *d = dest;
 
-	/* write plain integer */
-	if (K >= 0 && (exp < (ndigits + 7))) {
-		memcpy(dest, digits, ndigits);
-		memset(dest + ndigits, '0', K);
+	memcpy (d, digits, ndigits);
+	d += ndigits;
+	memset (d, '0', K);
+	d += K;
 
-		return ndigits + K;
+	precision = MIN(precision, FPCONV_BUFLEN - (ndigits + K + 1));
+
+	if (precision) {
+		*d++ = '.';
+		memset (d, '0', precision);
+		d += precision;
 	}
 
-	/* write decimal w/o scientific notation */
-	if (!scientific || (K < 0 && (K > -7 || exp < 4))) {
-		int offset = ndigits - absv(K);
-		/* fp < 1.0 -> write leading zero */
-		if (offset <= 0) {
-			offset = -offset;
-			dest[0] = '0';
-			dest[1] = '.';
+	return d - dest;
+}
 
-			/* We have up to 21 characters in output available */
-			if (offset + ndigits <= 21) {
-				memset(dest + 2, '0', offset);
-				memcpy(dest + offset + 2, digits, ndigits);
-
-				return ndigits + 2 + offset;
-			}
-			else {
-				goto scientific_fallback;
-			}
-
-			/* fp > 1.0 */
-		}
-		else {
-			/* Overflow check */
-			if (ndigits <= 23) {
-				memcpy(dest, digits, offset);
-				dest[offset] = '.';
-				memcpy(dest + offset + 1, digits + offset, ndigits - offset);
-				return ndigits + 1;
-			}
-
-			goto scientific_fallback;
-		}
-	}
-
-	scientific_fallback:
+static inline int emit_scientific_digits (char *digits, int ndigits,
+									 char *dest, int K, bool neg,
+									 unsigned precision, int exp)
+{
 	/* write decimal w/ scientific notation */
 	ndigits = minv(ndigits, 18 - neg);
 
@@ -286,19 +265,153 @@ static int emit_digits (char *digits, int ndigits, char *dest, int K, bool neg,
 	return idx;
 }
 
-static int filter_special (double fp, char *dest) {
+static inline int emit_fixed_digits (char *digits, int ndigits,
+									 char *dest, int K, bool neg,
+									 unsigned precision, int exp)
+{
+	int offset = ndigits - absv(K), to_print;
+	/* fp < 1.0 -> write leading zero */
+	if (K < 0) {
+		if (offset <= 0) {
+			if (precision) {
+				if (-offset >= precision) {
+					/* Just print 0.[0]{precision} */
+					dest[0] = '0';
+					dest[1] = '.';
+					memset(dest + 2, '0', precision);
+
+					return precision + 2;
+				}
+
+				to_print = MAX(ndigits - offset, precision);
+			}
+			else {
+				to_print = ndigits - offset;
+			}
+
+			if (to_print <= FPCONV_BUFLEN - 3) {
+				offset = -offset;
+				dest[0] = '0';
+				dest[1] = '.';
+				memset(dest + 2, '0', offset);
+
+				if (precision) {
+					/* The case where offset > precision is covered previously */
+					precision -= offset;
+
+					if (precision <= ndigits) {
+						/* Truncate or leave as is */
+						memcpy(dest + offset + 2, digits, precision);
+
+						return precision + 2 + offset;
+					}
+					else {
+						/* Expand */
+						memcpy(dest + offset + 2, digits, ndigits);
+						precision -= ndigits;
+						memset(dest + offset + 2 + ndigits, '0', precision);
+
+						return ndigits + 2 + offset + precision;
+					}
+				}
+				else {
+					memcpy(dest + offset + 2, digits, ndigits);
+				}
+
+				return ndigits + 2 + offset;
+			}
+			else {
+				return emit_scientific_digits (digits, ndigits, dest, K, neg, precision, exp);
+			}
+		}
+		else {
+			/*
+			 * fp > 1.0, if offset > 0 then we have less digits than
+			 * fp exponent, so we need to switch to scientific notation to
+			 * display number at least more or less precisely
+			 */
+			if (offset > 0 && ndigits <= FPCONV_BUFLEN - 3) {
+				char *d = dest;
+				memcpy(d, digits, offset);
+				d += offset;
+				*d++ = '.';
+
+				ndigits -= offset;
+
+				if (precision) {
+					if (ndigits >= precision) {
+						/* Truncate or leave as is */
+						memcpy(d, digits + offset, precision);
+						d += precision;
+					}
+					else {
+						/* Expand */
+						memcpy(d, digits + offset, ndigits);
+						precision -= ndigits;
+						d += ndigits;
+
+						/* Check if we have enough bufspace */
+						if ((d - dest) + precision <= FPCONV_BUFLEN) {
+							memset (d, '0', precision);
+							d += precision;
+						}
+						else {
+							memset (d, '0', FPCONV_BUFLEN - (d - dest));
+							d += FPCONV_BUFLEN - (d - dest);
+						}
+					}
+				}
+				else {
+					memcpy(d, digits + offset, ndigits);
+					d += ndigits;
+				}
+
+				return d - dest;
+			}
+		}
+	}
+
+	return emit_scientific_digits (digits, ndigits, dest, K, neg, precision, exp);
+}
+
+static int emit_digits (char *digits, int ndigits, char *dest, int K, bool neg,
+						unsigned precision, bool scientific)
+{
+	int exp = absv(K + ndigits - 1);
+
+	/* write plain integer */
+	if (K >= 0 && (exp < (ndigits + 7))) {
+		return emit_integer (digits, ndigits, dest, K, neg, precision);
+	}
+
+	/* write decimal w/o scientific notation */
+	if (!scientific || (K < 0 && (K > -7 || exp < 4))) {
+		return emit_fixed_digits (digits, ndigits, dest, K, neg, precision, exp);
+	}
+
+	return emit_scientific_digits (digits, ndigits, dest, K, neg, precision, exp);
+}
+
+static int filter_special (double fp, char *dest, unsigned precision)
+{
 	int nchars = 3;
+	char *d = dest;
 
 	if (fp == 0.0) {
 		if (get_dbits (fp) & signmask) {
-			dest[0] = '-';
-			dest[1] = '0';
-			return 2;
+			*d++ = '-';
+			*d++ = '0';
 		}
 		else {
-			dest[0] = '0';
-			return 1;
+			*d++ = '0';
 		}
+
+		if (precision) {
+			*d ++ = '.';
+			memset (d, '0', precision);
+		}
+
+		return d - dest + precision;
 	}
 
 	uint64_t bits = get_dbits (fp);
@@ -332,17 +445,23 @@ static int filter_special (double fp, char *dest) {
 	return nchars;
 }
 
-int fpconv_dtoa (double d, char dest[24], bool scientific) {
+int
+fpconv_dtoa (double d, char dest[FPCONV_BUFLEN],
+			 unsigned precision, bool scientific)
+{
 	char digits[18];
 
 	int str_len = 0;
 	bool neg = false;
 
+	if (precision > FPCONV_BUFLEN - 5) {
+		precision = FPCONV_BUFLEN - 5;
+	}
 
-	int spec = filter_special (d, dest + str_len);
+	int spec = filter_special (d, dest, precision);
 
 	if (spec) {
-		return str_len + spec;
+		return spec;
 	}
 
 	if (get_dbits (d) & signmask) {
@@ -354,7 +473,8 @@ int fpconv_dtoa (double d, char dest[24], bool scientific) {
 	int K = 0;
 	int ndigits = grisu2 (d, digits, &K);
 
-	str_len += emit_digits (digits, ndigits, dest + str_len, K, neg, scientific);
+	str_len += emit_digits (digits, ndigits, dest + str_len, K, neg, precision,
+			scientific);
 
 	return str_len;
 }
