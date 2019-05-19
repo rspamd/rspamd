@@ -1,6 +1,7 @@
 #ifndef FPCONV_H
 #define FPCONV_H
 
+#define FPCONV_BUFLEN 32
 /* Fast and accurate double to string conversion based on Florian Loitsch's
  * Grisu-algorithm[1].
  *
@@ -26,7 +27,8 @@
  *
  */
 
-int fpconv_dtoa(double fp, char dest[32], bool scientific);
+int fpconv_dtoa(double fp, char dest[FPCONV_BUFLEN], unsigned precision,
+		bool scientific);
 
 #endif
 
