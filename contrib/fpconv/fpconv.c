@@ -236,26 +236,24 @@ static int emit_digits(char* digits, int ndigits, char* dest, int K, bool neg,
             	return ndigits + 2 + offset;
             }
             else {
-            	/* Overflow */
-            	dest[2] = '0';
-            	return 3;
+            	goto scientific_fallback;
             }
 
         /* fp > 1.0 */
         } else {
-            memcpy(dest, digits, offset);
-
             /* Overflow check */
             if (ndigits <= 23) {
+            	memcpy(dest, digits, offset);
             	dest[offset] = '.';
             	memcpy(dest + offset + 1, digits + offset, ndigits - offset);
             	return ndigits + 1;
             }
 
-            return offset;
+            goto scientific_fallback;
         }
     }
 
+scientific_fallback:
     /* write decimal w/ scientific notation */
     ndigits = minv(ndigits, 18 - neg);
 
@@ -296,9 +294,18 @@ static int emit_digits(char* digits, int ndigits, char* dest, int K, bool neg,
 
 static int filter_special(double fp, char* dest)
 {
+	int nchars = 3;
+
     if(fp == 0.0) {
-        dest[0] = '0';
-        return 1;
+		if(get_dbits(fp) & signmask) {
+			dest[0] = '-';
+			dest[1] = '0';
+			return 2;
+		}
+		else {
+			dest[0] = '0';
+			return 1;
+		}
     }
 
     uint64_t bits = get_dbits(fp);
@@ -311,12 +318,18 @@ static int filter_special(double fp, char* dest)
 
     if(bits & fracmask) {
         dest[0] = 'n'; dest[1] = 'a'; dest[2] = 'n';
-
     } else {
-        dest[0] = 'i'; dest[1] = 'n'; dest[2] = 'f';
+		if(get_dbits(fp) & signmask) {
+			dest[0] = '-';
+			dest[1] = 'i'; dest[2] = 'n'; dest[3] = 'f';
+			nchars = 4;
+		}
+		else {
+			dest[0] = 'i'; dest[1] = 'n'; dest[2] = 'f';
+		}
     }
 
-    return 3;
+    return nchars;
 }
 
 int fpconv_dtoa(double d, char dest[24], bool scientific)
@@ -326,17 +339,18 @@ int fpconv_dtoa(double d, char dest[24], bool scientific)
     int str_len = 0;
     bool neg = false;
 
-    if(get_dbits(d) & signmask) {
-        dest[0] = '-';
-        str_len++;
-        neg = true;
-    }
 
     int spec = filter_special(d, dest + str_len);
 
     if(spec) {
         return str_len + spec;
     }
+
+	if(get_dbits(d) & signmask) {
+		dest[0] = '-';
+		str_len++;
+		neg = true;
+	}
 
     int K = 0;
     int ndigits = grisu2(d, digits, &K);
