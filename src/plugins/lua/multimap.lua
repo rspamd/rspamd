@@ -417,35 +417,35 @@ local function multimap_callback(task, rule)
         local maxbits = 128
         local minbits = 32
         if value:get_version() == 4 then
-            maxbits = 32
-            minbits = 8
+          maxbits = 32
+          minbits = 8
         end
         for i=maxbits,minbits,-1 do
-            local nip = value:apply_mask(i):tostring() .. "/" .. i
-            table.insert(srch, nip)
+          local nip = value:apply_mask(i):tostring() .. "/" .. i
+          table.insert(srch, nip)
         end
       end
 
       table.insert(srch, 1, r['redis_key'])
       ret = rspamd_redis_make_request(task,
-        redis_params, -- connect params
-        r['redis_key'], -- hash key
-        false, -- is write
-        redis_map_cb, --callback
-        cmd, -- command
-        srch -- arguments
+          redis_params, -- connect params
+          r['redis_key'], -- hash key
+          false, -- is write
+          redis_map_cb, --callback
+          cmd, -- command
+          srch -- arguments
       )
 
       return ret
-    elseif r['radix'] then
-      ret = r['radix']:get_key(value)
-    elseif r['hash'] then
+    elseif r.radix then
+      ret = r.radix:get_key(value)
+    elseif r.hash then
       if type(value) == 'userdata' then
         if value.class == 'rspamd{ip}' then
           value = value:tostring()
         end
       end
-      ret = r['hash']:get_key(value)
+      ret = r.hash:get_key(value)
     end
 
     if ret then
@@ -525,6 +525,44 @@ local function multimap_callback(task, rule)
     return false,nil,0.0
   end
 
+  local function insert_results(result, opt)
+    local _,symbol,score = parse_ret(rule, result)
+    local forced = false
+    if symbol then
+      if r['symbols_set'] then
+        if not r['symbols_set'][symbol] then
+          rspamd_logger.infox(task, 'symbol %s is not registered for map %s, ' ..
+              'replace it with just %s',
+              symbol, rule.symbol, rule.symbol)
+          symbol = rule.symbol
+        end
+      else
+        forced = true
+      end
+    else
+      symbol = rule.symbol
+    end
+
+
+    if opt then
+      task:insert_result(forced, symbol, score, opt)
+    else
+      task:insert_result(forced, symbol, score)
+    end
+
+    if pre_filter then
+      local message = rule.message
+      if rule.message_func then
+        message = rule.message_func(task, rule.symbol, opt)
+      end
+      if message then
+        task:set_pre_result(rule.action, message, N)
+      else
+        task:set_pre_result(rule.action, 'Matched map: ' .. rule.symbol, N)
+      end
+    end
+  end
+
   -- Match a single value for against a single rule
   local function match_rule(r, value)
     local function rule_callback(result)
@@ -537,40 +575,8 @@ local function multimap_callback(task, rule)
           end
           return
         end
-        local _,symbol,score = parse_ret(r, result)
-        local forced = false
-        if symbol then
-          if r['symbols_set'] then
-            if not r['symbols_set'][symbol] then
-              rspamd_logger.infox(task, 'symbol %s is not registered for map %s, ' ..
-                  'replace it with just %s',
-                  symbol, r['symbol'], r['symbol'])
-              symbol = r['symbol']
-            end
-          else
-            forced = true
-          end
-        else
-          symbol = r['symbol']
-        end
-
         local opt = value_types[r['type']].get_value(value)
-        if opt then
-          task:insert_result(forced, symbol, score, opt)
-        else
-          task:insert_result(forced, symbol, score)
-        end
-
-        if pre_filter then
-          if r['message_func'] then
-            r['message'] = r.message_func(task, r['symbol'], opt)
-          end
-          if r['message'] then
-            task:set_pre_result(r['action'], r['message'], N)
-          else
-            task:set_pre_result(r['action'], 'Matched map: ' .. r['symbol'], N)
-          end
-        end
+        insert_results(result, opt)
       end
     end
 
@@ -707,7 +713,7 @@ local function multimap_callback(task, rule)
     end
   end
 
-  if rule.expression then
+  if rule.expression and not rule.combined then
     local res,trace = rule['expression']:process_traced(task)
 
     if not res or res == 0 then
@@ -725,7 +731,7 @@ local function multimap_callback(task, rule)
     ip = function()
       local ip = task:get_from_ip()
       if ip:is_valid() then
-          match_rule(rule, ip)
+        match_rule(rule, ip)
       end
     end,
     dnsbl = function()
@@ -880,6 +886,15 @@ local function multimap_callback(task, rule)
         end
       end
     end,
+    combined = function()
+      local ret,trace = rule.combined:process(task)
+      if ret then
+        for n,t in pairs(trace) do
+          insert_results(t.value, string.format("%s=%s",
+              n, t.matched))
+        end
+      end
+    end,
   }
 
   local rt = rule.type
@@ -938,13 +953,30 @@ local function add_multimap_rule(key, newrule)
     end
   end
 
+  local known_generic_types = {
+    header = true,
+    rcpt = true,
+    from = true,
+    helo = true,
+    symbol_options = true,
+    filename = true,
+    url = true,
+    content = true,
+    hostname = true,
+    asn = true,
+    country = true,
+    mempool = true,
+    selector = true,
+    combined = true
+  }
+
   if newrule['message_func'] then
     newrule['message_func'] = assert(load(newrule['message_func']))()
   end
   if newrule['url'] and not newrule['map'] then
     newrule['map'] = newrule['url']
   end
-  if not newrule['map'] then
+  if not (newrule.map or newrule.rules)  then
     rspamd_logger.errx(rspamd_config, 'incomplete rule, missing map')
     return nil
   end
@@ -991,13 +1023,25 @@ local function add_multimap_rule(key, newrule)
   elseif type(newrule['map']) == 'string' and string.find(newrule['map'], '^redis://.*$') then
     if not redis_params then
       rspamd_logger.infox(rspamd_config, 'no redis servers are specified, ' ..
-        'cannot add redis map %s: %s', newrule['symbol'], newrule['map'])
+          'cannot add redis map %s: %s', newrule['symbol'], newrule['map'])
       return nil
     end
 
     newrule['redis_key'] = string.match(newrule['map'], '^redis://(.*)$')
 
     if newrule['redis_key'] then
+      ret = true
+    end
+  elseif newrule.type == 'combined' then
+    local lua_maps_expressions = require "lua_maps_expressions"
+    newrule.combined = lua_maps_expressions.create(rspamd_config,
+        {
+          rules = newrule.rules,
+          expression = newrule.expression
+        }, N, 'Combined map for ' .. newrule.symbol)
+    if not newrule.combined then
+      rspamd_logger.errx(rspamd_config, 'cannot add combined map for %s', newrule.symbol)
+    else
       ret = true
     end
   else
@@ -1011,7 +1055,7 @@ local function add_multimap_rule(key, newrule)
           newrule['hash'] = map['map']
         end
         rspamd_logger.infox(rspamd_config, 'reuse url for %s: "%s"',
-          newrule['symbol'], newrule['map'])
+            newrule['symbol'], newrule['map'])
         ret = true
       end
     end
@@ -1033,7 +1077,7 @@ local function add_multimap_rule(key, newrule)
           end
         else
           rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
-            newrule['map'])
+              newrule['map'])
         end
       elseif newrule['type'] == 'received' then
         if type(newrule['flags']) == 'table' and newrule['flags'][1] then
@@ -1070,22 +1114,10 @@ local function add_multimap_rule(key, newrule)
             end
           else
             rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
-              newrule['map'])
+                newrule['map'])
           end
         end
-      elseif newrule['type'] == 'header'
-          or newrule['type'] == 'rcpt'
-          or newrule['type'] == 'from'
-          or newrule['type'] == 'helo'
-          or newrule['type'] == 'symbol_options'
-          or newrule['type'] == 'filename'
-          or newrule['type'] == 'url'
-          or newrule['type'] == 'content'
-          or newrule['type'] == 'hostname'
-          or newrule['type'] == 'asn'
-          or newrule['type'] == 'country'
-          or newrule['type'] == 'mempool'
-          or newrule['type'] == 'selector'then
+      elseif known_generic_types[newrule.type] then
 
         if newrule.filter == 'ip_addr' then
           newrule['radix'] = rspamd_config:add_map ({
@@ -1093,7 +1125,7 @@ local function add_multimap_rule(key, newrule)
             description = newrule['description'],
             type = 'radix'
           })
-        else
+        elseif not newrule.combined then
           multimap_load_hash(newrule)
         end
 
@@ -1108,7 +1140,7 @@ local function add_multimap_rule(key, newrule)
           end
         else
           rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
-            newrule['map'])
+              newrule['map'])
         end
       elseif newrule['type'] == 'dnsbl' then
         ret = true
@@ -1152,13 +1184,13 @@ local function add_multimap_rule(key, newrule)
       end
 
       local expression = rspamd_expression.create(newrule['require_symbols'],
-        {parse_atom, process_atom}, rspamd_config:get_mempool())
+          {parse_atom, process_atom}, rspamd_config:get_mempool())
       if expression then
         newrule['expression'] = expression
 
         fun.each(function(v)
           lua_util.debugm(N, rspamd_config, 'add dependency %s -> %s',
-            newrule['symbol'], v)
+              newrule['symbol'], v)
           rspamd_config:register_dependency(newrule['symbol'], v)
         end, atoms)
       end
