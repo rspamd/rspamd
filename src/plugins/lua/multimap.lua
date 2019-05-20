@@ -529,8 +529,8 @@ local function multimap_callback(task, rule)
     local _,symbol,score = parse_ret(rule, result)
     local forced = false
     if symbol then
-      if r['symbols_set'] then
-        if not r['symbols_set'][symbol] then
+      if rule.symbols_set then
+        if not rule.symbols_set[symbol] then
           rspamd_logger.infox(task, 'symbol %s is not registered for map %s, ' ..
               'replace it with just %s',
               symbol, rule.symbol, rule.symbol)
