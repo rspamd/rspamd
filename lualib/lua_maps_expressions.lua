@@ -122,7 +122,7 @@ local function create(cfg, obj, module_name)
   }
 
   for name,rule in pairs(obj.rules) do
-    local sel = lua_selectors.parse_selector(cfg, rule.selector)
+    local sel = lua_selectors.create_selector_closure(cfg, rule.selector)
 
     if not sel then
       rspamd_logger.errx(cfg, 'cannot add selector for element %s in module %s',
@@ -176,7 +176,8 @@ local function create(cfg, obj, module_name)
 
     return nil
   end
-  local expr = rspamd_expression.create(obj.expression, parse_atom, rspamd_config:get_mempool())
+  local expr = rspamd_expression.create(obj.expression, parse_atom,
+      rspamd_config:get_mempool())
 
   if not expr then
     rspamd_logger.errx(cfg, 'cannot add map expression for module %s',
