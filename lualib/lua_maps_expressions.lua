@@ -152,6 +152,7 @@ local function create(cfg, obj, module_name)
       ret.rules[name] = {
         selector = sel,
         map = map,
+        name = name,
       }
     else
       return nil
@@ -194,6 +195,8 @@ local function create(cfg, obj, module_name)
       score = 0.0,
     }
   end
+
+  ret.symbol = obj.symbol
 
   return ret
 end
