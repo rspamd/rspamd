@@ -888,7 +888,7 @@ local function multimap_callback(task, rule)
     end,
     combined = function()
       local ret,trace = rule.combined:process(task)
-      if ret then
+      if ret and ret ~= 0 then
         for n,t in pairs(trace) do
           insert_results(t.value, string.format("%s=%s",
               n, t.matched))
