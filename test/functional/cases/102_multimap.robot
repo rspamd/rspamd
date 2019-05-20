@@ -59,6 +59,26 @@ MAP - FROM
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  user@example.com
   Check Rspamc  ${result}  FROM_MAP
 
+MAP - COMBINED IP MASK FROM
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  10.1.0.10  --from  user@example.com
+  Check Rspamc  ${result}  COMBINED_MAP_AND
+  Check Rspamc  ${result}  COMBINED_MAP_OR
+
+MAP - COMBINED IP MASK ONLY
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  10.1.0.10
+  Check Rspamc  ${result}  COMBINED_MAP_AND  inverse=1
+  Check Rspamc  ${result}  COMBINED_MAP_OR
+
+MAP - COMBINED FROM ONLY
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  user@example.com
+  Check Rspamc  ${result}  COMBINED_MAP_AND  inverse=1
+  Check Rspamc  ${result}  COMBINED_MAP_OR
+
+MAP - COMBINED MISS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  11.1.0.10  --from  user@other.com
+  Check Rspamc  ${result}  COMBINED_MAP_AND  inverse=1
+  Check Rspamc  ${result}  COMBINED_MAP_OR  inverse=1
+
 MAP - FROM MISS
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  user@other.com
   Check Rspamc  ${result}  FROM_MAP  inverse=1
