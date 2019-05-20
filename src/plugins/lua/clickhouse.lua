@@ -125,7 +125,7 @@ CREATE TABLE rspamd
     Country FixedString(2),
     IPNet String,
     `Symbols.Names` Array(String),
-    `Symbols.Scores` Array(Float64),
+    `Symbols.Scores` Array(Float32),
     `Symbols.Options` Array(String),
     ScanTimeReal UInt32,
     ScanTimeVirtual UInt32,
