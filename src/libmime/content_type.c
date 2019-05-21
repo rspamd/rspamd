@@ -235,7 +235,7 @@ rspamd_content_type_postprocess (rspamd_mempool_t *pool,
 
 	RSPAMD_FTOK_ASSIGN (&srch, "charset");
 
-	if (rspamd_ftok_cmp (&param->name, &srch) == 0) {
+	if (rspamd_ftok_casecmp (&param->name, &srch) == 0) {
 		/* Adjust charset */
 		found = param;
 		ct->charset.begin = param->value.begin;
@@ -244,7 +244,7 @@ rspamd_content_type_postprocess (rspamd_mempool_t *pool,
 
 	RSPAMD_FTOK_ASSIGN (&srch, "boundary");
 
-	if (rspamd_ftok_cmp (&param->name, &srch) == 0) {
+	if (rspamd_ftok_casecmp (&param->name, &srch) == 0) {
 		found = param;
 		gchar *lc_boundary;
 		/* Adjust boundary */
@@ -275,7 +275,7 @@ rspamd_content_disposition_postprocess (rspamd_mempool_t *pool,
 	srch.begin = "filename";
 	srch.len = 8;
 
-	if (rspamd_ftok_cmp (&param->name, &srch) == 0) {
+	if (rspamd_ftok_casecmp (&param->name, &srch) == 0) {
 		/* Adjust filename */
 		cd->filename.begin = param->value.begin;
 		cd->filename.len = param->value.len;
@@ -610,12 +610,12 @@ rspamd_content_type_parse (const gchar *in,
 {
 	struct rspamd_content_type *res = NULL;
 	rspamd_ftok_t srch;
-	gchar *lc_data;
+	gchar *cpy;
 
-	lc_data = rspamd_mempool_alloc (pool, len + 1);
-	rspamd_strlcpy (lc_data, in, len + 1);
+	cpy = rspamd_mempool_alloc (pool, len + 1);
+	rspamd_strlcpy (cpy, in, len + 1);
 
-	if ((res = rspamd_content_type_parser (lc_data, len, pool)) != NULL) {
+	if ((res = rspamd_content_type_parser (cpy, len, pool)) != NULL) {
 		if (res->attrs) {
 			rspamd_mempool_add_destructor (pool,
 					(rspamd_mempool_destruct_t)g_hash_table_unref, res->attrs);
@@ -629,7 +629,7 @@ rspamd_content_type_parse (const gchar *in,
 			res->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
 			RSPAMD_FTOK_ASSIGN (&srch, "text");
 
-			if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
+			if (rspamd_ftok_casecmp (&res->type, &srch) == 0) {
 				/* Workaround for Content-Type: text */
 				/* Assume text/plain */
 				RSPAMD_FTOK_ASSIGN (&srch, "plain");
@@ -637,7 +637,7 @@ rspamd_content_type_parse (const gchar *in,
 			else {
 				RSPAMD_FTOK_ASSIGN (&srch, "html");
 
-				if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
+				if (rspamd_ftok_casecmp (&res->type, &srch) == 0) {
 					/* Workaround for Content-Type: html */
 					RSPAMD_FTOK_ASSIGN (&res->type, "text");
 					RSPAMD_FTOK_ASSIGN (&res->subtype, "html");
@@ -645,7 +645,7 @@ rspamd_content_type_parse (const gchar *in,
 				else {
 					RSPAMD_FTOK_ASSIGN (&srch, "application");
 
-					if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
+					if (rspamd_ftok_casecmp (&res->type, &srch) == 0) {
 						RSPAMD_FTOK_ASSIGN (&res->subtype, "octet-stream");
 					}
 				}
@@ -655,7 +655,7 @@ rspamd_content_type_parse (const gchar *in,
 			/* Common mistake done by retards */
 			RSPAMD_FTOK_ASSIGN (&srch, "alternate");
 
-			if (rspamd_ftok_cmp (&res->subtype, &srch) == 0) {
+			if (rspamd_ftok_casecmp (&res->subtype, &srch) == 0) {
 				res->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
 				RSPAMD_FTOK_ASSIGN (&res->subtype, "alternative");
 			}
@@ -663,22 +663,22 @@ rspamd_content_type_parse (const gchar *in,
 
 		RSPAMD_FTOK_ASSIGN (&srch, "multipart");
 
-		if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
+		if (rspamd_ftok_casecmp (&res->type, &srch) == 0) {
 			res->flags |= RSPAMD_CONTENT_TYPE_MULTIPART;
 		}
 		else {
 			RSPAMD_FTOK_ASSIGN (&srch, "text");
 
-			if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
+			if (rspamd_ftok_casecmp (&res->type, &srch) == 0) {
 				res->flags |= RSPAMD_CONTENT_TYPE_TEXT;
 			}
 			else {
 				RSPAMD_FTOK_ASSIGN (&srch, "message");
 
-				if (rspamd_ftok_cmp (&res->type, &srch) == 0) {
+				if (rspamd_ftok_casecmp (&res->type, &srch) == 0) {
 					RSPAMD_FTOK_ASSIGN (&srch, "delivery-status");
 
-					if (rspamd_ftok_cmp (&res->subtype, &srch) == 0) {
+					if (rspamd_ftok_casecmp (&res->subtype, &srch) == 0) {
 						res->flags |= RSPAMD_CONTENT_TYPE_TEXT|RSPAMD_CONTENT_TYPE_DSN;
 					}
 					else {
@@ -698,7 +698,7 @@ rspamd_content_type_parse (const gchar *in,
 		}
 	}
 	else {
-		msg_warn_pool ("cannot parse content type: %*s", (gint)len, lc_data);
+		msg_warn_pool ("cannot parse content type: %*s", (gint)len, cpy);
 	}
 
 	return res;
