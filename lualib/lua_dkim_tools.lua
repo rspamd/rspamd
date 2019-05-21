@@ -118,7 +118,7 @@ local function parse_dkim_http_headers(N, task, settings)
 end
 
 local function prepare_dkim_signing(N, task, settings)
-  local is_local, is_sign_networks
+  local is_local, is_sign_networks, is_authed
 
   if settings.use_http_headers then
     local res,tbl = parse_dkim_http_headers(N, task, settings)
@@ -143,6 +143,7 @@ local function prepare_dkim_signing(N, task, settings)
 
   if settings.auth_only and auser then
     lua_util.debugm(N, task, 'user is authenticated')
+    is_authed = true
   elseif (settings.sign_networks and settings.sign_networks:get_key(ip)) then
     is_sign_networks = true
     lua_util.debugm(N, task, 'mail is from address in sign_networks')
@@ -190,6 +191,12 @@ local function prepare_dkim_signing(N, task, settings)
     end
   end
 
+  local function is_skip_sign()
+    return (settings.sign_networks and not is_sign_networks) and
+        (settings.auth_only and not is_authed) and
+        (settings.sign_local and not is_local)
+  end
+
   if hdom then
     hdom = hdom:lower()
   end
@@ -205,9 +212,10 @@ local function prepare_dkim_signing(N, task, settings)
 
   if settings.signing_table and (settings.key_table or settings.use_vault) then
     -- OpenDKIM style
-    if settings.sign_networks and not is_sign_networks then
+    if is_skip_sign() then
       lua_util.debugm(N, task,
-          'signing_table: sign networks specified but IP is not from that network, skip signing')
+          'skip signing: is_sign_network: %s, is_authed: %s, is_local: %s',
+          is_sign_networks, is_authed, is_local)
       return false,{}
     end
 
