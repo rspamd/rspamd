@@ -57,7 +57,10 @@ local function maybe_adjust_type(data,mtype)
   local known_types = {
     {'regexp;', 'regexp'},
     {'re;', 'regexp'},
+    {'regexp_multi;', 'regexp_multi'},
+    {'re_multi;', 'regexp_multi'},
     {'glob;', 'glob'},
+    {'glob_multi;', 'glob_multi'},
     {'radix;', 'radix'},
     {'ipnet;', 'radix'},
     {'set;', 'set'},

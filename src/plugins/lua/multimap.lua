@@ -29,11 +29,10 @@ local rspamd_expression = require "rspamd_expression"
 local rspamd_ip = require "rspamd_ip"
 local lua_util = require "lua_util"
 local lua_selectors = require "lua_selectors"
+local lua_maps = require "lua_maps"
 local redis_params
 local fun = require "fun"
 local N = 'multimap'
-
-local urls = {}
 
 local value_types = {
   ip = {
@@ -918,38 +917,23 @@ local function add_multimap_rule(key, newrule)
   local function multimap_load_hash(rule)
     if rule['regexp'] then
       if rule['multi'] then
-        rule['hash'] = rspamd_config:add_map ({
-          url = rule['map'],
-          description = rule['description'],
-          type = 'regexp_multi'
-        })
+        rule.hash = lua_maps.map_add_from_ucl(rule.map, 'regexp_multi',
+            rule.description)
       else
-        rule['hash'] = rspamd_config:add_map ({
-          url = newrule['map'],
-          description = newrule['description'],
-          type = 'regexp'
-        })
+        rule.hash = lua_maps.map_add_from_ucl(rule.map, 'regexp',
+            rule.description)
       end
     elseif rule['glob'] then
       if rule['multi'] then
-        rule['hash'] = rspamd_config:add_map ({
-          url = rule['map'],
-          description = rule['description'],
-          type = 'glob_multi'
-        })
+        rule.hash = lua_maps.map_add_from_ucl(rule.map, 'glob_multi',
+            rule.description)
       else
-        rule['hash'] = rspamd_config:add_map ({
-          url = rule['map'],
-          description = rule['description'],
-          type = 'glob'
-        })
+        rule.hash = lua_maps.map_add_from_ucl(rule.map, 'glob',
+            rule.description)
       end
     else
-      rule['hash'] = rspamd_config:add_map ({
-        url = rule['map'],
-        description = rule['description'],
-        type = 'hash'
-      })
+      rule.hash = lua_maps.map_add_from_ucl(rule.map, 'hash',
+          rule.description)
     end
   end
 
@@ -1045,106 +1029,60 @@ local function add_multimap_rule(key, newrule)
       ret = true
     end
   else
-    if type(newrule['map']) == 'string' then
-      local map = urls[newrule['map']]
-      if map and map['regexp'] == newrule['regexp'] and
-          map['glob'] == newrule['glob'] then
-        if newrule['type'] == 'ip' or newrule['filter'] == 'ip_addr' then
-          newrule['radix'] = map['map']
-        else
-          newrule['hash'] = map['map']
-        end
-        rspamd_logger.infox(rspamd_config, 'reuse url for %s: "%s"',
-            newrule['symbol'], newrule['map'])
+    if newrule['type'] == 'ip' then
+      newrule['radix'] = lua_maps.map_add_from_ucl(newrule.map, 'radix',
+          newrule.description)
+      if newrule['radix'] then
         ret = true
+      else
+        rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
+            newrule['map'])
       end
-    end
-    if not ret then
-      if newrule['type'] == 'ip' then
-        newrule['radix'] = rspamd_config:add_map ({
-          url = newrule['map'],
-          description = newrule['description'],
-          type = 'radix'
-        })
+    elseif newrule['type'] == 'received' then
+      if type(newrule['flags']) == 'table' and newrule['flags'][1] then
+        newrule['flags'] = newrule['flags']
+      elseif type(newrule['flags']) == 'string' then
+        newrule['flags'] = {newrule['flags']}
+      end
+      if type(newrule['nflags']) == 'table' and newrule['nflags'][1] then
+        newrule['nflags'] = newrule['nflags']
+      elseif type(newrule['nflags']) == 'string' then
+        newrule['nflags'] = {newrule['nflags']}
+      end
+      local filter = newrule['filter'] or 'real_ip'
+      if filter == 'real_ip' or filter == 'from_ip' then
+        newrule['radix'] = lua_maps.map_add_from_ucl(newrule.map, 'radix',
+            newrule.description)
         if newrule['radix'] then
           ret = true
-          if type(newrule['map']) == 'string' then
-            urls[newrule['map']] = {
-              type = 'ip',
-              map = newrule['radix'],
-              regexp = false
-            }
-          end
-        else
-          rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
-              newrule['map'])
         end
-      elseif newrule['type'] == 'received' then
-        if type(newrule['flags']) == 'table' and newrule['flags'][1] then
-          newrule['flags'] = newrule['flags']
-        elseif type(newrule['flags']) == 'string' then
-          newrule['flags'] = {newrule['flags']}
-        end
-        if type(newrule['nflags']) == 'table' and newrule['nflags'][1] then
-          newrule['nflags'] = newrule['nflags']
-        elseif type(newrule['nflags']) == 'string' then
-          newrule['nflags'] = {newrule['nflags']}
-        end
-        local filter = newrule['filter'] or 'real_ip'
-        if filter == 'real_ip' or filter == 'from_ip' then
-          newrule['radix'] = rspamd_config:add_map ({
-            url = newrule['map'],
-            description = newrule['description'],
-            type = 'radix'
-          })
-          if newrule['radix'] then
-            ret = true
-          end
-        else
-          multimap_load_hash(newrule)
+      else
+        multimap_load_hash(newrule)
 
-          if newrule['hash'] then
-            ret = true
-            if type(newrule['map']) == 'string' then
-              urls[newrule['map']] = {
-                type = newrule['type'],
-                map = newrule['hash'],
-                regexp = newrule['regexp']
-              }
-            end
-          else
-            rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
-                newrule['map'])
-          end
-        end
-      elseif known_generic_types[newrule.type] then
-
-        if newrule.filter == 'ip_addr' then
-          newrule['radix'] = rspamd_config:add_map ({
-            url = newrule['map'],
-            description = newrule['description'],
-            type = 'radix'
-          })
-        elseif not newrule.combined then
-          multimap_load_hash(newrule)
-        end
-
-        if newrule.hash or newrule.radix then
+        if newrule['hash'] then
           ret = true
-          if type(newrule['map']) == 'string' then
-            urls[newrule['map']] = {
-              type = newrule['type'],
-              map = newrule.hash or newrule.radix,
-              regexp = newrule['regexp']
-            }
-          end
         else
           rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
               newrule['map'])
         end
-      elseif newrule['type'] == 'dnsbl' then
-        ret = true
       end
+    elseif known_generic_types[newrule.type] then
+
+      if newrule.filter == 'ip_addr' then
+        newrule['radix'] = lua_maps.map_add_from_ucl(newrule.map, 'radix',
+            newrule.description)
+      elseif not newrule.combined then
+        multimap_load_hash(newrule)
+      end
+
+      if newrule.hash or newrule.radix then
+        ret = true
+      else
+        rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
+            newrule['map'])
+      end
+    elseif newrule['type'] == 'dnsbl' then
+      ret = true
     end
   end
 
