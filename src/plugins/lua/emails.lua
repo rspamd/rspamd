@@ -28,134 +28,142 @@ local logger = require "rspamd_logger"
 local hash = require "rspamd_cryptobox_hash"
 local rspamd_lua_utils = require "lua_util"
 local util = require "rspamd_util"
+local lua_maps = require "lua_maps"
+local lua_maps_expressions = require "lua_maps_expressions"
 local N = "emails"
 
 -- Check rule for a single email
 local function check_email_rule(task, rule, addr)
   if rule['whitelist'] then
     if rule['whitelist']:get_key(addr.addr)
-      or rule['whitelist']:get_key(addr.domain) then
-        logger.debugm(N, task, "whitelisted address: %s", addr.addr)
-        return
+        or rule['whitelist']:get_key(addr.domain) then
+      logger.debugm(N, task, "whitelisted address: %s", addr.addr)
+      return
+    end
+  elseif rule.whitelist_expr then
+    if rule['whitelist']:process(task) then
+      logger.debugm(N, task, "whitelisted emails processing: %s", addr.addr)
+      return
     end
   end
+
   if rule['dnsbl'] then
-    local email
-    local to_resolve
+      local email
+      local to_resolve
 
-    if rule['domain_only'] then
-      email = addr.domain
-    else
-      email = string.format('%s%s%s', addr.user, rule.delimiter, addr.domain)
-    end
+      if rule['domain_only'] then
+        email = addr.domain
+      else
+        email = string.format('%s%s%s', addr.user, rule.delimiter, addr.domain)
+      end
 
-    email = email:lower()
+      email = email:lower()
 
-    local function emails_dns_cb(_, _, results, err)
-      if err and (err ~= 'requested record is not found'
-          and err ~= 'no records with this name') then
-        logger.errx(task, 'Error querying DNS(%s.%s): %s', to_resolve,
-            rule['dnsbl'], err)
-      elseif results then
-        local expected_found = false
-        local symbol = rule['symbol']
+      local function emails_dns_cb(_, _, results, err)
+        if err and (err ~= 'requested record is not found'
+            and err ~= 'no records with this name') then
+          logger.errx(task, 'Error querying DNS(%s.%s): %s', to_resolve,
+              rule['dnsbl'], err)
+        elseif results then
+          local expected_found = false
+          local symbol = rule['symbol']
 
-        local function check_ip(ip)
-          for _,result in ipairs(results) do
-            local ipstr = result:to_string()
-            if ipstr == ip then
-              return true
+          local function check_ip(ip)
+            for _,result in ipairs(results) do
+              local ipstr = result:to_string()
+              if ipstr == ip then
+                return true
+              end
             end
+
+            return false
           end
 
-          return false
-        end
-
-        if rule['expect_ip'] then
-          if check_ip(rule['expect_ip']) then
-            expected_found = true
+          if rule['expect_ip'] then
+            if check_ip(rule['expect_ip']) then
+              expected_found = true
+            end
+          else
+            expected_found = true -- Accept any result
           end
-        else
-          expected_found = true -- Accept any result
-        end
 
-        if rule['returncodes'] then
-          for k,codes in pairs(rule['returncodes']) do
-            if type(codes) == 'table' then
-              for _,code in ipairs(codes) do
-                if check_ip(code) then
+          if rule['returncodes'] then
+            for k,codes in pairs(rule['returncodes']) do
+              if type(codes) == 'table' then
+                for _,code in ipairs(codes) do
+                  if check_ip(code) then
+                    expected_found = true
+                    symbol = k
+                    break
+                  end
+                end
+              else
+                if check_ip(codes) then
                   expected_found = true
                   symbol = k
                   break
                 end
               end
-            else
-              if check_ip(codes) then
-                expected_found = true
-                symbol = k
-                break
-              end
             end
           end
+
+          if expected_found then
+            if rule['hash'] then
+              task:insert_result(symbol, 1.0, {email, to_resolve})
+            else
+              task:insert_result(symbol, 1.0, email)
+            end
+          end
+
+        end
+      end
+
+      logger.debugm(N, task, "check %s on %s", email, rule['dnsbl'])
+
+      if rule['hash'] then
+        local hkey = hash.create_specific(rule['hash'], email)
+
+        if rule['encoding'] == 'base32' then
+          to_resolve = hkey:base32()
+        else
+          to_resolve = hkey:hex()
         end
 
-        if expected_found then
-          if rule['hash'] then
-            task:insert_result(symbol, 1.0, {email, to_resolve})
-          else
-            task:insert_result(symbol, 1.0, email)
+        if rule['hashlen'] and type(rule['hashlen']) == 'number' then
+          if #to_resolve > rule['hashlen'] then
+            to_resolve = string.sub(to_resolve, 1, rule['hashlen'])
           end
         end
-
-      end
-    end
-
-    logger.debugm(N, task, "check %s on %s", email, rule['dnsbl'])
-
-    if rule['hash'] then
-      local hkey = hash.create_specific(rule['hash'], email)
-
-      if rule['encoding'] == 'base32' then
-        to_resolve = hkey:base32()
       else
-        to_resolve = hkey:hex()
+        to_resolve = email
       end
 
-      if rule['hashlen'] and type(rule['hashlen']) == 'number' then
-        if #to_resolve > rule['hashlen'] then
-          to_resolve = string.sub(to_resolve, 1, rule['hashlen'])
+      local dns_arg = string.format('%s.%s', to_resolve, rule['dnsbl'])
+
+      logger.debugm(N, task, "query %s", dns_arg)
+
+      task:get_resolver():resolve_a({
+        task=task,
+        name = dns_arg,
+        callback = emails_dns_cb})
+    elseif rule['map'] then
+      if rule['domain_only'] then
+        local key = addr.domain
+        if rule['map']:get_key(key) then
+          task:insert_result(rule['symbol'], 1)
+          logger.infox(task, '<%1> email: \'%2\' is found in list: %3',
+              task:get_message_id(), key, rule['symbol'])
         end
-      end
-    else
-      to_resolve = email
-    end
-
-    local dns_arg = string.format('%s.%s', to_resolve, rule['dnsbl'])
-
-    logger.debugm(N, task, "query %s", dns_arg)
-
-    task:get_resolver():resolve_a({
-      task=task,
-      name = dns_arg,
-      callback = emails_dns_cb})
-  elseif rule['map'] then
-    if rule['domain_only'] then
-      local key = addr.domain
-      if rule['map']:get_key(key) then
-        task:insert_result(rule['symbol'], 1)
-        logger.infox(task, '<%1> email: \'%2\' is found in list: %3',
-          task:get_message_id(), key, rule['symbol'])
-      end
-    else
-      local key = string.format('%s%s%s', addr.user, rule.delimiter, addr.domain)
-      if rule['map']:get_key(key) then
-        task:insert_result(rule['symbol'], 1)
-        logger.infox(task, '<%1> email: \'%2\' is found in list: %3',
-          task:get_message_id(), key, rule['symbol'])
+      else
+        local key = string.format('%s%s%s', addr.user, rule.delimiter, addr.domain)
+        if rule['map']:get_key(key) then
+          task:insert_result(rule['symbol'], 1)
+          logger.infox(task, '<%1> email: \'%2\' is found in list: %3',
+              task:get_message_id(), key, rule['symbol'])
+        end
       end
     end
   end
-end
 
 -- Check email
 local function gen_check_emails(rule)
@@ -216,20 +224,20 @@ if opts and type(opts) == 'table' then
     end
 
     if rule['whitelist'] then
-      rule['whitelist'] = rspamd_config:add_map({
-        url = rule['whitelist'],
-        description = string.format('Emails rule %s whitelist', rule['symbol']),
-        type = 'set'
-      })
+      if type(rule['whitelist']) == 'string' then
+        rule['whitelist'] = lua_maps.map_add_from_ucl(rule.whitelist,
+            'set', 'Emails rule %s whitelist', rule['symbol'])
+      else
+        rule.whitelist_expr = lua_maps_expressions.create(rspamd_config,
+            rule.whitelist, N)
+        rule.whitelist = nil
+      end
     end
 
     if rule['map'] then
       rule['name'] = rule['map']
-      rule['map'] = rspamd_config:add_map({
-        url = rule['name'],
-        description = string.format('Emails rule %s', rule['symbol']),
-        type = 'regexp'
-      })
+      rule.map = lua_maps.map_add_from_ucl(rule.whitelist,
+          'regexp', 'Emails rule %s whitelist', rule['symbol'])
     end
     if not rule['symbol'] or (not rule['map'] and not rule['dnsbl']) then
       logger.errx(rspamd_config, 'incomplete rule: %s', rule)
