@@ -1590,7 +1590,8 @@ rspamd_7zip_read_next_section (struct rspamd_task *task,
 		 * In fact, headers are just packed, but we assume it as
 		 * encrypted to distinguish from the normal archives
 		 */
-		arch->flags |= RSPAMD_ARCHIVE_ENCRYPTED;
+		msg_debug_archive ("7zip: encoded header, needs to be uncompressed");
+		arch->flags |= RSPAMD_ARCHIVE_CANNOT_READ;
 		p = NULL; /* Cannot get anything useful */
 		break;
 	case kArchiveProperties:

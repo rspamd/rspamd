@@ -1037,13 +1037,20 @@ local function check_mime_type(task)
             if ext and settings.archive_exceptions[ext] then
               check = false
               logger.debugm("mime_types", task, "skip checking of %s as archive, %s is whitelisted",
-                filename, ext)
+                  filename, ext)
             end
           end
           local arch = p:get_archive()
 
           if arch:is_encrypted() then
-            task:insert_result(settings['symbol_encrypted_archive'], 1.0, filename)
+            task:insert_result(settings.symbol_encrypted_archive, 1.0, filename)
+            task:insert_result('MIME_TRACE', 0.0,
+                string.format("%s:%s", p:get_id(), '-'))
+          elseif arch:is_unreadable() then
+            task:insert_result(settings.symbol_encrypted_archive, 0.5, {
+              'compressed header',
+              filename,
+            })
             task:insert_result('MIME_TRACE', 0.0,
                 string.format("%s:%s", p:get_id(), '-'))
           end
