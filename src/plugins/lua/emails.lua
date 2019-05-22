@@ -150,16 +150,16 @@ local function check_email_rule(task, rule, addr)
       if rule['domain_only'] then
         local key = addr.domain
         if rule['map']:get_key(key) then
-          task:insert_result(rule['symbol'], 1)
-          logger.infox(task, '<%1> email: \'%2\' is found in list: %3',
-              task:get_message_id(), key, rule['symbol'])
+          task:insert_result(rule['symbol'], 1.0, key)
+          logger.debugm(N, task, 'email: \'%s\' is found in list: %s',
+              key, rule['symbol'])
         end
       else
         local key = string.format('%s%s%s', addr.user, rule.delimiter, addr.domain)
         if rule['map']:get_key(key) then
-          task:insert_result(rule['symbol'], 1)
-          logger.infox(task, '<%1> email: \'%2\' is found in list: %3',
-              task:get_message_id(), key, rule['symbol'])
+          task:insert_result(rule['symbol'], 1.0, key)
+          logger.debugm(N, task, 'email: \'%s\' is found in list: %s',
+              key, rule['symbol'])
         end
       end
     end
