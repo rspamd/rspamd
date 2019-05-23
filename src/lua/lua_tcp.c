@@ -1550,17 +1550,12 @@ lua_tcp_request (lua_State *L)
 		lua_pop (L, 1);
 	}
 	else {
-		msg_err ("tcp request has bad params");
-		lua_pushboolean (L, FALSE);
-
-		return 1;
+		return luaL_error (L, "tcp request has bad params");
 	}
 
 	if (resolver == NULL && cfg == NULL && task == NULL) {
-		msg_err ("tcp request has bad params: one of {resolver,task,config} should be set");
-		lua_pushboolean (L, FALSE);
-
-		return 1;
+		return luaL_error (L, "tcp request has bad params: one of "
+						"{resolver,task,config} should be set");
 	}
 
 	cbd->task = task;
@@ -1637,6 +1632,7 @@ lua_tcp_request (lua_State *L)
 		cbd->session = session;
 
 		if (rspamd_session_blocked (session)) {
+			lua_tcp_push_error (cbd, TRUE, "async session is the blocked state");
 			TCP_RELEASE (cbd);
 			lua_pushboolean (L, FALSE);
 
@@ -1650,6 +1646,7 @@ lua_tcp_request (lua_State *L)
 		lua_tcp_register_watcher (cbd);
 
 		if (!lua_tcp_make_connection (cbd)) {
+			lua_tcp_push_error (cbd, TRUE, "cannot connect to the host: %s", host);
 			lua_pushboolean (L, FALSE);
 
 			TCP_RELEASE (cbd);
