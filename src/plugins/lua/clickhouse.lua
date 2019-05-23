@@ -76,6 +76,7 @@ local settings = {
   no_ssl_verify = false,
   custom_rules = {},
   enable_digest = false,
+  exceptions = nil,
   retention = {
     enable = false,
     method = 'detach',
@@ -380,12 +381,27 @@ local function clickhouse_send_data(task, ev_base)
 end
 
 local function clickhouse_collect(task)
-  if task:has_flag('skip') then return end
-  if not settings.allow_local and rspamd_lua_utils.is_rspamc_or_controller(task) then return end
+  if task:has_flag('skip') then
+    return
+  end
+
+  if not settings.allow_local and rspamd_lua_utils.is_rspamc_or_controller(task) then
+    return
+  end
 
   for _,sym in ipairs(settings.stop_symbols) do
     if task:has_symbol(sym) then
-      lua_util.debugm(N, task, 'skip collection as symbol %s has fired', sym)
+      rspamd_logger.infox(task, 'skip Clickhouse storage for message: symbol %s has fired', sym)
+      return
+    end
+  end
+
+  if settings.exceptions then
+    local excepted,trace = settings.exceptions:process(task)
+    if excepted then
+      rspamd_logger.infox(task, 'skipped Clickhouse storage for message: excepted (%s)',
+          trace)
+      -- Excepted
       return
     end
   end
@@ -1067,6 +1083,13 @@ if opts then
             settings['server'] or settings['servers'])
         rspamd_lua_utils.disable_module(N, "config")
         return
+      end
+
+      if settings.exceptions then
+        local maps_expressions = require "lua_maps_expressions"
+
+        settings.exceptions = maps_expressions.create(rspamd_config,
+            settings.exceptions, N)
       end
 
       rspamd_config:register_symbol({
