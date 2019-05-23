@@ -1,3 +1,14 @@
+1.9.4: 23 May 2019
+  * [CritFix] Fix case sensitivity when parsing Content-Type
+  * [Fix] Arc: Another bunch of fixes for arc signing
+  * [Fix] Arc: More arc signing fixes
+  * [Fix] Avoid another overflow in fpconv
+  * [Fix] Fix ARC signing after fixing another bug in it...
+  * [Fix] Fix dkim signing exceptions
+  * [Fix] Fix some more corner cases for fpconv
+  * [Fix] Further fixes to printing of the FP numbers
+  * [Fix] Ratelimit: Fix dynamic score
+
 1.9.3: 13 May 2019
   * [Conf] Add IP_SCORE_FREEMAIL composite rule
   * [Feature] Add cryptobox method to generate dkim keypairs
