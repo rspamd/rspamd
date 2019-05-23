@@ -1683,7 +1683,7 @@ rspamd_controller_handle_history_reset (struct rspamd_http_connection_entry *con
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_controller_worker_ctx *ctx;
 	struct roll_history_row *row;
-	guint start_row, i, t;
+	guint completed_rows, i, t;
 	lua_State *L;
 
 	ctx = session->ctx;
@@ -1695,13 +1695,15 @@ rspamd_controller_handle_history_reset (struct rspamd_http_connection_entry *con
 
 	if (!ctx->srv->history->disabled) {
 		/* Clean from start to the current row */
-		start_row = g_atomic_int_get (&ctx->srv->history->cur_row);
+		completed_rows = g_atomic_int_get (&ctx->srv->history->cur_row);
 
-		for (i = 0; i < start_row; i ++) {
+		completed_rows = MIN (completed_rows, ctx->srv->history->nrows - 1);
+
+		for (i = 0; i <= completed_rows; i ++) {
 			t = g_atomic_int_get (&ctx->srv->history->cur_row);
 
 			/* We somehow come to the race condition */
-			if (i >= t) {
+			if (i > t) {
 				break;
 			}
 
@@ -1709,14 +1711,9 @@ rspamd_controller_handle_history_reset (struct rspamd_http_connection_entry *con
 			memset (row, 0, sizeof (*row));
 		}
 
-		start_row = g_atomic_int_get (&ctx->srv->history->cur_row);
-		/* Optimistically set all bytes to zero (might cause race) */
-		memset (ctx->srv->history->rows,
-				0,
-				sizeof (*row) * (ctx->srv->history->nrows - start_row));
-
-		msg_info_session ("<%s> reset history",
-				rspamd_inet_address_to_string (session->from_addr));
+		msg_info_session ("<%s> cleared %d entries from history",
+				rspamd_inet_address_to_string (session->from_addr),
+				completed_rows);
 		rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 	}
 	else {
