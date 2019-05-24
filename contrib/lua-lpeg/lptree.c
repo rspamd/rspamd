@@ -1147,23 +1147,34 @@ static size_t initposition (lua_State *L, size_t len) {
 ** Main match function
 */
 static int lp_match (lua_State *L) {
+#ifdef LPEG_LUD_WORKAROUND
+  Capture *capture = lpeg_allocate_mem_low(sizeof(Capture) * INITCAPSIZE);
+#else
   Capture capture[INITCAPSIZE];
+#endif
   const char *r;
   size_t l;
   Pattern *p = (getpatt(L, 1, NULL), getpattern(L, 1));
   Instruction *code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
   const char *s = luaL_checklstring(L, SUBJIDX, &l);
   size_t i = initposition(L, l);
-  int ptop = lua_gettop(L);
+  int ptop = lua_gettop(L), rs;
   lua_pushnil(L);  /* initialize subscache */
   lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
   lua_getuservalue(L, 1);  /* initialize penvidx */
   r = match(L, s, s + i, s + l, code, capture, ptop);
   if (r == NULL) {
     lua_pushnil(L);
+#ifdef LPEG_LUD_WORKAROUND
+    lpeg_free_mem_low (capture);
+#endif
     return 1;
   }
-  return getcaptures(L, s, r, ptop);
+  rs = getcaptures(L, s, r, ptop);
+#ifdef LPEG_LUD_WORKAROUND
+  lpeg_free_mem_low (capture);
+#endif
+  return rs;
 }
 
 

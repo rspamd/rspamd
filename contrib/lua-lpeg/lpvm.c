@@ -3,6 +3,8 @@
 ** Copyright 2007, Lua.org & PUC-Rio  (see 'lpeg.html' for license)
 */
 
+#include "config.h"
+
 #include <limits.h>
 #include <string.h>
 
@@ -15,6 +17,53 @@
 #include "lpvm.h"
 #include "lpprint.h"
 
+#include <sys/mman.h>
+
+static uint64_t xorshifto_seed[2] = {0xdeadbabe, 0xdeadbeef};
+
+static inline uint64_t
+xoroshiro_rotl (const uint64_t x, int k) {
+	return (x << k) | (x >> (64 - k));
+}
+
+void *
+lpeg_allocate_mem_low (size_t sz)
+{
+	unsigned char *cp;
+	unsigned flags = MAP_PRIVATE | MAP_ANON;
+	void *base_addr = NULL;
+
+#ifdef MAP_32BIT
+	flags |= MAP_32BIT;
+#else
+	const uint64_t s0 = xorshifto_seed[0];
+	uint64_t s1 = xorshifto_seed[1];
+
+	s1 ^= s0;
+	xorshifto_seed[0] = xoroshiro_rotl(s0, 55) ^ s1 ^ (s1 << 14);
+	xorshifto_seed[1] = xoroshiro_rotl (s1, 36);
+	flags |= MAP_FIXED;
+	/* Get 46 bits */
+	base_addr = (void *)((xorshifto_seed[0] + xorshifto_seed[1]) & 0x7FFFFFFFF000ULL);
+#endif
+
+	cp = mmap (base_addr, sz + sizeof (sz), PROT_WRITE | PROT_READ,
+			flags, -1, 0);
+	assert (cp != NULL);
+	memcpy (cp, &sz, sizeof (sz));
+
+	return cp + sizeof (sz);
+}
+
+void
+lpeg_free_mem_low(void *p)
+{
+	unsigned char *cp = (unsigned char *)p;
+	size_t sz;
+
+	memcpy (&sz, cp - sizeof (sz), sizeof (sz));
+	munmap (cp - sizeof (sz), sz + sizeof (sz));
+}
 
 /* initial size for call/backtrack stack */
 #if !defined(INITBACK)
@@ -146,7 +195,11 @@ static int removedyncap (lua_State *L, Capture *capture,
 */
 const char *match (lua_State *L, const char *o, const char *s, const char *e,
                    Instruction *op, Capture *capture, int ptop) {
+#ifdef LPEG_LUD_WORKAROUND
+  Stack *stackbase = lpeg_allocate_mem_low(sizeof (Stack) * INITBACK);
+#else
   Stack stackbase[INITBACK];
+#endif
   Stack *stacklimit = stackbase + INITBACK;
   Stack *stack = stackbase;  /* point to first empty slot in stack */
   int capsize = INITCAPSIZE;
@@ -168,10 +221,16 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
         assert(stack == getstackbase(L, ptop) + 1);
         capture[captop].kind = Cclose;
         capture[captop].s = NULL;
+#ifdef LPEG_LUD_WORKAROUND
+        lpeg_free_mem_low(stackbase);
+#endif
         return s;
       }
       case IGiveup: {
         assert(stack == getstackbase(L, ptop));
+#ifdef LPEG_LUD_WORKAROUND
+        lpeg_free_mem_low(stackbase);
+#endif
         return NULL;
       }
       case IRet: {
@@ -306,7 +365,7 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
             capsize = 2 * captop;
           }
           /* add new captures to 'capture' list */
-          adddyncaptures(s, capture + captop - n - 2, n, fr); 
+          adddyncaptures(s, capture + captop - n - 2, n, fr);
         }
         p++;
         continue;
@@ -348,6 +407,7 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
       default: assert(0); return NULL;
     }
   }
+
 }
 
 /* }====================================================== */
