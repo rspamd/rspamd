@@ -801,7 +801,6 @@ rspamd_re_cache_process_selector (struct rspamd_task *task,
 	khiter_t k;
 	lua_State *L;
 	gint err_idx, ret;
-	GString *tb;
 	struct rspamd_task **ptask;
 	gboolean result = FALSE;
 	struct rspamd_re_cache *cache = rt->cache;
@@ -845,13 +844,9 @@ rspamd_re_cache_process_selector (struct rspamd_task *task,
 	rspamd_lua_setclass (L, "rspamd{task}", -1);
 
 	if ((ret = lua_pcall (L, 1, 1, err_idx)) != 0) {
-		tb = lua_touserdata (L, -1);
 		msg_err_task ("call to selector %s "
-						"failed (%d): %v", name, ret, tb);
-
-		if (tb) {
-			g_string_free (tb, TRUE);
-		}
+						"failed (%d): %s", name, ret,
+						lua_tostring (L, -1));
 	}
 	else {
 		gsize slen;

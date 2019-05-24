@@ -143,7 +143,6 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 	struct lua_callback_state cbs;
 	rspamd_mempool_t *pool;
 	gint err_idx;
-	GString *tb = NULL;
 
 	pool = cd->pool;
 	lua_thread_pool_prepare_callback (cd->resolver->cfg->lua_thread_pool, &cbs);
@@ -199,12 +198,8 @@ lua_dns_resolver_callback (struct rdns_reply *reply, gpointer arg)
 	}
 
 	if (lua_pcall (L, 7, 0, err_idx) != 0) {
-		tb = lua_touserdata (L, -1);
-
-		if (tb) {
-			msg_err_pool_check ("call to dns callback failed: %s", tb->str);
-			g_string_free (tb, TRUE);
-		}
+		msg_err_pool_check ("call to dns callback failed: %s",
+				lua_tostring (L, -1));
 	}
 
 	lua_settop (L, err_idx - 1);

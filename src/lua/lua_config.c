@@ -1130,7 +1130,6 @@ lua_metric_symbol_callback (struct rspamd_task *task,
 	struct rspamd_task **ptask;
 	gint level = lua_gettop (cd->L), nresults, err_idx, ret;
 	lua_State *L = cd->L;
-	GString *tb;
 	struct rspamd_symbol_result *s;
 
 	cd->item = item;
@@ -1152,13 +1151,9 @@ lua_metric_symbol_callback (struct rspamd_task *task,
 	*ptask = task;
 
 	if ((ret = lua_pcall (L, 1, LUA_MULTRET, err_idx)) != 0) {
-		tb = lua_touserdata (L, -1);
-		msg_err_task ("call to (%s) failed (%d): %v", cd->symbol, ret, tb);
-
-		if (tb) {
-			g_string_free (tb, TRUE);
-			lua_pop (L, 1);
-		}
+		msg_err_task ("call to (%s) failed (%d): %s", cd->symbol, ret,
+				lua_tostring (L, -1));
+		lua_settop (L, err_idx); /* Not -1 here, as err_func is popped below */
 	}
 	else {
 		nresults = lua_gettop (L) - level;
@@ -1395,12 +1390,8 @@ rspamd_lua_squeeze_rule (lua_State *L,
 
 			/* Now call for squeeze function */
 			if (lua_pcall (L, 2, 1, err_idx) != 0) {
-				GString *tb = lua_touserdata (L, -1);
-				msg_err_config ("call to squeeze_virtual failed: %v", tb);
-
-				if (tb) {
-					g_string_free (tb, TRUE);
-				}
+				msg_err_config ("call to squeeze_virtual failed: %s",
+						lua_tostring (L, -1));
 			}
 
 			ret = lua_tonumber (L, -1);
@@ -1449,12 +1440,8 @@ rspamd_lua_squeeze_rule (lua_State *L,
 
 			/* Now call for squeeze function */
 			if (lua_pcall (L, 3, 1, err_idx) != 0) {
-				GString *tb = lua_touserdata (L, -1);
-				msg_err_config ("call to squeeze_rule failed: %v", tb);
-
-				if (tb) {
-					g_string_free (tb, TRUE);
-				}
+				msg_err_config ("call to squeeze_rule failed: %s",
+						lua_tostring (L, -1));
 			}
 
 			ret = lua_tonumber (L, -1);
@@ -2215,12 +2202,8 @@ rspamd_lua_squeeze_dependency (lua_State *L, struct rspamd_config *cfg,
 		lua_pushstring (L, parent);
 
 		if (lua_pcall (L, 2, 1, err_idx) != 0) {
-			GString *tb = lua_touserdata (L, -1);
-			msg_err_config ("call to squeeze_dependency script failed: %v", tb);
-
-			if (tb) {
-				g_string_free (tb, TRUE);
-			}
+			msg_err_config ("call to squeeze_dependency script failed: %s",
+					lua_tostring (L, -1));
 		}
 		else {
 			ret = lua_toboolean (L, -1);
@@ -3732,7 +3715,6 @@ lua_include_trace_cb (struct ucl_parser *parser,
 	struct rspamd_lua_include_trace_cbdata *cbdata =
 			(struct rspamd_lua_include_trace_cbdata *)user_data;
 	gint err_idx;
-	GString *tb;
 	lua_State *L;
 
 	L = cbdata->L;
@@ -3760,11 +3742,7 @@ lua_include_trace_cb (struct ucl_parser *parser,
 	}
 
 	if (lua_pcall (L, 4, 0, err_idx) != 0) {
-		tb = lua_touserdata (L, -1);
-		msg_err ("lua call to local include trace failed: %v", tb);
-		if (tb) {
-			g_string_free (tb, TRUE);
-		}
+		msg_err ("lua call to local include trace failed: %s", lua_tostring (L, -1));
 	}
 
 	lua_settop (L, err_idx - 1);
@@ -4014,7 +3992,6 @@ lua_config_register_re_selector (lua_State *L)
 				}
 				else {
 					gint err_idx, ret;
-					GString *tb;
 					struct rspamd_config **pcfg;
 
 					lua_pushcfunction (L, &rspamd_lua_traceback);
@@ -4030,13 +4007,9 @@ lua_config_register_re_selector (lua_State *L)
 					lua_pushstring (L, delimiter);
 
 					if ((ret = lua_pcall (L, 3, 1, err_idx)) != 0) {
-						tb = lua_touserdata (L, -1);
 						msg_err_config ("call to create_selector_closure lua "
-										"script failed (%d): %v", ret, tb);
-
-						if (tb) {
-							g_string_free (tb, TRUE);
-						}
+										"script failed (%d): %s", ret,
+										lua_tostring (L, -1));
 					}
 					else {
 						if (lua_type (L, -1) != LUA_TFUNCTION) {

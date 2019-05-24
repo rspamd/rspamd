@@ -216,9 +216,7 @@ lua_atom_process (gpointer runtime_ud, rspamd_expression_atom_t *atom)
 	}
 
 	if (lua_pcall (pd->L, nargs, 1, err_idx) != 0) {
-		GString *tb = lua_touserdata (pd->L, -1);
-		msg_info ("expression process callback failed: %s", tb->str);
-		g_string_free (tb, TRUE);
+		msg_info ("expression process callback failed: %s", lua_tostring (pd->L, -1));
 	}
 	else {
 		ret = lua_tonumber (pd->L, -1);

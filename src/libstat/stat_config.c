@@ -189,7 +189,6 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 			else {
 				/* Call this function to obtain closure */
 				gint err_idx, ret;
-				GString *tb;
 				struct rspamd_config **pcfg;
 
 				lua_pushcfunction (L, &rspamd_lua_traceback);
@@ -201,13 +200,9 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 				rspamd_lua_setclass (L, "rspamd{config}", -1);
 
 				if ((ret = lua_pcall (L, 1, 1, err_idx)) != 0) {
-					tb = lua_touserdata (L, -1);
 					msg_err_config ("call to gen_stat_tokens lua "
-									"script failed (%d): %v", ret, tb);
-
-					if (tb) {
-						g_string_free (tb, TRUE);
-					}
+									"script failed (%d): %s", ret,
+									lua_tostring (L, -1));
 				}
 				else {
 					if (lua_type (L, -1) != LUA_TFUNCTION) {

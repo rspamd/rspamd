@@ -1114,7 +1114,6 @@ rspamd_mime_expr_process (void *ud, rspamd_expression_atom_t *atom)
 	}
 	else if (mime_atom->type == MIME_ATOM_LOCAL_LUA_FUNCTION) {
 		gint err_idx;
-		GString *tb;
 
 		L = task->cfg->lua_state;
 		lua_pushcfunction (L, &rspamd_lua_traceback);
@@ -1124,13 +1123,9 @@ rspamd_mime_expr_process (void *ud, rspamd_expression_atom_t *atom)
 		rspamd_lua_task_push (L, task);
 
 		if (lua_pcall (L, 1, 1, err_idx) != 0) {
-			tb = lua_touserdata (L, -1);
-			msg_info_task ("lua call to local function for atom '%s' failed: %v",
+			msg_info_task ("lua call to local function for atom '%s' failed: %s",
 					mime_atom->str,
-					tb);
-			if (tb) {
-				g_string_free (tb, TRUE);
-			}
+					lua_tostring (L, -1));
 		}
 		else {
 			if (lua_type (L, -1) == LUA_TBOOLEAN) {

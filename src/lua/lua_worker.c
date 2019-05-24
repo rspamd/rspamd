@@ -291,7 +291,6 @@ rspamd_lua_execute_lua_subprocess (lua_State *L,
 								   struct rspamd_lua_process_cbdata *cbdata)
 {
 	gint err_idx, r;
-	GString *tb;
 	guint64 wlen = 0;
 	const gchar *ret;
 	gsize retlen;
@@ -302,23 +301,22 @@ rspamd_lua_execute_lua_subprocess (lua_State *L,
 	lua_rawgeti (L, LUA_REGISTRYINDEX, cbdata->func_cbref);
 
 	if (lua_pcall (L, 0, 1, err_idx) != 0) {
-		tb = lua_touserdata (L, -1);
-		msg_err ("call to subprocess failed: %v", tb);
+		const gchar *s = lua_tostring (L, -1);
+		gsize slen = strlen (s);
+
+		msg_err ("call to subprocess failed: %s", s);
 		/* Indicate error */
-		wlen = (1ULL << 63) + tb->len;
+		wlen = (1ULL << 63u) + slen;
 
 		r = write (cbdata->sp[1], &wlen, sizeof (wlen));
 		if (r == -1) {
 			msg_err ("write failed: %s", strerror (errno));
 		}
 
-		r = write (cbdata->sp[1], tb->str, tb->len);
+		r = write (cbdata->sp[1], s, slen);
 		if (r == -1) {
 			msg_err ("write failed: %s", strerror (errno));
 		}
-		g_string_free (tb, TRUE);
-
-		lua_pop (L, 1);
 	}
 	else {
 		ret = lua_tolstring (L, -1, &retlen);
@@ -335,7 +333,7 @@ rspamd_lua_execute_lua_subprocess (lua_State *L,
 		}
 	}
 
-	lua_pop (L, 1); /* Error function */
+	lua_settop (L, err_idx - 1);
 }
 
 static void
@@ -345,7 +343,6 @@ rspamd_lua_call_on_complete (lua_State *L,
 							 const gchar *data, gsize datalen)
 {
 	gint err_idx;
-	GString *tb;
 
 	lua_pushcfunction (L, &rspamd_lua_traceback);
 	err_idx = lua_gettop (L);
@@ -367,12 +364,11 @@ rspamd_lua_call_on_complete (lua_State *L,
 	}
 
 	if (lua_pcall (L, 2, 0, err_idx) != 0) {
-		tb = lua_touserdata (L, -1);
-		msg_err ("call to subprocess callback script failed: %v", tb);
-		lua_pop (L, 1);
+		msg_err ("call to on_complete script failed: %s",
+				lua_tostring (L, -1));
 	}
 
-	lua_pop (L, 1); /* Error function */
+	lua_settop (L, err_idx - 1);
 }
 
 static gboolean

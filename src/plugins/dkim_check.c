@@ -1317,7 +1317,7 @@ dkim_sign_callback (struct rspamd_task *task,
 	gint err_idx;
 	gint64 arc_idx = 0;
 	gsize len;
-	GString *tb, *hdr;
+	GString *hdr;
 	GList *sigs = NULL;
 	GError *err = NULL;
 	const gchar *selector = NULL, *domain = NULL, *key = NULL, *key_type = NULL,
@@ -1344,9 +1344,8 @@ dkim_sign_callback (struct rspamd_task *task,
 	rspamd_lua_setclass (L, "rspamd{task}", -1);
 
 	if (lua_pcall (L, 1, 1, err_idx) != 0) {
-		tb = lua_touserdata (L, -1);
-		msg_err_task ("call to user extraction script failed: %v", tb);
-		g_string_free (tb, TRUE);
+		msg_err_task ("call to user extraction script failed: %s",
+				lua_tostring (L, -1));
 	}
 	else {
 		if (lua_istable (L, -1)) {

@@ -479,9 +479,7 @@ lua_upstream_watch_func (struct upstream *up,
 	lua_pushinteger (L, cur_errors);
 
 	if (lua_pcall (L, 3, 0, err_idx) != 0) {
-		GString *tb = lua_touserdata (L, -1);
-		msg_err ("cannot call watch function for upstream: %s", tb->str);
-		g_string_free (tb, TRUE);
+		msg_err ("cannot call watch function for upstream: %s", lua_tostring (L, -1));
 		lua_settop (L, 0);
 
 		return;

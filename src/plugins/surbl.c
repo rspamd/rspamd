@@ -972,9 +972,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 
 			if (loaded) {
 				if (lua_pcall (L, 0, 1, err_idx) != 0) {
-					tb = lua_touserdata (L, -1);
-					msg_err_config ("call failed: %v\n", tb);
-					g_string_free (tb, TRUE);
+					msg_err_config ("call failed: %s\n", lua_tostring (L, -1));
 				}
 				else if (lua_isfunction (L, -1)) {
 					new_suffix->url_process_cbref = luaL_ref (L,

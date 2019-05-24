@@ -314,7 +314,6 @@ rspamd_sqlite3_get_user (struct rspamd_stat_sqlite3_db *db,
 	const gchar *user = NULL;
 	struct rspamd_task **ptask;
 	lua_State *L = db->L;
-	GString *tb;
 
 	if (db->cbref_user == -1) {
 		user = rspamd_task_get_principal_recipient (task);
@@ -330,16 +329,15 @@ rspamd_sqlite3_get_user (struct rspamd_stat_sqlite3_db *db,
 		rspamd_lua_setclass (L, "rspamd{task}", -1);
 
 		if (lua_pcall (L, 1, 1, err_idx) != 0) {
-			tb = lua_touserdata (L, -1);
-			msg_err_task ("call to user extraction script failed: %v", tb);
-			g_string_free (tb, TRUE);
+			msg_err_task ("call to user extraction script failed: %s",
+					lua_tostring (L, -1));
 		}
 		else {
 			user = rspamd_mempool_strdup (task->task_pool, lua_tostring (L, -1));
 		}
 
 		/* Result + error function */
-		lua_pop (L, 2);
+		lua_settop (L, err_idx - 1);
 	}
 
 
@@ -377,7 +375,6 @@ rspamd_sqlite3_get_language (struct rspamd_stat_sqlite3_db *db,
 	struct rspamd_mime_text_part *tp;
 	struct rspamd_task **ptask;
 	lua_State *L = db->L;
-	GString *tb;
 
 	if (db->cbref_language == -1) {
 		for (i = 0; i < task->text_parts->len; i++) {
@@ -401,9 +398,8 @@ rspamd_sqlite3_get_language (struct rspamd_stat_sqlite3_db *db,
 		rspamd_lua_setclass (L, "rspamd{task}", -1);
 
 		if (lua_pcall (L, 1, 1, err_idx) != 0) {
-			tb = lua_touserdata (L, -1);
-			msg_err_task ("call to language extraction script failed: %v", tb);
-			g_string_free (tb, TRUE);
+			msg_err_task ("call to language extraction script failed: %s",
+					lua_tostring (L, -1));
 		}
 		else {
 			language = rspamd_mempool_strdup (task->task_pool,
@@ -411,7 +407,7 @@ rspamd_sqlite3_get_language (struct rspamd_stat_sqlite3_db *db,
 		}
 
 		/* Result + error function */
-		lua_pop (L, 2);
+		lua_settop (L, err_idx - 1);
 	}
 
 

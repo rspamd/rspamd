@@ -716,11 +716,8 @@ rspamd_message_process_plain_text_part (struct rspamd_task *task,
 					text_part->utf_raw_content->len);
 
 			if (lua_pcall (L, 1, 1, err_idx) != 0) {
-				GString *tb;
-
-				tb = lua_touserdata (L, -1);
-				msg_err_task ("cannot call lua lua_ical.ical_txt_values: %s", tb->str);
-				g_string_free (tb, TRUE);
+				msg_err_task ("cannot call lua lua_ical.ical_txt_values: %s",
+						lua_tostring (L, -1));
 				lua_settop (L, err_idx - 1);
 
 				return FALSE;

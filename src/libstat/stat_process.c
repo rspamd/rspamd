@@ -46,7 +46,6 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 
 	if (st_ctx->lua_stat_tokens_ref != -1) {
 		gint err_idx, ret;
-		GString *tb;
 		struct rspamd_task **ptask;
 
 		lua_pushcfunction (L, &rspamd_lua_traceback);
@@ -58,13 +57,8 @@ rspamd_stat_tokenize_parts_metadata (struct rspamd_stat_ctx *st_ctx,
 		rspamd_lua_setclass (L, "rspamd{task}", -1);
 
 		if ((ret = lua_pcall (L, 1, 1, err_idx)) != 0) {
-			tb = lua_touserdata (L, -1);
 			msg_err_task ("call to stat_tokens lua "
-							"script failed (%d): %v", ret, tb);
-
-			if (tb) {
-				g_string_free (tb, TRUE);
-			}
+							"script failed (%d): %s", ret, lua_tostring (L, -1));
 		}
 		else {
 			if (lua_type (L, -1) != LUA_TTABLE) {
@@ -913,7 +907,6 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 	struct rspamd_metric_result *mres = NULL;
 	struct rspamd_task **ptask;
 	lua_State *L;
-	GString *tb;
 	guint i;
 	gint err_idx;
 	gboolean ret = FALSE;
@@ -1011,10 +1004,8 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 						rspamd_lua_setclass (L, "rspamd{task}", -1);
 
 						if (lua_pcall (L, 1, 1, err_idx) != 0) {
-							tb = lua_touserdata (L, -1);
 							msg_err_task ("call to autolearn script failed: "
-									"%v", tb);
-							g_string_free (tb, TRUE);
+									"%s", lua_tostring (L, -1));
 						}
 						else {
 							lua_ret = lua_tostring (L, -1);

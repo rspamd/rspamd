@@ -510,13 +510,10 @@ rspamd_lua_load_env (lua_State *L, const char *fname, gint tbl_pos, GError **err
 	}
 
 	if (ret && lua_pcall (L, 0, 1, err_idx) != 0) {
-		GString *tb = lua_touserdata (L, -1);
 		g_set_error (err, g_quark_from_static_string ("lua_env"), errno,
 				"cannot init lua file %s: %s",
 				fname,
-				tb->str);
-		g_string_free (tb, TRUE);
-
+				lua_tostring (L, -1));
 		ret = FALSE;
 	}
 
@@ -1048,7 +1045,6 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 	GList *cur;
 	struct script_module *module;
 	lua_State *L = cfg->lua_state;
-	GString *tb;
 	gint err_idx;
 
 	cur = g_list_first (cfg->script_modules);
@@ -1086,14 +1082,11 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 			lua_setglobal (L, "rspamd_config");
 
 			if (lua_pcall (L, 0, 0, err_idx) != 0) {
-				tb = lua_touserdata (L, -1);
-				msg_err_config ("init of %s failed: %v",
+				msg_err_config ("init of %s failed: %s",
 						module->path,
-						tb);
+						lua_tostring (L, -1));
 
-				g_string_free (tb, TRUE);
-				lua_pop (L, 2); /* Result and error function */
-
+				lua_settop (L, err_idx - 1);
 				rspamd_plugins_table_push_elt (L, "disabled_failed",
 						module->name);
 
@@ -1667,44 +1660,41 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 }
 
 static void
-rspamd_lua_traceback_string (lua_State *L, GString *s)
+rspamd_lua_traceback_string (lua_State *L, luaL_Buffer *buf)
 {
-	gint i = 1;
+	gint i = 1, r;
 	lua_Debug d;
+	gchar tmp[256];
 
 	while (lua_getstack (L, i++, &d)) {
 		lua_getinfo (L, "nSl", &d);
-		g_string_append_printf (s, " [%d]:{%s:%d - %s [%s]};",
+		r = rspamd_snprintf (tmp, sizeof (tmp), " [%d]:{%s:%d - %s [%s]};",
 				i - 1, d.short_src, d.currentline,
 				(d.name ? d.name : "<unknown>"), d.what);
+		luaL_addlstring (buf, tmp, r);
 	}
 }
 
 gint
 rspamd_lua_traceback (lua_State *L)
 {
+	luaL_Buffer b;
 
-	GString *tb;
-
-	tb = rspamd_lua_get_traceback_string (L);
-
-	lua_pushlightuserdata (L, tb);
+	luaL_buffinit (L, &b);
+	rspamd_lua_get_traceback_string (L, &b);
+	luaL_pushresult (&b);
 
 	return 1;
 }
 
-GString *
-rspamd_lua_get_traceback_string (lua_State *L)
+void
+rspamd_lua_get_traceback_string (lua_State *L, luaL_Buffer *buf)
 {
-	GString *tb;
 	const gchar *msg = lua_tostring (L, -1);
 
-	tb = g_string_sized_new (100);
-	g_string_append_printf (tb, "%s; trace:", msg);
-
-	rspamd_lua_traceback_string (L, tb);
-
-	return tb;
+	luaL_addstring (buf, msg);
+	luaL_addstring (buf, "; trace:");
+	rspamd_lua_traceback_string (L, buf);
 }
 
 guint
@@ -1730,7 +1720,6 @@ rspamd_lua_check_udata_common (lua_State *L, gint pos, const gchar *classname,
 		gboolean fatal)
 {
 	void *p = lua_touserdata (L, pos);
-	GString *err_msg;
 	guint i, top = lua_gettop (L);
 
 	if (p == NULL) {
@@ -1769,12 +1758,19 @@ err:
 			actual_classname = lua_typename (L, lua_type (L, pos));
 		}
 
-		err_msg = g_string_sized_new (100);
-		rspamd_printf_gstring (err_msg, "expected %s at position %d, but userdata has "
-										"%s metatable; trace: ",
+		luaL_Buffer buf;
+		gchar tmp[512];
+		gint r;
+
+		luaL_buffinit (L, &buf);
+		r = rspamd_snprintf (tmp, sizeof (tmp),
+				"expected %s at position %d, but userdata has "
+				"%s metatable; trace: ",
 				classname, pos, actual_classname);
-		rspamd_lua_traceback_string (L, err_msg);
-		rspamd_printf_gstring (err_msg, " stack(%d): ", top);
+		luaL_addlstring (&buf, tmp, r);
+		rspamd_lua_traceback_string (L, &buf);
+		r = rspamd_snprintf (tmp, sizeof (tmp), " stack(%d): ", top);
+		luaL_addlstring (&buf, tmp, r);
 
 		for (i = 1; i <= MIN (top, 10); i ++) {
 			if (lua_type (L, i) == LUA_TUSERDATA) {
@@ -1791,17 +1787,19 @@ err:
 					clsname = lua_typename (L, lua_type (L, i));
 				}
 
-				rspamd_printf_gstring (err_msg, "[%d: ud=%s] ", i,
+				r = rspamd_snprintf (tmp, sizeof (tmp), "[%d: ud=%s] ", i,
 						clsname);
+				luaL_addlstring (&buf, tmp, r);
 			}
 			else {
-				rspamd_printf_gstring (err_msg, "[%d: %s] ", i,
+				r = rspamd_snprintf (tmp, sizeof (tmp), "[%d: %s] ", i,
 						lua_typename (L, lua_type (L, i)));
+				luaL_addlstring (&buf, tmp, r);
 			}
 		}
 
-		msg_err ("lua type error: %v", err_msg);
-		g_string_free (err_msg, TRUE);
+		luaL_pushresult (&buf);
+		msg_err ("lua type error: %s", lua_tostring (L, -1));
 	}
 
 	lua_settop (L, top);
@@ -1982,11 +1980,8 @@ rspamd_lua_try_load_redis (lua_State *L, const ucl_object_t *obj,
 	lua_pushboolean (L, false); /* no_fallback */
 
 	if (lua_pcall (L, 3, 1, err_idx) != 0) {
-		GString *tb;
-
-		tb = lua_touserdata (L, -1);
-		msg_err_config ("cannot call lua try_load_redis_servers script: %s", tb->str);
-		g_string_free (tb, TRUE);
+		msg_err_config ("cannot call lua try_load_redis_servers script: %s",
+				lua_tostring (L, -1));
 		lua_settop (L, 0);
 
 		return FALSE;

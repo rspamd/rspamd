@@ -829,12 +829,8 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 		if (rspamd_lua_require_function (cfg->lua_state, "lua_squeeze_rules",
 				"squeeze_init")) {
 			if (lua_pcall (L, 0, 0, err_idx) != 0) {
-				GString *tb = lua_touserdata (L, -1);
-				msg_err_config ("call to squeeze_init script failed: %v", tb);
-
-				if (tb) {
-					g_string_free (tb, TRUE);
-				}
+				msg_err_config ("call to squeeze_init script failed: %s",
+						lua_tostring (L, -1));
 			}
 		}
 

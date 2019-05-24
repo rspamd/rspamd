@@ -5685,10 +5685,8 @@ lua_lookup_words_array (lua_State *L,
 			rspamd_lua_push_full_word (L, tok);
 
 			if (lua_pcall (L, 1, 0, err_idx) != 0) {
-				GString *tb = lua_touserdata (L, -1);
 				msg_err_task ("cannot call callback function for lookup words: %s",
-						tb->str);
-				g_string_free (tb, TRUE);
+						lua_tostring (L, -1));
 			}
 
 			lua_settop (L, err_idx - 1);

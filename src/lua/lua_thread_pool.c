@@ -278,7 +278,6 @@ lua_resume_thread_internal_full (struct thread_entry *thread_entry,
 {
 	gint ret;
 	struct lua_thread_pool *pool;
-	GString *tb;
 	struct rspamd_task *task;
 
 	msg_debug_lua_threads ("%s: lua_resume_thread_internal_full", loc);
@@ -297,6 +296,7 @@ lua_resume_thread_internal_full (struct thread_entry *thread_entry,
 		else {
 			pool = thread_entry->cfg->lua_thread_pool;
 		}
+
 		if (ret == 0) {
 			if (thread_entry->finish_callback) {
 				thread_entry->finish_callback (thread_entry, ret);
@@ -304,21 +304,21 @@ lua_resume_thread_internal_full (struct thread_entry *thread_entry,
 			lua_thread_pool_return_full (pool, thread_entry, loc);
 		}
 		else {
-			tb = rspamd_lua_get_traceback_string (thread_entry->lua_state);
-			if (tb && thread_entry->error_callback) {
-				thread_entry->error_callback (thread_entry, ret, tb->str);
+			rspamd_lua_traceback (thread_entry->lua_state);
+			if (thread_entry->error_callback) {
+				thread_entry->error_callback (thread_entry, ret,
+						lua_tostring (thread_entry->lua_state, -1));
 			}
 			else if (thread_entry->task) {
 				task = thread_entry->task;
-				msg_err_task ("lua call failed (%d): %v", ret, tb);
+				msg_err_task ("lua call failed (%d): %s", ret,
+						lua_tostring (thread_entry->lua_state, -1));
 			}
 			else {
-				msg_err ("lua call failed (%d): %v", ret, tb);
+				msg_err ("lua call failed (%d): %s", ret,
+						lua_tostring (thread_entry->lua_state, -1));
 			}
 
-			if (tb) {
-				g_string_free (tb, TRUE);
-			}
 			/*
 			 * Maybe there is a way to recover here.
 			 * For now, just remove faulty thread

@@ -224,7 +224,6 @@ rspamd_proxy_parse_lua_parser (lua_State *L, const ucl_object_t *obj,
 	const gchar *lua_script;
 	gsize slen;
 	gint err_idx, ref_idx;
-	GString *tb = NULL;
 	gboolean has_ref = FALSE;
 
 	g_assert (obj != NULL);
@@ -252,13 +251,11 @@ rspamd_proxy_parse_lua_parser (lua_State *L, const ucl_object_t *obj,
 
 	/* Now do it */
 	if (lua_pcall (L, 0, 1, err_idx) != 0) {
-		tb = lua_touserdata (L, -1);
 		g_set_error (err,
 				rspamd_proxy_quark (),
 				EINVAL,
 				"cannot init lua parser script: %s",
-				tb->str);
-		g_string_free (tb, TRUE);
+				lua_tostring (L, -1));
 		lua_settop (L, 0);
 
 		return FALSE;
@@ -644,7 +641,6 @@ rspamd_proxy_parse_script (rspamd_mempool_t *pool,
 	const gchar *lua_script;
 	gsize slen;
 	gint err_idx, ref_idx;
-	GString *tb = NULL;
 	struct stat st;
 
 	ctx = pd->user_struct;
@@ -690,13 +686,11 @@ rspamd_proxy_parse_script (rspamd_mempool_t *pool,
 
 	/* Now do it */
 	if (lua_pcall (L, 0, 1, err_idx) != 0) {
-		tb = lua_touserdata (L, -1);
 		g_set_error (err,
 				rspamd_proxy_quark (),
 				EINVAL,
 				"cannot init lua parser script: %s",
-				tb->str);
-		g_string_free (tb, TRUE);
+				lua_tostring (L, -1));
 		lua_settop (L, 0);
 
 		goto err;
@@ -872,7 +866,6 @@ proxy_backend_parse_results (struct rspamd_proxy_session *session,
 		const gchar *in, gsize inlen)
 {
 	struct ucl_parser *parser;
-	GString *tb = NULL;
 	gint err_idx;
 
 	if (inlen == 0 || in == NULL) {
@@ -889,11 +882,9 @@ proxy_backend_parse_results (struct rspamd_proxy_session *session,
 		lua_pushlstring (L, in, inlen);
 
 		if (lua_pcall (L, 1, 1, err_idx) != 0) {
-			tb = lua_touserdata (L, -1);
 			msg_err_session (
 					"cannot run lua parser script: %s",
-					tb->str);
-			g_string_free (tb, TRUE);
+					lua_tostring (L, -1));
 			lua_settop (L, 0);
 
 			return FALSE;
@@ -928,7 +919,6 @@ proxy_backend_parse_results (struct rspamd_proxy_session *session,
 static void
 proxy_call_cmp_script (struct rspamd_proxy_session *session, gint cbref)
 {
-	GString *tb = NULL;
 	gint err_idx;
 	guint i;
 	struct rspamd_proxy_backend_connection *conn;
@@ -969,11 +959,9 @@ proxy_call_cmp_script (struct rspamd_proxy_session *session, gint cbref)
 	}
 
 	if (lua_pcall (L, 1, 0, err_idx) != 0) {
-		tb = lua_touserdata (L, -1);
 		msg_err_session (
 				"cannot run lua compare script: %s",
-				tb->str);
-		g_string_free (tb, TRUE);
+				lua_tostring (L, -1));
 	}
 
 	lua_settop (L, 0);

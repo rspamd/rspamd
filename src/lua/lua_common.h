@@ -348,8 +348,7 @@ gint rspamd_lua_traceback (lua_State *L);
  * @param L
  * @return
  */
-GString *
-rspamd_lua_get_traceback_string (lua_State *L);
+void rspamd_lua_get_traceback_string (lua_State *L, luaL_Buffer *buf);
 
 /**
  * Returns size of table at position `tbl_pos`

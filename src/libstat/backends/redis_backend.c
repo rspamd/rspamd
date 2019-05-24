@@ -148,7 +148,6 @@ rspamd_redis_expand_object (const gchar *pattern,
 	struct rspamd_statfile_config *stcf;
 	lua_State *L = NULL;
 	struct rspamd_task **ptask;
-	GString *tb;
 	const gchar *rcpt = NULL;
 	gint err_idx;
 
@@ -172,16 +171,15 @@ rspamd_redis_expand_object (const gchar *pattern,
 			rspamd_lua_setclass (L, "rspamd{task}", -1);
 
 			if (lua_pcall (L, 1, 1, err_idx) != 0) {
-				tb = lua_touserdata (L, -1);
-				msg_err_task ("call to user extraction script failed: %v", tb);
-				g_string_free (tb, TRUE);
+				msg_err_task ("call to user extraction script failed: %s",
+						lua_tostring (L, -1));
 			}
 			else {
 				rcpt = rspamd_mempool_strdup (task->task_pool, lua_tostring (L, -1));
 			}
 
 			/* Result + error function */
-			lua_pop (L, 2);
+			lua_settop (L, err_idx - 1);
 		}
 
 		if (rcpt) {

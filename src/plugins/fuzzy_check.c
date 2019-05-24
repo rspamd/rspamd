@@ -583,7 +583,6 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 	 * Process rule in Lua
 	 */
 	gint err_idx, ret;
-	GString *tb;
 	lua_State *L = (lua_State *)cfg->lua_state;
 
 	lua_pushcfunction (L, &rspamd_lua_traceback);
@@ -592,13 +591,9 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 	ucl_object_push_lua (L, obj, true);
 
 	if ((ret = lua_pcall (L, 1, 1, err_idx)) != 0) {
-		tb = lua_touserdata (L, -1);
 		msg_err_config ("call to process_rule lua "
-						"script failed (%d): %v", ret, tb);
+						"script failed (%d): %s", ret, lua_tostring (L, -1));
 
-		if (tb) {
-			g_string_free (tb, TRUE);
-		}
 		rule->lua_id = -1;
 	}
 	else {
@@ -1147,7 +1142,6 @@ fuzzy_check_module_reconfig (struct rspamd_config *cfg)
 	if (fuzzy_module_ctx->cleanup_rules_ref != -1) {
 		/* Sync lua_fuzzy rules */
 		gint err_idx, ret;
-		GString *tb;
 		lua_State *L = (lua_State *)cfg->lua_state;
 
 		lua_pushcfunction (L, &rspamd_lua_traceback);
@@ -1155,13 +1149,8 @@ fuzzy_check_module_reconfig (struct rspamd_config *cfg)
 		lua_rawgeti (L, LUA_REGISTRYINDEX, fuzzy_module_ctx->cleanup_rules_ref);
 
 		if ((ret = lua_pcall (L, 0, 0, err_idx)) != 0) {
-			tb = lua_touserdata (L, -1);
 			msg_err_config ("call to cleanup_rules lua "
-							"script failed (%d): %v", ret, tb);
-
-			if (tb) {
-				g_string_free (tb, TRUE);
-			}
+							"script failed (%d): %s", ret, lua_tostring (L, -1));
 		}
 
 		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX,
@@ -1381,7 +1370,6 @@ fuzzy_rule_check_mimepart (struct rspamd_task *task,
 {
 	if (rule->lua_id != -1 && rule->ctx->check_mime_part_ref != -1) {
 		gint err_idx, ret;
-		GString *tb;
 		lua_State *L = (lua_State *)task->cfg->lua_state;
 		struct rspamd_task **ptask;
 		struct rspamd_mime_part **ppart;
@@ -1401,13 +1389,9 @@ fuzzy_rule_check_mimepart (struct rspamd_task *task,
 		lua_pushnumber (L, rule->lua_id);
 
 		if ((ret = lua_pcall (L, 3, 2, err_idx)) != 0) {
-			tb = lua_touserdata (L, -1);
 			msg_err_task ("call to check_mime_part lua "
-							"script failed (%d): %v", ret, tb);
+							"script failed (%d): %s", ret, lua_tostring (L, -1));
 
-			if (tb) {
-				g_string_free (tb, TRUE);
-			}
 			ret = FALSE;
 		}
 		else {
@@ -2956,7 +2940,6 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	guint i;
 	GError **err;
 	GPtrArray *commands;
-	GString *tb;
 	lua_State *L;
 	gint r, *saved, rules = 0, err_idx;
 	struct fuzzy_ctx *fuzzy_module_ctx;
@@ -3016,9 +2999,8 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 			rspamd_lua_setclass (L, "rspamd{task}", -1);
 
 			if (lua_pcall (L, 1, LUA_MULTRET, err_idx) != 0) {
-				tb = lua_touserdata (L, -1);
-				msg_err_task ("call to user extraction script failed: %v", tb);
-				g_string_free (tb, TRUE);
+				msg_err_task ("call to fuzzy learn condition failed: %s",
+						lua_tostring (L, -1));
 			}
 			else {
 				if (lua_gettop (L) > err_idx + 1) {
