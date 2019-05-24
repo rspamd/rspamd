@@ -111,30 +111,38 @@ local function check_query_settings(task)
   end
 
   local query_maxscore = task:get_request_header('maxscore')
+  local settings_id = task:get_request_header('settings-id')
+  local nset
+
   if query_maxscore then
+    if settings_id then
+      rspamd_logger.infox(task, "both settings id '%s' and maxscore '%s' headers are presented, merge them; " ..
+        "settings id has priority",
+        tostring(settings_id), tostring(query_maxscore))
+    end
     -- We have score limits redefined by request
     local ms = tonumber(tostring(query_maxscore))
     if ms then
-      local nset = {
-        default = {
-          actions = {
-            reject = ms
-          }
+      nset = {
+        actions = {
+          reject = ms
         }
       }
 
       local query_softscore = task:get_request_header('softscore')
       if query_softscore then
         local ss = tonumber(tostring(query_softscore))
-        nset['default']['actions']['add header'] = ss
+        nset.actions['add header'] = ss
       end
 
-      apply_settings(task, nset)
-      return true
+      if not settings_id then
+        rspamd_logger.infox(task, 'apply maxscore = %s', nset.actions)
+        apply_settings(task, nset)
+        return true
+      end
     end
   end
 
-  local settings_id = task:get_request_header('settings-id')
   if settings_id and settings_initialized then
     -- settings_id is rspamd text, so need to convert it to string for lua
     local id_str = tostring(settings_id)
@@ -146,10 +154,26 @@ local function check_query_settings(task)
       end
 
       if elt.apply then
+        if nset then
+          elt.apply = lua_util.override_defaults(nset, elt.apply)
+        end
         apply_settings(task, elt['apply'])
         rspamd_logger.infox(task, "applying settings id %s", id_str)
         return true
       end
+    else
+      rspamd_logger.warnx(task, 'no settings id "%s" has been found', id_str)
+      if nset then
+        rspamd_logger.infox(task, 'apply maxscore = %s', nset.actions)
+        apply_settings(task, nset)
+        return true
+      end
+    end
+  else
+    if nset then
+      rspamd_logger.infox(task, 'apply maxscore = %s', nset.actions)
+      apply_settings(task, nset)
+      return true
     end
   end
 
