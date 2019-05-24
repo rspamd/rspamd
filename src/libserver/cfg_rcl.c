@@ -3511,7 +3511,7 @@ rspamd_rcl_maybe_apply_lua_transform (struct rspamd_config *cfg)
 	ucl_object_push_lua (L, cfg->rcl_obj, true);
 
 	if ((ret = lua_pcall (L, 1, 2, err_idx)) != 0) {
-		msg_err ("call to rspamadm lua script failed (%d): %v", ret,
+		msg_err ("call to rspamadm lua script failed (%d): %s", ret,
 				lua_tostring (L, -1));
 		lua_settop (L, 0);
 
