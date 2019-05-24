@@ -1693,6 +1693,7 @@ rspamd_lua_get_traceback_string (lua_State *L, luaL_Buffer *buf)
 	const gchar *msg = lua_tostring (L, -1);
 
 	luaL_addstring (buf, msg);
+	lua_pop (L, 1); /* Error string */
 	luaL_addstring (buf, "; trace:");
 	rspamd_lua_traceback_string (L, buf);
 }
