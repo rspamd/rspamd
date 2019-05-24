@@ -257,7 +257,7 @@ local function oletools_config(opts)
 
   local oletools_conf = {
     name = N,
-    scan_mime_parts = false,
+    scan_mime_parts = true,
     scan_text_mime = false,
     scan_image_mime = false,
     default_port = 10050,
