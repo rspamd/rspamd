@@ -73,32 +73,32 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 		end = p + strlen (p);
 
 		if (*p == '<') {
-			p ++;
+			p++;
+		}
 
-			if (end > p) {
-				gchar *d;
+		if (end > p) {
+			gchar *d;
 
-				if (*(end - 1) == '>') {
-					end --;
-				}
-
-				id = rspamd_mempool_alloc (task->task_pool, end - p + 1);
-				d = id;
-
-				while (p < end) {
-					if (g_ascii_isgraph (*p)) {
-						*d++ = *p++;
-					}
-					else {
-						*d++ = '?';
-						p++;
-					}
-				}
-
-				*d = '\0';
-
-				task->message_id = id;
+			if (*(end - 1) == '>') {
+				end --;
 			}
+
+			id = rspamd_mempool_alloc (task->task_pool, end - p + 1);
+			d = id;
+
+			while (p < end) {
+				if (g_ascii_isgraph (*p)) {
+					*d++ = *p++;
+				}
+				else {
+					*d++ = '?';
+					p++;
+				}
+			}
+
+			*d = '\0';
+
+			task->message_id = id;
 		}
 
 		break;
