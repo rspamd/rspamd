@@ -299,14 +299,15 @@ local pushers = {
       end
     end
 
-    lua_smtp.sendmail(task, formatted, {
+    lua_smtp.sendmail({
+      task = task,
       host = rule.smtp,
       port = rule.smtp_port or settings.smtp_port or 25,
       from = rule.mail_from or settings.mail_from,
       recipients = rule.mail_to,
       helo = rule.helo or settings.helo,
       timeout = rule.timeout or settings.timeout,
-    }, sendmail_cb)
+    }, formatted, sendmail_cb)
   end,
 }
 

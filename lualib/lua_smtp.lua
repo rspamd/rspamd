@@ -15,6 +15,7 @@ limitations under the License.
 ]]--
 
 local rspamd_tcp = require "rspamd_tcp"
+local lua_util = require "lua_util"
 
 local exports = {}
 
@@ -24,7 +25,7 @@ local default_timeout = 10.0
 --[[[
 -- @function lua_smtp.sendmail(task, message, opts, callback)
 --]]
-local function sendmail(task, message, opts, callback)
+local function sendmail(opts, message, callback)
   local stage = 'connect'
 
   local function mail_cb(err, data, conn)
@@ -180,14 +181,12 @@ local function sendmail(task, message, opts, callback)
     opts.recipients = {opts.recipients}
   end
 
-  if not rspamd_tcp.request({
-    task = task,
-    callback = mail_cb,
-    stop_pattern = CRLF,
-    host = opts.host,
-    port = opts.port or 25,
-    timeout = opts.timeout or default_timeout,
-  }) then
+  local tcp_opts = lua_util.shallowcopy(opts)
+  tcp_opts.stop_pattern = CRLF
+  tcp_opts.timeout = opts.timeout or default_timeout
+  tcp_opts.callback = mail_cb
+
+  if not rspamd_tcp.request(tcp_opts) then
     callback(false, 'cannot make a TCP connection')
   end
 end
