@@ -107,7 +107,12 @@ local function sendmail(opts, message, callback)
     -- DATA stage
     local function data_done_cb(merr, mdata)
       if no_error_read(merr, mdata, '3') then
-        conn:add_write(pre_quit_cb, {message, CRLF.. '.' .. CRLF})
+        if type(message) == 'string' then
+          conn:add_write(pre_quit_cb, {message, CRLF.. '.' .. CRLF})
+        else
+          table.insert(message, CRLF.. '.' .. CRLF)
+          conn:add_write(pre_quit_cb, message)
+        end
       end
     end
     local function data_cb(merr, _)

@@ -19,7 +19,6 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local mempool = require "rspamd_mempool"
-local rspamd_tcp = require "rspamd_tcp"
 local rspamd_url = require "rspamd_url"
 local rspamd_util = require "rspamd_util"
 local rspamd_redis = require "lua_redis"
@@ -47,14 +46,14 @@ local report_settings = {
   retries = 2,
   from_name = 'Rspamd',
 }
-local report_template = [[From: "%s" <%s>
-To: %s
-Subject: Report Domain: %s
-	Submitter: %s
-	Report-ID: <%s>
-Date: %s
+local report_template = [[From: "{% from_name %}" <{% from_addr %}>
+To: {% rcpt %}
+Subject: Report Domain: {% report_domain %}
+	Submitter: {% submitter %}
+	Report-ID: {% report_id %}
+Date: {% report_date %}
 MIME-Version: 1.0
-Message-ID: <%s>
+Message-ID: <{% message_id %}>
 Content-Type: multipart/mixed;
 	boundary="----=_NextPart_000_024E_01CC9B0A.AFE54C00"
 
@@ -64,17 +63,17 @@ This is a multipart message in MIME format.
 Content-Type: text/plain; charset="us-ascii"
 Content-Transfer-Encoding: 7bit
 
-This is an aggregate report from %s.
+This is an aggregate report from {% submitter %}.
 
-Report domain: %s
-Submitter: %s
-Report ID: %s
+Report domain: {% report_domain %}
+Submitter: {% submitter %}
+Report ID: {% report_id %}
 
 ------=_NextPart_000_024E_01CC9B0A.AFE54C00
 Content-Type: application/gzip
 Content-Transfer-Encoding: base64
 Content-Disposition: attachment;
-	filename="%s!%s!%s!%s.xml.gz"
+	filename="{% submitter %}!{% report_domain %}!{% report_start %}!{% report_end %}.xml.gz"
 
 ]]
 local report_footer = [[
@@ -817,7 +816,8 @@ if opts['reporting'] == true then
       end
       local function dmarc_report_xml()
         local entries = {}
-        report_id = string.format('%s.%d.%d', reporting_domain, report_start, report_end)
+        report_id = string.format('%s.%d.%d',
+            reporting_domain, report_start, report_end)
         lua_util.debugm(N, rspamd_config, 'new report: %s', report_id)
         local actions = {
           push = function(t)
@@ -854,13 +854,15 @@ if opts['reporting'] == true then
               end
             end
             if split[10] and split[10] ~= '' then
-              local tmp = rspamd_str_split(split[10], '|')
+              local tmp = lua_util.str_split(split[10], '|')
               for _, d in ipairs(tmp) do
-                table.insert(row.dkim_results, {domain = d, result = 'permerror'})
+                table.insert(row.dkim_results,
+                    {domain = d, result = 'permerror'})
               end
             end
             table.insert(entries, row)
           end,
+          -- TODO: please rework this shit
           header = function()
               return table.concat({
                 '<?xml version="1.0" encoding="utf-8"?><feedback><report_metadata><org_name>',
@@ -891,158 +893,73 @@ if opts['reporting'] == true then
           return f(p)
         end
       end
+
+
       local function send_report_via_email(xmlf, retry)
         if not retry then retry = 0 end
-        if retry > report_settings.retries then
-          rspamd_logger.errx(rspamd_config, "Couldn't send mail for %s: retries exceeded", reporting_domain)
-          return get_reporting_domain()
+
+        local function sendmail_cb(ret, err)
+          if not ret then
+            rspamd_logger.errx(rspamd_config, "Couldn't send mail for %s: %s", err)
+            if retry >= report_settings.retries then
+              rspamd_logger.errx(rspamd_config, "Couldn't send mail for %s: retries exceeded", reporting_domain)
+              return get_reporting_domain()
+            else
+              send_report_via_email(xmlf, retry + 1)
+            end
+          end
         end
+
+        -- Format message
         local tmp_addr = {}
         for k in pairs(reporting_addr) do
           table.insert(tmp_addr, k)
         end
+
         local encoded = rspamd_util.encode_base64(rspamd_util.gzip_compress(
               table.concat(
                 {xmlf('header'),
                  xmlf('entries'),
                  xmlf('footer')})), 73)
-        local function mail_cb(err, data, conn)
-          local function no_error(merr, mdata, wantcode)
-            wantcode = wantcode or '2'
-            if merr then
-              rspamd_logger.errx(ev_base, 'got error in tcp callback: %s', merr)
-              if conn then
-                conn:close()
-              end
-              send_report_via_email(xmlf, retry+1)
-              return false
-            end
-            if mdata then
-              if type(mdata) ~= 'string' then
-                mdata = tostring(mdata)
-              end
-              if string.sub(mdata, 1, 1) ~= wantcode then
-                rspamd_logger.errx(ev_base, 'got bad smtp response: %s', mdata)
-                if conn then
-                  conn:close()
-                end
-                send_report_via_email(xmlf, retry+1)
-                return false
-              end
-            else
-              rspamd_logger.errx(ev_base, 'no data')
-              if conn then
-                conn:close()
-              end
-              send_report_via_email(xmlf, retry+1)
-              return false
-            end
-            return true
-          end
-          local function all_done_cb(merr, mdata)
-            if conn then
-              conn:close()
-            end
-            get_reporting_domain()
-            return true
-          end
-          local function quit_done_cb(merr, mdata)
-            conn:add_read(all_done_cb, '\r\n')
-          end
-          local function quit_cb(merr, mdata)
-            if no_error(merr, mdata) then
-              conn:add_write(quit_done_cb, 'QUIT\r\n')
-            end
-          end
-          local function pre_quit_cb(merr, mdata)
-            if no_error(merr, '2') then
-              conn:add_read(quit_cb, '\r\n')
-            end
-          end
-          local function data_done_cb(merr, mdata)
-            if no_error(merr, mdata, '3') then
-              local atmp = {}
-              for k in pairs(reporting_addr) do
-                table.insert(atmp, k)
-              end
-              local addr_string = table.concat(atmp, ', ')
-              -- TODO: migrate to templates and remove this shit
-              local rhead = string.format(report_template:gsub("\n", "\r\n"),
-                  report_settings.from_name,
-                  report_settings.email,
-                  addr_string,
-                  reporting_domain,
-                  report_settings.domain,
-                  report_id,
-                  rspamd_util.time_to_string(rspamd_util.get_time()),
-                  rspamd_util.random_hex(12) .. '@rspamd', -- Message-id
-                  report_settings.domain, -- Plain text part
-                  reporting_domain,
-                  addr_string,
-                  report_id,
-                  report_settings.domain,
-                  reporting_domain,
-                  report_start, report_end)
-              conn:add_write(pre_quit_cb, {rhead,
-                                           encoded,
-                                           report_footer:gsub("\n", "\r\n"),
-                                           '\r\n.\r\n'})
-            end
-          end
-          local function data_cb(merr, mdata)
-            if no_error(merr, '2') then
-              conn:add_read(data_done_cb, '\r\n')
-            end
-          end
-          local function rcpt_done_cb(merr, mdata)
-            if no_error(merr, mdata) then
-              conn:add_write(data_cb, 'DATA\r\n')
-            end
-          end
-          local from_done_cb
-          local function rcpt_cb(merr, mdata)
-            if no_error(merr, '2') then
-              if tmp_addr[1] then
-                conn:add_read(from_done_cb, '\r\n')
-              else
-                conn:add_read(rcpt_done_cb, '\r\n')
-              end
-            end
-          end
-          from_done_cb = function(merr, mdata)
-            if no_error(merr, mdata) then
-              conn:add_write(rcpt_cb, {'RCPT TO: <', table.remove(tmp_addr), '>\r\n'})
-            end
-          end
-          local function from_cb(merr, mdata)
-            if no_error(merr, '2') then
-              conn:add_read(from_done_cb, '\r\n')
-            end
-          end
-            local function hello_done_cb(merr, mdata)
-            if no_error(merr, mdata) then
-              conn:add_write(from_cb, {'MAIL FROM: <', report_settings.email, '>\r\n'})
-            end
-          end
-          local function hello_cb(merr)
-            if no_error(merr, '2') then
-              conn:add_read(hello_done_cb, '\r\n')
-            end
-          end
-          if no_error(err, data) then
-            conn:add_write(hello_cb, {'HELO ', report_settings.helo, '\r\n'})
-          end
+        local atmp = {}
+        for k in pairs(reporting_addr) do
+          table.insert(atmp, k)
         end
-        rspamd_tcp.request({
+        local addr_string = table.concat(atmp, ', ')
+
+        local rhead = lua_util.jinja_template(report_template,
+            {
+              from_name = report_settings.from_name,
+              from_addr = report_settings.email,
+              rcpt = addr_string,
+              reporting_domain = reporting_domain,
+              submitter = report_settings.domain,
+              report_id = report_id,
+              report_date = rspamd_util.time_to_string(rspamd_util.get_time()),
+              message_id = rspamd_util.random_hex(12) .. '@rspamd',
+              start = report_start,
+              report_end = report_end
+            }, true)
+        local message = {
+          rhead:gsub("\n", "\r\n"),
+          encoded,
+          report_footer:gsub("\n", "\r\n")
+        }
+
+        local lua_smtp = require "lua_smtp"
+        lua_smtp.sendmail({
           ev_base = ev_base,
-          callback = mail_cb,
           config = rspamd_config,
-          stop_pattern = '\r\n',
           host = report_settings.smtp,
           port = report_settings.smtp_port,
           resolver = rspamd_config:get_resolver(),
-        })
+          from = report_settings.email,
+          recipients = tmp_addr,
+          helo =  report_settings.helo,
+        }, message, sendmail_cb)
       end
+
+
       local function make_report()
         if type(report_settings.override_address) == 'string' then
           reporting_addr = {[report_settings.override_address] = true}
