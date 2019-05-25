@@ -24,7 +24,6 @@ end
 local redis_params
 local lua_util = require "lua_util"
 local rspamd_http = require "rspamd_http"
-local rspamd_tcp = require "rspamd_tcp"
 local rspamd_util = require "rspamd_util"
 local rspamd_logger = require "rspamd_logger"
 local ucl = require "ucl"
@@ -292,129 +291,22 @@ local pushers = {
     })
   end,
   send_mail = function(task, formatted, rule, extra)
-    local function mail_cb(err, data, conn)
-      local function no_error(merr, mdata, wantcode)
-        wantcode = wantcode or '2'
-        if merr then
-          rspamd_logger.errx(task, 'got error in tcp callback: %s', merr)
-          if conn then
-            conn:close()
-          end
-          maybe_defer(task, rule)
-          return false
-        end
-        if mdata then
-          if type(mdata) ~= 'string' then
-            mdata = tostring(mdata)
-            end
-          if string.sub(mdata, 1, 1) ~= wantcode then
-            rspamd_logger.errx(task, 'got bad smtp response: %s', mdata)
-            if conn then
-              conn:close()
-            end
-            maybe_defer(task, rule)
-            return false
-            end
-        else
-            rspamd_logger.errx(task, 'no data')
-          if conn then
-            conn:close()
-          end
-          maybe_defer(task, rule)
-          return false
-        end
-        return true
-      end
-      local function all_done_cb(merr, mdata)
-        if conn then
-          conn:close()
-        end
-        return true
-      end
-      local function quit_done_cb(merr, mdata)
-        conn:add_read(all_done_cb, '\r\n')
-      end
-      local function quit_cb(merr, mdata)
-        if no_error(merr, mdata) then
-          conn:add_write(quit_done_cb, 'QUIT\r\n')
-        end
-      end
-      local function pre_quit_cb(merr, mdata)
-        if no_error(merr, '2') then
-          conn:add_read(quit_cb, '\r\n')
-        end
-      end
-      local function data_done_cb(merr, mdata)
-        if no_error(merr, mdata, '3') then
-          conn:add_write(pre_quit_cb, {formatted, '\r\n.\r\n'})
-        end
-      end
-      local function data_cb(merr, mdata)
-        if no_error(merr, '2') then
-          conn:add_read(data_done_cb, '\r\n')
-        end
-      end
-      local from_done_cb
-      local function rcpt_done_cb(merr, mdata)
-        if no_error(merr, mdata) then
-          local k = next(extra.mail_targets)
-          if not k then
-            conn:add_write(data_cb, 'DATA\r\n')
-          else
-            from_done_cb('2', '2')
-          end
-        end
-      end
-      local function rcpt_cb(merr, mdata)
-        if no_error(merr, '2') then
-          conn:add_read(rcpt_done_cb, '\r\n')
-        end
-      end
-      from_done_cb = function(merr, mdata)
-        local k
-        if extra then
-          k = next(extra.mail_targets)
-        else
-          extra = {mail_targets = {}}
-          if type(rule.mail_to) == 'string' then
-            extra = {mail_targets = {}}
-            k = rule.mail_to
-          elseif type(rule.mail_to) == 'table' then
-            for _, r in ipairs(rule.mail_to) do
-              extra.mail_targets[r] = true
-            end
-            k = next(extra.mail_targets)
-          end
-        end
-        extra.mail_targets[k] = nil
-        conn:add_write(rcpt_cb, {'RCPT TO: <', k, '>\r\n'})
-      end
-      local function from_cb(merr, mdata)
-        if no_error(merr, '2') then
-          conn:add_read(from_done_cb, '\r\n')
-        end
-      end
-        local function hello_done_cb(merr, mdata)
-        if no_error(merr, mdata) then
-          conn:add_write(from_cb, {'MAIL FROM: <', rule.mail_from or settings.mail_from, '>\r\n'})
-        end
-      end
-      local function hello_cb(merr)
-        if no_error(merr, '2') then
-          conn:add_read(hello_done_cb, '\r\n')
-        end
-      end
-      if no_error(err, data) then
-        conn:add_write(hello_cb, {'HELO ', rule.helo or settings.helo, '\r\n'})
+    local lua_smtp = require "lua_smtp"
+    local function sendmail_cb(ret, err)
+      if not ret then
+        rspamd_logger.errx(task, 'SMTP export error: %s', err)
+        maybe_defer(task, rule)
       end
     end
-    rspamd_tcp.request({
-      task = task,
-      callback = mail_cb,
-      stop_pattern = '\r\n',
+
+    lua_smtp.sendmail(task, formatted, {
       host = rule.smtp,
       port = rule.smtp_port or settings.smtp_port or 25,
-    })
+      from = rule.mail_from or settings.mail_from,
+      recipients = rule.mail_to,
+      helo = rule.helo or settings.helo,
+      timeout = rule.timeout or settings.timeout,
+    }, sendmail_cb)
   end,
 }
 

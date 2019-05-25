@@ -19,6 +19,7 @@ local rspamd_tcp = require "rspamd_tcp"
 local exports = {}
 
 local CRLF = '\r\n'
+local default_timeout = 10.0
 
 --[[[
 -- @function lua_smtp.sendmail(task, message, opts, callback)
@@ -185,6 +186,7 @@ local function sendmail(task, message, opts, callback)
     stop_pattern = CRLF,
     host = opts.host,
     port = opts.port or 25,
+    timeout = opts.timeout or default_timeout,
   }) then
     callback(false, 'cannot make a TCP connection')
   end
