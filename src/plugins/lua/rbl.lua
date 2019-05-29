@@ -156,12 +156,12 @@ local function gen_check_rcvd_conditions(rbl, received_total)
   end
 end
 
-local function rbl_dns_process(task, rbl, to_resolve, results, err)
+local function rbl_dns_process(task, rbl, to_resolve, results, err, orig)
   if err and (err ~= 'requested record is not found' and
       err ~= 'no records with this name') then
     rspamd_logger.infox(task, 'error looking up %s: %s', to_resolve, err)
     task:insert_result(rbl.symbol .. '_FAIL', 1, string.format('%s:%s',
-        to_resolve, err))
+        orig, err))
     return
   end
 
@@ -177,7 +177,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err)
   end
 
   if rbl.returncodes == nil and rbl.symbol ~= nil then
-    task:insert_result(rbl.symbol, 1, to_resolve)
+    task:insert_result(rbl.symbol, 1, orig)
     return
   end
 
@@ -190,14 +190,14 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err)
       for _,v in ipairs(i) do
         if string.find(ipstr, '^' .. v .. '$') then
           foundrc = true
-          task:insert_result(s, 1, to_resolve .. ' : ' .. ipstr)
+          task:insert_result(s, 1, orig .. ' : ' .. ipstr)
           break
         end
       end
     end
     if not foundrc then
       if rbl.unknown and rbl.symbol then
-        task:insert_result(rbl.symbol, 1, to_resolve)
+        task:insert_result(rbl.symbol, 1, orig)
       else
         rspamd_logger.errx(task, 'RBL %1 returned unknown result: %2',
             rbl.rbl, ipstr)
@@ -219,11 +219,13 @@ local function gen_rbl_callback(rule)
         requests_table[req].forced = true
       end
     else
+      local orign = maybe_make_hash(req, rule)
       local nreq = {
         forced = forced,
         n = string.format('%s.%s',
-            maybe_make_hash(req, rule),
-            rule.rbl)
+            orign,
+            rule.rbl),
+        orig = orign
       }
       requests_table[req] = nreq
     end
@@ -429,8 +431,10 @@ local function gen_rbl_callback(rule)
     -- DNS requests to issue (might be hashed afterwards)
     local dns_req = {}
 
-    local function rbl_dns_callback(_, to_resolve, results, err)
-      rbl_dns_process(task, rule, to_resolve, results, err)
+    local function gen_rbl_dns_callback(orig)
+      return function(_, to_resolve, results, err)
+        rbl_dns_process(task, rule, to_resolve, results, err, orig)
+      end
     end
 
     -- Execute functions pipeline
@@ -451,7 +455,7 @@ local function gen_rbl_callback(rule)
         r:resolve_a({
           task = task,
           name = p.n,
-          callback = rbl_dns_callback,
+          callback = gen_rbl_dns_callback(p.orig),
           forced = p.forced
         })
       else
