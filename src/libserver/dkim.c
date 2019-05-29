@@ -1499,16 +1499,16 @@ rspamd_dkim_parse_key (const gchar *txt, gsize *keylen, GError **err)
 	}
 
 	if (alglen == 8 && rspamd_lc_cmp (alg, "ecdsa256", alglen) == 0) {
-		return rspamd_dkim_make_key (c, klen,
+		return rspamd_dkim_make_key (key, klen,
 				RSPAMD_DKIM_KEY_ECDSA, err);
 	}
 	else if (alglen == 7 && rspamd_lc_cmp (alg, "ed25519", alglen) == 0) {
-		return rspamd_dkim_make_key (c, klen,
+		return rspamd_dkim_make_key (key, klen,
 				RSPAMD_DKIM_KEY_EDDSA, err);
 	}
 	else {
 		/* We assume RSA default in all cases */
-		return rspamd_dkim_make_key (c, klen,
+		return rspamd_dkim_make_key (key, klen,
 				RSPAMD_DKIM_KEY_RSA, err);
 	}
 
