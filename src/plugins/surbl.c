@@ -111,6 +111,7 @@ struct dns_param {
 	struct rspamd_url *url;
 	struct rspamd_task *task;
 	gchar *host_resolve;
+	gchar *host_orig; /* Name with no uribl suffix */
 	struct suffix_item *suffix;
 	struct rspamd_symcache_item *item;
 	struct surbl_module_ctx *ctx;
@@ -1478,6 +1479,12 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 			param->suffix = suffix;
 			param->host_resolve =
 					rspamd_mempool_strdup (task->task_pool, surbl_req);
+
+			rspamd_ftok_t ftmp;
+			ftmp.begin = url->surbl;
+			ftmp.len = url->surbllen;
+			param->host_orig = rspamd_mempool_ftokdup (task->task_pool, &ftmp);
+
 			msg_debug_surbl ("send surbl dns ip request %s to %s", surbl_req,
 					suffix->suffix);
 
@@ -1506,6 +1513,12 @@ make_surbl_requests (struct rspamd_url *url, struct rspamd_task *task,
 		param->suffix = suffix;
 		param->host_resolve =
 			rspamd_mempool_strdup (task->task_pool, url->surbl);
+
+		rspamd_ftok_t ftmp;
+		ftmp.begin = url->surbl;
+		ftmp.len = url->surbllen;
+		param->host_orig = rspamd_mempool_ftokdup (task->task_pool, &ftmp);
+
 		msg_debug_surbl ("send surbl dns request %s", surbl_req);
 
 		if (rspamd_dns_resolver_request_task (task,
@@ -1611,12 +1624,12 @@ surbl_dns_callback (struct rdns_reply *reply, gpointer arg)
 	if (reply->code == RDNS_RC_NOERROR && reply->entries) {
 		msg_debug_surbl ("<%s> domain [%s] is in surbl %s",
 				param->task->message_id,
-			param->host_resolve, param->suffix->suffix);
+				param->host_orig, param->suffix->suffix);
 
 		DL_FOREACH (reply->entries, elt) {
 			if (elt->type == RDNS_REQUEST_A) {
 				process_dns_results (param->task, param->suffix,
-						param->host_resolve, (guint32) elt->content.a.addr.s_addr,
+						param->host_orig, (guint32) elt->content.a.addr.s_addr,
 						param->url);
 			}
 		}
@@ -1624,7 +1637,7 @@ surbl_dns_callback (struct rdns_reply *reply, gpointer arg)
 	else {
 		if (reply->code == RDNS_RC_NXDOMAIN || reply->code == RDNS_RC_NOREC) {
 			msg_debug_surbl ("<%s> domain [%s] is not in surbl %s",
-					param->task->message_id, param->host_resolve,
+					param->task->message_id, param->host_orig,
 					param->suffix->suffix);
 		}
 		else {
@@ -1670,7 +1683,7 @@ surbl_dns_ip_callback (struct rdns_reply *reply, gpointer arg)
 				msg_debug_surbl (
 						"<%s> domain [%s] send %v request to surbl",
 						param->task->message_id,
-						param->host_resolve,
+						param->host_orig,
 						to_resolve);
 
 				if (rspamd_dns_resolver_request_task (task,
