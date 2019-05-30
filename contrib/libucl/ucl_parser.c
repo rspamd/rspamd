@@ -2366,20 +2366,22 @@ ucl_state_machine (struct ucl_parser *parser)
 
 				p = chunk->pos;
 
-				if (*p == '[') {
-					parser->state = UCL_STATE_VALUE;
-					ucl_chunk_skipc (chunk, p);
-					seen_obrace = true;
-				}
-				else {
-
-					if (*p == '{') {
+				if (p < chunk->end) {
+					if (*p == '[') {
+						parser->state = UCL_STATE_VALUE;
 						ucl_chunk_skipc (chunk, p);
-						parser->state = UCL_STATE_KEY_OBRACE;
 						seen_obrace = true;
 					}
 					else {
-						parser->state = UCL_STATE_KEY;
+
+						if (*p == '{') {
+							ucl_chunk_skipc (chunk, p);
+							parser->state = UCL_STATE_KEY_OBRACE;
+							seen_obrace = true;
+						}
+						else {
+							parser->state = UCL_STATE_KEY;
+						}
 					}
 				}
 
