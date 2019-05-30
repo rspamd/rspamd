@@ -2345,6 +2345,34 @@ lua_tcp_sync_shutdown (lua_State *L)
 static gint
 lua_tcp_starttls (lua_State * L)
 {
+	LUA_TRACE_POINT;
+	struct lua_tcp_cbdata *cbd = lua_check_tcp (L, 1);
+	gpointer ssl_ctx;
+	gboolean verify_peer;
+
+	if (cbd == NULL || cbd->ssl_conn != NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (cbd->flags & LUA_TCP_FLAG_SSL_NOVERIFY) {
+		ssl_ctx = cbd->cfg->libs_ctx->ssl_ctx_noverify;
+		verify_peer = FALSE;
+	}
+	else {
+		ssl_ctx = cbd->cfg->libs_ctx->ssl_ctx;
+		verify_peer = TRUE;
+	}
+
+	event_base_set (cbd->ev_base, &cbd->ev);
+	cbd->ssl_conn =
+			rspamd_ssl_connection_new (ssl_ctx, cbd->ev_base, verify_peer);
+
+	if (!rspamd_ssl_connect_fd (cbd->ssl_conn, cbd->fd, cbd->hostname, &cbd->ev,
+			&cbd->tv, lua_tcp_handler, lua_tcp_ssl_on_error, cbd)) {
+		lua_tcp_push_error (cbd, TRUE, "ssl connection failed: %s",
+				strerror (errno));
+	}
+
 	return 0;
 }
 
