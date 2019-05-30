@@ -158,7 +158,7 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 	}
 #if defined(WITH_PCRE2)
 	gsize jsz;
-	guint jit_flags = PCRE2_JIT_COMPLETE;
+	guint jit_flags = can_jit ? PCRE2_JIT_COMPLETE : 0;
 	/* Create match context */
 
 	r->mcontext = pcre2_match_context_create (NULL);
@@ -171,22 +171,27 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 	}
 
 #ifdef HAVE_PCRE_JIT
-	if (pcre2_jit_compile (r->re, jit_flags) < 0) {
-		msg_err ("jit compilation of %s is not supported: %d", r->pattern, jit_flags);
-		r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
-	}
-	else {
-		if (!(pcre2_pattern_info (r->re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0)) {
-			msg_err ("jit compilation of %s is not supported", r->pattern);
+	if (can_jit) {
+		if (pcre2_jit_compile (r->re, jit_flags) < 0) {
+			msg_err ("jit compilation of %s is not supported: %d", r->pattern, jit_flags);
 			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 		}
+		else {
+			if (!(pcre2_pattern_info (r->re, PCRE2_INFO_JITSIZE, &jsz) >= 0 && jsz > 0)) {
+				msg_err ("jit compilation of %s is not supported", r->pattern);
+				r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
+			}
+		}
+	}
+	else {
+		r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
 	}
 
 	if (!(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
 		pcre2_jit_stack_assign (r->mcontext, NULL, global_re_cache->jstack);
 	}
 
-	if (r->re != r->raw_re) {
+	if (r->re != r->raw_re && !(r->flags & RSPAMD_REGEXP_FLAG_DISABLE_JIT)) {
 		if (pcre2_jit_compile (r->raw_re, jit_flags) < 0) {
 			msg_debug ("jit compilation of %s is not supported", r->pattern);
 			r->flags |= RSPAMD_REGEXP_FLAG_DISABLE_JIT;
@@ -1107,11 +1112,13 @@ rspamd_regexp_library_init (struct rspamd_config *cfg)
 			} else {
 				msg_info ("pcre is compiled without JIT support, so many optimizations"
 						  " are impossible");
+				can_jit = FALSE;
 			}
 		}
 #else
 		msg_info ("pcre is too old and has no JIT support, so many optimizations"
 				" are impossible");
+		can_jit = FALSE;
 #endif
 	}
 }
