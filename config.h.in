@@ -1,6 +1,7 @@
 #ifndef RSPAMD_CONFIG_H_IN
 #define RSPAMD_CONFIG_H_IN
 
+
 #cmakedefine BUILD_STATIC        1
 #cmakedefine CURL_FOUND          1
 #cmakedefine DEBUG_MODE          1
@@ -66,8 +67,13 @@
 #cmakedefine HAVE_OPENSSL        1
 #cmakedefine HAVE_O_DIRECT       1
 #cmakedefine HAVE_PATH_MAX       1
+
+/* OSX has broken JIT support in PCRE, disable it */
+#ifndef __APPLE__
 #cmakedefine HAVE_PCRE_JIT       1
 #cmakedefine HAVE_PCRE_JIT_FAST  1
+#endif
+
 #cmakedefine HAVE_PIDFILE        1
 #cmakedefine HAVE_PIDFILE_FILENO 1
 #cmakedefine HAVE_POLL_H         1
