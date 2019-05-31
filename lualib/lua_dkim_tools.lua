@@ -134,6 +134,17 @@ local function prepare_dkim_signing(N, task, settings)
     end
   end
 
+  if settings.sign_condition and type(settings.sign_condition) == 'function' then
+    -- Use sign condition only
+    local ret = settings.sign_condition(task)
+
+    if not ret then
+      return false,{}
+    end
+
+    return true,ret
+  end
+
   local auser = task:get_user()
   local ip = task:get_from_ip()
 
@@ -673,6 +684,8 @@ exports.process_signing_settings = function(N, settings, opts)
       settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM keys table')
     elseif k == 'vault_domains' then
       settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM signing domains in vault')
+    elseif k == 'sign_condition' then
+      settings[k] = lua_util.callback_from_string(v)
     else
       settings[k] = v
     end
