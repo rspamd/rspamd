@@ -142,7 +142,11 @@ local function prepare_dkim_signing(N, task, settings)
       return false,{}
     end
 
-    return true,ret
+    if ret[1] then
+      return true,ret
+    else
+      return true,{ret}
+    end
   end
 
   local auser = task:get_user()
@@ -666,7 +670,8 @@ exports.validate_signing_settings = function(settings)
       settings.selector_map or
       settings.use_http_headers or
       (settings.signing_table and settings.key_table) or
-      (settings.use_vault and settings.vault_url and settings.vault_token)
+      (settings.use_vault and settings.vault_url and settings.vault_token) or
+      settings.sign_condition
 end
 
 exports.process_signing_settings = function(N, settings, opts)
