@@ -15,6 +15,7 @@ if __name__ == "__main__":
         port = 5005
     sock = socket.socket(socket.AF_INET, # Internet
                          socket.SOCK_DGRAM) # UDP
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind((UDP_IP, port))
     dummy_killer.write_pid(PID)
 

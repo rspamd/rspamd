@@ -30,7 +30,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     def do_GET(self):
         response = "hello world"
-        
+
         """Respond to a GET request."""
         if self.path == "/empty":
             self.finish()
@@ -55,7 +55,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         conntype = self.headers.get('Connection', "").lower()
         if conntype != 'keep-alive':
             self.close_connection = True
-        
+
         self.log_message("ka:'%s', pv:%s[%s]" % (str(conntype == 'keep-alive'), str(self.protocol_version >= "HTTP/1.1"), self.protocol_version))
 
 
@@ -73,7 +73,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.send_response(403)
         else:
             self.send_response(200)
-            
+
         if self.path == "/content-length":
             self.send_header("Content-Length", str(len(response)))
 
@@ -85,10 +85,10 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 class ThreadingSimpleServer(SocketServer.ThreadingMixIn,
                    BaseHTTPServer.HTTPServer):
     def __init__(self):
-        BaseHTTPServer.HTTPServer.__init__(self, (HOST_NAME, PORT), MyHandler)
         self.allow_reuse_address = True
         self.timeout = 1
-        
+        BaseHTTPServer.HTTPServer.__init__(self, (HOST_NAME, PORT), MyHandler)
+
     def run(self):
         dummy_killer.write_pid(PID)
         try:

@@ -5,7 +5,7 @@ import atexit
 def setup_killer(server, method = None):
     def default_method():
         server.server_close()
-    
+
     if method is None:
         method = default_method
 
@@ -14,7 +14,7 @@ def setup_killer(server, method = None):
 
     signal.signal(signal.SIGALRM, alarm_handler)
     signal.signal(signal.SIGTERM, alarm_handler)
-    signal.alarm(10)
+    signal.alarm(30)
 
 
 def write_pid(path):
