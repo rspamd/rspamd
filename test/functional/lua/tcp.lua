@@ -32,6 +32,33 @@ local function http_simple_tcp_async_symbol(task)
   })
 end
 
+local function http_simple_tcp_ssl_symbol(task)
+  logger.errx(task, 'ssl_tcp_symbol: begin')
+  local function ssl_get_cb(err, data, conn)
+    logger.errx(task, 'ssl_get_cb: got reply: %s, error: %s, conn: %s', data, err, conn)
+    task:insert_result('TCP_SSL_RESPONSE_2', 1.0, tostring(data):gsub('%s', ''))
+  end
+  local function ssl_read_post_cb(err, conn)
+    logger.errx(task, 'ssl_read_post_cb: write done: error: %s, conn: %s', err, conn)
+    conn:add_read(ssl_get_cb)
+  end
+  local function ssl_read_cb(err, data, conn)
+    logger.errx(task, 'ssl_read_cb: got reply: %s, error: %s, conn: %s', data, err, conn)
+    conn:add_write(ssl_read_post_cb, "test2\n")
+    task:insert_result('TCP_SSL_RESPONSE', 1.0, tostring(data):gsub('%s', ''))
+  end
+  rspamd_tcp:request({
+    task = task,
+    callback = ssl_read_cb,
+    host = '127.0.0.1',
+    data = {'test\n'},
+    read = true,
+    ssl = true,
+    ssl_noverify = true,
+    port = 14433,
+  })
+end
+
 local function http_simple_tcp_symbol(task)
   logger.errx(task, 'connect_sync, before')
 
@@ -176,6 +203,12 @@ rspamd_config:register_symbol({
   name = 'SIMPLE_TCP_ASYNC_TEST',
   score = 1.0,
   callback = http_simple_tcp_async_symbol,
+  no_squeeze = true
+})
+rspamd_config:register_symbol({
+  name = 'SIMPLE_TCP_ASYNC_SSL_TEST',
+  score = 1.0,
+  callback = http_simple_tcp_ssl_symbol,
   no_squeeze = true
 })
 rspamd_config:register_symbol({

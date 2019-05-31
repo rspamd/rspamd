@@ -1,4 +1,3 @@
-import demjson
 import grp
 import os
 import os.path
@@ -25,7 +24,7 @@ except:
     import httplib
 
 def Check_JSON(j):
-    d = demjson.decode(j, strict=True)
+    d = json.loads(j, strict=True)
     assert len(d) > 0
     assert 'error' not in d
     return d
@@ -38,7 +37,7 @@ def save_run_results(directory, filenames):
     suite_name = BuiltIn().get_variable_value("${SUITE_NAME}")
     test_name = BuiltIn().get_variable_value("${TEST NAME}")
     if test_name is None:
-        # this is suite-level tear down 
+        # this is suite-level tear down
         destination_directory = "%s/robot-save/%s" % (current_directory, suite_name)
     else:
         destination_directory = "%s/robot-save/%s/%s" % (current_directory, suite_name, test_name)
@@ -185,19 +184,18 @@ def shutdown_process(process):
         process.wait(TERM_TIMEOUT)
         return
     except psutil.TimeoutExpired:
-        logger.info( "PID {} is not termianated in {} seconds, sending SIGKILL..." %
-            (process.pid, TERM_TIMEOUT))
+        logger.info( "PID {} is not terminated in {} seconds, sending SIGKILL...".format(process.pid, TERM_TIMEOUT))
         try:
             # send SIGKILL
             process.kill()
         except psutil.NoSuchProcess:
-            # process exited just befor we tried to kill
+            # process exited just before we tried to kill
             return
 
     try:
         process.wait(KILL_WAIT)
     except psutil.TimeoutExpired:
-        raise RuntimeError("Failed to shutdown process %d (%s)" % (process.pid, process.name()))
+        raise RuntimeError("Failed to shutdown process {} ({})".format(process.pid, process.name()))
 
 
 def shutdown_process_with_children(pid):
@@ -229,7 +227,7 @@ def get_file_if_exists(file_path):
             return myfile.read()
     return None
 
-# copy-paste from 
+# copy-paste from
 # https://hg.python.org/cpython/file/6860263c05b3/Lib/shutil.py#l1068
 # As soon as we move to Python 3, this should be removed in favor of shutil.which()
 def python3_which(cmd, mode=os.F_OK | os.X_OK, path=None):

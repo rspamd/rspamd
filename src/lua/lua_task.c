@@ -4872,7 +4872,8 @@ lua_task_get_settings_id (lua_State *L)
 	guint32 *hp;
 
 	if (task != NULL) {
-		hp = rspamd_mempool_get_variable (task->task_pool, "settings_hash");
+		hp = rspamd_mempool_get_variable (task->task_pool,
+				RSPAMD_MEMPOOL_SETTINGS_HASH);
 
 		if (hp) {
 			lua_pushnumber (L, *hp);
