@@ -968,4 +968,24 @@ exports.maybe_obfuscate_string = function(subject, settings, prefix)
   return subject
 end
 
+---[[[
+-- @function lua_util.callback_from_string(str)
+-- Converts a string like `return function(...) end` to lua function or emits error using
+-- `rspamd_config` superglobal
+-- @return function object or nil
+--]]]
+exports.callback_from_string = function(str)
+  local loadstring = loadstring or load
+  local ret, res_or_err = pcall(loadstring(str))
+
+  if not ret or type(res_or_err) ~= 'function' then
+    rspamd_logger.errx(rspamd_config, 'invalid callback (%s) - must be a function',
+        res_or_err)
+
+    return nil
+  end
+
+  return res_or_err
+end
+
 return exports
