@@ -19,6 +19,20 @@
 
 #include <sys/mman.h>
 
+#define MAX_PIECES (1u << 2u)
+
+/* 64 bytes, 1 cache line */
+struct poor_slab {
+	struct slab_piece {
+		unsigned char *ptr;
+		uint32_t sz;
+		uint32_t occupied;
+	} pieces[MAX_PIECES];
+};
+
+/* Used to optimize pages allocation */
+struct poor_slab slabs;
+
 static uint64_t xorshifto_seed[2] = {0xdeadbabe, 0xdeadbeef};
 
 static inline uint64_t
@@ -32,6 +46,15 @@ lpeg_allocate_mem_low (size_t sz)
 	unsigned char *cp;
 	unsigned flags = MAP_PRIVATE | MAP_ANON;
 	void *base_addr = NULL;
+
+	/* Check slabs */
+	for (unsigned i = 0; i < MAX_PIECES; i ++) {
+		if (!slabs.pieces[i].occupied && slabs.pieces[i].sz == sz) {
+			/* Reuse, short path */
+			slabs.pieces[i].occupied = 1;
+			return slabs.pieces[i].ptr + sizeof (size_t);
+		}
+	}
 
 #ifdef MAP_32BIT
 	flags |= MAP_32BIT;
@@ -52,6 +75,25 @@ lpeg_allocate_mem_low (size_t sz)
 	assert (cp != NULL);
 	memcpy (cp, &sz, sizeof (sz));
 
+	for (unsigned i = 0; i < MAX_PIECES; i ++) {
+		if (slabs.pieces[i].sz == 0) {
+			/* Store piece */
+			slabs.pieces[i].sz = sz;
+			slabs.pieces[i].ptr = cp;
+			slabs.pieces[i].occupied = 1;
+
+			return cp + sizeof (sz);
+		}
+	}
+
+	/* Not enough free pieces, pop some */
+	unsigned sel = ((uintptr_t)cp) & ((MAX_PIECES * 2) - 1);
+	/* Here we free memory in fact */
+	munmap (slabs.pieces[sel].ptr, slabs.pieces[sel].sz);
+	slabs.pieces[sel].sz = sz;
+	slabs.pieces[sel].ptr = cp;
+	slabs.pieces[sel].occupied = 1;
+
 	return cp + sizeof (sz);
 }
 
@@ -61,8 +103,20 @@ lpeg_free_mem_low(void *p)
 	unsigned char *cp = (unsigned char *)p;
 	size_t sz;
 
-	memcpy (&sz, cp - sizeof (sz), sizeof (sz));
-	munmap (cp - sizeof (sz), sz + sizeof (sz));
+	/* Base address */
+	cp -= sizeof (sz);
+	memcpy (&sz, cp, sizeof (sz));
+
+	for (unsigned i = 0; i < MAX_PIECES; i ++) {
+		if (slabs.pieces[i].occupied && slabs.pieces[i].ptr == cp) {
+			/* Return back */
+			slabs.pieces[i].occupied = 0;
+
+			return;
+		}
+	}
+
+	/* No match, unmapped by allocation */
 }
 
 /* initial size for call/backtrack stack */
