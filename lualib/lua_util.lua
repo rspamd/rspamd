@@ -979,6 +979,7 @@ exports.callback_from_string = function(str)
   local ret, res_or_err = pcall(loadstring(str))
 
   if not ret or type(res_or_err) ~= 'function' then
+    local rspamd_logger = require "rspamd_logger"
     rspamd_logger.errx(rspamd_config, 'invalid callback (%s) - must be a function',
         res_or_err)
 
