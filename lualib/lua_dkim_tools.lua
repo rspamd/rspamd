@@ -172,10 +172,14 @@ local function prepare_dkim_signing(N, task, settings)
   end
 
   local efrom = task:get_from('smtp')
-  if not settings.allow_envfrom_empty and
-      #(((efrom or E)[1] or E).addr or '') == 0 then
-    lua_util.debugm(N, task, 'empty envelope from not allowed')
-    return false,{}
+  local empty_envelope = false
+  if #(((efrom or E)[1] or E).addr or '') == 0 then
+    if not settings.allow_envfrom_empty then
+      lua_util.debugm(N, task, 'empty envelope from not allowed')
+      return false,{}
+    else
+      empty_envelope = true
+    end
   end
 
   local hfrom = task:get_from('mime')
@@ -242,6 +246,7 @@ local function prepare_dkim_signing(N, task, settings)
     local sign_entry = settings.signing_table:get_key(hfrom[1].addr)
 
     if sign_entry then
+      -- Check opendkim style entries
       lua_util.debugm(N, task,
           'signing_table: found entry for %s: %s', hfrom[1].addr, sign_entry)
       if sign_entry == '%' then
@@ -403,8 +408,12 @@ local function prepare_dkim_signing(N, task, settings)
     elseif settings.allow_hdrfrom_mismatch_sign_networks and is_sign_networks then
       lua_util.debugm(N, task, 'domain mismatch allowed for sign_networks: %1 != %2', hdom, edom)
     else
-      lua_util.debugm(N, task, 'domain mismatch not allowed: %1 != %2', hdom, edom)
-      return false,{}
+      if empty_envelope and hdom then
+        lua_util.debugm(N, task, 'domain mismatch allowed for empty envelope: %1 != %2', hdom, edom)
+      else
+        lua_util.debugm(N, task, 'domain mismatch not allowed: %1 != %2', hdom, edom)
+        return false,{}
+      end
     end
   end
 
