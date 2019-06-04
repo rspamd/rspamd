@@ -510,17 +510,9 @@ rspamd_parse_inet_address_ip6 (const guchar *text, gsize len, gpointer target)
 	g_assert (text != NULL);
 	g_assert (target != NULL);
 
+	p = text;
 	if (len == 0) {
 		len = strlen (text);
-	}
-
-	/* Ignore trailing semicolon */
-	if (text[0] == ':') {
-		p = text + 1;
-		len--;
-	}
-	else {
-		p = text;
 	}
 
 	/* Check IPv6 scope */
@@ -533,6 +525,12 @@ rspamd_parse_inet_address_ip6 (const guchar *text, gsize len, gpointer target)
 		/* Special case, SMTP conformant IPv6 address */
 		p += sizeof ("IPv6:") - 1;
 		len -= sizeof ("IPv6:") - 1;
+	}
+
+	/* Ignore leading colon */
+	if (len > 0 && *p == ':') {
+		p++;
+		len--;
 	}
 
 	for (/* void */; len; len--) {
@@ -580,7 +578,7 @@ rspamd_parse_inet_address_ip6 (const guchar *text, gsize len, gpointer target)
 		}
 
 		if (++nibbles > 4) {
-			/* Too many dots */
+			/* Too many digits */
 			return FALSE;
 		}
 
