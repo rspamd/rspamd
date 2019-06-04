@@ -2591,7 +2591,7 @@ out:
 
 gchar *
 rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
-		gsize *dst_len, enum rspamd_regexp_escape_flags flags)
+						  gsize *dst_len, enum rspamd_regexp_escape_flags flags)
 {
 	const gchar *p, *end = pattern + slen;
 	gchar *res, *d, t, *tmp_utf = NULL, *dend;

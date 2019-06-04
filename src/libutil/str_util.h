@@ -466,7 +466,7 @@ enum rspamd_regexp_escape_flags {
  */
 gchar *
 rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
-		gsize *dst_len, enum rspamd_regexp_escape_flags flags);
+						  gsize *dst_len, enum rspamd_regexp_escape_flags flags);
 
 /**
  * Returns copy of src (zero terminated) where all unicode is made valid or replaced
