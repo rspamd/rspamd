@@ -9,6 +9,7 @@ import signal
 import socket
 import sys
 import tempfile
+import json
 from robot.libraries.BuiltIn import BuiltIn
 from robot.api import logger
 
