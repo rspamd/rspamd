@@ -151,7 +151,7 @@ define(["jquery"],
             }
 
             $("#scan button").attr("disabled", true);
-            $("textarea").keyup(function () {
+            $("textarea").on("input", function () {
                 var $this = $(this);
                 $("#scan button")
                     .prop("disabled", ($.trim($this.val()).length === 0));
