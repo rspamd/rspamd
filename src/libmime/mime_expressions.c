@@ -491,14 +491,9 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 	dend = result->regexp_text + (end - start);
 	*dend = '\0';
 
-	gsize esc_len;
-	gchar *escaped = rspamd_str_regexp_escape (dbegin, dend - dbegin, &esc_len,
-			RSPAMD_REGEXP_ESCAPE_UTF);
-
-	result->regexp = rspamd_regexp_new (escaped, re_flags->str,
+	result->regexp = rspamd_regexp_new (dbegin, re_flags->str,
 			&err);
 
-	g_free (escaped);
 	g_string_free (re_flags, TRUE);
 
 	if (result->regexp == NULL || err != NULL) {
