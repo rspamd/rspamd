@@ -1349,13 +1349,16 @@ rspamd_language_detector_cmp_heuristic (gconstpointer a, gconstpointer b,
 
 static void
 rspamd_language_detector_unicode_scripts (struct rspamd_task *task,
-										  struct rspamd_mime_text_part *part)
+										  struct rspamd_mime_text_part *part,
+										  guint *pchinese,
+										  guint *pspecial)
 {
 	const gchar *p = part->utf_stripped_content->data, *end;
-	guint i = 0;
+	guint i = 0, cnt = 0;
 	end = p + part->utf_stripped_content->len;
 	gint32 uc, sc;
 	guint nlatin = 0, nchinese = 0, nspecial = 0;
+	const guint cutoff_limit = 32;
 
 	while (p + i < end) {
 		U8_NEXT (p, i, part->utf_stripped_content->len, uc);
@@ -1366,6 +1369,7 @@ rspamd_language_detector_unicode_scripts (struct rspamd_task *task,
 
 		if (u_isalpha (uc)) {
 			sc = ublock_getCode (uc);
+			cnt ++;
 
 			switch (sc) {
 			case UBLOCK_BASIC_LATIN:
@@ -1446,10 +1450,10 @@ rspamd_language_detector_unicode_scripts (struct rspamd_task *task,
 			}
 		}
 
-		if (nspecial > 6 && nspecial > nlatin) {
+		if (nspecial > cutoff_limit && nspecial > nlatin) {
 			break;
 		}
-		else if (nchinese > 6 && nchinese > nlatin) {
+		else if (nchinese > cutoff_limit && nchinese > nlatin) {
 			if (nspecial > 0) {
 				/* Likely japanese */
 				break;
@@ -1459,7 +1463,10 @@ rspamd_language_detector_unicode_scripts (struct rspamd_task *task,
 
 	msg_debug_lang_det ("stop after checking %d characters, "
 						"%d latin, %d special, %d chinese",
-			i, nlatin, nspecial, nchinese);
+			cnt, nlatin, nspecial, nchinese);
+
+	*pchinese = nchinese;
+	*pspecial = nspecial;
 }
 
 static inline void
@@ -1483,22 +1490,48 @@ rspamd_language_detector_set_language (struct rspamd_task *task,
 
 static gboolean
 rspamd_language_detector_try_uniscript (struct rspamd_task *task,
-										struct rspamd_mime_text_part *part)
+										struct rspamd_mime_text_part *part,
+										guint nchinese,
+										guint nspecial)
 {
 	guint i;
 
 	for (i = 0; i < G_N_ELEMENTS (unicode_langs); i ++) {
 		if (unicode_langs[i].unicode_code & part->unicode_scripts) {
-			msg_debug_lang_det ("set language based on unicode script %s",
-					unicode_langs[i].lang);
-			rspamd_language_detector_set_language (task, part,
-					unicode_langs[i].lang);
 
-			return TRUE;
+			if (unicode_langs[i].unicode_code != RSPAMD_UNICODE_JP) {
+				msg_debug_lang_det ("set language based on unicode script %s",
+						unicode_langs[i].lang);
+				rspamd_language_detector_set_language (task, part,
+						unicode_langs[i].lang);
+
+				return TRUE;
+			}
+			else {
+				/* Japanese <-> Chinese guess */
+
+				/*
+				 * Typically there might be around 0-70% of kanji glyphs
+				 * and the rest are Haragana/Katakana
+				 *
+				 * If we discover that Kanji is more than 80% then we consider
+				 * it Chinese
+				 */
+				if (nchinese <= 5 || nchinese < nspecial * 5) {
+					msg_debug_lang_det ("set language based on unicode script %s",
+							unicode_langs[i].lang);
+					rspamd_language_detector_set_language (task, part,
+							unicode_langs[i].lang);
+
+					return TRUE;
+				}
+			}
 		}
 	}
 
 	if (part->unicode_scripts & RSPAMD_UNICODE_CJK) {
+		msg_debug_lang_det ("guess chinese based on CJK characters: %d chinese, %d special",
+				nchinese, nspecial);
 		rspamd_language_detector_set_language (task, part,
 				"zh-CN");
 
@@ -1670,10 +1703,11 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 
 	start_ticks = rspamd_get_ticks (TRUE);
 
-	rspamd_language_detector_unicode_scripts (task, part);
+	guint nchinese = 0, nspecial = 0;
+	rspamd_language_detector_unicode_scripts (task, part, &nchinese, &nspecial);
 	/* Apply unicode scripts heuristic */
 
-	if (rspamd_language_detector_try_uniscript (task, part)) {
+	if (rspamd_language_detector_try_uniscript (task, part, nchinese, nspecial)) {
 		ret = TRUE;
 	}
 
