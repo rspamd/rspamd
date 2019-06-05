@@ -1587,6 +1587,23 @@ rspamd_re_cache_type_from_string (const char *str)
 }
 
 #ifdef WITH_HYPERSCAN
+static gchar *
+rspamd_re_cache_hs_pattern_from_pcre (rspamd_regexp_t *re)
+{
+	/*
+	 * Workaroung for bug in ragel 7.0.0.11
+	 * https://github.com/intel/hyperscan/issues/133
+	 */
+	const gchar *pat = rspamd_regexp_get_pattern (re);
+	gchar *escaped;
+	gsize esc_len;
+
+	escaped = rspamd_str_regexp_escape (pat, strlen (pat), &esc_len,
+			RSPAMD_REGEXP_ESCAPE_RE|RSPAMD_REGEXP_ESCAPE_UTF);
+
+	return escaped;
+}
+
 static gboolean
 rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 		rspamd_regexp_t *re, gint flags, gdouble max_time)
@@ -1608,7 +1625,11 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 
 	if (cld == 0) {
 		/* Try to compile pattern */
-		if (hs_compile (rspamd_regexp_get_pattern (re),
+
+		gchar *pat = rspamd_re_cache_hs_pattern_from_pcre (re);
+		/* Memory leak here but ok since we do exit */
+
+		if (hs_compile (pat,
 				flags | HS_FLAG_PREFILTER,
 				cache->vectorized_hyperscan ? HS_MODE_VECTORED : HS_MODE_BLOCK,
 				&cache->plt,
@@ -1681,7 +1702,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 	hs_compile_error_t *hs_errors;
 	guint *hs_flags = NULL;
 	const hs_expr_ext_t **hs_exts = NULL;
-	const gchar **hs_pats = NULL;
+	gchar **hs_pats = NULL;
 	gchar *hs_serialized;
 	gsize serialized_len, total = 0;
 	struct iovec iov[7];
@@ -1783,14 +1804,16 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 				hs_flags[i] |= HS_FLAG_SINGLEMATCH;
 			}
 
-			if (hs_compile (rspamd_regexp_get_pattern (re),
+			gchar *pat = rspamd_re_cache_hs_pattern_from_pcre (re);
+
+			if (hs_compile (pat,
 					hs_flags[i],
 					cache->vectorized_hyperscan ? HS_MODE_VECTORED : HS_MODE_BLOCK,
 					&cache->plt,
 					&test_db,
 					&hs_errors) != HS_SUCCESS) {
 				msg_info_re_cache ("cannot compile %s to hyperscan, try prefilter match",
-						rspamd_regexp_get_pattern (re));
+						pat);
 				hs_free_compile_error (hs_errors);
 
 				/* The approximation operation might take a significant
@@ -1799,13 +1822,16 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 				if (rspamd_re_cache_is_finite (cache, re, hs_flags[i], max_time)) {
 					hs_flags[i] |= HS_FLAG_PREFILTER;
 					hs_ids[i] = rspamd_regexp_get_cache_id (re);
-					hs_pats[i] = rspamd_regexp_get_pattern (re);
+					hs_pats[i] = pat;
 					i++;
+				}
+				else {
+					g_free (pat); /* Avoid leak */
 				}
 			}
 			else {
 				hs_ids[i] = rspamd_regexp_get_cache_id (re);
-				hs_pats[i] = rspamd_regexp_get_pattern (re);
+				hs_pats[i] = pat;
 				i ++;
 				hs_free_database (test_db);
 			}
@@ -1815,7 +1841,7 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 
 		if (n > 0) {
 			/* Create the hs tree */
-			if (hs_compile_ext_multi (hs_pats,
+			if (hs_compile_ext_multi ((const char **)hs_pats,
 					hs_flags,
 					hs_ids,
 					hs_exts,
@@ -1830,6 +1856,11 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 						hs_pats[hs_errors->expression], hs_errors->message);
 				g_free (hs_flags);
 				g_free (hs_ids);
+
+				for (guint j = 0; j < i; j ++) {
+					g_free (hs_pats[j]);
+				}
+
 				g_free (hs_pats);
 				g_free (hs_exts);
 				close (fd);
@@ -1839,6 +1870,9 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 				return -1;
 			}
 
+			for (guint j = 0; j < i; j ++) {
+				g_free (hs_pats[j]);
+			}
 			g_free (hs_pats);
 			g_free (hs_exts);
 
