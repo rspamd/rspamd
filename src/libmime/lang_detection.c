@@ -1675,6 +1675,9 @@ rspamd_language_detector_try_stop_words (struct rspamd_task *task,
 			ret = TRUE;
 		}
 	}
+	else {
+		msg_debug_lang_det ("found no stop words in a text");
+	}
 
 	kh_destroy (rspamd_sw_hash, cbdata.res);
 
