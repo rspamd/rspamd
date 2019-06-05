@@ -491,6 +491,10 @@ rspamd_mime_expr_parse_regexp_atom (rspamd_mempool_t * pool, const gchar *line,
 	dend = result->regexp_text + (end - start);
 	*dend = '\0';
 
+	/*
+	 * Workaroung for bug in ragel 7.0.0.11
+	 * https://github.com/intel/hyperscan/issues/133
+	 */
 	gsize esc_len;
 	gchar *escaped = rspamd_str_regexp_escape (dbegin, dend - dbegin, &esc_len,
 			RSPAMD_REGEXP_ESCAPE_UTF);
