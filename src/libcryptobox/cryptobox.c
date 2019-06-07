@@ -590,8 +590,9 @@ rspamd_cryptobox_verify (const guchar *sig,
 	bool ret = false;
 
 	if (G_LIKELY (mode == RSPAMD_CRYPTOBOX_MODE_25519)) {
-		g_assert (siglen == rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
-		ret = ed25519_verify (sig, m, mlen, pk);
+		if (siglen == rspamd_cryptobox_signature_bytes (RSPAMD_CRYPTOBOX_MODE_25519)) {
+			ret = ed25519_verify (sig, m, mlen, pk);
+		}
 	}
 	else {
 #ifndef HAVE_USABLE_OPENSSL
