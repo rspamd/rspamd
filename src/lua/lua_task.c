@@ -4869,14 +4869,11 @@ lua_task_get_settings_id (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	guint32 *hp;
 
 	if (task != NULL) {
-		hp = rspamd_mempool_get_variable (task->task_pool,
-				RSPAMD_MEMPOOL_SETTINGS_HASH);
 
-		if (hp) {
-			lua_pushnumber (L, *hp);
+		if (task->settings_id) {
+			lua_pushnumber (L, task->settings_id);
 		}
 		else {
 			lua_pushnil (L);

@@ -136,7 +136,6 @@ enum rspamd_newlines_type;
  */
 struct rspamd_task {
 	struct rspamd_worker *worker;					/**< pointer to worker object						*/
-	guint processed_stages;							/**< bits of stages that are processed				*/
 	enum rspamd_command cmd;						/**< command										*/
 	gint sock;										/**< socket descriptor								*/
 	guint32 flags;									/**< Bit flags										*/
@@ -206,6 +205,8 @@ struct rspamd_task {
 
 	gpointer checkpoint;							/**< Opaque checkpoint data							*/
 	ucl_object_t *settings;							/**< Settings applied to task						*/
+	guint32 processed_stages;							/**< bits of stages that are processed			*/
+	guint32 settings_id;							/**< hashed settings id								*/
 
 	const gchar *classifier;						/**< Classifier to learn (if needed)				*/
 	struct rspamd_lang_detector *lang_det;			/**< Languages detector								*/

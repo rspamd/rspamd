@@ -406,16 +406,12 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				}
 				IF_HEADER (SETTINGS_ID_HEADER) {
 					guint64 h;
-					guint32 *hp;
 
 					msg_debug_protocol ("read settings-id header, value: %V", hv);
 					h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
-							hv_tok->begin, hv_tok->len, 0xdeadbabe);
-					hp = rspamd_mempool_alloc (task->task_pool, sizeof (*hp));
-					memcpy (hp, &h, sizeof (*hp));
-					rspamd_mempool_set_variable (task->task_pool,
-							RSPAMD_MEMPOOL_SETTINGS_HASH,
-							hp, NULL);
+							hv_tok->begin, hv_tok->len, 0x0);
+					/* Take the lower part of hash as LE number */
+					task->settings_id = (guint32)GUINT64_TO_LE (h);
 				}
 				break;
 			case 'u':
@@ -1628,8 +1624,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 					ls = g_malloc0 (sz);
 
 					/* Handle settings id */
-					sid = rspamd_mempool_get_variable (task->task_pool,
-							"settings_hash");
+					sid = task->settings_id;
 
 					if (sid) {
 						ls->settings_id = *sid;
