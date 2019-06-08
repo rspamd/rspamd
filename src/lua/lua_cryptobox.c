@@ -1321,14 +1321,25 @@ lua_cryptobox_hash_hex (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
 	guchar out[rspamd_cryptobox_HASHBYTES],
-		out_hex[rspamd_cryptobox_HASHBYTES * 2 + 1];
+		out_hex[rspamd_cryptobox_HASHBYTES * 2 + 1], *r;
 	guint dlen;
 
 	if (h && !h->is_finished) {
 		memset (out_hex, 0, sizeof (out_hex));
 
 		lua_cryptobox_hash_finish (h, out, &dlen);
-		rspamd_encode_hex_buf (out, dlen, out_hex, sizeof (out_hex));
+		r = out;
+
+		if (lua_isnumber (L, 2)) {
+			guint lim = lua_tonumber (L, 2);
+
+			if (lim < dlen) {
+				r += dlen - lim;
+				dlen = lim;
+			}
+		}
+
+		rspamd_encode_hex_buf (r, dlen, out_hex, sizeof (out_hex));
 		lua_pushstring (L, out_hex);
 
 	}
@@ -1350,13 +1361,24 @@ lua_cryptobox_hash_base32 (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
 	guchar out[rspamd_cryptobox_HASHBYTES],
-		out_b32[rspamd_cryptobox_HASHBYTES * 2];
+		out_b32[rspamd_cryptobox_HASHBYTES * 2], *r;
 	guint dlen;
 
 	if (h && !h->is_finished) {
 		memset (out_b32, 0, sizeof (out_b32));
 		lua_cryptobox_hash_finish (h, out, &dlen);
-		rspamd_encode_base32_buf (out, dlen, out_b32, sizeof (out_b32));
+		r = out;
+
+		if (lua_isnumber (L, 2)) {
+			guint lim = lua_tonumber (L, 2);
+
+			if (lim < dlen) {
+				r += dlen - lim;
+				dlen = lim;
+			}
+		}
+
+		rspamd_encode_base32_buf (r, dlen, out_b32, sizeof (out_b32));
 		lua_pushstring (L, out_b32);
 		h->is_finished = TRUE;
 	}
@@ -1377,13 +1399,24 @@ lua_cryptobox_hash_base64 (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
-	guchar out[rspamd_cryptobox_HASHBYTES], *b64;
+	guchar out[rspamd_cryptobox_HASHBYTES], *b64, *r;
 	gsize len;
 	guint dlen;
 
 	if (h && !h->is_finished) {
 		lua_cryptobox_hash_finish (h, out, &dlen);
-		b64 = rspamd_encode_base64 (out, dlen, 0, &len);
+		r = out;
+
+		if (lua_isnumber (L, 2)) {
+			guint lim = lua_tonumber (L, 2);
+
+			if (lim < dlen) {
+				r += dlen - lim;
+				dlen = lim;
+			}
+		}
+
+		b64 = rspamd_encode_base64 (r, dlen, 0, &len);
 		lua_pushlstring (L, b64, len);
 		g_free (b64);
 		h->is_finished = TRUE;
@@ -1405,12 +1438,23 @@ lua_cryptobox_hash_bin (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_cryptobox_hash *h = lua_check_cryptobox_hash (L, 1);
-	guchar out[rspamd_cryptobox_HASHBYTES];
+	guchar out[rspamd_cryptobox_HASHBYTES], *r;
 	guint dlen;
 
 	if (h && !h->is_finished) {
 		lua_cryptobox_hash_finish (h, out, &dlen);
-		lua_pushlstring (L, out, dlen);
+		r = out;
+
+		if (lua_isnumber (L, 2)) {
+			guint lim = lua_tonumber (L, 2);
+
+			if (lim < dlen) {
+				r += dlen - lim;
+				dlen = lim;
+			}
+		}
+
+		lua_pushlstring (L, r, dlen);
 		h->is_finished = TRUE;
 	}
 	else {
