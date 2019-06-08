@@ -2684,7 +2684,6 @@ rspamd_symcache_finalize_item (struct rspamd_task *task,
 	struct rspamd_symcache_dynamic_item *dyn_item;
 	gdouble t2, diff;
 	guint i;
-	struct timeval tv;
 	const gdouble slow_diff_limit = 300;
 
 	/* Sanity checks */
@@ -2713,6 +2712,7 @@ rspamd_symcache_finalize_item (struct rspamd_task *task,
 	checkpoint->cur_item = NULL;
 
 #ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
+	struct timeval tv;
 	event_base_update_cache_time (task->ev_base);
 	event_base_gettimeofday_cached (task->ev_base, &tv);
 	t2 = tv_to_double (&tv);
