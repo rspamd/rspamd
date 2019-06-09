@@ -527,6 +527,12 @@ rspamd_parse_inet_address_ip6 (const guchar *text, gsize len, gpointer target)
 		len -= sizeof ("IPv6:") - 1;
 	}
 
+	if (*p == '[' && len > 1 && p[len - 1] == ']') {
+		/* Strip [] as well */
+		p ++;
+		len -= 2;
+	}
+
 	/* Ignore leading colon */
 	if (len > 0 && *p == ':') {
 		p++;
