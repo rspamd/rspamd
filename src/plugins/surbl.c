@@ -69,11 +69,12 @@ static const gchar *M = "surbl";
 #define DEFAULT_SURBL_WEIGHT 10
 #define DEFAULT_REDIRECTOR_READ_TIMEOUT 5.0
 #define DEFAULT_SURBL_SYMBOL "SURBL_DNS"
-#define SURBL_OPTION_NOIP (1 << 0)
-#define SURBL_OPTION_RESOLVEIP (1 << 1)
-#define SURBL_OPTION_CHECKIMAGES (1 << 2)
-#define SURBL_OPTION_CHECKDKIM (1 << 3)
-#define SURBL_OPTION_FULLDOMAIN (1 << 4)
+#define SURBL_OPTION_NOIP (1u << 0u)
+#define SURBL_OPTION_RESOLVEIP (1u << 1u)
+#define SURBL_OPTION_CHECKIMAGES (1u << 2u)
+#define SURBL_OPTION_CHECKDKIM (1u << 3u)
+#define SURBL_OPTION_FULLDOMAIN (1u << 4u)
+#define SURBL_OPTION_CHECKEMAILS (1u << 5u)
 #define MAX_LEVELS 10
 
 struct surbl_ctx {
@@ -801,14 +802,21 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 				(rspamd_mempool_destruct_t )ucl_object_unref,
 				ropts);
 
-		cur = ucl_object_lookup (cur_rule, "images");
+		cur = ucl_object_lookup_any (cur_rule, "images", "check_images", NULL);
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
 			if (ucl_object_toboolean (cur)) {
 				new_suffix->options |= SURBL_OPTION_CHECKIMAGES;
 			}
 		}
 
-		cur = ucl_object_lookup (cur_rule, "check_dkim");
+		cur = ucl_object_lookup_any (cur_rule, "emails", "check_emails", NULL);
+		if (cur != NULL && cur->type == UCL_BOOLEAN) {
+			if (ucl_object_toboolean (cur)) {
+				new_suffix->options |= SURBL_OPTION_CHECKEMAILS;
+			}
+		}
+
+		cur = ucl_object_lookup_any (cur_rule, "dkim", "check_dkim", NULL);
 		if (cur != NULL && cur->type == UCL_BOOLEAN) {
 			if (ucl_object_toboolean (cur)) {
 				new_suffix->options |= SURBL_OPTION_CHECKDKIM;
@@ -2066,6 +2074,10 @@ surbl_test_url (struct rspamd_task *task,
 	g_hash_table_foreach (task->urls, surbl_tree_url_callback, param);
 
 	rspamd_symcache_item_async_inc (task, item, M);
+
+	if (suffix->options & SURBL_OPTION_CHECKEMAILS) {
+		g_hash_table_foreach (task->emails, surbl_tree_url_callback, param);
+	}
 
 	/* We also need to check and process img URLs */
 	if (suffix->options & SURBL_OPTION_CHECKIMAGES) {
