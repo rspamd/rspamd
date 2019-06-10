@@ -1924,12 +1924,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				0,
 				"Disable PCRE JIT");
 		rspamd_rcl_add_default_handler (sub,
-				"disable_lua_squeeze",
-				rspamd_rcl_parse_struct_boolean,
-				G_STRUCT_OFFSET (struct rspamd_config, disable_lua_squeeze),
-				0,
-				"Disable Lua rules squeezing");
-		rspamd_rcl_add_default_handler (sub,
 				"min_word_len",
 				rspamd_rcl_parse_struct_integer,
 				G_STRUCT_OFFSET (struct rspamd_config, min_word_len),

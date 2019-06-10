@@ -66,7 +66,6 @@ INIT_LOG_MODULE(symcache)
 	(dyn_item)->finished = 1
 #define CLR_FINISH_BIT(checkpoint, dyn_item) \
 	(dyn_item)->finished = 0
-
 static const guchar rspamd_symcache_magic[8] = {'r', 's', 'c', 2, 0, 0, 0, 0 };
 
 struct rspamd_symcache_header {
@@ -80,6 +79,21 @@ struct symcache_order {
 	GPtrArray *d;
 	guint id;
 	ref_entry_t ref;
+};
+
+/*
+ * This structure is optimised to store ids list:
+ * - If the first element is -1 then use dynamic part, else use static part
+ */
+struct rspamd_symcache_id_list {
+	union {
+		guint32 st[4];
+		struct {
+			guint32 e;
+			guint32 dynlen;
+			guint *n;
+		} dyn;
+	};
 };
 
 struct rspamd_symcache_item {
@@ -115,6 +129,9 @@ struct rspamd_symcache_item {
 	guint order;
 	gint id;
 	gint frequency_peaks;
+	/* Settings ids */
+	struct rspamd_symcache_id_list allowed_ids;
+	struct rspamd_symcache_id_list forbidden_ids;
 
 	/* Dependencies */
 	GPtrArray *deps;
@@ -143,7 +160,6 @@ struct rspamd_symcache {
 	GPtrArray *composites;
 	GPtrArray *idempotent;
 	GPtrArray *virtual;
-	GPtrArray *squeezed;
 	GList *delayed_deps;
 	GList *delayed_conditions;
 	rspamd_mempool_t *static_pool;
@@ -984,10 +1000,6 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 		}
 	}
 
-	if (item->type & SYMBOL_TYPE_SQUEEZED) {
-		g_ptr_array_add (cache->squeezed, item);
-	}
-
 	cache->used_items ++;
 	cache->id ++;
 
@@ -1127,7 +1139,6 @@ rspamd_symcache_destroy (struct rspamd_symcache *cache)
 		g_ptr_array_free (cache->postfilters, TRUE);
 		g_ptr_array_free (cache->idempotent, TRUE);
 		g_ptr_array_free (cache->composites, TRUE);
-		g_ptr_array_free (cache->squeezed, TRUE);
 		REF_RELEASE (cache->items_by_order);
 
 		if (cache->peak_cb != -1) {
@@ -1155,7 +1166,6 @@ rspamd_symcache_new (struct rspamd_config *cfg)
 	cache->idempotent = g_ptr_array_new ();
 	cache->composites = g_ptr_array_new ();
 	cache->virtual = g_ptr_array_new ();
-	cache->squeezed = g_ptr_array_new ();
 	cache->reload_time = cfg->cache_reload_time;
 	cache->total_hits = 1;
 	cache->total_weight = 1.0;
@@ -2331,7 +2341,7 @@ rspamd_symcache_disable_all_symbols (struct rspamd_task *task,
 	PTR_ARRAY_FOREACH (cache->items_by_id, i, item) {
 		dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
 
-		if (!(item->type & (SYMBOL_TYPE_SQUEEZED|skip_mask))) {
+		if (!(item->type & (skip_mask))) {
 			SET_FINISH_BIT (checkpoint, dyn_item);
 			SET_START_BIT (checkpoint, dyn_item);
 		}
@@ -2357,15 +2367,10 @@ rspamd_symcache_disable_symbol_checkpoint (struct rspamd_task *task,
 	item = rspamd_symcache_find_filter (cache, symbol);
 
 	if (item) {
-		if (!(item->type & SYMBOL_TYPE_SQUEEZED)) {
-			dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
-			SET_FINISH_BIT (checkpoint, dyn_item);
-			SET_START_BIT (checkpoint, dyn_item);
-			msg_debug_cache_task ("disable execution of %s", symbol);
-		}
-		else {
-			msg_debug_cache_task ("skip disabling squeezed symbol %s", symbol);
-		}
+		dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
+		SET_FINISH_BIT (checkpoint, dyn_item);
+		SET_START_BIT (checkpoint, dyn_item);
+		msg_debug_cache_task ("disable execution of %s", symbol);
 	}
 	else {
 		msg_info_task ("cannot disable %s: not found", symbol);
@@ -2391,15 +2396,10 @@ rspamd_symcache_enable_symbol_checkpoint (struct rspamd_task *task,
 	item = rspamd_symcache_find_filter (cache, symbol);
 
 	if (item) {
-		if (!(item->type & SYMBOL_TYPE_SQUEEZED)) {
-			dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
-			dyn_item->finished = 0;
-			dyn_item->started = 0;
-			msg_debug_cache_task ("enable execution of %s", symbol);
-		}
-		else {
-			msg_debug_cache_task ("skip enabling squeezed symbol %s", symbol);
-		}
+		dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
+		dyn_item->finished = 0;
+		dyn_item->started = 0;
+		msg_debug_cache_task ("enable execution of %s", symbol);
 	}
 	else {
 		msg_info_task ("cannot enable %s: not found", symbol);
@@ -2726,15 +2726,13 @@ rspamd_symcache_finalize_item (struct rspamd_task *task,
 		rspamd_task_profile_set (task, item->symbol, diff);
 	}
 
-	if (!(item->type & SYMBOL_TYPE_SQUEEZED)) {
-		if (diff > slow_diff_limit) {
-			msg_info_task ("slow rule: %s(%d): %.2f ms", item->symbol, item->id,
-					diff);
-		}
+	if (diff > slow_diff_limit) {
+		msg_info_task ("slow rule: %s(%d): %.2f ms", item->symbol, item->id,
+				diff);
+	}
 
-		if (rspamd_worker_is_scanner (task->worker)) {
-			rspamd_set_counter (item->cd, diff);
-		}
+	if (rspamd_worker_is_scanner (task->worker)) {
+		rspamd_set_counter (item->cd, diff);
 	}
 
 	/* Process all reverse dependencies */

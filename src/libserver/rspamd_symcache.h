@@ -45,7 +45,6 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_POSTFILTER = (1u << 10u),
 	SYMBOL_TYPE_NOSTAT = (1u << 11u), /* Skip as statistical symbol */
 	SYMBOL_TYPE_IDEMPOTENT = (1u << 12u), /* Symbol cannot change metric */
-	SYMBOL_TYPE_SQUEEZED = (1u << 13u), /* Symbol is squeezed inside Lua */
 	SYMBOL_TYPE_TRIVIAL = (1u << 14u), /* Symbol is trivial */
 	SYMBOL_TYPE_MIME_ONLY = (1u << 15u), /* Symbol is mime only */
 	SYMBOL_TYPE_EXPLICIT_DISABLE = (1u << 16u), /* Symbol should be disabled explicitly only */

@@ -24,7 +24,6 @@ end
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_maps = require "lua_maps"
-local lua_squeeze = require "lua_squeeze_rules"
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
 local rspamd_ip = require "rspamd_ip"
@@ -46,7 +45,6 @@ local selectors_cache = {} -- Used to speed up selectors in settings
 local function apply_settings(task, to_apply)
   task:set_settings(to_apply)
   task:cache_set('settings', to_apply)
-  lua_squeeze.handle_settings(task, to_apply)
 
   if to_apply['add_headers'] or to_apply['remove_headers'] then
     local rep = {

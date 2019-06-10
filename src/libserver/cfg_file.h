@@ -336,7 +336,6 @@ struct rspamd_config {
 	gboolean enable_sessions_cache;                 /**< Enable session cache for debug						*/
 	gboolean enable_experimental;                   /**< Enable experimental plugins						*/
 	gboolean disable_pcre_jit;                      /**< Disable pcre JIT									*/
-	gboolean disable_lua_squeeze;                   /**< Disable lua rules squeezing						*/
 	gboolean own_lua_state;                         /**< True if we have created lua_state internally		*/
 	gboolean soft_reject_on_timeout;                /**< If true emit soft reject on task timeout (if not reject) */
 
