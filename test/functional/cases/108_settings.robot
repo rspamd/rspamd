@@ -63,6 +63,18 @@ ENABLE GROUP - NORMAL
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
   Should Not Contain  ${result.stdout}  SIMPLE_POST
 
+SETTINGS ID - NORMAL
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_test
+  Check Rspamc  ${result}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+  Should Not Contain  ${result.stdout}  SIMPLE_POST
+
+SETTINGS ID - PRE
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_pre
+  Check Rspamc  ${result}  SIMPLE_PRE
+  Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_POST
+
 *** Keywords ***
 Settings Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/settings.conf
