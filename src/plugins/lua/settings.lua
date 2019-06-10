@@ -712,6 +712,7 @@ local function process_settings_table(tbl)
 
     -- Now we must process actions
     if elt['symbols'] then out['symbols'] = elt['symbols'] end
+    if not elt.id then elt.id = name end
     if elt['id'] then
       out['id'] = elt['id']
       settings_ids[elt['id']] = out
