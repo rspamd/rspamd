@@ -26,6 +26,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_maps = require "lua_maps"
 local lua_squeeze = require "lua_squeeze_rules"
 local lua_util = require "lua_util"
+local rspamd_util = require "rspamd_util"
 local rspamd_ip = require "rspamd_ip"
 local rspamd_regexp = require "rspamd_regexp"
 local lua_selectors = require "lua_selectors"
@@ -111,7 +112,7 @@ local function check_query_settings(task)
   end
 
   local query_maxscore = task:get_request_header('maxscore')
-  local settings_id = task:get_request_header('settings-id')
+  local settings_id = task:get_settings_id()
   local nset
 
   if query_maxscore then
@@ -145,8 +146,7 @@ local function check_query_settings(task)
 
   if settings_id and settings_initialized then
     -- settings_id is rspamd text, so need to convert it to string for lua
-    local id_str = tostring(settings_id)
-    local elt = settings_ids[id_str]
+    local elt = settings_ids[settings_id]
 
     if elt then
       if elt['whitelist'] then
@@ -158,11 +158,11 @@ local function check_query_settings(task)
           elt.apply = lua_util.override_defaults(nset, elt.apply)
         end
         apply_settings(task, elt['apply'])
-        rspamd_logger.infox(task, "applying settings id %s", id_str)
+        rspamd_logger.infox(task, "applying settings id %s", settings_id)
         return true
       end
     else
-      rspamd_logger.warnx(task, 'no settings id "%s" has been found', id_str)
+      rspamd_logger.warnx(task, 'no settings id "%s" has been found', settings_id)
       if nset then
         rspamd_logger.infox(task, 'apply maxscore = %s', nset.actions)
         apply_settings(task, nset)
@@ -494,6 +494,7 @@ local function process_settings_table(tbl)
   -- Check the setting element internal data
   local process_setting_elt = function(name, elt)
 
+    lua_util.debugm(N, rspamd_config, 'process settings "%s"', name)
     -- Process IP address
     local function process_ip(ip)
       local out = {}
@@ -593,6 +594,8 @@ local function process_settings_table(tbl)
       local ip = process_ip(elt['ip'])
 
       if ip then
+        lua_util.debugm(N, rspamd_config, 'added ip condition to "%s": %s',
+            name, ip)
         out['ip'] = check_table(elt['ip'], ip)
       end
     end
@@ -600,6 +603,8 @@ local function process_settings_table(tbl)
       local ip = process_ip(elt['client_ip'])
 
       if ip then
+        lua_util.debugm(N, rspamd_config, 'added client_ip condition to "%s": %s',
+            name, ip)
         out['client_ip'] = check_table(elt['client_ip'], ip)
       end
     end
@@ -607,12 +612,16 @@ local function process_settings_table(tbl)
       local from = process_addr(elt['from'])
 
       if from then
+        lua_util.debugm(N, rspamd_config, 'added from condition to "%s": %s',
+            name, from)
         out['from'] = check_table(elt['from'], from)
       end
     end
     if elt['rcpt'] then
       local rcpt = process_addr(elt['rcpt'])
       if rcpt then
+        lua_util.debugm(N, rspamd_config, 'added rcpt condition to "%s": %s',
+            name, rcpt)
         out['rcpt'] = check_table(elt['rcpt'], rcpt)
       end
     end
@@ -620,34 +629,48 @@ local function process_settings_table(tbl)
       local from_mime = process_addr(elt['from_mime'])
 
       if from_mime then
+        lua_util.debugm(N, rspamd_config, 'added from_mime condition to "%s": %s',
+            name, from_mime)
         out['from_mime'] = check_table(elt['from_mime'], from_mime)
       end
     end
     if elt['rcpt_mime'] then
       local rcpt_mime = process_addr(elt['rcpt_mime'])
       if rcpt_mime then
+        lua_util.debugm(N, rspamd_config, 'added rcpt_mime condition to "%s": %s',
+            name, rcpt_mime)
         out['rcpt_mime'] = check_table(elt['rcpt_mime'], rcpt_mime)
       end
     end
     if elt['user'] then
       local user = process_addr(elt['user'])
       if user then
+        lua_util.debugm(N, rspamd_config, 'added user condition to "%s": %s',
+            name, user)
         out['user'] = check_table(elt['user'], user)
       end
     end
     if elt['hostname'] then
       local hostname = process_addr(elt['hostname'])
       if hostname then
+        lua_util.debugm(N, rspamd_config, 'added hostname condition to "%s": %s',
+            name, hostname)
         out['hostname'] = check_table(elt['hostname'], hostname)
       end
     end
     if elt['authenticated'] then
+      lua_util.debugm(N, rspamd_config, 'added authenticated condition to "%s"',
+          name)
       out['authenticated'] = true
     end
     if elt['local'] then
       out['local'] = true
+      lua_util.debugm(N, rspamd_config, 'added local condition to "%s"',
+          name)
     end
     if elt['inverse'] then
+      lua_util.debugm(N, rspamd_config, 'added inverse condition to "%s"',
+          name)
       out['inverse'] = true
     end
     if elt['request_header'] then
@@ -658,6 +681,8 @@ local function process_settings_table(tbl)
           rho[k] = re
         end
       end
+      lua_util.debugm(N, rspamd_config, 'added request_header condition to "%s": %s',
+          name, rho)
       out['request_header'] = rho
     end
     if elt['header'] then
@@ -688,6 +713,8 @@ local function process_settings_table(tbl)
         if not out['header'] then out['header'] = {} end
         table.insert(out['header'], rho)
       end
+      lua_util.debugm(N, rspamd_config, 'added header condition to "%s": %s',
+          name, out.header)
     end
 
     if elt['selector'] then
@@ -708,14 +735,26 @@ local function process_settings_table(tbl)
           out['selector'] = {sel}
         end
       end
+      lua_util.debugm(N, rspamd_config, 'added selector condition to "%s": %s',
+          name, sel)
     end
 
     -- Now we must process actions
-    if elt['symbols'] then out['symbols'] = elt['symbols'] end
-    if not elt.id then elt.id = name end
+    if elt['symbols'] then
+      lua_util.debugm(N, rspamd_config, 'added symbols condition to "%s": %s',
+          name, elt.symbols)
+      out['symbols'] = elt['symbols']
+    end
+    if not elt.id then
+      elt.id = name
+    end
     if elt['id'] then
-      out['id'] = elt['id']
-      settings_ids[elt['id']] = out
+      local cr = require "rspamd_cryptobox_hash"
+      out.id =  rspamd_util.unpack("I4",
+          cr.create_specific('xxh64'):update(elt.id):bin())
+      lua_util.debugm(N, rspamd_config, 'added settings id to "%s": %s -> %s',
+          name, elt.id, out.id)
+      settings_ids[out.id] = out
     end
 
     if elt['apply'] then
