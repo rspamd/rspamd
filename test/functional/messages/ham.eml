@@ -1,0 +1,269 @@
+Return-Path: <cfrg-bounces@irtf.org>
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=ietf.org; s=ietf1;
+	t=1557262917; bh=u0s27csbY4DoorjT0i6xdMU7DX5zBvyJdaTBxev7WE8=;
+	h=To:References:From:Date:In-Reply-To:Subject:List-Id:
+	 List-Unsubscribe:List-Archive:List-Post:List-Help:List-Subscribe:
+	 Cc;
+	b=D8Kty+gIkEInNAFcwmrAdpVfIHfzKGAKQrSgQyhT4khKxq7jZFOX5gaNw0pWD/rUB
+	 Sdumgfb+/iFZgG+M/xn8B7ANFNkQO65cWvVmYQ6TQxXE4uhFmehPzzDIWtlsizKnLf
+	 ItaQ2K4huFk+5FSyGuc56PqZtZa4S/Mkz3kX0w5E=
+X-Mailbox-Line: From cfrg-bounces@irtf.org  Tue May  7 14:01:51 2019
+Received: from ietfa.amsl.com (localhost [IPv6:::1])
+	by ietfa.amsl.com (Postfix) with ESMTP id 8569D12025D;
+	Tue,  7 May 2019 14:01:16 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=ietf.org; s=ietf1;
+	t=1557262877; bh=u0s27csbY4DoorjT0i6xdMU7DX5zBvyJdaTBxev7WE8=;
+	h=To:References:From:Date:In-Reply-To:Subject:List-Id:
+	 List-Unsubscribe:List-Archive:List-Post:List-Help:List-Subscribe:
+	 Cc;
+	b=jjHHLfvBzn3yzgYs0e1ROi1mK3zyHxZX4rrkkloh/EdQuG0R59ablyQk++nkgqPe4
+	 URZxEYII4EjhJTRM5r/mbpdBvZ5lG9IQv7faR3jSmFRtTjJhOTR9sr09dMW3GENtYE
+	 P0+NBPR1vU+czz/4XSvbPM1nj4oYLJ/Qe2FTFhEE=
+X-Original-To: cfrg@ietfa.amsl.com
+Delivered-To: cfrg@ietfa.amsl.com
+Received: from localhost (localhost [127.0.0.1])
+ by ietfa.amsl.com (Postfix) with ESMTP id 00E7712024B
+ for <cfrg@ietfa.amsl.com>; Tue,  7 May 2019 14:01:07 -0700 (PDT)
+Received: from mail.ietf.org ([4.31.198.44])
+ by localhost (ietfa.amsl.com [127.0.0.1]) (amavisd-new, port 10024)
+ with ESMTP id k8UsBTUjeiTe for <cfrg@ietfa.amsl.com>;
+ Tue,  7 May 2019 14:01:04 -0700 (PDT)
+From: user@example.com
+To: user@example.com
+Message-ID: <0a67411b-9a2d-9e08-ca06-08ea938c0c89@gmail.com>
+Date: Tue, 7 May 2019 17:01:00 -0400
+MIME-Version: 1.0
+Subject: Re: [Cfrg] Adoption call for draft-sullivan-cfrg-voprf
+Precedence: list
+List-Id: Crypto Forum Research Group <cfrg.irtf.org>
+List-Unsubscribe: <https://www.irtf.org/mailman/options/cfrg>,
+ <mailto:cfrg-request@irtf.org?subject=unsubscribe>
+List-Archive: <https://mailarchive.ietf.org/arch/browse/cfrg/>
+List-Post: <mailto:cfrg@irtf.org>
+List-Help: <mailto:cfrg-request@irtf.org?subject=help>
+List-Subscribe: <https://www.irtf.org/mailman/listinfo/cfrg>,
+ <mailto:cfrg-request@irtf.org?subject=subscribe>
+Cc: "draft-sullivan-cfrg-voprf.authors@ietf.org"
+ <draft-sullivan-cfrg-voprf.authors@ietf.org>
+Content-Type: multipart/mixed; boundary="===============0339907768802969961=="
+Errors-To: cfrg-bounces@irtf.org
+Sender: "Cfrg" <cfrg-bounces@irtf.org>
+
+This is a multi-part message in MIME format.
+--===============0339907768802969961==
+Content-Type: multipart/alternative;
+ boundary="------------2E5B38F9F07A306C0CA7CAE5"
+Content-Language: en-US
+
+This is a multi-part message in MIME format.
+--------------2E5B38F9F07A306C0CA7CAE5
+Content-Type: text/plain; charset=utf-8; format=flowed
+Content-Transfer-Encoding: 7bit
+
+Hi Kenny:
+
+I had some trouble finding recent discussions on this document. The 
+document seems to have dependencies on other drafts (e.g., Ristretto) 
+for which it is very hard to find any discussion either (and are not 
+that easy to read ). If you could point to this, that would be great.
+
+Could you explain how this fits within CFRG's charter? What is the 
+general philosophy nowadays ("more is better" vs. "less is more", 
+protocols with wide applicability vs. specialized, etc, etc.)?
+
+Best regards, Rene
+
+[excerpted from https://datatracker.ietf.org/rg/cfrg/about/]
+
+The Crypto Forum Research Group (CFRG) is a general forum for discussing 
+and reviewing uses of cryptographic mechanisms, both for network 
+security in general and for the IETF in particular.
+
+The CFRG serves as a bridge between theory and practice, bringing new 
+cryptographic techniques to the Internet community and promoting an 
+understanding of the use and applicability of these mechanisms via 
+Informational RFCs (in the tradition of, e.g., RFC 1321 (MD5) and RFC 
+2104 (HMAC). Our goal is to provide a forum for discussing and analyzing 
+general cryptographic aspects of security protocols, and to offer 
+guidance on the use of emerging mechanisms and new uses of existing 
+mechanisms. IETF working groups developing protocols that include 
+cryptographic elements are welcome to bring questions concerning the 
+protocols to the CFRG for advice.
+
+Meetings and Membership
+
+The CFRG meetings, membership, and mailing list are open to all who wish 
+to participate.
+
+
+On 5/7/2019 11:44 AM, Paterson Kenneth wrote:
+> Dear CFRG,
+>
+> This email starts a 2-week adoption call for:
+>
+> https://datatracker.ietf.org/doc/draft-sullivan-cfrg-voprf/
+> Oblivious Pseudorandom Functions (OPRFs) using Prime-Order Groups
+>
+> Please give your views on whether this document should be adopted as a CFRG draft, and if so, whether you'd be willing to help work on it/review it.
+>
+> (We have two other adoption calls running concurrently; they will end this Friday, May 10th.)
+>
+> Thanks,
+>
+> Kenny (for the chairs)
+>
+>
+> _______________________________________________
+> Cfrg mailing list
+> Cfrg@irtf.org
+> https://www.irtf.org/mailman/listinfo/cfrg
+
+
+-- 
+email: rstruik.ext@gmail.com | Skype: rstruik
+cell: +1 (647) 867-5658 | US: +1 (415) 690-7363
+
+
+--------------2E5B38F9F07A306C0CA7CAE5
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  </head>
+  <body text="#000000" bgcolor="#FFFFFF">
+    <div class="moz-cite-prefix">Hi Kenny:</div>
+    <div class="moz-cite-prefix"><br>
+    </div>
+    <div class="moz-cite-prefix">I had some trouble finding recent
+      discussions on this document. The document seems to have
+      dependencies on other drafts (e.g., Ristretto) for which it is
+      very hard to find any discussion either (and are not that easy to
+      read ). If you could point to this, that would be great.<br>
+    </div>
+    <div class="moz-cite-prefix"><br>
+    </div>
+    <div class="moz-cite-prefix">Could you explain how this fits within
+      CFRG's charter? What is the general philosophy nowadays ("more is
+      better" vs. "less is more", protocols with wide applicability vs.
+      specialized, etc, etc.)?</div>
+    <div class="moz-cite-prefix"><br>
+    </div>
+    <div class="moz-cite-prefix">Best regards, Rene<br>
+    </div>
+    <div class="moz-cite-prefix"><br>
+    </div>
+    <div class="moz-cite-prefix">[excerpted from <a
+        href="https://datatracker.ietf.org/rg/cfrg/about/">https://datatracker.ietf.org/rg/cfrg/about/</a>]</div>
+    <div class="moz-cite-prefix"><br>
+    </div>
+    <div class="moz-cite-prefix">
+      <p style="box-sizing: border-box; margin: 0px 0px 10.5px; color:
+        rgb(34, 34, 34); font-family: &quot;PT Serif&quot;, Palatino,
+        &quot;Neue Swift&quot;, serif; font-size: 15px; font-style:
+        normal; font-variant-ligatures: normal; font-variant-caps:
+        normal; font-weight: 400; letter-spacing: normal; orphans: 2;
+        text-align: start; text-indent: 0px; text-transform: none;
+        white-space: normal; widows: 2; word-spacing: 0px;
+        -webkit-text-stroke-width: 0px; background-color: rgb(255, 255,
+        255); text-decoration-style: initial; text-decoration-color:
+        initial;">The Crypto Forum Research Group (CFRG) is a general
+        forum for discussing and reviewing uses of cryptographic
+        mechanisms, both for network security in general and for the
+        IETF in particular.</p>
+      <p style="box-sizing: border-box; margin: 0px 0px 10.5px; color:
+        rgb(34, 34, 34); font-family: &quot;PT Serif&quot;, Palatino,
+        &quot;Neue Swift&quot;, serif; font-size: 15px; font-style:
+        normal; font-variant-ligatures: normal; font-variant-caps:
+        normal; font-weight: 400; letter-spacing: normal; orphans: 2;
+        text-align: start; text-indent: 0px; text-transform: none;
+        white-space: normal; widows: 2; word-spacing: 0px;
+        -webkit-text-stroke-width: 0px; background-color: rgb(255, 255,
+        255); text-decoration-style: initial; text-decoration-color:
+        initial;">The CFRG serves as a bridge between theory and
+        practice, bringing new cryptographic techniques to the Internet
+        community and promoting an understanding of the use and
+        applicability of these mechanisms via Informational RFCs (in the
+        tradition of, e.g., RFC 1321 (MD5) and RFC 2104 (HMAC). Our goal
+        is to provide a forum for discussing and analyzing general
+        cryptographic aspects of security protocols, and to offer
+        guidance on the use of emerging mechanisms and new uses of
+        existing mechanisms. IETF working groups developing protocols
+        that include cryptographic elements are welcome to bring
+        questions concerning the protocols to the CFRG for advice.</p>
+      <p style="box-sizing: border-box; margin: 0px 0px 10.5px; color:
+        rgb(34, 34, 34); font-family: &quot;PT Serif&quot;, Palatino,
+        &quot;Neue Swift&quot;, serif; font-size: 15px; font-style:
+        normal; font-variant-ligatures: normal; font-variant-caps:
+        normal; font-weight: 400; letter-spacing: normal; orphans: 2;
+        text-align: start; text-indent: 0px; text-transform: none;
+        white-space: normal; widows: 2; word-spacing: 0px;
+        -webkit-text-stroke-width: 0px; background-color: rgb(255, 255,
+        255); text-decoration-style: initial; text-decoration-color:
+        initial;">Meetings and Membership</p>
+      <p style="box-sizing: border-box; margin: 0px 0px 10.5px; color:
+        rgb(34, 34, 34); font-family: &quot;PT Serif&quot;, Palatino,
+        &quot;Neue Swift&quot;, serif; font-size: 15px; font-style:
+        normal; font-variant-ligatures: normal; font-variant-caps:
+        normal; font-weight: 400; letter-spacing: normal; orphans: 2;
+        text-align: start; text-indent: 0px; text-transform: none;
+        white-space: normal; widows: 2; word-spacing: 0px;
+        -webkit-text-stroke-width: 0px; background-color: rgb(255, 255,
+        255); text-decoration-style: initial; text-decoration-color:
+        initial;">The CFRG meetings, membership, and mailing list are
+        open to all who wish to participate.</p>
+    </div>
+    <div class="moz-cite-prefix"><br>
+    </div>
+    <div class="moz-cite-prefix">On 5/7/2019 11:44 AM, Paterson Kenneth
+      wrote:<br>
+    </div>
+    <blockquote type="cite"
+      cite="mid:54235333-9FEA-4543-93B6-2D4B1C8FCC2D@inf.ethz.ch">
+      <pre class="moz-quote-pre" wrap="">Dear CFRG,
+
+This email starts a 2-week adoption call for:
+
+<a class="moz-txt-link-freetext" href="https://datatracker.ietf.org/doc/draft-sullivan-cfrg-voprf/">https://datatracker.ietf.org/doc/draft-sullivan-cfrg-voprf/</a>
+Oblivious Pseudorandom Functions (OPRFs) using Prime-Order Groups
+
+Please give your views on whether this document should be adopted as a CFRG draft, and if so, whether you'd be willing to help work on it/review it.
+
+(We have two other adoption calls running concurrently; they will end this Friday, May 10th.)
+
+Thanks,
+
+Kenny (for the chairs)
+
+
+_______________________________________________
+Cfrg mailing list
+<a class="moz-txt-link-abbreviated" href="mailto:Cfrg@irtf.org">Cfrg@irtf.org</a>
+<a class="moz-txt-link-freetext" href="https://www.irtf.org/mailman/listinfo/cfrg">https://www.irtf.org/mailman/listinfo/cfrg</a>
+</pre>
+    </blockquote>
+    <p><br>
+    </p>
+    <pre class="moz-signature" cols="72">-- 
+email: <a class="moz-txt-link-abbreviated" href="mailto:rstruik.ext@gmail.com">rstruik.ext@gmail.com</a> | Skype: rstruik
+cell: +1 (647) 867-5658 | US: +1 (415) 690-7363</pre>
+  </body>
+</html>
+
+--------------2E5B38F9F07A306C0CA7CAE5--
+
+
+--===============0339907768802969961==
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+_______________________________________________
+Cfrg mailing list
+Cfrg@irtf.org
+https://www.irtf.org/mailman/listinfo/cfrg
+
+--===============0339907768802969961==--
+
