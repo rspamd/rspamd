@@ -30,20 +30,30 @@ NO SETTINGS HAM
   Should Contain  ${result.stdout}  BAYES_HAM
 
 ENABLE SYMBOL - NORMAL
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SIMPLE_TEST"]}
+  ${result} =  Scan Message With Rspamc  ${HAM_MESSAGE}  --header  Settings={symbols_enabled = ["SIMPLE_TEST"]}
   Check Rspamc  ${result}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
   Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Should Not Contain  ${result.stdout}  BAYES_HAM
 
 ENABLE SYMBOL - POSTFILTER
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SIMPLE_TEST", "SIMPLE_POST"]}
+  ${result} =  Scan Message With Rspamc  ${HAM_MESSAGE}  --header  Settings={symbols_enabled = ["SIMPLE_TEST", "SIMPLE_POST"]}
   Check Rspamc  ${result}  SIMPLE_TEST
   Should Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
+  Should Not Contain  ${result.stdout}  BAYES_HAM
 
 ENABLE SYMBOL - PREFILTER
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SIMPLE_PRE"]}
+  ${result} =  Scan Message With Rspamc  ${HAM_MESSAGE}  --header  Settings={symbols_enabled = ["SIMPLE_PRE"]}
   Check Rspamc  ${result}  SIMPLE_PRE
+  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  BAYES_HAM
+
+ENABLE SYMBOL - CLASSIFIER
+  ${result} =  Scan Message With Rspamc  ${HAM_MESSAGE}  --header  Settings={symbols_enabled = ["BAYES_HAM", "BAYES_SPAM"]}
+  Check Rspamc  ${result}  BAYES_HAM
+  Should Not Contain  ${result.stdout}  SIMPLE_PRE
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
 
