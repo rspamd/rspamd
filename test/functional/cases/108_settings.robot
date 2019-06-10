@@ -9,15 +9,25 @@ Variables       ${TESTDIR}/lib/vars.py
 ${CONFIG}       ${TESTDIR}/configs/plugins.conf
 ${LUA_SCRIPT}   ${TESTDIR}/lua/settings.lua
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
+${SPAM_MESSAGE}      ${TESTDIR}/messages/spam.eml
+${HAM_MESSAGE}      ${TESTDIR}/messages/ham.eml
 ${RSPAMD_SCOPE}  Suite
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 
 *** Test Cases ***
-NO SETTINGS
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}
+NO SETTINGS SPAM
+  ${result} =  Scan Message With Rspamc  ${SPAM_MESSAGE}
   Check Rspamc  ${result}  SIMPLE_TEST
   Should Contain  ${result.stdout}  SIMPLE_PRE
   Should Contain  ${result.stdout}  SIMPLE_POST
+  Should Contain  ${result.stdout}  BAYES_SPAM
+
+NO SETTINGS HAM
+  ${result} =  Scan Message With Rspamc  ${HAM_MESSAGE}
+  Check Rspamc  ${result}  SIMPLE_TEST
+  Should Contain  ${result.stdout}  SIMPLE_PRE
+  Should Contain  ${result.stdout}  SIMPLE_POST
+  Should Contain  ${result.stdout}  BAYES_HAM
 
 ENABLE SYMBOL - NORMAL
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SIMPLE_TEST"]}
