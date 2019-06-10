@@ -785,6 +785,7 @@ local full_extensions_map = {
   {"xll", "application/vnd.ms-excel"},
   {"xlm", "application/vnd.ms-excel"},
   {"xls", {
+    "application/excel",
     "application/vnd.ms-excel",
     "application/vnd.ms-office",
     "application/x-excel",
