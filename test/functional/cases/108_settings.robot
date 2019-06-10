@@ -97,6 +97,8 @@ SETTINGS ID - PRE
 
 *** Keywords ***
 Settings Setup
+  Copy File  ${TESTDIR}/data/bayes.spam.sqlite3  /tmp/bayes.spam.sqlite3
+  Copy File  ${TESTDIR}/data/bayes.ham.sqlite3  /tmp/bayes.ham.sqlite3
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/settings.conf
   Set Suite Variable  ${PLUGIN_CONFIG}
   Generic Setup  PLUGIN_CONFIG
