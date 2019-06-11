@@ -30,7 +30,7 @@ end
 local data_rows = {}
 local custom_rows = {}
 local nrows = 0
-local schema_version = 5 -- Current schema version
+local schema_version = 6 -- Current schema version
 
 local settings = {
   limit = 1000,
@@ -130,6 +130,8 @@ CREATE TABLE rspamd
     `Symbols.Options` Array(String),
     ScanTimeReal UInt32,
     ScanTimeVirtual UInt32,
+    AuthUser String,
+    SettingsId LowCardinality(String),
     Digest FixedString(32),
     SMTPFrom ALIAS if(From = '', '', concat(FromUser, '@', From)),
     SMTPRcpt ALIAS if(RcptDomain = '', '', concat(RcptUser, '@', RcptDomain)),
@@ -199,6 +201,14 @@ local migrations = {
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (5)]],
   },
+  [5] = {
+    [[ALTER TABLE rspamd
+      ADD COLUMN AuthUser String AFTER ScanTimeVirtual,
+      ADD COLUMN SettingsId LowCardinality(String) AFTER AuthUser
+    ]],
+    -- New version
+    [[INSERT INTO rspamd_version (Version) Values (6)]],
+  },
 }
 
 local predefined_actions = {
@@ -243,6 +253,9 @@ local function clickhouse_main_row(res)
     'ScanTimeVirtual',
     -- 1.9.3 +
     'CustomAction',
+    -- 2.0 +
+    'AuthUser',
+    'SettingsId',
   }
 
   for _,v in ipairs(fields) do table.insert(res, v) end
@@ -599,6 +612,8 @@ local function clickhouse_collect(task)
     scan_real = 0
   end
 
+  local auth_user = task:get_user() or ''
+
   local row = {
     today(timestamp),
     timestamp,
@@ -628,7 +643,9 @@ local function clickhouse_collect(task)
     message_id,
     scan_real,
     scan_virtual,
-    custom_action
+    custom_action,
+    auth_user,
+    '' -- TODO: Add settings id support
   }
 
   -- Attachments step
