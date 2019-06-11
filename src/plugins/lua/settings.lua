@@ -25,7 +25,6 @@ end
 local rspamd_logger = require "rspamd_logger"
 local rspamd_maps = require "lua_maps"
 local lua_util = require "lua_util"
-local rspamd_util = require "rspamd_util"
 local rspamd_ip = require "rspamd_ip"
 local rspamd_regexp = require "rspamd_regexp"
 local lua_selectors = require "lua_selectors"

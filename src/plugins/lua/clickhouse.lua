@@ -19,6 +19,7 @@ local rspamd_lua_utils = require "lua_util"
 local upstream_list = require "rspamd_upstream_list"
 local lua_util = require "lua_util"
 local lua_clickhouse = require "lua_clickhouse"
+local lua_settings = require "lua_settings"
 local fun = require "fun"
 
 local N = "clickhouse"
@@ -613,6 +614,20 @@ local function clickhouse_collect(task)
   end
 
   local auth_user = task:get_user() or ''
+  local settings_id = task:get_settings_id()
+
+  if settings_id then
+    -- Convert to string
+    settings_id = lua_settings.settings_by_id(settings_id)
+
+    if settings_id then
+      settings_id = settings_id.name
+    end
+  end
+
+  if not settings_id then
+    settings_id = ''
+  end
 
   local row = {
     today(timestamp),
@@ -645,7 +660,7 @@ local function clickhouse_collect(task)
     scan_virtual,
     custom_action,
     auth_user,
-    '' -- TODO: Add settings id support
+    settings_id
   }
 
   -- Attachments step
