@@ -485,28 +485,9 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 	}
 
 	/* Check tokenizer configuration */
-
-	while ((ret = rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
-			RSPAMD_STAT_BACKEND_TRANSACTION_START_IM)) == SQLITE_BUSY &&
-			++ntries <= max_tries) {
-		nanosleep (&sleep_ts, NULL);
-	}
-
-	if (ret != SQLITE_OK) {
-		msg_err_pool ("failed to start transaction: %d, %s", ret,
-				sqlite3_errmsg (bk->sqlite));
-		sqlite3_close (bk->sqlite);
-		g_free (bk);
-
-		return NULL;
-	}
-
 	if (rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
 			RSPAMD_STAT_BACKEND_LOAD_TOKENIZER, &sz64, &tk_conf) != SQLITE_OK ||
 			sz64 == 0) {
-
-		rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
-				RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
 
 		while ((ret = rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
 				RSPAMD_STAT_BACKEND_TRANSACTION_START_EXCL)) == SQLITE_BUSY &&
@@ -534,14 +515,14 @@ rspamd_sqlite3_opendb (rspamd_mempool_t *pool,
 
 			return NULL;
 		}
+
+		rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
+				RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
 		g_free (tok_conf_encoded);
 	}
 	else {
 		g_free (tk_conf);
 	}
-
-	rspamd_sqlite3_run_prstmt (pool, bk->sqlite, bk->prstmt,
-				RSPAMD_STAT_BACKEND_TRANSACTION_COMMIT);
 
 	return bk;
 }
