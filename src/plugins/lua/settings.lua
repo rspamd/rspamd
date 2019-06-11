@@ -29,6 +29,7 @@ local rspamd_util = require "rspamd_util"
 local rspamd_ip = require "rspamd_ip"
 local rspamd_regexp = require "rspamd_regexp"
 local lua_selectors = require "lua_selectors"
+local lua_settings = require "lua_settings"
 local ucl = require "ucl"
 local fun = require "fun"
 
@@ -36,7 +37,6 @@ local redis_params
 
 local settings = {}
 local N = "settings"
-local settings_ids = {}
 local settings_initialized = false
 local max_pri = 0
 
@@ -143,10 +143,10 @@ local function check_query_settings(task)
   end
 
   if settings_id and settings_initialized then
-    -- settings_id is rspamd text, so need to convert it to string for lua
-    local elt = settings_ids[settings_id]
+    local elt = lua_settings.settings_by_id(settings_id)
 
     if elt then
+      elt = elt.settings
       if elt['whitelist'] then
         elt['apply'] = {whitelist = true}
       end
@@ -746,14 +746,6 @@ local function process_settings_table(tbl)
     if not elt.id then
       elt.id = name
     end
-    if elt['id'] then
-      local cr = require "rspamd_cryptobox_hash"
-      out.id =  rspamd_util.unpack("I4",
-          cr.create_specific('xxh64'):update(elt.id):bin())
-      lua_util.debugm(N, rspamd_config, 'added settings id to "%s": %s -> %s',
-          name, elt.id, out.id)
-      settings_ids[out.id] = out
-    end
 
     if elt['apply'] then
       -- Just insert all metric results to the action key
@@ -763,6 +755,12 @@ local function process_settings_table(tbl)
     else
       rspamd_logger.errx(rspamd_config, "no actions in settings: " .. name)
       return nil
+    end
+
+    if elt['id'] then
+      out.id = lua_settings.register_settings_id(elt.id, out)
+      lua_util.debugm(N, rspamd_config, 'added settings id to "%s": %s -> %s',
+          name, elt.id, out.id)
     end
 
     return out
@@ -781,7 +779,7 @@ local function process_settings_table(tbl)
   -- clear all settings
   max_pri = 0
   local nrules = 0
-  settings_ids = {}
+  lua_settings.reset_ids()
   for k in pairs(settings) do settings[k]={} end
   -- fill new settings by priority
   fun.for_each(function(k, v)
