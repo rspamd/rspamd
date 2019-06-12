@@ -224,6 +224,117 @@ err:
 	return FALSE;
 }
 
+static void
+rspamd_protocol_process_recipients (struct rspamd_task *task,
+		const rspamd_ftok_t *hdr)
+{
+	enum {
+		skip_spaces,
+		quoted_string,
+		normal_string,
+	} state = skip_spaces;
+	const gchar *p, *end, *start_addr;
+	struct rspamd_email_address *addr;
+
+	p = hdr->begin;
+	end = hdr->begin + hdr->len;
+	start_addr = NULL;
+
+	while (p < end) {
+		switch (state) {
+		case skip_spaces:
+			if (g_ascii_isspace (*p)) {
+				p ++;
+			}
+			else if (*p == '"') {
+				start_addr = p;
+				p ++;
+				state = quoted_string;
+			}
+			else {
+				state = normal_string;
+				start_addr = p;
+			}
+			break;
+		case quoted_string:
+			if (*p == '"') {
+				state = normal_string;
+				p ++;
+			}
+			else if (*p == '\\') {
+				/* Quoted pair */
+				p += 2;
+			}
+			else {
+				p ++;
+			}
+			break;
+		case normal_string:
+			if (*p == '"') {
+				state = quoted_string;
+				p ++;
+			}
+			else if (*p == ',' && start_addr != NULL && p > start_addr) {
+				/* We have finished address, check what we have */
+				addr = rspamd_email_address_from_smtp (start_addr,
+						p - start_addr);
+
+				if (addr) {
+					if (task->rcpt_envelope == NULL) {
+						task->rcpt_envelope = g_ptr_array_sized_new (
+								2);
+					}
+
+					g_ptr_array_add (task->rcpt_envelope, addr);
+				}
+				else {
+					msg_err_protocol ("bad rcpt address: '%*s'",
+							(int)(p - start_addr), start_addr);
+					task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+				}
+				start_addr = NULL;
+				p ++;
+				state = skip_spaces;
+			}
+			else {
+				p ++;
+			}
+			break;
+		}
+	}
+
+	/* Check remainder */
+	if (start_addr && p > start_addr) {
+		switch (state) {
+		case normal_string:
+			addr = rspamd_email_address_from_smtp (start_addr, end - start_addr);
+
+			if (addr) {
+				if (task->rcpt_envelope == NULL) {
+					task->rcpt_envelope = g_ptr_array_sized_new (
+							2);
+				}
+
+				g_ptr_array_add (task->rcpt_envelope, addr);
+			}
+			else {
+				msg_err_protocol ("bad rcpt address: '%*s'",
+						(int)(end - start_addr), start_addr);
+				task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+			}
+			break;
+		case skip_spaces:
+			/* Do nothing */
+			break;
+		case quoted_string:
+		default:
+			msg_err_protocol ("bad state when parsing rcpt address: '%*s'",
+					(int)(end - start_addr), start_addr);
+			task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
+		}
+	}
+}
+
 #define IF_HEADER(name) \
 	srch.begin = (name); \
 	srch.len = sizeof (name) - 1; \
@@ -237,7 +348,6 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	rspamd_ftok_t *hn_tok, *hv_tok, srch;
 	gboolean fl, has_ip = FALSE;
 	struct rspamd_http_header *header, *h, *htmp;
-	struct rspamd_email_address *addr;
 
 	HASH_ITER (hh, msg->headers, header, htmp) {
 		DL_FOREACH (header, h) {
@@ -318,39 +428,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			case 'r':
 			case 'R':
 				IF_HEADER (RCPT_HEADER) {
-					const gchar *p, *end;
-					gsize cur_len;
-
-					p = hv->str;
-					end = p + hv->len;
-
-					while (p < end) {
-						cur_len = rspamd_memcspn (p, ",", end - p);
-
-						if (cur_len > 0) {
-							addr = rspamd_email_address_from_smtp (p, cur_len);
-
-							if (addr) {
-								if (task->rcpt_envelope == NULL) {
-									task->rcpt_envelope = g_ptr_array_sized_new (
-											2);
-								}
-
-								g_ptr_array_add (task->rcpt_envelope, addr);
-							} else {
-								msg_err_protocol ("bad rcpt header: '%T'",
-										&h->value);
-								task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
-							}
-
-							p += cur_len;
-						}
-
-						while (p < end && *p == ',') {
-							p ++;
-						}
-					}
-
+					rspamd_protocol_process_recipients (task, hv_tok);
 					msg_debug_protocol ("read rcpt header, value: %V", hv);
 				}
 				IF_HEADER (RAW_DATA_HEADER) {
