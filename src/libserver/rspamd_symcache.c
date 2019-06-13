@@ -301,7 +301,8 @@ rspamd_symcache_get_dynamic (struct cache_savepoint *checkpoint,
 
 static inline struct rspamd_symcache_item *
 rspamd_symcache_find_filter (struct rspamd_symcache *cache,
-							 const gchar *name)
+							 const gchar *name,
+							 bool resolve_parent)
 {
 	struct rspamd_symcache_item *item;
 
@@ -315,7 +316,7 @@ rspamd_symcache_find_filter (struct rspamd_symcache *cache,
 
 	if (item != NULL) {
 
-		if (item->is_virtual) {
+		if (resolve_parent && item->is_virtual) {
 			item = g_ptr_array_index (cache->items_by_id,
 					item->specific.virtual.parent);
 		}
@@ -541,7 +542,7 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 	while (cur) {
 		ddep = cur->data;
 
-		it = rspamd_symcache_find_filter (cache, ddep->from);
+		it = rspamd_symcache_find_filter (cache, ddep->from, true);
 
 		if (it == NULL) {
 			msg_err_cache ("cannot register delayed dependency between %s and %s, "
@@ -560,7 +561,7 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 	while (cur) {
 		dcond = cur->data;
 
-		it = rspamd_symcache_find_filter (cache, dcond->sym);
+		it = rspamd_symcache_find_filter (cache, dcond->sym, true);
 
 		if (it == NULL) {
 			msg_err_cache (
@@ -578,7 +579,7 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 	PTR_ARRAY_FOREACH (cache->items_by_id, i, it) {
 
 		PTR_ARRAY_FOREACH (it->deps, j, dep) {
-			dit = rspamd_symcache_find_filter (cache, dep->sym);
+			dit = rspamd_symcache_find_filter (cache, dep->sym, true);
 
 			if (dit != NULL) {
 				if (!dit->is_filter) {
@@ -1393,6 +1394,63 @@ rspamd_symcache_metric_limit (struct rspamd_task *task,
 	return FALSE;
 }
 
+static inline gboolean
+rspamd_symcache_check_id_list (const struct rspamd_symcache_id_list *ls, guint32 id)
+{
+	guint i;
+
+	if (ls->dyn.e == -1) {
+		guint *res = bsearch (&id, ls->dyn.n, ls->dyn.dynlen, sizeof (guint32),
+				rspamd_id_cmp);
+
+		if (res) {
+			return TRUE;
+		}
+	}
+	else {
+		for (i = 0; i < G_N_ELEMENTS (ls->st); i ++) {
+			if (ls->st[i] == id) {
+				return TRUE;
+			}
+			else if (ls->st[i] == 0) {
+				return FALSE;
+			}
+		}
+	}
+
+	return FALSE;
+}
+
+static gboolean
+rspamd_symcache_is_item_allowed (struct rspamd_task *task,
+								 struct rspamd_symcache_item *item)
+{
+	if (task->settings_id != 0) {
+		if (item->forbidden_ids.st[0] != 0 &&
+			rspamd_symcache_check_id_list (&item->forbidden_ids,
+					task->settings_id)) {
+			msg_debug_cache_task ("deny execution of %s as it is forbidden for "
+						 "settings id %d",
+						 item->symbol,
+						 task->settings_id);
+			return FALSE;
+		}
+
+		if (item->allowed_ids.st[0] != 0 &&
+				!rspamd_symcache_check_id_list (&item->allowed_ids,
+						task->settings_id)) {
+			msg_debug_cache_task ("deny execution of %s as it is not listed as allowed for "
+								  "settings id %d",
+								  item->symbol,
+								  task->settings_id);
+			return FALSE;
+		}
+	}
+
+	/* Allow all symbols with no settings id */
+	return TRUE;
+}
+
 static gboolean
 rspamd_symcache_check_symbol (struct rspamd_task *task,
 		struct rspamd_symcache *cache,
@@ -1431,9 +1489,11 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 	/* Check has been started */
 	SET_START_BIT (checkpoint, dyn_item);
 
-	if (!item->enabled ||
+	if (!item->enabled || /* Static flag */
+		!rspamd_symcache_is_item_allowed (task, item) || /* Dynamic id */
 		(RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY)) ||
 		(item->type & SYMBOL_TYPE_MIME_ONLY && !RSPAMD_TASK_IS_MIME(task))) {
+		msg_debug_cache_task ("disable execution of symbol %s", item->symbol);
 		check = FALSE;
 	}
 	else if (item->specific.normal.condition_cb != -1) {
@@ -2370,7 +2430,7 @@ rspamd_symcache_disable_symbol_checkpoint (struct rspamd_task *task,
 		checkpoint = task->checkpoint;
 	}
 
-	item = rspamd_symcache_find_filter (cache, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol, true);
 
 	if (item) {
 		dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
@@ -2399,7 +2459,7 @@ rspamd_symcache_enable_symbol_checkpoint (struct rspamd_task *task,
 		checkpoint = task->checkpoint;
 	}
 
-	item = rspamd_symcache_find_filter (cache, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol, true);
 
 	if (item) {
 		dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
@@ -2421,7 +2481,7 @@ rspamd_symcache_get_cbdata (struct rspamd_symcache *cache,
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
 
-	item = rspamd_symcache_find_filter (cache, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol, true);
 
 	if (item) {
 		return item->specific.normal.user_data;
@@ -2449,7 +2509,7 @@ rspamd_symcache_is_checked (struct rspamd_task *task,
 		checkpoint = task->checkpoint;
 	}
 
-	item = rspamd_symcache_find_filter (cache, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol, true);
 
 	if (item) {
 		dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
@@ -2468,7 +2528,7 @@ rspamd_symcache_disable_symbol_perm (struct rspamd_symcache *cache,
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
 
-	item = rspamd_symcache_find_filter (cache, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol, true);
 
 	if (item) {
 		item->enabled = FALSE;
@@ -2484,7 +2544,7 @@ rspamd_symcache_enable_symbol_perm (struct rspamd_symcache *cache,
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
 
-	item = rspamd_symcache_find_filter (cache, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol, true);
 
 	if (item) {
 		item->enabled = TRUE;
@@ -2519,7 +2579,7 @@ rspamd_symcache_is_symbol_enabled (struct rspamd_task *task,
 
 
 	if (checkpoint) {
-		item = rspamd_symcache_find_filter (cache, symbol);
+		item = rspamd_symcache_find_filter (cache, symbol, true);
 
 		if (item) {
 			dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
@@ -2570,7 +2630,7 @@ rspamd_symcache_enable_symbol (struct rspamd_task *task,
 	checkpoint = task->checkpoint;
 
 	if (checkpoint) {
-		item = rspamd_symcache_find_filter (cache, symbol);
+		item = rspamd_symcache_find_filter (cache, symbol, true);
 
 		if (item) {
 			dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
@@ -2606,7 +2666,7 @@ rspamd_symcache_disable_symbol (struct rspamd_task *task,
 	checkpoint = task->checkpoint;
 
 	if (checkpoint) {
-		item = rspamd_symcache_find_filter (cache, symbol);
+		item = rspamd_symcache_find_filter (cache, symbol, true);
 
 		if (item) {
 			dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
@@ -2825,7 +2885,7 @@ rspamd_symcache_add_symbol_flags (struct rspamd_symcache *cache,
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
 
-	item = rspamd_symcache_find_filter (cache, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol, true);
 
 	if (item) {
 		item->type |= flags;
@@ -2846,7 +2906,7 @@ rspamd_symcache_set_symbol_flags (struct rspamd_symcache *cache,
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
 
-	item = rspamd_symcache_find_filter (cache, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol, true);
 
 	if (item) {
 		item->type = flags;
@@ -2866,7 +2926,7 @@ rspamd_symcache_get_symbol_flags (struct rspamd_symcache *cache,
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
 
-	item = rspamd_symcache_find_filter (cache, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol, true);
 
 	if (item) {
 		return item->type;
@@ -2905,7 +2965,7 @@ rspamd_symcache_set_allowed_settings_ids (struct rspamd_symcache *cache,
 {
 	struct rspamd_symcache_item *item;
 
-	item = rspamd_symcache_find_filter (cache, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol, true);
 
 	if (item == NULL) {
 		return false;
@@ -2944,7 +3004,7 @@ rspamd_symcache_set_forbidden_settings_ids (struct rspamd_symcache *cache,
 {
 	struct rspamd_symcache_item *item;
 
-	item = rspamd_symcache_find_filter (cache, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol, true);
 
 	if (item == NULL) {
 		return false;
@@ -2982,7 +3042,7 @@ rspamd_symcache_get_allowed_settings_ids (struct rspamd_symcache *cache,
 {
 	struct rspamd_symcache_item *item;
 
-	item = rspamd_symcache_find_filter (cache, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol, true);
 
 	if (item == NULL) {
 		return NULL;
@@ -3017,7 +3077,7 @@ rspamd_symcache_get_forbidden_settings_ids (struct rspamd_symcache *cache,
 {
 	struct rspamd_symcache_item *item;
 
-	item = rspamd_symcache_find_filter (cache, symbol);
+	item = rspamd_symcache_find_filter (cache, symbol, true);
 
 	if (item == NULL) {
 		return NULL;
