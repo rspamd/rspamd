@@ -423,4 +423,49 @@ void rspamd_symcache_composites_foreach (struct rspamd_task *task,
 										 struct rspamd_symcache *cache,
 										 GHFunc func,
 										 gpointer fd);
+
+/**
+ * Sets allowed settings ids for a symbol
+ * @param cache
+ * @param symbol
+ * @param ids
+ * @param nids
+ */
+bool rspamd_symcache_set_allowed_settings_ids (struct rspamd_symcache *cache,
+											   const gchar *symbol,
+											   const guint32 *ids,
+											   guint nids);
+/**
+ * Sets denied settings ids for a symbol
+ * @param cache
+ * @param symbol
+ * @param ids
+ * @param nids
+ */
+bool rspamd_symcache_set_forbidden_settings_ids (struct rspamd_symcache *cache,
+											  const gchar *symbol,
+											  const guint32 *ids,
+											  guint nids);
+
+/**
+ * Returns allowed ids for a symbol as a constant array
+ * @param cache
+ * @param symbol
+ * @param nids
+ * @return
+ */
+const guint32* rspamd_symcache_get_allowed_settings_ids (struct rspamd_symcache *cache,
+														 const gchar *symbol,
+														 guint *nids);
+/**
+ * Returns denied ids for a symbol as a constant array
+ * @param cache
+ * @param symbol
+ * @param nids
+ * @return
+ */
+const guint32* rspamd_symcache_get_forbidden_settings_ids (struct rspamd_symcache *cache,
+														const gchar *symbol,
+														guint *nids);
+
 #endif

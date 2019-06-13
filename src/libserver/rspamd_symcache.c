@@ -89,7 +89,7 @@ struct rspamd_symcache_id_list {
 	union {
 		guint32 st[4];
 		struct {
-			guint32 e;
+			guint32 e; /* First element */
 			guint32 dynlen;
 			guint *n;
 		} dyn;
@@ -270,6 +270,12 @@ rspamd_symcache_order_unref (gpointer p)
 	struct symcache_order *ord = p;
 
 	REF_RELEASE (ord);
+}
+
+static gint
+rspamd_id_cmp (const void * a, const void * b)
+{
+	return (*(guint32*)a - *(guint32*)b);
 }
 
 static struct symcache_order *
@@ -2888,5 +2894,153 @@ rspamd_symcache_composites_foreach (struct rspamd_task *task,
 			func (item->symbol, item->specific.normal.user_data, fd);
 			SET_FINISH_BIT (task->checkpoint, dyn_item);
 		}
+	}
+}
+
+bool
+rspamd_symcache_set_allowed_settings_ids (struct rspamd_symcache *cache,
+											   const gchar *symbol,
+											   const guint32 *ids,
+											   guint nids)
+{
+	struct rspamd_symcache_item *item;
+
+	item = rspamd_symcache_find_filter (cache, symbol);
+
+	if (item == NULL) {
+		return false;
+	}
+
+	if (nids <= G_N_ELEMENTS (item->allowed_ids.st)) {
+		/* Use static version */
+		memset (&item->allowed_ids, 0, sizeof (item->allowed_ids));
+		for (guint i = 0; i < nids; i++) {
+			item->allowed_ids.st[i] = ids[i];
+		}
+	}
+	else {
+		/* Need to use a separate list */
+		item->allowed_ids.dyn.e = -1; /* Flag */
+		item->allowed_ids.dyn.n = rspamd_mempool_alloc (cache->static_pool,
+				sizeof (guint32) * nids);
+		item->allowed_ids.dyn.dynlen = nids;
+
+		for (guint i = 0; i < nids; i++) {
+			item->allowed_ids.dyn.n[i] = ids[i];
+		}
+
+		/* Keep sorted */
+		qsort (item->allowed_ids.dyn.n, nids, sizeof (guint32), rspamd_id_cmp);
+	}
+
+	return true;
+}
+
+bool
+rspamd_symcache_set_forbidden_settings_ids (struct rspamd_symcache *cache,
+											  const gchar *symbol,
+											  const guint32 *ids,
+											  guint nids)
+{
+	struct rspamd_symcache_item *item;
+
+	item = rspamd_symcache_find_filter (cache, symbol);
+
+	if (item == NULL) {
+		return false;
+	}
+
+	if (nids <= G_N_ELEMENTS (item->forbidden_ids.st)) {
+		/* Use static version */
+		memset (&item->forbidden_ids, 0, sizeof (item->forbidden_ids));
+		for (guint i = 0; i < nids; i++) {
+			item->forbidden_ids.st[i] = ids[i];
+		}
+	}
+	else {
+		/* Need to use a separate list */
+		item->forbidden_ids.dyn.e = -1; /* Flag */
+		item->forbidden_ids.dyn.n = rspamd_mempool_alloc (cache->static_pool,
+				sizeof (guint32) * nids);
+		item->forbidden_ids.dyn.dynlen = nids;
+
+		for (guint i = 0; i < nids; i++) {
+			item->forbidden_ids.dyn.n[i] = ids[i];
+		}
+
+		/* Keep sorted */
+		qsort (item->forbidden_ids.dyn.n, nids, sizeof (guint32), rspamd_id_cmp);
+	}
+
+	return true;
+}
+
+const guint32*
+rspamd_symcache_get_allowed_settings_ids (struct rspamd_symcache *cache,
+										  const gchar *symbol,
+										  guint *nids)
+{
+	struct rspamd_symcache_item *item;
+
+	item = rspamd_symcache_find_filter (cache, symbol);
+
+	if (item == NULL) {
+		return NULL;
+	}
+
+	if (item->allowed_ids.dyn.e == -1) {
+		/* Dynamic list */
+		*nids = item->allowed_ids.dyn.dynlen;
+
+		return item->allowed_ids.dyn.n;
+	}
+	else {
+		guint cnt = 0;
+
+		while (item->allowed_ids.st[cnt] != 0) {
+			cnt ++;
+
+			g_assert (cnt < G_N_ELEMENTS (item->allowed_ids.st));
+		}
+
+
+		*nids = cnt;
+
+		return item->allowed_ids.st;
+	}
+}
+
+const guint32*
+rspamd_symcache_get_forbidden_settings_ids (struct rspamd_symcache *cache,
+											const gchar *symbol,
+											guint *nids)
+{
+	struct rspamd_symcache_item *item;
+
+	item = rspamd_symcache_find_filter (cache, symbol);
+
+	if (item == NULL) {
+		return NULL;
+	}
+
+	if (item->forbidden_ids.dyn.e == -1) {
+		/* Dynamic list */
+		*nids = item->forbidden_ids.dyn.dynlen;
+
+		return item->forbidden_ids.dyn.n;
+	}
+	else {
+		guint cnt = 0;
+
+		while (item->forbidden_ids.st[cnt] != 0) {
+			cnt ++;
+
+			g_assert (cnt < G_N_ELEMENTS (item->allowed_ids.st));
+		}
+
+
+		*nids = cnt;
+
+		return item->forbidden_ids.st;
 	}
 }
