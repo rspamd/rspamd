@@ -313,6 +313,10 @@ rspamd_task_free (struct rspamd_task *task)
 			ucl_object_unref (task->settings);
 		}
 
+		if (task->settings_elt != NULL) {
+			REF_RELEASE (task->settings_elt);
+		}
+
 		if (task->client_addr) {
 			rspamd_inet_address_free (task->client_addr);
 		}

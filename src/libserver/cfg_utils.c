@@ -2334,3 +2334,115 @@ rspamd_actions_sort (struct rspamd_config *cfg)
 {
 	HASH_SORT (cfg->actions, rspamd_actions_cmp);
 }
+
+static void
+rspamd_config_settings_elt_dtor (struct rspamd_config_settings_elt *e)
+{
+	if (e->symbols_enabled) {
+		ucl_object_unref (e->symbols_enabled);
+	}
+	if (e->symbols_disabled) {
+		ucl_object_unref (e->symbols_disabled);
+	}
+}
+
+static inline guint32
+rspamd_config_name_to_id (const gchar *name, gsize namelen)
+{
+	guint64 h;
+
+	h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
+			name, strlen (name), 0x0);
+	/* Take the lower part of hash as LE number */
+	return ((guint32)GUINT64_TO_LE (h));
+}
+
+struct rspamd_config_settings_elt *
+rspamd_config_find_settings_id_ref (struct rspamd_config *cfg,
+									guint32 id)
+{
+	struct rspamd_config_settings_elt *cur;
+
+	DL_FOREACH (cfg->setting_ids, cur) {
+		if (cur->id == id) {
+			REF_RETAIN (cur);
+			return cur;
+		}
+	}
+
+	return NULL;
+}
+
+struct rspamd_config_settings_elt *rspamd_config_find_settings_name_ref (
+		struct rspamd_config *cfg,
+		const gchar *name, gsize namelen)
+{
+	guint32 id;
+
+	id = rspamd_config_name_to_id (name, namelen);
+
+	return rspamd_config_find_settings_id_ref (cfg, id);
+}
+
+void
+rspamd_config_register_settings_id (struct rspamd_config *cfg,
+										 const gchar *name,
+										 ucl_object_t *symbols_enabled,
+										 ucl_object_t *symbols_disabled)
+{
+	struct rspamd_config_settings_elt *elt;
+	guint32 id;
+
+	id = rspamd_config_name_to_id (name, strlen (name));
+	elt = rspamd_config_find_settings_id_ref (cfg, id);
+
+	if (elt) {
+		/* Need to replace */
+		struct rspamd_config_settings_elt *nelt;
+
+		DL_DELETE (cfg->setting_ids, elt);
+
+		nelt = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*nelt));
+
+		nelt->id = id;
+		nelt->name = rspamd_mempool_strdup (cfg->cfg_pool, name);
+
+		if (symbols_enabled) {
+			nelt->symbols_enabled = ucl_object_ref (symbols_enabled);
+		}
+
+		if (symbols_disabled) {
+			nelt->symbols_disabled = ucl_object_ref (symbols_disabled);
+		}
+
+		REF_INIT_RETAIN (nelt, rspamd_config_settings_elt_dtor);
+		msg_info_config ("replace settings id %d (%s)", id, name);
+		DL_APPEND (cfg->setting_ids, nelt);
+
+		/*
+		 * Need to unref old element twice as there are two reference holders:
+		 * 1. Config structure as we call REF_INIT_RETAIN
+		 * 2. rspamd_config_find_settings_id_ref also increases refcount
+		 */
+		REF_RELEASE (elt);
+		REF_RELEASE (elt);
+	}
+	else {
+		elt = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*elt));
+
+		elt->id = id;
+		elt->name = rspamd_mempool_strdup (cfg->cfg_pool, name);
+
+		if (symbols_enabled) {
+			elt->symbols_enabled = ucl_object_ref (symbols_enabled);
+		}
+
+		if (symbols_disabled) {
+			elt->symbols_disabled = ucl_object_ref (symbols_disabled);
+		}
+
+		msg_info_config ("register new settings id %d (%s)", id, name);
+		REF_INIT_RETAIN (elt, rspamd_config_settings_elt_dtor);
+		DL_APPEND (cfg->setting_ids, elt);
+	}
+}

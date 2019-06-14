@@ -206,7 +206,7 @@ struct rspamd_task {
 	gpointer checkpoint;							/**< Opaque checkpoint data							*/
 	ucl_object_t *settings;							/**< Settings applied to task						*/
 	guint32 processed_stages;							/**< bits of stages that are processed			*/
-	guint32 settings_id;							/**< hashed settings id								*/
+	struct rspamd_config_settings_elt *settings_elt;	/**< preprocessed settings id elt				*/
 
 	const gchar *classifier;						/**< Classifier to learn (if needed)				*/
 	struct rspamd_lang_detector *lang_det;			/**< Languages detector								*/

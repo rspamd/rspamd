@@ -4872,8 +4872,8 @@ lua_task_get_settings_id (lua_State *L)
 
 	if (task != NULL) {
 
-		if (task->settings_id) {
-			lua_pushnumber (L, task->settings_id);
+		if (task->settings_elt) {
+			lua_pushnumber (L, task->settings_elt->id);
 		}
 		else {
 			lua_pushnil (L);

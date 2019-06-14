@@ -302,6 +302,15 @@ struct rspamd_config_post_load_script {
 
 struct rspamd_lang_detector;
 
+struct rspamd_config_settings_elt {
+	guint32 id;
+	const gchar *name;
+	ucl_object_t *symbols_enabled;
+	ucl_object_t *symbols_disabled;
+	struct rspamd_config_settings_elt *prev, *next;
+	ref_entry_t ref;
+};
+
 /**
  * Structure that stores all config data
  */
@@ -458,6 +467,7 @@ struct rspamd_config {
 	gchar *zstd_output_dictionary;					/**< path to zstd output dictionary						*/
 	ucl_object_t *neighbours;						/**< other servers in the cluster						*/
 
+	struct rspamd_config_settings_elt *setting_ids;	/**< preprocessed settings ids							*/
 	struct rspamd_lang_detector *lang_det;			/**< language detector									*/
 
 	ref_entry_t ref;								/**< reference counter									*/
@@ -714,6 +724,38 @@ gboolean rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 		const gchar *description,
 		struct rspamd_radix_map_helper **target,
 		GError **err);
+
+/**
+ * Adds new settings id to be preprocessed
+ * @param cfg
+ * @param name
+ * @param symbols_enabled
+ * @param symbols_disabled
+ */
+void rspamd_config_register_settings_id (struct rspamd_config *cfg,
+										 const gchar *name,
+										 ucl_object_t *symbols_enabled,
+										 ucl_object_t *symbols_disabled);
+
+/**
+ * Finds settings id element and obtain reference count (must be unrefed by callee)
+ * @param cfg
+ * @param id
+ * @return
+ */
+struct rspamd_config_settings_elt *rspamd_config_find_settings_id_ref (
+		struct rspamd_config *cfg,
+		guint32 id);
+
+/**
+ * Finds settings id element and obtain reference count (must be unrefed by callee)
+ * @param cfg
+ * @param id
+ * @return
+ */
+struct rspamd_config_settings_elt *rspamd_config_find_settings_name_ref (
+		struct rspamd_config *cfg,
+		const gchar *name, gsize namelen);
 
 /**
  * Returns action object by name

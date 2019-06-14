@@ -483,13 +483,14 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					task->subject = rspamd_mempool_ftokdup (task->task_pool, hv_tok);
 				}
 				IF_HEADER (SETTINGS_ID_HEADER) {
-					guint64 h;
-
 					msg_debug_protocol ("read settings-id header, value: %V", hv);
-					h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
-							hv_tok->begin, hv_tok->len, 0x0);
-					/* Take the lower part of hash as LE number */
-					task->settings_id = (guint32)GUINT64_TO_LE (h);
+					task->settings_elt = rspamd_config_find_settings_name_ref (
+							task->cfg, hv_tok->begin, hv_tok->len);
+
+					if (task->settings_elt == NULL) {
+						msg_warn_protocol ("unknown settings id: %V",
+								hv);
+					}
 				}
 				break;
 			case 'u':
@@ -1702,10 +1703,9 @@ rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 					ls = g_malloc0 (sz);
 
 					/* Handle settings id */
-					sid = task->settings_id;
 
-					if (sid) {
-						ls->settings_id = sid;
+					if (task->settings_elt) {
+						ls->settings_id = task->settings_elt->id;
 					}
 					else {
 						ls->settings_id = 0;

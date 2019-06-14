@@ -1425,24 +1425,26 @@ static gboolean
 rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 								 struct rspamd_symcache_item *item)
 {
-	if (task->settings_id != 0) {
+	if (task->settings_elt != 0) {
+		guint32 id = task->settings_elt->id;
+
 		if (item->forbidden_ids.st[0] != 0 &&
 			rspamd_symcache_check_id_list (&item->forbidden_ids,
-					task->settings_id)) {
+					id)) {
 			msg_debug_cache_task ("deny execution of %s as it is forbidden for "
 						 "settings id %d",
 						 item->symbol,
-						 task->settings_id);
+						 id);
 			return FALSE;
 		}
 
 		if (item->allowed_ids.st[0] != 0 &&
 				!rspamd_symcache_check_id_list (&item->allowed_ids,
-						task->settings_id)) {
+						id)) {
 			msg_debug_cache_task ("deny execution of %s as it is not listed as allowed for "
 								  "settings id %d",
 								  item->symbol,
-								  task->settings_id);
+								  id);
 			return FALSE;
 		}
 	}
