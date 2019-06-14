@@ -18,6 +18,7 @@
 
 #include "config.h"
 #include "ucl.h"
+#include "cfg_file.h"
 #include <lua.h>
 #include <event.h>
 
@@ -26,6 +27,7 @@ struct rspamd_config;
 struct rspamd_symcache;
 struct rspamd_worker;
 struct rspamd_symcache_item;
+struct rspamd_config_settings_elt;
 
 typedef void (*symbol_func_t)(struct rspamd_task *task,
 							  struct rspamd_symcache_item *item,
@@ -467,5 +469,15 @@ const guint32* rspamd_symcache_get_allowed_settings_ids (struct rspamd_symcache 
 const guint32* rspamd_symcache_get_forbidden_settings_ids (struct rspamd_symcache *cache,
 														const gchar *symbol,
 														guint *nids);
+
+
+/**
+ * Processes settings_elt in cache and converts it to a set of
+ * adjustments for forbidden/allowed settings_ids for each symbol
+ * @param cache
+ * @param elt
+ */
+void rspamd_symcache_process_settings_elt (struct rspamd_symcache *cache,
+										   struct rspamd_config_settings_elt *elt);
 
 #endif

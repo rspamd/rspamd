@@ -2416,7 +2416,8 @@ rspamd_config_register_settings_id (struct rspamd_config *cfg,
 		}
 
 		REF_INIT_RETAIN (nelt, rspamd_config_settings_elt_dtor);
-		msg_info_config ("replace settings id %d (%s)", id, name);
+		msg_warn_config ("replace settings id %d (%s)", id, name);
+		rspamd_symcache_process_settings_elt (cfg->cache, elt);
 		DL_APPEND (cfg->setting_ids, nelt);
 
 		/*
@@ -2443,6 +2444,7 @@ rspamd_config_register_settings_id (struct rspamd_config *cfg,
 
 		msg_info_config ("register new settings id %d (%s)", id, name);
 		REF_INIT_RETAIN (elt, rspamd_config_settings_elt_dtor);
+		rspamd_symcache_process_settings_elt (cfg->cache, elt);
 		DL_APPEND (cfg->setting_ids, elt);
 	}
 }

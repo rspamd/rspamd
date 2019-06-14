@@ -90,7 +90,8 @@ struct rspamd_symcache_id_list {
 		guint32 st[4];
 		struct {
 			guint32 e; /* First element */
-			guint32 dynlen;
+			guint16 len;
+			guint16 allocated;
 			guint *n;
 		} dyn;
 	};
@@ -1400,7 +1401,7 @@ rspamd_symcache_check_id_list (const struct rspamd_symcache_id_list *ls, guint32
 	guint i;
 
 	if (ls->dyn.e == -1) {
-		guint *res = bsearch (&id, ls->dyn.n, ls->dyn.dynlen, sizeof (guint32),
+		guint *res = bsearch (&id, ls->dyn.n, ls->dyn.len, sizeof (guint32),
 				rspamd_id_cmp);
 
 		if (res) {
@@ -1438,14 +1439,22 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 			return FALSE;
 		}
 
-		if (item->allowed_ids.st[0] != 0 &&
+		if (!(item->type & SYMBOL_TYPE_EXPLICIT_DISABLE)) {
+			if (item->allowed_ids.st[0] != 0 &&
 				!rspamd_symcache_check_id_list (&item->allowed_ids,
 						id)) {
-			msg_debug_cache_task ("deny execution of %s as it is not listed as allowed for "
-								  "settings id %d",
-								  item->symbol,
-								  id);
-			return FALSE;
+				msg_debug_cache_task ("deny execution of %s as it is not listed "
+									  "as allowed for settings id %d",
+						item->symbol,
+						id);
+				return FALSE;
+			}
+		}
+		else {
+			msg_debug_cache_task ("allow execution of %s for "
+								  "settings id %d as it can be only disabled explicitly",
+					item->symbol,
+					id);
 		}
 	}
 
@@ -2985,7 +2994,8 @@ rspamd_symcache_set_allowed_settings_ids (struct rspamd_symcache *cache,
 		item->allowed_ids.dyn.e = -1; /* Flag */
 		item->allowed_ids.dyn.n = rspamd_mempool_alloc (cache->static_pool,
 				sizeof (guint32) * nids);
-		item->allowed_ids.dyn.dynlen = nids;
+		item->allowed_ids.dyn.len = nids;
+		item->allowed_ids.dyn.allocated = nids;
 
 		for (guint i = 0; i < nids; i++) {
 			item->allowed_ids.dyn.n[i] = ids[i];
@@ -3012,6 +3022,8 @@ rspamd_symcache_set_forbidden_settings_ids (struct rspamd_symcache *cache,
 		return false;
 	}
 
+	g_assert (nids < G_MAXUINT16);
+
 	if (nids <= G_N_ELEMENTS (item->forbidden_ids.st)) {
 		/* Use static version */
 		memset (&item->forbidden_ids, 0, sizeof (item->forbidden_ids));
@@ -3024,7 +3036,8 @@ rspamd_symcache_set_forbidden_settings_ids (struct rspamd_symcache *cache,
 		item->forbidden_ids.dyn.e = -1; /* Flag */
 		item->forbidden_ids.dyn.n = rspamd_mempool_alloc (cache->static_pool,
 				sizeof (guint32) * nids);
-		item->forbidden_ids.dyn.dynlen = nids;
+		item->forbidden_ids.dyn.len = nids;
+		item->forbidden_ids.dyn.allocated = nids;
 
 		for (guint i = 0; i < nids; i++) {
 			item->forbidden_ids.dyn.n[i] = ids[i];
@@ -3043,6 +3056,7 @@ rspamd_symcache_get_allowed_settings_ids (struct rspamd_symcache *cache,
 										  guint *nids)
 {
 	struct rspamd_symcache_item *item;
+	guint cnt = 0;
 
 	item = rspamd_symcache_find_filter (cache, symbol, true);
 
@@ -3052,13 +3066,11 @@ rspamd_symcache_get_allowed_settings_ids (struct rspamd_symcache *cache,
 
 	if (item->allowed_ids.dyn.e == -1) {
 		/* Dynamic list */
-		*nids = item->allowed_ids.dyn.dynlen;
+		*nids = item->allowed_ids.dyn.len;
 
 		return item->allowed_ids.dyn.n;
 	}
 	else {
-		guint cnt = 0;
-
 		while (item->allowed_ids.st[cnt] != 0) {
 			cnt ++;
 
@@ -3078,6 +3090,7 @@ rspamd_symcache_get_forbidden_settings_ids (struct rspamd_symcache *cache,
 											guint *nids)
 {
 	struct rspamd_symcache_item *item;
+	guint cnt = 0;
 
 	item = rspamd_symcache_find_filter (cache, symbol, true);
 
@@ -3087,22 +3100,150 @@ rspamd_symcache_get_forbidden_settings_ids (struct rspamd_symcache *cache,
 
 	if (item->forbidden_ids.dyn.e == -1) {
 		/* Dynamic list */
-		*nids = item->forbidden_ids.dyn.dynlen;
+		*nids = item->allowed_ids.dyn.len;
 
-		return item->forbidden_ids.dyn.n;
+		return item->allowed_ids.dyn.n;
 	}
 	else {
-		guint cnt = 0;
-
 		while (item->forbidden_ids.st[cnt] != 0) {
 			cnt ++;
 
 			g_assert (cnt < G_N_ELEMENTS (item->allowed_ids.st));
 		}
 
-
 		*nids = cnt;
 
 		return item->forbidden_ids.st;
+	}
+}
+
+/* Usable for near-sorted ids list */
+static inline void
+rspamd_ids_insertion_sort (guint *a, guint n)
+{
+	for (guint i = 1; i < n; i++) {
+		guint32 tmp = a[i];
+		guint j = i;
+
+		while (j > 0 && tmp < a[j - 1]) {
+			a[j] = a[j - 1];
+			j --;
+		}
+
+		a[j] = tmp;
+	}
+}
+
+static inline void
+rspamd_symcache_add_id_to_list (rspamd_mempool_t *pool,
+								struct rspamd_symcache_id_list *ls,
+								guint32 id)
+{
+	guint cnt = 0;
+	guint *new_array;
+
+	if (ls->st[0] == -1) {
+		/* Dynamic array */
+		if (ls->dyn.len < ls->dyn.allocated) {
+			/* Trivial, append + qsort */
+			ls->dyn.n[ls->dyn.len++] = id;
+		}
+		else {
+			/* Reallocate */
+			g_assert (ls->dyn.allocated <= G_MAXINT16);
+			ls->dyn.allocated *= 2;
+
+			new_array = rspamd_mempool_alloc (pool, ls->dyn.allocated);
+			memcpy (new_array, ls->dyn.n, ls->dyn.len * sizeof (guint32));
+			ls->dyn.n = new_array;
+			ls->dyn.n[ls->dyn.len++] = id;
+		}
+
+		rspamd_ids_insertion_sort (ls->dyn.n, ls->dyn.len);
+	}
+	else {
+		/* Static part */
+		while (ls->st[cnt] != 0) {
+			cnt ++;
+
+			g_assert (cnt < G_N_ELEMENTS (ls->st));
+		}
+
+
+		if (cnt < G_N_ELEMENTS (ls->st)) {
+			ls->st[cnt] = id;
+		}
+		else {
+			/* Switch to dynamic */
+			new_array = rspamd_mempool_alloc (pool, G_N_ELEMENTS (ls->st) * 2);
+			memcpy (new_array, ls->st,  G_N_ELEMENTS (ls->st) * sizeof (guint32));
+			ls->dyn.n = new_array;
+			ls->dyn.e = -1;
+			ls->dyn.allocated = G_N_ELEMENTS (ls->st) * 2;
+			ls->dyn.len = G_N_ELEMENTS (ls->st);
+
+			/* Recursively jump to dynamic branch that will handle insertion + sorting */
+			rspamd_symcache_add_id_to_list (pool, ls, id);
+		}
+	}
+}
+
+void
+rspamd_symcache_process_settings_elt (struct rspamd_symcache *cache,
+									  struct rspamd_config_settings_elt *elt)
+{
+	guint32 id = elt->id;
+	ucl_object_iter_t iter;
+	struct rspamd_symcache_item *item;
+	const ucl_object_t *cur;
+
+
+	if (elt->symbols_disabled) {
+		/* Process denied symbols */
+		iter = NULL;
+
+		while ((cur = ucl_object_iterate (elt->symbols_disabled, &iter, true)) != NULL) {
+			item = rspamd_symcache_find_filter (cache,
+					ucl_object_tostring (cur), false);
+
+			if (item->is_virtual) {
+				/*
+				 * Virtual symbols are special:
+				 * we ignore them in symcache but prevent them from being
+				 * inserted.
+				 */
+				msg_debug_cache ("skip virtual symbol %s for settings id %d (%s)",
+						ucl_object_tostring (cur), id, elt->name);
+			}
+			else {
+				/* Normal symbol, disable it */
+				rspamd_symcache_add_id_to_list (cache->static_pool,
+						&item->forbidden_ids, id);
+				msg_debug_cache ("deny symbol %s for settings %d (%s)",
+						ucl_object_tostring (cur), id, elt->name);
+			}
+		}
+	}
+	if (elt->symbols_enabled) {
+		iter = NULL;
+
+		while ((cur = ucl_object_iterate (elt->symbols_enabled, &iter, true)) != NULL) {
+			/* Here, we resolve parent and explicitly allow it */
+			item = rspamd_symcache_find_filter (cache,
+					ucl_object_tostring (cur), true);
+
+			if (elt->symbols_disabled &&
+					ucl_object_lookup (elt->symbols_disabled, item->symbol)) {
+				msg_err_cache ("conflict in %s: cannot enable disabled symbol %s, "
+				   "wanted to enable symbol %s",
+						elt->name, item->symbol, ucl_object_tostring (cur));
+			}
+			else {
+				rspamd_symcache_add_id_to_list (cache->static_pool,
+						&item->allowed_ids, id);
+				msg_debug_cache ("allow execution of symbol %s for settings %d (%s)",
+						ucl_object_tostring (cur), id, elt->name);
+			}
+		}
 	}
 }
