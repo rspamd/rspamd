@@ -3327,7 +3327,7 @@ lua_config_get_group_symbols (lua_State *L)
 
 			while (g_hash_table_iter_next (&it, &k, &v)) {
 				lua_pushstring (L, k);
-				lua_rawseti (L, -1, i);
+				lua_rawseti (L, -2, i);
 				i ++;
 			}
 		}

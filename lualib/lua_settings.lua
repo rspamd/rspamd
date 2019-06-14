@@ -22,7 +22,7 @@ limitations under the License.
 
 local exports = {}
 local known_ids = {}
-local on_load_added = false
+local post_init_added = false
 
 local function register_settings_cb()
   for _,set in pairs(known_ids) do
@@ -116,9 +116,9 @@ local function register_settings_id(str, settings)
     }
   end
 
-  if not on_load_added then
-    rspamd_config:add_on_load(register_settings_cb)
-    on_load_added = true
+  if not post_init_added then
+    rspamd_config:add_post_init(register_settings_cb)
+    post_init_added = true
   end
 
   return numeric_id

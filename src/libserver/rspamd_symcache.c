@@ -1431,6 +1431,17 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 	if (!item->enabled ||
 		(RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY)) ||
 		(item->type & SYMBOL_TYPE_MIME_ONLY && !RSPAMD_TASK_IS_MIME(task))) {
+
+		if (!item->enabled) {
+			msg_debug_cache_task ("skipping check of %s as it is permanently disabled",
+					item->symbol);
+		}
+		else {
+			msg_debug_cache_task ("skipping check of %s as it cannot be "
+						 "executed for this task type",
+					item->symbol);
+		}
+
 		return FALSE;
 	}
 
@@ -1449,7 +1460,7 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 		}
 
 		if (!(item->type & SYMBOL_TYPE_EXPLICIT_DISABLE)) {
-			if (item->allowed_ids.st[0] != 0 &&
+			if (item->allowed_ids.st[0] == 0 ||
 				!rspamd_symcache_check_id_list (&item->allowed_ids,
 						id)) {
 				msg_debug_cache_task ("deny execution of %s as it is not listed "
@@ -1515,7 +1526,6 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 	SET_START_BIT (checkpoint, dyn_item);
 
 	if (!rspamd_symcache_is_item_allowed (task, item)) {
-		msg_debug_cache_task ("disable execution of symbol %s", item->symbol);
 		check = FALSE;
 	}
 	else if (item->specific.normal.condition_cb != -1) {
@@ -1534,6 +1544,11 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 		else {
 			check = lua_toboolean (L, -1);
 			lua_pop (L, 1);
+		}
+
+		if (!check) {
+			msg_debug_cache_task ("skipping check of %s as its start condition is false",
+					item->symbol);
 		}
 	}
 
@@ -1570,8 +1585,6 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 		return FALSE;
 	}
 	else {
-		msg_debug_cache_task ("skipping check of %s as its start condition is false",
-				item->symbol);
 		SET_FINISH_BIT (checkpoint, dyn_item);
 	}
 
@@ -3179,10 +3192,7 @@ rspamd_symcache_add_id_to_list (rspamd_mempool_t *pool,
 		/* Static part */
 		while (ls->st[cnt] != 0) {
 			cnt ++;
-
-			g_assert (cnt < G_N_ELEMENTS (ls->st));
 		}
-
 
 		if (cnt < G_N_ELEMENTS (ls->st)) {
 			ls->st[cnt] = id;
