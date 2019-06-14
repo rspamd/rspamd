@@ -730,8 +730,8 @@ gboolean rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
  * Adds new settings id to be preprocessed
  * @param cfg
  * @param name
- * @param symbols_enabled
- * @param symbols_disabled
+ * @param symbols_enabled (ownership is transferred to callee)
+ * @param symbols_disabled (ownership is transferred to callee)
  */
 void rspamd_config_register_settings_id (struct rspamd_config *cfg,
 										 const gchar *name,
@@ -739,7 +739,7 @@ void rspamd_config_register_settings_id (struct rspamd_config *cfg,
 										 ucl_object_t *symbols_disabled);
 
 /**
- * Finds settings id element and obtain reference count (must be unrefed by callee)
+ * Finds settings id element and obtain reference count (must be unrefed by caller)
  * @param cfg
  * @param id
  * @return

@@ -454,6 +454,16 @@ LUA_FUNCTION_DEF (config, get_symbol_parent);
 LUA_FUNCTION_DEF (config, get_group_symbols);
 
 /***
+ * @method rspamd_config:register_settings_id(name, symbols_enabled, symbols_disabled)
+ * Register new static settings id in config
+ * @param {string} name id name (not numeric!)
+ * @param {map|string->string} symbols_enabled map from symbol's name to boolean (currently)
+ * @param {map|string->string} symbols_disabled map from symbol's name to boolean (currently)
+ * @available 2.0+
+ */
+LUA_FUNCTION_DEF (config, register_settings_id);
+
+/***
  * @method rspamd_config:__newindex(name, callback)
  * This metamethod is called if new indicies are added to the `rspamd_config` object.
  * Technically, it is the equivalent of @see rspamd_config:register_symbol where `weight` is 1.0.
@@ -796,6 +806,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, register_callback_symbol),
 	LUA_INTERFACE_DEF (config, register_callback_symbol_priority),
 	LUA_INTERFACE_DEF (config, register_dependency),
+	LUA_INTERFACE_DEF (config, register_settings_id),
 	LUA_INTERFACE_DEF (config, get_symbol_flags),
 	LUA_INTERFACE_DEF (config, add_symbol_flags),
 	LUA_INTERFACE_DEF (config, set_metric_symbol),
@@ -3311,6 +3322,43 @@ lua_config_register_finish_script (lua_State *L)
 		lua_pushvalue (L, 2);
 		sc->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 		DL_APPEND (cfg->finish_callbacks, sc);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
+
+static gint
+lua_config_register_settings_id (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *settings_name = luaL_checkstring (L, 2);
+
+	if (cfg != NULL && settings_name) {
+		ucl_object_t *sym_enabled, *sym_disabled;
+
+		sym_enabled = ucl_object_lua_import (L, 3);
+
+		if (sym_enabled == NULL || ucl_object_type (sym_enabled) != UCL_ARRAY) {
+			ucl_object_unref (sym_enabled);
+
+			return luaL_error (L, "invalid symbols enabled");
+		}
+
+		sym_disabled = ucl_object_lua_import (L, 3);
+
+		if (sym_disabled == NULL || ucl_object_type (sym_disabled) != UCL_ARRAY) {
+			ucl_object_unref (sym_enabled);
+			ucl_object_unref (sym_disabled);
+
+			return luaL_error (L, "invalid symbols enabled");
+		}
+
+		rspamd_config_register_settings_id (cfg, settings_name, sym_enabled,
+				sym_disabled);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
