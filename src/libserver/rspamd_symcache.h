@@ -51,7 +51,8 @@ enum rspamd_symbol_type {
 	SYMBOL_TYPE_MIME_ONLY = (1u << 15u), /* Symbol is mime only */
 	SYMBOL_TYPE_EXPLICIT_DISABLE = (1u << 16u), /* Symbol should be disabled explicitly only */
 	SYMBOL_TYPE_IGNORE_PASSTHROUGH = (1u << 17u), /* Symbol ignores passthrough result */
-	SYMBOL_TYPE_USE_CORO = (1u << 18u), /* Symbol uses lua coroutines */
+	SYMBOL_TYPE_EXPLICIT_ENABLE = (1u << 18u), /* Symbol should be enabled explicitly only */
+	SYMBOL_TYPE_USE_CORO = (1u << 19u), /* Symbol uses lua coroutines */
 };
 
 /**
@@ -479,5 +480,14 @@ const guint32* rspamd_symcache_get_forbidden_settings_ids (struct rspamd_symcach
  */
 void rspamd_symcache_process_settings_elt (struct rspamd_symcache *cache,
 										   struct rspamd_config_settings_elt *elt);
+
+/**
+ * Check if a symbol is allowed for execution/insertion
+ * @param task
+ * @param item
+ * @return
+ */
+gboolean rspamd_symcache_is_item_allowed (struct rspamd_task *task,
+										  struct rspamd_symcache_item *item);
 
 #endif

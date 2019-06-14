@@ -1423,10 +1423,18 @@ rspamd_symcache_check_id_list (const struct rspamd_symcache_id_list *ls, guint32
 	return FALSE;
 }
 
-static gboolean
+gboolean
 rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 								 struct rspamd_symcache_item *item)
 {
+	/* Static checks */
+	if (!item->enabled ||
+		(RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY)) ||
+		(item->type & SYMBOL_TYPE_MIME_ONLY && !RSPAMD_TASK_IS_MIME(task))) {
+		return FALSE;
+	}
+
+	/* Settings checks */
 	if (task->settings_elt != 0) {
 		guint32 id = task->settings_elt->id;
 
@@ -1457,6 +1465,11 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 					item->symbol,
 					id);
 		}
+	}
+	else if (item->type & SYMBOL_TYPE_EXPLICIT_ENABLE) {
+		msg_debug_cache_task ("deny execution of %s as it must be explicitly enabled",
+				item->symbol);
+		return FALSE;
 	}
 
 	/* Allow all symbols with no settings id */
@@ -1501,10 +1514,7 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 	/* Check has been started */
 	SET_START_BIT (checkpoint, dyn_item);
 
-	if (!item->enabled || /* Static flag */
-		!rspamd_symcache_is_item_allowed (task, item) || /* Dynamic id */
-		(RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY)) ||
-		(item->type & SYMBOL_TYPE_MIME_ONLY && !RSPAMD_TASK_IS_MIME(task))) {
+	if (!rspamd_symcache_is_item_allowed (task, item)) {
 		msg_debug_cache_task ("disable execution of symbol %s", item->symbol);
 		check = FALSE;
 	}

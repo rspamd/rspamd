@@ -1607,6 +1607,9 @@ lua_parse_symbol_flags (const gchar *str)
 		if (strstr (str, "explicit_disable") != NULL) {
 			ret |= SYMBOL_TYPE_EXPLICIT_DISABLE;
 		}
+		if (strstr (str, "explicit_enable") != NULL) {
+			ret |= SYMBOL_TYPE_EXPLICIT_ENABLE;
+		}
 		if (strstr (str, "coro") != NULL) {
 			ret |= SYMBOL_TYPE_USE_CORO;
 		}
@@ -1684,6 +1687,11 @@ lua_push_symbol_flags (lua_State *L, guint flags)
 
 	if (flags & SYMBOL_TYPE_EXPLICIT_DISABLE) {
 		lua_pushstring (L, "explicit_disable");
+		lua_rawseti (L, -2, i++);
+	}
+
+	if (flags & SYMBOL_TYPE_EXPLICIT_ENABLE) {
+		lua_pushstring (L, "explicit_enable");
 		lua_rawseti (L, -2, i++);
 	}
 
