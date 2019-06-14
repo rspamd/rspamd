@@ -41,9 +41,13 @@ local max_pri = 0
 
 local selectors_cache = {} -- Used to speed up selectors in settings
 
-local function apply_settings(task, to_apply)
+local function apply_settings(task, to_apply, id)
   task:set_settings(to_apply)
   task:cache_set('settings', to_apply)
+
+  if id then
+    task:set_settings_id(id)
+  end
 
   if to_apply['add_headers'] or to_apply['remove_headers'] then
     local rep = {
@@ -100,7 +104,7 @@ local function check_query_settings(task)
     local res,err = parser:parse_string(tostring(query_set))
     if res then
       local settings_obj = parser:get_object()
-      apply_settings(task, settings_obj)
+      apply_settings(task, settings_obj, nil)
 
       return true
     else
@@ -135,7 +139,7 @@ local function check_query_settings(task)
 
       if not settings_id then
         rspamd_logger.infox(task, 'apply maxscore = %s', nset.actions)
-        apply_settings(task, nset)
+        apply_settings(task, nset, nil)
         return true
       end
     end
@@ -154,7 +158,7 @@ local function check_query_settings(task)
         if nset then
           elt.apply = lua_util.override_defaults(nset, elt.apply)
         end
-        apply_settings(task, elt['apply'])
+        apply_settings(task, elt['apply'], settings_id)
         rspamd_logger.infox(task, "applying settings id %s", settings_id)
         return true
       end
@@ -162,14 +166,14 @@ local function check_query_settings(task)
       rspamd_logger.warnx(task, 'no settings id "%s" has been found', settings_id)
       if nset then
         rspamd_logger.infox(task, 'apply maxscore = %s', nset.actions)
-        apply_settings(task, nset)
+        apply_settings(task, nset, nil)
         return true
       end
     end
   else
     if nset then
       rspamd_logger.infox(task, 'apply maxscore = %s', nset.actions)
-      apply_settings(task, nset)
+      apply_settings(task, nset, nil)
       return true
     end
   end
@@ -448,7 +452,7 @@ local function check_settings(task)
           rspamd_logger.infox(task, "<%s> apply settings according to rule %s (%s matched)",
             task:get_message_id(), s.name, table.concat(matched, ','))
           if s.rule['apply'] then
-            apply_settings(task, s.rule['apply'])
+            apply_settings(task, s.rule.apply, s.rule.id)
             applied = true
           end
           if s.rule['symbols'] then
@@ -465,7 +469,7 @@ local function check_settings(task)
 end
 
 -- Process settings based on their priority
-local function process_settings_table(tbl)
+local function process_settings_table(tbl, allow_ids)
   local get_priority = function(elt)
     local pri_tonum = function(p)
       if p then
@@ -742,9 +746,7 @@ local function process_settings_table(tbl)
           name, elt.symbols)
       out['symbols'] = elt['symbols']
     end
-    if not elt.id then
-      elt.id = name
-    end
+
 
     if elt['apply'] then
       -- Just insert all metric results to the action key
@@ -756,10 +758,20 @@ local function process_settings_table(tbl)
       return nil
     end
 
-    if elt['id'] then
-      out.id = lua_settings.register_settings_id(elt.id, out)
-      lua_util.debugm(N, rspamd_config, 'added settings id to "%s": %s -> %s',
-          name, elt.id, out.id)
+    if allow_ids then
+      if not elt.id then
+        elt.id = name
+      end
+
+      if elt['id'] then
+        out.id = lua_settings.register_settings_id(elt.id, out)
+        lua_util.debugm(N, rspamd_config, 'added settings id to "%s": %s -> %s',
+            name, elt.id, out.id)
+      end
+    else
+      if elt['id'] then
+        rspamd_logger.errx(rspamd_config, 'cannot set static IDs from dynamic settings, please read the docs')
+      end
     end
 
     return out
@@ -778,7 +790,6 @@ local function process_settings_table(tbl)
   -- clear all settings
   max_pri = 0
   local nrules = 0
-  lua_settings.reset_ids()
   for k in pairs(settings) do settings[k]={} end
   -- fill new settings by priority
   fun.for_each(function(k, v)
@@ -813,9 +824,9 @@ local function process_settings_map(string)
   else
     local obj = parser:get_object()
     if obj['settings'] then
-      process_settings_table(obj['settings'])
+      process_settings_table(obj['settings'], false)
     else
-      process_settings_table(obj)
+      process_settings_table(obj, false)
     end
   end
 
@@ -839,7 +850,7 @@ local function gen_redis_callback(handler, id)
               local obj = parser:get_object()
               rspamd_logger.infox(task, "<%1> apply settings according to redis rule %2",
                 task:get_message_id(), id)
-              apply_settings(task, obj)
+              apply_settings(task, obj, nil)
               break
             end
           end
@@ -921,7 +932,7 @@ if set_section and set_section[1] and type(set_section[1]) == "string" then
     rspamd_logger.errx(rspamd_config, 'cannot load settings from %1', set_section)
   end
 elseif set_section and type(set_section) == "table" then
-  process_settings_table(set_section)
+  process_settings_table(set_section, true)
 end
 
 rspamd_config:register_symbol({

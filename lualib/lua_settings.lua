@@ -22,6 +22,59 @@ limitations under the License.
 
 local exports = {}
 local known_ids = {}
+local on_load_added = false
+
+local function register_settings_cb()
+  for _,set in pairs(known_ids) do
+    local s = set.settings
+    local enabled_symbols = {}
+    local disabled_symbols = {}
+
+    -- Enabled map
+    if s.symbols_enabled then
+      for _,sym in ipairs(s.symbols_enabled) do
+        enabled_symbols[sym] = true
+      end
+    end
+    if s.groups_enabled then
+      for _,gr in ipairs(s.groups_enabled) do
+        local syms = rspamd_config:get_group_symbols()
+
+        if syms then
+          for _,sym in ipairs(syms) do
+            enabled_symbols[sym] = true
+          end
+        end
+      end
+    end
+
+    -- Disabled map
+    if s.symbols_disabled then
+      for _,sym in ipairs(s.symbols_disabled) do
+        disabled_symbols[sym] = true
+      end
+    end
+    if s.groups_disabled then
+      for _,gr in ipairs(s.groups_disabled) do
+        local syms = rspamd_config:get_group_symbols()
+
+        if syms then
+          for _,sym in ipairs(syms) do
+            disabled_symbols[sym] = true
+          end
+        end
+      end
+    end
+
+    rspamd_config:register_settings_id(set.name, enabled_symbols, disabled_symbols)
+
+    -- Remove to avoid clash
+    s.symbols_disabled = nil
+    s.symbols_enabled = nil
+    s.groups_enabled = nil
+    s.groups_disabled = nil
+  end
+end
 
 -- Returns numeric representation of the settings id
 local function numeric_settings_id(str)
@@ -53,16 +106,16 @@ local function register_settings_id(str, settings)
     }
   end
 
+  if not on_load_added then
+    rspamd_config:add_on_load(register_settings_cb)
+    on_load_added = true
+  end
+
   return numeric_id
 end
 
 exports.register_settings_id = register_settings_id
 
-local function reset_ids()
-  known_ids = {}
-end
-
-exports.reset_ids = reset_ids
 
 local function settings_by_id(id)
   return known_ids[id]
