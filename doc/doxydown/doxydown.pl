@@ -172,6 +172,10 @@ EOD
         print "No return\n";
     }
 
+    if ( $f->{'available'} ) {
+      printf "\n**Available in:** %s\n", $f->{'available'};
+    }
+
     if ( $f->{'example'} ) {
         print <<EOD;
 
@@ -356,6 +360,8 @@ sub parse_function {
             push @{ $f->{'returns'} }, $r;
         } elsif ( /^\s*\@brief\s*(\S.+)$/ ) {
             $f->{'brief'} = $1;
+        } elsif ( /^\s*\@available\s*(\S.+)$/ ) {
+            $f->{'available'} = $1;
         }
         elsif ( /^\s*\@example\s*(\S)?\s*$/ ) {
             $example = 1;
@@ -380,6 +386,10 @@ sub parse_function {
 
     if ( $f->{'example'} ) {
         chomp $f->{'example'};
+    }
+
+    if ( $f->{'available'} ) {
+        chomp $f->{'available'}
     }
 
     if ( !$f->{'brief'} && $f->{'data'} ) {
