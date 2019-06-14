@@ -132,6 +132,8 @@ struct rspamd_symcache_item {
 	gint frequency_peaks;
 	/* Settings ids */
 	struct rspamd_symcache_id_list allowed_ids;
+	/* Allows execution but not symbols insertion */
+	struct rspamd_symcache_id_list exec_only_ids;
 	struct rspamd_symcache_id_list forbidden_ids;
 
 	/* Dependencies */
@@ -1425,8 +1427,11 @@ rspamd_symcache_check_id_list (const struct rspamd_symcache_id_list *ls, guint32
 
 gboolean
 rspamd_symcache_is_item_allowed (struct rspamd_task *task,
-								 struct rspamd_symcache_item *item)
+								 struct rspamd_symcache_item *item,
+								 gboolean exec_only)
 {
+	const gchar *what = "execution";
+
 	/* Static checks */
 	if (!item->enabled ||
 		(RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY)) ||
@@ -1445,6 +1450,10 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 		return FALSE;
 	}
 
+	if (!exec_only) {
+		what = "symbol insertion";
+	}
+
 	/* Settings checks */
 	if (task->settings_elt != 0) {
 		guint32 id = task->settings_elt->id;
@@ -1452,8 +1461,9 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 		if (item->forbidden_ids.st[0] != 0 &&
 			rspamd_symcache_check_id_list (&item->forbidden_ids,
 					id)) {
-			msg_debug_cache_task ("deny execution of %s as it is forbidden for "
+			msg_debug_cache_task ("deny %s of %s as it is forbidden for "
 						 "settings id %ud",
+						 what,
 						 item->symbol,
 						 id);
 			return FALSE;
@@ -1463,22 +1473,35 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 			if (item->allowed_ids.st[0] == 0 ||
 				!rspamd_symcache_check_id_list (&item->allowed_ids,
 						id)) {
-				msg_debug_cache_task ("deny execution of %s as it is not listed "
+
+				if (exec_only) {
+					/*
+					 * Special case if any of our virtual children are enabled
+					 */
+					if (rspamd_symcache_check_id_list (&item->exec_only_ids, id)) {
+						return TRUE;
+					}
+				}
+
+				msg_debug_cache_task ("deny %s of %s as it is not listed "
 									  "as allowed for settings id %ud",
+						what,
 						item->symbol,
 						id);
 				return FALSE;
 			}
 		}
 		else {
-			msg_debug_cache_task ("allow execution of %s for "
+			msg_debug_cache_task ("allow %s of %s for "
 								  "settings id %ud as it can be only disabled explicitly",
+					what,
 					item->symbol,
 					id);
 		}
 	}
 	else if (item->type & SYMBOL_TYPE_EXPLICIT_ENABLE) {
-		msg_debug_cache_task ("deny execution of %s as it must be explicitly enabled",
+		msg_debug_cache_task ("deny %s of %s as it must be explicitly enabled",
+				what,
 				item->symbol);
 		return FALSE;
 	}
@@ -1525,7 +1548,7 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 	/* Check has been started */
 	SET_START_BIT (checkpoint, dyn_item);
 
-	if (!rspamd_symcache_is_item_allowed (task, item)) {
+	if (!rspamd_symcache_is_item_allowed (task, item, TRUE)) {
 		check = FALSE;
 	}
 	else if (item->specific.normal.condition_cb != -1) {
@@ -2612,7 +2635,7 @@ rspamd_symcache_is_symbol_enabled (struct rspamd_task *task,
 
 		if (item) {
 
-			if (!rspamd_symcache_is_item_allowed (task, item)) {
+			if (!rspamd_symcache_is_item_allowed (task, item, TRUE)) {
 				ret = FALSE;
 			}
 			else {
@@ -3218,7 +3241,7 @@ rspamd_symcache_process_settings_elt (struct rspamd_symcache *cache,
 {
 	guint32 id = elt->id;
 	ucl_object_iter_t iter;
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_item *item, *parent;
 	const ucl_object_t *cur;
 
 
@@ -3262,21 +3285,32 @@ rspamd_symcache_process_settings_elt (struct rspamd_symcache *cache,
 		while ((cur = ucl_object_iterate (elt->symbols_enabled, &iter, true)) != NULL) {
 			/* Here, we resolve parent and explicitly allow it */
 			const gchar *sym = ucl_object_key (cur);
-			item = rspamd_symcache_find_filter (cache, sym, true);
+			item = rspamd_symcache_find_filter (cache, sym, false);
 
 			if (item) {
-				if (elt->symbols_disabled &&
-					ucl_object_lookup (elt->symbols_disabled, item->symbol)) {
-					msg_err_cache ("conflict in %s: cannot enable disabled symbol %s, "
-								   "wanted to enable symbol %s",
-							elt->name, item->symbol, sym);
+				if (item->is_virtual) {
+					parent = rspamd_symcache_find_filter (cache, sym, true);
+
+					if (parent) {
+						if (elt->symbols_disabled &&
+							ucl_object_lookup (elt->symbols_disabled, parent->symbol)) {
+							msg_err_cache ("conflict in %s: cannot enable disabled symbol %s, "
+										   "wanted to enable symbol %s",
+									elt->name, parent->symbol, sym);
+							continue;
+						}
+
+						rspamd_symcache_add_id_to_list (cache->static_pool,
+								&parent->exec_only_ids, id);
+						msg_debug_cache ("allow just execution of symbol %s for settings %ud (%s)",
+								parent->symbol, id, elt->name);
+					}
 				}
-				else {
-					rspamd_symcache_add_id_to_list (cache->static_pool,
-							&item->allowed_ids, id);
-					msg_debug_cache ("allow execution of symbol %s for settings %ud (%s)",
-							sym, id, elt->name);
-				}
+
+				rspamd_symcache_add_id_to_list (cache->static_pool,
+						&item->allowed_ids, id);
+				msg_debug_cache ("allow execution of symbol %s for settings %ud (%s)",
+						sym, id, elt->name);
 			}
 			else {
 				msg_warn_cache ("cannot find a symbol to enable %s "

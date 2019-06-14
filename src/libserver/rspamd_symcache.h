@@ -486,9 +486,11 @@ void rspamd_symcache_process_settings_elt (struct rspamd_symcache *cache,
  * condition scripts to be checked (so it is intended to be fast).
  * @param task
  * @param item
+ * @param exec_only
  * @return
  */
 gboolean rspamd_symcache_is_item_allowed (struct rspamd_task *task,
-										  struct rspamd_symcache_item *item);
+										  struct rspamd_symcache_item *item,
+										  gboolean exec_only);
 
 #endif

@@ -210,7 +210,7 @@ insert_metric_result (struct rspamd_task *task,
 	else {
 		if (sdef->cache_item) {
 			/* Check if we can insert this symbol at all */
-			if (!rspamd_symcache_is_item_allowed (task, sdef->cache_item)) {
+			if (!rspamd_symcache_is_item_allowed (task, sdef->cache_item, FALSE)) {
 				return NULL;
 			}
 		}
@@ -441,7 +441,7 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 			flags);
 
 	/* Process cache item */
-	if (task->cfg->cache && s->sym) {
+	if (s && task->cfg->cache && s->sym) {
 		rspamd_symcache_inc_frequency (task->cfg->cache, s->sym->cache_item);
 	}
 
