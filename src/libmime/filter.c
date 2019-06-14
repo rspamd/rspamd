@@ -208,6 +208,13 @@ insert_metric_result (struct rspamd_task *task,
 		}
 	}
 	else {
+		if (sdef->cache_item) {
+			/* Check if we can insert this symbol at all */
+			if (!rspamd_symcache_is_item_allowed (task, sdef->cache_item)) {
+				return NULL;
+			}
+		}
+
 		final_score = (*sdef->weight_ptr) * weight;
 
 		PTR_ARRAY_FOREACH (sdef->groups, i, gr) {
@@ -434,8 +441,8 @@ rspamd_task_insert_result_full (struct rspamd_task *task,
 			flags);
 
 	/* Process cache item */
-	if (task->cfg->cache) {
-		rspamd_symcache_inc_frequency (task->cfg->cache, symbol);
+	if (task->cfg->cache && s->sym) {
+		rspamd_symcache_inc_frequency (task->cfg->cache, s->sym->cache_item);
 	}
 
 	return s;

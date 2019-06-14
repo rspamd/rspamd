@@ -207,7 +207,7 @@ void rspamd_symcache_start_refresh (struct rspamd_symcache *cache,
  * @param symbol
  */
 void rspamd_symcache_inc_frequency (struct rspamd_symcache *cache,
-									const gchar *symbol);
+									struct rspamd_symcache_item *item);
 
 /**
  * Add dependency relation between two symbols identified by id (source) and
@@ -482,7 +482,8 @@ void rspamd_symcache_process_settings_elt (struct rspamd_symcache *cache,
 										   struct rspamd_config_settings_elt *elt);
 
 /**
- * Check if a symbol is allowed for execution/insertion
+ * Check if a symbol is allowed for execution/insertion, this does not involve
+ * condition scripts to be checked (so it is intended to be fast).
  * @param task
  * @param item
  * @return

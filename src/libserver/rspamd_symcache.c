@@ -2281,14 +2281,8 @@ rspamd_symcache_start_refresh (struct rspamd_symcache *cache,
 
 void
 rspamd_symcache_inc_frequency (struct rspamd_symcache *cache,
-							   const gchar *symbol)
+							   struct rspamd_symcache_item *item)
 {
-	struct rspamd_symcache_item *item;
-
-	g_assert (cache != NULL);
-
-	item = g_hash_table_lookup (cache->items_by_symbol, symbol);
-
 	if (item != NULL) {
 		g_atomic_int_inc (&item->st->hits);
 	}
@@ -2604,28 +2598,37 @@ rspamd_symcache_is_symbol_enabled (struct rspamd_task *task,
 		item = rspamd_symcache_find_filter (cache, symbol, true);
 
 		if (item) {
-			dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
-			if (CHECK_START_BIT (checkpoint, dyn_item)) {
+
+			if (!rspamd_symcache_is_item_allowed (task, item)) {
 				ret = FALSE;
 			}
 			else {
-				if (item->specific.normal.condition_cb != -1) {
-					/* We also executes condition callback to check if we need this symbol */
-					L = task->cfg->lua_state;
-					lua_rawgeti (L, LUA_REGISTRYINDEX,
-							item->specific.normal.condition_cb);
-					ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
-					rspamd_lua_setclass (L, "rspamd{task}", -1);
-					*ptask = task;
+				dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
+				if (CHECK_START_BIT (checkpoint, dyn_item)) {
+					ret = FALSE;
+				}
+				else {
+					if (item->specific.normal.condition_cb != -1) {
+						/*
+						 * We also executes condition callback to check
+						 * if we need this symbol
+						 */
+						L = task->cfg->lua_state;
+						lua_rawgeti (L, LUA_REGISTRYINDEX,
+								item->specific.normal.condition_cb);
+						ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+						rspamd_lua_setclass (L, "rspamd{task}", -1);
+						*ptask = task;
 
-					if (lua_pcall (L, 1, 1, 0) != 0) {
-						msg_info_task ("call to condition for %s failed: %s",
-								item->symbol, lua_tostring (L, -1));
-						lua_pop (L, 1);
-					}
-					else {
-						ret = lua_toboolean (L, -1);
-						lua_pop (L, 1);
+						if (lua_pcall (L, 1, 1, 0) != 0) {
+							msg_info_task ("call to condition for %s failed: %s",
+									item->symbol, lua_tostring (L, -1));
+							lua_pop (L, 1);
+						}
+						else {
+							ret = lua_toboolean (L, -1);
+							lua_pop (L, 1);
+						}
 					}
 				}
 			}
