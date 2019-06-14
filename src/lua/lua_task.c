@@ -770,6 +770,15 @@ LUA_FUNCTION_DEF (task, learn);
 LUA_FUNCTION_DEF (task, set_settings);
 
 /***
+ * @method task:set_settings_id(id)
+ * Set users settings id for a task (must be registered previously)
+ * @available 2.0+
+ * @param {number} id numeric id
+ * @return {boolean} true if settings id has been set
+ */
+LUA_FUNCTION_DEF (task, set_settings_id);
+
+/***
  * @method task:get_settings()
  * Gets users settings object for a task. The format of this object is described
  * [here](https://rspamd.com/doc/configuration/settings.html).
@@ -1126,6 +1135,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_settings),
 	LUA_INTERFACE_DEF (task, lookup_settings),
 	LUA_INTERFACE_DEF (task, get_settings_id),
+	LUA_INTERFACE_DEF (task, set_settings_id),
 	LUA_INTERFACE_DEF (task, cache_get),
 	LUA_INTERFACE_DEF (task, cache_set),
 	LUA_INTERFACE_DEF (task, process_regexp),
@@ -4878,6 +4888,38 @@ lua_task_get_settings_id (lua_State *L)
 		else {
 			lua_pushnil (L);
 		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_task_set_settings_id (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	guint32 id = luaL_checknumber (L, 2);
+
+	if (task != NULL && id != 0) {
+
+		if (task->settings_elt) {
+			return luaL_error (L, "settings id has been already set to %d (%s)",
+					task->settings_elt->id, task->settings_elt->name);
+
+		}
+		else {
+			task->settings_elt = rspamd_config_find_settings_id_ref (task->cfg,
+					id);
+
+			if (!task->settings_elt) {
+				return luaL_error (L, "settings id %d is unknown", id);
+			}
+		}
+
+		lua_pushboolean (L, true);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
