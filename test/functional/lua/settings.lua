@@ -19,11 +19,20 @@ rspamd_config:register_symbol({
   end
 })
 
-rspamd_config:register_symbol({
+local id = rspamd_config:register_symbol({
   name = 'SIMPLE_TEST',
   score = 1.0,
   group = 'b',
-  callback = function()
+  callback = function(task)
+    task:insert_result('SIMPLE_VIRTUAL', 1.0)
     return true, 'Fires always'
   end
+})
+
+rspamd_config:register_symbol({
+  name = 'SIMPLE_VIRTUAL',
+  type = 'virtual',
+  score = 1.0,
+  group = 'vg',
+  parent = id,
 })

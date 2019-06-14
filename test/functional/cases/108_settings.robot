@@ -95,6 +95,20 @@ SETTINGS ID - PRE
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_POST
 
+SETTINGS ID - VIRTUAL
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_virtual
+  Check Rspamc  ${result}  SIMPLE_VIRTUAL
+  Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+
+SETTINGS ID - VIRTUAL GROUP
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_virtual_group
+  Check Rspamc  ${result}  SIMPLE_VIRTUAL
+  Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+
 *** Keywords ***
 Settings Setup
   Copy File  ${TESTDIR}/data/bayes.spam.sqlite3  /tmp/bayes.spam.sqlite3
