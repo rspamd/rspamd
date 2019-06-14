@@ -3224,6 +3224,7 @@ rspamd_symcache_process_settings_elt (struct rspamd_symcache *cache,
 			}
 		}
 	}
+
 	if (elt->symbols_enabled) {
 		iter = NULL;
 

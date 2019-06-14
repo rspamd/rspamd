@@ -445,6 +445,15 @@ LUA_FUNCTION_DEF (config, disable_symbol);
 LUA_FUNCTION_DEF (config, get_symbol_parent);
 
 /***
+ * @method rspamd_config:get_group_symbols(group)
+ * Returns list of symbols for a specific group
+ * @param {string} group group's name
+ * @available 2.0+
+ * @return {list|string} list of all symbols in a specific group
+ */
+LUA_FUNCTION_DEF (config, get_group_symbols);
+
+/***
  * @method rspamd_config:__newindex(name, callback)
  * This metamethod is called if new indicies are added to the `rspamd_config` object.
  * Technically, it is the equivalent of @see rspamd_config:register_symbol where `weight` is 1.0.
@@ -821,6 +830,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, set_symbol_callback),
 	LUA_INTERFACE_DEF (config, get_symbol_stat),
 	LUA_INTERFACE_DEF (config, get_symbol_parent),
+	LUA_INTERFACE_DEF (config, get_group_symbols),
 	LUA_INTERFACE_DEF (config, register_finish_script),
 	LUA_INTERFACE_DEF (config, register_monitored),
 	LUA_INTERFACE_DEF (config, add_doc),
@@ -3235,6 +3245,43 @@ lua_config_get_symbol_parent (lua_State *L)
 		}
 		else {
 			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_config_get_group_symbols (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	const gchar *gr_name = luaL_checkstring (L, 2);
+
+	if (cfg != NULL && gr_name != NULL) {
+		struct rspamd_symbols_group *group;
+
+		group = g_hash_table_lookup (cfg->groups, gr_name);
+
+		if (group == NULL) {
+			lua_pushnil (L);
+		}
+		else {
+			guint i = 1;
+			gpointer k, v;
+			GHashTableIter it;
+
+			lua_createtable (L, g_hash_table_size (group->symbols), 0);
+			g_hash_table_iter_init (&it, group->symbols);
+
+			while (g_hash_table_iter_next (&it, &k, &v)) {
+				lua_pushstring (L, k);
+				lua_rawseti (L, -1, i);
+				i ++;
+			}
 		}
 	}
 	else {
