@@ -4,6 +4,9 @@ context("HTML processing", function()
 
   test("Extract text from HTML", function()
     local cases = {
+      -- Entities
+      {[[<html><body>.&#102;&#105;&#114;&#101;&#98;&#97;&#115;&#101;&#97;&#112;&#112;.&#99;&#111;&#109;</body></html>]],
+       [[.firebaseapp.com]]},
       {[[
 <!DOCTYPE html>
 <html lang="en">

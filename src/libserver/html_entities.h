@@ -1722,7 +1722,7 @@ static entity entities_defs[] = {
 		{"die", 168, "\xc2\xa8"},
 		{"ngt", 8815, "\xe2\x89\xaf"},
 		{"vcy", 1074, "\xd0\xb2"},
-		{"fjlig", 102, "\x66\x6a"},
+		{"fjlig", 0, "\x66\x6a"},
 		{"submult", 10945, "\xe2\xab\x81"},
 		{"ubrcy", 1118, "\xd1\x9e"},
 		{"ovbar", 9021, "\xe2\x8c\xbd"},

@@ -222,14 +222,16 @@ rspamd_html_library_init (void)
 				G_N_ELEMENTS (entities_defs));
 
 		for (i = 0; i < G_N_ELEMENTS (entities_defs); i++) {
-			k = kh_put (entity_by_number, html_entity_by_number,
-					entities_defs[i].code, &rc);
-			kh_val (html_entity_by_number, k) = entities_defs[i].replacement;
+			if (entities_defs[i].code != 0) {
+				k = kh_put (entity_by_number, html_entity_by_number,
+						entities_defs[i].code, &rc);
+				kh_val (html_entity_by_number, k) = entities_defs[i].replacement;
+			}
 
 			k = kh_put (entity_by_name, html_entity_by_name,
 					entities_defs[i].name, &rc);
 			kh_val (html_entity_by_name, k) = entities_defs[i].replacement;
-	}
+		}
 
 		html_color_by_name = kh_init (color_by_name);
 		kh_resize (color_by_name, html_color_by_name,
@@ -238,7 +240,7 @@ rspamd_html_library_init (void)
 		rspamd_ftok_t *keys;
 
 		keys = g_malloc0 (sizeof (rspamd_ftok_t) *
-				G_N_ELEMENTS (html_colornames));
+						  G_N_ELEMENTS (html_colornames));
 
 		for (i = 0; i < G_N_ELEMENTS (html_colornames); i ++) {
 			struct html_color c;
