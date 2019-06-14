@@ -3342,15 +3342,15 @@ lua_config_register_settings_id (lua_State *L)
 
 		sym_enabled = ucl_object_lua_import (L, 3);
 
-		if (sym_enabled == NULL || ucl_object_type (sym_enabled) != UCL_ARRAY) {
+		if (sym_enabled != NULL && ucl_object_type (sym_enabled) != UCL_OBJECT) {
 			ucl_object_unref (sym_enabled);
 
 			return luaL_error (L, "invalid symbols enabled");
 		}
 
-		sym_disabled = ucl_object_lua_import (L, 3);
+		sym_disabled = ucl_object_lua_import (L, 4);
 
-		if (sym_disabled == NULL || ucl_object_type (sym_disabled) != UCL_ARRAY) {
+		if (sym_disabled != NULL && ucl_object_type (sym_disabled) != UCL_OBJECT) {
 			ucl_object_unref (sym_enabled);
 			ucl_object_unref (sym_disabled);
 

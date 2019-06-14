@@ -491,6 +491,10 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 						msg_warn_protocol ("unknown settings id: %V",
 								hv);
 					}
+					else {
+						msg_debug_protocol ("applied settings id %V -> %ud", hv,
+								task->settings_elt->id);
+					}
 				}
 				break;
 			case 'u':

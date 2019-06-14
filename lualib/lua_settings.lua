@@ -26,23 +26,27 @@ local on_load_added = false
 
 local function register_settings_cb()
   for _,set in pairs(known_ids) do
-    local s = set.settings
+    local s = set.settings.apply
     local enabled_symbols = {}
+    local seen_enabled = false
     local disabled_symbols = {}
+    local seen_disabled = false
 
     -- Enabled map
     if s.symbols_enabled then
       for _,sym in ipairs(s.symbols_enabled) do
         enabled_symbols[sym] = true
+        seen_enabled = true
       end
     end
     if s.groups_enabled then
       for _,gr in ipairs(s.groups_enabled) do
-        local syms = rspamd_config:get_group_symbols()
+        local syms = rspamd_config:get_group_symbols(gr)
 
         if syms then
           for _,sym in ipairs(syms) do
             enabled_symbols[sym] = true
+            seen_enabled = true
           end
         end
       end
@@ -52,19 +56,25 @@ local function register_settings_cb()
     if s.symbols_disabled then
       for _,sym in ipairs(s.symbols_disabled) do
         disabled_symbols[sym] = true
+        seen_disabled = true
       end
     end
     if s.groups_disabled then
       for _,gr in ipairs(s.groups_disabled) do
-        local syms = rspamd_config:get_group_symbols()
+        local syms = rspamd_config:get_group_symbols(gr)
 
         if syms then
           for _,sym in ipairs(syms) do
             disabled_symbols[sym] = true
+            seen_disabled = true
           end
         end
       end
     end
+
+    -- Deal with complexity to avoid mess in C
+    if not seen_enabled then enabled_symbols = nil end
+    if not seen_disabled then disabled_symbols = nil end
 
     rspamd_config:register_settings_id(set.name, enabled_symbols, disabled_symbols)
 

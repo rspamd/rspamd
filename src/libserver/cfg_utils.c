@@ -246,6 +246,7 @@ void
 rspamd_config_free (struct rspamd_config *cfg)
 {
 	struct rspamd_config_post_load_script *sc, *sctmp;
+	struct rspamd_config_settings_elt *set, *stmp;
 	struct rspamd_worker_log_pipe *lp, *ltmp;
 
 	DL_FOREACH_SAFE (cfg->finish_callbacks, sc, sctmp) {
@@ -256,6 +257,10 @@ rspamd_config_free (struct rspamd_config *cfg)
 	DL_FOREACH_SAFE (cfg->on_load, sc, sctmp) {
 		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
 		g_free (sc);
+	}
+
+	DL_FOREACH_SAFE (cfg->setting_ids, set, stmp) {
+		REF_RELEASE (set);
 	}
 
 	rspamd_map_remove_all (cfg);
@@ -2352,7 +2357,7 @@ rspamd_config_name_to_id (const gchar *name, gsize namelen)
 	guint64 h;
 
 	h = rspamd_cryptobox_fast_hash_specific (RSPAMD_CRYPTOBOX_XXHASH64,
-			name, strlen (name), 0x0);
+			name, namelen, 0x0);
 	/* Take the lower part of hash as LE number */
 	return ((guint32)GUINT64_TO_LE (h));
 }
@@ -2416,7 +2421,7 @@ rspamd_config_register_settings_id (struct rspamd_config *cfg,
 		}
 
 		REF_INIT_RETAIN (nelt, rspamd_config_settings_elt_dtor);
-		msg_warn_config ("replace settings id %d (%s)", id, name);
+		msg_warn_config ("replace settings id %ud (%s)", id, name);
 		rspamd_symcache_process_settings_elt (cfg->cache, elt);
 		DL_APPEND (cfg->setting_ids, nelt);
 
@@ -2442,7 +2447,7 @@ rspamd_config_register_settings_id (struct rspamd_config *cfg,
 			elt->symbols_disabled = ucl_object_ref (symbols_disabled);
 		}
 
-		msg_info_config ("register new settings id %d (%s)", id, name);
+		msg_info_config ("register new settings id %ud (%s)", id, name);
 		REF_INIT_RETAIN (elt, rspamd_config_settings_elt_dtor);
 		rspamd_symcache_process_settings_elt (cfg->cache, elt);
 		DL_APPEND (cfg->setting_ids, elt);

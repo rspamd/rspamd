@@ -449,10 +449,28 @@ local function check_settings(task)
 
         -- Can use xor here but more complicated for reading
         if (result and not s.rule.inverse) or (not result and s.rule.inverse) then
-          rspamd_logger.infox(task, "<%s> apply settings according to rule %s (%s matched)",
-            task:get_message_id(), s.name, table.concat(matched, ','))
           if s.rule['apply'] then
-            apply_settings(task, s.rule.apply, s.rule.id)
+            if s.rule.id then
+              -- Extract static settings
+              local cached = lua_settings.settings_by_id(s.rule.id)
+
+              if not cached then
+                rspamd_logger.errx(task, 'unregistered settings id found: %s!', s.rule.id)
+              else
+                rspamd_logger.infox(task, "<%s> apply static settings %s (id = %s); %s matched",
+                    task:get_message_id(),
+                    cached.name, s.rule.id,
+                    table.concat(matched, ','))
+                apply_settings(task, cached.settings, s.rule.id)
+              end
+
+            else
+              -- Dynamic settings
+              rspamd_logger.infox(task, "<%s> apply settings according to rule %s (%s matched)",
+                  task:get_message_id(), s.name, table.concat(matched, ','))
+              apply_settings(task, s.rule.apply, nil)
+            end
+
             applied = true
           end
           if s.rule['symbols'] then

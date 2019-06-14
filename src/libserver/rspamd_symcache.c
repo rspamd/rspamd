@@ -1442,7 +1442,7 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 			rspamd_symcache_check_id_list (&item->forbidden_ids,
 					id)) {
 			msg_debug_cache_task ("deny execution of %s as it is forbidden for "
-						 "settings id %d",
+						 "settings id %ud",
 						 item->symbol,
 						 id);
 			return FALSE;
@@ -1453,7 +1453,7 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 				!rspamd_symcache_check_id_list (&item->allowed_ids,
 						id)) {
 				msg_debug_cache_task ("deny execution of %s as it is not listed "
-									  "as allowed for settings id %d",
+									  "as allowed for settings id %ud",
 						item->symbol,
 						id);
 				return FALSE;
@@ -1461,7 +1461,7 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 		}
 		else {
 			msg_debug_cache_task ("allow execution of %s for "
-								  "settings id %d as it can be only disabled explicitly",
+								  "settings id %ud as it can be only disabled explicitly",
 					item->symbol,
 					id);
 		}
@@ -3217,24 +3217,31 @@ rspamd_symcache_process_settings_elt (struct rspamd_symcache *cache,
 		iter = NULL;
 
 		while ((cur = ucl_object_iterate (elt->symbols_disabled, &iter, true)) != NULL) {
-			item = rspamd_symcache_find_filter (cache,
-					ucl_object_tostring (cur), false);
+			const gchar *sym = ucl_object_key (cur);
+			item = rspamd_symcache_find_filter (cache, sym, false);
 
-			if (item->is_virtual) {
-				/*
-				 * Virtual symbols are special:
-				 * we ignore them in symcache but prevent them from being
-				 * inserted.
-				 */
-				msg_debug_cache ("skip virtual symbol %s for settings id %d (%s)",
-						ucl_object_tostring (cur), id, elt->name);
+			if (item) {
+				if (item->is_virtual) {
+					/*
+					 * Virtual symbols are special:
+					 * we ignore them in symcache but prevent them from being
+					 * inserted.
+					 */
+					msg_debug_cache ("skip virtual symbol %s for settings id %ud (%s)",
+							sym, id, elt->name);
+				}
+				else {
+					/* Normal symbol, disable it */
+					rspamd_symcache_add_id_to_list (cache->static_pool,
+							&item->forbidden_ids, id);
+					msg_debug_cache ("deny symbol %s for settings %ud (%s)",
+							sym, id, elt->name);
+				}
 			}
 			else {
-				/* Normal symbol, disable it */
-				rspamd_symcache_add_id_to_list (cache->static_pool,
-						&item->forbidden_ids, id);
-				msg_debug_cache ("deny symbol %s for settings %d (%s)",
-						ucl_object_tostring (cur), id, elt->name);
+				msg_warn_cache ("cannot find a symbol to disable %s "
+					"when processing settings %ud (%s)",
+					sym, id, elt->name);
 			}
 		}
 	}
@@ -3244,20 +3251,27 @@ rspamd_symcache_process_settings_elt (struct rspamd_symcache *cache,
 
 		while ((cur = ucl_object_iterate (elt->symbols_enabled, &iter, true)) != NULL) {
 			/* Here, we resolve parent and explicitly allow it */
-			item = rspamd_symcache_find_filter (cache,
-					ucl_object_tostring (cur), true);
+			const gchar *sym = ucl_object_key (cur);
+			item = rspamd_symcache_find_filter (cache, sym, true);
 
-			if (elt->symbols_disabled &&
+			if (item) {
+				if (elt->symbols_disabled &&
 					ucl_object_lookup (elt->symbols_disabled, item->symbol)) {
-				msg_err_cache ("conflict in %s: cannot enable disabled symbol %s, "
-				   "wanted to enable symbol %s",
-						elt->name, item->symbol, ucl_object_tostring (cur));
+					msg_err_cache ("conflict in %s: cannot enable disabled symbol %s, "
+								   "wanted to enable symbol %s",
+							elt->name, item->symbol, sym);
+				}
+				else {
+					rspamd_symcache_add_id_to_list (cache->static_pool,
+							&item->allowed_ids, id);
+					msg_debug_cache ("allow execution of symbol %s for settings %ud (%s)",
+							sym, id, elt->name);
+				}
 			}
 			else {
-				rspamd_symcache_add_id_to_list (cache->static_pool,
-						&item->allowed_ids, id);
-				msg_debug_cache ("allow execution of symbol %s for settings %d (%s)",
-						ucl_object_tostring (cur), id, elt->name);
+				msg_warn_cache ("cannot find a symbol to enable %s "
+								"when processing settings %ud (%s)",
+						sym, id, elt->name);
 			}
 		}
 	}

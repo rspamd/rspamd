@@ -4906,9 +4906,10 @@ lua_task_set_settings_id (lua_State *L)
 	if (task != NULL && id != 0) {
 
 		if (task->settings_elt) {
-			return luaL_error (L, "settings id has been already set to %d (%s)",
-					task->settings_elt->id, task->settings_elt->name);
-
+			if (task->settings_elt->id != id) {
+				return luaL_error (L, "settings id has been already set to %d (%s)",
+						task->settings_elt->id, task->settings_elt->name);
+			}
 		}
 		else {
 			task->settings_elt = rspamd_config_find_settings_id_ref (task->cfg,
