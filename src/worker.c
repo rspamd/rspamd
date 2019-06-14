@@ -92,9 +92,9 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 	struct rspamd_task *task;
 	struct rspamd_config *cfg = worker->srv->cfg;
 	struct rspamd_abstract_worker_ctx *ctx;
-	struct rspamd_config_post_load_script *sc;
+	struct rspamd_config_cfg_lua_script *sc;
 
-	if (cfg->finish_callbacks) {
+	if (cfg->on_term_scripts) {
 		ctx = worker->ctx;
 		/* Create a fake task object for async events */
 		task = rspamd_task_new (worker, cfg, NULL, NULL, ctx->ev_base);
@@ -106,7 +106,7 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 				(event_finalizer_t) rspamd_task_free,
 				task);
 
-		DL_FOREACH (cfg->finish_callbacks, sc) {
+		DL_FOREACH (cfg->on_term_scripts, sc) {
 			lua_call_finish_script (sc, task);
 		}
 

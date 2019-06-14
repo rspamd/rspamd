@@ -245,18 +245,21 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 void
 rspamd_config_free (struct rspamd_config *cfg)
 {
-	struct rspamd_config_post_load_script *sc, *sctmp;
+	struct rspamd_config_cfg_lua_script *sc, *sctmp;
 	struct rspamd_config_settings_elt *set, *stmp;
 	struct rspamd_worker_log_pipe *lp, *ltmp;
 
-	DL_FOREACH_SAFE (cfg->finish_callbacks, sc, sctmp) {
+	/* Scripts part */
+	DL_FOREACH_SAFE (cfg->on_term_scripts, sc, sctmp) {
 		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
-		g_free (sc);
 	}
 
-	DL_FOREACH_SAFE (cfg->on_load, sc, sctmp) {
+	DL_FOREACH_SAFE (cfg->on_load_scripts, sc, sctmp) {
 		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
-		g_free (sc);
+	}
+
+	DL_FOREACH_SAFE (cfg->post_init_scripts, sc, sctmp) {
+		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
 	}
 
 	DL_FOREACH_SAFE (cfg->setting_ids, set, stmp) {
@@ -868,6 +871,10 @@ rspamd_config_post_load (struct rspamd_config *cfg,
 
 	if (opts & RSPAMD_CONFIG_INIT_PRELOAD_MAPS) {
 		rspamd_map_preload (cfg);
+	}
+
+	if (opts & RSPAMD_CONFIG_INIT_POST_LOAD_LUA) {
+		rspamd_lua_run_config_post_init (cfg->lua_state, cfg);
 	}
 
 	return ret;

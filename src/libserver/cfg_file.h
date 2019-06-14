@@ -296,9 +296,14 @@ enum rspamd_action_flags {
 
 struct rspamd_action;
 
-struct rspamd_config_post_load_script {
+struct rspamd_config_cfg_lua_script {
 	gint cbref;
-	struct rspamd_config_post_load_script *prev, *next;
+	struct rspamd_config_cfg_lua_script *prev, *next;
+};
+
+struct rspamd_config_post_init_script {
+	gint cbref;
+	struct rspamd_config_post_init_script *prev, *next;
 };
 
 struct rspamd_lang_detector;
@@ -447,9 +452,7 @@ struct rspamd_config {
 
 	GList *classify_headers;						/**< list of headers using for statistics				*/
 	struct module_s **compiled_modules;				/**< list of compiled C modules							*/
-	struct worker_s **compiled_workers;				/**< list of compiled C modules							*/
-	struct rspamd_config_post_load_script *finish_callbacks; /**< list of callbacks called on worker's termination	*/
-	struct rspamd_log_format *log_format;			/**< parsed log format									*/
+	struct worker_s **compiled_workers;				/**< list of compiled C modules							*/struct rspamd_log_format *log_format;			/**< parsed log format									*/
 	gchar *log_format_str;							/**< raw log format string								*/
 
 	struct rspamd_external_libs_ctx *libs_ctx;		/**< context for external libraries						*/
@@ -460,7 +463,9 @@ struct rspamd_config {
 
 	GHashTable *trusted_keys;						/**< list of trusted public keys						*/
 
-	struct rspamd_config_post_load_script *on_load;	/**< list of scripts executed on config load			*/
+	struct rspamd_config_cfg_lua_script *on_load_scripts;	/**< list of scripts executed on workers load			*/
+	struct rspamd_config_cfg_lua_script *post_init_scripts;	/**< list of scripts executed on workers load			*/
+	struct rspamd_config_cfg_lua_script *on_term_scripts; /**< list of callbacks called on worker's termination	*/
 
 	gchar *ssl_ca_path;								/**< path to CA certs									*/
 	gchar *ssl_ciphers;								/**< set of preferred ciphers							*/
@@ -529,13 +534,15 @@ enum rspamd_post_load_options {
 	RSPAMD_CONFIG_INIT_VALIDATE = 1 << 3,
 	RSPAMD_CONFIG_INIT_NO_TLD = 1 << 4,
 	RSPAMD_CONFIG_INIT_PRELOAD_MAPS = 1 << 5,
+	RSPAMD_CONFIG_INIT_POST_LOAD_LUA = 1 << 6,
 };
 
 #define RSPAMD_CONFIG_LOAD_ALL (RSPAMD_CONFIG_INIT_URL| \
 		RSPAMD_CONFIG_INIT_LIBS| \
 		RSPAMD_CONFIG_INIT_SYMCACHE| \
 		RSPAMD_CONFIG_INIT_VALIDATE| \
-		RSPAMD_CONFIG_INIT_PRELOAD_MAPS)
+		RSPAMD_CONFIG_INIT_PRELOAD_MAPS| \
+		RSPAMD_CONFIG_INIT_POST_LOAD_LUA)
 
 /**
  * Do post load actions for config
