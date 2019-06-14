@@ -1300,6 +1300,7 @@ rspamd_symcache_metric_validate_cb (gpointer k, gpointer v, gpointer ud)
 
 	if (item) {
 		item->st->weight = weight;
+		s->cache_item = item;
 	}
 }
 
