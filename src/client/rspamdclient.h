@@ -18,7 +18,7 @@
 
 #include "config.h"
 #include "ucl.h"
-#include <event.h>
+#include "contrib/libev/ev.h"
 
 struct rspamd_client_connection;
 struct rspamd_http_message;
@@ -58,7 +58,7 @@ struct rspamd_http_context;
  */
 struct rspamd_client_connection * rspamd_client_init (
 		struct rspamd_http_context *http_ctx,
-		struct event_base *ev_base,
+		struct ev_loop *ev_base,
 		const gchar *name,
 		guint16 port,
 		gdouble timeout,

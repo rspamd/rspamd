@@ -113,7 +113,7 @@ static const guint64 rspamd_rspamd_proxy_magic = 0xcdeb4fd1fc351980ULL;
 struct rspamd_proxy_ctx {
 	guint64 magic;
 	/* Events base */
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	/* DNS resolver */
 	struct rspamd_dns_resolver *resolver;
 	/* Config */

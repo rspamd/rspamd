@@ -5,7 +5,7 @@
 #include "tests.h"
 
 struct rspamd_main             *rspamd_main = NULL;
-struct event_base              *base = NULL;
+struct ev_loop              *base = NULL;
 worker_t *workers[] = { NULL };
 
 gchar *lua_test = NULL;

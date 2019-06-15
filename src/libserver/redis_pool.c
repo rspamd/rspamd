@@ -15,12 +15,12 @@
  */
 
 #include "config.h"
-#include <event.h>
+#include "contrib/libev/ev.h"
 #include "redis_pool.h"
 #include "cfg_file.h"
 #include "contrib/hiredis/hiredis.h"
 #include "contrib/hiredis/async.h"
-#include "contrib/hiredis/adapters/libevent.h"
+#include "contrib/hiredis/adapters/libev.h"
 #include "cryptobox.h"
 #include "logger.h"
 
@@ -44,7 +44,7 @@ struct rspamd_redis_pool_elt {
 };
 
 struct rspamd_redis_pool {
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
 	struct rspamd_config *cfg;
 	GHashTable *elts_by_key;
 	GHashTable *elts_by_ctx;
@@ -205,7 +205,7 @@ rspamd_redis_pool_schedule_timeout (struct rspamd_redis_pool_connection *conn)
 			conn->ctx, real_timeout);
 	double_to_tv (real_timeout, &tv);
 	event_set (&conn->timeout, -1, EV_TIMEOUT, rspamd_redis_conn_timeout, conn);
-	event_base_set (conn->elt->pool->ev_base, &conn->timeout);
+	event_base_set (conn->elt->pool->event_loop, &conn->timeout);
 	event_add (&conn->timeout, &tv);
 }
 
@@ -270,7 +270,7 @@ rspamd_redis_pool_new_connection (struct rspamd_redis_pool *pool,
 			REF_INIT_RETAIN (conn, rspamd_redis_pool_conn_dtor);
 			msg_debug_rpool ("created new connection to %s:%d: %p", ip, port, ctx);
 
-			redisLibeventAttach (ctx, pool->ev_base);
+			redisLibevAttach (pool->event_loop, ctx);
 			redisAsyncSetDisconnectCallback (ctx, rspamd_redis_pool_on_disconnect,
 					conn);
 
@@ -317,11 +317,11 @@ rspamd_redis_pool_init (void)
 void
 rspamd_redis_pool_config (struct rspamd_redis_pool *pool,
 		struct rspamd_config *cfg,
-		struct event_base *ev_base)
+		struct ev_loop *ev_base)
 {
 	g_assert (pool != NULL);
 
-	pool->ev_base = ev_base;
+	pool->event_loop = ev_base;
 	pool->cfg = cfg;
 	pool->timeout = default_timeout;
 	pool->max_conns = default_max_conns;
@@ -339,7 +339,7 @@ rspamd_redis_pool_connect (struct rspamd_redis_pool *pool,
 	struct rspamd_redis_pool_connection *conn;
 
 	g_assert (pool != NULL);
-	g_assert (pool->ev_base != NULL);
+	g_assert (pool->event_loop != NULL);
 	g_assert (ip != NULL);
 
 	key = rspamd_redis_pool_get_key (db, password, ip, port);

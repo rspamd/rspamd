@@ -132,7 +132,7 @@ static const guint64 rspamd_fuzzy_storage_magic = 0x291a3253eb1b3ea5ULL;
 struct rspamd_fuzzy_storage_ctx {
 	guint64 magic;
 	/* Events base */
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	/* DNS resolver */
 	struct rspamd_dns_resolver *resolver;
 	/* Config */

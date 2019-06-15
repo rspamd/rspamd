@@ -37,7 +37,7 @@ struct rspamd_client_connection {
 	GString *server_name;
 	struct rspamd_cryptobox_pubkey *key;
 	struct rspamd_cryptobox_keypair *keypair;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct timeval timeout;
 	struct rspamd_http_connection *http_conn;
 	gboolean req_sent;
@@ -240,7 +240,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 
 struct rspamd_client_connection *
 rspamd_client_init (struct rspamd_http_context *http_ctx,
-					struct event_base *ev_base, const gchar *name,
+					struct ev_loop *ev_base, const gchar *name,
 					guint16 port, gdouble timeout, const gchar *key)
 {
 	struct rspamd_client_connection *conn;

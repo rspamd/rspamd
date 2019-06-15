@@ -132,7 +132,7 @@ worker_t controller_worker = {
 struct rspamd_controller_worker_ctx {
 	guint64 magic;
 	/* Events base */
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	/* DNS resolver */
 	struct rspamd_dns_resolver *resolver;
 	/* Config */
@@ -3480,12 +3480,12 @@ static int
 lua_csession_get_ev_base (lua_State *L)
 {
 	struct rspamd_http_connection_entry *c = lua_check_controller_entry (L, 1);
-	struct event_base **pbase;
+	struct ev_loop **pbase;
 	struct rspamd_controller_session *s;
 
 	if (c) {
 		s = c->ud;
-		pbase = lua_newuserdata (L, sizeof (struct event_base *));
+		pbase = lua_newuserdata (L, sizeof (struct ev_loop *));
 		rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
 		*pbase = s->ctx->ev_base;
 	}

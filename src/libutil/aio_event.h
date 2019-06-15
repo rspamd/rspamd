@@ -32,7 +32,7 @@ typedef void (*rspamd_aio_cb) (gint fd, gint res, guint64 len, gpointer data,
 /**
  * Initialize aio with specified event base
  */
-struct aio_context * rspamd_aio_init (struct event_base *base);
+struct aio_context * rspamd_aio_init (struct ev_loop *base);
 
 /**
  * Open file for aio

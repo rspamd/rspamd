@@ -67,7 +67,7 @@ struct lua_http_cbdata {
 	struct rspamd_async_session *session;
 	struct rspamd_symcache_item *item;
 	struct rspamd_http_message *msg;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct rspamd_config *cfg;
 	struct rspamd_task *task;
 	struct timeval tv;
@@ -89,7 +89,7 @@ struct lua_http_cbdata {
 static const int default_http_timeout = 5000;
 
 static struct rspamd_dns_resolver *
-lua_http_global_resolver (struct event_base *ev_base)
+lua_http_global_resolver (struct ev_loop *ev_base)
 {
 	static struct rspamd_dns_resolver *global_resolver;
 
@@ -562,7 +562,7 @@ static gint
 lua_http_request (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct rspamd_http_message *msg;
 	struct lua_http_cbdata *cbd;
 	struct rspamd_dns_resolver *resolver;
@@ -597,7 +597,7 @@ lua_http_request (lua_State *L)
 		cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 
 		if (lua_gettop (L) >= 3 && rspamd_lua_check_udata_maybe (L, 3, "rspamd{ev_base}")) {
-			ev_base = *(struct event_base **)lua_touserdata (L, 3);
+			ev_base = *(struct ev_loop **)lua_touserdata (L, 3);
 		}
 		else {
 			ev_base = NULL;
@@ -643,7 +643,7 @@ lua_http_request (lua_State *L)
 
 		if (lua_type (L, -1) == LUA_TUSERDATA) {
 			task = lua_check_task (L, -1);
-			ev_base = task->ev_base;
+			ev_base = task->event_loop;
 			resolver = task->resolver;
 			session = task->s;
 			cfg = task->cfg;
@@ -654,7 +654,7 @@ lua_http_request (lua_State *L)
 			lua_pushstring (L, "ev_base");
 			lua_gettable (L, 1);
 			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{ev_base}")) {
-				ev_base = *(struct event_base **)lua_touserdata (L, -1);
+				ev_base = *(struct ev_loop **)lua_touserdata (L, -1);
 			}
 			else {
 				ev_base = NULL;

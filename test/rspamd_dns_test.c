@@ -8,7 +8,7 @@
 #include "cfg_file.h"
 
 static guint requests = 0;
-extern struct event_base *base;
+extern struct ev_loop *base;
 struct rspamd_dns_resolver *resolver;
 
 gboolean

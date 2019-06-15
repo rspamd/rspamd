@@ -35,7 +35,7 @@ struct rspamd_worker_signal_handler;
  * @param worker
  * @param base
  */
-void rspamd_worker_init_signals (struct rspamd_worker *worker, struct event_base *base);
+void rspamd_worker_init_signals (struct rspamd_worker *worker, struct ev_loop *base);
 /**
  * Prepare worker's startup
  * @param worker worker structure
@@ -44,7 +44,7 @@ void rspamd_worker_init_signals (struct rspamd_worker *worker, struct event_base
  * @param accept_handler handler of accept event for listen sockets
  * @return event base suitable for a worker
  */
-struct event_base *
+struct ev_loop *
 rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	void (*accept_handler)(int, short, void *));
 
@@ -53,7 +53,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
  */
 void rspamd_worker_set_signal_handler (int signo,
 		struct rspamd_worker *worker,
-		struct event_base *base,
+		struct ev_loop *base,
 		rspamd_worker_signal_handler handler,
 		void *handler_data);
 
@@ -162,7 +162,7 @@ gboolean rspamd_worker_is_primary_controller (struct rspamd_worker *w);
  * @return
  */
 void * rspamd_worker_session_cache_new (struct rspamd_worker *w,
-		struct event_base *ev_base);
+		struct ev_loop *ev_base);
 
 /**
  * Adds a new session identified by pointer
@@ -185,7 +185,7 @@ void rspamd_worker_session_cache_remove (void *cache, void *ptr);
  * Fork new worker with the specified configuration
  */
 struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,
-		struct rspamd_worker_conf *, guint idx, struct event_base *ev_base);
+		struct rspamd_worker_conf *, guint idx, struct ev_loop *ev_base);
 
 /**
  * Sets crash signals handlers if compiled with libunwind
@@ -199,7 +199,7 @@ void rspamd_set_crash_handler (struct rspamd_main *);
  * @param resolver
  */
 void rspamd_worker_init_monitored (struct rspamd_worker *worker,
-		struct event_base *ev_base,
+		struct ev_loop *ev_base,
 		struct rspamd_dns_resolver *resolver);
 
 #define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \

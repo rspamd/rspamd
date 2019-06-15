@@ -92,7 +92,7 @@ struct upstream_list {
 
 struct upstream_ctx {
 	struct rdns_resolver *res;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct upstream_limits limits;
 	GQueue *upstreams;
 	gboolean configured;
@@ -119,7 +119,7 @@ static guint default_dns_retransmits = 2;
 void
 rspamd_upstreams_library_config (struct rspamd_config *cfg,
 								 struct upstream_ctx *ctx,
-								 struct event_base *ev_base,
+								 struct ev_loop *ev_base,
 								 struct rdns_resolver *resolver)
 {
 	g_assert (ctx != NULL);

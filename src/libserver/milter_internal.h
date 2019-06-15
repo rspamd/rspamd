@@ -19,7 +19,7 @@
 
 #include "config.h"
 #include "libutil/mem_pool.h"
-#include <event.h>
+#include "contrib/libev/ev.h"
 #include "khash.h"
 #include "libutil/str_util.h"
 
@@ -63,7 +63,7 @@ struct rspamd_milter_private {
 	struct timeval tv;
 	struct rspamd_milter_outbuf *out_chain;
 	struct timeval *ptv;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	rspamd_mempool_t *pool;
 	khash_t(milter_headers_hash_t) *headers;
 	gint cur_hdr;

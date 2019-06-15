@@ -54,7 +54,7 @@ static const guint64 rspamd_lua_ctx_magic = 0x8055e2652aacf96eULL;
 struct rspamd_lua_worker_ctx {
 	guint64 magic;
 	/* Events base */
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	/* DNS resolver */
 	struct rspamd_dns_resolver *resolver;
 	/* Config */
@@ -117,10 +117,10 @@ static int
 lua_worker_get_ev_base (lua_State *L)
 {
 	struct rspamd_lua_worker_ctx *ctx = lua_check_lua_worker (L);
-	struct event_base **pbase;
+	struct ev_loop **pbase;
 
 	if (ctx) {
-		pbase = lua_newuserdata (L, sizeof (struct event_base *));
+		pbase = lua_newuserdata (L, sizeof (struct ev_loop *));
 		rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
 		*pbase = ctx->ev_base;
 	}

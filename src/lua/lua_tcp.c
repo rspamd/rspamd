@@ -342,7 +342,7 @@ struct lua_tcp_dtor {
 struct lua_tcp_cbdata {
 	struct rspamd_async_session *session;
 	struct rspamd_async_event *async_ev;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct timeval tv;
 	rspamd_inet_addr_t *addr;
 	GByteArray *in;
@@ -384,7 +384,7 @@ lua_tcp_void_finalyser (gpointer arg) {}
 static const int default_tcp_timeout = 5000;
 
 static struct rspamd_dns_resolver *
-lua_tcp_global_resolver (struct event_base *ev_base,
+lua_tcp_global_resolver (struct ev_loop *ev_base,
 		struct rspamd_config *cfg)
 {
 	static struct rspamd_dns_resolver *global_resolver;
@@ -1431,7 +1431,7 @@ lua_tcp_request (lua_State *L)
 	guint port;
 	gint cbref, tp, conn_cbref = -1;
 	gsize plen = 0;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct lua_tcp_cbdata *cbd;
 	struct rspamd_dns_resolver *resolver = NULL;
 	struct rspamd_async_session *session = NULL;
@@ -1478,7 +1478,7 @@ lua_tcp_request (lua_State *L)
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TUSERDATA) {
 			task = lua_check_task (L, -1);
-			ev_base = task->ev_base;
+			ev_base = task->event_loop;
 			resolver = task->resolver;
 			session = task->s;
 			cfg = task->cfg;
@@ -1489,7 +1489,7 @@ lua_tcp_request (lua_State *L)
 			lua_pushstring (L, "ev_base");
 			lua_gettable (L, -2);
 			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{ev_base}")) {
-				ev_base = *(struct event_base **)lua_touserdata (L, -1);
+				ev_base = *(struct ev_loop **)lua_touserdata (L, -1);
 			}
 			else {
 				ev_base = NULL;
@@ -1825,7 +1825,7 @@ lua_tcp_connect_sync (lua_State *L)
 	struct rspamd_async_session *session = NULL;
 	struct rspamd_dns_resolver *resolver = NULL;
 	struct rspamd_config *cfg = NULL;
-	struct event_base *ev_base = NULL;
+	struct ev_loop *ev_base = NULL;
 
 	int arguments_validated = rspamd_lua_parse_table_arguments (L, 1, &err,
 			"task=U{task};session=U{session};resolver=U{resolver};ev_base=U{ev_base};"
@@ -1859,7 +1859,7 @@ lua_tcp_connect_sync (lua_State *L)
 
 	if (task) {
 		cfg = task->cfg;
-		ev_base = task->ev_base;
+		ev_base = task->event_loop;
 		session = task->s;
 	}
 	if (resolver == NULL) {

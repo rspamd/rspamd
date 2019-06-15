@@ -649,8 +649,6 @@ ELSE()
 		ROOT ${PCRE_ROOT_DIR} MODULES pcre libpcre pcre3 libpcre3)
 ENDIF()
 
-ProcessPackage(LIBEVENT LIBRARY event INCLUDE event.h INCLUDE_SUFFIXES include/event
-	ROOT ${LIBEVENT_ROOT_DIR} MODULES event libevent)
 ProcessPackage(SQLITE3 LIBRARY sqlite3 INCLUDE sqlite3.h INCLUDE_SUFFIXES include/sqlite3 include/sqlite
 	ROOT ${SQLITE3_ROOT_DIR} MODULES sqlite3 sqlite)
 ProcessPackage(ICUDATA LIBRARY icudata INCLUDE unicode/ucnv.h

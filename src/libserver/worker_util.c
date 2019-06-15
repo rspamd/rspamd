@@ -229,7 +229,7 @@ rspamd_sigh_free (void *p)
 
 void
 rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
-		struct event_base *base,
+		struct ev_loop *base,
 		rspamd_worker_signal_handler handler,
 		void *handler_data)
 {
@@ -261,7 +261,7 @@ rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
 }
 
 void
-rspamd_worker_init_signals (struct rspamd_worker *worker, struct event_base *base)
+rspamd_worker_init_signals (struct rspamd_worker *worker, struct ev_loop *base)
 {
 	struct sigaction signals;
 	/* We ignore these signals in the worker */
@@ -297,11 +297,11 @@ rspamd_worker_init_signals (struct rspamd_worker *worker, struct event_base *bas
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 }
 
-struct event_base *
+struct ev_loop *
 rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	void (*accept_handler)(int, short, void *))
 {
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct event *accept_events;
 	GList *cur;
 	struct rspamd_worker_listen_socket *ls;
@@ -633,7 +633,7 @@ struct rspamd_worker *
 rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		struct rspamd_worker_conf *cf,
 		guint index,
-		struct event_base *ev_base)
+		struct ev_loop *ev_base)
 {
 	struct rspamd_worker *wrk;
 	gint rc;
@@ -683,8 +683,8 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 #endif
 
 		/* Remove the inherited event base */
-		event_reinit (rspamd_main->ev_base);
-		event_base_free (rspamd_main->ev_base);
+		event_reinit (rspamd_main->event_loop);
+		event_base_free (rspamd_main->event_loop);
 
 		/* Drop privileges */
 		rspamd_worker_drop_priv (rspamd_main);
@@ -867,7 +867,7 @@ struct rspamd_worker_session_elt {
 };
 
 struct rspamd_worker_session_cache {
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	GHashTable *cache;
 	struct rspamd_config *cfg;
 	struct timeval tv;
@@ -923,7 +923,7 @@ rspamd_sessions_cache_periodic (gint fd, short what, gpointer p)
 
 void *
 rspamd_worker_session_cache_new (struct rspamd_worker *w,
-		struct event_base *ev_base)
+		struct ev_loop *ev_base)
 {
 	struct rspamd_worker_session_cache *c;
 	static const gdouble periodic_interval = 60.0;
@@ -975,7 +975,7 @@ rspamd_worker_monitored_on_change (struct rspamd_monitored_ctx *ctx,
 {
 	struct rspamd_worker *worker = ud;
 	struct rspamd_config *cfg = worker->srv->cfg;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	guchar tag[RSPAMD_MONITORED_TAG_LEN];
 	static struct rspamd_srv_command srv_cmd;
 
@@ -995,7 +995,7 @@ rspamd_worker_monitored_on_change (struct rspamd_monitored_ctx *ctx,
 
 void
 rspamd_worker_init_monitored (struct rspamd_worker *worker,
-		struct event_base *ev_base,
+		struct ev_loop *ev_base,
 		struct rspamd_dns_resolver *resolver)
 {
 	rspamd_monitored_ctx_config (worker->srv->cfg->monitored_ctx,

@@ -317,7 +317,7 @@ void rspamd_lua_set_globals (struct rspamd_config *cfg, lua_State *L);
 struct memory_pool_s * rspamd_lua_check_mempool (lua_State * L, gint pos);
 struct rspamd_config * lua_check_config (lua_State * L, gint pos);
 struct rspamd_async_session* lua_check_session (lua_State * L, gint pos);
-struct event_base* lua_check_ev_base (lua_State * L, gint pos);
+struct ev_loop* lua_check_ev_base (lua_State * L, gint pos);
 struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L, gint pos);
 
 /**
@@ -420,7 +420,7 @@ void lua_call_finish_script (struct rspamd_config_cfg_lua_script *sc,
  * @param ev_base
  */
 void rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
-		struct event_base *ev_base, struct rspamd_worker *w);
+		struct ev_loop *ev_base, struct rspamd_worker *w);
 
 void rspamd_lua_run_config_post_init (lua_State *L, struct rspamd_config *cfg);
 void rspamd_lua_run_config_unload (lua_State *L, struct rspamd_config *cfg);

@@ -105,7 +105,7 @@ struct rspamd_fuzzy_backend {
 	enum rspamd_fuzzy_backend_type type;
 	gdouble expire;
 	gdouble sync;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	rspamd_fuzzy_periodic_cb periodic_cb;
 	void *periodic_ud;
 	const struct rspamd_fuzzy_backend_subr *subr;
@@ -271,7 +271,7 @@ rspamd_fuzzy_backend_close_sqlite (struct rspamd_fuzzy_backend *bk,
 
 
 struct rspamd_fuzzy_backend *
-rspamd_fuzzy_backend_create (struct event_base *ev_base,
+rspamd_fuzzy_backend_create (struct ev_loop *ev_base,
 		const ucl_object_t *config,
 		struct rspamd_config *cfg,
 		GError **err)
@@ -559,7 +559,7 @@ rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *bk)
 	g_free (bk);
 }
 
-struct event_base*
+struct ev_loop*
 rspamd_fuzzy_backend_event_base (struct rspamd_fuzzy_backend *backend)
 {
 	return backend->ev_base;

@@ -39,7 +39,7 @@ struct rspamd_monitored_methods {
 struct rspamd_monitored_ctx {
 	struct rspamd_config *cfg;
 	struct rdns_resolver *resolver;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	GPtrArray *elts;
 	GHashTable *helts;
 	mon_change_cb change_cb;
@@ -427,7 +427,7 @@ rspamd_monitored_ctx_init (void)
 void
 rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 		struct rspamd_config *cfg,
-		struct event_base *ev_base,
+		struct ev_loop *ev_base,
 		struct rdns_resolver *resolver,
 		mon_change_cb change_cb,
 		gpointer ud)
@@ -457,7 +457,7 @@ rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 }
 
 
-struct event_base *
+struct ev_loop *
 rspamd_monitored_ctx_get_ev_base (struct rspamd_monitored_ctx *ctx)
 {
 	return ctx->ev_base;

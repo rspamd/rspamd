@@ -21,7 +21,7 @@
 #include "cryptobox.h"
 #include "ucl.h"
 #include "hiredis.h"
-#include "adapters/libevent.h"
+#include "adapters/libev.h"
 #include "lua/lua_common.h"
 
 #define REDIS_DEFAULT_TIMEOUT 0.5
@@ -398,11 +398,11 @@ rspamd_stat_cache_redis_runtime (struct rspamd_task *task,
 
 	g_assert (rt->redis != NULL);
 
-	redisLibeventAttach (rt->redis, task->ev_base);
+	redisLibevAttach (task->event_loop, rt->redis);
 
 	/* Now check stats */
 	event_set (&rt->timeout_event, -1, EV_TIMEOUT, rspamd_redis_cache_timeout, rt);
-	event_base_set (task->ev_base, &rt->timeout_event);
+	event_base_set (task->event_loop, &rt->timeout_event);
 	rspamd_redis_cache_maybe_auth (ctx, rt->redis);
 
 	if (!learn) {

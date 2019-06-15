@@ -87,7 +87,7 @@ rspamd_http_context_client_rotate_ev (gint fd, short what, void *arg)
 
 static struct rspamd_http_context*
 rspamd_http_context_new_default (struct rspamd_config *cfg,
-								 struct event_base *ev_base,
+								 struct ev_loop *ev_base,
 								 struct upstream_ctx *ups_ctx)
 {
 	struct rspamd_http_context *ctx;
@@ -208,7 +208,7 @@ rspamd_http_context_init (struct rspamd_http_context *ctx)
 
 struct rspamd_http_context*
 rspamd_http_context_create (struct rspamd_config *cfg,
-							struct event_base *ev_base,
+							struct ev_loop *ev_base,
 							struct upstream_ctx *ups_ctx)
 {
 	struct rspamd_http_context *ctx;
@@ -337,7 +337,7 @@ rspamd_http_context_free (struct rspamd_http_context *ctx)
 
 struct rspamd_http_context*
 rspamd_http_context_create_config (struct rspamd_http_context_cfg *cfg,
-								   struct event_base *ev_base,
+								   struct ev_loop *ev_base,
 								   struct upstream_ctx *ups_ctx)
 {
 	struct rspamd_http_context *ctx;
@@ -498,7 +498,7 @@ void
 rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 									struct rspamd_http_connection *conn,
 									struct rspamd_http_message *msg,
-									struct event_base *ev_base)
+									struct ev_loop *ev_base)
 {
 	struct rspamd_http_keepalive_cbdata *cbdata;
 	struct timeval tv;

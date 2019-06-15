@@ -21,7 +21,7 @@
 #include "libutil/http_private.h"
 #include "addr.h"
 #include "unix-std.h"
-#include <event.h>
+#include "contrib/libev/ev.h"
 #include "libutil/util.h"
 #include "lua/lua_common.h"
 
@@ -159,7 +159,7 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 end:
 	exit_tv.tv_sec = 0;
 	exit_tv.tv_usec = 0;
-	event_base_loopexit (rspamd_main->ev_base, &exit_tv);
+	event_base_loopexit (rspamd_main->event_loop, &exit_tv);
 
 	return 0;
 }
@@ -248,7 +248,7 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 	rspamd_http_connection_write_message (conn, msg, NULL, NULL, &cbdata,
 			&tv);
 
-	event_base_loop (rspamd_main->ev_base, 0);
+	event_base_loop (rspamd_main->event_loop, 0);
 
 	rspamd_http_connection_unref (conn);
 	rspamd_inet_address_free (addr);

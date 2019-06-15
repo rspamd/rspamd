@@ -1609,7 +1609,7 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 }
 
 static void
-rspamc_process_input (struct event_base *ev_base, struct rspamc_command *cmd,
+rspamc_process_input (struct ev_loop *ev_base, struct rspamc_command *cmd,
 	FILE *in, const gchar *name, GQueue *attrs)
 {
 	struct rspamd_client_connection *conn;
@@ -1736,7 +1736,7 @@ rspamd_dirent_size (DIR * dirp)
 }
 
 static void
-rspamc_process_dir (struct event_base *ev_base, struct rspamc_command *cmd,
+rspamc_process_dir (struct ev_loop *ev_base, struct rspamc_command *cmd,
 	const gchar *name, GQueue *attrs)
 {
 	DIR *d;
@@ -1863,7 +1863,7 @@ main (gint argc, gchar **argv, gchar **env)
 	GPid cld;
 	struct rspamc_command *cmd;
 	FILE *in = NULL;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct stat st;
 	struct sigaction sigpipe_act;
 	gchar **exclude_pattern;

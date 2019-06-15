@@ -58,7 +58,7 @@ static GOptionEntry entries[] = {
 
 struct rspamd_http_server_session {
 	struct rspamd_http_connection *conn;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	guint req_size;
 	gboolean reply;
 	gint fd;
@@ -132,7 +132,7 @@ rspamd_server_finish (struct rspamd_http_connection *conn,
 static void
 rspamd_server_accept (gint fd, short what, void *arg)
 {
-	struct event_base *ev_base = arg;
+	struct ev_loop *ev_base = arg;
 	struct rspamd_http_server_session *session;
 	rspamd_inet_addr_t *addr;
 	gint nfd;
@@ -172,7 +172,7 @@ rspamd_server_accept (gint fd, short what, void *arg)
 static void
 rspamd_http_term_handler (gint fd, short what, void *arg)
 {
-	struct event_base *ev_base = arg;
+	struct ev_loop *ev_base = arg;
 	struct timeval tv = {0, 0};
 
 	event_base_loopexit (ev_base, &tv);
@@ -181,7 +181,7 @@ rspamd_http_term_handler (gint fd, short what, void *arg)
 static void
 rspamd_http_server_func (gint fd, rspamd_inet_addr_t *addr)
 {
-	struct event_base *ev_base = event_init ();
+	struct ev_loop *ev_base = event_init ();
 	struct event accept_ev, term_ev;
 
 	event_set (&accept_ev, fd, EV_READ | EV_PERSIST, rspamd_server_accept, ev_base);
@@ -245,7 +245,7 @@ main (int argc, gchar **argv)
 {
 	GOptionContext *context;
 	GError *error = NULL;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	GString *b32_key;
 	pid_t *sfd;
 	rspamd_inet_addr_t *addr;

@@ -10,7 +10,6 @@
 
 #include "config.h"
 #include "unix-std.h"
-#include <event.h>
 
 /*
  * OpenBSD fix

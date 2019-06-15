@@ -1893,7 +1893,7 @@ rspamd_map_periodic_callback (gint fd, short what, void *ud)
 /* Start watching event for all maps */
 void
 rspamd_map_watch (struct rspamd_config *cfg,
-				  struct event_base *ev_base,
+				  struct ev_loop *ev_base,
 				  struct rspamd_dns_resolver *resolver,
 				  struct rspamd_worker *worker,
 				  gboolean active_http)

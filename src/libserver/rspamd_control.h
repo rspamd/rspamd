@@ -18,7 +18,7 @@
 
 #include "config.h"
 #include "mem_pool.h"
-#include <event.h>
+#include "contrib/libev/ev.h"
 
 struct rspamd_main;
 struct rspamd_worker;
@@ -199,7 +199,7 @@ void rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
  * Register default handlers for a worker
  */
 void rspamd_control_worker_add_default_handler (struct rspamd_worker *worker,
-		struct event_base *ev_base);
+		struct ev_loop *ev_base);
 
 /**
  * Register custom handler for a specific control command for this worker
@@ -214,7 +214,7 @@ void rspamd_control_worker_add_cmd_handler (struct rspamd_worker *worker,
  */
 void rspamd_srv_start_watching (struct rspamd_main *srv,
 		struct rspamd_worker *worker,
-		struct event_base *ev_base);
+		struct ev_loop *ev_base);
 
 
 /**
@@ -222,7 +222,7 @@ void rspamd_srv_start_watching (struct rspamd_main *srv,
  * end
  */
 void rspamd_srv_send_command (struct rspamd_worker *worker,
-		struct event_base *ev_base,
+		struct ev_loop *ev_base,
 		struct rspamd_srv_command *cmd,
 		gint attached_fd,
 		rspamd_srv_reply_handler handler,

@@ -232,7 +232,7 @@ struct rspamd_cache_refresh_cbdata {
 	struct event resort_ev;
 	struct rspamd_symcache *cache;
 	struct rspamd_worker *w;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 };
 
 /* weight, frequency, time */
@@ -2173,14 +2173,14 @@ rspamd_symcache_counters (struct rspamd_symcache *cache)
 }
 
 static void
-rspamd_symcache_call_peak_cb (struct event_base *ev_base,
+rspamd_symcache_call_peak_cb (struct ev_loop *ev_base,
 		struct rspamd_symcache *cache,
 		struct rspamd_symcache_item *item,
 		gdouble cur_value,
 		gdouble cur_err)
 {
 	lua_State *L = cache->cfg->lua_state;
-	struct event_base **pbase;
+	struct ev_loop **pbase;
 
 	lua_rawgeti (L, LUA_REGISTRYINDEX, cache->peak_cb);
 	pbase = lua_newuserdata (L, sizeof (*pbase));
@@ -2291,7 +2291,7 @@ rspamd_symcache_resort_cb (gint fd, short what, gpointer ud)
 
 void
 rspamd_symcache_start_refresh (struct rspamd_symcache *cache,
-							   struct event_base *ev_base, struct rspamd_worker *w)
+							   struct ev_loop *ev_base, struct rspamd_worker *w)
 {
 	struct timeval tv;
 	gdouble tm;

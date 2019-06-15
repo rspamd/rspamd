@@ -689,7 +689,7 @@ lua_fann_train_threaded (lua_State *L)
 	struct fann *f = rspamd_lua_check_fann (L, 1);
 	guint ninputs, noutputs, ndata, i, j;
 	struct lua_fann_train_cbdata *cbdata;
-	struct event_base *ev_base = lua_check_ev_base (L, 5);
+	struct ev_loop *ev_base = lua_check_ev_base (L, 5);
 	GError *err = NULL;
 	const guint max_epochs_default = 1000;
 	const gdouble desired_mse_default = 0.0001;

@@ -22,7 +22,7 @@
 
 #ifdef WITH_HIREDIS
 #include "hiredis.h"
-#include "adapters/libevent.h"
+#include "adapters/libev.h"
 #include "ref.h"
 
 #define msg_debug_stat_redis(...)  rspamd_conditional_debug_fast (NULL, NULL, \
@@ -87,7 +87,7 @@ struct rspamd_redis_stat_cbdata;
 struct rspamd_redis_stat_elt {
 	struct redis_stat_ctx *ctx;
 	struct rspamd_stat_async_elt *async;
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
 	ucl_object_t *stat;
 	struct rspamd_redis_stat_cbdata *cbdata;
 };
@@ -986,7 +986,7 @@ rspamd_redis_async_stat_cb (struct rspamd_stat_async_elt *elt, gpointer d)
 
 	g_assert (cbdata->redis != NULL);
 
-	redisLibeventAttach (cbdata->redis, redis_elt->ev_base);
+	redisLibevAttach (redis_elt->event_loop, cbdata->redis);
 
 	cbdata->inflight = 1;
 	cbdata->cur = ucl_object_typed_new (UCL_OBJECT);
@@ -1444,7 +1444,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 	backend->stcf = stf;
 
 	st_elt = g_malloc0 (sizeof (*st_elt));
-	st_elt->ev_base = ctx->ev_base;
+	st_elt->event_loop = ctx->ev_base;
 	st_elt->ctx = backend;
 	backend->stat_elt = rspamd_stat_ctx_register_async (
 			rspamd_redis_async_stat_cb,
@@ -1536,7 +1536,7 @@ rspamd_redis_runtime (struct rspamd_task *task,
 		return NULL;
 	}
 
-	redisLibeventAttach (rt->redis, task->ev_base);
+	redisLibevAttach (task->event_loop, rt->redis);
 	rspamd_redis_maybe_auth (ctx, rt->redis);
 
 	return rt;
@@ -1595,7 +1595,7 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 			event_del (&rt->timeout_event);
 		}
 		event_set (&rt->timeout_event, -1, EV_TIMEOUT, rspamd_redis_timeout, rt);
-		event_base_set (task->ev_base, &rt->timeout_event);
+		event_base_set (task->event_loop, &rt->timeout_event);
 		double_to_tv (rt->ctx->timeout, &tv);
 		event_add (&rt->timeout_event, &tv);
 
@@ -1704,7 +1704,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 
 	g_assert (rt->redis != NULL);
 
-	redisLibeventAttach (rt->redis, task->ev_base);
+	redisLibevAttach (task->event_loop, rt->redis);
 	rspamd_redis_maybe_auth (rt->ctx, rt->redis);
 
 	/*
@@ -1806,7 +1806,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 			event_del (&rt->timeout_event);
 		}
 		event_set (&rt->timeout_event, -1, EV_TIMEOUT, rspamd_redis_timeout, rt);
-		event_base_set (task->ev_base, &rt->timeout_event);
+		event_base_set (task->event_loop, &rt->timeout_event);
 		double_to_tv (rt->ctx->timeout, &tv);
 		event_add (&rt->timeout_event, &tv);
 

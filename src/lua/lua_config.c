@@ -3050,7 +3050,7 @@ static void lua_periodic_callback_finish (struct thread_entry *thread, int ret);
 static void lua_periodic_callback_error (struct thread_entry *thread, int ret, const char *msg);
 
 struct rspamd_lua_periodic {
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct rspamd_config *cfg;
 	lua_State *L;
 	gdouble timeout;
@@ -3064,7 +3064,7 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 {
 	struct rspamd_lua_periodic *periodic = ud;
 	struct rspamd_config **pcfg, *cfg;
-	struct event_base **pev_base;
+	struct ev_loop **pev_base;
 	struct thread_entry *thread;
 	lua_State *L;
 
@@ -3147,7 +3147,7 @@ lua_config_add_periodic (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	struct event_base *ev_base = lua_check_ev_base (L, 2);
+	struct ev_loop *ev_base = lua_check_ev_base (L, 2);
 	gdouble timeout = lua_tonumber (L, 3);
 	struct timeval tv;
 	struct rspamd_lua_periodic *periodic;
@@ -3961,7 +3961,7 @@ lua_config_init_subsystem (lua_State *L)
 				rspamd_stat_init (cfg, NULL);
 			}
 			else if (strcmp (parts[i], "dns") == 0) {
-				struct event_base *ev_base = lua_check_ev_base (L, 3);
+				struct ev_loop *ev_base = lua_check_ev_base (L, 3);
 
 				if (ev_base) {
 					cfg->dns_resolver = rspamd_dns_resolver_init (rspamd_logger_get_singleton (),

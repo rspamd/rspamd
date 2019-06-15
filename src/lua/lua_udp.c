@@ -61,7 +61,7 @@ static const struct luaL_reg udp_libf[] = {
 struct lua_udp_cbdata {
 	struct event io;
 	struct timeval tv;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct rspamd_async_event *async_ev;
 	struct rspamd_task *task;
 	rspamd_mempool_t *pool;
@@ -358,7 +358,7 @@ lua_udp_sendto (lua_State *L) {
 	LUA_TRACE_POINT;
 	const gchar *host;
 	guint port;
-	struct event_base *ev_base = NULL;
+	struct ev_loop *ev_base = NULL;
 	struct lua_udp_cbdata *cbd;
 	struct rspamd_async_session *session = NULL;
 	struct rspamd_task *task = NULL;
@@ -423,7 +423,7 @@ lua_udp_sendto (lua_State *L) {
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TUSERDATA) {
 			task = lua_check_task (L, -1);
-			ev_base = task->ev_base;
+			ev_base = task->event_loop;
 			session = task->s;
 			pool = task->task_pool;
 		}
@@ -433,7 +433,7 @@ lua_udp_sendto (lua_State *L) {
 			lua_pushstring (L, "ev_base");
 			lua_gettable (L, -2);
 			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{ev_base}")) {
-				ev_base = *(struct event_base **) lua_touserdata (L, -1);
+				ev_base = *(struct ev_loop **) lua_touserdata (L, -1);
 			} else {
 				ev_base = NULL;
 			}

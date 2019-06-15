@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include "config.h"
-#include <event.h>
+#include "contrib/libev/ev.h"
 #include "aio_event.h"
 #include "rspamd.h"
 #include "unix-std.h"
@@ -177,7 +177,7 @@ eventfd (guint initval, guint flags)
  * AIO context
  */
 struct aio_context {
-	struct event_base *base;
+	struct ev_loop *base;
 	gboolean has_aio;       /**< Whether we have aio support on a system */
 #ifdef LINUX
 	/* Eventfd variant */
@@ -251,7 +251,7 @@ rspamd_eventfdcb (gint fd, gshort what, gpointer ud)
  * Initialize aio with specified event base
  */
 struct aio_context *
-rspamd_aio_init (struct event_base *base)
+rspamd_aio_init (struct ev_loop *base)
 {
 	struct aio_context *new;
 

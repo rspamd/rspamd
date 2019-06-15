@@ -219,7 +219,7 @@ rspamd_disable_accept_events (gint sock, GList *accept_events)
 	struct event *events;
 	const gdouble throttling = 0.5;
 	struct timeval tv;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 
 	double_to_tv (throttling, &tv);
 

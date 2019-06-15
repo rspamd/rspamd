@@ -199,7 +199,7 @@ struct rspamd_task {
 	void *fin_arg;									/**< argument for fin callback						*/
 
 	struct rspamd_dns_resolver *resolver;			/**< DNS resolver									*/
-	struct event_base *ev_base;						/**< Event base										*/
+	struct ev_loop *event_loop;						/**< Event base										*/
 	struct event timeout_ev;						/**< Global task timeout							*/
 	struct event *guard_ev;							/**< Event for input sanity guard 					*/
 
@@ -220,7 +220,7 @@ struct rspamd_task *rspamd_task_new (struct rspamd_worker *worker,
 									 struct rspamd_config *cfg,
 									 rspamd_mempool_t *pool,
 									 struct rspamd_lang_detector *lang_det,
-									 struct event_base *ev_base);
+									 struct ev_loop *ev_base);
 /**
  * Destroy task object and remove its IO dispatcher if it exists
  */

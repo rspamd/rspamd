@@ -695,9 +695,9 @@ static gint
 lua_util_create_event_base (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct event_base **pev_base;
+	struct ev_loop **pev_base;
 
-	pev_base = lua_newuserdata (L, sizeof (struct event_base *));
+	pev_base = lua_newuserdata (L, sizeof (struct ev_loop *));
 	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
 	*pev_base = event_init ();
 
@@ -842,7 +842,7 @@ lua_util_process_message (lua_State *L)
 	const gchar *message;
 	gsize mlen;
 	struct rspamd_task *task;
-	struct event_base *base;
+	struct ev_loop *base;
 	ucl_object_t *res = NULL;
 
 	message = luaL_checklstring (L, 2, &mlen);
@@ -3795,7 +3795,7 @@ static int
 lua_ev_base_loop (lua_State *L)
 {
 	int flags = 0;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 
 	ev_base = lua_check_ev_base (L, 1);
 	if (lua_isnumber (L, 2)) {

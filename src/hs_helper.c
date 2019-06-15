@@ -47,7 +47,7 @@ static const guint64 rspamd_hs_helper_magic = 0x22d310157a2288a0ULL;
 struct hs_helper_ctx {
 	guint64 magic;
 	/* Events base */
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	/* DNS resolver */
 	struct rspamd_dns_resolver *resolver;
 	/* Config */

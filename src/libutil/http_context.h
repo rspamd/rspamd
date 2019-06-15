@@ -21,7 +21,7 @@
 #include "ucl.h"
 #include "addr.h"
 
-#include <event.h>
+#include "contrib/libev/ev.h"
 
 struct rspamd_http_context;
 struct rspamd_config;
@@ -45,11 +45,11 @@ struct rspamd_http_context_cfg {
  * @return new context used for both client and server HTTP connections
  */
 struct rspamd_http_context* rspamd_http_context_create (struct rspamd_config *cfg,
-		struct event_base *ev_base, struct upstream_ctx *ctx);
+		struct ev_loop *ev_base, struct upstream_ctx *ctx);
 
 struct rspamd_http_context* rspamd_http_context_create_config (
 		struct rspamd_http_context_cfg *cfg,
-		struct event_base *ev_base,
+		struct ev_loop *ev_base,
 		struct upstream_ctx *ctx);
 /**
  * Destroys context
@@ -93,6 +93,6 @@ void rspamd_http_context_prepare_keepalive (struct rspamd_http_context *ctx,
 void rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 										 struct rspamd_http_connection *conn,
 										 struct rspamd_http_message *msg,
-										 struct event_base *ev_base);
+										 struct ev_loop *ev_base);
 
 #endif

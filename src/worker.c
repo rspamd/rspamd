@@ -77,7 +77,7 @@ rspamd_worker_finalize (gpointer user_data)
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_PROCESSING)) {
 		msg_info_task ("finishing actions has been processed, terminating");
-		event_base_loopexit (task->ev_base, &tv);
+		event_base_loopexit (task->event_loop, &tv);
 		rspamd_session_destroy (task->s);
 
 		return TRUE;
@@ -284,7 +284,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 	event_set (guard_ev, task->sock, EV_READ|EV_PERSIST,
 			rspamd_worker_guard_handler, task);
 #endif
-	event_base_set (task->ev_base, guard_ev);
+	event_base_set (task->event_loop, guard_ev);
 	event_add (guard_ev, NULL);
 	task->guard_ev = guard_ev;
 
@@ -638,7 +638,7 @@ rspamd_worker_on_terminate (struct rspamd_worker *worker)
 
 void
 rspamd_worker_init_scanner (struct rspamd_worker *worker,
-		struct event_base *ev_base,
+		struct ev_loop *ev_base,
 		struct rspamd_dns_resolver *resolver,
 		struct rspamd_lang_detector **plang_det)
 {

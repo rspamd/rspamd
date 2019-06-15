@@ -95,7 +95,7 @@ static struct rspamd_stat_cache stat_caches[] = {
 };
 
 void
-rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
+rspamd_stat_init (struct rspamd_config *cfg, struct ev_loop *ev_base)
 {
 	GList *cur, *curst;
 	struct rspamd_classifier_config *clf;

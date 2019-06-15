@@ -46,7 +46,7 @@ struct rspamd_ssl_connection {
 	SSL *ssl;
 	gchar *hostname;
 	struct event *ev;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct timeval *tv;
 	rspamd_ssl_handler_t handler;
 	rspamd_ssl_error_handler_t err_handler;
@@ -480,7 +480,7 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 }
 
 struct rspamd_ssl_connection *
-rspamd_ssl_connection_new (gpointer ssl_ctx, struct event_base *ev_base,
+rspamd_ssl_connection_new (gpointer ssl_ctx, struct ev_loop *ev_base,
 		gboolean verify_peer)
 {
 	struct rspamd_ssl_connection *c;

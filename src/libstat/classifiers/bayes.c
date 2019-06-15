@@ -256,7 +256,7 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 
 gboolean
 bayes_init (struct rspamd_config *cfg,
-			struct event_base *ev_base,
+			struct ev_loop *ev_base,
 			struct rspamd_classifier *cl)
 {
 	cl->cfg->flags |= RSPAMD_FLAG_CLASSIFIER_INTEGER;

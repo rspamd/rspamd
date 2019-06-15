@@ -73,7 +73,7 @@ struct rspamd_fuzzy_redis_session {
 	redisAsyncContext *ctx;
 	struct event timeout;
 	const struct rspamd_fuzzy_cmd *cmd;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	float prob;
 	gboolean shingles_checked;
 

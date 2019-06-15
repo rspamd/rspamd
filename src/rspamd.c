@@ -370,7 +370,7 @@ rspamd_fork_delayed_cb (gint signo, short what, gpointer arg)
 
 	event_del (&w->wait_ev);
 	rspamd_fork_worker (w->rspamd_main, w->cf, w->oldindex,
-			w->rspamd_main->ev_base);
+			w->rspamd_main->event_loop);
 	REF_RELEASE (w->cf);
 	g_free (w);
 }
@@ -391,7 +391,7 @@ rspamd_fork_delayed (struct rspamd_worker_conf *cf,
 	tv.tv_usec = 0;
 	REF_RETAIN (cf);
 	event_set (&nw->wait_ev, -1, EV_TIMEOUT, rspamd_fork_delayed_cb, nw);
-	event_base_set (rspamd_main->ev_base, &nw->wait_ev);
+	event_base_set (rspamd_main->event_loop, &nw->wait_ev);
 	event_add (&nw->wait_ev, &tv);
 }
 
@@ -552,7 +552,7 @@ make_listen_key (struct rspamd_worker_bind_conf *cf)
 }
 
 static void
-spawn_worker_type (struct rspamd_main *rspamd_main, struct event_base *ev_base,
+spawn_worker_type (struct rspamd_main *rspamd_main, struct ev_loop *ev_base,
 		struct rspamd_worker_conf *cf)
 {
 	gint i;
@@ -582,7 +582,7 @@ spawn_worker_type (struct rspamd_main *rspamd_main, struct event_base *ev_base,
 }
 
 static void
-spawn_workers (struct rspamd_main *rspamd_main, struct event_base *ev_base)
+spawn_workers (struct rspamd_main *rspamd_main, struct ev_loop *ev_base)
 {
 	GList *cur, *ls;
 	struct rspamd_worker_conf *cf;
@@ -992,7 +992,7 @@ rspamd_term_handler (gint signo, short what, gpointer arg)
 	rspamd_log_nolock (rspamd_main->logger);
 	rspamd_pass_signal (rspamd_main->workers, signo);
 
-	event_base_loopexit (rspamd_main->ev_base, NULL);
+	event_base_loopexit (rspamd_main->event_loop, NULL);
 }
 
 static void
@@ -1022,7 +1022,7 @@ rspamd_hup_handler (gint signo, short what, gpointer arg)
 				rspamd_main->workers_gid);
 	reread_config (rspamd_main);
 	rspamd_check_core_limits (rspamd_main);
-	spawn_workers (rspamd_main, rspamd_main->ev_base);
+	spawn_workers (rspamd_main, rspamd_main->event_loop);
 }
 
 static void
@@ -1175,7 +1175,7 @@ rspamd_final_term_handler (gint signo, short what, gpointer arg)
 	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
 
 	if (g_hash_table_size (rspamd_main->workers) == 0) {
-		event_base_loopexit (rspamd_main->ev_base, NULL);
+		event_base_loopexit (rspamd_main->event_loop, NULL);
 	}
 }
 
@@ -1243,7 +1243,7 @@ main (gint argc, gchar **argv, gchar **env)
 	worker_t **pworker;
 	GQuark type;
 	rspamd_inet_addr_t *control_addr = NULL;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct event term_ev, int_ev, cld_ev, hup_ev, usr1_ev, control_ev;
 	struct timeval term_tv;
 	struct rspamd_main *rspamd_main;
@@ -1499,7 +1499,7 @@ main (gint argc, gchar **argv, gchar **env)
 
 	/* Init event base */
 	ev_base = event_init ();
-	rspamd_main->ev_base = ev_base;
+	rspamd_main->event_loop = ev_base;
 	/* Unblock signals */
 	sigemptyset (&signals.sa_mask);
 	sigprocmask (SIG_SETMASK, &signals.sa_mask, NULL);

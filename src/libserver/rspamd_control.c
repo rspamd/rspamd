@@ -437,7 +437,7 @@ rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
 			event_set (&rep_elt->io_ev, wrk->control_pipe[0],
 					EV_READ | EV_PERSIST, handler,
 					rep_elt);
-			event_base_set (rspamd_main->ev_base,
+			event_base_set (rspamd_main->event_loop,
 					&rep_elt->io_ev);
 			event_add (&rep_elt->io_ev, &worker_io_timeout);
 
@@ -533,7 +533,7 @@ rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
 struct rspamd_worker_control_data {
 	struct event io_ev;
 	struct rspamd_worker *worker;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct {
 		rspamd_worker_control_handler handler;
 		gpointer ud;
@@ -676,7 +676,7 @@ rspamd_control_default_worker_handler (gint fd, short what, gpointer ud)
 
 void
 rspamd_control_worker_add_default_handler (struct rspamd_worker *worker,
-		struct event_base *ev_base)
+		struct ev_loop *ev_base)
 {
 	struct rspamd_worker_control_data *cd;
 
@@ -974,7 +974,7 @@ rspamd_srv_handler (gint fd, short what, gpointer ud)
 void
 rspamd_srv_start_watching (struct rspamd_main *srv,
 		struct rspamd_worker *worker,
-		struct event_base *ev_base)
+		struct ev_loop *ev_base)
 {
 	g_assert (worker != NULL);
 
@@ -1081,7 +1081,7 @@ cleanup:
 
 void
 rspamd_srv_send_command (struct rspamd_worker *worker,
-		struct event_base *ev_base,
+		struct ev_loop *ev_base,
 		struct rspamd_srv_command *cmd,
 		gint attached_fd,
 		rspamd_srv_reply_handler handler,

@@ -54,7 +54,7 @@ rspamd_upstream_test_func (void)
 {
 	struct upstream_list *ls, *nls;
 	struct upstream *up, *upn;
-	struct event_base *ev_base = event_init ();
+	struct ev_loop *ev_base = event_init ();
 	struct rspamd_dns_resolver *resolver;
 	struct rspamd_config *cfg;
 	gint i, success = 0;

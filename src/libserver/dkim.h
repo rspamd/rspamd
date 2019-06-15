@@ -17,7 +17,7 @@
 #define DKIM_H_
 
 #include "config.h"
-#include "event.h"
+#include "contrib/libev/ev.h"
 #include "dns.h"
 #include "ref.h"
 

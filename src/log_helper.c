@@ -49,7 +49,7 @@ static const guint64 rspamd_log_helper_magic = 0x1090bb46aaa74c9aULL;
 struct log_helper_ctx {
 	guint64 magic;
 	/* Events base */
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	/* DNS resolver */
 	struct rspamd_dns_resolver *resolver;
 	/* Config */
@@ -87,7 +87,7 @@ rspamd_log_helper_read (gint fd, short what, gpointer ud)
 	struct rspamd_protocol_log_message_sum *sm;
 	struct rspamd_worker_lua_script *sc;
 	struct rspamd_config **pcfg;
-	struct event_base **pevbase;
+	struct ev_loop **pevbase;
 
 	r = read (fd, buf, sizeof (buf));
 

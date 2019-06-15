@@ -282,7 +282,7 @@ struct rspamd_lua_process_cbdata {
 	GString *out_buf;
 	goffset out_pos;
 	struct rspamd_worker *wrk;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct event ev;
 };
 

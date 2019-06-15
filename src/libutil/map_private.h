@@ -130,7 +130,7 @@ struct rspamd_map {
 	map_fin_cb_t fin_callback;
 	map_dtor_t dtor;
 	void **user_data;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct rspamd_worker *wrk;
 	gchar *description;
 	gchar *name;
@@ -183,7 +183,7 @@ struct rspamd_http_file_data {
 };
 
 struct http_callback_data {
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct rspamd_http_connection *conn;
 	rspamd_inet_addr_t *addr;
 	struct rspamd_map *map;

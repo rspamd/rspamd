@@ -18,7 +18,7 @@
 #include "aio_event.h"
 #include "unix-std.h"
 
-extern struct event_base *base;
+extern struct ev_loop *base;
 
 static void
 aio_read_cb (gint fd, gint res, gsize len, gpointer data, gpointer ud)

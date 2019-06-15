@@ -2187,7 +2187,7 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 {
 	struct fuzzy_client_session *session = arg;
 	struct rspamd_task *task;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	gint r;
 
 	enum {
@@ -2274,7 +2274,7 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 {
 	struct fuzzy_client_session *session = arg;
 	struct rspamd_task *task;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 
 	task = session->task;
 
@@ -2340,7 +2340,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 	struct fuzzy_cmd_io *io;
 	struct rspamd_fuzzy_cmd *cmd = NULL;
 	const gchar *symbol, *ftype;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	gint r;
 	enum {
 		return_error = 0,
@@ -2593,7 +2593,7 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 {
 	struct fuzzy_learn_session *session = arg;
 	struct rspamd_task *task;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 
 	task = session->task;
 
@@ -2785,12 +2785,12 @@ register_fuzzy_client_call (struct rspamd_task *task,
 
 				event_set (&session->ev, sock, EV_WRITE, fuzzy_check_io_callback,
 						session);
-				event_base_set (session->task->ev_base, &session->ev);
+				event_base_set (session->task->event_loop, &session->ev);
 				event_add (&session->ev, NULL);
 
 				evtimer_set (&session->timev, fuzzy_check_timer_callback,
 						session);
-				event_base_set (session->task->ev_base, &session->timev);
+				event_base_set (session->task->event_loop, &session->timev);
 				event_add (&session->timev, &session->tv);
 
 				rspamd_session_add_event (task->s, fuzzy_io_fin, session, M);
@@ -2917,7 +2917,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 
 			evtimer_set (&s->timev, fuzzy_controller_timer_callback,
 					s);
-			event_base_set (s->task->ev_base, &s->timev);
+			event_base_set (s->task->event_loop, &s->timev);
 			event_add (&s->timev, &s->tv);
 
 			(*saved)++;
@@ -3271,11 +3271,11 @@ fuzzy_check_send_lua_learn (struct fuzzy_rule *rule,
 				s->session = task->s;
 
 				event_set (&s->ev, sock, EV_WRITE, fuzzy_controller_io_callback, s);
-				event_base_set (task->ev_base, &s->ev);
+				event_base_set (task->event_loop, &s->ev);
 				event_add (&s->ev, NULL);
 
 				evtimer_set (&s->timev, fuzzy_controller_timer_callback, s);
-				event_base_set (s->task->ev_base, &s->timev);
+				event_base_set (s->task->event_loop, &s->timev);
 				event_add (&s->timev, &s->tv);
 
 				rspamd_session_add_event (task->s,

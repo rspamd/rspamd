@@ -75,7 +75,7 @@ struct rspamd_task *
 rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 				 rspamd_mempool_t *pool,
 				 struct rspamd_lang_detector *lang_det,
-				 struct event_base *ev_base)
+				 struct ev_loop *ev_base)
 {
 	struct rspamd_task *new_task;
 
@@ -101,7 +101,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 		}
 	}
 
-	new_task->ev_base = ev_base;
+	new_task->event_loop = ev_base;
 
 #ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
 	if (ev_base) {

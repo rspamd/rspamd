@@ -1085,7 +1085,7 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 gboolean
 rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 		rspamd_mempool_t *pool,
-		struct event_base *ev_base, rspamd_milter_finish finish_cb,
+		struct ev_loop *ev_base, rspamd_milter_finish finish_cb,
 		rspamd_milter_error error_cb, void *ud)
 {
 	struct rspamd_milter_session *session;

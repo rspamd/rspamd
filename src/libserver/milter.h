@@ -41,7 +41,7 @@ enum rspamd_milter_reply {
 };
 
 struct rspamd_email_address;
-struct event_base;
+struct ev_loop;
 struct rspamd_http_message;
 struct rspamd_config;
 
@@ -83,7 +83,7 @@ typedef void (*rspamd_milter_error) (gint fd,
  */
 gboolean rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 		rspamd_mempool_t *pool,
-		struct event_base *ev_base, rspamd_milter_finish finish_cb,
+		struct ev_loop *ev_base, rspamd_milter_finish finish_cb,
 		rspamd_milter_error error_cb, void *ud);
 
 /**

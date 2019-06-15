@@ -46,7 +46,7 @@ struct rspamd_http_connection_router {
 	GPtrArray *regexps;
 	struct timeval tv;
 	struct timeval *ptv;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct rspamd_http_context *ctx;
 	gchar *default_fs_path;
 	rspamd_http_router_handler_t unknown_method_handler;

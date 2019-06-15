@@ -94,7 +94,7 @@ struct rspamd_worker {
 struct rspamd_abstract_worker_ctx {
 	guint64 magic;
 	/* Events base */
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	/* DNS resolver */
 	struct rspamd_dns_resolver *resolver;
 	/* Config */
@@ -116,7 +116,7 @@ struct rspamd_worker_signal_handler {
 	gint signo;
 	gboolean enabled;
 	struct event ev;
-	struct event_base *base;
+	struct ev_loop *base;
 	struct rspamd_worker *worker;
 	struct rspamd_worker_signal_cb *cb;
 };
@@ -276,7 +276,7 @@ struct rspamd_main {
 	gboolean is_privilleged;                                    /**< true if run in privilleged mode                */
 	gboolean cores_throttling;                                  /**< turn off cores when limits are exceeded		*/
 	struct roll_history *history;                               /**< rolling history								*/
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
 	struct rspamd_http_context *http_ctx;
 };
 
@@ -311,7 +311,7 @@ struct controller_session {
 	GList *parts;                                               /**< extracted mime parts							*/
 	struct rspamd_async_session * s;                             /**< async session object							*/
 	struct rspamd_dns_resolver *resolver;                       /**< DNS resolver									*/
-	struct event_base *ev_base;                                 /**< Event base										*/
+	struct ev_loop *ev_base;                                 /**< Event base										*/
 };
 
 struct zstd_dictionary {

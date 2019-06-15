@@ -98,7 +98,7 @@ struct lua_redis_userdata {
 	struct rspamd_task *task;
 	struct rspamd_symcache_item *item;
 	struct rspamd_async_session *s;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct rspamd_config *cfg;
 	struct rspamd_redis_pool *pool;
 	gchar *server;
@@ -800,7 +800,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 	gint cbref = -1;
 	struct rspamd_config *cfg = NULL;
 	struct rspamd_async_session *session = NULL;
-	struct event_base *ev_base = NULL;
+	struct ev_loop *ev_base = NULL;
 	gboolean ret = FALSE;
 	guint flags = 0;
 
@@ -850,7 +850,7 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 		else {
 			cfg = task->cfg;
 			session = task->s;
-			ev_base = task->ev_base;
+			ev_base = task->event_loop;
 			ret = TRUE;
 		}
 

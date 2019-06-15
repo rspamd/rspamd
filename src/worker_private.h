@@ -30,7 +30,7 @@ struct rspamd_lang_detector;
 struct rspamd_worker_ctx {
 	guint64 magic;
 	/* Events base */
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	/* DNS resolver */
 	struct rspamd_dns_resolver *resolver;
 	/* Config */
@@ -57,7 +57,7 @@ struct rspamd_worker_ctx {
  * Init scanning routines
  */
 void rspamd_worker_init_scanner (struct rspamd_worker *worker,
-		struct event_base *ev_base,
+		struct ev_loop *ev_base,
 		struct rspamd_dns_resolver *resolver,
 		struct rspamd_lang_detector **plang_det);
 

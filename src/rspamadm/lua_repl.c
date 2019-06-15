@@ -296,7 +296,7 @@ wait_session_events (void)
 {
 	/* XXX: it's probably worth to add timeout here - not to wait forever */
 	while (rspamd_session_events_pending (rspamadm_session) > 0) {
-		event_base_loop (rspamd_main->ev_base, EVLOOP_ONCE);
+		event_base_loop (rspamd_main->event_loop, EVLOOP_ONCE);
 	}
 }
 
@@ -793,7 +793,7 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 		/* HTTP Server mode */
 		GPtrArray *addrs = NULL;
 		gchar *name = NULL;
-		struct event_base *ev_base;
+		struct ev_loop *ev_base;
 		struct rspamd_http_connection_router *http;
 		gint fd;
 		struct rspamadm_lua_repl_context *ctx;
@@ -804,7 +804,7 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 			exit (EXIT_FAILURE);
 		}
 
-		ev_base = rspamd_main->ev_base;
+		ev_base = rspamd_main->event_loop;
 		ctx = g_malloc0  (sizeof (*ctx));
 		http = rspamd_http_router_new (rspamadm_lua_error_handler,
 						rspamadm_lua_finish_handler,

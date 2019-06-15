@@ -31,7 +31,7 @@
 #include "http_util.h"
 #include "addr.h"
 
-#include <event.h>
+#include "contrib/libev/ev.h"
 
 enum rspamd_http_connection_type {
 	RSPAMD_HTTP_SERVER,
