@@ -464,8 +464,9 @@ struct rspamd_config {
 	GHashTable *trusted_keys;						/**< list of trusted public keys						*/
 
 	struct rspamd_config_cfg_lua_script *on_load_scripts;	/**< list of scripts executed on workers load			*/
-	struct rspamd_config_cfg_lua_script *post_init_scripts;	/**< list of scripts executed on workers load			*/
+	struct rspamd_config_cfg_lua_script *post_init_scripts;	/**< list of scripts executed on config being fully loaded			*/
 	struct rspamd_config_cfg_lua_script *on_term_scripts; /**< list of callbacks called on worker's termination	*/
+	struct rspamd_config_cfg_lua_script *config_unload_scripts;	/**< list of scripts executed on config unload			*/
 
 	gchar *ssl_ca_path;								/**< path to CA certs									*/
 	gchar *ssl_ciphers;								/**< set of preferred ciphers							*/

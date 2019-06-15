@@ -593,6 +593,14 @@ LUA_FUNCTION_DEF (config, add_periodic);
 LUA_FUNCTION_DEF (config, add_post_init);
 
 /***
+ * @method rspamd_config:add_config_unload(function(cfg) ... end)
+ * Registers the following script to be executed when configuration is unloaded
+ * @available 2.0+
+ * @param {function} script function to be executed
+ */
+LUA_FUNCTION_DEF (config, add_config_unload);
+
+/***
  * @method rspamd_config:get_symbols_count()
  * Returns number of symbols registered in rspamd configuration
  * @return {number} number of symbols registered in the configuration
@@ -843,6 +851,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, add_on_load),
 	LUA_INTERFACE_DEF (config, add_periodic),
 	LUA_INTERFACE_DEF (config, add_post_init),
+	LUA_INTERFACE_DEF (config, add_config_unload),
 	LUA_INTERFACE_DEF (config, get_symbols_count),
 	LUA_INTERFACE_DEF (config, get_symbols_cksum),
 	LUA_INTERFACE_DEF (config, get_symbols_counters),
@@ -3016,6 +3025,26 @@ lua_config_add_post_init (lua_State *L)
 
 	return 0;
 }
+
+static gint
+lua_config_add_config_unload (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	struct rspamd_config_cfg_lua_script *sc;
+
+	if (cfg == NULL || lua_type (L, 2) != LUA_TFUNCTION) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	sc = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*sc));
+	lua_pushvalue (L, 2);
+	sc->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+	DL_APPEND (cfg->config_unload_scripts, sc);
+
+	return 0;
+}
+
 
 static void lua_periodic_callback_finish (struct thread_entry *thread, int ret);
 static void lua_periodic_callback_error (struct thread_entry *thread, int ret, const char *msg);

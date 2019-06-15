@@ -249,6 +249,8 @@ rspamd_config_free (struct rspamd_config *cfg)
 	struct rspamd_config_settings_elt *set, *stmp;
 	struct rspamd_worker_log_pipe *lp, *ltmp;
 
+	rspamd_lua_run_config_unload (cfg->lua_state, cfg);
+
 	/* Scripts part */
 	DL_FOREACH_SAFE (cfg->on_term_scripts, sc, sctmp) {
 		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
@@ -259,6 +261,10 @@ rspamd_config_free (struct rspamd_config *cfg)
 	}
 
 	DL_FOREACH_SAFE (cfg->post_init_scripts, sc, sctmp) {
+		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
+	}
+
+	DL_FOREACH_SAFE (cfg->config_unload_scripts, sc, sctmp) {
 		luaL_unref (cfg->lua_state, LUA_REGISTRYINDEX, sc->cbref);
 	}
 

@@ -1895,6 +1895,31 @@ rspamd_lua_run_config_post_init (lua_State *L, struct rspamd_config *cfg)
 	}
 }
 
+
+void
+rspamd_lua_run_config_unload (lua_State *L, struct rspamd_config *cfg)
+{
+	struct rspamd_config_cfg_lua_script *sc;
+	struct rspamd_config **pcfg;
+
+	LL_FOREACH (cfg->post_init_scripts, sc) {
+		lua_pushcfunction (L, &rspamd_lua_traceback);
+		gint err_idx = lua_gettop (L);
+
+		lua_rawgeti (L, LUA_REGISTRYINDEX, sc->cbref);
+		pcfg = lua_newuserdata (L, sizeof (*pcfg));
+		*pcfg = cfg;
+		rspamd_lua_setclass (L, "rspamd{config}", -1);
+
+		if (lua_pcall (L, 1, 0, err_idx) != 0) {
+			msg_err_config ("cannot run config post init script: %s",
+					lua_tostring (L, -1));
+		}
+
+		lua_settop (L, err_idx - 1);
+	}
+}
+
 static void
 rspamd_lua_run_postloads_error (struct thread_entry *thread, int ret, const char *msg)
 {

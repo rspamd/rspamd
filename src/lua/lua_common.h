@@ -421,6 +421,7 @@ void rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
 		struct event_base *ev_base, struct rspamd_worker *w);
 
 void rspamd_lua_run_config_post_init (lua_State *L, struct rspamd_config *cfg);
+void rspamd_lua_run_config_unload (lua_State *L, struct rspamd_config *cfg);
 
 /**
  * Adds new destructor for a local function for specific pool
