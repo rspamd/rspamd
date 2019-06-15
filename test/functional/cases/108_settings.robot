@@ -18,6 +18,8 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 NO SETTINGS SPAM
   ${result} =  Scan Message With Rspamc  ${SPAM_MESSAGE}
   Check Rspamc  ${result}  SIMPLE_TEST
+  Should Contain  ${result.stdout}  SIMPLE_VIRTUAL
+  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
   Should Contain  ${result.stdout}  SIMPLE_PRE
   Should Contain  ${result.stdout}  SIMPLE_POST
   Should Contain  ${result.stdout}  BAYES_SPAM
@@ -99,6 +101,7 @@ SETTINGS ID - VIRTUAL
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_virtual
   Check Rspamc  ${result}  SIMPLE_VIRTUAL
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
 
@@ -106,6 +109,7 @@ SETTINGS ID - VIRTUAL GROUP
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_virtual_group
   Check Rspamc  ${result}  SIMPLE_VIRTUAL
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
 
