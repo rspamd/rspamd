@@ -200,8 +200,8 @@ struct rspamd_task {
 
 	struct rspamd_dns_resolver *resolver;			/**< DNS resolver									*/
 	struct ev_loop *event_loop;						/**< Event base										*/
-	struct event timeout_ev;						/**< Global task timeout							*/
-	struct event *guard_ev;							/**< Event for input sanity guard 					*/
+	struct ev_timer timeout_ev;						/**< Global task timeout							*/
+	struct ev_io *guard_ev;							/**< Event for input sanity guard 					*/
 
 	gpointer checkpoint;							/**< Opaque checkpoint data							*/
 	ucl_object_t *settings;							/**< Settings applied to task						*/

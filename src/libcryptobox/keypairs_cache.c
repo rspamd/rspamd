@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 #include "config.h"
-#include "rspamd.h"
 #include "keypairs_cache.h"
 #include "keypair_private.h"
+#include "libutil/util.h"
 #include "hash.h"
 
 struct rspamd_keypair_elt {

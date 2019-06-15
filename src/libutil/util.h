@@ -426,10 +426,6 @@ void rspamd_random_seed_fast (void);
  */
 gboolean rspamd_constant_memcmp (const guchar *a, const guchar *b, gsize len);
 
-
-/* Avoid stupidity in libevent > 1.4 */
-int rspamd_event_pending (struct event *ev, short what);
-
 /**
  * Open file without following symlinks or special stuff
  * @param fname filename

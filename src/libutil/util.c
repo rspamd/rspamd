@@ -2570,24 +2570,6 @@ rspamd_constant_memcmp (const guchar *a, const guchar *b, gsize len)
 	return (((gint32)(guint16)((guint32)r + 0x8000) - 0x8000) == 0);
 }
 
-#if !defined(LIBEVENT_VERSION_NUMBER) || LIBEVENT_VERSION_NUMBER < 0x02000000UL
-struct ev_loop *
-event_get_base (struct event *ev)
-{
-	return ev->ev_base;
-}
-#endif
-
-int
-rspamd_event_pending (struct event *ev, short what)
-{
-	if (ev->ev_base == NULL) {
-		return 0;
-	}
-
-	return event_pending (ev, what, NULL);
-}
-
 int
 rspamd_file_xopen (const char *fname, int oflags, guint mode,
 		gboolean allow_symlink)

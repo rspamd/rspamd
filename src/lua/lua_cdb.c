@@ -64,13 +64,12 @@ lua_cdb_create (lua_State *L)
 	else {
 		cdb = g_malloc (sizeof (struct cdb));
 		cdb->filename = g_strdup (filename);
-		cdb->check_timer_ev = NULL;
-		cdb->check_timer_tv = NULL;
 		if (cdb_init (cdb, fd) == -1) {
 			msg_warn ("cannot open cdb: %s, %s", filename, strerror (errno));
 			lua_pushnil (L);
 		}
 		else {
+			cdb_add_timer (cdb, ev_default_loop (0), CDB_REFRESH_TIME);
 			pcdb = lua_newuserdata (L, sizeof (struct cdb *));
 			rspamd_lua_setclass (L, "rspamd{cdb}", -1);
 			*pcdb = cdb;
@@ -105,13 +104,6 @@ lua_cdb_lookup (lua_State *L)
 	if (!cdb) {
 		lua_error (L);
 		return 1;
-	}
-	/*
-	 * XXX: this code is placed here because event_loop is called inside workers, so start
-	 * monitoring on first check, not on creation
-	 */
-	if (cdb->check_timer_ev == NULL) {
-		cdb_add_timer (cdb, CDB_REFRESH_TIME);
 	}
 
 	what = luaL_checkstring (L, 2);

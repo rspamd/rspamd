@@ -70,7 +70,7 @@ struct redis_stat_runtime {
 	struct redis_stat_ctx *ctx;
 	struct rspamd_task *task;
 	struct upstream *selected;
-	struct event timeout_event;
+	ev_timer timeout_event;
 	GArray *results;
 	struct rspamd_statfile_config *stcf;
 	gchar *redis_object_expanded;
@@ -1019,8 +1019,8 @@ rspamd_redis_fin (gpointer data)
 
 	rt->has_event = FALSE;
 	/* Stop timeout */
-	if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
-		event_del (&rt->timeout_event);
+	if (ev_is_active (&rt->timeout_event)) {
+		ev_timer_stop (rt->task->event_loop, &rt->timeout_event);
 	}
 
 	if (rt->redis) {
@@ -1052,9 +1052,9 @@ rspamd_redis_fin_learn (gpointer data)
 }
 
 static void
-rspamd_redis_timeout (gint fd, short what, gpointer d)
+rspamd_redis_timeout (EV_P_ ev_timer *w, int revents)
 {
-	struct redis_stat_runtime *rt = REDIS_RUNTIME (d);
+	struct redis_stat_runtime *rt = REDIS_RUNTIME (w->data);
 	struct rspamd_task *task;
 	redisAsyncContext *redis;
 
@@ -1562,7 +1562,6 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 {
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (p);
 	rspamd_fstring_t *query;
-	struct timeval tv;
 	gint ret;
 	const gchar *learned_key = "learns";
 
@@ -1591,13 +1590,15 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 		rspamd_session_add_event (task->s, rspamd_redis_fin, rt, M);
 		rt->has_event = TRUE;
 
-		if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
-			event_del (&rt->timeout_event);
+
+		if (ev_is_active (&rt->timeout_event)) {
+			ev_timer_again (task->event_loop, &rt->timeout_event);
 		}
-		event_set (&rt->timeout_event, -1, EV_TIMEOUT, rspamd_redis_timeout, rt);
-		event_base_set (task->event_loop, &rt->timeout_event);
-		double_to_tv (rt->ctx->timeout, &tv);
-		event_add (&rt->timeout_event, &tv);
+		else {
+			ev_timer_init (&rt->timeout_event, rspamd_redis_timeout,
+					rt->ctx->timeout, 0.);
+			ev_timer_start (task->event_loop, &rt->timeout_event);
+		}
 
 		query = rspamd_redis_tokens_to_query (task, rt, tokens,
 				rt->ctx->new_schema ? "HGET" : "HMGET",
@@ -1628,8 +1629,8 @@ rspamd_redis_finalize_process (struct rspamd_task *task, gpointer runtime,
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
 	redisAsyncContext *redis;
 
-	if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
-		event_del (&rt->timeout_event);
+	if (ev_is_active (&rt->timeout_event)) {
+		ev_timer_stop (task->event_loop, &rt->timeout_event);
 	}
 
 	if (rt->redis) {
@@ -1802,13 +1803,14 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 		rt->has_event = TRUE;
 
 		/* Set timeout */
-		if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
-			event_del (&rt->timeout_event);
+		if (ev_is_active (&rt->timeout_event)) {
+			ev_timer_again (task->event_loop, &rt->timeout_event);
 		}
-		event_set (&rt->timeout_event, -1, EV_TIMEOUT, rspamd_redis_timeout, rt);
-		event_base_set (task->event_loop, &rt->timeout_event);
-		double_to_tv (rt->ctx->timeout, &tv);
-		event_add (&rt->timeout_event, &tv);
+		else {
+			ev_timer_init (&rt->timeout_event, rspamd_redis_timeout,
+					rt->ctx->timeout, 0.);
+			ev_timer_start (task->event_loop, &rt->timeout_event);
+		}
 
 		return TRUE;
 	}
@@ -1827,8 +1829,8 @@ rspamd_redis_finalize_learn (struct rspamd_task *task, gpointer runtime,
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
 	redisAsyncContext *redis;
 
-	if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
-		event_del (&rt->timeout_event);
+	if (ev_is_active (&rt->timeout_event)) {
+		ev_timer_stop (task->event_loop, &rt->timeout_event);
 	}
 
 	if (rt->redis) {
