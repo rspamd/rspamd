@@ -2358,7 +2358,7 @@ rspamd_config_settings_elt_dtor (struct rspamd_config_settings_elt *e)
 	}
 }
 
-static inline guint32
+guint32
 rspamd_config_name_to_id (const gchar *name, gsize namelen)
 {
 	guint64 h;

@@ -746,6 +746,14 @@ void rspamd_config_register_settings_id (struct rspamd_config *cfg,
 										 ucl_object_t *symbols_disabled);
 
 /**
+ * Convert settings name to settings id
+ * @param name
+ * @param namelen
+ * @return
+ */
+guint32 rspamd_config_name_to_id (const gchar *name, gsize namelen);
+
+/**
  * Finds settings id element and obtain reference count (must be unrefed by caller)
  * @param cfg
  * @param id

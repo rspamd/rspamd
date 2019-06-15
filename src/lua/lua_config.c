@@ -1396,6 +1396,27 @@ lua_metric_symbol_callback_return (struct thread_entry *thread_entry, int ret)
 	rspamd_symcache_item_async_dec_check (task, cd->item, "lua coro symbol");
 }
 
+static guint32*
+rspamd_process_id_list (const gchar *entries, guint32 *plen)
+{
+	gchar **sym_elts;
+	guint32 *ids, nids;
+
+	sym_elts = g_strsplit_set (entries, ",;", -1);
+	nids = g_strv_length (sym_elts);
+
+	ids = g_malloc (nids * sizeof (guint32));
+
+	for (guint i = 0; i < nids; i ++) {
+		ids[i] = rspamd_config_name_to_id (sym_elts[i], strlen (sym_elts[i]));
+	}
+
+	*plen = nids;
+	g_strfreev (sym_elts);
+
+	return ids;
+}
+
 static gint
 rspamd_register_symbol_fromlua (lua_State *L,
 		struct rspamd_config *cfg,
@@ -1405,10 +1426,13 @@ rspamd_register_symbol_fromlua (lua_State *L,
 		gint priority,
 		enum rspamd_symbol_type type,
 		gint parent,
+		const gchar *allowed_ids,
+		const gchar *forbidden_ids,
 		gboolean optional)
 {
 	struct lua_callback_data *cd;
 	gint ret = -1;
+	guint32 *ids, nids;
 
 	if (priority == 0 && weight < 0) {
 		priority = 1;
@@ -1425,6 +1449,13 @@ rspamd_register_symbol_fromlua (lua_State *L,
 
 			return -1;
 		}
+	}
+
+	if (allowed_ids && !(type & SYMBOL_TYPE_EXPLICIT_DISABLE)) {
+		/* Mark symbol as explicit allow */
+		msg_info_config ("mark symbol %s as explicit enable as its execution is"
+				   "allowed merely on specific settings ids", name);
+		type |= SYMBOL_TYPE_EXPLICIT_ENABLE;
 	}
 
 	if (ref != -1) {
@@ -1472,6 +1503,28 @@ rspamd_register_symbol_fromlua (lua_State *L,
 				parent);
 	}
 
+	if (allowed_ids) {
+		ids = rspamd_process_id_list (allowed_ids, &nids);
+
+		if (nids > 0) {
+			rspamd_symcache_set_allowed_settings_ids (cfg->cache, name,
+					ids, nids);
+
+			g_free (ids);
+		}
+	}
+
+	if (forbidden_ids) {
+		ids = rspamd_process_id_list (forbidden_ids, &nids);
+
+		if (nids > 0) {
+			rspamd_symcache_set_forbidden_settings_ids (cfg->cache, name,
+					ids, nids);
+
+			g_free (ids);
+		}
+	}
+
 	return ret;
 }
 
@@ -1508,6 +1561,7 @@ lua_config_register_post_filter (lua_State *L)
 				order,
 				SYMBOL_TYPE_POSTFILTER|SYMBOL_TYPE_CALLBACK,
 				-1,
+				NULL, NULL,
 				FALSE);
 
 		lua_pushboolean (L, ret);
@@ -1552,6 +1606,7 @@ lua_config_register_pre_filter (lua_State *L)
 				order,
 				SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_CALLBACK,
 				-1,
+				NULL, NULL,
 				FALSE);
 
 		lua_pushboolean (L, ret);
@@ -1810,7 +1865,8 @@ lua_config_register_symbol (lua_State * L)
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *name = NULL, *flags_str = NULL, *type_str = NULL,
-			*description = NULL, *group = NULL;
+			*description = NULL, *group = NULL, *allowed_ids = NULL,
+			*forbidden_ids = NULL;
 	double weight = 0, score = NAN, parent_float = NAN;
 	gboolean one_shot = FALSE;
 	gint ret = -1, cbref = -1, type, flags = 0;
@@ -1820,10 +1876,12 @@ lua_config_register_symbol (lua_State * L)
 	if (cfg) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
 				"name=S;weight=N;callback=F;flags=S;type=S;priority=I;parent=D;"
-				"score=D;description=S;group=S;one_shot=B;nshots=I",
+				"score=D;description=S;group=S;one_shot=B;nshots=I;"
+				"allowed_ids=S;forbidden_ids=S",
 				&name, &weight, &cbref, &flags_str, &type_str,
 				&priority, &parent_float,
-				&score, &description, &group, &one_shot, &nshots)) {
+				&score, &description, &group, &one_shot, &nshots,
+				&allowed_ids, &forbidden_ids)) {
 			msg_err_config ("bad arguments: %e", err);
 			g_error_free (err);
 
@@ -1862,6 +1920,7 @@ lua_config_register_symbol (lua_State * L)
 				priority,
 				type,
 				parent,
+				allowed_ids, forbidden_ids,
 				FALSE);
 
 		if (!isnan (score) || group) {
@@ -1950,6 +2009,7 @@ lua_config_register_symbols (lua_State *L)
 				0,
 				SYMBOL_TYPE_CALLBACK,
 				-1,
+				NULL, NULL,
 				FALSE);
 
 		for (i = top; i <= lua_gettop (L); i++) {
@@ -2041,6 +2101,7 @@ lua_config_register_callback_symbol (lua_State * L)
 				0,
 				SYMBOL_TYPE_CALLBACK,
 				-1,
+				NULL, NULL,
 				FALSE);
 	}
 
@@ -2083,6 +2144,7 @@ lua_config_register_callback_symbol_priority (lua_State * L)
 				priority,
 				SYMBOL_TYPE_CALLBACK,
 				-1,
+				NULL, NULL,
 				FALSE);
 	}
 
@@ -2462,7 +2524,7 @@ lua_config_newindex (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
-	const gchar *name;
+	const gchar *name, *allowed_ids = NULL, *forbidden_ids = NULL;
 	gint id, nshots, flags = 0;
 	gboolean optional = FALSE;
 
@@ -2481,6 +2543,7 @@ lua_config_newindex (lua_State *L)
 					0,
 					SYMBOL_TYPE_NORMAL,
 					-1,
+					NULL, NULL,
 					FALSE);
 		}
 		else if (lua_type (L, 3) == LUA_TTABLE) {
@@ -2556,6 +2619,22 @@ lua_config_newindex (lua_State *L)
 			}
 			lua_pop (L, 1);
 
+			lua_pushstring (L, "allowed_ids");
+			lua_gettable (L, -2);
+
+			if (lua_type (L, -1) == LUA_TSTRING) {
+				allowed_ids = lua_tostring (L, -1);
+			}
+			lua_pop (L, 1);
+
+			lua_pushstring (L, "forbidden_ids");
+			lua_gettable (L, -2);
+
+			if (lua_type (L, -1) == LUA_TSTRING) {
+				forbidden_ids = lua_tostring (L, -1);
+			}
+			lua_pop (L, 1);
+
 			id = rspamd_register_symbol_fromlua (L,
 					cfg,
 					name,
@@ -2564,6 +2643,7 @@ lua_config_newindex (lua_State *L)
 					priority,
 					type,
 					-1,
+					allowed_ids, forbidden_ids,
 					optional);
 
 			if (id != -1) {

@@ -3026,7 +3026,7 @@ rspamd_symcache_set_allowed_settings_ids (struct rspamd_symcache *cache,
 {
 	struct rspamd_symcache_item *item;
 
-	item = rspamd_symcache_find_filter (cache, symbol, true);
+	item = rspamd_symcache_find_filter (cache, symbol, false);
 
 	if (item == NULL) {
 		return false;
@@ -3066,7 +3066,7 @@ rspamd_symcache_set_forbidden_settings_ids (struct rspamd_symcache *cache,
 {
 	struct rspamd_symcache_item *item;
 
-	item = rspamd_symcache_find_filter (cache, symbol, true);
+	item = rspamd_symcache_find_filter (cache, symbol, false);
 
 	if (item == NULL) {
 		return false;
@@ -3108,7 +3108,7 @@ rspamd_symcache_get_allowed_settings_ids (struct rspamd_symcache *cache,
 	struct rspamd_symcache_item *item;
 	guint cnt = 0;
 
-	item = rspamd_symcache_find_filter (cache, symbol, true);
+	item = rspamd_symcache_find_filter (cache, symbol, false);
 
 	if (item == NULL) {
 		return NULL;
@@ -3142,7 +3142,7 @@ rspamd_symcache_get_forbidden_settings_ids (struct rspamd_symcache *cache,
 	struct rspamd_symcache_item *item;
 	guint cnt = 0;
 
-	item = rspamd_symcache_find_filter (cache, symbol, true);
+	item = rspamd_symcache_find_filter (cache, symbol, false);
 
 	if (item == NULL) {
 		return NULL;
