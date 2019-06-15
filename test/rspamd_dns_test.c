@@ -4,7 +4,7 @@
 #include "dns.h"
 #include "logger.h"
 #include "rspamd.h"
-#include "events.h"
+#include "async_session.h"
 #include "cfg_file.h"
 
 static guint requests = 0;

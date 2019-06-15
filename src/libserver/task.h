@@ -18,7 +18,7 @@
 
 #include "config.h"
 #include "http_connection.h"
-#include "events.h"
+#include "async_session.h"
 #include "util.h"
 #include "mem_pool.h"
 #include "dns.h"

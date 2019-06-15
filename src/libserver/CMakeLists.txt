@@ -6,7 +6,7 @@ SET(LIBRSPAMDSERVERSRC
 				${CMAKE_CURRENT_SOURCE_DIR}/dkim.c
 				${CMAKE_CURRENT_SOURCE_DIR}/dns.c
 				${CMAKE_CURRENT_SOURCE_DIR}/dynamic_cfg.c
-				${CMAKE_CURRENT_SOURCE_DIR}/events.c
+				${CMAKE_CURRENT_SOURCE_DIR}/async_session.c
 				${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend.c
 				${CMAKE_CURRENT_SOURCE_DIR}/fuzzy_backend_sqlite.c
 				${CMAKE_CURRENT_SOURCE_DIR}/html.c

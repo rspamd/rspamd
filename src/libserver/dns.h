@@ -19,7 +19,7 @@
 
 #include "config.h"
 #include "mem_pool.h"
-#include "events.h"
+#include "async_session.h"
 #include "logger.h"
 #include "rdns.h"
 #include "upstream.h"

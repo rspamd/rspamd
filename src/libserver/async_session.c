@@ -17,7 +17,7 @@
 #include "rspamd.h"
 #include "contrib/uthash/utlist.h"
 #include "contrib/libucl/khash.h"
-#include "events.h"
+#include "async_session.h"
 #include "cryptobox.h"
 
 #define RSPAMD_SESSION_FLAG_DESTROYING (1 << 1)

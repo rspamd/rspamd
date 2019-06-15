@@ -27,7 +27,7 @@
 #include "libutil/radix.h"
 #include "libserver/url.h"
 #include "libserver/protocol.h"
-#include "libserver/events.h"
+#include "libserver/async_session.h"
 #include "libserver/roll_history.h"
 #include "libserver/task.h"
 #include <openssl/ssl.h>
