@@ -54,7 +54,8 @@ enum fetch_proto {
  */
 struct file_map_data {
 	gchar *filename;
-	struct stat st;
+	gboolean processed;
+	ev_stat st_ev;
 };
 
 
@@ -130,7 +131,7 @@ struct rspamd_map {
 	map_fin_cb_t fin_callback;
 	map_dtor_t dtor;
 	void **user_data;
-	struct ev_loop *ev_base;
+	struct ev_loop *event_loop;
 	struct rspamd_worker *wrk;
 	gchar *description;
 	gchar *name;
@@ -143,7 +144,7 @@ struct rspamd_map {
 	gsize nelts;
 	guint64 digest;
 	/* Should we check HTTP or just load cached data */
-	struct timeval tv;
+	ev_tstamp timeout;
 	gdouble poll_timeout;
 	time_t next_check;
 	gboolean active_http;
@@ -164,7 +165,7 @@ enum rspamd_map_http_stage {
 struct map_periodic_cbdata {
 	struct rspamd_map *map;
 	struct map_cb_data cbdata;
-	struct event ev;
+	ev_timer ev;
 	gboolean need_modify;
 	gboolean errored;
 	gboolean locked;
@@ -183,7 +184,7 @@ struct rspamd_http_file_data {
 };
 
 struct http_callback_data {
-	struct ev_loop *ev_base;
+	struct ev_loop *event_loop;
 	struct rspamd_http_connection *conn;
 	rspamd_inet_addr_t *addr;
 	struct rspamd_map *map;
@@ -191,16 +192,15 @@ struct http_callback_data {
 	struct http_map_data *data;
 	struct map_periodic_cbdata *periodic;
 	struct rspamd_cryptobox_pubkey *pk;
-	gboolean check;
 	struct rspamd_storage_shmem *shmem_data;
 	struct rspamd_storage_shmem *shmem_sig;
 	struct rspamd_storage_shmem *shmem_pubkey;
 	gsize data_len;
 	gsize sig_len;
 	gsize pubkey_len;
-
+	gboolean check;
 	enum rspamd_map_http_stage stage;
-	struct timeval tv;
+	ev_tstamp timeout;
 
 	ref_entry_t ref;
 };
