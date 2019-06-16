@@ -244,7 +244,7 @@
 						<div class="row">
 							<div class="col-md-6">
 								<div class="well well-sm">
-									<form class="form-inline" role="form">
+									<form class="form-inline">
 										<h5>Learn Bayessian classifier:</h5>
 										<div class="form-group">
 											<div class="btn-group">
@@ -257,7 +257,7 @@
 							</div>
 							<div class="col-md-6">
 								<div class="well well-sm">
-									<form class="form-inline" role="form">
+									<form class="form-inline">
 										<h5>Learn Fuzzy storage:</h5>
 										<div class="form-group">
 											<label for="fuzzyFlagText">Flag:</label>
@@ -328,18 +328,14 @@
 </div>
 
 <!-- Common modal -->
-<div id="modalDialog" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="modalLabel">
+<div id="modalDialog" class="modal fade" tabindex="-1" role="dialog">
 	<div class="modal-dialog">
 		<div class="modal-content">
 			<div class="modal-header">
 				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
 				<h3 id="modalTitle"></h3>
 			</div>
-			<div class="modal-body" id="modalBody">
-				<div class="progress progress-striped active">
-					<div class="bar" style="width: 100%;"></div>
-				</div>
-			</div>
+			<div class="modal-body" id="modalBody"></div>
 			<div class="modal-footer">
 				<button class="btn btn-default" data-dismiss="modal" aria-hidden="true" id="modalClose">Close</button>
 				<button class="btn btn-primary" id="modalSave">Save changes</button>

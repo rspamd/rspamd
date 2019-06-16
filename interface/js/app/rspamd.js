@@ -167,10 +167,8 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
 
         var buttons = $("#navBar .pull-right");
         $("#mainUI").show();
-        $("#progress").show();
         $(buttons).show();
         $(".nav-tabs-sticky").stickyTabs({initialTab:"#status_nav"});
-        $("#progress").hide();
     }
 
     function alertMessage(alertClass, alertText) {
