@@ -62,6 +62,12 @@ enum rspamd_worker_flags {
 	RSPAMD_WORKER_CONTROLLER = (1 << 6),
 };
 
+struct rspamd_worker_accept_event {
+	ev_io accept_ev;
+	ev_timer throttling_ev;
+	struct ev_loop *event_loop;
+	struct rspamd_worker_accept_event *prev, *next;
+};
 
 /**
  * Worker process structure
@@ -77,7 +83,7 @@ struct rspamd_worker {
 	struct rspamd_main *srv;        /**< pointer to server structure					*/
 	GQuark type;                    /**< process type									*/
 	GHashTable *signal_events;      /**< signal events									*/
-	GList *accept_events;           /**< socket events									*/
+	struct rspamd_worker_accept_event *accept_events; /**< socket events									*/
 	struct rspamd_worker_conf *cf;  /**< worker config data								*/
 	gpointer ctx;                   /**< worker's specific data							*/
 	enum rspamd_worker_flags flags; /**< worker's flags									*/
@@ -85,7 +91,7 @@ struct rspamd_worker {
 	                                                   [1] is used by a worker			*/
 	gint srv_pipe[2];               /**< used by workers to request something from the
 	                                     main process. [0] - main, [1] - worker			*/
-	struct event srv_ev;            /**< used by main for read workers' requests		*/
+	ev_io srv_ev;                   /**< used by main for read workers' requests		*/
 	gpointer control_data;          /**< used by control protocol to handle commands	*/
 	gpointer tmp_data;              /**< used to avoid race condition to deal with control messages */
 	GPtrArray *finish_actions;      /**< called when worker is terminated				*/

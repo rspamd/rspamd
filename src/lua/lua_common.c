@@ -910,7 +910,6 @@ rspamd_lua_init (bool wipe_mem)
 	luaopen_util (L);
 	luaopen_tcp (L);
 	luaopen_html (L);
-	luaopen_fann (L);
 	luaopen_sqlite3 (L);
 	luaopen_cryptobox (L);
 	luaopen_dns (L);

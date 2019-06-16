@@ -281,7 +281,6 @@ void luaopen_text (lua_State *L);
 void luaopen_util (lua_State * L);
 void luaopen_tcp (lua_State * L);
 void luaopen_html (lua_State * L);
-void luaopen_fann (lua_State *L);
 void luaopen_sqlite3 (lua_State *L);
 void luaopen_cryptobox (lua_State *L);
 void luaopen_dns (lua_State *L);

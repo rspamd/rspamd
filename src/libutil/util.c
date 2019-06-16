@@ -1612,42 +1612,6 @@ rspamd_thread_func (gpointer ud)
 	return ud;
 }
 
-/**
- * Create new named thread
- * @param name name pattern
- * @param func function to start
- * @param data data to pass to function
- * @param err error pointer
- * @return new thread object that can be joined
- */
-GThread *
-rspamd_create_thread (const gchar *name,
-	GThreadFunc func,
-	gpointer data,
-	GError **err)
-{
-	GThread *new;
-	struct rspamd_thread_data *td;
-	static gint32 id;
-	guint r;
-
-	r = strlen (name);
-	td = g_malloc (sizeof (struct rspamd_thread_data));
-	td->id = ++id;
-	td->name = g_malloc (r + sizeof ("4294967296"));
-	td->func = func;
-	td->data = data;
-
-	rspamd_snprintf (td->name, r + sizeof ("4294967296"), "%s-%d", name, id);
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION > 32))
-	new = g_thread_try_new (td->name, rspamd_thread_func, td, err);
-#else
-	new = g_thread_create (rspamd_thread_func, td, TRUE, err);
-#endif
-
-	return new;
-}
-
 struct hash_copy_callback_data {
 	gpointer (*key_copy_func)(gconstpointer data, gpointer ud);
 	gpointer (*value_copy_func)(gconstpointer data, gpointer ud);

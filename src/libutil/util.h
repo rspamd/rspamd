@@ -263,19 +263,6 @@ void rspamd_mutex_unlock (rspamd_mutex_t *mtx);
 void rspamd_mutex_free (rspamd_mutex_t *mtx);
 
 /**
- * Create new named thread
- * @param name name pattern
- * @param func function to start
- * @param data data to pass to function
- * @param err error pointer
- * @return new thread object that can be joined
- */
-GThread * rspamd_create_thread (const gchar *name,
-	GThreadFunc func,
-	gpointer data,
-	GError **err);
-
-/**
  * Deep copy of one hash table to another
  * @param src source hash
  * @param dst destination hash

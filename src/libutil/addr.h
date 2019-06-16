@@ -221,15 +221,17 @@ int rspamd_inet_address_listen (const rspamd_inet_addr_t *addr, gint type,
  */
 gboolean rspamd_ip_is_valid (const rspamd_inet_addr_t *addr);
 
+typedef void (*rspamd_accept_throttling_handler)(gint, void *);
 /**
  * Accept from listening socket filling addr structure
  * @param sock listening socket
- * @param addr allocated inet addr structure
- * @param accept_events events for accepting new sockets
+ * @param target allocated inet addr structure
  * @return
  */
-gint rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **addr,
-		GList *accept_events);
+gint rspamd_accept_from_socket (gint sock,
+								rspamd_inet_addr_t **target,
+								rspamd_accept_throttling_handler hdl,
+								void *hdl_data);
 
 /**
  * Parse host[:port[:priority]] line

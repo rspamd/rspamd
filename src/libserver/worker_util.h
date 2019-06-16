@@ -36,6 +36,9 @@ struct rspamd_worker_signal_handler;
  * @param base
  */
 void rspamd_worker_init_signals (struct rspamd_worker *worker, struct ev_loop *base);
+
+typedef void (*rspamd_accept_handler)(struct ev_loop *loop, ev_io *w, int revents);
+
 /**
  * Prepare worker's startup
  * @param worker worker structure
@@ -46,7 +49,7 @@ void rspamd_worker_init_signals (struct rspamd_worker *worker, struct ev_loop *b
  */
 struct ev_loop *
 rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
-	void (*accept_handler)(int, short, void *));
+					   rspamd_accept_handler hdl);
 
 /**
  * Set special signal handler for a worker
@@ -124,8 +127,6 @@ void rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
  */
 worker_t * rspamd_get_worker_by_type (struct rspamd_config *cfg, GQuark type);
 
-void rspamd_worker_stop_accept (struct rspamd_worker *worker);
-
 /**
  * Block signals before terminations
  */
@@ -201,6 +202,13 @@ void rspamd_set_crash_handler (struct rspamd_main *);
 void rspamd_worker_init_monitored (struct rspamd_worker *worker,
 		struct ev_loop *ev_base,
 		struct rspamd_dns_resolver *resolver);
+
+/**
+ * Performs throttling for accept events
+ * @param sock
+ * @param data struct rspamd_worker_accept_event * list
+ */
+void rspamd_worker_throttle_accept_events (gint sock, void *data);
 
 #define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \

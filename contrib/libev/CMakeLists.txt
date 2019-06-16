@@ -59,7 +59,6 @@ ADD_LIBRARY(rspamd-libev STATIC ${LIBEVSRC})
 ADD_DEFINITIONS("-DEV_CONFIG_H=\"${CMAKE_CURRENT_BINARY_DIR}/libev-config.h\""
 		-DEV_MULTIPLICITY=1
 		-DEV_USE_FLOOR=1
-		-DEV_USE_MONOTONIC=1
 		-DEV_NO_THREADS=1 # We do not have threads in Rspamd!
 		-DEV_FEATURES=127 # Enable all features
 		)

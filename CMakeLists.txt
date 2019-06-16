@@ -52,9 +52,7 @@ OPTION(WANT_SYSTEMD_UNITS  "Install systemd unit files on Linux [default: OFF]" 
 OPTION(ENABLE_SNOWBALL     "Enable snowball stemmer [default: ON]"              ON)
 OPTION(ENABLE_CLANG_PLUGIN "Enable clang static analysing plugin [default: OFF]" OFF)
 OPTION(ENABLE_HYPERSCAN    "Enable hyperscan for fast regexp processing [default: OFF]" OFF)
-OPTION(ENABLE_FANN         "Enable fann for neural network plugin [default: OFF]" OFF)
 OPTION(ENABLE_PCRE2        "Enable pcre2 instead of pcre  [default: OFF]"         OFF)
-OPTION(ENABLE_GD           "Enable libgd for images processing [default: OFF]" OFF)
 OPTION(ENABLE_JEMALLOC     "Build rspamd with jemalloc allocator  [default: OFF]" OFF)
 OPTION(ENABLE_COVERAGE     "Build rspamd with code coverage options [default: OFF]" OFF)
 OPTION(ENABLE_FULL_DEBUG   "Build rspamd with all possible debug [default: OFF]" OFF)
@@ -634,9 +632,7 @@ IF(ENABLE_LIBUNWIND MATCHES "ON")
 			ROOT ${LIBUNWIND_ROOT_DIR} MODULES libunwind)
 	SET(WITH_LIBUNWIND "1")
 ENDIF()
-ProcessPackage(GTHREAD2 LIBRARY gthread-2.0 INCLUDE glib.h
-	INCLUDE_SUFFIXES include/glib include/glib-2.0
-	ROOT ${GLIB_ROOT_DIR} MODULES gthread-2.0>=2.28)
+
 ProcessPackage(GLIB2 LIBRARY glib-2.0 INCLUDE glib.h
 	INCLUDE_SUFFIXES include/glib include/glib-2.0
 	ROOT ${GLIB_ROOT_DIR} MODULES glib-2.0>=2.28)
@@ -672,34 +668,6 @@ IF(ENABLE_HYPERSCAN MATCHES "ON")
 			ROOT ${HYPERSCAN_ROOT_DIR} MODULES libhs)
 	SET(WITH_HYPERSCAN 1)
 ENDIF()
-IF (ENABLE_FANN MATCHES "ON")
-	ProcessPackage(FANN LIBRARY fann INCLUDE fann.h INCLUDE_SUFFIXES
-			include/fann
-			ROOT ${FANN_ROOT_DIR} MODULES fann)
-	SET(WITH_FANN 1)
-ENDIF ()
-
-IF (ENABLE_GD MATCHES "ON")
-	ProcessPackage(GD LIBRARY gd INCLUDE gd.h INCLUDE_SUFFIXES
-			include/gd include/libgd
-			ROOT ${GD_ROOT_DIR} MODULES gd)
-	LIST(APPEND CMAKE_REQUIRED_INCLUDES "${GD_INCLUDE}")
-	LIST(APPEND CMAKE_REQUIRED_LIBRARIES "${GD_LIBRARY}")
-
-	CHECK_SYMBOL_EXISTS(gdImageSetInterpolationMethod gd.h GD_INTERPOLATION)
-	CHECK_SYMBOL_EXISTS(gdImageScale gd.h GD_SCALE)
-	CHECK_SYMBOL_EXISTS(gdImageGrayScale gd.h GD_GRAYSCALE)
-	CHECK_SYMBOL_EXISTS(gdImageCreateFromJpegPtr gd.h GD_JPEG)
-	CHECK_SYMBOL_EXISTS(gdImageCreateFromPngPtr gd.h GD_PNG)
-	CHECK_SYMBOL_EXISTS(gdImageCreateFromBmpPtr gd.h GD_BMP)
-	CHECK_SYMBOL_EXISTS(gdImageCreateFromGifPtr gd.h GD_GIF)
-
-	IF(GD_INTERPOLATION AND GD_SCALE AND GD_GRAYSCALE AND GD_JPEG AND GD_PNG AND GD_GIF AND GD_BMP)
-		SET(USABLE_GD 1)
-	ELSE()
-		MESSAGE(STATUS "Libgd is found but it is unusable")
-	ENDIF()
-ENDIF ()
 
 #Check for openssl (required for dkim)
 SET(HAVE_OPENSSL 1)

@@ -984,21 +984,21 @@ do_encrypt_password (void)
 
 /* Signal handlers */
 static void
-rspamd_term_handler (gint signo, short what, gpointer arg)
+rspamd_term_handler (struct ev_loop *loop, ev_signal *w, int revents)
 {
-	struct rspamd_main *rspamd_main = arg;
+	struct rspamd_main *rspamd_main = (struct rspamd_main *)w->data;
 
 	msg_info_main ("catch termination signal, waiting for children");
 	rspamd_log_nolock (rspamd_main->logger);
-	rspamd_pass_signal (rspamd_main->workers, signo);
+	rspamd_pass_signal (rspamd_main->workers, w->signum);
 
-	event_base_loopexit (rspamd_main->event_loop, NULL);
+	ev_break (rspamd_main->event_loop, EVBREAK_ALL);
 }
 
 static void
-rspamd_usr1_handler (gint signo, short what, gpointer arg)
+rspamd_usr1_handler (struct ev_loop *loop, ev_signal *w, int revents)
 {
-	struct rspamd_main *rspamd_main = arg;
+	struct rspamd_main *rspamd_main = (struct rspamd_main *)w->data;
 
 	rspamd_log_reopen_priv (rspamd_main->logger,
 			rspamd_main->workers_uid,
@@ -1008,9 +1008,9 @@ rspamd_usr1_handler (gint signo, short what, gpointer arg)
 }
 
 static void
-rspamd_hup_handler (gint signo, short what, gpointer arg)
+rspamd_hup_handler (struct ev_loop *loop, ev_signal *w, int revents)
 {
-	struct rspamd_main *rspamd_main = arg;
+	struct rspamd_main *rspamd_main = (struct rspamd_main *)w->data;
 
 	msg_info_main ("rspamd "
 			RVERSION
@@ -1243,8 +1243,9 @@ main (gint argc, gchar **argv, gchar **env)
 	worker_t **pworker;
 	GQuark type;
 	rspamd_inet_addr_t *control_addr = NULL;
-	struct ev_loop *ev_base;
-	struct event term_ev, int_ev, cld_ev, hup_ev, usr1_ev, control_ev;
+	struct ev_loop *event_loop;
+	ev_signal term_ev, int_ev, cld_ev, hup_ev, usr1_ev;
+	ev_io control_ev;
 	struct timeval term_tv;
 	struct rspamd_main *rspamd_main;
 	gboolean skip_pid = FALSE, valgrind_mode = FALSE;
@@ -1498,47 +1499,53 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->workers = g_hash_table_new (g_direct_hash, g_direct_equal);
 
 	/* Init event base */
-	ev_base = event_init ();
-	rspamd_main->event_loop = ev_base;
+	event_loop = ev_default_loop (EVFLAG_SIGNALFD);
+	rspamd_main->event_loop = event_loop;
 	/* Unblock signals */
 	sigemptyset (&signals.sa_mask);
 	sigprocmask (SIG_SETMASK, &signals.sa_mask, NULL);
 
 	/* Set events for signals */
-	evsignal_set (&term_ev, SIGTERM, rspamd_term_handler, rspamd_main);
-	event_base_set (ev_base, &term_ev);
-	event_add (&term_ev, NULL);
-	evsignal_set (&int_ev, SIGINT, rspamd_term_handler, rspamd_main);
-	event_base_set (ev_base, &int_ev);
-	event_add (&int_ev, NULL);
-	evsignal_set (&hup_ev, SIGHUP, rspamd_hup_handler, rspamd_main);
-	event_base_set (ev_base, &hup_ev);
-	event_add (&hup_ev, NULL);
+	ev_signal_init (&term_ev, rspamd_term_handler, SIGTERM);
+	term_ev.data = rspamd_main;
+	ev_signal_start (event_loop, &term_ev);
+
+	ev_signal_init (&int_ev, rspamd_term_handler, SIGINT);
+	int_ev.data = rspamd_main;
+	ev_signal_start (event_loop, &int_ev);
+
+	ev_signal_init (&hup_ev, rspamd_hup_handler, SIGHUP);
+	hup_ev.data = rspamd_main;
+	ev_signal_start (event_loop, &hup_ev);
+
+	ev_signal_init (&usr1_ev, rspamd_usr1_handler, SIGUSR1);
+	usr1_ev.data = rspamd_main;
+	ev_signal_start (event_loop, &usr1_ev);
+
+
+	/* XXX: deal with children */
 	evsignal_set (&cld_ev, SIGCHLD, rspamd_cld_handler, rspamd_main);
-	event_base_set (ev_base, &cld_ev);
+	event_base_set (event_loop, &cld_ev);
 	event_add (&cld_ev, NULL);
-	evsignal_set (&usr1_ev, SIGUSR1, rspamd_usr1_handler, rspamd_main);
-	event_base_set (ev_base, &usr1_ev);
-	event_add (&usr1_ev, NULL);
+
 
 	rspamd_check_core_limits (rspamd_main);
 	rspamd_mempool_lock_mutex (rspamd_main->start_mtx);
-	spawn_workers (rspamd_main, ev_base);
+	spawn_workers (rspamd_main, event_loop);
 	rspamd_mempool_unlock_mutex (rspamd_main->start_mtx);
 
 	rspamd_main->http_ctx = rspamd_http_context_create (rspamd_main->cfg,
-			ev_base, rspamd_main->cfg->ups_ctx);
+			event_loop, rspamd_main->cfg->ups_ctx);
 
 	if (control_fd != -1) {
 		msg_info_main ("listening for control commands on %s",
 				rspamd_inet_address_to_string (control_addr));
-		event_set (&control_ev, control_fd, EV_READ|EV_PERSIST,
-				rspamd_control_handler, rspamd_main);
-		event_base_set (ev_base, &control_ev);
-		event_add (&control_ev, NULL);
+		ev_io_init (&control_ev, rspamd_control_handler, control_fd, EV_READ);
+		control_ev.data = rspamd_main;
+		ev_io_start (event_loop, &control_ev);
 	}
 
-	event_base_loop (ev_base, 0);
+	event_base_loop (event_loop, 0);
 	/* We need to block signals unless children are waited for */
 	rspamd_worker_block_signals ();
 
@@ -1570,10 +1577,10 @@ main (gint argc, gchar **argv, gchar **env)
 
 	event_set (&term_ev, -1, EV_TIMEOUT|EV_PERSIST,
 			rspamd_final_term_handler, rspamd_main);
-	event_base_set (ev_base, &term_ev);
+	event_base_set (event_loop, &term_ev);
 	event_add (&term_ev, &term_tv);
 
-	event_base_loop (ev_base, 0);
+	event_base_loop (event_loop, 0);
 	event_del (&term_ev);
 
 	/* Maybe save roll history */
@@ -1595,7 +1602,7 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	g_free (rspamd_main);
-	event_base_free (ev_base);
+	event_base_free (event_loop);
 	sqlite3_shutdown ();
 
 	if (control_addr) {
