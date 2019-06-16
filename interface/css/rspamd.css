@@ -32,6 +32,13 @@ textarea {
 }
 
 /* local overrides */
+.navbar-brand {
+    margin-left: auto !important;
+    padding: 0;
+}
+.navbar-brand > img {
+    height: 50px;
+}
 .disconnect {
     margin: 9px 0 0;
     padding-bottom: 5px;
