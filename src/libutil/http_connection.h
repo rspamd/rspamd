@@ -221,12 +221,12 @@ gboolean rspamd_http_connection_is_encrypted (struct rspamd_http_connection *con
 void rspamd_http_connection_read_message (
 		struct rspamd_http_connection *conn,
 		gpointer ud,
-		struct timeval *timeout);
+		ev_tstamp timeout);
 
 void rspamd_http_connection_read_message_shared (
 		struct rspamd_http_connection *conn,
 		gpointer ud,
-		struct timeval *timeout);
+		ev_tstamp timeout);
 
 /**
  * Send reply using initialised connection
@@ -241,7 +241,7 @@ void rspamd_http_connection_write_message (
 		const gchar *host,
 		const gchar *mime_type,
 		gpointer ud,
-		struct timeval *timeout);
+		ev_tstamp timeout);
 
 void rspamd_http_connection_write_message_shared (
 		struct rspamd_http_connection *conn,
@@ -249,7 +249,7 @@ void rspamd_http_connection_write_message_shared (
 		const gchar *host,
 		const gchar *mime_type,
 		gpointer ud,
-		struct timeval *timeout);
+		ev_tstamp timeout);
 
 /**
  * Free connection structure

@@ -92,7 +92,7 @@ rspamd_http_router_error_handler (struct rspamd_http_connection *conn,
 				NULL,
 				"text/plain",
 				entry,
-				entry->rt->ptv);
+				entry->rt->timeout);
 		entry->is_reply = TRUE;
 	}
 }
@@ -210,7 +210,7 @@ rspamd_http_router_try_file (struct rspamd_http_connection_entry *entry,
 	msg_debug ("requested file %s", realbuf);
 	rspamd_http_connection_write_message (entry->conn, reply_msg, NULL,
 			rspamd_http_router_detect_ct (realbuf), entry,
-			entry->rt->ptv);
+			entry->rt->timeout);
 
 	return TRUE;
 }
@@ -235,7 +235,7 @@ rspamd_http_router_send_error (GError *err,
 			NULL,
 			"text/plain",
 			entry,
-			entry->rt->ptv);
+			entry->rt->timeout);
 }
 
 
@@ -369,33 +369,25 @@ rspamd_http_router_finish_handler (struct rspamd_http_connection *conn,
 struct rspamd_http_connection_router *
 rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 						rspamd_http_router_finish_handler_t fh,
-						struct timeval *timeout,
+						ev_tstamp timeout,
 						const char *default_fs_path,
 						struct rspamd_http_context *ctx)
 {
-	struct rspamd_http_connection_router * new;
+	struct rspamd_http_connection_router *nrouter;
 	struct stat st;
 
-	new = g_malloc0 (sizeof (struct rspamd_http_connection_router));
-	new->paths = g_hash_table_new_full (rspamd_ftok_icase_hash,
+	nrouter = g_malloc0 (sizeof (struct rspamd_http_connection_router));
+	nrouter->paths = g_hash_table_new_full (rspamd_ftok_icase_hash,
 			rspamd_ftok_icase_equal, rspamd_fstring_mapped_ftok_free, NULL);
-	new->regexps = g_ptr_array_new ();
-	new->conns = NULL;
-	new->error_handler = eh;
-	new->finish_handler = fh;
-	new->response_headers = g_hash_table_new_full (rspamd_strcase_hash,
+	nrouter->regexps = g_ptr_array_new ();
+	nrouter->conns = NULL;
+	nrouter->error_handler = eh;
+	nrouter->finish_handler = fh;
+	nrouter->response_headers = g_hash_table_new_full (rspamd_strcase_hash,
 			rspamd_strcase_equal, g_free, g_free);
-	new->ev_base = ctx->ev_base;
-
-	if (timeout) {
-		new->tv = *timeout;
-		new->ptv = &new->tv;
-	}
-	else {
-		new->ptv = NULL;
-	}
-
-	new->default_fs_path = NULL;
+	nrouter->event_loop = ctx->event_loop;
+	nrouter->timeout = timeout;
+	nrouter->default_fs_path = NULL;
 
 	if (default_fs_path != NULL) {
 		if (stat (default_fs_path, &st) == -1) {
@@ -406,14 +398,14 @@ rspamd_http_router_new (rspamd_http_router_error_handler_t eh,
 				msg_err ("path %s is not a directory", default_fs_path);
 			}
 			else {
-				new->default_fs_path = realpath (default_fs_path, NULL);
+				nrouter->default_fs_path = realpath (default_fs_path, NULL);
 			}
 		}
 	}
 
-	new->ctx = ctx;
+	nrouter->ctx = ctx;
 
-	return new;
+	return nrouter;
 }
 
 void
@@ -517,7 +509,7 @@ rspamd_http_router_handle_socket (struct rspamd_http_connection_router *router,
 		rspamd_http_connection_set_key (conn->conn, router->key);
 	}
 
-	rspamd_http_connection_read_message (conn->conn, conn, router->ptv);
+	rspamd_http_connection_read_message (conn->conn, conn, router->timeout);
 	DL_PREPEND (router->conns, conn);
 }
 

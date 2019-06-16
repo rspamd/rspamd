@@ -114,7 +114,7 @@ rspamd_http_context_new_default (struct rspamd_config *cfg,
 		ctx->ssl_ctx_noverify = rspamd_init_ssl_ctx_noverify ();
 	}
 
-	ctx->ev_base = ev_base;
+	ctx->event_loop = ev_base;
 
 	ctx->keep_alive_hash = kh_init (rspamd_keep_alive_hash);
 
@@ -186,7 +186,7 @@ rspamd_http_context_init (struct rspamd_http_context *ctx)
 		ctx->server_kp_cache = rspamd_keypair_cache_new (ctx->config.kp_cache_size_server);
 	}
 
-	if (ctx->config.client_key_rotate_time > 0 && ctx->ev_base) {
+	if (ctx->config.client_key_rotate_time > 0 && ctx->event_loop) {
 		struct timeval tv;
 		double jittered = rspamd_time_jitter (ctx->config.client_key_rotate_time,
 				0);
@@ -194,7 +194,7 @@ rspamd_http_context_init (struct rspamd_http_context *ctx)
 		double_to_tv (jittered, &tv);
 		event_set (&ctx->client_rotate_ev, -1, EV_TIMEOUT,
 				rspamd_http_context_client_rotate_ev, ctx);
-		event_base_set (ctx->ev_base, &ctx->client_rotate_ev);
+		event_base_set (ctx->event_loop, &ctx->client_rotate_ev);
 		event_add (&ctx->client_rotate_ev, &tv);
 	}
 

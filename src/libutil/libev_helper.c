@@ -65,16 +65,26 @@ rspamd_ev_watcher_start (struct ev_loop *loop,
 						 ev_tstamp timeout)
 {
 	ev->last_activity = ev_now (EV_A);
-	ev_timer_set (&ev->tm, timeout, 0.0);
 	ev_io_start (EV_A_ &ev->io);
-	ev_timer_start (EV_A_ &ev->tm);
+
+	if (timeout > 0) {
+		ev->timeout = timeout;
+		ev_timer_set (&ev->tm, timeout, 0.0);
+		ev_timer_start (EV_A_ &ev->tm);
+	}
 }
 
 void
 rspamd_ev_watcher_stop (struct ev_loop *loop,
 						struct rspamd_io_ev *ev)
 {
-	ev_io_stop (EV_A_ &ev->io);
+	if (ev_is_pending (&ev->io) || ev_is_active (&ev->io)) {
+		ev_io_stop (EV_A_ &ev->io);
+	}
+
+	if (ev->timeout > 0) {
+		ev_timer_stop (EV_A_ &ev->tm);
+	}
 }
 
 void

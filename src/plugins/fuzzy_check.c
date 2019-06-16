@@ -2912,7 +2912,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 			rspamd_http_connection_ref (entry->conn);
 
 			event_set (&s->ev, sock, EV_WRITE, fuzzy_controller_io_callback, s);
-			event_base_set (entry->rt->ev_base, &s->ev);
+			event_base_set (entry->rt->event_loop, &s->ev);
 			event_add (&s->ev, NULL);
 
 			evtimer_set (&s->timev, fuzzy_controller_timer_callback,
@@ -2946,7 +2946,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 
 	/* Prepare task */
 	task = rspamd_task_new (session->wrk, session->cfg, NULL,
-			session->lang_det, conn_ent->rt->ev_base);
+			session->lang_det, conn_ent->rt->event_loop);
 	task->cfg = ctx->cfg;
 	saved = rspamd_mempool_alloc0 (session->pool, sizeof (gint));
 	err = rspamd_mempool_alloc0 (session->pool, sizeof (GError *));

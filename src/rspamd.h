@@ -121,7 +121,7 @@ struct rspamd_worker_signal_cb {
 struct rspamd_worker_signal_handler {
 	gint signo;
 	gboolean enabled;
-	struct event ev;
+	ev_signal ev_sig;
 	struct ev_loop *base;
 	struct rspamd_worker *worker;
 	struct rspamd_worker_signal_cb *cb;

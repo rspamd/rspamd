@@ -18,6 +18,7 @@
 
 #include "config.h"
 #include "libutil/addr.h"
+#include "libutil/libev_helper.h"
 
 struct rspamd_ssl_connection;
 
@@ -44,7 +45,7 @@ struct rspamd_ssl_connection * rspamd_ssl_connection_new (gpointer ssl_ctx,
  * @return TRUE if a session has been connected
  */
 gboolean rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
-		const gchar *hostname, struct event *ev, struct timeval *tv,
+		const gchar *hostname, struct rspamd_io_ev *ev, ev_tstamp timeout,
 		rspamd_ssl_handler_t handler, rspamd_ssl_error_handler_t err_handler,
 		gpointer handler_data);
 

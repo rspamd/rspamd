@@ -44,9 +44,8 @@ struct rspamd_http_connection_router {
 	GHashTable *paths;
 	GHashTable *response_headers;
 	GPtrArray *regexps;
-	struct timeval tv;
-	struct timeval *ptv;
-	struct ev_loop *ev_base;
+	ev_tstamp timeout;
+	struct ev_loop *event_loop;
 	struct rspamd_http_context *ctx;
 	gchar *default_fs_path;
 	rspamd_http_router_handler_t unknown_method_handler;
@@ -66,7 +65,7 @@ struct rspamd_http_connection_router {
 struct rspamd_http_connection_router * rspamd_http_router_new (
 		rspamd_http_router_error_handler_t eh,
 		rspamd_http_router_finish_handler_t fh,
-		struct timeval *timeout,
+		ev_tstamp timeout,
 		const char *default_fs_path,
 		struct rspamd_http_context *ctx);
 

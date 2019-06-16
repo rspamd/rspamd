@@ -100,8 +100,8 @@ struct rspamd_http_context {
 	struct upstream_list *http_proxies;
 	gpointer ssl_ctx;
 	gpointer ssl_ctx_noverify;
-	struct ev_loop *ev_base;
-	struct event client_rotate_ev;
+	struct ev_loop *event_loop;
+	ev_periodic client_rotate_ev;
 	khash_t (rspamd_keep_alive_hash) *keep_alive_hash;
 };
 
