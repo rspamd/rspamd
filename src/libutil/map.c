@@ -435,7 +435,6 @@ http_map_finish (struct rspamd_http_connection *conn,
 	struct rspamd_map_backend *bk;
 	struct http_map_data *data;
 	struct rspamd_http_map_cached_cbdata *cache_cbd;
-	struct timeval tv;
 	const rspamd_ftok_t *expires_hdr, *etag_hdr;
 	char next_check_date[128];
 	guchar *aux_data, *in = NULL;
@@ -1669,9 +1668,8 @@ check:
 }
 
 static void
-rspamd_map_http_check_callback (gint fd, short what, void *ud)
+rspamd_map_http_check_callback (struct map_periodic_cbdata *cbd)
 {
-	struct map_periodic_cbdata *cbd = ud;
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
 
@@ -1682,9 +1680,8 @@ rspamd_map_http_check_callback (gint fd, short what, void *ud)
 }
 
 static void
-rspamd_map_http_read_callback (void *ud)
+rspamd_map_http_read_callback (struct map_periodic_cbdata *cbd)
 {
-	struct map_periodic_cbdata *cbd = ud;
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
 
@@ -1694,10 +1691,9 @@ rspamd_map_http_read_callback (void *ud)
 }
 
 static void
-rspamd_map_file_check_callback (void *ud)
+rspamd_map_file_check_callback (struct map_periodic_cbdata *periodic)
 {
 	struct rspamd_map *map;
-	struct map_periodic_cbdata *periodic = ud;
 	struct file_map_data *data;
 	struct rspamd_map_backend *bk;
 
@@ -1722,10 +1718,9 @@ rspamd_map_file_check_callback (void *ud)
 }
 
 static void
-rspamd_map_static_check_callback (gint fd, short what, void *ud)
+rspamd_map_static_check_callback (struct map_periodic_cbdata *periodic)
 {
 	struct rspamd_map *map;
-	struct map_periodic_cbdata *periodic = ud;
 	struct static_map_data *data;
 	struct rspamd_map_backend *bk;
 
@@ -1854,13 +1849,13 @@ rspamd_map_process_periodic (struct map_periodic_cbdata *cbd)
 			switch (bk->protocol) {
 			case MAP_PROTO_HTTP:
 			case MAP_PROTO_HTTPS:
-				rspamd_map_http_read_callback (fd, what, cbd);
+				rspamd_map_http_read_callback (cbd);
 				break;
 			case MAP_PROTO_FILE:
-				rspamd_map_file_read_callback (fd, what, cbd);
+				rspamd_map_file_read_callback (cbd);
 				break;
 			case MAP_PROTO_STATIC:
-				rspamd_map_static_read_callback (fd, what, cbd);
+				rspamd_map_static_read_callback (cbd);
 				break;
 			}
 		} else {
@@ -1868,13 +1863,13 @@ rspamd_map_process_periodic (struct map_periodic_cbdata *cbd)
 			switch (bk->protocol) {
 			case MAP_PROTO_HTTP:
 			case MAP_PROTO_HTTPS:
-				rspamd_map_http_check_callback (fd, what, cbd);
+				rspamd_map_http_check_callback (cbd);
 				break;
 			case MAP_PROTO_FILE:
-				rspamd_map_file_check_callback (fd, what, cbd);
+				rspamd_map_file_check_callback (cbd);
 				break;
 			case MAP_PROTO_STATIC:
-				rspamd_map_static_check_callback (fd, what, cbd);
+				rspamd_map_static_check_callback (cbd);
 				break;
 			}
 		}
@@ -2240,7 +2235,8 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 				if (data->cur_cache_cbd) {
 					MAP_RELEASE (data->cur_cache_cbd->shm,
 							"rspamd_http_map_cached_cbdata");
-					event_del (&data->cur_cache_cbd->timeout);
+					ev_periodic_stop (ev_default_loop (0),
+							&data->cur_cache_cbd->timeout);
 					g_free (data->cur_cache_cbd);
 					data->cur_cache_cbd = NULL;
 				}
@@ -2299,7 +2295,6 @@ rspamd_map_parse_backend (struct rspamd_config *cfg, const gchar *map_line)
 	/* Now check for each proto separately */
 	if (bk->protocol == MAP_PROTO_FILE) {
 		fdata = g_malloc0 (sizeof (struct file_map_data));
-		fdata->st.st_mtime = -1;
 
 		if (access (bk->uri, R_OK) == -1) {
 			if (errno != ENOENT) {

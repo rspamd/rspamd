@@ -23,6 +23,7 @@
 #include "contrib/libottery/ottery.h"
 #include "contrib/http-parser/http_parser.h"
 #include "rspamd.h"
+#include "libev_helper.h"
 
 INIT_LOG_MODULE(http_context)
 
@@ -38,7 +39,7 @@ struct rspamd_http_keepalive_cbdata {
 	struct rspamd_http_context *ctx;
 	GQueue *queue;
 	GList *link;
-	struct event ev;
+	struct rspamd_io_ev ev;
 };
 
 static void
@@ -64,10 +65,10 @@ rspamd_http_keepalive_queue_cleanup (GQueue *conns)
 }
 
 static void
-rspamd_http_context_client_rotate_ev (gint fd, short what, void *arg)
+rspamd_http_context_client_rotate_ev (struct ev_loop *loop, ev_periodic *w, int revents)
 {
 	struct timeval rot_tv;
-	struct rspamd_http_context *ctx = arg;
+	struct rspamd_http_context *ctx = (struct rspamd_http_context *)w->data;
 	gpointer kp;
 
 	double_to_tv (ctx->config.client_key_rotate_time, &rot_tv);
@@ -76,8 +77,7 @@ rspamd_http_context_client_rotate_ev (gint fd, short what, void *arg)
 	msg_debug_http_context ("rotate local keypair, next rotate in %d seconds",
 			(int)rot_tv.tv_sec);
 
-	event_del (&ctx->client_rotate_ev);
-	event_add (&ctx->client_rotate_ev, &rot_tv);
+	ev_periodic_again (loop, w);
 
 	kp = ctx->client_kp;
 	ctx->client_kp = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
@@ -187,15 +187,13 @@ rspamd_http_context_init (struct rspamd_http_context *ctx)
 	}
 
 	if (ctx->config.client_key_rotate_time > 0 && ctx->event_loop) {
-		struct timeval tv;
 		double jittered = rspamd_time_jitter (ctx->config.client_key_rotate_time,
 				0);
 
-		double_to_tv (jittered, &tv);
-		event_set (&ctx->client_rotate_ev, -1, EV_TIMEOUT,
-				rspamd_http_context_client_rotate_ev, ctx);
-		event_base_set (ctx->event_loop, &ctx->client_rotate_ev);
-		event_add (&ctx->client_rotate_ev, &tv);
+		ev_periodic_init (&ctx->client_rotate_ev,
+				rspamd_http_context_client_rotate_ev, 0.0, jittered, NULL);
+		ev_periodic_start (ctx->event_loop, &ctx->client_rotate_ev);
+		ctx->client_rotate_ev.data = ctx;
 	}
 
 	if (ctx->config.http_proxy) {
@@ -412,7 +410,7 @@ rspamd_http_context_check_keepalive (struct rspamd_http_context *ctx,
 			struct rspamd_http_connection *conn;
 
 			cbd = g_queue_pop_head (conns);
-			event_del (&cbd->ev);
+			rspamd_ev_watcher_stop (ctx->event_loop, &cbd->ev);
 			conn = cbd->conn;
 			g_free (cbd);
 
@@ -491,6 +489,7 @@ rspamd_http_keepalive_handler (gint fd, short what, gpointer ud)
 			cbdata->conn->keepalive_hash_key->host,
 			cbdata->queue->length);
 	rspamd_http_connection_unref (cbdata->conn);
+	rspamd_ev_watcher_stop (cbdata->ctx->event_loop, &cbdata->ev);
 	g_free (cbdata);
 }
 
@@ -498,10 +497,9 @@ void
 rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 									struct rspamd_http_connection *conn,
 									struct rspamd_http_message *msg,
-									struct ev_loop *ev_base)
+									struct ev_loop *event_loop)
 {
 	struct rspamd_http_keepalive_cbdata *cbdata;
-	struct timeval tv;
 	gdouble timeout = ctx->config.keepalive_interval;
 
 	g_assert (conn->keepalive_hash_key != NULL);
@@ -571,17 +569,14 @@ rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 	cbdata->ctx = ctx;
 	conn->finished = FALSE;
 
-	event_set (&cbdata->ev, conn->fd, EV_READ|EV_TIMEOUT,
+	rspamd_ev_watcher_init (&cbdata->ev, conn->fd, EV_READ,
 			rspamd_http_keepalive_handler,
 			cbdata);
+	rspamd_ev_watcher_start (event_loop, &cbdata->ev, timeout);
 
 	msg_debug_http_context ("push keepalive element %s (%s), %d connections queued, %.1f timeout",
 			rspamd_inet_address_to_string_pretty (cbdata->conn->keepalive_hash_key->addr),
 			cbdata->conn->keepalive_hash_key->host,
 			cbdata->queue->length,
 			timeout);
-
-	double_to_tv (timeout, &tv);
-	event_base_set (ev_base, &cbdata->ev);
-	event_add (&cbdata->ev, &tv);
 }
