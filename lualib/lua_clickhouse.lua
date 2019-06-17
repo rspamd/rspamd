@@ -44,7 +44,12 @@ end
 
 local function clickhouse_quote(str)
   if str then
-    return str:gsub('[\'\\]', '\\%1'):lower()
+    return str:gsub('[\'\\\n\t]', {
+      ['\''] = '\\\'',
+      ['\\'] = '\\',
+      ['\n'] = '\\n',
+      ['\t'] = '\\t'
+    }):lower()
   end
 
   return ''
@@ -71,6 +76,8 @@ local function row_to_tsv(row)
       row[i] = '[' .. array_to_string(elt) .. ']'
     elseif type(elt) == 'number' then
       row[i] = ch_number(elt)
+    else
+      row[i] = clickhouse_quote(elt)
     end
   end
 
