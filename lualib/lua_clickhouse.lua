@@ -45,10 +45,10 @@ end
 local function clickhouse_quote(str)
   if str then
     return str:gsub('[\'\\\n\t]', {
-      ['\''] = '\\\'',
-      ['\\'] = '\\',
-      ['\n'] = '\\n',
-      ['\t'] = '\\t'
+      ['\''] = [[\']],
+      ['\\'] = [[\\]],
+      ['\n'] = [[\n]],
+      ['\t'] = [[\t]],
     }):lower()
   end
 
