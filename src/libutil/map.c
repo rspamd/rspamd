@@ -1698,21 +1698,21 @@ rspamd_map_file_check_callback (struct map_periodic_cbdata *periodic)
 	struct rspamd_map_backend *bk;
 
 	map = periodic->map;
-
 	bk = g_ptr_array_index (map->backends, periodic->cur_backend);
 	data = bk->data.fd;
 
-	if (!data->processed) {
-		/* File has never been read */
+	if (!data->need_modify) {
 		periodic->need_modify = TRUE;
 		periodic->cur_backend = 0;
+		data->need_modify = FALSE;
 
 		rspamd_map_process_periodic (periodic);
 
 		return;
 	}
 
-	/* Switch to the next backend */
+	map = periodic->map;
+	/* Switch to the next backend as the rest is handled by ev_stat */
 	periodic->cur_backend ++;
 	rspamd_map_process_periodic (periodic);
 }
@@ -1758,9 +1758,6 @@ rspamd_map_file_read_callback (struct map_periodic_cbdata *periodic)
 
 	if (!read_map_file (map, data, bk, periodic)) {
 		periodic->errored = TRUE;
-	}
-	else {
-		data->processed = TRUE;
 	}
 
 	/* Switch to the next backend */
@@ -1876,21 +1873,34 @@ rspamd_map_process_periodic (struct map_periodic_cbdata *cbd)
 	}
 }
 
+static void
+rspamd_map_on_stat (struct ev_loop *loop, ev_stat *w, int revents)
+{
+	struct rspamd_map *map = (struct rspamd_map *)w->data;
+
+	msg_info_map ("old mtime is %t, new mtime is %t for map file %s",
+			w->prev.st_mtime, w->attr.st_mtime, w->path);
+
+	rspamd_map_schedule_periodic (map, FALSE, TRUE, FALSE);
+}
+
 /* Start watching event for all maps */
 void
 rspamd_map_watch (struct rspamd_config *cfg,
-				  struct ev_loop *ev_base,
+				  struct ev_loop *event_loop,
 				  struct rspamd_dns_resolver *resolver,
 				  struct rspamd_worker *worker,
 				  gboolean active_http)
 {
 	GList *cur = cfg->maps;
 	struct rspamd_map *map;
+	struct rspamd_map_backend *bk;
+	guint i;
 
 	/* First of all do synced read of data */
 	while (cur) {
 		map = cur->data;
-		map->event_loop = ev_base;
+		map->event_loop = event_loop;
 		map->r = resolver;
 		map->wrk = worker;
 
@@ -1905,6 +1915,19 @@ rspamd_map_watch (struct rspamd_config *cfg,
 					cfg->map_file_watch_multiplier < 1.0) {
 				map->poll_timeout =
 						map->poll_timeout * cfg->map_file_watch_multiplier;
+			}
+		}
+
+		PTR_ARRAY_FOREACH (map->backends, i, bk) {
+			if (bk->protocol == MAP_PROTO_FILE) {
+				struct file_map_data *data;
+
+				data = bk->data.fd;
+
+				ev_stat_init (&data->st_ev, rspamd_map_on_stat,
+						data->filename, map->poll_timeout * cfg->map_file_watch_multiplier);
+				data->st_ev.data = map;
+				ev_stat_start (event_loop, &data->st_ev);
 			}
 		}
 

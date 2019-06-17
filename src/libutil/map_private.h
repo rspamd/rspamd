@@ -54,7 +54,7 @@ enum fetch_proto {
  */
 struct file_map_data {
 	gchar *filename;
-	gboolean processed;
+	gboolean need_modify;
 	ev_stat st_ev;
 };
 
