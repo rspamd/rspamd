@@ -159,13 +159,6 @@ LUA_FUNCTION_DEF (tcp, connect_sync);
  * Closes TCP connection
  */
 LUA_FUNCTION_DEF (tcp, close);
-/***
- * @method tcp:set_timeout(seconds)
- *
- * Sets new timeout for a TCP connection in **seconds**
- * @param {number} seconds floating point value that specifies new timeout
- */
-LUA_FUNCTION_DEF (tcp, set_timeout);
 
 /***
  * @method tcp:add_read(callback, [pattern])
@@ -210,7 +203,6 @@ static const struct luaL_reg tcp_libf[] = {
 
 static const struct luaL_reg tcp_libm[] = {
 	LUA_INTERFACE_DEF (tcp, close),
-	LUA_INTERFACE_DEF (tcp, set_timeout),
 	LUA_INTERFACE_DEF (tcp, add_read),
 	LUA_INTERFACE_DEF (tcp, add_write),
 	LUA_INTERFACE_DEF (tcp, shift_callback),
@@ -225,13 +217,6 @@ static const struct luaL_reg tcp_libm[] = {
  * Closes TCP connection
  */
 LUA_FUNCTION_DEF (tcp_sync, close);
-
-/***
- * @method set_timeout(seconds)
- *
- * Sets timeout for IO operations
- */
-LUA_FUNCTION_DEF (tcp_sync, set_timeout);
 
 /***
  * @method read_once()
@@ -270,7 +255,6 @@ static void lua_tcp_sync_session_dtor (gpointer ud);
 
 static const struct luaL_reg tcp_sync_libm[] = {
 	LUA_INTERFACE_DEF (tcp_sync, close),
-	LUA_INTERFACE_DEF (tcp_sync, set_timeout),
 	LUA_INTERFACE_DEF (tcp_sync, read_once),
 	LUA_INTERFACE_DEF (tcp_sync, write),
 	LUA_INTERFACE_DEF (tcp_sync, eof),
@@ -342,8 +326,7 @@ struct lua_tcp_dtor {
 struct lua_tcp_cbdata {
 	struct rspamd_async_session *session;
 	struct rspamd_async_event *async_ev;
-	struct ev_loop *ev_base;
-	struct timeval tv;
+	struct ev_loop *event_loop;
 	rspamd_inet_addr_t *addr;
 	GByteArray *in;
 	GQueue *handlers;
@@ -352,7 +335,7 @@ struct lua_tcp_cbdata {
 	guint port;
 	guint flags;
 	gchar tag[7];
-	struct event ev;
+	struct rspamd_io_ev ev;
 	struct lua_tcp_dtor *dtors;
 	ref_entry_t ref;
 	struct rspamd_task *task;
@@ -381,7 +364,7 @@ static void lua_tcp_unregister_event (struct lua_tcp_cbdata *cbd);
 static void
 lua_tcp_void_finalyser (gpointer arg) {}
 
-static const int default_tcp_timeout = 5000;
+static const gdouble default_tcp_timeout = 5.0;
 
 static struct rspamd_dns_resolver *
 lua_tcp_global_resolver (struct ev_loop *ev_base,
@@ -467,7 +450,7 @@ lua_tcp_fin (gpointer arg)
 	}
 
 	if (cbd->fd != -1) {
-		event_del (&cbd->ev);
+		rspamd_ev_watcher_stop (cbd->event_loop, &cbd->ev);
 		close (cbd->fd);
 		cbd->fd = -1;
 	}
@@ -755,15 +738,7 @@ lua_tcp_resume_thread (struct lua_tcp_cbdata *cbd, const guint8 *str, gsize len)
 static void
 lua_tcp_plan_read (struct lua_tcp_cbdata *cbd)
 {
-	event_del (&cbd->ev);
-#ifdef EV_CLOSED
-	event_set (&cbd->ev, cbd->fd, EV_READ|EV_CLOSED,
-				lua_tcp_handler, cbd);
-#else
-	event_set (&cbd->ev, cbd->fd, EV_READ, lua_tcp_handler, cbd);
-#endif
-	event_base_set (cbd->ev_base, &cbd->ev);
-	event_add (&cbd->ev, &cbd->tv);
+	rspamd_ev_watcher_reschedule (cbd->event_loop, &cbd->ev, EV_READ);
 }
 
 static void
@@ -867,7 +842,6 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 	}
 	else {
 		/* Want to write more */
-		event_add (&cbd->ev, &cbd->tv);
 	}
 
 	return;
@@ -1149,9 +1123,8 @@ lua_tcp_plan_handler_event (struct lua_tcp_cbdata *cbd, gboolean can_read,
 				msg_debug_tcp ("plan new read");
 				if (can_read) {
 					/* We need to plan a new event */
-					event_set (&cbd->ev, cbd->fd, EV_READ, lua_tcp_handler, cbd);
-					event_base_set (cbd->ev_base, &cbd->ev);
-					event_add (&cbd->ev, &cbd->tv);
+					rspamd_ev_watcher_reschedule (cbd->event_loop, &cbd->ev,
+							EV_READ);
 				}
 				else {
 					/* Cannot read more */
@@ -1172,9 +1145,8 @@ lua_tcp_plan_handler_event (struct lua_tcp_cbdata *cbd, gboolean can_read,
 			if (hdl->h.w.pos < hdl->h.w.total_bytes) {
 				msg_debug_tcp ("plan new write");
 				if (can_write) {
-					event_set (&cbd->ev, cbd->fd, EV_WRITE, lua_tcp_handler, cbd);
-					event_base_set (cbd->ev_base, &cbd->ev);
-					event_add (&cbd->ev, &cbd->tv);
+					rspamd_ev_watcher_reschedule (cbd->event_loop, &cbd->ev,
+							EV_WRITE);
 				}
 				else {
 					/* Cannot write more */
@@ -1192,9 +1164,8 @@ lua_tcp_plan_handler_event (struct lua_tcp_cbdata *cbd, gboolean can_read,
 		}
 		else { /* LUA_WANT_CONNECT */
 			msg_debug_tcp ("plan new connect");
-			event_set (&cbd->ev, cbd->fd, EV_WRITE, lua_tcp_handler, cbd);
-			event_base_set (cbd->ev_base, &cbd->ev);
-			event_add (&cbd->ev, &cbd->tv);
+			rspamd_ev_watcher_reschedule (cbd->event_loop, &cbd->ev,
+					EV_WRITE);
 		}
 	}
 }
@@ -1289,12 +1260,11 @@ lua_tcp_make_connection (struct lua_tcp_cbdata *cbd)
 			verify_peer = TRUE;
 		}
 
-		event_base_set (cbd->ev_base, &cbd->ev);
 		cbd->ssl_conn =
-				rspamd_ssl_connection_new (ssl_ctx, cbd->ev_base, verify_peer);
+				rspamd_ssl_connection_new (ssl_ctx, cbd->event_loop, verify_peer);
 
 		if (!rspamd_ssl_connect_fd (cbd->ssl_conn, fd, cbd->hostname, &cbd->ev,
-				&cbd->tv, lua_tcp_handler, lua_tcp_ssl_on_error, cbd)) {
+				cbd->ev.timeout, lua_tcp_handler, lua_tcp_ssl_on_error, cbd)) {
 			lua_tcp_push_error (cbd, TRUE, "ssl connection failed: %s",
 					strerror (errno));
 
@@ -1431,7 +1401,7 @@ lua_tcp_request (lua_State *L)
 	guint port;
 	gint cbref, tp, conn_cbref = -1;
 	gsize plen = 0;
-	struct ev_loop *ev_base;
+	struct ev_loop *event_loop = NULL;
 	struct lua_tcp_cbdata *cbd;
 	struct rspamd_dns_resolver *resolver = NULL;
 	struct rspamd_async_session *session = NULL;
@@ -1453,7 +1423,7 @@ lua_tcp_request (lua_State *L)
 		lua_pushstring (L, "port");
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TNUMBER) {
-			port = luaL_checknumber (L, -1);
+			port = lua_tointeger (L, -1);
 		}
 		else {
 			/* We assume that it is a unix socket */
@@ -1478,7 +1448,7 @@ lua_tcp_request (lua_State *L)
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TUSERDATA) {
 			task = lua_check_task (L, -1);
-			ev_base = task->event_loop;
+			event_loop = task->event_loop;
 			resolver = task->resolver;
 			session = task->s;
 			cfg = task->cfg;
@@ -1489,10 +1459,10 @@ lua_tcp_request (lua_State *L)
 			lua_pushstring (L, "ev_base");
 			lua_gettable (L, -2);
 			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{ev_base}")) {
-				ev_base = *(struct ev_loop **)lua_touserdata (L, -1);
+				event_loop = *(struct ev_loop **)lua_touserdata (L, -1);
 			}
 			else {
-				ev_base = NULL;
+				event_loop = ev_default_loop (0);
 			}
 			lua_pop (L, 1);
 
@@ -1522,7 +1492,7 @@ lua_tcp_request (lua_State *L)
 				resolver = *(struct rspamd_dns_resolver **)lua_touserdata (L, -1);
 			}
 			else {
-				resolver = lua_tcp_global_resolver (ev_base, cfg);
+				resolver = lua_tcp_global_resolver (event_loop, cfg);
 			}
 			lua_pop (L, 1);
 		}
@@ -1530,7 +1500,7 @@ lua_tcp_request (lua_State *L)
 		lua_pushstring (L, "timeout");
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TNUMBER) {
-			timeout = lua_tonumber (L, -1) * 1000.;
+			timeout = lua_tonumber (L, -1);
 		}
 		lua_pop (L, 1);
 
@@ -1691,10 +1661,10 @@ lua_tcp_request (lua_State *L)
 		g_queue_push_tail (cbd->handlers, wh);
 	}
 
-	cbd->ev_base = ev_base;
-	msec_to_tv (timeout, &cbd->tv);
+	cbd->event_loop = event_loop;
 	cbd->fd = -1;
 	cbd->port = port;
+	cbd->ev.timeout = timeout;
 
 	if (ssl) {
 		cbd->flags |= LUA_TCP_FLAG_SSL;
@@ -1881,9 +1851,8 @@ lua_tcp_connect_sync (lua_State *L)
 	rspamd_snprintf (cbd->tag, sizeof (cbd->tag), "%uxL", h);
 	cbd->handlers = g_queue_new ();
 
-	cbd->ev_base = ev_base;
+	cbd->event_loop = ev_base;
 	cbd->flags |= LUA_TCP_FLAG_SYNC;
-	double_to_tv (timeout, &cbd->tv);
 	cbd->fd = -1;
 	cbd->port = (guint16)port;
 
@@ -1975,25 +1944,6 @@ lua_tcp_close (lua_State *L)
 
 	cbd->flags |= LUA_TCP_FLAG_FINISHED;
 	TCP_RELEASE (cbd);
-
-	return 0;
-}
-
-static gint
-lua_tcp_set_timeout (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	struct lua_tcp_cbdata *cbd = lua_check_tcp (L, 1);
-	gdouble seconds = lua_tonumber (L, 2);
-
-	if (cbd == NULL) {
-		return luaL_error (L, "invalid arguments");
-	}
-	if (!lua_isnumber (L, 2)) {
-		return luaL_error (L, "invalid arguments: 'seconds' is expected to be number");
-	}
-
-	double_to_tv (seconds, &cbd->tv);
 
 	return 0;
 }
@@ -2159,7 +2109,7 @@ lua_tcp_sync_close (lua_State *L)
 	cbd->flags |= LUA_TCP_FLAG_FINISHED;
 
 	if (cbd->fd != -1) {
-		event_del (&cbd->ev);
+		rspamd_ev_watcher_stop (cbd->event_loop, &cbd->ev);
 		close (cbd->fd);
 		cbd->fd = -1;
 	}
@@ -2175,7 +2125,7 @@ lua_tcp_sync_session_dtor (gpointer ud)
 
 	if (cbd->fd != -1) {
 		msg_debug ("closing sync TCP connection");
-		event_del (&cbd->ev);
+		rspamd_ev_watcher_stop (cbd->event_loop, &cbd->ev);
 		close (cbd->fd);
 		cbd->fd = -1;
 	}
@@ -2185,25 +2135,6 @@ lua_tcp_sync_session_dtor (gpointer ud)
 
 	/* All events are removed when task is done, we should not refer them */
 	cbd->async_ev = NULL;
-}
-
-static int
-lua_tcp_sync_set_timeout (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	struct lua_tcp_cbdata *cbd = lua_check_sync_tcp (L, 1);
-	gdouble seconds = lua_tonumber (L, 2);
-
-	if (cbd == NULL) {
-		return luaL_error (L, "invalid arguments: self is not rspamd{tcp_sync}");
-	}
-	if (lua_type (L, 2) != LUA_TNUMBER) {
-		return luaL_error (L, "invalid arguments: second parameter is expected to be number");
-	}
-
-	double_to_tv (seconds, &cbd->tv);
-
-	return 0;
 }
 
 static int
@@ -2363,12 +2294,11 @@ lua_tcp_starttls (lua_State * L)
 		verify_peer = TRUE;
 	}
 
-	event_base_set (cbd->ev_base, &cbd->ev);
 	cbd->ssl_conn =
-			rspamd_ssl_connection_new (ssl_ctx, cbd->ev_base, verify_peer);
+			rspamd_ssl_connection_new (ssl_ctx, cbd->event_loop, verify_peer);
 
 	if (!rspamd_ssl_connect_fd (cbd->ssl_conn, cbd->fd, cbd->hostname, &cbd->ev,
-			&cbd->tv, lua_tcp_handler, lua_tcp_ssl_on_error, cbd)) {
+			cbd->ev.timeout, lua_tcp_handler, lua_tcp_ssl_on_error, cbd)) {
 		lua_tcp_push_error (cbd, TRUE, "ssl connection failed: %s",
 				strerror (errno));
 	}

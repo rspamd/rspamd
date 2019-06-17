@@ -3054,15 +3054,15 @@ struct rspamd_lua_periodic {
 	struct rspamd_config *cfg;
 	lua_State *L;
 	gdouble timeout;
-	struct event ev;
+	ev_timer ev;
 	gint cbref;
 	gboolean need_jitter;
 };
 
 static void
-lua_periodic_callback (gint unused_fd, short what, gpointer ud)
+lua_periodic_callback (struct ev_loop *loop, ev_timer *w, int revents)
 {
-	struct rspamd_lua_periodic *periodic = ud;
+	struct rspamd_lua_periodic *periodic = (struct rspamd_lua_periodic *)w->data;
 	struct rspamd_config **pcfg, *cfg;
 	struct ev_loop **pev_base;
 	struct thread_entry *thread;
@@ -3084,7 +3084,6 @@ lua_periodic_callback (gint unused_fd, short what, gpointer ud)
 	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
 	*pev_base = periodic->ev_base;
 
-	event_del (&periodic->ev);
 	lua_thread_call (thread, 2);
 }
 
@@ -3094,7 +3093,6 @@ lua_periodic_callback_finish (struct thread_entry *thread, int ret)
 	lua_State *L;
 	struct rspamd_lua_periodic *periodic = thread->cd;
 	gboolean plan_more = FALSE;
-	struct timeval tv;
 	gdouble timeout = 0.0;
 
 	L = thread->lua_state;
@@ -3120,11 +3118,12 @@ lua_periodic_callback_finish (struct thread_entry *thread, int ret)
 			timeout = rspamd_time_jitter (timeout, 0.0);
 		}
 
-		double_to_tv (timeout, &tv);
-		event_add (&periodic->ev, &tv);
+		periodic->ev.repeat = timeout;
+		ev_timer_again (periodic->ev_base, &periodic->ev);
 	}
 	else {
 		luaL_unref (L, LUA_REGISTRYINDEX, periodic->cbref);
+		ev_timer_stop (periodic->ev_base, &periodic->ev);
 		g_free (periodic);
 	}
 }
@@ -3138,7 +3137,7 @@ lua_periodic_callback_error (struct thread_entry *thread, int ret, const char *m
 
 	msg_err_config ("call to finishing script failed: %s", msg);
 
-	lua_periodic_callback_finish(thread, ret);
+	lua_periodic_callback_finish (thread, ret);
 }
 
 
@@ -3149,7 +3148,6 @@ lua_config_add_periodic (lua_State *L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	struct ev_loop *ev_base = lua_check_ev_base (L, 2);
 	gdouble timeout = lua_tonumber (L, 3);
-	struct timeval tv;
 	struct rspamd_lua_periodic *periodic;
 	gboolean need_jitter = FALSE;
 
@@ -3169,15 +3167,14 @@ lua_config_add_periodic (lua_State *L)
 	periodic->need_jitter = need_jitter;
 	lua_pushvalue (L, 4);
 	periodic->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
-	event_set (&periodic->ev, -1, EV_TIMEOUT, lua_periodic_callback, periodic);
-	event_base_set (ev_base, &periodic->ev);
 
 	if (need_jitter) {
 		timeout = rspamd_time_jitter (timeout, 0.0);
 	}
 
-	double_to_tv (timeout, &tv);
-	event_add (&periodic->ev, &tv);
+	ev_timer_init (&periodic->ev, lua_periodic_callback, timeout, 0.0);
+	periodic->ev.data = periodic;
+	ev_timer_start (ev_base, &periodic->ev);
 
 	return 0;
 }
