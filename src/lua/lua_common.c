@@ -1902,7 +1902,7 @@ rspamd_lua_run_config_unload (lua_State *L, struct rspamd_config *cfg)
 	struct rspamd_config_cfg_lua_script *sc;
 	struct rspamd_config **pcfg;
 
-	LL_FOREACH (cfg->post_init_scripts, sc) {
+	LL_FOREACH (cfg->config_unload_scripts, sc) {
 		lua_pushcfunction (L, &rspamd_lua_traceback);
 		gint err_idx = lua_gettop (L);
 

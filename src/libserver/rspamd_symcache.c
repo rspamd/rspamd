@@ -3203,7 +3203,8 @@ rspamd_symcache_add_id_to_list (rspamd_mempool_t *pool,
 			g_assert (ls->dyn.allocated <= G_MAXINT16);
 			ls->dyn.allocated *= 2;
 
-			new_array = rspamd_mempool_alloc (pool, ls->dyn.allocated);
+			new_array = rspamd_mempool_alloc (pool,
+					ls->dyn.allocated * sizeof (guint32));
 			memcpy (new_array, ls->dyn.n, ls->dyn.len * sizeof (guint32));
 			ls->dyn.n = new_array;
 			ls->dyn.n[ls->dyn.len++] = id;
@@ -3222,7 +3223,8 @@ rspamd_symcache_add_id_to_list (rspamd_mempool_t *pool,
 		}
 		else {
 			/* Switch to dynamic */
-			new_array = rspamd_mempool_alloc (pool, G_N_ELEMENTS (ls->st) * 2);
+			new_array = rspamd_mempool_alloc (pool,
+					G_N_ELEMENTS (ls->st) * 2 * sizeof (guint32));
 			memcpy (new_array, ls->st,  G_N_ELEMENTS (ls->st) * sizeof (guint32));
 			ls->dyn.n = new_array;
 			ls->dyn.e = -1;
