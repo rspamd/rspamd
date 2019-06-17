@@ -330,7 +330,7 @@ http_map_error (struct rspamd_http_connection *conn,
 }
 
 static void
-rspamd_map_cache_cb (struct ev_loop *loop, ev_periodic *w, int revents)
+rspamd_map_cache_cb (struct ev_loop *loop, ev_timer *w, int revents)
 {
 	struct rspamd_http_map_cached_cbdata *cache_cbd = (struct rspamd_http_map_cached_cbdata *)
 			w->data;
@@ -339,8 +339,6 @@ rspamd_map_cache_cb (struct ev_loop *loop, ev_periodic *w, int revents)
 
 	map = cache_cbd->map;
 	data = cache_cbd->data;
-
-	ev_periodic_stop (loop, &cache_cbd->timeout);
 
 	if (cache_cbd->gen != cache_cbd->data->gen) {
 		/* We have another update, so this cache element is obviously expired */
@@ -351,6 +349,7 @@ rspamd_map_cache_cb (struct ev_loop *loop, ev_periodic *w, int revents)
 		msg_info_map ("cached data is now expired (gen mismatch %L != %L) for %s",
 				cache_cbd->gen, cache_cbd->data->gen, map->name);
 		MAP_RELEASE (cache_cbd->shm, "rspamd_http_map_cached_cbdata");
+		ev_timer_stop (loop, &cache_cbd->timeout);
 		g_free (cache_cbd);
 	}
 	else if (cache_cbd->data->last_checked >= cache_cbd->last_checked) {
@@ -358,15 +357,25 @@ rspamd_map_cache_cb (struct ev_loop *loop, ev_periodic *w, int revents)
 		 * We checked map but we have not found anything more recent,
 		 * reschedule cache check
 		 */
+		if (cache_cbd->map->poll_timeout >
+			ev_now (loop) - cache_cbd->data->last_checked) {
+			w->repeat = cache_cbd->map->poll_timeout -
+						(ev_now (loop) - cache_cbd->data->last_checked);
+		}
+		else {
+			w->repeat = cache_cbd->map->poll_timeout;
+		}
+
 		cache_cbd->last_checked = cache_cbd->data->last_checked;
 		msg_debug_map ("cached data is up to date for %s", map->name);
-		ev_periodic_again (loop, &cache_cbd->timeout);
+		ev_timer_again (loop, &cache_cbd->timeout);
 	}
 	else {
 		data->cur_cache_cbd = NULL;
 		g_atomic_int_set (&data->cache->available, 0);
 		MAP_RELEASE (cache_cbd->shm, "rspamd_http_map_cached_cbdata");
 		msg_info_map ("cached data is now expired for %s", map->name);
+		ev_timer_stop (loop, &cache_cbd->timeout);
 		g_free (cache_cbd);
 	}
 }
@@ -675,14 +684,16 @@ read_data:
 		data->cache->last_modified = cbd->data->last_modified;
 		cache_cbd = g_malloc0 (sizeof (*cache_cbd));
 		cache_cbd->shm = cbd->shmem_data;
+		cache_cbd->event_loop = cbd->event_loop;
 		cache_cbd->map = map;
 		cache_cbd->data = cbd->data;
 		cache_cbd->last_checked = cbd->data->last_checked;
 		cache_cbd->gen = cbd->data->gen;
 		MAP_RETAIN (cache_cbd->shm, "shmem_data");
 
-		ev_periodic_set (&cache_cbd->timeout, 0.0, cached_timeout, NULL);
-		ev_periodic_start (cbd->event_loop, &cache_cbd->timeout);
+		ev_timer_init (&cache_cbd->timeout, rspamd_map_cache_cb, cached_timeout,
+				0.0);
+		ev_timer_start (cbd->event_loop, &cache_cbd->timeout);
 		cache_cbd->timeout.data = cache_cbd;
 		data->cur_cache_cbd = cache_cbd;
 
@@ -2258,7 +2269,7 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 				if (data->cur_cache_cbd) {
 					MAP_RELEASE (data->cur_cache_cbd->shm,
 							"rspamd_http_map_cached_cbdata");
-					ev_periodic_stop (ev_default_loop (0),
+					ev_timer_stop (data->cur_cache_cbd->event_loop,
 							&data->cur_cache_cbd->timeout);
 					g_free (data->cur_cache_cbd);
 					data->cur_cache_cbd = NULL;

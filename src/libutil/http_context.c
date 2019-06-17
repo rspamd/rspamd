@@ -65,19 +65,16 @@ rspamd_http_keepalive_queue_cleanup (GQueue *conns)
 }
 
 static void
-rspamd_http_context_client_rotate_ev (struct ev_loop *loop, ev_periodic *w, int revents)
+rspamd_http_context_client_rotate_ev (struct ev_loop *loop, ev_timer *w, int revents)
 {
-	struct timeval rot_tv;
 	struct rspamd_http_context *ctx = (struct rspamd_http_context *)w->data;
 	gpointer kp;
 
-	double_to_tv (ctx->config.client_key_rotate_time, &rot_tv);
-	rot_tv.tv_sec += ottery_rand_range (rot_tv.tv_sec);
+	w->repeat = rspamd_time_jitter (ctx->config.client_key_rotate_time, 0);
+	msg_debug_http_context ("rotate local keypair, next rotate in %.0f seconds",
+			w->repeat);
 
-	msg_debug_http_context ("rotate local keypair, next rotate in %d seconds",
-			(int)rot_tv.tv_sec);
-
-	ev_periodic_again (loop, w);
+	ev_timer_again (loop, w);
 
 	kp = ctx->client_kp;
 	ctx->client_kp = rspamd_keypair_new (RSPAMD_KEYPAIR_KEX,
@@ -190,9 +187,9 @@ rspamd_http_context_init (struct rspamd_http_context *ctx)
 		double jittered = rspamd_time_jitter (ctx->config.client_key_rotate_time,
 				0);
 
-		ev_periodic_init (&ctx->client_rotate_ev,
-				rspamd_http_context_client_rotate_ev, 0.0, jittered, NULL);
-		ev_periodic_start (ctx->event_loop, &ctx->client_rotate_ev);
+		ev_timer_init (&ctx->client_rotate_ev,
+				rspamd_http_context_client_rotate_ev, jittered, 0);
+		ev_timer_start (ctx->event_loop, &ctx->client_rotate_ev);
 		ctx->client_rotate_ev.data = ctx;
 	}
 

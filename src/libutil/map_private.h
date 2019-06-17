@@ -62,7 +62,8 @@ struct file_map_data {
 struct http_map_data;
 
 struct rspamd_http_map_cached_cbdata {
-	ev_periodic timeout;
+	ev_timer timeout;
+	struct ev_loop *event_loop;
 	struct rspamd_storage_shmem *shm;
 	struct rspamd_map *map;
 	struct http_map_data *data;
