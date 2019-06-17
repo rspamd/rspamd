@@ -69,11 +69,13 @@ local btc_wallet_address = [[/^[13][1-9A-Za-z]{25,34}$/]]
 local wallet_word = [[/^wallet$/{words}]]
 local broken_unicode = [[has_flag(bad_unicode)]]
 local list_unsub = [[header_exists(List-Unsubscribe)]]
+local x_php_origin = [[header_exists(X-PHP-Originating-Script)]]
 
 reconf['LEAKED_PASSWORD_SCAM'] = {
-  re = string.format('%s{words} & (%s | %s | %s | %s | %s | %s | %s | lua:check_data_images)',
+  re = string.format('%s{words} & (%s | %s | %s | %s | %s | %s | %s | %s | %s)',
       btc_wallet_address, password_in_words, wallet_word,
-      my_victim, your_webcam, your_onan, broken_unicode, list_unsub),
+      my_victim, your_webcam, your_onan, broken_unicode, 'lua:check_data_images',
+      list_unsub, x_php_origin),
   description = 'Contains password word and BTC wallet address',
   functions = {
     check_data_images = function(task)
