@@ -4883,7 +4883,7 @@ lua_task_get_settings_id (lua_State *L)
 	if (task != NULL) {
 
 		if (task->settings_elt) {
-			lua_pushnumber (L, task->settings_elt->id);
+			lua_pushinteger (L, task->settings_elt->id);
 		}
 		else {
 			lua_pushnil (L);
@@ -4901,7 +4901,7 @@ lua_task_set_settings_id (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	guint32 id = luaL_checknumber (L, 2);
+	guint32 id = lua_tointeger (L, 2);
 
 	if (task != NULL && id != 0) {
 
@@ -4916,7 +4916,7 @@ lua_task_set_settings_id (lua_State *L)
 					id);
 
 			if (!task->settings_elt) {
-				return luaL_error (L, "settings id %d is unknown", id);
+				return luaL_error (L, "settings id %u is unknown", id);
 			}
 		}
 
