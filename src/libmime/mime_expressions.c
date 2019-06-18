@@ -84,6 +84,9 @@ static gboolean rspamd_is_empty_body (struct rspamd_task *task,
 static gboolean rspamd_has_flag_expr (struct rspamd_task *task,
 									  GArray * args,
 									  void *unused);
+static gboolean rspamd_has_symbol_expr (struct rspamd_task *task,
+									  GArray * args,
+									  void *unused);
 
 static rspamd_expression_atom_t * rspamd_mime_expr_parse (const gchar *line, gsize len,
 		rspamd_mempool_t *pool, gpointer ud, GError **err);
@@ -157,6 +160,7 @@ static struct _fl {
 		{"has_flag", rspamd_has_flag_expr, NULL},
 		{"has_html_tag", rspamd_has_html_tag, NULL},
 		{"has_only_html_part", rspamd_has_only_html_part, NULL},
+		{"has_symbol", rspamd_has_symbol_expr, NULL},
 		{"header_exists", rspamd_header_exists, NULL},
 		{"is_empty_body", rspamd_is_empty_body, NULL},
 		{"is_html_balanced", rspamd_is_html_balanced, NULL},
@@ -2278,4 +2282,33 @@ rspamd_has_flag_expr (struct rspamd_task *task,
 	}
 
 	return result;
+}
+
+static gboolean
+rspamd_has_symbol_expr (struct rspamd_task *task,
+					  GArray * args,
+					  void *unused)
+{
+	struct expression_argument *sym_arg;
+	const gchar *symbol_str;
+
+	if (args == NULL) {
+		msg_warn_task ("no parameters to function");
+		return FALSE;
+	}
+
+	sym_arg = &g_array_index (args, struct expression_argument, 0);
+
+	if (sym_arg->type != EXPRESSION_ARGUMENT_NORMAL) {
+		msg_warn_task ("invalid parameter to function");
+		return FALSE;
+	}
+
+	symbol_str = (const gchar *)sym_arg->data;
+
+	if (rspamd_task_find_symbol_result (task, symbol_str)) {
+		return TRUE;
+	}
+
+	return FALSE;
 }
