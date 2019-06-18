@@ -2173,6 +2173,8 @@ rspamd_lua_push_words (lua_State *L, GArray *words,
 			/* Push to the resulting vector */
 			lua_rawseti (L, -2, cnt ++);
 			break;
+		default:
+			break;
 		}
 	}
 

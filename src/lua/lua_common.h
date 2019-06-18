@@ -210,6 +210,8 @@ struct rspamd_lua_ip * lua_check_ip (lua_State * L, gint pos);
 
 struct rspamd_lua_text * lua_check_text (lua_State * L, gint pos);
 
+struct rspamd_lua_regexp *lua_check_regexp (lua_State * L, gint pos);
+
 enum rspamd_lua_task_header_type {
 	RSPAMD_TASK_HEADER_PUSH_SIMPLE = 0,
 	RSPAMD_TASK_HEADER_PUSH_RAW,
@@ -464,7 +466,8 @@ enum rspamd_lua_words_type {
 	RSPAMD_LUA_WORDS_STEM = 0,
 	RSPAMD_LUA_WORDS_NORM,
 	RSPAMD_LUA_WORDS_RAW,
-	RSPAMD_LUA_WORDS_FULL
+	RSPAMD_LUA_WORDS_FULL,
+	RSPAMD_LUA_WORDS_MAX
 };
 /**
  * Pushes words (rspamd_stat_token_t) to Lua

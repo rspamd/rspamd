@@ -147,6 +147,24 @@ LUA_FUNCTION_DEF (textpart, get_words_count);
 LUA_FUNCTION_DEF (textpart, get_words);
 
 /***
+ * @method mime_part:filter_words(regexp, [how][, max]])
+ * Filter words using some regexp:
+ * - `stem`: stemmed words (default)
+ * - `norm`: normalised words (utf normalised + lowercased)
+ * - `raw`: raw words in utf (if possible)
+ * - `full`: list of tables, each table has the following fields:
+ *   - [1] - stemmed word
+ *   - [2] - normalised word
+ *   - [3] - raw word
+ *   - [4] - flags (table of strings)
+ * @param {rspamd_regexp} regexp regexp to match
+ * @param {string} how what words to extract
+ * @param {number} max maximum number of hits returned (all hits if <= 0 or nil)
+ * @return {table/strings} words matching regexp
+ */
+LUA_FUNCTION_DEF (textpart, filter_words);
+
+/***
  * @method text_part:is_empty()
  * Returns `true` if the specified part is empty
  * @return {bool} whether a part is empty
@@ -216,6 +234,7 @@ static const struct luaL_reg textpartlib_m[] = {
 	LUA_INTERFACE_DEF (textpart, get_lines_count),
 	LUA_INTERFACE_DEF (textpart, get_words_count),
 	LUA_INTERFACE_DEF (textpart, get_words),
+	LUA_INTERFACE_DEF (textpart, filter_words),
 	LUA_INTERFACE_DEF (textpart, is_empty),
 	LUA_INTERFACE_DEF (textpart, is_html),
 	LUA_INTERFACE_DEF (textpart, get_html),
@@ -841,6 +860,27 @@ lua_textpart_get_words_count (lua_State *L)
 	return 1;
 }
 
+static inline enum rspamd_lua_words_type
+word_extract_type_from_string (const gchar *how_str)
+{
+	enum rspamd_lua_words_type how = RSPAMD_LUA_WORDS_MAX;
+
+	if (strcmp (how_str, "stem") == 0) {
+		how = RSPAMD_LUA_WORDS_STEM;
+	}
+	else if (strcmp (how_str, "norm") == 0) {
+		how = RSPAMD_LUA_WORDS_NORM;
+	}
+	else if (strcmp (how_str, "raw") == 0) {
+		how = RSPAMD_LUA_WORDS_RAW;
+	}
+	else if (strcmp (how_str, "full") == 0) {
+		how = RSPAMD_LUA_WORDS_FULL;
+	}
+
+	return how;
+}
+
 static gint
 lua_textpart_get_words (lua_State *L)
 {
@@ -859,24 +899,102 @@ lua_textpart_get_words (lua_State *L)
 		if (lua_type (L, 2) == LUA_TSTRING) {
 			const gchar *how_str = lua_tostring (L, 2);
 
-			if (strcmp (how_str, "stem") == 0) {
-				how = RSPAMD_LUA_WORDS_STEM;
-			}
-			else if (strcmp (how_str, "norm") == 0) {
-				how = RSPAMD_LUA_WORDS_NORM;
-			}
-			else if (strcmp (how_str, "raw") == 0) {
-				how = RSPAMD_LUA_WORDS_RAW;
-			}
-			else if (strcmp (how_str, "full") == 0) {
-				how = RSPAMD_LUA_WORDS_FULL;
-			}
-			else {
-				return luaL_error (L, "unknown words type: %s", how_str);
+			how = word_extract_type_from_string (how_str);
+
+			if (how == RSPAMD_LUA_WORDS_MAX) {
+				return luaL_error (L, "invalid extraction type: %s", how_str);
 			}
 		}
 
 		return rspamd_lua_push_words (L, part->utf_words, how);
+	}
+
+	return 1;
+}
+
+static gint
+lua_textpart_filter_words (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_text_part *part = lua_check_textpart (L);
+	struct rspamd_lua_regexp *re = lua_check_regexp (L, 2);
+	gint lim = -1;
+	enum rspamd_lua_words_type how = RSPAMD_LUA_WORDS_STEM;
+
+	if (part == NULL || re == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (IS_PART_EMPTY (part) || part->utf_words == NULL) {
+		lua_createtable (L, 0, 0);
+	}
+	else {
+		if (lua_type (L, 3) == LUA_TSTRING) {
+			const gchar *how_str = lua_tostring (L, 2);
+
+			how = word_extract_type_from_string (how_str);
+
+			if (how == RSPAMD_LUA_WORDS_MAX) {
+				return luaL_error (L, "invalid extraction type: %s", how_str);
+			}
+		}
+
+		if (lua_type (L, 4) == LUA_TNUMBER) {
+			lim = lua_tointeger (L, 4);
+		}
+
+		guint cnt, i;
+
+		lua_createtable (L, 8, 0);
+
+		for (i = 0, cnt = 1; i < part->utf_words->len; i ++) {
+			rspamd_stat_token_t *w = &g_array_index (part->utf_words,
+					rspamd_stat_token_t, i);
+
+			switch (how) {
+			case RSPAMD_LUA_WORDS_STEM:
+				if (w->stemmed.len > 0) {
+					if (rspamd_regexp_match (re->re, w->stemmed.begin,
+							w->stemmed.len, FALSE)) {
+						lua_pushlstring (L, w->stemmed.begin, w->stemmed.len);
+						lua_rawseti (L, -2, cnt++);
+					}
+				}
+				break;
+			case RSPAMD_LUA_WORDS_NORM:
+				if (w->normalized.len > 0) {
+					if (rspamd_regexp_match (re->re, w->normalized.begin,
+							w->normalized.len, FALSE)) {
+						lua_pushlstring (L, w->normalized.begin, w->normalized.len);
+						lua_rawseti (L, -2, cnt++);
+					}
+				}
+				break;
+			case RSPAMD_LUA_WORDS_RAW:
+				if (w->original.len > 0) {
+					if (rspamd_regexp_match (re->re, w->original.begin,
+							w->original.len, TRUE)) {
+						lua_pushlstring (L, w->original.begin, w->original.len);
+						lua_rawseti (L, -2, cnt++);
+					}
+				}
+				break;
+			case RSPAMD_LUA_WORDS_FULL:
+				if (rspamd_regexp_match (re->re, w->normalized.begin,
+						w->normalized.len, FALSE)) {
+					rspamd_lua_push_full_word (L, w);
+					/* Push to the resulting vector */
+					lua_rawseti (L, -2, cnt++);
+				}
+				break;
+			default:
+				break;
+			}
+
+			if (lim > 0 && cnt >= lim) {
+				break;
+			}
+		}
 	}
 
 	return 1;
