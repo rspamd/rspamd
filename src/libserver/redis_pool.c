@@ -30,7 +30,7 @@ struct rspamd_redis_pool_connection {
 	struct redisAsyncContext *ctx;
 	struct rspamd_redis_pool_elt *elt;
 	GList *entry;
-	struct event timeout;
+	ev_timer timeout;
 	gboolean active;
 	gchar tag[MEMPOOL_UID_LEN];
 	ref_entry_t ref;
@@ -120,9 +120,7 @@ rspamd_redis_pool_conn_dtor (struct rspamd_redis_pool_connection *conn)
 	else {
 		msg_debug_rpool ("inactive connection removed");
 
-		if (rspamd_event_pending (&conn->timeout, EV_TIMEOUT)) {
-			event_del (&conn->timeout);
-		}
+		ev_timer_stop (conn->elt->pool->event_loop, &conn->timeout);
 
 		if (conn->ctx && !(conn->ctx->c.flags & REDIS_FREEING)) {
 			redisAsyncContext *ac = conn->ctx;
@@ -173,9 +171,10 @@ rspamd_redis_pool_elt_dtor (gpointer p)
 }
 
 static void
-rspamd_redis_conn_timeout (gint fd, short what, gpointer p)
+rspamd_redis_conn_timeout (EV_P_ ev_timer *w, int revents)
 {
-	struct rspamd_redis_pool_connection *conn = p;
+	struct rspamd_redis_pool_connection *conn =
+			(struct rspamd_redis_pool_connection *)w->data;
 
 	g_assert (!conn->active);
 	msg_debug_rpool ("scheduled removal of connection %p, refcount: %d",
@@ -186,7 +185,6 @@ rspamd_redis_conn_timeout (gint fd, short what, gpointer p)
 static void
 rspamd_redis_pool_schedule_timeout (struct rspamd_redis_pool_connection *conn)
 {
-	struct timeval tv;
 	gdouble real_timeout;
 	guint active_elts;
 
@@ -203,10 +201,12 @@ rspamd_redis_pool_schedule_timeout (struct rspamd_redis_pool_connection *conn)
 
 	msg_debug_rpool ("scheduled connection %p cleanup in %.1f seconds",
 			conn->ctx, real_timeout);
-	double_to_tv (real_timeout, &tv);
-	event_set (&conn->timeout, -1, EV_TIMEOUT, rspamd_redis_conn_timeout, conn);
-	event_base_set (conn->elt->pool->event_loop, &conn->timeout);
-	event_add (&conn->timeout, &tv);
+
+	conn->timeout.data = conn;
+	ev_timer_init (&conn->timeout,
+			rspamd_redis_conn_timeout,
+			real_timeout, 0.0);
+	ev_timer_start (conn->elt->pool->event_loop, &conn->timeout);
 }
 
 static void
@@ -352,7 +352,7 @@ rspamd_redis_pool_connect (struct rspamd_redis_pool *pool,
 			g_assert (!conn->active);
 
 			if (conn->ctx->err == REDIS_OK) {
-				event_del (&conn->timeout);
+				ev_timer_stop (elt->pool->event_loop, &conn->timeout);
 				conn->active = TRUE;
 				g_queue_push_tail_link (elt->active, conn_entry);
 				msg_debug_rpool ("reused existing connection to %s:%d: %p",

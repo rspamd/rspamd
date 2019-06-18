@@ -1301,7 +1301,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 		ucl_object_insert_key (top, ucl_object_fromstring (task->message_id),
 				"message-id", 0, false);
 		ucl_object_insert_key (top,
-				ucl_object_fromdouble (task->time_real_finish - task->time_real),
+				ucl_object_fromdouble (task->time_real_finish - task->task_timestamp),
 				"time_real", 0, false);
 		ucl_object_insert_key (top,
 				ucl_object_fromdouble (task->time_virtual_finish - task->time_virtual),

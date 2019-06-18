@@ -62,7 +62,6 @@ struct rspamd_milter_private {
 	struct rspamd_milter_parser parser;
 	struct rspamd_io_ev ev;
 	struct rspamd_milter_outbuf *out_chain;
-	struct timeval *ptv;
 	struct ev_loop *event_loop;
 	rspamd_mempool_t *pool;
 	khash_t(milter_headers_hash_t) *headers;

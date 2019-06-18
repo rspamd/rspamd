@@ -1444,7 +1444,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 	backend->stcf = stf;
 
 	st_elt = g_malloc0 (sizeof (*st_elt));
-	st_elt->event_loop = ctx->ev_base;
+	st_elt->event_loop = ctx->event_loop;
 	st_elt->ctx = backend;
 	backend->stat_elt = rspamd_stat_ctx_register_async (
 			rspamd_redis_async_stat_cb,

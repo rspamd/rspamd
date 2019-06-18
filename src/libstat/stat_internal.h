@@ -62,8 +62,8 @@ typedef void (*rspamd_stat_async_cleanup)(struct rspamd_stat_async_elt *elt,
 struct rspamd_stat_async_elt {
 	rspamd_stat_async_handler handler;
 	rspamd_stat_async_cleanup cleanup;
-	struct event timer_ev;
-	struct timeval tv;
+	struct ev_loop *event_loop;
+	ev_timer timer_ev;
 	gdouble timeout;
 	gboolean enabled;
 	gpointer ud;
@@ -93,7 +93,7 @@ struct rspamd_stat_ctx {
 	struct rspamd_stat_tokenizer *tokenizer;
 	gpointer tkcf;
 
-	struct ev_loop *ev_base;
+	struct ev_loop *event_loop;
 };
 
 typedef enum rspamd_learn_cache_result {
