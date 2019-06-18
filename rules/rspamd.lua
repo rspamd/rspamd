@@ -36,6 +36,7 @@ dofile(local_rules .. '/misc.lua')
 dofile(local_rules .. '/http_headers.lua')
 dofile(local_rules .. '/forwarding.lua')
 dofile(local_rules .. '/mid.lua')
+dofile(local_rules .. '/bitcoin.lua')
 
 if rspamd_util.file_exists(local_conf .. '/rspamd.local.lua') then
   dofile(local_conf .. '/rspamd.local.lua')
@@ -44,6 +45,10 @@ else
   if rspamd_util.file_exists(local_conf .. '/lua/rspamd.local.lua') then
     dofile(local_conf .. '/lua/rspamd.local.lua')
   end
+end
+
+if rspamd_util.file_exists(local_conf .. '/local.d/rspamd.lua') then
+  dofile(local_conf .. '/local.d/rspamd.lua')
 end
 
 if rspamd_util.file_exists(local_rules .. '/rspamd.classifiers.lua') then

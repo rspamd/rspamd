@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ]]--
 
--- This is main lua config file for rspamd
+-- Misc rules
 
 local E = {}
 local fun = require "fun"

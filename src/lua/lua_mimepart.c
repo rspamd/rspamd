@@ -930,7 +930,7 @@ lua_textpart_filter_words (lua_State *L)
 	}
 	else {
 		if (lua_type (L, 3) == LUA_TSTRING) {
-			const gchar *how_str = lua_tostring (L, 2);
+			const gchar *how_str = lua_tostring (L, 3);
 
 			how = word_extract_type_from_string (how_str);
 
