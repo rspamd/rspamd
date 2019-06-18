@@ -33,7 +33,7 @@ struct rspamd_task;
 struct rspamd_config;
 
 struct roll_history_row {
-	struct timeval tv;
+	ev_tstamp timestamp;
 	gchar message_id[HISTORY_MAX_ID];
 	gchar symbols[HISTORY_MAX_SYMBOLS];
 	gchar user[HISTORY_MAX_USER];

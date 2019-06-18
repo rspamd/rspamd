@@ -136,7 +136,7 @@ rspamd_roll_history_update (struct roll_history *history,
 		rspamd_strlcpy (row->from_addr, "unknown", sizeof (row->from_addr));
 	}
 
-	memcpy (&row->tv, &task->tv, sizeof (row->tv));
+	row->timestamp = task->task_timestamp;
 
 	/* Strings */
 	rspamd_strlcpy (row->message_id, task->message_id,
@@ -173,7 +173,7 @@ rspamd_roll_history_update (struct roll_history *history,
 		}
 	}
 
-	row->scan_time = task->time_real_finish - task->time_real;
+	row->scan_time = task->time_real_finish - task->task_timestamp;
 	row->len = task->msg.len;
 	g_atomic_int_set (&row->completed, TRUE);
 }
@@ -282,7 +282,7 @@ rspamd_roll_history_load (struct roll_history *history, const gchar *filename)
 			elt = ucl_object_lookup (cur, "time");
 
 			if (elt && ucl_object_type (elt) == UCL_FLOAT) {
-				double_to_tv (ucl_object_todouble (elt), &row->tv);
+				row->timestamp = ucl_object_todouble (elt);
 			}
 
 			elt = ucl_object_lookup (cur, "id");
@@ -391,8 +391,8 @@ rspamd_roll_history_save (struct roll_history *history, const gchar *filename)
 
 		elt = ucl_object_typed_new (UCL_OBJECT);
 
-		ucl_object_insert_key (elt, ucl_object_fromdouble (
-				tv_to_double (&row->tv)), "time", 0, false);
+		ucl_object_insert_key (elt, ucl_object_fromdouble (row->timestamp),
+				"time", 0, false);
 		ucl_object_insert_key (elt, ucl_object_fromstring (row->message_id),
 				"id", 0, false);
 		ucl_object_insert_key (elt, ucl_object_fromstring (row->symbols),

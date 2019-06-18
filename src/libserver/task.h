@@ -189,11 +189,10 @@ struct rspamd_task {
 	struct rspamd_config *cfg;						/**< pointer to config object						*/
 	GError *err;
 	rspamd_mempool_t *task_pool;					/**< memory pool for task							*/
-	double time_real;
 	double time_virtual;
 	double time_real_finish;
 	double time_virtual_finish;
-	struct timeval tv;
+	ev_tstamp task_timestamp;
 	gboolean (*fin_callback)(struct rspamd_task *task, void *arg);
 													/**< callback for filters finalizing					*/
 	void *fin_arg;									/**< argument for fin callback						*/

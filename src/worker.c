@@ -332,7 +332,7 @@ rspamd_worker_error_handler (struct rspamd_http_connection *conn, GError *err)
 				NULL,
 				"application/json",
 				task,
-				&task->tv);
+				1.0);
 	}
 }
 

@@ -273,7 +273,7 @@ rspamd_milter_plan_io (struct rspamd_milter_session *session,
 
 	event_set (&priv->ev, priv->fd, what, rspamd_milter_io_handler,
 			session);
-	event_base_set (priv->ev_base, &priv->ev);
+	event_base_set (priv->event_loop, &priv->ev);
 	event_add (&priv->ev, priv->ptv);
 }
 
@@ -1103,7 +1103,7 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 	priv->err_cb = error_cb;
 	priv->parser.state = st_len_1;
 	priv->parser.buf = rspamd_fstring_sized_new (RSPAMD_MILTER_MESSAGE_CHUNK + 5);
-	priv->ev_base = ev_base;
+	priv->event_loop = ev_base;
 	priv->state = RSPAMD_MILTER_READ_MORE;
 	priv->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "milter");
 	priv->discard_on_reject = milter_ctx->discard_on_reject;

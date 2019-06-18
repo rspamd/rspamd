@@ -4309,7 +4309,7 @@ lua_task_get_date (lua_State *L)
 		}
 		/* Get GMT date and store it to time_t */
 		if (type == DATE_CONNECT || type == DATE_CONNECT_STRING) {
-			tim = (tv_to_msec (&task->tv)) / 1000.;
+			tim = task->task_timestamp;
 
 			if (!gmt) {
 				struct tm t;
@@ -4399,14 +4399,16 @@ lua_task_get_timeval (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
+	struct timeval tv;
 
 	if (task != NULL) {
+		double_to_tv (task->task_timestamp, &tv);
 		lua_createtable (L, 0, 2);
 		lua_pushstring (L, "tv_sec");
-		lua_pushinteger (L, (lua_Integer)task->tv.tv_sec);
+		lua_pushinteger (L, (lua_Integer)tv.tv_sec);
 		lua_settable (L, -3);
 		lua_pushstring (L, "tv_usec");
-		lua_pushinteger (L, (lua_Integer)task->tv.tv_usec);
+		lua_pushinteger (L, (lua_Integer)tv.tv_usec);
 		lua_settable (L, -3);
 	}
 	else {
@@ -4429,7 +4431,7 @@ lua_task_get_scan_time (lua_State *L)
 		}
 
 		rspamd_task_set_finish_time (task);
-		lua_pushnumber (L, task->time_real_finish - task->time_real);
+		lua_pushnumber (L, task->time_real_finish - task->task_timestamp);
 		lua_pushnumber (L, task->time_virtual_finish - task->time_virtual);
 
 		if (!set) {

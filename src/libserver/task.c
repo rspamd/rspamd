@@ -102,23 +102,8 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 	}
 
 	new_task->event_loop = ev_base;
-
-#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
-	if (ev_base) {
-		event_base_update_cache_time (ev_base);
-		event_base_gettimeofday_cached (ev_base, &new_task->tv);
-		new_task->time_real = tv_to_double (&new_task->tv);
-	}
-	else {
-		gettimeofday (&new_task->tv, NULL);
-		new_task->time_real = tv_to_double (&new_task->tv);
-	}
-#else
-	gettimeofday (&new_task->tv, NULL);
-	new_task->time_real = tv_to_double (&new_task->tv);
-#endif
-
-	new_task->time_virtual = rspamd_get_virtual_ticks ();
+	new_task->task_timestamp = ev_time ();
+	new_task->time_virtual = ev_now (ev_base);
 	new_task->time_real_finish = NAN;
 	new_task->time_virtual_finish = NAN;
 
@@ -185,11 +170,13 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 static void
 rspamd_task_reply (struct rspamd_task *task)
 {
+	const ev_tstamp write_timeout = 2.0;
+
 	if (task->fin_callback) {
 		task->fin_callback (task, task->fin_arg);
 	}
 	else {
-		rspamd_protocol_write_reply (task);
+		rspamd_protocol_write_reply (task, write_timeout);
 	}
 }
 
@@ -1450,7 +1437,7 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		var.begin = numbuf;
 		break;
 	case RSPAMD_LOG_TIME_REAL:
-		var.begin = rspamd_log_check_time (task->time_real,
+		var.begin = rspamd_log_check_time (task->task_timestamp,
 				task->time_real_finish,
 				task->cfg->clock_res);
 		var.len = strlen (var.begin);
@@ -1748,25 +1735,9 @@ rspamd_task_profile_get (struct rspamd_task *task, const gchar *key)
 gboolean
 rspamd_task_set_finish_time (struct rspamd_task *task)
 {
-	struct timeval tv;
-
 	if (isnan (task->time_real_finish)) {
-
-#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
-		if (task->ev_base) {
-			event_base_update_cache_time (task->ev_base);
-			event_base_gettimeofday_cached (task->ev_base, &tv);
-			task->time_real_finish = tv_to_double (&tv);
-		}
-		else {
-			gettimeofday (&tv, NULL);
-			task->time_real_finish = tv_to_double (&tv);
-		}
-#else
-		gettimeofday (&tv, NULL);
-		task->time_real_finish = tv_to_double (&tv);
-#endif
-		task->time_virtual_finish = rspamd_get_virtual_ticks ();
+		task->time_real_finish = ev_time ();
+		task->time_virtual_finish = ev_now (task->event_loop);
 
 		return TRUE;
 	}
