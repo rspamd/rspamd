@@ -105,12 +105,8 @@ INIT_LOG_MODULE(controller)
 #define COLOR_REJECT "#CB4B4B"
 #define COLOR_TOTAL "#9440ED"
 
-const struct timeval rrd_update_time = {
-		.tv_sec = 1,
-		.tv_usec = 0
-};
-
-const guint64 rspamd_controller_ctx_magic = 0xf72697805e6941faULL;
+const static ev_tstamp rrd_update_time = 1.0;
+const static guint64 rspamd_controller_ctx_magic = 0xf72697805e6941faULL;
 
 extern void fuzzy_stat_command (struct rspamd_task *task);
 
@@ -132,7 +128,7 @@ worker_t controller_worker = {
 struct rspamd_controller_worker_ctx {
 	guint64 magic;
 	/* Events base */
-	struct ev_loop *ev_base;
+	struct ev_loop *event_loop;
 	/* DNS resolver */
 	struct rspamd_dns_resolver *resolver;
 	/* Config */
@@ -153,7 +149,7 @@ struct rspamd_controller_worker_ctx {
 	struct rspamd_http_context *http_ctx;
 	struct rspamd_http_connection_router *http;
 	/* Server's start time */
-	time_t start_time;
+	ev_tstamp start_time;
 	/* Main server */
 	struct rspamd_main *srv;
 	/* SSL cert */
@@ -182,9 +178,9 @@ struct rspamd_controller_worker_ctx {
 	/* Local keypair */
 	gpointer key;
 
-	struct event *rrd_event;
+	ev_timer rrd_event;
 	struct rspamd_rrd_file *rrd;
-	struct event save_stats_event;
+	ev_timer save_stats_event;
 	struct rspamd_lang_detector *lang_det;
 	gdouble task_timeout;
 };
@@ -1525,7 +1521,7 @@ rspamd_controller_handle_lua_history (lua_State *L,
 
 			if (lua_isfunction (L, -1)) {
 				task = rspamd_task_new (session->ctx->worker, session->cfg,
-						session->pool, ctx->lang_det, ctx->ev_base);
+						session->pool, ctx->lang_det, ctx->event_loop);
 
 				task->resolver = ctx->resolver;
 				task->s = rspamd_session_create (session->pool,
@@ -1822,7 +1818,7 @@ rspamd_controller_handle_lua (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
-			ctx->lang_det, ctx->ev_base);
+			ctx->lang_det, ctx->event_loop);
 
 	task->resolver = ctx->resolver;
 	task->s = rspamd_session_create (session->pool,
@@ -2004,7 +2000,7 @@ rspamd_controller_handle_learn_common (
 	}
 
 	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
-			session->ctx->lang_det, ctx->ev_base);
+			session->ctx->lang_det, ctx->event_loop);
 
 	task->resolver = ctx->resolver;
 	task->s = rspamd_session_create (session->pool,
@@ -2102,7 +2098,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
-			ctx->lang_det, ctx->ev_base);
+			ctx->lang_det, ctx->event_loop);
 
 	task->resolver = ctx->resolver;
 	task->s = rspamd_session_create (session->pool,
@@ -2133,7 +2129,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 
 		event_set (&task->timeout_ev, -1, EV_TIMEOUT, rspamd_task_timeout,
 				task);
-		event_base_set (ctx->ev_base, &task->timeout_ev);
+		event_base_set (ctx->event_loop, &task->timeout_ev);
 		double_to_tv (ctx->task_timeout, &task_tv);
 		event_add (&task->timeout_ev, &task_tv);
 	}
@@ -2600,7 +2596,7 @@ rspamd_controller_handle_stat_common (
 	ctx = session->ctx;
 
 	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
-			ctx->lang_det, ctx->ev_base);
+			ctx->lang_det, ctx->event_loop);
 	task->resolver = ctx->resolver;
 	cbdata = rspamd_mempool_alloc0 (session->pool, sizeof (*cbdata));
 	cbdata->conn_ent = conn_ent;
@@ -3002,7 +2998,7 @@ rspamd_controller_handle_lua_plugin (struct rspamd_http_connection_entry *conn_e
 	}
 
 	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
-			ctx->lang_det, ctx->ev_base);
+			ctx->lang_det, ctx->event_loop);
 
 	task->resolver = ctx->resolver;
 	task->s = rspamd_session_create (session->pool,
@@ -3487,7 +3483,7 @@ lua_csession_get_ev_base (lua_State *L)
 		s = c->ud;
 		pbase = lua_newuserdata (L, sizeof (struct ev_loop *));
 		rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
-		*pbase = s->ctx->ev_base;
+		*pbase = s->ctx->event_loop;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -3702,7 +3698,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	const guint save_stats_interval = 60 * 1000; /* 1 minute */
 	gpointer m;
 
-	ctx->ev_base = rspamd_prepare_worker (worker,
+	ctx->event_loop = rspamd_prepare_worker (worker,
 			"controller",
 			rspamd_controller_accept_socket);
 	msec_to_tv (ctx->timeout, &ctx->io_tv);
@@ -3752,7 +3748,7 @@ start_controller_worker (struct rspamd_worker *worker)
 		if (ctx->rrd) {
 			ctx->rrd_event = g_malloc0 (sizeof (*ctx->rrd_event));
 			evtimer_set (ctx->rrd_event, rspamd_controller_rrd_update, ctx);
-			event_base_set (ctx->ev_base, ctx->rrd_event);
+			event_base_set (ctx->event_loop, ctx->rrd_event);
 			event_add (ctx->rrd_event, &rrd_update_time);
 		}
 		else if (rrd_err) {
@@ -3773,7 +3769,7 @@ start_controller_worker (struct rspamd_worker *worker)
 			"password");
 
 	/* Accept event */
-	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->ev_base,
+	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->event_loop,
 			ctx->cfg->ups_ctx);
 	ctx->http = rspamd_http_router_new (rspamd_controller_error_handler,
 			rspamd_controller_finish_handler, &ctx->io_tv,
@@ -3889,40 +3885,40 @@ start_controller_worker (struct rspamd_worker *worker)
 			rspamd_controller_handle_unknown);
 
 	ctx->resolver = rspamd_dns_resolver_init (worker->srv->logger,
-			ctx->ev_base,
+			ctx->event_loop,
 			worker->srv->cfg);
 
 	rspamd_upstreams_library_config (worker->srv->cfg, worker->srv->cfg->ups_ctx,
-			ctx->ev_base, ctx->resolver->r);
-	rspamd_symcache_start_refresh (worker->srv->cfg->cache, ctx->ev_base,
+			ctx->event_loop, ctx->resolver->r);
+	rspamd_symcache_start_refresh (worker->srv->cfg->cache, ctx->event_loop,
 			worker);
-	rspamd_stat_init (worker->srv->cfg, ctx->ev_base);
+	rspamd_stat_init (worker->srv->cfg, ctx->event_loop);
 
 	if (worker->index == 0) {
 		if (!ctx->cfg->disable_monitored) {
-			rspamd_worker_init_monitored (worker, ctx->ev_base, ctx->resolver);
+			rspamd_worker_init_monitored (worker, ctx->event_loop, ctx->resolver);
 		}
 
-		rspamd_map_watch (worker->srv->cfg, ctx->ev_base,
+		rspamd_map_watch (worker->srv->cfg, ctx->event_loop,
 				ctx->resolver, worker, TRUE);
 
 		/* Schedule periodic stats saving, see #1823 */
 		event_set (&ctx->save_stats_event, -1, EV_PERSIST,
 				rspamd_controller_stats_save_periodic,
 				ctx);
-		event_base_set (ctx->ev_base, &ctx->save_stats_event);
+		event_base_set (ctx->event_loop, &ctx->save_stats_event);
 		msec_to_tv (save_stats_interval, &stv);
 		evtimer_add (&ctx->save_stats_event, &stv);
 	}
 	else {
-		rspamd_map_watch (worker->srv->cfg, ctx->ev_base,
+		rspamd_map_watch (worker->srv->cfg, ctx->event_loop,
 				ctx->resolver, worker, FALSE);
 	}
 
-	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->ev_base, worker);
+	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->event_loop, worker);
 
 	/* Start event loop */
-	event_base_loop (ctx->ev_base, 0);
+	event_base_loop (ctx->event_loop, 0);
 	rspamd_worker_block_signals ();
 
 	rspamd_stat_close ();
