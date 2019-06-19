@@ -274,10 +274,6 @@ void
 rspamd_worker_init_signals (struct rspamd_worker *worker, struct ev_loop *base)
 {
 	struct sigaction signals;
-	/* We ignore these signals in the worker */
-	rspamd_worker_ignore_signal (SIGPIPE);
-	rspamd_worker_ignore_signal (SIGALRM);
-	rspamd_worker_ignore_signal (SIGCHLD);
 
 	/* A set of terminating signals */
 	rspamd_worker_set_signal_handler (SIGTERM, worker, base,
@@ -298,11 +294,8 @@ rspamd_worker_init_signals (struct rspamd_worker *worker, struct ev_loop *base)
 	sigaddset (&signals.sa_mask, SIGTERM);
 	sigaddset (&signals.sa_mask, SIGINT);
 	sigaddset (&signals.sa_mask, SIGHUP);
-	sigaddset (&signals.sa_mask, SIGCHLD);
 	sigaddset (&signals.sa_mask, SIGUSR1);
 	sigaddset (&signals.sa_mask, SIGUSR2);
-	sigaddset (&signals.sa_mask, SIGALRM);
-	sigaddset (&signals.sa_mask, SIGPIPE);
 
 	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 }
@@ -345,6 +338,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 			if (ls->fd != -1) {
 				accept_ev = g_malloc0 (sizeof (*accept_ev));
 				accept_ev->event_loop = event_loop;
+				accept_ev->accept_ev.data = worker;
 				ev_io_init (&accept_ev->accept_ev, hdl, ls->fd, EV_READ);
 				ev_io_start (event_loop, &accept_ev->accept_ev);
 

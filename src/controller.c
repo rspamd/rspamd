@@ -134,8 +134,7 @@ struct rspamd_controller_worker_ctx {
 	/* Config */
 	struct rspamd_config *cfg;
 	/* END OF COMMON PART */
-	guint32 timeout;
-	struct timeval io_tv;
+	ev_tstamp timeout;
 	/* Whether we use ssl for this server */
 	gboolean use_ssl;
 	/* Webui password */
@@ -728,7 +727,7 @@ rspamd_controller_handle_auth (struct rspamd_http_connection_entry *conn_ent,
 	data[4] = st->actions_stat[METRIC_ACTION_SOFT_REJECT];
 
 	/* Get uptime */
-	uptime = time (NULL) - session->ctx->start_time;
+	uptime = ev_time () - session->ctx->start_time;
 
 	ucl_object_insert_key (obj, ucl_object_fromstring (
 			RVERSION),			   "version",  0, false);
@@ -996,7 +995,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_controller_session *session = conn_ent->ud;
 	GList *cur;
 	struct rspamd_map *map;
-	struct rspamd_map_backend *bk;
+	struct rspamd_map_backend *bk = NULL;
 	const rspamd_ftok_t *idstr;
 	struct stat st;
 	gint fd;
@@ -1037,7 +1036,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 		cur = g_list_next (cur);
 	}
 
-	if (!found) {
+	if (!found || bk == NULL) {
 		msg_info_session ("map not found");
 		rspamd_controller_send_error (conn_ent, 404, "Map not found");
 		return 0;
@@ -1075,7 +1074,7 @@ rspamd_controller_handle_get_map (struct rspamd_http_connection_entry *conn_ent,
 	rspamd_http_router_insert_headers (conn_ent->rt, reply);
 	rspamd_http_connection_write_message (conn_ent->conn, reply, NULL,
 			"text/plain", conn_ent,
-			conn_ent->rt->ptv);
+			conn_ent->rt->timeout);
 	conn_ent->is_reply = TRUE;
 
 	return 0;
@@ -1385,13 +1384,13 @@ rspamd_controller_handle_legacy_history (
 		row = &copied_rows[row_num];
 		/* Get only completed rows */
 		if (row->completed) {
-			rspamd_localtime (row->tv.tv_sec, &tm);
+			rspamd_localtime (row->timestamp, &tm);
 			strftime (timebuf, sizeof (timebuf) - 1, "%Y-%m-%d %H:%M:%S", &tm);
 			obj = ucl_object_typed_new (UCL_OBJECT);
 			ucl_object_insert_key (obj, ucl_object_fromstring (
 					timebuf),		  "time", 0, false);
 			ucl_object_insert_key (obj, ucl_object_fromint (
-					row->tv.tv_sec), "unix_time", 0, false);
+					row->timestamp), "unix_time", 0, false);
 			ucl_object_insert_key (obj, ucl_object_fromstring (
 					row->message_id), "id",	  0, false);
 			ucl_object_insert_key (obj, ucl_object_fromstring (row->from_addr),
@@ -1935,7 +1934,7 @@ rspamd_controller_scan_reply (struct rspamd_task *task)
 	rspamd_http_connection_reset (conn_ent->conn);
 	rspamd_http_router_insert_headers (conn_ent->rt, msg);
 	rspamd_http_connection_write_message (conn_ent->conn, msg, NULL,
-			"application/json", conn_ent, conn_ent->rt->ptv);
+			"application/json", conn_ent, conn_ent->rt->timeout);
 	conn_ent->is_reply = TRUE;
 }
 
@@ -2125,13 +2124,10 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	if (ctx->task_timeout > 0.0) {
-		struct timeval task_tv;
-
-		event_set (&task->timeout_ev, -1, EV_TIMEOUT, rspamd_task_timeout,
-				task);
-		event_base_set (ctx->event_loop, &task->timeout_ev);
-		double_to_tv (ctx->task_timeout, &task_tv);
-		event_add (&task->timeout_ev, &task_tv);
+		task->timeout_ev.data = task;
+		ev_timer_init (&task->timeout_ev, rspamd_task_timeout,
+				ctx->task_timeout, 0.0);
+		ev_timer_start (task->event_loop, &task->timeout_ev);
 	}
 
 end:
@@ -2210,6 +2206,7 @@ rspamd_controller_handle_saveactions (
 
 		switch (i) {
 		case 0:
+		default:
 			act = METRIC_ACTION_REJECT;
 			break;
 		case 1:
@@ -2404,7 +2401,7 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 {
 	struct rspamd_controller_session *session = conn_ent->ud;
 	GList *cur;
-	struct rspamd_map *map;
+	struct rspamd_map *map = NULL;
 	struct rspamd_map_backend *bk;
 	struct rspamd_controller_worker_ctx *ctx;
 	const rspamd_ftok_t *idstr;
@@ -2903,7 +2900,7 @@ rspamd_controller_handle_ping (struct rspamd_http_connection_entry *conn_ent,
 			NULL,
 			"text/plain",
 			conn_ent,
-			conn_ent->rt->ptv);
+			conn_ent->rt->timeout);
 	conn_ent->is_reply = TRUE;
 
 	return 0;
@@ -2937,7 +2934,7 @@ rspamd_controller_handle_unknown (struct rspamd_http_connection_entry *conn_ent,
 				NULL,
 				"text/plain",
 				conn_ent,
-				conn_ent->rt->ptv);
+				conn_ent->rt->timeout);
 		conn_ent->is_reply = TRUE;
 	}
 	else {
@@ -2953,7 +2950,7 @@ rspamd_controller_handle_unknown (struct rspamd_http_connection_entry *conn_ent,
 				NULL,
 				"text/plain",
 				conn_ent,
-				conn_ent->rt->ptv);
+				conn_ent->rt->timeout);
 		conn_ent->is_reply = TRUE;
 	}
 
@@ -3077,9 +3074,9 @@ rspamd_controller_finish_handler (struct rspamd_http_connection_entry *conn_ent)
 }
 
 static void
-rspamd_controller_accept_socket (gint fd, short what, void *arg)
+rspamd_controller_accept_socket (EV_P_ ev_io *w, int revents)
 {
-	struct rspamd_worker *worker = (struct rspamd_worker *) arg;
+	struct rspamd_worker *worker = (struct rspamd_worker *)w->data;
 	struct rspamd_controller_worker_ctx *ctx;
 	struct rspamd_controller_session *session;
 	rspamd_inet_addr_t *addr;
@@ -3088,7 +3085,8 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 	ctx = worker->ctx;
 
 	if ((nfd =
-		rspamd_accept_from_socket (fd, &addr, worker->accept_events)) == -1) {
+		rspamd_accept_from_socket (w->fd, &addr,
+				rspamd_worker_throttle_accept_events, worker->accept_events)) == -1) {
 		msg_warn_ctx ("accept failed: %s", strerror (errno));
 		return;
 	}
@@ -3113,9 +3111,10 @@ rspamd_controller_accept_socket (gint fd, short what, void *arg)
 }
 
 static void
-rspamd_controller_rrd_update (gint fd, short what, void *arg)
+rspamd_controller_rrd_update (EV_P_ ev_timer *w, int revents)
 {
-	struct rspamd_controller_worker_ctx *ctx = arg;
+	struct rspamd_controller_worker_ctx *ctx =
+			(struct rspamd_controller_worker_ctx *)w->data;
 	struct rspamd_stat *stat;
 	GArray ar;
 	gdouble points[METRIC_ACTION_MAX];
@@ -3139,8 +3138,7 @@ rspamd_controller_rrd_update (gint fd, short what, void *arg)
 	}
 
 	/* Plan new event */
-	event_del (ctx->rrd_event);
-	evtimer_add (ctx->rrd_event, &rrd_update_time);
+	ev_timer_again (ctx->event_loop, &ctx->rrd_event);
 }
 
 static void
@@ -3278,11 +3276,13 @@ rspamd_controller_store_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 }
 
 static void
-rspamd_controller_stats_save_periodic (int fd, short what, gpointer ud)
+rspamd_controller_stats_save_periodic (EV_P_ ev_timer *w, int revents)
 {
-	struct rspamd_controller_worker_ctx *ctx = ud;
+	struct rspamd_controller_worker_ctx *ctx =
+			(struct rspamd_controller_worker_ctx *)w->data;
 
 	rspamd_controller_store_saved_stats (ctx);
+	ev_timer_again (EV_A_ w);
 }
 
 static void
@@ -3375,7 +3375,7 @@ init_controller_worker (struct rspamd_config *cfg)
 			ctx,
 			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
 					timeout),
-			RSPAMD_CL_FLAG_TIME_INTEGER,
+			RSPAMD_CL_FLAG_TIME_FLOAT,
 			"Protocol timeout");
 
 	rspamd_rcl_register_worker_option (cfg,
@@ -3573,7 +3573,7 @@ rspamd_controller_on_terminate (struct rspamd_worker *worker)
 
 	if (ctx->rrd) {
 		msg_info ("closing rrd file: %s", ctx->rrd->filename);
-		event_del (ctx->rrd_event);
+		ev_timer_stop (ctx->event_loop, &ctx->rrd_event);
 		rspamd_rrd_close (ctx->rrd);
 	}
 
@@ -3694,16 +3694,14 @@ start_controller_worker (struct rspamd_worker *worker)
 	GHashTableIter iter;
 	gpointer key, value;
 	guint i;
-	struct timeval stv;
-	const guint save_stats_interval = 60 * 1000; /* 1 minute */
+	const ev_tstamp save_stats_interval = 60; /* 1 minute */
 	gpointer m;
 
 	ctx->event_loop = rspamd_prepare_worker (worker,
 			"controller",
 			rspamd_controller_accept_socket);
-	msec_to_tv (ctx->timeout, &ctx->io_tv);
 
-	ctx->start_time = time (NULL);
+	ctx->start_time = ev_time ();
 	ctx->worker = worker;
 	ctx->cfg = worker->srv->cfg;
 	ctx->srv = worker->srv;
@@ -3746,10 +3744,10 @@ start_controller_worker (struct rspamd_worker *worker)
 		ctx->rrd = rspamd_rrd_file_default (ctx->cfg->rrd_file, &rrd_err);
 
 		if (ctx->rrd) {
-			ctx->rrd_event = g_malloc0 (sizeof (*ctx->rrd_event));
-			evtimer_set (ctx->rrd_event, rspamd_controller_rrd_update, ctx);
-			event_base_set (ctx->event_loop, ctx->rrd_event);
-			event_add (ctx->rrd_event, &rrd_update_time);
+			ctx->rrd_event.data = ctx;
+			ev_timer_init (&ctx->rrd_event, rspamd_controller_rrd_update,
+					rrd_update_time, rrd_update_time);
+			ev_timer_start (ctx->event_loop, &ctx->rrd_event);
 		}
 		else if (rrd_err) {
 			msg_err ("cannot load rrd from %s: %e", ctx->cfg->rrd_file,
@@ -3772,7 +3770,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->event_loop,
 			ctx->cfg->ups_ctx);
 	ctx->http = rspamd_http_router_new (rspamd_controller_error_handler,
-			rspamd_controller_finish_handler, &ctx->io_tv,
+			rspamd_controller_finish_handler, ctx->timeout,
 			ctx->static_files_dir, ctx->http_ctx);
 
 	/* Add callbacks for different methods */
@@ -3903,12 +3901,11 @@ start_controller_worker (struct rspamd_worker *worker)
 				ctx->resolver, worker, TRUE);
 
 		/* Schedule periodic stats saving, see #1823 */
-		event_set (&ctx->save_stats_event, -1, EV_PERSIST,
+		ctx->save_stats_event.data = ctx;
+		ev_timer_init (&ctx->save_stats_event,
 				rspamd_controller_stats_save_periodic,
-				ctx);
-		event_base_set (ctx->event_loop, &ctx->save_stats_event);
-		msec_to_tv (save_stats_interval, &stv);
-		evtimer_add (&ctx->save_stats_event, &stv);
+				save_stats_interval, save_stats_interval);
+		ev_timer_start (ctx->event_loop, &ctx->save_stats_event);
 	}
 	else {
 		rspamd_map_watch (worker->srv->cfg, ctx->event_loop,
@@ -3918,7 +3915,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->event_loop, worker);
 
 	/* Start event loop */
-	event_base_loop (ctx->event_loop, 0);
+	ev_loop (ctx->event_loop, 0);
 	rspamd_worker_block_signals ();
 
 	rspamd_stat_close ();

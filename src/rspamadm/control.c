@@ -173,7 +173,6 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 	struct rspamd_http_connection *conn;
 	struct rspamd_http_message *msg;
 	rspamd_inet_addr_t *addr;
-	struct timeval tv;
 	static struct rspamadm_control_cbdata cbdata;
 
 	context = g_option_context_new (
@@ -239,16 +238,15 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 			addr);
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	msg->url = rspamd_fstring_new_init (path, strlen (path));
-	double_to_tv (timeout, &tv);
 
 	cbdata.argc = argc;
 	cbdata.argv = argv;
 	cbdata.path = path;
 
 	rspamd_http_connection_write_message (conn, msg, NULL, NULL, &cbdata,
-			&tv);
+			timeout);
 
-	event_base_loop (rspamd_main->event_loop, 0);
+	ev_loop (rspamd_main->event_loop, 0);
 
 	rspamd_http_connection_unref (conn);
 	rspamd_inet_address_free (addr);

@@ -316,13 +316,8 @@ rspamd_task_free (struct rspamd_task *task)
 			g_error_free (task->err);
 		}
 
-		if (rspamd_event_pending (&task->timeout_ev, EV_TIMEOUT)) {
-			event_del (&task->timeout_ev);
-		}
-
-		if (task->guard_ev) {
-			event_del (task->guard_ev);
-		}
+		ev_timer_stop (task->event_loop, &task->timeout_ev);
+		ev_io_stop (task->event_loop, &task->guard_ev);
 
 		if (task->sock != -1) {
 			close (task->sock);

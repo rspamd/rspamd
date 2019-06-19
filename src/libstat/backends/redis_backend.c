@@ -1039,9 +1039,7 @@ rspamd_redis_fin_learn (gpointer data)
 
 	rt->has_event = FALSE;
 	/* Stop timeout */
-	if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
-		event_del (&rt->timeout_event);
-	}
+	ev_timer_stop (rt->task->event_loop, &rt->timeout_event);
 
 	if (rt->redis) {
 		redis = rt->redis;
@@ -1654,7 +1652,6 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	struct upstream *up;
 	struct upstream_list *ups;
 	rspamd_inet_addr_t *addr;
-	struct timeval tv;
 	rspamd_fstring_t *query;
 	const gchar *redis_cmd;
 	rspamd_token_t *tok;
