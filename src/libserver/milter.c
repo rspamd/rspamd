@@ -186,10 +186,7 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 		priv = session->priv;
 		msg_debug_milter ("destroying milter session");
 
-		if (rspamd_event_pending (&priv->ev, EV_TIMEOUT|EV_WRITE|EV_READ)) {
-			event_del (&priv->ev);
-		}
-
+		rspamd_ev_watcher_stop (priv->event_loop, &priv->ev);
 		rspamd_milter_session_reset (session, RSPAMD_MILTER_RESET_ALL);
 
 		if (priv->parser.buf) {
@@ -267,14 +264,7 @@ static inline void
 rspamd_milter_plan_io (struct rspamd_milter_session *session,
 		struct rspamd_milter_private *priv, gshort what)
 {
-	if (rspamd_event_pending (&priv->ev, EV_TIMEOUT|EV_WRITE|EV_READ)) {
-		event_del (&priv->ev);
-	}
-
-	event_set (&priv->ev, priv->fd, what, rspamd_milter_io_handler,
-			session);
-	event_base_set (priv->event_loop, &priv->ev);
-	event_add (&priv->ev, priv->ptv);
+	rspamd_ev_watcher_reschedule (priv->event_loop, &priv->ev, what);
 }
 
 

@@ -45,7 +45,7 @@ struct rspamd_redis_cache_runtime {
 	struct rspamd_redis_cache_ctx *ctx;
 	struct rspamd_task *task;
 	struct upstream *selected;
-	struct event timeout_event;
+	ev_timer timer_ev;
 	redisAsyncContext *redis;
 	gboolean has_event;
 };
@@ -92,9 +92,7 @@ rspamd_redis_cache_fin (gpointer data)
 	redisAsyncContext *redis;
 
 	rt->has_event = FALSE;
-	if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
-		event_del (&rt->timeout_event);
-	}
+	ev_timer_stop (rt->task->event_loop, &rt->timer_ev);
 
 	if (rt->redis) {
 		redis = rt->redis;
@@ -105,9 +103,10 @@ rspamd_redis_cache_fin (gpointer data)
 }
 
 static void
-rspamd_redis_cache_timeout (gint fd, short what, gpointer d)
+rspamd_redis_cache_timeout (EV_P_ ev_timer *w, int revents)
 {
-	struct rspamd_redis_cache_runtime *rt = d;
+	struct rspamd_redis_cache_runtime *rt =
+			(struct rspamd_redis_cache_runtime *)w->data;
 	struct rspamd_task *task;
 
 	task = rt->task;
@@ -117,7 +116,7 @@ rspamd_redis_cache_timeout (gint fd, short what, gpointer d)
 	rspamd_upstream_fail (rt->selected, FALSE);
 
 	if (rt->has_event) {
-		rspamd_session_remove_event (task->s, rspamd_redis_cache_fin, d);
+		rspamd_session_remove_event (task->s, rspamd_redis_cache_fin, rt);
 	}
 }
 
@@ -401,8 +400,9 @@ rspamd_stat_cache_redis_runtime (struct rspamd_task *task,
 	redisLibevAttach (task->event_loop, rt->redis);
 
 	/* Now check stats */
-	event_set (&rt->timeout_event, -1, EV_TIMEOUT, rspamd_redis_cache_timeout, rt);
-	event_base_set (task->event_loop, &rt->timeout_event);
+	rt->timer_ev.data = rt;
+	ev_timer_init (&rt->timer_ev, rspamd_redis_cache_timeout,
+			rt->ctx->timeout, 0.0);
 	rspamd_redis_cache_maybe_auth (ctx, rt->redis);
 
 	if (!learn) {
@@ -418,7 +418,6 @@ rspamd_stat_cache_redis_check (struct rspamd_task *task,
 		gpointer runtime)
 {
 	struct rspamd_redis_cache_runtime *rt = runtime;
-	struct timeval tv;
 	gchar *h;
 
 	if (rspamd_session_blocked (task->s)) {
@@ -431,8 +430,6 @@ rspamd_stat_cache_redis_check (struct rspamd_task *task,
 		return RSPAMD_LEARN_INGORE;
 	}
 
-	double_to_tv (rt->ctx->timeout, &tv);
-
 	if (redisAsyncCommand (rt->redis, rspamd_stat_cache_redis_get, rt,
 			"HGET %s %s",
 			rt->ctx->redis_object, h) == REDIS_OK) {
@@ -440,7 +437,7 @@ rspamd_stat_cache_redis_check (struct rspamd_task *task,
 				rspamd_redis_cache_fin,
 				rt,
 				M);
-		event_add (&rt->timeout_event, &tv);
+		ev_timer_start (rt->task->event_loop, &rt->timer_ev);
 		rt->has_event = TRUE;
 	}
 
@@ -454,7 +451,6 @@ rspamd_stat_cache_redis_learn (struct rspamd_task *task,
 		gpointer runtime)
 {
 	struct rspamd_redis_cache_runtime *rt = runtime;
-	struct timeval tv;
 	gchar *h;
 	gint flag;
 
@@ -465,7 +461,6 @@ rspamd_stat_cache_redis_learn (struct rspamd_task *task,
 	h = rspamd_mempool_get_variable (task->task_pool, "words_hash");
 	g_assert (h != NULL);
 
-	double_to_tv (rt->ctx->timeout, &tv);
 	flag = (task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM) ? 1 : -1;
 
 	if (redisAsyncCommand (rt->redis, rspamd_stat_cache_redis_set, rt,
@@ -473,7 +468,7 @@ rspamd_stat_cache_redis_learn (struct rspamd_task *task,
 			rt->ctx->redis_object, h, flag) == REDIS_OK) {
 		rspamd_session_add_event (task->s,
 				rspamd_redis_cache_fin, rt, M);
-		event_add (&rt->timeout_event, &tv);
+		ev_timer_start (rt->task->event_loop, &rt->timer_ev);
 		rt->has_event = TRUE;
 	}
 

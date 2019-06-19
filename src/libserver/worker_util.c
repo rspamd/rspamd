@@ -57,7 +57,7 @@
 #include <sys/ucontext.h>
 #endif
 
-static void rspamd_worker_ignore_signal (int signo);
+static void rspamd_worker_ignore_signal (struct rspamd_worker_signal_handler *);
 /**
  * Return worker's control structure by its type
  * @param type
@@ -98,6 +98,16 @@ rspamd_worker_terminate_handlers (struct rspamd_worker *w)
 
 	return ret;
 }
+
+static void
+rspamd_worker_on_delayed_shutdown (EV_P_ ev_timer *w, int revents)
+{
+	ev_break (loop, EVBREAK_ALL);
+#ifdef WITH_GPERF_TOOLS
+	ProfilerStop ();
+#endif
+}
+
 /*
  * Config reload is designed by sending sigusr2 to active workers and pending shutdown of them
  */
@@ -108,7 +118,10 @@ rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 	struct timeval tv;
 
 	if (!sigh->worker->wanna_die) {
-		rspamd_worker_ignore_signal (SIGUSR2);
+		static ev_timer shutdown_ev;
+
+		rspamd_worker_ignore_signal (sigh);
+
 		tv.tv_sec = SOFT_SHUTDOWN_TIME;
 		tv.tv_usec = 0;
 		sigh->worker->wanna_die = TRUE;
@@ -119,7 +132,9 @@ rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 				G_STRFUNC,
 				"worker's shutdown is pending in %d sec",
 				SOFT_SHUTDOWN_TIME);
-		event_base_loopexit (sigh->base, &tv);
+		ev_timer_init (&shutdown_ev, rspamd_worker_on_delayed_shutdown,
+				SOFT_SHUTDOWN_TIME, 0.0);
+		ev_timer_start (sigh->event_loop, &shutdown_ev);
 		rspamd_worker_stop_accept (sigh->worker);
 	}
 
@@ -142,9 +157,12 @@ rspamd_worker_usr1_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 static gboolean
 rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
-	struct timeval tv;
+	ev_tstamp delay;
 
 	if (!sigh->worker->wanna_die) {
+		static ev_timer shutdown_ev;
+
+		rspamd_worker_ignore_signal (sigh);
 		rspamd_default_log_function (G_LOG_LEVEL_INFO,
 				sigh->worker->srv->server_pool->tag.tagname,
 				sigh->worker->srv->server_pool->tag.uid,
@@ -152,19 +170,17 @@ rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 				"terminating after receiving signal %s",
 				g_strsignal (sigh->signo));
 
-		tv.tv_usec = 0;
 		if (rspamd_worker_terminate_handlers (sigh->worker)) {
-			tv.tv_sec =  SOFT_SHUTDOWN_TIME;
+			delay = SOFT_SHUTDOWN_TIME;
 		}
 		else {
-			tv.tv_sec = 0;
+			delay = 0;
 		}
 
 		sigh->worker->wanna_die = 1;
-		event_base_loopexit (sigh->base, &tv);
-#ifdef WITH_GPERF_TOOLS
-		ProfilerStop ();
-#endif
+		ev_timer_init (&shutdown_ev, rspamd_worker_on_delayed_shutdown,
+				SOFT_SHUTDOWN_TIME, 0.0);
+		ev_timer_start (sigh->event_loop, &shutdown_ev);
 		rspamd_worker_stop_accept (sigh->worker);
 	}
 
@@ -173,10 +189,10 @@ rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 }
 
 static void
-rspamd_worker_signal_handle (int fd, short what, void *arg)
+rspamd_worker_signal_handle (EV_P_ ev_signal *w, int revents)
 {
 	struct rspamd_worker_signal_handler *sigh =
-			(struct rspamd_worker_signal_handler *) arg;
+			(struct rspamd_worker_signal_handler *)w->data;
 	struct rspamd_worker_signal_cb *cb, *cbtmp;
 
 	/* Call all signal handlers registered */
@@ -188,15 +204,9 @@ rspamd_worker_signal_handle (int fd, short what, void *arg)
 }
 
 static void
-rspamd_worker_ignore_signal (int signo)
+rspamd_worker_ignore_signal (struct rspamd_worker_signal_handler *sigh)
 {
-	struct sigaction sig;
-
-	sigemptyset (&sig.sa_mask);
-	sigaddset (&sig.sa_mask, signo);
-	sig.sa_handler = SIG_IGN;
-	sig.sa_flags = 0;
-	sigaction (signo, &sig, NULL);
+	ev_signal_stop (sigh->event_loop, &sigh->ev_sig);
 }
 
 static void
@@ -222,14 +232,14 @@ rspamd_sigh_free (void *p)
 		g_free (cb);
 	}
 
-	event_del (&sigh->ev);
+	ev_signal_stop (sigh->event_loop, &sigh->ev_sig);
 	rspamd_worker_default_signal (sigh->signo);
 	g_free (sigh);
 }
 
 void
 rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
-		struct ev_loop *base,
+		struct ev_loop *event_loop,
 		rspamd_worker_signal_handler handler,
 		void *handler_data)
 {
@@ -242,12 +252,12 @@ rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
 		sigh = g_malloc0 (sizeof (*sigh));
 		sigh->signo = signo;
 		sigh->worker = worker;
-		sigh->base = base;
+		sigh->event_loop = event_loop;
 		sigh->enabled = TRUE;
 
-		signal_set (&sigh->ev, signo, rspamd_worker_signal_handle, sigh);
-		event_base_set (base, &sigh->ev);
-		signal_add (&sigh->ev, NULL);
+		sigh->ev_sig.data = sigh;
+		ev_signal_init (&sigh->ev_sig, rspamd_worker_signal_handle, signo);
+		ev_signal_start (event_loop, &sigh->ev_sig);
 
 		g_hash_table_insert (worker->signal_events,
 				GINT_TO_POINTER (signo),
@@ -428,7 +438,7 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 		NULL,
 		"application/json",
 		entry,
-		entry->rt->ptv);
+		entry->rt->timeout);
 	entry->is_reply = TRUE;
 }
 
@@ -460,7 +470,7 @@ rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
 		NULL,
 		"application/json",
 		entry,
-		entry->rt->ptv);
+		entry->rt->timeout);
 	entry->is_reply = TRUE;
 }
 
@@ -486,7 +496,7 @@ rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
 		NULL,
 		"application/json",
 		entry,
-		entry->rt->ptv);
+		entry->rt->timeout);
 	entry->is_reply = TRUE;
 }
 
@@ -676,9 +686,8 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 #endif
 
 		/* Remove the inherited event base */
-		event_reinit (rspamd_main->event_loop);
-		event_base_free (rspamd_main->event_loop);
-
+		ev_loop_destroy (EV_DEFAULT);
+		rspamd_main->event_loop = NULL;
 		/* Drop privileges */
 		rspamd_worker_drop_priv (rspamd_main);
 		/* Set limits */
@@ -853,8 +862,7 @@ struct rspamd_worker_session_cache {
 	struct ev_loop *ev_base;
 	GHashTable *cache;
 	struct rspamd_config *cfg;
-	struct timeval tv;
-	struct event periodic;
+	struct ev_timer periodic;
 };
 
 static gint
@@ -868,9 +876,10 @@ rspamd_session_cache_sort_cmp (gconstpointer pa, gconstpointer pb)
 }
 
 static void
-rspamd_sessions_cache_periodic (gint fd, short what, gpointer p)
+rspamd_sessions_cache_periodic (EV_P_ ev_timer *w, int revents)
 {
-	struct rspamd_worker_session_cache *c = p;
+	struct rspamd_worker_session_cache *c =
+			(struct rspamd_worker_session_cache *)w->data;
 	GHashTableIter it;
 	gchar timebuf[32];
 	gpointer k, v;
@@ -902,6 +911,8 @@ rspamd_sessions_cache_periodic (gint fd, short what, gpointer p)
 					timebuf);
 		}
 	}
+
+	ev_timer_again (EV_A_ w);
 }
 
 void *
@@ -916,11 +927,10 @@ rspamd_worker_session_cache_new (struct rspamd_worker *w,
 	c->cache = g_hash_table_new_full (g_direct_hash, g_direct_equal,
 			NULL, g_free);
 	c->cfg = w->srv->cfg;
-	double_to_tv (periodic_interval, &c->tv);
-	event_set (&c->periodic, -1, EV_TIMEOUT|EV_PERSIST,
-			rspamd_sessions_cache_periodic, c);
-	event_base_set (ev_base, &c->periodic);
-	event_add (&c->periodic, &c->tv);
+	c->periodic.data = c;
+	ev_timer_init (&c->periodic, rspamd_sessions_cache_periodic, periodic_interval,
+			periodic_interval);
+	ev_timer_start (ev_base, &c->periodic);
 
 	return c;
 }
@@ -1115,12 +1125,13 @@ rspamd_set_crash_handler (struct rspamd_main *rspamd_main)
 }
 
 static void
-rspamd_enable_accept_event (gint fd, short what, gpointer d)
+rspamd_enable_accept_event (EV_P_ ev_timer *w, int revents)
 {
-	struct event *events = d;
+	struct rspamd_worker_accept_event *ac_ev =
+			(struct rspamd_worker_accept_event *)w->data;
 
-	event_del (&events[1]);
-	event_add (&events[0], NULL);
+	ev_timer_stop (EV_A_ w);
+	ev_io_start (EV_A_ &ac_ev->accept_ev);
 }
 
 void
@@ -1128,17 +1139,15 @@ rspamd_worker_throttle_accept_events (gint sock, void *data)
 {
 	struct rspamd_worker_accept_event *head, *cur;
 	const gdouble throttling = 0.5;
-	struct ev_loop *ev_base;
 
 	head = (struct rspamd_worker_accept_event *)data;
 
 	DL_FOREACH (head, cur) {
 
-		ev_base = event_get_base (&events[0]);
-		event_del (&events[0]);
-		event_set (&events[1], sock, EV_TIMEOUT, rspamd_enable_accept_event,
-				events);
-		event_base_set (ev_base, &events[1]);
-		event_add (&events[1], &tv);
+		ev_io_stop (cur->event_loop, &cur->accept_ev);
+		cur->throttling_ev.data = cur;
+		ev_timer_init (&cur->throttling_ev, rspamd_enable_accept_event,
+				throttling, 0.0);
+		ev_timer_start (cur->event_loop, &cur->throttling_ev);
 	}
 }
