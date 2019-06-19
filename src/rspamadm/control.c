@@ -111,7 +111,6 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 	const gchar *body;
 	gsize body_len;
 	struct rspamadm_control_cbdata *cbdata = conn->ud;
-	struct timeval exit_tv;
 
 	body = rspamd_http_message_get_body (msg, &body_len);
 	parser = ucl_parser_new (0);
@@ -157,9 +156,7 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 	}
 
 end:
-	exit_tv.tv_sec = 0;
-	exit_tv.tv_usec = 0;
-	event_base_loopexit (rspamd_main->event_loop, &exit_tv);
+	ev_break (rspamd_main->event_loop, EVBREAK_ALL);
 
 	return 0;
 }

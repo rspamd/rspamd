@@ -1829,7 +1829,7 @@ rspamc_process_dir (struct ev_loop *ev_base, struct rspamc_command *cmd,
 				if (cur_req >= max_requests) {
 					cur_req = 0;
 					/* Wait for completion */
-					event_base_loop (ev_base, 0);
+					ev_loop (ev_base, 0);
 				}
 			}
 		}
@@ -1840,7 +1840,7 @@ rspamc_process_dir (struct ev_loop *ev_base, struct rspamc_command *cmd,
 	}
 
 	closedir (d);
-	event_base_loop (ev_base, 0);
+	ev_loop (ev_base, 0);
 }
 
 
@@ -1863,7 +1863,7 @@ main (gint argc, gchar **argv, gchar **env)
 	GPid cld;
 	struct rspamc_command *cmd;
 	FILE *in = NULL;
-	struct ev_loop *ev_base;
+	struct ev_loop *event_loop;
 	struct stat st;
 	struct sigaction sigpipe_act;
 	gchar **exclude_pattern;
@@ -1884,6 +1884,7 @@ main (gint argc, gchar **argv, gchar **env)
 	npatterns = 0;
 
 	while (exclude_pattern && *exclude_pattern) {
+		exclude_pattern ++;
 		npatterns ++;
 	}
 
@@ -1902,7 +1903,7 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	rspamd_init_libs ();
-	ev_base = event_base_new ();
+	event_loop = ev_default_loop (EVFLAG_SIGNALFD);
 
 	struct rspamd_http_context_cfg http_config;
 
@@ -1911,7 +1912,7 @@ main (gint argc, gchar **argv, gchar **env)
 	http_config.kp_cache_size_server = 0;
 	http_config.user_agent = user_agent;
 	http_ctx = rspamd_http_context_create_config (&http_config,
-			ev_base, NULL);
+			event_loop, NULL);
 
 	/* Ignore sigpipe */
 	sigemptyset (&sigpipe_act.sa_mask);
@@ -1972,10 +1973,10 @@ main (gint argc, gchar **argv, gchar **env)
 	if (start_argc == argc) {
 		/* Do command without input or with stdin */
 		if (empty_input) {
-			rspamc_process_input (ev_base, cmd, NULL, "empty", kwattrs);
+			rspamc_process_input (event_loop, cmd, NULL, "empty", kwattrs);
 		}
 		else {
-			rspamc_process_input (ev_base, cmd, in, "stdin", kwattrs);
+			rspamc_process_input (event_loop, cmd, in, "stdin", kwattrs);
 		}
 	}
 	else {
@@ -1990,7 +1991,7 @@ main (gint argc, gchar **argv, gchar **env)
 				}
 				if (S_ISDIR (st.st_mode)) {
 					/* Directories are processed with a separate limit */
-					rspamc_process_dir (ev_base, cmd, argv[i], kwattrs);
+					rspamc_process_dir (event_loop, cmd, argv[i], kwattrs);
 					cur_req = 0;
 				}
 				else {
@@ -1999,24 +2000,24 @@ main (gint argc, gchar **argv, gchar **env)
 						fprintf (stderr, "cannot open file %s\n", argv[i]);
 						exit (EXIT_FAILURE);
 					}
-					rspamc_process_input (ev_base, cmd, in, argv[i], kwattrs);
+					rspamc_process_input (event_loop, cmd, in, argv[i], kwattrs);
 					cur_req++;
 					fclose (in);
 				}
 				if (cur_req >= max_requests) {
 					cur_req = 0;
 					/* Wait for completion */
-					event_base_loop (ev_base, 0);
+					ev_loop (event_loop, 0);
 				}
 			}
 		}
 
 		if (cmd->cmd == RSPAMC_COMMAND_FUZZY_DELHASH) {
-			rspamc_process_input (ev_base, cmd, NULL, "hashes", kwattrs);
+			rspamc_process_input (event_loop, cmd, NULL, "hashes", kwattrs);
 		}
 	}
 
-	event_base_loop (ev_base, 0);
+	ev_loop (event_loop, 0);
 
 	g_queue_free_full (kwattrs, rspamc_kwattr_free);
 

@@ -913,9 +913,7 @@ rspamd_upstream_restore_cb (gpointer elt, gpointer ls)
 	/* Here the upstreams list is already locked */
 	RSPAMD_UPSTREAM_LOCK (up->lock);
 
-	if (rspamd_event_pending (&up->ev, EV_TIMEOUT)) {
-		event_del (&up->ev);
-	}
+	ev_timer_stop (up->ctx->event_loop, &up->ev);
 	g_ptr_array_add (ups->alive, up);
 	up->active_idx = ups->alive->len - 1;
 	RSPAMD_UPSTREAM_UNLOCK (up->lock);

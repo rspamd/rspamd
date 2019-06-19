@@ -3050,7 +3050,7 @@ static void lua_periodic_callback_finish (struct thread_entry *thread, int ret);
 static void lua_periodic_callback_error (struct thread_entry *thread, int ret, const char *msg);
 
 struct rspamd_lua_periodic {
-	struct ev_loop *ev_base;
+	struct ev_loop *event_loop;
 	struct rspamd_config *cfg;
 	lua_State *L;
 	gdouble timeout;
@@ -3082,7 +3082,7 @@ lua_periodic_callback (struct ev_loop *loop, ev_timer *w, int revents)
 	*pcfg = cfg;
 	pev_base = lua_newuserdata (L, sizeof (*pev_base));
 	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
-	*pev_base = periodic->ev_base;
+	*pev_base = periodic->event_loop;
 
 	lua_thread_call (thread, 2);
 }
@@ -3097,6 +3097,7 @@ lua_periodic_callback_finish (struct thread_entry *thread, int ret)
 
 	L = thread->lua_state;
 
+	ev_now_update (periodic->event_loop);
 #ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
 	event_base_update_cache_time (periodic->ev_base);
 #endif
@@ -3119,11 +3120,11 @@ lua_periodic_callback_finish (struct thread_entry *thread, int ret)
 		}
 
 		periodic->ev.repeat = timeout;
-		ev_timer_again (periodic->ev_base, &periodic->ev);
+		ev_timer_again (periodic->event_loop, &periodic->ev);
 	}
 	else {
 		luaL_unref (L, LUA_REGISTRYINDEX, periodic->cbref);
-		ev_timer_stop (periodic->ev_base, &periodic->ev);
+		ev_timer_stop (periodic->event_loop, &periodic->ev);
 		g_free (periodic);
 	}
 }
@@ -3163,7 +3164,7 @@ lua_config_add_periodic (lua_State *L)
 	periodic->timeout = timeout;
 	periodic->L = L;
 	periodic->cfg = cfg;
-	periodic->ev_base = ev_base;
+	periodic->event_loop = ev_base;
 	periodic->need_jitter = need_jitter;
 	lua_pushvalue (L, 4);
 	periodic->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
