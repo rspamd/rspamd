@@ -37,8 +37,8 @@ struct rspamd_client_connection {
 	GString *server_name;
 	struct rspamd_cryptobox_pubkey *key;
 	struct rspamd_cryptobox_keypair *keypair;
-	struct ev_loop *ev_base;
-	struct timeval timeout;
+	struct ev_loop *event_loop;
+	ev_tstamp timeout;
 	struct rspamd_http_connection *http_conn;
 	gboolean req_sent;
 	gdouble start_time;
@@ -118,7 +118,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 		rspamd_http_connection_reset (c->http_conn);
 		rspamd_http_connection_read_message (c->http_conn,
 			c->req,
-			&c->timeout);
+			c->timeout);
 		return 0;
 	}
 	else {
@@ -252,7 +252,7 @@ rspamd_client_init (struct rspamd_http_context *http_ctx,
 	}
 
 	conn = g_malloc0 (sizeof (struct rspamd_client_connection));
-	conn->ev_base = ev_base;
+	conn->event_loop = ev_base;
 	conn->fd = fd;
 	conn->req_sent = FALSE;
 	conn->http_conn = rspamd_http_connection_new_client_socket (http_ctx,
@@ -267,7 +267,7 @@ rspamd_client_init (struct rspamd_http_context *http_ctx,
 		rspamd_printf_gstring (conn->server_name, ":%d", (int)port);
 	}
 
-	double_to_tv (timeout, &conn->timeout);
+	conn->timeout = timeout;
 
 	if (key) {
 		conn->key = rspamd_pubkey_from_base32 (key, 0, RSPAMD_KEYPAIR_KEX,
@@ -442,11 +442,11 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 	if (compressed) {
 		rspamd_http_connection_write_message (conn->http_conn, req->msg, NULL,
 				"application/x-compressed", req,
-				&conn->timeout);
+				conn->timeout);
 	}
 	else {
 		rspamd_http_connection_write_message (conn->http_conn, req->msg, NULL,
-				"text/plain", req, &conn->timeout);
+				"text/plain", req, conn->timeout);
 	}
 
 	return TRUE;
