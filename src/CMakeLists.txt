@@ -91,8 +91,7 @@ SET(RSPAMDSRC	controller.c
 				fuzzy_storage.c
 				rspamd.c
 				worker.c
-				rspamd_proxy.c
-				log_helper.c)
+				rspamd_proxy.c)
 
 SET(PLUGINSSRC	plugins/surbl.c
 				plugins/regexp.c
@@ -103,7 +102,7 @@ SET(PLUGINSSRC	plugins/surbl.c
 				libserver/rspamd_control.c)
 
 SET(MODULES_LIST surbl regexp chartable fuzzy_check spf dkim)
-SET(WORKERS_LIST normal controller fuzzy lua rspamd_proxy log_helper)
+SET(WORKERS_LIST normal controller fuzzy rspamd_proxy)
 IF (ENABLE_HYPERSCAN MATCHES "ON")
 	LIST(APPEND WORKERS_LIST "hs_helper")
 	LIST(APPEND RSPAMDSRC "hs_helper.c")

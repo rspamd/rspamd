@@ -296,7 +296,7 @@ wait_session_events (void)
 {
 	/* XXX: it's probably worth to add timeout here - not to wait forever */
 	while (rspamd_session_events_pending (rspamadm_session) > 0) {
-		event_base_loop (rspamd_main->event_loop, EVLOOP_ONCE);
+		ev_loop (rspamd_main->event_loop, EVLOOP_ONESHOT);
 	}
 }
 
