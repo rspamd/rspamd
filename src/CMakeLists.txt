@@ -89,7 +89,6 @@ ADD_SUBDIRECTORY(rspamadm)
 
 SET(RSPAMDSRC	controller.c
 				fuzzy_storage.c
-				lua_worker.c
 				rspamd.c
 				worker.c
 				rspamd_proxy.c
