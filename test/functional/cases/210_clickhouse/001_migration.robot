@@ -63,10 +63,10 @@ Clickhouse Setup
   ${config} =  Replace Variables  ${template}
   Create File  ${TMPDIR}/clickhouse-config.xml  ${config}
   Copy File    ${TESTDIR}/configs/clickhouse-users.xml  ${TMPDIR}/users.xml
-  Create Directory  ${TMPDIR}/metadata
-  Create Directory  ${TMPDIR}/metadata/default
-  Create Directory  ${TMPDIR}/data/default
-  ${result} =  Run Process  clickhouse-server  --daemon  --config-file\=${TMPDIR}/clickhouse-config.xml  --pid-file\=${TMPDIR}/clickhouse.pid
+  Create Directory           ${TMPDIR}/clickhouse
+  Set Directory Ownership    ${TMPDIR}/clickhouse    clickhouse    clickhouse
+  ${result} =    Run Process
+  ...    su    -s    /bin/sh    clickhouse    -c    clickhouse-server --daemon --config-file\=${TMPDIR}/clickhouse-config.xml --pid-file\=${TMPDIR}/clickhouse/clickhouse.pid
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Be Equal As Integers  ${result.rc}  0
   Wait Until Keyword Succeeds  5 sec  50 ms  TCP Connect  localhost  ${CLICKHOUSE_PORT}
@@ -76,7 +76,7 @@ Clickhouse Setup
 
 Clickhosue Teardown
   # Sleep 30
-  ${clickhouse_pid} =  Get File  ${TMPDIR}/clickhouse.pid
+  ${clickhouse_pid} =  Get File  ${TMPDIR}/clickhouse/clickhouse.pid
   Shutdown Process With Children  ${clickhouse_pid}
   Simple Teardown
 
