@@ -72,6 +72,8 @@ pipeline:
     image: rspamd/ci-perl-tidyall
     group: build
     commands:
+      - tidyall --version
+      - perltidy --version | head -1
       # checks are configured in .tidyallrc at the top of rspamd repo
       - tidyall --all --check-only --no-cache --data-dir /tmp/tidyall
 
