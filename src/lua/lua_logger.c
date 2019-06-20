@@ -326,7 +326,7 @@ lua_logger_out_str (lua_State *L, gint pos,
 			s = 0;
 
 			while (slen > 0 && len > 1) {
-				if (!lua_logger_char_safe (str[r], esc_type)) {
+				if (!lua_logger_char_safe (str[s], esc_type)) {
 					if (len >= 3) {
 						outbuf[r++] = '\\';
 						outbuf[r++] = hexdigests[((str[s] >> 4) & 0xF)];
