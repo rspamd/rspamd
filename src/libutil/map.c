@@ -1940,6 +1940,8 @@ rspamd_map_watch (struct rspamd_config *cfg,
 		}
 
 		PTR_ARRAY_FOREACH (map->backends, i, bk) {
+			bk->event_loop = event_loop;
+
 			if (bk->protocol == MAP_PROTO_FILE) {
 				struct file_map_data *data;
 
@@ -2245,7 +2247,7 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 	switch (bk->protocol) {
 	case MAP_PROTO_FILE:
 		if (bk->data.fd) {
-			ev_stat_stop (ev_default_loop (0), &bk->data.fd->st_ev);
+			ev_stat_stop (bk->event_loop, &bk->data.fd->st_ev);
 			g_free (bk->data.fd->filename);
 			g_free (bk->data.fd);
 		}

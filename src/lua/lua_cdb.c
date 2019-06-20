@@ -50,6 +50,7 @@ lua_cdb_create (lua_State *L)
 	struct cdb *cdb, **pcdb;
 	const gchar *filename;
 	gint fd;
+	struct ev_loop *ev_base = lua_check_ev_base (L, 2);
 
 	filename = luaL_checkstring (L, 1);
 	/* If file begins with cdb://, just skip it */
@@ -69,7 +70,7 @@ lua_cdb_create (lua_State *L)
 			lua_pushnil (L);
 		}
 		else {
-			cdb_add_timer (cdb, ev_default_loop (0), CDB_REFRESH_TIME);
+			cdb_add_timer (cdb, ev_base, CDB_REFRESH_TIME);
 			pcdb = lua_newuserdata (L, sizeof (struct cdb *));
 			rspamd_lua_setclass (L, "rspamd{cdb}", -1);
 			*pcdb = cdb;

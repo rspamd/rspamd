@@ -1903,7 +1903,7 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	rspamd_init_libs ();
-	event_loop = ev_default_loop (EVFLAG_SIGNALFD);
+	event_loop = ev_loop_new (EVFLAG_SIGNALFD|EVBACKEND_ALL);
 
 	struct rspamd_http_context_cfg http_config;
 

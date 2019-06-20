@@ -699,7 +699,7 @@ lua_util_create_event_base (lua_State *L)
 
 	pev_base = lua_newuserdata (L, sizeof (struct ev_loop *));
 	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
-	*pev_base = ev_default_loop (EVFLAG_SIGNALFD);
+	*pev_base = ev_loop_new (EVFLAG_SIGNALFD|EVBACKEND_ALL);
 
 	return 1;
 }
@@ -848,7 +848,7 @@ lua_util_process_message (lua_State *L)
 	message = luaL_checklstring (L, 2, &mlen);
 
 	if (cfg != NULL && message != NULL) {
-		base = ev_loop_new (EVFLAG_SIGNALFD);
+		base = ev_loop_new (EVFLAG_SIGNALFD|EVBACKEND_ALL);
 		rspamd_init_filters (cfg, FALSE);
 		task = rspamd_task_new (NULL, cfg, NULL, NULL, base);
 		task->msg.begin = rspamd_mempool_alloc (task->task_pool, mlen);

@@ -116,6 +116,7 @@ struct rspamd_map_backend {
 	gboolean is_signed;
 	gboolean is_compressed;
 	gboolean is_fallback;
+	struct ev_loop *event_loop;
 	guint32 id;
 	struct rspamd_cryptobox_pubkey *trusted_pubkey;
 	union rspamd_map_backend_data data;

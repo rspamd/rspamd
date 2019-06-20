@@ -289,6 +289,7 @@ struct rspamd_main {
 	gboolean cores_throttling;                                  /**< turn off cores when limits are exceeded		*/
 	struct roll_history *history;                               /**< rolling history								*/
 	struct ev_loop *event_loop;
+	ev_signal term_ev, int_ev, hup_ev, usr1_ev;                 /**< signals 										*/
 	struct rspamd_http_context *http_ctx;
 };
 

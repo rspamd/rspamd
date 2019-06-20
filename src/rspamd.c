@@ -714,100 +714,55 @@ kill_old_workers (gpointer key, gpointer value, gpointer unused)
 	}
 }
 
-static gboolean
+static void
 rspamd_worker_wait (struct rspamd_worker *w)
 {
 	struct rspamd_main *rspamd_main;
-	gint res = 0;
-	gboolean nowait = FALSE;
-
 	rspamd_main = w->srv;
 
-	if (w->ppid != getpid ()) {
-		nowait = TRUE;
-	}
-
-	if (nowait || waitpid (w->pid, &res, WNOHANG) <= 0) {
-		if (term_attempts < 0) {
-			if (w->cf->worker->flags & RSPAMD_WORKER_KILLABLE) {
-				msg_warn_main ("terminate worker %s(%P) with SIGKILL",
+	if (term_attempts < 0) {
+		if (w->cf->worker->flags & RSPAMD_WORKER_KILLABLE) {
+			msg_warn_main ("terminate worker %s(%P) with SIGKILL",
+					g_quark_to_string (w->type), w->pid);
+			if (kill (w->pid, SIGKILL) == -1) {
+				if (errno == ESRCH) {
+					/* We have actually killed the process */
+					return;
+				}
+			}
+		}
+		else {
+			if (term_attempts > -(TERMINATION_ATTEMPTS * 2)) {
+				if (term_attempts % 10 == 0) {
+					msg_info_main ("waiting for worker %s(%P) to sync, "
+								   "%d seconds remain",
+							g_quark_to_string (w->type), w->pid,
+							(TERMINATION_ATTEMPTS * 2 + term_attempts) / 5);
+					kill (w->pid, SIGTERM);
+					if (errno == ESRCH) {
+						/* We have actually killed the process */
+						return;
+					}
+				}
+			}
+			else {
+				msg_err_main ("data corruption warning: terminating "
+							  "special worker %s(%P) with SIGKILL",
 						g_quark_to_string (w->type), w->pid);
-				if (kill (w->pid, SIGKILL) == -1) {
-					if (nowait && errno == ESRCH) {
-						/* We have actually killed the process */
-						goto finished;
-					}
-				}
-			}
-			else {
-				if (term_attempts > -(TERMINATION_ATTEMPTS * 2)) {
-					if (term_attempts % 10 == 0) {
-						msg_info_main ("waiting for worker %s(%P) to sync, "
-									   "%d seconds remain",
-								g_quark_to_string (w->type), w->pid,
-								(TERMINATION_ATTEMPTS * 2 + term_attempts) / 5);
-						kill (w->pid, SIGTERM);
-						if (nowait && errno == ESRCH) {
-							/* We have actually killed the process */
-							goto finished;
-						}
-					}
-				}
-				else {
-					msg_err_main ("data corruption warning: terminating "
-								  "special worker %s(%P) with SIGKILL",
-							g_quark_to_string (w->type), w->pid);
-					kill (w->pid, SIGKILL);
-					if (nowait && errno == ESRCH) {
-						/* We have actually killed the process */
-						goto finished;
-					}
+				kill (w->pid, SIGKILL);
+				if (errno == ESRCH) {
+					/* We have actually killed the process */
+					return;
 				}
 			}
 		}
-		else if (nowait) {
-			kill (w->pid, 0);
-
-			if (errno != ESRCH) {
-				return FALSE;
-			}
-			else {
-				goto finished;
-			}
-		}
-
-		return FALSE;
 	}
-
-
-
-	finished:
-	msg_info_main ("%s process %P terminated %s",
-			g_quark_to_string (w->type), w->pid,
-			nowait ? "with no result available" :
-			(WTERMSIG (res) == SIGKILL ? "hardly" : "softly"));
-	if (w->srv_pipe[0] != -1) {
-		/* Ugly workaround */
-		if (w->tmp_data) {
-			g_free (w->tmp_data);
-		}
-		ev_io_stop (rspamd_main->event_loop, &w->srv_ev);
-	}
-
-	if (w->finish_actions) {
-		g_ptr_array_free (w->finish_actions, TRUE);
-	}
-
-	REF_RELEASE (w->cf);
-	g_free (w);
-
-	return TRUE;
 }
 
-static gboolean
+static void
 hash_worker_wait_callback (gpointer key, gpointer value, gpointer unused)
 {
-	return rspamd_worker_wait ((struct rspamd_worker *)value);
+	rspamd_worker_wait ((struct rspamd_worker *)value);
 }
 
 struct core_check_cbdata {
@@ -992,7 +947,7 @@ rspamd_final_timer_handler (EV_P_ ev_timer *w, int revents)
 
 	term_attempts--;
 
-	g_hash_table_foreach_remove (rspamd_main->workers, hash_worker_wait_callback, NULL);
+	g_hash_table_foreach (rspamd_main->workers, hash_worker_wait_callback, NULL);
 
 	if (g_hash_table_size (rspamd_main->workers) == 0) {
 		ev_break (rspamd_main->event_loop, EVBREAK_ALL);
@@ -1076,9 +1031,9 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 	gboolean need_refork;
 
 	/* Turn off locking for logger */
+	ev_child_stop (EV_A_ w);
 	rspamd_log_nolock (rspamd_main->logger);
 
-	msg_info_main ("got SIGCHLD signal, finding terminated workers");
 	/* Remove dead child form children list */
 	g_hash_table_remove (rspamd_main->workers, GSIZE_TO_POINTER (wrk->pid));
 	if (wrk->srv_pipe[0] != -1) {
@@ -1105,8 +1060,16 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 
 	if (need_refork) {
 		/* Fork another worker in replace of dead one */
+		msg_info_main ("respawn process %s in lieu of terminated process with pid %P",
+				g_quark_to_string (wrk->type),
+				wrk->pid);
 		rspamd_check_core_limits (rspamd_main);
 		rspamd_fork_delayed (wrk->cf, wrk->index, rspamd_main);
+	}
+	else {
+		msg_info_main ("do not respawn process %s after found terminated process with pid %P",
+				g_quark_to_string (wrk->type),
+				wrk->pid);
 	}
 
 	g_free (wrk);
@@ -1178,7 +1141,6 @@ main (gint argc, gchar **argv, gchar **env)
 	GQuark type;
 	rspamd_inet_addr_t *control_addr = NULL;
 	struct ev_loop *event_loop;
-	static ev_signal term_ev, int_ev, hup_ev, usr1_ev;
 	struct rspamd_main *rspamd_main;
 	gboolean skip_pid = FALSE;
 
@@ -1429,28 +1391,28 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->workers = g_hash_table_new (g_direct_hash, g_direct_equal);
 
 	/* Init event base */
-	event_loop = ev_default_loop (EVFLAG_SIGNALFD);
+	event_loop = ev_default_loop (EVFLAG_SIGNALFD|EVBACKEND_ALL);
 	rspamd_main->event_loop = event_loop;
 	/* Unblock signals */
 	sigemptyset (&signals.sa_mask);
 	sigprocmask (SIG_SETMASK, &signals.sa_mask, NULL);
 
 	/* Set events for signals */
-	ev_signal_init (&term_ev, rspamd_term_handler, SIGTERM);
-	term_ev.data = rspamd_main;
-	ev_signal_start (event_loop, &term_ev);
+	ev_signal_init (&rspamd_main->term_ev, rspamd_term_handler, SIGTERM);
+	rspamd_main->term_ev.data = rspamd_main;
+	ev_signal_start (event_loop, &rspamd_main->term_ev);
 
-	ev_signal_init (&int_ev, rspamd_term_handler, SIGINT);
-	int_ev.data = rspamd_main;
-	ev_signal_start (event_loop, &int_ev);
+	ev_signal_init (&rspamd_main->int_ev, rspamd_term_handler, SIGINT);
+	rspamd_main->int_ev.data = rspamd_main;
+	ev_signal_start (event_loop, &rspamd_main->int_ev);
 
-	ev_signal_init (&hup_ev, rspamd_hup_handler, SIGHUP);
-	hup_ev.data = rspamd_main;
-	ev_signal_start (event_loop, &hup_ev);
+	ev_signal_init (&rspamd_main->hup_ev, rspamd_hup_handler, SIGHUP);
+	rspamd_main->hup_ev.data = rspamd_main;
+	ev_signal_start (event_loop, &rspamd_main->hup_ev);
 
-	ev_signal_init (&usr1_ev, rspamd_usr1_handler, SIGUSR1);
-	usr1_ev.data = rspamd_main;
-	ev_signal_start (event_loop, &usr1_ev);
+	ev_signal_init (&rspamd_main->usr1_ev, rspamd_usr1_handler, SIGUSR1);
+	rspamd_main->usr1_ev.data = rspamd_main;
+	ev_signal_start (event_loop, &rspamd_main->usr1_ev);
 
 	rspamd_check_core_limits (rspamd_main);
 	rspamd_mempool_lock_mutex (rspamd_main->start_mtx);

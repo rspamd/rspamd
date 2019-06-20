@@ -55,6 +55,8 @@
 #include <ucontext.h>
 #elif defined(HAVE_SYS_UCONTEXT_H)
 #include <sys/ucontext.h>
+#include <ev.h>
+
 #endif
 
 static void rspamd_worker_ignore_signal (struct rspamd_worker_signal_handler *);
@@ -206,7 +208,12 @@ rspamd_worker_signal_handle (EV_P_ ev_signal *w, int revents)
 static void
 rspamd_worker_ignore_signal (struct rspamd_worker_signal_handler *sigh)
 {
+	sigset_t set;
+
 	ev_signal_stop (sigh->event_loop, &sigh->ev_sig);
+	sigemptyset (&set);
+	sigaddset (&set, sigh->signo);
+	sigprocmask (SIG_BLOCK, &set, NULL);
 }
 
 static void
@@ -271,33 +278,22 @@ rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
 }
 
 void
-rspamd_worker_init_signals (struct rspamd_worker *worker, struct ev_loop *base)
+rspamd_worker_init_signals (struct rspamd_worker *worker,
+		struct ev_loop *event_loop)
 {
-	struct sigaction signals;
-
 	/* A set of terminating signals */
-	rspamd_worker_set_signal_handler (SIGTERM, worker, base,
+	rspamd_worker_set_signal_handler (SIGTERM, worker, event_loop,
 			rspamd_worker_term_handler, NULL);
-	rspamd_worker_set_signal_handler (SIGINT, worker, base,
+	rspamd_worker_set_signal_handler (SIGINT, worker, event_loop,
 			rspamd_worker_term_handler, NULL);
-	rspamd_worker_set_signal_handler (SIGHUP, worker, base,
+	rspamd_worker_set_signal_handler (SIGHUP, worker, event_loop,
 			rspamd_worker_term_handler, NULL);
 
 	/* Special purpose signals */
-	rspamd_worker_set_signal_handler (SIGUSR1, worker, base,
+	rspamd_worker_set_signal_handler (SIGUSR1, worker, event_loop,
 			rspamd_worker_usr1_handler, NULL);
-	rspamd_worker_set_signal_handler (SIGUSR2, worker, base,
+	rspamd_worker_set_signal_handler (SIGUSR2, worker, event_loop,
 			rspamd_worker_usr2_handler, NULL);
-
-	/* Unblock all signals processed */
-	sigemptyset (&signals.sa_mask);
-	sigaddset (&signals.sa_mask, SIGTERM);
-	sigaddset (&signals.sa_mask, SIGINT);
-	sigaddset (&signals.sa_mask, SIGHUP);
-	sigaddset (&signals.sa_mask, SIGUSR1);
-	sigaddset (&signals.sa_mask, SIGUSR2);
-
-	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 }
 
 struct ev_loop *
@@ -319,7 +315,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	worker->signal_events = g_hash_table_new_full (g_direct_hash, g_direct_equal,
 			NULL, rspamd_sigh_free);
 
-	event_loop = ev_default_loop (EVFLAG_SIGNALFD);
+	event_loop = ev_loop_new (EVFLAG_SIGNALFD);
 
 	worker->srv->event_loop = event_loop;
 
@@ -633,11 +629,16 @@ rspamd_worker_on_term (EV_P_ ev_child *w, int revents)
 {
 	struct rspamd_worker *wrk = (struct rspamd_worker *)w->data;
 
-	if (wrk->term_handler) {
-		wrk->term_handler (EV_A_ w, wrk->srv, wrk);
+	if (wrk->ppid == getpid ()) {
+		if (wrk->term_handler) {
+			wrk->term_handler (EV_A_ w, wrk->srv, wrk);
+		}
+		else {
+			rspamd_check_termination_clause (wrk->srv, wrk, w->rstatus);
+		}
 	}
 	else {
-		rspamd_check_termination_clause (wrk->srv, wrk, w->rstatus);
+		/* Ignore SIGCHLD for not our children... */
 	}
 }
 
@@ -696,8 +697,17 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		evutil_secure_rng_init ();
 #endif
 
+		/*
+		 * Libev stores all signals in a global table, so
+		 * previous handlers must be explicitly detached and forgotten
+		 * before starting a new loop
+		 */
+		ev_signal_stop (rspamd_main->event_loop, &rspamd_main->int_ev);
+		ev_signal_stop (rspamd_main->event_loop, &rspamd_main->term_ev);
+		ev_signal_stop (rspamd_main->event_loop, &rspamd_main->hup_ev);
+		ev_signal_stop (rspamd_main->event_loop, &rspamd_main->usr1_ev);
 		/* Remove the inherited event base */
-		ev_loop_destroy (EV_DEFAULT);
+		ev_loop_destroy (rspamd_main->event_loop);
 		rspamd_main->event_loop = NULL;
 		/* Drop privileges */
 		rspamd_worker_drop_priv (rspamd_main);
@@ -1173,7 +1183,7 @@ rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
 {
 	gboolean need_refork = TRUE;
 
-	if (wrk->wanna_die) {
+	if (wrk->wanna_die || rspamd_main->wanna_die) {
 		/* Do not refork workers that are intended to be terminated */
 		need_refork = FALSE;
 	}
@@ -1183,6 +1193,7 @@ rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
 		msg_info_main ("%s process %P terminated normally",
 				g_quark_to_string (wrk->type),
 				wrk->pid);
+		need_refork = FALSE;
 	}
 	else {
 		if (WIFSIGNALED (res)) {

@@ -33,9 +33,9 @@ struct rspamd_worker_signal_handler;
 /**
  * Init basic signals for a worker
  * @param worker
- * @param base
+ * @param event_loop
  */
-void rspamd_worker_init_signals (struct rspamd_worker *worker, struct ev_loop *base);
+void rspamd_worker_init_signals (struct rspamd_worker *worker, struct ev_loop *event_loop);
 
 typedef void (*rspamd_accept_handler)(struct ev_loop *loop, ev_io *w, int revents);
 

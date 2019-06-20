@@ -1462,7 +1462,7 @@ lua_tcp_request (lua_State *L)
 				event_loop = *(struct ev_loop **)lua_touserdata (L, -1);
 			}
 			else {
-				event_loop = ev_default_loop (0);
+				return luaL_error (L, "event loop is required");
 			}
 			lua_pop (L, 1);
 
