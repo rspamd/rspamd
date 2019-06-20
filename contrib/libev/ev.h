@@ -630,6 +630,7 @@ EV_API_DECL void ev_break (EV_P_ int how EV_CPP (= EVBREAK_ONE)) EV_NOEXCEPT; /*
  */
 EV_API_DECL void ev_ref   (EV_P) EV_NOEXCEPT;
 EV_API_DECL void ev_unref (EV_P) EV_NOEXCEPT;
+EV_API_DECL int ev_active_cnt (EV_P) EV_NOEXCEPT;
 
 /*
  * convenience function, wait for a single event, without registering an event watcher

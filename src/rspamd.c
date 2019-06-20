@@ -967,7 +967,7 @@ rspamd_term_handler (struct ev_loop *loop, ev_signal *w, int revents)
 		rspamd_log_nolock (rspamd_main->logger);
 		/* Stop srv events to avoid false notifications */
 		g_hash_table_foreach (rspamd_main->workers, stop_srv_ev, rspamd_main);
-		rspamd_pass_signal (rspamd_main->workers, w->signum);
+		rspamd_pass_signal (rspamd_main->workers, SIGTERM);
 
 		if (control_fd != -1) {
 			ev_io_stop (rspamd_main->event_loop, &control_ev);

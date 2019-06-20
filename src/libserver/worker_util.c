@@ -84,21 +84,60 @@ rspamd_get_worker_by_type (struct rspamd_config *cfg, GQuark type)
 	return NULL;
 }
 
-static gboolean
+static void
+rspamd_worker_check_finished (EV_P_ ev_timer *w, int revents)
+{
+	int *pnchecks = (int *)w->data;
+
+	if (*pnchecks > SOFT_SHUTDOWN_TIME * 10) {
+		msg_warn ("terminating worker before finishing of terminate handlers");
+		ev_break (EV_A_ EVBREAK_ONE);
+	}
+	else {
+		int refcount = ev_active_cnt (EV_A);
+
+		if (refcount == 1) {
+			ev_break (EV_A_ EVBREAK_ONE);
+		}
+	}
+}
+
+static void
 rspamd_worker_terminate_handlers (struct rspamd_worker *w)
 {
 	guint i;
 	gboolean (*cb)(struct rspamd_worker *);
-	gboolean ret = FALSE;
+	struct rspamd_abstract_worker_ctx *actx;
+	struct ev_loop *final_gift, *orig_loop;
+	static ev_timer margin_call;
+	static int nchecks = 0;
+
+	actx = (struct rspamd_abstract_worker_ctx *)w->ctx;
+
+	/*
+	 * Here are dragons:
+	 * - we create a new loop
+	 * - we set a new ev_loop for worker via injection over rspamd_abstract_worker_ctx
+	 * - then we run finish actions
+	 * - then we create a special timer to kill worker if it fails to finish
+	 */
+	final_gift = ev_loop_new (EVBACKEND_ALL);
+	orig_loop = actx->event_loop;
+	actx->event_loop = final_gift;
+	margin_call.data = &nchecks;
+	ev_timer_init (&margin_call, rspamd_worker_check_finished, 0.1,
+			0.1);
+	ev_timer_start (final_gift, &margin_call);
 
 	for (i = 0; i < w->finish_actions->len; i ++) {
 		cb = g_ptr_array_index (w->finish_actions, i);
-		if (cb (w)) {
-			ret = TRUE;
-		}
+		cb (w);
 	}
 
-	return ret;
+	ev_run (final_gift, 0);
+	ev_loop_destroy (final_gift);
+	/* Restore original loop */
+	actx->event_loop = orig_loop;
 }
 
 static void
@@ -159,8 +198,6 @@ rspamd_worker_usr1_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 static gboolean
 rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
-	ev_tstamp delay;
-
 	if (!sigh->worker->wanna_die) {
 		static ev_timer shutdown_ev;
 
@@ -172,16 +209,10 @@ rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 				"terminating after receiving signal %s",
 				g_strsignal (sigh->signo));
 
-		if (rspamd_worker_terminate_handlers (sigh->worker)) {
-			delay = SOFT_SHUTDOWN_TIME;
-		}
-		else {
-			delay = 0;
-		}
-
+		rspamd_worker_terminate_handlers (sigh->worker);
 		sigh->worker->wanna_die = 1;
 		ev_timer_init (&shutdown_ev, rspamd_worker_on_delayed_shutdown,
-				SOFT_SHUTDOWN_TIME, 0.0);
+				0.0, 0.0);
 		ev_timer_start (sigh->event_loop, &shutdown_ev);
 		rspamd_worker_stop_accept (sigh->worker);
 	}

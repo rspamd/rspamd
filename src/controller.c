@@ -3564,7 +3564,7 @@ lua_csession_send_string (lua_State *L)
 	return 0;
 }
 
-static gboolean
+static void
 rspamd_controller_on_terminate (struct rspamd_worker *worker)
 {
 	struct rspamd_controller_worker_ctx *ctx = worker->ctx;
@@ -3576,8 +3576,6 @@ rspamd_controller_on_terminate (struct rspamd_worker *worker)
 		ev_timer_stop (ctx->event_loop, &ctx->rrd_event);
 		rspamd_rrd_close (ctx->rrd);
 	}
-
-	return FALSE;
 }
 
 static void
@@ -3732,8 +3730,6 @@ start_controller_worker (struct rspamd_worker *worker)
 				DEFAULT_STATS_PATH);
 	}
 
-	g_ptr_array_add (worker->finish_actions,
-			(gpointer)rspamd_controller_on_terminate);
 	rspamd_controller_load_saved_stats (ctx);
 	ctx->lang_det = ctx->cfg->lang_det;
 
@@ -3917,6 +3913,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	/* Start event loop */
 	ev_loop (ctx->event_loop, 0);
 	rspamd_worker_block_signals ();
+	rspamd_controller_on_terminate (worker);
 
 	rspamd_stat_close ();
 	rspamd_http_router_free (ctx->http);

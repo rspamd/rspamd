@@ -3777,6 +3777,12 @@ ev_unref (EV_P) EV_NOEXCEPT
   --activecnt;
 }
 
+int
+ev_active_cnt (EV_P) EV_NOEXCEPT
+{
+	return activecnt;
+}
+
 void
 ev_now_update (EV_P) EV_NOEXCEPT
 {
