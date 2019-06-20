@@ -87,7 +87,7 @@ worker_t fuzzy_worker = {
 		init_fuzzy,                 /* Init function */
 		start_fuzzy,                /* Start function */
 		RSPAMD_WORKER_HAS_SOCKET,
-		RSPAMD_WORKER_SOCKET_UDP|RSPAMD_WORKER_SOCKET_TCP,   /* Both socket */
+		RSPAMD_WORKER_SOCKET_UDP,   /* UDP socket */
 		RSPAMD_WORKER_VER           /* Version info */
 };
 
