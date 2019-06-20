@@ -112,6 +112,11 @@ rspamd_worker_terminate_handlers (struct rspamd_worker *w)
 	static ev_timer margin_call;
 	static int nchecks = 0;
 
+	if (w->finish_actions->len == 0) {
+		/* Nothing to do */
+		return;
+	}
+
 	actx = (struct rspamd_abstract_worker_ctx *)w->ctx;
 
 	/*
