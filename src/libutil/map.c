@@ -1234,6 +1234,7 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	map->scheduled_check = TRUE;
 	REF_INIT_RETAIN (cbd, rspamd_map_periodic_dtor);
 
+	cbd->ev.data = cbd;
 	ev_timer_init (&cbd->ev, rspamd_map_periodic_callback, jittered_sec, 0.0);
 	ev_timer_start (map->event_loop, &cbd->ev);
 

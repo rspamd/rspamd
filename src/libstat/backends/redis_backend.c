@@ -1593,6 +1593,7 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 			ev_timer_again (task->event_loop, &rt->timeout_event);
 		}
 		else {
+			rt->timeout_event.data = rt;
 			ev_timer_init (&rt->timeout_event, rspamd_redis_timeout,
 					rt->ctx->timeout, 0.);
 			ev_timer_start (task->event_loop, &rt->timeout_event);
@@ -1804,6 +1805,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 			ev_timer_again (task->event_loop, &rt->timeout_event);
 		}
 		else {
+			rt->timeout_event.data = rt;
 			ev_timer_init (&rt->timeout_event, rspamd_redis_timeout,
 					rt->ctx->timeout, 0.);
 			ev_timer_start (task->event_loop, &rt->timeout_event);

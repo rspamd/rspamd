@@ -391,6 +391,7 @@ rspamd_fork_delayed (struct rspamd_worker_conf *cf,
 	tv.tv_sec = SOFT_FORK_TIME;
 	tv.tv_usec = 0;
 	REF_RETAIN (cf);
+	nw->wait_ev.data = nw;
 	ev_timer_init (&nw->wait_ev, rspamd_fork_delayed_cb, SOFT_FORK_TIME, 0.0);
 	ev_timer_start (rspamd_main->event_loop, &nw->wait_ev);
 }
