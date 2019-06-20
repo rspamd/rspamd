@@ -186,7 +186,9 @@ void rspamd_worker_session_cache_remove (void *cache, void *ptr);
  * Fork new worker with the specified configuration
  */
 struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,
-		struct rspamd_worker_conf *, guint idx, struct ev_loop *ev_base);
+										  struct rspamd_worker_conf *, guint idx,
+										  struct ev_loop *ev_base,
+										  rspamd_worker_term_cb term_handler);
 
 /**
  * Sets crash signals handlers if compiled with libunwind
@@ -209,6 +211,17 @@ void rspamd_worker_init_monitored (struct rspamd_worker *worker,
  * @param data struct rspamd_worker_accept_event * list
  */
 void rspamd_worker_throttle_accept_events (gint sock, void *data);
+
+/**
+ * Checks (and logs) the worker's termination status. Returns TRUE if a worker
+ * should be restarted.
+ * @param rspamd_main
+ * @param wrk
+ * @param status waitpid res
+ * @return TRUE if refork is desired
+ */
+gboolean rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
+		struct rspamd_worker *wrk, int status);
 
 #define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \

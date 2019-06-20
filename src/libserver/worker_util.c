@@ -628,11 +628,25 @@ rspamd_worker_set_limits (struct rspamd_main *rspamd_main,
 	}
 }
 
+static void
+rspamd_worker_on_term (EV_P_ ev_child *w, int revents)
+{
+	struct rspamd_worker *wrk = (struct rspamd_worker *)w->data;
+
+	if (wrk->term_handler) {
+		wrk->term_handler (EV_A_ w, wrk->srv, wrk);
+	}
+	else {
+		rspamd_check_termination_clause (wrk->srv, wrk, w->rstatus);
+	}
+}
+
 struct rspamd_worker *
 rspamd_fork_worker (struct rspamd_main *rspamd_main,
-		struct rspamd_worker_conf *cf,
-		guint index,
-		struct ev_loop *ev_base)
+					struct rspamd_worker_conf *cf,
+					guint index,
+					struct ev_loop *ev_base,
+					rspamd_worker_term_cb term_handler)
 {
 	struct rspamd_worker *wrk;
 	gint rc;
@@ -662,6 +676,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	wrk->ppid = getpid ();
 	wrk->pid = fork ();
 	wrk->cores_throttled = rspamd_main->cores_throttling;
+	wrk->term_handler = term_handler;
 
 	switch (wrk->pid) {
 	case 0:
@@ -753,6 +768,9 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		rspamd_socket_nonblocking (wrk->control_pipe[0]);
 		rspamd_socket_nonblocking (wrk->srv_pipe[0]);
 		rspamd_srv_start_watching (rspamd_main, wrk, ev_base);
+		wrk->cld_ev.data = wrk;
+		ev_child_init (&wrk->cld_ev, rspamd_worker_on_term, wrk->pid, 0);
+		ev_child_start (rspamd_main->event_loop, &wrk->cld_ev);
 		/* Insert worker into worker's table, pid is index */
 		g_hash_table_insert (rspamd_main->workers, GSIZE_TO_POINTER (
 				wrk->pid), wrk);
@@ -1146,4 +1164,87 @@ rspamd_worker_throttle_accept_events (gint sock, void *data)
 				throttling, 0.0);
 		ev_timer_start (cur->event_loop, &cur->throttling_ev);
 	}
+}
+
+gboolean
+rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
+								 struct rspamd_worker *wrk,
+								 int res)
+{
+	gboolean need_refork = TRUE;
+
+	if (wrk->wanna_die) {
+		/* Do not refork workers that are intended to be terminated */
+		need_refork = FALSE;
+	}
+
+	if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
+		/* Normal worker termination, do not fork one more */
+		msg_info_main ("%s process %P terminated normally",
+				g_quark_to_string (wrk->type),
+				wrk->pid);
+	}
+	else {
+		if (WIFSIGNALED (res)) {
+#ifdef WCOREDUMP
+			if (WCOREDUMP (res)) {
+				msg_warn_main (
+						"%s process %P terminated abnormally by signal: %s"
+						" and created core file",
+						g_quark_to_string (wrk->type),
+						wrk->pid,
+						g_strsignal (WTERMSIG (res)));
+			}
+			else {
+#ifdef HAVE_SYS_RESOURCE_H
+				struct rlimit rlmt;
+				(void) getrlimit (RLIMIT_CORE, &rlmt);
+
+				msg_warn_main (
+						"%s process %P terminated abnormally by signal: %s"
+						" but NOT created core file (throttled=%s); "
+						"core file limits: %L current, %L max",
+						g_quark_to_string (wrk->type),
+						wrk->pid,
+						g_strsignal (WTERMSIG (res)),
+						wrk->cores_throttled ? "yes" : "no",
+						(gint64) rlmt.rlim_cur,
+						(gint64) rlmt.rlim_max);
+#else
+				msg_warn_main (
+								"%s process %P terminated abnormally by signal: %s"
+								" but NOT created core file (throttled=%s); ",
+								g_quark_to_string (wrk->type),
+								wrk->pid,
+								g_strsignal (WTERMSIG (res)),
+								wrk->cores_throttled ? "yes" : "no");
+#endif
+			}
+#else
+			msg_warn_main (
+							"%s process %P terminated abnormally by signal: %s",
+							g_quark_to_string (wrk->type),
+							wrk->pid,
+							g_strsignal (WTERMSIG (res)));
+#endif
+			if (WTERMSIG (res) == SIGUSR2) {
+				/*
+				 * It is actually race condition when not started process
+				 * has been requested to be reloaded.
+				 *
+				 * We shouldn't refork on this
+				 */
+				need_refork = FALSE;
+			}
+		}
+		else {
+			msg_warn_main ("%s process %P terminated abnormally "
+						   "with exit code %d",
+					g_quark_to_string (wrk->type),
+					wrk->pid,
+					WEXITSTATUS (res));
+		}
+	}
+
+	return need_refork;
 }

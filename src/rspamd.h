@@ -69,6 +69,9 @@ struct rspamd_worker_accept_event {
 	struct rspamd_worker_accept_event *prev, *next;
 };
 
+typedef void (*rspamd_worker_term_cb)(EV_P_ ev_child *, struct rspamd_main *,
+		struct rspamd_worker *);
+
 /**
  * Worker process structure
  */
@@ -95,6 +98,8 @@ struct rspamd_worker {
 	gpointer control_data;          /**< used by control protocol to handle commands	*/
 	gpointer tmp_data;              /**< used to avoid race condition to deal with control messages */
 	GPtrArray *finish_actions;      /**< called when worker is terminated				*/
+	ev_child cld_ev;                /**< to allow reaping								*/
+	rspamd_worker_term_cb term_handler; /**< custom term handler						*/
 };
 
 struct rspamd_abstract_worker_ctx {
@@ -280,6 +285,7 @@ struct rspamd_main {
 	uid_t workers_uid;                                          /**< worker's uid running to                        */
 	gid_t workers_gid;                                          /**< worker's gid running to						*/
 	gboolean is_privilleged;                                    /**< true if run in privilleged mode                */
+	gboolean wanna_die;                                         /**< no respawn of processes						*/
 	gboolean cores_throttling;                                  /**< turn off cores when limits are exceeded		*/
 	struct roll_history *history;                               /**< rolling history								*/
 	struct ev_loop *event_loop;

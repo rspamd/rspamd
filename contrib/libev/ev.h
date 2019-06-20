@@ -557,23 +557,6 @@ EV_API_DECL void ev_set_syserr_cb (void (*cb)(const char *msg) EV_NOEXCEPT) EV_N
 /* you can call this as often as you like */
 EV_API_DECL struct ev_loop *ev_default_loop (unsigned int flags EV_CPP (= 0)) EV_NOEXCEPT;
 
-#ifdef EV_API_STATIC
-EV_API_DECL struct ev_loop *ev_default_loop_ptr;
-#endif
-
-EV_INLINE struct ev_loop *
-ev_default_loop_uc_ (void) EV_NOEXCEPT
-{
-  extern struct ev_loop *ev_default_loop_ptr;
-
-  return ev_default_loop_ptr;
-}
-
-EV_INLINE int
-ev_is_default_loop (EV_P) EV_NOEXCEPT
-{
-  return EV_A == EV_DEFAULT_UC;
-}
 
 /* create and destroy alternative loops that don't handle signals */
 EV_API_DECL struct ev_loop *ev_loop_new (unsigned int flags EV_CPP (= 0)) EV_NOEXCEPT;

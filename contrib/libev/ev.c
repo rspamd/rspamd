@@ -1840,9 +1840,7 @@ typedef struct
   #include "ev_wrap.h"
 
   static struct ev_loop default_loop_struct;
-  EV_API_DECL struct ev_loop *ev_default_loop_ptr; /* needs to be initialised to make it a definition despite extern */
-  struct ev_loop *ev_default_loop_ptr = 0;
-
+  static struct ev_loop *ev_default_loop_ptr = 0;
 #else
 
   EV_API_DECL ev_tstamp ev_rt_now = 0; /* needs to be initialised to make it a definition despite extern */
@@ -2854,6 +2852,18 @@ ev_set_loop_release_cb (EV_P_ void (*release)(EV_P) EV_NOEXCEPT, void (*acquire)
   acquire_cb = acquire;
 }
 #endif
+
+EV_INLINE struct ev_loop *
+ev_default_loop_uc_ (void) EV_NOEXCEPT
+{
+	return ev_default_loop_ptr;
+}
+
+EV_INLINE int
+ev_is_default_loop (EV_P) EV_NOEXCEPT
+{
+	return EV_A == EV_DEFAULT_UC;
+}
 
 /* initialise a loop structure, must be zero-initialised */
 noinline ecb_cold
