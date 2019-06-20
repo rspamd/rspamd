@@ -274,7 +274,12 @@ free_http_cbdata_common (struct http_callback_data *cbd, gboolean plan_new)
 
 
 	MAP_RELEASE (cbd->bk, "rspamd_map_backend");
-	MAP_RELEASE (periodic, "periodic");
+
+	if (periodic) {
+		/* Detached in case of HTTP error */
+		MAP_RELEASE (periodic, "periodic");
+	}
+
 	g_free (cbd);
 }
 
@@ -325,7 +330,11 @@ http_map_error (struct rspamd_http_connection *conn,
 			cbd->bk->uri,
 			cbd->addr ? rspamd_inet_address_to_string_pretty (cbd->addr) : "",
 			err);
+	MAP_RETAIN (cbd->periodic, "periodic");
 	rspamd_map_process_periodic (cbd->periodic);
+	MAP_RELEASE (cbd->periodic, "periodic");
+	/* Detach periodic as rspamd_map_process_periodic will destroy it */
+	cbd->periodic = NULL;
 	MAP_RELEASE (cbd, "http_callback_data");
 }
 
@@ -2236,6 +2245,7 @@ rspamd_map_backend_dtor (struct rspamd_map_backend *bk)
 	switch (bk->protocol) {
 	case MAP_PROTO_FILE:
 		if (bk->data.fd) {
+			ev_stat_stop (ev_default_loop (0), &bk->data.fd->st_ev);
 			g_free (bk->data.fd->filename);
 			g_free (bk->data.fd);
 		}

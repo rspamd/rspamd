@@ -719,6 +719,7 @@ kill_old_workers (gpointer key, gpointer value, gpointer unused)
 	if (!w->wanna_die) {
 		w->wanna_die = TRUE;
 		kill (w->pid, SIGUSR2);
+		ev_io_stop (rspamd_main->event_loop, &w->srv_ev);
 		msg_info_main ("send signal to worker %P", w->pid);
 	}
 	else {
@@ -727,9 +728,8 @@ kill_old_workers (gpointer key, gpointer value, gpointer unused)
 }
 
 static gboolean
-wait_for_workers (gpointer key, gpointer value, gpointer unused)
+rspamd_worker_wait (struct rspamd_worker *w)
 {
-	struct rspamd_worker *w = value;
 	struct rspamd_main *rspamd_main;
 	gint res = 0;
 	gboolean nowait = FALSE;
@@ -756,7 +756,7 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 				if (term_attempts > -(TERMINATION_ATTEMPTS * 2)) {
 					if (term_attempts % 10 == 0) {
 						msg_info_main ("waiting for worker %s(%P) to sync, "
-								"%d seconds remain",
+									   "%d seconds remain",
 								g_quark_to_string (w->type), w->pid,
 								(TERMINATION_ATTEMPTS * 2 + term_attempts) / 5);
 						kill (w->pid, SIGTERM);
@@ -768,7 +768,7 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 				}
 				else {
 					msg_err_main ("data corruption warning: terminating "
-							"special worker %s(%P) with SIGKILL",
+								  "special worker %s(%P) with SIGKILL",
 							g_quark_to_string (w->type), w->pid);
 					kill (w->pid, SIGKILL);
 					if (nowait && errno == ESRCH) {
@@ -798,7 +798,7 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 	msg_info_main ("%s process %P terminated %s",
 			g_quark_to_string (w->type), w->pid,
 			nowait ? "with no result available" :
-					(WTERMSIG (res) == SIGKILL ? "hardly" : "softly"));
+			(WTERMSIG (res) == SIGKILL ? "hardly" : "softly"));
 	if (w->srv_pipe[0] != -1) {
 		/* Ugly workaround */
 		if (w->tmp_data) {
@@ -816,6 +816,25 @@ wait_for_workers (gpointer key, gpointer value, gpointer unused)
 
 	return TRUE;
 }
+
+static gboolean
+hash_worker_wait_callback (gpointer key, gpointer value, gpointer unused)
+{
+	return rspamd_worker_wait ((struct rspamd_worker *)value);
+}
+
+static void
+rspamd_final_cld_handler (EV_P_ ev_signal *w, int revents)
+{
+	struct rspamd_main *rspamd_main = (struct rspamd_main *)w->data;
+	g_hash_table_foreach_remove (rspamd_main->workers, hash_worker_wait_callback,
+			NULL);
+
+	if (g_hash_table_size (rspamd_main->workers) == 0) {
+		ev_break (rspamd_main->event_loop, EVBREAK_ALL);
+	}
+}
+
 
 struct core_check_cbdata {
 	struct rspamd_config *cfg;
@@ -983,6 +1002,15 @@ do_encrypt_password (void)
 	rspamd_fprintf (stderr, "use rspamadm pw for this operation\n");
 }
 
+static void
+stop_srv_ev (gpointer key, gpointer value, gpointer ud)
+{
+	struct rspamd_worker *cur = (struct rspamd_worker *)value;
+	struct rspamd_main *rspamd_main = (struct rspamd_main *)ud;
+
+	ev_io_stop (rspamd_main->event_loop, &cur->srv_ev);
+}
+
 /* Signal handlers */
 static void
 rspamd_term_handler (struct ev_loop *loop, ev_signal *w, int revents)
@@ -991,6 +1019,8 @@ rspamd_term_handler (struct ev_loop *loop, ev_signal *w, int revents)
 
 	msg_info_main ("catch termination signal, waiting for children");
 	rspamd_log_nolock (rspamd_main->logger);
+	/* Stop srv events to avoid false notifications */
+	g_hash_table_foreach (rspamd_main->workers, stop_srv_ev, rspamd_main);
 	rspamd_pass_signal (rspamd_main->workers, w->signum);
 
 	ev_break (rspamd_main->event_loop, EVBREAK_ALL);
@@ -1033,22 +1063,41 @@ rspamd_cld_handler (EV_P_ ev_signal *w, int revents)
 	guint i;
 	gint res = 0;
 	struct rspamd_worker *cur;
-	pid_t wrk;
-	gboolean need_refork = TRUE;
+	pid_t pid;
+	gboolean need_refork = TRUE, found_proc = FALSE;
 
 	/* Turn off locking for logger */
 	rspamd_log_nolock (rspamd_main->logger);
 
-	msg_info_main ("catch SIGCHLD signal, finding terminated workers");
+	msg_info_main ("got SIGCHLD signal, finding terminated workers");
 	/* Remove dead child form children list */
-	while ((wrk = waitpid (0, &res, WNOHANG)) > 0) {
+	for (;;) {
+		pid = waitpid (0, &res, WNOHANG);
+
+		if (pid == -1) {
+			if (errno != EINTR) {
+				msg_warn_main ("got unexpected system error when waiting: %s",
+						strerror (errno));
+				break;
+			}
+			else {
+				continue;
+			}
+		}
+		else if (pid == 0) {
+			/* No more processes to wait */
+			break;
+		}
+
+		found_proc = TRUE;
+
 		if ((cur =
 				g_hash_table_lookup (rspamd_main->workers,
-						GSIZE_TO_POINTER (wrk))) != NULL) {
+						GSIZE_TO_POINTER (pid))) != NULL) {
 			/* Unlink dead process from queue and hash table */
 
 			g_hash_table_remove (rspamd_main->workers, GSIZE_TO_POINTER (
-					wrk));
+					pid));
 
 			if (cur->wanna_die) {
 				/* Do not refork workers that are intended to be terminated */
@@ -1155,12 +1204,17 @@ rspamd_cld_handler (EV_P_ ev_signal *w, int revents)
 		}
 		else {
 			for (i = 0; i < other_workers->len; i++) {
-				if (g_array_index (other_workers, pid_t, i) == wrk) {
+				if (g_array_index (other_workers, pid_t, i) == pid) {
 					g_array_remove_index_fast (other_workers, i);
-					msg_info_main ("related process %P terminated", wrk);
+					msg_info_main ("related process %P terminated", pid);
 				}
 			}
 		}
+	}
+
+	if (!found_proc) {
+		msg_err_main ("got SIGCHLD but no workers were able to be waited: %s",
+				strerror (errno));
 	}
 
 	rspamd_log_lock (rspamd_main->logger);
@@ -1173,7 +1227,7 @@ rspamd_final_term_handler (EV_P_ ev_timer *w, int revents)
 
 	term_attempts--;
 
-	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
+	g_hash_table_foreach_remove (rspamd_main->workers, hash_worker_wait_callback, NULL);
 
 	if (g_hash_table_size (rspamd_main->workers) == 0) {
 		ev_break (rspamd_main->event_loop, EVBREAK_ALL);
@@ -1245,8 +1299,8 @@ main (gint argc, gchar **argv, gchar **env)
 	GQuark type;
 	rspamd_inet_addr_t *control_addr = NULL;
 	struct ev_loop *event_loop;
-	ev_signal term_ev, int_ev, cld_ev, hup_ev, usr1_ev;
-	ev_io control_ev;
+	static ev_signal term_ev, int_ev, cld_ev, hup_ev, usr1_ev;
+	static ev_io control_ev;
 	struct rspamd_main *rspamd_main;
 	gboolean skip_pid = FALSE, valgrind_mode = FALSE;
 
@@ -1568,7 +1622,10 @@ main (gint argc, gchar **argv, gchar **env)
 
 
 	/* Wait for workers termination */
-	g_hash_table_foreach_remove (rspamd_main->workers, wait_for_workers, NULL);
+	ev_signal_init (&cld_ev, rspamd_final_cld_handler, SIGCHLD);
+	ev_signal_start (event_loop, &cld_ev);
+
+	g_hash_table_foreach_remove (rspamd_main->workers, hash_worker_wait_callback, NULL);
 
 	static ev_timer ev_finale;
 

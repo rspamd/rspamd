@@ -727,7 +727,7 @@ rspamd_control_hs_io_handler (int fd, short what, void *ud)
 
 	/* At this point we just ignore replies from the workers */
 	(void)read (fd, &rep, sizeof (rep));
-	rspamd_ev_watcher_stop (ev_default_loop (0), &elt->ev);
+	rspamd_ev_watcher_stop (elt->wrk->srv->event_loop, &elt->ev);
 	g_free (elt);
 }
 
@@ -740,7 +740,7 @@ rspamd_control_log_pipe_io_handler (int fd, short what, void *ud)
 
 	/* At this point we just ignore replies from the workers */
 	(void) read (fd, &rep, sizeof (rep));
-	rspamd_ev_watcher_stop (ev_default_loop (0), &elt->ev);
+	rspamd_ev_watcher_stop (elt->wrk->srv->event_loop, &elt->ev);
 	g_free (elt);
 }
 
