@@ -73,7 +73,7 @@ sub learn_rspamc {
     my ( $files, $spam ) = @_;
     my $processed = 0;
 
-    my $cmd = $spam ? "learn_spam" : "learn_ham";
+    my $cmd         = $spam ? "learn_spam" : "learn_ham";
     my $args_quoted = shell_quote @{$files};
     open( my $p, "$rspamc -t $timeout -c $classifier --compact -j -n $parallel $cmd $args_quoted |" )
       or die "cannot spawn $rspamc: $!";
@@ -94,7 +94,7 @@ sub learn_bogofilter {
 
     foreach my $f ( @{$files} ) {
         my $args_quoted = shell_quote $f;
-        my $fl = $spam ? "-s" : "-n";
+        my $fl          = $spam ? "-s" : "-n";
         `$bogofilter  -I $args_quoted $fl`;
         if ( $? == 0 ) {
             $processed++;
@@ -110,7 +110,7 @@ sub learn_dspam {
 
     foreach my $f ( @{$files} ) {
         my $args_quoted = shell_quote $f;
-        my $fl = $spam ? "--class=spam" : "--class=innocent";
+        my $fl          = $spam ? "--class=spam" : "--class=innocent";
         open( my $p, "|$dspam --user nobody --source=corpus --stdout --mode=toe $fl" )
           or die "cannot run $dspam: $!";
 

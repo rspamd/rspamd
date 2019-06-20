@@ -63,7 +63,7 @@ sub download_file {
     my ($u) = @_;
 
     print "Fetching $u\n";
-    my $ff = File::Fetch->new( uri => $u );
+    my $ff    = File::Fetch->new( uri => $u );
     my $where = $ff->fetch( to => $download_target ) or die $ff->error;
 
     return $where;

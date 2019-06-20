@@ -100,7 +100,7 @@ foreach my $s (@symbols_bidirectional) {
 # Deal with groups
 my $group_id = 0;
 foreach my $g (@symbols_groups) {
-    my @symbols = split /,/, $g;
+    my @symbols    = split /,/, $g;
     my $group_name = "group$group_id";
 
     foreach my $s (@symbols) {
@@ -124,7 +124,7 @@ elsif ( -d "$log_file" ) {
     # Process logs
     foreach (@logs) {
         my $ext = (/[^.]+\.?([^.]*?)$/)[0];
-        my $dc = $decompressor{$ext} || 'cat';
+        my $dc  = $decompressor{$ext} || 'cat';
 
         open( $rspamd_log, "-|", "$dc $log_dir/$_" )
           or die "cannot execute $dc $log_dir/$_ : $!";
@@ -143,7 +143,7 @@ elsif ( -d "$log_file" ) {
 }
 else {
     my $ext = ( $log_file =~ /[^.]+\.?([^.]*?)$/ )[0];
-    my $dc = $decompressor{$ext} || 'cat';
+    my $dc  = $decompressor{$ext} || 'cat';
     open( $rspamd_log, "-|", "$dc $log_file" )
       or die "cannot execute $dc $log_file : $!";
     $spinner_update_time = 0;                         # Force spinner update
@@ -679,7 +679,7 @@ sub GetLogfilesList {
     opendir( DIR, $dir ) or die $!;
 
     my $pattern = join( '|', keys %decompressor );
-    my $re = qr/\.[0-9]+(?:\.(?:$pattern))?/;
+    my $re      = qr/\.[0-9]+(?:\.(?:$pattern))?/;
 
     # Add unnumbered logs first
     my @logs =
