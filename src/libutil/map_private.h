@@ -124,6 +124,8 @@ struct rspamd_map_backend {
 	ref_entry_t ref;
 };
 
+struct map_periodic_cbdata;
+
 struct rspamd_map {
 	struct rspamd_dns_resolver *r;
 	struct rspamd_config *cfg;
@@ -138,7 +140,7 @@ struct rspamd_map {
 	gchar *description;
 	gchar *name;
 	guint32 id;
-	gboolean scheduled_check;
+	struct map_periodic_cbdata *scheduled_check;
 	rspamd_map_tmp_dtor tmp_dtor;
 	gpointer tmp_dtor_data;
 	rspamd_map_traverse_function traverse_function;

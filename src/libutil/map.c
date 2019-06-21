@@ -16,6 +16,7 @@
 /*
  * Implementation of map files handling
  */
+#include <ev.h>
 #include "config.h"
 #include "map.h"
 #include "map_private.h"
@@ -1240,7 +1241,7 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	cbd->cbdata.cur_data = NULL;
 	cbd->cbdata.map = map;
 	cbd->map = map;
-	map->scheduled_check = TRUE;
+	map->scheduled_check = cbd;
 	REF_INIT_RETAIN (cbd, rspamd_map_periodic_dtor);
 
 	cbd->ev.data = cbd;
@@ -1722,7 +1723,7 @@ rspamd_map_file_check_callback (struct map_periodic_cbdata *periodic)
 	bk = g_ptr_array_index (map->backends, periodic->cur_backend);
 	data = bk->data.fd;
 
-	if (!data->need_modify) {
+	if (data->need_modify) {
 		periodic->need_modify = TRUE;
 		periodic->cur_backend = 0;
 		data->need_modify = FALSE;
@@ -1816,7 +1817,7 @@ rspamd_map_process_periodic (struct map_periodic_cbdata *cbd)
 	struct rspamd_map *map;
 
 	map = cbd->map;
-	map->scheduled_check = FALSE;
+	map->scheduled_check = NULL;
 
 	if (!cbd->locked) {
 		if (!g_atomic_int_compare_and_exchange (cbd->map->locked, 0, 1)) {
@@ -1899,10 +1900,33 @@ rspamd_map_on_stat (struct ev_loop *loop, ev_stat *w, int revents)
 {
 	struct rspamd_map *map = (struct rspamd_map *)w->data;
 
-	msg_info_map ("old mtime is %t, new mtime is %t for map file %s",
-			w->prev.st_mtime, w->attr.st_mtime, w->path);
+	if (w->attr.st_nlink > 0) {
 
-	rspamd_map_schedule_periodic (map, FALSE, TRUE, FALSE);
+		if (w->attr.st_mtime > w->prev.st_mtime) {
+			msg_info_map ("old mtime is %t, new mtime is %t for map file %s",
+					w->prev.st_mtime, w->attr.st_mtime, w->path);
+
+			/* Fire need modify flag */
+			struct rspamd_map_backend *bk;
+			guint i;
+
+			PTR_ARRAY_FOREACH (map->backends, i, bk) {
+				if (bk->protocol == MAP_PROTO_FILE) {
+					bk->data.fd->need_modify = TRUE;
+				}
+			}
+
+			map->next_check = 0;
+
+			if (map->scheduled_check) {
+				ev_timer_stop (map->event_loop, &map->scheduled_check->ev);
+				MAP_RELEASE (map->scheduled_check, "rspamd_map_on_stat");
+				map->scheduled_check = NULL;
+			}
+
+			rspamd_map_schedule_periodic (map, FALSE, TRUE, FALSE);
+		}
+	}
 }
 
 /* Start watching event for all maps */
