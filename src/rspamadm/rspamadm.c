@@ -21,6 +21,7 @@
 #include "lua/lua_thread_pool.h"
 #include "lua_ucl.h"
 #include "unix-std.h"
+#include "contrib/libev/ev.h"
 
 #ifdef HAVE_LIBUTIL_H
 #include <libutil.h>
@@ -433,6 +434,8 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_set_logger (cfg, process_quark, &rspamd_main->logger,
 			rspamd_main->server_pool);
 	(void) rspamd_log_open (rspamd_main->logger);
+
+	rspamd_main->event_loop = ev_default_loop (EVFLAG_SIGNALFD|EVBACKEND_ALL);
 
 	resolver = rspamd_dns_resolver_init (rspamd_main->logger,
 			rspamd_main->event_loop,
