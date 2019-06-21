@@ -223,6 +223,15 @@ void rspamd_worker_throttle_accept_events (gint sock, void *data);
 gboolean rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
 		struct rspamd_worker *wrk, int status);
 
+#ifdef WITH_HYPERSCAN
+struct rspamd_control_command;
+gboolean rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
+										struct rspamd_worker *worker, gint fd,
+										gint attached_fd,
+										struct rspamd_control_command *cmd,
+										gpointer ud);
+#endif
+
 #define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
         G_STRFUNC, \

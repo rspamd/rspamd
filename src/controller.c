@@ -3910,6 +3910,13 @@ start_controller_worker (struct rspamd_worker *worker)
 
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->event_loop, worker);
 
+#ifdef WITH_HYPERSCAN
+	rspamd_control_worker_add_cmd_handler (worker,
+			RSPAMD_CONTROL_HYPERSCAN_LOADED,
+			rspamd_worker_hyperscan_ready,
+			NULL);
+#endif
+
 	/* Start event loop */
 	ev_loop (ctx->event_loop, 0);
 	rspamd_worker_block_signals ();

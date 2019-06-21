@@ -794,6 +794,7 @@ rspamd_control_handle_on_fork (struct rspamd_srv_command *cmd,
 	}
 }
 
+
 static void
 rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 {

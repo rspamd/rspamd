@@ -2158,6 +2158,7 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 		/* Additional initialisation needed */
 		rspamd_worker_init_scanner (worker, ctx->event_loop, ctx->resolver,
 				&ctx->lang_det);
+
 	}
 
 	if (worker->srv->cfg->enable_sessions_cache) {

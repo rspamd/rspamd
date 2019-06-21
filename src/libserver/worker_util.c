@@ -1295,3 +1295,35 @@ rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
 
 	return need_refork;
 }
+
+#ifdef WITH_HYPERSCAN
+gboolean
+rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
+							   struct rspamd_worker *worker, gint fd,
+							   gint attached_fd,
+							   struct rspamd_control_command *cmd,
+							   gpointer ud)
+{
+	struct rspamd_control_reply rep;
+	struct rspamd_re_cache *cache = worker->srv->cfg->re_cache;
+
+	memset (&rep, 0, sizeof (rep));
+	rep.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
+
+	if (!rspamd_re_cache_is_hs_loaded (cache) || cmd->cmd.hs_loaded.forced) {
+		msg_info ("loading hyperscan expressions after receiving compilation "
+				  "notice: %s",
+				(!rspamd_re_cache_is_hs_loaded (cache)) ?
+				"new db" : "forced update");
+		rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan (
+				worker->srv->cfg->re_cache, cmd->cmd.hs_loaded.cache_dir);
+	}
+
+	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {
+		msg_err ("cannot write reply to the control socket: %s",
+				strerror (errno));
+	}
+
+	return TRUE;
+}
+#endif
