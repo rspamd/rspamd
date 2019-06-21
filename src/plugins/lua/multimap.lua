@@ -22,7 +22,6 @@ end
 
 local rules = {}
 local rspamd_logger = require "rspamd_logger"
-local cdb = require "rspamd_cdb"
 local util = require "rspamd_util"
 local regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
@@ -401,6 +400,7 @@ local function multimap_callback(task, rule)
 
     if r['cdb'] then
       if type(r.cdb) == 'string' then
+        local rspamd_cdb = require "rspamd_cdb"
         local cdb = rspamd_cdb.create(r.cdb, task:get_ev_base())
 
         if not cdb then
