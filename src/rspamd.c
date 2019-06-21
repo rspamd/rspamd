@@ -59,6 +59,8 @@
 #ifdef HAVE_OPENSSL
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <ev.h>
+
 #endif
 
 #include "sqlite3.h"
@@ -1393,6 +1395,51 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Init event base */
 	event_loop = ev_default_loop (EVFLAG_SIGNALFD|EVBACKEND_ALL);
 	rspamd_main->event_loop = event_loop;
+
+	if (event_loop) {
+		unsigned loop_type = ev_backend (event_loop);
+		const gchar *loop_str = "unknown";
+		gboolean poor_backend = TRUE;
+
+		switch (loop_type) {
+		case EVBACKEND_EPOLL:
+			loop_str = "epoll";
+			poor_backend = FALSE;
+			break;
+		case EVBACKEND_POLL:
+			loop_str = "poll";
+			break;
+		case EVBACKEND_SELECT:
+			loop_str = "select";
+			break;
+		case EVBACKEND_KQUEUE:
+			loop_str = "kqueue";
+			poor_backend = FALSE;
+			break;
+		case EVBACKEND_PORT:
+			loop_str = "port";
+			poor_backend = FALSE;
+			break;
+		case EVBACKEND_DEVPOLL:
+			loop_str = "/dev/poll";
+			poor_backend = FALSE;
+			break;
+		default:
+			break;
+		}
+
+		if (poor_backend) {
+			msg_warn_main ("event loop uses non-optimal backend: %s", loop_str);
+		}
+		else {
+			msg_info_main ("event loop initialised with backend: %s", loop_str);
+		}
+	}
+	else {
+		msg_err ("cannot init event loop! exiting");
+		exit (EXIT_FAILURE);
+	}
+
 	/* Unblock signals */
 	sigemptyset (&signals.sa_mask);
 	sigprocmask (SIG_SETMASK, &signals.sa_mask, NULL);
