@@ -65,6 +65,7 @@ Clickhosue Teardown
     # Sleep 30
     ${clickhouse_pid} =    Get File    ${TMPDIR}/clickhouse/clickhouse.pid
     Shutdown Process With Children    ${clickhouse_pid}
+    Log File    ${TMPDIR}/clickhouse/clickhouse-server.err.log
     Simple Teardown
 
 Prepare rspamd
