@@ -20,7 +20,6 @@ if confighelp then
 end
 
 local rspamd_logger = require "rspamd_logger"
-local rspamd_fann = require "rspamd_fann"
 local rspamd_util = require "rspamd_util"
 local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
@@ -320,14 +319,7 @@ local function create_ann(n, nlayers)
 
     return ann
   else
-    local layers = {}
-    local div = 1.0
-    for _ = 1, nlayers - 1 do
-      table.insert(layers, math.floor(n / div))
-      div = div * 2
-    end
-    table.insert(layers, 1)
-    return rspamd_fann.create(nlayers, layers)
+    assert(false)
   end
 end
 
@@ -378,7 +370,7 @@ local function load_or_invalidate_ann(rule, data, id, ev_base)
     if use_torch then
       ann = torch.MemoryFile(torch.CharStorage():string(tostring(ann_data))):readObject()
     else
-      ann = rspamd_fann.load_data(ann_data)
+      assert(false)
     end
   end
 
@@ -940,7 +932,7 @@ if not (opts and type(opts) == 'table') or not redis_params then
   return
 end
 
-if not rspamd_fann.is_enabled() and not use_torch then
+if not use_torch then
   rspamd_logger.errx(rspamd_config, 'neural networks support is not compiled in rspamd, this ' ..
     'module is eventually disabled')
   lua_util.disable_module(N, "fail")
