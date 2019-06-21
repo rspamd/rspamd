@@ -64,7 +64,7 @@ rspamd_config:register_symbol({
     end
     local function from_done_cb(err, data, conn)
       logger.errx(task, 'FROM: got reply: %s, error: %s', data, err)
-      conn:add_write(rcpt_cb, 'RCPT TO: <hui@yandex.ru>\r\n')
+      conn:add_write(rcpt_cb, 'RCPT TO: <test@yandex.ru>\r\n')
     end
     local function from_cb(err, conn)
       logger.errx(task, 'written from, error: %s', err)
@@ -281,7 +281,7 @@ struct lua_tcp_write_handler {
 enum lua_tcp_handler_type {
 	LUA_WANT_WRITE = 0,
 	LUA_WANT_READ,
-	LUA_WANT_CONNECT // used only with sync connections
+	LUA_WANT_CONNECT
 };
 
 struct lua_tcp_handler {
@@ -1007,6 +1007,8 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 	struct lua_tcp_handler *rh = g_queue_peek_head (cbd->handlers);
 	event_type = rh->type;
 
+	rspamd_ev_watcher_stop (cbd->event_loop, &cbd->ev);
+
 	if (what == EV_READ) {
 		if (cbd->ssl_conn) {
 			r = rspamd_ssl_read (cbd->ssl_conn, inbuf, sizeof (inbuf));
@@ -1074,12 +1076,6 @@ lua_tcp_handler (int fd, short what, gpointer ud)
 			g_assert_not_reached ();
 		}
 	}
-#ifdef EV_CLOSED
-	else if (what == EV_CLOSED) {
-		lua_tcp_push_error (cbd, TRUE, "Remote peer has closed the connection");
-		TCP_RELEASE (cbd);
-	}
-#endif
 	else {
 		lua_tcp_push_error (cbd, TRUE, "IO timeout");
 		TCP_RELEASE (cbd);
@@ -1120,16 +1116,17 @@ lua_tcp_plan_handler_event (struct lua_tcp_cbdata *cbd, gboolean can_read,
 				}
 			}
 			else {
-				msg_debug_tcp ("plan new read");
 				if (can_read) {
 					/* We need to plan a new event */
+					msg_debug_tcp ("plan new read");
 					rspamd_ev_watcher_reschedule (cbd->event_loop, &cbd->ev,
 							EV_READ);
 				}
 				else {
 					/* Cannot read more */
+					msg_debug_tcp ("cannot read more");
 					lua_tcp_push_error (cbd, FALSE, "EOF, cannot read more data");
-					if (!IS_SYNC(cbd)) {
+					if (!IS_SYNC (cbd)) {
 						lua_tcp_shift_handler (cbd);
 						lua_tcp_plan_handler_event (cbd, can_read, can_write);
 					}
@@ -1275,7 +1272,7 @@ lua_tcp_make_connection (struct lua_tcp_cbdata *cbd)
 		}
 	}
 	else {
-		rspamd_ev_watcher_init (&cbd->ev, cbd->fd, EV_READ|EV_WRITE,
+		rspamd_ev_watcher_init (&cbd->ev, cbd->fd, EV_WRITE,
 				lua_tcp_handler, cbd);
 		lua_tcp_register_event (cbd);
 		lua_tcp_plan_handler_event (cbd, TRUE, TRUE);

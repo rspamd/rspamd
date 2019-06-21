@@ -436,6 +436,7 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 				what = EV_WRITE;
 			}
 			else {
+				rspamd_ev_watcher_stop (c->event_loop, c->ev);
 				rspamd_tls_set_error (ret, "connect", &err);
 				c->err_handler (c->handler_data, err);
 				g_error_free (err);
@@ -453,11 +454,12 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 		break;
 	case ssl_next_write:
 	case ssl_conn_connected:
-		rspamd_ev_watcher_reschedule (c->event_loop, c->ev, EV_WRITE);
+		rspamd_ev_watcher_reschedule (c->event_loop, c->ev, what);
 		c->state = ssl_conn_connected;
-		c->handler (fd, EV_WRITE, c->handler_data);
+		c->handler (fd, what, c->handler_data);
 		break;
 	default:
+		rspamd_ev_watcher_stop (c->event_loop, c->ev);
 		g_set_error (&err, rspamd_ssl_quark (), EINVAL,
 				"ssl bad state error: %d", c->state);
 		c->err_handler (c->handler_data, err);
