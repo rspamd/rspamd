@@ -11,9 +11,9 @@ ${LUA_SCRIPT}    ${TESTDIR}/lua/get_from.lua
 ${RSPAMD_SCOPE}  Suite
 
 ${SYMBOL}   GET_FROM (0.00)
-${SYMBOL1}  ${SYMBOL}[,user@example.org,user,example.org]
-${SYMBOL2}  ${SYMBOL}[First Last,user@example.org,user,example.org]
-${SYMBOL3}  ${SYMBOL}[First M. Last,user@example.org,user,example.org]
+${SYMBOL1}  ${SYMBOL}\[,user@example.org,user,example.org]
+${SYMBOL2}  ${SYMBOL}\[First Last,user@example.org,user,example.org]
+${SYMBOL3}  ${SYMBOL}\[First M. Last,user@example.org,user,example.org]
 
 *** Test Cases ***
 task:get_from('mime') - address only
@@ -30,7 +30,7 @@ task:get_from('mime') - display name
 
 task:get_from('mime') - display name Base64
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/from/from_dn_base64.eml
-  Check Rspamc  ${result}  ${SYMBOL}[Кириллица,user@example.org,user,example.org]
+  Check Rspamc  ${result}  ${SYMBOL}\[Кириллица,user@example.org,user,example.org]
 
 task:get_from('mime') - display name and comment
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/from/from_dn_comment.eml

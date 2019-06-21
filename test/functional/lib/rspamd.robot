@@ -23,9 +23,10 @@ Check Rspamc
   ${inverse} =  Evaluate  'inverse' in $kwargs
   ${re} =  Evaluate  're' in $kwargs
   ${rc} =  Set Variable If  ${has_rc} == True  &{kwargs}[rc]  0
-  : FOR  ${i}  IN  @{args}
-  \  Run Keyword If  ${re} == True  Check Rspamc Match Regexp  ${result.stdout}  ${i}  ${inverse}
-  \  ...  ELSE  Check Rspamc Match String  ${result.stdout}  ${i}  ${inverse}
+  FOR  ${i}  IN  @{args}
+    Run Keyword If  ${re} == True  Check Rspamc Match Regexp  ${result.stdout}  ${i}  ${inverse}
+    ...  ELSE  Check Rspamc Match String  ${result.stdout}  ${i}  ${inverse}
+  END
   Run Keyword If  @{args} == @{EMPTY}  Check Rspamc Match Default  ${result.stdout}  ${inverse}
   Should Be Equal As Integers  ${result.rc}  ${rc}
 
@@ -61,10 +62,11 @@ Generic Setup
   [Arguments]  @{vargs}  &{kwargs}
   &{d} =  Run Rspamd  @{vargs}  &{kwargs}
   ${keys} =  Get Dictionary Keys  ${d}
-  : FOR  ${i}  IN  @{keys}
-  \  Run Keyword If  '${RSPAMD_SCOPE}' == 'Suite'  Set Suite Variable  ${${i}}  &{d}[${i}]
-  \  ...  ELSE IF  '${RSPAMD_SCOPE}' == 'Test'  Set Test Variable  ${${i}}  &{d}[${i}]
-  \  ...  ELSE  Fail  'RSPAMD_SCOPE must be Test or Suite'
+  FOR  ${i}  IN  @{keys}
+    Run Keyword If  '${RSPAMD_SCOPE}' == 'Suite'  Set Suite Variable  ${${i}}  &{d}[${i}]
+    ...  ELSE IF  '${RSPAMD_SCOPE}' == 'Test'  Set Test Variable  ${${i}}  &{d}[${i}]
+    ...  ELSE  Fail  'RSPAMD_SCOPE must be Test or Suite'
+  END
 
 Generic Teardown
   [Arguments]  @{ports}
@@ -144,7 +146,8 @@ Run Nginx
 
 Run Rspamc
   [Arguments]  @{args}
-  ${result} =  Run Process  ${RSPAMC}  -t  60  --header  Queue-ID\=${TEST NAME}  @{args}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
+  ${result} =  Run Process  ${RSPAMC}  -t  60  --header  Queue-ID\=${TEST NAME}
+  ...  @{args}  env:LD_LIBRARY_PATH=${TESTDIR}/../../contrib/aho-corasick
   Log  ${result.stdout}
   [Return]  ${result}
 
@@ -158,9 +161,10 @@ Run Rspamd
   ...  ELSE  Make Temporary Directory
   Set Directory Ownership  ${tmpdir}  ${RSPAMD_USER}  ${RSPAMD_GROUP}
   ${template} =  Get File  ${CONFIG}
-  : FOR  ${i}  IN  @{vargs}
-  \  ${newvalue} =  Replace Variables  ${${i}}
-  \  Set To Dictionary  ${d}  ${i}=${newvalue}
+  FOR  ${i}  IN  @{vargs}
+    ${newvalue} =  Replace Variables  ${${i}}
+    Set To Dictionary  ${d}  ${i}=${newvalue}
+  END
   ${config} =  Replace Variables  ${template}
   ${config} =  Replace Variables  ${config}
   Log  ${config}
@@ -188,8 +192,10 @@ Simple Teardown
 Sync Fuzzy Storage
   [Arguments]  @{vargs}
   ${len} =  Get Length  ${vargs}
-  ${result} =  Run Keyword If  $len == 0  Run Process  ${RSPAMADM}  control  -s  ${TMPDIR}/rspamd.sock  fuzzy_sync
-  ...  ELSE  Run Process  ${RSPAMADM}  control  -s  @{vargs}[0]/rspamd.sock  fuzzy_sync
+  ${result} =  Run Keyword If  $len == 0  Run Process  ${RSPAMADM}  control  -s
+  ...  ${TMPDIR}/rspamd.sock  fuzzy_sync
+  ...  ELSE  Run Process  ${RSPAMADM}  control  -s  @{vargs}[0]/rspamd.sock
+  ...  fuzzy_sync
   Log  ${result.stdout}
   Run Keyword If  $len == 0  Follow Rspamd Log
   ...  ELSE  Custom Follow Rspamd Log  @{vargs}[0]/rspamd.log  @{vargs}[1]  @{vargs}[2]  @{vargs}[3]
