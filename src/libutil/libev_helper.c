@@ -38,8 +38,8 @@ rspamd_ev_watcher_timer_cb (EV_P_ struct ev_timer *w, int revents)
 	}
 	else {
 		/* Start another cycle as there was some activity */
-		ev_timer_set (w, after, 0.);
-		ev_timer_start (EV_A_ w);
+		w->repeat = after;
+		ev_timer_again (EV_A_ w);
 	}
 }
 
@@ -101,4 +101,11 @@ rspamd_ev_watcher_reschedule (struct ev_loop *loop,
 		ev_io_set (&ev->io, ev->io.fd, what);
 		ev_io_start (EV_A_ &ev->io);
 	}
+
+	if (!(ev_is_active (&ev->tm) || ev_is_pending (&ev->tm))) {
+		ev_timer_set (&ev->tm, ev->timeout, 0.0);
+		ev_timer_start (EV_A_ &ev->tm);
+	}
+
+	ev->last_activity = ev_now (EV_A);
 }

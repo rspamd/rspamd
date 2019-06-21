@@ -1786,6 +1786,7 @@ rspamd_protocol_write_reply (struct rspamd_task *task, ev_tstamp timeout)
 		msg->flags |= RSPAMD_HTTP_FLAG_SPAMC;
 	}
 
+	ev_now_update (task->event_loop);
 	msg->date = ev_time ();
 
 	msg_debug_protocol ("writing reply to client");
