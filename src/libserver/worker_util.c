@@ -55,9 +55,9 @@
 #include <ucontext.h>
 #elif defined(HAVE_SYS_UCONTEXT_H)
 #include <sys/ucontext.h>
-#include <ev.h>
-
 #endif
+
+#include "contrib/libev/ev.h"
 
 static void rspamd_worker_ignore_signal (struct rspamd_worker_signal_handler *);
 /**

@@ -59,11 +59,11 @@
 #ifdef HAVE_OPENSSL
 #include <openssl/err.h>
 #include <openssl/evp.h>
-#include <ev.h>
 
 #endif
 
 #include "sqlite3.h"
+#include "contrib/libev/ev.h"
 
 /* 2 seconds to fork new process in place of dead one */
 #define SOFT_FORK_TIME 2
