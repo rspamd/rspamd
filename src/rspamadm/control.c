@@ -98,7 +98,7 @@ static void
 rspamd_control_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
 	rspamd_fprintf (stderr, "Cannot make HTTP request: %e\n", err);
-	rspamd_http_connection_unref (conn);
+	ev_break (rspamd_main->event_loop, EVBREAK_ALL);
 }
 
 static gint

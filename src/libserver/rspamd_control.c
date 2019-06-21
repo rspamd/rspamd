@@ -524,6 +524,7 @@ rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
 			0);
 	session->rspamd_main = rspamd_main;
 	session->addr = addr;
+	session->event_loop = rspamd_main->event_loop;
 	rspamd_http_connection_read_message (session->conn, session,
 			io_timeout);
 }
