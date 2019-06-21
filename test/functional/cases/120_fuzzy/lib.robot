@@ -47,9 +47,10 @@ Fuzzy Fuzzy Test
   Run Keyword If  ${RSPAMD_FUZZY_ADD_${message}} != 1  Fail  "Fuzzy Add was not run"
   @{path_info} =  Path Splitter  ${message}
   @{fuzzy_files} =  List Files In Directory  @{pathinfo}[0]  pattern=@{pathinfo}[1].fuzzy*  absolute=1
-  : FOR  ${i}  IN  @{fuzzy_files}
-  \  ${result} =  Scan Message With Rspamc  ${i}
-  \  Check Rspamc  ${result}  ${FLAG1_SYMBOL}
+  FOR  ${i}  IN  @{fuzzy_files}
+    ${result} =  Scan Message With Rspamc  ${i}
+    Check Rspamc  ${result}  ${FLAG1_SYMBOL}
+  END
 
 Fuzzy Miss Test
   [Arguments]  ${message}
@@ -59,10 +60,11 @@ Fuzzy Miss Test
 Fuzzy Overwrite Test
   [Arguments]  ${message}
   ${flag_numbers} =  Create List  ${FLAG1_NUMBER}  ${FLAG2_NUMBER}
-  : FOR  ${i}  IN  @{flag_numbers}
-  \  ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -w  10
-  \  ...  -f  ${i}  fuzzy_add  ${message}
-  \  Check Rspamc  ${result}
+  FOR  ${i}  IN  @{flag_numbers}
+    ${result} =  Run Rspamc  -h  ${LOCAL_ADDR}:${PORT_CONTROLLER}  -w  10
+    ...  -f  ${i}  fuzzy_add  ${message}
+    Check Rspamc  ${result}
+  END
   Sync Fuzzy Storage
   ${result} =  Scan Message With Rspamc  ${message}
   Follow Rspamd Log
@@ -129,24 +131,29 @@ Fuzzy Setup Encrypted Siphash
   Fuzzy Setup Encrypted  siphash
 
 Fuzzy Multimessage Add Test
-  : FOR  ${i}  IN  @{MESSAGES}
-  \  Fuzzy Add Test  ${i}
+  FOR  ${i}  IN  @{MESSAGES}
+    Fuzzy Add Test  ${i}
+  END
 
 Fuzzy Multimessage Fuzzy Test
-  : FOR  ${i}  IN  @{MESSAGES}
-  \  Fuzzy Fuzzy Test  ${i}
+  FOR  ${i}  IN  @{MESSAGES}
+    Fuzzy Fuzzy Test  ${i}
+  END
 
 Fuzzy Multimessage Miss Test
-  : FOR  ${i}  IN  @{RANDOM_MESSAGES}
-  \  Fuzzy Miss Test  ${i}
+  FOR  ${i}  IN  @{RANDOM_MESSAGES}
+    Fuzzy Miss Test  ${i}
+  END
 
 Fuzzy Multimessage Delete Test
-  : FOR  ${i}  IN  @{MESSAGES}
-  \  Fuzzy Delete Test  ${i}
+  FOR  ${i}  IN  @{MESSAGES}
+    Fuzzy Delete Test  ${i}
+  END
 
 Fuzzy Multimessage Overwrite Test
-  : FOR  ${i}  IN  @{MESSAGES}
-  \  Fuzzy Overwrite Test  ${i}
+  FOR  ${i}  IN  @{MESSAGES}
+    Fuzzy Overwrite Test  ${i}
+  END
 
 Fuzzy Teardown
   Normal Teardown
