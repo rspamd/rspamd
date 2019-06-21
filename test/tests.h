@@ -20,9 +20,6 @@ void rspamd_radix_test_func (void);
 /* DNS resolving */
 void rspamd_dns_test_func (void);
 
-/* Async IO */
-void rspamd_async_test_func (void);
-
 /* DKIM test */
 void rspamd_dkim_test_func (void);
 

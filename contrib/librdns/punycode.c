@@ -33,7 +33,7 @@
  */
 
 #include "dns_private.h"
-static const unsigned base = 36;
+static const unsigned event_loop = 36;
 static const unsigned t_min = 1;
 static const unsigned t_max = 26;
 static const unsigned skew = 38;
@@ -61,11 +61,11 @@ adapt (unsigned int delta, unsigned int numpoints, int first)
 	}
 	delta += delta / numpoints;
 	k = 0;
-	while (delta > ((base - t_min) * t_max) / 2) {
-		delta /= base - t_min;
-		k += base;
+	while (delta > ((event_loop - t_min) * t_max) / 2) {
+		delta /= event_loop - t_min;
+		k += event_loop;
 	}
-	return k + (((base - t_min + 1) * delta) / (delta + skew));
+	return k + (((event_loop - t_min + 1) * delta) / (delta + skew));
 }
 
 /**
@@ -139,7 +139,7 @@ rdns_punycode_label_toascii (const uint32_t *in, size_t in_len, char *out,
 			else if (in[i] == n) {
 				unsigned int q = delta;
 				unsigned int k;
-				for (k = base;; k += base) {
+				for (k = event_loop;; k += event_loop) {
 					unsigned int t;
 					if (k <= bias) {
 						t = t_min;
@@ -156,8 +156,8 @@ rdns_punycode_label_toascii (const uint32_t *in, size_t in_len, char *out,
 					if (o >= *out_len) {
 						return -1;
 					}
-					out[o++] = digit (t + ((q - t) % (base - t)));
-					q = (q - t) / (base - t);
+					out[o++] = digit (t + ((q - t) % (event_loop - t)));
+					q = (q - t) / (event_loop - t);
 				}
 				if (o >= *out_len) {
 					return -1;
