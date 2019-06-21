@@ -75,7 +75,7 @@ struct rspamd_task *
 rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 				 rspamd_mempool_t *pool,
 				 struct rspamd_lang_detector *lang_det,
-				 struct ev_loop *ev_base)
+				 struct ev_loop *event_loop)
 {
 	struct rspamd_task *new_task;
 
@@ -101,9 +101,16 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 		}
 	}
 
-	new_task->event_loop = ev_base;
-	new_task->task_timestamp = ev_time ();
-	new_task->time_virtual = ev_now (ev_base);
+	new_task->event_loop = event_loop;
+	if (event_loop) {
+		new_task->task_timestamp = ev_time ();
+		new_task->time_virtual = ev_now (event_loop);
+	}
+	else {
+		new_task->task_timestamp = ev_time ();
+		new_task->time_virtual = rspamd_get_virtual_ticks ();
+	}
+
 	new_task->time_real_finish = NAN;
 	new_task->time_virtual_finish = NAN;
 
