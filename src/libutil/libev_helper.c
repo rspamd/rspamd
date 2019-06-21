@@ -98,13 +98,17 @@ rspamd_ev_watcher_reschedule (struct ev_loop *loop,
 		ev_io_start (EV_A_ &ev->io);
 	}
 	else {
-		ev_io_set (&ev->io, ev->io.fd, what);
+		ev->io.data = ev;
+		ev_io_init (&ev->io, rspamd_ev_watcher_io_cb, ev->io.fd, what);
 		ev_io_start (EV_A_ &ev->io);
 	}
 
-	if (!(ev_is_active (&ev->tm) || ev_is_pending (&ev->tm))) {
-		ev_timer_set (&ev->tm, ev->timeout, 0.0);
-		ev_timer_start (EV_A_ &ev->tm);
+	if (ev->timeout > 0) {
+		if (!(ev_is_active (&ev->tm) || ev_is_pending (&ev->tm))) {
+			ev->tm.data = ev;
+			ev_timer_init (&ev->tm, rspamd_ev_watcher_timer_cb, ev->timeout, 0.0);
+			ev_timer_start (EV_A_ &ev->tm);
+		}
 	}
 
 	ev->last_activity = ev_now (EV_A);

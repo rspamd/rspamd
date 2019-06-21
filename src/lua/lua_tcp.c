@@ -1275,6 +1275,8 @@ lua_tcp_make_connection (struct lua_tcp_cbdata *cbd)
 		}
 	}
 	else {
+		rspamd_ev_watcher_init (&cbd->ev, cbd->fd, EV_READ|EV_WRITE,
+				lua_tcp_handler, cbd);
 		lua_tcp_register_event (cbd);
 		lua_tcp_plan_handler_event (cbd, TRUE, TRUE);
 	}
