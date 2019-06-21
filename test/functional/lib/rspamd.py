@@ -102,7 +102,14 @@ def HTTP(method, host, port, path, data=None, headers={}):
     return [s, t]
 
 def make_temporary_directory():
-    return tempfile.mkdtemp()
+    """Creates and returns a unique temporary directory
+
+    Example:
+    | ${TMPDIR} = | Make Temporary Directory |
+    """
+    dirname = tempfile.mkdtemp()
+    os.chmod(dirname, 0755)
+    return dirname
 
 def make_temporary_file():
     return tempfile.mktemp()
