@@ -1100,6 +1100,9 @@ rspamd_milter_handle_socket (gint fd, ev_tstamp timeout,
 	priv->quarantine_on_reject = milter_ctx->quarantine_on_reject;
 	priv->ev.timeout = timeout;
 
+	rspamd_ev_watcher_init (&priv->ev, fd, EV_READ|EV_WRITE,
+			rspamd_milter_io_handler, session);
+
 	if (pool) {
 		/* Copy tag */
 		memcpy (priv->pool->tag.uid, pool->tag.uid, sizeof (pool->tag.uid));
