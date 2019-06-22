@@ -1146,9 +1146,6 @@ main (gint argc, gchar **argv, gchar **env)
 	struct rspamd_main *rspamd_main;
 	gboolean skip_pid = FALSE;
 
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-	g_thread_init (NULL);
-#endif
 	rspamd_main = (struct rspamd_main *) g_malloc0 (sizeof (struct rspamd_main));
 
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
