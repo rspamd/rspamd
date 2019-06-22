@@ -64,6 +64,8 @@ rspamd_ev_watcher_start (struct ev_loop *loop,
 						 struct rspamd_io_ev *ev,
 						 ev_tstamp timeout)
 {
+	g_assert (ev->cb != NULL);
+
 	ev->last_activity = ev_now (EV_A);
 	ev_io_start (EV_A_ &ev->io);
 
@@ -92,6 +94,8 @@ rspamd_ev_watcher_reschedule (struct ev_loop *loop,
 							  struct rspamd_io_ev *ev,
 							  short what)
 {
+	g_assert (ev->cb != NULL);
+
 	if (ev_is_pending (&ev->io) || ev_is_active (&ev->io)) {
 		ev_io_stop (EV_A_ &ev->io);
 		ev_io_set (&ev->io, ev->io.fd, what);
