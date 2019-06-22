@@ -296,7 +296,7 @@ wait_session_events (void)
 {
 	/* XXX: it's probably worth to add timeout here - not to wait forever */
 	while (rspamd_session_events_pending (rspamadm_session) > 0) {
-		event_base_loop (rspamd_main->ev_base, EVLOOP_ONCE);
+		ev_loop (rspamd_main->event_loop, EVRUN_ONCE);
 	}
 }
 
@@ -515,7 +515,7 @@ rspamadm_lua_run_repl (lua_State *L)
 {
 	gchar *input;
 	gboolean is_multiline = FALSE;
-	GString *tb;
+	GString *tb = NULL;
 	guint i;
 
 	for (;;) {
@@ -591,15 +591,16 @@ struct rspamadm_lua_repl_session {
 };
 
 static void
-rspamadm_lua_accept_cb (gint fd, short what, void *arg)
+rspamadm_lua_accept_cb (EV_P_ ev_io *w, int revents)
 {
-	struct rspamadm_lua_repl_context *ctx = arg;
+	struct rspamadm_lua_repl_context *ctx =
+			(struct rspamadm_lua_repl_context *)w->data;
 	rspamd_inet_addr_t *addr;
 	struct rspamadm_lua_repl_session *session;
 	gint nfd;
 
 	if ((nfd =
-			rspamd_accept_from_socket (fd, &addr, NULL)) == -1) {
+			rspamd_accept_from_socket (w->fd, &addr, NULL, NULL)) == -1) {
 		rspamd_fprintf (stderr, "accept failed: %s", strerror (errno));
 		return;
 	}
@@ -793,7 +794,7 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 		/* HTTP Server mode */
 		GPtrArray *addrs = NULL;
 		gchar *name = NULL;
-		struct event_base *ev_base;
+		struct ev_loop *ev_base;
 		struct rspamd_http_connection_router *http;
 		gint fd;
 		struct rspamadm_lua_repl_context *ctx;
@@ -804,11 +805,11 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 			exit (EXIT_FAILURE);
 		}
 
-		ev_base = rspamd_main->ev_base;
+		ev_base = rspamd_main->event_loop;
 		ctx = g_malloc0  (sizeof (*ctx));
 		http = rspamd_http_router_new (rspamadm_lua_error_handler,
 						rspamadm_lua_finish_handler,
-						NULL,
+						0.0,
 						NULL,
 						rspamd_main->http_ctx);
 		ctx->L = L;
@@ -822,19 +823,17 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 
 			fd = rspamd_inet_address_listen (addr, SOCK_STREAM, TRUE);
 			if (fd != -1) {
-				struct event *ev;
+				static ev_io ev;
 
-				ev = g_malloc0 (sizeof (*ev));
-				event_set (ev, fd, EV_READ|EV_PERSIST, rspamadm_lua_accept_cb,
-						ctx);
-				event_base_set (ev_base, ev);
-				event_add (ev, NULL);
+				ev.data = ctx;
+				ev_io_init (&ev, rspamadm_lua_accept_cb, fd, EV_READ);
+				ev_io_start (ev_base, &ev);
 				rspamd_printf ("listen on %s\n",
 						rspamd_inet_address_to_string_pretty (addr));
 			}
 		}
 
-		event_base_loop (ev_base, 0);
+		ev_loop (ev_base, 0);
 
 		exit (EXIT_SUCCESS);
 	}

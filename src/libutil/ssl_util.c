@@ -45,9 +45,8 @@ struct rspamd_ssl_connection {
 	gboolean verify_peer;
 	SSL *ssl;
 	gchar *hostname;
-	struct event *ev;
-	struct event_base *ev_base;
-	struct timeval *tv;
+	struct rspamd_io_ev *ev;
+	struct ev_loop *event_loop;
 	rspamd_ssl_handler_t handler;
 	rspamd_ssl_error_handler_t err_handler;
 	gpointer handler_data;
@@ -407,7 +406,7 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 	gint ret;
 	GError *err = NULL;
 
-	if (what == EV_TIMEOUT) {
+	if (what == EV_TIMER) {
 		c->shut = ssl_shut_unclean;
 	}
 
@@ -417,7 +416,7 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 		ret = SSL_connect (c->ssl);
 
 		if (ret == 1) {
-			event_del (c->ev);
+			rspamd_ev_watcher_stop (c->event_loop, c->ev);
 			/* Verify certificate */
 			if ((!c->verify_peer) || rspamd_ssl_peer_verify (c)) {
 				c->state = ssl_conn_connected;
@@ -437,40 +436,30 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 				what = EV_WRITE;
 			}
 			else {
+				rspamd_ev_watcher_stop (c->event_loop, c->ev);
 				rspamd_tls_set_error (ret, "connect", &err);
 				c->err_handler (c->handler_data, err);
 				g_error_free (err);
 				return;
 			}
 
-			event_del (c->ev);
-			event_set (c->ev, fd, what, rspamd_ssl_event_handler, c);
-			event_base_set (c->ev_base, c->ev);
-			event_add (c->ev, c->tv);
+			rspamd_ev_watcher_reschedule (c->event_loop, c->ev, what);
+
 		}
 		break;
 	case ssl_next_read:
-		event_del (c->ev);
-		/* Restore handler */
-		event_set (c->ev, c->fd, EV_READ|EV_PERSIST,
-				c->handler, c->handler_data);
-		event_base_set (c->ev_base, c->ev);
-		event_add (c->ev, c->tv);
+		rspamd_ev_watcher_reschedule (c->event_loop, c->ev, EV_READ);
 		c->state = ssl_conn_connected;
 		c->handler (fd, EV_READ, c->handler_data);
 		break;
 	case ssl_next_write:
 	case ssl_conn_connected:
-		event_del (c->ev);
-		/* Restore handler */
-		event_set (c->ev, c->fd, EV_WRITE,
-				c->handler, c->handler_data);
-		event_base_set (c->ev_base, c->ev);
-		event_add (c->ev, c->tv);
+		rspamd_ev_watcher_reschedule (c->event_loop, c->ev, what);
 		c->state = ssl_conn_connected;
-		c->handler (fd, EV_WRITE, c->handler_data);
+		c->handler (fd, what, c->handler_data);
 		break;
 	default:
+		rspamd_ev_watcher_stop (c->event_loop, c->ev);
 		g_set_error (&err, rspamd_ssl_quark (), EINVAL,
 				"ssl bad state error: %d", c->state);
 		c->err_handler (c->handler_data, err);
@@ -480,7 +469,7 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 }
 
 struct rspamd_ssl_connection *
-rspamd_ssl_connection_new (gpointer ssl_ctx, struct event_base *ev_base,
+rspamd_ssl_connection_new (gpointer ssl_ctx, struct ev_loop *ev_base,
 		gboolean verify_peer)
 {
 	struct rspamd_ssl_connection *c;
@@ -488,7 +477,7 @@ rspamd_ssl_connection_new (gpointer ssl_ctx, struct event_base *ev_base,
 	g_assert (ssl_ctx != NULL);
 	c = g_malloc0 (sizeof (*c));
 	c->ssl = SSL_new (ssl_ctx);
-	c->ev_base = ev_base;
+	c->event_loop = ev_base;
 	c->verify_peer = verify_peer;
 
 	return c;
@@ -497,7 +486,7 @@ rspamd_ssl_connection_new (gpointer ssl_ctx, struct event_base *ev_base,
 
 gboolean
 rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
-		const gchar *hostname, struct event *ev, struct timeval *tv,
+		const gchar *hostname, struct rspamd_io_ev *ev, ev_tstamp timeout,
 		rspamd_ssl_handler_t handler, rspamd_ssl_error_handler_t err_handler,
 		gpointer handler_data)
 {
@@ -534,17 +523,9 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 	if (ret == 1) {
 		conn->state = ssl_conn_connected;
 
-		if (rspamd_event_pending (ev, EV_TIMEOUT|EV_WRITE|EV_READ)) {
-			event_del (ev);
-		}
-
-		event_set (ev, fd, EV_WRITE, rspamd_ssl_event_handler, conn);
-
-		if (conn->ev_base) {
-			event_base_set (conn->ev_base, ev);
-		}
-
-		event_add (ev, tv);
+		rspamd_ev_watcher_stop (conn->event_loop, ev);
+		rspamd_ev_watcher_init (ev, fd, EV_WRITE, rspamd_ssl_event_handler, conn);
+		rspamd_ev_watcher_start (conn->event_loop, ev, timeout);
 	}
 	else {
 		ret = SSL_get_error (conn->ssl, ret);
@@ -561,13 +542,10 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 			return FALSE;
 		}
 
-		if (rspamd_event_pending (ev, EV_TIMEOUT|EV_WRITE|EV_READ)) {
-			event_del (ev);
-		}
-
-		event_set (ev, fd, what, rspamd_ssl_event_handler, conn);
-		event_base_set (conn->ev_base, ev);
-		event_add (ev, tv);
+		rspamd_ev_watcher_stop (conn->event_loop, ev);
+		rspamd_ev_watcher_init (ev, fd, EV_WRITE|EV_READ,
+				rspamd_ssl_event_handler, conn);
+		rspamd_ev_watcher_start (conn->event_loop, ev, timeout);
 	}
 
 	return TRUE;
@@ -638,13 +616,8 @@ rspamd_ssl_read (struct rspamd_ssl_connection *conn, gpointer buf,
 			return -1;
 		}
 
-		event_del (conn->ev);
-		event_set (conn->ev, conn->fd, what, rspamd_ssl_event_handler, conn);
-		event_base_set (conn->ev_base, conn->ev);
-		event_add (conn->ev, conn->tv);
-
+		rspamd_ev_watcher_reschedule (conn->event_loop, conn->ev, what);
 		errno = EAGAIN;
-
 	}
 
 	return -1;
@@ -713,11 +686,7 @@ rspamd_ssl_write (struct rspamd_ssl_connection *conn, gconstpointer buf,
 			return -1;
 		}
 
-		event_del (conn->ev);
-		event_set (conn->ev, conn->fd, what, rspamd_ssl_event_handler, conn);
-		event_base_set (conn->ev_base, conn->ev);
-		event_add (conn->ev, conn->tv);
-
+		rspamd_ev_watcher_reschedule (conn->event_loop, conn->ev, what);
 		errno = EAGAIN;
 	}
 

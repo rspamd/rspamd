@@ -695,11 +695,11 @@ static gint
 lua_util_create_event_base (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct event_base **pev_base;
+	struct ev_loop **pev_base;
 
-	pev_base = lua_newuserdata (L, sizeof (struct event_base *));
+	pev_base = lua_newuserdata (L, sizeof (struct ev_loop *));
 	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
-	*pev_base = event_init ();
+	*pev_base = ev_loop_new (EVFLAG_SIGNALFD|EVBACKEND_ALL);
 
 	return 1;
 }
@@ -842,13 +842,13 @@ lua_util_process_message (lua_State *L)
 	const gchar *message;
 	gsize mlen;
 	struct rspamd_task *task;
-	struct event_base *base;
+	struct ev_loop *base;
 	ucl_object_t *res = NULL;
 
 	message = luaL_checklstring (L, 2, &mlen);
 
 	if (cfg != NULL && message != NULL) {
-		base = event_init ();
+		base = ev_loop_new (EVFLAG_SIGNALFD|EVBACKEND_ALL);
 		rspamd_init_filters (cfg, FALSE);
 		task = rspamd_task_new (NULL, cfg, NULL, NULL, base);
 		task->msg.begin = rspamd_mempool_alloc (task->task_pool, mlen);
@@ -865,7 +865,7 @@ lua_util_process_message (lua_State *L)
 		}
 		else {
 			if (rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL)) {
-				event_base_loop (base, 0);
+				ev_loop (base, 0);
 
 				if (res != NULL) {
 					ucl_object_push_lua (L, res, true);
@@ -885,7 +885,7 @@ lua_util_process_message (lua_State *L)
 			}
 		}
 
-		event_base_free (base);
+		ev_loop_destroy (base);
 	}
 	else {
 		lua_pushnil (L);
@@ -3795,14 +3795,14 @@ static int
 lua_ev_base_loop (lua_State *L)
 {
 	int flags = 0;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 
 	ev_base = lua_check_ev_base (L, 1);
 	if (lua_isnumber (L, 2)) {
-		flags = lua_tonumber (L, 2);
+		flags = lua_tointeger (L, 2);
 	}
 
-	int ret = event_base_loop (ev_base, flags);
+	int ret = ev_run (ev_base, flags);
 	lua_pushinteger (L, ret);
 
 	return 1;

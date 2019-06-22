@@ -57,7 +57,9 @@
 #include <sys/ucontext.h>
 #endif
 
-static void rspamd_worker_ignore_signal (int signo);
+#include "contrib/libev/ev.h"
+
+static void rspamd_worker_ignore_signal (struct rspamd_worker_signal_handler *);
 /**
  * Return worker's control structure by its type
  * @param type
@@ -82,22 +84,76 @@ rspamd_get_worker_by_type (struct rspamd_config *cfg, GQuark type)
 	return NULL;
 }
 
-static gboolean
+static void
+rspamd_worker_check_finished (EV_P_ ev_timer *w, int revents)
+{
+	int *pnchecks = (int *)w->data;
+
+	if (*pnchecks > SOFT_SHUTDOWN_TIME * 10) {
+		msg_warn ("terminating worker before finishing of terminate handlers");
+		ev_break (EV_A_ EVBREAK_ONE);
+	}
+	else {
+		int refcount = ev_active_cnt (EV_A);
+
+		if (refcount == 1) {
+			ev_break (EV_A_ EVBREAK_ONE);
+		}
+	}
+}
+
+static void
 rspamd_worker_terminate_handlers (struct rspamd_worker *w)
 {
 	guint i;
 	gboolean (*cb)(struct rspamd_worker *);
-	gboolean ret = FALSE;
+	struct rspamd_abstract_worker_ctx *actx;
+	struct ev_loop *final_gift, *orig_loop;
+	static ev_timer margin_call;
+	static int nchecks = 0;
+
+	if (w->finish_actions->len == 0) {
+		/* Nothing to do */
+		return;
+	}
+
+	actx = (struct rspamd_abstract_worker_ctx *)w->ctx;
+
+	/*
+	 * Here are dragons:
+	 * - we create a new loop
+	 * - we set a new ev_loop for worker via injection over rspamd_abstract_worker_ctx
+	 * - then we run finish actions
+	 * - then we create a special timer to kill worker if it fails to finish
+	 */
+	final_gift = ev_loop_new (EVBACKEND_ALL);
+	orig_loop = actx->event_loop;
+	actx->event_loop = final_gift;
+	margin_call.data = &nchecks;
+	ev_timer_init (&margin_call, rspamd_worker_check_finished, 0.1,
+			0.1);
+	ev_timer_start (final_gift, &margin_call);
 
 	for (i = 0; i < w->finish_actions->len; i ++) {
 		cb = g_ptr_array_index (w->finish_actions, i);
-		if (cb (w)) {
-			ret = TRUE;
-		}
+		cb (w);
 	}
 
-	return ret;
+	ev_run (final_gift, 0);
+	ev_loop_destroy (final_gift);
+	/* Restore original loop */
+	actx->event_loop = orig_loop;
 }
+
+static void
+rspamd_worker_on_delayed_shutdown (EV_P_ ev_timer *w, int revents)
+{
+	ev_break (loop, EVBREAK_ALL);
+#ifdef WITH_GPERF_TOOLS
+	ProfilerStop ();
+#endif
+}
+
 /*
  * Config reload is designed by sending sigusr2 to active workers and pending shutdown of them
  */
@@ -108,7 +164,10 @@ rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 	struct timeval tv;
 
 	if (!sigh->worker->wanna_die) {
-		rspamd_worker_ignore_signal (SIGUSR2);
+		static ev_timer shutdown_ev;
+
+		rspamd_worker_ignore_signal (sigh);
+
 		tv.tv_sec = SOFT_SHUTDOWN_TIME;
 		tv.tv_usec = 0;
 		sigh->worker->wanna_die = TRUE;
@@ -119,7 +178,9 @@ rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 				G_STRFUNC,
 				"worker's shutdown is pending in %d sec",
 				SOFT_SHUTDOWN_TIME);
-		event_base_loopexit (sigh->base, &tv);
+		ev_timer_init (&shutdown_ev, rspamd_worker_on_delayed_shutdown,
+				SOFT_SHUTDOWN_TIME, 0.0);
+		ev_timer_start (sigh->event_loop, &shutdown_ev);
 		rspamd_worker_stop_accept (sigh->worker);
 	}
 
@@ -142,9 +203,10 @@ rspamd_worker_usr1_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 static gboolean
 rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
-	struct timeval tv;
-
 	if (!sigh->worker->wanna_die) {
+		static ev_timer shutdown_ev;
+
+		rspamd_worker_ignore_signal (sigh);
 		rspamd_default_log_function (G_LOG_LEVEL_INFO,
 				sigh->worker->srv->server_pool->tag.tagname,
 				sigh->worker->srv->server_pool->tag.uid,
@@ -152,19 +214,11 @@ rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 				"terminating after receiving signal %s",
 				g_strsignal (sigh->signo));
 
-		tv.tv_usec = 0;
-		if (rspamd_worker_terminate_handlers (sigh->worker)) {
-			tv.tv_sec =  SOFT_SHUTDOWN_TIME;
-		}
-		else {
-			tv.tv_sec = 0;
-		}
-
+		rspamd_worker_terminate_handlers (sigh->worker);
 		sigh->worker->wanna_die = 1;
-		event_base_loopexit (sigh->base, &tv);
-#ifdef WITH_GPERF_TOOLS
-		ProfilerStop ();
-#endif
+		ev_timer_init (&shutdown_ev, rspamd_worker_on_delayed_shutdown,
+				0.0, 0.0);
+		ev_timer_start (sigh->event_loop, &shutdown_ev);
 		rspamd_worker_stop_accept (sigh->worker);
 	}
 
@@ -173,10 +227,10 @@ rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 }
 
 static void
-rspamd_worker_signal_handle (int fd, short what, void *arg)
+rspamd_worker_signal_handle (EV_P_ ev_signal *w, int revents)
 {
 	struct rspamd_worker_signal_handler *sigh =
-			(struct rspamd_worker_signal_handler *) arg;
+			(struct rspamd_worker_signal_handler *)w->data;
 	struct rspamd_worker_signal_cb *cb, *cbtmp;
 
 	/* Call all signal handlers registered */
@@ -188,15 +242,14 @@ rspamd_worker_signal_handle (int fd, short what, void *arg)
 }
 
 static void
-rspamd_worker_ignore_signal (int signo)
+rspamd_worker_ignore_signal (struct rspamd_worker_signal_handler *sigh)
 {
-	struct sigaction sig;
+	sigset_t set;
 
-	sigemptyset (&sig.sa_mask);
-	sigaddset (&sig.sa_mask, signo);
-	sig.sa_handler = SIG_IGN;
-	sig.sa_flags = 0;
-	sigaction (signo, &sig, NULL);
+	ev_signal_stop (sigh->event_loop, &sigh->ev_sig);
+	sigemptyset (&set);
+	sigaddset (&set, sigh->signo);
+	sigprocmask (SIG_BLOCK, &set, NULL);
 }
 
 static void
@@ -222,14 +275,14 @@ rspamd_sigh_free (void *p)
 		g_free (cb);
 	}
 
-	event_del (&sigh->ev);
+	ev_signal_stop (sigh->event_loop, &sigh->ev_sig);
 	rspamd_worker_default_signal (sigh->signo);
 	g_free (sigh);
 }
 
 void
 rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
-		struct event_base *base,
+		struct ev_loop *event_loop,
 		rspamd_worker_signal_handler handler,
 		void *handler_data)
 {
@@ -242,12 +295,12 @@ rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
 		sigh = g_malloc0 (sizeof (*sigh));
 		sigh->signo = signo;
 		sigh->worker = worker;
-		sigh->base = base;
+		sigh->event_loop = event_loop;
 		sigh->enabled = TRUE;
 
-		signal_set (&sigh->ev, signo, rspamd_worker_signal_handle, sigh);
-		event_base_set (base, &sigh->ev);
-		signal_add (&sigh->ev, NULL);
+		sigh->ev_sig.data = sigh;
+		ev_signal_init (&sigh->ev_sig, rspamd_worker_signal_handle, signo);
+		ev_signal_start (event_loop, &sigh->ev_sig);
 
 		g_hash_table_insert (worker->signal_events,
 				GINT_TO_POINTER (signo),
@@ -261,50 +314,32 @@ rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
 }
 
 void
-rspamd_worker_init_signals (struct rspamd_worker *worker, struct event_base *base)
+rspamd_worker_init_signals (struct rspamd_worker *worker,
+		struct ev_loop *event_loop)
 {
-	struct sigaction signals;
-	/* We ignore these signals in the worker */
-	rspamd_worker_ignore_signal (SIGPIPE);
-	rspamd_worker_ignore_signal (SIGALRM);
-	rspamd_worker_ignore_signal (SIGCHLD);
-
 	/* A set of terminating signals */
-	rspamd_worker_set_signal_handler (SIGTERM, worker, base,
+	rspamd_worker_set_signal_handler (SIGTERM, worker, event_loop,
 			rspamd_worker_term_handler, NULL);
-	rspamd_worker_set_signal_handler (SIGINT, worker, base,
+	rspamd_worker_set_signal_handler (SIGINT, worker, event_loop,
 			rspamd_worker_term_handler, NULL);
-	rspamd_worker_set_signal_handler (SIGHUP, worker, base,
+	rspamd_worker_set_signal_handler (SIGHUP, worker, event_loop,
 			rspamd_worker_term_handler, NULL);
 
 	/* Special purpose signals */
-	rspamd_worker_set_signal_handler (SIGUSR1, worker, base,
+	rspamd_worker_set_signal_handler (SIGUSR1, worker, event_loop,
 			rspamd_worker_usr1_handler, NULL);
-	rspamd_worker_set_signal_handler (SIGUSR2, worker, base,
+	rspamd_worker_set_signal_handler (SIGUSR2, worker, event_loop,
 			rspamd_worker_usr2_handler, NULL);
-
-	/* Unblock all signals processed */
-	sigemptyset (&signals.sa_mask);
-	sigaddset (&signals.sa_mask, SIGTERM);
-	sigaddset (&signals.sa_mask, SIGINT);
-	sigaddset (&signals.sa_mask, SIGHUP);
-	sigaddset (&signals.sa_mask, SIGCHLD);
-	sigaddset (&signals.sa_mask, SIGUSR1);
-	sigaddset (&signals.sa_mask, SIGUSR2);
-	sigaddset (&signals.sa_mask, SIGALRM);
-	sigaddset (&signals.sa_mask, SIGPIPE);
-
-	sigprocmask (SIG_UNBLOCK, &signals.sa_mask, NULL);
 }
 
-struct event_base *
+struct ev_loop *
 rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
-	void (*accept_handler)(int, short, void *))
+					   rspamd_accept_handler hdl)
 {
-	struct event_base *ev_base;
-	struct event *accept_events;
+	struct ev_loop *event_loop;
 	GList *cur;
 	struct rspamd_worker_listen_socket *ls;
+	struct rspamd_worker_accept_event *accept_ev;
 
 #ifdef WITH_PROFILER
 	extern void _start (void), etext (void);
@@ -316,65 +351,61 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	worker->signal_events = g_hash_table_new_full (g_direct_hash, g_direct_equal,
 			NULL, rspamd_sigh_free);
 
-	ev_base = event_init ();
+	event_loop = ev_loop_new (EVFLAG_SIGNALFD);
 
-	rspamd_worker_init_signals (worker, ev_base);
-	rspamd_control_worker_add_default_handler (worker, ev_base);
+	worker->srv->event_loop = event_loop;
+
+	rspamd_worker_init_signals (worker, event_loop);
+	rspamd_control_worker_add_default_handler (worker, event_loop);
 #ifdef WITH_HIREDIS
 	rspamd_redis_pool_config (worker->srv->cfg->redis_pool,
-			worker->srv->cfg, ev_base);
+			worker->srv->cfg, event_loop);
 #endif
 
 	/* Accept all sockets */
-	if (accept_handler) {
+	if (hdl) {
 		cur = worker->cf->listen_socks;
 
 		while (cur) {
 			ls = cur->data;
 
 			if (ls->fd != -1) {
-				accept_events = g_malloc0 (sizeof (struct event) * 2);
-				event_set (&accept_events[0], ls->fd, EV_READ | EV_PERSIST,
-						accept_handler, worker);
-				event_base_set (ev_base, &accept_events[0]);
-				event_add (&accept_events[0], NULL);
-				worker->accept_events = g_list_prepend (worker->accept_events,
-						accept_events);
+				accept_ev = g_malloc0 (sizeof (*accept_ev));
+				accept_ev->event_loop = event_loop;
+				accept_ev->accept_ev.data = worker;
+				ev_io_init (&accept_ev->accept_ev, hdl, ls->fd, EV_READ);
+				ev_io_start (event_loop, &accept_ev->accept_ev);
+
+				DL_APPEND (worker->accept_events, accept_ev);
 			}
 
 			cur = g_list_next (cur);
 		}
 	}
 
-	return ev_base;
+	return event_loop;
 }
 
 void
 rspamd_worker_stop_accept (struct rspamd_worker *worker)
 {
-	GList *cur;
-	struct event *events;
+	struct rspamd_worker_accept_event *cur, *tmp;
 
 	/* Remove all events */
-	cur = worker->accept_events;
-	while (cur) {
-		events = cur->data;
+	DL_FOREACH_SAFE (worker->accept_events, cur, tmp) {
 
-		if (rspamd_event_pending (&events[0], EV_TIMEOUT|EV_READ|EV_WRITE)) {
-			event_del (&events[0]);
+		if (ev_is_active (&cur->accept_ev) || ev_is_pending (&cur->accept_ev)) {
+			ev_io_stop (cur->event_loop, &cur->accept_ev);
 		}
 
-		if (rspamd_event_pending (&events[1], EV_TIMEOUT|EV_READ|EV_WRITE)) {
-			event_del (&events[1]);
+
+		if (ev_is_active (&cur->throttling_ev) || ev_is_pending (&cur->throttling_ev)) {
+			ev_timer_stop (cur->event_loop, &cur->throttling_ev);
 		}
 
-		cur = g_list_next (cur);
-		g_free (events);
+		g_free (cur);
 	}
 
-	if (worker->accept_events != NULL) {
-		g_list_free (worker->accept_events);
-	}
 	/* XXX: we need to do it much later */
 #if 0
 	g_hash_table_iter_init (&it, worker->signal_events);
@@ -435,7 +466,7 @@ rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
 		NULL,
 		"application/json",
 		entry,
-		entry->rt->ptv);
+		entry->rt->timeout);
 	entry->is_reply = TRUE;
 }
 
@@ -467,7 +498,7 @@ rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
 		NULL,
 		"application/json",
 		entry,
-		entry->rt->ptv);
+		entry->rt->timeout);
 	entry->is_reply = TRUE;
 }
 
@@ -493,7 +524,7 @@ rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
 		NULL,
 		"application/json",
 		entry,
-		entry->rt->ptv);
+		entry->rt->timeout);
 	entry->is_reply = TRUE;
 }
 
@@ -629,11 +660,30 @@ rspamd_worker_set_limits (struct rspamd_main *rspamd_main,
 	}
 }
 
+static void
+rspamd_worker_on_term (EV_P_ ev_child *w, int revents)
+{
+	struct rspamd_worker *wrk = (struct rspamd_worker *)w->data;
+
+	if (wrk->ppid == getpid ()) {
+		if (wrk->term_handler) {
+			wrk->term_handler (EV_A_ w, wrk->srv, wrk);
+		}
+		else {
+			rspamd_check_termination_clause (wrk->srv, wrk, w->rstatus);
+		}
+	}
+	else {
+		/* Ignore SIGCHLD for not our children... */
+	}
+}
+
 struct rspamd_worker *
 rspamd_fork_worker (struct rspamd_main *rspamd_main,
-		struct rspamd_worker_conf *cf,
-		guint index,
-		struct event_base *ev_base)
+					struct rspamd_worker_conf *cf,
+					guint index,
+					struct ev_loop *ev_base,
+					rspamd_worker_term_cb term_handler)
 {
 	struct rspamd_worker *wrk;
 	gint rc;
@@ -663,6 +713,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	wrk->ppid = getpid ();
 	wrk->pid = fork ();
 	wrk->cores_throttled = rspamd_main->cores_throttling;
+	wrk->term_handler = term_handler;
 
 	switch (wrk->pid) {
 	case 0:
@@ -682,10 +733,18 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		evutil_secure_rng_init ();
 #endif
 
+		/*
+		 * Libev stores all signals in a global table, so
+		 * previous handlers must be explicitly detached and forgotten
+		 * before starting a new loop
+		 */
+		ev_signal_stop (rspamd_main->event_loop, &rspamd_main->int_ev);
+		ev_signal_stop (rspamd_main->event_loop, &rspamd_main->term_ev);
+		ev_signal_stop (rspamd_main->event_loop, &rspamd_main->hup_ev);
+		ev_signal_stop (rspamd_main->event_loop, &rspamd_main->usr1_ev);
 		/* Remove the inherited event base */
-		event_reinit (rspamd_main->ev_base);
-		event_base_free (rspamd_main->ev_base);
-
+		ev_loop_destroy (rspamd_main->event_loop);
+		rspamd_main->event_loop = NULL;
 		/* Drop privileges */
 		rspamd_worker_drop_priv (rspamd_main);
 		/* Set limits */
@@ -721,16 +780,6 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		rspamd_log_open (rspamd_main->logger);
 		wrk->start_time = rspamd_get_calendar_ticks ();
 
-#if ((GLIB_MAJOR_VERSION == 2) && (GLIB_MINOR_VERSION <= 30))
-		# if (GLIB_MINOR_VERSION > 20)
-		/* Ugly hack for old glib */
-		if (!g_thread_get_initialized ()) {
-			g_thread_init (NULL);
-		}
-# else
-		g_thread_init (NULL);
-# endif
-#endif
 		if (cf->bind_conf) {
 			msg_info_main ("starting %s process %P (%d); listen on: %s",
 					cf->worker->name,
@@ -765,6 +814,9 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		rspamd_socket_nonblocking (wrk->control_pipe[0]);
 		rspamd_socket_nonblocking (wrk->srv_pipe[0]);
 		rspamd_srv_start_watching (rspamd_main, wrk, ev_base);
+		wrk->cld_ev.data = wrk;
+		ev_child_init (&wrk->cld_ev, rspamd_worker_on_term, wrk->pid, 0);
+		ev_child_start (rspamd_main->event_loop, &wrk->cld_ev);
 		/* Insert worker into worker's table, pid is index */
 		g_hash_table_insert (rspamd_main->workers, GSIZE_TO_POINTER (
 				wrk->pid), wrk);
@@ -867,11 +919,10 @@ struct rspamd_worker_session_elt {
 };
 
 struct rspamd_worker_session_cache {
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	GHashTable *cache;
 	struct rspamd_config *cfg;
-	struct timeval tv;
-	struct event periodic;
+	struct ev_timer periodic;
 };
 
 static gint
@@ -885,9 +936,10 @@ rspamd_session_cache_sort_cmp (gconstpointer pa, gconstpointer pb)
 }
 
 static void
-rspamd_sessions_cache_periodic (gint fd, short what, gpointer p)
+rspamd_sessions_cache_periodic (EV_P_ ev_timer *w, int revents)
 {
-	struct rspamd_worker_session_cache *c = p;
+	struct rspamd_worker_session_cache *c =
+			(struct rspamd_worker_session_cache *)w->data;
 	GHashTableIter it;
 	gchar timebuf[32];
 	gpointer k, v;
@@ -919,11 +971,13 @@ rspamd_sessions_cache_periodic (gint fd, short what, gpointer p)
 					timebuf);
 		}
 	}
+
+	ev_timer_again (EV_A_ w);
 }
 
 void *
 rspamd_worker_session_cache_new (struct rspamd_worker *w,
-		struct event_base *ev_base)
+		struct ev_loop *ev_base)
 {
 	struct rspamd_worker_session_cache *c;
 	static const gdouble periodic_interval = 60.0;
@@ -933,11 +987,10 @@ rspamd_worker_session_cache_new (struct rspamd_worker *w,
 	c->cache = g_hash_table_new_full (g_direct_hash, g_direct_equal,
 			NULL, g_free);
 	c->cfg = w->srv->cfg;
-	double_to_tv (periodic_interval, &c->tv);
-	event_set (&c->periodic, -1, EV_TIMEOUT|EV_PERSIST,
-			rspamd_sessions_cache_periodic, c);
-	event_base_set (ev_base, &c->periodic);
-	event_add (&c->periodic, &c->tv);
+	c->periodic.data = c;
+	ev_timer_init (&c->periodic, rspamd_sessions_cache_periodic, periodic_interval,
+			periodic_interval);
+	ev_timer_start (ev_base, &c->periodic);
 
 	return c;
 }
@@ -975,7 +1028,7 @@ rspamd_worker_monitored_on_change (struct rspamd_monitored_ctx *ctx,
 {
 	struct rspamd_worker *worker = ud;
 	struct rspamd_config *cfg = worker->srv->cfg;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	guchar tag[RSPAMD_MONITORED_TAG_LEN];
 	static struct rspamd_srv_command srv_cmd;
 
@@ -995,7 +1048,7 @@ rspamd_worker_monitored_on_change (struct rspamd_monitored_ctx *ctx,
 
 void
 rspamd_worker_init_monitored (struct rspamd_worker *worker,
-		struct event_base *ev_base,
+		struct ev_loop *ev_base,
 		struct rspamd_dns_resolver *resolver)
 {
 	rspamd_monitored_ctx_config (worker->srv->cfg->monitored_ctx,
@@ -1130,3 +1183,147 @@ rspamd_set_crash_handler (struct rspamd_main *rspamd_main)
 	sigaction (SIGSYS, &sa, NULL);
 #endif
 }
+
+static void
+rspamd_enable_accept_event (EV_P_ ev_timer *w, int revents)
+{
+	struct rspamd_worker_accept_event *ac_ev =
+			(struct rspamd_worker_accept_event *)w->data;
+
+	ev_timer_stop (EV_A_ w);
+	ev_io_start (EV_A_ &ac_ev->accept_ev);
+}
+
+void
+rspamd_worker_throttle_accept_events (gint sock, void *data)
+{
+	struct rspamd_worker_accept_event *head, *cur;
+	const gdouble throttling = 0.5;
+
+	head = (struct rspamd_worker_accept_event *)data;
+
+	DL_FOREACH (head, cur) {
+
+		ev_io_stop (cur->event_loop, &cur->accept_ev);
+		cur->throttling_ev.data = cur;
+		ev_timer_init (&cur->throttling_ev, rspamd_enable_accept_event,
+				throttling, 0.0);
+		ev_timer_start (cur->event_loop, &cur->throttling_ev);
+	}
+}
+
+gboolean
+rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
+								 struct rspamd_worker *wrk,
+								 int res)
+{
+	gboolean need_refork = TRUE;
+
+	if (wrk->wanna_die || rspamd_main->wanna_die) {
+		/* Do not refork workers that are intended to be terminated */
+		need_refork = FALSE;
+	}
+
+	if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
+		/* Normal worker termination, do not fork one more */
+		msg_info_main ("%s process %P terminated normally",
+				g_quark_to_string (wrk->type),
+				wrk->pid);
+		need_refork = FALSE;
+	}
+	else {
+		if (WIFSIGNALED (res)) {
+#ifdef WCOREDUMP
+			if (WCOREDUMP (res)) {
+				msg_warn_main (
+						"%s process %P terminated abnormally by signal: %s"
+						" and created core file",
+						g_quark_to_string (wrk->type),
+						wrk->pid,
+						g_strsignal (WTERMSIG (res)));
+			}
+			else {
+#ifdef HAVE_SYS_RESOURCE_H
+				struct rlimit rlmt;
+				(void) getrlimit (RLIMIT_CORE, &rlmt);
+
+				msg_warn_main (
+						"%s process %P terminated abnormally by signal: %s"
+						" but NOT created core file (throttled=%s); "
+						"core file limits: %L current, %L max",
+						g_quark_to_string (wrk->type),
+						wrk->pid,
+						g_strsignal (WTERMSIG (res)),
+						wrk->cores_throttled ? "yes" : "no",
+						(gint64) rlmt.rlim_cur,
+						(gint64) rlmt.rlim_max);
+#else
+				msg_warn_main (
+								"%s process %P terminated abnormally by signal: %s"
+								" but NOT created core file (throttled=%s); ",
+								g_quark_to_string (wrk->type),
+								wrk->pid,
+								g_strsignal (WTERMSIG (res)),
+								wrk->cores_throttled ? "yes" : "no");
+#endif
+			}
+#else
+			msg_warn_main (
+							"%s process %P terminated abnormally by signal: %s",
+							g_quark_to_string (wrk->type),
+							wrk->pid,
+							g_strsignal (WTERMSIG (res)));
+#endif
+			if (WTERMSIG (res) == SIGUSR2) {
+				/*
+				 * It is actually race condition when not started process
+				 * has been requested to be reloaded.
+				 *
+				 * We shouldn't refork on this
+				 */
+				need_refork = FALSE;
+			}
+		}
+		else {
+			msg_warn_main ("%s process %P terminated abnormally "
+						   "with exit code %d",
+					g_quark_to_string (wrk->type),
+					wrk->pid,
+					WEXITSTATUS (res));
+		}
+	}
+
+	return need_refork;
+}
+
+#ifdef WITH_HYPERSCAN
+gboolean
+rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
+							   struct rspamd_worker *worker, gint fd,
+							   gint attached_fd,
+							   struct rspamd_control_command *cmd,
+							   gpointer ud)
+{
+	struct rspamd_control_reply rep;
+	struct rspamd_re_cache *cache = worker->srv->cfg->re_cache;
+
+	memset (&rep, 0, sizeof (rep));
+	rep.type = RSPAMD_CONTROL_HYPERSCAN_LOADED;
+
+	if (!rspamd_re_cache_is_hs_loaded (cache) || cmd->cmd.hs_loaded.forced) {
+		msg_info ("loading hyperscan expressions after receiving compilation "
+				  "notice: %s",
+				(!rspamd_re_cache_is_hs_loaded (cache)) ?
+				"new db" : "forced update");
+		rep.reply.hs_loaded.status = rspamd_re_cache_load_hyperscan (
+				worker->srv->cfg->re_cache, cmd->cmd.hs_loaded.cache_dir);
+	}
+
+	if (write (fd, &rep, sizeof (rep)) != sizeof (rep)) {
+		msg_err ("cannot write reply to the control socket: %s",
+				strerror (errno));
+	}
+
+	return TRUE;
+}
+#endif

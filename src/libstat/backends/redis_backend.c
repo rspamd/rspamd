@@ -22,7 +22,7 @@
 
 #ifdef WITH_HIREDIS
 #include "hiredis.h"
-#include "adapters/libevent.h"
+#include "adapters/libev.h"
 #include "ref.h"
 
 #define msg_debug_stat_redis(...)  rspamd_conditional_debug_fast (NULL, NULL, \
@@ -70,7 +70,7 @@ struct redis_stat_runtime {
 	struct redis_stat_ctx *ctx;
 	struct rspamd_task *task;
 	struct upstream *selected;
-	struct event timeout_event;
+	ev_timer timeout_event;
 	GArray *results;
 	struct rspamd_statfile_config *stcf;
 	gchar *redis_object_expanded;
@@ -87,7 +87,7 @@ struct rspamd_redis_stat_cbdata;
 struct rspamd_redis_stat_elt {
 	struct redis_stat_ctx *ctx;
 	struct rspamd_stat_async_elt *async;
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
 	ucl_object_t *stat;
 	struct rspamd_redis_stat_cbdata *cbdata;
 };
@@ -986,7 +986,7 @@ rspamd_redis_async_stat_cb (struct rspamd_stat_async_elt *elt, gpointer d)
 
 	g_assert (cbdata->redis != NULL);
 
-	redisLibeventAttach (cbdata->redis, redis_elt->ev_base);
+	redisLibevAttach (redis_elt->event_loop, cbdata->redis);
 
 	cbdata->inflight = 1;
 	cbdata->cur = ucl_object_typed_new (UCL_OBJECT);
@@ -1019,8 +1019,8 @@ rspamd_redis_fin (gpointer data)
 
 	rt->has_event = FALSE;
 	/* Stop timeout */
-	if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
-		event_del (&rt->timeout_event);
+	if (ev_is_active (&rt->timeout_event)) {
+		ev_timer_stop (rt->task->event_loop, &rt->timeout_event);
 	}
 
 	if (rt->redis) {
@@ -1039,9 +1039,7 @@ rspamd_redis_fin_learn (gpointer data)
 
 	rt->has_event = FALSE;
 	/* Stop timeout */
-	if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
-		event_del (&rt->timeout_event);
-	}
+	ev_timer_stop (rt->task->event_loop, &rt->timeout_event);
 
 	if (rt->redis) {
 		redis = rt->redis;
@@ -1052,9 +1050,9 @@ rspamd_redis_fin_learn (gpointer data)
 }
 
 static void
-rspamd_redis_timeout (gint fd, short what, gpointer d)
+rspamd_redis_timeout (EV_P_ ev_timer *w, int revents)
 {
-	struct redis_stat_runtime *rt = REDIS_RUNTIME (d);
+	struct redis_stat_runtime *rt = REDIS_RUNTIME (w->data);
 	struct rspamd_task *task;
 	redisAsyncContext *redis;
 
@@ -1444,7 +1442,7 @@ rspamd_redis_init (struct rspamd_stat_ctx *ctx,
 	backend->stcf = stf;
 
 	st_elt = g_malloc0 (sizeof (*st_elt));
-	st_elt->ev_base = ctx->ev_base;
+	st_elt->event_loop = ctx->event_loop;
 	st_elt->ctx = backend;
 	backend->stat_elt = rspamd_stat_ctx_register_async (
 			rspamd_redis_async_stat_cb,
@@ -1536,7 +1534,7 @@ rspamd_redis_runtime (struct rspamd_task *task,
 		return NULL;
 	}
 
-	redisLibeventAttach (rt->redis, task->ev_base);
+	redisLibevAttach (task->event_loop, rt->redis);
 	rspamd_redis_maybe_auth (ctx, rt->redis);
 
 	return rt;
@@ -1562,7 +1560,6 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 {
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (p);
 	rspamd_fstring_t *query;
-	struct timeval tv;
 	gint ret;
 	const gchar *learned_key = "learns";
 
@@ -1591,13 +1588,16 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 		rspamd_session_add_event (task->s, rspamd_redis_fin, rt, M);
 		rt->has_event = TRUE;
 
-		if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
-			event_del (&rt->timeout_event);
+
+		if (ev_is_active (&rt->timeout_event)) {
+			ev_timer_again (task->event_loop, &rt->timeout_event);
 		}
-		event_set (&rt->timeout_event, -1, EV_TIMEOUT, rspamd_redis_timeout, rt);
-		event_base_set (task->ev_base, &rt->timeout_event);
-		double_to_tv (rt->ctx->timeout, &tv);
-		event_add (&rt->timeout_event, &tv);
+		else {
+			rt->timeout_event.data = rt;
+			ev_timer_init (&rt->timeout_event, rspamd_redis_timeout,
+					rt->ctx->timeout, 0.);
+			ev_timer_start (task->event_loop, &rt->timeout_event);
+		}
 
 		query = rspamd_redis_tokens_to_query (task, rt, tokens,
 				rt->ctx->new_schema ? "HGET" : "HMGET",
@@ -1628,8 +1628,8 @@ rspamd_redis_finalize_process (struct rspamd_task *task, gpointer runtime,
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
 	redisAsyncContext *redis;
 
-	if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
-		event_del (&rt->timeout_event);
+	if (ev_is_active (&rt->timeout_event)) {
+		ev_timer_stop (task->event_loop, &rt->timeout_event);
 	}
 
 	if (rt->redis) {
@@ -1653,7 +1653,6 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 	struct upstream *up;
 	struct upstream_list *ups;
 	rspamd_inet_addr_t *addr;
-	struct timeval tv;
 	rspamd_fstring_t *query;
 	const gchar *redis_cmd;
 	rspamd_token_t *tok;
@@ -1704,7 +1703,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 
 	g_assert (rt->redis != NULL);
 
-	redisLibeventAttach (rt->redis, task->ev_base);
+	redisLibevAttach (task->event_loop, rt->redis);
 	rspamd_redis_maybe_auth (rt->ctx, rt->redis);
 
 	/*
@@ -1802,13 +1801,15 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 		rt->has_event = TRUE;
 
 		/* Set timeout */
-		if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
-			event_del (&rt->timeout_event);
+		if (ev_is_active (&rt->timeout_event)) {
+			ev_timer_again (task->event_loop, &rt->timeout_event);
 		}
-		event_set (&rt->timeout_event, -1, EV_TIMEOUT, rspamd_redis_timeout, rt);
-		event_base_set (task->ev_base, &rt->timeout_event);
-		double_to_tv (rt->ctx->timeout, &tv);
-		event_add (&rt->timeout_event, &tv);
+		else {
+			rt->timeout_event.data = rt;
+			ev_timer_init (&rt->timeout_event, rspamd_redis_timeout,
+					rt->ctx->timeout, 0.);
+			ev_timer_start (task->event_loop, &rt->timeout_event);
+		}
 
 		return TRUE;
 	}
@@ -1827,8 +1828,8 @@ rspamd_redis_finalize_learn (struct rspamd_task *task, gpointer runtime,
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
 	redisAsyncContext *redis;
 
-	if (rspamd_event_pending (&rt->timeout_event, EV_TIMEOUT)) {
-		event_del (&rt->timeout_event);
+	if (ev_is_active (&rt->timeout_event)) {
+		ev_timer_stop (task->event_loop, &rt->timeout_event);
 	}
 
 	if (rt->redis) {

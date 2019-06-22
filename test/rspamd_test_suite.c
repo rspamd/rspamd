@@ -3,9 +3,10 @@
 #include "libstat/stat_api.h"
 #include "lua/lua_common.h"
 #include "tests.h"
+#include "contrib/libev/ev.h"
 
 struct rspamd_main             *rspamd_main = NULL;
-struct event_base              *base = NULL;
+struct ev_loop              *event_loop = NULL;
 worker_t *workers[] = { NULL };
 
 gchar *lua_test = NULL;
@@ -54,8 +55,8 @@ main (int argc, char **argv)
 	}
 
 	rspamd_lua_set_path ((lua_State *)cfg->lua_state, NULL, NULL);
-	base = event_init ();
-	rspamd_stat_init (cfg, base);
+	event_loop = ev_default_loop (EVFLAG_SIGNALFD|EVBACKEND_ALL);
+	rspamd_stat_init (cfg, event_loop);
 	rspamd_url_init (NULL);
 
 	if (g_test_verbose ()) {

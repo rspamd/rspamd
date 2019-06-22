@@ -33,9 +33,12 @@ struct rspamd_worker_signal_handler;
 /**
  * Init basic signals for a worker
  * @param worker
- * @param base
+ * @param event_loop
  */
-void rspamd_worker_init_signals (struct rspamd_worker *worker, struct event_base *base);
+void rspamd_worker_init_signals (struct rspamd_worker *worker, struct ev_loop *event_loop);
+
+typedef void (*rspamd_accept_handler)(struct ev_loop *loop, ev_io *w, int revents);
+
 /**
  * Prepare worker's startup
  * @param worker worker structure
@@ -44,16 +47,16 @@ void rspamd_worker_init_signals (struct rspamd_worker *worker, struct event_base
  * @param accept_handler handler of accept event for listen sockets
  * @return event base suitable for a worker
  */
-struct event_base *
+struct ev_loop *
 rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
-	void (*accept_handler)(int, short, void *));
+					   rspamd_accept_handler hdl);
 
 /**
  * Set special signal handler for a worker
  */
 void rspamd_worker_set_signal_handler (int signo,
 		struct rspamd_worker *worker,
-		struct event_base *base,
+		struct ev_loop *event_loop,
 		rspamd_worker_signal_handler handler,
 		void *handler_data);
 
@@ -124,8 +127,6 @@ void rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
  */
 worker_t * rspamd_get_worker_by_type (struct rspamd_config *cfg, GQuark type);
 
-void rspamd_worker_stop_accept (struct rspamd_worker *worker);
-
 /**
  * Block signals before terminations
  */
@@ -162,7 +163,7 @@ gboolean rspamd_worker_is_primary_controller (struct rspamd_worker *w);
  * @return
  */
 void * rspamd_worker_session_cache_new (struct rspamd_worker *w,
-		struct event_base *ev_base);
+		struct ev_loop *ev_base);
 
 /**
  * Adds a new session identified by pointer
@@ -185,7 +186,9 @@ void rspamd_worker_session_cache_remove (void *cache, void *ptr);
  * Fork new worker with the specified configuration
  */
 struct rspamd_worker *rspamd_fork_worker (struct rspamd_main *,
-		struct rspamd_worker_conf *, guint idx, struct event_base *ev_base);
+										  struct rspamd_worker_conf *, guint idx,
+										  struct ev_loop *ev_base,
+										  rspamd_worker_term_cb term_handler);
 
 /**
  * Sets crash signals handlers if compiled with libunwind
@@ -199,8 +202,35 @@ void rspamd_set_crash_handler (struct rspamd_main *);
  * @param resolver
  */
 void rspamd_worker_init_monitored (struct rspamd_worker *worker,
-		struct event_base *ev_base,
+		struct ev_loop *ev_base,
 		struct rspamd_dns_resolver *resolver);
+
+/**
+ * Performs throttling for accept events
+ * @param sock
+ * @param data struct rspamd_worker_accept_event * list
+ */
+void rspamd_worker_throttle_accept_events (gint sock, void *data);
+
+/**
+ * Checks (and logs) the worker's termination status. Returns TRUE if a worker
+ * should be restarted.
+ * @param rspamd_main
+ * @param wrk
+ * @param status waitpid res
+ * @return TRUE if refork is desired
+ */
+gboolean rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
+		struct rspamd_worker *wrk, int status);
+
+#ifdef WITH_HYPERSCAN
+struct rspamd_control_command;
+gboolean rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
+										struct rspamd_worker *worker, gint fd,
+										gint attached_fd,
+										struct rspamd_control_command *cmd,
+										gpointer ud);
+#endif
 
 #define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \

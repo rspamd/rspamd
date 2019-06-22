@@ -25,7 +25,7 @@
 #ifndef RDNS_EV_H_
 #define RDNS_EV_H_
 
-#include <ev.h>
+#include "contrib/libev/ev.h"
 #include <stdlib.h>
 #include <string.h>
 #include "rdns.h"

@@ -229,10 +229,10 @@ struct cache_savepoint {
 
 struct rspamd_cache_refresh_cbdata {
 	gdouble last_resort;
-	struct event resort_ev;
+	ev_timer resort_ev;
 	struct rspamd_symcache *cache;
 	struct rspamd_worker *w;
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
 };
 
 /* weight, frequency, time */
@@ -1577,16 +1577,8 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 
 	if (check) {
 		msg_debug_cache_task ("execute %s, %d", item->symbol, item->id);
-#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
-		struct timeval tv;
-
-		event_base_update_cache_time (task->ev_base);
-		event_base_gettimeofday_cached (task->ev_base, &tv);
-		t1 = tv_to_double (&tv);
-#else
-		t1 = rspamd_get_ticks (FALSE);
-#endif
-		dyn_item->start_msec = (t1 - task->time_real) * 1e3;
+		t1 = ev_now (task->event_loop);
+		dyn_item->start_msec = (t1 - task->time_virtual) * 1e3;
 		dyn_item->async_events = 0;
 		checkpoint->cur_item = item;
 		checkpoint->items_inflight ++;
@@ -2173,14 +2165,14 @@ rspamd_symcache_counters (struct rspamd_symcache *cache)
 }
 
 static void
-rspamd_symcache_call_peak_cb (struct event_base *ev_base,
+rspamd_symcache_call_peak_cb (struct ev_loop *ev_base,
 		struct rspamd_symcache *cache,
 		struct rspamd_symcache_item *item,
 		gdouble cur_value,
 		gdouble cur_err)
 {
 	lua_State *L = cache->cfg->lua_state;
-	struct event_base **pbase;
+	struct ev_loop **pbase;
 
 	lua_rawgeti (L, LUA_REGISTRYINDEX, cache->peak_cb);
 	pbase = lua_newuserdata (L, sizeof (*pbase));
@@ -2200,11 +2192,11 @@ rspamd_symcache_call_peak_cb (struct event_base *ev_base,
 }
 
 static void
-rspamd_symcache_resort_cb (gint fd, short what, gpointer ud)
+rspamd_symcache_resort_cb (EV_P_ ev_timer *w, int revents)
 {
-	struct timeval tv;
 	gdouble tm;
-	struct rspamd_cache_refresh_cbdata *cbdata = ud;
+	struct rspamd_cache_refresh_cbdata *cbdata =
+			(struct rspamd_cache_refresh_cbdata *)w->data;
 	struct rspamd_symcache *cache;
 	struct rspamd_symcache_item *item;
 	guint i;
@@ -2217,10 +2209,8 @@ rspamd_symcache_resort_cb (gint fd, short what, gpointer ud)
 	cur_ticks = rspamd_get_ticks (FALSE);
 	msg_debug_cache ("resort symbols cache, next reload in %.2f seconds", tm);
 	g_assert (cache != NULL);
-	evtimer_set (&cbdata->resort_ev, rspamd_symcache_resort_cb, cbdata);
-	event_base_set (cbdata->ev_base, &cbdata->resort_ev);
-	double_to_tv (tm, &tv);
-	event_add (&cbdata->resort_ev, &tv);
+	cbdata->resort_ev.repeat = tm;
+	ev_timer_again (EV_A_ w);
 
 	if (rspamd_worker_is_primary_controller (cbdata->w)) {
 		/* Gather stats from shared execution times */
@@ -2263,7 +2253,7 @@ rspamd_symcache_resort_cb (gint fd, short what, gpointer ud)
 							item->frequency_peaks);
 
 					if (cache->peak_cb != -1) {
-						rspamd_symcache_call_peak_cb (cbdata->ev_base,
+						rspamd_symcache_call_peak_cb (cbdata->event_loop,
 								cache, item,
 								cur_value, cur_err);
 					}
@@ -2283,36 +2273,41 @@ rspamd_symcache_resort_cb (gint fd, short what, gpointer ud)
 			}
 		}
 
-
 		cbdata->last_resort = cur_ticks;
 		/* We don't do actual sorting due to topological guarantees */
 	}
 }
 
+static void
+rspamd_symcache_refresh_dtor (void *d)
+{
+	struct rspamd_cache_refresh_cbdata *cbdata =
+			(struct rspamd_cache_refresh_cbdata *)d;
+
+	ev_timer_stop (cbdata->event_loop, &cbdata->resort_ev);
+}
+
 void
 rspamd_symcache_start_refresh (struct rspamd_symcache *cache,
-							   struct event_base *ev_base, struct rspamd_worker *w)
+							   struct ev_loop *ev_base, struct rspamd_worker *w)
 {
-	struct timeval tv;
 	gdouble tm;
 	struct rspamd_cache_refresh_cbdata *cbdata;
 
 	cbdata = rspamd_mempool_alloc0 (cache->static_pool, sizeof (*cbdata));
 	cbdata->last_resort = rspamd_get_ticks (TRUE);
-	cbdata->ev_base = ev_base;
+	cbdata->event_loop = ev_base;
 	cbdata->w = w;
 	cbdata->cache = cache;
 	tm = rspamd_time_jitter (cache->reload_time, 0);
 	msg_debug_cache ("next reload in %.2f seconds", tm);
 	g_assert (cache != NULL);
-	evtimer_set (&cbdata->resort_ev, rspamd_symcache_resort_cb,
-			cbdata);
-	event_base_set (ev_base, &cbdata->resort_ev);
-	double_to_tv (tm, &tv);
-	event_add (&cbdata->resort_ev, &tv);
+	cbdata->resort_ev.data = cbdata;
+	ev_timer_init (&cbdata->resort_ev, rspamd_symcache_resort_cb,
+			tm, tm);
+	ev_timer_start (cbdata->event_loop, &cbdata->resort_ev);
 	rspamd_mempool_add_destructor (cache->static_pool,
-			(rspamd_mempool_destruct_t) event_del,
-			&cbdata->resort_ev);
+			rspamd_symcache_refresh_dtor, cbdata);
 }
 
 void
@@ -2838,16 +2833,8 @@ rspamd_symcache_finalize_item (struct rspamd_task *task,
 	checkpoint->items_inflight --;
 	checkpoint->cur_item = NULL;
 
-#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
-	struct timeval tv;
-	event_base_update_cache_time (task->ev_base);
-	event_base_gettimeofday_cached (task->ev_base, &tv);
-	t2 = tv_to_double (&tv);
-#else
-	t2 = rspamd_get_ticks (FALSE);
-#endif
-
-	diff = ((t2 - task->time_real) * 1e3 - dyn_item->start_msec);
+	t2 = ev_now (task->event_loop);
+	diff = ((t2 - task->time_virtual) * 1e3 - dyn_item->start_msec);
 
 	if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {
 		rspamd_task_profile_set (task, item->symbol, diff);

@@ -83,10 +83,18 @@ gsize rspamd_strlcpy_safe (gchar *dst, const gchar *src, gsize siz);
 #  if __has_feature(address_sanitizer)
 #    define rspamd_strlcpy rspamd_strlcpy_safe
 #  else
-#    define rspamd_strlcpy rspamd_strlcpy_fast
+#    ifdef __SANITIZE_ADDRESS__
+#      define rspamd_strlcpy rspamd_strlcpy_safe
+#    else
+#      define rspamd_strlcpy rspamd_strlcpy_fast
+#    endif
 #  endif
 #else
-#  define rspamd_strlcpy rspamd_strlcpy_fast
+#  ifdef __SANITIZE_ADDRESS__
+#    define rspamd_strlcpy rspamd_strlcpy_safe
+#  else
+#    define rspamd_strlcpy rspamd_strlcpy_fast
+#  endif
 #endif
 
 /**

@@ -1301,7 +1301,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 		ucl_object_insert_key (top, ucl_object_fromstring (task->message_id),
 				"message-id", 0, false);
 		ucl_object_insert_key (top,
-				ucl_object_fromdouble (task->time_real_finish - task->time_real),
+				ucl_object_fromdouble (task->time_real_finish - task->task_timestamp),
 				"time_real", 0, false);
 		ucl_object_insert_key (top,
 				ucl_object_fromdouble (task->time_virtual_finish - task->time_virtual),
@@ -1766,7 +1766,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 }
 
 void
-rspamd_protocol_write_reply (struct rspamd_task *task)
+rspamd_protocol_write_reply (struct rspamd_task *task, ev_tstamp timeout)
 {
 	struct rspamd_http_message *msg;
 	const gchar *ctype = "application/json";
@@ -1786,7 +1786,8 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 		msg->flags |= RSPAMD_HTTP_FLAG_SPAMC;
 	}
 
-	msg->date = time (NULL);
+	ev_now_update (task->event_loop);
+	msg->date = ev_time ();
 
 	msg_debug_protocol ("writing reply to client");
 	if (task->err != NULL) {
@@ -1832,7 +1833,7 @@ rspamd_protocol_write_reply (struct rspamd_task *task)
 
 	rspamd_http_connection_reset (task->http_conn);
 	rspamd_http_connection_write_message (task->http_conn, msg, NULL,
-		ctype, task, &task->tv);
+		ctype, task, timeout);
 
 	task->processed_stages |= RSPAMD_TASK_STAGE_REPLIED;
 }

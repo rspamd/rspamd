@@ -18,6 +18,7 @@
 #include "utlist.h"
 #include "unix-std.h"
 #include <math.h>
+#include <src/libutil/libev_helper.h>
 
 static const gchar *M = "rspamd lua udp";
 
@@ -59,9 +60,8 @@ static const struct luaL_reg udp_libf[] = {
 };
 
 struct lua_udp_cbdata {
-	struct event io;
-	struct timeval tv;
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
+	struct rspamd_io_ev ev;
 	struct rspamd_async_event *async_ev;
 	struct rspamd_task *task;
 	rspamd_mempool_t *pool;
@@ -115,10 +115,7 @@ lua_udp_cbd_fin (gpointer p)
 	struct lua_udp_cbdata *cbd = (struct lua_udp_cbdata *)p;
 
 	if (cbd->sock != -1) {
-		if (cbd->io.ev_base != NULL) {
-			event_del (&cbd->io);
-		}
-
+		rspamd_ev_watcher_stop (cbd->event_loop, &cbd->ev);
 		close (cbd->sock);
 	}
 
@@ -264,16 +261,12 @@ lua_udp_io_handler (gint fd, short what, gpointer p)
 
 	L = cbd->L;
 
-	event_del (&cbd->io);
-
 	if (what == EV_TIMEOUT) {
 		if (cbd->sent && cbd->retransmits > 0) {
 			r = lua_try_send_request (cbd);
 
 			if (r == RSPAMD_SENT_OK) {
-				event_set (&cbd->io, cbd->sock, EV_READ, lua_udp_io_handler, cbd);
-				event_base_set (cbd->ev_base, &cbd->io);
-				event_add (&cbd->io, &cbd->tv);
+				rspamd_ev_watcher_reschedule (cbd->event_loop, &cbd->ev, EV_READ);
 				lua_udp_maybe_register_event (cbd);
 				cbd->retransmits --;
 			}
@@ -282,9 +275,7 @@ lua_udp_io_handler (gint fd, short what, gpointer p)
 			}
 			else {
 				cbd->retransmits --;
-				event_set (&cbd->io, cbd->sock, EV_WRITE, lua_udp_io_handler, cbd);
-				event_base_set (cbd->ev_base, &cbd->io);
-				event_add (&cbd->io, &cbd->tv);
+				rspamd_ev_watcher_reschedule (cbd->event_loop, &cbd->ev, EV_WRITE);
 			}
 		}
 		else {
@@ -301,9 +292,7 @@ lua_udp_io_handler (gint fd, short what, gpointer p)
 
 		if (r == RSPAMD_SENT_OK) {
 			if (cbd->cbref != -1) {
-				event_set (&cbd->io, cbd->sock, EV_READ, lua_udp_io_handler, cbd);
-				event_base_set (cbd->ev_base, &cbd->io);
-				event_add (&cbd->io, &cbd->tv);
+				rspamd_ev_watcher_reschedule (cbd->event_loop, &cbd->ev, EV_READ);
 				cbd->sent = TRUE;
 			}
 			else {
@@ -315,9 +304,7 @@ lua_udp_io_handler (gint fd, short what, gpointer p)
 		}
 		else {
 			cbd->retransmits --;
-			event_set (&cbd->io, cbd->sock, EV_WRITE, lua_udp_io_handler, cbd);
-			event_base_set (cbd->ev_base, &cbd->io);
-			event_add (&cbd->io, &cbd->tv);
+			rspamd_ev_watcher_reschedule (cbd->event_loop, &cbd->ev, EV_WRITE);
 		}
 	}
 	else if (what == EV_READ) {
@@ -358,7 +345,7 @@ lua_udp_sendto (lua_State *L) {
 	LUA_TRACE_POINT;
 	const gchar *host;
 	guint port;
-	struct event_base *ev_base = NULL;
+	struct ev_loop *ev_base = NULL;
 	struct lua_udp_cbdata *cbd;
 	struct rspamd_async_session *session = NULL;
 	struct rspamd_task *task = NULL;
@@ -371,7 +358,7 @@ lua_udp_sendto (lua_State *L) {
 		lua_gettable (L, -2);
 
 		if (lua_type (L, -1) == LUA_TNUMBER) {
-			port = luaL_checknumber (L, -1);
+			port = lua_tointeger (L, -1);
 		}
 		else {
 			/* We assume that it is a unix socket */
@@ -423,7 +410,7 @@ lua_udp_sendto (lua_State *L) {
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TUSERDATA) {
 			task = lua_check_task (L, -1);
-			ev_base = task->ev_base;
+			ev_base = task->event_loop;
 			session = task->s;
 			pool = task->task_pool;
 		}
@@ -433,7 +420,7 @@ lua_udp_sendto (lua_State *L) {
 			lua_pushstring (L, "ev_base");
 			lua_gettable (L, -2);
 			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{ev_base}")) {
-				ev_base = *(struct event_base **) lua_touserdata (L, -1);
+				ev_base = *(struct ev_loop **) lua_touserdata (L, -1);
 			} else {
 				ev_base = NULL;
 			}
@@ -472,22 +459,15 @@ lua_udp_sendto (lua_State *L) {
 		}
 
 
-
-		if (!ev_base || !pool) {
-			rspamd_inet_address_free (addr);
-
-			return luaL_error (L, "invalid arguments");
-		}
-
 		cbd = rspamd_mempool_alloc0 (pool, sizeof (*cbd));
-		cbd->ev_base = ev_base;
+		cbd->event_loop = ev_base;
 		cbd->pool = pool;
 		cbd->s = session;
 		cbd->addr = addr;
 		cbd->sock = rspamd_socket_create (rspamd_inet_address_get_af (addr),
 				SOCK_DGRAM, 0, TRUE);
 		cbd->cbref = -1;
-		double_to_tv (timeout, &cbd->tv);
+		cbd->ev.timeout = timeout;
 
 		if (cbd->sock == -1) {
 			rspamd_inet_address_free (addr);
@@ -555,9 +535,9 @@ lua_udp_sendto (lua_State *L) {
 					return 2;
 				}
 
-				event_set (&cbd->io, cbd->sock, EV_READ, lua_udp_io_handler, cbd);
-				event_base_set (cbd->ev_base, &cbd->io);
-				event_add (&cbd->io, &cbd->tv);
+				rspamd_ev_watcher_init (&cbd->ev, cbd->sock, EV_READ,
+						lua_udp_io_handler, cbd);
+				rspamd_ev_watcher_start (cbd->event_loop, &cbd->ev, timeout);
 				cbd->sent = TRUE;
 			}
 
@@ -571,9 +551,9 @@ lua_udp_sendto (lua_State *L) {
 			return 2;
 		}
 		else {
-			event_set (&cbd->io, cbd->sock, EV_WRITE, lua_udp_io_handler, cbd);
-			event_base_set (cbd->ev_base, &cbd->io);
-			event_add (&cbd->io, &cbd->tv);
+			rspamd_ev_watcher_init (&cbd->ev, cbd->sock, EV_WRITE,
+					lua_udp_io_handler, cbd);
+			rspamd_ev_watcher_start (cbd->event_loop, &cbd->ev, timeout);
 
 			if (!lua_udp_maybe_register_event (cbd)) {
 				lua_pushboolean (L, false);

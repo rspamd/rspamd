@@ -67,10 +67,10 @@ struct lua_http_cbdata {
 	struct rspamd_async_session *session;
 	struct rspamd_symcache_item *item;
 	struct rspamd_http_message *msg;
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
 	struct rspamd_config *cfg;
 	struct rspamd_task *task;
-	struct timeval tv;
+	ev_tstamp timeout;
 	struct rspamd_cryptobox_keypair *local_kp;
 	struct rspamd_cryptobox_pubkey *peer_pk;
 	rspamd_inet_addr_t *addr;
@@ -86,10 +86,10 @@ struct lua_http_cbdata {
 	ref_entry_t ref;
 };
 
-static const int default_http_timeout = 5000;
+static const gdouble default_http_timeout = 5.0;
 
 static struct rspamd_dns_resolver *
-lua_http_global_resolver (struct event_base *ev_base)
+lua_http_global_resolver (struct ev_loop *ev_base)
 {
 	static struct rspamd_dns_resolver *global_resolver;
 
@@ -451,7 +451,7 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 
 		rspamd_http_connection_write_message (cbd->conn, msg,
 				cbd->host, cbd->mime_type, cbd,
-				&cbd->tv);
+				cbd->timeout);
 
 		return TRUE;
 	}
@@ -562,7 +562,7 @@ static gint
 lua_http_request (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct rspamd_http_message *msg;
 	struct lua_http_cbdata *cbd;
 	struct rspamd_dns_resolver *resolver;
@@ -597,7 +597,7 @@ lua_http_request (lua_State *L)
 		cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 
 		if (lua_gettop (L) >= 3 && rspamd_lua_check_udata_maybe (L, 3, "rspamd{ev_base}")) {
-			ev_base = *(struct event_base **)lua_touserdata (L, 3);
+			ev_base = *(struct ev_loop **)lua_touserdata (L, 3);
 		}
 		else {
 			ev_base = NULL;
@@ -643,7 +643,7 @@ lua_http_request (lua_State *L)
 
 		if (lua_type (L, -1) == LUA_TUSERDATA) {
 			task = lua_check_task (L, -1);
-			ev_base = task->ev_base;
+			ev_base = task->event_loop;
 			resolver = task->resolver;
 			session = task->s;
 			cfg = task->cfg;
@@ -654,7 +654,7 @@ lua_http_request (lua_State *L)
 			lua_pushstring (L, "ev_base");
 			lua_gettable (L, 1);
 			if (rspamd_lua_check_udata_maybe (L, -1, "rspamd{ev_base}")) {
-				ev_base = *(struct event_base **)lua_touserdata (L, -1);
+				ev_base = *(struct ev_loop **)lua_touserdata (L, -1);
 			}
 			else {
 				ev_base = NULL;
@@ -717,7 +717,7 @@ lua_http_request (lua_State *L)
 		lua_pushstring (L, "timeout");
 		lua_gettable (L, 1);
 		if (lua_type (L, -1) == LUA_TNUMBER) {
-			timeout = lua_tonumber (L, -1) * 1000.;
+			timeout = lua_tonumber (L, -1);
 		}
 		lua_pop (L, 1);
 
@@ -860,7 +860,7 @@ lua_http_request (lua_State *L)
 		lua_gettable (L, 1);
 
 		if (lua_type (L, -1) == LUA_TNUMBER) {
-			max_size = lua_tonumber (L, -1);
+			max_size = lua_tointeger (L, -1);
 		}
 
 		lua_pop (L, 1);
@@ -943,9 +943,9 @@ lua_http_request (lua_State *L)
 	cbd = g_malloc0 (sizeof (*cbd));
 	cbd->cbref = cbref;
 	cbd->msg = msg;
-	cbd->ev_base = ev_base;
+	cbd->event_loop = ev_base;
 	cbd->mime_type = mime_type;
-	msec_to_tv (timeout, &cbd->tv);
+	cbd->timeout = timeout;
 	cbd->fd = -1;
 	cbd->cfg = cfg;
 	cbd->peer_pk = peer_key;

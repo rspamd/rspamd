@@ -26,8 +26,8 @@ static const gchar test_dkim_sig[] = "v=1; a=rsa-sha256; c=relaxed/relaxed; "
 		"oq3BLHap0GcMTTpSOgfQOKa8Df35Ns11JoOFjdBQ8GpM99kOrJP+vZcT8b7AMfthYm0Kwy"
 		"D9TjlkpScuoY5LjsWVnijh9dSNVLFqLatzg=;";
 
-extern struct event_base *base;
-
+extern struct ev_loop *event_loop;
+#if 0
 static void
 test_key_handler (rspamd_dkim_key_t *key, gsize keylen, rspamd_dkim_context_t *ctx, gpointer ud, GError *err)
 {
@@ -48,7 +48,7 @@ session_fin (gpointer unused)
 
 	return TRUE;
 }
-
+#endif
 void
 rspamd_dkim_test_func ()
 {

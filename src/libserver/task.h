@@ -18,7 +18,7 @@
 
 #include "config.h"
 #include "http_connection.h"
-#include "events.h"
+#include "async_session.h"
 #include "util.h"
 #include "mem_pool.h"
 #include "dns.h"
@@ -189,19 +189,18 @@ struct rspamd_task {
 	struct rspamd_config *cfg;						/**< pointer to config object						*/
 	GError *err;
 	rspamd_mempool_t *task_pool;					/**< memory pool for task							*/
-	double time_real;
 	double time_virtual;
 	double time_real_finish;
 	double time_virtual_finish;
-	struct timeval tv;
+	ev_tstamp task_timestamp;
 	gboolean (*fin_callback)(struct rspamd_task *task, void *arg);
 													/**< callback for filters finalizing					*/
 	void *fin_arg;									/**< argument for fin callback						*/
 
 	struct rspamd_dns_resolver *resolver;			/**< DNS resolver									*/
-	struct event_base *ev_base;						/**< Event base										*/
-	struct event timeout_ev;						/**< Global task timeout							*/
-	struct event *guard_ev;							/**< Event for input sanity guard 					*/
+	struct ev_loop *event_loop;						/**< Event base										*/
+	struct ev_timer timeout_ev;						/**< Global task timeout							*/
+	struct ev_io guard_ev;							/**< Event for input sanity guard 					*/
 
 	gpointer checkpoint;							/**< Opaque checkpoint data							*/
 	ucl_object_t *settings;							/**< Settings applied to task						*/
@@ -220,7 +219,7 @@ struct rspamd_task *rspamd_task_new (struct rspamd_worker *worker,
 									 struct rspamd_config *cfg,
 									 rspamd_mempool_t *pool,
 									 struct rspamd_lang_detector *lang_det,
-									 struct event_base *ev_base);
+									 struct ev_loop *event_loop);
 /**
  * Destroy task object and remove its IO dispatcher if it exists
  */

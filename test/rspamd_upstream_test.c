@@ -16,11 +16,14 @@
 #include "config.h"
 #include "rspamd.h"
 #include "ottery.h"
+#include "contrib/libev/ev.h"
+
 #include <math.h>
 
 const char *test_upstream_list = "microsoft.com:443:1,google.com:80:2,kernel.org:443:3";
 const char *new_upstream_list = "freebsd.org:80";
 char test_key[32];
+extern struct ev_loop *event_loop;
 
 static void
 rspamd_upstream_test_method (struct upstream_list *ls,
@@ -42,9 +45,9 @@ rspamd_upstream_test_method (struct upstream_list *ls,
 }
 
 static void
-rspamd_upstream_timeout_handler (int fd, short what, void *arg)
+rspamd_upstream_timeout_handler (EV_P_ ev_timer *w, int revents)
 {
-	struct rspamd_dns_resolver *resolver = (struct rspamd_dns_resolver *)arg;
+	struct rspamd_dns_resolver *resolver = (struct rspamd_dns_resolver *)w->data;
 
 	rdns_resolver_release (resolver->r);
 }
@@ -54,14 +57,12 @@ rspamd_upstream_test_func (void)
 {
 	struct upstream_list *ls, *nls;
 	struct upstream *up, *upn;
-	struct event_base *ev_base = event_init ();
 	struct rspamd_dns_resolver *resolver;
 	struct rspamd_config *cfg;
 	gint i, success = 0;
 	const gint assumptions = 100500;
 	gdouble p;
-	struct event ev;
-	struct timeval tv;
+	static ev_timer ev;
 	rspamd_inet_addr_t *addr, *next_addr, *paddr;
 
 	cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_SKIP_LUA);
@@ -71,8 +72,8 @@ rspamd_upstream_test_func (void)
 	cfg->upstream_revive_time = 0.5;
 	cfg->upstream_error_time = 2;
 
-	resolver = rspamd_dns_resolver_init (NULL, ev_base, cfg);
-	rspamd_upstreams_library_config (cfg, cfg->ups_ctx, ev_base, resolver->r);
+	resolver = rspamd_dns_resolver_init (NULL, event_loop, cfg);
+	rspamd_upstreams_library_config (cfg, cfg->ups_ctx, event_loop, resolver->r);
 
 	/*
 	 * Test v4/v6 priorities
@@ -161,8 +162,8 @@ rspamd_upstream_test_func (void)
 
 
 	/* Upstream fail test */
-	evtimer_set (&ev, rspamd_upstream_timeout_handler, resolver);
-	event_base_set (ev_base, &ev);
+	ev.data = resolver;
+	ev_timer_init (&ev, rspamd_upstream_timeout_handler, 2.0, 0.0);
 
 	up = rspamd_upstream_get (ls, RSPAMD_UPSTREAM_MASTER_SLAVE, NULL, 0);
 	for (i = 0; i < 100; i ++) {
@@ -170,11 +171,9 @@ rspamd_upstream_test_func (void)
 	}
 	g_assert (rspamd_upstreams_alive (ls) == 2);
 
-	tv.tv_sec = 2;
-	tv.tv_usec = 0;
-	event_add (&ev, &tv);
+	ev_timer_start (event_loop, &ev);
 
-	event_base_loop (ev_base, 0);
+	ev_run (event_loop, 0);
 	g_assert (rspamd_upstreams_alive (ls) == 3);
 
 	rspamd_upstreams_destroy (ls);

@@ -48,7 +48,7 @@ INIT_LOG_MODULE(luacl)
 
 gboolean
 lua_classifier_init (struct rspamd_config *cfg,
-					 struct event_base *ev_base,
+					 struct ev_loop *ev_base,
 					 struct rspamd_classifier *cl)
 {
 	struct rspamd_lua_classifier_ctx *ctx;

@@ -313,7 +313,7 @@ lua_dns_resolver_init (lua_State *L)
 {
 	struct rspamd_dns_resolver *resolver, **presolver;
 	struct rspamd_config *cfg, **pcfg;
-	struct event_base *base, **pbase;
+	struct ev_loop *base, **pbase;
 
 	/* Check args */
 	pbase = rspamd_lua_check_udata (L, 1, "rspamd{ev_base}");

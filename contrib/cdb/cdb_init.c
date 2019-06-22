@@ -83,10 +83,8 @@ cdb_free(struct cdb *cdbp)
 	}
 	cdbp->cdb_fsize = 0;
 
-	if (cdbp->check_timer_ev) {
-		evtimer_del (cdbp->check_timer_ev);
-		g_free (cdbp->check_timer_ev);
-		g_free (cdbp->check_timer_tv);
+	if (cdbp->loop) {
+		ev_stat_stop (cdbp->loop, &cdbp->stat_ev);
 	}
 }
 
@@ -111,43 +109,32 @@ cdb_read(const struct cdb *cdbp, void *buf, unsigned len, unsigned pos)
 }
 
 static void
-cdb_timer_callback (int fd, short what, gpointer ud)
+cdb_timer_callback (EV_P_ ev_stat *w, int revents)
 {
-	struct cdb *cdbp = ud;
+	struct cdb *cdbp = w->data;
 	gint nfd;
-	struct stat st;
 
 	/* Check cdb file for modifications */
-	if (stat (cdbp->filename, &st) != -1) {
-		if (st.st_mtime > cdbp->mtime) {
-			if ((nfd = open (cdbp->filename, O_RDONLY)) != -1) {
-				if (cdbp->cdb_mem) {
+	if ((nfd = open (cdbp->filename, O_RDONLY)) != -1) {
+		if (cdbp->cdb_mem) {
 #ifdef _WIN32
-					UnmapViewOfFile((void*) cdbp->cdb_mem);
+			UnmapViewOfFile((void*) cdbp->cdb_mem);
 #else
-					munmap ((void*) cdbp->cdb_mem, cdbp->cdb_fsize);
+			munmap ((void*) cdbp->cdb_mem, cdbp->cdb_fsize);
 #endif /* _WIN32 */
-					cdbp->cdb_mem = NULL;
-				}
-				(void)close (cdbp->cdb_fd);
-				cdbp->cdb_fsize = 0;
-				(void)cdb_init (cdbp, nfd);
-			}
+			cdbp->cdb_mem = NULL;
 		}
+		(void)close (cdbp->cdb_fd);
+		cdbp->cdb_fsize = 0;
+		(void)cdb_init (cdbp, nfd);
 	}
-
-	evtimer_add (cdbp->check_timer_ev, cdbp->check_timer_tv);
 }
 
 void
-cdb_add_timer(struct cdb *cdbp, unsigned seconds)
+cdb_add_timer (struct cdb *cdbp, EV_P_ ev_tstamp seconds)
 {
-	cdbp->check_timer_ev = g_malloc (sizeof (struct event));
-	cdbp->check_timer_tv = g_malloc (sizeof (struct timeval));
-
-	cdbp->check_timer_tv->tv_sec = seconds;
-	cdbp->check_timer_tv->tv_usec = 0;
-
-	evtimer_set (cdbp->check_timer_ev, cdb_timer_callback, cdbp);
-	evtimer_add (cdbp->check_timer_ev, cdbp->check_timer_tv);
+	cdbp->loop = loop;
+	ev_stat_init (&cdbp->stat_ev, cdb_timer_callback, cdbp->filename, seconds);
+	cdbp->stat_ev.data = cdbp;
+	ev_stat_start (EV_A_ &cdbp->stat_ev);
 }

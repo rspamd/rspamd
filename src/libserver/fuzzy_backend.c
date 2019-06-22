@@ -105,12 +105,12 @@ struct rspamd_fuzzy_backend {
 	enum rspamd_fuzzy_backend_type type;
 	gdouble expire;
 	gdouble sync;
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
 	rspamd_fuzzy_periodic_cb periodic_cb;
 	void *periodic_ud;
 	const struct rspamd_fuzzy_backend_subr *subr;
 	void *subr_ud;
-	struct event periodic_event;
+	ev_timer periodic_event;
 };
 
 static GQuark
@@ -271,7 +271,7 @@ rspamd_fuzzy_backend_close_sqlite (struct rspamd_fuzzy_backend *bk,
 
 
 struct rspamd_fuzzy_backend *
-rspamd_fuzzy_backend_create (struct event_base *ev_base,
+rspamd_fuzzy_backend_create (struct ev_loop *ev_base,
 		const ucl_object_t *config,
 		struct rspamd_config *cfg,
 		GError **err)
@@ -307,7 +307,7 @@ rspamd_fuzzy_backend_create (struct event_base *ev_base,
 	}
 
 	bk = g_malloc0 (sizeof (*bk));
-	bk->ev_base = ev_base;
+	bk->event_loop = ev_base;
 	bk->expire = expire;
 	bk->type = type;
 	bk->subr = &fuzzy_subrs[type];
@@ -499,17 +499,15 @@ rspamd_fuzzy_backend_periodic_sync (struct rspamd_fuzzy_backend *bk)
 }
 
 static void
-rspamd_fuzzy_backend_periodic_cb (gint fd, short what, void *ud)
+rspamd_fuzzy_backend_periodic_cb (EV_P_ ev_timer *w, int revents)
 {
-	struct rspamd_fuzzy_backend *bk = ud;
+	struct rspamd_fuzzy_backend *bk = (struct rspamd_fuzzy_backend *)w->data;
 	gdouble jittered;
-	struct timeval tv;
 
 	jittered = rspamd_time_jitter (bk->sync, bk->sync / 2.0);
-	double_to_tv (jittered, &tv);
-	event_del (&bk->periodic_event);
+	w->repeat = jittered;
 	rspamd_fuzzy_backend_periodic_sync (bk);
-	event_add (&bk->periodic_event, &tv);
+	ev_timer_again (EV_A_ w);
 }
 
 void
@@ -519,13 +517,12 @@ rspamd_fuzzy_backend_start_update (struct rspamd_fuzzy_backend *bk,
 		void *ud)
 {
 	gdouble jittered;
-	struct timeval tv;
 
 	g_assert (bk != NULL);
 
 	if (bk->subr->periodic) {
 		if (bk->sync > 0.0) {
-			event_del (&bk->periodic_event);
+			ev_timer_stop (bk->event_loop, &bk->periodic_event);
 		}
 
 		if (cb) {
@@ -536,11 +533,11 @@ rspamd_fuzzy_backend_start_update (struct rspamd_fuzzy_backend *bk,
 		rspamd_fuzzy_backend_periodic_sync (bk);
 		bk->sync = timeout;
 		jittered = rspamd_time_jitter (timeout, timeout / 2.0);
-		double_to_tv (jittered, &tv);
-		event_set (&bk->periodic_event, -1, EV_TIMEOUT,
-				rspamd_fuzzy_backend_periodic_cb, bk);
-		event_base_set (bk->ev_base, &bk->periodic_event);
-		event_add (&bk->periodic_event, &tv);
+
+		bk->periodic_event.data = bk;
+		ev_timer_init (&bk->periodic_event, rspamd_fuzzy_backend_periodic_cb,
+				jittered, 0.0);
+		ev_timer_start (bk->event_loop, &bk->periodic_event);
 	}
 }
 
@@ -551,7 +548,7 @@ rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *bk)
 
 	if (bk->sync > 0.0) {
 		rspamd_fuzzy_backend_periodic_sync (bk);
-		event_del (&bk->periodic_event);
+		ev_timer_stop (bk->event_loop, &bk->periodic_event);
 	}
 
 	bk->subr->close (bk, bk->subr_ud);
@@ -559,10 +556,10 @@ rspamd_fuzzy_backend_close (struct rspamd_fuzzy_backend *bk)
 	g_free (bk);
 }
 
-struct event_base*
+struct ev_loop*
 rspamd_fuzzy_backend_event_base (struct rspamd_fuzzy_backend *backend)
 {
-	return backend->ev_base;
+	return backend->event_loop;
 }
 
 gdouble

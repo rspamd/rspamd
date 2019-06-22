@@ -27,7 +27,7 @@
 #include "libutil/radix.h"
 #include "libserver/url.h"
 #include "libserver/protocol.h"
-#include "libserver/events.h"
+#include "libserver/async_session.h"
 #include "libserver/roll_history.h"
 #include "libserver/task.h"
 #include <openssl/ssl.h>
@@ -62,6 +62,15 @@ enum rspamd_worker_flags {
 	RSPAMD_WORKER_CONTROLLER = (1 << 6),
 };
 
+struct rspamd_worker_accept_event {
+	ev_io accept_ev;
+	ev_timer throttling_ev;
+	struct ev_loop *event_loop;
+	struct rspamd_worker_accept_event *prev, *next;
+};
+
+typedef void (*rspamd_worker_term_cb)(EV_P_ ev_child *, struct rspamd_main *,
+		struct rspamd_worker *);
 
 /**
  * Worker process structure
@@ -77,7 +86,7 @@ struct rspamd_worker {
 	struct rspamd_main *srv;        /**< pointer to server structure					*/
 	GQuark type;                    /**< process type									*/
 	GHashTable *signal_events;      /**< signal events									*/
-	GList *accept_events;           /**< socket events									*/
+	struct rspamd_worker_accept_event *accept_events; /**< socket events									*/
 	struct rspamd_worker_conf *cf;  /**< worker config data								*/
 	gpointer ctx;                   /**< worker's specific data							*/
 	enum rspamd_worker_flags flags; /**< worker's flags									*/
@@ -85,16 +94,18 @@ struct rspamd_worker {
 	                                                   [1] is used by a worker			*/
 	gint srv_pipe[2];               /**< used by workers to request something from the
 	                                     main process. [0] - main, [1] - worker			*/
-	struct event srv_ev;            /**< used by main for read workers' requests		*/
+	ev_io srv_ev;                   /**< used by main for read workers' requests		*/
 	gpointer control_data;          /**< used by control protocol to handle commands	*/
 	gpointer tmp_data;              /**< used to avoid race condition to deal with control messages */
 	GPtrArray *finish_actions;      /**< called when worker is terminated				*/
+	ev_child cld_ev;                /**< to allow reaping								*/
+	rspamd_worker_term_cb term_handler; /**< custom term handler						*/
 };
 
 struct rspamd_abstract_worker_ctx {
 	guint64 magic;
 	/* Events base */
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
 	/* DNS resolver */
 	struct rspamd_dns_resolver *resolver;
 	/* Config */
@@ -115,8 +126,8 @@ struct rspamd_worker_signal_cb {
 struct rspamd_worker_signal_handler {
 	gint signo;
 	gboolean enabled;
-	struct event ev;
-	struct event_base *base;
+	ev_signal ev_sig;
+	struct ev_loop *event_loop;
 	struct rspamd_worker *worker;
 	struct rspamd_worker_signal_cb *cb;
 };
@@ -274,9 +285,11 @@ struct rspamd_main {
 	uid_t workers_uid;                                          /**< worker's uid running to                        */
 	gid_t workers_gid;                                          /**< worker's gid running to						*/
 	gboolean is_privilleged;                                    /**< true if run in privilleged mode                */
+	gboolean wanna_die;                                         /**< no respawn of processes						*/
 	gboolean cores_throttling;                                  /**< turn off cores when limits are exceeded		*/
 	struct roll_history *history;                               /**< rolling history								*/
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
+	ev_signal term_ev, int_ev, hup_ev, usr1_ev;                 /**< signals 										*/
 	struct rspamd_http_context *http_ctx;
 };
 
@@ -311,7 +324,7 @@ struct controller_session {
 	GList *parts;                                               /**< extracted mime parts							*/
 	struct rspamd_async_session * s;                             /**< async session object							*/
 	struct rspamd_dns_resolver *resolver;                       /**< DNS resolver									*/
-	struct event_base *ev_base;                                 /**< Event base										*/
+	struct ev_loop *ev_base;                                 /**< Event base										*/
 };
 
 struct zstd_dictionary {

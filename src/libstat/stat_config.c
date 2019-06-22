@@ -95,7 +95,7 @@ static struct rspamd_stat_cache stat_caches[] = {
 };
 
 void
-rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
+rspamd_stat_init (struct rspamd_config *cfg, struct ev_loop *ev_base)
 {
 	GList *cur, *curst;
 	struct rspamd_classifier_config *clf;
@@ -163,7 +163,7 @@ rspamd_stat_init (struct rspamd_config *cfg, struct event_base *ev_base)
 	stat_ctx->statfiles = g_ptr_array_new ();
 	stat_ctx->classifiers = g_ptr_array_new ();
 	stat_ctx->async_elts = g_queue_new ();
-	stat_ctx->ev_base = ev_base;
+	stat_ctx->event_loop = ev_base;
 	stat_ctx->lua_stat_tokens_ref = -1;
 
 	/* Interact with lua_stat */
@@ -510,25 +510,24 @@ rspamd_async_elt_dtor (struct rspamd_stat_async_elt *elt)
 		elt->cleanup (elt, elt->ud);
 	}
 
-	event_del (&elt->timer_ev);
+	ev_timer_stop (elt->event_loop, &elt->timer_ev);
 	g_free (elt);
 }
 
 static void
-rspamd_async_elt_on_timer (gint fd, short what, gpointer d)
+rspamd_async_elt_on_timer (EV_P_ ev_timer *w, int revents)
 {
-	struct rspamd_stat_async_elt *elt = d;
+	struct rspamd_stat_async_elt *elt = (struct rspamd_stat_async_elt *)w->data;
 	gdouble jittered_time;
 
-	event_del (&elt->timer_ev);
 
 	if (elt->enabled) {
 		elt->handler (elt, elt->ud);
 	}
 
 	jittered_time = rspamd_time_jitter (elt->timeout, 0);
-	double_to_tv (jittered_time, &elt->tv);
-	event_add (&elt->timer_ev, &elt->tv);
+	elt->timer_ev.repeat = jittered_time;
+	ev_timer_again (EV_A_ w);
 }
 
 struct rspamd_stat_async_elt*
@@ -548,21 +547,20 @@ rspamd_stat_ctx_register_async (rspamd_stat_async_handler handler,
 	elt->cleanup = cleanup;
 	elt->ud = d;
 	elt->timeout = timeout;
+	elt->event_loop = st_ctx->event_loop;
 	REF_INIT_RETAIN (elt, rspamd_async_elt_dtor);
 	/* Enabled by default */
 
 
-	if (st_ctx->ev_base) {
+	if (st_ctx->event_loop) {
 		elt->enabled = TRUE;
-		event_set (&elt->timer_ev, -1, EV_TIMEOUT, rspamd_async_elt_on_timer, elt);
-		event_base_set (st_ctx->ev_base, &elt->timer_ev);
 		/*
 		 * First we set timeval to zero as we want cb to be executed as
 		 * fast as possible
 		 */
-		elt->tv.tv_sec = 0;
-		elt->tv.tv_usec = 0;
-		event_add (&elt->timer_ev, &elt->tv);
+		elt->timer_ev.data = elt;
+		ev_timer_init (&elt->timer_ev, rspamd_async_elt_on_timer, 0.0, 0.0);
+		ev_timer_start (st_ctx->event_loop, &elt->timer_ev);
 	}
 	else {
 		elt->enabled = FALSE;

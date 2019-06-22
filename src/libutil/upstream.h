@@ -41,7 +41,7 @@ void rspamd_upstreams_library_unref (struct upstream_ctx *ctx);
  * @param cfg
  */
 void rspamd_upstreams_library_config (struct rspamd_config *cfg,
-		struct upstream_ctx *ctx, struct event_base *ev_base,
+		struct upstream_ctx *ctx, struct ev_loop *event_loop,
 		struct rdns_resolver *resolver);
 
 /**

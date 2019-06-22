@@ -186,10 +186,7 @@ rspamd_milter_session_dtor (struct rspamd_milter_session *session)
 		priv = session->priv;
 		msg_debug_milter ("destroying milter session");
 
-		if (rspamd_event_pending (&priv->ev, EV_TIMEOUT|EV_WRITE|EV_READ)) {
-			event_del (&priv->ev);
-		}
-
+		rspamd_ev_watcher_stop (priv->event_loop, &priv->ev);
 		rspamd_milter_session_reset (session, RSPAMD_MILTER_RESET_ALL);
 
 		if (priv->parser.buf) {
@@ -267,14 +264,7 @@ static inline void
 rspamd_milter_plan_io (struct rspamd_milter_session *session,
 		struct rspamd_milter_private *priv, gshort what)
 {
-	if (rspamd_event_pending (&priv->ev, EV_TIMEOUT|EV_WRITE|EV_READ)) {
-		event_del (&priv->ev);
-	}
-
-	event_set (&priv->ev, priv->fd, what, rspamd_milter_io_handler,
-			session);
-	event_base_set (priv->ev_base, &priv->ev);
-	event_add (&priv->ev, priv->ptv);
+	rspamd_ev_watcher_reschedule (priv->event_loop, &priv->ev, what);
 }
 
 
@@ -1083,9 +1073,9 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 
 
 gboolean
-rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
+rspamd_milter_handle_socket (gint fd, ev_tstamp timeout,
 		rspamd_mempool_t *pool,
-		struct event_base *ev_base, rspamd_milter_finish finish_cb,
+		struct ev_loop *ev_base, rspamd_milter_finish finish_cb,
 		rspamd_milter_error error_cb, void *ud)
 {
 	struct rspamd_milter_session *session;
@@ -1103,11 +1093,15 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 	priv->err_cb = error_cb;
 	priv->parser.state = st_len_1;
 	priv->parser.buf = rspamd_fstring_sized_new (RSPAMD_MILTER_MESSAGE_CHUNK + 5);
-	priv->ev_base = ev_base;
+	priv->event_loop = ev_base;
 	priv->state = RSPAMD_MILTER_READ_MORE;
 	priv->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "milter");
 	priv->discard_on_reject = milter_ctx->discard_on_reject;
 	priv->quarantine_on_reject = milter_ctx->quarantine_on_reject;
+	priv->ev.timeout = timeout;
+
+	rspamd_ev_watcher_init (&priv->ev, fd, EV_READ|EV_WRITE,
+			rspamd_milter_io_handler, session);
 
 	if (pool) {
 		/* Copy tag */
@@ -1116,14 +1110,6 @@ rspamd_milter_handle_socket (gint fd, const struct timeval *tv,
 
 	priv->headers = kh_init (milter_headers_hash_t);
 	kh_resize (milter_headers_hash_t, priv->headers, 32);
-
-	if (tv) {
-		memcpy (&priv->tv, tv, sizeof (*tv));
-		priv->ptv = &priv->tv;
-	}
-	else {
-		priv->ptv = NULL;
-	}
 
 	session->priv = priv;
 	REF_INIT_RETAIN (session, rspamd_milter_session_dtor);

@@ -2,7 +2,7 @@
 #define RSPAMD_MAP_H
 
 #include "config.h"
-#include <event.h>
+#include "contrib/libev/ev.h"
 
 #include "ucl.h"
 #include "mem_pool.h"
@@ -79,7 +79,7 @@ struct rspamd_map* rspamd_map_add_from_ucl (struct rspamd_config *cfg,
  * Start watching of maps by adding events to libevent event loop
  */
 void rspamd_map_watch (struct rspamd_config *cfg,
-					   struct event_base *ev_base,
+					   struct ev_loop *event_loop,
 					   struct rspamd_dns_resolver *resolver,
 					   struct rspamd_worker *worker,
 					   gboolean active_http);

@@ -561,7 +561,7 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 		spf_record_ref (record);
 
 		if ((l = rspamd_lru_hash_lookup (spf_module_ctx->spf_hash,
-					record->domain, task->tv.tv_sec)) == NULL) {
+					record->domain, task->task_timestamp)) == NULL) {
 			l = record;
 
 			if (record->ttl > 0 &&
@@ -571,7 +571,7 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 
 				rspamd_lru_hash_insert (spf_module_ctx->spf_hash,
 						record->domain, spf_record_ref (l),
-						task->tv.tv_sec, record->ttl);
+						task->task_timestamp, record->ttl);
 
 				msg_info_task ("stored record for %s (0x%xuL) in LRU cache for %d seconds, "
 							   "%d/%d elements in the cache",
@@ -642,7 +642,7 @@ spf_symbol_callback (struct rspamd_task *task,
 	if (domain) {
 		if ((l =
 			rspamd_lru_hash_lookup (spf_module_ctx->spf_hash, domain,
-			task->tv.tv_sec)) != NULL) {
+					task->task_timestamp)) != NULL) {
 			spf_record_ref (l);
 			spf_check_list (l, task, TRUE);
 			spf_record_unref (l);

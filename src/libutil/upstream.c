@@ -50,7 +50,7 @@ struct upstream {
 	guint dns_requests;
 	gint active_idx;
 	gchar *name;
-	struct event ev;
+	ev_timer ev;
 	gdouble last_fail;
 	gpointer ud;
 	struct upstream_list *ls;
@@ -92,7 +92,7 @@ struct upstream_list {
 
 struct upstream_ctx {
 	struct rdns_resolver *res;
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
 	struct upstream_limits limits;
 	GQueue *upstreams;
 	gboolean configured;
@@ -119,7 +119,7 @@ static guint default_dns_retransmits = 2;
 void
 rspamd_upstreams_library_config (struct rspamd_config *cfg,
 								 struct upstream_ctx *ctx,
-								 struct event_base *ev_base,
+								 struct ev_loop *event_loop,
 								 struct rdns_resolver *resolver)
 {
 	g_assert (ctx != NULL);
@@ -141,7 +141,7 @@ rspamd_upstreams_library_config (struct rspamd_config *cfg,
 		ctx->limits.dns_timeout = cfg->dns_timeout;
 	}
 
-	ctx->ev_base = ev_base;
+	ctx->event_loop = event_loop;
 	ctx->res = resolver;
 	ctx->configured = TRUE;
 }
@@ -366,12 +366,12 @@ rspamd_upstream_dns_cb (struct rdns_reply *reply, void *arg)
 }
 
 static void
-rspamd_upstream_revive_cb (int fd, short what, void *arg)
+rspamd_upstream_revive_cb (struct ev_loop *loop, ev_timer *w, int revents)
 {
-	struct upstream *up = (struct upstream *)arg;
+	struct upstream *up = (struct upstream *)w->data;
 
 	RSPAMD_UPSTREAM_LOCK (up->lock);
-	event_del (&up->ev);
+	ev_timer_stop (loop, w);
 	if (up->ls) {
 		rspamd_upstream_set_active (up->ls, up);
 	}
@@ -414,7 +414,6 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 	gdouble ntim;
 	guint i;
 	struct upstream *cur;
-	struct timeval tv;
 	struct upstream_list_watcher *w;
 
 	RSPAMD_UPSTREAM_LOCK (ls->lock);
@@ -431,15 +430,14 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *up)
 		rspamd_upstream_resolve_addrs (ls, up);
 
 		REF_RETAIN (up);
-		evtimer_set (&up->ev, rspamd_upstream_revive_cb, up);
-		if (up->ctx->ev_base != NULL && up->ctx->configured) {
-			event_base_set (up->ctx->ev_base, &up->ev);
-		}
-
 		ntim = rspamd_time_jitter (ls->limits.revive_time,
 				ls->limits.revive_jitter);
-		double_to_tv (ntim, &tv);
-		event_add (&up->ev, &tv);
+		ev_timer_init (&up->ev, rspamd_upstream_revive_cb, ntim, 0);
+		up->ev.data = up;
+
+		if (up->ctx->event_loop != NULL && up->ctx->configured) {
+			ev_timer_start (up->ctx->event_loop, &up->ev);
+		}
 	}
 
 	DL_FOREACH (up->ls->watchers, w) {
@@ -915,9 +913,7 @@ rspamd_upstream_restore_cb (gpointer elt, gpointer ls)
 	/* Here the upstreams list is already locked */
 	RSPAMD_UPSTREAM_LOCK (up->lock);
 
-	if (rspamd_event_pending (&up->ev, EV_TIMEOUT)) {
-		event_del (&up->ev);
-	}
+	ev_timer_stop (up->ctx->event_loop, &up->ev);
 	g_ptr_array_add (ups->alive, up);
 	up->active_idx = ups->alive->len - 1;
 	RSPAMD_UPSTREAM_UNLOCK (up->lock);

@@ -4,21 +4,17 @@
 #include "dns.h"
 #include "logger.h"
 #include "rspamd.h"
-#include "events.h"
+#include "async_session.h"
 #include "cfg_file.h"
 
 static guint requests = 0;
-extern struct event_base *base;
+extern struct ev_loop *event_loop;
 struct rspamd_dns_resolver *resolver;
 
 gboolean
 session_fin (gpointer unused)
 {
-	struct timeval tv;
-
-	tv.tv_sec = 0;
-	tv.tv_usec = 0;
-	event_loopexit (&tv);
+	ev_break (event_loop, EVBREAK_ALL);
 
 	return TRUE;
 }
@@ -82,7 +78,7 @@ rspamd_dns_test_func ()
 
 	s = rspamd_session_create (pool, session_fin, NULL, NULL, NULL);
 
-	resolver = rspamd_dns_resolver_init (NULL, base, cfg);
+	resolver = rspamd_dns_resolver_init (NULL, event_loop, cfg);
 
 	requests ++;
 	g_assert (rspamd_dns_resolver_request (resolver, s, pool, test_dns_cb, NULL, RDNS_REQUEST_A, "google.com"));
@@ -104,5 +100,5 @@ rspamd_dns_test_func ()
 
 	g_assert (resolver != NULL);
 
-	event_loop (0);
+	ev_run (event_loop, 0);
 }

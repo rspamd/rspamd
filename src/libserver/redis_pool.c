@@ -15,12 +15,12 @@
  */
 
 #include "config.h"
-#include <event.h>
+#include "contrib/libev/ev.h"
 #include "redis_pool.h"
 #include "cfg_file.h"
 #include "contrib/hiredis/hiredis.h"
 #include "contrib/hiredis/async.h"
-#include "contrib/hiredis/adapters/libevent.h"
+#include "contrib/hiredis/adapters/libev.h"
 #include "cryptobox.h"
 #include "logger.h"
 
@@ -30,7 +30,7 @@ struct rspamd_redis_pool_connection {
 	struct redisAsyncContext *ctx;
 	struct rspamd_redis_pool_elt *elt;
 	GList *entry;
-	struct event timeout;
+	ev_timer timeout;
 	gboolean active;
 	gchar tag[MEMPOOL_UID_LEN];
 	ref_entry_t ref;
@@ -44,7 +44,7 @@ struct rspamd_redis_pool_elt {
 };
 
 struct rspamd_redis_pool {
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
 	struct rspamd_config *cfg;
 	GHashTable *elts_by_key;
 	GHashTable *elts_by_ctx;
@@ -120,9 +120,7 @@ rspamd_redis_pool_conn_dtor (struct rspamd_redis_pool_connection *conn)
 	else {
 		msg_debug_rpool ("inactive connection removed");
 
-		if (rspamd_event_pending (&conn->timeout, EV_TIMEOUT)) {
-			event_del (&conn->timeout);
-		}
+		ev_timer_stop (conn->elt->pool->event_loop, &conn->timeout);
 
 		if (conn->ctx && !(conn->ctx->c.flags & REDIS_FREEING)) {
 			redisAsyncContext *ac = conn->ctx;
@@ -173,9 +171,10 @@ rspamd_redis_pool_elt_dtor (gpointer p)
 }
 
 static void
-rspamd_redis_conn_timeout (gint fd, short what, gpointer p)
+rspamd_redis_conn_timeout (EV_P_ ev_timer *w, int revents)
 {
-	struct rspamd_redis_pool_connection *conn = p;
+	struct rspamd_redis_pool_connection *conn =
+			(struct rspamd_redis_pool_connection *)w->data;
 
 	g_assert (!conn->active);
 	msg_debug_rpool ("scheduled removal of connection %p, refcount: %d",
@@ -186,7 +185,6 @@ rspamd_redis_conn_timeout (gint fd, short what, gpointer p)
 static void
 rspamd_redis_pool_schedule_timeout (struct rspamd_redis_pool_connection *conn)
 {
-	struct timeval tv;
 	gdouble real_timeout;
 	guint active_elts;
 
@@ -203,10 +201,12 @@ rspamd_redis_pool_schedule_timeout (struct rspamd_redis_pool_connection *conn)
 
 	msg_debug_rpool ("scheduled connection %p cleanup in %.1f seconds",
 			conn->ctx, real_timeout);
-	double_to_tv (real_timeout, &tv);
-	event_set (&conn->timeout, -1, EV_TIMEOUT, rspamd_redis_conn_timeout, conn);
-	event_base_set (conn->elt->pool->ev_base, &conn->timeout);
-	event_add (&conn->timeout, &tv);
+
+	conn->timeout.data = conn;
+	ev_timer_init (&conn->timeout,
+			rspamd_redis_conn_timeout,
+			real_timeout, 0.0);
+	ev_timer_start (conn->elt->pool->event_loop, &conn->timeout);
 }
 
 static void
@@ -270,7 +270,7 @@ rspamd_redis_pool_new_connection (struct rspamd_redis_pool *pool,
 			REF_INIT_RETAIN (conn, rspamd_redis_pool_conn_dtor);
 			msg_debug_rpool ("created new connection to %s:%d: %p", ip, port, ctx);
 
-			redisLibeventAttach (ctx, pool->ev_base);
+			redisLibevAttach (pool->event_loop, ctx);
 			redisAsyncSetDisconnectCallback (ctx, rspamd_redis_pool_on_disconnect,
 					conn);
 
@@ -317,11 +317,11 @@ rspamd_redis_pool_init (void)
 void
 rspamd_redis_pool_config (struct rspamd_redis_pool *pool,
 		struct rspamd_config *cfg,
-		struct event_base *ev_base)
+		struct ev_loop *ev_base)
 {
 	g_assert (pool != NULL);
 
-	pool->ev_base = ev_base;
+	pool->event_loop = ev_base;
 	pool->cfg = cfg;
 	pool->timeout = default_timeout;
 	pool->max_conns = default_max_conns;
@@ -339,7 +339,7 @@ rspamd_redis_pool_connect (struct rspamd_redis_pool *pool,
 	struct rspamd_redis_pool_connection *conn;
 
 	g_assert (pool != NULL);
-	g_assert (pool->ev_base != NULL);
+	g_assert (pool->event_loop != NULL);
 	g_assert (ip != NULL);
 
 	key = rspamd_redis_pool_get_key (db, password, ip, port);
@@ -352,7 +352,7 @@ rspamd_redis_pool_connect (struct rspamd_redis_pool *pool,
 			g_assert (!conn->active);
 
 			if (conn->ctx->err == REDIS_OK) {
-				event_del (&conn->timeout);
+				ev_timer_stop (elt->pool->event_loop, &conn->timeout);
 				conn->active = TRUE;
 				g_queue_push_tail_link (elt->active, conn_entry);
 				msg_debug_rpool ("reused existing connection to %s:%d: %p",

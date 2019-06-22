@@ -15,10 +15,8 @@ SET(RSPAMADMSRC rspamadm.c
         ${CMAKE_BINARY_DIR}/src/modules.c
         ${CMAKE_SOURCE_DIR}/src/controller.c
         ${CMAKE_SOURCE_DIR}/src/fuzzy_storage.c
-        ${CMAKE_SOURCE_DIR}/src/lua_worker.c
         ${CMAKE_SOURCE_DIR}/src/worker.c
-        ${CMAKE_SOURCE_DIR}/src/rspamd_proxy.c
-        ${CMAKE_SOURCE_DIR}/src/log_helper.c)
+        ${CMAKE_SOURCE_DIR}/src/rspamd_proxy.c)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 IF (ENABLE_HYPERSCAN MATCHES "ON")
     LIST(APPEND RSPAMADMSRC "${CMAKE_SOURCE_DIR}/src/hs_helper.c")

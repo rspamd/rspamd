@@ -1601,14 +1601,14 @@ static void ge_select(ge_precomp *t, int pos, signed char b)
 	unsigned char babs = b - (((-bnegative) & b) * ((signed char) 1 << 1));
 
 	ge_precomp_0 (t);
-	cmov (t, &base[pos][0], equal (babs, 1));
-	cmov (t, &base[pos][1], equal (babs, 2));
-	cmov (t, &base[pos][2], equal (babs, 3));
-	cmov (t, &base[pos][3], equal (babs, 4));
-	cmov (t, &base[pos][4], equal (babs, 5));
-	cmov (t, &base[pos][5], equal (babs, 6));
-	cmov (t, &base[pos][6], equal (babs, 7));
-	cmov (t, &base[pos][7], equal (babs, 8));
+	cmov (t, &event_loop[pos][0], equal (babs, 1));
+	cmov (t, &event_loop[pos][1], equal (babs, 2));
+	cmov (t, &event_loop[pos][2], equal (babs, 3));
+	cmov (t, &event_loop[pos][3], equal (babs, 4));
+	cmov (t, &event_loop[pos][4], equal (babs, 5));
+	cmov (t, &event_loop[pos][5], equal (babs, 6));
+	cmov (t, &event_loop[pos][6], equal (babs, 7));
+	cmov (t, &event_loop[pos][7], equal (babs, 8));
 	fe_copy (minust.yplusx, t->yminusx);
 	fe_copy (minust.yminusx, t->yplusx);
 	fe_neg (minust.xy2d, t->xy2d);

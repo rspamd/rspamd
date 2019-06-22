@@ -73,7 +73,7 @@ rspamd_server_accept (gint fd, short what, void *arg)
 static void
 rspamd_http_term_handler (gint fd, short what, void *arg)
 {
-	struct event_base *ev_base = arg;
+	struct ev_loop *ev_base = arg;
 	struct timeval tv = {0, 0};
 
 	event_base_loopexit (ev_base, &tv);
@@ -84,7 +84,7 @@ rspamd_http_server_func (gint fd, const gchar *path, rspamd_inet_addr_t *addr,
 		struct rspamd_cryptobox_keypair *kp, struct rspamd_keypair_cache *c)
 {
 	struct rspamd_http_connection_router *rt;
-	struct event_base *ev_base = event_init ();
+	struct ev_loop *ev_base = event_init ();
 	struct event accept_ev, term_ev;
 
 	rt = rspamd_http_router_new (rspamd_server_error, rspamd_server_finish,
@@ -148,7 +148,7 @@ rspamd_http_client_func (const gchar *path, rspamd_inet_addr_t *addr,
 		struct rspamd_cryptobox_keypair *kp,
 		struct rspamd_cryptobox_pubkey *peer_kp,
 		struct rspamd_keypair_cache *c,
-		struct event_base *ev_base, double *latency)
+		struct ev_loop *ev_base, double *latency)
 {
 	struct rspamd_http_message *msg;
 	struct rspamd_http_connection *conn;
@@ -254,7 +254,7 @@ rspamd_http_stop_servers (pid_t *sfd)
 void
 rspamd_http_test_func (void)
 {
-	struct event_base *ev_base = event_init ();
+	struct ev_loop *ev_base = event_init ();
 	rspamd_mempool_t *pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
 	struct rspamd_cryptobox_keypair *serv_key, *client_key;
 	struct rspamd_cryptobox_pubkey *peer_key;

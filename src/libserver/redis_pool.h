@@ -21,7 +21,7 @@
 struct rspamd_redis_pool;
 struct rspamd_config;
 struct redisAsyncContext;
-struct event_base;
+struct ev_loop;
 
 /**
  * Creates new redis pool
@@ -36,7 +36,7 @@ struct rspamd_redis_pool *rspamd_redis_pool_init (void);
  */
 void rspamd_redis_pool_config (struct rspamd_redis_pool *pool,
 		struct rspamd_config *cfg,
-		struct event_base *ev_base);
+		struct ev_loop *ev_base);
 
 
 /**

@@ -19,7 +19,7 @@
 
 #include "config.h"
 #include "mem_pool.h"
-#include "events.h"
+#include "async_session.h"
 #include "logger.h"
 #include "rdns.h"
 #include "upstream.h"
@@ -28,7 +28,7 @@ struct rspamd_config;
 
 struct rspamd_dns_resolver {
 	struct rdns_resolver *r;
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
 	struct upstream_list *ups;
 	struct rspamd_config *cfg;
 	gdouble request_timeout;
@@ -41,7 +41,7 @@ struct rspamd_dns_resolver {
  * Init DNS resolver, params are obtained from a config file or system file /etc/resolv.conf
  */
 struct rspamd_dns_resolver * rspamd_dns_resolver_init (rspamd_logger_t *logger,
-													   struct event_base *ev_base, struct rspamd_config *cfg);
+													   struct ev_loop *ev_base, struct rspamd_config *cfg);
 
 struct rspamd_dns_request_ud;
 /**

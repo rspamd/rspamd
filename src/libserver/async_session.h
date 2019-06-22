@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef RSPAMD_EVENTS_H
-#define RSPAMD_EVENTS_H
+#ifndef RSPAMD_ASYNC_SESSION_H
+#define RSPAMD_ASYNC_SESSION_H
 
 #include "config.h"
 #include "mem_pool.h"
@@ -107,4 +107,4 @@ guint rspamd_session_events_pending (struct rspamd_async_session *session);
  */
 gboolean rspamd_session_blocked (struct rspamd_async_session *s);
 
-#endif /* RSPAMD_EVENTS_H */
+#endif /*RSPAMD_ASYNC_SESSION_H*/

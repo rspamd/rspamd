@@ -22,7 +22,6 @@ end
 
 local rules = {}
 local rspamd_logger = require "rspamd_logger"
-local cdb = require "rspamd_cdb"
 local util = require "rspamd_util"
 local regexp = require "rspamd_regexp"
 local rspamd_expression = require "rspamd_expression"
@@ -400,6 +399,18 @@ local function multimap_callback(task, rule)
     local ret = false
 
     if r['cdb'] then
+      if type(r.cdb) == 'string' then
+        local rspamd_cdb = require "rspamd_cdb"
+        local cdb = rspamd_cdb.create(r.cdb, task:get_ev_base())
+
+        if not cdb then
+          rspamd_logger.infox(task, 'cannot open cdb file %s', r.cdb)
+
+          return false
+        else
+          r.cdb = cdb
+        end
+      end
       local srch = value
       if type(value) == 'userdata' then
         if value.class == 'rspamd{ip}' then
@@ -997,13 +1008,8 @@ local function add_multimap_rule(key, newrule)
   end
   -- Check cdb flag
   if type(newrule['map']) == 'string' and string.find(newrule['map'], '^cdb://.*$') then
-    newrule['cdb'] = cdb.create(newrule['map'])
-    if newrule['cdb'] then
-      ret = true
-    else
-      rspamd_logger.warnx(rspamd_config, 'Cannot add rule: map doesn\'t exists: %1',
-          newrule['map'])
-    end
+    newrule['cdb'] = newrule['map']
+    ret = true
   elseif type(newrule['map']) == 'string' and string.find(newrule['map'], '^redis://.*$') then
     if not redis_params then
       rspamd_logger.infox(rspamd_config, 'no redis servers are specified, ' ..

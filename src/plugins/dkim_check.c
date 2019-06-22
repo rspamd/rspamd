@@ -1056,8 +1056,8 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 		 * lru hash owns this object now
 		 */
 		rspamd_lru_hash_insert (dkim_module_ctx->dkim_hash,
-			g_strdup (rspamd_dkim_get_dns_key (ctx)),
-			key, res->task->tv.tv_sec, rspamd_dkim_key_get_ttl (key));
+				g_strdup (rspamd_dkim_get_dns_key (ctx)),
+				key, res->task->task_timestamp, rspamd_dkim_key_get_ttl (key));
 		/* Release key when task is processed */
 		rspamd_mempool_add_destructor (res->task->task_pool,
 				dkim_module_key_dtor, res->key);
@@ -1210,7 +1210,7 @@ dkim_symbol_callback (struct rspamd_task *task,
 
 				key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_hash,
 						rspamd_dkim_get_dns_key (ctx),
-						task->tv.tv_sec);
+						task->task_timestamp);
 
 				if (key != NULL) {
 					cur->key = rspamd_dkim_key_ref (key);
@@ -1400,7 +1400,7 @@ dkim_module_lua_on_key (rspamd_dkim_key_t *key,
 		 */
 		rspamd_lru_hash_insert (dkim_module_ctx->dkim_hash,
 				g_strdup (rspamd_dkim_get_dns_key (ctx)),
-				key, cbd->task->tv.tv_sec, rspamd_dkim_key_get_ttl (key));
+				key, cbd->task->task_timestamp, rspamd_dkim_key_get_ttl (key));
 		/* Release key when task is processed */
 		rspamd_mempool_add_destructor (cbd->task->task_pool,
 				dkim_module_key_dtor, cbd->key);
@@ -1507,7 +1507,7 @@ lua_dkim_verify_handler (lua_State *L)
 
 		key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_hash,
 				rspamd_dkim_get_dns_key (ctx),
-				task->tv.tv_sec);
+				task->task_timestamp);
 
 		if (key != NULL) {
 			cbd->key = rspamd_dkim_key_ref (key);

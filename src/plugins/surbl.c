@@ -1815,7 +1815,6 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 	const gchar *rule)
 {
 	struct redirector_param *param;
-	struct timeval *timeout;
 	struct upstream *selected;
 	struct rspamd_http_message *msg;
 	struct surbl_ctx *surbl_module_ctx = surbl_get_context (task->cfg);
@@ -1851,8 +1850,6 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 		msg = rspamd_http_new_message (HTTP_REQUEST);
 		msg->url = rspamd_fstring_assign (msg->url, url->string, url->urllen);
 		param->redirector = selected;
-		timeout = rspamd_mempool_alloc (task->task_pool, sizeof (struct timeval));
-		double_to_tv (surbl_module_ctx->read_timeout, timeout);
 
 		rspamd_session_add_event (task->s,
 				free_redirector_session, param,
@@ -1864,7 +1861,7 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 		}
 
 		rspamd_http_connection_write_message (param->conn, msg, NULL,
-				NULL, param, timeout);
+				NULL, param, surbl_module_ctx->read_timeout);
 
 		msg_info_surbl (
 				"<%s> registered redirector call for %*s to %s, according to rule: %s",

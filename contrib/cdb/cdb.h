@@ -10,7 +10,7 @@
 
 #include "config.h"
 #include "unix-std.h"
-#include <event.h>
+#include "contrib/libev/ev.h"
 
 /*
  * OpenBSD fix
@@ -35,8 +35,9 @@ struct cdb
 	int cdb_fd; /* file descriptor */
 	char *filename; /* file name */
 	time_t mtime; /* mtime of cdb file */
-	struct event *check_timer_ev; /* event structure for checking cdb for modifications */
-	struct timeval *check_timer_tv;
+	struct ev_loop *loop;
+	ev_stat stat_ev; /* event structure for checking cdb for modifications */
+	ev_tstamp check_ts;
 	/* private members */
 	unsigned cdb_fsize; /* datafile size */
 	unsigned cdb_dend; /* end of data ptr */
@@ -54,7 +55,7 @@ struct cdb
 #define cdb_fileno(c) ((c)->cdb_fd)
 
 int cdb_init(struct cdb *cdbp, int fd);
-void cdb_add_timer(struct cdb *cdbp, unsigned seconds);
+void cdb_add_timer(struct cdb *cdbp, EV_P_ ev_tstamp seconds);
 void cdb_free(struct cdb *cdbp);
 
 int cdb_read(const struct cdb *cdbp, void *buf, unsigned len, unsigned pos);

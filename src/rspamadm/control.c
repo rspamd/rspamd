@@ -21,7 +21,7 @@
 #include "libutil/http_private.h"
 #include "addr.h"
 #include "unix-std.h"
-#include <event.h>
+#include "contrib/libev/ev.h"
 #include "libutil/util.h"
 #include "lua/lua_common.h"
 
@@ -98,7 +98,7 @@ static void
 rspamd_control_error_handler (struct rspamd_http_connection *conn, GError *err)
 {
 	rspamd_fprintf (stderr, "Cannot make HTTP request: %e\n", err);
-	rspamd_http_connection_unref (conn);
+	ev_break (rspamd_main->event_loop, EVBREAK_ALL);
 }
 
 static gint
@@ -111,7 +111,6 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 	const gchar *body;
 	gsize body_len;
 	struct rspamadm_control_cbdata *cbdata = conn->ud;
-	struct timeval exit_tv;
 
 	body = rspamd_http_message_get_body (msg, &body_len);
 	parser = ucl_parser_new (0);
@@ -157,9 +156,7 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 	}
 
 end:
-	exit_tv.tv_sec = 0;
-	exit_tv.tv_usec = 0;
-	event_base_loopexit (rspamd_main->ev_base, &exit_tv);
+	ev_break (rspamd_main->event_loop, EVBREAK_ALL);
 
 	return 0;
 }
@@ -173,7 +170,6 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 	struct rspamd_http_connection *conn;
 	struct rspamd_http_message *msg;
 	rspamd_inet_addr_t *addr;
-	struct timeval tv;
 	static struct rspamadm_control_cbdata cbdata;
 
 	context = g_option_context_new (
@@ -239,16 +235,15 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 			addr);
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	msg->url = rspamd_fstring_new_init (path, strlen (path));
-	double_to_tv (timeout, &tv);
 
 	cbdata.argc = argc;
 	cbdata.argv = argv;
 	cbdata.path = path;
 
 	rspamd_http_connection_write_message (conn, msg, NULL, NULL, &cbdata,
-			&tv);
+			timeout);
 
-	event_base_loop (rspamd_main->ev_base, 0);
+	ev_loop (rspamd_main->event_loop, 0);
 
 	rspamd_http_connection_unref (conn);
 	rspamd_inet_address_free (addr);

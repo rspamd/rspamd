@@ -20,7 +20,7 @@
 #include "ucl.h"
 #include "cfg_file.h"
 #include <lua.h>
-#include <event.h>
+#include "contrib/libev/ev.h"
 
 struct rspamd_task;
 struct rspamd_config;
@@ -198,7 +198,7 @@ ucl_object_t *rspamd_symcache_counters (struct rspamd_symcache *cache);
  * @param ev_base
  */
 void rspamd_symcache_start_refresh (struct rspamd_symcache *cache,
-									struct event_base *ev_base,
+									struct ev_loop *ev_base,
 									struct rspamd_worker *w);
 
 /**

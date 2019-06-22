@@ -17,7 +17,7 @@
 #define SRC_LIBSERVER_FUZZY_BACKEND_H_
 
 #include "config.h"
-#include <event.h>
+#include "contrib/libev/ev.h"
 #include "fuzzy_wire.h"
 
 struct rspamd_fuzzy_backend;
@@ -44,7 +44,7 @@ typedef gboolean (*rspamd_fuzzy_periodic_cb) (void *ud);
  * @param err
  * @return
  */
-struct rspamd_fuzzy_backend * rspamd_fuzzy_backend_create (struct event_base *ev_base,
+struct rspamd_fuzzy_backend * rspamd_fuzzy_backend_create (struct ev_loop *ev_base,
 		const ucl_object_t *config,
 		struct rspamd_config *cfg,
 		GError **err);
@@ -106,7 +106,7 @@ void rspamd_fuzzy_backend_start_update (struct rspamd_fuzzy_backend *backend,
 		rspamd_fuzzy_periodic_cb cb,
 		void *ud);
 
-struct event_base* rspamd_fuzzy_backend_event_base (struct rspamd_fuzzy_backend *backend);
+struct ev_loop* rspamd_fuzzy_backend_event_base (struct rspamd_fuzzy_backend *backend);
 gdouble rspamd_fuzzy_backend_get_expire (struct rspamd_fuzzy_backend *backend);
 
 /**

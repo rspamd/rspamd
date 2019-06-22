@@ -39,7 +39,7 @@ struct rspamd_monitored_methods {
 struct rspamd_monitored_ctx {
 	struct rspamd_config *cfg;
 	struct rdns_resolver *resolver;
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
 	GPtrArray *elts;
 	GHashTable *helts;
 	mon_change_cb change_cb;
@@ -63,7 +63,7 @@ struct rspamd_monitored {
 	enum rspamd_monitored_flags flags;
 	struct rspamd_monitored_ctx *ctx;
 	struct rspamd_monitored_methods proc;
-	struct event periodic;
+	ev_timer periodic;
 	gchar tag[RSPAMD_MONITORED_TAG_LEN];
 };
 
@@ -169,9 +169,9 @@ rspamd_monitored_propagate_success (struct rspamd_monitored *m, gdouble lat)
 }
 
 static void
-rspamd_monitored_periodic (gint fd, short what, gpointer ud)
+rspamd_monitored_periodic (EV_P_ ev_timer *w, int revents)
 {
-	struct rspamd_monitored *m = ud;
+	struct rspamd_monitored *m = (struct rspamd_monitored *)w->data;
 	struct timeval tv;
 	gdouble jittered;
 	gboolean ret = FALSE;
@@ -185,7 +185,8 @@ rspamd_monitored_periodic (gint fd, short what, gpointer ud)
 	}
 
 	if (ret) {
-		event_add (&m->periodic, &tv);
+		m->periodic.repeat = jittered;
+		ev_timer_again (EV_A_ &m->periodic);
 	}
 }
 
@@ -427,7 +428,7 @@ rspamd_monitored_ctx_init (void)
 void
 rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 		struct rspamd_config *cfg,
-		struct event_base *ev_base,
+		struct ev_loop *ev_base,
 		struct rdns_resolver *resolver,
 		mon_change_cb change_cb,
 		gpointer ud)
@@ -436,7 +437,7 @@ rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 	guint i;
 
 	g_assert (ctx != NULL);
-	ctx->ev_base = ev_base;
+	ctx->event_loop = ev_base;
 	ctx->resolver = resolver;
 	ctx->cfg = cfg;
 	ctx->initialized = TRUE;
@@ -457,10 +458,10 @@ rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
 }
 
 
-struct event_base *
+struct ev_loop *
 rspamd_monitored_ctx_get_ev_base (struct rspamd_monitored_ctx *ctx)
 {
-	return ctx->ev_base;
+	return ctx->event_loop;
 }
 
 
@@ -527,7 +528,7 @@ rspamd_monitored_create_ (struct rspamd_monitored_ctx *ctx,
 
 	g_ptr_array_add (ctx->elts, m);
 
-	if (ctx->ev_base) {
+	if (ctx->event_loop) {
 		rspamd_monitored_start (m);
 	}
 
@@ -592,30 +593,26 @@ rspamd_monitored_stop (struct rspamd_monitored *m)
 {
 	g_assert (m != NULL);
 
-	if (rspamd_event_pending (&m->periodic, EV_TIMEOUT)) {
-		event_del (&m->periodic);
-	}
+	ev_timer_stop (m->ctx->event_loop, &m->periodic);
 }
 
 void
 rspamd_monitored_start (struct rspamd_monitored *m)
 {
-	struct timeval tv;
 	gdouble jittered;
 
 	g_assert (m != NULL);
 	msg_debug_mon ("started monitored object %s", m->url);
 	jittered = rspamd_time_jitter (m->ctx->monitoring_interval * m->monitoring_mult,
 			0.0);
-	double_to_tv (jittered, &tv);
 
-	if (rspamd_event_pending (&m->periodic, EV_TIMEOUT)) {
-		event_del (&m->periodic);
+	if (ev_is_active (&m->periodic)) {
+		ev_timer_stop (m->ctx->event_loop, &m->periodic);
 	}
 
-	event_set (&m->periodic, -1, EV_TIMEOUT, rspamd_monitored_periodic, m);
-	event_base_set (m->ctx->ev_base, &m->periodic);
-	event_add (&m->periodic, &tv);
+	m->periodic.data = m;
+	ev_timer_init (&m->periodic, rspamd_monitored_periodic, jittered, 0.0);
+	ev_timer_start (m->ctx->event_loop, &m->periodic);
 }
 
 void

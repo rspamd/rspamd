@@ -3,7 +3,7 @@
 
 #include "config.h"
 #include "mem_pool.h"
-#include <event.h>
+#include "contrib/libev/ev.h"
 
 #define RSPAMD_DEFAULT_CLASSIFIER "bayes"
 /* Consider this value as 0 */
@@ -19,7 +19,7 @@ struct token_node_s;
 struct rspamd_stat_classifier {
 	char *name;
 	gboolean (*init_func)(struct rspamd_config *cfg,
-						  struct event_base *ev_base,
+						  struct ev_loop *ev_base,
 						  struct rspamd_classifier *cl);
 	gboolean (*classify_func)(struct rspamd_classifier * ctx,
 							  GPtrArray *tokens,
@@ -35,7 +35,7 @@ struct rspamd_stat_classifier {
 
 /* Bayes algorithm */
 gboolean bayes_init (struct rspamd_config *cfg,
-					 struct event_base *ev_base,
+					 struct ev_loop *ev_base,
 					 struct rspamd_classifier *);
 gboolean bayes_classify (struct rspamd_classifier *ctx,
 		GPtrArray *tokens,
@@ -50,7 +50,7 @@ void bayes_fin (struct rspamd_classifier *);
 
 /* Generic lua classifier */
 gboolean lua_classifier_init (struct rspamd_config *cfg,
-							  struct event_base *ev_base,
+							  struct ev_loop *ev_base,
 							  struct rspamd_classifier *);
 gboolean lua_classifier_classify (struct rspamd_classifier *ctx,
 		GPtrArray *tokens,

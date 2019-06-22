@@ -1523,7 +1523,7 @@ lua_task_create (lua_State * L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = NULL, **ptask;
 	struct rspamd_config *cfg = NULL;
-	struct event_base *ev_base = NULL;
+	struct ev_loop *ev_base = NULL;
 
 	if (lua_type (L, 1) == LUA_TUSERDATA) {
 		gpointer p;
@@ -1539,7 +1539,7 @@ lua_task_create (lua_State * L)
 		p = rspamd_lua_check_udata_maybe (L, 2, "rspamd{ev_base}");
 
 		if (p) {
-			ev_base = *(struct event_base **)p;
+			ev_base = *(struct ev_loop **)p;
 		}
 	}
 
@@ -1610,13 +1610,13 @@ static int
 lua_task_get_ev_base (lua_State * L)
 {
 	LUA_TRACE_POINT;
-	struct event_base **pbase;
+	struct ev_loop **pbase;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
-		pbase = lua_newuserdata (L, sizeof (struct event_base *));
+		pbase = lua_newuserdata (L, sizeof (struct ev_loop *));
 		rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
-		*pbase = task->ev_base;
+		*pbase = task->event_loop;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -4309,7 +4309,7 @@ lua_task_get_date (lua_State *L)
 		}
 		/* Get GMT date and store it to time_t */
 		if (type == DATE_CONNECT || type == DATE_CONNECT_STRING) {
-			tim = (tv_to_msec (&task->tv)) / 1000.;
+			tim = task->task_timestamp;
 
 			if (!gmt) {
 				struct tm t;
@@ -4399,14 +4399,16 @@ lua_task_get_timeval (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
+	struct timeval tv;
 
 	if (task != NULL) {
+		double_to_tv (task->task_timestamp, &tv);
 		lua_createtable (L, 0, 2);
 		lua_pushstring (L, "tv_sec");
-		lua_pushinteger (L, (lua_Integer)task->tv.tv_sec);
+		lua_pushinteger (L, (lua_Integer)tv.tv_sec);
 		lua_settable (L, -3);
 		lua_pushstring (L, "tv_usec");
-		lua_pushinteger (L, (lua_Integer)task->tv.tv_usec);
+		lua_pushinteger (L, (lua_Integer)tv.tv_usec);
 		lua_settable (L, -3);
 	}
 	else {
@@ -4429,7 +4431,7 @@ lua_task_get_scan_time (lua_State *L)
 		}
 
 		rspamd_task_set_finish_time (task);
-		lua_pushnumber (L, task->time_real_finish - task->time_real);
+		lua_pushnumber (L, task->time_real_finish - task->task_timestamp);
 		lua_pushnumber (L, task->time_virtual_finish - task->time_virtual);
 
 		if (!set) {

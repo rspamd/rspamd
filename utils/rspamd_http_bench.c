@@ -94,7 +94,7 @@ struct client_cbdata {
 	struct lat_elt *lat;
 	guint32 *wconns;
 	gdouble ts;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 };
 
 static void
@@ -130,7 +130,7 @@ rspamd_client_finish (struct rspamd_http_connection *conn,
 }
 
 static void
-rspamd_http_client_func (struct event_base *ev_base, struct lat_elt *latency,
+rspamd_http_client_func (struct ev_loop *ev_base, struct lat_elt *latency,
 		guint32 *wconns,
 		struct rspamd_cryptobox_pubkey *peer_key,
 		struct rspamd_cryptobox_keypair* client_key,
@@ -178,7 +178,7 @@ static void
 rspamd_worker_func (struct lat_elt *plat, guint32 *wconns)
 {
 	guint i, j;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	struct itimerval itv;
 	struct rspamd_keypair_cache *c = NULL;
 	struct rspamd_cryptobox_keypair *client_key = NULL;
@@ -313,7 +313,7 @@ main (int argc, char **argv)
 	GOptionContext *context;
 	GError *error = NULL;
 	pid_t *sfd;
-	struct event_base *ev_base;
+	struct ev_loop *ev_base;
 	rspamd_mempool_t *pool = rspamd_mempool_new (8192, "http-bench");
 	struct event term_ev, int_ev, cld_ev;
 	guint64 total_done;

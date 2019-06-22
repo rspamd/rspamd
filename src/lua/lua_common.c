@@ -910,7 +910,6 @@ rspamd_lua_init (bool wipe_mem)
 	luaopen_util (L);
 	luaopen_tcp (L);
 	luaopen_html (L);
-	luaopen_fann (L);
 	luaopen_sqlite3 (L);
 	luaopen_cryptobox (L);
 	luaopen_dns (L);
@@ -1828,23 +1827,23 @@ lua_check_session (lua_State * L, gint pos)
 	return ud ? *((struct rspamd_async_session **)ud) : NULL;
 }
 
-struct event_base*
+struct ev_loop*
 lua_check_ev_base (lua_State * L, gint pos)
 {
 	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{ev_base}");
 	luaL_argcheck (L, ud != NULL, pos, "'event_base' expected");
-	return ud ? *((struct event_base **)ud) : NULL;
+	return ud ? *((struct ev_loop **)ud) : NULL;
 }
 
 static void rspamd_lua_run_postloads_error (struct thread_entry *thread, int ret, const char *msg);
 
 void
 rspamd_lua_run_postloads (lua_State *L, struct rspamd_config *cfg,
-		struct event_base *ev_base, struct rspamd_worker *w)
+		struct ev_loop *ev_base, struct rspamd_worker *w)
 {
 	struct rspamd_config_cfg_lua_script *sc;
 	struct rspamd_config **pcfg;
-	struct event_base **pev_base;
+	struct ev_loop **pev_base;
 	struct rspamd_worker **pw;
 
 	/* Execute post load scripts */

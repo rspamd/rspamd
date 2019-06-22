@@ -54,14 +54,16 @@ enum fetch_proto {
  */
 struct file_map_data {
 	gchar *filename;
-	struct stat st;
+	gboolean need_modify;
+	ev_stat st_ev;
 };
 
 
 struct http_map_data;
 
 struct rspamd_http_map_cached_cbdata {
-	struct event timeout;
+	ev_timer timeout;
+	struct ev_loop *event_loop;
 	struct rspamd_storage_shmem *shm;
 	struct rspamd_map *map;
 	struct http_map_data *data;
@@ -114,12 +116,15 @@ struct rspamd_map_backend {
 	gboolean is_signed;
 	gboolean is_compressed;
 	gboolean is_fallback;
+	struct ev_loop *event_loop;
 	guint32 id;
 	struct rspamd_cryptobox_pubkey *trusted_pubkey;
 	union rspamd_map_backend_data data;
 	gchar *uri;
 	ref_entry_t ref;
 };
+
+struct map_periodic_cbdata;
 
 struct rspamd_map {
 	struct rspamd_dns_resolver *r;
@@ -130,12 +135,12 @@ struct rspamd_map {
 	map_fin_cb_t fin_callback;
 	map_dtor_t dtor;
 	void **user_data;
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
 	struct rspamd_worker *wrk;
 	gchar *description;
 	gchar *name;
 	guint32 id;
-	gboolean scheduled_check;
+	struct map_periodic_cbdata *scheduled_check;
 	rspamd_map_tmp_dtor tmp_dtor;
 	gpointer tmp_dtor_data;
 	rspamd_map_traverse_function traverse_function;
@@ -143,7 +148,7 @@ struct rspamd_map {
 	gsize nelts;
 	guint64 digest;
 	/* Should we check HTTP or just load cached data */
-	struct timeval tv;
+	ev_tstamp timeout;
 	gdouble poll_timeout;
 	time_t next_check;
 	gboolean active_http;
@@ -164,7 +169,7 @@ enum rspamd_map_http_stage {
 struct map_periodic_cbdata {
 	struct rspamd_map *map;
 	struct map_cb_data cbdata;
-	struct event ev;
+	ev_timer ev;
 	gboolean need_modify;
 	gboolean errored;
 	gboolean locked;
@@ -183,7 +188,7 @@ struct rspamd_http_file_data {
 };
 
 struct http_callback_data {
-	struct event_base *ev_base;
+	struct ev_loop *event_loop;
 	struct rspamd_http_connection *conn;
 	rspamd_inet_addr_t *addr;
 	struct rspamd_map *map;
@@ -191,16 +196,15 @@ struct http_callback_data {
 	struct http_map_data *data;
 	struct map_periodic_cbdata *periodic;
 	struct rspamd_cryptobox_pubkey *pk;
-	gboolean check;
 	struct rspamd_storage_shmem *shmem_data;
 	struct rspamd_storage_shmem *shmem_sig;
 	struct rspamd_storage_shmem *shmem_pubkey;
 	gsize data_len;
 	gsize sig_len;
 	gsize pubkey_len;
-
+	gboolean check;
 	enum rspamd_map_http_stage stage;
-	struct timeval tv;
+	ev_tstamp timeout;
 
 	ref_entry_t ref;
 };
