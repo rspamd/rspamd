@@ -123,7 +123,7 @@ CREATE TABLE rspamd
     `Urls.Tld` Array(String) COMMENT 'Effective second level domain part of the URL host',
     `Urls.Url` Array(String) COMMENT 'Full URL if `full_urls` module option enabled, host part of URL otherwise',
     Emails Array(String) COMMENT 'List of emails extracted from the message',
-    ASN String COMMENT 'BGP AS number for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
+    ASN UInt32 COMMENT 'BGP AS number for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
     Country LowCardinality(FixedString(2)) COMMENT 'Country for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
     IPNet String,
     `Symbols.Names` Array(LowCardinality(String)) COMMENT 'Symbol name',
@@ -158,7 +158,7 @@ local migrations = {
       ADD COLUMN `Urls.Tld` Array(String) AFTER `Attachments.Digest`,
       ADD COLUMN `Urls.Url` Array(String) AFTER `Urls.Tld`,
       ADD COLUMN Emails Array(String) AFTER `Urls.Url`,
-      ADD COLUMN ASN String AFTER Emails,
+      ADD COLUMN ASN UInt32 AFTER Emails,
       ADD COLUMN Country FixedString(2) AFTER ASN,
       ADD COLUMN IPNet String AFTER Country,
       ADD COLUMN `Symbols.Names` Array(String) AFTER IPNet,
@@ -731,7 +731,7 @@ local function clickhouse_collect(task)
   end
 
   -- ASN information
-  local asn, country, ipnet = '--', '--', '--'
+  local asn, country, ipnet = 0, '--', '--'
   local pool = task:get_mempool()
   ret = pool:get_variable("asn")
   if ret then
