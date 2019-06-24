@@ -1466,6 +1466,7 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 						 what,
 						 item->symbol,
 						 id);
+
 			return FALSE;
 		}
 
@@ -1473,6 +1474,15 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 			if (item->allowed_ids.st[0] == 0 ||
 				!rspamd_symcache_check_id_list (&item->allowed_ids,
 						id)) {
+
+				if (task->settings_elt->policy == RSPAMD_SETTINGS_POLICY_IMPLICIT_ALLOW) {
+					msg_debug_cache_task ("allow execution of %s settings id %ud "
+										  "allows implicit execution of the symbols",
+							item->symbol,
+							id);
+
+					return TRUE;
+				}
 
 				if (exec_only) {
 					/*
