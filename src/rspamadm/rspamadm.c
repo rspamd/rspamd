@@ -367,6 +367,7 @@ main (gint argc, gchar **argv, gchar **env)
 	GPtrArray *all_commands = g_ptr_array_new (); /* Discovered during check */
 	gint i, nargc, targc;
 	worker_t **pworker;
+	gboolean lua_file = FALSE;
 
 	ucl_vars = g_hash_table_new_full (rspamd_strcase_hash,
 		rspamd_strcase_equal, g_free, g_free);
@@ -516,6 +517,13 @@ main (gint argc, gchar **argv, gchar **env)
 		cmd_name = "help";
 	}
 
+	gsize cmdlen = strlen (cmd_name);
+
+	if (cmdlen > 4 && memcmp (cmd_name + (cmdlen - 4), ".lua", 4) == 0) {
+		cmd_name = "lua";
+		lua_file = TRUE;
+	}
+
 	cmd = rspamadm_search_command (cmd_name, all_commands);
 
 	if (cmd == NULL) {
@@ -543,11 +551,34 @@ main (gint argc, gchar **argv, gchar **env)
 	}
 
 	if (nargc < argc) {
-		nargv = g_malloc0 (sizeof (gchar *) * (argc - nargc + 1));
+
+		if (lua_file) {
+			nargv = g_malloc0 (sizeof (gchar *) * (argc - nargc + 2));
+			nargv[1] = g_strdup (argv[nargc]);
+			i = 2;
+			argc ++;
+		}
+		else {
+			nargv = g_malloc0 (sizeof (gchar *) * (argc - nargc + 1));
+			i = 1;
+		}
+
 		nargv[0] = g_strdup_printf ("%s %s", argv[0], cmd_name);
 
-		for (i = 1; i < argc - nargc; i ++) {
-			nargv[i] = g_strdup (argv[i + nargc]);
+		for (; i < argc - nargc; i ++) {
+			if (lua_file) {
+				/*
+				 * We append prefix '--arg=' to each argument and shift argv index
+				 */
+				gsize arglen = strlen (argv[i + nargc - 1]);
+
+				arglen += sizeof ("--args="); /* Including \0 */
+				nargv[i] = g_malloc (arglen);
+				rspamd_snprintf (nargv[i], arglen, "--args=%s", argv[i + nargc - 1]);
+			}
+			else {
+				nargv[i] = g_strdup (argv[i + nargc]);
+			}
 		}
 
 		targc = argc - nargc;
