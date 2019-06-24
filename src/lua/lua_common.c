@@ -1062,10 +1062,36 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 			lua_pushcfunction (L, &rspamd_lua_traceback);
 			err_idx = lua_gettop (L);
 
-			if (luaL_loadfile (L, module->path) != 0) {
+			gsize fsize;
+			guint8 *data = rspamd_file_xmap (module->path,
+					PROT_READ, &fsize, TRUE);
+			guchar digest[rspamd_cryptobox_HASHBYTES];
+
+			if (data == NULL) {
+				msg_err_config ("cannot mmap %s failed: %s", module->path,
+						strerror (errno));
+
+				lua_settop (L, err_idx - 1); /*  Error function */
+
+				rspamd_plugins_table_push_elt (L, "disabled_failed",
+						module->name);
+
+				cur = g_list_next (cur);
+				continue;
+			}
+
+			module->digest = rspamd_mempool_alloc (cfg->cfg_pool,
+				rspamd_cryptobox_HASHBYTES * 2 + 1);
+			rspamd_cryptobox_hash (digest, data, fsize, NULL, 0);
+			rspamd_encode_hex_buf (digest, sizeof (digest),
+					module->digest, rspamd_cryptobox_HASHBYTES * 2 + 1);
+			module->digest[rspamd_cryptobox_HASHBYTES * 2] = '\0';
+
+
+			if (luaL_loadbuffer (L, data, fsize, module->path) != 0) {
 				msg_err_config ("load of %s failed: %s", module->path,
 					lua_tostring (L, -1));
-				lua_pop (L, 1); /*  Error function */
+				lua_settop (L, err_idx - 1); /*  Error function */
 
 				rspamd_plugins_table_push_elt (L, "disabled_failed",
 						module->name);
@@ -1094,7 +1120,10 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 			}
 
 			if (!force_load) {
-				msg_info_config ("init lua module %s", module->name);
+				msg_info_config ("init lua module %s from %s; digest: %*s",
+						module->name,
+						module->path,
+						10, module->digest);
 			}
 
 			lua_pop (L, 1); /* Error function */

@@ -84,8 +84,9 @@ struct rspamd_worker_log_pipe {
  * script module list item
  */
 struct script_module {
-	gchar *name;                                    /**< name of module                                     */
-	gchar *path;                                    /**< path to module										*/
+	gchar *name;                                    /**< name of module   */
+	gchar *path;                                    /**< path to module   */
+	gchar *digest;
 };
 
 /**
