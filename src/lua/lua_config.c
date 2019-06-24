@@ -3475,6 +3475,7 @@ lua_config_register_settings_id (lua_State *L)
 
 	if (cfg != NULL && settings_name) {
 		ucl_object_t *sym_enabled, *sym_disabled;
+		enum rspamd_config_settings_policy policy = RSPAMD_SETTINGS_POLICY_DEFAULT;
 
 		sym_enabled = ucl_object_lua_import (L, 3);
 
@@ -3493,8 +3494,40 @@ lua_config_register_settings_id (lua_State *L)
 			return luaL_error (L, "invalid symbols enabled");
 		}
 
+		/* Check policy */
+		if (lua_isstring (L, 5)) {
+			const gchar *policy_str = lua_tostring (L, 5);
+
+			if (strcmp (policy_str, "default") == 0) {
+				policy = RSPAMD_SETTINGS_POLICY_DEFAULT;
+			}
+			else if (strcmp (policy_str, "implicit_allow") == 0) {
+				policy = RSPAMD_SETTINGS_POLICY_IMPLICIT_ALLOW;
+			}
+			else if (strcmp (policy_str, "implicit_deny") == 0) {
+				policy = RSPAMD_SETTINGS_POLICY_IMPLICIT_DENY;
+			}
+			else {
+				return luaL_error (L, "invalid settings policy: %s", policy_str);
+			}
+		}
+		else {
+			/* Apply heuristic */
+			if (!sym_enabled) {
+				policy = RSPAMD_SETTINGS_POLICY_IMPLICIT_ALLOW;
+			}
+		}
+
 		rspamd_config_register_settings_id (cfg, settings_name, sym_enabled,
-				sym_disabled);
+				sym_disabled, policy);
+
+		if (sym_enabled) {
+			ucl_object_unref (sym_enabled);
+		}
+
+		if (sym_disabled) {
+			ucl_object_unref (sym_disabled);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

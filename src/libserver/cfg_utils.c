@@ -2404,9 +2404,10 @@ struct rspamd_config_settings_elt *rspamd_config_find_settings_name_ref (
 
 void
 rspamd_config_register_settings_id (struct rspamd_config *cfg,
-										 const gchar *name,
-										 ucl_object_t *symbols_enabled,
-										 ucl_object_t *symbols_disabled)
+									const gchar *name,
+									ucl_object_t *symbols_enabled,
+									ucl_object_t *symbols_disabled,
+									enum rspamd_config_settings_policy policy)
 {
 	struct rspamd_config_settings_elt *elt;
 	guint32 id;
@@ -2432,6 +2433,8 @@ rspamd_config_register_settings_id (struct rspamd_config *cfg,
 		if (symbols_disabled) {
 			nelt->symbols_disabled = ucl_object_ref (symbols_disabled);
 		}
+
+		nelt->policy = policy;
 
 		REF_INIT_RETAIN (nelt, rspamd_config_settings_elt_dtor);
 		msg_warn_config ("replace settings id %ud (%s)", id, name);
@@ -2459,6 +2462,8 @@ rspamd_config_register_settings_id (struct rspamd_config *cfg,
 		if (symbols_disabled) {
 			elt->symbols_disabled = ucl_object_ref (symbols_disabled);
 		}
+
+		elt->policy = policy;
 
 		msg_info_config ("register new settings id %ud (%s)", id, name);
 		REF_INIT_RETAIN (elt, rspamd_config_settings_elt_dtor);

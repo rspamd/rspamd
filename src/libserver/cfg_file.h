@@ -308,8 +308,15 @@ struct rspamd_config_post_init_script {
 
 struct rspamd_lang_detector;
 
+enum rspamd_config_settings_policy {
+	RSPAMD_SETTINGS_POLICY_DEFAULT = 0,
+	RSPAMD_SETTINGS_POLICY_IMPLICIT_ALLOW = 1,
+	RSPAMD_SETTINGS_POLICY_IMPLICIT_DENY = 2,
+};
+
 struct rspamd_config_settings_elt {
 	guint32 id;
+	enum rspamd_config_settings_policy policy;
 	const gchar *name;
 	ucl_object_t *symbols_enabled;
 	ucl_object_t *symbols_disabled;
@@ -744,7 +751,8 @@ gboolean rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 void rspamd_config_register_settings_id (struct rspamd_config *cfg,
 										 const gchar *name,
 										 ucl_object_t *symbols_enabled,
-										 ucl_object_t *symbols_disabled);
+										 ucl_object_t *symbols_disabled,
+										 enum rspamd_config_settings_policy policy);
 
 /**
  * Convert settings name to settings id
