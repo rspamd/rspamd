@@ -32,6 +32,8 @@ local lua_maps = require "lua_maps"
 local lua_maps_expressions = require "lua_maps_expressions"
 local N = "emails"
 
+-- TODO: move this into common part
+
 -- Check rule for a single email
 local function check_email_rule(task, rule, addr)
   if rule['whitelist'] then
@@ -172,19 +174,24 @@ local function gen_check_emails(rule)
     local checked = {}
     if emails and not rule.skip_body then
       for _,addr in ipairs(emails) do
-        local to_check = string.format('%s%s%s', addr:get_user(),
-          rule.delimiter, addr:get_host())
-        local naddr = {
-          user = (addr:get_user() or ''):lower(),
-          domain = (addr:get_host() or ''):lower(),
-          addr = to_check:lower()
-        }
+        local user_part = addr:get_user()
+        local domain = addr:get_host()
 
-        rspamd_lua_utils.remove_email_aliases(naddr)
+        if (user_part and #user_part > 0) and (domain and #domain > 0) then
+          local to_check = string.format('%s%s%s', addr:get_user(),
+              rule.delimiter, addr:get_host())
+          local naddr = {
+            user = (addr:get_user() or ''):lower(),
+            domain = (addr:get_host() or ''):lower(),
+            addr = to_check:lower()
+          }
 
-        if not checked[naddr.addr] then
-          check_email_rule(task, rule, naddr)
-          checked[naddr.addr] = true
+          rspamd_lua_utils.remove_email_aliases(naddr)
+
+          if not checked[naddr.addr] then
+            check_email_rule(task, rule, naddr)
+            checked[naddr.addr] = true
+          end
         end
       end
     end
@@ -198,7 +205,7 @@ local function gen_check_emails(rule)
       if replyto then
         local rt = util.parse_mail_address(replyto, task:get_mempool())
 
-        if rt and rt[1] then
+        if rt and rt[1] and (rt[1].addr and #rt[1].addr > 0) then
           rspamd_lua_utils.remove_email_aliases(rt[1])
           rt[1].addr = rt[1].addr:lower()
           if not checked[rt[1].addr] then
