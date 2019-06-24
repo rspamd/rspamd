@@ -423,6 +423,32 @@ local transform_function = {
     ['description'] = 'Joins strings into a single string using separator in the argument',
     ['args_schema'] = {ts.string:is_optional()}
   },
+  -- Sort strings
+  ['sort'] = {
+    ['types'] = {
+      ['list'] = true
+    },
+    ['process'] = function(inp, t, _)
+      table.sort(inp)
+      return inp, t
+    end,
+    ['description'] = 'Sort strings lexicographically',
+  },
+  -- Return unique elements based on hashing (can work without sorting)
+  ['uniq'] = {
+    ['types'] = {
+      ['list'] = true
+    },
+    ['process'] = function(inp, t, _)
+      local tmp = {}
+      for _,val in ipairs(inp) do
+        tmp[val] = true
+      end
+
+      return fun.map(function(k, _) return k end, tmp), t
+    end,
+    ['description'] = 'Returns a list of unique elements (using a hash table)',
+  },
   -- Create a digest from string or a list of strings
   ['digest'] = {
     ['types'] = {
