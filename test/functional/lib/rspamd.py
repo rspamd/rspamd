@@ -10,6 +10,7 @@ import socket
 import sys
 import tempfile
 import json
+import stat
 from robot.libraries.BuiltIn import BuiltIn
 from robot.api import logger
 
@@ -108,7 +109,13 @@ def make_temporary_directory():
     | ${TMPDIR} = | Make Temporary Directory |
     """
     dirname = tempfile.mkdtemp()
-    os.chmod(dirname, 0755)
+    os.chmod(dirname, stat.S_IRUSR |
+             stat.S_IXUSR |
+             stat.S_IWUSR |
+             stat.S_IRGRP |
+             stat.S_IXGRP |
+             stat.S_IROTH |
+             stat.S_IXOTH)
     return dirname
 
 def make_temporary_file():
