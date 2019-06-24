@@ -622,11 +622,18 @@ LUA_FUNCTION_DEF (config, get_symbols_cksum);
 LUA_FUNCTION_DEF (config, get_symbols_counters);
 
 /***
- * @method rspamd_config:get_symbols_scores()
- * Returns table of all scores defined in config
+ * @method rspamd_config:get_symbols()
+ * Returns table of all scores defined in config. From version 2.0 returns table:
+ * - name
+ * - score
+ * - flags (e.g. `ignore` or `oneparam`)
+ * - nshots (== maxhits)
+ * - group - main group
+ * - groups - array of all groups
+ * @available 2.0+
  * @return {table|tables} all symbols indexed by name
  */
-LUA_FUNCTION_DEF (config, get_symbols_scores);
+LUA_FUNCTION_DEF (config, get_symbols);
 
 /***
  * @method rspamd_config:get_symbol_callback(name)
@@ -855,7 +862,8 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_symbols_count),
 	LUA_INTERFACE_DEF (config, get_symbols_cksum),
 	LUA_INTERFACE_DEF (config, get_symbols_counters),
-	LUA_INTERFACE_DEF (config, get_symbols_scores),
+	{"get_symbols_scores", lua_config_get_symbols},
+	LUA_INTERFACE_DEF (config, get_symbols),
 	LUA_INTERFACE_DEF (config, get_symbol_callback),
 	LUA_INTERFACE_DEF (config, set_symbol_callback),
 	LUA_INTERFACE_DEF (config, get_symbol_stat),
@@ -3244,10 +3252,12 @@ lua_metric_symbol_inserter (gpointer k, gpointer v, gpointer ud)
 	lua_State *L = (lua_State *) ud;
 	const gchar *sym = k;
 	struct rspamd_symbol *s = (struct rspamd_symbol *) v;
+	struct rspamd_symbols_group *gr;
+	gint i;
 
-	lua_pushstring (L, sym);
+	lua_pushstring (L, sym); /* Symbol name */
 
-	lua_createtable (L, 0, 3); /* TODO: add more if needed */
+	lua_createtable (L, 0, 6);
 	lua_pushstring (L, "score");
 	lua_pushnumber (L, s->score);
 	lua_settable (L, -3);
@@ -3255,11 +3265,52 @@ lua_metric_symbol_inserter (gpointer k, gpointer v, gpointer ud)
 	lua_pushstring (L, s->description);
 	lua_settable (L, -3);
 
+	lua_pushstring (L, "flags");
+	lua_createtable (L, 0, 3);
+
+	if (s->flags & RSPAMD_SYMBOL_FLAG_IGNORE) {
+		lua_pushstring (L, "ignore");
+		lua_pushboolean (L, true);
+		lua_settable (L, -3);
+	}
+	if (s->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM) {
+		lua_pushstring (L, "oneparam");
+		lua_pushboolean (L, true);
+		lua_settable (L, -3);
+	}
+	if (s->flags & RSPAMD_SYMBOL_FLAG_UNGROUPPED) {
+		lua_pushstring (L, "ungroupped");
+		lua_pushboolean (L, true);
+		lua_settable (L, -3);
+	}
+
+	lua_settable (L, -3); /* Flags -> flags_table */
+
+	lua_pushstring (L, "nshots");
+	lua_pushinteger (L, s->nshots);
 	lua_settable (L, -3);
+
+	if (s->gr) {
+		lua_pushstring (L, "group");
+		lua_pushstring (L, s->gr->name);
+		lua_settable (L, -3);
+	}
+
+	lua_pushstring (L, "groups");
+	lua_createtable (L, s->groups->len, 0);
+
+	PTR_ARRAY_FOREACH (s->groups, i, gr) {
+		lua_pushstring (L, gr->name);
+		lua_rawseti (L, -2, i + 1); /* Groups[i + 1] = group_name */
+	}
+
+	lua_settable (L, -3); /* Groups -> groups_table */
+
+	lua_settable (L, -3); /* Symname -> table */
 }
 
 static gint
-lua_config_get_symbols_scores (lua_State *L)
+lua_config_get_symbols (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
