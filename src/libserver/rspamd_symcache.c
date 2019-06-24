@@ -3259,7 +3259,10 @@ rspamd_symcache_process_settings_elt (struct rspamd_symcache *cache,
 					 * we ignore them in symcache but prevent them from being
 					 * inserted.
 					 */
-					msg_debug_cache ("skip virtual symbol %s for settings id %ud (%s)",
+					rspamd_symcache_add_id_to_list (cache->static_pool,
+							&item->forbidden_ids, id);
+					msg_debug_cache ("deny virtual symbol %s for settings %ud (%s); "
+									 "parent can still be executed",
 							sym, id, elt->name);
 				}
 				else {
