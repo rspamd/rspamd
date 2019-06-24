@@ -33,11 +33,13 @@ context("Selectors test", function()
   local cases = {
     ["ip"] = {
                 selector = "ip",
-                expect = {"198.172.22.91"}},
+                expect = {"198.172.22.91"}
+    },
 
     ["header Subject"] = {
                 selector = "header(Subject)",
-                expect = {"Second, lower-cased header subject"}},
+                expect = {"Second, lower-cased header subject"}
+    },
 
     ["header Subject lower"] = {
                 selector = "header(Subject).lower",
@@ -45,47 +47,68 @@ context("Selectors test", function()
 
     ["header full Subject lower"] = {
                 selector = "header(Subject, 'full').lower",
-                expect = {{"second, lower-cased header subject", "test subject"}}},
+                expect = {{"second, lower-cased header subject", "test subject"}}
+    },
 
     ["header full strong Subject"] = {
                 selector = "header(Subject, 'full,strong')",
-                expect = {{"Test subject"}}},
+                expect = {{"Test subject"}}
+    },
 
     ["header full strong lower-cased Subject"] = {
                 selector = "header(subject, 'full,strong')",
-                expect = {{"Second, lower-cased header subject"}}},
+                expect = {{"Second, lower-cased header subject"}}
+    },
 
     ["digest"] = {
                 selector = "digest",
-                expect = {"c459a21bd1f33fb4ba035481f46ef0c7"}},
+                expect = {"c459a21bd1f33fb4ba035481f46ef0c7"}
+    },
 
     ["user"] = {
                 selector = "user",
-                expect = {"cool user name"}},
+                expect = {"cool user name"}
+    },
 
     ["from"] = {
                 selector = "from",
-                expect = {"whoknows@nowhere.com"}},
+                expect = {"whoknows@nowhere.com"}
+    },
 
     ["rcpts"] = {
                 selector = "rcpts",
-                expect = {{"nobody@example.com", "no-one@example.com"}}},
+                expect = {{"nobody@example.com", "no-one@example.com"}}
+    },
 
     ["1st rcpts"] = {
                 selector = "rcpts.nth(1)",
-                expect = {"nobody@example.com"}},
+                expect = {"nobody@example.com"}
+    },
 
     ["lower rcpts"] = {
                 selector = "rcpts.lower.first",
-                expect = {"nobody@example.com"}},
+                expect = {"nobody@example.com"}
+    },
 
     ["first rcpts"] = {
                 selector = "rcpts.first",
-                expect = {"nobody@example.com"}},
+                expect = {"nobody@example.com"}
+    },
 
     ["first addr rcpts"] = {
                 selector = "rcpts:addr.first",
-                expect = {"nobody@example.com"}},
+                expect = {"nobody@example.com"}
+    },
+
+    ["rcpts_uniq_domains"] = {
+      selector = "rcpts:domain.uniq",
+      expect = {{"example.com"}}
+    },
+
+    ["rcpts_sorted"] = {
+      selector = "rcpts:addr.sort",
+      expect = {{"nobody@example.com", "no-one@example.com"}}
+    },
 
     ["to"] = {
                 selector = "to",

@@ -441,9 +441,9 @@ local transform_function = {
     },
     ['process'] = function(inp, t, _)
       local tmp = {}
-      for _,val in ipairs(inp) do
-        tmp[val] = true
-      end
+      fun.each(function(val)
+         tmp[val] = true
+      end, inp)
 
       return fun.map(function(k, _) return k end, tmp), t
     end,
