@@ -83,7 +83,6 @@ struct surbl_ctx {
 	gdouble read_timeout;
 	gboolean use_tags;
 	GList *suffixes;
-	gchar *metric;
 	const gchar *redirector_symbol;
 	GHashTable **exceptions;
 	struct rspamd_hash_map_helper *whitelist;
@@ -860,6 +859,14 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 
 		cb_id = rspamd_symcache_add_symbol (cfg->cache, sym->str,
 				0, surbl_test_url, new_suffix, SYMBOL_TYPE_CALLBACK, -1);
+		rspamd_config_add_symbol (cfg,
+				sym->str,
+				0.0,
+				"SURBL rule check callback",
+				"surbl",
+				RSPAMD_SYMBOL_FLAG_IGNORE,
+				1,
+				1);
 		rspamd_symcache_add_dependency (cfg->cache, cb_id,
 				SURBL_REDIRECTOR_CALLBACK);
 		/* Failure symbol */
@@ -1051,6 +1058,14 @@ surbl_module_config (struct rspamd_config *cfg)
 	(void) rspamd_symcache_add_symbol (cfg->cache, SURBL_REDIRECTOR_CALLBACK,
 			0, surbl_test_redirector, NULL,
 			SYMBOL_TYPE_CALLBACK, -1);
+	rspamd_config_add_symbol (cfg,
+			SURBL_REDIRECTOR_CALLBACK,
+			0.0,
+			"SURBL redirector check callback",
+			"surbl",
+			RSPAMD_SYMBOL_FLAG_IGNORE,
+			1,
+			1);
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "surbl", "redirector")) != NULL) {

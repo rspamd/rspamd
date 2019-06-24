@@ -300,11 +300,26 @@ spf_module_config (struct rspamd_config *cfg)
 	}
 
 	cb_id = rspamd_symcache_add_symbol (cfg->cache,
-			spf_module_ctx->symbol_fail,
+			"SPF_CHECK",
 			0,
 			spf_symbol_callback,
 			NULL,
-			SYMBOL_TYPE_NORMAL | SYMBOL_TYPE_FINE | SYMBOL_TYPE_EMPTY, -1);
+			SYMBOL_TYPE_CALLBACK | SYMBOL_TYPE_FINE | SYMBOL_TYPE_EMPTY, -1);
+	rspamd_config_add_symbol (cfg,
+			"SPF_CHECK",
+			0.0,
+			"SPF check callback",
+			"policies",
+			RSPAMD_SYMBOL_FLAG_IGNORE,
+			1,
+			1);
+	rspamd_config_add_symbol_group (cfg, "SPF_CHECK", "spf");
+
+	rspamd_symcache_add_symbol (cfg->cache,
+			spf_module_ctx->symbol_fail, 0,
+			NULL, NULL,
+			SYMBOL_TYPE_VIRTUAL,
+			cb_id);
 	rspamd_symcache_add_symbol (cfg->cache,
 			spf_module_ctx->symbol_softfail, 0,
 			NULL, NULL,

@@ -529,6 +529,15 @@ dkim_module_config (struct rspamd_config *cfg)
 				NULL,
 				SYMBOL_TYPE_CALLBACK,
 				-1);
+		rspamd_config_add_symbol (cfg,
+				"DKIM_CHECK",
+				0.0,
+				"DKIM check callback",
+				"policies",
+				RSPAMD_SYMBOL_FLAG_IGNORE,
+				1,
+				1);
+		rspamd_config_add_symbol_group (cfg, "DKIM_CHECK", "dkim");
 		rspamd_symcache_add_symbol (cfg->cache,
 				dkim_module_ctx->symbol_reject,
 				0,

@@ -1053,6 +1053,14 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 				"FUZZY_CALLBACK", 0, fuzzy_symbol_callback, NULL,
 				SYMBOL_TYPE_CALLBACK | SYMBOL_TYPE_FINE,
 				-1);
+		rspamd_config_add_symbol (cfg,
+				"FUZZY_CALLBACK",
+				0.0,
+				"Fuzzy check callback",
+				"fuzzy",
+				RSPAMD_SYMBOL_FLAG_IGNORE,
+				1,
+				1);
 
 		/*
 		 * Here we can have 2 possibilities:
