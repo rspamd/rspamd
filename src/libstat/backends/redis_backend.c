@@ -1590,6 +1590,7 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 
 
 		if (ev_is_active (&rt->timeout_event)) {
+			rt->timeout_event.repeat = rt->ctx->timeout;
 			ev_timer_again (task->event_loop, &rt->timeout_event);
 		}
 		else {
@@ -1802,6 +1803,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 
 		/* Set timeout */
 		if (ev_is_active (&rt->timeout_event)) {
+			rt->timeout_event.repeat = rt->ctx->timeout;
 			ev_timer_again (task->event_loop, &rt->timeout_event);
 		}
 		else {
