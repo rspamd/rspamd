@@ -4,8 +4,9 @@
 ; Ignore third-party code
 ignore = contrib/**/* doc/doxydown/doxydown.pl
 
-;[PerlCritic]
-;select = **/*.{pl,pl.in,pm,t}
+[PerlCritic]
+select = **/*.{pl,pl.in,pm,t}
+ignore = utils/{cgp_rspamd.pl,redirector.pl.in,classifier_test.pl}
 
 [PerlTidy]
 select = **/*.{pl,pl.in,pm,t}
