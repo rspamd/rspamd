@@ -1588,6 +1588,16 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 		rspamd_session_add_event (task->s, rspamd_redis_fin, rt, M);
 		rt->has_event = TRUE;
 
+		query = rspamd_redis_tokens_to_query (task, rt, tokens,
+				rt->ctx->new_schema ? "HGET" : "HMGET",
+				rt->redis_object_expanded, FALSE, -1,
+				rt->stcf->clcf->flags & RSPAMD_FLAG_CLASSIFIER_INTEGER);
+		g_assert (query != NULL);
+		rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t)rspamd_fstring_free, query);
+
+		ret = redisAsyncFormattedCommand (rt->redis, rspamd_redis_processed, rt,
+				query->str, query->len);
 
 		if (ev_is_active (&rt->timeout_event)) {
 			rt->timeout_event.repeat = rt->ctx->timeout;
@@ -1599,17 +1609,6 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 					rt->ctx->timeout, 0.);
 			ev_timer_start (task->event_loop, &rt->timeout_event);
 		}
-
-		query = rspamd_redis_tokens_to_query (task, rt, tokens,
-				rt->ctx->new_schema ? "HGET" : "HMGET",
-				rt->redis_object_expanded, FALSE, -1,
-				rt->stcf->clcf->flags & RSPAMD_FLAG_CLASSIFIER_INTEGER);
-		g_assert (query != NULL);
-		rspamd_mempool_add_destructor (task->task_pool,
-				(rspamd_mempool_destruct_t)rspamd_fstring_free, query);
-
-		ret = redisAsyncFormattedCommand (rt->redis, rspamd_redis_processed, rt,
-				query->str, query->len);
 
 		if (ret == REDIS_OK) {
 			return TRUE;
