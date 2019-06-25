@@ -9,6 +9,9 @@ Variables       ${TESTDIR}/lib/vars.py
 ${CONFIG}       ${TESTDIR}/configs/plugins.conf
 ${LUA_SCRIPT}   ${TESTDIR}/lua/settings.lua
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
+${MESSAGE_7BIT}      ${TESTDIR}/messages/utf.eml
+${MESSAGE_CUSTOM_HDR}      ${TESTDIR}/messages/empty-plain-text.eml
+${MESSAGE_ABSENT_MIME}      ${TESTDIR}/messages/ed25519.eml
 ${SPAM_MESSAGE}      ${TESTDIR}/messages/spam.eml
 ${HAM_MESSAGE}      ${TESTDIR}/messages/ham.eml
 ${RSPAMD_SCOPE}  Suite
@@ -107,6 +110,70 @@ SETTINGS ID - VIRTUAL
 
 SETTINGS ID - VIRTUAL GROUP
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_virtual_group
+  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+
+SETTINGS ID - VIRTUAL FROM
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  test2@example.com
+  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+
+SETTINGS ID - VIRTUAL USER
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --user  test@example.com
+  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+
+SETTINGS ID - VIRTUAL HOSTNAME
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --hostname  example.com
+  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+
+SETTINGS ID - VIRTUAL SELECTOR
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user3@example.com
+  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+
+SETTINGS ID - VIRTUAL HEADER MATCH
+  ${result} =  Scan Message With Rspamc  ${MESSAGE_7BIT}
+  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+
+SETTINGS ID - VIRTUAL HEADER EXISTS
+  ${result} =  Scan Message With Rspamc  ${MESSAGE_CUSTOM_HDR}
+  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+
+SETTINGS ID - VIRTUAL HEADER ABSENT
+  ${result} =  Scan Message With Rspamc  ${MESSAGE_ABSENT_MIME}
+  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+
+SETTINGS ID - VIRTUAL REQUEST HEADER
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Test=passed
   Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1

@@ -10,5 +10,6 @@ Message-ID: <d9946a191e0c97733a86424c48e65eca@test.com>
 Subject: Test Subject
 To: Me <me@me.me>
 Content-Type: text/plain; charset="UTF-8"
+Custom-Header: foo
 
 
