@@ -159,7 +159,7 @@ local function check_query_settings(task)
           elt.apply = lua_util.override_defaults(nset, elt.apply)
         end
         apply_settings(task, elt['apply'], settings_id)
-        rspamd_logger.infox(task, "applying settings id %s", settings_id)
+        rspamd_logger.infox(task, "applied settings id %s", settings_id)
         return true
       end
     else
@@ -955,8 +955,8 @@ end
 
 rspamd_config:register_symbol({
   name = 'SETTINGS_CHECK',
-  type = 'prefilter,nostat',
+  type = 'prefilter',
   callback = check_settings,
   priority = 10,
-  flags = 'empty',
+  flags = 'empty,nostat,explicit_disable,ignore_passthrough',
 })

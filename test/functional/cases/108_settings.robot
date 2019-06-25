@@ -107,7 +107,7 @@ SETTINGS ID - VIRTUAL
 
 SETTINGS ID - VIRTUAL GROUP
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_virtual_group
-  Check Rspamc  ${result}  SIMPLE_VIRTUAL
+  Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
   Should Not Contain  ${result.stdout}  SIMPLE_POST
