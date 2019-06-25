@@ -1066,6 +1066,7 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 			guint8 *data = rspamd_file_xmap (module->path,
 					PROT_READ, &fsize, TRUE);
 			guchar digest[rspamd_cryptobox_HASHBYTES];
+			gchar *lua_fname;
 
 			if (data == NULL) {
 				msg_err_config ("cannot mmap %s failed: %s", module->path,
@@ -1086,19 +1087,26 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 			rspamd_encode_hex_buf (digest, sizeof (digest),
 					module->digest, rspamd_cryptobox_HASHBYTES * 2 + 1);
 			module->digest[rspamd_cryptobox_HASHBYTES * 2] = '\0';
+			lua_fname = g_malloc (strlen (module->path) + 2);
+			rspamd_snprintf (lua_fname, strlen (module->path) + 2, "@%s",
+				module->path);
 
-
-			if (luaL_loadbuffer (L, data, fsize, module->path) != 0) {
+			if (luaL_loadbuffer (L, data, fsize, lua_fname) != 0) {
 				msg_err_config ("load of %s failed: %s", module->path,
 					lua_tostring (L, -1));
 				lua_settop (L, err_idx - 1); /*  Error function */
 
 				rspamd_plugins_table_push_elt (L, "disabled_failed",
 						module->name);
+				munmap (data, fsize);
+				g_free (lua_fname);
 
 				cur = g_list_next (cur);
 				continue;
 			}
+
+			munmap (data, fsize);
+			g_free (lua_fname);
 
 			/* Initialize config structure */
 			pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
