@@ -261,7 +261,7 @@ local function check_settings(task)
         if not input then return false end
 
         if elt.check(input) then
-          matched[#matched] = atom
+          matched[#matched + 1] = atom
           return 1.0
         end
       else
@@ -302,8 +302,8 @@ local function check_settings(task)
       for _,s in ipairs(settings[pri]) do
         local matched = {}
 
-        lua_util.debugm(N, task, "check for settings element %s; %s",
-            s.name, s.rule.expression)
+        lua_util.debugm(N, task, "check for settings element %s",
+            s.name)
         local result = check_specific_setting(s.rule, matched)
         -- Can use xor here but more complicated for reading
         if result then
@@ -702,6 +702,41 @@ local function process_settings_table(tbl, allow_ids, mempool)
       }
     end
 
+    local aliases = {}
+    -- This function is used to convert compound condition with
+    -- generic type and specific part (e.g. `header`, `Content-Transfer-Encoding`)
+    -- to a set of usable check elements:
+    -- `generic:specific` - most common part
+    -- `generic:<order>` - e.g. `header:1` for the first header
+    -- `generic:safe` - replace unsafe stuff with safe + lowercase
+    -- also aliases entry is set to avoid implicit expression
+    local function process_compound_condition(cond, generic, specific)
+      local full_key = generic .. ':' .. specific
+      checks[full_key] = cond
+
+      -- Try numeric key
+      for i=1,1000 do
+        local num_key = generic .. ':' .. tostring(i)
+        if not checks[num_key]  then
+          checks[num_key] = cond
+          aliases[num_key] = true
+          break
+        end
+      end
+
+      local safe_key = generic .. ':' ..
+          specific:gsub('[:%-+&|><]', '_')
+                  :gsub('%(', '[')
+                  :gsub('%)', ']')
+                  :lower()
+
+      if not checks[safe_key] then
+        checks[safe_key] = cond
+        aliases[safe_key] = true
+      end
+
+      return safe_key
+  end
     -- Headers are tricky:
     -- We create an closure with extraction function depending on header name
     -- We also inserts it into `checks` table as an atom in form header:<hname>
@@ -714,30 +749,30 @@ local function process_settings_table(tbl, allow_ids, mempool)
           if type(v) == 'string' then
             local re = rspamd_regexp.create(v)
             if re then
-              checks[table_element .. ':'..k] = {
+              local cond = {
                 check = function(values)
                   return fun.any(function(c) return re:match(c) end, values)
                 end,
                 extract = extractor_func(k),
               }
-
+              local skey = process_compound_condition(cond, table_element,
+                  k)
               lua_util.debugm(N, rspamd_config, 'added %s condition to "%s": %s =~ %s',
-                  table_element, name, k, v)
+                  skey, name, k, v)
             end
           elseif type(v) == 'boolean' then
-            checks[table_element .. ':'..k] = {
+            local cond = {
               check = function(values)
-                return fun.any(function(c)
-                  if c and v then return true end
-                  if not c or not v then return true end
-                  return false
-                end, values)
+                if #values == 0 then return (not v) end
+                return v
               end,
               extract = extractor_func(k),
             }
 
-            lua_util.debugm(N, rspamd_config, 'added %s condition to "%s": %s =~ %s',
-                table_element, name, k, v)
+            local skey = process_compound_condition(cond, table_element,
+                k)
+            lua_util.debugm(N, rspamd_config, 'added %s condition to "%s": %s == %s',
+                skey, name, k, v)
           else
             rspamd_logger.errx(rspamd_config, 'invalid %s %s = %s', table_element, k, v)
           end
@@ -756,25 +791,18 @@ local function process_settings_table(tbl, allow_ids, mempool)
       return function(task)
         local rh = task:get_header_full(hname)
         if rh then
-          return fun.map(function(h) return h.decoded end, rh)
+          return fun.totable(fun.map(function(h) return h.decoded end, rh))
         end
         return {}
       end
     end)
 
     if elt['selector'] then
-      local sel = selectors_cache[name]
-      if not sel then
-        sel = lua_selectors.create_selector_closure(rspamd_config, elt.selector,
-            elt.delimiter or "")
-
-        if sel then
-          selectors_cache[name] = sel
-        end
-      end
+      local sel = lua_selectors.create_selector_closure(rspamd_config, elt.selector,
+          elt.delimiter or "")
 
       if sel then
-        checks['selector:' .. name] = {
+        local cond = {
           check = function(values)
             return fun.any(function(c)
               return c
@@ -782,8 +810,9 @@ local function process_settings_table(tbl, allow_ids, mempool)
           end,
           extract = sel,
         }
+        local skey = process_compound_condition(cond, 'selector', elt.selector)
         lua_util.debugm(N, rspamd_config, 'added selector condition to "%s": %s',
-            name, sel)
+            name, skey)
       end
 
     end
@@ -808,8 +837,10 @@ local function process_settings_table(tbl, allow_ids, mempool)
         local s = ' && '
         -- By De Morgan laws
         if inverse then s = ' || ' end
+        -- Exclude aliases and join all checks by key
         local expr_str = table.concat(fun.totable(fun.map(function(k, _)
-          return k end, checks)), s)
+          return k end,
+            fun.filter(function(k, _) return not aliases[k] end, checks))), s)
 
         if inverse then
           expr_str = string.format('!(%s)', expr_str)
