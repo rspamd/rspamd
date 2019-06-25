@@ -40,8 +40,6 @@ local N = "settings"
 local settings_initialized = false
 local max_pri = 0
 
-local selectors_cache = {} -- Used to speed up selectors in settings
-
 local function apply_settings(task, to_apply, id)
   task:set_settings(to_apply)
   task:cache_set('settings', to_apply)
