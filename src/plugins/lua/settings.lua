@@ -454,14 +454,14 @@ local function check_settings(task)
               -- Extract static settings
               local cached = lua_settings.settings_by_id(s.rule.id)
 
-              if not cached then
+              if not cached or not cached.settings or not cached.settings.apply then
                 rspamd_logger.errx(task, 'unregistered settings id found: %s!', s.rule.id)
               else
                 rspamd_logger.infox(task, "<%s> apply static settings %s (id = %s); %s matched",
                     task:get_message_id(),
                     cached.name, s.rule.id,
                     table.concat(matched, ','))
-                apply_settings(task, cached.settings, s.rule.id)
+                apply_settings(task, cached.settings.apply, s.rule.id)
               end
 
             else
