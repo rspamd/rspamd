@@ -31,6 +31,7 @@ local lua_selectors = require "lua_selectors"
 local lua_settings = require "lua_settings"
 local ucl = require "ucl"
 local fun = require "fun"
+local rspamd_mempool = require "rspamd_mempool"
 
 local redis_params
 
@@ -181,218 +182,98 @@ local function check_query_settings(task)
   return false
 end
 
--- Check limit for a task
-local function check_settings(task)
-  local function check_addr_setting(rule, addr)
-    local function check_specific_addr(elt)
-      if rule['name'] then
-        if rspamd_maps.rspamd_maybe_check_map(rule['name'], elt['addr']) then
-          return true
-        end
-      end
-      if rule['user'] then
-        if rspamd_maps.rspamd_maybe_check_map(rule['user'], elt['user']) then
-          return true
-        end
-      end
-      if rule['domain'] and elt['domain'] then
-        if rspamd_maps.rspamd_maybe_check_map(rule['domain'], elt['domain']) then
-          return true
-        end
-      end
-      if rule['regexp'] then
-        if rule['regexp']:match(elt['addr']) then
-          return true
-        end
-      end
-      return false
-    end
-
-    for _, e in ipairs(addr) do
-      if check_specific_addr(e) then
+local function check_addr_setting(expected, addr)
+  local function check_specific_addr(elt)
+    if expected.name then
+      if rspamd_maps.rspamd_maybe_check_map(expected.name, elt.addr) then
         return true
       end
     end
-
+    if expected.user then
+      if rspamd_maps.rspamd_maybe_check_map(expected.user, elt.user) then
+        return true
+      end
+    end
+    if expected.domain and elt.domain then
+      if rspamd_maps.rspamd_maybe_check_map(expected.domain, elt.domain) then
+        return true
+      end
+    end
+    if expected.regexp then
+      if expected.regexp:match(elt.addr) then
+        return true
+      end
+    end
     return false
   end
 
-  local function check_ip_setting(rule, ip)
-    if not rule[2] then
-      if rspamd_maps.rspamd_maybe_check_map(rule[1], ip:to_string()) then
-        return true
-      end
-    else
-      if rule[2] ~= 0 then
-        local nip = ip:apply_mask(rule[2])
-        if nip and nip:to_string() == rule[1]:to_string() then
-          return true
-        end
-      elseif ip:to_string() == rule[1]:to_string() then
-        return true
-      end
-    end
-
-    return false
-  end
-
-  local function check_specific_setting(rule_name, rule, data, matched)
-    local res = false
-
-    local function ip_valid(ip)
-      return ip:is_valid()
-    end
-
-    local function not_empty(s)
-      return #s > 0
-    end
-
-    local function generic_check(value, to_check, check_func, what, valid_func)
-      if not to_check then return true end
-
-      if type(value) == 'function' then
-        value = value()
-      end
-
-      if value then
-        if valid_func then
-          if not valid_func(value) then
-            return false
-          end
-        end
-
-        if not check_func then
-          check_func = function(a, b) return a == b end
-        end
-
-        local ret = fun.any(function(d)
-          return check_func(d, value)
-        end, to_check)
-        if ret then
-          res = true
-          matched[#matched + 1] = what
-        else
-          return false
-        end
-      else
-        return false
-      end
-
+  for _, e in ipairs(addr) do
+    if check_specific_addr(e) then
       return true
     end
+  end
 
-    if not generic_check(data.ip, rule.ip,
-        check_ip_setting, 'ip', ip_valid) then
-      return nil
+  return false
+end
+
+local function check_string_setting(expected, str)
+  if expected.regexp then
+    if expected.regexp:match(str) then
+      return true
     end
-
-    if not generic_check(data.client_ip, rule.client_ip,
-        check_ip_setting, 'client_ip', ip_valid) then
-      return nil
+  elseif expected.check then
+    if rspamd_maps.rspamd_maybe_check_map(expected.check, str) then
+      return true
     end
+  end
+  return false
+end
 
-    if not generic_check(data.from, rule.from,
-        check_addr_setting, 'from') then
-      return nil
+local function check_ip_setting(expected, ip)
+  if not expected[2] then
+    if rspamd_maps.rspamd_maybe_check_map(expected[1], ip:to_string()) then
+      return true
     end
-
-    if not generic_check(data.from_mime, rule.from_mime,
-        check_addr_setting, 'from_mime') then
-      return nil
-    end
-
-    if not generic_check(data.rcpt, rule.rcpt,
-        check_addr_setting, 'rcpt') then
-      return nil
-    end
-
-    if not generic_check(data.rcpt_mime, rule.rcpt_mime,
-        check_addr_setting, 'rcpt_mime') then
-      return nil
-    end
-
-    if not generic_check(data.user, rule.user,
-        check_addr_setting, 'user') then
-      return nil
-    end
-
-    if not generic_check(data.hostname, rule.hostname,
-        check_addr_setting, 'hostname', not_empty) then
-      return nil
-    end
-
-    -- Non generic checks
-
-    if rule.authenticated then
-      if data.user[1] then
-        res = true
-        matched[#matched + 1] = 'authenticated'
+  else
+    if expected[2] ~= 0 then
+      local nip = ip:apply_mask(expected[2])
+      if nip and nip:to_string() == expected[1]:to_string() then
+        return true
       end
-      if not res then
-        return nil
-      end
+    elseif ip:to_string() == expected[1]:to_string() then
+      return true
     end
+  end
 
-    if rule['local'] then
-      if not data.ip or not data.ip:is_valid() then
-        return nil
-      end
+  return false
+end
 
-      if data.ip:is_local() then
-        matched[#matched + 1] = 'local'
-        res = true
+-- Check limit for a task
+local function check_settings(task)
+  local function check_specific_setting(rule, matched)
+    local res = false
+
+    local function process_atom(atom)
+      local elt = rule.checks[atom]
+
+      if elt then
+        local input = elt.extract(task)
+        if not input then return false end
+
+        if elt.check(input) then
+          matched[#matched] = atom
+          return 1.0
+        end
       else
-        return nil
+        rspamd_logger.errx(task, 'error in settings: check %s is not defined!', atom)
       end
+
+      return 0
     end
 
-    if rule.request_header then
-      for hname, pattern in pairs(rule.request_header) do
-        local hvalue = task:get_request_header(hname)
-        res = (hvalue and pattern:match(hvalue))
-        if res then
-          matched[#matched + 1] = 'req_header: ' .. hname
-          break
-        end
-      end
-      if not res then
-        return nil
-      end
-    end
+    res = rule.expression and rule.expression:process(process_atom)
 
-    if rule.header then
-      for _,elt in ipairs(rule.header) do
-        for hname,patterns in pairs(elt) do
-          for _,pattern in ipairs(patterns) do
-            local hvalue = task:get_header(hname)
-            res = (hvalue and pattern:match(hvalue))
-            if res then
-              matched[#matched + 1] = 'header: ' .. hname
-              break
-            end
-          end
-          if res then
-            break
-          end
-        end
-        if res then
-          break
-        end
-      end
-      if not res then
-        return nil
-      end
-    end
-
-    if rule.selector then
-      res = fun.all(function(s) return s(task) end, rule.selector)
-
-      if res then
-        matched[#matched + 1] = 'selector'
-      end
-    end
-
-    if res then
+    if res and res > 0 then
       if rule['whitelist'] then
         rule['apply'] = {whitelist = true}
       end
@@ -413,31 +294,6 @@ local function check_settings(task)
     return
   end
 
-  lua_util.debugm(N, task, "check for settings")
-  local data = {
-    ip = task:get_from_ip(),
-    client_ip = task:get_client_ip(),
-    from = task:get_from(1),
-    from_mime = task:get_from(2),
-    rcpt = task:get_recipients(1),
-    rcpt_mime = task:get_recipients(2),
-    hostname = task:get_hostname() or '',
-    user = {}
-  }
-
-  local uname = task:get_user()
-  if uname then
-    data.user[1] = {}
-    local localpart, domainpart = string.gmatch(uname, "(.+)@(.+)")()
-    if localpart then
-      data.user[1]["user"] = localpart
-      data.user[1]["domain"] = domainpart
-      data.user[1]["addr"] = uname
-    else
-      data.user[1]["user"] = uname
-      data.user[1]["addr"] = uname
-    end
-  end
   -- Match rules according their order
   local applied = false
 
@@ -445,10 +301,12 @@ local function check_settings(task)
     if not applied and settings[pri] then
       for _,s in ipairs(settings[pri]) do
         local matched = {}
-        local result = check_specific_setting(s.name, s.rule, data, matched)
 
+        lua_util.debugm(N, task, "check for settings element %s; %s",
+            s.name, s.rule.expression)
+        local result = check_specific_setting(s.rule, matched)
         -- Can use xor here but more complicated for reading
-        if (result and not s.rule.inverse) or (not result and s.rule.inverse) then
+        if result then
           if s.rule['apply'] then
             if s.rule.id then
               -- Extract static settings
@@ -487,7 +345,7 @@ local function check_settings(task)
 end
 
 -- Process settings based on their priority
-local function process_settings_table(tbl, allow_ids)
+local function process_settings_table(tbl, allow_ids, mempool)
   local get_priority = function(elt)
     local pri_tonum = function(p)
       if p then
@@ -514,13 +372,13 @@ local function process_settings_table(tbl, allow_ids)
   local process_setting_elt = function(name, elt)
 
     lua_util.debugm(N, rspamd_config, 'process settings "%s"', name)
-    -- Process IP address
-    local function process_ip(ip)
+    -- Process IP address: converted to a table {ip, mask}
+    local function process_ip_condition(ip)
       local out = {}
 
       if type(ip) == "table" then
         for _,v in ipairs(ip) do
-          table.insert(out, process_ip(v))
+          table.insert(out, process_ip_condition(v))
         end
       elseif type(ip) == "string" then
         local slash = string.find(ip, '/')
@@ -555,11 +413,16 @@ local function process_settings_table(tbl, allow_ids)
       return out
     end
 
-    local function process_addr(addr)
+    -- Process email like condition, converted to a table with fields:
+    -- name - full email (surprise!)
+    -- user - user part
+    -- domain - domain part
+    -- regexp - full email regexp (yes, it sucks)
+    local function process_email_condition(addr)
       local out = {}
       if type(addr) == "table" then
         for _,v in ipairs(addr) do
-          table.insert(out, process_addr(v))
+          table.insert(out, process_email_condition(v))
         end
       elseif type(addr) == "string" then
         if string.sub(addr, 1, 4) == "map:" then
@@ -599,7 +462,43 @@ local function process_settings_table(tbl, allow_ids)
       return out
     end
 
-    local check_table = function(chk_elt, out)
+    -- Convert a plain string condition to a table:
+    -- check - string to match
+    -- regexp - regexp to match
+    local function process_string_condition(addr)
+      local out = {}
+      if type(addr) == "table" then
+        for _,v in ipairs(addr) do
+          table.insert(out, process_string_condition(v))
+        end
+      elseif type(addr) == "string" then
+        if string.sub(addr, 1, 4) == "map:" then
+          -- It is map, don't apply any extra logic
+          out['check'] = addr
+        else
+          local start = string.sub(addr, 1, 1)
+          if start == '/' then
+            -- It is a regexp
+            local re = rspamd_regexp.create(addr)
+            if re then
+              out['regexp'] = re
+            else
+              rspamd_logger.errx(rspamd_config, "bad regexp: " .. addr)
+              return nil
+            end
+
+          else
+            out['check'] = addr
+          end
+        end
+      else
+        return nil
+      end
+
+      return out
+    end
+
+    local convert_to_table = function(chk_elt, out)
       if type(chk_elt) == 'string' then
         return {out}
       end
@@ -607,134 +506,261 @@ local function process_settings_table(tbl, allow_ids)
       return out
     end
 
+    -- Used to create a checking closure: if value matches expected somehow, return true
+    local function gen_check_closure(expected, check_func)
+      return function(value)
+        if not value then return false end
+
+        if type(value) == 'function' then
+          value = value()
+        end
+
+        if value then
+
+          if not check_func then
+            check_func = function(a, b) return a == b end
+          end
+
+          local ret = fun.any(function(d)
+            return check_func(d, value)
+          end, expected)
+          if ret then
+            return true
+          end
+        end
+
+        return false
+      end
+    end
+
     local out = {}
 
+    local checks = {}
     if elt['ip'] then
-      local ip = process_ip(elt['ip'])
+      local ips_table = process_ip_condition(elt['ip'])
 
-      if ip then
+      if ips_table then
         lua_util.debugm(N, rspamd_config, 'added ip condition to "%s": %s',
-            name, ip)
-        out['ip'] = check_table(elt['ip'], ip)
+            name, ips_table)
+        checks.ip = {
+          check = gen_check_closure(convert_to_table(elt.ip, ips_table), check_ip_setting),
+          extract = function(task)
+            local ip = task:get_from_ip()
+            if ip:is_valid() then return ip end
+            return nil
+          end,
+        }
       end
     end
     if elt['client_ip'] then
-      local ip = process_ip(elt['client_ip'])
+      local client_ips_table = process_ip_condition(elt['client_ip'])
 
-      if ip then
+      if client_ips_table then
         lua_util.debugm(N, rspamd_config, 'added client_ip condition to "%s": %s',
-            name, ip)
-        out['client_ip'] = check_table(elt['client_ip'], ip)
+            name, client_ips_table)
+        checks.client_ip = {
+          check = gen_check_closure(convert_to_table(elt.client_ip, client_ips_table),
+              check_ip_setting),
+          extract = function(task)
+            local ip = task:get_client_ip()
+            if ip:is_valid() then return ip end
+            return nil
+          end,
+        }
       end
     end
     if elt['from'] then
-      local from = process_addr(elt['from'])
+      local from_condition = process_email_condition(elt['from'])
 
-      if from then
+      if from_condition then
         lua_util.debugm(N, rspamd_config, 'added from condition to "%s": %s',
-            name, from)
-        out['from'] = check_table(elt['from'], from)
+            name, from_condition)
+        checks.from = {
+          check = gen_check_closure(convert_to_table(elt.from, from_condition),
+              check_addr_setting),
+          extract = function(task)
+            return task:get_from(1)
+          end,
+        }
       end
     end
     if elt['rcpt'] then
-      local rcpt = process_addr(elt['rcpt'])
-      if rcpt then
+      local rcpt_condition = process_email_condition(elt['rcpt'])
+      if rcpt_condition then
         lua_util.debugm(N, rspamd_config, 'added rcpt condition to "%s": %s',
-            name, rcpt)
-        out['rcpt'] = check_table(elt['rcpt'], rcpt)
+            name, rcpt_condition)
+        checks.rcpt = {
+          check = gen_check_closure(convert_to_table(elt.rcpt, rcpt_condition),
+              check_addr_setting),
+          extract = function(task)
+            return task:get_recipients(1)
+          end,
+        }
       end
     end
     if elt['from_mime'] then
-      local from_mime = process_addr(elt['from_mime'])
+      local from_mime_condition = process_email_condition(elt['from_mime'])
 
-      if from_mime then
+      if from_mime_condition then
         lua_util.debugm(N, rspamd_config, 'added from_mime condition to "%s": %s',
-            name, from_mime)
-        out['from_mime'] = check_table(elt['from_mime'], from_mime)
+            name, from_mime_condition)
+        checks.from_mime = {
+          check = gen_check_closure(convert_to_table(elt.from_mime, from_mime_condition),
+              check_addr_setting),
+          extract = function(task)
+            return task:get_from(2)
+          end,
+        }
       end
     end
     if elt['rcpt_mime'] then
-      local rcpt_mime = process_addr(elt['rcpt_mime'])
-      if rcpt_mime then
-        lua_util.debugm(N, rspamd_config, 'added rcpt_mime condition to "%s": %s',
-            name, rcpt_mime)
-        out['rcpt_mime'] = check_table(elt['rcpt_mime'], rcpt_mime)
+      local rcpt_mime_condition = process_email_condition(elt['rcpt'])
+      if rcpt_mime_condition then
+        lua_util.debugm(N, rspamd_config, 'added rcpt mime condition to "%s": %s',
+            name, rcpt_mime_condition)
+        checks.rcpt_mime = {
+          check = gen_check_closure(convert_to_table(elt.rcpt_mime, rcpt_mime_condition),
+              check_addr_setting),
+          extract = function(task)
+            return task:get_recipients(2)
+          end,
+        }
       end
     end
     if elt['user'] then
-      local user = process_addr(elt['user'])
-      if user then
+      local user_condition = process_email_condition(elt['user'])
+      if user_condition then
         lua_util.debugm(N, rspamd_config, 'added user condition to "%s": %s',
-            name, user)
-        out['user'] = check_table(elt['user'], user)
+            name, user_condition)
+        checks.user = {
+          check = gen_check_closure(convert_to_table(elt.user, user_condition),
+              check_addr_setting),
+          extract = function(task)
+            local uname = task:get_user()
+            local user = {}
+            if uname then
+              user[1] = {}
+              local localpart, domainpart = string.gmatch(uname, "(.+)@(.+)")()
+              if localpart then
+                user[1]["user"] = localpart
+                user[1]["domain"] = domainpart
+                user[1]["addr"] = uname
+              else
+                user[1]["user"] = uname
+                user[1]["addr"] = uname
+              end
+
+              return user
+            end
+
+            return nil
+          end,
+        }
       end
     end
     if elt['hostname'] then
-      local hostname = process_addr(elt['hostname'])
-      if hostname then
+      local hostname_condition = process_string_condition(elt['hostname'])
+      if hostname_condition then
         lua_util.debugm(N, rspamd_config, 'added hostname condition to "%s": %s',
-            name, hostname)
-        out['hostname'] = check_table(elt['hostname'], hostname)
+            name, hostname_condition)
+        checks.hostname = {
+          check = gen_check_closure(convert_to_table(elt.hostname, hostname_condition),
+              check_string_setting),
+          extract = function(task)
+            return task:get_hostname() or ''
+          end,
+        }
       end
     end
     if elt['authenticated'] then
       lua_util.debugm(N, rspamd_config, 'added authenticated condition to "%s"',
           name)
-      out['authenticated'] = true
+      checks.authenticated = {
+        check = function(value) if value then return true end return false end,
+        extract = function(task)
+          return task:get_user()
+        end
+      }
     end
     if elt['local'] then
-      out['local'] = true
       lua_util.debugm(N, rspamd_config, 'added local condition to "%s"',
           name)
-    end
-    if elt['inverse'] then
-      lua_util.debugm(N, rspamd_config, 'added inverse condition to "%s"',
-          name)
-      out['inverse'] = true
-    end
-    if elt['request_header'] then
-      local rho = {}
-      for k, v in pairs(elt['request_header']) do
-        local re = rspamd_regexp.create(v)
-        if re then
-          rho[k] = re
-        end
-      end
-      lua_util.debugm(N, rspamd_config, 'added request_header condition to "%s": %s',
-          name, rho)
-      out['request_header'] = rho
-    end
-    if elt['header'] then
-      if not elt['header'][1] and next(elt['header']) then
-        elt['header'] = {elt['header']}
-      end
-      for _, e in ipairs(elt['header']) do
-        local rho = {}
-        for k, v in pairs(e) do
-          if type(v) ~= 'table' then
-            v = {v}
+      checks['local'] = {
+        check = function(value) if value then return true end return false end,
+        extract = function(task)
+          local ip = task:get_from_ip()
+          if not ip or not ip:is_valid() then
+            return nil
           end
-          for _, r in ipairs(v) do
-            local re = rspamd_regexp.get_cached(r)
-            if not re then
-              re = rspamd_regexp.create_cached(r)
-            end
+
+          if ip:is_local() then
+            return true
+          else
+            return nil
+          end
+        end
+      }
+    end
+
+    -- Headers are tricky:
+    -- We create an closure with extraction function depending on header name
+    -- We also inserts it into `checks` table as an atom in form header:<hname>
+    -- Check function depends on the input:
+    -- * for something that looks like `header = "/bar/"` we create a regexp
+    -- * for something that looks like `header = true` we just check the existence
+    local function process_header_elt(table_element, extractor_func)
+      if elt[table_element] then
+        for k, v in pairs(elt[table_element]) do
+          if type(v) == 'string' then
+            local re = rspamd_regexp.create(v)
             if re then
-              if not out['header'] then out['header'] = {} end
-              if rho[k] then
-                table.insert(rho[k], re)
-              else
-                rho[k] = {re}
-              end
+              checks[table_element .. ':'..k] = {
+                check = function(values)
+                  return fun.any(function(c) return re:match(c) end, values)
+                end,
+                extract = extractor_func(k),
+              }
+
+              lua_util.debugm(N, rspamd_config, 'added %s condition to "%s": %s =~ %s',
+                  table_element, name, k, v)
             end
+          elseif type(v) == 'boolean' then
+            checks[table_element .. ':'..k] = {
+              check = function(values)
+                return fun.any(function(c)
+                  if c and v then return true end
+                  if not c or not v then return true end
+                  return false
+                end, values)
+              end,
+              extract = extractor_func(k),
+            }
+
+            lua_util.debugm(N, rspamd_config, 'added %s condition to "%s": %s =~ %s',
+                table_element, name, k, v)
+          else
+            rspamd_logger.errx(rspamd_config, 'invalid %s %s = %s', table_element, k, v)
           end
         end
-        if not out['header'] then out['header'] = {} end
-        table.insert(out['header'], rho)
       end
-      lua_util.debugm(N, rspamd_config, 'added header condition to "%s": %s',
-          name, out.header)
     end
+
+    process_header_elt('request_header', function(hname)
+      return function(task)
+        local rh = task:get_request_header(hname)
+        if rh then return {rh} end
+        return {}
+      end
+    end)
+    process_header_elt('header', function(hname)
+      return function(task)
+        local rh = task:get_header_full(hname)
+        if rh then
+          return fun.map(function(h) return h.decoded end, rh)
+        end
+        return {}
+      end
+    end)
 
     if elt['selector'] then
       local sel = selectors_cache[name]
@@ -748,17 +774,90 @@ local function process_settings_table(tbl, allow_ids)
       end
 
       if sel then
-        if out.selector then
-          table.insert(out['selector'], sel)
-        else
-          out['selector'] = {sel}
-        end
+        checks['selector:' .. name] = {
+          check = function(values)
+            return fun.any(function(c)
+              return c
+            end, values)
+          end,
+          extract = sel,
+        }
+        lua_util.debugm(N, rspamd_config, 'added selector condition to "%s": %s',
+            name, sel)
       end
-      lua_util.debugm(N, rspamd_config, 'added selector condition to "%s": %s',
-          name, sel)
+
     end
 
-    -- Now we must process actions
+    -- Special, special case!
+    local inverse = false
+    if elt['inverse'] then
+      lua_util.debugm(N, rspamd_config, 'added inverse condition to "%s"',
+          name)
+      inverse = true
+    end
+
+    -- Killmeplease
+    local nchecks = 0
+    for _,_ in pairs(checks) do nchecks = nchecks + 1 end
+
+    if nchecks > 0 then
+      -- Now we can deal with the expression!
+      if not elt.expression then
+        -- Artificial & expression to deal with the legacy parts
+        -- Here we get all keys and concatenate them with '&&'
+        local s = ' && '
+        -- By De Morgan laws
+        if inverse then s = ' || ' end
+        local expr_str = table.concat(fun.totable(fun.map(function(k, _)
+          return k end, checks)), s)
+
+        if inverse then
+          expr_str = string.format('!(%s)', expr_str)
+        end
+
+        elt.expression = expr_str
+        lua_util.debugm(N, rspamd_config, 'added implicit settings expression for %s: %s',
+            name, expr_str)
+      end
+
+      -- Parse expression's sanity
+      local function parse_atom(str)
+        local atom = table.concat(fun.totable(fun.take_while(function(c)
+          if string.find(', \t()><+!|&\n', c) then
+            return false
+          end
+          return true
+        end, fun.iter(str))), '')
+
+        if checks[atom] then
+          return atom
+        end
+
+        rspamd_logger.errx(rspamd_config,
+            'use of undefined element "%s" when parsing settings expression, known checks: %s',
+            atom, table.concat(fun.totable(fun.map(function(k, _) return k end, checks)), ','))
+
+        return nil
+      end
+
+      local rspamd_expression = require "rspamd_expression"
+      out.expression = rspamd_expression.create(elt.expression, parse_atom,
+          mempool)
+      out.checks = checks
+
+      if not out.expression then
+        rspamd_logger.errx(rspamd_config, 'cannot parse expression %s for %s',
+            elt.expression, name)
+      else
+        lua_util.debugm(N, rspamd_config, 'registered settings %s with %s checks',
+            name, nchecks)
+      end
+    else
+      lua_util.debugm(N, rspamd_config, 'registered settings %s with no checks',
+          name)
+    end
+
+    -- Process symbols part/apply part
     if elt['symbols'] then
       lua_util.debugm(N, rspamd_config, 'added symbols condition to "%s": %s',
           name, elt.symbols)
@@ -834,17 +933,24 @@ local function process_settings_table(tbl, allow_ids)
 end
 
 -- Parse settings map from the ucl line
+local settings_map_pool
 local function process_settings_map(string)
   local parser = ucl.parser()
   local res,err = parser:parse_string(string)
   if not res then
     rspamd_logger.warnx(rspamd_config, 'cannot parse settings map: ' .. err)
   else
+    if settings_map_pool then
+      settings_map_pool:destroy()
+    end
+
+    settings_map_pool = rspamd_mempool.create()
+
     local obj = parser:get_object()
     if obj['settings'] then
-      process_settings_table(obj['settings'], false)
+      process_settings_table(obj['settings'], false, settings_map_pool)
     else
-      process_settings_table(obj, false)
+      process_settings_table(obj, false, settings_map_pool)
     end
   end
 
@@ -950,7 +1056,8 @@ if set_section and set_section[1] and type(set_section[1]) == "string" then
     rspamd_logger.errx(rspamd_config, 'cannot load settings from %1', set_section)
   end
 elseif set_section and type(set_section) == "table" then
-  process_settings_table(set_section, true)
+  settings_map_pool = rspamd_mempool.create()
+  process_settings_table(set_section, true, settings_map_pool)
 end
 
 rspamd_config:register_symbol({
