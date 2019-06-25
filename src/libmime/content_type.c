@@ -597,8 +597,26 @@ rspamd_content_type_parser (gchar *in, gsize len, rspamd_mempool_t *pool)
 	}
 
 	if (val.type.len > 0) {
+		gchar *tmp;
+
 		res = rspamd_mempool_alloc (pool, sizeof (val));
 		memcpy (res, &val, sizeof (val));
+
+		/*
+		 * Lowercase type and subtype as they are specified as case insensitive
+		 * in rfc2045 section 5.1
+		 */
+		tmp = rspamd_mempool_alloc (pool, val.type.len);
+		memcpy (tmp, val.type.begin, val.type.len);
+		rspamd_str_lc (tmp, val.type.len);
+		res->type.begin = tmp;
+
+		if (val.subtype.len > 0) {
+			tmp = rspamd_mempool_alloc (pool, val.subtype.len);
+			memcpy (tmp, val.subtype.begin, val.subtype.len);
+			rspamd_str_lc (tmp, val.subtype.len);
+			res->subtype.begin = tmp;
+		}
 	}
 
 	return res;
