@@ -1424,10 +1424,18 @@ rspamd_message_process (struct rspamd_task *task)
 					if (sel->language && sel->language[0]) {
 						/* Propagate language */
 						if (sel == p1) {
+							if (p2->languages) {
+								g_ptr_array_unref (p2->languages);
+							}
+
 							p2->language = sel->language;
 							p2->languages = g_ptr_array_ref (sel->languages);
 						}
 						else {
+							if (p1->languages) {
+								g_ptr_array_unref (p1->languages);
+							}
+
 							p1->language = sel->language;
 							p1->languages = g_ptr_array_ref (sel->languages);
 						}

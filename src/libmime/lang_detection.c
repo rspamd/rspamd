@@ -1828,6 +1828,10 @@ rspamd_language_detector_detect (struct rspamd_task *task,
 				d->total_occurencies++;
 			}
 
+			if (part->languages != NULL) {
+				g_ptr_array_unref (part->languages);
+			}
+
 			part->languages = result;
 			ret = TRUE;
 		}
