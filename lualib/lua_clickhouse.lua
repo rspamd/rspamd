@@ -49,7 +49,7 @@ local function clickhouse_quote(str)
       ['\\'] = [[\\]],
       ['\n'] = [[\n]],
       ['\t'] = [[\t]],
-    }):lower()
+    })
   end
 
   return ''

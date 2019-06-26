@@ -426,7 +426,7 @@ local function clickhouse_collect(task)
     local from = task:get_from('smtp')[1]
 
     if from then
-      from_domain = from['domain']
+      from_domain = from['domain']:lower()
       from_user = from['user']
     end
 
@@ -446,15 +446,17 @@ local function clickhouse_collect(task)
   if task:has_from('mime') then
     local from = task:get_from({'mime','orig'})[1]
     if from then
-      mime_domain = from['domain']
+      mime_domain = from['domain']:lower()
       mime_user = from['user']
     end
   end
 
   local mime_rcpt = {}
   if task:has_recipients('mime') then
-    local from = task:get_recipients({'mime','orig'})
-    mime_rcpt = fun.totable(fun.map(function (f) return f.addr or '' end, from))
+    local recipients = task:get_recipients({'mime','orig'})
+    for _, rcpt in ipairs(recipients) do
+      table.insert(mime_rcpt, rcpt['user'] .. '@' .. rcpt['domain']:lower())
+    end
   end
 
   local ip_str = 'undefined'
@@ -474,7 +476,7 @@ local function clickhouse_collect(task)
   if task:has_recipients('smtp') then
     local rcpt = task:get_recipients('smtp')[1]
     rcpt_user = rcpt['user']
-    rcpt_domain = rcpt['domain']
+    rcpt_domain = rcpt['domain']:lower()
   end
 
   local list_id = task:get_header('List-Id') or ''
