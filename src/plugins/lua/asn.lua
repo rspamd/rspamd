@@ -42,8 +42,12 @@ local function asn_check(task)
     local descr_t = {}
     local mempool = task:get_mempool()
     if asn then
-      mempool:set_variable("asn", asn)
-      table.insert(descr_t, "asn:" .. asn)
+      if tonumber(asn) ~= nil then
+        mempool:set_variable("asn", asn)
+        table.insert(descr_t, "asn:" .. asn)
+      else
+        rspamd_logger.errx(task, 'malformed ASN "%s" for ip %s', asn, task:get_from_ip())
+      end
     end
     if ipnet then
       mempool:set_variable("ipnet", ipnet)

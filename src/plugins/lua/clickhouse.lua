@@ -123,7 +123,7 @@ CREATE TABLE rspamd
     `Urls.Tld` Array(String) COMMENT 'Effective second level domain part of the URL host',
     `Urls.Url` Array(String) COMMENT 'Full URL if `full_urls` module option enabled, host part of URL otherwise',
     Emails Array(String) COMMENT 'List of emails extracted from the message',
-    ASN String COMMENT 'BGP AS number for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
+    ASN UInt32 COMMENT 'BGP AS number for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
     Country LowCardinality(FixedString(2)) COMMENT 'Country for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
     IPNet String,
     `Symbols.Names` Array(LowCardinality(String)) COMMENT 'Symbol name',
@@ -158,7 +158,7 @@ local migrations = {
       ADD COLUMN `Urls.Tld` Array(String) AFTER `Attachments.Digest`,
       ADD COLUMN `Urls.Url` Array(String) AFTER `Urls.Tld`,
       ADD COLUMN Emails Array(String) AFTER `Urls.Url`,
-      ADD COLUMN ASN String AFTER Emails,
+      ADD COLUMN ASN UInt32 AFTER Emails,
       ADD COLUMN Country FixedString(2) AFTER ASN,
       ADD COLUMN IPNet String AFTER Country,
       ADD COLUMN `Symbols.Names` Array(String) AFTER IPNet,
@@ -426,7 +426,7 @@ local function clickhouse_collect(task)
     local from = task:get_from('smtp')[1]
 
     if from then
-      from_domain = from['domain']
+      from_domain = from['domain']:lower()
       from_user = from['user']
     end
 
@@ -446,15 +446,17 @@ local function clickhouse_collect(task)
   if task:has_from('mime') then
     local from = task:get_from({'mime','orig'})[1]
     if from then
-      mime_domain = from['domain']
+      mime_domain = from['domain']:lower()
       mime_user = from['user']
     end
   end
 
   local mime_rcpt = {}
   if task:has_recipients('mime') then
-    local from = task:get_recipients({'mime','orig'})
-    mime_rcpt = fun.totable(fun.map(function (f) return f.addr or '' end, from))
+    local recipients = task:get_recipients({'mime','orig'})
+    for _, rcpt in ipairs(recipients) do
+      table.insert(mime_rcpt, rcpt['user'] .. '@' .. rcpt['domain']:lower())
+    end
   end
 
   local ip_str = 'undefined'
@@ -474,7 +476,7 @@ local function clickhouse_collect(task)
   if task:has_recipients('smtp') then
     local rcpt = task:get_recipients('smtp')[1]
     rcpt_user = rcpt['user']
-    rcpt_domain = rcpt['domain']
+    rcpt_domain = rcpt['domain']:lower()
   end
 
   local list_id = task:get_header('List-Id') or ''
@@ -731,7 +733,7 @@ local function clickhouse_collect(task)
   end
 
   -- ASN information
-  local asn, country, ipnet = '--', '--', '--'
+  local asn, country, ipnet = 0, '--', '--'
   local pool = task:get_mempool()
   ret = pool:get_variable("asn")
   if ret then
