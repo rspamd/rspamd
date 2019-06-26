@@ -3060,6 +3060,7 @@ static void lua_periodic_callback_error (struct thread_entry *thread, int ret, c
 struct rspamd_lua_periodic {
 	struct ev_loop *event_loop;
 	struct rspamd_config *cfg;
+	gchar *lua_src_pos;
 	lua_State *L;
 	gdouble timeout;
 	ev_timer ev;
@@ -3144,7 +3145,8 @@ lua_periodic_callback_error (struct thread_entry *thread, int ret, const char *m
 	struct rspamd_lua_periodic *periodic = thread->cd;
 	cfg = periodic->cfg;
 
-	msg_err_config ("call to finishing script failed: %s", msg);
+	msg_err_config ("call to finishing script (registered at %s) failed: %s",
+			periodic->lua_src_pos, msg);
 
 	lua_periodic_callback_finish (thread, ret);
 }
@@ -3159,6 +3161,8 @@ lua_config_add_periodic (lua_State *L)
 	gdouble timeout = lua_tonumber (L, 3);
 	struct rspamd_lua_periodic *periodic;
 	gboolean need_jitter = FALSE;
+	lua_Debug d;
+	gchar tmp[256], *p;
 
 	if (cfg == NULL || timeout < 0 || lua_type (L, 4) != LUA_TFUNCTION) {
 		return luaL_error (L, "invalid arguments");
@@ -3168,12 +3172,32 @@ lua_config_add_periodic (lua_State *L)
 		need_jitter = lua_toboolean (L, 5);
 	}
 
+	if (lua_getstack (L, 1, &d) == 1) {
+		(void) lua_getinfo (L, "Sl", &d);
+		if ((p = strrchr (d.short_src, '/')) == NULL) {
+			p = d.short_src;
+		}
+		else {
+			p++;
+		}
+
+		if (strlen (p) > 20) {
+			rspamd_snprintf (tmp, sizeof (tmp), "%10s...]:%d", p,
+					d.currentline);
+		}
+		else {
+			rspamd_snprintf (tmp, sizeof (tmp), "%s:%d", p,
+					d.currentline);
+		}
+	}
+
 	periodic = g_malloc0 (sizeof (*periodic));
 	periodic->timeout = timeout;
 	periodic->L = L;
 	periodic->cfg = cfg;
 	periodic->event_loop = ev_base;
 	periodic->need_jitter = need_jitter;
+	periodic->lua_src_pos = rspamd_mempool_strdup (cfg->cfg_pool, tmp);
 	lua_pushvalue (L, 4);
 	periodic->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 
