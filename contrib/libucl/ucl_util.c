@@ -2749,7 +2749,7 @@ enum ucl_safe_iter_flags {
 	UCL_ITERATE_FLAG_EXCEPTION
 };
 
-const char safe_iter_magic[4] = {'u', 'i', 't', 'e'};
+static const char safe_iter_magic[4] = {'u', 'i', 't', 'e'};
 struct ucl_object_safe_iter {
 	char magic[4]; /* safety check */
 	uint32_t flags;

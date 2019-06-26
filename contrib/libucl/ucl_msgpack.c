@@ -438,7 +438,7 @@ static ssize_t ucl_msgpack_parse_ignore (struct ucl_parser *parser,
 /*
  * Search tree packed in array
  */
-struct ucl_msgpack_parser {
+static struct ucl_msgpack_parser {
 	uint8_t prefix;						/* Prefix byte					*/
 	uint8_t prefixlen;					/* Length of prefix in bits		*/
 	uint8_t fmt;						/* The desired format 			*/
