@@ -494,7 +494,8 @@ rspamd_language_detector_read_file (struct rspamd_config *cfg,
 					rspamd_ftok_t *tok;
 					gchar *dst;
 
-					tok = g_malloc (sizeof (*tok) + wlen + 1);
+					tok = rspamd_mempool_alloc (cfg->cfg_pool,
+							sizeof (*tok) + wlen + 1);
 					dst = ((gchar *)tok) + sizeof (*tok);
 					rspamd_strlcpy (dst, saved, wlen + 1);
 					tok->begin = dst;
@@ -737,8 +738,6 @@ static void
 rspamd_language_detector_dtor (struct rspamd_lang_detector *d)
 {
 	if (d) {
-		rspamd_ftok_t *tok;
-
 		for (guint i = 0; i < RSPAMD_LANGUAGE_MAX; i ++) {
 			kh_destroy (rspamd_trigram_hash, d->trigramms[i]);
 			rspamd_multipattern_destroy (d->stop_words[i].mp);
@@ -748,10 +747,6 @@ rspamd_language_detector_dtor (struct rspamd_lang_detector *d)
 		if (d->languages) {
 			g_ptr_array_free (d->languages, TRUE);
 		}
-
-		kh_foreach_key (d->stop_words_norm, tok, {
-			g_free (tok); /* String is embedded and freed automatically */
-		});
 
 		kh_destroy (rspamd_stopwords_hash, d->stop_words_norm);
 	}

@@ -1178,8 +1178,10 @@ rspamd_map_periodic_callback (struct ev_loop *loop, ev_timer *w, int revents)
 {
 	struct map_periodic_cbdata *cbd = (struct map_periodic_cbdata *)w->data;
 
+	MAP_RETAIN (cbd, "periodic");
 	ev_timer_stop (loop, w);
 	rspamd_map_process_periodic (cbd);
+	MAP_RELEASE (cbd, "periodic");
 }
 
 static void

@@ -1149,6 +1149,7 @@ rspamd_symcache_destroy (struct rspamd_symcache *cache)
 		g_ptr_array_free (cache->postfilters, TRUE);
 		g_ptr_array_free (cache->idempotent, TRUE);
 		g_ptr_array_free (cache->composites, TRUE);
+		g_ptr_array_free (cache->virtual, TRUE);
 		REF_RELEASE (cache->items_by_order);
 
 		if (cache->peak_cb != -1) {
