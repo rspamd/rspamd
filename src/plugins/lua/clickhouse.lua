@@ -459,11 +459,11 @@ local function clickhouse_collect(task)
     end
   end
 
-  local mime_rcpt = {}
+  local mime_recipients = {}
   if task:has_recipients('mime') then
     local recipients = task:get_recipients({'mime','orig'})
     for _, rcpt in ipairs(recipients) do
-      table.insert(mime_rcpt, rcpt['user'] .. '@' .. rcpt['domain']:lower())
+      table.insert(mime_recipients, rcpt['user'] .. '@' .. rcpt['domain']:lower())
     end
   end
 
@@ -674,7 +674,7 @@ local function clickhouse_collect(task)
     subject,
     digest,
     fields.spf,
-    mime_rcpt,
+    mime_recipients,
     message_id,
     scan_real,
     scan_virtual,
