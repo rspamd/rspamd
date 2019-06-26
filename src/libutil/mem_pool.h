@@ -89,8 +89,9 @@ typedef pthread_rwlock_t rspamd_mempool_rwlock_t;
 struct _pool_chain {
 	guint8 *begin;                  /**< begin of pool chain block              */
 	guint8 *pos;                    /**< current start of free space in block   */
-	gsize len;                      /**< length of block                        */
+	gsize slice_size;                      /**< length of block                        */
 	rspamd_mempool_mutex_t *lock;
+	struct _pool_chain *next;
 };
 
 /**
@@ -117,7 +118,7 @@ struct rspamd_mempool_tag {
 struct rspamd_mempool_entry_point;
 struct rspamd_mutex_s;
 typedef struct memory_pool_s {
-	GPtrArray *pools[RSPAMD_MEMPOOL_MAX];
+	struct _pool_chain *pools[RSPAMD_MEMPOOL_MAX];
 	GArray *destructors;
 	GPtrArray *trash_stack;
 	GHashTable *variables;                  /**< private memory pool variables			*/
