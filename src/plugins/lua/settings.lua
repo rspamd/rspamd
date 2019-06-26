@@ -1096,3 +1096,9 @@ rspamd_config:register_symbol({
   priority = 10,
   flags = 'empty,nostat,explicit_disable,ignore_passthrough',
 })
+
+rspamd_config:add_config_unload(function()
+  if settings_map_pool then
+    settings_map_pool:destroy()
+  end
+end)
