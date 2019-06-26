@@ -230,7 +230,7 @@ local function add_redis_sentinels(params)
     params.sentinel_master_maxerrors = 2 -- Maximum number of errors before rechecking
   end
 
-  rspamd_config:add_on_load(function(cfg, ev_base, worker)
+  rspamd_config:add_on_load(function(_, ev_base, worker)
     local initialised = false
     if worker:is_scanner() then
       rspamd_config:add_periodic(ev_base, 0.0, function()
@@ -304,8 +304,8 @@ local function process_redis_opts(options, redis_params)
     redis_params['password'] = options['password']
   end
 
-  if not redis_params.sentinel and options.sentinel then
-    redis_params.sentinel = options.sentinel
+  if not redis_params.sentinels and options.sentinels then
+    redis_params.sentinels = options.sentinels
   end
 end
 
