@@ -987,6 +987,8 @@ rspamd_rcl_modules_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 							TRUE,
 							mods_seen,
 							err)) {
+						g_hash_table_unref (mods_seen);
+
 						return FALSE;
 					}
 				}
@@ -997,6 +999,8 @@ rspamd_rcl_modules_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 					CFG_RCL_ERROR,
 					EINVAL,
 					"path attribute is missing");
+			g_hash_table_unref (mods_seen);
+
 			return FALSE;
 		}
 
@@ -1010,6 +1014,8 @@ rspamd_rcl_modules_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 							FALSE,
 							mods_seen,
 							err)) {
+						g_hash_table_unref (mods_seen);
+
 						return FALSE;
 					}
 				}
@@ -1026,11 +1032,15 @@ rspamd_rcl_modules_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 							FALSE,
 							mods_seen,
 							err)) {
+						g_hash_table_unref (mods_seen);
+
 						return FALSE;
 					}
 				}
 			}
 		}
+
+		g_hash_table_unref (mods_seen);
 	}
 	else if (ucl_object_tostring_safe (obj, &data)) {
 		if (!rspamd_rcl_add_lua_plugins_path (cfg,
