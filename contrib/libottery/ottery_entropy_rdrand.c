@@ -22,7 +22,7 @@
 extern int ottery_valgrind_;
 /** Helper: invoke the RDRAND instruction to get 4 random bytes in the output
  * value. Return 1 on success, and 0 on failure. */
-#define rdrand32(x) ({ unsigned char err = 0; asm volatile(".byte 0x0f; .byte 0xc7; .byte 0xf0; setc %1":"=a"(*x), "=qm"(err)); err; })
+#define rdrand32(x) ({ unsigned char err = 0; __asm volatile(".byte 0x0f; .byte 0xc7; .byte 0xf0; setc %1":"=a"(x), "=qm"(err) :"a"(0) :"cc"); err; })
 
 /** Generate bytes using the Intel RDRAND instruction. */
 static int
@@ -36,7 +36,7 @@ ottery_get_entropy_rdrand(const struct ottery_entropy_config *cfg,
   if (! (ottery_get_cpu_capabilities_() & OTTERY_CPUCAP_RAND) || ottery_valgrind_)
     return OTTERY_ERR_INIT_STRONG_RNG;
   while (outlen >= 4) {
-    if (rdrand32(&up) != 1)
+    if (rdrand32(up) != 1)
       return OTTERY_ERR_INIT_STRONG_RNG;
     memcpy (out, &up, sizeof (up));
     out += sizeof (up);
@@ -44,7 +44,7 @@ ottery_get_entropy_rdrand(const struct ottery_entropy_config *cfg,
   }
 
   if (outlen) {
-    if (rdrand32(&up) != 1)
+    if (rdrand32(up) != 1)
       return OTTERY_ERR_INIT_STRONG_RNG;
     memcpy(out, &up, outlen);
   }
