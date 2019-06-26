@@ -31,7 +31,7 @@ end
 local data_rows = {}
 local custom_rows = {}
 local nrows = 0
-local schema_version = 6 -- Current schema version
+local schema_version = 7 -- Current schema version
 
 local settings = {
   limit = 1000,
@@ -111,8 +111,9 @@ CREATE TABLE rspamd
     CustomAction LowCardinality(String) COMMENT 'Action string for custom action',
     FromUser String COMMENT 'Local part of the return address (RFC5321.MailFrom)',
     MimeUser String COMMENT 'Local part of address in From: header (RFC5322.From)',
-    RcptUser String COMMENT 'Local part of the first envelope recipient (RFC5321.RcptTo)',
-    RcptDomain String COMMENT 'Domain part of the first envelope recipient (RFC5321.RcptTo)',
+    RcptUser String COMMENT '[Deprecated] Local part of the first envelope recipient (RFC5321.RcptTo)',
+    RcptDomain String COMMENT '[Deprecated] Domain part of the first envelope recipient (RFC5321.RcptTo)',
+    SMTPRecipients Array(String) COMMENT 'List of envelope recipient (RFC5321.RcptTo)',
     MimeRecipients Array(String) COMMENT 'List of recipients from headers (RFC5322.To/.CC/.BCC)',
     MessageId String COMMENT 'Message-ID header',
     ListId String COMMENT 'List-Id header',
@@ -136,7 +137,7 @@ CREATE TABLE rspamd
     SettingsId LowCardinality(String) COMMENT 'ID for settings profile',
     Digest FixedString(32) COMMENT 'Deprecated, no longer stored',
     SMTPFrom ALIAS if(From = '', '', concat(FromUser, '@', From)) COMMENT 'Return address (RFC5321.MailFrom)',
-    SMTPRcpt ALIAS if(RcptDomain = '', '', concat(RcptUser, '@', RcptDomain)) COMMENT 'First recipient (RFC5321.RcptTo)',
+    SMTPRcpt ALIAS SMTPRecipients[1] COMMENT 'First recipient (RFC5321.RcptTo)',
     MIMEFrom ALIAS if(MimeFrom = '', '', concat(MimeUser, '@', MimeFrom)) COMMENT 'Address in From: header (RFC5322.From)',
     MIMERcpt ALIAS MimeRecipients[1] COMMENT 'First recipients from headers (RFC5322.To/.CC/.BCC)'
 ) ENGINE = MergeTree()
@@ -214,7 +215,13 @@ local migrations = {
   [6] = {
     -- Add new columns
     [[ALTER TABLE rspamd
-      ADD COLUMN Helo String AFTER IP
+      ADD COLUMN Helo String AFTER IP,
+      ADD COLUMN SMTPRecipients Array(String) AFTER RcptDomain
+    ]],
+    -- Modify SMTPRcpt alias
+    [[
+    ALTER TABLE rspamd
+      MODIFY COLUMN SMTPRcpt ALIAS SMTPRecipients[1]
     ]],
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (7)]],
@@ -253,6 +260,7 @@ local function clickhouse_main_row(res)
     'MimeUser',
     'RcptUser',
     'RcptDomain',
+    'SMTPRecipients',
     'ListId',
     'Subject',
     'Digest',
@@ -475,10 +483,16 @@ local function clickhouse_collect(task)
 
   local rcpt_user = ''
   local rcpt_domain = ''
+  local smtp_recipients = {}
   if task:has_recipients('smtp') then
-    local rcpt = task:get_recipients('smtp')[1]
-    rcpt_user = rcpt['user']
-    rcpt_domain = rcpt['domain']:lower()
+    local recipients = task:get_recipients('smtp')
+    -- for compatibility with an old table structure
+    rcpt_user = recipients[1]['user']
+    rcpt_domain = recipients[1]['domain']:lower()
+
+    for _, rcpt in ipairs(recipients) do
+      table.insert(smtp_recipients, rcpt['user'] .. '@' .. rcpt['domain']:lower())
+    end
   end
 
   local list_id = task:get_header('List-Id') or ''
@@ -655,6 +669,7 @@ local function clickhouse_collect(task)
     mime_user,
     rcpt_user,
     rcpt_domain,
+    smtp_recipients,
     list_id,
     subject,
     digest,

@@ -33,7 +33,10 @@ Migration
     Column should exist    rspamd    Symbols.Scores
     Column should exist    rspamd    Attachments.Digest
     Column should exist    rspamd    Symbols.Scores
-    Schema version should be    6
+    # Added in schema version 7
+    Column should exist    rspamd    Helo
+    Column should exist    rspamd    SMTPRecipients
+    Schema version should be    7
 
 Retention
     Upload new schema        ${TESTDIR}/data/schema_2/schema.sql
