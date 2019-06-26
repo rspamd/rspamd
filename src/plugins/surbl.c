@@ -1670,6 +1670,7 @@ surbl_dns_callback (struct rdns_reply *reply, gpointer arg)
 			g_string_append (sym, "_FAIL");
 			rspamd_task_insert_result (task, sym->str, 1.0,
 					rdns_strerror (reply->code));
+			g_string_free (sym, TRUE);
 		}
 	}
 
