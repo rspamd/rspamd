@@ -97,7 +97,7 @@ int space_count = 0;
 
 extern void * check_malloc(int n) {
     space_count++;
-    return malloc(n);
+    return calloc(1, n);
 }
 
 extern void check_free(void * p) {
@@ -109,7 +109,7 @@ extern void check_free(void * p) {
 
 extern char * b_to_s(symbol * p) {
     int n = SIZE(p);
-    char * s = (char *)malloc(n + 1);
+    char * s = (char *)calloc(1, n + 1);
     {
         int i;
         for (i = 0; i < n; i++) {
@@ -155,7 +155,7 @@ struct str {
 /* Create a new string. */
 extern struct str * str_new() {
 
-    struct str * output = (struct str *) malloc(sizeof(struct str));
+    struct str * output = (struct str *) calloc(1, sizeof(struct str));
     output->data = create_b(0);
     return output;
 }
