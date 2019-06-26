@@ -95,6 +95,7 @@ CREATE TABLE rspamd
     From String COMMENT 'Domain part of the return address (RFC5321.MailFrom)',
     MimeFrom String COMMENT 'Domain part of the address in From: header (RFC5322.From)',
     IP String COMMENT 'SMTP client IP as provided by MTA or from Received: header',
+    Helo String COMMENT 'Full hostname as sent by the SMTP client (RFC5321.HELO/.EHLO)',
     Score Float32 COMMENT 'Message score',
     NRcpt UInt8 COMMENT 'Number of envelope recipients (RFC5321.RcptTo)',
     Size UInt32 COMMENT 'Message size in bytes',
@@ -210,6 +211,14 @@ local migrations = {
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (6)]],
   },
+  [6] = {
+    -- Add new columns
+    [[ALTER TABLE rspamd
+      ADD COLUMN Helo String AFTER IP
+    ]],
+    -- New version
+    [[INSERT INTO rspamd_version (Version) Values (7)]],
+  },
 }
 
 local predefined_actions = {
@@ -228,6 +237,7 @@ local function clickhouse_main_row(res)
     'From',
     'MimeFrom',
     'IP',
+    'Helo',
     'Score',
     'NRcpt',
     'Size',
@@ -429,16 +439,6 @@ local function clickhouse_collect(task)
       from_domain = from['domain']:lower()
       from_user = from['user']
     end
-
-    if from_domain == '' then
-      if task:get_helo() then
-        from_domain = task:get_helo()
-      end
-    end
-  else
-    if task:get_helo() then
-      from_domain = task:get_helo()
-    end
   end
 
   local mime_domain = ''
@@ -470,6 +470,8 @@ local function clickhouse_collect(task)
     end
     ip_str = ipnet:to_string()
   end
+
+  local helo = task:get_helo() or ''
 
   local rcpt_user = ''
   local rcpt_domain = ''
@@ -637,6 +639,7 @@ local function clickhouse_collect(task)
     from_domain,
     mime_domain,
     ip_str,
+    helo,
     score,
     nrcpts,
     task:get_size(),
