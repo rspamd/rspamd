@@ -126,11 +126,13 @@ local function dcc_check(task, content, digest, rule)
       else
         -- Parse the response
         if upstream then upstream:ok() end
-        local _,_,result,disposition,header = tostring(data):find("(.-)\n(.-)\n(.-)\n")
+        local _,_,result,disposition,header = tostring(data):find("(.-)\n(.-)\n(.-)$")
         lua_util.debugm(rule.name, task, 'DCC result=%1 disposition=%2 header="%3"',
             result, disposition, header)
 
         if header then
+          -- Unfold header
+          header = header:gsub('\r?\n%s*', ' ')
           local _,_,info = header:find("; (.-)$")
           if (result == 'R') then
             -- Reject
