@@ -31,7 +31,7 @@ end
 local data_rows = {}
 local custom_rows = {}
 local nrows = 0
-local schema_version = 6 -- Current schema version
+local schema_version = 7 -- Current schema version
 
 local settings = {
   limit = 1000,
@@ -91,10 +91,11 @@ local clickhouse_schema = {[[
 CREATE TABLE rspamd
 (
     Date Date COMMENT 'Date (used for partitioning)',
-    TS DateTime COMMENT 'Date and time of request start (UTC)',
+    TS DateTime COMMENT 'Date and time of the request start (UTC)',
     From String COMMENT 'Domain part of the return address (RFC5321.MailFrom)',
     MimeFrom String COMMENT 'Domain part of the address in From: header (RFC5322.From)',
     IP String COMMENT 'SMTP client IP as provided by MTA or from Received: header',
+    Helo String COMMENT 'Full hostname as sent by the SMTP client (RFC5321.HELO/.EHLO)',
     Score Float32 COMMENT 'Message score',
     NRcpt UInt8 COMMENT 'Number of envelope recipients (RFC5321.RcptTo)',
     Size UInt32 COMMENT 'Message size in bytes',
@@ -109,9 +110,10 @@ CREATE TABLE rspamd
     Action Enum8('reject' = 0, 'rewrite subject' = 1, 'add header' = 2, 'greylist' = 3, 'no action' = 4, 'soft reject' = 5, 'custom' = 6) DEFAULT 'no action' COMMENT 'Action returned for the message; if action is not predefined actual action will be in `CustomAction` field',
     CustomAction LowCardinality(String) COMMENT 'Action string for custom action',
     FromUser String COMMENT 'Local part of the return address (RFC5321.MailFrom)',
-    MimeUser String COMMENT 'Local part of address in From: header (RFC5322.From)',
-    RcptUser String COMMENT 'Local part of the first envelope recipient (RFC5321.RcptTo)',
-    RcptDomain String COMMENT 'Domain part of the first envelope recipient (RFC5321.RcptTo)',
+    MimeUser String COMMENT 'Local part of the address in From: header (RFC5322.From)',
+    RcptUser String COMMENT '[Deprecated] Local part of the first envelope recipient (RFC5321.RcptTo)',
+    RcptDomain String COMMENT '[Deprecated] Domain part of the first envelope recipient (RFC5321.RcptTo)',
+    SMTPRecipients Array(String) COMMENT 'List of envelope recipients (RFC5321.RcptTo)',
     MimeRecipients Array(String) COMMENT 'List of recipients from headers (RFC5322.To/.CC/.BCC)',
     MessageId String COMMENT 'Message-ID header',
     ListId String COMMENT 'List-Id header',
@@ -132,12 +134,12 @@ CREATE TABLE rspamd
     ScanTimeReal UInt32 COMMENT 'Request time in milliseconds',
     ScanTimeVirtual UInt32,
     AuthUser String COMMENT 'Username for authenticated SMTP client',
-    SettingsId LowCardinality(String) COMMENT 'ID for settings profile',
-    Digest FixedString(32) COMMENT 'Deprecated, no longer stored',
+    SettingsId LowCardinality(String) COMMENT 'ID for the settings profile',
+    Digest FixedString(32) COMMENT '[Deprecated]',
     SMTPFrom ALIAS if(From = '', '', concat(FromUser, '@', From)) COMMENT 'Return address (RFC5321.MailFrom)',
-    SMTPRcpt ALIAS if(RcptDomain = '', '', concat(RcptUser, '@', RcptDomain)) COMMENT 'First recipient (RFC5321.RcptTo)',
+    SMTPRcpt ALIAS SMTPRecipients[1] COMMENT 'The first envelope recipient (RFC5321.RcptTo)',
     MIMEFrom ALIAS if(MimeFrom = '', '', concat(MimeUser, '@', MimeFrom)) COMMENT 'Address in From: header (RFC5322.From)',
-    MIMERcpt ALIAS MimeRecipients[1] COMMENT 'First recipients from headers (RFC5322.To/.CC/.BCC)'
+    MIMERcpt ALIAS MimeRecipients[1] COMMENT 'The first recipient from headers (RFC5322.To/.CC/.BCC)'
 ) ENGINE = MergeTree()
 PARTITION BY toMonday(Date)
 ORDER BY TS
@@ -210,6 +212,20 @@ local migrations = {
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (6)]],
   },
+  [6] = {
+    -- Add new columns
+    [[ALTER TABLE rspamd
+      ADD COLUMN Helo String AFTER IP,
+      ADD COLUMN SMTPRecipients Array(String) AFTER RcptDomain
+    ]],
+    -- Modify SMTPRcpt alias
+    [[
+    ALTER TABLE rspamd
+      MODIFY COLUMN SMTPRcpt ALIAS SMTPRecipients[1]
+    ]],
+    -- New version
+    [[INSERT INTO rspamd_version (Version) Values (7)]],
+  },
 }
 
 local predefined_actions = {
@@ -228,6 +244,7 @@ local function clickhouse_main_row(res)
     'From',
     'MimeFrom',
     'IP',
+    'Helo',
     'Score',
     'NRcpt',
     'Size',
@@ -243,6 +260,7 @@ local function clickhouse_main_row(res)
     'MimeUser',
     'RcptUser',
     'RcptDomain',
+    'SMTPRecipients',
     'ListId',
     'Subject',
     'Digest',
@@ -429,16 +447,6 @@ local function clickhouse_collect(task)
       from_domain = from['domain']:lower()
       from_user = from['user']
     end
-
-    if from_domain == '' then
-      if task:get_helo() then
-        from_domain = task:get_helo()
-      end
-    end
-  else
-    if task:get_helo() then
-      from_domain = task:get_helo()
-    end
   end
 
   local mime_domain = ''
@@ -451,11 +459,11 @@ local function clickhouse_collect(task)
     end
   end
 
-  local mime_rcpt = {}
+  local mime_recipients = {}
   if task:has_recipients('mime') then
     local recipients = task:get_recipients({'mime','orig'})
     for _, rcpt in ipairs(recipients) do
-      table.insert(mime_rcpt, rcpt['user'] .. '@' .. rcpt['domain']:lower())
+      table.insert(mime_recipients, rcpt['user'] .. '@' .. rcpt['domain']:lower())
     end
   end
 
@@ -471,12 +479,20 @@ local function clickhouse_collect(task)
     ip_str = ipnet:to_string()
   end
 
+  local helo = task:get_helo() or ''
+
   local rcpt_user = ''
   local rcpt_domain = ''
+  local smtp_recipients = {}
   if task:has_recipients('smtp') then
-    local rcpt = task:get_recipients('smtp')[1]
-    rcpt_user = rcpt['user']
-    rcpt_domain = rcpt['domain']:lower()
+    local recipients = task:get_recipients('smtp')
+    -- for compatibility with an old table structure
+    rcpt_user = recipients[1]['user']
+    rcpt_domain = recipients[1]['domain']:lower()
+
+    for _, rcpt in ipairs(recipients) do
+      table.insert(smtp_recipients, rcpt['user'] .. '@' .. rcpt['domain']:lower())
+    end
   end
 
   local list_id = task:get_header('List-Id') or ''
@@ -637,6 +653,7 @@ local function clickhouse_collect(task)
     from_domain,
     mime_domain,
     ip_str,
+    helo,
     score,
     nrcpts,
     task:get_size(),
@@ -652,11 +669,12 @@ local function clickhouse_collect(task)
     mime_user,
     rcpt_user,
     rcpt_domain,
+    smtp_recipients,
     list_id,
     subject,
     digest,
     fields.spf,
-    mime_rcpt,
+    mime_recipients,
     message_id,
     scan_real,
     scan_virtual,
