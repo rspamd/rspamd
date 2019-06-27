@@ -217,18 +217,8 @@
 #define T1HA_API
 #endif /* T1HA_API */
 
-#if defined(_MSC_VER)
-#define T1HA_ALIGN_PREFIX __declspec(align(16)) /* required only for SIMD */
-#else
 #define T1HA_ALIGN_PREFIX
-#endif /* _MSC_VER */
-
-#if defined(__GNUC__)
-#define T1HA_ALIGN_SUFFIX                                                      \
-  __attribute__((aligned(16))) /* required only for SIMD */
-#else
 #define T1HA_ALIGN_SUFFIX
-#endif /* GCC x86 */
 
 #ifdef __cplusplus
 extern "C" {

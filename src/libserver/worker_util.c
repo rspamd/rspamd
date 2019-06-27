@@ -57,6 +57,10 @@
 #include <sys/ucontext.h>
 #endif
 
+#ifdef HAVE_SYS_WAIT_H
+#include <sys/wait.h>
+#endif
+
 #include "contrib/libev/ev.h"
 
 static void rspamd_worker_ignore_signal (struct rspamd_worker_signal_handler *);

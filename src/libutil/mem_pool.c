@@ -105,7 +105,7 @@ static gboolean always_malloc = FALSE;
 static gsize
 pool_chain_free (struct _pool_chain *chain)
 {
-	gint64 occupied = chain->pos - chain->begin + MEM_ALIGNMENT;
+	gint64 occupied = chain->pos - chain->begin + MIN_MEM_ALIGNMENT;
 
 	return (occupied < (gint64)chain->slice_size ?
 			chain->slice_size - occupied : 0);
@@ -169,7 +169,7 @@ static struct _pool_chain *
 rspamd_mempool_chain_new (gsize size, enum rspamd_mempool_chain_type pool_type)
 {
 	struct _pool_chain *chain;
-	gsize total_size = size + sizeof (struct _pool_chain) + MEM_ALIGNMENT,
+	gsize total_size = size + sizeof (struct _pool_chain) + MIN_MEM_ALIGNMENT,
 			optimal_size = 0;
 	gpointer map;
 
@@ -235,7 +235,7 @@ rspamd_mempool_chain_new (gsize size, enum rspamd_mempool_chain_type pool_type)
 		g_atomic_int_inc (&mem_pool_stat->chunks_allocated);
 	}
 
-	chain->pos = align_ptr (chain->begin, MEM_ALIGNMENT);
+	chain->pos = align_ptr (chain->begin, MIN_MEM_ALIGNMENT);
 	chain->slice_size = total_size - sizeof (struct _pool_chain);
 	chain->lock = NULL;
 
@@ -369,7 +369,7 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
 static void *
 memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 						  enum rspamd_mempool_chain_type pool_type)
-RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
+RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 
 static void *
 memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
@@ -405,7 +405,7 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 
 		if (cur == NULL || free < size) {
 			/* Allocate new chain element */
-			if (pool->elt_len >= size + MEM_ALIGNMENT) {
+			if (pool->elt_len >= size + MIN_MEM_ALIGNMENT) {
 				pool->entry->elts[pool->entry->cur_elts].fragmentation += size;
 				new = rspamd_mempool_chain_new (pool->elt_len,
 						pool_type);
@@ -429,7 +429,7 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 		}
 
 		/* No need to allocate page */
-		tmp = align_ptr (cur->pos, MEM_ALIGNMENT);
+		tmp = align_ptr (cur->pos, MIN_MEM_ALIGNMENT);
 		cur->pos = tmp + size;
 		POOL_MTX_UNLOCK ();
 

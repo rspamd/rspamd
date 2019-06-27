@@ -353,8 +353,8 @@ enum rspamd_cryptobox_fast_hash_type {
 };
 
 /* Non crypto hash IUF interface */
-typedef struct RSPAMD_ALIGNED(16) rspamd_cryptobox_fast_hash_state_s  {
-	RSPAMD_ALIGNED(16) guint64 opaque[11];
+typedef struct rspamd_cryptobox_fast_hash_state_s  {
+	guint64 opaque[11];
 	enum rspamd_cryptobox_fast_hash_type type;
 } rspamd_cryptobox_fast_hash_state_t;
 
