@@ -146,6 +146,7 @@ local function get_general_metadata(task)
   r.user = task:get_user() or 'unknown'
   r.qid = task:get_queue_id() or 'unknown'
   r.action = task:get_metric_action('default')
+  r.rspamd_server = util.get_hostname() or 'unknown'  
   if r.user ~= 'unknown' then
       r.direction = "Outbound"
   end
