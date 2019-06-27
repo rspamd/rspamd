@@ -90,6 +90,8 @@ local function handler(args)
       h, err = io.popen('bzcat ' .. n, 'r')
     elseif string.match(n, '%.gz$') then
       h, err = io.popen('zcat ' .. n, 'r')
+    elseif string.match(n, '%.zst$') then
+      h, err = io.popen('zstdcat ' .. n, 'r')
     elseif n == 'stdin' then
       h = io.input()
     else
