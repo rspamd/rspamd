@@ -34,6 +34,7 @@ local elastic_template
 local redis_params
 local N = "elastic"
 local E = {}
+local HOSTNAME = util.get_hostname()
 local connect_prefix = 'http://'
 local enabled = true
 local ingest_geoip_type = 'plugins'
@@ -146,6 +147,7 @@ local function get_general_metadata(task)
   r.user = task:get_user() or 'unknown'
   r.qid = task:get_queue_id() or 'unknown'
   r.action = task:get_metric_action('default')
+  r.rspamd_server = HOSTNAME  
   if r.user ~= 'unknown' then
       r.direction = "Outbound"
   end
