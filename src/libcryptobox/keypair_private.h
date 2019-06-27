@@ -23,8 +23,8 @@
 /*
  * KEX cached data
  */
-struct RSPAMD_ALIGNED(32) rspamd_cryptobox_nm {
-	guchar RSPAMD_ALIGNED(32) nm[rspamd_cryptobox_MAX_NMBYTES];
+struct rspamd_cryptobox_nm {
+	guchar nm[rspamd_cryptobox_MAX_NMBYTES];
 	guint64 sk_id; /* Used to store secret key id */
 	ref_entry_t ref;
 };
@@ -32,7 +32,7 @@ struct RSPAMD_ALIGNED(32) rspamd_cryptobox_nm {
 /*
  * Generic keypair
  */
-struct RSPAMD_ALIGNED(32) rspamd_cryptobox_keypair  {
+struct rspamd_cryptobox_keypair  {
 	guchar id[rspamd_cryptobox_HASHBYTES];
 	enum rspamd_cryptobox_keypair_type type;
 	enum rspamd_cryptobox_mode alg;
@@ -43,46 +43,46 @@ struct RSPAMD_ALIGNED(32) rspamd_cryptobox_keypair  {
  * NIST p256 ecdh keypair
  */
 #define RSPAMD_CRYPTOBOX_KEYPAIR_NIST(x) ((struct rspamd_cryptobox_keypair_nist *)(x))
-struct RSPAMD_ALIGNED(32) rspamd_cryptobox_keypair_nist {
+struct rspamd_cryptobox_keypair_nist {
 	struct rspamd_cryptobox_keypair parent;
-	guchar RSPAMD_ALIGNED(32) sk[32];
-	guchar RSPAMD_ALIGNED(32) pk[65];
+	guchar sk[32];
+	guchar pk[65];
 };
 
 /*
  * Curve25519 ecdh keypair
  */
 #define RSPAMD_CRYPTOBOX_KEYPAIR_25519(x) ((struct rspamd_cryptobox_keypair_25519 *)(x))
-struct RSPAMD_ALIGNED(32) rspamd_cryptobox_keypair_25519 {
+struct rspamd_cryptobox_keypair_25519 {
 	struct rspamd_cryptobox_keypair parent;
-	guchar RSPAMD_ALIGNED(32) sk[32];
-	guchar RSPAMD_ALIGNED(32) pk[32];
+	guchar sk[32];
+	guchar pk[32];
 };
 
 /*
  * NIST p256 ecdsa keypair
  */
 #define RSPAMD_CRYPTOBOX_KEYPAIR_SIG_NIST(x) ((struct rspamd_cryptobox_keypair_sig_nist *)(x))
-struct RSPAMD_ALIGNED(32) rspamd_cryptobox_keypair_sig_nist {
+struct rspamd_cryptobox_keypair_sig_nist {
 	struct rspamd_cryptobox_keypair parent;
-	guchar RSPAMD_ALIGNED(32) sk[32];
-	guchar RSPAMD_ALIGNED(32) pk[65];
+	guchar sk[32];
+	guchar pk[65];
 };
 
 /*
  * Ed25519 keypair
  */
 #define RSPAMD_CRYPTOBOX_KEYPAIR_SIG_25519(x) ((struct rspamd_cryptobox_keypair_sig_25519 *)(x))
-struct RSPAMD_ALIGNED(32) rspamd_cryptobox_keypair_sig_25519 {
+struct rspamd_cryptobox_keypair_sig_25519 {
 	struct rspamd_cryptobox_keypair parent;
-	guchar RSPAMD_ALIGNED(32) sk[64];
-	guchar RSPAMD_ALIGNED(32) pk[32];
+	guchar sk[64];
+	guchar pk[32];
 };
 
 /*
  * Public component of the keypair
  */
-struct RSPAMD_ALIGNED(32) rspamd_cryptobox_pubkey {
+struct rspamd_cryptobox_pubkey {
 	guchar id[rspamd_cryptobox_HASHBYTES];
 	struct rspamd_cryptobox_nm *nm;
 	enum rspamd_cryptobox_keypair_type type;
@@ -94,36 +94,36 @@ struct RSPAMD_ALIGNED(32) rspamd_cryptobox_pubkey {
  * Public p256 ecdh
  */
 #define RSPAMD_CRYPTOBOX_PUBKEY_NIST(x) ((struct rspamd_cryptobox_pubkey_nist *)(x))
-struct RSPAMD_ALIGNED(32) rspamd_cryptobox_pubkey_nist {
+struct rspamd_cryptobox_pubkey_nist {
 	struct rspamd_cryptobox_pubkey parent;
-	guchar RSPAMD_ALIGNED(32) pk[65];
+	guchar pk[65];
 };
 
 /*
  * Public curve25519 ecdh
  */
 #define RSPAMD_CRYPTOBOX_PUBKEY_25519(x) ((struct rspamd_cryptobox_pubkey_25519 *)(x))
-struct RSPAMD_ALIGNED(32) rspamd_cryptobox_pubkey_25519 {
+struct rspamd_cryptobox_pubkey_25519 {
 	struct rspamd_cryptobox_pubkey parent;
-	guchar RSPAMD_ALIGNED(32) pk[32];
+	guchar pk[32];
 };
 
 /*
  * Public p256 ecdsa
  */
 #define RSPAMD_CRYPTOBOX_PUBKEY_SIG_NIST(x) ((struct rspamd_cryptobox_pubkey_sig_nist *)(x))
-struct RSPAMD_ALIGNED(32) rspamd_cryptobox_pubkey_sig_nist {
+struct rspamd_cryptobox_pubkey_sig_nist {
 	struct rspamd_cryptobox_pubkey parent;
-	guchar RSPAMD_ALIGNED(32) pk[65];
+	guchar pk[65];
 };
 
 /*
  * Public ed25519
  */
 #define RSPAMD_CRYPTOBOX_PUBKEY_SIG_25519(x) ((struct rspamd_cryptobox_pubkey_sig_25519 *)(x))
-struct RSPAMD_ALIGNED(32) rspamd_cryptobox_pubkey_sig_25519 {
+struct rspamd_cryptobox_pubkey_sig_25519 {
 	struct rspamd_cryptobox_pubkey parent;
-	guchar RSPAMD_ALIGNED(32) pk[32];
+	guchar pk[32];
 };
 
 void rspamd_cryptobox_nm_dtor (struct rspamd_cryptobox_nm *nm);
