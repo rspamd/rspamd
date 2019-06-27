@@ -32,7 +32,6 @@ local settings = {
   epsilon_common = 0.01, -- eliminate common if spam to ham rate is equal to this epsilon
   common_ttl = 10 * 86400, -- TTL of discriminated common elements
   significant_factor = 3.0 / 4.0, -- which tokens should we update
-  lazy = false, -- enable lazy expiration mode
   classifiers = {},
   cluster_nodes = 0,
 }
@@ -48,7 +47,6 @@ local function check_redis_classifier(cls, cfg)
       expiry = expiry[1]
     end
 
-    if cls.lazy then settings.lazy = cls.lazy end
     -- Load symbols from statfiles
 
     local function check_statfile_table(tbl, def_sym)
@@ -183,7 +181,6 @@ template.threshold = settings.threshold
 template.common_ttl = settings.common_ttl
 template.epsilon_common = settings.epsilon_common
 template.significant_factor = settings.significant_factor
-template.lazy = settings.lazy
 template.expire_step = settings.interval
 template.hostname = rspamd_util.get_hostname()
 
@@ -304,13 +301,8 @@ local expiry_script = [[
     elseif total >= threshold and total > 0 then
       if ham / total > ${significant_factor} or spam / total > ${significant_factor} then
         significant = significant + 1
-        if ${lazy} or expire < 0 then
-          if ttl ~= -1 then
-            redis.call('PERSIST', key)
-            extended = extended + 1
-          end
-        else
-          redis.call('EXPIRE', key, expire)
+        if ttl ~= -1 then
+          redis.call('PERSIST', key)
           extended = extended + 1
         end
       else
@@ -370,8 +362,6 @@ local function expire_step(cls, ev_base, worker)
       local c_data = args[4]
 
       local function log_stat(cycle)
-        local mode = settings.lazy and ' (lazy)' or ''
-        local significant_action = (settings.lazy or cls.expiry < 0) and 'made persistent' or 'extended'
         local infrequent_action = (cls.expiry < 0) and 'made persistent' or 'ttls set'
 
         local c_mean, c_stddev = 0, 0
@@ -382,16 +372,16 @@ local function expire_step(cls, ev_base, worker)
         end
 
         local d = cycle and {
-          'cycle in ' .. step .. ' steps', mode, c_data[1],
-          c_data[7], c_data[2], significant_action,
+          'cycle in ' .. step .. ' steps', c_data[1],
+          c_data[7], c_data[2], 'made persistent',
           c_data[10], c_data[11], infrequent_action,
           c_data[6], c_data[3],
           c_data[8], c_data[9], infrequent_action,
           c_mean,
           c_stddev
         } or {
-          'step ' .. step, mode, data[1],
-          data[7], data[2], significant_action,
+          'step ' .. step, data[1],
+          data[7], data[2], 'made persistent',
           data[10], data[11], infrequent_action,
           data[6], data[3],
           data[8], data[9], infrequent_action,
@@ -399,7 +389,7 @@ local function expire_step(cls, ev_base, worker)
           data[5]
         }
         logger.infox(rspamd_config,
-                'finished expiry %s%s: %s items checked, %s significant (%s %s), ' ..
+                'finished expiry %s: %s items checked, %s significant (%s %s), ' ..
                     '%s insignificant (%s %s), %s common (%s discriminated), ' ..
                     '%s infrequent (%s %s), %s mean, %s std',
                 lutil.unpack(d))
