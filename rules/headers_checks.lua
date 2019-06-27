@@ -115,6 +115,7 @@ rspamd_config:register_symbol{
 local prio_cb_id = rspamd_config:register_symbol {
   name = 'HAS_X_PRIO',
   type = 'callback,mime',
+  description = 'X-Priority check callback rule',
   score = 0.0,
   group = 'headers',
   callback = function (task)

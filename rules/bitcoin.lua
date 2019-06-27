@@ -27,6 +27,7 @@ local base58_dec = fun.tomap(fun.map(
 
 rspamd_config:register_symbol{
   name = 'BITCOIN_ADDR',
+  description = 'Message has a valid bitcoin wallet address',
   callback = function(task)
     local rspamd_re = require "rspamd_regexp"
     local hash = require "rspamd_cryptobox_hash"
