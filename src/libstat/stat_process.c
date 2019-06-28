@@ -633,25 +633,25 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 					"<%s> contains more tokens than allowed for %s classifier: "
 					"%d > %d",
 					task->message_id,
-					cl->cfg->name,
+					sel->cfg->name,
 					task->tokens->len,
-					cl->cfg->max_tokens);
+					sel->cfg->max_tokens);
 		}
 		else if (too_small) {
 			g_set_error (err, rspamd_stat_quark (), 204,
 					"<%s> contains less tokens than required for %s classifier: "
 					"%d < %d",
 					task->message_id,
-					cl->cfg->name,
+					sel->cfg->name,
 					task->tokens->len,
-					cl->cfg->min_tokens);
+					sel->cfg->min_tokens);
 		}
 		else if (conditionally_skipped) {
 			g_set_error (err, rspamd_stat_quark (), 204,
 					"<%s> is skipped for %s classifier: "
 					"%s",
 					task->message_id,
-					cl->cfg->name,
+					sel->cfg->name,
 					cond_str ? cond_str : "unknown reason");
 		}
 	}
@@ -698,6 +698,8 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 
 			if (bk_run == NULL) {
 				/* XXX: must be error */
+				msg_warn_task ("no runtime for backend %s; classifier %s; symbol %s",
+						st->backend->name, cl->cfg->name, st->stcf->symbol);
 				continue;
 			}
 
@@ -709,10 +711,9 @@ rspamd_stat_backends_learn (struct rspamd_stat_ctx *st_ctx,
 			}
 
 			if (!st->backend->learn_tokens (task, task->tokens, id, bk_run)) {
-				if (err && *err == NULL) {
-					g_set_error (err, rspamd_stat_quark (), 500, "Cannot push "
-							"learned results to the backend");
-				}
+				g_set_error (err, rspamd_stat_quark (), 500,
+						"Cannot push "
+						"learned results to the backend");
 
 				res = FALSE;
 				goto end;
@@ -844,11 +845,23 @@ rspamd_stat_learn (struct rspamd_task *task,
 		/* Process classifiers */
 		if (!rspamd_stat_classifiers_learn (st_ctx, task, classifier,
 				spam, err)) {
+			if (err && *err == NULL) {
+				g_set_error (err, rspamd_stat_quark (), 500,
+						"Unknown statistics error, found when learning classifiers;"
+						" classifier: %s",
+						task->classifier);
+			}
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 
 		/* Process backends */
 		if (!rspamd_stat_backends_learn (st_ctx, task, classifier, spam, err)) {
+			if (err && *err == NULL) {
+				g_set_error (err, rspamd_stat_quark (), 500,
+						"Unknown statistics error, found when storing data on backend;"
+						" classifier: %s",
+						task->classifier);
+			}
 			return RSPAMD_STAT_PROCESS_ERROR;
 		}
 	}
