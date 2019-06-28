@@ -42,9 +42,9 @@ luaL_register (lua_State *L, const gchar *name, const struct luaL_reg *methods)
 #endif
 
 /* Interface definitions */
-#define LUA_FUNCTION_DEF(class, name) static gint lua_ ## class ## _ ## name ( \
+#define LUA_FUNCTION_DEF(class, name) static int lua_ ## class ## _ ## name ( \
 		lua_State * L)
-#define LUA_PUBLIC_FUNCTION_DEF(class, name) gint lua_ ## class ## _ ## name ( \
+#define LUA_PUBLIC_FUNCTION_DEF(class, name) int lua_ ## class ## _ ## name ( \
 		lua_State * L)
 #define LUA_INTERFACE_DEF(class, name) { # name, lua_ ## class ## _ ## name }
 
@@ -286,6 +286,7 @@ void luaopen_cryptobox (lua_State *L);
 void luaopen_dns (lua_State *L);
 void luaopen_udp (lua_State * L);
 void luaopen_worker (lua_State * L);
+void luaopen_kann (lua_State * L);
 
 void rspamd_lua_dostring (const gchar *line);
 

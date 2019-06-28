@@ -47,7 +47,7 @@ lua_error_quark (void)
 
 /* Util functions */
 /**
- * Create new class and store metatable on top of the stack
+ * Create new class and store metatable on top of the stack (must be popped if not needed)
  * @param L
  * @param classname name of class
  * @param func table of class methods
@@ -62,10 +62,14 @@ rspamd_lua_new_class (lua_State * L,
 	lua_pushvalue (L, -2);      /* pushes the metatable */
 	lua_settable (L, -3);       /* metatable.__index = metatable */
 
-	lua_pushstring (L, "class");    /* mt,"__index",it,"class" */
-	lua_pushstring (L, classname);  /* mt,"__index",it,"class",classname */
-	lua_rawset (L, -3);         /* mt,"__index",it */
-	luaL_register (L, NULL, methods);
+	lua_pushstring (L, "class");    /* mt,"class" */
+	lua_pushstring (L, classname);  /* mt,"class",classname */
+	lua_rawset (L, -3);         /* mt */
+
+	if (methods) {
+		luaL_register (L, NULL, methods); /* pushes all methods as MT fields */
+	}
+	/* MT is left on stack ! */
 }
 
 /**
@@ -915,6 +919,7 @@ rspamd_lua_init (bool wipe_mem)
 	luaopen_dns (L);
 	luaopen_udp (L);
 	luaopen_worker (L);
+	luaopen_kann (L);
 
 	luaL_newmetatable (L, "rspamd{ev_base}");
 	lua_pushstring (L, "class");

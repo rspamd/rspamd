@@ -1075,8 +1075,8 @@ lua_cryptobox_hash_create (lua_State *L)
 /***
  * @function rspamd_cryptobox_hash.create_specific(type, [string])
  * Creates new hash context
- * @param {string} type type of signature
- * @param {string} data raw signature data
+ * @param {string} type type of hash (blake2, sha256, md5, sha512, mum, xxh64, xxh32, t1ha)
+ * @param {string} string initial data
  * @return {cryptobox_hash} hash object
  */
 static gint
