@@ -1064,6 +1064,26 @@ rspamd_config.MIME_BASE64_TEXT = {
   type = 'mime',
 }
 
+rspamd_config.MIME_BASE64_TEXT_BOGUS = {
+  callback = function(task)
+    local parts = task:get_text_parts()
+    if (not parts) then return false end
+    -- Check each part and look for base64 encoded text parts
+    -- where the part does not have any 8bit characters within it
+    for _, part in ipairs(parts) do
+      local mimepart = part:get_mimepart();
+      if (check_for_base64_text(mimepart) and not part:has_8bit()) then
+        return true
+      end
+    end
+    return false
+  end,
+  description = 'Has text part encoded in base64 that does not contain any 8bit characters',
+  score = 1.0,
+  group = 'headers',
+  type = 'mime',
+}
+
 local function is_8bit_addr(addr)
   if addr.flags and addr.flags['8bit'] then
     return true
