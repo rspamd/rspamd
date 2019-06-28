@@ -411,7 +411,7 @@ void rspamd_random_seed_fast (void);
 /**
  * Constant time version of memcmp
  */
-gboolean rspamd_constant_memcmp (const guchar *a, const guchar *b, gsize len);
+gboolean rspamd_constant_memcmp (const void *a, const void *b, gsize len);
 
 /**
  * Open file without following symlinks or special stuff
@@ -472,7 +472,7 @@ void rspamd_gmtime (gint64 ts, struct tm *dest);
  */
 void rspamd_localtime (gint64 ts, struct tm *dest);
 
-#define PTR_ARRAY_FOREACH(ar, i, cur) for ((i) = 0; (ar) != NULL && (i) < (ar)->len && (((cur) = g_ptr_array_index((ar), (i))) || 1); ++(i))
+#define PTR_ARRAY_FOREACH(ar, i, cur) for ((i) = 0; (ar) != NULL && (i) < (ar)->len && (((cur) = (__typeof__(cur))g_ptr_array_index((ar), (i))) || 1); ++(i))
 
 /**
  * Compresses the input string using gzip+zlib. Old string is replaced and freed

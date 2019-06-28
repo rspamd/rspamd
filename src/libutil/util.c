@@ -2507,15 +2507,17 @@ rspamd_time_jitter (gdouble in, gdouble jitter)
 }
 
 gboolean
-rspamd_constant_memcmp (const guchar *a, const guchar *b, gsize len)
+rspamd_constant_memcmp (const void *a, const void *b, gsize len)
 {
 	gsize lena, lenb, i;
 	guint16 d, r = 0, m;
 	guint16 v;
+	const guint8 *aa = (const guint8 *)a,
+			*bb =  (const guint8 *)b;
 
 	if (len == 0) {
-		lena = strlen (a);
-		lenb = strlen (b);
+		lena = strlen ((const char*)a);
+		lenb = strlen ((const char*)b);
 
 		if (lena != lenb) {
 			return FALSE;
@@ -2527,7 +2529,7 @@ rspamd_constant_memcmp (const guchar *a, const guchar *b, gsize len)
 	for (i = 0; i < len; i++) {
 		v = ((guint16)(guint8)r) + 255;
 		m = v / 256 - 1;
-		d = (guint16)((int)a[i] - (int)b[i]);
+		d = (guint16)((int)aa[i] - (int)bb[i]);
 		r |= (d & m);
 	}
 

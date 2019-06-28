@@ -85,7 +85,7 @@ struct html_block {
 	struct html_tag_component style;
 	guint font_size;
 	gboolean visible;
-	gchar *class;
+	gchar *html_class;
 };
 
 /* Public tags flags */

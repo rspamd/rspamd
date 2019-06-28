@@ -380,7 +380,7 @@ static const unsigned int url_scanner_table[256] = {
 #define is_urlsafe(x) ((url_scanner_table[(guchar)(x)] & (IS_URLSAFE)) != 0)
 
 const gchar *
-rspamd_url_strerror (enum uri_errno err)
+rspamd_url_strerror (int err)
 {
 	switch (err) {
 		case URI_ERRNO_OK:

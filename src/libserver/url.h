@@ -150,7 +150,7 @@ gboolean rspamd_url_find (rspamd_mempool_t *pool,
 /*
  * Return text representation of url parsing error
  */
-const gchar * rspamd_url_strerror (enum uri_errno err);
+const gchar * rspamd_url_strerror (int err);
 
 
 /**

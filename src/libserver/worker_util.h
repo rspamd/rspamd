@@ -57,7 +57,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 void rspamd_worker_set_signal_handler (int signo,
 		struct rspamd_worker *worker,
 		struct ev_loop *event_loop,
-		rspamd_worker_signal_handler handler,
+		rspamd_worker_signal_cb_t handler,
 		void *handler_data);
 
 /**

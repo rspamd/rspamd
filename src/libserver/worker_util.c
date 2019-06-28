@@ -235,7 +235,7 @@ rspamd_worker_signal_handle (EV_P_ ev_signal *w, int revents)
 {
 	struct rspamd_worker_signal_handler *sigh =
 			(struct rspamd_worker_signal_handler *)w->data;
-	struct rspamd_worker_signal_cb *cb, *cbtmp;
+	struct rspamd_worker_signal_handler_elt *cb, *cbtmp;
 
 	/* Call all signal handlers registered */
 	DL_FOREACH_SAFE (sigh->cb, cb, cbtmp) {
@@ -272,7 +272,7 @@ static void
 rspamd_sigh_free (void *p)
 {
 	struct rspamd_worker_signal_handler *sigh = p;
-	struct rspamd_worker_signal_cb *cb, *tmp;
+	struct rspamd_worker_signal_handler_elt *cb, *tmp;
 
 	DL_FOREACH_SAFE (sigh->cb, cb, tmp) {
 		DL_DELETE (sigh->cb, cb);
@@ -287,11 +287,11 @@ rspamd_sigh_free (void *p)
 void
 rspamd_worker_set_signal_handler (int signo, struct rspamd_worker *worker,
 		struct ev_loop *event_loop,
-		rspamd_worker_signal_handler handler,
+		rspamd_worker_signal_cb_t handler,
 		void *handler_data)
 {
 	struct rspamd_worker_signal_handler *sigh;
-	struct rspamd_worker_signal_cb *cb;
+	struct rspamd_worker_signal_handler_elt *cb;
 
 	sigh = g_hash_table_lookup (worker->signal_events, GINT_TO_POINTER (signo));
 

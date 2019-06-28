@@ -2337,8 +2337,8 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 			case RSPAMD_HTML_COMPONENT_CLASS:
 				fstr.begin = (gchar *) comp->start;
 				fstr.len = comp->len;
-				bl->class = rspamd_mempool_ftokdup (pool, &fstr);
-				msg_debug_html ("got class: %s", bl->class);
+				bl->html_class = rspamd_mempool_ftokdup (pool, &fstr);
+				msg_debug_html ("got class: %s", bl->html_class);
 				break;
 			case RSPAMD_HTML_COMPONENT_SIZE:
 				/* Not supported by html5 */

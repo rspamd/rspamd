@@ -114,13 +114,13 @@ struct rspamd_abstract_worker_ctx {
 };
 
 struct rspamd_worker_signal_handler;
-typedef gboolean (*rspamd_worker_signal_handler) (
+typedef gboolean (*rspamd_worker_signal_cb_t) (
 		struct rspamd_worker_signal_handler *, void *ud);
 
-struct rspamd_worker_signal_cb {
-	rspamd_worker_signal_handler handler;
+struct rspamd_worker_signal_handler_elt {
+	rspamd_worker_signal_cb_t handler;
 	void *handler_data;
-	struct rspamd_worker_signal_cb *next, *prev;
+	struct rspamd_worker_signal_handler_elt *next, *prev;
 };
 
 struct rspamd_worker_signal_handler {
@@ -129,7 +129,7 @@ struct rspamd_worker_signal_handler {
 	ev_signal ev_sig;
 	struct ev_loop *event_loop;
 	struct rspamd_worker *worker;
-	struct rspamd_worker_signal_cb *cb;
+	struct rspamd_worker_signal_handler_elt *cb;
 };
 
 struct rspamd_controller_pbkdf {
@@ -222,8 +222,8 @@ typedef struct worker_s {
 	const gchar *name;
 	gpointer (*worker_init_func)(struct rspamd_config *cfg);
 	void (*worker_start_func)(struct rspamd_worker *worker);
-	enum rspamd_worker_flags flags;
-	enum rspamd_worker_socket_type listen_type;
+	int flags;
+	int listen_type;
 	guint worker_version;
 	guint64 rspamd_version;
 	const gchar *rspamd_features;

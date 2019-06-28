@@ -21,9 +21,9 @@ struct _entity;
 typedef struct _entity entity;
 
 struct _entity {
-	gchar *name;
+	const gchar *name;
 	uint code;
-	gchar *replacement;
+	const gchar *replacement;
 };
 
 static entity entities_defs[] = {
