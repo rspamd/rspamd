@@ -53,13 +53,19 @@ struct redisAsyncContext* rspamd_redis_pool_connect (
 		const gchar *db, const gchar *password,
 		const char *ip, int port);
 
+enum rspamd_redis_pool_release_type {
+	RSPAMD_REDIS_RELEASE_DEFAULT = 0,
+	RSPAMD_REDIS_RELEASE_FATAL = 1,
+	RSPAMD_REDIS_RELEASE_ENFORCE
+};
+
 /**
  * Release a connection to the pool
  * @param pool
  * @param ctx
  */
 void rspamd_redis_pool_release_connection (struct rspamd_redis_pool *pool,
-		struct redisAsyncContext *ctx, gboolean is_fatal);
+		struct redisAsyncContext *ctx, enum rspamd_redis_pool_release_type how);
 
 /**
  * Stops redis pool and destroys it

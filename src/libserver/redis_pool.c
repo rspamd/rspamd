@@ -395,7 +395,7 @@ rspamd_redis_pool_connect (struct rspamd_redis_pool *pool,
 
 void
 rspamd_redis_pool_release_connection (struct rspamd_redis_pool *pool,
-		struct redisAsyncContext *ctx, gboolean is_fatal)
+		struct redisAsyncContext *ctx, enum rspamd_redis_pool_release_type how)
 {
 	struct rspamd_redis_pool_connection *conn;
 
@@ -406,24 +406,38 @@ rspamd_redis_pool_release_connection (struct rspamd_redis_pool *pool,
 	if (conn != NULL) {
 		g_assert (conn->active);
 
-		if (is_fatal || ctx->err != REDIS_OK) {
+		if (ctx->err != REDIS_OK) {
 			/* We need to terminate connection forcefully */
-			msg_debug_rpool ("closed connection %p forcefully", conn->ctx);
+			msg_debug_rpool ("closed connection %p due to an error", conn->ctx);
 			REF_RELEASE (conn);
 		}
 		else {
-			/* Ensure that there are no callbacks attached to this conn */
-			if (ctx->replies.head == NULL) {
-				/* Just move it to the inactive queue */
-				g_queue_unlink (conn->elt->active, conn->entry);
-				g_queue_push_head_link (conn->elt->inactive, conn->entry);
-				conn->active = FALSE;
-				rspamd_redis_pool_schedule_timeout (conn);
-				msg_debug_rpool ("mark connection %p inactive", conn->ctx);
+			if (how == RSPAMD_REDIS_RELEASE_DEFAULT) {
+				/* Ensure that there are no callbacks attached to this conn */
+				if (ctx->replies.head == NULL) {
+					/* Just move it to the inactive queue */
+					g_queue_unlink (conn->elt->active, conn->entry);
+					g_queue_push_head_link (conn->elt->inactive, conn->entry);
+					conn->active = FALSE;
+					rspamd_redis_pool_schedule_timeout (conn);
+					msg_debug_rpool ("mark connection %p inactive", conn->ctx);
+				}
+				else {
+					msg_debug_rpool ("closed connection %p due to callbacks left",
+							conn->ctx);
+					REF_RELEASE (conn);
+				}
 			}
 			else {
-				msg_debug_rpool ("closed connection %p due to callbacks left",
-					conn->ctx);
+				if (how == RSPAMD_REDIS_RELEASE_FATAL) {
+					msg_debug_rpool ("closed connection %p due to an fatal termination",
+							conn->ctx);
+				}
+				else {
+					msg_debug_rpool ("closed connection %p due to explicit termination",
+							conn->ctx);
+				}
+
 				REF_RELEASE (conn);
 			}
 		}

@@ -71,6 +71,7 @@ local function redis_query_sentinel(ev_base, params, initialised)
     timeout = params.timeout,
     config = rspamd_config,
     ev_base = ev_base,
+    no_pool = true,
   })
 
   if not is_ok then

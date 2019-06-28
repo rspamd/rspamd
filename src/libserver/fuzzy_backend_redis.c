@@ -140,7 +140,8 @@ rspamd_fuzzy_redis_session_dtor (struct rspamd_fuzzy_redis_session *session,
 		ac = session->ctx;
 		session->ctx = NULL;
 		rspamd_redis_pool_release_connection (session->backend->pool,
-				ac, is_fatal);
+				ac,
+				is_fatal ? RSPAMD_REDIS_RELEASE_FATAL : RSPAMD_REDIS_RELEASE_DEFAULT);
 	}
 
 	ev_timer_stop (session->event_loop, &session->timeout);
@@ -290,7 +291,7 @@ rspamd_fuzzy_redis_timeout (EV_P_ ev_timer *w, int revents)
 
 		/* This will cause session closing */
 		rspamd_redis_pool_release_connection (session->backend->pool,
-				ac, TRUE);
+				ac, RSPAMD_REDIS_RELEASE_FATAL);
 	}
 }
 
