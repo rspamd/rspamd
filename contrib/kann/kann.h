@@ -210,6 +210,8 @@ kad_node_t *kann_new_bias(int n);
 kad_node_t *kann_new_weight_conv2d(int n_out, int n_in, int k_row, int k_col);
 kad_node_t *kann_new_weight_conv1d(int n_out, int n_in, int kernel_len);
 
+kad_node_t *kann_new_leaf_array(int *offset, kad_node_p *par, uint8_t flag, float x0_01, int n_d, int32_t d[KAD_MAX_DIM]);
+
 kad_node_t *kann_new_leaf2(int *offset, kad_node_p *par, uint8_t flag, float x0_01, int n_d, ...);
 kad_node_t *kann_layer_dense2(int *offset, kad_node_p *par, kad_node_t *in, int n1);
 kad_node_t *kann_layer_dropout2(int *offset, kad_node_p *par, kad_node_t *t, float r);
