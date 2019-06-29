@@ -966,6 +966,8 @@ CHECK_SYMBOL_EXISTS(SSL_set_tlsext_host_name "openssl/ssl.h" HAVE_SSL_TLSEXT_HOS
 CHECK_SYMBOL_EXISTS(dirfd "sys/types.h;unistd.h;dirent.h" HAVE_DIRFD)
 CHECK_SYMBOL_EXISTS(fpathconf "sys/types.h;unistd.h" HAVE_FPATHCONF)
 CHECK_SYMBOL_EXISTS(sigaltstack "signal.h" HAVE_SIGALTSTACK)
+CHECK_SYMBOL_EXISTS(open_memstream "stdio.h" HAVE_OPENMEMSTREAM)
+CHECK_SYMBOL_EXISTS(fmemopen "stdio.h" HAVE_FMEMOPEN)
 CHECK_SYMBOL_EXISTS(clock_getcpuclockid "sys/types.h;time.h" HAVE_CLOCK_GETCPUCLOCKID)
 CHECK_SYMBOL_EXISTS(RUSAGE_SELF "sys/types.h;sys/resource.h" HAVE_RUSAGE_SELF)
 
