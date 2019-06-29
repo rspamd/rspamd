@@ -271,6 +271,13 @@ void luaopen_kann (lua_State *L)
 	(n)->ext_flag = fl; \
 }while(0)
 
+/***
+ * @function kann.layer.input(ninputs[, flags])
+ * Creates an input layer for ANN
+ * @param {int} ninputs number of inputs
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
 static int
 lua_kann_layer_input (lua_State *L)
 {
@@ -291,6 +298,14 @@ lua_kann_layer_input (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function kann.layer.dense(in, ninputs[, flags])
+ * Creates a dense layer (e.g. for hidden layer)
+ * @param {kann_node} in kann node
+ * @param {int} ninputs number of dense nodes
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
 static int
 lua_kann_layer_dense (lua_State *L)
 {
@@ -312,6 +327,14 @@ lua_kann_layer_dense (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function kann.layer.dropout(in, ratio[, flags])
+ * Creates a dropout layer
+ * @param {kann_node} in kann node
+ * @param {float} ratio drop ratio
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
 static int
 lua_kann_layer_layerdropout (lua_State *L)
 {
@@ -333,6 +356,13 @@ lua_kann_layer_layerdropout (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function kann.layer.dropout(in [, flags])
+ * Creates a normalisation layer
+ * @param {kann_node} in kann node
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
 static int
 lua_kann_layer_layernorm (lua_State *L)
 {
@@ -353,6 +383,15 @@ lua_kann_layer_layernorm (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function kann.layer.rnn(in, nnodes[, rnn_flags, [, flags]])
+ * Creates a recursive NN layer
+ * @param {kann_node} in kann node
+ * @param {int} nnodes number of cells
+ * @param {int} rnnflags rnn flags
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
 static int
 lua_kann_layer_rnn (lua_State *L)
 {
@@ -379,6 +418,15 @@ lua_kann_layer_rnn (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function kann.layer.lstm(in, nnodes[, rnn_flags, [, flags]])
+ * Creates a recursive NN layer using LSTM cells
+ * @param {kann_node} in kann node
+ * @param {int} nnodes number of cells
+ * @param {int} rnnflags rnn flags
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
 static int
 lua_kann_layer_lstm (lua_State *L)
 {
@@ -405,6 +453,15 @@ lua_kann_layer_lstm (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function kann.layer.rnn(in, nnodes[, rnn_flags, [, flags]])
+ * Creates a recursive NN layer using GRU cells
+ * @param {kann_node} in kann node
+ * @param {int} nnodes number of cells
+ * @param {int} rnnflags rnn flags
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
 static int
 lua_kann_layer_gru (lua_State *L)
 {
@@ -431,6 +488,20 @@ lua_kann_layer_gru (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function kann.layer.conv2d(in, n_flt, k_rows, k_cols, stride_rows, stride_cols, pad_rows, pad_columns[, flags])
+ * Creates a 2D convolution layer
+ * @param {kann_node} in kann node
+ * @param {int} n_flt number of filters
+ * @param {int} k_rows kernel rows
+ * @param {int} k_cols kernel columns
+ * @param {int} stride_rows stride rows
+ * @param {int} stride_cols stride columns
+ * @param {int} pad_rows padding rows
+ * @param {int} pad_columns padding columns
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
 static int
 lua_kann_layer_conv2d (lua_State *L)
 {
@@ -458,6 +529,17 @@ lua_kann_layer_conv2d (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function kann.layer.conv1d(in, n_flt, kern_size, stride_size, pad_size[, flags])
+ * Creates 1D convolution layer
+ * @param {kann_node} in kann node
+ * @param {int} n_flt number of filters
+ * @param {int} kern_size kernel rows
+ * @param {int} stride_size stride rows
+ * @param {int} pad_size padding rows
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
 static int
 lua_kann_layer_conv1d (lua_State *L)
 {
@@ -481,6 +563,15 @@ lua_kann_layer_conv1d (lua_State *L)
 	return 1;
 }
 
+/***
+ * @function kann.layer.cost(in, nout, cost_type[, flags])
+ * Creates 1D convolution layer
+ * @param {kann_node} in kann node
+ * @param {int} nout number of outputs
+ * @param {int} cost_type see kann.cost table
+ * @param {table|int} flags optional flags
+ * @return {kann_node} kann node object (should be used to combine ANN)
+*/
 static int
 lua_kann_layer_cost (lua_State *L)
 {
