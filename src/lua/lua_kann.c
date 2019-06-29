@@ -140,6 +140,20 @@ static luaL_reg rspamd_kann_new_f[] = {
 		{NULL, NULL},
 };
 
+LUA_FUNCTION_DEF (kann, load);
+LUA_FUNCTION_DEF (kann, destroy);
+LUA_FUNCTION_DEF (kann, save);
+LUA_FUNCTION_DEF (kann, train);
+LUA_FUNCTION_DEF (kann, forward);
+
+static luaL_reg rspamd_kann_m[] = {
+		LUA_INTERFACE_DEF (kann, save),
+		LUA_INTERFACE_DEF (kann, train),
+		LUA_INTERFACE_DEF (kann, forward),
+		{"__gc", lua_kann_destroy},
+		{NULL, NULL},
+};
+
 static int
 rspamd_kann_table_to_flags (lua_State *L, int table_pos)
 {
@@ -227,6 +241,11 @@ lua_load_kann (lua_State * L)
 	luaL_register (L, NULL, rspamd_kann_new_f);
 	lua_settable (L, -3);
 
+	/* Load ann from memory or file */
+	lua_pushstring (L, "load");
+	lua_pushcfunction (L, lua_kann_load);
+	lua_settable (L, -3);
+
 	return 1;
 }
 
@@ -238,12 +257,20 @@ lua_check_kann_node (lua_State *L, int pos)
 	return ud ? *((kad_node_t **)ud) : NULL;
 }
 
+static kann_t *
+lua_check_kann (lua_State *L, int pos)
+{
+	void *ud = rspamd_lua_check_udata (L, pos, KANN_NETWORK_CLASS);
+	luaL_argcheck (L, ud != NULL, pos, "'kann' expected");
+	return ud ? *((kann_t **)ud) : NULL;
+}
+
 void luaopen_kann (lua_State *L)
 {
 	/* Metatables */
 	rspamd_lua_new_class (L, KANN_NODE_CLASS, NULL); /* TODO: add methods */
 	lua_pop (L, 1); /* No need in metatable... */
-	rspamd_lua_new_class (L, KANN_NETWORK_CLASS, NULL); /* TODO: add methods */
+	rspamd_lua_new_class (L, KANN_NETWORK_CLASS, rspamd_kann_m);
 	lua_pop (L, 1); /* No need in metatable... */
 	rspamd_lua_add_preload (L, "rspamd_kann", lua_load_kann);
 	lua_settop (L, 0);
@@ -819,4 +846,156 @@ lua_kann_new_kann (lua_State *L)
 	}
 
 	return 1;
+}
+
+static int
+lua_kann_destroy (lua_State *L)
+{
+	kann_t *k = lua_check_kann (L, 1);
+
+	kann_delete (k);
+
+	return 0;
+}
+
+static int
+lua_kann_save (lua_State *L)
+{
+	kann_t *k = lua_check_kann (L, 1);
+
+	if (k) {
+		if (lua_istable (L, 2)) {
+			lua_getfield (L, 2, "filename");
+
+			if (lua_isstring (L, -1)) {
+				const gchar *fname = lua_tostring (L, -1);
+				FILE *f;
+
+				f = fopen (fname, "w");
+
+				if (!f) {
+					lua_pop (L, 1);
+
+					return luaL_error (L, "cannot open %s for writing: %s",
+							fname, strerror (errno));
+				}
+
+				kann_save_fp (f, k);
+				fclose (f);
+
+				lua_pushboolean (L, true);
+			}
+			else {
+				lua_pop (L, 1);
+
+				return luaL_error (L, "invalid arguments: missing filename");
+			}
+
+			lua_pop (L, 1);
+		}
+		else {
+			/* Save to Rspamd text */
+#ifndef HAVE_OPENMEMSTREAM
+			return luaL_error (L, "no support of saving to memory on your system");
+#endif
+			FILE *f;
+			char *buf = NULL;
+			size_t buflen;
+			struct rspamd_lua_text *t;
+
+			f = open_memstream (&buf, &buflen);
+			g_assert (f != NULL);
+
+			kann_save_fp (f, k);
+			fclose (f);
+
+			t = lua_newuserdata (L, sizeof (*t));
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
+			t->flags = RSPAMD_TEXT_FLAG_OWN;
+			t->start = (const gchar *)buf;
+			t->len = buflen;
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_kann_load (lua_State *L)
+{
+	kann_t *k;
+	FILE *f = NULL;
+
+	if (lua_istable (L, 1)) {
+		lua_getfield (L, 2, "filename");
+
+		if (lua_isstring (L, -1)) {
+			const gchar *fname = lua_tostring (L, -1);
+
+			f = fopen (fname, "rb");
+		}
+		else {
+			lua_pop (L, 1);
+
+			return luaL_error (L, "invalid arguments: missing filename");
+		}
+
+		lua_pop (L, 1);
+	}
+	else if (lua_isstring (L, 1)) {
+		gsize dlen;
+		const gchar *data;
+
+		data = lua_tolstring (L, 1, &dlen);
+
+#ifndef HAVE_FMEMOPEN
+		return luaL_error (L, "no support of loading from memory on your system");
+#endif
+		f = fmemopen ((void *)data, dlen, "rb");
+	}
+	else if (lua_isuserdata (L, 1)) {
+		struct rspamd_lua_text *t;
+
+		t = lua_check_text (L, 1);
+
+#ifndef HAVE_FMEMOPEN
+		return luaL_error (L, "no support of loading from memory on your system");
+#endif
+		f = fmemopen ((void *)t->start, t->len, "rb");
+	}
+
+	if (f == NULL) {
+		return luaL_error (L, "invalid arguments or cannot open file");
+	}
+
+	k = kann_load_fp (f);
+	fclose (f);
+
+	if (k == NULL) {
+		lua_pushnil (L);
+	}
+	else {
+		PUSH_KAN_NETWORK (k);
+	}
+
+	return 1;
+}
+
+static int
+lua_kann_train (lua_State *L)
+{
+	kann_t *k = lua_check_kann (L, 1);
+
+	g_assert_not_reached (); /* TODO: implement */
+}
+
+static int
+lua_kann_forward (lua_State *L)
+{
+	kann_t *k = lua_check_kann (L, 1);
+
+	g_assert_not_reached (); /* TODO: implement */
 }

@@ -68,6 +68,7 @@ struct rspamd_lua_ip {
 #define RSPAMD_TEXT_FLAG_OWN (1u << 0u)
 #define RSPAMD_TEXT_FLAG_MMAPED (1u << 1u)
 #define RSPAMD_TEXT_FLAG_WIPE (1u << 2u)
+#define RSPAMD_TEXT_FLAG_SYSMALLOC (1u << 3u)
 struct rspamd_lua_text {
 	const gchar *start;
 	guint len;

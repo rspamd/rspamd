@@ -350,7 +350,12 @@ lua_text_gc (lua_State *L)
 				munmap ((gpointer)t->start, t->len);
 			}
 			else {
-				g_free ((gpointer)t->start);
+				if (t->flags & RSPAMD_TEXT_FLAG_SYSMALLOC) {
+					free ((gpointer) t->start);
+				}
+				else {
+					g_free ((gpointer) t->start);
+				}
 			}
 		}
 
