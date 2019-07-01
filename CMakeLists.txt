@@ -57,7 +57,6 @@ OPTION(ENABLE_JEMALLOC     "Build rspamd with jemalloc allocator  [default: OFF]
 OPTION(ENABLE_COVERAGE     "Build rspamd with code coverage options [default: OFF]" OFF)
 OPTION(ENABLE_FULL_DEBUG   "Build rspamd with all possible debug [default: OFF]" OFF)
 OPTION(ENABLE_UTILS        "Build rspamd internal utils [default: OFF]" OFF)
-OPTION(ENABLE_TORCH        "Install torch7 with Rspamd [default: ON]" ON)
 OPTION(ENABLE_LIBUNWIND    "Use libunwind to print crash traces [default: OFF]" OFF)
 OPTION(ENABLE_LUA_TRACE    "Trace all Lua C API invocations [default: OFF]" OFF)
 
@@ -1232,19 +1231,6 @@ IF(ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_SUBDIRECTORY(clang-plugin)
 ENDIF()
 
-IF(ENABLE_TORCH MATCHES "ON")
-	IF(WITH_LUAJIT)
-		ADD_SUBDIRECTORY(contrib/lua-torch/paths)
-		ADD_SUBDIRECTORY(contrib/lua-torch/torch7)
-		ADD_SUBDIRECTORY(contrib/lua-torch/nn)
-		ADD_SUBDIRECTORY(contrib/lua-torch/optim)
-		ADD_SUBDIRECTORY(contrib/lua-torch/decisiontree)
-		SET(WITH_TORCH 1)
-	ELSE()
-		MESSAGE(FATAL_ERROR "Cannot enable torch without luajit")
-	ENDIF()
-ENDIF()
-
 ADD_SUBDIRECTORY(src)
 ADD_SUBDIRECTORY(test)
 ADD_SUBDIRECTORY(utils)
@@ -1336,10 +1322,6 @@ INSTALL(FILES "contrib/lua-argparse/argparse.lua" DESTINATION ${LUALIBDIR})
 INSTALL(FILES "contrib/lua-tableshape/tableshape.lua" DESTINATION ${LUALIBDIR})
 INSTALL(FILES "contrib/lua-lupa/lupa.lua" DESTINATION ${LUALIBDIR})
 INSTALL(FILES "contrib/lua-lpeg/lpegre.lua" DESTINATION ${LUALIBDIR})
-
-IF(ENABLE_TORCH MATCHES "ON")
-	INSTALL(FILES "contrib/lua-moses/moses.lua" DESTINATION ${LUALIBDIR})
-ENDIF()
 
 # systemd unit
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND WANT_SYSTEMD_UNITS MATCHES "ON")
