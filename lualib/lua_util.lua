@@ -943,7 +943,7 @@ end
 -- * <prefix>_privacy = false - subject privacy is off
 -- * <prefix>_privacy_alg = 'blake2' - default hash-algorithm to obfuscate subject
 -- * <prefix>_privacy_prefix = 'obf' - prefix to show it's obfuscated
--- * <prefix>_privacy_length = 16 - cut the length of the hash
+-- * <prefix>_privacy_length = 16 - cut the length of the hash; if 0 or fasle full hash is returned
 -- @return obfuscated or validated subject
 --]]
 
@@ -958,7 +958,7 @@ exports.maybe_obfuscate_string = function(subject, settings, prefix)
     local subject_hash = hash.create_specific(hash_alg, subject)
 
     local strip_len = settings[prefix .. '_privacy_length']
-    if strip_len then
+    if strip_len and strip_len > 0 then
       subject = subject_hash:hex():sub(1, strip_len)
     else
       subject = subject_hash:hex()
