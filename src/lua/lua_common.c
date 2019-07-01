@@ -1320,6 +1320,9 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
 						*(va_arg (ap, const gchar **)) = NULL;
 					}
+					else {
+						(void)va_arg (ap, gchar **);
+					}
 				}
 				else {
 					g_set_error (err,
@@ -1342,12 +1345,15 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 
 			case 'I':
 				if (t == LUA_TNUMBER) {
-					*(va_arg (ap, gint64 *)) = lua_tonumber (L, idx);
+					*(va_arg (ap, gint64 *)) = lua_tointeger (L, idx);
 				}
 				else if (t == LUA_TNIL || t == LUA_TNONE) {
 					failed = TRUE;
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
 						*(va_arg (ap, gint64 *)) = 0;
+					}
+					else {
+						(void)va_arg (ap, gint64 *);
 					}
 				}
 				else {
@@ -1382,6 +1388,9 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
 						*(va_arg (ap, gint *)) = -1;
+					}
+					else {
+						(void)va_arg (ap, gint *);
 					}
 
 					if (is_table) {
@@ -1450,6 +1459,9 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
 						*(va_arg (ap, gdouble *)) = 0;
 					}
+					else {
+						(void)va_arg (ap, gdouble *);
+					}
 				}
 				else {
 					g_set_error (err,
@@ -1480,6 +1492,9 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
 						*(va_arg (ap, gdouble *)) = NAN;
+					}
+					else {
+						(void)va_arg (ap, gdouble *);
 					}
 				}
 				else {
@@ -1516,6 +1531,9 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 						*(va_arg (ap, const char **)) = NULL;
 						*valuelen = 0;
 					}
+					else {
+						(void)va_arg (ap, const char **);
+					}
 				}
 				else {
 					g_set_error (err,
@@ -1547,6 +1565,9 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
 						*(va_arg (ap, ucl_object_t **)) = NULL;
 					}
+					else {
+						(void)va_arg (ap, ucl_object_t **);
+					}
 				}
 
 				if (is_table) {
@@ -1559,6 +1580,9 @@ rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
 
 					if (how != RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING) {
 						*(va_arg (ap, void **)) = NULL;
+					}
+					else {
+						(void)va_arg (ap, void **);
 					}
 				}
 				else if (t != LUA_TUSERDATA) {
