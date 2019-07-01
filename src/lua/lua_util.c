@@ -1739,17 +1739,8 @@ static gint
 lua_util_get_time (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	gdouble seconds;
-	struct timeval tv;
 
-	if (gettimeofday (&tv, NULL) == 0) {
-		seconds = tv_to_double (&tv);
-	}
-	else {
-		seconds = time (NULL);
-	}
-
-	lua_pushnumber (L, seconds);
+	lua_pushnumber (L, ev_time ());
 
 	return 1;
 }
@@ -1759,19 +1750,13 @@ lua_util_time_to_string (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	gdouble seconds;
-	struct timeval tv;
 	char timebuf[128];
 
 	if (lua_isnumber (L, 1)) {
 		seconds = lua_tonumber (L, 1);
 	}
 	else {
-		if (gettimeofday (&tv, NULL) == 0) {
-			seconds = tv_to_double (&tv);
-		}
-		else {
-			seconds = time (NULL);
-		}
+		seconds = ev_time ();
 	}
 
 	rspamd_http_date_format (timebuf, sizeof (timebuf), seconds);
