@@ -10,8 +10,6 @@ pipeline:
     image: ubuntu:18.04
     commands:
       - install -d -o nobody -g nogroup /rspamd/build /rspamd/install /rspamd/fedora/build /rspamd/fedora/install
-      # lua-torch CMakeLists writes to src dir
-      - chown nobody $CI_WORKSPACE/contrib/lua-torch/nn
       # for debug
       - echo $CI_COMMIT_AUTHOR
 
@@ -95,6 +93,7 @@ pipeline:
     commands:
       - test "$(id -un)" = nobody
       - ulimit -c unlimited
+      - ulimit -s unlimited
       # rspamd-test and functional test both use luacov.stats.out file and should be started from
       # different directories (if started in parallel)
       - cd /rspamd/build/test
@@ -122,6 +121,7 @@ pipeline:
       - test "$(id -un)" = nobody
       # Asan reserves 20Tb of virtual memory, limit core size to 2 Gb to avoid writing huge core
       - ulimit -c 2097152
+      - ulimit -s unlimited
       # disable leak sanitizer: too many leaks detected, most of them probably FP
       - export ASAN_OPTIONS="detect_leaks=0:print_stacktrace=1:disable_coredump=0"
       - export UBSAN_OPTIONS="print_stacktrace=1:print_summary=0:log_path=/tmp/ubsan"
@@ -146,6 +146,7 @@ pipeline:
     commands:
       - cd /rspamd/build
       - ulimit -c unlimited
+      - ulimit -s unlimited
       # some rspamd processes during this test work as root and some as nobody
       # use umask to create world-writable files so nobody can write to *.gcda files created by root
       - umask 0000

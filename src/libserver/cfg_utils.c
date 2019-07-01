@@ -1194,14 +1194,6 @@ rspamd_ucl_add_conf_variables (struct ucl_parser *parser, GHashTable *vars)
 	ucl_parser_register_variable (parser, RSPAMD_BRANCH_VERSION_MACRO,
 			RSPAMD_VERSION_BRANCH);
 
-#if defined(WITH_TORCH) && defined(WITH_LUAJIT) && defined(__x86_64__)
-	ucl_parser_register_variable (parser, "HAS_TORCH",
-			"yes");
-#else
-	ucl_parser_register_variable (parser, "HAS_TORCH",
-			"no");
-#endif
-
 	hostlen = sysconf (_SC_HOST_NAME_MAX);
 
 	if (hostlen <= 0) {
