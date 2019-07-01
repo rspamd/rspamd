@@ -1441,14 +1441,21 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 		if (!item->enabled) {
 			msg_debug_cache_task ("skipping check of %s as it is permanently disabled",
 					item->symbol);
+
+			return FALSE;
 		}
 		else {
-			msg_debug_cache_task ("skipping check of %s as it cannot be "
-						 "executed for this task type",
-					item->symbol);
-		}
+			/*
+			 * Exclude virtual symbols
+			 */
+			if (exec_only) {
+				msg_debug_cache_task ("skipping check of %s as it cannot be "
+									  "executed for this task type",
+						item->symbol);
 
-		return FALSE;
+				return FALSE;
+			}
+		}
 	}
 
 	if (!exec_only) {
