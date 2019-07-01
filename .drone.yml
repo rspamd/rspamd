@@ -10,8 +10,6 @@ pipeline:
     image: ubuntu:18.04
     commands:
       - install -d -o nobody -g nogroup /rspamd/build /rspamd/install /rspamd/fedora/build /rspamd/fedora/install
-      # lua-torch CMakeLists writes to src dir
-      - chown nobody $CI_WORKSPACE/contrib/lua-torch/nn
       # for debug
       - echo $CI_COMMIT_AUTHOR
 
