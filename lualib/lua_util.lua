@@ -937,7 +937,8 @@ end
 
 ---[[[
 -- @function lua_util.maybe_obfuscate_string(subject, settings, prefix)
--- Obfuscate string if enabled in settings. Also checks utf8 validity.
+-- Obfuscate string if enabled in settings. Also checks utf8 validity - if
+-- string is not valid utf8 then '???' is returned. Empty string returned as is.
 -- Supported settings:
 -- * <prefix>_privacy = false - subject privacy is off
 -- * <prefix>_privacy_alg = 'blake2' - default hash-algorithm to obfuscate subject
@@ -948,20 +949,24 @@ end
 
 exports.maybe_obfuscate_string = function(subject, settings, prefix)
   local hash = require 'rspamd_cryptobox_hash'
-  if subject and not rspamd_util.is_valid_utf8(subject) then
+  if not subject or subject == '' then
+    return subject
+  elseif not rspamd_util.is_valid_utf8(subject) then
     subject = '???'
   elseif settings[prefix .. '_privacy'] then
     local hash_alg = settings[prefix .. '_privacy_alg'] or 'blake2'
     local subject_hash = hash.create_specific(hash_alg, subject)
-    local strip_len = settings[prefix .. '_privacy_length']
-    local privacy_prefix = settings[prefix .. '_privacy_prefix'] or ''
 
+    local strip_len = settings[prefix .. '_privacy_length']
     if strip_len then
-      subject = privacy_prefix .. ':' ..
-          subject_hash:hex():sub(1, strip_len)
+      subject = subject_hash:hex():sub(1, strip_len)
     else
-      subject = privacy_prefix .. ':' ..
-          subject_hash:hex()
+      subject = subject_hash:hex()
+    end
+
+    local privacy_prefix = settings[prefix .. '_privacy_prefix']
+    if privacy_prefix and #privacy_prefix > 0 then
+      subject = privacy_prefix .. ':' .. subject
     end
   end
 
