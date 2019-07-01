@@ -51,6 +51,7 @@ lua_dns_request (lua_State *L)
 
 	/* Check arguments */
 	if (!rspamd_lua_parse_table_arguments (L, 1, &err,
+			RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 			"*name=S;task=U{task};*type=S;forced=B;session=U{session};config=U{config}",
 			&to_resolve,
 			&task,

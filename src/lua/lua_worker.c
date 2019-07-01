@@ -546,6 +546,7 @@ lua_worker_spawn_process (lua_State *L)
 	gint func_cbref, cb_cbref;
 
 	if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+			RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 			"func=F;exec=S;stdin=V;*on_complete=F", &func_cbref,
 			&cmdline, &inputlen, &input, &cb_cbref)) {
 		msg_err ("cannot get parameters list: %e", err);

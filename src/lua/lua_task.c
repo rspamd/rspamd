@@ -5011,6 +5011,7 @@ lua_task_store_in_file (lua_State *L)
 	if (task) {
 		if (lua_istable (L, 2)) {
 			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+					RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 					"filename=S;tmpmask=S;mode=I;force_new=B;keep=B",
 					&fname, &tmpmask, &mode, &force_new, &keep)) {
 				msg_err_task ("cannot get parameters list: %e", err);
@@ -5112,9 +5113,10 @@ lua_task_process_regexp (lua_State *L)
 	 */
 	if (task != NULL) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
-					"*re=U{regexp};*type=S;header=V;strong=B",
-					&re, &type_str, &header_len, &header_str,
-					&strong)) {
+				RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
+				"*re=U{regexp};*type=S;header=V;strong=B",
+				&re, &type_str, &header_len, &header_str,
+				&strong)) {
 			msg_err_task ("cannot get parameters list: %e", err);
 
 			if (err) {

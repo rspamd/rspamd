@@ -701,6 +701,7 @@ lua_dkim_sign_handler (lua_State *L)
 	 * - key
 	 */
 	if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+			RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 			"key=V;rawkey=V;*domain=S;*selector=S;no_cache=B;headers=S;"
 			"sign_type=S;arc_idx=I;arc_cv=S;expire=I;pubkey=S;"
 			"strict_pubkey_check=B",

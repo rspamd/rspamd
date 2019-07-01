@@ -1892,6 +1892,7 @@ lua_config_register_symbol (lua_State * L)
 
 	if (cfg) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+				RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 				"name=S;weight=N;callback=F;flags=S;type=S;priority=I;parent=D;"
 				"score=D;description=S;group=S;one_shot=B;nshots=I;"
 				"allowed_ids=S;forbidden_ids=S",
@@ -2227,6 +2228,7 @@ lua_config_set_metric_symbol (lua_State * L)
 
 		if (lua_type (L, 2) == LUA_TTABLE) {
 			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+					RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 					"*name=S;score=N;description=S;"
 					"group=S;one_shot=B;one_param=B;priority=N;flags=S;"
 					"nshots=I",
@@ -2376,6 +2378,7 @@ lua_config_set_metric_action (lua_State * L)
 
 		if (lua_type (L, 2) == LUA_TTABLE) {
 			if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+					RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 					"*action=S;score=N;"
 					"priority=N",
 					&name, &threshold,
@@ -2881,6 +2884,7 @@ lua_config_register_regexp (lua_State *L)
 	 */
 	if (cfg != NULL) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+				RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 				"*re=U{regexp};*type=S;header=S;pcre_only=B",
 				&re, &type_str, &header_str, &pcre_only)) {
 			msg_err_config ("cannot get parameters list: %e", err);
@@ -2947,6 +2951,7 @@ lua_config_replace_regexp (lua_State *L)
 
 	if (cfg != NULL) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+				RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 				"*old_re=U{regexp};*new_re=U{regexp}",
 				&old_re, &new_re)) {
 			msg_err_config ("cannot get parameters list: %e", err);
@@ -3686,6 +3691,7 @@ lua_config_add_doc (lua_State *L)
 	if (cfg && option && doc_string) {
 		if (lua_type (L, 5) == LUA_TTABLE) {
 			if (!rspamd_lua_parse_table_arguments (L, 5, &err,
+					RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 					"type=S;default=S;required=B",
 					&type_str, &default_value, &required)) {
 				msg_err_config ("cannot get parameters list: %e", err);

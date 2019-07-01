@@ -493,6 +493,7 @@ lua_config_add_map (lua_State *L)
 
 	if (cfg) {
 		if (!rspamd_lua_parse_table_arguments (L, 2, &err,
+				RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 				"*url=O;description=S;callback=F;type=S",
 				&map_obj, &description, &cbidx, &type)) {
 			ret = luaL_error (L, "invalid table arguments: %s", err->message);

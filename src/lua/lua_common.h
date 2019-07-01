@@ -321,6 +321,10 @@ struct rspamd_async_session* lua_check_session (lua_State * L, gint pos);
 struct ev_loop* lua_check_ev_base (lua_State * L, gint pos);
 struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L, gint pos);
 
+enum rspamd_lua_parse_arguments_flags {
+	RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT = 0,
+	RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING,
+};
 /**
  * Extract an arguments from lua table according to format string. Supported arguments are:
  * [*]key=S|I|N|B|V|U{a-z};[key=...]
@@ -337,11 +341,14 @@ struct rspamd_dns_resolver * lua_check_dns_resolver (lua_State * L, gint pos);
  * @param L lua state
  * @param pos at which pos start extraction
  * @param err error pointer
+ * @param how extraction type
  * @param extraction_pattern static pattern
  * @return TRUE if a table has been parsed
  */
 gboolean rspamd_lua_parse_table_arguments (lua_State *L, gint pos,
-		GError **err, const gchar *extraction_pattern, ...);
+										   GError **err,
+										   enum rspamd_lua_parse_arguments_flags how,
+										   const gchar *extraction_pattern, ...);
 
 
 gint rspamd_lua_traceback (lua_State *L);

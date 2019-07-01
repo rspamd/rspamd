@@ -1797,6 +1797,7 @@ lua_tcp_connect_sync (lua_State *L)
 	struct ev_loop *ev_base = NULL;
 
 	int arguments_validated = rspamd_lua_parse_table_arguments (L, 1, &err,
+			RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 			"task=U{task};session=U{session};resolver=U{resolver};ev_base=U{ev_base};"
 			"*host=S;*port=I;timeout=D;config=U{config}",
 			&task, &session, &resolver, &ev_base,

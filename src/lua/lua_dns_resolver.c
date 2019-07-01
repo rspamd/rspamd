@@ -360,6 +360,7 @@ lua_dns_resolver_resolve_common (lua_State *L,
 
 	/* Check arguments */
 	if (!rspamd_lua_parse_table_arguments (L, first, &err,
+			RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
 			"session=U{session};mempool=U{mempool};*name=S;*callback=F;"
 			"option=S;task=U{task};forced=B",
 			&session, &pool, &to_resolve, &cbref, &user_str, &task, &forced)) {
