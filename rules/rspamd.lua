@@ -68,6 +68,3 @@ if rmaps and type(rmaps) == 'table' then
     end
   end
 end
-
-local rspamd_nn = require "lua_nn"
-rspamd_nn.load_rspamd_nn() -- Load defined models if any
