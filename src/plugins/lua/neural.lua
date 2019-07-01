@@ -21,6 +21,7 @@ end
 
 local rspamd_logger = require "rspamd_logger"
 local rspamd_util = require "rspamd_util"
+local rspamd_kann = require "rspamd_kann"
 local lua_redis = require "lua_redis"
 local lua_util = require "lua_util"
 local fun = require "fun"
@@ -29,10 +30,6 @@ local use_torch = false
 local torch
 local nn
 local N = "neural"
-
-if rspamd_config:has_torch() then
-  use_torch = true
-end
 
 -- Module vars
 local default_options = {

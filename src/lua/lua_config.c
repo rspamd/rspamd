@@ -3805,27 +3805,8 @@ lua_config_get_cpu_flags (lua_State *L)
 static gint
 lua_config_has_torch (lua_State *L)
 {
-	LUA_TRACE_POINT;
-	struct rspamd_config *cfg = lua_check_config (L, 1);
-	struct rspamd_cryptobox_library_ctx *crypto_ctx;
-
-	if (cfg != NULL) {
-		crypto_ctx = cfg->libs_ctx->crypto_ctx;
-#if !defined(WITH_TORCH) || !defined(WITH_LUAJIT)
-		lua_pushboolean (L, false);
-		(void)crypto_ctx;
-#else
-		if (crypto_ctx->cpu_config & CPUID_SSE2) {
-			lua_pushboolean (L, true);
-		}
-		else {
-			lua_pushboolean (L, false);
-		}
-#endif
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
+	msg_warn ("use of the obsoleted `has_torch` function");
+	lua_pushboolean (L, false);
 
 	return 1;
 }
