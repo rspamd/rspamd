@@ -613,7 +613,8 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 				}
 			}
 			else {
-				msg_err_cache ("cannot find dependency on symbol %s", dep->sym);
+				msg_err_cache ("cannot find dependency on symbol %s for symbol %s",
+						dep->sym, it->symbol);
 			}
 		}
 
