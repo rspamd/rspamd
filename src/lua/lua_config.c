@@ -3338,6 +3338,36 @@ lua_metric_symbol_inserter (gpointer k, gpointer v, gpointer ud)
 		guint sflags = rspamd_symcache_get_symbol_flags (cbd->cfg->cache, sym);
 
 		lua_push_symbol_flags (L, sflags, LUA_SYMOPT_FLAG_USE_MAP);
+
+		guint nids;
+		const guint *allowed_ids = rspamd_symcache_get_allowed_settings_ids (cbd->cfg->cache,
+				sym, &nids);
+
+		if (allowed_ids && nids > 0) {
+			lua_createtable (L, nids, 0);
+
+			for (i = 0; i < nids; i ++) {
+				lua_pushinteger (L, allowed_ids[i]);
+				lua_rawseti (L, -2, i + 1);
+			}
+
+			lua_setfield (L, -2, "allowed_ids");
+		}
+
+		const guint *forbidden_ids = rspamd_symcache_get_forbidden_settings_ids (
+				cbd->cfg->cache,
+				sym, &nids);
+
+		if (forbidden_ids && nids > 0) {
+			lua_createtable (L, nids, 0);
+
+			for (i = 0; i < nids; i ++) {
+				lua_pushinteger (L, forbidden_ids[i]);
+				lua_rawseti (L, -2, i + 1);
+			}
+
+			lua_setfield (L, -2, "forbidden_ids");
+		}
 	}
 
 	lua_settable (L, -3); /* Flags -> flags_table */
