@@ -281,11 +281,6 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 {
 	struct rspamd_main *rspamd_main = ud;
 
-	if (config_test) {
-		/* Explicitly set logger type to console in case of config testing */
-		rspamd_main->cfg->log_type = RSPAMD_LOG_CONSOLE;
-	}
-
 	rspamd_set_logger (rspamd_main->cfg, g_quark_try_string ("main"),
 			&rspamd_main->logger, rspamd_main->server_pool);
 
@@ -1196,11 +1191,11 @@ main (gint argc, gchar **argv, gchar **env)
 		}
 	}
 
-	if (config_test || is_debug) {
+	if (is_debug) {
 		rspamd_main->cfg->log_level = G_LOG_LEVEL_DEBUG;
 	}
 	else {
-		rspamd_main->cfg->log_level = G_LOG_LEVEL_WARNING;
+		rspamd_main->cfg->log_level = G_LOG_LEVEL_MESSAGE;
 	}
 
 	type = g_quark_from_static_string ("main");
@@ -1243,33 +1238,22 @@ main (gint argc, gchar **argv, gchar **env)
 
 	if (encrypt_password) {
 		do_encrypt_password ();
-		exit (EXIT_SUCCESS);
+		exit (EXIT_FAILURE);
 	}
 
 	rspamd_log_close_priv (rspamd_main->logger, FALSE,
 			rspamd_main->workers_uid, rspamd_main->workers_gid);
 
 	if (config_test || dump_cache) {
-		if (!load_rspamd_config (rspamd_main, rspamd_main->cfg, FALSE, 0,
-				FALSE)) {
-			exit (EXIT_FAILURE);
-		}
-
-		res = TRUE;
-
-		if (!rspamd_symcache_validate (rspamd_main->cfg->cache,
-				rspamd_main->cfg,
-				FALSE)) {
-			res = FALSE;
-		}
-
 		if (dump_cache) {
 			msg_err_main ("Use rspamc counters for dumping cache");
-			exit (EXIT_FAILURE);
 		}
 
-		fprintf (stderr, "syntax %s\n", res ? "OK" : "BAD");
-		return res ? EXIT_SUCCESS : EXIT_FAILURE;
+		if (config_test) {
+			msg_err_main ("Use rspamadm configtest to check config");
+		}
+
+		exit (EXIT_FAILURE);
 	}
 
 	sqlite3_initialize ();
