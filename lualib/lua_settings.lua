@@ -23,66 +23,102 @@ limitations under the License.
 local exports = {}
 local known_ids = {}
 local post_init_added = false
+local post_init_performed = false
+
+local fun = require "fun"
+local lua_util = require "lua_util"
 
 local function register_settings_cb()
-  for _,set in pairs(known_ids) do
-    local s = set.settings.apply
-    local enabled_symbols = {}
-    local seen_enabled = false
-    local disabled_symbols = {}
-    local seen_disabled = false
+  if not post_init_performed then
+    local all_symbols = rspamd_config:get_symbols()
 
-    -- Enabled map
-    if s.symbols_enabled then
-      for _,sym in ipairs(s.symbols_enabled) do
-        enabled_symbols[sym] = true
-        seen_enabled = true
+    local explicit_symbols = lua_util.keys(fun.filter(function(k, v)
+      return v.flags.explicit_disable
+    end, all_symbols))
+    local symnames = lua_util.list_to_hash(lua_util.keys(all_symbols))
+
+    for _,set in pairs(known_ids) do
+      local s = set.settings.apply
+      set.symbols = lua_util.shallowcopy(symnames)
+      local enabled_symbols = {}
+      local seen_enabled = false
+      local disabled_symbols = {}
+      local seen_disabled = false
+
+      -- Enabled map
+      if s.symbols_enabled then
+        -- Remove all symbols from set.symbols aside of explicit_disable symbols
+        set.symbols = lua_util.list_to_hash(explicit_symbols)
+        for _,sym in ipairs(s.symbols_enabled) do
+          enabled_symbols[sym] = true
+          set.symbols[sym] = true
+          seen_enabled = true
+        end
       end
-    end
-    if s.groups_enabled then
-      for _,gr in ipairs(s.groups_enabled) do
-        local syms = rspamd_config:get_group_symbols(gr)
+      if s.groups_enabled then
+        for _,gr in ipairs(s.groups_enabled) do
+          local syms = rspamd_config:get_group_symbols(gr)
 
-        if syms then
-          for _,sym in ipairs(syms) do
-            enabled_symbols[sym] = true
-            seen_enabled = true
+          if syms then
+            for _,sym in ipairs(syms) do
+              enabled_symbols[sym] = true
+              set.symbols[sym] = true
+              seen_enabled = true
+            end
           end
         end
       end
-    end
 
-    -- Disabled map
-    if s.symbols_disabled then
-      for _,sym in ipairs(s.symbols_disabled) do
-        disabled_symbols[sym] = true
-        seen_disabled = true
+      -- Disabled map
+      if s.symbols_disabled then
+        for _,sym in ipairs(s.symbols_disabled) do
+          disabled_symbols[sym] = true
+          set.symbols[sym] = false
+          seen_disabled = true
+        end
       end
-    end
-    if s.groups_disabled then
-      for _,gr in ipairs(s.groups_disabled) do
-        local syms = rspamd_config:get_group_symbols(gr)
+      if s.groups_disabled then
+        for _,gr in ipairs(s.groups_disabled) do
+          local syms = rspamd_config:get_group_symbols(gr)
 
-        if syms then
-          for _,sym in ipairs(syms) do
-            disabled_symbols[sym] = true
-            seen_disabled = true
+          if syms then
+            for _,sym in ipairs(syms) do
+              disabled_symbols[sym] = true
+              seen_disabled = true
+              set.symbols[sym] = false
+            end
           end
         end
       end
+
+      -- Deal with complexity to avoid mess in C
+      if not seen_enabled then enabled_symbols = nil end
+      if not seen_disabled then disabled_symbols = nil end
+
+      if enabled_symbols or disabled_symbols then
+        -- Specify what symbols are really enabled for this settings id
+        set.has_specific_symbols = true
+        set.symbols = lua_util.keys(fun.filter(function(_, v) return v end, set.symbols))
+        table.sort(set.symbols)
+
+        -- Create digest from sorted symbols
+        local cr = require "rspamd_cryptobox_hash"
+        local h = cr.create()
+        for _,sym in ipairs(set.symbols) do
+          h:update(sym)
+        end
+        set.digest = h:base32()
+      end
+
+      rspamd_config:register_settings_id(set.name, enabled_symbols, disabled_symbols)
+
+      -- Remove to avoid clash
+      s.symbols_disabled = nil
+      s.symbols_enabled = nil
+      s.groups_enabled = nil
+      s.groups_disabled = nil
     end
-
-    -- Deal with complexity to avoid mess in C
-    if not seen_enabled then enabled_symbols = nil end
-    if not seen_disabled then disabled_symbols = nil end
-
-    rspamd_config:register_settings_id(set.name, enabled_symbols, disabled_symbols)
-
-    -- Remove to avoid clash
-    s.symbols_disabled = nil
-    s.symbols_enabled = nil
-    s.groups_enabled = nil
-    s.groups_disabled = nil
+    post_init_performed = true
   end
 end
 
@@ -128,9 +164,13 @@ exports.register_settings_id = register_settings_id
 
 
 local function settings_by_id(id)
+  if not post_init_performed then
+    register_settings_cb()
+  end
   return known_ids[id]
 end
 
 exports.settings_by_id = settings_by_id
+exports.all_settings = known_ids
 
 return exports
