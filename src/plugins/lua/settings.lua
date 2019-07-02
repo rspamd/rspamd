@@ -836,9 +836,9 @@ local function process_settings_table(tbl, allow_ids, mempool)
         -- By De Morgan laws
         if inverse then s = ' || ' end
         -- Exclude aliases and join all checks by key
-        local expr_str = table.concat(fun.totable(fun.map(function(k, _)
-          return k end,
-            fun.filter(function(k, _) return not aliases[k] end, checks))), s)
+        local expr_str = table.concat(lua_util.keys(fun.filter(
+            function(k, _) return not aliases[k] end,
+            checks)), s)
 
         if inverse then
           expr_str = string.format('!(%s)', expr_str)
@@ -911,12 +911,24 @@ local function process_settings_table(tbl, allow_ids, mempool)
 
       if elt['id'] then
         out.id = lua_settings.register_settings_id(elt.id, out)
-        lua_util.debugm(N, rspamd_config, 'added settings id to "%s": %s -> %s',
+        lua_util.debugm(N, rspamd_config,
+            'added settings id to "%s": %s -> %s',
             name, elt.id, out.id)
+      end
+
+      if elt.apply.symbols then
+        -- Register virtual symbols
+        for _,sym in ipairs(elt.apply.symbols) do
+          rspamd_config.register_symbol{
+            name = sym,
+            type = 'virtual,ghost',
+          }
+        end
       end
     else
       if elt['id'] then
-        rspamd_logger.errx(rspamd_config, 'cannot set static IDs from dynamic settings, please read the docs')
+        rspamd_logger.errx(rspamd_config,
+            'cannot set static IDs from dynamic settings, please read the docs')
       end
     end
 
