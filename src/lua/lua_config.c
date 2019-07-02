@@ -1761,61 +1761,73 @@ lua_parse_symbol_type (const gchar *str)
 	return ret;
 }
 
+enum lua_push_symbol_flags_opts {
+	LUA_SYMOPT_FLAG_CREATE_ARRAY = 1u << 0u,
+	LUA_SYMOPT_FLAG_CREATE_MAP = 1u << 1u,
+	LUA_SYMOPT_FLAG_USE_MAP = 1u << 2u,
+	LUA_SYMOPT_FLAG_USE_ARRAY = 1u << 3u,
+};
+
+#define LUA_SYMOPT_IS_ARRAY(f) ((f) & (LUA_SYMOPT_FLAG_CREATE_ARRAY|LUA_SYMOPT_FLAG_USE_ARRAY))
+#define LUA_SYMOPT_IS_CREATE(f) ((f) & (LUA_SYMOPT_FLAG_CREATE_ARRAY|LUA_SYMOPT_FLAG_CREATE_MAP))
+#define LUA_OPTION_PUSH(nm) do { \
+	if (LUA_SYMOPT_IS_ARRAY(fl)) { \
+		lua_pushstring (L, #nm); \
+		lua_rawseti (L, -2, i++); \
+	} \
+	else { \
+		lua_pushboolean (L, true); \
+		lua_setfield (L, -2, #nm); \
+	} \
+} while(0)
+
 static void
-lua_push_symbol_flags (lua_State *L, guint flags)
+lua_push_symbol_flags (lua_State *L, guint flags, enum lua_push_symbol_flags_opts fl)
 {
 	guint i = 1;
 
-	lua_newtable (L);
+	if (LUA_SYMOPT_IS_CREATE (fl)) {
+		lua_newtable (L);
+	}
 
 	if (flags & SYMBOL_TYPE_FINE) {
-		lua_pushstring (L, "fine");
-		lua_rawseti (L, -2, i++);
+		LUA_OPTION_PUSH (fine);
 	}
 
 	if (flags & SYMBOL_TYPE_EMPTY) {
-		lua_pushstring (L, "empty");
-		lua_rawseti (L, -2, i++);
+		LUA_OPTION_PUSH (empty);
 	}
 
 	if (flags & SYMBOL_TYPE_EXPLICIT_DISABLE) {
-		lua_pushstring (L, "explicit_disable");
-		lua_rawseti (L, -2, i++);
+		LUA_OPTION_PUSH (explicit_disable);
 	}
 
 	if (flags & SYMBOL_TYPE_EXPLICIT_ENABLE) {
-		lua_pushstring (L, "explicit_enable");
-		lua_rawseti (L, -2, i++);
+		LUA_OPTION_PUSH (explicit_enable);
 	}
 
 	if (flags & SYMBOL_TYPE_IGNORE_PASSTHROUGH) {
-		lua_pushstring (L, "ignore_passthrough");
-		lua_rawseti (L, -2, i++);
+		LUA_OPTION_PUSH (ignore_passthrough);
 	}
 
 	if (flags & SYMBOL_TYPE_NOSTAT) {
-		lua_pushstring (L, "nostat");
-		lua_rawseti (L, -2, i++);
+		LUA_OPTION_PUSH (nostat);
 	}
 
 	if (flags & SYMBOL_TYPE_IDEMPOTENT) {
-		lua_pushstring (L, "idempotent");
-		lua_rawseti (L, -2, i++);
+		LUA_OPTION_PUSH (idempotent);
 	}
 
 	if (flags & SYMBOL_TYPE_MIME_ONLY) {
-		lua_pushstring (L, "mime");
-		lua_rawseti (L, -2, i++);
+		LUA_OPTION_PUSH (mime);
 	}
 
 	if (flags & SYMBOL_TYPE_TRIVIAL) {
-		lua_pushstring (L, "trivial");
-		lua_rawseti (L, -2, i++);
+		LUA_OPTION_PUSH (trivial);
 	}
 
 	if (flags & SYMBOL_TYPE_SKIPPED) {
-		lua_pushstring (L, "skip");
-		lua_rawseti (L, -2, i++);
+		LUA_OPTION_PUSH (skip);
 	}
 }
 
@@ -1831,7 +1843,7 @@ lua_config_get_symbol_flags (lua_State *L)
 				name);
 
 		if (flags != 0) {
-			lua_push_symbol_flags (L, flags);
+			lua_push_symbol_flags (L, flags, LUA_SYMOPT_FLAG_CREATE_ARRAY);
 		}
 		else {
 			lua_pushnil (L);
@@ -1863,7 +1875,7 @@ lua_config_add_symbol_flags (lua_State *L)
 		if (flags != 0) {
 			rspamd_symcache_add_symbol_flags (cfg->cache, name, new_flags);
 			/* Push old flags */
-			lua_push_symbol_flags (L, flags);
+			lua_push_symbol_flags (L, flags, LUA_SYMOPT_FLAG_CREATE_ARRAY);
 		}
 		else {
 			lua_pushnil (L);
@@ -3275,14 +3287,23 @@ lua_config_get_symbols_counters (lua_State *L)
 
 	return 1;
 }
+
+struct lua_metric_symbols_cbdata {
+	lua_State *L;
+	struct rspamd_config *cfg;
+};
+
 static void
 lua_metric_symbol_inserter (gpointer k, gpointer v, gpointer ud)
 {
-	lua_State *L = (lua_State *) ud;
+	struct lua_metric_symbols_cbdata *cbd = (struct lua_metric_symbols_cbdata *)ud;
+	lua_State *L;
 	const gchar *sym = k;
 	struct rspamd_symbol *s = (struct rspamd_symbol *) v;
 	struct rspamd_symbols_group *gr;
 	gint i;
+
+	L = cbd->L;
 
 	lua_pushstring (L, sym); /* Symbol name */
 
@@ -3311,6 +3332,12 @@ lua_metric_symbol_inserter (gpointer k, gpointer v, gpointer ud)
 		lua_pushstring (L, "ungroupped");
 		lua_pushboolean (L, true);
 		lua_settable (L, -3);
+	}
+
+	if (s->cache_item) {
+		guint sflags = rspamd_symcache_get_symbol_flags (cbd->cfg->cache, sym);
+
+		lua_push_symbol_flags (L, sflags, LUA_SYMOPT_FLAG_USE_MAP);
 	}
 
 	lua_settable (L, -3); /* Flags -> flags_table */
@@ -3345,10 +3372,15 @@ lua_config_get_symbols (lua_State *L)
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 
 	if (cfg != NULL) {
+		struct lua_metric_symbols_cbdata cbd;
+
+		cbd.L = L;
+		cbd.cfg = cfg;
+
 		lua_createtable (L, 0, g_hash_table_size (cfg->symbols));
 		g_hash_table_foreach (cfg->symbols,
 				lua_metric_symbol_inserter,
-				L);
+				&cfg);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
