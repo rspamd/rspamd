@@ -87,21 +87,14 @@ static ev_io control_ev;
 static gboolean valgrind_mode = FALSE;
 
 /* Cmdline options */
-static gboolean config_test = FALSE;
 static gboolean no_fork = FALSE;
 static gboolean show_version = FALSE;
 static gchar **cfg_names = NULL;
-static gchar **lua_tests = NULL;
-static gchar **sign_configs = NULL;
-static gchar *privkey = NULL;
 static gchar *rspamd_user = NULL;
 static gchar *rspamd_group = NULL;
 static gchar *rspamd_pidfile = NULL;
-static gboolean dump_cache = FALSE;
 static gboolean is_debug = FALSE;
 static gboolean is_insecure = FALSE;
-static gboolean gen_keypair = FALSE;
-static gboolean encrypt_password = FALSE;
 static GHashTable *ucl_vars = NULL;
 static gchar **lua_env = NULL;
 static gboolean skip_template = FALSE;
@@ -121,8 +114,6 @@ static gboolean rspamd_parse_var (const gchar *option_name,
 								  GError **error);
 static GOptionEntry entries[] =
 {
-	{ "config-test", 't', 0, G_OPTION_ARG_NONE, &config_test,
-	  "Do config test and exit", NULL },
 	{ "no-fork", 'f', 0, G_OPTION_ARG_NONE, &no_fork,
 	  "Do not daemonize main process", NULL },
 	{ "config", 'c', 0, G_OPTION_ARG_FILENAME_ARRAY, &cfg_names,
@@ -133,22 +124,10 @@ static GOptionEntry entries[] =
 	  "Group to run rspamd as", NULL },
 	{ "pid", 'p', 0, G_OPTION_ARG_STRING, &rspamd_pidfile, "Path to pidfile",
 	  NULL },
-	{ "dump-cache", 'C', 0, G_OPTION_ARG_NONE, &dump_cache,
-	  "Dump symbols cache stats and exit", NULL },
 	{ "debug", 'd', 0, G_OPTION_ARG_NONE, &is_debug, "Force debug output",
 	  NULL },
 	{ "insecure", 'i', 0, G_OPTION_ARG_NONE, &is_insecure,
 	  "Ignore running workers as privileged users (insecure)", NULL },
-	{ "test-lua", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &lua_tests,
-	  "Specify lua file(s) to test", NULL },
-	{ "sign-config", 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &sign_configs,
-	  "Specify config file(s) to sign", NULL },
-	{ "private-key", 0, 0, G_OPTION_ARG_FILENAME, &privkey,
-	  "Specify private key to sign", NULL },
-	{ "gen-keypair", 0, 0, G_OPTION_ARG_NONE, &gen_keypair, "Generate new encryption "
-	  "keypair", NULL},
-	{ "encrypt-password", 0, 0, G_OPTION_ARG_NONE, &encrypt_password, "Encrypt "
-	  "controller password to store in the configuration file", NULL },
 	{ "version", 'v', 0, G_OPTION_ARG_NONE, &show_version,
 	  "Show version and exit", NULL },
 	{"var", 0, 0, G_OPTION_ARG_CALLBACK, (gpointer)&rspamd_parse_var,
@@ -908,26 +887,6 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 	return TRUE;
 }
 
-static gint
-perform_lua_tests (struct rspamd_config *cfg)
-{
-	rspamd_fprintf (stderr, "no longer supported\n");
-	return EXIT_FAILURE;
-}
-
-static gint
-perform_configs_sign (void)
-{
-	rspamd_fprintf (stderr, "use rspamadm signtool for this operation\n");
-	return EXIT_FAILURE;
-}
-
-static void
-do_encrypt_password (void)
-{
-	rspamd_fprintf (stderr, "use rspamadm pw for this operation\n");
-}
-
 static void
 stop_srv_ev (gpointer key, gpointer value, gpointer ud)
 {
@@ -1220,41 +1179,8 @@ main (gint argc, gchar **argv, gchar **env)
 	/* Init listen sockets hash */
 	listen_sockets = g_hash_table_new (g_direct_hash, g_direct_equal);
 
-	/* If we want to test lua skip everything except it */
-	if (lua_tests != NULL && lua_tests[0] != NULL) {
-		exit (perform_lua_tests (rspamd_main->cfg));
-	}
-
-	/* If we want to sign configs, just do it */
-	if (sign_configs != NULL && privkey != NULL) {
-		exit (perform_configs_sign ());
-	}
-
-	/* Same for keypair creation */
-	if (gen_keypair) {
-		rspamd_fprintf (stderr, "use rspamadm keypair for this operation\n");
-		exit (EXIT_FAILURE);
-	}
-
-	if (encrypt_password) {
-		do_encrypt_password ();
-		exit (EXIT_FAILURE);
-	}
-
 	rspamd_log_close_priv (rspamd_main->logger, FALSE,
 			rspamd_main->workers_uid, rspamd_main->workers_gid);
-
-	if (config_test || dump_cache) {
-		if (dump_cache) {
-			msg_err_main ("Use rspamc counters for dumping cache");
-		}
-
-		if (config_test) {
-			msg_err_main ("Use rspamadm configtest to check config");
-		}
-
-		exit (EXIT_FAILURE);
-	}
 
 	sqlite3_initialize ();
 
