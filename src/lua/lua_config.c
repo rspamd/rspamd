@@ -3352,15 +3352,21 @@ lua_metric_symbol_inserter (gpointer k, gpointer v, gpointer ud)
 		lua_settable (L, -3);
 	}
 
-	lua_pushstring (L, "groups");
-	lua_createtable (L, s->groups->len, 0);
+	if (s->groups && s->groups->len > 0) {
+		lua_pushstring (L, "groups");
+		lua_createtable (L, s->groups->len, 0);
 
-	PTR_ARRAY_FOREACH (s->groups, i, gr) {
-		lua_pushstring (L, gr->name);
-		lua_rawseti (L, -2, i + 1); /* Groups[i + 1] = group_name */
+		PTR_ARRAY_FOREACH (s->groups, i, gr) {
+			lua_pushstring (L, gr->name);
+			lua_rawseti (L, -2, i + 1); /* Groups[i + 1] = group_name */
+		}
+
+		lua_settable (L, -3); /* Groups -> groups_table */
 	}
-
-	lua_settable (L, -3); /* Groups -> groups_table */
+	else {
+		lua_createtable (L, 0, 0);
+		lua_setfield (L, -2, "groups");
+	}
 
 	lua_settable (L, -3); /* Symname -> table */
 }
@@ -3380,7 +3386,7 @@ lua_config_get_symbols (lua_State *L)
 		lua_createtable (L, 0, g_hash_table_size (cfg->symbols));
 		g_hash_table_foreach (cfg->symbols,
 				lua_metric_symbol_inserter,
-				&cfg);
+				&cbd);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
