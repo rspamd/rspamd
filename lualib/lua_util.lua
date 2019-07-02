@@ -994,4 +994,54 @@ exports.callback_from_string = function(str)
   return res_or_err
 end
 
+---[[[
+-- @function lua_util.keys(t)
+-- Returns all keys from a specific table
+-- @param {table} t input table (or iterator triplet)
+-- @return array of keys
+--]]]
+exports.keys = function(gen, param, state)
+  local keys = {}
+  local i = 1
+
+  if param then
+    for k,_ in fun.iter(gen, param, state) do
+      rawset(keys, i, k)
+      i = i + 1
+    end
+  else
+    for k,_ in pairs(gen) do
+      rawset(keys, i, k)
+      i = i + 1
+    end
+  end
+
+  return keys
+end
+
+---[[[
+-- @function lua_util.values(t)
+-- Returns all values from a specific table
+-- @param {table} t input table
+-- @return array of values
+--]]]
+exports.values = function(gen, param, state)
+  local values = {}
+  local i = 1
+
+  if param then
+    for _,v in fun.iter(gen, param, state) do
+      rawset(values, i, v)
+      i = i + 1
+    end
+  else
+    for _,v in pairs(gen) do
+      rawset(values, i, v)
+      i = i + 1
+    end
+  end
+
+  return values
+end
+
 return exports
