@@ -30,6 +30,9 @@ context("Kann test", function()
     mini_size = 80,
   })
 
+  local ser = k:save()
+  k = kann.load(ser)
+
   for i,inp in ipairs(inputs) do
     test(string.format("Check XOR MLP %s ^ %s == %s", inp[1], inp[2], outputs[i][1]),
         function()
