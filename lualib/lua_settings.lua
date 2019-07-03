@@ -24,17 +24,25 @@ local exports = {}
 local known_ids = {}
 local post_init_added = false
 local post_init_performed = false
+local all_symbols
+local default_symbols
 
 local fun = require "fun"
 local lua_util = require "lua_util"
+local rspamd_logger = require "rspamd_logger"
 
 local function register_settings_cb()
   if not post_init_performed then
-    local all_symbols = rspamd_config:get_symbols()
+    all_symbols = rspamd_config:get_symbols()
+
+    default_symbols = fun.totable(fun.filter(function(_, v)
+      return not v.allowed_ids or #v.allowed_ids == 0 or v.flags.explicit_disable
+    end,all_symbols))
 
     local explicit_symbols = lua_util.keys(fun.filter(function(k, v)
       return v.flags.explicit_disable
     end, all_symbols))
+
     local symnames = lua_util.list_to_hash(lua_util.keys(all_symbols))
 
     for _,set in pairs(known_ids) do
@@ -98,16 +106,6 @@ local function register_settings_cb()
       if enabled_symbols or disabled_symbols then
         -- Specify what symbols are really enabled for this settings id
         set.has_specific_symbols = true
-        set.symbols = lua_util.keys(fun.filter(function(_, v) return v end, set.symbols))
-        table.sort(set.symbols)
-
-        -- Create digest from sorted symbols
-        local cr = require "rspamd_cryptobox_hash"
-        local h = cr.create()
-        for _,sym in ipairs(set.symbols) do
-          h:update(sym)
-        end
-        set.digest = h:base32()
       end
 
       rspamd_config:register_settings_id(set.name, enabled_symbols, disabled_symbols)
@@ -118,6 +116,53 @@ local function register_settings_cb()
       s.groups_enabled = nil
       s.groups_disabled = nil
     end
+
+    -- We now iterate over all symbols and check for allowed_ids/forbidden_ids
+    for k,v in pairs(all_symbols) do
+      if v.allowed_ids and not v.flags.explicit_disable then
+        for _,id in ipairs(v.allowed_ids) do
+          if known_ids[id] then
+            local set = known_ids[id]
+            if not set.has_specific_symbols then
+              set.has_specific_symbols = true
+            end
+            set.symbols[k] = true
+          else
+            rspamd_logger.errx(rspamd_config, 'symbol %s is allowed at unknown settings id %s',
+                k, id)
+          end
+        end
+      end
+      if v.forbidden_ids then
+        for _,id in ipairs(v.forbidden_ids) do
+          if known_ids[id] then
+            local set = known_ids[id]
+            if not set.has_specific_symbols then
+              set.has_specific_symbols = true
+            end
+            set.symbols[k] = false
+          else
+            rspamd_logger.errx(rspamd_config, 'symbol %s is denied at unknown settings id %s',
+                k, id)
+          end
+        end
+      end
+    end
+
+    -- Now we create lists of symbols for each settings and digest
+    for _,set in pairs(known_ids) do
+      set.symbols = lua_util.keys(fun.filter(function(_, v) return v end, set.symbols))
+      table.sort(set.symbols)
+
+      -- Create digest from sorted symbols
+      local cr = require "rspamd_cryptobox_hash"
+      local h = cr.create()
+      for _,sym in ipairs(set.symbols) do
+        h:update(sym)
+      end
+      set.digest = h:base32()
+    end
+
     post_init_performed = true
   end
 end
@@ -148,7 +193,8 @@ local function register_settings_id(str, settings)
   else
     known_ids[numeric_id] = {
       name = str,
-      settings = settings
+      settings = settings,
+      symbols = {}
     }
   end
 
@@ -172,5 +218,8 @@ end
 
 exports.settings_by_id = settings_by_id
 exports.all_settings = known_ids
+exports.all_symbols = all_symbols
+-- What is enabled when no settings are there
+exports.default_symbols = default_symbols
 
 return exports
