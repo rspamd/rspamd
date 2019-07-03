@@ -1067,8 +1067,8 @@ lua_kann_train1 (lua_State *L)
 		float **x, **y;
 
 		/* Fill vectors */
-		x = (float **)g_malloc (sizeof (float *) * n);
-		y = (float **)g_malloc (sizeof (float *) * n);
+		x = (float **)g_malloc0 (sizeof (float *) * n);
+		y = (float **)g_malloc0 (sizeof (float *) * n);
 
 		for (int s = 0; s < n; s ++) {
 			/* Inputs */
