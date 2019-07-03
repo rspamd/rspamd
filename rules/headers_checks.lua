@@ -25,7 +25,7 @@ local E = {}
 
 local rcvd_cb_id = rspamd_config:register_symbol{
   name = 'CHECK_RECEIVED',
-  type = 'callback,mime',
+  type = 'callback',
   score = 0.0,
   group = 'headers',
   callback = function(task)
@@ -114,7 +114,7 @@ rspamd_config:register_symbol{
 
 local prio_cb_id = rspamd_config:register_symbol {
   name = 'HAS_X_PRIO',
-  type = 'callback,mime',
+  type = 'callback',
   description = 'X-Priority check callback rule',
   score = 0.0,
   group = 'headers',
@@ -186,7 +186,7 @@ local function get_raw_header(task, name)
 end
 
 local check_replyto_id = rspamd_config:register_symbol({
-  type = 'callback,mime',
+  type = 'callback',
   name = 'CHECK_REPLYTO',
   score = 0.0,
   group = 'headers',
@@ -334,7 +334,7 @@ rspamd_config:register_dependency('CHECK_REPLYTO', 'CHECK_FROM')
 
 local check_mime_id = rspamd_config:register_symbol{
   name = 'CHECK_MIME',
-  type = 'callback,mime',
+  type = 'callback',
   group = 'headers',
   score = 0.0,
   callback = function(task)
@@ -576,7 +576,6 @@ rspamd_config.MISSING_FROM = {
     return false
   end,
   score = 2.0,
-  type = 'mime',
   group = 'headers',
   description = 'Missing From: header'
 }
@@ -598,7 +597,6 @@ rspamd_config.MULTIPLE_FROM = {
   end,
   score = 9.0,
   group = 'headers',
-  type = 'mime',
   description = 'Multiple addresses in From'
 }
 
@@ -609,8 +607,7 @@ rspamd_config.MV_CASE = {
   end,
   description = 'Mime-Version .vs. MIME-Version',
   score = 0.5,
-  group = 'headers',
-  type = 'mime',
+  group = 'headers'
 }
 
 rspamd_config.FAKE_REPLY = {
@@ -625,13 +622,12 @@ rspamd_config.FAKE_REPLY = {
   end,
   description = 'Fake reply',
   score = 1.0,
-  group = 'headers',
-  type = 'mime',
+  group = 'headers'
 }
 
 local check_from_id = rspamd_config:register_symbol{
   name = 'CHECK_FROM',
-  type = 'callback,mime',
+  type = 'callback',
   score = 0.0,
   group = 'headers',
   callback = function(task)
@@ -994,8 +990,7 @@ rspamd_config.CTYPE_MISSING_DISPOSITION = {
   end,
   description = 'Binary content-type not specified as an attachment',
   score = 4.0,
-  type = 'mime',
-  group = 'headers'
+  group = 'mime'
 }
 
 rspamd_config.CTYPE_MIXED_BOGUS = {
@@ -1023,8 +1018,7 @@ rspamd_config.CTYPE_MIXED_BOGUS = {
   end,
   description = 'multipart/mixed without non-textual part',
   score = 1.0,
-  type = 'mime',
-  group = 'headers'
+  group = 'mime'
 }
 
 local function check_for_base64_text(part)
@@ -1060,8 +1054,7 @@ rspamd_config.MIME_BASE64_TEXT = {
   end,
   description = 'Has text part encoded in base64',
   score = 0.1,
-  group = 'headers',
-  type = 'mime',
+  group = 'mime'
 }
 
 rspamd_config.MIME_BASE64_TEXT_BOGUS = {
@@ -1080,8 +1073,7 @@ rspamd_config.MIME_BASE64_TEXT_BOGUS = {
   end,
   description = 'Has text part encoded in base64 that does not contain any 8bit characters',
   score = 1.0,
-  group = 'headers',
-  type = 'mime',
+  group = 'mime'
 }
 
 local function is_8bit_addr(addr)
@@ -1102,8 +1094,7 @@ rspamd_config.INVALID_FROM_8BIT = {
   end,
   description = 'Invalid 8bit character in From header',
   score = 6.0,
-  group = 'headers',
-  type = 'mime',
+  group = 'headers'
 }
 
 rspamd_config.INVALID_RCPT_8BIT = {
@@ -1118,8 +1109,7 @@ rspamd_config.INVALID_RCPT_8BIT = {
   end,
   description = 'Invalid 8bit character in recipients headers',
   score = 6.0,
-  group = 'headers',
-  type = 'mime',
+  group = 'headers'
 }
 
 rspamd_config.XM_CASE = {
@@ -1129,6 +1119,5 @@ rspamd_config.XM_CASE = {
   end,
   description = 'X-mailer .vs. X-Mailer',
   score = 0.5,
-  group = 'headers',
-  type = 'mime',
+  group = 'headers'
 }
