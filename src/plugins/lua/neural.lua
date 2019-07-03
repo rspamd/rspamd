@@ -551,13 +551,13 @@ local function train_ann(rule, _, ev_base, elt, worker)
         for _,e in ipairs(spam_elts) do
           if e == e then
             inputs[#inputs + 1] = e
-            outputs[#outputs + 1] = 1.0
+            outputs[#outputs + 1] = {1.0}
           end
         end
         for _,e in ipairs(ham_elts) do
           if e == e then
             inputs[#inputs + 1] = e
-            outputs[#outputs + 1] = 0.0
+            outputs[#outputs + 1] = {0.0}
           end
         end
 
