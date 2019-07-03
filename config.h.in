@@ -157,10 +157,6 @@
 
 #cmakedefine DISABLE_PTHREAD_MUTEX 1
 
-#ifdef HAVE_LIBEVENT2
-#define HAVE_EVUTIL_RNG_INIT 1
-#endif
-
 /* Detect endianness */
 
 #ifdef HAVE_ENDIAN_H
