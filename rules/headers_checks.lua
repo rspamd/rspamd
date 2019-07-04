@@ -238,6 +238,7 @@ local check_replyto_id = rspamd_config:register_symbol({
               if (not (task:get_header('List-Unsubscribe') or
                   task:get_header('X-To-Get-Off-This-List') or
                   task:get_header('X-List') or
+                  task:get_header('List-Id') or
                   task:get_header('Auto-Submitted')))
               then
                 task:insert_result('REPLYTO_EQ_TO_ADDR', 1.0)
