@@ -139,6 +139,9 @@ struct rspamd_symcache_item {
 	/* Dependencies */
 	GPtrArray *deps;
 	GPtrArray *rdeps;
+
+	/* Container */
+	GPtrArray *container;
 };
 
 struct item_stat {
@@ -319,7 +322,7 @@ rspamd_symcache_find_filter (struct rspamd_symcache *cache,
 
 	if (item != NULL) {
 
-		if (resolve_parent && item->is_virtual) {
+		if (resolve_parent && item->is_virtual && !(item->type & SYMBOL_TYPE_GHOST)) {
 			item = g_ptr_array_index (cache->items_by_id,
 					item->specific.virtual.parent);
 		}
@@ -346,7 +349,7 @@ rspamd_symcache_get_parent (struct rspamd_symcache *cache,
 
 	if (item != NULL) {
 
-		if (item->is_virtual) {
+		if (item->is_virtual && !(item->type & SYMBOL_TYPE_GHOST)) {
 			item = g_ptr_array_index (cache->items_by_id,
 					item->specific.virtual.parent);
 		}
@@ -775,7 +778,7 @@ rspamd_symcache_load_items (struct rspamd_symcache *cache, const gchar *name)
 				}
 			}
 
-			if (item->is_virtual) {
+			if (item->is_virtual && !(item->type & SYMBOL_TYPE_GHOST)) {
 				g_assert (item->specific.virtual.parent < (gint)cache->items_by_id->len);
 				parent = g_ptr_array_index (cache->items_by_id,
 						item->specific.virtual.parent);
@@ -919,15 +922,44 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 	}
 
 	if (name != NULL && !(type & SYMBOL_TYPE_CALLBACK)) {
-		if (g_hash_table_lookup (cache->items_by_symbol, name) != NULL) {
-			msg_err_cache ("skip duplicate symbol registration for %s", name);
-			return -1;
+		struct rspamd_symcache_item *existing;
+
+		if ((existing = g_hash_table_lookup (cache->items_by_symbol, name)) != NULL) {
+
+			if (existing->type & SYMBOL_TYPE_GHOST) {
+				/*
+				 * Complicated part:
+				 * - we need to remove the existing ghost symbol
+				 * - we need to cleanup containers:
+				 *   - symbols hash
+				 *   - specific array
+				 *   - items_by_it
+				 *   - decrement used_items
+				 */
+				msg_info_cache ("duplicate ghost symbol %s is removed");
+
+				if (existing->container) {
+					g_ptr_array_remove (existing->container, existing);
+				}
+
+				g_ptr_array_remove (cache->items_by_id, existing->container);
+				cache->used_items --;
+				g_hash_table_remove (cache->items_by_symbol, name);
+				/*
+				 * Here can be memory leak, but we assume that ghost symbols
+				 * are also virtual
+				 */
+			}
+			else {
+				msg_err_cache ("skip duplicate symbol registration for %s", name);
+				return -1;
+			}
 		}
 	}
 
 	if (type & (SYMBOL_TYPE_CLASSIFIER|SYMBOL_TYPE_CALLBACK|
 			SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_POSTFILTER|
-			SYMBOL_TYPE_IDEMPOTENT)) {
+			SYMBOL_TYPE_IDEMPOTENT|SYMBOL_TYPE_GHOST)) {
 		type |= SYMBOL_TYPE_NOSTAT;
 	}
 
@@ -957,16 +989,20 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 
 		if (item->type & SYMBOL_TYPE_PREFILTER) {
 			g_ptr_array_add (cache->prefilters, item);
+			item->container = cache->prefilters;
 		}
 		else if (item->type & SYMBOL_TYPE_IDEMPOTENT) {
 			g_ptr_array_add (cache->idempotent, item);
+			item->container = cache->idempotent;
 		}
 		else if (item->type & SYMBOL_TYPE_POSTFILTER) {
 			g_ptr_array_add (cache->postfilters, item);
+			item->container = cache->postfilters;
 		}
 		else {
 			item->is_filter = TRUE;
 			g_ptr_array_add (cache->filters, item);
+			item->container = cache->filters;
 		}
 
 		item->id = cache->items_by_id->len;
@@ -979,7 +1015,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 	else {
 		/*
 		 * Three possibilities here when no function is specified:
-		 * - virtual symbol
+		 * - virtual symbol (beware of ghosts!)
 		 * - classifier symbol
 		 * - composite symbol
 		 */
@@ -991,6 +1027,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 
 			item->id = cache->items_by_id->len;
 			g_ptr_array_add (cache->items_by_id, item);
+			item->container = cache->composites;
 		}
 		else if (item->type & SYMBOL_TYPE_CLASSIFIER) {
 			/* Treat it as normal symbol to allow enable/disable */
@@ -1007,6 +1044,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 			item->specific.virtual.parent = parent;
 			item->id = cache->virtual->len;
 			g_ptr_array_add (cache->virtual, item);
+			item->container = cache->virtual;
 			/* Not added to items_by_id, handled by parent */
 		}
 	}
@@ -1270,20 +1308,23 @@ rspamd_symcache_validate_cb (gpointer k, gpointer v, gpointer ud)
 	}
 
 	if (item->is_virtual) {
-		g_assert (item->specific.virtual.parent < (gint)cache->items_by_id->len);
-		parent = g_ptr_array_index (cache->items_by_id,
-				item->specific.virtual.parent);
+		if (!(item->type & SYMBOL_TYPE_GHOST)) {
+			g_assert (item->specific.virtual.parent != 1);
+			g_assert (item->specific.virtual.parent < (gint) cache->items_by_id->len);
+			parent = g_ptr_array_index (cache->items_by_id,
+					item->specific.virtual.parent);
 
-		if (fabs (parent->st->weight) < fabs (item->st->weight)) {
-			parent->st->weight = item->st->weight;
-		}
+			if (fabs (parent->st->weight) < fabs (item->st->weight)) {
+				parent->st->weight = item->st->weight;
+			}
 
-		p1 = abs (item->priority);
-		p2 = abs (parent->priority);
+			p1 = abs (item->priority);
+			p2 = abs (parent->priority);
 
-		if (p1 != p2) {
-			parent->priority = MAX (p1, p2);
-			item->priority = parent->priority;
+			if (p1 != p2) {
+				parent->priority = MAX (p1, p2);
+				item->priority = parent->priority;
+			}
 		}
 	}
 
@@ -2132,20 +2173,36 @@ rspamd_symcache_counters_cb (gpointer k, gpointer v, gpointer ud)
 			"symbol", 0, false);
 
 	if (item->is_virtual) {
-		parent = g_ptr_array_index (cbd->cache->items_by_id,
-				item->specific.virtual.parent);
-		ucl_object_insert_key (obj,
-				ucl_object_fromdouble (ROUND_DOUBLE (item->st->weight)),
-				"weight", 0, false);
-		ucl_object_insert_key (obj,
-				ucl_object_fromdouble (ROUND_DOUBLE (parent->st->avg_frequency)),
-				"frequency", 0, false);
-		ucl_object_insert_key (obj,
-				ucl_object_fromint (parent->st->total_hits),
-				"hits", 0, false);
-		ucl_object_insert_key (obj,
-				ucl_object_fromdouble (ROUND_DOUBLE (parent->st->avg_time)),
-				"time", 0, false);
+		if (!(item->type & SYMBOL_TYPE_GHOST)) {
+			parent = g_ptr_array_index (cbd->cache->items_by_id,
+					item->specific.virtual.parent);
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (ROUND_DOUBLE (item->st->weight)),
+					"weight", 0, false);
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (ROUND_DOUBLE (parent->st->avg_frequency)),
+					"frequency", 0, false);
+			ucl_object_insert_key (obj,
+					ucl_object_fromint (parent->st->total_hits),
+					"hits", 0, false);
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (ROUND_DOUBLE (parent->st->avg_time)),
+					"time", 0, false);
+		}
+		else {
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (ROUND_DOUBLE (item->st->weight)),
+					"weight", 0, false);
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (0.0),
+					"frequency", 0, false);
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (0.0),
+					"hits", 0, false);
+			ucl_object_insert_key (obj,
+					ucl_object_fromdouble (0.0),
+					"time", 0, false);
+		}
 	}
 	else {
 		ucl_object_insert_key (obj,
@@ -3300,22 +3357,25 @@ rspamd_symcache_process_settings_elt (struct rspamd_symcache *cache,
 
 			if (item) {
 				if (item->is_virtual) {
-					parent = rspamd_symcache_find_filter (cache, sym, true);
+					if (!(item->type & SYMBOL_TYPE_GHOST)) {
+						parent = rspamd_symcache_find_filter (cache, sym, true);
 
-					if (parent) {
-						if (elt->symbols_disabled &&
-							ucl_object_lookup (elt->symbols_disabled, parent->symbol)) {
-							msg_err_cache ("conflict in %s: cannot enable disabled symbol %s, "
-										   "wanted to enable symbol %s",
-									elt->name, parent->symbol, sym);
-							continue;
+						if (parent) {
+							if (elt->symbols_disabled &&
+								ucl_object_lookup (elt->symbols_disabled, parent->symbol)) {
+								msg_err_cache ("conflict in %s: cannot enable disabled symbol %s, "
+											   "wanted to enable symbol %s",
+										elt->name, parent->symbol, sym);
+								continue;
+							}
+
+							rspamd_symcache_add_id_to_list (cache->static_pool,
+									&parent->exec_only_ids, id);
+							msg_debug_cache ("allow just execution of symbol %s for settings %ud (%s)",
+									parent->symbol, id, elt->name);
 						}
-
-						rspamd_symcache_add_id_to_list (cache->static_pool,
-								&parent->exec_only_ids, id);
-						msg_debug_cache ("allow just execution of symbol %s for settings %ud (%s)",
-								parent->symbol, id, elt->name);
 					}
+					/* Ignore ghosts */
 				}
 
 				rspamd_symcache_add_id_to_list (cache->static_pool,
