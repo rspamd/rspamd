@@ -936,7 +936,7 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 				 *   - items_by_it
 				 *   - decrement used_items
 				 */
-				msg_info_cache ("duplicate ghost symbol %s is removed");
+				msg_info_cache ("duplicate ghost symbol %s is removed", name);
 
 				if (existing->container) {
 					g_ptr_array_remove (existing->container, existing);
