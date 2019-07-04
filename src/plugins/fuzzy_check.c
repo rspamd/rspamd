@@ -2138,12 +2138,14 @@ fuzzy_insert_metric_results (struct rspamd_task *task, GPtrArray *results)
 		mult = 1.0;
 
 		if (res->type == FUZZY_RESULT_IMG) {
-			if (!seen_text) {
-				mult *= 0.25;
-			}
-			else if (prob_txt < 0.75) {
-				/* Penalize sole image without matching text */
-				mult *= prob_txt;
+			if (seen_text) {
+				if (prob_txt < 0.75) {
+					/* Penalize sole image without matching text */
+					mult *= (1 - prob_txt);
+				}
+				else {
+					mult *= 0.25;
+				}
 			}
 		}
 		else if (res->type == FUZZY_RESULT_TXT) {
