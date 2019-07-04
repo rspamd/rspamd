@@ -1044,4 +1044,50 @@ exports.values = function(gen, param, state)
   return values
 end
 
+---[[[
+-- @function lua_util.distance_sorted(t1, t2)
+-- Returns distance between two sorted tables t1 and t2
+-- @param {table} t1 input table
+-- @param {table} t2 input table
+-- @return distance between `t1` and `t2`
+--]]]
+exports.distance_sorted = function(t1, t2)
+  local ncomp = #t1
+  local ndiff = 0
+  local i,j = 1,1
+
+  if ncomp < #t2 then
+    ncomp = #t2
+  end
+
+  for _=1,ncomp do
+    if j > #t2 then
+      ndiff = ndiff + ncomp - #t2
+      if i > j then
+        ndiff = ndiff - (i - j)
+      end
+      break
+    elseif i > #t1 then
+      ndiff = ndiff + ncomp - #t1
+      if j > i then
+        ndiff = ndiff - (j - i)
+      end
+      break
+    end
+
+    if t1[i] == t2[j] then
+      i = i + 1
+      j = j + 1
+    elseif t1[i] < t2[j] then
+      i = i + 1
+      ndiff = ndiff + 1
+    else
+      j = j + 1
+      ndiff = ndiff + 1
+    end
+  end
+
+  return ndiff
+end
+
 return exports
