@@ -72,6 +72,11 @@ RESCORE SYMBOL - NORMAL
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={SIMPLE_TEST = 3.33}
   Check Rspamc  ${result}  SIMPLE_TEST (3.33)
 
+INJECT SYMBOL - NORMAL
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols = ["INJECTED_SYMBOL1", "INJECTED_SYMBOL2"]}
+  Check Rspamc  ${result}  INJECTED_SYMBOL1
+  Should Contain  ${result.stdout}  INJECTED_SYMBOL2
+
 RESCORE ACTION
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={actions { reject = 1234.5; } }
   Check Rspamc  ${result}  ${SPACE}/ 1234.50
