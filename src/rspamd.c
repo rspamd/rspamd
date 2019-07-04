@@ -1021,6 +1021,7 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 				wrk->pid);
 		rspamd_check_core_limits (rspamd_main);
 		rspamd_fork_delayed (wrk->cf, wrk->index, rspamd_main);
+		rspamd_log_lock (rspamd_main->logger);
 	}
 	else {
 		msg_info_main ("do not respawn process %s after found terminated process with pid %P",
@@ -1029,7 +1030,6 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 	}
 
 	g_free (wrk);
-	rspamd_log_lock (rspamd_main->logger);
 }
 
 /* Control socket handler */
