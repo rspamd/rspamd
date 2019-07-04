@@ -919,7 +919,7 @@ local function process_settings_table(tbl, allow_ids, mempool)
       if elt.apply.symbols then
         -- Register virtual symbols
         for _,sym in ipairs(elt.apply.symbols) do
-          rspamd_config.register_symbol{
+          rspamd_config:register_symbol{
             name = sym,
             type = 'virtual,ghost',
           }
