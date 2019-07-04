@@ -126,7 +126,7 @@ CREATE TABLE rspamd
     `Urls.Url` Array(String) COMMENT 'Full URL if `full_urls` module option enabled, host part of URL otherwise',
     Emails Array(String) COMMENT 'List of emails extracted from the message',
     ASN UInt32 COMMENT 'BGP AS number for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
-    Country LowCardinality(FixedString(2)) COMMENT 'Country for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
+    Country FixedString(2) COMMENT 'Country for SMTP client IP (returned by asn.rspamd.com or asn6.rspamd.com)',
     IPNet String,
     `Symbols.Names` Array(LowCardinality(String)) COMMENT 'Symbol name',
     `Symbols.Scores` Array(Float32) COMMENT 'Symbol score',
