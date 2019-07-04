@@ -1309,7 +1309,7 @@ rspamd_symcache_validate_cb (gpointer k, gpointer v, gpointer ud)
 
 	if (item->is_virtual) {
 		if (!(item->type & SYMBOL_TYPE_GHOST)) {
-			g_assert (item->specific.virtual.parent != 1);
+			g_assert (item->specific.virtual.parent != -1);
 			g_assert (item->specific.virtual.parent < (gint) cache->items_by_id->len);
 			parent = g_ptr_array_index (cache->items_by_id,
 					item->specific.virtual.parent);
