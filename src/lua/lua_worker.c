@@ -292,7 +292,7 @@ rspamd_lua_execute_lua_subprocess (lua_State *L,
 {
 	gint err_idx, r;
 	guint64 wlen = 0;
-	const gchar *ret;
+	const gchar *ret = NULL;
 	gsize retlen;
 
 	lua_pushcfunction (L, &rspamd_lua_traceback);
@@ -319,15 +319,27 @@ rspamd_lua_execute_lua_subprocess (lua_State *L,
 		}
 	}
 	else {
-		ret = lua_tolstring (L, -1, &retlen);
-		wlen = retlen;
+		if (lua_type (L, -1) == LUA_TSTRING) {
+			ret = lua_tolstring (L, -1, &retlen);
+			wlen = retlen;
+		}
+		else {
+			struct rspamd_lua_text *t;
+
+			t = lua_check_text (L, -1);
+
+			if (t) {
+				ret = t->start;
+				wlen = t->len;
+			}
+		}
 
 		r = write (cbdata->sp[1], &wlen, sizeof (wlen));
 		if (r == -1) {
 			msg_err ("write failed: %s", strerror (errno));
 		}
 
-		r = write (cbdata->sp[1], ret, retlen);
+		r = write (cbdata->sp[1], ret, wlen);
 		if (r == -1) {
 			msg_err ("write failed: %s", strerror (errno));
 		}
