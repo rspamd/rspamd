@@ -781,7 +781,6 @@ lua_map_get_key (lua_State * L)
 
 			if (lua_type (L, 2) == LUA_TSTRING) {
 				const gchar *addr_str;
-				gsize len;
 
 				addr_str = luaL_checklstring (L, 2, &len);
 				addr = g_alloca (sizeof (*addr));
@@ -789,7 +788,8 @@ lua_map_get_key (lua_State * L)
 
 				if (!rspamd_parse_inet_address_ip (addr_str, len, addr->addr)) {
 					addr = NULL;
-					msg_err ("invalid ip address: %*s", (gint)len, addr_str);
+					msg_warn ("invalid ip address: %*s, when checking map: %s",
+							(gint)len, addr_str, map->map->name);
 				}
 			}
 			else if (lua_type (L, 2) == LUA_TUSERDATA) {
@@ -806,7 +806,7 @@ lua_map_get_key (lua_State * L)
 				}
 			}
 			else if (lua_type (L, 2) == LUA_TNUMBER) {
-				key_num = luaL_checknumber (L, 2);
+				key_num = luaL_checkinteger (L, 2);
 				key_num = htonl (key_num);
 			}
 
