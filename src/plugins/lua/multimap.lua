@@ -265,7 +265,7 @@ local function apply_addr_filter(task, filter, input, rule)
     end
   else
     -- regexp case
-  if not rule['re_filter'] then
+    if not rule['re_filter'] then
       local type,pat = string.match(filter, '(regexp:)(.+)')
       if type and pat then
         rule['re_filter'] = regexp.create(pat)
