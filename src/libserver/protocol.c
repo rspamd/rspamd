@@ -488,8 +488,20 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 							task->cfg, hv_tok->begin, hv_tok->len);
 
 					if (task->settings_elt == NULL) {
-						msg_warn_protocol ("unknown settings id: %V",
-								hv);
+						GString *known_ids = g_string_new (NULL);
+						struct rspamd_config_settings_elt *cur;
+
+						DL_FOREACH (task->cfg->setting_ids, cur) {
+							rspamd_printf_gstring (known_ids, "%s(%ud);",
+									cur->name, cur->id);
+						}
+
+						msg_warn_protocol ("unknown settings id: %V(%d); known_ids: %v",
+								hv,
+								rspamd_config_name_to_id (hv_tok->begin, hv_tok->len),
+								known_ids);
+
+						g_string_free (known_ids, TRUE);
 					}
 					else {
 						msg_debug_protocol ("applied settings id %V -> %ud", hv,
