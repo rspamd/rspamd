@@ -1584,5 +1584,46 @@ exports.connect = function(redis_params, attrs)
   end
 end
 
+local redis_prefixes = {}
+
+--[[[
+-- @function lua_redis.register_prefix(prefix, module, description[, optional])
+-- Register new redis prefix for documentation purposes
+-- @param {string} prefix string prefix
+-- @param {string} module module name
+-- @param {string} description prefix description
+-- @param {table} optional optional kv pairs (e.g. pattern)
+--]]
+local function register_prefix(prefix, module, description, optional)
+  local pr = {
+    module = module,
+    description = description
+  }
+
+  if optional and type(optional) == 'table' then
+    for k,v in pairs(optional) do
+      pr[k] = v
+    end
+  end
+
+  redis_prefixes[prefix] = pr
+end
+
+exports.register_prefix = register_prefix
+
+--[[[
+-- @function lua_redis.prefixes([mname])
+-- Returns prefixes for specific module (or all prefixes). Returns a table prefix -> table
+--]]
+exports.prefixes = function(mname)
+  if not mname then
+    return redis_prefixes
+  else
+    local fun = require "fun"
+
+    return fun.totable(fun.filter(function(_, data) return data.module == mname end,
+        redis_prefixes))
+  end
+end
 
 return exports
