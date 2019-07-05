@@ -503,6 +503,7 @@ end
 
 exports.rspamd_count_metatokens = rspamd_count_metatokens
 exports.count_metatokens = rspamd_count_metatokens
+exports.version = 1 -- MUST be increased on each change of metatokens
 
 exports.add_metafunction = function(tbl)
   local ret, err = meta_schema(tbl)

@@ -153,14 +153,7 @@ local function register_settings_cb()
     for _,set in pairs(known_ids) do
       set.symbols = lua_util.keys(fun.filter(function(_, v) return v end, set.symbols))
       table.sort(set.symbols)
-
-      -- Create digest from sorted symbols
-      local cr = require "rspamd_cryptobox_hash"
-      local h = cr.create()
-      for _,sym in ipairs(set.symbols) do
-        h:update(sym)
-      end
-      set.digest = h:base32()
+      set.digest = lua_util.table_digest(set.symbols)
     end
 
     post_init_performed = true
@@ -215,6 +208,7 @@ local function settings_by_id(id)
   end
   return known_ids[id]
 end
+
 
 exports.settings_by_id = settings_by_id
 exports.all_settings = known_ids
