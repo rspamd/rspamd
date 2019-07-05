@@ -1090,4 +1090,26 @@ exports.distance_sorted = function(t1, t2)
   return ndiff
 end
 
+---[[[
+-- @function lua_util.table_digest(t)
+-- Returns hash of all values if t[1] is string or all keys otherwise
+-- @param {table} t input array or map
+-- @return {string} base32 representation of blake2b hash of all strings
+--]]]
+exports.table_digest = function(t)
+  local cr = require "rspamd_cryptobox_hash"
+  local h = cr.create()
+
+  if t[1] then
+    for _,e in ipairs(t) do
+      h:update(tostring(e))
+    end
+  else
+    for k,_ in pairs(t) do
+      h:update(k)
+    end
+  end
+ return h:base32()
+end
+
 return exports
