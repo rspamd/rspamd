@@ -641,6 +641,16 @@ LUA_FUNCTION_DEF (task, get_symbols_numeric);
 LUA_FUNCTION_DEF (task, get_symbols_tokens);
 
 /***
+ * @method task:process_ann_tokens(symbols, ann_tokens, offset)
+ * Processes ann tokens
+ * @param {table|string} symbols list of symbols in this profile
+ * @param {table|number} ann_tokens list of tokens (including metatokens)
+ * @param {integer} offset offset for symbols token (#metatokens)
+ * @return nothing
+ */
+LUA_FUNCTION_DEF (task, process_ann_tokens);
+
+/***
  * @method task:has_symbol(name)
  * Fast path to check if a specified symbol is in the task's results
  * @param {string} name symbol's name
@@ -1118,6 +1128,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_symbols_all),
 	LUA_INTERFACE_DEF (task, get_symbols_numeric),
 	LUA_INTERFACE_DEF (task, get_symbols_tokens),
+	LUA_INTERFACE_DEF (task, process_ann_tokens),
 	LUA_INTERFACE_DEF (task, has_symbol),
 	LUA_INTERFACE_DEF (task, enable_symbol),
 	LUA_INTERFACE_DEF (task, disable_symbol),
@@ -4234,6 +4245,45 @@ lua_task_get_symbols_tokens (lua_State *L)
 	rspamd_symcache_foreach (task->cfg->cache, tokens_foreach_cb, &cbd);
 
 	return 1;
+}
+
+static gint
+lua_task_process_ann_tokens (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	gint offset = luaL_checkinteger (L, 4);
+
+	if (task && lua_istable (L, 2) && lua_istable (L, 3)) {
+		guint symlen = rspamd_lua_table_size (L, 2);
+
+		for (guint i = 1; i <= symlen; i ++, offset ++) {
+			const gchar *sym;
+			struct rspamd_symbol_result *sres;
+
+			lua_rawgeti (L, 2, i);
+			sym = lua_tostring (L, -1);
+
+			sres = rspamd_task_find_symbol_result (task, sym);
+
+			if (sres && !(sres->flags & RSPAMD_SYMBOL_RESULT_IGNORED)) {
+				if (!isnan (sres->score) &&
+					!(rspamd_symcache_item_flags (sres->sym->cache_item) &
+					  SYMBOL_TYPE_NOSTAT)) {
+
+					lua_pushnumber (L, tanh (sres->score));
+					lua_rawseti (L, 3, offset + 1);
+				}
+			}
+
+			lua_pop (L, 1); /* Symbol name */
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
 }
 
 enum lua_date_type {

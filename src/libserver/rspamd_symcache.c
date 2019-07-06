@@ -3391,3 +3391,13 @@ rspamd_symcache_process_settings_elt (struct rspamd_symcache *cache,
 		}
 	}
 }
+
+enum rspamd_symbol_type
+rspamd_symcache_item_flags (struct rspamd_symcache_item *item)
+{
+	if (item) {
+		return item->type;
+	}
+
+	return 0;
+}

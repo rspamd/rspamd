@@ -493,4 +493,10 @@ gboolean rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 										  struct rspamd_symcache_item *item,
 										  gboolean exec_only);
 
+/**
+ * Returns symbcache item flags
+ * @param item
+ * @return
+ */
+enum rspamd_symbol_type rspamd_symcache_item_flags (struct rspamd_symcache_item *item);
 #endif
