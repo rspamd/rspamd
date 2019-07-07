@@ -211,9 +211,24 @@ end
 
 
 exports.settings_by_id = settings_by_id
-exports.all_settings = known_ids
-exports.all_symbols = all_symbols
+exports.all_settings = function()
+  if not post_init_performed then
+    register_settings_cb()
+  end
+  return known_ids
+end
+exports.all_symbols = function()
+  if not post_init_performed then
+    register_settings_cb()
+  end
+  return all_symbols
+end
 -- What is enabled when no settings are there
-exports.default_symbols = default_symbols
+exports.default_symbols = function()
+  if not post_init_performed then
+    register_settings_cb()
+  end
+  return default_symbols
+end
 
 return exports
