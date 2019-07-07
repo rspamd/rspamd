@@ -128,7 +128,7 @@ local redis_can_store_train_vec_id = nil
 local redis_lua_script_maybe_invalidate = [[
   local card = redis.call('ZCARD', KEYS[1])
   if card > tonumber(KEYS[2]) then
-    local to_delete = redis.call('ZRANGE', KEYS[1], 0, (-(tonumber(KEYS[2] - 1)))
+    local to_delete = redis.call('ZRANGE', KEYS[1], 0, (-(tonumber(KEYS[2] - 1))))
     for _,k in ipairs(to_delete) do
       local tb = cjson.decode(k)
       redis.call('DEL', tb.redis_key)
@@ -136,7 +136,7 @@ local redis_lua_script_maybe_invalidate = [[
       redis.call('DEL', tb.redis_key .. '_spam')
       redis.call('DEL', tb.redis_key .. '_ham')
     end
-    redis.call('ZREMRANGEBYRANK', KEYS[1], 0, (-(tonumber(KEYS[2] - 1)))
+    redis.call('ZREMRANGEBYRANK', KEYS[1], 0, (-(tonumber(KEYS[2] - 1))))
     return to_delete
   else
     return {}
@@ -230,6 +230,22 @@ local function new_ann_key(rule, set)
   return ann_key
 end
 
+-- Extract settings element for a specific settings id
+local function get_rule_settings(task, rule)
+  local sid = task:get_settings_id() or -1
+
+  local set = rule.settings[sid]
+
+  if not set then return nil end
+
+  while type(set) == 'number' do
+    -- Reference to another settings!
+    set = rule.settings[set]
+  end
+
+  return set
+end
+
 -- Generate redis prefix for specific rule and specific settings
 local function redis_ann_prefix(rule, settings_name)
   -- We also need to count metatokens:
@@ -281,40 +297,22 @@ end
 local function ann_scores_filter(task)
 
   for _,rule in pairs(settings.rules) do
-    local sid = task:get_settings_id()
+    local sid = task:get_settings_id() or -1
     local ann
     local profile
 
-    if sid then
-      if rule.settings[sid] then
-        local set = rule.settings[sid]
-
-        if set.ann then
-          ann = set.ann.ann
-          profile = set.ann
-        else
-          lua_util.debugm(N, task, 'no ann loaded for %s:%s',
-              rule.prefix, set.name)
-        end
+    local set = get_rule_settings(task, rule)
+    if set then
+      if set.ann then
+        ann = set.ann.ann
+        profile = set.ann
       else
-        lua_util.debugm(N, task, 'no ann defined in %s for settings id %s',
-            rule.prefix, sid)
+        lua_util.debugm(N, task, 'no ann loaded for %s:%s',
+            rule.prefix, set.name)
       end
     else
-      if rule.settings[-1] then
-        local set = rule.settings[-1]
-
-        if set.ann then
-          ann = set.ann.ann
-          profile = set.ann
-        else
-          lua_util.debugm(N, task, 'no ann loaded for %s:%s',
-              rule.prefix, set.name)
-        end
-      else
-        lua_util.debugm(N, task, 'no default ann for rule %s',
-            rule.prefix)
-      end
+      lua_util.debugm(N, task, 'no ann defined in %s for settings id %s',
+          rule.prefix, sid)
     end
 
     if ann then
@@ -954,19 +952,21 @@ local function check_anns(worker, rule, cfg, ev_base, process_callback)
       end
     end
 
-    -- Extract all profiles for some specific settings id
-    -- Get the last `max_profiles` recently used
-    -- Select the most appropriate to our profile but it should not differ by more
-    -- than 30% of symbols
-    lua_redis.redis_make_request_taskless(ev_base,
-        cfg,
-        rule.redis,
-        nil,
-        false, -- is write
-        members_cb, --callback
-        'ZREVRANGE', -- command
-        {set.prefix, '0', tostring(settings.max_profiles)} -- arguments
-    )
+    if type(set) == 'table' then
+      -- Extract all profiles for some specific settings id
+      -- Get the last `max_profiles` recently used
+      -- Select the most appropriate to our profile but it should not differ by more
+      -- than 30% of symbols
+      lua_redis.redis_make_request_taskless(ev_base,
+          cfg,
+          rule.redis,
+          nil,
+          false, -- is write
+          members_cb, --callback
+          'ZREVRANGE', -- command
+          {set.prefix, '0', tostring(settings.max_profiles)} -- arguments
+      )
+    end
   end -- Cycle over all settings
 
   return rule.watch_interval
@@ -1070,12 +1070,24 @@ local function process_rules_settings()
     for s,_ in pairs(rule.allowed_settings) do
       -- Here, we have a name, set of symbols and
       local selt = lua_settings.settings_by_id(s)
-      rule.settings[s] = {
+
+      local nelt = {
         symbols = selt.symbols, -- Already sorted
         name = selt.name
       }
 
-      process_settings_elt(rule, rule.settings[s])
+      process_settings_elt(rule, nelt)
+      for id,ex in pairs(rule.settings) do
+        if lua_util.distance_sorted(ex.symbols, nelt.symbols) == 0 then
+          -- Equal symbols, add reference
+          rule.settings[s] = id
+          nelt = nil
+        end
+      end
+
+      if nelt then
+        rule.settings[s] = nelt
+      end
     end
   end
 end
