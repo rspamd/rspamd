@@ -168,18 +168,18 @@ local redis_maybe_lock_id = nil
 
 -- Lua script to save and unlock ANN in redis
 -- Uses the following keys
--- key1 - prefix for keys
--- key2 - compressed ANN
--- key3 - expire in seconds
+-- key1 - prefix for ANN
+-- key2 - prefix for profile
+-- key3 - compressed ANN
+-- key4 - profile as JSON
+-- key5 - expire in seconds
+-- key6 - current time
 local redis_lua_script_save_unlock = [[
-  redis.call('INCRBY', KEYS[1] .. '_version', '1')
-  redis.call('DEL', KEYS[1] .. '_spam')
-  redis.call('DEL', KEYS[1] .. '_ham')
-  redis.call('SET', KEYS[1] .. '_data', KEYS[2])
-  redis.call('DEL', KEYS[1] .. '_locked')
-  redis.call('DEL', KEYS[1] .. '_hostname')
-  redis.call('EXPIRE', KEYS[1] .. '_data', KEYS[3])
-  redis.call('EXPIRE', KEYS[1] .. '_version', KEYS[3])
+  local now = tonumber(KEYS[6])
+  redis.call('ZADD', KEYS[2], now, KEYS[4])
+  redis.call('HSET', KEYS[1], 'ann', KEYS[3])
+  redis.call('HDEL', KEYS[1], 'lock')
+  redis.call('EXPIRE', KEYS[1], tonumber(KEYS[5]))
   return 1
 ]]
 local redis_save_unlock_id = nil
@@ -228,6 +228,14 @@ local function new_ann_key(rule, set)
       rule.prefix, set.name, set.digest:sub(1, 8))
 
   return ann_key
+end
+
+-- Generate redis prefix for specific rule and specific settings
+local function redis_ann_prefix(rule, settings_name)
+  -- We also need to count metatokens:
+  local n = meta_functions.version
+  return string.format('%s_%s_%d_%s',
+      settings.prefix, rule.prefix, n, settings_name)
 end
 
 -- Creates and stores ANN profile in Redis
@@ -577,10 +585,27 @@ local function spawn_train(worker, ev_base, rule, set, ann_key, ham_vec, spam_ve
         set.ann.version = (set.ann.version or 0) + 1
         set.ann.ann = ann_trained
 
+        local profile = {
+          symbols = set.symbols,
+          distance = 0,
+          digest = set.digest,
+          redis_key = ann_key,
+          version = set.ann.version
+        }
+
+        local ucl = require "ucl"
+        local profile_serialized = ucl.to_format(profile, 'json-compact')
+
         lua_redis.exec_redis_script(redis_save_unlock_id,
             {ev_base = ev_base, is_write = true},
             redis_save_cb,
-            {ann_key, tostring(ann_data), tostring(rule.ann_expire)})
+            {ann_key,
+             redis_ann_prefix(rule, set.name),
+             ann_data,
+             profile_serialized,
+             tostring(rule.ann_expire),
+             tostring(os.time()),
+            })
       end
     end
 
@@ -986,14 +1011,6 @@ local function ann_push_vector(task)
   end
 end
 
-
--- Generate redis prefix for specific rule and specific settings
-local function redis_ann_prefix(rule, settings_name)
-  -- We also need to count metatokens:
-  local n = meta_functions.version
-  return string.format('%s_%s_%d_%s',
-      settings.prefix, rule.prefix, n, settings_name)
-end
 
 -- This function is used to adjust profiles and allowed setting ids for each rule
 -- It must be called when all settings are already registered (e.g. at post-init for config)
