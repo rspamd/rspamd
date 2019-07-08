@@ -957,8 +957,8 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
 
     local function initiate_train()
       rspamd_logger.infox(rspamd_config,
-          'need to learn ANN %s after %s learn vectors (%s required)',
-          ann_key, tonumber(data), rule.train.max_trains)
+          'need to learn ANN %s after %s required learn vectors',
+          ann_key, rule.train.max_trains)
       do_train_ann(worker, ev_base, rule, set, ann_key)
     end
 
@@ -1053,10 +1053,12 @@ local function cleanup_anns(rule, cfg, ev_base)
       end
     end
 
-    lua_redis.exec_redis_script(redis_maybe_invalidate_id,
-        {ev_base = ev_base, is_write = true},
-        invalidate_cb,
-        {set.prefix, tostring(settings.max_profiles)})
+    if type(set) == 'table' then
+      lua_redis.exec_redis_script(redis_maybe_invalidate_id,
+          {ev_base = ev_base, is_write = true},
+          invalidate_cb,
+          {set.prefix, tostring(settings.max_profiles)})
+    end
   end
 end
 
