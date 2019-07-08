@@ -271,8 +271,8 @@ local function new_ann_profile(task, rule, set, version)
 
   local function add_cb(err, _)
     if err then
-      rspamd_logger.errx(task, 'cannot check if we can train %s:%s : %s',
-          rule.prefix, set.name, err)
+      rspamd_logger.errx(task, 'cannot store ANN profile for %s:%s at %s : %s',
+          rule.prefix, set.name, profile.redis_key, err)
     else
       rspamd_logger.infox(task, 'created new ANN profile for %s:%s, data stored at prefix %s',
           rule.prefix, set.name, profile.redis_key)
@@ -285,7 +285,7 @@ local function new_ann_profile(task, rule, set, version)
       true, -- is write
       add_cb, --callback
       'ZADD', -- command
-      {set.prefix, profile_serialized, tostring(rspamd_util.get_time())}
+      {set.prefix, tostring(rspamd_util.get_time()), new_ann_profile}
   )
 
   return profile
@@ -785,7 +785,7 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
               true, -- is write
               rank_cb, --callback
               'ZADD', -- command
-              {set.prefix, profile_serialized, tostring(rspamd_util.get_time())}
+              {set.prefix, tostring(rspamd_util.get_time()), new_ann_profile}
           )
           rspamd_logger.infox(rspamd_config, 'loaded ANN for %s from %s; %s bytes compressed; version=%s',
               rule.prefix .. ':' .. set.name, ann_key, #ann_data, profile.version)
@@ -1009,10 +1009,10 @@ local function ann_push_vector(task)
   if not settings.allow_local and lua_util.is_rspamc_or_controller(task) then return end
   local verdict,score = lua_util.get_task_verdict(task)
   for _,rule in pairs(settings.rules) do
-    local sid = task:get_settings_id() or -1
+    local set = get_rule_settings(task, rule)
 
-    if rule.settings[sid] then
-      ann_push_task_result(rule, task, verdict, score, rule.settings[sid])
+    if set then
+      ann_push_task_result(rule, task, verdict, score, set)
     end
 
   end
@@ -1085,12 +1085,15 @@ local function process_rules_settings()
 
       process_settings_elt(rule, nelt)
       for id,ex in pairs(rule.settings) do
-        if lua_util.distance_sorted(ex.symbols, nelt.symbols) == 0 then
-          -- Equal symbols, add reference
-          lua_util.debugm(N, rspamd_config, 'added reference from settings id %s to %s; same symbols',
-              nelt.name, ex.name)
-          rule.settings[s] = id
-          nelt = nil
+        if type(ex) == 'table' then
+          if lua_util.distance_sorted(ex.symbols, nelt.symbols) == 0 then
+            -- Equal symbols, add reference
+            lua_util.debugm(N, rspamd_config,
+                'added reference from settings id %s to %s; same symbols',
+                nelt.name, ex.name)
+            rule.settings[s] = id
+            nelt = nil
+          end
         end
       end
 
