@@ -626,9 +626,9 @@ lua_worker_spawn_process (lua_State *L)
 		close (cbdata->sp[0]);
 		/* Here we assume that we can block on writing results */
 		rspamd_socket_blocking (cbdata->sp[1]);
+		g_hash_table_remove_all (w->signal_events);
 		ev_loop_destroy (cbdata->event_loop);
 		cbdata->event_loop = ev_loop_new (EVFLAG_SIGNALFD);
-		g_hash_table_remove_all (w->signal_events);
 		rspamd_worker_unblock_signals ();
 		rspamd_lua_execute_lua_subprocess (L, cbdata);
 
