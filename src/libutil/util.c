@@ -1917,13 +1917,6 @@ rspamd_get_calendar_ticks (void)
 	return res;
 }
 
-/* Required for tweetnacl */
-void
-randombytes (guchar *buf, guint64 len)
-{
-	ottery_rand_bytes (buf, (size_t)len);
-}
-
 void
 rspamd_random_hex (guchar *buf, guint64 len)
 {
