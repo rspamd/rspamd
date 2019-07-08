@@ -19,6 +19,11 @@
 #include "config.h"
 #include "cfg_file.h"
 
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /**
  * Init dynamic configuration using map logic and specific configuration
  * @param cfg config file
@@ -41,13 +46,13 @@ gboolean dump_dynamic_config (struct rspamd_config *cfg);
  * @return
  */
 gboolean add_dynamic_symbol (struct rspamd_config *cfg,
-	const gchar *metric,
-	const gchar *symbol,
-	gdouble value);
+							 const gchar *metric,
+							 const gchar *symbol,
+							 gdouble value);
 
 gboolean remove_dynamic_symbol (struct rspamd_config *cfg,
-	const gchar *metric,
-	const gchar *symbol);
+								const gchar *metric,
+								const gchar *symbol);
 
 /**
  * Add action for specified metric
@@ -58,15 +63,19 @@ gboolean remove_dynamic_symbol (struct rspamd_config *cfg,
  * @return
  */
 gboolean add_dynamic_action (struct rspamd_config *cfg,
-	const gchar *metric,
-	guint action,
-	gdouble value);
+							 const gchar *metric,
+							 guint action,
+							 gdouble value);
 
 /**
  * Removes dynamic action
  */
 gboolean remove_dynamic_action (struct rspamd_config *cfg,
-		const gchar *metric,
-		guint action);
+								const gchar *metric,
+								guint action);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* DYNAMIC_CFG_H_ */

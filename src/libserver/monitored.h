@@ -19,6 +19,10 @@
 #include "config.h"
 #include "rdns.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_monitored;
 struct rspamd_monitored_ctx;
 struct rspamd_config;
@@ -41,8 +45,9 @@ enum rspamd_monitored_flags {
 struct rspamd_monitored_ctx *rspamd_monitored_ctx_init (void);
 
 typedef void (*mon_change_cb) (struct rspamd_monitored_ctx *ctx,
-		struct rspamd_monitored *m, gboolean alive,
-		void *ud);
+							   struct rspamd_monitored *m, gboolean alive,
+							   void *ud);
+
 /**
  * Configure context for monitored objects
  * @param ctx context
@@ -51,11 +56,11 @@ typedef void (*mon_change_cb) (struct rspamd_monitored_ctx *ctx,
  * @param resolver resolver object
  */
 void rspamd_monitored_ctx_config (struct rspamd_monitored_ctx *ctx,
-		struct rspamd_config *cfg,
-		struct ev_loop *ev_base,
-		struct rdns_resolver *resolver,
-		mon_change_cb change_cb,
-		gpointer ud);
+								  struct rspamd_config *cfg,
+								  struct ev_loop *ev_base,
+								  struct rdns_resolver *resolver,
+								  mon_change_cb change_cb,
+								  gpointer ud);
 
 struct ev_loop *rspamd_monitored_ctx_get_ev_base (struct rspamd_monitored_ctx *ctx);
 
@@ -74,8 +79,9 @@ struct rspamd_monitored *rspamd_monitored_create_ (
 		enum rspamd_monitored_flags flags,
 		const ucl_object_t *opts,
 		const gchar *loc);
+
 #define rspamd_monitored_create(ctx, line, type, flags, opts) \
-	rspamd_monitored_create_(ctx, line, type, flags, opts, G_STRFUNC)
+    rspamd_monitored_create_(ctx, line, type, flags, opts, G_STRFUNC)
 
 /**
  * Return monitored by its tag
@@ -83,8 +89,8 @@ struct rspamd_monitored *rspamd_monitored_create_ (
  * @param tag
  * @return
  */
-struct rspamd_monitored * rspamd_monitored_by_tag (struct rspamd_monitored_ctx *ctx,
-		guchar tag[RSPAMD_MONITORED_TAG_LEN]);
+struct rspamd_monitored *rspamd_monitored_by_tag (struct rspamd_monitored_ctx *ctx,
+												  guchar tag[RSPAMD_MONITORED_TAG_LEN]);
 
 /**
  * Sets `tag_out` to the monitored tag
@@ -92,7 +98,7 @@ struct rspamd_monitored * rspamd_monitored_by_tag (struct rspamd_monitored_ctx *
  * @param tag_out
  */
 void rspamd_monitored_get_tag (struct rspamd_monitored *m,
-		guchar tag_out[RSPAMD_MONITORED_TAG_LEN]);
+							   guchar tag_out[RSPAMD_MONITORED_TAG_LEN]);
 
 /**
  * Return TRUE if monitored object is alive
@@ -134,6 +140,7 @@ gdouble rspamd_monitored_latency (struct rspamd_monitored *m);
  * @param m
  */
 void rspamd_monitored_stop (struct rspamd_monitored *m);
+
 /**
  * Explicitly enable monitored object
  * @param m
@@ -145,5 +152,9 @@ void rspamd_monitored_start (struct rspamd_monitored *m);
  * @param ctx
  */
 void rspamd_monitored_ctx_destroy (struct rspamd_monitored_ctx *ctx);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* SRC_LIBSERVER_MONITORED_H_ */

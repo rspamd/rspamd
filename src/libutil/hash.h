@@ -9,6 +9,10 @@
 
 #include "config.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_lru_hash_s;
 typedef struct rspamd_lru_hash_s rspamd_lru_hash_t;
 struct rspamd_lru_element_s;
@@ -23,9 +27,9 @@ typedef struct rspamd_lru_element_s rspamd_lru_element_t;
  * @param key_equal_func pointer to function for comparing keys
  * @return new rspamd_hash object
  */
-rspamd_lru_hash_t * rspamd_lru_hash_new (gint maxsize,
-										 GDestroyNotify key_destroy,
-										 GDestroyNotify value_destroy);
+rspamd_lru_hash_t *rspamd_lru_hash_new (gint maxsize,
+										GDestroyNotify key_destroy,
+										GDestroyNotify value_destroy);
 
 
 /**
@@ -36,11 +40,11 @@ rspamd_lru_hash_t * rspamd_lru_hash_new (gint maxsize,
  * @param key_equal_func pointer to function for comparing keys
  * @return new rspamd_hash object
  */
-rspamd_lru_hash_t * rspamd_lru_hash_new_full (gint maxsize,
-											  GDestroyNotify key_destroy,
-											  GDestroyNotify value_destroy,
-											  GHashFunc hfunc,
-											  GEqualFunc eqfunc);
+rspamd_lru_hash_t *rspamd_lru_hash_new_full (gint maxsize,
+											 GDestroyNotify key_destroy,
+											 GDestroyNotify value_destroy,
+											 GHashFunc hfunc,
+											 GEqualFunc eqfunc);
 
 /**
  * Lookup item from hash
@@ -60,6 +64,7 @@ gpointer rspamd_lru_hash_lookup (rspamd_lru_hash_t *hash,
  */
 gboolean rspamd_lru_hash_remove (rspamd_lru_hash_t *hash,
 								 gconstpointer key);
+
 /**
  * Insert item in hash
  * @param hash hash object
@@ -88,7 +93,7 @@ void rspamd_lru_hash_destroy (rspamd_lru_hash_t *hash);
  * @return new it or -1 if iteration has been reached over
  */
 int rspamd_lru_hash_foreach (rspamd_lru_hash_t *hash, int it, gpointer *k,
-		gpointer *v);
+							 gpointer *v);
 
 /**
  * Returns number of elements in a hash
@@ -101,4 +106,9 @@ guint rspamd_lru_hash_size (rspamd_lru_hash_t *hash);
  * @param hash hash object
  */
 guint rspamd_lru_hash_capacity (rspamd_lru_hash_t *hash);
+
+#ifdef  __cplusplus
+}
+#endif
+
 #endif

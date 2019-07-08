@@ -20,6 +20,9 @@
 #include "ref.h"
 #include "cryptobox.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
 /*
  * KEX cached data
  */
@@ -32,7 +35,7 @@ struct rspamd_cryptobox_nm {
 /*
  * Generic keypair
  */
-struct rspamd_cryptobox_keypair  {
+struct rspamd_cryptobox_keypair {
 	guchar id[rspamd_cryptobox_HASHBYTES];
 	enum rspamd_cryptobox_keypair_type type;
 	enum rspamd_cryptobox_mode alg;
@@ -127,7 +130,13 @@ struct rspamd_cryptobox_pubkey_sig_25519 {
 };
 
 void rspamd_cryptobox_nm_dtor (struct rspamd_cryptobox_nm *nm);
+
 void rspamd_cryptobox_keypair_dtor (struct rspamd_cryptobox_keypair *kp);
+
 void rspamd_cryptobox_pubkey_dtor (struct rspamd_cryptobox_pubkey *p);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* KEYPAIR_PRIVATE_H_ */

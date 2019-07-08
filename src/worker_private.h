@@ -23,6 +23,10 @@
 #include "libserver/cfg_file.h"
 #include "libserver/rspamd_control.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 static const guint64 rspamd_worker_magic = 0xb48abc69d601dc1dULL;
 
 struct rspamd_lang_detector;
@@ -52,13 +56,14 @@ struct rspamd_worker_ctx {
 	/* Language detector */
 	struct rspamd_lang_detector *lang_det;
 };
+
 /*
  * Init scanning routines
  */
 void rspamd_worker_init_scanner (struct rspamd_worker *worker,
-		struct ev_loop *ev_base,
-		struct rspamd_dns_resolver *resolver,
-		struct rspamd_lang_detector **plang_det);
+								 struct ev_loop *ev_base,
+								 struct rspamd_dns_resolver *resolver,
+								 struct rspamd_lang_detector **plang_det);
 
 /*
  * Called on forced timeout
@@ -69,5 +74,9 @@ void rspamd_task_timeout (EV_P_ ev_timer *w, int revents);
  * Called on unexpected IO error (e.g. ECONNRESET)
  */
 void rspamd_worker_guard_handler (EV_P_ ev_io *w, int revents);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

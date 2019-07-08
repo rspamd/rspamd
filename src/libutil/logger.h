@@ -2,23 +2,28 @@
 #define RSPAMD_LOGGER_H
 
 #include "config.h"
-#include "cfg_file.h"
 #include "radix.h"
 #include "util.h"
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
 
 #ifndef G_LOG_LEVEL_USER_SHIFT
 #define G_LOG_LEVEL_USER_SHIFT 8
 #endif
 
+struct rspamd_config;
+
 enum rspamd_log_flags {
 	RSPAMD_LOG_FORCED = (1 << G_LOG_LEVEL_USER_SHIFT),
 	RSPAMD_LOG_ENCRYPTED = (1 << (G_LOG_LEVEL_USER_SHIFT + 1)),
-	RSPAMD_LOG_LEVEL_MASK = ~(RSPAMD_LOG_FORCED|RSPAMD_LOG_ENCRYPTED)
+	RSPAMD_LOG_LEVEL_MASK = ~(RSPAMD_LOG_FORCED | RSPAMD_LOG_ENCRYPTED)
 };
 
 typedef void (*rspamd_log_func_t) (const gchar *module, const gchar *id,
-		const gchar *function,
-		gint level_flags, const gchar *message, gpointer arg);
+								   const gchar *function,
+								   gint level_flags, const gchar *message, gpointer arg);
 
 typedef struct rspamd_logger_s rspamd_logger_t;
 
@@ -28,9 +33,9 @@ typedef struct rspamd_logger_s rspamd_logger_t;
  * Init logger
  */
 void rspamd_set_logger (struct rspamd_config *cfg,
-		GQuark ptype,
-		rspamd_logger_t **plogger,
-		rspamd_mempool_t *pool);
+						GQuark ptype,
+						rspamd_logger_t **plogger,
+						rspamd_mempool_t *pool);
 
 /**
  * Open log file or initialize other structures
@@ -76,7 +81,7 @@ void rspamd_log_flush (rspamd_logger_t *logger);
  * Log function that is compatible for glib messages
  */
 void rspamd_glib_log_function (const gchar *log_domain,
-		GLogLevelFlags log_level, const gchar *message, gpointer arg);
+							   GLogLevelFlags log_level, const gchar *message, gpointer arg);
 
 /**
  * Log function for printing glib assertions
@@ -87,13 +92,13 @@ void rspamd_glib_printerr_function (const gchar *message);
  * Function with variable number of arguments support
  */
 void rspamd_common_log_function (rspamd_logger_t *logger,
-		gint level_flags,
-		const gchar *module, const gchar *id,
-		const gchar *function, const gchar *fmt, ...);
+								 gint level_flags,
+								 const gchar *module, const gchar *id,
+								 const gchar *function, const gchar *fmt, ...);
 
 void rspamd_common_logv (rspamd_logger_t *logger, gint level_flags,
-		const gchar *module, const gchar *id, const gchar *function,
-		const gchar *fmt, va_list args);
+						 const gchar *module, const gchar *id, const gchar *function,
+						 const gchar *fmt, va_list args);
 
 /**
  * Add new logging module, returns module ID
@@ -106,15 +111,15 @@ guint rspamd_logger_add_debug_module (const gchar *mod);
  * Macro to use for faster debug modules
  */
 #define INIT_LOG_MODULE(mname) \
-	static guint rspamd_##mname##_log_id = (guint)-1; \
-	RSPAMD_CONSTRUCTOR(rspamd_##mname##_log_init) { \
-		rspamd_##mname##_log_id = rspamd_logger_add_debug_module(#mname); \
+    static guint rspamd_##mname##_log_id = (guint)-1; \
+    RSPAMD_CONSTRUCTOR(rspamd_##mname##_log_init) { \
+        rspamd_##mname##_log_id = rspamd_logger_add_debug_module(#mname); \
 }
 
 #define INIT_LOG_MODULE_PUBLIC(mname) \
-	guint rspamd_##mname##_log_id = (guint)-1; \
-	RSPAMD_CONSTRUCTOR(rspamd_##mname##_log_init) { \
-		rspamd_##mname##_log_id = rspamd_logger_add_debug_module(#mname); \
+    guint rspamd_##mname##_log_id = (guint)-1; \
+    RSPAMD_CONSTRUCTOR(rspamd_##mname##_log_init) { \
+        rspamd_##mname##_log_id = rspamd_logger_add_debug_module(#mname); \
 }
 
 void rspamd_logger_configure_modules (GHashTable *mods_enabled);
@@ -123,22 +128,22 @@ void rspamd_logger_configure_modules (GHashTable *mods_enabled);
  * Conditional debug function
  */
 void rspamd_conditional_debug (rspamd_logger_t *logger,
-		rspamd_inet_addr_t *addr, const gchar *module, const gchar *id,
-		const gchar *function, const gchar *fmt, ...);
+							   rspamd_inet_addr_t *addr, const gchar *module, const gchar *id,
+							   const gchar *function, const gchar *fmt, ...);
 
 void rspamd_conditional_debug_fast (rspamd_logger_t *logger,
-		rspamd_inet_addr_t *addr,
-		guint mod_id, const gchar *module, const gchar *id,
-		const gchar *function, const gchar *fmt, ...);
+									rspamd_inet_addr_t *addr,
+									guint mod_id, const gchar *module, const gchar *id,
+									const gchar *function, const gchar *fmt, ...);
 
 /**
  * Function with variable number of arguments support that uses static default logger
  */
 void rspamd_default_log_function (gint level_flags,
-		const gchar *module, const gchar *id,
-		const gchar *function,
-		const gchar *fmt,
-		...);
+								  const gchar *module, const gchar *id,
+								  const gchar *function,
+								  const gchar *fmt,
+								  ...);
 
 /**
  * Varargs version of default log function
@@ -148,10 +153,10 @@ void rspamd_default_log_function (gint level_flags,
  * @param args
  */
 void rspamd_default_logv (gint level_flags,
-		const gchar *module, const gchar *id,
-		const gchar *function,
-		const gchar *fmt,
-		va_list args);
+						  const gchar *module, const gchar *id,
+						  const gchar *function,
+						  const gchar *fmt,
+						  va_list args);
 
 /**
  * Temporary turn on debug
@@ -180,20 +185,20 @@ void rspamd_log_lock (rspamd_logger_t *logger);
  * 2 - info messages
  * 3 - debug messages
  */
-const guint64* rspamd_log_counters (rspamd_logger_t *logger);
+const guint64 *rspamd_log_counters (rspamd_logger_t *logger);
 
 /**
  * Returns errors ring buffer as ucl array
  * @param logger
  * @return
  */
-ucl_object_t * rspamd_log_errorbuf_export (const rspamd_logger_t *logger);
+ucl_object_t *rspamd_log_errorbuf_export (const rspamd_logger_t *logger);
 
 /**
  * Returns the current logger object
  * @return
  */
-rspamd_logger_t* rspamd_logger_get_singleton (void);
+rspamd_logger_t *rspamd_logger_get_singleton (void);
 
 /* Typical functions */
 
@@ -282,7 +287,7 @@ extern guint rspamd_task_log_id;
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_debug_task_check(...)  rspamd_conditional_debug_fast (NULL, \
-		task ? task->from_addr : NULL, \
+        task ? task->from_addr : NULL, \
         rspamd_task_log_id, "task", task ? task->task_pool->tag.uid : NULL, \
         G_STRFUNC, \
         __VA_ARGS__)
@@ -310,7 +315,7 @@ extern guint rspamd_task_log_id;
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_warn_pool_check(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-		pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
+        pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_info_pool_check(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
@@ -318,7 +323,12 @@ extern guint rspamd_task_log_id;
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_debug_pool_check(...)  rspamd_conditional_debug (NULL, NULL, \
-		pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
-		G_STRFUNC, \
-		__VA_ARGS__)
+        pool ? pool->tag.tagname : NULL, pool ? pool->tag.uid : NULL, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
+#ifdef  __cplusplus
+}
+#endif
+
 #endif

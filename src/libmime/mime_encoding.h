@@ -21,6 +21,10 @@
 #include "fstring.h"
 #include <unicode/uchar.h>
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_task;
 struct rspamd_mime_part;
 struct rspamd_mime_text_part;
@@ -32,8 +36,8 @@ struct rspamd_charset_converter;
  * @param in
  * @return
  */
-const gchar * rspamd_mime_detect_charset (const rspamd_ftok_t *in,
-		rspamd_mempool_t *pool);
+const gchar *rspamd_mime_detect_charset (const rspamd_ftok_t *in,
+										 rspamd_mempool_t *pool);
 
 /**
  * Convert text chunk to utf-8. Input encoding is substituted using
@@ -48,9 +52,9 @@ const gchar * rspamd_mime_detect_charset (const rspamd_ftok_t *in,
  * @param err
  * @return
  */
-gchar * rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
-		gchar *input, gsize len, const gchar *in_enc,
-		gsize *olen, GError **err);
+gchar *rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
+								 gchar *input, gsize len, const gchar *in_enc,
+								 gsize *olen, GError **err);
 
 /**
  * Converts data from `in` to `out`, returns `FALSE` if `enc` is not a valid iconv charset
@@ -60,7 +64,7 @@ gchar * rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
  * @return
  */
 gboolean rspamd_mime_to_utf8_byte_array (GByteArray *in,
-		GByteArray *out, const gchar *enc);
+										 GByteArray *out, const gchar *enc);
 
 /**
  * Maybe convert part to utf-8
@@ -69,7 +73,7 @@ gboolean rspamd_mime_to_utf8_byte_array (GByteArray *in,
  * @return
  */
 void rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
-		struct rspamd_mime_text_part *text_part);
+										  struct rspamd_mime_text_part *text_part);
 
 /**
  * Checks utf8 charset and normalize/validate utf8 string
@@ -79,7 +83,7 @@ void rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
  * @return
  */
 gboolean rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
-		gchar *in, gsize len, gboolean content_check);
+										gchar *in, gsize len, gboolean content_check);
 
 /**
  * Ensure that all characters in string are valid utf8 chars or replace them
@@ -125,5 +129,8 @@ rspamd_converter_to_uchars (struct rspamd_charset_converter *cnv,
  */
 const char *rspamd_mime_charset_find_by_content (const gchar *in, gsize inlen);
 
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* SRC_LIBMIME_MIME_ENCODING_H_ */

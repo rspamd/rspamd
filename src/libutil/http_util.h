@@ -19,6 +19,10 @@
 
 #include "config.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /**
  * Parse HTTP date header and return it as time_t
  * @param header HTTP date header
@@ -44,5 +48,9 @@ glong rspamd_http_date_format (gchar *buf, gsize len, time_t time);
  * @param nlen
  */
 void rspamd_http_normalize_path_inplace (gchar *path, guint len, guint *nlen);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

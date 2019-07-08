@@ -10,6 +10,10 @@
 #include "expression.h"
 #include "contrib/libucl/ucl.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_task;
 struct rspamd_config;
 
@@ -34,8 +38,8 @@ struct expression_argument {
 };
 
 
-typedef gboolean (*rspamd_internal_func_t)(struct rspamd_task *,
-		GArray *args, void *user_data);
+typedef gboolean (*rspamd_internal_func_t) (struct rspamd_task *,
+											GArray *args, void *user_data);
 
 
 /**
@@ -44,8 +48,8 @@ typedef gboolean (*rspamd_internal_func_t)(struct rspamd_task *,
  * @param func pointer to function
  */
 void register_expression_function (const gchar *name,
-	rspamd_internal_func_t func,
-	void *user_data);
+								   rspamd_internal_func_t func,
+								   void *user_data);
 
 /**
  * Set global limit of regexp data size to be processed
@@ -53,5 +57,9 @@ void register_expression_function (const gchar *name,
  * @return old limit value
  */
 guint rspamd_mime_expression_set_re_limit (guint limit);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

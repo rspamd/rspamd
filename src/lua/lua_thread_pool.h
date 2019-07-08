@@ -3,10 +3,15 @@
 
 #include <lua.h>
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct thread_entry;
 struct lua_thread_pool;
 
 typedef void (*lua_thread_finish_t) (struct thread_entry *thread, int ret);
+
 typedef void (*lua_thread_error_t) (struct thread_entry *thread, int ret, const char *msg);
 
 struct thread_entry {
@@ -37,7 +42,7 @@ struct lua_callback_state {
  * @return
  */
 struct lua_thread_pool *
-lua_thread_pool_new (lua_State * L);
+lua_thread_pool_new (lua_State *L);
 
 /**
  * Destroys the pool
@@ -80,8 +85,9 @@ void
 lua_thread_pool_return_full (struct lua_thread_pool *pool,
 							 struct thread_entry *thread_entry,
 							 const gchar *loc);
+
 #define lua_thread_pool_return(pool, thread_entry) \
-	lua_thread_pool_return_full (pool, thread_entry, G_STRLOC)
+    lua_thread_pool_return_full (pool, thread_entry, G_STRLOC)
 
 /**
  * Currently running thread. Typically needed in yielding point - to fill-up continuation.
@@ -92,8 +98,10 @@ lua_thread_pool_return_full (struct lua_thread_pool *pool,
 struct thread_entry *
 lua_thread_pool_get_running_entry_full (struct lua_thread_pool *pool,
 										const gchar *loc);
+
 #define lua_thread_pool_get_running_entry(pool) \
-	lua_thread_pool_get_running_entry_full (pool, G_STRLOC)
+    lua_thread_pool_get_running_entry_full (pool, G_STRLOC)
+
 /**
  * Updates currently running thread
  *
@@ -104,8 +112,10 @@ void
 lua_thread_pool_set_running_entry_full (struct lua_thread_pool *pool,
 										struct thread_entry *thread_entry,
 										const gchar *loc);
+
 #define lua_thread_pool_set_running_entry(pool, thread_entry) \
-	lua_thread_pool_set_running_entry_full (pool, thread_entry, G_STRLOC)
+    lua_thread_pool_set_running_entry_full (pool, thread_entry, G_STRLOC)
+
 /**
  * Prevents yielded thread to be used for callback execution. lua_thread_pool_restore_callback() should be called afterwards.
  *
@@ -114,9 +124,11 @@ lua_thread_pool_set_running_entry_full (struct lua_thread_pool *pool,
  */
 void
 lua_thread_pool_prepare_callback_full (struct lua_thread_pool *pool,
-		struct lua_callback_state *cbs, const gchar *loc);
+									   struct lua_callback_state *cbs, const gchar *loc);
+
 #define lua_thread_pool_prepare_callback(pool, cbs) \
-	lua_thread_pool_prepare_callback_full (pool, cbs, G_STRLOC)
+    lua_thread_pool_prepare_callback_full (pool, cbs, G_STRLOC)
+
 /**
  * Restores state after lua_thread_pool_prepare_callback () usage
  *
@@ -124,9 +136,10 @@ lua_thread_pool_prepare_callback_full (struct lua_thread_pool *pool,
  */
 void
 lua_thread_pool_restore_callback_full (struct lua_callback_state *cbs,
-		const gchar *loc);
+									   const gchar *loc);
+
 #define lua_thread_pool_restore_callback(cbs) \
-	lua_thread_pool_restore_callback_full (cbs, G_STRLOC)
+    lua_thread_pool_restore_callback_full (cbs, G_STRLOC)
 
 /**
  * Acts like lua_call but the tread is able to suspend execution.
@@ -139,8 +152,9 @@ void
 lua_thread_call_full (struct thread_entry *thread_entry,
 					  int narg,
 					  const gchar *loc);
+
 #define lua_thread_call(thread_entry, narg) \
-	lua_thread_call_full (thread_entry, narg, G_STRLOC)
+    lua_thread_call_full (thread_entry, narg, G_STRLOC)
 
 /**
  * Yields thread. should be only called in return statement
@@ -150,9 +164,10 @@ lua_thread_call_full (struct thread_entry *thread_entry,
  */
 int
 lua_thread_yield_full (struct thread_entry *thread_entry, int nresults,
-		const gchar *loc);
+					   const gchar *loc);
+
 #define lua_thread_yield(thread_entry, narg) \
-	lua_thread_yield_full (thread_entry, narg, G_STRLOC)
+    lua_thread_yield_full (thread_entry, narg, G_STRLOC)
 
 /**
  * Resumes suspended by lua_yield_thread () thread
@@ -164,8 +179,13 @@ void
 lua_thread_resume_full (struct thread_entry *thread_entry,
 						int narg,
 						const gchar *loc);
+
 #define lua_thread_resume(thread_entry, narg) \
-	lua_thread_resume_full (thread_entry, narg, G_STRLOC)
+    lua_thread_resume_full (thread_entry, narg, G_STRLOC)
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* LUA_THREAD_POOL_H_ */
 

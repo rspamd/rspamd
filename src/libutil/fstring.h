@@ -20,6 +20,10 @@
 #include "mem_pool.h"
 #include <unicode/uchar.h>
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /**
  * Fixed strings library
  * These strings are NOT null-terminated for speed
@@ -47,26 +51,26 @@ typedef struct f_str_unicode_tok {
 /**
  * Create new fixed length string
  */
-rspamd_fstring_t* rspamd_fstring_new (void)
-		G_GNUC_WARN_UNUSED_RESULT;
+rspamd_fstring_t *rspamd_fstring_new (void)
+G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Create new fixed length string with preallocated size
  */
 rspamd_fstring_t *rspamd_fstring_sized_new (gsize initial_size)
-		G_GNUC_WARN_UNUSED_RESULT;
+G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Create new fixed length string and initialize it with the initial data
  */
 rspamd_fstring_t *rspamd_fstring_new_init (const gchar *init, gsize len)
-		G_GNUC_WARN_UNUSED_RESULT;
+G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Assign new value to fixed string
  */
 rspamd_fstring_t *rspamd_fstring_assign (rspamd_fstring_t *str,
-		const gchar *init, gsize len) G_GNUC_WARN_UNUSED_RESULT;
+										 const gchar *init, gsize len) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Free fixed length string
@@ -76,14 +80,14 @@ void rspamd_fstring_free (rspamd_fstring_t *str);
 /**
  * Append data to a fixed length string
  */
-rspamd_fstring_t* rspamd_fstring_append (rspamd_fstring_t *str,
-		const char *in, gsize len) G_GNUC_WARN_UNUSED_RESULT;
+rspamd_fstring_t *rspamd_fstring_append (rspamd_fstring_t *str,
+										 const char *in, gsize len) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Append `len` repeated chars `c` to string `str`
  */
 rspamd_fstring_t *rspamd_fstring_append_chars (rspamd_fstring_t *str,
-		char c, gsize len) G_GNUC_WARN_UNUSED_RESULT;
+											   char c, gsize len) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Erase `len` characters at position `pos`
@@ -96,14 +100,16 @@ void rspamd_fstring_erase (rspamd_fstring_t *str, gsize pos, gsize len);
  * Convert fixed string to a zero terminated string. This string must be
  * freed by a caller
  */
-char * rspamd_fstring_cstr (const rspamd_fstring_t *str)
-		G_GNUC_WARN_UNUSED_RESULT;
+char *rspamd_fstring_cstr (const rspamd_fstring_t *str)
+G_GNUC_WARN_UNUSED_RESULT;
+
 /**
  * Convert fixed string usign ftok_t to a zero terminated string. This string must be
  * freed by a caller
  */
-char * rspamd_ftok_cstr (const rspamd_ftok_t *str)
-		G_GNUC_WARN_UNUSED_RESULT;
+char *rspamd_ftok_cstr (const rspamd_ftok_t *str)
+G_GNUC_WARN_UNUSED_RESULT;
+
 /*
  * Return fast hash value for fixed string converted to lowercase
  */
@@ -113,31 +119,31 @@ guint32 rspamd_fstrhash_lc (const rspamd_ftok_t *str, gboolean is_utf);
  * Return true if two strings are equal
  */
 gboolean rspamd_fstring_equal (const rspamd_fstring_t *s1,
-		const rspamd_fstring_t *s2);
+							   const rspamd_fstring_t *s2);
 
 /**
  * Compare two fixed strings ignoring case
  */
 gint rspamd_fstring_casecmp (const rspamd_fstring_t *s1,
-		const rspamd_fstring_t *s2);
+							 const rspamd_fstring_t *s2);
 
 /**
  * Compare two fixed strings
  */
 gint rspamd_fstring_cmp (const rspamd_fstring_t *s1,
-		const rspamd_fstring_t *s2);
+						 const rspamd_fstring_t *s2);
 
 /**
  * Compare two fixed tokens ignoring case
  */
 gint rspamd_ftok_casecmp (const rspamd_ftok_t *s1,
-		const rspamd_ftok_t *s2);
+						  const rspamd_ftok_t *s2);
 
 /**
  * Compare two fixed tokens
  */
 gint rspamd_ftok_cmp (const rspamd_ftok_t *s1,
-		const rspamd_ftok_t *s2);
+					  const rspamd_ftok_t *s2);
 
 /**
  * Returns true if `s1` starts with `s2`
@@ -152,7 +158,7 @@ gboolean rspamd_ftok_starts_with (const rspamd_ftok_t *s1,
  * Return TRUE if ftok is equal to specified C string
  */
 gboolean rspamd_ftok_cstr_equal (const rspamd_ftok_t *s,
-		const gchar *pat, gboolean icase);
+								 const gchar *pat, gboolean icase);
 
 /**
  * Free fstring_t that is mapped to ftok_t
@@ -184,8 +190,8 @@ gsize rspamd_fstring_suggest_size (gsize len, gsize allocated, gsize needed_len)
  * @param needed_len
  * @return
  */
-rspamd_fstring_t * rspamd_fstring_grow (rspamd_fstring_t *str,
-		gsize needed_len) G_GNUC_WARN_UNUSED_RESULT;
+rspamd_fstring_t *rspamd_fstring_grow (rspamd_fstring_t *str,
+									   gsize needed_len) G_GNUC_WARN_UNUSED_RESULT;
 
 /**
  * Copies ftok to zero terminated string (must be freed using g_free)
@@ -203,14 +209,17 @@ gchar *rspamd_fstringdup (const rspamd_fstring_t *src) G_GNUC_WARN_UNUSED_RESULT
 
 #define RSPAMD_FTOK_ASSIGN(t, lit) do { (t)->begin = (lit); (t)->len = sizeof(lit) - 1; } while (0)
 #define RSPAMD_FTOK_FROM_STR(t, str) do { \
-	if (G_LIKELY(str)) { \
-		(t)->begin = (const char*)(str); \
-		(t)->len = strlen (str); \
-	} \
-	else { \
-		(t)->begin = NULL; \
-		(t)->len = 0; \
-	} \
+    if (G_LIKELY(str)) { \
+        (t)->begin = (const char*)(str); \
+        (t)->len = strlen (str); \
+    } \
+    else { \
+        (t)->begin = NULL; \
+        (t)->len = 0; \
+    } \
 } while (0)
 
+#ifdef  __cplusplus
+}
+#endif
 #endif

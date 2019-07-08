@@ -6,6 +6,10 @@
 #include "shingles.h"
 #include "cryptobox.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 #define RSPAMD_FUZZY_VERSION 4
 #define RSPAMD_FUZZY_KEYLEN 8
 
@@ -102,5 +106,9 @@ RSPAMD_PACKED(fuzzy_peer_cmd) {
 		struct rspamd_fuzzy_shingle_cmd shingle;
 	} cmd;
 };
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

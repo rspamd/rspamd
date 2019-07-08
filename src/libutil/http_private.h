@@ -27,6 +27,10 @@
 #define HASH_CASELESS
 #include "uthash_strcase.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /**
  * HTTP header structure
  */
@@ -84,9 +88,10 @@ struct rspamd_keepalive_hash_key {
 	GQueue conns;
 };
 
-gint32 rspamd_keep_alive_key_hash (struct rspamd_keepalive_hash_key* k);
-bool rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key* k1,
-								  struct rspamd_keepalive_hash_key* k2);
+gint32 rspamd_keep_alive_key_hash (struct rspamd_keepalive_hash_key *k);
+
+bool rspamd_keep_alive_key_equal (struct rspamd_keepalive_hash_key *k1,
+								  struct rspamd_keepalive_hash_key *k2);
 
 KHASH_INIT (rspamd_keep_alive_hash, struct rspamd_keepalive_hash_key *,
 		char, 0, rspamd_keep_alive_key_hash, rspamd_keep_alive_key_equal);
@@ -106,10 +111,16 @@ struct rspamd_http_context {
 };
 
 #define HTTP_ERROR http_error_quark ()
+
 GQuark http_error_quark (void);
 
 void rspamd_http_message_storage_cleanup (struct rspamd_http_message *msg);
+
 gboolean rspamd_http_message_grow_body (struct rspamd_http_message *msg,
 										gsize len);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* SRC_LIBUTIL_HTTP_PRIVATE_H_ */

@@ -10,6 +10,10 @@
 #include "rspamd_symcache.h"
 #include "task.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_task;
 struct rspamd_settings;
 struct rspamd_classifier_config;
@@ -67,14 +71,14 @@ struct kh_rspamd_symbols_group_hash_s;
 
 
 struct rspamd_metric_result {
-	double score;									/**< total score							*/
-	double grow_factor;								/**< current grow factor					*/
+	double score;                                    /**< total score							*/
+	double grow_factor;                                /**< current grow factor					*/
 	struct rspamd_passthrough_result *passthrough_result;
 	guint npositive;
 	guint nnegative;
 	double positive_score;
 	double negative_score;
-	struct kh_rspamd_symbols_hash_s *symbols;			/**< symbols of metric						*/
+	struct kh_rspamd_symbols_hash_s *symbols;            /**< symbols of metric						*/
 	struct kh_rspamd_symbols_group_hash_s *sym_groups; /**< groups of symbols						*/
 	struct rspamd_action_result *actions_limits;
 	guint nactions;
@@ -85,7 +89,7 @@ struct rspamd_metric_result {
  * @param task task object
  * @return metric result or NULL if metric `name` has not been found
  */
-struct rspamd_metric_result * rspamd_create_metric_result (struct rspamd_task *task);
+struct rspamd_metric_result *rspamd_create_metric_result (struct rspamd_task *task);
 
 /**
  * Adds a new passthrough result to a task
@@ -118,16 +122,16 @@ enum rspamd_symbol_insert_flags {
  * @param weight numeric weight for symbol
  * @param opts list of symbol's options
  */
-struct rspamd_symbol_result* rspamd_task_insert_result_full (struct rspamd_task *task,
-	const gchar *symbol,
-	double weight,
-	const gchar *opts,
-	enum rspamd_symbol_insert_flags flags);
+struct rspamd_symbol_result *rspamd_task_insert_result_full (struct rspamd_task *task,
+															 const gchar *symbol,
+															 double weight,
+															 const gchar *opts,
+															 enum rspamd_symbol_insert_flags flags);
 
 #define rspamd_task_insert_result_single(task, symbol, flag, opts) \
-	rspamd_task_insert_result_full (task, symbol, flag, opts, RSPAMD_SYMBOL_INSERT_SINGLE)
+    rspamd_task_insert_result_full (task, symbol, flag, opts, RSPAMD_SYMBOL_INSERT_SINGLE)
 #define rspamd_task_insert_result(task, symbol, flag, opts) \
-	rspamd_task_insert_result_full (task, symbol, flag, opts, RSPAMD_SYMBOL_INSERT_DEFAULT)
+    rspamd_task_insert_result_full (task, symbol, flag, opts, RSPAMD_SYMBOL_INSERT_DEFAULT)
 
 
 /**
@@ -137,7 +141,7 @@ struct rspamd_symbol_result* rspamd_task_insert_result_full (struct rspamd_task 
  * @param opt
  */
 gboolean rspamd_task_add_result_option (struct rspamd_task *task,
-		struct rspamd_symbol_result *s, const gchar *opt);
+										struct rspamd_symbol_result *s, const gchar *opt);
 
 /**
  * Finds symbol result
@@ -145,7 +149,7 @@ gboolean rspamd_task_add_result_option (struct rspamd_task *task,
  * @param sym
  * @return
  */
-struct rspamd_symbol_result* rspamd_task_find_symbol_result (
+struct rspamd_symbol_result *rspamd_task_find_symbol_result (
 		struct rspamd_task *task, const char *sym);
 
 /**
@@ -166,8 +170,8 @@ void rspamd_task_symbol_result_foreach (struct rspamd_task *task,
  * @return result metric weight
  */
 double rspamd_factor_consolidation_func (struct rspamd_task *task,
-	const gchar *metric_name,
-	const gchar *unused);
+										 const gchar *metric_name,
+										 const gchar *unused);
 
 
 /**
@@ -175,6 +179,10 @@ double rspamd_factor_consolidation_func (struct rspamd_task *task,
  * @param task
  * @return
  */
-struct rspamd_action* rspamd_check_action_metric (struct rspamd_task *task);
+struct rspamd_action *rspamd_check_action_metric (struct rspamd_task *task);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

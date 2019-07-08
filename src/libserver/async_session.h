@@ -19,11 +19,16 @@
 #include "config.h"
 #include "mem_pool.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_async_event;
 struct rspamd_async_session;
 
-typedef void (*event_finalizer_t)(gpointer ud);
-typedef gboolean (*session_finalizer_t)(gpointer user_data);
+typedef void (*event_finalizer_t) (gpointer ud);
+
+typedef gboolean (*session_finalizer_t) (gpointer user_data);
 
 /**
  * Make new async session
@@ -34,9 +39,9 @@ typedef gboolean (*session_finalizer_t)(gpointer user_data);
  * @param user_data abstract user data
  * @return
  */
-struct rspamd_async_session * rspamd_session_create (rspamd_mempool_t *pool,
-	session_finalizer_t fin, event_finalizer_t restore,
-	event_finalizer_t cleanup, gpointer user_data);
+struct rspamd_async_session *rspamd_session_create (rspamd_mempool_t *pool,
+													session_finalizer_t fin, event_finalizer_t restore,
+													event_finalizer_t cleanup, gpointer user_data);
 
 /**
  * Insert new event to the session
@@ -47,12 +52,13 @@ struct rspamd_async_session * rspamd_session_create (rspamd_mempool_t *pool,
  */
 struct rspamd_async_event *
 rspamd_session_add_event_full (struct rspamd_async_session *session,
-						  event_finalizer_t fin,
-						  gpointer user_data,
-						  const gchar *subsystem,
-						  const gchar *loc);
+							   event_finalizer_t fin,
+							   gpointer user_data,
+							   const gchar *subsystem,
+							   const gchar *loc);
+
 #define rspamd_session_add_event(session, fin, user_data, subsystem) \
-	rspamd_session_add_event_full(session, fin, user_data, subsystem, G_STRLOC)
+    rspamd_session_add_event_full(session, fin, user_data, subsystem, G_STRLOC)
 
 /**
  * Remove normal event
@@ -61,11 +67,12 @@ rspamd_session_add_event_full (struct rspamd_async_session *session,
  * @param ud user data object
  */
 void rspamd_session_remove_event_full (struct rspamd_async_session *session,
-								  event_finalizer_t fin,
-								  gpointer ud,
-								  const gchar *loc);
+									   event_finalizer_t fin,
+									   gpointer ud,
+									   const gchar *loc);
+
 #define rspamd_session_remove_event(session, fin, user_data) \
-	rspamd_session_remove_event_full(session, fin, user_data, G_STRLOC)
+    rspamd_session_remove_event_full(session, fin, user_data, G_STRLOC)
 
 /**
  * Must be called at the end of session, it calls fin functions for all non-forced callbacks
@@ -83,7 +90,7 @@ void rspamd_session_cleanup (struct rspamd_async_session *session);
  * @param session
  * @return
  */
-rspamd_mempool_t * rspamd_session_mempool (struct rspamd_async_session *session);
+rspamd_mempool_t *rspamd_session_mempool (struct rspamd_async_session *session);
 
 /**
  * Check session for events pending and call fin callback if no events are pending
@@ -106,5 +113,9 @@ guint rspamd_session_events_pending (struct rspamd_async_session *session);
  * @return
  */
 gboolean rspamd_session_blocked (struct rspamd_async_session *s);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /*RSPAMD_ASYNC_SESSION_H*/

@@ -22,16 +22,23 @@
 #include "fstring.h"
 #include "ref.h"
 
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_http_connection;
 
-enum rspamd_http_message_type { HTTP_REQUEST = 0, HTTP_RESPONSE };
+enum rspamd_http_message_type {
+	HTTP_REQUEST = 0, HTTP_RESPONSE
+};
 
 /**
  * Extract the current message from a connection to deal with separately
  * @param conn
  * @return
  */
-struct rspamd_http_message * rspamd_http_connection_steal_msg (
+struct rspamd_http_message *rspamd_http_connection_steal_msg (
 		struct rspamd_http_connection *conn);
 
 /**
@@ -39,7 +46,7 @@ struct rspamd_http_message * rspamd_http_connection_steal_msg (
  * @param conn
  * @return
  */
-struct rspamd_http_message * rspamd_http_connection_copy_msg (
+struct rspamd_http_message *rspamd_http_connection_copy_msg (
 		struct rspamd_http_message *msg, GError **err);
 
 /**
@@ -47,14 +54,15 @@ struct rspamd_http_message * rspamd_http_connection_copy_msg (
  * @param type request or response
  * @return new http message
  */
-struct rspamd_http_message * rspamd_http_new_message (enum rspamd_http_message_type type);
+struct rspamd_http_message *rspamd_http_new_message (enum rspamd_http_message_type type);
 
 /**
  * Increase refcount number for an HTTP message
  * @param msg message to use
  * @return
  */
-struct rspamd_http_message * rspamd_http_message_ref (struct rspamd_http_message *msg);
+struct rspamd_http_message *rspamd_http_message_ref (struct rspamd_http_message *msg);
+
 /**
  * Decrease number of refcounts for http message
  * @param msg
@@ -68,12 +76,13 @@ void rspamd_http_message_unref (struct rspamd_http_message *msg);
  */
 void rspamd_http_message_set_peer_key (struct rspamd_http_message *msg,
 									   struct rspamd_cryptobox_pubkey *pk);
+
 /**
  * Create HTTP message from URL
  * @param url
  * @return new message or NULL
  */
-struct rspamd_http_message* rspamd_http_message_from_url (const gchar *url);
+struct rspamd_http_message *rspamd_http_message_from_url (const gchar *url);
 
 /**
  * Returns body for a message
@@ -101,6 +110,7 @@ gboolean rspamd_http_message_set_body (struct rspamd_http_message *msg,
  */
 void rspamd_http_message_set_method (struct rspamd_http_message *msg,
 									 const gchar *method);
+
 /**
  * Maps fd as message's body
  * @param msg
@@ -162,7 +172,7 @@ void rspamd_http_message_add_header_fstr (struct rspamd_http_message *msg,
  * @param msg message
  * @param name name of header
  */
-const rspamd_ftok_t * rspamd_http_message_find_header (
+const rspamd_ftok_t *rspamd_http_message_find_header (
 		struct rspamd_http_message *msg,
 		const gchar *name);
 
@@ -172,7 +182,7 @@ const rspamd_ftok_t * rspamd_http_message_find_header (
  * @param name
  * @return list of rspamd_ftok_t * with values
  */
-GPtrArray* rspamd_http_message_find_header_multiple (
+GPtrArray *rspamd_http_message_find_header_multiple (
 		struct rspamd_http_message *msg,
 		const gchar *name);
 
@@ -198,13 +208,14 @@ void rspamd_http_message_free (struct rspamd_http_message *msg);
  * @return new GHashTable which maps rspamd_ftok_t* to rspamd_ftok_t*
  * (table must be freed by a caller)
  */
-GHashTable* rspamd_http_message_parse_query (struct rspamd_http_message *msg);
+GHashTable *rspamd_http_message_parse_query (struct rspamd_http_message *msg);
 
 /**
  * Increase refcount for shared file (if any) to prevent early memory unlinking
  * @param msg
  */
-struct rspamd_storage_shmem* rspamd_http_message_shmem_ref (struct rspamd_http_message *msg);
+struct rspamd_storage_shmem *rspamd_http_message_shmem_ref (struct rspamd_http_message *msg);
+
 /**
  * Decrease external ref for shmem segment associated with a message
  * @param msg
@@ -217,5 +228,9 @@ void rspamd_http_message_shmem_unref (struct rspamd_storage_shmem *p);
  * @return
  */
 guint rspamd_http_message_get_flags (struct rspamd_http_message *msg);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

@@ -18,6 +18,10 @@
 
 #include "config.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_task;
 
 /**
@@ -51,5 +55,9 @@ struct rspamd_composite {
 void rspamd_make_composites (struct rspamd_task *task);
 
 enum rspamd_composite_policy rspamd_composite_policy_from_str (const gchar *string);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* SRC_LIBSERVER_COMPOSITES_H_ */

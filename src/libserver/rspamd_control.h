@@ -20,6 +20,10 @@
 #include "mem_pool.h"
 #include "contrib/libev/ev.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_main;
 struct rspamd_worker;
 
@@ -179,42 +183,42 @@ struct rspamd_srv_reply {
 };
 
 typedef gboolean (*rspamd_worker_control_handler) (struct rspamd_main *rspamd_main,
-		struct rspamd_worker *worker,
-		gint fd,
-		gint attached_fd,
-		struct rspamd_control_command *cmd,
-		gpointer ud);
+												   struct rspamd_worker *worker,
+												   gint fd,
+												   gint attached_fd,
+												   struct rspamd_control_command *cmd,
+												   gpointer ud);
 
 typedef void (*rspamd_srv_reply_handler) (struct rspamd_worker *worker,
-		struct rspamd_srv_reply *rep, gint rep_fd,
-		gpointer ud);
+										  struct rspamd_srv_reply *rep, gint rep_fd,
+										  gpointer ud);
 
 /**
  * Process client socket connection
  */
 void rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
-		gint fd, rspamd_inet_addr_t *addr);
+										   gint fd, rspamd_inet_addr_t *addr);
 
 /**
  * Register default handlers for a worker
  */
 void rspamd_control_worker_add_default_handler (struct rspamd_worker *worker,
-		struct ev_loop *ev_base);
+												struct ev_loop *ev_base);
 
 /**
  * Register custom handler for a specific control command for this worker
  */
 void rspamd_control_worker_add_cmd_handler (struct rspamd_worker *worker,
-		enum rspamd_control_type type,
-		rspamd_worker_control_handler handler,
-		gpointer ud);
+											enum rspamd_control_type type,
+											rspamd_worker_control_handler handler,
+											gpointer ud);
 
 /**
  * Start watching on srv pipe
  */
 void rspamd_srv_start_watching (struct rspamd_main *srv,
-		struct rspamd_worker *worker,
-		struct ev_loop *ev_base);
+								struct rspamd_worker *worker,
+								struct ev_loop *ev_base);
 
 
 /**
@@ -222,9 +226,14 @@ void rspamd_srv_start_watching (struct rspamd_main *srv,
  * end
  */
 void rspamd_srv_send_command (struct rspamd_worker *worker,
-		struct ev_loop *ev_base,
-		struct rspamd_srv_command *cmd,
-		gint attached_fd,
-		rspamd_srv_reply_handler handler,
-		gpointer ud);
+							  struct ev_loop *ev_base,
+							  struct rspamd_srv_command *cmd,
+							  gint attached_fd,
+							  rspamd_srv_reply_handler handler,
+							  gpointer ud);
+
+#ifdef  __cplusplus
+}
+#endif
+
 #endif

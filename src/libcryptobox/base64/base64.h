@@ -18,6 +18,14 @@
 
 #include "config.h"
 
-const char* base64_load (void);
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
+const char *base64_load (void);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* SRC_LIBCRYPTOBOX_BASE64_BASE64_H_ */

@@ -33,6 +33,10 @@
 
 #include "contrib/libev/ev.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 enum rspamd_http_connection_type {
 	RSPAMD_HTTP_SERVER,
 	RSPAMD_HTTP_CLIENT
@@ -88,15 +92,15 @@ enum rspamd_http_options {
 };
 
 typedef int (*rspamd_http_body_handler_t) (struct rspamd_http_connection *conn,
-		struct rspamd_http_message *msg,
-		const gchar *chunk,
-		gsize len);
+										   struct rspamd_http_message *msg,
+										   const gchar *chunk,
+										   gsize len);
 
 typedef void (*rspamd_http_error_handler_t) (struct rspamd_http_connection *conn,
-		GError *err);
+											 GError *err);
 
 typedef int (*rspamd_http_finish_handler_t) (struct rspamd_http_connection *conn,
-		struct rspamd_http_message *msg);
+											 struct rspamd_http_message *msg);
 
 /**
  * HTTP connection structure
@@ -195,14 +199,14 @@ struct rspamd_http_connection *rspamd_http_connection_new_client_socket (
  * @param key opaque key structure
  */
 void rspamd_http_connection_set_key (struct rspamd_http_connection *conn,
-		struct rspamd_cryptobox_keypair *key);
+									 struct rspamd_cryptobox_keypair *key);
 
 /**
  * Get peer's public key
  * @param conn connection structure
  * @return pubkey structure or NULL
  */
-const struct rspamd_cryptobox_pubkey* rspamd_http_connection_get_peer_key (
+const struct rspamd_cryptobox_pubkey *rspamd_http_connection_get_peer_key (
 		struct rspamd_http_connection *conn);
 
 /**
@@ -263,8 +267,7 @@ void rspamd_http_connection_free (struct rspamd_http_connection *conn);
  * @return
  */
 static inline struct rspamd_http_connection *
-rspamd_http_connection_ref (struct rspamd_http_connection *conn)
-{
+rspamd_http_connection_ref (struct rspamd_http_connection *conn) {
 	conn->ref++;
 	return conn;
 }
@@ -274,8 +277,7 @@ rspamd_http_connection_ref (struct rspamd_http_connection *conn)
  * @param conn
  */
 static void
-rspamd_http_connection_unref (struct rspamd_http_connection *conn)
-{
+rspamd_http_connection_unref (struct rspamd_http_connection *conn) {
 	if (--conn->ref <= 0) {
 		rspamd_http_connection_free (conn);
 	}
@@ -292,8 +294,12 @@ void rspamd_http_connection_reset (struct rspamd_http_connection *conn);
  * @param sz
  */
 void rspamd_http_connection_set_max_size (struct rspamd_http_connection *conn,
-		gsize sz);
+										  gsize sz);
 
 void rspamd_http_connection_disable_encryption (struct rspamd_http_connection *conn);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* HTTP_H_ */

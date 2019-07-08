@@ -8,6 +8,10 @@
 #include "config.h"
 #include "mem_pool.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /*
  * HTML content flags
  */
@@ -130,13 +134,13 @@ struct html_content {
  */
 guint rspamd_html_decode_entitles_inplace (gchar *s, gsize len);
 
-GByteArray* rspamd_html_process_part (rspamd_mempool_t *pool,
-		struct html_content *hc,
-		GByteArray *in);
+GByteArray *rspamd_html_process_part (rspamd_mempool_t *pool,
+									  struct html_content *hc,
+									  GByteArray *in);
 
-GByteArray* rspamd_html_process_part_full (rspamd_mempool_t *pool,
-		struct html_content *hc,
-		GByteArray *in, GList **exceptions, GHashTable *urls, GHashTable *emails);
+GByteArray *rspamd_html_process_part_full (rspamd_mempool_t *pool,
+										   struct html_content *hc,
+										   GByteArray *in, GList **exceptions, GHashTable *urls, GHashTable *emails);
 
 /*
  * Returns true if a specified tag has been seen in a part
@@ -148,7 +152,7 @@ gboolean rspamd_html_tag_seen (struct html_content *hc, const gchar *tagname);
  * @param id
  * @return
  */
-const gchar* rspamd_html_tag_by_id (gint id);
+const gchar *rspamd_html_tag_by_id (gint id);
 
 /**
  * Returns HTML tag id by name
@@ -165,8 +169,12 @@ gint rspamd_html_tag_by_name (const gchar *name);
  * @param comp
  * @return
  */
-struct rspamd_url * rspamd_html_process_url (rspamd_mempool_t *pool,
-		const gchar *start, guint len,
-		struct html_tag_component *comp);
+struct rspamd_url *rspamd_html_process_url (rspamd_mempool_t *pool,
+											const gchar *start, guint len,
+											struct html_tag_component *comp);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

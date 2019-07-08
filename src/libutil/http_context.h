@@ -23,6 +23,10 @@
 
 #include "contrib/libev/ev.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_http_context;
 struct rspamd_config;
 struct rspamd_http_message;
@@ -44,20 +48,21 @@ struct rspamd_http_context_cfg {
  * @param ev_base event base
  * @return new context used for both client and server HTTP connections
  */
-struct rspamd_http_context* rspamd_http_context_create (struct rspamd_config *cfg,
-		struct ev_loop *ev_base, struct upstream_ctx *ctx);
+struct rspamd_http_context *rspamd_http_context_create (struct rspamd_config *cfg,
+														struct ev_loop *ev_base, struct upstream_ctx *ctx);
 
-struct rspamd_http_context* rspamd_http_context_create_config (
+struct rspamd_http_context *rspamd_http_context_create_config (
 		struct rspamd_http_context_cfg *cfg,
 		struct ev_loop *ev_base,
 		struct upstream_ctx *ctx);
+
 /**
  * Destroys context
  * @param ctx
  */
 void rspamd_http_context_free (struct rspamd_http_context *ctx);
 
-struct rspamd_http_context* rspamd_http_context_default (void);
+struct rspamd_http_context *rspamd_http_context_default (void);
 
 /**
  * Returns preserved keepalive connection if it's available.
@@ -67,7 +72,7 @@ struct rspamd_http_context* rspamd_http_context_default (void);
  * @param host
  * @return
  */
-struct rspamd_http_connection* rspamd_http_context_check_keepalive (
+struct rspamd_http_connection *rspamd_http_context_check_keepalive (
 		struct rspamd_http_context *ctx, const rspamd_inet_addr_t *addr,
 		const gchar *host);
 
@@ -83,6 +88,7 @@ void rspamd_http_context_prepare_keepalive (struct rspamd_http_context *ctx,
 											struct rspamd_http_connection *conn,
 											const rspamd_inet_addr_t *addr,
 											const gchar *host);
+
 /**
  * Pushes a connection to keepalive pool after client request is finished,
  * keepalive key *must* be prepared before using of this function
@@ -94,5 +100,9 @@ void rspamd_http_context_push_keepalive (struct rspamd_http_context *ctx,
 										 struct rspamd_http_connection *conn,
 										 struct rspamd_http_message *msg,
 										 struct ev_loop *ev_base);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

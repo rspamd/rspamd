@@ -16,6 +16,7 @@
 #include "config.h"
 #include "rrd.h"
 #include "util.h"
+#include "cfg_file.h"
 #include "logger.h"
 #include "unix-std.h"
 #include "cryptobox.h"

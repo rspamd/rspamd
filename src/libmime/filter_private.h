@@ -8,6 +8,10 @@
 #include "filter.h"
 #include "contrib/libucl/khash.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 KHASH_MAP_INIT_STR (rspamd_options_hash, struct rspamd_symbol_option *);
 /**
  * Result of metric processing
@@ -27,5 +31,9 @@ KHASH_INIT (rspamd_symbols_group_hash,
 		1,
 		rspamd_ptr_hash_func,
 		rspamd_ptr_equal_func);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif //RSPAMD_FILTER_PRIVATE_H

@@ -26,6 +26,10 @@
 #define RRD_VERSION   "0003"
 #define RRD_FLOAT_COOKIE  ((double)8.642135E130)
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 typedef union {
 	unsigned long lv;
 	double dv;
@@ -139,41 +143,41 @@ enum rrd_cdp_param {
 	CDP_val = 0,
 	/* the base_interval is always an
 	 * average */
-	CDP_unkn_pdp_cnt,
+			CDP_unkn_pdp_cnt,
 	/* how many unknown pdp were
 	 * integrated. This and the cdp_xff
 	 * will decide if this is going to
 	 * be a UNKNOWN or a valid value */
-	CDP_hw_intercept,
+			CDP_hw_intercept,
 	/* Current intercept coefficient for the Holt-Winters
 	 * prediction algorithm. */
-	CDP_hw_last_intercept,
+			CDP_hw_last_intercept,
 	/* Last iteration intercept coefficient for the Holt-Winters
 	 * prediction algorihtm. */
-	CDP_hw_slope,
+			CDP_hw_slope,
 	/* Current slope coefficient for the Holt-Winters
 	 * prediction algorithm. */
-	CDP_hw_last_slope,
+			CDP_hw_last_slope,
 	/* Last iteration slope coeffient. */
-	CDP_null_count,
+			CDP_null_count,
 	/* Number of sequential Unknown (DNAN) values + 1 preceding
 	 * the current prediction.
 	 * */
-	CDP_last_null_count,
+			CDP_last_null_count,
 	/* Last iteration count of Unknown (DNAN) values. */
-	CDP_primary_val = 8,
+			CDP_primary_val = 8,
 	/* optimization for bulk updates: the value of the first CDP
 	 * value to be written in the bulk update. */
-	CDP_secondary_val = 9,
+			CDP_secondary_val = 9,
 	/* optimization for bulk updates: the value of subsequent
 	 * CDP values to be written in the bulk update. */
-	CDP_hw_seasonal = CDP_hw_intercept,
+			CDP_hw_seasonal = CDP_hw_intercept,
 	/* Current seasonal coefficient for the Holt-Winters
 	 * prediction algorithm. This is stored in CDP prep to avoid
 	 * redundant seek operations. */
-	CDP_hw_last_seasonal = CDP_hw_last_intercept,
+			CDP_hw_last_seasonal = CDP_hw_last_intercept,
 	/* Last iteration seasonal coefficient. */
-	CDP_seasonal_deviation = CDP_hw_intercept,
+			CDP_seasonal_deviation = CDP_hw_intercept,
 	CDP_last_seasonal_deviation = CDP_hw_last_intercept,
 	CDP_init_seasonal = CDP_null_count
 };
@@ -200,7 +204,7 @@ struct rspamd_rrd_file {
 	gdouble *rrd_value; /* list of rrd values */
 
 	gchar *filename;
-	guint8 * map; /* mmapped area */
+	guint8 *map; /* mmapped area */
 	gsize size; /* its size */
 	gboolean finalized;
 	gchar *id;
@@ -216,7 +220,7 @@ struct rspamd_rrd_file {
  * @param err error pointer
  * @return rrd file structure
  */
-struct rspamd_rrd_file * rspamd_rrd_open (const gchar *filename, GError **err);
+struct rspamd_rrd_file *rspamd_rrd_open (const gchar *filename, GError **err);
 
 /**
  * Create basic header for rrd file
@@ -228,11 +232,11 @@ struct rspamd_rrd_file * rspamd_rrd_open (const gchar *filename, GError **err);
  * @return TRUE if file has been created
  */
 struct rspamd_rrd_file *rspamd_rrd_create (const gchar *filename,
-		gulong ds_count,
-		gulong rra_count,
-		gulong pdp_step,
-		gdouble initial_ticks,
-		GError **err);
+										   gulong ds_count,
+										   gulong rra_count,
+										   gulong pdp_step,
+										   gdouble initial_ticks,
+										   GError **err);
 
 /**
  * Add data sources to rrd file
@@ -241,9 +245,9 @@ struct rspamd_rrd_file *rspamd_rrd_create (const gchar *filename,
  * @param err error pointer
  * @return TRUE if data sources were added
  */
-gboolean rspamd_rrd_add_ds (struct rspamd_rrd_file * file,
-	GArray *ds,
-	GError **err);
+gboolean rspamd_rrd_add_ds (struct rspamd_rrd_file *file,
+							GArray *ds,
+							GError **err);
 
 /**
  * Add round robin archives to rrd file
@@ -253,8 +257,8 @@ gboolean rspamd_rrd_add_ds (struct rspamd_rrd_file * file,
  * @return TRUE if archives were added
  */
 gboolean rspamd_rrd_add_rra (struct rspamd_rrd_file *file,
-	GArray *rra,
-	GError **err);
+							 GArray *rra,
+							 GError **err);
 
 /**
  * Finalize rrd file header and initialize all RRA in the file
@@ -272,16 +276,16 @@ gboolean rspamd_rrd_finalize (struct rspamd_rrd_file *file, GError **err);
  * @return TRUE if a row has been added
  */
 gboolean rspamd_rrd_add_record (struct rspamd_rrd_file *file,
-		GArray *points,
-		gdouble ticks,
-		GError **err);
+								GArray *points,
+								gdouble ticks,
+								GError **err);
 
 /**
  * Close rrd file
  * @param file
  * @return
  */
-gint rspamd_rrd_close (struct rspamd_rrd_file * file);
+gint rspamd_rrd_close (struct rspamd_rrd_file *file);
 
 /*
  * Conversion functions
@@ -291,18 +295,21 @@ gint rspamd_rrd_close (struct rspamd_rrd_file * file);
  * Convert rrd dst type from string to numeric value
  */
 enum rrd_dst_type rrd_dst_from_string (const gchar *str);
+
 /**
  * Convert numeric presentation of dst to string
  */
-const gchar * rrd_dst_to_string (enum rrd_dst_type type);
+const gchar *rrd_dst_to_string (enum rrd_dst_type type);
+
 /**
  * Convert rrd consolidation function type from string to numeric value
  */
 enum rrd_cf_type rrd_cf_from_string (const gchar *str);
+
 /**
  * Convert numeric presentation of cf to string
  */
-const gchar * rrd_cf_to_string (enum rrd_cf_type type);
+const gchar *rrd_cf_to_string (enum rrd_cf_type type);
 
 /* Default RRA and DS */
 
@@ -310,23 +317,23 @@ const gchar * rrd_cf_to_string (enum rrd_cf_type type);
  * Create default RRA
  */
 void rrd_make_default_rra (const gchar *cf_name,
-	gulong pdp_cnt,
-	gulong rows,
-	struct rrd_rra_def *rra);
+						   gulong pdp_cnt,
+						   gulong rows,
+						   struct rrd_rra_def *rra);
 
 /**
  * Create default DS
  */
 void rrd_make_default_ds (const gchar *name,
-		const gchar *type,
-		gulong pdp_step,
-		struct rrd_ds_def *ds);
+						  const gchar *type,
+						  gulong pdp_step,
+						  struct rrd_ds_def *ds);
 
 /**
  * Open or create the default rspamd rrd file
  */
 struct rspamd_rrd_file *rspamd_rrd_file_default (const gchar *path,
-		GError **err);
+												 GError **err);
 
 /**
  * Returned by querying rrd database
@@ -346,6 +353,11 @@ struct rspamd_rrd_query_result {
  * @param rra_num number of rra to return data for
  * @return query result structure, that should be freed (using g_slice_free1) after usage
  */
-struct rspamd_rrd_query_result * rspamd_rrd_query (struct rspamd_rrd_file *file,
-	gulong rra_num);
+struct rspamd_rrd_query_result *rspamd_rrd_query (struct rspamd_rrd_file *file,
+												  gulong rra_num);
+
+#ifdef  __cplusplus
+}
+#endif
+
 #endif /* RRD_H_ */

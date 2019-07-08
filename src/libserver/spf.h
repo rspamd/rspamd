@@ -5,11 +5,15 @@
 #include "ref.h"
 #include "addr.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_task;
 struct spf_resolved;
 
-typedef void (*spf_cb_t)(struct spf_resolved *record,
-		struct rspamd_task *task, gpointer cbdata);
+typedef void (*spf_cb_t) (struct spf_resolved *record,
+						  struct rspamd_task *task, gpointer cbdata);
 
 typedef enum spf_mech_e {
 	SPF_FAIL,
@@ -74,18 +78,18 @@ struct spf_resolved {
  * Resolve spf record for specified task and call a callback after resolution fails/succeed
  */
 gboolean rspamd_spf_resolve (struct rspamd_task *task, spf_cb_t callback,
-		gpointer cbdata);
+							 gpointer cbdata);
 
 /*
  * Get a domain for spf for specified task
  */
-const gchar * rspamd_spf_get_domain (struct rspamd_task *task);
+const gchar *rspamd_spf_get_domain (struct rspamd_task *task);
 
 
 /*
  * Increase refcount
  */
-struct spf_resolved * spf_record_ref (struct spf_resolved *rec);
+struct spf_resolved *spf_record_ref (struct spf_resolved *rec);
 
 /*
  * Decrease refcount
@@ -105,6 +109,11 @@ gchar *spf_addr_mask_to_string (struct spf_addr *addr);
  * @param rec
  * @return
  */
-struct spf_addr * spf_addr_match_task (struct rspamd_task *task,
-									   struct spf_resolved *rec);
+struct spf_addr *spf_addr_match_task (struct rspamd_task *task,
+									  struct spf_resolved *rec);
+
+#ifdef  __cplusplus
+}
+#endif
+
 #endif

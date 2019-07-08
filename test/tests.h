@@ -5,6 +5,10 @@
  * Here are described test functions for rspamd test suite
  */
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /* URL parser test */
 void rspamd_url_test_func (void);
 
@@ -38,6 +42,10 @@ void rspamd_cryptobox_test_func (void);
 
 void rspamd_heap_test_func (void);
 
-void rspamd_lua_lua_pcall_vs_resume_test_func(void);
+void rspamd_lua_lua_pcall_vs_resume_test_func (void);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

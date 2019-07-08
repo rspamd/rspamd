@@ -19,6 +19,11 @@
 #include "config.h"
 #include "keypair.h"
 
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_keypair_cache;
 
 /**
@@ -26,7 +31,7 @@ struct rspamd_keypair_cache;
  * @param max_items defines maximum count of elements in the cache
  * @return new cache
  */
-struct rspamd_keypair_cache * rspamd_keypair_cache_new (guint max_items);
+struct rspamd_keypair_cache *rspamd_keypair_cache_new (guint max_items);
 
 
 /**
@@ -36,8 +41,8 @@ struct rspamd_keypair_cache * rspamd_keypair_cache_new (guint max_items);
  * @param rk remote key
  */
 void rspamd_keypair_cache_process (struct rspamd_keypair_cache *c,
-		struct rspamd_cryptobox_keypair *lk,
-		struct rspamd_cryptobox_pubkey *rk);
+								   struct rspamd_cryptobox_keypair *lk,
+								   struct rspamd_cryptobox_pubkey *rk);
 
 /**
  * Destroy old keypair cache
@@ -45,5 +50,8 @@ void rspamd_keypair_cache_process (struct rspamd_keypair_cache *c,
  */
 void rspamd_keypair_cache_destroy (struct rspamd_keypair_cache *c);
 
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* KEYPAIRS_CACHE_H_ */

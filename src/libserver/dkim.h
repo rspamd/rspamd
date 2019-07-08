@@ -21,6 +21,7 @@
 #include "dns.h"
 #include "ref.h"
 
+
 /* Main types and definitions */
 
 #define RSPAMD_DKIM_SIGNHEADER     "DKIM-Signature"
@@ -79,6 +80,10 @@
 #define DKIM_SIGERROR_KEYDECODE     43  /* key couldn't be decoded */
 #define DKIM_SIGERROR_MISSING_V     44  /* v= tag missing */
 #define DKIM_SIGERROR_EMPTY_V       45  /* v= tag empty */
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
 
 /* Check results */
 enum rspamd_dkim_check_rcode {
@@ -148,8 +153,8 @@ struct rspamd_dkim_check_result {
 
 
 /* Err MUST be freed if it is not NULL, key is allocated by slice allocator */
-typedef void (*dkim_key_handler_f)(rspamd_dkim_key_t *key, gsize keylen,
-	rspamd_dkim_context_t *ctx, gpointer ud, GError *err);
+typedef void (*dkim_key_handler_f) (rspamd_dkim_key_t *key, gsize keylen,
+									rspamd_dkim_context_t *ctx, gpointer ud, GError *err);
 
 /**
  * Create new dkim context from signature
@@ -159,11 +164,11 @@ typedef void (*dkim_key_handler_f)(rspamd_dkim_key_t *key, gsize keylen,
  * @param err pointer to error object
  * @return new context or NULL
  */
-rspamd_dkim_context_t * rspamd_create_dkim_context (const gchar *sig,
-		rspamd_mempool_t *pool,
-		guint time_jitter,
-		enum rspamd_dkim_type type,
-		GError **err);
+rspamd_dkim_context_t *rspamd_create_dkim_context (const gchar *sig,
+												   rspamd_mempool_t *pool,
+												   guint time_jitter,
+												   enum rspamd_dkim_type type,
+												   GError **err);
 
 /**
  * Create new dkim context for making a signature
@@ -172,13 +177,13 @@ rspamd_dkim_context_t * rspamd_create_dkim_context (const gchar *sig,
  * @param err
  * @return
  */
-rspamd_dkim_sign_context_t * rspamd_create_dkim_sign_context (struct rspamd_task *task,
-		rspamd_dkim_sign_key_t *priv_key,
-		gint headers_canon,
-		gint body_canon,
-		const gchar *dkim_headers,
-		enum rspamd_dkim_type type,
-		GError **err);
+rspamd_dkim_sign_context_t *rspamd_create_dkim_sign_context (struct rspamd_task *task,
+															 rspamd_dkim_sign_key_t *priv_key,
+															 gint headers_canon,
+															 gint body_canon,
+															 const gchar *dkim_headers,
+															 enum rspamd_dkim_type type,
+															 GError **err);
 
 /**
  * Load dkim key
@@ -186,9 +191,9 @@ rspamd_dkim_sign_context_t * rspamd_create_dkim_sign_context (struct rspamd_task
  * @param err
  * @return
  */
-rspamd_dkim_sign_key_t* rspamd_dkim_sign_key_load (const gchar *what, gsize len,
-		enum rspamd_dkim_key_format type,
-		GError **err);
+rspamd_dkim_sign_key_t *rspamd_dkim_sign_key_load (const gchar *what, gsize len,
+												   enum rspamd_dkim_key_format type,
+												   GError **err);
 
 /**
  * Invalidate modified sign key
@@ -196,7 +201,7 @@ rspamd_dkim_sign_key_t* rspamd_dkim_sign_key_load (const gchar *what, gsize len,
  * @return
 */
 gboolean rspamd_dkim_sign_key_maybe_invalidate (rspamd_dkim_sign_key_t *key,
-		time_t mtime);
+												time_t mtime);
 
 /**
  * Make DNS request for specified context and obtain and parse key
@@ -206,9 +211,9 @@ gboolean rspamd_dkim_sign_key_maybe_invalidate (rspamd_dkim_sign_key_t *key,
  * @return
  */
 gboolean rspamd_get_dkim_key (rspamd_dkim_context_t *ctx,
-	struct rspamd_task *task,
-	dkim_key_handler_f handler,
-	gpointer ud);
+							  struct rspamd_task *task,
+							  dkim_key_handler_f handler,
+							  gpointer ud);
 
 /**
  * Check task for dkim context using dkim key
@@ -217,9 +222,9 @@ gboolean rspamd_get_dkim_key (rspamd_dkim_context_t *ctx,
  * @param task task to check
  * @return
  */
-struct rspamd_dkim_check_result * rspamd_dkim_check (rspamd_dkim_context_t *ctx,
-													 rspamd_dkim_key_t *key,
-													 struct rspamd_task *task);
+struct rspamd_dkim_check_result *rspamd_dkim_check (rspamd_dkim_context_t *ctx,
+													rspamd_dkim_key_t *key,
+													struct rspamd_task *task);
 
 struct rspamd_dkim_check_result *
 rspamd_dkim_create_result (rspamd_dkim_context_t *ctx,
@@ -235,13 +240,20 @@ GString *rspamd_dkim_sign (struct rspamd_task *task,
 						   const gchar *arc_cv,
 						   rspamd_dkim_sign_context_t *ctx);
 
-rspamd_dkim_key_t * rspamd_dkim_key_ref (rspamd_dkim_key_t *k);
+rspamd_dkim_key_t *rspamd_dkim_key_ref (rspamd_dkim_key_t *k);
+
 void rspamd_dkim_key_unref (rspamd_dkim_key_t *k);
-rspamd_dkim_sign_key_t * rspamd_dkim_sign_key_ref (rspamd_dkim_sign_key_t *k);
+
+rspamd_dkim_sign_key_t *rspamd_dkim_sign_key_ref (rspamd_dkim_sign_key_t *k);
+
 void rspamd_dkim_sign_key_unref (rspamd_dkim_sign_key_t *k);
-const gchar* rspamd_dkim_get_domain (rspamd_dkim_context_t *ctx);
-const gchar* rspamd_dkim_get_selector (rspamd_dkim_context_t *ctx);
-const gchar* rspamd_dkim_get_dns_key (rspamd_dkim_context_t *ctx);
+
+const gchar *rspamd_dkim_get_domain (rspamd_dkim_context_t *ctx);
+
+const gchar *rspamd_dkim_get_selector (rspamd_dkim_context_t *ctx);
+
+const gchar *rspamd_dkim_get_dns_key (rspamd_dkim_context_t *ctx);
+
 guint rspamd_dkim_key_get_ttl (rspamd_dkim_key_t *k);
 
 /**
@@ -252,9 +264,9 @@ guint rspamd_dkim_key_get_ttl (rspamd_dkim_key_t *k);
  * @param err
  * @return
  */
-rspamd_dkim_key_t * rspamd_dkim_make_key (const gchar *keydata, guint keylen,
-										  enum rspamd_dkim_key_type type,
-										  GError **err);
+rspamd_dkim_key_t *rspamd_dkim_make_key (const gchar *keydata, guint keylen,
+										 enum rspamd_dkim_key_type type,
+										 GError **err);
 
 /**
  * Parse DKIM public key from a TXT record
@@ -263,8 +275,8 @@ rspamd_dkim_key_t * rspamd_dkim_make_key (const gchar *keydata, guint keylen,
  * @param err
  * @return
  */
-rspamd_dkim_key_t * rspamd_dkim_parse_key (const gchar *txt, gsize *keylen,
-										   GError **err);
+rspamd_dkim_key_t *rspamd_dkim_parse_key (const gchar *txt, gsize *keylen,
+										  GError **err);
 
 /**
  * Canonocalise header using relaxed algorithm
@@ -275,9 +287,9 @@ rspamd_dkim_key_t * rspamd_dkim_parse_key (const gchar *txt, gsize *keylen,
  * @return
  */
 goffset rspamd_dkim_canonize_header_relaxed_str (const gchar *hname,
-		const gchar *hvalue,
-		gchar *out,
-		gsize outlen);
+												 const gchar *hvalue,
+												 gchar *out,
+												 gsize outlen);
 
 /**
  * Checks public and private keys for match
@@ -295,5 +307,9 @@ gboolean rspamd_dkim_match_keys (rspamd_dkim_key_t *pk,
  * @param key
  */
 void rspamd_dkim_key_free (rspamd_dkim_key_t *key);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* DKIM_H_ */

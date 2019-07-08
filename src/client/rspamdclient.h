@@ -20,6 +20,10 @@
 #include "ucl.h"
 #include "contrib/libev/ev.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_client_connection;
 struct rspamd_http_message;
 
@@ -48,6 +52,7 @@ typedef void (*rspamd_client_callback) (
 		GError *err);
 
 struct rspamd_http_context;
+
 /**
  * Start rspamd worker or controller command
  * @param ev_base event base
@@ -56,7 +61,7 @@ struct rspamd_http_context;
  * @param timeout timeout in seconds
  * @return
  */
-struct rspamd_client_connection * rspamd_client_init (
+struct rspamd_client_connection *rspamd_client_init (
 		struct rspamd_http_context *http_ctx,
 		struct ev_loop *ev_base,
 		const gchar *name,
@@ -91,5 +96,9 @@ gboolean rspamd_client_command (
  * @param conn
  */
 void rspamd_client_destroy (struct rspamd_client_connection *conn);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* RSPAMDCLIENT_H_ */

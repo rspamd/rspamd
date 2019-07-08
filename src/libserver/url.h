@@ -6,6 +6,10 @@
 #include "mem_pool.h"
 #include "fstring.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_task;
 struct rspamd_mime_text_part;
 
@@ -106,7 +110,9 @@ enum rspamd_url_find_type {
  * @param cfg
  */
 void rspamd_url_init (const gchar *tld_file);
+
 void rspamd_url_deinit (void);
+
 /*
  * Parse urls inside text
  * @param pool memory pool
@@ -147,10 +153,11 @@ gboolean rspamd_url_find (rspamd_mempool_t *pool,
 						  enum rspamd_url_find_type how,
 						  goffset *url_pos,
 						  gboolean *prefix_added);
+
 /*
  * Return text representation of url parsing error
  */
-const gchar * rspamd_url_strerror (int err);
+const gchar *rspamd_url_strerror (int err);
 
 
 /**
@@ -163,7 +170,7 @@ const gchar * rspamd_url_strerror (int err);
 gboolean rspamd_url_find_tld (const gchar *in, gsize inlen, rspamd_ftok_t *out);
 
 typedef void (*url_insert_function) (struct rspamd_url *url,
-		gsize start_offset, gsize end_offset, void *ud);
+									 gsize start_offset, gsize end_offset, void *ud);
 
 /**
  * Search for multiple urls in text and call `func` for each url found
@@ -180,6 +187,7 @@ void rspamd_url_find_multiple (rspamd_mempool_t *pool,
 							   GPtrArray *nlines,
 							   url_insert_function func,
 							   gpointer ud);
+
 /**
  * Search for a single url in text and call `func` for each url found
  * @param pool
@@ -217,7 +225,9 @@ void rspamd_url_add_tag (struct rspamd_url *url, const gchar *tag,
 						 rspamd_mempool_t *pool);
 
 guint rspamd_url_hash (gconstpointer u);
+
 guint rspamd_email_hash (gconstpointer u);
+
 guint rspamd_url_host_hash (gconstpointer u);
 
 
@@ -226,6 +236,7 @@ gboolean rspamd_emails_cmp (gconstpointer a, gconstpointer b);
 
 /* Compare two urls for building emails hash */
 gboolean rspamd_urls_cmp (gconstpointer a, gconstpointer b);
+
 gboolean rspamd_urls_host_cmp (gconstpointer a, gconstpointer b);
 
 /**
@@ -244,8 +255,8 @@ gsize rspamd_url_decode (gchar *dst, const gchar *src, gsize size);
  * @param pool
  * @return
  */
-const gchar * rspamd_url_encode (struct rspamd_url *url, gsize *dlen,
-								 rspamd_mempool_t *pool);
+const gchar *rspamd_url_encode (struct rspamd_url *url, gsize *dlen,
+								rspamd_mempool_t *pool);
 
 
 /**
@@ -260,7 +271,7 @@ gboolean rspamd_url_is_domain (int c);
  * @param proto
  * @return
  */
-const gchar* rspamd_url_protocol_name (enum rspamd_url_protocol proto);
+const gchar *rspamd_url_protocol_name (enum rspamd_url_protocol proto);
 
 
 /**
@@ -269,4 +280,9 @@ const gchar* rspamd_url_protocol_name (enum rspamd_url_protocol proto);
  * @return
  */
 enum rspamd_url_protocol rspamd_url_protocol_from_string (const gchar *str);
+
+#ifdef  __cplusplus
+}
+#endif
+
 #endif

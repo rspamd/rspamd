@@ -16,6 +16,10 @@
 #include <unicode/uchar.h>
 #include <unicode/utext.h>
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_task;
 struct controller_session;
 struct html_content;
@@ -106,9 +110,9 @@ struct rspamd_mime_text_part {
 	GArray *utf_words;
 	UText utf_stripped_text; /* Used by libicu to represent the utf8 content */
 
-	GPtrArray *newlines;	/**< positions of newlines in text, relative to content*/
+	GPtrArray *newlines;    /**< positions of newlines in text, relative to content*/
 	struct html_content *html;
-	GList *exceptions;	/**< list of offsets of urls						*/
+	GList *exceptions;    /**< list of offsets of urls						*/
 	struct rspamd_mime_part *mime_part;
 
 	guint flags;
@@ -146,8 +150,9 @@ void rspamd_message_process (struct rspamd_task *task);
  * @return An array of header's values or NULL. It is NOT permitted to free array or values.
  */
 GPtrArray *rspamd_message_get_header_array (struct rspamd_task *task,
-		const gchar *field,
-		gboolean strong);
+											const gchar *field,
+											gboolean strong);
+
 /**
  * Get an array of mime parts header's values with specified header's name using raw headers
  * @param task worker task structure
@@ -156,8 +161,8 @@ GPtrArray *rspamd_message_get_header_array (struct rspamd_task *task,
  * @return An array of header's values or NULL. It is NOT permitted to free array or values.
  */
 GPtrArray *rspamd_message_get_mime_header_array (struct rspamd_task *task,
-		const gchar *field,
-		gboolean strong);
+												 const gchar *field,
+												 gboolean strong);
 
 /**
  * Get an array of header's values with specified header's name using raw headers
@@ -167,9 +172,9 @@ GPtrArray *rspamd_message_get_mime_header_array (struct rspamd_task *task,
  * @return An array of header's values or NULL. It is NOT permitted to free array or values.
  */
 GPtrArray *rspamd_message_get_header_from_hash (GHashTable *htb,
-		rspamd_mempool_t *pool,
-		const gchar *field,
-		gboolean strong);
+												rspamd_mempool_t *pool,
+												const gchar *field,
+												gboolean strong);
 
 
 /**
@@ -184,6 +189,10 @@ enum rspamd_cte rspamd_cte_from_string (const gchar *str);
  * @param ct
  * @return
  */
-const gchar* rspamd_cte_to_string (enum rspamd_cte ct);
+const gchar *rspamd_cte_to_string (enum rspamd_cte ct);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

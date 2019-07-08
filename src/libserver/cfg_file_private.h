@@ -22,6 +22,10 @@
 #define HASH_CASELESS
 #include "uthash_strcase.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /**
  * Action config definition
  */
@@ -34,5 +38,9 @@ struct rspamd_action {
 	gchar *name;
 	struct UT_hash_handle hh; /* Index by name */
 };
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

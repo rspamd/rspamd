@@ -20,6 +20,10 @@
 #include "libutil/mem_pool.h"
 #include "libutil/addr.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_task;
 
 enum rspamd_rfc2047_encoding {
@@ -97,9 +101,9 @@ struct received_header {
  * @param check_newlines
  */
 void rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
-		GQueue *order,
-		const gchar *in, gsize len,
-		gboolean check_newlines);
+								  GQueue *order,
+								  const gchar *in, gsize len,
+								  gboolean check_newlines);
 
 /**
  * Perform rfc2047 decoding of a header
@@ -108,8 +112,8 @@ void rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
  * @param inlen
  * @return
  */
-gchar * rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
-		gsize inlen, gboolean *invalid_utf);
+gchar *rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
+								  gsize inlen, gboolean *invalid_utf);
 
 /**
  * Encode mime header if needed
@@ -117,13 +121,17 @@ gchar * rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
  * @param len
  * @return newly allocated encoded header
  */
-gchar * rspamd_mime_header_encode (const gchar *in, gsize len);
+gchar *rspamd_mime_header_encode (const gchar *in, gsize len);
 
 /**
  * Generate new unique message id
  * @param fqdn
  * @return
  */
-gchar * rspamd_mime_message_id_generate (const gchar *fqdn);
+gchar *rspamd_mime_message_id_generate (const gchar *fqdn);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* SRC_LIBMIME_MIME_HEADERS_H_ */

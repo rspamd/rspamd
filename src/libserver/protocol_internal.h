@@ -17,6 +17,10 @@
 #ifndef RSPAMD_PROTOCOL_INTERNAL_H
 #define RSPAMD_PROTOCOL_INTERNAL_H
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /*
  * Just check if the passed message is spam or not and reply as
  * described below
@@ -84,5 +88,9 @@
 #define CERT_ISSUER_HEADER "TLS-Cert-Issuer"
 #define MAILER_HEADER "Mailer"
 #define RAW_DATA_HEADER "Raw"
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif //RSPAMD_PROTOCOL_INTERNAL_H

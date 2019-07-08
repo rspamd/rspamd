@@ -21,10 +21,16 @@
 #include "http_connection.h"
 #include "rspamd.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 #ifndef HAVE_SA_SIGINFO
 typedef void (*rspamd_sig_handler_t) (gint);
 #else
+
 typedef void (*rspamd_sig_handler_t) (gint, siginfo_t *, void *);
+
 #endif
 
 struct rspamd_worker;
@@ -37,7 +43,7 @@ struct rspamd_worker_signal_handler;
  */
 void rspamd_worker_init_signals (struct rspamd_worker *worker, struct ev_loop *event_loop);
 
-typedef void (*rspamd_accept_handler)(struct ev_loop *loop, ev_io *w, int revents);
+typedef void (*rspamd_accept_handler) (struct ev_loop *loop, ev_io *w, int revents);
 
 /**
  * Prepare worker's startup
@@ -55,10 +61,10 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
  * Set special signal handler for a worker
  */
 void rspamd_worker_set_signal_handler (int signo,
-		struct rspamd_worker *worker,
-		struct ev_loop *event_loop,
-		rspamd_worker_signal_cb_t handler,
-		void *handler_data);
+									   struct rspamd_worker *worker,
+									   struct ev_loop *event_loop,
+									   rspamd_worker_signal_cb_t handler,
+									   void *handler_data);
 
 /**
  * Stop accepting new connections for a worker
@@ -67,9 +73,9 @@ void rspamd_worker_set_signal_handler (int signo,
 void rspamd_worker_stop_accept (struct rspamd_worker *worker);
 
 typedef gint (*rspamd_controller_func_t) (
-	struct rspamd_http_connection_entry *conn_ent,
-	struct rspamd_http_message *msg,
-	struct module_ctx *ctx);
+		struct rspamd_http_connection_entry *conn_ent,
+		struct rspamd_http_message *msg,
+		struct module_ctx *ctx);
 
 struct rspamd_custom_controller_command {
 	const gchar *command;
@@ -102,7 +108,7 @@ struct rspamd_controller_session {
  * @param error_msg error message
  */
 void rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
-	gint code, const gchar *error_msg, ...);
+								   gint code, const gchar *error_msg, ...);
 
 /**
  * Send a custom string using HTTP
@@ -110,7 +116,7 @@ void rspamd_controller_send_error (struct rspamd_http_connection_entry *entry,
  * @param str string to send
  */
 void rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
-	const gchar *str);
+									const gchar *str);
 
 /**
  * Send UCL using HTTP and JSON serialization
@@ -118,14 +124,14 @@ void rspamd_controller_send_string (struct rspamd_http_connection_entry *entry,
  * @param obj object to send
  */
 void rspamd_controller_send_ucl (struct rspamd_http_connection_entry *entry,
-	ucl_object_t *obj);
+								 ucl_object_t *obj);
 
 /**
  * Return worker's control structure by its type
  * @param type
  * @return worker's control structure or NULL
  */
-worker_t * rspamd_get_worker_by_type (struct rspamd_config *cfg, GQuark type);
+worker_t *rspamd_get_worker_by_type (struct rspamd_config *cfg, GQuark type);
 
 /**
  * Block signals before terminations
@@ -162,8 +168,8 @@ gboolean rspamd_worker_is_primary_controller (struct rspamd_worker *w);
  * @param w
  * @return
  */
-void * rspamd_worker_session_cache_new (struct rspamd_worker *w,
-		struct ev_loop *ev_base);
+void *rspamd_worker_session_cache_new (struct rspamd_worker *w,
+									   struct ev_loop *ev_base);
 
 /**
  * Adds a new session identified by pointer
@@ -173,7 +179,7 @@ void * rspamd_worker_session_cache_new (struct rspamd_worker *w,
  * @param ptr
  */
 void rspamd_worker_session_cache_add (void *cache, const gchar *tag,
-		guint *pref, void *ptr);
+									  guint *pref, void *ptr);
 
 /**
  * Removes session from cache
@@ -202,8 +208,8 @@ void rspamd_set_crash_handler (struct rspamd_main *);
  * @param resolver
  */
 void rspamd_worker_init_monitored (struct rspamd_worker *worker,
-		struct ev_loop *ev_base,
-		struct rspamd_dns_resolver *resolver);
+								   struct ev_loop *ev_base,
+								   struct rspamd_dns_resolver *resolver);
 
 /**
  * Performs throttling for accept events
@@ -221,15 +227,17 @@ void rspamd_worker_throttle_accept_events (gint sock, void *data);
  * @return TRUE if refork is desired
  */
 gboolean rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
-		struct rspamd_worker *wrk, int status);
+										  struct rspamd_worker *wrk, int status);
 
 #ifdef WITH_HYPERSCAN
 struct rspamd_control_command;
+
 gboolean rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
 										struct rspamd_worker *worker, gint fd,
 										gint attached_fd,
 										struct rspamd_control_command *cmd,
 										gpointer ud);
+
 #endif
 
 #define msg_err_main(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
@@ -244,5 +252,9 @@ gboolean rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
         rspamd_main->server_pool->tag.tagname, rspamd_main->server_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* WORKER_UTIL_H_ */

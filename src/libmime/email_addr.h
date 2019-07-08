@@ -20,6 +20,11 @@
 #include "libutil/mem_pool.h"
 #include "libutil/ref.h"
 
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_mime_header;
 
 enum rspamd_email_address_flags {
@@ -62,7 +67,7 @@ struct rspamd_task;
  * @param len length of string
  * @return
  */
-struct rspamd_email_address * rspamd_email_address_from_smtp (
+struct rspamd_email_address *rspamd_email_address_from_smtp (
 		const gchar *str, guint len);
 
 /**
@@ -75,9 +80,9 @@ struct rspamd_email_address * rspamd_email_address_from_smtp (
  * @return
  */
 GPtrArray *rspamd_email_address_from_mime (rspamd_mempool_t *pool,
-		const gchar *hdr,
-		guint len,
-		GPtrArray *src);
+										   const gchar *hdr,
+										   guint len,
+										   GPtrArray *src);
 
 /**
  * Destroys list of email addresses
@@ -86,5 +91,10 @@ GPtrArray *rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 void rspamd_email_address_list_destroy (gpointer ptr);
 
 void rspamd_email_address_free (struct rspamd_email_address *addr);
+
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* SRC_LIBMIME_EMAIL_ADDR_H_ */

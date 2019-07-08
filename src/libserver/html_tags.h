@@ -16,9 +16,12 @@
 #ifndef SRC_LIBSERVER_HTML_TAGS_H_
 #define SRC_LIBSERVER_HTML_TAGS_H_
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /* Known HTML tags */
-typedef enum
-{
+typedef enum {
 	Tag_UNKNOWN, /**< Unknown tag! */
 	Tag_A,      /**< A */
 	Tag_ABBR,   /**< ABBR */
@@ -196,5 +199,8 @@ typedef enum
 /* Unique elements */
 #define CM_UNIQUE       (1 << 22)
 
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* SRC_LIBSERVER_HTML_TAGS_H_ */

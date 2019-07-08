@@ -22,6 +22,9 @@
 
 #define RADIX_NO_VALUE   (uintptr_t)-1
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
 
 typedef struct radix_tree_compressed radix_compressed_t;
 
@@ -35,10 +38,10 @@ typedef struct radix_tree_compressed radix_compressed_t;
  * @return previous value of the key or `RADIX_NO_VALUE`
  */
 uintptr_t
-radix_insert_compressed (radix_compressed_t * tree,
-	guint8 *key, gsize keylen,
-	gsize masklen,
-	uintptr_t value);
+radix_insert_compressed (radix_compressed_t *tree,
+						 guint8 *key, gsize keylen,
+						 gsize masklen,
+						 uintptr_t value);
 
 /**
  * Find a key in a radix trie
@@ -47,8 +50,8 @@ radix_insert_compressed (radix_compressed_t * tree,
  * @param keylen length of a key
  * @return opaque pointer or `RADIX_NO_VALUE` if no value has been found
  */
-uintptr_t radix_find_compressed (radix_compressed_t * tree, const guint8 *key,
-		gsize keylen);
+uintptr_t radix_find_compressed (radix_compressed_t *tree, const guint8 *key,
+								 gsize keylen);
 
 /**
  * Find specified address in tree (works for IPv4 or IPv6 addresses)
@@ -57,7 +60,7 @@ uintptr_t radix_find_compressed (radix_compressed_t * tree, const guint8 *key,
  * @return
  */
 uintptr_t radix_find_compressed_addr (radix_compressed_t *tree,
-		const rspamd_inet_addr_t *addr);
+									  const rspamd_inet_addr_t *addr);
 
 /**
  * Destroy the complete radix trie
@@ -81,14 +84,14 @@ radix_compressed_t *radix_create_compressed_with_pool (rspamd_mempool_t *pool);
  * @return number of elements inserted
  */
 gint rspamd_radix_add_iplist (const gchar *list, const gchar *separators,
-		radix_compressed_t *tree, gconstpointer value, gboolean resolve);
+							  radix_compressed_t *tree, gconstpointer value, gboolean resolve);
 
 /**
  * Generic version of @see rspamd_radix_add_iplist. This function creates tree
  * if `tree` is NULL.
  */
 gboolean radix_add_generic_iplist (const gchar *ip_list,
-		radix_compressed_t **tree, gboolean resolve);
+								   radix_compressed_t **tree, gboolean resolve);
 
 /**
  * Returns number of elements in the tree
@@ -102,11 +105,15 @@ gsize radix_get_size (radix_compressed_t *tree);
  * @param tree
  * @return constant string
  */
-const gchar * radix_get_info (radix_compressed_t *tree);
+const gchar *radix_get_info (radix_compressed_t *tree);
 
 /**
  * Returns memory pool associated with the radix tree
  */
-rspamd_mempool_t* radix_get_pool (radix_compressed_t *tree);
+rspamd_mempool_t *radix_get_pool (radix_compressed_t *tree);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

@@ -23,18 +23,23 @@
 #include "map.h"
 #include "ref.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 typedef void (*rspamd_map_tmp_dtor) (gpointer p);
+
 extern guint rspamd_map_log_id;
 #define msg_err_map(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
-		"map", map->tag, \
+        "map", map->tag, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_warn_map(...)   rspamd_default_log_function (G_LOG_LEVEL_WARNING, \
-		"map", map->tag, \
+        "map", map->tag, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_info_map(...)   rspamd_default_log_function (G_LOG_LEVEL_INFO, \
-		"map", map->tag, \
+        "map", map->tag, \
         G_STRFUNC, \
         __VA_ARGS__)
 #define msg_debug_map(...)  rspamd_conditional_debug_fast (NULL, NULL, \
@@ -208,5 +213,9 @@ struct http_callback_data {
 
 	ref_entry_t ref;
 };
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* SRC_LIBUTIL_MAP_PRIVATE_H_ */

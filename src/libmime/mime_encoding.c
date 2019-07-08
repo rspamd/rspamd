@@ -18,6 +18,7 @@
 #include "libutil/mem_pool.h"
 #include "libutil/regexp.h"
 #include "libutil/hash.h"
+#include "libserver/cfg_file.h"
 #include "libserver/task.h"
 #include "mime_encoding.h"
 #include "message.h"

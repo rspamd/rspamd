@@ -15,6 +15,10 @@
 #include "contrib/libev/ev.h"
 #include <time.h>
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_config;
 struct rspamd_main;
 struct workq;
@@ -28,10 +32,12 @@ struct workq;
  * @return socket FD or -1 in case of error
  */
 gint rspamd_socket_create (gint af, gint type, gint protocol, gboolean async);
+
 /*
  * Create socket and bind or connect it to specified address and port
  */
 gint rspamd_socket_tcp (struct addrinfo *, gboolean is_server, gboolean async);
+
 /*
  * Create socket and bind or connect it to specified address and port
  */
@@ -41,10 +47,10 @@ gint rspamd_socket_udp (struct addrinfo *, gboolean is_server, gboolean async);
  * Create and bind or connect unix socket
  */
 gint rspamd_socket_unix (const gchar *,
-	struct sockaddr_un *,
-	gint type,
-	gboolean is_server,
-	gboolean async);
+						 struct sockaddr_un *,
+						 gint type,
+						 gboolean is_server,
+						 gboolean async);
 
 /**
  * Make a universal socket
@@ -56,7 +62,7 @@ gint rspamd_socket_unix (const gchar *,
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
 gint rspamd_socket (const gchar *credits, guint16 port, gint type,
-	gboolean async, gboolean is_server, gboolean try_resolve);
+					gboolean async, gboolean is_server, gboolean try_resolve);
 
 /**
  * Make a universal sockets
@@ -67,12 +73,13 @@ gint rspamd_socket (const gchar *credits, guint16 port, gint type,
  * @param is_server make this socket as server socket
  * @param try_resolve try name resolution for a socket (BLOCKING)
  */
-GList * rspamd_sockets_list (const gchar *credits,
-	guint16 port,
-	gint type,
-	gboolean async,
-	gboolean is_server,
-	gboolean try_resolve);
+GList *rspamd_sockets_list (const gchar *credits,
+							guint16 port,
+							gint type,
+							gboolean async,
+							gboolean is_server,
+							gboolean try_resolve);
+
 /*
  * Create socketpair
  */
@@ -87,6 +94,7 @@ gint rspamd_write_pid (struct rspamd_main *);
  * Make specified socket non-blocking
  */
 gint rspamd_socket_nonblocking (gint);
+
 /*
  * Make specified socket blocking
  */
@@ -101,9 +109,11 @@ gint rspamd_socket_poll (gint fd, gint timeout, short events);
  * Init signals
  */
 #ifdef HAVE_SA_SIGINFO
-void rspamd_signals_init (struct sigaction *sa, void (*sig_handler)(gint,
-	siginfo_t *,
-	void *));
+
+void rspamd_signals_init (struct sigaction *sa, void (*sig_handler) (gint,
+																	 siginfo_t *,
+																	 void *));
+
 #else
 void rspamd_signals_init (struct sigaction *sa, void (*sig_handler)(gint));
 #endif
@@ -111,14 +121,17 @@ void rspamd_signals_init (struct sigaction *sa, void (*sig_handler)(gint));
 /*
  * Send specified signal to each worker
  */
-void rspamd_pass_signal (GHashTable *, gint );
+void rspamd_pass_signal (GHashTable *, gint);
 
 #ifndef HAVE_SETPROCTITLE
+
 /*
  * Process title utility functions
  */
 gint init_title (struct rspamd_main *, gint argc, gchar *argv[], gchar *envp[]);
+
 gint setproctitle (const gchar *fmt, ...);
+
 #endif
 
 #ifndef HAVE_PIDFILE
@@ -137,12 +150,17 @@ typedef struct rspamd_pidfh_s {
 	dev_t pf_dev;
 	ino_t pf_ino;
 } rspamd_pidfh_t;
-rspamd_pidfh_t * rspamd_pidfile_open (const gchar *path,
-	mode_t mode,
-	pid_t *pidptr);
+
+rspamd_pidfh_t *rspamd_pidfile_open (const gchar *path,
+									 mode_t mode,
+									 pid_t *pidptr);
+
 gint rspamd_pidfile_write (rspamd_pidfh_t *pfh);
+
 gint rspamd_pidfile_close (rspamd_pidfh_t *pfh);
+
 gint rspamd_pidfile_remove (rspamd_pidfh_t *pfh);
+
 #else
 typedef struct pidfh rspamd_pidfh_t;
 #define rspamd_pidfile_open pidfile_open
@@ -154,10 +172,10 @@ typedef struct pidfh rspamd_pidfh_t;
 /*
  * Replace %r with rcpt value and %f with from value, new string is allocated in pool
  */
-gchar * resolve_stat_filename (rspamd_mempool_t *pool,
-	gchar *pattern,
-	gchar *rcpt,
-	gchar *from);
+gchar *resolve_stat_filename (rspamd_mempool_t *pool,
+							  gchar *pattern,
+							  gchar *rcpt,
+							  gchar *from);
 
 const gchar *
 rspamd_log_check_time (gdouble start, gdouble end, gint resolution);
@@ -166,12 +184,14 @@ rspamd_log_check_time (gdouble start, gdouble end, gint resolution);
  * File locking functions
  */
 gboolean rspamd_file_lock (gint fd, gboolean async);
+
 gboolean rspamd_file_unlock (gint fd, gboolean async);
 
 /*
  * Google perf-tools initialization function
  */
 void gperf_profiler_init (struct rspamd_config *cfg, const gchar *descr);
+
 void gperf_profiler_stop (void);
 
 /*
@@ -203,18 +223,18 @@ const gchar *g_environ_getenv (gchar **envp, const gchar *variable);
  * Convert milliseconds to timeval fields
  */
 #define msec_to_tv(msec, tv) do { (tv)->tv_sec = (msec) / 1000; (tv)->tv_usec = \
-									  ((msec) - (tv)->tv_sec * 1000) * 1000; \
+                                      ((msec) - (tv)->tv_sec * 1000) * 1000; \
 } while (0)
 #define double_to_tv(dbl, tv) do { (tv)->tv_sec = (int)(dbl); (tv)->tv_usec = \
-									   ((dbl) - (int)(dbl)) * 1000 * 1000; \
+                                       ((dbl) - (int)(dbl)) * 1000 * 1000; \
 } while (0)
 #define double_to_ts(dbl, ts) do { (ts)->tv_sec = (int)(dbl); (ts)->tv_nsec = \
                                        ((dbl) - (int)(dbl)) * 1e9; \
 } while (0)
 #define tv_to_msec(tv) ((tv)->tv_sec * 1000LLU + (tv)->tv_usec / 1000LLU)
 #define tv_to_double(tv) ((double)(tv)->tv_sec + (tv)->tv_usec / 1.0e6)
-#define ts_to_usec(ts) ((ts)->tv_sec * 1000000LLU +							\
-	(ts)->tv_nsec / 1000LLU)
+#define ts_to_usec(ts) ((ts)->tv_sec * 1000000LLU +                            \
+    (ts)->tv_nsec / 1000LLU)
 #define ts_to_double(tv) ((double)(tv)->tv_sec + (tv)->tv_nsec / 1.0e9)
 
 /**
@@ -242,7 +262,7 @@ typedef struct rspamd_mutex_s {
  * Create new mutex
  * @return mutex or NULL
  */
-rspamd_mutex_t * rspamd_mutex_new (void);
+rspamd_mutex_t *rspamd_mutex_new (void);
 
 /**
  * Lock mutex
@@ -271,9 +291,9 @@ void rspamd_mutex_free (rspamd_mutex_t *mtx);
  * @param ud user data for copy functions
  */
 void rspamd_hash_table_copy (GHashTable *src, GHashTable *dst,
-	gpointer (*key_copy_func)(gconstpointer data, gpointer ud),
-	gpointer (*value_copy_func)(gconstpointer data, gpointer ud),
-	gpointer ud);
+							 gpointer (*key_copy_func) (gconstpointer data, gpointer ud),
+							 gpointer (*value_copy_func) (gconstpointer data, gpointer ud),
+							 gpointer ud);
 
 
 /**
@@ -315,6 +335,7 @@ void rspamd_ptr_array_free_hard (gpointer p);
  * @param p
  */
 void rspamd_array_free_hard (gpointer p);
+
 /**
  * Special utility to help GString freeing in rspamd_mempool
  * @param p
@@ -334,25 +355,28 @@ void rspamd_gerror_free_maybe (gpointer p);
 void rspamd_gstring_free_soft (gpointer p);
 
 struct rspamd_external_libs_ctx;
+
 /**
  * Initialize rspamd libraries
  */
-struct rspamd_external_libs_ctx* rspamd_init_libs (void);
+struct rspamd_external_libs_ctx *rspamd_init_libs (void);
 
 gpointer rspamd_init_ssl_ctx (void);
+
 gpointer rspamd_init_ssl_ctx_noverify (void);
 
 /**
  * Configure libraries
  */
 void rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
-		struct rspamd_config *cfg);
+						 struct rspamd_config *cfg);
 
 /**
  * Reset and initialize decompressor
  * @param ctx
  */
 gboolean rspamd_libs_reset_decompression (struct rspamd_external_libs_ctx *ctx);
+
 /**
  * Reset and initialize compressor
  * @param ctx
@@ -421,7 +445,7 @@ gboolean rspamd_constant_memcmp (const void *a, const void *b, gsize len);
  * @return fd or -1 in case of error
  */
 int rspamd_file_xopen (const char *fname, int oflags, guint mode,
-		gboolean allow_symlink);
+					   gboolean allow_symlink);
 
 /**
  * Map file without following symlinks or special stuff
@@ -431,7 +455,7 @@ int rspamd_file_xopen (const char *fname, int oflags, guint mode,
  * @return pointer to memory (should be freed using munmap) or NULL in case of error
  */
 gpointer rspamd_file_xmap (const char *fname, guint mode, gsize *size,
-		gboolean allow_symlink);
+						   gboolean allow_symlink);
 
 /**
  * Map named shared memory segment
@@ -441,7 +465,7 @@ gpointer rspamd_file_xmap (const char *fname, guint mode, gsize *size,
  * @return pointer to memory (should be freed using munmap) or NULL in case of error
  */
 gpointer rspamd_shmem_xmap (const char *fname, guint mode,
-		gsize *size);
+							gsize *size);
 
 /**
  * Normalize probabilities using polynomial function
@@ -520,5 +544,9 @@ double rspamd_set_counter_ema (struct rspamd_counter_data *cd,
  */
 double rspamd_set_counter (struct rspamd_counter_data *cd,
 						   gdouble value);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

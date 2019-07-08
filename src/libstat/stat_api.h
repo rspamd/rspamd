@@ -18,8 +18,12 @@
 
 #include "config.h"
 #include "task.h"
-#include <lua.h>
+#include "lua/lua_common.h"
 #include "contrib/libev/ev.h"
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
 
 /**
  * @file stat_api.h
@@ -89,7 +93,7 @@ void rspamd_stat_close (void);
  * @param task
  */
 void rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
-							  struct rspamd_task *task);
+								   struct rspamd_task *task);
 
 /**
  * Classify the task specified and insert symbols if needed
@@ -99,7 +103,7 @@ void rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
  * @return TRUE if task has been classified
  */
 rspamd_stat_result_t rspamd_stat_classify (struct rspamd_task *task,
-		lua_State *L, guint stage, GError **err);
+										   lua_State *L, guint stage, GError **err);
 
 
 /**
@@ -119,9 +123,9 @@ gboolean rspamd_stat_check_autolearn (struct rspamd_task *task);
  * @return TRUE if task has been learned
  */
 rspamd_stat_result_t rspamd_stat_learn (struct rspamd_task *task,
-		gboolean spam, lua_State *L, const gchar *classifier,
-		guint stage,
-		GError **err);
+										gboolean spam, lua_State *L, const gchar *classifier,
+										guint stage,
+										GError **err);
 
 /**
  * Get the overall statistics for all statfile backends
@@ -130,10 +134,14 @@ rspamd_stat_result_t rspamd_stat_learn (struct rspamd_task *task,
  * @return array of statistical information
  */
 rspamd_stat_result_t rspamd_stat_statistics (struct rspamd_task *task,
-		struct rspamd_config *cfg,
-		guint64 *total_learns,
-		ucl_object_t **res);
+											 struct rspamd_config *cfg,
+											 guint64 *total_learns,
+											 ucl_object_t **res);
 
 void rspamd_stat_unload (void);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* STAT_API_H_ */

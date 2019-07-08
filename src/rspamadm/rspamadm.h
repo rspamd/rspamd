@@ -22,6 +22,10 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 extern GHashTable *ucl_vars;
 extern gchar **lua_env;
 extern struct rspamd_main *rspamd_main;
@@ -29,10 +33,13 @@ extern struct rspamd_main *rspamd_main;
 GQuark rspamadm_error (void);
 
 struct rspamadm_command;
-typedef const gchar* (*rspamadm_help_func) (gboolean full_help,
+
+typedef const gchar *(*rspamadm_help_func) (gboolean full_help,
 											const struct rspamadm_command *cmd);
+
 typedef void (*rspamadm_run_func) (gint argc, gchar **argv,
 								   const struct rspamadm_command *cmd);
+
 typedef void (*rspamadm_lua_exports_func) (gpointer lua_state);
 
 #define RSPAMADM_FLAG_NOHELP (1 << 0)
@@ -52,8 +59,10 @@ extern const struct rspamadm_command *commands[];
 extern struct rspamadm_command help_command;
 
 const struct rspamadm_command *rspamadm_search_command (const gchar *name,
-		GPtrArray *all_commands);
+														GPtrArray *all_commands);
+
 void rspamadm_fill_internal_commands (GPtrArray *dest);
+
 void rspamadm_fill_lua_commands (lua_State *L, GPtrArray *dest);
 
 gboolean rspamadm_execute_lua_ucl_subr (gint argc, gchar **argv,
@@ -62,6 +71,7 @@ gboolean rspamadm_execute_lua_ucl_subr (gint argc, gchar **argv,
 										gboolean rspamadm_subcommand);
 
 struct thread_entry;
+
 typedef void (*lua_thread_error_t) (struct thread_entry *thread, int ret, const char *msg);
 
 
@@ -70,7 +80,12 @@ struct lua_call_data {
 	gint ret;
 	gpointer ud;
 };
+
 gint lua_repl_thread_call (struct thread_entry *thread, gint narg,
-		gpointer ud, lua_thread_error_t error_func);
+						   gpointer ud, lua_thread_error_t error_func);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

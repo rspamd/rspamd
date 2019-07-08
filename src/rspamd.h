@@ -25,11 +25,13 @@
 #include "libutil/http_connection.h"
 #include "libutil/upstream.h"
 #include "libutil/radix.h"
+#include "libserver/cfg_file.h"
 #include "libserver/url.h"
 #include "libserver/protocol.h"
 #include "libserver/async_session.h"
 #include "libserver/roll_history.h"
 #include "libserver/task.h"
+
 #include <openssl/ssl.h>
 #include <magic.h>
 
@@ -52,6 +54,10 @@
 #define CR '\r'
 #define LF '\n'
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 enum rspamd_worker_flags {
 	RSPAMD_WORKER_HAS_SOCKET = (1 << 0),
 	RSPAMD_WORKER_UNIQUE = (1 << 1),
@@ -69,8 +75,8 @@ struct rspamd_worker_accept_event {
 	struct rspamd_worker_accept_event *prev, *next;
 };
 
-typedef void (*rspamd_worker_term_cb)(EV_P_ ev_child *, struct rspamd_main *,
-		struct rspamd_worker *);
+typedef void (*rspamd_worker_term_cb) (EV_P_ ev_child *, struct rspamd_main *,
+									   struct rspamd_worker *);
 
 /**
  * Worker process structure
@@ -114,6 +120,7 @@ struct rspamd_abstract_worker_ctx {
 };
 
 struct rspamd_worker_signal_handler;
+
 typedef gboolean (*rspamd_worker_signal_cb_t) (
 		struct rspamd_worker_signal_handler *, void *ud);
 
@@ -147,10 +154,11 @@ struct rspamd_controller_pbkdf {
  * Common structure representing C module context
  */
 struct module_s;
+
 struct module_ctx {
-	gint (*filter)(struct rspamd_task *task);                   /**< pointer to headers process function			*/
-	struct module_s *mod;										/**< module pointer									*/
-	gboolean enabled;											/**< true if module is enabled in configuration		*/
+	gint (*filter) (struct rspamd_task *task);                   /**< pointer to headers process function			*/
+	struct module_s *mod;                                        /**< module pointer									*/
+	gboolean enabled;                                            /**< true if module is enabled in configuration		*/
 };
 
 #ifndef WITH_HYPERSCAN
@@ -178,28 +186,33 @@ struct module_ctx {
 #define RSPAMD_CUR_WORKER_VERSION 0x2
 
 #define RSPAMD_FEATURES \
-		RSPAMD_FEATURE_HYPERSCAN RSPAMD_FEATURE_PCRE2 \
-		RSPAMD_FEATURE_FANN RSPAMD_FEATURE_SNOWBALL
+        RSPAMD_FEATURE_HYPERSCAN RSPAMD_FEATURE_PCRE2 \
+        RSPAMD_FEATURE_FANN RSPAMD_FEATURE_SNOWBALL
 
 #define RSPAMD_MODULE_VER \
-		RSPAMD_CUR_MODULE_VERSION, /* Module version */ \
-		RSPAMD_VERSION_NUM, /* Rspamd version */ \
-		RSPAMD_FEATURES /* Compilation features */ \
+        RSPAMD_CUR_MODULE_VERSION, /* Module version */ \
+        RSPAMD_VERSION_NUM, /* Rspamd version */ \
+        RSPAMD_FEATURES /* Compilation features */ \
 
 #define RSPAMD_WORKER_VER \
-		RSPAMD_CUR_WORKER_VERSION, /* Worker version */ \
-		RSPAMD_VERSION_NUM, /* Rspamd version */ \
-		RSPAMD_FEATURES /* Compilation features */ \
+        RSPAMD_CUR_WORKER_VERSION, /* Worker version */ \
+        RSPAMD_VERSION_NUM, /* Rspamd version */ \
+        RSPAMD_FEATURES /* Compilation features */ \
 /**
  * Module
  */
 typedef struct module_s {
 	const gchar *name;
-	int (*module_init_func)(struct rspamd_config *cfg, struct module_ctx **ctx);
-	int (*module_config_func)(struct rspamd_config *cfg);
-	int (*module_reconfig_func)(struct rspamd_config *cfg);
-	int (*module_attach_controller_func)(struct module_ctx *ctx,
-		GHashTable *custom_commands);
+
+	int (*module_init_func) (struct rspamd_config *cfg, struct module_ctx **ctx);
+
+	int (*module_config_func) (struct rspamd_config *cfg);
+
+	int (*module_reconfig_func) (struct rspamd_config *cfg);
+
+	int (*module_attach_controller_func) (struct module_ctx *ctx,
+										  GHashTable *custom_commands);
+
 	guint module_version;
 	guint64 rspamd_version;
 	const gchar *rspamd_features;
@@ -220,8 +233,11 @@ struct rspamd_worker_listen_socket {
 
 typedef struct worker_s {
 	const gchar *name;
-	gpointer (*worker_init_func)(struct rspamd_config *cfg);
-	void (*worker_start_func)(struct rspamd_worker *worker);
+
+	gpointer (*worker_init_func) (struct rspamd_config *cfg);
+
+	void (*worker_start_func) (struct rspamd_worker *worker);
+
 	int flags;
 	int listen_type;
 	guint worker_version;
@@ -313,8 +329,9 @@ struct rspamd_process_exception {
  */
 struct controller_command;
 struct controller_session;
-typedef gboolean (*controller_func_t)(gchar **args,
-	struct controller_session *session);
+
+typedef gboolean (*controller_func_t) (gchar **args,
+									   struct controller_session *session);
 
 struct controller_session {
 	struct rspamd_worker *worker;                               /**< pointer to worker structure (controller in fact) */
@@ -322,7 +339,7 @@ struct controller_session {
 	struct controller_command *cmd;                             /**< real command									*/
 	struct rspamd_config *cfg;                                  /**< pointer to config file							*/
 	GList *parts;                                               /**< extracted mime parts							*/
-	struct rspamd_async_session * s;                             /**< async session object							*/
+	struct rspamd_async_session *s;                             /**< async session object							*/
 	struct rspamd_dns_resolver *resolver;                       /**< DNS resolver									*/
 	struct ev_loop *ev_base;                                 /**< Event base										*/
 };
@@ -354,17 +371,20 @@ struct rspamd_external_libs_ctx {
  * Register custom controller function
  */
 void register_custom_controller_command (const gchar *name,
-	controller_func_t handler,
-	gboolean privilleged,
-	gboolean require_message);
+										 controller_func_t handler,
+										 gboolean privilleged,
+										 gboolean require_message);
 
 enum rspamd_pbkdf_version_id {
 	RSPAMD_PBKDF_ID_V1 = 1,
-	RSPAMD_PBKDF_ID_V2= 2,
+	RSPAMD_PBKDF_ID_V2 = 2,
 	RSPAMD_PBKDF_ID_MAX
 };
 
 extern const struct rspamd_controller_pbkdf pbkdf_list[];
 
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

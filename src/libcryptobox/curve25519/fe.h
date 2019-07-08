@@ -18,25 +18,44 @@
 #ifndef SRC_LIBCRYPTOBOX_CURVE25519_FE_H_
 #define SRC_LIBCRYPTOBOX_CURVE25519_FE_H_
 
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 typedef int32_t fe[10];
 
-void fe_frombytes(fe,const unsigned char *);
-void fe_tobytes(unsigned char *,const fe);
+void fe_frombytes (fe, const unsigned char *);
 
-void fe_copy(fe,const fe);
-int fe_isnonzero(const fe);
-int fe_isnegative(const fe);
-void fe_0(fe);
-void fe_1(fe);
-void fe_cmov(fe,const fe,unsigned int);
-void fe_add(fe,const fe,const fe);
-void fe_sub(fe,const fe,const fe);
-void fe_neg(fe,const fe);
-void fe_mul(fe,const fe,const fe);
-void fe_sq(fe,const fe);
-void fe_sq2(fe,const fe);
-void fe_invert(fe,const fe);
-void fe_pow22523(fe,const fe);
+void fe_tobytes (unsigned char *, const fe);
+
+void fe_copy (fe, const fe);
+
+int fe_isnonzero (const fe);
+
+int fe_isnegative (const fe);
+
+void fe_0 (fe);
+
+void fe_1 (fe);
+
+void fe_cmov (fe, const fe, unsigned int);
+
+void fe_add (fe, const fe, const fe);
+
+void fe_sub (fe, const fe, const fe);
+
+void fe_neg (fe, const fe);
+
+void fe_mul (fe, const fe, const fe);
+
+void fe_sq (fe, const fe);
+
+void fe_sq2 (fe, const fe);
+
+void fe_invert (fe, const fe);
+
+void fe_pow22523 (fe, const fe);
 
 /*
 ge means group element.
@@ -51,68 +70,90 @@ Representations:
 */
 
 typedef struct {
-  fe X;
-  fe Y;
-  fe Z;
+	fe X;
+	fe Y;
+	fe Z;
 } ge_p2;
 
 typedef struct {
-  fe X;
-  fe Y;
-  fe Z;
-  fe T;
+	fe X;
+	fe Y;
+	fe Z;
+	fe T;
 } ge_p3;
 
 typedef struct {
-  fe X;
-  fe Y;
-  fe Z;
-  fe T;
+	fe X;
+	fe Y;
+	fe Z;
+	fe T;
 } ge_p1p1;
 
 typedef struct {
-  fe yplusx;
-  fe yminusx;
-  fe xy2d;
+	fe yplusx;
+	fe yminusx;
+	fe xy2d;
 } ge_precomp;
 
 typedef struct {
-  fe YplusX;
-  fe YminusX;
-  fe Z;
-  fe T2d;
+	fe YplusX;
+	fe YminusX;
+	fe Z;
+	fe T2d;
 } ge_cached;
 
 
-void ge_tobytes(unsigned char *,const ge_p2 *);
-void ge_p3_tobytes(unsigned char *,const ge_p3 *);
-int ge_frombytes_negate_vartime(ge_p3 *,const unsigned char *);
+void ge_tobytes (unsigned char *, const ge_p2 *);
 
-void ge_p2_0(ge_p2 *);
-void ge_p3_0(ge_p3 *);
-void ge_precomp_0(ge_precomp *);
-void ge_p3_to_p2(ge_p2 *,const ge_p3 *);
-void ge_p3_to_cached(ge_cached *,const ge_p3 *);
-void ge_p1p1_to_p2(ge_p2 *,const ge_p1p1 *);
-void ge_p1p1_to_p3(ge_p3 *,const ge_p1p1 *);
-void ge_p2_dbl(ge_p1p1 *,const ge_p2 *);
-void ge_p3_dbl(ge_p1p1 *,const ge_p3 *);
+void ge_p3_tobytes (unsigned char *, const ge_p3 *);
 
-void ge_madd(ge_p1p1 *,const ge_p3 *,const ge_precomp *);
-void ge_msub(ge_p1p1 *,const ge_p3 *,const ge_precomp *);
-void ge_add(ge_p1p1 *,const ge_p3 *,const ge_cached *);
-void ge_sub(ge_p1p1 *,const ge_p3 *,const ge_cached *);
-void ge_scalarmult_base(ge_p3 *,const unsigned char *);
-void ge_double_scalarmult_vartime(ge_p2 *,const unsigned char *,const ge_p3 *,const unsigned char *);
-void ge_scalarmult_vartime(ge_p3 *,const unsigned char *,const ge_p3 *);
-int verify_32(const unsigned char *x, const unsigned char *y);
+int ge_frombytes_negate_vartime (ge_p3 *, const unsigned char *);
+
+void ge_p2_0 (ge_p2 *);
+
+void ge_p3_0 (ge_p3 *);
+
+void ge_precomp_0 (ge_precomp *);
+
+void ge_p3_to_p2 (ge_p2 *, const ge_p3 *);
+
+void ge_p3_to_cached (ge_cached *, const ge_p3 *);
+
+void ge_p1p1_to_p2 (ge_p2 *, const ge_p1p1 *);
+
+void ge_p1p1_to_p3 (ge_p3 *, const ge_p1p1 *);
+
+void ge_p2_dbl (ge_p1p1 *, const ge_p2 *);
+
+void ge_p3_dbl (ge_p1p1 *, const ge_p3 *);
+
+void ge_madd (ge_p1p1 *, const ge_p3 *, const ge_precomp *);
+
+void ge_msub (ge_p1p1 *, const ge_p3 *, const ge_precomp *);
+
+void ge_add (ge_p1p1 *, const ge_p3 *, const ge_cached *);
+
+void ge_sub (ge_p1p1 *, const ge_p3 *, const ge_cached *);
+
+void ge_scalarmult_base (ge_p3 *, const unsigned char *);
+
+void ge_double_scalarmult_vartime (ge_p2 *, const unsigned char *, const ge_p3 *, const unsigned char *);
+
+void ge_scalarmult_vartime (ge_p3 *, const unsigned char *, const ge_p3 *);
+
+int verify_32 (const unsigned char *x, const unsigned char *y);
 
 /*
 The set of scalars is \Z/l
 where l = 2^252 + 27742317777372353535851937790883648493.
 */
 
-void sc_reduce(unsigned char *);
-void sc_muladd(unsigned char *,const unsigned char *,const unsigned char *,const unsigned char *);
+void sc_reduce (unsigned char *);
+
+void sc_muladd (unsigned char *, const unsigned char *, const unsigned char *, const unsigned char *);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* SRC_LIBCRYPTOBOX_CURVE25519_FE_H_ */

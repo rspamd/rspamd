@@ -28,6 +28,10 @@ cfg_rcl_error_quark (void)
 	return g_quark_from_static_string ("cfg-rcl-error-quark");
 }
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_rcl_section;
 struct rspamd_config;
 struct rspamd_rcl_default_handler_data;
@@ -491,4 +495,9 @@ gboolean rspamd_config_read (struct rspamd_config *cfg,
 							 GHashTable *vars,
 							 gboolean skip_jinja,
 							 gchar **lua_env);
+
+#ifdef  __cplusplus
+}
+#endif
+
 #endif /* CFG_RCL_H_ */

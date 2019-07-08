@@ -20,12 +20,17 @@
 #include "config.h"
 #include "contrib/libev/ev.h"
 
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /*
  * This module is a little helper to simplify libevent->libev transition
  * It allows to create timed IO watchers utilising both
  */
 
-typedef void (*rspamd_ev_cb)(int fd, short what, void *ud);
+typedef void (*rspamd_ev_cb) (int fd, short what, void *ud);
 
 struct rspamd_io_ev {
 	ev_io io;
@@ -45,7 +50,7 @@ struct rspamd_io_ev {
  * @param ud
  */
 void rspamd_ev_watcher_init (struct rspamd_io_ev *ev,
-		int fd, short what, rspamd_ev_cb cb, void *ud);
+							 int fd, short what, rspamd_ev_cb cb, void *ud);
 
 /**
  * Start watcher with the specific timeout
@@ -74,5 +79,9 @@ void rspamd_ev_watcher_stop (struct ev_loop *loop,
 void rspamd_ev_watcher_reschedule (struct ev_loop *loop,
 								   struct rspamd_io_ev *ev,
 								   short what);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif

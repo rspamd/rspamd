@@ -18,6 +18,10 @@
 
 #include "config.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 enum rspamd_archive_type {
 	RSPAMD_ARCHIVE_ZIP,
 	RSPAMD_ARCHIVE_RAR,
@@ -57,6 +61,10 @@ void rspamd_archives_process (struct rspamd_task *task);
 /**
  * Get textual representation of an archive's type
  */
-const gchar * rspamd_archive_type_str (enum rspamd_archive_type type);
+const gchar *rspamd_archive_type_str (enum rspamd_archive_type type);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* SRC_LIBMIME_ARCHIVES_H_ */

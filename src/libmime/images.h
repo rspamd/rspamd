@@ -4,6 +4,10 @@
 #include "config.h"
 #include "fstring.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct html_image;
 struct rspamd_task;
 struct rspamd_mime_part;
@@ -41,14 +45,18 @@ void rspamd_images_process (struct rspamd_task *task);
  * @param data
  * @return
  */
-struct rspamd_image* rspamd_maybe_process_image (rspamd_mempool_t *pool,
-		rspamd_ftok_t *data);
+struct rspamd_image *rspamd_maybe_process_image (rspamd_mempool_t *pool,
+												 rspamd_ftok_t *data);
 
 /*
  * Get textual representation of an image's type
  */
-const gchar * rspamd_image_type_str (enum rspamd_image_type type);
+const gchar *rspamd_image_type_str (enum rspamd_image_type type);
 
 void rspamd_image_normalize (struct rspamd_task *task, struct rspamd_image *img);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* IMAGES_H_ */

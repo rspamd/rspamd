@@ -18,6 +18,10 @@
 
 #include "config.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct rspamd_redis_pool;
 struct rspamd_config;
 struct redisAsyncContext;
@@ -35,8 +39,8 @@ struct rspamd_redis_pool *rspamd_redis_pool_init (void);
  * @param ev_base
  */
 void rspamd_redis_pool_config (struct rspamd_redis_pool *pool,
-		struct rspamd_config *cfg,
-		struct ev_loop *ev_base);
+							   struct rspamd_config *cfg,
+							   struct ev_loop *ev_base);
 
 
 /**
@@ -48,7 +52,7 @@ void rspamd_redis_pool_config (struct rspamd_redis_pool *pool,
  * @param port
  * @return
  */
-struct redisAsyncContext* rspamd_redis_pool_connect (
+struct redisAsyncContext *rspamd_redis_pool_connect (
 		struct rspamd_redis_pool *pool,
 		const gchar *db, const gchar *password,
 		const char *ip, int port);
@@ -65,7 +69,8 @@ enum rspamd_redis_pool_release_type {
  * @param ctx
  */
 void rspamd_redis_pool_release_connection (struct rspamd_redis_pool *pool,
-		struct redisAsyncContext *ctx, enum rspamd_redis_pool_release_type how);
+										   struct redisAsyncContext *ctx,
+										   enum rspamd_redis_pool_release_type how);
 
 /**
  * Stops redis pool and destroys it
@@ -78,6 +83,10 @@ void rspamd_redis_pool_destroy (struct rspamd_redis_pool *pool);
  * @param type
  * @return
  */
-const gchar* rspamd_redis_type_to_string (int type);
+const gchar *rspamd_redis_type_to_string (int type);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* SRC_LIBSERVER_REDIS_POOL_H_ */

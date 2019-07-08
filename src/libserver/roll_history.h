@@ -19,6 +19,10 @@
 #include "config.h"
 #include "mem_pool.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /*
  * Roll history is a special cycled buffer for checked messages, it is designed for writing history messages
  * and displaying them in webui
@@ -58,8 +62,8 @@ struct roll_history {
  * @param pool pool for shared memory
  * @return new structure
  */
-struct roll_history * rspamd_roll_history_new (rspamd_mempool_t *pool,
-		guint max_rows, struct rspamd_config *cfg);
+struct roll_history *rspamd_roll_history_new (rspamd_mempool_t *pool,
+											  guint max_rows, struct rspamd_config *cfg);
 
 /**
  * Update roll history with data from task
@@ -67,7 +71,7 @@ struct roll_history * rspamd_roll_history_new (rspamd_mempool_t *pool,
  * @param task task object
  */
 void rspamd_roll_history_update (struct roll_history *history,
-	struct rspamd_task *task);
+								 struct rspamd_task *task);
 
 /**
  * Load previously saved history from file
@@ -76,7 +80,7 @@ void rspamd_roll_history_update (struct roll_history *history,
  * @return TRUE if history has been loaded
  */
 gboolean rspamd_roll_history_load (struct roll_history *history,
-	const gchar *filename);
+								   const gchar *filename);
 
 /**
  * Save history to file
@@ -85,6 +89,10 @@ gboolean rspamd_roll_history_load (struct roll_history *history,
  * @return TRUE if history has been saved
  */
 gboolean rspamd_roll_history_save (struct roll_history *history,
-	const gchar *filename);
+								   const gchar *filename);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* ROLL_HISTORY_H_ */

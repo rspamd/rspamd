@@ -19,6 +19,9 @@
 #include "config.h"
 #include "fuzzy_wire.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
 
 struct rspamd_fuzzy_backend_sqlite;
 
@@ -29,8 +32,8 @@ struct rspamd_fuzzy_backend_sqlite;
  * @return backend structure or NULL
  */
 struct rspamd_fuzzy_backend_sqlite *rspamd_fuzzy_backend_sqlite_open (const gchar *path,
-		gboolean vacuum,
-		GError **err);
+																	  gboolean vacuum,
+																	  GError **err);
 
 /**
  * Check specified fuzzy in the backend
@@ -47,7 +50,7 @@ struct rspamd_fuzzy_reply rspamd_fuzzy_backend_sqlite_check (
  * Prepare storage for updates (by starting transaction)
  */
 gboolean rspamd_fuzzy_backend_sqlite_prepare_update (struct rspamd_fuzzy_backend_sqlite *backend,
-		const gchar *source);
+													 const gchar *source);
 
 /**
  * Add digest to the database
@@ -56,7 +59,7 @@ gboolean rspamd_fuzzy_backend_sqlite_prepare_update (struct rspamd_fuzzy_backend
  * @return
  */
 gboolean rspamd_fuzzy_backend_sqlite_add (struct rspamd_fuzzy_backend_sqlite *backend,
-		const struct rspamd_fuzzy_cmd *cmd);
+										  const struct rspamd_fuzzy_cmd *cmd);
 
 /**
  * Delete digest from the database
@@ -72,7 +75,7 @@ gboolean rspamd_fuzzy_backend_sqlite_del (
  * Commit updates to storage
  */
 gboolean rspamd_fuzzy_backend_sqlite_finish_update (struct rspamd_fuzzy_backend_sqlite *backend,
-		const gchar *source, gboolean version_bump);
+													const gchar *source, gboolean version_bump);
 
 /**
  * Sync storage
@@ -80,8 +83,8 @@ gboolean rspamd_fuzzy_backend_sqlite_finish_update (struct rspamd_fuzzy_backend_
  * @return
  */
 gboolean rspamd_fuzzy_backend_sqlite_sync (struct rspamd_fuzzy_backend_sqlite *backend,
-		gint64 expire,
-		gboolean clean_orphaned);
+										   gint64 expire,
+										   gboolean clean_orphaned);
 
 /**
  * Close storage
@@ -90,9 +93,15 @@ gboolean rspamd_fuzzy_backend_sqlite_sync (struct rspamd_fuzzy_backend_sqlite *b
 void rspamd_fuzzy_backend_sqlite_close (struct rspamd_fuzzy_backend_sqlite *backend);
 
 gsize rspamd_fuzzy_backend_sqlite_count (struct rspamd_fuzzy_backend_sqlite *backend);
+
 gint rspamd_fuzzy_backend_sqlite_version (struct rspamd_fuzzy_backend_sqlite *backend, const gchar *source);
+
 gsize rspamd_fuzzy_backend_sqlite_expired (struct rspamd_fuzzy_backend_sqlite *backend);
 
-const gchar * rspamd_fuzzy_sqlite_backend_id (struct rspamd_fuzzy_backend_sqlite *backend);
+const gchar *rspamd_fuzzy_sqlite_backend_id (struct rspamd_fuzzy_backend_sqlite *backend);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* FUZZY_BACKEND_H_ */
