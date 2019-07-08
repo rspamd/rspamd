@@ -3746,6 +3746,14 @@ ucl_object_array_sort (ucl_object_t *ar,
 			(int (*)(const void *, const void *))cmp);
 }
 
+void ucl_object_sort_keys (ucl_object_t *obj,
+		enum ucl_object_keys_sort_flags how)
+{
+	if (obj != NULL && obj->type == UCL_OBJECT) {
+		ucl_hash_sort (obj->value.ov, how);
+	}
+}
+
 #define PRIOBITS 4
 
 unsigned int

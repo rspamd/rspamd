@@ -104,4 +104,11 @@ bool ucl_hash_iter_has_next (ucl_hash_t *hashlin, ucl_hash_iter_t iter);
  */
 bool ucl_hash_reserve (ucl_hash_t *hashlin, size_t sz);
 
+/**
+ * Sorts keys in a hash
+ * @param hashlin
+ * @param fl
+ */
+void ucl_hash_sort (ucl_hash_t *hashlin, enum ucl_object_keys_sort_flags fl);
+
 #endif

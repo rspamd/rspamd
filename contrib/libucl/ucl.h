@@ -800,6 +800,19 @@ UCL_EXTERN int ucl_object_compare_qsort (const ucl_object_t **o1,
 UCL_EXTERN void ucl_object_array_sort (ucl_object_t *ar,
 		int (*cmp)(const ucl_object_t **o1, const ucl_object_t **o2));
 
+enum ucl_object_keys_sort_flags {
+	UCL_SORT_KEYS_DEFAULT = 0,
+	UCL_SORT_KEYS_ICASE = (1u << 0u),
+	UCL_SORT_KEYS_RECURSIVE = (1u << 1u),
+};
+/***
+ * Sorts keys in object in place
+ * @param obj
+ * @param how
+ */
+UCL_EXTERN void ucl_object_sort_keys (ucl_object_t *obj,
+		enum ucl_object_keys_sort_flags how);
+
 /**
  * Get the priority for specific UCL object
  * @param obj any ucl object

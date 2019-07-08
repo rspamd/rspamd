@@ -1368,6 +1368,7 @@ lua_ucl_to_format (lua_State *L)
 {
 	ucl_object_t *obj;
 	int format = UCL_EMIT_JSON;
+	bool sort = false;
 
 	if (lua_gettop (L) > 1) {
 		if (lua_type (L, 2) == LUA_TNUMBER) {
@@ -1397,10 +1398,22 @@ lua_ucl_to_format (lua_State *L)
 				format = UCL_EMIT_MSGPACK;
 			}
 		}
+
+		if (lua_isboolean (L, 3)) {
+			sort = lua_toboolean (L, 3);
+		}
 	}
 
 	obj = ucl_object_lua_import (L, 1);
+
 	if (obj != NULL) {
+
+		if (sort) {
+			if (ucl_object_type (obj) == UCL_OBJECT) {
+				ucl_object_sort_keys (obj, UCL_SORT_KEYS_RECURSIVE);
+			}
+		}
+
 		lua_ucl_to_string (L, obj, format);
 		ucl_object_unref (obj);
 	}
