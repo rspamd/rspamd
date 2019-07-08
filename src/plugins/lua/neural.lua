@@ -285,7 +285,7 @@ local function new_ann_profile(task, rule, set, version)
       true, -- is write
       add_cb, --callback
       'ZADD', -- command
-      {set.prefix, tostring(rspamd_util.get_time()), new_ann_profile}
+      {set.prefix, tostring(rspamd_util.get_time()), profile_serialized}
   )
 
   return profile
@@ -785,7 +785,7 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
               true, -- is write
               rank_cb, --callback
               'ZADD', -- command
-              {set.prefix, tostring(rspamd_util.get_time()), new_ann_profile}
+              {set.prefix, tostring(rspamd_util.get_time()), profile_serialized}
           )
           rspamd_logger.infox(rspamd_config, 'loaded ANN for %s from %s; %s bytes compressed; version=%s',
               rule.prefix .. ':' .. set.name, ann_key, #ann_data, profile.version)
