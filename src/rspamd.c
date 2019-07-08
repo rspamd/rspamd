@@ -1215,13 +1215,9 @@ main (gint argc, gchar **argv, gchar **env)
 			rspamd_main->cfg->cfg_name);
 	msg_info_main ("cpu features: %s",
 			rspamd_main->cfg->libs_ctx->crypto_ctx->cpu_extensions);
-	msg_info_main ("cryptobox configuration: curve25519(%s), "
-			"chacha20(%s), poly1305(%s), siphash(%s), blake2(%s), base64(%s)",
-			rspamd_main->cfg->libs_ctx->crypto_ctx->curve25519_impl,
+	msg_info_main ("cryptobox configuration: curve25519(libsodium), "
+			"chacha20(%s), poly1305(libsodium), siphash(libsodium), blake2(libsodium), base64(%s)",
 			rspamd_main->cfg->libs_ctx->crypto_ctx->chacha20_impl,
-			rspamd_main->cfg->libs_ctx->crypto_ctx->poly1305_impl,
-			rspamd_main->cfg->libs_ctx->crypto_ctx->siphash_impl,
-			rspamd_main->cfg->libs_ctx->crypto_ctx->blake2_impl,
 			rspamd_main->cfg->libs_ctx->crypto_ctx->base64_impl);
 	msg_info_main ("libottery prf: %s", ottery_get_impl_name ());
 

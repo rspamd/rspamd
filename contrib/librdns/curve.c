@@ -446,8 +446,13 @@ rdns_curve_dtor (struct rdns_resolver *resolver, void *plugin_data)
 
 #include "cryptobox.h"
 
+
+#ifndef crypto_box_ZEROBYTES
 #define crypto_box_ZEROBYTES 32
+#endif
+#ifndef crypto_box_BOXZEROBYTES
 #define crypto_box_BOXZEROBYTES 16
+#endif
 
 ssize_t rdns_curve_send (struct rdns_request *req, void *plugin_data,
 						 struct sockaddr *saddr, socklen_t slen);

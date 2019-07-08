@@ -25,6 +25,7 @@
 #include "hs.h"
 #endif
 #include "acism.h"
+#include <stdalign.h>
 
 #define MAX_SCRATCH 4
 
@@ -38,14 +39,14 @@ static const char *hs_cache_dir = NULL;
 static enum rspamd_hs_check_state hs_suitable_cpu = RSPAMD_HS_UNCHECKED;
 
 
-struct rspamd_multipattern {
+struct RSPAMD_ALIGNED(64) rspamd_multipattern {
 #ifdef WITH_HYPERSCAN
+	rspamd_cryptobox_hash_state_t hash_state;
 	hs_database_t *db;
 	hs_scratch_t *scratch[MAX_SCRATCH];
 	GArray *hs_pats;
 	GArray *hs_ids;
 	GArray *hs_flags;
-	rspamd_cryptobox_hash_state_t hash_state;
 	guint scratch_used;
 #endif
 	ac_trie_t *t;
@@ -240,7 +241,11 @@ rspamd_multipattern_create (enum rspamd_multipattern_flags flags)
 {
 	struct rspamd_multipattern *mp;
 
-	mp = g_malloc0 (sizeof (*mp));
+	/* Align due to blake2b state */
+	posix_memalign((void **)&mp, alignof (struct rspamd_multipattern),
+			sizeof (*mp));
+	g_assert (mp != NULL);
+	memset (mp, 0, sizeof (*mp));
 	mp->flags = flags;
 
 #ifdef WITH_HYPERSCAN
@@ -265,7 +270,10 @@ rspamd_multipattern_create_sized (guint npatterns,
 {
 	struct rspamd_multipattern *mp;
 
-	mp = g_malloc0 (sizeof (*mp));
+	/* Align due to blake2b state */
+	posix_memalign((void **)&mp, alignof (struct rspamd_multipattern), sizeof (*mp));
+	g_assert (mp != NULL);
+	memset (mp, 0, sizeof (*mp));
 	mp->flags = flags;
 
 #ifdef WITH_HYPERSCAN
@@ -646,7 +654,7 @@ rspamd_multipattern_destroy (struct rspamd_multipattern *mp)
 			g_array_free (mp->hs_pats, TRUE);
 			g_array_free (mp->hs_ids, TRUE);
 			g_array_free (mp->hs_flags, TRUE);
-			g_free (mp);
+			free (mp); /* Due to posix_memalign */
 
 			return;
 		}

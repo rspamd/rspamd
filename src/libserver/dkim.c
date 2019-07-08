@@ -21,7 +21,6 @@
 #include "utlist.h"
 #include "unix-std.h"
 #include "mempool_vars_internal.h"
-#include "libcryptobox/ed25519/ed25519.h"
 
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
@@ -2763,7 +2762,7 @@ rspamd_dkim_sign_key_load (const gchar *key, gsize len,
 			nkey->type = RSPAMD_DKIM_KEY_EDDSA;
 			nkey->key.key_eddsa = g_malloc (
 					rspamd_cryptobox_sk_sig_bytes (RSPAMD_CRYPTOBOX_MODE_25519));
-			ed25519_seed_keypair (pk, nkey->key.key_eddsa, (char *) key);
+			crypto_sign_ed25519_seed_keypair (pk, nkey->key.key_eddsa, key);
 			nkey->keylen = rspamd_cryptobox_sk_sig_bytes (RSPAMD_CRYPTOBOX_MODE_25519);
 		}
 		else {

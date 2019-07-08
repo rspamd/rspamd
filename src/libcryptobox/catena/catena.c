@@ -22,7 +22,8 @@
 
 #include "config.h"
 #include "catena.h"
-#include "../blake2/blake2.h"
+
+#include <sodium.h>
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 #define TO_LITTLE_ENDIAN_64(n) (n)
@@ -49,10 +50,10 @@ static inline void
 __Hash1(const uint8_t *input, const uint32_t inputlen,
 		uint8_t hash[H_LEN])
 {
-	blake2b_state ctx;
-	blake2b_init (&ctx);
-	blake2b_update (&ctx, input, inputlen);
-	blake2b_final (&ctx, hash);
+	crypto_generichash_blake2b_state ctx;
+	crypto_generichash_blake2b_init (&ctx, NULL, 0, H_LEN);
+	crypto_generichash_blake2b_update (&ctx, input, inputlen);
+	crypto_generichash_blake2b_final (&ctx, hash, H_LEN);
 }
 
 /***************************************************/
@@ -61,11 +62,12 @@ static inline
 void __Hash2(const uint8_t *i1, const uint8_t i1len, const uint8_t *i2,
 		const uint8_t i2len, uint8_t hash[H_LEN])
 {
-	blake2b_state ctx;
-	blake2b_init (&ctx);
-	blake2b_update (&ctx, i1, i1len);
-	blake2b_update (&ctx, i2, i2len);
-	blake2b_final (&ctx, hash);
+	crypto_generichash_blake2b_state ctx;
+
+	crypto_generichash_blake2b_init (&ctx, NULL, 0, H_LEN);
+	crypto_generichash_blake2b_update (&ctx, i1, i1len);
+	crypto_generichash_blake2b_update (&ctx, i2, i2len);
+	crypto_generichash_blake2b_final (&ctx, hash, H_LEN);
 }
 
 /***************************************************/
@@ -75,12 +77,13 @@ void __Hash3(const uint8_t *i1, const uint8_t i1len, const uint8_t *i2,
 		const uint8_t i2len, const uint8_t *i3, const uint8_t i3len,
 		uint8_t hash[H_LEN])
 {
-	blake2b_state ctx;
-	blake2b_init (&ctx);
-	blake2b_update (&ctx, i1, i1len);
-	blake2b_update (&ctx, i2, i2len);
-	blake2b_update (&ctx, i3, i3len);
-	blake2b_final (&ctx, hash);
+	crypto_generichash_blake2b_state ctx;
+
+	crypto_generichash_blake2b_init (&ctx, NULL, 0, H_LEN);
+	crypto_generichash_blake2b_update (&ctx, i1, i1len);
+	crypto_generichash_blake2b_update (&ctx, i2, i2len);
+	crypto_generichash_blake2b_update (&ctx, i3, i3len);
+	crypto_generichash_blake2b_final (&ctx, hash, H_LEN);
 }
 
 /***************************************************/
@@ -90,13 +93,14 @@ void __Hash4(const uint8_t *i1, const uint8_t i1len, const uint8_t *i2,
 		const uint8_t i2len, const uint8_t *i3, const uint8_t i3len,
 		const uint8_t *i4, const uint8_t i4len, uint8_t hash[H_LEN])
 {
-	blake2b_state ctx;
-	blake2b_init (&ctx);
-	blake2b_update (&ctx, i1, i1len);
-	blake2b_update (&ctx, i2, i2len);
-	blake2b_update (&ctx, i3, i3len);
-	blake2b_update (&ctx, i4, i4len);
-	blake2b_final (&ctx, hash);
+	crypto_generichash_blake2b_state ctx;
+
+	crypto_generichash_blake2b_init (&ctx, NULL, 0, H_LEN);
+	crypto_generichash_blake2b_update (&ctx, i1, i1len);
+	crypto_generichash_blake2b_update (&ctx, i2, i2len);
+	crypto_generichash_blake2b_update (&ctx, i3, i3len);
+	crypto_generichash_blake2b_update (&ctx, i4, i4len);
+	crypto_generichash_blake2b_final (&ctx, hash, H_LEN);
 }
 
 /***************************************************/
@@ -107,14 +111,15 @@ void __Hash5(const uint8_t *i1, const uint8_t i1len, const uint8_t *i2,
 		const uint8_t *i4, const uint8_t i4len, const uint8_t *i5,
 		const uint8_t i5len, uint8_t hash[H_LEN])
 {
-	blake2b_state ctx;
-	blake2b_init (&ctx);
-	blake2b_update (&ctx, i1, i1len);
-	blake2b_update (&ctx, i2, i2len);
-	blake2b_update (&ctx, i3, i3len);
-	blake2b_update (&ctx, i4, i4len);
-	blake2b_update (&ctx, i5, i5len);
-	blake2b_final (&ctx, hash);
+	crypto_generichash_blake2b_state ctx;
+
+	crypto_generichash_blake2b_init (&ctx, NULL, 0, H_LEN);
+	crypto_generichash_blake2b_update (&ctx, i1, i1len);
+	crypto_generichash_blake2b_update (&ctx, i2, i2len);
+	crypto_generichash_blake2b_update (&ctx, i3, i3len);
+	crypto_generichash_blake2b_update (&ctx, i4, i4len);
+	crypto_generichash_blake2b_update (&ctx, i5, i5len);
+	crypto_generichash_blake2b_final (&ctx, hash, H_LEN);
 }
 
 static inline void

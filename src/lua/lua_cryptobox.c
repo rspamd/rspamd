@@ -35,6 +35,8 @@
 #include "contrib/libottery/ottery.h"
 #include "libutil/ref.h"
 
+#include <stdalign.h>
+
 enum lua_cryptobox_hash_type {
 	LUA_CRYPTOBOX_HASH_BLAKE2,
 	LUA_CRYPTOBOX_HASH_SSL,
@@ -942,7 +944,7 @@ lua_cryptobox_hash_dtor (struct rspamd_lua_cryptobox_hash *h)
 	}
 	else if (h->type == LUA_CRYPTOBOX_HASH_BLAKE2) {
 		rspamd_explicit_memzero (h->content.h, sizeof (*h->content.h));
-		g_free (h->content.h);
+		free (h->content.h); /* Allocated by posix_memalign */
 	}
 	else {
 		g_free (h->content.fh);
@@ -988,7 +990,9 @@ rspamd_lua_hash_create (const gchar *type)
 		}
 		else if (g_ascii_strcasecmp (type, "blake2") == 0) {
 			h->type = LUA_CRYPTOBOX_HASH_BLAKE2;
-			h->content.h = g_malloc0 (sizeof (*h->content.h));
+			posix_memalign ((void **)&h->content.h, alignof (rspamd_cryptobox_hash_state_t),
+					sizeof (*h->content.h));
+			g_assert (h->content.h != NULL);
 			rspamd_cryptobox_hash_init (h->content.h, NULL, 0);
 		}
 		else if (g_ascii_strcasecmp (type, "xxh64") == 0) {
@@ -1023,7 +1027,9 @@ rspamd_lua_hash_create (const gchar *type)
 	}
 	else {
 		h->type = LUA_CRYPTOBOX_HASH_BLAKE2;
-		h->content.h = g_malloc0 (sizeof (*h->content.h));
+		posix_memalign ((void **)&h->content.h, alignof (rspamd_cryptobox_hash_state_t),
+				sizeof (*h->content.h));
+		g_assert (h->content.h != NULL);
 		rspamd_cryptobox_hash_init (h->content.h, NULL, 0);
 	}
 
@@ -1651,10 +1657,13 @@ lua_cryptobox_sign_memory (lua_State *L)
 
 	sig = rspamd_fstring_sized_new (rspamd_cryptobox_signature_bytes (
 			rspamd_keypair_alg (kp)));
-	rspamd_cryptobox_sign (sig->str, &sig->len, data,
+
+	unsigned long long siglen = sig->len;
+	rspamd_cryptobox_sign (sig->str, &siglen, data,
 			len, rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_SK,
 					NULL), rspamd_keypair_alg (kp));
 
+	sig->len = siglen;
 	psig = lua_newuserdata (L, sizeof (void *));
 	*psig = sig;
 	rspamd_lua_setclass (L, "rspamd{cryptobox_signature}", -1);
@@ -1695,10 +1704,14 @@ lua_cryptobox_sign_file (lua_State *L)
 	else {
 		sig = rspamd_fstring_sized_new (rspamd_cryptobox_signature_bytes (
 				rspamd_keypair_alg (kp)));
-		rspamd_cryptobox_sign (sig->str, &sig->len, data,
+
+		unsigned long long siglen = sig->len;
+
+		rspamd_cryptobox_sign (sig->str, &siglen, data,
 				len, rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_SK,
 						NULL), rspamd_keypair_alg (kp));
 
+		sig->len = siglen;
 		psig = lua_newuserdata (L, sizeof (void *));
 		*psig = sig;
 		rspamd_lua_setclass (L, "rspamd{cryptobox_signature}", -1);

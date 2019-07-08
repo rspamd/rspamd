@@ -18,6 +18,8 @@
 
 #include "config.h"
 
+#include <sodium.h>
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
@@ -41,7 +43,7 @@ struct rspamd_cryptobox_segment {
 #define rspamd_cryptobox_SIPKEYBYTES 16
 #define rspamd_cryptobox_HASHBYTES 64
 #define rspamd_cryptobox_HASHKEYBYTES 64
-#define rspamd_cryptobox_HASHSTATEBYTES 256
+#define rspamd_cryptobox_HASHSTATEBYTES sizeof(crypto_generichash_blake2b_state) + 64
 #define rspamd_cryptobox_MAX_SIGSKBYTES 64
 #define rspamd_cryptobox_MAX_SIGPKBYTES 32
 #define rspamd_cryptobox_MAX_SIGBYTES 72
@@ -72,12 +74,7 @@ enum rspamd_cryptobox_mode {
 
 struct rspamd_cryptobox_library_ctx {
 	gchar *cpu_extensions;
-	const gchar *curve25519_impl;
-	const gchar *ed25519_impl;
 	const gchar *chacha20_impl;
-	const gchar *poly1305_impl;
-	const gchar *siphash_impl;
-	const gchar *blake2_impl;
 	const gchar *base64_impl;
 	unsigned long cpu_config;
 };
@@ -203,7 +200,7 @@ void rspamd_cryptobox_nm (rspamd_nm_t nm, const rspamd_pk_t pk,
  * @param mlen input length
  * @param sk secret key
  */
-void rspamd_cryptobox_sign (guchar *sig, gsize *siglen_p,
+void rspamd_cryptobox_sign (guchar *sig, unsigned long long *siglen_p,
 							const guchar *m, gsize mlen,
 							const rspamd_sk_t sk,
 							enum rspamd_cryptobox_mode mode);
@@ -229,7 +226,8 @@ bool rspamd_cryptobox_verify (const guchar *sig,
  * @param buf buffer to zero
  * @param buflen length of buffer
  */
-void rspamd_explicit_memzero (void *const buf, gsize buflen);
+
+#define rspamd_explicit_memzero sodium_memzero
 
 /**
  * Constant time memcmp
@@ -238,8 +236,7 @@ void rspamd_explicit_memzero (void *const buf, gsize buflen);
  * @param len
  * @return
  */
-gint
-rspamd_cryptobox_memcmp (const void *const b1_, const void *const b2_, gsize len);
+#define rspamd_cryptobox_memcmp sodium_memcmp
 
 /**
  * Calculates siphash-2-4 for a message
@@ -317,9 +314,7 @@ guint rspamd_cryptobox_mac_bytes (enum rspamd_cryptobox_mode mode);
 guint rspamd_cryptobox_signature_bytes (enum rspamd_cryptobox_mode mode);
 
 /* Hash IUF interface */
-typedef struct rspamd_cryptobox_hash_state_s {
-	unsigned char opaque[256];
-} rspamd_cryptobox_hash_state_t;
+typedef crypto_generichash_blake2b_state rspamd_cryptobox_hash_state_t;
 
 /**
  * Init cryptobox hash state using key if needed, `st` must point to the buffer

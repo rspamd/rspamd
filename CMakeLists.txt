@@ -674,6 +674,9 @@ ProcessPackage(MAGIC LIBRARY magic INCLUDE magic.h INCLUDE_SUFFIXES include/libm
 	ROOT ${LIBMAGIC_ROOT_DIR} MODULES magic)
 ProcessPackage(LIBZ LIBRARY z INCLUDE zlib.h INCLUDE_SUFFIXES include/zlib
 		ROOT ${LIBZ_ROOT_DIR} MODULES z)
+ProcessPackage(SODIUM LIBRARY sodium INCLUDE sodium.h
+		INCLUDE_SUFFIXES include/libsodium include/sodium
+		ROOT ${LIBSODIUM_ROOT_DIR} MODULES libsodium>=1.0.0)
 
 IF(ENABLE_HYPERSCAN MATCHES "ON")
 	ProcessPackage(HYPERSCAN LIBRARY hs INCLUDE hs.h INCLUDE_SUFFIXES
@@ -897,14 +900,6 @@ CHECK_FUNCTION_EXISTS(mkstemp HAVE_MKSTEMP)
 CHECK_FUNCTION_EXISTS(setitimer HAVE_SETITIMER)
 CHECK_FUNCTION_EXISTS(inet_pton HAVE_INET_PTON)
 CHECK_FUNCTION_EXISTS(clock_gettime HAVE_CLOCK_GETTIME)
-CHECK_FUNCTION_EXISTS(memset_s HAVE_MEMSET_S)
-CHECK_FUNCTION_EXISTS(explicit_bzero HAVE_EXPLICIT_BZERO)
-CHECK_C_SOURCE_COMPILES(
-	"#include <stddef.h>
-	void cmkcheckweak() __attribute__((weak));
-	int main(int argc, char** argv) {
-  		return cmkcheckweak == NULL;
-	}" HAVE_WEAK_SYMBOLS)
 CHECK_C_SOURCE_COMPILES(
 		"#include <time.h>
 		extern char *tzname[2];

@@ -31,6 +31,7 @@
 #include "hs.h"
 #include "unix-std.h"
 #include <signal.h>
+#include <stdalign.h>
 
 #ifndef WITH_PCRE2
 #include <pcre.h>
@@ -385,7 +386,9 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 		rspamd_regexp_set_cache_id (re, i);
 
 		if (re_class->st == NULL) {
-			re_class->st = g_malloc (sizeof (*re_class->st));
+			posix_memalign ((void **)&re_class->st, alignof (rspamd_cryptobox_hash_state_t),
+			 		sizeof (*re_class->st));
+			g_assert (re_class->st != NULL);
 			rspamd_cryptobox_hash_init (re_class->st, NULL, 0);
 		}
 
@@ -447,7 +450,7 @@ rspamd_re_cache_init (struct rspamd_re_cache *cache, struct rspamd_config *cfg)
 			rspamd_cryptobox_hash_final (re_class->st, hash_out);
 			rspamd_snprintf (re_class->hash, sizeof (re_class->hash), "%*xs",
 					(gint) rspamd_cryptobox_HASHBYTES, hash_out);
-			g_free (re_class->st);
+			free (re_class->st); /* Due to posix_memalign */
 			re_class->st = NULL;
 		}
 	}
