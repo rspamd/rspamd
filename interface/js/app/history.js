@@ -827,7 +827,12 @@ define(["jquery", "footable", "humanize"],
                         });
                     var rows = [].concat.apply([], neighbours_data);
                     $.each(rows, function (i, item) {
-                        item.ts = unix_time_format(item.ts);
+                        item.ts = {
+                            value: unix_time_format(item.ts),
+                            options: {
+                                sortValue: item.ts
+                            }
+                        };
                     });
                     if (Object.prototype.hasOwnProperty.call(tables, "errors")) {
                         tables.errors.rows.load(rows);
