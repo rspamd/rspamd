@@ -5,10 +5,7 @@
 #
 
 ############################# INITIAL SECTION #############################################
-CMAKE_MINIMUM_REQUIRED(VERSION 3.0 FATAL_ERROR)
-
-PROJECT(rspamd C)
-ENABLE_LANGUAGE(ASM)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.1 FATAL_ERROR)
 
 SET(RSPAMD_VERSION_MAJOR 2)
 SET(RSPAMD_VERSION_MINOR 0)
@@ -23,6 +20,17 @@ IF(GIT_ID)
 ENDIF()
 
 SET(RSPAMD_VERSION         "${RSPAMD_VERSION_MAJOR}.${RSPAMD_VERSION_MINOR}")
+
+PROJECT(rspamd VERSION "${RSPAMD_VERSION}" LANGUAGES C CXX ASM)
+
+# This is supported merely with cmake 3.1
+SET(CMAKE_CXX_STANDARD 17)
+SET(CMAKE_CXX_STANDARD_REQUIRED ON)
+SET(USE_CXX_LINKER 1)
+
+SET(CMAKE_C_STANDARD 11)
+SET(CMAKE_C_STANDARD_REQUIRED ON)
+
 SET(RSPAMD_MASTER_SITE_URL "https://rspamd.com")
 
 IF(NOT RSPAMD_USER)
@@ -39,14 +47,11 @@ SET_PROPERTY(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS 1)
 
 OPTION(ENABLE_OPTIMIZATION "Enable extra optimizations [default: OFF]"          OFF)
 OPTION(SKIP_RELINK_RPATH   "Skip relinking and full RPATH for the install tree" OFF)
-OPTION(ENABLE_REDIRECTOR   "Enable redirector install [default: OFF]"           OFF)
 OPTION(ENABLE_GPERF_TOOLS  "Enable google perftools [default: OFF]"             OFF)
 OPTION(ENABLE_STATIC       "Enable static compiling [default: OFF]"             OFF)
 OPTION(ENABLE_LUAJIT       "Link with libluajit [default: ON]"                  ON)
-OPTION(ENABLE_DB           "Find and link with DB library [default: OFF]"       OFF)
 OPTION(ENABLE_URL_INCLUDE  "Enable urls in ucl includes (requires libcurl or libfetch) [default: OFF]" OFF)
 OPTION(NO_SHARED           "Build internal libs static [default: ON]"          ON)
-OPTION(INSTALL_EXAMPLES    "Install examples [default: OFF]"                    OFF)
 OPTION(INSTALL_WEBUI       "Install web interface [default: ON]"                ON)
 OPTION(WANT_SYSTEMD_UNITS  "Install systemd unit files on Linux [default: OFF]" OFF)
 OPTION(ENABLE_SNOWBALL     "Enable snowball stemmer [default: ON]"              ON)
@@ -404,6 +409,7 @@ MACRO(ProcessPackage PKG_NAME)
 		# Handle other CFLAGS and LDFLAGS
 		FOREACH(_arg ${${_XPREFIX}_CFLAGS_OTHER})
 			SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_arg}")
+			SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_arg}")
 		ENDFOREACH(_arg ${${_XPREFIX}_CFLAGS_OTHER})
 		FOREACH(_arg ${${_XPREFIX}_LDFLAGS_OTHER})
 			SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${_arg}")
@@ -464,35 +470,6 @@ MACRO(ProcessPackage PKG_NAME)
 	UNSET(_lib CACHE)
 	UNSET(_incl CACHE)
 ENDMACRO(ProcessPackage name)
-
-MACRO(ADD_PRECOMPILED_HEADER _target _input)
-	GET_FILENAME_COMPONENT(_name ${_input} NAME)
-	SET(_outdir "${CMAKE_BINARY_DIR}/${_name}.pch")
-	MAKE_DIRECTORY(${_outdir})
-	SET(_output "${_outdir}/${_name}.pch")
-	STRING(TOUPPER "CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE}" _flags_var_name)
-	SET(_compiler_FLAGS ${${_flags_var_name}})
-	GET_DIRECTORY_PROPERTY(_directory_flags INCLUDE_DIRECTORIES)
-	FOREACH(item ${_directory_flags})
-		LIST(APPEND _compiler_FLAGS "-I${item}")
-	ENDFOREACH(item)
-
-	INCLUDE_DIRECTORIES(${_outdir})
-	IF("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
-		IF(NOT TARGET ${_name}_pch)
-			MESSAGE("${CMAKE_C_COMPILER} -DPCHCOMPILE ${CMAKE_C_FLAGS} -x c-header -o ${_output} ${_input}")
-			ADD_CUSTOM_COMMAND(OUTPUT ${_output}
-				COMMAND ${CMAKE_C_COMPILER} -DPCHCOMPILE ${_compiler_FLAGS} -x c-header -o ${_output} ${_input}
-				DEPENDS ${_input})
-			ADD_CUSTOM_TARGET(${_name}_pch DEPENDS ${_output})
-		ENDIF()
-
-		ADD_CUSTOM_TARGET(${_target}_pch DEPENDS ${_name}_pch)
-		ADD_DEPENDENCIES(${_target} ${_target}_pch)
-		SET_TARGET_PROPERTIES(${_target} PROPERTIES COMPILE_FLAGS "-include ${_name} -Winvalid-pch")
-	ENDIF()
-ENDMACRO()
-
 ############################# CONFIG SECTION #############################################
 # Initial set
 
@@ -527,10 +504,6 @@ SET(TAR "tar")
 IF(CMAKE_SYSTEM_NAME MATCHES "^.*BSD$|DragonFly")
 	ADD_DEFINITIONS(-DFREEBSD -D_BSD_SOURCE)
 	CONFIGURE_FILE(freebsd/rspamd.sh.in freebsd/rspamd @ONLY)
-
-	IF(ENABLE_REDIRECTOR MATCHES "ON")
-		CONFIGURE_FILE(freebsd/redirector.sh.in freebsd/redirector @ONLY)
-	ENDIF(ENABLE_REDIRECTOR MATCHES "ON")
 	MESSAGE(STATUS "Configuring for BSD system")
 	# Find util library
 	ProcessPackage(LIBUTIL LIBRARY util INCLUDE libutil.h
@@ -549,7 +522,7 @@ IF(CMAKE_SYSTEM_NAME MATCHES "^.*BSD$|DragonFly")
 ENDIF()
 
 IF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_BSD_SOURCE -DDARWIN")
+	ADD_DEFINITIONS(-D_BSD_SOURCE -DDARWIN)
 	SET(CMAKE_SHARED_LIBRARY_CREATE_C_FLAGS "${CMAKE_SHARED_LIBRARY_CREATE_C_FLAGS} -undefined dynamic_lookup")
 	IF(ENABLE_LUAJIT MATCHES "ON")
 		SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pagezero_size 10000 -image_base 100000000")
@@ -560,7 +533,6 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 ENDIF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE")
 	ADD_DEFINITIONS(-D_GNU_SOURCE -DLINUX)
 	# Workaround with architecture specific includes
 	#IF(IS_DIRECTORY "/usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu/")
@@ -591,8 +563,7 @@ IF(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
 		ENDIF(ENABLE_OPTIMIZATION MATCHES "ON")
 	ENDIF("${CMAKE_C_COMPILER_ID}" MATCHES SunPro)
 
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D__EXTENSIONS__ -DSOLARIS -D_POSIX_SOURCE -D_POSIX_C_SOURCE=200112L")
-
+	ADD_DEFINITIONS(-D__EXTENSIONS__ -DSOLARIS -D_POSIX_SOURCE -D_POSIX_C_SOURCE=200112)
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES rt)
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES dl)
 	LIST(APPEND CMAKE_REQUIRED_LIBRARIES resolv)
@@ -694,15 +665,9 @@ IF(ENABLE_GPERF_TOOLS MATCHES "ON")
 	ProcessPackage(GPERF LIBRARY profiler INCLUDE profiler.h INCLUDE_SUFFIXES include/google
 		ROOT ${GPERF_ROOT_DIR})
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-omit-frame-pointer")
+	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer")
 	SET(WITH_GPERF_TOOLS 1)
 ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
-
-IF (ENABLE_HYPERSCAN MATCHES "ON")
-	IF(${HYPERSCAN_LIBRARY} MATCHES ".*[.]a$" OR STATIC_HYPERSCAN)
-		ENABLE_LANGUAGE(CXX)
-		SET(USE_CXX_LINKER 1)
-	ENDIF()
-ENDIF()
 
 CHECK_C_COMPILER_FLAG(-Wall SUPPORT_WALL)
 CHECK_C_COMPILER_FLAG(-W SUPPORT_W)
@@ -722,10 +687,6 @@ CHECK_C_COMPILER_FLAG(-Wduplicated-cond SUPPORT_WDUPLICATED_COND)
 # GCC 7 specific
 CHECK_C_COMPILER_FLAG(-Wimplicit-fallthrough SUPPORT_WIMPLICIT_FALLTHROUGH)
 
-IF(NOT "${CMAKE_C_COMPILER_ID}" MATCHES SunPro)
-	CHECK_C_COMPILER_FLAG("-std=c11" SUPPORT_STD11_FLAG)
-	CHECK_C_COMPILER_FLAG("-std=c99" SUPPORT_STD99_FLAG)
-ENDIF(NOT "${CMAKE_C_COMPILER_ID}" MATCHES SunPro)
 IF(SUPPORT_W)
 	ADD_COMPILE_OPTIONS("-W")
 ENDIF(SUPPORT_W)
@@ -816,6 +777,7 @@ ENDIF(NOT CMAKE_C_OPT_FLAGS)
 IF(ENABLE_COVERAGE)
 	SET(CMAKE_C_OPT_FLAGS "-g -O0")
 	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage")
+	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
 	SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
 ENDIF(ENABLE_COVERAGE)
 
@@ -824,6 +786,7 @@ IF(ENABLE_LUA_TRACE)
 ENDIF(ENABLE_LUA_TRACE)
 
 SET(CMAKE_C_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_C_FLAGS}")
+SET(CMAKE_CXX_FLAGS "${CMAKE_C_OPT_FLAGS} ${CMAKE_CXX_FLAGS}")
 
 ADD_DEFINITIONS(-DHAVE_CONFIG_H)
 
