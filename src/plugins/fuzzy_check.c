@@ -2121,16 +2121,37 @@ fuzzy_insert_metric_results (struct rspamd_task *task, GPtrArray *results)
 {
 	struct fuzzy_client_result *res;
 	guint i;
-	gboolean seen_text = FALSE, seen_img = FALSE;
+	gboolean seen_text_hash = FALSE, seen_img_hash = FALSE, seen_text = FALSE,
+			seen_long_text = FALSE;
 	gdouble prob_txt = 0.0, mult;
+	struct rspamd_mime_text_part *tp;
+
+	/* About 5 words */
+	static const text_length_cutoff = 25;
 
 	PTR_ARRAY_FOREACH (results, i, res) {
 		if (res->type == FUZZY_RESULT_TXT) {
-			seen_text = TRUE;
+			seen_text_hash = TRUE;
 			prob_txt = MAX (prob_txt, res->prob);
 		}
 		else if (res->type == FUZZY_RESULT_IMG) {
-			seen_img = TRUE;
+			seen_img_hash = TRUE;
+		}
+	}
+
+	PTR_ARRAY_FOREACH (task->text_parts, i, tp) {
+		if (!IS_PART_EMPTY (tp)) {
+			seen_text = TRUE;
+		}
+		else if (tp->utf_stripped_text.magic == UTEXT_MAGIC) {
+			if (utext_isLengthExpensive (&tp->utf_stripped_text)) {
+				seen_long_text =
+						utext_nativeLength (&tp->utf_stripped_text) > text_length_cutoff;
+			}
+			else {
+				/* Cannot directly calculate length */
+				seen_long_text = tp->utf_stripped_content->len / 2 > text_length_cutoff;
+			}
 		}
 	}
 
@@ -2138,16 +2159,28 @@ fuzzy_insert_metric_results (struct rspamd_task *task, GPtrArray *results)
 		mult = 1.0;
 
 		if (res->type == FUZZY_RESULT_IMG) {
-			if (!seen_text) {
-				mult *= 0.25;
+			if (!seen_text_hash) {
+				if (seen_long_text) {
+					mult *= 0.25;
+				}
+				else if (seen_text) {
+					/* We have some short text + image */
+					mult *= 0.9;
+				}
+				/* Otherwise apply full score */
 			}
 			else if (prob_txt < 0.75) {
 				/* Penalize sole image without matching text */
-				mult *= prob_txt;
+				if (prob_txt > 0.5) {
+					mult *= prob_txt;
+				}
+				else {
+					mult *= 0.5; /* cutoff */
+				}
 			}
 		}
 		else if (res->type == FUZZY_RESULT_TXT) {
-			if (seen_img) {
+			if (seen_img_hash) {
 				/* Slightly increase score */
 				mult = 1.1;
 			}
