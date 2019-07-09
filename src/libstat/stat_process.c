@@ -273,6 +273,7 @@ rspamd_stat_backends_post_process (struct rspamd_stat_ctx *st_ctx,
 	struct rspamd_statfile *st;
 	struct rspamd_classifier *cl;
 	gpointer bk_run;
+	gboolean ret = TRUE;
 
 	g_assert (task->stat_runtimes != NULL);
 
@@ -288,12 +289,12 @@ rspamd_stat_backends_post_process (struct rspamd_stat_ctx *st_ctx,
 
 		if (bk_run != NULL) {
 			if (!st->backend->finalize_process (task, bk_run, st_ctx)) {
-				return FALSE;
+				ret = FALSE;
 			}
 		}
 	}
 
-	return TRUE;
+	return ret;
 }
 
 static void
