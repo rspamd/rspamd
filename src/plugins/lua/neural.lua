@@ -356,11 +356,6 @@ local function ann_push_task_result(rule, task, verdict, score, set)
   local skip_reason = 'unknown'
 
   if train_opts.autotrain then
-    if verdict == 'passthrough' then
-      lua_util.debugm(N, task, 'ignore task as its verdict is %s(%s)',
-          verdict, score)
-    end
-
     if train_opts.spam_score then
       learn_spam = score >= train_opts.spam_score
 
@@ -1071,7 +1066,14 @@ local function ann_push_vector(task)
     lua_util.debugm(N, task, 'do not push data for manual scan')
     return
   end
+
   local verdict,score = lua_util.get_task_verdict(task)
+
+  if verdict == 'passthrough' then
+    lua_util.debugm(N, task, 'ignore task as its verdict is %s(%s)',
+        verdict, score)
+  end
+
   for _,rule in pairs(settings.rules) do
     local set = get_rule_settings(task, rule)
 
