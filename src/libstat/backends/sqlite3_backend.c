@@ -700,7 +700,7 @@ rspamd_sqlite3_process_tokens (struct rspamd_task *task,
 
 		if (bk == NULL) {
 			/* Statfile is does not exist, so all values are zero */
-			tok->values[id] = 0.0;
+			tok->values[id] = 0.0f;
 			continue;
 		}
 
@@ -735,7 +735,7 @@ rspamd_sqlite3_process_tokens (struct rspamd_task *task,
 				tok->values[id] = iv;
 			}
 			else {
-				tok->values[id] = 0.0;
+				tok->values[id] = 0.0f;
 			}
 		}
 		else {
@@ -745,7 +745,7 @@ rspamd_sqlite3_process_tokens (struct rspamd_task *task,
 				tok->values[id] = iv;
 			}
 			else {
-				tok->values[id] = 0.0;
+				tok->values[id] = 0.0f;
 			}
 		}
 

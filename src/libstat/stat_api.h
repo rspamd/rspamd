@@ -59,7 +59,7 @@ typedef struct token_node_s {
 	guint flags;
 	rspamd_stat_token_t *t1;
 	rspamd_stat_token_t *t2;
-	gdouble values[];
+	float values[];
 } rspamd_token_t;
 
 struct rspamd_stat_ctx;
