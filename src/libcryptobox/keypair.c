@@ -837,7 +837,7 @@ rspamd_keypair_sign (struct rspamd_cryptobox_keypair *kp,
 		const void *data, gsize len, guchar **sig, gsize *outlen,
 		GError **err)
 {
-	gsize siglen;
+	unsigned long long siglen;
 	guint sklen;
 
 	g_assert (kp != NULL);
