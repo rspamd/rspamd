@@ -1152,7 +1152,7 @@ local function process_rules_settings()
       process_settings_elt(rule, nelt)
       for id,ex in pairs(rule.settings) do
         if type(ex) == 'table' then
-          if lua_util.distance_sorted(ex.symbols, nelt.symbols) == 0 then
+          if nelt and lua_util.distance_sorted(ex.symbols, nelt.symbols) == 0 then
             -- Equal symbols, add reference
             lua_util.debugm(N, rspamd_config,
                 'added reference from settings id %s to %s; same symbols',
