@@ -789,7 +789,6 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
 
           if ann then
             set.ann = {
-              ann = ann,
               version = profile.version,
               symbols = profile.symbols,
               distance = min_diff,
@@ -798,6 +797,7 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
 
             local ucl = require "ucl"
             local profile_serialized = ucl.to_format(profile, 'json-compact', true)
+            profile.ann = ann -- To avoid serialization
 
             local function rank_cb(_, _)
               -- TODO: maybe add some logging
