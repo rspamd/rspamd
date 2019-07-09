@@ -376,8 +376,16 @@ typedef off_t goffset;
 # define NBYTES(nbits)   (((nbits) + BITSPERBYTE - 1) / BITSPERBYTE)
 #endif
 
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
 extern uint64_t ottery_rand_uint64(void);
 #define UCL_RANDOM_FUNCTION ottery_rand_uint64()
+#ifdef  __cplusplus
+}
+#endif
+
 
 /* Disable slab allocator if jemalloc is already in the system */
 #if defined(WITH_JEMALLOC) || defined(__FreeBSD__) || \
