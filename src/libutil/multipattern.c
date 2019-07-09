@@ -242,7 +242,7 @@ rspamd_multipattern_create (enum rspamd_multipattern_flags flags)
 	struct rspamd_multipattern *mp;
 
 	/* Align due to blake2b state */
-	posix_memalign((void **)&mp, alignof (struct rspamd_multipattern),
+	posix_memalign((void **)&mp, _Alignof (struct rspamd_multipattern),
 			sizeof (*mp));
 	g_assert (mp != NULL);
 	memset (mp, 0, sizeof (*mp));
@@ -271,7 +271,7 @@ rspamd_multipattern_create_sized (guint npatterns,
 	struct rspamd_multipattern *mp;
 
 	/* Align due to blake2b state */
-	posix_memalign((void **)&mp, alignof (struct rspamd_multipattern), sizeof (*mp));
+	posix_memalign((void **)&mp, _Alignof (struct rspamd_multipattern), sizeof (*mp));
 	g_assert (mp != NULL);
 	memset (mp, 0, sizeof (*mp));
 	mp->flags = flags;
