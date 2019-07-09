@@ -275,12 +275,16 @@ lua_redis_push_error (const gchar *err,
 {
 	struct lua_redis_userdata *ud = sp_ud->c;
 	struct lua_callback_state cbs;
+	lua_State *L;
 
 	if (!(sp_ud->flags & (LUA_REDIS_SPECIFIC_REPLIED|LUA_REDIS_SPECIFIC_FINISHED))) {
 		if (sp_ud->cbref != -1) {
 
 			lua_thread_pool_prepare_callback (ud->cfg->lua_thread_pool, &cbs);
+			L = cbs.L;
 
+			lua_pushcfunction (L, &rspamd_lua_traceback);
+			int err_idx = lua_gettop (L);
 			/* Push error */
 			lua_rawgeti (cbs.L, LUA_REGISTRYINDEX, sp_ud->cbref);
 
@@ -293,11 +297,11 @@ lua_redis_push_error (const gchar *err,
 				rspamd_symcache_set_cur_item (ud->task, ud->item);
 			}
 
-			if (lua_pcall (cbs.L, 2, 0, 0) != 0) {
+			if (lua_pcall (cbs.L, 2, 0, err_idx) != 0) {
 				msg_info ("call to callback failed: %s", lua_tostring (cbs.L, -1));
-				lua_pop (cbs.L, 1);
 			}
 
+			lua_settop (L, err_idx - 1);
 			lua_thread_pool_restore_callback (&cbs);
 		}
 
@@ -367,11 +371,15 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_ctx *ctx,
 {
 	struct lua_redis_userdata *ud = sp_ud->c;
 	struct lua_callback_state cbs;
+	lua_State *L;
 
 	if (!(sp_ud->flags & (LUA_REDIS_SPECIFIC_REPLIED|LUA_REDIS_SPECIFIC_FINISHED))) {
 		if (sp_ud->cbref != -1) {
 			lua_thread_pool_prepare_callback (ud->cfg->lua_thread_pool, &cbs);
+			L = cbs.L;
 
+			lua_pushcfunction (L, &rspamd_lua_traceback);
+			int err_idx = lua_gettop (L);
 			/* Push error */
 			lua_rawgeti (cbs.L, LUA_REGISTRYINDEX, sp_ud->cbref);
 			/* Error is nil */
@@ -383,11 +391,11 @@ lua_redis_push_data (const redisReply *r, struct lua_redis_ctx *ctx,
 				rspamd_symcache_set_cur_item (ud->task, ud->item);
 			}
 
-			if (lua_pcall (cbs.L, 2, 0, 0) != 0) {
+			if (lua_pcall (cbs.L, 2, 0, err_idx) != 0) {
 				msg_info ("call to callback failed: %s", lua_tostring (cbs.L, -1));
-				lua_pop (cbs.L, 1);
 			}
 
+			lua_settop (L, err_idx - 1);
 			lua_thread_pool_restore_callback (&cbs);
 		}
 
