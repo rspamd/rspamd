@@ -346,5 +346,17 @@ return function(cfg)
     end
   end
 
+  -- If neural network is enabled we MUST have `check_all_filters` flag
+  if cfg.neural then
+    if not cfg.options then
+      cfg.options = {}
+    end
+
+    if not cfg.options.check_all_filters then
+      logger.infox(rspamd_config, 'enable `options.check_all_filters` for neural network')
+      cfg.options.check_all_filters = true
+    end
+  end
+
   return ret, cfg
 end
