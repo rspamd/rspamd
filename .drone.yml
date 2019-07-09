@@ -16,6 +16,7 @@ pipeline:
   build:
     # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-build/Dockerfile
     image: rspamd/ci-ubuntu-build
+    pull: true
     group: build
     commands:
       # build directories should be writable by nobody, for rspamd in functional tests
