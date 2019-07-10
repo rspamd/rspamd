@@ -24,6 +24,13 @@
 #include <math.h>
 #include "contrib/uthash/utlist.h"
 
+#define msg_debug_metric(...)  rspamd_conditional_debug_fast (NULL, NULL, \
+        rspamd_metric_log_id, "metric", task->task_pool->tag.uid, \
+        G_STRFUNC, \
+        __VA_ARGS__)
+
+INIT_LOG_MODULE(metric)
+
 /* Average symbols count to optimize hash allocation */
 static struct rspamd_counter_data symbols_count;
 
@@ -198,6 +205,9 @@ insert_metric_result (struct rspamd_task *task,
 		weight = 0.0;
 	}
 
+	msg_debug_metric ("want to insert symbol %s, initial weight %.2f",
+			symbol, weight);
+
 	sdef = g_hash_table_lookup (task->cfg->symbols, symbol);
 	if (sdef == NULL) {
 		if (flags & RSPAMD_SYMBOL_INSERT_ENFORCE) {
@@ -206,11 +216,16 @@ insert_metric_result (struct rspamd_task *task,
 		else {
 			final_score = 0.0;
 		}
+
+		msg_debug_metric ("no symbol definition for %s; final multiplier %.2f",
+				symbol, final_score);
 	}
 	else {
 		if (sdef->cache_item) {
 			/* Check if we can insert this symbol at all */
 			if (!rspamd_symcache_is_item_allowed (task, sdef->cache_item, FALSE)) {
+				msg_debug_metric ("symbol %s is not allowed to be inserted due to settings",
+						symbol);
 				return NULL;
 			}
 		}
@@ -226,6 +241,9 @@ insert_metric_result (struct rspamd_task *task,
 				kh_value (metric_res->sym_groups, k) = 0;
 			}
 		}
+
+		msg_debug_metric ("metric multiplier for %s is %.2f",
+				symbol, *sdef->weight_ptr);
 	}
 
 	if (task->settings) {
@@ -234,15 +252,16 @@ insert_metric_result (struct rspamd_task *task,
 
 		sobj = ucl_object_lookup (mobj, symbol);
 		if (sobj != NULL && ucl_object_todouble_safe (sobj, &corr)) {
-			msg_debug ("settings: changed weight of symbol %s from %.2f to %.2f",
-					symbol, final_score, corr);
+			msg_debug_metric ("settings: changed weight of symbol %s from %.2f "
+					 "to %.2f * %.2f",
+					symbol, final_score, corr, weight);
 			final_score = corr * weight;
 		}
 	}
 
-	/* Add metric score */
 	k = kh_get (rspamd_symbols_hash, metric_res->symbols, symbol);
 	if (k != kh_end (metric_res->symbols)) {
+		/* Existing metric score */
 		s = &kh_value (metric_res->symbols, k);
 		if (single) {
 			max_shots = 1;
@@ -255,6 +274,8 @@ insert_metric_result (struct rspamd_task *task,
 				max_shots = task->cfg->default_max_shots;
 			}
 		}
+
+		msg_debug_metric ("nshots: %d for symbol %s", max_shots, symbol);
 
 		if (!single && (max_shots > 0 && (s->nshots >= max_shots))) {
 			single = TRUE;
@@ -279,12 +300,17 @@ insert_metric_result (struct rspamd_task *task,
 		/* Adjust diff */
 		if (!single) {
 			diff = final_score;
+			msg_debug_metric ("symbol %s can be inserted multiple times: %.2f weight",
+					symbol, diff);
 		}
 		else {
 			if (fabs (s->score) < fabs (final_score) &&
 				signbit (s->score) == signbit (final_score)) {
 				/* Replace less significant weight with a more significant one */
 				diff = final_score - s->score;
+				msg_debug_metric ("symbol %s can be inserted single time;"
+					  " weight adjusted %.2f + %.2f",
+						symbol, s->score, diff);
 			}
 			else {
 				diff = 0;
@@ -301,6 +327,9 @@ insert_metric_result (struct rspamd_task *task,
 				next_gf = task->cfg->grow_factor;
 			}
 
+			msg_debug_metric ("adjust grow factor to %.2f for symbol %s (%.2f final)",
+					next_gf, symbol, diff);
+
 			if (sdef) {
 				PTR_ARRAY_FOREACH (sdef->groups, i, gr) {
 					gdouble cur_diff;
@@ -314,6 +343,11 @@ insert_metric_result (struct rspamd_task *task,
 
 					if (isnan (cur_diff)) {
 						/* Limit reached, do not add result */
+						msg_debug_metric (
+								"group limit %.2f is reached for %s when inserting symbol %s;"
+								" drop score %.2f",
+								*gr_score, gr->name, symbol, diff);
+
 						diff = NAN;
 						break;
 					} else if (gr_score) {
@@ -321,6 +355,10 @@ insert_metric_result (struct rspamd_task *task,
 
 						if (cur_diff < diff) {
 							/* Reduce */
+							msg_debug_metric (
+									"group limit %.2f is reached for %s when inserting symbol %s;"
+									" reduce score %.2f - %.2f",
+									*gr_score, gr->name, symbol, diff, cur_diff);
 							diff = cur_diff;
 						}
 					}
@@ -332,14 +370,19 @@ insert_metric_result (struct rspamd_task *task,
 				metric_res->grow_factor = next_gf;
 
 				if (single) {
+					msg_debug_metric ("final score for single symbol %s = %.2f; %.2f diff",
+							symbol, final_score, diff);
 					s->score = final_score;
 				} else {
+					msg_debug_metric ("increase final score for multiple symbol %s += %.2f = %.2f",
+							symbol, s->score, diff);
 					s->score += diff;
 				}
 			}
 		}
 	}
 	else {
+		/* New result */
 		sym_cpy = rspamd_mempool_strdup (task->task_pool, symbol);
 		k = kh_put (rspamd_symbols_hash, metric_res->symbols,
 				sym_cpy, &ret);
@@ -355,6 +398,9 @@ insert_metric_result (struct rspamd_task *task,
 		else if (final_score > 0) {
 			next_gf = task->cfg->grow_factor;
 		}
+
+		msg_debug_metric ("adjust grow factor to %.2f for symbol %s (%.2f final)",
+				next_gf, symbol, final_score);
 
 		s->name = sym_cpy;
 		s->sym = sdef;
@@ -373,6 +419,10 @@ insert_metric_result (struct rspamd_task *task,
 
 				if (isnan (cur_score)) {
 					/* Limit reached, do not add result */
+					msg_debug_metric (
+							"group limit %.2f is reached for %s when inserting symbol %s;"
+							" drop score %.2f",
+							*gr_score, gr->name, symbol, final_score);
 					final_score = NAN;
 					break;
 				} else if (gr_score) {
@@ -380,6 +430,10 @@ insert_metric_result (struct rspamd_task *task,
 
 					if (cur_score < final_score) {
 						/* Reduce */
+						msg_debug_metric (
+								"group limit %.2f is reached for %s when inserting symbol %s;"
+								" reduce score %.2f - %.2f",
+								*gr_score, gr->name, symbol, final_score, cur_score);
 						final_score = cur_score;
 					}
 				}
@@ -409,7 +463,7 @@ insert_metric_result (struct rspamd_task *task,
 		rspamd_task_add_result_option (task, s, opt);
 	}
 
-	msg_debug_task ("symbol %s, score %.2f, factor: %f",
+	msg_debug_metric ("final insertion for symbol %s, score %.2f, factor: %f",
 			symbol,
 			s->score,
 			final_score);
