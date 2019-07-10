@@ -1961,12 +1961,12 @@ lua_config_register_symbol (lua_State * L)
 			if (!isnan (score)) {
 				rspamd_config_add_symbol (cfg, name,
 						score, description, group, flags,
-						(guint) priority, nshots);
+						0, nshots);
 			}
 			else {
 				rspamd_config_add_symbol (cfg, name,
 						0.0, description, group, flags,
-						(guint) priority, nshots);
+						0, nshots);
 			}
 
 			lua_pushstring (L, "groups");
