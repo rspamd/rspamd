@@ -1072,6 +1072,8 @@ local function ann_push_vector(task)
   if verdict == 'passthrough' then
     lua_util.debugm(N, task, 'ignore task as its verdict is %s(%s)',
         verdict, score)
+
+    return
   end
 
   for _,rule in pairs(settings.rules) do
