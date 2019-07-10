@@ -375,7 +375,7 @@ local function ann_push_task_result(rule, task, verdict, score, set)
     if train_opts.ham_score then
       learn_ham = score <= train_opts.ham_score
       if not learn_ham then
-        skip_reason = string.format('score > ham_score: %f < %f',
+        skip_reason = string.format('score > ham_score: %f > %f',
             score, train_opts.ham_score)
       end
     else
