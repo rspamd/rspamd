@@ -867,14 +867,14 @@ local function process_existing_ann(_, ev_base, rule, set, profiles)
         -- Same ANN, check version
         if set.ann.version < sel_elt.version then
           -- Load new ann
-          rspamd_logger.infox(rspamd_config, 'ann %s is changed,' ..
+          rspamd_logger.infox(rspamd_config, 'ann %s is changed, ' ..
               'our version = %s, remote version = %s',
               rule.prefix .. ':' .. set.name,
               set.ann.version,
               sel_elt.version)
           load_new_ann(rule, ev_base, set, sel_elt, min_diff)
         else
-          lua_util.debugm(N, rspamd_config, 'ann %s is not changed,' ..
+          lua_util.debugm(N, rspamd_config, 'ann %s is not changed, ' ..
               'our version = %s, remote version = %s',
               rule.prefix .. ':' .. set.name,
               set.ann.version,
@@ -884,14 +884,14 @@ local function process_existing_ann(_, ev_base, rule, set, profiles)
         -- We have some different ANN, so we need to compare distance
         if set.ann.distance > min_diff then
           -- Load more specific ANN
-          rspamd_logger.infox(rspamd_config, 'more specific ann is available for %s,' ..
+          rspamd_logger.infox(rspamd_config, 'more specific ann is available for %s, ' ..
               'our distance = %s, remote distance = %s',
               rule.prefix .. ':' .. set.name,
               set.ann.distance,
               min_diff)
           load_new_ann(rule, ev_base, set, sel_elt, min_diff)
         else
-          lua_util.debugm(N, rspamd_config, 'ann %s is not changed or less specific,' ..
+          lua_util.debugm(N, rspamd_config, 'ann %s is not changed or less specific, ' ..
               'our distance = %s, remote distance = %s',
               rule.prefix .. ':' .. set.name,
               set.ann.distance,
