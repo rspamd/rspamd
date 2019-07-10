@@ -180,7 +180,7 @@ local redis_lua_script_save_unlock = [[
   redis.call('ZADD', KEYS[2], now, KEYS[4])
   redis.call('HSET', KEYS[1], 'ann', KEYS[3])
   redis.call('DEL', KEYS[1] .. '_spam')
-  edis.call('DEL', KEYS[1] .. '_ham')
+  redis.call('DEL', KEYS[1] .. '_ham')
   redis.call('HDEL', KEYS[1], 'lock')
   redis.call('EXPIRE', KEYS[1], tonumber(KEYS[5]))
   return 1
