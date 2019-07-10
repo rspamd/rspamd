@@ -31,20 +31,22 @@ enum rspamd_rfc2047_encoding {
 	RSPAMD_RFC2047_BASE64,
 };
 
-enum rspamd_mime_header_special_type {
-	RSPAMD_HEADER_GENERIC = 0,
-	RSPAMD_HEADER_RECEIVED = 1 << 0,
-	RSPAMD_HEADER_TO = 1 << 2,
-	RSPAMD_HEADER_CC = 1 << 3,
-	RSPAMD_HEADER_BCC = 1 << 4,
-	RSPAMD_HEADER_FROM = 1 << 5,
-	RSPAMD_HEADER_MESSAGE_ID = 1 << 6,
-	RSPAMD_HEADER_SUBJECT = 1 << 7,
-	RSPAMD_HEADER_RETURN_PATH = 1 << 8,
-	RSPAMD_HEADER_DELIVERED_TO = 1 << 9,
-	RSPAMD_HEADER_SENDER = 1 << 10,
-	RSPAMD_HEADER_RCPT = 1 << 11,
-	RSPAMD_HEADER_UNIQUE = 1 << 12
+enum rspamd_mime_header_flags {
+	RSPAMD_HEADER_GENERIC = 0u,
+	RSPAMD_HEADER_RECEIVED = 1u << 0u,
+	RSPAMD_HEADER_TO = 1u << 2u,
+	RSPAMD_HEADER_CC = 1u << 3u,
+	RSPAMD_HEADER_BCC = 1u << 4u,
+	RSPAMD_HEADER_FROM = 1u << 5u,
+	RSPAMD_HEADER_MESSAGE_ID = 1u << 6u,
+	RSPAMD_HEADER_SUBJECT = 1u << 7u,
+	RSPAMD_HEADER_RETURN_PATH = 1u << 8u,
+	RSPAMD_HEADER_DELIVERED_TO = 1u << 9u,
+	RSPAMD_HEADER_SENDER = 1u << 10u,
+	RSPAMD_HEADER_RCPT = 1u << 11u,
+	RSPAMD_HEADER_UNIQUE = 1u << 12u,
+	RSPAMD_HEADER_EMPTY_SEPARATOR = 1u << 13u,
+	RSPAMD_HEADER_TAB_SEPARATED = 1u << 14u,
 };
 
 struct rspamd_mime_header {
@@ -52,31 +54,30 @@ struct rspamd_mime_header {
 	gchar *value;
 	const gchar *raw_value; /* As it is in the message (unfolded and unparsed) */
 	gsize raw_len;
-	gboolean tab_separated;
-	gboolean empty_separator;
 	guint order;
-	enum rspamd_mime_header_special_type type;
+	int flags; /* see enum rspamd_mime_header_flags */
 	gchar *separator;
 	gchar *decoded;
+	struct rspamd_mime_header *prev, *next; /* Headers with the same name */
+	struct rspamd_mime_header *ord_prev, *ord_next; /* Overall order of headers */
 };
 
 enum rspamd_received_type {
 	RSPAMD_RECEIVED_SMTP = 0,
-	RSPAMD_RECEIVED_ESMTP,
-	RSPAMD_RECEIVED_ESMTPA,
-	RSPAMD_RECEIVED_ESMTPS,
-	RSPAMD_RECEIVED_ESMTPSA,
-	RSPAMD_RECEIVED_LMTP,
-	RSPAMD_RECEIVED_IMAP,
-	RSPAMD_RECEIVED_LOCAL,
-	RSPAMD_RECEIVED_HTTP,
-	RSPAMD_RECEIVED_MAPI,
-	RSPAMD_RECEIVED_UNKNOWN
+	RSPAMD_RECEIVED_ESMTP = 1u << 0u,
+	RSPAMD_RECEIVED_ESMTPA = 1u << 1u,
+	RSPAMD_RECEIVED_ESMTPS = 1u << 2u,
+	RSPAMD_RECEIVED_ESMTPSA = 1u << 3u,
+	RSPAMD_RECEIVED_LMTP = 1u << 4u,
+	RSPAMD_RECEIVED_IMAP = 1u << 5u,
+	RSPAMD_RECEIVED_LOCAL = 1u << 6u,
+	RSPAMD_RECEIVED_HTTP = 1u << 7u,
+	RSPAMD_RECEIVED_MAPI = 1u << 8u,
+	RSPAMD_RECEIVED_UNKNOWN = 1u << 9u,
+	RSPAMD_RECEIVED_FLAG_ARTIFICIAL =  (1u << 10u),
+	RSPAMD_RECEIVED_FLAG_SSL =  (1u << 11u),
+	RSPAMD_RECEIVED_FLAG_AUTHENTICATED =  (1u << 12u),
 };
-
-#define RSPAMD_RECEIVED_FLAG_ARTIFICIAL (1 << 0)
-#define RSPAMD_RECEIVED_FLAG_SSL (1 << 1)
-#define RSPAMD_RECEIVED_FLAG_AUTHENTICATED (1 << 2)
 
 struct received_header {
 	const gchar *from_hostname;
@@ -88,8 +89,8 @@ struct received_header {
 	rspamd_inet_addr_t *addr;
 	struct rspamd_mime_header *hdr;
 	time_t timestamp;
-	enum rspamd_received_type type;
-	gint flags;
+	gint flags; /* See enum rspamd_received_type */
+	struct received_header *prev, *next;
 };
 
 /**
@@ -100,8 +101,9 @@ struct received_header {
  * @param len
  * @param check_newlines
  */
-void rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
-								  GQueue *order,
+void rspamd_mime_headers_process (struct rspamd_task *task,
+								  GHashTable *target,
+								  struct rspamd_mime_header **order_ptr,
 								  const gchar *in, gsize len,
 								  gboolean check_newlines);
 

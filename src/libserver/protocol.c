@@ -1409,6 +1409,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	gint flags = RSPAMD_PROTOCOL_DEFAULT;
 	struct rspamd_action *action;
 
+#if 0
 	/* Write custom headers */
 	g_hash_table_iter_init (&hiter, task->reply_headers);
 	while (g_hash_table_iter_next (&hiter, &h, &v)) {
@@ -1416,6 +1417,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 
 		rspamd_http_message_add_header (msg, hn->begin, hv->begin);
 	}
+#endif
 
 	flags |= RSPAMD_PROTOCOL_URLS;
 

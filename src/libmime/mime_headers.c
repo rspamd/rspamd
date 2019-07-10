@@ -44,31 +44,31 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 			g_ptr_array_add (task->received, recv);
 		}
 
-		rh->type = RSPAMD_HEADER_RECEIVED;
+		rh->flags = RSPAMD_HEADER_RECEIVED;
 		break;
 	case 0x76F31A09F4352521ULL:	/* to */
 		task->rcpt_mime = rspamd_email_address_from_mime (task->task_pool,
 				rh->decoded, strlen (rh->decoded), task->rcpt_mime);
-		rh->type = RSPAMD_HEADER_TO|RSPAMD_HEADER_RCPT|RSPAMD_HEADER_UNIQUE;
+		rh->flags = RSPAMD_HEADER_TO|RSPAMD_HEADER_RCPT|RSPAMD_HEADER_UNIQUE;
 		break;
 	case 0x7EB117C1480B76ULL:	/* cc */
 		task->rcpt_mime = rspamd_email_address_from_mime (task->task_pool,
 				rh->decoded, strlen (rh->decoded), task->rcpt_mime);
-		rh->type = RSPAMD_HEADER_CC|RSPAMD_HEADER_RCPT|RSPAMD_HEADER_UNIQUE;
+		rh->flags = RSPAMD_HEADER_CC|RSPAMD_HEADER_RCPT|RSPAMD_HEADER_UNIQUE;
 		break;
 	case 0xE4923E11C4989C8DULL:	/* bcc */
 		task->rcpt_mime = rspamd_email_address_from_mime (task->task_pool,
 				rh->decoded, strlen (rh->decoded), task->rcpt_mime);
-		rh->type = RSPAMD_HEADER_BCC|RSPAMD_HEADER_RCPT|RSPAMD_HEADER_UNIQUE;
+		rh->flags = RSPAMD_HEADER_BCC|RSPAMD_HEADER_RCPT|RSPAMD_HEADER_UNIQUE;
 		break;
 	case 0x41E1985EDC1CBDE4ULL:	/* from */
 		task->from_mime = rspamd_email_address_from_mime (task->task_pool,
 				rh->decoded, strlen (rh->decoded), task->from_mime);
-		rh->type = RSPAMD_HEADER_FROM|RSPAMD_HEADER_SENDER|RSPAMD_HEADER_UNIQUE;
+		rh->flags = RSPAMD_HEADER_FROM|RSPAMD_HEADER_SENDER|RSPAMD_HEADER_UNIQUE;
 		break;
 	case 0x43A558FC7C240226ULL:	/* message-id */ {
 
-		rh->type = RSPAMD_HEADER_MESSAGE_ID|RSPAMD_HEADER_UNIQUE;
+		rh->flags = RSPAMD_HEADER_MESSAGE_ID|RSPAMD_HEADER_UNIQUE;
 		p = rh->decoded;
 		end = p + strlen (p);
 
@@ -107,20 +107,20 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 		if (task->subject == NULL) {
 			task->subject = rh->decoded;
 		}
-		rh->type = RSPAMD_HEADER_SUBJECT|RSPAMD_HEADER_UNIQUE;
+		rh->flags = RSPAMD_HEADER_SUBJECT|RSPAMD_HEADER_UNIQUE;
 		break;
 	case 0xEE4AA2EAAC61D6F4ULL:	/* return-path */
 		if (task->from_envelope == NULL) {
 			task->from_envelope = rspamd_email_address_from_smtp (rh->decoded,
 					strlen (rh->decoded));
 		}
-		rh->type = RSPAMD_HEADER_RETURN_PATH|RSPAMD_HEADER_UNIQUE;
+		rh->flags = RSPAMD_HEADER_RETURN_PATH|RSPAMD_HEADER_UNIQUE;
 		break;
 	case 0xB9EEFAD2E93C2161ULL:	/* delivered-to */
 		if (task->deliver_to == NULL) {
 			task->deliver_to = rh->decoded;
 		}
-		rh->type = RSPAMD_HEADER_DELIVERED_TO;
+		rh->flags = RSPAMD_HEADER_DELIVERED_TO;
 		break;
 	case 0x2EC3BFF3C393FC10ULL: /* date */
 	case 0xAC0DDB1A1D214CAULL: /* sender */
@@ -128,7 +128,7 @@ rspamd_mime_header_check_special (struct rspamd_task *task,
 	case 0x81CD9E9131AB6A9AULL: /* content-type */
 	case 0xC39BD9A75AA25B60ULL: /* content-transfer-encoding */
 	case 0xB3F6704CB3AD6589ULL: /* references */
-		rh->type = RSPAMD_HEADER_UNIQUE;
+		rh->flags = RSPAMD_HEADER_UNIQUE;
 		break;
 	}
 }
@@ -472,7 +472,7 @@ rspamd_mime_headers_process (struct rspamd_task *task, GHashTable *target,
 		while (cur) {
 			nh = cur->data;
 
-			if (nh->name && nh->type != RSPAMD_HEADER_RECEIVED) {
+			if (nh->name && nh->flags != RSPAMD_HEADER_RECEIVED) {
 				rspamd_cryptobox_hash_update (&hs, nh->name, strlen (nh->name));
 			}
 

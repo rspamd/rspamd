@@ -134,6 +134,7 @@ enum rspamd_task_stage {
 struct rspamd_email_address;
 struct rspamd_lang_detector;
 enum rspamd_newlines_type;
+struct rspamd_message;
 
 /**
  * Worker task structure
@@ -147,15 +148,12 @@ struct rspamd_task {
 	gulong message_len;                                /**< Message length									*/
 	gchar *helo;                                    /**< helo header value								*/
 	gchar *queue_id;                                /**< queue id if specified							*/
-	const gchar *message_id;                        /**< message id										*/
 	rspamd_inet_addr_t *from_addr;                    /**< from addr for a task							*/
 	rspamd_inet_addr_t *client_addr;                /**< address of connected socket					*/
 	gchar *deliver_to;                                /**< address to deliver								*/
 	gchar *user;                                    /**< user to deliver								*/
-	gchar *subject;                                    /**< subject (for non-mime)							*/
 	const gchar *hostname;                            /**< hostname reported by MTA						*/
 	GHashTable *request_headers;                    /**< HTTP headers in a request						*/
-	GHashTable *reply_headers;                        /**< Custom reply headers							*/
 	struct {
 		const gchar *begin;
 		gsize len;
@@ -163,29 +161,14 @@ struct rspamd_task {
 	} msg;                                            /**< message buffer									*/
 	struct rspamd_http_connection *http_conn;        /**< HTTP server connection							*/
 	struct rspamd_async_session *s;                /**< async session object							*/
-	GPtrArray *parts;                                /**< list of parsed parts							*/
-	GPtrArray *text_parts;                            /**< list of text parts								*/
-	struct {
-		const gchar *begin;
-		gsize len;
-		const gchar *body_start;
-	} raw_headers_content;                /**< list of raw headers							*/
-	GPtrArray *received;                            /**< list of received headers						*/
-	GHashTable *urls;                                /**< list of parsed urls							*/
-	GHashTable *emails;                                /**< list of parsed emails							*/
-	GHashTable *raw_headers;                        /**< list of raw headers							*/
-	GQueue *headers_order;                            /**< order of raw headers							*/
 	struct rspamd_metric_result *result;            /**< Metric result									*/
 	GHashTable *lua_cache;                            /**< cache of lua objects							*/
 	GPtrArray *tokens;                                /**< statistics tokens */
 	GArray *meta_words;                                /**< rspamd_stat_token_t produced from meta headers
 														(e.g. Subject) */
 
-	GPtrArray *rcpt_mime;
 	GPtrArray *rcpt_envelope;                        /**< array of rspamd_email_address					*/
-	GPtrArray *from_mime;
 	struct rspamd_email_address *from_envelope;
-	enum rspamd_newlines_type nlines_type;            /**< type of newlines (detected on most of headers 	*/
 
 	ucl_object_t *messages;                            /**< list of messages that would be reported		*/
 	struct rspamd_re_runtime *re_rt;                /**< regexp runtime									*/
@@ -215,6 +198,7 @@ struct rspamd_task {
 
 	const gchar *classifier;                        /**< Classifier to learn (if needed)				*/
 	struct rspamd_lang_detector *lang_det;            /**< Languages detector								*/
+	struct rspamd_message *message;
 	guchar digest[16];
 };
 
@@ -252,7 +236,8 @@ gboolean rspamd_task_fin (void *arg);
  * @return
  */
 gboolean rspamd_task_load_message (struct rspamd_task *task,
-								   struct rspamd_http_message *msg, const gchar *start, gsize len);
+								   struct rspamd_http_message *msg,
+								   const gchar *start, gsize len);
 
 /**
  * Process task

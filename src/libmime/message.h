@@ -12,6 +12,8 @@
 #include "cryptobox.h"
 #include "mime_headers.h"
 #include "content_type.h"
+#include "libutil/ref.h"
+#include "libutil/str_util.h"
 
 #include <unicode/uchar.h>
 #include <unicode/utext.h>
@@ -129,6 +131,36 @@ struct rspamd_mime_text_part {
 	guint unicode_scripts;
 };
 
+struct rspamd_message {
+	const gchar *message_id;
+	gchar *subject;
+
+	GPtrArray *parts;				/**< list of parsed parts							*/
+	GPtrArray *text_parts;			/**< list of text parts								*/
+	struct {
+		const gchar *begin;
+		gsize len;
+		const gchar *body_start;
+	} raw_headers_content;			/**< list of raw headers							*/
+	GPtrArray *received;			/**< list of received headers						*/
+	GHashTable *urls;				/**< list of parsed urls							*/
+	GHashTable *emails;				/**< list of parsed emails							*/
+	GHashTable *raw_headers;		/**< list of raw headers							*/
+	GQueue *headers_order;			/**< order of raw headers							*/
+	GPtrArray *rcpt_mime;
+	GPtrArray *from_mime;
+	enum rspamd_newlines_type nlines_type; /**< type of newlines (detected on most of headers 	*/
+	ref_entry_t ref;
+};
+
+#ifndef FULL_DEBUG
+#define MESSAGE_FIELD(task, field) ((task)->message->(field))
+#else
+#define MESSAGE_FIELD(task, field) do { \
+	if (!task->message) {msg_err_task("no message when getting field %s", #field); g_assert(0);} \
+	} while(0), ((task)->message->(field))
+#endif
+
 /**
  * Parse and pre-process mime message
  * @param task worker_task object
@@ -190,6 +222,12 @@ enum rspamd_cte rspamd_cte_from_string (const gchar *str);
  * @return
  */
 const gchar *rspamd_cte_to_string (enum rspamd_cte ct);
+
+struct rspamd_message* rspamd_message_new (struct rspamd_task *task);
+
+struct rspamd_message *rspamd_message_ref (struct rspamd_message *msg);
+
+void rspamd_message_unref (struct rspamd_message *msg);
 
 #ifdef  __cplusplus
 }

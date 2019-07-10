@@ -1091,6 +1091,22 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 	task->queue_id = mid;
 }
 
+static void
+rspamd_message_dtor (struct rspamd_message *msg)
+{
+
+}
+
+struct rspamd_message*
+rspamd_message_new (struct rspamd_task *task)
+{
+	struct rspamd_message *msg;
+
+	msg = rspamd_mempool_alloc0 (sizeof (*msg));
+
+
+}
+
 gboolean
 rspamd_message_parse (struct rspamd_task *task)
 {
@@ -1592,4 +1608,15 @@ rspamd_message_get_mime_header_array (struct rspamd_task *task,
 		(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ret);
 
 	return ret;
+}
+
+struct rspamd_message *
+rspamd_message_ref (struct rspamd_message *msg)
+{
+	REF_RETAIN (msg);
+}
+
+void rspamd_message_unref (struct rspamd_message *msg)
+{
+	REF_RELEASE (msg);s
 }

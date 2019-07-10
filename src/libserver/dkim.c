@@ -2175,7 +2175,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 		if (ar) {
 			/* Check uniqueness of the header */
 			rh = g_ptr_array_index (ar, 0);
-			if ((rh->type & RSPAMD_HEADER_UNIQUE) && ar->len > 1) {
+			if ((rh->flags & RSPAMD_HEADER_UNIQUE) && ar->len > 1) {
 				guint64 random_cookie = ottery_rand_uint64 ();
 
 				msg_warn_dkim ("header %s is intended to be unique by"
@@ -2210,7 +2210,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 						(gint)rh->raw_len, rh->raw_value);
 			}
 			else {
-				if (ctx->is_sign && (rh->type & RSPAMD_HEADER_FROM)) {
+				if (ctx->is_sign && (rh->flags & RSPAMD_HEADER_FROM)) {
 					/* Special handling of the From handling when rewrite is done */
 					gboolean has_rewrite = FALSE;
 					guint i;

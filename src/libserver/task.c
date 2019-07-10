@@ -130,14 +130,8 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 			rspamd_ftok_icase_equal, rspamd_fstring_mapped_ftok_free,
 			rspamd_request_header_dtor);
 	rspamd_mempool_add_destructor (new_task->task_pool,
-		(rspamd_mempool_destruct_t) g_hash_table_unref,
-		new_task->request_headers);
-	new_task->reply_headers = g_hash_table_new_full (rspamd_ftok_icase_hash,
-			rspamd_ftok_icase_equal, rspamd_fstring_mapped_ftok_free,
-			rspamd_fstring_mapped_ftok_free);
-	rspamd_mempool_add_destructor (new_task->task_pool,
 			(rspamd_mempool_destruct_t) g_hash_table_unref,
-			new_task->reply_headers);
+			new_task->request_headers);
 	rspamd_mempool_add_destructor (new_task->task_pool,
 			(rspamd_mempool_destruct_t) g_hash_table_unref,
 			new_task->raw_headers);
