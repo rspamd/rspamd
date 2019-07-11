@@ -390,7 +390,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 			/* We also validate utf8 and replace all non-valid utf8 chars */
 			rspamd_mime_charset_utf_enforce (nh->decoded, strlen (nh->decoded));
 			nh->order = norder ++;
-			rspamd_mime_header_add (task, target, order, nh, check_newlines);
+			rspamd_mime_header_add (task, target, order_ptr, nh, check_newlines);
 			nh = NULL;
 			state = 0;
 			break;
@@ -400,7 +400,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 			nh->decoded = "";
 			nh->raw_len = p - nh->raw_value;
 			nh->order = norder ++;
-			rspamd_mime_header_add (task, target, order, nh, check_newlines);
+			rspamd_mime_header_add (task, target, order_ptr, nh, check_newlines);
 			nh = NULL;
 			state = 0;
 			break;
@@ -463,10 +463,12 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 		}
 	}
 
+	/* Since we have prepended headers, we need to reverse the list to get the actual order */
+	LL_REVERSE (*order_ptr);
+
 	if (check_newlines) {
 		guint max_cnt = 0;
 		gint sel = 0;
-		GList *cur;
 		rspamd_cryptobox_hash_state_t hs;
 		guchar hout[rspamd_cryptobox_HASHBYTES], *hexout;
 
@@ -479,17 +481,12 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 
 		MESSAGE_FIELD (task, nlines_type) = sel;
 
-		cur = order->head;
 		rspamd_cryptobox_hash_init (&hs, NULL, 0);
 
-		while (cur) {
-			nh = cur->data;
-
+		LL_FOREACH (*order_ptr, nh) {
 			if (nh->name && nh->flags != RSPAMD_HEADER_RECEIVED) {
 				rspamd_cryptobox_hash_update (&hs, nh->name, strlen (nh->name));
 			}
-
-			cur = g_list_next (cur);
 		}
 
 		rspamd_cryptobox_hash_final (&hs, hout);
@@ -1620,4 +1617,16 @@ rspamd_message_get_header_array (struct rspamd_task *task,
 {
 	return rspamd_message_get_header_from_hash (MESSAGE_FIELD (task, raw_headers),
 			field);
+}
+
+void
+rspamd_message_headers_destroy (khash_t(rspamd_mime_headers_htb) *htb)
+{
+	kh_destroy (rspamd_mime_headers_htb, htb);
+}
+
+khash_t(rspamd_mime_headers_htb) *
+rspamd_message_headers_new (void)
+{
+	return kh_init (rspamd_mime_headers_htb);
 }

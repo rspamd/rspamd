@@ -146,8 +146,8 @@ struct rspamd_message {
 	struct rspamd_received_header *received;	/**< list of received headers						*/
 	GHashTable *urls;							/**< list of parsed urls							*/
 	GHashTable *emails;							/**< list of parsed emails							*/
-	khash_t(rspamd_mime_headers_htb) *raw_headers;	/**< list of raw headers							*/
-	struct rspamd_mime_header *headers_order;	/**< inversed order of raw headers							*/
+	khash_t(rspamd_mime_headers_htb) *raw_headers;	/**< list of raw headers						*/
+	struct rspamd_mime_header *headers_order;	/**< order of raw headers							*/
 	GPtrArray *rcpt_mime;
 	GPtrArray *from_mime;
 	enum rspamd_newlines_type nlines_type; 		/**< type of newlines (detected on most of headers 	*/

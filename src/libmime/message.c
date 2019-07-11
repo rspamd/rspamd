@@ -36,6 +36,7 @@
 #include <unicode/uchar.h>
 #include "libserver/cfg_file_private.h"
 #include "lua/lua_common.h"
+#include "contrib/uthash/utlist.h"
 
 #define GTUBE_SYMBOL "GTUBE"
 
@@ -1061,12 +1062,9 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 	part->raw_data.len = len;
 	part->parsed_data.begin = start;
 	part->parsed_data.len = len;
-	part->id = task->parts->len;
-	part->raw_headers =  g_hash_table_new_full (rspamd_strcase_hash,
-			rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
-	part->headers_order = g_queue_new ();
-
-
+	part->id = MESSAGE_FIELD (task, parts)->len;
+	part->raw_headers = rspamd_message_headers_new ();
+	part->headers_order = NULL;
 
 	tok = rspamd_task_get_request_header (task, "Filename");
 
@@ -1080,21 +1078,57 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 	part->cd = rspamd_content_disposition_parse (cdbuf, strlen (cdbuf),
 			task->task_pool);
 
-	g_ptr_array_add (task->parts, part);
+	g_ptr_array_add (MESSAGE_FIELD (task, parts), part);
 	rspamd_mime_parser_calc_digest (part);
 
 	/* Generate message ID */
 	mid = rspamd_mime_message_id_generate ("localhost.localdomain");
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) g_free, mid);
-	task->message_id = mid;
+	MESSAGE_FIELD (task, message_id) = mid;
 	task->queue_id = mid;
 }
 
 static void
 rspamd_message_dtor (struct rspamd_message *msg)
 {
+	guint i;
+	struct rspamd_mime_part *p;
+	struct rspamd_mime_text_part *tp;
 
+
+	PTR_ARRAY_FOREACH (msg->parts, i, p) {
+		if (p->raw_headers) {
+			rspamd_message_headers_destroy (p->raw_headers);
+		}
+
+		if (IS_CT_MULTIPART (p->ct)) {
+			if (p->specific.mp->children) {
+				g_ptr_array_free (p->specific.mp->children, TRUE);
+			}
+		}
+	}
+
+	PTR_ARRAY_FOREACH (msg->text_parts, i, tp) {
+		if (tp->utf_words) {
+			g_array_free (tp->utf_words, TRUE);
+		}
+		if (tp->normalized_hashes) {
+			g_array_free (tp->normalized_hashes, TRUE);
+		}
+		if (tp->languages) {
+			g_ptr_array_unref (tp->languages);
+		}
+	}
+
+	g_ptr_array_unref (msg->text_parts);
+	g_ptr_array_unref (msg->parts);
+
+	g_ptr_array_unref (msg->from_mime);
+	g_ptr_array_unref (msg->rcpt_mime);
+
+	g_hash_table_unref (msg->urls);
+	g_hash_table_unref (msg->emails);
 }
 
 struct rspamd_message*
@@ -1102,9 +1136,15 @@ rspamd_message_new (struct rspamd_task *task)
 {
 	struct rspamd_message *msg;
 
-	msg = rspamd_mempool_alloc0 (sizeof (*msg));
+	msg = rspamd_mempool_alloc0 (task->task_pool, sizeof (*msg));
 
+	msg->raw_headers = rspamd_message_headers_new ();
+	msg->emails = g_hash_table_new (rspamd_email_hash, rspamd_emails_cmp);
+	msg->urls = g_hash_table_new (rspamd_url_hash, rspamd_urls_cmp);
+	msg->parts = g_ptr_array_sized_new (4);
+	msg->text_parts = g_ptr_array_sized_new (2);
 
+	return msg;
 }
 
 gboolean
@@ -1163,6 +1203,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	task->msg.begin = p;
 	task->msg.len = len;
 	rspamd_cryptobox_hash_init (&st, NULL, 0);
+	task->message = rspamd_message_new (task);s
 
 	if (task->flags & RSPAMD_TASK_FLAG_MIME) {
 		enum rspamd_mime_parse_error ret;
@@ -1206,8 +1247,8 @@ rspamd_message_parse (struct rspamd_task *task)
 	}
 
 
-	if (task->message_id == NULL) {
-		task->message_id = "undef";
+	if (MESSAGE_FIELD (task, message_id) == NULL) {
+		MESSAGE_FIELD (task, message_id) = "undef";
 	}
 
 	debug_task ("found %ud parts in message", task->parts->len);
@@ -1215,11 +1256,11 @@ rspamd_message_parse (struct rspamd_task *task)
 		task->queue_id = "undef";
 	}
 
-	if (task->received->len > 0) {
+	if (MESSAGE_FIELD (task, received)) {
 		gboolean need_recv_correction = FALSE;
 		rspamd_inet_addr_t *raddr;
 
-		recv = g_ptr_array_index (task->received, 0);
+		recv = MESSAGE_FIELD (task, received);
 		/*
 		 * For the first header we must ensure that
 		 * received is consistent with the IP that we obtain through
@@ -1273,23 +1314,7 @@ rspamd_message_parse (struct rspamd_task *task)
 				trecv->from_hostname = trecv->real_hostname;
 			}
 
-#ifdef GLIB_VERSION_2_40
-			g_ptr_array_insert (task->received, 0, trecv);
-#else
-			/*
-			 * Unfortunately, before glib 2.40 we cannot insert element into a
-			 * ptr array
-			 */
-			GPtrArray *nar = g_ptr_array_sized_new (task->received->len + 1);
-
-			g_ptr_array_add (nar, trecv);
-			PTR_ARRAY_FOREACH (task->received, i, recv) {
-				g_ptr_array_add (nar, recv);
-			}
-			rspamd_mempool_add_destructor (task->task_pool,
-						rspamd_ptr_array_free_hard, nar);
-			task->received = nar;
-#endif
+			DL_PREPEND (MESSAGE_FIELD (task, received), trecv);
 		}
 	}
 

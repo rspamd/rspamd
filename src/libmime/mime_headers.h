@@ -156,6 +156,18 @@ struct rspamd_mime_header *
 rspamd_message_get_header_from_hash (khash_t(rspamd_mime_headers_htb) *htb,
 									 const gchar *field);
 
+/**
+ * Cleans up hash table of the headers
+ * @param htb
+ */
+void rspamd_message_headers_destroy (khash_t(rspamd_mime_headers_htb) *htb);
+
+/**
+ * Init headers hash
+ * @return
+ */
+khash_t(rspamd_mime_headers_htb)* rspamd_message_headers_new (void);
+
 #ifdef  __cplusplus
 }
 #endif

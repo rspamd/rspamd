@@ -199,8 +199,6 @@ rspamd_task_restore (void *arg)
 void
 rspamd_task_free (struct rspamd_task *task)
 {
-	struct rspamd_mime_part *p;
-	struct rspamd_mime_text_part *tp;
 	struct rspamd_email_address *addr;
 	struct rspamd_lua_cached_entry *entry;
 	static guint free_iters = 0;
@@ -210,38 +208,6 @@ rspamd_task_free (struct rspamd_task *task)
 
 	if (task) {
 		debug_task ("free pointer %p", task);
-
-		for (i = 0; i < task->parts->len; i ++) {
-			p = g_ptr_array_index (task->parts, i);
-
-			if (p->raw_headers) {
-				g_hash_table_unref (p->raw_headers);
-			}
-
-			if (p->headers_order) {
-				g_queue_free (p->headers_order);
-			}
-
-			if (IS_CT_MULTIPART (p->ct)) {
-				if (p->specific.mp->children) {
-					g_ptr_array_free (p->specific.mp->children, TRUE);
-				}
-			}
-		}
-
-		for (i = 0; i < task->text_parts->len; i ++) {
-			tp = g_ptr_array_index (task->text_parts, i);
-
-			if (tp->utf_words) {
-				g_array_free (tp->utf_words, TRUE);
-			}
-			if (tp->normalized_hashes) {
-				g_array_free (tp->normalized_hashes, TRUE);
-			}
-			if (tp->languages) {
-				g_ptr_array_unref (tp->languages);
-			}
-		}
 
 		if (task->rcpt_envelope) {
 			for (i = 0; i < task->rcpt_envelope->len; i ++) {
