@@ -19,6 +19,7 @@
 #include "config.h"
 #include "libutil/mem_pool.h"
 #include "libutil/addr.h"
+#include "khash.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -50,7 +51,7 @@ enum rspamd_mime_header_flags {
 };
 
 struct rspamd_mime_header {
-	gchar *name;
+	gchar *name; /* Also used for key */
 	gchar *value;
 	const gchar *raw_value; /* As it is in the message (unfolded and unparsed) */
 	gsize raw_len;
@@ -59,8 +60,11 @@ struct rspamd_mime_header {
 	gchar *separator;
 	gchar *decoded;
 	struct rspamd_mime_header *prev, *next; /* Headers with the same name */
-	struct rspamd_mime_header *ord_prev, *ord_next; /* Overall order of headers */
+	struct rspamd_mime_header *ord_next; /* Overall order of headers, slist */
 };
+
+/* Define hash type */
+__KHASH_TYPE (rspamd_mime_headers_htb, gchar *, struct rspamd_mime_header *)
 
 enum rspamd_received_type {
 	RSPAMD_RECEIVED_SMTP = 0,
@@ -79,7 +83,7 @@ enum rspamd_received_type {
 	RSPAMD_RECEIVED_FLAG_AUTHENTICATED =  (1u << 12u),
 };
 
-struct received_header {
+struct rspamd_received_header {
 	const gchar *from_hostname;
 	const gchar *from_ip;
 	const gchar *real_hostname;
@@ -90,7 +94,7 @@ struct received_header {
 	struct rspamd_mime_header *hdr;
 	time_t timestamp;
 	gint flags; /* See enum rspamd_received_type */
-	struct received_header *prev, *next;
+	struct rspamd_received_header *prev, *next;
 };
 
 /**
@@ -102,7 +106,7 @@ struct received_header {
  * @param check_newlines
  */
 void rspamd_mime_headers_process (struct rspamd_task *task,
-								  GHashTable *target,
+								  khash_t(rspamd_mime_headers_htb) *target,
 								  struct rspamd_mime_header **order_ptr,
 								  const gchar *in, gsize len,
 								  gboolean check_newlines);
@@ -131,6 +135,26 @@ gchar *rspamd_mime_header_encode (const gchar *in, gsize len);
  * @return
  */
 gchar *rspamd_mime_message_id_generate (const gchar *fqdn);
+
+/**
+ * Get an array of header's values with specified header's name using raw headers
+ * @param task worker task structure
+ * @param field header's name
+ * @return An array of header's values or NULL. It is NOT permitted to free array or values.
+ */
+struct rspamd_mime_header *
+rspamd_message_get_header_array (struct rspamd_task *task,
+								 const gchar *field);
+
+/**
+ * Get an array of header's values with specified header's name using raw headers
+ * @param htb hash table indexed by header name (caseless) with ptr arrays as elements
+ * @param field header's name
+ * @return An array of header's values or NULL. It is NOT permitted to free array or values.
+ */
+struct rspamd_mime_header *
+rspamd_message_get_header_from_hash (khash_t(rspamd_mime_headers_htb) *htb,
+									 const gchar *field);
 
 #ifdef  __cplusplus
 }

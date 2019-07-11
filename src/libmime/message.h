@@ -7,11 +7,12 @@
 #define RSPAMD_MESSAGE_H
 
 #include "config.h"
-#include "email_addr.h"
-#include "addr.h"
-#include "cryptobox.h"
-#include "mime_headers.h"
-#include "content_type.h"
+
+#include "libmime/email_addr.h"
+#include "libutil/addr.h"
+#include "libcryptobox/cryptobox.h"
+#include "libmime/mime_headers.h"
+#include "libmime/content_type.h"
 #include "libutil/ref.h"
 #include "libutil/str_util.h"
 
@@ -60,8 +61,8 @@ struct rspamd_mime_part {
 	rspamd_ftok_t parsed_data;
 	struct rspamd_mime_part *parent_part;
 
-	GQueue *headers_order;
-	GHashTable *raw_headers;
+	struct rspamd_mime_header *headers_order;
+	khash_t(rspamd_mime_headers_htb) *raw_headers;
 
 	gchar *raw_headers_str;
 	gsize raw_headers_len;
@@ -141,24 +142,25 @@ struct rspamd_message {
 		const gchar *begin;
 		gsize len;
 		const gchar *body_start;
-	} raw_headers_content;			/**< list of raw headers							*/
-	GPtrArray *received;			/**< list of received headers						*/
-	GHashTable *urls;				/**< list of parsed urls							*/
-	GHashTable *emails;				/**< list of parsed emails							*/
-	GHashTable *raw_headers;		/**< list of raw headers							*/
-	GQueue *headers_order;			/**< order of raw headers							*/
+	} raw_headers_content;						/**< list of raw headers							*/
+	struct rspamd_received_header *received;	/**< list of received headers						*/
+	GHashTable *urls;							/**< list of parsed urls							*/
+	GHashTable *emails;							/**< list of parsed emails							*/
+	khash_t(rspamd_mime_headers_htb) *raw_headers;	/**< list of raw headers							*/
+	struct rspamd_mime_header *headers_order;	/**< inversed order of raw headers							*/
 	GPtrArray *rcpt_mime;
 	GPtrArray *from_mime;
-	enum rspamd_newlines_type nlines_type; /**< type of newlines (detected on most of headers 	*/
+	enum rspamd_newlines_type nlines_type; 		/**< type of newlines (detected on most of headers 	*/
 	ref_entry_t ref;
 };
 
 #ifndef FULL_DEBUG
-#define MESSAGE_FIELD(task, field) ((task)->message->(field))
+#define MESSAGE_FIELD(task, field) ((task)->message->field)
 #else
-#define MESSAGE_FIELD(task, field) do { \
-	if (!task->message) {msg_err_task("no message when getting field %s", #field); g_assert(0);} \
-	} while(0), ((task)->message->(field))
+#define MESSAGE_FIELD(task, field)
+	((!(task)->message) ? \
+	(msg_err_task("no message when getting field %s", #field), g_assert(0)) : \
+	((task)->message->field))
 #endif
 
 /**
@@ -173,40 +175,6 @@ gboolean rspamd_message_parse (struct rspamd_task *task);
  * @param task
  */
 void rspamd_message_process (struct rspamd_task *task);
-
-/**
- * Get an array of header's values with specified header's name using raw headers
- * @param task worker task structure
- * @param field header's name
- * @param strong if this flag is TRUE header's name is case sensitive, otherwise it is not
- * @return An array of header's values or NULL. It is NOT permitted to free array or values.
- */
-GPtrArray *rspamd_message_get_header_array (struct rspamd_task *task,
-											const gchar *field,
-											gboolean strong);
-
-/**
- * Get an array of mime parts header's values with specified header's name using raw headers
- * @param task worker task structure
- * @param field header's name
- * @param strong if this flag is TRUE header's name is case sensitive, otherwise it is not
- * @return An array of header's values or NULL. It is NOT permitted to free array or values.
- */
-GPtrArray *rspamd_message_get_mime_header_array (struct rspamd_task *task,
-												 const gchar *field,
-												 gboolean strong);
-
-/**
- * Get an array of header's values with specified header's name using raw headers
- * @param htb hash table indexed by header name (caseless) with ptr arrays as elements
- * @param field header's name
- * @param strong if this flag is TRUE header's name is case sensitive, otherwise it is not
- * @return An array of header's values or NULL. It is NOT permitted to free array or values.
- */
-GPtrArray *rspamd_message_get_header_from_hash (GHashTable *htb,
-												rspamd_mempool_t *pool,
-												const gchar *field,
-												gboolean strong);
 
 
 /**

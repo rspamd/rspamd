@@ -2514,7 +2514,7 @@ lua_task_get_received_headers (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	struct received_header *rh;
+	struct rspamd_received_header *rh;
 	const gchar *proto;
 	guint i, k = 1;
 
