@@ -314,6 +314,8 @@ rspamd_task_free (struct rspamd_task *task)
 			REF_RELEASE (task->cfg);
 		}
 
+		rspamd_message_unref (task->message);
+
 		if (task->flags & RSPAMD_TASK_FLAG_OWN_POOL) {
 			rspamd_mempool_delete (task->task_pool);
 		}
@@ -928,8 +930,9 @@ rspamd_task_get_principal_recipient (struct rspamd_task *task)
 		}
 	}
 
-	if (task->rcpt_mime != NULL && task->rcpt_mime->len > 0) {
-		PTR_ARRAY_FOREACH (task->rcpt_mime, i, addr) {
+	GPtrArray *rcpt_mime = MESSAGE_FIELD (task, rcpt_mime);
+	if (rcpt_mime != NULL && rcpt_mime->len > 0) {
+		PTR_ARRAY_FOREACH (rcpt_mime, i, addr) {
 			if (addr->addr && !(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
 				return rspamd_task_cache_principal_recipient (task, addr->addr,
 						addr->addr_len);
@@ -966,7 +969,8 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 
 	switch (lf->type) {
 	case RSPAMD_LOG_MID:
-		if (task->message_id && strcmp (task->message_id, "undef") != 0) {
+		if (MESSAGE_FIELD (task, message_id) &&
+			strcmp (MESSAGE_FIELD (task, message_id) , "undef") != 0) {
 			ret = TRUE;
 		}
 		break;
@@ -993,7 +997,8 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 		break;
 	case RSPAMD_LOG_MIME_RCPT:
 	case RSPAMD_LOG_MIME_RCPTS:
-		if (task->rcpt_mime && task->rcpt_mime->len > 0) {
+		if (MESSAGE_FIELD (task, rcpt_mime) &&
+			MESSAGE_FIELD (task, rcpt_mime)->len > 0) {
 			ret = TRUE;
 		}
 		break;
@@ -1003,7 +1008,8 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_MIME_FROM:
-		if (task->from_mime && task->from_mime->len > 0) {
+		if (MESSAGE_FIELD (task, from_mime) &&
+			MESSAGE_FIELD (task, from_mime)->len > 0) {
 			ret = TRUE;
 		}
 		break;
@@ -1322,8 +1328,8 @@ rspamd_task_log_variable (struct rspamd_task *task,
 	switch (lf->type) {
 	/* String vars */
 	case RSPAMD_LOG_MID:
-		if (task->message_id) {
-			var.begin = task->message_id;
+		if (MESSAGE_FIELD (task, message_id)) {
+			var.begin = MESSAGE_FIELD (task, message_id);
 			var.len = strlen (var.begin);
 		}
 		else {
@@ -1392,8 +1398,11 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_MIME_FROM:
-		if (task->from_mime) {
-			return rspamd_task_write_ialist (task, task->from_mime, 1, lf,
+		if (MESSAGE_FIELD (task, from_mime)) {
+			return rspamd_task_write_ialist (task,
+					MESSAGE_FIELD (task, from_mime),
+					1,
+					lf,
 					logbuf);
 		}
 		break;
@@ -1404,8 +1413,11 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_MIME_RCPT:
-		if (task->rcpt_mime) {
-			return rspamd_task_write_ialist (task, task->rcpt_mime, 1, lf,
+		if (MESSAGE_FIELD (task, rcpt_mime)) {
+			return rspamd_task_write_ialist (task,
+					MESSAGE_FIELD (task, rcpt_mime),
+					1,
+					lf,
 					logbuf);
 		}
 		break;
@@ -1416,8 +1428,11 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_MIME_RCPTS:
-		if (task->rcpt_mime) {
-			return rspamd_task_write_ialist (task, task->rcpt_mime, -1, lf,
+		if (MESSAGE_FIELD (task, rcpt_mime)) {
+			return rspamd_task_write_ialist (task,
+					MESSAGE_FIELD (task, rcpt_mime),
+					-1, /* All addresses */
+					lf,
 					logbuf);
 		}
 		break;

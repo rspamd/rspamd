@@ -657,8 +657,8 @@ rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part
 				task->flags |= RSPAMD_TASK_FLAG_SKIP;
 				task->flags |= RSPAMD_TASK_FLAG_GTUBE;
 				msg_info_task (
-						"<%s>: gtube %s pattern has been found in part of length %ud",
-						task->message_id, rspamd_action_to_str (act),
+						"gtube %s pattern has been found in part of length %ud",
+						rspamd_action_to_str (act),
 						part->utf_content->len);
 			}
 		}
@@ -792,8 +792,8 @@ rspamd_message_process_html_text_part (struct rspamd_task *task,
 			text_part->html,
 			text_part->utf_raw_content,
 			&text_part->exceptions,
-			task->urls,
-			task->emails);
+			MESSAGE_FIELD (task, urls),
+			MESSAGE_FIELD (task, emails));
 
 	if (text_part->utf_content->len == 0) {
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
@@ -943,7 +943,7 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 		}
 	}
 
-	g_ptr_array_add (task->text_parts, text_part);
+	g_ptr_array_add (MESSAGE_FIELD (task, text_parts), text_part);
 	mime_part->flags |= RSPAMD_MIME_PART_TEXT;
 	mime_part->specific.txt = text_part;
 
@@ -1144,6 +1144,8 @@ rspamd_message_new (struct rspamd_task *task)
 	msg->parts = g_ptr_array_sized_new (4);
 	msg->text_parts = g_ptr_array_sized_new (2);
 
+	REF_INIT_RETAIN (msg, rspamd_message_dtor);
+
 	return msg;
 }
 
@@ -1203,7 +1205,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	task->msg.begin = p;
 	task->msg.len = len;
 	rspamd_cryptobox_hash_init (&st, NULL, 0);
-	task->message = rspamd_message_new (task);s
+	task->message = rspamd_message_new (task);
 
 	if (task->flags & RSPAMD_TASK_FLAG_MIME) {
 		enum rspamd_mime_parse_error ret;
@@ -1251,7 +1253,7 @@ rspamd_message_parse (struct rspamd_task *task)
 		MESSAGE_FIELD (task, message_id) = "undef";
 	}
 
-	debug_task ("found %ud parts in message", task->parts->len);
+	debug_task ("found %ud parts in message", MESSAGE_FIELD (task, parts)->len);
 	if (task->queue_id == NULL) {
 		task->queue_id = "undef";
 	}
@@ -1319,9 +1321,9 @@ rspamd_message_parse (struct rspamd_task *task)
 	}
 
 	/* Extract data from received header if we were not given IP */
-	if (task->received->len > 0 && (task->flags & RSPAMD_TASK_FLAG_NO_IP) &&
+	if (MESSAGE_FIELD (task, received) && (task->flags & RSPAMD_TASK_FLAG_NO_IP) &&
 			(task->cfg && !task->cfg->ignore_received)) {
-		recv = g_ptr_array_index (task->received, 0);
+		recv = MESSAGE_FIELD (task, received);
 		if (recv->real_ip) {
 			if (!rspamd_parse_inet_address (&task->from_addr,
 					recv->real_ip,
@@ -1337,8 +1339,8 @@ rspamd_message_parse (struct rspamd_task *task)
 	}
 
 	/* Parse urls inside Subject header */
-	if (task->subject) {
-		p = task->subject;
+	if (MESSAGE_FIELD (task, subject)) {
+		p = MESSAGE_FIELD (task, subject);
 		len = strlen (p);
 		rspamd_cryptobox_hash_update (&st, p, len);
 		rspamd_url_find_multiple (task->task_pool, p, len,
@@ -1346,10 +1348,9 @@ rspamd_message_parse (struct rspamd_task *task)
 				rspamd_url_task_subject_callback, task);
 	}
 
-	for (i = 0; i < task->parts->len; i ++) {
-		struct rspamd_mime_part *part;
+	struct rspamd_mime_part *part;
 
-		part = g_ptr_array_index (task->parts, i);
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		rspamd_cryptobox_hash_update (&st, part->digest, sizeof (part->digest));
 	}
 
@@ -1359,13 +1360,13 @@ rspamd_message_parse (struct rspamd_task *task)
 	if (task->queue_id) {
 		msg_info_task ("loaded message; id: <%s>; queue-id: <%s>; size: %z; "
 				"checksum: <%*xs>",
-				task->message_id, task->queue_id, task->msg.len,
+				MESSAGE_FIELD (task, message_id), task->queue_id, task->msg.len,
 				(gint)sizeof (task->digest), task->digest);
 	}
 	else {
 		msg_info_task ("loaded message; id: <%s>; size: %z; "
 				"checksum: <%*xs>",
-				task->message_id, task->msg.len,
+				MESSAGE_FIELD (task, message_id), task->msg.len,
 				(gint)sizeof (task->digest), task->digest);
 	}
 
@@ -1379,13 +1380,9 @@ rspamd_message_process (struct rspamd_task *task)
 	struct rspamd_mime_text_part *p1, *p2;
 	gdouble diff, *pdiff;
 	guint tw, *ptw, dw;
+	struct rspamd_mime_part *part;
 
-	for (i = 0; i < task->parts->len; i ++) {
-		struct rspamd_mime_part *part;
-
-		part = g_ptr_array_index (task->parts, i);
-
-
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		if (!rspamd_message_process_text_part_maybe (task, part) &&
 				part->parsed_data.len > 0) {
 			const gchar *mb = magic_buffer (task->cfg->libs_ctx->libmagic,
@@ -1413,7 +1410,7 @@ rspamd_message_process (struct rspamd_task *task)
 	gdouble *var;
 	guint total_words = 0;
 
-	PTR_ARRAY_FOREACH (task->text_parts, i, text_part) {
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, text_part) {
 		if (!text_part->language) {
 			rspamd_mime_part_detect_language (task, text_part);
 		}
@@ -1426,9 +1423,9 @@ rspamd_message_process (struct rspamd_task *task)
 	}
 
 	/* Calculate distance for 2-parts messages */
-	if (task->text_parts->len == 2) {
-		p1 = g_ptr_array_index (task->text_parts, 0);
-		p2 = g_ptr_array_index (task->text_parts, 1);
+	if (i == 2) {
+		p1 = g_ptr_array_index (MESSAGE_FIELD (task, text_parts), 0);
+		p2 = g_ptr_array_index (MESSAGE_FIELD (task, text_parts), 1);
 
 		/* First of all check parent object */
 		if (p1->mime_part->parent_part) {
@@ -1544,9 +1541,13 @@ struct rspamd_message *
 rspamd_message_ref (struct rspamd_message *msg)
 {
 	REF_RETAIN (msg);
+
+	return msg;
 }
 
 void rspamd_message_unref (struct rspamd_message *msg)
 {
-	REF_RELEASE (msg);
+	if (msg) {
+		REF_RELEASE (msg);
+	}
 }
