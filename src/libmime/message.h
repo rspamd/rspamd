@@ -159,7 +159,7 @@ struct rspamd_message {
 #else
 #define MESSAGE_FIELD(task, field)
 	((!(task)->message) ? \
-	(msg_err_task("no message when getting field %s", #field), g_assert(0)) : \
+	(__typeof__((task)->message->field))(msg_err_task("no message when getting field %s", #field), g_assert(0), NULL) : \
 	((task)->message->field))
 #endif
 

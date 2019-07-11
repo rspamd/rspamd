@@ -2165,23 +2165,34 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 	const gchar *dkim_header,
 	const gchar *dkim_domain)
 {
-	struct rspamd_mime_header *rh;
-	gint rh_num = 0;
-	GPtrArray *ar;
+	struct rspamd_mime_header *rh, *cur, *sel = NULL;
+	gint hdr_cnt = 0;
 
 	if (dkim_header == NULL) {
-		ar = g_hash_table_lookup (task->raw_headers, header_name);
+		rh = rspamd_message_get_header_array (task, header_name);
 
-		if (ar) {
+		if (rh) {
 			/* Check uniqueness of the header */
-			rh = g_ptr_array_index (ar, 0);
-			if ((rh->flags & RSPAMD_HEADER_UNIQUE) && ar->len > 1) {
+			for (cur = rh->prev; ; cur = cur->prev) {
+				hdr_cnt ++;
+
+				if (hdr_cnt == count) {
+					sel = cur;
+				}
+
+				if (cur->next == NULL) {
+					/* Cycle */
+					break;
+				}
+			}
+
+			if ((rh->flags & RSPAMD_HEADER_UNIQUE) && hdr_cnt > 1) {
 				guint64 random_cookie = ottery_rand_uint64 ();
 
 				msg_warn_dkim ("header %s is intended to be unique by"
 						" email standards, but we have %d headers of this"
 						" type, artificially break DKIM check", header_name,
-						ar->len);
+						hdr_cnt);
 				rspamd_dkim_hash_update (ctx->headers_hash,
 						(const gchar *)&random_cookie,
 						sizeof (random_cookie));
@@ -2189,11 +2200,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 				return FALSE;
 			}
 
-			if (ar->len > count) {
-				/* Set skip count */
-				rh_num = ar->len - count - 1;
-			}
-			else {
+			if (hdr_cnt <= count) {
 				/*
 				 * If DKIM has less headers requested than there are in a
 				 * message, then it's fine, it allows adding extra headers
@@ -2201,22 +2208,23 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 				return TRUE;
 			}
 
-			rh = g_ptr_array_index (ar, rh_num);
+			/* Selected header must be non-null if previous condition is false */
+			g_assert (sel != NULL);
 
 			if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
-				rspamd_dkim_hash_update (ctx->headers_hash, rh->raw_value,
-						rh->raw_len);
+				rspamd_dkim_hash_update (ctx->headers_hash, sel->raw_value,
+						sel->raw_len);
 				msg_debug_dkim ("update signature with header: %*s",
-						(gint)rh->raw_len, rh->raw_value);
+						(gint)sel->raw_len, sel->raw_value);
 			}
 			else {
-				if (ctx->is_sign && (rh->flags & RSPAMD_HEADER_FROM)) {
+				if (ctx->is_sign && (sel->flags & RSPAMD_HEADER_FROM)) {
 					/* Special handling of the From handling when rewrite is done */
 					gboolean has_rewrite = FALSE;
 					guint i;
 					struct rspamd_email_address *addr;
 
-					PTR_ARRAY_FOREACH (task->from_mime, i, addr) {
+					PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, from_mime), i, addr) {
 						if ((addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)
 							&& !(addr->flags & RSPAMD_EMAIL_ADDR_ALIASED)) {
 							has_rewrite = TRUE;
@@ -2224,7 +2232,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 					}
 
 					if (has_rewrite) {
-						PTR_ARRAY_FOREACH (task->from_mime, i, addr) {
+						PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, from_mime), i, addr) {
 							if (!(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
 								if (!rspamd_dkim_canonize_header_relaxed (ctx, addr->raw,
 										header_name, FALSE)) {
@@ -2237,7 +2245,7 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 					}
 				}
 
-				if (!rspamd_dkim_canonize_header_relaxed (ctx, rh->value,
+				if (!rspamd_dkim_canonize_header_relaxed (ctx, sel->value,
 						header_name, FALSE)) {
 					return FALSE;
 				}
@@ -2248,17 +2256,15 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 		/* For signature check just use the saved dkim header */
 		if (ctx->header_canon_type == DKIM_CANON_SIMPLE) {
 			/* We need to find our own signature and use it */
-			guint i;
+			rh = rspamd_message_get_header_array (task, header_name);
 
-			ar = g_hash_table_lookup (task->raw_headers, header_name);
-
-			if (ar) {
+			if (rh) {
 				/* We need to find our own signature */
 				if (!dkim_domain) {
 					return FALSE;
 				}
 
-				PTR_ARRAY_FOREACH (ar, i, rh) {
+				DL_FOREACH (rh, cur) {
 					guint64 th = rspamd_cryptobox_fast_hash (rh->decoded,
 							strlen (rh->decoded), rspamd_hash_seed ());
 
@@ -2348,7 +2354,8 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 
 	/* First of all find place of body */
 	body_end = task->msg.begin + task->msg.len;
-	body_start = task->raw_headers_content.body_start;
+
+	body_start = MESSAGE_FIELD (task, raw_headers_content).body_start;
 
 	res = rspamd_mempool_alloc0 (task->task_pool, sizeof (*res));
 	res->ctx = ctx;
@@ -2948,7 +2955,7 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 
 	/* First of all find place of body */
 	body_end = task->msg.begin + task->msg.len;
-	body_start = task->raw_headers_content.body_start;
+	body_start = MESSAGE_FIELD (task, raw_headers_content).body_start;
 
 	if (len > 0) {
 		ctx->common.len = len;
@@ -3020,6 +3027,8 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 
 	/* Now canonize headers */
 	for (i = 0; i < ctx->common.hlist->len; i++) {
+		struct rspamd_mime_header *rh, *cur;
+
 		dh = g_ptr_array_index (ctx->common.hlist, i);
 
 		/* We allow oversigning if dh->count > number of headers with this name */
@@ -3027,25 +3036,25 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 
 		if (hstat.s.flags & RSPAMD_DKIM_FLAG_OVERSIGN) {
 			/* Do oversigning */
-			GPtrArray *ar;
 			guint count = 0;
 
-			ar = g_hash_table_lookup (task->raw_headers, dh->name);
+			rh = rspamd_message_get_header_array (task, dh->name);
 
-			if (ar) {
-				count = ar->len;
-			}
-
-			for (j = 0; j < count; j ++) {
-				/* Sign all existing headers */
-				rspamd_dkim_canonize_header (&ctx->common, task, dh->name, j,
-						NULL, NULL);
+			if (rh) {
+				DL_FOREACH (rh, cur) {
+					/* Sign all existing headers */
+					rspamd_dkim_canonize_header (&ctx->common, task, dh->name,
+							count,
+							NULL, NULL);
+					count++;
+				}
 			}
 
 			/* Now add one more entry to oversign */
 			if (count > 0 || !(hstat.s.flags & RSPAMD_DKIM_FLAG_OVERSIGN_EXISTING)) {
 				cur_len = (strlen (dh->name) + 1) * (count + 1);
 				headers_len += cur_len;
+
 				if (headers_len > 70 && i > 0 && i < ctx->common.hlist->len - 1) {
 					rspamd_printf_gstring (hdr, "  ");
 					headers_len = cur_len;
@@ -3057,7 +3066,9 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 			}
 		}
 		else {
-			if (g_hash_table_lookup (task->raw_headers, dh->name)) {
+			rh = rspamd_message_get_header_array (task, dh->name);
+
+			if (rh) {
 				if (hstat.s.count > 0) {
 
 					cur_len = (strlen (dh->name) + 1) * (hstat.s.count);
@@ -3166,7 +3177,7 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 	}
 	else {
 		b64_data = rspamd_encode_base64_fold (sig_buf, sig_len, 70, NULL,
-				task->nlines_type);
+				MESSAGE_FIELD (task, nlines_type));
 	}
 
 	rspamd_printf_gstring (hdr, "%s", b64_data);

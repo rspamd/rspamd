@@ -123,44 +123,18 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 		new_task->task_pool = pool;
 	}
 
-	new_task->raw_headers = g_hash_table_new_full (rspamd_strcase_hash,
-			rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
-	new_task->headers_order = g_queue_new ();
 	new_task->request_headers = g_hash_table_new_full (rspamd_ftok_icase_hash,
 			rspamd_ftok_icase_equal, rspamd_fstring_mapped_ftok_free,
 			rspamd_request_header_dtor);
 	rspamd_mempool_add_destructor (new_task->task_pool,
 			(rspamd_mempool_destruct_t) g_hash_table_unref,
 			new_task->request_headers);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_unref,
-			new_task->raw_headers);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			(rspamd_mempool_destruct_t) g_queue_free,
-			new_task->headers_order);
-	new_task->emails = g_hash_table_new (rspamd_email_hash, rspamd_emails_cmp);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_unref,
-			new_task->emails);
-	new_task->urls = g_hash_table_new (rspamd_url_hash, rspamd_urls_cmp);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_unref,
-			new_task->urls);
-	new_task->parts = g_ptr_array_sized_new (4);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			rspamd_ptr_array_free_hard, new_task->parts);
-	new_task->text_parts = g_ptr_array_sized_new (2);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			rspamd_ptr_array_free_hard, new_task->text_parts);
-	new_task->received = g_ptr_array_sized_new (8);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			rspamd_ptr_array_free_hard, new_task->received);
 
 	new_task->sock = -1;
 	new_task->flags |= (RSPAMD_TASK_FLAG_MIME|RSPAMD_TASK_FLAG_JSON);
 	new_task->result = rspamd_create_metric_result (new_task);
 
-	new_task->message_id = new_task->queue_id = "undef";
+	new_task->queue_id = "undef";
 	new_task->messages = ucl_object_typed_new (UCL_OBJECT);
 	new_task->lua_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
