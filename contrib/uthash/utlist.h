@@ -365,6 +365,15 @@ do {                                                                            
   }                                                                                            \
 } while (0)
 
+#define LL_REVERSE2(head,next) do {                                                            \
+    LDECLTYPE(head) _cur = (head), _p = NULL, _n = NULL;                                       \
+    while(_cur != NULL) { _n = _cur->next; _cur->next = _p; _p = _cur; _cur = _n; }            \
+    (head) = _p;                                                                               \
+} while (0)
+
+#define LL_REVERSE(head)                                                                       \
+    LL_REVERSE2(head,next)
+
 /* Here are VS2008 replacements for LL_APPEND and LL_DELETE */
 #define LL_APPEND_VS2008(head,add)                                                             \
     LL_APPEND2_VS2008(head,add,next)
