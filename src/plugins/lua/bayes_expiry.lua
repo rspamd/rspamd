@@ -192,7 +192,7 @@ end
 -- [1] = symbol pattern
 -- [2] = expire value
 -- [3] = cursor
--- returns new cursor
+-- returns {cursor for the next step, step number, step statistic counters, cycle statistic counters}
 local expiry_script = [[
   local unpack_function = table.unpack or unpack
 
@@ -242,7 +242,7 @@ local expiry_script = [[
   end
 
   local ret = redis.call('SCAN', cursor, 'MATCH', KEYS[1], 'COUNT', '${count}')
-  local next = ret[1]
+  local next_cursor = ret[1]
   local keys = ret[2]
   local tokens = {}
 
@@ -338,12 +338,12 @@ local expiry_script = [[
   c.insignificant_ttls_set = c.insignificant_ttls_set + insignificant_ttls_set
 
   redis.call('HMSET', counters_key, unpack_function(hash2list(c)))
-  redis.call('SET', cursor_key, tostring(next))
+  redis.call('SET', cursor_key, tostring(next_cursor))
   redis.call('SET', step_key, tostring(step))
   redis.call('DEL', lock_key)
 
   return {
-    next, step,
+    next_cursor, step,
     {nelts, extended, discriminated, mean, stddev, common, significant, infrequent,
      infrequent_ttls_set, insignificant, insignificant_ttls_set},
     {c.nelts, c.extended, c.discriminated, c.sum, c.sum_squares, c.common,
