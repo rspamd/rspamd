@@ -616,8 +616,7 @@ chartable_symbol_callback (struct rspamd_task *task,
 	struct rspamd_mime_text_part *part;
 	struct chartable_ctx *chartable_module_ctx = chartable_get_context (task->cfg);
 
-	for (i = 0; i < task->text_parts->len; i ++) {
-		part = g_ptr_array_index (task->text_parts, i);
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, part) {
 		rspamd_chartable_process_part (task, part, chartable_module_ctx);
 	}
 

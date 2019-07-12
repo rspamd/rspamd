@@ -1870,7 +1870,8 @@ rspamd_controller_learn_fin_task (void *ud)
 	session = conn_ent->ud;
 
 	if (task->err != NULL) {
-		msg_info_session ("cannot learn <%s>: %e", task->message_id, task->err);
+		msg_info_session ("cannot learn <%s>: %e",
+				MESSAGE_FIELD (task, message_id), task->err);
 		rspamd_controller_send_error (conn_ent, task->err->code, "%s",
 				task->err->message);
 
@@ -1882,13 +1883,14 @@ rspamd_controller_learn_fin_task (void *ud)
 		msg_info_task ("<%s> learned message as %s: %s",
 				rspamd_inet_address_to_string (session->from_addr),
 				session->is_spam ? "spam" : "ham",
-						task->message_id);
+				MESSAGE_FIELD (task, message_id));
 		rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 		return TRUE;
 	}
 
 	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_LEARN)) {
-		msg_info_task ("cannot learn <%s>: %e", task->message_id, task->err);
+		msg_info_task ("cannot learn <%s>: %e",
+				MESSAGE_FIELD (task, message_id), task->err);
 
 		if (task->err) {
 			rspamd_controller_send_error (conn_ent, task->err->code, "%s",
@@ -1909,7 +1911,7 @@ rspamd_controller_learn_fin_task (void *ud)
 			msg_info_task ("<%s> learned message as %s: %s",
 					rspamd_inet_address_to_string (session->from_addr),
 					session->is_spam ? "spam" : "ham",
-							task->message_id);
+					MESSAGE_FIELD (task, message_id));
 			rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 		}
 
@@ -1948,7 +1950,8 @@ rspamd_controller_check_fin_task (void *ud)
 	conn_ent = task->fin_arg;
 
 	if (task->err) {
-		msg_info_task ("cannot check <%s>: %e", task->message_id, task->err);
+		msg_info_task ("cannot check <%s>: %e",
+				MESSAGE_FIELD (task, message_id), task->err);
 		rspamd_controller_send_error (conn_ent, task->err->code, "%s",
 				task->err->message);
 		return TRUE;
@@ -2027,7 +2030,8 @@ rspamd_controller_handle_learn_common (
 	rspamd_learn_task_spam (task, is_spam, session->classifier, NULL);
 
 	if (!rspamd_task_process (task, RSPAMD_TASK_PROCESS_LEARN)) {
-		msg_warn_session ("<%s> message cannot be processed", task->message_id);
+		msg_warn_session ("<%s> message cannot be processed",
+				MESSAGE_FIELD (task, message_id));
 		goto end;
 	}
 

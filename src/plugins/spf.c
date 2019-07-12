@@ -665,8 +665,7 @@ spf_symbol_callback (struct rspamd_task *task,
 		else {
 
 			if (!rspamd_spf_resolve (task, spf_plugin_callback, item)) {
-				msg_info_task ("cannot make spf request for [%s]",
-						task->message_id);
+				msg_info_task ("cannot make spf request for %s", domain);
 				rspamd_task_insert_result (task,
 						spf_module_ctx->symbol_dnsfail,
 						1,

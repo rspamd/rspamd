@@ -1475,10 +1475,10 @@ fuzzy_cmd_from_text_part (struct rspamd_task *task,
 			rspamd_cryptobox_hash_update (&st, part->utf_stripped_content->data,
 					part->utf_stripped_content->len);
 
-			if (task->subject) {
+			if (MESSAGE_FIELD (task, subject)) {
 				/* We also include subject */
-				rspamd_cryptobox_hash_update (&st, task->subject,
-						strlen (task->subject));
+				rspamd_cryptobox_hash_update (&st, MESSAGE_FIELD (task, subject),
+						strlen (MESSAGE_FIELD (task, subject)));
 			}
 
 			rspamd_cryptobox_hash_final (&st, cmd->digest);
@@ -2127,7 +2127,7 @@ fuzzy_insert_metric_results (struct rspamd_task *task, GPtrArray *results)
 	struct rspamd_mime_text_part *tp;
 
 	/* About 5 words */
-	static const text_length_cutoff = 25;
+	static const unsigned int text_length_cutoff = 25;
 
 	PTR_ARRAY_FOREACH (results, i, res) {
 		if (res->type == FUZZY_RESULT_TXT) {
@@ -2139,7 +2139,7 @@ fuzzy_insert_metric_results (struct rspamd_task *task, GPtrArray *results)
 		}
 	}
 
-	PTR_ARRAY_FOREACH (task->text_parts, i, tp) {
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, tp) {
 		if (!IS_PART_EMPTY (tp)) {
 			seen_text = TRUE;
 		}
@@ -2434,8 +2434,8 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 				return;
 			}
 
-			msg_info_task ("cannot process fuzzy hash for message <%s>: %s",
-					session->task->message_id, strerror (errno));
+			msg_info_task ("cannot process fuzzy hash for message: %s",
+					strerror (errno));
 			if (*(session->err) == NULL) {
 				g_set_error (session->err,
 						g_quark_from_static_string (M),
@@ -2485,7 +2485,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 							(gint)sizeof (rep->digest), rep->digest,
 							symbol,
 							rep->v1.flag,
-							session->task->message_id);
+							MESSAGE_FIELD (session->task, message_id));
 				}
 				else {
 					if (rep->v1.value == 401) {
@@ -2495,7 +2495,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 										"list %s:%d, skipped by server",
 								ftype,
 								op,
-								session->task->message_id,
+								MESSAGE_FIELD (session->task, message_id),
 								(gint)sizeof (rep->digest), rep->digest,
 								symbol,
 								rep->v1.flag);
@@ -2513,7 +2513,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 										"list %s:%d, error: %d",
 								ftype,
 								op,
-								session->task->message_id,
+								MESSAGE_FIELD (session->task, message_id),
 								(gint)sizeof (rep->digest), rep->digest,
 								symbol,
 								rep->v1.flag,
@@ -2671,7 +2671,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 	GPtrArray *res;
 	gboolean check_part, fuzzy_check;
 
-	res = g_ptr_array_sized_new (task->parts->len + 1);
+	res = g_ptr_array_sized_new (MESSAGE_FIELD (task, parts)->len + 1);
 
 	if (c == FUZZY_STAT) {
 		io = fuzzy_cmd_stat (rule, c, flag, value, task->task_pool);
@@ -2682,7 +2682,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 		goto end;
 	}
 
-	PTR_ARRAY_FOREACH (task->parts, i, mime_part) {
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, mime_part) {
 		check_part = FALSE;
 		fuzzy_check = FALSE;
 
@@ -2829,8 +2829,8 @@ fuzzy_symbol_callback (struct rspamd_task *task,
 		if (rspamd_match_radix_map_addr (fuzzy_module_ctx->whitelist,
 				task->from_addr) != NULL) {
 			msg_info_task ("<%s>, address %s is whitelisted, skip fuzzy check",
-				task->message_id,
-				rspamd_inet_address_to_string (task->from_addr));
+					MESSAGE_FIELD (task, message_id),
+					rspamd_inet_address_to_string (task->from_addr));
 			rspamd_symcache_finalize_item (task, item);
 
 			return;
@@ -2963,7 +2963,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 
 		if (r == -1) {
 			msg_warn_task ("<%s>: cannot process message for fuzzy",
-					task->message_id);
+					MESSAGE_FIELD (task, message_id));
 			rspamd_task_free (task);
 			rspamd_controller_send_error (conn_ent, 400,
 					"Message processing error");
@@ -3102,7 +3102,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	if (res == -1) {
-		msg_warn_task ("<%s>: cannot send fuzzy request: %s", task->message_id,
+		msg_warn_task ("cannot send fuzzy request: %s",
 				strerror (errno));
 		rspamd_controller_send_error (conn_ent, 400, "Message sending error");
 		rspamd_task_free (task);
@@ -3111,8 +3111,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	}
 	else if (!processed) {
 		if (rules) {
-			msg_warn_task ("<%s>: no content to generate fuzzy",
-					task->message_id);
+			msg_warn_task ("no content to generate fuzzy");
 			rspamd_controller_send_error (conn_ent, 404,
 				"No content to generate fuzzy for flag %d", flag);
 		}
@@ -3122,9 +3121,7 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 						"Message is conditionally skipped for flag %d", flag);
 			}
 			else {
-				msg_warn_task ("<%s>: no fuzzy rules found for flag %d",
-						task->message_id,
-						flag);
+				msg_warn_task ("no fuzzy rules found for flag %d", flag);
 				rspamd_controller_send_error (conn_ent, 404,
 						"No fuzzy rules matched for flag %d", flag);
 			}
@@ -3342,20 +3339,17 @@ fuzzy_check_lua_process_learn (struct rspamd_task *task,
 	}
 
 	if (res == -1) {
-		msg_warn_task ("<%s>: cannot send fuzzy request: %s", task->message_id,
+		msg_warn_task ("cannot send fuzzy request: %s",
 				strerror (errno));
 	}
 	else if (!processed) {
 		if (rules) {
-			msg_warn_task ("<%s>: no content to generate fuzzy",
-					task->message_id);
+			msg_warn_task ("no content to generate fuzzy");
 
 			return FALSE;
 		}
 		else {
-			msg_warn_task ("<%s>: no fuzzy rules found for flag %d",
-					task->message_id,
-				flag);
+			msg_warn_task ("no fuzzy rules found for flag %d", flag);
 			return FALSE;
 		}
 	}
