@@ -2172,13 +2172,13 @@ rspamd_dkim_canonize_header (struct rspamd_dkim_common_ctx *ctx,
 		rh = rspamd_message_get_header_array (task, header_name);
 
 		if (rh) {
-			/* Check uniqueness of the header */
+			/* Check uniqueness of the header but we count from the bottom to top */
 			for (cur = rh->prev; ; cur = cur->prev) {
-				hdr_cnt ++;
-
 				if (hdr_cnt == count) {
 					sel = cur;
 				}
+
+				hdr_cnt ++;
 
 				if (cur->next == NULL) {
 					/* Cycle */
