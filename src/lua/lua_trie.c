@@ -259,9 +259,7 @@ lua_trie_search_mime (lua_State *L)
 	gboolean found = FALSE;
 
 	if (trie && task) {
-		for (i = 0; i < task->text_parts->len; i ++) {
-			part = g_ptr_array_index (task->text_parts, i);
-
+		PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, part) {
 			if (!IS_PART_EMPTY (part) && part->utf_content != NULL) {
 				text = part->utf_content->data;
 				len = part->utf_content->len;
@@ -327,9 +325,9 @@ lua_trie_search_rawbody (lua_State *L)
 	gboolean found = FALSE;
 
 	if (trie && task) {
-		if (task->raw_headers_content.len > 0) {
-			text = task->msg.begin + task->raw_headers_content.len;
-			len = task->msg.len - task->raw_headers_content.len;
+		if (MESSAGE_FIELD (task, raw_headers_content).len > 0) {
+			text = task->msg.begin + MESSAGE_FIELD (task, raw_headers_content).len;
+			len = task->msg.len - MESSAGE_FIELD (task, raw_headers_content).len;
 		}
 		else {
 			/* Treat as raw message */

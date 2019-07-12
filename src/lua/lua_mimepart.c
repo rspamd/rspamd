@@ -21,6 +21,8 @@
 #include "libcryptobox/cryptobox.h"
 #include "libutil/shingles.h"
 
+#include "contrib/uthash/utlist.h"
+
 /* Textpart methods */
 /***
  * @module rspamd_textpart
@@ -1558,16 +1560,21 @@ lua_mimepart_get_header_common (lua_State *L, enum rspamd_lua_task_header_type h
 {
 	struct rspamd_mime_part *part = lua_check_mimepart (L);
 	const gchar *name;
-	GPtrArray *ar;
+	gboolean strong = FALSE;
 
 	name = luaL_checkstring (L, 2);
 
 	if (name && part) {
 
-		ar = rspamd_message_get_header_from_hash (part->raw_headers, NULL,
-				name, FALSE);
+		if (lua_isboolean (L, 3)) {
+			strong = lua_toboolean (L, 3);
+		}
 
-		return rspamd_lua_push_header_array (L, ar, how);
+		return rspamd_lua_push_header_array (L,
+				name,
+				rspamd_message_get_header_from_hash (part->raw_headers, name),
+				how,
+				strong);
 	}
 
 	lua_pushnil (L);
@@ -1915,8 +1922,7 @@ lua_mimepart_headers_foreach (lua_State *L)
 	struct rspamd_mime_part *part = lua_check_mimepart (L);
 	enum rspamd_lua_task_header_type how = RSPAMD_TASK_HEADER_PUSH_SIMPLE;
 	struct rspamd_lua_regexp *re = NULL;
-	GList *cur;
-	struct rspamd_mime_header *hdr;
+	struct rspamd_mime_header *hdr, *cur;
 	gint old_top;
 
 	if (part && lua_isfunction (L, 2)) {
@@ -1951,23 +1957,20 @@ lua_mimepart_headers_foreach (lua_State *L)
 		}
 
 		if (part->headers_order) {
-			cur = part->headers_order->head;
+			hdr = part->headers_order;
 
-			while (cur) {
-				hdr = cur->data;
-
+			LL_FOREACH (hdr, cur) {
 				if (re && re->re) {
-					if (!rspamd_regexp_match (re->re, hdr->name,
-							strlen (hdr->name),FALSE)) {
-						cur = g_list_next (cur);
+					if (!rspamd_regexp_match (re->re, cur->name,
+							strlen (cur->name),FALSE)) {
 						continue;
 					}
 				}
 
 				old_top = lua_gettop (L);
 				lua_pushvalue (L, 2);
-				lua_pushstring (L, hdr->name);
-				rspamd_lua_push_header (L, hdr, how);
+				lua_pushstring (L, cur->name);
+				rspamd_lua_push_header (L, cur, how);
 
 				if (lua_pcall (L, 2, LUA_MULTRET, 0) != 0) {
 					msg_err ("call to header_foreach failed: %s",
@@ -1987,7 +1990,6 @@ lua_mimepart_headers_foreach (lua_State *L)
 				}
 
 				lua_settop (L, old_top);
-				cur = g_list_next (cur);
 			}
 		}
 	}
