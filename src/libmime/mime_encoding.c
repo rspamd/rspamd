@@ -667,7 +667,8 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	}
 
 	if (charset == NULL) {
-		msg_info_task ("<%s>: has invalid charset", task->message_id);
+		msg_info_task ("<%s>: has invalid charset",
+				MESSAGE_FIELD (task, message_id));
 		SET_PART_RAW (text_part);
 		text_part->utf_raw_content = part_content;
 
@@ -690,7 +691,7 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 		if (!rspamd_mime_text_part_utf8_convert (task, text_part,
 				part_content, charset, &err)) {
 			msg_warn_task ("<%s>: cannot convert from %s to utf8: %s",
-					task->message_id,
+					MESSAGE_FIELD (task, message_id),
 					charset,
 					err ? err->message : "unknown problem");
 			SET_PART_RAW (text_part);
