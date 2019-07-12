@@ -199,7 +199,6 @@ struct rspamd_task {
 	const gchar *classifier;                        /**< Classifier to learn (if needed)				*/
 	struct rspamd_lang_detector *lang_det;            /**< Languages detector								*/
 	struct rspamd_message *message;
-	guchar digest[16];
 };
 
 /**

@@ -1438,7 +1438,8 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		break;
 	case RSPAMD_LOG_DIGEST:
 		var.len = rspamd_snprintf (numbuf, sizeof (numbuf), "%*xs",
-				(gint)sizeof (task->digest), task->digest);
+				(gint)sizeof (MESSAGE_FIELD (task, digest)),
+				MESSAGE_FIELD (task, digest));
 		var.begin = numbuf;
 		break;
 	case RSPAMD_LOG_FILENAME:

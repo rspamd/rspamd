@@ -150,6 +150,7 @@ struct rspamd_message {
 	struct rspamd_mime_header *headers_order;	/**< order of raw headers							*/
 	GPtrArray *rcpt_mime;
 	GPtrArray *from_mime;
+	guchar digest[16];
 	enum rspamd_newlines_type nlines_type; 		/**< type of newlines (detected on most of headers 	*/
 	ref_entry_t ref;
 };

@@ -1204,6 +1204,12 @@ rspamd_message_parse (struct rspamd_task *task)
 
 	task->msg.begin = p;
 	task->msg.len = len;
+
+	/* Cleanup old message */
+	if (task->message) {
+		rspamd_message_unref (task->message);
+	}
+
 	rspamd_cryptobox_hash_init (&st, NULL, 0);
 	task->message = rspamd_message_new (task);
 
@@ -1355,19 +1361,20 @@ rspamd_message_parse (struct rspamd_task *task)
 	}
 
 	rspamd_cryptobox_hash_final (&st, digest_out);
-	memcpy (task->digest, digest_out, sizeof (task->digest));
+	memcpy (MESSAGE_FIELD (task, digest), digest_out,
+			sizeof (MESSAGE_FIELD (task, digest)));
 
 	if (task->queue_id) {
 		msg_info_task ("loaded message; id: <%s>; queue-id: <%s>; size: %z; "
 				"checksum: <%*xs>",
 				MESSAGE_FIELD (task, message_id), task->queue_id, task->msg.len,
-				(gint)sizeof (task->digest), task->digest);
+				(gint)sizeof (MESSAGE_FIELD (task, digest)), MESSAGE_FIELD (task, digest));
 	}
 	else {
 		msg_info_task ("loaded message; id: <%s>; size: %z; "
 				"checksum: <%*xs>",
 				MESSAGE_FIELD (task, message_id), task->msg.len,
-				(gint)sizeof (task->digest), task->digest);
+				(gint)sizeof (MESSAGE_FIELD (task, digest)), MESSAGE_FIELD (task, digest));
 	}
 
 	return TRUE;

@@ -263,7 +263,6 @@ rspamd_mime_part_get_cte (struct rspamd_task *task,
 						  gboolean apply_heuristic)
 {
 	struct rspamd_mime_header *hdr, *cur;
-	guint i;
 	enum rspamd_cte cte = RSPAMD_CTE_UNKNOWN;
 
 	hdr = rspamd_message_get_header_from_hash (hdrs, "Content-Transfer-Encoding");
@@ -335,7 +334,6 @@ static void
 rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part)
 {
 	struct rspamd_mime_header *hdr, *cur;
-	guint i;
 	struct rspamd_content_disposition *cd = NULL;
 	rspamd_ftok_t srch;
 	struct rspamd_content_type_param *found;
