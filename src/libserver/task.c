@@ -930,7 +930,7 @@ rspamd_task_get_principal_recipient (struct rspamd_task *task)
 		}
 	}
 
-	GPtrArray *rcpt_mime = MESSAGE_FIELD (task, rcpt_mime);
+	GPtrArray *rcpt_mime = MESSAGE_FIELD_CHECK (task, rcpt_mime);
 	if (rcpt_mime != NULL && rcpt_mime->len > 0) {
 		PTR_ARRAY_FOREACH (rcpt_mime, i, addr) {
 			if (addr->addr && !(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
@@ -969,7 +969,7 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 
 	switch (lf->type) {
 	case RSPAMD_LOG_MID:
-		if (MESSAGE_FIELD (task, message_id) &&
+		if (MESSAGE_FIELD_CHECK (task, message_id) &&
 			strcmp (MESSAGE_FIELD (task, message_id) , "undef") != 0) {
 			ret = TRUE;
 		}
@@ -997,7 +997,7 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 		break;
 	case RSPAMD_LOG_MIME_RCPT:
 	case RSPAMD_LOG_MIME_RCPTS:
-		if (MESSAGE_FIELD (task, rcpt_mime) &&
+		if (MESSAGE_FIELD_CHECK (task, rcpt_mime) &&
 			MESSAGE_FIELD (task, rcpt_mime)->len > 0) {
 			ret = TRUE;
 		}
@@ -1008,7 +1008,7 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_MIME_FROM:
-		if (MESSAGE_FIELD (task, from_mime) &&
+		if (MESSAGE_FIELD_CHECK (task, from_mime) &&
 			MESSAGE_FIELD (task, from_mime)->len > 0) {
 			ret = TRUE;
 		}
@@ -1328,7 +1328,7 @@ rspamd_task_log_variable (struct rspamd_task *task,
 	switch (lf->type) {
 	/* String vars */
 	case RSPAMD_LOG_MID:
-		if (MESSAGE_FIELD (task, message_id)) {
+		if (MESSAGE_FIELD_CHECK (task, message_id)) {
 			var.begin = MESSAGE_FIELD (task, message_id);
 			var.len = strlen (var.begin);
 		}
@@ -1398,7 +1398,7 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_MIME_FROM:
-		if (MESSAGE_FIELD (task, from_mime)) {
+		if (MESSAGE_FIELD_CHECK (task, from_mime)) {
 			return rspamd_task_write_ialist (task,
 					MESSAGE_FIELD (task, from_mime),
 					1,
@@ -1413,7 +1413,7 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_MIME_RCPT:
-		if (MESSAGE_FIELD (task, rcpt_mime)) {
+		if (MESSAGE_FIELD_CHECK (task, rcpt_mime)) {
 			return rspamd_task_write_ialist (task,
 					MESSAGE_FIELD (task, rcpt_mime),
 					1,
@@ -1428,7 +1428,7 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_MIME_RCPTS:
-		if (MESSAGE_FIELD (task, rcpt_mime)) {
+		if (MESSAGE_FIELD_CHECK (task, rcpt_mime)) {
 			return rspamd_task_write_ialist (task,
 					MESSAGE_FIELD (task, rcpt_mime),
 					-1, /* All addresses */
@@ -1437,10 +1437,16 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_DIGEST:
-		var.len = rspamd_snprintf (numbuf, sizeof (numbuf), "%*xs",
-				(gint)sizeof (MESSAGE_FIELD (task, digest)),
-				MESSAGE_FIELD (task, digest));
-		var.begin = numbuf;
+		if (task->message) {
+			var.len = rspamd_snprintf (numbuf, sizeof (numbuf), "%*xs",
+					(gint) sizeof (MESSAGE_FIELD (task, digest)),
+					MESSAGE_FIELD (task, digest));
+			var.begin = numbuf;
+		}
+		else {
+			var.begin = undef;
+			var.len = sizeof (undef) - 1;
+		}
 		break;
 	case RSPAMD_LOG_FILENAME:
 		if (task->msg.fpath) {

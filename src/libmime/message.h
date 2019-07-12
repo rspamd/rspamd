@@ -158,6 +158,9 @@ struct rspamd_message {
 };
 
 #define MESSAGE_FIELD(task, field) ((task)->message->field)
+#define MESSAGE_FIELD_CHECK(task, field) ((task)->message ? \
+	(task)->message->field : \
+	(__typeof__((task)->message->field))NULL)
 
 /**
  * Parse and pre-process mime message

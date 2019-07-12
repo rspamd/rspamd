@@ -1621,7 +1621,7 @@ struct rspamd_mime_header *
 rspamd_message_get_header_array (struct rspamd_task *task,
 								 const gchar *field)
 {
-	return rspamd_message_get_header_from_hash (MESSAGE_FIELD (task, raw_headers),
+	return rspamd_message_get_header_from_hash (MESSAGE_FIELD_CHECK (task, raw_headers),
 			field);
 }
 

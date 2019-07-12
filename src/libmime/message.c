@@ -1166,6 +1166,7 @@ rspamd_message_parse (struct rspamd_task *task)
 
 	if (RSPAMD_TASK_IS_EMPTY (task)) {
 		/* Don't do anything with empty task */
+		task->flags |= RSPAMD_TASK_FLAG_SKIP_PROCESS;
 		return TRUE;
 	}
 

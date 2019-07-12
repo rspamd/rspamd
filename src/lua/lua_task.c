@@ -1271,7 +1271,10 @@ lua_task_set_cached (lua_State *L, struct rspamd_task *task, const gchar *key,
 	}
 
 	entry->ref = luaL_ref (L, LUA_REGISTRYINDEX);
-	memcpy (entry->id, MESSAGE_FIELD (task, digest), sizeof (entry->id));
+
+	if (task->message) {
+		memcpy (entry->id, MESSAGE_FIELD (task, digest), sizeof (entry->id));
+	}
 }
 
 
@@ -1283,8 +1286,9 @@ lua_task_get_cached (lua_State *L, struct rspamd_task *task, const gchar *key)
 
 	entry = g_hash_table_lookup (task->lua_cache, key);
 
-	if (entry != NULL && memcmp (entry->id, MESSAGE_FIELD (task, digest),
-			sizeof (entry->id)) == 0) {
+	if (entry != NULL && (task->message &&
+						  memcmp (entry->id, MESSAGE_FIELD (task, digest),
+								  sizeof (entry->id)) == 0)) {
 		lua_rawgeti (L, LUA_REGISTRYINDEX, entry->ref);
 
 		return TRUE;
@@ -1970,7 +1974,7 @@ lua_task_get_urls (lua_State * L)
 			PROTOCOL_FILE|PROTOCOL_FTP;
 	gsize sz;
 
-	if (task) {
+	if (task && task->message) {
 		if (lua_gettop (L) >= 2) {
 			if (lua_type (L, 2) == LUA_TBOOLEAN) {
 				protocols_mask = default_mask;
@@ -2087,7 +2091,7 @@ lua_task_has_urls (lua_State * L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gboolean need_emails = FALSE, ret = FALSE;
 
-	if (task) {
+	if (task && task->message) {
 		if (lua_gettop (L) >= 2) {
 			need_emails = lua_toboolean (L, 2);
 		}
@@ -2159,20 +2163,25 @@ lua_task_get_rawbody (lua_State * L)
 	struct rspamd_lua_text *t;
 
 	if (task) {
-		t = lua_newuserdata (L, sizeof (*t));
-		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		if (task->message != NULL) {
+			t = lua_newuserdata (L, sizeof (*t));
+			rspamd_lua_setclass (L, "rspamd{text}", -1);
 
-		if (MESSAGE_FIELD (task, raw_headers_content).len > 0) {
-			g_assert (MESSAGE_FIELD (task, raw_headers_content).len <= task->msg.len);
-			t->start = task->msg.begin + MESSAGE_FIELD (task, raw_headers_content).len;
-			t->len = task->msg.len - MESSAGE_FIELD (task, raw_headers_content).len;
+			if (MESSAGE_FIELD (task, raw_headers_content).len > 0) {
+				g_assert (MESSAGE_FIELD (task, raw_headers_content).len <= task->msg.len);
+				t->start = task->msg.begin + MESSAGE_FIELD (task, raw_headers_content).len;
+				t->len = task->msg.len - MESSAGE_FIELD (task, raw_headers_content).len;
+			}
+			else {
+				t->len = task->msg.len;
+				t->start = task->msg.begin;
+			}
+
+			t->flags = 0;
 		}
 		else {
-			t->len = task->msg.len;
-			t->start = task->msg.begin;
+			lua_pushnil (L);
 		}
-
-		t->flags = 0;
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -2211,7 +2220,7 @@ lua_task_get_text_parts (lua_State * L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_mime_text_part *part, **ppart;
 
-	if (task != NULL) {
+	if (task != NULL && task->message != NULL) {
 
 		if (!lua_task_get_cached (L, task, "text_parts")) {
 			lua_createtable (L, MESSAGE_FIELD (task, text_parts)->len, 0);
@@ -2242,7 +2251,7 @@ lua_task_get_parts (lua_State * L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_mime_part *part, **ppart;
 
-	if (task != NULL) {
+	if (task != NULL && task->message != NULL) {
 		if (!lua_task_get_cached (L, task, "mime_parts")) {
 			lua_createtable (L, MESSAGE_FIELD (task, parts)->len, 0);
 
@@ -2519,7 +2528,7 @@ lua_task_get_raw_headers (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_lua_text *t;
 
-	if (task) {
+	if (task && task->message) {
 		t = lua_newuserdata (L, sizeof (*t));
 		rspamd_lua_setclass (L, "rspamd{text}", -1);
 		t->start = MESSAGE_FIELD (task, raw_headers_content).begin;
@@ -2543,7 +2552,7 @@ lua_task_get_received_headers (lua_State * L)
 	const gchar *proto;
 	guint k = 1;
 
-	if (task) {
+	if (task && task->message) {
 		if (!lua_task_get_cached (L, task, "received")) {
 			lua_createtable (L, 0, 0);
 
@@ -3105,7 +3114,7 @@ lua_task_get_recipients (lua_State *L)
 			break;
 		case RSPAMD_ADDRESS_MIME:
 			/* Here we check merely mime rcpt */
-			ptrs = MESSAGE_FIELD (task, rcpt_mime);
+			ptrs = MESSAGE_FIELD_CHECK (task, rcpt_mime);
 			break;
 		case RSPAMD_ADDRESS_ANY:
 		default:
@@ -3113,7 +3122,7 @@ lua_task_get_recipients (lua_State *L)
 				ptrs = task->rcpt_envelope;
 			}
 			else {
-				ptrs = MESSAGE_FIELD (task, rcpt_mime);
+				ptrs = MESSAGE_FIELD_CHECK (task, rcpt_mime);
 			}
 			break;
 		}
@@ -3158,7 +3167,7 @@ lua_task_set_recipients (lua_State *L)
 			break;
 		case RSPAMD_ADDRESS_MIME:
 			/* Here we check merely mime rcpt */
-			ptrs = MESSAGE_FIELD (task, rcpt_mime);
+			ptrs = MESSAGE_FIELD_CHECK (task, rcpt_mime);
 			need_update_digest = TRUE;
 			break;
 		case RSPAMD_ADDRESS_ANY:
@@ -3167,7 +3176,7 @@ lua_task_set_recipients (lua_State *L)
 				ptrs = task->rcpt_envelope;
 			}
 			else {
-				ptrs = MESSAGE_FIELD (task, rcpt_mime);
+				ptrs = MESSAGE_FIELD_CHECK (task, rcpt_mime);
 				need_update_digest = TRUE;
 			}
 			break;
@@ -3251,14 +3260,14 @@ lua_task_has_from (lua_State *L)
 			break;
 		case RSPAMD_ADDRESS_MIME:
 			/* Here we check merely mime rcpt */
-			CHECK_EMAIL_ADDR_LIST (MESSAGE_FIELD (task, from_mime));
+			CHECK_EMAIL_ADDR_LIST (MESSAGE_FIELD_CHECK (task, from_mime));
 			break;
 		case RSPAMD_ADDRESS_ANY:
 		default:
 			CHECK_EMAIL_ADDR (task->from_envelope);
 
 			if (!ret) {
-				CHECK_EMAIL_ADDR_LIST (MESSAGE_FIELD (task, from_mime));
+				CHECK_EMAIL_ADDR_LIST (MESSAGE_FIELD_CHECK (task, from_mime));
 			}
 			break;
 		}
@@ -3293,14 +3302,14 @@ lua_task_has_recipients (lua_State *L)
 			break;
 		case RSPAMD_ADDRESS_MIME:
 			/* Here we check merely mime rcpt */
-			CHECK_EMAIL_ADDR_LIST (MESSAGE_FIELD (task, rcpt_mime));
+			CHECK_EMAIL_ADDR_LIST (MESSAGE_FIELD_CHECK (task, rcpt_mime));
 			break;
 		case RSPAMD_ADDRESS_ANY:
 		default:
 			CHECK_EMAIL_ADDR_LIST (task->rcpt_envelope);
 
 			if (!ret) {
-				CHECK_EMAIL_ADDR_LIST (MESSAGE_FIELD (task, rcpt_mime));
+				CHECK_EMAIL_ADDR_LIST (MESSAGE_FIELD_CHECK (task, rcpt_mime));
 			}
 			break;
 		}
@@ -3336,7 +3345,7 @@ lua_task_get_from (lua_State *L)
 			break;
 		case RSPAMD_ADDRESS_MIME:
 			/* Here we check merely mime rcpt */
-			addrs = MESSAGE_FIELD (task, from_mime);
+			addrs = MESSAGE_FIELD_CHECK (task, from_mime);
 			break;
 		case RSPAMD_ADDRESS_ANY:
 		default:
@@ -3344,7 +3353,7 @@ lua_task_get_from (lua_State *L)
 				addr = task->from_envelope;
 			}
 			else {
-				addrs = MESSAGE_FIELD (task, from_mime);
+				addrs = MESSAGE_FIELD_CHECK (task, from_mime);
 			}
 			break;
 		}
@@ -3399,7 +3408,7 @@ lua_task_set_from (lua_State *L)
 			break;
 		case RSPAMD_ADDRESS_MIME:
 			/* Here we check merely mime rcpt */
-			addrs = MESSAGE_FIELD (task, from_mime);
+			addrs = MESSAGE_FIELD_CHECK (task, from_mime);
 			need_update_digest = TRUE;
 			break;
 		case RSPAMD_ADDRESS_ANY:
@@ -3408,7 +3417,7 @@ lua_task_set_from (lua_State *L)
 				paddr = &task->from_envelope;
 			}
 			else {
-				addrs = MESSAGE_FIELD (task, from_mime);
+				addrs = MESSAGE_FIELD_CHECK (task, from_mime);
 				need_update_digest = TRUE;
 			}
 			break;
@@ -3501,7 +3510,7 @@ lua_task_get_reply_sender (lua_State *L)
 		if (rh) {
 			lua_pushstring (L, rh->decoded);
 		}
-		else if (MESSAGE_FIELD (task, from_mime) &&
+		else if (MESSAGE_FIELD_CHECK (task, from_mime) &&
 				MESSAGE_FIELD (task, from_mime)->len == 1) {
 			struct rspamd_email_address *addr;
 
@@ -3689,7 +3698,7 @@ lua_task_get_subject (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
-		if (MESSAGE_FIELD (task, subject) != NULL) {
+		if (MESSAGE_FIELD_CHECK (task, subject) != NULL) {
 			lua_pushstring (L, MESSAGE_FIELD (task, subject));
 			return 1;
 		}
@@ -3789,7 +3798,7 @@ lua_task_get_images (lua_State *L)
 	struct rspamd_mime_part *part;
 	struct rspamd_image **pimg;
 
-	if (task) {
+	if (task && task->message) {
 		if (!lua_task_get_cached (L, task, "images")) {
 			lua_createtable (L, MESSAGE_FIELD (task, parts)->len, 0);
 
@@ -3821,7 +3830,7 @@ lua_task_get_archives (lua_State *L)
 	struct rspamd_mime_part *part;
 	struct rspamd_archive **parch;
 
-	if (task) {
+	if (task && task->message) {
 		if (!lua_task_get_cached (L, task, "archives")) {
 			lua_createtable (L, MESSAGE_FIELD (task, parts)->len, 0);
 
@@ -4462,7 +4471,7 @@ lua_task_get_message_id (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task != NULL) {
-		if (MESSAGE_FIELD (task, message_id) != NULL) {
+		if (MESSAGE_FIELD_CHECK (task, message_id) != NULL) {
 			lua_pushstring (L, MESSAGE_FIELD (task, message_id));
 		}
 		else {
@@ -4733,7 +4742,7 @@ lua_task_get_digest (lua_State *L)
 	gchar hexbuf[sizeof(MESSAGE_FIELD (task, digest)) * 2 + 1];
 	gint r;
 
-	if (task) {
+	if (task && task->message) {
 		r = rspamd_encode_hex_buf (MESSAGE_FIELD (task, digest),
 				sizeof (MESSAGE_FIELD (task, digest)),
 				hexbuf, sizeof (hexbuf) - 1);
@@ -5407,7 +5416,7 @@ lua_task_get_newlines_type (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
-	if (task) {
+	if (task && task->message) {
 		switch (MESSAGE_FIELD (task, nlines_type)) {
 		case RSPAMD_TASK_NEWLINES_CR:
 			lua_pushstring (L, "cr");
@@ -5630,7 +5639,7 @@ lua_task_headers_foreach (lua_State *L)
 	struct rspamd_mime_header *hdr, *cur;
 	gint old_top;
 
-	if (task && lua_isfunction (L, 2)) {
+	if (task && task->message && lua_isfunction (L, 2)) {
 		if (lua_istable (L, 3)) {
 			lua_pushstring (L, "full");
 			lua_gettable (L, 3);
@@ -5819,7 +5828,8 @@ lua_task_lookup_words (lua_State *L)
 
 	guint i, matches = 0;
 
-	if (task == NULL || map == NULL || lua_type (L, 3) != LUA_TFUNCTION) {
+	if (task == NULL || map == NULL || task->message == NULL
+		|| lua_type (L, 3) != LUA_TFUNCTION) {
 		return luaL_error (L, "invalid arguments");
 	}
 

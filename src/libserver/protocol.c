@@ -858,7 +858,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 		}
 
 		msg_notice_task_encrypted ("<%s> %s: %*s; ip: %s; URL: %*s",
-			MESSAGE_FIELD (task, message_id),
+			MESSAGE_FIELD_CHECK (task, message_id),
 			has_user ? "user" : "from",
 			len, user_field,
 			rspamd_inet_address_to_string (task->from_addr),
@@ -935,7 +935,7 @@ rspamd_protocol_rewrite_subject (struct rspamd_task *task)
 	}
 
 	p = c;
-	s = MESSAGE_FIELD (task, subject);
+	s = MESSAGE_FIELD_CHECK (task, subject);
 
 	if (s) {
 		slen = strlen (s);
@@ -1285,7 +1285,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 		}
 	}
 
-	if (flags & RSPAMD_PROTOCOL_URLS) {
+	if (flags & RSPAMD_PROTOCOL_URLS && task->message) {
 		if (g_hash_table_size (MESSAGE_FIELD (task, urls)) > 0) {
 			ucl_object_insert_key (top,
 					rspamd_urls_tree_ucl (MESSAGE_FIELD (task, urls), task),
@@ -1307,7 +1307,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 
 	if (flags & RSPAMD_PROTOCOL_BASIC) {
 		ucl_object_insert_key (top,
-				ucl_object_fromstring (MESSAGE_FIELD (task, message_id)),
+				ucl_object_fromstring (MESSAGE_FIELD_CHECK (task, message_id)),
 				"message-id", 0, false);
 		ucl_object_insert_key (top,
 				ucl_object_fromdouble (task->time_real_finish - task->task_timestamp),
@@ -1331,7 +1331,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 					GString *folded_header;
 					dkim_sig = (GString *) dkim_sigs->data;
 
-					if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
+					if (task->flags & RSPAMD_TASK_FLAG_MILTER || !task->message) {
 						folded_header = rspamd_header_value_fold ("DKIM-Signature",
 								dkim_sig->str, 80, RSPAMD_TASK_NEWLINES_LF, NULL);
 					}
@@ -1792,7 +1792,7 @@ rspamd_protocol_write_reply (struct rspamd_task *task, ev_tstamp timeout)
 
 	if (rspamd_http_connection_is_encrypted (task->http_conn)) {
 		msg_info_protocol ("<%s> writing encrypted reply",
-				MESSAGE_FIELD (task, message_id));
+				MESSAGE_FIELD_CHECK (task, message_id));
 	}
 
 	if (!RSPAMD_TASK_IS_JSON (task)) {
