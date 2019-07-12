@@ -1193,7 +1193,7 @@ dkim_symbol_callback (struct rspamd_task *task,
 					err = NULL;
 				}
 				else {
-					msg_info_task ("<%s> cannot parse DKIM signature: "
+					msg_info_task ("cannot parse DKIM signature: "
 							"unknown error");
 				}
 
