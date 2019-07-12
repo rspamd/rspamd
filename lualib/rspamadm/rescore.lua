@@ -298,13 +298,13 @@ local function print_stats(logs, messages, threshold)
   local file_stats, _ = rescore_utility.generate_statistics_from_logs(logs,
       messages, threshold)
 
-  local file_stat_format = [[
+  local file_stat_format = [=[
 F-score: %.2f
 False positive rate: %.2f %%
 False negative rate: %.2f %%
 Overall accuracy: %.2f %%
 Slowest message: %.2f (%s)
-] ]
+]=]
 
   logger.message("\nStatistics at threshold: " .. threshold)
 
