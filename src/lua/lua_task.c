@@ -5416,18 +5416,23 @@ lua_task_get_newlines_type (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 
-	if (task && task->message) {
-		switch (MESSAGE_FIELD (task, nlines_type)) {
-		case RSPAMD_TASK_NEWLINES_CR:
-			lua_pushstring (L, "cr");
-			break;
-		case RSPAMD_TASK_NEWLINES_LF:
-			lua_pushstring (L, "lf");
-			break;
-		case RSPAMD_TASK_NEWLINES_CRLF:
-		default:
+	if (task) {
+		if (task->message) {
+			switch (MESSAGE_FIELD (task, nlines_type)) {
+			case RSPAMD_TASK_NEWLINES_CR:
+				lua_pushstring (L, "cr");
+				break;
+			case RSPAMD_TASK_NEWLINES_LF:
+				lua_pushstring (L, "lf");
+				break;
+			case RSPAMD_TASK_NEWLINES_CRLF:
+			default:
+				lua_pushstring (L, "crlf");
+				break;
+			}
+		}
+		else {
 			lua_pushstring (L, "crlf");
-			break;
 		}
 	}
 	else {
