@@ -1140,10 +1140,15 @@ rspamd_message_new (struct rspamd_task *task)
 	msg = rspamd_mempool_alloc0 (task->task_pool, sizeof (*msg));
 
 	msg->raw_headers = rspamd_message_headers_new ();
+
 	msg->emails = g_hash_table_new (rspamd_email_hash, rspamd_emails_cmp);
 	msg->urls = g_hash_table_new (rspamd_url_hash, rspamd_urls_cmp);
+
 	msg->parts = g_ptr_array_sized_new (4);
 	msg->text_parts = g_ptr_array_sized_new (2);
+
+	msg->from_mime = g_ptr_array_sized_new (1);
+	msg->rcpt_mime = g_ptr_array_sized_new (1);
 
 	REF_INIT_RETAIN (msg, rspamd_message_dtor);
 

@@ -1602,13 +1602,17 @@ rspamd_message_get_header_from_hash (khash_t(rspamd_mime_headers_htb) *htb,
 {
 	khiter_t k;
 
-	k = kh_get (rspamd_mime_headers_htb, htb, (gchar *)field);
+	if (htb) {
+		k = kh_get (rspamd_mime_headers_htb, htb, (gchar *) field);
 
-	if (k == kh_end (htb)) {
-		return NULL;
+		if (k == kh_end (htb)) {
+			return NULL;
+		}
+
+		return kh_value (htb, k);
 	}
 
-	return kh_value (htb, k);
+	return NULL;
 }
 
 struct rspamd_mime_header *
