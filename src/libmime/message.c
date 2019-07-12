@@ -38,6 +38,7 @@
 #include "libserver/cfg_file_private.h"
 #include "lua/lua_common.h"
 #include "contrib/uthash/utlist.h"
+#include "contrib/t1ha/t1ha.h"
 
 #define GTUBE_SYMBOL "GTUBE"
 
@@ -52,7 +53,6 @@ static const gchar gtube_pattern_rewrite_subject[] = "ZJS*C4JDBQADN1.NSBN3*2IDNE
 		"GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X";
 struct rspamd_multipattern *gtube_matcher = NULL;
 static const guint64 words_hash_seed = 0xdeadbabe;
-
 
 static void
 free_byte_array_callback (void *pointer)
@@ -1163,6 +1163,7 @@ rspamd_message_parse (struct rspamd_task *task)
 	gsize len;
 	guint i;
 	GError *err = NULL;
+	guint64 n[2], seed;
 
 	if (RSPAMD_TASK_IS_EMPTY (task)) {
 		/* Don't do anything with empty task */
@@ -1362,18 +1363,26 @@ rspamd_message_parse (struct rspamd_task *task)
 			0x30,0x1e,0x70,0x2e,0xb7,0x12,0x09,0xfe,
 	};
 
+	memcpy (&seed, hash_key, sizeof (seed));
+
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-		crypto_shorthash_siphashx24 (MESSAGE_FIELD (task, digest),
+		n[0] = t1ha2_atonce128 (&n[1],
 				part->digest, sizeof (part->digest),
-				i == 0 ? hash_key : MESSAGE_FIELD (task, digest));
+				seed);
+
+		seed = n[0] ^ n[1];
 	}
+
+	memcpy (MESSAGE_FIELD (task, digest), n, sizeof (n));
 
 	/* Parse urls inside Subject header */
 	if (MESSAGE_FIELD (task, subject)) {
 		p = MESSAGE_FIELD (task, subject);
 		len = strlen (p);
-		crypto_shorthash_siphashx24 (MESSAGE_FIELD (task, digest), p, len,
-				MESSAGE_FIELD (task, digest));
+		n[0] = t1ha2_atonce128 (&n[1],
+				p, len,
+				seed);
+		memcpy (MESSAGE_FIELD (task, digest), n, sizeof (n));
 		rspamd_url_find_multiple (task->task_pool, p, len,
 				RSPAMD_URL_FIND_STRICT, NULL,
 				rspamd_url_task_subject_callback, task);
@@ -1577,13 +1586,11 @@ void rspamd_message_unref (struct rspamd_message *msg)
 void rspamd_message_update_digest (struct rspamd_message *msg,
 								   const void *input, gsize len)
 {
-	guchar RSPAMD_ALIGNED(32) ex_key[crypto_shorthash_siphashx24_KEYBYTES];
-
+	guint64 n[2];
 	/* Sanity */
-	G_STATIC_ASSERT (sizeof (ex_key) == sizeof (msg->digest));
-	G_STATIC_ASSERT (crypto_shorthash_siphashx24_BYTES == sizeof (msg->digest));
+	G_STATIC_ASSERT (sizeof (n) == sizeof (msg->digest));
 
-	memcpy (ex_key, msg->digest, sizeof (msg->digest));
-
-	crypto_shorthash_siphashx24 (msg->digest, input, len, ex_key);
+	memcpy (n, msg->digest, sizeof (msg->digest));
+	n[0] = t1ha2_atonce128 (&n[1], input, len, n[0]);
+	memcpy (msg->digest, n, sizeof (msg->digest));
 }
