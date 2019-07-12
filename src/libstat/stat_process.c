@@ -131,9 +131,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 
 	g_assert (st_ctx != NULL);
 
-	for (i = 0; i < task->text_parts->len; i++) {
-		part = g_ptr_array_index (task->text_parts, i);
-
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, part) {
 		if (!IS_PART_EMPTY (part) && part->utf_words != NULL) {
 			reserved_len += part->utf_words->len;
 		}
@@ -146,9 +144,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 			rspamd_ptr_array_free_hard, task->tokens);
 	pdiff = rspamd_mempool_get_variable (task->task_pool, "parts_distance");
 
-	for (i = 0; i < task->text_parts->len; i ++) {
-		part = g_ptr_array_index (task->text_parts, i);
-
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, part) {
 		if (!IS_PART_EMPTY (part) && part->utf_words != NULL) {
 			st_ctx->tokenizer->tokenize_func (st_ctx, task,
 					part->utf_words, IS_PART_UTF (part),
@@ -382,9 +378,8 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 		if (!skip) {
 			if (cl->cfg->min_tokens > 0 && task->tokens->len < cl->cfg->min_tokens) {
 				msg_debug_bayes (
-						"<%s> contains less tokens than required for %s classifier: "
+						"contains less tokens than required for %s classifier: "
 						"%ud < %ud",
-						task->message_id,
 						cl->cfg->name,
 						task->tokens->len,
 						cl->cfg->min_tokens);
@@ -392,9 +387,8 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 			}
 			else if (cl->cfg->max_tokens > 0 && task->tokens->len > cl->cfg->max_tokens) {
 				msg_debug_bayes (
-						"<%s> contains more tokens than allowed for %s classifier: "
+						"contains more tokens than allowed for %s classifier: "
 						"%ud > %ud",
-						task->message_id,
 						cl->cfg->name,
 						task->tokens->len,
 						cl->cfg->max_tokens);
@@ -474,7 +468,7 @@ rspamd_stat_cache_check (struct rspamd_stat_ctx *st_ctx,
 		if (learn_res == RSPAMD_LEARN_INGORE) {
 			/* Do not learn twice */
 			g_set_error (err, rspamd_stat_quark (), 404, "<%s> has been already "
-					"learned as %s, ignore it", task->message_id,
+					"learned as %s, ignore it", MESSAGE_FIELD (task, message_id),
 					spam ? "spam" : "ham");
 			task->flags |= RSPAMD_TASK_FLAG_ALREADY_LEARNED;
 
@@ -522,7 +516,7 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 			*err == NULL) {
 		/* Do not learn twice */
 		g_set_error (err, rspamd_stat_quark (), 208, "<%s> has been already "
-				"learned as %s, ignore it", task->message_id,
+				"learned as %s, ignore it", MESSAGE_FIELD (task, message_id),
 				spam ? "spam" : "ham");
 
 		return FALSE;
@@ -545,10 +539,10 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 			msg_info_task (
 				"<%s> contains less tokens than required for %s classifier: "
 						"%ud < %ud",
-				task->message_id,
-				cl->cfg->name,
-				task->tokens->len,
-				cl->cfg->min_tokens);
+					MESSAGE_FIELD (task, message_id),
+					cl->cfg->name,
+					task->tokens->len,
+					cl->cfg->min_tokens);
 			too_small = TRUE;
 			continue;
 		}
@@ -556,10 +550,10 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 			msg_info_task (
 				"<%s> contains more tokens than allowed for %s classifier: "
 						"%ud > %ud",
-				task->message_id,
-				cl->cfg->name,
-				task->tokens->len,
-				cl->cfg->max_tokens);
+					MESSAGE_FIELD (task, message_id),
+					cl->cfg->name,
+					task->tokens->len,
+					cl->cfg->max_tokens);
 			too_large = TRUE;
 			continue;
 		}
@@ -633,7 +627,7 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 			g_set_error (err, rspamd_stat_quark (), 204,
 					"<%s> contains more tokens than allowed for %s classifier: "
 					"%d > %d",
-					task->message_id,
+					MESSAGE_FIELD (task, message_id),
 					sel->cfg->name,
 					task->tokens->len,
 					sel->cfg->max_tokens);
@@ -642,7 +636,7 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 			g_set_error (err, rspamd_stat_quark (), 204,
 					"<%s> contains less tokens than required for %s classifier: "
 					"%d < %d",
-					task->message_id,
+					MESSAGE_FIELD (task, message_id),
 					sel->cfg->name,
 					task->tokens->len,
 					sel->cfg->min_tokens);
@@ -651,7 +645,7 @@ rspamd_stat_classifiers_learn (struct rspamd_stat_ctx *st_ctx,
 			g_set_error (err, rspamd_stat_quark (), 204,
 					"<%s> is skipped for %s classifier: "
 					"%s",
-					task->message_id,
+					MESSAGE_FIELD (task, message_id),
 					sel->cfg->name,
 					cond_str ? cond_str : "unknown reason");
 		}
@@ -1060,14 +1054,14 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 						msg_info_task ("<%s>: autolearn ham for classifier "
 								"'%s' as message's "
 								"score is negative: %.2f",
-								task->message_id, cl->cfg->name,
+								MESSAGE_FIELD (task, message_id), cl->cfg->name,
 								mres->score);
 					}
 					else {
 						msg_info_task ("<%s>: autolearn spam for classifier "
 								"'%s' as message's "
 								"action is reject, score: %.2f",
-								task->message_id, cl->cfg->name,
+								MESSAGE_FIELD (task, message_id), cl->cfg->name,
 								mres->score);
 					}
 

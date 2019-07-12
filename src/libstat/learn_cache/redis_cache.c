@@ -23,6 +23,7 @@
 #include "hiredis.h"
 #include "adapters/libev.h"
 #include "lua/lua_common.h"
+#include "libmime/message.h"
 
 #define REDIS_DEFAULT_TIMEOUT 0.5
 #define REDIS_STAT_TIMEOUT 30
@@ -153,7 +154,7 @@ rspamd_stat_cache_redis_get (redisAsyncContext *c, gpointer r, gpointer priv)
 				(val < 0 && (task->flags & RSPAMD_TASK_FLAG_LEARN_HAM))) {
 			/* Already learned */
 			msg_info_task ("<%s> has been already "
-					"learned as %s, ignore it", task->message_id,
+					"learned as %s, ignore it", MESSAGE_FIELD (task, message_id),
 					(task->flags & RSPAMD_TASK_FLAG_LEARN_SPAM) ? "spam" : "ham");
 			task->flags |= RSPAMD_TASK_FLAG_ALREADY_LEARNED;
 		}

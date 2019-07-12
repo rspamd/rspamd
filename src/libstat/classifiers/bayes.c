@@ -379,10 +379,9 @@ bayes_classify (struct rspamd_classifier * ctx,
 	if (isfinite (s) && isfinite (h)) {
 		final_prob = (s + 1.0 - h) / 2.;
 		msg_debug_bayes (
-				"<%s> got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f,"
+				"got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f,"
 				" %L tokens processed of %ud total tokens;"
 				" %uL text tokens found of %ud text tokens)",
-				task->message_id,
 				cl.ham_prob,
 				h,
 				cl.spam_prob,
@@ -399,18 +398,17 @@ bayes_classify (struct rspamd_classifier * ctx,
 		 */
 		if (isfinite (h)) {
 			final_prob = 1.0;
-			msg_debug_bayes ("<%s> spam class is overflowed, as we have no"
-					" ham samples", task->message_id);
+			msg_debug_bayes ("spam class is overflowed, as we have no"
+					" ham samples");
 		}
 		else if (isfinite (s)) {
 			final_prob = 0.0;
-			msg_debug_bayes ("<%s> ham class is overflowed, as we have no"
-					" spam samples", task->message_id);
+			msg_debug_bayes ("ham class is overflowed, as we have no"
+					" spam samples");
 		}
 		else {
 			final_prob = 0.5;
-			msg_warn_bayes ("<%s> spam and ham classes are both overflowed",
-					task->message_id);
+			msg_warn_bayes ("spam and ham classes are both overflowed");
 		}
 	}
 
