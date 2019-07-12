@@ -161,6 +161,8 @@ rspamd_mime_header_add (struct rspamd_task *task,
 	}
 	else {
 		kh_value (target, k) = rh;
+		rh->prev = rh;
+		rh->next = NULL;
 		msg_debug_task ("add new raw header %s: %s", rh->name, rh->value);
 	}
 

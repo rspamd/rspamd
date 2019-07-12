@@ -2450,7 +2450,14 @@ rspamd_lua_push_header_array (lua_State *L,
 		lua_pushinteger (L, i);
 	}
 	else {
-		return rspamd_lua_push_header (L, rh, how);
+		DL_FOREACH (rh, cur) {
+			if (!strong || strcmp (name, cur->name) == 0) {
+				return rspamd_lua_push_header (L, cur, how);
+			}
+		}
+
+		/* Not found with this case */
+		lua_pushnil (L);
 	}
 
 	return 1;
