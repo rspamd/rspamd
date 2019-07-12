@@ -387,8 +387,7 @@ rspamd_sqlite3_get_language (struct rspamd_stat_sqlite3_db *db,
 	lua_State *L = db->L;
 
 	if (db->cbref_language == -1) {
-		for (i = 0; i < task->text_parts->len; i++) {
-			tp = g_ptr_array_index (task->text_parts, i);
+		PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, tp) {
 
 			if (tp->language != NULL && tp->language[0] != '\0' &&
 					strcmp (tp->language, "en") != 0) {

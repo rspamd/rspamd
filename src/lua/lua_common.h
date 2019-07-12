@@ -120,7 +120,7 @@ struct rspamd_lua_map {
 
 struct rspamd_lua_cached_entry {
 	gint ref;
-	guint id;
+	guchar id[4];
 };
 
 /* Common utility functions */
@@ -234,8 +234,10 @@ gint rspamd_lua_push_header (lua_State *L,
  * Push specific header to lua
  */
 gint rspamd_lua_push_header_array (lua_State *L,
-								   GPtrArray *hdrs,
-								   enum rspamd_lua_task_header_type how);
+								   const gchar *name,
+								   struct rspamd_mime_header *rh,
+								   enum rspamd_lua_task_header_type how,
+								   gboolean strong);
 
 /**
  * Check for task at the specified position

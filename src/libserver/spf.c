@@ -121,8 +121,8 @@ struct spf_dns_cb {
     do {                                                        \
         if ((rec)->nested > SPF_MAX_NESTING ||                  \
             (rec)->dns_requests > SPF_MAX_DNS_REQUESTS) {       \
-            msg_info_spf ("<%s> spf recursion limit %d is reached, domain: %s", \
-                (rec)->task->message_id, (rec)->dns_requests,   \
+            msg_info_spf ("spf recursion limit %d is reached, domain: %s", \
+                (rec)->dns_requests,   \
                 (rec)->sender_domain);                          \
             return FALSE;                                       \
         }                                                       \
@@ -823,9 +823,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 					msg_debug_spf (
-							"<%s>: spf error for domain %s: cannot find MX"
+							"spf error for domain %s: cannot find MX"
 							" record for %s: %s",
-							task->message_id,
 							cb->rec->sender_domain,
 							cb->resolved->cur_domain,
 							rdns_strerror (reply->code));
@@ -836,9 +835,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 					msg_debug_spf (
-							"<%s>: spf error for domain %s: cannot resolve A"
+							"spf error for domain %s: cannot resolve A"
 							" record for %s: %s",
-							task->message_id,
 							cb->rec->sender_domain,
 							cb->resolved->cur_domain,
 							rdns_strerror (reply->code));
@@ -852,9 +850,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 					msg_debug_spf (
-							"<%s>: spf error for domain %s: cannot resolve AAAA"
+							"spf error for domain %s: cannot resolve AAAA"
 							" record for %s: %s",
-							task->message_id,
 							cb->rec->sender_domain,
 							cb->resolved->cur_domain,
 							rdns_strerror (reply->code));
@@ -866,9 +863,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 			case SPF_RESOLVE_PTR:
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					msg_debug_spf (
-							"<%s>: spf error for domain %s: cannot resolve PTR"
+							"spf error for domain %s: cannot resolve PTR"
 							" record for %s: %s",
-							task->message_id,
 							cb->rec->sender_domain,
 							cb->resolved->cur_domain,
 							rdns_strerror (reply->code));
@@ -881,9 +877,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					cb->addr->flags |= RSPAMD_SPF_FLAG_PERMFAIL;
 					msg_debug_spf (
-							"<%s>: spf error for domain %s: cannot resolve REDIRECT"
+							"spf error for domain %s: cannot resolve REDIRECT"
 							" record for %s: %s",
-							task->message_id,
 							cb->rec->sender_domain,
 							cb->resolved->cur_domain,
 							rdns_strerror (reply->code));
@@ -893,9 +888,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 			case SPF_RESOLVE_INCLUDE:
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					msg_debug_spf (
-							"<%s>: spf error for domain %s: cannot resolve INCLUDE"
+							"spf error for domain %s: cannot resolve INCLUDE"
 							" record for %s: %s",
-							task->message_id,
 							cb->rec->sender_domain,
 							cb->resolved->cur_domain,
 							rdns_strerror (reply->code));
@@ -908,9 +902,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 			case SPF_RESOLVE_EXISTS:
 				if (!(cb->addr->flags & RSPAMD_SPF_FLAG_RESOLVED)) {
 					msg_debug_spf (
-							"<%s>: spf error for domain %s: cannot resolve EXISTS"
+							"spf error for domain %s: cannot resolve EXISTS"
 							" record for %s: %s",
-							task->message_id,
 							cb->rec->sender_domain,
 							cb->resolved->cur_domain,
 							rdns_strerror (reply->code));
@@ -922,9 +915,8 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 	else {
 		cb->addr->flags |= RSPAMD_SPF_FLAG_TEMPFAIL;
 		msg_info_spf (
-				"<%s>: spf error for domain %s: cannot resolve %s DNS record for"
+				"spf error for domain %s: cannot resolve %s DNS record for"
 				" %s: %s",
-				task->message_id,
 				cb->rec->sender_domain,
 				rspamd_spf_dns_action_to_str (cb->cur_action),
 				cb->ptr_host,
@@ -1622,8 +1614,8 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 			else {
 				/* Something unknown */
 				msg_info_spf (
-						"<%s>: spf error for domain %s: unknown spf element",
-						task->message_id, rec->sender_domain);
+						"spf error for domain %s: unknown spf element",
+						rec->sender_domain);
 				return begin;
 			}
 			p++;
@@ -1657,9 +1649,8 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 				break;
 			default:
 				msg_info_spf (
-						"<%s>: spf error for domain %s: unknown or "
+						"spf error for domain %s: unknown or "
 								"unsupported spf macro %c in %s",
-						task->message_id,
 						rec->sender_domain,
 						*p,
 						begin);
@@ -1740,8 +1731,8 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 			else {
 				/* Something unknown */
 				msg_info_spf (
-						"<%s>: spf error for domain %s: unknown spf element",
-						task->message_id, rec->sender_domain);
+						"spf error for domain %s: unknown spf element",
+						rec->sender_domain);
 				return begin;
 			}
 			p++;
@@ -1836,9 +1827,8 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 				break;
 			default:
 				msg_info_spf (
-						"<%s>: spf error for domain %s: unknown or "
+						"spf error for domain %s: unknown or "
 								"unsupported spf macro %c in %s",
-						task->message_id,
 						rec->sender_domain,
 						*p,
 						begin);
@@ -1881,10 +1871,8 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 				delim = *p;
 			}
 			else {
-				msg_info_spf (
-						"<%s>: spf error for domain %s: unknown or "
+				msg_info_spf ("spf error for domain %s: unknown or "
 								"unsupported spf macro %c in %s",
-						task->message_id,
 						rec->sender_domain,
 						*p,
 						begin);
@@ -1939,9 +1927,8 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 				res = parse_spf_a (rec, resolved, addr);
 			}
 			else {
-				msg_info_spf (
-						"<%s>: spf error for domain %s: bad spf command %s",
-						task->message_id, rec->sender_domain, begin);
+				msg_info_spf ("spf error for domain %s: bad spf command %s",
+						rec->sender_domain, begin);
 			}
 			break;
 		case 'i':
@@ -1959,9 +1946,8 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 				res = parse_spf_ip6 (rec, addr);
 			}
 			else {
-				msg_info_spf (
-						"<%s>: spf error for domain %s: bad spf command %s",
-						task->message_id, rec->sender_domain, begin);
+				msg_info_spf ("spf error for domain %s: bad spf command %s",
+						rec->sender_domain, begin);
 			}
 			break;
 		case 'm':
@@ -1970,9 +1956,8 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 				res = parse_spf_mx (rec, resolved, addr);
 			}
 			else {
-				msg_info_spf (
-						"<%s>: spf error for domain %s: bad spf command %s",
-						task->message_id, rec->sender_domain, begin);
+				msg_info_spf ("spf error for domain %s: bad spf command %s",
+						rec->sender_domain, begin);
 			}
 			break;
 		case 'p':
@@ -1982,9 +1967,8 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 				res = parse_spf_ptr (rec, resolved, addr);
 			}
 			else {
-				msg_info_spf (
-						"<%s>: spf error for domain %s: bad spf command %s",
-						task->message_id, rec->sender_domain, begin);
+				msg_info_spf ("spf error for domain %s: bad spf command %s",
+						rec->sender_domain, begin);
 			}
 			break;
 		case 'e':
@@ -1998,9 +1982,8 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 				res = parse_spf_exists (rec, addr);
 			}
 			else {
-				msg_info_spf (
-						"<%s>: spf error for domain %s: bad spf command %s",
-						task->message_id, rec->sender_domain, begin);
+				msg_info_spf ("spf error for domain %s: bad spf command %s",
+						rec->sender_domain, begin);
 			}
 			break;
 		case 'r':
@@ -2010,9 +1993,8 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 				res = parse_spf_redirect (rec, resolved, addr);
 			}
 			else {
-				msg_info_spf (
-						"<%s>: spf error for domain %s: bad spf command %s",
-						task->message_id, rec->sender_domain, begin);
+				msg_info_spf ("spf error for domain %s: bad spf command %s",
+						rec->sender_domain, begin);
 			}
 			break;
 		case 'v':
@@ -2025,8 +2007,8 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 			}
 			break;
 		default:
-			msg_info_spf ("<%s>: spf error for domain %s: bad spf command %s",
-					task->message_id, rec->sender_domain, begin);
+			msg_info_spf ("spf error for domain %s: bad spf command %s",
+					rec->sender_domain, begin);
 			break;
 	}
 
@@ -2088,8 +2070,8 @@ start_spf_parse (struct spf_record *rec, struct spf_resolved_element *resolved,
 		/* Skip one number of record, so no we are here spf2.0/ */
 		begin += sizeof (SPF_VER2_STR);
 		if (*begin != '/') {
-			msg_info_spf ("<%s>: spf error for domain %s: sender id is invalid",
-					rec->task->message_id, rec->sender_domain);
+			msg_info_spf ("spf error for domain %s: sender id is invalid",
+					rec->sender_domain);
 		}
 		else {
 			begin++;
@@ -2099,8 +2081,7 @@ start_spf_parse (struct spf_record *rec, struct spf_resolved_element *resolved,
 	}
 	else {
 		msg_debug_spf (
-				"<%s>: spf error for domain %s: bad spf record start: %*s",
-				rec->task->message_id,
+				"spf error for domain %s: bad spf record start: %*s",
 				rec->sender_domain,
 				(gint)len,
 				begin);

@@ -1107,13 +1107,12 @@ dkim_symbol_callback (struct rspamd_task *task,
 		struct rspamd_symcache_item *item,
 		void *unused)
 {
-	GPtrArray *hlist;
 	rspamd_dkim_context_t *ctx;
 	rspamd_dkim_key_t *key;
 	GError *err = NULL;
-	struct rspamd_mime_header *rh;
+	struct rspamd_mime_header *rh, *rh_cur;
 	struct dkim_check_result *res = NULL, *cur;
-	guint checked = 0, i, *dmarc_checks;
+	guint checked = 0, *dmarc_checks;
 	struct dkim_ctx *dkim_module_ctx = dkim_get_context (task->cfg);
 
 	/* Allow dmarc */
@@ -1153,16 +1152,13 @@ dkim_symbol_callback (struct rspamd_task *task,
 	rspamd_symcache_item_async_inc (task, item, M);
 
 	/* Now check if a message has its signature */
-	hlist = rspamd_message_get_header_array (task,
-			RSPAMD_DKIM_SIGNHEADER,
-			FALSE);
-	if (hlist != NULL && hlist->len > 0) {
+	rh = rspamd_message_get_header_array (task, RSPAMD_DKIM_SIGNHEADER);
+	if (rh) {
 		msg_debug_task ("dkim signature found");
 
-		PTR_ARRAY_FOREACH (hlist, i, rh) {
-			if (rh->decoded == NULL || rh->decoded[0] == '\0') {
-				msg_info_task ("<%s> cannot load empty DKIM context",
-						task->message_id);
+		DL_FOREACH (rh, rh_cur) {
+			if (rh_cur->decoded == NULL || rh_cur->decoded[0] == '\0') {
+				msg_info_task ("cannot load empty DKIM signature");
 				continue;
 			}
 
@@ -1174,7 +1170,7 @@ dkim_symbol_callback (struct rspamd_task *task,
 			cur->mult_deny = 1.0;
 			cur->item = item;
 
-			ctx = rspamd_create_dkim_context (rh->decoded,
+			ctx = rspamd_create_dkim_context (rh_cur->decoded,
 					task->task_pool,
 					dkim_module_ctx->time_jitter,
 					RSPAMD_DKIM_NORMAL,
@@ -1191,15 +1187,14 @@ dkim_symbol_callback (struct rspamd_task *task,
 
 			if (ctx == NULL) {
 				if (err != NULL) {
-					msg_info_task ("<%s> cannot parse DKIM context: %e",
-							task->message_id, err);
+					msg_info_task ("cannot parse DKIM signature: %e",
+							err);
 					g_error_free (err);
 					err = NULL;
 				}
 				else {
-					msg_info_task ("<%s> cannot parse DKIM context: "
-							"unknown error",
-							task->message_id);
+					msg_info_task ("cannot parse DKIM signature: "
+							"unknown error");
 				}
 
 				continue;

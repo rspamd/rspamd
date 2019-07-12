@@ -440,7 +440,7 @@ rspamd_cryptobox_nm (rspamd_nm_t nm,
 		g_assert (len == sizeof (s));
 
 		/* Still do hchacha iteration since we are not using SHA1 KDF */
-		crypto_core_hchacha20 (nm, n0, s, NULL);
+		hchacha (s, n0, nm, 20);
 
 		EC_KEY_free (lk);
 		EC_POINT_free (ec_pub);

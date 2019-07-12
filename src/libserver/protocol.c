@@ -478,10 +478,6 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				break;
 			case 's':
 			case 'S':
-				IF_HEADER (SUBJECT_HEADER) {
-					msg_debug_protocol ("read subject header, value: %V", hv);
-					task->subject = rspamd_mempool_ftokdup (task->task_pool, hv_tok);
-				}
 				IF_HEADER (SETTINGS_ID_HEADER) {
 					msg_debug_protocol ("read settings-id header, value: %V", hv);
 					task->settings_elt = rspamd_config_find_settings_name_ref (
@@ -862,7 +858,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 		}
 
 		msg_notice_task_encrypted ("<%s> %s: %*s; ip: %s; URL: %*s",
-			task->message_id,
+			MESSAGE_FIELD_CHECK (task, message_id),
 			has_user ? "user" : "from",
 			len, user_field,
 			rspamd_inet_address_to_string (task->from_addr),
@@ -939,7 +935,7 @@ rspamd_protocol_rewrite_subject (struct rspamd_task *task)
 	}
 
 	p = c;
-	s = task->subject;
+	s = MESSAGE_FIELD_CHECK (task, subject);
 
 	if (s) {
 		slen = strlen (s);
@@ -1112,7 +1108,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 			sobj = rspamd_metric_symbol_ucl (task, sym);
 			ucl_object_insert_key (obj, sobj, sym->name, 0, false);
 		}
-	});
+	})
 
 	if (task->cmd == CMD_CHECK_V2) {
 		ucl_object_insert_key (top, obj, "symbols", 0, false);
@@ -1289,16 +1285,16 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 		}
 	}
 
-	if (flags & RSPAMD_PROTOCOL_URLS) {
-		if (g_hash_table_size (task->urls) > 0) {
+	if (flags & RSPAMD_PROTOCOL_URLS && task->message) {
+		if (g_hash_table_size (MESSAGE_FIELD (task, urls)) > 0) {
 			ucl_object_insert_key (top,
-					rspamd_urls_tree_ucl (task->urls, task),
+					rspamd_urls_tree_ucl (MESSAGE_FIELD (task, urls), task),
 					"urls", 0, false);
 		}
 
-		if (g_hash_table_size (task->emails) > 0) {
+		if (g_hash_table_size (MESSAGE_FIELD (task, emails)) > 0) {
 			ucl_object_insert_key (top,
-					rspamd_emails_tree_ucl (task->emails, task),
+					rspamd_emails_tree_ucl (MESSAGE_FIELD (task, emails), task),
 					"emails", 0, false);
 		}
 	}
@@ -1310,7 +1306,8 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 	}
 
 	if (flags & RSPAMD_PROTOCOL_BASIC) {
-		ucl_object_insert_key (top, ucl_object_fromstring (task->message_id),
+		ucl_object_insert_key (top,
+				ucl_object_fromstring (MESSAGE_FIELD_CHECK (task, message_id)),
 				"message-id", 0, false);
 		ucl_object_insert_key (top,
 				ucl_object_fromdouble (task->time_real_finish - task->task_timestamp),
@@ -1334,13 +1331,15 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 					GString *folded_header;
 					dkim_sig = (GString *) dkim_sigs->data;
 
-					if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
+					if (task->flags & RSPAMD_TASK_FLAG_MILTER || !task->message) {
 						folded_header = rspamd_header_value_fold ("DKIM-Signature",
 								dkim_sig->str, 80, RSPAMD_TASK_NEWLINES_LF, NULL);
 					}
 					else {
 						folded_header = rspamd_header_value_fold ("DKIM-Signature",
-								dkim_sig->str, 80, task->nlines_type, NULL);
+								dkim_sig->str, 80,
+								MESSAGE_FIELD (task, nlines_type),
+								NULL);
 					}
 
 					ucl_array_append (ar,
@@ -1365,7 +1364,8 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 				}
 				else {
 					folded_header = rspamd_header_value_fold ("DKIM-Signature",
-							dkim_sig->str, 80, task->nlines_type, NULL);
+							dkim_sig->str, 80, MESSAGE_FIELD (task, nlines_type),
+							NULL);
 				}
 
 				ucl_object_insert_key (top,
@@ -1401,14 +1401,17 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		struct rspamd_task *task, ucl_object_t **pobj)
 {
 	struct rspamd_metric_result *metric_res;
-	GHashTableIter hiter;
 	const struct rspamd_re_cache_stat *restat;
-	gpointer h, v;
+
 	ucl_object_t *top = NULL;
 	rspamd_fstring_t *reply;
 	gint flags = RSPAMD_PROTOCOL_DEFAULT;
 	struct rspamd_action *action;
 
+	/* Removed in 2.0 */
+#if 0
+	GHashTableIter hiter;
+	gpointer h, v;
 	/* Write custom headers */
 	g_hash_table_iter_init (&hiter, task->reply_headers);
 	while (g_hash_table_iter_next (&hiter, &h, &v)) {
@@ -1416,6 +1419,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 
 		rspamd_http_message_add_header (msg, hn->begin, hv->begin);
 	}
+#endif
 
 	flags |= RSPAMD_PROTOCOL_URLS;
 
@@ -1787,7 +1791,8 @@ rspamd_protocol_write_reply (struct rspamd_task *task, ev_tstamp timeout)
 	msg = rspamd_http_new_message (HTTP_RESPONSE);
 
 	if (rspamd_http_connection_is_encrypted (task->http_conn)) {
-		msg_info_protocol ("<%s> writing encrypted reply", task->message_id);
+		msg_info_protocol ("<%s> writing encrypted reply",
+				MESSAGE_FIELD_CHECK (task, message_id));
 	}
 
 	if (!RSPAMD_TASK_IS_JSON (task)) {

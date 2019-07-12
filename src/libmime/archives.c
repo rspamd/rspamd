@@ -1906,9 +1906,7 @@ rspamd_archives_process (struct rspamd_task *task)
 	const guchar sz_magic[] = {'7', 'z', 0xBC, 0xAF, 0x27, 0x1C};
 	const guchar gz_magic[] = {0x1F, 0x8B};
 
-	for (i = 0; i < task->parts->len; i ++) {
-		part = g_ptr_array_index (task->parts, i);
-
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		if (!(part->flags & (RSPAMD_MIME_PART_TEXT|RSPAMD_MIME_PART_IMAGE))) {
 			if (part->parsed_data.len > 0) {
 				if (rspamd_archive_cheat_detect (part, "zip",

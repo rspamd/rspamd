@@ -547,7 +547,7 @@ local function add_rbl(key, rbl)
     flags_tbl[#flags_tbl + 1] = 'nice'
   end
 
-  if not (rbl.dkim or rbl.emails) then
+  if not (rbl.dkim or rbl.emails or rbl.received) then
     flags_tbl[#flags_tbl + 1] = 'empty'
   end
 

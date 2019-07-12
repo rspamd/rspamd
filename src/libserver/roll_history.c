@@ -15,6 +15,7 @@
  */
 #include "config.h"
 #include "rspamd.h"
+#include "libmime/message.h"
 #include "lua/lua_common.h"
 #include "unix-std.h"
 #include "cfg_file_private.h"
@@ -139,8 +140,10 @@ rspamd_roll_history_update (struct roll_history *history,
 	row->timestamp = task->task_timestamp;
 
 	/* Strings */
-	rspamd_strlcpy (row->message_id, task->message_id,
-		sizeof (row->message_id));
+	if (task->message) {
+		rspamd_strlcpy (row->message_id, MESSAGE_FIELD (task, message_id),
+				sizeof (row->message_id));
+	}
 	if (task->user) {
 		rspamd_strlcpy (row->user, task->user, sizeof (row->user));
 	}

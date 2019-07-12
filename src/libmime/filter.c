@@ -139,14 +139,14 @@ rspamd_add_passthrough_result (struct rspamd_task *task,
 	if (!isnan (target_score)) {
 
 		msg_info_task ("<%s>: set pre-result to '%s' %s(%.2f): '%s' from %s(%d)",
-				task->message_id, action->name,
+				MESSAGE_FIELD_CHECK (task, message_id), action->name,
 				flags & RSPAMD_PASSTHROUGH_LEAST ? "*least " : "",
 				target_score,
 				message, module, priority);
 	}
 	else {
 		msg_info_task ("<%s>: set pre-result to '%s' %s(no score): '%s' from %s(%d)",
-				task->message_id, action->name,
+				MESSAGE_FIELD_CHECK (task, message_id), action->name,
 				flags & RSPAMD_PASSTHROUGH_LEAST ? "*least " : "",
 				message, module, priority);
 	}

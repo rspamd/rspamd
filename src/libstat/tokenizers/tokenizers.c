@@ -567,14 +567,15 @@ rspamd_tokenize_meta_words (struct rspamd_task *task)
 	guint i = 0;
 	rspamd_stat_token_t *tok;
 
-	if (task->subject) {
-		rspamd_add_metawords_from_str (task->subject, strlen (task->subject), task);
+	if (MESSAGE_FIELD (task, subject)) {
+		rspamd_add_metawords_from_str (MESSAGE_FIELD (task, subject),
+				strlen (MESSAGE_FIELD (task, subject)), task);
 	}
 
-	if (task->from_mime && task->from_mime->len > 0) {
+	if (MESSAGE_FIELD (task, from_mime) && MESSAGE_FIELD (task, from_mime)->len > 0) {
 		struct rspamd_email_address *addr;
 
-		addr = g_ptr_array_index (task->from_mime, 0);
+		addr = g_ptr_array_index (MESSAGE_FIELD (task, from_mime), 0);
 
 		if (addr->name) {
 			rspamd_add_metawords_from_str (addr->name, strlen (addr->name), task);
@@ -584,8 +585,10 @@ rspamd_tokenize_meta_words (struct rspamd_task *task)
 	if (task->meta_words != NULL) {
 		const gchar *language = NULL;
 
-		if (task->text_parts && task->text_parts->len > 0) {
-			struct rspamd_mime_text_part *tp = g_ptr_array_index (task->text_parts, 0);
+		if (MESSAGE_FIELD (task, text_parts) &&
+				MESSAGE_FIELD (task, text_parts)->len > 0) {
+			struct rspamd_mime_text_part *tp = g_ptr_array_index (
+					MESSAGE_FIELD (task, text_parts), 0);
 
 			if (tp->language) {
 				language = tp->language;

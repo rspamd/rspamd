@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+
 #include "config.h"
 #include "task.h"
 #include "mime_parser.h"
@@ -21,6 +22,7 @@
 #include "message.h"
 #include "multipattern.h"
 #include "contrib/libottery/ottery.h"
+#include "contrib/uthash/utlist.h"
 
 struct rspamd_mime_parser_lib_ctx {
 	struct rspamd_multipattern *mp_boundary;
@@ -256,21 +258,16 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 
 static void
 rspamd_mime_part_get_cte (struct rspamd_task *task,
-		GHashTable *hdrs,
-		struct rspamd_mime_part *part,
-		gboolean apply_heuristic)
+						  khash_t(rspamd_mime_headers_htb) *hdrs,
+						  struct rspamd_mime_part *part,
+						  gboolean apply_heuristic)
 {
-	struct rspamd_mime_header *hdr;
-	guint i;
-	GPtrArray *hdrs_cte;
+	struct rspamd_mime_header *hdr, *cur;
 	enum rspamd_cte cte = RSPAMD_CTE_UNKNOWN;
 
-	hdrs_cte = rspamd_message_get_header_from_hash (hdrs,
-			task->task_pool,
-			"Content-Transfer-Encoding", FALSE);
+	hdr = rspamd_message_get_header_from_hash (hdrs, "Content-Transfer-Encoding");
 
-	if (hdrs_cte == NULL) {
-
+	if (hdr == NULL) {
 		if (part->parent_part && part->parent_part->cte != RSPAMD_CTE_UNKNOWN &&
 				!(part->parent_part->flags & RSPAMD_MIME_PART_MISSING_CTE)) {
 			part->cte = part->parent_part->cte;
@@ -287,12 +284,11 @@ rspamd_mime_part_get_cte (struct rspamd_task *task,
 		part->flags |= RSPAMD_MIME_PART_MISSING_CTE;
 	}
 	else {
-		for (i = 0; i < hdrs_cte->len; i ++) {
+		DL_FOREACH (hdr, cur) {
 			gsize hlen;
 			gchar lc_buf[128];
 
-			hdr = g_ptr_array_index (hdrs_cte, i);
-			hlen = rspamd_snprintf (lc_buf, sizeof (lc_buf), "%s", hdr->value);
+			hlen = rspamd_snprintf (lc_buf, sizeof (lc_buf), "%s", cur->value);
 			rspamd_str_lc (lc_buf, hlen);
 			cte = rspamd_mime_parse_cte (lc_buf, hlen);
 
@@ -337,19 +333,16 @@ check_cte:
 static void
 rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part)
 {
-	struct rspamd_mime_header *hdr;
-	guint i;
-	GPtrArray *hdrs;
+	struct rspamd_mime_header *hdr, *cur;
 	struct rspamd_content_disposition *cd = NULL;
 	rspamd_ftok_t srch;
 	struct rspamd_content_type_param *found;
 
-	hdrs = rspamd_message_get_header_from_hash (part->raw_headers,
-			task->task_pool,
-			"Content-Disposition", FALSE);
+	hdr = rspamd_message_get_header_from_hash (part->raw_headers,
+			"Content-Disposition");
 
 
-	if (hdrs == NULL) {
+	if (hdr == NULL) {
 		cd = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cd));
 		cd->type = RSPAMD_CT_INLINE;
 
@@ -370,15 +363,13 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 		}
 	}
 	else {
-		for (i = 0; i < hdrs->len; i ++) {
+		DL_FOREACH (hdr, cur) {
 			gsize hlen;
-
-			hdr = g_ptr_array_index (hdrs, i);
 			cd = NULL;
 
-			if (hdr->decoded) {
-				hlen = strlen (hdr->decoded);
-				cd = rspamd_content_disposition_parse (hdr->decoded, hlen,
+			if (cur->decoded) {
+				hlen = strlen (cur->decoded);
+				cd = rspamd_content_disposition_parse (cur->decoded, hlen,
 						task->task_pool);
 			}
 
@@ -517,8 +508,8 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 		g_assert_not_reached ();
 	}
 
-	part->id = task->parts->len;
-	g_ptr_array_add (task->parts, part);
+	part->id = MESSAGE_FIELD (task, parts)->len;
+	g_ptr_array_add (MESSAGE_FIELD (task, parts), part);
 	msg_debug_mime ("parsed data part %T/%T of length %z (%z orig), %s cte",
 			&part->ct->type, &part->ct->subtype, part->parsed_data.len,
 			part->raw_data.len, rspamd_cte_to_string (part->cte));
@@ -546,12 +537,10 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 		GError **err)
 {
 	struct rspamd_content_type *ct, *sel = NULL;
-	struct rspamd_mime_header *hdr;
-	GPtrArray *hdrs = NULL;
+	struct rspamd_mime_header *hdr = NULL, *cur;
 	struct rspamd_mime_part *npart;
 	GString str;
 	goffset hdr_pos, body_pos;
-	guint i;
 	enum rspamd_mime_parse_error ret = RSPAMD_MIME_PARSE_FATAL;
 
 
@@ -592,9 +581,8 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	npart = rspamd_mempool_alloc0 (task->task_pool,
 			sizeof (struct rspamd_mime_part));
 	npart->parent_part = multipart;
-	npart->raw_headers =  g_hash_table_new_full (rspamd_strcase_hash,
-			rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
-	npart->headers_order = g_queue_new ();
+	npart->raw_headers =  rspamd_message_headers_new ();
+	npart->headers_order = NULL;
 
 	if (multipart) {
 		if (multipart->specific.mp->children == NULL) {
@@ -612,15 +600,14 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 
 		if (npart->raw_headers_len > 0) {
 			rspamd_mime_headers_process (task, npart->raw_headers,
-					npart->headers_order,
+					&npart->headers_order,
 					npart->raw_headers_str,
 					npart->raw_headers_len,
 					FALSE);
 		}
 
-		hdrs = rspamd_message_get_header_from_hash (npart->raw_headers,
-				task->task_pool,
-				"Content-Type", FALSE);
+		hdr = rspamd_message_get_header_from_hash (npart->raw_headers,
+				"Content-Type");
 
 	}
 	else {
@@ -631,11 +618,10 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	}
 
 
-	if (hdrs != NULL) {
+	if (hdr != NULL) {
 
-		for (i = 0; i < hdrs->len; i ++) {
-			hdr = g_ptr_array_index (hdrs, i);
-			ct = rspamd_content_type_parse (hdr->decoded, strlen (hdr->decoded),
+		DL_FOREACH (hdr, cur) {
+			ct = rspamd_content_type_parse (cur->decoded, strlen (cur->decoded),
 					task->task_pool);
 
 			/* Here we prefer multipart content-type or any content-type */
@@ -848,8 +834,8 @@ rspamd_mime_parse_multipart_part (struct rspamd_task *task,
 		return RSPAMD_MIME_PARSE_NESTING;
 	}
 
-	part->id = task->parts->len;
-	g_ptr_array_add (task->parts, part);
+	part->id = MESSAGE_FIELD (task, parts)->len;
+	g_ptr_array_add (MESSAGE_FIELD (task, parts), part);
 	st->nesting ++;
 	rspamd_mime_part_get_cte (task, part->raw_headers, part, FALSE);
 
@@ -1098,8 +1084,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		GError **err)
 {
 	struct rspamd_content_type *ct, *sel = NULL;
-	struct rspamd_mime_header *hdr;
-	GPtrArray *hdrs = NULL;
+	struct rspamd_mime_header *hdr = NULL, *cur;
 	const gchar *pbegin, *p;
 	gsize plen, len;
 	struct rspamd_mime_part *npart;
@@ -1159,42 +1144,45 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 
 		if (hdr_pos > 0 && hdr_pos < str.len) {
 
-			task->raw_headers_content.begin = str.str;
-			task->raw_headers_content.len = hdr_pos;
-			task->raw_headers_content.body_start = str.str + body_pos;
+			MESSAGE_FIELD (task, raw_headers_content).begin = str.str;
+			MESSAGE_FIELD (task, raw_headers_content).len = hdr_pos;
+			MESSAGE_FIELD (task, raw_headers_content).body_start = str.str + body_pos;
 
-			if (task->raw_headers_content.len > 0) {
-				rspamd_mime_headers_process (task, task->raw_headers,
-						task->headers_order,
-						task->raw_headers_content.begin,
-						task->raw_headers_content.len,
+			if (MESSAGE_FIELD (task, raw_headers_content).len > 0) {
+				rspamd_mime_headers_process (task,
+						MESSAGE_FIELD (task, raw_headers),
+						&MESSAGE_FIELD (task, headers_order),
+						MESSAGE_FIELD (task, raw_headers_content).begin,
+						MESSAGE_FIELD (task, raw_headers_content).len,
 						TRUE);
 			}
 
-			hdrs = rspamd_message_get_header_from_hash (task->raw_headers,
-					task->task_pool,
-					"Content-Type", FALSE);
+			hdr = rspamd_message_get_header_from_hash (
+					MESSAGE_FIELD (task, raw_headers),
+					"Content-Type");
 		}
 		else {
 			/* First apply heuristic, maybe we have just headers */
 			hdr_pos = rspamd_mime_parser_headers_heuristic (&str, &body_pos);
 
 			if (hdr_pos > 0 && hdr_pos <= str.len) {
-				task->raw_headers_content.begin = str.str;
-				task->raw_headers_content.len = hdr_pos;
-				task->raw_headers_content.body_start = str.str + body_pos;
+				MESSAGE_FIELD (task, raw_headers_content).begin = str.str;
+				MESSAGE_FIELD (task, raw_headers_content).len = hdr_pos;
+				MESSAGE_FIELD (task, raw_headers_content).body_start = str.str +
+						body_pos;
 
-				if (task->raw_headers_content.len > 0) {
-					rspamd_mime_headers_process (task, task->raw_headers,
-							task->headers_order,
-							task->raw_headers_content.begin,
-							task->raw_headers_content.len,
+				if (MESSAGE_FIELD (task, raw_headers_content).len > 0) {
+					rspamd_mime_headers_process (task,
+							MESSAGE_FIELD (task, raw_headers),
+							&MESSAGE_FIELD (task, headers_order),
+							MESSAGE_FIELD (task, raw_headers_content).begin,
+							MESSAGE_FIELD (task, raw_headers_content).len,
 							TRUE);
 				}
 
-				hdrs = rspamd_message_get_header_from_hash (task->raw_headers,
-						task->task_pool,
-						"Content-Type", FALSE);
+				hdr = rspamd_message_get_header_from_hash (
+						MESSAGE_FIELD (task, raw_headers),
+						"Content-Type");
 				task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
 			}
 			else {
@@ -1204,7 +1192,8 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 
 		pbegin = st->start + body_pos;
 		plen = st->end - pbegin;
-		npart->raw_headers = g_hash_table_ref (task->raw_headers);
+		/* TODO: check if it is correct */
+		npart->raw_headers = NULL;
 		npart->headers_order = NULL;
 	}
 	else {
@@ -1227,9 +1216,8 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		str.len = part->parsed_data.len;
 
 		hdr_pos = rspamd_string_find_eoh (&str, &body_pos);
-		npart->raw_headers =  g_hash_table_new_full (rspamd_strcase_hash,
-				rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
-		npart->headers_order = g_queue_new ();
+		npart->raw_headers =  rspamd_message_headers_new ();
+		npart->headers_order = NULL;
 
 		if (hdr_pos > 0 && hdr_pos < str.len) {
 			npart->raw_headers_str = str.str;
@@ -1237,16 +1225,16 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 			npart->raw_data.begin = str.str + body_pos;
 
 			if (npart->raw_headers_len > 0) {
-				rspamd_mime_headers_process (task, npart->raw_headers,
-						npart->headers_order,
+				rspamd_mime_headers_process (task,
+						npart->raw_headers,
+						&npart->headers_order,
 						npart->raw_headers_str,
 						npart->raw_headers_len,
 						FALSE);
 			}
 
-			hdrs = rspamd_message_get_header_from_hash (npart->raw_headers,
-					task->task_pool,
-					"Content-Type", FALSE);
+			hdr = rspamd_message_get_header_from_hash (npart->raw_headers,
+					"Content-Type");
 		}
 		else {
 			body_pos = 0;
@@ -1260,13 +1248,12 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 	npart->raw_data.len = plen;
 	npart->parent_part = part;
 
-	if (hdrs == NULL) {
+	if (hdr == NULL) {
 		sel = NULL;
 	}
 	else {
-		for (i = 0; i < hdrs->len; i ++) {
-			hdr = g_ptr_array_index (hdrs, i);
-			ct = rspamd_content_type_parse (hdr->decoded, strlen (hdr->decoded),
+		DL_FOREACH (hdr, cur) {
+			ct = rspamd_content_type_parse (cur->decoded, strlen (cur->decoded),
 					task->task_pool);
 
 			/* Here we prefer multipart content-type or any content-type */
@@ -1408,7 +1395,7 @@ rspamd_mime_parse_task (struct rspamd_task *task, GError **err)
 
 	st = g_malloc0 (sizeof (*st));
 	st->stack = g_ptr_array_sized_new (4);
-	st->pos = task->raw_headers_content.body_start;
+	st->pos = MESSAGE_FIELD (task, raw_headers_content).body_start;
 	st->end = task->msg.begin + task->msg.len;
 	st->boundaries = g_array_sized_new (FALSE, FALSE,
 			sizeof (struct rspamd_mime_boundary), 8);

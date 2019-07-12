@@ -1200,7 +1200,7 @@ gboolean
 rspamd_header_exists (struct rspamd_task * task, GArray * args, void *unused)
 {
 	struct expression_argument *arg;
-	GPtrArray *headerlist;
+	struct rspamd_mime_header *rh;
 
 	if (args == NULL || task == NULL) {
 		return FALSE;
@@ -1212,14 +1212,13 @@ rspamd_header_exists (struct rspamd_task * task, GArray * args, void *unused)
 		return FALSE;
 	}
 
-	headerlist = rspamd_message_get_header_array (task,
-			(gchar *)arg->data,
-			FALSE);
+	rh = rspamd_message_get_header_array (task,
+			(gchar *)arg->data);
 
 	debug_task ("try to get header %s: %d", (gchar *)arg->data,
-			(headerlist != NULL));
+			(rh != NULL));
 
-	if (headerlist) {
+	if (rh) {
 		return TRUE;
 	}
 
@@ -1344,11 +1343,11 @@ rspamd_recipients_distance (struct rspamd_task *task, GArray * args,
 		return FALSE;
 	}
 
-	if (!task->rcpt_mime) {
+	if (!MESSAGE_FIELD (task, rcpt_mime)) {
 		return FALSE;
 	}
 
-	num = task->rcpt_mime->len;
+	num = MESSAGE_FIELD (task, rcpt_mime)->len;
 
 	if (num < MIN_RCPT_TO_COMPARE) {
 		return FALSE;
@@ -1357,7 +1356,7 @@ rspamd_recipients_distance (struct rspamd_task *task, GArray * args,
 	ar = rspamd_mempool_alloc0 (task->task_pool, num * sizeof (struct addr_list));
 
 	/* Fill array */
-	PTR_ARRAY_FOREACH (task->rcpt_mime, i, cur) {
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, rcpt_mime), i, cur) {
 		ar[i].name = cur->addr;
 		ar[i].namelen = cur->addr_len;
 		ar[i].addr = cur->domain;
@@ -1391,8 +1390,8 @@ rspamd_has_only_html_part (struct rspamd_task * task, GArray * args,
 	struct rspamd_mime_text_part *p;
 	gboolean res = FALSE;
 
-	if (task->text_parts->len == 1) {
-		p = g_ptr_array_index (task->text_parts, 0);
+	if (MESSAGE_FIELD (task, text_parts)->len == 1) {
+		p = g_ptr_array_index (MESSAGE_FIELD (task, text_parts), 0);
 
 		if (IS_PART_HTML (p)) {
 			res = TRUE;
@@ -1445,8 +1444,8 @@ rspamd_is_recipients_sorted (struct rspamd_task * task,
 {
 	/* Check all types of addresses */
 
-	if (task->rcpt_mime) {
-		return is_recipient_list_sorted (task->rcpt_mime);
+	if (MESSAGE_FIELD (task, rcpt_mime)) {
+		return is_recipient_list_sorted (MESSAGE_FIELD (task, rcpt_mime));
 	}
 
 	return FALSE;
@@ -1480,7 +1479,7 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 		return FALSE;
 	}
 
-	PTR_ARRAY_FOREACH (task->parts, i, part) {
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		if (IS_CT_TEXT (part->ct)) {
 			if (part->cte == cte) {
 				return TRUE;
@@ -1498,9 +1497,7 @@ rspamd_is_html_balanced (struct rspamd_task * task, GArray * args, void *unused)
 	guint i;
 	gboolean res = TRUE;
 
-	for (i = 0; i < task->text_parts->len; i ++) {
-
-		p = g_ptr_array_index (task->text_parts, i);
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, p) {
 		if (IS_PART_HTML (p)) {
 			if (p->flags & RSPAMD_MIME_TEXT_PART_FLAG_BALANCED) {
 				res = TRUE;
@@ -1535,9 +1532,7 @@ rspamd_has_html_tag (struct rspamd_task * task, GArray * args, void *unused)
 		return FALSE;
 	}
 
-	for (i = 0; i < task->text_parts->len; i ++) {
-		p = g_ptr_array_index (task->text_parts, i);
-
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, p) {
 		if (IS_PART_HTML (p) && p->html) {
 			res = rspamd_html_tag_seen (p->html, arg->data);
 		}
@@ -1558,9 +1553,7 @@ rspamd_has_fake_html (struct rspamd_task * task, GArray * args, void *unused)
 	guint i;
 	gboolean res = FALSE;
 
-	for (i = 0; i < task->text_parts->len; i ++) {
-		p = g_ptr_array_index (task->text_parts, i);
-
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, p) {
 		if (IS_PART_HTML (p) && (p->html == NULL || p->html->html_tags == NULL)) {
 			res = TRUE;
 		}
@@ -1589,7 +1582,7 @@ rspamd_raw_header_exists (struct rspamd_task *task, GArray * args, void *unused)
 		return FALSE;
 	}
 
-	return g_hash_table_lookup (task->raw_headers, arg->data) != NULL;
+	return rspamd_message_get_header_array (task, arg->data) != NULL;
 }
 
 static gboolean
@@ -1679,7 +1672,7 @@ rspamd_check_smtp_data (struct rspamd_task *task, GArray * args, void *unused)
 		case 's':
 		case 'S':
 			if (g_ascii_strcasecmp (type, "subject") == 0) {
-				str = task->subject;
+				str = MESSAGE_FIELD (task, subject);
 			}
 			else {
 				msg_warn_task ("bad argument to function: %s", type);
@@ -1794,9 +1787,7 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 	param_name = arg->data;
 	arg_pattern = &g_array_index (args, struct expression_argument, 1);
 
-	for (i = 0; i < task->parts->len; i ++) {
-		cur_part = g_ptr_array_index (task->parts, i);
-
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, cur_part) {
 		if (args->len >= 3) {
 			arg1 = &g_array_index (args, struct expression_argument, 2);
 			if (g_ascii_strncasecmp (arg1->data, "true",
@@ -1876,9 +1867,7 @@ rspamd_content_type_has_param (struct rspamd_task * task,
 	g_assert (arg->type == EXPRESSION_ARGUMENT_NORMAL);
 	param_name = arg->data;
 
-	for (i = 0; i < task->parts->len; i ++) {
-		cur_part = g_ptr_array_index (task->parts, i);
-
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, cur_part) {
 		if (args->len >= 2) {
 			arg1 = &g_array_index (args, struct expression_argument, 1);
 			if (g_ascii_strncasecmp (arg1->data, "true",
@@ -1951,8 +1940,7 @@ rspamd_content_type_check (struct rspamd_task *task,
 
 	arg_pattern = &g_array_index (args, struct expression_argument, 0);
 
-	for (i = 0; i < task->parts->len; i ++) {
-		cur_part = g_ptr_array_index (task->parts, i);
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, cur_part) {
 		ct = cur_part->ct;
 
 		if (args->len >= 2) {
@@ -2091,8 +2079,7 @@ common_has_content_part (struct rspamd_task * task,
 	gint r = 0;
 	guint i;
 
-	for (i = 0; i < task->parts->len; i ++) {
-		part = g_ptr_array_index (task->parts, i);
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		ct = part->ct;
 
 		if (ct == NULL) {
@@ -2216,7 +2203,7 @@ rspamd_is_empty_body (struct rspamd_task *task,
 	struct rspamd_mime_part *part;
 	guint i;
 
-	PTR_ARRAY_FOREACH (task->parts, i, part) {
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		if (part->parsed_data.len > 0) {
 			return FALSE;
 		}

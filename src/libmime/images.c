@@ -54,9 +54,7 @@ rspamd_images_process (struct rspamd_task *task)
 
 	RSPAMD_FTOK_ASSIGN (&srch, "image");
 
-	for (i = 0; i < task->parts->len; i ++) {
-		part = g_ptr_array_index (task->parts, i);
-
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		if (!(part->flags & (RSPAMD_MIME_PART_TEXT|RSPAMD_MIME_PART_ARCHIVE))) {
 			if (rspamd_ftok_cmp (&part->ct->type, &srch) == 0 &&
 				part->parsed_data.len > 0) {
@@ -603,17 +601,15 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 	struct html_image *himg;
 	const gchar *cid, *html_cid;
 	guint cid_len, i, j;
-	GPtrArray *ar;
 	struct rspamd_image *img;
 
 
 	img = rspamd_maybe_process_image (task->task_pool, &part->parsed_data);
 
 	if (img != NULL) {
-		msg_debug_images ("detected %s image of size %ud x %ud in message <%s>",
+		msg_debug_images ("detected %s image of size %ud x %ud",
 			rspamd_image_type_str (img->type),
-			img->width, img->height,
-			task->message_id);
+			img->width, img->height);
 
 		if (part->cd) {
 			img->filename = &part->cd->filename;
@@ -625,11 +621,10 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 		part->specific.img = img;
 
 		/* Check Content-Id */
-		ar = rspamd_message_get_header_from_hash (part->raw_headers,
-				task->task_pool, "Content-Id", FALSE);
+		rh = rspamd_message_get_header_from_hash (part->raw_headers,
+				"Content-Id");
 
-		if (ar != NULL && ar->len > 0) {
-			rh = g_ptr_array_index (ar, 0);
+		if (rh) {
 			cid = rh->decoded;
 
 			if (*cid == '<') {
@@ -643,9 +638,8 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 					cid_len --;
 				}
 
-				for (i = 0; i < task->text_parts->len; i ++) {
-					tp = g_ptr_array_index (task->text_parts, i);
 
+				PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, tp) {
 					if (IS_PART_HTML (tp) && tp->html != NULL &&
 							tp->html->images != NULL) {
 						for (j = 0; j < tp->html->images->len; j ++) {

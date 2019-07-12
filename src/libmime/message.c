@@ -34,8 +34,10 @@
 
 #include <math.h>
 #include <unicode/uchar.h>
+#include "sodium.h"
 #include "libserver/cfg_file_private.h"
 #include "lua/lua_common.h"
+#include "contrib/uthash/utlist.h"
 
 #define GTUBE_SYMBOL "GTUBE"
 
@@ -656,8 +658,8 @@ rspamd_check_gtube (struct rspamd_task *task, struct rspamd_mime_text_part *part
 				task->flags |= RSPAMD_TASK_FLAG_SKIP;
 				task->flags |= RSPAMD_TASK_FLAG_GTUBE;
 				msg_info_task (
-						"<%s>: gtube %s pattern has been found in part of length %ud",
-						task->message_id, rspamd_action_to_str (act),
+						"gtube %s pattern has been found in part of length %ud",
+						rspamd_action_to_str (act),
 						part->utf_content->len);
 			}
 		}
@@ -791,8 +793,8 @@ rspamd_message_process_html_text_part (struct rspamd_task *task,
 			text_part->html,
 			text_part->utf_raw_content,
 			&text_part->exceptions,
-			task->urls,
-			task->emails);
+			MESSAGE_FIELD (task, urls),
+			MESSAGE_FIELD (task, emails));
 
 	if (text_part->utf_content->len == 0) {
 		text_part->flags |= RSPAMD_MIME_TEXT_PART_FLAG_EMPTY;
@@ -942,7 +944,7 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 		}
 	}
 
-	g_ptr_array_add (task->text_parts, text_part);
+	g_ptr_array_add (MESSAGE_FIELD (task, text_parts), text_part);
 	mime_part->flags |= RSPAMD_MIME_PART_TEXT;
 	mime_part->specific.txt = text_part;
 
@@ -1061,12 +1063,9 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 	part->raw_data.len = len;
 	part->parsed_data.begin = start;
 	part->parsed_data.len = len;
-	part->id = task->parts->len;
-	part->raw_headers =  g_hash_table_new_full (rspamd_strcase_hash,
-			rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
-	part->headers_order = g_queue_new ();
-
-
+	part->id = MESSAGE_FIELD (task, parts)->len;
+	part->raw_headers = rspamd_message_headers_new ();
+	part->headers_order = NULL;
 
 	tok = rspamd_task_get_request_header (task, "Filename");
 
@@ -1080,30 +1079,94 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 	part->cd = rspamd_content_disposition_parse (cdbuf, strlen (cdbuf),
 			task->task_pool);
 
-	g_ptr_array_add (task->parts, part);
+	g_ptr_array_add (MESSAGE_FIELD (task, parts), part);
 	rspamd_mime_parser_calc_digest (part);
 
 	/* Generate message ID */
 	mid = rspamd_mime_message_id_generate ("localhost.localdomain");
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) g_free, mid);
-	task->message_id = mid;
+	MESSAGE_FIELD (task, message_id) = mid;
 	task->queue_id = mid;
+}
+
+static void
+rspamd_message_dtor (struct rspamd_message *msg)
+{
+	guint i;
+	struct rspamd_mime_part *p;
+	struct rspamd_mime_text_part *tp;
+
+
+	PTR_ARRAY_FOREACH (msg->parts, i, p) {
+		if (p->raw_headers) {
+			rspamd_message_headers_destroy (p->raw_headers);
+		}
+
+		if (IS_CT_MULTIPART (p->ct)) {
+			if (p->specific.mp->children) {
+				g_ptr_array_free (p->specific.mp->children, TRUE);
+			}
+		}
+	}
+
+	PTR_ARRAY_FOREACH (msg->text_parts, i, tp) {
+		if (tp->utf_words) {
+			g_array_free (tp->utf_words, TRUE);
+		}
+		if (tp->normalized_hashes) {
+			g_array_free (tp->normalized_hashes, TRUE);
+		}
+		if (tp->languages) {
+			g_ptr_array_unref (tp->languages);
+		}
+	}
+
+	g_ptr_array_unref (msg->text_parts);
+	g_ptr_array_unref (msg->parts);
+
+	g_ptr_array_unref (msg->from_mime);
+	g_ptr_array_unref (msg->rcpt_mime);
+
+	g_hash_table_unref (msg->urls);
+	g_hash_table_unref (msg->emails);
+}
+
+struct rspamd_message*
+rspamd_message_new (struct rspamd_task *task)
+{
+	struct rspamd_message *msg;
+
+	msg = rspamd_mempool_alloc0 (task->task_pool, sizeof (*msg));
+
+	msg->raw_headers = rspamd_message_headers_new ();
+
+	msg->emails = g_hash_table_new (rspamd_email_hash, rspamd_emails_cmp);
+	msg->urls = g_hash_table_new (rspamd_url_hash, rspamd_urls_cmp);
+
+	msg->parts = g_ptr_array_sized_new (4);
+	msg->text_parts = g_ptr_array_sized_new (2);
+
+	msg->from_mime = g_ptr_array_sized_new (1);
+	msg->rcpt_mime = g_ptr_array_sized_new (1);
+
+	REF_INIT_RETAIN (msg, rspamd_message_dtor);
+
+	return msg;
 }
 
 gboolean
 rspamd_message_parse (struct rspamd_task *task)
 {
-	struct received_header *recv, *trecv;
+	struct rspamd_received_header *recv, *trecv;
 	const gchar *p;
 	gsize len;
 	guint i;
 	GError *err = NULL;
-	rspamd_cryptobox_hash_state_t st;
-	guchar digest_out[rspamd_cryptobox_HASHBYTES];
 
 	if (RSPAMD_TASK_IS_EMPTY (task)) {
 		/* Don't do anything with empty task */
+		task->flags |= RSPAMD_TASK_FLAG_SKIP_PROCESS;
 		return TRUE;
 	}
 
@@ -1146,7 +1209,13 @@ rspamd_message_parse (struct rspamd_task *task)
 
 	task->msg.begin = p;
 	task->msg.len = len;
-	rspamd_cryptobox_hash_init (&st, NULL, 0);
+
+	/* Cleanup old message */
+	if (task->message) {
+		rspamd_message_unref (task->message);
+	}
+
+	task->message = rspamd_message_new (task);
 
 	if (task->flags & RSPAMD_TASK_FLAG_MIME) {
 		enum rspamd_mime_parse_error ret;
@@ -1190,20 +1259,20 @@ rspamd_message_parse (struct rspamd_task *task)
 	}
 
 
-	if (task->message_id == NULL) {
-		task->message_id = "undef";
+	if (MESSAGE_FIELD (task, message_id) == NULL) {
+		MESSAGE_FIELD (task, message_id) = "undef";
 	}
 
-	debug_task ("found %ud parts in message", task->parts->len);
+	debug_task ("found %ud parts in message", MESSAGE_FIELD (task, parts)->len);
 	if (task->queue_id == NULL) {
 		task->queue_id = "undef";
 	}
 
-	if (task->received->len > 0) {
+	if (MESSAGE_FIELD (task, received)) {
 		gboolean need_recv_correction = FALSE;
 		rspamd_inet_addr_t *raddr;
 
-		recv = g_ptr_array_index (task->received, 0);
+		recv = MESSAGE_FIELD (task, received);
 		/*
 		 * For the first header we must ensure that
 		 * received is consistent with the IP that we obtain through
@@ -1231,7 +1300,7 @@ rspamd_message_parse (struct rspamd_task *task)
 					" not ours, prepend it with fake one");
 
 			trecv = rspamd_mempool_alloc0 (task->task_pool,
-					sizeof (struct received_header));
+					sizeof (struct rspamd_received_header));
 			trecv->flags |= RSPAMD_RECEIVED_FLAG_ARTIFICIAL;
 
 			if (task->flags & RSPAMD_TASK_FLAG_SSL) {
@@ -1257,30 +1326,14 @@ rspamd_message_parse (struct rspamd_task *task)
 				trecv->from_hostname = trecv->real_hostname;
 			}
 
-#ifdef GLIB_VERSION_2_40
-			g_ptr_array_insert (task->received, 0, trecv);
-#else
-			/*
-			 * Unfortunately, before glib 2.40 we cannot insert element into a
-			 * ptr array
-			 */
-			GPtrArray *nar = g_ptr_array_sized_new (task->received->len + 1);
-
-			g_ptr_array_add (nar, trecv);
-			PTR_ARRAY_FOREACH (task->received, i, recv) {
-				g_ptr_array_add (nar, recv);
-			}
-			rspamd_mempool_add_destructor (task->task_pool,
-						rspamd_ptr_array_free_hard, nar);
-			task->received = nar;
-#endif
+			DL_PREPEND (MESSAGE_FIELD (task, received), trecv);
 		}
 	}
 
 	/* Extract data from received header if we were not given IP */
-	if (task->received->len > 0 && (task->flags & RSPAMD_TASK_FLAG_NO_IP) &&
+	if (MESSAGE_FIELD (task, received) && (task->flags & RSPAMD_TASK_FLAG_NO_IP) &&
 			(task->cfg && !task->cfg->ignore_received)) {
-		recv = g_ptr_array_index (task->received, 0);
+		recv = MESSAGE_FIELD (task, received);
 		if (recv->real_ip) {
 			if (!rspamd_parse_inet_address (&task->from_addr,
 					recv->real_ip,
@@ -1295,37 +1348,48 @@ rspamd_message_parse (struct rspamd_task *task)
 		}
 	}
 
+	struct rspamd_mime_part *part;
+
+	/* Blake2b applied to string 'rspamd' */
+	static const guchar RSPAMD_ALIGNED(32) hash_key[] = {
+			0xef,0x43,0xae,0x80,0xcc,0x8d,0xc3,0x4c,
+			0x6f,0x1b,0xd6,0x18,0x1b,0xae,0x87,0x74,
+			0x0c,0xca,0xf7,0x8e,0x5f,0x2e,0x54,0x32,
+			0xf6,0x79,0xb9,0x27,0x26,0x96,0x20,0x92,
+			0x70,0x07,0x85,0xeb,0x83,0xf7,0x89,0xe0,
+			0xd7,0x32,0x2a,0xd2,0x1a,0x64,0x41,0xef,
+			0x49,0xff,0xc3,0x8c,0x54,0xf9,0x67,0x74,
+			0x30,0x1e,0x70,0x2e,0xb7,0x12,0x09,0xfe,
+	};
+
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
+		crypto_shorthash_siphashx24 (MESSAGE_FIELD (task, digest),
+				part->digest, sizeof (part->digest),
+				i == 0 ? hash_key : MESSAGE_FIELD (task, digest));
+	}
+
 	/* Parse urls inside Subject header */
-	if (task->subject) {
-		p = task->subject;
+	if (MESSAGE_FIELD (task, subject)) {
+		p = MESSAGE_FIELD (task, subject);
 		len = strlen (p);
-		rspamd_cryptobox_hash_update (&st, p, len);
+		crypto_shorthash_siphashx24 (MESSAGE_FIELD (task, digest), p, len,
+				MESSAGE_FIELD (task, digest));
 		rspamd_url_find_multiple (task->task_pool, p, len,
 				RSPAMD_URL_FIND_STRICT, NULL,
 				rspamd_url_task_subject_callback, task);
 	}
 
-	for (i = 0; i < task->parts->len; i ++) {
-		struct rspamd_mime_part *part;
-
-		part = g_ptr_array_index (task->parts, i);
-		rspamd_cryptobox_hash_update (&st, part->digest, sizeof (part->digest));
-	}
-
-	rspamd_cryptobox_hash_final (&st, digest_out);
-	memcpy (task->digest, digest_out, sizeof (task->digest));
-
 	if (task->queue_id) {
 		msg_info_task ("loaded message; id: <%s>; queue-id: <%s>; size: %z; "
 				"checksum: <%*xs>",
-				task->message_id, task->queue_id, task->msg.len,
-				(gint)sizeof (task->digest), task->digest);
+				MESSAGE_FIELD (task, message_id), task->queue_id, task->msg.len,
+				(gint)sizeof (MESSAGE_FIELD (task, digest)), MESSAGE_FIELD (task, digest));
 	}
 	else {
 		msg_info_task ("loaded message; id: <%s>; size: %z; "
 				"checksum: <%*xs>",
-				task->message_id, task->msg.len,
-				(gint)sizeof (task->digest), task->digest);
+				MESSAGE_FIELD (task, message_id), task->msg.len,
+				(gint)sizeof (MESSAGE_FIELD (task, digest)), MESSAGE_FIELD (task, digest));
 	}
 
 	return TRUE;
@@ -1338,13 +1402,9 @@ rspamd_message_process (struct rspamd_task *task)
 	struct rspamd_mime_text_part *p1, *p2;
 	gdouble diff, *pdiff;
 	guint tw, *ptw, dw;
+	struct rspamd_mime_part *part;
 
-	for (i = 0; i < task->parts->len; i ++) {
-		struct rspamd_mime_part *part;
-
-		part = g_ptr_array_index (task->parts, i);
-
-
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		if (!rspamd_message_process_text_part_maybe (task, part) &&
 				part->parsed_data.len > 0) {
 			const gchar *mb = magic_buffer (task->cfg->libs_ctx->libmagic,
@@ -1372,7 +1432,7 @@ rspamd_message_process (struct rspamd_task *task)
 	gdouble *var;
 	guint total_words = 0;
 
-	PTR_ARRAY_FOREACH (task->text_parts, i, text_part) {
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, text_part) {
 		if (!text_part->language) {
 			rspamd_mime_part_detect_language (task, text_part);
 		}
@@ -1385,9 +1445,9 @@ rspamd_message_process (struct rspamd_task *task)
 	}
 
 	/* Calculate distance for 2-parts messages */
-	if (task->text_parts->len == 2) {
-		p1 = g_ptr_array_index (task->text_parts, 0);
-		p2 = g_ptr_array_index (task->text_parts, 1);
+	if (i == 2) {
+		p1 = g_ptr_array_index (MESSAGE_FIELD (task, text_parts), 0);
+		p2 = g_ptr_array_index (MESSAGE_FIELD (task, text_parts), 1);
 
 		/* First of all check parent object */
 		if (p1->mime_part->parent_part) {
@@ -1499,97 +1559,31 @@ rspamd_message_process (struct rspamd_task *task)
 }
 
 
-GPtrArray *
-rspamd_message_get_header_from_hash (GHashTable *htb,
-		rspamd_mempool_t *pool,
-		const gchar *field,
-		gboolean strong)
+struct rspamd_message *
+rspamd_message_ref (struct rspamd_message *msg)
 {
-	GPtrArray *ret, *ar;
-	struct rspamd_mime_header *cur;
-	guint i;
+	REF_RETAIN (msg);
 
-	ar = g_hash_table_lookup (htb, field);
-
-	if (ar == NULL) {
-		return NULL;
-	}
-
-	if (strong && pool != NULL) {
-		/* Need to filter what we have */
-		ret = g_ptr_array_sized_new (ar->len);
-
-		PTR_ARRAY_FOREACH (ar, i, cur) {
-			if (strcmp (cur->name, field) != 0) {
-				continue;
-			}
-
-			g_ptr_array_add (ret, cur);
-		}
-
-		rspamd_mempool_add_destructor (pool,
-				(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ret);
-	}
-	else {
-		ret = ar;
-	}
-
-	return ret;
+	return msg;
 }
 
-GPtrArray *
-rspamd_message_get_header_array (struct rspamd_task *task,
-		const gchar *field,
-		gboolean strong)
+void rspamd_message_unref (struct rspamd_message *msg)
 {
-	return rspamd_message_get_header_from_hash (task->raw_headers,
-			task->task_pool, field, strong);
+	if (msg) {
+		REF_RELEASE (msg);
+	}
 }
 
-GPtrArray *
-rspamd_message_get_mime_header_array (struct rspamd_task *task,
-		const gchar *field,
-		gboolean strong)
+void rspamd_message_update_digest (struct rspamd_message *msg,
+								   const void *input, gsize len)
 {
-	GPtrArray *ret, *ar;
-	struct rspamd_mime_header *cur;
-	guint nelems = 0, i, j;
-	struct rspamd_mime_part *mp;
+	guchar RSPAMD_ALIGNED(32) ex_key[crypto_shorthash_siphashx24_KEYBYTES];
 
-	for (i = 0; i < task->parts->len; i ++) {
-		mp = g_ptr_array_index (task->parts, i);
-		ar = g_hash_table_lookup (mp->raw_headers, field);
+	/* Sanity */
+	G_STATIC_ASSERT (sizeof (ex_key) == sizeof (msg->digest));
+	G_STATIC_ASSERT (crypto_shorthash_siphashx24_BYTES == sizeof (msg->digest));
 
-		if (ar == NULL) {
-			continue;
-		}
+	memcpy (ex_key, msg->digest, sizeof (msg->digest));
 
-		nelems += ar->len;
-	}
-
-	if (nelems == 0) {
-		return NULL;
-	}
-
-	ret = g_ptr_array_sized_new (nelems);
-
-	for (i = 0; i < task->parts->len; i ++) {
-		mp = g_ptr_array_index (task->parts, i);
-		ar = g_hash_table_lookup (mp->raw_headers, field);
-
-		PTR_ARRAY_FOREACH (ar, j, cur) {
-			if (strong) {
-				if (strcmp (cur->name, field) != 0) {
-					continue;
-				}
-			}
-
-			g_ptr_array_add (ret, cur);
-		}
-	}
-
-	rspamd_mempool_add_destructor (task->task_pool,
-		(rspamd_mempool_destruct_t)rspamd_ptr_array_free_hard, ret);
-
-	return ret;
+	crypto_shorthash_siphashx24 (msg->digest, input, len, ex_key);
 }

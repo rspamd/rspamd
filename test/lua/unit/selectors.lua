@@ -62,7 +62,7 @@ context("Selectors test", function()
 
     ["digest"] = {
                 selector = "digest",
-                expect = {"c459a21bd1f33fb4ba035481f46ef0c7"}
+                expect = {"5b756ff185494c36f26c17a70b042f21"}
     },
 
     ["user"] = {

@@ -1808,7 +1808,7 @@ rspamd_symcache_process_settings (struct rspamd_task *task,
 	wl = ucl_object_lookup (task->settings, "whitelist");
 
 	if (wl != NULL) {
-		msg_info_task ("<%s> is whitelisted", task->message_id);
+		msg_info_task ("task is whitelisted");
 		task->flags |= RSPAMD_TASK_FLAG_SKIP;
 		return TRUE;
 	}
@@ -2015,9 +2015,9 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 
 			if (!(item->type & SYMBOL_TYPE_FINE)) {
 				if (rspamd_symcache_metric_limit (task, checkpoint)) {
-					msg_info_task ("<%s> has already scored more than %.2f, so do "
+					msg_info_task ("task has already scored more than %.2f, so do "
 								   "not "
-								   "plan more checks", task->message_id,
+								   "plan more checks",
 							checkpoint->rs->score);
 					all_done = TRUE;
 					break;

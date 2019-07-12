@@ -123,50 +123,18 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 		new_task->task_pool = pool;
 	}
 
-	new_task->raw_headers = g_hash_table_new_full (rspamd_strcase_hash,
-			rspamd_strcase_equal, NULL, rspamd_ptr_array_free_hard);
-	new_task->headers_order = g_queue_new ();
 	new_task->request_headers = g_hash_table_new_full (rspamd_ftok_icase_hash,
 			rspamd_ftok_icase_equal, rspamd_fstring_mapped_ftok_free,
 			rspamd_request_header_dtor);
 	rspamd_mempool_add_destructor (new_task->task_pool,
-		(rspamd_mempool_destruct_t) g_hash_table_unref,
-		new_task->request_headers);
-	new_task->reply_headers = g_hash_table_new_full (rspamd_ftok_icase_hash,
-			rspamd_ftok_icase_equal, rspamd_fstring_mapped_ftok_free,
-			rspamd_fstring_mapped_ftok_free);
-	rspamd_mempool_add_destructor (new_task->task_pool,
 			(rspamd_mempool_destruct_t) g_hash_table_unref,
-			new_task->reply_headers);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_unref,
-			new_task->raw_headers);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			(rspamd_mempool_destruct_t) g_queue_free,
-			new_task->headers_order);
-	new_task->emails = g_hash_table_new (rspamd_email_hash, rspamd_emails_cmp);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_unref,
-			new_task->emails);
-	new_task->urls = g_hash_table_new (rspamd_url_hash, rspamd_urls_cmp);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_unref,
-			new_task->urls);
-	new_task->parts = g_ptr_array_sized_new (4);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			rspamd_ptr_array_free_hard, new_task->parts);
-	new_task->text_parts = g_ptr_array_sized_new (2);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			rspamd_ptr_array_free_hard, new_task->text_parts);
-	new_task->received = g_ptr_array_sized_new (8);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			rspamd_ptr_array_free_hard, new_task->received);
+			new_task->request_headers);
 
 	new_task->sock = -1;
 	new_task->flags |= (RSPAMD_TASK_FLAG_MIME|RSPAMD_TASK_FLAG_JSON);
 	new_task->result = rspamd_create_metric_result (new_task);
 
-	new_task->message_id = new_task->queue_id = "undef";
+	new_task->queue_id = "undef";
 	new_task->messages = ucl_object_typed_new (UCL_OBJECT);
 	new_task->lua_cache = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
 
@@ -231,8 +199,6 @@ rspamd_task_restore (void *arg)
 void
 rspamd_task_free (struct rspamd_task *task)
 {
-	struct rspamd_mime_part *p;
-	struct rspamd_mime_text_part *tp;
 	struct rspamd_email_address *addr;
 	struct rspamd_lua_cached_entry *entry;
 	static guint free_iters = 0;
@@ -242,38 +208,6 @@ rspamd_task_free (struct rspamd_task *task)
 
 	if (task) {
 		debug_task ("free pointer %p", task);
-
-		for (i = 0; i < task->parts->len; i ++) {
-			p = g_ptr_array_index (task->parts, i);
-
-			if (p->raw_headers) {
-				g_hash_table_unref (p->raw_headers);
-			}
-
-			if (p->headers_order) {
-				g_queue_free (p->headers_order);
-			}
-
-			if (IS_CT_MULTIPART (p->ct)) {
-				if (p->specific.mp->children) {
-					g_ptr_array_free (p->specific.mp->children, TRUE);
-				}
-			}
-		}
-
-		for (i = 0; i < task->text_parts->len; i ++) {
-			tp = g_ptr_array_index (task->text_parts, i);
-
-			if (tp->utf_words) {
-				g_array_free (tp->utf_words, TRUE);
-			}
-			if (tp->normalized_hashes) {
-				g_array_free (tp->normalized_hashes, TRUE);
-			}
-			if (tp->languages) {
-				g_ptr_array_unref (tp->languages);
-			}
-		}
 
 		if (task->rcpt_envelope) {
 			for (i = 0; i < task->rcpt_envelope->len; i ++) {
@@ -379,6 +313,8 @@ rspamd_task_free (struct rspamd_task *task)
 
 			REF_RELEASE (task->cfg);
 		}
+
+		rspamd_message_unref (task->message);
 
 		if (task->flags & RSPAMD_TASK_FLAG_OWN_POOL) {
 			rspamd_mempool_delete (task->task_pool);
@@ -994,8 +930,9 @@ rspamd_task_get_principal_recipient (struct rspamd_task *task)
 		}
 	}
 
-	if (task->rcpt_mime != NULL && task->rcpt_mime->len > 0) {
-		PTR_ARRAY_FOREACH (task->rcpt_mime, i, addr) {
+	GPtrArray *rcpt_mime = MESSAGE_FIELD_CHECK (task, rcpt_mime);
+	if (rcpt_mime != NULL && rcpt_mime->len > 0) {
+		PTR_ARRAY_FOREACH (rcpt_mime, i, addr) {
 			if (addr->addr && !(addr->flags & RSPAMD_EMAIL_ADDR_ORIGINAL)) {
 				return rspamd_task_cache_principal_recipient (task, addr->addr,
 						addr->addr_len);
@@ -1032,7 +969,8 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 
 	switch (lf->type) {
 	case RSPAMD_LOG_MID:
-		if (task->message_id && strcmp (task->message_id, "undef") != 0) {
+		if (MESSAGE_FIELD_CHECK (task, message_id) &&
+			strcmp (MESSAGE_FIELD (task, message_id) , "undef") != 0) {
 			ret = TRUE;
 		}
 		break;
@@ -1059,7 +997,8 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 		break;
 	case RSPAMD_LOG_MIME_RCPT:
 	case RSPAMD_LOG_MIME_RCPTS:
-		if (task->rcpt_mime && task->rcpt_mime->len > 0) {
+		if (MESSAGE_FIELD_CHECK (task, rcpt_mime) &&
+			MESSAGE_FIELD (task, rcpt_mime)->len > 0) {
 			ret = TRUE;
 		}
 		break;
@@ -1069,7 +1008,8 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_MIME_FROM:
-		if (task->from_mime && task->from_mime->len > 0) {
+		if (MESSAGE_FIELD_CHECK (task, from_mime) &&
+			MESSAGE_FIELD (task, from_mime)->len > 0) {
 			ret = TRUE;
 		}
 		break;
@@ -1388,8 +1328,8 @@ rspamd_task_log_variable (struct rspamd_task *task,
 	switch (lf->type) {
 	/* String vars */
 	case RSPAMD_LOG_MID:
-		if (task->message_id) {
-			var.begin = task->message_id;
+		if (MESSAGE_FIELD_CHECK (task, message_id)) {
+			var.begin = MESSAGE_FIELD (task, message_id);
 			var.len = strlen (var.begin);
 		}
 		else {
@@ -1458,8 +1398,11 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_MIME_FROM:
-		if (task->from_mime) {
-			return rspamd_task_write_ialist (task, task->from_mime, 1, lf,
+		if (MESSAGE_FIELD_CHECK (task, from_mime)) {
+			return rspamd_task_write_ialist (task,
+					MESSAGE_FIELD (task, from_mime),
+					1,
+					lf,
 					logbuf);
 		}
 		break;
@@ -1470,8 +1413,11 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_MIME_RCPT:
-		if (task->rcpt_mime) {
-			return rspamd_task_write_ialist (task, task->rcpt_mime, 1, lf,
+		if (MESSAGE_FIELD_CHECK (task, rcpt_mime)) {
+			return rspamd_task_write_ialist (task,
+					MESSAGE_FIELD (task, rcpt_mime),
+					1,
+					lf,
 					logbuf);
 		}
 		break;
@@ -1482,15 +1428,25 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		}
 		break;
 	case RSPAMD_LOG_MIME_RCPTS:
-		if (task->rcpt_mime) {
-			return rspamd_task_write_ialist (task, task->rcpt_mime, -1, lf,
+		if (MESSAGE_FIELD_CHECK (task, rcpt_mime)) {
+			return rspamd_task_write_ialist (task,
+					MESSAGE_FIELD (task, rcpt_mime),
+					-1, /* All addresses */
+					lf,
 					logbuf);
 		}
 		break;
 	case RSPAMD_LOG_DIGEST:
-		var.len = rspamd_snprintf (numbuf, sizeof (numbuf), "%*xs",
-				(gint)sizeof (task->digest), task->digest);
-		var.begin = numbuf;
+		if (task->message) {
+			var.len = rspamd_snprintf (numbuf, sizeof (numbuf), "%*xs",
+					(gint) sizeof (MESSAGE_FIELD (task, digest)),
+					MESSAGE_FIELD (task, digest));
+			var.begin = numbuf;
+		}
+		else {
+			var.begin = undef;
+			var.len = sizeof (undef) - 1;
+		}
 		break;
 	case RSPAMD_LOG_FILENAME:
 		if (task->msg.fpath) {

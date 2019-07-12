@@ -164,10 +164,10 @@ ELSE()
 	ADD_LIBRARY(rspamd-server SHARED
 			${RSPAMD_CRYPTOBOX}
 			${RSPAMD_UTIL}
-			${RSPAMD_LUA}
 			${RSPAMD_SERVER}
 			${RSPAMD_STAT}
 			${RSPAMD_MIME}
+			${RSPAMD_LUA}
 			${CMAKE_CURRENT_BINARY_DIR}/modules.c
 			${PLUGINSSRC}
 			"${RAGEL_ragel_smtp_addr_OUTPUTS}"
