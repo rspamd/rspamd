@@ -34,6 +34,7 @@
 
 #include <math.h>
 #include <unicode/uchar.h>
+#include "sodium.h"
 #include "libserver/cfg_file_private.h"
 #include "lua/lua_common.h"
 #include "contrib/uthash/utlist.h"
@@ -1157,8 +1158,6 @@ rspamd_message_parse (struct rspamd_task *task)
 	gsize len;
 	guint i;
 	GError *err = NULL;
-	rspamd_cryptobox_hash_state_t st;
-	guchar digest_out[rspamd_cryptobox_HASHBYTES];
 
 	if (RSPAMD_TASK_IS_EMPTY (task)) {
 		/* Don't do anything with empty task */
@@ -1210,7 +1209,6 @@ rspamd_message_parse (struct rspamd_task *task)
 		rspamd_message_unref (task->message);
 	}
 
-	rspamd_cryptobox_hash_init (&st, NULL, 0);
 	task->message = rspamd_message_new (task);
 
 	if (task->flags & RSPAMD_TASK_FLAG_MIME) {
@@ -1344,25 +1342,36 @@ rspamd_message_parse (struct rspamd_task *task)
 		}
 	}
 
+	struct rspamd_mime_part *part;
+
+	/* Blake2b applied to string 'rspamd' */
+	static const guchar RSPAMD_ALIGNED(32) hash_key[] = {
+			0xef,0x43,0xae,0x80,0xcc,0x8d,0xc3,0x4c,
+			0x6f,0x1b,0xd6,0x18,0x1b,0xae,0x87,0x74,
+			0x0c,0xca,0xf7,0x8e,0x5f,0x2e,0x54,0x32,
+			0xf6,0x79,0xb9,0x27,0x26,0x96,0x20,0x92,
+			0x70,0x07,0x85,0xeb,0x83,0xf7,0x89,0xe0,
+			0xd7,0x32,0x2a,0xd2,0x1a,0x64,0x41,0xef,
+			0x49,0xff,0xc3,0x8c,0x54,0xf9,0x67,0x74,
+			0x30,0x1e,0x70,0x2e,0xb7,0x12,0x09,0xfe,
+	};
+
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
+		crypto_shorthash_siphashx24 (MESSAGE_FIELD (task, digest),
+				part->digest, sizeof (part->digest),
+				i == 0 ? hash_key : MESSAGE_FIELD (task, digest));
+	}
+
 	/* Parse urls inside Subject header */
 	if (MESSAGE_FIELD (task, subject)) {
 		p = MESSAGE_FIELD (task, subject);
 		len = strlen (p);
-		rspamd_cryptobox_hash_update (&st, p, len);
+		crypto_shorthash_siphashx24 (MESSAGE_FIELD (task, digest), p, len,
+				MESSAGE_FIELD (task, digest));
 		rspamd_url_find_multiple (task->task_pool, p, len,
 				RSPAMD_URL_FIND_STRICT, NULL,
 				rspamd_url_task_subject_callback, task);
 	}
-
-	struct rspamd_mime_part *part;
-
-	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-		rspamd_cryptobox_hash_update (&st, part->digest, sizeof (part->digest));
-	}
-
-	rspamd_cryptobox_hash_final (&st, digest_out);
-	memcpy (MESSAGE_FIELD (task, digest), digest_out,
-			sizeof (MESSAGE_FIELD (task, digest)));
 
 	if (task->queue_id) {
 		msg_info_task ("loaded message; id: <%s>; queue-id: <%s>; size: %z; "
@@ -1557,4 +1566,18 @@ void rspamd_message_unref (struct rspamd_message *msg)
 	if (msg) {
 		REF_RELEASE (msg);
 	}
+}
+
+void rspamd_message_update_digest (struct rspamd_message *msg,
+								   const void *input, gsize len)
+{
+	guchar RSPAMD_ALIGNED(32) ex_key[crypto_shorthash_siphashx24_KEYBYTES];
+
+	/* Sanity */
+	G_STATIC_ASSERT (sizeof (ex_key) == sizeof (msg->digest));
+	G_STATIC_ASSERT (crypto_shorthash_siphashx24_BYTES == sizeof (msg->digest));
+
+	memcpy (ex_key, msg->digest, sizeof (msg->digest));
+
+	crypto_shorthash_siphashx24 (msg->digest, input, len, ex_key);
 }

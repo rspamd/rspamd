@@ -132,17 +132,19 @@ struct rspamd_mime_text_part {
 	guint unicode_scripts;
 };
 
+struct rspamd_message_raw_headers_content {
+	const gchar *begin;
+	gsize len;
+	const gchar *body_start;
+};
+
 struct rspamd_message {
 	const gchar *message_id;
 	gchar *subject;
 
 	GPtrArray *parts;				/**< list of parsed parts							*/
 	GPtrArray *text_parts;			/**< list of text parts								*/
-	struct {
-		const gchar *begin;
-		gsize len;
-		const gchar *body_start;
-	} raw_headers_content;						/**< list of raw headers							*/
+	struct rspamd_message_raw_headers_content raw_headers_content;
 	struct rspamd_received_header *received;	/**< list of received headers						*/
 	GHashTable *urls;							/**< list of parsed urls							*/
 	GHashTable *emails;							/**< list of parsed emails							*/
@@ -155,14 +157,7 @@ struct rspamd_message {
 	ref_entry_t ref;
 };
 
-#ifndef FULL_DEBUG
 #define MESSAGE_FIELD(task, field) ((task)->message->field)
-#else
-#define MESSAGE_FIELD(task, field)
-	((!(task)->message) ? \
-	(__typeof__((task)->message->field))(msg_err_task("no message when getting field %s", #field), g_assert(0), NULL) : \
-	((task)->message->field))
-#endif
 
 /**
  * Parse and pre-process mime message
@@ -197,6 +192,15 @@ struct rspamd_message* rspamd_message_new (struct rspamd_task *task);
 struct rspamd_message *rspamd_message_ref (struct rspamd_message *msg);
 
 void rspamd_message_unref (struct rspamd_message *msg);
+
+/**
+ * Updates digest of the message if modified
+ * @param msg
+ * @param input
+ * @param len
+ */
+void rspamd_message_update_digest (struct rspamd_message *msg,
+		const void *input, gsize len);
 
 #ifdef  __cplusplus
 }
