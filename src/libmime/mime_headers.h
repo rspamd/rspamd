@@ -51,12 +51,13 @@ enum rspamd_mime_header_flags {
 };
 
 struct rspamd_mime_header {
-	gchar *name; /* Also used for key */
-	gchar *value;
 	const gchar *raw_value; /* As it is in the message (unfolded and unparsed) */
 	gsize raw_len;
 	guint order;
 	int flags; /* see enum rspamd_mime_header_flags */
+	/* These are zero terminated (historically) */
+	gchar *name; /* Also used for key */
+	gchar *value;
 	gchar *separator;
 	gchar *decoded;
 	struct rspamd_mime_header *prev, *next; /* Headers with the same name */

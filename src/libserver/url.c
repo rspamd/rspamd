@@ -2949,11 +2949,11 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 
 	if (url->protocol == PROTOCOL_MAILTO) {
 		if (url->userlen > 0) {
-			target_tbl = task->emails;
+			target_tbl = MESSAGE_FIELD (task, emails);
 		}
 	}
 	else {
-		target_tbl = task->urls;
+		target_tbl = MESSAGE_FIELD (task, urls);
 	}
 
 	if (target_tbl) {
@@ -2996,11 +2996,11 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 
 				if (query_url->protocol == PROTOCOL_MAILTO) {
 					if (query_url->userlen > 0) {
-						target_tbl = task->emails;
+						target_tbl = MESSAGE_FIELD (task, emails);
 					}
 				}
 				else {
-					target_tbl = task->urls;
+					target_tbl = MESSAGE_FIELD (task, urls);
 				}
 
 				if (target_tbl) {
@@ -3115,9 +3115,10 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 	url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED|RSPAMD_URL_FLAG_SUBJECT;
 
 	if (url->protocol == PROTOCOL_MAILTO) {
-		if (url->userlen > 0) {
-			if ((existing = g_hash_table_lookup (task->emails, url)) == NULL) {
-				g_hash_table_insert (task->emails, url,
+		if (url->userlen > 0 && url->hostlen > 0) {
+			if ((existing = g_hash_table_lookup (MESSAGE_FIELD (task, emails),
+					url)) == NULL) {
+				g_hash_table_insert (MESSAGE_FIELD (task, emails), url,
 						url);
 			}
 			else {
@@ -3126,8 +3127,9 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 		}
 	}
 	else {
-		if ((existing = g_hash_table_lookup (task->urls, url)) == NULL) {
-			g_hash_table_insert (task->urls, url, url);
+		if ((existing = g_hash_table_lookup (MESSAGE_FIELD (task, urls),
+				url)) == NULL) {
+			g_hash_table_insert (MESSAGE_FIELD (task, urls), url, url);
 		}
 		else {
 			existing->count ++;
@@ -3156,9 +3158,9 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 					query_url->flags |= RSPAMD_URL_FLAG_SCHEMALESS;
 				}
 
-				if ((existing = g_hash_table_lookup (task->urls,
+				if ((existing = g_hash_table_lookup (MESSAGE_FIELD (task, urls),
 						query_url)) == NULL) {
-					g_hash_table_insert (task->urls,
+					g_hash_table_insert (MESSAGE_FIELD (task, urls),
 							query_url,
 							query_url);
 				}
