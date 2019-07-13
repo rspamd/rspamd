@@ -29,6 +29,7 @@
 #include "libutil/map_helpers.h"
 
 #include <math.h>
+#include <src/libserver/task.h>
 
 /***
  * @module rspamd_task
@@ -70,8 +71,21 @@ LUA_FUNCTION_DEF (task, load_from_file);
  * @return {boolean,rspamd_task|error} status + new task or error message
  */
 LUA_FUNCTION_DEF (task, load_from_string);
-
+/***
+ * @method task:get_message()
+ * Returns task raw message content as opaque text
+ * @return {rspamd_text} task raw content
+ */
 LUA_FUNCTION_DEF (task, get_message);
+/***
+ * @method task:set_message(msg)
+ * Updates task message with another message, you should normally call
+ * `process_message` afterwards to fill internal Rspamd structures.
+ * Input might be a string, a lua_text or a table of the former stuff.
+ * @param {string/text/table} msg new message to set
+ * @return {rspamd_text} task raw content
+ */
+LUA_FUNCTION_DEF (task, set_message);
 /***
  * @method task:process_message()
  * Parses message
@@ -1062,6 +1076,7 @@ static const struct luaL_reg tasklib_f[] = {
 
 static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_message),
+	LUA_INTERFACE_DEF (task, set_message),
 	LUA_INTERFACE_DEF (task, destroy),
 	LUA_INTERFACE_DEF (task, process_message),
 	LUA_INTERFACE_DEF (task, set_cfg),
@@ -1379,7 +1394,124 @@ static int
 lua_task_get_message (lua_State * L)
 {
 	LUA_TRACE_POINT;
-	return luaL_error (L, "task:get_message is no longer supported");
+	struct rspamd_lua_text *t;
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task) {
+		t = lua_newuserdata (L, sizeof (*t));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		t->flags = 0;
+		t->start = task->msg.begin;
+		t->len = task->msg.len;
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static int
+lua_task_set_message (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t;
+	struct rspamd_task *task = lua_check_task (L, 1);
+
+	if (task) {
+		gsize final_len = 0;
+		gchar *buf = NULL;
+
+		if (lua_type (L, 2) == LUA_TTABLE) {
+			/* Piecewise construct */
+			guint vec_len = rspamd_lua_table_size (L, 2);
+
+
+			for (guint i = 0; i < vec_len; i ++) {
+				lua_rawgeti (L, 2, i + 1);
+
+				if (lua_type (L, -1) == LUA_TSTRING) {
+					gsize l;
+
+					(void)lua_tolstring (L, -1, &l);
+					final_len += l;
+				}
+				else {
+					t = lua_check_text (L, -1);
+
+					if (t) {
+						final_len += t->len;
+					}
+				}
+
+				lua_pop (L, 1);
+			}
+
+			if (final_len > 0) {
+				gchar *pos;
+
+				buf = rspamd_mempool_alloc (task->task_pool, final_len);
+				pos = buf;
+
+				for (guint i = 0; i < vec_len; i ++) {
+					lua_rawgeti (L, 2, i + 1);
+
+					if (lua_type (L, -1) == LUA_TSTRING) {
+						gsize l;
+						const gchar *s;
+
+						s = lua_tolstring (L, -1, &l);
+						memcpy (pos, s, l);
+						pos += l;
+					}
+					else {
+						t = lua_check_text (L, -1);
+
+						if (t) {
+							memcpy (pos, t->start, t->len);
+							pos += t->len;
+						}
+					}
+
+					lua_pop (L, 1);
+				}
+
+				task->msg.begin = buf;
+				task->msg.len = final_len;
+			}
+
+		}
+		else {
+			if (lua_type (L, 2) == LUA_TSTRING) {
+				const gchar *s;
+
+				s = lua_tolstring (L, -1, &final_len);
+				buf = rspamd_mempool_alloc (task->task_pool, final_len);
+				memcpy (buf, s, final_len);
+			}
+			else {
+				t = lua_check_text (L, -1);
+
+				if (t) {
+					final_len = t->len;
+					buf = rspamd_mempool_alloc (task->task_pool, final_len);
+					memcpy (buf, t->start, final_len);
+				}
+			}
+
+			if (buf) {
+				task->msg.begin = buf;
+				task->msg.len = final_len;
+			}
+		}
+
+		lua_pushinteger (L, final_len);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 static void
