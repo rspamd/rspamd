@@ -472,7 +472,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					srch.begin = "all";
 					srch.len = 3;
 
-					msg_debug_protocol ("read pass header, value: %V", hv_tok);
+					msg_debug_protocol ("read pass header, value: %T", hv_tok);
 
 					if (rspamd_ftok_casecmp (hv_tok, &srch) == 0) {
 						task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
