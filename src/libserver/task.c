@@ -16,7 +16,8 @@
 #include "task.h"
 #include "rspamd.h"
 #include "filter.h"
-#include "protocol.h"
+#include "libserver/protocol.h"
+#include "libserver/protocol_internal.h"
 #include "message.h"
 #include "lua/lua_common.h"
 #include "email_addr.h"
@@ -40,6 +41,10 @@
 
 #include <math.h>
 
+__KHASH_IMPL (rspamd_req_headers_hash, static inline,
+		rspamd_ftok_t *, struct rspamd_request_header_chain *, 1,
+				rspamd_ftok_icase_hash, rspamd_ftok_icase_equal)
+
 /*
  * Do not print more than this amount of elts
  */
@@ -49,23 +54,6 @@ static GQuark
 rspamd_task_quark (void)
 {
 	return g_quark_from_static_string ("task-error");
-}
-
-static void
-rspamd_request_header_dtor (gpointer p)
-{
-	GPtrArray *ar = p;
-	guint i;
-	rspamd_ftok_t *tok;
-
-	if (ar) {
-		for (i = 0; i < ar->len; i ++) {
-			tok = g_ptr_array_index (ar, i);
-			rspamd_fstring_mapped_ftok_free (tok);
-		}
-
-		g_ptr_array_free (ar, TRUE);
-	}
 }
 
 /*
@@ -123,13 +111,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 		new_task->task_pool = pool;
 	}
 
-	new_task->request_headers = g_hash_table_new_full (rspamd_ftok_icase_hash,
-			rspamd_ftok_icase_equal, rspamd_fstring_mapped_ftok_free,
-			rspamd_request_header_dtor);
-	rspamd_mempool_add_destructor (new_task->task_pool,
-			(rspamd_mempool_destruct_t) g_hash_table_unref,
-			new_task->request_headers);
-
+	new_task->request_headers = kh_init (rspamd_req_headers_hash);
 	new_task->sock = -1;
 	new_task->flags |= (RSPAMD_TASK_FLAG_MIME|RSPAMD_TASK_FLAG_JSON);
 	new_task->result = rspamd_create_metric_result (new_task);
@@ -314,6 +296,7 @@ rspamd_task_free (struct rspamd_task *task)
 			REF_RELEASE (task->cfg);
 		}
 
+		kh_destroy (rspamd_req_headers_hash, task->request_headers);
 		rspamd_message_unref (task->message);
 
 		if (task->flags & RSPAMD_TASK_FLAG_OWN_POOL) {
@@ -647,15 +630,19 @@ rspamd_task_load_message (struct rspamd_task *task,
 	}
 
 	if (task->flags & RSPAMD_TASK_FLAG_HAS_CONTROL) {
-		/* We have control chunk, so we need to process it separately */
-		if (task->msg.len < task->message_len) {
+		rspamd_ftok_t *hv = rspamd_task_get_request_header (task, MLEN_HEADER);
+		gulong message_len = 0;
+
+		if (!hv || !rspamd_strtoul (hv->begin, hv->len, &message_len) ||
+				task->msg.len < message_len) {
 			msg_warn_task ("message has invalid message length: %ul and total len: %ul",
-					task->message_len, task->msg.len);
+					message_len, task->msg.len);
 			g_set_error (&task->err, rspamd_task_quark(), RSPAMD_PROTOCOL_ERROR,
 					"Invalid length");
 			return FALSE;
 		}
-		control_len = task->msg.len - task->message_len;
+
+		control_len = task->msg.len - message_len;
 
 		if (control_len > 0) {
 			parser = ucl_parser_new (UCL_PARSER_KEY_LOWERCASE);
@@ -1590,32 +1577,33 @@ rspamd_ftok_t *
 rspamd_task_get_request_header (struct rspamd_task *task,
 		const gchar *name)
 {
-	GPtrArray *ret;
-	rspamd_ftok_t srch;
-
-	srch.begin = (gchar *)name;
-	srch.len = strlen (name);
-
-	ret = g_hash_table_lookup (task->request_headers, &srch);
+	struct rspamd_request_header_chain *ret =
+			rspamd_task_get_request_header_multiple (task, name);
 
 	if (ret) {
-		return (rspamd_ftok_t *)g_ptr_array_index (ret, 0);
+		return ret->hdr;
 	}
 
 	return NULL;
 }
 
-GPtrArray*
+struct rspamd_request_header_chain *
 rspamd_task_get_request_header_multiple (struct rspamd_task *task,
 		const gchar *name)
 {
-	GPtrArray *ret;
+	struct rspamd_request_header_chain *ret = NULL;
 	rspamd_ftok_t srch;
+	khiter_t k;
 
 	srch.begin = (gchar *)name;
 	srch.len = strlen (name);
 
-	ret = g_hash_table_lookup (task->request_headers, &srch);
+	k = kh_get (rspamd_req_headers_hash, task->request_headers,
+			&srch);
+
+	if (k != kh_end (task->request_headers)) {
+		ret = kh_value (task->request_headers, k);
+	}
 
 	return ret;
 }
@@ -1625,20 +1613,30 @@ void
 rspamd_task_add_request_header (struct rspamd_task *task,
 		rspamd_ftok_t *name, rspamd_ftok_t *value)
 {
-	GPtrArray *ret;
 
-	ret = g_hash_table_lookup (task->request_headers, name);
+	khiter_t k;
+	gint res;
+	struct rspamd_request_header_chain *chain, *nchain;
 
-	if (ret) {
-		g_ptr_array_add (ret, value);
+	k = kh_put (rspamd_req_headers_hash, task->request_headers,
+		name, &res);
 
-		/* We need to free name token */
-		rspamd_fstring_mapped_ftok_free (name);
+	if (res == 0) {
+		/* Existing name */
+		nchain = rspamd_mempool_alloc (task->task_pool, sizeof (*nchain));
+		nchain->hdr = value;
+		nchain->next = NULL;
+		chain = kh_value (task->request_headers, k);
+
+		/* Slow but OK here */
+		LL_APPEND (chain, nchain);
 	}
 	else {
-		ret = g_ptr_array_sized_new (2);
-		g_ptr_array_add (ret, value);
-		g_hash_table_replace (task->request_headers, name, ret);
+		nchain = rspamd_mempool_alloc (task->task_pool, sizeof (*nchain));
+		nchain->hdr = value;
+		nchain->next = NULL;
+
+		kh_value (task->request_headers, k) = nchain;
 	}
 }
 

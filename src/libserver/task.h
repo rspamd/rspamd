@@ -23,6 +23,7 @@
 #include "mem_pool.h"
 #include "dns.h"
 #include "re_cache.h"
+#include "khash.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -121,6 +122,7 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_MILTER (1u << 28u)
 #define RSPAMD_TASK_FLAG_SSL (1u << 29u)
 #define RSPAMD_TASK_FLAG_BAD_UNICODE (1u << 30u)
+#define RSPAMD_TASK_FLAG_MESSAGE_REWRITE (1u << 31u)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))
@@ -136,16 +138,28 @@ struct rspamd_lang_detector;
 enum rspamd_newlines_type;
 struct rspamd_message;
 
+struct rspamd_task_data_storage {
+	const gchar *begin;
+	gsize len;
+	gchar *fpath;
+};
+
+struct rspamd_request_header_chain {
+	rspamd_ftok_t *hdr;
+	struct rspamd_request_header_chain *next;
+};
+
+__KHASH_TYPE (rspamd_req_headers_hash, rspamd_ftok_t *, struct rspamd_request_header_chain *)
+
 /**
  * Worker task structure
  */
 struct rspamd_task {
 	struct rspamd_worker *worker;                    /**< pointer to worker object						*/
 	enum rspamd_command cmd;                        /**< command										*/
-	gint sock;                                        /**< socket descriptor								*/
-	guint32 flags;                                    /**< Bit flags										*/
-	guint32 dns_requests;                            /**< number of DNS requests per this task			*/
-	gulong message_len;                                /**< Message length									*/
+	gint sock;                                      /**< socket descriptor								*/
+	guint32 dns_requests;                           /**< number of DNS requests per this task			*/
+	guint32 flags;                                  /**< Bit flags										*/
 	gchar *helo;                                    /**< helo header value								*/
 	gchar *queue_id;                                /**< queue id if specified							*/
 	rspamd_inet_addr_t *from_addr;                    /**< from addr for a task							*/
@@ -153,12 +167,8 @@ struct rspamd_task {
 	gchar *deliver_to;                                /**< address to deliver								*/
 	gchar *user;                                    /**< user to deliver								*/
 	const gchar *hostname;                            /**< hostname reported by MTA						*/
-	GHashTable *request_headers;                    /**< HTTP headers in a request						*/
-	struct {
-		const gchar *begin;
-		gsize len;
-		gchar *fpath;
-	} msg;                                            /**< message buffer									*/
+	khash_t(rspamd_req_headers_hash) *request_headers; /**< HTTP headers in a request						*/
+	struct rspamd_task_data_storage msg;            /**< message buffer									*/
 	struct rspamd_http_connection *http_conn;        /**< HTTP server connection							*/
 	struct rspamd_async_session *s;                /**< async session object							*/
 	struct rspamd_metric_result *result;            /**< Metric result									*/
@@ -308,8 +318,9 @@ rspamd_ftok_t *rspamd_task_get_request_header (struct rspamd_task *task,
  * @param name
  * @return
  */
-GPtrArray *rspamd_task_get_request_header_multiple (struct rspamd_task *task,
-													const gchar *name);
+struct rspamd_request_header_chain *rspamd_task_get_request_header_multiple (
+		struct rspamd_task *task,
+		const gchar *name);
 
 /**
  * Adds a new request header to task (name and value should be mapped to fstring)

@@ -1476,6 +1476,7 @@ lua_task_set_message (lua_State * L)
 					lua_pop (L, 1);
 				}
 
+				task->flags |= RSPAMD_TASK_FLAG_MESSAGE_REWRITE;
 				task->msg.begin = buf;
 				task->msg.len = final_len;
 			}
@@ -1502,6 +1503,7 @@ lua_task_set_message (lua_State * L)
 			if (buf) {
 				task->msg.begin = buf;
 				task->msg.len = final_len;
+				task->flags |= RSPAMD_TASK_FLAG_MESSAGE_REWRITE;
 			}
 		}
 
@@ -4778,6 +4780,8 @@ lua_task_has_flag (lua_State *L)
 				RSPAMD_TASK_FLAG_BAD_UNICODE);
 		LUA_TASK_GET_FLAG (flag, "mime",
 				RSPAMD_TASK_FLAG_MIME);
+		LUA_TASK_GET_FLAG (flag, "message_rewrite",
+				RSPAMD_TASK_FLAG_MESSAGE_REWRITE);
 
 		if (!found) {
 			msg_warn_task ("unknown flag requested: %s", flag);
@@ -4851,6 +4855,10 @@ lua_task_get_flags (lua_State *L)
 					break;
 				case RSPAMD_TASK_FLAG_MILTER:
 					lua_pushstring (L, "milter");
+					lua_rawseti (L, -2, idx++);
+					break;
+				case RSPAMD_TASK_FLAG_MESSAGE_REWRITE:
+					lua_pushstring (L, "message_rewrite");
 					lua_rawseti (L, -2, idx++);
 					break;
 				default:

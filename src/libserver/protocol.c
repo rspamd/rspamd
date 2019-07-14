@@ -58,7 +58,7 @@ rspamd_protocol_quark (void)
  * Remove <> from the fixed string and copy it to the pool
  */
 static gchar *
-rspamd_protocol_escape_braces (struct rspamd_task *task, rspamd_fstring_t *in)
+rspamd_protocol_escape_braces (struct rspamd_task *task, rspamd_ftok_t *in)
 {
 	guint nchars = 0;
 	const gchar *p;
@@ -68,7 +68,7 @@ rspamd_protocol_escape_braces (struct rspamd_task *task, rspamd_fstring_t *in)
 	g_assert (in != NULL);
 	g_assert (in->len > 0);
 
-	p = in->str;
+	p = in->begin;
 
 	while ((g_ascii_isspace (*p) || *p == '<') && nchars < in->len) {
 		if (*p == '<') {
@@ -81,7 +81,7 @@ rspamd_protocol_escape_braces (struct rspamd_task *task, rspamd_fstring_t *in)
 
 	tok.begin = p;
 
-	p = in->str + in->len - 1;
+	p = in->begin + in->len - 1;
 	tok.len = in->len - nchars;
 
 	while (g_ascii_isspace (*p) && tok.len > 0) {
@@ -344,28 +344,34 @@ gboolean
 rspamd_protocol_handle_headers (struct rspamd_task *task,
 	struct rspamd_http_message *msg)
 {
-	rspamd_fstring_t *hn, *hv;
 	rspamd_ftok_t *hn_tok, *hv_tok, srch;
 	gboolean fl, has_ip = FALSE;
 	struct rspamd_http_header *header, *h, *htmp;
+	gchar *ntok;
 
 	HASH_ITER (hh, msg->headers, header, htmp) {
 		DL_FOREACH (header, h) {
-			hn = rspamd_fstring_new_init (h->name.begin, h->name.len);
-			hv = rspamd_fstring_new_init (h->value.begin, h->value.len);
-			hn_tok = rspamd_ftok_map (hn);
-			hv_tok = rspamd_ftok_map (hv);
+			ntok = rspamd_mempool_ftokdup (task->task_pool, &h->name);
+			hn_tok = rspamd_mempool_alloc (task->task_pool, sizeof (*hn_tok));
+			hn_tok->begin = ntok;
+			hn_tok->len = h->name.len;
+
+
+			ntok = rspamd_mempool_ftokdup (task->task_pool, &h->value);
+			hv_tok = rspamd_mempool_alloc (task->task_pool, sizeof (*hv_tok));
+			hv_tok->begin = ntok;
+			hv_tok->len = h->value.len;
 
 			switch (*hn_tok->begin) {
 			case 'd':
 			case 'D':
 				IF_HEADER (DELIVER_TO_HEADER) {
-					task->deliver_to = rspamd_protocol_escape_braces (task, hv);
+					task->deliver_to = rspamd_protocol_escape_braces (task, hv_tok);
 					msg_debug_protocol ("read deliver-to header, value: %s",
 							task->deliver_to);
 				}
 				else {
-					msg_debug_protocol ("wrong header: %V", hn);
+					msg_debug_protocol ("wrong header: %T", hn_tok);
 				}
 				break;
 			case 'h':
@@ -383,12 +389,13 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			case 'f':
 			case 'F':
 				IF_HEADER (FROM_HEADER) {
-					task->from_envelope = rspamd_email_address_from_smtp (hv->str,
-							hv->len);
-					msg_debug_protocol ("read from header, value: %V", hv);
+					task->from_envelope = rspamd_email_address_from_smtp (
+							hv_tok->begin,
+							hv_tok->len);
+					msg_debug_protocol ("read from header, value: %T", hv_tok);
 
 					if (!task->from_envelope) {
-						msg_err_protocol ("bad from header: '%V'", hv);
+						msg_err_protocol ("bad from header: '%T'", hv_tok);
 						task->flags |= RSPAMD_TASK_FLAG_BROKEN_HEADERS;
 					}
 				}
@@ -401,8 +408,8 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			case 'j':
 			case 'J':
 				IF_HEADER (JSON_HEADER) {
-					msg_debug_protocol ("read json header, value: %V", hv);
-					fl = rspamd_config_parse_flag (hv->str, hv->len);
+					msg_debug_protocol ("read json header, value: %T", hv_tok);
+					fl = rspamd_config_parse_flag (hv_tok->begin, hv_tok->len);
 					if (fl) {
 						task->flags |= RSPAMD_TASK_FLAG_JSON;
 					}
@@ -411,7 +418,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					}
 				}
 				else {
-					msg_debug_protocol ("wrong header: %V", hn);
+					msg_debug_protocol ("wrong header: %T", hn_tok);
 				}
 				break;
 			case 'q':
@@ -422,20 +429,20 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					msg_debug_protocol ("read queue_id header, value: %s", task->queue_id);
 				}
 				else {
-					msg_debug_protocol ("wrong header: %V", hn);
+					msg_debug_protocol ("wrong header: %T", hn_tok);
 				}
 				break;
 			case 'r':
 			case 'R':
 				IF_HEADER (RCPT_HEADER) {
 					rspamd_protocol_process_recipients (task, hv_tok);
-					msg_debug_protocol ("read rcpt header, value: %V", hv);
+					msg_debug_protocol ("read rcpt header, value: %T", hv_tok);
 				}
 				IF_HEADER (RAW_DATA_HEADER) {
 					srch.begin = "yes";
 					srch.len = 3;
 
-					msg_debug_protocol ("read raw data header, value: %V", hv);
+					msg_debug_protocol ("read raw data header, value: %T", hv_tok);
 
 					if (rspamd_ftok_casecmp (hv_tok, &srch) == 0) {
 						task->flags &= ~RSPAMD_TASK_FLAG_MIME;
@@ -446,16 +453,17 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			case 'i':
 			case 'I':
 				IF_HEADER (IP_ADDR_HEADER) {
-					if (!rspamd_parse_inet_address (&task->from_addr, hv->str, hv->len)) {
-						msg_err_protocol ("bad ip header: '%V'", hv);
+					if (!rspamd_parse_inet_address (&task->from_addr,
+							hv_tok->begin, hv_tok->len)) {
+						msg_err_protocol ("bad ip header: '%T'", hv_tok);
 					}
 					else {
-						msg_debug_protocol ("read IP header, value: %V", hv);
+						msg_debug_protocol ("read IP header, value: %T", hv_tok);
 						has_ip = TRUE;
 					}
 				}
 				else {
-					msg_debug_protocol ("wrong header: %V", hn);
+					msg_debug_protocol ("wrong header: %T", hn_tok);
 				}
 				break;
 			case 'p':
@@ -464,7 +472,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					srch.begin = "all";
 					srch.len = 3;
 
-					msg_debug_protocol ("read pass header, value: %V", hv);
+					msg_debug_protocol ("read pass header, value: %V", hv_tok);
 
 					if (rspamd_ftok_casecmp (hv_tok, &srch) == 0) {
 						task->flags |= RSPAMD_TASK_FLAG_PASS_ALL;
@@ -472,14 +480,14 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					}
 				}
 				IF_HEADER (PROFILE_HEADER) {
-					msg_debug_protocol ("read profile header, value: %V", hv);
+					msg_debug_protocol ("read profile header, value: %T", hv_tok);
 					task->flags |= RSPAMD_TASK_FLAG_PROFILE;
 				}
 				break;
 			case 's':
 			case 'S':
 				IF_HEADER (SETTINGS_ID_HEADER) {
-					msg_debug_protocol ("read settings-id header, value: %V", hv);
+					msg_debug_protocol ("read settings-id header, value: %T", hv_tok);
 					task->settings_elt = rspamd_config_find_settings_name_ref (
 							task->cfg, hv_tok->begin, hv_tok->len);
 
@@ -492,15 +500,15 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 									cur->name, cur->id);
 						}
 
-						msg_warn_protocol ("unknown settings id: %V(%d); known_ids: %v",
-								hv,
+						msg_warn_protocol ("unknown settings id: %T(%d); known_ids: %v",
+								hv_tok,
 								rspamd_config_name_to_id (hv_tok->begin, hv_tok->len),
 								known_ids);
 
 						g_string_free (known_ids, TRUE);
 					}
 					else {
-						msg_debug_protocol ("applied settings id %V -> %ud", hv,
+						msg_debug_protocol ("applied settings id %T -> %ud", hv_tok,
 								task->settings_elt->id);
 					}
 				}
@@ -512,7 +520,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					 * We must ignore User header in case of spamc, as SA has
 					 * different meaning of this header
 					 */
-					msg_debug_protocol ("read user header, value: %V", hv);
+					msg_debug_protocol ("read user header, value: %T", hv_tok);
 					if (!RSPAMD_TASK_IS_SPAMC (task)) {
 						task->user = rspamd_mempool_ftokdup (task->task_pool,
 								hv_tok);
@@ -522,7 +530,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					}
 				}
 				IF_HEADER (URLS_HEADER) {
-					msg_debug_protocol ("read urls header, value: %V", hv);
+					msg_debug_protocol ("read urls header, value: %T", hv_tok);
 
 					srch.begin = "extended";
 					srch.len = 8;
@@ -535,7 +543,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					/* TODO: add more formats there */
 				}
 				IF_HEADER (USER_AGENT_HEADER) {
-					msg_debug_protocol ("read user-agent header, value: %V", hv);
+					msg_debug_protocol ("read user-agent header, value: %T", hv_tok);
 
 					if (hv_tok->len == 6 &&
 							rspamd_lc_cmp (hv_tok->begin, "rspamc", 6) == 0) {
@@ -546,7 +554,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			case 'l':
 			case 'L':
 				IF_HEADER (NO_LOG_HEADER) {
-					msg_debug_protocol ("read log header, value: %V", hv);
+					msg_debug_protocol ("read log header, value: %T", hv_tok);
 					srch.begin = "no";
 					srch.len = 2;
 
@@ -558,15 +566,9 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			case 'm':
 			case 'M':
 				IF_HEADER (MLEN_HEADER) {
-					msg_debug_protocol ("read message length header, value: %V", hv);
-					if (!rspamd_strtoul (hv_tok->begin,
-							hv_tok->len,
-							&task->message_len)) {
-						msg_err_protocol ("Invalid message length header: %V", hv);
-					}
-					else {
-						task->flags |= RSPAMD_TASK_FLAG_HAS_CONTROL;
-					}
+					msg_debug_protocol ("read message length header, value: %T",
+							hv_tok);
+					task->flags |= RSPAMD_TASK_FLAG_HAS_CONTROL;
 				}
 				IF_HEADER (MTA_TAG_HEADER) {
 					gchar *mta_tag;
@@ -586,18 +588,18 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				}
 				IF_HEADER (MILTER_HEADER) {
 					task->flags |= RSPAMD_TASK_FLAG_MILTER;
-					msg_debug_protocol ("read Milter header, value: %V", hv);
+					msg_debug_protocol ("read Milter header, value: %T", hv_tok);
 				}
 				break;
 			case 't':
 			case 'T':
 				IF_HEADER (TLS_CIPHER_HEADER) {
 					task->flags |= RSPAMD_TASK_FLAG_SSL;
-					msg_debug_protocol ("read TLS cipher header, value: %V", hv);
+					msg_debug_protocol ("read TLS cipher header, value: %T", hv_tok);
 				}
 				break;
 			default:
-				msg_debug_protocol ("generic header: %V", hn);
+				msg_debug_protocol ("generic header: %T", hn_tok);
 				break;
 			}
 
