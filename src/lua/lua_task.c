@@ -4741,6 +4741,7 @@ lua_task_set_flag (lua_State *L)
 				RSPAMD_TASK_FLAG_BROKEN_HEADERS, set);
 		LUA_TASK_SET_FLAG (flag, "greylisted", RSPAMD_TASK_FLAG_GREYLISTED, set);
 		LUA_TASK_SET_FLAG (flag, "skip_process", RSPAMD_TASK_FLAG_SKIP_PROCESS, set);
+		LUA_TASK_SET_FLAG (flag, "message_rewrite", RSPAMD_TASK_FLAG_MESSAGE_REWRITE, set);
 
 		if (!found) {
 			msg_warn_task ("unknown flag requested: %s", flag);
