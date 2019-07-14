@@ -374,7 +374,7 @@ local function greylist_set(task)
 
     if not settings.check_local and is_rspamc then return end
 
-    ret,conn,upstream = lua_redis.make_request(task,
+    ret,conn,upstream = lua_redis.redis_make_request(task,
       redis_params, -- connect params
       hash_key, -- hash key
       true, -- is write
