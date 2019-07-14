@@ -192,7 +192,7 @@ end
 -- [1] = symbol pattern
 -- [2] = expire value
 -- [3] = cursor
--- returns {cursor for the next step, step number, step statistic counters, cycle statistic counters}
+-- returns {cursor for the next step, step number, step statistic counters, cycle statistic counters, tokens occurrences distribution}
 local expiry_script = [[
   local unpack_function = table.unpack or unpack
 
@@ -246,6 +246,13 @@ local expiry_script = [[
   local keys = ret[2]
   local tokens = {}
 
+  -- Tokens occurrences distribution counters
+  local occurr = {
+    ham = {},
+    spam = {},
+    total = {}
+  }
+
   -- Expiry step statistics counters
   local nelts, extended, discriminated, sum, sum_squares, common, significant,
    infrequent, infrequent_ttls_set, insignificant, insignificant_ttls_set =
@@ -265,6 +272,11 @@ local expiry_script = [[
     sum = sum + total
     sum_squares = sum_squares + total * total
     nelts = nelts + 1
+
+    for k,v in pairs({['ham']=ham, ['spam']=spam, ['total']=total}) do
+      if tonumber(v) > 19 then v = 20 end
+      occurr[k][v] = occurr[k][v] and occurr[k][v] + 1 or 1
+    end
   end
 
   local mean, stddev = 0, 0
@@ -342,12 +354,45 @@ local expiry_script = [[
   redis.call('SET', step_key, tostring(step))
   redis.call('DEL', lock_key)
 
+  local occ_distr = {}
+  for _,cl in pairs({'ham', 'spam', 'total'}) do
+    local occurr_key = pattern_sha1 .. '_occurrence_' .. cl
+
+    if cursor ~= 0 then
+      local n
+      for i,v in ipairs(redis.call('HGETALL', occurr_key)) do
+        if i % 2 == 1 then
+          n = tonumber(v)
+        else
+          occurr[cl][n] = occurr[cl][n] and occurr[cl][n] + v or v
+        end
+      end
+
+      local str = ''
+      if occurr[cl][0] ~= nil then
+        str = '0:' .. occurr[cl][0] .. ','
+      end
+      for k,v in ipairs(occurr[cl]) do
+        if k == 20 then k = '>19' end
+        str = str .. k .. ':' .. v .. ','
+      end
+      table.insert(occ_distr, str)
+    else
+      redis.call('DEL', occurr_key)
+    end
+
+    if next(occurr[cl]) ~= nil then
+      redis.call('HMSET', occurr_key, unpack_function(hash2list(occurr[cl])))
+    end
+  end
+
   return {
     next_cursor, step,
     {nelts, extended, discriminated, mean, stddev, common, significant, infrequent,
      infrequent_ttls_set, insignificant, insignificant_ttls_set},
     {c.nelts, c.extended, c.discriminated, c.sum, c.sum_squares, c.common,
-     c.significant, c.infrequent, c.infrequent_ttls_set, c.insignificant, c.insignificant_ttls_set}
+     c.significant, c.infrequent, c.infrequent_ttls_set, c.insignificant, c.insignificant_ttls_set},
+    occ_distr
   }
 ]]
 
@@ -360,6 +405,7 @@ local function expire_step(cls, ev_base, worker)
       local step = args[2]
       local data = args[3]
       local c_data = args[4]
+      local occ_distr = args[5]
 
       local function log_stat(cycle)
         local infrequent_action = (cls.expiry < 0) and 'made persistent' or 'ttls set'
@@ -393,6 +439,11 @@ local function expire_step(cls, ev_base, worker)
                     '%s insignificant (%s %s), %s common (%s discriminated), ' ..
                     '%s infrequent (%s %s), %s mean, %s std',
                 lutil.unpack(d))
+        if cycle then
+          for i,cl in ipairs({'in ham', 'in spam', 'total'}) do
+            logger.infox(rspamd_config, 'tokens occurrences, %s: {%s}', cl, occ_distr[i])
+          end
+        end
       end
       log_stat(false)
       if cur == 0 then
