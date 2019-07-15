@@ -27,6 +27,7 @@ local lua_util = require "lua_util"
 local fun = require "fun"
 local lua_settings = require "lua_settings"
 local meta_functions = require "lua_meta"
+local ts = require("tableshape").types
 local N = "neural"
 
 -- Module vars
@@ -48,6 +49,14 @@ local default_options = {
   ann_expire = 60 * 60 * 24 * 2, -- 2 days
   symbol_spam = 'NEURAL_SPAM',
   symbol_ham = 'NEURAL_HAM',
+}
+
+local redis_profile_schema = ts.shape{
+  digest = ts.string,
+  symbols = ts.array_of(ts.string),
+  version = ts.number,
+  redis_key = ts.string,
+  distance = ts.number:is_optional(),
 }
 
 -- Rule structure:
@@ -797,7 +806,7 @@ local function load_new_ann(rule, ev_base, set, profile, min_diff)
 
             local ucl = require "ucl"
             local profile_serialized = ucl.to_format(profile, 'json-compact', true)
-            profile.ann = ann -- To avoid serialization
+            set.ann.ann = ann -- To avoid serialization
 
             local function rank_cb(_, _)
               -- TODO: maybe add some logging
@@ -993,7 +1002,14 @@ local function load_ann_profile(element)
         ucl_err)
     return nil
   else
-    return parser:get_object()
+    local profile = parser:get_object()
+    local checked,schema_err = redis_profile_schema:transform(profile)
+    if not checked then
+      rspamd_logger.errx(rspamd_config, "cannot parse profile schema: %s", schema_err)
+
+      return nil
+    end
+    return checked
   end
 end
 
