@@ -19,7 +19,7 @@ CHECK HIT AND MISS
 
 WRITE NEW MAP
   Sleep  1s  Wait for new time
-  Create File  ${MAP_FILE}  ${MAP2}
+  Copy File  ${MAP_FILE}  ${MAP2}
 
 CHECK HIT AND MISS AFTER RELOAD
   Sleep  1s  Wait for map reload
