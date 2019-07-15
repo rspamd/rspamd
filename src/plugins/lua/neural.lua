@@ -235,9 +235,9 @@ local function result_to_vector(task, profile)
 end
 
 -- Used to generate new ANN key for specific profile
-local function new_ann_key(rule, set)
-  local ann_key = string.format('%s_%s_%s_%s_nn', settings.prefix,
-      rule.prefix, set.name, set.digest:sub(1, 8))
+local function new_ann_key(rule, set, version)
+  local ann_key = string.format('%s_%s_%s_%s_%s', settings.prefix,
+      rule.prefix, set.name, set.digest:sub(1, 8), tostring(version))
 
   return ann_key
 end
@@ -268,7 +268,7 @@ end
 
 -- Creates and stores ANN profile in Redis
 local function new_ann_profile(task, rule, set, version)
-  local ann_key = new_ann_key(rule, set)
+  local ann_key = new_ann_key(rule, set, version)
 
   local profile = {
     symbols = set.symbols,
@@ -619,15 +619,17 @@ local function spawn_train(worker, ev_base, rule, set, ann_key, ham_vec, spam_ve
         end
         -- Deserialise ANN from the child process
         ann_trained = rspamd_kann.load(data)
-        set.ann.version = (set.ann.version or 0) + 1
+        local version = (set.ann.version or 0) + 1
+        set.ann.version = version
         set.ann.ann = ann_trained
+        set.ann.symbols = set.symbols
+        set.ann.redis_key = new_ann_key(rule, set, version)
 
         local profile = {
           symbols = set.symbols,
-          distance = 0,
           digest = set.digest,
-          redis_key = ann_key,
-          version = set.ann.version
+          redis_key = set.ann.redis_key,
+          version = version
         }
 
         local ucl = require "ucl"
@@ -636,7 +638,7 @@ local function spawn_train(worker, ev_base, rule, set, ann_key, ham_vec, spam_ve
         lua_redis.exec_redis_script(redis_save_unlock_id,
             {ev_base = ev_base, is_write = true},
             redis_save_cb,
-            {ann_key,
+            {profile.redis_key,
              redis_ann_prefix(rule, set.name),
              ann_data,
              profile_serialized,
