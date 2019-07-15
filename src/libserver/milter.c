@@ -1161,7 +1161,7 @@ rspamd_milter_send_action (struct rspamd_milter_session *session,
 	rspamd_fstring_t *reply = NULL;
 	gsize len;
 	GString *name, *value;
-	const char *reason;
+	const char *reason, *body_str;
 	struct rspamd_milter_outbuf *obuf;
 	struct rspamd_milter_private *priv = session->priv;
 
@@ -1219,6 +1219,14 @@ rspamd_milter_send_action (struct rspamd_milter_session *session,
 		memcpy (pos, name->str, name->len + 1);
 		pos += name->len + 1;
 		memcpy (pos, value->str, value->len + 1);
+		break;
+	case RSPAMD_MILTER_REPLBODY:
+		len = va_arg (ap, gsize);
+		body_str = va_arg (ap, const char *);
+		msg_debug_milter ("want to change body; size = %uz",
+				len);
+		SET_COMMAND (cmd, len, reply, pos);
+		memcpy (pos, body_str, len + 1);
 		break;
 	case RSPAMD_MILTER_REPLYCODE:
 	case RSPAMD_MILTER_ADDRCPT:
