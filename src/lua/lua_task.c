@@ -4449,7 +4449,7 @@ lua_task_process_ann_tokens (lua_State *L)
 					!(rspamd_symcache_item_flags (sres->sym->cache_item) &
 					  SYMBOL_TYPE_NOSTAT)) {
 
-					lua_pushnumber (L, tanh (sres->score));
+					lua_pushnumber (L, fabs (tanh (sres->score)));
 					lua_rawseti (L, 3, offset + 1);
 				}
 			}
