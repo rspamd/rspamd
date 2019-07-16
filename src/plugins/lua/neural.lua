@@ -433,7 +433,7 @@ local function ann_push_task_result(rule, task, verdict, score, set)
                 rule.prefix, set.name, _err)
           else
             lua_util.debugm(N, task,
-                "add train data for ANN rule" ..
+                "add train data for ANN rule " ..
                 "%s:%s, save %s vector of %s elts in %s key; %s bytes compressed",
                 rule.prefix, set.name, learn_type, #vec, target_key, #str)
           end
