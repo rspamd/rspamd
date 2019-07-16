@@ -4819,7 +4819,7 @@ lua_task_get_flags (lua_State *L)
 
 		flags = task->flags;
 
-		for (i = 0; i < RSPAMD_TASK_FLAG_MAX_SHIFT; i ++) {
+		for (i = 0; i <= RSPAMD_TASK_FLAG_MAX_SHIFT; i ++) {
 			bit = (1U << i);
 
 			if (flags & bit) {

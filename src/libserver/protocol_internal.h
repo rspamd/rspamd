@@ -84,6 +84,7 @@ extern "C" {
 #define MTA_NAME_HEADER "MTA-Name"
 #define MILTER_HEADER "Milter"
 #define FILENAME_HEADER "Filename"
+#define FLAGS_HEADER "Flags"
 #define CERT_ISSUER_HEADER "TLS-Cert-Issuer"
 #define MAILER_HEADER "Mailer"
 #define RAW_DATA_HEADER "Raw"

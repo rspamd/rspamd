@@ -338,6 +338,93 @@ rspamd_protocol_process_recipients (struct rspamd_task *task,
 	}
 }
 
+#define COMPARE_FLAG_LIT(lit) (len == sizeof(lit) - 1 && memcmp ((lit), str, len) == 0)
+#define CHECK_PROTOCOL_FLAG(lit, fl) do { \
+	if (!known && COMPARE_FLAG_LIT(lit)) { \
+		task->protocol_flags |= (fl); \
+		known = TRUE; \
+		msg_debug_protocol ("add protocol flag %s", lit); \
+	} \
+} while (0)
+#define CHECK_TASK_FLAG(lit, fl) do { \
+	if (!known && COMPARE_FLAG_LIT(lit)) { \
+		task->flags |= (fl); \
+		known = TRUE; \
+		msg_debug_protocol ("add task flag %s", lit); \
+	} \
+} while (0)
+
+static void
+rspamd_protocol_handle_flag (struct rspamd_task *task, const gchar *str,
+		gsize len)
+{
+	gboolean known = FALSE;
+
+	CHECK_TASK_FLAG("pass_all", RSPAMD_TASK_FLAG_PASS_ALL);
+	CHECK_TASK_FLAG("no_log", RSPAMD_TASK_FLAG_NO_LOG);
+	CHECK_TASK_FLAG("skip", RSPAMD_TASK_FLAG_NO_LOG);
+	CHECK_TASK_FLAG("no_stat", RSPAMD_TASK_FLAG_NO_STAT);
+	CHECK_TASK_FLAG("ssl", RSPAMD_TASK_FLAG_SSL);
+
+	CHECK_PROTOCOL_FLAG("milter", RSPAMD_TASK_PROTOCOL_FLAG_MILTER);
+	CHECK_PROTOCOL_FLAG("zstd", RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED);
+	CHECK_PROTOCOL_FLAG("ext_urls", RSPAMD_TASK_PROTOCOL_FLAG_EXT_URLS);
+	CHECK_PROTOCOL_FLAG("body_block", RSPAMD_TASK_PROTOCOL_FLAG_BODY_BLOCK);
+
+	if (!known) {
+		msg_warn_protocol ("unknown flag: %*s", (gint)len, str);
+	}
+}
+
+#undef COMPARE_FLAG
+#undef CHECK_PROTOCOL_FLAG
+
+static void
+rspamd_protocol_process_flags (struct rspamd_task *task, const rspamd_ftok_t *hdr)
+{
+	enum {
+		skip_spaces,
+		read_flag,
+	} state = skip_spaces;
+	const gchar *p, *end, *start;
+
+	p = hdr->begin;
+	end = hdr->begin + hdr->len;
+	start = NULL;
+
+	while (p < end) {
+		switch (state) {
+		case skip_spaces:
+			if (g_ascii_isspace (*p)) {
+				p ++;
+			}
+			else {
+				state = read_flag;
+				start = p;
+			}
+			break;
+		case read_flag:
+			if (*p == ',') {
+				if (p > start) {
+					rspamd_protocol_handle_flag (task, start, p - start);
+				}
+				start = NULL;
+				state = skip_spaces;
+				p ++;
+			}
+			else {
+				p ++;
+			}
+			break;
+		}
+	}
+
+	/* Check remainder */
+	if (start && end > start && state == read_flag) {
+		rspamd_protocol_handle_flag (task, start, end - start);
+	}
+}
+
 #define IF_HEADER(name) \
 	srch.begin = (name); \
 	srch.len = sizeof (name) - 1; \
@@ -406,6 +493,10 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					task->msg.fpath = rspamd_mempool_ftokdup (task->task_pool,
 							hv_tok);
 					msg_debug_protocol ("read filename header, value: %s", task->msg.fpath);
+				}
+				IF_HEADER (FLAGS_HEADER) {
+					msg_debug_protocol ("read flags header, value: %T", hv_tok);
+					rspamd_protocol_process_flags (task, hv_tok);
 				}
 				break;
 			case 'q':
