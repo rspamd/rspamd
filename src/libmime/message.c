@@ -1127,9 +1127,6 @@ rspamd_message_dtor (struct rspamd_message *msg)
 	g_ptr_array_unref (msg->text_parts);
 	g_ptr_array_unref (msg->parts);
 
-	g_ptr_array_unref (msg->from_mime);
-	g_ptr_array_unref (msg->rcpt_mime);
-
 	g_hash_table_unref (msg->urls);
 	g_hash_table_unref (msg->emails);
 }
