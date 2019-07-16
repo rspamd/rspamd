@@ -79,6 +79,10 @@ static gint retcode = EXIT_SUCCESS;
     g_queue_push_tail ((o), nh); \
 } while (0)
 
+#define ADD_CLIENT_FLAG(str, n) do { \
+   g_string_append ((str), (n)); \
+} while (0)
+
 static gboolean rspamc_password_callback (const gchar *option_name,
 		const gchar *value,
 		gpointer data,
@@ -553,6 +557,7 @@ add_options (GQueue *opts)
 {
 	GString *numbuf;
 	gchar **hdr, **rcpt;
+	GString *flagbuf = g_string_new (NULL);
 
 	if (ip != NULL) {
 		rspamd_inet_addr_t *addr = NULL;
@@ -634,7 +639,7 @@ add_options (GQueue *opts)
 	}
 
 	if (pass_all) {
-		ADD_CLIENT_HEADER (opts, "Pass", "all");
+		ADD_CLIENT_FLAG (flagbuf, "pass_all");
 	}
 
 	if (classifier) {
@@ -664,7 +669,7 @@ add_options (GQueue *opts)
 	}
 
 	if (profile) {
-		ADD_CLIENT_HEADER (opts, "Profile", "true");
+		ADD_CLIENT_FLAG (flagbuf, "profile");
 	}
 
 	if (skip_images) {
@@ -693,6 +698,19 @@ add_options (GQueue *opts)
 
 		hdr ++;
 	}
+
+	if (flagbuf->len > 0) {
+		goffset last = flagbuf->len - 1;
+
+		if (flagbuf->str[last] == ',') {
+			flagbuf->str[last] = '\0';
+			flagbuf->len --;
+		}
+
+		ADD_CLIENT_HEADER (opts, "Flags", flagbuf->str);
+	}
+
+	g_string_free (flagbuf, TRUE);
 }
 
 static void
