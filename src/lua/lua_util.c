@@ -1037,8 +1037,7 @@ lua_util_decode_base64 (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t;
 	const gchar *s = NULL;
-	gsize inlen, outlen;
-	gboolean zero_copy = FALSE, grab_own = FALSE;
+	gsize inlen = 0, outlen;
 	gint state = 0;
 	guint save = 0;
 
@@ -1055,31 +1054,15 @@ lua_util_decode_base64 (lua_State *L)
 	}
 
 	if (s != NULL) {
-		if (zero_copy) {
-			/* Decode in place */
-			outlen = g_base64_decode_step (s, inlen, (guchar *)s, &state, &save);
-			t = lua_newuserdata (L, sizeof (*t));
-			rspamd_lua_setclass (L, "rspamd{text}", -1);
-			t->start = s;
-			t->len = outlen;
+		t = lua_newuserdata (L, sizeof (*t));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		t->len = (inlen / 4) * 3 + 3;
+		t->start = g_malloc (t->len);
 
-			if (grab_own) {
-				t->flags |= RSPAMD_TEXT_FLAG_OWN;
-			}
-			else {
-				t->flags = 0;
-			}
-		}
-		else {
-			t = lua_newuserdata (L, sizeof (*t));
-			rspamd_lua_setclass (L, "rspamd{text}", -1);
-			t->len = (inlen / 4) * 3 + 3;
-			t->start = g_malloc (t->len);
-			outlen = g_base64_decode_step (s, inlen, (guchar *)t->start,
-					&state, &save);
-			t->len = outlen;
-			t->flags = RSPAMD_TEXT_FLAG_OWN;
-		}
+		rspamd_cryptobox_base64_decode (s, inlen, (guchar *)t->start,
+				&outlen);
+		t->len = outlen;
+		t->flags = RSPAMD_TEXT_FLAG_OWN;
 	}
 	else {
 		lua_pushnil (L);
