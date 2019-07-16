@@ -1122,6 +1122,8 @@ rspamd_message_dtor (struct rspamd_message *msg)
 		}
 	}
 
+	rspamd_message_headers_destroy (msg->raw_headers);
+
 	g_ptr_array_unref (msg->text_parts);
 	g_ptr_array_unref (msg->parts);
 
@@ -1146,9 +1148,6 @@ rspamd_message_new (struct rspamd_task *task)
 
 	msg->parts = g_ptr_array_sized_new (4);
 	msg->text_parts = g_ptr_array_sized_new (2);
-
-	msg->from_mime = g_ptr_array_sized_new (1);
-	msg->rcpt_mime = g_ptr_array_sized_new (1);
 
 	REF_INIT_RETAIN (msg, rspamd_message_dtor);
 
