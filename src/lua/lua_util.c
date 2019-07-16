@@ -1038,8 +1038,6 @@ lua_util_decode_base64 (lua_State *L)
 	struct rspamd_lua_text *t;
 	const gchar *s = NULL;
 	gsize inlen = 0, outlen;
-	gint state = 0;
-	guint save = 0;
 
 	if (lua_type (L, 1) == LUA_TSTRING) {
 		s = luaL_checklstring (L, 1, &inlen);

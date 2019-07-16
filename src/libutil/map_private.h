@@ -95,7 +95,6 @@ struct http_map_data {
 	gchar *path;
 	gchar *host;
 	gchar *rest;
-	gchar *last_signature;
 	rspamd_fstring_t *etag;
 	time_t last_modified;
 	time_t last_checked;
@@ -163,12 +162,10 @@ struct rspamd_map {
 };
 
 enum rspamd_map_http_stage {
-	map_resolve_host2 = 0, /* 2 requests sent */
-	map_resolve_host1, /* 1 requests sent */
-	map_load_file,
-	map_load_pubkey,
-	map_load_signature,
-	map_finished
+	http_map_resolve_host2 = 0, /* 2 requests sent */
+	http_map_resolve_host1, /* 1 requests sent */
+	http_map_http_conn, /* http connection */
+	http_map_terminated /* terminated when doing resolving */
 };
 
 struct map_periodic_cbdata {
@@ -195,6 +192,7 @@ struct rspamd_http_file_data {
 struct http_callback_data {
 	struct ev_loop *event_loop;
 	struct rspamd_http_connection *conn;
+	GPtrArray *addrs;
 	rspamd_inet_addr_t *addr;
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
@@ -202,11 +200,7 @@ struct http_callback_data {
 	struct map_periodic_cbdata *periodic;
 	struct rspamd_cryptobox_pubkey *pk;
 	struct rspamd_storage_shmem *shmem_data;
-	struct rspamd_storage_shmem *shmem_sig;
-	struct rspamd_storage_shmem *shmem_pubkey;
 	gsize data_len;
-	gsize sig_len;
-	gsize pubkey_len;
 	gboolean check;
 	enum rspamd_map_http_stage stage;
 	ev_tstamp timeout;

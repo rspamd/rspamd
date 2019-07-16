@@ -997,7 +997,7 @@ lua_map_is_signed (lua_State *L)
 		if (map->map) {
 			for (i = 0; i < map->map->backends->len; i ++) {
 				bk = g_ptr_array_index (map->map->backends, i);
-				if (bk->is_signed) {
+				if (bk->is_signed && bk->protocol == MAP_PROTO_FILE) {
 					ret = TRUE;
 					break;
 				}
