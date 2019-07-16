@@ -145,7 +145,7 @@ foreach my $u ( @{ $config{'bgp_sources'} } ) {
           F_ORIGIN => 7,
         };
 
-        open(my $bgpd, "bgpdump -v -M $fname |") or die "can't start bgpdump: $!";
+        open(my $bgpd, '-|', "bgpdump -v -M $fname") or die "can't start bgpdump: $!";
 
         while (<$bgpd>) {
             chomp;
