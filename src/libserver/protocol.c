@@ -204,11 +204,14 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 		g_hash_table_iter_init (&it, query_args);
 
 		while (g_hash_table_iter_next (&it, &k, &v)) {
+			gchar *key_cpy;
 			key = k;
 			value = v;
-			/* Steal strings */
-			g_hash_table_iter_steal (&it);
-			rspamd_task_add_request_header (task, key, value);
+
+			key_cpy = rspamd_mempool_ftokdup (task->task_pool, key);
+
+			rspamd_http_message_add_header_len (msg, key_cpy,
+					value->begin, value->len);
 			msg_debug_protocol ("added header \"%T\" -> \"%T\" from HTTP query",
 					key, value);
 		}
