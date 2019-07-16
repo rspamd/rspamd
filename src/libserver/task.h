@@ -188,7 +188,6 @@ struct rspamd_task {
 	rspamd_mempool_t *task_pool;                    /**< memory pool for task							*/
 	double time_virtual;
 	double time_real_finish;
-	double time_virtual_finish;
 	ev_tstamp task_timestamp;
 
 	gboolean (*fin_callback) (struct rspamd_task *task, void *arg);

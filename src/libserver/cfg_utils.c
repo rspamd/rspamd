@@ -193,8 +193,8 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	/* Default log line */
 	cfg->log_format_str = "id: <$mid>,$if_qid{ qid: <$>,}$if_ip{ ip: $,}"
 			"$if_user{ user: $,}$if_smtp_from{ from: <$>,} (default: $is_spam "
-			"($action): [$scores] [$symbols_scores_params]), len: $len, time: $time_real real,"
-			" $time_virtual virtual, dns req: $dns_req, digest: <$digest>"
+			"($action): [$scores] [$symbols_scores_params]), len: $len, time: $time_real, "
+			"dns req: $dns_req, digest: <$digest>"
 			"$if_smtp_rcpts{ rcpts: <$>, }$if_mime_rcpt{ mime_rcpt: <$>, }";
 	/* Allow non-mime input by default */
 	cfg->allow_raw_input = TRUE;

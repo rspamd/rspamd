@@ -100,7 +100,6 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 	}
 
 	new_task->time_real_finish = NAN;
-	new_task->time_virtual_finish = NAN;
 
 	if (pool == NULL) {
 		new_task->task_pool =
@@ -1372,8 +1371,8 @@ rspamd_task_log_variable (struct rspamd_task *task,
 		var.len = strlen (var.begin);
 		break;
 	case RSPAMD_LOG_TIME_VIRTUAL:
-		var.begin = rspamd_log_check_time (task->time_virtual,
-				task->time_virtual_finish,
+		var.begin = rspamd_log_check_time (task->task_timestamp,
+				task->time_real_finish,
 				task->cfg->clock_res);
 		var.len = strlen (var.begin);
 		break;
@@ -1693,7 +1692,6 @@ rspamd_task_set_finish_time (struct rspamd_task *task)
 {
 	if (isnan (task->time_real_finish)) {
 		task->time_real_finish = ev_time ();
-		task->time_virtual_finish = ev_now (task->event_loop);
 
 		return TRUE;
 	}

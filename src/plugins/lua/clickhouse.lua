@@ -132,7 +132,7 @@ CREATE TABLE rspamd
     `Symbols.Scores` Array(Float32) COMMENT 'Symbol score',
     `Symbols.Options` Array(String) COMMENT 'Symbol options (comma separated list)',
     ScanTimeReal UInt32 COMMENT 'Request time in milliseconds',
-    ScanTimeVirtual UInt32,
+    ScanTimeVirtual UInt32 COMMENT 'Deprecated do not use',
     AuthUser String COMMENT 'Username for authenticated SMTP client',
     SettingsId LowCardinality(String) COMMENT 'ID for the settings profile',
     Digest FixedString(32) COMMENT '[Deprecated]',
@@ -269,7 +269,6 @@ local function clickhouse_main_row(res)
     'MimeRecipients',
     'MessageId',
     'ScanTimeReal',
-    'ScanTimeVirtual',
     -- 1.9.3 +
     'CustomAction',
     -- 2.0 +
@@ -622,12 +621,12 @@ local function clickhouse_collect(task)
     subject = lua_util.maybe_obfuscate_string(task:get_subject() or '', settings, 'subject')
   end
 
-  local scan_real,scan_virtual = task:get_scan_time()
-  scan_real,scan_virtual = math.floor(scan_real * 1000), math.floor(scan_virtual * 1000)
+  local scan_real = task:get_scan_time()
+  scan_real = math.floor(scan_real * 1000)
   if scan_real < 0 then
     rspamd_logger.messagex(task,
-        'clock skew detected for message: %s ms real scan time (reset to 0), %s virtual scan time',
-        scan_real, scan_virtual)
+        'clock skew detected for message: %s ms real scan time (reset to 0)',
+        scan_real)
     scan_real = 0
   end
 
@@ -677,7 +676,6 @@ local function clickhouse_collect(task)
     mime_recipients,
     message_id,
     scan_real,
-    scan_virtual,
     custom_action,
     auth_user,
     settings_id

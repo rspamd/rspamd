@@ -4656,8 +4656,9 @@ lua_task_get_scan_time (lua_State *L)
 		}
 
 		rspamd_task_set_finish_time (task);
-		lua_pushnumber (L, task->time_real_finish - task->task_timestamp);
-		lua_pushnumber (L, task->time_virtual_finish - task->time_virtual);
+		gdouble diff = task->time_real_finish - task->task_timestamp;
+		lua_pushnumber (L, diff);
+		lua_pushnumber (L, diff);
 
 		if (!set) {
 			/* Reset to nan to allow further calcs in rspamd_task_set_finish_time */
