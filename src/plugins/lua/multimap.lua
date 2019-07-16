@@ -382,18 +382,54 @@ local multimap_filters = {
 
 local multimap_grammar
 
+local function multimap_query_redis(key, task, value, callback)
+  local cmd = 'HGET'
+  if type(value) == 'userdata' and value.class == 'rspamd{ip}' then
+    cmd = 'HMGET'
+  end
+
+  local srch = {cmd, key}
+
+  -- Insert all ips for some mask :(
+  if type(value) == 'userdata' and value.class == 'rspamd{ip}' then
+    srch[#srch + 1] = tostring(value)
+    -- IPv6 case
+    local maxbits = 128
+    local minbits = 64
+    if value:get_version() == 4 then
+      maxbits = 32
+      minbits = 8
+    end
+    for i=maxbits,minbits,-1 do
+      local nip = value:apply_mask(i):tostring() .. "/" .. i
+      srch[#srch + 1] = nip
+    end
+  else
+    srch[#srch + 1] = value
+  end
+
+  local function redis_map_cb(err, data)
+    if not err and type(data) ~= 'userdata' then
+      callback(data)
+    end
+  end
+
+  return rspamd_redis_make_request(task,
+      redis_params, -- connect params
+      key, -- hash key
+      false, -- is write
+      redis_map_cb, --callback
+      cmd, -- command
+      srch -- arguments
+  )
+end
+
 local function multimap_callback(task, rule)
   local pre_filter = rule['prefilter']
 
   local function match_element(r, value, callback)
-   if not value then
+    if not value then
       return false
-    end
-
-    local function redis_map_cb(err, data)
-      if not err and type(data) ~= 'userdata' then
-        callback(data)
-      end
     end
 
     local ret = false
@@ -417,34 +453,28 @@ local function multimap_callback(task, rule)
           srch = value:tostring()
         end
       end
-      ret = r['cdb']:lookup(srch)
-    elseif r['redis_key'] then
-      local srch = {value}
-      local cmd = 'HGET'
-      if type(value) == 'userdata' and value.class == 'rspamd{ip}' then
-        srch = {value:tostring()}
-        cmd = 'HMGET'
-        local maxbits = 128
-        local minbits = 32
-        if value:get_version() == 4 then
-          maxbits = 32
-          minbits = 8
-        end
-        for i=maxbits,minbits,-1 do
-          local nip = value:apply_mask(i):tostring() .. "/" .. i
-          table.insert(srch, nip)
+      ret = r.cdb:lookup(srch)
+    elseif r.redis_key then
+      -- Deal with hash name here: it can be either plain string or a selector
+      if type(r.redis_key) == 'string' then
+        ret = multimap_query_redis(r.redis_key, task, value, callback)
+      else
+        -- Here we have a selector
+        local results = r.redis_key(task)
+
+        -- Here we need to spill this function into multiple queries
+        if type(results) == 'table' then
+          for _,res in ipairs(results) do
+            ret = multimap_query_redis(res, task, value, callback)
+
+            if not ret then
+              break
+            end
+          end
+        else
+          ret = multimap_query_redis(results, task, value, callback)
         end
       end
-
-      table.insert(srch, 1, r['redis_key'])
-      ret = rspamd_redis_make_request(task,
-          redis_params, -- connect params
-          r['redis_key'], -- hash key
-          false, -- is write
-          redis_map_cb, --callback
-          cmd, -- command
-          srch -- arguments
-      )
 
       return ret
     elseif r.radix then
@@ -479,23 +509,23 @@ local function multimap_callback(task, rule)
       local lpeg = require "lpeg"
 
       if not multimap_grammar then
-      local number = {}
+        local number = {}
 
         local digit = lpeg.R("09")
         number.integer =
         (lpeg.S("+-") ^ -1) *
-                (digit   ^  1)
+            (digit   ^  1)
 
         -- Matches: .6, .899, .9999873
         number.fractional =
         (lpeg.P(".")   ) *
-                (digit ^ 1)
+            (digit ^ 1)
 
         -- Matches: 55.97, -90.8, .9
         number.decimal =
         (number.integer *              -- Integer
-                (number.fractional ^ -1)) +    -- Fractional
-                (lpeg.S("+-") * number.fractional)  -- Completely fractional number
+            (number.fractional ^ -1)) +    -- Fractional
+            (lpeg.S("+-") * number.fractional)  -- Completely fractional number
 
         local sym_start = lpeg.R("az", "AZ") + lpeg.S("_")
         local sym_elt = sym_start + lpeg.R("09")
@@ -523,7 +553,7 @@ local function multimap_callback(task, rule)
       else
         if p_ret ~= '' then
           rspamd_logger.infox(task, '%s: cannot parse string "%s"',
-            parse_rule.symbol, p_ret)
+              parse_rule.symbol, p_ret)
         end
 
         return true,nil,1.0
@@ -634,7 +664,7 @@ local function multimap_callback(task, rule)
   end
 
   local function match_hostname(r, hostname)
-     match_rule(r, hostname)
+    match_rule(r, hostname)
   end
 
   local function match_filename(r, fn)
@@ -983,7 +1013,7 @@ local function add_multimap_rule(key, newrule)
   end
   if not newrule['description'] then
     newrule['description'] = string.format('multimap, type %s: %s', newrule['type'],
-      newrule['symbol'])
+        newrule['symbol'])
   end
   if newrule['type'] == 'mempool' and not newrule['variable'] then
     rspamd_logger.errx(rspamd_config, 'mempool map requires variable')
@@ -1010,7 +1040,8 @@ local function add_multimap_rule(key, newrule)
   if type(newrule['map']) == 'string' and string.find(newrule['map'], '^cdb://.*$') then
     newrule['cdb'] = newrule['map']
     ret = true
-  elseif type(newrule['map']) == 'string' and string.find(newrule['map'], '^redis://.*$') then
+  elseif type(newrule['map']) == 'string' and
+      string.find(newrule['map'], '^redis://.*$') then
     if not redis_params then
       rspamd_logger.infox(rspamd_config, 'no redis servers are specified, ' ..
           'cannot add redis map %s: %s', newrule['symbol'], newrule['map'])
@@ -1022,6 +1053,26 @@ local function add_multimap_rule(key, newrule)
     if newrule['redis_key'] then
       ret = true
     end
+  elseif type(newrule['map']) == 'string' and
+      string.find(newrule['map'], '^redis+selector://.*$') then
+    if not redis_params then
+      rspamd_logger.infox(rspamd_config, 'no redis servers are specified, ' ..
+          'cannot add redis map %s: %s', newrule['symbol'], newrule['map'])
+      return nil
+    end
+
+    local selector_str = string.match(newrule['map'], '^redis+selector://(.*)$')
+    local selector = lua_selectors.create_selector_closure(
+        rspamd_config, selector_str, newrule['delimiter'] or "")
+
+    if not selector then
+      rspamd_logger.errx(rspamd_config, 'redis selector map has invalid selector: "%s", symbol: %s',
+          selector_str, newrule['symbol'])
+      return nil
+    end
+
+    newrule['redis_key'] = selector
+    ret = true
   elseif newrule.type == 'combined' then
     local lua_maps_expressions = require "lua_maps_expressions"
     newrule.combined = lua_maps_expressions.create(rspamd_config,
@@ -1188,8 +1239,7 @@ if opts and type(opts) == 'table' then
 
       rspamd_config:set_metric_symbol(rule)
     end
-  end,
-  fun.filter(function(r) return not r['prefilter'] end, rules))
+  end, fun.filter(function(r) return not r['prefilter'] end, rules))
 
   fun.each(function(r)
     rspamd_config:register_symbol({
@@ -1197,8 +1247,7 @@ if opts and type(opts) == 'table' then
       name = r['symbol'],
       callback = gen_multimap_callback(r),
     })
-  end,
-  fun.filter(function(r) return r['prefilter'] end, rules))
+  end, fun.filter(function(r) return r['prefilter'] end, rules))
 
   if #rules == 0 then
     lua_util.disable_module(N, "config")
