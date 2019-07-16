@@ -39,6 +39,7 @@ my $v6_zone         = "asn6.rspamd.com";
 my $v4_file         = "asn.zone";
 my $v6_file         = "asn6.zone";
 my $ns_servers      = [ "asn-ns.rspamd.com", "asn-ns2.rspamd.com" ];
+my $use_bgpdump     = 0;
 
 GetOptions(
     "download-asn" => \$download_asn,
@@ -53,7 +54,8 @@ GetOptions(
     "file-v6=s"    => \$v6_file,
     "ns-server=s@" => \$ns_servers,
     "help|?"       => \$help,
-    "man"          => \$man
+    "man"          => \$man,
+    "bgpdump"      => \$use_bgpdump
 ) or pod2usage(2);
 
 pod2usage(1) if $help;
@@ -103,41 +105,135 @@ if ($v6) {
     }
 }
 
+sub is_bougus_asn {
+    my $as = shift;
+    # 64496-64511 Reserved for use in documentation and sample code
+    # 64512-65534 Designated for private use
+    # 65535       Reserved
+    # 65536-65551 Reserved for use in documentation and sample code
+    # 65552-131071 Reserved
+    return 1 if $as >= 64496 && $as <= 131071;
+    # 4294967295
+    return 1 if $as == 4294967295;
+    # AS0 is reserved
+    # AS1 is legal AS, but in most cases used by others without permission
+    # of owner (probably lame admins use AS1 as private AS).
+    return 1 if $as <= 1;
+
+    return 0;
+}
+
 # Now load BGP data
 my $networks = {};
 
 foreach my $u ( @{ $config{'bgp_sources'} } ) {
     my $parsed = URI->new($u);
     my $fname  = $download_target . '/' . basename( $parsed->path );
-    open( my $fh, "<:gzip", $fname )
-      or die "Cannot open $fname: $!";
 
-    while ( my $dd = eval { Net::MRT::mrt_read_next($fh) } ) {
-        if ( $dd->{'prefix'} && $dd->{'bits'} ) {
-            next if $dd->{'subtype'} == 2 and !$v4;
-            next if $dd->{'subtype'} == 4 and !$v6;
-            my $entry = $dd->{'entries'}->[0];
-            my $net   = $dd->{'prefix'} . '/' . $dd->{'bits'};
-            if ( $entry && $entry->{'AS_PATH'} ) {
-                my $as = $entry->{'AS_PATH'}->[-1];
-                if ( ref($as) eq "ARRAY" ) {
-                    $as = @{$as}[0];
+    if ($use_bgpdump) {
+        use constant {
+          F_MARKER => 0,
+          F_TIMESTAMP => 1,
+          F_PEER_IP => 3,
+          F_PEER_AS => 4,
+          F_PREFIX => 5,
+          F_AS_PATH => 6,
+          F_ORIGIN => 7,
+        };
+
+        open(my $bgpd, "bgpdump -M $fname |") or die "can't start bgpdump: $!";
+
+        while (<$bgpd>) {
+            chomp;
+            my @e = split /\|/;
+            if ($e[F_MARKER] ne 'TABLE_DUMP2') {
+                warn "bad line: $_\n";
+                next;
+            }
+
+            my $origin_as;
+            my $prefix = $e[F_PREFIX];
+            my $ipv6 = 0;
+
+            if ($prefix !~ /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/) {
+                $ipv6 = 1;
+            }
+
+            if ($e[F_AS_PATH]) {
+                # not empty AS_PATH
+                my @as_path = split /\s/, $e[F_AS_PATH];
+                $origin_as = pop @as_path;
+
+                if (substr($origin_as, 0, 1) eq '{') {
+                    # route is aggregated
+                    if ($origin_as =~ /^{(\d+)}$/) {
+                        # single AS aggregated, just remove { } around
+                        $origin_as = $1;
+                    } else {
+                        # use previous AS from AS_PATH
+                        $origin_as = pop @as_path;
+                    }
                 }
+                # strip bogus AS
+                while (is_bougus_asn($origin_as)) {
+                    $origin_as = pop @as_path;
+                    last if scalar @as_path == 0;
+                }
+            }
+            # empty AS_PATH or all AS_PATH elements is stripped as bogus - use PEER_AS is origin AS
+            $origin_as //= $e[F_PEER_AS];
 
-                if ( !$networks->{$as} ) {
-                    if ( $dd->{'subtype'} == 2 ) {
-                        $networks->{$as} = { nets_v4 => [$net], nets_v6 => [] };
-                    }
-                    else {
-                        $networks->{$as} = { nets_v6 => [$net], nets_v4 => [] };
-                    }
+            if (!$networks->{$origin_as}) {
+                if (!$ipv6) {
+                    $networks->{$origin_as} = { nets_v4 => [ $prefix ], nets_v6 => [] };
                 }
                 else {
-                    if ( $dd->{'subtype'} == 2 ) {
-                        push @{ $networks->{$as}->{'nets_v4'} }, $net;
+                    $networks->{$origin_as} = { nets_v6 => [ $prefix ], nets_v4 => [] };
+                }
+            }
+            else {
+                if (!$ipv6) {
+                    push @{$networks->{$origin_as}->{'nets_v4'}}, $prefix;
+                }
+                else {
+                    push @{$networks->{$origin_as}->{'nets_v6'}}, $prefix;
+                }
+            }
+        }
+    }
+    else {
+        open( my $fh, "<:gzip", $fname )
+          or die "Cannot open $fname: $!";
+        while (my $dd = eval {Net::MRT::mrt_read_next($fh)}) {
+            if ($dd->{'prefix'} && $dd->{'bits'}) {
+                next if $dd->{'subtype'} == 2 and !$v4;
+                next if $dd->{'subtype'} == 4 and !$v6;
+                my $entry = $dd->{'entries'}->[0];
+                my $net = $dd->{'prefix'} . '/' . $dd->{'bits'};
+                if ($entry && $entry->{'AS_PATH'}) {
+                    my $as = $entry->{'AS_PATH'}->[-1];
+                    if (ref($as) eq "ARRAY") {
+                        $as = @{$as}[0];
+                    }
+
+                    next if (is_bougus_asn($as));
+
+                    if (!$networks->{$as}) {
+                        if ($dd->{'subtype'} == 2) {
+                            $networks->{$as} = { nets_v4 => [ $net ], nets_v6 => [] };
+                        }
+                        else {
+                            $networks->{$as} = { nets_v6 => [ $net ], nets_v4 => [] };
+                        }
                     }
                     else {
-                        push @{ $networks->{$as}->{'nets_v6'} }, $net;
+
+                        if ($dd->{'subtype'} == 2) {
+                            push @{$networks->{$as}->{'nets_v4'}}, $net;
+                        }
+                        else {
+                            push @{$networks->{$as}->{'nets_v6'}}, $net;
+                        }
                     }
                 }
             }
@@ -221,6 +317,7 @@ asn.pl [options]
    --zone-v6              IPv6 zone (default: asn6.rspamd.com)
    --file-v4              IPv4 zone file (default: ./asn.zone)
    --file-v6              IPv6 zone (default: ./asn6.zone)
+   --bgpdump              Use bgpdump utility instead of NET::MRT
    --help                 Brief help message
    --man                  Full documentation
 
