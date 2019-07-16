@@ -8,12 +8,10 @@ use File::Fetch;
 use LWP::Simple;
 use PerlIO::gzip;
 use File::Basename;
-use Net::MRT;
 use URI;
 use Data::Dumper;
 
 $LWP::Simple::ua->show_progress(1);
-$Net::MRT::USE_RFC4760 = -1;
 
 my %config = (
     asn_sources => [
@@ -55,11 +53,17 @@ GetOptions(
     "ns-server=s@" => \$ns_servers,
     "help|?"       => \$help,
     "man"          => \$man,
-    "bgpdump"      => \$use_bgpdump
 ) or pod2usage(2);
 
 pod2usage(1) if $help;
 pod2usage( -exitval => 0, -verbose => 2 ) if $man;
+
+if ( -x bgpdump ) {
+    use_bgpdump = $1;
+} else {
+    warn "bgpdump is not found will try to use Net::MRT instead, results can be incomplete";
+}
+
 
 sub download_file {
     my ($u) = @_;
@@ -202,6 +206,9 @@ foreach my $u ( @{ $config{'bgp_sources'} } ) {
         }
     }
     else {
+        require Net::MRT;
+        $Net::MRT::USE_RFC4760 = -1;
+
         open( my $fh, "<:gzip", $fname )
           or die "Cannot open $fname: $!";
         while (my $dd = eval {Net::MRT::mrt_read_next($fh)}) {
@@ -317,7 +324,6 @@ asn.pl [options]
    --zone-v6              IPv6 zone (default: asn6.rspamd.com)
    --file-v4              IPv4 zone file (default: ./asn.zone)
    --file-v6              IPv6 zone (default: ./asn6.zone)
-   --bgpdump              Use bgpdump utility instead of NET::MRT
    --help                 Brief help message
    --man                  Full documentation
 
