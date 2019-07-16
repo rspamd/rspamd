@@ -2,14 +2,16 @@
 
 use warnings;
 use strict;
-use Pod::Usage;
-use Getopt::Long;
+
+use File::Basename;
 use File::Fetch;
+use Getopt::Long;
+use IPC::Cmd qw/can_run/;
+use Pod::Usage;
+
 use LWP::Simple;
 use PerlIO::gzip;
-use File::Basename;
 use URI;
-use Data::Dumper;
 
 $LWP::Simple::ua->show_progress(1);
 
@@ -58,12 +60,8 @@ GetOptions(
 pod2usage(1) if $help;
 pod2usage( -exitval => 0, -verbose => 2 ) if $man;
 
-if ( -x bgpdump ) {
-    use_bgpdump = $1;
-} else {
-    warn "bgpdump is not found will try to use Net::MRT instead, results can be incomplete";
-}
-
+my $bgpdump_path = can_run('bgpdump')
+    or warn 'bgpdump is not found, will try to use Net::MRT instead; results can be incomplete';
 
 sub download_file {
     my ($u) = @_;
@@ -134,7 +132,7 @@ foreach my $u ( @{ $config{'bgp_sources'} } ) {
     my $parsed = URI->new($u);
     my $fname  = $download_target . '/' . basename( $parsed->path );
 
-    if ($use_bgpdump) {
+    if ($bgpdump_path) {
         use constant {
           F_MARKER => 0,
           F_TIMESTAMP => 1,
@@ -145,7 +143,7 @@ foreach my $u ( @{ $config{'bgp_sources'} } ) {
           F_ORIGIN => 7,
         };
 
-        open(my $bgpd, '-|', "bgpdump -v -M $fname") or die "can't start bgpdump: $!";
+        open(my $bgpd, '-|', "$bgpdump_path -v -M $fname") or die "can't start bgpdump: $!";
 
         while (<$bgpd>) {
             chomp;
