@@ -3083,7 +3083,23 @@ struct rspamd_lua_periodic {
 	ev_timer ev;
 	gint cbref;
 	gboolean need_jitter;
+	ref_entry_t ref;
 };
+
+static void
+lua_periodic_dtor (struct rspamd_lua_periodic *periodic)
+{
+	luaL_unref (periodic->L, LUA_REGISTRYINDEX, periodic->cbref);
+	ev_timer_stop (periodic->event_loop, &periodic->ev);
+}
+
+static void
+lua_periodic_fin (gpointer p)
+{
+	struct rspamd_lua_periodic *periodic = (struct rspamd_lua_periodic *)p;
+
+	REF_RELEASE (periodic);
+}
 
 static void
 lua_periodic_callback (struct ev_loop *loop, ev_timer *w, int revents)
@@ -3094,6 +3110,7 @@ lua_periodic_callback (struct ev_loop *loop, ev_timer *w, int revents)
 	struct thread_entry *thread;
 	lua_State *L;
 
+	REF_RETAIN (periodic);
 	thread = lua_thread_pool_get_for_config (periodic->cfg);
 	thread->cd = periodic;
 	thread->finish_callback = lua_periodic_callback_finish;
@@ -3124,9 +3141,6 @@ lua_periodic_callback_finish (struct thread_entry *thread, int ret)
 	L = thread->lua_state;
 
 	ev_now_update (periodic->event_loop);
-#ifdef HAVE_EVENT_NO_CACHE_TIME_FUNC
-	event_base_update_cache_time (periodic->ev_base);
-#endif
 
 	if (ret == 0) {
 		if (lua_type (L, -1) == LUA_TBOOLEAN) {
@@ -3149,10 +3163,10 @@ lua_periodic_callback_finish (struct thread_entry *thread, int ret)
 		ev_timer_again (periodic->event_loop, &periodic->ev);
 	}
 	else {
-		luaL_unref (L, LUA_REGISTRYINDEX, periodic->cbref);
 		ev_timer_stop (periodic->event_loop, &periodic->ev);
-		g_free (periodic);
 	}
+
+	REF_RELEASE (periodic);
 }
 
 static void
@@ -3208,7 +3222,7 @@ lua_config_add_periodic (lua_State *L)
 		}
 	}
 
-	periodic = g_malloc0 (sizeof (*periodic));
+	periodic = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (*periodic));
 	periodic->timeout = timeout;
 	periodic->L = L;
 	periodic->cfg = cfg;
@@ -3225,6 +3239,10 @@ lua_config_add_periodic (lua_State *L)
 	ev_timer_init (&periodic->ev, lua_periodic_callback, timeout, 0.0);
 	periodic->ev.data = periodic;
 	ev_timer_start (ev_base, &periodic->ev);
+	REF_INIT_RETAIN (periodic, lua_periodic_dtor);
+
+	rspamd_mempool_add_destructor (cfg->cfg_pool, lua_periodic_fin,
+			periodic);
 
 	return 0;
 }
