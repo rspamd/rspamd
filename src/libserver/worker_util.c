@@ -241,6 +241,7 @@ rspamd_worker_signal_handle (EV_P_ ev_signal *w, int revents)
 	DL_FOREACH_SAFE (sigh->cb, cb, cbtmp) {
 		if (!cb->handler (sigh, cb->handler_data)) {
 			DL_DELETE (sigh->cb, cb);
+			g_free (cb);
 		}
 	}
 }
