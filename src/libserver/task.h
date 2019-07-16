@@ -92,41 +92,42 @@ enum rspamd_task_stage {
         RSPAMD_TASK_STAGE_DONE)
 
 #define RSPAMD_TASK_FLAG_MIME (1u << 0u)
-#define RSPAMD_TASK_FLAG_JSON (1u << 1u)
-#define RSPAMD_TASK_FLAG_SKIP_PROCESS (1u << 2u)
-#define RSPAMD_TASK_FLAG_SKIP (1u << 3u)
-#define RSPAMD_TASK_FLAG_EXT_URLS (1u << 4u)
-#define RSPAMD_TASK_FLAG_SPAMC (1u << 5u)
-#define RSPAMD_TASK_FLAG_PASS_ALL (1u << 6u)
-#define RSPAMD_TASK_FLAG_NO_LOG (1u << 7u)
-#define RSPAMD_TASK_FLAG_NO_IP (1u << 8u)
-#define RSPAMD_TASK_FLAG_HAS_CONTROL (1u << 9u)
-#define RSPAMD_TASK_FLAG_PROCESSING (1u << 10u)
-#define RSPAMD_TASK_FLAG_GTUBE (1u << 11u)
-#define RSPAMD_TASK_FLAG_FILE (1u << 12u)
-#define RSPAMD_TASK_FLAG_NO_STAT (1u << 13u)
-#define RSPAMD_TASK_FLAG_UNLEARN (1u << 14u)
-#define RSPAMD_TASK_FLAG_ALREADY_LEARNED (1u << 15u)
-#define RSPAMD_TASK_FLAG_LEARN_SPAM (1u << 16u)
-#define RSPAMD_TASK_FLAG_LEARN_HAM (1u << 17u)
-#define RSPAMD_TASK_FLAG_LEARN_AUTO (1u << 18u)
-#define RSPAMD_TASK_FLAG_BROKEN_HEADERS (1u << 19u)
-#define RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS (1u << 20u)
-#define RSPAMD_TASK_FLAG_HAS_HAM_TOKENS (1u << 21u)
-#define RSPAMD_TASK_FLAG_EMPTY (1u << 22u)
-#define RSPAMD_TASK_FLAG_LOCAL_CLIENT (1u << 23u)
-#define RSPAMD_TASK_FLAG_COMPRESSED (1u << 24u)
-#define RSPAMD_TASK_FLAG_PROFILE (1u << 25u)
-#define RSPAMD_TASK_FLAG_GREYLISTED (1u << 26u)
-#define RSPAMD_TASK_FLAG_OWN_POOL (1u << 27u)
-#define RSPAMD_TASK_FLAG_MILTER (1u << 28u)
-#define RSPAMD_TASK_FLAG_SSL (1u << 29u)
-#define RSPAMD_TASK_FLAG_BAD_UNICODE (1u << 30u)
-#define RSPAMD_TASK_FLAG_MESSAGE_REWRITE (1u << 31u)
+#define RSPAMD_TASK_FLAG_SKIP_PROCESS (1u << 1u)
+#define RSPAMD_TASK_FLAG_SKIP (1u << 2u)
+#define RSPAMD_TASK_FLAG_PASS_ALL (1u << 3u)
+#define RSPAMD_TASK_FLAG_NO_LOG (1u << 4u)
+#define RSPAMD_TASK_FLAG_NO_IP (1u << 5u)
+#define RSPAMD_TASK_FLAG_PROCESSING (1u << 6u)
+#define RSPAMD_TASK_FLAG_GTUBE (1u << 7u)
+#define RSPAMD_TASK_FLAG_FILE (1u << 8u)
+#define RSPAMD_TASK_FLAG_NO_STAT (1u << 9u)
+#define RSPAMD_TASK_FLAG_UNLEARN (1u << 10u)
+#define RSPAMD_TASK_FLAG_ALREADY_LEARNED (1u << 11u)
+#define RSPAMD_TASK_FLAG_LEARN_SPAM (1u << 12u)
+#define RSPAMD_TASK_FLAG_LEARN_HAM (1u << 13u)
+#define RSPAMD_TASK_FLAG_LEARN_AUTO (1u << 14u)
+#define RSPAMD_TASK_FLAG_BROKEN_HEADERS (1u << 15u)
+#define RSPAMD_TASK_FLAG_HAS_SPAM_TOKENS (1u << 16u)
+#define RSPAMD_TASK_FLAG_HAS_HAM_TOKENS (1u << 17u)
+#define RSPAMD_TASK_FLAG_EMPTY (1u << 18u)
+#define RSPAMD_TASK_FLAG_PROFILE (1u << 19u)
+#define RSPAMD_TASK_FLAG_GREYLISTED (1u << 20u)
+#define RSPAMD_TASK_FLAG_OWN_POOL (1u << 21u)
+#define RSPAMD_TASK_FLAG_SSL (1u << 22u)
+#define RSPAMD_TASK_FLAG_BAD_UNICODE (1u << 23u)
+#define RSPAMD_TASK_FLAG_MESSAGE_REWRITE (1u << 24u)
+#define RSPAMD_TASK_FLAG_MAX_SHIFT (24u)
+
+#define RSPAMD_TASK_PROTOCOL_FLAG_SPAMC (1u << 0u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_HAS_CONTROL (1u << 1u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT (1u << 2u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_MILTER (1u << 3u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED (1u << 4u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_EXT_URLS (1u << 5u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (5u)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
-#define RSPAMD_TASK_IS_JSON(task) (((task)->flags & RSPAMD_TASK_FLAG_JSON))
-#define RSPAMD_TASK_IS_SPAMC(task) (((task)->flags & RSPAMD_TASK_FLAG_SPAMC))
+#define RSPAMD_TASK_IS_SPAMC(task) (((task)->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_SPAMC))
 #define RSPAMD_TASK_IS_PROCESSED(task) (((task)->processed_stages & RSPAMD_TASK_STAGE_DONE))
 #define RSPAMD_TASK_IS_CLASSIFIED(task) (((task)->processed_stages & RSPAMD_TASK_STAGE_CLASSIFIERS))
 #define RSPAMD_TASK_IS_EMPTY(task) (((task)->flags & RSPAMD_TASK_FLAG_EMPTY))
@@ -160,6 +161,8 @@ struct rspamd_task {
 	gint sock;                                      /**< socket descriptor								*/
 	guint32 dns_requests;                           /**< number of DNS requests per this task			*/
 	guint32 flags;                                  /**< Bit flags										*/
+	guint32 protocol_flags;
+	guint32 processed_stages;                            /**< bits of stages that are processed			*/
 	gchar *helo;                                    /**< helo header value								*/
 	gchar *queue_id;                                /**< queue id if specified							*/
 	rspamd_inet_addr_t *from_addr;                    /**< from addr for a task							*/
@@ -191,7 +194,6 @@ struct rspamd_task {
 	ev_tstamp task_timestamp;
 
 	gboolean (*fin_callback) (struct rspamd_task *task, void *arg);
-
 	/**< callback for filters finalizing					*/
 	void *fin_arg;                                    /**< argument for fin callback						*/
 
@@ -202,7 +204,6 @@ struct rspamd_task {
 
 	gpointer checkpoint;                            /**< Opaque checkpoint data							*/
 	ucl_object_t *settings;                            /**< Settings applied to task						*/
-	guint32 processed_stages;                            /**< bits of stages that are processed			*/
 	struct rspamd_config_settings_elt *settings_elt;    /**< preprocessed settings id elt				*/
 
 	const gchar *classifier;                        /**< Classifier to learn (if needed)				*/

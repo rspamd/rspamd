@@ -3171,7 +3171,7 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 		return NULL;
 	}
 
-	if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
+	if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER) {
 		b64_data = rspamd_encode_base64_fold (sig_buf, sig_len, 70, NULL,
 				RSPAMD_TASK_NEWLINES_LF);
 	}

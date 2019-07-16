@@ -2223,6 +2223,18 @@ rspamd_is_empty_body (struct rspamd_task *task,
 	} \
 } while(0)
 
+#define TASK_PROTOCOL_FLAG_READ(flag) do { \
+	result = !!(task->protocol_flags & (flag)); \
+} while(0)
+
+#define TASK_GET_PROTOCOL_FLAG(flag, strname, macro) do { \
+	if (!found && strcmp ((flag), strname) == 0) { \
+		TASK_PROTOCOL_FLAG_READ((macro)); \
+		found = TRUE; \
+	} \
+} while(0)
+
+
 static gboolean
 rspamd_has_flag_expr (struct rspamd_task *task,
 					  GArray * args,
@@ -2250,7 +2262,8 @@ rspamd_has_flag_expr (struct rspamd_task *task,
 	TASK_GET_FLAG (flag_str, "no_log", RSPAMD_TASK_FLAG_NO_LOG);
 	TASK_GET_FLAG (flag_str, "no_stat", RSPAMD_TASK_FLAG_NO_STAT);
 	TASK_GET_FLAG (flag_str, "skip", RSPAMD_TASK_FLAG_SKIP);
-	TASK_GET_FLAG (flag_str, "extended_urls", RSPAMD_TASK_FLAG_EXT_URLS);
+	TASK_GET_PROTOCOL_FLAG (flag_str, "extended_urls",
+			RSPAMD_TASK_PROTOCOL_FLAG_EXT_URLS);
 	TASK_GET_FLAG (flag_str, "learn_spam", RSPAMD_TASK_FLAG_LEARN_SPAM);
 	TASK_GET_FLAG (flag_str, "learn_ham", RSPAMD_TASK_FLAG_LEARN_HAM);
 	TASK_GET_FLAG (flag_str, "greylisted", RSPAMD_TASK_FLAG_GREYLISTED);
@@ -2258,8 +2271,8 @@ rspamd_has_flag_expr (struct rspamd_task *task,
 			RSPAMD_TASK_FLAG_BROKEN_HEADERS);
 	TASK_GET_FLAG (flag_str, "skip_process",
 			RSPAMD_TASK_FLAG_SKIP_PROCESS);
-	TASK_GET_FLAG (flag_str, "milter",
-			RSPAMD_TASK_FLAG_MILTER);
+	TASK_GET_PROTOCOL_FLAG (flag_str, "milter",
+			RSPAMD_TASK_PROTOCOL_FLAG_MILTER);
 	TASK_GET_FLAG (flag_str, "bad_unicode",
 			RSPAMD_TASK_FLAG_BAD_UNICODE);
 

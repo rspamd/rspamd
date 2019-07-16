@@ -72,7 +72,6 @@ extern "C" {
 #define USER_HEADER "User"
 #define URLS_HEADER "URL-Format"
 #define PASS_HEADER "Pass"
-#define JSON_HEADER "Json"
 #define HOSTNAME_HEADER "Hostname"
 #define DELIVER_TO_HEADER "Deliver-To"
 #define NO_LOG_HEADER "Log"

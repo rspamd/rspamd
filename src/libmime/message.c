@@ -1187,8 +1187,8 @@ rspamd_message_parse (struct rspamd_task *task)
 	 * So we check if a task has non-http format then we check for such a line
 	 * at the beginning to avoid errors
 	 */
-	if (!(task->flags & RSPAMD_TASK_FLAG_JSON) || (task->flags &
-			RSPAMD_TASK_FLAG_LOCAL_CLIENT)) {
+	if (task->cmd != CMD_CHECK_V2 || (task->protocol_flags &
+			RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT)) {
 		if (len > sizeof ("From ") - 1) {
 			if (memcmp (p, "From ", sizeof ("From ") - 1) == 0) {
 				/* Skip to CRLF */

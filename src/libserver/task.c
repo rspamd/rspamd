@@ -112,7 +112,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 
 	new_task->request_headers = kh_init (rspamd_req_headers_hash);
 	new_task->sock = -1;
-	new_task->flags |= (RSPAMD_TASK_FLAG_MIME|RSPAMD_TASK_FLAG_JSON);
+	new_task->flags |= (RSPAMD_TASK_FLAG_MIME);
 	new_task->result = rspamd_create_metric_result (new_task);
 
 	new_task->queue_id = "undef";
@@ -606,7 +606,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 			rspamd_mempool_add_destructor (task->task_pool, g_free, zout.dst);
 			task->msg.begin = zout.dst;
 			task->msg.len = zout.pos;
-			task->flags |= RSPAMD_TASK_FLAG_COMPRESSED;
+			task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED;
 
 			msg_info_task ("loaded message from zstd compressed stream; "
 						   "compressed: %ul; uncompressed: %ul",
@@ -628,7 +628,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 		task->flags |= RSPAMD_TASK_FLAG_EMPTY;
 	}
 
-	if (task->flags & RSPAMD_TASK_FLAG_HAS_CONTROL) {
+	if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_HAS_CONTROL) {
 		rspamd_ftok_t *hv = rspamd_task_get_request_header (task, MLEN_HEADER);
 		gulong message_len = 0;
 

@@ -345,7 +345,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	struct rspamd_http_message *msg)
 {
 	rspamd_ftok_t *hn_tok, *hv_tok, srch;
-	gboolean fl, has_ip = FALSE;
+	gboolean has_ip = FALSE;
 	struct rspamd_http_header *header, *h, *htmp;
 	gchar *ntok;
 
@@ -403,22 +403,6 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					task->msg.fpath = rspamd_mempool_ftokdup (task->task_pool,
 							hv_tok);
 					msg_debug_protocol ("read filename header, value: %s", task->msg.fpath);
-				}
-				break;
-			case 'j':
-			case 'J':
-				IF_HEADER (JSON_HEADER) {
-					msg_debug_protocol ("read json header, value: %T", hv_tok);
-					fl = rspamd_config_parse_flag (hv_tok->begin, hv_tok->len);
-					if (fl) {
-						task->flags |= RSPAMD_TASK_FLAG_JSON;
-					}
-					else {
-						task->flags &= ~RSPAMD_TASK_FLAG_JSON;
-					}
-				}
-				else {
-					msg_debug_protocol ("wrong header: %T", hn_tok);
 				}
 				break;
 			case 'q':
@@ -536,7 +520,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					srch.len = 8;
 
 					if (rspamd_ftok_casecmp (hv_tok, &srch) == 0) {
-						task->flags |= RSPAMD_TASK_FLAG_EXT_URLS;
+						task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_EXT_URLS;
 						msg_debug_protocol ("extended urls information");
 					}
 
@@ -547,7 +531,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 
 					if (hv_tok->len == 6 &&
 							rspamd_lc_cmp (hv_tok->begin, "rspamc", 6) == 0) {
-						task->flags |= RSPAMD_TASK_FLAG_LOCAL_CLIENT;
+						task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT;
 					}
 				}
 				break;
@@ -568,7 +552,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 				IF_HEADER (MLEN_HEADER) {
 					msg_debug_protocol ("read message length header, value: %T",
 							hv_tok);
-					task->flags |= RSPAMD_TASK_FLAG_HAS_CONTROL;
+					task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_HAS_CONTROL;
 				}
 				IF_HEADER (MTA_TAG_HEADER) {
 					gchar *mta_tag;
@@ -587,7 +571,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 					msg_debug_protocol ("read MTA-Name header, value: %s", mta_name);
 				}
 				IF_HEADER (MILTER_HEADER) {
-					task->flags |= RSPAMD_TASK_FLAG_MILTER;
+					task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_MILTER;
 					msg_debug_protocol ("read Milter header, value: %T", hv_tok);
 				}
 				break;
@@ -734,21 +718,17 @@ rspamd_protocol_handle_request (struct rspamd_task *task,
 	gboolean ret = TRUE;
 
 	if (msg->method == HTTP_SYMBOLS) {
-		task->cmd = CMD_CHECK_V2;
-		task->flags &= ~RSPAMD_TASK_FLAG_JSON;
+		task->cmd = CMD_SYMBOLS;
 	}
 	else if (msg->method == HTTP_CHECK) {
-		task->cmd = CMD_CHECK_V2;
-		task->flags &= ~RSPAMD_TASK_FLAG_JSON;
+		task->cmd = CMD_SYMBOLS;
 	}
 	else {
-		task->flags |= RSPAMD_TASK_FLAG_JSON;
 		ret = rspamd_protocol_handle_url (task, msg);
 	}
 
 	if (msg->flags & RSPAMD_HTTP_FLAG_SPAMC) {
-		task->flags &= ~RSPAMD_TASK_FLAG_JSON;
-		task->flags |= RSPAMD_TASK_FLAG_SPAMC;
+		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_SPAMC;
 	}
 
 	return ret;
@@ -813,7 +793,7 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 	guint len = 0;
 	gsize enclen = 0;
 
-	if (!(task->flags & RSPAMD_TASK_FLAG_EXT_URLS)) {
+	if (!(task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_EXT_URLS)) {
 		if (url->hostlen > 0) {
 			if (g_hash_table_lookup (cb->seen, url)) {
 				return;
@@ -1330,7 +1310,9 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 					GString *folded_header;
 					dkim_sig = (GString *) dkim_sigs->data;
 
-					if (task->flags & RSPAMD_TASK_FLAG_MILTER || !task->message) {
+					if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER ||
+						!task->message) {
+
 						folded_header = rspamd_header_value_fold ("DKIM-Signature",
 								dkim_sig->str, 80, RSPAMD_TASK_NEWLINES_LF, NULL);
 					}
@@ -1357,7 +1339,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 				GString *folded_header;
 				dkim_sig = (GString *) dkim_sigs->data;
 
-				if (task->flags & RSPAMD_TASK_FLAG_MILTER) {
+				if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER) {
 					folded_header = rspamd_header_value_fold ("DKIM-Signature",
 							dkim_sig->str, 80, RSPAMD_TASK_NEWLINES_LF, NULL);
 				}
@@ -1463,7 +1445,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		}
 	}
 
-	if ((task->flags & RSPAMD_TASK_FLAG_COMPRESSED) &&
+	if ((task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED) &&
 			rspamd_libs_reset_compression (task->cfg->libs_ctx)) {
 		/* We can compress output */
 		ZSTD_inBuffer zin;
@@ -1794,10 +1776,11 @@ rspamd_protocol_write_reply (struct rspamd_task *task, ev_tstamp timeout)
 				MESSAGE_FIELD_CHECK (task, message_id));
 	}
 
-	if (!RSPAMD_TASK_IS_JSON (task)) {
+	if (task->cmd == CMD_SYMBOLS) {
 		/* Turn compatibility on */
 		msg->method = HTTP_SYMBOLS;
 	}
+
 	if (RSPAMD_TASK_IS_SPAMC (task)) {
 		msg->flags |= RSPAMD_HTTP_FLAG_SPAMC;
 	}

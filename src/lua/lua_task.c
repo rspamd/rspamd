@@ -4718,6 +4718,17 @@ lua_task_get_size (lua_State *L)
 	} \
 } while(0)
 
+#define LUA_TASK_PROTOCOL_FLAG_READ(flag) do { \
+	lua_pushboolean(L, !!(task->protocol_flags & (flag))); \
+} while(0)
+
+#define LUA_TASK_GET_PROTOCOL_FLAG(flag, strname, macro) do { \
+	if (!found && strcmp ((flag), strname) == 0) { \
+		LUA_TASK_PROTOCOL_FLAG_READ((macro)); \
+		found = TRUE; \
+	} \
+} while(0)
+
 static gint
 lua_task_set_flag (lua_State *L)
 {
@@ -4735,7 +4746,6 @@ lua_task_set_flag (lua_State *L)
 		LUA_TASK_SET_FLAG (flag, "no_log", RSPAMD_TASK_FLAG_NO_LOG, set);
 		LUA_TASK_SET_FLAG (flag, "no_stat", RSPAMD_TASK_FLAG_NO_STAT, set);
 		LUA_TASK_SET_FLAG (flag, "skip", RSPAMD_TASK_FLAG_SKIP, set);
-		LUA_TASK_SET_FLAG (flag, "extended_urls", RSPAMD_TASK_FLAG_EXT_URLS, set);
 		LUA_TASK_SET_FLAG (flag, "learn_spam", RSPAMD_TASK_FLAG_LEARN_SPAM, set);
 		LUA_TASK_SET_FLAG (flag, "learn_ham", RSPAMD_TASK_FLAG_LEARN_HAM, set);
 		LUA_TASK_SET_FLAG (flag, "broken_headers",
@@ -4768,7 +4778,6 @@ lua_task_has_flag (lua_State *L)
 		LUA_TASK_GET_FLAG (flag, "no_log", RSPAMD_TASK_FLAG_NO_LOG);
 		LUA_TASK_GET_FLAG (flag, "no_stat", RSPAMD_TASK_FLAG_NO_STAT);
 		LUA_TASK_GET_FLAG (flag, "skip", RSPAMD_TASK_FLAG_SKIP);
-		LUA_TASK_GET_FLAG (flag, "extended_urls", RSPAMD_TASK_FLAG_EXT_URLS);
 		LUA_TASK_GET_FLAG (flag, "learn_spam", RSPAMD_TASK_FLAG_LEARN_SPAM);
 		LUA_TASK_GET_FLAG (flag, "learn_ham", RSPAMD_TASK_FLAG_LEARN_HAM);
 		LUA_TASK_GET_FLAG (flag, "greylisted", RSPAMD_TASK_FLAG_GREYLISTED);
@@ -4776,14 +4785,14 @@ lua_task_has_flag (lua_State *L)
 				RSPAMD_TASK_FLAG_BROKEN_HEADERS);
 		LUA_TASK_GET_FLAG (flag, "skip_process",
 				RSPAMD_TASK_FLAG_SKIP_PROCESS);
-		LUA_TASK_GET_FLAG (flag, "milter",
-				RSPAMD_TASK_FLAG_MILTER);
 		LUA_TASK_GET_FLAG (flag, "bad_unicode",
 				RSPAMD_TASK_FLAG_BAD_UNICODE);
 		LUA_TASK_GET_FLAG (flag, "mime",
 				RSPAMD_TASK_FLAG_MIME);
 		LUA_TASK_GET_FLAG (flag, "message_rewrite",
 				RSPAMD_TASK_FLAG_MESSAGE_REWRITE);
+		LUA_TASK_GET_PROTOCOL_FLAG (flag, "milter",
+				RSPAMD_TASK_PROTOCOL_FLAG_MILTER);
 
 		if (!found) {
 			msg_warn_task ("unknown flag requested: %s", flag);
@@ -4810,7 +4819,7 @@ lua_task_get_flags (lua_State *L)
 
 		flags = task->flags;
 
-		for (i = 0; i < sizeof (task->flags) * NBBY; i ++) {
+		for (i = 0; i < RSPAMD_TASK_FLAG_MAX_SHIFT; i ++) {
 			bit = (1U << i);
 
 			if (flags & bit) {
@@ -4829,10 +4838,6 @@ lua_task_get_flags (lua_State *L)
 					break;
 				case RSPAMD_TASK_FLAG_SKIP:
 					lua_pushstring (L, "skip");
-					lua_rawseti (L, -2, idx++);
-					break;
-				case RSPAMD_TASK_FLAG_EXT_URLS:
-					lua_pushstring (L, "extended_urls");
 					lua_rawseti (L, -2, idx++);
 					break;
 				case RSPAMD_TASK_FLAG_BROKEN_HEADERS:
@@ -4855,10 +4860,6 @@ lua_task_get_flags (lua_State *L)
 					lua_pushstring (L, "skip_process");
 					lua_rawseti (L, -2, idx++);
 					break;
-				case RSPAMD_TASK_FLAG_MILTER:
-					lua_pushstring (L, "milter");
-					lua_rawseti (L, -2, idx++);
-					break;
 				case RSPAMD_TASK_FLAG_MESSAGE_REWRITE:
 					lua_pushstring (L, "message_rewrite");
 					lua_rawseti (L, -2, idx++);
@@ -4867,6 +4868,11 @@ lua_task_get_flags (lua_State *L)
 					break;
 				}
 			}
+		}
+
+		if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER) {
+			lua_pushstring (L, "milter");
+			lua_rawseti (L, -2, idx++);
 		}
 	}
 	else {

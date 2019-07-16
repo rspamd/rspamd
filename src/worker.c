@@ -194,8 +194,7 @@ rspamd_worker_guard_handler (EV_P_ ev_io *w, int revents)
 			 * reliable way to distinguish between shutdown(SHUT_WR) and
 			 * close.
 			 */
-			if (!(task->flags & RSPAMD_TASK_FLAG_JSON) &&
-					task->cfg->enable_shutdown_workaround) {
+			if (task->cmd != CMD_CHECK_V2 && task->cfg->enable_shutdown_workaround) {
 				msg_info_task ("workaround for shutdown enabled, please update "
 						"your client, this support might be removed in future");
 				shutdown (w->fd, SHUT_RD);
