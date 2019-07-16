@@ -494,6 +494,32 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
     ['args_schema'] = {(ts.number + ts.string / tonumber):is_optional(),
                        (ts.number + ts.string / tonumber):is_optional()}
   },
+  -- Prepends a string or a strings list
+  ['prepend'] = {
+    ['types'] = {
+      ['string'] = true
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
+      local prepend = table.concat(args, '')
+
+      return prepend .. inp, 'string'
+    end,
+    ['description'] = 'Prepends a string or a strings list',
+  },
+  -- Appends a string or a strings list
+  ['append'] = {
+    ['types'] = {
+      ['string'] = true
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, _, args)
+      local append = table.concat(args, '')
+
+      return inp .. append, 'string'
+    end,
+    ['description'] = 'Appends a string or a strings list',
+  },
   -- Regexp matching
   ['regexp'] = {
     ['types'] = {
