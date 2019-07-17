@@ -839,7 +839,7 @@ local function reputation_redis_init(rule, cfg, ev_base, worker)
   {% endfor %}
   end
 
-  return {cnt,results}
+  return {cnt or 0, results}
   ]]
 
   local get_script = lua_util.jinja_template(redis_get_script_tpl,
