@@ -4971,36 +4971,60 @@ lua_task_set_settings (lua_State *L)
 
 		act = ucl_object_lookup (task->settings, "actions");
 
-		if (act) {
+		if (act && ucl_object_type (act) == UCL_OBJECT) {
 			/* Adjust desired actions */
 			mres = task->result;
 
-			for (i = 0; i < mres->nactions; i++) {
-				struct rspamd_action_result *act_res = &mres->actions_limits[i];
-				elt = ucl_object_lookup (act, act_res->action->name);
+			it = NULL;
 
-				if (elt == NULL &&
-					act_res->action->action_type != METRIC_ACTION_CUSTOM) {
-					/* Also try alt name ... */
-					elt = ucl_object_lookup (act,
-							rspamd_action_to_str_alt (act_res->action->action_type));
+			while ((cur = ucl_object_iterate (act, &it, true)) != NULL) {
+				const gchar *act_name = ucl_object_key (cur);
+				double act_score = ucl_object_type (cur) == UCL_NULL ?
+						NAN : ucl_object_todouble (cur), old_score = NAN;
+				int act_type;
+				gboolean found = FALSE;
+
+				if (!rspamd_action_from_str (act_name, &act_type)) {
+					act_type = -1;
 				}
 
-				if (elt) {
-					if (ucl_object_type (elt) == UCL_FLOAT ||
-								ucl_object_type (elt) == UCL_INT) {
-						gdouble nscore =  ucl_object_todouble (elt);
+				for (i = 0; i < mres->nactions; i++) {
+					struct rspamd_action_result *act_res = &mres->actions_limits[i];
 
-						msg_debug_task ("adjusted action %s: %.2f -> %.2f",
-								ucl_object_key (elt),
-								act_res->cur_limit,
-								nscore);
-						act_res->cur_limit = nscore;
+					if (act_res->action->action_type == METRIC_ACTION_CUSTOM &&
+							act_type == -1) {
+						/* Compare by name */
+						if (g_ascii_strcasecmp (act_name, act_res->action->name) == 0) {
+							old_score = act_res->cur_limit;
+							act_res->cur_limit = act_score;
+							found = TRUE;
+							break;
+						}
 					}
-					else if (ucl_object_type (elt) == UCL_NULL) {
-						act_res->cur_limit = NAN;
+					else {
+						if (act_res->action->action_type == act_type) {
+							old_score = act_res->cur_limit;
+							act_res->cur_limit = act_score;
+							found = TRUE;
+							break;
+						}
+					}
+				}
+
+				if (!found) {
+					msg_warn_task ("cannot set custom score %.2f for unknown action %s",
+							act_score, act_name);
+				}
+				else {
+					if (isnan (act_score)) {
 						msg_info_task ("disabled action %s due to settings",
-								ucl_object_key (elt));
+								act_name);
+					}
+					else {
+						msg_debug_task ("adjusted action %s: %.2f -> %.2f",
+								act_name,
+								old_score,
+								act_score);
 					}
 				}
 			}
