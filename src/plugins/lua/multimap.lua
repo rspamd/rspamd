@@ -388,7 +388,7 @@ local function multimap_query_redis(key, task, value, callback)
     cmd = 'HMGET'
   end
 
-  local srch = {cmd, key}
+  local srch = {key}
 
   -- Insert all ips for some mask :(
   if type(value) == 'userdata' and value.class == 'rspamd{ip}' then
@@ -409,6 +409,8 @@ local function multimap_query_redis(key, task, value, callback)
   end
 
   local function redis_map_cb(err, data)
+    lua_util.debugm(N, task, 'got reply from Redis when trying to get key %s: err=%s, data=%s',
+        key, err, data)
     if not err and type(data) ~= 'userdata' then
       callback(data)
     end
