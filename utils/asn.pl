@@ -2,14 +2,16 @@
 
 use warnings;
 use strict;
-use Pod::Usage;
-use Getopt::Long;
+
+use File::Basename;
 use File::Fetch;
+use Getopt::Long;
+use IPC::Cmd qw/can_run/;
+use Pod::Usage;
+
 use LWP::Simple;
 use PerlIO::gzip;
-use File::Basename;
 use URI;
-use Data::Dumper;
 
 $LWP::Simple::ua->show_progress(1);
 
@@ -58,12 +60,8 @@ GetOptions(
 pod2usage(1) if $help;
 pod2usage( -exitval => 0, -verbose => 2 ) if $man;
 
-if ( -x bgpdump ) {
-    use_bgpdump = $1;
-} else {
-    warn "bgpdump is not found will try to use Net::MRT instead, results can be incomplete";
-}
-
+my $bgpdump_path = can_run('bgpdump')
+  or warn 'bgpdump is not found, will try to use Net::MRT instead; results can be incomplete';
 
 sub download_file {
     my ($u) = @_;
@@ -111,14 +109,17 @@ if ($v6) {
 
 sub is_bougus_asn {
     my $as = shift;
+
     # 64496-64511 Reserved for use in documentation and sample code
     # 64512-65534 Designated for private use
     # 65535       Reserved
     # 65536-65551 Reserved for use in documentation and sample code
     # 65552-131071 Reserved
     return 1 if $as >= 64496 && $as <= 131071;
+
     # 4294967295
     return 1 if $as == 4294967295;
+
     # AS0 is reserved
     # AS1 is legal AS, but in most cases used by others without permission
     # of owner (probably lame admins use AS1 as private AS).
@@ -134,73 +135,79 @@ foreach my $u ( @{ $config{'bgp_sources'} } ) {
     my $parsed = URI->new($u);
     my $fname  = $download_target . '/' . basename( $parsed->path );
 
-    if ($use_bgpdump) {
+    if ($bgpdump_path) {
         use constant {
-          F_MARKER => 0,
-          F_TIMESTAMP => 1,
-          F_PEER_IP => 3,
-          F_PEER_AS => 4,
-          F_PREFIX => 5,
-          F_AS_PATH => 6,
-          F_ORIGIN => 7,
+            F_MARKER    => 0,
+            F_TIMESTAMP => 1,
+            F_PEER_IP   => 3,
+            F_PEER_AS   => 4,
+            F_PREFIX    => 5,
+            F_AS_PATH   => 6,
+            F_ORIGIN    => 7,
         };
 
-        open(my $bgpd, "bgpdump -M $fname |") or die "can't start bgpdump: $!";
+        open( my $bgpd, '-|', "$bgpdump_path -v -M $fname" ) or die "can't start bgpdump: $!";
 
         while (<$bgpd>) {
             chomp;
             my @e = split /\|/;
-            if ($e[F_MARKER] ne 'TABLE_DUMP2') {
+            if ( $e[F_MARKER] ne 'TABLE_DUMP2' ) {
                 warn "bad line: $_\n";
                 next;
             }
 
             my $origin_as;
             my $prefix = $e[F_PREFIX];
-            my $ipv6 = 0;
+            my $ipv6   = 0;
 
-            if ($prefix !~ /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/) {
+            if ( $prefix !~ /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/ ) {
                 $ipv6 = 1;
             }
 
-            if ($e[F_AS_PATH]) {
+            if ( $e[F_AS_PATH] ) {
+
                 # not empty AS_PATH
                 my @as_path = split /\s/, $e[F_AS_PATH];
                 $origin_as = pop @as_path;
 
-                if (substr($origin_as, 0, 1) eq '{') {
+                if ( substr( $origin_as, 0, 1 ) eq '{' ) {
+
                     # route is aggregated
-                    if ($origin_as =~ /^{(\d+)}$/) {
+                    if ( $origin_as =~ /^{(\d+)}$/ ) {
+
                         # single AS aggregated, just remove { } around
                         $origin_as = $1;
-                    } else {
+                    }
+                    else {
                         # use previous AS from AS_PATH
                         $origin_as = pop @as_path;
                     }
                 }
+
                 # strip bogus AS
-                while (is_bougus_asn($origin_as)) {
+                while ( is_bougus_asn($origin_as) ) {
                     $origin_as = pop @as_path;
                     last if scalar @as_path == 0;
                 }
             }
+
             # empty AS_PATH or all AS_PATH elements is stripped as bogus - use PEER_AS is origin AS
             $origin_as //= $e[F_PEER_AS];
 
-            if (!$networks->{$origin_as}) {
-                if (!$ipv6) {
-                    $networks->{$origin_as} = { nets_v4 => [ $prefix ], nets_v6 => [] };
+            if ( !$networks->{$origin_as} ) {
+                if ( !$ipv6 ) {
+                    $networks->{$origin_as} = { nets_v4 => [$prefix], nets_v6 => [] };
                 }
                 else {
-                    $networks->{$origin_as} = { nets_v6 => [ $prefix ], nets_v4 => [] };
+                    $networks->{$origin_as} = { nets_v6 => [$prefix], nets_v4 => [] };
                 }
             }
             else {
-                if (!$ipv6) {
-                    push @{$networks->{$origin_as}->{'nets_v4'}}, $prefix;
+                if ( !$ipv6 ) {
+                    push @{ $networks->{$origin_as}->{'nets_v4'} }, $prefix;
                 }
                 else {
-                    push @{$networks->{$origin_as}->{'nets_v6'}}, $prefix;
+                    push @{ $networks->{$origin_as}->{'nets_v6'} }, $prefix;
                 }
             }
         }
@@ -211,35 +218,35 @@ foreach my $u ( @{ $config{'bgp_sources'} } ) {
 
         open( my $fh, "<:gzip", $fname )
           or die "Cannot open $fname: $!";
-        while (my $dd = eval {Net::MRT::mrt_read_next($fh)}) {
-            if ($dd->{'prefix'} && $dd->{'bits'}) {
+        while ( my $dd = eval { Net::MRT::mrt_read_next($fh) } ) {
+            if ( $dd->{'prefix'} && $dd->{'bits'} ) {
                 next if $dd->{'subtype'} == 2 and !$v4;
                 next if $dd->{'subtype'} == 4 and !$v6;
                 my $entry = $dd->{'entries'}->[0];
-                my $net = $dd->{'prefix'} . '/' . $dd->{'bits'};
-                if ($entry && $entry->{'AS_PATH'}) {
+                my $net   = $dd->{'prefix'} . '/' . $dd->{'bits'};
+                if ( $entry && $entry->{'AS_PATH'} ) {
                     my $as = $entry->{'AS_PATH'}->[-1];
-                    if (ref($as) eq "ARRAY") {
+                    if ( ref($as) eq "ARRAY" ) {
                         $as = @{$as}[0];
                     }
 
-                    next if (is_bougus_asn($as));
+                    next if ( is_bougus_asn($as) );
 
-                    if (!$networks->{$as}) {
-                        if ($dd->{'subtype'} == 2) {
-                            $networks->{$as} = { nets_v4 => [ $net ], nets_v6 => [] };
+                    if ( !$networks->{$as} ) {
+                        if ( $dd->{'subtype'} == 2 ) {
+                            $networks->{$as} = { nets_v4 => [$net], nets_v6 => [] };
                         }
                         else {
-                            $networks->{$as} = { nets_v6 => [ $net ], nets_v4 => [] };
+                            $networks->{$as} = { nets_v6 => [$net], nets_v4 => [] };
                         }
                     }
                     else {
 
-                        if ($dd->{'subtype'} == 2) {
-                            push @{$networks->{$as}->{'nets_v4'}}, $net;
+                        if ( $dd->{'subtype'} == 2 ) {
+                            push @{ $networks->{$as}->{'nets_v4'} }, $net;
                         }
                         else {
-                            push @{$networks->{$as}->{'nets_v6'}}, $net;
+                            push @{ $networks->{$as}->{'nets_v6'} }, $net;
                         }
                     }
                 }
