@@ -4950,7 +4950,7 @@ lua_task_set_settings (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	ucl_object_t *settings;
-	const ucl_object_t *act, *elt, *metric_elt, *vars, *cur;
+	const ucl_object_t *act, *metric_elt, *vars, *cur;
 	ucl_object_iter_t it = NULL;
 	struct rspamd_metric_result *mres;
 	guint i;

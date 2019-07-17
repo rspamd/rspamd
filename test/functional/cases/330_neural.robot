@@ -63,6 +63,7 @@ Check Neural SPAM INVERSE
 Neural Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/neural.conf
   Set Suite Variable  ${PLUGIN_CONFIG}
+  Set Suite Variable  ${LUA_SCRIPT}
   Generic Setup  PLUGIN_CONFIG
   Run Redis
 
