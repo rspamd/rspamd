@@ -1576,12 +1576,10 @@ rspamd_proxy_scan_self_reply (struct rspamd_task *task)
 	msg->code = 200;
 
 	switch (task->cmd) {
-	case CMD_REPORT_IFSPAM:
-	case CMD_REPORT:
 	case CMD_CHECK:
-	case CMD_SYMBOLS:
-	case CMD_PROCESS:
 	case CMD_SKIP:
+	case CMD_CHECK_RSPAMC:
+	case CMD_CHECK_SPAMC:
 	case CMD_CHECK_V2:
 		rspamd_task_set_finish_time (task);
 		rspamd_protocol_http_reply (msg, task, &rep);
@@ -1591,7 +1589,7 @@ rspamd_proxy_scan_self_reply (struct rspamd_task *task)
 		rspamd_http_message_set_body (msg, "pong" CRLF, 6);
 		ctype = "text/plain";
 		break;
-	case CMD_OTHER:
+	default:
 		msg_err_task ("BROKEN");
 		break;
 	}

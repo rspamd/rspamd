@@ -30,15 +30,12 @@ extern "C" {
 #endif
 
 enum rspamd_command {
-	CMD_CHECK,
-	CMD_SYMBOLS,
-	CMD_REPORT,
-	CMD_REPORT_IFSPAM,
-	CMD_SKIP,
+	CMD_SKIP = 0,
 	CMD_PING,
-	CMD_PROCESS,
-	CMD_CHECK_V2,
-	CMD_OTHER
+	CMD_CHECK_SPAMC, /* Legacy spamasassin format */
+	CMD_CHECK_RSPAMC, /* Legacy rspamc format (like SA one) */
+	CMD_CHECK, /* Legacy check - metric json reply */
+	CMD_CHECK_V2, /* Modern check - symbols in json reply  */
 };
 
 enum rspamd_task_stage {
@@ -118,24 +115,23 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_FLAG_MESSAGE_REWRITE (1u << 24u)
 #define RSPAMD_TASK_FLAG_MAX_SHIFT (24u)
 
-/* Spamc message */
-#define RSPAMD_TASK_PROTOCOL_FLAG_SPAMC (1u << 0u)
+
 /* Request has a JSON control block */
-#define RSPAMD_TASK_PROTOCOL_FLAG_HAS_CONTROL (1u << 1u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_HAS_CONTROL (1u << 0u)
 /* Request has been done by a local client */
-#define RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT (1u << 2u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_LOCAL_CLIENT (1u << 1u)
 /* Request has been sent via milter */
-#define RSPAMD_TASK_PROTOCOL_FLAG_MILTER (1u << 3u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_MILTER (1u << 2u)
 /* Compress protocol reply */
-#define RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED (1u << 4u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED (1u << 3u)
 /* Include all URLs */
-#define RSPAMD_TASK_PROTOCOL_FLAG_EXT_URLS (1u << 5u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_EXT_URLS (1u << 4u)
 /* Client allows body block (including headers in no FLAG_MILTER) */
-#define RSPAMD_TASK_PROTOCOL_FLAG_BODY_BLOCK (1u << 6u)
-#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (6u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_BODY_BLOCK (1u << 5u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (5u)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
-#define RSPAMD_TASK_IS_SPAMC(task) (((task)->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_SPAMC))
+#define RSPAMD_TASK_IS_SPAMC(task) (((task)->cmd == CMD_CHECK_SPAMC))
 #define RSPAMD_TASK_IS_PROCESSED(task) (((task)->processed_stages & RSPAMD_TASK_STAGE_DONE))
 #define RSPAMD_TASK_IS_CLASSIFIED(task) (((task)->processed_stages & RSPAMD_TASK_STAGE_CLASSIFIERS))
 #define RSPAMD_TASK_IS_EMPTY(task) (((task)->flags & RSPAMD_TASK_FLAG_EMPTY))

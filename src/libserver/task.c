@@ -1497,6 +1497,7 @@ rspamd_task_write_log (struct rspamd_task *task)
 
 	if (task->cfg->log_format == NULL ||
 			(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
+		msg_debug_task ("skip logging due to no log flag");
 		return;
 	}
 

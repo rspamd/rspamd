@@ -96,7 +96,7 @@ rspamd_protocol_escape_braces (struct rspamd_task *task, rspamd_ftok_t *in)
 	return rspamd_mempool_ftokdup (task->task_pool, &tok);
 }
 
-#define CMD_CHECK(str, cmd, len) (sizeof(cmd) - 1 == (len) && rspamd_lc_cmp((str), (cmd), (len)) == 0)
+#define COMPARE_CMD(str, cmd, len) (sizeof(cmd) - 1 == (len) && rspamd_lc_cmp((str), (cmd), (len)) == 0)
 
 static gboolean
 rspamd_protocol_handle_url (struct rspamd_task *task,
@@ -140,11 +140,13 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 'c':
 	case 'C':
 		/* check */
-		if (CMD_CHECK (p, MSG_CMD_CHECK_V2, pathlen)) {
+		if (COMPARE_CMD (p, MSG_CMD_CHECK_V2, pathlen)) {
 			task->cmd = CMD_CHECK_V2;
+			msg_debug_protocol ("got checkv2 command");
 		}
-		else if (CMD_CHECK (p, MSG_CMD_CHECK, pathlen)) {
+		else if (COMPARE_CMD (p, MSG_CMD_CHECK, pathlen)) {
 			task->cmd = CMD_CHECK;
+			msg_debug_protocol ("got check command");
 		}
 		else {
 			goto err;
@@ -153,13 +155,16 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 's':
 	case 'S':
 		/* symbols, skip */
-		if (CMD_CHECK (p, MSG_CMD_SYMBOLS, pathlen)) {
-			task->cmd = CMD_SYMBOLS;
+		if (COMPARE_CMD (p, MSG_CMD_SYMBOLS, pathlen)) {
+			task->cmd = CMD_CHECK;
+			msg_debug_protocol ("got symbols -> old check command");
 		}
-		else if (CMD_CHECK (p, MSG_CMD_SCAN, pathlen)) {
-			task->cmd = CMD_CHECK_V2;
+		else if (COMPARE_CMD (p, MSG_CMD_SCAN, pathlen)) {
+			task->cmd = CMD_CHECK;
+			msg_debug_protocol ("got scan -> old check command");
 		}
-		else if (CMD_CHECK (p, MSG_CMD_SKIP, pathlen)) {
+		else if (COMPARE_CMD (p, MSG_CMD_SKIP, pathlen)) {
+			msg_debug_protocol ("got skip command");
 			task->cmd = CMD_SKIP;
 		}
 		else {
@@ -169,11 +174,13 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 'p':
 	case 'P':
 		/* ping, process */
-		if (CMD_CHECK (p, MSG_CMD_PING, pathlen)) {
+		if (COMPARE_CMD (p, MSG_CMD_PING, pathlen)) {
+			msg_debug_protocol ("got ping command");
 			task->cmd = CMD_PING;
 		}
-		else if (CMD_CHECK (p, MSG_CMD_PROCESS, pathlen)) {
-			task->cmd = CMD_PROCESS;
+		else if (COMPARE_CMD (p, MSG_CMD_PROCESS, pathlen)) {
+			msg_debug_protocol ("got process -> old check command");
+			task->cmd = CMD_CHECK;
 		}
 		else {
 			goto err;
@@ -182,11 +189,13 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 	case 'r':
 	case 'R':
 		/* report, report_ifspam */
-		if (CMD_CHECK (p, MSG_CMD_REPORT, pathlen)) {
-			task->cmd = CMD_REPORT;
+		if (COMPARE_CMD (p, MSG_CMD_REPORT, pathlen)) {
+			msg_debug_protocol ("got report -> old check command");
+			task->cmd = CMD_CHECK;
 		}
-		else if (CMD_CHECK (p, MSG_CMD_REPORT_IFSPAM, pathlen)) {
-			task->cmd = CMD_REPORT_IFSPAM;
+		else if (COMPARE_CMD (p, MSG_CMD_REPORT_IFSPAM, pathlen)) {
+			msg_debug_protocol ("got reportifspam -> old check command");
+			task->cmd = CMD_CHECK;
 		}
 		else {
 			goto err;
@@ -813,17 +822,20 @@ rspamd_protocol_handle_request (struct rspamd_task *task,
 	gboolean ret = TRUE;
 
 	if (msg->method == HTTP_SYMBOLS) {
-		task->cmd = CMD_SYMBOLS;
+		msg_debug_protocol ("got legacy SYMBOLS method, enable rspamc protocol workaround");
+		task->cmd = CMD_CHECK_RSPAMC;
 	}
 	else if (msg->method == HTTP_CHECK) {
-		task->cmd = CMD_SYMBOLS;
+		msg_debug_protocol ("got legacy CHECK method, enable rspamc protocol workaround");
+		task->cmd = CMD_CHECK_RSPAMC;
 	}
 	else {
 		ret = rspamd_protocol_handle_url (task, msg);
 	}
 
 	if (msg->flags & RSPAMD_HTTP_FLAG_SPAMC) {
-		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_SPAMC;
+		msg_debug_protocol ("got legacy SA input, enable spamc protocol workaround");
+		task->cmd = CMD_CHECK_SPAMC;
 	}
 
 	return ret;
@@ -1126,7 +1138,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	action = rspamd_check_action_metric (task);
 	is_spam = !(action->flags & RSPAMD_ACTION_HAM);
 
-	if (task->cmd != CMD_CHECK_V2) {
+	if (task->cmd == CMD_CHECK) {
 		obj = ucl_object_typed_new (UCL_OBJECT);
 		ucl_object_insert_key (obj,
 				ucl_object_frombool (is_spam),
@@ -1176,7 +1188,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 	}
 
 	/* Now handle symbols */
-	if (task->cmd == CMD_CHECK_V2) {
+	if (task->cmd != CMD_CHECK) {
 		obj = ucl_object_typed_new (UCL_OBJECT);
 	}
 
@@ -1187,7 +1199,7 @@ rspamd_metric_result_ucl (struct rspamd_task *task,
 		}
 	})
 
-	if (task->cmd == CMD_CHECK_V2) {
+	if (task->cmd != CMD_CHECK) {
 		ucl_object_insert_key (top, obj, "symbols", 0, false);
 	}
 	else {
@@ -1458,7 +1470,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 				RSPAMD_MEMPOOL_MILTER_REPLY);
 
 		if (milter_reply) {
-			if (task->cmd == CMD_CHECK_V2) {
+			if (task->cmd != CMD_CHECK) {
 				ucl_object_insert_key (top, ucl_object_ref (milter_reply),
 						"milter", 0, false);
 			}
@@ -1508,6 +1520,9 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_LOG)) {
 		rspamd_roll_history_update (task->worker->srv->history, task);
 	}
+	else {
+		msg_debug_protocol ("skip history update due to no log flag");
+	}
 
 	rspamd_task_write_log (task);
 
@@ -1529,13 +1544,16 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 	reply = rspamd_fstring_sized_new (1000);
 
 	if (msg->method < HTTP_SYMBOLS && !RSPAMD_TASK_IS_SPAMC (task)) {
+		msg_debug_protocol ("writing json reply");
 		rspamd_ucl_emit_fstring (top, UCL_EMIT_JSON_COMPACT, &reply);
 	}
 	else {
 		if (RSPAMD_TASK_IS_SPAMC (task)) {
+			msg_debug_protocol ("writing spamc legacy reply to client");
 			rspamd_ucl_tospamc_output (top, &reply);
 		}
 		else {
+			msg_debug_protocol ("writing rspamc legacy reply to client");
 			rspamd_ucl_torspamc_output (top, &reply);
 		}
 	}
@@ -1604,6 +1622,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 end:
 	if (!(task->flags & RSPAMD_TASK_FLAG_NO_STAT)) {
 		/* Update stat for default metric */
+		msg_debug_protocol ("skip stats update due to no_stat flag");
 		metric_res = task->result;
 
 		if (metric_res != NULL) {
@@ -1871,20 +1890,20 @@ rspamd_protocol_write_reply (struct rspamd_task *task, ev_tstamp timeout)
 				MESSAGE_FIELD_CHECK (task, message_id));
 	}
 
-	if (task->cmd == CMD_SYMBOLS) {
-		/* Turn compatibility on */
+	/* Compatibility */
+	if (task->cmd == CMD_CHECK_RSPAMC) {
 		msg->method = HTTP_SYMBOLS;
 	}
-
-	if (RSPAMD_TASK_IS_SPAMC (task)) {
+	else if (task->cmd == CMD_CHECK_SPAMC)  {
+		msg->method = HTTP_SYMBOLS;
 		msg->flags |= RSPAMD_HTTP_FLAG_SPAMC;
 	}
 
 	ev_now_update (task->event_loop);
 	msg->date = ev_time ();
 
-	msg_debug_protocol ("writing reply to client");
 	if (task->err != NULL) {
+		msg_debug_protocol ("writing error reply to client");
 		ucl_object_t *top = NULL;
 
 		top = ucl_object_typed_new (UCL_OBJECT);
@@ -1905,21 +1924,20 @@ rspamd_protocol_write_reply (struct rspamd_task *task, ev_tstamp timeout)
 		msg->status = rspamd_fstring_new_init ("OK", 2);
 
 		switch (task->cmd) {
-		case CMD_REPORT_IFSPAM:
-		case CMD_REPORT:
 		case CMD_CHECK:
-		case CMD_SYMBOLS:
-		case CMD_PROCESS:
+		case CMD_CHECK_RSPAMC:
+		case CMD_CHECK_SPAMC:
 		case CMD_SKIP:
 		case CMD_CHECK_V2:
 			rspamd_protocol_http_reply (msg, task, NULL);
 			rspamd_protocol_write_log_pipe (task);
 			break;
 		case CMD_PING:
+			msg_debug_protocol ("writing pong to client");
 			rspamd_http_message_set_body (msg, "pong" CRLF, 6);
 			ctype = "text/plain";
 			break;
-		case CMD_OTHER:
+		default:
 			msg_err_protocol ("BROKEN");
 			break;
 		}
