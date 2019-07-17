@@ -10,7 +10,6 @@ Variables       ${TESTDIR}/lib/vars.py
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 ${CONFIG}       ${TESTDIR}/configs/plugins.conf
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
-${LUA_SCRIPT}   ${TESTDIR}/lua/neural.lua
 ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
 
@@ -63,7 +62,6 @@ Check Neural SPAM INVERSE
 Neural Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/neural.conf
   Set Suite Variable  ${PLUGIN_CONFIG}
-  Set Suite Variable  ${LUA_SCRIPT}
   Generic Setup  PLUGIN_CONFIG
   Run Redis
 
