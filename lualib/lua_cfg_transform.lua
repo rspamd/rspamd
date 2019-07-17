@@ -17,6 +17,7 @@ limitations under the License.
 local logger = require "rspamd_logger"
 local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
+local fun = require "fun"
 
 local function is_implicit(t)
   local mt = getmetatable(t)
@@ -355,6 +356,43 @@ return function(cfg)
     if not cfg.options.check_all_filters then
       logger.infox(rspamd_config, 'enable `options.check_all_filters` for neural network')
       cfg.options.check_all_filters = true
+    end
+  end
+
+  -- Deal with IP_SCORE
+  if cfg.ip_score then
+    logger.warnx(rspamd_config, 'ip_score module is deprecated in honor of reputation module!')
+
+    if not cfg.reputation then
+      cfg.reputation = {
+        rules = {}
+      }
+    end
+
+    if not fun.any(function(_, v) return v.selector and v.selector.ip end,
+        cfg.reputation.rules) then
+      logger.infox(rspamd_config, 'attach ip reputation element to use it')
+
+      cfg.reputation.rules.ip_score = {
+        selector = {
+          ip = {},
+        },
+        backend = {
+          redis = {},
+        }
+      }
+
+      if cfg.symbols['IP_SCORE'] then
+        local t = cfg.symbols['IP_SCORE']
+
+        if not cfg.symbols['SENDER_REP_SPAM'] then
+          cfg.symbols['SENDER_REP_SPAM'] = t
+          cfg.symbols['SENDER_REP_HAM'] = t
+          cfg.symbols['SENDER_REP_HAM'].weight = -(t.weight or 0)
+        end
+      end
+    else
+      logger.infox(rspamd_config, 'ip reputation already exists, do not do any IP_SCORE transforms')
     end
   end
 
