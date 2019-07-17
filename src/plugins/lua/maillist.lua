@@ -204,56 +204,63 @@ end
 local function check_generic_list_headers(task)
   local score = 0
   local has_subscribe, has_unsubscribe
-  local header = task:get_header('List-Id')
-  if not header or not string.find(header, '<.+>') then
-    lua_util.debugm(N, task, 'has header List-Id: %s, score = %s', header, score)
-    score = score + 1
+
+  if task:get_header_count('list-id') then
+    lua_util.debugm(N, task, 'has header List-Id, score = %s', score)
+    score = score + 0.75
   end
 
-  header = task:get_header('Precedence')
+  local header = task:get_header('Precedence')
   if header and (header == 'list' or header == 'bulk') then
     lua_util.debugm(N, task, 'has header Precedence: %s, score = %s',
         header, score)
 
-    score = score + 0.2
+    score = score + 0.25
   end
 
   if task:get_header_count('list-archive') == 1 then
     lua_util.debugm(N, task, 'has header List-Archive, score = %s',
         score)
-    score = score + 0.1
+    score = score + 0.125
   end
   if task:get_header_count('list-owner') == 1 then
     lua_util.debugm(N, task, 'has header List-Owner, score = %s',
         score)
-    score = score + 0.1
+    score = score + 0.125
   end
   if task:get_header_count('list-help') == 1 then
     lua_util.debugm(N, task, 'has header List-Help, score = %s',
         score)
-    score = score + 0.1
+    score = score + 0.125
   end
 
   -- Subscribe and unsubscribe
   if task:get_header_count('list-subscribe') == 1 then
     lua_util.debugm(N, task, 'has header List-Subscribe, score = %s',
         score)
-    score = score + 0.1
+    score = score + 0.125
     has_subscribe = true
   end
   if task:get_header_count('list-unsubscribe') == 1 then
     lua_util.debugm(N, task, 'has header List-Subscribe, score = %s',
         score)
-    score = score + 0.1
+    score = score + 0.125
     has_unsubscribe = true
   end
 
-  if has_subscribe and has_unsubscribe then
-    score = score + 0.5
-  else
-    score = score - 0.5
+  if task:get_header_count('x-loop') == 1 then
+    lua_util.debugm(N, task, 'has header x-loop, score = %s',
+        score)
+    score = score + 0.125
   end
 
+  if has_subscribe and has_unsubscribe then
+    score = score + 0.25
+  elseif (has_subscribe or has_unsubscribe) then
+    score = score - 0.75
+  end
+
+  lua_util.debugm(N, task, 'final maillist score %s', score)
   return score
 end
 
