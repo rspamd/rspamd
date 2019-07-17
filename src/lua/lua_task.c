@@ -4979,6 +4979,13 @@ lua_task_set_settings (lua_State *L)
 				struct rspamd_action_result *act_res = &mres->actions_limits[i];
 				elt = ucl_object_lookup (act, act_res->action->name);
 
+				if (elt == NULL &&
+					act_res->action->action_type != METRIC_ACTION_CUSTOM) {
+					/* Also try alt name ... */
+					elt = ucl_object_lookup (act,
+							rspamd_action_to_str_alt (act_res->action->action_type));
+				}
+
 				if (elt) {
 					if (ucl_object_type (elt) == UCL_FLOAT ||
 								ucl_object_type (elt) == UCL_INT) {
