@@ -19,8 +19,9 @@ if confighelp then
 end
 
 -- Module for checking mail list headers
-
+local N = 'maillist'
 local symbol = 'MAILLIST'
+local lua_util = require "lua_util"
 -- EZMLM
 -- Mailing-List: .*run by ezmlm
 -- Precedence: bulk
@@ -167,16 +168,6 @@ local function check_ml_subscriberu(task)
 
 end
 
--- RFC 2919 headers
-local function check_rfc2919(task)
-  local header = task:get_header('List-Id')
-  if not header or not string.find(header, '<.+>') then
-    return false
-  end
-
-  return true
-end
-
 -- Google groups detector
 -- header exists X-Google-Loop
 -- RFC 2919 headers exist
@@ -190,27 +181,6 @@ local function check_ml_googlegroup(task)
     if not header then
       return false
     end
-  end
-
-  return true
-end
-
--- Majordomo detector
--- Check Sender for owner- or -owner
--- Check Precedence for 'Bulk' or 'List'
--- RFC 2919 headers exist
---
--- And nothing more can be extracted :(
-local function check_ml_majordomo(task)
-  local header = task:get_header('Sender')
-  if not header or
-      (not string.find(header, '^owner-.*$') and not string.find(header, '^.*-owner@.*$')) then
-    return false
-  end
-
-  header = task:get_header('Precedence')
-  if not header or (header ~= 'list' and header ~= 'bulk') then
-    return false
   end
 
   return true
@@ -230,18 +200,68 @@ local function check_ml_cgp(task)
   return true
 end
 
-local function check_ml_generic(task)
-  local header = task:get_header('Precedence')
-  if not header then
-    return false
+-- RFC 2919 headers
+local function check_generic_list_headers(task)
+  local score = 0
+  local has_subscribe, has_unsubscribe
+  local header = task:get_header('List-Id')
+  if not header or not string.find(header, '<.+>') then
+    lua_util.debugm(N, task, 'has header List-Id: %s, score = %s', header, score)
+    score = score + 1
   end
 
-  return check_rfc2919(task)
+  header = task:get_header('Precedence')
+  if header and (header == 'list' or header == 'bulk') then
+    lua_util.debugm(N, task, 'has header Precedence: %s, score = %s',
+        header, score)
+
+    score = score + 0.2
+  end
+
+  if task:get_header_count('list-archive') == 1 then
+    lua_util.debugm(N, task, 'has header List-Archive, score = %s',
+        score)
+    score = score + 0.1
+  end
+  if task:get_header_count('list-owner') == 1 then
+    lua_util.debugm(N, task, 'has header List-Owner, score = %s',
+        score)
+    score = score + 0.1
+  end
+  if task:get_header_count('list-help') == 1 then
+    lua_util.debugm(N, task, 'has header List-Help, score = %s',
+        score)
+    score = score + 0.1
+  end
+
+  -- Subscribe and unsubscribe
+  if task:get_header_count('list-subscribe') == 1 then
+    lua_util.debugm(N, task, 'has header List-Subscribe, score = %s',
+        score)
+    score = score + 0.1
+    has_subscribe = true
+  end
+  if task:get_header_count('list-unsubscribe') == 1 then
+    lua_util.debugm(N, task, 'has header List-Subscribe, score = %s',
+        score)
+    score = score + 0.1
+    has_unsubscribe = true
+  end
+
+  if has_subscribe and has_unsubscribe then
+    score = score + 0.5
+  else
+    score = score - 0.5
+  end
+
+  return score
 end
+
 
 -- RFC 2919 headers exist
 local function check_maillist(task)
-  if check_ml_generic(task) then
+  local score = check_generic_list_headers(task)
+  if score > 1 then
     if check_ml_ezmlm(task) then
       task:insert_result(symbol, 1, 'ezmlm')
     elseif check_ml_mailman(task) then
@@ -250,15 +270,15 @@ local function check_maillist(task)
       task:insert_result(symbol, 1, 'subscribe.ru')
     elseif check_ml_googlegroup(task) then
       task:insert_result(symbol, 1, 'googlegroups')
-    elseif check_ml_majordomo(task) then
-      task:insert_result(symbol, 1, 'majordomo')
     elseif check_ml_cgp(task) then
       task:insert_result(symbol, 1, 'cgp')
     else
-      task:insert_result(symbol, 0.5, 'generic')
+      if score > 2 then score = 2 end
+      task:insert_result(symbol, 0.5 * score, 'generic')
     end
   end
 end
+
 
 
 -- Configuration
