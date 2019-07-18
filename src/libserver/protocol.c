@@ -1564,7 +1564,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 			GString *hdr_offset = g_string_sized_new (30);
 
 			rspamd_printf_gstring (hdr_offset, "%z", RSPAMD_FSTRING_LEN (reply));
-			rspamd_http_message_add_header (msg, "Message-Offset",
+			rspamd_http_message_add_header (msg, MESSAGE_OFFSET_HEADER,
 					hdr_offset->str);
 			msg_debug_protocol ("write body block at position %s",
 					hdr_offset->str);

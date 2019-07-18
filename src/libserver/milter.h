@@ -163,7 +163,9 @@ struct rspamd_http_message *rspamd_milter_to_http (
  * @param results
  */
 void rspamd_milter_send_task_results (struct rspamd_milter_session *session,
-									  const ucl_object_t *results);
+									  const ucl_object_t *results,
+									  const gchar *new_body,
+									  gsize bodylen);
 
 /**
  * Init internal milter context

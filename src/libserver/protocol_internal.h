@@ -88,6 +88,7 @@ extern "C" {
 #define CERT_ISSUER_HEADER "TLS-Cert-Issuer"
 #define MAILER_HEADER "Mailer"
 #define RAW_DATA_HEADER "Raw"
+#define MESSAGE_OFFSET_HEADER "Message-Offset"
 
 #ifdef  __cplusplus
 }

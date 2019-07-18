@@ -854,15 +854,34 @@ proxy_backend_close_connection (struct rspamd_proxy_backend_connection *conn)
 
 static gboolean
 proxy_backend_parse_results (struct rspamd_proxy_session *session,
-		struct rspamd_proxy_backend_connection *conn,
-		lua_State *L, gint parser_ref,
-		const gchar *in, gsize inlen)
+							 struct rspamd_proxy_backend_connection *conn,
+							 lua_State *L, gint parser_ref,
+							 struct rspamd_http_message *msg,
+							 goffset *body_offset)
 {
 	struct ucl_parser *parser;
 	gint err_idx;
+	const gchar *in = msg->body_buf.begin;
+	gsize inlen = msg->body_buf.len;
+	const rspamd_ftok_t *offset_hdr;
 
 	if (inlen == 0 || in == NULL) {
 		return FALSE;
+	}
+
+	offset_hdr = rspamd_http_message_find_header (msg, MESSAGE_OFFSET_HEADER);
+
+	if (offset_hdr) {
+		gulong val;
+
+		if (rspamd_strtoul (offset_hdr->begin, offset_hdr->len, &val)
+			&& val < inlen) {
+
+			if (body_offset) {
+				*body_offset = val;
+			}
+			inlen = val;
+		}
 	}
 
 	if (parser_ref != -1) {
@@ -1300,7 +1319,7 @@ proxy_backend_mirror_finish_handler (struct rspamd_http_connection *conn,
 	proxy_request_decompress (msg);
 
 	if (!proxy_backend_parse_results (session, bk_conn, session->ctx->lua_state,
-			bk_conn->parser_from_ref, msg->body_buf.begin, msg->body_buf.len)) {
+			bk_conn->parser_from_ref, msg, NULL)) {
 		msg_warn_session ("cannot parse results from the mirror backend %s:%s",
 				bk_conn->name,
 				rspamd_inet_address_to_string (
@@ -1503,11 +1522,12 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 
 static gint
 proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
-	struct rspamd_http_message *msg)
+									 struct rspamd_http_message *msg)
 {
 	struct rspamd_proxy_backend_connection *bk_conn = conn->ud;
 	struct rspamd_proxy_session *session, *nsession;
 	rspamd_fstring_t *reply;
+	goffset body_offset = -1;
 
 	session = bk_conn->s;
 	rspamd_http_connection_steal_msg (session->master_conn->backend_conn);
@@ -1518,7 +1538,7 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 	rspamd_http_connection_reset (session->master_conn->backend_conn);
 
 	if (!proxy_backend_parse_results (session, bk_conn, session->ctx->lua_state,
-			bk_conn->parser_from_ref, msg->body_buf.begin, msg->body_buf.len)) {
+			bk_conn->parser_from_ref, msg, &body_offset)) {
 		msg_warn_session ("cannot parse results from the master backend");
 	}
 
@@ -1549,8 +1569,17 @@ proxy_backend_master_finish_handler (struct rspamd_http_connection *conn,
 
 	if (session->client_milter_conn) {
 		nsession = proxy_session_refresh (session);
-		rspamd_milter_send_task_results (nsession->client_milter_conn,
-				session->master_conn->results);
+
+		if (body_offset > 0) {
+			rspamd_milter_send_task_results (nsession->client_milter_conn,
+					session->master_conn->results,
+					msg->body_buf.begin + body_offset,
+					msg->body_buf.len - body_offset);
+		}
+		else {
+			rspamd_milter_send_task_results (nsession->client_milter_conn,
+					session->master_conn->results, NULL, 0);
+		}
 		REF_RELEASE (session);
 		rspamd_http_message_free (msg);
 	}
@@ -1602,8 +1631,50 @@ rspamd_proxy_scan_self_reply (struct rspamd_task *task)
 
 	if (session->client_milter_conn) {
 		nsession = proxy_session_refresh (session);
-		rspamd_milter_send_task_results (nsession->client_milter_conn,
-				session->master_conn->results);
+
+		if (task->flags & RSPAMD_TASK_FLAG_MESSAGE_REWRITE) {
+			const gchar *start;
+			goffset len, hdr_off;
+
+			start = task->msg.begin;
+			len = task->msg.len;
+
+			hdr_off = MESSAGE_FIELD (task, raw_headers_content).len;
+
+			if (hdr_off < len) {
+				start += hdr_off;
+				len -= hdr_off;
+
+				/* The problem here is that we need not end of headers, we need
+				 * start of body.
+				 *
+				 * Hence, we need to skip one \r\n till there is anything else in
+				 * a line.
+				 */
+
+				if (*start == '\r' && len > 0) {
+					start++;
+					len--;
+				}
+
+				if (*start == '\n' && len > 0) {
+					start++;
+					len--;
+				}
+
+				rspamd_milter_send_task_results (nsession->client_milter_conn,
+						session->master_conn->results, start, len);
+			}
+			else {
+				/* XXX: should never happen! */
+				rspamd_milter_send_task_results (nsession->client_milter_conn,
+						session->master_conn->results, NULL, 0);
+			}
+		}
+		else {
+			rspamd_milter_send_task_results (nsession->client_milter_conn,
+					session->master_conn->results, NULL, 0);
+		}
 		rspamd_http_message_free (msg);
 		REF_RELEASE (session);
 	}

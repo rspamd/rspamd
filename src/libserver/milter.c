@@ -1786,7 +1786,9 @@ rspamd_milter_process_milter_block (struct rspamd_milter_session *session,
 
 void
 rspamd_milter_send_task_results (struct rspamd_milter_session *session,
-		const ucl_object_t *results)
+								 const ucl_object_t *results,
+								 const gchar *new_body,
+								 gsize bodylen)
 {
 	const ucl_object_t *elt;
 	struct rspamd_milter_private *priv = session->priv;
@@ -1881,6 +1883,11 @@ rspamd_milter_send_task_results (struct rspamd_milter_session *session,
 
 	if (processed) {
 		goto cleanup;
+	}
+
+	if (new_body) {
+		rspamd_milter_send_action (session, RSPAMD_MILTER_REPLBODY,
+				bodylen, new_body);
 	}
 
 	if (priv->no_action) {
