@@ -1522,6 +1522,7 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 		struct rspamd_http_message *msg,
 		const gchar *name, ucl_object_t *result, GString *input,
 		gpointer ud, gdouble start_time, gdouble send_time,
+		const gchar *body, gsize bodylen,
 		GError *err)
 {
 	gchar *ucl_out;
@@ -1529,8 +1530,6 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 	struct rspamc_command *cmd;
 	FILE *out = stdout;
 	gdouble finish = rspamd_get_ticks (FALSE), diff;
-	const gchar *body;
-	gsize body_len;
 
 	cmd = cbdata->cmd;
 
@@ -1603,11 +1602,15 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 				rspamd_fprintf (out, "%s\n", err->message);
 
 				if (json && msg != NULL) {
-					body = rspamd_http_message_get_body (msg, &body_len);
+					const gchar *raw;
+					gsize rawlen;
 
-					if (body) {
+					raw = rspamd_http_message_get_body (msg, &rawlen);
+
+					if (raw) {
 						/* We can also output the resulting json */
-						rspamd_fprintf (out, "%*s\n", (gint)body_len, body);
+						rspamd_fprintf (out, "%*s\n", (gint)rawlen - bodylen,
+								raw);
 					}
 				}
 			}

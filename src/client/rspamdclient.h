@@ -49,6 +49,8 @@ typedef void (*rspamd_client_callback) (
 		gpointer ud,
 		gdouble start_time,
 		gdouble send_time,
+		const gchar *body,
+		gsize body_len,
 		GError *err);
 
 struct rspamd_http_context;

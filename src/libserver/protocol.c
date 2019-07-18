@@ -1661,7 +1661,7 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		compressed_reply->len = zout.pos;
 		rspamd_fstring_free (reply);
 		rspamd_http_message_set_body_from_fstring_steal (msg, compressed_reply);
-		rspamd_http_message_add_header (msg, "Compression", "zstd");
+		rspamd_http_message_add_header (msg, COMPRESSION_HEADER, "zstd");
 
 		if (task->cfg->libs_ctx->out_dict &&
 				task->cfg->libs_ctx->out_dict->id != 0) {

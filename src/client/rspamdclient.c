@@ -17,6 +17,7 @@
 #include "libutil/util.h"
 #include "libutil/http_connection.h"
 #include "libutil/http_private.h"
+#include "libserver/protocol_internal.h"
 #include "unix-std.h"
 #include "contrib/zstd/zstd.h"
 #include "contrib/zstd/zdict.h"
@@ -96,7 +97,7 @@ rspamd_client_error_handler (struct rspamd_http_connection *conn, GError *err)
 	c = req->conn;
 	req->cb (c, NULL, c->server_name->str, NULL,
 			req->input, req->ud,
-			c->start_time, c->send_time, err);
+			c->start_time, c->send_time, NULL, 0, err);
 }
 
 static gint
@@ -109,6 +110,9 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 	struct ucl_parser *parser;
 	GError *err;
 	const rspamd_ftok_t *tok;
+	const gchar *start, *body = NULL;
+	guchar *out = NULL;
+	gsize len, bodylen = 0;
 
 	c = req->conn;
 
@@ -119,6 +123,7 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 		rspamd_http_connection_read_message (c->http_conn,
 			c->req,
 			c->timeout);
+
 		return 0;
 	}
 	else {
@@ -127,13 +132,13 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 					msg->code,
 					(gint)msg->status->len, msg->status->str);
 			req->cb (c, msg, c->server_name->str, NULL, req->input, req->ud,
-					c->start_time, c->send_time, err);
+					c->start_time, c->send_time, body, bodylen, err);
 			g_error_free (err);
 
 			return 0;
 		}
 
-		tok = rspamd_http_message_find_header (msg, "compression");
+		tok = rspamd_http_message_find_header (msg, COMPRESSION_HEADER);
 
 		if (tok) {
 			/* Need to uncompress */
@@ -146,7 +151,6 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 				ZSTD_DStream *zstream;
 				ZSTD_inBuffer zin;
 				ZSTD_outBuffer zout;
-				guchar *out;
 				gsize outlen, r;
 
 				zstream = ZSTD_createDStream ();
@@ -174,12 +178,11 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 								ZSTD_getErrorName (r));
 						req->cb (c, msg, c->server_name->str, NULL,
 								req->input, req->ud, c->start_time,
-								c->send_time, err);
+								c->send_time, body, bodylen, err);
 						g_error_free (err);
 						ZSTD_freeDStream (zstream);
-						g_free (out);
 
-						return 0;
+						goto end;
 					}
 
 					if (zout.pos == zout.size) {
@@ -191,48 +194,62 @@ rspamd_client_finish_handler (struct rspamd_http_connection *conn,
 
 				ZSTD_freeDStream (zstream);
 
-				parser = ucl_parser_new (0);
-				if (!ucl_parser_add_chunk (parser, zout.dst, zout.pos)) {
-					err = g_error_new (RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
-							ucl_parser_get_error (parser));
-					ucl_parser_free (parser);
-					req->cb (c, msg, c->server_name->str, NULL, req->input,
-							req->ud, c->start_time, c->send_time, err);
-					g_error_free (err);
-					g_free (zout.dst);
-
-					return 0;
-				}
-
-				g_free (zout.dst);
+				start = zout.dst;
+				len = zout.pos;
 			}
 			else {
 				err = g_error_new (RCLIENT_ERROR, 500,
 						"Invalid compression method");
 				req->cb (c, msg, c->server_name->str, NULL,
-						req->input, req->ud, c->start_time, c->send_time, err);
+						req->input, req->ud, c->start_time, c->send_time,
+						body, bodylen, err);
 				g_error_free (err);
 
 				return 0;
 			}
 		}
 		else {
-			parser = ucl_parser_new (0);
-			if (!ucl_parser_add_chunk (parser, msg->body_buf.begin, msg->body_buf.len)) {
-				err = g_error_new (RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
-						ucl_parser_get_error (parser));
-				ucl_parser_free (parser);
-				req->cb (c, msg, c->server_name->str, NULL,
-						req->input, req->ud, c->start_time, c->send_time, err);
-				g_error_free (err);
+			start = msg->body_buf.begin;
+			len = msg->body_buf.len;
+		}
 
-				return 0;
+		/* Deal with body */
+		tok = rspamd_http_message_find_header (msg, MESSAGE_OFFSET_HEADER);
+
+		if (tok) {
+			gulong value = 0;
+
+			if (rspamd_strtoul (tok->begin, tok->len, &value) &&
+					value < len) {
+				body = start + value;
+				bodylen = len - value;
+				len = value;
 			}
 		}
 
-		req->cb (c, msg, c->server_name->str, ucl_parser_get_object (
-				parser), req->input, req->ud, c->start_time, c->send_time, NULL);
+		parser = ucl_parser_new (0);
+		if (!ucl_parser_add_chunk (parser, start, len)) {
+			err = g_error_new (RCLIENT_ERROR, msg->code, "Cannot parse UCL: %s",
+					ucl_parser_get_error (parser));
+			ucl_parser_free (parser);
+			req->cb (c, msg, c->server_name->str, NULL,
+					req->input, req->ud,
+					c->start_time, c->send_time, body, bodylen, err);
+			g_error_free (err);
+
+			goto end;
+		}
+
+		req->cb (c, msg, c->server_name->str,
+				ucl_parser_get_object (parser),
+				req->input, req->ud,
+				c->start_time, c->send_time, body, bodylen, NULL);
 		ucl_parser_free (parser);
+	}
+
+end:
+	if (out) {
+		g_free (out);
 	}
 
 	return 0;
@@ -419,7 +436,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 	}
 
 	if (compressed) {
-		rspamd_http_message_add_header (req->msg, "Compression", "zstd");
+		rspamd_http_message_add_header (req->msg, COMPRESSION_HEADER, "zstd");
 
 		if (dict_id != 0) {
 			gchar dict_str[32];
