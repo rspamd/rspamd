@@ -90,15 +90,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 	}
 
 	new_task->event_loop = event_loop;
-	if (event_loop) {
-		new_task->task_timestamp = ev_time ();
-		new_task->time_virtual = ev_now (event_loop);
-	}
-	else {
-		new_task->task_timestamp = ev_time ();
-		new_task->time_virtual = rspamd_get_virtual_ticks ();
-	}
-
+	new_task->task_timestamp = ev_time ();
 	new_task->time_real_finish = NAN;
 
 	if (pool == NULL) {

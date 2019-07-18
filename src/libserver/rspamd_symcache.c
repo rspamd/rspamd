@@ -177,6 +177,7 @@ struct rspamd_symcache {
 	guint id;
 	struct rspamd_config *cfg;
 	gdouble reload_time;
+	gdouble last_profile;
 	gint peak_cb;
 };
 
@@ -221,6 +222,8 @@ struct cache_savepoint {
 	enum rspamd_cache_savepoint_stage pass;
 	guint version;
 	guint items_inflight;
+	gboolean profile;
+	gdouble profile_start;
 
 	struct rspamd_metric_result *rs;
 	gdouble lim;
@@ -237,6 +240,13 @@ struct rspamd_cache_refresh_cbdata {
 	struct rspamd_worker *w;
 	struct ev_loop *event_loop;
 };
+
+/* At least once per minute */
+#define PROFILE_MAX_TIME (60.0)
+/* For messages larger than 2Mb enable profiling */
+#define PROFILE_MESSAGE_SIZE_THRESHOLD (1024 * 1024 * 2)
+/* Enable profile at least once per this amount of messages processed */
+#define PROFILE_PROBABILITY (0.01)
 
 /* weight, frequency, time */
 #define TIME_ALPHA (1.0)
@@ -764,17 +774,17 @@ rspamd_symcache_load_items (struct rspamd_symcache *cache, const gchar *name)
 
 			elt = ucl_object_lookup (cur, "frequency");
 			if (elt && ucl_object_type (elt) == UCL_OBJECT) {
-				const ucl_object_t *cur;
+				const ucl_object_t *freq_elt;
 
-				cur = ucl_object_lookup (elt, "avg");
+				freq_elt = ucl_object_lookup (elt, "avg");
 
-				if (cur) {
-					item->st->avg_frequency = ucl_object_todouble (cur);
+				if (freq_elt) {
+					item->st->avg_frequency = ucl_object_todouble (freq_elt);
 				}
-				cur = ucl_object_lookup (elt, "stddev");
+				freq_elt = ucl_object_lookup (elt, "stddev");
 
-				if (cur) {
-					item->st->stddev_frequency = ucl_object_todouble (cur);
+				if (freq_elt) {
+					item->st->stddev_frequency = ucl_object_todouble (freq_elt);
 				}
 			}
 
@@ -1576,7 +1586,6 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 		struct rspamd_symcache_item *item,
 		struct cache_savepoint *checkpoint)
 {
-	double t1 = 0;
 	struct rspamd_task **ptask;
 	lua_State *L;
 	gboolean check = TRUE;
@@ -1637,8 +1646,12 @@ rspamd_symcache_check_symbol (struct rspamd_task *task,
 
 	if (check) {
 		msg_debug_cache_task ("execute %s, %d", item->symbol, item->id);
-		t1 = ev_now (task->event_loop);
-		dyn_item->start_msec = (t1 - task->time_virtual) * 1e3;
+
+		if (checkpoint->profile) {
+			dyn_item->start_msec = (rspamd_get_virtual_ticks () -
+					checkpoint->profile_start) * 1e3;
+		}
+
 		dyn_item->async_events = 0;
 		checkpoint->cur_item = item;
 		checkpoint->items_inflight ++;
@@ -1786,6 +1799,18 @@ rspamd_symcache_make_checkpoint (struct rspamd_task *task,
 	REF_RETAIN (checkpoint->order);
 	rspamd_mempool_add_destructor (task->task_pool,
 			rspamd_symcache_order_unref, checkpoint->order);
+
+	/* Calculate profile probability */
+	ev_tstamp now = ev_now (task->event_loop);
+
+	if ((cache->last_profile == 0.0 || now > cache->last_profile + PROFILE_MAX_TIME) ||
+			(task->msg.len >= PROFILE_MESSAGE_SIZE_THRESHOLD) ||
+			(rspamd_random_double_fast () >= (1 - PROFILE_PROBABILITY))) {
+		msg_debug_cache_task ("enable profiling of symbols for task");
+		checkpoint->profile = TRUE;
+		checkpoint->profile_start = rspamd_get_virtual_ticks ();
+		cache->last_profile = now;
+	}
 
 	checkpoint->pass = RSPAMD_CACHE_PASS_INIT;
 	task->checkpoint = checkpoint;
@@ -2880,7 +2905,7 @@ rspamd_symcache_finalize_item (struct rspamd_task *task,
 	struct cache_savepoint *checkpoint = task->checkpoint;
 	struct cache_dependency *rdep;
 	struct rspamd_symcache_dynamic_item *dyn_item;
-	gdouble t2, diff;
+	gdouble diff;
 	guint i;
 	const gdouble slow_diff_limit = 300;
 
@@ -2909,20 +2934,21 @@ rspamd_symcache_finalize_item (struct rspamd_task *task,
 	checkpoint->items_inflight --;
 	checkpoint->cur_item = NULL;
 
-	t2 = ev_now (task->event_loop);
-	diff = ((t2 - task->time_virtual) * 1e3 - dyn_item->start_msec);
+	if (checkpoint->profile) {
+		diff = ((rspamd_get_virtual_ticks () - checkpoint->profile_start) * 1e3 -
+				dyn_item->start_msec);
+		if (diff > slow_diff_limit) {
+			msg_info_task ("slow rule: %s(%d): %.2f ms", item->symbol, item->id,
+					diff);
+		}
 
-	if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {
-		rspamd_task_profile_set (task, item->symbol, diff);
-	}
+		if (G_UNLIKELY (RSPAMD_TASK_IS_PROFILING (task))) {
+			rspamd_task_profile_set (task, item->symbol, diff);
+		}
 
-	if (diff > slow_diff_limit) {
-		msg_info_task ("slow rule: %s(%d): %.2f ms", item->symbol, item->id,
-				diff);
-	}
-
-	if (rspamd_worker_is_scanner (task->worker)) {
-		rspamd_set_counter (item->cd, diff);
+		if (rspamd_worker_is_scanner (task->worker)) {
+			rspamd_set_counter (item->cd, diff);
+		}
 	}
 
 	/* Process all reverse dependencies */

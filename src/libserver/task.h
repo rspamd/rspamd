@@ -193,7 +193,6 @@ struct rspamd_task {
 	struct rspamd_config *cfg;                        /**< pointer to config object						*/
 	GError *err;
 	rspamd_mempool_t *task_pool;                    /**< memory pool for task							*/
-	double time_virtual;
 	double time_real_finish;
 	ev_tstamp task_timestamp;
 
