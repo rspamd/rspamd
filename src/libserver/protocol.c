@@ -1558,6 +1558,63 @@ rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		}
 	}
 
+	if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_BODY_BLOCK) {
+		/* Check if we need to insert a body block */
+		if (task->flags & RSPAMD_TASK_FLAG_MESSAGE_REWRITE) {
+			GString *hdr_offset = g_string_sized_new (30);
+
+			rspamd_printf_gstring (hdr_offset, "%z", RSPAMD_FSTRING_LEN (reply));
+			rspamd_http_message_add_header (msg, "Message-Offset",
+					hdr_offset->str);
+			msg_debug_protocol ("write body block at position %s",
+					hdr_offset->str);
+			g_string_free (hdr_offset, TRUE);
+
+			/* In case of milter, we append just body, otherwise - full message */
+			if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_MILTER) {
+				const gchar *start;
+				goffset len, hdr_off;
+
+				start = task->msg.begin;
+				len = task->msg.len;
+
+				hdr_off = MESSAGE_FIELD (task, raw_headers_content).len;
+
+				if (hdr_off < len) {
+					start += hdr_off;
+					len -= hdr_off;
+
+					/* The problem here is that we need not end of headers, we need
+					 * start of body.
+					 *
+					 * Hence, we need to skip one \r\n till there is anything else in
+					 * a line.
+					 */
+
+					if (*start == '\r' && len > 0) {
+						start ++;
+						len --;
+					}
+
+					if (*start == '\n' && len > 0) {
+						start ++;
+						len --;
+					}
+
+					msg_debug_protocol ("milter version of body block size %d",
+							(int)len);
+					reply = rspamd_fstring_append (reply, start, len);
+				}
+			}
+			else {
+				msg_debug_protocol ("general version of body block size %d",
+						(int)task->msg.len);
+				reply = rspamd_fstring_append (reply,
+						task->msg.begin, task->msg.len);
+			}
+		}
+	}
+
 	if ((task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED) &&
 			rspamd_libs_reset_compression (task->cfg->libs_ctx)) {
 		/* We can compress output */
