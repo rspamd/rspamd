@@ -1965,8 +1965,15 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 	}
 
 	if (priv->ctx->config.user_agent && conn->type == RSPAMD_HTTP_CLIENT) {
-		rspamd_http_message_add_header (msg, "User-Agent",
-				priv->ctx->config.user_agent);
+		struct rspamd_http_header *found = NULL;
+
+		HASH_FIND (hh, msg->headers, "User-Agent",
+				sizeof ("User-Agent") - 1, found);
+
+		if (!found) {
+			rspamd_http_message_add_header (msg, "User-Agent",
+					priv->ctx->config.user_agent);
+		}
 	}
 
 	if (encrypted) {
