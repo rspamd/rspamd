@@ -1497,7 +1497,7 @@ rspamd_milter_to_http (struct rspamd_milter_session *session)
 	}
 
 	rspamd_milter_macro_http (session, msg);
-	rspamd_http_message_add_header (msg, MILTER_HEADER, "Yes");
+	rspamd_http_message_add_header (msg, FLAGS_HEADER, "milter,body_block");
 
 	return msg;
 }
