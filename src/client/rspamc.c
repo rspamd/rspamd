@@ -1609,7 +1609,7 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 
 					if (raw) {
 						/* We can also output the resulting json */
-						rspamd_fprintf (out, "%*s\n", (gint)rawlen - bodylen,
+						rspamd_fprintf (out, "%*s\n", (gint)(rawlen - bodylen),
 								raw);
 					}
 				}
