@@ -231,13 +231,7 @@ define(["jquery", "footable", "humanize"],
                             sortValue: item.unix_time
                         }
                     };
-                    var scan_time = item.time_real.toFixed(3) + " / " + item.time_virtual.toFixed(3);
-                    item.scan_time = {
-                        options: {
-                            sortValue: item.time_real
-                        },
-                        value: scan_time
-                    };
+                    item.time_real = item.time_real.toFixed(3);
                     item.id = item["message-id"];
 
                     var rcpt = {};
@@ -272,12 +266,6 @@ define(["jquery", "footable", "humanize"],
             $.each(data, function (i, item) {
                 item.time = unix_time_format(item.unix_time);
                 preprocess_item(item);
-                item.scan_time = {
-                    options: {
-                        sortValue: item.scan_time
-                    },
-                    value: item.scan_time
-                };
                 item.symbols = Object.keys(item.symbols)
                     .map(function (key) {
                         return item.symbols[key];
@@ -395,14 +383,14 @@ define(["jquery", "footable", "humanize"],
                 },
                 formatter: Humanize.compactInteger
             }, {
-                name: "scan_time",
-                title: '<span title="real / virtual">Scan time</span>',
+                name: "time_real",
+                title: "Scan time",
                 breakpoints: "xs sm md",
                 style: {
                     "font-size": "11px",
                     "maxWidth": 72
                 },
-                sortValue: function (val) { return Number(val.options.sortValue); }
+                sortValue: function (val) { return Number(val); }
             }, {
                 sorted: true,
                 direction: "DESC",
@@ -484,13 +472,13 @@ define(["jquery", "footable", "humanize"],
                 formatter: Humanize.compactInteger
             }, {
                 name: "scan_time",
-                title: '<span title="real / virtual">Scan time</span>',
+                title: "Scan time",
                 breakpoints: "xs sm",
                 style: {
                     "font-size": "11px",
                     "maxWidth": 80
                 },
-                sortValue: function (val) { return Number(val.options.sortValue); }
+                sortValue: function (val) { return Number(val); }
             }, {
                 sorted: true,
                 direction: "DESC",
