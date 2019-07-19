@@ -15,6 +15,7 @@ ${RSPAMD_SCOPE}  Suite
 
 *** Test Cases ***
 Train Spam
+  Sleep  2s  Wait for redis mess
   : FOR    ${INDEX}    IN RANGE    0    10
   \  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SPAM_SYMBOL"]}
   \  Check Rspamc  ${result}  SPAM_SYMBOL (1.00)

@@ -1299,7 +1299,14 @@ local function exec_redis_script(id, params, callback, keys, args)
       table.insert(script.waitq, do_call)
     else
       -- TODO: fix taskfull requests
-      callback('NOSCRIPT', nil)
+      table.insert(script.waitq, function()
+        if script.loaded then
+          do_call(false)
+        else
+          callback('NOSCRIPT', nil)
+        end
+      end)
+      load_script_task(script, params.task)
     end
   end
 
