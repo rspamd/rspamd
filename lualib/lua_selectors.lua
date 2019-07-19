@@ -38,6 +38,7 @@ local M = "selectors"
 local E = {}
 
 local extractors = {
+  -- Plain id function
   ['id'] = {
     ['get_value'] = function(_, args)
       if args[1] then
@@ -49,6 +50,18 @@ local extractors = {
     ['description'] = [[Return value from function's argument or an empty string,
 For example, `id('Something')` returns a string 'Something']],
     ['args_schema'] = {ts.string:is_optional()}
+  },
+  -- Similar but for making lists
+  ['list'] = {
+    ['get_value'] = function(_, args)
+      if args[1] then
+        return fun.map(tostring, args), 'string_list'
+      end
+
+      return {},'string_list'
+    end,
+    ['description'] = [[Return a list from function's arguments or an empty list,
+For example, `list('foo', 'bar')` returns a list {'foo', 'bar'}]],
   },
   -- Get source IP address
   ['ip'] = {
