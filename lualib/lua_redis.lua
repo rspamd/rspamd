@@ -1102,14 +1102,16 @@ local function load_script_task(script, task)
     opt.callback = function(err, data)
       if err then
         logger.errx(task, 'cannot upload script to %s: %s; registered from: %s:%s',
-          opt.upstream:get_addr(), err, script.caller.short_src, script.caller.currentline)
+            opt.upstream:get_addr():to_string(true),
+            err, script.caller.short_src, script.caller.currentline)
         opt.upstream:fail()
         script.fatal_error = err
       else
         opt.upstream:ok()
         logger.infox(task,
           "uploaded redis script to %s with id %s, sha: %s",
-          opt.upstream:get_addr(), script.id, data)
+            opt.upstream:get_addr():to_string(true),
+            script.id, data)
         script.sha = data -- We assume that sha is the same on all servers
       end
       script.in_flight = script.in_flight - 1
@@ -1144,14 +1146,15 @@ local function load_script_taskless(script, cfg, ev_base)
     opt.callback = function(err, data)
       if err then
         logger.errx(cfg, 'cannot upload script to %s: %s; registered from: %s:%s',
-          opt.upstream:get_addr(), err, script.caller.short_src, script.caller.currentline)
+            opt.upstream:get_addr():to_string(true),
+            err, script.caller.short_src, script.caller.currentline)
         opt.upstream:fail()
         script.fatal_error = err
       else
         opt.upstream:ok()
         logger.infox(cfg,
           "uploaded redis script to %s with id %s, sha: %s",
-            opt.upstream:get_addr(), script.id, data)
+            opt.upstream:get_addr():to_string(true), script.id, data)
         script.sha = data -- We assume that sha is the same on all servers
         script.fatal_error = nil
       end
