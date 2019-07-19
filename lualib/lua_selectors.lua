@@ -26,7 +26,10 @@ limitations under the License.
 -- Typical selector looks like this: header(User).lower.substring(1, 2):ip
 --]]
 
-local exports = {}
+local exports = {
+  maps = {} -- Defined for selectors maps, must be indexed by name
+}
+
 local logger = require 'rspamd_logger'
 local fun = require 'fun'
 local lua_util = require "lua_util"
@@ -549,6 +552,56 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
       return nil
     end,
     ['description'] = 'Regexp matching',
+    ['args_schema'] = {ts.string}
+  },
+  -- Returns a value if it exists in some map (or acts like a `filter` function)
+  ['filter_map'] = {
+    ['types'] = {
+      ['string'] = true
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, t, args)
+      local map = exports.maps[args[1]]
+
+      if not map then
+        logger.errx('invalid map name: %s', args[1])
+        return nil
+      end
+
+      local res = map:get_key(inp)
+
+      if res then
+        return inp,t
+      end
+
+      return nil
+    end,
+    ['description'] = 'Returns a value if it exists in some map (or acts like a `filter` function)',
+    ['args_schema'] = {ts.string}
+  },
+  -- Returns a value from some map corresponding to some key (or acts like a `map` function)
+  ['apply_map'] = {
+    ['types'] = {
+      ['string'] = true
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, t, args)
+      local map = exports.maps[args[1]]
+
+      if not map then
+        logger.errx('invalid map name: %s', args[1])
+        return nil
+      end
+
+      local res = map:get_key(inp)
+
+      if res then
+        return res,t
+      end
+
+      return nil
+    end,
+    ['description'] = 'Returns a value from some map corresponding to some key (or acts like a `map` function)',
     ['args_schema'] = {ts.string}
   },
   -- Drops input value and return values from function's arguments or an empty string
