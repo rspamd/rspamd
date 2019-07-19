@@ -13,6 +13,7 @@ context("Selectors test", function()
   lua_selectors.maps.test_map = lua_maps.map_add_from_ucl({
     'key value',
     'key1 value1',
+    'key3 value1',
   }, 'hash', 'test selectors maps')
 
   before(function()
@@ -253,6 +254,18 @@ context("Selectors test", function()
     ["map apply"] = {
       selector = "id('key').apply_map(test_map)",
       expect = {'value'}
+    },
+    ["map filter list"] = {
+      selector = "list('key', 'key1', 'key2').filter_map(test_map)",
+      expect = {{'key', 'key1'}}
+    },
+    ["map apply list"] = {
+      selector = "list('key', 'key1', 'key2', 'key3').apply_map(test_map)",
+      expect = {{'value', 'value1', 'value1'}}
+    },
+    ["map apply list uniq"] = {
+      selector = "list('key', 'key1', 'key2', 'key3').apply_map(test_map).uniq",
+      expect = {{'value1', 'value'}}
     },
   }
 
