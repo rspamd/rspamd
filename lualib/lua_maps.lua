@@ -206,14 +206,30 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
         else
           local data = {}
           local nelts = 0
+          -- Plain array of keys, count merely numeric elts
           for _,elt in ipairs(opt) do
             if type(elt) == 'string' then
-              data[elt] = true
+              -- Numeric table
+              if mtype == 'hash' then
+                -- Treat as KV pair
+                local lua_util = require "lua_util"
+                local pieces = lua_util.str_split(elt, ' ')
+                if #pieces > 1 then
+                  local key = table.remove(pieces, 1)
+                  data[key] = table.concat(pieces, ' ')
+                else
+                  data[elt] = true
+                end
+              else
+                data[elt] = true
+              end
+
               nelts = nelts + 1
             end
           end
 
           if nelts > 0 then
+            -- Plain Lua table that is used as a map
             ret.__data = data
             ret.get_key = function(t, k)
               if k ~= '__data' then
@@ -222,11 +238,17 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
 
               return nil
             end
+
             return ret
+          else
+            -- Empty map, huh?
+            rspamd_logger.errx(rspamd_config, 'invalid map element: %s',
+                opt)
           end
         end
       end
     else
+      -- We have some non-trivial object so let C code to deal with it somehow...
       local map = rspamd_config:add_map{
         type = mtype,
         description = description,
@@ -237,7 +259,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
         setmetatable(ret, ret_mt)
         return ret
       end
-    end
+    end -- opt[1]
   end
 
   return nil
