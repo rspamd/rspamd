@@ -2668,12 +2668,12 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 	struct rspamd_image *image;
 	struct fuzzy_cmd_io *io, *cur;
 	guint i, j;
-	GPtrArray *res;
+	GPtrArray *res = NULL;
 	gboolean check_part, fuzzy_check;
 
-	res = g_ptr_array_sized_new (MESSAGE_FIELD (task, parts)->len + 1);
-
 	if (c == FUZZY_STAT) {
+		res = g_ptr_array_sized_new (1);
+
 		io = fuzzy_cmd_stat (rule, c, flag, value, task->task_pool);
 		if (io) {
 			g_ptr_array_add (res, io);
@@ -2681,6 +2681,12 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 
 		goto end;
 	}
+
+	if (task->message == NULL) {
+		goto end;
+	}
+
+	res = g_ptr_array_sized_new (MESSAGE_FIELD (task, parts)->len + 1);
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, mime_part) {
 		check_part = FALSE;
@@ -2740,7 +2746,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 	}
 
 end:
-	if (res->len == 0) {
+	if (res && res->len == 0) {
 		g_ptr_array_free (res, TRUE);
 
 		return NULL;
