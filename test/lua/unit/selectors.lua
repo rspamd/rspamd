@@ -3,11 +3,17 @@ context("Selectors test", function()
   local rspamd_task = require "rspamd_task"
   local logger = require "rspamd_logger"
   local lua_selectors = require "lua_selectors"
+  local lua_maps = require "lua_maps"
   local test_helper = require "rspamd_test_helper"
   local cfg = rspamd_config
   local task
 
   test_helper.init_url_parser()
+
+  lua_selectors.maps.test_map = lua_maps.map_add_from_ucl({
+    'key value',
+    'key1 value1',
+  }, 'hash', 'test selectors maps')
 
   before(function()
     local res
@@ -238,7 +244,16 @@ context("Selectors test", function()
 
     ["transformation substring -4"] = {
                 selector = "header(Subject, strong).substring(-4)",
-                expect = {'ject'}},
+                expect = {'ject'}
+    },
+    ["map filter"] = {
+      selector = "id('key').filter_map(test_map)",
+      expect = {'key'}
+    },
+    ["map apply"] = {
+      selector = "id('key').apply_map(test_map)",
+      expect = {'value'}
+    },
   }
 
   for case_name, case in pairs(cases) do
