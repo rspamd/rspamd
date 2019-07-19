@@ -243,7 +243,7 @@ if opts and type(opts) == 'table' then
 
     if rule['map'] then
       rule['name'] = rule['map']
-      rule.map = lua_maps.map_add_from_ucl(rule.whitelist,
+      rule.map = lua_maps.map_add_from_ucl(rule.map,
           'regexp', 'Emails rule %s whitelist', rule['symbol'])
     end
     if not rule['symbol'] or (not rule['map'] and not rule['dnsbl']) then
