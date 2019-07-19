@@ -110,9 +110,6 @@ Redis SET
   Should Be Equal As Integers  ${result.rc}  0
 
 Run Redis
-  ${has_TMPDIR} =  Evaluate  'TMPDIR'
-  ${tmpdir} =  Run Keyword If  '${has_TMPDIR}' == 'True'  Set Variable  &{kwargs}[TMPDIR]
-  ...  ELSE  Make Temporary Directory
   ${template} =  Get File  ${TESTDIR}/configs/redis-server.conf
   ${config} =  Replace Variables  ${template}
   Create File  ${TMPDIR}/redis-server.conf  ${config}
@@ -120,8 +117,8 @@ Run Redis
   ${result} =  Run Process  redis-server  ${TMPDIR}/redis-server.conf
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Be Equal As Integers  ${result.rc}  0
-  Wait Until Keyword Succeeds  30 sec  1 sec  Check Pidfile  ${TMPDIR}/redis.pid
-  Wait Until Keyword Succeeds  30 sec  1 sec  TCP Connect  ${REDIS_ADDR}  ${REDIS_PORT}
+  Wait Until Keyword Succeeds  5x  1 sec  Check Pidfile  ${TMPDIR}/redis.pid  timeout=0.5s
+  Wait Until Keyword Succeeds  5x  1 sec  Redis Check  ${REDIS_ADDR}  ${REDIS_PORT}
   ${REDIS_PID} =  Get File  ${TMPDIR}/redis.pid
   Run Keyword If  '${REDIS_SCOPE}' == 'Test'  Set Test Variable  ${REDIS_PID}
   ...  ELSE IF  '${REDIS_SCOPE}' == 'Suite'  Set Suite Variable  ${REDIS_PID}
@@ -136,8 +133,8 @@ Run Nginx
   ${result} =  Run Process  nginx  -c  ${TMPDIR}/nginx.conf
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   Should Be Equal As Integers  ${result.rc}  0
-  Wait Until Keyword Succeeds  30 sec  1 sec  Check Pidfile  ${TMPDIR}/nginx.pid
-  Wait Until Keyword Succeeds  30 sec  1 sec  TCP Connect  ${NGINX_ADDR}  ${NGINX_PORT}
+  Wait Until Keyword Succeeds  10x  1 sec  Check Pidfile  ${TMPDIR}/nginx.pid  timeout=0.5s
+  Wait Until Keyword Succeeds  5x  1 sec  TCP Connect  ${NGINX_ADDR}  ${NGINX_PORT}
   ${NGINX_PID} =  Get File  ${TMPDIR}/nginx.pid
   Run Keyword If  '${NGINX_SCOPE}' == 'Test'  Set Test Variable  ${NGINX_PID}
   ...  ELSE IF  '${NGINX_SCOPE}' == 'Suite'  Set Suite Variable  ${NGINX_PID}
@@ -174,7 +171,8 @@ Run Rspamd
   Run Keyword If  ${result.rc} != 0  Log  ${result.stderr}
   ${rspamd_logpos} =  Log Logs  ${tmpdir}/rspamd.log  0
   Should Be Equal As Integers  ${result.rc}  0
-  Wait Until Keyword Succeeds  30 sec  1 sec  Check Pidfile  ${tmpdir}/rspamd.pid
+  Wait Until Keyword Succeeds  10x  1 sec  Check Pidfile  ${tmpdir}/rspamd.pid  timeout=0.5s
+  Wait Until Keyword Succeeds  5x  1 sec  Ping Rspamd  ${LOCAL_ADDR}  ${PORT_NORMAL}
   ${rspamd_pid} =  Get File  ${tmpdir}/rspamd.pid
   Set To Dictionary  ${d}  RSPAMD_LOGPOS=${rspamd_logpos}  RSPAMD_PID=${rspamd_pid}  TMPDIR=${tmpdir}
   [Return]  &{d}

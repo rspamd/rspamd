@@ -66,5 +66,5 @@ Neural Setup
   Run Redis
 
 Neural Teardown
-  Normal Teardown
   Shutdown Process With Children  ${REDIS_PID}
+  Normal Teardown
