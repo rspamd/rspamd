@@ -668,7 +668,7 @@ rspamd_ssl_write (struct rspamd_ssl_connection *conn, gconstpointer buf,
 	}
 	else {
 		ret = SSL_get_error (conn->ssl, ret);
-		conn->state = ssl_next_read;
+		conn->state = ssl_next_write;
 
 		if (ret == SSL_ERROR_WANT_READ) {
 			what = EV_READ;
