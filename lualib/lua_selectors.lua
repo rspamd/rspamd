@@ -723,10 +723,12 @@ local function process_selector(task, sel)
         if meth.types[pt] then
           lua_util.debugm(M, task, 'map method `%s` to list of %s',
               meth.name, pt)
-          input = fun.map(function(list_elt)
-            local ret, _ = meth.process(list_elt, pt)
-            return ret
-          end, input)
+          -- Map method to a list of inputs, excluding empty elements
+          input = fun.filter(function(map_elt) return map_elt end,
+              fun.map(function(list_elt)
+                local ret, _ = meth.process(list_elt, pt)
+                return ret
+              end, input))
           etype = 'string_list'
         end
       end
@@ -743,10 +745,11 @@ local function process_selector(task, sel)
         etype = 'string'
       else
         lua_util.debugm(M, task, 'apply implicit map %s->string', pt)
-        input = fun.map(function(list_elt)
-          local ret = implicit_tostring(pt, list_elt)
-          return ret
-        end, input)
+        input = fun.filter(function(map_elt) return map_elt end,
+            fun.map(function(list_elt)
+              local ret = implicit_tostring(pt, list_elt)
+              return ret
+            end, input))
         etype = 'string_list'
       end
     end
@@ -773,12 +776,16 @@ local function process_selector(task, sel)
         local map_type = x.map_type .. '_list'
         lua_util.debugm(M, task, 'map `%s` to list of %s resulting %s',
             x.name, pt, map_type)
-
-        return {fun.map(function(list_elt)
-          if not list_elt then return nil end
-          local ret, _ = x.process(list_elt, pt, x.args)
-          return ret
-        end, value), map_type}
+        -- Apply map, filtering empty values
+        return {
+          fun.filter(function(map_elt) return map_elt end,
+              fun.map(function(list_elt)
+                if not list_elt then return nil end
+                local ret, _ = x.process(list_elt, pt, x.args)
+                return ret
+              end, value)),
+          map_type -- Returned type
+        }
       end
       logger.errx(task, 'cannot apply transform %s for type %s', x.name, t)
       return nil
