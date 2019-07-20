@@ -789,7 +789,14 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 	niov = wh->iovlen;
 	remain = wh->pos;
 	/* We know that niov is small enough for that */
-	cur_iov = alloca (niov * sizeof (struct iovec));
+
+	if (niov < 1024) {
+		cur_iov = g_alloca (niov * sizeof (struct iovec));
+	}
+	else {
+		cur_iov = g_malloc0 (niov * sizeof (struct iovec));
+	}
+
 	memcpy (cur_iov, wh->iov, niov * sizeof (struct iovec));
 
 	for (i = 0; i < wh->iovlen && remain > 0; i++) {
@@ -820,6 +827,10 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 	}
 	else {
 		r = sendmsg (cbd->fd, &msg, flags);
+	}
+
+	if (niov >= 1024) {
+		g_free (cur_iov);
 	}
 
 	if (r == -1) {
