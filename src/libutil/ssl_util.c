@@ -408,7 +408,16 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 
 	if (what == EV_TIMER) {
 		c->shut = ssl_shut_unclean;
+		rspamd_ev_watcher_stop (c->event_loop, c->ev);
+		g_set_error (&err, rspamd_ssl_quark (), ETIMEDOUT,
+				"ssl connection timed out");
+		c->err_handler (c->handler_data, err);
+		g_error_free (err);
+
+		return;
 	}
+
+	msg_debug ("ssl event; what=%d; c->state=%d", (int)what, (int)c->state);
 
 	switch (c->state) {
 	case ssl_conn_init:
@@ -453,6 +462,10 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 		c->handler (fd, EV_READ, c->handler_data);
 		break;
 	case ssl_next_write:
+		rspamd_ev_watcher_reschedule (c->event_loop, c->ev, EV_WRITE);
+		c->state = ssl_conn_connected;
+		c->handler (fd, EV_WRITE, c->handler_data);
+		break;
 	case ssl_conn_connected:
 		rspamd_ev_watcher_reschedule (c->event_loop, c->ev, what);
 		c->state = ssl_conn_connected;
@@ -697,7 +710,7 @@ gssize
 rspamd_ssl_writev (struct rspamd_ssl_connection *conn, struct iovec *iov,
 		gsize iovlen)
 {
-	static guchar ssl_buf[16000];
+	guchar ssl_buf[16000];
 	guchar *p;
 	struct iovec *cur;
 	guint i, remain;
