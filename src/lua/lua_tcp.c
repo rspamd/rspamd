@@ -273,9 +273,9 @@ struct lua_tcp_read_handler {
 struct lua_tcp_write_handler {
 	struct iovec *iov;
 	guint iovlen;
-	guint pos;
-	gsize total_bytes;
 	gint cbref;
+	gsize pos;
+	gsize total_bytes;
 };
 
 enum lua_tcp_handler_type {
@@ -396,6 +396,7 @@ lua_tcp_shift_handler (struct lua_tcp_cbdata *cbd)
 	}
 
 	if (hdl->type == LUA_WANT_READ) {
+		msg_debug_tcp ("switch from read handler");
 		if (hdl->h.r.cbref && hdl->h.r.cbref != -1) {
 			luaL_unref (cbd->cfg->lua_state, LUA_REGISTRYINDEX, hdl->h.r.cbref);
 		}
@@ -405,6 +406,7 @@ lua_tcp_shift_handler (struct lua_tcp_cbdata *cbd)
 		}
 	}
 	else if (hdl->type == LUA_WANT_WRITE) {
+		msg_debug_tcp ("switch from write handler");
 		if (hdl->h.w.cbref && hdl->h.w.cbref != -1) {
 			luaL_unref (cbd->cfg->lua_state, LUA_REGISTRYINDEX, hdl->h.w.cbref);
 		}
@@ -755,6 +757,7 @@ lua_tcp_connect_helper (struct lua_tcp_cbdata *cbd)
 	pcbd = lua_newuserdata (L, sizeof (*pcbd));
 	*pcbd = cbd;
 	rspamd_lua_setclass (L, "rspamd{tcp_sync}", -1);
+	msg_debug_tcp ("tcp connected");
 
 	lua_tcp_shift_handler (cbd);
 
@@ -822,6 +825,9 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 	flags = MSG_NOSIGNAL;
 #endif
 
+	msg_debug_tcp ("want write %d io vectors of %d", msg.msg_iovlen,
+			niov);
+
 	if (cbd->ssl_conn) {
 		r = rspamd_ssl_writev (cbd->ssl_conn, msg.msg_iov, msg.msg_iovlen);
 	}
@@ -848,18 +854,29 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 		wh->pos += r;
 	}
 
+	msg_debug_tcp ("written %z bytes: %z/%z", r,
+			wh->pos, wh->total_bytes);
+
 	if (wh->pos >= wh->total_bytes) {
 		goto call_finish_handler;
 	}
 	else {
 		/* Want to write more */
+		if (niov > IOV_MAX && r > 0) {
+			/* XXX: special case: we know that we want to write more data
+			 * than it is available in iov function.
+			 *
+			 * Hence, we need to check if we can write more at some point...
+			 */
+			lua_tcp_write_helper (cbd);
+		}
 	}
 
 	return;
 
 call_finish_handler:
 
-	msg_debug_tcp ("finishing TCP write");
+	msg_debug_tcp ("finishing TCP write, calling TCP handler");
 
 	if ((cbd->flags & LUA_TCP_FLAG_SHUTDOWN)) {
 		/* Half close the connection */
@@ -921,7 +938,7 @@ lua_tcp_process_read_handler (struct lua_tcp_cbdata *cbd,
 		}
 	}
 	else {
-		msg_debug_tcp ("read TCP partial data");
+		msg_debug_tcp ("read TCP partial data %d bytes", cbd->in->len);
 		slen = cbd->in->len;
 
 		/* we have eaten all the data, handler should not know that there is something */

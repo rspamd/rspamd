@@ -78,7 +78,7 @@ local function http_large_tcp_ssl_symbol(task)
 
   if task:get_queue_id() == 'SSL Large TCP request' then
     logger.errx(task, 'ssl_large_tcp_symbol: begin')
-    for i = 1,10000000 do
+    for i = 1,2000 do
       data[i] = 'test\n'
     end
 
