@@ -825,8 +825,8 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 	flags = MSG_NOSIGNAL;
 #endif
 
-	msg_debug_tcp ("want write %d io vectors of %d", msg.msg_iovlen,
-			niov);
+	msg_debug_tcp ("want write %d io vectors of %d", (int)msg.msg_iovlen,
+			(int)niov);
 
 	if (cbd->ssl_conn) {
 		r = rspamd_ssl_writev (cbd->ssl_conn, msg.msg_iov, msg.msg_iovlen);
