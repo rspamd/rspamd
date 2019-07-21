@@ -1,6 +1,6 @@
 *** Settings ***
-Test Setup      Servers Setup
-Test Teardown   Servers Teardown
+Suite Setup      Servers Setup
+Suite Teardown   Servers Teardown
 Library         Process
 Library         ${TESTDIR}/lib/rspamd.py
 Resource        ${TESTDIR}/lib/rspamd.robot
@@ -11,7 +11,7 @@ Variables       ${TESTDIR}/lib/vars.py
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 ${CONFIG}       ${TESTDIR}/configs/lua_test.conf
 ${MESSAGE}      ${TESTDIR}/messages/spam_message.eml
-${RSPAMD_SCOPE}  Test
+${RSPAMD_SCOPE}  Suite
 
 *** Test Cases ***
 Simple TCP request
@@ -23,6 +23,11 @@ SSL TCP request
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
   Check Rspamc  ${result}  TCP_SSL_RESPONSE (0.00)[test]
   Check Rspamc  ${result}  TCP_SSL_RESPONSE_2 (0.00)[test2]
+
+SSL Large TCP request
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}
+  Check Rspamc  ${result}  TCP_SSL_LARGE (0.00)
+  Check Rspamc  ${result}  TCP_SSL_LARGE_2 (0.00)
 
 Sync API TCP request
   ${result} =  Scan Message With Rspamc  ${MESSAGE}
