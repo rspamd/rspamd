@@ -2139,18 +2139,21 @@ fuzzy_insert_metric_results (struct rspamd_task *task, GPtrArray *results)
 		}
 	}
 
-	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, tp) {
-		if (!IS_PART_EMPTY (tp)) {
-			seen_text = TRUE;
-		}
-		else if (tp->utf_stripped_text.magic == UTEXT_MAGIC) {
-			if (utext_isLengthExpensive (&tp->utf_stripped_text)) {
-				seen_long_text =
-						utext_nativeLength (&tp->utf_stripped_text) > text_length_cutoff;
+	if (task->message) {
+		PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, tp) {
+			if (!IS_PART_EMPTY (tp)) {
+				seen_text = TRUE;
 			}
-			else {
-				/* Cannot directly calculate length */
-				seen_long_text = tp->utf_stripped_content->len / 2 > text_length_cutoff;
+			else if (tp->utf_stripped_text.magic == UTEXT_MAGIC) {
+				if (utext_isLengthExpensive (&tp->utf_stripped_text)) {
+					seen_long_text =
+							utext_nativeLength (&tp->utf_stripped_text) > text_length_cutoff;
+				}
+				else {
+					/* Cannot directly calculate length */
+					seen_long_text =
+							tp->utf_stripped_content->len / 2 > text_length_cutoff;
+				}
 			}
 		}
 	}
