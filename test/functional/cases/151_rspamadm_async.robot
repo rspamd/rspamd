@@ -11,7 +11,7 @@ Suite Teardown  Terminate All Processes    kill=True
 ${REDIS_SCOPE}   Test
 ${CONFIG}       ${TESTDIR}/configs/plugins.conf
 ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
-${PLUGIN_CONFIG}  
+${PLUGIN_CONFIG}
 
 *** Test Cases ***
 Tcp client
@@ -39,6 +39,8 @@ DNS client
 *** Keywords ***
 
 Rspamadm test Setup
+  ${tmpdir} =  Make Temporary Directory
+  Set Suite Variable  ${TMPDIR}  ${tmpdir}
   Run Dummy Http
   Run Redis
 
