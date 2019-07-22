@@ -80,7 +80,7 @@ static gint retcode = EXIT_SUCCESS;
 } while (0)
 
 #define ADD_CLIENT_FLAG(str, n) do { \
-   g_string_append ((str), (n)); \
+   g_string_append ((str), n ","); \
 } while (0)
 
 static gboolean rspamc_password_callback (const gchar *option_name,
