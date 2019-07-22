@@ -71,6 +71,15 @@ LUA_FUNCTION_DEF (util, encode_base64);
  * @return {rspamd_text} encoded data chunk
  */
 LUA_FUNCTION_DEF (util, encode_qp);
+
+/***
+ * @function util.decode_qp(input)
+ * Decodes data from quouted printable
+ * @param {text or string} input input data
+ * @return {rspamd_text} decoded data chunk
+ */
+LUA_FUNCTION_DEF (util, decode_qp);
+
 /***
  * @function util.decode_base64(input)
  * Decodes data from base64 ignoring whitespace characters
@@ -606,6 +615,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, process_message),
 	LUA_INTERFACE_DEF (util, encode_base64),
 	LUA_INTERFACE_DEF (util, encode_qp),
+	LUA_INTERFACE_DEF (util, decode_qp),
 	LUA_INTERFACE_DEF (util, decode_base64),
 	LUA_INTERFACE_DEF (util, encode_base32),
 	LUA_INTERFACE_DEF (util, decode_base32),
@@ -1024,6 +1034,52 @@ lua_util_encode_qp (lua_State *L)
 			t->flags = RSPAMD_TEXT_FLAG_OWN;
 		}
 		else {
+			lua_pushnil (L);
+		}
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_decode_qp (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t, *out;
+	const gchar *s = NULL;
+	gsize inlen = 0;
+	gssize outlen;
+
+	if (lua_type (L, 1) == LUA_TSTRING) {
+		s = luaL_checklstring (L, 1, &inlen);
+	}
+	else if (lua_type (L, 1) == LUA_TUSERDATA) {
+		t = lua_check_text (L, 1);
+
+		if (t != NULL) {
+			s = t->start;
+			inlen = t->len;
+		}
+	}
+
+	if (s == NULL) {
+		lua_pushnil (L);
+	}
+	else {
+		out = lua_newuserdata (L, sizeof (*t));
+		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		out->start = g_malloc (inlen + 1);
+		out->flags = RSPAMD_TEXT_FLAG_OWN;
+		outlen = rspamd_decode_qp_buf (s, inlen, (gchar *)out->start, inlen + 1);
+
+		if (outlen > 0) {
+			out->len = outlen;
+		}
+		else {
+			/*
+			 * It removes out and frees memory on gc due to RSPAMD_TEXT_FLAG_OWN
+			 */
+			lua_pop (L, 1);
 			lua_pushnil (L);
 		}
 	}
