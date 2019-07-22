@@ -497,21 +497,25 @@ dkim_module_config (struct rspamd_config *cfg)
 		dkim_module_ctx->arc_sign_headers = ucl_object_tostring (value);
 	}
 
-	dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (
-			cache_size,
-			g_free,
-			dkim_module_key_dtor);
-	dkim_module_ctx->dkim_sign_hash = rspamd_lru_hash_new (
-			sign_cache_size,
-			g_free,
-			(GDestroyNotify)rspamd_dkim_sign_key_unref);
+	if (cache_size > 0) {
+		dkim_module_ctx->dkim_hash = rspamd_lru_hash_new (
+				cache_size,
+				g_free,
+				dkim_module_key_dtor);
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
+				(rspamd_mempool_destruct_t)rspamd_lru_hash_destroy,
+				dkim_module_ctx->dkim_hash);
+	}
 
-	rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)rspamd_lru_hash_destroy,
-			dkim_module_ctx->dkim_hash);
-	rspamd_mempool_add_destructor (cfg->cfg_pool,
-			(rspamd_mempool_destruct_t)rspamd_lru_hash_destroy,
-			dkim_module_ctx->dkim_sign_hash);
+	if (sign_cache_size > 0) {
+		dkim_module_ctx->dkim_sign_hash = rspamd_lru_hash_new (
+				sign_cache_size,
+				g_free,
+				(GDestroyNotify) rspamd_dkim_sign_key_unref);
+		rspamd_mempool_add_destructor (cfg->cfg_pool,
+				(rspamd_mempool_destruct_t)rspamd_lru_hash_destroy,
+				dkim_module_ctx->dkim_sign_hash);
+	}
 
 	if (dkim_module_ctx->trusted_only && !got_trusted) {
 		msg_err_config (
@@ -610,15 +614,18 @@ dkim_module_load_key_format (struct rspamd_task *task,
 {
 	guchar h[rspamd_cryptobox_HASHBYTES],
 			hex_hash[rspamd_cryptobox_HASHBYTES * 2 + 1];
-	rspamd_dkim_sign_key_t *ret;
+	rspamd_dkim_sign_key_t *ret = NULL;
 	GError *err = NULL;
 	struct stat st;
 
 	memset (hex_hash, 0, sizeof (hex_hash));
 	rspamd_cryptobox_hash (h, key, keylen, NULL, 0);
 	rspamd_encode_hex_buf (h, sizeof (h), hex_hash, sizeof (hex_hash));
-	ret = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_sign_hash,
+
+	if (dkim_module_ctx->dkim_sign_hash) {
+		ret = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_sign_hash,
 				hex_hash, time (NULL));
+	}
 
 	/*
 	 * This fails for paths that are also valid base64.
@@ -650,8 +657,10 @@ dkim_module_load_key_format (struct rspamd_task *task,
 			 * Invalidate DKIM key
 			 * removal from lru cache also cleanup the key and value
 			 */
-			rspamd_lru_hash_remove (dkim_module_ctx->dkim_sign_hash,
-					hex_hash);
+			if (dkim_module_ctx->dkim_sign_hash) {
+				rspamd_lru_hash_remove (dkim_module_ctx->dkim_sign_hash,
+						hex_hash);
+			}
 			ret = NULL;
 		}
 	}
@@ -667,7 +676,8 @@ dkim_module_load_key_format (struct rspamd_task *task,
 		msg_err_task ("cannot load dkim key %s: %e",
 				key, err);
 		g_error_free (err);
-	} else {
+	}
+	else if (dkim_module_ctx->dkim_sign_hash) {
 		rspamd_lru_hash_insert (dkim_module_ctx->dkim_sign_hash,
 				g_strdup (hex_hash), ret, time (NULL), 0);
 	}
@@ -718,14 +728,6 @@ lua_dkim_sign_handler (lua_State *L)
 	}
 
 	dkim_module_ctx = dkim_get_context (task->cfg);
-
-	if (dkim_module_ctx->dkim_sign_hash == NULL) {
-		dkim_module_ctx->dkim_sign_hash = rspamd_lru_hash_new (
-				128,
-				g_free, /* Keys are just C-strings */
-				(GDestroyNotify)rspamd_dkim_sign_key_unref);
-	}
-
 
 	if (key) {
 		dkim_key = dkim_module_load_key_format (task, dkim_module_ctx, key,
@@ -1065,18 +1067,22 @@ dkim_module_key_handler (rspamd_dkim_key_t *key,
 		 * We actually receive key with refcount = 1, so we just assume that
 		 * lru hash owns this object now
 		 */
-		rspamd_lru_hash_insert (dkim_module_ctx->dkim_hash,
-				g_strdup (rspamd_dkim_get_dns_key (ctx)),
-				key, res->task->task_timestamp, rspamd_dkim_key_get_ttl (key));
 		/* Release key when task is processed */
 		rspamd_mempool_add_destructor (res->task->task_pool,
 				dkim_module_key_dtor, res->key);
-		msg_info_task ("stored DKIM key for %s in LRU cache for %d seconds, "
-					   "%d/%d elements in the cache",
-				rspamd_dkim_get_dns_key (ctx),
-				rspamd_dkim_key_get_ttl (key),
-				rspamd_lru_hash_size (dkim_module_ctx->dkim_hash),
-				rspamd_lru_hash_capacity (dkim_module_ctx->dkim_hash));
+
+		if (dkim_module_ctx->dkim_hash) {
+			rspamd_lru_hash_insert (dkim_module_ctx->dkim_hash,
+					g_strdup (rspamd_dkim_get_dns_key (ctx)),
+					key, res->task->task_timestamp, rspamd_dkim_key_get_ttl (key));
+
+			msg_info_task ("stored DKIM key for %s in LRU cache for %d seconds, "
+						   "%d/%d elements in the cache",
+					rspamd_dkim_get_dns_key (ctx),
+					rspamd_dkim_key_get_ttl (key),
+					rspamd_lru_hash_size (dkim_module_ctx->dkim_hash),
+					rspamd_lru_hash_capacity (dkim_module_ctx->dkim_hash));
+		}
 	}
 	else {
 		/* Insert tempfail symbol */
@@ -1213,9 +1219,14 @@ dkim_symbol_callback (struct rspamd_task *task,
 					continue;
 				}
 
-				key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_hash,
-						rspamd_dkim_get_dns_key (ctx),
-						task->task_timestamp);
+				if (dkim_module_ctx->dkim_hash) {
+					key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_hash,
+							rspamd_dkim_get_dns_key (ctx),
+							task->task_timestamp);
+				}
+				else {
+					key = NULL;
+				}
 
 				if (key != NULL) {
 					cur->key = rspamd_dkim_key_ref (key);
@@ -1403,9 +1414,12 @@ dkim_module_lua_on_key (rspamd_dkim_key_t *key,
 		 * We actually receive key with refcount = 1, so we just assume that
 		 * lru hash owns this object now
 		 */
-		rspamd_lru_hash_insert (dkim_module_ctx->dkim_hash,
-				g_strdup (rspamd_dkim_get_dns_key (ctx)),
-				key, cbd->task->task_timestamp, rspamd_dkim_key_get_ttl (key));
+
+		if (dkim_module_ctx->dkim_hash) {
+			rspamd_lru_hash_insert (dkim_module_ctx->dkim_hash,
+					g_strdup (rspamd_dkim_get_dns_key (ctx)),
+					key, cbd->task->task_timestamp, rspamd_dkim_key_get_ttl (key));
+		}
 		/* Release key when task is processed */
 		rspamd_mempool_add_destructor (cbd->task->task_pool,
 				dkim_module_key_dtor, cbd->key);
@@ -1510,9 +1524,14 @@ lua_dkim_verify_handler (lua_State *L)
 		cbd->ctx = ctx;
 		cbd->key = NULL;
 
-		key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_hash,
-				rspamd_dkim_get_dns_key (ctx),
-				task->task_timestamp);
+		if (dkim_module_ctx->dkim_hash) {
+			key = rspamd_lru_hash_lookup (dkim_module_ctx->dkim_hash,
+					rspamd_dkim_get_dns_key (ctx),
+					task->task_timestamp);
+		}
+		else {
+			key = NULL;
+		}
 
 		if (key != NULL) {
 			cbd->key = rspamd_dkim_key_ref (key);
