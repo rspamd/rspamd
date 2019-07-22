@@ -481,6 +481,10 @@ rspamd_lru_hash_evict (rspamd_lru_hash_t *hash, time_t now)
 				}
 			}
 		});
+
+		if (selected) {
+			elt = selected;
+		}
 	}
 	else {
 		/* Fast random eviction */
@@ -493,6 +497,7 @@ rspamd_lru_hash_evict (rspamd_lru_hash_t *hash, time_t now)
 		}
 	}
 
+	/* Evict if nothing else has been cleaned */
 	if (elt && nexpired == 0) {
 		rspamd_lru_hash_remove_node (hash, elt);
 	}
