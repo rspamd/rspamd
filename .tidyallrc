@@ -8,10 +8,6 @@ ignore = contrib/**/* doc/doxydown/doxydown.pl
 select = **/*.{pl,pl.in,pm,t}
 ignore = utils/{cgp_rspamd.pl,redirector.pl.in,classifier_test.pl}
 
-[PerlTidy]
-select = **/*.{pl,pl.in,pm,t}
-argv = -l=120
-
 [PodChecker]
 select = **/*.{pl,pl.in,pm,pod}
 
