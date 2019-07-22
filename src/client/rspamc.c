@@ -672,6 +672,8 @@ add_options (GQueue *opts)
 		ADD_CLIENT_FLAG (flagbuf, "profile");
 	}
 
+	ADD_CLIENT_FLAG (flagbuf, "body_block");
+
 	if (skip_images) {
 		ADD_CLIENT_HEADER (opts, "Skip-Images", "true");
 	}
@@ -1547,7 +1549,16 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 	else {
 
 		if (cmd->cmd == RSPAMC_COMMAND_SYMBOLS && mime_output && input) {
-			rspamc_mime_output (out, result, input, diff, err);
+			if (body) {
+				GString tmp;
+
+				tmp.str = (char *)body;
+				tmp.len = bodylen;
+				rspamc_mime_output (out, result, &tmp, diff, err);
+			}
+			else {
+				rspamc_mime_output (out, result, input, diff, err);
+			}
 		}
 		else {
 			if (cmd->need_input) {
@@ -1594,6 +1605,11 @@ rspamc_client_cb (struct rspamd_client_connection *conn,
 				}
 				else {
 					cmd->command_output_func (out, result);
+				}
+
+				if (body) {
+					rspamd_fprintf (out, "\nNew body:\n%*s\n", (int)bodylen,
+							body);
 				}
 
 				ucl_object_unref (result);
