@@ -1226,7 +1226,7 @@ rspamd_milter_send_action (struct rspamd_milter_session *session,
 		msg_debug_milter ("want to change body; size = %uz",
 				len);
 		SET_COMMAND (cmd, len, reply, pos);
-		memcpy (pos, body_str, len + 1);
+		memcpy (pos, body_str, len);
 		break;
 	case RSPAMD_MILTER_REPLYCODE:
 	case RSPAMD_MILTER_ADDRCPT:
