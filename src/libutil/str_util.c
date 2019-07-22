@@ -917,25 +917,61 @@ rspamd_encode_base64_fold (const guchar *in, gsize inlen, gint str_len,
 	return rspamd_encode_base64_common (in, inlen, str_len, outlen, TRUE, how);
 }
 
+#define QP_RANGE(x) (((x) >= 33 && (x) <= 60) || ((x) >= 62 && (x) <= 126) \
+		|| (x) == '\r' || (x) == '\n' || (x) == ' ' || (x) == '\t')
+#define QP_SPAN_NORMAL(span, str_len) ((str_len) > 0 && \
+		((span) + 1) >= (str_len))
+#define QP_SPAN_SPECIAL(span, str_len) ((str_len) > 0 && \
+		((span) + 4) >= (str_len))
+
 gchar *
 rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
 						   gsize *outlen, enum rspamd_newlines_type how)
 {
-	gsize olen = 0, span = 0, i = 0;
+	gsize olen = 0, span = 0, i = 0, seen_spaces = 0;
 	gchar *out;
-	gint ch;
+	gint ch, last_sp;
 	const guchar *end = in + inlen, *p = in;
 	static const gchar hexdigests[16] = "0123456789ABCDEF";
 
 	while (p < end) {
 		ch = *p;
 
-		if (ch < 128 && ch != '\r' && ch != '\n') {
+		if (QP_RANGE(ch)) {
 			olen ++;
 			span ++;
+
+			if (ch == '\r' || ch == '\n') {
+				if (seen_spaces > 0) {
+					/* We must encode spaces at the end of line */
+					olen += 3;
+					seen_spaces = 0;
+					/* Special stuff for space character at the end */
+					if (QP_SPAN_SPECIAL(span, str_len)) {
+						if (how == RSPAMD_TASK_NEWLINES_CRLF) {
+							/* =\r\n */
+							olen += 3;
+						}
+						else {
+							olen += 2;
+						}
+					}
+					/* Continue with the same `ch` but without spaces logic */
+					continue;
+				}
+
+				span = 0;
+			}
+			else if (ch == ' ' || ch == '\t') {
+				seen_spaces ++;
+				last_sp = ch;
+			}
+			else {
+				seen_spaces = 0;
+			}
 		}
 		else {
-			if (str_len > 0 && span + 5 >= str_len) {
+			if (QP_SPAN_SPECIAL(span, str_len)) {
 				if (how == RSPAMD_TASK_NEWLINES_CRLF) {
 					/* =\r\n */
 					olen += 3;
@@ -950,7 +986,7 @@ rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
 			span += 3;
 		}
 
-		if (str_len > 0 && span + 3 >= str_len) {
+		if (QP_SPAN_NORMAL(span, str_len)) {
 			if (how == RSPAMD_TASK_NEWLINES_CRLF) {
 				/* =\r\n */
 				olen += 3;
@@ -964,21 +1000,112 @@ rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
 		p ++;
 	}
 
+	if (seen_spaces > 0) {
+		/* Reserve length for the last space encoded */
+		olen += 3;
+	}
+
 	out = g_malloc (olen + 1);
 	p = in;
 	i = 0;
 	span = 0;
+	seen_spaces = 0;
 
 	while (p < end) {
 		ch = *p;
 
-		if (ch < 128 && ch != '\r' && ch != '\n') {
+		if (QP_RANGE (ch)) {
+			if (ch == '\r' || ch == '\n') {
+				if (seen_spaces > 0) {
+					if (QP_SPAN_SPECIAL(span, str_len)) {
+						/* Add soft newline */
+						i --;
+
+						if (p + 1 < end || span + 3 >= str_len) {
+							switch (how) {
+							default:
+							case RSPAMD_TASK_NEWLINES_CRLF:
+								out[i++] = '=';
+								out[i++] = '\r';
+								out[i++] = '\n';
+								break;
+							case RSPAMD_TASK_NEWLINES_LF:
+								out[i++] = '=';
+								out[i++] = '\n';
+								break;
+							case RSPAMD_TASK_NEWLINES_CR:
+								out[i++] = '=';
+								out[i++] = '\r';
+								break;
+							}
+						}
+
+						/* Now write encoded `last_sp` but after newline */
+						out[i++] = '=';
+						out[i++] = hexdigests[((last_sp >> 4) & 0xF)];
+						out[i++] = hexdigests[(last_sp & 0xF)];
+
+						span = 0;
+					}
+					else {
+						/* Encode last space */
+						--i;
+						out[i++] = '=';
+						out[i++] = hexdigests[((last_sp >> 4) & 0xF)];
+						out[i++] = hexdigests[(last_sp & 0xF)];
+						seen_spaces = 0;
+					}
+
+					continue;
+				}
+				span = 0;
+			}
+			else if (ch == ' ' || ch == '\t') {
+				seen_spaces ++;
+				last_sp = ch;
+				span ++;
+			}
+			else {
+				seen_spaces = 0;
+				span ++;
+			}
+
 			out[i++] = ch;
-			span ++;
 		}
 		else {
-			if (str_len > 0 && span + 5 >= str_len) {
+			if (QP_SPAN_SPECIAL(span, str_len)) {
 				/* Add new line and then continue */
+				if (p + 1 < end || span + 3 >= str_len) {
+					switch (how) {
+					default:
+					case RSPAMD_TASK_NEWLINES_CRLF:
+						out[i++] = '=';
+						out[i++] = '\r';
+						out[i++] = '\n';
+						break;
+					case RSPAMD_TASK_NEWLINES_LF:
+						out[i++] = '=';
+						out[i++] = '\n';
+						break;
+					case RSPAMD_TASK_NEWLINES_CR:
+						out[i++] = '=';
+						out[i++] = '\r';
+						break;
+					}
+					span = 0;
+				}
+			}
+
+			out[i++] = '=';
+			out[i++] = hexdigests[((ch >> 4) & 0xF)];
+			out[i++] = hexdigests[(ch & 0xF)];
+			span += 3;
+			seen_spaces = 0;
+		}
+
+		if (QP_SPAN_NORMAL(span, str_len)) {
+			/* Add new line and then continue */
+			if (p + 1 < end || span > str_len || seen_spaces) {
 				switch (how) {
 				default:
 				case RSPAMD_TASK_NEWLINES_CRLF:
@@ -995,40 +1122,21 @@ rspamd_encode_qp_fold (const guchar *in, gsize inlen, gint str_len,
 					out[i++] = '\r';
 					break;
 				}
-
 				span = 0;
+				seen_spaces = 0;
 			}
-
-			out[i++] = '=';
-			out[i++] = hexdigests[((ch >> 4) & 0xF)];
-			out[i++] = hexdigests[(ch & 0xF)];
-			span += 3;
-		}
-
-		if (str_len > 0 && span + 3 >= str_len) {
-			/* Add new line and then continue */
-			switch (how) {
-			default:
-			case RSPAMD_TASK_NEWLINES_CRLF:
-				out[i++] = '=';
-				out[i++] = '\r';
-				out[i++] = '\n';
-				break;
-			case RSPAMD_TASK_NEWLINES_LF:
-				out[i++] = '=';
-				out[i++] = '\n';
-				break;
-			case RSPAMD_TASK_NEWLINES_CR:
-				out[i++] = '=';
-				out[i++] = '\r';
-				break;
-			}
-
-			span = 0;
 		}
 
 		g_assert (i <= olen);
 		p ++;
+	}
+
+	/* Deal with the last space character */
+	if (seen_spaces > 0) {
+		i --;
+		out[i++] = '=';
+		out[i++] = hexdigests[((last_sp >> 4) & 0xF)];
+		out[i++] = hexdigests[(last_sp & 0xF)];
 	}
 
 	out[i] = '\0';
