@@ -8,7 +8,7 @@ end
 
 local function rspamd_assert_equals_msg(_, tbl)
   return logger.slog(
-    "Failed asserting that \n  (actual)   %1 \n equals to\n  (expected) %2",
+    "Failed asserting that \n  (actual)   : %1 \n equals to\n  (expected) : %2",
     tbl.actual, tbl.expect
   )
 end

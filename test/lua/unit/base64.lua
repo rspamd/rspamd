@@ -1,4 +1,4 @@
-context("Base64 encodning", function()
+context("Base64 encoding", function()
   local ffi = require("ffi")
   local util = require("rspamd_util")
   ffi.cdef[[
