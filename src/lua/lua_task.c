@@ -79,11 +79,11 @@ LUA_FUNCTION_DEF (task, load_from_string);
 LUA_FUNCTION_DEF (task, get_message);
 /***
  * @method task:set_message(msg)
- * Updates task message with another message, you should normally call
- * `process_message` afterwards to fill internal Rspamd structures.
+ * Updates task message with another message; It also parses a message to
+ * fill the internal structures.
  * Input might be a string, a lua_text or a table of the former stuff.
  * @param {string/text/table} msg new message to set
- * @return {rspamd_text} task raw content
+ * @return {boolean,number} if a message has been set + its raw size
  */
 LUA_FUNCTION_DEF (task, set_message);
 /***
@@ -1417,6 +1417,7 @@ lua_task_set_message (lua_State * L)
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t;
 	struct rspamd_task *task = lua_check_task (L, 1);
+	gboolean message_set = FALSE;
 
 	if (task) {
 		gsize final_len = 0;
@@ -1479,6 +1480,7 @@ lua_task_set_message (lua_State * L)
 				task->flags |= RSPAMD_TASK_FLAG_MESSAGE_REWRITE;
 				task->msg.begin = buf;
 				task->msg.len = final_len;
+				message_set = TRUE;
 			}
 
 		}
@@ -1504,10 +1506,25 @@ lua_task_set_message (lua_State * L)
 				task->msg.begin = buf;
 				task->msg.len = final_len;
 				task->flags |= RSPAMD_TASK_FLAG_MESSAGE_REWRITE;
+				message_set = TRUE;
 			}
 		}
 
-		lua_pushinteger (L, final_len);
+		if (message_set) {
+			if (rspamd_message_parse (task)) {
+				rspamd_message_process (task);
+				lua_pushboolean (L, TRUE);
+				lua_pushinteger (L, final_len);
+
+				return 2;
+			}
+			else {
+				lua_pushboolean (L, FALSE);
+			}
+		}
+		else {
+			lua_pushboolean (L, FALSE);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
