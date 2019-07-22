@@ -1,7 +1,5 @@
 #!/usr/bin/env perl
 #
-# Ansible managed
-#
 
 use warnings;
 use strict;
