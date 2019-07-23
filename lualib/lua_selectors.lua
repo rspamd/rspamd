@@ -1027,8 +1027,12 @@ exports.parse_selector = function(cfg, str)
       if proc_name:match('^__') then
         -- Special case - method
         local method_name = proc_name:match('^__(.*)$')
+        -- Check array indexing...
+        if tonumber(method_name) then
+          method_name = tonumber(method_name)
+        end
         local processor = {
-          name = method_name,
+          name = tostring(method_name),
           method = true,
           args = proc_tbl[2] or E,
           types = {
@@ -1052,7 +1056,7 @@ exports.parse_selector = function(cfg, str)
 
         if not transform_function[proc_name] then
           logger.errx(cfg, 'processor %s is unknown', proc_name)
-          pipeline_error = true
+          pipeline_error = proc_name
           return nil
         end
         local processor = lua_util.shallowcopy(transform_function[proc_name])
@@ -1060,7 +1064,7 @@ exports.parse_selector = function(cfg, str)
         processor.args = proc_tbl[2] or E
 
         if not check_args(processor.name, processor.args_schema, processor.args) then
-          pipeline_error = true
+          pipeline_error = 'args schema for ' .. proc_name
           return nil
         end
 
@@ -1071,7 +1075,7 @@ exports.parse_selector = function(cfg, str)
     end, fun.tail(sel))
 
     if pipeline_error then
-      logger.errx(cfg, 'unknown or invalid processor used, exiting')
+      logger.errx(cfg, 'unknown or invalid processor used: "%s", exiting', pipeline_error)
       return nil
     end
 

@@ -271,6 +271,10 @@ context("Selectors test", function()
       selector = "words('norm')",
       expect = {{'hello', 'world', 'mail', 'me'}}
     },
+    ["words_full"] = {
+      selector = "words('full'):2",
+      expect = {{'hello', 'world', '', 'mail', 'me'}}
+    },
   }
 
   for case_name, case in pairs(cases) do
