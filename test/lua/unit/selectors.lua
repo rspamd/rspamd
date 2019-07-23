@@ -69,7 +69,7 @@ context("Selectors test", function()
 
     ["digest"] = {
                 selector = "digest",
-                expect = {"1649c0cbbd127660095d4f44e15e8b60"}
+                expect = {"f46ccafe448fe4d7b46076938749695e"}
     },
 
     ["user"] = {
@@ -267,6 +267,10 @@ context("Selectors test", function()
       selector = "list('key', 'key1', 'key2', 'key3').apply_map(test_map).uniq",
       expect = {{'value1', 'value'}}
     },
+    ["words"] = {
+      selector = "words('norm')",
+      expect = {{'hello', 'world', 'mail', 'me'}}
+    },
   }
 
   for case_name, case in pairs(cases) do
@@ -295,7 +299,7 @@ Content-Type: multipart/alternative;
 
 --_000_6be055295eab48a5af7ad4022f33e2d0_
 Content-Type: text/plain; charset="utf-8"
-Content-Transfer-Encoding: base64
+Content-Transfer-Encoding: 7bit
 
 Hello world
 

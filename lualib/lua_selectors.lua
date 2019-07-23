@@ -358,7 +358,35 @@ The first argument must be header name.]],
   The second argument is optional time format, see [os.date](http://pgl.yoyo.org/luai/i/os.date) description]],
     ['args_schema'] = {ts.one_of{'connect', 'message'}:is_optional(),
                        ts.string:is_optional()}
-  }
+  },
+  -- Get text words from a message
+  ['words'] = {
+    ['get_value'] = function(task, args)
+      local how = args[1] or 'stem'
+      local tp = task:get_text_parts()
+
+      if tp then
+        local rtype = 'string_list'
+        if how == 'full' then
+          rtype = 'table_list'
+        end
+
+        return lua_util.flatten(
+            fun.map(function(p)
+              return p:get_words(how)
+            end, tp)), rtype
+      end
+
+      return nil
+    end,
+    ['description'] = [[Get words from text parts
+  - `stem`: stemmed words (default)
+  - `raw`: raw words
+  - `norm`: normalised words (lowercased)
+  - `full`: list of tables
+  ]],
+    ['args_schema'] = { ts.one_of { 'stem', 'raw', 'norm', 'full' }:is_optional()},
+  },
 }
 
 local function pure_type(ltype)
