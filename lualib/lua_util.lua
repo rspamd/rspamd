@@ -285,6 +285,23 @@ exports.unpack = function(t)
 end
 
 --[[[
+-- @function lua_util.flatten(table)
+-- Flatten underlying tables in a single table
+-- @param {table} table table of tables
+-- @return {table} flattened table
+--]]
+exports.flatten = function(t)
+  local res = {}
+  for _,e in fun.iter(t) do
+    for _,v in fun.iter(e) do
+      res[#res + 1] = v
+    end
+  end
+
+  return res
+end
+
+--[[[
 -- @function lua_util.spairs(table)
 -- Like `pairs` but keys are sorted lexicographically
 -- @param {table} table table containing key/value pairs
