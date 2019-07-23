@@ -956,7 +956,7 @@ local function reputation_redis_set_token(task, rule, token, sc, continuation_cb
       {task = task, is_write = true},
       redis_set_cb,
       {key, tostring(os.time() * 1000),
-       tonumber(sc),
+       tostring(sc),
        tostring(rule.backend.config.expiry)})
   if not ret then
     rspamd_logger.errx(task, 'got error while connecting to redis')
