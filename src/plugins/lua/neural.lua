@@ -1176,6 +1176,8 @@ local function process_rules_settings()
 
   for _,rule in pairs(settings.rules) do
     if not rule.allowed_settings then
+      rule.allowed_settings = {}
+    elseif rule.allowed_settings == 'all' then
       -- Extract all settings ids
       rule.allowed_settings = lua_util.keys(lua_settings.all_settings())
     end
