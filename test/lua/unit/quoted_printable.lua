@@ -73,6 +73,11 @@ context("Quoted-Printable encoding", function()
       'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=\r\nx=20',
       'Exactly 77 chars of which the last one is a space'
     },
+    {
+      'fdafadsf\r\n-- • Test\r\n',
+      'fdafadsf\r\n-- =E2=80=A2 Test\r\n',
+      'Newlines',
+    },
   }
   for _,c in ipairs(cases) do
     test("QP sanity test case: " .. c[3], function()
