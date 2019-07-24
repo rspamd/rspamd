@@ -18,7 +18,7 @@ limitations under the License.
 
 local exports = {}
 
-exports.autolearn = function(task, is_spam, is_unlearn)
+exports.can_learn = function(task, is_spam, is_unlearn)
   local learn_type = task:get_request_header('Learn-Type')
 
   if not (learn_type and tostring(learn_type) == 'bulk') then
