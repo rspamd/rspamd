@@ -484,14 +484,16 @@ local function ip_reputation_idempotent(task, rule)
     end
   end
   local sc = extract_task_score(task, rule)
-  if asn then
-    rule.backend.set_token(task, rule, cfg.asn_prefix .. asn, sc)
-  end
-  if country then
-    rule.backend.set_token(task, rule, cfg.country_prefix .. country, sc)
-  end
+  if sc then
+    if asn then
+      rule.backend.set_token(task, rule, cfg.asn_prefix .. asn, sc)
+    end
+    if country then
+      rule.backend.set_token(task, rule, cfg.country_prefix .. country, sc)
+    end
 
-  rule.backend.set_token(task, rule, cfg.ip_prefix .. tostring(ip), sc)
+    rule.backend.set_token(task, rule, cfg.ip_prefix .. tostring(ip), sc)
+  end
 end
 
 -- Selectors are used to extract reputation tokens
