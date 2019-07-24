@@ -51,10 +51,6 @@ if rspamd_util.file_exists(local_conf .. '/local.d/rspamd.lua') then
   dofile(local_conf .. '/local.d/rspamd.lua')
 end
 
-if rspamd_util.file_exists(local_rules .. '/rspamd.classifiers.lua') then
-  dofile(local_rules .. '/rspamd.classifiers.lua')
-end
-
 local rmaps =  rspamd_config:get_all_opt("lua_maps")
 if rmaps and type(rmaps) == 'table' then
   local rspamd_logger = require "rspamd_logger"
