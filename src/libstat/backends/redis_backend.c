@@ -1230,6 +1230,32 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 					rt->redis_object_expanded, rt->learned);
 			rspamd_upstream_ok (rt->selected);
 
+			/* Save learn count in mempool variable */
+			gint64 *learns_cnt;
+			const gchar *var_name;
+
+			if (rt->stcf->is_spam) {
+				var_name = RSPAMD_MEMPOOL_SPAM_LEARNS;
+			}
+			else {
+				var_name = RSPAMD_MEMPOOL_HAM_LEARNS;
+			}
+
+			learns_cnt = rspamd_mempool_get_variable (task->task_pool,
+					var_name);
+
+			if (learns_cnt) {
+				(*learns_cnt) += rt->learned;
+			}
+			else {
+				learns_cnt = rspamd_mempool_alloc (task->task_pool,
+						sizeof (*learns_cnt));
+				*learns_cnt = rt->learned;
+				rspamd_mempool_set_variable (task->task_pool,
+						var_name,
+						learns_cnt, NULL);
+			}
+
 			if (rt->learned >= rt->stcf->clcf->min_learns && rt->learned > 0) {
 				rspamd_fstring_t *query = rspamd_redis_tokens_to_query (
 						task,

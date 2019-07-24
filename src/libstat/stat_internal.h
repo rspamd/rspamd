@@ -43,6 +43,7 @@ struct rspamd_classifier {
 	gpointer cachecf;
 	gulong spam_learns;
 	gulong ham_learns;
+	gint autolearn_cbref;
 	struct rspamd_classifier_config *cfg;
 	struct rspamd_stat_classifier *subrs;
 	gpointer specific;
