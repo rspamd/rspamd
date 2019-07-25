@@ -530,6 +530,7 @@ local rule_schema = ts.shape({
   hash = ts.one_of{"sha1", "sha256", "sha384", "sha512", "md5", "blake2"}:is_optional(),
   hash_format = ts.one_of{"hex", "base32", "base64"}:is_optional(),
   hash_len = (ts.integer + ts.string / tonumber):is_optional(),
+  monitored_address = ts.string:is_optional(),
 }, {
   extra_fields = ts.map_of(ts.string, ts.boolean)
 })
