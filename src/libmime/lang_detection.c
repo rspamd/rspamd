@@ -1590,6 +1590,7 @@ rspamd_language_detector_sw_cb (struct rspamd_multipattern *mp,
 	struct rspamd_stop_word_range *r;
 	struct rspamd_sw_cbdata *cbdata = (struct rspamd_sw_cbdata *)context;
 	khiter_t k;
+	static const gsize max_stop_words = 80;
 
 	if (match_start > 0) {
 		prev = text + match_start - 1;
@@ -1616,6 +1617,10 @@ rspamd_language_detector_sw_cb (struct rspamd_multipattern *mp,
 
 	if (k != kh_end (cbdata->res)) {
 		kh_value (cbdata->res, k) ++;
+
+		if (kh_value (cbdata->res, k) > max_stop_words) {
+			return 1;
+		}
 	}
 	else {
 		gint tt;
