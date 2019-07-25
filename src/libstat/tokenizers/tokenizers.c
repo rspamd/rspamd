@@ -298,12 +298,23 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 	GList *cur = exceptions;
 	guint min_len = 0, max_len = 0, word_decay = 0, initial_size = 128;
 	guint64 hv = 0;
-	gboolean decay = FALSE;
+	gboolean decay = FALSE, long_text_mode = FALSE;
 	guint64 prob = 0;
 	static UBreakIterator* bi = NULL;
+	static const gsize long_text_limit = 1 * 1024 * 1024;
+	static const ev_tstamp max_exec_time = 0.2; /* 200 ms */
+	ev_tstamp start;
 
 	if (text == NULL) {
 		return cur_words;
+	}
+
+	if (len > long_text_limit) {
+		/*
+		 * In this mode we do additional checks to avoid performance issues
+		 */
+		long_text_mode = TRUE;
+		start = ev_time ();
 	}
 
 	buf.original.begin = text;
@@ -347,7 +358,31 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 				}
 			}
 
+			if (long_text_mode) {
+				if ((res->len + 1) % 16 == 0) {
+					ev_tstamp now = ev_time ();
+
+					if (now - start > max_exec_time) {
+						msg_warn ("too long time has been spent on tokenization:"
+								  " %.1f ms, limit is %.1f ms; %d words added so far",
+								(now - start) * 1e3, max_exec_time * 1e3,
+								res->len);
+
+						goto end;
+					}
+				}
+			}
+
 			g_array_append_val (res, token);
+
+			if (((gsize)res->len) * sizeof (token) > (0x1ull << 30u)) {
+				/* Due to bug in glib ! */
+				msg_err ("too many words found: %d, stop tokenization to avoid DoS",
+						res->len);
+
+				goto end;
+			}
+
 			token.original.begin = pos;
 		}
 	}
@@ -482,6 +517,7 @@ start_over:
 			}
 
 			if (token.original.len > 0) {
+				/* Additional check for number of words */
 				if (((gsize)res->len) * sizeof (token) > (0x1ull << 30u)) {
 					/* Due to bug in glib ! */
 					msg_err ("too many words found: %d, stop tokenization to avoid DoS",
@@ -489,7 +525,24 @@ start_over:
 
 					goto end;
 				}
+
 				g_array_append_val (res, token);
+			}
+
+			/* Also check for long text mode */
+			if (long_text_mode) {
+				if ((res->len + 1) % 16 == 0) {
+					ev_tstamp now = ev_time ();
+
+					if (now - start > max_exec_time) {
+						msg_warn ("too long time has been spent on tokenization:"
+								  " %.1f ms, limit is %.1f ms; %d words added so far",
+								(now - start) * 1e3, max_exec_time * 1e3,
+								res->len);
+
+						goto end;
+					}
+				}
 			}
 
 			last = p;
