@@ -43,6 +43,8 @@ base64_table_dec[256] =
 	255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 };
 
+static const char base64_alphabet[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/";
+
 typedef struct base64_impl {
 	unsigned long cpu_flags;
 	const char *desc;
@@ -90,6 +92,7 @@ static const base64_impl_t base64_list[] = {
 };
 
 static const base64_impl_t *base64_opt = &base64_list[0];
+static const base64_impl_t *base64_ref = &base64_list[0];
 
 const char *
 base64_load (void)
@@ -113,7 +116,27 @@ gboolean
 rspamd_cryptobox_base64_decode (const gchar *in, gsize inlen,
 		guchar *out, gsize *outlen)
 {
-	return base64_opt->decode (in, inlen, out, outlen);
+	if (inlen > 256) {
+		/*
+		 * For SIMD base64 decoding we need really large inputs with no
+		 * garbadge such as newlines
+		 * Otherwise, naive version is MUCH faster
+		 */
+
+		if (rspamd_memcspn (in, base64_alphabet, 256) == 256) {
+			return base64_opt->decode (in, inlen, out, outlen);
+		}
+		else {
+			/* Garbage found */
+			return base64_ref->decode (in, inlen, out, outlen);
+		}
+	}
+	else {
+		/* Small input, use reference version */
+		return base64_ref->decode (in, inlen, out, outlen);
+	}
+
+	g_assert_not_reached ();
 }
 
 size_t
