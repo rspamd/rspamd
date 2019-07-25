@@ -3176,7 +3176,7 @@ lua_periodic_callback_error (struct thread_entry *thread, int ret, const char *m
 	struct rspamd_lua_periodic *periodic = thread->cd;
 	cfg = periodic->cfg;
 
-	msg_err_config ("call to finishing script (registered at %s) failed: %s",
+	msg_err_config ("call to periodic script (registered at %s) failed: %s",
 			periodic->lua_src_pos, msg);
 
 	lua_periodic_callback_finish (thread, ret);
