@@ -2282,7 +2282,14 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 
 		switch (r) {
 		case 0:
-			ret = return_want_more;
+			if (what & EV_READ) {
+				ret = return_want_more;
+			}
+			else {
+				/* It is actually time out */
+				fuzzy_check_timer_callback (fd, what, arg);
+				return;
+			}
 			break;
 		case 1:
 			ret = return_finished;
