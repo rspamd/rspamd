@@ -2125,7 +2125,13 @@ lua_task_get_urls (lua_State * L)
 			PROTOCOL_FILE|PROTOCOL_FTP;
 	gsize sz;
 
-	if (task && task->message) {
+	if (task) {
+		if (task->message == NULL) {
+			lua_newtable (L);
+
+			return 1;
+		}
+
 		if (lua_gettop (L) >= 2) {
 			if (lua_type (L, 2) == LUA_TBOOLEAN) {
 				protocols_mask = default_mask;
@@ -2242,17 +2248,19 @@ lua_task_has_urls (lua_State * L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gboolean need_emails = FALSE, ret = FALSE;
 
-	if (task && task->message) {
-		if (lua_gettop (L) >= 2) {
-			need_emails = lua_toboolean (L, 2);
-		}
+	if (task) {
+		if (task->message) {
+			if (lua_gettop (L) >= 2) {
+				need_emails = lua_toboolean (L, 2);
+			}
 
-		if (g_hash_table_size (MESSAGE_FIELD (task, urls)) > 0) {
-			ret = TRUE;
-		}
+			if (g_hash_table_size (MESSAGE_FIELD (task, urls)) > 0) {
+				ret = TRUE;
+			}
 
-		if (need_emails && g_hash_table_size (MESSAGE_FIELD (task, emails)) > 0) {
-			ret = TRUE;
+			if (need_emails && g_hash_table_size (MESSAGE_FIELD (task, emails)) > 0) {
+				ret = TRUE;
+			}
 		}
 	}
 	else {
@@ -2349,12 +2357,17 @@ lua_task_get_emails (lua_State * L)
 	struct lua_tree_cb_data cb;
 
 	if (task) {
-		lua_createtable (L, g_hash_table_size (MESSAGE_FIELD (task, emails)), 0);
-		cb.i = 1;
-		cb.L = L;
-		cb.mask = PROTOCOL_MAILTO;
-		g_hash_table_foreach (MESSAGE_FIELD (task, emails),
-				lua_tree_url_callback, &cb);
+		if (task->message) {
+			lua_createtable (L, g_hash_table_size (MESSAGE_FIELD (task, emails)), 0);
+			cb.i = 1;
+			cb.L = L;
+			cb.mask = PROTOCOL_MAILTO;
+			g_hash_table_foreach (MESSAGE_FIELD (task, emails),
+					lua_tree_url_callback, &cb);
+		}
+		else {
+			lua_newtable (L);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -2371,20 +2384,25 @@ lua_task_get_text_parts (lua_State * L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_mime_text_part *part, **ppart;
 
-	if (task != NULL && task->message != NULL) {
+	if (task != NULL) {
 
-		if (!lua_task_get_cached (L, task, "text_parts")) {
-			lua_createtable (L, MESSAGE_FIELD (task, text_parts)->len, 0);
+		if (task->message) {
+			if (!lua_task_get_cached (L, task, "text_parts")) {
+				lua_createtable (L, MESSAGE_FIELD (task, text_parts)->len, 0);
 
-			PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, part) {
-				ppart = lua_newuserdata (L, sizeof (struct rspamd_mime_text_part *));
-				*ppart = part;
-				rspamd_lua_setclass (L, "rspamd{textpart}", -1);
-				/* Make it array */
-				lua_rawseti (L, -2, i + 1);
+				PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, part) {
+					ppart = lua_newuserdata (L, sizeof (struct rspamd_mime_text_part *));
+					*ppart = part;
+					rspamd_lua_setclass (L, "rspamd{textpart}", -1);
+					/* Make it array */
+					lua_rawseti (L, -2, i + 1);
+				}
+
+				lua_task_set_cached (L, task, "text_parts", -1);
 			}
-
-			lua_task_set_cached (L, task, "text_parts", -1);
+		}
+		else {
+			lua_newtable (L);
 		}
 	}
 	else {
@@ -2402,19 +2420,24 @@ lua_task_get_parts (lua_State * L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 	struct rspamd_mime_part *part, **ppart;
 
-	if (task != NULL && task->message != NULL) {
-		if (!lua_task_get_cached (L, task, "mime_parts")) {
-			lua_createtable (L, MESSAGE_FIELD (task, parts)->len, 0);
+	if (task != NULL) {
+		if (task->message) {
+			if (!lua_task_get_cached (L, task, "mime_parts")) {
+				lua_createtable (L, MESSAGE_FIELD (task, parts)->len, 0);
 
-			PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-				ppart = lua_newuserdata (L, sizeof (struct rspamd_mime_part *));
-				*ppart = part;
-				rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
-				/* Make it array */
-				lua_rawseti (L, -2, i + 1);
+				PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
+					ppart = lua_newuserdata (L, sizeof (struct rspamd_mime_part *));
+					*ppart = part;
+					rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
+					/* Make it array */
+					lua_rawseti (L, -2, i + 1);
+				}
+
+				lua_task_set_cached (L, task, "mime_parts", -1);
 			}
-
-			lua_task_set_cached (L, task, "mime_parts", -1);
+		}
+		else {
+			lua_newtable (L);
 		}
 	}
 	else {
