@@ -26,19 +26,20 @@ my %config = (
   bgp_sources => ['http://data.ris.ripe.net/rrc00/latest-bview.gz']
 );
 
-my $download_asn    = 0;
-my $download_bgp    = 0;
-my $download_target = "./";
-my $help            = 0;
-my $man             = 0;
-my $v4              = 1;
-my $v6              = 1;
-my $parse           = 1;
-my $v4_zone         = "asn.rspamd.com";
-my $v6_zone         = "asn6.rspamd.com";
-my $v4_file         = "asn.zone";
-my $v6_file         = "asn6.zone";
-my $ns_servers      = [ "asn-ns.rspamd.com", "asn-ns2.rspamd.com" ];
+my $download_asn        = 0;
+my $download_bgp        = 0;
+my $download_target     = "./";
+my $help                = 0;
+my $man                 = 0;
+my $v4                  = 1;
+my $v6                  = 1;
+my $parse               = 1;
+my $v4_zone             = "asn.rspamd.com";
+my $v6_zone             = "asn6.rspamd.com";
+my $v4_file             = "asn.zone";
+my $v6_file             = "asn6.zone";
+my $ns_servers          = [ "asn-ns.rspamd.com", "asn-ns2.rspamd.com" ];
+my $unknown_placeholder = "--";
 
 GetOptions(
   "download-asn" => \$download_asn,
@@ -53,7 +54,8 @@ GetOptions(
   "file-v6=s"    => \$v6_file,
   "ns-server=s@" => \$ns_servers,
   "help|?"       => \$help,
-  "man"          => \$man
+  "man"          => \$man,
+  "unknown-placeholder" => \$unknown_placeholder,
 ) or
   pod2usage(2);
 
@@ -201,8 +203,8 @@ if ($v4) {
     print $v4_fh $zone_header;
 
     while (my ($net, $asn) = each %{ $networks->{4} }) {
-        my $country = $as_info->{$asn}{'country'} || 'UN';
-        my $rir     = $as_info->{$asn}{'rir'}     || 'UN';
+        my $country = $as_info->{$asn}{'country'} || $unknown_placeholder;
+        my $rir     = $as_info->{$asn}{'rir'}     || $unknown_placeholder;
 
         # "15169|8.8.8.0/24|US|arin|" for 8.8.8.8
         printf $v4_fh "%s %s|%s|%s|%s|\n", $net, $asn, $net, $country, $rir;
@@ -217,8 +219,8 @@ if ($v6) {
     print $v6_fh $zone_header;
 
     while (my ($net, $asn) = each %{ $networks->{6} }) {
-        my $country = $as_info->{$asn}{'country'} || 'UN';
-        my $rir     = $as_info->{$asn}{'rir'}     || 'UN';
+        my $country = $as_info->{$asn}{'country'} || $unknown_placeholder;
+        my $rir     = $as_info->{$asn}{'rir'}     || $unknown_placeholder;
 
         # "2606:4700:4700::/48 13335|2606:4700:4700::/48|US|arin|" for 2606:4700:4700::1111
         printf $v6_fh "%s %s|%s|%s|%s|\n", $net, $asn, $net, $country, $rir;
@@ -283,6 +285,7 @@ asn.pl [options]
    --zone-v6              IPv6 zone (default: asn6.rspamd.com)
    --file-v4              IPv4 zone file (default: ./asn.zone)
    --file-v6              IPv6 zone (default: ./asn6.zone)
+   --unknown-placeholder  Placeholder for unknown elements (default: --)
    --help                 Brief help message
    --man                  Full documentation
 
