@@ -906,19 +906,6 @@ rspamd_stat_has_classifier_symbols (struct rspamd_task *task,
 	return FALSE;
 }
 
-struct cl_cbref_dtor_data {
-	lua_State *L;
-	gint ref_idx;
-};
-
-static void
-rspamd_stat_cbref_dtor (void *d)
-{
-	struct cl_cbref_dtor_data *data = (struct cl_cbref_dtor_data *)d;
-
-	luaL_unref (data->L, LUA_REGISTRYINDEX, data->ref_idx);
-}
-
 gboolean
 rspamd_stat_check_autolearn (struct rspamd_task *task)
 {
@@ -1069,16 +1056,7 @@ rspamd_stat_check_autolearn (struct rspamd_task *task)
 									  "`lua_bayes_learn`");
 					}
 					else {
-						struct cl_cbref_dtor_data *dtor_data;
-
-						dtor_data = (struct cl_cbref_dtor_data *)
-								rspamd_mempool_alloc (task->cfg->cfg_pool,
-									sizeof (*dtor_data));
 						cl->autolearn_cbref = luaL_ref (L, LUA_REGISTRYINDEX);
-						dtor_data->L = L;
-						dtor_data->ref_idx = cl->autolearn_cbref;
-						rspamd_mempool_add_destructor (task->cfg->cfg_pool,
-								rspamd_stat_cbref_dtor, dtor_data);
 					}
 				}
 
