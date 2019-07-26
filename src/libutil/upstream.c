@@ -799,6 +799,7 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups, const gchar *str,
 			}
 
 			g_ptr_array_add (addrs, addr);
+			ret = RSPAMD_PARSE_ADDR_NUMERIC;
 
 			if (ups->ctx) {
 				rspamd_mempool_add_destructor (ups->ctx->pool,
