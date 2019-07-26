@@ -22,6 +22,7 @@ local rspamd_logger = require "rspamd_logger"
 local lua_meta = require "lua_meta"
 local rspamd_url = require "rspamd_url"
 local lua_util = require "lua_util"
+local lua_mime = require "lua_mime"
 local ucl = require "ucl"
 
 -- Define command line options
@@ -642,47 +643,6 @@ local function modify_handler(opts)
     return content
   end
 
-  local function do_append_footer(task, part, footer, is_multipart, out)
-    local newline_s = newline(task)
-    local tp = part:get_text()
-    local ct = 'text/plain'
-    local cte = 'quoted-printable'
-
-    if tp:is_html() then
-      ct = 'text/html'
-    end
-
-    if part:get_cte() == '7bit' then
-      cte = '7bit'
-    end
-
-    if is_multipart then
-      out[#out + 1] = string.format('Content-Type: %s; charset=utf-8%s'..
-          'Content-Transfer-Encoding: %s',
-          ct, newline_s, cte)
-      out[#out + 1] = ''
-    end
-
-    local content = tostring(tp:get_content('raw_utf') or '')
-    local double_nline = newline_s .. newline_s
-    local nlen = #double_nline
-    -- Hack, if part ends with 2 newline, then we append it after footer
-    if content:sub(-(nlen), nlen + 1) == double_nline then
-      content = string.format('%s%s',
-          content:sub(-(#newline_s), #newline_s + 1), -- content without last newline
-          footer)
-      out[#out + 1] = {rspamd_util.encode_qp(content,
-          80, task:get_newlines_type()), true}
-      out[#out + 1] = ''
-    else
-      content = content .. footer
-      out[#out + 1] = {rspamd_util.encode_qp(content,
-          80, task:get_newlines_type()), true}
-      out[#out + 1] = ''
-    end
-
-  end
-
   local text_footer, html_footer
 
   if opts['text_footer'] then
@@ -696,13 +656,12 @@ local function modify_handler(opts)
   for _,fname in ipairs(opts.file) do
     local task = load_task(opts, fname)
     local newline_s = newline(task)
-    local need_rewrite_ct = false
-    local parsed_ct
-    local seen_cte = false
-    local out = {}
+    local seen_cte
+
+    local rewrite = lua_mime.add_text_footer(task, html_footer, text_footer) or {}
+    local out = {} -- Start with headers
 
     local function process_headers_cb(name, hdr)
-
       for _,h in ipairs(opts['remove_header']) do
         if name:match(h) then
           return
@@ -723,65 +682,21 @@ local function modify_handler(opts)
         end
       end
 
-      if need_rewrite_ct then
+      if rewrite.need_rewrite_ct then
         if name:lower() == 'content-type' then
           local nct = string.format('%s: %s/%s; charset=utf-8',
-              'Content-Type', parsed_ct.type, parsed_ct.subtype)
+              'Content-Type', rewrite.new_ct.type, rewrite.new_ct.subtype)
           out[#out + 1] = nct
           return
         elseif name:lower() == 'content-transfer-encoding' then
-          seen_cte = true
           out[#out + 1] = string.format('%s: %s',
               'Content-Transfer-Encoding', 'quoted-printable')
+          seen_cte = true
           return
         end
       end
 
       out[#out + 1] = hdr.raw:gsub('\r?\n?$', '')
-    end
-
-    if html_footer or text_footer then
-      -- We need to take extra care about content-type and cte
-      local ct = task:get_header('Content-Type')
-      if ct then
-        ct = rspamd_util.parse_content_type(ct, task:get_mempool())
-      end
-
-      if ct then
-        if ct.type and ct.type == 'text' then
-          if ct.subtype then
-            if html_footer and (ct.subtype == 'html' or ct.subtype == 'htm') then
-              need_rewrite_ct = true
-            elseif text_footer and ct.subtype == 'plain' then
-              need_rewrite_ct = true
-            end
-          else
-            if text_footer then
-              need_rewrite_ct = true
-            end
-          end
-
-          parsed_ct = ct
-        end
-      else
-        local text_parts = task:get_text_parts()
-        if text_parts then
-
-          if #text_parts == 1 then
-            need_rewrite_ct = true
-            parsed_ct = {
-              type = 'text',
-              subtype = 'plain'
-            }
-          elseif #text_parts > 1 then
-            -- XXX: in fact, it cannot be
-            parsed_ct = {
-              type = 'multipart',
-              subtype = 'mixed'
-            }
-          end
-        end
-      end
     end
 
     task:headers_foreach(process_headers_cb, {full = true})
@@ -795,108 +710,20 @@ local function modify_handler(opts)
       end
     end
 
-    if not seen_cte and need_rewrite_ct then
+    if not seen_cte and rewrite.need_rewrite_ct then
       out[#out + 1] = string.format('%s: %s',
           'Content-Transfer-Encoding', 'quoted-printable')
     end
 
     -- End of headers
-    --local eoh_pos = #out
     out[#out + 1] = ''
 
-    local boundaries = {}
-    local cur_boundary
-
-    for _,part in ipairs(task:get_parts()) do
-      local boundary = part:get_boundary()
-      if part:is_multipart() then
-        if cur_boundary then
-          out[#out + 1] = string.format('--%s',
-              boundaries[#boundaries])
-        end
-
-        boundaries[#boundaries + 1] = boundary or '--XXX'
-        cur_boundary = boundary
-
-        local rh = part:get_raw_headers()
-        if #rh > 0 then
-          out[#out + 1] = {rh, true}
-        end
-      elseif part:is_message() then
-        if boundary then
-          if cur_boundary and boundary ~= cur_boundary then
-            -- Need to close boundary
-            out[#out + 1] = string.format('--%s--%s',
-                boundaries[#boundaries], newline_s)
-            table.remove(boundaries)
-            cur_boundary = nil
-          end
-          out[#out + 1] = string.format('--%s',
-              boundary)
-        end
-
-        out[#out + 1] = {part:get_raw_headers(), true}
-      else
-        local append_footer = false
-        local skip_footer = part:is_attachment()
-
-        local parent = part:get_parent()
-        if parent then
-          local t,st = parent:get_type()
-
-          if t == 'multipart' and st == 'signed' then
-            -- Do not modify signed parts
-            skip_footer = true
-          end
-        end
-        if text_footer and part:is_text() then
-          local tp = part:get_text()
-
-          if not tp:is_html() then
-            append_footer = text_footer
-          end
-        end
-
-        if html_footer and part:is_text() then
-          local tp = part:get_text()
-
-          if tp:is_html() then
-            append_footer = html_footer
-          end
-        end
-
-        if boundary then
-          if cur_boundary and boundary ~= cur_boundary then
-            -- Need to close boundary
-            out[#out + 1] = string.format('--%s--%s',
-                boundaries[#boundaries], newline_s)
-            table.remove(boundaries)
-            cur_boundary = boundary
-          end
-          out[#out + 1] = string.format('--%s',
-              boundary)
-        end
-
-        io.flush()
-
-        if append_footer and not skip_footer then
-          do_append_footer(task, part, append_footer,
-              parent and parent:is_multipart(), out)
-        else
-          out[#out + 1] = {part:get_raw_headers(), true}
-          out[#out + 1] = {part:get_raw_content(), false}
-        end
+    if rewrite.out then
+      for _,o in ipairs(rewrite.out) do
+        out[#out + 1] = o
       end
-    end
-
-    -- Close remaining
-    local b = table.remove(boundaries)
-    while b do
-      out[#out + 1] = string.format('--%s--', b)
-      if #boundaries > 0 then
-        out[#out + 1] = ''
-      end
-      b = table.remove(boundaries)
+    else
+      out[#out + 1] = task:get_rawbody()
     end
 
     for _,o in ipairs(out) do
