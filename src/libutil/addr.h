@@ -240,17 +240,23 @@ gint rspamd_accept_from_socket (gint sock,
 								rspamd_accept_throttling_handler hdl,
 								void *hdl_data);
 
+enum rspamd_parse_host_port_result {
+	RSPAMD_PARSE_ADDR_FAIL = 0,
+	RSPAMD_PARSE_ADDR_RESOLVED = 1,
+	RSPAMD_PARSE_ADDR_NUMERIC = 2,
+};
 /**
  * Parse host[:port[:priority]] line
  * @param ina host address
  * @param port port
  * @param priority priority
- * @return TRUE if string was parsed
+ * @return RSPAMD_PARSE_ADDR_FAIL in case of error, RSPAMD_PARSE_ADDR_NUMERIC in case of pure ip/unix socket
  */
-gboolean rspamd_parse_host_port_priority (const gchar *str,
-										  GPtrArray **addrs,
-										  guint *priority, gchar **name, guint default_port,
-										  rspamd_mempool_t *pool);
+enum rspamd_parse_host_port_result
+rspamd_parse_host_port_priority (const gchar *str,
+								 GPtrArray **addrs,
+								 guint *priority, gchar **name, guint default_port,
+								 rspamd_mempool_t *pool);
 
 /**
  * Destroy the specified IP address

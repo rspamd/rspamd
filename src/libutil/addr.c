@@ -1211,7 +1211,7 @@ rspamd_check_port_priority (const char *line, guint default_port,
 	return TRUE;
 }
 
-static gboolean
+static enum rspamd_parse_host_port_result
 rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 		const gchar *portbuf, gint flags,
 		rspamd_mempool_t *pool)
@@ -1220,6 +1220,7 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 	rspamd_inet_addr_t *cur_addr = NULL;
 	gint r, addr_cnt;
 	gchar *addr_cpy = NULL;
+	enum rspamd_parse_host_port_result ret = RSPAMD_PARSE_ADDR_FAIL;
 
 	rspamd_ip_check_ipv6 ();
 
@@ -1236,6 +1237,7 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 
 		rspamd_inet_address_set_port (cur_addr, strtoul (portbuf, NULL, 10));
 		g_ptr_array_add (*addrs, cur_addr);
+		ret = RSPAMD_PARSE_ADDR_NUMERIC;
 	}
 	else {
 		memset (&hints, 0, sizeof (hints));
@@ -1292,6 +1294,7 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 			}
 
 			freeaddrinfo (res);
+			ret = RSPAMD_PARSE_ADDR_RESOLVED;
 		}
 		else if (addr_cpy) {
 			msg_err_pool_check ("address resolution for %s failed: %s",
@@ -1302,7 +1305,7 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 				g_free (addr_cpy);
 			}
 
-			return FALSE;
+			return RSPAMD_PARSE_ADDR_FAIL;
 		}
 		else {
 			/* Should never ever happen */
@@ -1310,21 +1313,22 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 		}
 	}
 
-	return TRUE;
+	return ret;
 }
 
-gboolean
+enum rspamd_parse_host_port_result
 rspamd_parse_host_port_priority (const gchar *str,
-	GPtrArray **addrs,
-	guint *priority,
-	gchar **name_ptr,
-	guint default_port,
-	rspamd_mempool_t *pool)
+								 GPtrArray **addrs,
+								 guint *priority,
+								 gchar **name_ptr,
+								 guint default_port,
+								 rspamd_mempool_t *pool)
 {
 	gchar portbuf[8];
 	const gchar *p, *name = NULL;
 	gsize namelen;
 	rspamd_inet_addr_t *cur_addr = NULL;
+	enum rspamd_parse_host_port_result ret = RSPAMD_PARSE_ADDR_FAIL;
 
 	/*
 	 * In this function, we can have several possibilities:
@@ -1337,15 +1341,17 @@ rspamd_parse_host_port_priority (const gchar *str,
 	if (str[0] == '*') {
 		if (!rspamd_check_port_priority (str + 1, default_port, priority,
 				portbuf, sizeof (portbuf), pool)) {
-			return FALSE;
+			return ret;
 		}
 
-		if (!rspamd_resolve_addrs (str, 0, addrs, portbuf, AI_PASSIVE, pool)) {
-			return FALSE;
+		if (rspamd_resolve_addrs (str, 0, addrs, portbuf, AI_PASSIVE, pool)
+				== RSPAMD_PARSE_ADDR_FAIL) {
+			return ret;
 		}
 
 		name = "*";
 		namelen = 1;
+		ret = RSPAMD_PARSE_ADDR_NUMERIC; /* No resolution here */
 	}
 	else if (str[0] == '[') {
 		/* This is braced IPv6 address */
@@ -1356,7 +1362,7 @@ rspamd_parse_host_port_priority (const gchar *str,
 					str,
 					strerror (EINVAL));
 
-			return FALSE;
+			return ret;
 		}
 
 		name = str + 1;
@@ -1364,13 +1370,10 @@ rspamd_parse_host_port_priority (const gchar *str,
 
 		if (!rspamd_check_port_priority (p + 1, default_port, priority, portbuf,
 				sizeof (portbuf), pool)) {
-			return FALSE;
+			return ret;
 		}
 
-		if (!rspamd_resolve_addrs (name, namelen, addrs,
-				portbuf, 0, pool)) {
-			return FALSE;
-		}
+		ret = rspamd_resolve_addrs (name, namelen, addrs, portbuf, 0, pool);
 	}
 	else if (str[0] == '/' || str[0] == '.') {
 		/* Special case of unix socket, as getaddrinfo cannot deal with them */
@@ -1389,12 +1392,13 @@ rspamd_parse_host_port_priority (const gchar *str,
 					str,
 					strerror (errno));
 
-			return FALSE;
+			return ret;
 		}
 
 		g_ptr_array_add (*addrs, cur_addr);
 		name = str;
 		namelen = strlen (str);
+		ret = RSPAMD_PARSE_ADDR_NUMERIC; /* No resolution here: unix socket */
 	}
 	else {
 		p = strchr (str, ':');
@@ -1406,10 +1410,8 @@ rspamd_parse_host_port_priority (const gchar *str,
 			rspamd_check_port_priority ("", default_port, priority, portbuf,
 					sizeof (portbuf), pool);
 
-			if (!rspamd_resolve_addrs (name, namelen, addrs,
-					portbuf, 0, pool)) {
-				return FALSE;
-			}
+			ret = rspamd_resolve_addrs (name, namelen, addrs,
+					portbuf, 0, pool);
 		}
 		else {
 			name = str;
@@ -1417,13 +1419,11 @@ rspamd_parse_host_port_priority (const gchar *str,
 
 			if (!rspamd_check_port_priority (p, default_port, priority, portbuf,
 					sizeof (portbuf), pool)) {
-				return FALSE;
+				return ret;
 			}
 
-			if (!rspamd_resolve_addrs (str, p - str, addrs,
-					portbuf, 0, pool)) {
-				return FALSE;
-			}
+			ret = rspamd_resolve_addrs (str, p - str, addrs,
+					portbuf, 0, pool);
 		}
 	}
 
@@ -1438,7 +1438,7 @@ rspamd_parse_host_port_priority (const gchar *str,
 		rspamd_strlcpy (*name_ptr, name, namelen + 1);
 	}
 
-	return TRUE;
+	return ret;
 }
 
 guchar*

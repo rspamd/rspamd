@@ -2223,6 +2223,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				G_STRUCT_OFFSET (struct rspamd_config, upstream_revive_time),
 				RSPAMD_CL_FLAG_TIME_FLOAT,
 				"Time before attempting to recover upstream after an error");
+		rspamd_rcl_add_default_handler (ssub,
+				"lazy_resolve_time",
+				rspamd_rcl_parse_struct_time,
+				G_STRUCT_OFFSET (struct rspamd_config, upstream_lazy_resolve_time),
+				RSPAMD_CL_FLAG_TIME_FLOAT,
+				"Time to resolve upstreams addresses in lazy mode");
 	}
 
 	if (!(skip_sections && g_hash_table_lookup (skip_sections, "actions"))) {

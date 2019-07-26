@@ -450,6 +450,7 @@ struct rspamd_config {
 	guint upstream_max_errors;                        /**< upstream max errors before shutting off			*/
 	gdouble upstream_error_time;                    /**< rate of upstream errors							*/
 	gdouble upstream_revive_time;                    /**< revive timeout for upstreams						*/
+	gdouble upstream_lazy_resolve_time;              /**< lazy resolve time for upstreams					*/
 	struct upstream_ctx *ups_ctx;                    /**< upstream context									*/
 	struct rspamd_dns_resolver *dns_resolver;        /**< dns resolver if loaded								*/
 
