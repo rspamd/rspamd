@@ -48,12 +48,8 @@ rspamd_rfc2231_decode (rspamd_mempool_t *pool,
 		ctok.begin = value_start;
 		ctok.len = quote_pos - value_start;
 
-		charset = rspamd_mime_detect_charset (&ctok, pool);
-
-		if (charset == NULL) {
-			msg_warn_pool ("cannot convert parameter from charset %T", &ctok);
-
-			return FALSE;
+		if (ctok.len > 0) {
+			charset = rspamd_mime_detect_charset (&ctok, pool);
 		}
 
 		/* Now, we can check for either next quote sign or, eh, ignore that */
@@ -70,6 +66,17 @@ rspamd_rfc2231_decode (rspamd_mempool_t *pool,
 		gsize r = rspamd_url_decode (value_start, value_start,
 				value_end - value_start);
 		GError *err = NULL;
+
+		if (charset == NULL) {
+			/* Try heuristic */
+			charset = rspamd_mime_charset_find_by_content (value_start, r);
+		}
+
+		if (charset == NULL) {
+			msg_warn_pool ("cannot convert parameter from charset %T", &ctok);
+
+			return FALSE;
+		}
 
 		param->value.begin = rspamd_mime_text_to_utf8 (pool,
 				value_start, r,
