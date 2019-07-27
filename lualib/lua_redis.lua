@@ -865,7 +865,9 @@ local function rspamd_redis_make_request(task, redis_params, key, is_write,
     else
       addr:ok()
     end
-    callback(err, data, addr)
+    if callback then
+      callback(err, data, addr)
+    end
   end
   if not task or not redis_params or not callback or not command then
     return false,nil,nil
@@ -965,7 +967,9 @@ local function redis_make_request_taskless(ev_base, cfg, redis_params, key,
     else
       addr:ok()
     end
-    callback(err, data, addr)
+    if callback then
+      callback(err, data, addr)
+    end
   end
 
   local rspamd_redis = require "rspamd_redis"
