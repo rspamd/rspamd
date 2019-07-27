@@ -29,7 +29,6 @@
 #include "libutil/map_helpers.h"
 
 #include <math.h>
-#include <src/libserver/task.h>
 
 /***
  * @module rspamd_task
@@ -3972,20 +3971,25 @@ lua_task_get_images (lua_State *L)
 	struct rspamd_mime_part *part;
 	struct rspamd_image **pimg;
 
-	if (task && task->message) {
-		if (!lua_task_get_cached (L, task, "images")) {
-			lua_createtable (L, MESSAGE_FIELD (task, parts)->len, 0);
+	if (task) {
+		if (task->message) {
+			if (!lua_task_get_cached (L, task, "images")) {
+				lua_createtable (L, MESSAGE_FIELD (task, parts)->len, 0);
 
-			PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-				if (part->flags & RSPAMD_MIME_PART_IMAGE) {
-					pimg = lua_newuserdata (L, sizeof (struct rspamd_image *));
-					rspamd_lua_setclass (L, "rspamd{image}", -1);
-					*pimg = part->specific.img;
-					lua_rawseti (L, -2, ++nelt);
+				PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
+					if (part->flags & RSPAMD_MIME_PART_IMAGE) {
+						pimg = lua_newuserdata (L, sizeof (struct rspamd_image *));
+						rspamd_lua_setclass (L, "rspamd{image}", -1);
+						*pimg = part->specific.img;
+						lua_rawseti (L, -2, ++nelt);
+					}
 				}
-			}
 
-			lua_task_set_cached (L, task, "images", -1);
+				lua_task_set_cached (L, task, "images", -1);
+			}
+		}
+		else {
+			lua_newtable (L);
 		}
 	}
 	else {
@@ -4004,20 +4008,25 @@ lua_task_get_archives (lua_State *L)
 	struct rspamd_mime_part *part;
 	struct rspamd_archive **parch;
 
-	if (task && task->message) {
-		if (!lua_task_get_cached (L, task, "archives")) {
-			lua_createtable (L, MESSAGE_FIELD (task, parts)->len, 0);
+	if (task) {
+		if (task->message) {
+			if (!lua_task_get_cached (L, task, "archives")) {
+				lua_createtable (L, MESSAGE_FIELD (task, parts)->len, 0);
 
-			PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-				if (part->flags & RSPAMD_MIME_PART_ARCHIVE) {
-					parch = lua_newuserdata (L, sizeof (struct rspamd_archive *));
-					rspamd_lua_setclass (L, "rspamd{archive}", -1);
-					*parch = part->specific.arch;
-					lua_rawseti (L, -2, ++nelt);
+				PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
+					if (part->flags & RSPAMD_MIME_PART_ARCHIVE) {
+						parch = lua_newuserdata (L, sizeof (struct rspamd_archive *));
+						rspamd_lua_setclass (L, "rspamd{archive}", -1);
+						*parch = part->specific.arch;
+						lua_rawseti (L, -2, ++nelt);
+					}
 				}
-			}
 
-			lua_task_set_cached (L, task, "archives", -1);
+				lua_task_set_cached (L, task, "archives", -1);
+			}
+		}
+		else {
+			lua_newtable (L);
 		}
 	}
 	else {
@@ -4930,14 +4939,19 @@ lua_task_get_digest (lua_State *L)
 	gchar hexbuf[sizeof(MESSAGE_FIELD (task, digest)) * 2 + 1];
 	gint r;
 
-	if (task && task->message) {
-		r = rspamd_encode_hex_buf (MESSAGE_FIELD (task, digest),
-				sizeof (MESSAGE_FIELD (task, digest)),
-				hexbuf, sizeof (hexbuf) - 1);
+	if (task) {
+		if (task->message) {
+			r = rspamd_encode_hex_buf (MESSAGE_FIELD (task, digest),
+					sizeof (MESSAGE_FIELD (task, digest)),
+					hexbuf, sizeof (hexbuf) - 1);
 
-		if (r > 0) {
-			hexbuf[r] = '\0';
-			lua_pushstring (L, hexbuf);
+			if (r > 0) {
+				hexbuf[r] = '\0';
+				lua_pushstring (L, hexbuf);
+			}
+			else {
+				lua_pushnil (L);
+			}
 		}
 		else {
 			lua_pushnil (L);
@@ -5863,73 +5877,78 @@ lua_task_headers_foreach (lua_State *L)
 	struct rspamd_mime_header *hdr, *cur;
 	gint old_top;
 
-	if (task && task->message && lua_isfunction (L, 2)) {
-		if (lua_istable (L, 3)) {
-			lua_pushstring (L, "full");
-			lua_gettable (L, 3);
+	if (task && lua_isfunction (L, 2)) {
+		if (task->message) {
+			if (lua_istable (L, 3)) {
+				lua_pushstring (L, "full");
+				lua_gettable (L, 3);
 
-			if (lua_isboolean (L, -1) && lua_toboolean (L, -1)) {
-				how = RSPAMD_TASK_HEADER_PUSH_FULL;
+				if (lua_isboolean (L, -1) && lua_toboolean (L, -1)) {
+					how = RSPAMD_TASK_HEADER_PUSH_FULL;
+				}
+
+				lua_pop (L, 1);
+
+				lua_pushstring (L, "raw");
+				lua_gettable (L, 3);
+
+				if (lua_isboolean (L, -1) && lua_toboolean (L, -1)) {
+					how = RSPAMD_TASK_HEADER_PUSH_RAW;
+				}
+
+				lua_pop (L, 1);
+
+				lua_pushstring (L, "regexp");
+				lua_gettable (L, 3);
+
+				if (lua_isuserdata (L, -1)) {
+					re = *(struct rspamd_lua_regexp **)
+							rspamd_lua_check_udata (L, -1, "rspamd{regexp}");
+				}
+
+				lua_pop (L, 1);
 			}
 
-			lua_pop (L, 1);
+			if (MESSAGE_FIELD (task, headers_order)) {
+				hdr = MESSAGE_FIELD (task, headers_order);
 
-			lua_pushstring (L, "raw");
-			lua_gettable (L, 3);
-
-			if (lua_isboolean (L, -1) && lua_toboolean (L, -1)) {
-				how = RSPAMD_TASK_HEADER_PUSH_RAW;
-			}
-
-			lua_pop (L, 1);
-
-			lua_pushstring (L, "regexp");
-			lua_gettable (L, 3);
-
-			if (lua_isuserdata (L, -1)) {
-				re = *(struct rspamd_lua_regexp **)
-						rspamd_lua_check_udata (L, -1, "rspamd{regexp}");
-			}
-
-			lua_pop (L, 1);
-		}
-
-		if (MESSAGE_FIELD (task, headers_order)) {
-			hdr = MESSAGE_FIELD (task, headers_order);
-
-			LL_FOREACH (hdr, cur) {
-				if (re && re->re) {
-					if (!rspamd_regexp_match (re->re, cur->name,
-							strlen (cur->name),FALSE)) {
-						continue;
+				LL_FOREACH (hdr, cur) {
+					if (re && re->re) {
+						if (!rspamd_regexp_match (re->re, cur->name,
+								strlen (cur->name), FALSE)) {
+							continue;
+						}
 					}
-				}
 
-				old_top = lua_gettop (L);
-				lua_pushvalue (L, 2);
-				lua_pushstring (L, cur->name);
-				rspamd_lua_push_header (L, cur, how);
+					old_top = lua_gettop (L);
+					lua_pushvalue (L, 2);
+					lua_pushstring (L, cur->name);
+					rspamd_lua_push_header (L, cur, how);
 
-				if (lua_pcall (L, 2, LUA_MULTRET, 0) != 0) {
-					msg_err ("call to header_foreach failed: %s",
-							lua_tostring (L, -1));
-					lua_settop (L, old_top);
-					break;
-				}
-				else {
-					if (lua_gettop (L) > old_top) {
-						if (lua_isboolean (L, old_top + 1)) {
-							if (lua_toboolean (L, old_top + 1)) {
-								lua_settop (L, old_top);
-								break;
+					if (lua_pcall (L, 2, LUA_MULTRET, 0) != 0) {
+						msg_err ("call to header_foreach failed: %s",
+								lua_tostring (L, -1));
+						lua_settop (L, old_top);
+						break;
+					}
+					else {
+						if (lua_gettop (L) > old_top) {
+							if (lua_isboolean (L, old_top + 1)) {
+								if (lua_toboolean (L, old_top + 1)) {
+									lua_settop (L, old_top);
+									break;
+								}
 							}
 						}
 					}
-				}
 
-				lua_settop (L, old_top);
+					lua_settop (L, old_top);
+				}
 			}
-		}
+		} /* if (task->message) */
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
 	return 0;
@@ -6086,6 +6105,7 @@ lua_task_topointer (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
+		/* XXX: this might cause issues on arm64 and LuaJIT */
 		lua_pushlightuserdata (L, task);
 	}
 	else {
