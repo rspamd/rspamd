@@ -1008,7 +1008,7 @@ rspamd_inet_address_connect (const rspamd_inet_addr_t *addr, gint type,
 	if (r == -1) {
 		if (!async || errno != EINPROGRESS) {
 			close (fd);
-			msg_warn ("connect %s failed: %d, '%s'",
+			msg_info ("connect %s failed: %d, '%s'",
 					rspamd_inet_address_to_string_pretty (addr),
 					errno, strerror (errno));
 			return -1;
