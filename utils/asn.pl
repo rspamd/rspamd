@@ -199,7 +199,11 @@ my $zone_header = << "EOH";
 EOH
 
 if ($v4) {
-    open my $v4_fh, '>', ".$v4_file.tmp";
+    # create temp file in the same dir so we can be sure that mv is atomic
+    my $out_dir = dirname($v4_file);
+    my $out_file = basename($v4_file);
+    my $temp_file = "$out_dir/.$out_file.tmp";
+    open my $v4_fh, '>', $temp_file;
     print $v4_fh $zone_header;
 
     while (my ($net, $asn) = each %{ $networks->{4} }) {
@@ -211,11 +215,14 @@ if ($v4) {
     }
 
     close $v4_fh;
-    rename ".$v4_file.tmp", $v4_file;
+    rename $temp_file, $v4_file;
 }
 
 if ($v6) {
-    open my $v6_fh, '>', ".$v6_file.tmp";
+    my $out_dir = dirname($v6_file);
+    my $out_file = basename($v6_file);
+    my $temp_file = "$out_dir/.$out_file.tmp";
+    open my $v6_fh, '>', $temp_file;
     print $v6_fh $zone_header;
 
     while (my ($net, $asn) = each %{ $networks->{6} }) {
@@ -227,7 +234,7 @@ if ($v6) {
     }
 
     close $v6_fh;
-    rename ".$v6_file.tmp", $v6_file;
+    rename $temp_file, $v6_file;
 }
 
 exit 0;
