@@ -145,10 +145,10 @@ local function check_query_settings(task)
   end
 
   if settings_id and settings_initialized then
-    local elt = lua_settings.settings_by_id(settings_id)
+    local cached = lua_settings.settings_by_id(settings_id)
 
-    if elt then
-      elt = elt.settings
+    if cached then
+      local elt = cached.settings
       if elt['whitelist'] then
         elt['apply'] = {whitelist = true}
       end
@@ -158,8 +158,8 @@ local function check_query_settings(task)
           elt.apply = lua_util.override_defaults(nset, elt.apply)
         end
         apply_settings(task, elt['apply'], settings_id)
-        rspamd_logger.infox(task, "applied settings id %s(%s)", settings_id,
-            elt.name)
+        rspamd_logger.infox(task, "applied settings id %s(%s)",
+            cached.name, settings_id)
         return true
       end
     else
