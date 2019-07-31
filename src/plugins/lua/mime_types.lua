@@ -37,12 +37,17 @@ local settings = {
   symbol_double_extension = 'MIME_DOUBLE_BAD_EXTENSION',
   symbol_bad_extension = 'MIME_BAD_EXTENSION',
   symbol_bad_unicode = 'MIME_BAD_UNICODE',
+  symbol_banned_extension = 'MIME_BANNED_EXTENSION',
+  banned_message = 'Forbidden attachment format',
   regexp = false,
   extension_map = { -- extension -> mime_type
     html = 'text/html',
     htm = 'text/html',
     txt = 'text/plain',
     pdf = 'application/pdf'
+  },
+
+  banned_extensions = {
   },
 
   bad_extensions = {
@@ -894,10 +899,20 @@ local function check_mime_type(task)
             string.format(".%s.%s", ext2, ext))
           task:insert_result('MIME_TRACE', 0.0,
               string.format("%s:%s", part:get_id(), '-'))
+
+          if settings.banned_extensions[ext] or settings.banned_extensions[ext2] then
+            -- banned double extension ex: exe.pdf
+            task:insert_result(settings['symbol_banned_extension'], 0 , string.format("%s,%s", ext2, ext))
+            task:set_pre_result('reject', string.format("%s (.%s.%s)",settings.banned_message, ext2, ext) , N)
+          end
           return
         end
       end
-      if badness_mult then
+      if settings.banned_extensions[ext] then
+        -- banned extension
+        task:insert_result(settings['symbol_banned_extension'], 0 , ext)
+        task:set_pre_result('reject', string.format("%s (%s)",settings.banned_message, ext) , N)
+      elseif badness_mult then
         -- Just bad extension
         task:insert_result(settings['symbol_bad_extension'], badness_mult, ext)
         task:insert_result('MIME_TRACE', 0.0,
@@ -943,7 +958,7 @@ local function check_mime_type(task)
           extra_table[e] or settings.bad_extensions[e]
       end
 
-      return extra_table[e] or settings.bad_extensions[e]
+      return extra_table[e] or settings.bad_extensions[e] or settings.banned_extensions[e]
     end
 
     if ext then
@@ -1245,6 +1260,12 @@ if opts then
     rspamd_config:register_symbol({
       type = 'virtual',
       name = settings['symbol_bad_extension'],
+      parent = id,
+      group = 'mime_types',
+    })
+    rspamd_config:register_symbol({
+      type = 'virtual',
+      name = settings['symbol_banned_extension'],
       parent = id,
       group = 'mime_types',
     })
