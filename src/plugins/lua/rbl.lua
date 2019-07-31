@@ -336,11 +336,11 @@ local function gen_rbl_callback(rule)
         if rule.hash then
           -- Leave @ as is
           add_dns_request(string.format('%s@%s',
-              email:get_user(), email:get_domain()), false, requests_table)
+              email:get_user(), email:get_host()), false, requests_table)
         else
           -- Replace @ with .
           add_dns_request(string.format('%s.%s',
-              email:get_user(), email:get_domain()), false, requests_table)
+              email:get_user(), email:get_host()), false, requests_table)
         end
       end
     end
