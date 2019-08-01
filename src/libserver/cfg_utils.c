@@ -500,6 +500,9 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 	else if (rspamd_ftok_cstr_equal (&tok, "forced_action", TRUE)) {
 		type = RSPAMD_LOG_FORCED_ACTION;
 	}
+	else if (rspamd_ftok_cstr_equal (&tok, "settings_id", TRUE)) {
+		type = RSPAMD_LOG_SETTINGS_ID;
+	}
 	else {
 		msg_err_config ("unknown log variable: %T", &tok);
 		return FALSE;
