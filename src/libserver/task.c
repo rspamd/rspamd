@@ -1001,6 +1001,11 @@ rspamd_task_log_check_condition (struct rspamd_task *task,
 			ret = TRUE;
 		}
 		break;
+	case RSPAMD_LOG_SETTINGS_ID:
+		if (task->settings_elt) {
+			ret = TRUE;
+		}
+		break;
 	default:
 		ret = TRUE;
 		break;
@@ -1456,6 +1461,16 @@ rspamd_task_log_variable (struct rspamd_task *task,
 						pr->module);
 			}
 			var.begin = numbuf;
+		}
+		else {
+			var.begin = undef;
+			var.len = sizeof (undef) - 1;
+		}
+		break;
+	case RSPAMD_LOG_SETTINGS_ID:
+		if (task->settings_elt) {
+			var.begin = task->settings_elt->name;
+			var.len = strlen (task->settings_elt->name);
 		}
 		else {
 			var.begin = undef;

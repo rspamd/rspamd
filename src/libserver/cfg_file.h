@@ -255,6 +255,7 @@ enum rspamd_log_format_type {
 	RSPAMD_LOG_DIGEST,
 	RSPAMD_LOG_FILENAME,
 	RSPAMD_LOG_FORCED_ACTION,
+	RSPAMD_LOG_SETTINGS_ID,
 };
 
 enum rspamd_log_format_flags {
