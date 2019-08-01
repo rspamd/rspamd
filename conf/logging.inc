@@ -5,7 +5,7 @@ log_format =<<EOD
 id: <$mid>,$if_qid{ qid: <$>,}$if_ip{ ip: $,}$if_user{ user: $,}$if_smtp_from{ from: <$>,}
 (default: $is_spam ($action): [$scores] [$symbols_scores_params]),
 len: $len, time: $time_real, dns req: $dns_req,
-digest: <$digest>$if_smtp_rcpts{, rcpts: <$>}$if_mime_rcpts{, mime_rcpts: <$>}$if_filename{, file: $}$if_forced_action{, forced: $}
+digest: <$digest>$if_smtp_rcpts{, rcpts: <$>}$if_mime_rcpts{, mime_rcpts: <$>}$if_filename{, file: $}$if_forced_action{, forced: $}$if_settings_id{, settings_id: $}
 EOD
 
 
