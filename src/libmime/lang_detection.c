@@ -1556,6 +1556,7 @@ KHASH_INIT (rspamd_sw_hash, struct rspamd_language_elt *, int, 1,
 		rspamd_langelt_hash_func, rspamd_langelt_equal_func);
 
 struct rspamd_sw_cbdata {
+	struct rspamd_task *task;
 	khash_t (rspamd_sw_hash) *res;
 	GArray *ranges;
 };
@@ -1591,6 +1592,7 @@ rspamd_language_detector_sw_cb (struct rspamd_multipattern *mp,
 	struct rspamd_sw_cbdata *cbdata = (struct rspamd_sw_cbdata *)context;
 	khiter_t k;
 	static const gsize max_stop_words = 80;
+	struct rspamd_task *task;
 
 	if (match_start > 0) {
 		prev = text + match_start - 1;
@@ -1609,14 +1611,17 @@ rspamd_language_detector_sw_cb (struct rspamd_multipattern *mp,
 	}
 
 	/* We have a word on the boundary, check range */
+	task = cbdata->task;
 	r = bsearch (GINT_TO_POINTER (strnum), cbdata->ranges->data,
 			cbdata->ranges->len, sizeof (*r), rspamd_ranges_cmp);
+
 	g_assert (r != NULL);
 
 	k = kh_get (rspamd_sw_hash, cbdata->res, r->elt);
+	gint nwords = 1;
 
 	if (k != kh_end (cbdata->res)) {
-		kh_value (cbdata->res, k) ++;
+		nwords = ++ kh_value (cbdata->res, k);
 
 		if (kh_value (cbdata->res, k) > max_stop_words) {
 			return 1;
@@ -1628,6 +1633,9 @@ rspamd_language_detector_sw_cb (struct rspamd_multipattern *mp,
 		k = kh_put (rspamd_sw_hash, cbdata->res, r->elt, &tt);
 		kh_value (cbdata->res, k) = 1;
 	}
+
+	msg_debug_lang_det ("found word %*s from %s language (%d stop words found so far)",
+			(int)(next - prev - 1), prev + 1, r->elt->name, nwords);
 
 	return 0;
 }
@@ -1645,6 +1653,7 @@ rspamd_language_detector_try_stop_words (struct rspamd_task *task,
 	elt = &d->stop_words[cat];
 	cbdata.res = kh_init (rspamd_sw_hash);
 	cbdata.ranges = elt->ranges;
+	cbdata.task = task;
 
 	rspamd_multipattern_lookup (elt->mp, part->utf_stripped_content->data,
 			part->utf_stripped_content->len, rspamd_language_detector_sw_cb,
