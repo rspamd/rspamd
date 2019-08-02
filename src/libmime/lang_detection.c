@@ -939,6 +939,7 @@ rspamd_language_detector_random_select (GArray *ucs_tokens, guint nwords,
 			/* Filter bad tokens */
 
 			if (tok->unicode.len >= 2 &&
+					!(tok->flags & RSPAMD_STAT_TOKEN_FLAG_EXCEPTION) &&
 					u_isalpha (tok->unicode.begin[0]) &&
 					u_isalpha (tok->unicode.begin[tok->unicode.len - 1])) {
 				offsets_out[out_idx] = sel;
