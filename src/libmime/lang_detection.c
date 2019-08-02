@@ -1650,6 +1650,7 @@ rspamd_language_detector_try_stop_words (struct rspamd_task *task,
 	struct rspamd_stop_word_elt *elt;
 	struct rspamd_sw_cbdata cbdata;
 	gboolean ret = FALSE;
+	static const int stop_words_threshold = 4;
 
 	elt = &d->stop_words[cat];
 	cbdata.res = kh_init (rspamd_sw_hash);
@@ -1667,7 +1668,12 @@ rspamd_language_detector_try_stop_words (struct rspamd_task *task,
 		struct rspamd_language_elt *cur_lang;
 
 		kh_foreach (cbdata.res, cur_lang, cur_matches, {
+			if (cur_matches < stop_words_threshold) {
+				continue;
+			}
+
 			double rate = (double)cur_matches / (double)cur_lang->stop_words;
+
 			if (rate > max_rate) {
 				max_rate = rate;
 				sel = cur_lang->name;
