@@ -1728,6 +1728,12 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 			session->pool, session->ctx->lang_det,
 			session->ctx->event_loop);
 	task->flags |= RSPAMD_TASK_FLAG_MIME;
+
+	if (session->ctx->milter) {
+		task->protocol_flags |= RSPAMD_TASK_PROTOCOL_FLAG_MILTER|
+				RSPAMD_TASK_PROTOCOL_FLAG_BODY_BLOCK;
+	}
+
 	task->sock = -1;
 
 	if (session->client_milter_conn) {
