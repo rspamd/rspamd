@@ -4923,6 +4923,10 @@ lua_task_get_flags (lua_State *L)
 			lua_pushstring (L, "milter");
 			lua_rawseti (L, -2, idx++);
 		}
+		if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_BODY_BLOCK) {
+			lua_pushstring (L, "body_block");
+			lua_rawseti (L, -2, idx++);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
