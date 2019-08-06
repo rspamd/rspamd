@@ -170,7 +170,7 @@ local function handler(args)
 end
 
 return {
-  name = 'dns_tool',
+  name = 'dnstool',
   aliases = {'dns', 'dns_tool'},
   handler = handler,
   description = parser._description

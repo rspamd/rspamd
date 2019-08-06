@@ -179,7 +179,8 @@ end
 
 
 return {
-  name = 'corpus_test',
+  name = 'corpustest',
+  aliases = {'corpus_test', 'corpus'},
   handler = handler,
   description = parser._description
 }
