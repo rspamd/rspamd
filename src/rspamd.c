@@ -308,6 +308,8 @@ reread_config (struct rspamd_main *rspamd_main)
 	else {
 		msg_info_main ("replacing config");
 		REF_RELEASE (old_cfg);
+		rspamd_main->cfg->rspamd_user = rspamd_user;
+		rspamd_main->cfg->rspamd_group = rspamd_group;
 		/* Here, we can do post actions with the existing config */
 		/*
 		 * As some rules are defined in lua, we need to process them, then init
@@ -317,12 +319,9 @@ reread_config (struct rspamd_main *rspamd_main)
 		rspamd_init_filters (tmp_cfg, TRUE);
 
 		/* Do post-load actions */
-		rspamd_config_post_load (tmp_cfg, load_opts);
+		rspamd_config_post_load (tmp_cfg,
+				load_opts|RSPAMD_CONFIG_INIT_POST_LOAD_LUA|RSPAMD_CONFIG_INIT_PRELOAD_MAPS);
 		msg_info_main ("config has been reread successfully");
-		rspamd_map_preload (rspamd_main->cfg);
-
-		rspamd_main->cfg->rspamd_user = rspamd_user;
-		rspamd_main->cfg->rspamd_group = rspamd_group;
 	}
 }
 
