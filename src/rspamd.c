@@ -277,6 +277,8 @@ reread_config (struct rspamd_main *rspamd_main)
 {
 	struct rspamd_config *tmp_cfg, *old_cfg;
 	gchar *cfg_file;
+	int load_opts = RSPAMD_CONFIG_INIT_VALIDATE|RSPAMD_CONFIG_INIT_SYMCACHE|
+					RSPAMD_CONFIG_INIT_LIBS|RSPAMD_CONFIG_INIT_URL;
 
 	rspamd_symcache_save (rspamd_main->cfg->cache);
 	tmp_cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT);
@@ -289,10 +291,7 @@ reread_config (struct rspamd_main *rspamd_main)
 	old_cfg = rspamd_main->cfg;
 	rspamd_main->cfg = tmp_cfg;
 
-	if (!load_rspamd_config (rspamd_main, tmp_cfg, TRUE,
-				RSPAMD_CONFIG_INIT_VALIDATE|RSPAMD_CONFIG_INIT_SYMCACHE|
-				RSPAMD_CONFIG_INIT_LIBS|RSPAMD_CONFIG_INIT_URL,
-				TRUE)) {
+	if (!load_rspamd_config (rspamd_main, tmp_cfg, TRUE, load_opts, TRUE)) {
 		rspamd_main->cfg = old_cfg;
 		rspamd_log_close_priv (rspamd_main->logger,
 					FALSE,
@@ -309,6 +308,16 @@ reread_config (struct rspamd_main *rspamd_main)
 	else {
 		msg_info_main ("replacing config");
 		REF_RELEASE (old_cfg);
+		/* Here, we can do post actions with the existing config */
+		/*
+		 * As some rules are defined in lua, we need to process them, then init
+		 * modules and merely afterwards to init modules
+		 */
+		rspamd_lua_post_load_config (tmp_cfg);
+		rspamd_init_filters (tmp_cfg, TRUE);
+
+		/* Do post-load actions */
+		rspamd_config_post_load (tmp_cfg, load_opts);
 		msg_info_main ("config has been reread successfully");
 		rspamd_map_preload (rspamd_main->cfg);
 
@@ -871,18 +880,20 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 		}
 	}
 
-	/*
-	 * As some rules are defined in lua, we need to process them, then init
-	 * modules and merely afterwards to init modules
-	 */
-	rspamd_lua_post_load_config (cfg);
+	if (!reload) {
+		/*
+		 * As some rules are defined in lua, we need to process them, then init
+		 * modules and merely afterwards to init modules
+		 */
+		rspamd_lua_post_load_config (cfg);
 
-	if (init_modules) {
-		rspamd_init_filters (cfg, reload);
+		if (init_modules) {
+			rspamd_init_filters (cfg, reload);
+		}
+
+		/* Do post-load actions */
+		rspamd_config_post_load (cfg, opts);
 	}
-
-	/* Do post-load actions */
-	rspamd_config_post_load (cfg, opts);
 
 	return TRUE;
 }
