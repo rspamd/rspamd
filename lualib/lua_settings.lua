@@ -193,6 +193,14 @@ local function register_settings_id(str, settings)
 
   if not post_init_added then
     rspamd_config:add_post_init(register_settings_cb)
+    rspamd_config:add_config_unload(function()
+      if post_init_added then
+        known_ids = {}
+        post_init_added = false
+      end
+      post_init_performed = false
+    end)
+
     post_init_added = true
   end
 
