@@ -411,10 +411,6 @@ struct rspamd_config {
 	GHashTable *cfg_params;                        /**< all cfg params indexed by its name in this structure */
 	gchar *dynamic_conf;                            /**< path to dynamic configuration						*/
 	ucl_object_t *current_dynamic_conf;             /**< currently loaded dynamic configuration				*/
-	GHashTable *domain_settings;                   /**< settings per-domains                               */
-	GHashTable *user_settings;                     /**< settings per-user                                  */
-	gchar *domain_settings_str;                    /**< string representation of settings					*/
-	gchar *user_settings_str;
 	gint clock_res;                                 /**< resolution of clock used							*/
 
 	GList *maps;                                    /**< maps active										*/
@@ -429,7 +425,6 @@ struct rspamd_config {
 	gchar *cache_filename;                          /**< filename of cache file								*/
 	gdouble cache_reload_time;                      /**< how often cache reload should be performed			*/
 	gchar *checksum;                               /**< real checksum of config file						*/
-	gchar *dump_checksum;                          /**< dump checksum of config file						*/
 	gpointer lua_state;                             /**< pointer to lua state								*/
 	gpointer lua_thread_pool;                       /**< pointer to lua thread (coroutine) pool				*/
 
@@ -441,8 +436,6 @@ struct rspamd_config {
 
 	gdouble dns_timeout;                            /**< timeout in milliseconds for waiting for dns reply	*/
 	guint32 dns_retransmits;                        /**< maximum retransmits count							*/
-	guint32 dns_throttling_errors;                  /**< maximum errors for starting resolver throttling	*/
-	guint32 dns_throttling_time;                    /**< time in seconds for DNS throttling					*/
 	guint32 dns_io_per_server;                      /**< number of sockets per DNS server					*/
 	const ucl_object_t *nameservers;                /**< list of nameservers or NULL to parse resolv.conf	*/
 	guint32 dns_max_requests;                       /**< limit of DNS requests per task 					*/

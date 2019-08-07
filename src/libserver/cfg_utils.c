@@ -130,9 +130,6 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->cfg_pool = rspamd_mempool_new (8 * 1024 * 1024, "cfg");
 	cfg->dns_timeout = 1000;
 	cfg->dns_retransmits = 5;
-	/* After 20 errors do throttling for 10 seconds */
-	cfg->dns_throttling_errors = 20;
-	cfg->dns_throttling_time = 10000;
 	/* 16 sockets per DNS server */
 	cfg->dns_io_per_server = 16;
 
