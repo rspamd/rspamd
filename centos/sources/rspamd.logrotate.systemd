@@ -6,6 +6,6 @@
     compress
     sharedscripts
     postrotate
-        export `systemctl -p MainPID show rspamd.service`; if [ -n "$MainPID" ]; then kill -USR1 $MainPID; fi
+        systemctl --signal=USR1 --kill-who=main kill rspamd.service 2>/dev/null || :
     endscript
 }
