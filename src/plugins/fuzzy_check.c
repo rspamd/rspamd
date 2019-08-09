@@ -2495,7 +2495,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 							(gint)sizeof (rep->digest), rep->digest,
 							symbol,
 							rep->v1.flag,
-							MESSAGE_FIELD (session->task, message_id));
+							MESSAGE_FIELD_CHECK (session->task, message_id));
 				}
 				else {
 					if (rep->v1.value == 401) {
