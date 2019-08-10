@@ -18,6 +18,7 @@
 #include "libutil/util.h"
 #include "libutil/logger.h"
 #include "ssl_util.h"
+#include "unix-std.h"
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -30,7 +31,8 @@ enum rspamd_ssl_state {
 	ssl_conn_init,
 	ssl_conn_connected,
 	ssl_next_read,
-	ssl_next_write
+	ssl_next_write,
+	ssl_next_shutdown,
 };
 
 enum rspamd_ssl_shutdown {
@@ -400,6 +402,53 @@ rspamd_tls_set_error (gint retcode, const gchar *stage, GError **err)
 }
 
 static void
+rspamd_ssl_connection_dtor (struct rspamd_ssl_connection *conn)
+{
+	SSL_free (conn->ssl);
+
+	if (conn->hostname) {
+		g_free (conn->hostname);
+	}
+
+	close (conn->fd);
+	g_free (conn);
+}
+
+static void
+rspamd_ssl_shutdown (struct rspamd_ssl_connection *conn)
+{
+	gint ret;
+
+	if ((ret = SSL_shutdown (conn->ssl)) == 1) {
+		/* All done */
+		rspamd_ssl_connection_dtor (conn);
+	}
+	else {
+		short what;
+
+		ret = SSL_get_error (conn->ssl, ret);
+		conn->state = ssl_next_shutdown;
+
+		if (ret == SSL_ERROR_WANT_READ) {
+			what = EV_READ;
+		}
+		else if (ret == SSL_ERROR_WANT_WRITE) {
+			what = EV_WRITE;
+		}
+		else {
+			/* Cannot do anything else, fatal error */
+			rspamd_ssl_connection_dtor (conn);
+
+			return;
+		}
+
+		/* As we own fd, we can try to perform shutdown one more time */
+		rspamd_ev_watcher_reschedule (conn->event_loop, conn->ev, what);
+		conn->state = ssl_next_shutdown;
+	}
+}
+
+static void
 rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 {
 	struct rspamd_ssl_connection *c = ud;
@@ -407,12 +456,18 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 	GError *err = NULL;
 
 	if (what == EV_TIMER) {
-		c->shut = ssl_shut_unclean;
-		rspamd_ev_watcher_stop (c->event_loop, c->ev);
-		g_set_error (&err, rspamd_ssl_quark (), ETIMEDOUT,
-				"ssl connection timed out");
-		c->err_handler (c->handler_data, err);
-		g_error_free (err);
+		if (c->state == ssl_next_shutdown) {
+			/* No way to restore, just terminate */
+			rspamd_ssl_connection_dtor (c);
+		}
+		else {
+			c->shut = ssl_shut_unclean;
+			rspamd_ev_watcher_stop (c->event_loop, c->ev);
+			g_set_error (&err, rspamd_ssl_quark (), ETIMEDOUT,
+					"ssl connection timed out");
+			c->err_handler (c->handler_data, err);
+			g_error_free (err);
+		}
 
 		return;
 	}
@@ -471,6 +526,9 @@ rspamd_ssl_event_handler (gint fd, short what, gpointer ud)
 		c->state = ssl_conn_connected;
 		c->handler (fd, what, c->handler_data);
 		break;
+	case ssl_next_shutdown:
+		rspamd_ssl_shutdown (c);
+		break;
 	default:
 		rspamd_ev_watcher_stop (c->event_loop, c->ev);
 		g_set_error (&err, rspamd_ssl_quark (), EINVAL,
@@ -512,13 +570,22 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 		return FALSE;
 	}
 
-	conn->fd = fd;
+	/* We dup fd to allow graceful closing */
+	gint nfd = dup (fd);
+
+	if (nfd == -1) {
+		return FALSE;
+	}
+
+	conn->fd = nfd;
 	conn->ev = ev;
 	conn->handler = handler;
 	conn->err_handler = err_handler;
 	conn->handler_data = handler_data;
 
-	if (SSL_set_fd (conn->ssl, fd) != 1) {
+	if (SSL_set_fd (conn->ssl, conn->fd) != 1) {
+		close (conn->fd);
+
 		return FALSE;
 	}
 
@@ -747,38 +814,13 @@ void
 rspamd_ssl_connection_free (struct rspamd_ssl_connection *conn)
 {
 	if (conn) {
-		/*
-		 * SSL_RECEIVED_SHUTDOWN tells SSL_shutdown to act as if we had already
-		 * received a close notify from the other end.  SSL_shutdown will then
-		 * send the final close notify in reply.  The other end will receive the
-		 * close notify and send theirs.  By this time, we will have already
-		 * closed the socket and the other end's real close notify will never be
-		 * received.  In effect, both sides will think that they have completed a
-		 * clean shutdown and keep their sessions valid.  This strategy will fail
-		 * if the socket is not ready for writing, in which case this hack will
-		 * lead to an unclean shutdown and lost session on the other end.
-		 */
 		if (conn->shut == ssl_shut_unclean) {
-			SSL_set_shutdown (conn->ssl, SSL_RECEIVED_SHUTDOWN|SSL_SENT_SHUTDOWN);
-			SSL_set_quiet_shutdown (conn->ssl, 1);
+			/* Ignore return result and close socket */
+			(void)SSL_shutdown (conn->ssl);
+			rspamd_ssl_connection_dtor (conn);
 		}
 		else {
-			SSL_set_shutdown (conn->ssl, SSL_RECEIVED_SHUTDOWN);
+			rspamd_ssl_shutdown (conn);
 		}
-
-		/* Stupid hack to enforce SSL to do shutdown sequence */
-		for (guint i = 0; i < 4; i++) {
-			if (SSL_shutdown (conn->ssl)) {
-				break;
-			}
-		}
-
-		SSL_free (conn->ssl);
-
-		if (conn->hostname) {
-			g_free (conn->hostname);
-		}
-
-		g_free (conn);
 	}
 }
