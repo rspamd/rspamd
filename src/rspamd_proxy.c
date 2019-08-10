@@ -1779,7 +1779,8 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 	if (session->ctx->default_upstream->timeout > 0.0) {
 		task->timeout_ev.data = task;
 		ev_timer_init (&task->timeout_ev, rspamd_task_timeout,
-				session->ctx->default_upstream->timeout, 0.0);
+				session->ctx->default_upstream->timeout,
+				session->ctx->default_upstream->timeout);
 		ev_timer_start (task->event_loop, &task->timeout_ev);
 
 	}
@@ -1787,7 +1788,8 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 		if (session->ctx->cfg->task_timeout > 0) {
 			task->timeout_ev.data = task;
 			ev_timer_init (&task->timeout_ev, rspamd_task_timeout,
-					session->ctx->cfg->task_timeout, 0.0);
+					session->ctx->cfg->task_timeout,
+					session->ctx->default_upstream->timeout);
 			ev_timer_start (task->event_loop, &task->timeout_ev);
 		}
 	}

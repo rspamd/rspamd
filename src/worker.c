@@ -168,7 +168,43 @@ rspamd_task_timeout (EV_P_ ev_timer *w, int revents)
 			}
 		}
 
+		ev_timer_again (EV_A_ w);
 		task->processed_stages |= RSPAMD_TASK_STAGE_FILTERS;
+		rspamd_session_cleanup (task->s);
+		rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
+		rspamd_session_pending (task->s);
+	}
+	else {
+		/* Postprocessing timeout */
+		msg_info_task ("post-processing of task time out: %.1f second spent; forced processing",
+				ev_now (task->event_loop) - task->task_timestamp);
+
+		if (task->cfg->soft_reject_on_timeout) {
+			struct rspamd_action *action, *soft_reject;
+
+			action = rspamd_check_action_metric (task);
+
+			if (action->action_type != METRIC_ACTION_REJECT) {
+				soft_reject = rspamd_config_get_action_by_type (task->cfg,
+						METRIC_ACTION_SOFT_REJECT);
+				rspamd_add_passthrough_result (task,
+						soft_reject,
+						0,
+						NAN,
+						"timeout post-processing message",
+						"task timeout",
+						0);
+
+				ucl_object_replace_key (task->messages,
+						ucl_object_fromstring_common ("timeout post-processing message",
+								0, UCL_STRING_RAW),
+						"smtp_message", 0,
+						false);
+			}
+		}
+
+		ev_timer_stop (EV_A_ w);
+		task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
 		rspamd_session_cleanup (task->s);
 		rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
 		rspamd_session_pending (task->s);
@@ -247,7 +283,8 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 	if (ctx->task_timeout > 0.0) {
 		task->timeout_ev.data = task;
 		ev_timer_init (&task->timeout_ev, rspamd_task_timeout,
-				ctx->task_timeout, 0.0);
+				ctx->task_timeout,
+				ctx->task_timeout);
 		ev_timer_start (task->event_loop, &task->timeout_ev);
 	}
 

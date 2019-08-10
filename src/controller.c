@@ -2130,7 +2130,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	if (ctx->task_timeout > 0.0) {
 		task->timeout_ev.data = task;
 		ev_timer_init (&task->timeout_ev, rspamd_task_timeout,
-				ctx->task_timeout, 0.0);
+				ctx->task_timeout, ctx->task_timeout);
 		ev_timer_start (task->event_loop, &task->timeout_ev);
 	}
 
