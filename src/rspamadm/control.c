@@ -233,6 +233,13 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 			rspamd_control_finish_handler,
 			RSPAMD_HTTP_CLIENT_SIMPLE,
 			addr);
+
+	if (!conn) {
+		rspamd_fprintf (stderr, "cannot open connection to %s: %s\n",
+				control_path, strerror (errno));
+		exit (-errno);
+	}
+
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 	msg->url = rspamd_fstring_new_init (path, strlen (path));
 
