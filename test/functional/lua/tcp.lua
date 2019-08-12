@@ -72,20 +72,20 @@ local function http_large_tcp_ssl_symbol(task)
   end
   local function ssl_read_cb(err, rep, conn)
     logger.errx(task, 'ssl_large_read_cb: got reply: %s, error: %s, conn: %s', rep, err, conn)
-    conn:add_write(ssl_read_post_cb, data)
+    conn:add_write(ssl_read_post_cb, 'foo\n')
     task:insert_result('TCP_SSL_LARGE', 1.0)
   end
 
   if task:get_queue_id() == 'SSL Large TCP request' then
     logger.errx(task, 'ssl_large_tcp_symbol: begin')
-    for i = 1,10 do
+    for i = 1,2 do
       local st = {}
-      for j=1,60000 do
+      for j=1,300000 do
         st[j] = 't'
       end
-      st[#st + 1] = '\n'
       data[i] = table.concat(st)
     end
+    data[#data + 1] = '\n'
 
     rspamd_tcp:request({
       task = task,
@@ -94,8 +94,10 @@ local function http_large_tcp_ssl_symbol(task)
       data = data,
       read = true,
       ssl = true,
+      stop_pattern = '\n',
       ssl_noverify = true,
       port = 14433,
+      timeout = 20,
     })
   else
     logger.errx(task, 'ssl_large_tcp_symbol: skip')

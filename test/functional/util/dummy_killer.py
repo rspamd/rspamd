@@ -14,7 +14,7 @@ def setup_killer(server, method = None):
 
     signal.signal(signal.SIGALRM, alarm_handler)
     signal.signal(signal.SIGTERM, alarm_handler)
-    signal.alarm(30)
+    signal.alarm(120)
 
 
 def write_pid(path):
