@@ -20,6 +20,8 @@
 #include "ucl.h"
 #include "fstring.h"
 
+#include <stdalign.h>
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
@@ -422,23 +424,35 @@ gsize rspamd_memspn (const gchar *s, const gchar *e, gsize len);
 
 /* https://graphics.stanford.edu/~seander/bithacks.html#HasMoreInWord */
 #define rspamd_str_hasmore(x, n) ((((x)+~0UL/255*(127-(n)))|(x))&~0UL/255*128)
+/*
+ * Check if a pointer is aligned; n must be power of two
+ */
+#define rspamd_is_aligned(p, n) (((uintptr_t)(p) & ((uintptr_t)(n) - 1)) == 0)
+#define rspamd_is_aligned_as(p, v) rspamd_is_aligned(p, _Alignof(__typeof((v))))
 
 static inline gboolean
-rspamd_str_has_8bit (const guchar *beg, gsize len) {
+rspamd_str_has_8bit (const guchar *beg, gsize len)
+{
 	unsigned long *w;
-	gsize i, leftover = len % sizeof (*w);
+	gsize i, leftover;
 
-	w = (unsigned long *) beg;
+	if (rspamd_is_aligned_as (beg, *w)) {
+		leftover = len % sizeof (*w);
+		w = (unsigned long *) beg;
 
-	for (i = 0; i < len / sizeof (*w); i++) {
-		if (rspamd_str_hasmore (*w, 127)) {
-			return TRUE;
+		for (i = 0; i < len / sizeof (*w); i++) {
+			if (rspamd_str_hasmore (*w, 127)) {
+				return TRUE;
+			}
+
+			w++;
 		}
 
-		w++;
+		beg = (const guchar *) w;
 	}
-
-	beg = (const guchar *) w;
+	else {
+		leftover = len;
+	}
 
 	for (i = 0; i < leftover; i++) {
 		if (beg[i] > 127) {

@@ -1232,7 +1232,7 @@ rspamd_symcache_new (struct rspamd_config *cfg)
 	cache->cfg = cfg;
 	cache->cksum = 0xdeadbabe;
 	cache->peak_cb = -1;
-	cache->id = rspamd_random_uint64_fast ();
+	cache->id = (guint)rspamd_random_uint64_fast ();
 
 	return cache;
 }

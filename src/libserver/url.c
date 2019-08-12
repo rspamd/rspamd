@@ -1188,7 +1188,7 @@ rspamd_web_parse (struct http_parser_url *u, const gchar *str, gsize len,
 						(*flags) |= RSPAMD_URL_FLAG_IDN;
 						guint i = 0;
 
-						U8_NEXT (p, i, last - p, uc);
+						U8_NEXT (((const guchar *)p), i, last - p, uc);
 
 						if (uc < 0) {
 							/* Bad utf8 */
