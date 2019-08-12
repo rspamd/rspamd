@@ -16,12 +16,15 @@ PID = "/tmp/dummy_ssl.pid"
 
 class SSLTCPHandler(SocketServer.BaseRequestHandler):
     def handle(self):
-        data = self.request.recv(1024)
+        time.sleep(0.5)
+        data = self.request.recv(16384)
         while data:
             print "{} wrote:".format(self.client_address[0])
             print data
+            time.sleep(0.1)
             self.request.sendall(data)
-            data = self.request.recv(1024)
+            time.sleep(0.1)
+            data = self.request.recv(16384)
 
 class SSL_TCP_Server(SocketServer.TCPServer):
     def __init__(self,

@@ -78,8 +78,13 @@ local function http_large_tcp_ssl_symbol(task)
 
   if task:get_queue_id() == 'SSL Large TCP request' then
     logger.errx(task, 'ssl_large_tcp_symbol: begin')
-    for i = 1,2000 do
-      data[i] = 'test\n'
+    for i = 1,10 do
+      local st = {}
+      for j=1,60000 do
+        st[j] = 't'
+      end
+      st[#st + 1] = '\n'
+      data[i] = table.concat(st)
     end
 
     rspamd_tcp:request({
