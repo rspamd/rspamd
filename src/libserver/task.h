@@ -128,7 +128,9 @@ enum rspamd_task_stage {
 #define RSPAMD_TASK_PROTOCOL_FLAG_EXT_URLS (1u << 4u)
 /* Client allows body block (including headers in no FLAG_MILTER) */
 #define RSPAMD_TASK_PROTOCOL_FLAG_BODY_BLOCK (1u << 5u)
-#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (5u)
+/* Emit groups information */
+#define RSPAMD_TASK_PROTOCOL_FLAG_GROUPS (1u << 6u)
+#define RSPAMD_TASK_PROTOCOL_FLAG_MAX_SHIFT (6u)
 
 #define RSPAMD_TASK_IS_SKIPPED(task) (((task)->flags & RSPAMD_TASK_FLAG_SKIP))
 #define RSPAMD_TASK_IS_SPAMC(task) (((task)->cmd == CMD_CHECK_SPAMC))

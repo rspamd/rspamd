@@ -380,6 +380,7 @@ rspamd_protocol_handle_flag (struct rspamd_task *task, const gchar *str,
 	CHECK_PROTOCOL_FLAG("zstd", RSPAMD_TASK_PROTOCOL_FLAG_COMPRESSED);
 	CHECK_PROTOCOL_FLAG("ext_urls", RSPAMD_TASK_PROTOCOL_FLAG_EXT_URLS);
 	CHECK_PROTOCOL_FLAG("body_block", RSPAMD_TASK_PROTOCOL_FLAG_BODY_BLOCK);
+	CHECK_PROTOCOL_FLAG("groups", RSPAMD_TASK_PROTOCOL_FLAG_GROUPS);
 
 	if (!known) {
 		msg_warn_protocol ("unknown flag: %*s", (gint)len, str);
@@ -1108,8 +1109,8 @@ rspamd_metric_symbol_ucl (struct rspamd_task *task, struct rspamd_symbol_result 
 	}
 
 	if (description) {
-		ucl_object_insert_key (obj, ucl_object_fromstring (
-				description), "description", 0, false);
+		ucl_object_insert_key (obj, ucl_object_fromstring (description),
+				"description", 0, false);
 	}
 
 	if (sym->options != NULL) {
@@ -1121,6 +1122,19 @@ rspamd_metric_symbol_ucl (struct rspamd_task *task, struct rspamd_symbol_result 
 
 		ucl_object_insert_key (obj, ar, "options", 0, false);
 	}
+
+	return obj;
+}
+
+static ucl_object_t *
+rspamd_metric_group_ucl (struct rspamd_task *task,
+		struct rspamd_symbols_group *gr, gdouble score)
+{
+	ucl_object_t *obj = NULL;
+
+	obj = ucl_object_typed_new (UCL_OBJECT);
+	ucl_object_insert_key (obj, ucl_object_fromdouble (score),
+			"score", 0, false);
 
 	return obj;
 }
@@ -1189,6 +1203,7 @@ rspamd_scan_result_ucl (struct rspamd_task *task,
 
 	/* Now handle symbols */
 	if (task->cmd != CMD_CHECK) {
+		/* For checkv2 we insert symbols as a separate object */
 		obj = ucl_object_typed_new (UCL_OBJECT);
 	}
 
@@ -1200,10 +1215,27 @@ rspamd_scan_result_ucl (struct rspamd_task *task,
 	})
 
 	if (task->cmd != CMD_CHECK) {
+		/* For checkv2 we insert symbols as a separate object */
 		ucl_object_insert_key (top, obj, "symbols", 0, false);
 	}
 	else {
+		/* For legacy check we just insert it as "default" all together */
 		ucl_object_insert_key (top, obj, DEFAULT_METRIC, 0, false);
+	}
+
+	/* Handle groups if needed */
+	if (task->protocol_flags & RSPAMD_TASK_PROTOCOL_FLAG_GROUPS) {
+		struct rspamd_symbols_group *gr;
+		gdouble gr_score;
+
+		obj = ucl_object_typed_new (UCL_OBJECT);
+
+		kh_foreach (mres->sym_groups, gr, gr_score,{
+			sobj = rspamd_metric_group_ucl (task, gr, gr_score);
+			ucl_object_insert_key (obj, sobj, gr->name, 0, false);
+		});
+
+		ucl_object_insert_key (top, obj, "groups", 0, false);
 	}
 
 	return obj;
