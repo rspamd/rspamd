@@ -1,10 +1,10 @@
 /**
- * @file filter.h
- * Filters logic implementation
+ * @file scan_result.h
+ * Scan result holder
  */
 
-#ifndef RSPAMD_FILTER_H
-#define RSPAMD_FILTER_H
+#ifndef RSPAMD_SCAN_RESULT_H
+#define RSPAMD_SCAN_RESULT_H
 
 #include "config.h"
 #include "rspamd_symcache.h"
@@ -70,7 +70,7 @@ struct kh_rspamd_symbols_hash_s;
 struct kh_rspamd_symbols_group_hash_s;
 
 
-struct rspamd_metric_result {
+struct rspamd_scan_result {
 	double score;                                    /**< total score							*/
 	double grow_factor;                                /**< current grow factor					*/
 	struct rspamd_passthrough_result *passthrough_result;
@@ -89,7 +89,7 @@ struct rspamd_metric_result {
  * @param task task object
  * @return metric result or NULL if metric `name` has not been found
  */
-struct rspamd_metric_result *rspamd_create_metric_result (struct rspamd_task *task);
+struct rspamd_scan_result *rspamd_create_metric_result (struct rspamd_task *task);
 
 /**
  * Adds a new passthrough result to a task

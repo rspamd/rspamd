@@ -20,7 +20,7 @@
 #include "http_private.h"
 #include "worker_private.h"
 #include "libserver/cfg_file_private.h"
-#include "libmime/filter_private.h"
+#include "libmime/scan_result_private.h"
 #include "contrib/zstd/zstd.h"
 #include "lua/lua_common.h"
 #include "unix-std.h"
@@ -1126,8 +1126,8 @@ rspamd_metric_symbol_ucl (struct rspamd_task *task, struct rspamd_symbol_result 
 }
 
 static ucl_object_t *
-rspamd_metric_result_ucl (struct rspamd_task *task,
-	struct rspamd_metric_result *mres, ucl_object_t *top)
+rspamd_scan_result_ucl (struct rspamd_task *task,
+						struct rspamd_scan_result *mres, ucl_object_t *top)
 {
 	struct rspamd_symbol_result *sym;
 	gboolean is_spam;
@@ -1349,7 +1349,7 @@ rspamd_protocol_write_ucl (struct rspamd_task *task,
 			(rspamd_mempool_destruct_t)ucl_object_unref, top);
 
 	if (flags & RSPAMD_PROTOCOL_METRICS) {
-		rspamd_metric_result_ucl (task, task->result, top);
+		rspamd_scan_result_ucl (task, task->result, top);
 	}
 
 	if (flags & RSPAMD_PROTOCOL_MESSAGES) {
@@ -1488,7 +1488,7 @@ void
 rspamd_protocol_http_reply (struct rspamd_http_message *msg,
 		struct rspamd_task *task, ucl_object_t **pobj)
 {
-	struct rspamd_metric_result *metric_res;
+	struct rspamd_scan_result *metric_res;
 	const struct rspamd_re_cache_stat *restat;
 
 	ucl_object_t *top = NULL;
@@ -1723,7 +1723,7 @@ rspamd_protocol_write_log_pipe (struct rspamd_task *task)
 	struct rspamd_worker_log_pipe *lp;
 	struct rspamd_protocol_log_message_sum *ls;
 	lua_State *L = task->cfg->lua_state;
-	struct rspamd_metric_result *mres;
+	struct rspamd_scan_result *mres;
 	struct rspamd_symbol_result *sym;
 	gint id, i;
 	guint32 n = 0, nextra = 0;

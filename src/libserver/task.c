@@ -15,7 +15,7 @@
  */
 #include "task.h"
 #include "rspamd.h"
-#include "filter.h"
+#include "scan_result.h"
 #include "libserver/protocol.h"
 #include "libserver/protocol_internal.h"
 #include "message.h"
@@ -29,7 +29,7 @@
 #include "libserver/mempool_vars_internal.h"
 #include "libserver/cfg_file_private.h"
 #include "libmime/lang_detection.h"
-#include "libmime/filter_private.h"
+#include "libmime/scan_result_private.h"
 
 #ifdef WITH_JEMALLOC
 #include <jemalloc/jemalloc.h>
@@ -1041,7 +1041,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 {
 	static gchar scorebuf[32];
 	rspamd_ftok_t res = {.begin = NULL, .len = 0};
-	struct rspamd_metric_result *mres;
+	struct rspamd_scan_result *mres;
 	gboolean first = TRUE;
 	rspamd_fstring_t *symbuf;
 	struct rspamd_symbol_result *sym;
@@ -1555,7 +1555,7 @@ rspamd_task_write_log (struct rspamd_task *task)
 }
 
 gdouble
-rspamd_task_get_required_score (struct rspamd_task *task, struct rspamd_metric_result *m)
+rspamd_task_get_required_score (struct rspamd_task *task, struct rspamd_scan_result *m)
 {
 	gint i;
 

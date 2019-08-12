@@ -24,7 +24,7 @@
 #include "libserver/dkim.h"
 #include "libserver/task.h"
 #include "libserver/cfg_file_private.h"
-#include "libmime/filter_private.h"
+#include "libmime/scan_result_private.h"
 #include "libstat/stat_api.h"
 #include "libutil/map_helpers.h"
 
@@ -1878,7 +1878,7 @@ lua_task_adjust_result (lua_State * L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	const gchar *symbol_name, *param;
-	struct rspamd_metric_result *metric_res;
+	struct rspamd_scan_result *metric_res;
 	struct rspamd_symbol_result *s = NULL;
 	double weight;
 	gint i, top;
@@ -4128,7 +4128,7 @@ lua_push_symbol_result (lua_State *L,
 		gboolean add_metric,
 		gboolean add_name)
 {
-	struct rspamd_metric_result *metric_res;
+	struct rspamd_scan_result *metric_res;
 	struct rspamd_symbol_result *s = NULL;
 	struct rspamd_symbol_option *opt;
 	struct rspamd_symbols_group *sym_group;
@@ -4306,7 +4306,7 @@ lua_task_get_symbols (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	struct rspamd_metric_result *mres;
+	struct rspamd_scan_result *mres;
 	gint i = 1;
 	struct rspamd_symbol_result *s;
 
@@ -4344,7 +4344,7 @@ lua_task_get_symbols_all (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	struct rspamd_metric_result *mres;
+	struct rspamd_scan_result *mres;
 	struct rspamd_symbol_result *s;
 	gboolean found = FALSE;
 	gint i = 1;
@@ -4379,7 +4379,7 @@ lua_task_get_symbols_numeric (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	struct rspamd_metric_result *mres;
+	struct rspamd_scan_result *mres;
 	gint i = 1, id;
 	struct rspamd_symbol_result *s;
 
@@ -5010,7 +5010,7 @@ lua_task_set_settings (lua_State *L)
 	ucl_object_t *settings;
 	const ucl_object_t *act, *metric_elt, *vars, *cur;
 	ucl_object_iter_t it = NULL;
-	struct rspamd_metric_result *mres;
+	struct rspamd_scan_result *mres;
 	guint i;
 
 	settings = ucl_object_lua_import (L, 2);
@@ -5472,7 +5472,7 @@ lua_task_get_metric_result (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	struct rspamd_metric_result *metric_res;
+	struct rspamd_scan_result *metric_res;
 	struct rspamd_action *action;
 
 	if (task) {
@@ -5534,7 +5534,7 @@ lua_task_get_metric_score (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gdouble rs;
-	struct rspamd_metric_result *metric_res;
+	struct rspamd_scan_result *metric_res;
 
 	if (task) {
 		if ((metric_res = task->result) != NULL) {
@@ -5561,7 +5561,7 @@ lua_task_get_metric_action (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	struct rspamd_metric_result *metric_res;
+	struct rspamd_scan_result *metric_res;
 	struct rspamd_action *action;
 
 	if (task) {
@@ -5582,7 +5582,7 @@ lua_task_set_metric_score (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	struct rspamd_metric_result *metric_res;
+	struct rspamd_scan_result *metric_res;
 	gdouble nscore;
 
 	if (lua_isnumber (L, 2)) {

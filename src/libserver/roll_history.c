@@ -101,7 +101,7 @@ rspamd_roll_history_update (struct roll_history *history,
 {
 	guint row_num;
 	struct roll_history_row *row;
-	struct rspamd_metric_result *metric_res;
+	struct rspamd_scan_result *metric_res;
 	struct history_metric_callback_data cbdata;
 	struct rspamd_action *action;
 

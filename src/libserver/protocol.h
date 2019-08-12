@@ -7,7 +7,7 @@
 #define RSPAMD_PROTOCOL_H
 
 #include "config.h"
-#include "filter.h"
+#include "scan_result.h"
 #include "http_connection.h"
 #include "task.h"
 

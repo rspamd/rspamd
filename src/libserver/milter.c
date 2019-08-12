@@ -26,7 +26,7 @@
 #include "libutil/http_private.h"
 #include "libserver/protocol_internal.h"
 #include "libserver/cfg_file_private.h"
-#include "libmime/filter.h"
+#include "libmime/scan_result.h"
 #include "libserver/worker_util.h"
 #include "utlist.h"
 

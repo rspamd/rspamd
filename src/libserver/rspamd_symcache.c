@@ -225,7 +225,7 @@ struct cache_savepoint {
 	gboolean profile;
 	gdouble profile_start;
 
-	struct rspamd_metric_result *rs;
+	struct rspamd_scan_result *rs;
 	gdouble lim;
 
 	struct rspamd_symcache_item *cur_item;
@@ -1417,7 +1417,7 @@ static gboolean
 rspamd_symcache_metric_limit (struct rspamd_task *task,
 		struct cache_savepoint *cp)
 {
-	struct rspamd_metric_result *res;
+	struct rspamd_scan_result *res;
 	double ms;
 
 	if (task->flags & RSPAMD_TASK_FLAG_PASS_ALL) {

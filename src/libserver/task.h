@@ -178,7 +178,7 @@ struct rspamd_task {
 	struct rspamd_task_data_storage msg;            /**< message buffer									*/
 	struct rspamd_http_connection *http_conn;        /**< HTTP server connection							*/
 	struct rspamd_async_session *s;                /**< async session object							*/
-	struct rspamd_metric_result *result;            /**< Metric result									*/
+	struct rspamd_scan_result *result;            /**< Metric result									*/
 	GHashTable *lua_cache;                            /**< cache of lua objects							*/
 	GPtrArray *tokens;                                /**< statistics tokens */
 	GArray *meta_words;                                /**< rspamd_stat_token_t produced from meta headers
@@ -301,10 +301,10 @@ gboolean rspamd_learn_task_spam (struct rspamd_task *task,
  * @param m
  * @return
  */
-struct rspamd_metric_result;
+struct rspamd_scan_result;
 
 gdouble rspamd_task_get_required_score (struct rspamd_task *task,
-										struct rspamd_metric_result *m);
+										struct rspamd_scan_result *m);
 
 /**
  * Returns the first header as value for a header

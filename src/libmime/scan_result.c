@@ -15,12 +15,12 @@
  */
 #include "config.h"
 #include "mem_pool.h"
-#include "filter.h"
+#include "scan_result.h"
 #include "rspamd.h"
 #include "message.h"
 #include "lua/lua_common.h"
 #include "libserver/cfg_file_private.h"
-#include "libmime/filter_private.h"
+#include "libmime/scan_result_private.h"
 #include <math.h>
 #include "contrib/uthash/utlist.h"
 
@@ -35,9 +35,9 @@ INIT_LOG_MODULE(metric)
 static struct rspamd_counter_data symbols_count;
 
 static void
-rspamd_metric_result_dtor (gpointer d)
+rspamd_scan_result_dtor (gpointer d)
 {
-	struct rspamd_metric_result *r = (struct rspamd_metric_result *)d;
+	struct rspamd_scan_result *r = (struct rspamd_scan_result *)d;
 	struct rspamd_symbol_result sres;
 
 	rspamd_set_counter_ema (&symbols_count, kh_size (r->symbols), 0.5);
@@ -51,10 +51,10 @@ rspamd_metric_result_dtor (gpointer d)
 	kh_destroy (rspamd_symbols_group_hash, r->sym_groups);
 }
 
-struct rspamd_metric_result *
+struct rspamd_scan_result *
 rspamd_create_metric_result (struct rspamd_task *task)
 {
-	struct rspamd_metric_result *metric_res;
+	struct rspamd_scan_result *metric_res;
 	guint i;
 
 	metric_res = task->result;
@@ -64,7 +64,7 @@ rspamd_create_metric_result (struct rspamd_task *task)
 	}
 
 	metric_res = rspamd_mempool_alloc0 (task->task_pool,
-			sizeof (struct rspamd_metric_result));
+			sizeof (struct rspamd_scan_result));
 	metric_res->symbols = kh_init (rspamd_symbols_hash);
 	metric_res->sym_groups = kh_init (rspamd_symbols_group_hash);
 
@@ -98,7 +98,7 @@ rspamd_create_metric_result (struct rspamd_task *task)
 	}
 
 	rspamd_mempool_add_destructor (task->task_pool,
-			rspamd_metric_result_dtor,
+			rspamd_scan_result_dtor,
 			metric_res);
 
 	return metric_res;
@@ -120,7 +120,7 @@ rspamd_add_passthrough_result (struct rspamd_task *task,
 									const gchar *module,
 									guint flags)
 {
-	struct rspamd_metric_result *metric_res;
+	struct rspamd_scan_result *metric_res;
 	struct rspamd_passthrough_result *pr;
 
 	metric_res = task->result;
@@ -185,7 +185,7 @@ insert_metric_result (struct rspamd_task *task,
 		const gchar *opt,
 		enum rspamd_symbol_insert_flags flags)
 {
-	struct rspamd_metric_result *metric_res;
+	struct rspamd_scan_result *metric_res;
 	struct rspamd_symbol_result *s = NULL;
 	gdouble final_score, *gr_score = NULL, next_gf = 1.0, diff;
 	struct rspamd_symbol *sdef;
@@ -560,7 +560,7 @@ rspamd_check_action_metric (struct rspamd_task *task)
 	struct rspamd_passthrough_result *pr;
 	double max_score = -(G_MAXDOUBLE), sc;
 	int i;
-	struct rspamd_metric_result *mres = task->result;
+	struct rspamd_scan_result *mres = task->result;
 	gboolean seen_least = FALSE;
 
 	if (mres->passthrough_result != NULL)  {

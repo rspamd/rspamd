@@ -18,7 +18,7 @@
 #include "cfg_file.h"
 #include "rspamd.h"
 #include "cfg_file_private.h"
-#include "filter.h"
+#include "scan_result.h"
 #include "lua/lua_common.h"
 #include "lua/lua_thread_pool.h"
 #include "map.h"

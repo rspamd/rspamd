@@ -2,10 +2,10 @@
 // Created by Vsevolod Stakhov on 2019-01-14.
 //
 
-#ifndef RSPAMD_FILTER_PRIVATE_H
-#define RSPAMD_FILTER_PRIVATE_H
+#ifndef RSPAMD_SCAN_RESULT_PRIVATE_H
+#define RSPAMD_SCAN_RESULT_PRIVATE_H
 
-#include "filter.h"
+#include "scan_result.h"
 #include "contrib/libucl/khash.h"
 
 #ifdef  __cplusplus
@@ -36,4 +36,4 @@ KHASH_INIT (rspamd_symbols_group_hash,
 }
 #endif
 
-#endif //RSPAMD_FILTER_PRIVATE_H
+#endif //RSPAMD_SCAN_RESULT_PRIVATE_H

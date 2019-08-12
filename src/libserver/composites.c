@@ -18,7 +18,7 @@
 #include "expression.h"
 #include "task.h"
 #include "utlist.h"
-#include "filter.h"
+#include "scan_result.h"
 #include "composites.h"
 
 #include <math.h>
@@ -46,7 +46,7 @@ INIT_LOG_MODULE(composites)
 struct composites_data {
 	struct rspamd_task *task;
 	struct rspamd_composite *composite;
-	struct rspamd_metric_result *metric_res;
+	struct rspamd_scan_result *metric_res;
 	GHashTable *symbols_to_remove;
 	guint8 *checked;
 };
@@ -540,7 +540,7 @@ composites_remove_symbols (gpointer key, gpointer value, gpointer data)
 }
 
 static void
-composites_metric_callback (struct rspamd_metric_result *metric_res,
+composites_metric_callback (struct rspamd_scan_result *metric_res,
 		struct rspamd_task *task)
 {
 	struct composites_data *cd =

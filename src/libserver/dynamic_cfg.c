@@ -16,7 +16,7 @@
 #include "config.h"
 #include "rspamd.h"
 #include "map.h"
-#include "filter.h"
+#include "scan_result.h"
 #include "dynamic_cfg.h"
 #include "unix-std.h"
 #include "lua/lua_common.h"
