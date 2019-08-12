@@ -35,7 +35,6 @@ extern const uint8_t base64_table_dec[256];
 #define INNER_LOOP_64 do { \
 	uint64_t str, res, dec; \
 	bool aligned = rspamd_is_aligned_as(c, str); \
-	bool oaligned = rspamd_is_aligned_as(o, res); \
 	while (inlen >= 13) { \
 		if (aligned) { str = *(uint64_t *)c; } else {memcpy(&str, c, sizeof(str)); } \
 		str = GUINT64_TO_BE(str); \
@@ -72,7 +71,7 @@ extern const uint8_t base64_table_dec[256];
 		} \
 		res |= dec << 16; \
 		res = GUINT64_FROM_BE(res); \
-		if (oaligned) {*(uint64_t *)o = res;} else {memcpy(o, &res, sizeof(res));} \
+		memcpy(o, &res, sizeof(res)); \
 		c += 8; \
 		o += 6; \
 		outl += 6; \
@@ -83,7 +82,6 @@ extern const uint8_t base64_table_dec[256];
 #define INNER_LOOP_32 do { \
 	uint32_t str, res, dec; \
 	bool aligned = rspamd_is_aligned_as(c, str); \
-	bool oaligned = rspamd_is_aligned_as(o, res); \
 	while (inlen >= 8) { \
 		if (aligned) { str = *(uint32_t *)c; } else {memcpy(&str, c, sizeof(str)); } \
 		str = GUINT32_TO_BE(str); \
@@ -104,7 +102,7 @@ extern const uint8_t base64_table_dec[256];
 		} \
 		res |= dec << 8; \
 		res = GUINT32_FROM_BE(res); \
-		if (oaligned) {*(uint32_t *)o = res;} else {memcpy(o, &res, sizeof(res));} \
+		memcpy(o, &res, sizeof(res)); \
 		c += 4; \
 		o += 3; \
 		outl += 3; \
@@ -142,7 +140,7 @@ repeat:
 				ret = 0;
 				break;
 			}
-			carry = q << 2;
+			carry = (uint8_t)(q << 2);
 			leftover++;
 
 		case 1:
@@ -186,7 +184,7 @@ repeat:
 				break;
 			}
 			*o++ = carry | (q >> 2);
-			carry = q << 6;
+			carry = (uint8_t)(q << 6);
 			leftover++;
 			outl++;
 

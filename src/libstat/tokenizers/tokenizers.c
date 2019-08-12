@@ -173,13 +173,9 @@ rspamd_tokenize_check_limit (gboolean decay,
 
 	if (!decay) {
 		if (token->original.len >= sizeof (guint64)) {
-#ifdef _MUM_UNALIGNED_ACCESS
-			*hv = mum_hash_step (*hv, *(guint64 *)token->original.begin);
-#else
 			guint64 tmp;
 			memcpy (&tmp, token->original.begin, sizeof (tmp));
 			*hv = mum_hash_step (*hv, tmp);
-#endif
 		}
 
 		/* Check for decay */
