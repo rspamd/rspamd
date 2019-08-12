@@ -2222,7 +2222,8 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 			}
 
 			priv->ssl = rspamd_ssl_connection_new (ssl_ctx, priv->ctx->event_loop,
-					!(msg->flags & RSPAMD_HTTP_FLAG_SSL_NOVERIFY));
+					!(msg->flags & RSPAMD_HTTP_FLAG_SSL_NOVERIFY),
+					conn->log_tag);
 			g_assert (priv->ssl != NULL);
 
 			if (!rspamd_ssl_connect_fd (priv->ssl, conn->fd, host, &priv->ev,

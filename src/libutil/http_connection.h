@@ -111,6 +111,7 @@ struct rspamd_http_connection {
 	rspamd_http_error_handler_t error_handler;
 	rspamd_http_finish_handler_t finish_handler;
 	gpointer ud;
+	const gchar *log_tag;
 	/* Used for keepalive */
 	struct rspamd_keepalive_hash_key *keepalive_hash_key;
 	gsize max_size;

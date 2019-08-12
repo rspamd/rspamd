@@ -840,12 +840,15 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 	}
 
 	if (r == -1) {
-		lua_tcp_push_error (cbd, FALSE, "IO write error while trying to write %d "
-				"bytes: %s", (gint)remain, strerror (errno));
-		if (!IS_SYNC (cbd)) {
-			/* sync connection methods perform this inside */
-			lua_tcp_shift_handler (cbd);
-			lua_tcp_plan_handler_event (cbd, TRUE, FALSE);
+		if (!(cbd->ssl_conn)) {
+			lua_tcp_push_error (cbd, FALSE,
+					"IO write error while trying to write %d bytes: %s",
+					(gint) remain, strerror (errno));
+			if (!IS_SYNC (cbd)) {
+				/* sync connection methods perform this inside */
+				lua_tcp_shift_handler (cbd);
+				lua_tcp_plan_handler_event (cbd, TRUE, FALSE);
+			}
 		}
 
 		return;
@@ -862,7 +865,7 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 	}
 	else {
 		/* Want to write more */
-		if (niov > IOV_MAX && r > 0) {
+		if (r > 0) {
 			/* XXX: special case: we know that we want to write more data
 			 * than it is available in iov function.
 			 *
@@ -1285,8 +1288,10 @@ lua_tcp_make_connection (struct lua_tcp_cbdata *cbd)
 			verify_peer = TRUE;
 		}
 
-		cbd->ssl_conn =
-				rspamd_ssl_connection_new (ssl_ctx, cbd->event_loop, verify_peer);
+		cbd->ssl_conn = rspamd_ssl_connection_new (ssl_ctx,
+				cbd->event_loop,
+				verify_peer,
+				cbd->tag);
 
 		if (!rspamd_ssl_connect_fd (cbd->ssl_conn, fd, cbd->hostname, &cbd->ev,
 				cbd->ev.timeout, lua_tcp_handler, lua_tcp_ssl_on_error, cbd)) {
@@ -1823,6 +1828,8 @@ lua_tcp_connect_sync (lua_State *L)
 	struct rspamd_dns_resolver *resolver = NULL;
 	struct rspamd_config *cfg = NULL;
 	struct ev_loop *ev_base = NULL;
+	struct lua_tcp_cbdata *cbd;
+
 
 	int arguments_validated = rspamd_lua_parse_table_arguments (L, 1, &err,
 			RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT,
@@ -1855,11 +1862,24 @@ lua_tcp_connect_sync (lua_State *L)
 		timeout = default_tcp_timeout;
 	}
 
+	cbd = g_new0 (struct lua_tcp_cbdata, 1);
+
 	if (task) {
+		static const gchar hexdigests[16] = "0123456789abcdef";
+
 		cfg = task->cfg;
 		ev_base = task->event_loop;
 		session = task->s;
+		/* Make a readable tag */
+		memcpy (cbd->tag, task->task_pool->tag.uid, sizeof (cbd->tag) - 2);
+		cbd->tag[sizeof (cbd->tag) - 2] = hexdigests[GPOINTER_TO_INT (cbd) & 0xf];
+		cbd->tag[sizeof (cbd->tag) - 1] = 0;
 	}
+	else {
+		h = rspamd_random_uint64_fast ();
+		rspamd_snprintf (cbd->tag, sizeof (cbd->tag), "%uxL", h);
+	}
+
 	if (resolver == NULL) {
 		if (task) {
 			resolver = task->resolver;
@@ -1869,14 +1889,11 @@ lua_tcp_connect_sync (lua_State *L)
 		}
 	}
 
-	struct lua_tcp_cbdata *cbd = g_new0 (struct lua_tcp_cbdata, 1);
-
 	cbd->task = task;
 	cbd->cfg = cfg;
 	cbd->thread = lua_thread_pool_get_running_entry (cfg->lua_thread_pool);
 
-	h = rspamd_random_uint64_fast ();
-	rspamd_snprintf (cbd->tag, sizeof (cbd->tag), "%uxL", h);
+
 	cbd->handlers = g_queue_new ();
 
 	cbd->event_loop = ev_base;
@@ -2322,8 +2339,10 @@ lua_tcp_starttls (lua_State * L)
 		verify_peer = TRUE;
 	}
 
-	cbd->ssl_conn =
-			rspamd_ssl_connection_new (ssl_ctx, cbd->event_loop, verify_peer);
+	cbd->ssl_conn = rspamd_ssl_connection_new (ssl_ctx,
+			cbd->event_loop,
+			verify_peer,
+			cbd->tag);
 
 	if (!rspamd_ssl_connect_fd (cbd->ssl_conn, cbd->fd, cbd->hostname, &cbd->ev,
 			cbd->ev.timeout, lua_tcp_handler, lua_tcp_ssl_on_error, cbd)) {

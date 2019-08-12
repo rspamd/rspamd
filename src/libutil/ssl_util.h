@@ -36,7 +36,9 @@ typedef void (*rspamd_ssl_error_handler_t) (gpointer d, GError *err);
  * @return opaque connection data
  */
 struct rspamd_ssl_connection *rspamd_ssl_connection_new (gpointer ssl_ctx,
-														 struct ev_loop *ev_base, gboolean verify_peer);
+														 struct ev_loop *ev_base,
+														 gboolean verify_peer,
+														 const gchar *log_tag);
 
 /**
  * Connects SSL session using the specified (connected) FD
