@@ -329,6 +329,7 @@ rspamd_rcl_group_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	const ucl_object_t *val, *elt;
 	struct rspamd_rcl_section *subsection;
 	struct rspamd_rcl_symbol_data sd;
+	const gchar *description = NULL;
 
 	g_assert (key != NULL);
 
@@ -386,6 +387,14 @@ rspamd_rcl_group_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		if (!ucl_object_toboolean (elt)) {
 			gr->flags |= RSPAMD_SYMBOL_GROUP_DISABLED;
 		}
+	}
+
+	elt = ucl_object_lookup (obj, "description");
+	if (elt) {
+		description = ucl_object_tostring (elt);
+
+		gr->description = rspamd_mempool_strdup (cfg->cfg_pool,
+				description);
 	}
 
 	sd.gr = gr;

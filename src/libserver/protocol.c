@@ -1136,6 +1136,11 @@ rspamd_metric_group_ucl (struct rspamd_task *task,
 	ucl_object_insert_key (obj, ucl_object_fromdouble (score),
 			"score", 0, false);
 
+	if (gr->description) {
+		ucl_object_insert_key (obj, ucl_object_fromstring (gr->description),
+				"description", 0, false);
+	}
+
 	return obj;
 }
 

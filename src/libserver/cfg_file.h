@@ -117,6 +117,7 @@ enum rspamd_symbol_group_flags {
 struct rspamd_symbol;
 struct rspamd_symbols_group {
 	gchar *name;
+	gchar *description;
 	GHashTable *symbols;
 	gdouble max_score;
 	enum rspamd_symbol_group_flags flags;
