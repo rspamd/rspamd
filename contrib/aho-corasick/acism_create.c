@@ -158,7 +158,7 @@ fill_symv(ACISM *psp, MEMREF const *strv, int nstrs)
 
 #if ACISM_SIZE < 8
     psp->sym_bits = bitwid(psp->nsyms);
-    psp->sym_mask = ~(-1 << psp->sym_bits);
+    psp->sym_mask = ~((~0u) << psp->sym_bits);
 #endif
 }
 

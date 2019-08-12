@@ -66,7 +66,7 @@ extern const guchar lc_map[256];
 static inline uint32_t
 ucl_hash_func (const ucl_object_t *o)
 {
-	return rspamd_cryptobox_fast_hash (o->key, o->keylen, 0xb9a1ef83c4561c95ULL);
+	return (uint32_t)rspamd_cryptobox_fast_hash (o->key, o->keylen, 0xb9a1ef83c4561c95ULL);
 }
 
 static inline int
@@ -124,7 +124,7 @@ ucl_hash_caseless_func (const ucl_object_t *o)
 		break;
 	}
 
-	return rspamd_cryptobox_fast_hash_final (&hst);
+	return (uint32_t)rspamd_cryptobox_fast_hash_final (&hst);
 }
 
 

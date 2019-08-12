@@ -34,7 +34,7 @@ extern const uint8_t base64_table_dec[256];
 #define INNER_LOOP_64 do { \
 	while (inlen >= 13) { \
 		uint64_t str, res, dec; \
-		str = *(uint64_t *)c; \
+		memcpy(&str, c, sizeof(str)); \
 		str = GUINT64_TO_BE(str); \
 		if ((dec = base64_table_dec[str >> 56]) > 63) { \
 			break; \
@@ -80,7 +80,7 @@ extern const uint8_t base64_table_dec[256];
 #define INNER_LOOP_32 do { \
 	while (inlen >= 8) { \
 		uint32_t str, res, dec; \
-		str = *(uint32_t *)c; \
+		memcpy(&str, c, sizeof(str)); \
 		str = GUINT32_TO_BE(str); \
 		if ((dec = base64_table_dec[str >> 24]) > 63) { \
 			break; \

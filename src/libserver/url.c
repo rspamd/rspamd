@@ -1684,7 +1684,10 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 		 * 192.168 -> 192.0.0.168
 		 */
 		shift = 8 * (4 - i);
-		n |= t << shift;
+
+		if (shift < 32) {
+			n |= t << shift;
+		}
 
 		if (check_num && dots <= 4) {
 			memcpy (&in4, &n, sizeof (in4));

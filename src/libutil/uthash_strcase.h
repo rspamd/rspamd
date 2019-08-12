@@ -26,7 +26,7 @@
 /* Utils for uthash tuning */
 #ifndef HASH_CASELESS
 #define HASH_FUNCTION(key,keylen,num_bkts,hashv,bkt) do {\
-	hashv = rspamd_cryptobox_fast_hash(key, keylen, rspamd_hash_seed ()); \
+	hashv = (__typeof (hashv))rspamd_cryptobox_fast_hash(key, keylen, rspamd_hash_seed ()); \
 	bkt = (hashv) & (num_bkts-1); \
 } while (0)
 
@@ -78,7 +78,7 @@
 		rspamd_cryptobox_fast_hash_update (&_hst, &_u, sizeof (_u)); \
 		break; \
 	} \
-	hashv = rspamd_cryptobox_fast_hash_final (&_hst); \
+	hashv = (__typeof (hashv))rspamd_cryptobox_fast_hash_final (&_hst); \
 	bkt = (hashv) & (num_bkts-1); \
 } while (0)
 #define HASH_KEYCMP(a,b,len) rspamd_lc_cmp(a,b,len)

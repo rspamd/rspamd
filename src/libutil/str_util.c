@@ -255,7 +255,7 @@ rspamd_strcase_hash (gconstpointer key)
 
 	len = strlen (p);
 
-	return rspamd_icase_hash (p, len, rspamd_hash_seed ());
+	return (guint)rspamd_icase_hash (p, len, rspamd_hash_seed ());
 }
 
 guint
@@ -293,7 +293,7 @@ rspamd_ftok_icase_hash (gconstpointer key)
 {
 	const rspamd_ftok_t *f = key;
 
-	return rspamd_icase_hash (f->begin, f->len, rspamd_hash_seed ());
+	return (guint)rspamd_icase_hash (f->begin, f->len, rspamd_hash_seed ());
 }
 
 gboolean
@@ -791,7 +791,7 @@ while (0)
 	cols = 0;
 
 	while (inlen > 6) {
-		n = *(guint64 *)in;
+		memcpy (&n, in, sizeof (n));
 		n = GUINT64_TO_BE (n);
 
 		if (str_len <= 0 || cols <= str_len - 8) {
