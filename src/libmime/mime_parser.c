@@ -1155,6 +1155,8 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 						MESSAGE_FIELD (task, raw_headers_content).begin,
 						MESSAGE_FIELD (task, raw_headers_content).len,
 						TRUE);
+				npart->raw_headers = rspamd_message_headers_ref (
+						MESSAGE_FIELD (task, raw_headers));
 			}
 
 			hdr = rspamd_message_get_header_from_hash (
@@ -1178,6 +1180,8 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 							MESSAGE_FIELD (task, raw_headers_content).begin,
 							MESSAGE_FIELD (task, raw_headers_content).len,
 							TRUE);
+					npart->raw_headers = rspamd_message_headers_ref (
+							MESSAGE_FIELD (task, raw_headers));
 				}
 
 				hdr = rspamd_message_get_header_from_hash (
@@ -1192,8 +1196,6 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 
 		pbegin = st->start + body_pos;
 		plen = st->end - pbegin;
-		/* TODO: check if it is correct */
-		npart->raw_headers = NULL;
 		npart->headers_order = NULL;
 	}
 	else {
