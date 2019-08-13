@@ -1545,11 +1545,7 @@ lua_task_unmap_dtor (gpointer p)
 static void
 lua_task_free_dtor (gpointer p)
 {
-	struct rspamd_task *task = (struct rspamd_task *)p;
-
-	if (task->msg.begin) {
-		g_free ((gpointer)task->msg.begin);
-	}
+	g_free (p);
 }
 
 static gint
@@ -1600,7 +1596,7 @@ lua_task_load_from_file (lua_State * L)
 			task->msg.begin = data->str;
 			task->msg.len = data->len;
 			rspamd_mempool_add_destructor (task->task_pool,
-					lua_task_free_dtor, task);
+					lua_task_free_dtor, data->str);
 			res = TRUE;
 			g_string_free (data, FALSE); /* Buffer is still valid */
 		}
@@ -1667,7 +1663,8 @@ lua_task_load_from_string (lua_State * L)
 		task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
 		task->msg.begin = g_strdup (str_message);
 		task->msg.len   = message_len;
-		rspamd_mempool_add_destructor (task->task_pool, lua_task_free_dtor, task);
+		rspamd_mempool_add_destructor (task->task_pool, lua_task_free_dtor,
+				(gpointer)task->msg.begin);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
