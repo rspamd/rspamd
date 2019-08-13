@@ -41,7 +41,7 @@ define(["jquery"],
             } else if (source === "fuzzy") {
                 url = "fuzzyadd";
             } else if (source === "scan") {
-                url = "scan";
+                url = "checkv2";
             }
             rspamd.query(url, {
                 data: data,
