@@ -160,12 +160,17 @@ if __name__ == '__main__':
 
     if args.token:
         j1['repo_token'] = args.token
-        print("sending data to coveralls...")
-        r = requests.post('https://coveralls.io/api/v1/jobs', files={"json_file": json.dumps(j1)})
-        response = r.json()
-        print("[coveralls] %s" % response['message'])
-        if 'url' in response:
-            print("[coveralls] Uploaded to %s" % response['url'])
+        try:
+            r = requests.post('https://coveralls.io/api/v1/jobs', files={"json_file": json.dumps(j1)})
+            r.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            print("Failed to send data to coveralls: %s" % e)
+            sys.exit()
 
-    # post https://coveralls.io/api/v1/jobs
-    # print args
+        try:
+            response = r.json()
+            print("[coveralls] %s" % response['message'])
+            if 'url' in response:
+                print("[coveralls] Uploaded to %s" % response['url'])
+        except json.decoder.JSONDecodeError:
+            print("Bad resonse: '%s'" % r.text)
