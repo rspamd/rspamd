@@ -411,8 +411,8 @@ lua_mempool_get_variable (lua_State *L)
 	struct memory_pool_s *mempool = rspamd_lua_check_mempool (L, 1);
 	const gchar *var = luaL_checkstring (L, 2);
 	const gchar *type = NULL, *pt;
-	struct lua_numbers_bucket *bucket;
-	gchar *value, *pv;
+	struct lua_numbers_bucket bucket;
+	const gchar *value, *pv;
 	guint len, nvar, slen, i;
 
 	if (mempool && var) {
@@ -432,22 +432,30 @@ lua_mempool_get_variable (lua_State *L)
 				while ((len = strcspn (pt, ", ")) > 0) {
 					if (len == sizeof ("double") - 1 &&
 							g_ascii_strncasecmp (pt, "double", len) == 0) {
-						lua_pushnumber (L, *(gdouble *)pv);
+						gdouble num;
+						memcpy (&num, pv, sizeof (gdouble));
+						lua_pushnumber (L, num);
 						pv += sizeof (gdouble);
 					}
 					else if (len == sizeof ("int") - 1 &&
 							g_ascii_strncasecmp (pt, "int", len) == 0) {
-						lua_pushinteger (L, *(gint *)pv);
+						gint num;
+						memcpy (&num, pv, sizeof (gint));
+						lua_pushinteger (L, num);
 						pv += sizeof (gint);
 					}
 					else if (len == sizeof ("int64") - 1 &&
 							g_ascii_strncasecmp (pt, "int64", len) == 0) {
-						lua_pushinteger (L, *(gint64 *)pv);
+						gint64 num;
+						memcpy (&num, pv, sizeof (gint64));
+						lua_pushinteger (L, num);
 						pv += sizeof (gint64);
 					}
 					else if (len == sizeof ("bool") - 1 &&
 							g_ascii_strncasecmp (pt, "bool", len) == 0) {
-						lua_pushboolean (L, *(gboolean *)pv);
+						gboolean num;
+						memcpy (&num, pv, sizeof (gboolean));
+						lua_pushboolean (L, num);
 						pv += sizeof (gboolean);
 					}
 					else if (len == sizeof ("string") - 1 &&
@@ -464,16 +472,17 @@ lua_mempool_get_variable (lua_State *L)
 					}
 					else if (len == sizeof ("bucket") - 1 &&
 							g_ascii_strncasecmp (pt, "bucket", len) == 0) {
-						bucket = (struct lua_numbers_bucket *)pv;
-						lua_createtable (L, bucket->nelts, 0);
+						memcpy (&bucket, pv, sizeof (bucket));
+						lua_createtable (L, bucket.nelts, 0);
+						pv += sizeof (struct lua_numbers_bucket);
 
-						for (i = 0; i < bucket->nelts; i ++) {
-							lua_pushnumber (L, bucket->elts[i]);
+						for (i = 0; i < bucket.nelts; i ++) {
+							gdouble num;
+							memcpy (&num, pv, sizeof (num));
+							lua_pushnumber (L, num);
 							lua_rawseti (L, -1, i + 1);
+							pv += sizeof (num);
 						}
-
-						pv += sizeof (struct lua_numbers_bucket) +
-								bucket->nelts * sizeof (gdouble);
 					}
 					else if (len == sizeof ("fstrings") - 1 &&
 							 g_ascii_strncasecmp (pt, "fstrings", len) == 0) {
