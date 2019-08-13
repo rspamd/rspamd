@@ -62,7 +62,7 @@ define(["jquery"],
         // @upload text
         function scanText(rspamd, data, server) {
             var items = [];
-            rspamd.query("scan", {
+            rspamd.query("checkv2", {
                 data: data,
                 params: {
                     processData: false,
