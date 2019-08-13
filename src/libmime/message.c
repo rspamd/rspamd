@@ -1412,20 +1412,21 @@ rspamd_message_process (struct rspamd_task *task)
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		if (!rspamd_message_process_text_part_maybe (task, part) &&
 				part->parsed_data.len > 0) {
-			const gchar *mb = magic_buffer (task->cfg->libs_ctx->libmagic,
-					part->parsed_data.begin,
-					part->parsed_data.len);
+			if (task->cfg) {
+				const gchar *mb = magic_buffer (task->cfg->libs_ctx->libmagic,
+						part->parsed_data.begin,
+						part->parsed_data.len);
 
-			if (mb) {
-				rspamd_ftok_t srch;
+				if (mb) {
+					rspamd_ftok_t srch;
 
-				srch.begin = mb;
-				srch.len = strlen (mb);
-				part->detected_ct = rspamd_content_type_parse (srch.begin,
-						srch.len,
-						task->task_pool);
+					srch.begin = mb;
+					srch.len = strlen (mb);
+					part->detected_ct = rspamd_content_type_parse (srch.begin,
+							srch.len,
+							task->task_pool);
+				}
 			}
-
 		}
 	}
 

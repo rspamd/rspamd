@@ -1297,15 +1297,16 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 		ret = rspamd_mime_parse_multipart_part (task, npart, nst, err);
 	}
 	else if (sel->flags & RSPAMD_CONTENT_TYPE_MESSAGE) {
-		g_ptr_array_add (nst->stack, npart);
-		nst->nesting ++;
-		ret = rspamd_mime_parse_message (task, npart, nst, err);
+		if ((ret = rspamd_mime_parse_normal_part (task, npart, nst, err))
+			== RSPAMD_MIME_PARSE_OK) {
+			ret = rspamd_mime_parse_message (task, npart, nst, err);
+		}
 	}
 	else {
 		ret = rspamd_mime_parse_normal_part (task, npart, nst, err);
 	}
 
-	if (part) {
+	if (part && st->stack->len > 0) {
 		/* Remove message part from the parent stack */
 		g_ptr_array_remove_index_fast (st->stack, st->stack->len - 1);
 		st->nesting --;
