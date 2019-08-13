@@ -41,12 +41,12 @@ gint rspamd_lc_cmp (const gchar *s, const gchar *d, gsize l);
 /**
  * Convert string to lowercase in-place using ASCII conversion
  */
-void rspamd_str_lc (gchar *str, guint size);
+guint rspamd_str_lc (gchar *str, guint size);
 
 /**
  * Convert string to lowercase in-place using utf (limited) conversion
  */
-void rspamd_str_lc_utf8 (gchar *str, guint size);
+guint rspamd_str_lc_utf8 (gchar *str, guint size);
 
 /*
  * Hash table utility functions for case insensitive hashing

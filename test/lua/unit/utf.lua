@@ -3,8 +3,8 @@
 context("UTF8 check functions", function()
   local ffi = require("ffi")
   ffi.cdef[[
-    void rspamd_str_lc_utf8 (char *str, unsigned int size);
-    void rspamd_str_lc (char *str, unsigned int size);
+    unsigned int rspamd_str_lc_utf8 (char *str, unsigned int size);
+    unsigned int rspamd_str_lc (char *str, unsigned int size);
     char * rspamd_str_make_utf_valid (const char *src, size_t slen, size_t *dstlen);
   ]]
 
@@ -19,8 +19,8 @@ context("UTF8 check functions", function()
     test("UTF lowercase " .. tostring(i), function()
       local buf = ffi.new("char[?]", #c[1] + 1)
       ffi.copy(buf, c[1])
-      ffi.C.rspamd_str_lc_utf8(buf, #c[1])
-      local s = ffi.string(buf)
+      local nlen = ffi.C.rspamd_str_lc_utf8(buf, #c[1])
+      local s = ffi.string(buf, nlen)
       assert_equal(s, c[2])
     end)
   end

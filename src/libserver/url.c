@@ -2069,7 +2069,8 @@ rspamd_url_parse (struct rspamd_url *uri,
 	}
 
 	rspamd_str_lc (uri->string, uri->protocollen);
-	rspamd_str_lc_utf8 (uri->host, uri->hostlen);
+	unquoted_len = rspamd_str_lc_utf8 (uri->host, uri->hostlen);
+	rspamd_url_shift (uri, unquoted_len, UF_HOST);
 
 	if (uri->protocol == PROTOCOL_UNKNOWN) {
 		for (i = 0; i < G_N_ELEMENTS (rspamd_url_protocols); i++) {

@@ -1018,8 +1018,8 @@ rspamd_html_parse_tag_content (rspamd_mempool_t *pool,
 				tag->name.len = rspamd_html_decode_entitles_inplace (s,
 						tag->name.len);
 				tag->name.start = s;
+				tag->name.len = rspamd_str_lc_utf8 (s, tag->name.len);
 				s[tag->name.len] = '\0';
-				rspamd_str_lc_utf8 (s, tag->name.len);
 
 				k = kh_get (tag_by_name, html_tag_by_name, s);
 
