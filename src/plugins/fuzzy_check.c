@@ -2143,7 +2143,7 @@ fuzzy_insert_metric_results (struct rspamd_task *task, GPtrArray *results)
 
 	if (task->message) {
 		PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, tp) {
-			if (!IS_PART_EMPTY (tp) && tp->utf_words->len > RSPAMD_SHINGLE_SIZE) {
+			if (!IS_PART_EMPTY (tp) && tp->utf_words->len > 0) {
 				seen_text_part = TRUE;
 
 				if (tp->utf_stripped_text.magic == UTEXT_MAGIC) {
