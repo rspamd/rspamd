@@ -2121,7 +2121,9 @@ fuzzy_insert_metric_results (struct rspamd_task *task, GPtrArray *results)
 {
 	struct fuzzy_client_result *res;
 	guint i;
-	gboolean seen_text_hash = FALSE, seen_img_hash = FALSE, seen_text = FALSE,
+	gboolean seen_text_hash = FALSE,
+			seen_img_hash = FALSE,
+			seen_text_part = FALSE,
 			seen_long_text = FALSE;
 	gdouble prob_txt = 0.0, mult;
 	struct rspamd_mime_text_part *tp;
@@ -2141,18 +2143,21 @@ fuzzy_insert_metric_results (struct rspamd_task *task, GPtrArray *results)
 
 	if (task->message) {
 		PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, tp) {
-			if (!IS_PART_EMPTY (tp)) {
-				seen_text = TRUE;
-			}
-			else if (tp->utf_stripped_text.magic == UTEXT_MAGIC) {
-				if (utext_isLengthExpensive (&tp->utf_stripped_text)) {
-					seen_long_text =
-							utext_nativeLength (&tp->utf_stripped_text) > text_length_cutoff;
-				}
-				else {
-					/* Cannot directly calculate length */
-					seen_long_text =
-							tp->utf_stripped_content->len / 2 > text_length_cutoff;
+			if (!IS_PART_EMPTY (tp) && tp->utf_words->len > RSPAMD_SHINGLE_SIZE) {
+				seen_text_part = TRUE;
+
+				if (tp->utf_stripped_text.magic == UTEXT_MAGIC) {
+					if (utext_isLengthExpensive (&tp->utf_stripped_text)) {
+						seen_long_text =
+								utext_nativeLength (&tp->utf_stripped_text) >
+								text_length_cutoff;
+					}
+					else {
+						/* Cannot directly calculate length */
+						seen_long_text =
+								(tp->utf_stripped_content->len / 2) >
+								text_length_cutoff;
+					}
 				}
 			}
 		}
@@ -2166,7 +2171,7 @@ fuzzy_insert_metric_results (struct rspamd_task *task, GPtrArray *results)
 				if (seen_long_text) {
 					mult *= 0.25;
 				}
-				else if (seen_text) {
+				else if (seen_text_part) {
 					/* We have some short text + image */
 					mult *= 0.9;
 				}
