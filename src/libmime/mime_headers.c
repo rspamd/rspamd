@@ -23,8 +23,14 @@
 #include "libutil/util.h"
 #include <unicode/utf8.h>
 
-__KHASH_IMPL (rspamd_mime_headers_htb, static inline, gchar *,
-		struct rspamd_mime_header *, 1, rspamd_strcase_hash, rspamd_strcase_equal);
+KHASH_INIT (rspamd_mime_headers_htb, gchar *,
+		struct rspamd_mime_header *, 1,
+		rspamd_strcase_hash, rspamd_strcase_equal);
+
+struct rspamd_mime_headers_table {
+	khash_t(rspamd_mime_headers_htb) htb;
+	ref_entry_t ref;
+};
 
 static void
 rspamd_mime_header_check_special (struct rspamd_task *task,
@@ -177,7 +183,7 @@ rspamd_mime_header_add (struct rspamd_task *task,
 /* Convert raw headers to a list of struct raw_header * */
 void
 rspamd_mime_headers_process (struct rspamd_task *task,
-		khash_t(rspamd_mime_headers_htb) *target,
+		struct rspamd_mime_headers_table *target,
 		struct rspamd_mime_header **order_ptr,
 		const gchar *in, gsize len,
 		gboolean check_newlines)
@@ -392,7 +398,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 			/* We also validate utf8 and replace all non-valid utf8 chars */
 			rspamd_mime_charset_utf_enforce (nh->decoded, strlen (nh->decoded));
 			nh->order = norder ++;
-			rspamd_mime_header_add (task, target, order_ptr, nh, check_newlines);
+			rspamd_mime_header_add (task, &target->htb, order_ptr, nh, check_newlines);
 			nh = NULL;
 			state = 0;
 			break;
@@ -402,7 +408,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 			nh->decoded = "";
 			nh->raw_len = p - nh->raw_value;
 			nh->order = norder ++;
-			rspamd_mime_header_add (task, target, order_ptr, nh, check_newlines);
+			rspamd_mime_header_add (task, &target->htb, order_ptr, nh, check_newlines);
 			nh = NULL;
 			state = 0;
 			break;
@@ -1599,10 +1605,11 @@ rspamd_smtp_received_parse (struct rspamd_task *task,
 }
 
 struct rspamd_mime_header *
-rspamd_message_get_header_from_hash (khash_t(rspamd_mime_headers_htb) *htb,
+rspamd_message_get_header_from_hash (struct rspamd_mime_headers_table *headers,
 									 const gchar *field)
 {
 	khiter_t k;
+	khash_t(rspamd_mime_headers_htb) *htb = &headers->htb;
 
 	if (htb) {
 		k = kh_get (rspamd_mime_headers_htb, htb, (gchar *) field);
@@ -1621,18 +1628,43 @@ struct rspamd_mime_header *
 rspamd_message_get_header_array (struct rspamd_task *task,
 								 const gchar *field)
 {
-	return rspamd_message_get_header_from_hash (MESSAGE_FIELD_CHECK (task, raw_headers),
+	return rspamd_message_get_header_from_hash (
+			MESSAGE_FIELD_CHECK (task, raw_headers),
 			field);
 }
 
-void
-rspamd_message_headers_destroy (khash_t(rspamd_mime_headers_htb) *htb)
+static void
+rspamd_message_headers_dtor (struct rspamd_mime_headers_table *hdrs)
 {
-	kh_destroy (rspamd_mime_headers_htb, htb);
+	if (hdrs) {
+		kfree (hdrs->htb.keys);
+		kfree (hdrs->htb.vals);
+		kfree (hdrs->htb.flags);
+		g_free (hdrs);
+	}
 }
 
-khash_t(rspamd_mime_headers_htb) *
+struct rspamd_mime_headers_table *
+rspamd_message_headers_ref (struct rspamd_mime_headers_table *hdrs)
+{
+	REF_RETAIN (hdrs);
+
+	return hdrs;
+}
+
+void
+rspamd_message_headers_unref (struct rspamd_mime_headers_table *hdrs)
+{
+	REF_RELEASE (hdrs);
+}
+
+struct rspamd_mime_headers_table *
 rspamd_message_headers_new (void)
 {
-	return kh_init (rspamd_mime_headers_htb);
+	struct rspamd_mime_headers_table *nhdrs;
+
+	nhdrs = g_malloc0 (sizeof (*nhdrs));
+	REF_INIT_RETAIN (nhdrs, rspamd_message_headers_dtor);
+
+	return nhdrs;
 }

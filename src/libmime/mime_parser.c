@@ -258,7 +258,7 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 
 static void
 rspamd_mime_part_get_cte (struct rspamd_task *task,
-						  khash_t(rspamd_mime_headers_htb) *hdrs,
+						  struct rspamd_mime_headers_table *hdrs,
 						  struct rspamd_mime_part *part,
 						  gboolean apply_heuristic)
 {

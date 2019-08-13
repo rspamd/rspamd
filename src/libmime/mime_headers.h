@@ -64,8 +64,7 @@ struct rspamd_mime_header {
 	struct rspamd_mime_header *ord_next; /* Overall order of headers, slist */
 };
 
-/* Define hash type */
-__KHASH_TYPE (rspamd_mime_headers_htb, gchar *, struct rspamd_mime_header *)
+struct rspamd_mime_headers_table;
 
 enum rspamd_received_type {
 	RSPAMD_RECEIVED_SMTP = 1u << 0u,
@@ -119,7 +118,7 @@ struct rspamd_received_header {
  * @param check_newlines
  */
 void rspamd_mime_headers_process (struct rspamd_task *task,
-								  khash_t(rspamd_mime_headers_htb) *target,
+								  struct rspamd_mime_headers_table *target,
 								  struct rspamd_mime_header **order_ptr,
 								  const gchar *in, gsize len,
 								  gboolean check_newlines);
@@ -166,20 +165,22 @@ rspamd_message_get_header_array (struct rspamd_task *task,
  * @return An array of header's values or NULL. It is NOT permitted to free array or values.
  */
 struct rspamd_mime_header *
-rspamd_message_get_header_from_hash (khash_t(rspamd_mime_headers_htb) *htb,
+rspamd_message_get_header_from_hash (struct rspamd_mime_headers_table *hdrs,
 									 const gchar *field);
 
 /**
  * Cleans up hash table of the headers
  * @param htb
  */
-void rspamd_message_headers_destroy (khash_t(rspamd_mime_headers_htb) *htb);
+void rspamd_message_headers_unref (struct rspamd_mime_headers_table *hdrs);
+
+struct rspamd_mime_headers_table * rspamd_message_headers_ref (struct rspamd_mime_headers_table *hdrs);
 
 /**
  * Init headers hash
  * @return
  */
-khash_t(rspamd_mime_headers_htb)* rspamd_message_headers_new (void);
+struct rspamd_mime_headers_table* rspamd_message_headers_new (void);
 
 #ifdef  __cplusplus
 }

@@ -1100,7 +1100,7 @@ rspamd_message_dtor (struct rspamd_message *msg)
 
 	PTR_ARRAY_FOREACH (msg->parts, i, p) {
 		if (p->raw_headers) {
-			rspamd_message_headers_destroy (p->raw_headers);
+			rspamd_message_headers_unref (p->raw_headers);
 		}
 
 		if (IS_CT_MULTIPART (p->ct)) {
@@ -1122,7 +1122,7 @@ rspamd_message_dtor (struct rspamd_message *msg)
 		}
 	}
 
-	rspamd_message_headers_destroy (msg->raw_headers);
+	rspamd_message_headers_unref (msg->raw_headers);
 
 	g_ptr_array_unref (msg->text_parts);
 	g_ptr_array_unref (msg->parts);
