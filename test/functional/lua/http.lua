@@ -106,13 +106,51 @@ local function periodic(cfg, ev_base)
 end
 
 rspamd_config:register_symbol({
-name = 'SIMPLE_TEST',
-score = 1.0,
-callback = http_symbol,
-no_squeeze = true,
-flags = 'coro'
+  name = 'SIMPLE_TEST',
+  score = 1.0,
+  callback = http_symbol,
+  no_squeeze = true,
+  flags = 'coro'
 })
 
+local function http_large_symbol(task)
+  if task:get_queue_id() == 'SSL Large HTTP request' then
+    local data = {}
+    for i = 1,2 do
+      local st = {}
+      for j=1,300000 do
+        st[j] = 't'
+      end
+      data[i] = table.concat(st)
+    end
+    data[#data + 1] = '\n'
+
+    local function http_callback(err, code, body)
+      if err then
+        rspamd_logger.errx('http_callback error: ' .. err)
+        task:insert_result('HTTP_ERROR', 1.0, err)
+      else
+        task:insert_result('HTTP_SSL_LARGE', 1.0)
+      end
+    end
+    rspamd_http.request({
+      url = 'https://127.0.0.1:18081/',
+      task = task,
+      method = 'post',
+      callback = http_callback,
+      timeout = 10,
+      body = data,
+      no_ssl_verify = true,
+    })
+  end
+end
+rspamd_config:register_symbol({
+  name = 'LARGE_TEST',
+  score = 1.0,
+  callback = http_large_symbol,
+  no_squeeze = true,
+  flags = 'coro'
+})
 
 rspamd_config:register_finish_script(finish)
 
