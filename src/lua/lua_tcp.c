@@ -1582,17 +1582,20 @@ lua_tcp_request (lua_State *L)
 		lua_gettable (L, -2);
 		if (lua_type (L, -1) == LUA_TBOOLEAN) {
 			ssl_noverify = lua_toboolean (L, -1);
+			lua_pop (L, 1);
 		}
 		else {
+			lua_pop (L, 1); /* Previous nil... */
 			/* Similar to lua http, meh... */
 			lua_pushstring (L, "no_ssl_verify");
 			lua_gettable (L, -2);
+
 			if (lua_type (L, -1) == LUA_TBOOLEAN) {
 				ssl_noverify = lua_toboolean (L, -1);
 			}
+
 			lua_pop (L, 1);
 		}
-		lua_pop (L, 1);
 
 		lua_pushstring (L, "on_connect");
 		lua_gettable (L, -2);
