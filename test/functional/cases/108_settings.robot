@@ -116,6 +116,7 @@ SETTINGS ID - VIRTUAL
 SETTINGS ID - VIRTUAL GROUP
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_virtual_group
   Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
   Should Not Contain  ${result.stdout}  SIMPLE_POST
@@ -124,6 +125,7 @@ SETTINGS ID - VIRTUAL GROUP
 SETTINGS ID - VIRTUAL FROM
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --from  test2@example.com
   Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
   Should Not Contain  ${result.stdout}  SIMPLE_POST
@@ -132,6 +134,7 @@ SETTINGS ID - VIRTUAL FROM
 SETTINGS ID - VIRTUAL USER
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --user  test@example.com
   Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
   Should Not Contain  ${result.stdout}  SIMPLE_POST
@@ -140,6 +143,7 @@ SETTINGS ID - VIRTUAL USER
 SETTINGS ID - VIRTUAL HOSTNAME
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --hostname  example.com
   Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
   Should Not Contain  ${result.stdout}  SIMPLE_POST
@@ -148,6 +152,7 @@ SETTINGS ID - VIRTUAL HOSTNAME
 SETTINGS ID - VIRTUAL SELECTOR
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  user3@example.com
   Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
   Should Not Contain  ${result.stdout}  SIMPLE_POST
@@ -156,6 +161,7 @@ SETTINGS ID - VIRTUAL SELECTOR
 SETTINGS ID - ANGLED RECIPIENT
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --rcpt  <user3@example.com>
   Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
   Should Not Contain  ${result.stdout}  SIMPLE_POST
@@ -164,6 +170,7 @@ SETTINGS ID - ANGLED RECIPIENT
 SETTINGS ID - VIRTUAL HEADER MATCH
   ${result} =  Scan Message With Rspamc  ${MESSAGE_7BIT}
   Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
+  Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
   Should Not Contain  ${result.stdout}  SIMPLE_POST
