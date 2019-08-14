@@ -65,18 +65,19 @@ local function apply_settings(task, to_apply, id)
   if to_apply.symbols then
     -- Add symbols, specified in the settings
     if #to_apply.symbols > 0 then
-      fun.each(function(val)
+      -- Array like symbols
+      for _,val in ipairs(to_apply.symbols) do
         task:insert_result(val, 1.0)
-      end,
-          fun.filter(function(elt) return type(elt) == 'string' end,
-              to_apply.symbols))
+      end
     else
       -- Object like symbols
-      fun.each(function(k, val)
-        task:insert_result(k, val.score or 1.0, val.options or {})
-      end,
-          fun.filter(function(_, elt) return type(elt) == 'table' end,
-              to_apply.symbols))
+      for k,v in pairs(to_apply.symbols) do
+        if type(v) == 'table' then
+          task:insert_result(k, v.score or 1.0, v.options or {})
+        elseif tonumber(v) then
+          task:insert_result(k, tonumber(v))
+        end
+      end
     end
   end
 
@@ -919,11 +920,18 @@ local function process_settings_table(tbl, allow_ids, mempool)
 
       if elt.apply.symbols then
         -- Register virtual symbols
-        for _,sym in ipairs(elt.apply.symbols) do
-          rspamd_config:register_symbol{
-            name = sym,
-            type = 'virtual,ghost',
-          }
+        for k,v in pairs(elt.apply.symbols) do
+          if type(k) == 'number' and type(v) == 'string' then
+            rspamd_config:register_symbol{
+              name = v,
+              type = 'virtual,ghost',
+            }
+          elseif type(k) == 'string' then
+            rspamd_config:register_symbol{
+              name = k,
+              type = 'virtual,ghost',
+            }
+          end
         end
       end
     else

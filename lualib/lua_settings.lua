@@ -183,13 +183,13 @@ local function transform_settings_maybe(settings, name)
       if not senabled[1] then
         -- Transform map to a list
         local nlist = {}
-        if not settings.symbols then
-          settings.symbols = {}
+        if not apply.scores then
+          apply.scores = {}
         end
         for k,v in pairs(senabled) do
           if tonumber(v) then
             -- Move to symbols as well
-            settings.symbols[k] = tonumber(v)
+            apply.scores[k] = tonumber(v)
             lua_util.debugm('settings', rspamd_config,
                 'set symbol %s -> %s for settings %s', k, v, name)
           end
@@ -203,7 +203,7 @@ local function transform_settings_maybe(settings, name)
 
       if apply.symbols then
         -- Check if added symbols are enabled
-        for _,s in ipairs(apply.symbols) do
+        for _,s in pairs(apply.symbols) do
           if not symhash[s] then
             lua_util.debugm('settings', rspamd_config,
                 'added symbol %s to symbols_enabled for %s', s, name)

@@ -247,8 +247,16 @@ insert_metric_result (struct rspamd_task *task,
 	}
 
 	if (task->settings) {
-		mobj = task->settings;
 		gdouble corr;
+		mobj = ucl_object_lookup (task->settings, "scores");
+
+		if (!mobj) {
+			/* Legacy */
+			mobj = task->settings;
+		}
+		else {
+			msg_debug_metric ("found scores in the settings");
+		}
 
 		sobj = ucl_object_lookup (mobj, symbol);
 		if (sobj != NULL && ucl_object_todouble_safe (sobj, &corr)) {
