@@ -203,10 +203,18 @@ local function transform_settings_maybe(settings, name)
 
       if apply.symbols then
         -- Check if added symbols are enabled
-        for _,s in pairs(apply.symbols) do
+        for k,v in pairs(apply.symbols) do
+          local s
+          -- Check if we have ["sym1", "sym2" ...] or {"sym1": xx, "sym2": yy}
+          if type(k) == 'string' then
+            s = k
+          else
+            s = v
+          end
           if not symhash[s] then
             lua_util.debugm('settings', rspamd_config,
                 'added symbol %s to symbols_enabled for %s', s, name)
+            apply.symbols_enabled[#apply.symbols_enabled + 1] = s
           end
         end
       end
