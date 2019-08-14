@@ -111,4 +111,52 @@ Thank you,
 
     task:destroy()
   end)
+  test("Process mime nesting: message in multipart", function()
+    local msg = table.concat{
+      hdrs, mpart, '\n',
+      '--XXX\n',
+      'Content-Type: message/rfc822\n', '\n', hdrs, body ,
+      '\n--XXX--\n',
+    }
+
+    local res,task = rspamd_task.load_from_string(msg)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    assert_rspamd_table_eq({
+      actual = fun.totable(fun.map(function(u)
+        return u:get_host()
+      end, task:get_urls())),
+
+      expect = {
+        'evil.com', 'example.com'
+      }})
+
+    task:destroy()
+  end)
+  test("Process mime nesting: multipart message in multipart", function()
+    local msg = table.concat{
+      hdrs, mpart, '\n',
+      '--XXX\n',
+      'Content-Type: message/rfc822\n', '\n', hdrs,  mpart, '\n',
+
+      '--XXX\n',
+      body ,
+      '\n--XXX--\n',
+
+      '\n--XXX--\n',
+    }
+    local res,task = rspamd_task.load_from_string(msg)
+    assert_true(res, "failed to load message")
+    task:process_message()
+    assert_rspamd_table_eq({
+      actual = fun.totable(fun.map(function(u)
+        return u:get_host()
+      end, task:get_urls())),
+
+      expect = {
+        'evil.com', 'example.com'
+      }})
+
+    task:destroy()
+  end)
 end)
