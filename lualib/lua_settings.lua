@@ -170,6 +170,52 @@ local function numeric_settings_id(str)
   return ret
 end
 
+-- Used to do the following:
+-- If there is a group of symbols_allowed, it checks if that is an array
+-- If that is a hash table then we transform it to a normal list, probably adding symbols to adjust scores
+local function transform_settings_maybe(settings, name)
+  if settings.apply then
+    local apply = settings.apply
+
+    if apply.symbols_enabled then
+      local senabled = apply.symbols_enabled
+
+      if not senabled[1] then
+        -- Transform map to a list
+        local nlist = {}
+        if not settings.symbols then
+          settings.symbols = {}
+        end
+        for k,v in pairs(senabled) do
+          if tonumber(v) then
+            -- Move to symbols as well
+            settings.symbols[k] = tonumber(v)
+            lua_util.debugm('settings', rspamd_config,
+                'set symbol %s -> %s for settings %s', k, v, name)
+          end
+          nlist[#nlist + 1] = k
+        end
+        -- Convert
+        apply.symbols_enabled = nlist
+      end
+
+      local symhash = lua_util.list_to_hash(apply.symbols_enabled)
+
+      if apply.symbols then
+        -- Check if added symbols are enabled
+        for _,s in ipairs(apply.symbols) do
+          if not symhash[s] then
+            lua_util.debugm('settings', rspamd_config,
+                'added symbol %s to symbols_enabled for %s', s, name)
+          end
+        end
+      end
+    end
+  end
+
+  return settings
+end
+
 local function register_settings_id(str, settings)
   local numeric_id = numeric_settings_id(str)
 
@@ -186,7 +232,7 @@ local function register_settings_id(str, settings)
   else
     known_ids[numeric_id] = {
       name = str,
-      settings = settings,
+      settings = transform_settings_maybe(settings, str),
       symbols = {}
     }
   end
