@@ -1,6 +1,7 @@
 context("Rspamd util for lua - check generic functions", function()
     local util  = require 'rspamd_util'
 
+
     local cases = {
         {
             input = "test1",
@@ -86,4 +87,50 @@ context("Rspamd util for lua - check generic functions", function()
     test("is_utf_mixed_script, empty str should return errror", function()
         assert_error(util.is_utf_mixed_script,'\200\213\202')
     end)
+end)
+
+context("Rspamd string utility", function()
+    local ffi = require 'ffi'
+
+    ffi.cdef[[
+char ** rspamd_string_len_split (const char *in, size_t len,
+		const char *spill, int max_elts, void *pool);
+		void g_strfreev (char **str_array);
+]]
+    local NULL = ffi.new 'void*'
+    local cases = {
+        {'', ';,', {}},
+        {'', '', {}},
+        {'a', ';,', {'a'}},
+        {'a', '', {'a'}},
+        {'a;b', ';', {'a', 'b'}},
+        {'a;;b', ';', {'a', 'b'}},
+        {';a;;b;', ';', {'a', 'b'}},
+        {'ab', ';', {'ab'}},
+        {'a,;b', ',', {'a', ';b'}},
+        {'a,;b', ';,', {'a', 'b'}},
+        {',a,;b', ';,', {'a', 'b'}},
+        {',,;', ';,', {}},
+        {',,;a', ';,', {'a'}},
+        {'a,,;', ';,', {'a'}},
+    }
+
+    for i,case in ipairs(cases) do
+        test("rspamd_string_len_split: case " .. tostring(i), function()
+            local ret = ffi.C.rspamd_string_len_split(case[1], #case[1],
+                case[2], -1, NULL)
+            local actual = {}
+
+            while ret[#actual] ~= NULL do
+                actual[#actual + 1] = ffi.string(ret[#actual])
+            end
+
+            assert_rspamd_table_eq({
+                expect = case[3],
+                actual = actual
+            })
+
+            ffi.C.g_strfreev(ret)
+        end)
+    end
 end)
