@@ -272,10 +272,9 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 				msg_debug_composites ("symbol %s in composite %s misses required option %s",
 						sym,
 						cd->composite->sym,
-						ms->score,
-						cur_opt->type == RSPAMD_COMPOSITE_OPTION_PLAIN ?
+						(cur_opt->type == RSPAMD_COMPOSITE_OPTION_PLAIN ?
 						  cur_opt->data.match :
-						  rspamd_regexp_get_pattern (cur_opt->data.re));
+						  rspamd_regexp_get_pattern (cur_opt->data.re)));
 				ms = NULL;
 
 				break;
