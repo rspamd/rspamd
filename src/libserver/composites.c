@@ -51,6 +51,24 @@ struct composites_data {
 	guint8 *checked;
 };
 
+struct rspamd_composite_option_match {
+	enum {
+		RSPAMD_COMPOSITE_OPTION_PLAIN,
+		RSPAMD_COMPOSITE_OPTION_RE
+	} type;
+
+	union {
+		rspamd_regexp_t *re;
+		gchar *match;
+	} data;
+	struct rspamd_composite_option_match *prev, *next;
+};
+
+struct rspamd_composite_atom {
+	gchar *symbol;
+	struct rspamd_composite_option_match *opts;
+};
+
 enum rspamd_composite_action {
 	RSPAMD_COMPOSITE_UNTOUCH = 0,
 	RSPAMD_COMPOSITE_REMOVE_SYMBOL = (1 << 0),
@@ -92,11 +110,12 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 {
 	gsize clen;
 	rspamd_expression_atom_t *res;
+	struct rspamd_composite_atom *atom;
 
 	/*
 	 * Composites are just sequences of symbols
 	 */
-	clen = strcspn (line, ", \t()><!|&\n");
+	clen = strcspn (line, "; \t()><!|&\n");
 	if (clen == 0) {
 		/* Invalid composite atom */
 		g_set_error (err, rspamd_composites_quark (), 100, "Invalid composite: %s",
@@ -107,15 +126,75 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 	res = rspamd_mempool_alloc0 (pool, sizeof (*res));
 	res->len = clen;
 	res->str = line;
-	res->data = rspamd_mempool_alloc (pool, clen + 1);
-	rspamd_strlcpy (res->data, line, clen + 1);
+
+	atom = rspamd_mempool_alloc0 (pool, sizeof (*atom));
+
+	/* Now check for options combinations */
+	const gchar *obrace, *ebrace;
+
+	if ((obrace = memchr (line, '[', clen)) != NULL && obrace > line) {
+		atom->symbol = rspamd_mempool_alloc (pool, obrace - line + 1);
+		rspamd_strlcpy (atom->symbol, line, obrace - line + 1);
+		ebrace = memchr (line, ']', clen);
+
+		if (ebrace != NULL && ebrace > obrace) {
+			/* We can make a list of options */
+			gchar **opts = rspamd_string_len_split (obrace + 1,
+					ebrace - obrace - 1, ",", -1, pool);
+
+			for (guint i = 0; opts[i] != NULL; i ++) {
+				struct rspamd_composite_option_match *opt_match;
+
+				opt_match = rspamd_mempool_alloc (pool, sizeof (*opt_match));
+
+				if (opts[i][0] == '/' && strchr (opts[i] + 1, '/') != NULL) {
+					/* Regexp */
+					rspamd_regexp_t *re;
+					GError *re_err = NULL;
+
+					re = rspamd_regexp_new (opts[i], NULL, &re_err);
+
+					if (re == NULL) {
+						msg_err_pool ("cannot create regexp from string %s: %s",
+								opts[i], err);
+
+						g_error_free (re_err);
+					}
+					else {
+						rspamd_mempool_add_destructor (pool,
+								(rspamd_mempool_destruct_t)rspamd_regexp_unref,
+								re);
+						opt_match->data.re = re;
+						opt_match->type = RSPAMD_COMPOSITE_OPTION_RE;
+
+						DL_APPEND (atom->opts, opt_match);
+					}
+				}
+				else {
+					/* Plain match */
+					opt_match->data.match = opts[i];
+					opt_match->type = RSPAMD_COMPOSITE_OPTION_PLAIN;
+
+					DL_APPEND (atom->opts, opt_match);
+				}
+			}
+		}
+	}
+	else {
+		atom->symbol = rspamd_mempool_alloc (pool, clen + 1);
+		rspamd_strlcpy (atom->symbol, line, clen + 1);
+	}
+
+	res->data = atom;
 
 	return res;
 }
 
 static gdouble
 rspamd_composite_process_single_symbol (struct composites_data *cd,
-		const gchar *sym, struct rspamd_symbol_result **pms)
+										const gchar *sym,
+										struct rspamd_symbol_result **pms,
+										struct rspamd_composite_atom *atom)
 {
 	struct rspamd_symbol_result *ms = NULL;
 	gdouble rc = 0;
@@ -162,11 +241,54 @@ rspamd_composite_process_single_symbol (struct composites_data *cd,
 	if (ms) {
 		msg_debug_composites ("found symbol %s in composite %s, weight: %.3f",
 				sym, cd->composite->sym, ms->score);
-		if (ms->score == 0) {
-			rc = 0.001; /* Distinguish from 0 */
+
+		/* Now check options */
+		struct rspamd_composite_option_match *cur_opt;
+
+		DL_FOREACH (atom->opts, cur_opt) {
+			struct rspamd_symbol_option *opt;
+			bool found = false;
+
+			DL_FOREACH (ms->opts_head, opt) {
+				if (cur_opt->type == RSPAMD_COMPOSITE_OPTION_PLAIN) {
+					if (strcmp (opt->option, cur_opt->data.match) == 0) {
+						found = true;
+
+						break;
+					}
+				}
+				else {
+					if (rspamd_regexp_match (cur_opt->data.re,
+							opt->option, 0, FALSE)) {
+						found = true;
+
+						break;
+					}
+				}
+			}
+
+
+			if (!found) {
+				msg_debug_composites ("symbol %s in composite %s misses required option %s",
+						sym,
+						cd->composite->sym,
+						ms->score,
+						cur_opt->type == RSPAMD_COMPOSITE_OPTION_PLAIN ?
+						  cur_opt->data.match :
+						  rspamd_regexp_get_pattern (cur_opt->data.re));
+				ms = NULL;
+
+				break;
+			}
 		}
-		else {
-			rc = ms->score;
+
+		if (ms) {
+			if (ms->score == 0) {
+				rc = 0.001; /* Distinguish from 0 */
+			}
+			else {
+				rc = ms->score;
+			}
 		}
 	}
 
@@ -257,7 +379,8 @@ rspamd_composite_expr_process (void *ud,
 		rspamd_expression_atom_t *atom)
 {
 	struct composites_data *cd = (struct composites_data *)ud;
-	const gchar *beg = atom->data, *sym = NULL;
+	const gchar *sym = NULL;
+	struct rspamd_composite_atom *comp_atom = (struct rspamd_composite_atom *)atom->data;
 
 	struct rspamd_symbol_result *ms = NULL;
 	struct rspamd_symbols_group *gr;
@@ -288,7 +411,7 @@ rspamd_composite_expr_process (void *ud,
 		return rc;
 	}
 
-	sym = beg;
+	sym = comp_atom->symbol;
 
 	while (*sym != '\0' && !g_ascii_isalnum (*sym)) {
 		sym ++;
@@ -302,13 +425,14 @@ rspamd_composite_expr_process (void *ud,
 
 			while (g_hash_table_iter_next (&it, &k, &v)) {
 				sdef = v;
-				rc = rspamd_composite_process_single_symbol (cd, sdef->name, &ms);
+				rc = rspamd_composite_process_single_symbol (cd, sdef->name, &ms,
+						comp_atom);
 
 				if (rc) {
 					rspamd_composite_process_symbol_removal (atom,
 							cd,
 							ms,
-							beg);
+							comp_atom->symbol);
 
 					if (fabs (rc) > max) {
 						max = fabs (rc);
@@ -332,13 +456,14 @@ rspamd_composite_expr_process (void *ud,
 				if (sdef->score > 0) {
 					rc = rspamd_composite_process_single_symbol (cd,
 							sdef->name,
-							&ms);
+							&ms,
+							comp_atom);
 
 					if (rc) {
 						rspamd_composite_process_symbol_removal (atom,
 								cd,
 								ms,
-								beg);
+								comp_atom->symbol);
 
 						if (fabs (rc) > max) {
 							max = fabs (rc);
@@ -361,13 +486,16 @@ rspamd_composite_expr_process (void *ud,
 				sdef = v;
 
 				if (sdef->score < 0) {
-					rc = rspamd_composite_process_single_symbol (cd, sdef->name, &ms);
+					rc = rspamd_composite_process_single_symbol (cd,
+							sdef->name,
+							&ms,
+							comp_atom);
 
 					if (rc) {
 						rspamd_composite_process_symbol_removal (atom,
 								cd,
 								ms,
-								beg);
+								comp_atom->symbol);
 
 						if (fabs (rc) > max) {
 							max = fabs (rc);
@@ -380,13 +508,13 @@ rspamd_composite_expr_process (void *ud,
 		}
 	}
 	else {
-		rc = rspamd_composite_process_single_symbol (cd, sym, &ms);
+		rc = rspamd_composite_process_single_symbol (cd, sym, &ms, comp_atom);
 
 		if (rc) {
 			rspamd_composite_process_symbol_removal (atom,
 					cd,
 					ms,
-					beg);
+					comp_atom->symbol);
 		}
 	}
 
