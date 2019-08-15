@@ -155,8 +155,8 @@ rspamd_composite_expr_parse (const gchar *line, gsize len,
 					re = rspamd_regexp_new (opts[i], NULL, &re_err);
 
 					if (re == NULL) {
-						msg_err_pool ("cannot create regexp from string %s: %s",
-								opts[i], err);
+						msg_err_pool ("cannot create regexp from string %s: %e",
+								opts[i], re_err);
 
 						g_error_free (re_err);
 					}
