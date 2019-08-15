@@ -1554,6 +1554,12 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 		rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_symbol));
 	score_ptr = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (gdouble));
 
+	if (isnan (score)) {
+		msg_warn_config ("score is not defined for symbol %s, set it to zero",
+				symbol);
+		score = 0.0;
+	}
+
 	*score_ptr = score;
 	sym_def->score = score;
 	sym_def->weight_ptr = score_ptr;
@@ -1603,9 +1609,12 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 gboolean
 rspamd_config_add_symbol (struct rspamd_config *cfg,
 						  const gchar *symbol,
-						  gdouble score, const gchar *description,
+						  gdouble score,
+						  const gchar *description,
 						  const gchar *group,
-						  guint flags, guint priority, gint nshots)
+						  guint flags,
+						  guint priority,
+						  gint nshots)
 {
 	struct rspamd_symbol *sym_def;
 	struct rspamd_symbols_group *sym_group;
@@ -1662,17 +1671,22 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 			return FALSE;
 		}
 		else {
-			msg_debug_config ("symbol %s has been already registered with "
-					"priority %ud, override it with new priority: %ud, "
-					"old score: %.2f, new score: %.2f",
-					symbol,
-					sym_def->priority,
-					priority,
-					sym_def->score,
-					score);
 
-			*sym_def->weight_ptr = score;
-			sym_def->score = score;
+			if (!isnan (score)) {
+				msg_debug_config ("symbol %s has been already registered with "
+								  "priority %ud, override it with new priority: %ud, "
+								  "old score: %.2f, new score: %.2f",
+						symbol,
+						sym_def->priority,
+						priority,
+						sym_def->score,
+						score);
+
+				*sym_def->weight_ptr = score;
+				sym_def->score = score;
+				sym_def->priority = priority;
+			}
+
 			sym_def->flags = flags;
 			sym_def->nshots = nshots;
 
@@ -1681,7 +1695,6 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 						description);
 			}
 
-			sym_def->priority = priority;
 
 			/* We also check group information in this case */
 			if (group != NULL && sym_def->gr != NULL &&
@@ -1707,6 +1720,7 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 		}
 	}
 
+	/* This is called merely when we have an undefined symbol */
 	rspamd_config_new_symbol (cfg, symbol, score, description,
 			group, flags, priority, nshots);
 

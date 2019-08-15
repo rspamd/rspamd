@@ -424,7 +424,7 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	struct rspamd_config *cfg;
 	const ucl_object_t *elt;
 	const gchar *description = NULL;
-	gdouble score = 0.0;
+	gdouble score = NAN;
 	guint priority = 1, flags = 0;
 	gint nshots;
 

@@ -141,7 +141,7 @@ struct rspamd_symbol {
 	guint priority;
 	struct rspamd_symbols_group *gr; /* Main group */
 	GPtrArray *groups; /* Other groups */
-	enum rspamd_symbol_flags flags;
+	guint flags;
 	struct rspamd_symcache_item *cache_item;
 	gint nshots;
 };
