@@ -918,7 +918,7 @@ local function process_settings_table(tbl, allow_ids, mempool)
             name, elt.id, out.id)
       end
 
-      if elt.apply.symbols then
+      if elt.apply and elt.apply.symbols then
         -- Register virtual symbols
         for k,v in pairs(elt.apply.symbols) do
           if type(k) == 'number' and type(v) == 'string' then

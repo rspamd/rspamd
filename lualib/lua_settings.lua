@@ -46,7 +46,7 @@ local function register_settings_cb()
     local symnames = lua_util.list_to_hash(lua_util.keys(all_symbols))
 
     for _,set in pairs(known_ids) do
-      local s = set.settings.apply
+      local s = set.settings.apply or {}
       set.symbols = lua_util.shallowcopy(symnames)
       local enabled_symbols = {}
       local seen_enabled = false
