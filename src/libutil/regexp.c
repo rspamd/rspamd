@@ -863,6 +863,10 @@ rspamd_regexp_match (rspamd_regexp_t *re, const gchar *text, gsize len,
 	g_assert (re != NULL);
 	g_assert (text != NULL);
 
+	if (len == 0 && text != NULL) {
+		len = strlen (text);
+	}
+
 	if (rspamd_regexp_search (re, text, len, &start, &end, raw, NULL)) {
 		if (start == text && end == text + len) {
 			return TRUE;
