@@ -124,3 +124,17 @@ rspamd_config:register_symbol({
     return true, 'Fires always'
   end
 })
+
+rspamd_config:register_symbol({
+  name = 'OPTS',
+  score = -1.0,
+  group = "any",
+  callback = function(task)
+    local lua_util = require "lua_util"
+    local woot = lua_util.str_split(tostring(task:get_request_header('opts') or ''), ',')
+
+    if woot and #woot > 0 and #woot[1] > 0 then
+      return true, 1.0, woot
+    end
+  end
+})

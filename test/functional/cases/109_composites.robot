@@ -63,3 +63,23 @@ Composites - Symbol groups
   Should Contain  ${result.stdout}  ANY_A (-1.00)
   Should Contain  ${result.stdout}  NEGATIVE_B (1.00)
   Should Not Contain  ${result.stdout}  NEGATIVE_A
+
+Composites - Opts Plain
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header=opts:sym1
+  Check Rspamc  ${result}  SYMOPTS1 (5.00)
+  Should Not Contain  ${result.stdout}  SYMOPTS2
+
+Composites - Opts RE Miss one
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header=opts:sym1,foo1
+  Check Rspamc  ${result}  SYMOPTS1 (5.00)
+  Should Not Contain  ${result.stdout}  SYMOPTS2
+
+Composites - Opts RE Miss both
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header=opts:sym2
+  Should Not Contain  ${result.stdout}  SYMOPTS1
+  Should Not Contain  ${result.stdout}  SYMOPTS2
+
+Composites - Opts RE Hit
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header=opts:sym2,foo1
+  Check Rspamc  ${result}  SYMOPTS2 (6.00)
+  Should Not Contain  ${result.stdout}  SYMOPTS1
