@@ -533,6 +533,20 @@ gsize rspamd_gstring_strip (GString *s, const gchar *strip_chars);
 const gchar *rspamd_string_len_strip (const gchar *in,
 									  gsize *len, const gchar *strip_chars);
 
+/**
+ * Returns a NULL terminated list of zero terminated strings based on splitting of
+ * the base string into parts. If pool is not NULL then memory is allocated from
+ * the pool. Otherwise, it is allocated from the heap using `g_malloc` (so
+ * g_strfreev could be used to free stuff)
+ * @param in
+ * @param len
+ * @param spill
+ * @param max_elts
+ * @return
+ */
+gchar ** rspamd_string_len_split (const gchar *in, gsize len,
+		const gchar *spill, gint max_elts, rspamd_mempool_t *pool);
+
 #define IS_ZERO_WIDTH_SPACE(uc) ((uc) == 0x200B || \
                                 (uc) == 0x200C || \
                                 (uc) == 0x200D || \

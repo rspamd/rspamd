@@ -3025,3 +3025,63 @@ const gchar* rspamd_string_len_strip (const gchar *in,
 
 	return in;
 }
+
+gchar **
+rspamd_string_len_split (const gchar *in, gsize len, const gchar *spill,
+		gint max_elts, rspamd_mempool_t *pool)
+{
+	const gchar *p = in, *end = in + len;
+	gsize detected_elts = 0;
+	gchar **res;
+
+	/* Detect number of elements */
+	while (p < end) {
+		gsize cur_fragment = rspamd_memcspn (p, spill, end - p);
+
+		if (cur_fragment > 0) {
+			detected_elts ++;
+			p += cur_fragment;
+
+			if (max_elts > 0 && detected_elts >= max_elts) {
+				break;
+			}
+		}
+
+		/* Something like a,,b produces {'a', 'b'} not {'a', '', 'b'} */
+		p += rspamd_memspn (p, spill, end - p);
+	}
+
+	res = pool ?
+			rspamd_mempool_alloc (pool, sizeof (gchar *) * (detected_elts + 1)) :
+			g_malloc (sizeof (gchar *) * (detected_elts + 1));
+	/* Last one */
+	res[detected_elts] = NULL;
+	detected_elts = 0;
+	p = in;
+
+	while (p < end) {
+		gsize cur_fragment = rspamd_memcspn (p, spill, end - p);
+
+		if (cur_fragment > 0) {
+			gchar *elt;
+
+			elt = pool ?
+				  rspamd_mempool_alloc (pool, cur_fragment + 1) :
+				  g_malloc (cur_fragment + 1);
+
+			memcpy (elt, p, cur_fragment);
+			elt[cur_fragment] = '\0';
+
+			res[detected_elts ++] = elt;
+			p += cur_fragment;
+
+			if (max_elts > 0 && detected_elts >= max_elts) {
+				break;
+			}
+		}
+
+		p += rspamd_memspn (p, spill, end - p);
+	}
+
+	return res;
+}
