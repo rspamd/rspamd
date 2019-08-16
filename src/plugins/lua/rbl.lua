@@ -25,6 +25,7 @@ local rspamd_util = require 'rspamd_util'
 local fun = require 'fun'
 local lua_util = require 'lua_util'
 local ts = require("tableshape").types
+local bit = require 'bit'
 
 -- This plugin implements various types of RBL checks
 -- Documentation can be found here:
@@ -34,8 +35,6 @@ local E = {}
 local N = 'rbl'
 
 local local_exclusions
-
-local default_monitored = '1.0.0.127'
 
 local function validate_dns(lstr)
   if lstr:match('%.%.') then
@@ -176,7 +175,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, orig)
         to_resolve, true, err, rbl.symbol)
   end
 
-  if rbl.returncodes == nil and rbl.symbol ~= nil then
+  if rbl.returncodes == nil and rbl.returnbits == nil and rbl.symbol ~= nil then
     task:insert_result(rbl.symbol, 1, orig)
     return
   end
@@ -186,15 +185,29 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, orig)
     lua_util.debugm(N, task, '%s DNS result %s', to_resolve, ipstr)
     local foundrc = false
     -- Check return codes
-    for s,i in pairs(rbl.returncodes) do
-      for _,v in ipairs(i) do
-        if string.find(ipstr, '^' .. v .. '$') then
-          foundrc = true
-          task:insert_result(s, 1, orig .. ' : ' .. ipstr)
-          break
+    if rbl.returnbits then
+      local ipnum = result:to_number()
+      for s,bits in pairs(rbl.returnbits) do
+        for _,check_bit in ipairs(bits) do
+          if bit.band(ipnum, check_bit) == check_bit then
+            foundrc = true
+            task:insert_result(s, 1, orig .. ' : ' .. ipstr)
+            -- Here, we continue with other bits
+          end
+        end
+      end
+    elseif rbl.returncodes then
+      for s, codes in pairs(rbl.returncodes) do
+        for _,v in ipairs(codes) do
+          if string.find(ipstr, '^' .. v .. '$') then
+            foundrc = true
+            task:insert_result(s, 1, orig .. ' : ' .. ipstr)
+            break
+          end
         end
       end
     end
+
     if not foundrc then
       if rbl.unknown and rbl.symbol then
         task:insert_result(rbl.symbol, 1, orig)
@@ -204,6 +217,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, orig)
       end
     end
   end
+
 end
 
 local function gen_rbl_callback(rule)
@@ -516,11 +530,24 @@ local rule_schema = ts.shape({
   rbl = ts.string,
   symbol = ts.string:is_optional(),
   returncodes = ts.map_of(
-      ts.string / string.upper,
+      ts.string / string.upper, -- Symbol name
       (
-          ts.array_of(ts.string) + (ts.string / function(s)
-            return { s }
-          end)
+          ts.array_of(ts.string) +
+              (ts.string / function(s)
+                return { s }
+              end) -- List of IP patterns
+      )
+  ):is_optional(),
+  returnbits = ts.map_of(
+      ts.string / string.upper, -- Symbol name
+      (
+          ts.array_of(ts.number + ts.string / tonumber) +
+              (ts.string / function(s)
+                return { tonumber(s) }
+              end) +
+              (ts.number / function(s)
+                return { s }
+              end)
       )
   ):is_optional(),
   whitelist_exception = (
@@ -537,6 +564,20 @@ local rule_schema = ts.shape({
 
 
 local monitored_addresses = {}
+
+local function get_monitored(rbl)
+  local default_monitored = '1.0.0.127'
+
+  if rbl.monitored_address then
+    return rbl.monitored_address
+  end
+
+  if rbl.dkim or rbl.url or rbl.email then
+    default_monitored = 'facebook.com' -- should never be blacklisted
+  end
+
+  return default_monitored
+end
 
 local function add_rbl(key, rbl)
   if not rbl.symbol then
@@ -571,34 +612,44 @@ local function add_rbl(key, rbl)
     score = 0.0,
   }
 
-  if rbl.returncodes then
-    for s,_ in pairs(rbl['returncodes']) do
-      rspamd_config:register_symbol({
-        name = s,
-        parent = id,
-        type = 'virtual'
-      })
+  local function process_return_code(s)
+    rspamd_config:register_symbol({
+      name = s,
+      parent = id,
+      type = 'virtual'
+    })
 
-      if rbl.is_whitelist then
-        if rbl.whitelist_exception then
-          local foundException = false
-          for _, e in ipairs(rbl.whitelist_exception) do
-            if e == s then
-              foundException = true
-              break
-            end
+    if rbl.is_whitelist then
+      if rbl.whitelist_exception then
+        local found_exception = false
+        for _, e in ipairs(rbl.whitelist_exception) do
+          if e == s then
+            found_exception = true
+            break
           end
-          if not foundException then
-            table.insert(white_symbols, s)
-          end
-        else
+        end
+        if not found_exception then
           table.insert(white_symbols, s)
         end
       else
-        if rbl.ignore_whitelist == false then
-          table.insert(black_symbols, s)
-        end
+        table.insert(white_symbols, s)
       end
+    else
+      if rbl.ignore_whitelist == false then
+        table.insert(black_symbols, s)
+      end
+    end
+  end
+
+  if rbl.returncodes then
+    for s,_ in pairs(rbl.returncodes) do
+      process_return_code(s)
+    end
+  end
+
+  if rbl.returnbits then
+    for s,_ in pairs(rbl.returnbits) do
+      process_return_code(s)
     end
   end
 
@@ -609,10 +660,10 @@ local function add_rbl(key, rbl)
   if not rbl.disable_monitoring and not rbl.is_whitelist then
     if not monitored_addresses[rbl.rbl] then
       monitored_addresses[rbl.rbl] = true
-      rbl.monitored = rspamd_config:register_monitored(rbl['rbl'], 'dns',
+      rbl.monitored = rspamd_config:register_monitored(rbl.rbl, 'dns',
           {
             rcode = 'nxdomain',
-            prefix = rbl.monitored_address or default_monitored
+            prefix = get_monitored(rbl)
           })
     end
   end
