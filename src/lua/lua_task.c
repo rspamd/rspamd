@@ -5067,8 +5067,45 @@ lua_task_set_settings (lua_State *L)
 				}
 
 				if (!found) {
-					msg_warn_task ("cannot set custom score %.2f for unknown action %s",
-							act_score, act_name);
+
+					if (!isnan (act_score)) {
+						struct rspamd_action *new_act;
+
+						HASH_FIND_PTR (task->cfg->actions, act_name, new_act);
+
+						if (new_act == NULL) {
+							/* New action! */
+							msg_info_task ("added new action %s with threshold %.2f "
+										   "due to settings",
+									act_name,
+									act_score);
+							new_act = rspamd_mempool_alloc0 (task->task_pool,
+									sizeof (*new_act));
+							new_act->name = rspamd_mempool_strdup (task->task_pool, act_name);
+							new_act->action_type = METRIC_ACTION_CUSTOM;
+							new_act->threshold = act_score;
+						}
+						else {
+							/* A disabled action that is enabled */
+							msg_info_task ("enabled disabled action %s with threshold %.2f "
+										   "due to settings",
+									act_name,
+									act_score);
+						}
+
+						/* Insert it to the mres structure */
+						gsize new_actions_cnt = mres->nactions + 1;
+						struct rspamd_action_result *old_actions = mres->actions_limits;
+
+						mres->actions_limits = rspamd_mempool_alloc (task->task_pool,
+								sizeof (struct rspamd_action_result) * new_actions_cnt);
+						memcpy (mres->actions_limits, old_actions,
+								sizeof (struct rspamd_action_result) * mres->nactions);
+						mres->actions_limits[mres->nactions].action = new_act;
+						mres->actions_limits[mres->nactions].cur_limit = act_score;
+						mres->nactions ++;
+					}
+					/* Disabled/missing action is disabled one more time, not an error */
 				}
 				else {
 					if (isnan (act_score)) {
