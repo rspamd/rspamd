@@ -217,7 +217,6 @@ fi
 %dir %{rspamd_pluginsdir}
 %dir %{rspamd_wwwdir}
 %dir %{_libdir}/rspamd
-%config(noreplace) %{rspamd_confdir}/2tld.inc
 %config(noreplace) %{rspamd_confdir}/surbl-whitelist.inc
 %config(noreplace) %{rspamd_confdir}/spf_dkim_whitelist.inc
 %config(noreplace) %{rspamd_confdir}/dmarc_whitelist.inc
