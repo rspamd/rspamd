@@ -384,7 +384,7 @@ return function(cfg)
         }
       }
 
-      if cfg.symbols['IP_SCORE'] then
+      if cfg.symbols and cfg.symbols['IP_SCORE'] then
         local t = cfg.symbols['IP_SCORE']
 
         if not cfg.symbols['SENDER_REP_SPAM'] then
