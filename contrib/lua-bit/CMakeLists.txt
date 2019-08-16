@@ -1,0 +1,4 @@
+SET(BITSRC bit.c)
+
+SET(LIB_TYPE STATIC)
+ADD_LIBRARY(rspamd-bit ${LIB_TYPE} ${BITSRC})

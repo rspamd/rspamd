@@ -190,6 +190,10 @@ IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
 	ADD_DEPENDENCIES(rspamd-server rspamd-clang)
 ENDIF()
 
+IF (NOT WITH_LUAJIT)
+	TARGET_LINK_LIBRARIES(rspamd-server rspamd-bit)
+ENDIF()
+
 IF (ENABLE_SNOWBALL MATCHES "ON")
 	TARGET_LINK_LIBRARIES(rspamd-server stemmer)
 ENDIF()

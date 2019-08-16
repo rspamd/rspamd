@@ -868,6 +868,10 @@ rspamd_lua_wipe_realloc (void *ud,
 	return NULL;
 }
 
+#ifndef WITH_LUAJIT
+extern int luaopen_bit(lua_State *L);
+#endif
+
 lua_State *
 rspamd_lua_init (bool wipe_mem)
 {
@@ -920,6 +924,10 @@ rspamd_lua_init (bool wipe_mem)
 	luaopen_udp (L);
 	luaopen_worker (L);
 	luaopen_kann (L);
+#ifndef WITH_LUAJIT
+	rspamd_lua_add_preload (L, "bit", luaopen_bit);
+	lua_settop (L, 0);
+#endif
 
 	luaL_newmetatable (L, "rspamd{ev_base}");
 	lua_pushstring (L, "class");
