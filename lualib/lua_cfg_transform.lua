@@ -369,6 +369,8 @@ return function(cfg)
       }
     end
 
+    if not cfg.reputation.rules then cfg.reputation.rules = {} end
+
     if not fun.any(function(_, v) return v.selector and v.selector.ip end,
         cfg.reputation.rules) then
       logger.infox(rspamd_config, 'attach ip reputation element to use it')
