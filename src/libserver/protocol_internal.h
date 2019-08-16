@@ -68,6 +68,7 @@ extern "C" {
 #define RCPT_HEADER "Rcpt"
 #define SUBJECT_HEADER "Subject"
 #define SETTINGS_ID_HEADER "Settings-ID"
+#define SETTINGS_HEADER "Settings"
 #define QUEUE_ID_HEADER "Queue-ID"
 #define USER_HEADER "User"
 #define URLS_HEADER "URL-Format"

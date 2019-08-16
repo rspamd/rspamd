@@ -98,11 +98,15 @@ end
 -- settings are overridden
 local function check_query_settings(task)
   -- Try 'settings' attribute
+  local settings_id = task:get_settings_id()
   local query_set = task:get_request_header('settings')
   if query_set then
+
     local parser = ucl.parser()
     local res,err = parser:parse_string(tostring(query_set))
     if res then
+      rspamd_logger.warnx(task, "both settings-id '%s' and settings headers are presented, ignore settings-id; ",
+          tostring(settings_id))
       local settings_obj = parser:get_object()
       apply_settings(task, settings_obj, nil)
 
@@ -113,7 +117,6 @@ local function check_query_settings(task)
   end
 
   local query_maxscore = task:get_request_header('maxscore')
-  local settings_id = task:get_settings_id()
   local nset
 
   if query_maxscore then

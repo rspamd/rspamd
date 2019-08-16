@@ -446,7 +446,7 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 	struct rspamd_http_message *msg)
 {
 	rspamd_ftok_t *hn_tok, *hv_tok, srch;
-	gboolean has_ip = FALSE;
+	gboolean has_ip = FALSE, seen_settings_header = FALSE;
 	struct rspamd_http_header *header, *h, *htmp;
 	gchar *ntok;
 
@@ -601,6 +601,10 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 								task->settings_elt->id);
 					}
 				}
+				IF_HEADER (SETTINGS_HEADER) {
+					msg_debug_protocol ("read settings header, value: %T", hv_tok);
+					seen_settings_header = TRUE;
+				}
 				break;
 			case 'u':
 			case 'U':
@@ -694,6 +698,14 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 
 			rspamd_task_add_request_header (task, hn_tok, hv_tok);
 		}
+	}
+
+	if (seen_settings_header && task->settings_elt) {
+		msg_warn_task ("ignore settings id %s as settings header is also presented",
+				task->settings_elt->name);
+		REF_RELEASE (task->settings_elt);
+
+		task->settings_elt = NULL;
 	}
 
 	if (!has_ip) {
