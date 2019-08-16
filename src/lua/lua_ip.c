@@ -403,7 +403,7 @@ lua_ip_to_number (lua_State *L)
 			lua_pushinteger (L, ntohl (c));
 		}
 
-		return max;
+		return max / sizeof (c);
 	}
 	else {
 		lua_pushnil (L);
