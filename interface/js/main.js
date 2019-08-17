@@ -21,7 +21,8 @@ requirejs.config({
         d3evolution: {exports:"D3Evolution", deps:["d3", "jquery"]},
         footable: {deps:["bootstrap", "jquery"]},
         stickytabs: {deps:["jquery"]}
-    }
+    },
+    waitSeconds: 30,
 });
 
 document.title = window.location.hostname +
