@@ -105,8 +105,10 @@ local function check_query_settings(task)
     local parser = ucl.parser()
     local res,err = parser:parse_string(tostring(query_set))
     if res then
-      rspamd_logger.warnx(task, "both settings-id '%s' and settings headers are presented, ignore settings-id; ",
-          tostring(settings_id))
+      if settings_id then
+        rspamd_logger.warnx(task, "both settings-id '%s' and settings headers are presented, ignore settings-id; ",
+            tostring(settings_id))
+      end
       local settings_obj = parser:get_object()
       apply_settings(task, settings_obj, nil)
 
