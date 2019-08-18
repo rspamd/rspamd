@@ -1940,6 +1940,7 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 	gboolean all_done;
 	gint saved_priority;
 	enum rspamd_cache_savepoint_stage next;
+	gint next_task_stage;
 	guint start_events_pending;
 
 	g_assert (cache != NULL);
@@ -1962,7 +1963,8 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 		checkpoint->pass = RSPAMD_CACHE_PASS_IDEMPOTENT;
 	}
 
-	msg_debug_cache_task ("symbols processing stage at pass: %d", checkpoint->pass);
+	msg_debug_cache_task ("symbols processing stage at pass: %d, %d stage requested",
+			checkpoint->pass, stage);
 	start_events_pending = rspamd_session_events_pending (task->s);
 
 	switch (checkpoint->pass) {
@@ -1976,11 +1978,14 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 		if (checkpoint->pass != RSPAMD_CACHE_PASS_PREFILTERS) {
 			sel = cache->prefilters_empty;
 			next = RSPAMD_CACHE_PASS_PREFILTERS;
+			next_task_stage = RSPAMD_TASK_STAGE_PRE_FILTERS;
 			checkpoint->pass = RSPAMD_CACHE_PASS_PREFILTERS_EMPTY;
 		}
 		else {
 			sel = cache->prefilters;
 			next = RSPAMD_CACHE_PASS_FILTERS;
+			checkpoint->pass = RSPAMD_CACHE_PASS_PREFILTERS;
+			next_task_stage = RSPAMD_TASK_STAGE_FILTERS;
 		}
 
 
@@ -2015,11 +2020,11 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 			}
 		}
 
-		if (all_done || stage == next) {
+		if (all_done || stage == next_task_stage) {
 			checkpoint->pass = next;
 		}
 
-		if (stage == next) {
+		if (stage == next_task_stage) {
 			return rspamd_symcache_process_symbols (task, cache, stage);
 		}
 
