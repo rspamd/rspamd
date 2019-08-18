@@ -161,6 +161,7 @@ struct rspamd_symcache {
 	GPtrArray *items_by_id;
 	struct symcache_order *items_by_order;
 	GPtrArray *filters;
+	GPtrArray *prefilters_empty;
 	GPtrArray *prefilters;
 	GPtrArray *postfilters;
 	GPtrArray *composites;
@@ -210,6 +211,7 @@ struct delayed_cache_condition {
 
 enum rspamd_cache_savepoint_stage {
 	RSPAMD_CACHE_PASS_INIT = 0,
+	RSPAMD_CACHE_PASS_PREFILTERS_EMPTY,
 	RSPAMD_CACHE_PASS_PREFILTERS,
 	RSPAMD_CACHE_PASS_FILTERS,
 	RSPAMD_CACHE_PASS_POSTFILTERS,
@@ -644,6 +646,7 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 		}
 	}
 
+	g_ptr_array_sort_with_data (cache->prefilters_empty, prefilters_cmp, cache);
 	g_ptr_array_sort_with_data (cache->prefilters, prefilters_cmp, cache);
 	g_ptr_array_sort_with_data (cache->postfilters, postfilters_cmp, cache);
 	g_ptr_array_sort_with_data (cache->idempotent, postfilters_cmp, cache);
@@ -998,8 +1001,15 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 		g_assert (parent == -1);
 
 		if (item->type & SYMBOL_TYPE_PREFILTER) {
-			g_ptr_array_add (cache->prefilters, item);
-			item->container = cache->prefilters;
+			if (item->type & SYMBOL_TYPE_EMPTY) {
+				/* Executed before mime parsing stage */
+				g_ptr_array_add (cache->prefilters_empty, item);
+				item->container = cache->prefilters_empty;
+			}
+			else {
+				g_ptr_array_add (cache->prefilters, item);
+				item->container = cache->prefilters;
+			}
 		}
 		else if (item->type & SYMBOL_TYPE_IDEMPOTENT) {
 			g_ptr_array_add (cache->idempotent, item);
@@ -1195,6 +1205,7 @@ rspamd_symcache_destroy (struct rspamd_symcache *cache)
 		rspamd_mempool_delete (cache->static_pool);
 		g_ptr_array_free (cache->filters, TRUE);
 		g_ptr_array_free (cache->prefilters, TRUE);
+		g_ptr_array_free (cache->prefilters_empty, TRUE);
 		g_ptr_array_free (cache->postfilters, TRUE);
 		g_ptr_array_free (cache->idempotent, TRUE);
 		g_ptr_array_free (cache->composites, TRUE);
@@ -1222,6 +1233,7 @@ rspamd_symcache_new (struct rspamd_config *cfg)
 	cache->items_by_id = g_ptr_array_new ();
 	cache->filters = g_ptr_array_new ();
 	cache->prefilters = g_ptr_array_new ();
+	cache->prefilters_empty = g_ptr_array_new ();
 	cache->postfilters = g_ptr_array_new ();
 	cache->idempotent = g_ptr_array_new ();
 	cache->composites = g_ptr_array_new ();
@@ -1923,9 +1935,11 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 	struct rspamd_symcache_item *item = NULL;
 	struct rspamd_symcache_dynamic_item *dyn_item;
 	struct cache_savepoint *checkpoint;
+	GPtrArray *sel;
 	gint i;
 	gboolean all_done;
 	gint saved_priority;
+	enum rspamd_cache_savepoint_stage next;
 	guint start_events_pending;
 
 	g_assert (cache != NULL);
@@ -1954,12 +1968,24 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 	switch (checkpoint->pass) {
 	case RSPAMD_CACHE_PASS_INIT:
 	case RSPAMD_CACHE_PASS_PREFILTERS:
+	case RSPAMD_CACHE_PASS_PREFILTERS_EMPTY:
 		/* Check for prefilters */
 		saved_priority = G_MININT;
 		all_done = TRUE;
 
-		for (i = 0; i < (gint)cache->prefilters->len; i ++) {
-			item = g_ptr_array_index (cache->prefilters, i);
+		if (checkpoint->pass != RSPAMD_CACHE_PASS_PREFILTERS) {
+			sel = cache->prefilters_empty;
+			next = RSPAMD_CACHE_PASS_PREFILTERS;
+			checkpoint->pass = RSPAMD_CACHE_PASS_PREFILTERS_EMPTY;
+		}
+		else {
+			sel = cache->prefilters;
+			next = RSPAMD_CACHE_PASS_FILTERS;
+		}
+
+
+		for (i = 0; i < (gint)sel->len; i ++) {
+			item = g_ptr_array_index (sel, i);
 			dyn_item = rspamd_symcache_get_dynamic (checkpoint, item);
 
 			if (RSPAMD_TASK_IS_SKIPPED (task)) {
@@ -1979,8 +2005,6 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 						 * Delay further checks as we have higher
 						 * priority filters to be processed
 						 */
-						checkpoint->pass = RSPAMD_CACHE_PASS_PREFILTERS;
-
 						return TRUE;
 					}
 				}
@@ -1991,11 +2015,11 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 			}
 		}
 
-		if (all_done || stage == RSPAMD_TASK_STAGE_FILTERS) {
-			checkpoint->pass = RSPAMD_CACHE_PASS_FILTERS;
+		if (all_done || stage == next) {
+			checkpoint->pass = next;
 		}
 
-		if (stage == RSPAMD_TASK_STAGE_FILTERS) {
+		if (stage == next) {
 			return rspamd_symcache_process_symbols (task, cache, stage);
 		}
 
