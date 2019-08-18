@@ -3124,6 +3124,10 @@ rspamd_symcache_composites_foreach (struct rspamd_task *task,
 	struct rspamd_symcache_item *item;
 	struct rspamd_symcache_dynamic_item *dyn_item;
 
+	if (task->checkpoint == NULL) {
+		return;
+	}
+
 	PTR_ARRAY_FOREACH (cache->composites, i, item) {
 		dyn_item = rspamd_symcache_get_dynamic (task->checkpoint, item);
 

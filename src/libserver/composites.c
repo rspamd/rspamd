@@ -695,7 +695,7 @@ composites_metric_callback (struct rspamd_scan_result *metric_res,
 void
 rspamd_make_composites (struct rspamd_task *task)
 {
-	if (task->result) {
+	if (task->result && !RSPAMD_TASK_IS_SKIPPED (task)) {
 		composites_metric_callback (task->result, task);
 	}
 }

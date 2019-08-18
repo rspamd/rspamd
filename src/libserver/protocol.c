@@ -177,6 +177,8 @@ rspamd_protocol_handle_url (struct rspamd_task *task,
 		if (COMPARE_CMD (p, MSG_CMD_PING, pathlen)) {
 			msg_debug_protocol ("got ping command");
 			task->cmd = CMD_PING;
+			task->flags |= RSPAMD_TASK_FLAG_SKIP;
+			task->processed_stages |= RSPAMD_TASK_STAGE_DONE; /* Skip all */
 		}
 		else if (COMPARE_CMD (p, MSG_CMD_PROCESS, pathlen)) {
 			msg_debug_protocol ("got process -> old check command");
