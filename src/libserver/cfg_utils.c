@@ -2089,7 +2089,9 @@ rspamd_config_maybe_disable_action (struct rspamd_config *cfg,
 					act->priority,
 					priority);
 
-			HASH_DEL (cfg->actions, act);
+			act->threshold = NAN;
+			act->priority = priority;
+			act->flags |= RSPAMD_ACTION_NO_THRESHOLD;
 
 			return TRUE;
 		}
