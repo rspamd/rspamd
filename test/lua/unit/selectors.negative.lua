@@ -5,9 +5,9 @@ context("Selectors test", function()
   local lua_selectors = require "lua_selectors"
   local ffi = require "ffi"
   local cfg = rspamd_config
-  
+
   local task
-  
+
   ffi.cdef[[
   void rspamd_url_init (const char *tld_file);
   ]]
