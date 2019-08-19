@@ -1171,4 +1171,39 @@ exports.table_digest = function(t)
  return h:base32()
 end
 
+---[[[
+-- @function lua_util.toboolean(v)
+-- Converts a string or a number to boolean
+-- @param {string|number} v
+-- @return {boolean} v converted to boolean
+--]]]
+exports.toboolean = function(v)
+  local true_t = {
+    ['1'] = true,
+    ['true'] = true,
+    ['TRUE'] = true,
+    ['True'] = true,
+  };
+  local false_t = {
+    ['0'] = false,
+    ['false'] = false,
+    ['FALSE'] = false,
+    ['False'] = false,
+  };
+
+  if type(v) == 'string' then
+    if true_t[v] == true then
+      return true;
+    elseif false_t[v] == false then
+      return false;
+    else
+      return false, string.format( 'cannot convert %q to boolean', v);
+    end
+  elseif type(v) == 'number' then
+    return (not (v == 0))
+  else
+    return false, string.format( 'cannot convert %q to boolean', v);
+  end
+end
+
 return exports
