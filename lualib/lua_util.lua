@@ -636,20 +636,18 @@ exports.override_defaults = override_defaults
 exports.filter_specific_urls = function (urls, params)
   local cache_key
 
-  if params.prefix then
-    cache_key = params.prefix
-  else
-    cache_key = string.format('sp_urls_%d%s', params.limit,
-        tostring(params.need_emails or false))
-  end
-
-  if params.task then
+  if params.task and not params.no_cache then
+    if params.prefix then
+      cache_key = params.prefix
+    else
+      cache_key = string.format('sp_urls_%d%s', params.limit,
+          tostring(params.need_emails or false))
+    end
     local cached = params.task:cache_get(cache_key)
 
     if cached then
       return cached
     end
-
   end
 
   if not urls then return {} end
@@ -657,7 +655,7 @@ exports.filter_specific_urls = function (urls, params)
   if params.filter then urls = fun.totable(fun.filter(params.filter, urls)) end
 
   if #urls <= params.limit and #urls <= params.esld_limit then
-    if params.task then
+    if params.task and not params.no_cache then
       params.task:cache_set(cache_key, urls)
     end
 
@@ -742,7 +740,9 @@ exports.filter_specific_urls = function (urls, params)
 
     until limit <= 0 or not item_found
 
-    params.task:cache_set(cache_key, urls)
+    if params.task and not params.no_cache then
+      params.task:cache_set(cache_key, urls)
+    end
     return res
   end
 
@@ -756,7 +756,9 @@ exports.filter_specific_urls = function (urls, params)
       end
     end
 
-    params.task:cache_set(cache_key, urls)
+    if params.task and not params.no_cache then
+      params.task:cache_set(cache_key, urls)
+    end
     return res
   end
 
@@ -785,7 +787,7 @@ exports.filter_specific_urls = function (urls, params)
     end
   end
 
-  if params.task then
+  if params.task and not params.no_cache then
     params.task:cache_set(cache_key, urls)
   end
 
@@ -817,6 +819,7 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     filter = nil,
     prefix = nil,
     ignore_redirected = false,
+    no_cache = false,
   }
 
   local params
