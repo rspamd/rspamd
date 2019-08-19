@@ -16,6 +16,7 @@
         "dot-location": ["error", "property"],
         "func-names": "off",
         // "func-style": ["error", "declaration"],
+        "function-call-argument-newline": "off",
         "id-length": ["error", { "min": 1 }],
         "indent": ["error", 4, { "SwitchCase": 1 }],
         // "max-len": ["error", { "code": 120 }],
