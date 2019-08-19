@@ -671,8 +671,18 @@ exports.filter_specific_urls = function (urls, params)
 
   local res = {}
 
-  for _,u in ipairs(urls) do
+  local function process_single_url(u)
     local esld = u:get_tld()
+
+    if params.ignore_redirected and u:is_redirected() then
+      local redir = u:get_redirected() -- get the real url
+      local redir_tld = redir:get_tld()
+
+      if redir_tld then
+        -- Ignore redirected as it should also be in the hash
+        return
+      end
+    end
 
     if esld then
       if not eslds[esld] then
@@ -707,6 +717,10 @@ exports.filter_specific_urls = function (urls, params)
         end
       end
     end
+  end
+
+  for _,u in ipairs(urls) do
+    process_single_url(u)
   end
 
   local limit = params.limit
@@ -788,6 +802,7 @@ end
 - - need_emails <bool> (default = false)
 - - filter <callback> (default = nil)
 - - prefix <string> cache prefix (default = nil)
+- - ignore_redirected <bool> (default = false)
 -- }
 -- Apply heuristic in extracting of urls from task, this function
 -- tries its best to extract specific number of urls from a task based on
@@ -800,7 +815,8 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     esld_limit = 9999,
     need_emails = false,
     filter = nil,
-    prefix = nil
+    prefix = nil,
+    ignore_redirected = false,
   }
 
   local params
