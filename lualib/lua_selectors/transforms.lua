@@ -253,6 +253,31 @@ the second argument is optional hash type (`blake2`, `sha256`, `sha1`, `sha512`,
     ['description'] = 'Returns a value if it exists in some map (or acts like a `filter` function)',
     ['args_schema'] = {ts.string}
   },
+  -- Returns a value if it exists in some map (or acts like a `filter` function)
+  ['except_map'] = {
+    ['types'] = {
+      ['string'] = true
+    },
+    ['map_type'] = 'string',
+    ['process'] = function(inp, t, args)
+      local map = maps[args[1]]
+
+      if not map then
+        logger.errx('invalid map name: %s', args[1])
+        return nil
+      end
+
+      local res = map:get_key(inp)
+
+      if not res then
+        return inp,t
+      end
+
+      return nil
+    end,
+    ['description'] = 'Returns a value if it does not exists in some map (or acts like a `except` function)',
+    ['args_schema'] = {ts.string}
+  },
   -- Returns a value from some map corresponding to some key (or acts like a `map` function)
   ['apply_map'] = {
     ['types'] = {
