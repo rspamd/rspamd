@@ -45,8 +45,8 @@ context("Lua util - extract_specific_urls", function()
   local cases = {
     {expect = url_list, filter = nil, limit = 9999, need_emails = true, prefix = 'p'},
     {expect = {}, filter = (function() return false end), limit = 9999, need_emails = true, prefix = 'p'},
-    {expect = {"domain4.co.net", "test.com"}, filter = nil, limit = 2, need_emails = true, prefix = 'p'},
-    {expect = {"domain4.co.net", "test.com", "domain3.org"}, filter = nil, limit = 3, need_emails = true, prefix = 'p'},
+    {expect = {"tesco.co.net", "test.com"}, filter = nil, limit = 2, need_emails = true, prefix = 'p'},
+    {expect = {"tesco.co.net", "test.com", "meet.org"}, filter = nil, limit = 3, need_emails = true, prefix = 'p'},
     {
       expect = {"gov.co.net", "tesco.co.net", "domain1.co.net", "domain2.co.net", "domain3.co.net", "domain4.co.net"},
       filter = (function(s) return s:get_host():sub(-4) == ".net" end),
@@ -65,7 +65,7 @@ context("Lua util - extract_specific_urls", function()
     },
     {
       input  = {"abc@a.google.com", "b.google.com", "c.google.com", "a.net", "bb.net", "a.bb.net", "b.bb.net"},
-      expect = {"abc@a.google.com", "a.bb.net", "b.google.com", "a.net", "bb.net", "abc@a.google.com"},
+      expect = {"abc@a.google.com", "a.bb.net", "b.google.com", "a.net", "bb.net"},
       filter = nil,
       limit = 9999,
       esld_limit = 2,
@@ -105,6 +105,8 @@ context("Lua util - extract_specific_urls", function()
         local s = logger.slog("%1 =?= %2", c.expect, actual_result)
         print(s) --]]
 
+      table.sort(actual_result)
+      table.sort(c.expect)
       assert_rspamd_table_eq({actual = actual_result, expect = c.expect})
     end)
 
@@ -126,6 +128,8 @@ context("Lua util - extract_specific_urls", function()
         local s = logger.slog("case[%1] %2 =?= %3", i, c.expect, actual_result)
         print(s) --]]
 
+      table.sort(actual_result)
+      table.sort(c.expect)
       assert_rspamd_table_eq({actual = actual_result, expect = c.expect})
     end)
   end
@@ -135,12 +139,14 @@ context("Lua util - extract_specific_urls", function()
     local actual = util.extract_specific_urls(task_object, 3, true)
 
     local actual_result = prepare_actual_result(actual)
-    table.sort(actual_result)
     --[[
       local s = logger.slog("%1 =?= %2", c.expect, actual_result)
       print(s) --]]
 
-    assert_rspamd_table_eq({actual = actual_result, expect = {"abc.com", "abc.net", "abc.za.org"}})
+    local expect = {"abc.com", "abc.net", "abc.za.org"}
+    table.sort(actual_result)
+    table.sort(expect)
+    assert_rspamd_table_eq({actual = actual_result, expect = expect})
   end)
 
 
