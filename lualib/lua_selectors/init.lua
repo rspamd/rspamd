@@ -214,6 +214,9 @@ local function make_grammar()
   local dot = l.P(".")
   local semicolon = l.P(":")
   local obrace = "(" * spc
+  local tbl_obrace = "{" * spc
+  local eqsign = spc * "=" * spc
+  local tbl_ebrace = spc * "}"
   local ebrace = spc * ")"
   local comma = spc * "," * spc
   local sel_separator = spc * l.S";*" * spc
@@ -225,7 +228,9 @@ local function make_grammar()
     PROCESSOR = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
     FUNCTION = l.Ct(atom * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
     METHOD = l.Ct(atom / function(e) return '__' .. e end * spc * (obrace * l.V("ARG_LIST") * ebrace)^0),
-    ARG_LIST = l.Ct((argument * comma^0)^0)
+    ARG_LIST = l.Ct((l.V("ARG") * comma^0)^0),
+    ARG = l.Cf(tbl_obrace * l.V("NAMED_ARG") * tbl_ebrace, rawset) + argument,
+    NAMED_ARG = (l.Ct("") * l.Cg(argument * eqsign * argument * comma^0)^0),
   }
 end
 
