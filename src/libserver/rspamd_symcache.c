@@ -1936,7 +1936,7 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 		checkpoint = task->checkpoint;
 	}
 
-	msg_debug_cache_task ("symbols processing stage at pass: %d");
+	msg_debug_cache_task ("symbols processing stage at pass: %d", stage);
 	start_events_pending = rspamd_session_events_pending (task->s);
 
 	switch (stage) {
