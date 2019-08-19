@@ -278,6 +278,23 @@ e.g. `by_hostname`]],
 If no arguments specified, returns list of url objects. Otherwise, calls a specific method,
 e.g. `get_tld`]],
   },
+  -- Get specific urls
+  ['specific_urls'] = {
+    ['get_value'] = function(task, args)
+      local params = args[1] or {}
+      params.task = task
+      local urls = lua_util.extract_specific_urls(params)
+      return urls,'userdata_list'
+    end,
+    ['description'] = [[Get most specific urls. Arguments are equal to the Lua API function]],
+    ['args_schema'] = {ts.shape{
+      limit = ts.number + ts.string / tonumber,
+      esld_limit = (ts.number + ts.string / tonumber):is_optional(),
+      prefix = ts.string:is_optional(),
+      need_emails = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
+      ignore_redirected = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
+    }}
+  },
   -- Get all emails
   ['emails'] = {
     ['get_value'] = function(task, args)

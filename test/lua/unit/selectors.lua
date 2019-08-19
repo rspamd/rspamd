@@ -151,6 +151,18 @@ context("Selectors test", function()
                 selector = "emails",
                 expect = {{"mailto://test@example.net"}}},
 
+    ["specific_urls"] = {
+      selector = "specific_urls({limit = 1})",
+      expect = {{"http://example.net"}}},
+
+    ["specific_urls + emails"] = {
+      selector = "specific_urls({need_emails = true, limit = 2})",
+      expect = {{"http://example.net", "mailto://test@example.net"}}},
+
+    ["specific_urls + emails limit"] = {
+      selector = "specific_urls({need_emails = true, limit = 1})",
+      expect = {{"http://example.net"}}},
+
     ["pool_var str, default type"] = {
                 selector = [[pool_var("str_var")]],
                 expect = {"str 1"}},
