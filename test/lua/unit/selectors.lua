@@ -251,6 +251,10 @@ context("Selectors test", function()
       selector = "id('key').filter_map(test_map)",
       expect = {'key'}
     },
+    ["map except"] = {
+      selector = "list('key', 'key1', 'key2', 'key3', 'key4').except_map(test_map)",
+      expect = {{'key2', 'key4'}}
+    },
     ["map apply"] = {
       selector = "id('key').apply_map(test_map)",
       expect = {'value'}
