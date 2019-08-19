@@ -36,8 +36,8 @@ local lua_util = require "lua_util"
 local M = "selectors"
 local E = {}
 
-local extractors = require "lua_scanners/extractors"
-local transform_function = require "lua_scanners/transforms"
+local extractors = require "lua_selectors/extractors"
+local transform_function = require "lua_selectors/transforms"
 
 local function pure_type(ltype)
   return ltype:match('^(.*)_list$')
