@@ -619,9 +619,9 @@ end
 exports.override_defaults = override_defaults
 
 --[[[
--- @function lua_util.extract_specific_urls(params)
+-- @function lua_util.filter_specific_urls(urls, params)
 -- params: {
-- - task
+- - task - if needed to save in the cache
 - - limit <int> (default = 9999)
 - - esld_limit <int> (default = 9999) n domains per eSLD (effective second level domain)
                                       works only if number of unique eSLD less than `limit`
@@ -629,62 +629,38 @@ exports.override_defaults = override_defaults
 - - filter <callback> (default = nil)
 - - prefix <string> cache prefix (default = nil)
 -- }
--- Apply heuristic in extracting of urls from task, this function
+-- Apply heuristic in extracting of urls from `urls` table, this function
 -- tries its best to extract specific number of urls from a task based on
 -- their characteristics
 --]]
--- exports.extract_specific_urls = function(params_or_task, limit, need_emails, filter, prefix)
-exports.extract_specific_urls = function(params_or_task, lim, need_emails, filter, prefix)
-  local default_params = {
-    limit = 9999,
-    esld_limit = 9999,
-    need_emails = false,
-    filter = nil,
-    prefix = nil
-  }
-
-  local params
-  if type(params_or_task) == 'table' and type(lim) == 'nil' then
-    params = params_or_task
-  else
-    -- Deprecated call
-    params = {
-      task = params_or_task,
-      limit = lim,
-      need_emails = need_emails,
-      filter = filter,
-      prefix = prefix
-    }
-  end
-  for k,v in pairs(default_params) do
-    if not params[k] then params[k] = v end
-  end
-
-
+exports.filter_specific_urls = function (urls, params)
   local cache_key
 
   if params.prefix then
     cache_key = params.prefix
   else
     cache_key = string.format('sp_urls_%d%s', params.limit,
-        tostring(params.need_emails))
+        tostring(params.need_emails or false))
   end
 
+  if params.task then
+    local cached = params.task:cache_get(cache_key)
 
-  local cached = params.task:cache_get(cache_key)
+    if cached then
+      return cached
+    end
 
-  if cached then
-    return cached
   end
-
-  local urls = params.task:get_urls(params.need_emails)
 
   if not urls then return {} end
 
   if params.filter then urls = fun.totable(fun.filter(params.filter, urls)) end
 
   if #urls <= params.limit and #urls <= params.esld_limit then
-    params.task:cache_set(cache_key, urls)
+    if params.task then
+      params.task:cache_set(cache_key, urls)
+    end
+
     return urls
   end
 
@@ -795,8 +771,58 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     end
   end
 
-  params.task:cache_set(cache_key, urls)
+  if params.task then
+    params.task:cache_set(cache_key, urls)
+  end
+
   return res
+end
+
+--[[[
+-- @function lua_util.extract_specific_urls(params)
+-- params: {
+- - task
+- - limit <int> (default = 9999)
+- - esld_limit <int> (default = 9999) n domains per eSLD (effective second level domain)
+                                      works only if number of unique eSLD less than `limit`
+- - need_emails <bool> (default = false)
+- - filter <callback> (default = nil)
+- - prefix <string> cache prefix (default = nil)
+-- }
+-- Apply heuristic in extracting of urls from task, this function
+-- tries its best to extract specific number of urls from a task based on
+-- their characteristics
+--]]
+-- exports.extract_specific_urls = function(params_or_task, limit, need_emails, filter, prefix)
+exports.extract_specific_urls = function(params_or_task, lim, need_emails, filter, prefix)
+  local default_params = {
+    limit = 9999,
+    esld_limit = 9999,
+    need_emails = false,
+    filter = nil,
+    prefix = nil
+  }
+
+  local params
+  if type(params_or_task) == 'table' and type(lim) == 'nil' then
+    params = params_or_task
+  else
+    -- Deprecated call
+    params = {
+      task = params_or_task,
+      limit = lim,
+      need_emails = need_emails,
+      filter = filter,
+      prefix = prefix
+    }
+  end
+  for k,v in pairs(default_params) do
+    if not params[k] then params[k] = v end
+  end
+
+  local urls = params.task:get_urls(params.need_emails)
+
+  return exports.filter_specific_urls(urls, params)
 end
 
 --[[[
