@@ -283,6 +283,7 @@ e.g. `get_tld`]],
     ['get_value'] = function(task, args)
       local params = args[1] or {}
       params.task = task
+      params.no_cache = true
       local urls = lua_util.extract_specific_urls(params)
       return urls,'userdata_list'
     end,

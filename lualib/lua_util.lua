@@ -668,6 +668,18 @@ exports.filter_specific_urls = function (urls, params)
   local ntlds, neslds = 0, 0
 
   local res = {}
+  local nres = 0
+
+  local function insert_url(str, u)
+    if not res[str] then
+      res[str] = u
+      nres = nres + 1
+
+      return true
+    end
+
+    return false
+  end
 
   local function process_single_url(u)
     local esld = u:get_tld()
@@ -682,13 +694,15 @@ exports.filter_specific_urls = function (urls, params)
       end
     end
 
+    local str_hash = tostring(u)
+
     if esld then
       if not eslds[esld] then
-        eslds[esld] = {u}
+        eslds[esld] = {{str_hash, u}}
         neslds = neslds + 1
       else
         if #eslds[esld] < params.esld_limit then
-          table.insert(eslds[esld], u)
+          table.insert(eslds[esld], {str_hash, u})
         end
       end
 
@@ -696,21 +710,21 @@ exports.filter_specific_urls = function (urls, params)
       local tld = table.concat(fun.totable(fun.tail(parts)), '.')
 
       if not tlds[tld] then
-        tlds[tld] = {u}
+        tlds[tld] = {{str_hash, u}}
         ntlds = ntlds + 1
       else
-        table.insert(tlds[tld], u)
+        table.insert(tlds[tld], {str_hash, u})
       end
 
-      -- Extract priority urls that are proven to be malicious
-      if not u:is_html_displayed() then
+      -- Special cases
+      if not u:get_protocol() == 'mailto' and not u:is_html_displayed() then
         if u:is_obscured() then
-          table.insert(res, u)
+          insert_url(str_hash, u)
         else
           if u:get_user() then
-            table.insert(res, u)
+            insert_url(str_hash, u)
           elseif u:is_subject() or u:is_phished() then
-            table.insert(res, u)
+            insert_url(str_hash, u)
           end
         end
       end
@@ -722,7 +736,7 @@ exports.filter_specific_urls = function (urls, params)
   end
 
   local limit = params.limit
-  limit = limit - #res
+  limit = limit - nres
   if limit <= 0 then limit = 1 end
 
   if neslds <= limit then
@@ -732,7 +746,8 @@ exports.filter_specific_urls = function (urls, params)
 
       for _,lurls in pairs(eslds) do
         if #lurls > 0 then
-          table.insert(res, table.remove(lurls))
+          local last = table.remove(lurls)
+          insert_url(last[1], last[2])
           limit = limit - 1
           item_found = true
         end
@@ -740,8 +755,9 @@ exports.filter_specific_urls = function (urls, params)
 
     until limit <= 0 or not item_found
 
+    res = exports.values(res)
     if params.task and not params.no_cache then
-      params.task:cache_set(cache_key, urls)
+      params.task:cache_set(cache_key, res)
     end
     return res
   end
@@ -750,14 +766,16 @@ exports.filter_specific_urls = function (urls, params)
     while limit > 0 do
       for _,lurls in pairs(tlds) do
         if #lurls > 0 then
-          table.insert(res, table.remove(lurls))
+          local last = table.remove(lurls)
+          insert_url(last[1], last[2])
           limit = limit - 1
         end
       end
     end
 
+    res = exports.values(res)
     if params.task and not params.no_cache then
-      params.task:cache_set(cache_key, urls)
+      params.task:cache_set(cache_key, res)
     end
     return res
   end
@@ -774,11 +792,13 @@ exports.filter_specific_urls = function (urls, params)
     local tld1 = tlds[tlds_keys[i]]
     local tld2 = tlds[tlds_keys[ntlds - i]]
     if #tld1 > 0 then
-      table.insert(res, table.remove(tld1))
+      local last = table.remove(tld1)
+      insert_url(last[1], last[2])
       limit = limit - 1
     end
     if #tld2 > 0 then
-      table.insert(res, table.remove(tld2))
+      local last = table.remove(tld2)
+      insert_url(last[1], last[2])
       limit = limit - 1
     end
 
@@ -787,8 +807,9 @@ exports.filter_specific_urls = function (urls, params)
     end
   end
 
+  res = exports.values(res)
   if params.task and not params.no_cache then
-    params.task:cache_set(cache_key, urls)
+    params.task:cache_set(cache_key, res)
   end
 
   return res
