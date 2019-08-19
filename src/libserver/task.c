@@ -693,7 +693,7 @@ gboolean
 rspamd_task_process (struct rspamd_task *task, guint stages)
 {
 	gint st;
-	gboolean ret = TRUE;
+	gboolean ret = TRUE, all_done = TRUE;
 	GError *stat_error = NULL;
 
 	/* Avoid nested calls */
@@ -717,24 +717,16 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_PRE_FILTERS_EMPTY:
-		rspamd_symcache_process_symbols (task, task->cfg->cache,
-				RSPAMD_TASK_STAGE_PRE_FILTERS_EMPTY);
+	case RSPAMD_TASK_STAGE_PRE_FILTERS:
+	case RSPAMD_TASK_STAGE_FILTERS:
+	case RSPAMD_TASK_STAGE_IDEMPOTENT:
+		all_done = rspamd_symcache_process_symbols (task, task->cfg->cache, st);
 		break;
 
 	case RSPAMD_TASK_STAGE_PROCESS_MESSAGE:
 		if (!(task->flags & RSPAMD_TASK_FLAG_SKIP_PROCESS)) {
 			rspamd_message_process (task);
 		}
-		break;
-
-	case RSPAMD_TASK_STAGE_PRE_FILTERS:
-		rspamd_symcache_process_symbols (task, task->cfg->cache,
-				RSPAMD_TASK_STAGE_PRE_FILTERS);
-		break;
-
-	case RSPAMD_TASK_STAGE_FILTERS:
-		rspamd_symcache_process_symbols (task, task->cfg->cache,
-				RSPAMD_TASK_STAGE_FILTERS);
 		break;
 
 	case RSPAMD_TASK_STAGE_CLASSIFIERS:
@@ -754,10 +746,10 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		break;
 
 	case RSPAMD_TASK_STAGE_POST_FILTERS:
-		rspamd_symcache_process_symbols (task, task->cfg->cache,
-				RSPAMD_TASK_STAGE_POST_FILTERS);
+		all_done = rspamd_symcache_process_symbols (task, task->cfg->cache,
+				st);
 
-		if ((task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO) &&
+		if (all_done && (task->flags & RSPAMD_TASK_FLAG_LEARN_AUTO) &&
 				!RSPAMD_TASK_IS_EMPTY (task) &&
 				!(task->flags & (RSPAMD_TASK_FLAG_LEARN_SPAM|RSPAMD_TASK_FLAG_LEARN_HAM))) {
 			rspamd_stat_check_autolearn (task);
@@ -811,10 +803,6 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		/* Second run of composites processing before idempotent filters */
 		rspamd_make_composites (task);
 		break;
-	case RSPAMD_TASK_STAGE_IDEMPOTENT:
-		rspamd_symcache_process_symbols (task, task->cfg->cache,
-				RSPAMD_TASK_STAGE_IDEMPOTENT);
-		break;
 
 	case RSPAMD_TASK_STAGE_DONE:
 		task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
@@ -843,17 +831,24 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 		return ret;
 	}
 
-	if (rspamd_session_events_pending (task->s) != 0) {
-		/* We have events pending, so we consider this stage as incomplete */
-		msg_debug_task ("need more work on stage %d", st);
-	}
-	else {
-		/* Mark the current stage as done and go to the next stage */
-		msg_debug_task ("completed stage %d", st);
-		task->processed_stages |= st;
+	if (ret) {
+		if (rspamd_session_events_pending (task->s) != 0) {
+			/* We have events pending, so we consider this stage as incomplete */
+			msg_debug_task ("need more work on stage %d", st);
+		}
+		else {
+			if (all_done) {
+				/* Mark the current stage as done and go to the next stage */
+				msg_debug_task ("completed stage %d", st);
+				task->processed_stages |= st;
+			}
+			else {
+				msg_debug_task ("need more processing on stage %d", st);
+			}
 
-		/* Tail recursion */
-		return rspamd_task_process (task, stages);
+			/* Tail recursion */
+			return rspamd_task_process (task, stages);
+		}
 	}
 
 	return ret;
