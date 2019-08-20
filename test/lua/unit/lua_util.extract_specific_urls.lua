@@ -192,8 +192,8 @@ context("Lua util - extract_specific_urls", function()
 
     local actual = util.extract_specific_urls({
       task = task,
-      limit = 2,
-      esld_limit = 2,
+      limit = 1,
+      esld_limit = 1,
     })
 
     local actual_result = prepare_actual_result(actual)
@@ -202,7 +202,7 @@ context("Lua util - extract_specific_urls", function()
       local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
       print(s) --]]
 
-    assert_equal("domain.com", actual_result[1], "checking that first url is the one with highest suspiciousness level")
+    assert_rspamd_table_eq({actual = actual_result, expect = {"domain.com"}})
 
   end)
 end)
