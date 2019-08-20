@@ -1106,6 +1106,14 @@ if redis_section then
   end, redis_key_handlers)
 end
 
+module_sym_id = rspamd_config:register_symbol({
+  name = 'SETTINGS_CHECK',
+  type = 'prefilter',
+  callback = check_settings,
+  priority = 10,
+  flags = 'empty,nostat,explicit_disable,ignore_passthrough',
+})
+
 local set_section = rspamd_config:get_all_opt("settings")
 
 if set_section and set_section[1] and type(set_section[1]) == "string" then
@@ -1117,14 +1125,6 @@ elseif set_section and type(set_section) == "table" then
   settings_map_pool = rspamd_mempool.create()
   process_settings_table(set_section, true, settings_map_pool)
 end
-
-module_sym_id = rspamd_config:register_symbol({
-  name = 'SETTINGS_CHECK',
-  type = 'prefilter',
-  callback = check_settings,
-  priority = 10,
-  flags = 'empty,nostat,explicit_disable,ignore_passthrough',
-})
 
 rspamd_config:add_config_unload(function()
   if settings_map_pool then
