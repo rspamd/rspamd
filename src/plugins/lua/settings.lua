@@ -39,6 +39,7 @@ local settings = {}
 local N = "settings"
 local settings_initialized = false
 local max_pri = 0
+local module_sym_id -- Main module symbol
 
 local function apply_settings(task, to_apply, id)
   task:set_settings(to_apply)
@@ -926,17 +927,19 @@ local function process_settings_table(tbl, allow_ids, mempool)
       if elt.apply and elt.apply.symbols then
         -- Register virtual symbols
         for k,v in pairs(elt.apply.symbols) do
+          local rtb = {
+            type = 'virtual',
+            parent = module_sym_id,
+          }
           if type(k) == 'number' and type(v) == 'string' then
-            rspamd_config:register_symbol{
-              name = v,
-              type = 'virtual,ghost',
-            }
+            rtb.name = v
           elseif type(k) == 'string' then
-            rspamd_config:register_symbol{
-              name = k,
-              type = 'virtual,ghost',
-            }
+            rtb.name = k
           end
+          if out.id then
+            rtb.allowed_ids = tostring(elt.id)
+          end
+          rspamd_config:register_symbol(rtb)
         end
       end
     else
@@ -1115,7 +1118,7 @@ elseif set_section and type(set_section) == "table" then
   process_settings_table(set_section, true, settings_map_pool)
 end
 
-rspamd_config:register_symbol({
+module_sym_id = rspamd_config:register_symbol({
   name = 'SETTINGS_CHECK',
   type = 'prefilter',
   callback = check_settings,
