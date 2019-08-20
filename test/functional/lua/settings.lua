@@ -47,3 +47,21 @@ rspamd_config:register_symbol({
   group = 'vg',
   parent = id,
 })
+
+id = rspamd_config:register_symbol({
+  name = 'DEP_REAL',
+  callback = function(task)
+    task:insert_result('DEP_VIRTUAL', 1.0)
+    return true
+  end,
+  score = 1.0,
+})
+
+rspamd_config:register_symbol({
+  name = 'DEP_VIRTUAL',
+  parent = id,
+  type = 'virtual',
+  score = 1.0,
+})
+
+rspamd_config:register_dependency('DEP_VIRTUAL', 'EXPLICIT_VIRTUAL1')

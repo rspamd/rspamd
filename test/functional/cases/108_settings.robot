@@ -110,6 +110,7 @@ SETTINGS ID - VIRTUAL
   Check Rspamc  ${result}  SIMPLE_VIRTUAL
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  DEP_REAL
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
 
@@ -119,6 +120,7 @@ SETTINGS ID - VIRTUAL GROUP
   Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  DEP_REAL
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
 
@@ -128,6 +130,7 @@ SETTINGS ID - VIRTUAL FROM
   Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  DEP_REAL
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
 
@@ -137,6 +140,7 @@ SETTINGS ID - VIRTUAL USER
   Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  DEP_REAL
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
 
@@ -146,6 +150,7 @@ SETTINGS ID - VIRTUAL HOSTNAME
   Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  DEP_REAL
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
 
@@ -155,6 +160,7 @@ SETTINGS ID - VIRTUAL SELECTOR
   Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  DEP_REAL
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
 
@@ -164,6 +170,7 @@ SETTINGS ID - ANGLED RECIPIENT
   Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  DEP_REAL
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
 
@@ -173,6 +180,7 @@ SETTINGS ID - VIRTUAL HEADER MATCH
   Should Contain  ${result.stdout}  EXPLICIT_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  DEP_REAL
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
 
@@ -181,6 +189,7 @@ SETTINGS ID - VIRTUAL HEADER EXISTS
   Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  DEP_REAL
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
 
@@ -189,6 +198,7 @@ SETTINGS ID - VIRTUAL HEADER ABSENT
   Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  DEP_REAL
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
 
@@ -197,6 +207,17 @@ SETTINGS ID - VIRTUAL REQUEST HEADER
   Check Rspamc  ${result}  SIMPLE_VIRTUAL (10
   Should Not Contain  ${result.stdout}  SIMPLE_TEST
   Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL1
+  Should Not Contain  ${result.stdout}  DEP_REAL
+  Should Not Contain  ${result.stdout}  SIMPLE_POST
+  Should Not Contain  ${result.stdout}  SIMPLE_PRE
+
+SETTINGS ID - VIRTUAL DEP
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings-Id=id_virtual1
+  Check Rspamc  ${result}  EXPLICIT_VIRTUAL1
+  Should Contain  ${result.stdout}  DEP_VIRTUAL
+  Should Contain  ${result.stdout}  DEP_REAL
+  Should Not Contain  ${result.stdout}  SIMPLE_TEST
+  Should Not Contain  ${result.stdout}  SIMPLE_VIRTUAL
   Should Not Contain  ${result.stdout}  SIMPLE_POST
   Should Not Contain  ${result.stdout}  SIMPLE_PRE
 
