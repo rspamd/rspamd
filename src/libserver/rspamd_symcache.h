@@ -224,7 +224,8 @@ void rspamd_symcache_inc_frequency (struct rspamd_symcache *cache,
  * @param to destination name
  */
 void rspamd_symcache_add_dependency (struct rspamd_symcache *cache,
-									 gint id_from, const gchar *to);
+									 gint id_from, const gchar *to,
+									 gint virtual_id_from);
 
 /**
  * Add delayed dependency that is resolved on cache post-load routine

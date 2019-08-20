@@ -193,9 +193,10 @@ struct rspamd_symcache_dynamic_item {
 
 
 struct cache_dependency {
-	struct rspamd_symcache_item *item;
-	gchar *sym;
-	gint id;
+	struct rspamd_symcache_item *item; /* Real dependency */
+	gchar *sym; /* Symbolic dep name */
+	gint id; /* Real from */
+	gint vid; /* Virtual from */
 };
 
 struct delayed_cache_dependency {
@@ -533,12 +534,139 @@ rspamd_symcache_resort (struct rspamd_symcache *cache)
 	cache->items_by_order = ord;
 }
 
+static void
+rspamd_symcache_propagate_dep (struct rspamd_symcache *cache,
+							   struct rspamd_symcache_item *it,
+							   struct rspamd_symcache_item *dit)
+{
+	const guint *ids;
+	guint nids = 0;
+
+	ids = rspamd_symcache_get_allowed_settings_ids (cache, dit->symbol, &nids);
+
+	/* TODO: merge? */
+	if (nids > 0) {
+		msg_info_cache ("propagate allowed ids from %s to %s",
+				dit->symbol, it->symbol);
+
+		rspamd_symcache_set_allowed_settings_ids (cache, it->symbol, ids,
+				nids);
+	}
+
+	ids = rspamd_symcache_get_forbidden_settings_ids (cache, dit->symbol, &nids);
+
+	if (nids > 0) {
+		msg_info_cache ("propagate forbidden ids from %s to %s",
+				dit->symbol, it->symbol);
+
+		rspamd_symcache_set_forbidden_settings_ids (cache, it->symbol, ids,
+				nids);
+	}
+}
+
+static void
+rspamd_symcache_process_dep (struct rspamd_symcache *cache,
+							 struct rspamd_symcache_item *it,
+							 struct cache_dependency *dep)
+{
+	struct rspamd_symcache_item *dit = NULL, *vdit = NULL;
+	struct cache_dependency *rdep;
+
+	if (dep->id >= 0) {
+		dit = rspamd_symcache_find_filter (cache, dep->sym, true);
+	}
+
+	if (dep->vid >= 0) {
+		/* Case of the virtual symbol that depends on another (maybe virtual) symbol */
+		vdit = rspamd_symcache_find_filter (cache, dep->sym, false);
+	}
+	else {
+		vdit = dit;
+	}
+
+	if (dit != NULL) {
+		if (!dit->is_filter) {
+			/*
+			 * Check sanity:
+			 * - filters -> prefilter dependency is OK and always satisfied
+			 * - postfilter -> (filter, prefilter) dep is ok
+			 * - idempotent -> (any) dep is OK
+			 *
+			 * Otherwise, emit error
+			 * However, even if everything is fine this dep is useless ¯\_(ツ)_/¯
+			 */
+			gboolean ok_dep = FALSE;
+
+			if (it->is_filter) {
+				if (dit->type & SYMBOL_TYPE_PREFILTER) {
+					ok_dep = TRUE;
+				}
+			}
+			else if (it->type & SYMBOL_TYPE_POSTFILTER) {
+				if (dit->type & SYMBOL_TYPE_PREFILTER) {
+					ok_dep = TRUE;
+				}
+			}
+			else if (it->type & SYMBOL_TYPE_IDEMPOTENT) {
+				if (dit->type & (SYMBOL_TYPE_PREFILTER|SYMBOL_TYPE_POSTFILTER)) {
+					ok_dep = TRUE;
+				}
+			}
+			else if (it->type & SYMBOL_TYPE_PREFILTER) {
+				if (it->priority < dit->priority) {
+					/* Also OK */
+					ok_dep = TRUE;
+				}
+			}
+
+			if (!ok_dep) {
+				msg_err_cache ("cannot add dependency from %s on %s: invalid symbol types",
+						dep->sym, dit->symbol);
+
+				return;
+			}
+		}
+		else {
+			if (dit->id == it->id) {
+				msg_err_cache ("cannot add dependency on self: %s -> %s "
+							   "(resolved to %s)",
+						it->symbol, dep->sym, dit->symbol);
+			} else {
+				rdep = rspamd_mempool_alloc (cache->static_pool,
+						sizeof (*rdep));
+
+				rdep->sym = dep->sym;
+				rdep->item = it;
+				rdep->id = it->id;
+				g_assert (dit->rdeps != NULL);
+				g_ptr_array_add (dit->rdeps, rdep);
+				dep->item = dit;
+				dep->id = dit->id;
+
+				msg_debug_cache ("add dependency from %d on %d", it->id,
+						dit->id);
+			}
+		}
+	}
+	else if (dep->id >= 0) {
+		msg_err_cache ("cannot find dependency on symbol %s for symbol %s",
+				dep->sym, it->symbol);
+
+		return;
+	}
+
+	if (vdit) {
+		/* Use virtual symbol to propagate deps */
+		rspamd_symcache_propagate_dep (cache, it, vdit);
+	}
+}
+
 /* Sort items in logical order */
 static void
 rspamd_symcache_post_init (struct rspamd_symcache *cache)
 {
-	struct rspamd_symcache_item *it, *dit;
-	struct cache_dependency *dep, *rdep;
+	struct rspamd_symcache_item *it, *vit;
+	struct cache_dependency *dep;
 	struct delayed_cache_dependency *ddep;
 	struct delayed_cache_condition *dcond;
 	GList *cur;
@@ -548,6 +676,7 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 	while (cur) {
 		ddep = cur->data;
 
+		vit = rspamd_symcache_find_filter (cache, ddep->from, false);
 		it = rspamd_symcache_find_filter (cache, ddep->from, true);
 
 		if (it == NULL) {
@@ -555,9 +684,9 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 					"%s is missing", ddep->from, ddep->to, ddep->from);
 		}
 		else {
-			msg_debug_cache ("delayed between %s(%d) -> %s", ddep->from,
-					it->id, ddep->to);
-			rspamd_symcache_add_dependency (cache, it->id, ddep->to);
+			msg_debug_cache ("delayed between %s(%d:%d) -> %s", ddep->from,
+					it->id, vit->id, ddep->to);
+			rspamd_symcache_add_dependency (cache, it->id, ddep->to, vit->id);
 		}
 
 		cur = g_list_next (cur);
@@ -585,40 +714,7 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 	PTR_ARRAY_FOREACH (cache->items_by_id, i, it) {
 
 		PTR_ARRAY_FOREACH (it->deps, j, dep) {
-			dit = rspamd_symcache_find_filter (cache, dep->sym, true);
-
-			if (dit != NULL) {
-				if (!dit->is_filter) {
-					msg_err_cache ("cannot depend on non filter symbol "
-								   "(%s wants to add dependency on %s)",
-							dep->sym, dit->symbol);
-				}
-				else {
-					if (dit->id == i) {
-						msg_err_cache ("cannot add dependency on self: %s -> %s "
-									   "(resolved to %s)",
-								it->symbol, dep->sym, dit->symbol);
-					} else {
-						rdep = rspamd_mempool_alloc (cache->static_pool,
-								sizeof (*rdep));
-
-						rdep->sym = dep->sym;
-						rdep->item = it;
-						rdep->id = i;
-						g_assert (dit->rdeps != NULL);
-						g_ptr_array_add (dit->rdeps, rdep);
-						dep->item = dit;
-						dep->id = dit->id;
-
-						msg_debug_cache ("add dependency from %d on %d", it->id,
-								dit->id);
-					}
-				}
-			}
-			else {
-				msg_err_cache ("cannot find dependency on symbol %s for symbol %s",
-						dep->sym, it->symbol);
-			}
+			rspamd_symcache_process_dep (cache, it, dep);
 		}
 
 		if (it->deps) {
@@ -1083,15 +1179,12 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 				cache->used_items, item->id);
 	}
 
-	if (item->is_filter) {
-		/* Only plain filters can have deps and rdeps */
-		item->deps = g_ptr_array_new ();
-		item->rdeps = g_ptr_array_new ();
-		rspamd_mempool_add_destructor (cache->static_pool,
-				rspamd_ptr_array_free_hard, item->deps);
-		rspamd_mempool_add_destructor (cache->static_pool,
-				rspamd_ptr_array_free_hard, item->rdeps);
-	}
+	item->deps = g_ptr_array_new ();
+	item->rdeps = g_ptr_array_new ();
+	rspamd_mempool_add_destructor (cache->static_pool,
+			rspamd_ptr_array_free_hard, item->deps);
+	rspamd_mempool_add_destructor (cache->static_pool,
+			rspamd_ptr_array_free_hard, item->rdeps);
 
 	if (name != NULL) {
 		g_hash_table_insert (cache->items_by_symbol, item->symbol, item);
@@ -2384,9 +2477,10 @@ rspamd_symcache_inc_frequency (struct rspamd_symcache *cache,
 
 void
 rspamd_symcache_add_dependency (struct rspamd_symcache *cache,
-								gint id_from, const gchar *to)
+								gint id_from, const gchar *to,
+								gint virtual_id_from)
 {
-	struct rspamd_symcache_item *source;
+	struct rspamd_symcache_item *source, *vsource;
 	struct cache_dependency *dep;
 
 	g_assert (id_from >= 0 && id_from < (gint)cache->items_by_id->len);
@@ -2397,7 +2491,20 @@ rspamd_symcache_add_dependency (struct rspamd_symcache *cache,
 	dep->sym = rspamd_mempool_strdup (cache->static_pool, to);
 	/* Will be filled later */
 	dep->item = NULL;
+	dep->vid = -1;
 	g_ptr_array_add (source->deps, dep);
+
+	if (id_from != virtual_id_from) {
+		/* We need that for settings id propagation */
+		vsource = g_ptr_array_index (cache->items_by_id, virtual_id_from);
+		dep = rspamd_mempool_alloc (cache->static_pool, sizeof (*dep));
+		dep->vid = id_from;
+		dep->id = -1;
+		dep->sym = rspamd_mempool_strdup (cache->static_pool, to);
+		/* Will be filled later */
+		dep->item = NULL;
+		g_ptr_array_add (vsource->deps, dep);
+	}
 }
 
 void

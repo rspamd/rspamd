@@ -2206,7 +2206,8 @@ lua_config_register_dependency (lua_State * L)
 
 		if (child_id > 0 && parent != NULL) {
 
-			rspamd_symcache_add_dependency (cfg->cache, child_id, parent);
+			rspamd_symcache_add_dependency (cfg->cache, child_id, parent,
+					child_id);
 		}
 	}
 	else {
