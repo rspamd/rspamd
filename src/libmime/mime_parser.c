@@ -436,7 +436,8 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 
 	g_assert (part != NULL);
 
-	rspamd_mime_part_get_cte (task, part->raw_headers, part, TRUE);
+	rspamd_mime_part_get_cte (task, part->raw_headers, part,
+			!(part->ct->flags & RSPAMD_CONTENT_TYPE_MESSAGE));
 	rspamd_mime_part_get_cd (task, part);
 
 	switch (part->cte) {
