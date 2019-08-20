@@ -86,18 +86,12 @@ define(["jquery", "d3evolution", "footable"],
             }
         };
 
-        // Get selectors' current state
-        function getSelector(id) {
-            var e = document.getElementById(id);
-            return e.options[e.selectedIndex].value;
-        }
-
-        function initGraph() {
+        function initGraph(rspamd) {
             var graph = new D3Evolution("graph", $.extend({}, graph_options, {
-                yScale: getSelector("selYScale"),
-                type: getSelector("selType"),
-                interpolate: getSelector("selInterpolate"),
-                convert: getSelector("selConvert"),
+                yScale: rspamd.getSelector("selYScale"),
+                type: rspamd.getSelector("selType"),
+                interpolate: rspamd.getSelector("selInterpolate"),
+                convert: rspamd.getSelector("selConvert"),
             }));
             $("#selYScale").change(function () {
                 graph.yScale(this.value);
@@ -251,7 +245,7 @@ define(["jquery", "d3evolution", "footable"],
             }
 
             if (!graphs.graph) {
-                graphs.graph = initGraph();
+                graphs.graph = initGraph(rspamd);
             }
 
             rspamd.query("graph", {
@@ -297,7 +291,7 @@ define(["jquery", "d3evolution", "footable"],
             });
         };
 
-        ui.setup = function () {
+        ui.setup = function (rspamd) {
             // Handling mouse events on overlapping elements
             $("#rrd-pie").mouseover(function () {
                 $("#rrd-pie").css("z-index", "200");
@@ -308,7 +302,7 @@ define(["jquery", "d3evolution", "footable"],
                 $("#rrd-table_toggle").css("z-index", "0");
             });
 
-            return getSelector("selData");
+            return rspamd.getSelector("selData");
         };
 
         return ui;

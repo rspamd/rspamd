@@ -29,11 +29,6 @@ define(["jquery", "footable"],
         "use strict";
         var ui = {};
 
-        function getSelector(id) {
-            var e = document.getElementById(id);
-            return e.options[e.selectedIndex].value;
-        }
-
         function saveSymbols(rspamd, action, id, server) {
             var inputs = $("#" + id + " :input[data-role=\"numerictextbox\"]");
             var url = action;
@@ -62,12 +57,12 @@ define(["jquery", "footable"],
             var digits = Number(number).toFixed(20).replace(/^-?\d*\.?|0+$/g, "").length;
             return (digits === 0 || digits > 4) ? 0.1 : 1.0 / Math.pow(10, digits);
         }
-        function process_symbols_data(data) {
+        function process_symbols_data(rspamd, data) {
             var items = [];
             var lookup = {};
             var freqs = [];
             var distinct_groups = [];
-            var selected_server = getSelector("selSrv");
+            var selected_server = rspamd.getSelector("selSrv");
 
             data.forEach(function (group) {
                 group.rules.forEach(function (item) {
@@ -147,7 +142,7 @@ define(["jquery", "footable"],
             rspamd.query("symbols", {
                 success: function (json) {
                     var data = json[0].data;
-                    var items = process_symbols_data(data);
+                    var items = process_symbols_data(rspamd, data);
 
                     /* eslint-disable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
                     FooTable.groupFilter = FooTable.Filtering.extend({
@@ -250,10 +245,10 @@ define(["jquery", "footable"],
         ui.setup = function (rspamd, tables) {
             $("#updateSymbols").on("click", function (e) {
                 e.preventDefault();
-                var checked_server = getSelector("selSrv");
+                var checked_server = rspamd.getSelector("selSrv");
                 rspamd.query("symbols", {
                     success: function (data) {
-                        var items = process_symbols_data(data[0].data)[0];
+                        var items = process_symbols_data(rspamd, data[0].data)[0];
                         tables.symbols.rows.load(items);
                     },
                     server: (checked_server === "All SERVERS") ? "local" : checked_server

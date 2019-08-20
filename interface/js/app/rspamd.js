@@ -150,6 +150,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         return sessionStorage.getItem("Password");
     }
 
+    // Get selectors' current state
     function getSelector(id) {
         var e = document.getElementById(id);
         return e.options[e.selectedIndex].value;
@@ -375,7 +376,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         tab_history.setup(ui, tables);
         tab_symbols.setup(ui, tables);
         tab_upload.setup(ui, tables);
-        selData = tab_graph.setup();
+        selData = tab_graph.setup(ui);
     };
 
     ui.connect = function () {
