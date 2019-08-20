@@ -607,7 +607,7 @@ end
 for k, r in pairs(settings.rules) do
   rspamd_config:register_symbol({
     name = 'EXPORT_METADATA_' .. k,
-    type = 'postfilter,idempotent',
+    type = 'idempotent',
     callback = gen_exporter(r),
     priority = 10,
     flags = 'empty',
