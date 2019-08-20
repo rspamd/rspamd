@@ -868,7 +868,7 @@ surbl_module_parse_rule (const ucl_object_t* value, struct rspamd_config* cfg)
 				1,
 				1);
 		rspamd_symcache_add_dependency (cfg->cache, cb_id,
-				SURBL_REDIRECTOR_CALLBACK, cb_id);
+				SURBL_REDIRECTOR_CALLBACK, -1);
 		/* Failure symbol */
 		g_string_append (sym, "_FAIL");
 		rspamd_symcache_add_symbol (cfg->cache, sym->str,
@@ -1205,7 +1205,7 @@ surbl_module_config (struct rspamd_config *cfg)
 
 		if (cur_suffix->options & SURBL_OPTION_CHECKDKIM) {
 			rspamd_symcache_add_dependency (cfg->cache,
-					cur_suffix->callback_id, "DKIM_TRACE", cur_suffix->callback_id);
+					cur_suffix->callback_id, "DKIM_TRACE", -1);
 		}
 
 		cur_opt = g_list_next (cur_opt);

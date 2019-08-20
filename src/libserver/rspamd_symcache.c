@@ -542,6 +542,8 @@ rspamd_symcache_propagate_dep (struct rspamd_symcache *cache,
 	const guint *ids;
 	guint nids = 0;
 
+	msg_debug_cache ("check id propagation for dependency %s from %s",
+			it->symbol, dit->symbol);
 	ids = rspamd_symcache_get_allowed_settings_ids (cache, dit->symbol, &nids);
 
 	/* TODO: merge? */
@@ -573,12 +575,15 @@ rspamd_symcache_process_dep (struct rspamd_symcache *cache,
 	struct cache_dependency *rdep;
 
 	if (dep->id >= 0) {
+		msg_debug_cache ("process real dependency %s on %s", it->symbol, dep->sym);
 		dit = rspamd_symcache_find_filter (cache, dep->sym, true);
 	}
 
 	if (dep->vid >= 0) {
 		/* Case of the virtual symbol that depends on another (maybe virtual) symbol */
 		vdit = rspamd_symcache_find_filter (cache, dep->sym, false);
+		msg_debug_cache ("process virtual dependency %s(%d) on %s(%d)", it->symbol,
+				dep->vid, vdit->symbol, vdit->id);
 	}
 	else {
 		vdit = dit;
@@ -686,7 +691,8 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 		else {
 			msg_debug_cache ("delayed between %s(%d:%d) -> %s", ddep->from,
 					it->id, vit->id, ddep->to);
-			rspamd_symcache_add_dependency (cache, it->id, ddep->to, vit->id);
+			rspamd_symcache_add_dependency (cache, it->id, ddep->to, vit != it ?
+																	 vit->id : -1);
 		}
 
 		cur = g_list_next (cur);
@@ -727,6 +733,14 @@ rspamd_symcache_post_init (struct rspamd_symcache *cache)
 					g_ptr_array_remove_index (it->deps, j);
 				}
 			}
+		}
+	}
+
+	/* Special case for virtual symbols */
+	PTR_ARRAY_FOREACH (cache->virtual, i, it) {
+
+		PTR_ARRAY_FOREACH (it->deps, j, dep) {
+			rspamd_symcache_process_dep (cache, it, dep);
 		}
 	}
 
@@ -2485,7 +2499,7 @@ rspamd_symcache_add_dependency (struct rspamd_symcache *cache,
 
 	g_assert (id_from >= 0 && id_from < (gint)cache->items_by_id->len);
 
-	source = g_ptr_array_index (cache->items_by_id, id_from);
+	source = (struct rspamd_symcache_item *)g_ptr_array_index (cache->items_by_id, id_from);
 	dep = rspamd_mempool_alloc (cache->static_pool, sizeof (*dep));
 	dep->id = id_from;
 	dep->sym = rspamd_mempool_strdup (cache->static_pool, to);
@@ -2494,11 +2508,13 @@ rspamd_symcache_add_dependency (struct rspamd_symcache *cache,
 	dep->vid = -1;
 	g_ptr_array_add (source->deps, dep);
 
-	if (id_from != virtual_id_from) {
+	if (virtual_id_from >= 0) {
+		g_assert (virtual_id_from < (gint)cache->virtual->len);
 		/* We need that for settings id propagation */
-		vsource = g_ptr_array_index (cache->items_by_id, virtual_id_from);
+		vsource = (struct rspamd_symcache_item *)
+				g_ptr_array_index (cache->virtual, virtual_id_from);
 		dep = rspamd_mempool_alloc (cache->static_pool, sizeof (*dep));
-		dep->vid = id_from;
+		dep->vid = virtual_id_from;
 		dep->id = -1;
 		dep->sym = rspamd_mempool_strdup (cache->static_pool, to);
 		/* Will be filled later */

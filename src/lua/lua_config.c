@@ -1524,6 +1524,17 @@ rspamd_register_symbol_fromlua (lua_State *L,
 		ids = rspamd_process_id_list (allowed_ids, &nids);
 
 		if (nids > 0) {
+			GString *dbg = g_string_new ("");
+
+			for (guint i = 0; i < nids; i ++) {
+				rspamd_printf_gstring (dbg, "%ud,", ids[i]);
+			}
+
+			dbg->len --;
+
+			msg_debug_config ("allowed ids for %s are: %v", name, dbg);
+			g_string_free (dbg, TRUE);
+
 			rspamd_symcache_set_allowed_settings_ids (cfg->cache, name,
 					ids, nids);
 
@@ -1535,6 +1546,17 @@ rspamd_register_symbol_fromlua (lua_State *L,
 		ids = rspamd_process_id_list (forbidden_ids, &nids);
 
 		if (nids > 0) {
+			GString *dbg = g_string_new ("");
+
+			for (guint i = 0; i < nids; i ++) {
+				rspamd_printf_gstring (dbg, "%ud,", ids[i]);
+			}
+
+			dbg->len --;
+
+			msg_debug_config ("forbidden ids for %s are: %v", name, dbg);
+			g_string_free (dbg, TRUE);
+
 			rspamd_symcache_set_forbidden_settings_ids (cfg->cache, name,
 					ids, nids);
 
@@ -2207,7 +2229,7 @@ lua_config_register_dependency (lua_State * L)
 		if (child_id > 0 && parent != NULL) {
 
 			rspamd_symcache_add_dependency (cfg->cache, child_id, parent,
-					child_id);
+					-1);
 		}
 	}
 	else {
