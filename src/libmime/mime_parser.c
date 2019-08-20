@@ -1353,7 +1353,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 				start = nst->start + start_boundary->start;
 
 				if (end > start &&
-					(ret = rspamd_mime_process_multipart_node (task, st,
+					(ret = rspamd_mime_process_multipart_node (task, nst,
 						NULL, start, end, FALSE, err)) != RSPAMD_MIME_PARSE_OK) {
 
 					if (nst != st) {
