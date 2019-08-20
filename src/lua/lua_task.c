@@ -2035,8 +2035,7 @@ lua_task_set_pre_result (lua_State * L)
 									   RSPAMD_TASK_STAGE_CLASSIFIERS_PRE |
 									   RSPAMD_TASK_STAGE_CLASSIFIERS_POST);
 			rspamd_symcache_disable_all_symbols (task, task->cfg->cache,
-					SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_IGNORE_PASSTHROUGH |
-					SYMBOL_TYPE_POSTFILTER);
+					SYMBOL_TYPE_IDEMPOTENT | SYMBOL_TYPE_IGNORE_PASSTHROUGH);
 		}
 	}
 	else {
