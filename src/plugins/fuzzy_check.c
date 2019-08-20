@@ -2908,7 +2908,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 
 	/* Get upstream */
 
-	while ((selected = rspamd_upstream_get (rule->servers,
+	while ((selected = rspamd_upstream_get_forced (rule->servers,
 			RSPAMD_UPSTREAM_SEQUENTIAL, NULL, 0))) {
 		/* Create UDP socket */
 		addr = rspamd_upstream_addr_next (selected);
