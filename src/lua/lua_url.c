@@ -59,6 +59,7 @@ LUA_FUNCTION_DEF (url, is_obscured);
 LUA_FUNCTION_DEF (url, is_html_displayed);
 LUA_FUNCTION_DEF (url, is_subject);
 LUA_FUNCTION_DEF (url, get_phished);
+LUA_FUNCTION_DEF (url, set_redirected);
 LUA_FUNCTION_DEF (url, get_count);
 LUA_FUNCTION_DEF (url, get_visible);
 LUA_FUNCTION_DEF (url, create);
@@ -89,6 +90,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, get_count),
 	LUA_INTERFACE_DEF (url, get_flags),
 	{"get_redirected", lua_url_get_phished},
+	LUA_INTERFACE_DEF (url, set_redirected),
 	{"__tostring", lua_url_tostring},
 	{NULL, NULL}
 };
@@ -108,6 +110,17 @@ lua_check_url (lua_State * L, gint pos)
 	return ud ? ((struct rspamd_lua_url *)ud) : NULL;
 }
 
+static void
+lua_url_single_inserter (struct rspamd_url *url, gsize start_offset,
+						 gsize end_offset, gpointer ud)
+{
+	lua_State *L = ud;
+	struct rspamd_lua_url *lua_url;
+
+	lua_url = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
+	rspamd_lua_setclass (L, "rspamd{url}", -1);
+	lua_url->url = url;
+}
 
 /***
  * @method url:get_length()
@@ -462,6 +475,70 @@ lua_url_get_phished (lua_State *L)
 }
 
 /***
+ * @method url:set_redirected(url,[ pool])
+ * Set url as redirected to another url
+ * @param {string|url} url new url that is redirecting an old one
+ * @param {pool} pool if url is a string this is required for parsing
+ * @return {url} parsed redirected url (if needed)
+ */
+static gint
+lua_url_set_redirected (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_url *url = lua_check_url (L, 1), *redir;
+	rspamd_mempool_t *pool = NULL;
+
+	if (url == NULL) {
+		return luaL_error (L, "url is required as the first argument");
+	}
+
+	if (lua_type (L, 2) == LUA_TSTRING) {
+		/* Parse url */
+		if (lua_type (L, 3) != LUA_TUSERDATA) {
+			return luaL_error (L, "mempool is required as the third argument");
+		}
+
+		pool = rspamd_lua_check_mempool (L, 3);
+
+		if (pool == NULL) {
+			return luaL_error (L, "mempool is required as the third argument");
+		}
+
+		gsize len;
+		const gchar *urlstr = lua_tolstring (L, 2, &len);
+
+		rspamd_url_find_single (pool, urlstr, len, RSPAMD_URL_FIND_ALL,
+				lua_url_single_inserter, L);
+
+		if (lua_type (L, -1) != LUA_TUSERDATA) {
+			/* URL is actually not found */
+			lua_pushnil (L);
+		}
+		else {
+			redir = lua_check_url (L, -1);
+
+			url->url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
+			url->url->phished_url = redir->url;
+		}
+	}
+	else {
+		redir = lua_check_url (L, 2);
+
+		if (redir == NULL) {
+			return luaL_error (L, "url is required as the second argument");
+		}
+
+		url->url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
+		url->url->phished_url = redir->url;
+
+		/* Push back on stack */
+		lua_pushvalue (L, 2);
+	}
+
+	return 1;
+}
+
+/***
  * @method url:get_tld()
  * Get effective second level domain part (eSLD) of the url host
  * @return {string} effective second level domain part (eSLD) of the url host
@@ -623,18 +700,6 @@ lua_url_to_table (lua_State *L)
 	}
 
 	return 1;
-}
-
-static void
-lua_url_single_inserter (struct rspamd_url *url, gsize start_offset,
-		gsize end_offset, gpointer ud)
-{
-	lua_State *L = ud;
-	struct rspamd_lua_url *lua_url;
-
-	lua_url = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
-	rspamd_lua_setclass (L, "rspamd{url}", -1);
-	lua_url->url = url;
 }
 
 
