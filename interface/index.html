@@ -219,20 +219,6 @@
 								</div>
 							</form>
 						</div>
-						<div id="scanResult" style="display: none;">
-							<h4>Scan results:</h4>
-							<div class="well nomargin nopadding">
-								<table class="table table-log table-hover" id="scanOutput">
-									<thead>
-										<tr>
-											<th class="col4" title="Action">Action</th>
-											<th class="col5" title="Score / Req.&nbsp;score">Score / Req.&nbsp;score</th>
-											<th class="col6" title="Symbols">Symbols</th>
-										</tr>
-									</thead>
-								</table>
-							</div>
-						</div>
 					</div>
 				</div>
 				<div class="widget-box learn" style="display: none;">
@@ -274,6 +260,31 @@
 						</div>
 					</div>
 				</div>
+
+				<div class="widget-box">
+					<div class="widget-title">
+						<div id="scanResult" class="form-inline widget-title-form input-group-sm pull-right buttons">
+								<label for="selSymOrder_scan">Symbols order:</label>
+								<select id="selSymOrder_scan" class="form-control">
+									<option value="magnitude" selected>Score magnitude</option>
+									<option value="score">Score value</option>
+									<option value="name">Name</option>
+								</select>
+							<label for="scan_page_size">Rows per page:</label>
+							<input id="scan_page_size" class="form-control" value="25" min="1" type="number">
+							<button class="btn btn-default btn-sm" id="cleanScanHistory">
+								<i class="glyphicon glyphicon-trash"></i> Clean history
+							</button>
+						</div>
+						<span class="icon"><i class="glyphicon glyphicon-eye-open"></i></span>
+						<h5>Scan results history</h5>
+					</div>
+					<div class="widget-content nopadding">
+						<div id="scanLog">
+							<table class="table" id="historyTable_scan"></table>
+						</div>
+					</div>
+				</div>
 			</div>
 
 			<div class="tab-pane" id="history">
@@ -281,8 +292,8 @@
 				<div class="widget-box">
 					<div class="widget-title">
 						<div class="form-inline widget-title-form input-group-sm pull-right buttons">
-								<label for="selSymOrder">Symbols order:</label>
-								<select id="selSymOrder" class="form-control">
+								<label for="selSymOrder_history">Symbols order:</label>
+								<select id="selSymOrder_history" class="form-control">
 									<option value="magnitude" selected>Score magnitude</option>
 									<option value="score">Score value</option>
 									<option value="name">Name</option>
@@ -301,7 +312,7 @@
 					</div>
 					<div class="widget-content nopadding">
 						<div id="historyLog">
-							<table class="table" id="historyTable"></table>
+							<table class="table" id="historyTable_history"></table>
 						</div>
 					</div>
 				</div>

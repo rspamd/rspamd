@@ -23,7 +23,7 @@
  THE SOFTWARE.
  */
 
-/* global jQuery:false, Visibility:false */
+/* global jQuery:false, FooTable:false, Visibility:false */
 
 define(["jquery", "d3pie", "visibility", "nprogress", "stickytabs", "app/stats", "app/graph", "app/config",
     "app/symbols", "app/history", "app/upload"],
@@ -31,14 +31,25 @@ define(["jquery", "d3pie", "visibility", "nprogress", "stickytabs", "app/stats",
 function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_config,
     tab_symbols, tab_history, tab_upload) {
     "use strict";
-    // begin
+    var ui = {
+        page_size: {
+            scan: 25,
+            errors: 25,
+            history: 25
+        },
+        symbols: {
+            scan: [],
+            history: []
+        }
+    };
+
     var graphs = {};
     var tables = {};
     var neighbours = []; // list of clusters
     var checked_server = "All SERVERS";
-    var ui = {};
     var timer_id = [];
     var selData = null; // Graph's dataset selector state
+    var symbolDescriptions = {};
 
     NProgress.configure({
         minimum: 0.01,
@@ -124,14 +135,71 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         }, 1000);
     }
 
-    // @return password
+    function drawTooltips() {
+        // Update symbol description tooltips
+        $.each(symbolDescriptions, function (key, description) {
+            $("abbr[data-sym-key=" + key + "]").tooltip({
+                placement: "bottom",
+                html: true,
+                title: description
+            });
+        });
+    }
+
     function getPassword() {
         return sessionStorage.getItem("Password");
     }
 
-    // @save credentials
+    // Get selectors' current state
+    function getSelector(id) {
+        var e = document.getElementById(id);
+        return e.options[e.selectedIndex].value;
+    }
+
+    function get_compare_function(table) {
+        var compare_functions = {
+            magnitude: function (e1, e2) {
+                return Math.abs(e2.score) - Math.abs(e1.score);
+            },
+            name: function (e1, e2) {
+                return e1.name.localeCompare(e2.name);
+            },
+            score: function (e1, e2) {
+                return e2.score - e1.score;
+            }
+        };
+
+        return compare_functions[getSelector("selSymOrder_" + table)];
+    }
+
     function saveCredentials(password) {
         sessionStorage.setItem("Password", password);
+    }
+
+    function set_page_size(table, page_size, callback) {
+        var n = parseInt(page_size, 10); // HTML Input elements return string representing a number
+        if (n !== ui.page_size[table] && n > 0) {
+            ui.page_size[table] = n;
+            if (callback) {
+                return callback(n);
+            }
+        }
+        return null;
+    }
+
+    function sort_symbols(o, compare_function) {
+        return Object.keys(o)
+            .map(function (key) {
+                return o[key];
+            })
+            .sort(compare_function)
+            .map(function (e) { return e.str; })
+            .join("<br>\n");
+    }
+
+    function unix_time_format(tm) {
+        var date = new Date(tm ? tm * 1000 : 0);
+        return date.toLocaleString();
     }
 
     function displayUI() {
@@ -307,8 +375,8 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
         tab_config.setup(ui);
         tab_history.setup(ui, tables);
         tab_symbols.setup(ui, tables);
-        tab_upload.setup(ui);
-        selData = tab_graph.setup();
+        tab_upload.setup(ui, tables);
+        selData = tab_graph.setup(ui);
     };
 
     ui.connect = function () {
@@ -460,6 +528,7 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
     };
 
     ui.getPassword = getPassword;
+    ui.getSelector = getSelector;
 
     /**
      * @param {string} url - A string containing the URL to which the request is sent
@@ -534,6 +603,330 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
             }
             queryServer(neighbours_status, 0, url, o);
         }
+    };
+
+    // Scan and History shared functions
+
+    ui.drawTooltips = drawTooltips;
+    ui.unix_time_format = unix_time_format;
+    ui.set_page_size = set_page_size;
+
+    ui.bindHistoryTableEventHandlers = function (table, symbolsCol) {
+        function change_symbols_order(order) {
+            $(".btn-sym-" + table + "-" + order).addClass("active").siblings().removeClass("active");
+            var compare_function = get_compare_function(table);
+            $.each(tables[table].rows.all, function (i, row) {
+                var cell_val = sort_symbols(ui.symbols[table][i], compare_function);
+                row.cells[symbolsCol].val(cell_val, false, true);
+            });
+            drawTooltips();
+        }
+
+        $("#selSymOrder_" + table).unbind().change(function () {
+            var order = this.value;
+            change_symbols_order(order);
+        });
+        $("#" + table + "_page_size").change(function () {
+            set_page_size(table, this.value, function (n) { tables[table].pageSize(n); });
+        });
+        $(document).on("click", ".btn-sym-order-" + table + " button", function () {
+            var order = this.value;
+            $("#selSymOrder_" + table).val(order);
+            change_symbols_order(order);
+        });
+    };
+
+    ui.destroyTable = function (table) {
+        if (tables[table]) {
+            tables[table].destroy();
+            delete tables[table];
+        }
+    };
+
+
+    ui.initHistoryTable = function (rspamd, data, items, table, columns, expandFirst) {
+        /* eslint-disable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
+        FooTable.actionFilter = FooTable.Filtering.extend({
+            construct: function (instance) {
+                this._super(instance);
+                this.actions = ["reject", "add header", "greylist",
+                    "no action", "soft reject", "rewrite subject"];
+                this.def = "Any action";
+                this.$action = null;
+            },
+            $create: function () {
+                this._super();
+                var self = this, $form_grp = $("<div/>", {
+                    class: "form-group"
+                }).append($("<label/>", {
+                    class: "sr-only",
+                    text: "Action"
+                })).prependTo(self.$form);
+
+                self.$action = $("<select/>", {
+                    class: "form-control"
+                }).on("change", {
+                    self: self
+                }, self._onStatusDropdownChanged).append(
+                    $("<option/>", {
+                        text: self.def
+                    })).appendTo($form_grp);
+
+                $.each(self.actions, function (i, action) {
+                    self.$action.append($("<option/>").text(action));
+                });
+            },
+            _onStatusDropdownChanged: function (e) {
+                var self = e.data.self, selected = $(this).val();
+                if (selected !== self.def) {
+                    if (selected === "reject") {
+                        self.addFilter("action", "reject -soft", ["action"]);
+                    } else {
+                        self.addFilter("action", selected, ["action"]);
+                    }
+                } else {
+                    self.removeFilter("action");
+                }
+                self.filter();
+            },
+            draw: function () {
+                this._super();
+                var action = this.find("action");
+                if (action instanceof FooTable.Filter) {
+                    if (action.query.val() === "reject -soft") {
+                        this.$action.val("reject");
+                    } else {
+                        this.$action.val(action.query.val());
+                    }
+                } else {
+                    this.$action.val(this.def);
+                }
+            }
+        });
+        /* eslint-enable consistent-this, no-underscore-dangle, one-var-declaration-per-line */
+
+        tables[table] = FooTable.init("#historyTable_" + table, {
+            columns: columns,
+            rows: items,
+            expandFirst: expandFirst,
+            paging: {
+                enabled: true,
+                limit: 5,
+                size: ui.page_size[table]
+            },
+            filtering: {
+                enabled: true,
+                position: "left",
+                connectors: false
+            },
+            sorting: {
+                enabled: true
+            },
+            components: {
+                filtering: FooTable.actionFilter
+            },
+            on: {
+                "ready.ft.table": drawTooltips,
+                "after.ft.sorting": drawTooltips,
+                "after.ft.paging": drawTooltips,
+                "after.ft.filtering": drawTooltips,
+                "expand.ft.row": function (e, ft, row) {
+                    setTimeout(function () {
+                        var detail_row = row.$el.next();
+                        var order = getSelector("selSymOrder_" + table);
+                        detail_row.find(".btn-sym-" + table + "-" + order)
+                            .addClass("active").siblings().removeClass("active");
+                    }, 5);
+                }
+            }
+        });
+    };
+
+    ui.preprocess_item = function (rspamd, item) {
+        function escapeHTML(string) {
+            var htmlEscaper = /[&<>"'/`=]/g;
+            var htmlEscapes = {
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                "\"": "&quot;",
+                "'": "&#39;",
+                "/": "&#x2F;",
+                "`": "&#x60;",
+                "=": "&#x3D;"
+            };
+            return String(string).replace(htmlEscaper, function (match) {
+                return htmlEscapes[match];
+            });
+        }
+        function escape_HTML_array(arr) {
+            arr.forEach(function (d, i) { arr[i] = escapeHTML(d); });
+        }
+
+        for (var prop in item) {
+            if (!{}.hasOwnProperty.call(item, prop)) continue;
+            switch (prop) {
+                case "rcpt_mime":
+                case "rcpt_smtp":
+                    escape_HTML_array(item[prop]);
+                    break;
+                case "symbols":
+                    Object.keys(item.symbols).forEach(function (key) {
+                        var sym = item.symbols[key];
+                        if (!sym.name) {
+                            sym.name = key;
+                        }
+                        sym.name = escapeHTML(sym.name);
+                        if (sym.description) {
+                            sym.description = escapeHTML(sym.description);
+                        }
+
+                        if (sym.options) {
+                            escape_HTML_array(sym.options);
+                        }
+                    });
+                    break;
+                default:
+                    if (typeof item[prop] === "string") {
+                        item[prop] = escapeHTML(item[prop]);
+                    }
+            }
+        }
+
+        if (item.action === "clean" || item.action === "no action") {
+            item.action = "<div style='font-size:11px' class='label label-success'>" + item.action + "</div>";
+        } else if (item.action === "rewrite subject" || item.action === "add header" || item.action === "probable spam") {
+            item.action = "<div style='font-size:11px' class='label label-warning'>" + item.action + "</div>";
+        } else if (item.action === "spam" || item.action === "reject") {
+            item.action = "<div style='font-size:11px' class='label label-danger'>" + item.action + "</div>";
+        } else {
+            item.action = "<div style='font-size:11px' class='label label-info'>" + item.action + "</div>";
+        }
+
+        var score_content = (item.score < item.required_score)
+            ? "<span class='text-success'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>"
+            : "<span class='text-danger'>" + item.score.toFixed(2) + " / " + item.required_score + "</span>";
+
+        item.score = {
+            options: {
+                sortValue: item.score
+            },
+            value: score_content
+        };
+    };
+
+    ui.process_history_v2 = function (rspamd, data, table) {
+        // Display no more than rcpt_lim recipients
+        var rcpt_lim = 3;
+        var items = [];
+        var unsorted_symbols = [];
+        var compare_function = get_compare_function(table);
+
+        $("#selSymOrder_" + table + ", label[for='selSymOrder_" + table + "']").show();
+
+        $.each(data.rows,
+            function (i, item) {
+                function more(p) {
+                    var l = item[p].length;
+                    return (l > rcpt_lim) ? " … (" + l + ")" : "";
+                }
+                function format_rcpt(smtp, mime) {
+                    var full = "";
+                    var shrt = "";
+                    if (smtp) {
+                        full = "[" + item.rcpt_smtp.join(", ") + "] ";
+                        shrt = "[" + item.rcpt_smtp.slice(0, rcpt_lim).join(",&#8203;") + more("rcpt_smtp") + "]";
+                        if (mime) {
+                            full += " ";
+                            shrt += " ";
+                        }
+                    }
+                    if (mime) {
+                        full += item.rcpt_mime.join(", ");
+                        shrt += item.rcpt_mime.slice(0, rcpt_lim).join(",&#8203;") + more("rcpt_mime");
+                    }
+                    return {full:full, shrt:shrt};
+                }
+
+                function get_symbol_class(name, score) {
+                    if (name.match(/^GREYLIST$/)) {
+                        return "symbol-special";
+                    }
+
+                    if (score < 0) {
+                        return "symbol-negative";
+                    } else if (score > 0) {
+                        return "symbol-positive";
+                    }
+                    return null;
+                }
+
+                rspamd.preprocess_item(rspamd, item);
+                Object.keys(item.symbols).forEach(function (key) {
+                    var sym = item.symbols[key];
+                    sym.str = '<span class="symbol-default ' + get_symbol_class(sym.name, sym.score) + '"><strong>';
+
+                    if (sym.description) {
+                        sym.str += '<abbr data-sym-key="' + key + '">' +
+                            sym.name + "</abbr></strong> (" + sym.score + ")</span>";
+                        // Store description for tooltip
+                        symbolDescriptions[key] = sym.description;
+                    } else {
+                        sym.str += sym.name + "</strong> (" + sym.score + ")</span>";
+                    }
+
+                    if (sym.options) {
+                        sym.str += " [" + sym.options.join(",") + "]";
+                    }
+                });
+                unsorted_symbols.push(item.symbols);
+                item.symbols = sort_symbols(item.symbols, compare_function);
+                if (table === "scan") {
+                    item.unix_time = (new Date()).getTime() / 1000;
+                }
+                item.time = {
+                    value: unix_time_format(item.unix_time),
+                    options: {
+                        sortValue: item.unix_time
+                    }
+                };
+                item.time_real = item.time_real.toFixed(3);
+                item.id = item["message-id"];
+
+                if (table === "history") {
+                    var rcpt = {};
+                    if (!item.rcpt_mime.length) {
+                        rcpt = format_rcpt(true, false);
+                    } else if ($(item.rcpt_mime).not(item.rcpt_smtp).length !== 0 || $(item.rcpt_smtp).not(item.rcpt_mime).length !== 0) {
+                        rcpt = format_rcpt(true, true);
+                    } else {
+                        rcpt = format_rcpt(false, true);
+                    }
+                    item.rcpt_mime_short = rcpt.shrt;
+                    item.rcpt_mime = rcpt.full;
+
+                    if (item.sender_mime !== item.sender_smtp) {
+                        item.sender_mime = "[" + item.sender_smtp + "] " + item.sender_mime;
+                    }
+                }
+                items.push(item);
+            });
+
+        return {items:items, symbols:unsorted_symbols};
+    };
+
+    ui.waitForRowsDisplayed = function (table, rows_total, callback, iteration) {
+        var i = (typeof iteration === "undefined") ? 10 : iteration;
+        var num_rows = $("#historyTable_" + table + " > tbody > tr:not(.footable-detail-row)").length;
+        if (num_rows === ui.page_size[table] ||
+            num_rows === rows_total) {
+            return callback();
+        } else if (--i) {
+            setTimeout(function () {
+                ui.waitForRowsDisplayed(table, rows_total, callback, i);
+            }, 500);
+        }
+        return null;
     };
 
     return ui;

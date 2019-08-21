@@ -59,9 +59,72 @@ define(["jquery"],
                 }
             });
         }
+
+        function columns_v2() {
+            return [{
+                name: "id",
+                title: "ID",
+                style: {
+                    "font-size": "11px",
+                    "minWidth": 130,
+                    "overflow": "hidden",
+                    "textOverflow": "ellipsis",
+                    "wordBreak": "break-all",
+                    "whiteSpace": "normal"
+                }
+            }, {
+                name: "action",
+                title: "Action",
+                style: {
+                    "font-size": "11px",
+                    "minwidth": 82
+                }
+            }, {
+                name: "score",
+                title: "Score",
+                style: {
+                    "font-size": "11px",
+                    "maxWidth": 110
+                },
+                sortValue: function (val) { return Number(val.options.sortValue); }
+            }, {
+                name: "symbols",
+                title: "Symbols<br /><br />" +
+                        '<span style="font-weight:normal;">Sort by:</span><br />' +
+                        '<div class="btn-group btn-group-xs btn-sym-order-scan" data-toggle="buttons">' +
+                            '<button type="button" class="btn btn-default btn-sym-scan-magnitude" value="magnitude">Magnitude</button>' +
+                            '<button type="button" class="btn btn-default btn-sym-scan-score" value="score">Value</button>' +
+                            '<button type="button" class="btn btn-default btn-sym-scan-name" value="name">Name</button>' +
+                        "</div>",
+                breakpoints: "all",
+                style: {
+                    "font-size": "11px",
+                    "width": 550,
+                    "maxWidth": 550
+                }
+            }, {
+                name: "time_real",
+                title: "Scan time",
+                breakpoints: "xs sm md",
+                style: {
+                    "font-size": "11px",
+                    "maxWidth": 72
+                },
+                sortValue: function (val) { return Number(val); }
+            }, {
+                sorted: true,
+                direction: "DESC",
+                name: "time",
+                title: "Time",
+                style: {
+                    "font-size": "11px"
+                },
+                sortValue: function (val) { return Number(val.options.sortValue); }
+            }];
+        }
+
         // @upload text
-        function scanText(rspamd, data, server) {
-            var items = [];
+        function scanText(rspamd, tables, data, server) {
             rspamd.query("checkv2", {
                 data: data,
                 params: {
@@ -72,58 +135,33 @@ define(["jquery"],
                     var json = neighbours_status[0].data;
                     if (json.action) {
                         rspamd.alertMessage("alert-success", "Data successfully scanned");
-                        var action = "";
 
-                        if (json.action === "clean" || json.action === "no action") {
-                            action = "label-success";
-                        } else if (json.action === "rewrite subject" || json.action === "add header" || json.action === "probable spam") {
-                            action = "label-warning";
-                        } else if (json.action === "spam") {
-                            action = "label-danger";
-                        }
+                        var rows_total = $("#historyTable_scan > tbody > tr:not(.footable-detail-row)").length + 1;
+                        var o = rspamd.process_history_v2(rspamd, {rows:[json]}, "scan");
+                        var items = o.items;
+                        rspamd.symbols.scan.push(o.symbols[0]);
 
-                        var score = "";
-                        if (json.score <= json.required_score) {
-                            score = "label-success";
-                        } else if (json.score >= json.required_score) {
-                            score = "label-danger";
-                        }
-                        $("<tbody id=\"tmpBody\"><tr>" +
-                            "<td><span class=\"label " + action + "\">" + json.action + "</span></td>" +
-                            "<td><span class=\"label " + score + "\">" + json.score.toFixed(2) + "/" + json.required_score.toFixed(2) + "</span></td>" +
-                            "</tr></tbody>")
-                            .insertAfter("#scanOutput thead");
-                        var sym_desc = {};
-                        var nsym = 0;
-
-                        $.each(json.symbols, function (i, item) {
-                            if (typeof item === "object") {
-                                var sym_id = "sym_" + nsym;
-                                if (item.description) {
-                                    sym_desc[sym_id] = item.description;
-                                }
-                                items.push("<div class=\"cell-overflow\" tabindex=\"1\"><abbr id=\"" + sym_id +
-                                "\">" + item.name + "</abbr>: " + item.score.toFixed(2) + "</div>");
-                                nsym++;
-                            }
-                        });
-                        $("<td/>", {
-                            id: "tmpSymbols",
-                            html: items.join("")
-                        }).appendTo("#scanResult");
-                        $("#tmpSymbols").insertAfter("#tmpBody td:last").removeAttr("id");
-                        $("#tmpBody").removeAttr("id");
-                        $("#scanResult").show();
-                        // Show tooltips
-                        $.each(sym_desc, function (k, v) {
-                            $("#" + k).tooltip({
-                                placement: "bottom",
-                                title: v
+                        if (Object.prototype.hasOwnProperty.call(tables, "scan")) {
+                            tables.scan.rows.load(items, true);
+                            // Is there a way to get an event when all rows are loaded?
+                            rspamd.waitForRowsDisplayed("scan", rows_total, function () {
+                                rspamd.drawTooltips();
+                                $("html, body").animate({
+                                    scrollTop: $("#scanResult").offset().top
+                                }, 1000);
                             });
-                        });
-                        $("html, body").animate({
-                            scrollTop: $("#scanResult").offset().top
-                        }, 1000);
+                        } else {
+                            rspamd.destroyTable("scan");
+                            // Is there a way to get an event when the table is destroyed?
+                            setTimeout(function () {
+                                rspamd.initHistoryTable(rspamd, data, items, "scan", columns_v2(), true);
+                                rspamd.waitForRowsDisplayed("scan", rows_total, function () {
+                                    $("html, body").animate({
+                                        scrollTop: $("#scanResult").offset().top
+                                    }, 1000);
+                                });
+                            }, 200);
+                        }
                     } else {
                         rspamd.alertMessage("alert-error", "Cannot scan data");
                     }
@@ -144,12 +182,19 @@ define(["jquery"],
             });
         }
 
-        ui.setup = function (rspamd) {
-            function getSelector(id) {
-                var e = document.getElementById(id);
-                return e.options[e.selectedIndex].value;
-            }
+        ui.setup = function (rspamd, tables) {
+            rspamd.set_page_size("scan", $("#scan_page_size").val());
+            rspamd.bindHistoryTableEventHandlers("scan", 3);
 
+            $("#cleanScanHistory").off("click");
+            $("#cleanScanHistory").on("click", function (e) {
+                e.preventDefault();
+                if (!confirm("Are you sure you want to clean scan history?")) { // eslint-disable-line no-alert
+                    return;
+                }
+                rspamd.destroyTable("scan");
+                rspamd.symbols.scan.length = 0;
+            });
             $("#scan button").attr("disabled", true);
             $("textarea").on("input", function () {
                 var $this = $(this);
@@ -176,9 +221,9 @@ define(["jquery"],
                     : {};
                 if ($.trim(data).length > 0) {
                     if (source === "scan") {
-                        var checked_server = getSelector("selSrv");
+                        var checked_server = rspamd.getSelector("selSrv");
                         var server = (checked_server === "All SERVERS") ? "local" : checked_server;
-                        scanText(rspamd, data, server);
+                        scanText(rspamd, tables, data, server);
                     } else {
                         uploadText(rspamd, data, source, headers);
                     }

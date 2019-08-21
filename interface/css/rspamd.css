@@ -502,17 +502,17 @@ td.maps-cell {
 }
 
 /* history table */
-#historyTable > tbody > tr > td,
-#historyTable > thead > tr > th {
+#historyTable_scan > tbody > tr > td,
+#historyTable_scan > thead > tr > th,
+#historyTable_history > tbody > tr > td,
+#historyTable_history > thead > tr > th {
     padding: 4px;
 }
-#historyTable > thead > tr > th {
+#historyTable_scan > thead > tr > th,
+#historyTable_history > thead > tr > th {
     padding-right: 20px;
 }
 
-#selSymOrder {
-    height: auto;
-}
 .widget-title-form label {
     font-size: 12px;
     font-weight: normal;
