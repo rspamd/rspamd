@@ -681,27 +681,30 @@ exports.filter_specific_urls = function (urls, params)
     return false
   end
 
-  local function process_single_url(u)
-    local priority = 1 -- Normal priority
-    local esld = u:get_tld()
+  local function process_single_url(u, default_priority)
+    local priority = default_priority or 1 -- Normal priority
 
-    if params.ignore_redirected and u:is_redirected() then
+    if u:is_redirected() then
       local redir = u:get_redirected() -- get the real url
-      local redir_tld = redir:get_tld()
 
-      if redir_tld then
-        -- Ignore redirected as it should also be in the hash
-        return
+      if params.ignore_redirected then
+        -- Replace `u` with redir
+        u = redir
+        priority = 2
+      else
+        -- Process both redirected url and the original one
+        process_single_url(redir, 2)
       end
     end
 
+    local esld = u:get_tld()
     local str_hash = tostring(u)
 
     if esld then
       -- Special cases
       if (u:get_protocol() ~= 'mailto') and (not u:is_html_displayed()) then
         if u:is_obscured() then
-          priority = 2
+          priority = 3
         else
           if u:get_user() then
             priority = 2
