@@ -462,9 +462,33 @@ exports.combine_selectors = function(_, selectors, delimiter)
 end
 
 --[[[
+-- @function lua_selectors.flatten_selectors(selectors)
+-- Convert selectors to a flat table of elements
+--]]
+exports.flatten_selectors = function(selectors)
+  local res = {}
+
+  local function fill(tbl)
+    for _,s in ipairs(tbl) do
+      if type(s) == 'string' then
+        rawset(res, #res + 1, s)
+      elseif type(s) == 'userdata' then
+        rawset(res, #res + 1, tostring(s))
+      else
+        fill(s)
+      end
+    end
+  end
+
+  fill(selectors)
+
+  return res
+end
+
+--[[[
 -- @function lua_selectors.create_closure(cfg, selector_str, delimiter='')
 --]]
-exports.create_selector_closure = function(cfg, selector_str, delimiter)
+exports.create_selector_closure = function(cfg, selector_str, delimiter, flatten)
   local selector = exports.parse_selector(cfg, selector_str)
 
   if not selector then
@@ -475,7 +499,11 @@ exports.create_selector_closure = function(cfg, selector_str, delimiter)
     local res = exports.process_selectors(task, selector)
 
     if res then
-      return exports.combine_selectors(nil, res, delimiter)
+      if flatten then
+        return exports.flatten_selectors(res)
+      else
+        return exports.combine_selectors(nil, res, delimiter)
+      end
     end
 
     return nil
