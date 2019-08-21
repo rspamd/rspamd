@@ -25,6 +25,7 @@ local rspamd_util = require 'rspamd_util'
 local fun = require 'fun'
 local lua_util = require 'lua_util'
 local ts = require("tableshape").types
+local selectors = require "lua_selectors"
 local bit = require 'bit'
 
 -- This plugin implements various types of RBL checks
@@ -35,6 +36,23 @@ local E = {}
 local N = 'rbl'
 
 local local_exclusions
+local white_symbols = {}
+local black_symbols = {}
+local monitored_addresses = {}
+
+local function get_monitored(rbl)
+  local default_monitored = '1.0.0.127'
+
+  if rbl.monitored_address then
+    return rbl.monitored_address
+  end
+
+  if rbl.dkim or rbl.url or rbl.email then
+    default_monitored = 'facebook.com' -- should never be blacklisted
+  end
+
+  return default_monitored
+end
 
 local function validate_dns(lstr)
   if lstr:match('%.%.') then
@@ -43,7 +61,7 @@ local function validate_dns(lstr)
   end
   for v in lstr:gmatch('[^%.]+') do
     if not v:match('^[%w-]+$') or v:len() > 63
-      or v:match('^-') or v:match('-$') then
+        or v:match('^-') or v:match('-$') then
       -- too long label or weird labels
       return false
     end
@@ -96,11 +114,11 @@ local function gen_check_rcvd_conditions(rbl, received_total)
   local function basic_received_check(rh)
     if not (rh['real_ip'] and rh['real_ip']:is_valid()) then return false end
     if ((rh['real_ip']:get_version() == 6 and rbl['ipv6']) or
-      (rh['real_ip']:get_version() == 4 and rbl['ipv4'])) and
-      ((rbl['exclude_private_ips'] and not rh['real_ip']:is_local()) or
-      not rbl['exclude_private_ips']) and ((rbl['exclude_local_ips'] and
-      not is_excluded_ip(rh['real_ip'])) or not rbl['exclude_local_ips']) then
-        return true
+        (rh['real_ip']:get_version() == 4 and rbl['ipv4'])) and
+        ((rbl['exclude_private_ips'] and not rh['real_ip']:is_local()) or
+            not rbl['exclude_private_ips']) and ((rbl['exclude_local_ips'] and
+        not is_excluded_ip(rh['real_ip'])) or not rbl['exclude_local_ips']) then
+      return true
     else
       return false
     end
@@ -404,6 +422,16 @@ local function gen_rbl_callback(rule)
     return true
   end
 
+  local function check_selector(task, requests_table)
+    local res = rule.selector(task)
+
+    if res then
+      for _,r in ipairs(res) do
+        add_dns_request(r, false, requests_table)
+      end
+    end
+  end
+
   -- Create function pipeline depending on rbl settings
   local pipeline = {
     is_alive, -- generic for all
@@ -439,6 +467,10 @@ local function gen_rbl_callback(rule)
 
   if rule.rdns then
     pipeline[#pipeline + 1] = check_rdns
+  end
+
+  if rule.selector then
+    pipeline[#pipeline + 1] = check_selector
   end
 
   return function(task)
@@ -480,105 +512,6 @@ local function gen_rbl_callback(rule)
   end
 end
 
--- Configuration
-local opts = rspamd_config:get_all_opt(N)
-if not (opts and type(opts) == 'table') then
-  rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
-  lua_util.disable_module(N, "config")
-  return
-end
-
--- Plugin defaults should not be changed - override these in config
--- New defaults should not alter behaviour
-local default_defaults = {
-  ['default_enabled'] = true,
-  ['default_ipv4'] = true,
-  ['default_ipv6'] = true,
-  ['default_received'] = false,
-  ['default_from'] = true,
-  ['default_unknown'] = false,
-  ['default_rdns'] = false,
-  ['default_helo'] = false,
-  ['default_dkim'] = false,
-  ['default_dkim_domainonly'] = true,
-  ['default_emails'] = false,
-  ['default_emails_domainonly'] = false,
-  ['default_exclude_private_ips'] = true,
-  ['default_exclude_users'] = false,
-  ['default_exclude_local'] = true,
-  ['default_is_whitelist'] = false,
-  ['default_ignore_whitelist'] = false,
-}
--- Enrich with defaults
-for default, default_v in pairs(default_defaults) do
-  if opts[default] == nil then
-    opts[default] = default_v
-  end
-end
-
-if(opts['local_exclude_ip_map'] ~= nil) then
-  local_exclusions = rspamd_map_add(N, 'local_exclude_ip_map', 'radix',
-    'RBL exclusions map')
-end
-
-local white_symbols = {}
-local black_symbols = {}
-
-local rule_schema = ts.shape({
-  enabled = ts.boolean:is_optional(),
-  disabled = ts.boolean:is_optional(),
-  rbl = ts.string,
-  symbol = ts.string:is_optional(),
-  returncodes = ts.map_of(
-      ts.string / string.upper, -- Symbol name
-      (
-          ts.array_of(ts.string) +
-              (ts.string / function(s)
-                return { s }
-              end) -- List of IP patterns
-      )
-  ):is_optional(),
-  returnbits = ts.map_of(
-      ts.string / string.upper, -- Symbol name
-      (
-          ts.array_of(ts.number + ts.string / tonumber) +
-              (ts.string / function(s)
-                return { tonumber(s) }
-              end) +
-              (ts.number / function(s)
-                return { s }
-              end)
-      )
-  ):is_optional(),
-  whitelist_exception = (
-      ts.array_of(ts.string) + (ts.string / function(s) return {s} end)
-  ):is_optional(),
-  local_exclude_ip_map = ts.string:is_optional(),
-  hash = ts.one_of{"sha1", "sha256", "sha384", "sha512", "md5", "blake2"}:is_optional(),
-  hash_format = ts.one_of{"hex", "base32", "base64"}:is_optional(),
-  hash_len = (ts.integer + ts.string / tonumber):is_optional(),
-  monitored_address = ts.string:is_optional(),
-}, {
-  extra_fields = ts.map_of(ts.string, ts.boolean)
-})
-
-
-local monitored_addresses = {}
-
-local function get_monitored(rbl)
-  local default_monitored = '1.0.0.127'
-
-  if rbl.monitored_address then
-    return rbl.monitored_address
-  end
-
-  if rbl.dkim or rbl.url or rbl.email then
-    default_monitored = 'facebook.com' -- should never be blacklisted
-  end
-
-  return default_monitored
-end
-
 local function add_rbl(key, rbl)
   if not rbl.symbol then
     rbl.symbol = key:upper()
@@ -589,12 +522,26 @@ local function add_rbl(key, rbl)
     flags_tbl[#flags_tbl + 1] = 'nice'
   end
 
-  if not (rbl.dkim or rbl.emails or rbl.received) then
+  -- Check if rbl is available for empty tasks
+  if not (rbl.emails or rbl.urls or rbl.dkim or rbl.received or rbl.selector) or
+      rbl.is_empty then
     flags_tbl[#flags_tbl + 1] = 'empty'
   end
 
+  if rbl.selector then
+    -- Create a flattened closure
+    local sel = selectors.create_selector_closure(rspamd_config, rbl.selector, '', true)
+
+    if not sel then
+      rspamd_logger.errx('invalid selector for rbl rule %s: %s', key, rbl.selector)
+      return false
+    end
+
+    rbl.selector = sel
+  end
+
   local id = rspamd_config:register_symbol{
-    type = 'callback',
+    type = 'normal',
     callback = gen_rbl_callback(rbl),
     name = rbl.symbol,
     flags = table.concat(flags_tbl, ',')
@@ -667,16 +614,97 @@ local function add_rbl(key, rbl)
           })
     end
   end
+
+  return true
 end
+
+-- Configuration
+local opts = rspamd_config:get_all_opt(N)
+if not (opts and type(opts) == 'table') then
+  rspamd_logger.infox(rspamd_config, 'Module is unconfigured')
+  lua_util.disable_module(N, "config")
+  return
+end
+
+-- Plugin defaults should not be changed - override these in config
+-- New defaults should not alter behaviour
+local default_options = {
+  ['default_enabled'] = true,
+  ['default_ipv4'] = true,
+  ['default_ipv6'] = true,
+  ['default_received'] = false,
+  ['default_from'] = true,
+  ['default_unknown'] = false,
+  ['default_rdns'] = false,
+  ['default_helo'] = false,
+  ['default_dkim'] = false,
+  ['default_dkim_domainonly'] = true,
+  ['default_emails'] = false,
+  ['default_urls'] = false,
+  ['default_emails_domainonly'] = false,
+  ['default_exclude_private_ips'] = true,
+  ['default_exclude_users'] = false,
+  ['default_exclude_local'] = true,
+  ['default_is_whitelist'] = false,
+  ['default_ignore_whitelist'] = false,
+}
+
+opts = lua_util.override_defaults(default_options, opts)
+
+if(opts['local_exclude_ip_map'] ~= nil) then
+  local_exclusions = rspamd_map_add(N, 'local_exclude_ip_map', 'radix',
+    'RBL exclusions map')
+end
+
+local rule_schema = ts.shape({
+  enabled = ts.boolean:is_optional(),
+  disabled = ts.boolean:is_optional(),
+  rbl = ts.string,
+  selector = ts.string:is_optional(),
+  symbol = ts.string:is_optional(),
+  returncodes = ts.map_of(
+      ts.string / string.upper, -- Symbol name
+      (
+          ts.array_of(ts.string) +
+              (ts.string / function(s)
+                return { s }
+              end) -- List of IP patterns
+      )
+  ):is_optional(),
+  returnbits = ts.map_of(
+      ts.string / string.upper, -- Symbol name
+      (
+          ts.array_of(ts.number + ts.string / tonumber) +
+              (ts.string / function(s)
+                return { tonumber(s) }
+              end) +
+              (ts.number / function(s)
+                return { s }
+              end)
+      )
+  ):is_optional(),
+  whitelist_exception = (
+      ts.array_of(ts.string) + (ts.string / function(s) return {s} end)
+  ):is_optional(),
+  local_exclude_ip_map = ts.string:is_optional(),
+  hash = ts.one_of{"sha1", "sha256", "sha384", "sha512", "md5", "blake2"}:is_optional(),
+  hash_format = ts.one_of{"hex", "base32", "base64"}:is_optional(),
+  hash_len = (ts.integer + ts.string / tonumber):is_optional(),
+  monitored_address = ts.string:is_optional(),
+  requests_limit = (ts.integer + ts.string / tonumber):is_optional(),
+}, {
+  extra_fields = ts.map_of(ts.string, ts.boolean)
+})
 
 for key,rbl in pairs(opts.rbls or opts.rules) do
   if type(rbl) ~= 'table' or rbl.disabled == true or rbl.enabled == false then
     rspamd_logger.infox(rspamd_config, 'disable rbl "%s"', key)
   else
-    for default,_ in pairs(default_defaults) do
-      local rbl_opt = default:sub(#('default_') + 1)
+    -- Propagate default options from opts to rule
+    for default_opt_key,_ in pairs(default_options) do
+      local rbl_opt = default_opt_key:sub(#('default_') + 1)
       if rbl[rbl_opt] == nil then
-        rbl[rbl_opt] = opts[default]
+        rbl[rbl_opt] = opts[default_opt_key]
       end
     end
 
@@ -693,7 +721,6 @@ end
 -- We now create two symbols:
 -- * RBL_CALLBACK_WHITE that depends on all symbols white
 -- * RBL_CALLBACK that depends on all symbols black to participate in depends chains
-
 local function rbl_callback_white(task)
   local found_whitelist = false
   for _, w in ipairs(white_symbols) do
