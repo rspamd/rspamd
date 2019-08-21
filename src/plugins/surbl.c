@@ -1584,9 +1584,6 @@ process_dns_results (struct rspamd_task *task,
 					bit->bit);
 			rspamd_task_insert_result (task, bit->symbol, 1, resolved_name);
 
-			if (surbl_module_ctx->use_tags) {
-				rspamd_url_add_tag (uri, "surbl", bit->symbol, task->task_pool);
-			}
 			got_result = TRUE;
 		}
 	}
@@ -1605,10 +1602,6 @@ process_dns_results (struct rspamd_task *task,
 						resolved_name, suffix->suffix,
 						bit->bit);
 				rspamd_task_insert_result (task, bit->symbol, 1, resolved_name);
-
-				if (surbl_module_ctx->use_tags) {
-					rspamd_url_add_tag (uri, "surbl", bit->symbol, task->task_pool);
-				}
 			}
 		}
 	}
@@ -1618,10 +1611,6 @@ process_dns_results (struct rspamd_task *task,
 			msg_info_surbl ("domain [%s] is in surbl %s",
 					resolved_name, suffix->suffix);
 			rspamd_task_insert_result (task, suffix->symbol, 1, resolved_name);
-
-			if (surbl_module_ctx->use_tags) {
-				rspamd_url_add_tag (uri, "surbl", suffix->symbol, task->task_pool);
-			}
 		}
 		else {
 			ina.s_addr = addr;
@@ -1795,11 +1784,6 @@ surbl_redirector_finish (struct rspamd_http_connection *conn,
 				else {
 					existing->count ++;
 				}
-
-				if (surbl_module_ctx->use_tags) {
-					rspamd_url_add_tag (param->url, "redirector", urlstr,
-							task->task_pool);
-				}
 			}
 			else {
 				msg_info_surbl ("cannot parse redirector reply: %s", urlstr);
@@ -1877,38 +1861,6 @@ register_redirector_call (struct rspamd_url *url, struct rspamd_task *task,
 				rspamd_upstream_name (param->redirector),
 				rule);
 	}
-}
-
-static gboolean
-surbl_test_tags (struct rspamd_task *task, struct redirector_param *param,
-		struct rspamd_url *url)
-{
-	struct rspamd_url_tag *tag = NULL, *cur;
-	gchar *ftld = NULL;
-	rspamd_ftok_t tld;
-	gboolean processed = FALSE;
-
-	if (url->tags) {
-		tag = g_hash_table_lookup (url->tags, "surbl");
-	}
-
-	if (tag) {
-		tld.begin = url->tld;
-		tld.len = url->tldlen;
-
-		ftld = rspamd_mempool_ftokdup (task->task_pool, &tld);
-		/* We know results for this URL */
-
-		DL_FOREACH (tag, cur) {
-			msg_info_surbl ("domain [%s] is in surbl %s (tags)",
-					ftld, cur->data);
-			rspamd_task_insert_result (task, cur->data, 1, ftld);
-		}
-
-		processed = TRUE;
-	}
-
-	return processed;
 }
 
 static void
@@ -2025,15 +1977,6 @@ surbl_tree_url_callback (gpointer key, gpointer value, void *data)
 
 	msg_debug_surbl ("check url %*s in %s", url->urllen, url->string,
 			param->suffix->suffix);
-
-	if (surbl_module_ctx->use_tags && surbl_test_tags (param->task, param, url)) {
-		return;
-	}
-
-	if (url->tags && g_hash_table_lookup (url->tags, "redirector")) {
-		/* URL is redirected, skip from checks */
-		return;
-	}
 
 	make_surbl_requests (url, param->task, param->item, param->suffix, FALSE,
 			param->tree, surbl_module_ctx);
@@ -2323,11 +2266,6 @@ surbl_continue_process_handler (lua_State *L)
 							redirected_url);
 					redirected_url->phished_url = param->url;
 					redirected_url->flags |= RSPAMD_URL_FLAG_REDIRECTED;
-				}
-
-				if (surbl_module_ctx->use_tags) {
-					rspamd_url_add_tag (param->url, "redirector", urlstr,
-							task->task_pool);
 				}
 			}
 			else {

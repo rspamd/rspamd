@@ -3176,34 +3176,6 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 	}
 }
 
-void
-rspamd_url_add_tag (struct rspamd_url *url, const gchar *tag,
-		const gchar *value,
-		rspamd_mempool_t *pool)
-{
-	struct rspamd_url_tag *found, *ntag;
-
-	g_assert (url != NULL && tag != NULL && value != NULL);
-
-	if (url->tags == NULL) {
-		url->tags = g_hash_table_new (rspamd_strcase_hash, rspamd_strcase_equal);
-		rspamd_mempool_add_destructor (pool,
-				(rspamd_mempool_destruct_t)g_hash_table_unref, url->tags);
-	}
-
-	found = g_hash_table_lookup (url->tags, tag);
-
-	ntag = rspamd_mempool_alloc0 (pool, sizeof (*ntag));
-	ntag->data = rspamd_mempool_strdup (pool, value);
-
-	if (found == NULL) {
-		g_hash_table_insert (url->tags, rspamd_mempool_strdup (pool, tag),
-				ntag);
-	}
-
-	DL_APPEND (found, ntag);
-}
-
 guint
 rspamd_url_hash (gconstpointer u)
 {

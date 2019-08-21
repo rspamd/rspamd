@@ -59,10 +59,7 @@ LUA_FUNCTION_DEF (url, is_obscured);
 LUA_FUNCTION_DEF (url, is_html_displayed);
 LUA_FUNCTION_DEF (url, is_subject);
 LUA_FUNCTION_DEF (url, get_phished);
-LUA_FUNCTION_DEF (url, get_tag);
 LUA_FUNCTION_DEF (url, get_count);
-LUA_FUNCTION_DEF (url, get_tags);
-LUA_FUNCTION_DEF (url, add_tag);
 LUA_FUNCTION_DEF (url, get_visible);
 LUA_FUNCTION_DEF (url, create);
 LUA_FUNCTION_DEF (url, init);
@@ -87,9 +84,7 @@ static const struct luaL_reg urllib_m[] = {
 	LUA_INTERFACE_DEF (url, is_html_displayed),
 	LUA_INTERFACE_DEF (url, is_subject),
 	LUA_INTERFACE_DEF (url, get_phished),
-	LUA_INTERFACE_DEF (url, get_tag),
-	LUA_INTERFACE_DEF (url, get_tags),
-	LUA_INTERFACE_DEF (url, add_tag),
+
 	LUA_INTERFACE_DEF (url, get_visible),
 	LUA_INTERFACE_DEF (url, get_count),
 	LUA_INTERFACE_DEF (url, get_flags),
@@ -436,129 +431,6 @@ lua_url_is_subject (lua_State *L)
 	}
 
 	return 1;
-}
-
-/***
- * @method url:get_tag(tag)
- * Returns list of string for a specific tagname for an url
- * @return {table/strings} list of tags for an url
- */
-static gint
-lua_url_get_tag (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	struct rspamd_lua_url *url = lua_check_url (L, 1);
-	guint i;
-	const gchar *tag = luaL_checkstring (L, 2);
-	struct rspamd_url_tag *tval, *cur;
-
-	if (url != NULL && tag != NULL) {
-
-		if (url->url->tags == NULL) {
-			lua_createtable (L, 0, 0);
-		}
-		else {
-			tval = g_hash_table_lookup (url->url->tags, tag);
-
-			if (tval) {
-				lua_newtable (L);
-				i = 1;
-
-				DL_FOREACH (tval, cur) {
-					lua_pushstring (L, cur->data);
-					lua_rawseti (L, -2, i ++);
-				}
-
-				lua_settable (L, -3);
-			}
-			else {
-				lua_createtable (L, 0, 0);
-			}
-		}
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
-}
-
-
-/***
- * @method url:get_tags()
- * Returns list of string tags for an url
- * @return {table/strings} list of tags for an url
- */
-static gint
-lua_url_get_tags (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	struct rspamd_lua_url *url = lua_check_url (L, 1);
-	guint i;
-	GHashTableIter it;
-	struct rspamd_url_tag *tval, *cur;
-	gpointer k, v;
-
-	if (url != NULL) {
-		if (url->url->tags == NULL) {
-			lua_createtable (L, 0, 0);
-		}
-		else {
-			lua_createtable (L, 0, g_hash_table_size (url->url->tags));
-			g_hash_table_iter_init (&it, url->url->tags);
-
-			while (g_hash_table_iter_next (&it, &k, &v)) {
-				tval = v;
-				lua_pushstring (L, (const gchar *)k);
-				lua_newtable (L);
-				i = 1;
-
-				DL_FOREACH (tval, cur) {
-					lua_pushstring (L, cur->data);
-					lua_rawseti (L, -2, i ++);
-				}
-
-				lua_settable (L, -3);
-			}
-		}
-	}
-	else {
-		lua_pushnil (L);
-	}
-
-	return 1;
-}
-
-/***
- * @method url:add_tag(tag, mempool)
- * Adds a new tag for url
- * @param {string} tag new tag to add
- * @param {mempool} mempool memory pool (e.g. `task:get_pool()`)
- */
-static gint
-lua_url_add_tag (lua_State *L)
-{
-	LUA_TRACE_POINT;
-	struct rspamd_lua_url *url = lua_check_url (L, 1);
-	rspamd_mempool_t *mempool = rspamd_lua_check_mempool (L, 4);
-	const gchar *tag = luaL_checkstring (L, 2);
-	const gchar *value;
-
-	if (lua_type (L, 3) == LUA_TSTRING) {
-		value = lua_tostring (L, 3);
-	}
-	else {
-		value = "1"; /* Some stupid placeholder */
-	}
-
-	if (url != NULL && mempool != NULL && tag != NULL) {
-		rspamd_url_add_tag (url->url, tag, value, mempool);
-	}
-	else {
-		return luaL_error (L, "invalid arguments");
-	}
-
-	return 0;
 }
 
 /***
