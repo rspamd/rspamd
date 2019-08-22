@@ -547,14 +547,6 @@ if opts then
     end
   end
 
-  for ext,inner_tbl in pairs(settings.extension_map) do
-    for _,elt in ipairs(inner_tbl) do
-      if not lua_mime.reversed_extensions_map[elt.ct] then
-        lua_mime.reversed_extensions_map[elt.ct] = ext
-      end
-    end
-  end
-
   local map_type = 'map'
   if settings['regexp'] then map_type = 'regexp' end
   map = lua_maps.rspamd_map_add('mime_types', 'file', map_type,
