@@ -125,7 +125,7 @@ local function cache_url(task, orig_url, url, key, param)
     if err then
       rspamd_logger.errx(task, 'got error while setting redirect keys: %s', err)
     else
-      local ret = rspamd_redis_make_request(task,
+      local ret = lua_redis.redis_make_request(task,
         redis_params, -- connect params
         key, -- hash key
         false, -- is write
