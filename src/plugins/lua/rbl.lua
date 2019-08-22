@@ -541,7 +541,7 @@ local function add_rbl(key, rbl)
   end
 
   local id = rspamd_config:register_symbol{
-    type = 'normal',
+    type = 'callback',
     callback = gen_rbl_callback(rbl),
     name = rbl.symbol,
     flags = table.concat(flags_tbl, ',')
