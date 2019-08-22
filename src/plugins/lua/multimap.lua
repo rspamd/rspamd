@@ -624,11 +624,15 @@ local function multimap_callback(task, rule)
       end
     end
 
-    if r['filter'] or r['type'] == 'url' then
-      local fn = multimap_filters[r['type']]
+    if r.filter or r.type == 'url' then
+      local fn = multimap_filters[r.type]
 
       if fn then
-        value = fn(task, r['filter'], value, r)
+
+        local filtered_value = fn(task, r.filter, value, r)
+        lua_util.debugm(N, task, 'apply filter %s for rule %s: %s -> %s',
+            r.filter, r.symbol, value, filtered_value)
+        value = filtered_value
       end
     end
 
