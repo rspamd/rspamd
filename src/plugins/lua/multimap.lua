@@ -430,6 +430,8 @@ local function multimap_callback(task, rule)
   local pre_filter = rule['prefilter']
 
   local function match_element(r, value, callback)
+    lua_util.debugm(N, task, 'check value %s for multimap %s', value,
+        rule.symbol)
     if not value then
       return false
     end
@@ -877,6 +879,8 @@ local function multimap_callback(task, rule)
 
             if ext then
               local fake_fname = string.format('detected.%s', ext)
+              lua_util.debugm(N, task, 'detected filename %s (%s content-type)',
+                  fake_fname, detected_ct)
               match_filename(rule, fake_fname)
             end
           end
