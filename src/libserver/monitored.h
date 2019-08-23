@@ -34,8 +34,9 @@ enum rspamd_monitored_type {
 };
 
 enum rspamd_monitored_flags {
-	RSPAMD_MONITORED_DEFAULT = 0,
-	RSPAMD_MONITORED_RBL = (1 << 0),
+	RSPAMD_MONITORED_DEFAULT = 0u,
+	RSPAMD_MONITORED_RBL = (1u << 0u),
+	RSPAMD_MONITORED_RANDOM = (1u << 1u)
 };
 
 /**
