@@ -64,6 +64,7 @@ local function adjust_url(task, orig_url, redir_url)
 
   if redir_url then
     orig_url:set_redirected(redir_url)
+    task:inject_url(redir_url)
     if settings.redirector_symbol then
       task:insert_result(settings.redirector_symbol, 1.0,
           string.format('%s->%s', orig_url:get_host(), redir_url:get_host()))
