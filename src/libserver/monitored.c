@@ -203,7 +203,7 @@ static void
 rspamd_monitored_dns_random (struct rspamd_monitored *m,
 							 struct rspamd_dns_monitored_conf *conf)
 {
-	gchar random_prefix[64];
+	gchar random_prefix[32];
 	const gchar dns_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
 	gint len;
 
