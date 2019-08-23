@@ -699,7 +699,12 @@ exports.process_signing_settings = function(N, settings, opts)
     elseif k == 'vault_domains' then
       settings[k] = lua_maps.map_add(N, k, 'glob', 'DKIM signing domains in vault')
     elseif k == 'sign_condition' then
-      settings[k] = lua_util.callback_from_string(v)
+      local ret,f = lua_util.callback_from_string(v)
+      if ret then
+        settings[k] = f
+      else
+        logger.errx(rspamd_config, 'cannot load sign condition %s: %s', v, f)
+      end
     else
       settings[k] = v
     end

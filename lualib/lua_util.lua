@@ -1071,23 +1071,37 @@ end
 
 ---[[[
 -- @function lua_util.callback_from_string(str)
--- Converts a string like `return function(...) end` to lua function or emits error using
--- `rspamd_config` superglobal
--- @return function object or nil
+-- Converts a string like `return function(...) end` to lua function and return true and this function
+-- or returns false + error message
+-- @return status code and function object or an error message
 --]]]
-exports.callback_from_string = function(str)
+exports.callback_from_string = function(s)
   local loadstring = loadstring or load
-  local ret, res_or_err = pcall(loadstring(str))
 
-  if not ret or type(res_or_err) ~= 'function' then
-    local rspamd_logger = require "rspamd_logger"
-    rspamd_logger.errx(rspamd_config, 'invalid callback (%s) - must be a function',
-        res_or_err)
-
-    return nil
+  if not s or #s == 0 then
+    return false,'invalid or empty string'
   end
 
-  return res_or_err
+  s = exports.rspamd_str_trim(s)
+  local inp
+
+  if s:match('^return%s*function') then
+    -- 'return function', can be evaluated directly
+    inp = s
+  elseif s:match('^function%s*%(') then
+    inp = 'return ' .. s
+  else
+    -- Just a plain sequence
+    inp = 'return function(...)\n' .. s .. '; end'
+  end
+
+  local ret, res_or_err = pcall(loadstring(inp))
+
+  if not ret or type(res_or_err) ~= 'function' then
+    return false,res_or_err
+  end
+
+  return ret,res_or_err
 end
 
 ---[[[
