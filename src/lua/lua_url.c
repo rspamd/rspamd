@@ -102,7 +102,7 @@ static const struct luaL_reg urllib_f[] = {
 	{NULL, NULL}
 };
 
-static struct rspamd_lua_url *
+struct rspamd_lua_url *
 lua_check_url (lua_State * L, gint pos)
 {
 	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{url}");

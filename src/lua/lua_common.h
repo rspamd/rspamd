@@ -370,6 +370,8 @@ struct ev_loop *lua_check_ev_base (lua_State *L, gint pos);
 
 struct rspamd_dns_resolver *lua_check_dns_resolver (lua_State *L, gint pos);
 
+struct rspamd_lua_url *lua_check_url (lua_State * L, gint pos);
+
 enum rspamd_lua_parse_arguments_flags {
 	RSPAMD_LUA_PARSE_ARGUMENTS_DEFAULT = 0,
 	RSPAMD_LUA_PARSE_ARGUMENTS_IGNORE_MISSING,

@@ -430,11 +430,12 @@ local function multimap_callback(task, rule)
   local pre_filter = rule['prefilter']
 
   local function match_element(r, value, callback)
-    lua_util.debugm(N, task, 'check value %s for multimap %s', value,
-        rule.symbol)
     if not value then
       return false
     end
+
+    lua_util.debugm(N, task, 'check value %s for multimap %s', value,
+        rule.symbol)
 
     local ret = false
 

@@ -227,6 +227,12 @@ LUA_FUNCTION_DEF (task, get_urls);
  */
 LUA_FUNCTION_DEF (task, has_urls);
 /***
+ * @method task:inject_url(url)
+ * Inserts an url into a task (useful for redirected urls)
+ * @param {lua_url} url url to inject
+ */
+LUA_FUNCTION_DEF (task, inject_url);
+/***
  * @method task:get_content()
  * Get raw content for the specified task
  * @return {text} the data contained in the task
@@ -1092,6 +1098,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, append_message),
 	LUA_INTERFACE_DEF (task, has_urls),
 	LUA_INTERFACE_DEF (task, get_urls),
+	LUA_INTERFACE_DEF (task, inject_url),
 	LUA_INTERFACE_DEF (task, get_content),
 	LUA_INTERFACE_DEF (task, get_filename),
 	LUA_INTERFACE_DEF (task, get_rawbody),
@@ -2265,6 +2272,31 @@ lua_task_has_urls (lua_State * L)
 	lua_pushboolean (L, ret);
 
 	return 1;
+}
+
+static gint
+lua_task_inject_url (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	struct rspamd_lua_url *url = lua_check_url (L, 2);
+
+	if (task && task->message && url && url->url) {
+		struct rspamd_url *existing;
+
+		if ((existing = g_hash_table_lookup (MESSAGE_FIELD (task, urls),
+				url->url)) == NULL) {
+			g_hash_table_insert (MESSAGE_FIELD (task, urls), url->url, url->url);
+		}
+		else {
+			existing->count ++;
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
 }
 
 static gint
