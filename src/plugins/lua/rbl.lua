@@ -48,7 +48,7 @@ local function get_monitored(rbl)
   end
 
   if rbl.dkim or rbl.url or rbl.email then
-    default_monitored = 'facebook.com' -- should never be blacklisted
+    default_monitored = 'diuaotr7.ep1nmhjk' -- should never be blacklisted or whitelisted
   end
 
   return default_monitored
