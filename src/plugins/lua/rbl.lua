@@ -42,16 +42,21 @@ local monitored_addresses = {}
 
 local function get_monitored(rbl)
   local default_monitored = '1.0.0.127'
+  local ret = {
+    rcode = 'nxdomain',
+    prefix = default_monitored,
+    random = false,
+  }
 
   if rbl.monitored_address then
-    return rbl.monitored_address
+    ret.prefix = rbl.monitored_address
   end
 
   if rbl.dkim or rbl.url or rbl.email then
-    default_monitored = 'facebook.com' -- should never be blacklisted
+    ret.random = true
   end
 
-  return default_monitored
+  return ret
 end
 
 local function validate_dns(lstr)
@@ -708,14 +713,11 @@ local function add_rbl(key, rbl)
     table.insert(black_symbols, rbl.symbol)
   end
   -- Process monitored
-  if not rbl.disable_monitoring and not rbl.is_whitelist then
+  if not rbl.disable_monitoring then
     if not monitored_addresses[rbl.rbl] then
       monitored_addresses[rbl.rbl] = true
       rbl.monitored = rspamd_config:register_monitored(rbl.rbl, 'dns',
-          {
-            rcode = 'nxdomain',
-            prefix = get_monitored(rbl)
-          })
+          get_monitored(rbl))
     end
   end
 
