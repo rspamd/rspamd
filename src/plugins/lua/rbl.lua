@@ -239,30 +239,44 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, orig)
 end
 
 local function gen_rbl_callback(rule)
-  -- Here, we have functional approach: we form a pipeline of functions
-  -- f1, f2, ... fn. Each function accepts task and return boolean value
-  -- that allows to process pipeline further
-  -- Each function in the pipeline can add something to `dns_req` vector as a side effect
 
-  local function add_dns_request(req, forced, requests_table)
+  local function add_dns_request(task, req, forced, requests_table)
     if requests_table[req] then
       -- Duplicate request
       if forced and not requests_table[req].forced then
         requests_table[req].forced = true
       end
     else
-      local orign = maybe_make_hash(req, rule)
-      local nreq = {
-        forced = forced,
-        n = string.format('%s.%s',
-            orign,
-            rule.rbl),
-        orig = orign
-      }
-      requests_table[req] = nreq
+      if rule.process_script then
+        local proc = rule.process_script(req, rule.rbl, task)
+
+        if proc then
+          local nreq = {
+            forced = forced,
+            n = proc,
+            orig = req
+          }
+          requests_table[req] = nreq
+        end
+      else
+        local orign = maybe_make_hash(req, rule)
+        local nreq = {
+          forced = forced,
+          n = string.format('%s.%s',
+              orign,
+              rule.rbl),
+          orig = orign
+        }
+        requests_table[req] = nreq
+      end
+
     end
   end
 
+  -- Here, we have functional approach: we form a pipeline of functions
+  -- f1, f2, ... fn. Each function accepts task and return boolean value
+  -- that allows to process pipeline further
+  -- Each function in the pipeline can add something to `dns_req` vector as a side effect
   local function is_alive(_, _)
     if rule.monitored then
       if not rule.monitored:alive() then
@@ -302,7 +316,7 @@ local function gen_rbl_callback(rule)
       return false
     end
 
-    add_dns_request(helo, true, requests_table)
+    add_dns_request(task, helo, true, requests_table)
   end
 
   local function check_dkim(task, requests_table)
@@ -335,15 +349,16 @@ local function gen_rbl_callback(rule)
             end
 
             if mime_from_domain and mime_from_domain == domain_tld then
-              add_dns_request(domain_tld, true, requests_table)
+              add_dns_request(task, domain_tld, true, requests_table)
               ret = true
             end
           else
             if rule.dkim_domainonly then
-              add_dns_request(rspamd_util.get_tld(domain), false, requests_table)
+              add_dns_request(task, rspamd_util.get_tld(domain),
+                  false, requests_table)
               ret = true
             else
-              add_dns_request(domain, false, requests_table)
+              add_dns_request(task, domain, false, requests_table)
               ret = true
             end
           end
@@ -363,15 +378,15 @@ local function gen_rbl_callback(rule)
 
     for _,email in ipairs(emails) do
       if rule.emails_domainonly then
-        add_dns_request(email:get_tld(), false, requests_table)
+        add_dns_request(task, email:get_tld(), false, requests_table)
       else
         if rule.hash then
           -- Leave @ as is
-          add_dns_request(string.format('%s@%s',
+          add_dns_request(task, string.format('%s@%s',
               email:get_user(), email:get_host()), false, requests_table)
         else
           -- Replace @ with .
-          add_dns_request(string.format('%s.%s',
+          add_dns_request(task, string.format('%s.%s',
               email:get_user(), email:get_host()), false, requests_table)
         end
       end
@@ -388,7 +403,7 @@ local function gen_rbl_callback(rule)
     end
     if (ip:get_version() == 6 and rule.ipv6) or
         (ip:get_version() == 4 and rule.ipv4) then
-      add_dns_request(ip_to_rbl(ip), true, requests_table)
+      add_dns_request(task, ip_to_rbl(ip), true, requests_table)
     end
 
     return true
@@ -404,7 +419,7 @@ local function gen_rbl_callback(rule)
 
     for pos,rh in ipairs(received) do
       if check_conditions(rh, pos) then
-        add_dns_request(ip_to_rbl(rh.real_ip), false, requests_table)
+        add_dns_request(task, ip_to_rbl(rh.real_ip), false, requests_table)
       end
     end
 
@@ -417,7 +432,7 @@ local function gen_rbl_callback(rule)
       return false
     end
 
-    add_dns_request(hostname, true, requests_table)
+    add_dns_request(task, hostname, true, requests_table)
 
     return true
   end
@@ -427,7 +442,7 @@ local function gen_rbl_callback(rule)
 
     if res then
       for _,r in ipairs(res) do
-        add_dns_request(r, false, requests_table)
+        add_dns_request(task, r, false, requests_table)
       end
     end
   end
@@ -538,6 +553,18 @@ local function add_rbl(key, rbl)
     end
 
     rbl.selector = sel
+  end
+
+  if rbl.process_script then
+    local ret, f = lua_util.callback_from_string(rbl.process_script)
+
+    if ret then
+      rbl.process_script = f
+    else
+      rspamd_logger.errx('invalid process script for rbl rule %s: %s; %s',
+          key, rbl.process_script, f)
+      return false
+    end
   end
 
   local id = rspamd_config:register_symbol{
@@ -692,6 +719,7 @@ local rule_schema = ts.shape({
   hash_len = (ts.integer + ts.string / tonumber):is_optional(),
   monitored_address = ts.string:is_optional(),
   requests_limit = (ts.integer + ts.string / tonumber):is_optional(),
+  process_script = ts.string:is_optional(),
 }, {
   extra_fields = ts.map_of(ts.string, ts.boolean)
 })
