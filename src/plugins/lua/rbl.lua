@@ -425,6 +425,29 @@ local function gen_rbl_callback(rule)
     return true
   end
 
+  local function check_urls(task, requests_table)
+    local ex_params = {
+      task = task,
+      limit = rule.requests_limit,
+      ignore_redirected = true,
+      ignore_ip = rule.no_ip,
+      need_emails = false,
+      esld_limit = 1,
+      prefix = 'rbl_url'
+    }
+
+    local urls = lua_util.extract_specific_urls(ex_params)
+    if not urls or #urls == 0 then
+      return false
+    end
+
+    for _,u in ipairs(urls) do
+      add_dns_request(task, u:get_tld(), false, false, requests_table)
+    end
+
+    return true
+  end
+
   local function check_from(task, requests_table)
     local ip = task:get_from_ip()
 
@@ -500,6 +523,10 @@ local function gen_rbl_callback(rule)
 
   if rule.emails then
     pipeline[#pipeline + 1] = check_emails
+  end
+
+  if rule.urls then
+    pipeline[#pipeline + 1] = check_urls
   end
 
   if rule.from then
@@ -766,6 +793,7 @@ local default_options = {
   ['default_is_whitelist'] = false,
   ['default_ignore_whitelist'] = false,
   ['default_resolve_ip'] = false,
+  ['default_no_ip'] = false,
 }
 
 opts = lua_util.override_defaults(default_options, opts)
