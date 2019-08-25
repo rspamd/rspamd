@@ -706,7 +706,7 @@ exports.filter_specific_urls = function (urls, params)
 
     if esld then
       -- Special cases
-      if (u:get_protocol() ~= 'mailto') and (not flags.url_displayed) then
+      if (u:get_protocol() ~= 'mailto') and (not flags.html_displayed) then
         if flags.obscured then
           priority = 3
         else
@@ -716,7 +716,7 @@ exports.filter_specific_urls = function (urls, params)
             priority = 2
           end
         end
-      elseif u:is_html_displayed() then
+      elseif flags.html_displayed then
         priority = 0
       end
 
