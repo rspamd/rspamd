@@ -52,7 +52,7 @@ local function get_monitored(rbl)
     ret.prefix = rbl.monitored_address
   end
 
-  if rbl.dkim or rbl.url or rbl.email then
+  if rbl.dkim or rbl.urls or rbl.emails then
     ret.random = true
   end
 
@@ -388,9 +388,21 @@ local function gen_rbl_callback(rule)
   end
 
   local function check_emails(task, requests_table)
-    local emails = task:get_emails()
+    local ex_params = {
+      task = task,
+      limit = rule.requests_limit,
+      filter = function(u) return u:get_protocol() == 'mailto' end,
+      need_emails = true,
+      prefix = 'rbl_email'
+    }
 
-    if not emails then
+    if rule.emails_domainonly then
+      ex_params.esld_limit = 1
+      ex_params.prefix = 'rbl_email_domainonly'
+    end
+
+    local emails = lua_util.extract_specific_urls(ex_params)
+    if not emails or #emails == 0 then
       return false
     end
 
