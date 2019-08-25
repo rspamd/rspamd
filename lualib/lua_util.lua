@@ -683,8 +683,12 @@ exports.filter_specific_urls = function (urls, params)
 
   local function process_single_url(u, default_priority)
     local priority = default_priority or 1 -- Normal priority
+    local flags = u:get_flags()
+    if params.ignore_ip and flags.numeric then
+      return
+    end
 
-    if u:is_redirected() then
+    if flags.redirected then
       local redir = u:get_redirected() -- get the real url
 
       if params.ignore_redirected then
@@ -702,13 +706,13 @@ exports.filter_specific_urls = function (urls, params)
 
     if esld then
       -- Special cases
-      if (u:get_protocol() ~= 'mailto') and (not u:is_html_displayed()) then
-        if u:is_obscured() then
+      if (u:get_protocol() ~= 'mailto') and (not flags.url_displayed) then
+        if flags.obscured then
           priority = 3
         else
-          if u:get_user() then
+          if (flags.has_user or flags.has_port) then
             priority = 2
-          elseif u:is_subject() or u:is_phished() then
+          elseif (flags.subject or flags.phished) then
             priority = 2
           end
         end
@@ -852,6 +856,7 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     need_emails = false,
     filter = nil,
     prefix = nil,
+    ignore_ip = false,
     ignore_redirected = false,
     no_cache = false,
   }
