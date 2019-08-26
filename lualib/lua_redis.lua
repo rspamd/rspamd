@@ -317,6 +317,11 @@ local function process_redis_opts(options, redis_params)
   if not redis_params.sentinels and options.sentinels then
     redis_params.sentinels = options.sentinels
   end
+
+  if options['sentinel_masters_pattern'] and not redis_params['sentinel_masters_pattern'] then
+    redis_params['sentinel_masters_pattern'] = options['sentinel_masters_pattern']
+  end
+
 end
 
 local function enrich_defaults(rspamd_config, module, redis_params)
