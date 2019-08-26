@@ -125,7 +125,7 @@ local function redis_query_sentinel(ev_base, params, initialised)
         for _,s in ipairs(slave_result) do
           local slave = flatten_redis_table(s)
           lutil.debugm(N, rspamd_config,
-              'found slave form master %s with ip %s and port %s',
+              'found slave for master %s with ip %s and port %s',
               v.name, slave.ip, slave.port)
           -- Wrap IPv6-adresses in brackets
           if (slave.ip:match(":")) then
