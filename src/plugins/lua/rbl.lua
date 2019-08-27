@@ -259,6 +259,8 @@ end
 
 local function gen_rbl_callback(rule)
   local function is_whitelisted(task, req, req_str, whitelist, what)
+    if rule.ignore_whitelist then return false end
+
     if rule.whitelist then
       if rule.whitelist:get_key(req) then
         lua_util.debugm(N, task,
