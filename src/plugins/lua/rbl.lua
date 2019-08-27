@@ -27,6 +27,7 @@ local lua_util = require 'lua_util'
 local ts = require("tableshape").types
 local selectors = require "lua_selectors"
 local bit = require 'bit'
+local lua_maps = require "lua_maps"
 
 -- This plugin implements various types of RBL checks
 -- Documentation can be found here:
@@ -799,7 +800,7 @@ local default_options = {
 opts = lua_util.override_defaults(default_options, opts)
 
 if(opts['local_exclude_ip_map'] ~= nil) then
-  local_exclusions = rspamd_map_add(N, 'local_exclude_ip_map', 'radix',
+  local_exclusions = lua_maps.map_add(N, 'local_exclude_ip_map', 'radix',
     'RBL exclusions map')
 end
 

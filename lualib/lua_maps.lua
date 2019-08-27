@@ -20,6 +20,7 @@ limitations under the License.
 ]]--
 
 local rspamd_logger = require "rspamd_logger"
+local ts = require("tableshape").types
 
 local exports = {}
 
@@ -314,5 +315,25 @@ local function rspamd_maybe_check_map(key, what)
 end
 
 exports.rspamd_maybe_check_map = rspamd_maybe_check_map
+
+exports.map_schema = ts.one_of{
+  ts.string, -- 'http://some_map'
+  ts.array_of(ts.string), -- ['foo', 'bar']
+  ts.shape{ -- complex object
+    name = ts.string:is_optional(),
+    description = ts.string:is_optional(),
+    timeout = ts.number,
+    data = ts.array_of(ts.string):is_optional(),
+    -- Tableshape has no options support for something like key1 or key2?
+    upstreams = ts.one_of{
+      ts.string,
+      ts.array_of(ts.string),
+    }:is_optional(),
+    url = ts.one_of{
+      ts.string,
+      ts.array_of(ts.string),
+    }:is_optional(),
+  }
+}
 
 return exports
