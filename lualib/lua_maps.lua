@@ -140,8 +140,8 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
   elseif type(opt) == 'table' then
     local k = lua_util.table_digest(opt)
     if maps_cache[k] then
-      rspamd_logger.infox(rspamd_config, 'reuse url for %s(%s)',
-          opt, mtype)
+      rspamd_logger.infox(rspamd_config, 'reuse url for complex map definition %s: %s',
+          k:sub(1,8), description)
 
       return maps_cache[k]
     end
@@ -155,6 +155,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
           if map then
             ret.__data = map
             setmetatable(ret, ret_mt)
+            maps_cache[k] = ret
             return ret
           end
         else
@@ -167,6 +168,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
           if map then
             ret.__data = map
             setmetatable(ret, ret_mt)
+            maps_cache[k] = ret
             return ret
           end
         end
@@ -181,6 +183,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
           if map then
             ret.__data = map
             setmetatable(ret, ret_mt)
+            maps_cache[k] = ret
             return ret
           end
         else
@@ -195,6 +198,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
           if map then
             ret.__data = map
             setmetatable(ret, ret_mt)
+            maps_cache[k] = ret
             return ret
           end
         end
@@ -209,6 +213,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
           if map then
             ret.__data = map
             setmetatable(ret, ret_mt)
+            maps_cache[k] = ret
             return ret
           end
         else
@@ -247,6 +252,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
               return nil
             end
 
+            maps_cache[k] = ret
             return ret
           else
             -- Empty map, huh?
@@ -265,6 +271,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
       if map then
         ret.__data = map
         setmetatable(ret, ret_mt)
+        maps_cache[k] = ret
         return ret
       end
     end -- opt[1]
