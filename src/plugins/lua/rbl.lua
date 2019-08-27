@@ -247,6 +247,18 @@ end
 local function gen_rbl_callback(rule)
 
   local function add_dns_request(task, req, forced, is_ip, requests_table)
+    if rule.whitelist then
+      if rule.whitelist:get_key(req) then
+        lua_util.debugm(N, task, 'whitelisted %s on %s', req, rule.symbol)
+
+        return
+      end
+    end
+
+    if is_ip then
+      req = ip_to_rbl(req)
+    end
+
     if requests_table[req] then
       -- Duplicate request
       if forced and not requests_table[req].forced then
@@ -457,7 +469,7 @@ local function gen_rbl_callback(rule)
     end
     if (ip:get_version() == 6 and rule.ipv6) or
         (ip:get_version() == 4 and rule.ipv4) then
-      add_dns_request(task, ip_to_rbl(ip), true, true, requests_table)
+      add_dns_request(task, ip, true, true, requests_table)
     end
 
     return true
@@ -473,7 +485,7 @@ local function gen_rbl_callback(rule)
 
     for pos,rh in ipairs(received) do
       if check_conditions(rh, pos) then
-        add_dns_request(task, ip_to_rbl(rh.real_ip), false, true, requests_table)
+        add_dns_request(task, rh.real_ip, false, true, requests_table)
       end
     end
 
@@ -579,7 +591,7 @@ local function gen_rbl_callback(rule)
             -- Check if we have rspamd{ip} userdata
             if type(dns_res) == 'userdata' then
               -- Add result as an actual RBL request
-              add_dns_request(task, ip_to_rbl(dns_res), false, true,
+              add_dns_request(task, dns_res, false, true,
                   resolved_req)
             end
           end
@@ -687,6 +699,15 @@ local function add_rbl(key, rbl)
           key, rbl.process_script, f)
       return false
     end
+  end
+
+  if rbl.whitelist then
+    local def_type = 'set'
+    if rbl.from or rbl.received then
+      def_type = 'radix'
+    end
+    rbl.whitelist = lua_maps.map_add_from_ucl(rbl.whitelist, def_type,
+        'RBL whitelist for ' .. rbl.symbol)
   end
 
   local id = rspamd_config:register_symbol{
@@ -834,6 +855,7 @@ local rule_schema = ts.shape({
   whitelist_exception = (
       ts.array_of(ts.string) + (ts.string / function(s) return {s} end)
   ):is_optional(),
+  whitelist = lua_maps.map_schema:is_optional(),
   local_exclude_ip_map = ts.string:is_optional(),
   hash = ts.one_of{"sha1", "sha256", "sha384", "sha512", "md5", "blake2"}:is_optional(),
   hash_format = ts.one_of{"hex", "base32", "base64"}:is_optional(),
