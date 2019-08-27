@@ -233,6 +233,46 @@ local function check_statistics_sanity()
   end
 end
 
+-- Converts surbl module config to rbl module
+local function surbl_section_convert(cfg, section)
+  local rbl_section = cfg.rbl.rbls
+  local wl = section.whitelist
+  for name,value in pairs(section.rules or {}) do
+    if not rbl_section[name] then
+      local converted = {
+        urls = true,
+        ignore_defaults = true,
+      }
+
+      if wl then
+        converted.whitelist = wl
+      end
+
+      for k,v in pairs(value) do
+        -- Rename
+        if k == 'suffix' then k = 'rbl' end
+        if k == 'ips' then k = 'returncodes' end
+        if k == 'bits' then k = 'returnbits' end
+        if k:match('check_') then
+          local n = k:match('check_(.*)')
+          k = n
+        end
+
+        if k == 'dkim' and v then
+          converted.dkim_domainonly = false
+          converted.dkim_match_from = true
+        end
+
+        converted[k] = lua_util.deepcopy(v)
+      end
+      rbl_section[name] = converted
+    else
+      logger.warnx(rspamd_config, 'conflicting names in surbl and rbl rules: %s, ignore surbl rule',
+          name)
+    end
+  end
+end
+
 return function(cfg)
   local ret = false
 
@@ -400,6 +440,20 @@ return function(cfg)
     else
       logger.infox(rspamd_config, 'ip reputation already exists, do not do any IP_SCORE transforms')
     end
+  end
+
+  if cfg.surbl then
+    if not cfg.rbl then
+      cfg.rbl = {
+        rbls = {}
+      }
+    end
+    if not cfg.rbl.rbls then
+      cfg.rbl.rbls = {}
+    end
+    surbl_section_convert(cfg, cfg.surbl)
+    logger.infox(rspamd_config, 'converted surbl rules to rbl rules')
+    cfg.surbl = {}
   end
 
   return ret, cfg
