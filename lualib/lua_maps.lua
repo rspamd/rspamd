@@ -21,6 +21,7 @@ limitations under the License.
 
 local rspamd_logger = require "rspamd_logger"
 local ts = require("tableshape").types
+local lua_util = require "lua_util"
 
 local exports = {}
 
@@ -137,8 +138,14 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
       return ret
     end
   elseif type(opt) == 'table' then
-    -- it might be plain map or map of plain elements
-    -- no caching in this case (yet)
+    local k = lua_util.table_digest(opt)
+    if maps_cache[k] then
+      rspamd_logger.infox(rspamd_config, 'reuse url for %s(%s)',
+          opt, mtype)
+
+      return maps_cache[k]
+    end
+
     if opt[1] then
       if mtype == 'radix' then
 
