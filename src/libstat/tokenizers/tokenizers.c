@@ -627,14 +627,10 @@ rspamd_uchars_to_ucs32 (const UChar *src, gsize srclen,
 			}
 #endif
 
-			if (cat == U_UPPERCASE_LETTER ||
-					cat == U_LOWERCASE_LETTER ||
-					cat == U_DECIMAL_DIGIT_NUMBER ||
+			if ((cat >= U_UPPERCASE_LETTER && cat <= U_OTHER_NUMBER) ||
 					cat == U_CONNECTOR_PUNCTUATION ||
 					cat == U_MATH_SYMBOL ||
-					cat == U_CURRENCY_SYMBOL ||
-					cat == U_INITIAL_PUNCTUATION ||
-					cat == U_FINAL_PUNCTUATION) {
+					cat == U_CURRENCY_SYMBOL) {
 				*d++ = u_tolower (t);
 			}
 		}
