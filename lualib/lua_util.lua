@@ -1207,25 +1207,37 @@ end
 
 ---[[[
 -- @function lua_util.table_digest(t)
--- Returns hash of all values if t[1] is string or all keys otherwise
+-- Returns hash of all values if t[1] is string or all keys/values otherwise
 -- @param {table} t input array or map
 -- @return {string} base32 representation of blake2b hash of all strings
 --]]]
-exports.table_digest = function(t)
+local function table_digest(t)
   local cr = require "rspamd_cryptobox_hash"
   local h = cr.create()
 
   if t[1] then
     for _,e in ipairs(t) do
-      h:update(tostring(e))
+      if type(e) == 'table' then
+        h:update(table_digest(e))
+      else
+        h:update(tostring(e))
+      end
     end
   else
-    for k,_ in pairs(t) do
-      h:update(k)
+    for k,v in pairs(t) do
+      h:update(tostring(k))
+
+      if type(v) == 'string' then
+        h:update(v)
+      elseif type(v) == 'table' then
+        h:update(table_digest(v))
+      end
     end
   end
  return h:base32()
 end
+
+exports.table_digest = table_digest
 
 ---[[[
 -- @function lua_util.toboolean(v)
