@@ -51,6 +51,30 @@ exports.can_learn = function(task, is_spam, is_unlearn)
 end
 
 exports.autolearn = function(task, conf)
+  local function log_can_autolearn(verdict, score, threshold)
+    local from = task:get_from('smtp')
+    local mime_rcpts = 'undef'
+    local mr = task:get_recipients('mime')
+    if mr then
+      for _,r in ipairs(mr) do
+        if mime_rcpts == 'undef' then
+          mime_rcpts = r.addr
+        else
+          mime_rcpts = mime_rcpts .. ',' .. r.addr
+        end
+      end
+    end
+
+    lua_util.debugm(N, task, 'id: %s, from: <%s>: can autolearn %s: score %s %s %s, mime_rcpts: <%s>',
+        task:get_header('Message-Id') or '<undef>',
+        from and from[1].addr or 'undef',
+        verdict,
+        string.format("%.2f", score),
+        verdict == 'ham' and '<=' or verdict == 'spam' and '>=' or '/',
+        threshold,
+        mime_rcpts)
+  end
+
   -- We have autolearn config so let's figure out what is requested
   local verdict,score = lua_util.get_task_verdict(task)
   local learn_spam,learn_ham = false, false
@@ -65,14 +89,12 @@ exports.autolearn = function(task, conf)
   if conf.spam_threshold and conf.ham_threshold then
     if verdict == 'spam' then
       if conf.spam_threshold and score >= conf.spam_threshold then
-        lua_util.debugm(N, task, 'can autolearn spam: score %s >= %s',
-            score, conf.spam_threshold)
+        log_can_autolearn(verdict, score, conf.spam_threshold)
         learn_spam = true
       end
     elseif verdict == 'ham' then
       if conf.ham_threshold and score <= conf.ham_threshold then
-        lua_util.debugm(N, task, 'can autolearn ham: score %s <= %s',
-            score, conf.ham_threshold)
+        log_can_autolearn(verdict, score, conf.ham_threshold)
         learn_ham = true
       end
     end
