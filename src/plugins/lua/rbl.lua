@@ -850,10 +850,12 @@ for key,rbl in pairs(opts.rbls or opts.rules) do
     rspamd_logger.infox(rspamd_config, 'disable rbl "%s"', key)
   else
     -- Propagate default options from opts to rule
-    for default_opt_key,_ in pairs(default_options) do
-      local rbl_opt = default_opt_key:sub(#('default_') + 1)
-      if rbl[rbl_opt] == nil then
-        rbl[rbl_opt] = opts[default_opt_key]
+    if not rbl.ignore_defaults then
+      for default_opt_key,_ in pairs(default_options) do
+        local rbl_opt = default_opt_key:sub(#('default_') + 1)
+        if rbl[rbl_opt] == nil then
+          rbl[rbl_opt] = opts[default_opt_key]
+        end
       end
     end
 
