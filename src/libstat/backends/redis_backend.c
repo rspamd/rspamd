@@ -526,7 +526,8 @@ rspamd_redis_tokens_to_query (struct rspamd_task *task,
 								"HSET %b_tokens %b %b",
 								prefix, (size_t) prefix_len,
 								n0, (size_t) l0,
-								tok->t1->stemmed.begin, tok->t1->stemmed.len);
+								tok->t1->stemmed.begin,
+								tok->t1->stemmed.len);
 					}
 				}
 				else {
