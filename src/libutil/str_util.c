@@ -2081,15 +2081,18 @@ rspamd_decode_qp_buf (const gchar *in, gsize inlen,
 
 	while (remain > 0 && o < end) {
 		if (*p == '=') {
-			p ++;
 			remain --;
 
 			if (remain == 0) {
+				/* Last '=' character, bugon */
 				if (end - o > 0) {
 					*o++ = *p;
-					break;
 				}
+
+				break;
 			}
+
+			p ++;
 decode:
 			/* Decode character after '=' */
 			c = *p++;
