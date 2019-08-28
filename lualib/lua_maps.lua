@@ -116,12 +116,12 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
 
   if type(opt) == 'string' then
     opt,mtype = maybe_adjust_type(opt, mtype)
-    local k = map_hash_key(opt, mtype)
-    if maps_cache[k] then
+    local cache_key = map_hash_key(opt, mtype)
+    if maps_cache[cache_key] then
       rspamd_logger.infox(rspamd_config, 'reuse url for %s(%s)',
           opt, mtype)
 
-      return maps_cache[k]
+      return maps_cache[cache_key]
     end
     -- We have a single string, so we treat it as a map
     local map = rspamd_config:add_map{
@@ -132,18 +132,18 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
 
     if map then
       ret.__data = map
-      ret.hash = k
+      ret.hash = cache_key
       setmetatable(ret, ret_mt)
-      maps_cache[k] = ret
+      maps_cache[cache_key] = ret
       return ret
     end
   elseif type(opt) == 'table' then
-    local k = lua_util.table_digest(opt)
-    if maps_cache[k] then
+    local cache_key = lua_util.table_digest(opt)
+    if maps_cache[cache_key] then
       rspamd_logger.infox(rspamd_config, 'reuse url for complex map definition %s: %s',
-          k:sub(1,8), description)
+          cache_key:sub(1,8), description)
 
-      return maps_cache[k]
+      return maps_cache[cache_key]
     end
 
     if opt[1] then
@@ -155,7 +155,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
           if map then
             ret.__data = map
             setmetatable(ret, ret_mt)
-            maps_cache[k] = ret
+            maps_cache[cache_key] = ret
             return ret
           end
         else
@@ -168,7 +168,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
           if map then
             ret.__data = map
             setmetatable(ret, ret_mt)
-            maps_cache[k] = ret
+            maps_cache[cache_key] = ret
             return ret
           end
         end
@@ -183,7 +183,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
           if map then
             ret.__data = map
             setmetatable(ret, ret_mt)
-            maps_cache[k] = ret
+            maps_cache[cache_key] = ret
             return ret
           end
         else
@@ -198,7 +198,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
           if map then
             ret.__data = map
             setmetatable(ret, ret_mt)
-            maps_cache[k] = ret
+            maps_cache[cache_key] = ret
             return ret
           end
         end
@@ -213,7 +213,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
           if map then
             ret.__data = map
             setmetatable(ret, ret_mt)
-            maps_cache[k] = ret
+            maps_cache[cache_key] = ret
             return ret
           end
         else
@@ -225,7 +225,6 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
               -- Numeric table
               if mtype == 'hash' then
                 -- Treat as KV pair
-                local lua_util = require "lua_util"
                 local pieces = lua_util.str_split(elt, ' ')
                 if #pieces > 1 then
                   local key = table.remove(pieces, 1)
@@ -252,7 +251,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
               return nil
             end
 
-            maps_cache[k] = ret
+            maps_cache[cache_key] = ret
             return ret
           else
             -- Empty map, huh?
@@ -271,7 +270,7 @@ local function rspamd_map_add_from_ucl(opt, mtype, description)
       if map then
         ret.__data = map
         setmetatable(ret, ret_mt)
-        maps_cache[k] = ret
+        maps_cache[cache_key] = ret
         return ret
       end
     end -- opt[1]
