@@ -291,7 +291,7 @@ local function gen_rbl_callback(rule)
       req_str = ip_to_rbl(req)
     end
 
-    if is_whitelisted(task, req, req_str, whitelist, what) then
+    if whitelist and is_whitelisted(task, req, req_str, whitelist, what) then
       return
     end
 
