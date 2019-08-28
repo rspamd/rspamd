@@ -982,11 +982,13 @@ local function rbl_callback_white(task)
   local whitelisted_elements = {}
   for _, w in ipairs(white_symbols) do
     local ws = task:get_symbol(w)
-    if ws then
-      lua_util.debugm(N, task,'found whitelist %s', w)
+    if ws and ws[1] then
+      ws = ws[1]
       if not ws.options then ws.options = {} end
       for _,opt in ipairs(ws.options) do
         local elt,what = opt:match('^([^:]+):([^:]+)')
+        lua_util.debugm(N, task,'found whitelist from %s: %s(%s)', w,
+            elt, what)
         if elt and what then
           whitelisted_elements[elt] = what
         end
