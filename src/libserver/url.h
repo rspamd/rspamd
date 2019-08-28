@@ -51,7 +51,6 @@ struct rspamd_url {
 	gchar *data;
 	gchar *query;
 	gchar *fragment;
-	gchar *surbl;
 	gchar *tld;
 	gchar *visible_part;
 
@@ -63,7 +62,6 @@ struct rspamd_url {
 	guint datalen;
 	guint querylen;
 	guint fragmentlen;
-	guint surbllen;
 	guint tldlen;
 	guint urllen;
 	guint rawlen;

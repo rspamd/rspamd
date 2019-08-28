@@ -875,9 +875,9 @@ rspamd_protocol_extended_url (struct rspamd_task *task,
 	elt = ucl_object_fromlstring (encoded, enclen);
 	ucl_object_insert_key (obj, elt, "url", 0, false);
 
-	if (url->surbllen > 0) {
-		elt = ucl_object_fromlstring (url->surbl, url->surbllen);
-		ucl_object_insert_key (obj, elt, "surbl", 0, false);
+	if (url->tldlen > 0) {
+		elt = ucl_object_fromlstring (url->tld, url->tldlen);
+		ucl_object_insert_key (obj, elt, "tld", 0, false);
 	}
 	if (url->hostlen > 0) {
 		elt = ucl_object_fromlstring (url->host, url->hostlen);
