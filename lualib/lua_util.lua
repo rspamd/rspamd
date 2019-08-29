@@ -640,8 +640,9 @@ exports.filter_specific_urls = function (urls, params)
     if params.prefix then
       cache_key = params.prefix
     else
-      cache_key = string.format('sp_urls_%d%s', params.limit,
-          tostring(params.need_emails or false))
+      cache_key = string.format('sp_urls_%d%s%s', params.limit,
+          tostring(params.need_emails or false),
+          tostring(params.need_images or false))
     end
     local cached = params.task:cache_get(cache_key)
 
@@ -698,6 +699,16 @@ exports.filter_specific_urls = function (urls, params)
       else
         -- Process both redirected url and the original one
         process_single_url(redir, 2)
+      end
+    end
+
+    if flags.image then
+      if not params.need_images then
+        -- Ignore url
+        return
+      else
+        -- Penalise images in urls
+        priority = 0
       end
     end
 
@@ -843,6 +854,7 @@ end
 - - filter <callback> (default = nil)
 - - prefix <string> cache prefix (default = nil)
 - - ignore_redirected <bool> (default = false)
+- - need_images <bool> (default = false)
 -- }
 -- Apply heuristic in extracting of urls from task, this function
 -- tries its best to extract specific number of urls from a task based on
@@ -854,6 +866,7 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     limit = 9999,
     esld_limit = 9999,
     need_emails = false,
+    need_images = false,
     filter = nil,
     prefix = nil,
     ignore_ip = false,
