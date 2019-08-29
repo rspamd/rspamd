@@ -399,12 +399,12 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 	/* Remove all events */
 	DL_FOREACH_SAFE (worker->accept_events, cur, tmp) {
 
-		if (ev_is_active (&cur->accept_ev) || ev_is_pending (&cur->accept_ev)) {
+		if (ev_can_stop (&cur->accept_ev)) {
 			ev_io_stop (cur->event_loop, &cur->accept_ev);
 		}
 
 
-		if (ev_is_active (&cur->throttling_ev) || ev_is_pending (&cur->throttling_ev)) {
+		if (ev_can_stop (&cur->throttling_ev)) {
 			ev_timer_stop (cur->event_loop, &cur->throttling_ev);
 		}
 

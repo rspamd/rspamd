@@ -705,6 +705,8 @@ EV_API_DECL void ev_resume  (EV_P) EV_NOEXCEPT;
 
 #define ev_is_pending(ev)                    (0 + ((ev_watcher *)(void *)(ev))->pending) /* ro, true when watcher is waiting for callback invocation */
 #define ev_is_active(ev)                     (0 + ((ev_watcher *)(void *)(ev))->active) /* ro, true when the watcher has been started */
+#define ev_can_stop(ev)                      (ev_is_pending(ev) || ev_is_active(ev)) /* ro, true when the watcher has been started */
+
 
 #define ev_cb_(ev)                           (ev)->cb /* rw */
 #define ev_cb(ev)                            (memmove (&ev_cb_ (ev), &((ev_watcher *)(ev))->cb, sizeof (ev_cb_ (ev))), (ev)->cb)

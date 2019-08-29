@@ -80,7 +80,7 @@ void
 rspamd_ev_watcher_stop (struct ev_loop *loop,
 						struct rspamd_io_ev *ev)
 {
-	if (ev_is_pending (&ev->io) || ev_is_active (&ev->io)) {
+	if (ev_can_stop (&ev->io)) {
 		ev_io_stop (EV_A_ &ev->io);
 	}
 
@@ -96,7 +96,7 @@ rspamd_ev_watcher_reschedule (struct ev_loop *loop,
 {
 	g_assert (ev->cb != NULL);
 
-	if (ev_is_pending (&ev->io) || ev_is_active (&ev->io)) {
+	if (ev_can_stop (&ev->io)) {
 		ev_io_stop (EV_A_ &ev->io);
 		ev_io_set (&ev->io, ev->io.fd, what);
 		ev_io_start (EV_A_ &ev->io);
@@ -108,7 +108,7 @@ rspamd_ev_watcher_reschedule (struct ev_loop *loop,
 	}
 
 	if (ev->timeout > 0) {
-		if (!(ev_is_active (&ev->tm) || ev_is_pending (&ev->tm))) {
+		if (!(ev_can_stop (&ev->tm))) {
 			ev->tm.data = ev;
 			ev_timer_init (&ev->tm, rspamd_ev_watcher_timer_cb, ev->timeout, 0.0);
 			ev_timer_start (EV_A_ &ev->tm);
