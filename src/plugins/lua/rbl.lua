@@ -483,9 +483,10 @@ local function gen_rbl_callback(rule)
       limit = rule.requests_limit,
       ignore_redirected = true,
       ignore_ip = rule.no_ip,
+      need_images = rule.images,
       need_emails = false,
       esld_limit = 1,
-      prefix = 'rbl_url'
+      no_cache = true,
     }
 
     local urls = lua_util.extract_specific_urls(ex_params)
