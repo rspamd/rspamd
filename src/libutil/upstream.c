@@ -450,6 +450,7 @@ rspamd_upstream_revive_cb (struct ev_loop *loop, ev_timer *w, int revents)
 	}
 
 	RSPAMD_UPSTREAM_UNLOCK (upstream->lock);
+	g_assert (upstream->ref.refcount > 1);
 	REF_RELEASE (upstream);
 }
 
@@ -1045,6 +1046,7 @@ rspamd_upstream_restore_cb (gpointer elt, gpointer ls)
 	}
 
 	/* For revive event */
+	g_assert (up->ref.refcount > 1);
 	REF_RELEASE (up);
 }
 
