@@ -559,6 +559,38 @@ local function gen_rbl_callback(rule)
     return true
   end
 
+  local function check_replyto(task, requests_table, whitelist)
+    local function get_raw_header(name)
+      return ((task:get_header_full(name) or {})[1] or {})['value']
+    end
+
+    local replyto = get_raw_header('Reply-To')
+    if replyto then
+      local rt = rspamd_util.parse_mail_address(replyto, task:get_mempool())
+
+      if rt and rt[1] and (rt[1].addr and #rt[1].addr > 0) then
+        lua_util.remove_email_aliases(rt[1])
+        rt[1].addr = rt[1].addr:lower()
+        if rule.emails_domainonly then
+          add_dns_request(task, rt[1].addr, true, false, requests_table,
+              'email replyto', whitelist)
+        else
+          if rule.hash then
+            -- Leave @ as is
+            add_dns_request(task, string.format('%s@%s',
+                rt[1].user, rt[1].host), false, false,
+                requests_table, 'email replyto', whitelist)
+          else
+            -- Replace @ with .
+            add_dns_request(task, string.format('%s.%s',
+                rt[1].user, rt[1].host), false, false,
+                requests_table, 'email replyto', whitelist)
+          end
+        end
+      end
+    end
+  end
+
   -- Create function pipeline depending on rbl settings
   local pipeline = {
     is_alive, -- generic for all
@@ -590,6 +622,10 @@ local function gen_rbl_callback(rule)
   if rule.emails then
     pipeline[#pipeline + 1] = check_emails
     description[#description + 1] = 'emails'
+  end
+  if rule.replyto then
+    pipeline[#pipeline + 1] = check_replyto
+    description[#description + 1] = 'replyto'
   end
 
   if rule.urls then
@@ -900,6 +936,8 @@ local default_options = {
   ['default_ignore_whitelist'] = false,
   ['default_resolve_ip'] = false,
   ['default_no_ip'] = false,
+  ['default_images'] = false,
+  ['default_replyto'] = false,
 }
 
 opts = lua_util.override_defaults(default_options, opts)
