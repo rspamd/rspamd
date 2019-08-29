@@ -1677,7 +1677,7 @@ rspamd_html_process_data_image (rspamd_mempool_t *pool,
 
 static void
 rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
-		struct html_content *hc)
+		struct html_content *hc, GHashTable *urls)
 {
 	struct html_tag_component *comp;
 	struct html_image *img;
@@ -1717,8 +1717,23 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 				else {
 					img->flags |= RSPAMD_HTML_FLAG_IMAGE_EXTERNAL;
 					if (img->src) {
+
 						img->url = rspamd_html_process_url (pool,
 								img->src, fstr.len, NULL);
+
+						if (img->url) {
+							struct rspamd_url *turl = g_hash_table_lookup (urls,
+									img->url);
+
+							img->url->flags |= RSPAMD_URL_FLAG_IMAGE;
+
+							if (turl == NULL) {
+								g_hash_table_insert (urls, img->url, img->url);
+							}
+							else {
+								turl->count++;
+							}
+						}
 					}
 				}
 			}
@@ -3041,7 +3056,7 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 				}
 
 				if (cur_tag->id == Tag_IMG && !(cur_tag->flags & FL_CLOSING)) {
-					rspamd_html_process_img_tag (pool, cur_tag, hc);
+					rspamd_html_process_img_tag (pool, cur_tag, hc, urls);
 				}
 				else if (cur_tag->flags & FL_BLOCK) {
 					struct html_block *bl;

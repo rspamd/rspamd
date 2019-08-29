@@ -881,6 +881,7 @@ lua_url_get_flags (lua_State *L)
 		PUSH_FLAG (RSPAMD_URL_FLAG_UNNORMALISED, "unnormalised");
 		PUSH_FLAG (RSPAMD_URL_FLAG_ZW_SPACES, "zw_spaces");
 		PUSH_FLAG (RSPAMD_URL_FLAG_DISPLAY_URL, "url_displayed");
+		PUSH_FLAG (RSPAMD_URL_FLAG_IMAGE, "image");
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
