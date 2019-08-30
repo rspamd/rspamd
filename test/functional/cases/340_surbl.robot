@@ -60,6 +60,15 @@ SURBL Example.com domain image false
   Should Not Contain  ${result.stdout}  DBL_PHISH (
   Should Not Contain  ${result.stdout}  URIBL_BLACK (
 
+SURBL @example.com mail
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/mailadr.eml
+  Should Contain  ${result.stdout}  URIBL_IN_MAIL (
+  Should Not Contain  ${result.stdout}  RSPAMD_URIBL
+  Should Not Contain  ${result.stdout}  DBL_SPAM (
+  Should Not Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Not Contain  ${result.stdout}  DBL_PHISH (
+  Should Not Contain  ${result.stdout}  URIBL_BLACK (
+
 *** Keywords ***
 Surbl Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/surbl.conf
