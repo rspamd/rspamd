@@ -105,8 +105,8 @@ function ($, D3pie, visibility, NProgress, stickyTabs, tab_stat, tab_graph, tab_
                 tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
 
                 var autoRefresh = {
-                    hourly: 60000,
-                    daily: 300000
+                    day: 60000,
+                    week: 300000
                 };
                 timer_id.throughput = Visibility.every(autoRefresh[selData] || 3600000, function () {
                     tab_graph.draw(ui, graphs, tables, neighbours, checked_server, selData);
