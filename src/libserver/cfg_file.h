@@ -109,6 +109,7 @@ enum rspamd_symbol_group_flags {
 	RSPAMD_SYMBOL_GROUP_DISABLED = (1 << 0),
 	RSPAMD_SYMBOL_GROUP_ONE_SHOT = (1 << 1),
 	RSPAMD_SYMBOL_GROUP_UNGROUPED = (1 << 2),
+	RSPAMD_SYMBOL_GROUP_PUBLIC = (1 << 3),
 };
 
 /**

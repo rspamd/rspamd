@@ -389,6 +389,36 @@ rspamd_rcl_group_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 	}
 
+	if ((elt = ucl_object_lookup (obj, "public")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"public attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+		if (ucl_object_toboolean (elt)) {
+			gr->flags |= RSPAMD_SYMBOL_GROUP_PUBLIC;
+		}
+	}
+
+	if ((elt = ucl_object_lookup (obj, "private")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"private attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+		if (!ucl_object_toboolean (elt)) {
+			gr->flags |= RSPAMD_SYMBOL_GROUP_PUBLIC;
+		}
+	}
+
 	elt = ucl_object_lookup (obj, "description");
 	if (elt) {
 		description = ucl_object_tostring (elt);
