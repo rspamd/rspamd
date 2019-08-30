@@ -258,6 +258,8 @@ enum rspamd_log_format_type {
 	RSPAMD_LOG_FILENAME,
 	RSPAMD_LOG_FORCED_ACTION,
 	RSPAMD_LOG_SETTINGS_ID,
+	RSPAMD_LOG_GROUPS,
+	RSPAMD_LOG_PUBLIC_GROUPS,
 };
 
 enum rspamd_log_format_flags {

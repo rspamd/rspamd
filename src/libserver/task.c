@@ -1035,6 +1035,16 @@ rspamd_task_compare_log_sym (gconstpointer a, gconstpointer b)
 	return (w2 - w1) * 1000.0;
 }
 
+static gint
+rspamd_task_compare_log_group (gconstpointer a, gconstpointer b)
+{
+	const struct rspamd_symbols_group *s1 = *(const struct rspamd_symbols_group **)a,
+			*s2 = *(const struct rspamd_symbols_group **)b;
+
+	return strcmp (s1->name, s2->name);
+}
+
+
 static rspamd_ftok_t
 rspamd_task_log_metric_res (struct rspamd_task *task,
 		struct rspamd_log_format *lf)
@@ -1047,7 +1057,10 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 	struct rspamd_symbol_result *sym;
 	GPtrArray *sorted_symbols;
 	struct rspamd_action *act;
+	struct rspamd_symbols_group *gr;
+	gdouble gr_score;
 	guint i, j;
+	khiter_t k;
 
 	mres = task->result;
 	act = rspamd_check_action_metric (task);
@@ -1132,6 +1145,49 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 
 			rspamd_mempool_add_destructor (task->task_pool,
 					(rspamd_mempool_destruct_t)rspamd_fstring_free,
+					symbuf);
+			res.begin = symbuf->str;
+			res.len = symbuf->len;
+			break;
+
+		case RSPAMD_LOG_GROUPS:
+		case RSPAMD_LOG_PUBLIC_GROUPS:
+
+			symbuf = rspamd_fstring_sized_new (128);
+			sorted_symbols = g_ptr_array_sized_new (kh_size (mres->sym_groups));
+
+			kh_foreach (mres->sym_groups, gr, gr_score,{
+				if (!(gr->flags & RSPAMD_SYMBOL_GROUP_PUBLIC)) {
+					if (lf->type == RSPAMD_LOG_PUBLIC_GROUPS) {
+						continue;
+					}
+				}
+			});
+
+			g_ptr_array_sort (sorted_symbols, rspamd_task_compare_log_group);
+
+			for (i = 0; i < sorted_symbols->len; i++) {
+				gr = g_ptr_array_index (sorted_symbols, i);
+
+				if (first) {
+					rspamd_printf_fstring (&symbuf, "%s", gr->name);
+				}
+				else {
+					rspamd_printf_fstring (&symbuf, ",%s", gr->name);
+				}
+
+				k = kh_get (rspamd_symbols_group_hash, mres->sym_groups, gr);
+
+				rspamd_printf_fstring (&symbuf, "(%.2f)",
+						kh_value (mres->sym_groups, k));
+
+				first = FALSE;
+			}
+
+			g_ptr_array_free (sorted_symbols, TRUE);
+
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t) rspamd_fstring_free,
 					symbuf);
 			res.begin = symbuf->str;
 			res.len = symbuf->len;
