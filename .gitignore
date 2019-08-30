@@ -1,2 +1,26 @@
 # Code::TidyAll
 /.tidyall.d/
+.idea
+# Logs and databases #
+######################
+*.log
+*.sqlite3-*
+# Compiled source #
+###################
+*.com
+*.class
+*.dll
+*.pyc
+*.o
+*.so
+luacov.stats.out
+# OS generated files #
+######################
+*.orig
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
