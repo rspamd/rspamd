@@ -102,7 +102,6 @@ context("Lua util - extract_specific_urls plain", function()
     "domain1.org",
     "domain2.org",
     "domain3.org",
-    "domain3.org",
     "test.com",
   }
 

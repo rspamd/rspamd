@@ -655,14 +655,6 @@ exports.filter_specific_urls = function (urls, params)
 
   if params.filter then urls = fun.totable(fun.filter(params.filter, urls)) end
 
-  if #urls <= params.limit and #urls <= params.esld_limit then
-    if params.task and not params.no_cache then
-      params.task:cache_set(cache_key, urls)
-    end
-
-    return urls
-  end
-
   -- Filter by tld:
   local tlds = {}
   local eslds = {}
@@ -888,7 +880,7 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     }
   end
   for k,v in pairs(default_params) do
-    if not params[k] then params[k] = v end
+    if type(params[k]) == 'nil' and v ~= nil then params[k] = v end
   end
 
   local urls = params.task:get_urls(params.need_emails)
