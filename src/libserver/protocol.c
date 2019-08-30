@@ -1248,8 +1248,13 @@ rspamd_scan_result_ucl (struct rspamd_task *task,
 		gdouble gr_score;
 
 		obj = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_reserve (obj, kh_size (mres->sym_groups));
 
 		kh_foreach (mres->sym_groups, gr, gr_score,{
+			if (task->cfg->public_groups_only &&
+				!(gr->flags & RSPAMD_SYMBOL_GROUP_PUBLIC)) {
+				continue;
+			}
 			sobj = rspamd_metric_group_ucl (task, gr, gr_score);
 			ucl_object_insert_key (obj, sobj, gr->name, 0, false);
 		});
