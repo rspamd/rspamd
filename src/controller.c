@@ -1201,7 +1201,7 @@ rspamd_controller_graph_point (gulong t, gulong step,
 
 /*
  * Graph command handler:
- * request: /graph?type=<hourly|daily|weekly|monthly>
+ * request: /graph?type=<day|week|month|year>
  * headers: Password
  * reply: json [
  *      { label: "Foo", data: 11 },
@@ -1223,10 +1223,10 @@ rspamd_controller_handle_graph (
 	gdouble *acc;
 	ucl_object_t *res, *elt[METRIC_ACTION_MAX];
 	enum {
-		rra_hourly = 0,
-		rra_daily,
-		rra_weekly,
-		rra_monthly,
+		rra_day = 0,
+		rra_week,
+		rra_month,
+		rra_year,
 		rra_invalid
 	} rra_num = rra_invalid;
 	/* How many points are we going to send to display */
@@ -1260,17 +1260,17 @@ rspamd_controller_handle_graph (
 		return 0;
 	}
 
-	if (value->len == 6 && rspamd_lc_cmp (value->begin, "hourly", value->len) == 0) {
-		rra_num = rra_hourly;
+	if (value->len == 3 && rspamd_lc_cmp (value->begin, "day", value->len) == 0) {
+		rra_num = rra_day;
 	}
-	else if (value->len == 5 && rspamd_lc_cmp (value->begin, "daily", value->len) == 0) {
-		rra_num = rra_daily;
+	else if (value->len == 4 && rspamd_lc_cmp (value->begin, "week", value->len) == 0) {
+		rra_num = rra_week;
 	}
-	else if (value->len == 6 && rspamd_lc_cmp (value->begin, "weekly", value->len) == 0) {
-		rra_num = rra_weekly;
+	else if (value->len == 5 && rspamd_lc_cmp (value->begin, "month", value->len) == 0) {
+		rra_num = rra_month;
 	}
-	else if (value->len == 7 && rspamd_lc_cmp (value->begin, "monthly", value->len) == 0) {
-		rra_num = rra_monthly;
+	else if (value->len == 4 && rspamd_lc_cmp (value->begin, "year", value->len) == 0) {
+		rra_num = rra_year;
 	}
 
 	g_hash_table_unref (query);
