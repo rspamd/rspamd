@@ -52,6 +52,14 @@ SURBL Example.ru ZEN domain
   Should Not Contain  ${result.stdout}  DBL_PHISH (
   Should Not Contain  ${result.stdout}  URIBL_BLACK (
 
+SURBL Example.com domain image false
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/urlimage.eml
+  Should Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES
+  Should Not Contain  ${result.stdout}  DBL_SPAM (
+  Should Not Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Not Contain  ${result.stdout}  DBL_PHISH (
+  Should Not Contain  ${result.stdout}  URIBL_BLACK (
+
 *** Keywords ***
 Surbl Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/surbl.conf
