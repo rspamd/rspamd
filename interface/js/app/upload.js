@@ -195,12 +195,15 @@ define(["jquery"],
                 rspamd.destroyTable("scan");
                 rspamd.symbols.scan.length = 0;
             });
-            $("#scan button").attr("disabled", true);
+
+            function enable_disable_scan_btn() {
+                $("#scan button").prop("disabled", ($.trim($("textarea").val()).length === 0));
+            }
+            enable_disable_scan_btn();
             $("textarea").on("input", function () {
-                var $this = $(this);
-                $("#scan button")
-                    .prop("disabled", ($.trim($this.val()).length === 0));
+                enable_disable_scan_btn();
             });
+
             $("#scanClean").on("click", function () {
                 $("#scan button").attr("disabled", true);
                 $("#scanMsgSource").val("");
