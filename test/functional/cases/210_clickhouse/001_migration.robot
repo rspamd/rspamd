@@ -36,7 +36,9 @@ Migration
     # Added in schema version 7
     Column should exist    rspamd    Helo
     Column should exist    rspamd    SMTPRecipients
-    Schema version should be    7
+    # Added in schema version 8
+    Column should exist    rspamd    Groups.Scores
+    Schema version should be    8
 
 Retention
     Upload new schema        ${TESTDIR}/data/schema_2/schema.sql
