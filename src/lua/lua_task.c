@@ -646,6 +646,14 @@ LUA_FUNCTION_DEF (task, get_symbols_all);
 LUA_FUNCTION_DEF (task, get_symbols);
 
 /***
+ * @method task:get_groups([need_private])
+ * Returns a map [group -> group_score] for matched group. If `need_private` is
+ * unspecified, then the global option `public_groups_only` is used for default.
+ * @return {table, number} a map [group -> group_score]
+ */
+LUA_FUNCTION_DEF (task, get_groups);
+
+/***
  * @method task:get_symbols_numeric()
  * Returns array of all symbols matched for this task
  * @return {table|number, table|number} table of numbers with symbols ids + table of theirs scores
@@ -1149,6 +1157,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_symbols_all),
 	LUA_INTERFACE_DEF (task, get_symbols_numeric),
 	LUA_INTERFACE_DEF (task, get_symbols_tokens),
+	LUA_INTERFACE_DEF (task, get_groups),
 	LUA_INTERFACE_DEF (task, process_ann_tokens),
 	LUA_INTERFACE_DEF (task, has_symbol),
 	LUA_INTERFACE_DEF (task, enable_symbol),
@@ -4442,6 +4451,46 @@ lua_task_get_symbols_numeric (lua_State *L)
 	}
 
 	return 2;
+}
+
+static gint
+lua_task_get_groups (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	gboolean need_private;
+	struct rspamd_scan_result *mres;
+	struct rspamd_symbols_group *gr;
+	gdouble gr_score;
+
+	if (task) {
+		mres = task->result;
+
+		if (lua_isboolean (L, 2)) {
+			need_private = lua_toboolean (L, 2);
+		}
+		else {
+			need_private = !(task->cfg->public_groups_only);
+		}
+
+		lua_createtable (L, 0, kh_size (mres->sym_groups));
+
+		kh_foreach (mres->sym_groups, gr, gr_score, {
+			if (!(gr->flags & RSPAMD_SYMBOL_GROUP_PUBLIC)) {
+				if (!need_private) {
+					continue;
+				}
+			}
+
+			lua_pushnumber (L, gr_score);
+			lua_setfield (L, -2, gr->name);
+		});
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 struct tokens_foreach_cbdata {
