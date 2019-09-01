@@ -263,6 +263,11 @@ local function surbl_section_convert(cfg, section)
           converted.dkim_match_from = true
         end
 
+        if k == 'emails' and v then
+          -- To match surbl behaviour
+          converted.emails_domainonly = true
+        end
+
         converted[k] = lua_util.deepcopy(v)
       end
       rbl_section[name] = converted
