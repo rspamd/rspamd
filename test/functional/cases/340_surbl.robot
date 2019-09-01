@@ -62,21 +62,22 @@ SURBL Example.com domain image false
 
 SURBL @example.com mail html
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/mailadr.eml
-  Should Contain  ${result.stdout}  URIBL_IN_MAIL (
-  Should Not Contain  ${result.stdout}  RSPAMD_URIBL
-  Should Not Contain  ${result.stdout}  DBL_SPAM (
-  Should Not Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Contain  ${result.stdout}  DBL_SPAM (
+  Should Contain  ${result.stdout}  example.com:email
+  Should Not Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES (
   Should Not Contain  ${result.stdout}  DBL_PHISH (
   Should Not Contain  ${result.stdout}  URIBL_BLACK (
 
 SURBL @example.com mail text
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/mailadr2.eml
-  Should Contain  ${result.stdout}  URIBL_IN_MAIL (
-  Should Not Contain  ${result.stdout}  RSPAMD_URIBL
-  Should Not Contain  ${result.stdout}  DBL_SPAM (
-  Should Not Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Contain  ${result.stdout}  DBL_SPAM (
+  Should Contain  ${result.stdout}  example.com:email
+  Should Not Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES (
   Should Not Contain  ${result.stdout}  DBL_PHISH (
   Should Not Contain  ${result.stdout}  URIBL_BLACK (
+
 
 *** Keywords ***
 Surbl Setup
