@@ -1162,6 +1162,8 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 						continue;
 					}
 				}
+
+				g_ptr_array_add (sorted_symbols, gr);
 			});
 
 			g_ptr_array_sort (sorted_symbols, rspamd_task_compare_log_group);
