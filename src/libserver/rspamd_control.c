@@ -35,6 +35,7 @@ struct rspamd_control_session;
 struct rspamd_control_reply_elt {
 	struct rspamd_control_reply reply;
 	struct rspamd_io_ev ev;
+	struct ev_loop *event_loop;
 	struct rspamd_worker *wrk;
 	gpointer ud;
 	gint attached_fd;
@@ -428,9 +429,9 @@ rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
 		r = sendmsg (wrk->control_pipe[0], &msg, 0);
 
 		if (r == sizeof (*cmd)) {
-
 			rep_elt = g_malloc0 (sizeof (*rep_elt));
 			rep_elt->wrk = wrk;
+			rep_elt->event_loop = rspamd_main->event_loop;
 			rep_elt->ud = ud;
 			rspamd_ev_watcher_init (&rep_elt->ev,
 					wrk->control_pipe[0],
@@ -720,7 +721,7 @@ struct rspamd_srv_reply_data {
 };
 
 static void
-rspamd_control_hs_io_handler (int fd, short what, void *ud)
+rspamd_control_ignore_io_handler (int fd, short what, void *ud)
 {
 	struct rspamd_control_reply_elt *elt =
 			(struct rspamd_control_reply_elt *)ud;
@@ -728,7 +729,7 @@ rspamd_control_hs_io_handler (int fd, short what, void *ud)
 
 	/* At this point we just ignore replies from the workers */
 	(void)read (fd, &rep, sizeof (rep));
-	rspamd_ev_watcher_stop (elt->wrk->srv->event_loop, &elt->ev);
+	rspamd_ev_watcher_stop (elt->event_loop, &elt->ev);
 	g_free (elt);
 }
 
@@ -741,7 +742,7 @@ rspamd_control_log_pipe_io_handler (int fd, short what, void *ud)
 
 	/* At this point we just ignore replies from the workers */
 	(void) read (fd, &rep, sizeof (rep));
-	rspamd_ev_watcher_stop (elt->wrk->srv->event_loop, &elt->ev);
+	rspamd_ev_watcher_stop (elt->event_loop, &elt->ev);
 	g_free (elt);
 }
 
@@ -886,7 +887,7 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 						sizeof (wcmd.cmd.hs_loaded.cache_dir));
 				wcmd.cmd.hs_loaded.forced = cmd.cmd.hs_loaded.forced;
 				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
-						rspamd_control_hs_io_handler, NULL);
+						rspamd_control_ignore_io_handler, NULL);
 				break;
 			case RSPAMD_SRV_MONITORED_CHANGE:
 				/* Broadcast command to all workers */
@@ -898,7 +899,7 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 				wcmd.cmd.monitored_change.alive = cmd.cmd.monitored_change.alive;
 				wcmd.cmd.monitored_change.sender = cmd.cmd.monitored_change.sender;
 				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
-						rspamd_control_hs_io_handler, NULL);
+						rspamd_control_ignore_io_handler, NULL);
 				break;
 			case RSPAMD_SRV_LOG_PIPE:
 				memset (&wcmd, 0, sizeof (wcmd));
