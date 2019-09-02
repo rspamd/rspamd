@@ -760,7 +760,7 @@ local function gen_rbl_callback(rule)
   return callback_f,string.format('checks: %s', table.concat(description, ','))
 end
 
-local function add_rbl(key, rbl)
+local function add_rbl(key, rbl, global_opts)
   if not rbl.symbol then
     rbl.symbol = key:upper()
   end
@@ -822,6 +822,13 @@ local function add_rbl(key, rbl)
         'RBL whitelist for ' .. rbl.symbol)
   end
 
+  if not rbl.whitelist and global_opts.url_whitelist and
+      (rbl.urls or rbl.emails or rbl.dkim) then
+    local def_type = 'set'
+    rbl.whitelist = lua_maps.map_add_from_ucl(global_opts.url_whitelist, def_type,
+        'RBL url whitelist for ' .. rbl.symbol)
+  end
+
   local callback,description = gen_rbl_callback(rbl)
 
   if callback then
@@ -848,11 +855,14 @@ local function add_rbl(key, rbl)
     }
 
     local function process_return_code(s)
-      rspamd_config:register_symbol({
-        name = s,
-        parent = id,
-        type = 'virtual'
-      })
+      if s ~= rbl.symbol then
+        -- hack
+        rspamd_config:register_symbol({
+          name = s,
+          parent = id,
+          type = 'virtual'
+        })
+      end
 
       if rbl.is_whitelist then
         if rbl.whitelist_exception then
@@ -1010,7 +1020,7 @@ for key,rbl in pairs(opts.rbls or opts.rules) do
       rspamd_logger.errx(rspamd_config, 'invalid config for %s: %s, RBL is DISABLED',
           key, err)
     else
-      add_rbl(key, res)
+      add_rbl(key, res, opts)
     end
   end -- rbl.enabled
 end
