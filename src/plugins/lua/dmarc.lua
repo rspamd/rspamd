@@ -663,6 +663,11 @@ local function dmarc_callback(task)
               end
             end
           end
+
+          if not has_valid_policy then
+            policy_target.err = lookup_domain .. ':' .. ' no valid DMARC record'
+            policy_target.symbol = dmarc_symbols['na']
+          end
         end
       end
 
