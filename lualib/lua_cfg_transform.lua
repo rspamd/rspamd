@@ -278,6 +278,47 @@ local function surbl_section_convert(cfg, section)
   end
 end
 
+-- Converts surbl module config to rbl module
+local function emails_section_convert(cfg, section)
+  local rbl_section = cfg.rbl.rbls
+  local wl = section.whitelist
+  for name,value in pairs(section.rules or {}) do
+    if not rbl_section[name] then
+      local converted = {
+        emails = true,
+        ignore_defaults = true,
+      }
+
+      if wl then
+        converted.whitelist = wl
+      end
+
+      for k,v in pairs(value) do
+        -- Rename
+        if k == 'dnsbl' then k = 'rbl' end
+        if k == 'check_replyto' then k = 'replyto' end
+        if k == 'hashlen' then k = 'hash_len' end
+        if k == 'encoding' then k = 'hash_format' end
+        if k == 'domain_only' then k = 'emails_domainonly' end
+        if k == 'delimiter' then k = 'emails_delimiter' end
+        if k == 'skip_body' then
+          if v then
+            -- Hack
+            converted.emails = false
+            converted.replyto = true
+          end
+        end
+
+        converted[k] = lua_util.deepcopy(v)
+      end
+      rbl_section[name] = converted
+    else
+      logger.warnx(rspamd_config, 'conflicting names in emails and rbl rules: %s, ignore emails rule',
+          name)
+    end
+  end
+end
+
 return function(cfg)
   local ret = false
 
@@ -459,6 +500,20 @@ return function(cfg)
     surbl_section_convert(cfg, cfg.surbl)
     logger.infox(rspamd_config, 'converted surbl rules to rbl rules')
     cfg.surbl = {}
+  end
+
+  if cfg.emails then
+    if not cfg.rbl then
+      cfg.rbl = {
+        rbls = {}
+      }
+    end
+    if not cfg.rbl.rbls then
+      cfg.rbl.rbls = {}
+    end
+    emails_section_convert(cfg, cfg.emails)
+    logger.infox(rspamd_config, 'converted emails rules to rbl rules')
+    cfg.emails = {}
   end
 
   return ret, cfg
