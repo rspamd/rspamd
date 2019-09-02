@@ -460,17 +460,17 @@ local function gen_rbl_callback(rule)
         add_dns_request(task, email:get_tld(), false, false, requests_table,
             'email', whitelist)
       else
-        if rule.hash then
-          -- Leave @ as is
-          add_dns_request(task, string.format('%s@%s',
-              email:get_user(), email:get_host()), false, false,
-              requests_table, 'email', whitelist)
+        local delimiter = '.'
+        if rule.emails_delimiter then
+          delimiter = rule.emails_delimiter
         else
-          -- Replace @ with .
-          add_dns_request(task, string.format('%s.%s',
-              email:get_user(), email:get_host()), false, false,
-              requests_table, 'email', whitelist)
+          if rule.hash then
+            delimiter = '@'
+          end
         end
+        add_dns_request(task, string.format('%s%s%s',
+            email:get_user(), delimiter, email:get_host()), false, false,
+            requests_table, 'email', whitelist)
       end
     end
 
@@ -572,20 +572,20 @@ local function gen_rbl_callback(rule)
         lua_util.remove_email_aliases(rt[1])
         rt[1].addr = rt[1].addr:lower()
         if rule.emails_domainonly then
-          add_dns_request(task, rt[1].addr, true, false, requests_table,
-              'email replyto', whitelist)
+          add_dns_request(task, rt[1].host, true, false, requests_table,
+              'email replyt', whitelist)
         else
-          if rule.hash then
-            -- Leave @ as is
-            add_dns_request(task, string.format('%s@%s',
-                rt[1].user, rt[1].host), false, false,
-                requests_table, 'email replyto', whitelist)
+          local delimiter = '.'
+          if rule.emails_delimiter then
+            delimiter = rule.emails_delimiter
           else
-            -- Replace @ with .
-            add_dns_request(task, string.format('%s.%s',
-                rt[1].user, rt[1].host), false, false,
-                requests_table, 'email replyto', whitelist)
+            if rule.hash then
+              delimiter = '@'
+            end
           end
+          add_dns_request(task, string.format('%s%s%s',
+              rt[1].user, delimiter, rt[1].host), true, false,
+              requests_table, 'email replyt', whitelist)
         end
       end
     end
@@ -985,6 +985,7 @@ local rule_schema = ts.shape({
   monitored_address = ts.string:is_optional(),
   requests_limit = (ts.integer + ts.string / tonumber):is_optional(),
   process_script = ts.string:is_optional(),
+  emails_delimiter = ts.string:is_optional(),
 }, {
   -- Covers boolean defaults
   extra_fields = ts.map_of(ts.string, ts.boolean)
