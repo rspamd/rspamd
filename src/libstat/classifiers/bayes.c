@@ -80,7 +80,7 @@ inv_chi_square (struct rspamd_task *task, gdouble value, gint freedom_deg)
 
 	sum = prob;
 
-	msg_debug_bayes ("m: %f, prob: %g", m, prob);
+	msg_debug_bayes ("m: %f, probability: %g", m, prob);
 
 	/*
 	 * m is our confidence in class
@@ -91,7 +91,7 @@ inv_chi_square (struct rspamd_task *task, gdouble value, gint freedom_deg)
 	for (i = 1; i < freedom_deg; i++) {
 		prob *= m / (gdouble)i;
 		sum += prob;
-		msg_debug_bayes ("i=%d, prob: %g, sum: %g", i, prob, sum);
+		msg_debug_bayes ("i=%d, probability: %g, sum: %g", i, prob, sum);
 	}
 
 	return MIN (1.0, sum);
@@ -197,7 +197,7 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 		if ((bayes_spam_prob > 0.5 && bayes_spam_prob < 0.5 + ctx->cfg->min_prob_strength) ||
 			(bayes_spam_prob < 0.5 && bayes_spam_prob > 0.5 - ctx->cfg->min_prob_strength)) {
 			msg_debug_bayes (
-					"token %uL <%*s:%*s> skipped, prob not in range: %f",
+					"token %uL <%*s:%*s> skipped, probability not in range: %f",
 					tok->data,
 					(int) tok->t1->stemmed.len, tok->t1->stemmed.begin,
 					(int) tok->t2->stemmed.len, tok->t2->stemmed.begin,
@@ -225,7 +225,7 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 					"spam_count: %ud, ham_count: %ud,"
 					"spam_prob: %.3f, ham_prob: %.3f, "
 					"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
-					"current spam prob: %.3f, current ham prob: %.3f",
+					"current spam probability: %.3f, current ham probability: %.3f",
 					token_type,
 					tok->data,
 					(int) tok->t1->stemmed.len, tok->t1->stemmed.begin,
@@ -241,7 +241,7 @@ bayes_classify_token (struct rspamd_classifier *ctx,
 					"spam_count: %ud, ham_count: %ud,"
 					"spam_prob: %.3f, ham_prob: %.3f, "
 					"bayes_spam_prob: %.3f, bayes_ham_prob: %.3f, "
-					"current spam prob: %.3f, current ham prob: %.3f",
+					"current spam probability: %.3f, current ham probability: %.3f",
 					token_type,
 					tok->data,
 					fw, w, total_count, spam_count, ham_count,
@@ -291,15 +291,15 @@ bayes_classify (struct rspamd_classifier * ctx,
 	/* Check min learns */
 	if (ctx->cfg->min_learns > 0) {
 		if (ctx->ham_learns < ctx->cfg->min_learns) {
-			msg_info_task ("skip classification as ham class has not enough "
-					"learns: %ul, %ud required",
+			msg_info_task ("not classified as ham. The ham class needs more "
+					"training samples. Currently: %ul; minimum %ud required",
 					ctx->ham_learns, ctx->cfg->min_learns);
 
 			return TRUE;
 		}
 		if (ctx->spam_learns < ctx->cfg->min_learns) {
-			msg_info_task ("skip classification as spam class has not enough "
-					"learns: %ul, %ud required",
+			msg_info_task ("not classified as spam. The spam class needs more "
+					"training samples. Currently: %ul; minimum %ud required",
 					ctx->spam_learns, ctx->cfg->min_learns);
 
 			return TRUE;
@@ -314,8 +314,8 @@ bayes_classify (struct rspamd_classifier * ctx,
 	}
 
 	if (text_tokens == 0) {
-		msg_info_task ("skip classification as there are no text tokens, "
-				"%ud total tokens",
+		msg_info_task ("skipped classification as there are no text tokens. "
+				"Total tokens: %ud",
 				tokens->len);
 
 		return TRUE;
@@ -349,7 +349,7 @@ bayes_classify (struct rspamd_classifier * ctx,
 		cl.text_tokens < (gint)(ctx->cfg->min_tokens * 0.1)) {
 		msg_info_bayes ("ignore bayes probability since we have "
 						"found too few text tokens: %uL (of %ud checked), "
-						"at least %d is required",
+						"at least %d required",
 						cl.text_tokens,
 						text_tokens,
 						(gint)(ctx->cfg->min_tokens * 0.1));
@@ -379,7 +379,7 @@ bayes_classify (struct rspamd_classifier * ctx,
 	if (isfinite (s) && isfinite (h)) {
 		final_prob = (s + 1.0 - h) / 2.;
 		msg_debug_bayes (
-				"got ham prob %.2f -> %.2f and spam prob %.2f -> %.2f,"
+				"got ham probability %.2f -> %.2f and spam probability %.2f -> %.2f,"
 				" %L tokens processed of %ud total tokens;"
 				" %uL text tokens found of %ud text tokens)",
 				cl.ham_prob,
@@ -398,17 +398,17 @@ bayes_classify (struct rspamd_classifier * ctx,
 		 */
 		if (isfinite (h)) {
 			final_prob = 1.0;
-			msg_debug_bayes ("spam class is overflowed, as we have no"
+			msg_debug_bayes ("spam class is full: no"
 					" ham samples");
 		}
 		else if (isfinite (s)) {
 			final_prob = 0.0;
-			msg_debug_bayes ("ham class is overflowed, as we have no"
+			msg_debug_bayes ("ham class is full: no"
 					" spam samples");
 		}
 		else {
 			final_prob = 0.5;
-			msg_warn_bayes ("spam and ham classes are both overflowed");
+			msg_warn_bayes ("spam and ham classes are both full");
 		}
 	}
 
