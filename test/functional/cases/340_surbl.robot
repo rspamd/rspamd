@@ -78,6 +78,19 @@ SURBL @example.com mail text
   Should Not Contain  ${result.stdout}  DBL_PHISH (
   Should Not Contain  ${result.stdout}  URIBL_BLACK (
 
+SURBL example.com not encoded url in subject
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/urlinsubject.eml
+  Should Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Contain  ${result.stdout}  DBL_SPAM (
+  Should Not Contain  ${result.stdout}  DBL_PHISH (
+  Should Not Contain  ${result.stdout}  URIBL_BLACK (
+
+SURBL example.com encoded url in subject
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/urlinsubjectencoded.eml
+  Should Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Contain  ${result.stdout}  DBL_SPAM (
+  Should Not Contain  ${result.stdout}  DBL_PHISH (
+  Should Not Contain  ${result.stdout}  URIBL_BLACK (
 
 *** Keywords ***
 Surbl Setup
