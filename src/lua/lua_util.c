@@ -23,7 +23,11 @@
 #include "libmime/content_type.h"
 #include "libmime/mime_headers.h"
 #include "libutil/hash.h"
-#include "linenoise.h"
+
+#ifdef WITH_LUA_REPL
+#include "replxx.h"
+#endif
+
 #include <math.h>
 #include <glob.h>
 #include <zlib.h>
@@ -2865,17 +2869,41 @@ lua_util_readline (lua_State *L)
 	if (lua_type (L, 1) == LUA_TSTRING) {
 		prompt = lua_tostring (L, 1);
 	}
+#ifdef WITH_LUA_REPL
+	static Replxx *rx_instance = NULL;
 
-	input = linenoise (prompt);
+	if (rx_instance == NULL) {
+		rx_instance = replxx_init ();
+	}
+
+	input = (gchar *)replxx_input (rx_instance, prompt);
 
 	if (input) {
 		lua_pushstring (L, input);
-		linenoiseHistoryAdd (input);
-		linenoiseFree (input);
 	}
 	else {
 		lua_pushnil (L);
 	}
+#else
+	size_t linecap = 0;
+	ssize_t linelen;
+
+	fprintf (stdout, "%s ", prompt);
+
+	linelen = getline (&input, &linecap, stdin);
+
+	if (linelen > 0) {
+		if (input[linelen - 1] == '\n') {
+			linelen --;
+		}
+
+		lua_pushlstring (L, input, linelen);
+		free (input);
+	}
+	else {
+		lua_pushnil (L);
+	}
+#endif
 
 	return 1;
 }
