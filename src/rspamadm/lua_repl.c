@@ -24,7 +24,9 @@
 #include "lua/lua_thread_pool.h"
 #include "message.h"
 #include "unix-std.h"
-#include "linenoise.h"
+#ifdef WITH_LUA_REPL
+#include "replxx.h"
+#endif
 #include "worker_util.h"
 #ifdef WITH_LUAJIT
 #include <luajit.h>
@@ -42,6 +44,10 @@ static gboolean per_line = FALSE;
 extern struct rspamd_async_session *rspamadm_session;
 
 static const char *default_history_file = ".rspamd_repl.hist";
+
+#ifdef WITH_LUA_REPL
+static Replxx *rx_instance = NULL;
+#endif
 
 #ifdef WITH_LUAJIT
 #define MAIN_PROMPT LUAJIT_VERSION "> "
@@ -516,11 +522,32 @@ rspamadm_lua_run_repl (lua_State *L)
 	gchar *input;
 	gboolean is_multiline = FALSE;
 	GString *tb = NULL;
-	guint i;
+	gsize i;
 
 	for (;;) {
+#ifndef WITH_LUA_REPL
+		size_t linecap = 0;
+		ssize_t linelen;
+
+		fprintf (stdout, "%s ", MAIN_PROMPT);
+
+		linelen = getline (&input, &linecap, stdin);
+
+		if (linelen > 0) {
+			if (input[linelen - 1] == '\n') {
+				linelen --;
+			}
+
+			rspamadm_exec_input (L, input);
+		}
+		else {
+			break;
+		}
+
+		lua_settop (L, 0);
+#else
 		if (!is_multiline) {
-			input = linenoise (MAIN_PROMPT);
+			input = (gchar *)replxx_input (rx_instance, MAIN_PROMPT);
 
 			if (input == NULL) {
 				return;
@@ -528,26 +555,23 @@ rspamadm_lua_run_repl (lua_State *L)
 
 			if (input[0] == '.') {
 				if (rspamadm_lua_try_dot_command (L, input)) {
-					linenoiseHistoryAdd (input);
-					linenoiseFree (input);
+					replxx_history_add (rx_instance, input);
 					continue;
 				}
 			}
 
 			if (strcmp (input, "{{") == 0) {
 				is_multiline = TRUE;
-				linenoiseFree (input);
 				tb = g_string_sized_new (8192);
 				continue;
 			}
 
 			rspamadm_exec_input (L, input);
-			linenoiseHistoryAdd (input);
-			linenoiseFree (input);
+			replxx_history_add (rx_instance, input);
 			lua_settop (L, 0);
 		}
 		else {
-			input = linenoise (MULTILINE_PROMPT);
+			input = (gchar *)replxx_input (rx_instance, MULTILINE_PROMPT);
 
 			if (input == NULL) {
 				g_string_free (tb, TRUE);
@@ -556,7 +580,6 @@ rspamadm_lua_run_repl (lua_State *L)
 
 			if (strcmp (input, "}}") == 0) {
 				is_multiline = FALSE;
-				linenoiseFree (input);
 				rspamadm_exec_input (L, tb->str);
 
 				/* Replace \n with ' ' for sanity */
@@ -566,15 +589,15 @@ rspamadm_lua_run_repl (lua_State *L)
 					}
 				}
 
-				linenoiseHistoryAdd (tb->str);
+				replxx_history_add (rx_instance, tb->str);
 				g_string_free (tb, TRUE);
 			}
 			else {
 				g_string_append (tb, input);
 				g_string_append (tb, " \n");
-				linenoiseFree (input);
 			}
 		}
+#endif
 	}
 }
 
@@ -926,13 +949,19 @@ again:
 		}
 	}
 	else {
+#ifdef WITH_LUA_REPL
+		rx_instance = replxx_init ();
+#endif
 		if (!batch) {
-			linenoiseHistorySetMaxLen (max_history);
-			linenoiseHistoryLoad (histfile);
+			replxx_set_max_history_size (rx_instance, max_history);
+			replxx_history_load (rx_instance, histfile);
 			rspamadm_lua_run_repl (L);
-			linenoiseHistorySave (histfile);
+			replxx_history_save (rx_instance, histfile);
 		} else {
 			rspamadm_lua_run_repl (L);
 		}
+#ifdef WITH_LUA_REPL
+		 replxx_end (rx_instance);
+#endif
 	}
 }
