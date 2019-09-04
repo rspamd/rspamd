@@ -81,7 +81,7 @@ lua_trie_destroy (lua_State *L)
 }
 
 /***
- * function trie.create(patterns)
+ * function trie.create(patterns, [flags])
  * Creates new trie data structure
  * @param {table} array of string patterns
  * @return {trie} new trie object
@@ -93,9 +93,12 @@ lua_trie_create (lua_State *L)
 	gint npat = 0, flags = RSPAMD_MULTIPATTERN_ICASE|RSPAMD_MULTIPATTERN_GLOB;
 	GError *err = NULL;
 
+	if (lua_isnumber (L, 2)) {
+		flags = lua_tointeger (L, 2);
+	}
+
 	if (!lua_istable (L, 1)) {
-		msg_err ("lua trie expects array of patterns for now");
-		lua_pushnil (L);
+		return luaL_error (L, "lua trie expects array of patterns for now");
 	}
 	else {
 		lua_pushvalue (L, 1);
@@ -348,6 +351,24 @@ static gint
 lua_load_trie (lua_State *L)
 {
 	lua_newtable (L);
+
+	/* Flags */
+	lua_pushstring (L, "flags");
+	lua_newtable (L);
+
+	lua_pushinteger (L, RSPAMD_MULTIPATTERN_GLOB);
+	lua_setfield (L, -2, "glob");
+	lua_pushinteger (L, RSPAMD_MULTIPATTERN_RE);
+	lua_setfield (L, -2, "re");
+	lua_pushinteger (L, RSPAMD_MULTIPATTERN_ICASE);
+	lua_setfield (L, -2, "icase");
+	lua_pushinteger (L, RSPAMD_MULTIPATTERN_UTF8);
+	lua_setfield (L, -2, "utf8");
+	lua_pushinteger (L, RSPAMD_MULTIPATTERN_TLD);
+	lua_setfield (L, -2, "tld");
+	lua_settable (L, -3);
+
+	/* Main content */
 	luaL_register (L, NULL, trielib_f);
 
 	return 1;

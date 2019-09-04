@@ -36,7 +36,7 @@ enum rspamd_multipattern_flags {
 	RSPAMD_MULTIPATTERN_UTF8 = (1 << 1),
 	RSPAMD_MULTIPATTERN_TLD = (1 << 2),
 	/* Not supported by acism */
-			RSPAMD_MULTIPATTERN_GLOB = (1 << 3),
+	RSPAMD_MULTIPATTERN_GLOB = (1 << 3),
 	RSPAMD_MULTIPATTERN_RE = (1 << 4),
 };
 
