@@ -12,6 +12,7 @@ ${M_DMARC_BAD}  ${TESTDIR}/messages/dmarc/fail_none.eml
 
 ${M_DKIM_RSPAMD_OK}   ${TESTDIR}/messages/dmarc/good_dkim_rspamd.eml
 ${M_DKIM_RSPAMD_BAD}  ${TESTDIR}/messages/dmarc/bad_dkim_rspamd.eml
+${M_NO_DKIM_VALID_SPF}  ${TESTDIR}/messages/dmarc/no_dkim_valid_spf.eml
 
 ${UTF_MESSAGE}  ${TESTDIR}/messages/utf.eml
 ${RSPAMD_SCOPE}  Suite
@@ -60,6 +61,27 @@ BLACKLISTS_WL_ONLY
   Should Not Contain  ${result.stdout}  WHITELIST_DKIM (
   Should Not Contain  ${result.stdout}  BLACKLIST_DKIM (
 
+VALID SPF and VALID DKIM
+  ${result} =  Scan Message With Rspamc  ${M_DKIM_RSPAMD_OK}
+  Should Contain  ${result.stdout}  R_SPF_ALLOW (
+  Should Contain  ${result.stdout}  R_DKIM_ALLOW (
+  Should Contain  ${result.stdout}  WHITELIST_SPF_DKIM (
+
+VALID SPF and NOT VALID DKIM
+  ${result} =  Scan Message With Rspamc  ${M_DKIM_RSPAMD_BAD}
+  Should Contain  ${result.stdout}  R_SPF_ALLOW (
+  Should Contain  ${result.stdout}  R_DKIM_REJECT (
+  Should Not Contain  ${result.stdout}  WHITELIST_SPF_DKIM (
+  Should Not Contain  ${result.stdout}  R_DKIM_ALLOW (
+
+VALID SPF and NO DKIM
+  ${result} =  Scan Message With Rspamc  ${M_NO_DKIM_VALID_SPF}
+  Should Contain  ${result.stdout}  R_SPF_ALLOW (
+  Should Contain  ${result.stdout}  R_DKIM_NA (
+  Should Not Contain  ${result.stdout}  R_DKIM_REJECT (
+  Should Not Contain  ${result.stdout}  WHITELIST_SPF_DKIM (
+  Should Not Contain  ${result.stdout}  R_DKIM_ALLOW (
+  
 *** Keywords ***
 Whitelist Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/whitelist.conf
