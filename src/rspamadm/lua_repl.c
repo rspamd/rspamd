@@ -40,7 +40,6 @@ static guint max_history = 2000;
 static gchar *serve = NULL;
 static gchar *exec_line = NULL;
 static gint batch = -1;
-static gboolean per_line = FALSE;
 extern struct rspamd_async_session *rspamadm_session;
 
 static const char *default_history_file = ".rspamd_repl.hist";
@@ -125,8 +124,6 @@ static GOptionEntry entries[] = {
 				"Serve http lua server", NULL},
 		{"batch", 'b', 0, G_OPTION_ARG_NONE, &batch,
 				"Batch execution mode", NULL},
-		{"per-line", 'p', 0, G_OPTION_ARG_NONE, &per_line,
-				"Pass each line of input to the specified lua script", NULL},
 		{"exec", 'e', 0, G_OPTION_ARG_STRING, &exec_line,
 				"Execute specified script", NULL},
 		{"args", 'a', 0, G_OPTION_ARG_STRING_ARRAY, &lua_args,
@@ -228,14 +225,11 @@ rspamadm_lua_load_script (lua_State *L, const gchar *path)
 		return FALSE;
 	}
 
-	if (!per_line) {
-
-		if (lua_repl_thread_call (thread, 0, (void *)path, lua_thread_str_error_cb) != 0) {
-			return FALSE;
-		}
-
-		lua_settop (L, 0);
+	if (lua_repl_thread_call (thread, 0, (void *)path, lua_thread_str_error_cb) != 0) {
+		return FALSE;
 	}
+
+	lua_settop (L, 0);
 
 	return TRUE;
 }
@@ -274,24 +268,22 @@ rspamadm_exec_input (lua_State *L, const gchar *input)
 
 	g_string_free (tb, TRUE);
 
-	if (!per_line) {
 
-		top = lua_gettop (L);
+	top = lua_gettop (L);
 
-		if (lua_repl_thread_call (thread, 0, NULL, NULL) == 0) {
-			/* Print output */
-			for (i = top; i <= lua_gettop (L); i++) {
-				if (lua_isfunction (L, i)) {
-					lua_pushvalue (L, i);
-					cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+	if (lua_repl_thread_call (thread, 0, NULL, NULL) == 0) {
+		/* Print output */
+		for (i = top; i <= lua_gettop (L); i++) {
+			if (lua_isfunction (L, i)) {
+				lua_pushvalue (L, i);
+				cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 
-					rspamd_printf ("local function: %d\n", cbref);
-				} else {
-					memset (&tr, 0, sizeof (tr));
-					lua_logger_out_type (L, i, outbuf, sizeof (outbuf), &tr,
-							LUA_ESCAPE_UNPRINTABLE);
-					rspamd_printf ("%s\n", outbuf);
-				}
+				rspamd_printf ("local function: %d\n", cbref);
+			} else {
+				memset (&tr, 0, sizeof (tr));
+				lua_logger_out_type (L, i, outbuf, sizeof (outbuf), &tr,
+						LUA_ESCAPE_UNPRINTABLE);
+				rspamd_printf ("%s\n", outbuf);
 			}
 		}
 	}
@@ -516,8 +508,106 @@ rspamadm_lua_try_dot_command (lua_State *L, const gchar *input)
 	return FALSE;
 }
 
+#ifdef WITH_LUA_REPL
+static gint lex_ref_idx = -1;
+
 static void
-rspamadm_lua_run_repl (lua_State *L)
+lua_syntax_highlighter (const char *str, ReplxxColor *colours, int size, void *ud)
+{
+	lua_State *L = (lua_State *)ud;
+
+	if (lex_ref_idx == -1) {
+		if (!rspamd_lua_require_function (L, "lua_lexer", "lex_to_table")) {
+			fprintf (stderr, "cannot require lua_lexer!\n");
+
+			exit (EXIT_FAILURE);
+		}
+
+		lex_ref_idx = luaL_ref (L, LUA_REGISTRYINDEX);
+	}
+
+	lua_rawgeti (L, LUA_REGISTRYINDEX, lex_ref_idx);
+	lua_pushstring (L, str);
+
+	if (lua_pcall (L, 1, 1, 0) != 0) {
+		fprintf (stderr, "cannot lex a string!\n");
+	}
+	else {
+		/* Process what we have after lexing */
+		gsize nelts = rspamd_lua_table_size (L, -1);
+
+		for (gsize i = 0; i < nelts; i ++) {
+			/*
+			 * Indexes in the table:
+			 * 1 - type of element (string)
+			 * 2 - text (string)
+			 * 3 - line num (int), always 1...
+			 * 4 - column num (must be less than size)
+			 */
+			const gchar *what, *text;
+			gsize column, tlen, cur_top, elt_pos;
+			ReplxxColor elt_color = REPLXX_COLOR_DEFAULT;
+
+			cur_top = lua_gettop (L);
+			lua_rawgeti (L, -1, i + 1);
+			elt_pos = lua_gettop (L);
+			lua_rawgeti (L, elt_pos, 1);
+			what = lua_tostring (L, -1);
+			lua_rawgeti (L, elt_pos, 2);
+			text = lua_tolstring (L, -1, &tlen);
+			lua_rawgeti (L, elt_pos, 4);
+			column = lua_tointeger (L, -1);
+
+			g_assert (column > 0);
+			column --; /* Start from 0 */
+
+			if (column + tlen > size) {
+				/* Likely utf8 case, too complicated to match */
+				lua_settop (L, cur_top);
+				continue;
+			}
+
+			/* Check what and adjust color */
+			if (strcmp (what, "identifier") == 0) {
+				elt_color = REPLXX_COLOR_NORMAL;
+			}
+			else if (strcmp (what, "number") == 0) {
+				elt_color = REPLXX_COLOR_BLUE;
+			}
+			else if (strcmp (what, "string") == 0) {
+				elt_color = REPLXX_COLOR_GREEN;
+			}
+			else if (strcmp (what, "keyword") == 0) {
+				elt_color = REPLXX_COLOR_WHITE;
+			}
+			else if (strcmp (what, "constant") == 0) {
+				elt_color = REPLXX_COLOR_WHITE;
+			}
+			else if (strcmp (what, "operator") == 0) {
+				elt_color = REPLXX_COLOR_CYAN;
+			}
+			else if (strcmp (what, "comment") == 0) {
+				elt_color = REPLXX_COLOR_BRIGHTGREEN;
+			}
+			else if (strcmp (what, "error") == 0) {
+				elt_color = REPLXX_COLOR_ERROR;
+			}
+
+			for (gsize j = column; j < column + tlen; j ++) {
+				colours[j] = elt_color;
+			}
+
+			/* Restore stack */
+			lua_settop (L, cur_top);
+		}
+	}
+
+	lua_settop (L, 0);
+}
+#endif
+
+static void
+rspamadm_lua_run_repl (lua_State *L, bool is_batch)
 {
 	gchar *input;
 	gboolean is_multiline = FALSE;
@@ -546,6 +636,11 @@ rspamadm_lua_run_repl (lua_State *L)
 
 		lua_settop (L, 0);
 #else
+		if (!is_batch) {
+			replxx_set_highlighter_callback (rx_instance, lua_syntax_highlighter,
+					L);
+		}
+
 		if (!is_multiline) {
 			input = (gchar *)replxx_input (rx_instance, MAIN_PROMPT);
 
@@ -555,7 +650,9 @@ rspamadm_lua_run_repl (lua_State *L)
 
 			if (input[0] == '.') {
 				if (rspamadm_lua_try_dot_command (L, input)) {
-					replxx_history_add (rx_instance, input);
+					if (!is_batch) {
+						replxx_history_add (rx_instance, input);
+					}
 					continue;
 				}
 			}
@@ -567,7 +664,9 @@ rspamadm_lua_run_repl (lua_State *L)
 			}
 
 			rspamadm_exec_input (L, input);
-			replxx_history_add (rx_instance, input);
+			if (!is_batch) {
+				replxx_history_add (rx_instance, input);
+			}
 			lua_settop (L, 0);
 		}
 		else {
@@ -589,7 +688,9 @@ rspamadm_lua_run_repl (lua_State *L)
 					}
 				}
 
-				replxx_history_add (rx_instance, tb->str);
+				if (!is_batch) {
+					replxx_history_add (rx_instance, tb->str);
+				}
 				g_string_free (tb, TRUE);
 			}
 			else {
@@ -899,69 +1000,19 @@ rspamadm_lua (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 		g_hash_table_insert (cmds_hash, (gpointer)cmds[i].name, &cmds[i]);
 	}
 
-	if (per_line) {
-		GIOChannel *in;
-		GString *buf;
-		gsize end_pos;
-		GIOStatus ret;
-		gint old_top;
-		GError *err = NULL;
 
-		in = g_io_channel_unix_new (STDIN_FILENO);
-		buf = g_string_sized_new (BUFSIZ);
-
-again:
-		while ((ret = g_io_channel_read_line_string (in, buf, &end_pos, &err)) ==
-				G_IO_STATUS_NORMAL) {
-			old_top = lua_gettop (L);
-			lua_pushvalue (L, -1);
-			lua_pushlstring (L, buf->str, MIN (buf->len, end_pos));
-			lua_setglobal (L, "input");
-
-			struct thread_entry *thread = lua_thread_pool_get_for_config (rspamd_main->cfg);
-			L = thread->lua_state;
-
-			lua_repl_thread_call (thread, 0, NULL, NULL);
-
-			lua_settop (L, old_top);
-		}
-
-		if (ret == G_IO_STATUS_AGAIN) {
-			goto again;
-		}
-
-		g_string_free (buf, TRUE);
-		g_io_channel_shutdown (in, FALSE, NULL);
-
-		if (ret == G_IO_STATUS_EOF) {
-			if (err) {
-				g_error_free (err);
-			}
-		}
-		else {
-			rspamd_fprintf (stderr, "IO error: %e\n", err);
-
-			if (err) {
-				g_error_free (err);
-			}
-
-			exit (-errno);
-		}
-	}
-	else {
 #ifdef WITH_LUA_REPL
-		rx_instance = replxx_init ();
+	rx_instance = replxx_init ();
 #endif
-		if (!batch) {
-			replxx_set_max_history_size (rx_instance, max_history);
-			replxx_history_load (rx_instance, histfile);
-			rspamadm_lua_run_repl (L);
-			replxx_history_save (rx_instance, histfile);
-		} else {
-			rspamadm_lua_run_repl (L);
-		}
-#ifdef WITH_LUA_REPL
-		 replxx_end (rx_instance);
-#endif
+	if (!batch) {
+		replxx_set_max_history_size (rx_instance, max_history);
+		replxx_history_load (rx_instance, histfile);
+		rspamadm_lua_run_repl (L, false);
+		replxx_history_save (rx_instance, histfile);
+	} else {
+		rspamadm_lua_run_repl (L, true);
 	}
+#ifdef WITH_LUA_REPL
+	replxx_end (rx_instance);
+#endif
 }
