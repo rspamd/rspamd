@@ -3080,7 +3080,10 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 								bl->font_color.d.comp.alpha < 10) {
 
 								bl->visible = FALSE;
-								msg_debug_html ("tag is not visible");
+								msg_debug_html ("tag is not visible: font size: "
+												"%d, alpha: %d",
+										(int)bl->font_size,
+										(int)bl->font_color.d.comp.alpha);
 							}
 
 							if (!bl->visible) {
