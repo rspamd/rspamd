@@ -23,6 +23,7 @@ WHITELISTS
   ${result} =  Scan Message With Rspamc  ${M_DMARC_OK}  -i  8.8.4.4  -F  foo@spf.cacophony.za.org
   Check Rspamc  ${result}  WHITELIST_DKIM (-
   Should Contain  ${result.stdout}  STRICT_DMARC (-
+  Should Contain  ${result.stdout}  WHITELIST_SPF_DKIM (-
   Should Contain  ${result.stdout}  WHITELIST_DDS (-
   Should Contain  ${result.stdout}  WHITELIST_DMARC (-
   Should Contain  ${result.stdout}  WHITELIST_DMARC_DKIM (-
@@ -81,7 +82,7 @@ VALID SPF and NO DKIM
   Should Not Contain  ${result.stdout}  R_DKIM_REJECT (
   Should Not Contain  ${result.stdout}  WHITELIST_SPF_DKIM (
   Should Not Contain  ${result.stdout}  R_DKIM_ALLOW (
-  
+
 *** Keywords ***
 Whitelist Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/whitelist.conf
