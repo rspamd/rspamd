@@ -139,11 +139,16 @@ lua_text_fromstring (lua_State *L)
 	LUA_TRACE_POINT;
 	const gchar *str;
 	gsize l = 0;
+	gboolean transparent = FALSE;
 
 	str = luaL_checklstring (L, 1, &l);
 
 	if (str) {
-		lua_new_text (L, str, l, RSPAMD_TEXT_FLAG_OWN);
+		if (lua_isboolean (L, 2)) {
+			transparent = lua_toboolean (L, 2);
+		}
+
+		lua_new_text (L, str, l, transparent ? 0 : RSPAMD_TEXT_FLAG_OWN);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
