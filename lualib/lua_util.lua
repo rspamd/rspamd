@@ -970,6 +970,14 @@ exports.init_debug_logging = function(config)
   end
 end
 
+exports.enable_debug_logging = function()
+  unconditional_debug = true
+end
+
+exports.disable_debug_logging = function()
+  unconditional_debug = false
+end
+
 --[[[
 -- @function lua_util.debugm(module, [log_object], format, ...)
 -- Performs fast debug log for a specific module
