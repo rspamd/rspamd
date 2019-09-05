@@ -25,7 +25,6 @@ local S = lpeg.S
 local D = R'09' -- Digits
 local I = R('AZ', 'az', '\127\255') + '_' -- Identifiers
 local B = -(I + D) -- Word boundary
-local SOS = lpeg.P(function(s, i) return i == 1 end) -- start of string
 local EOS = -lpeg.P(1) -- end of string
 
 -- Pattern for long strings and long comments.
