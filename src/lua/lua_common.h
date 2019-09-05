@@ -216,6 +216,9 @@ void rspamd_lua_task_push (lua_State *L, struct rspamd_task *task);
 struct rspamd_lua_ip *lua_check_ip (lua_State *L, gint pos);
 
 struct rspamd_lua_text *lua_check_text (lua_State *L, gint pos);
+/* Creates and *pushes* new rspamd text, data is copied if  RSPAMD_TEXT_FLAG_OWN is in flags*/
+struct rspamd_lua_text *lua_new_text (lua_State *L, const gchar *start,
+		gsize len, guint flags);
 
 struct rspamd_lua_regexp *lua_check_regexp (lua_State *L, gint pos);
 

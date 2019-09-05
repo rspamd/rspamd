@@ -65,6 +65,15 @@ LUA_FUNCTION_DEF (text, ptr);
  * @return {boolean} true if save has been completed
  */
 LUA_FUNCTION_DEF (text, save_in_file);
+/***
+ * @method rspamd_text:span(start[, len])
+ * Returns a span for lua_text starting at pos [start] (1 indexed) and with
+ * length `len` (or to the end of the text)
+ * @param {integer} start start index
+ * @param {integer} len length of span
+ * @return {rspamd_text} new rspamd_text with span (must be careful when using with owned texts...)
+ */
+LUA_FUNCTION_DEF (text, span);
 LUA_FUNCTION_DEF (text, take_ownership);
 LUA_FUNCTION_DEF (text, gc);
 LUA_FUNCTION_DEF (text, eq);
@@ -81,6 +90,7 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, ptr),
 		LUA_INTERFACE_DEF (text, take_ownership),
 		LUA_INTERFACE_DEF (text, save_in_file),
+		LUA_INTERFACE_DEF (text, span),
 		{"write", lua_text_save_in_file},
 		{"__len", lua_text_len},
 		{"__tostring", lua_text_str},
@@ -89,23 +99,51 @@ static const struct luaL_reg textlib_m[] = {
 		{NULL, NULL}
 };
 
+struct rspamd_lua_text *
+lua_check_text (lua_State * L, gint pos)
+{
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{text}");
+	luaL_argcheck (L, ud != NULL, pos, "'text' expected");
+	return ud ? (struct rspamd_lua_text *)ud : NULL;
+}
+
+struct rspamd_lua_text *
+lua_new_text (lua_State *L, const gchar *start, gsize len, guint flags)
+{
+	struct rspamd_lua_text *t;
+
+	t = lua_newuserdata (L, sizeof (*t));
+
+	if (len > 0 && (flags & RSPAMD_TEXT_FLAG_OWN)) {
+		gchar *storage;
+
+		storage = g_malloc (len);
+		memcpy (storage, start, len);
+		t->start = storage;
+	}
+	else {
+		t->start = start;
+	}
+
+	t->len = len;
+	t->flags = flags;
+	rspamd_lua_setclass (L, "rspamd{text}", -1);
+
+	return t;
+}
+
+
 static gint
 lua_text_fromstring (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	const gchar *str;
 	gsize l = 0;
-	struct rspamd_lua_text *t;
 
 	str = luaL_checklstring (L, 1, &l);
 
 	if (str) {
-		t = lua_newuserdata (L, sizeof (*t));
-		t->start = g_malloc (l + 1);
-		rspamd_strlcpy ((char *)t->start, str, l + 1);
-		t->len = l;
-		t->flags = RSPAMD_TEXT_FLAG_OWN;
-		rspamd_lua_setclass (L, "rspamd{text}", -1);
+		lua_new_text (L, str, l, RSPAMD_TEXT_FLAG_OWN);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -262,6 +300,34 @@ lua_text_take_ownership (lua_State *L)
 			t->flags |= RSPAMD_TEXT_FLAG_OWN;
 			lua_pushboolean (L, true);
 		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_span (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+	gint start = lua_tointeger (L, 2), len = -1;
+
+	if (t && start >= 1 && start <= t->len) {
+		if (lua_isnumber (L, 3)) {
+			len = lua_tonumber (L, 3);
+		}
+
+		if (len == -1) {
+			len = t->len - (start - 1);
+		}
+		else if (len > (t->len - (start - 1))) {
+			return luaL_error (L, "invalid length");
+		}
+
+		lua_new_text (L, t->start + (start - 1), len, 0);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

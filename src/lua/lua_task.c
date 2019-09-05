@@ -1271,14 +1271,6 @@ lua_check_archive (lua_State * L)
 	return ud ? *((struct rspamd_archive **)ud) : NULL;
 }
 
-struct rspamd_lua_text *
-lua_check_text (lua_State * L, gint pos)
-{
-	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{text}");
-	luaL_argcheck (L, ud != NULL, pos, "'text' expected");
-	return ud ? (struct rspamd_lua_text *)ud : NULL;
-}
-
 static void
 lua_task_set_cached (lua_State *L, struct rspamd_task *task, const gchar *key,
 		gint pos)
