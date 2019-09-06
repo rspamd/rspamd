@@ -202,6 +202,15 @@ local patterns = {
       },
     }
   },
+  iso = {
+    matches = {
+      {
+        string = [[\x{01}CD001\x{01}]],
+        position = {'>=', 0x8000 + 7}, -- first 32k is unused
+        weight = 60,
+      },
+    }
+  },
   -- Apple is a 'special' child: this needs to be matched at the data tail...
   dmg = {
     matches = {

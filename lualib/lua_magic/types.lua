@@ -97,6 +97,10 @@ local types = {
     ct = 'application/x-dmg',
     type = 'archive',
   },
+  iso = {
+    ct = 'application/x-iso',
+    type = 'archive',
+  },
   szdd = { -- in fact, their MSDOS extension is like FOO.TX_ or FOO.TX$
     ct = 'application/x-compressed',
     type = 'archive',
