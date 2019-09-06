@@ -54,19 +54,34 @@ local function process_patterns(log_obj)
         if min_tail_offset > match.tail then
           min_tail_offset = match.tail
         end
+
+        lua_util.debugm(N, log_obj, 'add tail pattern %s for ext %s',
+            str, pattern.ext)
       elseif match.position < short_match_limit then
         short_patterns[#short_patterns + 1] = {
           str, match, pattern
         }
+        lua_util.debugm(N, log_obj, 'add short pattern %s for ext %s',
+            str, pattern.ext)
 
         if max_short_offset < match.position then
           max_short_offset = match.position
         end
+      else
+        processed_patterns[#processed_patterns + 1] = {
+          str, match, pattern
+        }
+
+        lua_util.debugm(N, log_obj, 'add long pattern %s for ext %s',
+            str, pattern.ext)
       end
     else
       processed_patterns[#processed_patterns + 1] = {
         str, match, pattern
       }
+
+      lua_util.debugm(N, log_obj, 'add long pattern %s for ext %s',
+          str, pattern.ext)
     end
   end
 
@@ -118,6 +133,7 @@ end
 
 local function match_chunk(input, tlen, offset, trie, processed_tbl, log_obj, res)
   local matches = trie:match(input)
+
   local last = tlen
 
   local function add_result(match, pattern)
@@ -161,7 +177,6 @@ local function match_chunk(input, tlen, offset, trie, processed_tbl, log_obj, re
       if expected < 0 then
         expected = last + expected + 1
       end
-
       return cmp(pos, expected)
     end
     -- Single position
@@ -253,18 +268,15 @@ exports.detect = function(input, log_obj)
     -- No way, let's check data in chunks or just the whole input if it is small enough
     if #input > exports.chunk_size * 3 then
       -- Chunked version as input is too long
-      local chunk1, chunk2, chunk3 =
-      input:span(1, exports.chunk_size),
-      input:span(exports.chunk_size, exports.chunk_size),
+      local chunk1, chunk2 =
+      input:span(1, exports.chunk_size * 2),
       input:span(inplen - exports.chunk_size, exports.chunk_size)
-      local offset1, offset2, offset3 = 0, exports.chunk_size, inplen - exports.chunk_size
+      local offset1, offset2 = 0, inplen - exports.chunk_size
 
       match_chunk(chunk1, inplen,
           offset1, compiled_patterns, processed_patterns, log_obj, res)
       match_chunk(chunk2, inplen,
           offset2, compiled_patterns, processed_patterns, log_obj, res)
-      match_chunk(chunk3, inplen,
-          offset3, compiled_patterns, processed_patterns, log_obj, res)
     else
       -- Input is short enough to match it at all
       match_chunk(input, inplen, 0,
@@ -287,6 +299,6 @@ end
 
 -- This parameter specifies how many bytes are checked in the input
 -- Rspamd checks 2 chunks at start and 1 chunk at the end
-exports.chunk_size = 16384
+exports.chunk_size = 32768
 
 return exports
