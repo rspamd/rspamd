@@ -98,6 +98,36 @@ local patterns = {
       }
     }
   },
+  elf = {
+    matches = {
+      {
+        hex = [[7f454c46]],
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
+  lnk = {
+    matches = {
+      {
+        hex = [[4C0000000114020000000000C000000000000046]],
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
+  class = {
+    -- Technically, this also matches MachO files, but I don't care about
+    -- Apple and their mental health problems here: just consider Java files,
+    -- Mach object files and all other cafe babes as bad and block them!
+    matches = {
+      {
+        hex = [[cafebabe]],
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
   -- Archives
   arj = {
     matches = {
@@ -120,7 +150,82 @@ local patterns = {
   cab = {
     matches = {
       {
-        string = [[MSCF]],
+        hex = [[4d53434600000000]], -- Can be anywhere for SFX :(
+        position = {'>=', 8},
+        weight = 60,
+      },
+    }
+  },
+  tar = {
+    matches = {
+      {
+        string = [[ustar]],
+        relative_position = 257,
+        weight = 60,
+      },
+    }
+  },
+  bz2 = {
+    matches = {
+      {
+        string = "BZ[h0]",
+        position = 3,
+        weight = 60,
+      },
+    }
+  },
+  lz4 = {
+    matches = {
+      {
+        hex = "184d2204",
+        relative_position = 0,
+        weight = 60,
+      },
+      {
+        hex = "184c2103",
+        relative_position = 0,
+        weight = 60,
+      },
+      {
+        hex = "184c2102",
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
+  zst = {
+    matches = {
+      {
+        string = [[\x{FD}\x{2F}\x{B5}[\x{22}-\x{40}].]],
+        position = 5, -- includes last .
+        weight = 60,
+      },
+    }
+  },
+  -- Apple is a 'special' child: this needs to be matched at the data tail...
+  dmg = {
+    matches = {
+      {
+        string = [[koly]],
+        position = -512 + 4,
+        weight = 61,
+        tail = 512,
+      },
+    }
+  },
+  szdd = {
+    matches = {
+      {
+        hex = [[535a4444]],
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
+  xz = {
+    matches = {
+      {
+        hex = [[FD377A585A00]],
         relative_position = 0,
         weight = 60,
       },
@@ -163,6 +268,39 @@ local patterns = {
       },
     }
   },
+  swf = {
+    matches = {
+      {
+        hex = [[5a5753]], -- LZMA
+        relative_position = 0,
+        weight = 60,
+      },
+      {
+        hex = [[435753]], -- Zlib
+        relative_position = 0,
+        weight = 60,
+      },
+      {
+        hex = [[465753]], -- Uncompressed
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
+  tiff = {
+    matches = {
+      {
+        hex = [[49492a00]], -- LE encoded
+        relative_position = 0,
+        weight = 60,
+      },
+      {
+        hex = [[4d4d]], -- BE tiff
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
   -- Other
   pgp = {
     matches = {
@@ -177,7 +315,16 @@ local patterns = {
         weight = 60,
       },
     }
-  }
+  },
+  uue = {
+    matches = {
+      {
+        hex = [[626567696e20]],
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
 }
 
 return patterns
