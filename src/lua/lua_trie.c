@@ -290,7 +290,7 @@ lua_trie_match (lua_State *L)
 			}
 		}
 		else if (lua_type (L, 2) == LUA_TUSERDATA) {
-			t = lua_check_text (L, -1);
+			t = lua_check_text (L, 2);
 
 			if (t && lua_trie_search_str (L, trie, t->start, t->len, cb)) {
 				found = TRUE;
