@@ -42,6 +42,16 @@ local function process_patterns()
           processed_patterns[#processed_patterns + 1] = {
             match.string, match, pattern
           }
+        elseif match.hex then
+          local hex_table = {}
+
+          for i=1,#match.hex,2 do
+            local subc = match.hex:sub(i, i + 1)
+            hex_table[#hex_table + 1] = string.format('\\x{%s}', subc)
+          end
+          processed_patterns[#processed_patterns + 1] = {
+            table.concat(hex_table), match, pattern
+          }
         end
       end
     end
