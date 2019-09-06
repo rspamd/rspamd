@@ -20,14 +20,12 @@ limitations under the License.
 --]]
 
 local patterns = {
-  {
-    -- MSDOS extension to match types table
-    ext = 'pdf',
+  pdf = {
     -- These are alternatives
     matches = {
       {
         string = [[%PDF-\d]],
-        position = 6, -- must be end of the match, as that's how hyperscan works
+        position = 6, -- must be end of the match, as that's how hyperscan works (or use relative_position)
         weight = 60,
       },
       {
@@ -41,6 +39,144 @@ local patterns = {
         weight = 60,
       },
     },
+  },
+  ps = {
+    matches = {
+      {
+        string = [[%!PS-Adobe]],
+        relative_position = 0,
+        weight = 60,
+      },
+    },
+  },
+  -- RTF document
+  rtf = {
+    matches = {
+      {
+        string = [[{\\rtf\d]],
+        position = 6,
+        weight = 60,
+      }
+    }
+  },
+  chm = {
+    matches = {
+      {
+        string = [[ITSF]],
+        relative_position = 0,
+        weight = 60,
+      }
+    }
+  },
+  djvu = {
+    matches = {
+      {
+        string = [[AT&TFORM]],
+        relative_position = 0,
+        weight = 60,
+      },
+      {
+        string = [[DJVM]],
+        relative_position = 0x0c,
+        weight = 60,
+      }
+    }
+  },
+  -- MS Exe file
+  exe = {
+    matches = {
+      {
+        string = [[MZ]],
+        relative_position = 0,
+        weight = 10,
+      },
+      -- PE part
+      {
+        string = [[PE\x{00}\x{00}]],
+        position = {'>=', 0x3c + 4},
+        weight = 40,
+      }
+    }
+  },
+  -- Archives
+  arj = {
+    matches = {
+      {
+        hex = '60EA',
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
+  ace = {
+    matches = {
+      {
+        string = [[\*\*ACE\*\*]],
+        position = 14,
+        weight = 60,
+      },
+    }
+  },
+  cab = {
+    matches = {
+      {
+        string = [[MSCF]],
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
+  -- Images
+  psd = {
+    matches = {
+      {
+        string = [[8BPS]],
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
+  ico = {
+    matches = {
+      {
+        hex = [[00000100]],
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
+  pcx = {
+    matches = {
+      {
+        hex = [[0A050108]],
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
+  pic = {
+    matches = {
+      {
+        hex = [[FF80C9C71A00]],
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
+  -- Other
+  pgp = {
+    matches = {
+      {
+        hex = [[A803504750]],
+        relative_position = 0,
+        weight = 60,
+      },
+      {
+        hex = [[2D424547494E20504750204D4553534147452D]],
+        relative_position = 0,
+        weight = 60,
+      },
+    }
   }
 }
 

@@ -22,17 +22,70 @@ limitations under the License.
 -- This table is indexed by msdos extension for convenience
 
 local types = {
-  pdf = {
-    ct = 'application/pdf',
-    type = 'binary',
-  },
+  -- exe
   exe = {
     ct = 'application/x-ms-application',
     type = 'executable',
   },
+  -- text
+  rtf = {
+    ct = "application/rtf",
+    type = 'text',
+  },
+  pdf = {
+    ct = 'application/pdf',
+    type = 'binary',
+  },
+  ps = {
+    ct = 'application/postscript',
+    type = 'binary',
+  },
+  chm = {
+    ct = 'application/chm',
+    type = 'binary',
+  },
+  djvu = {
+    ct = 'application/djvu',
+    type = 'binary',
+  },
+  -- archives
+  arj = {
+    ct = 'application/x-compressed',
+    type = 'archive',
+  },
+  cab = {
+    ct = 'application/x-compressed',
+    type = 'archive',
+  },
+  ace = {
+    ct = 'application/x-compressed',
+    type = 'archive',
+  },
+  -- images
+  psd = {
+    ct = 'image/psd',
+    type = 'image',
+  },
+  pcx = {
+    ct = 'image/pcx',
+    type = 'image',
+  },
+  pic = {
+    ct = 'image/pic',
+    type = 'image',
+  },
   tiff = {
     ct = 'image/tiff',
     type = 'image',
+  },
+  ico = {
+    ct = 'image/ico',
+    type = 'image',
+  },
+  -- other
+  pgp = {
+    ct = 'application/encrypted',
+    type = 'encrypted'
   }
 }
 
