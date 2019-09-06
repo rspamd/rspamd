@@ -72,7 +72,7 @@ local function process_patterns(log_obj)
 
   if not compiled_patterns then
     for ext,pattern in pairs(patterns) do
-      assert(types[ext])
+      assert(types[ext], 'not found type: ' .. ext)
       pattern.ext = ext
       for _,match in ipairs(pattern.matches) do
         if match.string then
@@ -250,6 +250,7 @@ exports.detect = function(input, log_obj)
       return extensions[1],types[extensions[1]]
     end
 
+    -- No way, let's check data in chunks or just the whole input if it is small enough
     if #input > exports.chunk_size * 3 then
       -- Chunked version as input is too long
       local chunk1, chunk2, chunk3 =
@@ -270,7 +271,8 @@ exports.detect = function(input, log_obj)
           compiled_patterns, processed_patterns, log_obj, res)
     end
   else
-    assert(0)
+    -- Table input is NYI
+    assert(0, 'table input for match')
   end
 
   local extensions = process_detected(res)
