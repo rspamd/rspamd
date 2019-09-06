@@ -24,6 +24,7 @@ local types = require "lua_magic/types"
 local fun = require "fun"
 local lua_util = require "lua_util"
 
+local rspamd_text = require "rspamd_text"
 local rspamd_trie = require "rspamd_trie"
 
 local N = "lua_magic"
@@ -55,9 +56,7 @@ local function process_patterns()
   end
 end
 
-exports.detect = function(input, log_obj)
-  process_patterns()
-  local res = {}
+local function match_chunk(input, offset, log_obj, res)
   local matches = compiled_patterns:match(input)
 
   if not log_obj then log_obj = rspamd_config end
@@ -106,7 +105,7 @@ exports.detect = function(input, log_obj)
       local position = match.position
 
       for _,pos in ipairs(matched_positions) do
-        if match_position(pos, position) then
+        if match_position(pos + offset, position) then
           add_result(match, pattern)
         end
       end
@@ -122,6 +121,30 @@ exports.detect = function(input, log_obj)
       end
     end
   end
+end
+exports.detect = function(input, log_obj)
+  process_patterns()
+  local res = {}
+
+  if type(input) == 'string' then
+    -- Convert to rspamd_text
+    input = rspamd_text.fromstring(input)
+  end
+
+  if type(input) == 'userdata' and #input > exports.chunk_size * 3 then
+    -- Split by chunks
+    local chunk1, chunk2, chunk3 =
+    input:span(1, exports.chunk_size),
+    input:span(exports.chunk_size, exports.chunk_size),
+    input:span(#input - exports.chunk_size, exports.chunk_size)
+    local offset1, offset2, offset3 = 0, exports.chunk_size, #input - exports.chunk_size
+
+    match_chunk(chunk1, offset1, log_obj, res)
+    match_chunk(chunk2, offset2, log_obj, res)
+    match_chunk(chunk3, offset3, log_obj, res)
+  else
+    match_chunk(input, 0, log_obj, res)
+  end
 
   local extensions = lua_util.keys(res)
 
@@ -136,5 +159,9 @@ exports.detect = function(input, log_obj)
   -- Nothing found
   return nil
 end
+
+-- This parameter specifies how many bytes are checked in the input
+-- Rspamd checks 2 chunks at start and 1 chunk at the end
+exports.chunk_size = 16384
 
 return exports
