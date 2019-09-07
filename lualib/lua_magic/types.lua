@@ -147,8 +147,16 @@ local types = {
     ct = 'application/vnd.ms-powerpoint',
     type = 'msoffice'
   },
+  vsd = {
+    ct = 'application/vnd.visio',
+    type = 'msoffice'
+  },
   msi = {
     ct = 'application/x-msi',
+    type = 'executable'
+  },
+  msg = {
+    ct = 'application/vnd.ms-outlook',
     type = 'executable'
   },
   -- other

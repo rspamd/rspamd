@@ -28,25 +28,55 @@ local fun = require "fun"
 local N = "lua_magic"
 local msoffice_trie
 local msoffice_patterns = {
-  doc = [[WordDocument]],
-  xls = [[Workbook]],
-  ppt = [[PowerPoint Document]]
+  doc = {[[WordDocument]]},
+  xls = {[[Workbook]], [[Book]]},
+  ppt = {[[PowerPoint Document]], [[Current User]]},
+  vsd = {[[VisioDocument]]},
 }
+local msoffice_trie_clsid
+local msoffice_clsids = {
+  doc = {[[0609020000000000c000000000000046]]},
+  xls = {[[1008020000000000c000000000000046]], [[2008020000000000c000000000000046]]},
+  ppt = {[[108d81649b4fcf1186ea00aa00b929e8]]},
+  msg = {[[46f0060000000000c000000000000046]], [[0b0d020000000000c000000000000046]]},
+  msi = {[[84100c0000000000c000000000000046]]},
+}
+local msoffice_clsid_indexes = {}
+local msoffice_patterns_indexes = {}
 
 local exports = {}
 
 local function compile_msoffice_trie(log_obj)
   if not msoffice_trie then
+    -- Directory names
     local strs = {}
-    for ext,pat in pairs(msoffice_patterns) do
-      strs[#strs + 1] = '^' ..
-         table.concat(
-             fun.totable(
-                 fun.map(function(c) return c .. [[\x{00}]] end,
-                     fun.iter(pat))))
-      msoffice_patterns[ext] = #strs
+    for ext,pats in pairs(msoffice_patterns) do
+      for _,pat in ipairs(pats) do
+        strs[#strs + 1] = '^' ..
+            table.concat(
+                fun.totable(
+                    fun.map(function(c) return c .. [[\x{00}]] end,
+                        fun.iter(pat))))
+        msoffice_patterns_indexes[#msoffice_patterns_indexes + 1] = ext
+
+      end
     end
     msoffice_trie = rspamd_trie.create(strs, rspamd_trie.flags.re)
+    -- Clsids
+    strs = {}
+    for ext,pats in pairs(msoffice_clsids) do
+      for _,pat in ipairs(pats) do
+        local hex_table = {}
+        for i=1,#pat,2 do
+          local subc = pat:sub(i, i + 1)
+          hex_table[#hex_table + 1] = string.format('\\x{%s}', subc)
+        end
+        strs[#strs + 1] = '^' .. table.concat(hex_table) .. '$'
+        msoffice_clsid_indexes[#msoffice_clsid_indexes + 1] = ext
+
+      end
+    end
+    msoffice_trie_clsid = rspamd_trie.create(strs, rspamd_trie.flags.re)
   end
 end
 
@@ -66,7 +96,7 @@ local function detect_ole_format(input, log_obj)
     bom = '>'; sec_size = bit.bswap(sec_size)
   end
 
-  if sec_size < 7 or sec_size > 9 then
+  if sec_size < 7 or sec_size > 31 then
     lua_util.debugm(N, log_obj, "bad sec_size: %s", sec_size)
     return nil
   end
@@ -85,24 +115,32 @@ local function detect_ole_format(input, log_obj)
 
   local function process_dir_entry(offset)
     local dtype = input:at(offset + 66)
-    lua_util.debugm(N, log_obj, "dtype: %s", dtype)
+    lua_util.debugm(N, log_obj, "dtype: %s, offset: %s", dtype, offset)
 
     if dtype == 5 then
-      -- Skip root dentry
+      -- Extract clsid
+      local matches = msoffice_trie_clsid:match(input:span(offset + 80, 16))
+      if matches then
+        for n,_ in pairs(matches) do
+          if msoffice_clsid_indexes[n] then
+            lua_util.debugm(N, log_obj, "found valid clsid for %s",
+                msoffice_clsid_indexes[n])
+            return true,msoffice_clsid_indexes[n]
+          end
+        end
+      end
       return true,nil
     elseif dtype == 2 then
       local matches = msoffice_trie:match(input:span(offset, 64))
       if matches then
         for n,_ in pairs(matches) do
-          for ext,num in pairs(msoffice_patterns) do
-            if num == n then
-              return true,ext
-            end
+          if msoffice_patterns_indexes[n] then
+            return true,msoffice_patterns_indexes[n]
           end
         end
       end
       return true,nil
-    elseif dtype < 5 then
+    elseif dtype >= 0 and dtype < 5 then
       -- Bad type
       return true,nil
     end
