@@ -140,7 +140,7 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
     if not res[ext] then
       res[ext] = 0
     end
-    if match.weight then
+    if weight then
       res[ext] = res[ext] + weight
     else
       res[ext] = res[ext] + 1

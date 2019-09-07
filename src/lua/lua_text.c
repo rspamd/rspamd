@@ -98,6 +98,7 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, take_ownership),
 		LUA_INTERFACE_DEF (text, save_in_file),
 		LUA_INTERFACE_DEF (text, span),
+		LUA_INTERFACE_DEF (text, at),
 		{"write", lua_text_save_in_file},
 		{"__len", lua_text_len},
 		{"__tostring", lua_text_str},

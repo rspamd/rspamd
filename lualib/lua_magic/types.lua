@@ -130,6 +130,27 @@ local types = {
     ct = 'application/x-shockwave-flash',
     type = 'image',
   },
+  -- Ole files
+  ole = {
+    ct = 'application/octet-stream',
+    type = 'msoffice'
+  },
+  doc = {
+    ct = 'application/msword',
+    type = 'msoffice'
+  },
+  xls = {
+    ct = 'application/vnd.ms-excel',
+    type = 'msoffice'
+  },
+  ppt = {
+    ct = 'application/vnd.ms-powerpoint',
+    type = 'msoffice'
+  },
+  msi = {
+    ct = 'application/x-msi',
+    type = 'executable'
+  },
   -- other
   pgp = {
     ct = 'application/encrypted',
