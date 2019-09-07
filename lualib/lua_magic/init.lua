@@ -21,6 +21,7 @@ limitations under the License.
 
 local patterns = require "lua_magic/patterns"
 local types = require "lua_magic/types"
+local heuristics = require "lua_magic/heuristics"
 local fun = require "fun"
 local lua_util = require "lua_util"
 
@@ -315,6 +316,16 @@ exports.detect = function(input, log_obj)
 
   -- Nothing found
   return nil
+end
+
+exports.detect_mime_part = function(part, log_obj)
+  local ext,weight = heuristics.mime_part_heuristic(part)
+
+  if ext and weight and weight > 20 then
+    return ext,types[ext]
+  end
+
+  return exports.detect(part:get_content(), log_obj)
 end
 
 -- This parameter specifies how many bytes are checked in the input

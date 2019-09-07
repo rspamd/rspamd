@@ -168,6 +168,50 @@ local types = {
     ct = 'application/x-uuencoded',
     type = 'binary',
   },
+  -- Types that are detected by Rspamd itself
+  -- Archives
+  zip = {
+    ct = 'application/zip',
+    type = 'archive',
+  },
+  rar = {
+    ct = 'application/x-rar',
+    type = 'archive',
+  },
+  ['7z'] = {
+    ct = 'x-7z-compressed',
+    type = 'archive',
+  },
+  gz = {
+    ct = 'application/gzip',
+    type = 'archive',
+  },
+  -- Images
+  png = {
+    ct = 'image/png',
+    type = 'image',
+  },
+  gif = {
+    ct = 'image/gif',
+    type = 'image',
+  },
+  jpg = {
+    ct = 'image/jpeg',
+    type = 'image',
+  },
+  bmp = {
+    type = 'image',
+    ct = 'image/bmp',
+  },
+  -- Text
+  txt = {
+    type = 'text',
+    ct = 'text/plain',
+  },
+  html = {
+    type = 'text',
+    ct = 'text/html',
+  },
 }
 
 return types

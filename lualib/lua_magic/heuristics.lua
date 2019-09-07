@@ -52,6 +52,7 @@ local function compile_msoffice_trie(log_obj)
     local strs = {}
     for ext,pats in pairs(msoffice_patterns) do
       for _,pat in ipairs(pats) do
+        -- These are utf16 strings in fact...
         strs[#strs + 1] = '^' ..
             table.concat(
                 fun.totable(
@@ -66,6 +67,7 @@ local function compile_msoffice_trie(log_obj)
     strs = {}
     for ext,pats in pairs(msoffice_clsids) do
       for _,pat in ipairs(pats) do
+        -- Convert hex to re
         local hex_table = {}
         for i=1,#pat,2 do
           local subc = pat:sub(i, i + 1)
@@ -163,6 +165,30 @@ local function detect_ole_format(input, log_obj)
   until directory_offset >= inplen
 end
 
+
 exports.ole_format_heuristic = detect_ole_format
+
+exports.mime_part_heuristic = function(part)
+  if part:is_text() then
+    if part:get_text():is_html() then
+      return 'html',60
+    else
+      return 'txt',60
+    end
+  end
+
+  if part:is_image() then
+    local img = part:get_image()
+    return img:get_type():lower(),60
+  end
+
+  if part:is_archive() then
+    local arch = part:get_archive()
+    -- TODO: add files heuristics
+    return arch:get_type():lower(),60
+  end
+
+  return nil
+end
 
 return exports
