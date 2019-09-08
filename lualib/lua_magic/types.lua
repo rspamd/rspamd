@@ -133,23 +133,23 @@ local types = {
   -- Ole files
   ole = {
     ct = 'application/octet-stream',
-    type = 'msoffice'
+    type = 'office'
   },
   doc = {
     ct = 'application/msword',
-    type = 'msoffice'
+    type = 'office'
   },
   xls = {
     ct = 'application/vnd.ms-excel',
-    type = 'msoffice'
+    type = 'office'
   },
   ppt = {
     ct = 'application/vnd.ms-powerpoint',
-    type = 'msoffice'
+    type = 'office'
   },
   vsd = {
     ct = 'application/vnd.visio',
-    type = 'msoffice'
+    type = 'office'
   },
   msi = {
     ct = 'application/x-msi',
@@ -157,20 +157,33 @@ local types = {
   },
   msg = {
     ct = 'application/vnd.ms-outlook',
-    type = 'msoffice'
+    type = 'office'
   },
   -- newer office (2007+)
   docx = {
     ct = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    type = 'msoffice'
+    type = 'office'
   },
   xlsx = {
     ct = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    type = 'msoffice'
+    type = 'office'
   },
   pptx = {
     ct = 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    type = 'msoffice'
+    type = 'office'
+  },
+  -- OpenOffice formats
+  odt = {
+    ct = 'application/vnd.oasis.opendocument.text',
+    type = 'office'
+  },
+  ods = {
+    ct = 'application/vnd.oasis.opendocument.spreadsheet',
+    type = 'office'
+  },
+  odp = {
+    ct = 'application/vnd.oasis.opendocument.presentation',
+    type = 'office'
   },
   -- other
   pgp = {

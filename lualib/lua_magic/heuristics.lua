@@ -167,6 +167,20 @@ end
 
 exports.ole_format_heuristic = detect_ole_format
 
+local function process_detected(res)
+  local extensions = lua_util.keys(res)
+
+  if #extensions > 0 then
+    table.sort(extensions, function(ex1, ex2)
+      return res[ex1] > res[ex2]
+    end)
+
+    return extensions,res[extensions[1]]
+  end
+
+  return nil
+end
+
 local function detect_archive_flaw(part, arch)
   local arch_type = arch:get_type()
   local res = {
@@ -174,6 +188,9 @@ local function detect_archive_flaw(part, arch)
     xlsx = 0,
     pptx = 0,
     jar = 0,
+    odt = 0,
+    odp = 0,
+    ods = 0
   } -- ext + confidence pairs
 
   -- General msoffice patterns
@@ -195,7 +212,43 @@ local function detect_archive_flaw(part, arch)
         res.xlsx = res.docx + 30
       elseif file == 'ppt/' then
         res.xlsx = res.pptx + 30
+      elseif file == 'META-INF/manifest.xml' then
+        -- Apply ODT detection logic
+        local content = part:get_content()
+
+        if #content > 80 then
+          -- https://lists.oasis-open.org/archives/office/200505/msg00006.html
+          local start_span = content:span(30, 50)
+
+          local mp = tostring(start_span:span(1, 8))
+          if mp == 'mimetype' then
+            local spec_type = tostring(start_span:span(9))
+            if spec_type:find('vnd.oasis.opendocument.text') then
+              res.odt = 40
+            elseif spec_type:find('vnd.oasis.opendocument.spreadsheet') then
+              res.ods = 40
+            elseif spec_type:find('vnd.oasis.opendocument.formula') then
+              res.ods = 40
+            elseif spec_type:find('vnd.oasis.opendocument.chart') then
+              res.ods = 40
+            elseif spec_type:find('vnd.oasis.opendocument.presentation') then
+              res.odp = 40
+            elseif spec_type:find('vnd.oasis.opendocument.image') then
+              -- Assume image as odt
+              res.odt = 40
+            elseif spec_type:find('vnd.oasis.opendocument.graphics') then
+              -- Assume image as odt
+              res.odt = 40
+            end
+          end
+        end
       end
+    end
+
+    local ext,weight = process_detected(res)
+
+    if weight >= 40 then
+      return ext,weight
     end
   end
 
