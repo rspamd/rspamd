@@ -215,6 +215,15 @@ local patterns = {
       },
     }
   },
+  zoo = {
+    matches = {
+      {
+        hex = [[dca7c4fd]],
+        relative_position = 20,
+        weight = 60,
+      },
+    }
+  },
   iso = {
     matches = {
       {

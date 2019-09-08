@@ -101,6 +101,10 @@ local types = {
     ct = 'application/x-iso',
     type = 'archive',
   },
+  zoo = {
+    ct = 'application/x-zoo',
+    type = 'archive',
+  },
   szdd = { -- in fact, their MSDOS extension is like FOO.TX_ or FOO.TX$
     ct = 'application/x-compressed',
     type = 'archive',
