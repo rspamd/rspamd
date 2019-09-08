@@ -165,9 +165,42 @@ local function detect_ole_format(input, log_obj)
   until directory_offset >= inplen
 end
 
-
 exports.ole_format_heuristic = detect_ole_format
 
+local function detect_archive_flaw(part, arch)
+  local arch_type = arch:get_type()
+  local res = {
+    docx = 0,
+    xlsx = 0,
+    pptx = 0,
+    jar = 0,
+  } -- ext + confidence pairs
+
+  -- General msoffice patterns
+  local function add_msoffice_confidence(incr)
+    res.docx = res.docx + incr
+    res.xlsx = res.xlsx + incr
+    res.pptx = res.pptx + incr
+  end
+
+  if arch_type == 'zip' then
+    -- Find specific files/folders in zip file
+    local files = arch:get_files() or {}
+    for _,file in ipairs(files) do
+      if file == '[Content_Types].xml' then
+        add_msoffice_confidence(10)
+      elseif file == 'xl/' then
+        res.xlsx = res.xlsx + 30
+      elseif file == 'word/' then
+        res.xlsx = res.docx + 30
+      elseif file == 'ppt/' then
+        res.xlsx = res.pptx + 30
+      end
+    end
+  end
+
+  return arch_type:lower(),40
+end
 exports.mime_part_heuristic = function(part)
   if part:is_text() then
     if part:get_text():is_html() then
@@ -184,8 +217,7 @@ exports.mime_part_heuristic = function(part)
 
   if part:is_archive() then
     local arch = part:get_archive()
-    -- TODO: add files heuristics
-    return arch:get_type():lower(),60
+    return detect_archive_flaw(part, arch)
   end
 
   return nil

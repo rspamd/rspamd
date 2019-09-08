@@ -157,7 +157,20 @@ local types = {
   },
   msg = {
     ct = 'application/vnd.ms-outlook',
-    type = 'executable'
+    type = 'msoffice'
+  },
+  -- newer office (2007+)
+  docx = {
+    ct = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    type = 'msoffice'
+  },
+  xlsx = {
+    ct = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    type = 'msoffice'
+  },
+  pptx = {
+    ct = 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    type = 'msoffice'
   },
   -- other
   pgp = {
