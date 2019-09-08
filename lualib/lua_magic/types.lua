@@ -101,6 +101,10 @@ local types = {
     ct = 'application/x-iso',
     type = 'archive',
   },
+  zoo = {
+    ct = 'application/x-zoo',
+    type = 'archive',
+  },
   szdd = { -- in fact, their MSDOS extension is like FOO.TX_ or FOO.TX$
     ct = 'application/x-compressed',
     type = 'archive',
@@ -130,6 +134,61 @@ local types = {
     ct = 'application/x-shockwave-flash',
     type = 'image',
   },
+  -- Ole files
+  ole = {
+    ct = 'application/octet-stream',
+    type = 'office'
+  },
+  doc = {
+    ct = 'application/msword',
+    type = 'office'
+  },
+  xls = {
+    ct = 'application/vnd.ms-excel',
+    type = 'office'
+  },
+  ppt = {
+    ct = 'application/vnd.ms-powerpoint',
+    type = 'office'
+  },
+  vsd = {
+    ct = 'application/vnd.visio',
+    type = 'office'
+  },
+  msi = {
+    ct = 'application/x-msi',
+    type = 'executable'
+  },
+  msg = {
+    ct = 'application/vnd.ms-outlook',
+    type = 'office'
+  },
+  -- newer office (2007+)
+  docx = {
+    ct = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    type = 'office'
+  },
+  xlsx = {
+    ct = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    type = 'office'
+  },
+  pptx = {
+    ct = 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    type = 'office'
+  },
+  -- OpenOffice formats
+  odt = {
+    ct = 'application/vnd.oasis.opendocument.text',
+    type = 'office'
+  },
+  ods = {
+    ct = 'application/vnd.oasis.opendocument.spreadsheet',
+    type = 'office'
+  },
+  odp = {
+    ct = 'application/vnd.oasis.opendocument.presentation',
+    type = 'office'
+  },
   -- other
   pgp = {
     ct = 'application/encrypted',
@@ -138,6 +197,50 @@ local types = {
   uue = {
     ct = 'application/x-uuencoded',
     type = 'binary',
+  },
+  -- Types that are detected by Rspamd itself
+  -- Archives
+  zip = {
+    ct = 'application/zip',
+    type = 'archive',
+  },
+  rar = {
+    ct = 'application/x-rar',
+    type = 'archive',
+  },
+  ['7z'] = {
+    ct = 'x-7z-compressed',
+    type = 'archive',
+  },
+  gz = {
+    ct = 'application/gzip',
+    type = 'archive',
+  },
+  -- Images
+  png = {
+    ct = 'image/png',
+    type = 'image',
+  },
+  gif = {
+    ct = 'image/gif',
+    type = 'image',
+  },
+  jpg = {
+    ct = 'image/jpeg',
+    type = 'image',
+  },
+  bmp = {
+    type = 'image',
+    ct = 'image/bmp',
+  },
+  -- Text
+  txt = {
+    type = 'text',
+    ct = 'text/plain',
+  },
+  html = {
+    type = 'text',
+    ct = 'text/html',
   },
 }
 

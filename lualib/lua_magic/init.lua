@@ -21,6 +21,7 @@ limitations under the License.
 
 local patterns = require "lua_magic/patterns"
 local types = require "lua_magic/types"
+local heuristics = require "lua_magic/heuristics"
 local fun = require "fun"
 local lua_util = require "lua_util"
 
@@ -131,23 +132,48 @@ local function process_patterns(log_obj)
   end
 end
 
-local function match_chunk(input, tlen, offset, trie, processed_tbl, log_obj, res)
-  local matches = trie:match(input)
+local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_obj, res)
+  local matches = trie:match(chunk)
 
   local last = tlen
 
-  local function add_result(match, pattern)
-    if not res[pattern.ext] then
-      res[pattern.ext] = 0
+  local function add_result(weight, ext)
+    if not res[ext] then
+      res[ext] = 0
     end
-    if match.weight then
-      res[pattern.ext] = res[pattern.ext] + match.weight
+    if weight then
+      res[ext] = res[ext] + weight
     else
-      res[pattern.ext] = res[pattern.ext] + 1
+      res[ext] = res[ext] + 1
     end
 
     lua_util.debugm(N, log_obj,'add pattern for %s, weight %s, total weight %s',
-        pattern.ext, match.weight, res[pattern.ext])
+        ext, weight, res[ext])
+  end
+
+  local function match_position(pos, expected)
+    local cmp = function(a, b) return a == b end
+    if type(expected) == 'table' then
+      -- Something like {'>', 0}
+      if expected[1] == '>' then
+        cmp = function(a, b) return a > b end
+      elseif expected[1] == '>=' then
+        cmp = function(a, b) return a >= b end
+      elseif expected[1] == '<' then
+        cmp = function(a, b) return a < b end
+      elseif expected[1] == '<=' then
+        cmp = function(a, b) return a <= b end
+      elseif expected[1] == '!=' then
+        cmp = function(a, b) return a ~= b end
+      end
+      expected = expected[2]
+    end
+
+    -- Tail match
+    if expected < 0 then
+      expected = last + expected + 1
+    end
+    return cmp(pos, expected)
   end
 
   for npat,matched_positions in pairs(matches) do
@@ -155,30 +181,6 @@ local function match_chunk(input, tlen, offset, trie, processed_tbl, log_obj, re
     local pattern = pat_data[3]
     local match = pat_data[2]
 
-    local function match_position(pos, expected)
-      local cmp = function(a, b) return a == b end
-      if type(expected) == 'table' then
-        -- Something like {'>', 0}
-        if expected[1] == '>' then
-          cmp = function(a, b) return a > b end
-        elseif expected[1] == '>=' then
-          cmp = function(a, b) return a >= b end
-        elseif expected[1] == '<' then
-          cmp = function(a, b) return a < b end
-        elseif expected[1] == '<=' then
-          cmp = function(a, b) return a <= b end
-        elseif expected[1] == '!=' then
-          cmp = function(a, b) return a ~= b end
-        end
-        expected = expected[2]
-      end
-
-      -- Tail match
-      if expected < 0 then
-        expected = last + expected + 1
-      end
-      return cmp(pos, expected)
-    end
     -- Single position
     if match.position then
       local position = match.position
@@ -187,13 +189,21 @@ local function match_chunk(input, tlen, offset, trie, processed_tbl, log_obj, re
         lua_util.debugm(N, log_obj, 'found match %s at offset %s(from %s)',
             pattern.ext, pos, offset)
         if match_position(pos + offset, position) then
-          add_result(match, pattern)
-          break
+          if match.heuristic then
+            local ext,weight = match.heuristic(input, log_obj)
+
+            if ext then
+              add_result(weight, ext)
+              break
+            end
+          else
+            add_result(match.weight, pattern.ext)
+            break
+          end
         end
       end
-    end
-    -- Match all positions
-    if match.positions then
+    elseif match.positions then
+      -- Match all positions
       local all_right = true
       for _,position in ipairs(match.positions) do
         local matched = false
@@ -210,10 +220,21 @@ local function match_chunk(input, tlen, offset, trie, processed_tbl, log_obj, re
       end
 
       if all_right then
-        add_result(match, pattern)
+        if match.heuristic then
+          local ext,weight = match.heuristic(input, log_obj)
+
+          if ext then
+            add_result(weight, ext)
+            break
+          end
+        else
+          add_result(match.weight, pattern.ext)
+          break
+        end
       end
     end
   end
+
 end
 
 local function process_detected(res)
@@ -248,13 +269,13 @@ exports.detect = function(input, log_obj)
     -- Check tail matches
     if inplen > min_tail_offset then
       local tail = input:span(inplen - min_tail_offset, min_tail_offset)
-      match_chunk(tail, inplen, inplen - min_tail_offset,
+      match_chunk(tail, input, inplen, inplen - min_tail_offset,
           compiled_tail_patterns, tail_patterns, log_obj, res)
     end
 
     -- Try short match
     local head = input:span(1, math.min(max_short_offset, inplen))
-    match_chunk(head, inplen, 0,
+    match_chunk(head, input, inplen, 0,
         compiled_short_patterns, short_patterns, log_obj, res)
 
     -- Check if we have enough data or go to long patterns
@@ -273,13 +294,13 @@ exports.detect = function(input, log_obj)
       input:span(inplen - exports.chunk_size, exports.chunk_size)
       local offset1, offset2 = 0, inplen - exports.chunk_size
 
-      match_chunk(chunk1, inplen,
+      match_chunk(chunk1, input, inplen,
           offset1, compiled_patterns, processed_patterns, log_obj, res)
-      match_chunk(chunk2, inplen,
+      match_chunk(chunk2, input, inplen,
           offset2, compiled_patterns, processed_patterns, log_obj, res)
     else
       -- Input is short enough to match it at all
-      match_chunk(input, inplen, 0,
+      match_chunk(input, input, inplen, 0,
           compiled_patterns, processed_patterns, log_obj, res)
     end
   else
@@ -295,6 +316,16 @@ exports.detect = function(input, log_obj)
 
   -- Nothing found
   return nil
+end
+
+exports.detect_mime_part = function(part, log_obj)
+  local ext,weight = heuristics.mime_part_heuristic(part)
+
+  if ext and weight and weight > 20 then
+    return ext,types[ext]
+  end
+
+  return exports.detect(part:get_content(), log_obj)
 end
 
 -- This parameter specifies how many bytes are checked in the input

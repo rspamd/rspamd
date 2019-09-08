@@ -19,6 +19,8 @@ limitations under the License.
 -- This module contains most common patterns
 --]]
 
+local heuristics = require "lua_magic/heuristics"
+
 local patterns = {
   pdf = {
     -- These are alternatives
@@ -79,6 +81,17 @@ local patterns = {
         string = [[DJVM]],
         relative_position = 0x0c,
         weight = 60,
+      }
+    }
+  },
+  -- MS Office format, needs heuristic
+  ole = {
+    matches = {
+      {
+        hex = [[d0cf11e0a1b11ae1]],
+        relative_position = 0,
+        weight = 60,
+        heuristic = heuristics.ole_format_heuristic
       }
     }
   },
@@ -198,6 +211,15 @@ local patterns = {
       {
         string = [[\x{FD}\x{2F}\x{B5}[\x{22}-\x{40}].]],
         position = 5, -- includes last .
+        weight = 60,
+      },
+    }
+  },
+  zoo = {
+    matches = {
+      {
+        hex = [[dca7c4fd]],
+        relative_position = 20,
         weight = 60,
       },
     }

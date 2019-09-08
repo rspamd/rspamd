@@ -841,7 +841,7 @@ end
 local function do_remove_partition(ev_base, cfg, table_name, partition_id)
   lua_util.debugm(N, rspamd_config, "removing partition %s.%s", table_name, partition_id)
   local upstream = settings.upstream:get_upstream_round_robin()
-  local remove_partition_sql = "ALTER TABLE ${table_name} ${remove_method} PARTITION ${partition_id}"
+  local remove_partition_sql = "ALTER TABLE ${table_name} ${remove_method} PARTITION '${partition_id}'"
   local remove_method = (settings.retention.method == 'drop') and 'DROP' or 'DETACH'
   local sql_params = {
     ['table_name']     = table_name,

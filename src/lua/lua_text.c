@@ -74,6 +74,13 @@ LUA_FUNCTION_DEF (text, save_in_file);
  * @return {rspamd_text} new rspamd_text with span (must be careful when using with owned texts...)
  */
 LUA_FUNCTION_DEF (text, span);
+/***
+ * @method rspamd_text:at(pos)
+ * Returns a byte at the position `pos`
+ * @param {integer} pos index
+ * @return {integer} byte at the position `pos` or nil if pos out of bound
+ */
+LUA_FUNCTION_DEF (text, at);
 LUA_FUNCTION_DEF (text, take_ownership);
 LUA_FUNCTION_DEF (text, gc);
 LUA_FUNCTION_DEF (text, eq);
@@ -91,6 +98,7 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, take_ownership),
 		LUA_INTERFACE_DEF (text, save_in_file),
 		LUA_INTERFACE_DEF (text, span),
+		LUA_INTERFACE_DEF (text, at),
 		{"write", lua_text_save_in_file},
 		{"__len", lua_text_len},
 		{"__tostring", lua_text_str},
@@ -333,6 +341,28 @@ lua_text_span (lua_State *L)
 		}
 
 		lua_new_text (L, t->start + (start - 1), len, 0);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_at (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+	gint pos = lua_tointeger (L, 2);
+
+	if (t) {
+		if (pos > 0 && pos <= t->len) {
+			lua_pushinteger (L, t->start[pos - 1]);
+		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

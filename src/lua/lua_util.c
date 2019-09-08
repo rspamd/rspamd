@@ -3715,11 +3715,28 @@ lua_util_unpack (lua_State *L)
 	Header h;
 	const char *fmt = luaL_checkstring(L, 1);
 	size_t ld;
-	const char *data = luaL_checklstring (L, 2, &ld);
-	size_t pos = (size_t) posrelat (luaL_optinteger (L, 3, 1), ld) - 1;
+	const char *data;
 	int n = 0;  /* number of results */
+
+	if (lua_type (L, 2) == LUA_TUSERDATA) {
+		struct rspamd_lua_text *t = lua_check_text (L, 2);
+
+		if (!t) {
+			return luaL_error (L, "invalid arguments");
+		}
+
+		data = t->start;
+		ld = t->len;
+	}
+	else {
+		data = luaL_checklstring (L, 2, &ld);
+	}
+
+	size_t pos = (size_t) posrelat (luaL_optinteger (L, 3, 1), ld) - 1;
 	luaL_argcheck(L, pos <= ld, 3, "initial position out of string");
+
 	initheader (L, &h);
+
 	while (*fmt != '\0') {
 		int size, ntoalign;
 		KOption opt = getdetails (&h, pos, &fmt, &size, &ntoalign);
