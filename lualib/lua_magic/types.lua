@@ -22,18 +22,123 @@ limitations under the License.
 -- This table is indexed by msdos extension for convenience
 
 local types = {
-  pdf = {
-    ct = 'application/pdf',
-    type = 'binary',
-  },
+  -- exe
   exe = {
     ct = 'application/x-ms-application',
     type = 'executable',
   },
+  elf = {
+    ct = 'application/x-elf-executable',
+    type = 'executable',
+  },
+  lnk = {
+    ct = 'application/x-ms-application',
+    type = 'executable',
+  },
+  class = {
+    ct = 'application/x-java-applet',
+    type = 'executable',
+  },
+  -- text
+  rtf = {
+    ct = "application/rtf",
+    type = 'text',
+  },
+  pdf = {
+    ct = 'application/pdf',
+    type = 'binary',
+  },
+  ps = {
+    ct = 'application/postscript',
+    type = 'binary',
+  },
+  chm = {
+    ct = 'application/x-chm',
+    type = 'binary',
+  },
+  djvu = {
+    ct = 'application/x-djvu',
+    type = 'binary',
+  },
+  -- archives
+  arj = {
+    ct = 'application/x-arj',
+    type = 'archive',
+  },
+  cab = {
+    ct = 'application/x-cab',
+    type = 'archive',
+  },
+  ace = {
+    ct = 'application/x-ace',
+    type = 'archive',
+  },
+  tar = {
+    ct = 'application/x-tar',
+    type = 'archive',
+  },
+  bz2 = {
+    ct = 'application/x-bzip',
+    type = 'archive',
+  },
+  xz = {
+    ct = 'application/x-xz',
+    type = 'archive',
+  },
+  lz4 = {
+    ct = 'application/x-lz4',
+    type = 'archive',
+  },
+  zst = {
+    ct = 'application/x-zstandard',
+    type = 'archive',
+  },
+  dmg = {
+    ct = 'application/x-dmg',
+    type = 'archive',
+  },
+  iso = {
+    ct = 'application/x-iso',
+    type = 'archive',
+  },
+  szdd = { -- in fact, their MSDOS extension is like FOO.TX_ or FOO.TX$
+    ct = 'application/x-compressed',
+    type = 'archive',
+  },
+  -- images
+  psd = {
+    ct = 'image/psd',
+    type = 'image',
+  },
+  pcx = {
+    ct = 'image/pcx',
+    type = 'image',
+  },
+  pic = {
+    ct = 'image/pic',
+    type = 'image',
+  },
   tiff = {
     ct = 'image/tiff',
     type = 'image',
-  }
+  },
+  ico = {
+    ct = 'image/ico',
+    type = 'image',
+  },
+  swf = {
+    ct = 'application/x-shockwave-flash',
+    type = 'image',
+  },
+  -- other
+  pgp = {
+    ct = 'application/encrypted',
+    type = 'encrypted'
+  },
+  uue = {
+    ct = 'application/x-uuencoded',
+    type = 'binary',
+  },
 }
 
 return types
