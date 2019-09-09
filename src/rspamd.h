@@ -33,8 +33,6 @@
 #include "libserver/task.h"
 
 #include <openssl/ssl.h>
-#include <magic.h>
-
 
 /* Default values */
 #define FIXED_CONFIG_FILE RSPAMD_CONFDIR "/rspamd.conf"
@@ -353,7 +351,6 @@ struct zstd_dictionary {
 struct rspamd_radix_map_helper;
 
 struct rspamd_external_libs_ctx {
-	magic_t libmagic;
 	struct rspamd_radix_map_helper **local_addrs;
 	struct rspamd_cryptobox_library_ctx *crypto_ctx;
 	struct ottery_config *ottery_cfg;

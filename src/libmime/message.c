@@ -818,97 +818,18 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 
 	if (IS_CT_TEXT (mime_part->ct) && (!mime_part->detected_ct ||
 									   IS_CT_TEXT (mime_part->detected_ct))) {
+		found_txt = TRUE;
+
 		html_tok.begin = "html";
 		html_tok.len = 4;
 		xhtml_tok.begin = "xhtml";
 		xhtml_tok.len = 5;
 
 		if (rspamd_ftok_casecmp (&mime_part->ct->subtype, &html_tok) == 0 ||
-				rspamd_ftok_casecmp (&mime_part->ct->subtype, &xhtml_tok) == 0) {
+			rspamd_ftok_casecmp (&mime_part->ct->subtype, &xhtml_tok) == 0 ||
+			(mime_part->detected_ct &&
+				rspamd_ftok_casecmp (&mime_part->detected_ct->subtype, &html_tok) == 0)) {
 			found_html = TRUE;
-		}
-		else {
-			/*
-			 * We also need to apply heuristic for text parts that are actually
-			 * HTML.
-			 */
-			RSPAMD_FTOK_ASSIGN (&html_tok, "<!DOCTYPE html");
-			RSPAMD_FTOK_ASSIGN (&xhtml_tok, "<html");
-
-			if (mime_part->parsed_data.len >= xhtml_tok.len &&
-					rspamd_lc_cmp (mime_part->parsed_data.begin,
-							xhtml_tok.begin, xhtml_tok.len) == 0) {
-				found_html = TRUE;
-			}
-			else if (mime_part->parsed_data.len >= html_tok.len &&
-					rspamd_lc_cmp (mime_part->parsed_data.begin,
-							html_tok.begin, html_tok.len) == 0) {
-				found_html = TRUE;
-			}
-			else {
-				/* We need to be extra careful with some stupid things here */
-
-				html_tok.begin = "plain";
-				html_tok.len = 5;
-
-				if (rspamd_ftok_casecmp (&mime_part->ct->subtype, &html_tok) == 0) {
-					found_txt = TRUE;
-				}
-				else {
-					if (mime_part->cd && mime_part->cd->filename.len > 4) {
-						const gchar *pos = mime_part->cd->filename.begin +
-										   mime_part->cd->filename.len -
-										   sizeof (".txt") + 1;
-						if (rspamd_lc_cmp (pos, ".txt", sizeof ("txt") - 1) == 0) {
-							found_txt = TRUE;
-						}
-						else {
-							msg_debug_task ("found mime part with incorrect content-type: %T/%T, "
-										   "filename: %T",
-									&mime_part->ct->type,
-									&mime_part->ct->subtype,
-									&mime_part->cd->filename);
-						}
-					}
-					else {
-						/* For something like Content-Type: text */
-						found_txt = TRUE;
-					}
-				}
-			}
-
-			if (found_html) {
-				msg_info_task ("found html part pretending to be text/plain part");
-			}
-		}
-	}
-	else {
-		/* Apply heuristic */
-
-		if (mime_part->cd && mime_part->cd->filename.len > 4) {
-			const gchar *pos = mime_part->cd->filename.begin +
-					mime_part->cd->filename.len - sizeof (".htm") + 1;
-
-			if (rspamd_lc_cmp (pos, ".htm", sizeof (".htm") - 1) == 0) {
-				found_html = TRUE;
-			}
-			else if (rspamd_lc_cmp (pos, ".txt", sizeof ("txt") - 1) == 0) {
-				found_txt = TRUE;
-			}
-			else if ( mime_part->cd->filename.len > 5) {
-				pos = mime_part->cd->filename.begin +
-						mime_part->cd->filename.len - sizeof (".html") + 1;
-				if (rspamd_lc_cmp (pos, ".html", sizeof (".html") - 1) == 0) {
-					found_html = TRUE;
-				}
-			}
-		}
-
-		if (found_txt || found_html) {
-			msg_info_task ("found %s part with incorrect content-type: %T/%T",
-					found_html ? "html" : "text",
-					&mime_part->ct->type, &mime_part->ct->subtype);
-			mime_part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
 		}
 	}
 
@@ -1006,7 +927,7 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 {
 	struct rspamd_content_type *ct = NULL;
 	struct rspamd_mime_part *part;
-	const char *mb = NULL;
+	const char *mb = "application/octet-stream";
 	gchar *mid;
 	rspamd_ftok_t srch, *tok;
 	gchar cdbuf[1024];
@@ -1014,6 +935,14 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 	g_assert (start != NULL);
 
 	part = rspamd_mempool_alloc0 (task->task_pool, sizeof (*part));
+
+	part->raw_data.begin = start;
+	part->raw_data.len = len;
+	part->parsed_data.begin = start;
+	part->parsed_data.len = len;
+	part->id = MESSAGE_FIELD (task, parts)->len;
+	part->raw_headers = rspamd_message_headers_new ();
+	part->headers_order = NULL;
 
 	tok = rspamd_task_get_request_header (task, "Content-Type");
 
@@ -1023,11 +952,42 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 				task->task_pool);
 		part->ct = ct;
 	}
+	else if (task->cfg && task->cfg->libs_ctx) {
+		lua_State *L = task->cfg->lua_state;
 
-	if (task->cfg && task->cfg->libs_ctx) {
-		mb = magic_buffer (task->cfg->libs_ctx->libmagic,
-				start,
-				len);
+		if (rspamd_lua_require_function (L,
+				"lua_magic", "detect_mime_part")) {
+
+			struct rspamd_mime_part **pmime;
+			struct rspamd_task **ptask;
+
+			pmime = lua_newuserdata (L, sizeof (struct rspamd_mime_part *));
+			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
+			*pmime = part;
+			ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+			rspamd_lua_setclass (L, "rspamd{task}", -1);
+			*ptask = task;
+
+			if (lua_pcall (L, 2, 2, 0) != 0) {
+				msg_err_task ("cannot detect type: %s", lua_tostring (L, -1));
+			}
+			else {
+				if (lua_istable (L, -1)) {
+					lua_pushstring (L, "ct");
+					lua_gettable (L, -2);
+
+					if (lua_isstring (L, -1)) {
+						mb = rspamd_mempool_strdup (task->task_pool,
+								lua_tostring (L, -1));
+					}
+				}
+			}
+
+			lua_settop (L, 0);
+		}
+		else {
+			msg_err_task ("cannot require lua_magic.detect_mime_part");
+		}
 
 		if (mb) {
 			srch.begin = mb;
@@ -1059,13 +1019,6 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 		}
 	}
 
-	part->raw_data.begin = start;
-	part->raw_data.len = len;
-	part->parsed_data.begin = start;
-	part->parsed_data.len = len;
-	part->id = MESSAGE_FIELD (task, parts)->len;
-	part->raw_headers = rspamd_message_headers_new ();
-	part->headers_order = NULL;
 
 	tok = rspamd_task_get_request_header (task, "Filename");
 
@@ -1408,30 +1361,80 @@ rspamd_message_process (struct rspamd_task *task)
 	gdouble diff, *pdiff;
 	guint tw, *ptw, dw;
 	struct rspamd_mime_part *part;
+	lua_State *L = task->cfg->lua_state;
+	gint func_pos = -1;
 
 	rspamd_images_process (task);
 	rspamd_archives_process (task);
 
+	if (rspamd_lua_require_function (L,
+			"lua_magic", "detect_mime_part")) {
+		func_pos = lua_gettop (L);
+	}
+	else {
+		msg_err_task ("cannot require lua_magic.detect_mime_part");
+	}
+
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-		if (!rspamd_message_process_text_part_maybe (task, part) &&
-				part->parsed_data.len > 0) {
-			if (task->cfg) {
-				const gchar *mb = magic_buffer (task->cfg->libs_ctx->libmagic,
-						part->parsed_data.begin,
-						part->parsed_data.len);
+		if (func_pos != -1) {
+			struct rspamd_mime_part **pmime;
+			struct rspamd_task **ptask;
 
-				if (mb) {
-					rspamd_ftok_t srch;
+			lua_pushvalue (L, func_pos);
+			pmime = lua_newuserdata (L, sizeof (struct rspamd_mime_part *));
+			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
+			*pmime = part;
+			ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+			rspamd_lua_setclass (L, "rspamd{task}", -1);
+			*ptask = task;
 
-					srch.begin = mb;
-					srch.len = strlen (mb);
-					part->detected_ct = rspamd_content_type_parse (srch.begin,
-							srch.len,
-							task->task_pool);
+			if (lua_pcall (L, 2, 2, 0) != 0) {
+				msg_err_task ("cannot detect type: %s", lua_tostring (L, -1));
+			}
+			else {
+				if (lua_istable (L, -1)) {
+					const gchar *mb;
+
+					/* First returned value */
+					part->detected_ext = rspamd_mempool_strdup (task->task_pool,
+							lua_tostring (L, -2));
+
+					lua_pushstring (L, "ct");
+					lua_gettable (L, -2);
+
+					if (lua_isstring (L, -1)) {
+						mb = lua_tostring (L, -1);
+
+						if (mb) {
+							rspamd_ftok_t srch;
+
+							srch.begin = mb;
+							srch.len = strlen (mb);
+							part->detected_ct = rspamd_content_type_parse (srch.begin,
+									srch.len,
+									task->task_pool);
+						}
+					}
+
+					lua_pop (L, 1);
+
+					lua_pushstring (L, "type");
+					lua_gettable (L, -2);
+
+					if (lua_isstring (L, -1)) {
+						part->detected_type = rspamd_mempool_strdup (task->task_pool,
+								lua_tostring (L, -1));
+					}
 				}
 			}
+
+			lua_settop (L, func_pos);
 		}
+
+		rspamd_message_process_text_part_maybe (task, part);
 	}
+
+	lua_settop (L, 0);
 
 	/* Calculate average words length and number of short words */
 	struct rspamd_mime_text_part *text_part;
