@@ -326,9 +326,9 @@ exports.detect_mime_part = function(part, log_obj)
     return ext,types[ext]
   end
 
-  ext,weight = exports.detect(part:get_content(), log_obj)
+  ext = exports.detect(part:get_content(), log_obj)
 
-  if ext and weight and weight > 20 then
+  if ext then
     return ext,types[ext]
   end
 

@@ -209,8 +209,8 @@ local patterns = {
   zst = {
     matches = {
       {
-        string = [[\x{FD}\x{2F}\x{B5}[\x{22}-\x{40}].]],
-        position = 5, -- includes last .
+        string = [[[\x{22}-\x{40}]\x{B5}\x{2F}\x{FD}]],
+        position = 4,
         weight = 60,
       },
     }
