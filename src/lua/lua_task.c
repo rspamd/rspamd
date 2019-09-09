@@ -1669,8 +1669,9 @@ lua_task_load_from_string (lua_State * L)
 		}
 
 		task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
-		task->msg.begin = g_strdup (str_message);
-		task->msg.len   = message_len;
+		task->msg.begin = g_malloc (message_len);
+		memcpy ((gchar *)task->msg.begin, str_message, message_len);
+		task->msg.len  = message_len;
 		rspamd_mempool_add_destructor (task->task_pool, lua_task_free_dtor,
 				(gpointer)task->msg.begin);
 	}
