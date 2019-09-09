@@ -105,6 +105,14 @@ local types = {
     ct = 'application/x-zoo',
     type = 'archive',
   },
+  xar = {
+    ct = 'application/x-xar',
+    type = 'archive',
+  },
+  epub = {
+    ct = 'application/x-epub',
+    type = 'archive'
+  },
   szdd = { -- in fact, their MSDOS extension is like FOO.TX_ or FOO.TX$
     ct = 'application/x-compressed',
     type = 'archive',

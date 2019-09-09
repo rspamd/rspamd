@@ -51,6 +51,7 @@ local zip_patterns = {
          [[mimetypeapplication/vnd\.oasis\.opendocument.formula]],
          [[mimetypeapplication/vnd\.oasis\.opendocument\.chart]]},
   odp = {[[mimetypeapplication/vnd\.oasis\.opendocument\.presentation]]},
+  epub = {[[epub\+zip]]}
 }
 
 -- Used to match pattern index and extension
@@ -236,6 +237,8 @@ local function detect_archive_flaw(part, arch, log_obj)
         res.docx = res.docx + 30
       elseif file:sub(1, 4) == 'ppt/' then
         res.pptx = res.pptx + 30
+      elseif file == 'META-INF/MANIFEST.MF' then
+        res.jar = res.jar + 40
       end
     end
 

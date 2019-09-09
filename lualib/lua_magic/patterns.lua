@@ -224,6 +224,15 @@ local patterns = {
       },
     }
   },
+  xar = {
+    matches = {
+      {
+        string = [[xar!]],
+        relative_position = 0,
+        weight = 60,
+      },
+    }
+  },
   iso = {
     matches = {
       {
