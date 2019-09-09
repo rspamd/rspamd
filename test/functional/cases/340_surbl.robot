@@ -92,6 +92,12 @@ SURBL example.com encoded url in subject
   Should Not Contain  ${result.stdout}  DBL_PHISH (
   Should Not Contain  ${result.stdout}  URIBL_BLACK (
 
+WHITELIST
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/whitelist.eml
+  Should Not Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Not Contain  ${result.stdout}  DBL_SPAM (
+  Should Not Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES (
+
 *** Keywords ***
 Surbl Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/surbl.conf
