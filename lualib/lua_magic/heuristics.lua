@@ -46,41 +46,49 @@ local msoffice_patterns_indexes = {}
 
 local exports = {}
 
-local function compile_msoffice_trie(log_obj)
-  if not msoffice_trie then
-    -- Directory names
+local function compile_tries()
+  local function compile_pats(patterns, indexes, transform_func)
     local strs = {}
-    for ext,pats in pairs(msoffice_patterns) do
+    for ext,pats in pairs(patterns) do
       for _,pat in ipairs(pats) do
         -- These are utf16 strings in fact...
-        strs[#strs + 1] = '^' ..
-            table.concat(
-                fun.totable(
-                    fun.map(function(c) return c .. [[\x{00}]] end,
-                        fun.iter(pat))))
-        msoffice_patterns_indexes[#msoffice_patterns_indexes + 1] = ext
-
+        strs[#strs + 1] = transform_func(pat)
+        indexes[#indexes + 1] = ext
       end
     end
-    msoffice_trie = rspamd_trie.create(strs, rspamd_trie.flags.re)
+
+    return rspamd_trie.create(strs, rspamd_trie.flags.re)
+  end
+
+  if not msoffice_trie then
+    -- Directory names
+    local function msoffice_pattern_transform(pat)
+      return '^' ..
+          table.concat(
+              fun.totable(
+                  fun.map(function(c) return c .. [[\x{00}]] end,
+                      fun.iter(pat))))
+    end
+    local function msoffice_clsid_transform(pat)
+      local hex_table = {}
+      for i=1,#pat,2 do
+        local subc = pat:sub(i, i + 1)
+        hex_table[#hex_table + 1] = string.format('\\x{%s}', subc)
+      end
+
+      return '^' .. table.concat(hex_table) .. '$'
+    end
+    -- Directory entries
+    msoffice_trie = compile_pats(msoffice_patterns, msoffice_patterns_indexes,
+        msoffice_pattern_transform)
     -- Clsids
-    strs = {}
-    for ext,pats in pairs(msoffice_clsids) do
-      for _,pat in ipairs(pats) do
-        -- Convert hex to re
-        local hex_table = {}
-        for i=1,#pat,2 do
-          local subc = pat:sub(i, i + 1)
-          hex_table[#hex_table + 1] = string.format('\\x{%s}', subc)
-        end
-        strs[#strs + 1] = '^' .. table.concat(hex_table) .. '$'
-        msoffice_clsid_indexes[#msoffice_clsid_indexes + 1] = ext
-
-      end
-    end
-    msoffice_trie_clsid = rspamd_trie.create(strs, rspamd_trie.flags.re)
+    msoffice_trie_clsid = compile_pats(msoffice_clsids, msoffice_clsid_indexes,
+        msoffice_clsid_transform)
   end
 end
+
+-- Call immediately on require
+compile_tries()
 
 local function detect_ole_format(input, log_obj)
   local inplen = #input
@@ -89,7 +97,6 @@ local function detect_ole_format(input, log_obj)
     return nil
   end
 
-  compile_msoffice_trie(log_obj)
   local bom,sec_size = rspamd_util.unpack('<I2<I2', input:span(29, 4))
   if bom == 0xFFFE then
     bom = '<'
@@ -167,7 +174,7 @@ end
 
 exports.ole_format_heuristic = detect_ole_format
 
-local function process_detected(res)
+local function process_top_detected(res)
   local extensions = lua_util.keys(res)
 
   if #extensions > 0 then
@@ -175,13 +182,13 @@ local function process_detected(res)
       return res[ex1] > res[ex2]
     end)
 
-    return extensions,res[extensions[1]]
+    return extensions[1],res[extensions[1]]
   end
 
   return nil
 end
 
-local function detect_archive_flaw(part, arch)
+local function detect_archive_flaw(part, arch, log_obj)
   local arch_type = arch:get_type()
   local res = {
     docx = 0,
@@ -206,12 +213,12 @@ local function detect_archive_flaw(part, arch)
     for _,file in ipairs(files) do
       if file == '[Content_Types].xml' then
         add_msoffice_confidence(10)
-      elseif file == 'xl/' then
+      elseif file:sub(1, 3) == 'xl/' then
         res.xlsx = res.xlsx + 30
-      elseif file == 'word/' then
-        res.xlsx = res.docx + 30
-      elseif file == 'ppt/' then
-        res.xlsx = res.pptx + 30
+      elseif file:sub(1, 5) == 'word/' then
+        res.docx = res.docx + 30
+      elseif file:sub(1, 4) == 'ppt/' then
+        res.pptx = res.pptx + 30
       elseif file == 'META-INF/manifest.xml' then
         -- Apply ODT detection logic
         local content = part:get_content()
@@ -245,7 +252,7 @@ local function detect_archive_flaw(part, arch)
       end
     end
 
-    local ext,weight = process_detected(res)
+    local ext,weight = process_top_detected(res)
 
     if weight >= 40 then
       return ext,weight
@@ -254,7 +261,8 @@ local function detect_archive_flaw(part, arch)
 
   return arch_type:lower(),40
 end
-exports.mime_part_heuristic = function(part)
+
+exports.mime_part_heuristic = function(part, log_obj)
   if part:is_text() then
     if part:get_text():is_html() then
       return 'html',60
@@ -270,7 +278,7 @@ exports.mime_part_heuristic = function(part)
 
   if part:is_archive() then
     local arch = part:get_archive()
-    return detect_archive_flaw(part, arch)
+    return detect_archive_flaw(part, arch, log_obj)
   end
 
   return nil

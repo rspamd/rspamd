@@ -1409,6 +1409,9 @@ rspamd_message_process (struct rspamd_task *task)
 	guint tw, *ptw, dw;
 	struct rspamd_mime_part *part;
 
+	rspamd_images_process (task);
+	rspamd_archives_process (task);
+
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		if (!rspamd_message_process_text_part_maybe (task, part) &&
 				part->parsed_data.len > 0) {
@@ -1429,9 +1432,6 @@ rspamd_message_process (struct rspamd_task *task)
 			}
 		}
 	}
-
-	rspamd_images_process (task);
-	rspamd_archives_process (task);
 
 	/* Calculate average words length and number of short words */
 	struct rspamd_mime_text_part *text_part;
