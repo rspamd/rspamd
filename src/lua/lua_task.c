@@ -3438,6 +3438,7 @@ lua_task_set_recipients (lua_State *L)
 	} \
 	else { \
 		ret = addr->len > 0; \
+		nrcpt = addr->len; \
 	} \
 } while (0)
 
@@ -3446,7 +3447,7 @@ lua_task_has_from (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	gint what = 0;
+	gint what = 0, nrcpt = 0;
 	gboolean ret = FALSE;
 
 	if (task) {
@@ -3488,7 +3489,7 @@ lua_task_has_recipients (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	gint what = 0;
+	gint what = 0, nrcpt = 0;
 	gboolean ret = FALSE;
 
 	if (task) {
@@ -3521,6 +3522,11 @@ lua_task_has_recipients (lua_State *L)
 	}
 
 	lua_pushboolean (L, ret);
+
+	if (ret) {
+		lua_pushinteger (L, nrcpt);
+		return 2;
+	}
 
 	return 1;
 }
