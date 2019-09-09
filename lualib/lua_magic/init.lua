@@ -326,7 +326,17 @@ exports.detect_mime_part = function(part, log_obj)
     return ext,types[ext]
   end
 
-  return exports.detect(part:get_content(), log_obj)
+  ext,weight = exports.detect(part:get_content(), log_obj)
+
+  if ext and weight and weight > 20 then
+    return ext,types[ext]
+  end
+
+  -- Text/html and other parts
+  ext,weight = heuristics.text_part_heuristic(part, log_obj)
+  if ext and weight and weight > 20 then
+    return ext,types[ext]
+  end
 end
 
 -- This parameter specifies how many bytes are checked in the input

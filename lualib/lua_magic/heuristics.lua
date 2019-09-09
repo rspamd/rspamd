@@ -44,20 +44,46 @@ local msoffice_clsids = {
 local zip_trie
 local zip_patterns = {
   -- https://lists.oasis-open.org/archives/office/200505/msg00006.html
-  odt = {[[mimetypeapplication/vnd\.oasis\.opendocument.text]],
-         [[mimetypeapplication/vnd\.oasis.opendocument\.image]],
-         [[mimetypeapplication/vnd\.oasis\.opendocument\.graphic]]},
-  ods = {[[mimetypeapplication/vnd\.oasis\.opendocument\.spreadsheet]],
-         [[mimetypeapplication/vnd\.oasis\.opendocument.formula]],
-         [[mimetypeapplication/vnd\.oasis\.opendocument\.chart]]},
+  odt = {
+    [[mimetypeapplication/vnd\.oasis\.opendocument.text]],
+    [[mimetypeapplication/vnd\.oasis.opendocument\.image]],
+    [[mimetypeapplication/vnd\.oasis\.opendocument\.graphic]]
+  },
+  ods = {
+    [[mimetypeapplication/vnd\.oasis\.opendocument\.spreadsheet]],
+    [[mimetypeapplication/vnd\.oasis\.opendocument.formula]],
+    [[mimetypeapplication/vnd\.oasis\.opendocument\.chart]]
+  },
   odp = {[[mimetypeapplication/vnd\.oasis\.opendocument\.presentation]]},
   epub = {[[epub\+zip]]}
+}
+
+local txt_trie
+local txt_patterns = {
+  html = {
+    [[(?i)\s*<html]],
+    [[(?i)\s*<\!DOCTYPE HTML]],
+    [[(?i)\s*<xml]],
+    [[(?i)\s*<body]],
+    [[(?i)\s*<table]],
+    [[(?i)\s*<a]],
+    [[(?i)\s*<p]],
+    [[(?i)\s*<div]],
+    [[(?i)\s*<span]],
+  },
+  csv = {
+    [[(?:[-a-zA-Z0-9_]+\s*,){2,}(?:[-a-zA-Z0-9_]+[\r\n])]]
+  },
+  js = {
+    [[\s*function\s*\(]],
+  },
 }
 
 -- Used to match pattern index and extension
 local msoffice_clsid_indexes = {}
 local msoffice_patterns_indexes = {}
 local zip_patterns_indexes = {}
+local txt_patterns_indexes = {}
 
 local exports = {}
 
@@ -101,6 +127,9 @@ local function compile_tries()
         msoffice_clsid_transform)
     -- Misc zip patterns at the initial fragment
     zip_trie = compile_pats(zip_patterns, zip_patterns_indexes,
+        function(pat) return pat end)
+    -- Text patterns at the initial fragment
+    txt_trie = compile_pats(txt_patterns, txt_patterns_indexes,
         function(pat) return pat end)
   end
 end
@@ -271,13 +300,6 @@ local function detect_archive_flaw(part, arch, log_obj)
 end
 
 exports.mime_part_heuristic = function(part, log_obj)
-  if part:is_text() then
-    if part:get_text():is_html() then
-      return 'html',60
-    else
-      return 'txt',60
-    end
-  end
 
   if part:is_image() then
     local img = part:get_image()
@@ -290,6 +312,84 @@ exports.mime_part_heuristic = function(part, log_obj)
   end
 
   return nil
+end
+
+exports.text_part_heuristic = function(part, log_obj)
+  -- We get some span of data and check it
+  local function is_span_text(span)
+    local function rough_utf8_check(b)
+      if b >= 127 then
+        if bit.band(b, 0xe0) == 0xc0 or bit.band(b, 0xf0) == 0xe0 or bit.band(b, 0xf8) == 0xf0 then
+          return true
+        end
+        return false
+      else
+        return true
+      end
+    end
+
+    -- Convert to string as LuaJIT can optimise string.sub (and fun.iter) but not C calls
+    local tlen = #span
+    local non_printable = 0
+    for _,b in ipairs(span:bytes()) do
+      if ((b < 0x20) and not (b == 0x0d or b == 0x0a or b == 0x09))
+          or (not rough_utf8_check(b)) then
+        non_printable = non_printable + 1
+      end
+    end
+    lua_util.debugm(N, log_obj, "text part check: %s printable, %s non-printable, %s total",
+        tlen - non_printable, non_printable, tlen)
+    if non_printable / tlen > 0.0625 then
+      return false
+    end
+
+    return true
+  end
+
+  local content = part:get_content()
+  local clen = #content
+  local is_text
+
+  if clen > 0 then
+    if clen > 80 * 3 then
+      -- Use chunks
+      is_text = is_span_text(content:span(1, 160)) and is_span_text(content:span(clen - 80, 80))
+    else
+      is_text = is_span_text(content)
+    end
+
+    if is_text then
+      -- Try patterns
+      local span_len = math.min(160, clen)
+      local start_span = content:span(1, span_len)
+      local matches = txt_trie:match(start_span)
+      local res = {}
+      if matches then
+        -- Require at least 2 occurrences of those patterns
+        for n,positions in pairs(matches) do
+          local ext = txt_patterns_indexes[n]
+          if ext then
+            res[ext] = (res[ext] or 0) + 20 * #positions
+            lua_util.debugm(N, log_obj, "found txt pattern for %s: %s",
+                ext, #positions)
+          end
+        end
+
+        if res.html and res.html >= 40 then
+          -- HTML has priority over something like js...
+          return 'html',res.html
+        end
+
+        local ext,weight = process_top_detected(res)
+
+        if weight and weight >= 40 then
+          return ext,weight
+        end
+      end
+
+      return 'txt',40
+    end
+  end
 end
 
 return exports

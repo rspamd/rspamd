@@ -250,6 +250,18 @@ local types = {
     type = 'text',
     ct = 'text/html',
   },
+  csv = {
+    type = 'text',
+    ct = 'text/csv',
+  },
+  eml = {
+    type = 'message',
+    ct = 'message/rfc822',
+  },
+  js = {
+    type = 'application',
+    ct = 'application/javascript',
+  },
 }
 
 return types
