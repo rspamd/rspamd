@@ -41,8 +41,22 @@ local msoffice_clsids = {
   msg = {[[46f0060000000000c000000000000046]], [[0b0d020000000000c000000000000046]]},
   msi = {[[84100c0000000000c000000000000046]]},
 }
+local zip_trie
+local zip_patterns = {
+  -- https://lists.oasis-open.org/archives/office/200505/msg00006.html
+  odt = {[[mimetypeapplication/vnd\.oasis\.opendocument.text]],
+         [[mimetypeapplication/vnd\.oasis.opendocument\.image]],
+         [[mimetypeapplication/vnd\.oasis\.opendocument\.graphic]]},
+  ods = {[[mimetypeapplication/vnd\.oasis\.opendocument\.spreadsheet]],
+         [[mimetypeapplication/vnd\.oasis\.opendocument.formula]],
+         [[mimetypeapplication/vnd\.oasis\.opendocument\.chart]]},
+  odp = {[[mimetypeapplication/vnd\.oasis\.opendocument\.presentation]]},
+}
+
+-- Used to match pattern index and extension
 local msoffice_clsid_indexes = {}
 local msoffice_patterns_indexes = {}
+local zip_patterns_indexes = {}
 
 local exports = {}
 
@@ -84,6 +98,9 @@ local function compile_tries()
     -- Clsids
     msoffice_trie_clsid = compile_pats(msoffice_clsids, msoffice_clsid_indexes,
         msoffice_clsid_transform)
+    -- Misc zip patterns at the initial fragment
+    zip_trie = compile_pats(zip_patterns, zip_patterns_indexes,
+        function(pat) return pat end)
   end
 end
 
@@ -219,36 +236,6 @@ local function detect_archive_flaw(part, arch, log_obj)
         res.docx = res.docx + 30
       elseif file:sub(1, 4) == 'ppt/' then
         res.pptx = res.pptx + 30
-      elseif file == 'META-INF/manifest.xml' then
-        -- Apply ODT detection logic
-        local content = part:get_content()
-
-        if #content > 80 then
-          -- https://lists.oasis-open.org/archives/office/200505/msg00006.html
-          local start_span = content:span(30, 50)
-
-          local mp = tostring(start_span:span(1, 8))
-          if mp == 'mimetype' then
-            local spec_type = tostring(start_span:span(9))
-            if spec_type:find('vnd.oasis.opendocument.text') then
-              res.odt = 40
-            elseif spec_type:find('vnd.oasis.opendocument.spreadsheet') then
-              res.ods = 40
-            elseif spec_type:find('vnd.oasis.opendocument.formula') then
-              res.ods = 40
-            elseif spec_type:find('vnd.oasis.opendocument.chart') then
-              res.ods = 40
-            elseif spec_type:find('vnd.oasis.opendocument.presentation') then
-              res.odp = 40
-            elseif spec_type:find('vnd.oasis.opendocument.image') then
-              -- Assume image as odt
-              res.odt = 40
-            elseif spec_type:find('vnd.oasis.opendocument.graphics') then
-              -- Assume image as odt
-              res.odt = 40
-            end
-          end
-        end
       end
     end
 
@@ -256,6 +243,24 @@ local function detect_archive_flaw(part, arch, log_obj)
 
     if weight >= 40 then
       return ext,weight
+    end
+
+    -- Apply misc Zip detection logic
+    local content = part:get_content()
+
+    if #content > 128 then
+      local start_span = content:span(1, 128)
+
+      local matches = zip_trie:match(start_span)
+      if matches then
+        for n,_ in pairs(matches) do
+          if zip_patterns_indexes[n] then
+            lua_util.debugm(N, log_obj, "found zip pattern for %s",
+                zip_patterns_indexes[n])
+            return zip_patterns_indexes[n],40
+          end
+        end
+      end
     end
   end
 
