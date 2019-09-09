@@ -81,6 +81,12 @@ LUA_FUNCTION_DEF (text, span);
  * @return {integer} byte at the position `pos` or nil if pos out of bound
  */
 LUA_FUNCTION_DEF (text, at);
+/***
+ * @method rspamd_text:bytes()
+ * Converts text to an array of bytes
+ * @return {table|integer} bytes in the array (as unsigned char)
+ */
+LUA_FUNCTION_DEF (text, bytes);
 LUA_FUNCTION_DEF (text, take_ownership);
 LUA_FUNCTION_DEF (text, gc);
 LUA_FUNCTION_DEF (text, eq);
@@ -99,6 +105,7 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, save_in_file),
 		LUA_INTERFACE_DEF (text, span),
 		LUA_INTERFACE_DEF (text, at),
+		LUA_INTERFACE_DEF (text, bytes),
 		{"write", lua_text_save_in_file},
 		{"__len", lua_text_len},
 		{"__tostring", lua_text_str},
@@ -362,6 +369,27 @@ lua_text_at (lua_State *L)
 		}
 		else {
 			lua_pushnil (L);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_text_bytes (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+
+	if (t) {
+		lua_createtable (L, t->len, 0);
+
+		for (gsize i = 0; i < t->len; i ++) {
+			lua_pushinteger (L, (guchar)t->start[i]);
+			lua_rawseti (L, -2, i + 1);
 		}
 	}
 	else {

@@ -132,6 +132,8 @@ local function process_patterns(log_obj)
   end
 end
 
+process_patterns(rspamd_config)
+
 local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_obj, res)
   local matches = trie:match(chunk)
 
@@ -253,7 +255,6 @@ end
 
 exports.detect = function(input, log_obj)
   if not log_obj then log_obj = rspamd_config end
-  process_patterns(log_obj)
 
   local res = {}
 
@@ -319,13 +320,23 @@ exports.detect = function(input, log_obj)
 end
 
 exports.detect_mime_part = function(part, log_obj)
-  local ext,weight = heuristics.mime_part_heuristic(part)
+  local ext,weight = heuristics.mime_part_heuristic(part, log_obj)
 
   if ext and weight and weight > 20 then
     return ext,types[ext]
   end
 
-  return exports.detect(part:get_content(), log_obj)
+  ext = exports.detect(part:get_content(), log_obj)
+
+  if ext then
+    return ext,types[ext]
+  end
+
+  -- Text/html and other parts
+  ext,weight = heuristics.text_part_heuristic(part, log_obj)
+  if ext and weight and weight > 20 then
+    return ext,types[ext]
+  end
 end
 
 -- This parameter specifies how many bytes are checked in the input

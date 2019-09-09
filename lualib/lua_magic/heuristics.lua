@@ -41,46 +41,101 @@ local msoffice_clsids = {
   msg = {[[46f0060000000000c000000000000046]], [[0b0d020000000000c000000000000046]]},
   msi = {[[84100c0000000000c000000000000046]]},
 }
+local zip_trie
+local zip_patterns = {
+  -- https://lists.oasis-open.org/archives/office/200505/msg00006.html
+  odt = {
+    [[mimetypeapplication/vnd\.oasis\.opendocument.text]],
+    [[mimetypeapplication/vnd\.oasis.opendocument\.image]],
+    [[mimetypeapplication/vnd\.oasis\.opendocument\.graphic]]
+  },
+  ods = {
+    [[mimetypeapplication/vnd\.oasis\.opendocument\.spreadsheet]],
+    [[mimetypeapplication/vnd\.oasis\.opendocument.formula]],
+    [[mimetypeapplication/vnd\.oasis\.opendocument\.chart]]
+  },
+  odp = {[[mimetypeapplication/vnd\.oasis\.opendocument\.presentation]]},
+  epub = {[[epub\+zip]]}
+}
+
+local txt_trie
+local txt_patterns = {
+  html = {
+    [[(?i)\s*<html]],
+    [[(?i)\s*<\!DOCTYPE HTML]],
+    [[(?i)\s*<xml]],
+    [[(?i)\s*<body]],
+    [[(?i)\s*<table]],
+    [[(?i)\s*<a]],
+    [[(?i)\s*<p]],
+    [[(?i)\s*<div]],
+    [[(?i)\s*<span]],
+  },
+  csv = {
+    [[(?:[-a-zA-Z0-9_]+\s*,){2,}(?:[-a-zA-Z0-9_]+[\r\n])]]
+  },
+  js = {
+    [[\s*function\s*\(]],
+  },
+}
+
+-- Used to match pattern index and extension
 local msoffice_clsid_indexes = {}
 local msoffice_patterns_indexes = {}
+local zip_patterns_indexes = {}
+local txt_patterns_indexes = {}
 
 local exports = {}
 
-local function compile_msoffice_trie(log_obj)
-  if not msoffice_trie then
-    -- Directory names
+local function compile_tries()
+  local function compile_pats(patterns, indexes, transform_func)
     local strs = {}
-    for ext,pats in pairs(msoffice_patterns) do
+    for ext,pats in pairs(patterns) do
       for _,pat in ipairs(pats) do
         -- These are utf16 strings in fact...
-        strs[#strs + 1] = '^' ..
-            table.concat(
-                fun.totable(
-                    fun.map(function(c) return c .. [[\x{00}]] end,
-                        fun.iter(pat))))
-        msoffice_patterns_indexes[#msoffice_patterns_indexes + 1] = ext
-
+        strs[#strs + 1] = transform_func(pat)
+        indexes[#indexes + 1] = ext
       end
     end
-    msoffice_trie = rspamd_trie.create(strs, rspamd_trie.flags.re)
+
+    return rspamd_trie.create(strs, rspamd_trie.flags.re)
+  end
+
+  if not msoffice_trie then
+    -- Directory names
+    local function msoffice_pattern_transform(pat)
+      return '^' ..
+          table.concat(
+              fun.totable(
+                  fun.map(function(c) return c .. [[\x{00}]] end,
+                      fun.iter(pat))))
+    end
+    local function msoffice_clsid_transform(pat)
+      local hex_table = {}
+      for i=1,#pat,2 do
+        local subc = pat:sub(i, i + 1)
+        hex_table[#hex_table + 1] = string.format('\\x{%s}', subc)
+      end
+
+      return '^' .. table.concat(hex_table) .. '$'
+    end
+    -- Directory entries
+    msoffice_trie = compile_pats(msoffice_patterns, msoffice_patterns_indexes,
+        msoffice_pattern_transform)
     -- Clsids
-    strs = {}
-    for ext,pats in pairs(msoffice_clsids) do
-      for _,pat in ipairs(pats) do
-        -- Convert hex to re
-        local hex_table = {}
-        for i=1,#pat,2 do
-          local subc = pat:sub(i, i + 1)
-          hex_table[#hex_table + 1] = string.format('\\x{%s}', subc)
-        end
-        strs[#strs + 1] = '^' .. table.concat(hex_table) .. '$'
-        msoffice_clsid_indexes[#msoffice_clsid_indexes + 1] = ext
-
-      end
-    end
-    msoffice_trie_clsid = rspamd_trie.create(strs, rspamd_trie.flags.re)
+    msoffice_trie_clsid = compile_pats(msoffice_clsids, msoffice_clsid_indexes,
+        msoffice_clsid_transform)
+    -- Misc zip patterns at the initial fragment
+    zip_trie = compile_pats(zip_patterns, zip_patterns_indexes,
+        function(pat) return pat end)
+    -- Text patterns at the initial fragment
+    txt_trie = compile_pats(txt_patterns, txt_patterns_indexes,
+        function(pat) return pat end)
   end
 end
+
+-- Call immediately on require
+compile_tries()
 
 local function detect_ole_format(input, log_obj)
   local inplen = #input
@@ -89,7 +144,6 @@ local function detect_ole_format(input, log_obj)
     return nil
   end
 
-  compile_msoffice_trie(log_obj)
   local bom,sec_size = rspamd_util.unpack('<I2<I2', input:span(29, 4))
   if bom == 0xFFFE then
     bom = '<'
@@ -167,7 +221,7 @@ end
 
 exports.ole_format_heuristic = detect_ole_format
 
-local function process_detected(res)
+local function process_top_detected(res)
   local extensions = lua_util.keys(res)
 
   if #extensions > 0 then
@@ -175,13 +229,13 @@ local function process_detected(res)
       return res[ex1] > res[ex2]
     end)
 
-    return extensions,res[extensions[1]]
+    return extensions[1],res[extensions[1]]
   end
 
   return nil
 end
 
-local function detect_archive_flaw(part, arch)
+local function detect_archive_flaw(part, arch, log_obj)
   local arch_type = arch:get_type()
   local res = {
     docx = 0,
@@ -206,62 +260,46 @@ local function detect_archive_flaw(part, arch)
     for _,file in ipairs(files) do
       if file == '[Content_Types].xml' then
         add_msoffice_confidence(10)
-      elseif file == 'xl/' then
+      elseif file:sub(1, 3) == 'xl/' then
         res.xlsx = res.xlsx + 30
-      elseif file == 'word/' then
-        res.xlsx = res.docx + 30
-      elseif file == 'ppt/' then
-        res.xlsx = res.pptx + 30
-      elseif file == 'META-INF/manifest.xml' then
-        -- Apply ODT detection logic
-        local content = part:get_content()
-
-        if #content > 80 then
-          -- https://lists.oasis-open.org/archives/office/200505/msg00006.html
-          local start_span = content:span(30, 50)
-
-          local mp = tostring(start_span:span(1, 8))
-          if mp == 'mimetype' then
-            local spec_type = tostring(start_span:span(9))
-            if spec_type:find('vnd.oasis.opendocument.text') then
-              res.odt = 40
-            elseif spec_type:find('vnd.oasis.opendocument.spreadsheet') then
-              res.ods = 40
-            elseif spec_type:find('vnd.oasis.opendocument.formula') then
-              res.ods = 40
-            elseif spec_type:find('vnd.oasis.opendocument.chart') then
-              res.ods = 40
-            elseif spec_type:find('vnd.oasis.opendocument.presentation') then
-              res.odp = 40
-            elseif spec_type:find('vnd.oasis.opendocument.image') then
-              -- Assume image as odt
-              res.odt = 40
-            elseif spec_type:find('vnd.oasis.opendocument.graphics') then
-              -- Assume image as odt
-              res.odt = 40
-            end
-          end
-        end
+      elseif file:sub(1, 5) == 'word/' then
+        res.docx = res.docx + 30
+      elseif file:sub(1, 4) == 'ppt/' then
+        res.pptx = res.pptx + 30
+      elseif file == 'META-INF/MANIFEST.MF' then
+        res.jar = res.jar + 40
       end
     end
 
-    local ext,weight = process_detected(res)
+    local ext,weight = process_top_detected(res)
 
     if weight >= 40 then
       return ext,weight
+    end
+
+    -- Apply misc Zip detection logic
+    local content = part:get_content()
+
+    if #content > 128 then
+      local start_span = content:span(1, 128)
+
+      local matches = zip_trie:match(start_span)
+      if matches then
+        for n,_ in pairs(matches) do
+          if zip_patterns_indexes[n] then
+            lua_util.debugm(N, log_obj, "found zip pattern for %s",
+                zip_patterns_indexes[n])
+            return zip_patterns_indexes[n],40
+          end
+        end
+      end
     end
   end
 
   return arch_type:lower(),40
 end
-exports.mime_part_heuristic = function(part)
-  if part:is_text() then
-    if part:get_text():is_html() then
-      return 'html',60
-    else
-      return 'txt',60
-    end
-  end
+
+exports.mime_part_heuristic = function(part, log_obj)
 
   if part:is_image() then
     local img = part:get_image()
@@ -270,10 +308,88 @@ exports.mime_part_heuristic = function(part)
 
   if part:is_archive() then
     local arch = part:get_archive()
-    return detect_archive_flaw(part, arch)
+    return detect_archive_flaw(part, arch, log_obj)
   end
 
   return nil
+end
+
+exports.text_part_heuristic = function(part, log_obj)
+  -- We get some span of data and check it
+  local function is_span_text(span)
+    local function rough_utf8_check(b)
+      if b >= 127 then
+        if bit.band(b, 0xe0) == 0xc0 or bit.band(b, 0xf0) == 0xe0 or bit.band(b, 0xf8) == 0xf0 then
+          return true
+        end
+        return false
+      else
+        return true
+      end
+    end
+
+    -- Convert to string as LuaJIT can optimise string.sub (and fun.iter) but not C calls
+    local tlen = #span
+    local non_printable = 0
+    for _,b in ipairs(span:bytes()) do
+      if ((b < 0x20) and not (b == 0x0d or b == 0x0a or b == 0x09))
+          or (not rough_utf8_check(b)) then
+        non_printable = non_printable + 1
+      end
+    end
+    lua_util.debugm(N, log_obj, "text part check: %s printable, %s non-printable, %s total",
+        tlen - non_printable, non_printable, tlen)
+    if non_printable / tlen > 0.0625 then
+      return false
+    end
+
+    return true
+  end
+
+  local content = part:get_content()
+  local clen = #content
+  local is_text
+
+  if clen > 0 then
+    if clen > 80 * 3 then
+      -- Use chunks
+      is_text = is_span_text(content:span(1, 160)) and is_span_text(content:span(clen - 80, 80))
+    else
+      is_text = is_span_text(content)
+    end
+
+    if is_text then
+      -- Try patterns
+      local span_len = math.min(160, clen)
+      local start_span = content:span(1, span_len)
+      local matches = txt_trie:match(start_span)
+      local res = {}
+      if matches then
+        -- Require at least 2 occurrences of those patterns
+        for n,positions in pairs(matches) do
+          local ext = txt_patterns_indexes[n]
+          if ext then
+            res[ext] = (res[ext] or 0) + 20 * #positions
+            lua_util.debugm(N, log_obj, "found txt pattern for %s: %s",
+                ext, #positions)
+          end
+        end
+
+        if res.html and res.html >= 40 then
+          -- HTML has priority over something like js...
+          return 'html',res.html
+        end
+
+        local ext,weight = process_top_detected(res)
+
+        if weight and weight >= 40 then
+          return ext,weight
+        end
+      end
+
+      return 'txt',40
+    end
+  end
 end
 
 return exports

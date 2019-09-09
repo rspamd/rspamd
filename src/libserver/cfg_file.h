@@ -437,7 +437,6 @@ struct rspamd_config {
 	gchar *history_file;                           /**< file to save rolling history						*/
 	gchar *tld_file;                               /**< file to load effective tld list from				*/
 	gchar *hs_cache_dir;                           /**< directory to save hyperscan databases				*/
-	gchar *magic_file;                             /**< file to initialize libmagic						*/
 
 	gdouble dns_timeout;                            /**< timeout in milliseconds for waiting for dns reply	*/
 	guint32 dns_retransmits;                        /**< maximum retransmits count							*/

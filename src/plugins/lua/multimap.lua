@@ -873,21 +873,14 @@ local function multimap_callback(task, rule)
           match_filename(rule, fn)
         end
         -- Also deal with detected content type
-        local dtype,dsubtype = p:get_detected_type()
-        if not rule.skip_detected and (dtype and dsubtype) then
-          local detected_ct = string.format('%s/%s', dtype, dsubtype)
+        if not rule.skip_detected then
+          local ext = p:get_detected_ext()
 
-          if detected_ct then
-            local lua_mime = require "lua_mime"
-
-            local ext = lua_mime.reversed_extensions_map[detected_ct]
-
-            if ext then
-              local fake_fname = string.format('detected.%s', ext)
-              lua_util.debugm(N, task, 'detected filename %s (%s content-type)',
-                  fake_fname, detected_ct)
-              match_filename(rule, fake_fname)
-            end
+          if ext then
+            local fake_fname = string.format('detected.%s', ext)
+            lua_util.debugm(N, task, 'detected filename %s',
+                fake_fname)
+            match_filename(rule, fake_fname)
           end
         end
       end

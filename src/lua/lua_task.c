@@ -1669,8 +1669,9 @@ lua_task_load_from_string (lua_State * L)
 		}
 
 		task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
-		task->msg.begin = g_strdup (str_message);
-		task->msg.len   = message_len;
+		task->msg.begin = g_malloc (message_len);
+		memcpy ((gchar *)task->msg.begin, str_message, message_len);
+		task->msg.len  = message_len;
 		rspamd_mempool_add_destructor (task->task_pool, lua_task_free_dtor,
 				(gpointer)task->msg.begin);
 	}
@@ -3438,6 +3439,7 @@ lua_task_set_recipients (lua_State *L)
 	} \
 	else { \
 		ret = addr->len > 0; \
+		nrcpt = addr->len; \
 	} \
 } while (0)
 
@@ -3446,7 +3448,7 @@ lua_task_has_from (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	gint what = 0;
+	gint what = 0, nrcpt = 0;
 	gboolean ret = FALSE;
 
 	if (task) {
@@ -3488,7 +3490,7 @@ lua_task_has_recipients (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	gint what = 0;
+	gint what = 0, nrcpt = 0;
 	gboolean ret = FALSE;
 
 	if (task) {
@@ -3521,6 +3523,11 @@ lua_task_has_recipients (lua_State *L)
 	}
 
 	lua_pushboolean (L, ret);
+
+	if (ret) {
+		lua_pushinteger (L, nrcpt);
+		return 2;
+	}
 
 	return 1;
 }

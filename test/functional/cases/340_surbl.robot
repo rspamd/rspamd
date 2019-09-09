@@ -96,6 +96,7 @@ WHITELIST
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/whitelist.eml
   Should Not Contain  ${result.stdout}  RSPAMD_URIBL (
   Should Not Contain  ${result.stdout}  DBL_SPAM (
+  Should Not Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES (
 
 *** Keywords ***
 Surbl Setup

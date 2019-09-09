@@ -105,6 +105,14 @@ local types = {
     ct = 'application/x-zoo',
     type = 'archive',
   },
+  xar = {
+    ct = 'application/x-xar',
+    type = 'archive',
+  },
+  epub = {
+    ct = 'application/x-epub',
+    type = 'archive'
+  },
   szdd = { -- in fact, their MSDOS extension is like FOO.TX_ or FOO.TX$
     ct = 'application/x-compressed',
     type = 'archive',
@@ -241,6 +249,18 @@ local types = {
   html = {
     type = 'text',
     ct = 'text/html',
+  },
+  csv = {
+    type = 'text',
+    ct = 'text/csv',
+  },
+  eml = {
+    type = 'message',
+    ct = 'message/rfc822',
+  },
+  js = {
+    type = 'application',
+    ct = 'application/javascript',
   },
 }
 

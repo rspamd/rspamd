@@ -638,8 +638,6 @@ ProcessPackage(LIBCRYPT LIBRARY crypto INCLUDE openssl/evp.h
 	ROOT ${OPENSSL_ROOT_DIR} MODULES openssl libcrypt)
 ProcessPackage(LIBSSL LIBRARY ssl INCLUDE openssl/ssl.h
 	ROOT ${OPENSSL_ROOT_DIR} MODULES openssl libssl)
-ProcessPackage(MAGIC LIBRARY magic INCLUDE magic.h INCLUDE_SUFFIXES include/libmagic
-	ROOT ${LIBMAGIC_ROOT_DIR} MODULES magic)
 ProcessPackage(LIBZ LIBRARY z INCLUDE zlib.h INCLUDE_SUFFIXES include/zlib
 		ROOT ${LIBZ_ROOT_DIR} MODULES z)
 ProcessPackage(SODIUM LIBRARY sodium INCLUDE sodium.h

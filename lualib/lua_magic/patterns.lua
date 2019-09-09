@@ -55,8 +55,8 @@ local patterns = {
   rtf = {
     matches = {
       {
-        string = [[{\\rtf\d]],
-        position = 6,
+        string = [[{\\rt]],
+        position = 4,
         weight = 60,
       }
     }
@@ -209,8 +209,8 @@ local patterns = {
   zst = {
     matches = {
       {
-        string = [[\x{FD}\x{2F}\x{B5}[\x{22}-\x{40}].]],
-        position = 5, -- includes last .
+        string = [[[\x{22}-\x{40}]\x{B5}\x{2F}\x{FD}]],
+        position = 4,
         weight = 60,
       },
     }
@@ -220,6 +220,15 @@ local patterns = {
       {
         hex = [[dca7c4fd]],
         relative_position = 20,
+        weight = 60,
+      },
+    }
+  },
+  xar = {
+    matches = {
+      {
+        string = [[xar!]],
+        relative_position = 0,
         weight = 60,
       },
     }

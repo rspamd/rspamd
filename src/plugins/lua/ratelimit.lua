@@ -58,6 +58,7 @@ local settings = {
 -- KEYS[3] - bucket leak rate (messages per millisecond)
 -- KEYS[4] - bucket burst
 -- KEYS[5] - expire for a bucket
+-- KEYS[6] - number of recipients
 -- return 1 if message should be ratelimited and 0 if not
 -- Redis keys used:
 --   l - last hit
@@ -97,7 +98,7 @@ local bucket_check_script = [[
    dynb = tonumber(redis.call('HGET', KEYS[1], 'db')) / 10000.0
    if dynb == 0 then dynb = 0.0001 end
 
-   if burst > 0 and (burst + 1) > tonumber(KEYS[4]) * dynb then
+   if burst > 0 and (burst + tonumber(KEYS[6])) > tonumber(KEYS[4]) * dynb then
      return {1, tostring(burst), tostring(dynr), tostring(dynb), tostring(leaked)}
    end
   else
@@ -118,6 +119,7 @@ local bucket_check_id
 -- KEYS[5] - max dyn rate (min: 1/x)
 -- KEYS[6] - max burst rate (min: 1/x)
 -- KEYS[7] - expire for a bucket
+-- KEYS[8] - number of recipients (or increase rate)
 -- Redis keys used:
 --   l - last hit
 --   b - current burst
@@ -185,7 +187,7 @@ local bucket_update_script = [[
   local burst = tonumber(redis.call('HGET', KEYS[1], 'b'))
   if burst < 0 then burst = 0 end
 
-  redis.call('HINCRBYFLOAT', KEYS[1], 'b', 1)
+  redis.call('HINCRBYFLOAT', KEYS[1], 'b', tonumber(KEYS[8]))
   redis.call('HSET', KEYS[1], 'l', KEYS[2])
   redis.call('EXPIRE', KEYS[1], KEYS[7])
 
@@ -282,7 +284,8 @@ end
 
 local bucket_schema = ts.shape{
   burst = ts.number + ts.string / lua_util.dehumanize_number,
-  rate = ts.number + ts.string / str_to_rate
+  rate = ts.number + ts.string / str_to_rate,
+  skip_recipients = ts.boolean:is_optional(),
 }
 
 local function parse_limit(name, data)
@@ -622,6 +625,11 @@ local function ratelimit_cb(task)
   -- Don't do anything if pre-result has been already set
   if task:has_pre_result() then return end
 
+  local _,nrcpt = task:has_recipients('smtp')
+  if not nrcpt or nrcpt <= 0 then
+    nrcpt = 1
+  end
+
   if nprefixes > 0 then
     -- Save prefixes to the cache to allow update
     task:cache_set('ratelimit_prefixes', prefixes)
@@ -632,13 +640,16 @@ local function ratelimit_cb(task)
     for pr,value in pairs(prefixes) do
       local bucket = value.bucket
       local rate = (bucket.rate) / 1000.0 -- Leak rate in messages/ms
+      local bincr = nrcpt
+      if bucket.skip_recipients then bincr = 1 end
+
       lua_util.debugm(N, task, "check limit %s:%s -> %s (%s/%s)",
           value.name, pr, value.hash, bucket.burst, bucket.rate)
       lua_redis.exec_redis_script(bucket_check_id,
-              {key = value.hash, task = task, is_write = true},
-              gen_check_cb(pr, bucket, value.name, value.hash),
-              {value.hash, tostring(now), tostring(rate), tostring(bucket.burst),
-                  tostring(settings.expire)})
+          {key = value.hash, task = task, is_write = true},
+          gen_check_cb(pr, bucket, value.name, value.hash),
+          {value.hash, tostring(now), tostring(rate), tostring(bucket.burst),
+           tostring(settings.expire), tostring(bincr)})
     end
   end
 end
@@ -656,6 +667,10 @@ local function ratelimit_update_cb(task)
     end
 
     local verdict = lua_util.get_task_verdict(task)
+    local _,nrcpt = task:has_recipients('smtp')
+    if not nrcpt or nrcpt <= 0 then
+      nrcpt = 1
+    end
 
     -- Update each bucket
     for k, v in pairs(prefixes) do
@@ -663,7 +678,7 @@ local function ratelimit_update_cb(task)
       local function update_bucket_cb(err, data)
         if err then
           rspamd_logger.errx(task, 'cannot update rate bucket %s: %s',
-                  k, err)
+              k, err)
         else
           lua_util.debugm(N, task,
               "updated limit %s:%s -> %s (%s/%s), burst: %s, dyn_rate: %s, dyn_burst: %s",
@@ -685,12 +700,15 @@ local function ratelimit_update_cb(task)
         mult_rate = bucket.ham_factor_rate or 1.0
       end
 
+      local bincr = nrcpt
+      if bucket.skip_recipients then bincr = 1 end
+
       lua_redis.exec_redis_script(bucket_update_id,
-              {key = v.hash, task = task, is_write = true},
-              update_bucket_cb,
-              {v.hash, tostring(now), tostring(mult_rate), tostring(mult_burst),
-               tostring(settings.max_rate_mult), tostring(settings.max_bucket_mult),
-               tostring(settings.expire)})
+          {key = v.hash, task = task, is_write = true},
+          update_bucket_cb,
+          {v.hash, tostring(now), tostring(mult_rate), tostring(mult_burst),
+           tostring(settings.max_rate_mult), tostring(settings.max_bucket_mult),
+           tostring(settings.expire), tostring(bincr)})
     end
   end
 end
