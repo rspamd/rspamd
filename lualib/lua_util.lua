@@ -84,9 +84,17 @@ end
 exports.rspamd_str_split = rspamd_str_split
 exports.str_split = rspamd_str_split
 
-exports.rspamd_str_trim = function(s)
+local function rspamd_str_trim(s)
   return match(ptrim, s)
 end
+exports.rspamd_str_trim = rspamd_str_trim
+--[[[
+-- @function lua_util.str_trim(text)
+-- Returns a string with no trailing and leading spaces
+-- @param {string} text input text
+-- @return {string} string with no trailing and leading spaces
+--]]
+exports.str_trim = rspamd_str_trim
 
 --[[[
 -- @function lua_util.round(number, decimalPlaces)
