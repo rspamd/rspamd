@@ -1361,13 +1361,17 @@ rspamd_message_process (struct rspamd_task *task)
 	gdouble diff, *pdiff;
 	guint tw, *ptw, dw;
 	struct rspamd_mime_part *part;
-	lua_State *L = task->cfg->lua_state;
+	lua_State *L = NULL;
 	gint func_pos = -1;
+
+	if (task->cfg) {
+		L = task->cfg->lua_state;
+	}
 
 	rspamd_images_process (task);
 	rspamd_archives_process (task);
 
-	if (rspamd_lua_require_function (L,
+	if (L && rspamd_lua_require_function (L,
 			"lua_magic", "detect_mime_part")) {
 		func_pos = lua_gettop (L);
 	}
@@ -1434,7 +1438,9 @@ rspamd_message_process (struct rspamd_task *task)
 		rspamd_message_process_text_part_maybe (task, part);
 	}
 
-	lua_settop (L, 0);
+	if (func_pos != -1) {
+		lua_settop (L, func_pos - 1);
+	}
 
 	/* Calculate average words length and number of short words */
 	struct rspamd_mime_text_part *text_part;
