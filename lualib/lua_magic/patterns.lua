@@ -55,8 +55,8 @@ local patterns = {
   rtf = {
     matches = {
       {
-        string = [[{\\rtf\d]],
-        position = 6,
+        string = [[{\\rt]],
+        position = 4,
         weight = 60,
       }
     }
