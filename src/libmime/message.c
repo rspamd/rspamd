@@ -1376,7 +1376,7 @@ rspamd_message_process (struct rspamd_task *task)
 	}
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-		if (func_pos != -1) {
+		if (func_pos != -1 && part->parsed_data.len > 0) {
 			struct rspamd_mime_part **pmime;
 			struct rspamd_task **ptask;
 
