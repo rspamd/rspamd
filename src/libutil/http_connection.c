@@ -954,6 +954,14 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 					err = g_error_new (HTTP_ERROR, 400,
 							"Encryption required");
 				}
+				else if (priv->parser.http_errno == HPE_CLOSED_CONNECTION) {
+					msg_err ("got garbage after end of the message, ignore it");
+
+					REF_RELEASE (pbuf);
+					rspamd_http_connection_unref (conn);
+
+					return;
+				}
 				else {
 					err = g_error_new (HTTP_ERROR, 500 + priv->parser.http_errno,
 							"HTTP parser error: %s",
