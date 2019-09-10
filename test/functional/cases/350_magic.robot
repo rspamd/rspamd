@@ -14,5 +14,6 @@ ${URL_TLD}      ${TESTDIR}/../lua/unit/test_tld.dat
 *** Test Cases ***
 Magic detections bundle 1
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/gargantua.eml
+  Follow Rspamd Log
   Should Contain  ${result.stdout}  MAGIC_SYM_ZIP_2
   Should Contain  ${result.stdout}  MAGIC_SYM_RAR_3
