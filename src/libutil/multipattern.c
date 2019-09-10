@@ -663,11 +663,20 @@ rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
 					&end,
 					TRUE,
 					NULL)) {
-				ret = rspamd_multipattern_acism_cb (i, end - in, &cbd);
+				if (rspamd_multipattern_acism_cb (i, end - in, &cbd)) {
+					goto out;
+				}
 			}
+		}
+out:
+		ret = cbd.ret;
+
+		if (pnfound) {
+			*pnfound = cbd.nfound;
 		}
 	}
 	else {
+		/* Plain trie */
 		ret = acism_lookup (mp->t, in, len, rspamd_multipattern_acism_cb, &cbd,
 				&state, mp->flags & RSPAMD_MULTIPATTERN_ICASE);
 
