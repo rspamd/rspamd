@@ -32,5 +32,5 @@ Magic detections bundle 1
   Should Contain  ${result.stdout}  MAGIC_SYM_TAR_16
   Should Contain  ${result.stdout}  MAGIC_SYM_BZ2_17
   Should Contain  ${result.stdout}  MAGIC_SYM_XZ_18
-  Should Contain  ${result.stdout}  MAGIC_SYM_LZ_19
+  Should Contain  ${result.stdout}  MAGIC_SYM_LZ4_19
 
