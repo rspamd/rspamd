@@ -2182,6 +2182,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				G_STRUCT_OFFSET (struct rspamd_config, full_gc_iters),
 				RSPAMD_CL_FLAG_UINT,
 				"Task scanned before memory gc is performed (default: 0 - disabled)");
+		rspamd_rcl_add_default_handler (sub,
+				"heartbeat_interval",
+				rspamd_rcl_parse_struct_time,
+				G_STRUCT_OFFSET (struct rspamd_config, heartbeat_interval),
+				RSPAMD_CL_FLAG_TIME_FLOAT,
+				"Time between workers heartbeats");
 
 		/* Neighbours configuration */
 		rspamd_rcl_add_section_doc (&sub->subsections, "neighbours", "name",

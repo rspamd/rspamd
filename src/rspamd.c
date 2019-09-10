@@ -1008,6 +1008,7 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 			g_free (wrk->tmp_data);
 		}
 		ev_io_stop (rspamd_main->event_loop, &wrk->srv_ev);
+		ev_timer_stop (rspamd_main->event_loop, &wrk->hb.heartbeat_ev);
 	}
 
 	if (wrk->control_pipe[0] != -1) {

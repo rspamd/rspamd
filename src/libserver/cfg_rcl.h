@@ -413,6 +413,7 @@ ucl_object_t *rspamd_rcl_add_doc_by_path (struct rspamd_config *cfg,
 		const char *default_value,
 		gboolean required);
 
+
 /**
  * Parses example and adds documentation according to the example:
  *
