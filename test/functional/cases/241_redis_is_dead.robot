@@ -28,7 +28,7 @@ Dead Redis client
 *** Keywords ***
 Lua Setup
   [Arguments]  ${LUA_SCRIPT}
-  Set Global Variable  ${LUA_SCRIPT}
+  Set Suite Variable  ${LUA_SCRIPT}
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/redis.conf
   Set Suite Variable  ${PLUGIN_CONFIG}
   Generic Setup  PLUGIN_CONFIG
