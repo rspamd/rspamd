@@ -17,3 +17,4 @@ Magic detections bundle 1
   Follow Rspamd Log
   Should Contain  ${result.stdout}  MAGIC_SYM_ZIP_2
   Should Contain  ${result.stdout}  MAGIC_SYM_RAR_3
+
