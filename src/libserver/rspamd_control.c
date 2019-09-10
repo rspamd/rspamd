@@ -912,6 +912,10 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 				rdata->rep.reply.on_fork.status = 0;
 				rspamd_control_handle_on_fork (&cmd, srv);
 				break;
+			case RSPAMD_SRV_HEARTBEAT:
+				worker->hb.last_event = ev_time ();
+				rdata->rep.reply.heartbeat.status = 0;
+				break;
 			default:
 				msg_err ("unknown command type: %d", cmd.type);
 				break;

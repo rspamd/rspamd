@@ -692,7 +692,11 @@ static void
 rspamd_worker_heartbeat_cb (EV_P_ ev_timer *w, int revents)
 {
 	struct rspamd_worker *wrk = (struct rspamd_worker *)w->data;
+	struct rspamd_srv_command cmd;
 
+	memset (&cmd, 0, sizeof (cmd));
+	cmd.type = RSPAMD_SRV_HEARTBEAT;
+	rspamd_srv_send_command (wrk, EV_A, &cmd, -1, NULL, NULL);
 }
 
 static void
