@@ -190,17 +190,17 @@ local patterns = {
   lz4 = {
     matches = {
       {
-        hex = "184d2204",
+        hex = "04224d18",
         relative_position = 0,
         weight = 60,
       },
       {
-        hex = "184c2103",
+        hex = "03214c18",
         relative_position = 0,
         weight = 60,
       },
       {
-        hex = "184c2102",
+        hex = "02214c18",
         relative_position = 0,
         weight = 60,
       },
