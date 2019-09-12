@@ -1562,16 +1562,21 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 	score_ptr = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (gdouble));
 
 	if (isnan (score)) {
-		msg_warn_config ("score is not defined for symbol %s, set it to zero",
+		/* In fact, it could be defined later */
+		msg_debug_config ("score is not defined for symbol %s, set it to zero",
 				symbol);
 		score = 0.0;
+		/* Also set priority to 0 to allow override by anything */
+		sym_def->priority = 0;
+	}
+	else {
+		sym_def->priority = priority;
 	}
 
 	*score_ptr = score;
 	sym_def->score = score;
 	sym_def->weight_ptr = score_ptr;
 	sym_def->name = rspamd_mempool_strdup (cfg->cfg_pool, symbol);
-	sym_def->priority = priority;
 	sym_def->flags = flags;
 	sym_def->nshots = nshots;
 	sym_def->groups = g_ptr_array_sized_new (1);
