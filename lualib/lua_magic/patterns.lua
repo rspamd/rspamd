@@ -204,6 +204,12 @@ local patterns = {
         relative_position = 0,
         weight = 60,
       },
+      {
+        -- MozLZ4
+        hex = '6d6f7a4c7a343000',
+        relative_position = 0,
+        weight = 60,
+      }
     }
   },
   zst = {
