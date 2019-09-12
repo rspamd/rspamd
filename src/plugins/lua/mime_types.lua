@@ -244,7 +244,7 @@ local function check_mime_type(task)
       detected = lua_magic_types[detected_ext]
     end
 
-    if not ext or (detected_ext and ext ~= detected_ext) then
+    if detected_ext and ((not ext) or ext ~= detected_ext) then
       -- Try to find extension by real content type
       check_filename('detected.' .. detected_ext, detected.ct,
           false, part, nil)
