@@ -238,43 +238,43 @@ local function surbl_section_convert(cfg, section)
   local rbl_section = cfg.rbl.rbls
   local wl = section.whitelist
   for name,value in pairs(section.rules or {}) do
-    if not rbl_section[name] then
-      local converted = {
-        urls = true,
-        ignore_defaults = true,
-      }
-
-      if wl then
-        converted.whitelist = wl
-      end
-
-      for k,v in pairs(value) do
-        -- Rename
-        if k == 'suffix' then k = 'rbl' end
-        if k == 'ips' then k = 'returncodes' end
-        if k == 'bits' then k = 'returnbits' end
-        if k:match('check_') then
-          local n = k:match('check_(.*)')
-          k = n
-        end
-
-        if k == 'dkim' and v then
-          converted.dkim_domainonly = false
-          converted.dkim_match_from = true
-        end
-
-        if k == 'emails' and v then
-          -- To match surbl behaviour
-          converted.emails_domainonly = true
-        end
-
-        converted[k] = lua_util.deepcopy(v)
-      end
-      rbl_section[name] = converted
-    else
-      logger.warnx(rspamd_config, 'conflicting names in surbl and rbl rules: %s, ignore surbl rule',
+    if rbl_section[name] then
+      logger.warnx(rspamd_config, 'conflicting names in surbl and rbl rules: %s, ignore rbl rule!',
           name)
+      rbl_section[name] = {}
     end
+    local converted = {
+      urls = true,
+      ignore_defaults = true,
+    }
+
+    if wl then
+      converted.whitelist = wl
+    end
+
+    for k,v in pairs(value) do
+      -- Rename
+      if k == 'suffix' then k = 'rbl' end
+      if k == 'ips' then k = 'returncodes' end
+      if k == 'bits' then k = 'returnbits' end
+      if k:match('check_') then
+        local n = k:match('check_(.*)')
+        k = n
+      end
+
+      if k == 'dkim' and v then
+        converted.dkim_domainonly = false
+        converted.dkim_match_from = true
+      end
+
+      if k == 'emails' and v then
+        -- To match surbl behaviour
+        converted.emails_domainonly = true
+      end
+
+      converted[k] = lua_util.deepcopy(v)
+    end
+    rbl_section[name] = converted
   end
 end
 
@@ -283,39 +283,39 @@ local function emails_section_convert(cfg, section)
   local rbl_section = cfg.rbl.rbls
   local wl = section.whitelist
   for name,value in pairs(section.rules or {}) do
-    if not rbl_section[name] then
-      local converted = {
-        emails = true,
-        ignore_defaults = true,
-      }
-
-      if wl then
-        converted.whitelist = wl
-      end
-
-      for k,v in pairs(value) do
-        -- Rename
-        if k == 'dnsbl' then k = 'rbl' end
-        if k == 'check_replyto' then k = 'replyto' end
-        if k == 'hashlen' then k = 'hash_len' end
-        if k == 'encoding' then k = 'hash_format' end
-        if k == 'domain_only' then k = 'emails_domainonly' end
-        if k == 'delimiter' then k = 'emails_delimiter' end
-        if k == 'skip_body' then
-          if v then
-            -- Hack
-            converted.emails = false
-            converted.replyto = true
-          end
-        end
-
-        converted[k] = lua_util.deepcopy(v)
-      end
-      rbl_section[name] = converted
-    else
-      logger.warnx(rspamd_config, 'conflicting names in emails and rbl rules: %s, ignore emails rule',
+    if rbl_section[name] then
+      logger.warnx(rspamd_config, 'conflicting names in emails and rbl rules: %s, ignore rbl rule!',
           name)
+      rbl_section[name] = {}
     end
+    local converted = {
+      emails = true,
+      ignore_defaults = true,
+    }
+
+    if wl then
+      converted.whitelist = wl
+    end
+
+    for k,v in pairs(value) do
+      -- Rename
+      if k == 'dnsbl' then k = 'rbl' end
+      if k == 'check_replyto' then k = 'replyto' end
+      if k == 'hashlen' then k = 'hash_len' end
+      if k == 'encoding' then k = 'hash_format' end
+      if k == 'domain_only' then k = 'emails_domainonly' end
+      if k == 'delimiter' then k = 'emails_delimiter' end
+      if k == 'skip_body' then
+        if v then
+          -- Hack
+          converted.emails = false
+          converted.replyto = true
+        end
+      end
+
+      converted[k] = lua_util.deepcopy(v)
+    end
+    rbl_section[name] = converted
   end
 end
 
