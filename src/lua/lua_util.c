@@ -233,6 +233,14 @@ LUA_FUNCTION_DEF (util, parse_mail_address);
  */
 LUA_FUNCTION_DEF (util, strlen_utf8);
 
+/***
+ * @function util.lower_utf8(str)
+ * Converts utf8 string to lower case
+ * @param {string} str utf8 encoded string
+ * @return {string} lowercased utf8 string
+ */
+LUA_FUNCTION_DEF (util, lower_utf8);
+
 
 /***
  * @function util.strcasecmp(str1, str2)
@@ -636,6 +644,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, glob),
 	LUA_INTERFACE_DEF (util, parse_mail_address),
 	LUA_INTERFACE_DEF (util, strlen_utf8),
+	LUA_INTERFACE_DEF (util, lower_utf8),
 	LUA_INTERFACE_DEF (util, strcasecmp_ascii),
 	LUA_INTERFACE_DEF (util, strequal_caseless),
 	LUA_INTERFACE_DEF (util, get_ticks),
@@ -1680,21 +1689,53 @@ static gint
 lua_util_strlen_utf8 (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *str, *end;
+	const gchar *str;
 	gsize len;
 
 	str = lua_tolstring (L, 1, &len);
 
 	if (str) {
-		if (g_utf8_validate (str, len, &end)) {
-			len = g_utf8_strlen (str, len);
-		}
-		else if (end != NULL && end > str) {
-			len = (g_utf8_strlen (str, end - str)) /* UTF part */
-					+ (len - (end - str)) /* raw part */;
+		gint32 i = 0, nchars = 0;
+		UChar32 uc;
+
+		while (i < len) {
+			U8_NEXT ((guint8 *) str, i, len, uc);
+			nchars ++;
 		}
 
-		lua_pushinteger (L, len);
+		lua_pushinteger (L, nchars);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_lower_utf8 (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	const gchar *str;
+	gchar *dst;
+	gsize len;
+	UChar32 uc;
+	UBool err = 0;
+	gint32 i = 0, j = 0;
+
+	str = lua_tolstring (L, 1, &len);
+
+	if (str) {
+		dst = g_malloc (len);
+
+		while (i < len && err == 0) {
+			U8_NEXT ((guint8 *) str, i, len, uc);
+			uc = u_tolower (uc);
+			U8_APPEND (dst, j, len, uc, err);
+		}
+
+		lua_pushlstring (L, dst, j);
+		g_free (dst);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
