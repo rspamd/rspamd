@@ -365,7 +365,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	worker->srv->event_loop = event_loop;
 
 	rspamd_worker_init_signals (worker, event_loop);
-	rspamd_control_worker_add_default_handler (worker, event_loop);
+	rspamd_control_worker_add_default_cmd_handlers (worker, event_loop);
 	rspamd_worker_heartbeat_start (worker, event_loop);
 #ifdef WITH_HIREDIS
 	rspamd_redis_pool_config (worker->srv->cfg->redis_pool,

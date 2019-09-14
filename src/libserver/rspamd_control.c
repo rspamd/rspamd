@@ -676,8 +676,8 @@ rspamd_control_default_worker_handler (EV_P_ ev_io *w, int revents)
 }
 
 void
-rspamd_control_worker_add_default_handler (struct rspamd_worker *worker,
-		struct ev_loop *ev_base)
+rspamd_control_worker_add_default_cmd_handlers (struct rspamd_worker *worker,
+												struct ev_loop *ev_base)
 {
 	struct rspamd_worker_control_data *cd;
 
@@ -1107,4 +1107,44 @@ rspamd_srv_send_command (struct rspamd_worker *worker,
 	ev_io_init (&rd->io_ev, rspamd_srv_request_handler,
 			rd->worker->srv_pipe[1], EV_WRITE);
 	ev_io_start (ev_base, &rd->io_ev);
+}
+
+enum rspamd_control_type
+rspamd_control_command_from_string (const gchar *str)
+{
+	enum rspamd_control_type ret = RSPAMD_CONTROL_MAX;
+
+	if (!str) {
+		return ret;
+	}
+
+	if (g_ascii_strcasecmp (str, "hyperscan_loaded") == 0) {
+		ret = RSPAMD_CONTROL_HYPERSCAN_LOADED;
+	}
+	else if (g_ascii_strcasecmp (str, "stat") == 0) {
+		ret = RSPAMD_CONTROL_STAT;
+	}
+	else if (g_ascii_strcasecmp (str, "reload") == 0) {
+		ret = RSPAMD_CONTROL_RELOAD;
+	}
+	else if (g_ascii_strcasecmp (str, "reresolve") == 0) {
+		ret = RSPAMD_CONTROL_RERESOLVE;
+	}
+	else if (g_ascii_strcasecmp (str, "recompile") == 0) {
+		ret = RSPAMD_CONTROL_RECOMPILE;
+	}
+	else if (g_ascii_strcasecmp (str, "log_pipe") == 0) {
+		ret = RSPAMD_CONTROL_LOG_PIPE;
+	}
+	else if (g_ascii_strcasecmp (str, "fuzzy_stat") == 0) {
+		ret = RSPAMD_CONTROL_FUZZY_STAT;
+	}
+	else if (g_ascii_strcasecmp (str, "fuzzy_sync") == 0) {
+		ret = RSPAMD_CONTROL_FUZZY_SYNC;
+	}
+	else if (g_ascii_strcasecmp (str, "monitored_change") == 0) {
+		ret = RSPAMD_CONTROL_MONITORED_CHANGE;
+	}
+
+	return ret;
 }
