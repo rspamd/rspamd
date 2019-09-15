@@ -503,7 +503,7 @@ local ip_selector = {
       ['country'] = 0.01,
       ['ip'] = 1.0
     },
-    symbol_spam = 'SENDER_REP', -- symbol to be inserted
+    symbol = 'SENDER_REP', -- symbol to be inserted
     split_symbols = true,
     asn_prefix = 'a:', -- prefix for ASN hashes
     country_prefix = 'c:', -- prefix for country hashes
