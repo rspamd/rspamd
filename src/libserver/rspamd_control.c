@@ -103,6 +103,8 @@ static const struct rspamd_control_cmd_match {
 		},
 };
 
+static void rspamd_control_ignore_io_handler (int fd, short what, void *ud);
+
 void
 rspamd_control_send_error (struct rspamd_control_session *session,
 		gint code, const gchar *error_msg, ...)
@@ -388,7 +390,8 @@ rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
 							  struct rspamd_control_command *cmd,
 							  gint attached_fd,
 							  rspamd_ev_cb handler,
-							  gpointer ud)
+							  gpointer ud,
+							  pid_t except_pid)
 {
 	GHashTableIter it;
 	struct rspamd_worker *wrk;
@@ -406,6 +409,10 @@ rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
 		wrk = v;
 
 		if (wrk->control_pipe[0] == -1) {
+			continue;
+		}
+
+		if (except_pid != 0 && wrk->pid == except_pid) {
 			continue;
 		}
 
@@ -458,6 +465,15 @@ rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
 	return res;
 }
 
+void
+rspamd_control_broadcast_srv_cmd (struct rspamd_main *rspamd_main,
+								  struct rspamd_control_command *cmd,
+								  pid_t except_pid)
+{
+	rspamd_control_broadcast_cmd (rspamd_main, cmd, -1,
+			rspamd_control_ignore_io_handler, NULL, except_pid);
+}
+
 static gint
 rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg)
@@ -496,7 +512,7 @@ rspamd_control_finish_handler (struct rspamd_http_connection *conn,
 			/* Send command to all workers */
 			session->replies = rspamd_control_broadcast_cmd (
 					session->rspamd_main, &session->cmd, -1,
-					rspamd_control_wrk_io, session);
+					rspamd_control_wrk_io, session, 0);
 
 			DL_FOREACH (session->replies, cur) {
 				session->replies_remain ++;
@@ -890,7 +906,7 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 						sizeof (wcmd.cmd.hs_loaded.cache_dir));
 				wcmd.cmd.hs_loaded.forced = cmd.cmd.hs_loaded.forced;
 				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
-						rspamd_control_ignore_io_handler, NULL);
+						rspamd_control_ignore_io_handler, NULL, worker->pid);
 				break;
 			case RSPAMD_SRV_MONITORED_CHANGE:
 				/* Broadcast command to all workers */
@@ -902,14 +918,14 @@ rspamd_srv_handler (EV_P_ ev_io *w, int revents)
 				wcmd.cmd.monitored_change.alive = cmd.cmd.monitored_change.alive;
 				wcmd.cmd.monitored_change.sender = cmd.cmd.monitored_change.sender;
 				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
-						rspamd_control_ignore_io_handler, NULL);
+						rspamd_control_ignore_io_handler, NULL, 0);
 				break;
 			case RSPAMD_SRV_LOG_PIPE:
 				memset (&wcmd, 0, sizeof (wcmd));
 				wcmd.type = RSPAMD_CONTROL_LOG_PIPE;
 				wcmd.cmd.log_pipe.type = cmd.cmd.log_pipe.type;
 				rspamd_control_broadcast_cmd (srv, &wcmd, rfd,
-						rspamd_control_log_pipe_io_handler, NULL);
+						rspamd_control_log_pipe_io_handler, NULL, 0);
 				break;
 			case RSPAMD_SRV_ON_FORK:
 				rdata->rep.reply.on_fork.status = 0;

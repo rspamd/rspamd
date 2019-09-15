@@ -241,6 +241,17 @@ void rspamd_srv_send_command (struct rspamd_worker *worker,
 							  gpointer ud);
 
 /**
+ * Broadcast srv cmd from rspamd_main to workers
+ * @param rspamd_main
+ * @param cmd
+ * @param except_pid
+ */
+void
+rspamd_control_broadcast_srv_cmd (struct rspamd_main *rspamd_main,
+								  struct rspamd_control_command *cmd,
+								  pid_t except_pid);
+
+/**
  * Returns command from a specified string (case insensitive)
  * @param str
  * @return
