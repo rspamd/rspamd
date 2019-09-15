@@ -36,7 +36,8 @@ struct rspamd_control_reply_elt {
 	struct rspamd_control_reply reply;
 	struct rspamd_io_ev ev;
 	struct ev_loop *event_loop;
-	struct rspamd_worker *wrk;
+	GQuark wrk_type;
+	pid_t wrk_pid;
 	gpointer ud;
 	gint attached_fd;
 	struct rspamd_control_reply_elt *prev, *next;
@@ -193,15 +194,15 @@ rspamd_control_write_reply (struct rspamd_control_session *session)
 		/* Skip incompatible worker for fuzzy_stat */
 		if ((session->cmd.type == RSPAMD_CONTROL_FUZZY_STAT ||
 			session->cmd.type == RSPAMD_CONTROL_FUZZY_SYNC) &&
-				elt->wrk->type != g_quark_from_static_string ("fuzzy")) {
+				elt->wrk_type != g_quark_from_static_string ("fuzzy")) {
 			continue;
 		}
 
-		rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "%P", elt->wrk->pid);
+		rspamd_snprintf (tmpbuf, sizeof (tmpbuf), "%P", elt->wrk_pid);
 		cur = ucl_object_typed_new (UCL_OBJECT);
 
 		ucl_object_insert_key (cur, ucl_object_fromstring (g_quark_to_string (
-				elt->wrk->type)), "type", 0, false);
+				elt->wrk_type)), "type", 0, false);
 
 		switch (session->cmd.type) {
 		case RSPAMD_CONTROL_STAT:
@@ -340,7 +341,7 @@ rspamd_control_wrk_io (gint fd, short what, gpointer ud)
 		r = recvmsg (fd, &msg, 0);
 		if (r == -1) {
 			msg_err ("cannot read reply from the worker %P (%s): %s",
-					elt->wrk->pid, g_quark_to_string (elt->wrk->type),
+					elt->wrk_pid, g_quark_to_string (elt->wrk_type),
 					strerror (errno));
 		}
 		else if (r >= (gssize)sizeof (elt->reply)) {
@@ -352,7 +353,7 @@ rspamd_control_wrk_io (gint fd, short what, gpointer ud)
 	else {
 		/* Timeout waiting */
 		msg_warn ("timeout waiting reply from %P (%s)",
-				elt->wrk->pid, g_quark_to_string (elt->wrk->type));
+				elt->wrk_pid, g_quark_to_string (elt->wrk_type));
 	}
 
 	session->replies_remain --;
@@ -384,9 +385,10 @@ rspamd_control_error_handler (struct rspamd_http_connection *conn, GError *err)
 
 static struct rspamd_control_reply_elt *
 rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
-		struct rspamd_control_command *cmd,
-		gint attached_fd,
-		void (*handler) (int, short, void *), gpointer ud)
+							  struct rspamd_control_command *cmd,
+							  gint attached_fd,
+							  rspamd_ev_cb handler,
+							  gpointer ud)
 {
 	GHashTableIter it;
 	struct rspamd_worker *wrk;
@@ -430,7 +432,8 @@ rspamd_control_broadcast_cmd (struct rspamd_main *rspamd_main,
 
 		if (r == sizeof (*cmd)) {
 			rep_elt = g_malloc0 (sizeof (*rep_elt));
-			rep_elt->wrk = wrk;
+			rep_elt->wrk_pid = wrk->pid;
+			rep_elt->wrk_type = wrk->type;
 			rep_elt->event_loop = rspamd_main->event_loop;
 			rep_elt->ud = ud;
 			rspamd_ev_watcher_init (&rep_elt->ev,
