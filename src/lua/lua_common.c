@@ -1248,7 +1248,7 @@ rspamd_lua_check_class (lua_State *L, gint index, const gchar *name)
 				}
 
 				lua_rawgetp (L, LUA_REGISTRYINDEX,
-						RSPAMD_LIGHTUSERDATA_MASK (kh_value (lua_classes, k)));
+						RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k)));
 
 				if (lua_rawequal (L, -1, -2)) {  /* does it have the correct mt? */
 					lua_pop (L, 2);  /* remove both metatables */
