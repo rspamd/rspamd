@@ -141,7 +141,6 @@ struct rspamd_fuzzy_storage_ctx {
 	gdouble expire;
 	gdouble sync_timeout;
 	struct rspamd_radix_map_helper *update_ips;
-	struct rspamd_radix_map_helper *master_ips;
 	struct rspamd_radix_map_helper *blocked_ips;
 	struct rspamd_radix_map_helper *ratelimit_whitelist;
 
@@ -152,7 +151,6 @@ struct rspamd_fuzzy_storage_ctx {
 	guint keypair_cache_size;
 	ev_timer stat_ev;
 	ev_io peer_ev;
-	ev_tstamp stat_timeout;
 
 	/* Local keypair */
 	struct rspamd_cryptobox_keypair *default_keypair; /* Bad clash, need for parse keypair */
@@ -161,6 +159,7 @@ struct rspamd_fuzzy_storage_ctx {
 	gboolean encrypted_only;
 	gboolean read_only;
 	struct rspamd_keypair_cache *keypair_cache;
+	struct rspamd_http_context *http_ctx;
 	rspamd_lru_hash_t *errors_ips;
 	rspamd_lru_hash_t *ratelimit_buckets;
 	struct rspamd_fuzzy_backend *backend;
@@ -825,7 +824,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 
 	if (G_UNLIKELY (cmd == NULL || up_len == 0)) {
 		result.v1.value = 500;
-		result.v1.prob = 0.0;
+		result.v1.prob = 0.0f;
 		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
 		return;
 	}
@@ -833,7 +832,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	if (session->ctx->encrypted_only && !encrypted) {
 		/* Do not accept unencrypted commands */
 		result.v1.value = 403;
-		result.v1.prob = 0.0;
+		result.v1.prob = 0.0f;
 		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
 		return;
 	}
@@ -860,13 +859,13 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		}
 		else {
 			result.v1.value = 403;
-			result.v1.prob = 0.0;
+			result.v1.prob = 0.0f;
 			result.v1.flag = 0;
 			rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
 		}
 	}
 	else if (cmd->cmd == FUZZY_STAT) {
-		result.v1.prob = 1.0;
+		result.v1.prob = 1.0f;
 		result.v1.value = 0;
 		result.v1.flag = session->ctx->stat.fuzzy_hashes;
 		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
@@ -881,7 +880,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 
 				if (rspamd_match_hash_map (session->ctx->skip_hashes, hexbuf)) {
 					result.v1.value = 401;
-					result.v1.prob = 0.0;
+					result.v1.prob = 0.0f;
 
 					goto reply;
 				}
@@ -911,11 +910,11 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 			}
 
 			result.v1.value = 0;
-			result.v1.prob = 1.0;
+			result.v1.prob = 1.0f;
 		}
 		else {
 			result.v1.value = 403;
-			result.v1.prob = 0.0;
+			result.v1.prob = 0.0f;
 		}
 reply:
 		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
@@ -1880,6 +1879,10 @@ start_fuzzy (struct rspamd_worker *worker)
 			worker->srv->cfg);
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->event_loop, ctx->resolver->r);
+	/* Since this worker uses maps it needs a valid HTTP context */
+	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->event_loop,
+			ctx->cfg->ups_ctx);
+
 	if (ctx->keypair_cache_size > 0) {
 		/* Create keypairs cache */
 		ctx->keypair_cache = rspamd_keypair_cache_new (ctx->keypair_cache_size);
