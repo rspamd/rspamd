@@ -575,31 +575,34 @@ lua_logger_out_type (lua_State *L, gint pos,
 	trace->cur_level ++;
 
 	switch (type) {
-		case LUA_TNUMBER:
-			r = lua_logger_out_num (L, pos, outbuf, len, trace);
-			break;
-		case LUA_TBOOLEAN:
-			r = lua_logger_out_boolean (L, pos, outbuf, len, trace);
-			break;
-		case LUA_TTABLE:
-			r = lua_logger_out_table (L, pos, outbuf, len, trace, esc_type);
-			break;
-		case LUA_TUSERDATA:
-			r = lua_logger_out_userdata (L, pos, outbuf, len, trace);
-			break;
-		case LUA_TFUNCTION:
-			r = rspamd_snprintf (outbuf, len + 1, "function");
-			break;
-		case LUA_TNIL:
-			r = rspamd_snprintf (outbuf, len + 1, "nil");
-			break;
-		case LUA_TNONE:
-			r = rspamd_snprintf (outbuf, len + 1, "no value");
-			break;
-		default:
-			/* Try to push everything as string using tostring magic */
-			r = lua_logger_out_str (L, pos, outbuf, len, trace, esc_type);
-			break;
+	case LUA_TNUMBER:
+		r = lua_logger_out_num (L, pos, outbuf, len, trace);
+		break;
+	case LUA_TBOOLEAN:
+		r = lua_logger_out_boolean (L, pos, outbuf, len, trace);
+		break;
+	case LUA_TTABLE:
+		r = lua_logger_out_table (L, pos, outbuf, len, trace, esc_type);
+		break;
+	case LUA_TUSERDATA:
+		r = lua_logger_out_userdata (L, pos, outbuf, len, trace);
+		break;
+	case LUA_TFUNCTION:
+		r = rspamd_snprintf (outbuf, len + 1, "function");
+		break;
+	case LUA_TLIGHTUSERDATA:
+		r = rspamd_snprintf (outbuf, len + 1, "0x%p", lua_topointer (L, pos));
+		break;
+	case LUA_TNIL:
+		r = rspamd_snprintf (outbuf, len + 1, "nil");
+		break;
+	case LUA_TNONE:
+		r = rspamd_snprintf (outbuf, len + 1, "no value");
+		break;
+	default:
+		/* Try to push everything as string using tostring magic */
+		r = lua_logger_out_str (L, pos, outbuf, len, trace, esc_type);
+		break;
 	}
 
 	trace->cur_level --;
