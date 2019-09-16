@@ -3471,7 +3471,7 @@ luaopen_controller (lua_State * L)
 struct rspamd_http_connection_entry *
 lua_check_controller_entry (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{csession}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{csession}");
 	luaL_argcheck (L, ud != NULL, pos, "'csession' expected");
 	return ud ? *((struct rspamd_http_connection_entry **)ud) : NULL;
 }
