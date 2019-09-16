@@ -722,7 +722,9 @@ rspamd_main_heartbeat_cb (EV_P_ ev_timer *w, int revents)
 	time_from_last -= wrk->hb.last_event;
 	rspamd_main = wrk->srv;
 
-	if (time_from_last > 0 && time_from_last > rspamd_main->cfg->heartbeat_interval) {
+	if (time_from_last > 0 &&
+		time_from_last >= rspamd_main->cfg->heartbeat_interval * 2) {
+
 		rspamd_localtime (wrk->hb.last_event, &tm);
 		r = strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", &tm);
 		rspamd_snprintf (usec_buf, sizeof (usec_buf), "%.5f",
