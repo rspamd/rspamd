@@ -131,14 +131,7 @@ rspamd_lua_class_tostring_buf (lua_State *L, gboolean print_pointer, gint pos)
 		goto err;
 	}
 
-	lua_pushstring (L, "__index");
-	lua_gettable (L, -2);
 	pop ++;
-
-	if (!lua_istable (L, -1)) {
-		goto err;
-	}
-
 	lua_pushstring (L, "class");
 	lua_gettable (L, -2);
 	pop ++;
