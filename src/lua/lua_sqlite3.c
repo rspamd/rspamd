@@ -373,28 +373,10 @@ lua_load_sqlite3 (lua_State * L)
 void
 luaopen_sqlite3 (lua_State * L)
 {
-	luaL_newmetatable (L, "rspamd{sqlite3}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{sqlite3}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL, sqlitelib_m);
+	rspamd_lua_new_class (L, "rspamd{sqlite3}", sqlitelib_m);
 	lua_pop (L, 1);
 
-	luaL_newmetatable (L, "rspamd{sqlite3_stmt}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{sqlite3_stmt}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL, sqlitestmtlib_m);
+	rspamd_lua_new_class (L, "rspamd{sqlite3_stmt}", sqlitestmtlib_m);
 	lua_pop (L, 1);
 
 	rspamd_lua_add_preload (L, "rspamd_sqlite3", lua_load_sqlite3);

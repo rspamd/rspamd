@@ -210,8 +210,8 @@ void rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
 /**
  * Register default handlers for a worker
  */
-void rspamd_control_worker_add_default_handler (struct rspamd_worker *worker,
-												struct ev_loop *ev_base);
+void rspamd_control_worker_add_default_cmd_handlers (struct rspamd_worker *worker,
+													 struct ev_loop *ev_base);
 
 /**
  * Register custom handler for a specific control command for this worker
@@ -239,6 +239,24 @@ void rspamd_srv_send_command (struct rspamd_worker *worker,
 							  gint attached_fd,
 							  rspamd_srv_reply_handler handler,
 							  gpointer ud);
+
+/**
+ * Broadcast srv cmd from rspamd_main to workers
+ * @param rspamd_main
+ * @param cmd
+ * @param except_pid
+ */
+void
+rspamd_control_broadcast_srv_cmd (struct rspamd_main *rspamd_main,
+								  struct rspamd_control_command *cmd,
+								  pid_t except_pid);
+
+/**
+ * Returns command from a specified string (case insensitive)
+ * @param str
+ * @return
+ */
+enum rspamd_control_type rspamd_control_command_from_string (const gchar *str);
 
 #ifdef  __cplusplus
 }

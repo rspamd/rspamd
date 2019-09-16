@@ -365,7 +365,7 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	worker->srv->event_loop = event_loop;
 
 	rspamd_worker_init_signals (worker, event_loop);
-	rspamd_control_worker_add_default_handler (worker, event_loop);
+	rspamd_control_worker_add_default_cmd_handlers (worker, event_loop);
 	rspamd_worker_heartbeat_start (worker, event_loop);
 #ifdef WITH_HIREDIS
 	rspamd_redis_pool_config (worker->srv->cfg->redis_pool,
@@ -722,7 +722,10 @@ rspamd_main_heartbeat_cb (EV_P_ ev_timer *w, int revents)
 	time_from_last -= wrk->hb.last_event;
 	rspamd_main = wrk->srv;
 
-	if (time_from_last > 0 && time_from_last > rspamd_main->cfg->heartbeat_interval) {
+	if (wrk->hb.last_event > 0 &&
+		time_from_last > 0 &&
+		time_from_last >= rspamd_main->cfg->heartbeat_interval * 2) {
+
 		rspamd_localtime (wrk->hb.last_event, &tm);
 		r = strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", &tm);
 		rspamd_snprintf (usec_buf, sizeof (usec_buf), "%.5f",

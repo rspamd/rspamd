@@ -719,40 +719,16 @@ lua_load_rsa (lua_State * L)
 void
 luaopen_rsa (lua_State * L)
 {
-	luaL_newmetatable (L, "rspamd{rsa_pubkey}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{rsa_pubkey}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL, rsapubkeylib_m);
+	rspamd_lua_new_class (L, "rspamd{rsa_pubkey}", rsapubkeylib_m);
+	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_rsa_pubkey", lua_load_pubkey);
 
-	luaL_newmetatable (L, "rspamd{rsa_privkey}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{rsa_privkey}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL, rsaprivkeylib_m);
+	rspamd_lua_new_class (L, "rspamd{rsa_privkey}", rsaprivkeylib_m);
+	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_rsa_privkey", lua_load_privkey);
 
-	luaL_newmetatable (L, "rspamd{rsa_signature}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{rsa_signature}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL, rsasignlib_m);
+	rspamd_lua_new_class (L, "rspamd{rsa_signature}", rsasignlib_m);
+	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_rsa_signature", lua_load_signature);
 
 	rspamd_lua_add_preload (L, "rspamd_rsa", lua_load_rsa);

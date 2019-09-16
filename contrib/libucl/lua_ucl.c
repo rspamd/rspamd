@@ -807,8 +807,8 @@ struct _rspamd_lua_text {
 
 /***
  * @method parser:parse_text(input)
- * Parse UCL object from file.
- * @param {string} input string to parse
+ * Parse UCL object from text object (Rspamd specific).
+ * @param {rspamd_text} input text to parse
  * @return {bool[, string]} if res is `true` then file has been parsed successfully, otherwise an error string is also returned
  */
 static int
@@ -820,7 +820,7 @@ lua_ucl_parser_parse_text (lua_State *L)
 	int ret = 2;
 
 	parser = lua_ucl_parser_get (L, 1);
-	t = luaL_checkudata (L, 2, "rspamd{text}");
+	t = lua_touserdata (L, 2);
 
 	if (lua_type (L, 3) == LUA_TSTRING) {
 		type = lua_ucl_str_to_parse_type (lua_tostring (L, 3));

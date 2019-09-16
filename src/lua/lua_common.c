@@ -45,6 +45,25 @@ lua_error_quark (void)
 	return g_quark_from_static_string ("lua-routines");
 }
 
+/* idea from daurnimator */
+#if defined(WITH_LUAJIT) && (defined(_LP64) || defined(_LLP64) || defined(__arch64__) || defined (__arm64__) || defined (__aarch64__) || defined(_WIN64))
+#define RSPAMD_USE_47BIT_LIGHTUSERDATA_HACK 1
+#else
+#define RSPAMD_USE_47BIT_LIGHTUSERDATA_HACK 0
+#endif
+
+#if RSPAMD_USE_47BIT_LIGHTUSERDATA_HACK
+#define RSPAMD_LIGHTUSERDATA_MASK(p) ((void *)((uintptr_t)(p) & ((1UL<<47)-1)))
+#else
+#define RSPAMD_LIGHTUSERDATA_MASK(p) ((void *)(p))
+#endif
+
+/*
+ * Used to map string to a pointer
+ */
+KHASH_INIT (lua_class_set, const gchar *, bool, 0, rspamd_str_hash, rspamd_str_equal);
+khash_t (lua_class_set) *lua_classes = NULL;
+
 /* Util functions */
 /**
  * Create new class and store metatable on top of the stack (must be popped if not needed)
@@ -57,33 +76,48 @@ rspamd_lua_new_class (lua_State * L,
 	const gchar *classname,
 	const struct luaL_reg *methods)
 {
-	luaL_newmetatable (L, classname);   /* mt */
+	void *class_ptr;
+	khiter_t k;
+	gint r, nmethods = 0;
+
+	if (lua_classes == NULL) {
+		lua_classes = kh_init (lua_class_set);
+	}
+
+	k = kh_put (lua_class_set, lua_classes, classname, &r);
+	class_ptr = RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k));
+
+	if (methods) {
+		for (;;) {
+			if (methods[nmethods].name != NULL) {
+				nmethods ++;
+			}
+			else {
+				break;
+			}
+		}
+	}
+
+	lua_createtable (L, 0, 3 + nmethods);
 	lua_pushstring (L, "__index");
 	lua_pushvalue (L, -2);      /* pushes the metatable */
 	lua_settable (L, -3);       /* metatable.__index = metatable */
 
-	lua_pushstring (L, "class");    /* mt,"class" */
-	lua_pushstring (L, classname);  /* mt,"class",classname */
-	lua_rawset (L, -3);         /* mt */
+	lua_pushstring (L, "class");
+	lua_pushstring (L, classname);
+	lua_rawset (L, -3);
+
+	lua_pushstring (L, "class_ptr");
+	lua_pushlightuserdata (L, class_ptr);
+	lua_rawset (L, -3);
 
 	if (methods) {
 		luaL_register (L, NULL, methods); /* pushes all methods as MT fields */
 	}
-	/* MT is left on stack ! */
-}
 
-/**
- * Create and register new class with static methods and store metatable on top of the stack
- */
-void
-rspamd_lua_new_class_full (lua_State *L,
-	const gchar *classname,
-	const gchar *static_name,
-	const struct luaL_reg *methods,
-	const struct luaL_reg *func)
-{
-	rspamd_lua_new_class (L, classname, methods);
-	luaL_register (L, static_name, func);
+	lua_pushvalue (L, -1); /* Preserves metatable */
+	lua_rawsetp (L, LUA_REGISTRYINDEX, class_ptr);
+	/* MT is left on stack ! */
 }
 
 static const gchar *
@@ -97,14 +131,7 @@ rspamd_lua_class_tostring_buf (lua_State *L, gboolean print_pointer, gint pos)
 		goto err;
 	}
 
-	lua_pushstring (L, "__index");
-	lua_gettable (L, -2);
 	pop ++;
-
-	if (!lua_istable (L, -1)) {
-		goto err;
-	}
-
 	lua_pushstring (L, "class");
 	lua_gettable (L, -2);
 	pop ++;
@@ -150,7 +177,14 @@ rspamd_lua_class_tostring (lua_State * L)
 void
 rspamd_lua_setclass (lua_State * L, const gchar *classname, gint objidx)
 {
-	luaL_getmetatable (L, classname);
+	khiter_t k;
+
+	k = kh_get (lua_class_set, lua_classes, classname);
+
+	g_assert (k != kh_end (lua_classes));
+	lua_rawgetp (L, LUA_REGISTRYINDEX,
+			RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k)));
+
 	if (objidx < 0) {
 		objidx--;
 	}
@@ -161,7 +195,6 @@ rspamd_lua_setclass (lua_State * L, const gchar *classname, gint objidx)
 void
 rspamd_lua_table_set (lua_State * L, const gchar *index, const gchar *value)
 {
-
 	lua_pushstring (L, index);
 	if (value) {
 		lua_pushstring (L, value);
@@ -929,16 +962,10 @@ rspamd_lua_init (bool wipe_mem)
 	lua_settop (L, 0);
 #endif
 
-	luaL_newmetatable (L, "rspamd{ev_base}");
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{ev_base}");
-	lua_rawset (L, -3);
+	rspamd_lua_new_class (L, "rspamd{ev_base}", NULL);
 	lua_pop (L, 1);
 
-	luaL_newmetatable (L, "rspamd{session}");
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{session}");
-	lua_rawset (L, -3);
+	rspamd_lua_new_class (L, "rspamd{session}", NULL);
 	lua_pop (L, 1);
 
 	rspamd_lua_add_preload (L, "lpeg", luaopen_lpeg);
@@ -1206,12 +1233,23 @@ gpointer
 rspamd_lua_check_class (lua_State *L, gint index, const gchar *name)
 {
 	gpointer p;
+	khiter_t k;
 
 	if (lua_type (L, index) == LUA_TUSERDATA) {
 		p = lua_touserdata (L, index);
 		if (p) {
 			if (lua_getmetatable (L, index)) {
-				lua_getfield (L, LUA_REGISTRYINDEX, name);  /* get correct metatable */
+				k = kh_get (lua_class_set, lua_classes, name);
+
+				if (k == kh_end (lua_classes)) {
+					lua_pop (L, 1);
+
+					return NULL;
+				}
+
+				lua_rawgetp (L, LUA_REGISTRYINDEX,
+						RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k)));
+
 				if (lua_rawequal (L, -1, -2)) {  /* does it have the correct mt? */
 					lua_pop (L, 2);  /* remove both metatables */
 					return p;
@@ -1824,6 +1862,7 @@ rspamd_lua_check_udata_common (lua_State *L, gint pos, const gchar *classname,
 {
 	void *p = lua_touserdata (L, pos);
 	guint i, top = lua_gettop (L);
+	khiter_t k;
 
 	if (p == NULL) {
 		goto err;
@@ -1831,7 +1870,14 @@ rspamd_lua_check_udata_common (lua_State *L, gint pos, const gchar *classname,
 	else {
 		/* Match class */
 		if (lua_getmetatable (L, pos)) {
-			luaL_getmetatable (L, classname);
+			k = kh_get (lua_class_set, lua_classes, (gchar *)classname);
+
+			if (k == kh_end (lua_classes)) {
+				goto err;
+			}
+
+			lua_rawgetp (L, LUA_REGISTRYINDEX,
+					RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k)));
 
 			if (!lua_rawequal (L, -1, -2)) {
 				goto err;

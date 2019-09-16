@@ -83,6 +83,8 @@ static void rspamd_cld_handler (EV_P_ ev_child *w,
 /* Control socket */
 static gint control_fd;
 static ev_io control_ev;
+static struct rspamd_stat old_stat;
+static ev_timer stat_ev;
 
 static gboolean valgrind_mode = FALSE;
 
@@ -969,6 +971,39 @@ rspamd_usr1_handler (struct ev_loop *loop, ev_signal *w, int revents)
 }
 
 static void
+rspamd_stat_update_handler (struct ev_loop *loop, ev_timer *w, int revents)
+{
+	struct rspamd_main *rspamd_main = (struct rspamd_main *)w->data;
+	struct rspamd_stat cur_stat;
+	gchar proctitle[128];
+
+	memcpy (&cur_stat, rspamd_main->stat, sizeof (cur_stat));
+
+	if (old_stat.messages_scanned > 0 &&
+		cur_stat.messages_scanned > old_stat.messages_scanned) {
+		gdouble rate = (double)(cur_stat.messages_scanned - old_stat.messages_scanned) /
+				w->repeat;
+		gdouble old_spam = old_stat.actions_stat[METRIC_ACTION_REJECT] +
+				old_stat.actions_stat[METRIC_ACTION_ADD_HEADER] +
+				old_stat.actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
+		gdouble old_ham = old_stat.actions_stat[METRIC_ACTION_NOACTION];
+		gdouble new_spam = cur_stat.actions_stat[METRIC_ACTION_REJECT] +
+				cur_stat.actions_stat[METRIC_ACTION_ADD_HEADER] +
+				cur_stat.actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
+		gdouble new_ham = cur_stat.actions_stat[METRIC_ACTION_NOACTION];
+
+		rspamd_snprintf (proctitle, sizeof (proctitle),
+				"main process; %.1f msg/sec, %.1f msg/sec spam, %.1f msg/sec ham",
+				rate,
+				(new_spam - old_spam) / w->repeat,
+				(new_ham - old_ham) / w->repeat);
+		setproctitle (proctitle);
+	}
+
+	memcpy (&old_stat, &cur_stat, sizeof (cur_stat));
+}
+
+static void
 rspamd_hup_handler (struct ev_loop *loop, ev_signal *w, int revents)
 {
 	struct rspamd_main *rspamd_main = (struct rspamd_main *)w->data;
@@ -1374,6 +1409,15 @@ main (gint argc, gchar **argv, gchar **env)
 	ev_signal_init (&rspamd_main->usr1_ev, rspamd_usr1_handler, SIGUSR1);
 	rspamd_main->usr1_ev.data = rspamd_main;
 	ev_signal_start (event_loop, &rspamd_main->usr1_ev);
+
+	/* Update proctitle according to number of messages processed */
+	static const ev_tstamp stat_update_time = 10.0;
+
+	memset (&old_stat, 0, sizeof (old_stat));
+	stat_ev.data = rspamd_main;
+	ev_timer_init (&stat_ev, rspamd_stat_update_handler,
+			stat_update_time, stat_update_time);
+	ev_timer_start (event_loop, &stat_ev);
 
 	rspamd_check_core_limits (rspamd_main);
 	rspamd_mempool_lock_mutex (rspamd_main->start_mtx);

@@ -2437,54 +2437,20 @@ lua_load_cryptobox (lua_State * L)
 void
 luaopen_cryptobox (lua_State * L)
 {
-	luaL_newmetatable (L, "rspamd{cryptobox_pubkey}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{cryptobox_pubkey}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL, cryptoboxpubkeylib_m);
+	rspamd_lua_new_class (L, "rspamd{cryptobox_pubkey}", cryptoboxpubkeylib_m);
+	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_cryptobox_pubkey", lua_load_pubkey);
 
-	luaL_newmetatable (L, "rspamd{cryptobox_keypair}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{cryptobox_keypair}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL, cryptoboxkeypairlib_m);
+	rspamd_lua_new_class (L, "rspamd{cryptobox_keypair}", cryptoboxkeypairlib_m);
+	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_cryptobox_keypair", lua_load_keypair);
 
-	luaL_newmetatable (L, "rspamd{cryptobox_signature}");
-
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{cryptobox_signature}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL, cryptoboxsignlib_m);
+	rspamd_lua_new_class (L, "rspamd{cryptobox_signature}", cryptoboxsignlib_m);
+	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_cryptobox_signature", lua_load_signature);
 
-	luaL_newmetatable (L, "rspamd{cryptobox_hash}");
-
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{cryptobox_hash}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL, cryptoboxhashlib_m);
+	rspamd_lua_new_class (L, "rspamd{cryptobox_hash}", cryptoboxhashlib_m);
+	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_cryptobox_hash", lua_load_hash);
 
 	rspamd_lua_add_preload (L, "rspamd_cryptobox", lua_load_cryptobox);
