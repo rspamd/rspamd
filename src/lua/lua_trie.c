@@ -441,17 +441,7 @@ lua_load_trie (lua_State *L)
 void
 luaopen_trie (lua_State * L)
 {
-	luaL_newmetatable (L, "rspamd{trie}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{trie}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL,			 trielib_m);
+	rspamd_lua_new_class (L, "rspamd{trie}", trielib_m);
+	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_trie", lua_load_trie);
-
-	lua_pop (L, 1);                      /* remove metatable from stack */
 }

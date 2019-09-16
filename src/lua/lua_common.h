@@ -155,15 +155,6 @@ void rspamd_lua_new_class (lua_State *L,
 						   const struct luaL_reg *methods);
 
 /**
- * Create and register new class with static methods
- */
-void rspamd_lua_new_class_full (lua_State *L,
-								const gchar *classname,
-								const gchar *static_name,
-								const struct luaL_reg *methods,
-								const struct luaL_reg *func);
-
-/**
  * Set class name for object at @param objidx position
  */
 void rspamd_lua_setclass (lua_State *L, const gchar *classname, gint objidx);

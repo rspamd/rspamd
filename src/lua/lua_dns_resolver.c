@@ -693,15 +693,7 @@ void
 luaopen_dns_resolver (lua_State * L)
 {
 
-	luaL_newmetatable (L, "rspamd{resolver}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{resolver}");
-	lua_rawset (L, -3);
-
+	rspamd_lua_new_class (L, "rspamd{resolver}", dns_resolverlib_m);
 	{
 		LUA_ENUM (L, DNS_A,	 RDNS_REQUEST_A);
 		LUA_ENUM (L, DNS_PTR, RDNS_REQUEST_PTR);
@@ -713,8 +705,7 @@ luaopen_dns_resolver (lua_State * L)
 		LUA_ENUM (L, DNS_SOA, RDNS_REQUEST_SOA);
 	}
 
-	luaL_register (L, NULL, dns_resolverlib_m);
-	rspamd_lua_add_preload (L, "rspamd_resolver", lua_load_dns_resolver);
+	lua_pop (L, 1);
 
-	lua_pop (L, 1);                      /* remove metatable from stack */
+	rspamd_lua_add_preload (L, "rspamd_resolver", lua_load_dns_resolver);
 }

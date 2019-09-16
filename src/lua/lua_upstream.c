@@ -569,30 +569,10 @@ lua_load_upstream_list (lua_State * L)
 void
 luaopen_upstream (lua_State * L)
 {
-	luaL_newmetatable (L, "rspamd{upstream_list}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{upstream_list}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL,			   upstream_list_m);
+	rspamd_lua_new_class (L, "rspamd{upstream_list}", upstream_list_m);
+	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_upstream_list", lua_load_upstream_list);
 
-	lua_pop (L, 1);                      /* remove metatable from stack */
-
-	luaL_newmetatable (L, "rspamd{upstream}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{upstream}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL,		  upstream_m);
-
-	lua_pop (L, 1);                      /* remove metatable from stack */
+	rspamd_lua_new_class (L, "rspamd{upstream}", upstream_m);
+	lua_pop (L, 1);
 }

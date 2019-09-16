@@ -880,22 +880,12 @@ lua_load_regexp (lua_State * L)
 void
 luaopen_regexp (lua_State * L)
 {
-	luaL_newmetatable (L, "rspamd{regexp}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{regexp}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL, regexplib_m);
+	rspamd_lua_new_class (L, "rspamd{regexp}", regexplib_m);
+	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_regexp", lua_load_regexp);
 
 	if (regexp_static_pool == NULL) {
 		regexp_static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 				"regexp_lua_pool");
 	}
-
-	lua_settop (L, 0);
 }
