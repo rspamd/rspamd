@@ -55,7 +55,7 @@ Magic detections bundle 1
   Should Contain  ${result.stdout}  MAGIC_SYM_ODT_39
   Should Contain  ${result.stdout}  MAGIC_SYM_ODS_40
   Should Contain  ${result.stdout}  MAGIC_SYM_ODP_41
-  Should Contain  ${result.stdout}	MAGIC_SYM_7Z_42
+  Should Contain  ${result.stdout}  MAGIC_SYM_7Z_42
   Should Contain  ${result.stdout}  MAGIC_SYM_VSD_43
   Should Contain  ${result.stdout}  MAGIC_SYM_PNG_44
   Should Contain  ${result.stdout}  MAGIC_SYM_JPG_45
