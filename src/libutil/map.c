@@ -295,6 +295,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 	if (msg->code == 200) {
 
 		if (cbd->check) {
+			msg_info_map ("need to reread map from %s", cbd->bk->uri);
 			cbd->periodic->need_modify = TRUE;
 			/* Reset the whole chain */
 			cbd->periodic->cur_backend = 0;
