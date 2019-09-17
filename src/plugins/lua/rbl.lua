@@ -957,33 +957,38 @@ if(opts['local_exclude_ip_map'] ~= nil) then
     'RBL exclusions map')
 end
 
+local return_codes_schema = ts.map_of(
+    ts.string / string.upper, -- Symbol name
+    (
+        ts.array_of(ts.string) +
+            (ts.string / function(s)
+              return { s }
+            end) -- List of IP patterns
+    )
+)
+local return_bits_schema = ts.map_of(
+    ts.string / string.upper, -- Symbol name
+    (
+        ts.array_of(ts.number + ts.string / tonumber) +
+            (ts.string / function(s)
+              return { tonumber(s) }
+            end) +
+            (ts.number / function(s)
+              return { s }
+            end)
+    )
+)
+
 local rule_schema = ts.shape({
   enabled = ts.boolean:is_optional(),
   disabled = ts.boolean:is_optional(),
   rbl = ts.string,
   selector = ts.string:is_optional(),
   symbol = ts.string:is_optional(),
-  returncodes = ts.map_of(
-      ts.string / string.upper, -- Symbol name
-      (
-          ts.array_of(ts.string) +
-              (ts.string / function(s)
-                return { s }
-              end) -- List of IP patterns
-      )
-  ):is_optional(),
-  returnbits = ts.map_of(
-      ts.string / string.upper, -- Symbol name
-      (
-          ts.array_of(ts.number + ts.string / tonumber) +
-              (ts.string / function(s)
-                return { tonumber(s) }
-              end) +
-              (ts.number / function(s)
-                return { s }
-              end)
-      )
-  ):is_optional(),
+  returncodes = return_codes_schema:is_optional(),
+  return_codes = return_codes_schema:is_optional(),
+  returnbits = return_bits_schema:is_optional(),
+  return_bits = return_bits_schema:is_optional(),
   whitelist_exception = (
       ts.array_of(ts.string) + (ts.string / function(s) return {s} end)
   ):is_optional(),
@@ -1020,6 +1025,9 @@ for key,rbl in pairs(opts.rbls or opts.rules) do
       rspamd_logger.errx(rspamd_config, 'invalid config for %s: %s, RBL is DISABLED',
           key, err)
     else
+      -- Aliases
+      if res.return_codes then res.returncodes = res.return_codes end
+      if res.return_bits then res.returnbits = res.return_bits end
       add_rbl(key, res, opts)
     end
   end -- rbl.enabled
