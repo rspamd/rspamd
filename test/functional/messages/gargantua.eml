@@ -23042,7 +23042,7 @@ AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
 --XXX
-Content-Type: application/octet-stream
+Content-Type: image/unknown
 Content-Transfer-Encoding: base64
 X-Real-Type: png
 
@@ -23117,7 +23117,7 @@ REFUOBFj1NLW/c9ARcBERbPARo0aSHmIjobhaBiSEQKjyYaMQEPTQvUwBAD4XQGl
 r/6/wAAAAABJRU5ErkJggg==
 
 --XXX
-Content-Type: application/octet-stream
+Content-Type: image/unknown
 Content-Transfer-Encoding: base64
 X-Real-Type: jpg
 
@@ -23134,7 +23134,7 @@ wFx0i+Lv1HK8mTLaeNa122GlmzLGrYnTofqPOhomtaytMWSZ6i9dfCa3SKuaqtt4
 N44QXoIzwglB/9k=
 
 --XXX
-Content-Type: application/octet-stream
+Content-Type: image/unknown
 Content-Transfer-Encoding: base64
 X-Real-Type: gif
 
@@ -23169,7 +23169,7 @@ RKFxh0gZYFRRxRdRJocbkRLBGJoukSRyZxmIwBkfaIEyh4ygMOZiZo2TakWnoMh0
 x92mlmoFKaSdJvUppqEWOaqjpaZ6U0AAOw==
 
 --XXX
-Content-Type: application/octet-stream
+Content-Type: image/unknown
 Content-Transfer-Encoding: base64
 X-Real-Type: bmp
 
@@ -23220,7 +23220,7 @@ ZgagmZkJPArXAyRcjzIAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAA////////
 /v3///7+//3///39/v35///7///+////////////////////////AAAA
 
 --XXX
-Content-Type: application/octet-stream
+Content-Type: text/unknown
 Content-Transfer-Encoding: base64
 X-Real-Type: txt
 
