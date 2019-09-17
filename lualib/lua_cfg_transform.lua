@@ -253,10 +253,18 @@ local function surbl_section_convert(cfg, section)
     end
 
     for k,v in pairs(value) do
+      local skip = false
       -- Rename
       if k == 'suffix' then k = 'rbl' end
       if k == 'ips' then k = 'returncodes' end
       if k == 'bits' then k = 'returnbits' end
+      -- Crappy legacy
+      if k == 'options' then
+        if v == 'noip' or v == 'no_ip' then
+          converted.no_ip = true
+          skip = true
+        end
+      end
       if k:match('check_') then
         local n = k:match('check_(.*)')
         k = n
@@ -272,7 +280,9 @@ local function surbl_section_convert(cfg, section)
         converted.emails_domainonly = true
       end
 
-      converted[k] = lua_util.deepcopy(v)
+      if not skip then
+        converted[k] = lua_util.deepcopy(v)
+      end
     end
     rbl_section[name] = converted
   end
@@ -298,6 +308,7 @@ local function emails_section_convert(cfg, section)
     end
 
     for k,v in pairs(value) do
+      local skip = false
       -- Rename
       if k == 'dnsbl' then k = 'rbl' end
       if k == 'check_replyto' then k = 'replyto' end
@@ -310,10 +321,21 @@ local function emails_section_convert(cfg, section)
           -- Hack
           converted.emails = false
           converted.replyto = true
+          skip = true
         end
       end
+      if k == 'expect_ip' then
+        -- Another stupid hack
+        if not converted.return_codes then
+          converted.return_codes = {}
+        end
+        local symbol = value.symbol or name
+        converted.return_codes[symbol] = { v }
+      end
 
-      converted[k] = lua_util.deepcopy(v)
+      if not skip then
+        converted[k] = lua_util.deepcopy(v)
+      end
     end
     rbl_section[name] = converted
   end
