@@ -460,17 +460,23 @@ local function gen_rbl_callback(rule)
         add_dns_request(task, email:get_tld(), false, false, requests_table,
             'email', whitelist)
       else
-        local delimiter = '.'
-        if rule.emails_delimiter then
-          delimiter = rule.emails_delimiter
-        else
-          if rule.hash then
-            delimiter = '@'
+        if not is_whitelisted(task,
+            email:get_tld(),
+            email:get_tld(),
+            whitelist,
+            'email replyto')  then
+          local delimiter = '.'
+          if rule.emails_delimiter then
+            delimiter = rule.emails_delimiter
+          else
+            if rule.hash then
+              delimiter = '@'
+            end
           end
+          add_dns_request(task, string.format('%s%s%s',
+              email:get_user(), delimiter, email:get_host()), false, false,
+              requests_table, 'email', whitelist)
         end
-        add_dns_request(task, string.format('%s%s%s',
-            email:get_user(), delimiter, email:get_host()), false, false,
-            requests_table, 'email', whitelist)
       end
     end
 
@@ -571,9 +577,14 @@ local function gen_rbl_callback(rule)
       if rt and rt[1] and (rt[1].addr and #rt[1].addr > 0) then
         lua_util.remove_email_aliases(rt[1])
         rt[1].addr = rt[1].addr:lower()
+        lua_util.debugm(N, task, 'check replyto %s', rt[1].addr)
+        if is_whitelisted(task, rt[1].host, rt[1].host, whitelist, 'email replyto')
+          then return
+        end
+
         if rule.emails_domainonly then
           add_dns_request(task, rt[1].host, true, false, requests_table,
-              'email replyt', whitelist)
+              'email replyto', whitelist)
         else
           local delimiter = '.'
           if rule.emails_delimiter then
@@ -585,7 +596,7 @@ local function gen_rbl_callback(rule)
           end
           add_dns_request(task, string.format('%s%s%s',
               rt[1].user, delimiter, rt[1].host), true, false,
-              requests_table, 'email replyt', whitelist)
+              requests_table, 'email replyto', whitelist)
         end
       end
     end
@@ -771,7 +782,7 @@ local function add_rbl(key, rbl, global_opts)
   end
 
   -- Check if rbl is available for empty tasks
-  if not (rbl.emails or rbl.urls or rbl.dkim or rbl.received or rbl.selector) or
+  if not (rbl.emails or rbl.urls or rbl.dkim or rbl.received or rbl.selector or rbl.replyto) or
       rbl.is_empty then
     flags_tbl[#flags_tbl + 1] = 'empty'
   end
@@ -823,7 +834,7 @@ local function add_rbl(key, rbl, global_opts)
   end
 
   if not rbl.whitelist and global_opts.url_whitelist and
-      (rbl.urls or rbl.emails or rbl.dkim) then
+      (rbl.urls or rbl.emails or rbl.dkim or rbl.replyto) then
     local def_type = 'set'
     rbl.whitelist = lua_maps.map_add_from_ucl(global_opts.url_whitelist, def_type,
         'RBL url whitelist for ' .. rbl.symbol)
