@@ -58,6 +58,10 @@ local function get_monitored(rbl)
     ret.random = true
   end
 
+  lua_util.debugm(N, rspamd_config,
+      'added monitored address: %s (%s random)',
+      ret.prefix, ret.random)
+
   return ret
 end
 

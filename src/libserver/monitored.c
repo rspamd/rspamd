@@ -214,12 +214,13 @@ rspamd_monitored_dns_random (struct rspamd_monitored *m,
 	}
 
 	for (guint i = 0; i < len; i ++) {
-		guint idx = rspamd_random_uint64_fast () % sizeof (dns_chars);
+		guint idx = rspamd_random_uint64_fast () % (sizeof (dns_chars) - 1);
 		random_prefix[i] = dns_chars[idx];
 	}
 
 	conf->request->len = 0;
-	rspamd_printf_gstring (conf->request, "%*.s.%s", len, random_prefix, m->url);
+	rspamd_printf_gstring (conf->request, "%*.s.%s", len, random_prefix,
+			m->url);
 }
 
 static void *
@@ -414,7 +415,8 @@ rspamd_monitored_dns_mon (struct rspamd_monitored *m,
 	if (!rdns_make_request_full (ctx->resolver, rspamd_monitored_dns_cb,
 			conf, ctx->cfg->dns_timeout, ctx->cfg->dns_retransmits,
 			1, conf->request->str, conf->rt)) {
-		msg_notice_mon ("cannot make request to resolve %s", conf->request->str);
+		msg_notice_mon ("cannot make request to resolve %s (%s monitored url)",
+				conf->request->str, conf->m->url);
 
 		m->cur_errors ++;
 		rspamd_monitored_propagate_error (m, "failed to make DNS request");
