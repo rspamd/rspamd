@@ -468,7 +468,7 @@ local function gen_rbl_callback(rule)
             email:get_tld(),
             email:get_tld(),
             whitelist,
-            'email replyto')  then
+            'email')  then
           local delimiter = '.'
           if rule.emails_delimiter then
             delimiter = rule.emails_delimiter
@@ -604,6 +604,8 @@ local function gen_rbl_callback(rule)
         end
       end
     end
+
+    return true
   end
 
   -- Create function pipeline depending on rbl settings
