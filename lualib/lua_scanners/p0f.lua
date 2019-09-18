@@ -51,10 +51,10 @@ local function p0f_check(task, ip, rule)
   local function trim(...)
     local vars = {...}
 
-    for k in pairs(vars) do
+    for k, v in ipairs(vars) do
       -- skip numbers, trim only strings
       if tonumber(vars[k]) == nil then
-        vars[k] = string.gsub(vars[k], '[^%w-_\\.\\(\\) ]', '')
+        vars[k] = string.gsub(v, '[^%w-_\\.\\(\\) ]', '')
       end
     end
 
@@ -71,7 +71,7 @@ local function p0f_check(task, ip, rule)
     data = tostring(data)
 
     -- API response must be 232 bytes long
-    if (#data < 232) then
+    if #data ~= 232 then
       rspamd_logger.errx(task, 'malformed response from p0f on %s, %s bytes',
         rule.socket, #data)
 
@@ -112,7 +112,6 @@ local function p0f_check(task, ip, rule)
       local function redis_set_cb(redis_set_err)
         if redis_set_err then
           rspamd_logger.errx(task, 'redis received an error: %s', redis_set_err)
-          return
         end
       end
 
@@ -156,7 +155,7 @@ local function p0f_check(task, ip, rule)
   end
 
   local ret = nil
-  if rule.redis_prams then
+  if rule.redis_params then
     local key = rule.prefix .. ip:to_string()
     ret = lua_redis.redis_make_request(task,
       rule.redis_params,
