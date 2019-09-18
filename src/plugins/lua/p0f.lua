@@ -33,7 +33,7 @@ p0f {
   enabled = true
 
   # Path to the unix socket that p0f listens on
-  socket = '/tmp/p0f.sock';
+  socket = '/var/run/p0f.sock';
 
   # Connection timeout
   timeout = 5s;

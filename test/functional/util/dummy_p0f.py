@@ -28,23 +28,23 @@ class MyStreamHandler(socketserver.BaseRequestHandler):
 
         self.data = self.request.recv(21).strip()
 
-        if self.server.p0f_status == 'fail':
+        if self.server.p0f_status == 'bad_response':
             response = 0
         else:
             response = struct.pack(
                 "IbIIIIIIIhbb32s32s32s32s32s32s",
-                0x50304602,                       # magic        
+                0x50304602,                       # magic
                 S[self.server.p0f_status],        # status
                 1568493408,                       # first_seen
                 1568493408,                       # last_seen
                 1,                                # total_conn
                 1,                                # uptime_min
-                4,                                # up_mod_days        
+                4,                                # up_mod_days
                 1568493408,                       # last_nat
                 1568493408,                       # last_chg
                 10,                               # distance
                 0,                                # bad_sw
-                0,                                # os_match_q    
+                0,                                # os_match_q
                 OS[self.server.p0f_os][0],        # os_name
                 OS[self.server.p0f_os][1],        # os_flavor
                 '',                               # http_name
@@ -61,7 +61,7 @@ def cleanup(SOCK):
         try:
             os.unlink(SOCK)
         except OSError:
-            logging.warning("Could not unlink socket %s", SOCK)
+            print "Could not unlink socket: " + SOCK
 
 if __name__ == "__main__":
     SOCK = '/tmp/p0f.sock'

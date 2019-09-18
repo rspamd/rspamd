@@ -27,39 +27,58 @@ p0f HIT
   Run Dummy p0f  ${P0F_SOCKET}  windows
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.2
   Check Rspamc  ${result}  P0F  inverse=1
+  Check Rspamc  ${result}  P0F_FAIL  inverse=1
   Check Rspamc  ${result}  ETHER
   Check Rspamc  ${result}  DISTGE10
   Check Rspamc  ${result}  WINDOWS
   Shutdown p0f
-  
-p0f NOREDIS
-  Shutdown Process With Children  ${REDIS_PID}
+
+p0f MISS CACHE
   Run Dummy p0f
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.3
+  Check Rspamc  ${result}  WINDOWS  inverse=1
+  Shutdown p0f
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.3
+  Check Rspamc  ${result}  WINDOWS  inverse=1
+  Check Rspamc  ${result}  P0F_FAIL  inverse=1
+
+p0f HIT CACHE
+  Run Dummy p0f  ${P0F_SOCKET}  windows
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.4
+  Check Rspamc  ${result}  WINDOWS
+  Shutdown p0f
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.4
+  Check Rspamc  ${result}  WINDOWS
+  Check Rspamc  ${result}  P0F_FAIL  inverse=1
+
+p0f NO REDIS
+  Shutdown Process With Children  ${REDIS_PID}
+  Run Dummy p0f
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.5
   Check Rspamc  ${result}  P0F
   Check Rspamc  ${result}  ETHER
   Check Rspamc  ${result}  DISTGE10
   Check Rspamc  ${result}  P0F_FAIL  inverse=1
   Shutdown p0f
 
-p0f NOMATCH
+p0f NO MATCH
   Run Dummy p0f  ${P0F_SOCKET}  windows  no_match
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.4
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.6
   Check Rspamc  ${result}  P0F  inverse=1
   Check Rspamc  ${result}  WINDOWS  inverse=1
   Shutdown p0f
 
-p0f BADQUERY
+p0f BAD QUERY
   Run Dummy p0f  ${P0F_SOCKET}  windows  bad_query
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.5
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.7
   Check Rspamc  ${result}  P0F_FAIL
   Check Rspamc  ${result}  Malformed Query
   Check Rspamc  ${result}  WINDOWS  inverse=1
   Shutdown p0f
 
-p0f FAILURE
-  Run Dummy p0f  ${P0F_SOCKET}  windows  fail
-  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.6
+p0f BAD RESPONSE
+  Run Dummy p0f  ${P0F_SOCKET}  windows  bad_response
+  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.8
   Check Rspamc  ${result}  P0F_FAIL
   Check Rspamc  ${result}  Malformed Response
   Check Rspamc  ${result}  WINDOWS  inverse=1
