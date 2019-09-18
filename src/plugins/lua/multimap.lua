@@ -861,7 +861,7 @@ local function multimap_callback(task, rule)
       local parts = task:get_parts()
 
       local function filter_parts(p)
-        return (not p:is_text()) and (not p:is_multipart())
+        return p:is_attachment() or (not p:is_text()) and (not p:is_multipart())
       end
 
       for p in fun.iter(fun.filter(filter_parts, parts)) do
