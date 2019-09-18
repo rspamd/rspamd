@@ -66,16 +66,18 @@ local your_webcam = [[/webcam/{words}]]
 local your_onan = [[/(?:mast[ur]{2}bati(?:on|ng)|onanism|solitary)/{words}]]
 local password_in_words = [[/^pass(?:(?:word)|(?:phrase))$/i{words}]]
 local btc_wallet_address = [[has_symbol(BITCOIN_ADDR)]]
+local mixed_charset = [[has_symbol(R_MIXED_CHARSET)]]
 local wallet_word = [[/^wallet$/{words}]]
 local broken_unicode = [[has_flag(bad_unicode)]]
 local list_unsub = [[header_exists(List-Unsubscribe)]]
 local x_php_origin = [[header_exists(X-PHP-Originating-Script)]]
 
 reconf['LEAKED_PASSWORD_SCAM'] = {
-  re = string.format('%s & (%s | %s | %s | %s | %s | %s | %s | %s | %s)',
+  re = string.format('%s & (%s | %s | %s | %s | %s | %s | %s | %s | %s | %s)',
       btc_wallet_address, password_in_words, wallet_word,
-      my_victim, your_webcam, your_onan, broken_unicode, 'lua:check_data_images',
-      list_unsub, x_php_origin),
+      my_victim, your_webcam, your_onan,
+      broken_unicode, 'lua:check_data_images',
+      list_unsub, x_php_origin, mixed_charset),
   description = 'Contains password word and BTC wallet address',
   functions = {
     check_data_images = function(task)
@@ -99,3 +101,4 @@ reconf['LEAKED_PASSWORD_SCAM'] = {
 }
 
 rspamd_config:register_dependency('LEAKED_PASSWORD_SCAM', 'BITCOIN_ADDR')
+rspamd_config:register_dependency('LEAKED_PASSWORD_SCAM', 'R_MIXED_CHARSET')
