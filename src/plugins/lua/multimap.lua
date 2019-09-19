@@ -864,7 +864,7 @@ local function multimap_callback(task, rule)
         return p:is_attachment() or (not p:is_text()) and (not p:is_multipart())
       end
 
-      for p in fun.iter(fun.filter(filter_parts, parts)) do
+      for _,p in fun.iter(fun.filter(filter_parts, parts)) do
         if p:is_archive() and not rule['skip_archives'] then
           local fnames = p:get_archive():get_files()
 
