@@ -39,6 +39,11 @@ struct rspamd_image {
  */
 void rspamd_images_process (struct rspamd_task *task);
 
+/*
+ * Link embedded images to the HTML parts
+ */
+void rspamd_images_link (struct rspamd_task *task);
+
 /**
  * Processes image in raw data
  * @param task
