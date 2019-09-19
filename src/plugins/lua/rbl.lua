@@ -824,7 +824,8 @@ local function add_rbl(key, rbl, global_opts)
     if ret then
       rbl.process_script = f
     else
-      rspamd_logger.errx('invalid process script for rbl rule %s: %s; %s',
+      rspamd_logger.errx(rspamd_config,
+          'invalid process script for rbl rule %s: %s; %s',
           key, rbl.process_script, f)
       return false
     end
@@ -837,13 +838,18 @@ local function add_rbl(key, rbl, global_opts)
     end
     rbl.whitelist = lua_maps.map_add_from_ucl(rbl.whitelist, def_type,
         'RBL whitelist for ' .. rbl.symbol)
+    rspamd_logger.infox(rspamd_config, 'added %s whitelist for RBL %s',
+        def_type, rbl.symbol)
   end
 
   if not rbl.whitelist and global_opts.url_whitelist and
-      (rbl.urls or rbl.emails or rbl.dkim or rbl.replyto) then
+      (rbl.urls or rbl.emails or rbl.dkim or rbl.replyto) and
+      not (rbl.from or rbl.received) then
     local def_type = 'set'
     rbl.whitelist = lua_maps.map_add_from_ucl(global_opts.url_whitelist, def_type,
         'RBL url whitelist for ' .. rbl.symbol)
+    rspamd_logger.infox(rspamd_config, 'added URL whitelist for RBL %s',
+        rbl.symbol)
   end
 
   local callback,description = gen_rbl_callback(rbl)
