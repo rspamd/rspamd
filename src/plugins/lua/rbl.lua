@@ -598,8 +598,9 @@ local function gen_rbl_callback(rule)
               delimiter = '@'
             end
           end
-          add_dns_request(task, string.format('%s%s%s',
-              rt[1].user, delimiter, rt[1].host), true, false,
+
+          add_dns_request(task, rt[1].addr:gsub('@', delimiter),
+              true, false,
               requests_table, 'email replyto', whitelist)
         end
       end
