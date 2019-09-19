@@ -846,6 +846,8 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	return;
 
 call_finish_handler:
+	rspamd_ev_watcher_stop (priv->ctx->event_loop, &priv->ev);
+
 	if ((conn->opts & RSPAMD_HTTP_CLIENT_SIMPLE) == 0) {
 		rspamd_http_connection_ref (conn);
 		conn->finished = TRUE;
