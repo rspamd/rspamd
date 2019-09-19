@@ -374,7 +374,8 @@ rspamd_http_on_headers_complete (http_parser * parser)
 	 *
 	 * Hence, we skip body setup here
 	 */
-	if (parser->content_length != ULLONG_MAX && parser->content_length != 0) {
+	if (parser->content_length != ULLONG_MAX && parser->content_length != 0 &&
+			msg->method != HTTP_HEAD) {
 		if (conn->max_size > 0 &&
 				parser->content_length > conn->max_size) {
 			/* Too large message */
@@ -845,6 +846,8 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	return;
 
 call_finish_handler:
+	rspamd_ev_watcher_stop (priv->ctx->event_loop, &priv->ev);
+
 	if ((conn->opts & RSPAMD_HTTP_CLIENT_SIMPLE) == 0) {
 		rspamd_http_connection_ref (conn);
 		conn->finished = TRUE;

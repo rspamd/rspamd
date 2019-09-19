@@ -1570,6 +1570,7 @@ rspamd_message_process (struct rspamd_task *task)
 		}
 	}
 
+	rspamd_images_link (task);
 	rspamd_tokenize_meta_words (task);
 }
 

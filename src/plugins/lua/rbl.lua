@@ -58,6 +58,10 @@ local function get_monitored(rbl)
     ret.random = true
   end
 
+  lua_util.debugm(N, rspamd_config,
+      'added monitored address: %s (%s random)',
+      ret.prefix, ret.random)
+
   return ret
 end
 
@@ -460,17 +464,23 @@ local function gen_rbl_callback(rule)
         add_dns_request(task, email:get_tld(), false, false, requests_table,
             'email', whitelist)
       else
-        local delimiter = '.'
-        if rule.emails_delimiter then
-          delimiter = rule.emails_delimiter
-        else
-          if rule.hash then
-            delimiter = '@'
+        if not is_whitelisted(task,
+            email:get_tld(),
+            email:get_tld(),
+            whitelist,
+            'email')  then
+          local delimiter = '.'
+          if rule.emails_delimiter then
+            delimiter = rule.emails_delimiter
+          else
+            if rule.hash then
+              delimiter = '@'
+            end
           end
+          add_dns_request(task, string.format('%s%s%s',
+              email:get_user(), delimiter, email:get_host()), false, false,
+              requests_table, 'email', whitelist)
         end
-        add_dns_request(task, string.format('%s%s%s',
-            email:get_user(), delimiter, email:get_host()), false, false,
-            requests_table, 'email', whitelist)
       end
     end
 
@@ -571,9 +581,14 @@ local function gen_rbl_callback(rule)
       if rt and rt[1] and (rt[1].addr and #rt[1].addr > 0) then
         lua_util.remove_email_aliases(rt[1])
         rt[1].addr = rt[1].addr:lower()
+        lua_util.debugm(N, task, 'check replyto %s', rt[1].addr)
+        if is_whitelisted(task, rt[1].host, rt[1].host, whitelist, 'email replyto')
+          then return
+        end
+
         if rule.emails_domainonly then
           add_dns_request(task, rt[1].host, true, false, requests_table,
-              'email replyt', whitelist)
+              'email replyto', whitelist)
         else
           local delimiter = '.'
           if rule.emails_delimiter then
@@ -583,12 +598,15 @@ local function gen_rbl_callback(rule)
               delimiter = '@'
             end
           end
-          add_dns_request(task, string.format('%s%s%s',
-              rt[1].user, delimiter, rt[1].host), true, false,
-              requests_table, 'email replyt', whitelist)
+
+          add_dns_request(task, rt[1].addr:gsub('@', delimiter),
+              true, false,
+              requests_table, 'email replyto', whitelist)
         end
       end
     end
+
+    return true
   end
 
   -- Create function pipeline depending on rbl settings
@@ -771,7 +789,7 @@ local function add_rbl(key, rbl, global_opts)
   end
 
   -- Check if rbl is available for empty tasks
-  if not (rbl.emails or rbl.urls or rbl.dkim or rbl.received or rbl.selector) or
+  if not (rbl.emails or rbl.urls or rbl.dkim or rbl.received or rbl.selector or rbl.replyto) or
       rbl.is_empty then
     flags_tbl[#flags_tbl + 1] = 'empty'
   end
@@ -807,7 +825,8 @@ local function add_rbl(key, rbl, global_opts)
     if ret then
       rbl.process_script = f
     else
-      rspamd_logger.errx('invalid process script for rbl rule %s: %s; %s',
+      rspamd_logger.errx(rspamd_config,
+          'invalid process script for rbl rule %s: %s; %s',
           key, rbl.process_script, f)
       return false
     end
@@ -820,13 +839,18 @@ local function add_rbl(key, rbl, global_opts)
     end
     rbl.whitelist = lua_maps.map_add_from_ucl(rbl.whitelist, def_type,
         'RBL whitelist for ' .. rbl.symbol)
+    rspamd_logger.infox(rspamd_config, 'added %s whitelist for RBL %s',
+        def_type, rbl.symbol)
   end
 
   if not rbl.whitelist and global_opts.url_whitelist and
-      (rbl.urls or rbl.emails or rbl.dkim) then
+      (rbl.urls or rbl.emails or rbl.dkim or rbl.replyto) and
+      not (rbl.from or rbl.received) then
     local def_type = 'set'
     rbl.whitelist = lua_maps.map_add_from_ucl(global_opts.url_whitelist, def_type,
         'RBL url whitelist for ' .. rbl.symbol)
+    rspamd_logger.infox(rspamd_config, 'added URL whitelist for RBL %s',
+        rbl.symbol)
   end
 
   local callback,description = gen_rbl_callback(rbl)
@@ -957,33 +981,38 @@ if(opts['local_exclude_ip_map'] ~= nil) then
     'RBL exclusions map')
 end
 
+local return_codes_schema = ts.map_of(
+    ts.string / string.upper, -- Symbol name
+    (
+        ts.array_of(ts.string) +
+            (ts.string / function(s)
+              return { s }
+            end) -- List of IP patterns
+    )
+)
+local return_bits_schema = ts.map_of(
+    ts.string / string.upper, -- Symbol name
+    (
+        ts.array_of(ts.number + ts.string / tonumber) +
+            (ts.string / function(s)
+              return { tonumber(s) }
+            end) +
+            (ts.number / function(s)
+              return { s }
+            end)
+    )
+)
+
 local rule_schema = ts.shape({
   enabled = ts.boolean:is_optional(),
   disabled = ts.boolean:is_optional(),
   rbl = ts.string,
   selector = ts.string:is_optional(),
   symbol = ts.string:is_optional(),
-  returncodes = ts.map_of(
-      ts.string / string.upper, -- Symbol name
-      (
-          ts.array_of(ts.string) +
-              (ts.string / function(s)
-                return { s }
-              end) -- List of IP patterns
-      )
-  ):is_optional(),
-  returnbits = ts.map_of(
-      ts.string / string.upper, -- Symbol name
-      (
-          ts.array_of(ts.number + ts.string / tonumber) +
-              (ts.string / function(s)
-                return { tonumber(s) }
-              end) +
-              (ts.number / function(s)
-                return { s }
-              end)
-      )
-  ):is_optional(),
+  returncodes = return_codes_schema:is_optional(),
+  return_codes = return_codes_schema:is_optional(),
+  returnbits = return_bits_schema:is_optional(),
+  return_bits = return_bits_schema:is_optional(),
   whitelist_exception = (
       ts.array_of(ts.string) + (ts.string / function(s) return {s} end)
   ):is_optional(),
@@ -1020,6 +1049,9 @@ for key,rbl in pairs(opts.rbls or opts.rules) do
       rspamd_logger.errx(rspamd_config, 'invalid config for %s: %s, RBL is DISABLED',
           key, err)
     else
+      -- Aliases
+      if res.return_codes then res.returncodes = res.return_codes end
+      if res.return_bits then res.returnbits = res.return_bits end
       add_rbl(key, res, opts)
     end
   end -- rbl.enabled

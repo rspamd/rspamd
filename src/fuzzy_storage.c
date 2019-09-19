@@ -518,6 +518,7 @@ rspamd_fuzzy_reply_io (EV_P_ ev_io *w, int revents)
 	struct fuzzy_session *session = (struct fuzzy_session *)w->data;
 
 	rspamd_fuzzy_write_reply (session);
+	ev_io_stop (EV_A_ w);
 	REF_RELEASE (session);
 }
 
@@ -559,7 +560,8 @@ rspamd_fuzzy_write_reply (struct fuzzy_session *session)
 			/* Grab reference to avoid early destruction */
 			REF_RETAIN (session);
 			session->io.data = session;
-			ev_io_init (&session->io, rspamd_fuzzy_reply_io, session->fd, EV_WRITE);
+			ev_io_init (&session->io,
+					rspamd_fuzzy_reply_io, session->fd, EV_WRITE);
 			ev_io_start (session->ctx->event_loop, &session->io);
 		}
 		else {
@@ -679,15 +681,26 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 	rspamd_fuzzy_write_reply (session);
 }
 
+static gboolean
+fuzzy_peer_try_send (gint fd, struct fuzzy_peer_request *up_req)
+{
+	gssize r;
+
+	r = write (fd, &up_req->cmd, sizeof (up_req->cmd));
+
+	if (r != sizeof (up_req->cmd)) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 static void
 fuzzy_peer_send_io (EV_P_ ev_io *w, int revents)
 {
 	struct fuzzy_peer_request *up_req = (struct fuzzy_peer_request *)w->data;
-	gssize r;
 
-	r = write (w->fd, &up_req->cmd, sizeof (up_req->cmd));
-
-	if (r != sizeof (up_req->cmd)) {
+	if (!fuzzy_peer_try_send (w->fd, up_req)) {
 		msg_err ("cannot send update request to the peer: %s", strerror (errno));
 	}
 
@@ -767,10 +780,15 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 						sizeof (up_req->cmd.cmd.shingle.sgl));
 			}
 
-			up_req->io_ev.data = up_req;
-			ev_io_init (&up_req->io_ev, fuzzy_peer_send_io,
-					session->ctx->peer_fd, EV_WRITE);
-			ev_io_start (session->ctx->event_loop, &up_req->io_ev);
+			if (!fuzzy_peer_try_send (session->ctx->peer_fd, up_req)) {
+				up_req->io_ev.data = up_req;
+				ev_io_init (&up_req->io_ev, fuzzy_peer_send_io,
+						session->ctx->peer_fd, EV_WRITE);
+				ev_io_start (session->ctx->event_loop, &up_req->io_ev);
+			}
+			else {
+				g_free (up_req);
+			}
 		}
 	}
 
@@ -903,10 +921,16 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 						(gpointer)&up_req->cmd.cmd.shingle :
 						(gpointer)&up_req->cmd.cmd.normal;
 				memcpy (ptr, cmd, up_len);
-				up_req->io_ev.data = up_req;
-				ev_io_init (&up_req->io_ev, fuzzy_peer_send_io,
-						session->ctx->peer_fd, EV_WRITE);
-				ev_io_start (session->ctx->event_loop, &up_req->io_ev);
+
+				if (!fuzzy_peer_try_send (session->ctx->peer_fd, up_req)) {
+					up_req->io_ev.data = up_req;
+					ev_io_init (&up_req->io_ev, fuzzy_peer_send_io,
+							session->ctx->peer_fd, EV_WRITE);
+					ev_io_start (session->ctx->event_loop, &up_req->io_ev);
+				}
+				else {
+					g_free (up_req);
+				}
 			}
 
 			result.v1.value = 0;
@@ -1784,19 +1808,22 @@ rspamd_fuzzy_peer_io (EV_P_ ev_io *w, int revents)
 			(struct rspamd_fuzzy_storage_ctx *)w->data;
 	gssize r;
 
-	r = read (w->fd, &cmd, sizeof (cmd));
+	for (;;) {
+		r = read (w->fd, &cmd, sizeof (cmd));
 
-	if (r != sizeof (cmd)) {
-		if (errno == EINTR) {
-			rspamd_fuzzy_peer_io (EV_A_ w, revents);
-			return;
+		if (r != sizeof (cmd)) {
+			if (errno == EINTR) {
+				continue;
+			}
+			if (errno != EAGAIN) {
+				msg_err ("cannot read command from peers: %s", strerror (errno));
+			}
+
+			break;
 		}
-		if (errno != EAGAIN) {
-			msg_err ("cannot read command from peers: %s", strerror (errno));
+		else {
+			g_array_append_val (ctx->updates_pending, cmd);
 		}
-	}
-	else {
-		g_array_append_val (ctx->updates_pending, cmd);
 	}
 }
 

@@ -356,14 +356,16 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 								   rspamd_stat_token_t *w,
 								   gboolean is_url,
 								   guint *ncap,
-								   struct chartable_ctx *chartable_module_ctx)
+								   struct chartable_ctx *chartable_module_ctx,
+								   const gchar *lang)
 {
 	const UChar32 *p, *end;
 	gdouble badness = 0.0;
 	UChar32 uc;
 	UBlockCode sc;
+	guint cat;
 	gint last_is_latin = -1;
-	guint same_script_count = 0, nsym = 0;
+	guint same_script_count = 0, nsym = 0, nspecial = 0;
 	enum {
 		start_process = 0,
 		got_alpha,
@@ -383,8 +385,20 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 			break;
 		}
 
+		sc = ublock_getCode (uc);
+		cat = u_charType (uc);
+
+		if (cat == U_NON_SPACING_MARK ||
+			(sc == UBLOCK_LATIN_1_SUPPLEMENT) ||
+			(sc == UBLOCK_LATIN_EXTENDED_A) ||
+			(sc == UBLOCK_LATIN_EXTENDED_ADDITIONAL) ||
+			(sc == UBLOCK_LATIN_EXTENDED_B) ||
+			(sc == UBLOCK_COMBINING_DIACRITICAL_MARKS)) {
+			nspecial ++;
+		}
+
 		if (u_isalpha (uc)) {
-			sc = ublock_getCode (uc);
+
 			if (sc <= UBLOCK_COMBINING_DIACRITICAL_MARKS ||
 					sc == UBLOCK_LATIN_EXTENDED_ADDITIONAL) {
 				/*
@@ -452,6 +466,21 @@ rspamd_chartable_process_word_utf (struct rspamd_task *task,
 		}
 
 		nsym ++;
+	}
+
+	if (nspecial > 0) {
+		if (lang) {
+			if (strcmp (lang, "en") == 0) {
+				/* Diacritic is always bad for English */
+				badness += nspecial;
+			}
+			else if (nspecial > 1) {
+				badness += (nspecial - 1.0) / 2.0;
+			}
+		}
+		else if (nspecial > 1) {
+			badness += (nspecial - 1.0) / 2.0;
+		}
 	}
 
 	/* Try to avoid FP for long words */
@@ -578,7 +607,7 @@ rspamd_chartable_process_part (struct rspamd_task *task,
 
 			if (w->flags & RSPAMD_STAT_TOKEN_FLAG_UTF) {
 				cur_score += rspamd_chartable_process_word_utf (task, w, FALSE,
-						&ncap, chartable_module_ctx);
+						&ncap, chartable_module_ctx, part->language);
 			}
 			else {
 				cur_score += rspamd_chartable_process_word_ascii (task, w,
@@ -615,9 +644,11 @@ chartable_symbol_callback (struct rspamd_task *task,
 	guint i;
 	struct rspamd_mime_text_part *part;
 	struct chartable_ctx *chartable_module_ctx = chartable_get_context (task->cfg);
+	const gchar *language = NULL;
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, part) {
 		rspamd_chartable_process_part (task, part, chartable_module_ctx);
+		language = part->language;
 	}
 
 	if (task->meta_words != NULL) {
@@ -628,7 +659,7 @@ chartable_symbol_callback (struct rspamd_task *task,
 		for (i = 0; i < arlen; i++) {
 			w = &g_array_index (task->meta_words, rspamd_stat_token_t, i);
 			cur_score += rspamd_chartable_process_word_utf (task, w, FALSE,
-					NULL, chartable_module_ctx);
+					NULL, chartable_module_ctx, language);
 		}
 
 		cur_score /= (gdouble)arlen;

@@ -1730,7 +1730,7 @@ lua_mimepart_is_attachment (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (!(part->flags & (RSPAMD_MIME_PART_IMAGE|RSPAMD_MIME_PART_TEXT))) {
+	if (!(part->flags & (RSPAMD_MIME_PART_IMAGE))) {
 		if (part->cd && part->cd->type == RSPAMD_CT_ATTACHMENT) {
 			lua_pushboolean (L, true);
 		}

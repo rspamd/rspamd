@@ -327,10 +327,11 @@ local function emails_section_convert(cfg, section)
       if k == 'expect_ip' then
         -- Another stupid hack
         if not converted.return_codes then
-          converted.return_codes = {}
+          converted.returncodes = {}
         end
         local symbol = value.symbol or name
-        converted.return_codes[symbol] = { v }
+        converted.returncodes[symbol] = { v }
+        skip = true
       end
 
       if not skip then

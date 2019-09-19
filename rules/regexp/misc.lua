@@ -71,12 +71,13 @@ local broken_unicode = [[has_flag(bad_unicode)]]
 local list_unsub = [[header_exists(List-Unsubscribe)]]
 local x_php_origin = [[header_exists(X-PHP-Originating-Script)]]
 
-reconf['LEAKED_PASSWORD_SCAM'] = {
+reconf['LEAKED_PASSWORD_SCAM_RE'] = {
   re = string.format('%s & (%s | %s | %s | %s | %s | %s | %s | %s | %s)',
       btc_wallet_address, password_in_words, wallet_word,
-      my_victim, your_webcam, your_onan, broken_unicode, 'lua:check_data_images',
+      my_victim, your_webcam, your_onan,
+      broken_unicode, 'lua:check_data_images',
       list_unsub, x_php_origin),
-  description = 'Contains password word and BTC wallet address',
+  description = 'Contains BTC wallet address and malicious regexps',
   functions = {
     check_data_images = function(task)
       local tp = task:get_text_parts() or {}
@@ -94,7 +95,7 @@ reconf['LEAKED_PASSWORD_SCAM'] = {
       return false
     end
   },
-  score = 7.0,
+  score = 0.0,
   group = 'scams'
 }
 
