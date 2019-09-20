@@ -20,7 +20,7 @@ Example domains whitelist config:
 greylist {
   # Search "example.com" and "mail.example.com" for "mx.out.mail.example.com":
   whitelist_domains_url = [
-    "$LOCAL_CONFDIR/local.d/greylist-whitelist-domains.inc",
+    "$LOCAL_CONFDIR/local.d/maps.d/greylist-whitelist-domains.inc",
     "${CONFDIR}/maps.d/maillist.inc",
     "${CONFDIR}/maps.d/redirectors.inc",
     "${CONFDIR}/maps.d/dmarc_whitelist.inc",
