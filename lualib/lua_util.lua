@@ -891,7 +891,7 @@ exports.extract_specific_urls = function(params_or_task, lim, need_emails, filte
     if type(params[k]) == 'nil' and v ~= nil then params[k] = v end
   end
 
-  local urls = params.task:get_urls(params.need_emails)
+  local urls = params.task:get_urls(params.need_emails, params.need_images)
 
   return exports.filter_specific_urls(urls, params)
 end
