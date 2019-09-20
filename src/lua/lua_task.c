@@ -200,9 +200,10 @@ end
  */
 LUA_FUNCTION_DEF (task, append_message);
 /***
- * @method task:get_urls([need_emails|list_protos])
+ * @method task:get_urls([need_emails|list_protos][, need_images])
  * Get all URLs found in a message. Telephone urls and emails are not included unless explicitly asked in `list_protos`
  * @param {boolean} need_emails if `true` then reutrn also email urls, this can be a comma separated string of protocols desired or a table (e.g. `mailto` or `telephone`)
+ * @param {boolean} need_images return urls from images (<img src=...>) as well
  * @return {table rspamd_url} list of all urls found
 @example
 local function phishing_cb(task)
@@ -2101,6 +2102,7 @@ struct lua_tree_cb_data {
 	lua_State *L;
 	int i;
 	gint mask;
+	gint need_images;
 };
 
 static void
@@ -2111,6 +2113,10 @@ lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 	struct lua_tree_cb_data *cb = ud;
 
 	if (url->protocol & cb->mask) {
+		if (!cb->need_images && (url->flags & RSPAMD_URL_FLAG_IMAGE)) {
+			return;
+		}
+
 		lua_url = lua_newuserdata (cb->L, sizeof (struct rspamd_lua_url));
 		rspamd_lua_setclass (cb->L, "rspamd{url}", -1);
 		lua_url->url = url;
@@ -2127,6 +2133,8 @@ lua_task_get_urls (lua_State * L)
 	gint protocols_mask = 0;
 	static const gint default_mask = PROTOCOL_HTTP|PROTOCOL_HTTPS|
 			PROTOCOL_FILE|PROTOCOL_FTP;
+	const gchar *cache_name = "emails+urls";
+	gboolean need_images = FALSE;
 	gsize sz;
 
 	if (task) {
@@ -2186,6 +2194,10 @@ lua_task_get_urls (lua_State * L)
 			else {
 				protocols_mask = default_mask;
 			}
+
+			if (lua_type (L, 3) == LUA_TBOOLEAN) {
+				need_images = lua_toboolean (L, 3);
+			}
 		}
 		else {
 			protocols_mask = default_mask;
@@ -2194,21 +2206,29 @@ lua_task_get_urls (lua_State * L)
 		cb.i = 1;
 		cb.L = L;
 		cb.mask = protocols_mask;
+		cb.need_images = need_images;
 
 		if (protocols_mask & PROTOCOL_MAILTO) {
+			if (need_images) {
+				cache_name = "emails+urls+img";
+			}
+			else {
+				cache_name = "emails+urls";
+			}
+
 			sz = g_hash_table_size (MESSAGE_FIELD (task, urls)) +
 					g_hash_table_size (MESSAGE_FIELD (task, emails));
 
 			if (protocols_mask == (default_mask|PROTOCOL_MAILTO)) {
 				/* Can use cached version */
-				if (!lua_task_get_cached (L, task, "emails+urls")) {
+				if (!lua_task_get_cached (L, task, cache_name)) {
 					lua_createtable (L, sz, 0);
 					g_hash_table_foreach (MESSAGE_FIELD (task, urls),
 							lua_tree_url_callback, &cb);
 					g_hash_table_foreach (MESSAGE_FIELD (task, emails),
 							lua_tree_url_callback, &cb);
 
-					lua_task_set_cached (L, task, "emails+urls", -1);
+					lua_task_set_cached (L, task, cache_name, -1);
 				}
 			}
 			else {
@@ -2221,14 +2241,21 @@ lua_task_get_urls (lua_State * L)
 
 		}
 		else {
+			if (need_images) {
+				cache_name = "urls+img";
+			}
+			else {
+				cache_name = "urls";
+			}
+
 			sz = g_hash_table_size (MESSAGE_FIELD (task, urls));
 
 			if (protocols_mask == (default_mask)) {
-				if (!lua_task_get_cached (L, task, "urls")) {
+				if (!lua_task_get_cached (L, task, cache_name)) {
 					lua_createtable (L, sz, 0);
 					g_hash_table_foreach (MESSAGE_FIELD (task, urls),
 							lua_tree_url_callback, &cb);
-					lua_task_set_cached (L, task, "urls", -1);
+					lua_task_set_cached (L, task, cache_name, -1);
 				}
 			}
 			else {
