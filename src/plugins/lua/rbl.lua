@@ -443,50 +443,6 @@ local function gen_rbl_callback(rule)
     return true
   end
 
-  local function check_emails(task, requests_table, whitelist)
-    local ex_params = {
-      task = task,
-      limit = rule.requests_limit,
-      filter = function(u) return u:get_protocol() == 'mailto' end,
-      need_emails = true,
-      prefix = 'rbl_email'
-    }
-
-    if rule.emails_domainonly then
-      ex_params.esld_limit = 1
-      ex_params.prefix = 'rbl_email_domainonly'
-    end
-
-    local emails = lua_util.extract_specific_urls(ex_params)
-
-    for _,email in ipairs(emails) do
-      if rule.emails_domainonly then
-        add_dns_request(task, email:get_tld(), false, false, requests_table,
-            'email', whitelist)
-      else
-        if not is_whitelisted(task,
-            email:get_tld(),
-            email:get_tld(),
-            whitelist,
-            'email')  then
-          local delimiter = '.'
-          if rule.emails_delimiter then
-            delimiter = rule.emails_delimiter
-          else
-            if rule.hash then
-              delimiter = '@'
-            end
-          end
-          add_dns_request(task, string.format('%s%s%s',
-              email:get_user(), delimiter, email:get_host()), false, false,
-              requests_table, 'email', whitelist)
-        end
-      end
-    end
-
-    return true
-  end
-
   local function check_urls(task, requests_table, whitelist)
     local ex_params = {
       task = task,
@@ -569,6 +525,64 @@ local function gen_rbl_callback(rule)
     return true
   end
 
+  local function check_email_table(task, email_tbl, requests_table, whitelist, what)
+    lua_util.remove_email_aliases(email_tbl)
+    email_tbl.addr = email_tbl.addr:lower()
+
+    if rule.emails_domainonly then
+      add_dns_request(task, email_tbl.domain, false, false, requests_table,
+          what, whitelist)
+    else
+      -- Also check WL for domain only
+      if is_whitelisted(task,
+          email_tbl.domain,
+          email_tbl.domain,
+          whitelist,
+          what) then
+        return
+      end
+      local delimiter = '.'
+      if rule.emails_delimiter then
+        delimiter = rule.emails_delimiter
+      else
+        if rule.hash then
+          delimiter = '@'
+        end
+      end
+      add_dns_request(task, string.format('%s%s%s',
+          email_tbl.user, delimiter, email_tbl.host), false, false,
+          requests_table, what, whitelist)
+    end
+  end
+
+  local function check_emails(task, requests_table, whitelist)
+    local ex_params = {
+      task = task,
+      limit = rule.requests_limit,
+      filter = function(u) return u:get_protocol() == 'mailto' end,
+      need_emails = true,
+      prefix = 'rbl_email'
+    }
+
+    if rule.emails_domainonly then
+      ex_params.esld_limit = 1
+      ex_params.prefix = 'rbl_email_domainonly'
+    end
+
+    local emails = lua_util.extract_specific_urls(ex_params)
+
+    for _,email in ipairs(emails) do
+      local email_tbl = {
+        domain = email:get_tld(),
+        user = email:get_user(),
+        addr = tostring(email),
+      }
+      check_email_table(task, email_tbl, requests_table, whitelist, 'email')
+    end
+
+    return true
+  end
+
   local function check_replyto(task, requests_table, whitelist)
     local function get_raw_header(name)
       return ((task:get_header_full(name) or {})[1] or {})['value']
@@ -579,30 +593,7 @@ local function gen_rbl_callback(rule)
       local rt = rspamd_util.parse_mail_address(replyto, task:get_mempool())
 
       if rt and rt[1] and (rt[1].addr and #rt[1].addr > 0) then
-        lua_util.remove_email_aliases(rt[1])
-        rt[1].addr = rt[1].addr:lower()
-        lua_util.debugm(N, task, 'check replyto %s', rt[1].addr)
-        if is_whitelisted(task, rt[1].host, rt[1].host, whitelist, 'email replyto')
-          then return
-        end
-
-        if rule.emails_domainonly then
-          add_dns_request(task, rt[1].host, true, false, requests_table,
-              'email replyto', whitelist)
-        else
-          local delimiter = '.'
-          if rule.emails_delimiter then
-            delimiter = rule.emails_delimiter
-          else
-            if rule.hash then
-              delimiter = '@'
-            end
-          end
-
-          add_dns_request(task, rt[1].addr:gsub('@', delimiter),
-              true, false,
-              requests_table, 'email replyto', whitelist)
-        end
+        check_email_table(task, rt[1], requests_table, whitelist, 'email replyto')
       end
     end
 
