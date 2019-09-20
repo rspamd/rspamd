@@ -550,7 +550,7 @@ local function gen_rbl_callback(rule)
         end
       end
       add_dns_request(task, string.format('%s%s%s',
-          email_tbl.user, delimiter, email_tbl.host), false, false,
+          email_tbl.user, delimiter, email_tbl.domain), false, false,
           requests_table, what, whitelist)
     end
   end
@@ -591,6 +591,7 @@ local function gen_rbl_callback(rule)
     local replyto = get_raw_header('Reply-To')
     if replyto then
       local rt = rspamd_util.parse_mail_address(replyto, task:get_mempool())
+      lua_util.debugm(N, task, 'check replyto %s', rt[1])
 
       if rt and rt[1] and (rt[1].addr and #rt[1].addr > 0) then
         check_email_table(task, rt[1], requests_table, whitelist, 'email replyto')
