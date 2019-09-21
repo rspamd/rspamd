@@ -380,6 +380,7 @@ struct rspamd_config {
 	gsize images_cache_size;                        /**< size of LRU cache for DCT data from images			*/
 	gdouble task_timeout;                           /**< maximum message processing time					*/
 	gint default_max_shots;                         /**< default maximum count of symbols hits permitted (-1 for unlimited) */
+	gint32 heartbeats_loss_max;                     /**< number of heartbeats lost to consider worker's termination */
 	gdouble heartbeat_interval;                     /**< interval for heartbeats for workers				*/
 
 	enum rspamd_log_type log_type;                  /**< log type											*/

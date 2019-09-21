@@ -756,6 +756,31 @@ rspamd_main_heartbeat_cb (EV_P_ ev_timer *w, int revents)
 					g_quark_to_string (wrk->type),
 					wrk->pid,
 					timebuf);
+
+			if (rspamd_main->cfg->heartbeats_loss_max > 0 &&
+				-(wrk->hb.nbeats) >= rspamd_main->cfg->heartbeats_loss_max) {
+
+
+				if (-(wrk->hb.nbeats) >= rspamd_main->cfg->heartbeats_loss_max + 1) {
+					msg_err_main ("terminate worker type %s with pid %P, "
+								  "last beat on: %s; %L heartbeat loast",
+							g_quark_to_string (wrk->type),
+							wrk->pid,
+							timebuf,
+							-(wrk->hb.nbeats));
+					kill (wrk->pid, SIGTERM);
+				}
+				else {
+					msg_err_main ("force kill worker type %s with pid %P, "
+								  "last beat on: %s; %L heartbeat loast",
+							g_quark_to_string (wrk->type),
+							wrk->pid,
+							timebuf,
+							-(wrk->hb.nbeats));
+					kill (wrk->pid, SIGKILL);
+				}
+
+			}
 		}
 	}
 	else if (wrk->hb.nbeats < 0) {

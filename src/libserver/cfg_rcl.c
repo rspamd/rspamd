@@ -2188,6 +2188,13 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				G_STRUCT_OFFSET (struct rspamd_config, heartbeat_interval),
 				RSPAMD_CL_FLAG_TIME_FLOAT,
 				"Time between workers heartbeats");
+		rspamd_rcl_add_default_handler (sub,
+				"heartbeats_loss_max",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, heartbeat_interval),
+				RSPAMD_CL_FLAG_INT_32,
+				"Maximum count of heartbeats to be lost before trying to "
+				"terminate a worker (default: 0 - disabled)");
 
 		/* Neighbours configuration */
 		rspamd_rcl_add_section_doc (&sub->subsections, "neighbours", "name",
