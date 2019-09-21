@@ -37,6 +37,7 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_FUZZY_STAT,
 	RSPAMD_CONTROL_FUZZY_SYNC,
 	RSPAMD_CONTROL_MONITORED_CHANGE,
+	RSPAMD_CONTROL_CHILD_CHANGE,
 	RSPAMD_CONTROL_MAX
 };
 
@@ -86,6 +87,15 @@ struct rspamd_control_command {
 		struct {
 			guint unused;
 		} fuzzy_sync;
+		struct {
+			enum {
+				rspamd_child_offline,
+				rspamd_child_online,
+				rspamd_child_terminated,
+			} what;
+			pid_t pid;
+			guint additional;
+		} child_change;
 	} cmd;
 };
 
@@ -246,10 +256,9 @@ void rspamd_srv_send_command (struct rspamd_worker *worker,
  * @param cmd
  * @param except_pid
  */
-void
-rspamd_control_broadcast_srv_cmd (struct rspamd_main *rspamd_main,
-								  struct rspamd_control_command *cmd,
-								  pid_t except_pid);
+void rspamd_control_broadcast_srv_cmd (struct rspamd_main *rspamd_main,
+									   struct rspamd_control_command *cmd,
+									   pid_t except_pid);
 
 /**
  * Returns command from a specified string (case insensitive)

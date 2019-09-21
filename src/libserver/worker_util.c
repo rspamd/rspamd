@@ -714,6 +714,7 @@ rspamd_main_heartbeat_cb (EV_P_ ev_timer *w, int revents)
 	struct rspamd_worker *wrk = (struct rspamd_worker *)w->data;
 	gdouble time_from_last = ev_time ();
 	struct rspamd_main *rspamd_main;
+	static struct rspamd_control_command cmd;
 	struct tm tm;
 	gchar timebuf[64];
 	gchar usec_buf[16];
@@ -735,6 +736,10 @@ rspamd_main_heartbeat_cb (EV_P_ ev_timer *w, int revents)
 
 		if (wrk->hb.nbeats > 0) {
 			/* First time lost event */
+			cmd.type = RSPAMD_CONTROL_CHILD_CHANGE;
+			cmd.cmd.child_change.what = rspamd_child_offline;
+			cmd.cmd.child_change.pid = wrk->pid;
+			rspamd_control_broadcast_srv_cmd (rspamd_main, &cmd, wrk->pid);
 			msg_warn_main ("lost heartbeat from worker type %s with pid %P, "
 				  "last beat on: %s (%L beats received previously)",
 					g_quark_to_string (wrk->type), wrk->pid,
@@ -761,6 +766,10 @@ rspamd_main_heartbeat_cb (EV_P_ ev_timer *w, int revents)
 		rspamd_snprintf (timebuf + r, sizeof (timebuf) - r,
 				"%s", usec_buf + 1);
 
+		cmd.type = RSPAMD_CONTROL_CHILD_CHANGE;
+		cmd.cmd.child_change.what = rspamd_child_online;
+		cmd.cmd.child_change.pid = wrk->pid;
+		rspamd_control_broadcast_srv_cmd (rspamd_main, &cmd, wrk->pid);
 		msg_info_main ("received heartbeat from worker type %s with pid %P, "
 					   "last beat on: %s (%L beats lost previously)",
 				g_quark_to_string (wrk->type), wrk->pid,

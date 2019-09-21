@@ -597,6 +597,7 @@ rspamd_control_default_cmd_handler (gint fd,
 	case RSPAMD_CONTROL_FUZZY_STAT:
 	case RSPAMD_CONTROL_FUZZY_SYNC:
 	case RSPAMD_CONTROL_LOG_PIPE:
+	case RSPAMD_CONTROL_CHILD_CHANGE:
 		break;
 	case RSPAMD_CONTROL_RERESOLVE:
 		if (cd->worker->srv->cfg) {
