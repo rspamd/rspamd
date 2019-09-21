@@ -38,5 +38,33 @@ Magic detections bundle 1
   Should Contain  ${result.stdout}  MAGIC_SYM_ISO_22
   Should Contain  ${result.stdout}  MAGIC_SYM_ZOO_23
   Should Contain  ${result.stdout}  MAGIC_SYM_EPUB_24
+  Should Contain  ${result.stdout}  MAGIC_SYM_XAR_25
+  Should Contain  ${result.stdout}  MAGIC_SYM_PSD_26
+  Should Contain  ${result.stdout}  MAGIC_SYM_PCX_27
+  Should Contain  ${result.stdout}  MAGIC_SYM_TIFF_28
+  Should Contain  ${result.stdout}  MAGIC_SYM_ICO_29
+  Should Contain  ${result.stdout}  MAGIC_SYM_SWF_30
+  Should Contain  ${result.stdout}  MAGIC_SYM_DOC_31
+  Should Contain  ${result.stdout}  MAGIC_SYM_XLS_32
+  Should Contain  ${result.stdout}  MAGIC_SYM_PPT_33
+  Should Contain  ${result.stdout}  MAGIC_SYM_MSI_34
+  Should Contain  ${result.stdout}  MAGIC_SYM_MSG_35
+  Should Contain  ${result.stdout}  MAGIC_SYM_DOCX_36
+  Should Contain  ${result.stdout}  MAGIC_SYM_XLSX_37
+  Should Contain  ${result.stdout}  MAGIC_SYM_PPTX_38
+  Should Contain  ${result.stdout}  MAGIC_SYM_ODT_39
+  Should Contain  ${result.stdout}  MAGIC_SYM_ODS_40
+  Should Contain  ${result.stdout}  MAGIC_SYM_ODP_41
+  Should Contain  ${result.stdout}  MAGIC_SYM_7Z_42
+  Should Contain  ${result.stdout}  MAGIC_SYM_VSD_43
+  Should Contain  ${result.stdout}  MAGIC_SYM_PNG_44
+  Should Contain  ${result.stdout}  MAGIC_SYM_GIF_46
+  Should Contain  ${result.stdout}  MAGIC_SYM_BMP_47
+  Should Contain  ${result.stdout}  MAGIC_SYM_TXT_48
+  Should Contain  ${result.stdout}  MAGIC_SYM_HTML_49
+  Should Contain  ${result.stdout}  MAGIC_SYM_CSV_50
+  Should Contain  ${result.stdout}  MAGIC_SYM_EML_52
+  Should Contain  ${result.stdout}  MAGIC_SYM_JS_51
+  Should Contain  ${result.stdout}  MAGIC_SYM_JPG_45
 
 
