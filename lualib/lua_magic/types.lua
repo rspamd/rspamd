@@ -258,10 +258,6 @@ local types = {
     type = 'message',
     ct = 'message/rfc822',
   },
-  js = {
-    type = 'application',
-    ct = 'application/javascript',
-  },
 }
 
 return types

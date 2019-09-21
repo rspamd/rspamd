@@ -63,8 +63,6 @@ Magic detections bundle 1
   Should Contain  ${result.stdout}  MAGIC_SYM_TXT_48
   Should Contain  ${result.stdout}  MAGIC_SYM_HTML_49
   Should Contain  ${result.stdout}  MAGIC_SYM_CSV_50
-  Should Contain  ${result.stdout}  MAGIC_SYM_EML_52
-  Should Contain  ${result.stdout}  MAGIC_SYM_JS_51
   Should Contain  ${result.stdout}  MAGIC_SYM_JPG_45
 
 

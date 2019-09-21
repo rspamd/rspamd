@@ -74,9 +74,6 @@ local txt_patterns = {
   csv = {
     [[(?:[-a-zA-Z0-9_]+\s*,){2,}(?:[-a-zA-Z0-9_]+[\r\n])]]
   },
-  js = {
-    [[\s*function\s*\(]],
-  },
 }
 
 -- Used to match pattern index and extension
@@ -303,7 +300,10 @@ exports.mime_part_heuristic = function(part, log_obj)
 
   if part:is_image() then
     local img = part:get_image()
-    return img:get_type():lower(),60
+    local img_type = img:get_type():lower()
+
+    if img_type == 'jpeg' then img_type = 'jpg' end
+    return img_type,60
   end
 
   if part:is_archive() then
