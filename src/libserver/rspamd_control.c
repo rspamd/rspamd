@@ -1165,6 +1165,52 @@ rspamd_control_command_from_string (const gchar *str)
 	else if (g_ascii_strcasecmp (str, "monitored_change") == 0) {
 		ret = RSPAMD_CONTROL_MONITORED_CHANGE;
 	}
+	else if (g_ascii_strcasecmp (str, "child_change") == 0) {
+		ret = RSPAMD_CONTROL_CHILD_CHANGE;
+	}
 
 	return ret;
+}
+
+const gchar *
+rspamd_control_command_to_string (enum rspamd_control_type cmd)
+{
+	const gchar *reply = "unknown";
+
+	switch (cmd) {
+	case RSPAMD_CONTROL_STAT:
+		reply = "stat";
+		break;
+	case RSPAMD_CONTROL_RELOAD:
+		reply = "reload";
+		break;
+	case RSPAMD_CONTROL_RERESOLVE:
+		reply = "reresolve";
+		break;
+	case RSPAMD_CONTROL_RECOMPILE:
+		reply = "recompile";
+		break;
+	case RSPAMD_CONTROL_HYPERSCAN_LOADED:
+		reply = "hyperscan_loaded";
+		break;
+	case RSPAMD_CONTROL_LOG_PIPE:
+		reply = "log_pipe";
+		break;
+	case RSPAMD_CONTROL_FUZZY_STAT:
+		reply = "fuzzy_stat";
+		break;
+	case RSPAMD_CONTROL_FUZZY_SYNC:
+		reply = "fuzzy_sync";
+		break;
+	case RSPAMD_CONTROL_MONITORED_CHANGE:
+		reply = "monitored_change";
+		break;
+	case RSPAMD_CONTROL_CHILD_CHANGE:
+		reply = "child_change";
+		break;
+	default:
+		break;
+	}
+
+	return reply;
 }

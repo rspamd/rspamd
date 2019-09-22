@@ -267,6 +267,13 @@ void rspamd_control_broadcast_srv_cmd (struct rspamd_main *rspamd_main,
  */
 enum rspamd_control_type rspamd_control_command_from_string (const gchar *str);
 
+/**
+ * Returns command name from it's type
+ * @param cmd
+ * @return
+ */
+const gchar *rspamd_control_command_to_string (enum rspamd_control_type cmd);
+
 #ifdef  __cplusplus
 }
 #endif
