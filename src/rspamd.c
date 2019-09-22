@@ -59,6 +59,7 @@
 #ifdef HAVE_OPENSSL
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <src/libserver/rspamd_control.h>
 
 #endif
 
@@ -1030,6 +1031,7 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 					struct rspamd_worker *wrk)
 {
 	gboolean need_refork;
+	static struct rspamd_control_command cmd;
 
 	/* Turn off locking for logger */
 	ev_child_stop (EV_A_ w);
@@ -1051,6 +1053,12 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 		close (wrk->control_pipe[0]);
 		close (wrk->srv_pipe[0]);
 	}
+
+	cmd.type = RSPAMD_CONTROL_CHILD_CHANGE;
+	cmd.cmd.child_change.what = rspamd_child_terminated;
+	cmd.cmd.child_change.pid = wrk->pid;
+	cmd.cmd.child_change.additional = w->rstatus;
+	rspamd_control_broadcast_srv_cmd (rspamd_main, &cmd, wrk->pid);
 
 	REF_RELEASE (wrk->cf);
 

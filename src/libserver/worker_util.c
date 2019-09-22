@@ -761,23 +761,23 @@ rspamd_main_heartbeat_cb (EV_P_ ev_timer *w, int revents)
 				-(wrk->hb.nbeats) >= rspamd_main->cfg->heartbeats_loss_max) {
 
 
-				if (-(wrk->hb.nbeats) >= rspamd_main->cfg->heartbeats_loss_max + 1) {
-					msg_err_main ("terminate worker type %s with pid %P, "
-								  "last beat on: %s; %L heartbeat loast",
-							g_quark_to_string (wrk->type),
-							wrk->pid,
-							timebuf,
-							-(wrk->hb.nbeats));
-					kill (wrk->pid, SIGTERM);
-				}
-				else {
+				if (-(wrk->hb.nbeats) > rspamd_main->cfg->heartbeats_loss_max + 1) {
 					msg_err_main ("force kill worker type %s with pid %P, "
-								  "last beat on: %s; %L heartbeat loast",
+								  "last beat on: %s; %L heartbeat lost",
 							g_quark_to_string (wrk->type),
 							wrk->pid,
 							timebuf,
 							-(wrk->hb.nbeats));
 					kill (wrk->pid, SIGKILL);
+				}
+				else {
+					msg_err_main ("terminate worker type %s with pid %P, "
+								  "last beat on: %s; %L heartbeat lost",
+							g_quark_to_string (wrk->type),
+							wrk->pid,
+							timebuf,
+							-(wrk->hb.nbeats));
+					kill (wrk->pid, SIGTERM);
 				}
 
 			}
@@ -1363,10 +1363,21 @@ rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
 
 	if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
 		/* Normal worker termination, do not fork one more */
-		msg_info_main ("%s process %P terminated normally",
-				g_quark_to_string (wrk->type),
-				wrk->pid);
-		need_refork = FALSE;
+
+		if (wrk->hb.nbeats < 0) {
+			msg_info_main ("%s process %P terminated normally, but lost %L "
+				  "heartbeats, refork it",
+					g_quark_to_string (wrk->type),
+					wrk->pid,
+					-(wrk->hb.nbeats));
+			need_refork = TRUE;
+		}
+		else {
+			msg_info_main ("%s process %P terminated normally",
+					g_quark_to_string (wrk->type),
+					wrk->pid);
+			need_refork = FALSE;
+		}
 	}
 	else {
 		if (WIFSIGNALED (res)) {

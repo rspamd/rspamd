@@ -78,8 +78,8 @@ typedef void (*rspamd_worker_term_cb) (EV_P_ ev_child *, struct rspamd_main *,
 
 struct rspamd_worker_heartbeat {
 	ev_timer heartbeat_ev;          /**< used by main for checking heartbeats and by workers to send heartbeats */
-	ev_tstamp last_event;
-	gint64 nbeats; /* positive for beats received, negative for beats missed */
+	ev_tstamp last_event;           /**< last heartbeat received timestamp */
+	gint64 nbeats;                  /**< positive for beats received, negative for beats missed */
 };
 
 /**
