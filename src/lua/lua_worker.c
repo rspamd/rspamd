@@ -297,7 +297,7 @@ lua_worker_control_handler (struct rspamd_main *rspamd_main,
 	struct rspamd_control_cbdata *cbd = (struct rspamd_control_cbdata *)ud;
 	rspamd_mempool_t *pool;
 	lua_State *L;
-	gint err_idx;
+	gint err_idx, status;
 
 	L = cbd->L;
 	pool = cbd->pool;
@@ -316,7 +316,73 @@ lua_worker_control_handler (struct rspamd_main *rspamd_main,
 	rspamd_lua_setclass (L, "rspamd{session}", -1);
 	*psession = session;
 
-	if (lua_pcall (L, 1, 0, err_idx) != 0) {
+	/* Command name */
+	lua_pushstring (L, rspamd_control_command_to_string (cmd->type));
+
+	/* Command's extras */
+	lua_newtable (L);
+
+	switch (cmd->type) {
+	case RSPAMD_CONTROL_CHILD_CHANGE:
+		lua_pushinteger (L, cmd->cmd.child_change.pid);
+		lua_setfield (L, -2, "pid");
+		switch (cmd->cmd.child_change.what) {
+		case rspamd_child_offline:
+			lua_pushstring (L, "offline");
+			lua_setfield (L, -2, "what");
+			break;
+		case rspamd_child_online:
+			lua_pushstring (L, "online");
+			lua_setfield (L, -2, "what");
+			break;
+		case rspamd_child_terminated:
+			lua_pushstring (L, "terminated");
+			lua_setfield (L, -2, "what");
+			status = cmd->cmd.child_change.additional;
+
+			if (WIFEXITED (status)) {
+				lua_pushinteger (L, WEXITSTATUS (status));
+				lua_setfield (L, -2, "exit_code");
+			}
+
+			if (WIFSIGNALED (status)) {
+				lua_pushinteger (L, WTERMSIG (status));
+				lua_setfield (L, -2, "signal");
+#ifdef WCOREDUMP
+				lua_pushboolean (L, WCOREDUMP (status));
+				lua_setfield (L, -2, "core");
+#endif
+			}
+			break;
+		}
+		break;
+	case RSPAMD_CONTROL_MONITORED_CHANGE:
+		lua_pushinteger (L, cmd->cmd.monitored_change.sender);
+		lua_setfield (L, -2, "sender");
+		lua_pushboolean (L, cmd->cmd.monitored_change.alive);
+		lua_setfield (L, -2, "alive");
+		lua_pushlstring (L, cmd->cmd.monitored_change.tag,
+				sizeof (cmd->cmd.monitored_change.tag));
+		lua_setfield (L, -2, "tag");
+		break;
+	case RSPAMD_CONTROL_HYPERSCAN_LOADED:
+		lua_pushstring (L, cmd->cmd.hs_loaded.cache_dir);
+		lua_setfield (L, -2, "cache_dir");
+		lua_pushboolean (L, cmd->cmd.hs_loaded.forced);
+		lua_setfield (L, -2, "forced");
+		break;
+	case RSPAMD_CONTROL_STAT:
+	case RSPAMD_CONTROL_RELOAD:
+	case RSPAMD_CONTROL_RERESOLVE:
+	case RSPAMD_CONTROL_RECOMPILE:
+	case RSPAMD_CONTROL_LOG_PIPE:
+	case RSPAMD_CONTROL_FUZZY_STAT:
+	case RSPAMD_CONTROL_FUZZY_SYNC:
+	default:
+		break;
+	}
+
+	if (lua_pcall (L, 3, 0, err_idx) != 0) {
 		msg_err_pool ("cannot init lua parser script: %s", lua_tostring (L, -1));
 		lua_settop (L, err_idx - 1);
 
