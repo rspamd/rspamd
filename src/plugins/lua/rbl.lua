@@ -857,6 +857,8 @@ local function add_rbl(key, rbl, global_opts)
 
     rspamd_logger.infox(rspamd_config, 'added rbl rule %s: %s',
         rbl.symbol, description)
+    lua_util.debugm(N, rspamd_config, 'rule dump for %s: %s',
+        rbl.symbol, rbl)
 
     if rbl.dkim then
       rspamd_config:register_dependency(rbl.symbol, 'DKIM_CHECK')
