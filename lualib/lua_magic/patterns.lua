@@ -371,6 +371,13 @@ local patterns = {
       },
     }
   },
+  dwg = {
+    matches = {
+      string = 'AC10[12][2-9]',
+      position = 6,
+      weight = 60,
+    }
+  },
 }
 
 return patterns

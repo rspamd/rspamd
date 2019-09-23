@@ -241,6 +241,10 @@ local types = {
     type = 'image',
     ct = 'image/bmp',
   },
+  dwg = {
+    type = 'image',
+    ct = 'image/vnd.dwg',
+  },
   -- Text
   txt = {
     type = 'text',
