@@ -98,6 +98,22 @@ WHITELIST
   Should Not Contain  ${result.stdout}  DBL_SPAM (
   Should Not Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES (
 
+EMAILBL full adress & domain only
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emailbltext.eml
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
+
+EMAILBL REPLY TO full adress
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replyto.eml
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
+  Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
+
+EMAILBL REPLY TO domain only
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replyto2.eml
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
+  Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
+
+
 *** Keywords ***
 Surbl Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/surbl.conf
