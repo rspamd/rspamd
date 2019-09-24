@@ -244,7 +244,8 @@ local function detect_archive_flaw(part, arch, log_obj)
     jar = 0,
     odt = 0,
     odp = 0,
-    ods = 0
+    ods = 0,
+    apk = 0,
   } -- ext + confidence pairs
 
   -- General msoffice patterns
@@ -268,6 +269,8 @@ local function detect_archive_flaw(part, arch, log_obj)
         res.pptx = res.pptx + 30
       elseif file == 'META-INF/MANIFEST.MF' then
         res.jar = res.jar + 40
+      elseif file == 'AndroidManifest.xml' then
+        res.apk = res.apk + 60
       end
     end
 
