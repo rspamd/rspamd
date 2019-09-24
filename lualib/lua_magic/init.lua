@@ -62,8 +62,14 @@ local function process_patterns(log_obj)
         short_patterns[#short_patterns + 1] = {
           str, match, pattern
         }
-        lua_util.debugm(N, log_obj, 'add short pattern %s for ext %s',
-            str, pattern.ext)
+        if str:sub(1, 1) == '^' then
+          lua_util.debugm(N, log_obj, 'add head pattern %s for ext %s',
+              str, pattern.ext)
+        else
+          lua_util.debugm(N, log_obj, 'add short pattern %s for ext %s',
+              str, pattern.ext)
+        end
+
 
         if max_short_offset < match.position then
           max_short_offset = match.position
@@ -94,6 +100,12 @@ local function process_patterns(log_obj)
         if match.string then
           if match.relative_position and not match.position then
             match.position = match.relative_position + #match.string
+
+            if match.relative_position == 0 then
+              if match.string:sub(1, 1) ~= '^' then
+                match.string = '^' .. match.string
+              end
+            end
           end
           add_processed(match.string, match, pattern)
         elseif match.hex then
@@ -106,6 +118,9 @@ local function process_patterns(log_obj)
 
           if match.relative_position and not match.position then
             match.position = match.relative_position + #match.hex / 2
+          end
+          if match.relative_position == 0 then
+            table.insert(hex_table, 1, '^')
           end
           add_processed(table.concat(hex_table), match, pattern)
         end

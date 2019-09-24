@@ -26,17 +26,17 @@ local patterns = {
     -- These are alternatives
     matches = {
       {
-        string = [[%PDF-\d]],
+        string = [[^%PDF-\d]],
         position = 6, -- must be end of the match, as that's how hyperscan works (or use relative_position)
         weight = 60,
       },
       {
-        string = [[\012%PDF-\d]],
+        string = [[^\012%PDF-\d]],
         position = 7,
         weight = 60,
       },
       {
-        string = [[%FDF-\d]],
+        string = [[^%FDF-\d]],
         position = 6,
         weight = 60,
       },
@@ -55,7 +55,7 @@ local patterns = {
   rtf = {
     matches = {
       {
-        string = [[{\\rt]],
+        string = [[^{\\rt]],
         position = 4,
         weight = 60,
       }
@@ -181,7 +181,7 @@ local patterns = {
   bz2 = {
     matches = {
       {
-        string = "BZ[h0]",
+        string = "^BZ[h0]",
         position = 3,
         weight = 60,
       },
@@ -215,7 +215,7 @@ local patterns = {
   zst = {
     matches = {
       {
-        string = [[[\x{22}-\x{40}]\x{B5}\x{2F}\x{FD}]],
+        string = [[^[\x{22}-\x{40}]\x{B5}\x{2F}\x{FD}]],
         position = 4,
         weight = 60,
       },
@@ -374,7 +374,7 @@ local patterns = {
   dwg = {
     matches = {
       {
-        string = 'AC10[12][2-9]',
+        string = '^AC10[12][2-9]',
         position = 6,
         weight = 60,
       }
