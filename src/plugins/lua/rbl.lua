@@ -197,6 +197,22 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
           resolve_table_elt.what)
     end
   end
+
+  local function insert_result(s, ip)
+    if rbl.symbols_prefixes then
+      local prefix = rbl.symbols_prefixes[resolve_table_elt.what]
+
+      if not prefix then
+        rspamd_logger.warnx(task, 'unlisted symbol prefix for %s', resolve_table_elt.what)
+        task:insert_result(s, 1.0, make_option(ip))
+      else
+        task:insert_result(prefix .. '_' .. s, 1.0, make_option(ip))
+      end
+    else
+      task:insert_result(s, 1.0, make_option(ip))
+    end
+  end
+
   if err and (err ~= 'requested record is not found' and
       err ~= 'no records with this name') then
     rspamd_logger.infox(task, 'error looking up %s: %s', to_resolve, err)
@@ -217,7 +233,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
   end
 
   if rbl.returncodes == nil and rbl.returnbits == nil and rbl.symbol ~= nil then
-    task:insert_result(rbl.symbol, 1, make_option())
+    insert_result(rbl.symbol)
     return
   end
 
@@ -232,7 +248,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
         for _,check_bit in ipairs(bits) do
           if bit.band(ipnum, check_bit) == check_bit then
             foundrc = true
-            task:insert_result(s, 1, make_option())
+            insert_result(s)
             -- Here, we continue with other bits
           end
         end
@@ -242,7 +258,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
         for _,v in ipairs(codes) do
           if string.find(ipstr, '^' .. v .. '$') then
             foundrc = true
-            task:insert_result(s, 1, make_option())
+            insert_result(s)
             break
           end
         end
@@ -251,7 +267,7 @@ local function rbl_dns_process(task, rbl, to_resolve, results, err, resolve_tabl
 
     if not foundrc then
       if rbl.unknown and rbl.symbol then
-        task:insert_result(rbl.symbol, 1, make_option(ipstr))
+        insert_result(rbl.symbol, ipstr)
       else
         rspamd_logger.errx(task, 'RBL %1 returned unknown result: %2',
             rbl.rbl, ipstr)
@@ -848,12 +864,36 @@ local function add_rbl(key, rbl, global_opts)
   local callback,description = gen_rbl_callback(rbl)
 
   if callback then
-    local id = rspamd_config:register_symbol{
-      type = 'callback',
-      callback = callback,
-      name = rbl.symbol,
-      flags = table.concat(flags_tbl, ',')
-    }
+    local id
+
+    if rbl.symbols_prefixes then
+      if not rbl.symbol:match('_CHECK$') then
+        rbl.symbol = rbl.symbol .. '_CHECK'
+      end
+
+      id = rspamd_config:register_symbol{
+        type = 'callback',
+        callback = callback,
+        name = rbl.symbol,
+        flags = table.concat(flags_tbl, ',')
+      }
+
+      for _,prefix in pairs(rbl.symbols_prefixes) do
+        rspamd_config:register_symbol{
+          type = 'virtual',
+          parent = id,
+          name = prefix .. '_' .. rbl.symbol,
+        }
+      end
+    else
+      id = rspamd_config:register_symbol{
+        type = 'callback',
+        callback = callback,
+        name = rbl.symbol,
+        flags = table.concat(flags_tbl, ',')
+      }
+    end
+
 
     rspamd_logger.infox(rspamd_config, 'added rbl rule %s: %s',
         rbl.symbol, description)
@@ -875,11 +915,22 @@ local function add_rbl(key, rbl, global_opts)
     local function process_return_code(s)
       if s ~= rbl.symbol then
         -- hack
-        rspamd_config:register_symbol({
-          name = s,
-          parent = id,
-          type = 'virtual'
-        })
+        if rbl.symbols_prefixes then
+          for _,prefix in pairs(rbl.symbols_prefixes) do
+            rspamd_config:register_symbol{
+              type = 'virtual',
+              parent = id,
+              name = prefix .. '_' .. s,
+            }
+          end
+        else
+          rspamd_config:register_symbol({
+            name = s,
+            parent = id,
+            type = 'virtual'
+          })
+        end
+
       end
 
       if rbl.is_whitelist then
@@ -1019,6 +1070,7 @@ local rule_schema = ts.shape({
   requests_limit = (ts.integer + ts.string / tonumber):is_optional(),
   process_script = ts.string:is_optional(),
   emails_delimiter = ts.string:is_optional(),
+  symbols_prefixes = ts.map_of(ts.string, ts.string):is_optional(),
 }, {
   -- Covers boolean defaults
   extra_fields = ts.map_of(ts.string, ts.boolean)
