@@ -47,6 +47,10 @@ local types = {
     ct = 'application/vnd.android.package-archive',
     type = 'archive',
   },
+  bat = {
+    ct = 'application/x-bat',
+    type = 'executable',
+  },
   -- text
   rtf = {
     ct = "application/rtf",

@@ -129,6 +129,15 @@ local patterns = {
       },
     }
   },
+  bat = {
+    matches = {
+      {
+        string = [[(?i)@\s*ECHO\s+OFF]],
+        position = {'>=', 0},
+        weight = 60,
+      },
+    }
+  },
   class = {
     -- Technically, this also matches MachO files, but I don't care about
     -- Apple and their mental health problems here: just consider Java files,
