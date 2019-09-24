@@ -38,6 +38,9 @@ enum rspamd_multipattern_flags {
 	/* Not supported by acism */
 	RSPAMD_MULTIPATTERN_GLOB = (1 << 3),
 	RSPAMD_MULTIPATTERN_RE = (1 << 4),
+	RSPAMD_MULTIPATTERN_DOTALL = (1 << 5),
+	RSPAMD_MULTIPATTERN_SINGLEMATCH = (1 << 6),
+	RSPAMD_MULTIPATTERN_NO_START = (1 << 7),
 };
 
 struct rspamd_multipattern;

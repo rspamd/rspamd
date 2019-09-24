@@ -430,6 +430,12 @@ lua_load_trie (lua_State *L)
 	lua_setfield (L, -2, "utf8");
 	lua_pushinteger (L, RSPAMD_MULTIPATTERN_TLD);
 	lua_setfield (L, -2, "tld");
+	lua_pushinteger (L, RSPAMD_MULTIPATTERN_DOTALL);
+	lua_setfield (L, -2, "dot_all");
+	lua_pushinteger (L, RSPAMD_MULTIPATTERN_SINGLEMATCH);
+	lua_setfield (L, -2, "single_match");
+	lua_pushinteger (L, RSPAMD_MULTIPATTERN_NO_START);
+	lua_setfield (L, -2, "no_start");
 	lua_settable (L, -3);
 
 	/* Main content */

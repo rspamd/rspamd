@@ -332,6 +332,16 @@ rspamd_multipattern_add_pattern_len (struct rspamd_multipattern *mp,
 		if (mp->flags & RSPAMD_MULTIPATTERN_UTF8) {
 			fl |= HS_FLAG_UTF8|HS_FLAG_UCP;
 		}
+		if (mp->flags & RSPAMD_MULTIPATTERN_DOTALL) {
+			fl |= HS_FLAG_DOTALL;
+		}
+		if (mp->flags & RSPAMD_MULTIPATTERN_SINGLEMATCH) {
+			fl |= HS_FLAG_SINGLEMATCH;
+			fl &= ~HS_FLAG_SOM_LEFTMOST; /* According to hyperscan docs */
+		}
+		if (mp->flags & RSPAMD_MULTIPATTERN_NO_START) {
+			fl &= ~HS_FLAG_SOM_LEFTMOST;
+		}
 
 		g_array_append_val (mp->hs_flags, fl);
 		np = rspamd_multipattern_pattern_filter (pattern, patlen, flags, &dlen);
