@@ -1368,7 +1368,6 @@ rspamd_message_process (struct rspamd_task *task)
 		L = task->cfg->lua_state;
 	}
 
-	rspamd_images_process (task);
 	rspamd_archives_process (task);
 
 	if (L && rspamd_lua_require_function (L,
@@ -1570,7 +1569,9 @@ rspamd_message_process (struct rspamd_task *task)
 		}
 	}
 
+	rspamd_images_process (task);
 	rspamd_images_link (task);
+
 	rspamd_tokenize_meta_words (task);
 }
 

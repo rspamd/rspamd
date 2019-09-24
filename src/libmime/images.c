@@ -50,14 +50,13 @@ rspamd_images_process (struct rspamd_task *task)
 {
 	guint i;
 	struct rspamd_mime_part *part;
-	rspamd_ftok_t srch;
-
-	RSPAMD_FTOK_ASSIGN (&srch, "image");
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		if (!(part->flags & (RSPAMD_MIME_PART_TEXT|RSPAMD_MIME_PART_ARCHIVE))) {
-			if (rspamd_ftok_cmp (&part->ct->type, &srch) == 0 &&
+			if (part->detected_type &&
+				strcmp (part->detected_type, "image") == 0 &&
 				part->parsed_data.len > 0) {
+
 				process_image (task, part);
 			}
 		}
