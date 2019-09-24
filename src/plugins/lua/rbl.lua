@@ -867,23 +867,23 @@ local function add_rbl(key, rbl, global_opts)
     local id
 
     if rbl.symbols_prefixes then
-      if not rbl.symbol:match('_CHECK$') then
-        rbl.symbol = rbl.symbol .. '_CHECK'
-      end
-
       id = rspamd_config:register_symbol{
         type = 'callback',
         callback = callback,
-        name = rbl.symbol,
+        name = rbl.symbol .. '_CHECK',
         flags = table.concat(flags_tbl, ',')
       }
 
       for _,prefix in pairs(rbl.symbols_prefixes) do
+        -- For unknown results...
         rspamd_config:register_symbol{
           type = 'virtual',
           parent = id,
           name = prefix .. '_' .. rbl.symbol,
         }
+      end
+      if not rbl.is_whitelist and rbl.ignore_whitelist == false then
+        table.insert(black_symbols, rbl.symbol .. '_CHECK')
       end
     else
       id = rspamd_config:register_symbol{
@@ -892,6 +892,9 @@ local function add_rbl(key, rbl, global_opts)
         name = rbl.symbol,
         flags = table.concat(flags_tbl, ',')
       }
+      if not rbl.is_whitelist and rbl.ignore_whitelist == false then
+        table.insert(black_symbols, rbl.symbol)
+      end
     end
 
 
@@ -967,9 +970,6 @@ local function add_rbl(key, rbl, global_opts)
       end
     end
 
-    if not rbl.is_whitelist and rbl.ignore_whitelist == false then
-      table.insert(black_symbols, rbl.symbol)
-    end
     -- Process monitored
     if not rbl.disable_monitoring then
       if not monitored_addresses[rbl.rbl] then
