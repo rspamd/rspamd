@@ -126,18 +126,21 @@ local function process_patterns(log_obj)
         end
       end
     end
-
+    local bit = require "bit"
+    local compile_flags = bit.bor(rspamd_trie.flags.re, rspamd_trie.flags.dot_all)
+    compile_flags = bit.bor(compile_flags, rspamd_trie.flags.single_match)
+    compile_flags = bit.bor(compile_flags, rspamd_trie.flags.no_start)
     compiled_patterns = rspamd_trie.create(fun.totable(
         fun.map(function(t) return t[1] end, processed_patterns)),
-        rspamd_trie.flags.re
+        compile_flags
     )
     compiled_short_patterns = rspamd_trie.create(fun.totable(
         fun.map(function(t) return t[1] end, short_patterns)),
-        rspamd_trie.flags.re
+        compile_flags
     )
     compiled_tail_patterns = rspamd_trie.create(fun.totable(
         fun.map(function(t) return t[1] end, tail_patterns)),
-        rspamd_trie.flags.re
+        compile_flags
     )
 
     lua_util.debugm(N, log_obj,

@@ -95,7 +95,10 @@ local function compile_tries()
       end
     end
 
-    return rspamd_trie.create(strs, rspamd_trie.flags.re)
+    local compile_flags = bit.bor(rspamd_trie.flags.re, rspamd_trie.flags.dot_all)
+    compile_flags = bit.bor(compile_flags, rspamd_trie.flags.single_match)
+    compile_flags = bit.bor(compile_flags, rspamd_trie.flags.no_start)
+    return rspamd_trie.create(strs, compile_flags)
   end
 
   if not msoffice_trie then
