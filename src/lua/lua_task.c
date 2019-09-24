@@ -2203,6 +2203,7 @@ lua_task_get_urls (lua_State * L)
 			protocols_mask = default_mask;
 		}
 
+		memset (&cb, 0, sizeof (cb));
 		cb.i = 1;
 		cb.L = L;
 		cb.mask = protocols_mask;
@@ -2415,6 +2416,7 @@ lua_task_get_emails (lua_State * L)
 	if (task) {
 		if (task->message) {
 			lua_createtable (L, g_hash_table_size (MESSAGE_FIELD (task, emails)), 0);
+			memset (&cb, 0, sizeof (cb));
 			cb.i = 1;
 			cb.L = L;
 			cb.mask = PROTOCOL_MAILTO;
