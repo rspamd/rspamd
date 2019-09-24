@@ -490,7 +490,7 @@ local function gen_rbl_callback(rule)
     if (ip:get_version() == 6 and rule.ipv6) or
         (ip:get_version() == 4 and rule.ipv4) then
       add_dns_request(task, ip, true, true,
-          requests_table, 'from_ip',
+          requests_table, 'from',
           whitelist)
     end
 
@@ -508,7 +508,7 @@ local function gen_rbl_callback(rule)
     for pos,rh in ipairs(received) do
       if check_conditions(rh, pos) then
         add_dns_request(task, rh.real_ip, false, true,
-            requests_table, 'rcvd',
+            requests_table, 'received',
             whitelist)
       end
     end
@@ -610,7 +610,7 @@ local function gen_rbl_callback(rule)
       lua_util.debugm(N, task, 'check replyto %s', rt[1])
 
       if rt and rt[1] and (rt[1].addr and #rt[1].addr > 0) then
-        check_email_table(task, rt[1], requests_table, whitelist, 'email replyto')
+        check_email_table(task, rt[1], requests_table, whitelist, 'replyto')
       end
     end
 
