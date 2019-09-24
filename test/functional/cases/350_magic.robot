@@ -65,5 +65,7 @@ Magic detections bundle 1
   Should Contain  ${result.stdout}  MAGIC_SYM_HTML_49
   Should Contain  ${result.stdout}  MAGIC_SYM_CSV_50
   Should Contain  ${result.stdout}  MAGIC_SYM_DWG_51
-
+  Should Contain  ${result.stdout}  MAGIC_SYM_JAR_52
+  Should Contain  ${result.stdout}  MAGIC_SYM_APK_53
+  Should Contain  ${result.stdout}  MAGIC_SYM_BAT_54
 
