@@ -303,15 +303,6 @@ local function detect_archive_flaw(part, arch, log_obj)
 end
 
 exports.mime_part_heuristic = function(part, log_obj)
-
-  if part:is_image() then
-    local img = part:get_image()
-    local img_type = img:get_type():lower()
-
-    if img_type == 'jpeg' then img_type = 'jpg' end
-    return img_type,60
-  end
-
   if part:is_archive() then
     local arch = part:get_archive()
     return detect_archive_flaw(part, arch, log_obj)

@@ -380,6 +380,47 @@ local patterns = {
       }
     }
   },
+  jpg = {
+    matches = {
+      { -- JPEG2000
+        hex = [[0000000c6a5020200d0a870a]],
+        relative_position = 0,
+        weight = 60,
+      },
+      {
+        string = [[^\x{ff}\x{d8}\x{ff}(?:[\x{e0}\x{e1}])]],
+        weight = 60,
+        position = 4,
+      },
+    },
+  },
+  png = {
+    matches = {
+      {
+        string = [[^\x{89}PNG\x{0d}\x{0a}\x{1a}\x{0a}]],
+        position = 8,
+        weight = 60,
+      },
+    }
+  },
+  gif = {
+    matches = {
+      {
+        string = [[^GIF8\d]],
+        position = 5,
+        weight = 60,
+      },
+    }
+  },
+  bmp = {
+    matches = {
+      {
+        string = [[^BM...\x{00}\x{00}\x{00}\x{00}]],
+        position = 9,
+        weight = 60,
+      },
+    }
+  },
 }
 
 return patterns
