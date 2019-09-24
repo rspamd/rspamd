@@ -912,47 +912,47 @@ local function add_rbl(key, rbl, global_opts)
       score = 0.0,
     }
 
-    local function process_return_code(s)
-      if s ~= rbl.symbol then
-        -- hack
-        if rbl.symbols_prefixes then
-          for _,prefix in pairs(rbl.symbols_prefixes) do
-            rspamd_config:register_symbol{
-              type = 'virtual',
-              parent = id,
-              name = prefix .. '_' .. s,
-            }
-          end
-        else
-          rspamd_config:register_symbol({
-            name = s,
+    local function process_return_code(suffix)
+      local function process_specific_suffix(s)
+        if s ~= rbl.symbol then
+          -- hack
+
+          rspamd_config:register_symbol{
+            type = 'virtual',
             parent = id,
-            type = 'virtual'
-          })
+            name = s,
+          }
         end
-
-      end
-
-      if rbl.is_whitelist then
-        if rbl.whitelist_exception then
-          local found_exception = false
-          for _, e in ipairs(rbl.whitelist_exception) do
-            if e == s then
-              found_exception = true
-              break
+        if rbl.is_whitelist then
+          if rbl.whitelist_exception then
+            local found_exception = false
+            for _, e in ipairs(rbl.whitelist_exception) do
+              if e == s then
+                found_exception = true
+                break
+              end
             end
-          end
-          if not found_exception then
+            if not found_exception then
+              table.insert(white_symbols, s)
+            end
+          else
             table.insert(white_symbols, s)
           end
         else
-          table.insert(white_symbols, s)
-        end
-      else
-        if rbl.ignore_whitelist == false then
-          table.insert(black_symbols, s)
+          if rbl.ignore_whitelist == false then
+            table.insert(black_symbols, s)
+          end
         end
       end
+
+      if rbl.symbols_prefixes then
+        for _,prefix in pairs(rbl.symbols_prefixes) do
+          process_specific_suffix(prefix .. '_' .. suffix)
+        end
+      else
+        process_specific_suffix(suffix)
+      end
+
     end
 
     if rbl.returncodes then
