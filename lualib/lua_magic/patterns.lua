@@ -397,9 +397,9 @@ local patterns = {
         weight = 60,
       },
       {
-        string = [[^\x{ff}\x{d8}\x{ff}(?:[\x{e0}\x{e1}])]],
+        string = [[^\x{ff}\x{d8}\x{ff}]],
         weight = 60,
-        position = 4,
+        position = 3,
       },
     },
   },
