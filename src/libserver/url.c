@@ -3487,16 +3487,23 @@ rspamd_url_encode (struct rspamd_url *url, gsize *pdlen,
 	}
 
 	/* Need to encode */
-	dlen += url->urllen;
+	dlen += url->urllen + sizeof ("telephone://"); /* Protocol hack */
 	dest = rspamd_mempool_alloc (pool, dlen + 1);
 	d = dest;
 	dend = d + dlen;
 
 	if (url->protocollen > 0) {
-		const gchar *known_proto = rspamd_url_protocol_name (url->protocol);
-		d += rspamd_snprintf ((gchar *) d, dend - d,
-				"%s://",
-				known_proto);
+		if (!(url->protocol & PROTOCOL_UNKNOWN)) {
+			const gchar *known_proto = rspamd_url_protocol_name (url->protocol);
+			d += rspamd_snprintf ((gchar *) d, dend - d,
+					"%s://",
+					known_proto);
+		}
+		else {
+			d += rspamd_snprintf ((gchar *) d, dend - d,
+					"%*s://",
+					(gint)url->protocollen, url->string);
+		}
 	}
 	else {
 		d += rspamd_snprintf ((gchar *) d, dend - d, "http://");
