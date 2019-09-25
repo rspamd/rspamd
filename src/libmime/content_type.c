@@ -801,7 +801,7 @@ rspamd_content_disposition_parse (const gchar *in,
 	}
 	else {
 		msg_warn_pool ("cannot parse content disposition: %*s",
-				(gint)len, val.lc_data);
+				(gint)len, in);
 	}
 
 	return res;
