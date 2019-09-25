@@ -260,7 +260,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 					if (*p == '\n') {
 						nlines_count[RSPAMD_TASK_NEWLINES_LF] ++;
 					}
-					else if (*(p + 1) == '\n') {
+					else if (p + 1 < end && *(p + 1) == '\n') {
 						nlines_count[RSPAMD_TASK_NEWLINES_CRLF] ++;
 					}
 					else {
