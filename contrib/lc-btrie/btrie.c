@@ -658,7 +658,8 @@ static inline int prefixes_equal(const btrie_oct_t *pfx1,
 		const btrie_oct_t *pfx2, unsigned len)
 {
 	return (memcmp (pfx1, pfx2, len / 8) == 0
-			&& ((pfx1[len / 8] ^ pfx2[len / 8]) & high_bits (len % 8)) == 0);
+			&& (len % 8 == 0 ||
+			((pfx1[len / 8] ^ pfx2[len / 8]) & high_bits (len % 8)) == 0));
 }
 
 /* determine length of longest common subprefix */
