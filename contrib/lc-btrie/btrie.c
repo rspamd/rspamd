@@ -631,8 +631,8 @@ static inline unsigned count_bits_from(tbm_bitmap_t bm, int b)
 }
 
 /* extracts a few bits from bitstring, returning them as an integer */
-static inline btrie_oct_t extract_bits(const btrie_oct_t *prefix, unsigned pos,
-		unsigned nbits) RSPAMD_NO_SANITIZE
+static inline btrie_oct_t RSPAMD_NO_SANITIZE extract_bits(const btrie_oct_t *prefix, unsigned pos,
+		unsigned nbits)
 {
 	if (nbits == 0)
 		return 0;
