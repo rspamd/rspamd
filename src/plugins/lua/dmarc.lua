@@ -942,7 +942,7 @@ if opts['reporting'] == true then
               report_id = report_id,
               report_date = rspamd_util.time_to_string(rspamd_util.get_time()),
               message_id = rspamd_util.random_hex(12) .. '@rspamd',
-              start = report_start,
+              report_start = report_start,
               report_end = report_end
             }, true)
         local message = {
