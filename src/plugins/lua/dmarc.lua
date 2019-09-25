@@ -48,7 +48,7 @@ local report_settings = {
 }
 local report_template = [[From: "{% from_name %}" <{% from_addr %}>
 To: {% rcpt %}
-Subject: Report Domain: {% report_domain %}
+Subject: Report Domain: {% reporting_domain %}
 	Submitter: {% submitter %}
 	Report-ID: {% report_id %}
 Date: {% report_date %}
@@ -65,7 +65,7 @@ Content-Transfer-Encoding: 7bit
 
 This is an aggregate report from {% submitter %}.
 
-Report domain: {% report_domain %}
+Report domain: {% reporting_domain %}
 Submitter: {% submitter %}
 Report ID: {% report_id %}
 
@@ -73,7 +73,7 @@ Report ID: {% report_id %}
 Content-Type: application/gzip
 Content-Transfer-Encoding: base64
 Content-Disposition: attachment;
-	filename="{% submitter %}!{% report_domain %}!{% report_start %}!{% report_end %}.xml.gz"
+	filename="{% submitter %}!{% reporting_domain %}!{% report_start %}!{% report_end %}.xml.gz"
 
 ]]
 local report_footer = [[
