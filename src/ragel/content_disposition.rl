@@ -18,9 +18,9 @@
   parameter = CFWS? attribute FWS? "=" FWS? value CFWS?;
 
   ietf_token = token+;
-  custom_x_token = 'x' "-" token+;
+  custom_x_token = /x/i "-" token+;
   extension_token = ietf_token | custom_x_token;
-  disposition_type = 'inline' %Disposition_Inline | 'attachment' %Disposition_Attachment
+  disposition_type = /inline/i %Disposition_Inline | /attachment/i %Disposition_Attachment
     | extension_token >Disposition_Start %Disposition_End;
   disposition_parm = parameter;
   content_disposition = disposition_type (";" disposition_parm)*;
