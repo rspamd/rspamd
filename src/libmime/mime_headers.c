@@ -444,7 +444,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 			/* Fail state, skip line */
 
 			if (*p == '\r') {
-				if (*(p + 1) == '\n') {
+				if (p + 1 < end && *(p + 1) == '\n') {
 					nlines_count[RSPAMD_TASK_NEWLINES_CRLF] ++;
 					p++;
 				}
@@ -454,7 +454,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 			else if (*p == '\n') {
 				nlines_count[RSPAMD_TASK_NEWLINES_LF] ++;
 
-				if (*(p + 1) == '\r') {
+				if (p + 1 < end && *(p + 1) == '\r') {
 					p++;
 				}
 				p++;
@@ -480,7 +480,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 		rspamd_cryptobox_hash_state_t hs;
 		guchar hout[rspamd_cryptobox_HASHBYTES], *hexout;
 
-		for (gint i = 0; i < RSPAMD_TASK_NEWLINES_MAX; i ++) {
+		for (gint i = RSPAMD_TASK_NEWLINES_CR; i < RSPAMD_TASK_NEWLINES_MAX; i ++) {
 			if (nlines_count[i] > max_cnt) {
 				max_cnt = nlines_count[i];
 				sel = i;
