@@ -370,6 +370,28 @@ typedef off_t goffset;
 #endif
 #endif
 
+/* Address sanitizer */
+#ifdef __clang__
+#  if __has_feature(address_sanitizer)
+/* emulate gcc's __SANITIZE_ADDRESS__ flag */
+#    define __SANITIZE_ADDRESS__
+#    define RSPAMD_NO_SANITIZE \
+      __attribute__((no_sanitize("address", "hwaddress")))
+#  else
+#    define RSPAMD_NO_SANITIZE
+#  endif
+#elif defined(__GNUC__)
+/* GCC based */
+#  if __has_attribute(__no_sanitize_address__)
+#    define RSPAMD_NO_SANITIZE __attribute__((no_sanitize_address))
+#  else
+#    define RSPAMD_NO_SANITIZE
+#  endif
+#else
+#  define RSPAMD_NO_SANITIZE
+#endif
+
+
 #ifndef BITSPERBYTE
 # define BITSPERBYTE (NBBY * sizeof (char))
 #endif

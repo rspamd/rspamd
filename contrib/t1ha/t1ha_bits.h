@@ -120,10 +120,6 @@
 #define __has_extension(x) (0)
 #endif
 
-#if __has_feature(address_sanitizer)
-#define __SANITIZE_ADDRESS__ 1
-#endif
-
 #if __GNUC_PREREQ(4, 4) || defined(__clang__)
 
 #if defined(__ia32__) || defined(__e2k__)
