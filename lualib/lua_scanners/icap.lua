@@ -18,7 +18,13 @@ limitations under the License.
 --[[[
 -- @module icap
 -- This module contains icap access functions.
--- Currently tested with Symantec, Sophos Savdi, ClamAV/c-icap
+-- Currently tested with
+--  - Symantec
+--  - Sophos Savdi
+--  - ClamAV/c-icap
+--  - Kaspersky Web Traffic Security
+--  - Trend Micro IWSVA
+--  - F-Secure Internet Gatekeeper Strings
 --]]
 
 local lua_util = require "lua_util"
@@ -47,6 +53,7 @@ local function icap_config(opts)
     detection_category = "virus",
     default_score = 1,
     action = false,
+    dynamic_scan = false,
   }
 
   icap_conf = lua_util.override_defaults(icap_conf, opts)
@@ -103,158 +110,9 @@ local function icap_check(task, content, digest, rule)
     }
     local size = string.format("%x", tonumber(#content))
 
-    local function get_respond_query()
-      table.insert(respond_headers, 1,
-          'RESPMOD icap://' .. addr:to_string() .. ':' .. addr:get_port() .. '/'
-        .. rule.scheme .. ' ICAP/1.0\r\n')
-      table.insert(respond_headers, 'Encapsulated: res-body=0\r\n')
-      table.insert(respond_headers, '\r\n')
-      table.insert(respond_headers, size .. '\r\n')
-      table.insert(respond_headers, content)
-      table.insert(respond_headers, '\r\n0\r\n\r\n')
-      return respond_headers
-    end
-
-    local function add_respond_header(name, value)
-      table.insert(respond_headers, name .. ': ' .. value .. '\r\n' )
-    end
-
-    local function icap_result_header_table(result)
-      local icap_headers = {}
-      for s in result:gmatch("[^\r\n]+") do
-        if string.find(s, '^ICAP') then
-          icap_headers['icap'] = s
-        end
-        if string.find(s, '[%a%d-+]-:') then
-          local _,_,key,value = tostring(s):find("([%a%d-+]-):%s?(.+)")
-          if key ~= nil then
-            icap_headers[key] = value
-          end
-        end
-      end
-      lua_util.debugm(rule.name, task, '%s: icap_headers: %s',
-          rule.log_prefix, icap_headers)
-      return icap_headers
-    end
-
-    local function icap_parse_result(icap_headers)
-
-      local threat_string = {}
-
-      --[[
-      @ToDo: handle type in response
-
-      Generic Strings:
-        X-Infection-Found: Type=0; Resolution=2; Threat=Troj/DocDl-OYC;
-        X-Infection-Found: Type=0; Resolution=2; Threat=W97M.Downloader;
-      Symantec String:
-        X-Infection-Found: Type=2; Resolution=2; Threat=Container size violation
-        X-Infection-Found: Type=2; Resolution=2; Threat=Encrypted container violation;
-      Sophos Strings:
-        X-Virus-ID: Troj/DocDl-OYC
-      Kaspersky Strings:
-        X-Virus-ID: HEUR:Backdoor.Java.QRat.gen
-        X-Response-Info: blocked
-
-        X-Virus-ID: no threats
-        X-Response-Info: blocked
-
-        X-Response-Info: passed
-      ]] --
-
-      if icap_headers['X-Infection-Found'] ~= nil then
-        local _,_,icap_type,_,icap_threat =
-          icap_headers['X-Infection-Found']:find("Type=(.-); Resolution=(.-); Threat=(.-);$")
-
-        if not icap_type or icap_type == 2 then
-          -- error returned
-          lua_util.debugm(rule.name, task,
-              '%s: icap error X-Infection-Found: %s', rule.log_prefix, icap_threat)
-          common.yield_result(task, rule, icap_threat, 0, 'fail')
-        else
-          lua_util.debugm(rule.name, task,
-              '%s: icap X-Infection-Found: %s', rule.log_prefix, icap_threat)
-          table.insert(threat_string, icap_threat)
-        end
-
-      elseif icap_headers['X-Virus-ID'] ~= nil and icap_headers['X-Virus-ID'] ~= "no threats" then
-        lua_util.debugm(rule.name, task,
-            '%s: icap X-Virus-ID: %s', rule.log_prefix, icap_headers['X-Virus-ID'])
-
-        if string.find(icap_headers['X-Virus-ID'], ', ') then
-          local vnames = rspamd_str_split(string.gsub(icap_headers['X-Virus-ID'], "%s", ""), ',') or {}
-
-          for _,v in ipairs(vnames) do
-            table.insert(threat_string, v)
-          end
-        else
-          table.insert(threat_string, icap_headers['X-Virus-ID'])
-        end
-      end
-
-      if #threat_string > 0 then
-        common.yield_result(task, rule, threat_string, rule.default_score)
-        common.save_av_cache(task, digest, rule, threat_string, rule.default_score)
-      else
-        common.save_av_cache(task, digest, rule, 'OK', 0)
-        common.log_clean(task, rule)
-      end
-    end
-
-    local function icap_r_respond_cb(err, data, conn)
-      local result = tostring(data)
-      conn:close()
-
-      local icap_headers = icap_result_header_table(result)
-      -- Find ICAP/1.x 2xx response
-      if string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
-        icap_parse_result(icap_headers)
-      elseif string.find(icap_headers.icap, 'ICAP%/1%.. [45]%d%d') then
-        -- Find ICAP/1.x 5/4xx response
-        --[[
-        Symantec String:
-          ICAP/1.0 539 Aborted - No AV scanning license
-        SquidClamAV/C-ICAP:
-          ICAP/1.0 500 Server error
-        ]]--
-        rspamd_logger.errx(task, '%s: ICAP ERROR: %s', rule.log_prefix, icap_headers.icap)
-        common.yield_result(task, rule, icap_headers.icap, 0.0, 'fail')
-        return false
-      else
-        rspamd_logger.errx(task, '%s: unhandled response |%s|',
-          rule.log_prefix, string.gsub(result, "\r\n", ", "))
-        common.yield_result(task, rule, 'unhandled icap response: ' .. icap_headers.icap, 0.0, 'fail')
-      end
-    end
-
-    local function icap_w_respond_cb(err, conn)
-      conn:add_read(icap_r_respond_cb, '\r\n\r\n')
-    end
-
-    local function icap_r_options_cb(err, data, conn)
-      local icap_headers = icap_result_header_table(tostring(data))
-
-      if string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
-        if icap_headers['Methods'] ~= nil and string.find(icap_headers['Methods'], 'RESPMOD') then
-          if icap_headers['Allow'] ~= nil and string.find(icap_headers['Allow'], '204') then
-            add_respond_header('Allow', '204')
-          end
-          conn:add_write(icap_w_respond_cb, get_respond_query())
-        else
-          rspamd_logger.errx(task, '%s: RESPMOD method not advertised: Methods: %s',
-            rule.log_prefix, icap_headers['Methods'])
-          common.yield_result(task, rule, 'NO RESPMOD', 0.0, 'fail')
-        end
-      else
-        rspamd_logger.errx(task, '%s: OPTIONS query failed: %s',
-          rule.log_prefix, icap_headers.icap)
-        common.yield_result(task, rule, 'OPTIONS query failed', 0.0, 'fail')
-      end
-    end
-
     local function icap_callback(err, conn)
 
-      local function icap_requery(error)
+      local function icap_requery(error, info)
         -- set current upstream to fail because an error occurred
         upstream:fail()
 
@@ -264,8 +122,8 @@ local function icap_check(task, content, digest, rule)
           retransmits = retransmits - 1
 
           lua_util.debugm(rule.name, task,
-              '%s: Request Error: %s - retries left: %s',
-              rule.log_prefix, error, retransmits)
+              '%s: %s Request Error: %s - retries left: %s',
+              rule.log_prefix, info, error, retransmits)
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
@@ -291,8 +149,204 @@ local function icap_check(task, content, digest, rule)
         end
       end
 
-      if err then
-        icap_requery(err)
+      local function get_respond_query()
+        table.insert(respond_headers, 1,
+            'RESPMOD icap://' .. addr:to_string() .. ':' .. addr:get_port() .. '/'
+          .. rule.scheme .. ' ICAP/1.0\r\n')
+        table.insert(respond_headers, '\r\n')
+        table.insert(respond_headers, size .. '\r\n')
+        table.insert(respond_headers, content)
+        table.insert(respond_headers, '\r\n0\r\n\r\n')
+        return respond_headers
+      end
+
+      local function add_respond_header(name, value)
+        table.insert(respond_headers, name .. ': ' .. value .. '\r\n' )
+      end
+
+      local function icap_result_header_table(result)
+        local icap_headers = {}
+        for s in result:gmatch("[^\r\n]+") do
+          if string.find(s, '^ICAP') then
+            icap_headers['icap'] = s
+          end
+          if string.find(s, '[%a%d-+]-:') then
+            local _,_,key,value = tostring(s):find("([%a%d-+]-):%s?(.+)")
+            if key ~= nil then
+              icap_headers[key] = value
+            end
+          end
+        end
+        lua_util.debugm(rule.name, task, '%s: icap_headers: %s',
+            rule.log_prefix, icap_headers)
+        return icap_headers
+      end
+
+      local function icap_parse_result(icap_headers)
+
+        local threat_string = {}
+
+        --[[
+        @ToDo: handle type in response
+
+        Generic Strings:
+          X-Infection-Found: Type=0; Resolution=2; Threat=Troj/DocDl-OYC;
+          X-Infection-Found: Type=0; Resolution=2; Threat=W97M.Downloader;
+        Symantec String:
+          X-Infection-Found: Type=2; Resolution=2; Threat=Container size violation
+          X-Infection-Found: Type=2; Resolution=2; Threat=Encrypted container violation;
+        Sophos Strings:
+          X-Virus-ID: Troj/DocDl-OYC
+        Kaspersky Web Traffic Security Strings:
+          X-Virus-ID: HEUR:Backdoor.Java.QRat.gen
+          X-Response-Info: blocked
+
+          X-Virus-ID: no threats
+          X-Response-Info: blocked
+
+          X-Response-Info: passed
+        Trend Micro IWSVA Strings:
+          X-Virus-ID: Trojan.W97M.POWLOAD.SMTHF1
+          X-Infection-Found: Type=0; Resolution=2; Threat=Trojan.W97M.POWLOAD.SMTHF1;
+        F-Secure Internet Gatekeeper Strings:
+          X-FSecure-Scan-Result: infected
+          X-FSecure-Infection-Name: "Malware.W97M/Agent.32584203"
+          X-FSecure-Infected-Filename: "virus.doc"
+        ]] --
+
+        if icap_headers['X-Infection-Found'] ~= nil then
+          local _,_,icap_type,_,icap_threat =
+            icap_headers['X-Infection-Found']:find("Type=(.-); Resolution=(.-); Threat=(.-);$")
+
+          if not icap_type or icap_type == 2 then
+            -- error returned
+            lua_util.debugm(rule.name, task,
+                '%s: icap error X-Infection-Found: %s', rule.log_prefix, icap_threat)
+            common.yield_result(task, rule, icap_threat, 0, 'fail')
+          else
+            lua_util.debugm(rule.name, task,
+                '%s: icap X-Infection-Found: %s', rule.log_prefix, icap_threat)
+            table.insert(threat_string, icap_threat)
+          end
+
+        elseif icap_headers['X-Virus-ID'] ~= nil and icap_headers['X-Virus-ID'] ~= "no threats" then
+          lua_util.debugm(rule.name, task,
+              '%s: icap X-Virus-ID: %s', rule.log_prefix, icap_headers['X-Virus-ID'])
+
+          if string.find(icap_headers['X-Virus-ID'], ', ') then
+            local vnames = rspamd_str_split(string.gsub(icap_headers['X-Virus-ID'], "%s", ""), ',') or {}
+
+            for _,v in ipairs(vnames) do
+              table.insert(threat_string, v)
+            end
+          else
+            table.insert(threat_string, icap_headers['X-Virus-ID'])
+          end
+        elseif icap_headers['X-FSecure-Scan-Result'] ~= nil and icap_headers['X-FSecure-Scan-Result'] ~= "clean" then
+          lua_util.debugm(rule.name, task,
+              '%s: icap X-FSecure-Infection-Name (X-FSecure-Infected-Filename): %s (%s)',
+              rule.log_prefix, string.gsub(icap_headers['X-FSecure-Infection-Name'], '[%s"]', ''),
+              string.gsub(icap_headers['X-FSecure-Infected-Filename:'], '[%s"]', ''))
+
+          if string.find(icap_headers['X-FSecure-Infection-Name'], ', ') then
+            local vnames = rspamd_str_split(string.gsub(icap_headers['X-FSecure-Infection-Name'], '[%s"]', '')
+              , ',') or {}
+
+            for _,v in ipairs(vnames) do
+              table.insert(threat_string, v)
+            end
+          else
+            table.insert(threat_string, string.gsub(icap_headers['X-FSecure-Infection-Name'], '[%s"]', ''))
+          end
+        end
+        if #threat_string > 0 then
+          common.yield_result(task, rule, threat_string, rule.default_score)
+          common.save_cache(task, digest, rule, threat_string, rule.default_score)
+        else
+          common.save_cache(task, digest, rule, 'OK', 0)
+          common.log_clean(task, rule)
+        end
+      end
+
+      local function icap_r_respond_cb(err, data, conn)
+        if err or conn == nil then
+          icap_requery(err, "icap_r_respond_cb")
+        else
+          local result = tostring(data)
+          conn:close()
+
+          local icap_headers = icap_result_header_table(result)
+          -- Find ICAP/1.x 2xx response
+          if string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
+            icap_parse_result(icap_headers)
+          elseif string.find(icap_headers.icap, 'ICAP%/1%.. [45]%d%d') then
+            -- Find ICAP/1.x 5/4xx response
+            --[[
+            Symantec String:
+              ICAP/1.0 539 Aborted - No AV scanning license
+            SquidClamAV/C-ICAP:
+              ICAP/1.0 500 Server error
+            ]]--
+            rspamd_logger.errx(task, '%s: ICAP ERROR: %s', rule.log_prefix, icap_headers.icap)
+            common.yield_result(task, rule, icap_headers.icap, 0.0, 'fail')
+            return false
+          else
+            rspamd_logger.errx(task, '%s: unhandled response |%s|',
+              rule.log_prefix, string.gsub(result, "\r\n", ", "))
+            common.yield_result(task, rule, 'unhandled icap response: ' .. icap_headers.icap, 0.0, 'fail')
+          end
+        end
+      end
+
+      local function icap_w_respond_cb(err, conn)
+        if err or conn == nil then
+          icap_requery(err, "icap_w_respond_cb")
+        else
+          conn:add_read(icap_r_respond_cb, '\r\n\r\n')
+        end
+      end
+
+      local function icap_r_options_cb(err, data, conn)
+        if err or conn == nil then
+          icap_requery(err, "icap_r_options_cb")
+        else
+          local icap_headers = icap_result_header_table(tostring(data))
+
+          if string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
+            if icap_headers['Methods'] ~= nil and string.find(icap_headers['Methods'], 'RESPMOD') then
+              if icap_headers['Allow'] ~= nil and string.find(icap_headers['Allow'], '204') then
+                add_respond_header('Allow', '204')
+              end
+              if icap_headers['Service'] ~= nil and string.find(icap_headers['Service'], 'IWSVA 6.5') then
+                add_respond_header('Encapsulated', 'res-hdr=0 res-body=0')
+              else
+                add_respond_header('Encapsulated', 'res-body=0')
+              end
+              if icap_headers['Server'] ~= nil and string.find(icap_headers['Server'], 'F-Secure ICAP Server') then
+                local from = task:get_from('mime')
+                local rcpt_to = task:get_principal_recipient()
+                local client = task:get_from_ip()
+                add_respond_header('X-Client-IP', client:to_string())
+                add_respond_header('X-Mail-From', from[1].addr)
+                add_respond_header('X-Rcpt-To', rcpt_to)
+              end
+
+              conn:add_write(icap_w_respond_cb, get_respond_query())
+            else
+              rspamd_logger.errx(task, '%s: RESPMOD method not advertised: Methods: %s',
+                rule.log_prefix, icap_headers['Methods'])
+              common.yield_result(task, rule, 'NO RESPMOD', 0.0, 'fail')
+            end
+          else
+            rspamd_logger.errx(task, '%s: OPTIONS query failed: %s',
+              rule.log_prefix, icap_headers.icap)
+            common.yield_result(task, rule, 'OPTIONS query failed', 0.0, 'fail')
+          end
+        end
+      end
+
+      if err or conn == nil then
+        icap_requery(err, "options_request")
       else
         -- set upstream ok
         if upstream then upstream:ok() end
@@ -319,6 +373,7 @@ local function icap_check(task, content, digest, rule)
       callback = icap_callback,
     })
   end
+
   if common.need_av_check(task, content, rule) then
     if common.check_av_cache(task, digest, rule, icap_check_uncached) then
       return
