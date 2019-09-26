@@ -373,7 +373,7 @@ lua_udp_sendto (lua_State *L) {
 		if (lua_type (L, -1) == LUA_TSTRING) {
 			host = luaL_checkstring (L, -1);
 
-			if (rspamd_parse_inet_address (&addr, host, 0)) {
+			if (rspamd_parse_inet_address (&addr, host, strlen (host))) {
 				if (port != 0) {
 					rspamd_inet_address_set_port (addr, port);
 				}

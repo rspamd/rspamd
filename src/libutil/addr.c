@@ -689,12 +689,12 @@ rspamd_parse_inet_address_common (rspamd_inet_addr_t **target,
 	guint iplen;
 	gulong portnum;
 
+	if (srclen == 0) {
+		return FALSE;
+	}
+
 	g_assert (src != NULL);
 	g_assert (target != NULL);
-
-	if (srclen == 0) {
-		srclen = strlen (src);
-	}
 
 	rspamd_ip_check_ipv6 ();
 
@@ -1387,7 +1387,7 @@ rspamd_parse_host_port_priority (const gchar *str,
 			}
 		}
 
-		if (!rspamd_parse_inet_address (&cur_addr, str, 0)) {
+		if (!rspamd_parse_inet_address (&cur_addr, str, strlen (str))) {
 			msg_err_pool_check ("cannot parse unix socket definition %s: %s",
 					str,
 					strerror (errno));

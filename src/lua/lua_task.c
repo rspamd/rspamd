@@ -3856,7 +3856,8 @@ lua_task_set_from_ip (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	const gchar *ip_str = luaL_checkstring (L, 2);
+	gsize len;
+	const gchar *ip_str = luaL_checklstring (L, 2, &len);
 	rspamd_inet_addr_t *addr = NULL;
 
 	if (!task || !ip_str) {
@@ -3866,7 +3867,7 @@ lua_task_set_from_ip (lua_State *L)
 	else {
 		if (!rspamd_parse_inet_address (&addr,
 				ip_str,
-				0)) {
+				len)) {
 			msg_warn_task ("cannot get IP from received header: '%s'",
 					ip_str);
 		}

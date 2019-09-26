@@ -3260,7 +3260,7 @@ rspamd_rcl_parse_struct_addr (rspamd_mempool_t *pool,
 	if (ucl_object_type (obj) == UCL_STRING) {
 		val = ucl_object_tostring (obj);
 
-		if (!rspamd_parse_inet_address (target, val, 0)) {
+		if (!rspamd_parse_inet_address (target, val, strlen (val))) {
 			g_set_error (err,
 				CFG_RCL_ERROR,
 				EINVAL,

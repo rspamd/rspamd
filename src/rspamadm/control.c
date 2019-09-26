@@ -220,7 +220,7 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 		exit (1);
 	}
 
-	if (!rspamd_parse_inet_address (&addr, control_path, 0)) {
+	if (!rspamd_parse_inet_address (&addr, control_path, strlen (control_path))) {
 		rspamd_fprintf (stderr, "bad control path: %s\n", control_path);
 		exit (1);
 	}
