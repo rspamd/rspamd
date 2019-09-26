@@ -39,7 +39,7 @@ typedef gboolean (*token_get_function) (rspamd_stat_token_t * buf, gchar const *
 		rspamd_stat_token_t * token,
 		GList **exceptions, gsize *rl, gboolean check_signature);
 
-const gchar t_delimiters[255] = {
+const gchar t_delimiters[256] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
 	1, 0, 0, 1, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -65,7 +65,7 @@ const gchar t_delimiters[255] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0
+	0, 0, 0, 0, 0, 0
 };
 
 /* Get next word from specified f_str_t buf */
