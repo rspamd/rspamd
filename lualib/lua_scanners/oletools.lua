@@ -42,6 +42,7 @@ local function oletools_config(opts)
     log_clean = false,
     retransmits = 2,
     cache_expire = 86400, -- expire redis in 1d
+    min_size = 500,
     symbol = "OLETOOLS",
     message = '${SCANNER}: Oletools threat message found: "${VIRUS}"',
     detection_category = "office macro",
@@ -176,7 +177,7 @@ local function oletools_check(task, content, digest, rule)
             rspamd_logger.errx(task, '%s: ERROR found: %s', rule.log_prefix,
                 result[1].error)
             if result[1].error == 'File too small' then
-              common.save_av_cache(task, digest, rule, 'OK')
+              common.save_cache(task, digest, rule, 'OK')
               common.log_clean(task, rule, 'File too small to be scanned for macros')
             else
               oletools_requery(result[1].error)
@@ -198,7 +199,7 @@ local function oletools_check(task, content, digest, rule)
             rspamd_logger.warnx(task, '%s: maybe unhandled python or oletools error', rule.log_prefix)
             common.yield_result(task, rule, 'oletools unhandled error', 0.0, 'fail')
           elseif type(result[2]['analysis']) ~= 'table' and #result[2]['macros'] == 0 then
-            common.save_av_cache(task, digest, rule, 'OK')
+            common.save_cache(task, digest, rule, 'OK')
             common.log_clean(task, rule, 'No macro found')
           elseif #result[2]['macros'] > 0 then
             -- M=Macros, A=Auto-executable, S=Suspicious keywords, I=IOCs,
@@ -257,7 +258,7 @@ local function oletools_check(task, content, digest, rule)
               local threat = 'AutoExec + Suspicious (' .. table.concat(analysis_keyword_table, ',') .. ')'
               lua_util.debugm(rule.name, task, '%s: threat result: %s', rule.log_prefix, threat)
               common.yield_result(task, rule, threat, rule.default_score)
-              common.save_av_cache(task, digest, rule, threat, rule.default_score)
+              common.save_cache(task, digest, rule, threat, rule.default_score)
 
             elseif rule.extended == true and #analysis_keyword_table > 0 then
               -- report any flags (types) and any most keywords as individual virus name
@@ -276,9 +277,9 @@ local function oletools_check(task, content, digest, rule)
                   rule.log_prefix, table.concat(analysis_keyword_table, ','))
 
               common.yield_result(task, rule, analysis_keyword_table, rule.default_score)
-              common.save_av_cache(task, digest, rule, analysis_keyword_table, rule.default_score)
+              common.save_cache(task, digest, rule, analysis_keyword_table, rule.default_score)
             else
-              common.save_av_cache(task, digest, rule, 'OK')
+              common.save_cache(task, digest, rule, 'OK')
               common.log_clean(task, rule, 'Scanned Macro is OK')
             end
 
@@ -287,14 +288,6 @@ local function oletools_check(task, content, digest, rule)
             common.yield_result(task, rule, 'unhandled error', 0.0, 'fail')
           end
         end
-      end
-    end
-
-    if rule.dynamic_scan then
-      local pre_check, pre_check_msg = common.check_metric_results(task, rule)
-      if pre_check then
-        rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, pre_check_msg)
-        return true
       end
     end
 
@@ -309,13 +302,11 @@ local function oletools_check(task, content, digest, rule)
     })
 
   end
-  if common.need_av_check(task, content, rule) then
-    if common.check_av_cache(task, digest, rule, oletools_check_uncached) then
-      return
-    else
-      oletools_check_uncached()
-    end
+
+  if common.need_check(task, content, rule, digest) then
+    oletools_check_uncached()
   end
+
 end
 
 return {

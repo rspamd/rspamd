@@ -354,14 +354,6 @@ local function icap_check(task, content, digest, rule)
       end
     end
 
-    if rule.dynamic_scan then
-      local pre_check, pre_check_msg = common.check_metric_results(task, rule)
-      if pre_check then
-        rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, pre_check_msg)
-        return true
-      end
-    end
-
     tcp.request({
       task = task,
       host = addr:to_string(),
@@ -374,13 +366,10 @@ local function icap_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule) then
-    if common.check_av_cache(task, digest, rule, icap_check_uncached) then
-      return
-    else
-      icap_check_uncached()
-    end
+  if common.need_check(task, content, rule, digest) then
+    icap_check_uncached()
   end
+
 end
 
 return {

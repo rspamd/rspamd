@@ -125,11 +125,68 @@ local function message_not_too_large(task, content, rule)
   return true
 end
 
-local function need_av_check(task, content, rule)
-  return message_not_too_large(task, content, rule)
+local function message_not_too_small(task, content, rule)
+  local min_size = tonumber(rule.min_size)
+  if not min_size then return true end
+  if #content < min_size then
+    rspamd_logger.infox(task, "skip %s check as it is too small: %s (%s is allowed)",
+        rule.log_prefix, #content, min_size)
+    return false
+  end
+  return true
 end
 
-local function check_av_cache(task, digest, rule, fn)
+local function message_min_words(task, rule)
+  if rule.text_part_min_words then
+    local text_parts_empty = false
+    local text_parts = task:get_text_parts()
+
+    local filter_func = function(p)
+      return p:get_words_count() <= tonumber(rule.text_part_min_words)
+    end
+
+    fun.each(function(p)
+      text_parts_empty = true
+      rspamd_logger.infox(task, '%s: #words is less then text_part_min_words: %s',
+        rule.log_prefix, rule.text_part_min_words)
+    end, fun.filter(filter_func, text_parts))
+
+    return text_parts_empty
+  else
+    return true
+  end
+end
+
+local function dynamic_scan(task, rule)
+  if rule.dynamic_scan then
+    if rule.action ~= 'reject' then
+      local metric_result = task:get_metric_score('default')
+      local metric_action = task:get_metric_action('default')
+      local has_pre_result = task:has_pre_result()
+      -- ToDo: needed?
+      -- Sometimes leads to FPs
+      --if rule.symbol_type == 'postfilter' and metric_action == 'reject' then
+      --  rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, "result is already reject")
+      --  return false
+      --elseif metric_result[1] > metric_result[2]*2 then
+      if metric_result[1] > metric_result[2]*2 then
+        rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, 'score > 2 * reject_level: ' .. metric_result[1])
+        return false
+      elseif has_pre_result and metric_action == 'reject' then
+        rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, 'pre_result reject is set')
+        return false
+      else
+        return true, 'undecided'
+      end
+    else
+      return true, 'dynamic_scan is not possible with config `action=reject;`'
+    end
+  else
+    return true
+  end
+end
+
+local function check_cache(task, digest, rule, fn)
   local key = digest
 
   local function redis_av_cb(err, data)
@@ -173,7 +230,15 @@ local function check_av_cache(task, digest, rule, fn)
   return false
 end
 
-local function save_av_cache(task, digest, rule, to_save, dyn_weight)
+local function need_check(task, content, rule, digest)
+  return check_cache(task, digest, rule) and
+    message_not_too_large(task, content, rule) and
+    message_not_too_small(task, content, rule) and
+    message_min_words(task, rule) and
+    dynamic_scan(task, rule)
+end
+
+local function save_cache(task, digest, rule, to_save, dyn_weight)
   local key = digest
   if not dyn_weight then dyn_weight = 1.0 end
 
@@ -363,9 +428,9 @@ end
 exports.log_clean = log_clean
 exports.yield_result = yield_result
 exports.match_patterns = match_patterns
-exports.need_av_check = need_av_check
-exports.check_av_cache = check_av_cache
-exports.save_av_cache = save_av_cache
+exports.need_check = need_check
+exports.check_cache = check_cache
+exports.save_cache = save_cache
 exports.create_regex_table = create_regex_table
 exports.check_parts_match = check_parts_match
 exports.check_metric_results = check_metric_results

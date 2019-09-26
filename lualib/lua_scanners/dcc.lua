@@ -193,7 +193,7 @@ local function dcc_check(task, content, digest, rule)
           if (result == 'R') then
             -- Reject
             common.yield_result(task, rule, info, rule.default_score)
-            common.save_av_cache(task, digest, rule, info, rule.default_score)
+            common.save_cache(task, digest, rule, info, rule.default_score)
           elseif (result == 'T') then
             -- Temporary failure
             rspamd_logger.warnx(task, 'DCC returned a temporary failure result: %s', result)
@@ -248,9 +248,9 @@ local function dcc_check(task, content, digest, rule)
                 task:insert_result(rule.symbol_bulk,
                     score,
                     opts)
-                common.save_av_cache(task, digest, rule, opts, score)
+                common.save_cache(task, digest, rule, opts, score)
               else
-                common.save_av_cache(task, digest, rule, 'OK')
+                common.save_cache(task, digest, rule, 'OK')
                 if rule.log_clean then
                   rspamd_logger.infox(task, '%s: clean, returned result A - info: %s',
                       rule.log_prefix, info)
@@ -261,7 +261,7 @@ local function dcc_check(task, content, digest, rule)
             end
           elseif result == 'G' then
             -- do nothing
-            common.save_av_cache(task, digest, rule, 'OK')
+            common.save_cache(task, digest, rule, 'OK')
             if rule.log_clean then
               rspamd_logger.infox(task, '%s: clean, returned result G - info: %s', rule.log_prefix, info)
             else
@@ -269,7 +269,7 @@ local function dcc_check(task, content, digest, rule)
             end
           elseif result == 'S' then
             -- do nothing
-            common.save_av_cache(task, digest, rule, 'OK')
+            common.save_cache(task, digest, rule, 'OK')
             if rule.log_clean then
               rspamd_logger.infox(task, '%s: clean, returned result S - info: %s', rule.log_prefix, info)
             else
@@ -281,14 +281,6 @@ local function dcc_check(task, content, digest, rule)
             common.yield_result(task, rule, 'error: ' .. result, 0.0, 'fail')
           end
         end
-      end
-    end
-
-    if rule.dynamic_scan then
-      local pre_check, pre_check_msg = common.check_metric_results(task, rule)
-      if pre_check then
-        rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, pre_check_msg)
-        return true
       end
     end
 
@@ -305,13 +297,11 @@ local function dcc_check(task, content, digest, rule)
       fuz2_max = 999999,
     })
   end
-  if common.need_av_check(task, content, rule) then
-    if common.check_av_cache(task, digest, rule, dcc_check_uncached) then
-      return
-    else
-      dcc_check_uncached()
-    end
+
+  if common.need_check(task, content, rule, digest) then
+    dcc_check_uncached()
   end
+
 end
 
 return {

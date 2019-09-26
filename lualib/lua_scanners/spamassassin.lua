@@ -177,26 +177,18 @@ local function spamassassin_check(task, content, digest, rule)
 
           if rule.extended == false then
             common.yield_result(task, rule, symbols, spam_score)
-            common.save_av_cache(task, digest, rule, symbols, spam_score)
+            common.save_cache(task, digest, rule, symbols, spam_score)
           else
             local symbols_table = {}
             symbols_table = rspamd_str_split(symbols, ",")
             lua_util.debugm(rule.N, task, '%s: returned symbols as table: %s', rule.log_prefix, symbols_table)
 
             common.yield_result(task, rule, symbols_table, spam_score)
-            common.save_av_cache(task, digest, rule, symbols_table, spam_score)
+            common.save_cache(task, digest, rule, symbols_table, spam_score)
           end
         else
           common.log_clean(task, rule, 'no spam detected - spam score: ' .. spam_score .. ', symbols: ' .. symbols)
         end
-      end
-    end
-
-    if rule.dynamic_scan then
-      local pre_check, pre_check_msg = common.check_metric_results(task, rule)
-      if pre_check then
-        rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, pre_check_msg)
-        return true
       end
     end
 
@@ -209,13 +201,11 @@ local function spamassassin_check(task, content, digest, rule)
       callback = spamassassin_callback,
     })
   end
-  if common.need_av_check(task, content, rule) then
-    if common.check_av_cache(task, digest, rule, spamassassin_check_uncached) then
-      return
-    else
-      spamassassin_check_uncached()
-    end
+
+  if common.need_check(task, content, rule, digest) then
+    spamassassin_check_uncached()
   end
+
 end
 
 return {
