@@ -2235,7 +2235,7 @@ url_file_start (struct url_callback_data *cb,
 {
 	match->m_begin = pos;
 
-	if (pos > cb->begin - 1) {
+	if (pos > cb->begin) {
 		match->st = *(pos - 1);
 	}
 	else {
