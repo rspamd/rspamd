@@ -29,6 +29,62 @@ local fun = require "fun"
 
 local N = 'dcc'
 
+local function dcc_config(opts)
+
+  local dcc_conf = {
+    name = N,
+    default_port = 10045,
+    timeout = 5.0,
+    log_clean = false,
+    retransmits = 2,
+    cache_expire = 7200, -- expire redis in 2h
+    message = '${SCANNER}: bulk message found: "${VIRUS}"',
+    detection_category = "hash",
+    default_score = 1,
+    action = false,
+    client = '0.0.0.0',
+    symbol_fail = 'DCC_FAIL',
+    symbol = 'DCC_REJECT',
+    symbol_bulk = 'DCC_BULK',
+    body_max = 999999,
+    fuz1_max = 999999,
+    fuz2_max = 999999,
+  }
+
+  dcc_conf = lua_util.override_defaults(dcc_conf, opts)
+
+  if not dcc_conf.prefix then
+    dcc_conf.prefix = 'rs_' .. dcc_conf.name .. '_'
+  end
+
+  if not dcc_conf.log_prefix then
+    dcc_conf.log_prefix = dcc_conf.name
+  end
+
+  if not dcc_conf.servers and dcc_conf.socket then
+    dcc_conf.servers = dcc_conf.socket
+  end
+
+  if not dcc_conf.servers then
+    rspamd_logger.errx(rspamd_config, 'no servers defined')
+
+    return nil
+  end
+
+  dcc_conf.upstreams = upstream_list.create(rspamd_config,
+      dcc_conf.servers,
+      dcc_conf.default_port)
+
+  if dcc_conf.upstreams then
+    lua_util.add_debug_alias('external_services', dcc_conf.name)
+    return dcc_conf
+  end
+
+  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
+      dcc_conf['servers'])
+  return nil
+end
+
 local function dcc_check(task, content, digest, rule)
   local function dcc_check_uncached ()
     local upstream = rule.upstreams:get_upstream_round_robin()
@@ -256,62 +312,6 @@ local function dcc_check(task, content, digest, rule)
       dcc_check_uncached()
     end
   end
-end
-
-local function dcc_config(opts)
-
-  local dcc_conf = {
-    name = N,
-    default_port = 10045,
-    timeout = 5.0,
-    log_clean = false,
-    retransmits = 2,
-    cache_expire = 7200, -- expire redis in 2h
-    message = '${SCANNER}: bulk message found: "${VIRUS}"',
-    detection_category = "hash",
-    default_score = 1,
-    action = false,
-    client = '0.0.0.0',
-    symbol_fail = 'DCC_FAIL',
-    symbol = 'DCC_REJECT',
-    symbol_bulk = 'DCC_BULK',
-    body_max = 999999,
-    fuz1_max = 999999,
-    fuz2_max = 999999,
-  }
-
-  dcc_conf = lua_util.override_defaults(dcc_conf, opts)
-
-  if not dcc_conf.prefix then
-    dcc_conf.prefix = 'rs_' .. dcc_conf.name .. '_'
-  end
-
-  if not dcc_conf.log_prefix then
-    dcc_conf.log_prefix = dcc_conf.name
-  end
-
-  if not dcc_conf.servers and dcc_conf.socket then
-    dcc_conf.servers = dcc_conf.socket
-  end
-
-  if not dcc_conf.servers then
-    rspamd_logger.errx(rspamd_config, 'no servers defined')
-
-    return nil
-  end
-
-  dcc_conf.upstreams = upstream_list.create(rspamd_config,
-      dcc_conf.servers,
-      dcc_conf.default_port)
-
-  if dcc_conf.upstreams then
-    lua_util.add_debug_alias('external_services', dcc_conf.name)
-    return dcc_conf
-  end
-
-  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
-      dcc_conf['servers'])
-  return nil
 end
 
 return {

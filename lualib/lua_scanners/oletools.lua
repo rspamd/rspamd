@@ -30,6 +30,62 @@ local common = require "lua_scanners/common"
 
 local N = 'oletools'
 
+local function oletools_config(opts)
+
+  local oletools_conf = {
+    name = N,
+    scan_mime_parts = true,
+    scan_text_mime = false,
+    scan_image_mime = false,
+    default_port = 10050,
+    timeout = 15.0,
+    log_clean = false,
+    retransmits = 2,
+    cache_expire = 86400, -- expire redis in 1d
+    symbol = "OLETOOLS",
+    message = '${SCANNER}: Oletools threat message found: "${VIRUS}"',
+    detection_category = "office macro",
+    default_score = 1,
+    action = false,
+    extended = false,
+    symbol_type = 'postfilter',
+    dynamic_scan = true,
+  }
+
+  oletools_conf = lua_util.override_defaults(oletools_conf, opts)
+
+  if not oletools_conf.prefix then
+    oletools_conf.prefix = 'rs_' .. oletools_conf.name .. '_'
+  end
+
+  if not oletools_conf.log_prefix then
+    if oletools_conf.name:lower() == oletools_conf.type:lower() then
+      oletools_conf.log_prefix = oletools_conf.name
+    else
+      oletools_conf.log_prefix = oletools_conf.name .. ' (' .. oletools_conf.type .. ')'
+    end
+  end
+
+  if not oletools_conf.servers then
+    rspamd_logger.errx(rspamd_config, 'no servers defined')
+
+    return nil
+  end
+
+  oletools_conf.upstreams = upstream_list.create(rspamd_config,
+      oletools_conf.servers,
+      oletools_conf.default_port)
+
+  if oletools_conf.upstreams then
+    lua_util.add_debug_alias('external_services', oletools_conf.name)
+    return oletools_conf
+  end
+
+  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
+      oletools_conf.servers)
+  return nil
+end
+
 local function oletools_check(task, content, digest, rule)
   local function oletools_check_uncached ()
     local upstream = rule.upstreams:get_upstream_round_robin()
@@ -260,62 +316,6 @@ local function oletools_check(task, content, digest, rule)
       oletools_check_uncached()
     end
   end
-end
-
-local function oletools_config(opts)
-
-  local oletools_conf = {
-    name = N,
-    scan_mime_parts = true,
-    scan_text_mime = false,
-    scan_image_mime = false,
-    default_port = 10050,
-    timeout = 15.0,
-    log_clean = false,
-    retransmits = 2,
-    cache_expire = 86400, -- expire redis in 1d
-    symbol = "OLETOOLS",
-    message = '${SCANNER}: Oletools threat message found: "${VIRUS}"',
-    detection_category = "office macro",
-    default_score = 1,
-    action = false,
-    extended = false,
-    symbol_type = 'postfilter',
-    dynamic_scan = true,
-  }
-
-  oletools_conf = lua_util.override_defaults(oletools_conf, opts)
-
-  if not oletools_conf.prefix then
-    oletools_conf.prefix = 'rs_' .. oletools_conf.name .. '_'
-  end
-
-  if not oletools_conf.log_prefix then
-    if oletools_conf.name:lower() == oletools_conf.type:lower() then
-      oletools_conf.log_prefix = oletools_conf.name
-    else
-      oletools_conf.log_prefix = oletools_conf.name .. ' (' .. oletools_conf.type .. ')'
-    end
-  end
-
-  if not oletools_conf.servers then
-    rspamd_logger.errx(rspamd_config, 'no servers defined')
-
-    return nil
-  end
-
-  oletools_conf.upstreams = upstream_list.create(rspamd_config,
-      oletools_conf.servers,
-      oletools_conf.default_port)
-
-  if oletools_conf.upstreams then
-    lua_util.add_debug_alias('external_services', oletools_conf.name)
-    return oletools_conf
-  end
-
-  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
-      oletools_conf.servers)
-  return nil
 end
 
 return {

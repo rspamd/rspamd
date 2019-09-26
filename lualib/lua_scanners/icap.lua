@@ -29,6 +29,64 @@ local common = require "lua_scanners/common"
 
 local N = 'icap'
 
+local function icap_config(opts)
+
+  local icap_conf = {
+    name = N,
+    scan_mime_parts = true,
+    scan_all_mime_parts = true,
+    scan_text_mime = false,
+    scan_image_mime = false,
+    scheme = "scan",
+    default_port = 4020,
+    timeout = 10.0,
+    log_clean = false,
+    retransmits = 2,
+    cache_expire = 7200, -- expire redis in one hour
+    message = '${SCANNER}: threat found with icap scanner: "${VIRUS}"',
+    detection_category = "virus",
+    default_score = 1,
+    action = false,
+  }
+
+  icap_conf = lua_util.override_defaults(icap_conf, opts)
+
+  if not icap_conf.prefix then
+    icap_conf.prefix = 'rs_' .. icap_conf.name .. '_'
+  end
+
+  if not icap_conf.log_prefix then
+    icap_conf.log_prefix = icap_conf.name .. ' (' .. icap_conf.type .. ')'
+  end
+
+  if not icap_conf.log_prefix then
+    if icap_conf.name:lower() == icap_conf.type:lower() then
+      icap_conf.log_prefix = icap_conf.name
+    else
+      icap_conf.log_prefix = icap_conf.name .. ' (' .. icap_conf.type .. ')'
+    end
+  end
+
+  if not icap_conf.servers then
+    rspamd_logger.errx(rspamd_config, 'no servers defined')
+
+    return nil
+  end
+
+  icap_conf.upstreams = upstream_list.create(rspamd_config,
+    icap_conf.servers,
+    icap_conf.default_port)
+
+  if icap_conf.upstreams then
+    lua_util.add_debug_alias('external_services', icap_conf.name)
+    return icap_conf
+  end
+
+  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
+    icap_conf.servers)
+  return nil
+end
+
 local function icap_check(task, content, digest, rule)
   local function icap_check_uncached ()
     local upstream = rule.upstreams:get_upstream_round_robin()
@@ -268,65 +326,6 @@ local function icap_check(task, content, digest, rule)
       icap_check_uncached()
     end
   end
-end
-
-
-local function icap_config(opts)
-
-  local icap_conf = {
-    name = N,
-    scan_mime_parts = true,
-    scan_all_mime_parts = true,
-    scan_text_mime = false,
-    scan_image_mime = false,
-    scheme = "scan",
-    default_port = 4020,
-    timeout = 10.0,
-    log_clean = false,
-    retransmits = 2,
-    cache_expire = 7200, -- expire redis in one hour
-    message = '${SCANNER}: threat found with icap scanner: "${VIRUS}"',
-    detection_category = "virus",
-    default_score = 1,
-    action = false,
-  }
-
-  icap_conf = lua_util.override_defaults(icap_conf, opts)
-
-  if not icap_conf.prefix then
-    icap_conf.prefix = 'rs_' .. icap_conf.name .. '_'
-  end
-
-  if not icap_conf.log_prefix then
-    icap_conf.log_prefix = icap_conf.name .. ' (' .. icap_conf.type .. ')'
-  end
-
-  if not icap_conf.log_prefix then
-    if icap_conf.name:lower() == icap_conf.type:lower() then
-      icap_conf.log_prefix = icap_conf.name
-    else
-      icap_conf.log_prefix = icap_conf.name .. ' (' .. icap_conf.type .. ')'
-    end
-  end
-
-  if not icap_conf.servers then
-    rspamd_logger.errx(rspamd_config, 'no servers defined')
-
-    return nil
-  end
-
-  icap_conf.upstreams = upstream_list.create(rspamd_config,
-    icap_conf.servers,
-    icap_conf.default_port)
-
-  if icap_conf.upstreams then
-    lua_util.add_debug_alias('external_services', icap_conf.name)
-    return icap_conf
-  end
-
-  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
-    icap_conf.servers)
-  return nil
 end
 
 return {

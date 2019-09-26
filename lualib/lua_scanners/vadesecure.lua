@@ -28,6 +28,129 @@ local common = require "lua_scanners/common"
 
 local N = 'vadesecure'
 
+local function vade_config(opts)
+
+  local vade_conf = {
+    name = N,
+    default_port = 23808,
+    url = '/api/v1/scan',
+    use_https = false,
+    timeout = 5.0,
+    log_clean = false,
+    retransmits = 1,
+    cache_expire = 7200, -- expire redis in 2h
+    message = '${SCANNER}: spam message found: "${VIRUS}"',
+    detection_category = "hash",
+    default_score = 1,
+    action = false,
+    log_spamcause = true,
+    symbol_fail = 'VADE_FAIL',
+    symbol = 'VADE_CHECK',
+    symbols = {
+      clean = {
+        symbol = 'VADE_CLEAN',
+        score = -0.5,
+        description = 'VadeSecure decided message to be clean'
+      },
+      spam = {
+        high = {
+          symbol = 'VADE_SPAM_HIGH',
+          score = 8.0,
+          description = 'VadeSecure decided message to be clearly spam'
+        },
+        medium = {
+          symbol = 'VADE_SPAM_MEDIUM',
+          score = 5.0,
+          description = 'VadeSecure decided message to be highly likely spam'
+        },
+        low = {
+          symbol = 'VADE_SPAM_LOW',
+          score = 2.0,
+          description = 'VadeSecure decided message to be likely spam'
+        },
+      },
+      malware = {
+        symbol = 'VADE_MALWARE',
+        score = 8.0,
+        description = 'VadeSecure decided message to be malware'
+      },
+      scam = {
+        symbol = 'VADE_SCAM',
+        score = 7.0,
+        description = 'VadeSecure decided message to be scam'
+      },
+      phishing = {
+        symbol = 'VADE_PHISHING',
+        score = 8.0,
+        description = 'VadeSecure decided message to be phishing'
+      },
+      commercial =  {
+        symbol = 'VADE_COMMERCIAL',
+        score = 0.0,
+        description = 'VadeSecure decided message to be commercial message'
+      },
+      community =  {
+        symbol = 'VADE_COMMUNITY',
+        score = 0.0,
+        description = 'VadeSecure decided message to be community message'
+      },
+      transactional =  {
+        symbol = 'VADE_TRANSACTIONAL',
+        score = 0.0,
+        description = 'VadeSecure decided message to be transactional message'
+      },
+      suspect = {
+        symbol = 'VADE_SUSPECT',
+        score = 3.0,
+        description = 'VadeSecure decided message to be suspicious message'
+      },
+      bounce = {
+        symbol = 'VADE_BOUNCE',
+        score = 0.0,
+        description = 'VadeSecure decided message to be bounce message'
+      },
+      other = 'VADE_OTHER',
+    }
+  }
+
+  vade_conf = lua_util.override_defaults(vade_conf, opts)
+
+  if not vade_conf.prefix then
+    vade_conf.prefix = 'rs_' .. vade_conf.name .. '_'
+  end
+
+  if not vade_conf.log_prefix then
+    if vade_conf.name:lower() == vade_conf.type:lower() then
+      vade_conf.log_prefix = vade_conf.name
+    else
+      vade_conf.log_prefix = vade_conf.name .. ' (' .. vade_conf.type .. ')'
+    end
+  end
+
+  if not vade_conf.servers and vade_conf.socket then
+    vade_conf.servers = vade_conf.socket
+  end
+
+  if not vade_conf.servers then
+    rspamd_logger.errx(rspamd_config, 'no servers defined')
+
+    return nil
+  end
+
+  vade_conf.upstreams = upstream_list.create(rspamd_config,
+      vade_conf.servers,
+      vade_conf.default_port)
+
+  if vade_conf.upstreams then
+    lua_util.add_debug_alias('external_services', vade_conf.name)
+    return vade_conf
+  end
+
+  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
+      vade_conf['servers'])
+  return nil
+end
+
 local function vade_check(task, content, digest, rule)
   local function vade_url(addr)
     local url
@@ -192,130 +315,6 @@ local function vade_check(task, content, digest, rule)
 
   request_data.callback = vade_callback
   http.request(request_data)
-end
-
-
-local function vade_config(opts)
-
-  local vade_conf = {
-    name = N,
-    default_port = 23808,
-    url = '/api/v1/scan',
-    use_https = false,
-    timeout = 5.0,
-    log_clean = false,
-    retransmits = 1,
-    cache_expire = 7200, -- expire redis in 2h
-    message = '${SCANNER}: spam message found: "${VIRUS}"',
-    detection_category = "hash",
-    default_score = 1,
-    action = false,
-    log_spamcause = true,
-    symbol_fail = 'VADE_FAIL',
-    symbol = 'VADE_CHECK',
-    symbols = {
-      clean = {
-        symbol = 'VADE_CLEAN',
-        score = -0.5,
-        description = 'VadeSecure decided message to be clean'
-      },
-      spam = {
-        high = {
-          symbol = 'VADE_SPAM_HIGH',
-          score = 8.0,
-          description = 'VadeSecure decided message to be clearly spam'
-        },
-        medium = {
-          symbol = 'VADE_SPAM_MEDIUM',
-          score = 5.0,
-          description = 'VadeSecure decided message to be highly likely spam'
-        },
-        low = {
-          symbol = 'VADE_SPAM_LOW',
-          score = 2.0,
-          description = 'VadeSecure decided message to be likely spam'
-        },
-      },
-      malware = {
-        symbol = 'VADE_MALWARE',
-        score = 8.0,
-        description = 'VadeSecure decided message to be malware'
-      },
-      scam = {
-        symbol = 'VADE_SCAM',
-        score = 7.0,
-        description = 'VadeSecure decided message to be scam'
-      },
-      phishing = {
-        symbol = 'VADE_PHISHING',
-        score = 8.0,
-        description = 'VadeSecure decided message to be phishing'
-      },
-      commercial =  {
-        symbol = 'VADE_COMMERCIAL',
-        score = 0.0,
-        description = 'VadeSecure decided message to be commercial message'
-      },
-      community =  {
-        symbol = 'VADE_COMMUNITY',
-        score = 0.0,
-        description = 'VadeSecure decided message to be community message'
-      },
-      transactional =  {
-        symbol = 'VADE_TRANSACTIONAL',
-        score = 0.0,
-        description = 'VadeSecure decided message to be transactional message'
-      },
-      suspect = {
-        symbol = 'VADE_SUSPECT',
-        score = 3.0,
-        description = 'VadeSecure decided message to be suspicious message'
-      },
-      bounce = {
-        symbol = 'VADE_BOUNCE',
-        score = 0.0,
-        description = 'VadeSecure decided message to be bounce message'
-      },
-      other = 'VADE_OTHER',
-    }
-  }
-
-  vade_conf = lua_util.override_defaults(vade_conf, opts)
-
-  if not vade_conf.prefix then
-    vade_conf.prefix = 'rs_' .. vade_conf.name .. '_'
-  end
-
-  if not vade_conf.log_prefix then
-    if vade_conf.name:lower() == vade_conf.type:lower() then
-      vade_conf.log_prefix = vade_conf.name
-    else
-      vade_conf.log_prefix = vade_conf.name .. ' (' .. vade_conf.type .. ')'
-    end
-  end
-
-  if not vade_conf.servers and vade_conf.socket then
-    vade_conf.servers = vade_conf.socket
-  end
-
-  if not vade_conf.servers then
-    rspamd_logger.errx(rspamd_config, 'no servers defined')
-
-    return nil
-  end
-
-  vade_conf.upstreams = upstream_list.create(rspamd_config,
-      vade_conf.servers,
-      vade_conf.default_port)
-
-  if vade_conf.upstreams then
-    lua_util.add_debug_alias('external_services', vade_conf.name)
-    return vade_conf
-  end
-
-  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
-      vade_conf['servers'])
-  return nil
 end
 
 return {
