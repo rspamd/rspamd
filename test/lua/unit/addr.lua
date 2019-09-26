@@ -6,7 +6,7 @@ context("Inet addr check functions", function()
   ffi.cdef[[
   typedef struct rspamd_inet_addr_s rspamd_inet_addr_t;
   bool rspamd_parse_inet_address (rspamd_inet_addr_t **target,
-    const char *src);
+    const char *src, size_t len);
   void rspamd_inet_address_free (rspamd_inet_addr_t *addr);
   ]]
 
@@ -35,7 +35,7 @@ context("Inet addr check functions", function()
   for i,c in ipairs(cases) do
     test("Create inet addr from string " .. c[1] .. '; expect ' .. tostring(c[2]), function()
       local ip = ffi.new("rspamd_inet_addr_t* [1]");
-      local res = ffi.C.rspamd_parse_inet_address(ip, c[1])
+      local res = ffi.C.rspamd_parse_inet_address(ip, c[1], #c[1])
       assert_equal(res, c[2], "Expect " .. tostring(c[2]) .. " while parsing " .. c[1])
       if res then
         ffi.C.rspamd_inet_address_free(ip[0])

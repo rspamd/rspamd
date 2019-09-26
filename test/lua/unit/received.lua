@@ -117,6 +117,11 @@ context("Received headers parser", function()
        by_hostname = 'mail01.someotherdomain.org',
      }
     },
+    {[[from example.com ([]) by example.com with ESMTP id 2019091111 ; Thu, 26 Sep 2019 11:19:07 +0200]],
+      {
+        by_hostname = 'example.com',
+      },
+    }
   }
 
   local task = ffi.C.rspamd_task_new(nil, nil)
