@@ -1266,8 +1266,6 @@ rspamd_symcache_destroy (struct rspamd_symcache *cache)
 	struct delayed_cache_condition *dcond;
 
 	if (cache != NULL) {
-		rspamd_symcache_save (cache);
-
 		if (cache->delayed_deps) {
 			cur = cache->delayed_deps;
 
