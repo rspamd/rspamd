@@ -270,7 +270,7 @@ rspamd_dns_server_init (struct upstream *up, guint idx, gpointer ud)
 
 	g_assert (serv != NULL);
 
-	elt = g_malloc0 (sizeof (*elt));
+	elt = rspamd_mempool_alloc0 (r->cfg->cfg_pool, sizeof (*elt));
 	elt->server = serv;
 	elt->lib_data = up;
 
