@@ -46,7 +46,10 @@ struct rspamd_dns_resolver {
  * Init DNS resolver, params are obtained from a config file or system file /etc/resolv.conf
  */
 struct rspamd_dns_resolver *rspamd_dns_resolver_init (rspamd_logger_t *logger,
-													  struct ev_loop *ev_base, struct rspamd_config *cfg);
+													  struct ev_loop *ev_base,
+													  struct rspamd_config *cfg);
+
+void rspamd_dns_resolver_deinit (struct rspamd_dns_resolver *resolver);
 
 struct rspamd_dns_request_ud;
 

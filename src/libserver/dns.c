@@ -642,6 +642,22 @@ rspamd_dns_resolver_init (rspamd_logger_t *logger,
 	return dns_resolver;
 }
 
+void
+rspamd_dns_resolver_deinit (struct rspamd_dns_resolver *resolver)
+{
+	if (resolver) {
+		if (resolver->r) {
+			rdns_resolver_release (resolver->r);
+		}
+
+		if (resolver->ups) {
+			rspamd_upstreams_destroy (resolver->ups);
+		}
+
+		g_free (resolver);
+	}
+}
+
 
 static struct rdns_upstream_elt*
 rspamd_dns_select_upstream (const char *name,
