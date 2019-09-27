@@ -927,17 +927,19 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 				bend ++;
 			}
 
-			if (*bend == '\r') {
-				bend ++;
+			if (bend < end) {
+				if (*bend == '\r') {
+					bend++;
 
-				/* \r\n */
-				if (*bend == '\n') {
-					bend ++;
+					/* \r\n */
+					if (*bend == '\n') {
+						bend++;
+					}
 				}
-			}
-			else {
-				/* \n */
-				bend ++;
+				else {
+					/* \n */
+					bend++;
+				}
 			}
 
 			b.boundary = p - st->start - 2;
