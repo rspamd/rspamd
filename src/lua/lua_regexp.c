@@ -588,12 +588,14 @@ lua_regexp_search (lua_State *L)
 			if (capture) {
 				g_array_free (captures, TRUE);
 			}
-
-			return 1;
+		}
+		else {
+			lua_pushnil (L);
 		}
 	}
-
-	lua_pushnil (L);
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }
@@ -644,11 +646,14 @@ lua_regexp_match (lua_State *L)
 			else {
 				lua_pushboolean (L, FALSE);
 			}
-			return 1;
+		}
+		else {
+			lua_pushboolean (L, FALSE);
 		}
 	}
-
-	lua_pushnil (L);
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }
@@ -689,13 +694,13 @@ lua_regexp_matchn (lua_State *L)
 		}
 
 		max_matches = lua_tointeger (L, 3);
+		matches = 0;
 
 		if (lua_gettop (L) == 4) {
 			raw = lua_toboolean (L, 4);
 		}
 
 		if (data && len > 0) {
-			matches = 0;
 
 			if (re->match_limit > 0) {
 				len = MIN (len, re->match_limit);
@@ -714,14 +719,14 @@ lua_regexp_matchn (lua_State *L)
 					break;
 				}
 			}
-
-			lua_pushinteger (L, matches);
-
-			return 1;
 		}
+
+		lua_pushinteger (L, matches);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnil (L);
 
 	return 1;
 }
@@ -824,6 +829,9 @@ lua_regexp_split (lua_State *L)
 			}
 			return 1;
 		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
 	lua_pushnil (L);
