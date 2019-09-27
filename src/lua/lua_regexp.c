@@ -543,7 +543,7 @@ lua_regexp_search (lua_State *L)
 			raw = lua_toboolean (L, 3);
 		}
 
-		if (data) {
+		if (data && len > 0) {
 			if (lua_gettop (L) >= 4) {
 				capture = TRUE;
 				captures = g_array_new (FALSE, TRUE,
@@ -633,7 +633,7 @@ lua_regexp_match (lua_State *L)
 			raw = lua_toboolean (L, 3);
 		}
 
-		if (data) {
+		if (data && len > 0) {
 			if (re->match_limit > 0) {
 				len = MIN (len, re->match_limit);
 			}
@@ -694,7 +694,7 @@ lua_regexp_matchn (lua_State *L)
 			raw = lua_toboolean (L, 4);
 		}
 
-		if (data) {
+		if (data && len > 0) {
 			matches = 0;
 
 			if (re->match_limit > 0) {
@@ -770,10 +770,11 @@ lua_regexp_split (lua_State *L)
 			len = MIN (len, re->match_limit);
 		}
 
-		if (data) {
+		if (data && len > 0) {
 			lua_newtable (L);
 			i = 0;
 			old_start = data;
+
 			while (rspamd_regexp_search (re->re, data, len, &start, &end, FALSE,
 					NULL)) {
 				if (start - old_start > 0) {

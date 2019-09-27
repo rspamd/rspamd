@@ -611,7 +611,7 @@ rspamd_multipattern_lookup (struct rspamd_multipattern *mp,
 
 	g_assert (mp != NULL);
 
-	if (mp->cnt == 0 || !mp->compiled) {
+	if (mp->cnt == 0 || !mp->compiled || len == 0) {
 		return 0;
 	}
 
