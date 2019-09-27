@@ -1137,15 +1137,17 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			lenvec = g_malloc (sizeof (*lenvec) * cnt);
 			g_hash_table_iter_init (&it, MESSAGE_FIELD (task, urls));
 			i = 0;
+			raw = FALSE;
 
 			while (g_hash_table_iter_next (&it, &k, &v)) {
 				url = v;
 				in = url->string;
 				len = url->urllen;
-				raw = FALSE;
 
-				scvec[i] = (guchar *)in;
-				lenvec[i++] = len;
+				if (len > 0 && !(url->flags & RSPAMD_URL_FLAG_IMAGE)) {
+					scvec[i] = (guchar *) in;
+					lenvec[i++] = len;
+				}
 			}
 
 			g_hash_table_iter_init (&it, MESSAGE_FIELD (task, emails));
@@ -1154,13 +1156,12 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				url = v;
 				in = url->string;
 				len = url->urllen;
-				raw = FALSE;
 
-				scvec[i] = (guchar *) in;
-				lenvec[i++] = len;
+				if (len > 0 && !(url->flags & RSPAMD_URL_FLAG_IMAGE)) {
+					scvec[i] = (guchar *) in;
+					lenvec[i++] = len;
+				}
 			}
-
-			g_assert (i == cnt);
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
 					task, scvec, lenvec, i, raw);
