@@ -87,7 +87,6 @@ main (int argc, char **argv)
 	g_test_add_func ("/rspamd/aio", rspamd_async_test_func);
 #endif
 	g_test_run ();
-	rspamd_regexp_library_finalize ();
 
 	return 0;
 }

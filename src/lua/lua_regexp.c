@@ -892,9 +892,13 @@ luaopen_regexp (lua_State * L)
 	rspamd_lua_new_class (L, "rspamd{regexp}", regexplib_m);
 	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_regexp", lua_load_regexp);
+}
 
-	if (regexp_static_pool == NULL) {
-		regexp_static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-				"regexp_lua_pool");
-	}
+RSPAMD_CONSTRUCTOR (lua_re_static_pool_ctor) {
+	regexp_static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+			"regexp_lua_pool");
+}
+
+RSPAMD_DESTRUCTOR (lua_re_static_pool_dtor) {
+	rspamd_mempool_delete (regexp_static_pool);
 }

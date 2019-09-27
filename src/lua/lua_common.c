@@ -64,6 +64,16 @@ lua_error_quark (void)
 KHASH_INIT (lua_class_set, const gchar *, bool, 0, rspamd_str_hash, rspamd_str_equal);
 khash_t (lua_class_set) *lua_classes = NULL;
 
+RSPAMD_CONSTRUCTOR (lua_classes_ctor)
+{
+	lua_classes = kh_init (lua_class_set);
+}
+
+RSPAMD_DESTRUCTOR (lua_classes_dtor)
+{
+	kh_destroy (lua_class_set, lua_classes);
+}
+
 /* Util functions */
 /**
  * Create new class and store metatable on top of the stack (must be popped if not needed)
@@ -79,10 +89,6 @@ rspamd_lua_new_class (lua_State * L,
 	void *class_ptr;
 	khiter_t k;
 	gint r, nmethods = 0;
-
-	if (lua_classes == NULL) {
-		lua_classes = kh_init (lua_class_set);
-	}
 
 	k = kh_put (lua_class_set, lua_classes, classname, &r);
 	class_ptr = RSPAMD_LIGHTUSERDATA_MASK (kh_key (lua_classes, k));
