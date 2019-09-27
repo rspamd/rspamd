@@ -619,8 +619,11 @@ end:
 	rspamd_http_context_free (rspamd_main->http_ctx);
 	rspamd_log_close (rspamd_main->logger, TRUE);
 	rspamd_url_deinit ();
-	g_free (rspamd_main);
 	g_ptr_array_free (all_commands, TRUE);
+	ev_loop_destroy (rspamd_main->event_loop);
+	g_hash_table_unref (ucl_vars);
+	rspamd_mempool_delete (rspamd_main->server_pool);
+	g_free (rspamd_main);
 
 	return retcode;
 }

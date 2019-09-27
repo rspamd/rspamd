@@ -84,6 +84,7 @@ struct rspamd_cryptobox_library_ctx {
  */
 struct rspamd_cryptobox_library_ctx *rspamd_cryptobox_init (void);
 
+void rspamd_cryptobox_deinit (struct rspamd_cryptobox_library_ctx *);
 /**
  * Generate new keypair
  * @param pk public key buffer

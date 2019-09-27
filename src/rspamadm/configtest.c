@@ -128,12 +128,16 @@ rspamadm_configtest (gint argc, gchar **argv, const struct rspamadm_command *cmd
 	g_option_context_free (context);
 
 	if (config == NULL) {
+		static gchar fbuf[PATH_MAX];
+
 		if ((confdir = g_hash_table_lookup (ucl_vars, "CONFDIR")) == NULL) {
 			confdir = RSPAMD_CONFDIR;
 		}
 
-		config = g_strdup_printf ("%s%c%s", confdir, G_DIR_SEPARATOR,
+		rspamd_snprintf (fbuf, sizeof (fbuf), "%s%c%s",
+				confdir, G_DIR_SEPARATOR,
 				"rspamd.conf");
+		config = fbuf;
 	}
 
 	pworker = &workers[0];

@@ -357,9 +357,10 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, gboolean termination, uid_t 
 		rspamd_log->opened = FALSE;
 	}
 
-	if (termination && rspamd_log->log_file) {
+	if (termination) {
 		g_free (rspamd_log->log_file);
 		rspamd_log->log_file = NULL;
+		g_free (rspamd_log);
 	}
 }
 
@@ -1445,6 +1446,15 @@ rspamd_logger_allocate_mod_bit (void)
 	}
 }
 
+RSPAMD_DESTRUCTOR (rspamd_debug_modules_dtor)
+{
+	if (log_modules) {
+		g_hash_table_unref (log_modules->modules);
+		g_free (log_modules->bitset);
+		g_free (log_modules);
+	}
+}
+
 guint
 rspamd_logger_add_debug_module (const gchar *mname)
 {
@@ -1455,9 +1465,13 @@ rspamd_logger_add_debug_module (const gchar *mname)
 	}
 
 	if (log_modules == NULL) {
+		/*
+		 * This is usually called from constructors, so we call init check
+		 * each time to avoid dependency issues between ctors calls
+		 */
 		log_modules = g_malloc0 (sizeof (*log_modules));
-		log_modules->modules = g_hash_table_new (rspamd_strcase_hash,
-				rspamd_strcase_equal);
+		log_modules->modules = g_hash_table_new_full (rspamd_strcase_hash,
+				rspamd_strcase_equal, g_free, g_free);
 		log_modules->bitset_allocated = 16;
 		log_modules->bitset_len = 0;
 		log_modules->bitset = g_malloc0 (log_modules->bitset_allocated);

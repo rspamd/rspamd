@@ -1055,6 +1055,7 @@ rspamd_regexp_cache_destroy (struct rspamd_regexp_cache *cache)
 		}
 #endif
 #endif
+		g_free (cache);
 	}
 }
 

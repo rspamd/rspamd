@@ -2573,6 +2573,8 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 			ZSTD_freeDStream (ctx->in_zstream);
 		}
 
+		rspamd_cryptobox_deinit (ctx->crypto_ctx);
+
 		g_free (ctx);
 	}
 }

@@ -311,6 +311,15 @@ rspamd_cryptobox_init (void)
 }
 
 void
+rspamd_cryptobox_deinit (struct rspamd_cryptobox_library_ctx *ctx)
+{
+	if (ctx) {
+		g_free (ctx->cpu_extensions);
+		g_free (ctx);
+	}
+}
+
+void
 rspamd_cryptobox_keypair (rspamd_pk_t pk, rspamd_sk_t sk,
 		enum rspamd_cryptobox_mode mode)
 {

@@ -668,6 +668,9 @@ start_worker (struct rspamd_worker *worker)
 
 	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->event_loop,
 			ctx->cfg->ups_ctx);
+	rspamd_mempool_add_destructor (ctx->cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_http_context_free,
+			ctx->http_ctx);
 	rspamd_worker_init_scanner (worker, ctx->event_loop, ctx->resolver,
 			&ctx->lang_det);
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->event_loop,
@@ -677,9 +680,7 @@ start_worker (struct rspamd_worker *worker)
 	rspamd_worker_block_signals ();
 
 	rspamd_stat_close ();
-	struct rspamd_http_context *http_ctx = ctx->http_ctx;
 	REF_RELEASE (ctx->cfg);
-	rspamd_http_context_free (http_ctx);
 	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);

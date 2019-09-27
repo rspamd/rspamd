@@ -124,10 +124,12 @@ struct rspamd_config *
 rspamd_config_new (enum rspamd_config_init_flags flags)
 {
 	struct rspamd_config *cfg;
+	rspamd_mempool_t *pool;
 
-	cfg = g_malloc0 (sizeof (*cfg));
+	pool = rspamd_mempool_new (8 * 1024 * 1024, "cfg");
+	cfg = rspamd_mempool_alloc0 (pool, sizeof (*cfg));
 	/* Allocate larger pool for cfg */
-	cfg->cfg_pool = rspamd_mempool_new (8 * 1024 * 1024, "cfg");
+	cfg->cfg_pool = pool;
 	cfg->dns_timeout = 1.0;
 	cfg->dns_retransmits = 5;
 	/* 16 sockets per DNS server */
@@ -311,7 +313,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 
 	HASH_CLEAR (hh, cfg->actions);
 
-	rspamd_mempool_delete (cfg->cfg_pool);
+	rspamd_mempool_destructors_enforce (cfg->cfg_pool);
 
 	if (cfg->checksum) {
 		g_free (cfg->checksum);
@@ -324,7 +326,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 		g_free (lp);
 	}
 
-	g_free (cfg);
+	rspamd_mempool_delete (cfg->cfg_pool);
 }
 
 const ucl_object_t *
