@@ -616,6 +616,7 @@ main (gint argc, gchar **argv, gchar **env)
 end:
 	rspamd_dns_resolver_deinit (resolver);
 	REF_RELEASE (rspamd_main->cfg);
+	rspamd_http_context_free (rspamd_main->http_ctx);
 	rspamd_log_close (rspamd_main->logger, TRUE);
 	rspamd_url_deinit ();
 	g_free (rspamd_main);
