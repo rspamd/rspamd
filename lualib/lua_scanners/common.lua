@@ -207,7 +207,7 @@ local function check_cache(task, digest, rule, fn)
       if err then
         rspamd_logger.errx(task, 'got error checking cache: %s', err)
       end
-      fn()
+      return true
     end
   end
 

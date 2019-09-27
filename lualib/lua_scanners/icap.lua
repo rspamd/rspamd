@@ -243,20 +243,29 @@ local function icap_check(task, content, digest, rule)
             table.insert(threat_string, icap_headers['X-Virus-ID'])
           end
         elseif icap_headers['X-FSecure-Scan-Result'] ~= nil and icap_headers['X-FSecure-Scan-Result'] ~= "clean" then
+
+          local infected_filename = ""
+          local infection_name = "-unknown-"
+
+          if icap_headers['X-FSecure-Infected-Filename'] ~= nil then
+            infected_filename = string.gsub(icap_headers['X-FSecure-Infected-Filename'], '[%s"]', '')
+          end
+          if icap_headers['X-FSecure-Infection-Name'] ~= nil then
+            infection_name = string.gsub(icap_headers['X-FSecure-Infection-Name'], '[%s"]', '')
+          end
+
           lua_util.debugm(rule.name, task,
               '%s: icap X-FSecure-Infection-Name (X-FSecure-Infected-Filename): %s (%s)',
-              rule.log_prefix, string.gsub(icap_headers['X-FSecure-Infection-Name'], '[%s"]', ''),
-              string.gsub(icap_headers['X-FSecure-Infected-Filename:'], '[%s"]', ''))
+              rule.log_prefix, infection_name, infected_filename)
 
-          if string.find(icap_headers['X-FSecure-Infection-Name'], ', ') then
-            local vnames = rspamd_str_split(string.gsub(icap_headers['X-FSecure-Infection-Name'], '[%s"]', '')
-              , ',') or {}
+          if string.find(infection_name, ', ') then
+            local vnames = rspamd_str_split(infection_name, ',') or {}
 
             for _,v in ipairs(vnames) do
               table.insert(threat_string, v)
             end
           else
-            table.insert(threat_string, string.gsub(icap_headers['X-FSecure-Infection-Name'], '[%s"]', ''))
+            table.insert(threat_string, infection_name)
           end
         end
         if #threat_string > 0 then
