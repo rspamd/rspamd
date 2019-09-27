@@ -1,0 +1,17 @@
+Content-Type: multipart/mixed; boundary="===============3209040583106423479=="
+MIME-Version: 1.0
+From: test@example.org
+To: test@example.org
+Date: Thu, 26 Sep 2019 15:52:32 -0000
+Subject: Test message
+Message-ID: <156951315267.43830.14912869070271436609@example.org>
+
+--===============3209040583106423479==
+Content-Type: image/gif
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="Transparent.gif"
+
+R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7
+
+--===============3209040583106423479==
