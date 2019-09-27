@@ -235,27 +235,27 @@ local function apply_addr_filter(task, filter, input, rule)
   if filter == 'email:addr' or filter == 'email' then
     local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
-      return addr[1]['addr']
+      return fun.totable(fun.map(function(a) return a.addr end, addr))
     end
   elseif filter == 'email:user' then
     local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
-      return addr[1]['user']
+      return fun.totable(fun.map(function(a) return a.user end, addr))
     end
   elseif filter == 'email:domain' then
     local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
-      return addr[1]['domain']
+      return fun.totable(fun.map(function(a) return a.domain end, addr))
     end
   elseif filter == 'email:domain:tld' then
     local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
-      return util.get_tld(addr[1]['domain'])
+      return fun.totable(fun.map(function(a) return util.get_tld(a.domain) end, addr))
     end
   elseif filter == 'email:name' then
     local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
-      return addr[1]['name']
+      return fun.totable(fun.map(function(a) return a.name end, addr))
     end
   elseif filter == 'ip_addr' then
     local ip_addr = rspamd_ip.from_string(input)
@@ -637,7 +637,11 @@ local function multimap_callback(task, rule)
       end
     end
 
-    match_element(r, value, rule_callback)
+    if type(value) == 'table' then
+      fun.each(function(elt) match_element(r, elt, rule_callback) end, value)
+    else
+      match_element(r, value, rule_callback)
+    end
   end
 
   -- Match list of values according to the field
