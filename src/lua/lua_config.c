@@ -4157,7 +4157,12 @@ lua_config_init_subsystem (lua_State *L)
 				rspamd_init_filters (cfg, FALSE);
 			}
 			else if (strcmp (parts[i], "langdet") == 0) {
-				cfg->lang_det = rspamd_language_detector_init (cfg);
+				if (!cfg->lang_det) {
+					cfg->lang_det = rspamd_language_detector_init (cfg);
+					rspamd_mempool_add_destructor (cfg->cfg_pool,
+							(rspamd_mempool_destruct_t) rspamd_language_detector_unref,
+							cfg->lang_det);
+				}
 			}
 			else if (strcmp (parts[i], "stat") == 0) {
 				rspamd_stat_init (cfg, NULL);

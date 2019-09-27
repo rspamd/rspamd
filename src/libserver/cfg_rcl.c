@@ -3932,6 +3932,9 @@ rspamd_config_read (struct rspamd_config *cfg,
 	}
 
 	cfg->lang_det = rspamd_language_detector_init (cfg);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_language_detector_unref,
+			cfg->lang_det);
 
 	return TRUE;
 }

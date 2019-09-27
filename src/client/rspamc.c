@@ -411,6 +411,7 @@ read_cmd_line (gint *argc, gchar ***argv)
 	/* Parse options */
 	if (!g_option_context_parse (context, argc, argv, &error)) {
 		fprintf (stderr, "option parsing failed: %s\n", error->message);
+		g_option_context_free (context);
 		exit (EXIT_FAILURE);
 	}
 
@@ -418,6 +419,7 @@ read_cmd_line (gint *argc, gchar ***argv)
 		raw = TRUE;
 	}
 	/* Argc and argv are shifted after this function */
+	g_option_context_free (context);
 }
 
 static gboolean
