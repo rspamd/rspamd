@@ -185,8 +185,11 @@ rspamadm_control (gint argc, gchar **argv, const struct rspamadm_command *_cmd)
 	if (!g_option_context_parse (context, &argc, &argv, &error)) {
 		rspamd_fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
+		g_option_context_free (context);
 		exit (1);
 	}
+
+	g_option_context_free (context);
 
 	if (argc <= 1) {
 		rspamd_fprintf (stderr, "command required\n");

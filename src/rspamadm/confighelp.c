@@ -216,9 +216,11 @@ rspamadm_confighelp (gint argc, gchar **argv, const struct rspamadm_command *cmd
 	if (!g_option_context_parse (context, &argc, &argv, &error)) {
 		rspamd_fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
+		g_option_context_free (context);
 		exit (1);
 	}
 
+	g_option_context_free (context);
 	pworker = &workers[0];
 	while (*pworker) {
 		/* Init string quarks */

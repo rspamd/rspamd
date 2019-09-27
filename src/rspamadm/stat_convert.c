@@ -128,8 +128,11 @@ rspamadm_statconvert (gint argc, gchar **argv, const struct rspamadm_command *cm
 	if (!g_option_context_parse (context, &argc, &argv, &error)) {
 		rspamd_fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
+		g_option_context_free (context);
 		exit (1);
 	}
+
+	g_option_context_free (context);
 
 	if (config_file) {
 		/* Load config file, assuming that it has all information required */
