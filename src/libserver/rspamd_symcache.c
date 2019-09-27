@@ -942,7 +942,7 @@ rspamd_symcache_save_items (struct rspamd_symcache *cache, const gchar *name)
 				return TRUE;
 			}
 
-			msg_info_cache ("cannot open file %s, error %d, %s", path,
+			msg_err_cache ("cannot open file %s, error %d, %s", path,
 					errno, strerror (errno));
 			return FALSE;
 		}
@@ -957,7 +957,7 @@ rspamd_symcache_save_items (struct rspamd_symcache *cache, const gchar *name)
 			sizeof (rspamd_symcache_magic));
 
 	if (write (fd, &hdr, sizeof (hdr)) == -1) {
-		msg_info_cache ("cannot write to file %s, error %d, %s", path,
+		msg_err_cache ("cannot write to file %s, error %d, %s", path,
 				errno, strerror (errno));
 		rspamd_file_unlock (fd, FALSE);
 		close (fd);
@@ -1000,7 +1000,7 @@ rspamd_symcache_save_items (struct rspamd_symcache *cache, const gchar *name)
 	close (fd);
 
 	if (rename (path, name) == -1) {
-		msg_info_cache ("cannot rename %s -> %s, error %d, %s", path, name,
+		msg_err_cache ("cannot rename %s -> %s, error %d, %s", path, name,
 				errno, strerror (errno));
 		(void)unlink (path);
 		ret = FALSE;
@@ -1251,8 +1251,8 @@ rspamd_symcache_save (struct rspamd_symcache *cache)
 			/* Try to sync values to the disk */
 			if (!rspamd_symcache_save_items (cache,
 					cache->cfg->cache_filename)) {
-				msg_err_cache ("cannot save cache data to %s",
-						cache->cfg->cache_filename);
+				msg_err_cache ("cannot save cache data to %s: %s",
+						cache->cfg->cache_filename, strerror (errno));
 			}
 		}
 	}
