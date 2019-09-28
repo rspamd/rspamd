@@ -244,9 +244,9 @@ local function milter_headers(task)
       string.format('%.2f', common['metric_score'][1]), ' / ', string.format('%.2f', common['metric_score'][2]), ']'
     }))
     for _, s in ipairs(common.symbols) do
-      if not s.options then s.options = {} end
+      local opt = s.options and table.concat({'[', table.concat(s.options, ','), ']'}) or ''
       table.insert(buf, table.concat({
-        ' ', s.name, '(', string.format('%.2f', s.score), ')[', table.concat(s.options, ','), ']',
+        ' ', s.name, '(', string.format('%.2f', s.score), ')', opt,
       }))
     end
     add_header('x-spamd-result', table.concat(buf, '; '), ';')
