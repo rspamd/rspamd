@@ -1469,7 +1469,8 @@ check:
 	/* Try address */
 	rspamd_inet_addr_t *addr = NULL;
 
-	if (rspamd_parse_inet_address (&addr, data->host, strlen (data->host))) {
+	if (rspamd_parse_inet_address (&addr, data->host,
+			strlen (data->host), RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 		rspamd_inet_address_set_port (addr, cbd->data->port);
 		g_ptr_array_add (cbd->addrs, (void *)addr);
 		cbd->conn = rspamd_http_connection_new_client (

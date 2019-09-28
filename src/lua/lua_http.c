@@ -984,7 +984,8 @@ lua_http_request (lua_State *L)
 		cbd->session = session;
 	}
 
-	if (rspamd_parse_inet_address (&cbd->addr, msg->host->str, msg->host->len)) {
+	if (rspamd_parse_inet_address (&cbd->addr,
+			msg->host->str, msg->host->len, RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 		/* Host is numeric IP, no need to resolve */
 		gboolean ret;
 

@@ -32,6 +32,9 @@ struct rspamd_mime_headers_table {
 	ref_entry_t ref;
 };
 
+#define RSPAMD_INET_ADDRESS_PARSE_RECEIVED \
+	(RSPAMD_INET_ADDRESS_PARSE_REMOTE|RSPAMD_INET_ADDRESS_PARSE_NO_UNIX)
+
 static void
 rspamd_mime_header_check_special (struct rspamd_task *task,
 		struct rspamd_mime_header *rh)
@@ -1320,7 +1323,8 @@ rspamd_smtp_received_process_host_tcpinfo (struct rspamd_task *task,
 		if (brace_pos) {
 			addr = rspamd_parse_inet_address_pool (data + 1,
 					brace_pos - data - 1,
-					task->task_pool);
+					task->task_pool,
+					RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 
 			if (addr) {
 				rh->addr = addr;
@@ -1334,7 +1338,7 @@ rspamd_smtp_received_process_host_tcpinfo (struct rspamd_task *task,
 		if (g_ascii_isxdigit (data[0])) {
 			/* Try to parse IP address */
 			addr = rspamd_parse_inet_address_pool (data,
-					len, task->task_pool);
+					len, task->task_pool, RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 			if (addr) {
 				rh->addr = addr;
 				rh->real_ip = rspamd_mempool_strdup (task->task_pool,
@@ -1355,7 +1359,8 @@ rspamd_smtp_received_process_host_tcpinfo (struct rspamd_task *task,
 				if (ebrace_pos) {
 					addr = rspamd_parse_inet_address_pool (obrace_pos + 1,
 							ebrace_pos - obrace_pos - 1,
-							task->task_pool);
+							task->task_pool,
+							RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 
 					if (addr) {
 						rh->addr = addr;
@@ -1420,7 +1425,8 @@ rspamd_smtp_received_process_from (struct rspamd_task *task,
 				if (brace_pos) {
 					addr = rspamd_parse_inet_address_pool (rpart->data + 1,
 							brace_pos - rpart->data - 1,
-							task->task_pool);
+							task->task_pool,
+							RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 
 					if (addr) {
 						seen_ip_in_data = TRUE;
@@ -1434,7 +1440,8 @@ rspamd_smtp_received_process_from (struct rspamd_task *task,
 				/* Try to parse IP address */
 				rspamd_inet_addr_t *addr;
 				addr = rspamd_parse_inet_address_pool (rpart->data,
-						rpart->dlen, task->task_pool);
+						rpart->dlen, task->task_pool,
+						RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 				if (addr) {
 					seen_ip_in_data = TRUE;
 					rh->addr = addr;

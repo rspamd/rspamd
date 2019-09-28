@@ -300,7 +300,8 @@ rspamd_dns_resolv_conf_on_server (struct rdns_resolver *resolver,
 	msg_info_config ("parsed nameserver %s from resolv.conf", name);
 
 	/* Try to open a connection */
-	if (!rspamd_parse_inet_address (&addr, name, strlen (name))) {
+	if (!rspamd_parse_inet_address (&addr, name, strlen (name),
+			RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 		msg_warn_config ("cannot parse nameserver address %s", name);
 
 		return FALSE;

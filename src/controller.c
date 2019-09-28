@@ -434,7 +434,8 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 			comma = hdr->begin;
 		}
 		if (rspamd_parse_inet_address (&addr, comma,
-				(hdr->begin + hdr->len) - comma)) {
+				(hdr->begin + hdr->len) - comma,
+				RSPAMD_INET_ADDRESS_PARSE_NO_UNIX)) {
 			/* We have addr now, so check if it is still trusted */
 			if (ctx->secure_map &&
 					rspamd_match_radix_map_addr (ctx->secure_map, addr) != NULL) {
@@ -463,7 +464,8 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 		hdr = rspamd_http_message_find_header (msg, alt_hdr_name);
 
 		if (hdr) {
-			if (rspamd_parse_inet_address (&addr, hdr->begin, hdr->len)) {
+			if (rspamd_parse_inet_address (&addr, hdr->begin, hdr->len,
+					RSPAMD_INET_ADDRESS_PARSE_NO_UNIX)) {
 				/* We have addr now, so check if it is still trusted */
 				if (ctx->secure_map &&
 						rspamd_match_radix_map_addr (ctx->secure_map, addr) != NULL) {
