@@ -339,6 +339,12 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target,
 		if (tokens[0] == NULL) {
 			return FALSE;
 		}
+
+		rspamd_strlcpy (addr->u.un->addr.sun_path, tokens[0],
+				sizeof (addr->u.un->addr.sun_path));
+#if defined(FREEBSD) || defined(__APPLE__)
+		addr->u.un->addr.sun_len = SUN_LEN (&addr->u.un->addr);
+#endif
 	}
 	else {
 		rspamd_strlcpy (addr->u.un->addr.sun_path, src,
