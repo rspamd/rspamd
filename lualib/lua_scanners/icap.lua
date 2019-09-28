@@ -104,7 +104,7 @@ local function icap_check(task, content, digest, rule)
     -- Build the icap queries
     local options_request = {
       "OPTIONS icap://" .. addr:to_string() .. ":" .. addr:get_port() .. "/" .. rule.scheme .. " ICAP/1.0\r\n",
-      "Host:" .. addr:to_string() .. "\r\n",
+      "Host: " .. addr:to_string() .. "\r\n",
       "User-Agent: Rspamd\r\n",
       "Encapsulated: null-body=0\r\n\r\n",
     }
@@ -284,11 +284,11 @@ local function icap_check(task, content, digest, rule)
           local result = tostring(data)
           conn:close()
 
-          local icap_headers = icap_result_header_table(result)
+          local icap_headers = icap_result_header_table(result) or {}
           -- Find ICAP/1.x 2xx response
-          if string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
+          if icap_headers.icap ~= nil and string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
             icap_parse_result(icap_headers)
-          elseif string.find(icap_headers.icap, 'ICAP%/1%.. [45]%d%d') then
+          elseif icap_headers.icap ~= nil and string.find(icap_headers.icap, 'ICAP%/1%.. [45]%d%d') then
             -- Find ICAP/1.x 5/4xx response
             --[[
             Symantec String:
@@ -302,7 +302,7 @@ local function icap_check(task, content, digest, rule)
           else
             rspamd_logger.errx(task, '%s: unhandled response |%s|',
               rule.log_prefix, string.gsub(result, "\r\n", ", "))
-            common.yield_result(task, rule, 'unhandled icap response: ' .. icap_headers.icap, 0.0, 'fail')
+            common.yield_result(task, rule, 'unhandled icap response: ' .. icap_headers.icap or "-", 0.0, 'fail')
           end
         end
       end
@@ -321,7 +321,7 @@ local function icap_check(task, content, digest, rule)
         else
           local icap_headers = icap_result_header_table(tostring(data))
 
-          if string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
+          if icap_headers.icap ~= nil and string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
             if icap_headers['Methods'] ~= nil and string.find(icap_headers['Methods'], 'RESPMOD') then
               if icap_headers['Allow'] ~= nil and string.find(icap_headers['Allow'], '204') then
                 add_respond_header('Allow', '204')
@@ -341,6 +341,7 @@ local function icap_check(task, content, digest, rule)
               end
 
               conn:add_write(icap_w_respond_cb, get_respond_query())
+
             else
               rspamd_logger.errx(task, '%s: RESPMOD method not advertised: Methods: %s',
                 rule.log_prefix, icap_headers['Methods'])
@@ -348,7 +349,7 @@ local function icap_check(task, content, digest, rule)
             end
           else
             rspamd_logger.errx(task, '%s: OPTIONS query failed: %s',
-              rule.log_prefix, icap_headers.icap)
+              rule.log_prefix, icap_headers.icap or "-")
             common.yield_result(task, rule, 'OPTIONS query failed', 0.0, 'fail')
           end
         end
