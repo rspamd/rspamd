@@ -564,7 +564,8 @@ add_options (GQueue *opts)
 	if (ip != NULL) {
 		rspamd_inet_addr_t *addr = NULL;
 
-		if (!rspamd_parse_inet_address (&addr, ip, strlen (ip))) {
+		if (!rspamd_parse_inet_address (&addr, ip, strlen (ip),
+				RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 			/* Try to resolve */
 			struct addrinfo hints, *res, *cur;
 			gint r;

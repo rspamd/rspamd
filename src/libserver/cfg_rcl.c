@@ -3254,13 +3254,15 @@ rspamd_rcl_parse_struct_addr (rspamd_mempool_t *pool,
 	struct rspamd_rcl_struct_parser *pd = ud;
 	rspamd_inet_addr_t **target;
 	const gchar *val;
+	gsize size;
 
 	target = (rspamd_inet_addr_t **)(((gchar *)pd->user_struct) + pd->offset);
 
 	if (ucl_object_type (obj) == UCL_STRING) {
-		val = ucl_object_tostring (obj);
+		val = ucl_object_tolstring (obj, &size);
 
-		if (!rspamd_parse_inet_address (target, val, strlen (val))) {
+		if (!rspamd_parse_inet_address (target, val, size,
+				RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 			g_set_error (err,
 				CFG_RCL_ERROR,
 				EINVAL,

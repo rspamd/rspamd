@@ -545,7 +545,8 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			case 'I':
 				IF_HEADER (IP_ADDR_HEADER) {
 					if (!rspamd_parse_inet_address (&task->from_addr,
-							hv_tok->begin, hv_tok->len)) {
+							hv_tok->begin, hv_tok->len,
+							RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 						msg_err_protocol ("bad ip header: '%T'", hv_tok);
 					}
 					else {

@@ -1323,7 +1323,8 @@ main (gint argc, gchar **argv, gchar **env)
 	if (rspamd_main->cfg->control_socket_path) {
 		if (!rspamd_parse_inet_address (&control_addr,
 				rspamd_main->cfg->control_socket_path,
-				strlen (rspamd_main->cfg->control_socket_path))) {
+				strlen (rspamd_main->cfg->control_socket_path),
+				RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 			msg_err_main ("cannot parse inet address %s",
 					rspamd_main->cfg->control_socket_path);
 		}

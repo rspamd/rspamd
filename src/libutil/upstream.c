@@ -788,7 +788,8 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups, const gchar *str,
 		break;
 	case RSPAMD_UPSTREAM_PARSE_NAMESERVER:
 		addrs = g_ptr_array_sized_new (1);
-		if (rspamd_parse_inet_address (&addr, str, strlen (str))) {
+		if (rspamd_parse_inet_address (&addr, str, strlen (str),
+				RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 			if (ups->ctx) {
 				upstream->name = rspamd_mempool_strdup (ups->ctx->pool, str);
 			}

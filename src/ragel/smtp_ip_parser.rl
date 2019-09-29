@@ -48,7 +48,8 @@ rspamd_parse_smtp_ip (const char *data, size_t len, rspamd_mempool_t *pool)
   %% write exec;
 
   if (ip_start && ip_end && ip_end > ip_start) {
-    return rspamd_parse_inet_address_pool (ip_start, ip_end - ip_start, pool);
+    return rspamd_parse_inet_address_pool (ip_start, ip_end - ip_start, pool,
+    		RSPAMD_INET_ADDRESS_PARSE_NO_UNIX|RSPAMD_INET_ADDRESS_PARSE_REMOTE);
   }
 
   return NULL;

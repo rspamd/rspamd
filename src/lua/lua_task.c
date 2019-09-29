@@ -3867,7 +3867,8 @@ lua_task_set_from_ip (lua_State *L)
 	else {
 		if (!rspamd_parse_inet_address (&addr,
 				ip_str,
-				len)) {
+				len,
+				RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 			msg_warn_task ("cannot get IP from received header: '%s'",
 					ip_str);
 		}

@@ -1287,7 +1287,8 @@ rspamd_message_parse (struct rspamd_task *task)
 		if (recv->real_ip) {
 			if (!rspamd_parse_inet_address (&task->from_addr,
 					recv->real_ip,
-					strlen (recv->real_ip))) {
+					strlen (recv->real_ip),
+					RSPAMD_INET_ADDRESS_PARSE_NO_UNIX)) {
 				msg_warn_task ("cannot get IP from received header: '%s'",
 						recv->real_ip);
 				task->from_addr = NULL;
