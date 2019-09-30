@@ -589,7 +589,7 @@ local function gen_rbl_callback(rule)
 
     for _,email in ipairs(emails) do
       local email_tbl = {
-        domain = email:get_tld(),
+        domain = (rule.emails_domainonly and email:get_tld()) or email:get_host(),
         user = email:get_user(),
         addr = tostring(email),
       }
