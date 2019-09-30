@@ -281,7 +281,7 @@ rspamadm_exec_input (lua_State *L, const gchar *input)
 				rspamd_printf ("local function: %d\n", cbref);
 			} else {
 				memset (&tr, 0, sizeof (tr));
-				lua_logger_out_type (L, i, outbuf, sizeof (outbuf), &tr,
+				lua_logger_out_type (L, i, outbuf, sizeof (outbuf) - 1, &tr,
 						LUA_ESCAPE_UNPRINTABLE);
 				rspamd_printf ("%s\n", outbuf);
 			}
