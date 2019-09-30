@@ -316,11 +316,13 @@ local function emails_section_convert(cfg, section)
       if k == 'domain_only' then k = 'emails_domainonly' end
       if k == 'delimiter' then k = 'emails_delimiter' end
       if k == 'skip_body' then
+        skip = true
         if v then
           -- Hack
           converted.emails = false
           converted.replyto = true
-          skip = true
+        else
+          converted.emails = true
         end
       end
       if k == 'expect_ip' then
