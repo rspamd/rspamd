@@ -208,6 +208,8 @@ make_dns_request_task_common (struct rspamd_task *task,
 		if (!forced && task->dns_requests >= task->cfg->dns_max_requests) {
 			msg_info_task ("stop resolving on reaching %ud requests",
 					task->dns_requests);
+
+			return FALSE;
 		}
 
 		return TRUE;

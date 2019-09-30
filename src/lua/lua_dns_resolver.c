@@ -486,7 +486,11 @@ lua_dns_resolver_resolve_common (lua_State *L,
 				lua_pushboolean (L, TRUE);
 			}
 			else {
-				lua_pushnil (L);
+				if (item) {
+					rspamd_symcache_item_async_dec_check (task, item, M);
+				}
+
+				goto err;
 			}
 
 			if (item) {
@@ -504,6 +508,11 @@ err:
 		/* Free resources */
 		g_free (cbdata->to_resolve);
 		g_free (cbdata->user_str);
+	}
+
+	/* Callback is not called in this case */
+	if (cbdata->cbref != -1) {
+		luaL_unref (L, LUA_REGISTRYINDEX, cbdata->cbref);
 	}
 
 	lua_pushnil (L);
