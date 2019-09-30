@@ -103,6 +103,10 @@ EMAILBL full adress & domain only
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
 
+EMAILBL full subdomain adress
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emailbltext2.eml
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
+
 EMAILBL REPLY TO full adress
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replyto.eml
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
@@ -112,6 +116,11 @@ EMAILBL REPLY TO domain only
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replyto2.eml
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
   Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
+
+EMAILBL REPLY TO full subdomain adress
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replytosubdomain.eml
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
+  Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY ( 
 
 
 *** Keywords ***
