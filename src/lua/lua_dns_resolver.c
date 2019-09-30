@@ -477,7 +477,6 @@ lua_dns_resolver_resolve_common (lua_State *L,
 			if (ret) {
 				cbdata->s = session;
 
-
 				if (item) {
 					cbdata->item = item;
 					rspamd_symcache_item_async_inc (task, item, M);
