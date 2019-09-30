@@ -239,9 +239,8 @@ local function surbl_section_convert(cfg, section)
   local wl = section.whitelist
   for name,value in pairs(section.rules or {}) do
     if rbl_section[name] then
-      logger.warnx(rspamd_config, 'conflicting names in surbl and rbl rules: %s, ignore rbl rule!',
+      logger.warnx(rspamd_config, 'conflicting names in surbl and rbl rules: %s, prefer surbl rule!',
           name)
-      rbl_section[name] = {}
     end
     local converted = {
       urls = true,
@@ -284,7 +283,7 @@ local function surbl_section_convert(cfg, section)
         converted[k] = lua_util.deepcopy(v)
       end
     end
-    rbl_section[name] = converted
+    rbl_section[name] = lua_util.override_defaults(rbl_section[name], converted)
   end
 end
 
@@ -294,9 +293,8 @@ local function emails_section_convert(cfg, section)
   local wl = section.whitelist
   for name,value in pairs(section.rules or {}) do
     if rbl_section[name] then
-      logger.warnx(rspamd_config, 'conflicting names in emails and rbl rules: %s, ignore rbl rule!',
+      logger.warnx(rspamd_config, 'conflicting names in emails and rbl rules: %s, prefer emails rule!',
           name)
-      rbl_section[name] = {}
     end
     local converted = {
       emails = true,
@@ -338,7 +336,7 @@ local function emails_section_convert(cfg, section)
         converted[k] = lua_util.deepcopy(v)
       end
     end
-    rbl_section[name] = converted
+    rbl_section[name] = lua_util.override_defaults(rbl_section[name], converted)
   end
 end
 
