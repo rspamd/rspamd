@@ -1017,6 +1017,7 @@ local default_options = {
   ['default_no_ip'] = false,
   ['default_images'] = false,
   ['default_replyto'] = false,
+  ['default_dkim_match_from'] = false,
 }
 
 opts = lua_util.override_defaults(default_options, opts)
@@ -1048,7 +1049,7 @@ local return_bits_schema = ts.map_of(
     )
 )
 
-local rule_schema = ts.shape({
+local rule_schema_tbl = {
   enabled = ts.boolean:is_optional(),
   disabled = ts.boolean:is_optional(),
   rbl = ts.string,
@@ -1070,11 +1071,15 @@ local rule_schema = ts.shape({
   requests_limit = (ts.integer + ts.string / tonumber):is_optional(),
   process_script = ts.string:is_optional(),
   emails_delimiter = ts.string:is_optional(),
+  ignore_defaults = ts.boolean:is_optional(),
   symbols_prefixes = ts.map_of(ts.string, ts.string):is_optional(),
-}, {
-  -- Covers boolean defaults
-  extra_fields = ts.map_of(ts.string, ts.boolean)
-})
+}
+-- Add default boolean flags to the schema
+for def_k,_ in pairs(default_options) do
+  rule_schema_tbl[def_k:sub(#('default_') + 1)] = ts.boolean:is_optional()
+end
+
+local rule_schema = ts.shape(rule_schema_tbl)
 
 for key,rbl in pairs(opts.rbls or opts.rules) do
   if type(rbl) ~= 'table' or rbl.disabled == true or rbl.enabled == false then

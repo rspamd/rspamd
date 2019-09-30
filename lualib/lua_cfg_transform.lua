@@ -257,6 +257,7 @@ local function surbl_section_convert(cfg, section)
       if k == 'suffix' then k = 'rbl' end
       if k == 'ips' then k = 'returncodes' end
       if k == 'bits' then k = 'returnbits' end
+      if k == 'noip' then k = 'no_ip' end
       -- Crappy legacy
       if k == 'options' then
         if v == 'noip' or v == 'no_ip' then
