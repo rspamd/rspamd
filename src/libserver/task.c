@@ -66,8 +66,20 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 				 struct ev_loop *event_loop)
 {
 	struct rspamd_task *new_task;
+	rspamd_mempool_t *task_pool;
+	guint flags = 0;
 
-	new_task = g_malloc0 (sizeof (struct rspamd_task));
+	if (pool == NULL) {
+		task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "task");
+		flags |= RSPAMD_TASK_FLAG_OWN_POOL;
+	}
+	else {
+		task_pool = pool;
+	}
+
+	new_task = rspamd_mempool_alloc0 (task_pool, sizeof (struct rspamd_task));
+	new_task->task_pool = task_pool;
+	new_task->flags = flags;
 	new_task->worker = worker;
 	new_task->lang_det = lang_det;
 
@@ -92,15 +104,6 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 	new_task->event_loop = event_loop;
 	new_task->task_timestamp = ev_time ();
 	new_task->time_real_finish = NAN;
-
-	if (pool == NULL) {
-		new_task->task_pool =
-				rspamd_mempool_new (rspamd_mempool_suggest_size (), "task");
-		new_task->flags |= RSPAMD_TASK_FLAG_OWN_POOL;
-	}
-	else {
-		new_task->task_pool = pool;
-	}
 
 	new_task->request_headers = kh_init (rspamd_req_headers_hash);
 	new_task->sock = -1;
@@ -293,8 +296,6 @@ rspamd_task_free (struct rspamd_task *task)
 		if (task->flags & RSPAMD_TASK_FLAG_OWN_POOL) {
 			rspamd_mempool_delete (task->task_pool);
 		}
-
-		g_free (task);
 	}
 }
 
