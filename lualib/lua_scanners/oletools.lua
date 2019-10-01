@@ -195,7 +195,8 @@ local function oletools_check(task, content, digest, rule)
             rspamd_logger.errx(task, '%s: Error message: %s',
                 rule.log_prefix, result[2]['message'])
             oletools_requery(oletools_rc[result[3]['return_code']])
-          elseif type(result[2]['analysis']) == 'table' and #result[2]['analysis'] == 0 and #result[2]['macros'] == 0 then
+          elseif type(result[2]['analysis']) == 'table' and #result[2]['analysis'] == 0
+            and #result[2]['macros'] == 0 then
             rspamd_logger.warnx(task, '%s: maybe unhandled python or oletools error', rule.log_prefix)
             common.yield_result(task, rule, 'oletools unhandled error', 0.0, 'fail')
           elseif type(result[2]['analysis']) ~= 'table' and #result[2]['macros'] == 0 then

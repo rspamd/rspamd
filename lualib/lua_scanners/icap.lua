@@ -285,8 +285,8 @@ local function icap_check(task, content, digest, rule)
         end
       end
 
-      local function icap_r_respond_cb(err, data, conn)
-        if err or conn == nil then
+      local function icap_r_respond_cb(error, data, connection)
+        if error or connection == nil then
           icap_requery(err, "icap_r_respond_cb")
         else
           local result = tostring(data)
@@ -315,16 +315,16 @@ local function icap_check(task, content, digest, rule)
         end
       end
 
-      local function icap_w_respond_cb(err, conn)
-        if err or conn == nil then
+      local function icap_w_respond_cb(error, connection)
+        if error or connection == nil then
           icap_requery(err, "icap_w_respond_cb")
         else
-          conn:add_read(icap_r_respond_cb, '\r\n\r\n')
+          connection:add_read(icap_r_respond_cb, '\r\n\r\n')
         end
       end
 
-      local function icap_r_options_cb(err, data, conn)
-        if err or conn == nil then
+      local function icap_r_options_cb(error, data, connection)
+        if error or connection == nil then
           icap_requery(err, "icap_r_options_cb")
         else
           local icap_headers = icap_result_header_table(tostring(data))
