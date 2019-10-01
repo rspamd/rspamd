@@ -103,8 +103,8 @@ local function icap_check(task, content, digest, rule)
 
     -- Build the icap queries
     local options_request = {
-      "OPTIONS icap://" .. addr:to_string() .. ":" .. addr:get_port() .. "/" .. rule.scheme .. " ICAP/1.0\r\n",
-      "Host: " .. addr:to_string() .. "\r\n",
+      string.format("OPTIONS icap://%s:%s/%s ICAP/1.0\r\n", addr:to_string(), addr:get_port(), rule.scheme),
+      string.format('Host: %s\r\n', addr:to_string()),
       "User-Agent: Rspamd\r\n",
       "Encapsulated: null-body=0\r\n\r\n",
     }
@@ -192,29 +192,37 @@ local function icap_check(task, content, digest, rule)
         Generic Strings:
           X-Infection-Found: Type=0; Resolution=2; Threat=Troj/DocDl-OYC;
           X-Infection-Found: Type=0; Resolution=2; Threat=W97M.Downloader;
+
         Symantec String:
           X-Infection-Found: Type=2; Resolution=2; Threat=Container size violation
           X-Infection-Found: Type=2; Resolution=2; Threat=Encrypted container violation;
+
         Sophos Strings:
           X-Virus-ID: Troj/DocDl-OYC
+
         Kaspersky Web Traffic Security Strings:
           X-Virus-ID: HEUR:Backdoor.Java.QRat.gen
           X-Response-Info: blocked
-
           X-Virus-ID: no threats
           X-Response-Info: blocked
-
           X-Response-Info: passed
+
         Trend Micro IWSVA Strings:
           X-Virus-ID: Trojan.W97M.POWLOAD.SMTHF1
           X-Infection-Found: Type=0; Resolution=2; Threat=Trojan.W97M.POWLOAD.SMTHF1;
+
         F-Secure Internet Gatekeeper Strings:
           X-FSecure-Scan-Result: infected
           X-FSecure-Infection-Name: "Malware.W97M/Agent.32584203"
           X-FSecure-Infected-Filename: "virus.doc"
+
+        ESET File Security for Linux 7.0
+          X-Infection-Found: Type=0; Resolution=0; Threat=VBA/TrojanDownloader.Agent.JOA;
+          X-Virus-ID: Trojaner
+          X-Response-Info: Blocked
         ]] --
 
-        if icap_headers['X-Infection-Found'] ~= nil then
+        if icap_headers['X-Infection-Found'] then
           local _,_,icap_type,_,icap_threat =
             icap_headers['X-Infection-Found']:find("Type=(.-); Resolution=(.-); Threat=(.-);$")
 
@@ -229,12 +237,12 @@ local function icap_check(task, content, digest, rule)
             table.insert(threat_string, icap_threat)
           end
 
-        elseif icap_headers['X-Virus-ID'] ~= nil and icap_headers['X-Virus-ID'] ~= "no threats" then
+        elseif icap_headers['X-Virus-ID'] and icap_headers['X-Virus-ID'] ~= "no threats" then
           lua_util.debugm(rule.name, task,
               '%s: icap X-Virus-ID: %s', rule.log_prefix, icap_headers['X-Virus-ID'])
 
           if string.find(icap_headers['X-Virus-ID'], ', ') then
-            local vnames = rspamd_str_split(string.gsub(icap_headers['X-Virus-ID'], "%s", ""), ',') or {}
+            local vnames = lua_util.rspamd_str_split(string.gsub(icap_headers['X-Virus-ID'], "%s", ""), ',') or {}
 
             for _,v in ipairs(vnames) do
               table.insert(threat_string, v)
@@ -242,15 +250,15 @@ local function icap_check(task, content, digest, rule)
           else
             table.insert(threat_string, icap_headers['X-Virus-ID'])
           end
-        elseif icap_headers['X-FSecure-Scan-Result'] ~= nil and icap_headers['X-FSecure-Scan-Result'] ~= "clean" then
+        elseif icap_headers['X-FSecure-Scan-Result'] and icap_headers['X-FSecure-Scan-Result'] ~= "clean" then
 
           local infected_filename = ""
           local infection_name = "-unknown-"
 
-          if icap_headers['X-FSecure-Infected-Filename'] ~= nil then
+          if icap_headers['X-FSecure-Infected-Filename'] then
             infected_filename = string.gsub(icap_headers['X-FSecure-Infected-Filename'], '[%s"]', '')
           end
-          if icap_headers['X-FSecure-Infection-Name'] ~= nil then
+          if icap_headers['X-FSecure-Infection-Name'] then
             infection_name = string.gsub(icap_headers['X-FSecure-Infection-Name'], '[%s"]', '')
           end
 
@@ -259,7 +267,7 @@ local function icap_check(task, content, digest, rule)
               rule.log_prefix, infection_name, infected_filename)
 
           if string.find(infection_name, ', ') then
-            local vnames = rspamd_str_split(infection_name, ',') or {}
+            local vnames = lua_util.rspamd_str_split(infection_name, ',') or {}
 
             for _,v in ipairs(vnames) do
               table.insert(threat_string, v)
@@ -286,9 +294,9 @@ local function icap_check(task, content, digest, rule)
 
           local icap_headers = icap_result_header_table(result) or {}
           -- Find ICAP/1.x 2xx response
-          if icap_headers.icap ~= nil and string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
+          if icap_headers.icap and string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
             icap_parse_result(icap_headers)
-          elseif icap_headers.icap ~= nil and string.find(icap_headers.icap, 'ICAP%/1%.. [45]%d%d') then
+          elseif icap_headers.icap and string.find(icap_headers.icap, 'ICAP%/1%.. [45]%d%d') then
             -- Find ICAP/1.x 5/4xx response
             --[[
             Symantec String:
@@ -321,17 +329,17 @@ local function icap_check(task, content, digest, rule)
         else
           local icap_headers = icap_result_header_table(tostring(data))
 
-          if icap_headers.icap ~= nil and string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
-            if icap_headers['Methods'] ~= nil and string.find(icap_headers['Methods'], 'RESPMOD') then
-              if icap_headers['Allow'] ~= nil and string.find(icap_headers['Allow'], '204') then
+          if icap_headers.icap and string.find(icap_headers.icap, 'ICAP%/1%.. 2%d%d') then
+            if icap_headers['Methods'] and string.find(icap_headers['Methods'], 'RESPMOD') then
+              if icap_headers['Allow'] and string.find(icap_headers['Allow'], '204') then
                 add_respond_header('Allow', '204')
               end
-              if icap_headers['Service'] ~= nil and string.find(icap_headers['Service'], 'IWSVA 6.5') then
+              if icap_headers['Service'] and string.find(icap_headers['Service'], 'IWSVA 6.5') then
                 add_respond_header('Encapsulated', 'res-hdr=0 res-body=0')
               else
                 add_respond_header('Encapsulated', 'res-body=0')
               end
-              if icap_headers['Server'] ~= nil and string.find(icap_headers['Server'], 'F-Secure ICAP Server') then
+              if icap_headers['Server'] and string.find(icap_headers['Server'], 'F-Secure ICAP Server') then
                 local from = task:get_from('mime')
                 local rcpt_to = task:get_principal_recipient()
                 local client = task:get_from_ip()
