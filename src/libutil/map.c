@@ -970,7 +970,9 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 	}
 
 	if (periodic->locked) {
-		rspamd_map_schedule_periodic (periodic->map, FALSE, FALSE, FALSE);
+		if (!periodic->map->wrk->wanna_die) {
+			rspamd_map_schedule_periodic (periodic->map, FALSE, FALSE, FALSE);
+		}
 		g_atomic_int_set (periodic->map->locked, 0);
 		msg_debug_map ("unlocked map");
 	}
