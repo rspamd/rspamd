@@ -1126,7 +1126,7 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 		}
 		break;
 	case skip_spaces:
-		if (p > c) {
+		if (p > (const guchar *)data) {
 			*last = p - (const guchar *) data;
 
 			return npart;
@@ -1179,7 +1179,6 @@ rspamd_smtp_received_spill (struct rspamd_task *task,
 	p += pos;
 	len = end > p ? end - p : 0;
 	DL_APPEND (head, cur_part);
-
 
 	if (len > 2 && (lc_map[p[0]] == 'b' &&
 					lc_map[p[1]] == 'y')) {
@@ -1245,7 +1244,8 @@ rspamd_smtp_received_spill (struct rspamd_task *task,
 			}
 
 			if (!cur_part) {
-				return NULL;
+				p ++;
+				len = end > p ? end - p : 0;
 			}
 			else {
 				g_assert (pos != 0);
