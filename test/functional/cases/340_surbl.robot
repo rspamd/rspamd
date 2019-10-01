@@ -107,6 +107,11 @@ EMAILBL full subdomain adress
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emailbltext2.eml
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
 
+EMAILBL full subdomain adress & domain only
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emailbltext3.eml
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (0.00)[baddomain.com:email]
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (0.00)[user.subdomain.baddomain.com:email]
+
 EMAILBL REPLY TO full adress
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replyto.eml
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
