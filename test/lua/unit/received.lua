@@ -121,7 +121,14 @@ context("Received headers parser", function()
       {
         by_hostname = 'example.com',
       },
-    }
+    },
+    {[[from 171-29.br (1-1-1-1.z.com.br [1.1.1.1]) by x.com.br (Postfix) with;ESMTP id 44QShF6xj4z1X for <y.br>; Thu, 21 Mar 2019 23:45:46 -0300 : <g @yi.br>]],
+       {
+         from_hostname = '171-29.br',
+         real_ip = '1.1.1.1',
+         by_hostname = 'x.com.br',
+       }
+    },
   }
 
   local task = ffi.C.rspamd_task_new(nil, nil)
