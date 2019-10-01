@@ -28,6 +28,7 @@
 
 struct upstream_inet_addr_entry {
 	rspamd_inet_addr_t *addr;
+	guint priority;
 	struct upstream_inet_addr_entry *next;
 };
 
@@ -52,6 +53,7 @@ struct upstream {
 	guint checked;
 	guint dns_requests;
 	gint active_idx;
+	guint ttl;
 	gchar *name;
 	ev_timer ev;
 	gdouble last_fail;
@@ -464,7 +466,6 @@ rspamd_upstream_dns_cb (struct rdns_reply *reply, void *arg)
 
 struct rspamd_upstream_srv_dns_cb {
 	struct upstream *up;
-	guint ttl;
 	guint priority;
 	guint port;
 	guint requests_inflight;
@@ -492,12 +493,16 @@ rspamd_upstream_dns_srv_phase2_cb (struct rdns_reply *reply, void *arg)
 				up_ent = g_malloc0 (sizeof (*up_ent));
 				up_ent->addr = rspamd_inet_address_new (AF_INET,
 						&entry->content.a.addr);
+				up_ent->priority = cbdata->priority;
+				rspamd_inet_address_set_port (up_ent->addr, cbdata->port);
 				LL_PREPEND (up->new_addrs, up_ent);
 			}
 			else if (entry->type == RDNS_REQUEST_AAAA) {
 				up_ent = g_malloc0 (sizeof (*up_ent));
 				up_ent->addr = rspamd_inet_address_new (AF_INET6,
 						&entry->content.aaa.addr);
+				up_ent->priority = cbdata->priority;
+				rspamd_inet_address_set_port (up_ent->addr, cbdata->port);
 				LL_PREPEND (up->new_addrs, up_ent);
 			}
 			entry = entry->next;
@@ -542,7 +547,8 @@ rspamd_upstream_dns_srv_cb (struct rdns_reply *reply, void *arg)
 				ncbdata = g_malloc0 (sizeof (*ncbdata));
 				ncbdata->priority = entry->content.srv.weight;
 				ncbdata->port = entry->content.srv.port;
-				ncbdata->ttl = entry->ttl;
+				/* XXX: for all entries? */
+				upstream->ttl = entry->ttl;
 
 				if (rdns_make_request_full (upstream->ctx->res,
 						rspamd_upstream_dns_srv_phase2_cb, ncbdata,
@@ -646,11 +652,16 @@ rspamd_upstream_lazy_resolve_cb (struct ev_loop *loop, ev_timer *w, int revents)
 	ev_timer_stop (loop, w);
 
 	if (up->ls) {
-
 		rspamd_upstream_resolve_addrs (up->ls, up);
 
-		w->repeat = rspamd_time_jitter (up->ls->limits.lazy_resolve_time,
-				up->ls->limits.lazy_resolve_time * .1);
+		if (up->ttl == 0 || up->ttl > up->ls->limits.lazy_resolve_time) {
+			w->repeat = rspamd_time_jitter (up->ls->limits.lazy_resolve_time,
+					up->ls->limits.lazy_resolve_time * .1);
+		}
+		else {
+			w->repeat = up->ttl;
+		}
+
 		ev_timer_again (loop, w);
 	}
 
