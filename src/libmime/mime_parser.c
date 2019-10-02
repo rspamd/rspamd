@@ -688,10 +688,11 @@ rspamd_mime_parse_multipart_cb (struct rspamd_task *task,
 		st->pos = cb->part_start;
 	}
 	else {
-		/* We have seen the start of the boundary */
-		if (cb->part_start < pos) {
-			/* We should have seen some boundary */
-			g_assert (cb->cur_boundary != NULL);
+		/*
+		 * We have seen the start of the boundary,
+		 * but it might be unsuitable (e.g. in broken headers)
+		 */
+		if (cb->part_start < pos && cb->cur_boundary) {
 
 			if ((ret = rspamd_mime_process_multipart_node (task, cb->st,
 					cb->multipart, cb->part_start, pos, TRUE, cb->err))
