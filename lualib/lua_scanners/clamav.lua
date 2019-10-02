@@ -167,7 +167,9 @@ local function clamav_check(task, content, digest, rule)
     })
   end
 
-  if common.need_check(task, content, rule, digest) then
+  if common.need_check(task, content, rule, digest, clamav_check_uncached) then
+    return
+  else
     clamav_check_uncached()
   end
 

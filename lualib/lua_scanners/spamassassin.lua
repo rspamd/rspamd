@@ -180,7 +180,7 @@ local function spamassassin_check(task, content, digest, rule)
             common.save_cache(task, digest, rule, symbols, spam_score)
           else
             local symbols_table = {}
-            symbols_table = rspamd_str_split(symbols, ",")
+            symbols_table = lua_util.str_split(symbols, ",")
             lua_util.debugm(rule.N, task, '%s: returned symbols as table: %s', rule.log_prefix, symbols_table)
 
             common.yield_result(task, rule, symbols_table, spam_score)
@@ -202,7 +202,9 @@ local function spamassassin_check(task, content, digest, rule)
     })
   end
 
-  if common.need_check(task, content, rule, digest) then
+  if common.need_check(task, content, rule, digest, spamassassin_check_uncached) then
+    return
+  else
     spamassassin_check_uncached()
   end
 

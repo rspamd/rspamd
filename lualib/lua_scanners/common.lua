@@ -186,14 +186,16 @@ local function dynamic_scan(task, rule)
   end
 end
 
-local function check_cache(task, digest, rule, fn)
+local function need_check(task, content, rule, digest, fn)
+
+  local uncached = true
   local key = digest
 
   local function redis_av_cb(err, data)
     if data and type(data) == 'string' then
       -- Cached
-      data = rspamd_str_split(data, '\t')
-      local threat_string = rspamd_str_split(data[1], '\v')
+      data = lua_util.str_split(data, '\t')
+      local threat_string = lua_util.str_split(data[1], '\v')
       local score = data[2] or rule.default_score
       if threat_string[1] ~= 'OK' then
         lua_util.debugm(rule.name, task, '%s: got cached threat result for %s: %s - score: %s',
@@ -203,12 +205,28 @@ local function check_cache(task, digest, rule, fn)
         lua_util.debugm(rule.name, task, '%s: got cached negative result for %s: %s',
           rule.log_prefix, key, threat_string[1])
       end
+      uncached = false
     else
       if err then
         rspamd_logger.errx(task, 'got error checking cache: %s', err)
       end
-      return true
     end
+
+    local f_message_not_too_large = message_not_too_large(task, content, rule) or true
+    local f_message_not_too_small = message_not_too_small(task, content, rule) or true
+    local f_message_min_words = message_min_words(task, rule) or true
+    local f_dynamic_scan = dynamic_scan(task, rule) or true
+
+    if uncached and
+      f_message_not_too_large and
+      f_message_not_too_small and
+      f_message_min_words and
+      f_dynamic_scan then
+
+      fn()
+
+    end
+
   end
 
   if rule.redis_params then
@@ -228,14 +246,7 @@ local function check_cache(task, digest, rule, fn)
   end
 
   return false
-end
 
-local function need_check(task, content, rule, digest)
-  return check_cache(task, digest, rule) and
-    message_not_too_large(task, content, rule) and
-    message_not_too_small(task, content, rule) and
-    message_min_words(task, rule) and
-    dynamic_scan(task, rule)
 end
 
 local function save_cache(task, digest, rule, to_save, dyn_weight)
@@ -248,8 +259,8 @@ local function save_cache(task, digest, rule, to_save, dyn_weight)
       rspamd_logger.errx(task, 'failed to save %s cache for %s -> "%s": %s',
           rule.detection_category, to_save, key, err)
     else
-      lua_util.debugm(rule.name, task, '%s: saved cached result for %s: %s - score %s',
-        rule.log_prefix, key, to_save, dyn_weight)
+      lua_util.debugm(rule.name, task, '%s: saved cached result for %s: %s - score %s - ttl %s',
+        rule.log_prefix, key, to_save, dyn_weight, rule.cache_expire)
     end
   end
 
@@ -322,7 +333,7 @@ end
 -- ext is the last extension, LOWERCASED
 -- ext2 is the one before last extension LOWERCASED
 local function gen_extension(fname)
-  local filename_parts = rspamd_str_split(fname, '.')
+  local filename_parts = lua_util.str_split(fname, '.')
 
   local ext = {}
   for n = 1, 2 do

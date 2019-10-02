@@ -112,7 +112,7 @@ local function icap_check(task, content, digest, rule)
 
     local function icap_callback(err, conn)
 
-      local function icap_requery(error, info)
+      local function icap_requery(err_m, info)
         -- set current upstream to fail because an error occurred
         upstream:fail()
 
@@ -123,7 +123,7 @@ local function icap_check(task, content, digest, rule)
 
           lua_util.debugm(rule.name, task,
               '%s: %s Request Error: %s - retries left: %s',
-              rule.log_prefix, info, error, retransmits)
+              rule.log_prefix, info, err_m, retransmits)
 
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
@@ -144,15 +144,14 @@ local function icap_check(task, content, digest, rule)
           })
         else
           rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
-            'exceed - err: %s', rule.log_prefix, error)
-          common.yield_result(task, rule, 'failed - err: ' .. error, 0.0, 'fail')
+            'exceed - error: %s', rule.log_prefix, err_m or '')
+          common.yield_result(task, rule, 'failed - error: ' .. err_m or '', 0.0, 'fail')
         end
       end
 
       local function get_respond_query()
-        table.insert(respond_headers, 1,
-            'RESPMOD icap://' .. addr:to_string() .. ':' .. addr:get_port() .. '/'
-          .. rule.scheme .. ' ICAP/1.0\r\n')
+        table.insert(respond_headers, 1, string.format(
+            'RESPMOD icap://%s:%s/%s ICAP/1.0\r\n', addr:to_string(), addr:get_port(), rule.scheme))
         table.insert(respond_headers, '\r\n')
         table.insert(respond_headers, size .. '\r\n')
         table.insert(respond_headers, content)
@@ -161,7 +160,9 @@ local function icap_check(task, content, digest, rule)
       end
 
       local function add_respond_header(name, value)
-        table.insert(respond_headers, name .. ': ' .. value .. '\r\n' )
+        if name and value then
+          table.insert(respond_headers, string.format('%s: %s\r\n', name, value))
+        end
       end
 
       local function icap_result_header_table(result)
@@ -242,7 +243,7 @@ local function icap_check(task, content, digest, rule)
               '%s: icap X-Virus-ID: %s', rule.log_prefix, icap_headers['X-Virus-ID'])
 
           if string.find(icap_headers['X-Virus-ID'], ', ') then
-            local vnames = lua_util.rspamd_str_split(string.gsub(icap_headers['X-Virus-ID'], "%s", ""), ',') or {}
+            local vnames = lua_util.str_split(string.gsub(icap_headers['X-Virus-ID'], "%s", ""), ',') or {}
 
             for _,v in ipairs(vnames) do
               table.insert(threat_string, v)
@@ -267,7 +268,7 @@ local function icap_check(task, content, digest, rule)
               rule.log_prefix, infection_name, infected_filename)
 
           if string.find(infection_name, ', ') then
-            local vnames = lua_util.rspamd_str_split(infection_name, ',') or {}
+            local vnames = lua_util.str_split(infection_name, ',') or {}
 
             for _,v in ipairs(vnames) do
               table.insert(threat_string, v)
@@ -285,9 +286,9 @@ local function icap_check(task, content, digest, rule)
         end
       end
 
-      local function icap_r_respond_cb(error, data, connection)
-        if error or connection == nil then
-          icap_requery(err, "icap_r_respond_cb")
+      local function icap_r_respond_cb(err_m, data, connection)
+        if err_m or connection == nil then
+          icap_requery(err_m, "icap_r_respond_cb")
         else
           local result = tostring(data)
           conn:close()
@@ -315,17 +316,17 @@ local function icap_check(task, content, digest, rule)
         end
       end
 
-      local function icap_w_respond_cb(error, connection)
-        if error or connection == nil then
-          icap_requery(err, "icap_w_respond_cb")
+      local function icap_w_respond_cb(err_m, connection)
+        if err_m or connection == nil then
+          icap_requery(err_m, "icap_w_respond_cb")
         else
           connection:add_read(icap_r_respond_cb, '\r\n\r\n')
         end
       end
 
-      local function icap_r_options_cb(error, data, connection)
-        if error or connection == nil then
-          icap_requery(err, "icap_r_options_cb")
+      local function icap_r_options_cb(err_m, data, connection)
+        if err_m or connection == nil then
+          icap_requery(err_m, "icap_r_options_cb")
         else
           local icap_headers = icap_result_header_table(tostring(data))
 
@@ -343,7 +344,7 @@ local function icap_check(task, content, digest, rule)
                 local from = task:get_from('mime')
                 local rcpt_to = task:get_principal_recipient()
                 local client = task:get_from_ip()
-                add_respond_header('X-Client-IP', client:to_string())
+                if client then add_respond_header('X-Client-IP', client:to_string()) end
                 add_respond_header('X-Mail-From', from[1].addr)
                 add_respond_header('X-Rcpt-To', rcpt_to)
               end
@@ -384,7 +385,9 @@ local function icap_check(task, content, digest, rule)
     })
   end
 
-  if common.need_check(task, content, rule, digest) then
+  if common.need_check(task, content, rule, digest, icap_check_uncached) then
+    return
+  else
     icap_check_uncached()
   end
 

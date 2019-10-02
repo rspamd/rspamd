@@ -160,7 +160,9 @@ local function fprot_check(task, content, digest, rule)
     })
   end
 
-  if common.need_check(task, content, rule, digest) then
+  if common.need_check(task, content, rule, digest, fprot_check_uncached) then
+    return
+  else
     fprot_check_uncached()
   end
 

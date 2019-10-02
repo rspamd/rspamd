@@ -247,7 +247,9 @@ local function savapi_check(task, content, digest, rule)
     })
   end
 
-  if common.need_check(task, content, rule, digest) then
+  if common.need_check(task, content, rule, digest, savapi_check_uncached) then
+    return
+  else
     savapi_check_uncached()
   end
 

@@ -304,7 +304,9 @@ local function oletools_check(task, content, digest, rule)
 
   end
 
-  if common.need_check(task, content, rule, digest) then
+  if common.need_check(task, content, rule, digest, oletools_check_uncached) then
+    return
+  else
     oletools_check_uncached()
   end
 

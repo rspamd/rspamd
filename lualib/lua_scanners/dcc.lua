@@ -298,7 +298,9 @@ local function dcc_check(task, content, digest, rule)
     })
   end
 
-  if common.need_check(task, content, rule, digest) then
+  if common.need_check(task, content, rule, digest, dcc_check_uncached) then
+    return
+  else
     dcc_check_uncached()
   end
 
