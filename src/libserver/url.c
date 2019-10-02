@@ -877,7 +877,7 @@ rspamd_telephone_parse (struct http_parser_url *u,
 
 			if (u_isdigit (uc) || uc == '(' || uc == ')' || uc == '[' || uc == ']'
 				|| u_isspace (uc) || uc == '%') {
-				p ++;
+				/* p is already incremented by U8_NEXT! */
 			}
 			else if (uc <= 0 || is_url_end (uc)) {
 				ret = 0;
@@ -1983,9 +1983,12 @@ rspamd_url_parse (struct rspamd_url *uri,
 		uri->flags |= RSPAMD_URL_FLAG_UNNORMALISED;
 	}
 
-	/* Ensure that hostname starts with something sane (exclude numeric urls) */
-	if (!(is_domain_start (uri->host[0]) || uri->host[0] == ':')) {
-		return URI_ERRNO_BAD_FORMAT;
+
+	if (uri->protocol & (PROTOCOL_HTTP|PROTOCOL_HTTPS|PROTOCOL_MAILTO|PROTOCOL_FTP|PROTOCOL_FILE)) {
+		/* Ensure that hostname starts with something sane (exclude numeric urls) */
+		if (!(is_domain_start (uri->host[0]) || uri->host[0] == ':')) {
+			return URI_ERRNO_BAD_FORMAT;
+		}
 	}
 
 	rspamd_url_shift (uri, unquoted_len, UF_HOST);
