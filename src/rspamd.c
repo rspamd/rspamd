@@ -1060,8 +1060,6 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 	cmd.cmd.child_change.additional = w->rstatus;
 	rspamd_control_broadcast_srv_cmd (rspamd_main, &cmd, wrk->pid);
 
-	REF_RELEASE (wrk->cf);
-
 	if (wrk->finish_actions) {
 		g_ptr_array_free (wrk->finish_actions, TRUE);
 	}
@@ -1083,6 +1081,7 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 				wrk->pid);
 	}
 
+	REF_RELEASE (wrk->cf);
 	g_free (wrk);
 }
 
