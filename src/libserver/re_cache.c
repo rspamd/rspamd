@@ -2045,7 +2045,6 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 	g_assert (cache_dir != NULL);
 
 #ifndef WITH_HYPERSCAN
-	g_set_error (err, rspamd_re_cache_quark (), EINVAL, "hyperscan is disabled");
 	return -1;
 #else
 	static ev_timer *timer;
