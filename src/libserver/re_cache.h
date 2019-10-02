@@ -160,12 +160,17 @@ const gchar *rspamd_re_cache_type_to_string (enum rspamd_re_type type);
  */
 enum rspamd_re_type rspamd_re_cache_type_from_string (const char *str);
 
+struct ev_loop;
 /**
  * Compile expressions to the hyperscan tree and store in the `cache_dir`
  */
 gint rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
-										const char *cache_dir, gdouble max_time, gboolean silent,
-										GError **err);
+										const char *cache_dir,
+										gdouble max_time,
+										gboolean silent,
+										struct ev_loop *event_loop,
+										void (*cb)(guint ncompiled, GError *err, void *cbd),
+										void *cbd);
 
 
 /**
