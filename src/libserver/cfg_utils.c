@@ -83,9 +83,7 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 		return FALSE;
 	}
 
-	cnf =
-		rspamd_mempool_alloc0 (cfg->cfg_pool,
-			sizeof (struct rspamd_worker_bind_conf));
+	cnf = g_malloc0 (sizeof (struct rspamd_worker_bind_conf));
 
 	cnf->cnt = 1024;
 	cnf->bind_line = str;
@@ -94,10 +92,10 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 		/* The actual socket will be passed by systemd environment */
 		cnf->is_systemd = TRUE;
 		cnf->cnt = strtoul (str + sizeof ("systemd:") - 1, &err, 10);
-		cnf->addrs = NULL;
+		cnf->addrs = g_ptr_array_new ();
 
 		if (err == NULL || *err == '\0') {
-			cnf->name = rspamd_mempool_strdup (cfg->cfg_pool, str);
+			cnf->name = g_strdup (str);
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
 		else {
@@ -107,7 +105,7 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 	}
 	else {
 		if (rspamd_parse_host_port_priority (str, &cnf->addrs,
-				NULL, &cnf->name, DEFAULT_BIND_PORT, cfg->cfg_pool) == RSPAMD_PARSE_ADDR_FAIL) {
+				NULL, &cnf->name, DEFAULT_BIND_PORT, NULL) == RSPAMD_PARSE_ADDR_FAIL) {
 			msg_err_config ("cannot parse bind line: %s", str);
 			ret = FALSE;
 		}
@@ -115,6 +113,15 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 			cnf->cnt = cnf->addrs->len;
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
+	}
+
+	if (!ret) {
+		if (cnf->addrs) {
+			g_ptr_array_free (cnf->addrs, TRUE);
+		}
+
+		g_free (cnf->name);
+		g_free (cnf);
 	}
 
 	return ret;
@@ -1066,6 +1073,14 @@ static void
 rspamd_worker_conf_dtor (struct rspamd_worker_conf *wcf)
 {
 	if (wcf) {
+		struct rspamd_worker_bind_conf *cnf, *tmp;
+
+		LL_FOREACH_SAFE (wcf->bind_conf, cnf, tmp) {
+			g_free (cnf->name);
+			g_ptr_array_free (cnf->addrs, TRUE);
+			g_free (cnf);
+		}
+
 		ucl_object_unref (wcf->options);
 		g_queue_free (wcf->active_workers);
 		g_hash_table_unref (wcf->params);
