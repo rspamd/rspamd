@@ -1696,7 +1696,7 @@ rspamd_re_cache_compile_err (EV_P_ ev_timer *w, GError *err,
 		struct rspamd_re_cache_hs_compile_cbdata *cbdata)
 {
 	ev_timer_stop (EV_A_ w);
-	cbdata->cb (cbdata->total, err, cbdata->cb);
+	cbdata->cb (cbdata->total, err, cbdata->cbd);
 	g_free (w);
 	g_free (cbdata);
 	g_error_free (err);
