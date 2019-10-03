@@ -893,7 +893,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 
 		if (cf->bind_conf) {
 			setproctitle ("%s process (%s)", cf->worker->name,
-					cf->bind_conf->bind_line);
+					cf->bind_conf->name);
 		}
 		else {
 			setproctitle ("%s process", cf->worker->name);
@@ -919,7 +919,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		if (cf->bind_conf) {
 			msg_info_main ("starting %s process %P (%d); listen on: %s",
 					cf->worker->name,
-					getpid (), index, cf->bind_conf->bind_line);
+					getpid (), index, cf->bind_conf->name);
 		}
 		else {
 			msg_info_main ("starting %s process %P (%d)", cf->worker->name,

@@ -584,7 +584,7 @@ spawn_workers (struct rspamd_main *rspamd_main, struct ev_loop *ev_base)
 			if (!cf->enabled || cf->count <= 0) {
 				msg_info_main ("worker of type %s(%s) is disabled in the config, "
 						"skip spawning", g_quark_to_string (cf->type),
-						cf->bind_conf ? cf->bind_conf->bind_line : "none");
+						cf->bind_conf ? cf->bind_conf->name : "none");
 				cur = g_list_next (cur);
 
 				continue;
