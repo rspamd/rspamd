@@ -213,8 +213,7 @@ rspamd_rs_compile_cb (guint ncompiled, GError *err, void *cbd)
 	ctx = (struct hs_helper_ctx *)worker->ctx;
 
 	if (ncompiled > 0) {
-		msg_info ("compiled %d regular expressions to the hyperscan tree",
-				ncompiled);
+		/* Enforce update for other workers */
 		hack_global_forced = TRUE;
 	}
 
@@ -225,6 +224,15 @@ rspamd_rs_compile_cb (guint ncompiled, GError *err, void *cbd)
 	if (!ctx->loaded) {
 		when = 5.0; /* Postpone */
 		ctx->loaded = TRUE;
+		msg_info ("compiled %d regular expressions to the hyperscan tree, "
+				  "postpone loaded notification for %.0f seconds to avoid races",
+				ncompiled,
+				when);
+	}
+	else {
+		msg_info ("compiled %d regular expressions to the hyperscan tree, "
+				  "send loaded notification",
+				ncompiled);
 	}
 
 	tm = g_malloc0 (sizeof (*tm));
