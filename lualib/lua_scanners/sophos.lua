@@ -125,7 +125,7 @@ local function sophos_check(task, content, digest, rule)
         local vname = string.match(data, 'VIRUS (%S+) ')
         if vname then
           common.yield_result(task, rule, vname)
-          common.save_av_cache(task, digest, rule, vname)
+          common.save_cache(task, digest, rule, vname)
         else
           if string.find(data, 'DONE OK') then
             if rule['log_clean'] then
@@ -134,7 +134,7 @@ local function sophos_check(task, content, digest, rule)
               lua_util.debugm(rule.name, task,
                   '%s: message or mime_part is clean', rule.log_prefix)
             end
-            common.save_av_cache(task, digest, rule, 'OK')
+            common.save_cache(task, digest, rule, 'OK')
             -- not finished - continue
           elseif string.find(data, 'ACC') or string.find(data, 'OK SSSP') then
             conn:add_read(sophos_callback)
@@ -157,14 +157,6 @@ local function sophos_check(task, content, digest, rule)
       end
     end
 
-    if rule.dynamic_scan then
-      local pre_check, pre_check_msg = common.check_metric_results(task, rule)
-      if pre_check then
-        rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, pre_check_msg)
-        return true
-      end
-    end
-
     tcp.request({
       task = task,
       host = addr:to_string(),
@@ -175,13 +167,12 @@ local function sophos_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule) then
-    if common.check_av_cache(task, digest, rule, sophos_check_uncached) then
-      return
-    else
-      sophos_check_uncached()
-    end
+  if common.need_check(task, content, rule, digest, sophos_check_uncached) then
+    return
+  else
+    sophos_check_uncached()
   end
+
 end
 
 return {
