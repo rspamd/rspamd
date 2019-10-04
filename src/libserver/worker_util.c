@@ -107,6 +107,9 @@ rspamd_worker_check_finished (EV_P_ ev_timer *w, int revents)
 		if (refcount == 1) {
 			ev_break (EV_A_ EVBREAK_ONE);
 		}
+		else {
+			ev_timer_again (EV_A_ w);
+		}
 	}
 }
 

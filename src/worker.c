@@ -76,7 +76,7 @@ rspamd_worker_finalize (gpointer user_data)
 
 	if (!(task->flags & RSPAMD_TASK_FLAG_PROCESSING)) {
 		msg_info_task ("finishing actions has been processed, terminating");
-		ev_break (task->event_loop, EVBREAK_ALL);
+		/* ev_break (task->event_loop, EVBREAK_ALL); */
 		rspamd_session_destroy (task->s);
 
 		return TRUE;
