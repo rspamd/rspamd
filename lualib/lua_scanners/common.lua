@@ -440,7 +440,6 @@ exports.log_clean = log_clean
 exports.yield_result = yield_result
 exports.match_patterns = match_patterns
 exports.need_check = need_check
-exports.check_cache = check_cache
 exports.save_cache = save_cache
 exports.create_regex_table = create_regex_table
 exports.check_parts_match = check_parts_match
