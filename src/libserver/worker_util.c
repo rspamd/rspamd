@@ -1460,8 +1460,7 @@ rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
 							   struct rspamd_worker *worker, gint fd,
 							   gint attached_fd,
 							   struct rspamd_control_command *cmd,
-							   gpointer ud)
-{
+							   gpointer ud) {
 	struct rspamd_control_reply rep;
 	struct rspamd_re_cache *cache = worker->srv->cfg->re_cache;
 
@@ -1484,6 +1483,7 @@ rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
 
 	return TRUE;
 }
+#endif /* With Hyperscan */
 
 gboolean
 rspamd_worker_check_context (gpointer ctx, guint64 magic)
@@ -1492,4 +1492,3 @@ rspamd_worker_check_context (gpointer ctx, guint64 magic)
 
 	return actx->magic == magic;
 }
-#endif
