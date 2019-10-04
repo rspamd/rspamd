@@ -172,15 +172,10 @@ static gboolean
 rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
 	/* Do not accept new connections, preparing to end worker's process */
-	struct timeval tv;
-
 	if (!sigh->worker->wanna_die) {
 		static ev_timer shutdown_ev;
 
 		rspamd_worker_ignore_signal (sigh);
-
-		tv.tv_sec = SOFT_SHUTDOWN_TIME;
-		tv.tv_usec = 0;
 		sigh->worker->wanna_die = TRUE;
 		rspamd_worker_terminate_handlers (sigh->worker);
 		rspamd_default_log_function (G_LOG_LEVEL_INFO,

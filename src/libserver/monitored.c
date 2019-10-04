@@ -172,13 +172,11 @@ static void
 rspamd_monitored_periodic (EV_P_ ev_timer *w, int revents)
 {
 	struct rspamd_monitored *m = (struct rspamd_monitored *)w->data;
-	struct timeval tv;
 	gdouble jittered;
 	gboolean ret = FALSE;
 
 	jittered = rspamd_time_jitter (m->ctx->monitoring_interval * m->monitoring_mult,
 			0.0);
-	double_to_tv (jittered, &tv);
 
 	if (m->proc.monitored_update) {
 		ret = m->proc.monitored_update (m, m->ctx, m->proc.ud);

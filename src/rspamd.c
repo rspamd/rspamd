@@ -359,14 +359,11 @@ rspamd_fork_delayed (struct rspamd_worker_conf *cf,
 		struct rspamd_main *rspamd_main)
 {
 	struct waiting_worker *nw;
-	struct timeval tv;
 
 	nw = g_malloc0 (sizeof (*nw));
 	nw->cf = cf;
 	nw->oldindex = index;
 	nw->rspamd_main = rspamd_main;
-	tv.tv_sec = SOFT_FORK_TIME;
-	tv.tv_usec = 0;
 	REF_RETAIN (cf);
 	nw->wait_ev.data = nw;
 	ev_timer_init (&nw->wait_ev, rspamd_fork_delayed_cb, SOFT_FORK_TIME, 0.0);
