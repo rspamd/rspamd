@@ -902,12 +902,35 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 }
 
 static void
+rspamd_detach_worker (struct rspamd_main *rspamd_main, struct rspamd_worker *wrk)
+{
+	ev_io_stop (rspamd_main->event_loop, &wrk->srv_ev);
+	ev_timer_stop (rspamd_main->event_loop, &wrk->hb.heartbeat_ev);
+}
+
+static void
+rspamd_attach_worker (struct rspamd_main *rspamd_main, struct rspamd_worker *wrk)
+{
+	ev_io_start (rspamd_main->event_loop, &wrk->srv_ev);
+	ev_timer_start (rspamd_main->event_loop, &wrk->hb.heartbeat_ev);
+}
+
+static void
 stop_srv_ev (gpointer key, gpointer value, gpointer ud)
 {
 	struct rspamd_worker *cur = (struct rspamd_worker *)value;
 	struct rspamd_main *rspamd_main = (struct rspamd_main *)ud;
 
-	ev_io_stop (rspamd_main->event_loop, &cur->srv_ev);
+	rspamd_detach_worker (rspamd_main, cur);
+}
+
+static void
+start_srv_ev (gpointer key, gpointer value, gpointer ud)
+{
+	struct rspamd_worker *cur = (struct rspamd_worker *)value;
+	struct rspamd_main *rspamd_main = (struct rspamd_main *)ud;
+
+	rspamd_attach_worker (rspamd_main, cur);
 }
 
 static void
@@ -1014,17 +1037,28 @@ rspamd_hup_handler (struct ev_loop *loop, ev_signal *w, int revents)
 		msg_info_main ("rspamd "
 				RVERSION
 				" is requested to reload configuration");
+		/* Detach existing workers and stop their heartbeats */
+		g_hash_table_foreach (rspamd_main->workers, stop_srv_ev, rspamd_main);
+
+		/* Close log to avoid FDs leak, as reread_config will re-init logging */
+		rspamd_log_close_priv (rspamd_main->logger,
+				FALSE,
+				rspamd_main->workers_uid,
+				rspamd_main->workers_gid);
+
 		if (reread_config (rspamd_main)) {
 			msg_info_main ("kill old workers");
 			g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
-			rspamd_log_close_priv (rspamd_main->logger,
-					FALSE,
-					rspamd_main->workers_uid,
-					rspamd_main->workers_gid);
 
 			rspamd_check_core_limits (rspamd_main);
 			msg_info_main ("spawn workers with a new config");
 			spawn_workers (rspamd_main, rspamd_main->event_loop);
+			msg_info_main ("workers spawning has been finished");
+		}
+		else {
+			/* Reattach old workers */
+			msg_info_main ("restore old workers with a old config");
+			g_hash_table_foreach (rspamd_main->workers, start_srv_ev, rspamd_main);
 		}
 	}
 }
@@ -1049,8 +1083,8 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 		if (wrk->tmp_data) {
 			g_free (wrk->tmp_data);
 		}
-		ev_io_stop (rspamd_main->event_loop, &wrk->srv_ev);
-		ev_timer_stop (rspamd_main->event_loop, &wrk->hb.heartbeat_ev);
+
+		rspamd_detach_worker (rspamd_main, wrk);
 	}
 
 	if (wrk->control_pipe[0] != -1) {

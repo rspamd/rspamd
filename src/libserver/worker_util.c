@@ -836,6 +836,17 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		rspamd_hard_terminate (rspamd_main);
 	}
 
+	if (cf->bind_conf) {
+		msg_info_main ("prepare to fork process %s (%d); listen on: %s",
+				cf->worker->name,
+				index, cf->bind_conf->name);
+	}
+	else {
+		msg_info_main ("prepare to fork process %s (%d), no bind socket",
+				cf->worker->name,
+				index);
+	}
+
 	wrk->srv = rspamd_main;
 	wrk->type = cf->type;
 	wrk->cf = cf;
