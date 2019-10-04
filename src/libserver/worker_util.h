@@ -58,6 +58,14 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 					   rspamd_accept_handler hdl);
 
 /**
+ * Should be used to validate context for a worker as in assert like invocation
+ * @param ctx
+ * @param magic
+ * @return
+ */
+gboolean rspamd_worker_check_context (gpointer ctx, guint64 magic);
+
+/**
  * Set special signal handler for a worker
  */
 void rspamd_worker_set_signal_handler (int signo,

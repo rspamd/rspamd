@@ -3701,6 +3701,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	const ev_tstamp save_stats_interval = 60; /* 1 minute */
 	gpointer m;
 
+	g_assert (rspamd_worker_check_context (worker->ctx, rspamd_controller_ctx_magic));
 	ctx->event_loop = rspamd_prepare_worker (worker,
 			"controller",
 			rspamd_controller_accept_socket);

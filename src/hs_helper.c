@@ -303,6 +303,7 @@ start_hs_helper (struct rspamd_worker *worker)
 	struct hs_helper_ctx *ctx = worker->ctx;
 	double tim;
 
+	g_assert (rspamd_worker_check_context (worker->ctx, rspamd_hs_helper_magic));
 	ctx->cfg = worker->srv->cfg;
 
 	if (ctx->hs_dir == NULL) {

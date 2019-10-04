@@ -1472,4 +1472,12 @@ rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
 
 	return TRUE;
 }
+
+gboolean
+rspamd_worker_check_context (gpointer ctx, guint64 magic)
+{
+	struct rspamd_abstract_worker_ctx *actx = (struct rspamd_abstract_worker_ctx*)ctx;
+
+	return actx->magic == magic;
+}
 #endif

@@ -525,7 +525,6 @@ init_worker (struct rspamd_config *cfg)
 	GQuark type;
 
 	type = g_quark_try_string ("normal");
-
 	ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
 			sizeof (struct rspamd_worker_ctx));
 
@@ -645,6 +644,7 @@ start_worker (struct rspamd_worker *worker)
 {
 	struct rspamd_worker_ctx *ctx = worker->ctx;
 
+	g_assert (rspamd_worker_check_context (worker->ctx, rspamd_worker_magic));
 	ctx->cfg = worker->srv->cfg;
 	ctx->event_loop = rspamd_prepare_worker (worker, "normal", accept_socket);
 	rspamd_symcache_start_refresh (worker->srv->cfg->cache, ctx->event_loop,

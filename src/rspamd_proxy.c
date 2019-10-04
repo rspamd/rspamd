@@ -2216,6 +2216,7 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 {
 	struct rspamd_proxy_ctx *ctx = worker->ctx;
 
+	g_assert (rspamd_worker_check_context (worker->ctx, rspamd_rspamd_proxy_magic));
 	ctx->cfg = worker->srv->cfg;
 	ctx->event_loop = rspamd_prepare_worker (worker, "rspamd_proxy",
 			proxy_accept_socket);

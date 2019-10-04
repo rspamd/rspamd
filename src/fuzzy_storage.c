@@ -1895,6 +1895,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	struct rspamd_srv_command srv_cmd;
 	struct rspamd_config *cfg = worker->srv->cfg;
 
+	g_assert (rspamd_worker_check_context (worker->ctx, rspamd_fuzzy_storage_magic));
 	ctx->event_loop = rspamd_prepare_worker (worker,
 			"fuzzy",
 			NULL);
