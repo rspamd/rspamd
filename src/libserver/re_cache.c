@@ -2113,19 +2113,29 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 
 		if (memcmp (hash_pos, re_class->hash, sizeof (re_class->hash) - 1) == 0) {
 			/* Open file and check magic */
+			gssize r;
+
 			fd = open (path, O_RDONLY);
 
 			if (fd == -1) {
-				if (!silent) {
+				if (errno != ENOENT || !silent) {
 					msg_err_re_cache ("cannot open hyperscan cache file %s: %s",
 							path, strerror (errno));
 				}
 				return FALSE;
 			}
 
-			if (read (fd, magicbuf, sizeof (magicbuf)) != sizeof (magicbuf)) {
-				msg_err_re_cache ("cannot read hyperscan cache file %s: %s",
-						path, strerror (errno));
+			if ((r = read (fd, magicbuf, sizeof (magicbuf))) != sizeof (magicbuf)) {
+				if (r == -1) {
+					msg_err_re_cache ("cannot read magic from hyperscan "
+									  "cache file %s: %s",
+							path, strerror (errno));
+				}
+				else {
+					msg_err_re_cache ("truncated read magic from hyperscan "
+									  "cache file %s: %z, %z wanted",
+							path, r, (gsize)sizeof (magicbuf));
+				}
 				close (fd);
 				return FALSE;
 			}
@@ -2147,9 +2157,18 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 				return FALSE;
 			}
 
-			if (read (fd, &test_plt, sizeof (test_plt)) != sizeof (test_plt)) {
-				msg_err_re_cache ("cannot read hyperscan cache file %s: %s",
-						path, strerror (errno));
+			if ((r = read (fd, &test_plt, sizeof (test_plt))) != sizeof (test_plt)) {
+				if (r == -1) {
+					msg_err_re_cache ("cannot read platform data from hyperscan "
+									  "cache file %s: %s",
+							path, strerror (errno));
+				}
+				else {
+					msg_err_re_cache ("truncated read platform data from hyperscan "
+									  "cache file %s: %z, %z wanted",
+							path, r, (gsize)sizeof (magicbuf));
+				}
+
 				close (fd);
 				return FALSE;
 			}
