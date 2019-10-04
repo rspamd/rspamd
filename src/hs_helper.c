@@ -200,6 +200,8 @@ rspamd_rs_delayed_cb (EV_P_ ev_timer *w, int revents)
 			ctx->event_loop, &srv_cmd, -1, NULL, NULL);
 	ev_timer_stop (EV_A_ w);
 	g_free (w);
+
+	ev_timer_again (EV_A_ &ctx->recompile_timer);
 }
 
 static void
@@ -286,6 +288,8 @@ rspamd_hs_helper_reload (struct rspamd_main *rspamd_main,
 				strerror (errno));
 	}
 
+	/* Stop recompile */
+	ev_timer_stop (ctx->event_loop, &ctx->recompile_timer);
 	rspamd_rs_compile (ctx, worker, TRUE);
 
 	return TRUE;
@@ -302,7 +306,6 @@ rspamd_hs_helper_timer (EV_P_ ev_timer *w, int revents)
 	tim = rspamd_time_jitter (ctx->recompile_time, 0);
 	w->repeat = tim;
 	rspamd_rs_compile (ctx, worker, FALSE);
-	ev_timer_again (EV_A_ w);
 }
 
 static void
