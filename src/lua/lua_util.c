@@ -1614,11 +1614,10 @@ lua_util_glob (lua_State *L)
 	LUA_TRACE_POINT;
 	const gchar *pattern;
 	glob_t gl;
-	gint top, i, flags;
+	gint top, i, flags = 0;
 
 	top = lua_gettop (L);
 	memset (&gl, 0, sizeof (gl));
-	flags = GLOB_NOSORT;
 
 	for (i = 1; i <= top; i ++, flags |= GLOB_APPEND) {
 		pattern = luaL_checkstring (L, i);
