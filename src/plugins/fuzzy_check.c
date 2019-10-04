@@ -467,7 +467,9 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 		/* pass max_error and revive_time configuration in upstream for fuzzy storage
 		 * it allows to configure error_rate threshold and upstream dead timer
 		 */
-		rspamd_upstreams_set_limits (rule->servers, (gdouble) fuzzy_module_ctx->revive_time, NAN, NAN, NAN, (guint) fuzzy_module_ctx->max_errors, NAN);
+		rspamd_upstreams_set_limits (rule->servers,
+				(gdouble) fuzzy_module_ctx->revive_time, NAN, NAN, NAN,
+				(guint) fuzzy_module_ctx->max_errors, 0);
 
 		rspamd_mempool_add_destructor (cfg->cfg_pool,
 				(rspamd_mempool_destruct_t)rspamd_upstreams_destroy,
