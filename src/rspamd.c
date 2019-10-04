@@ -275,7 +275,7 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 	rspamd_logger_configure_modules (rspamd_main->cfg->debug_modules);
 }
 
-static void
+static gboolean
 reread_config (struct rspamd_main *rspamd_main)
 {
 	struct rspamd_config *tmp_cfg, *old_cfg;
@@ -307,6 +307,8 @@ reread_config (struct rspamd_main *rspamd_main)
 					rspamd_main->workers_gid);
 		msg_err_main ("cannot parse new config file, revert to old one");
 		REF_RELEASE (tmp_cfg);
+
+		return FALSE;
 	}
 	else {
 		msg_info_main ("replacing config");
@@ -326,6 +328,8 @@ reread_config (struct rspamd_main *rspamd_main)
 				load_opts|RSPAMD_CONFIG_INIT_POST_LOAD_LUA|RSPAMD_CONFIG_INIT_PRELOAD_MAPS);
 		msg_info_main ("config has been reread successfully");
 	}
+
+	return TRUE;
 }
 
 struct waiting_worker {
@@ -1012,15 +1016,19 @@ rspamd_hup_handler (struct ev_loop *loop, ev_signal *w, int revents)
 	if (!rspamd_main->wanna_die) {
 		msg_info_main ("rspamd "
 				RVERSION
-				" is restarting");
-		g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
-		rspamd_log_close_priv (rspamd_main->logger,
-				FALSE,
-				rspamd_main->workers_uid,
-				rspamd_main->workers_gid);
-		reread_config (rspamd_main);
-		rspamd_check_core_limits (rspamd_main);
-		spawn_workers (rspamd_main, rspamd_main->event_loop);
+				" is requested to reload configuration");
+		if (reread_config (rspamd_main)) {
+			msg_info_main ("kill old workers");
+			g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
+			rspamd_log_close_priv (rspamd_main->logger,
+					FALSE,
+					rspamd_main->workers_uid,
+					rspamd_main->workers_gid);
+
+			rspamd_check_core_limits (rspamd_main);
+			msg_info_main ("spawn workers with a new config");
+			spawn_workers (rspamd_main, rspamd_main->event_loop);
+		}
 	}
 }
 
