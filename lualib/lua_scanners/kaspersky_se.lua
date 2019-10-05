@@ -25,7 +25,6 @@ local rspamd_util = require "rspamd_util"
 local http = require "rspamd_http"
 local upstream_list = require "rspamd_upstream_list"
 local rspamd_logger = require "rspamd_logger"
-local ucl = require "ucl"
 local common = require "lua_scanners/common"
 
 local N = 'kaspersky_se'
