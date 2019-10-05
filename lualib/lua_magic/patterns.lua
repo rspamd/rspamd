@@ -261,8 +261,8 @@ local patterns = {
   dmg = {
     matches = {
       {
-        string = [[koly]],
-        position = -512 + 4,
+        string = [[koly\x{00}\x{00}\x{00}\x{04}]],
+        position = -512 + 8,
         weight = 61,
         tail = 512,
       },
