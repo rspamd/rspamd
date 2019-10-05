@@ -34,6 +34,7 @@ end
 require_scanner('clamav')
 require_scanner('fprot')
 require_scanner('kaspersky_av')
+require_scanner('kaspersky_se')
 require_scanner('savapi')
 require_scanner('sophos')
 
