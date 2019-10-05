@@ -204,7 +204,45 @@ local function kaspersky_se_check(task, content, digest, rule)
           task:insert_result(rule.symbol_fail, 1.0, 'Bad HTTP code: ' .. code)
           return
         end
-        rspamd_logger.errx(task, 'got reply: %s', body)
+        lua_util.debugm(rule.name, task, 'got reply: %s', body)
+        local data = tostring(body)
+        local cached
+        lua_util.debugm(rule.name, task, '%s: got reply: %s',
+            rule.log_prefix, data)
+        if data == 'CLEAN' then
+          cached = 'CLEAN'
+          if rule['log_clean'] then
+            rspamd_logger.infox(task, '%s: message or mime_part is clean',
+                rule.log_prefix)
+          else
+            lua_util.debugm(rule.name, task, '%s: message or mime_part is clean',
+                rule.log_prefix)
+          end
+        elseif data == 'SERVER_ERROR' then
+          rspamd_logger.errx(task, '%s: error: %s', rule.log_prefix, data)
+          common.yield_result(task, rule, 'error:' .. data,
+              0.0, 'fail')
+        elseif string.match(data, 'DETECT (.+)') then
+          local vname = string.match(data, 'DETECT (.+)')
+          common.yield_result(task, rule, vname)
+          cached = vname
+        elseif string.match(data, 'NON_SCANNED %((.+)%)') then
+          local why = string.match(data, 'NON_SCANNED %((.+)%)')
+
+          if why == 'PASSWORD PROTECTED' then
+            rspamd_logger.errx(task, '%s: File is encrypted', rule.log_prefix)
+            common.yield_result(task, rule, 'File is encrypted: '.. why,
+                0.0, 'encrypted')
+          else
+            common.yield_result(task, rule, 'unhandled response:' .. data, 0.0, 'fail')
+          end
+        else
+          rspamd_logger.errx(task, '%s: unhandled response: %s', rule.log_prefix, data)
+          common.yield_result(task, rule, 'unhandled response:' .. data, 0.0, 'fail')
+        end
+          if cached then
+          common.save_cache(task, digest, rule, cached)
+          end
 
       end
     end
