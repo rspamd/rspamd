@@ -251,6 +251,35 @@ rspamd_escape_log_string (gchar *str)
 	}
 }
 
+gint
+rspamd_try_open_log_fd (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
+{
+	gint fd;
+
+	fd = open (rspamd_log->log_file,
+			O_CREAT | O_WRONLY | O_APPEND,
+			S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
+	if (fd == -1) {
+		fprintf (stderr,
+				"open_log: cannot open desired log file: %s, %s\n",
+				rspamd_log->log_file, strerror (errno));
+		return -1;
+	}
+
+	if (uid != -1 || gid != -1) {
+		if (fchown (fd, uid, gid) == -1) {
+			fprintf (stderr,
+					"open_log: cannot chown desired log file: %s, %s\n",
+					rspamd_log->log_file, strerror (errno));
+			close (fd);
+
+			return -1;
+		}
+	}
+
+	return fd;
+}
+
 /* Logging utility functions */
 gint
 rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
@@ -268,20 +297,9 @@ rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 #endif
 			break;
 		case RSPAMD_LOG_FILE:
-			rspamd_log->fd = open (rspamd_log->log_file,
-					O_CREAT | O_WRONLY | O_APPEND,
-					S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
+			rspamd_log->fd = rspamd_try_open_log_fd (rspamd_log, uid, gid);
+
 			if (rspamd_log->fd == -1) {
-				fprintf (stderr,
-						"open_log: cannot open desired log file: %s, %s\n",
-						rspamd_log->log_file, strerror (errno));
-				return -1;
-			}
-			if (fchown (rspamd_log->fd, uid, gid) == -1) {
-				fprintf (stderr,
-						"open_log: cannot chown desired log file: %s, %s\n",
-						rspamd_log->log_file, strerror (errno));
-				close (rspamd_log->fd);
 				return -1;
 			}
 			break;
@@ -296,23 +314,12 @@ rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 	return 0;
 }
 
-void
-rspamd_log_close_priv (rspamd_logger_t *rspamd_log, gboolean termination, uid_t uid, gid_t gid)
+static void
+rspamd_log_reset_repeated (rspamd_logger_t *rspamd_log)
 {
 	gchar tmpbuf[256];
-	rspamd_log_flush (rspamd_log);
-
 	if (rspamd_log->opened) {
-		switch (rspamd_log->type) {
-		case RSPAMD_LOG_CONSOLE:
-			/* Do nothing special */
-			break;
-		case RSPAMD_LOG_SYSLOG:
-#ifdef HAVE_SYSLOG_H
-			closelog ();
-#endif
-			break;
-		case RSPAMD_LOG_FILE:
+		if (rspamd_log->type == RSPAMD_LOG_FILE) {
 			if (rspamd_log->repeats > REPEATS_MIN) {
 				rspamd_snprintf (tmpbuf,
 						sizeof (tmpbuf),
@@ -343,11 +350,38 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, gboolean termination, uid_t 
 						tmpbuf,
 						rspamd_log);
 			}
+		}
+	}
+}
 
+void
+rspamd_log_close_priv (rspamd_logger_t *rspamd_log, gboolean termination, uid_t uid, gid_t gid)
+{
+
+	rspamd_log_flush (rspamd_log);
+	rspamd_log_reset_repeated (rspamd_log);
+
+	if (rspamd_log->opened) {
+		switch (rspamd_log->type) {
+		case RSPAMD_LOG_CONSOLE:
+			/* Do nothing special */
+			break;
+		case RSPAMD_LOG_SYSLOG:
+#ifdef HAVE_SYSLOG_H
+			closelog ();
+#endif
+			break;
+		case RSPAMD_LOG_FILE:
 			if (rspamd_log->fd != -1) {
+#if _POSIX_SYNCHRONIZED_IO > 0
+				if (fdatasync (rspamd_log->fd) == -1) {
+					msg_err ("error syncing log file: %s", strerror (errno));
+				}
+#else
 				if (fsync (rspamd_log->fd) == -1) {
 					msg_err ("error syncing log file: %s", strerror (errno));
 				}
+#endif
 				close (rspamd_log->fd);
 			}
 			break;
@@ -367,11 +401,29 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, gboolean termination, uid_t 
 gint
 rspamd_log_reopen_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 {
-	rspamd_log_close_priv (rspamd_log, FALSE, uid, gid);
+	if (rspamd_log->type == RSPAMD_LOG_FILE) {
+		rspamd_log_flush (rspamd_log);
+		rspamd_log_reset_repeated (rspamd_log);
 
-	if (rspamd_log_open_priv (rspamd_log, uid, gid) == 0) {
-		msg_info ("log file reopened");
-		return 0;
+		gint newfd = rspamd_try_open_log_fd (rspamd_log, uid, gid);
+
+		if (newfd != -1) {
+			rspamd_log_close_priv (rspamd_log, FALSE, uid, gid);
+			rspamd_log->fd = newfd;
+
+			rspamd_log->opened = TRUE;
+			rspamd_log->enabled = TRUE;
+		}
+
+		/* Do nothing, use old settings */
+	}
+	else {
+		/* Straightforward */
+		rspamd_log_close_priv (rspamd_log, FALSE, uid, gid);
+
+		if (rspamd_log_open_priv (rspamd_log, uid, gid) == 0) {
+			return 0;
+		}
 	}
 
 	return -1;

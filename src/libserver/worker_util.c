@@ -200,7 +200,10 @@ rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 static gboolean
 rspamd_worker_usr1_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
+	struct rspamd_main *rspamd_main = sigh->worker->srv;
+
 	rspamd_log_reopen (sigh->worker->srv->logger);
+	msg_info_main ("logging reinitialised");
 
 	/* Get more signals */
 	return TRUE;

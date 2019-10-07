@@ -990,6 +990,7 @@ rspamd_usr1_handler (struct ev_loop *loop, ev_signal *w, int revents)
 		rspamd_log_reopen_priv (rspamd_main->logger,
 				rspamd_main->workers_uid,
 				rspamd_main->workers_gid);
+		msg_info_main ("logging reinitialised");
 		g_hash_table_foreach (rspamd_main->workers, reopen_log_handler,
 				NULL);
 	}
