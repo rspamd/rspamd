@@ -336,7 +336,7 @@ exports.text_part_heuristic = function(part, log_obj)
     end
     lua_util.debugm(N, log_obj, "text part check: %s printable, %s non-printable, %s total",
         tlen - non_printable, non_printable, tlen)
-    if non_printable / tlen > 0.0625 then
+    if non_printable / tlen > 0.0078125 then
       return false
     end
 
