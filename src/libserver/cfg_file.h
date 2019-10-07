@@ -202,7 +202,7 @@ struct rspamd_worker_bind_conf {
 	GPtrArray *addrs;
 	guint cnt;
 	gchar *name;
-	const gchar *bind_line;
+	gchar *bind_line;
 	gboolean is_systemd;
 	struct rspamd_worker_bind_conf *next;
 };

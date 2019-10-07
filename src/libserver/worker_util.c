@@ -907,7 +907,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 
 		if (cf->bind_conf) {
 			setproctitle ("%s process (%s)", cf->worker->name,
-					cf->bind_conf->name);
+					cf->bind_conf->bind_line);
 		}
 		else {
 			setproctitle ("%s process", cf->worker->name);
@@ -933,7 +933,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		if (cf->bind_conf) {
 			msg_info_main ("starting %s process %P (%d); listen on: %s",
 					cf->worker->name,
-					getpid (), index, cf->bind_conf->name);
+					getpid (), index, cf->bind_conf->bind_line);
 		}
 		else {
 			msg_info_main ("starting %s process %P (%d)", cf->worker->name,
@@ -949,7 +949,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		exit (EXIT_FAILURE);
 		break;
 	case -1:
-		msg_err_main ("cannot fork main process. %s", strerror (errno));
+		msg_err_main ("cannot fork main process: %s", strerror (errno));
 
 		if (rspamd_main->pfh) {
 			rspamd_pidfile_remove (rspamd_main->pfh);
@@ -969,8 +969,8 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		ev_child_start (rspamd_main->event_loop, &wrk->cld_ev);
 		rspamd_main_heartbeat_start (wrk, rspamd_main->event_loop);
 		/* Insert worker into worker's table, pid is index */
-		g_hash_table_insert (rspamd_main->workers, GSIZE_TO_POINTER (
-				wrk->pid), wrk);
+		g_hash_table_insert (rspamd_main->workers,
+				GSIZE_TO_POINTER (wrk->pid), wrk);
 		break;
 	}
 

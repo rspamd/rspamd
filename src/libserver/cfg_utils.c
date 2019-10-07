@@ -86,7 +86,7 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 	cnf = g_malloc0 (sizeof (struct rspamd_worker_bind_conf));
 
 	cnf->cnt = 1024;
-	cnf->bind_line = str;
+	cnf->bind_line = g_strdup (str);
 
 	if (g_ascii_strncasecmp (str, "systemd:", sizeof ("systemd:") - 1) == 0) {
 		/* The actual socket will be passed by systemd environment */
@@ -1077,6 +1077,7 @@ rspamd_worker_conf_dtor (struct rspamd_worker_conf *wcf)
 
 		LL_FOREACH_SAFE (wcf->bind_conf, cnf, tmp) {
 			g_free (cnf->name);
+			g_free (cnf->bind_line);
 			g_ptr_array_free (cnf->addrs, TRUE);
 			g_free (cnf);
 		}
