@@ -212,10 +212,10 @@ local function need_check(task, content, rule, digest, fn)
       end
     end
 
-    local f_message_not_too_large = message_not_too_large(task, content, rule) or true
-    local f_message_not_too_small = message_not_too_small(task, content, rule) or true
-    local f_message_min_words = message_min_words(task, rule) or true
-    local f_dynamic_scan = dynamic_scan(task, rule) or true
+    local f_message_not_too_large = message_not_too_large(task, content, rule)
+    local f_message_not_too_small = message_not_too_small(task, content, rule)
+    local f_message_min_words = message_min_words(task, rule)
+    local f_dynamic_scan = dynamic_scan(task, rule)
 
     if uncached and
       f_message_not_too_large and
@@ -229,7 +229,7 @@ local function need_check(task, content, rule, digest, fn)
 
   end
 
-  if rule.redis_params then
+  if rule.redis_params and not rule.no_cache then
 
     key = rule.prefix .. key
 
@@ -439,7 +439,7 @@ end
 exports.log_clean = log_clean
 exports.yield_result = yield_result
 exports.match_patterns = match_patterns
-exports.need_check = need_check
+exports.condition_check_and_continue = need_check
 exports.save_cache = save_cache
 exports.create_regex_table = create_regex_table
 exports.check_parts_match = check_parts_match

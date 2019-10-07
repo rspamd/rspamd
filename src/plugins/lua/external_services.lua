@@ -144,8 +144,10 @@ local function add_scanner_rule(sym, opts)
 
   -- if any mime_part filter defined, do not scan all attachments
   if opts.mime_parts_filter_regex ~= nil
-    or opts.mime_parts_filter_ext ~= nil then
-      rule.scan_all_mime_parts = false
+      or opts.mime_parts_filter_ext ~= nil then
+    rule.scan_all_mime_parts = false
+  else
+    rule.scan_all_mime_parts = true
   end
 
   rule.patterns = common.create_regex_table(opts.patterns or {})

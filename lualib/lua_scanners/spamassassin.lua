@@ -202,7 +202,7 @@ local function spamassassin_check(task, content, digest, rule)
     })
   end
 
-  if common.need_check(task, content, rule, digest, spamassassin_check_uncached) then
+  if common.condition_check_and_continue(task, content, rule, digest, spamassassin_check_uncached) then
     return
   else
     spamassassin_check_uncached()

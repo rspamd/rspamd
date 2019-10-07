@@ -178,7 +178,7 @@ local function kaspersky_check(task, content, digest, rule)
     })
   end
 
-  if common.need_check(task, content, rule, digest, kaspersky_check_uncached) then
+  if common.condition_check_and_continue(task, content, rule, digest, kaspersky_check_uncached) then
     return
   else
     kaspersky_check_uncached()
