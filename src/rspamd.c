@@ -957,7 +957,6 @@ rspamd_term_handler (struct ev_loop *loop, ev_signal *w, int revents)
 	if (!rspamd_main->wanna_die) {
 		rspamd_main->wanna_die = TRUE;
 		msg_info_main ("catch termination signal, waiting for children");
-		rspamd_log_nolock (rspamd_main->logger);
 		/* Stop srv events to avoid false notifications */
 		g_hash_table_foreach (rspamd_main->workers, stop_srv_ev, rspamd_main);
 		rspamd_pass_signal (rspamd_main->workers, SIGTERM);
@@ -1075,7 +1074,6 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 
 	/* Turn off locking for logger */
 	ev_child_stop (EV_A_ w);
-	rspamd_log_nolock (rspamd_main->logger);
 
 	/* Remove dead child form children list */
 	g_hash_table_remove (rspamd_main->workers, GSIZE_TO_POINTER (wrk->pid));
@@ -1113,7 +1111,6 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 				wrk->pid);
 		rspamd_check_core_limits (rspamd_main);
 		rspamd_fork_delayed (wrk->cf, wrk->index, rspamd_main);
-		rspamd_log_lock (rspamd_main->logger);
 	}
 	else {
 		msg_info_main ("do not respawn process %s after found terminated process with pid %P",

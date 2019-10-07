@@ -154,6 +154,9 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 	const gchar *line;
 	glong r;
 	gint fd;
+	gboolean locked = FALSE;
+
+	iov = (struct iovec *) data;
 
 	if (rspamd_log->type == RSPAMD_LOG_CONSOLE) {
 
@@ -173,20 +176,36 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 	}
 
 	if (!rspamd_log->no_lock) {
-#ifndef DISABLE_PTHREAD_MUTEX
-		if (rspamd_log->mtx) {
-			rspamd_mempool_lock_mutex (rspamd_log->mtx);
+		gsize tlen;
+
+		if (is_iov) {
+			tlen = 0;
+
+			for (guint i = 0; i < count; i ++) {
+				tlen += iov[i].iov_len;
+			}
 		}
 		else {
-			rspamd_file_lock (fd, FALSE);
+			tlen = count;
 		}
+
+		if (tlen > PIPE_BUF) {
+			locked = TRUE;
+
+#ifndef DISABLE_PTHREAD_MUTEX
+			if (rspamd_log->mtx) {
+				rspamd_mempool_lock_mutex (rspamd_log->mtx);
+			}
+			else {
+				rspamd_file_lock (fd, FALSE);
+			}
 #else
-		rspamd_file_lock (fd, FALSE);
+			rspamd_file_lock (fd, FALSE);
 #endif
+		}
 	}
 
 	if (is_iov) {
-		iov = (struct iovec *) data;
 		r = writev (fd, iov, count);
 	}
 	else {
@@ -194,7 +213,7 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 		r = write (fd, line, count);
 	}
 
-	if (!rspamd_log->no_lock) {
+	if (locked) {
 #ifndef DISABLE_PTHREAD_MUTEX
 		if (rspamd_log->mtx) {
 			rspamd_mempool_unlock_mutex (rspamd_log->mtx);
@@ -294,6 +313,7 @@ rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 #ifdef HAVE_SYSLOG_H
 			openlog ("rspamd", LOG_NDELAY | LOG_PID,
 					rspamd_log->log_facility);
+			rspamd_log->no_lock = TRUE;
 #endif
 			break;
 		case RSPAMD_LOG_FILE:
@@ -302,6 +322,8 @@ rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 			if (rspamd_log->fd == -1) {
 				return -1;
 			}
+
+			rspamd_log->no_lock = TRUE;
 			break;
 		default:
 			return -1;
@@ -1395,22 +1417,6 @@ rspamd_log_counters (rspamd_logger_t *logger)
 	}
 
 	return NULL;
-}
-
-void
-rspamd_log_nolock (rspamd_logger_t *logger)
-{
-	if (logger) {
-		logger->no_lock = TRUE;
-	}
-}
-
-void
-rspamd_log_lock (rspamd_logger_t *logger)
-{
-	if (logger) {
-		logger->no_lock = FALSE;
-	}
 }
 
 static gint

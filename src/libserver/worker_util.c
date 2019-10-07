@@ -867,6 +867,8 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	case 0:
 		/* Update pid for logging */
 		rspamd_log_update_pid (cf->type, rspamd_main->logger);
+		/* To avoid atomic writes issue */
+		rspamd_log_reopen (rspamd_main->logger);
 		wrk->pid = getpid ();
 
 		/* Init PRNG after fork */
