@@ -33,7 +33,7 @@ local function kaspersky_se_config(opts)
 
   local default_conf = {
     name = N,
-    default_port = 1234,
+    default_port = 9999,
     use_https = false,
     use_files = false,
     timeout = 5.0,
@@ -99,10 +99,10 @@ local function kaspersky_se_check(task, content, digest, rule)
       end
       if rule.use_https then
         url = string.format('https://%s:%d%s', tostring(addr),
-            rule.default_port, suffix)
+            addr:get_port(), suffix)
       else
         url = string.format('http://%s:%d%s', tostring(addr),
-            rule.default_port, suffix)
+            addr:get_port(), suffix)
       end
 
       return url
