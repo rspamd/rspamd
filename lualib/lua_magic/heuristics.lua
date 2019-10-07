@@ -314,26 +314,50 @@ end
 exports.text_part_heuristic = function(part, log_obj)
   -- We get some span of data and check it
   local function is_span_text(span)
-    local function rough_utf8_check(b)
+    local function rough_utf8_check(bytes, idx, remain)
+      local b = bytes[idx]
       if b >= 127 then
-        if bit.band(b, 0xe0) == 0xc0 or bit.band(b, 0xf0) == 0xe0 or bit.band(b, 0xf8) == 0xf0 then
-          return true
+        if bit.band(b, 0xe0) == 0xc0 and remain > 1 and
+            bit.band(bytes[idx + 1], 0xc0) == 0x80 then
+          return true,1
+        elseif bit.band(b, 0xf0) == 0xe0 and remain > 2 and
+            bit.band(bytes[idx + 1], 0xc0) == 0x80 and
+            bit.band(bytes[idx + 2], 0xc0) == 0x80 then
+          return true,2
+        elseif bit.band(b, 0xf8) == 0xf0 and remain > 3 and
+            bit.band(bytes[idx + 1], 0xc0) == 0x80 and
+            bit.band(bytes[idx + 2], 0xc0) == 0x80 and
+            bit.band(bytes[idx + 3], 0xc0) == 0x80 then
+          return true,3
         end
         return false
       else
-        return true
+        return true,0
       end
     end
 
     -- Convert to string as LuaJIT can optimise string.sub (and fun.iter) but not C calls
     local tlen = #span
     local non_printable = 0
-    for _,b in ipairs(span:bytes()) do
-      if ((b < 0x20) and not (b == 0x0d or b == 0x0a or b == 0x09))
-          or (not rough_utf8_check(b)) then
+    local bytes = span:bytes()
+    local i = 1
+    repeat
+      local b = bytes[i]
+
+      if (b < 0x20) and not (b == 0x0d or b == 0x0a or b == 0x09) then
         non_printable = non_printable + 1
+      elseif b >= 127 then
+        local c,nskip = rough_utf8_check(bytes, i, tlen - i)
+
+        if not c then
+          non_printable = non_printable + 1
+        else
+          i = i + nskip
+        end
       end
-    end
+      i = i + 1
+    until i > tlen
+
     lua_util.debugm(N, log_obj, "text part check: %s printable, %s non-printable, %s total",
         tlen - non_printable, non_printable, tlen)
     if non_printable / tlen > 0.0078125 then
