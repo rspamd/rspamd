@@ -72,7 +72,7 @@ local txt_patterns = {
     [[(?i)\s*<span]],
   },
   csv = {
-    [[(?:[-a-zA-Z0-9_]+\s*,){2,}(?:[-a-zA-Z0-9_]+[\r\n])]]
+    [[(?:[-a-zA-Z0-9_]+\s*,){2,}(?:[-a-zA-Z0-9_]+,?[ ]*[\r\n])]]
   },
 }
 
@@ -85,7 +85,11 @@ local txt_patterns_indexes = {}
 local exports = {}
 
 local function compile_tries()
-  local function compile_pats(patterns, indexes, transform_func)
+  local default_compile_flags = bit.bor(rspamd_trie.flags.re,
+      rspamd_trie.flags.dot_all,
+      rspamd_trie.flags.single_match,
+      rspamd_trie.flags.no_start)
+  local function compile_pats(patterns, indexes, transform_func, compile_flags)
     local strs = {}
     for ext,pats in pairs(patterns) do
       for _,pat in ipairs(pats) do
@@ -95,10 +99,7 @@ local function compile_tries()
       end
     end
 
-    local compile_flags = bit.bor(rspamd_trie.flags.re, rspamd_trie.flags.dot_all)
-    compile_flags = bit.bor(compile_flags, rspamd_trie.flags.single_match)
-    compile_flags = bit.bor(compile_flags, rspamd_trie.flags.no_start)
-    return rspamd_trie.create(strs, compile_flags)
+    return rspamd_trie.create(strs, compile_flags or default_compile_flags)
   end
 
   if not msoffice_trie then
@@ -130,7 +131,10 @@ local function compile_tries()
         function(pat) return pat end)
     -- Text patterns at the initial fragment
     txt_trie = compile_pats(txt_patterns, txt_patterns_indexes,
-        function(pat) return pat end)
+        function(pat) return pat end,
+        bit.bor(rspamd_trie.flags.re,
+            rspamd_trie.flags.dot_all,
+            rspamd_trie.flags.no_start))
   end
 end
 
@@ -391,8 +395,8 @@ exports.text_part_heuristic = function(part, log_obj)
           local ext = txt_patterns_indexes[n]
           if ext then
             res[ext] = (res[ext] or 0) + 20 * #positions
-            lua_util.debugm(N, log_obj, "found txt pattern for %s: %s",
-                ext, #positions)
+            lua_util.debugm(N, log_obj, "found txt pattern for %s: %s, total: %s",
+                ext, #positions, res[ext])
           end
         end
 
