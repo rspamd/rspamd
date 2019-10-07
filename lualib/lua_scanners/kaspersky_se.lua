@@ -130,7 +130,7 @@ local function kaspersky_se_check(task, content, digest, rule)
       local message_fd = rspamd_util.create_file(fname)
 
       if not message_fd then
-        rspamd_logger.errx('cannot store file for savapi scan: %s', fname)
+        rspamd_logger.errx('cannot store file for kaspersky_se scan: %s', fname)
         return
       end
 
@@ -203,13 +203,12 @@ local function kaspersky_se_check(task, content, digest, rule)
           task:insert_result(rule.symbol_fail, 1.0, 'Bad HTTP code: ' .. code)
           return
         end
-        lua_util.debugm(rule.name, task, 'got reply: %s', body)
-        local data = tostring(body)
+        local data = string.gsub(tostring(body), '[\r\n%s]$', '')
         local cached
-        lua_util.debugm(rule.name, task, '%s: got reply: %s',
+        lua_util.debugm(rule.name, task, '%s: got reply data: "%s"',
             rule.log_prefix, data)
         if data == 'CLEAN' then
-          cached = 'CLEAN'
+          cached = 'OK'
           if rule['log_clean'] then
             rspamd_logger.infox(task, '%s: message or mime_part is clean',
                 rule.log_prefix)
@@ -239,9 +238,10 @@ local function kaspersky_se_check(task, content, digest, rule)
           rspamd_logger.errx(task, '%s: unhandled response: %s', rule.log_prefix, data)
           common.yield_result(task, rule, 'unhandled response:' .. data, 0.0, 'fail')
         end
-          if cached then
+
+        if cached then
           common.save_cache(task, digest, rule, cached)
-          end
+        end
 
       end
     end
