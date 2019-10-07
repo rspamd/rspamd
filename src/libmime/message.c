@@ -813,11 +813,12 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 {
 	struct rspamd_mime_text_part *text_part;
 	rspamd_ftok_t html_tok, xhtml_tok;
-	gboolean found_html = FALSE, found_txt = FALSE;
+	gboolean found_html = FALSE, found_txt = FALSE, straight_ct = FALSE;
 	enum rspamd_action_type act;
 
-	if (IS_CT_TEXT (mime_part->ct) || (mime_part->detected_type &&
-									   strcmp (mime_part->detected_type, "text") == 0)) {
+	if ((IS_CT_TEXT (mime_part->ct) && (straight_ct = TRUE)) ||
+					(mime_part->detected_type &&
+						strcmp (mime_part->detected_type, "text") == 0)) {
 		found_txt = TRUE;
 
 		html_tok.begin = "html";
@@ -836,9 +837,9 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 	/* Skip attachments */
 	if ((found_txt || found_html) &&
 			mime_part->cd && mime_part->cd->type == RSPAMD_CT_ATTACHMENT &&
-			(task->cfg && !task->cfg->check_text_attachements)) {
+			(!straight_ct || (task->cfg && !task->cfg->check_text_attachements))) {
 		debug_task ("skip attachments for checking as text parts");
-		return TRUE;
+		return FALSE;
 	}
 	else if (!(found_txt || found_html)) {
 		/* Not a text part */
