@@ -70,7 +70,7 @@ struct rspamd_mime_part {
 	gsize raw_headers_len;
 
 	enum rspamd_cte cte;
-	enum rspamd_mime_part_flags flags;
+	guint flags;
 	guint id;
 
 	union {
