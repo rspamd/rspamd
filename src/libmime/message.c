@@ -816,7 +816,7 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 	gboolean found_html = FALSE, found_txt = FALSE;
 	enum rspamd_action_type act;
 
-	if (IS_CT_TEXT (mime_part->ct) || (!mime_part->detected_type ||
+	if (IS_CT_TEXT (mime_part->ct) || (mime_part->detected_type &&
 									   strcmp (mime_part->detected_type, "text") == 0)) {
 		found_txt = TRUE;
 
