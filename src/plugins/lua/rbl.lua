@@ -308,14 +308,16 @@ local function gen_rbl_callback(rule)
   local function add_dns_request(task, req, forced, is_ip, requests_table, what, whitelist)
     local req_str = req
     if is_ip then
-      req_str = ip_to_rbl(req)
+      req_str = tostring(req)
     end
 
     if whitelist and is_whitelisted(task, req, req_str, whitelist, what) then
       return
     end
 
-    req = req_str
+    if is_ip then
+      req = ip_to_rbl(req)
+    end
 
     if requests_table[req] then
       -- Duplicate request
@@ -331,7 +333,7 @@ local function gen_rbl_callback(rule)
           local nreq = {
             forced = forced,
             n = processed,
-            orig = req,
+            orig = req_str,
             resolve_ip = resolve_ip,
             what = what,
           }
@@ -354,7 +356,7 @@ local function gen_rbl_callback(rule)
         local nreq = {
           forced = forced,
           n = to_resolve,
-          orig = orign,
+          orig = req_str,
           resolve_ip = resolve_ip,
           what = what,
         }
