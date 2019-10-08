@@ -87,7 +87,6 @@ local function add_antivirus_rule(sym, opts)
   if not opts.symbol_fail then
     opts.symbol_fail = opts.symbol .. '_FAIL'
   end
-
   if not opts.symbol_encrypted then
     opts.symbol_encrypted = opts.symbol .. '_ENCRYPTED'
   end
