@@ -484,7 +484,7 @@ sub ProcessLog {
             next if ( defined $endTime && $ts gt $endTime );
 
             if ( $_ !~
-                /\(([^()]+)\): \[(NaN|-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\].+? time: (\d+\.\d+)ms real/ )
+                /\(([^()]+)\): \[(NaN|-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\].+? time: (\d+\.\d+)ms/ )
             {
                 #print "BAD: $_\n";
                 next;
