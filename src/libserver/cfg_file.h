@@ -105,11 +105,11 @@ enum lua_var_type {
 };
 
 enum rspamd_symbol_group_flags {
-	RSPAMD_SYMBOL_GROUP_NORMAL = 0,
-	RSPAMD_SYMBOL_GROUP_DISABLED = (1 << 0),
-	RSPAMD_SYMBOL_GROUP_ONE_SHOT = (1 << 1),
-	RSPAMD_SYMBOL_GROUP_UNGROUPED = (1 << 2),
-	RSPAMD_SYMBOL_GROUP_PUBLIC = (1 << 3),
+	RSPAMD_SYMBOL_GROUP_NORMAL = 0u,
+	RSPAMD_SYMBOL_GROUP_DISABLED = (1u << 0u),
+	RSPAMD_SYMBOL_GROUP_ONE_SHOT = (1u << 1u),
+	RSPAMD_SYMBOL_GROUP_UNGROUPED = (1u << 2u),
+	RSPAMD_SYMBOL_GROUP_PUBLIC = (1u << 3u),
 };
 
 /**
@@ -121,7 +121,7 @@ struct rspamd_symbols_group {
 	gchar *description;
 	GHashTable *symbols;
 	gdouble max_score;
-	enum rspamd_symbol_group_flags flags;
+	guint flags;
 };
 
 enum rspamd_symbol_flags {
