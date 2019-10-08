@@ -207,14 +207,24 @@ local function kaspersky_se_check(task, content, digest, rule)
         local cached
         lua_util.debugm(rule.name, task, '%s: got reply data: "%s"',
             rule.log_prefix, data)
-        if data == 'CLEAN' then
-          cached = 'OK'
-          if rule['log_clean'] then
-            rspamd_logger.infox(task, '%s: message or mime_part is clean',
-                rule.log_prefix)
+
+        if data:find('^CLEAN') then
+          -- Handle CLEAN replies
+          if data == 'CLEAN' then
+            cached = 'OK'
+            if rule['log_clean'] then
+              rspamd_logger.infox(task, '%s: message or mime_part is clean',
+                  rule.log_prefix)
+            else
+              lua_util.debugm(rule.name, task, '%s: message or mime_part is clean',
+                  rule.log_prefix)
+            end
+          elseif data == 'CLEAN AND CONTAINS OFFICE MACRO' then
+            common.yield_result(task, rule, 'File contains macros', 0.0, 'encrypted')
+            cached = 'MACRO'
           else
-            lua_util.debugm(rule.name, task, '%s: message or mime_part is clean',
-                rule.log_prefix)
+            rspamd_logger.errx(task, '%s: unhandled clean response: %s', rule.log_prefix, data)
+            common.yield_result(task, rule, 'unhandled response:' .. data, 0.0, 'fail')
           end
         elseif data == 'SERVER_ERROR' then
           rspamd_logger.errx(task, '%s: error: %s', rule.log_prefix, data)
@@ -231,6 +241,7 @@ local function kaspersky_se_check(task, content, digest, rule)
             rspamd_logger.errx(task, '%s: File is encrypted', rule.log_prefix)
             common.yield_result(task, rule, 'File is encrypted: '.. why,
                 0.0, 'encrypted')
+            cached = 'ENCRYPTED'
           else
             common.yield_result(task, rule, 'unhandled response:' .. data, 0.0, 'fail')
           end
