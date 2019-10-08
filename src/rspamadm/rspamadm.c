@@ -438,8 +438,6 @@ main (gint argc, gchar **argv, gchar **env)
 		exit (1);
 	}
 
-	g_option_context_free (context);
-
 	/* Setup logger */
 	if (verbose) {
 		cfg->log_level = G_LOG_LEVEL_DEBUG;
@@ -614,6 +612,7 @@ main (gint argc, gchar **argv, gchar **env)
 	ev_break (rspamd_main->event_loop, EVBREAK_ALL);
 
 end:
+	g_option_context_free (context);
 	rspamd_dns_resolver_deinit (resolver);
 	REF_RELEASE (rspamd_main->cfg);
 	rspamd_http_context_free (rspamd_main->http_ctx);
