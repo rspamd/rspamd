@@ -84,6 +84,11 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail)
     symbol = rule.symbol_encrypted
     threat_info = "Scan has returned that input was encrypted"
     dyn_weight = 1.0
+  elseif is_fail == 'macro' then
+    patterns = rule.patterns
+    symbol = rule.symbol_macro
+    threat_info = "Scan has returned that input contains macros"
+    dyn_weight = 1.0
   end
 
   if type(vname) == 'string' then
@@ -198,9 +203,16 @@ local function need_check(task, content, rule, digest, fn)
       local threat_string = lua_util.str_split(data[1], '\v')
       local score = data[2] or rule.default_score
       if threat_string[1] ~= 'OK' then
-        lua_util.debugm(rule.name, task, '%s: got cached threat result for %s: %s - score: %s',
-          rule.log_prefix, key, threat_string[1], score)
-        yield_result(task, rule, threat_string, score)
+        if threat_string[1] == 'MACRO' then
+          yield_result(task, rule, 'File contains macros', 0.0, 'macro')
+        elseif threat_string[1] == 'ENCRYPTED' then
+          yield_result(task, rule, 'File is encrypted', 0.0, 'encrypted')
+        else
+          lua_util.debugm(rule.name, task, '%s: got cached threat result for %s: %s - score: %s',
+              rule.log_prefix, key, threat_string[1], score)
+          yield_result(task, rule, threat_string, score)
+        end
+
       else
         lua_util.debugm(rule.name, task, '%s: got cached negative result for %s: %s',
           rule.log_prefix, key, threat_string[1])
