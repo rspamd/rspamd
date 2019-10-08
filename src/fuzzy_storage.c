@@ -517,8 +517,8 @@ rspamd_fuzzy_reply_io (EV_P_ ev_io *w, int revents)
 {
 	struct fuzzy_session *session = (struct fuzzy_session *)w->data;
 
-	rspamd_fuzzy_write_reply (session);
 	ev_io_stop (EV_A_ w);
+	rspamd_fuzzy_write_reply (session);
 	REF_RELEASE (session);
 }
 
