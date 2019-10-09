@@ -158,13 +158,21 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 	}
 #if defined(WITH_PCRE2)
 	gsize jsz;
-	guint jit_flags = can_jit ? PCRE2_JIT_COMPLETE : 0;
-	/* Create match context */
+	static const guint max_recursion_depth = 100000, max_backtrack = 1000000;
 
+	guint jit_flags = can_jit ? PCRE2_JIT_COMPLETE : 0;
+
+	/* Create match context */
 	r->mcontext = pcre2_match_context_create (NULL);
+	g_assert (r->mcontext != NULL);
+	pcre2_set_depth_limit (r->mcontext, max_recursion_depth);
+	pcre2_set_match_limit (r->mcontext, max_backtrack);
 
 	if (r->re != r->raw_re) {
 		r->raw_mcontext = pcre2_match_context_create (NULL);
+		g_assert (r->raw_mcontext != NULL);
+		pcre2_set_depth_limit (r->raw_mcontext, max_recursion_depth);
+		pcre2_set_match_limit (r->raw_mcontext, max_backtrack);
 	}
 	else {
 		r->raw_mcontext = r->mcontext;
