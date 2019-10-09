@@ -165,13 +165,13 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 	/* Create match context */
 	r->mcontext = pcre2_match_context_create (NULL);
 	g_assert (r->mcontext != NULL);
-	pcre2_set_depth_limit (r->mcontext, max_recursion_depth);
+	pcre2_set_recursion_limit (r->mcontext, max_recursion_depth);
 	pcre2_set_match_limit (r->mcontext, max_backtrack);
 
 	if (r->re != r->raw_re) {
 		r->raw_mcontext = pcre2_match_context_create (NULL);
 		g_assert (r->raw_mcontext != NULL);
-		pcre2_set_depth_limit (r->raw_mcontext, max_recursion_depth);
+		pcre2_set_recursion_limit (r->raw_mcontext, max_recursion_depth);
 		pcre2_set_match_limit (r->raw_mcontext, max_backtrack);
 	}
 	else {
