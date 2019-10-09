@@ -110,7 +110,7 @@ lua_check_url (lua_State * L, gint pos)
 	return ud ? ((struct rspamd_lua_url *)ud) : NULL;
 }
 
-static void
+static gboolean
 lua_url_single_inserter (struct rspamd_url *url, gsize start_offset,
 						 gsize end_offset, gpointer ud)
 {
@@ -120,6 +120,8 @@ lua_url_single_inserter (struct rspamd_url *url, gsize start_offset,
 	lua_url = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
 	rspamd_lua_setclass (L, "rspamd{url}", -1);
 	lua_url->url = url;
+
+	return TRUE;
 }
 
 /***
@@ -770,7 +772,7 @@ lua_url_init (lua_State *L)
 	return 0;
 }
 
-static void
+static gboolean
 lua_url_table_inserter (struct rspamd_url *url, gsize start_offset,
 		gsize end_offset, gpointer ud)
 {
@@ -785,6 +787,8 @@ lua_url_table_inserter (struct rspamd_url *url, gsize start_offset,
 	lua_pushinteger (L, n + 1);
 	lua_pushlstring (L, url->string, url->urllen);
 	lua_settable (L, -3);
+
+	return TRUE;
 }
 
 

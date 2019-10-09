@@ -2915,8 +2915,10 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 			}
 
 			if (cb->func) {
-				cb->func (url, cb->start - text, (m.m_begin + m.m_len) - text,
-						cb->funcd);
+				if (!cb->func (url, cb->start - text, (m.m_begin + m.m_len) - text,
+						cb->funcd)) {
+					return FALSE;
+				}
 			}
 		}
 		else if (rc != URI_ERRNO_OK) {
@@ -2962,9 +2964,10 @@ rspamd_url_trie_generic_callback_single (struct rspamd_multipattern *mp,
 struct rspamd_url_mimepart_cbdata {
 	struct rspamd_task *task;
 	struct rspamd_mime_text_part *part;
+	gsize url_len;
 };
 
-static void
+static gboolean
 rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 		gsize end_offset, gpointer ud)
 {
@@ -2984,6 +2987,17 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 	ex->len = end_offset - start_offset;
 	ex->type = RSPAMD_EXCEPTION_URL;
 	ex->ptr = url;
+
+	cbd->url_len += ex->len;
+
+	if (cbd->part->utf_stripped_content &&
+			cbd->url_len > cbd->part->utf_stripped_content->len * 10) {
+		/* Absurdic case, stop here now */
+		msg_err_task ("part has too many URLs, we cannot process more: %z",
+				cbd->url_len);
+
+		return FALSE;
+	}
 
 	if (url->protocol == PROTOCOL_MAILTO) {
 		if (url->userlen > 0) {
@@ -3014,7 +3028,6 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 	if (url->querylen > 0) {
 		if (rspamd_url_find (task->task_pool, url->query, url->querylen,
 				&url_str, RSPAMD_URL_FIND_ALL, NULL, &prefix_added)) {
-
 			query_url = rspamd_mempool_alloc0 (task->task_pool,
 					sizeof (struct rspamd_url));
 			rc = rspamd_url_parse (query_url,
@@ -3053,6 +3066,8 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 			}
 		}
 	}
+
+	return TRUE;
 }
 
 void
@@ -3070,6 +3085,7 @@ rspamd_url_text_extract (rspamd_mempool_t *pool,
 
 	mcbd.task = task;
 	mcbd.part = part;
+	mcbd.url_len = 0;
 
 	rspamd_url_find_multiple (task->task_pool, part->utf_stripped_content->data,
 			part->utf_stripped_content->len, how, part->newlines,
@@ -3139,7 +3155,7 @@ rspamd_url_find_single (rspamd_mempool_t *pool,
 }
 
 
-void
+gboolean
 rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 		gsize end_offset, gpointer ud)
 {
@@ -3208,6 +3224,8 @@ rspamd_url_task_subject_callback (struct rspamd_url *url, gsize start_offset,
 			}
 		}
 	}
+
+	return TRUE;
 }
 
 guint

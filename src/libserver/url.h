@@ -167,7 +167,7 @@ const gchar *rspamd_url_strerror (int err);
  */
 gboolean rspamd_url_find_tld (const gchar *in, gsize inlen, rspamd_ftok_t *out);
 
-typedef void (*url_insert_function) (struct rspamd_url *url,
+typedef gboolean (*url_insert_function) (struct rspamd_url *url,
 									 gsize start_offset, gsize end_offset, void *ud);
 
 /**
@@ -208,7 +208,7 @@ void rspamd_url_find_single (rspamd_mempool_t *pool,
  * @param end_offset
  * @param ud
  */
-void rspamd_url_task_subject_callback (struct rspamd_url *url,
+gboolean rspamd_url_task_subject_callback (struct rspamd_url *url,
 									   gsize start_offset,
 									   gsize end_offset, gpointer ud);
 
