@@ -2681,6 +2681,13 @@ rspamd_url_trie_callback (struct rspamd_multipattern *mp,
 	const gchar *pos, *newline_pos = NULL;
 	struct url_callback_data *cb = context;
 
+	pos = text + match_pos;
+
+	if (cb->fin > pos) {
+		/* Already seen */
+		return 0;
+	}
+
 	matcher = &g_array_index (url_scanner->matchers, struct url_matcher,
 			strnum);
 
@@ -2689,7 +2696,6 @@ rspamd_url_trie_callback (struct rspamd_multipattern *mp,
 		return 0;
 	}
 
-	pos = text + match_pos;
 	memset (&m, 0, sizeof (m));
 	m.m_begin = text + match_start;
 	m.m_len = match_pos - match_start;
@@ -2810,6 +2816,13 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 	gint rc;
 	rspamd_mempool_t *pool;
 
+	pos = text + match_pos;
+
+	if (cb->fin > pos) {
+		/* Already seen */
+		return 0;
+	}
+
 	matcher = &g_array_index (url_scanner->matchers, struct url_matcher,
 			strnum);
 	pool = cb->pool;
@@ -2820,7 +2833,7 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 	}
 
 	memset (&m, 0, sizeof (m));
-	pos = text + match_pos;
+
 
 	/* Find the next newline after our pos */
 	if (cb->newlines && cb->newlines->len > 0) {
