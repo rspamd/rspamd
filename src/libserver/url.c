@@ -2289,6 +2289,8 @@ url_tld_start (struct url_callback_data *cb,
 		url_match_t *match)
 {
 	const gchar *p = pos;
+	guint processed = 0;
+	static const guint max_shift = 253 + sizeof ("https://");
 
 	/* Try to find the start of the url by finding any non-urlsafe character or whitespace/punctuation */
 	while (p >= cb->begin) {
@@ -2338,6 +2340,12 @@ url_tld_start (struct url_callback_data *cb,
 		}
 
 		p--;
+		processed ++;
+
+		if (processed > max_shift) {
+			/* Too long */
+			return FALSE;
+		}
 	}
 
 	return FALSE;
@@ -2398,15 +2406,24 @@ url_web_start (struct url_callback_data *cb,
 		url_match_t *match)
 {
 	/* Check what we have found */
-	if (pos > cb->begin &&
-		(g_ascii_strncasecmp (pos, "www", 3) == 0 ||
-		 g_ascii_strncasecmp (pos, "ftp", 3) == 0)) {
+	if (pos > cb->begin) {
+		if (g_ascii_strncasecmp (pos, "www", 3) == 0 ||
+		 g_ascii_strncasecmp (pos, "ftp", 3) == 0) {
 
-		if (!(is_url_start (*(pos - 1)) ||
-				g_ascii_isspace (*(pos - 1)) ||
-				pos - 1 == match->prev_newline_pos ||
-				(*(pos - 1) & 0x80))) { /* Chinese trick */
-			return FALSE;
+			if (!(is_url_start (*(pos - 1)) ||
+				  g_ascii_isspace (*(pos - 1)) ||
+				  pos - 1 == match->prev_newline_pos ||
+				  (*(pos - 1) & 0x80))) { /* Chinese trick */
+				return FALSE;
+			}
+		}
+		else {
+			guchar prev = *(pos - 1);
+
+			if (g_ascii_isalnum (prev)) {
+				/* Part of another url */
+				return FALSE;
+			}
 		}
 	}
 
@@ -2747,7 +2764,7 @@ rspamd_url_trie_callback (struct rspamd_multipattern *mp,
 		}
 
 		cb->start = m.m_begin;
-		cb->fin = m.m_begin + m.m_len;
+		cb->fin = pos;
 
 		return 1;
 	}
@@ -2884,7 +2901,7 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 		}
 
 		cb->start = m.m_begin;
-		cb->fin = m.m_begin + m.m_len;
+		cb->fin = pos;
 		url = rspamd_mempool_alloc0 (pool, sizeof (struct rspamd_url));
 		g_strstrip (cb->url_str);
 		rc = rspamd_url_parse (url, cb->url_str,
@@ -2898,7 +2915,8 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 			}
 
 			if (cb->func) {
-				cb->func (url, cb->start - text, cb->fin - text, cb->funcd);
+				cb->func (url, cb->start - text, (m.m_begin + m.m_len) - text,
+						cb->funcd);
 			}
 		}
 		else if (rc != URI_ERRNO_OK) {
