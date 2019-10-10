@@ -677,11 +677,11 @@ local no_inr_yes_ref = string.format('(%s) | (%s) | (%s) | (%s) | (%s) | (%s) | 
 local subj_re = 'Subject=/^R[eE]:/H'
 local has_ref = '(header_exists(References) | header_exists(In-Reply-To))'
 local missing_ref = string.format('!(%s)', has_ref)
--- Fake reply (has RE in subject, but has not References header)
+-- Fake reply (has RE in subject, but has no References header)
 reconf['FAKE_REPLY_C'] = {
   re = string.format('(%s) & (%s) & (%s) & !(%s)', subj_re, missing_ref, no_inr_yes_ref, xm_msoe6),
   score = 6.0,
-  description = 'Fake reply (has RE in subject, but has not References header)',
+  description = 'Fake reply (has RE in subject, but has no References header)',
   group = 'subject'
 }
 
