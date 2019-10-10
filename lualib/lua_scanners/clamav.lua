@@ -140,6 +140,10 @@ local function clamav_check(task, content, digest, rule)
             rspamd_logger.errx(task, '%s: File is encrypted', rule.log_prefix)
             common.yield_result(task, rule, 'File is encrypted: '.. vname, 0.0, 'encrypted')
             cached = 'encrypted'
+          elseif string.find(vname, '^Heuristics%.OLE2%.ContainsMacros') then
+            rspamd_logger.errx(task, '%s: ClamAV Found an OLE2 Office Macro', rule.log_prefix)
+            common.yield_result(task, rule, vname, 0.0, 'macro')
+          elseif vname then
           elseif string.find(vname, '^Heuristics%.Limits%.Exceeded') then
             rspamd_logger.errx(task, '%s: ClamAV Limits Exceeded', rule.log_prefix)
             common.yield_result(task, rule, 'Limits Exceeded: '.. vname, 0.0, 'fail')
