@@ -227,20 +227,25 @@ if opts and type(opts) == 'table' then
           score = 0.0,
           group = N
         })
-        rspamd_config:register_symbol({
-          type = 'virtual',
-          name = m['symbol_encrypted'],
-          parent = id,
-          score = 0.0,
-          group = N
-        })
-        rspamd_config:register_symbol({
-          type = 'virtual',
-          name = m['symbol_macro'],
-          parent = id,
-          score = 0.0,
-          group = N
-        })
+
+        if m.symbol_encrypted then
+          rspamd_config:register_symbol({
+            type = 'virtual',
+            name = m['symbol_encrypted'],
+            parent = id,
+            score = 0.0,
+            group = N
+          })
+        end
+        if m.symbol_macro then
+          rspamd_config:register_symbol({
+            type = 'virtual',
+            name = m['symbol_macro'],
+            parent = id,
+            score = 0.0,
+            group = N
+          })
+        end
         has_valid = true
         if type(m['patterns']) == 'table' then
           if m['patterns'][1] then
