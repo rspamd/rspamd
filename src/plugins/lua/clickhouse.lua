@@ -421,12 +421,13 @@ local function clickhouse_send_data(task, ev_base)
   end
 
   send_data('generic data', data_rows,
-      string.format('INSERT INTO rspamd (%s)', table.concat(fields, ',')))
+      string.format('INSERT INTO rspamd (%s)',
+          table.concat(fields, ',')))
 
   for k,crows in pairs(custom_rows) do
     if #crows > 1 then
-      send_data('custom data ('..k..')', settings.custom_rules[k].first_row(),
-          crows)
+      send_data('custom data ('..k..')', crows,
+          settings.custom_rules[k].first_row())
     end
   end
 end
@@ -823,11 +824,11 @@ local function clickhouse_collect(task)
   -- Custom data
   for k,rule in pairs(settings.custom_rules) do
     if not custom_rows[k] then custom_rows[k] = {} end
-    table.insert(custom_rows[k], rule.get_row(task))
+    table.insert(custom_rows[k], lua_clickhouse.row_to_tsv(rule.get_row(task)))
   end
 
   nrows = nrows + 1
-  table.insert(data_rows, row)
+  data_rows[#data_rows + 1] = lua_clickhouse.row_to_tsv(row)
   lua_util.debugm(N, task, "add clickhouse row %s / %s", nrows, settings.limit)
 
   if nrows >= settings['limit'] then

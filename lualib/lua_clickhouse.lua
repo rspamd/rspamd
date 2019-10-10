@@ -23,6 +23,7 @@ limitations under the License.
 local rspamd_logger = require "rspamd_logger"
 local rspamd_http = require "rspamd_http"
 local lua_util = require "lua_util"
+local rspamd_text = require "rspamd_text"
 
 local exports = {}
 local N = 'clickhouse'
@@ -81,8 +82,10 @@ local function row_to_tsv(row)
     end
   end
 
-  return table.concat(row, '\t')
+  return rspamd_text.fromtable(row, '\t')
 end
+
+exports.row_to_tsv = row_to_tsv
 
 -- Parses JSONEachRow reply from CH
 local function parse_clickhouse_response_json_eachrow(params, data)
@@ -373,9 +376,7 @@ exports.insert = function (upstream, settings, params, query, rows,
   http_params.user = settings.user
   http_params.password = settings.password
   http_params.method = 'POST'
-  http_params.body = {table.concat(fun.totable(fun.map(function(row)
-    return row_to_tsv(row)
-  end, rows)), '\n'), '\n'}
+  http_params.body = {rspamd_text.from_table(rows, '\n'), '\n'}
   http_params.log_obj = params.task or params.config
 
   if not http_params.url then
