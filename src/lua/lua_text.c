@@ -215,8 +215,11 @@ lua_text_fromtable (lua_State *L)
 			}
 		}
 
+		if (i != tblen - 1) {
+			textlen += dlen;
+		}
+
 		lua_pop (L, 1);
-		textlen += dlen;
 	}
 
 	/* Allocate new text */
@@ -243,7 +246,10 @@ lua_text_fromtable (lua_State *L)
 			}
 		}
 
-		memcpy (dest, delim, dlen);
+		if (i != tblen - 1) {
+			memcpy (dest, delim, dlen);
+		}
+
 		lua_pop (L, 1);
 	}
 
