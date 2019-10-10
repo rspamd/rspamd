@@ -1053,12 +1053,24 @@ rspamd_plugins_table_push_elt (lua_State *L, const gchar *field_name,
 		const gchar *new_elt)
 {
 	lua_getglobal (L, rspamd_modules_state_global);
-	lua_pushstring (L, field_name);
-	lua_gettable (L, -2);
-	lua_pushstring (L, new_elt);
-	lua_newtable (L);
-	lua_settable (L, -3);
-	lua_pop (L, 2); /* Global + element */
+
+	if (lua_istable (L, -1)) {
+		lua_pushstring (L, field_name);
+		lua_gettable (L, -2);
+
+		if (lua_istable (L, -1)) {
+			lua_pushstring (L, new_elt);
+			lua_newtable (L);
+			lua_settable (L, -3);
+			lua_pop (L, 2); /* Global + element */
+		}
+		else {
+			lua_pop (L, 2); /* Global + element */
+		}
+	}
+	else {
+		lua_pop (L, 1);
+	}
 }
 
 gboolean
@@ -1069,6 +1081,11 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 	struct script_module *module;
 	lua_State *L = cfg->lua_state;
 	gint err_idx;
+
+	pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
+	rspamd_lua_setclass (L, "rspamd{config}", -1);
+	*pcfg = cfg;
+	lua_setglobal (L, "rspamd_config");
 
 	cur = g_list_first (cfg->script_modules);
 
@@ -1131,12 +1148,6 @@ rspamd_init_lua_filters (struct rspamd_config *cfg, gboolean force_load)
 
 			munmap (data, fsize);
 			g_free (lua_fname);
-
-			/* Initialize config structure */
-			pcfg = lua_newuserdata (L, sizeof (struct rspamd_config *));
-			rspamd_lua_setclass (L, "rspamd{config}", -1);
-			*pcfg = cfg;
-			lua_setglobal (L, "rspamd_config");
 
 			if (lua_pcall (L, 0, 0, err_idx) != 0) {
 				msg_err_config ("init of %s failed: %s",
