@@ -190,7 +190,7 @@ lua_text_fromtable (lua_State *L)
 		delim = lua_tolstring (L, 2, &dlen);
 	}
 	else {
-		dlen = strlen (delim);
+		dlen = 0;
 	}
 
 	/* Calculate length needed */
@@ -243,11 +243,13 @@ lua_text_fromtable (lua_State *L)
 
 			if (elt) {
 				memcpy (dest, elt->start, elt->len);
+				dest += elt->len;
 			}
 		}
 
-		if (i != tblen - 1) {
+		if (dlen && i != tblen - 1) {
 			memcpy (dest, delim, dlen);
+			dest += dlen;
 		}
 
 		lua_pop (L, 1);
