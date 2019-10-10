@@ -25,7 +25,6 @@ local tcp = require "rspamd_tcp"
 local upstream_list = require "rspamd_upstream_list"
 local rspamd_logger = require "rspamd_logger"
 local common = require "lua_scanners/common"
-local fun = require "fun"
 
 local N = 'razor'
 
