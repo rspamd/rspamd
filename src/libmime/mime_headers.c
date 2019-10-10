@@ -1415,11 +1415,11 @@ rspamd_smtp_received_process_from (struct rspamd_task *task,
 		 * - hostname ([ip]:port helo=xxx)
 		 * Maybe more...
 		 */
-		gboolean seen_ip_in_data = FALSE, seen_rdns_in_comment = FALSE;
+		gboolean seen_ip_in_data = FALSE;
 
 		if (rpart->head_comment && rpart->head_comment->dlen > 0) {
 			/* We can have info within comment as part of RFC */
-			seen_rdns_in_comment = rspamd_smtp_received_process_host_tcpinfo (
+			rspamd_smtp_received_process_host_tcpinfo (
 					task, rh,
 					rpart->head_comment->data, rpart->head_comment->dlen);
 		}

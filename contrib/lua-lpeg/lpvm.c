@@ -17,6 +17,7 @@
 #include "lpvm.h"
 #include "lpprint.h"
 
+#ifdef LPEG_LUD_WORKAROUND
 #include <sys/mman.h>
 
 #define MAX_PIECES (1u << 2u)
@@ -118,6 +119,8 @@ lpeg_free_mem_low(void *p)
 
 	/* No match, unmapped by allocation */
 }
+
+#endif
 
 /* initial size for call/backtrack stack */
 #if !defined(INITBACK)

@@ -468,14 +468,11 @@ static void
 rspamd_http_keepalive_handler (gint fd, short what, gpointer ud)
 {
 	struct rspamd_http_keepalive_cbdata *cbdata =
-			(struct rspamd_http_keepalive_cbdata *)ud;
-	struct rspamd_http_context *ctx;
-	/*
+			(struct rspamd_http_keepalive_cbdata *)ud;/*
 	 * We can get here if a remote side reported something or it has
 	 * timed out. In both cases we just terminate keepalive connection.
 	 */
 
-	ctx = cbdata->ctx;
 	g_queue_delete_link (cbdata->queue, cbdata->link);
 	msg_debug_http_context ("remove keepalive element %s (%s), %d connections left",
 			rspamd_inet_address_to_string_pretty (cbdata->conn->keepalive_hash_key->addr),

@@ -544,7 +544,7 @@ lua_syntax_highlighter (const char *str, ReplxxColor *colours, int size, void *u
 			 * 3 - line num (int), always 1...
 			 * 4 - column num (must be less than size)
 			 */
-			const gchar *what, *text;
+			const gchar *what;
 			gsize column, tlen, cur_top, elt_pos;
 			ReplxxColor elt_color = REPLXX_COLOR_DEFAULT;
 
@@ -554,7 +554,7 @@ lua_syntax_highlighter (const char *str, ReplxxColor *colours, int size, void *u
 			lua_rawgeti (L, elt_pos, 1);
 			what = lua_tostring (L, -1);
 			lua_rawgeti (L, elt_pos, 2);
-			text = lua_tolstring (L, -1, &tlen);
+			lua_tolstring (L, -1, &tlen);
 			lua_rawgeti (L, elt_pos, 4);
 			column = lua_tointeger (L, -1);
 
@@ -782,15 +782,11 @@ rspamadm_lua_handle_exec (struct rspamd_http_connection_entry *conn_ent,
 	GString *tb;
 	gint err_idx, i;
 	lua_State *L;
-	struct rspamadm_lua_repl_context *ctx;
-	struct rspamadm_lua_repl_session *session = conn_ent->ud;
 	ucl_object_t *obj, *elt;
 	const gchar *body;
 	gsize body_len;
-
-	ctx = session->ctx;
-
 	struct thread_entry *thread = lua_thread_pool_get_for_config (rspamd_main->cfg);
+
 	L = thread->lua_state;
 
 	body = rspamd_http_message_get_body (msg, &body_len);

@@ -136,7 +136,7 @@ regexp_module_config (struct rspamd_config *cfg)
 	struct regexp_module_item *cur_item = NULL;
 	const ucl_object_t *sec, *value, *elt;
 	ucl_object_iter_t it = NULL;
-	gint res = TRUE, id, nre = 0, nlua = 0, nshots = cfg->default_max_shots;
+	gint res = TRUE, nre = 0, nlua = 0, nshots = cfg->default_max_shots;
 
 	if (!rspamd_config_is_module_enabled (cfg, "regexp")) {
 		return TRUE;
@@ -272,7 +272,7 @@ regexp_module_config (struct rspamd_config *cfg)
 					}
 				}
 
-				id = rspamd_symcache_add_symbol (cfg->cache,
+				rspamd_symcache_add_symbol (cfg->cache,
 						cur_item->symbol,
 						0,
 						process_regexp_item,

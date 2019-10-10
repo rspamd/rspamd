@@ -75,9 +75,7 @@ write_http_request (struct http_callback_data *cbd)
 {
 	gchar datebuf[128];
 	struct rspamd_http_message *msg;
-	struct rspamd_map *map;
 
-	map = cbd->map;
 	msg = rspamd_http_new_message (HTTP_REQUEST);
 
 	if (cbd->bk->protocol == MAP_PROTO_HTTPS) {

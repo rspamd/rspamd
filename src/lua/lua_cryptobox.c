@@ -2321,6 +2321,16 @@ lua_cryptobox_gen_dkim_keypair (lua_State *L)
 
 		/* Process private key */
 		rc = i2d_RSAPrivateKey_bio (mbio, r);
+
+		if (rc == 0) {
+			BIO_free (mbio);
+			BN_free (e);
+			RSA_free (r);
+			EVP_PKEY_free (pk);
+
+			return luaL_error (L, "i2d_RSAPrivateKey_bio failed");
+		}
+
 		len = BIO_get_mem_data (mbio, &data);
 
 		b64_data = rspamd_encode_base64 (data, len, -1, &b64_len);
@@ -2334,6 +2344,16 @@ lua_cryptobox_gen_dkim_keypair (lua_State *L)
 		/* Process public key */
 		BIO_reset (mbio);
 		rc = i2d_RSA_PUBKEY_bio (mbio, r);
+
+		if (rc == 0) {
+			BIO_free (mbio);
+			BN_free (e);
+			RSA_free (r);
+			EVP_PKEY_free (pk);
+
+			return luaL_error (L, "i2d_RSA_PUBKEY_bio failed");
+		}
+
 		len = BIO_get_mem_data (mbio, &data);
 
 		b64_data = rspamd_encode_base64 (data, len, -1, &b64_len);

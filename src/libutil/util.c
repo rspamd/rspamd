@@ -786,7 +786,7 @@ rspamd_pass_signal (GHashTable * workers, gint signo)
 #ifndef HAVE_SETPROCTITLE
 
 #ifdef LINUX
-static gchar *title_buffer = 0;
+static gchar *title_buffer = NULL;
 static size_t title_buffer_size = 0;
 static gchar *title_progname, *title_progname_full;
 #endif
@@ -1076,7 +1076,6 @@ setproctitle (const gchar *fmt, ...)
 	ssize_t written;
 
 	if (fmt) {
-		ssize_t written2;
 		va_list ap;
 
 		written = rspamd_snprintf (title_buffer,
@@ -1087,13 +1086,11 @@ setproctitle (const gchar *fmt, ...)
 			return -1;
 
 		va_start (ap, fmt);
-		written2 = rspamd_vsnprintf (title_buffer + written,
+		rspamd_vsnprintf (title_buffer + written,
 				title_buffer_size - written,
 				fmt,
 				ap);
 		va_end (ap);
-		if (written2 < 0 || (size_t) written2 >= title_buffer_size - written)
-			return -1;
 	}
 	else {
 		written = rspamd_snprintf (title_buffer,

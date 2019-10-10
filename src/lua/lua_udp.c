@@ -256,10 +256,7 @@ static void
 lua_udp_io_handler (gint fd, short what, gpointer p)
 {
 	struct lua_udp_cbdata *cbd = (struct lua_udp_cbdata *)p;
-	lua_State *L;
 	gssize r;
-
-	L = cbd->L;
 
 	if (what == EV_TIMEOUT) {
 		if (cbd->sent && cbd->retransmits > 0) {

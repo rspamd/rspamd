@@ -261,9 +261,7 @@ lua_worker_control_fin_session (void *ud)
 	struct rspamd_control_reply rep;
 	struct rspamd_control_cbdata *cbd = (struct rspamd_control_cbdata *)ud;
 	rspamd_mempool_t *pool;
-	lua_State *L;
 
-	L = cbd->L;
 	pool = cbd->pool;
 
 	memset (&rep, 0, sizeof (rep));

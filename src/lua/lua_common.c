@@ -253,11 +253,9 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 {
 	const gchar *old_path, *additional_path = NULL;
 	const ucl_object_t *opts = NULL;
-	const gchar *pluginsdir = RSPAMD_PLUGINSDIR,
-			*rulesdir = RSPAMD_RULESDIR,
+	const gchar *rulesdir = RSPAMD_RULESDIR,
 			*lualibdir = RSPAMD_LUALIBDIR,
-			*libdir = RSPAMD_LIBDIR,
-			*sharedir = RSPAMD_SHAREDIR;
+			*libdir = RSPAMD_LIBDIR;
 	const gchar *t;
 
 	gchar path_buf[PATH_MAX];
@@ -290,16 +288,6 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 	}
 	else {
 		/* Try environment */
-		t = getenv ("SHAREDIR");
-		if (t) {
-			sharedir = t;
-		}
-
-		t = getenv ("PLUGINSDIR");
-		if (t) {
-			pluginsdir = t;
-		}
-
 		t = getenv ("RULESDIR");
 		if (t) {
 			rulesdir = t;
@@ -321,16 +309,6 @@ rspamd_lua_set_path (lua_State *L, const ucl_object_t *cfg_obj, GHashTable *vars
 		}
 
 		if (vars) {
-			t = g_hash_table_lookup (vars, "PLUGINSDIR");
-			if (t) {
-				pluginsdir = t;
-			}
-
-			t = g_hash_table_lookup (vars, "SHAREDIR");
-			if (t) {
-				sharedir = t;
-			}
-
 			t = g_hash_table_lookup (vars, "RULESDIR");
 			if (t) {
 				rulesdir = t;

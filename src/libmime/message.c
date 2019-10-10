@@ -224,7 +224,6 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
 	const gchar *p = begin, *c = begin;
-	gchar last_c = '\0';
 	gboolean crlf_added = FALSE;
 	gboolean url_open_bracket = FALSE;
 	UChar32 uc;
@@ -276,7 +275,6 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 			case normal_char:
 				state = seen_cr;
 				if (p > c) {
-					last_c = *(p - 1);
 					g_byte_array_append (part->utf_stripped_content,
 							(const guint8 *)c, p - c);
 				}
@@ -315,7 +313,6 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 				state = seen_lf;
 
 				if (p > c) {
-					last_c = *(p - 1);
 					g_byte_array_append (part->utf_stripped_content,
 							(const guint8 *)c, p - c);
 				}

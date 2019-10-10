@@ -105,8 +105,8 @@ INIT_LOG_MODULE(controller)
 #define COLOR_REJECT "#CB4B4B"
 #define COLOR_TOTAL "#9440ED"
 
-const static ev_tstamp rrd_update_time = 1.0;
-const static guint64 rspamd_controller_ctx_magic = 0xf72697805e6941faULL;
+static const ev_tstamp rrd_update_time = 1.0;
+static const guint64 rspamd_controller_ctx_magic = 0xf72697805e6941faULL;
 
 extern void fuzzy_stat_command (struct rspamd_task *task);
 

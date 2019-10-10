@@ -1937,7 +1937,6 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 	struct spf_addr *addr = NULL;
 	gboolean res = FALSE;
 	const gchar *begin;
-	struct rspamd_task *task;
 	gchar t;
 
 	g_assert (elt != NULL);
@@ -1947,7 +1946,6 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 		return TRUE;
 	}
 
-	task = rec->task;
 	begin = expand_spf_macro (rec, resolved, elt);
 	addr = rspamd_spf_new_addr (rec, resolved, begin);
 	g_assert (addr != NULL);

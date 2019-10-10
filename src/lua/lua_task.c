@@ -3510,6 +3510,7 @@ lua_task_has_from (lua_State *L)
 	}
 
 	lua_pushboolean (L, ret);
+	(void)nrcpt; /* Silence warning */
 
 	return 1;
 }
@@ -5705,12 +5706,9 @@ lua_task_get_metric_action (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	struct rspamd_scan_result *metric_res;
 	struct rspamd_action *action;
 
 	if (task) {
-		metric_res = task->result;
-
 		action = rspamd_check_action_metric (task);
 		lua_pushstring (L, action->name);
 	}

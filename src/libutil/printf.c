@@ -593,7 +593,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 {
 	gchar zero, numbuf[G_ASCII_DTOSTR_BUF_SIZE], dtoabuf[32], *p, *last;
 	guchar c;
-	const gchar *buf_start = fmt, *fmt_start = NULL;
+	const gchar *buf_start = fmt;
 	gint d;
 	gdouble f;
 	glong written = 0, wr, slen;
@@ -622,8 +622,6 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 				}
 				written += wr;
 			}
-
-			fmt_start = fmt;
 
 			i64 = 0;
 			ui64 = 0;

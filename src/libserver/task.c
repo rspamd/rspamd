@@ -1059,7 +1059,6 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 	GPtrArray *sorted_symbols;
 	struct rspamd_action *act;
 	struct rspamd_symbols_group *gr;
-	gdouble gr_score;
 	guint i, j;
 	khiter_t k;
 
@@ -1157,7 +1156,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 			symbuf = rspamd_fstring_sized_new (128);
 			sorted_symbols = g_ptr_array_sized_new (kh_size (mres->sym_groups));
 
-			kh_foreach (mres->sym_groups, gr, gr_score,{
+			kh_foreach_key (mres->sym_groups, gr,{
 				if (!(gr->flags & RSPAMD_SYMBOL_GROUP_PUBLIC)) {
 					if (lf->type == RSPAMD_LOG_PUBLIC_GROUPS) {
 						continue;

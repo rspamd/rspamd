@@ -579,7 +579,6 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 		gpointer handler_data)
 {
 	gint ret;
-	short what;
 
 	g_assert (conn != NULL);
 
@@ -630,11 +629,9 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 
 		if (ret == SSL_ERROR_WANT_READ) {
 			msg_debug_ssl ("not connected, want read");
-			what = EV_READ;
 		}
 		else if (ret == SSL_ERROR_WANT_WRITE) {
 			msg_debug_ssl ("not connected, want write");
-			what = EV_WRITE;
 		}
 		else {
 			conn->shut = ssl_shut_unclean;

@@ -573,7 +573,7 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 	struct rspamd_url **ptext_url)
 {
 	struct rspamd_url *text_url;
-	rspamd_ftok_t phished_tld, disp_tok, href_tok;
+	rspamd_ftok_t disp_tok, href_tok;
 	gint rc;
 	goffset url_pos;
 	gchar *url_str = NULL, *idn_hbuf;
@@ -719,8 +719,6 @@ rspamd_html_url_is_phished (rspamd_mempool_t *pool,
 					if (!rspamd_url_is_subdomain (&disp_tok, &href_tok)) {
 						href_url->flags |= RSPAMD_URL_FLAG_PHISHED;
 						href_url->phished_url = text_url;
-						phished_tld.begin = href_tok.begin;
-						phished_tld.len = href_tok.len;
 						text_url->flags |= RSPAMD_URL_FLAG_HTML_DISPLAYED;
 					}
 				}

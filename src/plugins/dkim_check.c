@@ -866,7 +866,8 @@ lua_dkim_sign_handler (lua_State *L)
 				rspamd_mempool_set_variable (task->task_pool, "dkim-signature",
 						sigs, dkim_module_free_list);
 			} else {
-				(void) g_list_append (sigs, hdr);
+				sigs = g_list_append (sigs, hdr);
+				(void)sigs;
 			}
 		}
 

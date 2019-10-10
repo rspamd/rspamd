@@ -217,8 +217,8 @@ initmem (const uint8_t x[H_LEN], const uint64_t c, uint8_t *r)
 }
 
 static inline void
-gamma (const uint8_t garlic, const uint8_t *salt,
-		const uint8_t saltlen, uint8_t *r)
+catena_gamma (const uint8_t garlic, const uint8_t *salt,
+			  const uint8_t saltlen, uint8_t *r)
 {
 	const uint64_t q = UINT64_C(1) << ((3 * garlic + 3) / 4);
 
@@ -314,7 +314,7 @@ Flap (const uint8_t x[H_LEN], const uint8_t lambda, const uint8_t garlic,
 	initmem (x, c, r);
 
 	/*Gamma Function*/
-	gamma (garlic, salt, saltlen, r);
+	catena_gamma (garlic, salt, saltlen, r);
 
 	/* DBH */
 	for (k = 0; k < lambda; k++) {
