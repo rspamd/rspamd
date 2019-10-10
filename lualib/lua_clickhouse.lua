@@ -375,7 +375,7 @@ exports.insert = function (upstream, settings, params, query, rows,
   http_params.user = settings.user
   http_params.password = settings.password
   http_params.method = 'POST'
-  http_params.body = {rspamd_text.from_table(rows, '\n'), '\n'}
+  http_params.body = {rspamd_text.fromtable(rows, '\n'), '\n'}
   http_params.log_obj = params.task or params.config
 
   if not http_params.url then
