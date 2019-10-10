@@ -363,7 +363,6 @@ end
 --]]
 exports.insert = function (upstream, settings, params, query, rows,
                               ok_cb, fail_cb)
-  local fun = require "fun"
   local http_params = {}
 
   for k,v in pairs(params) do http_params[k] = v end
