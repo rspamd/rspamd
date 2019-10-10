@@ -389,6 +389,36 @@ rspamd_rcl_group_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 	}
 
+	if ((elt = ucl_object_lookup (obj, "public")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"public attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+		if (ucl_object_toboolean (elt)) {
+			gr->flags |= RSPAMD_SYMBOL_GROUP_PUBLIC;
+		}
+	}
+
+	if ((elt = ucl_object_lookup (obj, "private")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"private attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+		if (!ucl_object_toboolean (elt)) {
+			gr->flags |= RSPAMD_SYMBOL_GROUP_PUBLIC;
+		}
+	}
+
 	elt = ucl_object_lookup (obj, "description");
 	if (elt) {
 		description = ucl_object_tostring (elt);
@@ -1931,6 +1961,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				0,
 				"Always check all filters");
 		rspamd_rcl_add_default_handler (sub,
+				"public_groups_only",
+				rspamd_rcl_parse_struct_boolean,
+				G_STRUCT_OFFSET (struct rspamd_config, public_groups_only),
+				0,
+				"Output merely public groups everywhere");
+		rspamd_rcl_add_default_handler (sub,
 				"enable_experimental",
 				rspamd_rcl_parse_struct_boolean,
 				G_STRUCT_OFFSET (struct rspamd_config, enable_experimental),
@@ -2057,12 +2093,6 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				0,
 				"List of ssl ciphers (e.g. HIGH:!aNULL:!kRSA:!PSK:!SRP:!MD5:!RC4)");
 		rspamd_rcl_add_default_handler (sub,
-				"magic_file",
-				rspamd_rcl_parse_struct_string,
-				G_STRUCT_OFFSET (struct rspamd_config, magic_file),
-				0,
-				"Path to a custom libmagic file");
-		rspamd_rcl_add_default_handler (sub,
 				"max_message",
 				rspamd_rcl_parse_struct_integer,
 				G_STRUCT_OFFSET (struct rspamd_config, max_message),
@@ -2152,6 +2182,19 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				G_STRUCT_OFFSET (struct rspamd_config, full_gc_iters),
 				RSPAMD_CL_FLAG_UINT,
 				"Task scanned before memory gc is performed (default: 0 - disabled)");
+		rspamd_rcl_add_default_handler (sub,
+				"heartbeat_interval",
+				rspamd_rcl_parse_struct_time,
+				G_STRUCT_OFFSET (struct rspamd_config, heartbeat_interval),
+				RSPAMD_CL_FLAG_TIME_FLOAT,
+				"Time between workers heartbeats");
+		rspamd_rcl_add_default_handler (sub,
+				"heartbeats_loss_max",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, heartbeats_loss_max),
+				RSPAMD_CL_FLAG_INT_32,
+				"Maximum count of heartbeats to be lost before trying to "
+				"terminate a worker (default: 0 - disabled)");
 
 		/* Neighbours configuration */
 		rspamd_rcl_add_section_doc (&sub->subsections, "neighbours", "name",
@@ -3211,13 +3254,15 @@ rspamd_rcl_parse_struct_addr (rspamd_mempool_t *pool,
 	struct rspamd_rcl_struct_parser *pd = ud;
 	rspamd_inet_addr_t **target;
 	const gchar *val;
+	gsize size;
 
 	target = (rspamd_inet_addr_t **)(((gchar *)pd->user_struct) + pd->offset);
 
 	if (ucl_object_type (obj) == UCL_STRING) {
-		val = ucl_object_tostring (obj);
+		val = ucl_object_tolstring (obj, &size);
 
-		if (!rspamd_parse_inet_address (target, val, 0)) {
+		if (!rspamd_parse_inet_address (target, val, size,
+				RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 			g_set_error (err,
 				CFG_RCL_ERROR,
 				EINVAL,
@@ -3889,6 +3934,9 @@ rspamd_config_read (struct rspamd_config *cfg,
 	}
 
 	cfg->lang_det = rspamd_language_detector_init (cfg);
+	rspamd_mempool_add_destructor (cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_language_detector_unref,
+			cfg->lang_det);
 
 	return TRUE;
 }

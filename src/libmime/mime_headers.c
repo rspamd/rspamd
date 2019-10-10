@@ -32,6 +32,9 @@ struct rspamd_mime_headers_table {
 	ref_entry_t ref;
 };
 
+#define RSPAMD_INET_ADDRESS_PARSE_RECEIVED \
+	(RSPAMD_INET_ADDRESS_PARSE_REMOTE|RSPAMD_INET_ADDRESS_PARSE_NO_UNIX)
+
 static void
 rspamd_mime_header_check_special (struct rspamd_task *task,
 		struct rspamd_mime_header *rh)
@@ -260,7 +263,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 					if (*p == '\n') {
 						nlines_count[RSPAMD_TASK_NEWLINES_LF] ++;
 					}
-					else if (*(p + 1) == '\n') {
+					else if (p + 1 < end && *(p + 1) == '\n') {
 						nlines_count[RSPAMD_TASK_NEWLINES_CRLF] ++;
 					}
 					else {
@@ -299,7 +302,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 					if (*p == '\n') {
 						nlines_count[RSPAMD_TASK_NEWLINES_LF] ++;
 					}
-					else if (*(p + 1) == '\n') {
+					else if (p + 1 < end && *(p + 1) == '\n') {
 						nlines_count[RSPAMD_TASK_NEWLINES_CRLF] ++;
 					}
 					else {
@@ -444,7 +447,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 			/* Fail state, skip line */
 
 			if (*p == '\r') {
-				if (*(p + 1) == '\n') {
+				if (p + 1 < end && *(p + 1) == '\n') {
 					nlines_count[RSPAMD_TASK_NEWLINES_CRLF] ++;
 					p++;
 				}
@@ -454,7 +457,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 			else if (*p == '\n') {
 				nlines_count[RSPAMD_TASK_NEWLINES_LF] ++;
 
-				if (*(p + 1) == '\r') {
+				if (p + 1 < end && *(p + 1) == '\r') {
 					p++;
 				}
 				p++;
@@ -480,7 +483,7 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 		rspamd_cryptobox_hash_state_t hs;
 		guchar hout[rspamd_cryptobox_HASHBYTES], *hexout;
 
-		for (gint i = 0; i < RSPAMD_TASK_NEWLINES_MAX; i ++) {
+		for (gint i = RSPAMD_TASK_NEWLINES_CR; i < RSPAMD_TASK_NEWLINES_MAX; i ++) {
 			if (nlines_count[i] > max_cnt) {
 				max_cnt = nlines_count[i];
 				sel = i;
@@ -1095,8 +1098,14 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 			p ++;
 			break;
 		case all_done:
-			*last = p - (const guchar *)data;
-			return npart;
+			if (p > (const guchar *)data) {
+				*last = p - (const guchar *) data;
+				return npart;
+			}
+			else {
+				/* Empty element */
+				return NULL;
+			}
 			break;
 		}
 	}
@@ -1117,9 +1126,11 @@ rspamd_smtp_received_process_part (struct rspamd_task *task,
 		}
 		break;
 	case skip_spaces:
-		*last = p - (const guchar *)data;
+		if (p > (const guchar *)data) {
+			*last = p - (const guchar *) data;
 
-		return npart;
+			return npart;
+		}
 	default:
 		break;
 	}
@@ -1168,7 +1179,6 @@ rspamd_smtp_received_spill (struct rspamd_task *task,
 	p += pos;
 	len = end > p ? end - p : 0;
 	DL_APPEND (head, cur_part);
-
 
 	if (len > 2 && (lc_map[p[0]] == 'b' &&
 					lc_map[p[1]] == 'y')) {
@@ -1234,7 +1244,8 @@ rspamd_smtp_received_spill (struct rspamd_task *task,
 			}
 
 			if (!cur_part) {
-				return NULL;
+				p ++;
+				len = end > p ? end - p : 0;
 			}
 			else {
 				g_assert (pos != 0);
@@ -1320,7 +1331,8 @@ rspamd_smtp_received_process_host_tcpinfo (struct rspamd_task *task,
 		if (brace_pos) {
 			addr = rspamd_parse_inet_address_pool (data + 1,
 					brace_pos - data - 1,
-					task->task_pool);
+					task->task_pool,
+					RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 
 			if (addr) {
 				rh->addr = addr;
@@ -1334,7 +1346,7 @@ rspamd_smtp_received_process_host_tcpinfo (struct rspamd_task *task,
 		if (g_ascii_isxdigit (data[0])) {
 			/* Try to parse IP address */
 			addr = rspamd_parse_inet_address_pool (data,
-					len, task->task_pool);
+					len, task->task_pool, RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 			if (addr) {
 				rh->addr = addr;
 				rh->real_ip = rspamd_mempool_strdup (task->task_pool,
@@ -1355,7 +1367,8 @@ rspamd_smtp_received_process_host_tcpinfo (struct rspamd_task *task,
 				if (ebrace_pos) {
 					addr = rspamd_parse_inet_address_pool (obrace_pos + 1,
 							ebrace_pos - obrace_pos - 1,
-							task->task_pool);
+							task->task_pool,
+							RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 
 					if (addr) {
 						rh->addr = addr;
@@ -1420,7 +1433,8 @@ rspamd_smtp_received_process_from (struct rspamd_task *task,
 				if (brace_pos) {
 					addr = rspamd_parse_inet_address_pool (rpart->data + 1,
 							brace_pos - rpart->data - 1,
-							task->task_pool);
+							task->task_pool,
+							RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 
 					if (addr) {
 						seen_ip_in_data = TRUE;
@@ -1434,7 +1448,8 @@ rspamd_smtp_received_process_from (struct rspamd_task *task,
 				/* Try to parse IP address */
 				rspamd_inet_addr_t *addr;
 				addr = rspamd_parse_inet_address_pool (rpart->data,
-						rpart->dlen, task->task_pool);
+						rpart->dlen, task->task_pool,
+						RSPAMD_INET_ADDRESS_PARSE_RECEIVED);
 				if (addr) {
 					seen_ip_in_data = TRUE;
 					rh->addr = addr;

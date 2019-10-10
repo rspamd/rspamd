@@ -37,6 +37,7 @@ enum rspamd_control_type {
 	RSPAMD_CONTROL_FUZZY_STAT,
 	RSPAMD_CONTROL_FUZZY_SYNC,
 	RSPAMD_CONTROL_MONITORED_CHANGE,
+	RSPAMD_CONTROL_CHILD_CHANGE,
 	RSPAMD_CONTROL_MAX
 };
 
@@ -46,6 +47,7 @@ enum rspamd_srv_type {
 	RSPAMD_SRV_MONITORED_CHANGE,
 	RSPAMD_SRV_LOG_PIPE,
 	RSPAMD_SRV_ON_FORK,
+	RSPAMD_SRV_HEARTBEAT,
 };
 
 enum rspamd_log_pipe_type {
@@ -85,6 +87,15 @@ struct rspamd_control_command {
 		struct {
 			guint unused;
 		} fuzzy_sync;
+		struct {
+			enum {
+				rspamd_child_offline,
+				rspamd_child_online,
+				rspamd_child_terminated,
+			} what;
+			pid_t pid;
+			guint additional;
+		} child_change;
 	} cmd;
 };
 
@@ -157,6 +168,10 @@ struct rspamd_srv_command {
 				child_dead,
 			} state;
 		} on_fork;
+		struct {
+			guint status;
+			/* TODO: add more fields */
+		} heartbeat;
 	} cmd;
 };
 
@@ -179,6 +194,9 @@ struct rspamd_srv_reply {
 		struct {
 			gint status;
 		} on_fork;
+		struct {
+			gint status;
+		} heartbeat;
 	} reply;
 };
 
@@ -202,8 +220,8 @@ void rspamd_control_process_client_socket (struct rspamd_main *rspamd_main,
 /**
  * Register default handlers for a worker
  */
-void rspamd_control_worker_add_default_handler (struct rspamd_worker *worker,
-												struct ev_loop *ev_base);
+void rspamd_control_worker_add_default_cmd_handlers (struct rspamd_worker *worker,
+													 struct ev_loop *ev_base);
 
 /**
  * Register custom handler for a specific control command for this worker
@@ -231,6 +249,30 @@ void rspamd_srv_send_command (struct rspamd_worker *worker,
 							  gint attached_fd,
 							  rspamd_srv_reply_handler handler,
 							  gpointer ud);
+
+/**
+ * Broadcast srv cmd from rspamd_main to workers
+ * @param rspamd_main
+ * @param cmd
+ * @param except_pid
+ */
+void rspamd_control_broadcast_srv_cmd (struct rspamd_main *rspamd_main,
+									   struct rspamd_control_command *cmd,
+									   pid_t except_pid);
+
+/**
+ * Returns command from a specified string (case insensitive)
+ * @param str
+ * @return
+ */
+enum rspamd_control_type rspamd_control_command_from_string (const gchar *str);
+
+/**
+ * Returns command name from it's type
+ * @param cmd
+ * @return
+ */
+const gchar *rspamd_control_command_to_string (enum rspamd_control_type cmd);
 
 #ifdef  __cplusplus
 }

@@ -8,7 +8,7 @@
 | libottery     | ?       | Public Domain / CC0 | YES     |
 | librdns       | ?       | BSD-2-Clause        | YES     |
 | libucl        | ?       | BSD-2-Clause        | YES     |
-| linenoise     | 1.0     | BSD-2-Clause        | YES     |
+| replxx        | 0.0.2   | BSD-2-Clause        | YES     |
 | lua-argparse  | ?       | MIT                 | YES     |
 | lua-fun       | ?       | MIT                 | NO      |
 | lua-lpeg      | 1.0     | MIT                 | NO      |

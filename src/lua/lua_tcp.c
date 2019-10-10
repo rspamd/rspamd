@@ -1760,7 +1760,8 @@ lua_tcp_request (lua_State *L)
 		}
 	}
 
-	if (rspamd_parse_inet_address (&cbd->addr, host, 0)) {
+	if (rspamd_parse_inet_address (&cbd->addr,
+			host, strlen (host), RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 		rspamd_inet_address_set_port (cbd->addr, port);
 		/* Host is numeric IP, no need to resolve */
 		lua_tcp_register_watcher (cbd);
@@ -1942,7 +1943,8 @@ lua_tcp_connect_sync (lua_State *L)
 		}
 	}
 
-	if (rspamd_parse_inet_address (&cbd->addr, host, 0)) {
+	if (rspamd_parse_inet_address (&cbd->addr,
+			host, strlen (host), RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 		rspamd_inet_address_set_port (cbd->addr, (guint16)port);
 		/* Host is numeric IP, no need to resolve */
 		if (!lua_tcp_make_connection (cbd)) {

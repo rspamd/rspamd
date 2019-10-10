@@ -123,9 +123,10 @@ local function sophos_check(task, content, digest, rule)
         lua_util.debugm(rule.name, task,
             '%s [%s]: got reply: %s', rule['symbol'], rule['type'], data)
         local vname = string.match(data, 'VIRUS (%S+) ')
+        local cached
         if vname then
           common.yield_result(task, rule, vname)
-          common.save_av_cache(task, digest, rule, vname)
+          common.save_cache(task, digest, rule, vname)
         else
           if string.find(data, 'DONE OK') then
             if rule['log_clean'] then
@@ -134,13 +135,14 @@ local function sophos_check(task, content, digest, rule)
               lua_util.debugm(rule.name, task,
                   '%s: message or mime_part is clean', rule.log_prefix)
             end
-            common.save_av_cache(task, digest, rule, 'OK')
+            cached = 'OK'
             -- not finished - continue
           elseif string.find(data, 'ACC') or string.find(data, 'OK SSSP') then
             conn:add_read(sophos_callback)
           elseif string.find(data, 'FAIL 0212') then
             rspamd_logger.warnx(task, 'Message is encrypted (FAIL 0212): %s', data)
             common.yield_result(task, rule, 'SAVDI: Message is encrypted (FAIL 0212)', 0.0, 'fail')
+            cached = 'ENCRYPTED'
           elseif string.find(data, 'REJ 4') then
             rspamd_logger.warnx(task, 'Message is oversized (REJ 4): %s', data)
             common.yield_result(task, rule, 'SAVDI: Message oversized (REJ 4)', 0.0, 'fail')
@@ -152,16 +154,10 @@ local function sophos_check(task, content, digest, rule)
             rspamd_logger.errx(task, 'unhandled response: %s', data)
             common.yield_result(task, rule, 'unhandled response: ' .. data, 0.0, 'fail')
           end
-
+          if cached then
+            common.save_cache(task, digest, rule, cached)
+          end
         end
-      end
-    end
-
-    if rule.dynamic_scan then
-      local pre_check, pre_check_msg = common.check_metric_results(task, rule)
-      if pre_check then
-        rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, pre_check_msg)
-        return true
       end
     end
 
@@ -175,13 +171,12 @@ local function sophos_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule) then
-    if common.check_av_cache(task, digest, rule, sophos_check_uncached) then
-      return
-    else
-      sophos_check_uncached()
-    end
+  if common.condition_check_and_continue(task, content, rule, digest, sophos_check_uncached) then
+    return
+  else
+    sophos_check_uncached()
   end
+
 end
 
 return {

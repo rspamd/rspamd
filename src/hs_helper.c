@@ -178,14 +178,75 @@ rspamd_hs_helper_cleanup_dir (struct hs_helper_ctx *ctx, gboolean forced)
 	return ret;
 }
 
+/* Bad hack, but who cares */
+static gboolean hack_global_forced;
+
+static void
+rspamd_rs_delayed_cb (EV_P_ ev_timer *w, int revents)
+{
+	struct rspamd_worker *worker = (struct rspamd_worker *)w->data;
+	static struct rspamd_srv_command srv_cmd;
+	struct hs_helper_ctx *ctx;
+
+	ctx = (struct hs_helper_ctx *)worker->ctx;
+	memset (&srv_cmd, 0, sizeof (srv_cmd));
+	srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
+	rspamd_strlcpy (srv_cmd.cmd.hs_loaded.cache_dir, ctx->hs_dir,
+			sizeof (srv_cmd.cmd.hs_loaded.cache_dir));
+	srv_cmd.cmd.hs_loaded.forced = hack_global_forced;
+	hack_global_forced = FALSE;
+
+	rspamd_srv_send_command (worker,
+			ctx->event_loop, &srv_cmd, -1, NULL, NULL);
+	ev_timer_stop (EV_A_ w);
+	g_free (w);
+
+	ev_timer_again (EV_A_ &ctx->recompile_timer);
+}
+
+static void
+rspamd_rs_compile_cb (guint ncompiled, GError *err, void *cbd)
+{
+	struct rspamd_worker *worker = (struct rspamd_worker *)cbd;
+	ev_timer *tm;
+	ev_tstamp when = 0.0;
+	struct hs_helper_ctx *ctx;
+
+	ctx = (struct hs_helper_ctx *)worker->ctx;
+
+	if (ncompiled > 0) {
+		/* Enforce update for other workers */
+		hack_global_forced = TRUE;
+	}
+
+	/*
+	 * Do not send notification unless all other workers are started
+	 * XXX: now we just sleep for 5 seconds to ensure that
+	 */
+	if (!ctx->loaded) {
+		when = 5.0; /* Postpone */
+		ctx->loaded = TRUE;
+		msg_info ("compiled %d regular expressions to the hyperscan tree, "
+				  "postpone loaded notification for %.0f seconds to avoid races",
+				ncompiled,
+				when);
+	}
+	else {
+		msg_info ("compiled %d regular expressions to the hyperscan tree, "
+				  "send loaded notification",
+				ncompiled);
+	}
+
+	tm = g_malloc0 (sizeof (*tm));
+	tm->data = (void *)worker;
+	ev_timer_init (tm, rspamd_rs_delayed_cb, when, 0);
+	ev_timer_start (ctx->event_loop, tm);
+}
+
 static gboolean
 rspamd_rs_compile (struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 		gboolean forced)
 {
-	GError *err = NULL;
-	static struct rspamd_srv_command srv_cmd;
-	gint ncompiled;
-
 	if (!(ctx->cfg->libs_ctx->crypto_ctx->cpu_config & CPUID_SSSE3)) {
 		msg_warn ("CPU doesn't have SSSE3 instructions set "
 				"required for hyperscan, disable hyperscan compilation");
@@ -196,37 +257,12 @@ rspamd_rs_compile (struct hs_helper_ctx *ctx, struct rspamd_worker *worker,
 		msg_warn ("cannot cleanup cache dir '%s'", ctx->hs_dir);
 	}
 
-	if ((ncompiled = rspamd_re_cache_compile_hyperscan (ctx->cfg->re_cache,
+	hack_global_forced = forced; /* killmeplease */
+	rspamd_re_cache_compile_hyperscan (ctx->cfg->re_cache,
 			ctx->hs_dir, ctx->max_time, !forced,
-			&err)) == -1) {
-		msg_err ("failed to compile re cache: %e", err);
-		g_error_free (err);
-
-		return FALSE;
-	}
-
-	if (ncompiled > 0) {
-		msg_info ("compiled %d regular expressions to the hyperscan tree",
-				ncompiled);
-		forced = TRUE;
-	}
-
-	/*
-	 * Do not send notification unless all other workers are started
-	 * XXX: now we just sleep for 5 seconds to ensure that
-	 */
-	if (!ctx->loaded) {
-		ev_sleep (5.0);
-		ctx->loaded = TRUE;
-	}
-
-	memset (&srv_cmd, 0, sizeof (srv_cmd));
-	srv_cmd.type = RSPAMD_SRV_HYPERSCAN_LOADED;
-	rspamd_strlcpy (srv_cmd.cmd.hs_loaded.cache_dir, ctx->hs_dir,
-			sizeof (srv_cmd.cmd.hs_loaded.cache_dir));
-	srv_cmd.cmd.hs_loaded.forced = forced;
-
-	rspamd_srv_send_command (worker, ctx->event_loop, &srv_cmd, -1, NULL, NULL);
+			ctx->event_loop,
+			rspamd_rs_compile_cb,
+			(void *)worker);
 
 	return TRUE;
 }
@@ -252,6 +288,8 @@ rspamd_hs_helper_reload (struct rspamd_main *rspamd_main,
 				strerror (errno));
 	}
 
+	/* Stop recompile */
+	ev_timer_stop (ctx->event_loop, &ctx->recompile_timer);
 	rspamd_rs_compile (ctx, worker, TRUE);
 
 	return TRUE;
@@ -268,7 +306,6 @@ rspamd_hs_helper_timer (EV_P_ ev_timer *w, int revents)
 	tim = rspamd_time_jitter (ctx->recompile_time, 0);
 	w->repeat = tim;
 	rspamd_rs_compile (ctx, worker, FALSE);
-	ev_timer_again (EV_A_ w);
 }
 
 static void
@@ -277,6 +314,7 @@ start_hs_helper (struct rspamd_worker *worker)
 	struct hs_helper_ctx *ctx = worker->ctx;
 	double tim;
 
+	g_assert (rspamd_worker_check_context (worker->ctx, rspamd_hs_helper_magic));
 	ctx->cfg = worker->srv->cfg;
 
 	if (ctx->hs_dir == NULL) {

@@ -1252,11 +1252,11 @@ rspamd_match_regexp_map_all (struct rspamd_regexp_map_helper *map,
 	gboolean validated = FALSE;
 	struct rspamd_map_helper_value *val;
 
-	g_assert (in != NULL);
-
 	if (map == NULL || map->regexps == NULL || len == 0) {
 		return NULL;
 	}
+
+	g_assert (in != NULL);
 
 	if (map->map_flags & RSPAMD_REGEXP_MAP_FLAG_UTF) {
 		if (g_utf8_validate (in, len, NULL)) {

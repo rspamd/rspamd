@@ -2216,6 +2216,7 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 {
 	struct rspamd_proxy_ctx *ctx = worker->ctx;
 
+	g_assert (rspamd_worker_check_context (worker->ctx, rspamd_rspamd_proxy_magic));
 	ctx->cfg = worker->srv->cfg;
 	ctx->event_loop = rspamd_prepare_worker (worker, "rspamd_proxy",
 			proxy_accept_socket);
@@ -2230,6 +2231,9 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 
 	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->event_loop,
 			ctx->cfg->ups_ctx);
+	rspamd_mempool_add_destructor (ctx->cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_http_context_free,
+			ctx->http_ctx);
 
 	if (ctx->has_self_scan) {
 		/* Additional initialisation needed */
@@ -2263,9 +2267,7 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 		rspamd_stat_close ();
 	}
 
-	struct rspamd_http_context *http_ctx = ctx->http_ctx;
 	REF_RELEASE (ctx->cfg);
-	rspamd_http_context_free (http_ctx);
 	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);

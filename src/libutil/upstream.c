@@ -24,14 +24,17 @@
 #include "logger.h"
 
 #include <math.h>
+#include <contrib/librdns/rdns.h>
 
 struct upstream_inet_addr_entry {
 	rspamd_inet_addr_t *addr;
+	guint priority;
 	struct upstream_inet_addr_entry *next;
 };
 
 struct upstream_addr_elt {
 	rspamd_inet_addr_t *addr;
+	guint priority;
 	guint errors;
 };
 
@@ -50,6 +53,7 @@ struct upstream {
 	guint checked;
 	guint dns_requests;
 	gint active_idx;
+	guint ttl;
 	gchar *name;
 	ev_timer ev;
 	gdouble last_fail;
@@ -172,10 +176,19 @@ rspamd_upstreams_library_config (struct rspamd_config *cfg,
 
 		while (cur) {
 			upstream = cur->data;
-			if (!ev_is_active (&upstream->ev) && upstream->ls &&
+			if (!ev_can_stop (&upstream->ev) && upstream->ls &&
 						!(upstream->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE)) {
-				gdouble when = rspamd_time_jitter (upstream->ls->limits.lazy_resolve_time,
-						upstream->ls->limits.lazy_resolve_time * .1);
+				gdouble when;
+
+				if (upstream->flags & RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE) {
+					/* Resolve them immediately ! */
+					when = 0.0;
+				}
+				else {
+					when = rspamd_time_jitter (upstream->ls->limits.lazy_resolve_time,
+							upstream->ls->limits.lazy_resolve_time * .1);
+				}
+
 				ev_timer_init (&upstream->ev, rspamd_upstream_lazy_resolve_cb,
 						when, 0);
 				upstream->ev.data = upstream;
@@ -261,13 +274,20 @@ rspamd_upstream_af_to_weight (const rspamd_inet_addr_t *addr)
 static gint
 rspamd_upstream_addr_sort_func (gconstpointer a, gconstpointer b)
 {
-	const struct upstream_addr_elt **ip1 = (const struct upstream_addr_elt **)a,
-			**ip2 = (const struct upstream_addr_elt **)b;
+	const struct upstream_addr_elt *ip1 = *(const struct upstream_addr_elt **)a,
+			*ip2 = *(const struct upstream_addr_elt **)b;
 	gint w1, w2;
 
-	w1 = rspamd_upstream_af_to_weight ((*ip1)->addr);
-	w2 = rspamd_upstream_af_to_weight ((*ip2)->addr);
+	if (ip1->priority == 0 && ip2->priority == 0) {
+		w1 = rspamd_upstream_af_to_weight (ip1->addr);
+		w2 = rspamd_upstream_af_to_weight (ip2->addr);
+	}
+	else {
+		w1 = ip1->priority;
+		w2 = ip2->priority;
+	}
 
+	/* Inverse order */
 	return w2 - w1;
 }
 
@@ -281,12 +301,21 @@ rspamd_upstream_set_active (struct upstream_list *ls, struct upstream *upstream)
 	if (upstream->ctx && upstream->ctx->configured &&
 		!(upstream->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE)) {
 
-		if (ev_is_active (&upstream->ev)) {
+		if (ev_can_stop (&upstream->ev)) {
 			ev_timer_stop (upstream->ctx->event_loop, &upstream->ev);
 		}
-		/* Start lazy names resolution */
-		gdouble when = rspamd_time_jitter (ls->limits.lazy_resolve_time,
-				ls->limits.lazy_resolve_time * 0.1);
+
+		/* Start lazy (or not so lazy) names resolution */
+		gdouble when;
+
+		if (upstream->flags & RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE) {
+			/* Resolve them immediately ! */
+			when = 0.0;
+		}
+		else {
+			when = rspamd_time_jitter (upstream->ls->limits.lazy_resolve_time,
+					upstream->ls->limits.lazy_resolve_time * .1);
+		}
 		ev_timer_init (&upstream->ev, rspamd_upstream_lazy_resolve_cb,
 				when, 0);
 		upstream->ev.data = upstream;
@@ -435,6 +464,126 @@ rspamd_upstream_dns_cb (struct rdns_reply *reply, void *arg)
 	REF_RELEASE (up);
 }
 
+struct rspamd_upstream_srv_dns_cb {
+	struct upstream *up;
+	guint priority;
+	guint port;
+	guint requests_inflight;
+};
+
+/* Used when we have resolved SRV record and resolved addrs */
+static void
+rspamd_upstream_dns_srv_phase2_cb (struct rdns_reply *reply, void *arg)
+{
+	struct rspamd_upstream_srv_dns_cb *cbdata =
+			(struct rspamd_upstream_srv_dns_cb *)arg;
+	struct upstream *up;
+	struct rdns_reply_entry *entry;
+	struct upstream_inet_addr_entry *up_ent;
+
+	up = cbdata->up;
+
+	if (reply->code == RDNS_RC_NOERROR) {
+		entry = reply->entries;
+
+		RSPAMD_UPSTREAM_LOCK (up->lock);
+		while (entry) {
+
+			if (entry->type == RDNS_REQUEST_A) {
+				up_ent = g_malloc0 (sizeof (*up_ent));
+				up_ent->addr = rspamd_inet_address_new (AF_INET,
+						&entry->content.a.addr);
+				up_ent->priority = cbdata->priority;
+				rspamd_inet_address_set_port (up_ent->addr, cbdata->port);
+				LL_PREPEND (up->new_addrs, up_ent);
+			}
+			else if (entry->type == RDNS_REQUEST_AAAA) {
+				up_ent = g_malloc0 (sizeof (*up_ent));
+				up_ent->addr = rspamd_inet_address_new (AF_INET6,
+						&entry->content.aaa.addr);
+				up_ent->priority = cbdata->priority;
+				rspamd_inet_address_set_port (up_ent->addr, cbdata->port);
+				LL_PREPEND (up->new_addrs, up_ent);
+			}
+			entry = entry->next;
+		}
+
+		RSPAMD_UPSTREAM_UNLOCK (up->lock);
+	}
+
+	up->dns_requests--;
+	cbdata->requests_inflight --;
+
+	if (cbdata->requests_inflight == 0) {
+		g_free (cbdata);
+	}
+
+	if (up->dns_requests == 0) {
+		rspamd_upstream_update_addrs (up);
+	}
+
+	REF_RELEASE (up);
+}
+
+static void
+rspamd_upstream_dns_srv_cb (struct rdns_reply *reply, void *arg)
+{
+	struct upstream *upstream = (struct upstream *) arg;
+	struct rdns_reply_entry *entry;
+	struct rspamd_upstream_srv_dns_cb *ncbdata;
+
+	if (reply->code == RDNS_RC_NOERROR) {
+		entry = reply->entries;
+
+		RSPAMD_UPSTREAM_LOCK (upstream->lock);
+		while (entry) {
+			/* XXX: we ignore weight as it contradicts with upstreams logic */
+			if (entry->type == RDNS_REQUEST_SRV) {
+				msg_debug_upstream ("got srv reply for %s: %s "
+						"(weight=%d, priority=%d, port=%d)",
+						upstream->name, entry->content.srv.target,
+						entry->content.srv.weight, entry->content.srv.priority,
+						entry->content.srv.port);
+				ncbdata = g_malloc0 (sizeof (*ncbdata));
+				ncbdata->priority = entry->content.srv.weight;
+				ncbdata->port = entry->content.srv.port;
+				/* XXX: for all entries? */
+				upstream->ttl = entry->ttl;
+
+				if (rdns_make_request_full (upstream->ctx->res,
+						rspamd_upstream_dns_srv_phase2_cb, ncbdata,
+						upstream->ls->limits.dns_timeout,
+						upstream->ls->limits.dns_retransmits,
+						1, entry->content.srv.target, RDNS_REQUEST_A) != NULL) {
+					upstream->dns_requests++;
+					REF_RETAIN (upstream);
+					ncbdata->requests_inflight ++;
+				}
+
+				if (rdns_make_request_full (upstream->ctx->res,
+						rspamd_upstream_dns_srv_phase2_cb, ncbdata,
+						upstream->ls->limits.dns_timeout,
+						upstream->ls->limits.dns_retransmits,
+						1, entry->content.srv.target, RDNS_REQUEST_AAAA) != NULL) {
+					upstream->dns_requests++;
+					REF_RETAIN (upstream);
+					ncbdata->requests_inflight ++;
+				}
+
+				if (ncbdata->requests_inflight == 0) {
+					g_free (ncbdata);
+				}
+			}
+			entry = entry->next;
+		}
+
+		RSPAMD_UPSTREAM_UNLOCK (upstream->lock);
+	}
+
+	upstream->dns_requests--;
+	REF_RELEASE (upstream);
+}
+
 static void
 rspamd_upstream_revive_cb (struct ev_loop *loop, ev_timer *w, int revents)
 {
@@ -450,6 +599,7 @@ rspamd_upstream_revive_cb (struct ev_loop *loop, ev_timer *w, int revents)
 	}
 
 	RSPAMD_UPSTREAM_UNLOCK (upstream->lock);
+	g_assert (upstream->ref.refcount > 1);
 	REF_RELEASE (upstream);
 }
 
@@ -463,19 +613,31 @@ rspamd_upstream_resolve_addrs (const struct upstream_list *ls,
 			!(up->flags & RSPAMD_UPSTREAM_FLAG_NORESOLVE)) {
 		/* Resolve name of the upstream one more time */
 		if (up->name[0] != '/') {
-
-			if (rdns_make_request_full (up->ctx->res, rspamd_upstream_dns_cb, up,
-					ls->limits.dns_timeout, ls->limits.dns_retransmits,
-					1, up->name, RDNS_REQUEST_A) != NULL) {
-				up->dns_requests ++;
-				REF_RETAIN (up);
+			if (up->flags & RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE) {
+				if (rdns_make_request_full (up->ctx->res,
+						rspamd_upstream_dns_srv_cb, up,
+						ls->limits.dns_timeout, ls->limits.dns_retransmits,
+						1, up->name, RDNS_REQUEST_SRV) != NULL) {
+					up->dns_requests++;
+					REF_RETAIN (up);
+				}
 			}
+			else {
+				if (rdns_make_request_full (up->ctx->res,
+						rspamd_upstream_dns_cb, up,
+						ls->limits.dns_timeout, ls->limits.dns_retransmits,
+						1, up->name, RDNS_REQUEST_A) != NULL) {
+					up->dns_requests++;
+					REF_RETAIN (up);
+				}
 
-			if (rdns_make_request_full (up->ctx->res, rspamd_upstream_dns_cb, up,
-					ls->limits.dns_timeout, ls->limits.dns_retransmits,
-					1, up->name, RDNS_REQUEST_AAAA) != NULL) {
-				up->dns_requests ++;
-				REF_RETAIN (up);
+				if (rdns_make_request_full (up->ctx->res,
+						rspamd_upstream_dns_cb, up,
+						ls->limits.dns_timeout, ls->limits.dns_retransmits,
+						1, up->name, RDNS_REQUEST_AAAA) != NULL) {
+					up->dns_requests++;
+					REF_RETAIN (up);
+				}
 			}
 		}
 	}
@@ -492,8 +654,14 @@ rspamd_upstream_lazy_resolve_cb (struct ev_loop *loop, ev_timer *w, int revents)
 	if (up->ls) {
 		rspamd_upstream_resolve_addrs (up->ls, up);
 
-		w->repeat = rspamd_time_jitter (up->ls->limits.lazy_resolve_time,
-				up->ls->limits.lazy_resolve_time * .1);
+		if (up->ttl == 0 || up->ttl > up->ls->limits.lazy_resolve_time) {
+			w->repeat = rspamd_time_jitter (up->ls->limits.lazy_resolve_time,
+					up->ls->limits.lazy_resolve_time * .1);
+		}
+		else {
+			w->repeat = up->ttl;
+		}
+
 		ev_timer_again (loop, w);
 	}
 
@@ -525,7 +693,7 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *upstrea
 		ntim = rspamd_time_jitter (ls->limits.revive_time,
 				ls->limits.revive_jitter);
 
-		if (ev_is_active (&upstream->ev)) {
+		if (ev_can_stop (&upstream->ev)) {
 			ev_timer_stop (upstream->ctx->event_loop, &upstream->ev);
 		}
 
@@ -721,7 +889,7 @@ rspamd_upstream_dtor (struct upstream *up)
 
 	if (up->ctx) {
 
-		if (ev_is_active (&up->ev)) {
+		if (ev_can_stop (&up->ev)) {
 			ev_timer_stop (up->ctx->event_loop, &up->ev);
 		}
 
@@ -772,22 +940,66 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups, const gchar *str,
 {
 	struct upstream *upstream;
 	GPtrArray *addrs = NULL;
-	guint i;
+	guint i, slen;
 	rspamd_inet_addr_t *addr;
 	enum rspamd_parse_host_port_result ret = RSPAMD_PARSE_ADDR_FAIL;
 
 	upstream = g_malloc0 (sizeof (*upstream));
+	slen = strlen (str);
 
 	switch (parse_type) {
 	case RSPAMD_UPSTREAM_PARSE_DEFAULT:
-		ret = rspamd_parse_host_port_priority (str, &addrs,
-				&upstream->weight,
-				&upstream->name, def_port,
-				ups->ctx ? ups->ctx->pool : NULL);
+		if (slen > sizeof ("service=") &&
+			RSPAMD_LEN_CHECK_STARTS_WITH (str, slen, "service=")) {
+			const gchar *plus_pos, *service_pos, *semicolon_pos;
+
+			/* Accept service=srv_name+hostname[:priority] */
+			service_pos = str + sizeof ("service=") - 1;
+			plus_pos = strchr (service_pos, '+');
+
+			if (plus_pos != NULL) {
+				semicolon_pos = strchr (plus_pos + 1, ':');
+
+				if (semicolon_pos) {
+					upstream->weight = strtoul (semicolon_pos + 1, NULL, 10);
+				}
+				else {
+					semicolon_pos = plus_pos + strlen (plus_pos);
+				}
+
+				/*
+				 * Now our name is _service._tcp.<domain>
+				 * where <domain> is string between semicolon_pos and plus_pos +1
+				 * while service is a string between service_pos and plus_pos
+				 */
+				guint namelen = (semicolon_pos - (plus_pos + 1)) +
+						(plus_pos - service_pos) +
+						(sizeof ("tcp") - 1) +
+						4;
+				addrs = g_ptr_array_sized_new (1);
+				upstream->name = ups->ctx ?
+						rspamd_mempool_alloc (ups->ctx->pool, namelen + 1) :
+						g_malloc (namelen + 1);
+
+				rspamd_snprintf (upstream->name, namelen + 1,
+						"_%*s._tcp.%*s",
+						(gint)(plus_pos - service_pos), service_pos,
+						(gint)(semicolon_pos - (plus_pos + 1)), plus_pos + 1);
+				upstream->flags |= RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE;
+				ret = RSPAMD_PARSE_ADDR_RESOLVED;
+			}
+		}
+		else {
+			ret = rspamd_parse_host_port_priority (str, &addrs,
+					&upstream->weight,
+					&upstream->name, def_port,
+					ups->ctx ? ups->ctx->pool : NULL);
+		}
 		break;
 	case RSPAMD_UPSTREAM_PARSE_NAMESERVER:
 		addrs = g_ptr_array_sized_new (1);
-		if (rspamd_parse_inet_address (&addr, str, strlen (str))) {
+		if (rspamd_parse_inet_address (&addr, str, strlen (str),
+				RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 			if (ups->ctx) {
 				upstream->name = rspamd_mempool_strdup (ups->ctx->pool, str);
 			}
@@ -822,7 +1034,7 @@ rspamd_upstreams_add_upstream (struct upstream_list *ups, const gchar *str,
 		return FALSE;
 	}
 	else {
-		upstream->flags = ups->flags;
+		upstream->flags |= ups->flags;
 
 		if (ret == RSPAMD_PARSE_ADDR_NUMERIC) {
 			/* Add noresolve flag */
@@ -1030,7 +1242,7 @@ rspamd_upstream_restore_cb (gpointer elt, gpointer ls)
 	/* Here the upstreams list is already locked */
 	RSPAMD_UPSTREAM_LOCK (up->lock);
 
-	if (ev_is_active (&up->ev)) {
+	if (ev_can_stop (&up->ev)) {
 		ev_timer_stop (up->ctx->event_loop, &up->ev);
 	}
 
@@ -1045,6 +1257,7 @@ rspamd_upstream_restore_cb (gpointer elt, gpointer ls)
 	}
 
 	/* For revive event */
+	g_assert (up->ref.refcount > 1);
 	REF_RELEASE (up);
 }
 

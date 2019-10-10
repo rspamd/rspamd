@@ -158,13 +158,21 @@ rspamd_regexp_post_process (rspamd_regexp_t *r)
 	}
 #if defined(WITH_PCRE2)
 	gsize jsz;
-	guint jit_flags = can_jit ? PCRE2_JIT_COMPLETE : 0;
-	/* Create match context */
+	static const guint max_recursion_depth = 100000, max_backtrack = 1000000;
 
+	guint jit_flags = can_jit ? PCRE2_JIT_COMPLETE : 0;
+
+	/* Create match context */
 	r->mcontext = pcre2_match_context_create (NULL);
+	g_assert (r->mcontext != NULL);
+	pcre2_set_recursion_limit (r->mcontext, max_recursion_depth);
+	pcre2_set_match_limit (r->mcontext, max_backtrack);
 
 	if (r->re != r->raw_re) {
 		r->raw_mcontext = pcre2_match_context_create (NULL);
+		g_assert (r->raw_mcontext != NULL);
+		pcre2_set_recursion_limit (r->raw_mcontext, max_recursion_depth);
+		pcre2_set_match_limit (r->raw_mcontext, max_backtrack);
 	}
 	else {
 		r->raw_mcontext = r->mcontext;
@@ -998,7 +1006,7 @@ rspamd_regexp_cache_create (struct rspamd_regexp_cache *cache,
 	res = rspamd_regexp_new (pattern, flags, err);
 
 	if (res) {
-		REF_RETAIN (res);
+		/* REF_RETAIN (res); */
 		g_hash_table_insert (cache->tbl, res->id, res);
 	}
 
@@ -1055,8 +1063,27 @@ rspamd_regexp_cache_destroy (struct rspamd_regexp_cache *cache)
 		}
 #endif
 #endif
+		g_free (cache);
 	}
 }
+
+RSPAMD_CONSTRUCTOR (rspamd_re_static_pool_ctor)
+{
+	global_re_cache = rspamd_regexp_cache_new ();
+#ifdef WITH_PCRE2
+	pcre2_ctx = pcre2_compile_context_create (NULL);
+	pcre2_set_newline (pcre2_ctx, PCRE_FLAG(NEWLINE_ANY));
+#endif
+}
+
+RSPAMD_DESTRUCTOR (rspamd_re_static_pool_dtor)
+{
+	rspamd_regexp_cache_destroy (global_re_cache);
+#ifdef WITH_PCRE2
+	pcre2_compile_context_free (pcre2_ctx);
+#endif
+}
+
 
 void
 rspamd_regexp_library_init (struct rspamd_config *cfg)
@@ -1066,19 +1093,16 @@ rspamd_regexp_library_init (struct rspamd_config *cfg)
 			can_jit = FALSE;
 			check_jit = FALSE;
 		}
+		else if (!can_jit) {
+			check_jit = TRUE;
+		}
 	}
 
-	if (global_re_cache == NULL) {
-		global_re_cache = rspamd_regexp_cache_new ();
+	if (check_jit) {
 #ifdef HAVE_PCRE_JIT
 		gint jit, rc;
 		gchar *str;
 
-		if (check_jit) {
-#ifdef WITH_PCRE2
-			pcre2_ctx = pcre2_compile_context_create (NULL);
-			pcre2_set_newline (pcre2_ctx, PCRE_FLAG(NEWLINE_ANY));
-#endif
 #ifndef WITH_PCRE2
 			rc = pcre_config (PCRE_CONFIG_JIT, &jit);
 #else
@@ -1118,23 +1142,12 @@ rspamd_regexp_library_init (struct rspamd_config *cfg)
 						  " are impossible");
 				can_jit = FALSE;
 			}
-		}
 #else
 		msg_info ("pcre is too old and has no JIT support, so many optimizations"
-				" are impossible");
+				  " are impossible");
 		can_jit = FALSE;
 #endif
-	}
-}
-
-void
-rspamd_regexp_library_finalize (void)
-{
-	if (global_re_cache != NULL) {
-		rspamd_regexp_cache_destroy (global_re_cache);
-#ifdef WITH_PCRE2
-		pcre2_compile_context_free (pcre2_ctx);
-#endif
+		check_jit = FALSE;
 	}
 }
 

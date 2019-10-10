@@ -11,19 +11,6 @@ context("Trie search functions", function()
     'str\1ing'
   }
 
-  local function comparetables(t1, t2)
-    if #t1 ~= #t2 then return false end
-    for i=1,#t1 do
-      if type(t1[i]) ~= type(t2[i]) then return false
-      elseif type(t1[i]) == 'table' then
-        if not comparetables(t1[i], t2[i]) then return false end
-      elseif t1[i] ~= t2[i] then
-        return false
-      end
-    end
-    return true
-  end
-
   local trie = t.create(patterns)
 
   local cases = {
@@ -32,6 +19,14 @@ context("Trie search functions", function()
     {'non-existent', false},
     {'str\1ing test', true, {{7, 5}, {12, 1}, {12, 2}}},
   }
+
+  local function cmp_tables(t1, t2)
+    if t1[2] ~= t2[2] then
+      return t1[2] < t2[2]
+    else
+      return t1[1] < t2[1]
+    end
+  end
 
   for i,c in ipairs(cases) do
     test("Trie search " .. i, function()
@@ -47,13 +42,38 @@ context("Trie search functions", function()
       assert_equal(c[2], ret, tostring(c[2]) .. ' while matching ' .. c[1])
 
       if ret then
-        table.sort(res, function(a, b) return a[2] > b[2] end)
-        table.sort(c[3], function(a, b) return a[2] > b[2] end)
-        local cmp = comparetables(res, c[3])
-        assert_true(cmp, 'valid results for case: ' .. c[1] ..
-                ' got: ' .. logger.slog('%s', res) .. ' expected: ' ..
-                logger.slog('%s', c[3])
-        )
+        table.sort(c[3], cmp_tables)
+        table.sort(res, cmp_tables)
+        assert_rspamd_table_eq({
+          expect = c[3],
+          actual = res
+        })
+      end
+    end)
+  end
+
+  for i,c in ipairs(cases) do
+    test("Trie search, table version " .. i, function()
+      local match = {}
+
+      match = trie:match(c[1])
+
+      assert_equal(c[2], #match > 0, tostring(c[2]) .. ' while matching ' .. c[1])
+
+      if match and #match > 0 then
+        local res = {}
+        -- Convert to something that this test expects
+        for pat,hits in pairs(match) do
+          for _,pos in ipairs(hits) do
+            table.insert(res, {pos, pat})
+          end
+        end
+        table.sort(c[3], cmp_tables)
+        table.sort(res, cmp_tables)
+        assert_rspamd_table_eq({
+          expect = c[3],
+          actual = res
+        })
       end
     end)
   end

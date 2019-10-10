@@ -200,9 +200,10 @@ end
  */
 LUA_FUNCTION_DEF (task, append_message);
 /***
- * @method task:get_urls([need_emails|list_protos])
+ * @method task:get_urls([need_emails|list_protos][, need_images])
  * Get all URLs found in a message. Telephone urls and emails are not included unless explicitly asked in `list_protos`
  * @param {boolean} need_emails if `true` then reutrn also email urls, this can be a comma separated string of protocols desired or a table (e.g. `mailto` or `telephone`)
+ * @param {boolean} need_images return urls from images (<img src=...>) as well
  * @return {table rspamd_url} list of all urls found
 @example
 local function phishing_cb(task)
@@ -644,6 +645,14 @@ LUA_FUNCTION_DEF (task, get_symbols_all);
  * @return {table, table} table of strings with symbols names + table of theirs scores
  */
 LUA_FUNCTION_DEF (task, get_symbols);
+
+/***
+ * @method task:get_groups([need_private])
+ * Returns a map [group -> group_score] for matched group. If `need_private` is
+ * unspecified, then the global option `public_groups_only` is used for default.
+ * @return {table, number} a map [group -> group_score]
+ */
+LUA_FUNCTION_DEF (task, get_groups);
 
 /***
  * @method task:get_symbols_numeric()
@@ -1149,6 +1158,7 @@ static const struct luaL_reg tasklib_m[] = {
 	LUA_INTERFACE_DEF (task, get_symbols_all),
 	LUA_INTERFACE_DEF (task, get_symbols_numeric),
 	LUA_INTERFACE_DEF (task, get_symbols_tokens),
+	LUA_INTERFACE_DEF (task, get_groups),
 	LUA_INTERFACE_DEF (task, process_ann_tokens),
 	LUA_INTERFACE_DEF (task, has_symbol),
 	LUA_INTERFACE_DEF (task, enable_symbol),
@@ -1260,14 +1270,6 @@ lua_check_archive (lua_State * L)
 	void *ud = rspamd_lua_check_udata (L, 1, "rspamd{archive}");
 	luaL_argcheck (L, ud != NULL, 1, "'archive' expected");
 	return ud ? *((struct rspamd_archive **)ud) : NULL;
-}
-
-struct rspamd_lua_text *
-lua_check_text (lua_State * L, gint pos)
-{
-	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{text}");
-	luaL_argcheck (L, ud != NULL, pos, "'text' expected");
-	return ud ? (struct rspamd_lua_text *)ud : NULL;
 }
 
 static void
@@ -1668,8 +1670,9 @@ lua_task_load_from_string (lua_State * L)
 		}
 
 		task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
-		task->msg.begin = g_strdup (str_message);
-		task->msg.len   = message_len;
+		task->msg.begin = g_malloc (message_len);
+		memcpy ((gchar *)task->msg.begin, str_message, message_len);
+		task->msg.len  = message_len;
 		rspamd_mempool_add_destructor (task->task_pool, lua_task_free_dtor,
 				(gpointer)task->msg.begin);
 	}
@@ -2099,6 +2102,7 @@ struct lua_tree_cb_data {
 	lua_State *L;
 	int i;
 	gint mask;
+	gint need_images;
 };
 
 static void
@@ -2109,6 +2113,10 @@ lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 	struct lua_tree_cb_data *cb = ud;
 
 	if (url->protocol & cb->mask) {
+		if (!cb->need_images && (url->flags & RSPAMD_URL_FLAG_IMAGE)) {
+			return;
+		}
+
 		lua_url = lua_newuserdata (cb->L, sizeof (struct rspamd_lua_url));
 		rspamd_lua_setclass (cb->L, "rspamd{url}", -1);
 		lua_url->url = url;
@@ -2125,6 +2133,8 @@ lua_task_get_urls (lua_State * L)
 	gint protocols_mask = 0;
 	static const gint default_mask = PROTOCOL_HTTP|PROTOCOL_HTTPS|
 			PROTOCOL_FILE|PROTOCOL_FTP;
+	const gchar *cache_name = "emails+urls";
+	gboolean need_images = FALSE;
 	gsize sz;
 
 	if (task) {
@@ -2184,29 +2194,42 @@ lua_task_get_urls (lua_State * L)
 			else {
 				protocols_mask = default_mask;
 			}
+
+			if (lua_type (L, 3) == LUA_TBOOLEAN) {
+				need_images = lua_toboolean (L, 3);
+			}
 		}
 		else {
 			protocols_mask = default_mask;
 		}
 
+		memset (&cb, 0, sizeof (cb));
 		cb.i = 1;
 		cb.L = L;
 		cb.mask = protocols_mask;
+		cb.need_images = need_images;
 
 		if (protocols_mask & PROTOCOL_MAILTO) {
+			if (need_images) {
+				cache_name = "emails+urls+img";
+			}
+			else {
+				cache_name = "emails+urls";
+			}
+
 			sz = g_hash_table_size (MESSAGE_FIELD (task, urls)) +
 					g_hash_table_size (MESSAGE_FIELD (task, emails));
 
 			if (protocols_mask == (default_mask|PROTOCOL_MAILTO)) {
 				/* Can use cached version */
-				if (!lua_task_get_cached (L, task, "emails+urls")) {
+				if (!lua_task_get_cached (L, task, cache_name)) {
 					lua_createtable (L, sz, 0);
 					g_hash_table_foreach (MESSAGE_FIELD (task, urls),
 							lua_tree_url_callback, &cb);
 					g_hash_table_foreach (MESSAGE_FIELD (task, emails),
 							lua_tree_url_callback, &cb);
 
-					lua_task_set_cached (L, task, "emails+urls", -1);
+					lua_task_set_cached (L, task, cache_name, -1);
 				}
 			}
 			else {
@@ -2219,14 +2242,21 @@ lua_task_get_urls (lua_State * L)
 
 		}
 		else {
+			if (need_images) {
+				cache_name = "urls+img";
+			}
+			else {
+				cache_name = "urls";
+			}
+
 			sz = g_hash_table_size (MESSAGE_FIELD (task, urls));
 
 			if (protocols_mask == (default_mask)) {
-				if (!lua_task_get_cached (L, task, "urls")) {
+				if (!lua_task_get_cached (L, task, cache_name)) {
 					lua_createtable (L, sz, 0);
 					g_hash_table_foreach (MESSAGE_FIELD (task, urls),
 							lua_tree_url_callback, &cb);
-					lua_task_set_cached (L, task, "urls", -1);
+					lua_task_set_cached (L, task, cache_name, -1);
 				}
 			}
 			else {
@@ -2386,6 +2416,7 @@ lua_task_get_emails (lua_State * L)
 	if (task) {
 		if (task->message) {
 			lua_createtable (L, g_hash_table_size (MESSAGE_FIELD (task, emails)), 0);
+			memset (&cb, 0, sizeof (cb));
 			cb.i = 1;
 			cb.L = L;
 			cb.mask = PROTOCOL_MAILTO;
@@ -3437,6 +3468,7 @@ lua_task_set_recipients (lua_State *L)
 	} \
 	else { \
 		ret = addr->len > 0; \
+		nrcpt = addr->len; \
 	} \
 } while (0)
 
@@ -3445,7 +3477,7 @@ lua_task_has_from (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	gint what = 0;
+	gint what = 0, nrcpt = 0;
 	gboolean ret = FALSE;
 
 	if (task) {
@@ -3487,7 +3519,7 @@ lua_task_has_recipients (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	gint what = 0;
+	gint what = 0, nrcpt = 0;
 	gboolean ret = FALSE;
 
 	if (task) {
@@ -3520,6 +3552,11 @@ lua_task_has_recipients (lua_State *L)
 	}
 
 	lua_pushboolean (L, ret);
+
+	if (ret) {
+		lua_pushinteger (L, nrcpt);
+		return 2;
+	}
 
 	return 1;
 }
@@ -3819,7 +3856,8 @@ lua_task_set_from_ip (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	const gchar *ip_str = luaL_checkstring (L, 2);
+	gsize len;
+	const gchar *ip_str = luaL_checklstring (L, 2, &len);
 	rspamd_inet_addr_t *addr = NULL;
 
 	if (!task || !ip_str) {
@@ -3829,7 +3867,8 @@ lua_task_set_from_ip (lua_State *L)
 	else {
 		if (!rspamd_parse_inet_address (&addr,
 				ip_str,
-				0)) {
+				len,
+				RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 			msg_warn_task ("cannot get IP from received header: '%s'",
 					ip_str);
 		}
@@ -4442,6 +4481,46 @@ lua_task_get_symbols_numeric (lua_State *L)
 	}
 
 	return 2;
+}
+
+static gint
+lua_task_get_groups (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_task *task = lua_check_task (L, 1);
+	gboolean need_private;
+	struct rspamd_scan_result *mres;
+	struct rspamd_symbols_group *gr;
+	gdouble gr_score;
+
+	if (task) {
+		mres = task->result;
+
+		if (lua_isboolean (L, 2)) {
+			need_private = lua_toboolean (L, 2);
+		}
+		else {
+			need_private = !(task->cfg->public_groups_only);
+		}
+
+		lua_createtable (L, 0, kh_size (mres->sym_groups));
+
+		kh_foreach (mres->sym_groups, gr, gr_score, {
+			if (!(gr->flags & RSPAMD_SYMBOL_GROUP_PUBLIC)) {
+				if (!need_private) {
+					continue;
+				}
+			}
+
+			lua_pushnumber (L, gr_score);
+			lua_setfield (L, -2, gr->name);
+		});
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 struct tokens_foreach_cbdata {

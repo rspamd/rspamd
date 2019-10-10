@@ -582,17 +582,7 @@ lua_load_mempool (lua_State * L)
 void
 luaopen_mempool (lua_State * L)
 {
-	luaL_newmetatable (L, "rspamd{mempool}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{mempool}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL,				mempoollib_m);
+	rspamd_lua_new_class (L, "rspamd{mempool}", mempoollib_m);
+	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_mempool", lua_load_mempool);
-
-	lua_pop (L, 1);                      /* remove metatable from stack */
 }

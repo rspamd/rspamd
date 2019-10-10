@@ -484,7 +484,7 @@ sub ProcessLog {
             next if ( defined $endTime && $ts gt $endTime );
 
             if ( $_ !~
-                /\(([^()]+)\): \[(NaN|-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\].+? time: (\d+\.\d+)ms real/ )
+                /\(([^()]+)\): \[(NaN|-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\]\s+\[([^\]]+)\].+? time: (\d+\.\d+)ms/ )
             {
                 #print "BAD: $_\n";
                 next;
@@ -713,7 +713,7 @@ sub log_time_format {
 
         # 2017-08-08 00:00:01 #66984(
         # 2017-08-08 00:00:01.001 #66984(
-        if (/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d(\.\d{3})? #\d+\(/) {
+        if (/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d(\.\d{3,5})? #\d+\(/) {
             $format = 'rspamd';
             last;
         }

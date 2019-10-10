@@ -29,6 +29,62 @@ local fun = require "fun"
 
 local N = 'dcc'
 
+local function dcc_config(opts)
+
+  local dcc_conf = {
+    name = N,
+    default_port = 10045,
+    timeout = 5.0,
+    log_clean = false,
+    retransmits = 2,
+    cache_expire = 7200, -- expire redis in 2h
+    message = '${SCANNER}: bulk message found: "${VIRUS}"',
+    detection_category = "hash",
+    default_score = 1,
+    action = false,
+    client = '0.0.0.0',
+    symbol_fail = 'DCC_FAIL',
+    symbol = 'DCC_REJECT',
+    symbol_bulk = 'DCC_BULK',
+    body_max = 999999,
+    fuz1_max = 999999,
+    fuz2_max = 999999,
+  }
+
+  dcc_conf = lua_util.override_defaults(dcc_conf, opts)
+
+  if not dcc_conf.prefix then
+    dcc_conf.prefix = 'rs_' .. dcc_conf.name .. '_'
+  end
+
+  if not dcc_conf.log_prefix then
+    dcc_conf.log_prefix = dcc_conf.name
+  end
+
+  if not dcc_conf.servers and dcc_conf.socket then
+    dcc_conf.servers = dcc_conf.socket
+  end
+
+  if not dcc_conf.servers then
+    rspamd_logger.errx(rspamd_config, 'no servers defined')
+
+    return nil
+  end
+
+  dcc_conf.upstreams = upstream_list.create(rspamd_config,
+      dcc_conf.servers,
+      dcc_conf.default_port)
+
+  if dcc_conf.upstreams then
+    lua_util.add_debug_alias('external_services', dcc_conf.name)
+    return dcc_conf
+  end
+
+  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
+      dcc_conf['servers'])
+  return nil
+end
+
 local function dcc_check(task, content, digest, rule)
   local function dcc_check_uncached ()
     local upstream = rule.upstreams:get_upstream_round_robin()
@@ -137,7 +193,7 @@ local function dcc_check(task, content, digest, rule)
           if (result == 'R') then
             -- Reject
             common.yield_result(task, rule, info, rule.default_score)
-            common.save_av_cache(task, digest, rule, info, rule.default_score)
+            common.save_cache(task, digest, rule, info, rule.default_score)
           elseif (result == 'T') then
             -- Temporary failure
             rspamd_logger.warnx(task, 'DCC returned a temporary failure result: %s', result)
@@ -192,9 +248,9 @@ local function dcc_check(task, content, digest, rule)
                 task:insert_result(rule.symbol_bulk,
                     score,
                     opts)
-                common.save_av_cache(task, digest, rule, opts, score)
+                common.save_cache(task, digest, rule, opts, score)
               else
-                common.save_av_cache(task, digest, rule, 'OK')
+                common.save_cache(task, digest, rule, 'OK')
                 if rule.log_clean then
                   rspamd_logger.infox(task, '%s: clean, returned result A - info: %s',
                       rule.log_prefix, info)
@@ -205,7 +261,7 @@ local function dcc_check(task, content, digest, rule)
             end
           elseif result == 'G' then
             -- do nothing
-            common.save_av_cache(task, digest, rule, 'OK')
+            common.save_cache(task, digest, rule, 'OK')
             if rule.log_clean then
               rspamd_logger.infox(task, '%s: clean, returned result G - info: %s', rule.log_prefix, info)
             else
@@ -213,7 +269,7 @@ local function dcc_check(task, content, digest, rule)
             end
           elseif result == 'S' then
             -- do nothing
-            common.save_av_cache(task, digest, rule, 'OK')
+            common.save_cache(task, digest, rule, 'OK')
             if rule.log_clean then
               rspamd_logger.infox(task, '%s: clean, returned result S - info: %s', rule.log_prefix, info)
             else
@@ -225,14 +281,6 @@ local function dcc_check(task, content, digest, rule)
             common.yield_result(task, rule, 'error: ' .. result, 0.0, 'fail')
           end
         end
-      end
-    end
-
-    if rule.dynamic_scan then
-      local pre_check, pre_check_msg = common.check_metric_results(task, rule)
-      if pre_check then
-        rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, pre_check_msg)
-        return true
       end
     end
 
@@ -249,69 +297,13 @@ local function dcc_check(task, content, digest, rule)
       fuz2_max = 999999,
     })
   end
-  if common.need_av_check(task, content, rule) then
-    if common.check_av_cache(task, digest, rule, dcc_check_uncached) then
-      return
-    else
-      dcc_check_uncached()
-    end
-  end
-end
 
-local function dcc_config(opts)
-
-  local dcc_conf = {
-    name = N,
-    default_port = 10045,
-    timeout = 5.0,
-    log_clean = false,
-    retransmits = 2,
-    cache_expire = 7200, -- expire redis in 2h
-    message = '${SCANNER}: bulk message found: "${VIRUS}"',
-    detection_category = "hash",
-    default_score = 1,
-    action = false,
-    client = '0.0.0.0',
-    symbol_fail = 'DCC_FAIL',
-    symbol = 'DCC_REJECT',
-    symbol_bulk = 'DCC_BULK',
-    body_max = 999999,
-    fuz1_max = 999999,
-    fuz2_max = 999999,
-  }
-
-  dcc_conf = lua_util.override_defaults(dcc_conf, opts)
-
-  if not dcc_conf.prefix then
-    dcc_conf.prefix = 'rs_' .. dcc_conf.name .. '_'
+  if common.condition_check_and_continue(task, content, rule, digest, dcc_check_uncached) then
+    return
+  else
+    dcc_check_uncached()
   end
 
-  if not dcc_conf.log_prefix then
-    dcc_conf.log_prefix = dcc_conf.name
-  end
-
-  if not dcc_conf.servers and dcc_conf.socket then
-    dcc_conf.servers = dcc_conf.socket
-  end
-
-  if not dcc_conf.servers then
-    rspamd_logger.errx(rspamd_config, 'no servers defined')
-
-    return nil
-  end
-
-  dcc_conf.upstreams = upstream_list.create(rspamd_config,
-      dcc_conf.servers,
-      dcc_conf.default_port)
-
-  if dcc_conf.upstreams then
-    lua_util.add_debug_alias('external_services', dcc_conf.name)
-    return dcc_conf
-  end
-
-  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
-      dcc_conf['servers'])
-  return nil
 end
 
 return {

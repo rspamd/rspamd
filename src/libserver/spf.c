@@ -963,7 +963,7 @@ parse_spf_domain_mask (struct spf_record *rec, struct spf_addr *addr,
 
 		switch (state) {
 			case parse_spf_elt:
-				if (t == ':') {
+				if (t == ':' || t == '=') {
 					state = parse_semicolon;
 				}
 				else if (t == '/') {
@@ -1011,7 +1011,8 @@ parse_spf_domain_mask (struct spf_record *rec, struct spf_addr *addr,
 						addr->m.dual.mask_v4 = cur_mask;
 					}
 					else {
-						msg_info_spf ("bad ipv4 mask: %d", cur_mask);
+						msg_info_spf ("bad ipv4 mask for %s: %d",
+								rec->sender_domain, cur_mask);
 					}
 					state = parse_second_slash;
 				}
@@ -1041,7 +1042,7 @@ parse_spf_domain_mask (struct spf_record *rec, struct spf_addr *addr,
 			addr->m.dual.mask_v4 = cur_mask;
 		}
 		else {
-			msg_info_spf ("bad ipv4 mask: %d", cur_mask);
+			msg_info_spf ("bad ipv4 mask for %s: %d", rec->sender_domain, cur_mask);
 		}
 	}
 	else if (state == parse_ipv6_mask) {
@@ -1228,7 +1229,13 @@ parse_spf_ip4 (struct spf_record *rec, struct spf_addr *addr)
 	semicolon = strchr (addr->spf_string, ':');
 
 	if (semicolon == NULL) {
-		return FALSE;
+		semicolon = strchr (addr->spf_string, '=');
+
+		if (semicolon == NULL) {
+			msg_info_spf ("invalid ip4 element for %s: %s", addr->spf_string,
+					rec->sender_domain);
+			return FALSE;
+		}
 	}
 
 	semicolon++;
@@ -1244,12 +1251,16 @@ parse_spf_ip4 (struct spf_record *rec, struct spf_addr *addr)
 	rspamd_strlcpy (ipbuf, semicolon, MIN (len + 1, sizeof (ipbuf)));
 
 	if (inet_pton (AF_INET, ipbuf, addr->addr4) != 1) {
+		msg_info_spf ("invalid ip4 element for %s: %s", addr->spf_string,
+				rec->sender_domain);
 		return FALSE;
 	}
 
 	if (slash) {
 		mask = strtoul (slash + 1, NULL, 10);
 		if (mask > 32) {
+			msg_info_spf ("invalid mask for ip4 element for %s: %s", addr->spf_string,
+					rec->sender_domain);
 			return FALSE;
 		}
 
@@ -1285,7 +1296,13 @@ parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 	semicolon = strchr (addr->spf_string, ':');
 
 	if (semicolon == NULL) {
-		return FALSE;
+		semicolon = strchr (addr->spf_string, '=');
+
+		if (semicolon == NULL) {
+			msg_info_spf ("invalid ip6 element for %s: %s", addr->spf_string,
+					rec->sender_domain);
+			return FALSE;
+		}
 	}
 
 	semicolon++;
@@ -1301,12 +1318,16 @@ parse_spf_ip6 (struct spf_record *rec, struct spf_addr *addr)
 	rspamd_strlcpy (ipbuf, semicolon, MIN (len + 1, sizeof (ipbuf)));
 
 	if (inet_pton (AF_INET6, ipbuf, addr->addr6) != 1) {
+		msg_info_spf ("invalid ip6 element for %s: %s", addr->spf_string,
+				rec->sender_domain);
 		return FALSE;
 	}
 
 	if (slash) {
 		mask = strtoul (slash + 1, NULL, 10);
 		if (mask > 128) {
+			msg_info_spf ("invalid mask for ip6 element for %s: %s", addr->spf_string,
+					rec->sender_domain);
 			return FALSE;
 		}
 
@@ -1341,7 +1362,14 @@ parse_spf_include (struct spf_record *rec, struct spf_addr *addr)
 	domain = strchr (addr->spf_string, ':');
 
 	if (domain == NULL) {
-		return FALSE;
+		/* Common mistake */
+		domain = strchr (addr->spf_string, '=');
+
+		if (domain == NULL) {
+			msg_info_spf ("invalid include element for %s: %s", addr->spf_string,
+					rec->sender_domain);
+			return FALSE;
+		}
 	}
 
 	domain++;
@@ -1390,7 +1418,14 @@ parse_spf_redirect (struct spf_record *rec,
 	domain = strchr (addr->spf_string, '=');
 
 	if (domain == NULL) {
-		return FALSE;
+		/* Common mistake */
+		domain = strchr (addr->spf_string, ':');
+
+		if (domain == NULL) {
+			msg_info_spf ("invalid redirect element for %s: %s", addr->spf_string,
+					rec->sender_domain);
+			return FALSE;
+		}
 	}
 
 	domain++;
@@ -1433,8 +1468,13 @@ parse_spf_exists (struct spf_record *rec, struct spf_addr *addr)
 
 	host = strchr (addr->spf_string, ':');
 	if (host == NULL) {
-		msg_info_spf ("bad SPF exist record: %s", addr->spf_string);
-		return FALSE;
+		host = strchr (addr->spf_string, '=');
+
+		if (host == NULL) {
+			msg_info_spf ("invalid exists element for %s: %s", addr->spf_string,
+					rec->sender_domain);
+			return FALSE;
+		}
 	}
 
 	host++;

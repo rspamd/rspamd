@@ -73,7 +73,7 @@ local function add_symbol_score(task, rule, mult, params)
   if not params then params = {tostring(mult)};
 
   end
-  if rule.config.split_symbols then
+  if rule.selector.config.split_symbols then
     if mult >= 0 then
       task:insert_result(rule.symbol .. '_SPAM', mult, params)
     else
@@ -89,7 +89,7 @@ local function sub_symbol_score(task, rule, score)
     local s = task:get_symbol(sym)[1]
     return s.score
   end
-  if rule.config.split_symbols then
+  if rule.selector.config.split_symbols then
     local spam_sym = rule.symbol .. '_SPAM'
     local ham_sym = rule.symbol .. '_HAM'
 
@@ -346,7 +346,6 @@ local url_selector = {
     outbound = true,
     inbound = true,
   },
-  dependencies = {"SURBL_REDIRECTOR_CALLBACK"},
   filter = url_reputation_filter, -- used to get scores
   idempotent = url_reputation_idempotent -- used to set scores
 }
@@ -504,7 +503,7 @@ local ip_selector = {
       ['country'] = 0.01,
       ['ip'] = 1.0
     },
-    symbol_spam = 'SENDER_REP', -- symbol to be inserted
+    symbol = 'SENDER_REP', -- symbol to be inserted
     split_symbols = true,
     asn_prefix = 'a:', -- prefix for ASN hashes
     country_prefix = 'c:', -- prefix for country hashes
@@ -1122,7 +1121,7 @@ local function parse_rule(name, tbl)
         rule.config.whitelist, N)
   end
 
-  local symbol = name
+  local symbol = rule.selector.config.symbol or name
   if tbl.symbol then
     symbol = tbl.symbol
   end
@@ -1157,26 +1156,27 @@ local function parse_rule(name, tbl)
     end
 
     if rule.enabled then
-      rspamd_logger.infox(rspamd_config, 'Enable %s (%s backend) rule for symbol %s',
-          sel_type, bk_type, rule.symbol)
+      rspamd_logger.infox(rspamd_config, 'Enable %s (%s backend) rule for symbol %s (split symbols: %s)',
+          sel_type, bk_type, rule.symbol,
+          rule.selector.config.split_symbols)
     end
   end)
 
   -- We now generate symbol for checking
   local id = rspamd_config:register_symbol{
-    name = symbol,
+    name = rule.symbol,
     type = 'normal',
     callback = callback_gen(reputation_filter_cb, rule),
   }
 
-  if rule.config.split_symbols then
+  if rule.selector.config.split_symbols then
     rspamd_config:register_symbol{
-      name = symbol .. '_HAM',
+      name = rule.symbol .. '_HAM',
       type = 'virtual',
       parent = id,
     }
     rspamd_config:register_symbol{
-      name = symbol .. '_SPAM',
+      name = rule.symbol .. '_SPAM',
       type = 'virtual',
       parent = id,
     }
@@ -1191,7 +1191,7 @@ local function parse_rule(name, tbl)
   if rule.selector.postfilter then
     -- Also register a postfilter
     rspamd_config:register_symbol{
-      name = symbol .. '_POST',
+      name = rule.symbol .. '_POST',
       type = 'postfilter,nostat',
       callback = callback_gen(reputation_postfilter_cb, rule),
     }
@@ -1200,7 +1200,7 @@ local function parse_rule(name, tbl)
   if rule.selector.idempotent then
     -- Has also idempotent component (e.g. saving data to the backend)
     rspamd_config:register_symbol{
-      name = symbol .. '_IDEMPOTENT',
+      name = rule.symbol .. '_IDEMPOTENT',
       type = 'idempotent',
       callback = callback_gen(reputation_idempotent_cb, rule),
     }

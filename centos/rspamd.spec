@@ -195,13 +195,13 @@ fi
 %config(noreplace) %{rspamd_confdir}/%{name}.conf
 %config(noreplace) %{rspamd_confdir}/composites.conf
 %config(noreplace) %{rspamd_confdir}/metrics.conf
-%config(noreplace) %{rspamd_confdir}/mime_types.inc
+%config(noreplace) %{rspamd_confdir}/maps.d/mime_types.inc
 %config(noreplace) %{rspamd_confdir}/modules.conf
 %config(noreplace) %{rspamd_confdir}/statistic.conf
 %config(noreplace) %{rspamd_confdir}/common.conf
 %config(noreplace) %{rspamd_confdir}/logging.inc
 %config(noreplace) %{rspamd_confdir}/options.inc
-%config(noreplace) %{rspamd_confdir}/redirectors.inc
+%config(noreplace) %{rspamd_confdir}/maps.d/redirectors.inc
 %config(noreplace) %{rspamd_confdir}/worker-controller.inc
 %config(noreplace) %{rspamd_confdir}/worker-fuzzy.inc
 %config(noreplace) %{rspamd_confdir}/worker-normal.inc
@@ -217,9 +217,9 @@ fi
 %dir %{rspamd_pluginsdir}
 %dir %{rspamd_wwwdir}
 %dir %{_libdir}/rspamd
-%config(noreplace) %{rspamd_confdir}/surbl-whitelist.inc
-%config(noreplace) %{rspamd_confdir}/spf_dkim_whitelist.inc
-%config(noreplace) %{rspamd_confdir}/dmarc_whitelist.inc
+%config(noreplace) %{rspamd_confdir}/maps.d/surbl-whitelist.inc
+%config(noreplace) %{rspamd_confdir}/maps.d/spf_dkim_whitelist.inc
+%config(noreplace) %{rspamd_confdir}/maps.d/dmarc_whitelist.inc
 %{rspamd_pluginsdir}/lib/*.lua
 %{rspamd_pluginsdir}/lua/*.lua
 %{rspamd_rulesdir}/regexp/*.lua

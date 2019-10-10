@@ -135,11 +135,6 @@ rspamd_milter_session_reset (struct rspamd_milter_session *session,
 			session->from = NULL;
 		}
 
-		if (session->helo) {
-			msg_debug_milter ("cleanup helo");
-			session->helo->len = 0;
-		}
-
 		if (priv->headers) {
 			msg_debug_milter ("cleanup headers");
 			gchar *k;

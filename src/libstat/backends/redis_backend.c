@@ -1021,7 +1021,7 @@ rspamd_redis_fin (gpointer data)
 
 	rt->has_event = FALSE;
 	/* Stop timeout */
-	if (ev_is_active (&rt->timeout_event)) {
+	if (ev_can_stop (&rt->timeout_event)) {
 		ev_timer_stop (rt->task->event_loop, &rt->timeout_event);
 	}
 
@@ -1280,7 +1280,7 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 					/* Further is handled by rspamd_redis_processed */
 					final = FALSE;
 					/* Restart timeout */
-					if (ev_is_active (&rt->timeout_event)) {
+					if (ev_can_stop (&rt->timeout_event)) {
 						rt->timeout_event.repeat = rt->ctx->timeout;
 						ev_timer_again (task->event_loop, &rt->timeout_event);
 					}
@@ -1684,7 +1684,7 @@ rspamd_redis_process_tokens (struct rspamd_task *task,
 		rt->has_event = TRUE;
 		rt->tokens = g_ptr_array_ref (tokens);
 
-		if (ev_is_active (&rt->timeout_event)) {
+		if (ev_can_stop (&rt->timeout_event)) {
 			rt->timeout_event.repeat = rt->ctx->timeout;
 			ev_timer_again (task->event_loop, &rt->timeout_event);
 		}
@@ -1706,7 +1706,7 @@ rspamd_redis_finalize_process (struct rspamd_task *task, gpointer runtime,
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
 	redisAsyncContext *redis;
 
-	if (ev_is_active (&rt->timeout_event)) {
+	if (ev_can_stop (&rt->timeout_event)) {
 		ev_timer_stop (task->event_loop, &rt->timeout_event);
 	}
 
@@ -1889,7 +1889,7 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 		rt->has_event = TRUE;
 
 		/* Set timeout */
-		if (ev_is_active (&rt->timeout_event)) {
+		if (ev_can_stop (&rt->timeout_event)) {
 			rt->timeout_event.repeat = rt->ctx->timeout;
 			ev_timer_again (task->event_loop, &rt->timeout_event);
 		}
@@ -1917,7 +1917,7 @@ rspamd_redis_finalize_learn (struct rspamd_task *task, gpointer runtime,
 	struct redis_stat_runtime *rt = REDIS_RUNTIME (runtime);
 	redisAsyncContext *redis;
 
-	if (ev_is_active (&rt->timeout_event)) {
+	if (ev_can_stop (&rt->timeout_event)) {
 		ev_timer_stop (task->event_loop, &rt->timeout_event);
 	}
 

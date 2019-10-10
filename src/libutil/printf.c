@@ -801,6 +801,7 @@ rspamd_vprintf_common (rspamd_printf_append_func func,
 				p = va_arg (args, gchar *);
 				if (p == NULL) {
 					p = "(NULL)";
+					slen = sizeof ("(NULL)") - 1;
 				}
 
 				if (G_UNLIKELY (b32)) {

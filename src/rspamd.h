@@ -33,8 +33,6 @@
 #include "libserver/task.h"
 
 #include <openssl/ssl.h>
-#include <magic.h>
-
 
 /* Default values */
 #define FIXED_CONFIG_FILE RSPAMD_CONFDIR "/rspamd.conf"
@@ -78,6 +76,12 @@ struct rspamd_worker_accept_event {
 typedef void (*rspamd_worker_term_cb) (EV_P_ ev_child *, struct rspamd_main *,
 									   struct rspamd_worker *);
 
+struct rspamd_worker_heartbeat {
+	ev_timer heartbeat_ev;          /**< used by main for checking heartbeats and by workers to send heartbeats */
+	ev_tstamp last_event;           /**< last heartbeat received timestamp */
+	gint64 nbeats;                  /**< positive for beats received, negative for beats missed */
+};
+
 /**
  * Worker process structure
  */
@@ -92,7 +96,7 @@ struct rspamd_worker {
 	struct rspamd_main *srv;        /**< pointer to server structure					*/
 	GQuark type;                    /**< process type									*/
 	GHashTable *signal_events;      /**< signal events									*/
-	struct rspamd_worker_accept_event *accept_events; /**< socket events									*/
+	struct rspamd_worker_accept_event *accept_events; /**< socket events				*/
 	struct rspamd_worker_conf *cf;  /**< worker config data								*/
 	gpointer ctx;                   /**< worker's specific data							*/
 	enum rspamd_worker_flags flags; /**< worker's flags									*/
@@ -101,6 +105,7 @@ struct rspamd_worker {
 	gint srv_pipe[2];               /**< used by workers to request something from the
 	                                     main process. [0] - main, [1] - worker			*/
 	ev_io srv_ev;                   /**< used by main for read workers' requests		*/
+	struct rspamd_worker_heartbeat hb; /**< heartbeat data */
 	gpointer control_data;          /**< used by control protocol to handle commands	*/
 	gpointer tmp_data;              /**< used to avoid race condition to deal with control messages */
 	GPtrArray *finish_actions;      /**< called when worker is terminated				*/
@@ -353,7 +358,6 @@ struct zstd_dictionary {
 struct rspamd_radix_map_helper;
 
 struct rspamd_external_libs_ctx {
-	magic_t libmagic;
 	struct rspamd_radix_map_helper **local_addrs;
 	struct rspamd_cryptobox_library_ctx *crypto_ctx;
 	struct ottery_config *ottery_cfg;

@@ -24,6 +24,7 @@ local lua_util = require "lua_util"
 local rspamd_util = require "rspamd_util"
 local lua_maps = require "lua_maps"
 local lua_mime = require "lua_mime"
+local lua_magic_types = require "lua_magic/types"
 local fun = require "fun"
 
 local N = "mime_types"
@@ -210,7 +211,7 @@ local function check_mime_type(task)
     return ext[1],ext[2],parts
   end
 
-  local function check_filename(fname, ct, is_archive, part, detected_ct)
+  local function check_filename(fname, ct, is_archive, part, detected_ext)
 
     local has_bad_unicode, char, ch_pos = rspamd_util.has_obscured_unicode(fname)
     if has_bad_unicode then
@@ -229,7 +230,7 @@ local function check_mime_type(task)
     if settings.filename_whitelist and
         settings.filename_whitelist:get_key(fname) then
       logger.debugm("mime_types", task, "skip checking of %s - file is in filename whitelist",
-        fname)
+          fname)
       return
     end
 
@@ -237,10 +238,19 @@ local function check_mime_type(task)
     -- ext is the last extension, LOWERCASED
     -- ext2 is the one before last extension LOWERCASED
 
-    if not ext and detected_ct then
-      -- Try to find extension by real content type
-      ext = lua_mime.reversed_extensions_map[detected_ct]
+    local detected
+
+    if not is_archive and detected_ext then
+      detected = lua_magic_types[detected_ext]
     end
+
+    if detected_ext and ((not ext) or ext ~= detected_ext) then
+      -- Try to find extension by real content type
+      check_filename('detected.' .. detected_ext, detected.ct,
+          false, part, nil)
+    end
+
+    if not ext then return end
 
     local function check_extension(badness_mult, badness_mult2)
       if not badness_mult and not badness_mult2 then return end
@@ -257,7 +267,7 @@ local function check_mime_type(task)
 
           -- Double extension + bad extension == VERY bad
           task:insert_result(settings['symbol_double_extension'], badness_mult,
-            string.format(".%s.%s", ext2, ext))
+              string.format(".%s.%s", ext2, ext))
           task:insert_result('MIME_TRACE', 0.0,
               string.format("%s:%s", part:get_id(), '-'))
           return
@@ -286,7 +296,7 @@ local function check_mime_type(task)
           -- Convert to a key-value map
           extra_table = fun.tomap(
               fun.map(function(e) return e,1.0 end,
-              user_settings.bad_extensions))
+                  user_settings.bad_extensions))
         else
           extra_table = user_settings.bad_extensions
         end
@@ -306,66 +316,64 @@ local function check_mime_type(task)
     local function check_tables(e)
       if is_archive then
         return extra_archive_table[e] or settings.bad_archive_extensions[e] or
-          extra_table[e] or settings.bad_extensions[e]
+            extra_table[e] or settings.bad_extensions[e]
       end
 
       return extra_table[e] or settings.bad_extensions[e]
     end
 
-    if ext then
-      -- Also check for archive bad extension
-      if is_archive then
-        if ext2 then
-          local score1 = check_tables(ext)
-          local score2 = check_tables(ext2)
-          check_extension(score1, score2)
-        else
-          local score1 = check_tables(ext)
-          check_extension(score1, nil)
-        end
+    -- Also check for archive bad extension
+    if is_archive then
+      if ext2 then
+        local score1 = check_tables(ext)
+        local score2 = check_tables(ext2)
+        check_extension(score1, score2)
+      else
+        local score1 = check_tables(ext)
+        check_extension(score1, nil)
+      end
 
-        if settings['archive_extensions'][ext] then
-          -- Archive in archive
-          task:insert_result(settings['symbol_archive_in_archive'], 1.0, ext)
+      if settings['archive_extensions'][ext] then
+        -- Archive in archive
+        task:insert_result(settings['symbol_archive_in_archive'], 1.0, ext)
+        task:insert_result('MIME_TRACE', 0.0,
+            string.format("%s:%s", part:get_id(), '-'))
+      end
+    else
+      if ext2 then
+        local score1 = check_tables(ext)
+        local score2 = check_tables(ext2)
+        check_extension(score1, score2)
+        -- Check for archive cloaking like .zip.gz
+        if settings['archive_extensions'][ext2]
+            -- Exclude multipart archive extensions, e.g. .zip.001
+            and not string.match(ext, '^%d+$')
+        then
+          task:insert_result(settings['symbol_archive_in_archive'],
+              1.0, string.format(".%s.%s", ext2, ext))
           task:insert_result('MIME_TRACE', 0.0,
               string.format("%s:%s", part:get_id(), '-'))
         end
       else
-        if ext2 then
-          local score1 = check_tables(ext)
-          local score2 = check_tables(ext2)
-          check_extension(score1, score2)
-          -- Check for archive cloaking like .zip.gz
-          if settings['archive_extensions'][ext2]
-            -- Exclude multipart archive extensions, e.g. .zip.001
-            and not string.match(ext, '^%d+$')
-          then
-            task:insert_result(settings['symbol_archive_in_archive'],
-                1.0, string.format(".%s.%s", ext2, ext))
-            task:insert_result('MIME_TRACE', 0.0,
-                string.format("%s:%s", part:get_id(), '-'))
-          end
-        else
-          local score1 = check_tables(ext)
-          check_extension(score1, nil)
+        local score1 = check_tables(ext)
+        check_extension(score1, nil)
+      end
+    end
+
+    local mt = settings['extension_map'][ext]
+    if mt and ct then
+      local found
+      local mult
+      for _,v in ipairs(mt) do
+        mult = v.mult
+        if ct == v.ct then
+          found = true
+          break
         end
       end
 
-      local mt = settings['extension_map'][ext]
-      if mt and ct then
-        local found
-        local mult
-        for _,v in ipairs(mt) do
-          mult = v.mult
-          if ct == v.ct then
-            found = true
-            break
-          end
-        end
-
-        if not found  then
-          task:insert_result(settings['symbol_attachment'], mult, ext)
-        end
+      if not found  then
+        task:insert_result(settings['symbol_attachment'], mult, ext)
       end
     end
   end
@@ -375,7 +383,6 @@ local function check_mime_type(task)
   if parts then
     for _,p in ipairs(parts) do
       local mtype,subtype = p:get_type()
-      local dtype,dsubtype = p:get_detected_type()
 
       if not mtype then
         task:insert_result(settings['symbol_unknown'], 1.0, 'missing content type')
@@ -385,20 +392,24 @@ local function check_mime_type(task)
         -- Check for attachment
         local filename = p:get_filename()
         local ct = string.format('%s/%s', mtype, subtype):lower()
-        local detected_ct
-        if dtype and dsubtype then
-          detected_ct = string.format('%s/%s', dtype, dsubtype)
-        end
+        local detected_ext = p:get_detected_ext()
 
         if filename then
-          check_filename(filename, ct, false, p, detected_ct)
+          check_filename(filename, ct, false, p, detected_ext)
         end
 
         if p:is_archive() then
-
           local check = true
+          if detected_ext then
+            local detected_type = lua_magic_types[detected_ext]
 
-          if filename then
+            if detected_type.type ~= 'archive' then
+              logger.debugm("mime_types", task, "skip checking of %s as archive, %s is not archive but %s",
+                  filename, detected_type.type)
+              check = false
+            end
+          end
+          if check and filename then
             local ext = gen_extension(filename)
 
             if ext and settings.archive_exceptions[ext] then
@@ -436,7 +447,8 @@ local function check_mime_type(task)
               end
 
               if f['name'] then
-                check_filename(f['name'], nil, true, p, nil)
+                check_filename(f['name'], nil,
+                    true, p, nil)
               end
             end
 
@@ -463,8 +475,14 @@ local function check_mime_type(task)
         if map then
           local v = map:get_key(ct)
           local detected_different = false
-          if detected_ct and detected_ct ~= ct then
-            local v_detected = map:get_key(detected_ct)
+
+          local detected_type
+          if detected_ext then
+            detected_type = lua_magic_types[detected_ext]
+          end
+
+          if detected_type and detected_type.ct ~= ct then
+            local v_detected = map:get_key(detected_type.ct)
             if not v or v_detected and v_detected > v then v = v_detected end
             detected_different = true
           end
@@ -477,7 +495,7 @@ local function check_mime_type(task)
                   -- Penalize case
                   n = n * 1.5
                   task:insert_result(settings['symbol_bad'], n,
-                      string.format('%s:%s', ct, detected_ct))
+                      string.format('%s:%s', ct, detected_type.ct))
                 else
                   task:insert_result(settings['symbol_bad'], n, ct)
                 end

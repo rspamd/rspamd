@@ -156,6 +156,7 @@
 #cmakedefine WITH_TORCH          1
 #cmakedefine WITH_LIBUNWIND      1
 #cmakedefine WITH_LUA_TRACE      1
+#cmakedefine WITH_LUA_REPL       1
 
 #cmakedefine DISABLE_PTHREAD_MUTEX 1
 
@@ -369,6 +370,28 @@ typedef off_t goffset;
 #endif
 #endif
 
+/* Address sanitizer */
+#ifdef __clang__
+#  if __has_feature(address_sanitizer)
+/* emulate gcc's __SANITIZE_ADDRESS__ flag */
+#    define __SANITIZE_ADDRESS__
+#    define RSPAMD_NO_SANITIZE \
+      __attribute__((no_sanitize("address", "hwaddress")))
+#  else
+#    define RSPAMD_NO_SANITIZE
+#  endif
+#elif defined(__GNUC__)
+/* GCC based */
+#  if __has_attribute(__no_sanitize_address__)
+#    define RSPAMD_NO_SANITIZE __attribute__((no_sanitize_address))
+#  else
+#    define RSPAMD_NO_SANITIZE
+#  endif
+#else
+#  define RSPAMD_NO_SANITIZE
+#endif
+
+
 #ifndef BITSPERBYTE
 # define BITSPERBYTE (NBBY * sizeof (char))
 #endif
@@ -397,27 +420,16 @@ extern uint64_t ottery_rand_uint64(void);
 #endif
 #endif
 
-#ifdef __cplusplus
-    #define RSPAMD_CONSTRUCTOR(f) \
-        static void f(void); \
-        struct f##_t_ { f##_t_(void) { f(); } }; static f##_t_ f##_; \
-        static void f(void)
-#elif defined(_MSC_VER)
-    #pragma section(".CRT$XCU",read)
-    #define INITIALIZER2_(f,p) \
-        static void f(void); \
-        __declspec(allocate(".CRT$XCU")) void (*f##_)(void) = f; \
-        __pragma(comment(linker,"/include:" p #f "_")) \
-        static void f(void)
-    #ifdef _WIN64
-        #define RSPAMD_CONSTRUCTOR(f) INITIALIZER2_(f,"")
-    #else
-        #define RSPAMD_CONSTRUCTOR(f) INITIALIZER2_(f,"_")
-    #endif
+#if  __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 7)
+  #define RSPAMD_CONSTRUCTOR(f) \
+          static void f(void) __attribute__((constructor)); \
+          static void f(void)
+  #define RSPAMD_DESTRUCTOR(f) \
+          static void f(void) __attribute__((destructor)); \
+          static void f(void)
 #else
-    #define RSPAMD_CONSTRUCTOR(f) \
-        static void f(void) __attribute__((constructor)); \
-        static void f(void)
+  /* In fact, everything else is not supported ¯\_(ツ)_/¯ */
+  #error incompatible compiler found, need gcc > 2.7 or clang
 #endif
 
 #endif

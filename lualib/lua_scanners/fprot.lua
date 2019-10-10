@@ -144,16 +144,8 @@ local function fprot_check(task, content, digest, rule)
           end
         end
         if cached then
-          common.save_av_cache(task, digest, rule, cached)
+          common.save_cache(task, digest, rule, cached)
         end
-      end
-    end
-
-    if rule.dynamic_scan then
-      local pre_check, pre_check_msg = common.check_metric_results(task, rule)
-      if pre_check then
-        rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, pre_check_msg)
-        return true
       end
     end
 
@@ -168,13 +160,12 @@ local function fprot_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule) then
-    if common.check_av_cache(task, digest, rule, fprot_check_uncached) then
-      return
-    else
-      fprot_check_uncached()
-    end
+  if common.condition_check_and_continue(task, content, rule, digest, fprot_check_uncached) then
+    return
+  else
+    fprot_check_uncached()
   end
+
 end
 
 return {

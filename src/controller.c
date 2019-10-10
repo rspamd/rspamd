@@ -434,7 +434,8 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 			comma = hdr->begin;
 		}
 		if (rspamd_parse_inet_address (&addr, comma,
-				(hdr->begin + hdr->len) - comma)) {
+				(hdr->begin + hdr->len) - comma,
+				RSPAMD_INET_ADDRESS_PARSE_NO_UNIX)) {
 			/* We have addr now, so check if it is still trusted */
 			if (ctx->secure_map &&
 					rspamd_match_radix_map_addr (ctx->secure_map, addr) != NULL) {
@@ -463,7 +464,8 @@ rspamd_controller_check_forwarded (struct rspamd_controller_session *session,
 		hdr = rspamd_http_message_find_header (msg, alt_hdr_name);
 
 		if (hdr) {
-			if (rspamd_parse_inet_address (&addr, hdr->begin, hdr->len)) {
+			if (rspamd_parse_inet_address (&addr, hdr->begin, hdr->len,
+					RSPAMD_INET_ADDRESS_PARSE_NO_UNIX)) {
 				/* We have addr now, so check if it is still trusted */
 				if (ctx->secure_map &&
 						rspamd_match_radix_map_addr (ctx->secure_map, addr) != NULL) {
@@ -1201,7 +1203,7 @@ rspamd_controller_graph_point (gulong t, gulong step,
 
 /*
  * Graph command handler:
- * request: /graph?type=<hourly|daily|weekly|monthly>
+ * request: /graph?type=<day|week|month|year>
  * headers: Password
  * reply: json [
  *      { label: "Foo", data: 11 },
@@ -1223,10 +1225,10 @@ rspamd_controller_handle_graph (
 	gdouble *acc;
 	ucl_object_t *res, *elt[METRIC_ACTION_MAX];
 	enum {
-		rra_hourly = 0,
-		rra_daily,
-		rra_weekly,
-		rra_monthly,
+		rra_day = 0,
+		rra_week,
+		rra_month,
+		rra_year,
 		rra_invalid
 	} rra_num = rra_invalid;
 	/* How many points are we going to send to display */
@@ -1260,17 +1262,17 @@ rspamd_controller_handle_graph (
 		return 0;
 	}
 
-	if (value->len == 6 && rspamd_lc_cmp (value->begin, "hourly", value->len) == 0) {
-		rra_num = rra_hourly;
+	if (value->len == 3 && rspamd_lc_cmp (value->begin, "day", value->len) == 0) {
+		rra_num = rra_day;
 	}
-	else if (value->len == 5 && rspamd_lc_cmp (value->begin, "daily", value->len) == 0) {
-		rra_num = rra_daily;
+	else if (value->len == 4 && rspamd_lc_cmp (value->begin, "week", value->len) == 0) {
+		rra_num = rra_week;
 	}
-	else if (value->len == 6 && rspamd_lc_cmp (value->begin, "weekly", value->len) == 0) {
-		rra_num = rra_weekly;
+	else if (value->len == 5 && rspamd_lc_cmp (value->begin, "month", value->len) == 0) {
+		rra_num = rra_month;
 	}
-	else if (value->len == 7 && rspamd_lc_cmp (value->begin, "monthly", value->len) == 0) {
-		rra_num = rra_monthly;
+	else if (value->len == 4 && rspamd_lc_cmp (value->begin, "year", value->len) == 0) {
+		rra_num = rra_year;
 	}
 
 	g_hash_table_unref (query);
@@ -3471,7 +3473,7 @@ luaopen_controller (lua_State * L)
 struct rspamd_http_connection_entry *
 lua_check_controller_entry (lua_State * L, gint pos)
 {
-	void *ud = luaL_checkudata (L, pos, "rspamd{csession}");
+	void *ud = rspamd_lua_check_udata (L, pos, "rspamd{csession}");
 	luaL_argcheck (L, ud != NULL, pos, "'csession' expected");
 	return ud ? *((struct rspamd_http_connection_entry **)ud) : NULL;
 }
@@ -3699,6 +3701,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	const ev_tstamp save_stats_interval = 60; /* 1 minute */
 	gpointer m;
 
+	g_assert (rspamd_worker_check_context (worker->ctx, rspamd_controller_ctx_magic));
 	ctx->event_loop = rspamd_prepare_worker (worker,
 			"controller",
 			rspamd_controller_accept_socket);
@@ -3769,6 +3772,9 @@ start_controller_worker (struct rspamd_worker *worker)
 	/* Accept event */
 	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->event_loop,
 			ctx->cfg->ups_ctx);
+	rspamd_mempool_add_destructor (ctx->cfg->cfg_pool,
+			(rspamd_mempool_destruct_t)rspamd_http_context_free,
+			ctx->http_ctx);
 	ctx->http = rspamd_http_router_new (rspamd_controller_error_handler,
 			rspamd_controller_finish_handler, ctx->timeout,
 			ctx->static_files_dir, ctx->http_ctx);
@@ -3942,9 +3948,7 @@ start_controller_worker (struct rspamd_worker *worker)
 	g_hash_table_unref (ctx->plugins);
 	g_hash_table_unref (ctx->custom_commands);
 
-	struct rspamd_http_context *http_ctx = ctx->http_ctx;
 	REF_RELEASE (ctx->cfg);
-	rspamd_http_context_free (http_ctx);
 	rspamd_log_close (worker->srv->logger, TRUE);
 
 	exit (EXIT_SUCCESS);

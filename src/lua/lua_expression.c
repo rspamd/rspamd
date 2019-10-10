@@ -511,17 +511,7 @@ lua_load_expression (lua_State * L)
 void
 luaopen_expression (lua_State * L)
 {
-	luaL_newmetatable (L, "rspamd{expr}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{expr}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL,		   exprlib_m);
+	rspamd_lua_new_class (L, "rspamd{expr}", exprlib_m);
+	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_expression", lua_load_expression);
-
-	lua_pop (L, 1);                      /* remove metatable from stack */
 }

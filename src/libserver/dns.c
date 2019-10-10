@@ -270,7 +270,7 @@ rspamd_dns_server_init (struct upstream *up, guint idx, gpointer ud)
 
 	g_assert (serv != NULL);
 
-	elt = g_malloc0 (sizeof (*elt));
+	elt = rspamd_mempool_alloc0 (r->cfg->cfg_pool, sizeof (*elt));
 	elt->server = serv;
 	elt->lib_data = up;
 
@@ -300,7 +300,8 @@ rspamd_dns_resolv_conf_on_server (struct rdns_resolver *resolver,
 	msg_info_config ("parsed nameserver %s from resolv.conf", name);
 
 	/* Try to open a connection */
-	if (!rspamd_parse_inet_address (&addr, name, strlen (name))) {
+	if (!rspamd_parse_inet_address (&addr, name, strlen (name),
+			RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 		msg_warn_config ("cannot parse nameserver address %s", name);
 
 		return FALSE;
@@ -640,6 +641,22 @@ rspamd_dns_resolver_init (rspamd_logger_t *logger,
 	rdns_resolver_init (dns_resolver->r);
 
 	return dns_resolver;
+}
+
+void
+rspamd_dns_resolver_deinit (struct rspamd_dns_resolver *resolver)
+{
+	if (resolver) {
+		if (resolver->r) {
+			rdns_resolver_release (resolver->r);
+		}
+
+		if (resolver->ups) {
+			rspamd_upstreams_destroy (resolver->ups);
+		}
+
+		g_free (resolver);
+	}
 }
 
 

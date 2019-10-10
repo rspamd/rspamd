@@ -358,6 +358,7 @@ static TTree *gettree (lua_State *L, int idx, int *len) {
 static TTree *newtree (lua_State *L, int len) {
   size_t size = (len - 1) * sizeof(TTree) + sizeof(Pattern);
   Pattern *p = (Pattern *)lua_newuserdata(L, size);
+  memset(p, 0, size);
   luaL_getmetatable(L, PATTERN_T);
   lua_pushvalue(L, -1);
   lua_setuservalue(L, -3);

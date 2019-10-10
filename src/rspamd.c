@@ -59,6 +59,7 @@
 #ifdef HAVE_OPENSSL
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <src/libserver/rspamd_control.h>
 
 #endif
 
@@ -83,6 +84,8 @@ static void rspamd_cld_handler (EV_P_ ev_child *w,
 /* Control socket */
 static gint control_fd;
 static ev_io control_ev;
+static struct rspamd_stat old_stat;
+static ev_timer stat_ev;
 
 static gboolean valgrind_mode = FALSE;
 
@@ -272,7 +275,7 @@ config_logger (rspamd_mempool_t *pool, gpointer ud)
 	rspamd_logger_configure_modules (rspamd_main->cfg->debug_modules);
 }
 
-static void
+static gboolean
 reread_config (struct rspamd_main *rspamd_main)
 {
 	struct rspamd_config *tmp_cfg, *old_cfg;
@@ -304,6 +307,8 @@ reread_config (struct rspamd_main *rspamd_main)
 					rspamd_main->workers_gid);
 		msg_err_main ("cannot parse new config file, revert to old one");
 		REF_RELEASE (tmp_cfg);
+
+		return FALSE;
 	}
 	else {
 		msg_info_main ("replacing config");
@@ -323,6 +328,8 @@ reread_config (struct rspamd_main *rspamd_main)
 				load_opts|RSPAMD_CONFIG_INIT_POST_LOAD_LUA|RSPAMD_CONFIG_INIT_PRELOAD_MAPS);
 		msg_info_main ("config has been reread successfully");
 	}
+
+	return TRUE;
 }
 
 struct waiting_worker {
@@ -352,14 +359,11 @@ rspamd_fork_delayed (struct rspamd_worker_conf *cf,
 		struct rspamd_main *rspamd_main)
 {
 	struct waiting_worker *nw;
-	struct timeval tv;
 
 	nw = g_malloc0 (sizeof (*nw));
 	nw->cf = cf;
 	nw->oldindex = index;
 	nw->rspamd_main = rspamd_main;
-	tv.tv_sec = SOFT_FORK_TIME;
-	tv.tv_usec = 0;
 	REF_RETAIN (cf);
 	nw->wait_ev.data = nw;
 	ev_timer_init (&nw->wait_ev, rspamd_fork_delayed_cb, SOFT_FORK_TIME, 0.0);
@@ -581,7 +585,7 @@ spawn_workers (struct rspamd_main *rspamd_main, struct ev_loop *ev_base)
 			if (!cf->enabled || cf->count <= 0) {
 				msg_info_main ("worker of type %s(%s) is disabled in the config, "
 						"skip spawning", g_quark_to_string (cf->type),
-						cf->bind_conf ? cf->bind_conf->bind_line : "none");
+						cf->bind_conf ? cf->bind_conf->name : "none");
 				cur = g_list_next (cur);
 
 				continue;
@@ -898,12 +902,35 @@ load_rspamd_config (struct rspamd_main *rspamd_main,
 }
 
 static void
+rspamd_detach_worker (struct rspamd_main *rspamd_main, struct rspamd_worker *wrk)
+{
+	ev_io_stop (rspamd_main->event_loop, &wrk->srv_ev);
+	ev_timer_stop (rspamd_main->event_loop, &wrk->hb.heartbeat_ev);
+}
+
+static void
+rspamd_attach_worker (struct rspamd_main *rspamd_main, struct rspamd_worker *wrk)
+{
+	ev_io_start (rspamd_main->event_loop, &wrk->srv_ev);
+	ev_timer_start (rspamd_main->event_loop, &wrk->hb.heartbeat_ev);
+}
+
+static void
 stop_srv_ev (gpointer key, gpointer value, gpointer ud)
 {
 	struct rspamd_worker *cur = (struct rspamd_worker *)value;
 	struct rspamd_main *rspamd_main = (struct rspamd_main *)ud;
 
-	ev_io_stop (rspamd_main->event_loop, &cur->srv_ev);
+	rspamd_detach_worker (rspamd_main, cur);
+}
+
+static void
+start_srv_ev (gpointer key, gpointer value, gpointer ud)
+{
+	struct rspamd_worker *cur = (struct rspamd_worker *)value;
+	struct rspamd_main *rspamd_main = (struct rspamd_main *)ud;
+
+	rspamd_attach_worker (rspamd_main, cur);
 }
 
 static void
@@ -930,7 +957,6 @@ rspamd_term_handler (struct ev_loop *loop, ev_signal *w, int revents)
 	if (!rspamd_main->wanna_die) {
 		rspamd_main->wanna_die = TRUE;
 		msg_info_main ("catch termination signal, waiting for children");
-		rspamd_log_nolock (rspamd_main->logger);
 		/* Stop srv events to avoid false notifications */
 		g_hash_table_foreach (rspamd_main->workers, stop_srv_ev, rspamd_main);
 		rspamd_pass_signal (rspamd_main->workers, SIGTERM);
@@ -963,9 +989,43 @@ rspamd_usr1_handler (struct ev_loop *loop, ev_signal *w, int revents)
 		rspamd_log_reopen_priv (rspamd_main->logger,
 				rspamd_main->workers_uid,
 				rspamd_main->workers_gid);
+		msg_info_main ("logging reinitialised");
 		g_hash_table_foreach (rspamd_main->workers, reopen_log_handler,
 				NULL);
 	}
+}
+
+static void
+rspamd_stat_update_handler (struct ev_loop *loop, ev_timer *w, int revents)
+{
+	struct rspamd_main *rspamd_main = (struct rspamd_main *)w->data;
+	struct rspamd_stat cur_stat;
+	gchar proctitle[128];
+
+	memcpy (&cur_stat, rspamd_main->stat, sizeof (cur_stat));
+
+	if (old_stat.messages_scanned > 0 &&
+		cur_stat.messages_scanned > old_stat.messages_scanned) {
+		gdouble rate = (double)(cur_stat.messages_scanned - old_stat.messages_scanned) /
+				w->repeat;
+		gdouble old_spam = old_stat.actions_stat[METRIC_ACTION_REJECT] +
+				old_stat.actions_stat[METRIC_ACTION_ADD_HEADER] +
+				old_stat.actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
+		gdouble old_ham = old_stat.actions_stat[METRIC_ACTION_NOACTION];
+		gdouble new_spam = cur_stat.actions_stat[METRIC_ACTION_REJECT] +
+				cur_stat.actions_stat[METRIC_ACTION_ADD_HEADER] +
+				cur_stat.actions_stat[METRIC_ACTION_REWRITE_SUBJECT];
+		gdouble new_ham = cur_stat.actions_stat[METRIC_ACTION_NOACTION];
+
+		rspamd_snprintf (proctitle, sizeof (proctitle),
+				"main process; %.1f msg/sec, %.1f msg/sec spam, %.1f msg/sec ham",
+				rate,
+				(new_spam - old_spam) / w->repeat,
+				(new_ham - old_ham) / w->repeat);
+		setproctitle (proctitle);
+	}
+
+	memcpy (&old_stat, &cur_stat, sizeof (cur_stat));
 }
 
 static void
@@ -976,15 +1036,30 @@ rspamd_hup_handler (struct ev_loop *loop, ev_signal *w, int revents)
 	if (!rspamd_main->wanna_die) {
 		msg_info_main ("rspamd "
 				RVERSION
-				" is restarting");
-		g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
+				" is requested to reload configuration");
+		/* Detach existing workers and stop their heartbeats */
+		g_hash_table_foreach (rspamd_main->workers, stop_srv_ev, rspamd_main);
+
+		/* Close log to avoid FDs leak, as reread_config will re-init logging */
 		rspamd_log_close_priv (rspamd_main->logger,
 				FALSE,
 				rspamd_main->workers_uid,
 				rspamd_main->workers_gid);
-		reread_config (rspamd_main);
-		rspamd_check_core_limits (rspamd_main);
-		spawn_workers (rspamd_main, rspamd_main->event_loop);
+
+		if (reread_config (rspamd_main)) {
+			msg_info_main ("kill old workers");
+			g_hash_table_foreach (rspamd_main->workers, kill_old_workers, NULL);
+
+			rspamd_check_core_limits (rspamd_main);
+			msg_info_main ("spawn workers with a new config");
+			spawn_workers (rspamd_main, rspamd_main->event_loop);
+			msg_info_main ("workers spawning has been finished");
+		}
+		else {
+			/* Reattach old workers */
+			msg_info_main ("restore old workers with a old config");
+			g_hash_table_foreach (rspamd_main->workers, start_srv_ev, rspamd_main);
+		}
 	}
 }
 
@@ -995,10 +1070,10 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 					struct rspamd_worker *wrk)
 {
 	gboolean need_refork;
+	static struct rspamd_control_command cmd;
 
 	/* Turn off locking for logger */
 	ev_child_stop (EV_A_ w);
-	rspamd_log_nolock (rspamd_main->logger);
 
 	/* Remove dead child form children list */
 	g_hash_table_remove (rspamd_main->workers, GSIZE_TO_POINTER (wrk->pid));
@@ -1007,7 +1082,8 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 		if (wrk->tmp_data) {
 			g_free (wrk->tmp_data);
 		}
-		ev_io_stop (rspamd_main->event_loop, &wrk->srv_ev);
+
+		rspamd_detach_worker (rspamd_main, wrk);
 	}
 
 	if (wrk->control_pipe[0] != -1) {
@@ -1016,7 +1092,11 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 		close (wrk->srv_pipe[0]);
 	}
 
-	REF_RELEASE (wrk->cf);
+	cmd.type = RSPAMD_CONTROL_CHILD_CHANGE;
+	cmd.cmd.child_change.what = rspamd_child_terminated;
+	cmd.cmd.child_change.pid = wrk->pid;
+	cmd.cmd.child_change.additional = w->rstatus;
+	rspamd_control_broadcast_srv_cmd (rspamd_main, &cmd, wrk->pid);
 
 	if (wrk->finish_actions) {
 		g_ptr_array_free (wrk->finish_actions, TRUE);
@@ -1031,7 +1111,6 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 				wrk->pid);
 		rspamd_check_core_limits (rspamd_main);
 		rspamd_fork_delayed (wrk->cf, wrk->index, rspamd_main);
-		rspamd_log_lock (rspamd_main->logger);
 	}
 	else {
 		msg_info_main ("do not respawn process %s after found terminated process with pid %P",
@@ -1039,6 +1118,7 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 				wrk->pid);
 	}
 
+	REF_RELEASE (wrk->cf);
 	g_free (wrk);
 }
 
@@ -1279,7 +1359,8 @@ main (gint argc, gchar **argv, gchar **env)
 	if (rspamd_main->cfg->control_socket_path) {
 		if (!rspamd_parse_inet_address (&control_addr,
 				rspamd_main->cfg->control_socket_path,
-				0)) {
+				strlen (rspamd_main->cfg->control_socket_path),
+				RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 			msg_err_main ("cannot parse inet address %s",
 					rspamd_main->cfg->control_socket_path);
 		}
@@ -1373,6 +1454,15 @@ main (gint argc, gchar **argv, gchar **env)
 	ev_signal_init (&rspamd_main->usr1_ev, rspamd_usr1_handler, SIGUSR1);
 	rspamd_main->usr1_ev.data = rspamd_main;
 	ev_signal_start (event_loop, &rspamd_main->usr1_ev);
+
+	/* Update proctitle according to number of messages processed */
+	static const ev_tstamp stat_update_time = 10.0;
+
+	memset (&old_stat, 0, sizeof (old_stat));
+	stat_ev.data = rspamd_main;
+	ev_timer_init (&stat_ev, rspamd_stat_update_handler,
+			stat_update_time, stat_update_time);
+	ev_timer_start (event_loop, &stat_ev);
 
 	rspamd_check_core_limits (rspamd_main);
 	rspamd_mempool_lock_mutex (rspamd_main->start_mtx);

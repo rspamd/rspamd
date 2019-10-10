@@ -25,7 +25,7 @@ Sync API TCP get request when server is down
 *** Keywords ***
 Lua Setup
   [Arguments]  ${LUA_SCRIPT}
-  Set Global Variable  ${LUA_SCRIPT}
+  Set Suite Variable  ${LUA_SCRIPT}
   Generic Setup
 
 Http Setup

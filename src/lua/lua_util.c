@@ -23,7 +23,11 @@
 #include "libmime/content_type.h"
 #include "libmime/mime_headers.h"
 #include "libutil/hash.h"
-#include "linenoise.h"
+
+#ifdef WITH_LUA_REPL
+#include "replxx.h"
+#endif
+
 #include <math.h>
 #include <glob.h>
 #include <zlib.h>
@@ -228,6 +232,14 @@ LUA_FUNCTION_DEF (util, parse_mail_address);
  * @return {number} number of characters in string
  */
 LUA_FUNCTION_DEF (util, strlen_utf8);
+
+/***
+ * @function util.lower_utf8(str)
+ * Converts utf8 string to lower case
+ * @param {string} str utf8 encoded string
+ * @return {string} lowercased utf8 string
+ */
+LUA_FUNCTION_DEF (util, lower_utf8);
 
 
 /***
@@ -632,6 +644,7 @@ static const struct luaL_reg utillib_f[] = {
 	LUA_INTERFACE_DEF (util, glob),
 	LUA_INTERFACE_DEF (util, parse_mail_address),
 	LUA_INTERFACE_DEF (util, strlen_utf8),
+	LUA_INTERFACE_DEF (util, lower_utf8),
 	LUA_INTERFACE_DEF (util, strcasecmp_ascii),
 	LUA_INTERFACE_DEF (util, strequal_caseless),
 	LUA_INTERFACE_DEF (util, get_ticks),
@@ -809,7 +822,6 @@ lua_util_config_from_ucl (lua_State *L)
 		cfg->lua_state = L;
 
 		cfg->rcl_obj = obj;
-		cfg->cache = rspamd_symcache_new (cfg);
 		top = rspamd_rcl_config_init (cfg, NULL);
 
 		if (!rspamd_rcl_parse (top, cfg, cfg, cfg->cfg_pool, cfg->rcl_obj, &err)) {
@@ -1602,11 +1614,10 @@ lua_util_glob (lua_State *L)
 	LUA_TRACE_POINT;
 	const gchar *pattern;
 	glob_t gl;
-	gint top, i, flags;
+	gint top, i, flags = 0;
 
 	top = lua_gettop (L);
 	memset (&gl, 0, sizeof (gl));
-	flags = GLOB_NOSORT;
 
 	for (i = 1; i <= top; i ++, flags |= GLOB_APPEND) {
 		pattern = luaL_checkstring (L, i);
@@ -1676,21 +1687,53 @@ static gint
 lua_util_strlen_utf8 (lua_State *L)
 {
 	LUA_TRACE_POINT;
-	const gchar *str, *end;
+	const gchar *str;
 	gsize len;
 
 	str = lua_tolstring (L, 1, &len);
 
 	if (str) {
-		if (g_utf8_validate (str, len, &end)) {
-			len = g_utf8_strlen (str, len);
-		}
-		else if (end != NULL && end > str) {
-			len = (g_utf8_strlen (str, end - str)) /* UTF part */
-					+ (len - (end - str)) /* raw part */;
+		gint32 i = 0, nchars = 0;
+		UChar32 uc;
+
+		while (i < len) {
+			U8_NEXT ((guint8 *) str, i, len, uc);
+			nchars ++;
 		}
 
-		lua_pushinteger (L, len);
+		lua_pushinteger (L, nchars);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_util_lower_utf8 (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	const gchar *str;
+	gchar *dst;
+	gsize len;
+	UChar32 uc;
+	UBool err = 0;
+	gint32 i = 0, j = 0;
+
+	str = lua_tolstring (L, 1, &len);
+
+	if (str) {
+		dst = g_malloc (len);
+
+		while (i < len && err == 0) {
+			U8_NEXT ((guint8 *) str, i, len, uc);
+			uc = u_tolower (uc);
+			U8_APPEND (dst, j, len, uc, err);
+		}
+
+		lua_pushlstring (L, dst, j);
+		g_free (dst);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -2865,17 +2908,41 @@ lua_util_readline (lua_State *L)
 	if (lua_type (L, 1) == LUA_TSTRING) {
 		prompt = lua_tostring (L, 1);
 	}
+#ifdef WITH_LUA_REPL
+	static Replxx *rx_instance = NULL;
 
-	input = linenoise (prompt);
+	if (rx_instance == NULL) {
+		rx_instance = replxx_init ();
+	}
+
+	input = (gchar *)replxx_input (rx_instance, prompt);
 
 	if (input) {
 		lua_pushstring (L, input);
-		linenoiseHistoryAdd (input);
-		linenoiseFree (input);
 	}
 	else {
 		lua_pushnil (L);
 	}
+#else
+	size_t linecap = 0;
+	ssize_t linelen;
+
+	fprintf (stdout, "%s ", prompt);
+
+	linelen = getline (&input, &linecap, stdin);
+
+	if (linelen > 0) {
+		if (input[linelen - 1] == '\n') {
+			linelen --;
+		}
+
+		lua_pushlstring (L, input, linelen);
+		free (input);
+	}
+	else {
+		lua_pushnil (L);
+	}
+#endif
 
 	return 1;
 }
@@ -3687,11 +3754,28 @@ lua_util_unpack (lua_State *L)
 	Header h;
 	const char *fmt = luaL_checkstring(L, 1);
 	size_t ld;
-	const char *data = luaL_checklstring (L, 2, &ld);
-	size_t pos = (size_t) posrelat (luaL_optinteger (L, 3, 1), ld) - 1;
+	const char *data;
 	int n = 0;  /* number of results */
+
+	if (lua_type (L, 2) == LUA_TUSERDATA) {
+		struct rspamd_lua_text *t = lua_check_text (L, 2);
+
+		if (!t) {
+			return luaL_error (L, "invalid arguments");
+		}
+
+		data = t->start;
+		ld = t->len;
+	}
+	else {
+		data = luaL_checklstring (L, 2, &ld);
+	}
+
+	size_t pos = (size_t) posrelat (luaL_optinteger (L, 3, 1), ld) - 1;
 	luaL_argcheck(L, pos <= ld, 3, "initial position out of string");
+
 	initheader (L, &h);
+
 	while (*fmt != '\0') {
 		int size, ntoalign;
 		KOption opt = getdetails (&h, pos, &fmt, &size, &ntoalign);

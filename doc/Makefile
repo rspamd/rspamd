@@ -36,7 +36,7 @@ lua_clickhouse:
 	$(LLUADOC) < ../lualib/lua_clickhouse.lua > markdown/lua/lua_clickhouse.md
 
 lua_selectors:
-	$(LLUADOC) < ../lualib/lua_selectors.lua > markdown/lua/lua_selectors.md
+	$(LLUADOC) < ../lualib/lua_selectors/init.lua > markdown/lua/lua_selectors.md
 
 rspamd_regexp: ../src/lua/lua_regexp.c
 	$(LUADOC) < ../src/lua/lua_regexp.c > markdown/lua/rspamd_regexp.md

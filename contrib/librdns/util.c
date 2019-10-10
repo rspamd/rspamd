@@ -495,9 +495,11 @@ rdns_ioc_free (struct rdns_io_channel *ioc)
 	HASH_ITER (hh, ioc->requests, req, rtmp) {
 		REF_RELEASE (req);
 	}
+
 	ioc->resolver->async->del_read (ioc->resolver->async->data,
 			ioc->async_io);
 	close (ioc->sock);
+	free (ioc->saddr);
 	free (ioc);
 }
 

@@ -5,7 +5,6 @@
         "stylelint-config-standard": "*"
     },
     "eslintIgnore": [
-        "*.min.js",
-        "interface/js/lib/domReady.js"
+        "*.min.js"
     ]
 }

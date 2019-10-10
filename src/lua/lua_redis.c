@@ -896,7 +896,8 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 		else if (lua_type (L, -1) == LUA_TSTRING) {
 			host = lua_tostring (L, -1);
 
-			if (rspamd_parse_inet_address (&ip, host, strlen (host))) {
+			if (rspamd_parse_inet_address (&ip,
+					host, strlen (host), RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 				addr = g_alloca (sizeof (*addr));
 				addr->addr = ip;
 
@@ -1165,7 +1166,8 @@ lua_redis_make_request_sync (lua_State *L)
 		}
 		else if (lua_type (L, -1) == LUA_TSTRING) {
 			host = lua_tostring (L, -1);
-			if (rspamd_parse_inet_address (&ip, host, strlen (host))) {
+			if (rspamd_parse_inet_address (&ip,
+					host, strlen (host), RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 				addr = g_alloca (sizeof (*addr));
 				addr->addr = ip;
 
@@ -1603,17 +1605,7 @@ lua_load_redis (lua_State * L)
 void
 luaopen_redis (lua_State * L)
 {
-	luaL_newmetatable (L, "rspamd{redis}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{redis}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL, redislib_m);
+	rspamd_lua_new_class (L, "rspamd{redis}", redislib_m);
 	lua_pop (L, 1);
-
 	rspamd_lua_add_preload (L, "rspamd_redis", lua_load_redis);
 }

@@ -54,8 +54,7 @@ rspamd_http_keepalive_queue_cleanup (GQueue *conns)
 
 		cbd = (struct rspamd_http_keepalive_cbdata *)cur->data;
 		rspamd_http_connection_unref (cbd->conn);
-		/* Event is deleted here by deletion of the ev_base */
-		/* event_del (&cbd->ev); */
+		rspamd_ev_watcher_stop (cbd->ctx->event_loop, &cbd->ev);
 		g_free (cbd);
 
 		cur = cur->next;
@@ -173,8 +172,6 @@ rspamd_http_context_parse_proxy (struct rspamd_http_context *ctx,
 static void
 rspamd_http_context_init (struct rspamd_http_context *ctx)
 {
-
-
 	if (ctx->config.kp_cache_size_client > 0) {
 		ctx->client_kp_cache = rspamd_keypair_cache_new (ctx->config.kp_cache_size_client);
 	}
@@ -297,8 +294,7 @@ rspamd_http_context_free (struct rspamd_http_context *ctx)
 	}
 
 	if (ctx->config.client_key_rotate_time > 0) {
-		/* Event is removed on base event loop termination */
-		/* event_del (&ctx->client_rotate_ev); */
+		ev_timer_stop (ctx->event_loop, &ctx->client_rotate_ev);
 
 		if (ctx->client_kp) {
 			rspamd_keypair_unref (ctx->client_kp);

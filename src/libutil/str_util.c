@@ -2088,6 +2088,10 @@ rspamd_decode_qp_buf (const gchar *in, gsize inlen,
 				if (end - o > 0) {
 					*o++ = *p;
 				}
+				else {
+					/* Buffer overflow */
+					return (-1);
+				}
 
 				break;
 			}
@@ -2149,9 +2153,29 @@ decode:
 					processed = pos - o;
 					remain -= processed;
 					p += processed;
-					o = pos - 1;
-					/* Skip comparison, as we know that we have found match */
-					goto decode;
+
+					if (remain > 0) {
+						o = pos - 1;
+						/*
+						 * Skip comparison and jump inside decode branch,
+						 * as we know that we have found match
+						 */
+						goto decode;
+					}
+					else {
+						/* Last '=' character, bugon */
+						o = pos;
+
+						if (end - o > 0) {
+							*o = '=';
+						}
+						else {
+							/* Buffer overflow */
+							return (-1);
+						}
+
+						break;
+					}
 				}
 			}
 			else {

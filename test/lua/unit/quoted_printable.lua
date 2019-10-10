@@ -95,6 +95,24 @@ context("Quoted-Printable encoding", function()
       assert_rspamd_eq(res)
     end)
   end
+  -- Decode issues
+  cases = {
+    {
+      'Mailscape External Mail Flow Outbound Test=',
+      'Mailscape External Mail Flow Outbound Test=',
+      'asan found'
+    },
+  }
+
+  for _,c in ipairs(cases) do
+    test("QP decoding test case: " .. c[3], function()
+      local res = {
+        expect = c[2],
+        actual = tostring(rspamd_util.decode_qp(c[1]))
+      }
+      assert_rspamd_eq(res)
+    end)
+  end
 
   -- Fuzz testing
   local charset = {}
@@ -108,7 +126,6 @@ context("Quoted-Printable encoding", function()
       return ""
     end
   end
-
 
   for _,l in ipairs({10, 100, 1000, 10000}) do
     test("QP fuzz test max length " .. tostring(l), function()

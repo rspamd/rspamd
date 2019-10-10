@@ -52,6 +52,82 @@ SURBL Example.ru ZEN domain
   Should Not Contain  ${result.stdout}  DBL_PHISH (
   Should Not Contain  ${result.stdout}  URIBL_BLACK (
 
+SURBL Example.com domain image false
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/urlimage.eml
+  Should Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES
+  Should Not Contain  ${result.stdout}  DBL_SPAM (
+  Should Not Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Not Contain  ${result.stdout}  DBL_PHISH (
+  Should Not Contain  ${result.stdout}  URIBL_BLACK (
+
+SURBL @example.com mail html
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/mailadr.eml
+  Should Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Contain  ${result.stdout}  DBL_SPAM (
+  Should Contain  ${result.stdout}  example.com:email
+  Should Not Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES (
+  Should Not Contain  ${result.stdout}  DBL_PHISH (
+  Should Not Contain  ${result.stdout}  URIBL_BLACK (
+
+SURBL @example.com mail text
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/mailadr2.eml
+  Should Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Contain  ${result.stdout}  DBL_SPAM (
+  Should Contain  ${result.stdout}  example.com:email
+  Should Not Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES (
+  Should Not Contain  ${result.stdout}  DBL_PHISH (
+  Should Not Contain  ${result.stdout}  URIBL_BLACK (
+
+SURBL example.com not encoded url in subject
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/urlinsubject.eml
+  Should Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Contain  ${result.stdout}  DBL_SPAM (
+  Should Not Contain  ${result.stdout}  DBL_PHISH (
+  Should Not Contain  ${result.stdout}  URIBL_BLACK (
+
+SURBL example.com encoded url in subject
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/urlinsubjectencoded.eml
+  Should Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Contain  ${result.stdout}  DBL_SPAM (
+  Should Not Contain  ${result.stdout}  DBL_PHISH (
+  Should Not Contain  ${result.stdout}  URIBL_BLACK (
+
+WHITELIST
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/whitelist.eml
+  Should Not Contain  ${result.stdout}  RSPAMD_URIBL (
+  Should Not Contain  ${result.stdout}  DBL_SPAM (
+  Should Not Contain  ${result.stdout}  RSPAMD_URIBL_IMAGES (
+
+EMAILBL full adress & domain only
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emailbltext.eml
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
+
+EMAILBL full subdomain adress
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emailbltext2.eml
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
+
+EMAILBL full subdomain adress & domain only
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/emailbltext3.eml
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (0.00)[baddomain.com:email]
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (0.00)[user.subdomain.baddomain.com:email]
+
+EMAILBL REPLY TO full adress
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replyto.eml
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
+  Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
+
+EMAILBL REPLY TO domain only
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replyto2.eml
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
+  Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
+
+EMAILBL REPLY TO full subdomain adress
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replytosubdomain.eml
+  Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
+  Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY ( 
+
+
 *** Keywords ***
 Surbl Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/surbl.conf

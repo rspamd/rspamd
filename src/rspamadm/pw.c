@@ -372,8 +372,11 @@ rspamadm_pw (gint argc, gchar **argv, const struct rspamadm_command *cmd)
 	if (!g_option_context_parse (context, &argc, &argv, &error)) {
 		fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
+		g_option_context_free (context);
 		exit (1);
 	}
+
+	g_option_context_free (context);
 
 	if (list) {
 		rspamadm_alg_list ();

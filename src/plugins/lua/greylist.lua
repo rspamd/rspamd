@@ -20,12 +20,12 @@ Example domains whitelist config:
 greylist {
   # Search "example.com" and "mail.example.com" for "mx.out.mail.example.com":
   whitelist_domains_url = [
-    "$LOCAL_CONFDIR/local.d/greylist-whitelist-domains.inc",
-    "${CONFDIR}/maillist.inc",
-    "${CONFDIR}/redirectors.inc",
-    "${CONFDIR}/dmarc_whitelist.inc",
-    "${CONFDIR}/spf_dkim_whitelist.inc",
-    "${CONFDIR}/surbl-whitelist.inc",
+    "$LOCAL_CONFDIR/local.d/maps.d/greylist-whitelist-domains.inc",
+    "${CONFDIR}/maps.d/maillist.inc",
+    "${CONFDIR}/maps.d/redirectors.inc",
+    "${CONFDIR}/maps.d/dmarc_whitelist.inc",
+    "${CONFDIR}/maps.d/spf_dkim_whitelist.inc",
+    "${CONFDIR}/maps.d/surbl-whitelist.inc",
     "https://maps.rspamd.com/freemail/free.txt.zst"
   ];
 }

@@ -352,6 +352,21 @@ rspamadm_add_lua_globals (struct rspamd_dns_resolver *resolver)
 	lua_setglobal (L, "rspamadm_dns_resolver");
 }
 
+static void
+rspamadm_cmd_dtor (gpointer p)
+{
+	struct rspamadm_command *cmd = (struct rspamadm_command *)p;
+
+	if (cmd->flags & RSPAMADM_FLAG_DYNAMIC) {
+		if (cmd->aliases) {
+			g_ptr_array_free (cmd->aliases, TRUE);
+		}
+
+		g_free ((gpointer)cmd->name);
+		g_free (cmd);
+	}
+}
+
 gint
 main (gint argc, gchar **argv, gchar **env)
 {
@@ -364,10 +379,12 @@ main (gint argc, gchar **argv, gchar **env)
 	const gchar *cmd_name;
 	const struct rspamadm_command *cmd;
 	struct rspamd_dns_resolver *resolver;
-	GPtrArray *all_commands = g_ptr_array_new (); /* Discovered during check */
+	GPtrArray *all_commands = g_ptr_array_new_full (32,
+			rspamadm_cmd_dtor); /* Discovered during check */
 	gint i, nargc, targc;
 	worker_t **pworker;
 	gboolean lua_file = FALSE;
+	gint retcode = 0;
 
 	ucl_vars = g_hash_table_new_full (rspamd_strcase_hash,
 		rspamd_strcase_equal, g_free, g_free);
@@ -417,6 +434,7 @@ main (gint argc, gchar **argv, gchar **env)
 	if (!g_option_context_parse (context, &targc, &targv, &error)) {
 		fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
+		g_option_context_free (context);
 		exit (1);
 	}
 
@@ -469,7 +487,7 @@ main (gint argc, gchar **argv, gchar **env)
 		rspamd_fprintf (stderr, "Cannot load lua environment: %e", error);
 		g_error_free (error);
 
-		exit (EXIT_FAILURE);
+		goto end;
 	}
 
 	rspamd_lua_set_globals (cfg, L);
@@ -500,15 +518,15 @@ main (gint argc, gchar **argv, gchar **env)
 
 	if (show_version) {
 		rspamadm_version ();
-		exit (EXIT_SUCCESS);
+		goto end;
 	}
 	if (show_help) {
 		rspamadm_usage (context);
-		exit (EXIT_SUCCESS);
+		goto end;
 	}
 	if (list_commands) {
 		rspamadm_commands (all_commands);
-		exit (EXIT_SUCCESS);
+		goto end;
 	}
 
 	cmd_name = argv[nargc];
@@ -547,7 +565,8 @@ main (gint argc, gchar **argv, gchar **env)
 			}
 		}
 
-		exit (EXIT_FAILURE);
+		retcode = EXIT_FAILURE;
+		goto end;
 	}
 
 	if (nargc < argc) {
@@ -592,12 +611,19 @@ main (gint argc, gchar **argv, gchar **env)
 
 	ev_break (rspamd_main->event_loop, EVBREAK_ALL);
 
-
+end:
+	g_option_context_free (context);
+	rspamd_dns_resolver_deinit (resolver);
 	REF_RELEASE (rspamd_main->cfg);
+	rspamd_http_context_free (rspamd_main->http_ctx);
 	rspamd_log_close (rspamd_main->logger, TRUE);
-	g_free (rspamd_main);
+	rspamd_url_deinit ();
 	g_ptr_array_free (all_commands, TRUE);
+	ev_loop_destroy (rspamd_main->event_loop);
+	g_hash_table_unref (ucl_vars);
+	rspamd_mempool_delete (rspamd_main->server_pool);
+	g_free (rspamd_main);
 
-	return 0;
+	return retcode;
 }
 

@@ -295,6 +295,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 	if (msg->code == 200) {
 
 		if (cbd->check) {
+			msg_info_map ("need to reread map from %s", cbd->bk->uri);
 			cbd->periodic->need_modify = TRUE;
 			/* Reset the whole chain */
 			cbd->periodic->cur_backend = 0;
@@ -969,7 +970,9 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 	}
 
 	if (periodic->locked) {
-		rspamd_map_schedule_periodic (periodic->map, FALSE, FALSE, FALSE);
+		if (!periodic->map->wrk->wanna_die) {
+			rspamd_map_schedule_periodic (periodic->map, FALSE, FALSE, FALSE);
+		}
 		g_atomic_int_set (periodic->map->locked, 0);
 		msg_debug_map ("unlocked map");
 	}
@@ -1468,7 +1471,8 @@ check:
 	/* Try address */
 	rspamd_inet_addr_t *addr = NULL;
 
-	if (rspamd_parse_inet_address (&addr, data->host, strlen (data->host))) {
+	if (rspamd_parse_inet_address (&addr, data->host,
+			strlen (data->host), RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 		rspamd_inet_address_set_port (addr, cbd->data->port);
 		g_ptr_array_add (cbd->addrs, (void *)addr);
 		cbd->conn = rspamd_http_connection_new_client (

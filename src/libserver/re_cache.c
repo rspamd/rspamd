@@ -33,6 +33,7 @@
 #include "unix-std.h"
 #include <signal.h>
 #include <stdalign.h>
+#include "contrib/libev/ev.h"
 
 #ifndef WITH_PCRE2
 #include <pcre.h>
@@ -1137,15 +1138,17 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 			lenvec = g_malloc (sizeof (*lenvec) * cnt);
 			g_hash_table_iter_init (&it, MESSAGE_FIELD (task, urls));
 			i = 0;
+			raw = FALSE;
 
 			while (g_hash_table_iter_next (&it, &k, &v)) {
 				url = v;
 				in = url->string;
 				len = url->urllen;
-				raw = FALSE;
 
-				scvec[i] = (guchar *)in;
-				lenvec[i++] = len;
+				if (len > 0 && !(url->flags & RSPAMD_URL_FLAG_IMAGE)) {
+					scvec[i] = (guchar *) in;
+					lenvec[i++] = len;
+				}
 			}
 
 			g_hash_table_iter_init (&it, MESSAGE_FIELD (task, emails));
@@ -1154,13 +1157,12 @@ rspamd_re_cache_exec_re (struct rspamd_task *task,
 				url = v;
 				in = url->string;
 				len = url->urllen;
-				raw = FALSE;
 
-				scvec[i] = (guchar *) in;
-				lenvec[i++] = len;
+				if (len > 0 && !(url->flags & RSPAMD_URL_FLAG_IMAGE)) {
+					scvec[i] = (guchar *) in;
+					lenvec[i++] = len;
+				}
 			}
-
-			g_assert (i == cnt);
 
 			ret = rspamd_re_cache_process_regexp_data (rt, re,
 					task, scvec, lenvec, i, raw);
@@ -1677,19 +1679,35 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 }
 #endif
 
-gint
-rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
-		const char *cache_dir, gdouble max_time, gboolean silent,
-		GError **err)
-{
-	g_assert (cache != NULL);
-	g_assert (cache_dir != NULL);
+#ifdef WITH_HYPERSCAN
+struct rspamd_re_cache_hs_compile_cbdata {
+	GHashTableIter it;
+	struct rspamd_re_cache *cache;
+	const char *cache_dir;
+	gdouble max_time;
+	gboolean silent;
+	guint total;
+	void (*cb)(guint ncompiled, GError *err, void *cbd);
+	void *cbd;
+};
 
-#ifndef WITH_HYPERSCAN
-	g_set_error (err, rspamd_re_cache_quark (), EINVAL, "hyperscan is disabled");
-	return -1;
-#else
-	GHashTableIter it, cit;
+static void
+rspamd_re_cache_compile_err (EV_P_ ev_timer *w, GError *err,
+		struct rspamd_re_cache_hs_compile_cbdata *cbdata)
+{
+	ev_timer_stop (EV_A_ w);
+	cbdata->cb (cbdata->total, err, cbdata->cbd);
+	g_free (w);
+	g_free (cbdata);
+	g_error_free (err);
+}
+
+static void
+rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
+{
+	struct rspamd_re_cache_hs_compile_cbdata *cbdata =
+			(struct rspamd_re_cache_hs_compile_cbdata *)w->data;
+	GHashTableIter cit;
 	gpointer k, v;
 	struct rspamd_re_class *re_class;
 	gchar path[PATH_MAX], npath[PATH_MAX];
@@ -1703,298 +1721,353 @@ rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
 	const hs_expr_ext_t **hs_exts = NULL;
 	gchar **hs_pats = NULL;
 	gchar *hs_serialized;
-	gsize serialized_len, total = 0;
+	gsize serialized_len;
 	struct iovec iov[7];
+	struct rspamd_re_cache *cache;
+	GError *err;
 
-	g_hash_table_iter_init (&it, cache->re_classes);
+	cache = cbdata->cache;
 
-	while (g_hash_table_iter_next (&it, &k, &v)) {
-		re_class = v;
-		rspamd_snprintf (path, sizeof (path), "%s%c%s.hs", cache_dir,
-				G_DIR_SEPARATOR, re_class->hash);
+	if (!g_hash_table_iter_next (&cbdata->it, &k, &v)) {
+		/* All done */
+		ev_timer_stop (EV_A_ w);
+		cbdata->cb (cbdata->total, NULL, cbdata->cbd);
+		g_free (w);
+		g_free (cbdata);
 
-		if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, TRUE, TRUE)) {
+		return;
+	}
 
-			fd = open (path, O_RDONLY, 00600);
+	re_class = v;
+	rspamd_snprintf (path, sizeof (path), "%s%c%s.hs", cbdata->cache_dir,
+			G_DIR_SEPARATOR, re_class->hash);
 
-			/* Read number of regexps */
-			g_assert (fd != -1);
-			lseek (fd, RSPAMD_HS_MAGIC_LEN + sizeof (cache->plt), SEEK_SET);
-			g_assert (read (fd, &n, sizeof (n)) == sizeof (n));
-			close (fd);
+	if (rspamd_re_cache_is_valid_hyperscan_file (cache, path, TRUE, TRUE)) {
 
-			if (re_class->type_len > 0) {
-				if (!silent) {
-					msg_info_re_cache (
-							"skip already valid class %s(%*s) to cache %6s, %d regexps",
-							rspamd_re_cache_type_to_string (re_class->type),
-							(gint) re_class->type_len - 1,
-							re_class->type_data,
-							re_class->hash,
-							n);
-				}
-			}
-			else {
-				if (!silent) {
-					msg_info_re_cache (
-							"skip already valid class %s to cache %6s, %d regexps",
-							rspamd_re_cache_type_to_string (re_class->type),
-							re_class->hash,
-							n);
-				}
-			}
+		fd = open (path, O_RDONLY, 00600);
 
-			continue;
-		}
+		/* Read number of regexps */
+		g_assert (fd != -1);
+		lseek (fd, RSPAMD_HS_MAGIC_LEN + sizeof (cache->plt), SEEK_SET);
+		g_assert (read (fd, &n, sizeof (n)) == sizeof (n));
+		close (fd);
 
-		rspamd_snprintf (path, sizeof (path), "%s%c%s.hs.new", cache_dir,
-						G_DIR_SEPARATOR, re_class->hash);
-		fd = open (path, O_CREAT|O_TRUNC|O_EXCL|O_WRONLY, 00600);
-
-		if (fd == -1) {
-			g_set_error (err, rspamd_re_cache_quark (), errno, "cannot open file "
-					"%s: %s", path, strerror (errno));
-			return -1;
-		}
-
-		g_hash_table_iter_init (&cit, re_class->re);
-		n = g_hash_table_size (re_class->re);
-		hs_flags = g_malloc0 (sizeof (*hs_flags) * n);
-		hs_ids = g_malloc (sizeof (*hs_ids) * n);
-		hs_pats = g_malloc (sizeof (*hs_pats) * n);
-		hs_exts = g_malloc0 (sizeof (*hs_exts) * n);
-		i = 0;
-
-		while (g_hash_table_iter_next (&cit, &k, &v)) {
-			re = v;
-
-			pcre_flags = rspamd_regexp_get_pcre_flags (re);
-			re_flags = rspamd_regexp_get_flags (re);
-
-			if (re_flags & RSPAMD_REGEXP_FLAG_PCRE_ONLY) {
-				/* Do not try to compile bad regexp */
+		if (re_class->type_len > 0) {
+			if (!cbdata->silent) {
 				msg_info_re_cache (
-						"do not try compile %s to hyperscan as it is PCRE only",
-						rspamd_regexp_get_pattern (re));
-				continue;
-			}
-
-			hs_flags[i] = 0;
-			hs_exts[i] = NULL;
-#ifndef WITH_PCRE2
-			if (pcre_flags & PCRE_FLAG(UTF8)) {
-				hs_flags[i] |= HS_FLAG_UTF8;
-			}
-#else
-			if (pcre_flags & PCRE_FLAG(UTF)) {
-				hs_flags[i] |= HS_FLAG_UTF8;
-			}
-#endif
-			if (pcre_flags & PCRE_FLAG(CASELESS)) {
-				hs_flags[i] |= HS_FLAG_CASELESS;
-			}
-			if (pcre_flags & PCRE_FLAG(MULTILINE)) {
-				hs_flags[i] |= HS_FLAG_MULTILINE;
-			}
-			if (pcre_flags & PCRE_FLAG(DOTALL)) {
-				hs_flags[i] |= HS_FLAG_DOTALL;
-			}
-			if (rspamd_regexp_get_maxhits (re) == 1) {
-				hs_flags[i] |= HS_FLAG_SINGLEMATCH;
-			}
-
-			gchar *pat = rspamd_re_cache_hs_pattern_from_pcre (re);
-
-			if (hs_compile (pat,
-					hs_flags[i],
-					cache->vectorized_hyperscan ? HS_MODE_VECTORED : HS_MODE_BLOCK,
-					&cache->plt,
-					&test_db,
-					&hs_errors) != HS_SUCCESS) {
-				msg_info_re_cache ("cannot compile %s to hyperscan, try prefilter match",
-						pat);
-				hs_free_compile_error (hs_errors);
-
-				/* The approximation operation might take a significant
-				 * amount of time, so we need to check if it's finite
-				 */
-				if (rspamd_re_cache_is_finite (cache, re, hs_flags[i], max_time)) {
-					hs_flags[i] |= HS_FLAG_PREFILTER;
-					hs_ids[i] = rspamd_regexp_get_cache_id (re);
-					hs_pats[i] = pat;
-					i++;
-				}
-				else {
-					g_free (pat); /* Avoid leak */
-				}
-			}
-			else {
-				hs_ids[i] = rspamd_regexp_get_cache_id (re);
-				hs_pats[i] = pat;
-				i ++;
-				hs_free_database (test_db);
-			}
-		}
-		/* Adjust real re number */
-		n = i;
-
-		if (n > 0) {
-			/* Create the hs tree */
-			if (hs_compile_ext_multi ((const char **)hs_pats,
-					hs_flags,
-					hs_ids,
-					hs_exts,
-					n,
-					cache->vectorized_hyperscan ? HS_MODE_VECTORED : HS_MODE_BLOCK,
-					&cache->plt,
-					&test_db,
-					&hs_errors) != HS_SUCCESS) {
-
-				g_set_error (err, rspamd_re_cache_quark (), EINVAL,
-						"cannot create tree of regexp when processing '%s': %s",
-						hs_pats[hs_errors->expression], hs_errors->message);
-				g_free (hs_flags);
-				g_free (hs_ids);
-
-				for (guint j = 0; j < i; j ++) {
-					g_free (hs_pats[j]);
-				}
-
-				g_free (hs_pats);
-				g_free (hs_exts);
-				close (fd);
-				unlink (path);
-				hs_free_compile_error (hs_errors);
-
-				return -1;
-			}
-
-			for (guint j = 0; j < i; j ++) {
-				g_free (hs_pats[j]);
-			}
-			g_free (hs_pats);
-			g_free (hs_exts);
-
-			if (hs_serialize_database (test_db, &hs_serialized,
-					&serialized_len) != HS_SUCCESS) {
-				g_set_error (err,
-						rspamd_re_cache_quark (),
-						errno,
-						"cannot serialize tree of regexp for %s",
-						re_class->hash);
-
-				close (fd);
-				unlink (path);
-				g_free (hs_ids);
-				g_free (hs_flags);
-				hs_free_database (test_db);
-
-				return -1;
-			}
-
-			hs_free_database (test_db);
-
-			/*
-			 * Magic - 8 bytes
-			 * Platform - sizeof (platform)
-			 * n - number of regexps
-			 * n * <regexp ids>
-			 * n * <regexp flags>
-			 * crc - 8 bytes checksum
-			 * <hyperscan blob>
-			 */
-			rspamd_cryptobox_fast_hash_init (&crc_st, 0xdeadbabe);
-			/* IDs -> Flags -> Hs blob */
-			rspamd_cryptobox_fast_hash_update (&crc_st,
-					hs_ids, sizeof (*hs_ids) * n);
-			rspamd_cryptobox_fast_hash_update (&crc_st,
-					hs_flags, sizeof (*hs_flags) * n);
-			rspamd_cryptobox_fast_hash_update (&crc_st,
-					hs_serialized, serialized_len);
-			crc = rspamd_cryptobox_fast_hash_final (&crc_st);
-
-			if (cache->vectorized_hyperscan) {
-				iov[0].iov_base = (void *) rspamd_hs_magic_vector;
-			}
-			else {
-				iov[0].iov_base = (void *) rspamd_hs_magic;
-			}
-
-			iov[0].iov_len = RSPAMD_HS_MAGIC_LEN;
-			iov[1].iov_base = &cache->plt;
-			iov[1].iov_len = sizeof (cache->plt);
-			iov[2].iov_base = &n;
-			iov[2].iov_len = sizeof (n);
-			iov[3].iov_base = hs_ids;
-			iov[3].iov_len = sizeof (*hs_ids) * n;
-			iov[4].iov_base = hs_flags;
-			iov[4].iov_len = sizeof (*hs_flags) * n;
-			iov[5].iov_base = &crc;
-			iov[5].iov_len = sizeof (crc);
-			iov[6].iov_base = hs_serialized;
-			iov[6].iov_len = serialized_len;
-
-			if (writev (fd, iov, G_N_ELEMENTS (iov)) == -1) {
-				g_set_error (err,
-						rspamd_re_cache_quark (),
-						errno,
-						"cannot serialize tree of regexp to %s: %s",
-						path, strerror (errno));
-				close (fd);
-				unlink (path);
-				g_free (hs_ids);
-				g_free (hs_flags);
-				g_free (hs_serialized);
-
-				return -1;
-			}
-
-			if (re_class->type_len > 0) {
-				msg_info_re_cache (
-						"compiled class %s(%*s) to cache %6s, %d regexps",
+						"skip already valid class %s(%*s) to cache %6s, %d regexps",
 						rspamd_re_cache_type_to_string (re_class->type),
 						(gint) re_class->type_len - 1,
 						re_class->type_data,
 						re_class->hash,
 						n);
 			}
-			else {
+		}
+		else {
+			if (!cbdata->silent) {
 				msg_info_re_cache (
-						"compiled class %s to cache %6s, %d regexps",
+						"skip already valid class %s to cache %6s, %d regexps",
 						rspamd_re_cache_type_to_string (re_class->type),
 						re_class->hash,
 						n);
 			}
-
-			total += n;
-
-			g_free (hs_serialized);
-			g_free (hs_ids);
-			g_free (hs_flags);
 		}
 
-		fsync (fd);
-
-		/* Now rename temporary file to the new .hs file */
-		rspamd_snprintf (npath, sizeof (path), "%s%c%s.hs", cache_dir,
-				G_DIR_SEPARATOR, re_class->hash);
-
-		if (rename (path, npath) == -1) {
-			g_set_error (err,
-					rspamd_re_cache_quark (),
-					errno,
-					"cannot rename %s to %s: %s",
-					path, npath, strerror (errno));
-			unlink (path);
-			close (fd);
-
-			return -1;
-		}
-
-		close (fd);
+		ev_timer_again (EV_A_ w);
+		return;
 	}
 
-	return total;
+	rspamd_snprintf (path, sizeof (path), "%s%c%s.hs.new", cbdata->cache_dir,
+			G_DIR_SEPARATOR, re_class->hash);
+	fd = open (path, O_CREAT|O_TRUNC|O_EXCL|O_WRONLY, 00600);
+
+	if (fd == -1) {
+		err = g_error_new (rspamd_re_cache_quark (), errno,
+				"cannot open file %s: %s", path, strerror (errno));
+		rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
+		return;
+	}
+
+	g_hash_table_iter_init (&cit, re_class->re);
+	n = g_hash_table_size (re_class->re);
+	hs_flags = g_malloc0 (sizeof (*hs_flags) * n);
+	hs_ids = g_malloc (sizeof (*hs_ids) * n);
+	hs_pats = g_malloc (sizeof (*hs_pats) * n);
+	hs_exts = g_malloc0 (sizeof (*hs_exts) * n);
+	i = 0;
+
+	while (g_hash_table_iter_next (&cit, &k, &v)) {
+		re = v;
+
+		pcre_flags = rspamd_regexp_get_pcre_flags (re);
+		re_flags = rspamd_regexp_get_flags (re);
+
+		if (re_flags & RSPAMD_REGEXP_FLAG_PCRE_ONLY) {
+			/* Do not try to compile bad regexp */
+			msg_info_re_cache (
+					"do not try compile %s to hyperscan as it is PCRE only",
+					rspamd_regexp_get_pattern (re));
+			continue;
+		}
+
+		hs_flags[i] = 0;
+		hs_exts[i] = NULL;
+#ifndef WITH_PCRE2
+		if (pcre_flags & PCRE_FLAG(UTF8)) {
+			hs_flags[i] |= HS_FLAG_UTF8;
+		}
+#else
+		if (pcre_flags & PCRE_FLAG(UTF)) {
+				hs_flags[i] |= HS_FLAG_UTF8;
+			}
+#endif
+		if (pcre_flags & PCRE_FLAG(CASELESS)) {
+			hs_flags[i] |= HS_FLAG_CASELESS;
+		}
+		if (pcre_flags & PCRE_FLAG(MULTILINE)) {
+			hs_flags[i] |= HS_FLAG_MULTILINE;
+		}
+		if (pcre_flags & PCRE_FLAG(DOTALL)) {
+			hs_flags[i] |= HS_FLAG_DOTALL;
+		}
+		if (rspamd_regexp_get_maxhits (re) == 1) {
+			hs_flags[i] |= HS_FLAG_SINGLEMATCH;
+		}
+
+		gchar *pat = rspamd_re_cache_hs_pattern_from_pcre (re);
+
+		if (hs_compile (pat,
+				hs_flags[i],
+				cache->vectorized_hyperscan ? HS_MODE_VECTORED : HS_MODE_BLOCK,
+				&cache->plt,
+				&test_db,
+				&hs_errors) != HS_SUCCESS) {
+			msg_info_re_cache ("cannot compile %s to hyperscan, try prefilter match",
+					pat);
+			hs_free_compile_error (hs_errors);
+
+			/* The approximation operation might take a significant
+			 * amount of time, so we need to check if it's finite
+			 */
+			if (rspamd_re_cache_is_finite (cache, re, hs_flags[i], cbdata->max_time)) {
+				hs_flags[i] |= HS_FLAG_PREFILTER;
+				hs_ids[i] = rspamd_regexp_get_cache_id (re);
+				hs_pats[i] = pat;
+				i++;
+			}
+			else {
+				g_free (pat); /* Avoid leak */
+			}
+		}
+		else {
+			hs_ids[i] = rspamd_regexp_get_cache_id (re);
+			hs_pats[i] = pat;
+			i ++;
+			hs_free_database (test_db);
+		}
+	}
+	/* Adjust real re number */
+	n = i;
+
+	if (n > 0) {
+		/* Create the hs tree */
+		if (hs_compile_ext_multi ((const char **)hs_pats,
+				hs_flags,
+				hs_ids,
+				hs_exts,
+				n,
+				cache->vectorized_hyperscan ? HS_MODE_VECTORED : HS_MODE_BLOCK,
+				&cache->plt,
+				&test_db,
+				&hs_errors) != HS_SUCCESS) {
+
+
+			g_free (hs_flags);
+			g_free (hs_ids);
+
+			for (guint j = 0; j < i; j ++) {
+				g_free (hs_pats[j]);
+			}
+
+			g_free (hs_pats);
+			g_free (hs_exts);
+			close (fd);
+			unlink (path);
+			hs_free_compile_error (hs_errors);
+
+			err = g_error_new (rspamd_re_cache_quark (), EINVAL,
+					"cannot create tree of regexp when processing '%s': %s",
+					hs_pats[hs_errors->expression], hs_errors->message);
+			rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
+
+			return;
+		}
+
+		for (guint j = 0; j < i; j ++) {
+			g_free (hs_pats[j]);
+		}
+
+		g_free (hs_pats);
+		g_free (hs_exts);
+
+		if (hs_serialize_database (test_db, &hs_serialized,
+				&serialized_len) != HS_SUCCESS) {
+			err = g_error_new (rspamd_re_cache_quark (),
+					errno,
+					"cannot serialize tree of regexp for %s",
+					re_class->hash);
+
+			close (fd);
+			unlink (path);
+			g_free (hs_ids);
+			g_free (hs_flags);
+			hs_free_database (test_db);
+
+			rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
+			return;
+		}
+
+		hs_free_database (test_db);
+
+		/*
+		 * Magic - 8 bytes
+		 * Platform - sizeof (platform)
+		 * n - number of regexps
+		 * n * <regexp ids>
+		 * n * <regexp flags>
+		 * crc - 8 bytes checksum
+		 * <hyperscan blob>
+		 */
+		rspamd_cryptobox_fast_hash_init (&crc_st, 0xdeadbabe);
+		/* IDs -> Flags -> Hs blob */
+		rspamd_cryptobox_fast_hash_update (&crc_st,
+				hs_ids, sizeof (*hs_ids) * n);
+		rspamd_cryptobox_fast_hash_update (&crc_st,
+				hs_flags, sizeof (*hs_flags) * n);
+		rspamd_cryptobox_fast_hash_update (&crc_st,
+				hs_serialized, serialized_len);
+		crc = rspamd_cryptobox_fast_hash_final (&crc_st);
+
+		if (cache->vectorized_hyperscan) {
+			iov[0].iov_base = (void *) rspamd_hs_magic_vector;
+		}
+		else {
+			iov[0].iov_base = (void *) rspamd_hs_magic;
+		}
+
+		iov[0].iov_len = RSPAMD_HS_MAGIC_LEN;
+		iov[1].iov_base = &cache->plt;
+		iov[1].iov_len = sizeof (cache->plt);
+		iov[2].iov_base = &n;
+		iov[2].iov_len = sizeof (n);
+		iov[3].iov_base = hs_ids;
+		iov[3].iov_len = sizeof (*hs_ids) * n;
+		iov[4].iov_base = hs_flags;
+		iov[4].iov_len = sizeof (*hs_flags) * n;
+		iov[5].iov_base = &crc;
+		iov[5].iov_len = sizeof (crc);
+		iov[6].iov_base = hs_serialized;
+		iov[6].iov_len = serialized_len;
+
+		if (writev (fd, iov, G_N_ELEMENTS (iov)) == -1) {
+			err = g_error_new (rspamd_re_cache_quark (),
+					errno,
+					"cannot serialize tree of regexp to %s: %s",
+					path, strerror (errno));
+			close (fd);
+			unlink (path);
+			g_free (hs_ids);
+			g_free (hs_flags);
+			g_free (hs_serialized);
+
+			rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
+			return;
+		}
+
+		if (re_class->type_len > 0) {
+			msg_info_re_cache (
+					"compiled class %s(%*s) to cache %6s, %d regexps",
+					rspamd_re_cache_type_to_string (re_class->type),
+					(gint) re_class->type_len - 1,
+					re_class->type_data,
+					re_class->hash,
+					n);
+		}
+		else {
+			msg_info_re_cache (
+					"compiled class %s to cache %6s, %d regexps",
+					rspamd_re_cache_type_to_string (re_class->type),
+					re_class->hash,
+					n);
+		}
+
+		cbdata->total += n;
+
+		g_free (hs_serialized);
+		g_free (hs_ids);
+		g_free (hs_flags);
+	}
+
+	fsync (fd);
+
+	/* Now rename temporary file to the new .hs file */
+	rspamd_snprintf (npath, sizeof (path), "%s%c%s.hs", cbdata->cache_dir,
+			G_DIR_SEPARATOR, re_class->hash);
+
+	if (rename (path, npath) == -1) {
+		err = g_error_new (rspamd_re_cache_quark (),
+				errno,
+				"cannot rename %s to %s: %s",
+				path, npath, strerror (errno));
+		unlink (path);
+		close (fd);
+
+		rspamd_re_cache_compile_err (EV_A_ w, err, cbdata);
+		return;
+	}
+
+	close (fd);
+	ev_timer_again (EV_A_ w);
+}
+
+#endif
+
+gint
+rspamd_re_cache_compile_hyperscan (struct rspamd_re_cache *cache,
+								   const char *cache_dir,
+								   gdouble max_time,
+								   gboolean silent,
+								   struct ev_loop *event_loop,
+								   void (*cb)(guint ncompiled, GError *err, void *cbd),
+								   void *cbd)
+{
+	g_assert (cache != NULL);
+	g_assert (cache_dir != NULL);
+
+#ifndef WITH_HYPERSCAN
+	return -1;
+#else
+	static ev_timer *timer;
+	static const ev_tstamp timer_interval = 0.1;
+	struct rspamd_re_cache_hs_compile_cbdata *cbdata;
+
+	cbdata = g_malloc0 (sizeof (*cbdata));
+	g_hash_table_iter_init (&cbdata->it, cache->re_classes);
+	cbdata->cache = cache;
+	cbdata->cache_dir = cache_dir;
+	cbdata->cb = cb;
+	cbdata->cbd = cbd;
+	cbdata->max_time = max_time;
+	cbdata->silent = silent;
+	cbdata->total = 0;
+	timer = g_malloc0 (sizeof (*timer));
+	timer->data = (void *)cbdata; /* static */
+
+	ev_timer_init (timer, rspamd_re_cache_compile_timer_cb,
+			timer_interval, timer_interval);
+	ev_timer_start (event_loop, timer);
+
+	return 0;
 #endif
 }
 
@@ -2040,19 +2113,29 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 
 		if (memcmp (hash_pos, re_class->hash, sizeof (re_class->hash) - 1) == 0) {
 			/* Open file and check magic */
+			gssize r;
+
 			fd = open (path, O_RDONLY);
 
 			if (fd == -1) {
-				if (!silent) {
+				if (errno != ENOENT || !silent) {
 					msg_err_re_cache ("cannot open hyperscan cache file %s: %s",
 							path, strerror (errno));
 				}
 				return FALSE;
 			}
 
-			if (read (fd, magicbuf, sizeof (magicbuf)) != sizeof (magicbuf)) {
-				msg_err_re_cache ("cannot read hyperscan cache file %s: %s",
-						path, strerror (errno));
+			if ((r = read (fd, magicbuf, sizeof (magicbuf))) != sizeof (magicbuf)) {
+				if (r == -1) {
+					msg_err_re_cache ("cannot read magic from hyperscan "
+									  "cache file %s: %s",
+							path, strerror (errno));
+				}
+				else {
+					msg_err_re_cache ("truncated read magic from hyperscan "
+									  "cache file %s: %z, %z wanted",
+							path, r, (gsize)sizeof (magicbuf));
+				}
 				close (fd);
 				return FALSE;
 			}
@@ -2074,9 +2157,18 @@ rspamd_re_cache_is_valid_hyperscan_file (struct rspamd_re_cache *cache,
 				return FALSE;
 			}
 
-			if (read (fd, &test_plt, sizeof (test_plt)) != sizeof (test_plt)) {
-				msg_err_re_cache ("cannot read hyperscan cache file %s: %s",
-						path, strerror (errno));
+			if ((r = read (fd, &test_plt, sizeof (test_plt))) != sizeof (test_plt)) {
+				if (r == -1) {
+					msg_err_re_cache ("cannot read platform data from hyperscan "
+									  "cache file %s: %s",
+							path, strerror (errno));
+				}
+				else {
+					msg_err_re_cache ("truncated read platform data from hyperscan "
+									  "cache file %s: %z, %z wanted",
+							path, r, (gsize)sizeof (magicbuf));
+				}
+
 				close (fd);
 				return FALSE;
 			}

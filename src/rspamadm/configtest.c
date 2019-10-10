@@ -121,16 +121,23 @@ rspamadm_configtest (gint argc, gchar **argv, const struct rspamadm_command *cmd
 	if (!g_option_context_parse (context, &argc, &argv, &error)) {
 		fprintf (stderr, "option parsing failed: %s\n", error->message);
 		g_error_free (error);
+		g_option_context_free (context);
 		exit (1);
 	}
 
+	g_option_context_free (context);
+
 	if (config == NULL) {
+		static gchar fbuf[PATH_MAX];
+
 		if ((confdir = g_hash_table_lookup (ucl_vars, "CONFDIR")) == NULL) {
 			confdir = RSPAMD_CONFDIR;
 		}
 
-		config = g_strdup_printf ("%s%c%s", confdir, G_DIR_SEPARATOR,
+		rspamd_snprintf (fbuf, sizeof (fbuf), "%s%c%s",
+				confdir, G_DIR_SEPARATOR,
 				"rspamd.conf");
+		config = fbuf;
 	}
 
 	pworker = &workers[0];
@@ -139,7 +146,7 @@ rspamadm_configtest (gint argc, gchar **argv, const struct rspamadm_command *cmd
 		(void) g_quark_from_static_string ((*pworker)->name);
 		pworker++;
 	}
-	cfg->cache = rspamd_symcache_new (cfg);
+
 	cfg->compiled_modules = modules;
 	cfg->compiled_workers = workers;
 	cfg->cfg_name = config;
@@ -160,8 +167,8 @@ rspamadm_configtest (gint argc, gchar **argv, const struct rspamadm_command *cmd
 			ret = rspamd_config_post_load (cfg, RSPAMD_CONFIG_INIT_SYMCACHE);
 		}
 
-		if (ret && !rspamd_symcache_validate (rspamd_main->cfg->cache,
-				rspamd_main->cfg,
+		if (ret && !rspamd_symcache_validate (cfg->cache,
+				cfg,
 				FALSE)) {
 			ret = FALSE;
 		}
@@ -185,6 +192,4 @@ rspamadm_configtest (gint argc, gchar **argv, const struct rspamadm_command *cmd
 	if (!ret) {
 		exit (EXIT_FAILURE);
 	}
-
-	exit (EXIT_SUCCESS);
 }

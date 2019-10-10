@@ -83,21 +83,19 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 		return FALSE;
 	}
 
-	cnf =
-		rspamd_mempool_alloc0 (cfg->cfg_pool,
-			sizeof (struct rspamd_worker_bind_conf));
+	cnf = g_malloc0 (sizeof (struct rspamd_worker_bind_conf));
 
 	cnf->cnt = 1024;
-	cnf->bind_line = str;
+	cnf->bind_line = g_strdup (str);
 
 	if (g_ascii_strncasecmp (str, "systemd:", sizeof ("systemd:") - 1) == 0) {
 		/* The actual socket will be passed by systemd environment */
 		cnf->is_systemd = TRUE;
 		cnf->cnt = strtoul (str + sizeof ("systemd:") - 1, &err, 10);
-		cnf->addrs = NULL;
+		cnf->addrs = g_ptr_array_new ();
 
 		if (err == NULL || *err == '\0') {
-			cnf->name = rspamd_mempool_strdup (cfg->cfg_pool, str);
+			cnf->name = g_strdup (str);
 			LL_PREPEND (cf->bind_conf, cnf);
 		}
 		else {
@@ -107,7 +105,7 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 	}
 	else {
 		if (rspamd_parse_host_port_priority (str, &cnf->addrs,
-				NULL, &cnf->name, DEFAULT_BIND_PORT, cfg->cfg_pool) == RSPAMD_PARSE_ADDR_FAIL) {
+				NULL, &cnf->name, DEFAULT_BIND_PORT, NULL) == RSPAMD_PARSE_ADDR_FAIL) {
 			msg_err_config ("cannot parse bind line: %s", str);
 			ret = FALSE;
 		}
@@ -117,6 +115,15 @@ rspamd_parse_bind_line (struct rspamd_config *cfg,
 		}
 	}
 
+	if (!ret) {
+		if (cnf->addrs) {
+			g_ptr_array_free (cnf->addrs, TRUE);
+		}
+
+		g_free (cnf->name);
+		g_free (cnf);
+	}
+
 	return ret;
 }
 
@@ -124,11 +131,13 @@ struct rspamd_config *
 rspamd_config_new (enum rspamd_config_init_flags flags)
 {
 	struct rspamd_config *cfg;
+	rspamd_mempool_t *pool;
 
-	cfg = g_malloc0 (sizeof (*cfg));
+	pool = rspamd_mempool_new (8 * 1024 * 1024, "cfg");
+	cfg = rspamd_mempool_alloc0 (pool, sizeof (*cfg));
 	/* Allocate larger pool for cfg */
-	cfg->cfg_pool = rspamd_mempool_new (8 * 1024 * 1024, "cfg");
-	cfg->dns_timeout = 1000;
+	cfg->cfg_pool = pool;
+	cfg->dns_timeout = 1.0;
 	cfg->dns_retransmits = 5;
 	/* 16 sockets per DNS server */
 	cfg->dns_io_per_server = 16;
@@ -233,6 +242,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->max_sessions_cache = DEFAULT_MAX_SESSIONS;
 	cfg->maps_cache_dir = rspamd_mempool_strdup (cfg->cfg_pool, RSPAMD_DBDIR);
 	cfg->c_modules = g_ptr_array_new ();
+	cfg->heartbeat_interval = 10.0;
 
 	REF_INIT_RETAIN (cfg, rspamd_config_free);
 
@@ -310,7 +320,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 
 	HASH_CLEAR (hh, cfg->actions);
 
-	rspamd_mempool_delete (cfg->cfg_pool);
+	rspamd_mempool_destructors_enforce (cfg->cfg_pool);
 
 	if (cfg->checksum) {
 		g_free (cfg->checksum);
@@ -323,7 +333,7 @@ rspamd_config_free (struct rspamd_config *cfg)
 		g_free (lp);
 	}
 
-	g_free (cfg);
+	rspamd_mempool_delete (cfg->cfg_pool);
 }
 
 const ucl_object_t *
@@ -450,6 +460,12 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 	else if (rspamd_ftok_cstr_equal (&tok, "symbols_scores_params", TRUE)) {
 		type = RSPAMD_LOG_SYMBOLS;
 		flags |= RSPAMD_LOG_FMT_FLAG_SYMBOLS_PARAMS|RSPAMD_LOG_FMT_FLAG_SYMBOLS_SCORES;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "groups", TRUE)) {
+		type = RSPAMD_LOG_GROUPS;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "public_groups", TRUE)) {
+		type = RSPAMD_LOG_PUBLIC_GROUPS;
 	}
 	else if (rspamd_ftok_cstr_equal (&tok, "ip", TRUE)) {
 		type = RSPAMD_LOG_IP;
@@ -1057,6 +1073,15 @@ static void
 rspamd_worker_conf_dtor (struct rspamd_worker_conf *wcf)
 {
 	if (wcf) {
+		struct rspamd_worker_bind_conf *cnf, *tmp;
+
+		LL_FOREACH_SAFE (wcf->bind_conf, cnf, tmp) {
+			g_free (cnf->name);
+			g_free (cnf->bind_line);
+			g_ptr_array_free (cnf->addrs, TRUE);
+			g_free (cnf);
+		}
+
 		ucl_object_unref (wcf->options);
 		g_queue_free (wcf->active_workers);
 		g_hash_table_unref (wcf->params);
@@ -1555,16 +1580,21 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 	score_ptr = rspamd_mempool_alloc (cfg->cfg_pool, sizeof (gdouble));
 
 	if (isnan (score)) {
-		msg_warn_config ("score is not defined for symbol %s, set it to zero",
+		/* In fact, it could be defined later */
+		msg_debug_config ("score is not defined for symbol %s, set it to zero",
 				symbol);
 		score = 0.0;
+		/* Also set priority to 0 to allow override by anything */
+		sym_def->priority = 0;
+	}
+	else {
+		sym_def->priority = priority;
 	}
 
 	*score_ptr = score;
 	sym_def->score = score;
 	sym_def->weight_ptr = score_ptr;
 	sym_def->name = rspamd_mempool_strdup (cfg->cfg_pool, symbol);
-	sym_def->priority = priority;
 	sym_def->flags = flags;
 	sym_def->nshots = nshots;
 	sym_def->groups = g_ptr_array_sized_new (1);

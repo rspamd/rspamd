@@ -238,7 +238,7 @@ if opts then
     settings[k] = v
   end
 
-  redis_params = rspamd_parse_redis_server('history_redis')
+  redis_params = lua_redis.parse_redis_server('history_redis')
   if not redis_params then
     rspamd_logger.infox(rspamd_config, 'no servers are specified, disabling module')
     lua_util.disable_module(N, "redis")
@@ -250,6 +250,8 @@ if opts then
       flags = 'empty,explicit_disable,ignore_passthrough',
       priority = 150
     })
+    lua_redis.register_prefix(settings.key_prefix .. hostname, N,
+        "Redis history")
     rspamd_plugins['history'] = {
       handler = handle_history_request
     }

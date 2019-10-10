@@ -83,9 +83,11 @@ rspamd_upstream_test_func (void)
 			RSPAMD_UPSTREAM_PARSE_DEFAULT,
 			NULL));
 	up = rspamd_upstream_get (nls, RSPAMD_UPSTREAM_RANDOM, NULL, 0);
-	rspamd_parse_inet_address (&paddr, "127.0.0.2", 0);
+	rspamd_parse_inet_address (&paddr, "127.0.0.2", strlen ("127.0.0.2"),
+			RSPAMD_INET_ADDRESS_PARSE_DEFAULT);
 	g_assert (rspamd_upstream_add_addr (up, paddr));
-	rspamd_parse_inet_address (&paddr, "::1", 0);
+	rspamd_parse_inet_address (&paddr, "::1", strlen ("::1"),
+			RSPAMD_INET_ADDRESS_PARSE_DEFAULT);
 	g_assert (rspamd_upstream_add_addr (up, paddr));
 	/* Rewind to start */
 	addr = rspamd_upstream_addr_next (up);

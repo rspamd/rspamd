@@ -34,6 +34,7 @@ end
 require_scanner('clamav')
 require_scanner('fprot')
 require_scanner('kaspersky_av')
+require_scanner('kaspersky_se')
 require_scanner('savapi')
 require_scanner('sophos')
 
@@ -43,6 +44,7 @@ require_scanner('oletools')
 require_scanner('icap')
 require_scanner('vadesecure')
 require_scanner('spamassassin')
+require_scanner('p0f')
 
 exports.add_scanner = function(name, t, conf_func, check_func)
   assert(type(conf_func) == 'function' and type(check_func) == 'function',

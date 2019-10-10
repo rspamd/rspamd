@@ -262,11 +262,6 @@ gint rspamd_regexp_cmp (gconstpointer a, gconstpointer b);
 void rspamd_regexp_library_init (struct rspamd_config *cfg);
 
 /**
- * Cleanup internal library structures
- */
-void rspamd_regexp_library_finalize (void);
-
-/**
  * Create regexp from glob
  * @param gl
  * @param err

@@ -315,8 +315,10 @@ out:
 }
 
 static gboolean
-rspamd_parse_unix_path (rspamd_inet_addr_t **target, const char *src,
-						rspamd_mempool_t *pool)
+rspamd_parse_unix_path (rspamd_inet_addr_t **target,
+						const char *src, gsize len,
+						rspamd_mempool_t *pool,
+						enum rspamd_inet_address_parse_flags how)
 {
 	gchar **tokens, **cur_tok, *p, *pwbuf;
 	glong pwlen;
@@ -325,19 +327,35 @@ rspamd_parse_unix_path (rspamd_inet_addr_t **target, const char *src,
 	rspamd_inet_addr_t *addr;
 	bool has_group = false;
 
-	tokens = g_strsplit_set (src, " ,", -1);
 	addr = rspamd_inet_addr_create (AF_UNIX, pool);
-
-	rspamd_strlcpy (addr->u.un->addr.sun_path, tokens[0],
-			sizeof (addr->u.un->addr.sun_path));
-	#if defined(FREEBSD) || defined(__APPLE__)
-	addr->u.un->addr.sun_len = SUN_LEN (&addr->u.un->addr);
-	#endif
 
 	addr->u.un->mode = 00644;
 	addr->u.un->owner = (uid_t)-1;
 	addr->u.un->group = (gid_t)-1;
 
+	if (!(how & RSPAMD_INET_ADDRESS_PARSE_REMOTE)) {
+		tokens = rspamd_string_len_split (src, len, " ,", -1, pool);
+
+		if (tokens[0] == NULL) {
+			return FALSE;
+		}
+
+		rspamd_strlcpy (addr->u.un->addr.sun_path, tokens[0],
+				sizeof (addr->u.un->addr.sun_path));
+#if defined(FREEBSD) || defined(__APPLE__)
+		addr->u.un->addr.sun_len = SUN_LEN (&addr->u.un->addr);
+#endif
+	}
+	else {
+		rspamd_strlcpy (addr->u.un->addr.sun_path, src,
+				MIN (len + 1, sizeof (addr->u.un->addr.sun_path)));
+#if defined(FREEBSD) || defined(__APPLE__)
+		addr->u.un->addr.sun_len = SUN_LEN (&addr->u.un->addr);
+#endif
+		return TRUE;
+	}
+
+	/* Skip for remote */
 	cur_tok = &tokens[1];
 #ifdef _SC_GETPW_R_SIZE_MAX
 	pwlen = sysconf (_SC_GETPW_R_SIZE_MAX);
@@ -679,27 +697,29 @@ static gboolean
 rspamd_parse_inet_address_common (rspamd_inet_addr_t **target,
 								  const char *src,
 								  gsize srclen,
-								  rspamd_mempool_t *pool)
+								  rspamd_mempool_t *pool,
+								  enum rspamd_inet_address_parse_flags how)
 {
 	gboolean ret = FALSE;
 	rspamd_inet_addr_t *addr = NULL;
 	union sa_inet su;
-	const char *end;
+	const char *end = NULL;
 	char ipbuf[INET6_ADDRSTRLEN + 1];
 	guint iplen;
 	gulong portnum;
 
+	if (srclen == 0) {
+		return FALSE;
+	}
+
 	g_assert (src != NULL);
 	g_assert (target != NULL);
 
-	if (srclen == 0) {
-		srclen = strlen (src);
-	}
-
 	rspamd_ip_check_ipv6 ();
 
-	if (src[0] == '/' || src[0] == '.') {
-		return rspamd_parse_unix_path (target, src, pool);
+	if (!(how & RSPAMD_INET_ADDRESS_PARSE_NO_UNIX) &&
+		(src[0] == '/' || src[0] == '.')) {
+		return rspamd_parse_unix_path (target, src, srclen, pool, how);
 	}
 
 	if (src[0] == '[') {
@@ -726,7 +746,7 @@ rspamd_parse_inet_address_common (rspamd_inet_addr_t **target,
 			ret = TRUE;
 		}
 
-		if (ret && end[1] == ':') {
+		if (!(how & RSPAMD_INET_ADDRESS_PARSE_NO_PORT) && ret && end[1] == ':') {
 			/* Port part */
 			rspamd_strtoul (end + 1, srclen - iplen - 3, &portnum);
 			rspamd_inet_address_set_port (addr, portnum);
@@ -734,7 +754,8 @@ rspamd_parse_inet_address_common (rspamd_inet_addr_t **target,
 	}
 	else {
 
-		if ((end = memchr (src, ':', srclen)) != NULL) {
+		if (!(how & RSPAMD_INET_ADDRESS_PARSE_NO_PORT) &&
+			(end = memchr (src, ':', srclen)) != NULL) {
 			/* This is either port number and ipv4 addr or ipv6 addr */
 			/* Search for another semicolon */
 			if (memchr (end + 1, ':', srclen - (end - src + 1)) &&
@@ -789,19 +810,21 @@ rspamd_parse_inet_address_common (rspamd_inet_addr_t **target,
 gboolean
 rspamd_parse_inet_address (rspamd_inet_addr_t **target,
 						   const char *src,
-						   gsize srclen)
+						   gsize srclen,
+						   enum rspamd_inet_address_parse_flags how)
 {
-	return rspamd_parse_inet_address_common (target, src, srclen, NULL);
+	return rspamd_parse_inet_address_common (target, src, srclen, NULL, how);
 }
 
 rspamd_inet_addr_t *
 rspamd_parse_inet_address_pool (const char *src,
 								gsize srclen,
-								rspamd_mempool_t *pool)
+								rspamd_mempool_t *pool,
+								enum rspamd_inet_address_parse_flags how)
 {
 	rspamd_inet_addr_t *ret = NULL;
 
-	if (!rspamd_parse_inet_address_common (&ret, src, srclen, pool)) {
+	if (!rspamd_parse_inet_address_common (&ret, src, srclen, pool, how)) {
 		return NULL;
 	}
 
@@ -1224,7 +1247,8 @@ rspamd_resolve_addrs (const char *begin, size_t len, GPtrArray **addrs,
 
 	rspamd_ip_check_ipv6 ();
 
-	if (rspamd_parse_inet_address (&cur_addr, begin, len)) {
+	if (rspamd_parse_inet_address (&cur_addr,
+			begin, len, RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 		if (*addrs == NULL) {
 			*addrs = g_ptr_array_new_full (1,
 					(GDestroyNotify) rspamd_inet_address_free);
@@ -1387,7 +1411,8 @@ rspamd_parse_host_port_priority (const gchar *str,
 			}
 		}
 
-		if (!rspamd_parse_inet_address (&cur_addr, str, 0)) {
+		if (!rspamd_parse_inet_address (&cur_addr,
+				str, strlen (str), RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 			msg_err_pool_check ("cannot parse unix socket definition %s: %s",
 					str,
 					strerror (errno));

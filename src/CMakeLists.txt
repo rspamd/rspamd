@@ -93,15 +93,14 @@ SET(RSPAMDSRC	controller.c
 				worker.c
 				rspamd_proxy.c)
 
-SET(PLUGINSSRC	plugins/surbl.c
-				plugins/regexp.c
+SET(PLUGINSSRC  plugins/regexp.c
 				plugins/chartable.c
 				plugins/fuzzy_check.c
 				plugins/spf.c
 				plugins/dkim_check.c
 				libserver/rspamd_control.c)
 
-SET(MODULES_LIST surbl regexp chartable fuzzy_check spf dkim)
+SET(MODULES_LIST regexp chartable fuzzy_check spf dkim)
 SET(WORKERS_LIST normal controller fuzzy rspamd_proxy)
 IF (ENABLE_HYPERSCAN MATCHES "ON")
 	LIST(APPEND WORKERS_LIST "hs_helper")
@@ -207,7 +206,6 @@ IF (ENABLE_HYPERSCAN MATCHES "ON")
 	TARGET_LINK_LIBRARIES(rspamd-server hs)
 ENDIF()
 
-TARGET_LINK_LIBRARIES(rspamd-server rspamd-linenoise)
 TARGET_LINK_LIBRARIES(rspamd-server ${RSPAMD_REQUIRED_LIBRARIES})
 
 ADD_EXECUTABLE(rspamd ${RSPAMDSRC} ${CMAKE_CURRENT_BINARY_DIR}/workers.c)

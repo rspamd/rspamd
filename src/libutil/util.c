@@ -2364,35 +2364,6 @@ rspamd_init_libs (void)
 	rlim.rlim_max = rlim.rlim_cur;
 	setrlimit (RLIMIT_STACK, &rlim);
 
-	gint magic_flags = 0;
-
-	/* Unless trusty and other crap is supported... */
-#if 0
-#ifdef MAGIC_NO_CHECK_BUILTIN
-	magic_flags = MAGIC_NO_CHECK_BUILTIN;
-#endif
-#endif
-	magic_flags |= MAGIC_MIME|MAGIC_NO_CHECK_COMPRESS|
-				   MAGIC_NO_CHECK_ELF|MAGIC_NO_CHECK_TAR;
-#ifdef MAGIC_NO_CHECK_CDF
-	magic_flags |= MAGIC_NO_CHECK_CDF;
-#endif
-#ifdef MAGIC_NO_CHECK_ENCODING
-	magic_flags |= MAGIC_NO_CHECK_ENCODING;
-#endif
-#ifdef MAGIC_NO_CHECK_TAR
-	magic_flags |= MAGIC_NO_CHECK_TAR;
-#endif
-#ifdef MAGIC_NO_CHECK_TEXT
-	magic_flags |= MAGIC_NO_CHECK_TEXT;
-#endif
-#ifdef MAGIC_NO_CHECK_TOKENS
-	magic_flags |= MAGIC_NO_CHECK_TOKENS;
-#endif
-#ifdef MAGIC_NO_CHECK_JSON
-	magic_flags |= MAGIC_NO_CHECK_JSON;
-#endif
-	ctx->libmagic = magic_open (magic_flags);
 	ctx->local_addrs = rspamd_inet_library_init ();
 	REF_INIT_RETAIN (ctx, rspamd_deinit_libs);
 
@@ -2471,10 +2442,6 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 				/* Default settings */
 				SSL_CTX_set_cipher_list (ctx->ssl_ctx, secure_ciphers);
 			}
-		}
-
-		if (ctx->libmagic) {
-			magic_load (ctx->libmagic, cfg->magic_file);
 		}
 
 		rspamd_free_zstd_dictionary (ctx->in_dict);
@@ -2586,10 +2553,6 @@ void
 rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 {
 	if (ctx != NULL) {
-		if (ctx->libmagic) {
-			magic_close (ctx->libmagic);
-		}
-
 		g_free (ctx->ottery_cfg);
 
 #ifdef HAVE_OPENSSL
@@ -2609,6 +2572,8 @@ rspamd_deinit_libs (struct rspamd_external_libs_ctx *ctx)
 		if (ctx->in_zstream) {
 			ZSTD_freeDStream (ctx->in_zstream);
 		}
+
+		rspamd_cryptobox_deinit (ctx->crypto_ctx);
 
 		g_free (ctx);
 	}

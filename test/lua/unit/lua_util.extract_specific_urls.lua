@@ -1,14 +1,78 @@
 
-local msg
+local msg, msg_img
+local logger = require "rspamd_logger"
+local rspamd_util = require "rspamd_util"
+local rspamd_task = require "rspamd_task"
+local util  = require 'lua_util'
+local mpool = require "rspamd_mempool"
+local fun   = require "fun"
+local url   = require "rspamd_url"
 
-context("Lua util - extract_specific_urls", function()
-  local util  = require 'lua_util'
-  local mpool = require "rspamd_mempool"
-  local fun   = require "fun"
-  local url   = require "rspamd_url"
-  local logger = require "rspamd_logger"
-  local rspamd_util = require "rspamd_util"
-  local rspamd_task = require "rspamd_task"
+--[=========[ *******************  message  ******************* ]=========]
+msg = [[
+From: <>
+To: <nobody@example.com>
+Subject: test
+Content-Type: multipart/alternative;
+    boundary="_000_6be055295eab48a5af7ad4022f33e2d0_"
+
+--_000_6be055295eab48a5af7ad4022f33e2d0_
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: base64
+
+Hello world
+
+
+--_000_6be055295eab48a5af7ad4022f33e2d0_
+Content-Type: text/html; charset="utf-8"
+
+<html><body>
+<a href="http://example.net">http://example.net</a>
+<a href="http://example1.net">http://example1.net</a>
+<a href="http://example2.net">http://example2.net</a>
+<a href="http://example3.net">http://example3.net</a>
+<a href="http://example4.net">http://example4.net</a>
+<a href="http://domain1.com">http://domain1.com</a>
+<a href="http://domain2.com">http://domain2.com</a>
+<a href="http://domain3.com">http://domain3.com</a>
+<a href="http://domain4.com">http://domain4.com</a>
+<a href="http://domain5.com">http://domain5.com</a>
+<a href="http://domain.com">http://example.net/</a>
+<img src="http://example5.org">hahaha</img>
+</html>
+]]
+msg_img = [[
+From: <>
+To: <nobody@example.com>
+Subject: test
+Content-Type: multipart/alternative;
+    boundary="_000_6be055295eab48a5af7ad4022f33e2d0_"
+
+--_000_6be055295eab48a5af7ad4022f33e2d0_
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: base64
+
+Hello world
+
+
+--_000_6be055295eab48a5af7ad4022f33e2d0_
+Content-Type: text/html; charset="utf-8"
+
+<html><body>
+<a href="http://example.net">http://example.net</a>
+<a href="http://domain.com">http://example.net</a>
+<img src="http://example5.org">hahaha</img>
+</html>
+]]
+
+local function prepare_actual_result(actual)
+  return fun.totable(fun.map(
+      function(u) return u:get_raw():gsub('^%w+://', '') end,
+      actual
+  ))
+end
+
+context("Lua util - extract_specific_urls plain", function()
   local test_helper = require "rspamd_test_helper"
 
   test_helper.init_url_parser()
@@ -37,7 +101,6 @@ context("Lua util - extract_specific_urls", function()
     "meet.org",
     "domain1.org",
     "domain2.org",
-    "domain3.org",
     "domain3.org",
     "test.com",
   }
@@ -73,13 +136,6 @@ context("Lua util - extract_specific_urls", function()
       prefix = 'p'
     }
   }
-
-  local function prepare_actual_result(actual)
-    return fun.totable(fun.map(
-      function(u) return u:get_raw():gsub('^%w+://', '') end,
-      actual
-    ))
-  end
 
   local pool = mpool.create()
 
@@ -148,7 +204,9 @@ context("Lua util - extract_specific_urls", function()
     table.sort(expect)
     assert_rspamd_table_eq({actual = actual_result, expect = expect})
   end)
+end)
 
+context("Lua util - extract_specific_urls message", function()
 
 --[[ ******************* kinda functional *************************************** ]]
   local test_dir = string.gsub(debug.getinfo(1).source, "^@(.+/)[^/]+$", "%1")
@@ -175,21 +233,18 @@ context("Lua util - extract_specific_urls", function()
     }
   }
 
-  test("extract_specific_urls - from email", function()
-    local cfg = rspamd_util.config_from_ucl(config, "INIT_URL,INIT_LIBS,INIT_SYMCACHE,INIT_VALIDATE,INIT_PRELOAD_MAPS")
-    assert_not_nil(cfg)
+  local cfg = rspamd_util.config_from_ucl(config, "INIT_URL,INIT_LIBS,INIT_SYMCACHE,INIT_VALIDATE,INIT_PRELOAD_MAPS")
+  local res,task = rspamd_task.load_from_string(msg, cfg)
 
-    local expect = {"example.net", "domain.com"}
-    local res,task = rspamd_task.load_from_string(msg, rspamd_config)
+  if not res then
+    assert(false, "failed to load message")
+  end
 
-    if not res then
-      assert_true(false, "failed to load message")
-    end
+  if not task:process_message() then
+    assert(false, "failed to process message")
+  end
 
-    if not task:process_message() then
-      assert_true(false, "failed to process message")
-    end
-
+  test("extract_specific_urls - from email 1 limit", function()
     local actual = util.extract_specific_urls({
       task = task,
       limit = 1,
@@ -205,37 +260,114 @@ context("Lua util - extract_specific_urls", function()
     assert_rspamd_table_eq({actual = actual_result, expect = {"domain.com"}})
 
   end)
+  test("extract_specific_urls - from email 2 limit", function()
+    local actual = util.extract_specific_urls({
+      task = task,
+      limit = 2,
+      esld_limit = 1,
+    })
+
+    local actual_result = prepare_actual_result(actual)
+
+    --[[
+      local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
+      print(s) --]]
+
+    assert_rspamd_table_eq({actual = actual_result, expect = {"domain.com", "example.net"}})
+
+  end)
+
+  res,task = rspamd_task.load_from_string(msg_img, rspamd_config)
+
+  if not res then
+    assert_true(false, "failed to load message")
+  end
+
+  if not task:process_message() then
+    assert_true(false, "failed to process message")
+  end
+  test("extract_specific_urls - from email image 1 limit", function()
+    local actual = util.extract_specific_urls({
+      task = task,
+      limit = 1,
+      esld_limit = 1,
+      need_images = false,
+    })
+
+    local actual_result = prepare_actual_result(actual)
+
+    --[[
+      local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
+      print(s) --]]
+
+    assert_rspamd_table_eq({actual = actual_result, expect = {"domain.com"}})
+
+  end)
+  test("extract_specific_urls - from email image 2 limit", function()
+    local actual = util.extract_specific_urls({
+      task = task,
+      limit = 2,
+      esld_limit = 1,
+      need_images = false,
+    })
+
+    local actual_result = prepare_actual_result(actual)
+
+    --[[
+      local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
+      print(s) --]]
+
+    assert_rspamd_table_eq({actual = actual_result, expect = {"domain.com", "example.net"}})
+
+  end)
+  test("extract_specific_urls - from email image 3 limit, no images", function()
+    local actual = util.extract_specific_urls({
+      task = task,
+      limit = 3,
+      esld_limit = 1,
+      need_images = false,
+    })
+
+    local actual_result = prepare_actual_result(actual)
+
+    --[[
+      local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
+      print(s) --]]
+
+    assert_rspamd_table_eq({actual = actual_result, expect = {"domain.com", "example.net"}})
+  end)
+  test("extract_specific_urls - from email image 3 limit, has images", function()
+    local actual = util.extract_specific_urls({
+      task = task,
+      limit = 3,
+      esld_limit = 1,
+      need_images = true,
+    })
+
+    local actual_result = prepare_actual_result(actual)
+
+    --[[
+      local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
+      print(s) --]]
+
+    assert_rspamd_table_eq({actual = actual_result,
+                            expect = {"domain.com", "example.net", "example5.org"}})
+  end)
+  test("extract_specific_urls - from email image 2 limit, has images", function()
+    local actual = util.extract_specific_urls({
+      task = task,
+      limit = 2,
+      esld_limit = 1,
+      need_images = true,
+    })
+
+    local actual_result = prepare_actual_result(actual)
+
+    --[[
+      local s = logger.slog("case[%1] %2 =?= %3", i, expect, actual_result)
+      print(s) --]]
+
+    assert_rspamd_table_eq({actual = actual_result,
+                            expect = {"domain.com", "example.net"}})
+  end)
 end)
-
---[=========[ *******************  message  ******************* ]=========]
-msg = [[
-From: <>
-To: <nobody@example.com>
-Subject: test
-Content-Type: multipart/alternative;
-    boundary="_000_6be055295eab48a5af7ad4022f33e2d0_"
-
---_000_6be055295eab48a5af7ad4022f33e2d0_
-Content-Type: text/plain; charset="utf-8"
-Content-Transfer-Encoding: base64
-
-Hello world
-
-
---_000_6be055295eab48a5af7ad4022f33e2d0_
-Content-Type: text/html; charset="utf-8"
-
-<html><body>
-<a href="http://example.net">http://example.net</a>
-<a href="http://example1.net">http://example1.net</a>
-<a href="http://example2.net">http://example2.net</a>
-<a href="http://example3.net">http://example3.net</a>
-<a href="http://example4.net">http://example4.net</a>
-<a href="http://domain1.com">http://domain1.com</a>
-<a href="http://domain2.com">http://domain2.com</a>
-<a href="http://domain3.com">http://domain3.com</a>
-<a href="http://domain4.com">http://domain4.com</a>
-<a href="http://domain5.com">http://domain5.com</a>
-<a href="http://domain.com">http://example.net/</a>
-</html>
-]]

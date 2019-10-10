@@ -266,14 +266,15 @@ rspamadm_fill_lua_commands (lua_State *L, GPtrArray *dest)
 			lua_pushvalue (L, -1);
 			/* Reference table itself */
 			lua_cmd->command_data = GINT_TO_POINTER (luaL_ref (L, LUA_REGISTRYINDEX));
-			lua_cmd->flags |= RSPAMADM_FLAG_LUA;
+			lua_cmd->flags |= RSPAMADM_FLAG_LUA|RSPAMADM_FLAG_DYNAMIC;
 			lua_cmd->run = rspamadm_lua_command_run;
 			lua_cmd->help = rspamadm_lua_command_help;
-
 
 			g_ptr_array_add (dest, lua_cmd);
 		}
 
 		lua_settop (L, 0);
 	}
+
+	g_ptr_array_free (lua_paths, TRUE);
 }

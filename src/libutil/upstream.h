@@ -21,6 +21,7 @@ enum rspamd_upstream_rotation {
 
 enum rspamd_upstream_flag {
 	RSPAMD_UPSTREAM_FLAG_NORESOLVE = (1 << 0),
+	RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE = (1 << 1),
 };
 
 struct rspamd_config;

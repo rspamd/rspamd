@@ -127,7 +127,7 @@ local function savapi_check(task, content, digest, rule)
         end
 
         common.yield_result(task, rule, vname)
-        common.save_av_cache(task, digest, rule, vname)
+        common.save_cache(task, digest, rule, vname)
       end
       if conn then
         conn:close()
@@ -144,7 +144,7 @@ local function savapi_check(task, content, digest, rule)
         if rule['log_clean'] then
           rspamd_logger.infox(task, '%s: message or mime_part is clean', rule['type'])
         end
-        common.save_av_cache(task, digest, rule, 'OK')
+        common.save_cache(task, digest, rule, 'OK')
         conn:add_write(savapi_fin_cb, 'QUIT\n')
 
         -- Terminal response - infected
@@ -237,14 +237,6 @@ local function savapi_check(task, content, digest, rule)
       end
     end
 
-    if rule.dynamic_scan then
-      local pre_check, pre_check_msg = common.check_metric_results(task, rule)
-      if pre_check then
-        rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, pre_check_msg)
-        return true
-      end
-    end
-
     tcp.request({
       task = task,
       host = addr:to_string(),
@@ -255,13 +247,12 @@ local function savapi_check(task, content, digest, rule)
     })
   end
 
-  if common.need_av_check(task, content, rule) then
-    if common.check_av_cache(task, digest, rule, savapi_check_uncached) then
-      return
-    else
-      savapi_check_uncached()
-    end
+  if common.condition_check_and_continue(task, content, rule, digest, savapi_check_uncached) then
+    return
+  else
+    savapi_check_uncached()
   end
+
 end
 
 return {

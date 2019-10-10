@@ -28,173 +28,6 @@ local common = require "lua_scanners/common"
 
 local N = 'vadesecure'
 
-local function vade_check(task, content, digest, rule)
-  local function vade_url(addr)
-    local url
-    if rule.use_https then
-      url = string.format('https://%s:%d%s', tostring(addr),
-          rule.default_port, rule.url)
-    else
-      url = string.format('http://%s:%d%s', tostring(addr),
-          rule.default_port, rule.url)
-    end
-
-    return url
-  end
-
-  local upstream = rule.upstreams:get_upstream_round_robin()
-  local addr = upstream:get_addr()
-  local retransmits = rule.retransmits
-
-  local url = vade_url(addr)
-  local hdrs = {}
-
-  local helo = task:get_helo()
-  if helo then
-    hdrs['X-Helo'] = helo
-  end
-  local mail_from = task:get_from('smtp') or {}
-  if mail_from[1] and #mail_from[1].addr > 1 then
-    hdrs['X-Mailfrom'] = mail_from[1].addr
-  end
-
-  local rcpt_to = task:get_recipients('smtp')
-  if rcpt_to then
-    hdrs['X-Rcptto'] = {}
-    for _, r in ipairs(rcpt_to) do
-      table.insert(hdrs['X-Rcptto'], r.addr)
-    end
-  end
-
-  local fip = task:get_from_ip()
-  if fip and fip:is_valid() then
-    hdrs['X-Inet'] = tostring(fip)
-  end
-
-  local request_data = {
-    task = task,
-    url = url,
-    body = task:get_content(),
-    headers = hdrs,
-    timeout = rule.timeout,
-  }
-
-  local function vade_callback(http_err, code, body, headers)
-
-    local function vade_requery()
-      -- set current upstream to fail because an error occurred
-      upstream:fail()
-
-      -- retry with another upstream until retransmits exceeds
-      if retransmits > 0 then
-
-        retransmits = retransmits - 1
-
-        lua_util.debugm(rule.name, task,
-            '%s: Request Error: %s - retries left: %s',
-            rule.log_prefix, http_err, retransmits)
-
-        -- Select a different upstream!
-        upstream = rule.upstreams:get_upstream_round_robin()
-        addr = upstream:get_addr()
-        url = vade_url(addr)
-
-        lua_util.debugm(rule.name, task, '%s: retry IP: %s:%s',
-            rule.log_prefix, addr, addr:get_port())
-        request_data.url = url
-
-        http.request(request_data)
-      else
-        rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
-            'exceed', rule.log_prefix)
-        task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and '..
-            'retransmits exceed')
-      end
-    end
-
-    if http_err then
-      vade_requery()
-    else
-      -- Parse the response
-      if upstream then upstream:ok() end
-      if code ~= 200 then
-        rspamd_logger.errx(task, 'invalid HTTP code: %s, body: %s, headers: %s', code, body, headers)
-        task:insert_result(rule.symbol_fail, 1.0, 'Bad HTTP code: ' .. code)
-        return
-      end
-      local parser = ucl.parser()
-      local ret, err = parser:parse_string(body)
-      if not ret then
-        rspamd_logger.errx(task, 'vade: bad response body (raw): %s', body)
-        task:insert_result(rule.symbol_fail, 1.0, 'Parser error: ' .. err)
-        return
-      end
-      local obj = parser:get_object()
-      local verdict = obj.verdict
-      if not verdict then
-        rspamd_logger.errx(task, 'vade: bad response JSON (no verdict): %s', obj)
-        task:insert_result(rule.symbol_fail, 1.0, 'No verdict/unknown verdict')
-        return
-      end
-      local vparts = lua_util.rspamd_str_split(verdict, ":")
-      verdict = table.remove(vparts, 1) or verdict
-
-      local sym = rule.symbols[verdict]
-      if not sym then
-        sym = rule.symbols.other
-      end
-
-      if not sym.symbol then
-        -- Subcategory match
-        local lvl = 'low'
-        if vparts and vparts[1] then
-          lvl = vparts[1]
-        end
-
-        if sym[lvl] then
-          sym = sym[lvl]
-        else
-          sym = rule.symbols.other
-        end
-      end
-
-      local opts = {}
-      if obj.score then
-        table.insert(opts, 'score=' .. obj.score)
-      end
-      if obj.elapsed then
-        table.insert(opts, 'elapsed=' .. obj.elapsed)
-      end
-
-      if rule.log_spamcause and obj.spamcause then
-        rspamd_logger.infox(task, 'vadesecure verdict="%s", score=%s, spamcause="%s", message-id="%s"',
-            verdict, obj.score, obj.spamcause, task:get_message_id())
-      else
-        lua_util.debugm(rule.name, task, 'vadesecure returned verdict="%s", score=%s, spamcause="%s"',
-            verdict, obj.score, obj.spamcause)
-      end
-
-      if #vparts > 0 then
-        table.insert(opts, 'verdict=' .. verdict .. ';' .. table.concat(vparts, ':'))
-      end
-
-      task:insert_result(sym.symbol, 1.0, opts)
-    end
-  end
-
-  if rule.dynamic_scan then
-    local pre_check, pre_check_msg = common.check_metric_results(task, rule)
-    if pre_check then
-      rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, pre_check_msg)
-      return true
-    end
-  end
-
-  request_data.callback = vade_callback
-  http.request(request_data)
-end
-
-
 local function vade_config(opts)
 
   local vade_conf = {
@@ -316,6 +149,173 @@ local function vade_config(opts)
   rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
       vade_conf['servers'])
   return nil
+end
+
+local function vade_check(task, content, digest, rule)
+  local function vade_check_uncached()
+    local function vade_url(addr)
+      local url
+      if rule.use_https then
+        url = string.format('https://%s:%d%s', tostring(addr),
+            rule.default_port, rule.url)
+      else
+        url = string.format('http://%s:%d%s', tostring(addr),
+            rule.default_port, rule.url)
+      end
+
+      return url
+    end
+
+    local upstream = rule.upstreams:get_upstream_round_robin()
+    local addr = upstream:get_addr()
+    local retransmits = rule.retransmits
+
+    local url = vade_url(addr)
+    local hdrs = {}
+
+    local helo = task:get_helo()
+    if helo then
+      hdrs['X-Helo'] = helo
+    end
+    local mail_from = task:get_from('smtp') or {}
+    if mail_from[1] and #mail_from[1].addr > 1 then
+      hdrs['X-Mailfrom'] = mail_from[1].addr
+    end
+
+    local rcpt_to = task:get_recipients('smtp')
+    if rcpt_to then
+      hdrs['X-Rcptto'] = {}
+      for _, r in ipairs(rcpt_to) do
+        table.insert(hdrs['X-Rcptto'], r.addr)
+      end
+    end
+
+    local fip = task:get_from_ip()
+    if fip and fip:is_valid() then
+      hdrs['X-Inet'] = tostring(fip)
+    end
+
+    local request_data = {
+      task = task,
+      url = url,
+      body = task:get_content(),
+      headers = hdrs,
+      timeout = rule.timeout,
+    }
+
+    local function vade_callback(http_err, code, body, headers)
+
+      local function vade_requery()
+        -- set current upstream to fail because an error occurred
+        upstream:fail()
+
+        -- retry with another upstream until retransmits exceeds
+        if retransmits > 0 then
+
+          retransmits = retransmits - 1
+
+          lua_util.debugm(rule.name, task,
+              '%s: Request Error: %s - retries left: %s',
+              rule.log_prefix, http_err, retransmits)
+
+          -- Select a different upstream!
+          upstream = rule.upstreams:get_upstream_round_robin()
+          addr = upstream:get_addr()
+          url = vade_url(addr)
+
+          lua_util.debugm(rule.name, task, '%s: retry IP: %s:%s',
+              rule.log_prefix, addr, addr:get_port())
+          request_data.url = url
+
+          http.request(request_data)
+        else
+          rspamd_logger.errx(task, '%s: failed to scan, maximum retransmits '..
+              'exceed', rule.log_prefix)
+          task:insert_result(rule['symbol_fail'], 0.0, 'failed to scan and '..
+              'retransmits exceed')
+        end
+      end
+
+      if http_err then
+        vade_requery()
+      else
+        -- Parse the response
+        if upstream then upstream:ok() end
+        if code ~= 200 then
+          rspamd_logger.errx(task, 'invalid HTTP code: %s, body: %s, headers: %s', code, body, headers)
+          task:insert_result(rule.symbol_fail, 1.0, 'Bad HTTP code: ' .. code)
+          return
+        end
+        local parser = ucl.parser()
+        local ret, err = parser:parse_string(body)
+        if not ret then
+          rspamd_logger.errx(task, 'vade: bad response body (raw): %s', body)
+          task:insert_result(rule.symbol_fail, 1.0, 'Parser error: ' .. err)
+          return
+        end
+        local obj = parser:get_object()
+        local verdict = obj.verdict
+        if not verdict then
+          rspamd_logger.errx(task, 'vade: bad response JSON (no verdict): %s', obj)
+          task:insert_result(rule.symbol_fail, 1.0, 'No verdict/unknown verdict')
+          return
+        end
+        local vparts = lua_util.str_split(verdict, ":")
+        verdict = table.remove(vparts, 1) or verdict
+
+        local sym = rule.symbols[verdict]
+        if not sym then
+          sym = rule.symbols.other
+        end
+
+        if not sym.symbol then
+          -- Subcategory match
+          local lvl = 'low'
+          if vparts and vparts[1] then
+            lvl = vparts[1]
+          end
+
+          if sym[lvl] then
+            sym = sym[lvl]
+          else
+            sym = rule.symbols.other
+          end
+        end
+
+        local opts = {}
+        if obj.score then
+          table.insert(opts, 'score=' .. obj.score)
+        end
+        if obj.elapsed then
+          table.insert(opts, 'elapsed=' .. obj.elapsed)
+        end
+
+        if rule.log_spamcause and obj.spamcause then
+          rspamd_logger.infox(task, 'vadesecure verdict="%s", score=%s, spamcause="%s", message-id="%s"',
+              verdict, obj.score, obj.spamcause, task:get_message_id())
+        else
+          lua_util.debugm(rule.name, task, 'vadesecure returned verdict="%s", score=%s, spamcause="%s"',
+              verdict, obj.score, obj.spamcause)
+        end
+
+        if #vparts > 0 then
+          table.insert(opts, 'verdict=' .. verdict .. ';' .. table.concat(vparts, ':'))
+        end
+
+        task:insert_result(sym.symbol, 1.0, opts)
+      end
+    end
+
+    request_data.callback = vade_callback
+    http.request(request_data)
+  end
+
+  if common.condition_check_and_continue(task, content, rule, digest, vade_check_uncached) then
+    return
+  else
+    vade_check_uncached()
+  end
+
 end
 
 return {

@@ -128,9 +128,10 @@ local function whitelist_cb(symbol, rule, task)
 
   local spf_violated = false
   local dmarc_violated = false
+  local dkim_violated = false
   local ip_addr = task:get_ip()
 
-  if rule['valid_spf'] then
+  if rule.valid_spf then
     if not task:has_symbol(options['spf_allow_symbol']) then
       -- Not whitelisted
       spf_violated = true
@@ -157,7 +158,7 @@ local function whitelist_cb(symbol, rule, task)
     end
   end
 
-  if rule['valid_dkim'] then
+  if rule.valid_dkim then
     if task:has_symbol('DKIM_TRACE') then
       local sym = task:get_symbol('DKIM_TRACE')
       local dkim_opts = sym[1]['options']
@@ -178,8 +179,8 @@ local function whitelist_cb(symbol, rule, task)
     end
   end
 
-  if rule['valid_dmarc'] then
-    if not task:has_symbol(options['dmarc_allow_symbol']) then
+  if rule.valid_dmarc then
+    if not task:has_symbol(options.dmarc_allow_symbol) then
       dmarc_violated = true
     end
 
@@ -203,11 +204,14 @@ local function whitelist_cb(symbol, rule, task)
   local opts = {}
 
   if rule.valid_dkim then
+    dkim_violated = true
+
     for dom,val in pairs(domains.dkim_success or E) do
       if val[1] == 'wl' or val[1] == 'both' then
         -- We have valid and whitelisted signature
         table.insert(opts, dom .. ':d:+')
         found_wl = true
+        dkim_violated = false
 
         if not found_bl then
           final_mult = val[2]
@@ -222,6 +226,9 @@ local function whitelist_cb(symbol, rule, task)
         table.insert(opts, dom .. ':d:-')
         found_bl = true
         final_mult = val[2]
+      else
+        -- Even in the case of whitelisting we need to indicate dkim failure
+        dkim_violated = true
       end
     end
   end
@@ -249,7 +256,8 @@ local function whitelist_cb(symbol, rule, task)
     found_wl = false
 
     for dom,val in pairs(domains.dmarc or E) do
-      check_domain_violation('D', dom, val, dmarc_violated)
+      check_domain_violation('D', dom, val,
+          (dmarc_violated or dkim_violated))
     end
   end
 
@@ -257,7 +265,8 @@ local function whitelist_cb(symbol, rule, task)
     found_wl = false
 
     for dom,val in pairs(domains.spf or E) do
-      check_domain_violation('s', dom, val, spf_violated)
+      check_domain_violation('s', dom, val,
+          (spf_violated or dkim_violated))
     end
   end
 

@@ -28,6 +28,62 @@ local common = require "lua_scanners/common"
 
 local N = 'spamassassin'
 
+local function spamassassin_config(opts)
+
+  local spamassassin_conf = {
+    N = N,
+    scan_mime_parts = false,
+    scan_text_mime = false,
+    scan_image_mime = false,
+    default_port = 783,
+    timeout = 15.0,
+    log_clean = false,
+    retransmits = 2,
+    cache_expire = 3600, -- expire redis in one hour
+    symbol = "SPAMD",
+    message = '${SCANNER}: Spamassassin bulk message found: "${VIRUS}"',
+    detection_category = "spam",
+    default_score = 1,
+    action = false,
+    extended = false,
+    symbol_type = 'postfilter',
+    dynamic_scan = true,
+  }
+
+  spamassassin_conf = lua_util.override_defaults(spamassassin_conf, opts)
+
+  if not spamassassin_conf.prefix then
+    spamassassin_conf.prefix = 'rs_' .. spamassassin_conf.name .. '_'
+  end
+
+  if not spamassassin_conf.log_prefix then
+    if spamassassin_conf.name:lower() == spamassassin_conf.type:lower() then
+      spamassassin_conf.log_prefix = spamassassin_conf.name
+    else
+      spamassassin_conf.log_prefix = spamassassin_conf.name .. ' (' .. spamassassin_conf.type .. ')'
+    end
+  end
+
+  if not spamassassin_conf.servers then
+    rspamd_logger.errx(rspamd_config, 'no servers defined')
+
+    return nil
+  end
+
+  spamassassin_conf.upstreams = upstream_list.create(rspamd_config,
+    spamassassin_conf.servers,
+    spamassassin_conf.default_port)
+
+  if spamassassin_conf.upstreams then
+    lua_util.add_debug_alias('external_services', spamassassin_conf.N)
+    return spamassassin_conf
+  end
+
+  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
+    spamassassin_conf.servers)
+  return nil
+end
+
 local function spamassassin_check(task, content, digest, rule)
   local function spamassassin_check_uncached ()
     local upstream = rule.upstreams:get_upstream_round_robin()
@@ -121,26 +177,18 @@ local function spamassassin_check(task, content, digest, rule)
 
           if rule.extended == false then
             common.yield_result(task, rule, symbols, spam_score)
-            common.save_av_cache(task, digest, rule, symbols, spam_score)
+            common.save_cache(task, digest, rule, symbols, spam_score)
           else
             local symbols_table = {}
-            symbols_table = rspamd_str_split(symbols, ",")
+            symbols_table = lua_util.str_split(symbols, ",")
             lua_util.debugm(rule.N, task, '%s: returned symbols as table: %s', rule.log_prefix, symbols_table)
 
             common.yield_result(task, rule, symbols_table, spam_score)
-            common.save_av_cache(task, digest, rule, symbols_table, spam_score)
+            common.save_cache(task, digest, rule, symbols_table, spam_score)
           end
         else
           common.log_clean(task, rule, 'no spam detected - spam score: ' .. spam_score .. ', symbols: ' .. symbols)
         end
-      end
-    end
-
-    if rule.dynamic_scan then
-      local pre_check, pre_check_msg = common.check_metric_results(task, rule)
-      if pre_check then
-        rspamd_logger.infox(task, '%s: aborting: %s', rule.log_prefix, pre_check_msg)
-        return true
       end
     end
 
@@ -153,69 +201,13 @@ local function spamassassin_check(task, content, digest, rule)
       callback = spamassassin_callback,
     })
   end
-  if common.need_av_check(task, content, rule) then
-    if common.check_av_cache(task, digest, rule, spamassassin_check_uncached) then
-      return
-    else
-      spamassassin_check_uncached()
-    end
-  end
-end
 
-local function spamassassin_config(opts)
-
-  local spamassassin_conf = {
-    N = N,
-    scan_mime_parts = false,
-    scan_text_mime = false,
-    scan_image_mime = false,
-    default_port = 783,
-    timeout = 15.0,
-    log_clean = false,
-    retransmits = 2,
-    cache_expire = 3600, -- expire redis in one hour
-    symbol = "SPAMD",
-    message = '${SCANNER}: Spamassassin bulk message found: "${VIRUS}"',
-    detection_category = "spam",
-    default_score = 1,
-    action = false,
-    extended = false,
-    symbol_type = 'postfilter',
-    dynamic_scan = true,
-  }
-
-  spamassassin_conf = lua_util.override_defaults(spamassassin_conf, opts)
-
-  if not spamassassin_conf.prefix then
-    spamassassin_conf.prefix = 'rs_' .. spamassassin_conf.name .. '_'
+  if common.condition_check_and_continue(task, content, rule, digest, spamassassin_check_uncached) then
+    return
+  else
+    spamassassin_check_uncached()
   end
 
-  if not spamassassin_conf.log_prefix then
-    if spamassassin_conf.name:lower() == spamassassin_conf.type:lower() then
-      spamassassin_conf.log_prefix = spamassassin_conf.name
-    else
-      spamassassin_conf.log_prefix = spamassassin_conf.name .. ' (' .. spamassassin_conf.type .. ')'
-    end
-  end
-
-  if not spamassassin_conf.servers then
-    rspamd_logger.errx(rspamd_config, 'no servers defined')
-
-    return nil
-  end
-
-  spamassassin_conf.upstreams = upstream_list.create(rspamd_config,
-    spamassassin_conf.servers,
-    spamassassin_conf.default_port)
-
-  if spamassassin_conf.upstreams then
-    lua_util.add_debug_alias('external_services', spamassassin_conf.N)
-    return spamassassin_conf
-  end
-
-  rspamd_logger.errx(rspamd_config, 'cannot parse servers %s',
-    spamassassin_conf.servers)
-  return nil
 end
 
 return {

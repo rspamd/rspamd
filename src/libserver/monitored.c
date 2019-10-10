@@ -172,13 +172,11 @@ static void
 rspamd_monitored_periodic (EV_P_ ev_timer *w, int revents)
 {
 	struct rspamd_monitored *m = (struct rspamd_monitored *)w->data;
-	struct timeval tv;
 	gdouble jittered;
 	gboolean ret = FALSE;
 
 	jittered = rspamd_time_jitter (m->ctx->monitoring_interval * m->monitoring_mult,
 			0.0);
-	double_to_tv (jittered, &tv);
 
 	if (m->proc.monitored_update) {
 		ret = m->proc.monitored_update (m, m->ctx, m->proc.ud);
@@ -214,12 +212,13 @@ rspamd_monitored_dns_random (struct rspamd_monitored *m,
 	}
 
 	for (guint i = 0; i < len; i ++) {
-		guint idx = rspamd_random_uint64_fast () % sizeof (dns_chars);
+		guint idx = rspamd_random_uint64_fast () % (sizeof (dns_chars) - 1);
 		random_prefix[i] = dns_chars[idx];
 	}
 
 	conf->request->len = 0;
-	rspamd_printf_gstring (conf->request, "%*.s.%s", len, random_prefix, m->url);
+	rspamd_printf_gstring (conf->request, "%*.s.%s", len, random_prefix,
+			m->url);
 }
 
 static void *
@@ -414,7 +413,8 @@ rspamd_monitored_dns_mon (struct rspamd_monitored *m,
 	if (!rdns_make_request_full (ctx->resolver, rspamd_monitored_dns_cb,
 			conf, ctx->cfg->dns_timeout, ctx->cfg->dns_retransmits,
 			1, conf->request->str, conf->rt)) {
-		msg_notice_mon ("cannot make request to resolve %s", conf->request->str);
+		msg_notice_mon ("cannot make request to resolve %s (%s monitored url)",
+				conf->request->str, conf->m->url);
 
 		m->cur_errors ++;
 		rspamd_monitored_propagate_error (m, "failed to make DNS request");
@@ -651,7 +651,7 @@ rspamd_monitored_start (struct rspamd_monitored *m)
 	jittered = rspamd_time_jitter (m->ctx->monitoring_interval * m->monitoring_mult,
 			0.0);
 
-	if (ev_is_active (&m->periodic)) {
+	if (ev_can_stop (&m->periodic)) {
 		ev_timer_stop (m->ctx->event_loop, &m->periodic);
 	}
 

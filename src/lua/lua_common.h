@@ -40,6 +40,28 @@ luaL_register (lua_State *L, const gchar *name, const struct luaL_reg *methods)
 }
 #endif
 
+#if defined(LUA_VERSION_NUM) && LUA_VERSION_NUM == 501
+static inline int lua_absindex (lua_State *L, int i) {
+	if (i < 0 && i > LUA_REGISTRYINDEX)
+		i += lua_gettop(L) + 1;
+	return i;
+}
+static inline int lua_rawgetp (lua_State *L, int i, const void *p) {
+	int abs_i = lua_absindex(L, i);
+	lua_pushlightuserdata(L, (void*)p);
+	lua_rawget(L, abs_i);
+	return lua_type(L, -1);
+}
+
+static inline void lua_rawsetp (lua_State *L, int i, const void *p) {
+	int abs_i = lua_absindex(L, i);
+	luaL_checkstack(L, 1, "not enough stack slots");
+	lua_pushlightuserdata(L, (void*)p);
+	lua_insert(L, -2);
+	lua_rawset(L, abs_i);
+}
+#endif
+
 /* Interface definitions */
 #define LUA_FUNCTION_DEF(class, name) static int lua_ ## class ## _ ## name ( \
 		lua_State * L)
@@ -133,15 +155,6 @@ void rspamd_lua_new_class (lua_State *L,
 						   const struct luaL_reg *methods);
 
 /**
- * Create and register new class with static methods
- */
-void rspamd_lua_new_class_full (lua_State *L,
-								const gchar *classname,
-								const gchar *static_name,
-								const struct luaL_reg *methods,
-								const struct luaL_reg *func);
-
-/**
  * Set class name for object at @param objidx position
  */
 void rspamd_lua_setclass (lua_State *L, const gchar *classname, gint objidx);
@@ -216,6 +229,9 @@ void rspamd_lua_task_push (lua_State *L, struct rspamd_task *task);
 struct rspamd_lua_ip *lua_check_ip (lua_State *L, gint pos);
 
 struct rspamd_lua_text *lua_check_text (lua_State *L, gint pos);
+/* Creates and *pushes* new rspamd text, data is copied if  RSPAMD_TEXT_FLAG_OWN is in flags*/
+struct rspamd_lua_text *lua_new_text (lua_State *L, const gchar *start,
+		gsize len, guint flags);
 
 struct rspamd_lua_regexp *lua_check_regexp (lua_State *L, gint pos);
 

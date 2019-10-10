@@ -235,27 +235,27 @@ local function apply_addr_filter(task, filter, input, rule)
   if filter == 'email:addr' or filter == 'email' then
     local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
-      return addr[1]['addr']
+      return fun.totable(fun.map(function(a) return a.addr end, addr))
     end
   elseif filter == 'email:user' then
     local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
-      return addr[1]['user']
+      return fun.totable(fun.map(function(a) return a.user end, addr))
     end
   elseif filter == 'email:domain' then
     local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
-      return addr[1]['domain']
+      return fun.totable(fun.map(function(a) return a.domain end, addr))
     end
   elseif filter == 'email:domain:tld' then
     local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
-      return util.get_tld(addr[1]['domain'])
+      return fun.totable(fun.map(function(a) return util.get_tld(a.domain) end, addr))
     end
   elseif filter == 'email:name' then
     local addr = util.parse_mail_address(input, task:get_mempool())
     if addr and addr[1] then
-      return addr[1]['name']
+      return fun.totable(fun.map(function(a) return a.name end, addr))
     end
   elseif filter == 'ip_addr' then
     local ip_addr = rspamd_ip.from_string(input)
@@ -637,7 +637,11 @@ local function multimap_callback(task, rule)
       end
     end
 
-    match_element(r, value, rule_callback)
+    if type(value) == 'table' then
+      fun.each(function(elt) match_element(r, elt, rule_callback) end, value)
+    else
+      match_element(r, value, rule_callback)
+    end
   end
 
   -- Match list of values according to the field
@@ -859,7 +863,12 @@ local function multimap_callback(task, rule)
     end,
     filename = function()
       local parts = task:get_parts()
-      for _,p in ipairs(parts) do
+
+      local function filter_parts(p)
+        return p:is_attachment() or (not p:is_text()) and (not p:is_multipart())
+      end
+
+      for _,p in fun.iter(fun.filter(filter_parts, parts)) do
         if p:is_archive() and not rule['skip_archives'] then
           local fnames = p:get_archive():get_files()
 
@@ -873,21 +882,14 @@ local function multimap_callback(task, rule)
           match_filename(rule, fn)
         end
         -- Also deal with detected content type
-        local dtype,dsubtype = p:get_detected_type()
-        if not rule.skip_detected and (dtype and dsubtype) then
-          local detected_ct = string.format('%s/%s', dtype, dsubtype)
+        if not rule.skip_detected then
+          local ext = p:get_detected_ext()
 
-          if detected_ct then
-            local lua_mime = require "lua_mime"
-
-            local ext = lua_mime.reversed_extensions_map[detected_ct]
-
-            if ext then
-              local fake_fname = string.format('detected.%s', ext)
-              lua_util.debugm(N, task, 'detected filename %s (%s content-type)',
-                  fake_fname, detected_ct)
-              match_filename(rule, fake_fname)
-            end
+          if ext then
+            local fake_fname = string.format('detected.%s', ext)
+            lua_util.debugm(N, task, 'detected filename %s',
+                fake_fname)
+            match_filename(rule, fake_fname)
           end
         end
       end

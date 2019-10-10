@@ -293,6 +293,7 @@ e.g. `get_tld`]],
       esld_limit = (ts.number + ts.string / tonumber):is_optional(),
       prefix = ts.string:is_optional(),
       need_emails = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
+      need_images = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
       ignore_redirected = (ts.boolean + ts.string / lua_util.toboolean):is_optional(),
     }}
   },

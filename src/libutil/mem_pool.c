@@ -142,23 +142,34 @@ rspamd_mempool_entry_new (const gchar *loc)
 	return entry;
 }
 
+RSPAMD_CONSTRUCTOR (rspamd_mempool_entries_ctor)
+{
+	mempool_entries = kh_init (mempool_entry);
+}
+
+RSPAMD_DESTRUCTOR (rspamd_mempool_entries_dtor)
+{
+	struct rspamd_mempool_entry_point *elt;
+
+	kh_foreach_value (mempool_entries, elt, {
+		g_free (elt);
+	});
+
+	kh_destroy (mempool_entry, mempool_entries);
+}
+
 static inline struct rspamd_mempool_entry_point *
 rspamd_mempool_get_entry (const gchar *loc)
 {
 	khiter_t k;
 	struct rspamd_mempool_entry_point *elt;
 
-	if (mempool_entries == NULL) {
-		mempool_entries = kh_init (mempool_entry);
-	}
-	else {
-		k = kh_get (mempool_entry, mempool_entries, loc);
+	k = kh_get (mempool_entry, mempool_entries, loc);
 
-		if (k != kh_end (mempool_entries)) {
-			elt = kh_value (mempool_entries, k);
+	if (k != kh_end (mempool_entries)) {
+		elt = kh_value (mempool_entries, k);
 
-			return elt;
-		}
+		return elt;
 	}
 
 	return rspamd_mempool_entry_new (loc);

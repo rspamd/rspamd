@@ -50,14 +50,13 @@ rspamd_images_process (struct rspamd_task *task)
 {
 	guint i;
 	struct rspamd_mime_part *part;
-	rspamd_ftok_t srch;
-
-	RSPAMD_FTOK_ASSIGN (&srch, "image");
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		if (!(part->flags & (RSPAMD_MIME_PART_TEXT|RSPAMD_MIME_PART_ARCHIVE))) {
-			if (rspamd_ftok_cmp (&part->ct->type, &srch) == 0 &&
+			if (part->detected_type &&
+				strcmp (part->detected_type, "image") == 0 &&
 				part->parsed_data.len > 0) {
+
 				process_image (task, part);
 			}
 		}
@@ -596,13 +595,7 @@ rspamd_maybe_process_image (rspamd_mempool_t *pool,
 static void
 process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 {
-	struct rspamd_mime_header *rh;
-	struct rspamd_mime_text_part *tp;
-	struct html_image *himg;
-	const gchar *cid, *html_cid;
-	guint cid_len, i, j;
 	struct rspamd_image *img;
-
 
 	img = rspamd_maybe_process_image (task->task_pool, &part->parsed_data);
 
@@ -619,63 +612,6 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 
 		part->flags |= RSPAMD_MIME_PART_IMAGE;
 		part->specific.img = img;
-
-		/* Check Content-Id */
-		rh = rspamd_message_get_header_from_hash (part->raw_headers,
-				"Content-Id");
-
-		if (rh) {
-			cid = rh->decoded;
-
-			if (*cid == '<') {
-				cid ++;
-			}
-
-			cid_len = strlen (cid);
-
-			if (cid_len > 0) {
-				if (cid[cid_len - 1] == '>') {
-					cid_len --;
-				}
-
-
-				PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, tp) {
-					if (IS_PART_HTML (tp) && tp->html != NULL &&
-							tp->html->images != NULL) {
-						for (j = 0; j < tp->html->images->len; j ++) {
-							himg = g_ptr_array_index (tp->html->images, j);
-
-							if ((himg->flags & RSPAMD_HTML_FLAG_IMAGE_EMBEDDED) &&
-									himg->src) {
-								html_cid = himg->src;
-
-								if (strncmp (html_cid, "cid:", 4) == 0) {
-									html_cid += 4;
-								}
-
-								if (strlen (html_cid) == cid_len &&
-										memcmp (html_cid, cid, cid_len) == 0) {
-									img->html_image = himg;
-									himg->embedded_image = img;
-
-									msg_debug_images ("found linked image by cid: <%s>",
-											cid);
-
-									if (himg->height == 0) {
-										himg->height = img->height;
-									}
-									if (himg->width == 0) {
-										himg->width = img->width;
-									}
-								}
-							}
-						}
-					}
-				}
-
-			}
-
-		}
 	}
 }
 
@@ -700,4 +636,87 @@ rspamd_image_type_str (enum rspamd_image_type type)
 	}
 
 	return "unknown";
+}
+
+static void
+rspamd_image_process_part (struct rspamd_task *task, struct rspamd_mime_part *part)
+{
+	struct rspamd_mime_header *rh;
+	struct rspamd_mime_text_part *tp;
+	struct html_image *himg;
+	const gchar *cid, *html_cid;
+	guint cid_len, i, j;
+	struct rspamd_image *img;
+
+	img = (struct rspamd_image *)part->specific.img;
+
+	if (img) {
+		/* Check Content-Id */
+		rh = rspamd_message_get_header_from_hash (part->raw_headers,
+				"Content-Id");
+
+		if (rh) {
+			cid = rh->decoded;
+
+			if (*cid == '<') {
+				cid ++;
+			}
+
+			cid_len = strlen (cid);
+
+			if (cid_len > 0) {
+				if (cid[cid_len - 1] == '>') {
+					cid_len --;
+				}
+
+				PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, tp) {
+					if (IS_PART_HTML (tp) && tp->html != NULL &&
+						tp->html->images != NULL) {
+						for (j = 0; j < tp->html->images->len; j ++) {
+							himg = g_ptr_array_index (tp->html->images, j);
+
+							if ((himg->flags & RSPAMD_HTML_FLAG_IMAGE_EMBEDDED) &&
+								himg->src) {
+								html_cid = himg->src;
+
+								if (strncmp (html_cid, "cid:", 4) == 0) {
+									html_cid += 4;
+								}
+
+								if (strlen (html_cid) == cid_len &&
+									memcmp (html_cid, cid, cid_len) == 0) {
+									img->html_image = himg;
+									himg->embedded_image = img;
+
+									msg_debug_images ("found linked image by cid: <%s>",
+											cid);
+
+									if (himg->height == 0) {
+										himg->height = img->height;
+									}
+
+									if (himg->width == 0) {
+										himg->width = img->width;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+void
+rspamd_images_link (struct rspamd_task *task)
+{
+	struct rspamd_mime_part *part;
+	guint i;
+
+	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
+		if (part->flags & RSPAMD_MIME_PART_IMAGE) {
+			rspamd_image_process_part (task, part);
+		}
+	}
 }

@@ -60,6 +60,7 @@ OPTION(ENABLE_FULL_DEBUG   "Build rspamd with all possible debug [default: OFF]"
 OPTION(ENABLE_UTILS        "Build rspamd internal utils [default: OFF]" OFF)
 OPTION(ENABLE_LIBUNWIND    "Use libunwind to print crash traces [default: OFF]" OFF)
 OPTION(ENABLE_LUA_TRACE    "Trace all Lua C API invocations [default: OFF]" OFF)
+OPTION(ENABLE_LUA_REPL     "Enables Lua repl (requires C++11 compiler) [default: ON]" ON)
 
 INCLUDE(FindArch.cmake)
 TARGET_ARCHITECTURE(ARCH)
@@ -478,7 +479,7 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/"
 		"${CMAKE_SOURCE_DIR}/src/libstat"
 		"${CMAKE_SOURCE_DIR}/src/libcryptobox"
 		"${CMAKE_SOURCE_DIR}/contrib/libucl"
-		"${CMAKE_SOURCE_DIR}/contrib/linenoise"
+		"${CMAKE_SOURCE_DIR}/contrib/replxx/include"
 		"${CMAKE_SOURCE_DIR}/contrib/uthash"
 		"${CMAKE_SOURCE_DIR}/contrib/http-parser"
 		"${CMAKE_SOURCE_DIR}/contrib/fpconv"
@@ -637,8 +638,6 @@ ProcessPackage(LIBCRYPT LIBRARY crypto INCLUDE openssl/evp.h
 	ROOT ${OPENSSL_ROOT_DIR} MODULES openssl libcrypt)
 ProcessPackage(LIBSSL LIBRARY ssl INCLUDE openssl/ssl.h
 	ROOT ${OPENSSL_ROOT_DIR} MODULES openssl libssl)
-ProcessPackage(MAGIC LIBRARY magic INCLUDE magic.h INCLUDE_SUFFIXES include/libmagic
-	ROOT ${LIBMAGIC_ROOT_DIR} MODULES magic)
 ProcessPackage(LIBZ LIBRARY z INCLUDE zlib.h INCLUDE_SUFFIXES include/zlib
 		ROOT ${LIBZ_ROOT_DIR} MODULES z)
 ProcessPackage(SODIUM LIBRARY sodium INCLUDE sodium.h
@@ -1175,13 +1174,18 @@ ADD_SUBDIRECTORY(contrib/libucl)
 ADD_SUBDIRECTORY(contrib/librdns)
 ADD_SUBDIRECTORY(contrib/aho-corasick)
 ADD_SUBDIRECTORY(contrib/lua-lpeg)
-ADD_SUBDIRECTORY(contrib/linenoise)
 ADD_SUBDIRECTORY(contrib/t1ha)
 ADD_SUBDIRECTORY(contrib/libev)
 ADD_SUBDIRECTORY(contrib/kann)
 
 IF (NOT WITH_LUAJIT)
 	ADD_SUBDIRECTORY(contrib/lua-bit)
+ENDIF()
+
+IF (ENABLE_LUA_REPL MATCHES "ON")
+	ADD_SUBDIRECTORY(contrib/replxx)
+	SET(WITH_LUA_REPL 1)
+	LIST(APPEND RSPAMD_REQUIRED_LIBRARIES rspamd-replxx)
 ENDIF()
 
 IF (ENABLE_SNOWBALL MATCHES "ON")

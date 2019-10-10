@@ -97,28 +97,50 @@ rspamd_lua_post_load_config (struct rspamd_config *cfg)
 	lua_State *L = cfg->lua_state;
 	const gchar *name;
 	ucl_object_t *obj;
-	gsize keylen;
+	gsize keylen, i;
 
 	/* First check all module options that may be overridden in 'config' global */
 	lua_getglobal (L, "config");
 
 	if (lua_istable (L, -1)) {
-		/* Iterate */
-		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
-			/* 'key' is at index -2 and 'value' is at index -1 */
-			/* Key must be a string and value must be a table */
-			name = luaL_checklstring (L, -2, &keylen);
+		/* Iterate to get all keys */
+		GPtrArray *names = g_ptr_array_new_full (rspamd_lua_table_size (L, -1),
+				g_free);
+
+		for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 2)) {
+			gchar *tmp;
+			lua_pushvalue (L, -2);
+			name = luaL_checklstring (L, -1, &keylen);
+
+			if (name && lua_istable (L, -2)) {
+				tmp = g_malloc (keylen + 1);
+				rspamd_strlcpy (tmp, name, keylen + 1);
+				g_ptr_array_add (names, tmp);
+			}
+
 			if (name != NULL && lua_istable (L, -1)) {
+
+			}
+		}
+
+		PTR_ARRAY_FOREACH (names, i, name) {
+			lua_getfield (L, -1, name);
+
+			if (lua_istable (L, -1)) {
 				obj = ucl_object_lua_import (L, lua_gettop (L));
+
 				if (obj != NULL) {
+					ucl_object_sort_keys (obj, UCL_SORT_KEYS_DEFAULT);
 					ucl_object_insert_key_merged (cfg->rcl_obj,
-						obj,
-						name,
-						keylen,
-						true);
+							obj,
+							name,
+							strlen (name),
+							true);
 				}
 			}
 		}
+
+		g_ptr_array_free (names, TRUE);
 	}
 
 	/* Check metrics settings */

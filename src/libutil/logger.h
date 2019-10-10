@@ -169,16 +169,6 @@ void rspamd_log_debug (rspamd_logger_t *logger);
 void rspamd_log_nodebug (rspamd_logger_t *logger);
 
 /**
- * Turn off locking on logger (useful to avoid races)
- */
-void rspamd_log_nolock (rspamd_logger_t *logger);
-
-/**
- * Turn on locking to avoid log output mix
- */
-void rspamd_log_lock (rspamd_logger_t *logger);
-
-/**
  * Return array of counters (4 numbers):
  * 0 - errors
  * 1 - warnings

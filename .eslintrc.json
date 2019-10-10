@@ -8,6 +8,7 @@
     },
     "rules": {
         "array-bracket-newline": ["error", "consistent"],
+        "array-element-newline": "off",
         "brace-style": ["error", "1tbs", { "allowSingleLine": true }],
         "camelcase": "off",
         "capitalized-comments": "off",
@@ -23,6 +24,7 @@
         "key-spacing": ["error", {
             "singleLine": { "afterColon": false }
         }],
+        "line-comment-position": "off",
         "max-params": ["warn", 6],
         "max-statements": ["warn", 44],
         "max-statements-per-line": ["error", { "max": 2 }],
@@ -32,6 +34,7 @@
         "no-continue": "off",
         "no-extra-parens": ["error", "functions"],
         "no-implicit-globals": "off",
+        "no-inline-comments": "off",
         "no-magic-numbers": "off",
         "no-negated-condition": "off",
         "no-plusplus": "off",
@@ -58,14 +61,11 @@
 
 
         // Temporarily disabled rules
-        "array-element-newline": "off",
         "func-style": "off",
         "function-paren-newline": "off",
-        "line-comment-position": "off",
         "max-len": "off",
         "max-lines": "off",
         "max-lines-per-function": "off",
-        "no-inline-comments": "off",
         "no-invalid-this": "off",
         "sort-keys": "off",
         "sort-vars": "off"

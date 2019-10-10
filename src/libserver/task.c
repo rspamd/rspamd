@@ -66,8 +66,20 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 				 struct ev_loop *event_loop)
 {
 	struct rspamd_task *new_task;
+	rspamd_mempool_t *task_pool;
+	guint flags = 0;
 
-	new_task = g_malloc0 (sizeof (struct rspamd_task));
+	if (pool == NULL) {
+		task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "task");
+		flags |= RSPAMD_TASK_FLAG_OWN_POOL;
+	}
+	else {
+		task_pool = pool;
+	}
+
+	new_task = rspamd_mempool_alloc0 (task_pool, sizeof (struct rspamd_task));
+	new_task->task_pool = task_pool;
+	new_task->flags = flags;
 	new_task->worker = worker;
 	new_task->lang_det = lang_det;
 
@@ -92,15 +104,6 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 	new_task->event_loop = event_loop;
 	new_task->task_timestamp = ev_time ();
 	new_task->time_real_finish = NAN;
-
-	if (pool == NULL) {
-		new_task->task_pool =
-				rspamd_mempool_new (rspamd_mempool_suggest_size (), "task");
-		new_task->flags |= RSPAMD_TASK_FLAG_OWN_POOL;
-	}
-	else {
-		new_task->task_pool = pool;
-	}
 
 	new_task->request_headers = kh_init (rspamd_req_headers_hash);
 	new_task->sock = -1;
@@ -293,8 +296,6 @@ rspamd_task_free (struct rspamd_task *task)
 		if (task->flags & RSPAMD_TASK_FLAG_OWN_POOL) {
 			rspamd_mempool_delete (task->task_pool);
 		}
-
-		g_free (task);
 	}
 }
 
@@ -1035,6 +1036,16 @@ rspamd_task_compare_log_sym (gconstpointer a, gconstpointer b)
 	return (w2 - w1) * 1000.0;
 }
 
+static gint
+rspamd_task_compare_log_group (gconstpointer a, gconstpointer b)
+{
+	const struct rspamd_symbols_group *s1 = *(const struct rspamd_symbols_group **)a,
+			*s2 = *(const struct rspamd_symbols_group **)b;
+
+	return strcmp (s1->name, s2->name);
+}
+
+
 static rspamd_ftok_t
 rspamd_task_log_metric_res (struct rspamd_task *task,
 		struct rspamd_log_format *lf)
@@ -1047,7 +1058,10 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 	struct rspamd_symbol_result *sym;
 	GPtrArray *sorted_symbols;
 	struct rspamd_action *act;
+	struct rspamd_symbols_group *gr;
+	gdouble gr_score;
 	guint i, j;
+	khiter_t k;
 
 	mres = task->result;
 	act = rspamd_check_action_metric (task);
@@ -1132,6 +1146,51 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 
 			rspamd_mempool_add_destructor (task->task_pool,
 					(rspamd_mempool_destruct_t)rspamd_fstring_free,
+					symbuf);
+			res.begin = symbuf->str;
+			res.len = symbuf->len;
+			break;
+
+		case RSPAMD_LOG_GROUPS:
+		case RSPAMD_LOG_PUBLIC_GROUPS:
+
+			symbuf = rspamd_fstring_sized_new (128);
+			sorted_symbols = g_ptr_array_sized_new (kh_size (mres->sym_groups));
+
+			kh_foreach (mres->sym_groups, gr, gr_score,{
+				if (!(gr->flags & RSPAMD_SYMBOL_GROUP_PUBLIC)) {
+					if (lf->type == RSPAMD_LOG_PUBLIC_GROUPS) {
+						continue;
+					}
+				}
+
+				g_ptr_array_add (sorted_symbols, gr);
+			});
+
+			g_ptr_array_sort (sorted_symbols, rspamd_task_compare_log_group);
+
+			for (i = 0; i < sorted_symbols->len; i++) {
+				gr = g_ptr_array_index (sorted_symbols, i);
+
+				if (first) {
+					rspamd_printf_fstring (&symbuf, "%s", gr->name);
+				}
+				else {
+					rspamd_printf_fstring (&symbuf, ",%s", gr->name);
+				}
+
+				k = kh_get (rspamd_symbols_group_hash, mres->sym_groups, gr);
+
+				rspamd_printf_fstring (&symbuf, "(%.2f)",
+						kh_value (mres->sym_groups, k));
+
+				first = FALSE;
+			}
+
+			g_ptr_array_free (sorted_symbols, TRUE);
+
+			rspamd_mempool_add_destructor (task->task_pool,
+					(rspamd_mempool_destruct_t) rspamd_fstring_free,
 					symbuf);
 			res.begin = symbuf->str;
 			res.len = symbuf->len;

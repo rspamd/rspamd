@@ -63,6 +63,10 @@
 
 #include "contrib/libev/ev.h"
 
+/* Forward declaration */
+static void rspamd_worker_heartbeat_start (struct rspamd_worker *,
+		struct ev_loop *);
+
 static void rspamd_worker_ignore_signal (struct rspamd_worker_signal_handler *);
 /**
  * Return worker's control structure by its type
@@ -102,6 +106,9 @@ rspamd_worker_check_finished (EV_P_ ev_timer *w, int revents)
 
 		if (refcount == 1) {
 			ev_break (EV_A_ EVBREAK_ONE);
+		}
+		else {
+			ev_timer_again (EV_A_ w);
 		}
 	}
 }
@@ -165,15 +172,10 @@ static gboolean
 rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
 	/* Do not accept new connections, preparing to end worker's process */
-	struct timeval tv;
-
 	if (!sigh->worker->wanna_die) {
 		static ev_timer shutdown_ev;
 
 		rspamd_worker_ignore_signal (sigh);
-
-		tv.tv_sec = SOFT_SHUTDOWN_TIME;
-		tv.tv_usec = 0;
 		sigh->worker->wanna_die = TRUE;
 		rspamd_worker_terminate_handlers (sigh->worker);
 		rspamd_default_log_function (G_LOG_LEVEL_INFO,
@@ -198,7 +200,10 @@ rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 static gboolean
 rspamd_worker_usr1_handler (struct rspamd_worker_signal_handler *sigh, void *arg)
 {
+	struct rspamd_main *rspamd_main = sigh->worker->srv;
+
 	rspamd_log_reopen (sigh->worker->srv->logger);
+	msg_info_main ("logging reinitialised");
 
 	/* Get more signals */
 	return TRUE;
@@ -361,7 +366,8 @@ rspamd_prepare_worker (struct rspamd_worker *worker, const char *name,
 	worker->srv->event_loop = event_loop;
 
 	rspamd_worker_init_signals (worker, event_loop);
-	rspamd_control_worker_add_default_handler (worker, event_loop);
+	rspamd_control_worker_add_default_cmd_handlers (worker, event_loop);
+	rspamd_worker_heartbeat_start (worker, event_loop);
 #ifdef WITH_HIREDIS
 	rspamd_redis_pool_config (worker->srv->cfg->redis_pool,
 			worker->srv->cfg, event_loop);
@@ -399,12 +405,12 @@ rspamd_worker_stop_accept (struct rspamd_worker *worker)
 	/* Remove all events */
 	DL_FOREACH_SAFE (worker->accept_events, cur, tmp) {
 
-		if (ev_is_active (&cur->accept_ev) || ev_is_pending (&cur->accept_ev)) {
+		if (ev_can_stop (&cur->accept_ev)) {
 			ev_io_stop (cur->event_loop, &cur->accept_ev);
 		}
 
 
-		if (ev_is_active (&cur->throttling_ev) || ev_is_pending (&cur->throttling_ev)) {
+		if (ev_can_stop (&cur->throttling_ev)) {
 			ev_timer_stop (cur->event_loop, &cur->throttling_ev);
 		}
 
@@ -683,6 +689,132 @@ rspamd_worker_on_term (EV_P_ ev_child *w, int revents)
 	}
 }
 
+static void
+rspamd_worker_heartbeat_cb (EV_P_ ev_timer *w, int revents)
+{
+	struct rspamd_worker *wrk = (struct rspamd_worker *)w->data;
+	struct rspamd_srv_command cmd;
+
+	memset (&cmd, 0, sizeof (cmd));
+	cmd.type = RSPAMD_SRV_HEARTBEAT;
+	rspamd_srv_send_command (wrk, EV_A, &cmd, -1, NULL, NULL);
+}
+
+static void
+rspamd_worker_heartbeat_start (struct rspamd_worker *wrk, struct ev_loop *event_loop)
+{
+	wrk->hb.heartbeat_ev.data = (void *)wrk;
+	ev_timer_init (&wrk->hb.heartbeat_ev, rspamd_worker_heartbeat_cb,
+			0.0, wrk->srv->cfg->heartbeat_interval);
+	ev_timer_start (event_loop, &wrk->hb.heartbeat_ev);
+}
+
+static void
+rspamd_main_heartbeat_cb (EV_P_ ev_timer *w, int revents)
+{
+	struct rspamd_worker *wrk = (struct rspamd_worker *)w->data;
+	gdouble time_from_last = ev_time ();
+	struct rspamd_main *rspamd_main;
+	static struct rspamd_control_command cmd;
+	struct tm tm;
+	gchar timebuf[64];
+	gchar usec_buf[16];
+	gint r;
+
+	time_from_last -= wrk->hb.last_event;
+	rspamd_main = wrk->srv;
+
+	if (wrk->hb.last_event > 0 &&
+		time_from_last > 0 &&
+		time_from_last >= rspamd_main->cfg->heartbeat_interval * 2) {
+
+		rspamd_localtime (wrk->hb.last_event, &tm);
+		r = strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", &tm);
+		rspamd_snprintf (usec_buf, sizeof (usec_buf), "%.5f",
+				wrk->hb.last_event - (gdouble)(time_t)wrk->hb.last_event);
+		rspamd_snprintf (timebuf + r, sizeof (timebuf) - r,
+				"%s", usec_buf + 1);
+
+		if (wrk->hb.nbeats > 0) {
+			/* First time lost event */
+			cmd.type = RSPAMD_CONTROL_CHILD_CHANGE;
+			cmd.cmd.child_change.what = rspamd_child_offline;
+			cmd.cmd.child_change.pid = wrk->pid;
+			rspamd_control_broadcast_srv_cmd (rspamd_main, &cmd, wrk->pid);
+			msg_warn_main ("lost heartbeat from worker type %s with pid %P, "
+				  "last beat on: %s (%L beats received previously)",
+					g_quark_to_string (wrk->type), wrk->pid,
+					timebuf,
+					wrk->hb.nbeats);
+			wrk->hb.nbeats = -1;
+			/* TODO: send notify about worker problem */
+		}
+		else {
+			wrk->hb.nbeats --;
+			msg_warn_main ("lost %L heartbeat from worker type %s with pid %P, "
+						   "last beat on: %s",
+					-(wrk->hb.nbeats),
+					g_quark_to_string (wrk->type),
+					wrk->pid,
+					timebuf);
+
+			if (rspamd_main->cfg->heartbeats_loss_max > 0 &&
+				-(wrk->hb.nbeats) >= rspamd_main->cfg->heartbeats_loss_max) {
+
+
+				if (-(wrk->hb.nbeats) > rspamd_main->cfg->heartbeats_loss_max + 1) {
+					msg_err_main ("force kill worker type %s with pid %P, "
+								  "last beat on: %s; %L heartbeat lost",
+							g_quark_to_string (wrk->type),
+							wrk->pid,
+							timebuf,
+							-(wrk->hb.nbeats));
+					kill (wrk->pid, SIGKILL);
+				}
+				else {
+					msg_err_main ("terminate worker type %s with pid %P, "
+								  "last beat on: %s; %L heartbeat lost",
+							g_quark_to_string (wrk->type),
+							wrk->pid,
+							timebuf,
+							-(wrk->hb.nbeats));
+					kill (wrk->pid, SIGTERM);
+				}
+
+			}
+		}
+	}
+	else if (wrk->hb.nbeats < 0) {
+		rspamd_localtime (wrk->hb.last_event, &tm);
+		r = strftime (timebuf, sizeof (timebuf), "%F %H:%M:%S", &tm);
+		rspamd_snprintf (usec_buf, sizeof (usec_buf), "%.5f",
+				wrk->hb.last_event - (gdouble)(time_t)wrk->hb.last_event);
+		rspamd_snprintf (timebuf + r, sizeof (timebuf) - r,
+				"%s", usec_buf + 1);
+
+		cmd.type = RSPAMD_CONTROL_CHILD_CHANGE;
+		cmd.cmd.child_change.what = rspamd_child_online;
+		cmd.cmd.child_change.pid = wrk->pid;
+		rspamd_control_broadcast_srv_cmd (rspamd_main, &cmd, wrk->pid);
+		msg_info_main ("received heartbeat from worker type %s with pid %P, "
+					   "last beat on: %s (%L beats lost previously)",
+				g_quark_to_string (wrk->type), wrk->pid,
+				timebuf,
+				-(wrk->hb.nbeats));
+		wrk->hb.nbeats = 1;
+		/* TODO: send notify about worker restoration */
+	}
+}
+
+static void
+rspamd_main_heartbeat_start (struct rspamd_worker *wrk, struct ev_loop *event_loop)
+{
+	wrk->hb.heartbeat_ev.data = (void *)wrk;
+	ev_timer_init (&wrk->hb.heartbeat_ev, rspamd_main_heartbeat_cb,
+			0.0, wrk->srv->cfg->heartbeat_interval * 2);
+	ev_timer_start (event_loop, &wrk->hb.heartbeat_ev);
+}
+
 struct rspamd_worker *
 rspamd_fork_worker (struct rspamd_main *rspamd_main,
 					struct rspamd_worker_conf *cf,
@@ -707,6 +839,17 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		rspamd_hard_terminate (rspamd_main);
 	}
 
+	if (cf->bind_conf) {
+		msg_info_main ("prepare to fork process %s (%d); listen on: %s",
+				cf->worker->name,
+				index, cf->bind_conf->name);
+	}
+	else {
+		msg_info_main ("prepare to fork process %s (%d), no bind socket",
+				cf->worker->name,
+				index);
+	}
+
 	wrk->srv = rspamd_main;
 	wrk->type = cf->type;
 	wrk->cf = cf;
@@ -724,6 +867,8 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 	case 0:
 		/* Update pid for logging */
 		rspamd_log_update_pid (cf->type, rspamd_main->logger);
+		/* To avoid atomic writes issue */
+		rspamd_log_reopen (rspamd_main->logger);
 		wrk->pid = getpid ();
 
 		/* Init PRNG after fork */
@@ -804,7 +949,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		exit (EXIT_FAILURE);
 		break;
 	case -1:
-		msg_err_main ("cannot fork main process. %s", strerror (errno));
+		msg_err_main ("cannot fork main process: %s", strerror (errno));
 
 		if (rspamd_main->pfh) {
 			rspamd_pidfile_remove (rspamd_main->pfh);
@@ -822,9 +967,10 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		wrk->cld_ev.data = wrk;
 		ev_child_init (&wrk->cld_ev, rspamd_worker_on_term, wrk->pid, 0);
 		ev_child_start (rspamd_main->event_loop, &wrk->cld_ev);
+		rspamd_main_heartbeat_start (wrk, rspamd_main->event_loop);
 		/* Insert worker into worker's table, pid is index */
-		g_hash_table_insert (rspamd_main->workers, GSIZE_TO_POINTER (
-				wrk->pid), wrk);
+		g_hash_table_insert (rspamd_main->workers,
+				GSIZE_TO_POINTER (wrk->pid), wrk);
 		break;
 	}
 
@@ -1231,10 +1377,22 @@ rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
 
 	if (WIFEXITED (res) && WEXITSTATUS (res) == 0) {
 		/* Normal worker termination, do not fork one more */
-		msg_info_main ("%s process %P terminated normally",
-				g_quark_to_string (wrk->type),
-				wrk->pid);
-		need_refork = FALSE;
+
+		if (wrk->hb.nbeats < 0 && rspamd_main->cfg->heartbeats_loss_max > 0 &&
+		        -(wrk->hb.nbeats) >= rspamd_main->cfg->heartbeats_loss_max) {
+			msg_info_main ("%s process %P terminated normally, but lost %L "
+				  "heartbeats, refork it",
+					g_quark_to_string (wrk->type),
+					wrk->pid,
+					-(wrk->hb.nbeats));
+			need_refork = TRUE;
+		}
+		else {
+			msg_info_main ("%s process %P terminated normally",
+					g_quark_to_string (wrk->type),
+					wrk->pid);
+			need_refork = FALSE;
+		}
 	}
 	else {
 		if (WIFSIGNALED (res)) {
@@ -1307,8 +1465,7 @@ rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
 							   struct rspamd_worker *worker, gint fd,
 							   gint attached_fd,
 							   struct rspamd_control_command *cmd,
-							   gpointer ud)
-{
+							   gpointer ud) {
 	struct rspamd_control_reply rep;
 	struct rspamd_re_cache *cache = worker->srv->cfg->re_cache;
 
@@ -1331,4 +1488,12 @@ rspamd_worker_hyperscan_ready (struct rspamd_main *rspamd_main,
 
 	return TRUE;
 }
-#endif
+#endif /* With Hyperscan */
+
+gboolean
+rspamd_worker_check_context (gpointer ctx, guint64 magic)
+{
+	struct rspamd_abstract_worker_ctx *actx = (struct rspamd_abstract_worker_ctx*)ctx;
+
+	return actx->magic == magic;
+}

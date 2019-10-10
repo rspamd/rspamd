@@ -365,17 +365,24 @@ LUA_FUNCTION_DEF (mimepart, get_type_full);
 
 /***
  * @method mime_part:get_detected_type()
- * Extract content-type string of the mime part. Use libmagic detection
+ * Extract content-type string of the mime part. Use lua_magic detection
  * @return {string,string} content type in form 'type','subtype'
  */
 LUA_FUNCTION_DEF (mimepart, get_detected_type);
 
 /***
  * @method mime_part:get_detected_type_full()
- * Extract content-type string of the mime part with all attributes. Use libmagic detection
+ * Extract content-type string of the mime part with all attributes. Use lua_magic detection
  * @return {string,string,table} content type in form 'type','subtype', {attrs}
  */
 LUA_FUNCTION_DEF (mimepart, get_detected_type_full);
+
+/***
+ * @method mime_part:get_detected_ext()
+ * Returns a msdos extension name according to lua_magic detection
+ * @return {string} detected extension (see lua_magic.types)
+ */
+LUA_FUNCTION_DEF (mimepart, get_detected_ext);
 
 /***
  * @method mime_part:get_cte()
@@ -523,6 +530,7 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_type),
 	LUA_INTERFACE_DEF (mimepart, get_type_full),
 	LUA_INTERFACE_DEF (mimepart, get_detected_type),
+	LUA_INTERFACE_DEF (mimepart, get_detected_ext),
 	LUA_INTERFACE_DEF (mimepart, get_detected_type_full),
 	LUA_INTERFACE_DEF (mimepart, get_cte),
 	LUA_INTERFACE_DEF (mimepart, get_filename),
@@ -1495,6 +1503,26 @@ lua_mimepart_get_detected_type_full (lua_State * L)
 }
 
 static gint
+lua_mimepart_get_detected_ext (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (part->detected_ext) {
+		lua_pushstring (L, part->detected_ext);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	return 1;
+}
+
+static gint
 lua_mimepart_get_cte (lua_State * L)
 {
 	LUA_TRACE_POINT;
@@ -1702,7 +1730,7 @@ lua_mimepart_is_attachment (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (!(part->flags & (RSPAMD_MIME_PART_IMAGE|RSPAMD_MIME_PART_TEXT))) {
+	if (!(part->flags & (RSPAMD_MIME_PART_IMAGE))) {
 		if (part->cd && part->cd->type == RSPAMD_CT_ATTACHMENT) {
 			lua_pushboolean (L, true);
 		}

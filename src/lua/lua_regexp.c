@@ -543,7 +543,7 @@ lua_regexp_search (lua_State *L)
 			raw = lua_toboolean (L, 3);
 		}
 
-		if (data) {
+		if (data && len > 0) {
 			if (lua_gettop (L) >= 4) {
 				capture = TRUE;
 				captures = g_array_new (FALSE, TRUE,
@@ -588,12 +588,14 @@ lua_regexp_search (lua_State *L)
 			if (capture) {
 				g_array_free (captures, TRUE);
 			}
-
-			return 1;
+		}
+		else {
+			lua_pushnil (L);
 		}
 	}
-
-	lua_pushnil (L);
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }
@@ -633,7 +635,7 @@ lua_regexp_match (lua_State *L)
 			raw = lua_toboolean (L, 3);
 		}
 
-		if (data) {
+		if (data && len > 0) {
 			if (re->match_limit > 0) {
 				len = MIN (len, re->match_limit);
 			}
@@ -644,11 +646,14 @@ lua_regexp_match (lua_State *L)
 			else {
 				lua_pushboolean (L, FALSE);
 			}
-			return 1;
+		}
+		else {
+			lua_pushboolean (L, FALSE);
 		}
 	}
-
-	lua_pushnil (L);
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
 
 	return 1;
 }
@@ -689,13 +694,13 @@ lua_regexp_matchn (lua_State *L)
 		}
 
 		max_matches = lua_tointeger (L, 3);
+		matches = 0;
 
 		if (lua_gettop (L) == 4) {
 			raw = lua_toboolean (L, 4);
 		}
 
-		if (data) {
-			matches = 0;
+		if (data && len > 0) {
 
 			if (re->match_limit > 0) {
 				len = MIN (len, re->match_limit);
@@ -714,14 +719,14 @@ lua_regexp_matchn (lua_State *L)
 					break;
 				}
 			}
-
-			lua_pushinteger (L, matches);
-
-			return 1;
 		}
+
+		lua_pushinteger (L, matches);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushnil (L);
 
 	return 1;
 }
@@ -770,10 +775,11 @@ lua_regexp_split (lua_State *L)
 			len = MIN (len, re->match_limit);
 		}
 
-		if (data) {
+		if (data && len > 0) {
 			lua_newtable (L);
 			i = 0;
 			old_start = data;
+
 			while (rspamd_regexp_search (re->re, data, len, &start, &end, FALSE,
 					NULL)) {
 				if (start - old_start > 0) {
@@ -823,6 +829,9 @@ lua_regexp_split (lua_State *L)
 			}
 			return 1;
 		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
 	}
 
 	lua_pushnil (L);
@@ -880,22 +889,16 @@ lua_load_regexp (lua_State * L)
 void
 luaopen_regexp (lua_State * L)
 {
-	luaL_newmetatable (L, "rspamd{regexp}");
-	lua_pushstring (L, "__index");
-	lua_pushvalue (L, -2);
-	lua_settable (L, -3);
-
-	lua_pushstring (L, "class");
-	lua_pushstring (L, "rspamd{regexp}");
-	lua_rawset (L, -3);
-
-	luaL_register (L, NULL, regexplib_m);
+	rspamd_lua_new_class (L, "rspamd{regexp}", regexplib_m);
+	lua_pop (L, 1);
 	rspamd_lua_add_preload (L, "rspamd_regexp", lua_load_regexp);
+}
 
-	if (regexp_static_pool == NULL) {
-		regexp_static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-				"regexp_lua_pool");
-	}
+RSPAMD_CONSTRUCTOR (lua_re_static_pool_ctor) {
+	regexp_static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+			"regexp_lua_pool");
+}
 
-	lua_settop (L, 0);
+RSPAMD_DESTRUCTOR (lua_re_static_pool_dtor) {
+	rspamd_mempool_delete (regexp_static_pool);
 }

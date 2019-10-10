@@ -374,7 +374,8 @@ rspamd_http_on_headers_complete (http_parser * parser)
 	 *
 	 * Hence, we skip body setup here
 	 */
-	if (parser->content_length != ULLONG_MAX && parser->content_length != 0) {
+	if (parser->content_length != ULLONG_MAX && parser->content_length != 0 &&
+			msg->method != HTTP_HEAD) {
 		if (conn->max_size > 0 &&
 				parser->content_length > conn->max_size) {
 			/* Too large message */
@@ -845,6 +846,8 @@ rspamd_http_write_helper (struct rspamd_http_connection *conn)
 	return;
 
 call_finish_handler:
+	rspamd_ev_watcher_stop (priv->ctx->event_loop, &priv->ev);
+
 	if ((conn->opts & RSPAMD_HTTP_CLIENT_SIMPLE) == 0) {
 		rspamd_http_connection_ref (conn);
 		conn->finished = TRUE;
@@ -953,6 +956,14 @@ rspamd_http_event_handler (int fd, short what, gpointer ud)
 				else if (priv->flags & RSPAMD_HTTP_CONN_FLAG_ENCRYPTION_NEEDED) {
 					err = g_error_new (HTTP_ERROR, 400,
 							"Encryption required");
+				}
+				else if (priv->parser.http_errno == HPE_CLOSED_CONNECTION) {
+					msg_err ("got garbage after end of the message, ignore it");
+
+					REF_RELEASE (pbuf);
+					rspamd_http_connection_unref (conn);
+
+					return;
 				}
 				else {
 					err = g_error_new (HTTP_ERROR, 500 + priv->parser.http_errno,

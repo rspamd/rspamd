@@ -31,7 +31,7 @@ end
 local data_rows = {}
 local custom_rows = {}
 local nrows = 0
-local schema_version = 7 -- Current schema version
+local schema_version = 8 -- Current schema version
 
 local settings = {
   limit = 1000,
@@ -131,6 +131,8 @@ CREATE TABLE rspamd
     `Symbols.Names` Array(LowCardinality(String)) COMMENT 'Symbol name',
     `Symbols.Scores` Array(Float32) COMMENT 'Symbol score',
     `Symbols.Options` Array(String) COMMENT 'Symbol options (comma separated list)',
+    `Groups.Names` Array(LowCardinality(String)) COMMENT 'Group name',
+    `Groups.Scores` Array(Float32) COMMENT 'Group score',
     ScanTimeReal UInt32 COMMENT 'Request time in milliseconds',
     ScanTimeVirtual UInt32 COMMENT 'Deprecated do not use',
     AuthUser String COMMENT 'Username for authenticated SMTP client',
@@ -226,6 +228,15 @@ local migrations = {
     -- New version
     [[INSERT INTO rspamd_version (Version) Values (7)]],
   },
+  [7] = {
+    -- Add new columns
+    [[ALTER TABLE rspamd
+      ADD COLUMN `Groups.Names` Array(LowCardinality(String)) AFTER `Symbols.Options`,
+      ADD COLUMN `Groups.Scores` Array(Float32) AFTER `Groups.Names`
+    ]],
+    -- New version
+    [[INSERT INTO rspamd_version (Version) Values (8)]],
+  },
 }
 
 local predefined_actions = {
@@ -314,6 +325,14 @@ local function clickhouse_symbols_row(res)
   for _,v in ipairs(fields) do table.insert(res, v) end
 end
 
+local function clickhouse_groups_row(res)
+  local fields = {
+    'Groups.Names',
+    'Groups.Scores',
+  }
+  for _,v in ipairs(fields) do table.insert(res, v) end
+end
+
 local function clickhouse_asn_row(res)
   local fields = {
     'ASN',
@@ -398,6 +417,7 @@ local function clickhouse_send_data(task, ev_base)
 
   if settings.enable_symbols then
     clickhouse_symbols_row(fields)
+    clickhouse_groups_row(fields)
   end
 
   send_data('generic data', data_rows,
@@ -787,6 +807,17 @@ local function clickhouse_collect(task)
     table.insert(row, syms_tab)
     table.insert(row, scores_tab)
     table.insert(row, options_tab)
+
+    -- Groups data
+    local groups = task:get_groups()
+    local groups_tab = {}
+    local gr_scores_tab = {}
+    for gr,sc in pairs(groups) do
+      table.insert(groups_tab, gr)
+      table.insert(gr_scores_tab, sc)
+    end
+    table.insert(row, groups_tab)
+    table.insert(row, gr_scores_tab)
   end
 
   -- Custom data
@@ -810,7 +841,7 @@ end
 local function do_remove_partition(ev_base, cfg, table_name, partition_id)
   lua_util.debugm(N, rspamd_config, "removing partition %s.%s", table_name, partition_id)
   local upstream = settings.upstream:get_upstream_round_robin()
-  local remove_partition_sql = "ALTER TABLE ${table_name} ${remove_method} PARTITION ${partition_id}"
+  local remove_partition_sql = "ALTER TABLE ${table_name} ${remove_method} PARTITION '${partition_id}'"
   local remove_method = (settings.retention.method == 'drop') and 'DROP' or 'DETACH'
   local sql_params = {
     ['table_name']     = table_name,

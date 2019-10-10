@@ -141,7 +141,6 @@ struct rspamd_fuzzy_storage_ctx {
 	gdouble expire;
 	gdouble sync_timeout;
 	struct rspamd_radix_map_helper *update_ips;
-	struct rspamd_radix_map_helper *master_ips;
 	struct rspamd_radix_map_helper *blocked_ips;
 	struct rspamd_radix_map_helper *ratelimit_whitelist;
 
@@ -152,7 +151,6 @@ struct rspamd_fuzzy_storage_ctx {
 	guint keypair_cache_size;
 	ev_timer stat_ev;
 	ev_io peer_ev;
-	ev_tstamp stat_timeout;
 
 	/* Local keypair */
 	struct rspamd_cryptobox_keypair *default_keypair; /* Bad clash, need for parse keypair */
@@ -161,6 +159,7 @@ struct rspamd_fuzzy_storage_ctx {
 	gboolean encrypted_only;
 	gboolean read_only;
 	struct rspamd_keypair_cache *keypair_cache;
+	struct rspamd_http_context *http_ctx;
 	rspamd_lru_hash_t *errors_ips;
 	rspamd_lru_hash_t *ratelimit_buckets;
 	struct rspamd_fuzzy_backend *backend;
@@ -518,6 +517,7 @@ rspamd_fuzzy_reply_io (EV_P_ ev_io *w, int revents)
 {
 	struct fuzzy_session *session = (struct fuzzy_session *)w->data;
 
+	ev_io_stop (EV_A_ w);
 	rspamd_fuzzy_write_reply (session);
 	REF_RELEASE (session);
 }
@@ -560,7 +560,8 @@ rspamd_fuzzy_write_reply (struct fuzzy_session *session)
 			/* Grab reference to avoid early destruction */
 			REF_RETAIN (session);
 			session->io.data = session;
-			ev_io_init (&session->io, rspamd_fuzzy_reply_io, session->fd, EV_WRITE);
+			ev_io_init (&session->io,
+					rspamd_fuzzy_reply_io, session->fd, EV_WRITE);
 			ev_io_start (session->ctx->event_loop, &session->io);
 		}
 		else {
@@ -680,15 +681,26 @@ rspamd_fuzzy_make_reply (struct rspamd_fuzzy_cmd *cmd,
 	rspamd_fuzzy_write_reply (session);
 }
 
+static gboolean
+fuzzy_peer_try_send (gint fd, struct fuzzy_peer_request *up_req)
+{
+	gssize r;
+
+	r = write (fd, &up_req->cmd, sizeof (up_req->cmd));
+
+	if (r != sizeof (up_req->cmd)) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 static void
 fuzzy_peer_send_io (EV_P_ ev_io *w, int revents)
 {
 	struct fuzzy_peer_request *up_req = (struct fuzzy_peer_request *)w->data;
-	gssize r;
 
-	r = write (w->fd, &up_req->cmd, sizeof (up_req->cmd));
-
-	if (r != sizeof (up_req->cmd)) {
+	if (!fuzzy_peer_try_send (w->fd, up_req)) {
 		msg_err ("cannot send update request to the peer: %s", strerror (errno));
 	}
 
@@ -768,10 +780,15 @@ rspamd_fuzzy_check_callback (struct rspamd_fuzzy_reply *result, void *ud)
 						sizeof (up_req->cmd.cmd.shingle.sgl));
 			}
 
-			up_req->io_ev.data = up_req;
-			ev_io_init (&up_req->io_ev, fuzzy_peer_send_io,
-					session->ctx->peer_fd, EV_WRITE);
-			ev_io_start (session->ctx->event_loop, &up_req->io_ev);
+			if (!fuzzy_peer_try_send (session->ctx->peer_fd, up_req)) {
+				up_req->io_ev.data = up_req;
+				ev_io_init (&up_req->io_ev, fuzzy_peer_send_io,
+						session->ctx->peer_fd, EV_WRITE);
+				ev_io_start (session->ctx->event_loop, &up_req->io_ev);
+			}
+			else {
+				g_free (up_req);
+			}
 		}
 	}
 
@@ -825,7 +842,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 
 	if (G_UNLIKELY (cmd == NULL || up_len == 0)) {
 		result.v1.value = 500;
-		result.v1.prob = 0.0;
+		result.v1.prob = 0.0f;
 		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
 		return;
 	}
@@ -833,7 +850,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 	if (session->ctx->encrypted_only && !encrypted) {
 		/* Do not accept unencrypted commands */
 		result.v1.value = 403;
-		result.v1.prob = 0.0;
+		result.v1.prob = 0.0f;
 		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
 		return;
 	}
@@ -860,13 +877,13 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		}
 		else {
 			result.v1.value = 403;
-			result.v1.prob = 0.0;
+			result.v1.prob = 0.0f;
 			result.v1.flag = 0;
 			rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
 		}
 	}
 	else if (cmd->cmd == FUZZY_STAT) {
-		result.v1.prob = 1.0;
+		result.v1.prob = 1.0f;
 		result.v1.value = 0;
 		result.v1.flag = session->ctx->stat.fuzzy_hashes;
 		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
@@ -881,7 +898,7 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 
 				if (rspamd_match_hash_map (session->ctx->skip_hashes, hexbuf)) {
 					result.v1.value = 401;
-					result.v1.prob = 0.0;
+					result.v1.prob = 0.0f;
 
 					goto reply;
 				}
@@ -904,18 +921,24 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 						(gpointer)&up_req->cmd.cmd.shingle :
 						(gpointer)&up_req->cmd.cmd.normal;
 				memcpy (ptr, cmd, up_len);
-				up_req->io_ev.data = up_req;
-				ev_io_init (&up_req->io_ev, fuzzy_peer_send_io,
-						session->ctx->peer_fd, EV_WRITE);
-				ev_io_start (session->ctx->event_loop, &up_req->io_ev);
+
+				if (!fuzzy_peer_try_send (session->ctx->peer_fd, up_req)) {
+					up_req->io_ev.data = up_req;
+					ev_io_init (&up_req->io_ev, fuzzy_peer_send_io,
+							session->ctx->peer_fd, EV_WRITE);
+					ev_io_start (session->ctx->event_loop, &up_req->io_ev);
+				}
+				else {
+					g_free (up_req);
+				}
 			}
 
 			result.v1.value = 0;
-			result.v1.prob = 1.0;
+			result.v1.prob = 1.0f;
 		}
 		else {
 			result.v1.value = 403;
-			result.v1.prob = 0.0;
+			result.v1.prob = 0.0f;
 		}
 reply:
 		rspamd_fuzzy_make_reply (cmd, &result, session, encrypted, is_shingle);
@@ -1785,19 +1808,22 @@ rspamd_fuzzy_peer_io (EV_P_ ev_io *w, int revents)
 			(struct rspamd_fuzzy_storage_ctx *)w->data;
 	gssize r;
 
-	r = read (w->fd, &cmd, sizeof (cmd));
+	for (;;) {
+		r = read (w->fd, &cmd, sizeof (cmd));
 
-	if (r != sizeof (cmd)) {
-		if (errno == EINTR) {
-			rspamd_fuzzy_peer_io (EV_A_ w, revents);
-			return;
+		if (r != sizeof (cmd)) {
+			if (errno == EINTR) {
+				continue;
+			}
+			if (errno != EAGAIN) {
+				msg_err ("cannot read command from peers: %s", strerror (errno));
+			}
+
+			break;
 		}
-		if (errno != EAGAIN) {
-			msg_err ("cannot read command from peers: %s", strerror (errno));
+		else {
+			g_array_append_val (ctx->updates_pending, cmd);
 		}
-	}
-	else {
-		g_array_append_val (ctx->updates_pending, cmd);
 	}
 }
 
@@ -1869,6 +1895,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	struct rspamd_srv_command srv_cmd;
 	struct rspamd_config *cfg = worker->srv->cfg;
 
+	g_assert (rspamd_worker_check_context (worker->ctx, rspamd_fuzzy_storage_magic));
 	ctx->event_loop = rspamd_prepare_worker (worker,
 			"fuzzy",
 			NULL);
@@ -1880,6 +1907,10 @@ start_fuzzy (struct rspamd_worker *worker)
 			worker->srv->cfg);
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->event_loop, ctx->resolver->r);
+	/* Since this worker uses maps it needs a valid HTTP context */
+	ctx->http_ctx = rspamd_http_context_create (ctx->cfg, ctx->event_loop,
+			ctx->cfg->ups_ctx);
+
 	if (ctx->keypair_cache_size > 0) {
 		/* Create keypairs cache */
 		ctx->keypair_cache = rspamd_keypair_cache_new (ctx->keypair_cache_size);

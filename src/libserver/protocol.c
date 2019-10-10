@@ -545,7 +545,8 @@ rspamd_protocol_handle_headers (struct rspamd_task *task,
 			case 'I':
 				IF_HEADER (IP_ADDR_HEADER) {
 					if (!rspamd_parse_inet_address (&task->from_addr,
-							hv_tok->begin, hv_tok->len)) {
+							hv_tok->begin, hv_tok->len,
+							RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
 						msg_err_protocol ("bad ip header: '%T'", hv_tok);
 					}
 					else {
@@ -875,9 +876,9 @@ rspamd_protocol_extended_url (struct rspamd_task *task,
 	elt = ucl_object_fromlstring (encoded, enclen);
 	ucl_object_insert_key (obj, elt, "url", 0, false);
 
-	if (url->surbllen > 0) {
-		elt = ucl_object_fromlstring (url->surbl, url->surbllen);
-		ucl_object_insert_key (obj, elt, "surbl", 0, false);
+	if (url->tldlen > 0) {
+		elt = ucl_object_fromlstring (url->tld, url->tldlen);
+		ucl_object_insert_key (obj, elt, "tld", 0, false);
 	}
 	if (url->hostlen > 0) {
 		elt = ucl_object_fromlstring (url->host, url->hostlen);
@@ -1248,8 +1249,13 @@ rspamd_scan_result_ucl (struct rspamd_task *task,
 		gdouble gr_score;
 
 		obj = ucl_object_typed_new (UCL_OBJECT);
+		ucl_object_reserve (obj, kh_size (mres->sym_groups));
 
 		kh_foreach (mres->sym_groups, gr, gr_score,{
+			if (task->cfg->public_groups_only &&
+				!(gr->flags & RSPAMD_SYMBOL_GROUP_PUBLIC)) {
+				continue;
+			}
 			sobj = rspamd_metric_group_ucl (task, gr, gr_score);
 			ucl_object_insert_key (obj, sobj, gr->name, 0, false);
 		});
