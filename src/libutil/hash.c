@@ -701,7 +701,7 @@ rspamd_lru_hash_foreach (rspamd_lru_hash_t *h, int it, gpointer *k,
 		return -1;
 	}
 
-	return i;
+	return i + 1;
 }
 
 
