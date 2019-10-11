@@ -350,7 +350,7 @@ rspamd_html_decode_entitles_inplace (gchar *s, gsize len)
 	khiter_t k;
 
 	if (len == 0) {
-		l = strlen (s);
+		return 0;
 	}
 	else {
 		l = len;
@@ -871,7 +871,10 @@ rspamd_html_parse_tag_component (rspamd_mempool_t *pool,
 	gboolean ret = FALSE;
 	gchar *p;
 
-	g_assert (end >= begin);
+	if (end <= begin) {
+		return FALSE;
+	}
+
 	p = rspamd_mempool_alloc (pool, end - begin);
 	memcpy (p, begin, end - begin);
 	len = rspamd_html_decode_entitles_inplace (p, end - begin);
