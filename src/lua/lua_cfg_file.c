@@ -117,10 +117,6 @@ rspamd_lua_post_load_config (struct rspamd_config *cfg)
 				rspamd_strlcpy (tmp, name, keylen + 1);
 				g_ptr_array_add (names, tmp);
 			}
-
-			if (name != NULL && lua_istable (L, -1)) {
-
-			}
 		}
 
 		PTR_ARRAY_FOREACH (names, i, name) {
