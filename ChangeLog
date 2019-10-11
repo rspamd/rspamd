@@ -1,3 +1,247 @@
+2.0: 11 Oct 2019
+  * [Conf] Add BROKEN_HEADERS_MAILLIST composite
+  * [Conf] Add path to greylist-whitelist-domains.inc
+  * [Conf] Clarify documentation in the config files
+  * [Conf] Introduce maps.d directories
+  * [Conf] Log settings id by default
+  * [Conf] Make LEAKED_PASSWORD_SCAM a composite rule again
+  * [Conf] Move all surbl/emails rules to rbl
+  * [Conf] Register new Spamhaus codes
+  * [Conf] Remove configs for deleted modules
+  * [Conf] Remove surbl parts, fix hash_format attribute
+  * [Conf] Show autolearn sample
+  * [Conf] Slashing: Change default stats backend to Redis
+  * [Conf] Surbl: Utilise new `check_emails` option
+  * [Conf] Update header
+  * [Conf] Use multi-prefixes RBLs in the default config
+  * [CritFix] Deal with case-sensivity in Content-Disposition parser
+  * [CritFix] Eliminate old endpoint
+  * [CritFix] Fix case sensivity when parsing Content-Type
+  * [CritFix] Fix loading of DKIM public keys
+  * [CritFix] Fix procesing of urls
+  * [CritFix] Fix whitelisting when both spf and dkim are required to be valid
+  * [CritFix] Langdet: Fix language detection where no stop words found
+  * [Feature] Add description to the groups
+  * [Feature] Add limit for number of URLs in Lua
+  * [Feature] Add logging of groups to the log_format
+  * [Feature] Add lua_smtp library
+  * [Feature] Add maps cache and type refinement
+  * [Feature] Add p0f scanner
+  * [Feature] Adopt emails module to use lua_maps
+  * [Feature] Allow options matching in composites
+  * [Feature] Allow selectors in rbl module
+  * [Feature] Allow to output group results
+  * [Feature] Asn: Allow to use bgpdump when NET::MRT is broken
+  * [Feature] Calculate tokens occurrences distribution
+  * [Feature] Clickhouse: Add authenticated user and settings id columns
+  * [Feature] Clickhouse: Store groups data
+  * [Feature] Clickhouse: Utilise LowCardinality feature
+  * [Feature] Implement Redis prefixes registration logic
+  * [Feature] Implement settings id propagation between deps
+  * [Feature] Improve AV results caching
+  * [Feature] Improve autolearning
+  * [Feature] Improve logging locking logic (remove it actually)
+  * [Feature] Improve settings processing
+  * [Feature] Langdet: Limit number of stop words to be checked
+  * [Feature] Libucl: Allow to sort keys in ucl objects
+  * [Feature] Lua_config: Extend get symbols method
+  * [Feature] Lua_maps: Allow static maps for key-value pairs
+  * [Feature] Lua_mimepart: Add function filter_words
+  * [Feature] Lua_selectors: Add `words` selector
+  * [Feature] Lua_selectors: Add sort and uniq transform functions
+  * [Feature] Lua_selectors: Allow table arguments for selectors
+  * [Feature] Lua_tcp: Add preliminary support of SSL connections
+  * [Feature] Lua_trie: More flexible API
+  * [Feature] Lua_util: Add filter_specific_url function
+  * [Feature] Lua_util: table_digest can now recursively traverse tables
+  * [Feature] Maillist: Improve detection
+  * [Feature] Maps: Allow caching for complex maps
+  * [Feature] Monitored: Support random lookups
+  * [Feature] Multimap: Add combined maps prototype
+  * [Feature] Multimap: Add dependend maps via redis keys selectors
+  * [Feature] Multimap: Allow multiple email addresses matches
+  * [Feature] Multimap: Also check detected charset when do filename checks
+  * [Feature] Output number of messages processed to proctitle
+  * [Feature] Perform clean SSL shutdown
+  * [Feature] Performance: Do not use base64 SIMD version for bad inputs
+  * [Feature] RBL: Support bit results in replies
+  * [Feature] RBL: Support type specific prefixes
+  * [Feature] Ratelimit: Consider number of SMTP recipients
+  * [Feature] Rbl: Add ability to check urls
+  * [Feature] Rbl: Add resolve_ip based RBLs
+  * [Feature] Rbl: Make config checks much more strict
+  * [Feature] Rbl: Support per-rule whitelists
+  * [Feature] Rbl: Support process script
+  * [Feature] Rbl: Support replyto addresses
+  * [Feature] SURBL: Allow to check email domains
+  * [Feature] Selectors: Add `list` generator
+  * [Feature] Selectors: Add `specific_urls` extractor
+  * [Feature] Selectors: Add flatten function
+  * [Feature] Selectors: Support filter_map and apply_map functions
+  * [Feature] Store Clickhouse data outside of lua alloc
+  * [Feature] Support caching for encrypted files and macros
+  * [Feature] Support images when extracting urls
+  * [Feature] Support more hyperscan flags
+  * [Feature] Support protocol flags
+  * [Feature] URL: Apply stringprep to hostnames to filter garbage
+  * [Feature] Upstreams: Add lazy resolving logic to all upstreams
+  * [Feature] Upstreams: Set noresolve flag on numeric upstreams
+  * [Feature] Use `scores` in apply section
+  * [Feature] Use maps logic from lua_maps for multimap
+  * [Feature] Use random monitored in rbl module
+  * [Feature] lua_scanners - add Razor support
+  * [Fix] Add another safe-guard in urls processing
+  * [Fix] Add debug to ssl, fixed write hangs
+  * [Fix] Add missing groups to C callback symbols
+  * [Fix] Add more checks for ghosts symbols
+  * [Fix] Allow to enable or add new actions via settings
+  * [Fix] Allow to set 0 size for spf/dkim caches
+  * [Fix] Another bunch of fixes towards protocol mess
+  * [Fix] Another fix to deal with bad URLs
+  * [Fix] Arc: Another bunch of fixes for arc signing
+  * [Fix] Arc: More arc signing fixes
+  * [Fix] Avoid another overflow in fpconv
+  * [Fix] Clickhouse: Fix quoting
+  * [Fix] Clickhouse: Fix retention query quoting
+  * [Fix] Distinguish empty and non-empty prefilters
+  * [Fix] Distinguish remote and local addrs parsing
+  * [Fix] Do not assert if length of sig is bad, just fail verification
+  * [Fix] Do not assert if we have broken mime boundary in the headers
+  * [Fix] Do not call implicit strlen to avoid issues
+  * [Fix] Do not count images urls when checking url regexps for compatibility
+  * [Fix] Do not output rbl suffix in symbol option
+  * [Fix] Do not use config pool to avoid issues with double reload
+  * [Fix] Do not use ephemeral string
+  * [Fix] Do not use lightuserdata for traceback
+  * [Fix] Do not use priority in metric registration
+  * [Fix] Emails: Check email sanity before testing on BL
+  * [Fix] Emails: Fix misprint in key name
+  * [Fix] Escape utf in regexp to dodge ragel/hyperscan issue
+  * [Fix] Extend task_timeout to postfilters stage
+  * [Fix] Fix ARC signing after fixing another bug in it...
+  * [Fix] Fix AV scan logic
+  * [Fix] Fix DMARC_NA behaviour in case of no valid policies
+  * [Fix] Fix LRU hash iteration logic
+  * [Fix] Fix alignment mess
+  * [Fix] Fix configuring symbols without scores
+  * [Fix] Fix disabling of the actions
+  * [Fix] Fix dkim signing exceptions
+  * [Fix] Fix embedded images linking logic
+  * [Fix] Fix events leak
+  * [Fix] Fix eviction corner case
+  * [Fix] Fix fuzzy image score calculation #2962
+  * [Fix] Fix hang in fuzzy_learn when explicit rotation is set
+  * [Fix] Fix headers propagation logic
+  * [Fix] Fix hearbeats restart issue
+  * [Fix] Fix history reset
+  * [Fix] Fix log parameter
+  * [Fix] Fix lua_ip_equal logic
+  * [Fix] Fix more issues with nested messages + tests
+  * [Fix] Fix normalization of non-alphabet based languages
+  * [Fix] Fix offsets when parsing message/rfc822 in multipart
+  * [Fix] Fix options in rbl symbols
+  * [Fix] Fix out of bound access in lua logger
+  * [Fix] Fix out-of-bound read in qp decode
+  * [Fix] Fix parent CTE propagation
+  * [Fix] Fix parsing of the received headers with empty part
+  * [Fix] Fix pending checks for events
+  * [Fix] Fix printing of NULL pointer with fixed length
+  * [Fix] Fix race condition in watcher handler
+  * [Fix] Fix read-after-end in quoted printable decoding
+  * [Fix] Fix redis sentinel support
+  * [Fix] Fix registry leak in case of DNS errors
+  * [Fix] Fix reload logic
+  * [Fix] Fix sending of large entries via HTTPS
+  * [Fix] Fix settings reload
+  * [Fix] Fix some more corner cases for fpconv
+  * [Fix] Fix trie code when there are regexps and Hyperscan is absent
+  * [Fix] Further fixes to printing of the FP numbers
+  * [Fix] Fuzzy_check: Fix timeouts
+  * [Fix] Grrr, fix empty ip case
+  * [Fix] Html: Fix processing of fjlig entity
+  * [Fix] Lang_det: Try better to distinguish Chinese and Japanese
+  * [Fix] Lua_mime: Fix reversed extensions map
+  * [Fix] Lua_task: Fix message-less API
+  * [Fix] Lua_tcp: Report connection failures
+  * [Fix] Lua_tcp: Various fixes and debugging improvements
+  * [Fix] Metadata_exporter: This plugin is idempotent not a postfilter
+  * [Fix] More fixes to extract_specific_urls
+  * [Fix] More stages fixes
+  * [Fix] Neural: Another bunch of fixes
+  * [Fix] Neural: use version in ANN key profile
+  * [Fix] Postpone lua state destruction to allow lua dtors to be used
+  * [Fix] Prefer surbl/emails rule on rbl to preserve compatibility
+  * [Fix] RBL: Fix behaviour of emails_domainonly
+  * [Fix] Ratelimit: Fix dynamic score
+  * [Fix] Rbl: Fix emailbl functions
+  * [Fix] Really fix hyperscan workaround
+  * [Fix] Set sanity limits for pcre2
+  * [Fix] Settings: Fix settings check flags
+  * [Fix] Sort keys when getting data from Lua when filling rules
+  * [Fix] Statistics: Do not query Redis tokens when there are no learns
+  * [Fix] Stop IO event on write finished in http connection
+  * [Fix] Use heuristically detected text parts data
+  * [Fix] Various fixes to QP encoding algorithm
+  * [Fix] Various fixes to SSL state machine handler
+  * [Fix] Various fixes to asn module
+  * [Fix] Workaround for empty charset in rfc2231 encoding
+  * [Project] Switch from torch to KANN
+  * [Project] Add heartbeat events
+  * [Project] Add preliminary support of the Kaspersky Scan Engine
+  * [Project] Add preliminary version of maps expressions
+  * [Project] Add preprocessed settings to the config structure
+  * [Project] Add simple forward propagation function
+  * [Project] Add small helpers for migration simplifications
+  * [Project] Allow to replace body in milter
+  * [Project] Bundle libev
+  * [Project] First refactoring step libevent->libev
+  * [Project] Implement syntax highlighting for Lua
+  * [Project] Lua_magic: Adopt lua_magic stuff in mime_types
+  * [Project] Remove libfann, gd and other unsupported stuff
+  * [Project] Remove torch
+  * [Project] Rework upstreams
+  * [Rework] Allow execution of async events when hs compiles regexps
+  * [Rework] Bayes expiry: eliminate `default` expiration mode
+  * [Rework] Dkim: Remove signing code
+  * [Rework] Dkim_signing: Move sign condition to dkim_signing
+  * [Rework] Do not lowercase all data send to ClickHouse
+  * [Rework] Drop url tags
+  * [Rework] Eliminate lua_squeeze as it has shown no improvements
+  * [Rework] Eliminate virtual scan time as it is useless
+  * [Rework] Lua core: Use lightuserdata to index classes
+  * [Rework] Lua_util: Another rework for extract_specific_urls
+  * [Rework] Migrate from ip_score to reputation
+  * [Rework] Move mime modification functions to lua_mime library
+  * [Rework] Rbl: Major whitelisting logic rework
+  * [Rework] Remove deprecated plugins
+  * [Rework] Remove log helper worker
+  * [Rework] Remove rspamd.classifiers.lua
+  * [Rework] Rename filter.h to a more sane name
+  * [Rework] Reorganise selectors implementation
+  * [Rework] Replace linenoise with replxx
+  * [Rework] Reputation: Remove ipnet from the ip reputation
+  * [Rework] Reputation: Slashing - change name of symbols
+  * [Rework] Rework children operations
+  * [Rework] Rework config reload
+  * [Rework] Rework expression API
+  * [Rework] Rework image urls processing
+  * [Rework] Rework initialisation to reduce static leaks count
+  * [Rework] Rework request headers processing
+  * [Rework] Slashing: Change versioning schema - move to 2.0
+  * [Rework] Slashing: Turn off postfilters when passthrough result is set
+  * [Rework] Start moving to replxx
+  * [Rework] Stop support of signed HTTP maps to simplify code
+  * [Rework] Store ASN as UInt32 in ClickHouse
+  * [Rework] Url_redirector: Rewrite plugin
+  * [Rework] Use a dedicated library for autolearn
+  * [Rework] Use libsodium instead of hand crafted crypto implementations
+  * [Rework] Use opaque structure to store a table of mime headers
+  * [Rules] Add dedicated bitcoin addresses filter rule
+  * [Rules] Add more detection to LEAKED_PASSWORD_SCAM
+  * [Rules] Catch LTC addresses
+  * [Rules] Reduce weight of RSPAMD_EMAILBL
+  * [Rules] Rework LEAKED_PASSWORD_SCAM rule one more time
+
 1.9.4: 23 May 2019
   * [CritFix] Fix case sensitivity when parsing Content-Type
   * [Fix] Arc: Another bunch of fixes for arc signing
