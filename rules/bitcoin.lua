@@ -32,16 +32,25 @@ rspamd_config:register_symbol{
     local rspamd_re = require "rspamd_regexp"
     local hash = require "rspamd_cryptobox_hash"
 
-    local wallet_re = rspamd_re.create_cached('^[13][1-9A-Za-z]{25,34}$')
+    local btc_wallet_re = rspamd_re.create_cached('^[13][1-9A-Za-z]{25,34}$')
+    local ltc_wallet_re = rspamd_re.create_cached('^[LM3][a-km-zA-HJ-NP-Z1-9]{26,33}$')
     local words_matched = {}
     local valid_wallets = {}
 
     for _,part in ipairs(task:get_text_parts() or {}) do
-      local pw = part:filter_words(wallet_re, 'raw', 3)
+      local pw = part:filter_words(btc_wallet_re, 'raw', 3)
 
       if pw and #pw > 0 then
         for _,w in ipairs(pw) do
           words_matched[#words_matched + 1] = w
+        end
+      end
+
+      pw = part:filter_words(ltc_wallet_re, 'raw', 3)
+      if pw and #pw > 0 then
+        for _,w in ipairs(pw) do
+          -- Do not validate, LTC regexp is more strict than BTC one, maybe do it in future
+          valid_wallets[#valid_wallets + 1] = w
         end
       end
     end
