@@ -783,13 +783,13 @@ local function multimap_callback(task, rule)
   local process_rule_funcs = {
     ip = function()
       local ip = task:get_from_ip()
-      if ip:is_valid() then
+      if ip and ip:is_valid() then
         match_rule(rule, ip)
       end
     end,
     dnsbl = function()
       local ip = task:get_from_ip()
-      if ip:is_valid() then
+      if ip and ip:is_valid() then
         local to_resolve = ip_to_rbl(ip, rule['map'])
         local function dns_cb(_, _, results, err)
           lua_util.debugm(N, rspamd_config,
