@@ -2103,6 +2103,8 @@ struct lua_tree_cb_data {
 	int i;
 	gint mask;
 	gint need_images;
+	gdouble skip_prob;
+	guint64 xoroshiro_state[2];
 };
 
 static void
@@ -2117,11 +2119,39 @@ lua_tree_url_callback (gpointer key, gpointer value, gpointer ud)
 			return;
 		}
 
+		if (cb->skip_prob > 0) {
+			gdouble coin = rspamd_random_double_fast_seed (cb->xoroshiro_state);
+
+			if (coin < cb->skip_prob) {
+				return;
+			}
+		}
+
 		lua_url = lua_newuserdata (cb->L, sizeof (struct rspamd_lua_url));
 		rspamd_lua_setclass (cb->L, "rspamd{url}", -1);
 		lua_url->url = url;
 		lua_rawseti (cb->L, -2, cb->i++);
 	}
+}
+
+static inline gsize
+lua_task_urls_adjust_skip_prob (struct rspamd_task *task,
+		struct lua_tree_cb_data *cb, gsize sz, gsize max_urls)
+{
+	if (max_urls > 0 && sz > max_urls) {
+		cb->skip_prob = 1.0 - ((gdouble)max_urls) / (gdouble)sz;
+		/*
+		 * Use task dependent probabilistic seed to ensure that
+		 * consequent task:get_urls return the same list of urls
+		 */
+		memcpy (&cb->xoroshiro_state[0], &task->task_timestamp,
+				MIN (sizeof (cb->xoroshiro_state[0]), sizeof (task->task_timestamp)));
+		memcpy (&cb->xoroshiro_state[1], MESSAGE_FIELD (task, digest),
+				sizeof (cb->xoroshiro_state[1]));
+		sz = max_urls;
+	}
+
+	return sz;
 }
 
 static gint
@@ -2135,9 +2165,13 @@ lua_task_get_urls (lua_State * L)
 			PROTOCOL_FILE|PROTOCOL_FTP;
 	const gchar *cache_name = "emails+urls";
 	gboolean need_images = FALSE;
-	gsize sz;
+	gsize sz, max_urls = 0;
 
 	if (task) {
+		if (task->cfg) {
+			max_urls = task->cfg->max_lua_urls;
+		}
+
 		if (task->message == NULL) {
 			lua_newtable (L);
 
@@ -2220,6 +2254,8 @@ lua_task_get_urls (lua_State * L)
 			sz = g_hash_table_size (MESSAGE_FIELD (task, urls)) +
 					g_hash_table_size (MESSAGE_FIELD (task, emails));
 
+			sz = lua_task_urls_adjust_skip_prob (task, &cb, sz, max_urls);
+
 			if (protocols_mask == (default_mask|PROTOCOL_MAILTO)) {
 				/* Can use cached version */
 				if (!lua_task_get_cached (L, task, cache_name)) {
@@ -2250,6 +2286,7 @@ lua_task_get_urls (lua_State * L)
 			}
 
 			sz = g_hash_table_size (MESSAGE_FIELD (task, urls));
+			sz = lua_task_urls_adjust_skip_prob (task, &cb, sz, max_urls);
 
 			if (protocols_mask == (default_mask)) {
 				if (!lua_task_get_cached (L, task, cache_name)) {
@@ -2279,6 +2316,7 @@ lua_task_has_urls (lua_State * L)
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
 	gboolean need_emails = FALSE, ret = FALSE;
+	gsize sz = 0;
 
 	if (task) {
 		if (task->message) {
@@ -2287,10 +2325,12 @@ lua_task_has_urls (lua_State * L)
 			}
 
 			if (g_hash_table_size (MESSAGE_FIELD (task, urls)) > 0) {
+				sz += g_hash_table_size (MESSAGE_FIELD (task, urls));
 				ret = TRUE;
 			}
 
 			if (need_emails && g_hash_table_size (MESSAGE_FIELD (task, emails)) > 0) {
+				sz += g_hash_table_size (MESSAGE_FIELD (task, emails));
 				ret = TRUE;
 			}
 		}
@@ -2300,8 +2340,9 @@ lua_task_has_urls (lua_State * L)
 	}
 
 	lua_pushboolean (L, ret);
+	lua_pushinteger (L, sz);
 
-	return 1;
+	return 2;
 }
 
 static gint

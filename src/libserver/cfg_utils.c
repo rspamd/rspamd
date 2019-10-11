@@ -195,6 +195,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->log_error_elts = 10;
 	cfg->log_error_elt_maxlen = 1000;
 	cfg->cache_reload_time = 30.0;
+	cfg->max_lua_urls = 1024;
 
 	/* Default log line */
 	cfg->log_format_str = "id: <$mid>,$if_qid{ qid: <$>,}$if_ip{ ip: $,}"

@@ -2195,6 +2195,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				RSPAMD_CL_FLAG_INT_32,
 				"Maximum count of heartbeats to be lost before trying to "
 				"terminate a worker (default: 0 - disabled)");
+		rspamd_rcl_add_default_handler (sub,
+				"max_lua_urls",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, max_lua_urls),
+				RSPAMD_CL_FLAG_INT_32,
+				"Maximum count of URLs to pass to Lua to avoid DoS");
 
 		/* Neighbours configuration */
 		rspamd_rcl_add_section_doc (&sub->subsections, "neighbours", "name",

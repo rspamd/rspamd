@@ -2624,17 +2624,22 @@ xoroshiro_rotl (const guint64 x, int k) {
 	return (x << k) | (x >> (64 - k));
 }
 
-
 gdouble
 rspamd_random_double_fast (void)
 {
-	const guint64 s0 = xorshifto_seed[0];
-	guint64 s1 = xorshifto_seed[1];
+	return rspamd_random_double_fast_seed (xorshifto_seed);
+}
+
+gdouble
+rspamd_random_double_fast_seed (guint64 seed[2])
+{
+	const guint64 s0 = seed[0];
+	guint64 s1 = seed[1];
 	const guint64 result = s0 + s1;
 
 	s1 ^= s0;
-	xorshifto_seed[0] = xoroshiro_rotl(s0, 55) ^ s1 ^ (s1 << 14);
-	xorshifto_seed[1] = xoroshiro_rotl (s1, 36);
+	seed[0] = xoroshiro_rotl(s0, 55) ^ s1 ^ (s1 << 14);
+	seed[1] = xoroshiro_rotl (s1, 36);
 
 	return rspamd_double_from_int64 (result);
 }

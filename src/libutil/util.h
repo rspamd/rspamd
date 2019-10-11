@@ -424,7 +424,7 @@ gdouble rspamd_random_double (void);
  * @return
  */
 gdouble rspamd_random_double_fast (void);
-
+gdouble rspamd_random_double_fast_seed (guint64 seed[2]);
 guint64 rspamd_random_uint64_fast (void);
 
 /**

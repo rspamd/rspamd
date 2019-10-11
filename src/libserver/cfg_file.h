@@ -462,6 +462,7 @@ struct rspamd_config {
 	guint lua_gc_step;                                /**< lua gc step 										*/
 	guint lua_gc_pause;                                /**< lua gc pause										*/
 	guint full_gc_iters;                            /**< iterations between full gc cycle					*/
+	guint max_lua_urls;                             /**< maximum number of urls to be passed to Lua			*/
 
 	GList *classify_headers;                        /**< list of headers using for statistics				*/
 	struct module_s **compiled_modules;                /**< list of compiled C modules							*/
