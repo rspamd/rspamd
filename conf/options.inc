@@ -1,4 +1,17 @@
-# Included from top-level .conf file
+# Logging configuration
+# Please don't modify this file as your changes might be overwritten with
+# the next update.
+#
+# You can modify 'local.d/options.inc' to add and merge
+# parameters defined inside this section
+#
+# You can modify 'override.d/options.inc' to strictly override all
+# parameters defined inside this section
+#
+# See https://rspamd.com/doc/faq.html#what-are-the-locald-and-overrided-directories
+# for details
+#
+# Relevant documentation: https://rspamd.com/doc/configuration/options.html
 
 filters = "chartable,dkim,spf,regexp,fuzzy_check";
 raw_mode = false;

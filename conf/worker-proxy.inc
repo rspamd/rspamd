@@ -1,4 +1,16 @@
-# Included from top-level .conf file
+# Proxy worker setup
+# Please don't modify this file as your changes might be overwritten with
+# the next update.
+#
+# You can modify 'local.d/worker-proxy.inc' to add and merge
+# parameters defined inside this section
+#
+# You can modify 'override.d/worker-proxy.inc' to strictly override all
+# parameters defined inside this section
+#
+# See https://rspamd.com/doc/faq.html#what-are-the-locald-and-overrided-directories
+# for details
+# Module documentation: https://rspamd.com/doc/workers/rspamd_proxy.html
 
 milter = yes; # Enable milter mode
 timeout = 120s; # Needed for Milter usually
