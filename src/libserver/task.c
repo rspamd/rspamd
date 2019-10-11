@@ -127,7 +127,9 @@ rspamd_task_reply (struct rspamd_task *task)
 		task->fin_callback (task, task->fin_arg);
 	}
 	else {
-		rspamd_protocol_write_reply (task, write_timeout);
+		if (!(task->processed_stages & RSPAMD_TASK_STAGE_REPLIED)) {
+			rspamd_protocol_write_reply (task, write_timeout);
+		}
 	}
 }
 
