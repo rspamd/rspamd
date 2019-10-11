@@ -24,6 +24,11 @@ map_file_watch_multiplier = 0.1;
 dynamic_conf = "$DBDIR/rspamd_dynamic";
 history_file = "$DBDIR/rspamd.history";
 check_all_filters = false;
+
+# Default settings
+dns_max_requests = 64;
+max_lua_urls = 1024;
+
 dns {
     timeout = 1s;
     sockets = 16;
