@@ -264,6 +264,7 @@ rspamd_mime_part_get_cte (struct rspamd_task *task,
 {
 	struct rspamd_mime_header *hdr, *cur;
 	enum rspamd_cte cte = RSPAMD_CTE_UNKNOWN;
+	gboolean parent_propagated = FALSE;
 
 	hdr = rspamd_message_get_header_from_hash (hdrs, "Content-Transfer-Encoding");
 
@@ -271,6 +272,7 @@ rspamd_mime_part_get_cte (struct rspamd_task *task,
 		if (part->parent_part && part->parent_part->cte != RSPAMD_CTE_UNKNOWN &&
 				!(part->parent_part->flags & RSPAMD_MIME_PART_MISSING_CTE)) {
 			part->cte = part->parent_part->cte;
+			parent_propagated = TRUE;
 
 			goto check_cte;
 		}
@@ -318,6 +320,11 @@ check_cte:
 							rspamd_cte_to_string (cte));
 					part->cte = cte;
 					part->flags |= RSPAMD_MIME_PART_BAD_CTE;
+				}
+				else if (cte != part->cte && parent_propagated) {
+					part->cte = cte;
+					msg_info_task ("detected missing CTE for part as: %s",
+							rspamd_cte_to_string (part->cte));
 				}
 			}
 			else {
