@@ -3843,7 +3843,12 @@ lua_task_get_from_ip (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
-		rspamd_lua_ip_push (L, task->from_addr);
+		if (task->from_addr) {
+			rspamd_lua_ip_push (L, task->from_addr);
+		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -3901,7 +3906,12 @@ lua_task_get_client_ip (lua_State *L)
 	struct rspamd_task *task = lua_check_task (L, 1);
 
 	if (task) {
-		rspamd_lua_ip_push (L, task->client_addr);
+		if (task->client_addr) {
+			rspamd_lua_ip_push (L, task->client_addr);
+		}
+		else {
+			lua_pushnil (L);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

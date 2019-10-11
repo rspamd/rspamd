@@ -391,7 +391,7 @@ local function gen_rbl_callback(rule)
   local function check_local(task, _)
     local ip = task:get_from_ip()
 
-    if not ip:is_valid() then
+    if ip and not ip:is_valid() then
       ip = nil
     end
 

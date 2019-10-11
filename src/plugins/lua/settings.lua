@@ -552,7 +552,7 @@ local function process_settings_table(tbl, allow_ids, mempool)
           check = gen_check_closure(convert_to_table(elt.ip, ips_table), check_ip_setting),
           extract = function(task)
             local ip = task:get_from_ip()
-            if ip:is_valid() then return ip end
+            if ip and ip:is_valid() then return ip end
             return nil
           end,
         }

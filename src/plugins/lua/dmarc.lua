@@ -181,7 +181,7 @@ local dmarc_grammar = gen_dmarc_grammar()
 local function dmarc_report(task, spf_ok, dkim_ok, disposition,
     sampled_out, hfromdom, spfdom, dres, spf_result)
   local ip = task:get_from_ip()
-  if not ip:is_valid() then
+  if ip and not ip:is_valid() then
     return nil
   end
   local rspamd_lua_utils = require "lua_util"
