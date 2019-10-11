@@ -810,6 +810,13 @@ LUA_FUNCTION_DEF (config, init_subsystem);
  */
 LUA_FUNCTION_DEF (config, get_tld_path);
 
+/***
+ * @method rspamd_config:get_dns_max_requests()
+ * Returns limit of DNS requests per task
+ * @return {number} number of dns requests allowed
+ */
+LUA_FUNCTION_DEF (config, get_dns_max_requests);
+
 static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_module_opt),
 	LUA_INTERFACE_DEF (config, get_mempool),
@@ -882,6 +889,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, init_modules),
 	LUA_INTERFACE_DEF (config, init_subsystem),
 	LUA_INTERFACE_DEF (config, get_tld_path),
+	LUA_INTERFACE_DEF (config, get_dns_max_requests),
 	{"__tostring", rspamd_lua_class_tostring},
 	{"__newindex", lua_config_newindex},
 	{NULL, NULL}
@@ -4293,6 +4301,22 @@ lua_config_get_tld_path (lua_State *L)
 
 	if (cfg != NULL) {
 		lua_pushstring (L, cfg->tld_file);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_config_get_dns_max_requests (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+
+	if (cfg != NULL) {
+		lua_pushinteger (L, cfg->dns_max_requests);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

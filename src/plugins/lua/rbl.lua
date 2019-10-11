@@ -1097,6 +1097,10 @@ for key,rbl in pairs(opts.rbls or opts.rules) do
       end
     end
 
+    if not rbl.requests_limit then
+      rbl.requests_limit = rspamd_config:get_dns_max_requests()
+    end
+
     local res,err = rule_schema:transform(rbl)
     if not res then
       rspamd_logger.errx(rspamd_config, 'invalid config for %s: %s, RBL is DISABLED',
