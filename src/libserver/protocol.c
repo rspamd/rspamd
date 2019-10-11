@@ -2013,9 +2013,6 @@ rspamd_protocol_write_reply (struct rspamd_task *task, ev_tstamp timeout)
 		msg->flags |= RSPAMD_HTTP_FLAG_SPAMC;
 	}
 
-	ev_now_update (task->event_loop);
-	msg->date = ev_time ();
-
 	if (task->err != NULL) {
 		msg_debug_protocol ("writing error reply to client");
 		ucl_object_t *top = NULL;
@@ -2056,6 +2053,9 @@ rspamd_protocol_write_reply (struct rspamd_task *task, ev_tstamp timeout)
 			break;
 		}
 	}
+
+	ev_now_update (task->event_loop);
+	msg->date = ev_time ();
 
 	rspamd_http_connection_reset (task->http_conn);
 	rspamd_http_connection_write_message (task->http_conn, msg, NULL,
