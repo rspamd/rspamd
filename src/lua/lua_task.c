@@ -1326,11 +1326,19 @@ lua_task_process_message (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
+	gboolean enforce = FALSE;
 
 	if (task != NULL) {
 		if (task->msg.len > 0) {
+			if (lua_isboolean (L, 2)) {
+				enforce = lua_toboolean (L, 2);
+			}
+
 			if (rspamd_message_parse (task)) {
-				if (!(task->flags & RSPAMD_TASK_FLAG_SKIP_PROCESS)) {
+				if (enforce ||
+					(!(task->flags & RSPAMD_TASK_FLAG_SKIP_PROCESS) &&
+					!(task->processed_stages & RSPAMD_TASK_STAGE_PROCESS_MESSAGE))) {
+
 					lua_pushboolean (L, TRUE);
 					rspamd_message_process (task);
 					task->processed_stages |= RSPAMD_TASK_STAGE_PROCESS_MESSAGE;
