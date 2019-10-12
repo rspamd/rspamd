@@ -900,5 +900,7 @@ luaopen_regexp (lua_State * L)
 }
 
 RSPAMD_DESTRUCTOR (lua_re_static_pool_dtor) {
-	rspamd_mempool_delete (regexp_static_pool);
+	if (regexp_static_pool) {
+		rspamd_mempool_delete (regexp_static_pool);
+	}
 }
