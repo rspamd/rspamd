@@ -1330,8 +1330,14 @@ lua_task_process_message (lua_State *L)
 	if (task != NULL) {
 		if (task->msg.len > 0) {
 			if (rspamd_message_parse (task)) {
-				lua_pushboolean (L, TRUE);
-				rspamd_message_process (task);
+				if (!(task->flags & RSPAMD_TASK_FLAG_SKIP_PROCESS)) {
+					lua_pushboolean (L, TRUE);
+					rspamd_message_process (task);
+					task->processed_stages |= RSPAMD_TASK_STAGE_PROCESS_MESSAGE;
+				}
+				else {
+					lua_pushboolean (L, FALSE);
+				}
 			}
 			else {
 				lua_pushboolean (L, FALSE);
