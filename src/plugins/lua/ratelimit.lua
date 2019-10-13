@@ -396,11 +396,13 @@ local keywords = {
     ['get_value'] = function(task)
       return task:get_principal_recipient()
     end,
+    need_process = true,
   },
   ['digest'] = {
     ['get_value'] = function(task)
       return task:get_digest()
     end,
+    need_process = true,
   },
   ['attachments'] = {
     ['get_value'] = function(task)
@@ -419,6 +421,7 @@ local keywords = {
 
       return nil
     end,
+    need_process = true,
   },
   ['files'] = {
     ['get_value'] = function(task)
@@ -438,6 +441,7 @@ local keywords = {
 
       return nil
     end,
+    need_process = true,
   },
 }
 
@@ -445,12 +449,18 @@ local function gen_rate_key(task, rtype, bucket)
   local key_t = {tostring(lua_util.round(100000.0 / bucket.burst))}
   local key_keywords = lua_util.str_split(rtype, '_')
   local have_user = false
+  local message_processed = false
 
   for _, v in ipairs(key_keywords) do
     local ret
-
     if keywords[v] and type(keywords[v]['get_value']) == 'function' then
-      ret = keywords[v]['get_value'](task)
+      if keywords[v].need_process and not message_processed then
+        lua_util.debugm(N, task, 'process message as %s needs mime elts',
+            v)
+        message_processed = task:process_message()
+        message_processed = true
+      end
+      ret = keywords[v].get_value(task)
     end
     if not ret then return nil end
     if v == 'user' then have_user = true end
@@ -495,6 +505,9 @@ local function limit_to_prefixes(task, k, v, prefixes)
   local n = 0
   for _,bucket in ipairs(v.buckets) do
     if v.selector then
+      lua_util.debugm(N, task, 'process message as selectors need mime elts',
+          v)
+      task:process_message()
       local selectors = lua_selectors.process_selectors(task, v.selector)
       if selectors then
         local combined = lua_selectors.combine_selectors(task, selectors, ':')
@@ -855,11 +868,10 @@ if opts then
     lua_util.disable_module(N, "redis")
   else
     local s = {
-      type = 'prefilter,nostat',
+      type = 'prefilter,nostat,empty',
       name = 'RATELIMIT_CHECK',
       priority = 7,
       callback = ratelimit_cb,
-      flags = 'empty',
     }
 
     if settings.symbol then

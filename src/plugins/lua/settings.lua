@@ -256,6 +256,7 @@ end
 
 -- Check limit for a task
 local function check_settings(task)
+  local message_processed = false
   local function check_specific_setting(rule, matched)
     local res = false
 
@@ -263,6 +264,13 @@ local function check_settings(task)
       local elt = rule.checks[atom]
 
       if elt then
+        if elt.need_process and not message_processed then
+          lua_util.debugm(N, task, 'process message as %s needs mime elts',
+              atom)
+          message_processed = task:process_message()
+          message_processed = true
+        end
+
         local input = elt.extract(task)
         if not input then return false end
 
@@ -616,6 +624,7 @@ local function process_settings_table(tbl, allow_ids, mempool)
           extract = function(task)
             return task:get_from(2)
           end,
+          need_process = true,
         }
       end
     end
@@ -630,6 +639,7 @@ local function process_settings_table(tbl, allow_ids, mempool)
           extract = function(task)
             return task:get_recipients(2)
           end,
+          need_process = true,
         }
       end
     end
@@ -773,6 +783,7 @@ local function process_settings_table(tbl, allow_ids, mempool)
                 return v
               end,
               extract = extractor_func(k),
+              need_process = true,
             }
 
             local skey = process_compound_condition(cond, table_element,
@@ -815,6 +826,7 @@ local function process_settings_table(tbl, allow_ids, mempool)
             end, values)
           end,
           extract = sel,
+          need_process = true,
         }
         local skey = process_compound_condition(cond, 'selector', elt.selector)
         lua_util.debugm(N, rspamd_config, 'added selector condition to "%s": %s',
