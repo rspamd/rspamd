@@ -133,22 +133,27 @@ local types = {
   psd = {
     ct = 'image/psd',
     type = 'image',
+    av_check = false,
   },
   pcx = {
     ct = 'image/pcx',
     type = 'image',
+    av_check = false,
   },
   pic = {
     ct = 'image/pic',
     type = 'image',
+    av_check = false,
   },
   tiff = {
     ct = 'image/tiff',
     type = 'image',
+    av_check = false,
   },
   ico = {
     ct = 'image/ico',
     type = 'image',
+    av_check = false,
   },
   swf = {
     ct = 'application/x-shockwave-flash',
@@ -240,18 +245,22 @@ local types = {
   png = {
     ct = 'image/png',
     type = 'image',
+    av_check = false,
   },
   gif = {
     ct = 'image/gif',
     type = 'image',
+    av_check = false,
   },
   jpg = {
     ct = 'image/jpeg',
     type = 'image',
+    av_check = false,
   },
   bmp = {
     type = 'image',
     ct = 'image/bmp',
+    av_check = false,
   },
   dwg = {
     type = 'image',
@@ -261,18 +270,22 @@ local types = {
   txt = {
     type = 'text',
     ct = 'text/plain',
+    av_check = false,
   },
   html = {
     type = 'text',
     ct = 'text/html',
+    av_check = false,
   },
   csv = {
     type = 'text',
     ct = 'text/csv',
+    av_check = false,
   },
   eml = {
     type = 'message',
     ct = 'message/rfc822',
+    av_check = false,
   },
 }
 

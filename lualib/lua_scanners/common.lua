@@ -24,6 +24,7 @@ local rspamd_logger = require "rspamd_logger"
 local rspamd_regexp = require "rspamd_regexp"
 local lua_util = require "lua_util"
 local lua_redis = require "lua_redis"
+local lua_magic_types = require "lua_magic/types"
 local fun = require "fun"
 
 local exports = {}
@@ -321,7 +322,7 @@ local function create_regex_table(patterns)
 end
 
 local function match_filter(task, found, patterns)
-  if type(patterns) ~= 'table' then return false end
+  if type(patterns) ~= 'table' or not found then return false end
   if not patterns[1] then
     for _, pat in pairs(patterns) do
       if pat:match(found) then
@@ -358,11 +359,12 @@ local function check_parts_match(task, rule)
 
   local filter_func = function(p)
     local mtype,msubtype = p:get_type()
-    local dmtype,dmsubtype = p:get_detected_type()
+    local detected_ext = p:get_detected_ext()
     local fname = p:get_filename()
     local ext, ext2
     local extension_check = false
     local content_type_check = false
+    local attachment_check = false
     local text_part_min_words_check = true
 
     if rule.scan_all_mime_parts == false then
@@ -370,9 +372,16 @@ local function check_parts_match(task, rule)
       if fname ~= nil then
         ext,ext2 = gen_extension(fname)
         if match_filter(task, ext, rule.mime_parts_filter_ext)
-          or match_filter(task, ext2, rule.mime_parts_filter_ext) then
-          lua_util.debugm(rule.name, task, '%s: extension matched: %s', rule.log_prefix, ext)
+          or match_filter(task, ext2, rule.mime_parts_filter_ext)  then
+          lua_util.debugm(rule.name, task, '%s: extension matched: %s',
+              rule.log_prefix, ext)
           extension_check = true
+        end
+        if match_filter(task, detected_ext, rule.mime_parts_filter_ext) then
+          lua_util.debugm(rule.name, task, '%s: detected extension matched: %s',
+              rule.log_prefix, detected_ext)
+          extension_check = true
+          ext = detected_ext
         end
         if match_filter(task, fname, rule.mime_parts_filter_regex) then
           content_type_check = true
@@ -387,10 +396,11 @@ local function check_parts_match(task, rule)
         end
       end
       -- check detected content type (libmagic) regex matching
-      if dmtype ~= nil and dmsubtype ~= nil then
-        local ct = string.format('%s/%s', mtype, msubtype):lower()
-        if match_filter(task, ct, rule.mime_parts_filter_regex) then
-          lua_util.debugm(rule.name, task, '%s: regex detected libmagic content-type: %s', rule.log_prefix, ct)
+      if detected_ext then
+        local magic = lua_magic_types[detected_ext] or {}
+        if match_filter(task, magic.ct, rule.mime_parts_filter_regex) then
+          lua_util.debugm(rule.name, task, '%s: regex detected libmagic content-type: %s',
+              rule.log_prefix, magic.ct)
           content_type_check = true
         end
       end
@@ -416,10 +426,23 @@ local function check_parts_match(task, rule)
     if rule.text_part_min_words and p:is_text() then
       text_part_min_words_check = p:get_words_count() >= tonumber(rule.text_part_min_words)
     end
+    if rule.scan_all_mime_parts ~= false then
+      if detected_ext then
+        -- We know what to scan!
+        local magic = lua_magic_types[detected_ext] or {}
+
+        if magic.av_check ~= false then
+          extension_check = true
+        end
+      else
+        -- Just rely on attachment property
+        extension_check = p:is_attachment()
+      end
+    end
 
     return (rule.scan_image_mime and p:is_image())
         or (rule.scan_text_mime and text_part_min_words_check)
-        or (p:is_attachment() and rule.scan_all_mime_parts ~= false)
+        or attachment_check
         or extension_check
         or content_type_check
   end
