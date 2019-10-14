@@ -868,8 +868,24 @@ local function multimap_callback(task, rule)
         return p:is_attachment() or (not p:is_text()) and (not p:is_multipart())
       end
 
+      local function filter_archive(p)
+        local ext = p:get_detected_ext()
+        local det_type = 'unknown'
+
+        if ext then
+          local lua_magic_types = require "lua_magic/types"
+          local det_t = lua_magic_types[ext]
+
+          if det_t then
+            det_type = det_t.type
+          end
+        end
+
+        return p:is_archive() and det_type == 'archive' and not rule.skip_archives
+      end
+
       for _,p in fun.iter(fun.filter(filter_parts, parts)) do
-        if p:is_archive() and not rule['skip_archives'] then
+        if filter_archive(p) then
           local fnames = p:get_archive():get_files()
 
           for _,fn in ipairs(fnames) do

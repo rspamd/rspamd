@@ -361,4 +361,6 @@ end
 -- Rspamd checks 2 chunks at start and 1 chunk at the end
 exports.chunk_size = 32768
 
+exports.types = types
+
 return exports
