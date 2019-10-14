@@ -389,9 +389,9 @@ local configure_whitelist_module = function()
           return
         end
 
-        local flags
-        if not rule['blacklist'] then
-          flags = 'nice'
+        local flags = 'nice,empty'
+        if rule['blacklist'] then
+          flags = 'empty'
         end
 
         local id = rspamd_config:register_symbol({
