@@ -2401,6 +2401,14 @@ rspamd_free_zstd_dictionary (struct zstd_dictionary *dict)
 	}
 }
 
+#ifdef HAVE_CBLAS
+#ifdef HAVE_CBLAS_H
+#include "cblas.h"
+#else
+extern void openblas_set_num_threads(int num_threads);
+#endif
+#endif
+
 void
 rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 		struct rspamd_config *cfg)
@@ -2494,6 +2502,9 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 			ZSTD_freeCStream (ctx->out_zstream);
 			ctx->out_zstream = NULL;
 		}
+#ifdef HAVE_CBLAS
+		openblas_set_num_threads (cfg->max_blas_threads);
+#endif
 	}
 }
 

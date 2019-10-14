@@ -643,6 +643,27 @@ ProcessPackage(LIBZ LIBRARY z INCLUDE zlib.h INCLUDE_SUFFIXES include/zlib
 ProcessPackage(SODIUM LIBRARY sodium INCLUDE sodium.h
 		INCLUDE_SUFFIXES include/libsodium include/sodium
 		ROOT ${LIBSODIUM_ROOT_DIR} MODULES libsodium>=1.0.0)
+ProcessPackage(BLAS OPTIONAL LIBRARY openblas blas
+		INCLUDE cblas.h INCLUDE_SUFFIXES include/openblas
+		include/blas
+		ROOT ${BLAS_ROOT_DIR}
+		LIB_OUTPUT BLAS_REQUIRED_LIBRARIES)
+IF(WITH_BLAS)
+	MESSAGE(STATUS "Use openblas to accelerate kann")
+	IF(NOT BLAS_INCLUDE)
+		FIND_FILE(HAVE_CBLAS_H HINTS "${RSPAMD_SEARCH_PATH}"
+				NAMES cblas.h
+				DOC "Path to cblas.h header")
+		IF(NOT HAVE_CBLAS_H)
+			MESSAGE(STATUS "Blas header cblas.h has not been found, use internal workaround")
+		ELSE()
+			ADD_DEFINITIONS(-DHAVE_CBLAS_H)
+		ENDIF()
+	ELSE()
+		ADD_DEFINITIONS(-DHAVE_CBLAS_H)
+	ENDIF()
+	ADD_DEFINITIONS(-DHAVE_CBLAS)
+ENDIF(WITH_BLAS)
 
 IF(ENABLE_HYPERSCAN MATCHES "ON")
 	ProcessPackage(HYPERSCAN LIBRARY hs INCLUDE hs.h INCLUDE_SUFFIXES
