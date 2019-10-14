@@ -10,8 +10,6 @@ pipeline:
     image: ubuntu:18.04
     commands:
       - install -d -o nobody -g nogroup /rspamd/build /rspamd/install /rspamd/fedora/build /rspamd/fedora/install
-      # for debug
-      - echo $CI_COMMIT_AUTHOR
 
   build:
     # https://github.com/rspamd/rspamd-build-docker/blob/master/ubuntu-build/Dockerfile
@@ -157,7 +155,7 @@ pipeline:
       # upload test results to nginx frontent using WebDAV PUT
       - >
         if [ -n "$HTTP_PUT_AUTH" ]; then
-        $CI_WORKSPACE/test/tools/http_put.py log.html report.html $CI_SYSTEM_LINK/testlogs/$CI_REPO_NAME/$CI_BUILD_NUMBER/;
+        $CI_WORKSPACE/test/tools/http_put.py log.html report.html https://$DRONE_SYSTEM_HOSTNAME/testlogs/$DRONE_REPO/$DRONE_BUILD_NUMBER/;
         fi
       # core_pattern=/var/tmp/%u.%e.core so one or two cores can be saved for each binary
       - core_files=$(find /var/tmp/ -name '*.core')
