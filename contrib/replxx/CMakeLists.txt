@@ -1,7 +1,4 @@
 # -*- mode: CMAKE; -*-
-
-cmake_minimum_required(VERSION 3.0)
-
 project( replxx VERSION 0.0.2 LANGUAGES CXX C )
 message(STATUS "Build mode: ${CMAKE_BUILD_TYPE}")
 
