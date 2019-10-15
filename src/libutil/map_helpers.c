@@ -68,7 +68,7 @@ struct rspamd_regexp_map_helper {
 #ifdef WITH_HYPERSCAN
 	hs_database_t *hs_db;
 	hs_scratch_t *hs_scratch;
-	const gchar **patterns;
+	gchar **patterns;
 	gint *flags;
 	gint *ids;
 #endif
@@ -787,6 +787,10 @@ rspamd_map_helper_destroy_regexp (struct rspamd_regexp_map_helper *re_map)
 		hs_free_database (re_map->hs_db);
 	}
 	if (re_map->patterns) {
+		for (i = 0; i < re_map->regexps->len; i ++) {
+			g_free (re_map->patterns[i]);
+		}
+
 		g_free (re_map->patterns);
 	}
 	if (re_map->flags) {
@@ -941,15 +945,32 @@ rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 		return;
 	}
 
-	re_map->patterns = g_new (const gchar *, re_map->regexps->len);
+	re_map->patterns = g_new (gchar *, re_map->regexps->len);
 	re_map->flags = g_new (gint, re_map->regexps->len);
 	re_map->ids = g_new (gint, re_map->regexps->len);
 
 	for (i = 0; i < re_map->regexps->len; i ++) {
+		const gchar *pat;
+		gchar *escaped;
+		gint pat_flags;
+
 		re = g_ptr_array_index (re_map->regexps, i);
-		re_map->patterns[i] = rspamd_regexp_get_pattern (re);
-		re_map->flags[i] = HS_FLAG_SINGLEMATCH;
 		pcre_flags = rspamd_regexp_get_pcre_flags (re);
+		pat = rspamd_regexp_get_pattern (re);
+		pat_flags = rspamd_regexp_get_flags (re);
+
+		if (pat_flags & RSPAMD_REGEXP_FLAG_UTF) {
+			escaped = rspamd_str_regexp_escape (pat, strlen (pat), NULL,
+					RSPAMD_REGEXP_ESCAPE_RE|RSPAMD_REGEXP_ESCAPE_UTF);
+			re_map->flags[i] |= HS_FLAG_UTF8;
+		}
+		else {
+			escaped = rspamd_str_regexp_escape (pat, strlen (pat), NULL,
+					RSPAMD_REGEXP_ESCAPE_RE);
+		}
+
+		re_map->patterns[i] = escaped;
+		re_map->flags[i] = HS_FLAG_SINGLEMATCH;
 
 #ifndef WITH_PCRE2
 		if (pcre_flags & PCRE_FLAG(UTF8)) {
@@ -977,7 +998,7 @@ rspamd_re_map_finalize (struct rspamd_regexp_map_helper *re_map)
 	}
 
 	if (re_map->regexps->len > 0 && re_map->patterns) {
-		if (hs_compile_multi (re_map->patterns,
+		if (hs_compile_multi ((const gchar **)re_map->patterns,
 				re_map->flags,
 				re_map->ids,
 				re_map->regexps->len,
