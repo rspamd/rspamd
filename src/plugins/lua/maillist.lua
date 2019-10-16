@@ -242,7 +242,7 @@ local function check_generic_list_headers(task)
     has_subscribe = true
   end
   if task:get_header_count('list-unsubscribe') == 1 then
-    lua_util.debugm(N, task, 'has header List-Subscribe, score = %s',
+    lua_util.debugm(N, task, 'has header List-Unsubscribe, score = %s',
         score)
     score = score + 0.125
     has_unsubscribe = true
