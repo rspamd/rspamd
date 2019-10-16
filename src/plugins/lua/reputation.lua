@@ -865,8 +865,8 @@ local function reputation_redis_init(rule, cfg, ev_base, worker)
     local last_value = tonumber(redis.call('HGET', KEYS[1], 'v' .. '{= w.name =}'))
     local window = {= w.time =}
     -- Adjust alpha
-    local time_diff = now - last_value
-    if time_diff > 0 then
+    local time_diff = now - last
+    if time_diff < 0 then
       time_diff = 0
     end
     local alpha = 1.0 - math.exp((-time_diff) / (1000 * window))
