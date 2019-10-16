@@ -256,7 +256,9 @@ local function check_generic_list_headers(task)
 
   if has_subscribe and has_unsubscribe then
     score = score + 0.25
-  elseif (has_subscribe or has_unsubscribe) then
+  elseif (has_unsubscribe) then
+    score = score - 0.25
+  elseif (has_subscribe) then
     score = score - 0.75
   end
 
