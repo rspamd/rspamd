@@ -1439,14 +1439,16 @@ rspamd_7zip_ucs2_to_utf8 (struct rspamd_task *task, const guchar *p,
 	UChar32 wc;
 	UBool is_error = 0;
 
-	res = g_string_sized_new ((end - p) + sizeof (wc) * 2 + 1);
+	res = g_string_sized_new ((end - p) * 1.5 + sizeof (wc) + 1);
 	up = (guint16 *)p;
 
 	while (src_pos < len) {
 		U16_NEXT (up, src_pos, len, wc);
 
 		if (wc > 0) {
-			U8_APPEND (res->str, dest_pos, res->allocated_len, wc, is_error);
+			U8_APPEND (res->str, dest_pos,
+					res->allocated_len - 1,
+					wc, is_error);
 		}
 
 		if (is_error) {
