@@ -593,7 +593,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 
 				if (zout.pos == zout.size) {
 					/* We need to extend output buffer */
-					zout.size = zout.size * 1.5 + 1.0;
+					zout.size = zout.size * 2 + 1;
 					zout.dst = g_realloc (zout.dst, zout.size);
 				}
 			}

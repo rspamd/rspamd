@@ -456,7 +456,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 
 				if (zout.pos == zout.size) {
 					/* We need to extend output buffer */
-					zout.size = zout.size * 1.5 + 1.0;
+					zout.size = zout.size * 2 + 1.0;
 					out = g_realloc (zout.dst, zout.size);
 					zout.dst = out;
 				}
@@ -835,7 +835,7 @@ read_map_file (struct rspamd_map *map, struct file_map_data *data,
 
 				if (zout.pos == zout.size) {
 					/* We need to extend output buffer */
-					zout.size = zout.size * 1.5 + 1.0;
+					zout.size = zout.size * 2 + 1;
 					out = g_realloc (zout.dst, zout.size);
 					zout.dst = out;
 				}
@@ -922,7 +922,7 @@ read_map_static (struct rspamd_map *map, struct static_map_data *data,
 
 				if (zout.pos == zout.size) {
 					/* We need to extend output buffer */
-					zout.size = zout.size * 1.5 + 1.0;
+					zout.size = zout.size * 2 + 1;
 					out = g_realloc (zout.dst, zout.size);
 					zout.dst = out;
 				}
@@ -1201,7 +1201,7 @@ rspamd_map_read_cached (struct rspamd_map *map, struct rspamd_map_backend *bk,
 
 			if (zout.pos == zout.size) {
 				/* We need to extend output buffer */
-				zout.size = zout.size * 1.5 + 1.0;
+				zout.size = zout.size * 2 + 1;
 				out = g_realloc (zout.dst, zout.size);
 				zout.dst = out;
 			}

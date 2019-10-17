@@ -1144,7 +1144,7 @@ proxy_request_decompress (struct rspamd_http_message *msg)
 
 			if (zout.pos == zout.size) {
 				/* We need to extend output buffer */
-				zout.size = zout.size * 1.5 + 1.0;
+				zout.size = zout.size * 2 + 1;
 				body = rspamd_fstring_grow (body, zout.size);
 				zout.size = body->allocated;
 				zout.dst = body->str;

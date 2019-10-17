@@ -2211,7 +2211,7 @@ lua_util_zstd_decompress (lua_State *L)
 
 		if (zin.pos < zin.size && zout.pos == zout.size) {
 			/* We need to extend output buffer */
-			zout.size = zout.size * 1.5 + 1.0;
+			zout.size = zout.size * 2;
 			out = g_realloc (zout.dst, zout.size);
 			zout.dst = out;
 		}
