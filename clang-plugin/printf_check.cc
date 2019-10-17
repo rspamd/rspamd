@@ -84,7 +84,7 @@ namespace rspamd {
 	using arg_parser_t = bool (*) (const Expr *, struct PrintfArgChecker *);
 
 	static void
-	print_error (const std::string &err, const Expr *e, const ASTContext *ast,
+	print_error (const char *err, const Expr *e, const ASTContext *ast,
 			CompilerInstance *ci)
 	{
 		auto loc = e->getExprLoc ();
@@ -95,12 +95,23 @@ namespace rspamd {
 	}
 
 	static void
-	print_warning (const std::string &err, const Expr *e, const ASTContext *ast,
+	print_warning (const char *err, const Expr *e, const ASTContext *ast,
 			CompilerInstance *ci)
 	{
 		auto loc = e->getExprLoc ();
 		auto &diag = ci->getDiagnostics ();
 		auto id = diag.getCustomDiagID (DiagnosticsEngine::Warning,
+				"format query warning: %0");
+		diag.Report (loc, id) << err;
+	}
+
+	static void
+	print_remark (const char *err, const Expr *e, const ASTContext *ast,
+				   CompilerInstance *ci)
+	{
+		auto loc = e->getExprLoc ();
+		auto &diag = ci->getDiagnostics ();
+		auto id = diag.getCustomDiagID (DiagnosticsEngine::Remark,
 				"format query warning: %0");
 		diag.Report (loc, id) << err;
 	}
@@ -390,7 +401,7 @@ namespace rspamd {
 				auto query = args[pos];
 
 				if (!query->isEvaluatable (*pcontext)) {
-					print_warning (std::string ("cannot evaluate query"),
+					print_remark ("cannot evaluate query",
 							E, this->pcontext, this->ci);
 					/* It is not assumed to be an error */
 					return true;
@@ -399,7 +410,7 @@ namespace rspamd {
 				clang::Expr::EvalResult r;
 
 				if (!query->EvaluateAsRValue (r, *pcontext)) {
-					print_warning (std::string ("cannot evaluate rvalue of query"),
+					print_warning ("cannot evaluate rvalue of query",
 							E, this->pcontext, this->ci);
 					return false;
 				}
@@ -407,7 +418,7 @@ namespace rspamd {
 				auto qval = dyn_cast<StringLiteral> (
 						r.Val.getLValueBase ().get<const Expr *> ());
 				if (!qval) {
-					print_warning (std::string ("bad or absent query string"),
+					print_warning ("bad or absent query string",
 							E, this->pcontext, this->ci);
 					return false;
 				}
@@ -425,7 +436,7 @@ namespace rspamd {
 										<< ", got " <<
 								(E->getNumArgs () - (pos + 1))
 										<< " args";
-						print_error (err_buf.str (), E, this->pcontext, this->ci);
+						print_error (err_buf.str(), E, this->pcontext, this->ci);
 
 						return false;
 					}
