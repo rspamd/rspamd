@@ -45,6 +45,7 @@ require_scanner('icap')
 require_scanner('vadesecure')
 require_scanner('spamassassin')
 require_scanner('p0f')
+require_scanner('razor')
 
 exports.add_scanner = function(name, t, conf_func, check_func)
   assert(type(conf_func) == 'function' and type(check_func) == 'function',
