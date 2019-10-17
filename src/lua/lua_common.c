@@ -1218,10 +1218,12 @@ rspamd_lua_dumpstack (lua_State *L)
 
 		}
 		if (i < top) {
-			r += rspamd_snprintf (buf + r, sizeof (buf) - r, " -> "); /* put a separator */
+			r += rspamd_snprintf (buf + r, sizeof (buf) - r,
+					" -> "); /* put a separator */
 		}
 	}
-	msg_info (buf);
+
+	msg_info ("%*s", r, buf);
 }
 
 gpointer
