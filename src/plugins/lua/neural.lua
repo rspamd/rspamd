@@ -967,21 +967,27 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
         ann_key)
 
     -- Create continuation closure
-    local redis_len_cb_gen = function(cont_cb, what)
+    local redis_len_cb_gen = function(cont_cb, what, is_final)
       return function(err, data)
         if err then
           rspamd_logger.errx(rspamd_config,
               'cannot get ANN %s trains %s from redis: %s', what, ann_key, err)
         elseif data and type(data) == 'number' or type(data) == 'string' then
           if tonumber(data) and tonumber(data) >= rule.train.max_trains then
-            rspamd_logger.debugm(N, rspamd_config,
-                'ANN %s has %s %s learn vectors (%s required)',
-                ann_key, tonumber(data), what, rule.train.max_trains)
+            if is_final then
+              rspamd_logger.debugm(N, rspamd_config,
+                  'can start ANN %s learn as it has %s learn vectors; %s required, after checking %s vectors',
+                  ann_key, tonumber(data), rule.train.max_trains, what)
+            else
+              rspamd_logger.debugm(N, rspamd_config,
+                  'checked %s vectors in ANN %s: %s vectors; %s required, need to check other class vectors',
+                  what, ann_key, tonumber(data), rule.train.max_trains)
+            end
             cont_cb()
           else
             rspamd_logger.debugm(N, rspamd_config,
-                'no need to learn ANN %s %s %s learn vectors (%s required)',
-                ann_key, tonumber(data), what, rule.train.max_trains)
+                'cannot learn ANN %s now: there are not enough %s learn vectors (has %s vectors; %s required)',
+                ann_key, what, tonumber(data), rule.train.max_trains)
           end
         end
       end
@@ -1002,7 +1008,7 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
           rule.redis,
           nil,
           false, -- is write
-          redis_len_cb_gen(initiate_train, 'ham'), --callback
+          redis_len_cb_gen(initiate_train, 'ham', true), --callback
           'LLEN', -- command
           {ann_key .. '_ham'}
       )
@@ -1013,7 +1019,7 @@ local function maybe_train_existing_ann(worker, ev_base, rule, set, profiles)
         rule.redis,
         nil,
         false, -- is write
-        redis_len_cb_gen(check_ham_len, 'spam'), --callback
+        redis_len_cb_gen(check_ham_len, 'spam', false), --callback
         'LLEN', -- command
         {ann_key .. '_spam'}
     )
