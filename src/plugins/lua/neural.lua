@@ -126,7 +126,7 @@ local redis_lua_script_can_store_train_vec = [[
     end
   else
     if nham <= lim then
-      if nsham > nspam then
+      if nham > nspam then
         -- Apply sampling
         local skip_rate = 1.0 - nspam / (nham + 1)
         if math.random() < skip_rate then
