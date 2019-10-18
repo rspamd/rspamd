@@ -770,15 +770,6 @@ rspamd_map_helper_destroy_regexp (struct rspamd_regexp_map_helper *re_map)
 		return;
 	}
 
-	for (i = 0; i < re_map->regexps->len; i ++) {
-		re = g_ptr_array_index (re_map->regexps, i);
-		rspamd_regexp_unref (re);
-	}
-
-	g_ptr_array_free (re_map->regexps, TRUE);
-	g_ptr_array_free (re_map->values, TRUE);
-	kh_destroy (rspamd_map_hash, re_map->htb);
-
 #ifdef WITH_HYPERSCAN
 	if (re_map->hs_scratch) {
 		hs_free_scratch (re_map->hs_scratch);
@@ -800,6 +791,15 @@ rspamd_map_helper_destroy_regexp (struct rspamd_regexp_map_helper *re_map)
 		g_free (re_map->ids);
 	}
 #endif
+
+	for (i = 0; i < re_map->regexps->len; i ++) {
+		re = g_ptr_array_index (re_map->regexps, i);
+		rspamd_regexp_unref (re);
+	}
+
+	g_ptr_array_free (re_map->regexps, TRUE);
+	g_ptr_array_free (re_map->values, TRUE);
+	kh_destroy (rspamd_map_hash, re_map->htb);
 
 	rspamd_mempool_t *pool = re_map->pool;
 	memset (re_map, 0, sizeof (*re_map));
