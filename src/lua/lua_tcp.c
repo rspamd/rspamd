@@ -850,12 +850,19 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 
 	if (r == -1) {
 		if (!(cbd->ssl_conn)) {
-			lua_tcp_push_error (cbd, TRUE,
-					"IO write error while trying to write %d bytes: %s",
-					(gint) remain, strerror (errno));
+			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+				msg_debug_tcp ("got temporary failure, retry write");
+				lua_tcp_plan_handler_event (cbd, TRUE, TRUE);
+				return;
+			}
+			else {
+				lua_tcp_push_error (cbd, TRUE,
+						"IO write error while trying to write %d bytes: %s",
+						(gint) remain, strerror (errno));
 
-			msg_debug_tcp ("write error, terminate connection");
-			TCP_RELEASE (cbd);
+				msg_debug_tcp ("write error, terminate connection");
+				TCP_RELEASE (cbd);
+			}
 		}
 
 		return;
