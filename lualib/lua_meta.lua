@@ -455,7 +455,7 @@ local function rspamd_gen_metatokens(task, names)
         for i,tok in ipairs(ct) do
           lua_util.debugm(N, task, "metatoken: %s = %s",
               mt.names[i], tok)
-          if tok ~= tok or tok == math.huge() then
+          if tok ~= tok or tok == math.huge then
             logger.errx(task, 'metatoken %s returned %s; replace it with 0 for sanity',
                 mt.names[i], tok)
             tok = 0.0
@@ -471,7 +471,7 @@ local function rspamd_gen_metatokens(task, names)
     for _,n in ipairs(names) do
       if metatokens_by_name[n] then
         local tok = metatokens_by_name[n](task)
-        if tok ~= tok or tok == math.huge() then
+        if tok ~= tok or tok == math.huge then
           logger.errx(task, 'metatoken %s returned %s; replace it with 0 for sanity',
               n, tok)
           tok = 0.0
@@ -495,7 +495,7 @@ local function rspamd_gen_metatokens_table(task)
   for _,mt in ipairs(metafunctions) do
     local ct = mt.cb(task)
     for i,tok in ipairs(ct) do
-      if tok ~= tok or tok == math.huge() then
+      if tok ~= tok or tok == math.huge then
         logger.errx(task, 'metatoken %s returned %s; replace it with 0 for sanity',
             mt.names[i], tok)
         tok = 0.0
