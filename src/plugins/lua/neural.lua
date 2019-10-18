@@ -105,7 +105,6 @@ local redis_lua_script_can_store_train_vec = [[
   local nspam = 0
   local nham = 0
   local lim = tonumber(KEYS[3])
-  lim = lim + lim * 0.1
 
   local ret = redis.call('LLEN', prefix .. '_spam')
   if ret then nspam = tonumber(ret) end
