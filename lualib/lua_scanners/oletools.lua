@@ -106,16 +106,12 @@ local function oletools_check(task, content, digest, rule)
 
           retransmits = retransmits - 1
 
-          lua_util.debugm(rule.name, task,
-              '%s: Request Error: %s - retries left: %s',
-              rule.log_prefix, error, retransmits)
-
           -- Select a different upstream!
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(rule.name, task, '%s: retry IP: %s:%s',
-              rule.log_prefix, addr, addr:get_port())
+          lua_util.debugm(rule.name, task, '%s: error: %s; retry IP: %s; retries left: %s',
+              rule.log_prefix, err, addr, retransmits)
 
           tcp.request({
             task = task,

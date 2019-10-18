@@ -103,8 +103,8 @@ local function clamav_check(task, content, digest, rule)
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(rule.name, task, '%s: retry IP: %s',
-              rule.log_prefix, addr)
+          lua_util.debugm(rule.name, task, '%s: error: %s; retry IP: %s; retries left: %s',
+              rule.log_prefix, err, addr, retransmits)
 
           tcp.request({
             task = task,

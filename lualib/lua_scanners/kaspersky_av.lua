@@ -122,8 +122,8 @@ local function kaspersky_check(task, content, digest, rule)
           upstream = rule.upstreams:get_upstream_round_robin()
           addr = upstream:get_addr()
 
-          lua_util.debugm(rule.name, task,
-              '%s [%s]: retry IP: %s', rule['symbol'], rule['type'], addr)
+          lua_util.debugm(rule.name, task, '%s: error: %s; retry IP: %s; retries left: %s',
+              rule.log_prefix, err, addr, retransmits)
 
           tcp.request({
             task = task,
