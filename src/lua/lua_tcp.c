@@ -535,6 +535,7 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 	gint cbref, top;
 	struct lua_callback_state cbs;
 	lua_State *L;
+	gboolean callback_called = FALSE;
 
 	if (cbd->thread) {
 		va_start (ap, err);
@@ -591,11 +592,19 @@ lua_tcp_push_error (struct lua_tcp_cbdata *cbd, gboolean is_fatal,
 			lua_settop (L, top);
 
 			TCP_RELEASE (cbd);
+
+			callback_called = TRUE;
 		}
 
 		if (!is_fatal) {
-			/* Stop on the first callback found */
-			break;
+			if (callback_called) {
+				/* Stop on the first callback found */
+				break;
+			}
+			else {
+				/* Shift to another callback to inform about fatal error */
+				continue;
+			}
 		}
 		else {
 			lua_tcp_shift_handler (cbd);
@@ -841,14 +850,12 @@ lua_tcp_write_helper (struct lua_tcp_cbdata *cbd)
 
 	if (r == -1) {
 		if (!(cbd->ssl_conn)) {
-			lua_tcp_push_error (cbd, FALSE,
+			lua_tcp_push_error (cbd, TRUE,
 					"IO write error while trying to write %d bytes: %s",
 					(gint) remain, strerror (errno));
-			if (!IS_SYNC (cbd)) {
-				/* sync connection methods perform this inside */
-				lua_tcp_shift_handler (cbd);
-				lua_tcp_plan_handler_event (cbd, TRUE, FALSE);
-			}
+
+			msg_debug_tcp ("write error, terminate connection");
+			TCP_RELEASE (cbd);
 		}
 
 		return;
