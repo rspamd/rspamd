@@ -181,9 +181,11 @@ local function meta_received_function(task)
     end,
     fun.filter(function(rc) return not rc.flags or not rc.flags['artificial'] end, rh))
 
-    invalid_factor = invalid_factor / ntotal
-    secure_factor = secure_factor / ntotal
-    count_factor = 1.0 / ntotal
+    if ntotal > 0 then
+      invalid_factor = invalid_factor / ntotal
+      secure_factor = secure_factor / ntotal
+      count_factor = 1.0 / ntotal
+    end
 
     if time_factor ~= 0 then
       time_factor = 1.0 / time_factor
@@ -194,8 +196,9 @@ local function meta_received_function(task)
 end
 
 local function meta_urls_function(task)
-  if task:has_urls() then
-    return {1.0 / #(task:get_urls())}
+  local has_urls,nurls = task:has_urls()
+  if has_urls and nurls > 0 then
+    return {1.0 / nurls}
   end
 
   return {0}
@@ -481,6 +484,13 @@ local function rspamd_gen_metatokens_table(task)
   for _,mt in ipairs(metafunctions) do
     local ct = mt.cb(task)
     for i,tok in ipairs(ct) do
+      if tok ~= tok or tok == math.huge() then
+        local logger = require "rspamd_logger"
+        logger.errx(task, 'metatoken %s returned %s; replace it with 0 for sanity',
+            mt.names[i], tok)
+        tok = 0.0
+      end
+
       metatokens[mt.names[i]] = tok
     end
   end
