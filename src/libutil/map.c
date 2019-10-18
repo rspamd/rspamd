@@ -586,7 +586,7 @@ read_map_file_chunks (struct rspamd_map *map, struct map_cb_data *cbdata,
 
 	while ((r = read (fd, pos, avail)) > 0) {
 		gchar *end = bytes + (pos - bytes) + r;
-		msg_info_map ("%s: read map chunk, %z bytes", fname,
+		msg_debug_map ("%s: read map chunk, %z bytes", fname,
 				r);
 		pos = map->read_callback (bytes, end - bytes, cbdata, r == len);
 
