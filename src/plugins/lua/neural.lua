@@ -139,7 +139,7 @@ local redis_lua_script_can_store_train_vec = [[
     end
   end
 
-  return {tostring(0),'bad input'}
+  return {tostring(-1),'bad input'}
 ]]
 local redis_can_store_train_vec_id = nil
 
@@ -432,7 +432,7 @@ local function ann_push_task_result(rule, task, verdict, score, set)
       if not err and type(data) == 'table' then
         local nsamples,reason = tonumber(data[1]),data[2]
 
-        if nsamples > 0 then
+        if nsamples >= 0 then
           local coin = math.random()
 
           if coin < 1.0 - train_opts.train_prob then
@@ -467,8 +467,8 @@ local function ann_push_task_result(rule, task, verdict, score, set)
           )
         else
           -- Negative result returned
-          rspamd_logger.infox(task, "cannot learn ANN %s:%s: %s (%s vectors stored)",
-              rule.prefix, set.name, learn_type, reason, -tonumber(nsamples))
+          rspamd_logger.infox(task, "cannot learn %s ANN %s:%s: %s (%s vectors stored)",
+              learn_type, rule.prefix, set.name, reason, -tonumber(nsamples))
         end
       else
         rspamd_logger.errx(task, 'cannot check if we can train %s:%s : %s',
