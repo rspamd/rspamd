@@ -559,7 +559,8 @@ rspamd_stat_ctx_register_async (rspamd_stat_async_handler handler,
 		 * fast as possible
 		 */
 		elt->timer_ev.data = elt;
-		ev_timer_init (&elt->timer_ev, rspamd_async_elt_on_timer, 0.0, 0.0);
+		ev_timer_init (&elt->timer_ev, rspamd_async_elt_on_timer,
+				0.1, 0.0);
 		ev_timer_start (st_ctx->event_loop, &elt->timer_ev);
 	}
 	else {
