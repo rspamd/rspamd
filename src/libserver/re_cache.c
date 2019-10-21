@@ -855,12 +855,15 @@ rspamd_re_cache_process_selector (struct rspamd_task *task,
 	}
 	else {
 		gsize slen;
+		const gchar *sel_data;
 
 		if (lua_type (L, -1) == LUA_TSTRING) {
+			sel_data = lua_tolstring (L, -1, &slen);
 			*n = 1;
 			*svec = g_malloc (sizeof (guchar *));
 			*lenvec = g_malloc (sizeof (guint));
-			(*svec)[0] = g_strdup (lua_tolstring (L, -1, &slen));
+			(*svec)[0] = g_malloc (slen);
+			memcpy ((*svec)[0], sel_data, slen);
 			(*lenvec)[0] = slen;
 
 			result = TRUE;
@@ -874,7 +877,10 @@ rspamd_re_cache_process_selector (struct rspamd_task *task,
 
 				for (guint i = 0; i < *n; i ++) {
 					lua_rawgeti (L, -1, i + 1);
-					(*svec)[i] = g_strdup (lua_tolstring (L, -1, &slen));
+
+					sel_data = lua_tolstring (L, -1, &slen);
+					(*svec)[i] = g_malloc (slen);
+					memcpy ((*svec)[i], sel_data, slen);
 					(*lenvec)[i] = slen;
 					lua_pop (L, 1);
 				}
