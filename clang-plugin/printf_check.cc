@@ -384,13 +384,15 @@ namespace rspamd {
 		bool VisitCallExpr (CallExpr *E)
 		{
 			if (E->getCalleeDecl () == nullptr) {
-				llvm::errs () << "Bad callee\n";
-				return false;
+				print_remark ("cannot get callee decl",
+						E, this->pcontext, this->ci);
+				return true;
 			}
 			auto callee = dyn_cast<NamedDecl> (E->getCalleeDecl ());
 			if (callee == NULL) {
-				llvm::errs () << "Bad callee\n";
-				return false;
+				print_remark ("cannot get named callee decl",
+						E, this->pcontext, this->ci);
+				return true;
 			}
 
 			auto fname = callee->getNameAsString ();
