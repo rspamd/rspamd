@@ -180,13 +180,14 @@ struct map_periodic_cbdata {
 };
 
 static const gchar rspamd_http_file_magic[] =
-		{'r', 'm', 'c', 'd', '1', '0', '0', '0'};
+		{'r', 'm', 'c', 'd', '2', '0', '0', '0'};
 
 struct rspamd_http_file_data {
 	guchar magic[sizeof (rspamd_http_file_magic)];
 	goffset data_off;
 	gulong mtime;
 	gulong next_check;
+	gulong etag_len;
 };
 
 struct http_callback_data {

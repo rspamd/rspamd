@@ -1290,17 +1290,36 @@ rspamd_map_save_http_cached_file (struct rspamd_map *map,
 	header.next_check = map->next_check;
 	header.data_off = sizeof (header);
 
+	if (htdata->etag) {
+		header.data_off += RSPAMD_FSTRING_LEN (htdata->etag);
+		header.etag_len = RSPAMD_FSTRING_LEN (htdata->etag);
+	}
+	else {
+		header.etag_len = 0;
+	}
+
 	if (write (fd, &header, sizeof (header)) != sizeof (header)) {
-		msg_err_map ("cannot write file %s: %s", path, strerror (errno));
+		msg_err_map ("cannot write file %s (header stage): %s", path, strerror (errno));
 		rspamd_file_unlock (fd, FALSE);
 		close (fd);
 
 		return FALSE;
 	}
 
+	if (header.etag_len > 0) {
+		if (write (fd, RSPAMD_FSTRING_DATA (htdata->etag), header.etag_len) !=
+				header.etag_len) {
+			msg_err_map ("cannot write file %s (etag stage): %s", path, strerror (errno));
+			rspamd_file_unlock (fd, FALSE);
+			close (fd);
+
+			return FALSE;
+		}
+	}
+
 	/* Now write the rest */
 	if (write (fd, data, len) != len) {
-		msg_err_map ("cannot write file %s: %s", path, strerror (errno));
+		msg_err_map ("cannot write file %s (data stage): %s", path, strerror (errno));
 		rspamd_file_unlock (fd, FALSE);
 		close (fd);
 
@@ -1310,7 +1329,8 @@ rspamd_map_save_http_cached_file (struct rspamd_map *map,
 	rspamd_file_unlock (fd, FALSE);
 	close (fd);
 
-	msg_info_map ("saved data from %s in %s, %uz bytes", bk->uri, path, len);
+	msg_info_map ("saved data from %s in %s, %uz bytes", bk->uri, path, len +
+			sizeof (header) + header.etag_len);
 
 	return TRUE;
 }
@@ -1352,7 +1372,7 @@ rspamd_map_read_http_cached_file (struct rspamd_map *map,
 	(void)fstat (fd, &st);
 
 	if (read (fd, &header, sizeof (header)) != sizeof (header)) {
-		msg_err_map ("cannot read file %s: %s", path, strerror (errno));
+		msg_err_map ("cannot read file %s (header stage): %s", path, strerror (errno));
 		rspamd_file_unlock (fd, FALSE);
 		close (fd);
 
@@ -1361,18 +1381,44 @@ rspamd_map_read_http_cached_file (struct rspamd_map *map,
 
 	if (memcmp (header.magic, rspamd_http_file_magic,
 			sizeof (rspamd_http_file_magic)) != 0) {
-		msg_err_map ("invalid magic in file %s: %s", path, strerror (errno));
+		msg_warn_map ("invalid or old version magic in file %s; ignore it", path);
 		rspamd_file_unlock (fd, FALSE);
 		close (fd);
 
 		return FALSE;
 	}
 
-	rspamd_file_unlock (fd, FALSE);
-	close (fd);
-
 	map->next_check = header.next_check;
 	htdata->last_modified = header.mtime;
+
+	if (header.etag_len > 0) {
+		rspamd_fstring_t *etag = rspamd_fstring_sized_new (header.etag_len);
+
+		if (read (fd, RSPAMD_FSTRING_DATA (etag), header.etag_len) != header.etag_len) {
+			msg_err_map ("cannot read file %s (etag stage): %s", path,
+					strerror (errno));
+			rspamd_file_unlock (fd, FALSE);
+			rspamd_fstring_free (etag);
+			close (fd);
+
+			return FALSE;
+		}
+
+		etag->len = header.etag_len;
+
+		if (htdata->etag) {
+			/* FIXME: should be dealt somehow better */
+			msg_warn_map ("etag is already defined as %V; cached is %V; ignore cached",
+					htdata->etag, etag);
+			rspamd_fstring_free (etag);
+		}
+		else {
+			htdata->etag = etag;
+		}
+	}
+
+	rspamd_file_unlock (fd, FALSE);
+	close (fd);
 
 	/* Now read file data */
 	/* Perform buffered read: fail-safe */
@@ -1381,8 +1427,21 @@ rspamd_map_read_http_cached_file (struct rspamd_map *map,
 		return FALSE;
 	}
 
-	msg_info_map ("read cached data for %s from %s, %uz bytes", bk->uri, path,
-			st.st_size - header.data_off);
+	struct tm tm;
+	gchar ncheck_buf[32], lm_buf[32];
+
+	rspamd_localtime (map->next_check, &tm);
+	strftime (ncheck_buf, sizeof (ncheck_buf) - 1, "%Y-%m-%d %H:%M:%S", &tm);
+	rspamd_localtime (htdata->last_modified, &tm);
+	strftime (lm_buf, sizeof (lm_buf) - 1, "%Y-%m-%d %H:%M:%S", &tm);
+
+	msg_info_map ("read cached data for %s from %s, %uz bytes; next check at: %s;"
+				  " last modified on: %s; etag: %V",
+			bk->uri, path,
+			st.st_size - header.data_off,
+			ncheck_buf,
+			lm_buf,
+			htdata->etag);
 
 	return TRUE;
 }
