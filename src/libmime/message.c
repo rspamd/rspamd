@@ -1433,7 +1433,8 @@ rspamd_message_process (struct rspamd_task *task)
 			lua_settop (L, func_pos);
 		}
 
-		if (!(part->flags & (RSPAMD_MIME_PART_IMAGE|RSPAMD_MIME_PART_ARCHIVE))) {
+		if (!(part->flags & (RSPAMD_MIME_PART_IMAGE|RSPAMD_MIME_PART_ARCHIVE)) &&
+				(!part->ct || !(part->ct->flags & (RSPAMD_CONTENT_TYPE_MULTIPART|RSPAMD_CONTENT_TYPE_MESSAGE)))) {
 			rspamd_message_process_text_part_maybe (task, part);
 		}
 	}
