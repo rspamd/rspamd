@@ -302,7 +302,7 @@ lua_url_tostring (lua_State *L)
 
 	if (url != NULL && url->url != NULL) {
 		if (url->url->protocol == PROTOCOL_MAILTO) {
-			if (url->url->userlen + 1 + url->url->hostlen >= url->url->urllen) {
+			if (url->url->userlen + 1 + url->url->hostlen <= url->url->urllen) {
 				lua_pushlstring (L, url->url->user,
 						url->url->userlen + 1 + url->url->hostlen);
 			}
