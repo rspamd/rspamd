@@ -2725,7 +2725,7 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 	gsize len;
 	static const gchar hexdigests[16] = "0123456789abcdef";
 
-	len = slen;
+	len = 0;
 	p = pattern;
 
 	/* [-[\]{}()*+?.,\\^$|#\s] need to be escaped */
@@ -2781,13 +2781,10 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 		}
 	}
 
-	if (slen == len) {
+	if (len == 0) {
+		/* No need to escape anything */
+
 		if (dst_len) {
-
-			if (tmp_utf) {
-				slen = strlen (tmp_utf);
-			}
-
 			*dst_len = slen;
 		}
 
@@ -2799,10 +2796,12 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 		}
 	}
 
+	/* Escape logic */
 	if (tmp_utf) {
 		pattern = tmp_utf;
 	}
 
+	len = slen + len;
 	res = g_malloc (len + 1);
 	p = pattern;
 	d = res;
