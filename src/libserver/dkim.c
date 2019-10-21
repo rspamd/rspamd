@@ -1659,17 +1659,13 @@ rspamd_dkim_relaxed_body_step (struct rspamd_dkim_common_ctx *ctx, EVP_MD_CTX *c
 	*start = h;
 
 	if (*remain > 0) {
-		size_t cklen = MIN(t - buf, *remain + added);
+		gsize cklen = MIN(t - buf, *remain + added);
+
 		EVP_DigestUpdate (ck, buf, cklen);
 		*remain = *remain - (cklen - added);
-#if 0
-		msg_debug_dkim ("update signature with buffer (%ud size, %ud remain, %ud added): %*s",
-				cklen, *remain, added, cklen, buf);
-#else
 		msg_debug_dkim ("update signature with body buffer "
-				"(%ud size, %ud remain, %ud added)",
+				"(%z size, %ud remain, %ud added)",
 						cklen, *remain, added);
-#endif
 	}
 
 	return (len != 0);
@@ -1713,11 +1709,12 @@ rspamd_dkim_simple_body_step (struct rspamd_dkim_common_ctx *ctx,
 	*start = h;
 
 	if (*remain > 0) {
-		size_t cklen = MIN(t - buf, *remain + added);
+		gsize cklen = MIN(t - buf, *remain + added);
+
 		EVP_DigestUpdate (ck, buf, cklen);
 		*remain = *remain - (cklen - added);
 		msg_debug_dkim ("update signature with body buffer "
-				"(%ud size, %ud remain, %ud added)",
+				"(%z size, %ud remain, %ud added)",
 				cklen, *remain, added);
 	}
 
@@ -2016,8 +2013,8 @@ rspamd_dkim_signature_update (struct rspamd_dkim_common_ctx *ctx,
 		if (tag && p[0] == 'b' && p[1] == '=') {
 			/* Add to signature */
 			msg_debug_dkim ("initial update hash with signature part: %*s",
-				p - c + 2,
-				c);
+					(gint)(p - c + 2),
+					c);
 			rspamd_dkim_hash_update (ctx->headers_hash, c, p - c + 2);
 			skip = TRUE;
 		}
@@ -2041,7 +2038,8 @@ rspamd_dkim_signature_update (struct rspamd_dkim_common_ctx *ctx,
 	}
 
 	if (p - c + 1 > 0) {
-		msg_debug_dkim ("final update hash with signature part: %*s", p - c + 1, c);
+		msg_debug_dkim ("final update hash with signature part: %*s",
+				(gint)(p - c + 1), c);
 		rspamd_dkim_hash_update (ctx->headers_hash, c, p - c + 1);
 	}
 }
@@ -2427,8 +2425,8 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 			if (cpy_ctx) {
 				msg_debug_dkim (
 						"bh value mismatch: %*xs versus %*xs, try add CRLF",
-						dlen, ctx->bh,
-						dlen, cached_bh->digest_normal);
+						(gint)dlen, ctx->bh,
+						(gint)dlen, cached_bh->digest_normal);
 				/* Try add CRLF */
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 				EVP_MD_CTX_cleanup (cpy_ctx);
@@ -2445,8 +2443,8 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 				if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
 					msg_debug_dkim (
 							"bh value mismatch: %*xs versus %*xs, try add LF",
-							dlen, ctx->bh,
-							dlen, raw_digest);
+							(gint)dlen, ctx->bh,
+							(gint)dlen, raw_digest);
 
 					/* Try add LF */
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
@@ -2463,8 +2461,8 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 
 					if (memcmp (ctx->bh, raw_digest, ctx->bhlen) != 0) {
 						msg_debug_dkim ("bh value mismatch: %*xs versus %*xs",
-								dlen, ctx->bh,
-								dlen, raw_digest);
+								(gint)dlen, ctx->bh,
+								(gint)dlen, raw_digest);
 #if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
 						EVP_MD_CTX_cleanup (cpy_ctx);
 #else
@@ -2481,15 +2479,15 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 			else if (cached_bh->digest_crlf) {
 				if (memcmp (ctx->bh, cached_bh->digest_crlf, ctx->bhlen) != 0) {
 					msg_debug_dkim ("bh value mismatch: %*xs versus %*xs",
-							dlen, ctx->bh,
-							dlen, cached_bh->digest_crlf);
+							(gint)dlen, ctx->bh,
+							(gint)dlen, cached_bh->digest_crlf);
 
 					if (cached_bh->digest_cr) {
 						if (memcmp (ctx->bh, cached_bh->digest_cr, ctx->bhlen) != 0) {
 							msg_debug_dkim (
 									"bh value mismatch: %*xs versus %*xs",
-									dlen, ctx->bh,
-									dlen, cached_bh->digest_cr);
+									(gint)dlen, ctx->bh,
+									(gint)dlen, cached_bh->digest_cr);
 
 							res->fail_reason = "body hash did not verify";
 							res->rcode = DKIM_REJECT;
@@ -2509,8 +2507,8 @@ rspamd_dkim_check (rspamd_dkim_context_t *ctx,
 			else {
 				msg_debug_dkim (
 						"bh value mismatch: %*xs versus %*xs",
-						dlen, ctx->bh,
-						dlen, cached_bh->digest_normal);
+						(gint)dlen, ctx->bh,
+						(gint)dlen, cached_bh->digest_normal);
 				res->fail_reason = "body hash did not verify";
 				res->rcode = DKIM_REJECT;
 
@@ -2704,7 +2702,7 @@ rspamd_dkim_sign_key_load (const gchar *key, gsize len,
 	nkey = g_malloc0 (sizeof (*nkey));
 	nkey->mtime = mtime;
 
-	msg_debug_dkim_taskless ("got public key with length %d and type %d",
+	msg_debug_dkim_taskless ("got public key with length %z and type %d",
 			len, type);
 
 	/* Load key file if needed */
@@ -3006,12 +3004,13 @@ rspamd_dkim_sign (struct rspamd_task *task, const gchar *selector,
 	}
 	else {
 		g_assert (arc_cv != NULL);
-		rspamd_printf_gstring (hdr, "i=%d; a=%s; c=%s/%s; d=%s; s=%s; cv=%s; ",
-				arc_cv,
+		rspamd_printf_gstring (hdr, "i=%d; a=%s; d=%s; s=%s; cv=%s; ",
+				idx,
 				ctx->key->type == RSPAMD_DKIM_KEY_RSA ?
 						"rsa-sha256" : "ed25519-sha256",
-				idx,
-				domain, selector);
+				domain,
+				selector,
+				arc_cv);
 	}
 
 	if (expire > 0) {
