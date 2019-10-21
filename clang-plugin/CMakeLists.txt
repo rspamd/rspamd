@@ -1,54 +1,41 @@
 IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
     # Clang plugin for static analysis
+    PROJECT(RspamdClangPlugin)
     if (NOT "${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
         MESSAGE(FATAL_ERROR "Cannot build clang plugin when compiler is not clang")
     endif ()
+    FIND_PACKAGE(LLVM REQUIRED CONFIG)
 
-    LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
-    ENABLE_LANGUAGE(CXX)
-    FIND_PACKAGE(LLVM REQUIRED)
-    MESSAGE(STATUS "Trying to find libclang for llvm version ${LLVM_PACKAGE_VERSION}")
-    SET(libclang_llvm_header_search_paths
-            # LLVM Debian/Ubuntu nightly packages: http://llvm.org/apt/
-            "/usr/lib/llvm-${LLVM_PACKAGE_VERSION}/include/"
-            # LLVM MacPorts
-            "/opt/local/libexec/llvm-${LLVM_PACKAGE_VERSION}/include"
-            # LLVM Homebrew
-            "/usr/local/Cellar/llvm/${LLVM_PACKAGE_VERSION}/include"
-            # LLVM Homebrew/versions
-            "/usr/local/lib/llvm-${LLVM_PACKAGE_VERSION}/include"
-            # FreeBSD ports versions
-            "/usr/local/llvm${LLVM_PACKAGE_VERSION}/include"
-            "${LLVM_INCLUDE_DIRS}"
-            )
-
-    SET(libclang_llvm_lib_search_paths
-            # LLVM Debian/Ubuntu nightly packages: http://llvm.org/apt/
-            "/usr/lib/llvm-${LLVM_PACKAGE_VERSION}/lib/"
-            # LLVM MacPorts
-            "/opt/local/libexec/llvm-${LLVM_PACKAGE_VERSION}/lib"
-            # LLVM Homebrew
-            "/usr/local/Cellar/llvm/${LLVM_PACKAGE_VERSION}/lib"
-            # LLVM Homebrew/versions
-            "/usr/local/lib/llvm-${LLVM_PACKAGE_VERSION}/lib"
-            # FreeBSD ports versions
-            "/usr/local/llvm${LLVM_PACKAGE_VERSION}/lib"
-            "${LLVM_LIBRARY_DIRS}"
-            )
+    MESSAGE(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+    MESSAGE(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+    INCLUDE_DIRECTORIES(${LLVM_INCLUDE_DIRS})
+    ADD_DEFINITIONS(${LLVM_DEFINITIONS})
 
     find_path(LIBCLANG_INCLUDE_DIR clang-c/Index.h
-            PATHS ${libclang_llvm_header_search_paths}
-            PATH_SUFFIXES LLVM/include #Windows package from http://llvm.org/releases/
+            PATHS ${LLVM_INCLUDE_DIRS}
             DOC "The path to the directory that contains clang-c/Index.h")
-    find_library(LIBCLANG_LIBRARY NAMES libclang.imp libclang clang
-            PATHS ${libclang_llvm_lib_search_paths}
-            PATH_SUFFIXES LLVM/lib #Windows package from http://llvm.org/releases/
+
+    find_library(LIBCLANG_LIBRARY
+            NAMES
+            libclang
+            clang
+            PATHS ${LLVM_LIBRARY_DIRS}
             DOC "The file that corresponds to the libclang library.")
 
     get_filename_component(LIBCLANG_LIBRARY_DIR ${LIBCLANG_LIBRARY} PATH)
 
     set(LIBCLANG_LIBRARIES ${LIBCLANG_LIBRARY})
     set(LIBCLANG_INCLUDE_DIRS ${LIBCLANG_INCLUDE_DIR})
+
+    include(FindPackageHandleStandardArgs)
+    find_package_handle_standard_args(LibClang DEFAULT_MSG
+            LIBCLANG_LIBRARY LIBCLANG_INCLUDE_DIR)
+
+    mark_as_advanced(LIBCLANG_INCLUDE_DIR LIBCLANG_LIBRARY)
+
+    if (NOT LIBCLANG_FOUND)
+        MESSAGE(FATAL_ERROR "Libclang is required to build clang plugin")
+    endif()
 
     SET(CLANGPLUGINSRC plugin.cc printf_check.cc)
 
