@@ -46,14 +46,14 @@ local report_settings = {
   retries = 2,
   from_name = 'Rspamd',
 }
-local report_template = [[From: "{% from_name %}" <{% from_addr %}>
-To: {% rcpt %}
-Subject: Report Domain: {% reporting_domain %}
-	Submitter: {% submitter %}
-	Report-ID: {% report_id %}
-Date: {% report_date %}
+local report_template = [[From: "{= from_name =}" <{= from_addr =}>
+To: {= rcpt =}
+Subject: Report Domain: {= reporting_domain =}
+	Submitter: {= submitter =}
+	Report-ID: {= report_id =}
+Date: {= report_date =}
 MIME-Version: 1.0
-Message-ID: <{% message_id %}>
+Message-ID: <{= message_id =}>
 Content-Type: multipart/mixed;
 	boundary="----=_NextPart_000_024E_01CC9B0A.AFE54C00"
 
@@ -63,17 +63,17 @@ This is a multipart message in MIME format.
 Content-Type: text/plain; charset="us-ascii"
 Content-Transfer-Encoding: 7bit
 
-This is an aggregate report from {% submitter %}.
+This is an aggregate report from {= submitter =}.
 
-Report domain: {% reporting_domain %}
-Submitter: {% submitter %}
-Report ID: {% report_id %}
+Report domain: {= reporting_domain =}
+Submitter: {= submitter =}
+Report ID: {= report_id =}
 
 ------=_NextPart_000_024E_01CC9B0A.AFE54C00
 Content-Type: application/gzip
 Content-Transfer-Encoding: base64
 Content-Disposition: attachment;
-	filename="{% submitter %}!{% reporting_domain %}!{% report_start %}!{% report_end %}.xml.gz"
+	filename="{= submitter =}!{= reporting_domain =}!{= report_start =}!{= report_end =}.xml.gz"
 
 ]]
 local report_footer = [[
@@ -912,6 +912,8 @@ if opts['reporting'] == true then
             else
               send_report_via_email(xmlf, retry + 1)
             end
+          else
+            get_reporting_domain()
           end
         end
 
@@ -946,9 +948,9 @@ if opts['reporting'] == true then
               report_end = report_end
             }, true)
         local message = {
-          rhead:gsub("\n", "\r\n"),
+          (rhead:gsub("\n", "\r\n")),
           encoded,
-          report_footer:gsub("\n", "\r\n")
+          (report_footer:gsub("\n", "\r\n"))
         }
 
         local lua_smtp = require "lua_smtp"
