@@ -1596,11 +1596,15 @@ rspamd_re_cache_hs_pattern_from_pcre (rspamd_regexp_t *re)
 	 * https://github.com/intel/hyperscan/issues/133
 	 */
 	const gchar *pat = rspamd_regexp_get_pattern (re);
+	guint flags = rspamd_regexp_get_flags (re), esc_flags = RSPAMD_REGEXP_ESCAPE_RE;
 	gchar *escaped;
 	gsize esc_len;
 
-	escaped = rspamd_str_regexp_escape (pat, strlen (pat), &esc_len,
-			RSPAMD_REGEXP_ESCAPE_RE|RSPAMD_REGEXP_ESCAPE_UTF);
+	if (flags & RSPAMD_REGEXP_FLAG_UTF) {
+		esc_flags |= RSPAMD_REGEXP_ESCAPE_UTF;
+	}
+
+	escaped = rspamd_str_regexp_escape (pat, strlen (pat), &esc_len,esc_flags);
 
 	return escaped;
 }
