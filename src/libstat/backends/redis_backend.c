@@ -1006,6 +1006,14 @@ rspamd_redis_async_stat_cb (struct rspamd_stat_async_elt *elt, gpointer d)
 
 		return;
 	}
+	else if (redis_ctx->err != REDIS_OK) {
+		msg_warn ("cannot connect to redis server %s: %s",
+				rspamd_inet_address_to_string_pretty (addr),
+				redis_ctx->errstr);
+		redisAsyncFree (redis_ctx);
+
+		return;
+	}
 
 	redisLibevAttach (redis_elt->event_loop, redis_ctx);
 	cbdata = g_malloc0 (sizeof (*cbdata));
@@ -1030,8 +1038,10 @@ rspamd_redis_async_stat_fin (struct rspamd_stat_async_elt *elt, gpointer d)
 {
 	struct rspamd_redis_stat_elt *redis_elt = elt->ud;
 
-	rspamd_redis_async_cbdata_cleanup (redis_elt->cbdata);
-	redis_elt->cbdata = NULL;
+	if (redis_elt->cbdata != NULL) {
+		rspamd_redis_async_cbdata_cleanup (redis_elt->cbdata);
+		redis_elt->cbdata = NULL;
+	}
 }
 
 /* Called on connection termination */
@@ -1649,7 +1659,18 @@ rspamd_redis_runtime (struct rspamd_task *task,
 	}
 
 	if (rt->redis == NULL) {
-		msg_err_task ("cannot connect redis");
+		msg_warn_task ("cannot connect to redis server %s: %s",
+				rspamd_inet_address_to_string_pretty (addr),
+				strerror (errno));
+		return NULL;
+	}
+	else if (rt->redis->err != REDIS_OK) {
+		msg_warn_task ("cannot connect to redis server %s: %s",
+				rspamd_inet_address_to_string_pretty (addr),
+				rt->redis->errstr);
+		redisAsyncFree (rt->redis);
+		rt->redis = NULL;
+
 		return NULL;
 	}
 
@@ -1811,7 +1832,22 @@ rspamd_redis_learn_tokens (struct rspamd_task *task, GPtrArray *tokens,
 				rspamd_inet_address_get_port (addr));
 	}
 
-	g_assert (rt->redis != NULL);
+	if (rt->redis == NULL) {
+		msg_warn_task ("cannot connect to redis server %s: %s",
+				rspamd_inet_address_to_string_pretty (addr),
+				strerror (errno));
+
+		return FALSE;
+	}
+	else if (rt->redis->err != REDIS_OK) {
+		msg_warn_task ("cannot connect to redis server %s: %s",
+				rspamd_inet_address_to_string_pretty (addr),
+				rt->redis->errstr);
+		redisAsyncFree (rt->redis);
+		rt->redis = NULL;
+
+		return FALSE;
+	}
 
 	redisLibevAttach (task->event_loop, rt->redis);
 	rspamd_redis_maybe_auth (rt->ctx, rt->redis);

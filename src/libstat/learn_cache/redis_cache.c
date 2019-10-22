@@ -396,7 +396,22 @@ rspamd_stat_cache_redis_runtime (struct rspamd_task *task,
 				rspamd_inet_address_get_port (addr));
 	}
 
-	g_assert (rt->redis != NULL);
+	if (rt->redis == NULL) {
+		msg_warn_task ("cannot connect to redis server %s: %s",
+				rspamd_inet_address_to_string_pretty (addr),
+				strerror (errno));
+
+		return NULL;
+	}
+	else if (rt->redis->err != REDIS_OK) {
+		msg_warn_task ("cannot connect to redis server %s: %s",
+				rspamd_inet_address_to_string_pretty (addr),
+				rt->redis->errstr);
+		redisAsyncFree (rt->redis);
+		rt->redis = NULL;
+
+		return NULL;
+	}
 
 	redisLibevAttach (task->event_loop, rt->redis);
 

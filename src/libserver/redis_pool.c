@@ -252,7 +252,7 @@ rspamd_redis_pool_new_connection (struct rspamd_redis_pool *pool,
 	if (ctx) {
 
 		if (ctx->err != REDIS_OK) {
-			msg_err ("cannot connect to redis: %s", ctx->errstr);
+			msg_err ("cannot connect to redis %s (port %d): %s", ip, port, ctx->errstr);
 			redisAsyncFree (ctx);
 
 			return NULL;
