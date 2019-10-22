@@ -302,21 +302,15 @@ lua_url_tostring (lua_State *L)
 
 	if (url != NULL && url->url != NULL) {
 		if (url->url->protocol == PROTOCOL_MAILTO) {
-			if (url->url->userlen + 1 + url->url->hostlen == url->url->urllen) {
-				lua_pushlstring (L, url->url->string, url->url->urllen);
-			}
-			else {
-				/* TODO: not efficient */
-				gchar *tmp = g_malloc (url->url->userlen + 1 +
-						url->url->hostlen);
-				memcpy (tmp, url->url->user, url->url->userlen);
-				tmp[url->url->userlen] = '@';
-				memcpy (tmp + url->url->userlen + 1, url->url->host,
-						url->url->hostlen);
+			gchar *tmp = g_malloc (url->url->userlen + 1 +
+								   url->url->hostlen);
+			memcpy (tmp, url->url->user, url->url->userlen);
+			tmp[url->url->userlen] = '@';
+			memcpy (tmp + url->url->userlen + 1, url->url->host,
+					url->url->hostlen);
 
-				lua_pushlstring (L, tmp, url->url->userlen + 1 + url->url->hostlen);
-				g_free (tmp);
-			}
+			lua_pushlstring (L, tmp, url->url->userlen + 1 + url->url->hostlen);
+			g_free (tmp);
 		}
 		else {
 			lua_pushlstring (L, url->url->string, url->url->urllen);
