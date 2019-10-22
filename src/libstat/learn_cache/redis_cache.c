@@ -470,7 +470,7 @@ rspamd_stat_cache_redis_learn (struct rspamd_task *task,
 	gchar *h;
 	gint flag;
 
-	if (rspamd_session_blocked (task->s)) {
+	if (rt == NULL || rt->ctx == NULL || rspamd_session_blocked (task->s)) {
 		return RSPAMD_LEARN_INGORE;
 	}
 
