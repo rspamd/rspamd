@@ -999,7 +999,8 @@ rspamd_lua_redis_prepare_connection (lua_State *L, gint *pcbref, gboolean is_asy
 				ud->ctx = NULL;
 			}
 			else {
-				msg_err_task_check ("cannot connect to redis: unknown error");
+				msg_err_task_check ("cannot connect to redis (OS error): %s",
+						strerror (errno));
 			}
 
 			REDIS_RELEASE (ctx);
