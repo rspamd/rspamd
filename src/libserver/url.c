@@ -1554,7 +1554,7 @@ static gboolean
 rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 {
 	const gchar *p, *end, *c;
-	gchar buf[INET6_ADDRSTRLEN + 1], *errstr;
+	gchar *errstr;
 	struct in_addr in4;
 	struct in6_addr in6;
 	gboolean ret = FALSE, check_num = TRUE;
@@ -1572,13 +1572,11 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 		end--;
 	}
 
-	if (end - p > (gint) sizeof (buf) - 1) {
+	if (end - p == 0) {
 		return FALSE;
 	}
 
-	rspamd_strlcpy (buf, p, end - p + 1);
-
-	if (inet_pton (AF_INET, buf, &in4) == 1) {
+	if (rspamd_parse_inet_address_ip4 (p, end - p, &in4)) {
 		uri->host = rspamd_mempool_alloc (pool, INET_ADDRSTRLEN + 1);
 		memset (uri->host, 0, INET_ADDRSTRLEN + 1);
 		inet_ntop (AF_INET, &in4, uri->host, INET_ADDRSTRLEN);
@@ -1588,7 +1586,7 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 		uri->flags |= RSPAMD_URL_FLAG_NUMERIC;
 		ret = TRUE;
 	}
-	else if (inet_pton (AF_INET6, buf, &in6) == 1) {
+	else if (rspamd_parse_inet_address_ip6 (p, end - p, &in6)) {
 		uri->host = rspamd_mempool_alloc (pool, INET6_ADDRSTRLEN + 1);
 		memset (uri->host, 0, INET6_ADDRSTRLEN + 1);
 		inet_ntop (AF_INET6, &in6, uri->host, INET6_ADDRSTRLEN);
@@ -1599,6 +1597,8 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 		ret = TRUE;
 	}
 	else {
+		/* Heuristics for broken urls */
+		gchar buf[INET6_ADDRSTRLEN + 1];
 		/* Try also numeric notation */
 		c = p;
 		n = 0;
@@ -1621,10 +1621,11 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 					dots++;
 				}
 
-				t = strtoul (buf, &errstr, 0);
+				glong long_n = strtol (buf, &errstr, 0);
 
-				if (errstr == NULL || *errstr == '\0') {
+				if ((errstr == NULL || *errstr == '\0') && long_n >= 0) {
 
+					t = long_n; /* Truncate as windows does */
 					/*
 					 * Even if we have zero, we need to shift by 1 octet
 					 */
@@ -1689,16 +1690,32 @@ rspamd_url_is_ip (struct rspamd_url *uri, rspamd_mempool_t *pool)
 			n |= t << shift;
 		}
 
-		if (check_num && dots <= 4) {
-			memcpy (&in4, &n, sizeof (in4));
-			uri->host = rspamd_mempool_alloc (pool, INET_ADDRSTRLEN + 1);
-			memset (uri->host, 0, INET_ADDRSTRLEN + 1);
-			inet_ntop (AF_INET, &in4, uri->host, INET_ADDRSTRLEN);
-			uri->hostlen = strlen (uri->host);
-			uri->tld = uri->host;
-			uri->tldlen = uri->hostlen;
-			uri->flags |= RSPAMD_URL_FLAG_NUMERIC|RSPAMD_URL_FLAG_OBSCURED;
-			ret = TRUE;
+		if (check_num) {
+			if (dots <= 4) {
+				memcpy (&in4, &n, sizeof (in4));
+				uri->host = rspamd_mempool_alloc (pool, INET_ADDRSTRLEN + 1);
+				memset (uri->host, 0, INET_ADDRSTRLEN + 1);
+				inet_ntop (AF_INET, &in4, uri->host, INET_ADDRSTRLEN);
+				uri->hostlen = strlen (uri->host);
+				uri->tld = uri->host;
+				uri->tldlen = uri->hostlen;
+				uri->flags |= RSPAMD_URL_FLAG_NUMERIC | RSPAMD_URL_FLAG_OBSCURED;
+				ret = TRUE;
+			}
+			else if (end - c > (gint) sizeof (buf) - 1) {
+				rspamd_strlcpy (buf, c, end - c + 1);
+
+				if (inet_pton (AF_INET6, buf, &in6) == 1) {
+					uri->host = rspamd_mempool_alloc (pool, INET6_ADDRSTRLEN + 1);
+					memset (uri->host, 0, INET6_ADDRSTRLEN + 1);
+					inet_ntop (AF_INET6, &in6, uri->host, INET6_ADDRSTRLEN);
+					uri->hostlen = strlen (uri->host);
+					uri->tld = uri->host;
+					uri->tldlen = uri->hostlen;
+					uri->flags |= RSPAMD_URL_FLAG_NUMERIC | RSPAMD_URL_FLAG_OBSCURED;
+					ret = TRUE;
+				}
+			}
 		}
 	}
 
