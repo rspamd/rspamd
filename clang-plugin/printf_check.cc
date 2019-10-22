@@ -590,11 +590,22 @@ namespace rspamd {
 	size_arg_handler (const Expr *arg, struct PrintfArgChecker *ctx)
 	{
 		if (sizeof (size_t) == sizeof (long)) {
-			return check_builtin_type (arg,
-					ctx,
-					{BuiltinType::Kind::ULong,
-					 BuiltinType::Kind::Long},
-					"%z");
+			if (sizeof (long long) == sizeof (long)) {
+				return check_builtin_type (arg,
+						ctx,
+						{BuiltinType::Kind::ULong,
+						 BuiltinType::Kind::Long,
+						 BuiltinType::Kind::LongLong,
+						 BuiltinType::Kind::ULongLong},
+						"%z");
+			}
+			else {
+				return check_builtin_type (arg,
+						ctx,
+						{BuiltinType::Kind::ULong,
+						 BuiltinType::Kind::Long},
+						"%z");
+			}
 		}
 		else if (sizeof (size_t) == sizeof (int)) {
 			return check_builtin_type (arg,

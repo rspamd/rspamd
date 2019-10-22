@@ -1,6 +1,5 @@
 
 IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
-    cmake_minimum_required(VERSION 3.9)
     # Clang plugin for static analysis
     PROJECT(RspamdClangPlugin)
     if (NOT "${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
@@ -14,6 +13,13 @@ IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
     ADD_DEFINITIONS(${LLVM_DEFINITIONS})
 
     find_package(Clang REQUIRED)
+
+    set(clang_libs
+            clangAST
+            clangBasic
+            clangFrontend)
+
+    message(STATUS "Found LibClang in: ${CLANG_INSTALL_PREFIX}")
     include_directories(${CLANG_INCLUDE_DIRS})
 
     SET(CLANGPLUGINSRC plugin.cc printf_check.cc)
@@ -22,7 +28,9 @@ IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
     SET_TARGET_PROPERTIES(rspamd-clang PROPERTIES
             COMPILE_FLAGS "-O2 -Wall -Wextra -Wno-unused-parameter -Werror"
             LINKER_LANGUAGE CXX)
-	set_property(TARGET rspamd-clang APPEND_STRING PROPERTY LINK_FLAGS " -Wl,--no-undefined -Wl,--as-needed")
+    IF(NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+	    set_property(TARGET rspamd-clang APPEND_STRING PROPERTY LINK_FLAGS " -Wl,--no-undefined -Wl,--as-needed")
+    ENDIF()
 
     find_library(found_LLVM LLVM HINTS ${LLVM_LIBRARY_DIRS})
     if(found_LLVM)
@@ -33,9 +41,5 @@ IF (ENABLE_CLANG_PLUGIN MATCHES "ON")
         target_link_libraries(rspamd-clang PRIVATE ${llvm_libs})
     endif()
 
-    set(clang_libs
-        clangAST
-        clangBasic
-        clangFrontend)
     target_link_libraries(rspamd-clang PRIVATE ${clang_libs})
 ENDIF()

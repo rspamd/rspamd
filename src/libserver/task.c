@@ -395,7 +395,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 
 			if (offset > (gulong)st.st_size) {
 				msg_err_task ("invalid offset %ul (%ul available) for shm "
-							  "segment %s", offset, st.st_size, fp);
+							  "segment %s", offset, (gulong)st.st_size, fp);
 				munmap (map, st.st_size);
 				close (fd);
 
@@ -412,7 +412,7 @@ rspamd_task_load_message (struct rspamd_task *task,
 
 			if (shmem_size > (gulong)st.st_size) {
 				msg_err_task ("invalid length %ul (%ul available) for %s "
-							  "segment %s", shmem_size, st.st_size, ft, fp);
+							  "segment %s", shmem_size, (gulong)st.st_size, ft, fp);
 				munmap (map, st.st_size);
 				close (fd);
 
