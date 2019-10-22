@@ -14,14 +14,11 @@ ${REDIS_SCOPE}  Suite
 ${RSPAMD_SCOPE}  Suite
 
 *** Test Cases ***
-Train Spam
+Train
   Sleep  2s  Wait for redis mess
   : FOR    ${INDEX}    IN RANGE    0    10
   \  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SPAM_SYMBOL"]}
   \  Check Rspamc  ${result}  SPAM_SYMBOL (1.00)
-
-Train Ham
-  : FOR    ${INDEX}    IN RANGE    0    10
   \  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["HAM_SYMBOL"]}
   \  Check Rspamc  ${result}  HAM_SYMBOL (-1.00)
 
@@ -37,16 +34,12 @@ Check Neural SPAM
   Check Rspamc  ${result}  NEURAL_HAM_SHORT  inverse=1
 
 
-Train Spam INVERSE
+Train INVERSE
   : FOR    ${INDEX}    IN RANGE    0    10
   \  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["SPAM_SYMBOL"]; SPAM_SYMBOL = -1}
   \  Check Rspamc  ${result}  SPAM_SYMBOL (-1.00)
-
-Train Ham INVERSE
-  : FOR    ${INDEX}    IN RANGE    0    10
   \  ${result} =  Scan Message With Rspamc  ${MESSAGE}  --header  Settings={symbols_enabled = ["HAM_SYMBOL"]; HAM_SYMBOL = 1;}
   \  Check Rspamc  ${result}  HAM_SYMBOL (1.00)
-
 
 Check Neural HAM INVERSE
   Sleep  2s  Wait for neural to be loaded
