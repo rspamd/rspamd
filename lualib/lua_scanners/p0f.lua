@@ -117,7 +117,7 @@ local function p0f_check(task, ip, rule)
 
       data = parse_p0f_response(data)
 
-      if rule.redis_params then
+      if rule.redis_params and data then
         local key = rule.prefix .. ip:to_string()
         local ret = lua_redis.redis_make_request(task,
           rule.redis_params,
