@@ -105,6 +105,9 @@ rspamd_cte_to_string (enum rspamd_cte ct)
 	case RSPAMD_CTE_B64:
 		ret = "base64";
 		break;
+	case RSPAMD_CTE_UUE:
+		ret = "X-uuencode";
+		break;
 	default:
 		break;
 	}
@@ -130,6 +133,15 @@ rspamd_cte_from_string (const gchar *str)
 	}
 	else if (strcmp (str, "base64") == 0) {
 		ret = RSPAMD_CTE_B64;
+	}
+	else if (strcmp (str, "X-uuencode") == 0) {
+		ret = RSPAMD_CTE_UUE;
+	}
+	else if (strcmp (str, "uuencode") == 0) {
+		ret = RSPAMD_CTE_UUE;
+	}
+	else if (strcmp (str, "X-uue") == 0) {
+		ret = RSPAMD_CTE_UUE;
 	}
 
 	return ret;
@@ -172,6 +184,11 @@ rspamd_mime_parse_cte (const gchar *in, gsize len)
 	case 0x171029DE1B0423A9ULL: /* base-64 */
 		ret = RSPAMD_CTE_B64;
 		break;
+	case 0x420b54dc00d13cecULL: /* uuencode */
+	case 0x8df6700b8f6c4cf9ULL: /* x-uuencode */
+	case 0x41f725ec544356d3ULL: /* x-uue */
+		ret = RSPAMD_CTE_UUE;
+		break;
 	}
 
 	return ret;
@@ -193,6 +210,33 @@ rspamd_mime_part_get_cte_heuristic (struct rspamd_task *task,
 
 	while (p < end && g_ascii_isspace (*p)) {
 		p ++;
+	}
+
+	if (end - p > sizeof ("begin-base64 ")) {
+		const guchar *uue_start;
+
+		if (memcmp (p, "begin ", sizeof ("begin ") - 1) == 0) {
+			uue_start = p + sizeof ("begin ") - 1;
+
+			while (uue_start < end && g_ascii_isspace (*uue_start)) {
+				uue_start ++;
+			}
+
+			if (uue_start < end && g_ascii_isdigit (*uue_start)) {
+				return RSPAMD_CTE_UUE;
+			}
+		}
+		else if (memcmp (p, "begin-base64 ", sizeof ("begin-base64 ") - 1) == 0) {
+			uue_start = p + sizeof ("begin ") - 1;
+
+			while (uue_start < end && g_ascii_isspace (*uue_start)) {
+				uue_start ++;
+			}
+
+			if (uue_start < end && g_ascii_isdigit (*uue_start)) {
+				return RSPAMD_CTE_UUE;
+			}
+		}
 	}
 
 	if (end > p + 2) {
@@ -511,6 +555,27 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 		part->parsed_data.len = parsed->len;
 		rspamd_mempool_add_destructor (task->task_pool,
 				(rspamd_mempool_destruct_t)rspamd_fstring_free, parsed);
+		break;
+	case RSPAMD_CTE_UUE:
+		parsed = rspamd_fstring_sized_new (part->raw_data.len / 4 * 3 + 12);
+		r = rspamd_decode_uue_buf (part->raw_data.begin, part->raw_data.len,
+				parsed->str, parsed->allocated);
+		rspamd_mempool_add_destructor (task->task_pool,
+				(rspamd_mempool_destruct_t)rspamd_fstring_free, parsed);
+		if (r != -1) {
+			parsed->len = r;
+			part->parsed_data.begin = parsed->str;
+			part->parsed_data.len = parsed->len;
+		}
+		else {
+			msg_err_task ("invalid quoted-printable encoded part, assume 8bit");
+			part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+			part->cte = RSPAMD_CTE_8BIT;
+			memcpy (parsed->str, part->raw_data.begin, part->raw_data.len);
+			parsed->len = part->raw_data.len;
+			part->parsed_data.begin = parsed->str;
+			part->parsed_data.len = parsed->len;
+		}
 		break;
 	default:
 		g_assert_not_reached ();

@@ -44,6 +44,7 @@ enum rspamd_cte {
 	RSPAMD_CTE_8BIT = 2,
 	RSPAMD_CTE_QP = 3,
 	RSPAMD_CTE_B64 = 4,
+	RSPAMD_CTE_UUE = 5,
 };
 
 struct rspamd_mime_text_part;

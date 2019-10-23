@@ -228,6 +228,8 @@ local function match_chunk(chunk, input, tlen, offset, trie, processed_tbl, log_
       for _,position in ipairs(match.positions) do
         local matched = false
         for _,pos in ipairs(matched_positions) do
+          lua_util.debugm(N, log_obj, 'found match %s at offset %s(from %s)',
+              pattern.ext, pos, offset)
           if not match_position(pos + offset, position) then
             matched = true
             break
