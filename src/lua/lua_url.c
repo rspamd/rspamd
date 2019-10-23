@@ -762,7 +762,7 @@ lua_url_create (lua_State *L)
 /***
  * @function url.init(tld_file)
  * Initialize url library if not initialized yet by Rspamd
- * @param {string} tld_file for url library
+ * @param {string} tld_file path to effective_tld_names.dat file (public suffix list)
  * @return nothing
  */
 static gint
@@ -849,6 +849,7 @@ lua_url_all (lua_State *L)
  * - `unnormalised`: URL has some unicode unnormalities
  * - `zw_spaces`: URL has some zero width spaces
  * - `url_displayed`: URL has some other url-like string in visible part
+ * - `image`: URL is from src attribute of img HTML tag
  * @return {table} URL flags
  */
 #define PUSH_FLAG(fl, name) do { \
