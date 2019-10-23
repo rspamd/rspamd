@@ -422,11 +422,11 @@ local function milter_headers(task)
 
     local os_string, link_type, uptime_min, distance =
       task:get_mempool():get_variable('os_fingerprint',
-        'string, string, int, int');
+        'string, string, double, double');
 
     if not os_string then return end
 
-    local value = string.format('%s, (up: %u min), (distance %i, link: %s)',
+    local value = string.format('%s, (up: %i min), (distance %i, link: %s)',
       os_string, uptime_min, distance, link_type)
 
     if settings.routines['x-os-fingerprint'].remove then
@@ -434,7 +434,7 @@ local function milter_headers(task)
         = settings.routines['x-os-fingerprint'].remove
     end
 
-    add_header(settings.routines['x-os-fingerprint'].header, value)
+    add_header('x-os-fingerprint', value)
   end
 
   routines['x-spam-status'] = function()
