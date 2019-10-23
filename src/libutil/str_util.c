@@ -1578,21 +1578,13 @@ rspamd_substring_preprocess_kmp (const gchar *pat, gsize len, goffset *fsm,
 }
 
 static inline goffset
-rspamd_substring_search_common (const gchar *in, gsize inlen,
-		const gchar *srch, gsize srchlen, rspamd_cmpchar_func_t f)
+rspamd_substring_search_preprocessed (const gchar *in, gsize inlen,
+								const gchar *srch,
+								gsize srchlen,
+								const goffset *fsm,
+								rspamd_cmpchar_func_t f)
 {
-	static goffset st_fsm[128];
-	goffset *fsm;
-	goffset i, j, k, ell, ret = -1;
-
-	if (G_LIKELY (srchlen < G_N_ELEMENTS (st_fsm))) {
-		fsm = st_fsm;
-	}
-	else {
-		fsm = g_malloc ((srchlen + 1) * sizeof (*fsm));
-	}
-
-	rspamd_substring_preprocess_kmp (srch, srchlen, fsm, f);
+	goffset i, j, k, ell;
 
 	for (ell = 1; f(srch[ell - 1], srch[ell]); ell++) {}
 	if (ell == srchlen) {
@@ -1614,8 +1606,7 @@ rspamd_substring_search_common (const gchar *in, gsize inlen,
 			}
 
 			if (k >= ell) {
-				ret = j;
-				goto out;
+				return j;
 			}
 		}
 
@@ -1635,7 +1626,26 @@ rspamd_substring_search_common (const gchar *in, gsize inlen,
 		}
 	}
 
-out:
+	return -1;
+}
+
+static inline goffset
+rspamd_substring_search_common (const gchar *in, gsize inlen,
+		const gchar *srch, gsize srchlen, rspamd_cmpchar_func_t f)
+{
+	static goffset st_fsm[128];
+	goffset *fsm, ret;
+
+	if (G_LIKELY (srchlen < G_N_ELEMENTS (st_fsm))) {
+		fsm = st_fsm;
+	}
+	else {
+		fsm = g_malloc ((srchlen + 1) * sizeof (*fsm));
+	}
+
+	rspamd_substring_preprocess_kmp (srch, srchlen, fsm, f);
+	ret = rspamd_substring_search_preprocessed (in, inlen, srch, srchlen, fsm, f);
+
 	if (G_UNLIKELY (srchlen >= G_N_ELEMENTS (st_fsm))) {
 		g_free (fsm);
 	}
@@ -2183,6 +2193,150 @@ decode:
 				return (-1);
 			}
 		}
+	}
+
+	return (o - out);
+}
+
+gssize
+rspamd_decode_uue_buf (const gchar *in, gsize inlen,
+					  gchar *out, gsize outlen)
+{
+	gchar *o, *out_end;
+	const gchar *p;
+	gssize remain;
+	gboolean base64 = FALSE;
+	goffset newlines_fsm[3], pos;
+	static const gchar *nline = "\r\n";
+
+	p = in;
+	o = out;
+	out_end = out + outlen;
+	remain = inlen;
+
+	/* First of all, we need to read the first line (and probably skip it) */
+	if (remain < sizeof ("begin-base64 ")) {
+		/* Obviously truncated */
+		return -1;
+	}
+
+	rspamd_substring_preprocess_kmp (nline, 2, newlines_fsm,
+			rspamd_substring_cmp_func);
+
+	if (memcmp (p, "begin ", sizeof ("begin ") - 1) == 0) {
+		p += sizeof ("begin ") - 1;
+		remain -= sizeof ("begin ") - 1;
+
+		pos = rspamd_substring_search_preprocessed (p, remain, nline, 2,
+		 		newlines_fsm, rspamd_substring_cmp_func);
+	}
+	else if (memcmp (p, "begin-base64 ", sizeof ("begin-base64 ") - 1) == 0) {
+		base64 = TRUE;
+		p += sizeof ("begin-base64 ") - 1;
+		remain -= sizeof ("begin-base64 ") - 1;
+		pos = rspamd_substring_search_preprocessed (p, remain, nline, 2,
+				newlines_fsm, rspamd_substring_cmp_func);
+	}
+	else {
+		/* Crap */
+		return (-1);
+	}
+
+	if (pos == -1) {
+		/* Crap */
+		return (-1);
+	}
+
+#define SKIP_NEWLINE do { while (remain > 0 && (*p == '\n' || *p == '\r')) {p ++; remain --; } } while (0)
+#define	DEC(c)	(((c) - ' ') & 077)		/* single character decode */
+#define IS_DEC(c) ( (((c) - ' ') >= 0) && (((c) - ' ') <= 077 + 1) )
+#define CHAR_OUT(c) do { if (o < out_end) { *o++ = c; } else { return (-1); } } while(0)
+
+	p = p + pos;
+	SKIP_NEWLINE;
+
+	if (base64) {
+		if (!rspamd_cryptobox_base64_decode (p,
+				remain,
+				out, &outlen)) {
+			return (-1);
+		}
+
+		return outlen;
+	}
+
+	while (remain > 0 && o < out_end) {
+		/* Main cycle */
+		const gchar *eol;
+		gint i, ch;
+
+		pos = rspamd_substring_search_preprocessed (p, remain, nline, 2,
+				newlines_fsm, rspamd_substring_cmp_func);
+
+		if (pos == -1) {
+			/* Assume end of buffer */
+			pos = remain;
+		}
+
+		eol = p + pos;
+		remain -= eol - p;
+
+		if ((i = DEC(*p)) <= 0) {
+			/* Last pos */
+			break;
+		}
+
+		/* i can be less than eol - p, it means uue padding which we ignore */
+		for (++p; i > 0 && p < eol; p += 4, i -= 3) {
+			if (i >= 3 && p + 3 < eol) {
+				/* Process 4 bytes of input */
+				if (!IS_DEC(*p)) {
+					return (-1);
+				}
+				if (!IS_DEC(*(p + 1))) {
+					return (-1);
+				}
+				if (!IS_DEC(*(p + 2))) {
+					return (-1);
+				}
+				if (!IS_DEC(*(p + 3))) {
+					return (-1);
+				}
+				ch = DEC(p[0]) << 2 | DEC(p[1]) >> 4;
+				CHAR_OUT(ch);
+				ch = DEC(p[1]) << 4 | DEC(p[2]) >> 2;
+				CHAR_OUT(ch);
+				ch = DEC(p[2]) << 6 | DEC(p[3]);
+				CHAR_OUT(ch);
+			}
+			else {
+				if (i >= 1 && p + 1 < eol) {
+					if (!IS_DEC(*p)) {
+						return (-1);
+					}
+					if (!IS_DEC(*(p + 1))) {
+						return (-1);
+					}
+
+					ch = DEC(p[0]) << 2 | DEC(p[1]) >> 4;
+					CHAR_OUT(ch);
+				}
+				if (i >= 2 && p + 2 < eol) {
+					if (!IS_DEC(*(p + 1))) {
+						return (-1);
+					}
+					if (!IS_DEC(*(p + 2))) {
+						return (-1);
+					}
+
+					ch = DEC(p[1]) << 4 | DEC(p[2]) >> 2;
+					CHAR_OUT(ch);
+				}
+			}
+		}
+		/* Skip newline */
+		p = eol;
+		SKIP_NEWLINE;
 	}
 
 	return (o - out);

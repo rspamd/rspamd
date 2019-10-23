@@ -279,6 +279,17 @@ gssize rspamd_decode_qp_buf (const gchar *in, gsize inlen,
 							 gchar *out, gsize outlen);
 
 /**
+ * Decode uuencode encoded buffer, input and output must not overlap
+ * @param in input
+ * @param inlen length of input
+ * @param out output
+ * @param outlen length of output
+ * @return real size of decoded output or (-1) if outlen is not enough
+ */
+gssize rspamd_decode_uue_buf (const gchar *in, gsize inlen,
+							 gchar *out, gsize outlen);
+
+/**
  * Decode quoted-printable encoded buffer using rfc2047 format, input and output must not overlap
  * @param in input
  * @param inlen length of input
