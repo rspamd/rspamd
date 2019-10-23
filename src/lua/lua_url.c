@@ -762,7 +762,7 @@ lua_url_create (lua_State *L)
 /***
  * @function url.init(tld_file)
  * Initialize url library if not initialized yet by Rspamd
- * @param {string} tld_file for url library
+ * @param {string} tld_file path to effective_tld_names.dat file (public suffix list)
  * @return nothing
  */
 static gint
