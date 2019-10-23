@@ -1466,14 +1466,19 @@ local function post_process()
         local res = 0
         local trace = {}
         -- XXX: need to memoize result for better performance
-        local sym = task:has_symbol(k)
-        if not sym then
+        local has_sym = task:has_symbol(k)
+        if not has_sym then
           if expression then
             res,trace = expression:process_traced(task)
           end
           if res > 0 then
             -- Symbol should be one shot to make it working properly
-            task:insert_result(k, res, trace)
+
+            -- Exclude elements that are named in the same way as the symbol itself
+            local function exclude_sym_filter(sopt)
+              return sopt ~= k
+            end
+            task:insert_result(k, res, fun.totable(fun.filter(exclude_sym_filter, trace)))
           end
         else
           res = 1
