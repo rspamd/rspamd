@@ -849,6 +849,7 @@ lua_url_all (lua_State *L)
  * - `unnormalised`: URL has some unicode unnormalities
  * - `zw_spaces`: URL has some zero width spaces
  * - `url_displayed`: URL has some other url-like string in visible part
+ * - `image`: URL is from src attribute of img HTML tag
  * @return {table} URL flags
  */
 #define PUSH_FLAG(fl, name) do { \
