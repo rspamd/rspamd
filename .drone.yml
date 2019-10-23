@@ -93,7 +93,6 @@ steps:
     commands:
       - test "$(id -un)" = nobody
       - ulimit -c unlimited
-      - ulimit -s unlimited
       # rspamd-test and functional test both use luacov.stats.out file and should be started from
       # different directories (if started in parallel)
       - cd /rspamd/build/test
@@ -253,6 +252,6 @@ trigger:
 
 ---
 kind: signature
-hmac: 2b33ee4678e119d3c794e8641fbeee97d514b3a027a4538bb1b0dac61e5224cc
+hmac: 9997b0189f3cf3acce7575372f728ccc57bf57b9a72936d86e91b1cff852a48b
 
 ...
