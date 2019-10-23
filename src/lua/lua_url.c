@@ -23,6 +23,9 @@
  * You can also create `rspamd_url` from any text.
  * @example
 local url = require "rspamd_url"
+local mpool = require "rspamd_mempool"
+
+url.init("/usr/share/rspamd/effective_tld_names.dat")
 local pool = mpool.create()
 local res = url.create(pool, 'Look at: http://user@test.example.com/test?query")
 local t = res:to_table()
@@ -757,7 +760,7 @@ lua_url_create (lua_State *L)
 }
 
 /***
- * @function url.create(tld_file)
+ * @function url.init(tld_file)
  * Initialize url library if not initialized yet by Rspamd
  * @param {string} tld_file for url library
  * @return nothing
