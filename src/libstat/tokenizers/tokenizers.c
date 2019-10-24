@@ -285,7 +285,8 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 					  struct rspamd_config *cfg,
 					  GList *exceptions,
 					  guint64 *hash,
-					  GArray *cur_words)
+					  GArray *cur_words,
+					  rspamd_mempool_t *pool)
 {
 	rspamd_stat_token_t token, buf;
 	const gchar *pos = NULL;
@@ -359,7 +360,8 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 					ev_tstamp now = ev_time ();
 
 					if (now - start > max_exec_time) {
-						msg_warn ("too long time has been spent on tokenization:"
+						msg_warn_pool_check (
+								"too long time has been spent on tokenization:"
 								  " %.1f ms, limit is %.1f ms; %d words added so far",
 								(now - start) * 1e3, max_exec_time * 1e3,
 								res->len);
@@ -373,7 +375,8 @@ rspamd_tokenize_text (const gchar *text, gsize len,
 
 			if (((gsize)res->len) * sizeof (token) > (0x1ull << 30u)) {
 				/* Due to bug in glib ! */
-				msg_err ("too many words found: %d, stop tokenization to avoid DoS",
+				msg_err_pool_check (
+						"too many words found: %d, stop tokenization to avoid DoS",
 						res->len);
 
 				goto end;
@@ -420,7 +423,17 @@ start_over:
 							if (last > p) {
 								/* Exception spread over the boundaries */
 								while (last > p && p != UBRK_DONE) {
+									gint32 old_p = p;
 									p = ubrk_next (bi);
+
+									if (p <= old_p) {
+										msg_warn_pool_check (
+												"tokenization reversed back on position %d,"
+												"%d new position (%d backward), likely libicu bug!",
+												(gint)(p), (gint)(old_p), old_p - p);
+
+										goto end;
+									}
 								}
 
 								/* We need to reset our scan with new p and last */
@@ -450,7 +463,16 @@ start_over:
 							if (last > p) {
 								/* Exception spread over the boundaries */
 								while (last > p && p != UBRK_DONE) {
+									gint32 old_p = p;
 									p = ubrk_next (bi);
+									if (p <= old_p) {
+										msg_warn_pool_check (
+												"tokenization reversed back on position %d,"
+												"%d new position (%d backward), likely libicu bug!",
+												(gint)(p), (gint)(old_p), old_p - p);
+
+										goto end;
+									}
 								}
 								/* We need to reset our scan with new p and last */
 								SHIFT_EX;
@@ -531,7 +553,8 @@ start_over:
 					ev_tstamp now = ev_time ();
 
 					if (now - start > max_exec_time) {
-						msg_warn ("too long time has been spent on tokenization:"
+						msg_warn_pool_check (
+								"too long time has been spent on tokenization:"
 								  " %.1f ms, limit is %.1f ms; %d words added so far",
 								(now - start) * 1e3, max_exec_time * 1e3,
 								res->len);
@@ -543,6 +566,14 @@ start_over:
 
 			last = p;
 			p = ubrk_next (bi);
+
+			if (p <= last) {
+				msg_warn_pool_check ("tokenization reversed back on position %d,"
+						 "%d new position (%d backward), likely libicu bug!",
+						(gint)(p), (gint)(last), last - p);
+
+				goto end;
+			}
 		}
 	}
 
@@ -599,14 +630,17 @@ rspamd_add_metawords_from_str (const gchar *beg, gsize len,
 
 		task->meta_words = rspamd_tokenize_text (beg, len,
 				&utxt, RSPAMD_TOKENIZE_UTF,
-				task->cfg, NULL, NULL, task->meta_words);
+				task->cfg, NULL, NULL,
+				task->meta_words,
+				task->task_pool);
 
 		utext_close (&utxt);
 	}
 	else {
 		task->meta_words = rspamd_tokenize_text (beg, len,
 				NULL, RSPAMD_TOKENIZE_RAW,
-				task->cfg, NULL, NULL, task->meta_words);
+				task->cfg, NULL, NULL, task->meta_words,
+				task->task_pool);
 	}
 }
 

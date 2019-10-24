@@ -187,7 +187,9 @@ rspamd_mime_part_create_words (struct rspamd_task *task,
 			&part->utf_stripped_text,
 			tok_type, task->cfg,
 			part->exceptions,
-			NULL, NULL);
+			NULL,
+			NULL,
+			task->task_pool);
 
 
 	if (part->utf_words) {

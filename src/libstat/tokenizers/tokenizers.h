@@ -50,7 +50,8 @@ GArray *rspamd_tokenize_text (const gchar *text, gsize len,
 							  struct rspamd_config *cfg,
 							  GList *exceptions,
 							  guint64 *hash,
-							  GArray *cur_words);
+							  GArray *cur_words,
+							  rspamd_mempool_t *pool);
 
 /* OSB tokenize function */
 gint rspamd_tokenizer_osb (struct rspamd_stat_ctx *ctx,
