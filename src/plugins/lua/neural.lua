@@ -118,7 +118,7 @@ local redis_lua_script_can_store_train_vec = [[
       if nspam > nham then
         -- Apply sampling
         local skip_rate = 1.0 - nham / (nspam + 1)
-        if coun < skip_rate then
+        if coin < skip_rate then
           return {tostring(-(nspam)),'sampled out with probability ' .. tostring(skip_rate)}
         end
       end
