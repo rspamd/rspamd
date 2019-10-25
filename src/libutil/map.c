@@ -60,6 +60,9 @@ static gboolean rspamd_map_save_http_cached_file (struct rspamd_map *map,
 												  struct http_map_data *htdata,
 												  const guchar *data,
 												  gsize len);
+static gboolean rspamd_map_update_http_cached_file (struct rspamd_map *map,
+												  struct rspamd_map_backend *bk,
+												  struct http_map_data *htdata);
 
 guint rspamd_map_log_id = (guint)-1;
 RSPAMD_CONSTRUCTOR(rspamd_map_log_init)
@@ -536,6 +539,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 		msg_info_map ("data is not modified for server %s, next check at %s",
 				cbd->data->host, next_check_date);
 
+		rspamd_map_update_http_cached_file (map, bk, cbd->data);
 		cbd->periodic->cur_backend ++;
 		rspamd_map_process_periodic (cbd->periodic);
 	}
@@ -1312,7 +1316,7 @@ rspamd_map_save_http_cached_file (struct rspamd_map *map,
 
 	if (header.etag_len > 0) {
 		if (write (fd, RSPAMD_FSTRING_DATA (htdata->etag), header.etag_len) !=
-				header.etag_len) {
+			header.etag_len) {
 			msg_err_map ("cannot write file %s (etag stage): %s", path, strerror (errno));
 			rspamd_file_unlock (fd, FALSE);
 			close (fd);
@@ -1334,10 +1338,82 @@ rspamd_map_save_http_cached_file (struct rspamd_map *map,
 	close (fd);
 
 	msg_info_map ("saved data from %s in %s, %uz bytes", bk->uri, path, len +
-			sizeof (header) + header.etag_len);
+																		sizeof (header) + header.etag_len);
 
 	return TRUE;
 }
+
+static gboolean
+rspamd_map_update_http_cached_file (struct rspamd_map *map,
+								  struct rspamd_map_backend *bk,
+								  struct http_map_data *htdata)
+{
+	gchar path[PATH_MAX];
+	guchar digest[rspamd_cryptobox_HASHBYTES];
+	struct rspamd_config *cfg = map->cfg;
+	gint fd;
+	struct rspamd_http_file_data header;
+
+	if (!rspamd_map_has_http_cached_file (map, bk)) {
+		return FALSE;
+	}
+
+	rspamd_cryptobox_hash (digest, bk->uri, strlen (bk->uri), NULL, 0);
+	rspamd_snprintf (path, sizeof (path), "%s%c%*xs.map", cfg->maps_cache_dir,
+			G_DIR_SEPARATOR, 20, digest);
+
+	fd = rspamd_file_xopen (path, O_WRONLY,
+			00600, FALSE);
+
+	if (fd == -1) {
+		return FALSE;
+	}
+
+	if (!rspamd_file_lock (fd, FALSE)) {
+		msg_err_map ("cannot lock file %s: %s", path, strerror (errno));
+		close (fd);
+
+		return FALSE;
+	}
+
+	memcpy (header.magic, rspamd_http_file_magic, sizeof (rspamd_http_file_magic));
+	header.mtime = htdata->last_modified;
+	header.next_check = map->next_check;
+	header.data_off = sizeof (header);
+
+	if (htdata->etag) {
+		header.data_off += RSPAMD_FSTRING_LEN (htdata->etag);
+		header.etag_len = RSPAMD_FSTRING_LEN (htdata->etag);
+	}
+	else {
+		header.etag_len = 0;
+	}
+
+	if (write (fd, &header, sizeof (header)) != sizeof (header)) {
+		msg_err_map ("cannot update file %s (header stage): %s", path, strerror (errno));
+		rspamd_file_unlock (fd, FALSE);
+		close (fd);
+
+		return FALSE;
+	}
+
+	if (header.etag_len > 0) {
+		if (write (fd, RSPAMD_FSTRING_DATA (htdata->etag), header.etag_len) !=
+			header.etag_len) {
+			msg_err_map ("cannot update file %s (etag stage): %s", path, strerror (errno));
+			rspamd_file_unlock (fd, FALSE);
+			close (fd);
+
+			return FALSE;
+		}
+	}
+
+	rspamd_file_unlock (fd, FALSE);
+	close (fd);
+
+	return TRUE;
+}
+
 
 static gboolean
 rspamd_map_read_http_cached_file (struct rspamd_map *map,
