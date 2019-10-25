@@ -2206,8 +2206,8 @@ rspamd_decode_uue_buf (const gchar *in, gsize inlen,
 	const gchar *p;
 	gssize remain;
 	gboolean base64 = FALSE;
-	goffset newlines_fsm[3], pos;
-	static const gchar *nline = "\r\n";
+	goffset pos;
+	const gchar *nline = "\r\n";
 
 	p = in;
 	o = out;
@@ -2224,29 +2224,24 @@ rspamd_decode_uue_buf (const gchar *in, gsize inlen,
 		return -1;
 	}
 
-	rspamd_substring_preprocess_kmp (nline, 2, newlines_fsm,
-			rspamd_substring_cmp_func);
-
 	if (memcmp (p, "begin ", sizeof ("begin ") - 1) == 0) {
 		p += sizeof ("begin ") - 1;
 		remain -= sizeof ("begin ") - 1;
 
-		pos = rspamd_substring_search_preprocessed (p, remain, nline, 2,
-		 		newlines_fsm, rspamd_substring_cmp_func);
+		pos = rspamd_memcspn (p, nline, remain);
 	}
 	else if (memcmp (p, "begin-base64 ", sizeof ("begin-base64 ") - 1) == 0) {
 		base64 = TRUE;
 		p += sizeof ("begin-base64 ") - 1;
 		remain -= sizeof ("begin-base64 ") - 1;
-		pos = rspamd_substring_search_preprocessed (p, remain, nline, 2,
-				newlines_fsm, rspamd_substring_cmp_func);
+		pos = rspamd_memcspn (p, nline, remain);
 	}
 	else {
 		/* Crap */
 		return (-1);
 	}
 
-	if (pos == -1) {
+	if (pos == -1 || remain == 0) {
 		/* Crap */
 		return (-1);
 	}
@@ -2274,12 +2269,15 @@ rspamd_decode_uue_buf (const gchar *in, gsize inlen,
 		const gchar *eol;
 		gint i, ch;
 
-		pos = rspamd_substring_search_preprocessed (p, remain, nline, 2,
-				newlines_fsm, rspamd_substring_cmp_func);
+		pos = rspamd_memcspn (p, nline, remain);
 
-		if (pos == -1) {
-			/* Assume end of buffer */
-			pos = remain;
+		if (pos == 0) {
+			/* Skip empty lines */
+			SKIP_NEWLINE;
+
+			if (remain == 0) {
+				break;
+			}
 		}
 
 		eol = p + pos;
