@@ -2252,6 +2252,7 @@ rspamd_decode_uue_buf (const gchar *in, gsize inlen,
 #define IS_DEC(c) ( (((c) - ' ') >= 0) && (((c) - ' ') <= 077 + 1) )
 #define CHAR_OUT(c) do { if (o < out_end) { *o++ = c; } else { return (-1); } } while(0)
 
+	remain -= pos;
 	p = p + pos;
 	SKIP_NEWLINE;
 
