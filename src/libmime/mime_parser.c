@@ -568,11 +568,11 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 			part->parsed_data.len = parsed->len;
 		}
 		else {
-			msg_err_task ("invalid quoted-printable encoded part, assume 8bit");
+			msg_err_task ("invalid uuencoding in encoded part, assume 8bit");
 			part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
 			part->cte = RSPAMD_CTE_8BIT;
-			memcpy (parsed->str, part->raw_data.begin, part->raw_data.len);
-			parsed->len = part->raw_data.len;
+			parsed->len = MIN (part->raw_data.len, parsed->allocated);
+			memcpy (parsed->str, part->raw_data.begin, parsed->len);
 			part->parsed_data.begin = parsed->str;
 			part->parsed_data.len = parsed->len;
 		}

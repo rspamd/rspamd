@@ -2214,6 +2214,10 @@ rspamd_decode_uue_buf (const gchar *in, gsize inlen,
 	out_end = out + outlen;
 	remain = inlen;
 
+	/* Skip newlines */
+#define SKIP_NEWLINE do { while (remain > 0 && (*p == '\n' || *p == '\r')) {p ++; remain --; } } while (0)
+	SKIP_NEWLINE;
+
 	/* First of all, we need to read the first line (and probably skip it) */
 	if (remain < sizeof ("begin-base64 ")) {
 		/* Obviously truncated */
@@ -2247,7 +2251,6 @@ rspamd_decode_uue_buf (const gchar *in, gsize inlen,
 		return (-1);
 	}
 
-#define SKIP_NEWLINE do { while (remain > 0 && (*p == '\n' || *p == '\r')) {p ++; remain --; } } while (0)
 #define	DEC(c)	(((c) - ' ') & 077)		/* single character decode */
 #define IS_DEC(c) ( (((c) - ' ') >= 0) && (((c) - ' ') <= 077 + 1) )
 #define CHAR_OUT(c) do { if (o < out_end) { *o++ = c; } else { return (-1); } } while(0)
