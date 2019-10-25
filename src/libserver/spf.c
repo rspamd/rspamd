@@ -66,6 +66,7 @@ struct rspamd_spf_library_ctx {
 	guint max_dns_nesting;
 	guint max_dns_requests;
 	guint min_cache_ttl;
+	gboolean disable_ipv6;
 };
 
 struct rspamd_spf_library_ctx *spf_lib_ctx = NULL;
@@ -144,6 +145,7 @@ RSPAMD_CONSTRUCTOR(rspamd_spf_lib_ctx_ctor) {
 	spf_lib_ctx->max_dns_nesting = SPF_MAX_NESTING;
 	spf_lib_ctx->max_dns_requests = SPF_MAX_DNS_REQUESTS;
 	spf_lib_ctx->min_cache_ttl = SPF_MIN_CACHE_TTL;
+	spf_lib_ctx->disable_ipv6 = FALSE;
 }
 
 RSPAMD_DESTRUCTOR(rspamd_spf_lib_ctx_dtor) {
@@ -152,20 +154,40 @@ RSPAMD_DESTRUCTOR(rspamd_spf_lib_ctx_dtor) {
 }
 
 void
-spf_library_config (gint max_dns_nesting, gint max_dns_requests,
-						 gint min_cache_ttl)
+spf_library_config (const ucl_object_t *obj)
 {
-	if (max_dns_nesting >= 0) {
-		spf_lib_ctx->max_dns_nesting = max_dns_nesting;
+	const ucl_object_t *value;
+	guint64 ival;
+	bool bval;
+
+	if (obj == NULL) {
+		/* No specific config */
+		return;
 	}
 
-	if (max_dns_requests >= 0) {
-		spf_lib_ctx->max_dns_requests = max_dns_requests;
+	if ((value = ucl_object_find_key (obj, "min_cache_ttl")) != NULL) {
+		if (ucl_object_toint_safe (value, &ival) && ival >= 0) {
+			spf_lib_ctx->min_cache_ttl = ival;
+		}
 	}
 
-	if (min_cache_ttl >= 0) {
-		spf_lib_ctx->min_cache_ttl = min_cache_ttl;
+	if ((value = ucl_object_find_key (obj, "max_dns_nesting")) != NULL) {
+		if (ucl_object_toint_safe (value, &ival) && ival >= 0) {
+			spf_lib_ctx->max_dns_nesting = ival;
+		}
 	}
+
+	if ((value = ucl_object_find_key (obj, "max_dns_requests")) != NULL) {
+		if (ucl_object_toint_safe (value, &ival) && ival >= 0) {
+			spf_lib_ctx->max_dns_requests = ival;
+		}
+	}
+	if ((value = ucl_object_find_key (obj, "disable_ipv6")) != NULL) {
+		if (ucl_object_toboolean_safe (value, &bval)) {
+			spf_lib_ctx->disable_ipv6 = bval;
+		}
+	}
+
 }
 
 static gboolean start_spf_parse (struct spf_record *rec,
@@ -767,11 +789,16 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 							cb->rec->requests_inflight++;
 						}
 
-						if (rspamd_dns_resolver_request_task_forced (task,
-								spf_record_dns_callback, (void *) cb,
-								RDNS_REQUEST_AAAA,
-								elt_data->content.mx.name)) {
-							cb->rec->requests_inflight++;
+						if (!spf_lib_ctx->disable_ipv6) {
+							if (rspamd_dns_resolver_request_task_forced (task,
+									spf_record_dns_callback, (void *) cb,
+									RDNS_REQUEST_AAAA,
+									elt_data->content.mx.name)) {
+								cb->rec->requests_inflight++;
+							}
+						}
+						else {
+							msg_debug_spf ("skip AAAA request for MX resolution");
 						}
 					}
 					else {
@@ -792,7 +819,7 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 						/* Validate returned records prior to making A requests */
 						if (spf_check_ptr_host (cb,
 								elt_data->content.ptr.name)) {
-							msg_debug_spf ("resolve %s after resolving of PTR",
+							msg_debug_spf ("resolve PTR %s after resolving of PTR",
 									elt_data->content.ptr.name);
 							if (rspamd_dns_resolver_request_task_forced (task,
 									spf_record_dns_callback, (void *) cb,
@@ -800,11 +827,17 @@ spf_record_dns_callback (struct rdns_reply *reply, gpointer arg)
 									elt_data->content.ptr.name)) {
 								cb->rec->requests_inflight++;
 							}
-							if (rspamd_dns_resolver_request_task_forced (task,
-									spf_record_dns_callback, (void *) cb,
-									RDNS_REQUEST_AAAA,
-									elt_data->content.ptr.name)) {
-								cb->rec->requests_inflight++;
+
+							if (!spf_lib_ctx->disable_ipv6) {
+								if (rspamd_dns_resolver_request_task_forced (task,
+										spf_record_dns_callback, (void *) cb,
+										RDNS_REQUEST_AAAA,
+										elt_data->content.ptr.name)) {
+									cb->rec->requests_inflight++;
+								}
+							}
+							else {
+								msg_debug_spf ("skip AAAA request for PTR resolution");
 							}
 						}
 						else {
@@ -1149,11 +1182,15 @@ parse_spf_a (struct spf_record *rec,
 		cb->addr = addr;
 		cb->cur_action = SPF_RESOLVE_AAA;
 		cb->resolved = resolved;
-		msg_debug_spf ("resolve aaa %s", host);
 
-		if (rspamd_dns_resolver_request_task_forced (task,
-				spf_record_dns_callback, (void *) cb, RDNS_REQUEST_AAAA, host)) {
-			rec->requests_inflight++;
+		if (!spf_lib_ctx->disable_ipv6) {
+			if (rspamd_dns_resolver_request_task_forced (task,
+					spf_record_dns_callback, (void *) cb, RDNS_REQUEST_AAAA, host)) {
+				rec->requests_inflight++;
+			}
+		}
+		else {
+			msg_debug_spf ("skip AAAA request for a record resolution");
 		}
 
 		return TRUE;

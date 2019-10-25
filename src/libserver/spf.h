@@ -117,8 +117,7 @@ gchar *spf_addr_mask_to_string (struct spf_addr *addr);
 struct spf_addr *spf_addr_match_task (struct rspamd_task *task,
 									  struct spf_resolved *rec);
 
-void spf_library_config (gint max_dns_nesting, gint max_dns_requests,
-		gint min_cache_ttl);
+void spf_library_config (const ucl_object_t *obj);
 
 #ifdef  __cplusplus
 }

@@ -62,10 +62,6 @@ struct spf_ctx {
 
 	gboolean check_local;
 	gboolean check_authed;
-
-	guint max_dns_nesting;
-	guint max_dns_requests;
-	guint min_cache_ttl;
 };
 
 static void spf_symbol_callback (struct rspamd_task *task,
@@ -103,9 +99,6 @@ spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 	spf_module_ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
 			sizeof (*spf_module_ctx));
 	*ctx = (struct module_ctx *)spf_module_ctx;
-	spf_module_ctx->min_cache_ttl = SPF_MIN_CACHE_TTL;
-	spf_module_ctx->max_dns_nesting = SPF_MAX_NESTING;
-	spf_module_ctx->max_dns_requests = SPF_MAX_DNS_REQUESTS;
 
 	rspamd_rcl_add_doc_by_path (cfg,
 			NULL,
@@ -226,6 +219,15 @@ spf_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 			RSPAMD_CL_FLAG_UINT,
 			NULL,
 			0);
+	rspamd_rcl_add_doc_by_path (cfg,
+			"spf",
+			"Disable ipv6 resolving when doing SPF resolution",
+			"disable_ipv6",
+			UCL_BOOLEAN,
+			NULL,
+			0,
+			NULL,
+			0);
 
 	return 0;
 }
@@ -327,22 +329,7 @@ spf_module_config (struct rspamd_config *cfg)
 		cache_size = DEFAULT_CACHE_SIZE;
 	}
 
-	if ((value =
-				 rspamd_config_get_module_opt (cfg, "spf", "min_cache_ttl")) != NULL) {
-		spf_module_ctx->min_cache_ttl = ucl_obj_toint (value);
-	}
-	if ((value =
-				  rspamd_config_get_module_opt (cfg, "spf", "max_dns_nesting")) != NULL) {
-		spf_module_ctx->max_dns_nesting = ucl_obj_toint (value);
-	}
-	if ((value =
-				 rspamd_config_get_module_opt (cfg, "spf", "max_dns_requests")) != NULL) {
-		spf_module_ctx->max_dns_requests = ucl_obj_toint (value);
-	}
-
-	spf_library_config (spf_module_ctx->max_dns_nesting,
-			spf_module_ctx->max_dns_requests,
-			spf_module_ctx->min_cache_ttl);
+	spf_library_config (ucl_obj_get_key (cfg->rcl_obj, "spf"));
 
 	if ((value =
 		rspamd_config_get_module_opt (cfg, "spf", "whitelist")) != NULL) {
