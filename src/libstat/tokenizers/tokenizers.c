@@ -426,7 +426,7 @@ start_over:
 									gint32 old_p = p;
 									p = ubrk_next (bi);
 
-									if (p <= old_p) {
+									if (p != UBRK_DONE && p <= old_p) {
 										msg_warn_pool_check (
 												"tokenization reversed back on position %d,"
 												"%d new position (%d backward), likely libicu bug!",
@@ -465,7 +465,7 @@ start_over:
 								while (last > p && p != UBRK_DONE) {
 									gint32 old_p = p;
 									p = ubrk_next (bi);
-									if (p <= old_p) {
+									if (p != UBRK_DONE && p <= old_p) {
 										msg_warn_pool_check (
 												"tokenization reversed back on position %d,"
 												"%d new position (%d backward), likely libicu bug!",
@@ -567,7 +567,7 @@ start_over:
 			last = p;
 			p = ubrk_next (bi);
 
-			if (p <= last) {
+			if (p != UBRK_DONE && p <= last) {
 				msg_warn_pool_check ("tokenization reversed back on position %d,"
 						 "%d new position (%d backward), likely libicu bug!",
 						(gint)(p), (gint)(last), last - p);
