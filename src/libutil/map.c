@@ -1007,31 +1007,35 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	if (map->next_check != 0) {
 		timeout = map->next_check - rspamd_get_calendar_ticks ();
 
-		if (timeout < map->poll_timeout) {
-			timeout = map->poll_timeout;
+		if (timeout > 0 && timeout < map->poll_timeout) {
+			/* Early check case, jitter */
+			gdouble poll_timeout = map->poll_timeout;
 
 			if (errored) {
-				timeout = map->poll_timeout * error_mult;
+				poll_timeout = map->poll_timeout * error_mult;
 			}
 			else if (locked) {
-				timeout = map->poll_timeout * lock_mult;
+				poll_timeout = map->poll_timeout * lock_mult;
 			}
 
-			jittered_sec = rspamd_time_jitter (timeout, 0);
+			jittered_sec = MIN (timeout, poll_timeout);
+		}
+		else if (timeout <= 0) {
+			/* Data is already expired, need to check */
+			jittered_sec = 0.0;
 		}
 		else {
-			jittered_sec = rspamd_time_jitter (timeout, map->poll_timeout);
+			/* No need to check now, wait till next_check */
+			jittered_sec = timeout;
 		}
-
-		/* Reset till the next usage */
-		map->next_check = 0;
 	}
 	else {
 		timeout = map->poll_timeout;
 
 		if (initial) {
 			timeout = 0.0;
-		} else {
+		}
+		else {
 			if (errored) {
 				timeout = map->poll_timeout * error_mult;
 			}
