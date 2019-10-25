@@ -46,6 +46,11 @@ typedef enum spf_action_e {
 #define RSPAMD_SPF_FLAG_PERMFAIL (1u << 10u)
 #define RSPAMD_SPF_FLAG_RESOLVED (1u << 11u)
 
+/** Default SPF limits for avoiding abuse **/
+#define SPF_MAX_NESTING 10
+#define SPF_MAX_DNS_REQUESTS 30
+#define SPF_MIN_CACHE_TTL (60 * 5) /* 5 minutes */
+
 struct spf_addr {
 	guchar addr6[sizeof (struct in6_addr)];
 	guchar addr4[sizeof (struct in_addr)];
@@ -111,6 +116,9 @@ gchar *spf_addr_mask_to_string (struct spf_addr *addr);
  */
 struct spf_addr *spf_addr_match_task (struct rspamd_task *task,
 									  struct spf_resolved *rec);
+
+void spf_library_config (gint max_dns_nesting, gint max_dns_requests,
+		gint min_cache_ttl);
 
 #ifdef  __cplusplus
 }

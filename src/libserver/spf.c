@@ -39,10 +39,6 @@
 #define SPF_REDIRECT "redirect"
 #define SPF_EXP "exp"
 
-/** SPF limits for avoiding abuse **/
-#define SPF_MAX_NESTING 10
-#define SPF_MAX_DNS_REQUESTS 30
-
 struct spf_resolved_element {
 	GPtrArray *elts;
 	gchar *cur_domain;
@@ -65,6 +61,14 @@ struct spf_record {
 	gpointer cbdata;
 	gboolean done;
 };
+
+struct rspamd_spf_library_ctx {
+	guint max_dns_nesting;
+	guint max_dns_requests;
+	guint min_cache_ttl;
+};
+
+struct rspamd_spf_library_ctx *spf_lib_ctx = NULL;
 
 /**
  * BNF for SPF record:
@@ -119,15 +123,50 @@ struct spf_dns_cb {
 
 #define CHECK_REC(rec)                                          \
     do {                                                        \
-        if ((rec)->nested > SPF_MAX_NESTING ||                  \
-            (rec)->dns_requests > SPF_MAX_DNS_REQUESTS) {       \
-            msg_info_spf ("spf recursion limit %d is reached, domain: %s", \
-                (rec)->dns_requests,   \
+        if (spf_lib_ctx->max_dns_nesting > 0 &&                 \
+            (rec)->nested > spf_lib_ctx->max_dns_nesting) {     \
+            msg_warn_spf ("spf nesting limit: %d > %d is reached, domain: %s", \
+                (rec)->nested,  spf_lib_ctx->max_dns_nesting,   \
+                (rec)->sender_domain);                          \
+            return FALSE;                                       \
+        }                                                       \
+        if (spf_lib_ctx->max_dns_requests > 0 &&                \
+            (rec)->dns_requests > spf_lib_ctx->max_dns_requests) {     \
+            msg_warn_spf ("spf dns requests limit: %d > %d is reached, domain: %s", \
+                (rec)->dns_requests,  spf_lib_ctx->max_dns_requests, \
                 (rec)->sender_domain);                          \
             return FALSE;                                       \
         }                                                       \
     } while (0)                                                 \
 
+RSPAMD_CONSTRUCTOR(rspamd_spf_lib_ctx_ctor) {
+	spf_lib_ctx = g_malloc0 (sizeof (*spf_lib_ctx));
+	spf_lib_ctx->max_dns_nesting = SPF_MAX_NESTING;
+	spf_lib_ctx->max_dns_requests = SPF_MAX_DNS_REQUESTS;
+	spf_lib_ctx->min_cache_ttl = SPF_MIN_CACHE_TTL;
+}
+
+RSPAMD_DESTRUCTOR(rspamd_spf_lib_ctx_dtor) {
+	g_free (spf_lib_ctx);
+	spf_lib_ctx = NULL;
+}
+
+void
+spf_library_config (gint max_dns_nesting, gint max_dns_requests,
+						 gint min_cache_ttl)
+{
+	if (max_dns_nesting >= 0) {
+		spf_lib_ctx->max_dns_nesting = max_dns_nesting;
+	}
+
+	if (max_dns_requests >= 0) {
+		spf_lib_ctx->max_dns_requests = max_dns_requests;
+	}
+
+	if (min_cache_ttl >= 0) {
+		spf_lib_ctx->min_cache_ttl = min_cache_ttl;
+	}
+}
 
 static gboolean start_spf_parse (struct spf_record *rec,
 		struct spf_resolved_element *resolved, gchar *begin);
@@ -452,7 +491,7 @@ rspamd_spf_elts_cmp (gconstpointer a, gconstpointer b)
 }
 
 static void
-rspamd_spf_record_postprocess (struct spf_resolved *rec)
+rspamd_spf_record_postprocess (struct spf_resolved *rec, struct rspamd_task *task)
 {
 	g_array_sort (rec->elts, rspamd_spf_elts_cmp);
 
@@ -481,6 +520,14 @@ rspamd_spf_record_postprocess (struct spf_resolved *rec)
 			rec->digest = mum_hash_step (rec->digest, t);
 		}
 	}
+
+	if (spf_lib_ctx->min_cache_ttl > 0) {
+		if (rec->ttl != 0 && rec->ttl < spf_lib_ctx->min_cache_ttl) {
+			msg_info_task ("increasing ttl from %d to %d as it lower than a limit",
+					rec->ttl, spf_lib_ctx->min_cache_ttl);
+			rec->ttl = spf_lib_ctx->min_cache_ttl;
+		}
+	}
 }
 
 static void
@@ -490,7 +537,7 @@ rspamd_spf_maybe_return (struct spf_record *rec)
 
 	if (rec->requests_inflight == 0 && !rec->done) {
 		flat = rspamd_spf_record_flatten (rec);
-		rspamd_spf_record_postprocess (flat);
+		rspamd_spf_record_postprocess (flat, rec->task);
 		rec->callback (flat, rec->task, rec->cbdata);
 		REF_RELEASE (flat);
 		rec->done = TRUE;
