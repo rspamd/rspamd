@@ -18,7 +18,6 @@
 -- Definitions of header regexps
 
 local reconf = config['regexp']
-local rspamd_regexp = require "rspamd_regexp"
 
 -- Subject needs encoding
 -- Define encodings types
