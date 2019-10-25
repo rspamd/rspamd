@@ -253,9 +253,9 @@ rspamd_map_cache_cb (struct ev_loop *loop, ev_timer *w, int revents)
 		 * reschedule cache check
 		 */
 		if (cache_cbd->map->poll_timeout >
-			ev_now (loop) - cache_cbd->data->last_checked) {
+			rspamd_get_calendar_ticks () - cache_cbd->data->last_checked) {
 			w->repeat = cache_cbd->map->poll_timeout -
-						(ev_now (loop) - cache_cbd->data->last_checked);
+						(rspamd_get_calendar_ticks () - cache_cbd->data->last_checked);
 		}
 		else {
 			w->repeat = cache_cbd->map->poll_timeout;
@@ -351,11 +351,6 @@ http_map_finish (struct rspamd_http_connection *conn,
 			hdate = rspamd_http_parse_date (expires_hdr->begin, expires_hdr->len);
 
 			if (hdate != (time_t)-1 && hdate > msg->date) {
-				if (map->next_check) {
-					/* If we have multiple backends */
-					hdate = MIN (map->next_check, hdate);
-				}
-
 				cached_timeout = map->next_check - msg->date +
 								 map->poll_timeout * 2;
 
@@ -415,7 +410,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 		}
 		else {
 			rspamd_http_date_format (next_check_date, sizeof (next_check_date),
-					ev_now (cbd->event_loop) + map->poll_timeout);
+					rspamd_get_calendar_ticks () + map->poll_timeout);
 		}
 
 
@@ -506,13 +501,7 @@ http_map_finish (struct rspamd_http_connection *conn,
 			time_t hdate;
 
 			hdate = rspamd_http_parse_date (expires_hdr->begin, expires_hdr->len);
-
 			if (hdate != (time_t)-1 && hdate > msg->date) {
-				if (map->next_check) {
-					/* If we have multiple backends */
-					hdate = MIN (map->next_check, hdate);
-				}
-
 				map->next_check = hdate;
 			}
 		}
@@ -531,13 +520,17 @@ http_map_finish (struct rspamd_http_connection *conn,
 		if (map->next_check) {
 			rspamd_http_date_format (next_check_date, sizeof (next_check_date),
 					map->next_check);
+			msg_info_map ("data is not modified for server %s, next check at %s "
+						  "(http cache based)",
+					cbd->data->host, next_check_date);
 		}
 		else {
 			rspamd_http_date_format (next_check_date, sizeof (next_check_date),
-					ev_now (cbd->event_loop) + map->poll_timeout);
+					rspamd_get_calendar_ticks () + map->poll_timeout);
+			msg_info_map ("data is not modified for server %s, next check at %s "
+						  "(timer based)",
+					cbd->data->host, next_check_date);
 		}
-		msg_info_map ("data is not modified for server %s, next check at %s",
-				cbd->data->host, next_check_date);
 
 		rspamd_map_update_http_cached_file (map, bk, cbd->data);
 		cbd->periodic->cur_backend ++;
