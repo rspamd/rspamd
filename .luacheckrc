@@ -15,7 +15,6 @@ globals = {
   'classifiers',
   'config',
   'confighelp',
-  'kmail_msgid',
   'rspamd_classifiers',
   'rspamd_config',
   'rspamd_count_metatokens',
