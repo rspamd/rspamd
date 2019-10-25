@@ -171,7 +171,7 @@ local function arc_callback(task)
     -- We mandate that count of seals is equal to count of signatures
     rspamd_logger.infox(task, 'number of seals (%s) is not equal to number of signatures (%s)',
         #arc_seal_headers, #arc_sig_headers)
-    task:insert_result(arc_symbols['invalid'], 'invalid count of seals and signatures')
+    task:insert_result(arc_symbols['invalid'], 1.0, 'invalid count of seals and signatures')
     return
   end
 
