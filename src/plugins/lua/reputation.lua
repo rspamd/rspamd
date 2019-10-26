@@ -284,15 +284,15 @@ local function gen_url_queries(task, rule)
 end
 
 local function url_reputation_filter(task, rule)
-  local requests = lua_util.extract_specific_urls(task, rule.selector.config.max_urls)
+  local requests = gen_url_queries(task, rule)
   local results = {}
   local nchecked = 0
 
-  local function tokens_cb(err, token, values)
+  local function indexed_tokens_cb(err, index, values)
     nchecked = nchecked + 1
 
     if values then
-      results[token] = values
+      results[index] = values
     end
 
     if nchecked == #requests then
@@ -319,8 +319,12 @@ local function url_reputation_filter(task, rule)
     end
   end
 
-  for _,u in ipairs(requests) do
-    rule.backend.get_token(task, rule, u:get_tld(), tokens_cb)
+  for i,req in ipairs(requests) do
+    local function tokens_cb(err, token, values)
+      indexed_tokens_cb(err, i, values)
+    end
+
+    rule.backend.get_token(task, rule, req[1], tokens_cb)
   end
 end
 
