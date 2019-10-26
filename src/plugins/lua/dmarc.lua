@@ -975,7 +975,7 @@ if opts['reporting'] == true then
           reporting_addr[report_settings.additional_address] = true
         end
         rspamd_logger.infox(ev_base, 'sending report for %s <%s>',
-            reporting_domain, table.concat(reporting_addr, ','))
+            reporting_domain, reporting_addr)
         local dmarc_xml = dmarc_report_xml()
         local dmarc_push_cb
         dmarc_push_cb = function(err, data)
