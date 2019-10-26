@@ -521,8 +521,11 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 	gint r;
 
 	if (s && val) {
-		if (s->options && !(s->sym &&
-				(s->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM)) &&
+		if (!s->options) {
+			s->options = kh_init (rspamd_options_hash);
+		}
+
+		if (!(s->sym && (s->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM)) &&
 				kh_size (s->options) < task->cfg->default_max_shots) {
 			/* Append new options */
 			k = kh_get (rspamd_options_hash, s->options, val);
@@ -540,7 +543,6 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 			}
 		}
 		else {
-			s->options = kh_init (rspamd_options_hash);
 			opt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*opt));
 			opt_cpy = rspamd_mempool_strdup (task->task_pool, val);
 			k = kh_put (rspamd_options_hash, s->options, opt_cpy, &r);
