@@ -1766,7 +1766,7 @@ rspamd_archive_process_gzip (struct rspamd_task *task,
 	}
 
 	/* Fallback, we need to extract file name from archive name if possible */
-	if (part->cd->filename.len > 0) {
+	if (part->cd && part->cd->filename.len > 0) {
 		const gchar *dot_pos, *slash_pos;
 
 		dot_pos = rspamd_memrchr (part->cd->filename.begin, '.',
