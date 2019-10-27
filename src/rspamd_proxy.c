@@ -2086,8 +2086,8 @@ proxy_milter_error_handler (gint fd,
 	struct rspamd_proxy_session *session = ud;
 
 	msg_info_session ("abnormally closing milter connection from: %s, "
-			"error: %s", rspamd_inet_address_to_string (session->client_addr),
-			err->message);
+			"error: %e", rspamd_inet_address_to_string (session->client_addr),
+			err);
 	/* Terminate session immediately */
 	proxy_backend_close_connection (session->master_conn);
 	REF_RELEASE (session);

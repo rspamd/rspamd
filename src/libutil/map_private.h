@@ -156,6 +156,7 @@ struct rspamd_map {
 	gdouble poll_timeout;
 	time_t next_check;
 	gboolean active_http;
+	gboolean non_trivial; /* E.g. has http backends in active mode */
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	gint *locked;
 	gchar tag[MEMPOOL_UID_LEN];

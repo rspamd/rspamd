@@ -43,13 +43,19 @@
 #define MAP_RELEASE(x, t) REF_RELEASE(x)
 #endif
 
+enum rspamd_map_periodic_opts {
+	RSPAMD_MAP_SCHEDULE_NORMAL = 0,
+	RSPAMD_MAP_SCHEDULE_ERROR = (1u << 0u),
+	RSPAMD_MAP_SCHEDULE_LOCKED = (1u << 1u),
+	RSPAMD_MAP_SCHEDULE_INIT = (1u << 2u),
+};
+
 static void free_http_cbdata_common (struct http_callback_data *cbd,
 									 gboolean plan_new);
 static void free_http_cbdata_dtor (gpointer p);
 static void free_http_cbdata (struct http_callback_data *cbd);
 static void rspamd_map_process_periodic (struct map_periodic_cbdata *cbd);
-static void rspamd_map_schedule_periodic (struct rspamd_map *map, gboolean locked,
-										  gboolean initial, gboolean errored);
+static void rspamd_map_schedule_periodic (struct rspamd_map *map, int how);
 static gboolean read_map_file_chunks (struct rspamd_map *map,
 									  struct map_cb_data *cbdata,
 									  const gchar *fname,
@@ -214,11 +220,7 @@ http_map_error (struct rspamd_http_connection *conn,
 				cbd->addr ? rspamd_inet_address_to_string_pretty (cbd->addr) : "",
 				err);
 
-		MAP_RETAIN (cbd->periodic, "periodic");
 		rspamd_map_process_periodic (cbd->periodic);
-		MAP_RELEASE (cbd->periodic, "periodic");
-		/* Detach periodic as rspamd_map_process_periodic will destroy it */
-		cbd->periodic = NULL;
 	}
 
 	MAP_RELEASE (cbd, "http_callback_data");
@@ -965,11 +967,13 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 	}
 
 	if (periodic->locked) {
-		if (!periodic->map->wrk->wanna_die) {
-			rspamd_map_schedule_periodic (periodic->map, FALSE, FALSE, FALSE);
-		}
 		g_atomic_int_set (periodic->map->locked, 0);
-		msg_debug_map ("unlocked map");
+		msg_debug_map ("unlocked map %s", periodic->map->name);
+
+		if (!periodic->map->wrk->wanna_die) {
+			rspamd_map_schedule_periodic (periodic->map,
+					RSPAMD_SYMBOL_RESULT_NORMAL);
+		}
 	}
 
 	g_free (periodic);
@@ -988,10 +992,11 @@ rspamd_map_periodic_callback (struct ev_loop *loop, ev_timer *w, int revents)
 }
 
 static void
-rspamd_map_schedule_periodic (struct rspamd_map *map,
-		gboolean locked, gboolean initial, gboolean errored)
+rspamd_map_schedule_periodic (struct rspamd_map *map, int how)
 {
 	const gdouble error_mult = 20.0, lock_mult = 0.1;
+	static const gdouble min_timer_interval = 2.0;
+	const gchar *reason = "unknown reason";
 	gdouble jittered_sec;
 	gdouble timeout;
 	struct map_periodic_cbdata *cbd;
@@ -1001,47 +1006,81 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 		return;
 	}
 
-	if (map->next_check != 0) {
+	if (map->non_trivial && map->next_check != 0) {
 		timeout = map->next_check - rspamd_get_calendar_ticks ();
 
 		if (timeout > 0 && timeout < map->poll_timeout) {
 			/* Early check case, jitter */
 			gdouble poll_timeout = map->poll_timeout;
 
-			if (errored) {
+			if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
 				poll_timeout = map->poll_timeout * error_mult;
+				reason = "early active non-trivial check (after error)";
 			}
-			else if (locked) {
+			else if (how & RSPAMD_MAP_SCHEDULE_LOCKED) {
 				poll_timeout = map->poll_timeout * lock_mult;
+				reason = "early active non-trivial check (after being locked)";
+			}
+			else {
+				reason = "early active non-trivial check";
 			}
 
 			jittered_sec = MIN (timeout, poll_timeout);
+
 		}
 		else if (timeout <= 0) {
 			/* Data is already expired, need to check */
 			jittered_sec = 0.0;
+			reason = "expired non-trivial data";
 		}
 		else {
 			/* No need to check now, wait till next_check */
 			jittered_sec = timeout;
+			reason = "valid non-trivial data";
 		}
 	}
 	else {
 		timeout = map->poll_timeout;
 
-		if (initial) {
+		if (how & RSPAMD_MAP_SCHEDULE_INIT) {
 			timeout = 0.0;
+			reason = "init scheduled check";
 		}
 		else {
-			if (errored) {
+			if (how & RSPAMD_MAP_SCHEDULE_ERROR) {
 				timeout = map->poll_timeout * error_mult;
+				reason = "errored scheduled check";
 			}
-			else if (locked) {
+			else if (how & RSPAMD_MAP_SCHEDULE_LOCKED) {
 				timeout = map->poll_timeout * lock_mult;
+				reason = "locked scheduled check";
+			}
+			else {
+				reason = "normal scheduled check";
 			}
 		}
 
 		jittered_sec = rspamd_time_jitter (timeout, 0);
+	}
+
+	/* Now, we do some sanity checks for jittered seconds */
+	if (!(how & RSPAMD_MAP_SCHEDULE_INIT)) {
+		/* Never allow too low interval between timer checks, it is epxensive */
+		if (jittered_sec < min_timer_interval) {
+			jittered_sec = rspamd_time_jitter (min_timer_interval, 0);
+		}
+
+		if (map->non_trivial) {
+			/*
+			 * Even if we are reported that we need to reload cache often, we
+			 * still want to be sane in terms of events...
+			 */
+			if (jittered_sec < min_timer_interval * 2.0) {
+				if (map->nelts > 0) {
+					jittered_sec = min_timer_interval * 3.0;
+				}
+			}
+		}
 	}
 
 	cbd = g_malloc0 (sizeof (*cbd));
@@ -1057,8 +1096,8 @@ rspamd_map_schedule_periodic (struct rspamd_map *map,
 	ev_timer_init (&cbd->ev, rspamd_map_periodic_callback, jittered_sec, 0.0);
 	ev_timer_start (map->event_loop, &cbd->ev);
 
-	msg_debug_map ("schedule new periodic event %p in %.2f seconds",
-			cbd, jittered_sec);
+	msg_debug_map ("schedule new periodic event %p in %.3f seconds for %s; reason: %s",
+			cbd, jittered_sec, map->name, reason);
 }
 
 static void
@@ -1070,6 +1109,9 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 	guint flags = RSPAMD_HTTP_CLIENT_SIMPLE|RSPAMD_HTTP_CLIENT_SHARED;
 
 	map = cbd->map;
+
+	msg_debug_map ("got dns reply with code %s on stage %d",
+			rdns_strerror (reply->code), cbd->stage);
 
 	if (cbd->stage == http_map_terminated) {
 		MAP_RELEASE (cbd, "http_callback_data");
@@ -1112,6 +1154,10 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 			cbd->periodic->errored = 1;
 			rspamd_map_process_periodic (cbd->periodic);
 		}
+		else {
+			/* We have at least one address, so we can continue... */
+			cbd->stage = http_map_http_conn;
+		}
 	}
 
 	if (cbd->stage == http_map_http_conn && cbd->addrs->len > 0) {
@@ -1121,6 +1167,8 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 		cbd->addr = (rspamd_inet_addr_t *)g_ptr_array_index (cbd->addrs,
 				selected_addr_idx);
 
+		msg_debug_map ("open http connection to %s",
+				rspamd_inet_address_to_string_pretty (cbd->addr));
 		cbd->conn = rspamd_http_connection_new_client (NULL,
 				NULL,
 				http_map_error,
@@ -1130,6 +1178,16 @@ rspamd_map_dns_callback (struct rdns_reply *reply, void *arg)
 
 		if (cbd->conn != NULL) {
 			write_http_request (cbd);
+		}
+		else {
+			cbd->periodic->errored = TRUE;
+			msg_err_map ("error reading %s(%s): "
+						 "connection with http server terminated incorrectly: %s",
+					cbd->bk->uri,
+					cbd->addr ? rspamd_inet_address_to_string_pretty (cbd->addr) : "",
+					strerror (errno));
+
+			rspamd_map_process_periodic (cbd->periodic);
 		}
 	}
 
@@ -1795,28 +1853,30 @@ rspamd_map_process_periodic (struct map_periodic_cbdata *cbd)
 	if (!cbd->locked) {
 		if (!g_atomic_int_compare_and_exchange (cbd->map->locked, 0, 1)) {
 			msg_debug_map (
-					"don't try to reread map as it is locked by other process, "
-					"will reread it later");
-			rspamd_map_schedule_periodic (map, TRUE, FALSE, FALSE);
+					"don't try to reread map %s as it is locked by other process, "
+					"will reread it later", cbd->map->name);
+			rspamd_map_schedule_periodic (map, RSPAMD_MAP_SCHEDULE_LOCKED);
 			MAP_RELEASE (cbd, "periodic");
 
 			return;
 		}
 		else {
-			msg_debug_map ("locked map");
+			msg_debug_map ("locked map %s", cbd->map->name);
 			cbd->locked = TRUE;
 		}
 	}
 
 	if (cbd->errored) {
 		/* We should not check other backends if some backend has failed */
-		rspamd_map_schedule_periodic (cbd->map, FALSE, FALSE, TRUE);
+		rspamd_map_schedule_periodic (cbd->map, RSPAMD_MAP_SCHEDULE_ERROR);
 
 		if (cbd->locked) {
 			g_atomic_int_set (cbd->map->locked, 0);
+			cbd->locked = FALSE;
 		}
 
-		msg_debug_map ("unlocked map");
+		msg_debug_map ("unlocked map %s, refcount=%d", cbd->map->name,
+				cbd->ref.refcount);
 		MAP_RELEASE (cbd, "periodic");
 
 		return;
@@ -1897,7 +1957,7 @@ rspamd_map_on_stat (struct ev_loop *loop, ev_stat *w, int revents)
 				map->scheduled_check = NULL;
 			}
 
-			rspamd_map_schedule_periodic (map, FALSE, TRUE, FALSE);
+			rspamd_map_schedule_periodic (map, RSPAMD_MAP_SCHEDULE_INIT);
 		}
 	}
 }
@@ -1949,9 +2009,13 @@ rspamd_map_watch (struct rspamd_config *cfg,
 				data->st_ev.data = map;
 				ev_stat_start (event_loop, &data->st_ev);
 			}
+			else if ((bk->protocol == MAP_PROTO_HTTP ||
+					  bk->protocol == MAP_PROTO_HTTPS) && map->active_http) {
+				map->non_trivial = TRUE;
+			}
 		}
 
-		rspamd_map_schedule_periodic (map, FALSE, TRUE, FALSE);
+		rspamd_map_schedule_periodic (map, RSPAMD_MAP_SCHEDULE_INIT);
 
 		cur = g_list_next (cur);
 	}
