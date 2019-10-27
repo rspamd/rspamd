@@ -2511,3 +2511,79 @@ rspamd_config_register_settings_id (struct rspamd_config *cfg,
 		DL_APPEND (cfg->setting_ids, elt);
 	}
 }
+
+int
+rspamd_config_ev_backend_get (struct rspamd_config *cfg)
+{
+	if (cfg == NULL || cfg->events_backend == NULL) {
+		return ev_supported_backends ();
+	}
+
+	if (strcmp (cfg->events_backend, "auto") == 0) {
+		return ev_supported_backends ();
+	}
+	else if (strcmp (cfg->events_backend, "epoll") == 0) {
+		if (ev_supported_backends () & EVBACKEND_EPOLL) {
+			return EVBACKEND_EPOLL;
+		}
+		else {
+			msg_warn_config ("unsupported events_backend: %s; defaulting to auto",
+					cfg->events_backend);
+			return ev_supported_backends ();
+		}
+	}
+	else if (strcmp (cfg->events_backend, "kqueue") == 0) {
+		if (ev_supported_backends () & EVBACKEND_KQUEUE) {
+			return EVBACKEND_KQUEUE;
+		}
+		else {
+			msg_warn_config ("unsupported events_backend: %s; defaulting to auto",
+					cfg->events_backend);
+			return ev_supported_backends ();
+		}
+	}
+	else if (strcmp (cfg->events_backend, "poll") == 0) {
+		return EVBACKEND_POLL;
+	}
+	else if (strcmp (cfg->events_backend, "select") == 0) {
+		return EVBACKEND_SELECT;
+	}
+	else {
+		msg_warn_config ("unknown events_backend: %s; defaulting to auto",
+				cfg->events_backend);
+	}
+
+	return EVBACKEND_ALL;
+}
+
+const gchar *
+rspamd_config_ev_backend_to_string (int ev_backend, gboolean *effective)
+{
+#define SET_EFFECTIVE(b) do { if ((effective) != NULL) *(effective) = b; } while(0)
+
+	if ((ev_backend & EVBACKEND_ALL) == EVBACKEND_ALL) {
+		SET_EFFECTIVE (TRUE);
+		return "auto";
+	}
+
+	if (ev_backend & EVBACKEND_EPOLL) {
+		SET_EFFECTIVE (TRUE);
+		return "epoll";
+	}
+	if (ev_backend & EVBACKEND_KQUEUE) {
+		SET_EFFECTIVE (TRUE);
+		return "kqueue";
+	}
+	if (ev_backend & EVBACKEND_POLL) {
+		SET_EFFECTIVE (FALSE);
+		return "poll";
+	}
+	if (ev_backend & EVBACKEND_SELECT) {
+		SET_EFFECTIVE (FALSE);
+		return "select";
+	}
+
+	SET_EFFECTIVE (FALSE);
+	return "unknown";
+#undef SET_EFFECTIVE
+}

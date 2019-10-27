@@ -439,6 +439,7 @@ struct rspamd_config {
 	gchar *history_file;                           /**< file to save rolling history						*/
 	gchar *tld_file;                               /**< file to load effective tld list from				*/
 	gchar *hs_cache_dir;                           /**< directory to save hyperscan databases				*/
+	gchar *events_backend;                         /**< string representation of the events backend used	*/
 
 	gdouble dns_timeout;                            /**< timeout in milliseconds for waiting for dns reply	*/
 	guint32 dns_retransmits;                        /**< maximum retransmits count							*/
@@ -807,6 +808,9 @@ struct rspamd_action *rspamd_config_get_action (struct rspamd_config *cfg,
 
 struct rspamd_action *rspamd_config_get_action_by_type (struct rspamd_config *cfg,
 														enum rspamd_action_type type);
+
+int rspamd_config_ev_backend_get (struct rspamd_config *cfg);
+const gchar * rspamd_config_ev_backend_to_string (int ev_backend, gboolean *effective);
 
 #define msg_err_config(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
         cfg->cfg_pool->tag.tagname, cfg->checksum, \

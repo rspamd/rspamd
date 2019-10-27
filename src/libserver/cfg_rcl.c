@@ -2207,6 +2207,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				G_STRUCT_OFFSET (struct rspamd_config, max_blas_threads),
 				RSPAMD_CL_FLAG_INT_32,
 				"Maximum number of Blas threads for learning neural networks (default: 1)");
+		rspamd_rcl_add_default_handler (sub,
+				"events_backend",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, events_backend),
+				0,
+				"Events backend to use: kqueue, epoll, select, poll or auto (default: auto)");
 
 		/* Neighbours configuration */
 		rspamd_rcl_add_section_doc (&sub->subsections, "neighbours", "name",
