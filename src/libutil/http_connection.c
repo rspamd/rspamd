@@ -1281,10 +1281,9 @@ rspamd_http_connection_reset (struct rspamd_http_connection *conn)
 
 	conn->finished = FALSE;
 	/* Clear priv */
+	rspamd_ev_watcher_stop (priv->ctx->event_loop, &priv->ev);
 
 	if (!(priv->flags & RSPAMD_HTTP_CONN_FLAG_RESETED)) {
-
-		rspamd_ev_watcher_stop (priv->ctx->event_loop, &priv->ev);
 		rspamd_http_parser_reset (conn);
 	}
 
