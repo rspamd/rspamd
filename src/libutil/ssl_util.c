@@ -49,6 +49,7 @@ struct rspamd_ssl_connection {
 	gchar *hostname;
 	const gchar *log_tag;
 	struct rspamd_io_ev *ev;
+	struct rspamd_io_ev *shut_ev;
 	struct ev_loop *event_loop;
 	rspamd_ssl_handler_t handler;
 	rspamd_ssl_error_handler_t err_handler;
@@ -59,6 +60,8 @@ struct rspamd_ssl_connection {
         rspamd_ssl_log_id, "ssl", conn->log_tag, \
         G_STRFUNC, \
         __VA_ARGS__)
+
+static void rspamd_ssl_event_handler (gint fd, short what, gpointer ud);
 
 INIT_LOG_MODULE(ssl)
 
@@ -418,6 +421,11 @@ rspamd_ssl_connection_dtor (struct rspamd_ssl_connection *conn)
 		g_free (conn->hostname);
 	}
 
+	if (conn->shut_ev) {
+		rspamd_ev_watcher_stop (conn->event_loop, conn->shut_ev);
+		g_free (conn->shut_ev);
+	}
+
 	close (conn->fd);
 	g_free (conn);
 }
@@ -455,7 +463,17 @@ rspamd_ssl_shutdown (struct rspamd_ssl_connection *conn)
 		}
 
 		/* As we own fd, we can try to perform shutdown one more time */
-		rspamd_ev_watcher_reschedule (conn->event_loop, conn->ev, what);
+		/* BUGON: but we DO NOT own conn->ev, and it's a big issue */
+		static const ev_tstamp shutdown_time = 5.0;
+
+		rspamd_ev_watcher_stop (conn->event_loop, conn->ev);
+		conn->shut_ev = g_malloc0 (sizeof (*conn->shut_ev));
+		rspamd_ev_watcher_init (conn->shut_ev, conn->fd, what,
+				rspamd_ssl_event_handler, conn);
+		rspamd_ev_watcher_start (conn->event_loop, conn->shut_ev, shutdown_time);
+		/* XXX: can it be done safely ? */
+		conn->ev = conn->shut_ev;
+
 		conn->state = ssl_next_shutdown;
 	}
 }
@@ -621,7 +639,7 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 
 		msg_debug_ssl ("connected, start write event");
 		rspamd_ev_watcher_stop (conn->event_loop, ev);
-		rspamd_ev_watcher_init (ev, fd, EV_WRITE, rspamd_ssl_event_handler, conn);
+		rspamd_ev_watcher_init (ev, nfd, EV_WRITE, rspamd_ssl_event_handler, conn);
 		rspamd_ev_watcher_start (conn->event_loop, ev, timeout);
 	}
 	else {
@@ -641,7 +659,7 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 		}
 
 		rspamd_ev_watcher_stop (conn->event_loop, ev);
-		rspamd_ev_watcher_init (ev, fd, EV_WRITE|EV_READ,
+		rspamd_ev_watcher_init (ev, nfd, EV_WRITE|EV_READ,
 				rspamd_ssl_event_handler, conn);
 		rspamd_ev_watcher_start (conn->event_loop, ev, timeout);
 	}
