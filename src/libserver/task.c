@@ -722,7 +722,14 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 	case RSPAMD_TASK_STAGE_PRE_FILTERS_EMPTY:
 	case RSPAMD_TASK_STAGE_PRE_FILTERS:
 	case RSPAMD_TASK_STAGE_FILTERS:
+		all_done = rspamd_symcache_process_symbols (task, task->cfg->cache, st);
+		break;
 	case RSPAMD_TASK_STAGE_IDEMPOTENT:
+		/* Stop task timeout */
+		if (ev_can_stop (&task->timeout_ev)) {
+			ev_timer_stop (task->event_loop, &task->timeout_ev);
+		}
+
 		all_done = rspamd_symcache_process_symbols (task, task->cfg->cache, st);
 		break;
 
