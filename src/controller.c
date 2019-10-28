@@ -2411,8 +2411,9 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 	struct rspamd_map_backend *bk;
 	struct rspamd_controller_worker_ctx *ctx;
 	const rspamd_ftok_t *idstr;
-	gulong id, i, ntries = 0;
+	gulong id, i;
 	gboolean found = FALSE;
+	gchar tempname[PATH_MAX];
 	gint fd;
 
 	ctx = session->ctx;
@@ -2463,48 +2464,40 @@ rspamd_controller_handle_savemap (struct rspamd_http_connection_entry *conn_ent,
 		return 0;
 	}
 
-	while (g_atomic_int_compare_and_exchange (map->locked, 0, 1)) {
-		struct timespec sleep_ts = {
-			.tv_sec = 0,
-			.tv_nsec = 100000000ULL,
-		};
-
-		if (ntries > 5) {
-			msg_info_session ("map locked: %s", bk->uri);
-			rspamd_controller_send_error (conn_ent, 404, "Map is locked");
-			return 0;
-		}
-
-		ntries ++;
-		nanosleep (&sleep_ts, NULL);
-	}
-
-	/* Set lock */
-	fd = open (bk->uri, O_WRONLY | O_TRUNC | O_CREAT, 00644);
+	rspamd_snprintf (tempname, sizeof (tempname), "%s.newXXXXXX", bk->uri);
+	fd = g_mkstemp_full (tempname, O_WRONLY, 00644);
 
 	if (fd == -1) {
-		g_atomic_int_set (map->locked, 0);
-		msg_info_session ("map %s open error: %s", bk->uri, strerror (errno));
-		rspamd_controller_send_error (conn_ent, 404, "Cannot open map: %s",
+		msg_info_session ("map %s open error: %s", tempname, strerror (errno));
+		rspamd_controller_send_error (conn_ent, 404,
+				"Cannot open map: %s",
 				strerror (errno));
 		return 0;
 	}
 
 	if (write (fd, msg->body_buf.begin, msg->body_buf.len) == -1) {
-		msg_info_session ("map %s write error: %s", bk->uri, strerror (errno));
+		msg_info_session ("map %s write error: %s", tempname, strerror (errno));
+		unlink (tempname);
 		close (fd);
-		g_atomic_int_set (map->locked, 0);
 		rspamd_controller_send_error (conn_ent, 500, "Map write error: %s",
 				strerror (errno));
 		return 0;
 	}
 
+	/* Rename */
+	if (rename (tempname, bk->uri) == -1) {
+		msg_info_session ("map %s rename error: %s", tempname, strerror (errno));
+		unlink (tempname);
+		close (fd);
+		rspamd_controller_send_error (conn_ent, 500, "Map rename error: %s",
+				strerror (errno));
+		return 0;
+	}
+
 	msg_info_session ("<%s>, map %s saved",
-		rspamd_inet_address_to_string (session->from_addr),
-		bk->uri);
-	/* Close and unlock */
+			rspamd_inet_address_to_string (session->from_addr),
+			bk->uri);
 	close (fd);
-	g_atomic_int_set (map->locked, 0);
 
 	rspamd_controller_send_string (conn_ent, "{\"success\":true}");
 
