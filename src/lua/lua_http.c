@@ -749,25 +749,27 @@ lua_http_request (lua_State *L)
 			}
 		}
 		else if (lua_type (L, -1) == LUA_TTABLE) {
-			body = rspamd_fstring_new ();
+			gsize total_len = 0, nelts = rspamd_lua_table_size (L, -1);
 
-			for (lua_pushnil (L); lua_next (L, -2); lua_pop (L, 1)) {
+			/* Calculate length and check types */
+			for (gsize i = 0; i < nelts; i ++) {
+				lua_rawgeti (L, -1, i + 1);
+
 				if (lua_type (L, -1) == LUA_TSTRING) {
-					lua_body = lua_tolstring (L, -1, &bodylen);
-					body = rspamd_fstring_append (body, lua_body, bodylen);
+#if LUA_VERSION_NUM >= 502
+					total_len += lua_rawlen (L, -1);
+#else
+					total_len += lua_objlen (L, -1);
+#endif
 				}
 				else if (lua_type (L, -1) == LUA_TUSERDATA) {
 					t = lua_check_text (L, -1);
 
 					if (t) {
-						body = rspamd_fstring_append (body, t->start, t->len);
+						total_len += t->len;
 					}
 					else {
 						rspamd_http_message_unref (msg);
-						if (body) {
-							rspamd_fstring_free (body);
-						}
-
 						if (mime_type) {
 							g_free (mime_type);
 						}
@@ -778,13 +780,44 @@ lua_http_request (lua_State *L)
 				}
 				else {
 					rspamd_http_message_unref (msg);
-					if (body) {
-						rspamd_fstring_free (body);
+					if (mime_type) {
+						g_free (mime_type);
 					}
 
 					return luaL_error (L, "invalid body argument type: %s",
 							lua_typename (L, lua_type (L, -1)));
 				}
+
+				lua_pop (L, 1);
+			}
+
+			/* Preallocate body */
+			if (total_len > 0) {
+				body = rspamd_fstring_sized_new (total_len);
+			}
+			else {
+				rspamd_http_message_unref (msg);
+				if (mime_type) {
+					g_free (mime_type);
+				}
+
+				return luaL_error (L, "empty body specified");
+			}
+
+			/* Fill elements */
+			for (gsize i = 0; i < nelts; i ++) {
+				lua_rawgeti (L, -1, i + 1);
+
+				if (lua_type (L, -1) == LUA_TSTRING) {
+					lua_body = lua_tolstring (L, -1, &bodylen);
+					body = rspamd_fstring_append (body, lua_body, bodylen);
+				}
+				else {
+					t = lua_check_text (L, -1);
+					body = rspamd_fstring_append (body, t->start, t->len);
+				}
+
+				lua_pop (L, 1);
 			}
 		}
 		else if (lua_type (L, -1) != LUA_TNONE && lua_type (L, -1) != LUA_TNIL) {
