@@ -1,3 +1,49 @@
+2.1: 28 Oct 2019
+  * [Conf] Update neural.conf
+  * [CritFix] Fix dkim verification for multiple headers listed
+  * [Feature] Add support of uudecode
+  * [Feature] Allow to explicitly set events backend
+  * [Feature] Implement configurable limits for SPF lookups
+  * [Feature] Lua_scanners: Use lua magic for inclusion/exclusion logic
+  * [Feature] Multimap: Do not check files in office archives
+  * [Feature] Neural: Add sampling when storing training vectors
+  * [Feature] SPF: Allow to disable AAAA checks in configuration
+  * [Feature] Spf: Add limits configuration support
+  * [Feature] Store etag in cached HTTP maps + better logging
+  * [Feature] Support segwit BTC addresses, fix LTC verification
+  * [Feature] Support uuencoding
+  * [Fix] Add configurable number of threads for OpenBLAS
+  * [Fix] Add workaround for ragel 7 in hyperscan related maps code
+  * [Fix] Another fix for numeric urls parsing
+  * [Fix] Correct EMA time calculations
+  * [Fix] Do not treat archives as text
+  * [Fix] Do not use strdup on data extracted from lua
+  * [Fix] Fix a failure calcuating URL reputation.
+  * [Fix] Fix crash due to constructors init order
+  * [Fix] Fix crash on parts with no cd
+  * [Fix] Fix empty prefilters that require mime structures
+  * [Fix] Fix event loop creation
+  * [Fix] Fix issues sending DMARC reports.
+  * [Fix] Fix misprint
+  * [Fix] Fix saving of the file maps
+  * [Fix] Fix size calculations when converting from utf16
+  * [Fix] Fix support of disable_monitoring in rbl
+  * [Fix] Fix use-after-free
+  * [Fix] Fix zip files check to relax requirements
+  * [Fix] Important hiredis fixes
+  * [Fix] Lot's of fixes in maps check logic
+  * [Fix] Lua_tcp: Deal with temporary fails on write
+  * [Fix] Lua_tcp: Make write errors fatal and rework error handlers
+  * [Fix] Meta: Filter some more values
+  * [Fix] Neural: Add protection agains infinities
+  * [Fix] Oops, fix math.huge invocation
+  * [Fix] Plug memory leak
+  * [Fix] Sigh, another email to string fix
+  * [Fix] Try to fix another ownership race in ssl connection
+  * [Fix] Uuencode: Fix parsing of corrupted uuencode
+  * [Fix] lua_scanners - razor rename need_check function
+  * [Rework] Require CMake 3.9 to work, remove manual lto crap
+
 2.0: 11 Oct 2019
   * [Conf] Add BROKEN_HEADERS_MAILLIST composite
   * [Conf] Add path to greylist-whitelist-domains.inc
