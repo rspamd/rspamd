@@ -11,6 +11,8 @@ assignees: ''
 
 Do you want to ask a question? Are you looking for support? Here are the places where you can get what you need: https://rspamd.com/support.html
 
+Feature requests are welcomed. Before opening a feature request, please take a moment to find out whether your idea fits with the scope and goals of the project. It’s up to you to make a strong case to convince the project maintainers the merits of the feature. Please provide as much detail and context as possible.
+
 -->
 
 ## Summary
