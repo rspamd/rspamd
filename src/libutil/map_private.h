@@ -157,6 +157,8 @@ struct rspamd_map {
 	time_t next_check;
 	gboolean active_http;
 	gboolean non_trivial; /* E.g. has http backends in active mode */
+	gboolean file_only; /* No HTTP backends found */
+	gboolean static_only; /* No need to check */
 	/* Shared lock for temporary disabling of map reading (e.g. when this map is written by UI) */
 	gint *locked;
 	gchar tag[MEMPOOL_UID_LEN];

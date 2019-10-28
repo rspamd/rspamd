@@ -1006,6 +1006,11 @@ rspamd_map_schedule_periodic (struct rspamd_map *map, int how)
 		return;
 	}
 
+	if (!(how & RSPAMD_MAP_SCHEDULE_INIT) && map->static_only) {
+		/* No need to schedule anything for static maps */
+		return;
+	}
+
 	if (map->non_trivial && map->next_check != 0) {
 		timeout = map->next_check - rspamd_get_calendar_ticks ();
 
@@ -1850,7 +1855,7 @@ rspamd_map_process_periodic (struct map_periodic_cbdata *cbd)
 	map = cbd->map;
 	map->scheduled_check = NULL;
 
-	if (!cbd->locked) {
+	if (!map->file_only && !cbd->locked) {
 		if (!g_atomic_int_compare_and_exchange (cbd->map->locked, 0, 1)) {
 			msg_debug_map (
 					"don't try to reread map %s as it is locked by other process, "
@@ -1996,6 +2001,9 @@ rspamd_map_watch (struct rspamd_config *cfg,
 			}
 		}
 
+		map->file_only = TRUE;
+		map->static_only = TRUE;
+
 		PTR_ARRAY_FOREACH (map->backends, i, bk) {
 			bk->event_loop = event_loop;
 
@@ -2008,10 +2016,16 @@ rspamd_map_watch (struct rspamd_config *cfg,
 						data->filename, map->poll_timeout * cfg->map_file_watch_multiplier);
 				data->st_ev.data = map;
 				ev_stat_start (event_loop, &data->st_ev);
+				map->static_only = FALSE;
 			}
 			else if ((bk->protocol == MAP_PROTO_HTTP ||
-					  bk->protocol == MAP_PROTO_HTTPS) && map->active_http) {
-				map->non_trivial = TRUE;
+					  bk->protocol == MAP_PROTO_HTTPS)) {
+				if (map->active_http) {
+					map->non_trivial = TRUE;
+				}
+
+				map->static_only = FALSE;
+				map->file_only = FALSE;
 			}
 		}
 
