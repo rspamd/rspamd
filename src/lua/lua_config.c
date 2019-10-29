@@ -3157,8 +3157,9 @@ lua_periodic_callback (struct ev_loop *loop, ev_timer *w, int revents)
 	pev_base = lua_newuserdata (L, sizeof (*pev_base));
 	rspamd_lua_setclass (L, "rspamd{ev_base}", -1);
 	*pev_base = periodic->event_loop;
+	lua_pushnumber (L, ev_now (periodic->event_loop));
 
-	lua_thread_call (thread, 2);
+	lua_thread_call (thread, 3);
 }
 
 static void
