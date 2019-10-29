@@ -113,6 +113,7 @@ application/hyperstudio 0
 application/ibe-key-request+xml 0
 application/ibe-pkg-reply+xml 0
 application/ibe-pp-data 0
+application/ics 0
 application/iges 0
 application/im-iscomposing+xml 0
 application/index 0
