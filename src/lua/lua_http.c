@@ -392,6 +392,8 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 	if (cbd->flags & RSPAMD_LUA_HTTP_FLAG_KEEP_ALIVE) {
 		cbd->fd = -1; /* FD is owned by keepalive connection */
 
+		/* Update timestamp to make a more precise timers */
+		ev_now_update (cbd->event_loop);
 		cbd->conn = rspamd_http_connection_new_keepalive (
 				NULL, /* Default context */
 				NULL,
