@@ -1941,8 +1941,11 @@ rspamd_map_on_stat (struct ev_loop *loop, ev_stat *w, int revents)
 	if (w->attr.st_nlink > 0) {
 
 		if (w->attr.st_mtime > w->prev.st_mtime) {
-			msg_info_map ("old mtime is %t, new mtime is %t for map file %s",
-					w->prev.st_mtime, w->attr.st_mtime, w->path);
+			msg_info_map ("old mtime is %t (size = %Hz), "
+				 "new mtime is %t (size = %Hz) for map file %s",
+					w->prev.st_mtime, (gsize)w->prev.st_size,
+					w->attr.st_mtime, (gsize)w->attr.st_size,
+					w->path);
 
 			/* Fire need modify flag */
 			struct rspamd_map_backend *bk;
