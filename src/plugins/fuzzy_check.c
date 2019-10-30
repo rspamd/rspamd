@@ -2960,7 +2960,8 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 	struct fuzzy_rule *rule;
 	struct rspamd_controller_session *session = conn_ent->ud;
 	struct rspamd_task *task, **ptask;
-	gboolean processed = FALSE, res = TRUE, skip = FALSE;
+	gboolean processed = FALSE, skip = FALSE;
+	gint res = 0;
 	guint i;
 	GError **err;
 	GPtrArray *commands;
@@ -3118,19 +3119,24 @@ fuzzy_process_handler (struct rspamd_http_connection_entry *conn_ent,
 			}
 		}
 
-
-		if (res) {
+		if (res > 0) {
 			processed = TRUE;
 		}
 	}
 
 	if (res == -1) {
-		msg_warn_task ("cannot send fuzzy request: %s",
-				strerror (errno));
-		rspamd_controller_send_error (conn_ent, 400, "Message sending error");
-		rspamd_task_free (task);
+		if (!processed) {
+			msg_warn_task ("cannot send fuzzy request: %s",
+					strerror (errno));
+			rspamd_controller_send_error (conn_ent, 400, "Message sending error");
+			rspamd_task_free (task);
 
-		return;
+			return;
+		}
+		else {
+			/* Some rules failed and some rules are OK */
+			msg_warn_task ("some rules are not processed, but we still sent this request");
+		}
 	}
 	else if (!processed) {
 		if (rules) {
