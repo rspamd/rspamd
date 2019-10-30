@@ -2407,6 +2407,16 @@ rspamd_free_zstd_dictionary (struct zstd_dictionary *dict)
 #else
 extern void openblas_set_num_threads(int num_threads);
 #endif
+/*
+ * Openblas creates threads that are not supported by
+ * jemalloc allocator (aside of being bloody stupid). So this hack
+ * is intended to set number of threads to one by default.
+ * FIXME: is it legit to do so in ctor?
+ */
+RSPAMD_CONSTRUCTOR (openblas_stupidity_fix_ctor)
+{
+	openblas_set_num_threads (1);
+}
 #endif
 
 void
