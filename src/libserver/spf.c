@@ -392,15 +392,15 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 		cur = g_ptr_array_index (elt->elts, i);
 
 		if (cur->flags & RSPAMD_SPF_FLAG_TEMPFAIL) {
-			target->temp_failed = TRUE;
+			target->flags |= RSPAMD_SPF_RESOLVED_TEMP_FAILED;
 			continue;
 		}
 		if (cur->flags & RSPAMD_SPF_FLAG_PERMFAIL) {
-			target->perm_failed = TRUE;
+			target->flags |= RSPAMD_SPF_RESOLVED_PERM_FAILED;
 			continue;
 		}
 		if (cur->flags & RSPAMD_SPF_FLAG_NA) {
-			target->na = TRUE;
+			target->flags |= RSPAMD_SPF_RESOLVED_NA;
 			continue;
 		}
 		if (cur->flags & RSPAMD_SPF_FLAG_INVALID) {
@@ -448,26 +448,24 @@ rspamd_spf_record_flatten (struct spf_record *rec)
 
 	g_assert (rec != NULL);
 
+	res = g_malloc0 (sizeof (*res));
+	res->domain = g_strdup (rec->sender_domain);
+	res->ttl = rec->ttl;
+	/* Not precise but okay */
+	res->timestamp = rec->task->task_timestamp;
+	res->digest = mum_hash_init (0xa4aa40bbeec59e2bULL);
+	REF_INIT_RETAIN (res, rspamd_flatten_record_dtor);
+
 	if (rec->resolved) {
-		res = g_malloc0 (sizeof (*res));
 		res->elts = g_array_sized_new (FALSE, FALSE, sizeof (struct spf_addr),
 				rec->resolved->len);
-		res->domain = g_strdup (rec->sender_domain);
-		res->ttl = rec->ttl;
-		res->digest = mum_hash_init (0xa4aa40bbeec59e2bULL);
-		REF_INIT_RETAIN (res, rspamd_flatten_record_dtor);
 
 		if (rec->resolved->len > 0) {
 			rspamd_spf_process_reference (res, NULL, rec, TRUE);
 		}
 	}
 	else {
-		res = g_malloc0 (sizeof (*res));
 		res->elts = g_array_new (FALSE, FALSE, sizeof (struct spf_addr));
-		res->domain = g_strdup (rec->sender_domain);
-		res->ttl = rec->ttl;
-		res->digest = mum_hash_init (0xa4aa40bbeec59e2bULL);
-		REF_INIT_RETAIN (res, rspamd_flatten_record_dtor);
 	}
 
 	return res;

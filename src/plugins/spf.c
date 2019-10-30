@@ -490,12 +490,12 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 			spf_result[0] = '-';
 			spf_message = "(SPF): spf fail";
 			if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
-				if (rec->perm_failed) {
+				if (rec->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED) {
 					msg_info_task ("do not apply SPF failed policy, as we have "
 							"some addresses unresolved");
 					spf_symbol = spf_module_ctx->symbol_permfail;
 				}
-				else if (rec->temp_failed) {
+				else if (rec->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED) {
 					msg_info_task ("do not apply SPF failed policy, as we have "
 							"some addresses unresolved");
 					spf_symbol = spf_module_ctx->symbol_dnsfail;
@@ -509,12 +509,12 @@ spf_check_element (struct spf_resolved *rec, struct spf_addr *addr,
 			spf_result[0] = '~';
 
 			if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
-				if (rec->perm_failed) {
+				if (rec->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED) {
 					msg_info_task ("do not apply SPF failed policy, as we have "
 							"some addresses unresolved");
 					spf_symbol = spf_module_ctx->symbol_permfail;
 				}
-				else if (rec->temp_failed) {
+				else if (rec->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED) {
 					msg_info_task ("do not apply SPF failed policy, as we have "
 							"some addresses unresolved");
 					spf_symbol = spf_module_ctx->symbol_dnsfail;
@@ -567,7 +567,7 @@ spf_check_list (struct spf_resolved *rec, struct rspamd_task *task, gboolean cac
 					   "%d/%d elements in the cache",
 				rec->domain,
 				rec->digest,
-				rec->ttl,
+				rec->ttl - (task->task_timestamp - rec->timestamp),
 				rspamd_lru_hash_size (spf_module_ctx->spf_hash),
 				rspamd_lru_hash_capacity (spf_module_ctx->spf_hash));
 	}
@@ -588,19 +588,19 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 	struct rspamd_symcache_item *item = (struct rspamd_symcache_item *)ud;
 	struct spf_ctx *spf_module_ctx = spf_get_context (task->cfg);
 
-	if (record && record->na) {
+	if (record && (record->flags & RSPAMD_SPF_RESOLVED_NA)) {
 		rspamd_task_insert_result (task,
 				spf_module_ctx->symbol_na,
 				1,
 				NULL);
 	}
-	else if (record && record->elts->len == 0 && record->temp_failed) {
+	else if (record && record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED)) {
 		rspamd_task_insert_result (task,
 				spf_module_ctx->symbol_dnsfail,
 				1,
 				NULL);
 	}
-	else if (record && record->elts->len == 0 && record->perm_failed) {
+	else if (record && record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED)) {
 		rspamd_task_insert_result (task,
 				spf_module_ctx->symbol_permfail,
 				1,
@@ -621,15 +621,12 @@ spf_plugin_callback (struct spf_resolved *record, struct rspamd_task *task,
 					record->domain, task->task_timestamp)) == NULL) {
 			l = record;
 
-			if (record->ttl > 0 &&
-					!record->temp_failed &&
-					!record->perm_failed &&
-					!record->na) {
+			if (record->ttl > 0 && record->flags == 0) {
 
 				if (spf_module_ctx->spf_hash) {
 					rspamd_lru_hash_insert (spf_module_ctx->spf_hash,
 							record->domain, spf_record_ref (l),
-							task->task_timestamp, record->ttl);
+							record->timestamp, record->ttl);
 
 					msg_info_task ("stored record for %s (0x%xuL) in LRU cache for %d seconds, "
 								   "%d/%d elements in the cache",

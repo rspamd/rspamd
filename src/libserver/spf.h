@@ -67,12 +67,18 @@ struct spf_addr {
 	struct spf_addr *prev, *next;
 };
 
+enum rspamd_spf_resolved_flags {
+	RSPAMD_SPF_RESOLVED_NORMAL = 0,
+	RSPAMD_SPF_RESOLVED_TEMP_FAILED = (1u << 0u),
+	RSPAMD_SPF_RESOLVED_PERM_FAILED = (1u << 1u),
+	RSPAMD_SPF_RESOLVED_NA = (1u << 2u),
+};
+
 struct spf_resolved {
 	gchar *domain;
 	guint ttl;
-	gboolean temp_failed;
-	gboolean na;
-	gboolean perm_failed;
+	gint flags;
+	gdouble timestamp;
 	guint64 digest;
 	GArray *elts; /* Flat list of struct spf_addr */
 	ref_entry_t ref; /* Refcounting */
