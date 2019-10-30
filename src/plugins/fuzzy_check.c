@@ -2917,6 +2917,10 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 
 		if ((sock = rspamd_inet_address_connect (addr,
 				SOCK_DGRAM, TRUE)) == -1) {
+			msg_warn_task ("cannot connect to fuzzy storage %s (%s rule): %s",
+					rspamd_inet_address_to_string_pretty (addr),
+					rule->name,
+					strerror (errno));
 			rspamd_upstream_fail (selected, TRUE);
 		}
 		else {
