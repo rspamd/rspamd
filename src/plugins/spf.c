@@ -567,7 +567,7 @@ spf_check_list (struct spf_resolved *rec, struct rspamd_task *task, gboolean cac
 					   "%d/%d elements in the cache",
 				rec->domain,
 				rec->digest,
-				rec->ttl - (task->task_timestamp - rec->timestamp),
+				rec->ttl - (guint)(task->task_timestamp - rec->timestamp),
 				rspamd_lru_hash_size (spf_module_ctx->spf_hash),
 				rspamd_lru_hash_capacity (spf_module_ctx->spf_hash));
 	}
