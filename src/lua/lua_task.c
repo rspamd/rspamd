@@ -2118,7 +2118,7 @@ struct lua_tree_cb_data {
 	gint mask;
 	gint need_images;
 	gdouble skip_prob;
-	guint64 xoroshiro_state[2];
+	guint64 xoroshiro_state[4];
 };
 
 static void
@@ -2161,7 +2161,7 @@ lua_task_urls_adjust_skip_prob (struct rspamd_task *task,
 		memcpy (&cb->xoroshiro_state[0], &task->task_timestamp,
 				MIN (sizeof (cb->xoroshiro_state[0]), sizeof (task->task_timestamp)));
 		memcpy (&cb->xoroshiro_state[1], MESSAGE_FIELD (task, digest),
-				sizeof (cb->xoroshiro_state[1]));
+				sizeof (cb->xoroshiro_state[1]) * 3);
 		sz = max_urls;
 	}
 

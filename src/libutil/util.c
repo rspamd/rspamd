@@ -2638,7 +2638,7 @@ rspamd_random_double (void)
 }
 
 
-static guint64 xorshifto_seed[2];
+static guint64 xorshifto_seed[4];
 
 static inline guint64
 xoroshiro_rotl (const guint64 x, int k) {
@@ -2651,32 +2651,50 @@ rspamd_random_double_fast (void)
 	return rspamd_random_double_fast_seed (xorshifto_seed);
 }
 
-gdouble
-rspamd_random_double_fast_seed (guint64 seed[2])
+/* xoshiro256+ */
+inline gdouble
+rspamd_random_double_fast_seed (guint64 seed[4])
 {
-	const guint64 s0 = seed[0];
-	guint64 s1 = seed[1];
-	const guint64 result = s0 + s1;
+	const uint64_t result = seed[0] + seed[3];
 
-	s1 ^= s0;
-	seed[0] = xoroshiro_rotl(s0, 55) ^ s1 ^ (s1 << 14);
-	seed[1] = xoroshiro_rotl (s1, 36);
+	const uint64_t t = seed[1] << 17;
+
+	seed[2] ^= seed[0];
+	seed[3] ^= seed[1];
+	seed[1] ^= seed[2];
+	seed[0] ^= seed[3];
+
+	seed[2] ^= t;
+
+	seed[3] = xoroshiro_rotl (seed[3], 45);
 
 	return rspamd_double_from_int64 (result);
+}
+
+/* xoroshiro256** */
+static inline guint64
+rspamd_random_uint64_fast_seed (guint64 seed[4])
+{
+	const uint64_t result = xoroshiro_rotl (seed[1] * 5, 7) * 9;
+
+	const uint64_t t = seed[1] << 17;
+
+	seed[2] ^= seed[0];
+	seed[3] ^= seed[1];
+	seed[1] ^= seed[2];
+	seed[0] ^= seed[3];
+
+	seed[2] ^= t;
+
+	seed[3] = xoroshiro_rotl (seed[3], 45);
+
+	return result;
 }
 
 guint64
 rspamd_random_uint64_fast (void)
 {
-	const guint64 s0 = xorshifto_seed[0];
-	guint64 s1 = xorshifto_seed[1];
-	const guint64 result = s0 + s1;
-
-	s1 ^= s0;
-	xorshifto_seed[0] = xoroshiro_rotl(s0, 55) ^ s1 ^ (s1 << 14);
-	xorshifto_seed[1] = xoroshiro_rotl (s1, 36);
-
-	return result;
+	return rspamd_random_uint64_fast_seed (xorshifto_seed);
 }
 
 void
