@@ -23,6 +23,7 @@
 #include "logger.h"
 #include "rdns.h"
 #include "upstream.h"
+#include "libutil/hash.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -34,6 +35,8 @@ struct rspamd_task;
 struct rspamd_dns_resolver {
 	struct rdns_resolver *r;
 	struct ev_loop *event_loop;
+	rspamd_lru_hash_t *fails_cache;
+	ev_tstamp fails_cache_time;
 	struct upstream_list *ups;
 	struct rspamd_config *cfg;
 	gdouble request_timeout;
