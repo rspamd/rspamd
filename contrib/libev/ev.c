@@ -2893,15 +2893,22 @@ loop_init (EV_P_ unsigned int flags) EV_NOEXCEPT
           if (!clock_gettime (CLOCK_MONOTONIC, &ts)) {
             have_monotonic = 1;
             monotinic_clock_id = CLOCK_MONOTONIC;
+#define CHECK_CLOCK_SOURCE(id) do { \
+  if (!clock_gettime ((id), &ts) && \
+    !clock_getres ((id), &ts)) { \
+    if (ts.tv_sec == 0 && ts.tv_nsec < 10ULL * 1000000) { \
+      monotinic_clock_id = (id); \
+    } \
+  } \
+} while(0)
 #ifdef CLOCK_MONOTONIC_COARSE
-            if (!clock_gettime (CLOCK_MONOTONIC_COARSE, &ts) &&
-               !clock_getres (CLOCK_MONOTONIC_COARSE, &ts)) {
-              /* Check if we have at least 10ms resolution */
-              if (ts.tv_sec == 0 && ts.tv_nsec < 10ULL * 1000000) {
-                monotinic_clock_id = CLOCK_MONOTONIC_COARSE;
-              }
-            }
+            CHECK_CLOCK_SOURCE(CLOCK_MONOTONIC_COARSE);
+#elif defined(CLOCK_MONOTONIC_FAST) /* BSD stuff */
+            CHECK_CLOCK_SOURCE(CLOCK_MONOTONIC_FAST);
+#elif defined(CLOCK_MONOTONIC_RAW_APPROX) /* OSX stuff */
+            CHECK_CLOCK_SOURCE(CLOCK_MONOTONIC_RAW_APPROX);
 #endif
+#undef CHECK_CLOCK_SOURCE
           }
         }
 #endif
