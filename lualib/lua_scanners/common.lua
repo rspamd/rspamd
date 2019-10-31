@@ -431,7 +431,7 @@ local function check_parts_match(task, rule)
         -- We know what to scan!
         local magic = lua_magic_types[detected_ext] or {}
 
-        if magic.av_check ~= false then
+        if p:is_attachment() or magic.av_check ~= false then
           extension_check = true
         end
       else
