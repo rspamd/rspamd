@@ -1570,6 +1570,7 @@ static EV_ATOMIC_T have_realtime; /* did clock_gettime (CLOCK_REALTIME) work? */
 
 #if EV_USE_MONOTONIC
 static EV_ATOMIC_T have_monotonic; /* did clock_gettime (CLOCK_MONOTONIC) work? */
+static EV_ATOMIC_T monotinic_clock_id;
 #endif
 
 #ifndef EV_FD_TO_WIN32_HANDLE
@@ -1892,7 +1893,7 @@ get_clock (void)
   if (expect_true (have_monotonic))
     {
       struct timespec ts;
-      clock_gettime (CLOCK_MONOTONIC, &ts);
+      clock_gettime (monotinic_clock_id, &ts);
       return ts.tv_sec + ts.tv_nsec * 1e-9;
     }
 #endif
@@ -2889,8 +2890,19 @@ loop_init (EV_P_ unsigned int flags) EV_NOEXCEPT
         {
           struct timespec ts;
 
-          if (!clock_gettime (CLOCK_MONOTONIC, &ts))
+          if (!clock_gettime (CLOCK_MONOTONIC, &ts)) {
             have_monotonic = 1;
+            monotinic_clock_id = CLOCK_MONOTONIC;
+#ifdef CLOCK_MONOTONIC_COARSE
+            if (!clock_gettime (CLOCK_MONOTONIC_COARSE, &ts) &&
+               !clock_getres (CLOCK_MONOTONIC_COARSE, &ts)) {
+              /* Check if we have at least 10ms resolution */
+              if (ts.tv_sec == 0 && ts.tv_nsec < 10ULL * 1000000) {
+                monotinic_clock_id = CLOCK_MONOTONIC_COARSE;
+              }
+            }
+#endif
+          }
         }
 #endif
 
