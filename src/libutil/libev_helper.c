@@ -70,6 +70,9 @@ rspamd_ev_watcher_start (struct ev_loop *loop,
 	ev_io_start (EV_A_ &ev->io);
 
 	if (timeout > 0) {
+		/* Update timestamp to avoid timers running early */
+		ev_now_update (loop);
+
 		ev->timeout = timeout;
 		ev_timer_set (&ev->tm, timeout, 0.0);
 		ev_timer_start (EV_A_ &ev->tm);
@@ -109,6 +112,9 @@ rspamd_ev_watcher_reschedule (struct ev_loop *loop,
 
 	if (ev->timeout > 0) {
 		if (!(ev_can_stop (&ev->tm))) {
+			/* Update timestamp to avoid timers running early */
+			ev_now_update (loop);
+
 			ev->tm.data = ev;
 			ev_timer_init (&ev->tm, rspamd_ev_watcher_timer_cb, ev->timeout, 0.0);
 			ev_timer_start (EV_A_ &ev->tm);
