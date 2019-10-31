@@ -726,7 +726,7 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *upstrea
 void
 rspamd_upstream_fail (struct upstream *up, gboolean addr_failure)
 {
-	gdouble error_rate, max_error_rate;
+	gdouble error_rate = 0, max_error_rate = 0;
 	gdouble sec_last, sec_cur;
 	struct upstream_addr_elt *addr_elt;
 	struct upstream_list_watcher *w;
@@ -752,20 +752,17 @@ rspamd_upstream_fail (struct upstream *up, gboolean addr_failure)
 			if (sec_cur >= sec_last) {
 				up->errors ++;
 
+
 				DL_FOREACH (up->ls->watchers, w) {
 					if (w->events_mask & RSPAMD_UPSTREAM_WATCH_FAILURE) {
 						w->func (up, RSPAMD_UPSTREAM_WATCH_FAILURE, up->errors, w->ud);
 					}
 				}
 
-				if (sec_cur > sec_last) {
+				if (sec_cur - sec_last >= up->ls->limits.error_time)  {
 					error_rate = ((gdouble)up->errors) / (sec_cur - sec_last);
 					max_error_rate = ((gdouble)up->ls->limits.max_errors) /
 							up->ls->limits.error_time;
-				}
-				else {
-					error_rate = 1;
-					max_error_rate = 0;
 				}
 
 				if (error_rate > max_error_rate) {
@@ -781,6 +778,11 @@ rspamd_upstream_fail (struct upstream *up, gboolean addr_failure)
 							rspamd_upstream_resolve_addrs (up->ls, up);
 						}
 					}
+				}
+				else if (sec_cur - sec_last >= up->ls->limits.error_time) {
+					/* Forget the whole interval */
+					up->last_fail = sec_cur;
+					up->errors = 1;
 				}
 			}
 		}
