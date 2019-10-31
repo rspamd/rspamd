@@ -98,11 +98,13 @@ local function add_antivirus_rule(sym, opts)
   if opts.attachments_only ~= nil then
     opts.scan_mime_parts = opts.attachments_only
     rspamd_logger.warnx(rspamd_config, '%s [%s]: Using attachments_only is deprecated. '..
-     'Please use scan_mime_parts = %s instead', opts.symbol, opts.type, opts.attachments_only)
+        'Please use scan_mime_parts = %s instead', opts.symbol, opts.type, opts.attachments_only)
   end
   -- WORKAROUND for deprecated attachments_only
 
   local rule = cfg.configure(opts)
+  if not rule then return nil end
+
   rule.type = opts.type
   rule.symbol_fail = opts.symbol_fail
   rule.symbol_encrypted = opts.symbol_encrypted
@@ -110,7 +112,7 @@ local function add_antivirus_rule(sym, opts)
 
   if not rule then
     rspamd_logger.errx(rspamd_config, 'cannot configure %s for %s',
-      opts.type, opts.symbol)
+        opts.type, opts.symbol)
     return nil
   end
 
@@ -143,7 +145,7 @@ if opts and type(opts) == 'table' then
   redis_params = rspamd_parse_redis_server(N)
   local has_valid = false
   for k, m in pairs(opts) do
-    if type(m) == 'table' and m.servers then
+    if type(m) == 'table' then
       if not m.type then m.type = k end
       if not m.name then m.name = k end
       local cb = add_antivirus_rule(k, m)
@@ -151,7 +153,7 @@ if opts and type(opts) == 'table' then
       if not cb then
         rspamd_logger.errx(rspamd_config, 'cannot add rule: "' .. k .. '"')
       else
-
+        rspamd_logger.infox(rspamd_config, 'added antivirus engine %s -> %s', k, m.symbol)
         local t = {
           name = m.symbol,
           callback = cb,
