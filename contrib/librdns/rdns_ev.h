@@ -162,6 +162,7 @@ rdns_libev_add_timer (void *priv_data, double after, void *user_data)
 	if (ev != NULL) {
 		ev_timer_init (ev, rdns_libev_timer_event, after, after);
 		ev->data = user_data;
+		ev_now_update_if_cheap ((struct ev_loop *)priv_data);
 		ev_timer_start ((struct ev_loop *)priv_data, ev);
 	}
 	return (void *)ev;
@@ -184,6 +185,7 @@ rdns_libev_add_periodic (void *priv_data, double after,
 			cbdata->ev = ev;
 			ev_timer_init (ev, rdns_libev_periodic_event, after, after);
 			ev->data = cbdata;
+			ev_now_update_if_cheap ((struct ev_loop *)priv_data);
 			ev_timer_start ((struct ev_loop *)priv_data, ev);
 		}
 		else {
@@ -211,6 +213,7 @@ rdns_libev_repeat_timer (void *priv_data, void *ev_data)
 {
 	ev_timer *ev = (ev_timer *)ev_data;
 	if (ev != NULL) {
+		ev_now_update_if_cheap ((struct ev_loop *)priv_data);
 		ev_timer_again ((struct ev_loop *)priv_data, ev);
 	}
 }
