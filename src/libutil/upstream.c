@@ -131,23 +131,30 @@ struct upstream_ctx {
 INIT_LOG_MODULE(upstream)
 
 /* 4 errors in 10 seconds */
-static const guint default_max_errors = 4;
-static const gdouble default_revive_time = 60;
-static const gdouble default_revive_jitter = 0.4;
-static const gdouble default_error_time = 10;
-static const gdouble default_dns_timeout = 1.0;
-static const guint default_dns_retransmits = 2;
+#define DEFAULT_MAX_ERRORS 4
+static const guint default_max_errors = DEFAULT_MAX_ERRORS;
+#define DEFAULT_REVIVE_TIME 60
+static const gdouble default_revive_time = DEFAULT_REVIVE_TIME;
+#define DEFAULT_REVIVE_JITTER 0.4
+static const gdouble default_revive_jitter = DEFAULT_REVIVE_JITTER;
+#define DEFAULT_ERROR_TIME 10
+static const gdouble default_error_time = DEFAULT_ERROR_TIME;
+#define DEFAULT_DNS_TIMEOUT 1.0
+static const gdouble default_dns_timeout = DEFAULT_DNS_TIMEOUT;
+#define DEFAULT_DNS_RETRANSMITS 2
+static const guint default_dns_retransmits = DEFAULT_DNS_RETRANSMITS;
 /* TODO: make it configurable */
-static const gdouble default_lazy_resolve_time = 3600.0;
+#define DEFAULT_LAZY_RESOLVE_TIME 3600.0
+static const gdouble default_lazy_resolve_time = DEFAULT_LAZY_RESOLVE_TIME;
 
 static const struct upstream_limits default_limits = {
-		.revive_time = default_revive_time,
-		.revive_jitter = default_revive_jitter,
-		.error_time = default_error_time,
-		.dns_timeout = default_dns_timeout,
-		.dns_retransmits = default_dns_retransmits,
-		.max_errors = default_max_errors,
-		.lazy_resolve_time = default_lazy_resolve_time,
+		.revive_time = DEFAULT_REVIVE_TIME,
+		.revive_jitter = DEFAULT_REVIVE_JITTER,
+		.error_time = DEFAULT_ERROR_TIME,
+		.dns_timeout = DEFAULT_DNS_TIMEOUT,
+		.dns_retransmits = DEFAULT_DNS_RETRANSMITS,
+		.max_errors = DEFAULT_MAX_ERRORS,
+		.lazy_resolve_time = DEFAULT_LAZY_RESOLVE_TIME,
 };
 
 static void rspamd_upstream_lazy_resolve_cb (struct ev_loop *, ev_timer *, int );
