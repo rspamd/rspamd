@@ -724,78 +724,96 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *upstrea
 }
 
 void
-rspamd_upstream_fail (struct upstream *up, gboolean addr_failure)
+rspamd_upstream_fail (struct upstream *upstream, gboolean addr_failure)
 {
 	gdouble error_rate = 0, max_error_rate = 0;
 	gdouble sec_last, sec_cur;
 	struct upstream_addr_elt *addr_elt;
 	struct upstream_list_watcher *w;
 
-	if (up->ctx && up->active_idx != -1) {
+	if (upstream->ctx && upstream->active_idx != -1) {
 		sec_cur = rspamd_get_ticks (FALSE);
 
-		RSPAMD_UPSTREAM_LOCK (up);
-		if (up->errors == 0) {
+		RSPAMD_UPSTREAM_LOCK (upstream);
+		if (upstream->errors == 0) {
 			/* We have the first error */
-			up->last_fail = sec_cur;
-			up->errors = 1;
+			upstream->last_fail = sec_cur;
+			upstream->errors = 1;
 
-			DL_FOREACH (up->ls->watchers, w) {
+			DL_FOREACH (upstream->ls->watchers, w) {
 				if (w->events_mask & RSPAMD_UPSTREAM_WATCH_FAILURE) {
-					w->func (up, RSPAMD_UPSTREAM_WATCH_FAILURE, 1, w->ud);
+					w->func (upstream, RSPAMD_UPSTREAM_WATCH_FAILURE, 1, w->ud);
 				}
 			}
 		}
 		else {
-			sec_last = up->last_fail;
+			sec_last = upstream->last_fail;
 
 			if (sec_cur >= sec_last) {
-				up->errors ++;
+				upstream->errors ++;
 
 
-				DL_FOREACH (up->ls->watchers, w) {
+				DL_FOREACH (upstream->ls->watchers, w) {
 					if (w->events_mask & RSPAMD_UPSTREAM_WATCH_FAILURE) {
-						w->func (up, RSPAMD_UPSTREAM_WATCH_FAILURE, up->errors, w->ud);
+						w->func (upstream, RSPAMD_UPSTREAM_WATCH_FAILURE,
+								upstream->errors, w->ud);
 					}
 				}
 
-				if (sec_cur - sec_last >= up->ls->limits.error_time)  {
-					error_rate = ((gdouble)up->errors) / (sec_cur - sec_last);
-					max_error_rate = ((gdouble)up->ls->limits.max_errors) /
-							up->ls->limits.error_time;
+				if (sec_cur - sec_last >= upstream->ls->limits.error_time)  {
+					error_rate = ((gdouble)upstream->errors) / (sec_cur - sec_last);
+					max_error_rate = ((gdouble)upstream->ls->limits.max_errors) /
+									 upstream->ls->limits.error_time;
 				}
 
 				if (error_rate > max_error_rate) {
 					/* Remove upstream from the active list */
-					if (up->ls->ups->len > 1) {
-						up->errors = 0;
-						rspamd_upstream_set_inactive (up->ls, up);
+					if (upstream->ls->ups->len > 1) {
+						msg_debug_upstream ("mark upstream %s inactive: %.2f "
+											"error rate (%d errors), "
+											"%.2f max error rate, "
+											"%.1f first error time, "
+											"%.1f current ts, "
+											"%d upstreams left",
+								upstream->name, error_rate, upstream->errors,
+								max_error_rate, sec_last, sec_cur,
+								upstream->ls->alive->len - 1);
+						rspamd_upstream_set_inactive (upstream->ls, upstream);
+						upstream->errors = 0;
 					}
 					else {
+						msg_debug_upstream ("cannot mark last alive upstream %s "
+											"inactive: %.2f "
+											"error rate (%d errors), "
+											"%.2f max error rate, "
+											"%.1f first error time, "
+											"%.1f current ts",
+								upstream->name, error_rate, upstream->errors,
+								max_error_rate, sec_last, sec_cur);
 						/* Just re-resolve addresses */
-						if (sec_cur - sec_last > up->ls->limits.revive_time) {
-							up->errors = 0;
-							rspamd_upstream_resolve_addrs (up->ls, up);
+						if (sec_cur - sec_last > upstream->ls->limits.revive_time) {
+							upstream->errors = 0;
+							rspamd_upstream_resolve_addrs (upstream->ls, upstream);
 						}
 					}
 				}
-				else if (sec_cur - sec_last >= up->ls->limits.error_time) {
+				else if (sec_cur - sec_last >= upstream->ls->limits.error_time) {
 					/* Forget the whole interval */
-					up->last_fail = sec_cur;
-					up->errors = 1;
+					upstream->last_fail = sec_cur;
+					upstream->errors = 1;
 				}
 			}
 		}
 
 		if (addr_failure) {
 			/* Also increase count of errors for this specific address */
-			if (up->addrs.addr) {
-				addr_elt = g_ptr_array_index (up->addrs.addr, up->addrs.cur);
+			if (upstream->addrs.addr) {
+				addr_elt = g_ptr_array_index (upstream->addrs.addr, upstream->addrs.cur);
 				addr_elt->errors++;
 			}
 		}
 
-		RSPAMD_UPSTREAM_UNLOCK (up);
+		RSPAMD_UPSTREAM_UNLOCK (upstream);
 	}
 }
 
