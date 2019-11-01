@@ -279,7 +279,7 @@ rspamd_rcl_options_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 
 	HASH_FIND_STR (section->subsections, "upstream", upstream_section);
 
-	upstream = ucl_object_lookup (obj, "upstream");
+	upstream = ucl_object_lookup_any (obj, "upstream", "upstreams", NULL);
 	if (upstream_section != NULL && upstream != NULL) {
 		if (!rspamd_rcl_section_parse_defaults (cfg,
 				upstream_section, cfg->cfg_pool,
