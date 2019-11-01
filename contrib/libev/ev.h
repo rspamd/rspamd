@@ -596,6 +596,11 @@ EV_API_DECL void ev_loop_fork (EV_P) EV_NOEXCEPT;
 EV_API_DECL unsigned int ev_backend (EV_P) EV_NOEXCEPT; /* backend in use by loop */
 
 EV_API_DECL void ev_now_update (EV_P) EV_NOEXCEPT; /* update event loop time */
+/*
+ * Same as ev_now_update, but will update time merely if cheap (coarse) timers
+ * are used in system.
+ */
+EV_API_DECL void ev_now_update_if_cheap (EV_P) EV_NOEXCEPT;
 
 #if EV_WALK_ENABLE
 /* walk (almost) all watchers in the loop of a given type, invoking the */
