@@ -96,7 +96,7 @@ struct upstream_list {
 	GPtrArray *alive;
 	struct upstream_list_watcher *watchers;
 	guint64 hash_seed;
-	struct upstream_limits limits;
+	const struct upstream_limits *limits;
 	enum rspamd_upstream_flag flags;
 	guint cur_elt;
 	enum rspamd_upstream_rotation rot_alg;
@@ -131,14 +131,24 @@ struct upstream_ctx {
 INIT_LOG_MODULE(upstream)
 
 /* 4 errors in 10 seconds */
-static guint default_max_errors = 4;
-static gdouble default_revive_time = 60;
-static gdouble default_revive_jitter = 0.4;
-static gdouble default_error_time = 10;
-static gdouble default_dns_timeout = 1.0;
-static guint default_dns_retransmits = 2;
+static const guint default_max_errors = 4;
+static const gdouble default_revive_time = 60;
+static const gdouble default_revive_jitter = 0.4;
+static const gdouble default_error_time = 10;
+static const gdouble default_dns_timeout = 1.0;
+static const guint default_dns_retransmits = 2;
 /* TODO: make it configurable */
-static gdouble default_lazy_resolve_time = 3600.0;
+static const gdouble default_lazy_resolve_time = 3600.0;
+
+static const struct upstream_limits default_limits = {
+		.revive_time = default_revive_time,
+		.revive_jitter = default_revive_jitter,
+		.error_time = default_error_time,
+		.dns_timeout = default_dns_timeout,
+		.dns_retransmits = default_dns_retransmits,
+		.max_errors = default_max_errors,
+		.lazy_resolve_time = default_lazy_resolve_time,
+};
 
 static void rspamd_upstream_lazy_resolve_cb (struct ev_loop *, ev_timer *, int );
 
@@ -192,8 +202,8 @@ rspamd_upstreams_library_config (struct rspamd_config *cfg,
 					when = 0.0;
 				}
 				else {
-					when = rspamd_time_jitter (upstream->ls->limits.lazy_resolve_time,
-							upstream->ls->limits.lazy_resolve_time * .1);
+					when = rspamd_time_jitter (upstream->ls->limits->lazy_resolve_time,
+							upstream->ls->limits->lazy_resolve_time * .1);
 				}
 
 				ev_timer_init (&upstream->ev, rspamd_upstream_lazy_resolve_cb,
@@ -239,13 +249,7 @@ rspamd_upstreams_library_init (void)
 	struct upstream_ctx *ctx;
 
 	ctx = g_malloc0 (sizeof (*ctx));
-	ctx->limits.error_time = default_error_time;
-	ctx->limits.max_errors = default_max_errors;
-	ctx->limits.dns_retransmits = default_dns_retransmits;
-	ctx->limits.dns_timeout = default_dns_timeout;
-	ctx->limits.revive_jitter = default_revive_jitter;
-	ctx->limits.revive_time = default_revive_time;
-	ctx->limits.lazy_resolve_time = default_lazy_resolve_time;
+	memcpy (&ctx->limits, &default_limits, sizeof (ctx->limits));
 	ctx->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
 			"upstreams");
 
@@ -320,8 +324,8 @@ rspamd_upstream_set_active (struct upstream_list *ls, struct upstream *upstream)
 			when = 0.0;
 		}
 		else {
-			when = rspamd_time_jitter (upstream->ls->limits.lazy_resolve_time,
-					upstream->ls->limits.lazy_resolve_time * .1);
+			when = rspamd_time_jitter (upstream->ls->limits->lazy_resolve_time,
+					upstream->ls->limits->lazy_resolve_time * .1);
 		}
 		ev_timer_init (&upstream->ev, rspamd_upstream_lazy_resolve_cb,
 				when, 0);
@@ -559,8 +563,8 @@ rspamd_upstream_dns_srv_cb (struct rdns_reply *reply, void *arg)
 
 				if (rdns_make_request_full (upstream->ctx->res,
 						rspamd_upstream_dns_srv_phase2_cb, ncbdata,
-						upstream->ls->limits.dns_timeout,
-						upstream->ls->limits.dns_retransmits,
+						upstream->ls->limits->dns_timeout,
+						upstream->ls->limits->dns_retransmits,
 						1, entry->content.srv.target, RDNS_REQUEST_A) != NULL) {
 					upstream->dns_requests++;
 					REF_RETAIN (upstream);
@@ -569,8 +573,8 @@ rspamd_upstream_dns_srv_cb (struct rdns_reply *reply, void *arg)
 
 				if (rdns_make_request_full (upstream->ctx->res,
 						rspamd_upstream_dns_srv_phase2_cb, ncbdata,
-						upstream->ls->limits.dns_timeout,
-						upstream->ls->limits.dns_retransmits,
+						upstream->ls->limits->dns_timeout,
+						upstream->ls->limits->dns_retransmits,
 						1, entry->content.srv.target, RDNS_REQUEST_AAAA) != NULL) {
 					upstream->dns_requests++;
 					REF_RETAIN (upstream);
@@ -623,7 +627,7 @@ rspamd_upstream_resolve_addrs (const struct upstream_list *ls,
 			if (up->flags & RSPAMD_UPSTREAM_FLAG_SRV_RESOLVE) {
 				if (rdns_make_request_full (up->ctx->res,
 						rspamd_upstream_dns_srv_cb, up,
-						ls->limits.dns_timeout, ls->limits.dns_retransmits,
+						ls->limits->dns_timeout, ls->limits->dns_retransmits,
 						1, up->name, RDNS_REQUEST_SRV) != NULL) {
 					up->dns_requests++;
 					REF_RETAIN (up);
@@ -632,7 +636,7 @@ rspamd_upstream_resolve_addrs (const struct upstream_list *ls,
 			else {
 				if (rdns_make_request_full (up->ctx->res,
 						rspamd_upstream_dns_cb, up,
-						ls->limits.dns_timeout, ls->limits.dns_retransmits,
+						ls->limits->dns_timeout, ls->limits->dns_retransmits,
 						1, up->name, RDNS_REQUEST_A) != NULL) {
 					up->dns_requests++;
 					REF_RETAIN (up);
@@ -640,7 +644,7 @@ rspamd_upstream_resolve_addrs (const struct upstream_list *ls,
 
 				if (rdns_make_request_full (up->ctx->res,
 						rspamd_upstream_dns_cb, up,
-						ls->limits.dns_timeout, ls->limits.dns_retransmits,
+						ls->limits->dns_timeout, ls->limits->dns_retransmits,
 						1, up->name, RDNS_REQUEST_AAAA) != NULL) {
 					up->dns_requests++;
 					REF_RETAIN (up);
@@ -661,9 +665,9 @@ rspamd_upstream_lazy_resolve_cb (struct ev_loop *loop, ev_timer *w, int revents)
 	if (up->ls) {
 		rspamd_upstream_resolve_addrs (up->ls, up);
 
-		if (up->ttl == 0 || up->ttl > up->ls->limits.lazy_resolve_time) {
-			w->repeat = rspamd_time_jitter (up->ls->limits.lazy_resolve_time,
-					up->ls->limits.lazy_resolve_time * .1);
+		if (up->ttl == 0 || up->ttl > up->ls->limits->lazy_resolve_time) {
+			w->repeat = rspamd_time_jitter (up->ls->limits->lazy_resolve_time,
+					up->ls->limits->lazy_resolve_time * .1);
 		}
 		else {
 			w->repeat = up->ttl;
@@ -697,8 +701,8 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *upstrea
 		rspamd_upstream_resolve_addrs (ls, upstream);
 
 		REF_RETAIN (upstream);
-		ntim = rspamd_time_jitter (ls->limits.revive_time,
-				ls->limits.revive_jitter);
+		ntim = rspamd_time_jitter (ls->limits->revive_time,
+				ls->limits->revive_time * ls->limits->revive_jitter);
 
 		if (ev_can_stop (&upstream->ev)) {
 			ev_timer_stop (upstream->ctx->event_loop, &upstream->ev);
@@ -760,10 +764,10 @@ rspamd_upstream_fail (struct upstream *upstream, gboolean addr_failure)
 					}
 				}
 
-				if (sec_cur - sec_last >= upstream->ls->limits.error_time)  {
+				if (sec_cur - sec_last >= upstream->ls->limits->error_time)  {
 					error_rate = ((gdouble)upstream->errors) / (sec_cur - sec_last);
-					max_error_rate = ((gdouble)upstream->ls->limits.max_errors) /
-									 upstream->ls->limits.error_time;
+					max_error_rate = ((gdouble)upstream->ls->limits->max_errors) /
+									 upstream->ls->limits->error_time;
 				}
 
 				if (error_rate > max_error_rate) {
@@ -791,13 +795,13 @@ rspamd_upstream_fail (struct upstream *upstream, gboolean addr_failure)
 								upstream->name, error_rate, upstream->errors,
 								max_error_rate, sec_last, sec_cur);
 						/* Just re-resolve addresses */
-						if (sec_cur - sec_last > upstream->ls->limits.revive_time) {
+						if (sec_cur - sec_last > upstream->ls->limits->revive_time) {
 							upstream->errors = 0;
 							rspamd_upstream_resolve_addrs (upstream->ls, upstream);
 						}
 					}
 				}
-				else if (sec_cur - sec_last >= upstream->ls->limits.error_time) {
+				else if (sec_cur - sec_last >= upstream->ls->limits->error_time) {
 					/* Forget the whole interval */
 					upstream->last_fail = sec_cur;
 					upstream->errors = 1;
@@ -871,16 +875,10 @@ rspamd_upstreams_create (struct upstream_ctx *ctx)
 	ls->rot_alg = RSPAMD_UPSTREAM_UNDEF;
 
 	if (ctx) {
-		ls->limits = ctx->limits;
+		ls->limits = &ctx->limits;
 	}
 	else {
-		ls->limits.error_time = default_error_time;
-		ls->limits.max_errors = default_max_errors;
-		ls->limits.dns_retransmits = default_dns_retransmits;
-		ls->limits.dns_timeout = default_dns_timeout;
-		ls->limits.revive_jitter = default_revive_jitter;
-		ls->limits.revive_time = default_revive_time;
-		ls->limits.lazy_resolve_time = default_lazy_resolve_time;
+		ls->limits = &default_limits;
 	}
 
 	return ls;
@@ -1568,31 +1566,37 @@ rspamd_upstreams_set_limits (struct upstream_list *ups,
 								  guint max_errors,
 								  guint dns_retransmits)
 {
+	struct upstream_limits *nlimits;
 	g_assert (ups != NULL);
 
+	nlimits = rspamd_mempool_alloc (ups->ctx->pool, sizeof (*nlimits));
+	memcpy (nlimits, ups->limits, sizeof (*nlimits));
+
 	if (!isnan (revive_time)) {
-		ups->limits.revive_time = revive_time;
+		nlimits->revive_time = revive_time;
 	}
 
 	if (!isnan (revive_jitter)) {
-		ups->limits.revive_jitter = revive_jitter;
+		nlimits->revive_jitter = revive_jitter;
 	}
 
 	if (!isnan (error_time)) {
-		ups->limits.error_time = error_time;
+		nlimits->error_time = error_time;
 	}
 
 	if (!isnan (dns_timeout)) {
-		ups->limits.dns_timeout = dns_timeout;
+		nlimits->dns_timeout = dns_timeout;
 	}
 
 	if (max_errors > 0) {
-		ups->limits.max_errors = max_errors;
+		nlimits->max_errors = max_errors;
 	}
 
 	if (dns_retransmits > 0) {
-		ups->limits.dns_retransmits = dns_retransmits;
+		nlimits->dns_retransmits = dns_retransmits;
 	}
+
+	ups->limits = nlimits;
 }
 
 void rspamd_upstreams_add_watch_callback (struct upstream_list *ups,

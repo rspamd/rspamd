@@ -89,6 +89,8 @@ void rspamd_upstreams_set_flags (struct upstream_list *ups,
 
 /**
  * Sets custom limits for upstreams
+ * This function allocates memory from the upstreams ctx pool and should
+ * not be called in cycles/constantly as this memory is likely persistent
  * @param ups
  * @param revive_time
  * @param revive_jitter
