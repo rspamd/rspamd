@@ -110,6 +110,11 @@ local function virustotal_check(task, content, digest, rule)
               lua_util.debugm(rule.name, task, '%s: hash %s clean (not found)',
                   rule.log_prefix)
             end
+          elseif code == 204 then
+            -- Request rate limit exceeded
+            rspamd_logger.infox(task, 'virustotal request rate limit exceeded')
+            task:insert_result(rule.symbol_fail, 1.0, 'rate limit exceeded')
+            return
           else
             rspamd_logger.errx(task, 'invalid HTTP code: %s, body: %s, headers: %s', code, body, headers)
             task:insert_result(rule.symbol_fail, 1.0, 'Bad HTTP code: ' .. code)
@@ -126,10 +131,28 @@ local function virustotal_check(task, content, digest, rule)
           if res then
             local obj = parser:get_object()
             if not obj.positives then
-              rspamd_logger.errx(task, 'invalid JSON reply: %s, body: %s, headers: %s',
-                  'no positives element', body, headers)
-              task:insert_result(rule.symbol_fail, 1.0, 'Bad JSON reply: no `positives` element')
-              return
+              if obj.response_code then
+                if obj.response_code == 0 then
+                  cached = 'OK'
+                  if rule['log_clean'] then
+                    rspamd_logger.infox(task, '%s: hash %s clean (not found)',
+                        rule.log_prefix, hash)
+                  else
+                    lua_util.debugm(rule.name, task, '%s: hash %s clean (not found)',
+                        rule.log_prefix)
+                  end
+                else
+                  rspamd_logger.errx(task, 'invalid JSON reply: %s, body: %s, headers: %s',
+                      'bad response code: ' .. tostring(obj.response_code), body, headers)
+                  task:insert_result(rule.symbol_fail, 1.0, 'Bad JSON reply: no `positives` element')
+                  return
+                end
+              else
+                rspamd_logger.errx(task, 'invalid JSON reply: %s, body: %s, headers: %s',
+                    'no response_code', body, headers)
+                task:insert_result(rule.symbol_fail, 1.0, 'Bad JSON reply: no `positives` element')
+                return
+              end
             end
             if obj.positives < rule.minimum_engines then
               lua_util.debugm(rule.name, task, '%s: hash %s has not enough hits: %s where %s is min',
