@@ -98,6 +98,7 @@ local function virustotal_check(task, content, digest, rule)
         rspamd_logger.errx(task, 'HTTP error: %s, body: %s, headers: %s', http_err, body, headers)
       else
         local cached
+        local dyn_score
         -- Parse the response
         if code ~= 200 then
           if code == 404 then
@@ -136,7 +137,6 @@ local function virustotal_check(task, content, digest, rule)
               -- TODO: add proper hashing!
               cached = 'OK'
             else
-              local dyn_score
               if obj.positives > rule.full_score_engines then
                 dyn_score = 1.0
               else
@@ -147,11 +147,10 @@ local function virustotal_check(task, content, digest, rule)
               if dyn_score < 0 or dyn_score > 1 then
                 dyn_score = 1.0
               end
-              common.yield_result(task, rule, {
-                hash,
-                string.format("%s/%s", obj.positives, obj.total)
-              }, dyn_score)
-              cached = hash
+              local sopt = string.format("%s:%s/%s",
+                  hash, obj.positives, obj.total)
+              common.yield_result(task, rule, sopt, dyn_score)
+              cached = sopt
             end
           else
             rspamd_logger.errx(task, 'invalid JSON reply: %s, body: %s, headers: %s',
@@ -163,7 +162,7 @@ local function virustotal_check(task, content, digest, rule)
         end
 
         if cached then
-          common.save_cache(task, digest, rule, cached)
+          common.save_cache(task, digest, rule, cached, dyn_score)
         end
       end
     end
