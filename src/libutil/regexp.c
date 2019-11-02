@@ -450,8 +450,8 @@ fin:
 
 	if (r == NULL) {
 		g_set_error (err, rspamd_regexp_quark(), EINVAL,
-			"regexp parsing error: '%s' at position %d",
-			err_str, (gint)err_off);
+			"regexp parsing error: '%s' at position %d; pattern: %s",
+			err_str, (gint)err_off, real_pattern);
 		g_free (real_pattern);
 
 		return NULL;
