@@ -108,7 +108,7 @@ local function virustotal_check(task, content, digest, rule)
                   rule.log_prefix, hash)
             else
               lua_util.debugm(rule.name, task, '%s: hash %s clean (not found)',
-                  rule.log_prefix)
+                  rule.log_prefix, hash)
             end
           elseif code == 204 then
             -- Request rate limit exceeded
@@ -139,7 +139,7 @@ local function virustotal_check(task, content, digest, rule)
                         rule.log_prefix, hash)
                   else
                     lua_util.debugm(rule.name, task, '%s: hash %s clean (not found)',
-                        rule.log_prefix)
+                        rule.log_prefix, hash)
                   end
                 else
                   rspamd_logger.errx(task, 'invalid JSON reply: %s, body: %s, headers: %s',
