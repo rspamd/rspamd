@@ -203,8 +203,8 @@ define(["jquery"],
                 return false;
             });
             // close modal without saving
-            $("#modalDialog").on('hidden.bs.modal', function () {
-              $("#modalBody form").remove();
+            $("#modalDialog").on("hidden.bs.modal", function () {
+                $("#modalBody form").remove();
             });
             // @save forms from modal
             function saveMap(server) {
