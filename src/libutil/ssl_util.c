@@ -492,13 +492,18 @@ rspamd_ssl_shutdown (struct rspamd_ssl_connection *conn)
 		/* BUGON: but we DO NOT own conn->ev, and it's a big issue */
 		static const ev_tstamp shutdown_time = 5.0;
 
-		rspamd_ev_watcher_stop (conn->event_loop, conn->ev);
-		conn->shut_ev = g_malloc0 (sizeof (*conn->shut_ev));
-		rspamd_ev_watcher_init (conn->shut_ev, conn->fd, what,
-				rspamd_ssl_event_handler, conn);
-		rspamd_ev_watcher_start (conn->event_loop, conn->shut_ev, shutdown_time);
-		/* XXX: can it be done safely ? */
-		conn->ev = conn->shut_ev;
+		if (conn->shut_ev == NULL) {
+			rspamd_ev_watcher_stop (conn->event_loop, conn->ev);
+			conn->shut_ev = g_malloc0 (sizeof (*conn->shut_ev));
+			rspamd_ev_watcher_init (conn->shut_ev, conn->fd, what,
+					rspamd_ssl_event_handler, conn);
+			rspamd_ev_watcher_start (conn->event_loop, conn->shut_ev, shutdown_time);
+			/* XXX: can it be done safely ? */
+			conn->ev = conn->shut_ev;
+		}
+		else {
+			rspamd_ev_watcher_reschedule (conn->event_loop, conn->shut_ev, what);
+		}
 
 		conn->state = ssl_next_shutdown;
 	}
@@ -900,6 +905,7 @@ rspamd_ssl_connection_free (struct rspamd_ssl_connection *conn)
 		if (conn->shut == ssl_shut_unclean) {
 			/* Ignore return result and close socket */
 			msg_debug_ssl ("unclean shutdown");
+			SSL_set_quiet_shutdown (conn->ssl, 1);
 			(void)SSL_shutdown (conn->ssl);
 			rspamd_ssl_connection_dtor (conn);
 		}
