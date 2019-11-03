@@ -456,7 +456,11 @@ rspamd_ssl_shutdown (struct rspamd_ssl_connection *conn)
 		}
 		else {
 			/* Cannot do anything else, fatal error */
-			msg_debug_ssl ("ssl shutdown: fatal error");
+			GError *err = NULL;
+
+			rspamd_tls_set_error (ret, "final shutdown", &err);
+			msg_debug_ssl ("ssl shutdown: fatal error: %e", err);
+			g_error_free (err);
 			rspamd_ssl_connection_dtor (conn);
 
 			return;
@@ -652,8 +656,13 @@ rspamd_ssl_connect_fd (struct rspamd_ssl_connection *conn, gint fd,
 			msg_debug_ssl ("not connected, want write");
 		}
 		else {
+			GError *err = NULL;
+
 			conn->shut = ssl_shut_unclean;
-			msg_debug_ssl ("not connected, fatal error %d", ret);
+			rspamd_tls_set_error (ret, "initial connect", &err);
+			msg_debug_ssl ("not connected, fatal error %e", err);
+			g_error_free (err);
+
 
 			return FALSE;
 		}
