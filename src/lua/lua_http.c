@@ -439,6 +439,13 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 			cbd->flags |= RSPAMD_LUA_HTTP_FLAG_RESOLVED;
 		}
 
+		if (cbd->task) {
+			cbd->conn->log_tag = cbd->task->task_pool->tag.uid;
+		}
+		else if (cbd->cfg) {
+			cbd->conn->log_tag = cbd->cfg->cfg_pool->tag.uid;
+		}
+
 		if (cbd->item) {
 			rspamd_symcache_item_async_inc (cbd->task, cbd->item, M);
 		}
