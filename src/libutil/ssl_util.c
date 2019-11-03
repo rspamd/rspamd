@@ -433,7 +433,7 @@ rspamd_ssl_connection_dtor (struct rspamd_ssl_connection *conn)
 static void
 rspamd_ssl_shutdown (struct rspamd_ssl_connection *conn)
 {
-	gint ret = 0, retries;
+	gint ret = 0, nret, retries;
 	static const gint max_retries = 5;
 
 	/*
@@ -464,14 +464,14 @@ rspamd_ssl_shutdown (struct rspamd_ssl_connection *conn)
 	else if (ret < 0) {
 		short what;
 
-		ret = SSL_get_error (conn->ssl, ret);
+		nret = SSL_get_error (conn->ssl, ret);
 		conn->state = ssl_next_shutdown;
 
-		if (ret == SSL_ERROR_WANT_READ) {
+		if (nret == SSL_ERROR_WANT_READ) {
 			msg_debug_ssl ("ssl shutdown: need read");
 			what = EV_READ;
 		}
-		else if (ret == SSL_ERROR_WANT_WRITE) {
+		else if (nret == SSL_ERROR_WANT_WRITE) {
 			msg_debug_ssl ("ssl shutdown: need write");
 			what = EV_WRITE;
 		}
@@ -480,7 +480,8 @@ rspamd_ssl_shutdown (struct rspamd_ssl_connection *conn)
 			GError *err = NULL;
 
 			rspamd_tls_set_error (ret, "final shutdown", &err);
-			msg_debug_ssl ("ssl shutdown: fatal error: %e", err);
+			msg_debug_ssl ("ssl shutdown: fatal error: %e; retries=%d; ret=%d",
+					err, retries, ret);
 			g_error_free (err);
 			rspamd_ssl_connection_dtor (conn);
 
