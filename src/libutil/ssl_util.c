@@ -479,7 +479,7 @@ rspamd_ssl_shutdown (struct rspamd_ssl_connection *conn)
 			/* Cannot do anything else, fatal error */
 			GError *err = NULL;
 
-			rspamd_tls_set_error (ret, "final shutdown", &err);
+			rspamd_tls_set_error (nret, "final shutdown", &err);
 			msg_debug_ssl ("ssl shutdown: fatal error: %e; retries=%d; ret=%d",
 					err, retries, ret);
 			g_error_free (err);
