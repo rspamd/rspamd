@@ -433,14 +433,35 @@ rspamd_ssl_connection_dtor (struct rspamd_ssl_connection *conn)
 static void
 rspamd_ssl_shutdown (struct rspamd_ssl_connection *conn)
 {
-	gint ret;
+	gint ret = 0, retries;
+	static const gint max_retries = 5;
 
-	if ((ret = SSL_shutdown (conn->ssl)) == 1) {
+	/*
+	 * Fucking openssl...
+	 * From the manual, 0 means: "The shutdown is not yet finished.
+	 * Call SSL_shutdown() for a second time,
+	 * if a bidirectional shutdown shall be performed.
+	 * The output of SSL_get_error(3) may be misleading,
+	 * as an erroneous SSL_ERROR_SYSCALL may be flagged
+	 * even though no error occurred."
+	 *
+	 * What is `second`, what if `second` also returns 0?
+	 * What a retarded behaviour!
+	 */
+	for (retries = 0; retries < max_retries; retries ++) {
+		ret = SSL_shutdown (conn->ssl);
+
+		if (ret != 0) {
+			break;
+		}
+	}
+
+	if (ret == 1) {
 		/* All done */
 		msg_debug_ssl ("ssl shutdown: all done");
 		rspamd_ssl_connection_dtor (conn);
 	}
-	else {
+	else if (ret < 0) {
 		short what;
 
 		ret = SSL_get_error (conn->ssl, ret);
@@ -451,7 +472,7 @@ rspamd_ssl_shutdown (struct rspamd_ssl_connection *conn)
 			what = EV_READ;
 		}
 		else if (ret == SSL_ERROR_WANT_WRITE) {
-			msg_debug_ssl ("ssl shutdown: need read");
+			msg_debug_ssl ("ssl shutdown: need write");
 			what = EV_WRITE;
 		}
 		else {
@@ -479,6 +500,12 @@ rspamd_ssl_shutdown (struct rspamd_ssl_connection *conn)
 		conn->ev = conn->shut_ev;
 
 		conn->state = ssl_next_shutdown;
+	}
+	else if (ret == 0) {
+		/* What can we do here?? */
+		msg_debug_ssl ("ssl shutdown: openssl failed to initiate shutdown after "
+				 "%d attempts!", max_retries);
+		rspamd_ssl_connection_dtor (conn);
 	}
 }
 
