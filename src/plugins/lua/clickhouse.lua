@@ -930,7 +930,7 @@ local function clickhouse_maybe_send_data_periodic(cfg, ev_base, now)
   end
 
   if settings.limits.max_rows > 0 then
-    if nrows > settings.max_rows then
+    if nrows > settings.limits.max_rows then
       need_collect = true
       reason = string.format('limit of rows has been reached: %d', nrows)
     end
