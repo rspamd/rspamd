@@ -168,7 +168,7 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 			}
 		}
 		else {
-			fd = STDERR_FILENO;
+			fd = rspamd_log->fd;
 		}
 	}
 	else {
@@ -189,7 +189,7 @@ direct_write_log_line (rspamd_logger_t *rspamd_log,
 			tlen = count;
 		}
 
-		if (tlen > PIPE_BUF) {
+		if (tlen > PIPE_BUF || rspamd_log->flags & RSPAMD_LOG_FLAG_TTY) {
 			locked = TRUE;
 
 #ifndef DISABLE_PTHREAD_MUTEX
@@ -306,8 +306,11 @@ rspamd_log_open_priv (rspamd_logger_t *rspamd_log, uid_t uid, gid_t gid)
 	if (!rspamd_log->opened) {
 		switch (rspamd_log->log_type) {
 		case RSPAMD_LOG_CONSOLE:
-			/* Do nothing with console */
-			rspamd_log->fd = -1;
+			/* Dup stderr fd to simplify processing */
+			rspamd_log->fd = dup (STDERR_FILENO);
+			if (isatty (STDERR_FILENO)) {
+				rspamd_log->flags |= RSPAMD_LOG_FLAG_TTY;
+			}
 			break;
 		case RSPAMD_LOG_SYSLOG:
 #ifdef HAVE_SYSLOG_H
@@ -385,9 +388,6 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, gboolean termination, uid_t 
 
 	if (rspamd_log->opened) {
 		switch (rspamd_log->type) {
-		case RSPAMD_LOG_CONSOLE:
-			/* Do nothing special */
-			break;
 		case RSPAMD_LOG_SYSLOG:
 #ifdef HAVE_SYSLOG_H
 			closelog ();
@@ -404,6 +404,11 @@ rspamd_log_close_priv (rspamd_logger_t *rspamd_log, gboolean termination, uid_t 
 					msg_err ("error syncing log file: %s", strerror (errno));
 				}
 #endif
+				close (rspamd_log->fd);
+			}
+			break;
+		case RSPAMD_LOG_CONSOLE:
+			if (rspamd_log->fd != -1) {
 				close (rspamd_log->fd);
 			}
 			break;
@@ -522,7 +527,6 @@ rspamd_set_logger (struct rspamd_config *cfg,
 	switch (cfg->log_type) {
 		case RSPAMD_LOG_CONSOLE:
 			logger->log_func = file_log_function;
-			logger->fd = -1;
 			break;
 		case RSPAMD_LOG_SYSLOG:
 			logger->log_func = syslog_log_function;
