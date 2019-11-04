@@ -1286,6 +1286,8 @@ rspamd_crash_sig_handler (int sig, siginfo_t *info, void *ctx)
 #ifdef WITH_LIBUNWIND
 	rspamd_print_crash (uap);
 #endif
+	msg_err ("please see Rspamd FAQ to learn how to dump core files and how to "
+			 "fill a bug report");
 
 	if (saved_main) {
 		if (pid == saved_main->pid) {
@@ -1401,7 +1403,9 @@ rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
 			if (WCOREDUMP (res)) {
 				msg_warn_main (
 						"%s process %P terminated abnormally by signal: %s"
-						" and created core file",
+						" and created core file; please see Rspamd FAQ "
+						"to learn how to extract data from core file and "
+						"fill a bug report",
 						g_quark_to_string (wrk->type),
 						wrk->pid,
 						g_strsignal (WTERMSIG (res)));
@@ -1412,30 +1416,32 @@ rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
 				(void) getrlimit (RLIMIT_CORE, &rlmt);
 
 				msg_warn_main (
-						"%s process %P terminated abnormally by signal: %s"
+						"%s process %P terminated abnormally with exit code %d by "
+						"signal: %s"
 						" but NOT created core file (throttled=%s); "
 						"core file limits: %L current, %L max",
 						g_quark_to_string (wrk->type),
 						wrk->pid,
+						WEXITSTATUS (res),
 						g_strsignal (WTERMSIG (res)),
 						wrk->cores_throttled ? "yes" : "no",
 						(gint64) rlmt.rlim_cur,
 						(gint64) rlmt.rlim_max);
 #else
 				msg_warn_main (
-								"%s process %P terminated abnormally by signal: %s"
+								"%s process %P terminated abnormally with exit code %d by signal: %s"
 								" but NOT created core file (throttled=%s); ",
 								g_quark_to_string (wrk->type),
-								wrk->pid,
+								wrk->pid, WEXITSTATUS (res),
 								g_strsignal (WTERMSIG (res)),
 								wrk->cores_throttled ? "yes" : "no");
 #endif
 			}
 #else
 			msg_warn_main (
-							"%s process %P terminated abnormally by signal: %s",
+							"%s process %P terminated abnormally with exit code %d by signal: %s",
 							g_quark_to_string (wrk->type),
-							wrk->pid,
+							wrk->pid, WEXITSTATUS (res),
 							g_strsignal (WTERMSIG (res)));
 #endif
 			if (WTERMSIG (res) == SIGUSR2) {
@@ -1450,6 +1456,7 @@ rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
 		}
 		else {
 			msg_warn_main ("%s process %P terminated abnormally "
+						   "(but it was not killed by a signal) "
 						   "with exit code %d",
 					g_quark_to_string (wrk->type),
 					wrk->pid,
