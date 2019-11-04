@@ -384,7 +384,7 @@ local function clickhouse_send_data(task, ev_base, why)
 
   local function gen_success_cb(what, how_many)
     return function (_, _)
-      rspamd_logger.infox(log_object, "sent %s rows of %s to clickhouse server %s; started as %s",
+      rspamd_logger.messagex(log_object, "sent %s rows of %s to clickhouse server %s; started as %s",
           how_many, what, ip_addr, why)
       upstream:ok()
     end
@@ -932,19 +932,21 @@ local function clickhouse_maybe_send_data_periodic(cfg, ev_base, now)
   if settings.limits.max_rows > 0 then
     if nrows > settings.max_rows then
       need_collect = true
-      reason = 'limit of rows has been reached'
+      reason = string.format('limit of rows has been reached: %d', nrows)
     end
   end
   if settings.limits.max_interval > 0 then
     if now - last_collection > settings.limits.max_interval then
       need_collect = true
-      reason = 'limit of time since last collection has been reached'
+      reason = string.format('limit of time since last collection has been reached: %d seconds passed',
+          (now - last_collection) - settings.limits.max_interval)
     end
   end
   if settings.limits.max_memory > 0 then
     if used_memory >= settings.limits.max_memory then
       need_collect = true
-      reason = 'limit of memory has been reached'
+      reason = string.format('limit of memory has been reached: %d bytes used',
+          used_memory)
     end
   end
 
