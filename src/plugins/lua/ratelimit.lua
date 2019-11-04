@@ -26,6 +26,7 @@ local lua_redis = require "lua_redis"
 local fun = require "fun"
 local lua_maps = require "lua_maps"
 local lua_util = require "lua_util"
+local lua_verdict = require "lua_verdict"
 local rspamd_hash = require "rspamd_cryptobox_hash"
 local lua_selectors = require "lua_selectors"
 local ts = require("tableshape").types
@@ -666,7 +667,7 @@ local function ratelimit_update_cb(task)
       return
     end
 
-    local verdict = lua_util.get_task_verdict(task)
+    local verdict = lua_verdict.get_specific_verdict(N, task)
     local _,nrcpt = task:has_recipients('smtp')
     if not nrcpt or nrcpt <= 0 then
       nrcpt = 1

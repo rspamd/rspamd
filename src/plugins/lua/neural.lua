@@ -28,6 +28,7 @@ local fun = require "fun"
 local lua_settings = require "lua_settings"
 local meta_functions = require "lua_meta"
 local ts = require("tableshape").types
+local lua_verdict = require "lua_verdict"
 local N = "neural"
 
 -- Module vars
@@ -1164,7 +1165,7 @@ local function ann_push_vector(task)
     return
   end
 
-  local verdict,score = lua_util.get_task_verdict(task)
+  local verdict,score = lua_verdict.get_specific_verdict(N, task)
 
   if verdict == 'passthrough' then
     lua_util.debugm(N, task, 'ignore task as its verdict is %s(%s)',

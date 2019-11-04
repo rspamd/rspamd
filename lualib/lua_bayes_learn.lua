@@ -17,7 +17,7 @@ limitations under the License.
 -- This file contains functions to simplify bayes classifier auto-learning
 
 local lua_util = require "lua_util"
-
+local lua_verdict = require "lua_verdict"
 local N = "lua_bayes"
 
 local exports = {}
@@ -76,7 +76,7 @@ exports.autolearn = function(task, conf)
   end
 
   -- We have autolearn config so let's figure out what is requested
-  local verdict,score = lua_util.get_task_verdict(task)
+  local verdict,score = lua_verdict.get_specific_verdict("bayes", task)
   local learn_spam,learn_ham = false, false
 
   if verdict == 'passthrough' then
@@ -97,6 +97,12 @@ exports.autolearn = function(task, conf)
         log_can_autolearn(verdict, score, conf.ham_threshold)
         learn_ham = true
       end
+    end
+  elseif conf.learn_verdict then
+    if verdict == 'spam' or verdict == 'junk' then
+      learn_spam = true
+    elseif verdict == 'ham' then
+      learn_ham = true
     end
   end
 

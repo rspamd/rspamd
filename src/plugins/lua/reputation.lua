@@ -109,9 +109,10 @@ end
 
 -- Extracts task score and subtracts score of the rule itself
 local function extract_task_score(task, rule)
-  local _,score = lua_util.get_task_verdict(task)
+  local lua_verdict = require "lua_verdict"
+  local verdict,score = lua_verdict.get_specific_verdict(N, task)
 
-  if not score then return nil end
+  if not score or verdict == 'passthrough' then return nil end
 
   return sub_symbol_score(task, rule, score)
 end

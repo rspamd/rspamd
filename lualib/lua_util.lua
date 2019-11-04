@@ -1026,35 +1026,9 @@ end
 -- * `uncertain`: all other cases
 --]]
 exports.get_task_verdict = function(task)
-  local result = task:get_metric_result()
+  local lua_verdict = require "lua_verdict"
 
-  if result then
-
-    if result.passthrough then
-      return 'passthrough',nil
-    end
-
-    local score = result.score
-
-    local action = result.action
-
-    if action == 'reject' and result.npositive > 1 then
-      return 'spam',score
-    elseif action == 'no action' then
-      if score < 0 or result.nnegative > 3 then
-        return 'ham',score
-      end
-    else
-      -- All colors of junk
-      if action == 'add header' or action == 'rewrite subject' then
-        if result.npositive > 2 then
-          return 'junk',score
-        end
-      end
-    end
-
-    return 'uncertain',score
-  end
+  return lua_verdict.get_default_verdict(task)
 end
 
 ---[[[

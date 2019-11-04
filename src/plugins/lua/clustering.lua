@@ -24,6 +24,7 @@ local N = 'clustering'
 
 local rspamd_logger = require "rspamd_logger"
 local lua_util = require "lua_util"
+local lua_verdict = require "lua_verdict"
 local lua_redis = require "lua_redis"
 local lua_selectors = require "lua_selectors"
 local ts = require("tableshape").types
@@ -190,7 +191,7 @@ local function clusterting_idempotent_cb(task, rule)
   if task:has_flag('skip') then return end
   if not rule.allow_local and lua_util.is_rspamc_or_controller(task) then return end
 
-  local verdict = lua_util.get_task_verdict(task)
+  local verdict = lua_verdict.get_specific_verdict(N, task)
   local score
 
   if verdict == 'ham' then
