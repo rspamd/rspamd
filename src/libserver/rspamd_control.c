@@ -655,10 +655,15 @@ rspamd_control_default_worker_handler (EV_P_ ev_io *w, int revents)
 	r = recvmsg (w->fd, &msg, 0);
 
 	if (r == -1) {
-		msg_err ("cannot read request from the control socket: %s",
-				strerror (errno));
-
 		if (errno != EAGAIN && errno != EINTR) {
+			if (errno != ECONNRESET) {
+				/*
+				 * In case of connection reset it means that main process
+				 * has died, so do not pollute logs
+				 */
+				msg_err ("cannot read request from the control socket: %s",
+						strerror (errno));
+			}
 			ev_io_stop (cd->ev_base, &cd->io_ev);
 			close (w->fd);
 		}

@@ -1092,11 +1092,13 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 		close (wrk->srv_pipe[0]);
 	}
 
-	cmd.type = RSPAMD_CONTROL_CHILD_CHANGE;
-	cmd.cmd.child_change.what = rspamd_child_terminated;
-	cmd.cmd.child_change.pid = wrk->pid;
-	cmd.cmd.child_change.additional = w->rstatus;
-	rspamd_control_broadcast_srv_cmd (rspamd_main, &cmd, wrk->pid);
+	if (!rspamd_main->wanna_die) {
+		cmd.type = RSPAMD_CONTROL_CHILD_CHANGE;
+		cmd.cmd.child_change.what = rspamd_child_terminated;
+		cmd.cmd.child_change.pid = wrk->pid;
+		cmd.cmd.child_change.additional = w->rstatus;
+		rspamd_control_broadcast_srv_cmd (rspamd_main, &cmd, wrk->pid);
+	}
 
 	if (wrk->finish_actions) {
 		g_ptr_array_free (wrk->finish_actions, TRUE);

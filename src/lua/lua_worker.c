@@ -841,7 +841,8 @@ lua_worker_spawn_process (lua_State *L)
 		/* Wait for parent to reply and exit */
 		rc = read (cbdata->sp[1], inbuf, sizeof (inbuf));
 
-		if (memcmp (inbuf, "\0\0\0\0", 4) == 0) {
+		if (rc >= sizeof (inbuf) &&
+			memcmp (inbuf, "\0\0\0\0", sizeof (inbuf)) == 0) {
 			exit (EXIT_SUCCESS);
 		}
 		else {
