@@ -1195,7 +1195,7 @@ rspamd_http_connection_new_client (struct rspamd_http_context *ctx,
 
 			if (fd == -1) {
 				msg_info ("cannot connect to http proxy %s: %s",
-						rspamd_inet_address_to_string (proxy_addr),
+						rspamd_inet_address_to_string_pretty (proxy_addr),
 						strerror (errno));
 				rspamd_upstream_fail (up, TRUE);
 
@@ -1214,8 +1214,8 @@ rspamd_http_connection_new_client (struct rspamd_http_context *ctx,
 	fd = rspamd_inet_address_connect (addr, SOCK_STREAM, TRUE);
 
 	if (fd == -1) {
-		msg_info ("cannot connect to proxy %s: %s",
-				rspamd_inet_address_to_string (addr),
+		msg_info ("cannot connect make http connection to %s: %s",
+				rspamd_inet_address_to_string_pretty (addr),
 				strerror (errno));
 
 		return NULL;
@@ -1905,7 +1905,7 @@ rspamd_http_message_write_header (const gchar* mime_type, gboolean encrypted,
 	return meth_len;
 }
 
-static void
+static gboolean
 rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn,
 											 struct rspamd_http_message *msg,
 											 const gchar *host,
@@ -2236,7 +2236,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 			conn->error_handler (conn, err);
 			rspamd_http_connection_unref (conn);
 			g_error_free (err);
-			return;
+			return FALSE;
 		}
 		else {
 			if (priv->ssl) {
@@ -2261,7 +2261,7 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 				conn->error_handler (conn, err);
 				rspamd_http_connection_unref (conn);
 				g_error_free (err);
-				return;
+				return FALSE;
 			}
 		}
 	}
@@ -2270,9 +2270,11 @@ rspamd_http_connection_write_message_common (struct rspamd_http_connection *conn
 				rspamd_http_event_handler, conn);
 		rspamd_ev_watcher_start (priv->ctx->event_loop, &priv->ev, priv->timeout);
 	}
+
+	return TRUE;
 }
 
-void
+gboolean
 rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 									  struct rspamd_http_message *msg,
 									  const gchar *host,
@@ -2280,11 +2282,11 @@ rspamd_http_connection_write_message (struct rspamd_http_connection *conn,
 									  gpointer ud,
 									  ev_tstamp timeout)
 {
-	rspamd_http_connection_write_message_common (conn, msg, host, mime_type,
+	return rspamd_http_connection_write_message_common (conn, msg, host, mime_type,
 			ud, timeout, FALSE);
 }
 
-void
+gboolean
 rspamd_http_connection_write_message_shared (struct rspamd_http_connection *conn,
 											 struct rspamd_http_message *msg,
 											 const gchar *host,
@@ -2292,7 +2294,7 @@ rspamd_http_connection_write_message_shared (struct rspamd_http_connection *conn
 											 gpointer ud,
 											 ev_tstamp timeout)
 {
-	rspamd_http_connection_write_message_common (conn, msg, host, mime_type,
+	return rspamd_http_connection_write_message_common (conn, msg, host, mime_type,
 			ud, timeout, TRUE);
 }
 

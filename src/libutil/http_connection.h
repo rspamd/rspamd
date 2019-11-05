@@ -240,7 +240,7 @@ void rspamd_http_connection_read_message_shared (
  * @param ud opaque user data
  * @param fd fd to read/write
  */
-void rspamd_http_connection_write_message (
+gboolean rspamd_http_connection_write_message (
 		struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg,
 		const gchar *host,
@@ -248,7 +248,7 @@ void rspamd_http_connection_write_message (
 		gpointer ud,
 		ev_tstamp timeout);
 
-void rspamd_http_connection_write_message_shared (
+gboolean rspamd_http_connection_write_message_shared (
 		struct rspamd_http_connection *conn,
 		struct rspamd_http_message *msg,
 		const gchar *host,

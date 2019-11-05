@@ -324,6 +324,7 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 	gsize dict_len = 0;
 	void *dict = NULL;
 	ZSTD_CCtx *zctx;
+	gboolean ret;
 
 	req = g_malloc0 (sizeof (struct rspamd_client_request));
 	req->conn = conn;
@@ -457,16 +458,16 @@ rspamd_client_command (struct rspamd_client_connection *conn,
 	conn->start_time = rspamd_get_ticks (FALSE);
 
 	if (compressed) {
-		rspamd_http_connection_write_message (conn->http_conn, req->msg, NULL,
-				"application/x-compressed", req,
+		ret = rspamd_http_connection_write_message (conn->http_conn, req->msg,
+				NULL,"application/x-compressed", req,
 				conn->timeout);
 	}
 	else {
-		rspamd_http_connection_write_message (conn->http_conn, req->msg, NULL,
-				"text/plain", req, conn->timeout);
+		ret = rspamd_http_connection_write_message (conn->http_conn, req->msg,
+				NULL,"text/plain", req, conn->timeout);
 	}
 
-	return TRUE;
+	return ret;
 }
 
 void

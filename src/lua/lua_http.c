@@ -455,11 +455,9 @@ lua_http_make_connection (struct lua_http_cbdata *cbd)
 		/* Message is now owned by a connection object */
 		cbd->msg = NULL;
 
-		rspamd_http_connection_write_message (cbd->conn, msg,
+		return rspamd_http_connection_write_message (cbd->conn, msg,
 				cbd->host, cbd->mime_type, cbd,
 				cbd->timeout);
-
-		return TRUE;
 	}
 
 	return FALSE;
