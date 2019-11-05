@@ -381,7 +381,7 @@ local function clickhouse_send_data(task, ev_base, why, gen_rows, cust_rows)
   local upstream = settings.upstream:get_upstream_round_robin()
   local ip_addr = upstream:get_addr():to_string(true)
   rspamd_logger.infox(log_object, "trying to send %s rows to clickhouse server %s; started as %s",
-      nrows, ip_addr, why)
+      #gen_rows + #cust_rows, ip_addr, why)
 
   local function gen_success_cb(what, how_many)
     return function (_, _)
