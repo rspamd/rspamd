@@ -248,18 +248,19 @@ rspamd_accept_from_socket (gint sock, rspamd_inet_addr_t **target,
 				addr = rspamd_inet_addr_create (AF_INET, NULL);
 				memcpy (&addr->u.in.addr.s4.sin_addr, &p[12],
 						sizeof (struct in_addr));
+				addr->u.in.addr.s4.sin_port = su.s6.sin6_port;
 			}
 			else {
 				/* Something strange but not mapped v4 address */
 				addr = rspamd_inet_addr_create (AF_INET6, NULL);
-				memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
-						sizeof (struct in6_addr));
+				memcpy (&addr->u.in.addr.s6, &su.s6,
+						sizeof (struct sockaddr_in6));
 			}
 		}
 		else {
 			addr = rspamd_inet_addr_create (AF_INET6, NULL);
-			memcpy (&addr->u.in.addr.s6.sin6_addr, &su.s6.sin6_addr,
-					sizeof (struct in6_addr));
+			memcpy (&addr->u.in.addr.s6, &su.s6,
+					sizeof (struct sockaddr_in6));
 		}
 
 	}
