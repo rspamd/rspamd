@@ -125,7 +125,21 @@ EMAILBL REPLY TO domain only
 EMAILBL REPLY TO full subdomain adress
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/replytosubdomain.eml
   Should Contain  ${result.stdout}  RSPAMD_EMAILBL_FULL (
-  Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY ( 
+  Should Not Contain  ${result.stdout}  RSPAMD_EMAILBL_DOMAINONLY (
+
+SURBL IDN domain
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url8.eml
+  Should Contain  ${result.stdout}  RSPAMD_URIBL
+  Should Contain  ${result.stdout}  DBL_SPAM
+  Should Not Contain  ${result.stdout}  DBL_PHISH
+  Should Not Contain  ${result.stdout}  URIBL_BLACK
+
+SURBL IDN Punycode domain
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url9.eml
+  Should Contain  ${result.stdout}  RSPAMD_URIBL
+  Should Contain  ${result.stdout}  DBL_SPAM
+  Should Not Contain  ${result.stdout}  DBL_PHISH
+  Should Not Contain  ${result.stdout}  URIBL_BLACK
 
 
 *** Keywords ***
