@@ -47,13 +47,13 @@ struct rspamd_ssl_connection {
 	gboolean verify_peer;
 	SSL *ssl;
 	gchar *hostname;
-	const gchar *log_tag;
 	struct rspamd_io_ev *ev;
 	struct rspamd_io_ev *shut_ev;
 	struct ev_loop *event_loop;
 	rspamd_ssl_handler_t handler;
 	rspamd_ssl_error_handler_t err_handler;
 	gpointer handler_data;
+	gchar log_tag[8];
 };
 
 #define msg_debug_ssl(...)  rspamd_conditional_debug_fast (NULL, NULL, \
@@ -621,7 +621,14 @@ rspamd_ssl_connection_new (gpointer ssl_ctx, struct ev_loop *ev_base,
 	c->ssl = SSL_new (ssl_ctx);
 	c->event_loop = ev_base;
 	c->verify_peer = verify_peer;
-	c->log_tag = log_tag;
+
+	if (log_tag) {
+		rspamd_strlcpy (c->log_tag, log_tag, sizeof (log_tag));
+	}
+	else {
+		rspamd_random_hex (c->log_tag, sizeof (log_tag) - 1);
+		c->log_tag[sizeof (log_tag) - 1] = '\0';
+	}
 
 	return c;
 }
