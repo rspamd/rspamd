@@ -242,7 +242,7 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 			U8_NEXT (begin, off, pe - begin, uc);
 
 			if (uc != -1) {
-				while (p < pe) {
+				while (p < pe && off < (pe - begin)) {
 					if (IS_ZERO_WIDTH_SPACE (uc)) {
 						/* Invisible space ! */
 						task->flags |= RSPAMD_TASK_FLAG_BAD_UNICODE;
