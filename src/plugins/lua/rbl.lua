@@ -70,9 +70,12 @@ local function validate_dns(lstr)
     -- two dots in a row
     return false
   end
+  if not rspamd_util.is_valid_utf8(lstr) then
+    -- invalid utf8 detected
+    return false
+  end
   for v in lstr:gmatch('[^%.]+') do
-    if not v:match('^[%w-]+$') or v:len() > 63
-        or v:match('^-') or v:match('-$') then
+    if v:len() > 63 or v:match('^-') or v:match('-$') then
       -- too long label or weird labels
       return false
     end
