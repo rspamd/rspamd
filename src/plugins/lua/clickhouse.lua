@@ -1279,8 +1279,10 @@ if opts then
     end)
     -- Create tables on load
     rspamd_config:add_on_load(function(cfg, ev_base, worker)
-      rspamd_config:add_periodic(ev_base, 0,
-          clickhouse_maybe_send_data_periodic, true)
+      if worker:is_scanner() then
+        rspamd_config:add_periodic(ev_base, 0,
+            clickhouse_maybe_send_data_periodic, true)
+      end
       if worker:is_primary_controller() then
         local upstreams = settings.upstream:all_upstreams()
 
