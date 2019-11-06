@@ -372,7 +372,7 @@ ENDFUNCTION(INSTALL_IF_NOT_EXISTS)
 # MODULES - modules to search using pkg_config
 MACRO(ProcessPackage PKG_NAME)
 
-	CMAKE_PARSE_ARGUMENTS(PKG "OPTIONAL" "ROOT;INCLUDE"
+	CMAKE_PARSE_ARGUMENTS(PKG "OPTIONAL;OPTIONAL_INCLUDE" "ROOT;INCLUDE"
 		"LIBRARY;INCLUDE_SUFFIXES;LIB_SUFFIXES;MODULES;LIB_OUTPUT" ${ARGN})
 
 	IF(NOT PKG_LIBRARY)
@@ -435,29 +435,38 @@ MACRO(ProcessPackage PKG_NAME)
 							PATH_SUFFIXES ${PKG_INCLUDE_SUFFIXES} include
 							PATHS 	{RSPAMD_DEFAULT_INCLUDE_PATHS})
 			IF(NOT _incl)
-				IF(PKG_OPTIONAL)
+				IF(PKG_OPTIONAL OR PKG_OPTIONAL_INCLUDE)
 					MESSAGE(STATUS "Cannot find header ${PKG_INCLUDE} for package ${PKG_NAME}")
 				ELSE()
 					MESSAGE(FATAL_ERROR "Cannot find header ${PKG_INCLUDE} for package ${PKG_NAME}")
 				ENDIF()
-			ENDIF(NOT _incl)
-
-			IF(_incl AND _lib)
-				# We need to apply heuristic to find the real dir name
+			ELSE()
 				STRING(REGEX REPLACE "/[^/]+$" "" _incl_path "${PKG_INCLUDE}")
 				STRING(REGEX REPLACE "${_incl_path}/$" "" _stripped_incl "${_incl}")
-				GET_FILENAME_COMPONENT(_lib_path "${_lib}" PATH)
 				INCLUDE_DIRECTORIES("${_stripped_incl}")
+				SET(${PKG_NAME}_INCLUDE "${_stripped_incl}" CACHE INTERNAL "")
+			ENDIF(NOT _incl)
+
+			IF(_lib)
+				# We need to apply heuristic to find the real dir name
+				GET_FILENAME_COMPONENT(_lib_path "${_lib}" PATH)
 				LINK_DIRECTORIES("${_lib_path}")
 				LIST(APPEND ${PKG_LIB_OUTPUT} ${_lib})
-				SET(${PKG_NAME}_INCLUDE "${_stripped_incl}" CACHE INTERNAL "")
 				SET(${PKG_NAME}_LIBRARY_PATH "${_lib_path}" CACHE INTERNAL "")
 				SET(${PKG_NAME}_LIBRARY "${_lib}" CACHE INTERNAL "")
-				SET(${PKG_NAME}_GUESSED 1 CACHE INTERNAL "")
-				SET(WITH_${PKG_NAME} 1 CACHE INTERNAL "")
-				MESSAGE(STATUS "Found package ${PKG_NAME} in '${_lib_path}' (${_lib}) and '${_stripped_incl}' (${PKG_INCLUDE}).")
 			ENDIF()
 
+			IF(_incl AND _lib)
+				MESSAGE(STATUS "Found package ${PKG_NAME} in '${_lib_path}' (${_lib}) and '${_stripped_incl}' (${PKG_INCLUDE}).")
+				SET(${PKG_NAME}_GUESSED 1 CACHE INTERNAL "")
+				SET(WITH_${PKG_NAME} 1 CACHE INTERNAL "")
+			ELSEIF(_lib)
+				IF(PKG_OPTIONAL_INCLUDE)
+					SET(${PKG_NAME}_GUESSED 1 INTERNAL "")
+					SET(WITH_${PKG_NAME} 1 INTERNAL "")
+				ENDIF()
+				MESSAGE(STATUS "Found incomplete package ${PKG_NAME} in '${_lib_path}' (${_lib}); no includes.")
+			ENDIF()
 		ELSE()
 			MESSAGE(STATUS "Found package ${PKG_NAME} (cached)")
 			INCLUDE_DIRECTORIES("${${PKG_NAME}_INCLUDE}")
@@ -647,7 +656,7 @@ ProcessPackage(SODIUM LIBRARY sodium INCLUDE sodium.h
 		ROOT ${LIBSODIUM_ROOT_DIR} MODULES libsodium>=1.0.0)
 
 IF(ENABLE_BLAS MATCHES "ON")
-ProcessPackage(BLAS LIBRARY openblas blas
+ProcessPackage(BLAS OPTIONAL_INCLUDE LIBRARY openblas blas
 		INCLUDE cblas.h INCLUDE_SUFFIXES include/openblas
 		include/blas
 		ROOT ${BLAS_ROOT_DIR}
