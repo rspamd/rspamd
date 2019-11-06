@@ -61,6 +61,8 @@ OPTION(ENABLE_UTILS        "Build rspamd internal utils [default: OFF]" OFF)
 OPTION(ENABLE_LIBUNWIND    "Use libunwind to print crash traces [default: OFF]" OFF)
 OPTION(ENABLE_LUA_TRACE    "Trace all Lua C API invocations [default: OFF]" OFF)
 OPTION(ENABLE_LUA_REPL     "Enables Lua repl (requires C++11 compiler) [default: ON]" ON)
+OPTION(ENABLE_BLAS         "Enables libopenblas support [default: ON]" ON)
+
 
 INCLUDE(FindArch.cmake)
 TARGET_ARCHITECTURE(ARCH)
@@ -643,11 +645,15 @@ ProcessPackage(LIBZ LIBRARY z INCLUDE zlib.h INCLUDE_SUFFIXES include/zlib
 ProcessPackage(SODIUM LIBRARY sodium INCLUDE sodium.h
 		INCLUDE_SUFFIXES include/libsodium include/sodium
 		ROOT ${LIBSODIUM_ROOT_DIR} MODULES libsodium>=1.0.0)
-ProcessPackage(BLAS OPTIONAL LIBRARY openblas blas
+
+IF(ENABLE_BLAS MATCHES "ON")
+ProcessPackage(BLAS LIBRARY openblas blas
 		INCLUDE cblas.h INCLUDE_SUFFIXES include/openblas
 		include/blas
 		ROOT ${BLAS_ROOT_DIR}
 		LIB_OUTPUT BLAS_REQUIRED_LIBRARIES)
+ENDIF()
+
 IF(WITH_BLAS)
 	MESSAGE(STATUS "Use openblas to accelerate kann")
 	IF(NOT BLAS_INCLUDE)
