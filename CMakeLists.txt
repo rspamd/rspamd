@@ -61,7 +61,7 @@ OPTION(ENABLE_UTILS        "Build rspamd internal utils [default: OFF]" OFF)
 OPTION(ENABLE_LIBUNWIND    "Use libunwind to print crash traces [default: OFF]" OFF)
 OPTION(ENABLE_LUA_TRACE    "Trace all Lua C API invocations [default: OFF]" OFF)
 OPTION(ENABLE_LUA_REPL     "Enables Lua repl (requires C++11 compiler) [default: ON]" ON)
-OPTION(ENABLE_BLAS         "Enables libopenblas support [default: ON]" ON)
+OPTION(ENABLE_BLAS         "Enables libopenblas support [default: OFF]" OFF)
 
 
 INCLUDE(FindArch.cmake)
