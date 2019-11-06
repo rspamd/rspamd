@@ -70,7 +70,7 @@
 #define SOFT_FORK_TIME 2
 
 /* 10 seconds after getting termination signal to terminate all workers with SIGKILL */
-#define TERMINATION_ATTEMPTS 50
+#define TERMINATION_INTERVAL (0.2)
 
 static gboolean load_rspamd_config (struct rspamd_main *rspamd_main,
 									struct rspamd_config *cfg,
@@ -710,38 +710,27 @@ rspamd_worker_wait (struct rspamd_worker *w)
 
 	if (term_attempts < 0) {
 		if (w->cf->worker->flags & RSPAMD_WORKER_KILLABLE) {
-			msg_warn_main ("terminate worker %s(%P) with SIGKILL",
-					g_quark_to_string (w->type), w->pid);
 			if (kill (w->pid, SIGKILL) == -1) {
 				if (errno == ESRCH) {
 					/* We have actually killed the process */
 					return;
 				}
 			}
+			else {
+				msg_warn_main ("terminate worker %s(%P) with SIGKILL",
+						g_quark_to_string (w->type), w->pid);
+			}
 		}
 		else {
-			if (term_attempts > -(TERMINATION_ATTEMPTS * 2)) {
-				if (term_attempts % 10 == 0) {
-					msg_info_main ("waiting for worker %s(%P) to sync, "
-								   "%d seconds remain",
-							g_quark_to_string (w->type), w->pid,
-							(TERMINATION_ATTEMPTS * 2 + term_attempts) / 5);
-					kill (w->pid, SIGTERM);
-					if (errno == ESRCH) {
-						/* We have actually killed the process */
-						return;
-					}
-				}
+			kill (w->pid, SIGKILL);
+			if (errno == ESRCH) {
+				/* We have actually killed the process */
+				return;
 			}
 			else {
 				msg_err_main ("data corruption warning: terminating "
 							  "special worker %s(%P) with SIGKILL",
 						g_quark_to_string (w->type), w->pid);
-				kill (w->pid, SIGKILL);
-				if (errno == ESRCH) {
-					/* We have actually killed the process */
-					return;
-				}
 			}
 		}
 	}
@@ -940,7 +929,8 @@ rspamd_final_timer_handler (EV_P_ ev_timer *w, int revents)
 
 	term_attempts--;
 
-	g_hash_table_foreach (rspamd_main->workers, hash_worker_wait_callback, NULL);
+	g_hash_table_foreach (rspamd_main->workers, hash_worker_wait_callback,
+			NULL);
 
 	if (g_hash_table_size (rspamd_main->workers) == 0) {
 		ev_break (rspamd_main->event_loop, EVBREAK_ALL);
@@ -953,10 +943,14 @@ rspamd_term_handler (struct ev_loop *loop, ev_signal *w, int revents)
 {
 	struct rspamd_main *rspamd_main = (struct rspamd_main *)w->data;
 	static ev_timer ev_finale;
+	ev_tstamp shutdown_ts;
 
 	if (!rspamd_main->wanna_die) {
 		rspamd_main->wanna_die = TRUE;
-		msg_info_main ("catch termination signal, waiting for children");
+		shutdown_ts = MAX (SOFT_SHUTDOWN_TIME,
+				rspamd_main->cfg->task_timeout * 2.0);
+		msg_info_main ("catch termination signal, waiting for children for %.2f seconds",
+				shutdown_ts);
 		/* Stop srv events to avoid false notifications */
 		g_hash_table_foreach (rspamd_main->workers, stop_srv_ev, rspamd_main);
 		rspamd_pass_signal (rspamd_main->workers, SIGTERM);
@@ -968,14 +962,15 @@ rspamd_term_handler (struct ev_loop *loop, ev_signal *w, int revents)
 
 		if (valgrind_mode) {
 			/* Special case if we are likely running with valgrind */
-			term_attempts = TERMINATION_ATTEMPTS * 10;
+			term_attempts = shutdown_ts / TERMINATION_INTERVAL * 10;
 		}
 		else {
-			term_attempts = TERMINATION_ATTEMPTS;
+			term_attempts = shutdown_ts / TERMINATION_INTERVAL;
 		}
 
 		ev_finale.data = rspamd_main;
-		ev_timer_init (&ev_finale, rspamd_final_timer_handler, 0.2, 0.2);
+		ev_timer_init (&ev_finale, rspamd_final_timer_handler,
+				TERMINATION_INTERVAL, TERMINATION_INTERVAL);
 		ev_timer_start (rspamd_main->event_loop, &ev_finale);
 	}
 }

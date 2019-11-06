@@ -174,6 +174,10 @@ rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 	/* Do not accept new connections, preparing to end worker's process */
 	if (!sigh->worker->wanna_die) {
 		static ev_timer shutdown_ev;
+		ev_tstamp shutdown_ts;
+
+		shutdown_ts = MAX (SOFT_SHUTDOWN_TIME,
+				sigh->worker->srv->cfg->task_timeout * 2.0);
 
 		rspamd_worker_ignore_signal (sigh);
 		sigh->worker->wanna_die = TRUE;
@@ -182,10 +186,10 @@ rspamd_worker_usr2_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 				sigh->worker->srv->server_pool->tag.tagname,
 				sigh->worker->srv->server_pool->tag.uid,
 				G_STRFUNC,
-				"worker's shutdown is pending in %d sec",
-				SOFT_SHUTDOWN_TIME);
+				"worker's shutdown is pending in %.2f sec",
+				shutdown_ts);
 		ev_timer_init (&shutdown_ev, rspamd_worker_on_delayed_shutdown,
-				SOFT_SHUTDOWN_TIME, 0.0);
+				shutdown_ts, 0.0);
 		ev_timer_start (sigh->event_loop, &shutdown_ev);
 		rspamd_worker_stop_accept (sigh->worker);
 	}
