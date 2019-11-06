@@ -103,7 +103,7 @@ end
 local redis_lua_script_can_store_train_vec = [[
   local prefix = KEYS[1]
   local locked = redis.call('HGET', prefix, 'lock')
-  if locked then return 0 end
+  if locked then return {tostring(-1),'locked by another process: ' .. locked} end
   local nspam = 0
   local nham = 0
   local lim = tonumber(KEYS[3])
@@ -474,8 +474,14 @@ local function ann_push_task_result(rule, task, verdict, score, set)
               learn_type, rule.prefix, set.name, reason, -tonumber(nsamples))
         end
       else
-        rspamd_logger.errx(task, 'cannot check if we can train %s:%s : %s',
-            rule.prefix, set.name, err)
+        if err then
+          rspamd_logger.errx(task, 'cannot check if we can train %s:%s : %s',
+              rule.prefix, set.name, err)
+        else
+          rspamd_logger.errx(task, 'cannot check if we can train %s:%s : type of Redis key %s is %s, expected table' ..
+              'please remove this key from Redis manually if you perform upgrade from the previous version',
+              rule.prefix, set.name, set.ann.redis_key, type(data))
+        end
       end
     end
 
