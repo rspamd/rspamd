@@ -130,7 +130,7 @@ local function virustotal_check(task, content, digest, rule)
 
           if res then
             local obj = parser:get_object()
-            if not obj.positives then
+            if not obj.positives or type(obj.positives) ~= 'number' then
               if obj.response_code then
                 if obj.response_code == 0 then
                   cached = 'OK'
@@ -153,35 +153,36 @@ local function virustotal_check(task, content, digest, rule)
                 task:insert_result(rule.symbol_fail, 1.0, 'Bad JSON reply: no `positives` element')
                 return
               end
-            end
-            if obj.positives < rule.minimum_engines then
-              lua_util.debugm(rule.name, task, '%s: hash %s has not enough hits: %s where %s is min',
-                  rule.log_prefix, obj.positives, rule.minimum_engines)
-              -- TODO: add proper hashing!
-              cached = 'OK'
             else
-              if obj.positives > rule.full_score_engines then
-                dyn_score = 1.0
+              if obj.positives < rule.minimum_engines then
+                lua_util.debugm(rule.name, task, '%s: hash %s has not enough hits: %s where %s is min',
+                    rule.log_prefix, obj.positives, rule.minimum_engines)
+                -- TODO: add proper hashing!
+                cached = 'OK'
               else
-                local norm_pos = obj.positives - rule.minimum_engines
-                dyn_score = norm_pos / (rule.full_score_engines - rule.minimum_engines)
-              end
+                if obj.positives > rule.full_score_engines then
+                  dyn_score = 1.0
+                else
+                  local norm_pos = obj.positives - rule.minimum_engines
+                  dyn_score = norm_pos / (rule.full_score_engines - rule.minimum_engines)
+                end
 
-              if dyn_score < 0 or dyn_score > 1 then
-                dyn_score = 1.0
+                if dyn_score < 0 or dyn_score > 1 then
+                  dyn_score = 1.0
+                end
+                local sopt = string.format("%s:%s/%s",
+                    hash, obj.positives, obj.total)
+                common.yield_result(task, rule, sopt, dyn_score)
+                cached = sopt
               end
-              local sopt = string.format("%s:%s/%s",
-                  hash, obj.positives, obj.total)
-              common.yield_result(task, rule, sopt, dyn_score)
-              cached = sopt
             end
           else
+            -- not res
             rspamd_logger.errx(task, 'invalid JSON reply: %s, body: %s, headers: %s',
                 json_err, body, headers)
             task:insert_result(rule.symbol_fail, 1.0, 'Bad JSON reply: ' .. json_err)
             return
           end
-
         end
 
         if cached then
