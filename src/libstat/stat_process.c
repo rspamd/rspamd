@@ -261,38 +261,6 @@ rspamd_stat_backends_process (struct rspamd_stat_ctx *st_ctx,
 	}
 }
 
-static gboolean
-rspamd_stat_backends_post_process (struct rspamd_stat_ctx *st_ctx,
-		struct rspamd_task *task)
-{
-	guint i;
-	struct rspamd_statfile *st;
-	struct rspamd_classifier *cl;
-	gpointer bk_run;
-	gboolean ret = TRUE;
-
-	g_assert (task->stat_runtimes != NULL);
-
-	for (i = 0; i < st_ctx->statfiles->len; i++) {
-		st = g_ptr_array_index (st_ctx->statfiles, i);
-		cl = st->classifier;
-
-		if (cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND) {
-			continue;
-		}
-
-		bk_run = g_ptr_array_index (task->stat_runtimes, i);
-
-		if (bk_run != NULL) {
-			if (!st->backend->finalize_process (task, bk_run, st_ctx)) {
-				ret = FALSE;
-			}
-		}
-	}
-
-	return ret;
-}
-
 static void
 rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 		struct rspamd_task *task)
@@ -327,6 +295,8 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 		cl->ham_learns = 0;
 	}
 
+	g_assert (task->stat_runtimes != NULL);
+
 	for (i = 0; i < st_ctx->statfiles->len; i++) {
 		st = g_ptr_array_index (st_ctx->statfiles, i);
 		cl = st->classifier;
@@ -357,10 +327,28 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 
 		g_assert (cl != NULL);
 
-		/* Ensure that all symbols enabled */
 		skip = FALSE;
 
-		if (!(cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND)) {
+		/* Do not process classifiers on backend failures */
+		for (j = 0; j < cl->statfiles_ids->len; j++) {
+			if (cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND) {
+				continue;
+			}
+
+			id = g_array_index (cl->statfiles_ids, gint, j);
+			bk_run =  g_ptr_array_index (task->stat_runtimes, id);
+			st = g_ptr_array_index (st_ctx->statfiles, id);
+
+			if (bk_run != NULL) {
+				if (!st->backend->finalize_process (task, bk_run, st_ctx)) {
+					skip = TRUE;
+					break
+				}
+			}
+		}
+
+		/* Ensure that all symbols enabled */
+		if (!skip && !(cl->cfg->flags & RSPAMD_FLAG_CLASSIFIER_NO_BACKEND)) {
 			for (j = 0; j < cl->statfiles_ids->len; j++) {
 				id = g_array_index (cl->statfiles_ids, gint, j);
 				bk_run =  g_ptr_array_index (task->stat_runtimes, id);
@@ -425,10 +413,7 @@ rspamd_stat_classify (struct rspamd_task *task, lua_State *L, guint stage,
 	}
 	else if (stage == RSPAMD_TASK_STAGE_CLASSIFIERS_POST) {
 		/* Process classifiers */
-		if (rspamd_stat_backends_post_process (st_ctx, task)) {
-			rspamd_stat_classifiers_process (st_ctx, task);
-		}
-		/* Do not process classifiers on backend failures */
+		rspamd_stat_classifiers_process (st_ctx, task);
 	}
 
 	task->processed_stages |= stage;
