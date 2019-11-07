@@ -829,29 +829,30 @@ rspamd_upstream_fail (struct upstream *upstream, gboolean addr_failure)
 }
 
 void
-rspamd_upstream_ok (struct upstream *up)
+rspamd_upstream_ok (struct upstream *upstream)
 {
 	struct upstream_addr_elt *addr_elt;
 	struct upstream_list_watcher *w;
 
-	RSPAMD_UPSTREAM_LOCK (up);
-	if (up->errors > 0 && up->active_idx != -1) {
+	RSPAMD_UPSTREAM_LOCK (upstream);
+	if (upstream->errors > 0 && upstream->active_idx != -1) {
 		/* We touch upstream if and only if it is active */
-		up->errors = 0;
+		msg_debug_upstream ("reset errors on upstream %s (was %ud)", upstream->name, upstream->errors);
+		upstream->errors = 0;
 
-		if (up->addrs.addr) {
-			addr_elt = g_ptr_array_index (up->addrs.addr, up->addrs.cur);
+		if (upstream->addrs.addr) {
+			addr_elt = g_ptr_array_index (upstream->addrs.addr, upstream->addrs.cur);
 			addr_elt->errors = 0;
 		}
 
-		DL_FOREACH (up->ls->watchers, w) {
+		DL_FOREACH (upstream->ls->watchers, w) {
 			if (w->events_mask & RSPAMD_UPSTREAM_WATCH_SUCCESS) {
-				w->func (up, RSPAMD_UPSTREAM_WATCH_SUCCESS, 0, w->ud);
+				w->func (upstream, RSPAMD_UPSTREAM_WATCH_SUCCESS, 0, w->ud);
 			}
 		}
 	}
 
-	RSPAMD_UPSTREAM_UNLOCK (up);
+	RSPAMD_UPSTREAM_UNLOCK (upstream);
 }
 
 void
