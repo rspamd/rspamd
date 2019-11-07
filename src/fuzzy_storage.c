@@ -2020,8 +2020,10 @@ start_fuzzy (struct rspamd_worker *worker)
 	}
 
 	if (worker->index == 0 && ctx->updates_pending->len > 0) {
+		msg_info_config ("start another event loop to sync fuzzy storage");
 		rspamd_fuzzy_process_updates_queue (ctx, local_db_name, FALSE);
 		ev_loop (ctx->event_loop, 0);
+		msg_info_config ("sync cycle is done");
 	}
 
 	rspamd_fuzzy_backend_close (ctx->backend);
