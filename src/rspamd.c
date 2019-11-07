@@ -691,8 +691,8 @@ kill_old_workers (gpointer key, gpointer value, gpointer unused)
 
 	rspamd_main = w->srv;
 
-	if (!w->wanna_die) {
-		w->wanna_die = TRUE;
+	if (w->state == rspamd_worker_state_running) {
+		w->state = rspamd_worker_state_terminating;
 		kill (w->pid, SIGUSR2);
 		ev_io_stop (rspamd_main->event_loop, &w->srv_ev);
 		msg_info_main ("send signal to worker %P", w->pid);
@@ -1093,10 +1093,6 @@ rspamd_cld_handler (EV_P_ ev_child *w, struct rspamd_main *rspamd_main,
 		cmd.cmd.child_change.pid = wrk->pid;
 		cmd.cmd.child_change.additional = w->rstatus;
 		rspamd_control_broadcast_srv_cmd (rspamd_main, &cmd, wrk->pid);
-	}
-
-	if (wrk->finish_actions) {
-		g_ptr_array_free (wrk->finish_actions, TRUE);
 	}
 
 	need_refork = rspamd_check_termination_clause (wrk->srv, wrk, w->rstatus);

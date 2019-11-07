@@ -237,6 +237,13 @@ void rspamd_worker_throttle_accept_events (gint sock, void *data);
 gboolean rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
 										  struct rspamd_worker *wrk, int status);
 
+/**
+ * Call for final scripts for a worker
+ * @param worker
+ * @return
+ */
+gboolean rspamd_worker_call_finish_handlers (struct rspamd_worker *worker);
+
 #ifdef WITH_HYPERSCAN
 struct rspamd_control_command;
 

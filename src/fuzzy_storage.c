@@ -481,7 +481,7 @@ rspamd_fuzzy_updates_cb (gboolean success,
 		}
 	}
 
-	if (ctx->worker->wanna_die) {
+	if (ctx->worker->state != rspamd_worker_state_running) {
 		/* Plan exit */
 		ev_break (ctx->event_loop, EVBREAK_ALL);
 	}

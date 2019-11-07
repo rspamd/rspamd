@@ -970,7 +970,7 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 		g_atomic_int_set (periodic->map->locked, 0);
 		msg_debug_map ("unlocked map %s", periodic->map->name);
 
-		if (!periodic->map->wrk->wanna_die) {
+		if (periodic->map->wrk->state == rspamd_worker_state_running) {
 			rspamd_map_schedule_periodic (periodic->map,
 					RSPAMD_SYMBOL_RESULT_NORMAL);
 		}
@@ -1001,7 +1001,7 @@ rspamd_map_schedule_periodic (struct rspamd_map *map, int how)
 	gdouble timeout;
 	struct map_periodic_cbdata *cbd;
 
-	if (map->scheduled_check || (map->wrk && map->wrk->wanna_die)) {
+	if (map->scheduled_check || (map->wrk && map->wrk->state == rspamd_worker_state_running)) {
 		/* Do not schedule check if some check is already scheduled */
 		return;
 	}
@@ -1897,7 +1897,7 @@ rspamd_map_process_periodic (struct map_periodic_cbdata *cbd)
 		return;
 	}
 
-	if (!(cbd->map->wrk && cbd->map->wrk->wanna_die)) {
+	if (!(cbd->map->wrk && cbd->map->wrk->state == rspamd_worker_state_running)) {
 		bk = g_ptr_array_index (cbd->map->backends, cbd->cur_backend);
 		g_assert (bk != NULL);
 

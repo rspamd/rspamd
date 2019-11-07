@@ -82,6 +82,14 @@ struct rspamd_worker_heartbeat {
 	gint64 nbeats;                  /**< positive for beats received, negative for beats missed */
 };
 
+enum rspamd_worker_state {
+	rspamd_worker_state_running = 0,
+	rspamd_worker_state_terminating,
+	rspamd_worker_wait_connections,
+	rspamd_worker_wait_final_scripts,
+	rspamd_worker_wanna_die
+};
+
 /**
  * Worker process structure
  */
@@ -90,7 +98,7 @@ struct rspamd_worker {
 	pid_t ppid;                     /**< pid of parent									*/
 	guint index;                    /**< index number									*/
 	guint nconns;                   /**< current connections count						*/
-	gboolean wanna_die;             /**< worker is terminating							*/
+	enum rspamd_worker_state state; /**< current worker state							*/
 	gboolean cores_throttled;       /**< set to true if cores throttling took place		*/
 	gdouble start_time;             /**< start time										*/
 	struct rspamd_main *srv;        /**< pointer to server structure					*/
@@ -108,7 +116,6 @@ struct rspamd_worker {
 	struct rspamd_worker_heartbeat hb; /**< heartbeat data */
 	gpointer control_data;          /**< used by control protocol to handle commands	*/
 	gpointer tmp_data;              /**< used to avoid race condition to deal with control messages */
-	GPtrArray *finish_actions;      /**< called when worker is terminated				*/
 	ev_child cld_ev;                /**< to allow reaping								*/
 	rspamd_worker_term_cb term_handler; /**< custom term handler						*/
 };

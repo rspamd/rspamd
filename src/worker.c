@@ -69,56 +69,6 @@ worker_t normal_worker = {
         G_STRFUNC, \
         __VA_ARGS__)
 
-static gboolean
-rspamd_worker_finalize (gpointer user_data)
-{
-	struct rspamd_task *task = user_data;
-
-	if (!(task->flags & RSPAMD_TASK_FLAG_PROCESSING)) {
-		msg_info_task ("finishing actions has been processed, terminating");
-		/* ev_break (task->event_loop, EVBREAK_ALL); */
-		rspamd_session_destroy (task->s);
-
-		return TRUE;
-	}
-
-	return FALSE;
-}
-
-static gboolean
-rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
-{
-	struct rspamd_task *task;
-	struct rspamd_config *cfg = worker->srv->cfg;
-	struct rspamd_abstract_worker_ctx *ctx;
-	struct rspamd_config_cfg_lua_script *sc;
-
-	if (cfg->on_term_scripts) {
-		ctx = worker->ctx;
-		/* Create a fake task object for async events */
-		task = rspamd_task_new (worker, cfg, NULL, NULL, ctx->event_loop);
-		task->resolver = ctx->resolver;
-		task->flags |= RSPAMD_TASK_FLAG_PROCESSING;
-		task->s = rspamd_session_create (task->task_pool,
-				rspamd_worker_finalize,
-				NULL,
-				(event_finalizer_t) rspamd_task_free,
-				task);
-
-		DL_FOREACH (cfg->on_term_scripts, sc) {
-			lua_call_finish_script (sc, task);
-		}
-
-		task->flags &= ~RSPAMD_TASK_FLAG_PROCESSING;
-
-		if (rspamd_session_pending (task->s)) {
-			return TRUE;
-		}
-	}
-
-	return FALSE;
-}
-
 /*
  * Reduce number of tasks proceeded
  */
@@ -129,9 +79,20 @@ reduce_tasks_count (gpointer arg)
 
 	worker->nconns --;
 
-	if (worker->wanna_die && worker->nconns == 0) {
+	if (worker->state == rspamd_worker_wait_connections && worker->nconns == 0) {
+
+		worker->state = rspamd_worker_wait_final_scripts;
 		msg_info ("performing finishing actions");
-		rspamd_worker_call_finish_handlers (worker);
+
+		if (rspamd_worker_call_finish_handlers (worker)) {
+			worker->state = rspamd_worker_wait_final_scripts;
+		}
+		else {
+			worker->state = rspamd_worker_wanna_die;
+		}
+	}
+	else if (worker->state != rspamd_worker_state_running) {
+		worker->state = rspamd_worker_wait_connections;
 	}
 }
 
@@ -596,19 +557,6 @@ init_worker (struct rspamd_config *cfg)
 	return ctx;
 }
 
-static gboolean
-rspamd_worker_on_terminate (struct rspamd_worker *worker)
-{
-	if (worker->nconns == 0) {
-		msg_info ("performing finishing actions");
-		if (rspamd_worker_call_finish_handlers (worker)) {
-			return TRUE;
-		}
-	}
-
-	return FALSE;
-}
-
 void
 rspamd_worker_init_scanner (struct rspamd_worker *worker,
 		struct ev_loop *ev_base,
@@ -616,8 +564,6 @@ rspamd_worker_init_scanner (struct rspamd_worker *worker,
 		struct rspamd_lang_detector **plang_det)
 {
 	rspamd_stat_init (worker->srv->cfg, ev_base);
-	g_ptr_array_add (worker->finish_actions,
-			(gpointer) rspamd_worker_on_terminate);
 #ifdef WITH_HYPERSCAN
 	rspamd_control_worker_add_cmd_handler (worker,
 			RSPAMD_CONTROL_HYPERSCAN_LOADED,
