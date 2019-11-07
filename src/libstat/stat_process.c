@@ -342,7 +342,7 @@ rspamd_stat_classifiers_process (struct rspamd_stat_ctx *st_ctx,
 			if (bk_run != NULL) {
 				if (!st->backend->finalize_process (task, bk_run, st_ctx)) {
 					skip = TRUE;
-					break
+					break;
 				}
 			}
 		}

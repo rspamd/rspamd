@@ -1328,7 +1328,7 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 				msg_warn_task ("skip obtaining bayes tokens for %s of classifier "
 							   "%s: not enough learns %d; %d required",
 						rt->stcf->symbol, rt->stcf->clcf->name,
-						(int)rt->learned, rt->stcf->clcf->min_learns););
+						(int)rt->learned, rt->stcf->clcf->min_learns);
 			}
 		}
 	}
