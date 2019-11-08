@@ -1005,8 +1005,12 @@ rspamd_map_schedule_periodic (struct rspamd_map *map, int how)
 	gdouble timeout;
 	struct map_periodic_cbdata *cbd;
 
-	if (map->scheduled_check || (map->wrk && map->wrk->state == rspamd_worker_state_running)) {
-		/* Do not schedule check if some check is already scheduled */
+	if (map->scheduled_check || (map->wrk &&
+			map->wrk->state != rspamd_worker_state_running)) {
+		/*
+		 * Do not schedule check if some check is already scheduled or
+		 * if worker is going to die
+		 */
 		return;
 	}
 
@@ -1860,7 +1864,8 @@ rspamd_map_process_periodic (struct map_periodic_cbdata *cbd)
 	map->scheduled_check = NULL;
 
 	if (!map->file_only && !cbd->locked) {
-		if (!g_atomic_int_compare_and_exchange (cbd->map->locked, 0, 1)) {
+		if (!g_atomic_int_compare_and_exchange (cbd->map->locked,
+				0, 1)) {
 			msg_debug_map (
 					"don't try to reread map %s as it is locked by other process, "
 					"will reread it later", cbd->map->name);
@@ -1901,7 +1906,7 @@ rspamd_map_process_periodic (struct map_periodic_cbdata *cbd)
 		return;
 	}
 
-	if (!(cbd->map->wrk && cbd->map->wrk->state == rspamd_worker_state_running)) {
+	if (cbd->map->wrk && cbd->map->wrk->state == rspamd_worker_state_running) {
 		bk = g_ptr_array_index (cbd->map->backends, cbd->cur_backend);
 		g_assert (bk != NULL);
 

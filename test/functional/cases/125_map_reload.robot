@@ -18,7 +18,6 @@ CHECK HIT AND MISS
   Check Rspamc  ${result}  MAP_SET_HIT_AND_MISS (1.00)[example.com]
 
 WRITE NEW MAP
-  Sleep  1s  Wait for new time
   ${TMP_FILE} =  Make Temporary File
   Copy File  ${TESTDIR}/configs/maps/domains.list.2  ${TMP_FILE}
   Move File  ${TMP_FILE}  ${MAP_FILE}
