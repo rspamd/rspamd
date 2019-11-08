@@ -235,8 +235,9 @@ struct rspamd_updates_cbdata {
 
 
 static void rspamd_fuzzy_write_reply (struct fuzzy_session *session);
-static void rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
-									const gchar *source, gboolean final);
+static gboolean rspamd_fuzzy_process_updates_queue (
+		struct rspamd_fuzzy_storage_ctx *ctx,
+		const gchar *source, gboolean final);
 
 static gboolean
 rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
@@ -506,7 +507,7 @@ rspamd_fuzzy_updates_cb (gboolean success,
 	g_free (cbdata);
 }
 
-static void
+static gboolean
 rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
 		const gchar *source, gboolean final)
 {
@@ -525,11 +526,14 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
 		rspamd_fuzzy_backend_process_updates (ctx->backend,
 				cbdata->updates_pending,
 				source, rspamd_fuzzy_updates_cb, cbdata);
+		return TRUE;
 	}
-	else {
+	else if (final) {
 		/* No need to sync */
 		ev_break (ctx->event_loop, EVBREAK_ALL);
 	}
+
+	return FALSE;
 }
 
 static void
@@ -2040,10 +2044,16 @@ start_fuzzy (struct rspamd_worker *worker)
 	}
 
 	if (worker->index == 0 && ctx->updates_pending->len > 0) {
+
 		msg_info_config ("start another event loop to sync fuzzy storage");
-		rspamd_fuzzy_process_updates_queue (ctx, local_db_name, TRUE);
-		ev_loop (ctx->event_loop, 0);
-		msg_info_config ("sync cycle is done");
+
+		if (rspamd_fuzzy_process_updates_queue (ctx, local_db_name, TRUE)) {
+			ev_loop (ctx->event_loop, 0);
+			msg_info_config ("sync cycle is done");
+		}
+		else {
+			msg_info_config ("no need to sync");
+		}
 	}
 
 	rspamd_fuzzy_backend_close (ctx->backend);
