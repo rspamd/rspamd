@@ -230,10 +230,13 @@ struct rspamd_updates_cbdata {
 	GArray *updates_pending;
 	struct rspamd_fuzzy_storage_ctx *ctx;
 	gchar *source;
+	gboolean final;
 };
 
 
 static void rspamd_fuzzy_write_reply (struct fuzzy_session *session);
+static void rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
+									const gchar *source, gboolean final);
 
 static gboolean
 rspamd_fuzzy_check_ratelimit (struct fuzzy_session *session)
@@ -458,6 +461,11 @@ rspamd_fuzzy_updates_cb (gboolean success,
 		rspamd_fuzzy_backend_version (ctx->backend, source,
 				fuzzy_update_version_callback, g_strdup (source));
 		ctx->updates_failed = 0;
+
+		if (cbdata->final || ctx->worker->state != rspamd_worker_state_running) {
+			/* Plan exit */
+			ev_break (ctx->event_loop, EVBREAK_ALL);
+		}
 	}
 	else {
 		if (++ctx->updates_failed > ctx->updates_maxfail) {
@@ -466,6 +474,11 @@ rspamd_fuzzy_updates_cb (gboolean success,
 					cbdata->updates_pending->len,
 					ctx->updates_maxfail);
 			ctx->updates_failed = 0;
+
+			if (cbdata->final || ctx->worker->state != rspamd_worker_state_running) {
+				/* Plan exit */
+				ev_break (ctx->event_loop, EVBREAK_ALL);
+			}
 		}
 		else {
 			msg_err ("cannot commit update transaction to fuzzy backend, "
@@ -478,12 +491,14 @@ rspamd_fuzzy_updates_cb (gboolean success,
 			g_array_append_vals (ctx->updates_pending,
 					cbdata->updates_pending->data,
 					cbdata->updates_pending->len);
-		}
-	}
 
-	if (ctx->worker->state != rspamd_worker_state_running) {
-		/* Plan exit */
-		ev_break (ctx->event_loop, EVBREAK_ALL);
+			if (cbdata->final) {
+				/* Try one more time */
+				rspamd_fuzzy_process_updates_queue (cbdata->ctx, cbdata->source,
+						cbdata->final);
+
+			}
+		}
 	}
 
 	g_array_free (cbdata->updates_pending, TRUE);
@@ -493,14 +508,15 @@ rspamd_fuzzy_updates_cb (gboolean success,
 
 static void
 rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
-		const gchar *source, gboolean forced)
+		const gchar *source, gboolean final)
 {
 
 	struct rspamd_updates_cbdata *cbdata;
 
-	if ((forced ||ctx->updates_pending->len > 0)) {
+	if (ctx->updates_pending->len > 0) {
 		cbdata = g_malloc (sizeof (*cbdata));
 		cbdata->ctx = ctx;
+		cbdata->final = final;
 		cbdata->updates_pending = ctx->updates_pending;
 		ctx->updates_pending = g_array_sized_new (FALSE, FALSE,
 				sizeof (struct fuzzy_peer_cmd),
@@ -509,6 +525,10 @@ rspamd_fuzzy_process_updates_queue (struct rspamd_fuzzy_storage_ctx *ctx,
 		rspamd_fuzzy_backend_process_updates (ctx->backend,
 				cbdata->updates_pending,
 				source, rspamd_fuzzy_updates_cb, cbdata);
+	}
+	else {
+		/* No need to sync */
+		ev_break (ctx->event_loop, EVBREAK_ALL);
 	}
 }
 
@@ -2021,7 +2041,7 @@ start_fuzzy (struct rspamd_worker *worker)
 
 	if (worker->index == 0 && ctx->updates_pending->len > 0) {
 		msg_info_config ("start another event loop to sync fuzzy storage");
-		rspamd_fuzzy_process_updates_queue (ctx, local_db_name, FALSE);
+		rspamd_fuzzy_process_updates_queue (ctx, local_db_name, TRUE);
 		ev_loop (ctx->event_loop, 0);
 		msg_info_config ("sync cycle is done");
 	}
