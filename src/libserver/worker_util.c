@@ -167,10 +167,6 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 static void
 rspamd_worker_terminate_handlers (struct rspamd_worker *w)
 {
-	struct rspamd_abstract_worker_ctx *actx;
-
-	actx = (struct rspamd_abstract_worker_ctx *)w->ctx;
-
 	if (w->nconns == 0 &&
 		(!(w->flags & RSPAMD_WORKER_SCANNER) || w->srv->cfg->on_term_scripts == NULL)) {
 		/*
@@ -179,10 +175,7 @@ rspamd_worker_terminate_handlers (struct rspamd_worker *w)
 		 * - No term scripts are registered
 		 * - Worker is not a scanner, so it can die safely
 		 */
-		ev_break (actx->event_loop, EVBREAK_ALL);
 		w->state = rspamd_worker_wanna_die;
-
-		return;
 	}
 	else {
 		if (w->nconns > 0) {
@@ -197,17 +190,17 @@ rspamd_worker_terminate_handlers (struct rspamd_worker *w)
 			 */
 			if (w->state != rspamd_worker_wait_final_scripts) {
 				w->state = rspamd_worker_wait_final_scripts;
-				msg_info ("performing finishing actions");
 
 				if ((w->flags & RSPAMD_WORKER_SCANNER) &&
 					rspamd_worker_call_finish_handlers (w)) {
+					msg_info ("performing async finishing actions");
 					w->state = rspamd_worker_wait_final_scripts;
 				}
 				else {
 					/*
 					 * We are done now
 					 */
-					ev_break (actx->event_loop, EVBREAK_ALL);
+					msg_info ("no async finishing actions, terminating");
 					w->state = rspamd_worker_wanna_die;
 				}
 			}
@@ -234,15 +227,21 @@ rspamd_worker_shutdown_check (EV_P_ ev_timer *w, int revents)
 	struct rspamd_worker *worker = (struct rspamd_worker *)w->data;
 
 	if (worker->state != rspamd_worker_wanna_die) {
-		ev_timer_again (EV_A_ w);
 		rspamd_worker_terminate_handlers (worker);
 
 		if (worker->state == rspamd_worker_wanna_die) {
+			/* We are done, kill event loop */
 			ev_timer_stop (EV_A_ w);
+			ev_break (EV_A_ EVBREAK_ALL);
+		}
+		else {
+			/* Try again later */
+			ev_timer_again (EV_A_ w);
 		}
 	}
 	else {
 		ev_timer_stop (EV_A_ w);
+		ev_break (EV_A_ EVBREAK_ALL);
 	}
 }
 
@@ -338,6 +337,9 @@ rspamd_worker_term_handler (struct rspamd_worker_signal_handler *sigh, void *arg
 			ev_timer_init (&shutdown_check_ev, rspamd_worker_shutdown_check,
 					0.5, 0.5);
 			ev_timer_start (sigh->event_loop, &shutdown_check_ev);
+		}
+		else {
+			ev_break (sigh->event_loop, EVBREAK_ALL);
 		}
 	}
 
