@@ -292,7 +292,17 @@ rspamd_stat_cache_redis_init (struct rspamd_stat_ctx *ctx,
 		cache_ctx->redis_object = ucl_object_tostring (obj);
 	}
 	else {
-		cache_ctx->redis_object = DEFAULT_REDIS_KEY;
+		gchar *cl_name = st->classifier->cfg->name;
+		if (cl_name) {
+			gchar *redis_object;
+			redis_object = g_malloc (strlen (cl_name) + strlen (DEFAULT_REDIS_KEY) + 2);
+			strcpy (redis_object, cl_name);
+			strcat (redis_object, "_");
+			strcat (redis_object, DEFAULT_REDIS_KEY);
+			cache_ctx->redis_object = redis_object;
+		} else {
+			cache_ctx->redis_object = DEFAULT_REDIS_KEY;
+		}
 	}
 
 	cache_ctx->conf_ref = conf_ref;
