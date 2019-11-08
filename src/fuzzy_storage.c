@@ -1189,8 +1189,6 @@ accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 	if (revents == EV_READ) {
 
 		for (;;) {
-			worker->nconns++;
-
 			r = rspamd_inet_address_recvfrom (w->fd,
 					buf,
 					sizeof (buf),
@@ -1219,6 +1217,7 @@ accept_fuzzy_socket (EV_P_ ev_io *w, int revents)
 			session->ctx = worker->ctx;
 			session->time = (guint64) time (NULL);
 			session->addr = addr;
+			worker->nconns++;
 
 			if (rspamd_fuzzy_cmd_from_wire (buf, r, session)) {
 				/* Check shingles count sanity */
