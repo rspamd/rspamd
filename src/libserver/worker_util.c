@@ -1054,6 +1054,7 @@ rspamd_fork_worker (struct rspamd_main *rspamd_main,
 		close (wrk->srv_pipe[0]);
 		rspamd_socket_nonblocking (wrk->control_pipe[1]);
 		rspamd_socket_nonblocking (wrk->srv_pipe[1]);
+		rspamd_main->cfg->cur_worker = wrk;
 		/* Execute worker */
 		cf->worker->worker_start_func (wrk);
 		exit (EXIT_FAILURE);

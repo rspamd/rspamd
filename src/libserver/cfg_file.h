@@ -493,6 +493,7 @@ struct rspamd_config {
 
 	struct rspamd_config_settings_elt *setting_ids;    /**< preprocessed settings ids							*/
 	struct rspamd_lang_detector *lang_det;            /**< language detector									*/
+	struct rspamd_worker *cur_worker;               /**< set dynamically by each worker							*/
 
 	ref_entry_t ref;                                /**< reference counter									*/
 };

@@ -974,6 +974,10 @@ rspamd_map_periodic_dtor (struct map_periodic_cbdata *periodic)
 			rspamd_map_schedule_periodic (periodic->map,
 					RSPAMD_SYMBOL_RESULT_NORMAL);
 		}
+		else {
+			msg_debug_map ("stop scheduling periodics for %s; terminating state",
+					periodic->map->name);
+		}
 	}
 
 	g_free (periodic);

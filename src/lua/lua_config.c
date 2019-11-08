@@ -3186,6 +3186,14 @@ lua_periodic_callback_finish (struct thread_entry *thread, int ret)
 
 		lua_pop (L, 1); /* Return value */
 	}
+
+	if (periodic->cfg->cur_worker) {
+		if (periodic->cfg->cur_worker->state != rspamd_worker_state_running) {
+			/* We are terminating, no more periodics */
+			plan_more = FALSE;
+		}
+	}
+
 	if (plan_more) {
 		if (periodic->need_jitter) {
 			timeout = rspamd_time_jitter (timeout, 0.0);
