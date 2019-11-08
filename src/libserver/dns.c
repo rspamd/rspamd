@@ -824,7 +824,13 @@ rspamd_dns_select_upstream_retransmit (
 	struct upstream_list *ups = ups_data;
 	struct upstream *up;
 
-	up = rspamd_upstream_get_forced (ups, RSPAMD_UPSTREAM_RANDOM, name, len);
+	if (prev_elt) {
+		up = rspamd_upstream_get_except (ups, (struct upstream *)prev_elt->lib_data,
+				RSPAMD_UPSTREAM_MASTER_SLAVE, name, len);
+	}
+	else {
+		up = rspamd_upstream_get_forced (ups, RSPAMD_UPSTREAM_RANDOM, name, len);
+	}
 
 	if (up) {
 		msg_debug ("select forced %s", rspamd_upstream_name (up));
