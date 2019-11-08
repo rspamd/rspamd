@@ -284,6 +284,17 @@ struct upstream *rspamd_upstream_get_forced (struct upstream_list *ups,
 											 const guchar *key, gsize keylen);
 
 /**
+ * Get new upstream from the list excepting the upstream specified
+ * @param ups upstream list
+ * @param type type of rotation algorithm, for `RSPAMD_UPSTREAM_HASHED` it is required to specify `key` and `keylen` as arguments
+ * @return
+ */
+struct upstream *rspamd_upstream_get_except (struct upstream_list *ups,
+											 struct upstream *except,
+											 enum rspamd_upstream_rotation default_type,
+											 const guchar *key, gsize keylen);
+
+/**
  * Re-resolve addresses for all upstreams registered
  */
 void rspamd_upstream_reresolve (struct upstream_ctx *ctx);
