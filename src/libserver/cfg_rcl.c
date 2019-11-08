@@ -520,7 +520,23 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 		}
 
 		if (ucl_object_toboolean (elt)) {
-			flags |= RSPAMD_SYMBOL_FLAG_IGNORE;
+			flags |= RSPAMD_SYMBOL_FLAG_IGNORE_METRIC;
+		}
+	}
+
+	if ((elt = ucl_object_lookup (obj, "enabled")) != NULL) {
+		if (ucl_object_type (elt) != UCL_BOOLEAN) {
+			g_set_error (err,
+					CFG_RCL_ERROR,
+					EINVAL,
+					"enabled attribute is not boolean for symbol: '%s'",
+					key);
+
+			return FALSE;
+		}
+
+		if (ucl_object_toboolean (elt)) {
+			flags |= RSPAMD_SYMBOL_FLAG_DISABLED;
 		}
 	}
 

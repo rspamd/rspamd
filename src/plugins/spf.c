@@ -349,7 +349,7 @@ spf_module_config (struct rspamd_config *cfg)
 			0.0,
 			"SPF check callback",
 			"policies",
-			RSPAMD_SYMBOL_FLAG_IGNORE,
+			RSPAMD_SYMBOL_FLAG_IGNORE_METRIC,
 			1,
 			1);
 	rspamd_config_add_symbol_group (cfg, "SPF_CHECK", "spf");

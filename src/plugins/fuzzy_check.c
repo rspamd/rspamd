@@ -1060,7 +1060,7 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 				0.0,
 				"Fuzzy check callback",
 				"fuzzy",
-				RSPAMD_SYMBOL_FLAG_IGNORE,
+				RSPAMD_SYMBOL_FLAG_IGNORE_METRIC,
 				1,
 				1);
 

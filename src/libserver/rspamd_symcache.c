@@ -1495,7 +1495,8 @@ rspamd_symcache_validate (struct rspamd_symcache *cache,
 		ignore_symbol = FALSE;
 		sym_def = v;
 
-		if (sym_def && (sym_def->flags & RSPAMD_SYMBOL_FLAG_IGNORE)) {
+		if (sym_def && (sym_def->flags &
+				(RSPAMD_SYMBOL_FLAG_IGNORE_METRIC|RSPAMD_SYMBOL_FLAG_DISABLED))) {
 			ignore_symbol = TRUE;
 		}
 
@@ -1510,6 +1511,13 @@ rspamd_symcache_validate (struct rspamd_symcache *cache,
 				if (strict) {
 					ret = FALSE;
 				}
+			}
+		}
+		else if (sym_def->flags & RSPAMD_SYMBOL_FLAG_DISABLED) {
+			item = g_hash_table_lookup (cache->items_by_symbol, k);
+
+			if (item) {
+				item->enabled = FALSE;
 			}
 		}
 	}

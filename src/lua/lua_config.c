@@ -2318,7 +2318,7 @@ lua_config_set_metric_symbol (lua_State * L)
 				nshots = 1;
 			}
 			if (strstr (flags_str, "ignore") != NULL) {
-				flags |= RSPAMD_SYMBOL_FLAG_IGNORE;
+				flags |= RSPAMD_SYMBOL_FLAG_IGNORE_METRIC;
 			}
 			if (strstr (flags_str, "one_param") != NULL) {
 				flags |= RSPAMD_SYMBOL_FLAG_ONEPARAM;
@@ -3376,7 +3376,7 @@ lua_metric_symbol_inserter (gpointer k, gpointer v, gpointer ud)
 	lua_pushstring (L, "flags");
 	lua_createtable (L, 0, 3);
 
-	if (s->flags & RSPAMD_SYMBOL_FLAG_IGNORE) {
+	if (s->flags & RSPAMD_SYMBOL_FLAG_IGNORE_METRIC) {
 		lua_pushstring (L, "ignore");
 		lua_pushboolean (L, true);
 		lua_settable (L, -3);
@@ -3388,6 +3388,11 @@ lua_metric_symbol_inserter (gpointer k, gpointer v, gpointer ud)
 	}
 	if (s->flags & RSPAMD_SYMBOL_FLAG_UNGROUPPED) {
 		lua_pushstring (L, "ungroupped");
+		lua_pushboolean (L, true);
+		lua_settable (L, -3);
+	}
+	if (s->flags & RSPAMD_SYMBOL_FLAG_DISABLED) {
+		lua_pushstring (L, "disabled");
 		lua_pushboolean (L, true);
 		lua_settable (L, -3);
 	}

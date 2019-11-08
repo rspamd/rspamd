@@ -127,9 +127,10 @@ struct rspamd_symbols_group {
 
 enum rspamd_symbol_flags {
 	RSPAMD_SYMBOL_FLAG_NORMAL = 0,
-	RSPAMD_SYMBOL_FLAG_IGNORE = (1 << 1),
+	RSPAMD_SYMBOL_FLAG_IGNORE_METRIC = (1 << 1),
 	RSPAMD_SYMBOL_FLAG_ONEPARAM = (1 << 2),
 	RSPAMD_SYMBOL_FLAG_UNGROUPPED = (1 << 3),
+	RSPAMD_SYMBOL_FLAG_DISABLED = (1 << 4),
 };
 
 /**
