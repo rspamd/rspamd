@@ -456,11 +456,10 @@ rspamd_rcl_symbol_handler (rspamd_mempool_t *pool, const ucl_object_t *obj,
 	const gchar *description = NULL;
 	gdouble score = NAN;
 	guint priority = 1, flags = 0;
-	gint nshots;
+	gint nshots = 0;
 
 	g_assert (key != NULL);
 	cfg = sd->cfg;
-	nshots = cfg->default_max_shots;
 
 	if ((elt = ucl_object_lookup (obj, "one_shot")) != NULL) {
 		if (ucl_object_type (elt) != UCL_BOOLEAN) {

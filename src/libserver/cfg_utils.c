@@ -1598,7 +1598,7 @@ rspamd_config_new_symbol (struct rspamd_config *cfg, const gchar *symbol,
 	sym_def->weight_ptr = score_ptr;
 	sym_def->name = rspamd_mempool_strdup (cfg->cfg_pool, symbol);
 	sym_def->flags = flags;
-	sym_def->nshots = nshots;
+	sym_def->nshots = nshots != 0 ? nshots : cfg->default_max_shots;
 	sym_def->groups = g_ptr_array_sized_new (1);
 	rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_ptr_array_free_hard,
 			sym_def->groups);
@@ -1700,6 +1700,11 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 						description);
 			}
 
+			/* Or nshots in case of non-default setting */
+			if (nshots != 0 && sym_def->nshots == cfg->default_max_shots) {
+				sym_def->nshots = nshots;
+			}
+
 			return FALSE;
 		}
 		else {
@@ -1720,7 +1725,16 @@ rspamd_config_add_symbol (struct rspamd_config *cfg,
 			}
 
 			sym_def->flags = flags;
-			sym_def->nshots = nshots;
+
+			if (nshots != 0) {
+				sym_def->nshots = nshots;
+			}
+			else {
+				/* Do not reset unless we have exactly lower priority */
+				if (sym_def->priority < priority) {
+					sym_def->nshots = cfg->default_max_shots;
+				}
+			}
 
 			if (description) {
 				sym_def->description = rspamd_mempool_strdup (cfg->cfg_pool,
