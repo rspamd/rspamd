@@ -30,7 +30,9 @@ static struct rdns_upstream_elt* rspamd_dns_select_upstream (const char *name,
 		size_t len, void *ups_data);
 static struct rdns_upstream_elt* rspamd_dns_select_upstream_retransmit (
 		const char *name,
-		size_t len, void *ups_data);
+		size_t len,
+		struct rdns_upstream_elt *prev_elt,
+		void *ups_data);
 static void rspamd_dns_upstream_ok (struct rdns_upstream_elt *elt,
 		void *ups_data);
 static void rspamd_dns_upstream_fail (struct rdns_upstream_elt *elt,
@@ -815,7 +817,9 @@ rspamd_dns_select_upstream (const char *name,
 static struct rdns_upstream_elt*
 rspamd_dns_select_upstream_retransmit (
 		const char *name,
-		size_t len, void *ups_data)
+		size_t len,
+		struct rdns_upstream_elt *prev_elt,
+		void *ups_data)
 {
 	struct upstream_list *ups = ups_data;
 	struct upstream *up;

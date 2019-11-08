@@ -164,8 +164,9 @@ struct rdns_upstream_context {
 	void *data;
 	struct rdns_upstream_elt* (*select)(const char *name,
 			size_t len, void *ups_data);
-	struct rdns_upstream_elt* (*select_retransmit)(const char *name,
-			size_t len, void *ups_data);
+	struct rdns_upstream_elt* (*select_retransmit)(const char *name, size_t len,
+												   struct rdns_upstream_elt* prev_elt,
+												   void *ups_data);
 	unsigned int (*count)(void *ups_data);
 	void (*ok)(struct rdns_upstream_elt *elt, void *ups_data);
 	void (*fail)(struct rdns_upstream_elt *elt, void *ups_data);

@@ -332,14 +332,15 @@ rdns_process_timer (void *arg)
 	req->retransmits --;
 	resolver = req->resolver;
 
+	if (req->resolver->ups && req->io->srv->ups_elt) {
+		req->resolver->ups->fail (req->io->srv->ups_elt,
+				req->resolver->ups->data);
+	}
+	else {
+		UPSTREAM_FAIL (req->io->srv, time (NULL));
+	}
+
 	if (req->retransmits == 0) {
-		if (req->resolver->ups && req->io->srv->ups_elt) {
-			req->resolver->ups->fail (req->io->srv->ups_elt,
-					req->resolver->ups->data);
-		}
-		else {
-			UPSTREAM_FAIL (req->io->srv, time (NULL));
-		}
 
 		rep = rdns_make_reply (req, RDNS_RC_TIMEOUT);
 		rdns_request_unschedule (req);
@@ -371,8 +372,11 @@ rdns_process_timer (void *arg)
 			if (resolver->ups) {
 				struct rdns_upstream_elt *elt;
 
-				elt = resolver->ups->select_retransmit (req->requested_names[0].name,
-						req->requested_names[0].len, resolver->ups->data);
+				elt = resolver->ups->select_retransmit (
+						req->requested_names[0].name,
+						req->requested_names[0].len,
+						req->io->srv->ups_elt,
+						resolver->ups->data);
 
 				if (elt) {
 					serv = elt->server;
