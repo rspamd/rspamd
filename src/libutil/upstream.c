@@ -1475,7 +1475,7 @@ rspamd_upstream_get_common (struct upstream_list *ups,
 	}
 	RSPAMD_UPSTREAM_UNLOCK (ups);
 
-	if (ups->alive->len == 1) {
+	if (ups->alive->len == 1 && default_type != RSPAMD_UPSTREAM_SEQUENTIAL) {
 		/* Fast path */
 		up =  g_ptr_array_index (ups->alive, 0);
 		goto end;
