@@ -315,7 +315,8 @@ local hotmail_baydav_msgid = 'Message-Id=/^<?BAY\\d+-DAV\\d+[A-Z0-9]{25}\\@phx\\
 -- Sympatico message id
 local sympatico_msgid = 'Message-Id=/^<?BAYC\\d+-PASMTP\\d+[A-Z0-9]{25}\\@CEZ\\.ICE>?$/H'
 -- Mailman message id
-local mailman_msgid = 'Message-ID=/^<mailman\\.\\d+\\.\\d+\\.\\d+\\..+\\@\\S+>$/H'
+-- https://bazaar.launchpad.net/~mailman-coders/mailman/2.1/view/head:/Mailman/Utils.py#L811
+local mailman_msgid = [[Message-ID=/^<mailman\.\d+\.\d+\.\d+\.[-+.:=\w]+@[-a-zA-Z\d.]+>$/H]]
 -- Message id seems to be forged
 local unusable_msgid = string.format('(%s | %s | %s | %s | %s | %s)',
 					lyris_ezml_remailer, wacky_sendmail_version, iplanet_messaging_server, hotmail_baydav_msgid, sympatico_msgid, mailman_msgid)
