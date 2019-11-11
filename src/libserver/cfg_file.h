@@ -439,6 +439,7 @@ struct rspamd_config {
 
 	gchar *rrd_file;                               /**< rrd file to store statistics						*/
 	gchar *history_file;                           /**< file to save rolling history						*/
+	gchar *stats_file;                           /**< file to save stats 						*/
 	gchar *tld_file;                               /**< file to load effective tld list from				*/
 	gchar *hs_cache_dir;                           /**< directory to save hyperscan databases				*/
 	gchar *events_backend;                         /**< string representation of the events backend used	*/

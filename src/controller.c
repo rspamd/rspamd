@@ -38,8 +38,6 @@
 /* 60 seconds for worker's IO */
 #define DEFAULT_WORKER_IO_TIMEOUT 60000
 
-#define DEFAULT_STATS_PATH RSPAMD_DBDIR "/stats.ucl"
-
 /* HTTP paths */
 #define PATH_AUTH "/auth"
 #define PATH_SYMBOLS "/symbols"
@@ -161,9 +159,6 @@ struct rspamd_controller_worker_ctx {
 
 	/* Static files dir */
 	gchar *static_files_dir;
-
-	/* Saved statistics path */
-	gchar *saved_stats_path;
 
 	/* Custom commands registered by plugins */
 	GHashTable *custom_commands;
@@ -3141,7 +3136,8 @@ rspamd_controller_rrd_update (EV_P_ ev_timer *w, int revents)
 }
 
 static void
-rspamd_controller_load_saved_stats (struct rspamd_controller_worker_ctx *ctx)
+rspamd_controller_load_saved_stats (struct rspamd_main *rspamd_main,
+		struct rspamd_config *cfg)
 {
 	struct ucl_parser *parser;
 	ucl_object_t *obj;
@@ -3149,19 +3145,21 @@ rspamd_controller_load_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 	struct rspamd_stat *stat, stat_copy;
 	gint i;
 
-	g_assert (ctx->saved_stats_path != NULL);
+	if (cfg->stats_file == NULL) {
+		return;
+	}
 
-	if (access (ctx->saved_stats_path, R_OK) == -1) {
-		msg_err_ctx ("cannot load controller stats from %s: %s",
-				ctx->saved_stats_path, strerror (errno));
+	if (access (cfg->stats_file, R_OK) == -1) {
+		msg_err_config ("cannot load controller stats from %s: %s",
+				cfg->stats_file, strerror (errno));
 		return;
 	}
 
 	parser = ucl_parser_new (0);
 
-	if (!ucl_parser_add_file (parser, ctx->saved_stats_path)) {
-		msg_err_ctx ("cannot parse controller stats from %s: %s",
-				ctx->saved_stats_path, ucl_parser_get_error (parser));
+	if (!ucl_parser_add_file (parser, cfg->stats_file)) {
+		msg_err_config ("cannot parse controller stats from %s: %s",
+				cfg->stats_file, ucl_parser_get_error (parser));
 		ucl_parser_free (parser);
 
 		return;
@@ -3170,7 +3168,7 @@ rspamd_controller_load_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 	obj = ucl_parser_get_object (parser);
 	ucl_parser_free (parser);
 
-	stat = ctx->srv->stat;
+	stat = rspamd_main->stat;
 	memcpy (&stat_copy, stat, sizeof (stat_copy));
 
 	elt = ucl_object_lookup (obj, "scanned");
@@ -3214,32 +3212,29 @@ rspamd_controller_load_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 }
 
 static void
-rspamd_controller_store_saved_stats (struct rspamd_controller_worker_ctx *ctx)
+rspamd_controller_store_saved_stats (struct rspamd_main *rspamd_main,
+		struct rspamd_config *cfg)
 {
 	struct rspamd_stat *stat;
 	ucl_object_t *top, *sub;
 	struct ucl_emitter_functions *efuncs;
 	gint i, fd;
+	gchar fpath[PATH_MAX], *tmpfile;
 
-	g_assert (ctx->saved_stats_path != NULL);
+	if (cfg->stats_file == NULL) {
+		return;
+	}
 
-	fd = open (ctx->saved_stats_path, O_WRONLY|O_CREAT|O_TRUNC, 00644);
+	rspamd_snprintf (fpath, sizeof (fpath), "%s.XXXXXXXX", cfg->stats_file);
+	fd = g_mkstemp_full (fpath, O_WRONLY|O_TRUNC, 00644);
 
 	if (fd == -1) {
-		msg_err_ctx ("cannot open for writing controller stats from %s: %s",
-				ctx->saved_stats_path, strerror (errno));
+		msg_err_config ("cannot open for writing controller stats from %s: %s",
+				fpath, strerror (errno));
 		return;
 	}
 
-	if (rspamd_file_lock (fd, FALSE) == -1) {
-		msg_err_ctx ("cannot lock controller stats in %s: %s",
-				ctx->saved_stats_path, strerror (errno));
-		close (fd);
-
-		return;
-	}
-
-	stat = ctx->srv->stat;
+	stat = rspamd_main->stat;
 
 	top = ucl_object_typed_new (UCL_OBJECT);
 	ucl_object_insert_key (top, ucl_object_fromint (
@@ -3258,18 +3253,28 @@ rspamd_controller_store_saved_stats (struct rspamd_controller_worker_ctx *ctx)
 	}
 
 	ucl_object_insert_key (top,
-			ucl_object_fromint (stat->connections_count), "connections", 0, false);
+			ucl_object_fromint (stat->connections_count),
+			"connections", 0, false);
 	ucl_object_insert_key (top,
 			ucl_object_fromint (stat->control_connections_count),
 			"control_connections", 0, false);
 
-
 	efuncs = ucl_object_emit_fd_funcs (fd);
-	ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT,
-			efuncs, NULL);
+	if (!ucl_object_emit_full (top, UCL_EMIT_JSON_COMPACT,
+			efuncs, NULL)) {
+		msg_err_config ("cannot write stats to %s: %s",
+				fpath, strerror (errno));
+
+		unlink (fpath);
+	}
+	else {
+		if (rename (fpath, cfg->stats_file) == -1) {
+			msg_err_config ("cannot rename stats from %s to %s: %s",
+					fpath, cfg->stats_file, strerror (errno));
+		}
+	}
 
 	ucl_object_unref (top);
-	rspamd_file_unlock (fd, FALSE);
 	close (fd);
 	ucl_object_emit_funcs_free (efuncs);
 }
@@ -3280,7 +3285,7 @@ rspamd_controller_stats_save_periodic (EV_P_ ev_timer *w, int revents)
 	struct rspamd_controller_worker_ctx *ctx =
 			(struct rspamd_controller_worker_ctx *)w->data;
 
-	rspamd_controller_store_saved_stats (ctx);
+	rspamd_controller_store_saved_stats (ctx->srv, ctx->cfg);
 	ev_timer_again (EV_A_ w);
 }
 
@@ -3414,16 +3419,6 @@ init_controller_worker (struct rspamd_config *cfg)
 					key),
 			0,
 			"Encryption keypair");
-
-	rspamd_rcl_register_worker_option (cfg,
-			type,
-			"stats_path",
-			rspamd_rcl_parse_struct_string,
-			ctx,
-			G_STRUCT_OFFSET (struct rspamd_controller_worker_ctx,
-					saved_stats_path),
-			0,
-			"Directory where controller saves server's statistics between restarts");
 
 	rspamd_rcl_register_worker_option (cfg,
 			type,
@@ -3563,18 +3558,10 @@ lua_csession_send_string (lua_State *L)
 	return 0;
 }
 
-static void
+void
 rspamd_controller_on_terminate (struct rspamd_worker *worker)
 {
-	struct rspamd_controller_worker_ctx *ctx = worker->ctx;
-
-	rspamd_controller_store_saved_stats (ctx);
-
-	if (ctx->rrd) {
-		msg_info ("closing rrd file: %s", ctx->rrd->filename);
-		ev_timer_stop (ctx->event_loop, &ctx->rrd_event);
-		rspamd_rrd_close (ctx->rrd);
-	}
+	rspamd_controller_store_saved_stats (worker->srv, worker->srv->cfg);
 }
 
 static void
@@ -3724,13 +3711,7 @@ start_controller_worker (struct rspamd_worker *worker)
 				&ctx->secure_map, NULL);
 	}
 
-	if (ctx->saved_stats_path == NULL) {
-		/* Assume default path */
-		ctx->saved_stats_path = rspamd_mempool_strdup (worker->srv->cfg->cfg_pool,
-				DEFAULT_STATS_PATH);
-	}
-
-	rspamd_controller_load_saved_stats (ctx);
+	rspamd_controller_load_saved_stats (ctx->srv, ctx->cfg);
 	ctx->lang_det = ctx->cfg->lang_det;
 
 	/* RRD collector */
@@ -3924,6 +3905,12 @@ start_controller_worker (struct rspamd_worker *worker)
 	ev_loop (ctx->event_loop, 0);
 	rspamd_worker_block_signals ();
 	rspamd_controller_on_terminate (worker);
+
+	if (ctx->rrd) {
+		msg_info ("closing rrd file: %s", ctx->rrd->filename);
+		ev_timer_stop (ctx->event_loop, &ctx->rrd_event);
+		rspamd_rrd_close (ctx->rrd);
+	}
 
 	rspamd_stat_close ();
 	rspamd_http_router_free (ctx->http);

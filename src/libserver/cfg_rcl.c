@@ -1964,6 +1964,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				RSPAMD_CL_FLAG_STRING_PATH,
 				"Path to RRD file");
 		rspamd_rcl_add_default_handler (sub,
+				"stats_file",
+				rspamd_rcl_parse_struct_string,
+				G_STRUCT_OFFSET (struct rspamd_config, stats_file),
+				RSPAMD_CL_FLAG_STRING_PATH,
+				"Path to stats file");
+		rspamd_rcl_add_default_handler (sub,
 				"history_file",
 				rspamd_rcl_parse_struct_string,
 				G_STRUCT_OFFSET (struct rspamd_config, history_file),

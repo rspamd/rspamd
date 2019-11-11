@@ -244,6 +244,12 @@ gboolean rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
  */
 gboolean rspamd_worker_call_finish_handlers (struct rspamd_worker *worker);
 
+/**
+ * Defined in controller.c
+ * @param worker
+ */
+extern void rspamd_controller_on_terminate (struct rspamd_worker *worker);
+
 #ifdef WITH_HYPERSCAN
 struct rspamd_control_command;
 

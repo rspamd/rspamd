@@ -36,12 +36,12 @@ local rspamd_mempool = require "rspamd_mempool"
 
 local function parse_func(str)
 	-- extract token till the first space character
-	local token = table.join('', take_while(function(s) return s ~= ' ' end, str))
+	local token = table.concat(totable(take_while(function(s) return s ~= ' ' end, iter(str))))
 	-- Return token name
 	return token
 end
 
-local function process_func(token, task)
+local function process_func(token)
 	-- Do something using token and task
 end
 
