@@ -2216,6 +2216,7 @@ void
 start_rspamd_proxy (struct rspamd_worker *worker)
 {
 	struct rspamd_proxy_ctx *ctx = worker->ctx;
+	gboolean is_controller = FALSE;
 
 	g_assert (rspamd_worker_check_context (worker->ctx, rspamd_rspamd_proxy_magic));
 	ctx->cfg = worker->srv->cfg;
@@ -2234,9 +2235,6 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 	rspamd_mempool_add_destructor (ctx->cfg->cfg_pool,
 			(rspamd_mempool_destruct_t)rspamd_http_context_free,
 			ctx->http_ctx);
-
-	rspamd_map_watch (worker->srv->cfg, ctx->event_loop, ctx->resolver,
-			worker, 0);
 
 	if (ctx->has_self_scan) {
 		/* Additional initialisation needed */
@@ -2273,6 +2271,7 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 				msg_info ("no controller or normal workers defined, execute "
 							  "controller periodics in this worker");
 				worker->flags |= RSPAMD_WORKER_CONTROLLER;
+				is_controller = TRUE;
 			}
 		}
 	}
@@ -2294,6 +2293,14 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 	ctx->milter_ctx.cfg = ctx->cfg;
 	rspamd_milter_init_library (&ctx->milter_ctx);
 
+	if (is_controller) {
+		rspamd_worker_init_controller (worker, NULL);
+	}
+	else {
+		rspamd_map_watch (worker->srv->cfg, ctx->event_loop, ctx->resolver,
+				worker, 0);
+	}
+
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->event_loop,
 			worker);
 	adjust_upstreams_limits (ctx);
@@ -2303,6 +2310,10 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 
 	if (ctx->has_self_scan) {
 		rspamd_stat_close ();
+	}
+
+	if (is_controller) {
+		rspamd_controller_on_terminate (worker, NULL);
 	}
 
 	REF_RELEASE (ctx->cfg);

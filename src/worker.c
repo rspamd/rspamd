@@ -507,7 +507,6 @@ start_worker (struct rspamd_worker *worker)
 	ctx->resolver = rspamd_dns_resolver_init (worker->srv->logger,
 			ctx->event_loop,
 			worker->srv->cfg);
-	rspamd_map_watch (worker->srv->cfg, ctx->event_loop, ctx->resolver, worker, 0);
 	rspamd_upstreams_library_config (worker->srv->cfg, ctx->cfg->ups_ctx,
 			ctx->event_loop, ctx->resolver->r);
 
@@ -548,6 +547,14 @@ start_worker (struct rspamd_worker *worker)
 		}
 	}
 
+	if (is_controller) {
+		rspamd_worker_init_controller (worker, NULL);
+	}
+	else {
+		rspamd_map_watch (worker->srv->cfg, ctx->event_loop, ctx->resolver,
+				worker, 0);
+	}
+
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->event_loop,
 			worker);
 
@@ -555,7 +562,7 @@ start_worker (struct rspamd_worker *worker)
 	rspamd_worker_block_signals ();
 
 	if (is_controller) {
-		rspamd_controller_on_terminate (
+		rspamd_controller_on_terminate (worker, NULL);
 	}
 
 	rspamd_stat_close ();

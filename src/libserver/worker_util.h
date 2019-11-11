@@ -244,11 +244,30 @@ gboolean rspamd_check_termination_clause (struct rspamd_main *rspamd_main,
  */
 gboolean rspamd_worker_call_finish_handlers (struct rspamd_worker *worker);
 
+struct rspamd_rrd_file;
 /**
- * Defined in controller.c
+ * Terminate controller worker
  * @param worker
  */
-extern void rspamd_controller_on_terminate (struct rspamd_worker *worker);
+void rspamd_controller_on_terminate (struct rspamd_worker *worker,
+		struct rspamd_rrd_file *rrd);
+
+/**
+ * Inits controller worker
+ * @param worker
+ * @param ev_base
+ * @param prrd
+ */
+void rspamd_worker_init_controller (struct rspamd_worker *worker,
+								   struct rspamd_rrd_file **prrd);
+
+/**
+ * Saves stats
+ * @param rspamd_main
+ * @param cfg
+ */
+void rspamd_controller_store_saved_stats (struct rspamd_main *rspamd_main,
+									 struct rspamd_config *cfg);
 
 #ifdef WITH_HYPERSCAN
 struct rspamd_control_command;
