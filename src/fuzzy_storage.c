@@ -1975,7 +1975,7 @@ start_fuzzy (struct rspamd_worker *worker)
 	if (ctx->update_map != NULL) {
 		rspamd_config_radix_from_ucl (worker->srv->cfg, ctx->update_map,
 				"Allow fuzzy updates from specified addresses",
-				&ctx->update_ips, NULL);
+				&ctx->update_ips, NULL, worker);
 	}
 
 	if (ctx->skip_map != NULL) {
@@ -1986,7 +1986,8 @@ start_fuzzy (struct rspamd_worker *worker)
 				rspamd_kv_list_read,
 				rspamd_kv_list_fin,
 				rspamd_kv_list_dtor,
-				(void **)&ctx->skip_hashes)) == NULL) {
+				(void **)&ctx->skip_hashes,
+				worker)) == NULL) {
 			msg_warn_config ("cannot load hashes list from %s",
 					ucl_object_tostring (ctx->skip_map));
 		}
@@ -1998,14 +1999,18 @@ start_fuzzy (struct rspamd_worker *worker)
 	if (ctx->blocked_map != NULL) {
 		rspamd_config_radix_from_ucl (worker->srv->cfg, ctx->blocked_map,
 				"Block fuzzy requests from the specific IPs",
-				&ctx->blocked_ips, NULL);
+				&ctx->blocked_ips,
+				NULL,
+				worker);
 	}
 
 	/* Create radix trees */
 	if (ctx->ratelimit_whitelist_map != NULL) {
 		rspamd_config_radix_from_ucl (worker->srv->cfg, ctx->ratelimit_whitelist_map,
 				"Skip ratelimits from specific ip addresses/networks",
-				&ctx->ratelimit_whitelist, NULL);
+				&ctx->ratelimit_whitelist,
+				NULL,
+				worker);
 	}
 
 	/* Ratelimits */
@@ -2019,7 +2024,8 @@ start_fuzzy (struct rspamd_worker *worker)
 	ctx->resolver = rspamd_dns_resolver_init (worker->srv->logger,
 			ctx->event_loop,
 			worker->srv->cfg);
-	rspamd_map_watch (worker->srv->cfg, ctx->event_loop, ctx->resolver, worker, 0);
+	rspamd_map_watch (worker->srv->cfg, ctx->event_loop,
+			ctx->resolver, worker, RSPAMD_MAP_WATCH_WORKER);
 
 	/* Get peer pipe */
 	memset (&srv_cmd, 0, sizeof (srv_cmd));

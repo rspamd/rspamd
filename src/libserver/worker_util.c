@@ -1955,7 +1955,8 @@ rspamd_worker_init_controller (struct rspamd_worker *worker,
 		ev_timer_start (ctx->event_loop, &cbd.save_stats_event);
 
 		rspamd_map_watch (worker->srv->cfg, ctx->event_loop,
-				ctx->resolver, worker, TRUE);
+				ctx->resolver, worker,
+				RSPAMD_MAP_WATCH_PRIMARY_CONTROLLER);
 
 		if (prrd != NULL) {
 			if (ctx->cfg->rrd_file && worker->index == 0) {
@@ -1992,6 +1993,6 @@ rspamd_worker_init_controller (struct rspamd_worker *worker,
 	}
 	else {
 		rspamd_map_watch (worker->srv->cfg, ctx->event_loop,
-				ctx->resolver, worker, FALSE);
+				ctx->resolver, worker, RSPAMD_MAP_WATCH_SCANNER);
 	}
 }

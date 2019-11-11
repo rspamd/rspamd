@@ -161,7 +161,8 @@ lua_config_add_radix_map (lua_State *L)
 				rspamd_radix_read,
 				rspamd_radix_fin,
 				rspamd_radix_dtor,
-				(void **)&map->data.radix)) == NULL) {
+				(void **)&map->data.radix,
+				NULL)) == NULL) {
 			msg_warn_config ("invalid radix map %s", map_line);
 			lua_pushnil (L);
 
@@ -218,7 +219,8 @@ lua_config_radix_from_config (lua_State *L)
 					rspamd_radix_read,
 					rspamd_radix_fin,
 					rspamd_radix_dtor,
-					(void **)&map->data.radix)) == NULL) {
+					(void **)&map->data.radix,
+					NULL)) == NULL) {
 				msg_err_config ("invalid radix map static");
 				lua_pushnil (L);
 				ucl_object_unref (fake_obj);
@@ -279,7 +281,8 @@ lua_config_radix_from_ucl (lua_State *L)
 				rspamd_radix_read,
 				rspamd_radix_fin,
 				rspamd_radix_dtor,
-				(void **)&map->data.radix)) == NULL) {
+				(void **)&map->data.radix,
+				NULL)) == NULL) {
 			msg_err_config ("invalid radix map static");
 			lua_pushnil (L);
 			ucl_object_unref (fake_obj);
@@ -324,7 +327,8 @@ lua_config_add_hash_map (lua_State *L)
 				rspamd_kv_list_read,
 				rspamd_kv_list_fin,
 				rspamd_kv_list_dtor,
-				(void **)&map->data.hash)) == NULL) {
+				(void **)&map->data.hash,
+				NULL)) == NULL) {
 			msg_warn_config ("invalid set map %s", map_line);
 			lua_pushnil (L);
 			return 1;
@@ -364,7 +368,8 @@ lua_config_add_kv_map (lua_State *L)
 				rspamd_kv_list_read,
 				rspamd_kv_list_fin,
 				rspamd_kv_list_dtor,
-				(void **)&map->data.hash)) == NULL) {
+				(void **)&map->data.hash,
+				NULL)) == NULL) {
 			msg_warn_config ("invalid hash map %s", map_line);
 			lua_pushnil (L);
 
@@ -529,7 +534,8 @@ lua_config_add_map (lua_State *L)
 					lua_map_read,
 					lua_map_fin,
 					lua_map_dtor,
-					(void **)&map->data.cbdata)) == NULL) {
+					(void **)&map->data.cbdata,
+					NULL)) == NULL) {
 
 				if (cbidx != -1) {
 					luaL_unref (L, LUA_REGISTRYINDEX, cbidx);
@@ -554,7 +560,8 @@ lua_config_add_map (lua_State *L)
 					rspamd_kv_list_read,
 					rspamd_kv_list_fin,
 					rspamd_kv_list_dtor,
-					(void **)&map->data.hash)) == NULL) {
+					(void **)&map->data.hash,
+					NULL)) == NULL) {
 				lua_pushnil (L);
 				ucl_object_unref (map_obj);
 
@@ -571,7 +578,8 @@ lua_config_add_map (lua_State *L)
 					rspamd_kv_list_read,
 					rspamd_kv_list_fin,
 					rspamd_kv_list_dtor,
-					(void **)&map->data.hash)) == NULL) {
+					(void **)&map->data.hash,
+					NULL)) == NULL) {
 				lua_pushnil (L);
 				ucl_object_unref (map_obj);
 
@@ -588,7 +596,8 @@ lua_config_add_map (lua_State *L)
 					rspamd_radix_read,
 					rspamd_radix_fin,
 					rspamd_radix_dtor,
-					(void **)&map->data.radix)) == NULL) {
+					(void **)&map->data.radix,
+					NULL)) == NULL) {
 				lua_pushnil (L);
 				ucl_object_unref (map_obj);
 
@@ -605,7 +614,8 @@ lua_config_add_map (lua_State *L)
 					rspamd_regexp_list_read_single,
 					rspamd_regexp_list_fin,
 					rspamd_regexp_list_dtor,
-					(void **) &map->data.re_map)) == NULL) {
+					(void **) &map->data.re_map,
+					NULL)) == NULL) {
 				lua_pushnil (L);
 				ucl_object_unref (map_obj);
 
@@ -622,7 +632,8 @@ lua_config_add_map (lua_State *L)
 					rspamd_regexp_list_read_multiple,
 					rspamd_regexp_list_fin,
 					rspamd_regexp_list_dtor,
-					(void **) &map->data.re_map)) == NULL) {
+					(void **) &map->data.re_map,
+					NULL)) == NULL) {
 				lua_pushnil (L);
 				ucl_object_unref (map_obj);
 
@@ -639,7 +650,8 @@ lua_config_add_map (lua_State *L)
 					rspamd_glob_list_read_single,
 					rspamd_regexp_list_fin,
 					rspamd_regexp_list_dtor,
-					(void **) &map->data.re_map)) == NULL) {
+					(void **) &map->data.re_map,
+					NULL)) == NULL) {
 				lua_pushnil (L);
 				ucl_object_unref (map_obj);
 
@@ -656,7 +668,8 @@ lua_config_add_map (lua_State *L)
 					rspamd_glob_list_read_multiple,
 					rspamd_regexp_list_fin,
 					rspamd_regexp_list_dtor,
-					(void **) &map->data.re_map)) == NULL) {
+					(void **) &map->data.re_map,
+					NULL)) == NULL) {
 				lua_pushnil (L);
 				ucl_object_unref (map_obj);
 

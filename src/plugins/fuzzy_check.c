@@ -359,7 +359,8 @@ fuzzy_parse_rule (struct rspamd_config *cfg, const ucl_object_t *obj,
 				rspamd_kv_list_read,
 				rspamd_kv_list_fin,
 				rspamd_kv_list_dtor,
-				(void **)&rule->skip_map);
+				(void **)&rule->skip_map,
+				NULL);
 	}
 
 	if ((value = ucl_object_lookup (obj, "headers")) != NULL) {
@@ -1042,7 +1043,9 @@ fuzzy_check_module_config (struct rspamd_config *cfg)
 		rspamd_config_get_module_opt (cfg, "fuzzy_check",
 		"whitelist")) != NULL) {
 		rspamd_config_radix_from_ucl (cfg, value, "Fuzzy whitelist",
-				&fuzzy_module_ctx->whitelist, NULL);
+				&fuzzy_module_ctx->whitelist,
+				NULL,
+				NULL);
 	}
 	else {
 		fuzzy_module_ctx->whitelist = NULL;

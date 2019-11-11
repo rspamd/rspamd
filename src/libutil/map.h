@@ -70,7 +70,8 @@ struct rspamd_map *rspamd_map_add (struct rspamd_config *cfg,
 								   map_cb_t read_callback,
 								   map_fin_cb_t fin_callback,
 								   map_dtor_t dtor,
-								   void **user_data);
+								   void **user_data,
+								   struct rspamd_worker *worker);
 
 /**
  * Add map from ucl
@@ -81,7 +82,16 @@ struct rspamd_map *rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 											map_cb_t read_callback,
 											map_fin_cb_t fin_callback,
 											map_dtor_t dtor,
-											void **user_data);
+											void **user_data,
+											struct rspamd_worker *worker);
+
+enum rspamd_map_watch_type {
+	RSPAMD_MAP_WATCH_MIN = 9,
+	RSPAMD_MAP_WATCH_PRIMARY_CONTROLLER,
+	RSPAMD_MAP_WATCH_SCANNER,
+	RSPAMD_MAP_WATCH_WORKER,
+	RSPAMD_MAP_WATCH_MAX
+};
 
 /**
  * Start watching of maps by adding events to libevent event loop
@@ -90,7 +100,7 @@ void rspamd_map_watch (struct rspamd_config *cfg,
 					   struct ev_loop *event_loop,
 					   struct rspamd_dns_resolver *resolver,
 					   struct rspamd_worker *worker,
-					   gboolean active_http);
+					   enum rspamd_map_watch_type how);
 
 /**
  * Preloads maps where all backends are file

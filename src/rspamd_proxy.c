@@ -2297,8 +2297,14 @@ start_rspamd_proxy (struct rspamd_worker *worker)
 		rspamd_worker_init_controller (worker, NULL);
 	}
 	else {
-		rspamd_map_watch (worker->srv->cfg, ctx->event_loop, ctx->resolver,
-				worker, 0);
+		if (ctx->has_self_scan) {
+			rspamd_map_watch (worker->srv->cfg, ctx->event_loop, ctx->resolver,
+					worker, RSPAMD_MAP_WATCH_SCANNER);
+		}
+		else {
+			rspamd_map_watch (worker->srv->cfg, ctx->event_loop, ctx->resolver,
+					worker, RSPAMD_MAP_WATCH_WORKER);
+		}
 	}
 
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->event_loop,

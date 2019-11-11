@@ -335,7 +335,7 @@ spf_module_config (struct rspamd_config *cfg)
 		rspamd_config_get_module_opt (cfg, "spf", "whitelist")) != NULL) {
 
 		rspamd_config_radix_from_ucl (cfg, value, "SPF whitelist",
-				&spf_module_ctx->whitelist_ip, NULL);
+				&spf_module_ctx->whitelist_ip, NULL, NULL);
 	}
 
 	cb_id = rspamd_symcache_add_symbol (cfg->cache,

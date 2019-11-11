@@ -1985,22 +1985,40 @@ rspamd_map_watch (struct rspamd_config *cfg,
 				  struct ev_loop *event_loop,
 				  struct rspamd_dns_resolver *resolver,
 				  struct rspamd_worker *worker,
-				  gboolean active_http)
+				  enum rspamd_map_watch_type how)
 {
 	GList *cur = cfg->maps;
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
 	guint i;
 
+	g_assert (how > RSPAMD_MAP_WATCH_MIN && how < RSPAMD_MAP_WATCH_MAX);
+
 	/* First of all do synced read of data */
 	while (cur) {
 		map = cur->data;
 		map->event_loop = event_loop;
 		map->r = resolver;
-		map->wrk = worker;
 
-		if (active_http) {
-			map->active_http = active_http;
+		if (map->wrk == NULL && how != RSPAMD_MAP_WATCH_WORKER) {
+			/* Generic scanner map */
+			map->wrk = worker;
+
+			if (how == RSPAMD_MAP_WATCH_PRIMARY_CONTROLLER) {
+				map->active_http = TRUE;
+			}
+			else {
+				map->active_http = FALSE;
+			}
+		}
+		else if (map->wrk != NULL && map->wrk == worker) {
+			/* Map is bound to a specific worker */
+			map->active_http = TRUE;
+		}
+		else {
+			/* Skip map for this worker as irrelevant */
+			cur = g_list_next (cur);
+			continue;
 		}
 
 		if (!map->active_http) {
@@ -2590,7 +2608,8 @@ rspamd_map_add (struct rspamd_config *cfg,
 				map_cb_t read_callback,
 				map_fin_cb_t fin_callback,
 				map_dtor_t dtor,
-				void **user_data)
+				void **user_data,
+				struct rspamd_worker *worker)
 {
 	struct rspamd_map *map;
 	struct rspamd_map_backend *bk;
@@ -2617,6 +2636,7 @@ rspamd_map_add (struct rspamd_config *cfg,
 	map->locked =
 		rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
 	map->backends = g_ptr_array_sized_new (1);
+	map->wrk = worker;
 	rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_ptr_array_free_hard,
 			map->backends);
 	g_ptr_array_add (map->backends, bk);
@@ -2663,7 +2683,8 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 						 map_cb_t read_callback,
 						 map_fin_cb_t fin_callback,
 						 map_dtor_t dtor,
-						 void **user_data)
+						 void **user_data,
+						 struct rspamd_worker *worker)
 {
 	ucl_object_iter_t it = NULL;
 	const ucl_object_t *cur, *elt;
@@ -2676,7 +2697,7 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 	if (ucl_object_type (obj) == UCL_STRING) {
 		/* Just a plain string */
 		return rspamd_map_add (cfg, ucl_object_tostring (obj), description,
-				read_callback, fin_callback, dtor, user_data);
+				read_callback, fin_callback, dtor, user_data, worker);
 	}
 
 	map = rspamd_mempool_alloc0 (cfg->cfg_pool, sizeof (struct rspamd_map));
@@ -2689,6 +2710,7 @@ rspamd_map_add_from_ucl (struct rspamd_config *cfg,
 	map->locked =
 			rspamd_mempool_alloc0_shared (cfg->cfg_pool, sizeof (gint));
 	map->backends = g_ptr_array_new ();
+	map->wrk = worker;
 	rspamd_mempool_add_destructor (cfg->cfg_pool, rspamd_ptr_array_free_hard,
 			map->backends);
 	map->poll_timeout = cfg->map_timeout;

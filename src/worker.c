@@ -552,7 +552,7 @@ start_worker (struct rspamd_worker *worker)
 	}
 	else {
 		rspamd_map_watch (worker->srv->cfg, ctx->event_loop, ctx->resolver,
-				worker, 0);
+				worker, RSPAMD_MAP_WATCH_SCANNER);
 	}
 
 	rspamd_lua_run_postloads (ctx->cfg->lua_state, ctx->cfg, ctx->event_loop,

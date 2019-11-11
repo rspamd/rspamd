@@ -758,7 +758,8 @@ gboolean rspamd_config_radix_from_ucl (struct rspamd_config *cfg,
 									   const ucl_object_t *obj,
 									   const gchar *description,
 									   struct rspamd_radix_map_helper **target,
-									   GError **err);
+									   GError **err,
+									   struct rspamd_worker *worker);
 
 /**
  * Adds new settings id to be preprocessed

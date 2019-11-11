@@ -2432,7 +2432,9 @@ rspamd_config_libs (struct rspamd_external_libs_ctx *ctx,
 		if (cfg->local_addrs) {
 			rspamd_config_radix_from_ucl (cfg, cfg->local_addrs,
 					"Local addresses",
-					ctx->local_addrs, NULL);
+					ctx->local_addrs,
+					NULL,
+					NULL);
 		}
 
 		if (cfg->ssl_ca_path) {

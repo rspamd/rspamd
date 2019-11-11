@@ -3513,7 +3513,9 @@ start_controller_worker (struct rspamd_worker *worker)
 	if (ctx->secure_ip != NULL) {
 		rspamd_config_radix_from_ucl (ctx->cfg, ctx->secure_ip,
 				"Allow unauthenticated requests from these addresses",
-				&ctx->secure_map, NULL);
+				&ctx->secure_map,
+				NULL,
+				worker);
 	}
 
 	ctx->lang_det = ctx->cfg->lang_det;

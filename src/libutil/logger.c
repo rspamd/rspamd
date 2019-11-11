@@ -579,7 +579,9 @@ rspamd_set_logger (struct rspamd_config *cfg,
 		rspamd_config_radix_from_ucl (cfg,
 				cfg->debug_ip_map,
 				"IP addresses for which debug logs are enabled",
-				&logger->debug_ip, NULL);
+				&logger->debug_ip,
+				NULL,
+				NULL);
 	}
 	else if (logger->debug_ip) {
 		rspamd_map_helper_destroy_radix (logger->debug_ip);
