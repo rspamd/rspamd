@@ -950,7 +950,7 @@ rspamd_term_handler (struct ev_loop *loop, ev_signal *w, int revents)
 		shutdown_ts = MAX (SOFT_SHUTDOWN_TIME,
 				rspamd_main->cfg->task_timeout * 2.0);
 		msg_info_main ("catch termination signal, waiting for children for %.2f seconds",
-				shutdown_ts);
+				valgrind_mode ? shutdown_ts * 10 : shutdown_ts);
 		/* Stop srv events to avoid false notifications */
 		g_hash_table_foreach (rspamd_main->workers, stop_srv_ev, rspamd_main);
 		rspamd_pass_signal (rspamd_main->workers, SIGTERM);
