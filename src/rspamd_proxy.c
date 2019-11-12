@@ -1474,8 +1474,36 @@ proxy_client_write_error (struct rspamd_proxy_session *session, gint code,
 	}
 	else {
 		reply = rspamd_http_new_message (HTTP_RESPONSE);
-		reply->code = code;
-		reply->status = rspamd_fstring_new_init (status, strlen (status));
+
+		switch (code) {
+		case ETIMEDOUT:
+			reply->code = 504;
+			reply->status = RSPAMD_FSTRING_LIT ("Gateway timeout");
+			break;
+		case ECONNRESET:
+		case ECONNABORTED:
+			reply->code = 502;
+			reply->status = RSPAMD_FSTRING_LIT ("Gateway connection reset");
+			break;
+		case ECONNREFUSED:
+			reply->code = 502;
+			reply->status = RSPAMD_FSTRING_LIT ("Gateway connection refused");
+			break;
+		default:
+			if (code >= 300) {
+				/* Likely HTTP error */
+				reply->code = code;
+				reply->status = rspamd_fstring_new_init (status, strlen (status));
+			}
+			else {
+				reply->code = 502;
+				reply->status = RSPAMD_FSTRING_LIT ("Unknown gateway error: ");
+				reply->status = rspamd_fstring_append (reply->status,
+						status, strlen (status));
+			}
+			break;
+		}
+
 		rspamd_http_connection_write_message (session->client_conn,
 				reply, NULL, NULL, session,
 				session->ctx->timeout);

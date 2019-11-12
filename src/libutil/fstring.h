@@ -37,6 +37,7 @@ typedef struct f_str_s {
 
 #define RSPAMD_FSTRING_DATA(s) ((s)->str)
 #define RSPAMD_FSTRING_LEN(s) ((s)->len)
+#define RSPAMD_FSTRING_LIT(lit) rspamd_fstring_new_init((lit), sizeof(lit) - 1)
 
 typedef struct f_str_tok {
 	gsize len;
