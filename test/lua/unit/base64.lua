@@ -1,6 +1,7 @@
 context("Base64 encoding", function()
   local ffi = require("ffi")
   local util = require("rspamd_util")
+  local logger = require "rspamd_logger"
   ffi.cdef[[
     void rspamd_cryptobox_init (void);
     void ottery_rand_bytes(void *buf, size_t n);
@@ -10,7 +11,7 @@ context("Base64 encoding", function()
       size_t str_len, size_t *outlen);
     void g_free(void *ptr);
     int memcmp(const void *a1, const void *a2, size_t len);
-    size_t base64_test (bool generic, size_t niters, size_t len);
+    double base64_test (bool generic, size_t niters, size_t len, size_t str_len);
     double rspamd_get_ticks (void);
   ]]
 
@@ -98,7 +99,7 @@ vehemence of any carnal pleasure.]]
       assert_equal(orig, tostring(dec), "fuzz test failed for length: " .. #orig)
     end
   end)
-    test("Base64 fuzz test (ffi)", function()
+  test("Base64 fuzz test (ffi)", function()
     for i = 1,1000 do
       local b, l = random_buf(4096)
       local nl = ffi.new("size_t [1]")
@@ -117,52 +118,75 @@ vehemence of any carnal pleasure.]]
 
   local speed_iters = 10000
 
-  test("Base64 test reference vectors 1K", function()
-    local t1 = ffi.C.rspamd_get_ticks()
-    local res = ffi.C.base64_test(true, speed_iters, 1024)
-    local t2 = ffi.C.rspamd_get_ticks()
+  local function perform_base64_speed_test(chunk, is_reference, line_len)
+    local ticks = ffi.C.base64_test(is_reference, speed_iters, chunk, line_len)
+    local what = 'Optimized'
+    if is_reference then
+      what = 'Reference'
+    end
+    logger.messagex("%s base64 %s chunk (%s line len): %s ticks per iter, %s ticks per byte",
+        what, chunk, line_len,
+        ticks / speed_iters, ticks / speed_iters / chunk)
 
-    print("Reference base64 (1K): " .. tostring(t2 - t1) .. " sec")
+    return 1
+  end
+  test("Base64 test reference vectors 78", function()
+    local res = perform_base64_speed_test(78, true, 0)
     assert_not_equal(res, 0)
   end)
-  test("Base64 test optimized vectors 1K", function()
-    local t1 = ffi.C.rspamd_get_ticks()
-    local res = ffi.C.base64_test(false, speed_iters, 1024)
-    local t2 = ffi.C.rspamd_get_ticks()
-
-    print("Optimized base64 (1K): " .. tostring(t2 - t1) .. " sec")
+  test("Base64 test optimized vectors 78", function()
+    local res = perform_base64_speed_test(78, false, 0)
     assert_not_equal(res, 0)
   end)
-    test("Base64 test reference vectors 512", function()
-    local t1 = ffi.C.rspamd_get_ticks()
-    local res = ffi.C.base64_test(true, speed_iters, 512)
-    local t2 = ffi.C.rspamd_get_ticks()
 
-    print("Reference base64 (512): " .. tostring(t2 - t1) .. " sec")
+  test("Base64 test reference vectors 512", function()
+    local res = perform_base64_speed_test(512, true, 0)
     assert_not_equal(res, 0)
   end)
   test("Base64 test optimized vectors 512", function()
-    local t1 = ffi.C.rspamd_get_ticks()
-    local res = ffi.C.base64_test(false, speed_iters, 512)
-    local t2 = ffi.C.rspamd_get_ticks()
-
-    print("Optimized base64 (512): " .. tostring(t2 - t1) .. " sec")
+    local res = perform_base64_speed_test(512, false, 0)
     assert_not_equal(res, 0)
   end)
-    test("Base64 test reference vectors 10K", function()
-    local t1 = ffi.C.rspamd_get_ticks()
-    local res = ffi.C.base64_test(true, speed_iters / 100, 10240)
-    local t2 = ffi.C.rspamd_get_ticks()
+  test("Base64 test reference vectors 512 (78 line len)", function()
+    local res = perform_base64_speed_test(512, true, 78)
+    assert_not_equal(res, 0)
+  end)
+  test("Base64 test optimized vectors 512 (78 line len)", function()
+    local res = perform_base64_speed_test(512, false, 78)
+    assert_not_equal(res, 0)
+  end)
 
-    print("Reference base64 (10K): " .. tostring(t2 - t1) .. " sec")
+  test("Base64 test reference vectors 1K", function()
+    local res = perform_base64_speed_test(1024, true, 0)
+    assert_not_equal(res, 0)
+  end)
+  test("Base64 test optimized vectors 1K", function()
+    local res = perform_base64_speed_test(1024, false, 0)
+    assert_not_equal(res, 0)
+  end)
+  test("Base64 test reference vectors 1K (78 line len)", function()
+    local res = perform_base64_speed_test(1024, true, 78)
+    assert_not_equal(res, 0)
+  end)
+  test("Base64 test optimized vectors 1K (78 line len)", function()
+    local res = perform_base64_speed_test(1024, false, 78)
+    assert_not_equal(res, 0)
+  end)
+
+  test("Base64 test reference vectors 10K", function()
+    local res = perform_base64_speed_test(10 * 1024, true, 0)
     assert_not_equal(res, 0)
   end)
   test("Base64 test optimized vectors 10K", function()
-    local t1 = ffi.C.rspamd_get_ticks()
-    local res = ffi.C.base64_test(false, speed_iters / 100, 10240)
-    local t2 = ffi.C.rspamd_get_ticks()
-
-    print("Optimized base64 (10K): " .. tostring(t2 - t1) .. " sec")
+    local res = perform_base64_speed_test(10 * 1024, false, 0)
+    assert_not_equal(res, 0)
+  end)
+  test("Base64 test reference vectors 10K (78 line len)", function()
+    local res = perform_base64_speed_test(10 * 1024, true, 78)
+    assert_not_equal(res, 0)
+  end)
+  test("Base64 test optimized vectors 10K (78 line len)", function()
+    local res = perform_base64_speed_test(10 * 1024, false, 78)
     assert_not_equal(res, 0)
   end)
 end)
