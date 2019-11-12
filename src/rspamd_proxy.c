@@ -1517,18 +1517,18 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 	struct rspamd_proxy_session *session;
 
 	session = bk_conn->s;
+	session->retries ++;
 	msg_info_session ("abnormally closing connection from backend: %s, error: %e,"
 			" retries left: %d",
 		rspamd_inet_address_to_string (
 				rspamd_upstream_addr_cur (session->master_conn->up)),
 		err,
 		session->ctx->max_retries - session->retries);
-	session->retries ++;
 	rspamd_upstream_fail (bk_conn->up, FALSE);
 	proxy_backend_close_connection (session->master_conn);
 
-	if (session->ctx->max_retries &&
-			session->retries > session->ctx->max_retries) {
+	if (session->ctx->max_retries > 0 &&
+			session->retries >= session->ctx->max_retries) {
 		msg_err_session ("cannot connect to upstream, maximum retries "
 				"has been reached: %d", session->retries);
 		/* Terminate session immediately */
