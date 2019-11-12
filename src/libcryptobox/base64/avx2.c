@@ -144,6 +144,7 @@ dec_reshuffle (__m256i in)
 		const __m256i eq_2F       = _mm256_cmpeq_epi8(str, mask_2F); \
 		const __m256i roll        = _mm256_shuffle_epi8(lut_roll, _mm256_add_epi8(eq_2F, hi_nibbles)); \
 		if (!_mm256_testz_si256(lo, hi)) { \
+			seen_error = true; \
 			break; \
 		} \
 		str = _mm256_add_epi8(str, roll); \
@@ -168,12 +169,15 @@ base64_decode_avx2 (const char *in, size_t inlen,
 	uint8_t q, carry;
 	size_t outl = 0;
 	size_t leftover = 0;
+	bool seen_error = false;
 
 repeat:
 	switch (leftover) {
 		for (;;) {
 		case 0:
-			INNER_LOOP_AVX2
+			if (G_LIKELY (!seen_error)) {
+				INNER_LOOP_AVX2
+			}
 
 			if (inlen-- == 0) {
 				ret = 1;
@@ -267,6 +271,7 @@ repeat:
 		}
 
 		if (inlen > 0) {
+			seen_error = false;
 			goto repeat;
 		}
 	}

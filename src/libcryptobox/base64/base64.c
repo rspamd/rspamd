@@ -19,6 +19,7 @@
 #include "base64.h"
 #include "platform_config.h"
 #include "str_util.h"
+#include "util.h"
 #include "contrib/libottery/ottery.h"
 
 extern unsigned long cpu_config;
@@ -116,20 +117,13 @@ gboolean
 rspamd_cryptobox_base64_decode (const gchar *in, gsize inlen,
 		guchar *out, gsize *outlen)
 {
-	if (inlen > 256) {
+	if (inlen > 128) {
 		/*
 		 * For SIMD base64 decoding we need really large inputs with no
 		 * garbadge such as newlines
-		 * Otherwise, naive version is MUCH faster
+		 * Otherwise, naive version is faster
 		 */
-
-		if (rspamd_memcspn (in, base64_alphabet, 256) == 256) {
-			return base64_opt->decode (in, inlen, out, outlen);
-		}
-		else {
-			/* Garbage found */
-			return base64_ref->decode (in, inlen, out, outlen);
-		}
+		return base64_opt->decode (in, inlen, out, outlen);
 	}
 	else {
 		/* Small input, use reference version */
@@ -139,12 +133,12 @@ rspamd_cryptobox_base64_decode (const gchar *in, gsize inlen,
 	g_assert_not_reached ();
 }
 
-size_t
-base64_test (bool generic, size_t niters, size_t len)
+double
+base64_test (bool generic, size_t niters, size_t len, size_t str_len)
 {
 	size_t cycles;
 	guchar *in, *out, *tmp;
-	const base64_impl_t *impl;
+	gdouble t1, t2, total = 0;
 	gsize outlen;
 
 	g_assert (len > 0);
@@ -152,22 +146,35 @@ base64_test (bool generic, size_t niters, size_t len)
 	tmp = g_malloc (len);
 	ottery_rand_bytes (in, len);
 
-	impl = generic ? &base64_list[0] : base64_opt;
+	out = rspamd_encode_base64_fold (in, len, str_len, &outlen,
+			RSPAMD_TASK_NEWLINES_CRLF);
 
-	out = rspamd_encode_base64 (in, len, 0, &outlen);
-	impl->decode (out, outlen, tmp, &len);
+	if (generic) {
+		base64_list[0].decode (out, outlen, tmp, &len);
+	}
+	else {
+		rspamd_cryptobox_base64_decode (out, outlen, tmp, &len);
+	}
 
 	g_assert (memcmp (in, tmp, len) == 0);
 
 	for (cycles = 0; cycles < niters; cycles ++) {
-		impl->decode (out, outlen, in, &len);
+		t1 = rspamd_get_ticks (TRUE);
+		if (generic) {
+			base64_list[0].decode (out, outlen, tmp, &len);
+		}
+		else {
+			rspamd_cryptobox_base64_decode (out, outlen, tmp, &len);
+		}
+		t2 = rspamd_get_ticks (TRUE);
+		total += t2 - t1;
 	}
 
 	g_free (in);
 	g_free (tmp);
 	g_free (out);
 
-	return cycles;
+	return total;
 }
 
 

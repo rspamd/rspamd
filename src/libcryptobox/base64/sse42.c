@@ -118,6 +118,7 @@ static inline __m128i dec_reshuffle (__m128i in)
 			'A','Z', \
 			'a','z'); \
 		if (_mm_cmpistrc(range, str, _SIDD_UBYTE_OPS | _SIDD_CMP_RANGES | _SIDD_NEGATIVE_POLARITY)) { \
+			seen_error = true; \
 			break; \
 		} \
 		__m128i indices = _mm_subs_epu8(str, _mm_set1_epi8(46)); \
@@ -150,12 +151,15 @@ base64_decode_sse42 (const char *in, size_t inlen,
 	uint8_t q, carry;
 	size_t outl = 0;
 	size_t leftover = 0;
+	bool seen_error = false;
 
 repeat:
 	switch (leftover) {
 		for (;;) {
 		case 0:
-			INNER_LOOP_SSE42
+			if (G_LIKELY (!seen_error)) {
+				INNER_LOOP_SSE42
+			}
 
 			if (inlen-- == 0) {
 				ret = 1;
@@ -249,6 +253,7 @@ repeat:
 		}
 
 		if (inlen > 0) {
+			seen_error = false;
 			goto repeat;
 		}
 	}
