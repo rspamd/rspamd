@@ -27,7 +27,7 @@
 #include "chacha.h"
 #include "platform_config.h"
 
-extern unsigned long cpu_config;
+extern unsigned cpu_config;
 
 typedef struct chacha_impl_t {
 	unsigned long cpu_flags;

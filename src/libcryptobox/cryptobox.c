@@ -57,7 +57,7 @@
 
 #include <sodium.h>
 
-unsigned long cpu_config = 0;
+unsigned cpu_config = 0;
 
 static gboolean cryptobox_loaded = FALSE;
 

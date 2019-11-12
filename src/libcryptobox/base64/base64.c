@@ -22,7 +22,7 @@
 #include "util.h"
 #include "contrib/libottery/ottery.h"
 
-extern unsigned long cpu_config;
+extern unsigned cpu_config;
 const uint8_t
 base64_table_dec[256] =
 {
@@ -47,20 +47,21 @@ base64_table_dec[256] =
 static const char base64_alphabet[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/";
 
 typedef struct base64_impl {
-	unsigned long cpu_flags;
+	unsigned short enabled;
+	unsigned short min_len;
+	unsigned int cpu_flags;
 	const char *desc;
-
 	int (*decode) (const char *in, size_t inlen,
 			unsigned char *out, size_t *outlen);
 } base64_impl_t;
 
 #define BASE64_DECLARE(ext) \
     int base64_decode_##ext(const char *in, size_t inlen, unsigned char *out, size_t *outlen);
-#define BASE64_IMPL(cpuflags, desc, ext) \
-    {(cpuflags), desc, base64_decode_##ext}
+#define BASE64_IMPL(cpuflags, min_len, desc, ext) \
+    {0, (min_len), (cpuflags), desc, base64_decode_##ext}
 
 BASE64_DECLARE(ref);
-#define BASE64_REF BASE64_IMPL(0, "ref", ref)
+#define BASE64_REF BASE64_IMPL(0, 0, "ref", ref)
 
 #ifdef RSPAMD_HAS_TARGET_ATTR
 # if defined(HAVE_SSE42)
@@ -68,7 +69,7 @@ int base64_decode_sse42 (const char *in, size_t inlen,
 		unsigned char *out, size_t *outlen) __attribute__((__target__("sse4.2")));
 
 BASE64_DECLARE(sse42);
-#  define BASE64_SSE42 BASE64_IMPL(CPUID_SSE42, "sse42", sse42)
+#  define BASE64_SSE42 BASE64_IMPL(CPUID_SSE42, 24, "sse42", sse42)
 # endif
 #endif
 
@@ -78,59 +79,58 @@ int base64_decode_avx2 (const char *in, size_t inlen,
 		unsigned char *out, size_t *outlen) __attribute__((__target__("avx2")));
 
 BASE64_DECLARE(avx2);
-#  define BASE64_AVX2 BASE64_IMPL(CPUID_AVX2, "avx2", avx2)
+#  define BASE64_AVX2 BASE64_IMPL(CPUID_AVX2, 128, "avx2", avx2)
 # endif
 #endif
 
-static const base64_impl_t base64_list[] = {
+static base64_impl_t base64_list[] = {
 		BASE64_REF,
-#ifdef BASE64_AVX2
-		BASE64_AVX2,
-#endif
 #ifdef BASE64_SSE42
 		BASE64_SSE42,
 #endif
+#ifdef BASE64_AVX2
+		BASE64_AVX2,
+#endif
 };
 
-static const base64_impl_t *base64_opt = &base64_list[0];
 static const base64_impl_t *base64_ref = &base64_list[0];
 
 const char *
 base64_load (void)
 {
 	guint i;
+	const base64_impl_t *opt_impl = base64_ref;
+
+	/* Enable reference */
+	base64_list[0].enabled = true;
 
 	if (cpu_config != 0) {
-		for (i = 0; i < G_N_ELEMENTS (base64_list); i++) {
+		for (i = 1; i < G_N_ELEMENTS (base64_list); i++) {
 			if (base64_list[i].cpu_flags & cpu_config) {
-				base64_opt = &base64_list[i];
-				break;
+				base64_list[i].enabled = true;
+				opt_impl = &base64_list[i];
 			}
 		}
 	}
 
 
-	return base64_opt->desc;
+	return opt_impl->desc;
 }
 
 gboolean
 rspamd_cryptobox_base64_decode (const gchar *in, gsize inlen,
 		guchar *out, gsize *outlen)
 {
-	if (inlen > 128) {
-		/*
-		 * For SIMD base64 decoding we need really large inputs with no
-		 * garbadge such as newlines
-		 * Otherwise, naive version is faster
-		 */
-		return base64_opt->decode (in, inlen, out, outlen);
-	}
-	else {
-		/* Small input, use reference version */
-		return base64_ref->decode (in, inlen, out, outlen);
+	const base64_impl_t *opt_impl = base64_ref;
+
+	for (gint i = G_N_ELEMENTS (base64_list) - 1; i > 0; i --) {
+		if (base64_list[i].enabled && base64_list[i].min_len <= inlen) {
+			opt_impl = &base64_list[i];
+			break;
+		}
 	}
 
-	g_assert_not_reached ();
+	return opt_impl->decode (in, inlen, out, outlen);
 }
 
 double
