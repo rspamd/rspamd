@@ -2255,7 +2255,7 @@ fuzzy_check_timer_callback (gint fd, short what, void *arg)
 				rspamd_inet_address_to_string_pretty (
 						rspamd_upstream_addr_cur (session->server)),
 				session->retransmits);
-		rspamd_upstream_fail (session->server, TRUE);
+		rspamd_upstream_fail (session->server, TRUE, "timeout");
 
 		if (session->item) {
 			rspamd_symcache_item_async_dec_check (session->task, session->item, M);
@@ -2337,7 +2337,7 @@ fuzzy_check_io_callback (gint fd, short what, void *arg)
 			session->state == 1 ? "read" : "write",
 			errno,
 			strerror (errno));
-		rspamd_upstream_fail (session->server, TRUE);
+		rspamd_upstream_fail (session->server, TRUE, strerror (errno));
 
 		if (session->item) {
 			rspamd_symcache_item_async_dec_check (session->task, session->item, M);
@@ -2378,7 +2378,7 @@ fuzzy_controller_timer_callback (gint fd, short what, void *arg)
 	task = session->task;
 
 	if (session->retransmits >= session->rule->ctx->retransmits) {
-		rspamd_upstream_fail (session->server, TRUE);
+		rspamd_upstream_fail (session->server, TRUE, "timeout");
 		msg_err_task_check ("got IO timeout with server %s(%s), "
 							"after %d retransmits",
 				rspamd_upstream_name (session->server),
@@ -2594,7 +2594,7 @@ fuzzy_controller_io_callback (gint fd, short what, void *arg)
 				rspamd_inet_address_to_string_pretty (
 						rspamd_upstream_addr_cur (session->server)),
 				errno, strerror (errno));
-		rspamd_upstream_fail (session->server, FALSE);
+		rspamd_upstream_fail (session->server, FALSE, strerror (errno));
 	}
 
 	/*
@@ -2798,7 +2798,7 @@ register_fuzzy_client_call (struct rspamd_task *task,
 						rspamd_inet_address_to_string_pretty (addr),
 						errno,
 						strerror (errno));
-				rspamd_upstream_fail (selected, TRUE);
+				rspamd_upstream_fail (selected, TRUE, strerror (errno));
 				g_ptr_array_free (commands, TRUE);
 			} else {
 				/* Create session for a socket */
@@ -2924,7 +2924,7 @@ register_fuzzy_controller_call (struct rspamd_http_connection_entry *entry,
 					rspamd_inet_address_to_string_pretty (addr),
 					rule->name,
 					strerror (errno));
-			rspamd_upstream_fail (selected, TRUE);
+			rspamd_upstream_fail (selected, TRUE, strerror (errno));
 		}
 		else {
 			s =
@@ -3287,7 +3287,7 @@ fuzzy_check_send_lua_learn (struct fuzzy_rule *rule,
 
 			if ((sock = rspamd_inet_address_connect (addr,
 					SOCK_DGRAM, TRUE)) == -1) {
-				rspamd_upstream_fail (selected, TRUE);
+				rspamd_upstream_fail (selected, TRUE, strerror (errno));
 			} else {
 				s =
 						rspamd_mempool_alloc0 (task->task_pool,

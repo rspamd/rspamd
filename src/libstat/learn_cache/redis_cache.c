@@ -114,7 +114,7 @@ rspamd_redis_cache_timeout (EV_P_ ev_timer *w, int revents)
 
 	msg_err_task ("connection to redis server %s timed out",
 			rspamd_upstream_name (rt->selected));
-	rspamd_upstream_fail (rt->selected, FALSE);
+	rspamd_upstream_fail (rt->selected, FALSE, "timeout");
 
 	if (rt->has_event) {
 		rspamd_session_remove_event (task->s, rspamd_redis_cache_fin, rt);
@@ -166,7 +166,7 @@ rspamd_stat_cache_redis_get (redisAsyncContext *c, gpointer r, gpointer priv)
 		rspamd_upstream_ok (rt->selected);
 	}
 	else {
-		rspamd_upstream_fail (rt->selected, FALSE);
+		rspamd_upstream_fail (rt->selected, FALSE, c->errstr);
 	}
 
 	if (rt->has_event) {
@@ -188,7 +188,7 @@ rspamd_stat_cache_redis_set (redisAsyncContext *c, gpointer r, gpointer priv)
 		rspamd_upstream_ok (rt->selected);
 	}
 	else {
-		rspamd_upstream_fail (rt->selected, FALSE);
+		rspamd_upstream_fail (rt->selected, FALSE, c->errstr);
 	}
 
 	if (rt->has_event) {

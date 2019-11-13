@@ -129,14 +129,22 @@ lua_upstream_fail (lua_State *L)
 	LUA_TRACE_POINT;
 	struct upstream *up = lua_check_upstream (L);
 	gboolean fail_addr = FALSE;
+	const gchar *reason = "unknown";
 
 	if (up) {
 
 		if (lua_isboolean (L, 2)) {
 			fail_addr = lua_toboolean (L, 2);
+
+			if (lua_isstring (L, 3)) {
+				reason = lua_tostring (L, 3);
+			}
+		}
+		else if (lua_isstring (L, 2)) {
+			reason = lua_tostring (L, 2);
 		}
 
-		rspamd_upstream_fail (up, fail_addr);
+		rspamd_upstream_fail (up, fail_addr, reason);
 	}
 
 	return 0;

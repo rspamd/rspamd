@@ -1197,7 +1197,7 @@ rspamd_http_connection_new_client (struct rspamd_http_context *ctx,
 				msg_info ("cannot connect to http proxy %s: %s",
 						rspamd_inet_address_to_string_pretty (proxy_addr),
 						strerror (errno));
-				rspamd_upstream_fail (up, TRUE);
+				rspamd_upstream_fail (up, TRUE, strerror (errno));
 
 				return NULL;
 			}

@@ -1293,7 +1293,7 @@ proxy_backend_mirror_error_handler (struct rspamd_http_connection *conn, GError 
 	msg_info_session ("abnormally closing connection from backend: %s:%s, "
 			"error: %e",
 			bk_conn->name,
-			rspamd_inet_address_to_string (
+			rspamd_inet_address_to_string_pretty (
 					rspamd_upstream_addr_cur (bk_conn->up)),
 			err);
 
@@ -1301,7 +1301,7 @@ proxy_backend_mirror_error_handler (struct rspamd_http_connection *conn, GError 
 		bk_conn->err = rspamd_mempool_strdup (session->pool, err->message);
 	}
 
-	rspamd_upstream_fail (bk_conn->up, FALSE);
+	rspamd_upstream_fail (bk_conn->up, FALSE, err ? err->message : "unknown");
 
 	proxy_backend_close_connection (bk_conn);
 	REF_RELEASE (bk_conn->s);
@@ -1378,7 +1378,7 @@ proxy_open_mirror_connections (struct rspamd_proxy_session *session)
 
 		if (bk_conn->backend_sock == -1) {
 			msg_err_session ("cannot connect upstream for %s", m->name);
-			rspamd_upstream_fail (bk_conn->up, TRUE);
+			rspamd_upstream_fail (bk_conn->up, TRUE, strerror (errno));
 			continue;
 		}
 
@@ -1519,12 +1519,12 @@ proxy_backend_master_error_handler (struct rspamd_http_connection *conn, GError 
 	session = bk_conn->s;
 	session->retries ++;
 	msg_info_session ("abnormally closing connection from backend: %s, error: %e,"
-			" retries left: %d",
-		rspamd_inet_address_to_string (
-				rspamd_upstream_addr_cur (session->master_conn->up)),
-		err,
-		session->ctx->max_retries - session->retries);
-	rspamd_upstream_fail (bk_conn->up, FALSE);
+					  " retries left: %d",
+			rspamd_inet_address_to_string_pretty (
+					rspamd_upstream_addr_cur (session->master_conn->up)),
+			err,
+			session->ctx->max_retries - session->retries);
+	rspamd_upstream_fail (bk_conn->up, FALSE, err ? err->message : "unknown");
 	proxy_backend_close_connection (session->master_conn);
 
 	if (session->ctx->max_retries > 0 &&
@@ -1889,10 +1889,11 @@ retry:
 		if (session->master_conn->backend_sock == -1) {
 			msg_err_session ("cannot connect upstream: %s(%s)",
 					host ? hostbuf : "default",
-							rspamd_inet_address_to_string (
+							rspamd_inet_address_to_string_pretty (
 									rspamd_upstream_addr_cur (
 											session->master_conn->up)));
-			rspamd_upstream_fail (session->master_conn->up, TRUE);
+			rspamd_upstream_fail (session->master_conn->up, TRUE,
+					strerror (errno));
 			session->retries ++;
 			goto retry;
 		}

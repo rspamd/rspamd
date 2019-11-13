@@ -334,7 +334,7 @@ rdns_process_timer (void *arg)
 
 	if (req->resolver->ups && req->io->srv->ups_elt) {
 		req->resolver->ups->fail (req->io->srv->ups_elt,
-				req->resolver->ups->data);
+				req->resolver->ups->data, "timeout waiting reply");
 	}
 	else {
 		UPSTREAM_FAIL (req->io->srv, time (NULL));
@@ -427,7 +427,7 @@ rdns_process_timer (void *arg)
 	else if (r == -1) {
 		if (req->resolver->ups && req->io->srv->ups_elt) {
 			req->resolver->ups->fail (req->io->srv->ups_elt,
-					req->resolver->ups->data);
+					req->resolver->ups->data, "cannot send retransmit after timeout");
 		}
 		else {
 			UPSTREAM_FAIL (req->io->srv, time (NULL));
@@ -537,7 +537,7 @@ rdns_process_retransmit (int fd, void *arg)
 	else if (r == -1) {
 		if (req->resolver->ups && req->io->srv->ups_elt) {
 			req->resolver->ups->fail (req->io->srv->ups_elt,
-					req->resolver->ups->data);
+					req->resolver->ups->data, "retransmit send failed");
 		}
 		else {
 			UPSTREAM_FAIL (req->io->srv, time (NULL));
@@ -790,7 +790,8 @@ rdns_make_request_full (
 			REF_RELEASE (req);
 
 			if (resolver->ups && serv->ups_elt) {
-				resolver->ups->fail (serv->ups_elt, resolver->ups->data);
+				resolver->ups->fail (serv->ups_elt, resolver->ups->data,
+						"send IO error");
 			}
 			else {
 				UPSTREAM_FAIL (serv, time (NULL));

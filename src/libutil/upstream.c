@@ -735,12 +735,18 @@ rspamd_upstream_set_inactive (struct upstream_list *ls, struct upstream *upstrea
 }
 
 void
-rspamd_upstream_fail (struct upstream *upstream, gboolean addr_failure)
+rspamd_upstream_fail (struct upstream *upstream,
+					  gboolean addr_failure,
+					  const gchar *reason)
 {
 	gdouble error_rate = 0, max_error_rate = 0;
 	gdouble sec_last, sec_cur;
 	struct upstream_addr_elt *addr_elt;
 	struct upstream_list_watcher *w;
+
+	msg_debug_upstream ("upstream %s failed; reason: %s",
+			upstream->name,
+			reason);
 
 	if (upstream->ctx && upstream->active_idx != -1) {
 		sec_cur = rspamd_get_ticks (FALSE);
@@ -780,27 +786,38 @@ rspamd_upstream_fail (struct upstream *upstream, gboolean addr_failure)
 				if (error_rate > max_error_rate) {
 					/* Remove upstream from the active list */
 					if (upstream->ls->ups->len > 1) {
-						msg_debug_upstream ("mark upstream %s inactive: %.2f "
+						msg_debug_upstream ("mark upstream %s inactive; "
+											"reason: %s; %.2f "
 											"error rate (%d errors), "
 											"%.2f max error rate, "
 											"%.1f first error time, "
 											"%.1f current ts, "
 											"%d upstreams left",
-								upstream->name, error_rate, upstream->errors,
-								max_error_rate, sec_last, sec_cur,
+								upstream->name,
+								reason,
+								error_rate,
+								upstream->errors,
+								max_error_rate,
+								sec_last,
+								sec_cur,
 								upstream->ls->alive->len - 1);
 						rspamd_upstream_set_inactive (upstream->ls, upstream);
 						upstream->errors = 0;
 					}
 					else {
 						msg_debug_upstream ("cannot mark last alive upstream %s "
-											"inactive: %.2f "
+											"inactive; reason: %s; %.2f "
 											"error rate (%d errors), "
 											"%.2f max error rate, "
 											"%.1f first error time, "
 											"%.1f current ts",
-								upstream->name, error_rate, upstream->errors,
-								max_error_rate, sec_last, sec_cur);
+								upstream->name,
+								reason,
+								error_rate,
+								upstream->errors,
+								max_error_rate,
+								sec_last,
+								sec_cur);
 						/* Just re-resolve addresses */
 						if (sec_cur - sec_last > upstream->ls->limits->revive_time) {
 							upstream->errors = 0;
@@ -819,7 +836,8 @@ rspamd_upstream_fail (struct upstream *upstream, gboolean addr_failure)
 		if (addr_failure) {
 			/* Also increase count of errors for this specific address */
 			if (upstream->addrs.addr) {
-				addr_elt = g_ptr_array_index (upstream->addrs.addr, upstream->addrs.cur);
+				addr_elt = g_ptr_array_index (upstream->addrs.addr,
+						upstream->addrs.cur);
 				addr_elt->errors++;
 			}
 		}

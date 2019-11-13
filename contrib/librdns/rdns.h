@@ -169,7 +169,7 @@ struct rdns_upstream_context {
 												   void *ups_data);
 	unsigned int (*count)(void *ups_data);
 	void (*ok)(struct rdns_upstream_elt *elt, void *ups_data);
-	void (*fail)(struct rdns_upstream_elt *elt, void *ups_data);
+	void (*fail)(struct rdns_upstream_elt *elt, void *ups_data, const char *reason);
 };
 
 /**

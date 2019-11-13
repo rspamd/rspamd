@@ -60,7 +60,7 @@ void rspamd_upstreams_library_config (struct rspamd_config *cfg,
 /**
  * Add an error to an upstream
  */
-void rspamd_upstream_fail (struct upstream *upstream, gboolean addr_failure);
+void rspamd_upstream_fail (struct upstream *upstream, gboolean addr_failure, const gchar *reason);
 
 /**
  * Increase upstream successes count
