@@ -1440,8 +1440,18 @@ rspamd_parse_host_port_priority (const gchar *str,
 					portbuf, 0, pool);
 		}
 		else {
+			const gchar *second_semicolon = strchr (p + 1, ':');
+
 			name = str;
-			namelen = p - str;
+
+			if (second_semicolon) {
+				/* name + port part excluding priority */
+				namelen = second_semicolon - str;
+			}
+			else {
+				/* Full ip/name + port */
+				namelen = strlen (str);
+			}
 
 			if (!rspamd_check_port_priority (p, default_port, priority, portbuf,
 					sizeof (portbuf), pool)) {
