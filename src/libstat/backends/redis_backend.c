@@ -1425,29 +1425,13 @@ rspamd_redis_parse_classifier_opts (struct redis_stat_ctx *backend,
 
 	elt = ucl_object_lookup (obj, "prefix");
 	if (elt == NULL || ucl_object_type (elt) != UCL_STRING) {
-		gchar *redis_object;
-
 		/* Default non-users statistics */
 		if (backend->enable_users || backend->cbref_user != -1) {
-			redis_object = REDIS_DEFAULT_USERS_OBJECT;
+			backend->redis_object = REDIS_DEFAULT_USERS_OBJECT;
 		}
 		else {
-			redis_object = REDIS_DEFAULT_OBJECT;
+			backend->redis_object = REDIS_DEFAULT_OBJECT;
 		}
-
-		/* Prepend classifier name if defined */
-		elt = ucl_object_lookup (obj, "name");
-		if (elt != NULL && ucl_object_type (elt) == UCL_STRING) {
-			const gchar *cl_name = ucl_object_tostring (elt);
-			gchar *temp;
-			temp = g_malloc (strlen (cl_name) + strlen (redis_object) + 2);
-			strcpy (temp, cl_name);
-			strcat (temp, "_");
-			strcat (temp, redis_object);
-			redis_object = temp;
-		}
-
-		backend->redis_object = redis_object;
 	}
 	else {
 		/* XXX: sanity check */
