@@ -1060,6 +1060,7 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 	case RSPAMD_MILTER_WANNA_DIE:
 		/* We are here after processing everything, so release session */
 		REF_RELEASE (session);
+		return FALSE;
 		break;
 	}
 
