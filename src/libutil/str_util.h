@@ -527,7 +527,7 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
  * @param dstelen
  * @return
  */
-gchar *rspamd_str_make_utf_valid (const guchar *src, gsize slen, gsize *dstlen);
+gchar *rspamd_str_make_utf_valid (const guchar *src, gsize slen, gsize *dstlen, rspamd_mempool_t *pool);
 
 /**
  * Strips characters in `strip_chars` from start and end of the GString

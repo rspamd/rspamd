@@ -2935,7 +2935,7 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 
 	if (flags & RSPAMD_REGEXP_ESCAPE_UTF) {
 		if (rspamd_fast_utf8_validate (pattern, slen) != 0) {
-			tmp_utf = rspamd_str_make_utf_valid (pattern, slen, NULL);
+			tmp_utf = rspamd_str_make_utf_valid (pattern, slen, NULL, NULL);
 		}
 	}
 
@@ -3052,61 +3052,110 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 
 
 gchar *
-rspamd_str_make_utf_valid (const guchar *src, gsize slen, gsize *dstlen)
+rspamd_str_make_utf_valid (const guchar *src, gsize slen,
+		gsize *dstlen,
+		rspamd_mempool_t *pool)
 {
-	GString *dst;
-	const gchar *last;
-	gchar *dchar;
-	gsize valid, prev;
 	UChar32 uc;
-	gint32 i;
+	goffset err_offset;
+	const guchar *p;
+	gchar *dst, *d;
+	gsize remain = slen, dlen = 0;
 
 	if (src == NULL) {
 		return NULL;
 	}
 
 	if (slen == 0) {
-		slen = strlen (src);
+		return NULL;
 	}
 
-	dst = g_string_sized_new (slen);
-	i = 0;
-	last = src;
-	valid = 0;
-	prev = 0;
+	p = src;
+	dlen = slen;
 
-	while (i < slen) {
-		U8_NEXT (src, i, slen, uc);
+	/* Check space required */
+	while (remain > 0 && (err_offset = rspamd_fast_utf8_validate (p, remain) > 0)) {
+		gint i = 0;
 
-		if (uc <= 0) {
-			if (valid > 0) {
-				g_string_append_len (dst, last, valid);
+		p += err_offset;
+		remain -= err_offset;
+		dlen += err_offset;
+
+		/* Each invalid character of input requires 3 bytes of output */
+		while (i < remain) {
+			gint old_i = i;
+			U8_NEXT (p, i, remain, uc);
+
+			if (uc < 0) {
+				dlen += 3;
 			}
-			/* 0xFFFD in UTF8 */
-			g_string_append_len (dst, "\357\277\275", 3);
-			valid = 0;
-			last = &src[i];
+			else {
+				p += old_i;
+				remain -= old_i;
+				break;
+			}
 		}
-		else {
-			valid += i - prev;
-		}
-
-		prev = i;
 	}
 
-	if (valid > 0) {
-		g_string_append_len (dst, last, valid);
+	if (pool) {
+		dst = rspamd_mempool_alloc (pool, dlen + 1);
+	}
+	else {
+		dst = g_malloc (dlen + 1);
 	}
 
-	dchar = dst->str;
+	p = src;
+	d = dst;
+	remain = slen;
+
+	while (remain > 0 && (err_offset = rspamd_fast_utf8_validate (p, remain) > 0)) {
+		/* Copy valid */
+		memcpy (d, p, err_offset);
+		d += err_offset;
+
+		/* Append 0xFFFD for each bad character */
+		gint i = 0;
+
+		p += err_offset;
+		remain -= err_offset;
+
+		while (i < remain) {
+			gint old_i = i;
+			U8_NEXT (p, i, remain, uc);
+
+			if (uc < 0) {
+				*d++ = '\357';
+				*d++ = '\277';
+				*d++ = '\275';
+			}
+			else {
+				/* Adjust p and remaining stuff and go to the outer cycle */
+				p += old_i;
+				remain -= old_i;
+				break;
+			}
+		}
+		/*
+		 * Now p is the first valid utf8 character and remain is the rest of the string
+		 * so we can continue our loop
+		 */
+	}
+
+	if (err_offset == 0 && remain > 0) {
+		/* Last piece */
+		memcpy (d, p, remain);
+		d += remain;
+	}
+
+	/* Last '\0' */
+	g_assert (dlen > d - dst);
+	*d = '\0';
 
 	if (dstlen) {
-		*dstlen = dst->len;
+		*dstlen = d - dst;
 	}
 
-	g_string_free (dst, FALSE);
-
-	return dchar;
+	return dst;
 }
 
 gsize
