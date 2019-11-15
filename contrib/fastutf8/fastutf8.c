@@ -154,5 +154,7 @@ rspamd_fast_utf8_library_init (unsigned flags)
 off_t
 rspamd_fast_utf8_validate (const unsigned char *data, size_t len)
 {
-	return validate_func (data, len);
+	return len >= 64 ?
+			validate_func (data, len) :
+			rspamd_fast_utf8_validate_ref (data, len);
 }
