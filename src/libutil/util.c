@@ -86,6 +86,7 @@
 #include "cryptobox.h"
 #include "zlib.h"
 #include "contrib/uthash/utlist.h"
+#include "contrib/fastutf8/fastutf8.h"
 
 /* Check log messages intensity once per minute */
 #define CHECK_TIME 60
@@ -2333,6 +2334,18 @@ rspamd_init_libs (void)
 		RAND_set_rand_engine (NULL);
 #endif
 	}
+
+	/* Configure utf8 library */
+	guint utf8_flags = 0;
+
+	if ((ctx->crypto_ctx->cpu_config & CPUID_SSE41)) {
+		utf8_flags |= RSPAMD_FAST_UTF8_FLAG_SSE41;
+	}
+	if ((ctx->crypto_ctx->cpu_config & CPUID_AVX2)) {
+		utf8_flags |= RSPAMD_FAST_UTF8_FLAG_AVX2;
+	}
+
+	rspamd_fast_utf8_library_init (utf8_flags);
 
 	g_assert (ottery_init (ottery_cfg) == 0);
 
