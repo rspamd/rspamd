@@ -22,6 +22,7 @@
 #include "libserver/task.h"
 #include "mime_encoding.h"
 #include "message.h"
+#include "contrib/fastutf8/fastutf8.h"
 #include <unicode/ucnv.h>
 #include <unicode/ucsdet.h>
 #if U_ICU_VERSION_MAJOR_NUM >= 44
@@ -468,36 +469,39 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 void
 rspamd_mime_charset_utf_enforce (gchar *in, gsize len)
 {
-	const gchar *end, *p;
-	gsize remain = len;
+	gchar *p, *end;
+	goffset err_offset;
+	UChar32 uc = 0;
 
 	/* Now we validate input and replace bad characters with '?' symbol */
 	p = in;
+	end = in + len;
 
-	while (remain > 0 && !g_utf8_validate (p, remain, &end)) {
-		gchar *valid;
+	while (p < end && len > 0 && (err_offset = rspamd_fast_utf8_validate (p, len) > 0)) {
+		goffset cur_offset = err_offset;
 
-		if (end >= in + len) {
-			if (p < in + len) {
-				memset ((gchar *)p, '?', (in + len) - p);
+		while (cur_offset < len) {
+			goffset tmp = cur_offset;
+
+			U8_NEXT (in, cur_offset, len, uc);
+
+			if (uc > 0) {
+				/* Fill string between err_offset and tmp with `?` character */
+				memset (in + err_offset, '?',
+					tmp - err_offset);
+				break;
 			}
+		}
+
+		if (uc < 0) {
+			/* Fill till the end */
+			memset (p + err_offset, '?',
+					len - err_offset);
 			break;
 		}
 
-		valid = g_utf8_find_next_char (end, in + len);
-
-		if (!valid) {
-			valid = in + len;
-		}
-
-		if (valid > end) {
-			memset ((gchar *)end, '?', valid - end);
-			p = valid;
-			remain = (in + len) - p;
-		}
-		else {
-			break;
-		}
+		p = in + cur_offset;
+		len = end - p;
 	}
 }
 

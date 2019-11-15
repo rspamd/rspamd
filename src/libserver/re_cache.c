@@ -41,6 +41,8 @@
 #include <pcre2.h>
 #endif
 
+#include "contrib/fastutf8/fastutf8.h"
+
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
 #endif
@@ -988,7 +990,7 @@ rspamd_re_cache_process_headers_list (struct rspamd_task *task,
 			in = (const guchar *)cur->value;
 			lenvec[i] = strlen (cur->value);
 
-			if (!g_utf8_validate (in, lenvec[i], NULL)) {
+			if (rspamd_fast_utf8_validate (in, lenvec[i]) != 0) {
 				raw = TRUE;
 			}
 		}

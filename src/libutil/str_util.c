@@ -27,6 +27,8 @@
 #endif
 #include <math.h>
 
+#include "contrib/fastutf8/fastutf8.h"
+
 const guchar lc_map[256] = {
 		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
 		0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
@@ -2932,7 +2934,7 @@ rspamd_str_regexp_escape (const gchar *pattern, gsize slen,
 	}
 
 	if (flags & RSPAMD_REGEXP_ESCAPE_UTF) {
-		if (!g_utf8_validate (pattern, slen, NULL)) {
+		if (rspamd_fast_utf8_validate (pattern, slen) != 0) {
 			tmp_utf = rspamd_str_make_utf_valid (pattern, slen, NULL);
 		}
 	}

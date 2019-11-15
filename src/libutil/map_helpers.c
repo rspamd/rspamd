@@ -20,6 +20,7 @@
 #include "radix.h"
 #include "rspamd.h"
 #include "cryptobox.h"
+#include "contrib/fastutf8/fastutf8.h"
 
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
@@ -1189,7 +1190,7 @@ rspamd_match_regexp_map_single (struct rspamd_regexp_map_helper *map,
 	}
 
 	if (map->map_flags & RSPAMD_REGEXP_MAP_FLAG_UTF) {
-		if (g_utf8_validate (in, len, NULL)) {
+		if (rspamd_fast_utf8_validate (in, len) == 0) {
 			validated = TRUE;
 		}
 	}
@@ -1280,7 +1281,7 @@ rspamd_match_regexp_map_all (struct rspamd_regexp_map_helper *map,
 	g_assert (in != NULL);
 
 	if (map->map_flags & RSPAMD_REGEXP_MAP_FLAG_UTF) {
-		if (g_utf8_validate (in, len, NULL)) {
+		if (rspamd_fast_utf8_validate (in, len) == 0) {
 			validated = TRUE;
 		}
 	}

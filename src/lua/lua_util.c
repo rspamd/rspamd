@@ -34,6 +34,7 @@
 
 #include "unicode/uspoof.h"
 #include "unicode/uscript.h"
+#include "contrib/fastutf8/fastutf8.h"
 
 /***
  * @module rspamd_util
@@ -2855,10 +2856,33 @@ lua_util_is_valid_utf8 (lua_State *L)
 	const gchar *str;
 	gsize len;
 
-	str = lua_tolstring (L, 1, &len);
+	if (lua_isstring (L, 1)) {
+		str = lua_tolstring (L, 1, &len);
+	}
+	else {
+		struct rspamd_lua_text *t = lua_check_text (L, 1);
+
+		if (t) {
+			str = t->start;
+			len = t->len;
+		}
+		else {
+			return luaL_error (L, "invalid arguments (text expected)");
+		}
+	}
 
 	if (str) {
-		lua_pushboolean (L, g_utf8_validate (str, len, NULL));
+		goffset error_offset = rspamd_fast_utf8_validate (str, len);
+
+		if (error_offset == 0) {
+			lua_pushboolean (L, true);
+		}
+		else {
+			lua_pushboolean (L, false);
+			lua_pushnumber (L, error_offset);
+
+			return 2;
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

@@ -26,6 +26,7 @@
 #include "unix-std.h"
 #include "protocol_internal.h"
 #include "libserver/mempool_vars_internal.h"
+#include "contrib/fastutf8/fastutf8.h"
 #include "task.h"
 #include <math.h>
 
@@ -922,16 +923,13 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 				return;
 			}
 
-			const gchar *end = NULL;
+			goffset err_offset;
 
-			if (g_utf8_validate (url->host, url->hostlen, &end)) {
+			if ((err_offset = rspamd_fast_utf8_validate (url->host, url->hostlen) == 0)) {
 				obj = ucl_object_fromlstring (url->host, url->hostlen);
 			}
-			else if (end - url->host > 0) {
-				obj = ucl_object_fromlstring (url->host, end - url->host);
-			}
 			else {
-				return;
+				obj = ucl_object_fromlstring (url->host, err_offset);
 			}
 		}
 		else {
