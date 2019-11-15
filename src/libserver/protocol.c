@@ -925,11 +925,11 @@ urls_protocol_cb (gpointer key, gpointer value, gpointer ud)
 
 			goffset err_offset;
 
-			if ((err_offset = rspamd_fast_utf8_validate (url->host, url->hostlen) == 0)) {
+			if ((err_offset = rspamd_fast_utf8_validate (url->host, url->hostlen)) == 0) {
 				obj = ucl_object_fromlstring (url->host, url->hostlen);
 			}
 			else {
-				obj = ucl_object_fromlstring (url->host, err_offset);
+				obj = ucl_object_fromlstring (url->host, err_offset - 1);
 			}
 		}
 		else {

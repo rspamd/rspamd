@@ -3071,30 +3071,31 @@ rspamd_str_make_utf_valid (const guchar *src, gsize slen,
 	}
 
 	p = src;
-	dlen = slen;
+	dlen = slen + 1; /* As we add '\0' */
 
 	/* Check space required */
-	while (remain > 0 && (err_offset = rspamd_fast_utf8_validate (p, remain) > 0)) {
+	while (remain > 0 && (err_offset = rspamd_fast_utf8_validate (p, remain)) > 0) {
 		gint i = 0;
 
+		err_offset --; /* As it returns it 1 indexed */
 		p += err_offset;
 		remain -= err_offset;
 		dlen += err_offset;
 
-		/* Each invalid character of input requires 3 bytes of output */
+		/* Each invalid character of input requires 3 bytes of output (+2 bytes) */
 		while (i < remain) {
-			gint old_i = i;
 			U8_NEXT (p, i, remain, uc);
 
 			if (uc < 0) {
-				dlen += 3;
+				dlen += 2;
 			}
 			else {
-				p += old_i;
-				remain -= old_i;
 				break;
 			}
 		}
+
+		p += i;
+		remain -= i;
 	}
 
 	if (pool) {
@@ -3108,8 +3109,9 @@ rspamd_str_make_utf_valid (const guchar *src, gsize slen,
 	d = dst;
 	remain = slen;
 
-	while (remain > 0 && (err_offset = rspamd_fast_utf8_validate (p, remain) > 0)) {
+	while (remain > 0 && (err_offset = rspamd_fast_utf8_validate (p, remain)) > 0) {
 		/* Copy valid */
+		err_offset --; /* As it returns it 1 indexed */
 		memcpy (d, p, err_offset);
 		d += err_offset;
 
@@ -3130,8 +3132,7 @@ rspamd_str_make_utf_valid (const guchar *src, gsize slen,
 			}
 			else {
 				/* Adjust p and remaining stuff and go to the outer cycle */
-				p += old_i;
-				remain -= old_i;
+				i = old_i;
 				break;
 			}
 		}
@@ -3139,6 +3140,8 @@ rspamd_str_make_utf_valid (const guchar *src, gsize slen,
 		 * Now p is the first valid utf8 character and remain is the rest of the string
 		 * so we can continue our loop
 		 */
+		p += i;
+		remain -= i;
 	}
 
 	if (err_offset == 0 && remain > 0) {

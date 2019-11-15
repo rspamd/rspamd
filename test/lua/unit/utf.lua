@@ -5,7 +5,7 @@ context("UTF8 check functions", function()
   ffi.cdef[[
     unsigned int rspamd_str_lc_utf8 (char *str, unsigned int size);
     unsigned int rspamd_str_lc (char *str, unsigned int size);
-    char * rspamd_str_make_utf_valid (const char *src, size_t slen, size_t *dstlen);
+    char * rspamd_str_make_utf_valid (const char *src, size_t slen, size_t *dstlen, void *);
   ]]
 
   local cases = {
@@ -58,7 +58,7 @@ context("UTF8 check functions", function()
       local buf = ffi.new("char[?]", #c[1] + 1)
       ffi.copy(buf, c[1])
 
-      local s = ffi.string(ffi.C.rspamd_str_make_utf_valid(buf, #c[1], NULL))
+      local s = ffi.string(ffi.C.rspamd_str_make_utf_valid(buf, #c[1], NULL, NULL))
       local function to_hex(s)
         return (s:gsub('.', function (c)
           return string.format('%02X', string.byte(c))
