@@ -12,7 +12,7 @@ context("Base64 encoding", function()
     void g_free(void *ptr);
     int memcmp(const void *a1, const void *a2, size_t len);
     double base64_test (bool generic, size_t niters, size_t len, size_t str_len);
-    double rspamd_get_ticks (void);
+    double rspamd_get_ticks (int);
   ]]
 
   ffi.C.rspamd_cryptobox_init()
