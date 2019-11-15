@@ -1294,6 +1294,7 @@ ADD_SUBDIRECTORY(contrib/lua-lpeg)
 ADD_SUBDIRECTORY(contrib/t1ha)
 ADD_SUBDIRECTORY(contrib/libev)
 ADD_SUBDIRECTORY(contrib/kann)
+ADD_SUBDIRECTORY(contrib/fastutf8)
 
 IF (NOT WITH_LUAJIT)
 	ADD_SUBDIRECTORY(contrib/lua-bit)

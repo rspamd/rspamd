@@ -1,0 +1,13 @@
+SET(UTFSRC ${CMAKE_CURRENT_SOURCE_DIR}/fastutf8.c)
+IF(HAVE_AVX2)
+    SET(UTFSRC ${UTFSRC} ${CMAKE_CURRENT_SOURCE_DIR}/avx2.c)
+    MESSAGE(STATUS "UTF8: AVX2 support is added")
+ENDIF()
+IF(HAVE_SSE41)
+    SET(UTFSRC ${UTFSRC} ${CMAKE_CURRENT_SOURCE_DIR}/sse41.c)
+    MESSAGE(STATUS "UTF8: SSE41 support is added")
+ENDIF()
+
+CONFIGURE_FILE(platform_config.h.in platform_config.h)
+
+ADD_LIBRARY(rspamd-fastutf8 STATIC ${UTFSRC})

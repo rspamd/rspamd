@@ -1,0 +1,12 @@
+#ifndef PLATFORM_H_CONFIG
+#define PLATFORM_H_CONFIG
+
+#define ARCH "${ARCH}"
+#define CMAKE_ARCH_${ARCH} 1
+
+#ifdef __x86_64__
+#cmakedefine HAVE_AVX2	1
+#cmakedefine HAVE_SSE41	1
+#endif
+
+#endif
