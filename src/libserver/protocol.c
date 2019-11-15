@@ -2027,7 +2027,21 @@ rspamd_protocol_write_reply (struct rspamd_task *task, ev_tstamp timeout)
 		reply = rspamd_fstring_sized_new (256);
 		rspamd_ucl_emit_fstring (top, UCL_EMIT_JSON_COMPACT, &reply);
 		ucl_object_unref (top);
-		rspamd_http_message_set_body_from_fstring_steal (msg, reply);
+
+		/* We also need to validate utf8 */
+		if (rspamd_fast_utf8_validate (reply->str, reply->len) != 0) {
+			gsize valid_len;
+			gchar *validated;
+
+			/* We copy reply several times here but it should be a rare case */
+			validated = rspamd_str_make_utf_valid (reply->str, reply->len,
+					&valid_len, task->task_pool);
+			rspamd_http_message_set_body (msg, validated, valid_len);
+			rspamd_fstring_free (reply);
+		}
+		else {
+			rspamd_http_message_set_body_from_fstring_steal (msg, reply);
+		}
 	}
 	else {
 		msg->status = rspamd_fstring_new_init ("OK", 2);
