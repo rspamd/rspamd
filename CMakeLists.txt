@@ -26,6 +26,7 @@ PROJECT(rspamd VERSION "${RSPAMD_VERSION}" LANGUAGES C ASM)
 # This is supported merely with cmake 3.1
 SET(CMAKE_C_STANDARD 11)
 SET(CMAKE_C_STANDARD_REQUIRED ON)
+LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
 
 SET(RSPAMD_MASTER_SITE_URL "https://rspamd.com")
 
@@ -64,10 +65,10 @@ OPTION(ENABLE_LUA_REPL     "Enables Lua repl (requires C++11 compiler) [default:
 OPTION(ENABLE_BLAS         "Enables libopenblas support [default: OFF]" OFF)
 
 
-INCLUDE(FindArch.cmake)
+INCLUDE(FindArch)
 TARGET_ARCHITECTURE(ARCH)
 
-INCLUDE(FindRagel.cmake)
+INCLUDE(FindRagel)
 IF(NOT RAGEL_FOUND)
 	MESSAGE(FATAL_ERROR "Ragel is required to build rspamd")
 ENDIF()
@@ -1357,7 +1358,7 @@ ENDIF(NOT DEBIAN_BUILD)
 find_program(_PVS_STUDIO "pvs-studio-analyzer")
 
 if(_PVS_STUDIO)
-	include(${CMAKE_SOURCE_DIR}/PVS-Studio.cmake)
+	include(PVS-Studio)
 	pvs_studio_add_target(TARGET ${PROJECT_NAME}.analyze
 			ANALYZE ${PROJECT_NAME} rspamd-server rspamadm rspamc
 			OUTPUT FORMAT errorfile
