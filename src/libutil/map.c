@@ -1581,8 +1581,9 @@ rspamd_map_read_http_cached_file (struct rspamd_map *map,
 
 	msg_info_map ("read cached data for %s from %s, %uz bytes; next check at: %s;"
 				  " last modified on: %s; etag: %V",
-			bk->uri, path,
-			st.st_size - header.data_off,
+			bk->uri,
+			path,
+			(size_t)(st.st_size - header.data_off),
 			ncheck_buf,
 			lm_buf,
 			htdata->etag);
