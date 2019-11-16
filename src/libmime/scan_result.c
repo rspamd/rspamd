@@ -21,6 +21,7 @@
 #include "lua/lua_common.h"
 #include "libserver/cfg_file_private.h"
 #include "libmime/scan_result_private.h"
+#include "contrib/fastutf8/fastutf8.h"
 #include <math.h>
 #include "contrib/uthash/utlist.h"
 
@@ -516,13 +517,22 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 {
 	struct rspamd_symbol_option *opt;
 	gboolean ret = FALSE;
-	gchar *opt_cpy;
+	gchar *opt_cpy = NULL;
+	gsize vlen;
 	khiter_t k;
 	gint r;
 
 	if (s && val) {
 		if (!s->options) {
 			s->options = kh_init (rspamd_options_hash);
+		}
+
+		vlen = strlen (val);
+
+		if (!rspamd_fast_utf8_validate (val, vlen)) {
+			opt_cpy = rspamd_str_make_utf_valid (val, vlen, &vlen,
+					task->task_pool);
+			val = opt_cpy;
 		}
 
 		if (!(s->sym && (s->sym->flags & RSPAMD_SYMBOL_FLAG_ONEPARAM)) &&
@@ -532,7 +542,11 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 
 			if (k == kh_end (s->options)) {
 				opt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*opt));
-				opt_cpy = rspamd_mempool_strdup (task->task_pool, val);
+
+				if (opt_cpy == NULL) {
+					opt_cpy = rspamd_mempool_strdup (task->task_pool, val);
+				}
+
 				k = kh_put (rspamd_options_hash, s->options, opt_cpy, &r);
 
 				kh_value (s->options, k) = opt;
@@ -544,7 +558,11 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 		}
 		else {
 			opt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*opt));
-			opt_cpy = rspamd_mempool_strdup (task->task_pool, val);
+
+			if (opt_cpy == NULL) {
+				opt_cpy = rspamd_mempool_strdup (task->task_pool, val);
+			}
+
 			k = kh_put (rspamd_options_hash, s->options, opt_cpy, &r);
 
 			kh_value (s->options, k) = opt;
