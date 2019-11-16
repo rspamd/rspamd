@@ -65,8 +65,11 @@ local function check_quantity_received (task)
       end
       task:insert_result(symbol_rdns, 1)
     else
-      rspamd_logger.infox(task, 'SMTP resolver failed to resolve: %1 is %2',
+      rspamd_logger.infox(task, 'source hostname has not been passed to Rspamd from MTA, ' ..
+          ' but we could resolve source IP address PTR %s as "%s"',
         to_resolve, results[1])
+      task:set_hostname(results[1])
+
       if good_hosts then
         for _,gh in ipairs(good_hosts) do
           if string.find(results[1], gh) then
