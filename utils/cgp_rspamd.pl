@@ -137,7 +137,7 @@ sub rspamd_scan {
                         }
                     }
                     elsif ( $action eq 'soft reject' ) {
-                        print "$tag REJECT Try again later\n";
+                        print "$tag REJECTED Try again later\n";
                         return;
                     }
 
