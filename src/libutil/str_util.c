@@ -3067,7 +3067,11 @@ rspamd_str_make_utf_valid (const guchar *src, gsize slen,
 	}
 
 	if (slen == 0) {
-		return NULL;
+		if (dstlen) {
+			*dstlen = 0;
+		}
+
+		return pool ? rspamd_mempool_strdup (pool, "") : g_strdup ("");
 	}
 
 	p = src;
