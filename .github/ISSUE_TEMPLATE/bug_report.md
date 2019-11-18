@@ -19,6 +19,7 @@ Do you want to ask a question? Are you looking for support? Here are the places 
     * Read about bug reporting in general: https://rspamd.com/doc/faq.html#how-to-report-bugs-found-in-rspamd
     * Enabled relevant debugging logs: https://rspamd.com/doc/faq.html#how-to-debug-some-module-in-rspamd 
     * Checked the FAQs about Core files in case of fatal crash: https://rspamd.com/doc/faq.html#how-to-figure-out-why-rspamd-process-crashed
+    * Tried ASAN package and obtained the ASAN report (if possible): https://rspamd.com/doc/faq.html#asan-builds 
     * Checked that your issue isn't already filed: https://github.com/issues?utf8=%E2%9C%93&q=is%3Aissue+user%3Arspamd
     * Checked that there is not already an experimental package or master branch
 
