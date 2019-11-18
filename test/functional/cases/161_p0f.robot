@@ -19,6 +19,8 @@ p0f MISS
   Run Dummy p0f
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.1
   Check Rspamc  ${result}  P0F
+  Check Rspamc  ${result}  Linux 3.11 and newer
+  Check Rspamc  ${result}  Ethernet or modem
   Check Rspamc  ${result}  WINDOWS  inverse=1
   Check Rspamc  ${result}  P0F_FAIL  inverse=1
   Shutdown p0f
@@ -26,11 +28,11 @@ p0f MISS
 p0f HIT
   Run Dummy p0f  ${P0F_SOCKET}  windows
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.2
-  Check Rspamc  ${result}  P0F  inverse=1
+  Check Rspamc  ${result}  P0F
   Check Rspamc  ${result}  P0F_FAIL  inverse=1
-  Check Rspamc  ${result}  ETHER
-  Check Rspamc  ${result}  DISTGE10
+  Check Rspamc  ${result}  Ethernet or modem
   Check Rspamc  ${result}  WINDOWS
+  Check Rspamc  ${result}  Linux 3.11 and newer  inverse=1
   Shutdown p0f
 
 p0f MISS CACHE
@@ -56,9 +58,10 @@ p0f NO REDIS
   Run Dummy p0f
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.5
   Check Rspamc  ${result}  P0F
-  Check Rspamc  ${result}  ETHER
-  Check Rspamc  ${result}  DISTGE10
+  Check Rspamc  ${result}  Linux 3.11 and newer
+  Check Rspamc  ${result}  Ethernet or modem
   Check Rspamc  ${result}  P0F_FAIL  inverse=1
+  Should Contain  ${result.stdout}  distance=10
   Shutdown p0f
 
 p0f NO MATCH
@@ -80,7 +83,7 @@ p0f BAD RESPONSE
   Run Dummy p0f  ${P0F_SOCKET}  windows  bad_response
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  --ip  1.1.1.8
   Check Rspamc  ${result}  P0F_FAIL
-  Check Rspamc  ${result}  Malformed Response
+  Check Rspamc  ${result}  Error getting result: IO read error: connection terminated
   Check Rspamc  ${result}  WINDOWS  inverse=1
   Shutdown p0f
 
