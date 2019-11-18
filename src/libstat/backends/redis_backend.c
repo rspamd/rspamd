@@ -1325,13 +1325,10 @@ rspamd_redis_connected (redisAsyncContext *c, gpointer r, gpointer priv)
 				}
 			}
 			else {
-				if (!rt->err) {
-					g_set_error (&rt->err, rspamd_redis_stat_quark (), c->err,
-							"skip obtaining bayes tokens for %s: "
-							"not enough learns %d; %d required",
-							rt->stcf->symbol, (int)rt->learned,
-							rt->stcf->clcf->min_learns);
-				}
+				msg_warn_task ("skip obtaining bayes tokens for %s of classifier "
+							   "%s: not enough learns %d; %d required",
+						rt->stcf->symbol, rt->stcf->clcf->name,
+						(int)rt->learned, rt->stcf->clcf->min_learns);
 			}
 		}
 	}
