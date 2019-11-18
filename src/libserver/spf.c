@@ -157,7 +157,7 @@ void
 spf_library_config (const ucl_object_t *obj)
 {
 	const ucl_object_t *value;
-	guint64 ival;
+	gint64 ival;
 	bool bval;
 
 	if (obj == NULL) {

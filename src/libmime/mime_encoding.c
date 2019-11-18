@@ -479,10 +479,10 @@ rspamd_mime_charset_utf_enforce (gchar *in, gsize len)
 
 	while (p < end && len > 0 && (err_offset = rspamd_fast_utf8_validate (p, len)) > 0) {
 		err_offset --; /* As it returns it 1 indexed */
-		goffset cur_offset = err_offset;
+		gint32 cur_offset = err_offset;
 
 		while (cur_offset < len) {
-			goffset tmp = cur_offset;
+			gint32 tmp = cur_offset;
 
 			U8_NEXT (p, cur_offset, len, uc);
 

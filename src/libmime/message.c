@@ -489,6 +489,12 @@ rspamd_strip_newlines_parse (struct rspamd_task *task,
 }
 
 static void
+rspamd_u_text_dtor (void *p)
+{
+	utext_close ((UText *)p);
+}
+
+static void
 rspamd_normalize_text_part (struct rspamd_task *task,
 		struct rspamd_mime_text_part *part)
 {
@@ -535,7 +541,7 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 		}
 		else {
 			rspamd_mempool_add_destructor (task->task_pool,
-					(rspamd_mempool_destruct_t)utext_close,
+					rspamd_u_text_dtor,
 					&part->utf_stripped_text);
 		}
 	}
