@@ -100,11 +100,17 @@ local function p0f_check(task, ip, rule)
       uptime_min, distance)
 
     if link_type and #link_type > 0 then
-      common.yield_result(task, rule, string.format('%s, link=%s, distance: %s',
-          os_string, link_type, distance), 0.0)
+      common.yield_result(task, rule, {
+        os_string,
+        'link=' .. link_type,
+        'distance=' .. distance},
+          0.0)
     else
-      common.yield_result(task, rule, string.format('%s, distance: %s',
-          os_string, distance), 0.0)
+      common.yield_result(task, rule, {
+        os_string,
+        'link=unknown',
+        'distance=' .. distance},
+          0.0)
     end
 
     return data
@@ -122,6 +128,8 @@ local function p0f_check(task, ip, rule)
 
       if err then
         rspamd_logger.errx(task, 'p0f received an error: %s', err)
+        common.yield_result(task, rule, 'Error getting result: ' .. err,
+            0.0, 'fail')
         return
       end
 
