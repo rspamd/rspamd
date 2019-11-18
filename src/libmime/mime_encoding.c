@@ -488,7 +488,7 @@ rspamd_mime_charset_utf_enforce (gchar *in, gsize len)
 
 			if (uc > 0) {
 				/* Fill string between err_offset and tmp with `?` character */
-				memset (p + err_offset - 1, '?', tmp - err_offset);
+				memset (p + err_offset, '?', tmp - err_offset);
 				break;
 			}
 		}
