@@ -1,6 +1,5 @@
 # -*- mode: CMAKE; -*-
 project( replxx VERSION 0.0.2 LANGUAGES CXX C )
-message(STATUS "Build mode: ${CMAKE_BUILD_TYPE}")
 
 # INFO
 set(REPLXX_DISPLAY_NAME "replxx")

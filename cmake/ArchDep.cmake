@@ -89,11 +89,6 @@ int main(int argc, char** argv) {
     ASM_OP(HAVE_SSE42 "sse42")
 ENDIF()
 
-IF (NOT "${ARCH}" STREQUAL "x86_64")
-    MESSAGE(STATUS "Hyperscan support is possible only for x86_64 architecture")
-    SET(ENABLE_HYPERSCAN "OFF")
-ENDIF()
-
 IF ("${ARCH}" STREQUAL "x86_64")
     MESSAGE(STATUS "Enable sse2 on x86_64 architecture")
     IF((CMAKE_C_COMPILER_ID MATCHES "GNU") OR (CMAKE_C_COMPILER_ID MATCHES "Clang"))

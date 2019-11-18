@@ -66,7 +66,6 @@
 #cmakedefine HAVE_OCLOEXEC       1
 #cmakedefine HAVE_ONOFOLLOW      1
 #cmakedefine HAVE_OPENMEMSTREAM  1
-#cmakedefine HAVE_OPENSSL        1
 #cmakedefine HAVE_O_DIRECT       1
 #cmakedefine HAVE_PATH_MAX       1
 
@@ -431,5 +430,7 @@ extern uint64_t ottery_rand_uint64(void);
   /* In fact, everything else is not supported ¯\_(ツ)_/¯ */
   #error incompatible compiler found, need gcc > 2.7 or clang
 #endif
+
+#define HAVE_OPENSSL             1
 
 #endif

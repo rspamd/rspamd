@@ -41,11 +41,6 @@ SET(RSPAMD_WORKER_CONTROLLER "*:11334")
 SET_PROPERTY(GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS 1)
 
 ############################# OPTIONS SECTION #############################################
-
-OPTION(ENABLE_OPTIMIZATION "Enable extra optimizations [default: OFF]"          OFF)
-OPTION(SKIP_RELINK_RPATH   "Skip relinking and full RPATH for the install tree" OFF)
-OPTION(ENABLE_GPERF_TOOLS  "Enable google perftools [default: OFF]"             OFF)
-OPTION(ENABLE_STATIC       "Enable static compiling [default: OFF]"             OFF)
 OPTION(ENABLE_LUAJIT       "Link with libluajit [default: ON]"                  ON)
 OPTION(ENABLE_URL_INCLUDE  "Enable urls in ucl includes (requires libcurl or libfetch) [default: OFF]" OFF)
 OPTION(NO_SHARED           "Build internal libs static [default: ON]"          ON)
@@ -53,11 +48,8 @@ OPTION(INSTALL_WEBUI       "Install web interface [default: ON]"                
 OPTION(WANT_SYSTEMD_UNITS  "Install systemd unit files on Linux [default: OFF]" OFF)
 OPTION(ENABLE_SNOWBALL     "Enable snowball stemmer [default: ON]"              ON)
 OPTION(ENABLE_CLANG_PLUGIN "Enable clang static analysing plugin [default: OFF]" OFF)
-OPTION(ENABLE_HYPERSCAN    "Enable hyperscan for fast regexp processing [default: OFF]" OFF)
 OPTION(ENABLE_PCRE2        "Enable pcre2 instead of pcre  [default: OFF]"         OFF)
 OPTION(ENABLE_JEMALLOC     "Build rspamd with jemalloc allocator  [default: OFF]" OFF)
-OPTION(ENABLE_COVERAGE     "Build rspamd with code coverage options [default: OFF]" OFF)
-OPTION(ENABLE_FULL_DEBUG   "Build rspamd with all possible debug [default: OFF]" OFF)
 OPTION(ENABLE_UTILS        "Build rspamd internal utils [default: OFF]" OFF)
 OPTION(ENABLE_LIBUNWIND    "Use libunwind to print crash traces [default: OFF]" OFF)
 OPTION(ENABLE_LUA_TRACE    "Trace all Lua C API invocations [default: OFF]" OFF)
@@ -87,33 +79,11 @@ ENDIF()
 FIND_PACKAGE(PkgConfig REQUIRED)
 FIND_PACKAGE(Perl REQUIRED)
 
+INCLUDE(Toolset)
+INCLUDE(Sanitizer)
+
 INCLUDE(ArchDep)
 INCLUDE(Paths)
-
-IF(ENABLE_STATIC MATCHES "ON")
-	MESSAGE(STATUS "Static build of rspamd implies that the target binary will be *GPL* licensed")
-	SET(GPL_RSPAMD_BINARY 1)
-	SET(CMAKE_SKIP_INSTALL_RPATH ON)
-	SET(BUILD_STATIC 1)
-	SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-	SET(BUILD_SHARED_LIBRARIES OFF)
-	SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
-	SET(LINK_TYPE "STATIC")
-	SET(NO_SHARED "ON")
-	# Dirty hack for cmake
-	SET(CMAKE_EXE_LINK_DYNAMIC_C_FLAGS)       # remove -Wl,-Bdynamic
-	SET(CMAKE_EXE_LINK_DYNAMIC_CXX_FLAGS)
-	SET(CMAKE_SHARED_LIBRARY_C_FLAGS)         # remove -fPIC
-	SET(CMAKE_SHARED_LIBRARY_CXX_FLAGS)
-	SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS)    # remove -rdynamic
-	SET(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS)
-ELSE(ENABLE_STATIC MATCHES "ON")
-	IF (NO_SHARED MATCHES "OFF")
-		SET(LINK_TYPE "SHARED")
-	ELSE(NO_SHARED MATCHES "OFF")
-		SET(LINK_TYPE "STATIC")
-	ENDIF (NO_SHARED MATCHES "OFF")
-ENDIF (ENABLE_STATIC MATCHES "ON")
 
 IF(ENABLE_PCRE2 MATCHES "ON")
 	SET(WITH_PCRE2 1)
@@ -221,91 +191,9 @@ ProcessPackage(SODIUM LIBRARY sodium INCLUDE sodium.h
 		INCLUDE_SUFFIXES include/libsodium include/sodium
 		ROOT ${LIBSODIUM_ROOT_DIR} MODULES libsodium>=1.0.0)
 
-IF(ENABLE_BLAS MATCHES "ON")
-ProcessPackage(BLAS OPTIONAL_INCLUDE LIBRARY openblas blas
-		INCLUDE cblas.h INCLUDE_SUFFIXES include/openblas
-		include/blas
-		ROOT ${BLAS_ROOT_DIR}
-		LIB_OUTPUT BLAS_REQUIRED_LIBRARIES)
-ENDIF()
-
-IF(WITH_BLAS)
-	MESSAGE(STATUS "Use openblas to accelerate kann")
-	IF(NOT BLAS_INCLUDE)
-		FIND_FILE(HAVE_CBLAS_H HINTS "${RSPAMD_SEARCH_PATH}"
-				NAMES cblas.h
-				DOC "Path to cblas.h header")
-		IF(NOT HAVE_CBLAS_H)
-			MESSAGE(STATUS "Blas header cblas.h has not been found, use internal workaround")
-		ELSE()
-			ADD_DEFINITIONS(-DHAVE_CBLAS_H)
-		ENDIF()
-	ELSE()
-		ADD_DEFINITIONS(-DHAVE_CBLAS_H)
-	ENDIF()
-	ADD_DEFINITIONS(-DHAVE_CBLAS)
-ENDIF(WITH_BLAS)
-
-IF(ENABLE_HYPERSCAN MATCHES "ON")
-	ProcessPackage(HYPERSCAN LIBRARY hs INCLUDE hs.h INCLUDE_SUFFIXES
-			hs include/hs
-			ROOT ${HYPERSCAN_ROOT_DIR} MODULES libhs)
-	SET(WITH_HYPERSCAN 1)
-
-	# For static linking with Hyperscan we need to link using CXX
-	IF (ENABLE_HYPERSCAN MATCHES "ON")
-		IF(${HYPERSCAN_LIBRARY} MATCHES ".*[.]a$" OR STATIC_HYPERSCAN)
-			ENABLE_LANGUAGE(CXX)
-			SET(USE_CXX_LINKER 1)
-		ENDIF()
-	ENDIF()
-ENDIF()
-
-#Check for openssl (required for dkim)
-SET(HAVE_OPENSSL 1)
-
-# Google performance tools
-
-IF(ENABLE_GPERF_TOOLS MATCHES "ON")
-	ProcessPackage(GPERF LIBRARY profiler INCLUDE profiler.h INCLUDE_SUFFIXES include/google
-		ROOT ${GPERF_ROOT_DIR})
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-omit-frame-pointer")
-	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer")
-	SET(WITH_GPERF_TOOLS 1)
-ENDIF(ENABLE_GPERF_TOOLS MATCHES "ON")
-
-INCLUDE(CompilerWarnings)
-
- # Optimization flags
-IF(NOT CMAKE_C_OPT_FLAGS)
-	IF(ENABLE_OPTIMIZATION MATCHES "ON")
-		SET(CMAKE_C_OPT_FLAGS "-g -O2")
-		IF(${CMAKE_VERSION} VERSION_GREATER "3.9.0")
-			CMAKE_POLICY(SET CMP0069 NEW)
-			INCLUDE(CheckIPOSupported)
-			check_ipo_supported(RESULT SUPPORT_LTO OUTPUT LTO_DIAG )
-			if(SUPPORT_LTO)
-				SET(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
-			else()
-				message(WARNING "IPO is not supported: ${LTO_DIAG}")
-			endif()
-		ENDIF()
-	ELSE(ENABLE_OPTIMIZATION MATCHES "ON")
-		IF(ENABLE_FULL_DEBUG MATCHES "ON")
-			ADD_DEFINITIONS(-DFULL_DEBUG)
-			SET(CMAKE_C_OPT_FLAGS "-g -Og")
-		ELSE(ENABLE_FULL_DEBUG MATCHES "ON")
-			SET(CMAKE_C_OPT_FLAGS "-g -O2")
-		ENDIF(ENABLE_FULL_DEBUG MATCHES "ON")
-	ENDIF(ENABLE_OPTIMIZATION MATCHES "ON")
-ENDIF(NOT CMAKE_C_OPT_FLAGS)
-
-IF(ENABLE_COVERAGE)
-	SET(CMAKE_C_OPT_FLAGS "-g -Og")
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage")
-	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
-	SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
-ENDIF(ENABLE_COVERAGE)
+include (CompilerWarnings)
+include (Hyperscan)
+include (Openblas)
 
 IF(ENABLE_LUA_TRACE)
 	SET(WITH_LUA_TRACE 1)
