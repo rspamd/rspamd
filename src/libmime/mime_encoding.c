@@ -239,6 +239,7 @@ rspamd_mime_detect_charset (const rspamd_ftok_t *in, rspamd_mempool_t *pool)
 {
 	gchar *ret = NULL, *h, *t;
 	struct rspamd_charset_substitution *s;
+	const gchar *cset;
 	UErrorCode uc_err = U_ZERO_ERROR;
 
 	if (sub_hash == NULL) {
@@ -271,7 +272,13 @@ rspamd_mime_detect_charset (const rspamd_ftok_t *in, rspamd_mempool_t *pool)
 		return ucnv_getStandardName (s->canon, "IANA", &uc_err);
 	}
 
-	return ucnv_getStandardName (ret, "IANA", &uc_err);
+	cset = ucnv_getStandardName (ret, "IANA", &uc_err);
+
+	if (cset == NULL) {
+		cset = ucnv_getStandardName (ret, "MIME", &uc_err);
+	}
+
+	return cset;
 }
 
 gchar *
