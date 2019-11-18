@@ -529,7 +529,7 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 
 		vlen = strlen (val);
 
-		if (rspamd_fast_utf8_validate (val, vlen) == 0) {
+		if (rspamd_fast_utf8_validate (val, vlen) != 0) {
 			opt_cpy = rspamd_str_make_utf_valid (val, vlen, &vlen,
 					task->task_pool);
 			val = opt_cpy;
