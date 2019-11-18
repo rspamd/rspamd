@@ -104,9 +104,9 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail)
       rspamd_logger.infox(task, '%s: "%s" is in whitelist', rule.log_prefix, tm)
     else
       all_whitelisted = false
-      task:insert_result(symname, symscore, tm)
       rspamd_logger.infox(task, '%s: result - %s: "%s - score: %s"',
           rule.log_prefix, threat_info, tm, symscore)
+      task:insert_result(symname, symscore, tm)
     end
   end
 
