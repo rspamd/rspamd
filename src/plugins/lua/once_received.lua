@@ -66,7 +66,7 @@ local function check_quantity_received (task)
       task:insert_result(symbol_rdns, 1)
     else
       rspamd_logger.infox(task, 'source hostname has not been passed to Rspamd from MTA, ' ..
-          ' but we could resolve source IP address PTR %s as "%s"',
+          'but we could resolve source IP address PTR %s as "%s"',
         to_resolve, results[1])
       task:set_hostname(results[1])
 
