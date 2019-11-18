@@ -1861,26 +1861,47 @@ lua_task_insert_result (lua_State * L)
 				luaL_checkstring (L, args_start));
 		weight = luaL_checknumber (L, args_start + 1);
 		top = lua_gettop (L);
-		s = rspamd_task_insert_result_full (task, symbol_name, weight, NULL, flags);
+		s = rspamd_task_insert_result_full (task, symbol_name, weight,
+				NULL, flags);
 
 		/* Get additional options */
 		if (s) {
 			for (i = args_start + 2; i <= top; i++) {
-				if (lua_type (L, i) == LUA_TSTRING) {
+				gint ltype = lua_type (L, i);
+
+				if (ltype == LUA_TSTRING) {
 					param = luaL_checkstring (L, i);
 					rspamd_task_add_result_option (task, s, param);
 				}
-				else if (lua_type (L, i) == LUA_TTABLE) {
+				else if (ltype == LUA_TTABLE) {
 					lua_pushvalue (L, i);
 					lua_pushnil (L);
 
 					while (lua_next (L, -2)) {
-						param = lua_tostring (L, -1);
-						rspamd_task_add_result_option (task, s, param);
+						if (lua_isstring (L, -1)) {
+							param = lua_tostring (L, -1);
+							rspamd_task_add_result_option (task, s, param);
+						}
+						else {
+							const gchar *tname = lua_typename (L, lua_type (L, -1));
+							lua_pop (L, 2);
+
+							return luaL_error (L, "not a string option in a table "
+												  "when adding symbol  %s: %s type",
+									s->name, tname);
+						}
+
 						lua_pop (L, 1);
 					}
 
 					lua_pop (L, 1);
+				}
+				else {
+					const gchar *tname = lua_typename (L, ltype);
+
+					return luaL_error (L, "not a string/table option "
+										  "when adding symbol %s: %s type",
+							s->name, tname);
 				}
 			}
 		}
