@@ -272,10 +272,22 @@ rspamd_mime_detect_charset (const rspamd_ftok_t *in, rspamd_mempool_t *pool)
 		return ucnv_getStandardName (s->canon, "IANA", &uc_err);
 	}
 
+	/* Just fucking stupid */
 	cset = ucnv_getStandardName (ret, "IANA", &uc_err);
 
 	if (cset == NULL) {
+		uc_err = U_ZERO_ERROR;
 		cset = ucnv_getStandardName (ret, "MIME", &uc_err);
+	}
+
+	if (cset == NULL) {
+		uc_err = U_ZERO_ERROR;
+		cset = ucnv_getStandardName (ret, "WINDOWS", &uc_err);
+	}
+
+	if (cset == NULL) {
+		uc_err = U_ZERO_ERROR;
+		cset = ucnv_getStandardName (ret, "JAVA", &uc_err);
 	}
 
 	return cset;
