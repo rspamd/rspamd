@@ -1,3 +1,41 @@
+2.2: 19 Nov 2019
+  * [Conf] Antivirus: Fix the default config
+  * [Feature] Add verdict library in lua
+  * [Feature] Allow exception when choosing upstream
+  * [Feature] Allow to disable symbols from the metric config
+  * [Feature] Allow to limit maps per specific worker
+  * [Feature] Always validate Rspamd protocol output
+  * [Feature] Antivirus: Add preliminary virustotal support
+  * [Feature] Clickhouse: Rework Clickhouse collection logic
+  * [Feature] Improve base64 usage
+  * [Feature] Shutdown timeout is now associated with task timeout
+  * [Fix] #3129 Multiple classifiers on redis working incorrectly
+  * [Fix] Allow real upstreams configuration
+  * [Fix] Another try to fix slow callbacks and timers
+  * [Fix] Check results of write message as SSL can bork them
+  * [Fix] Clickhouse: Avoid potential races in collection
+  * [Fix] Clickhouse: Fix periodic script
+  * [Fix] Fail DNS upstream on each retransmit attempt
+  * [Fix] Fix consistent hashing when upstreams are marked inactive
+  * [Fix] Fix issues found
+  * [Fix] Fix off-by-one in retries for the proxy
+  * [Fix] Fix termination
+  * [Fix] Fix upstreams exclusion logic
+  * [Fix] Fix utf8 validation for symbols options and empty strings
+  * [Fix] Oops, fix maps reload
+  * [Fix] Rbl: Allow utf8 lookups for IDN domains
+  * [Fix] Sigh, another try to fix brain-damaged openssl
+  * [Project] Add fast utf8 validation library
+  * [Project] Use own utf8 validation instead of glib
+  * [Rework] Another phase of finish actions rework
+  * [Rework] Further cmake system rework
+  * [Rework] Further isolation of the controller's functions
+  * [Rework] Make cmake structure more modular
+  * [Rework] Move cmake modules to a dedicated path
+  * [Rework] Replace controller functions by any scanner worker if needed
+  * [Rework] Rework final scripts logic
+  * [Rework] Rewrite rspamd_str_make_utf_valid function
+
 2.1: 28 Oct 2019
   * [Conf] Update neural.conf
   * [CritFix] Fix dkim verification for multiple headers listed
