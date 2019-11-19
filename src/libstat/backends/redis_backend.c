@@ -846,9 +846,10 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 {
 	struct rspamd_redis_stat_elt *redis_elt = (struct rspamd_redis_stat_elt *)priv;
 	struct rspamd_redis_stat_cbdata *cbdata;
-	redisReply *reply = r, *more, *elts, *elt;
+	redisReply *reply = r, *more_elt, *elts, *elt;
 	gchar **pk, *k;
 	guint i, processed = 0;
+	gboolean more = false;
 
 	cbdata = redis_elt->cbdata;
 
@@ -860,8 +861,12 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	if (c->err == 0 && r != NULL) {
 		if (reply->type == REDIS_REPLY_ARRAY) {
-			more = reply->element[0];
+			more_elt = reply->element[0];
 			elts = reply->element[1];
+
+			if (more_elt != NULL && more_elt->str != NULL && strcmp (more_elt->str, "0") != 0) {
+				more = true;
+			}
 
 			g_ptr_array_set_size (cbdata->cur_keys, elts->elements);
 
@@ -915,7 +920,7 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 			}
 		}
 
-		if (more != NULL && more->integer) {
+		if (more) {
 			/* Cleanup the cbdata->cur_keys and re-allowcate */
 			for (i = 0; i < cbdata->cur_keys->len; i ++) {
 				k = g_ptr_array_index (cbdata->cur_keys, i);
@@ -928,8 +933,10 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 
 			/* Get more keys */
 			redisAsyncCommand (cbdata->redis, rspamd_redis_stat_keys, redis_elt,
-					"SSCAN %s_keys %d COUNT 1000",
-					cbdata->elt->ctx->stcf->symbol, more->integer);
+					"SSCAN %s_keys %s COUNT 1000",
+					cbdata->elt->ctx->stcf->symbol, more_elt->str);
+
+			cbdata->inflight += 1;
 		}
 		else {
 			/* Set up the required keys */
