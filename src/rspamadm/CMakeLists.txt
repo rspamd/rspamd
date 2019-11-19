@@ -11,7 +11,7 @@ SET(RSPAMADMSRC rspamadm.c
         lua_repl.c
         dkim_keygen.c
         ${CMAKE_BINARY_DIR}/src/workers.c
-        ${CMAKE_BINARY_DIR}/src/modules.c
+        #${CMAKE_BINARY_DIR}/src/modules.c - defined in rspamdserver
         ${CMAKE_SOURCE_DIR}/src/controller.c
         ${CMAKE_SOURCE_DIR}/src/fuzzy_storage.c
         ${CMAKE_SOURCE_DIR}/src/worker.c
