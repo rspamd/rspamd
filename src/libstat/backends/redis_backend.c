@@ -921,17 +921,7 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 		}
 
 		if (more) {
-			/* Cleanup the cbdata->cur_keys and re-allowcate */
-			for (i = 0; i < cbdata->cur_keys->len; i ++) {
-				k = g_ptr_array_index (cbdata->cur_keys, i);
-				g_free (k);
-			}
-
-			g_ptr_array_free (cbdata->cur_keys, TRUE);
-
-			cbdata->cur_keys = g_ptr_array_new ();
-
-			/* Get more keys */
+			/* Get more stat keys */
 			redisAsyncCommand (cbdata->redis, rspamd_redis_stat_keys, redis_elt,
 					"SSCAN %s_keys %s COUNT 1000",
 					cbdata->elt->ctx->stcf->symbol, more_elt->str);
