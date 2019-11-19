@@ -98,6 +98,7 @@ struct rspamd_redis_stat_cbdata {
 	redisAsyncContext *redis;
 	ucl_object_t *cur;
 	GPtrArray *cur_keys;
+	guint 
 	struct upstream *selected;
 	guint inflight;
 	gboolean wanna_die;
@@ -846,7 +847,7 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 {
 	struct rspamd_redis_stat_elt *redis_elt = (struct rspamd_redis_stat_elt *)priv;
 	struct rspamd_redis_stat_cbdata *cbdata;
-	redisReply *reply = r, *elt;
+	redisReply *reply = r, *more, **elts, *elt;
 	gchar **pk, *k;
 	guint i, processed = 0;
 
@@ -860,10 +861,13 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 
 	if (c->err == 0 && r != NULL) {
 		if (reply->type == REDIS_REPLY_ARRAY) {
-			g_ptr_array_set_size (cbdata->cur_keys, reply->elements);
+			more = r.element[0]
+			elts = r.element[1]
 
-			for (i = 0; i < reply->elements; i ++) {
-				elt = reply->element[i];
+			g_ptr_array_set_size (cbdata->cur_keys, elts->elements);
+
+			for (i = 0; i < elts->elements; i ++) {
+				elt = elts->element[i];
 
 				if (elt->type == REDIS_REPLY_STRING) {
 					pk = (gchar **)&g_ptr_array_index (cbdata->cur_keys, i);
@@ -912,30 +916,48 @@ rspamd_redis_stat_keys (redisAsyncContext *c, gpointer r, gpointer priv)
 			}
 		}
 
-		/* Set up the required keys */
-		ucl_object_insert_key (cbdata->cur,
-				ucl_object_typed_new (UCL_INT), "revision", 0, false);
-		ucl_object_insert_key (cbdata->cur,
-				ucl_object_typed_new (UCL_INT), "used", 0, false);
-		ucl_object_insert_key (cbdata->cur,
-				ucl_object_typed_new (UCL_INT), "total", 0, false);
-		ucl_object_insert_key (cbdata->cur,
-				ucl_object_typed_new (UCL_INT), "size", 0, false);
-		ucl_object_insert_key (cbdata->cur,
-				ucl_object_fromstring (cbdata->elt->ctx->stcf->symbol),
-				"symbol", 0, false);
-		ucl_object_insert_key (cbdata->cur, ucl_object_fromstring ("redis"),
-				"type", 0, false);
-		ucl_object_insert_key (cbdata->cur, ucl_object_fromint (0),
-				"languages", 0, false);
-		ucl_object_insert_key (cbdata->cur, ucl_object_fromint (processed),
-				"users", 0, false);
+		if (more != NULL && more.integer) {
+			/* Cleanup the cbdata->cur_keys and re-allowcate */
+			for (i = 0; i < cbdata->cur_keys->len; i ++) {
+				k = g_ptr_array_index (cbdata->cur_keys, i);
+				g_free (k);
+			}
 
-		rspamd_upstream_ok (cbdata->selected);
+			g_ptr_array_free (cbdata->cur_keys, TRUE);
 
-		if (cbdata->inflight == 0) {
-			rspamd_redis_async_cbdata_cleanup (cbdata);
-			redis_elt->cbdata = NULL;
+			cbdata->cur_keys = g_ptr_array_new ();
+
+			/* Get more keys */
+			redisAsyncCommand (cbdata->redis, rspamd_redis_stat_keys, redis_elt,
+					"SSCAN %s_keys %d COUNT 1000",
+					ctx->stcf->symbol, more.integer);
+		}
+		else {
+			/* Set up the required keys */
+			ucl_object_insert_key (cbdata->cur,
+					ucl_object_typed_new (UCL_INT), "revision", 0, false);
+			ucl_object_insert_key (cbdata->cur,
+					ucl_object_typed_new (UCL_INT), "used", 0, false);
+			ucl_object_insert_key (cbdata->cur,
+					ucl_object_typed_new (UCL_INT), "total", 0, false);
+			ucl_object_insert_key (cbdata->cur,
+					ucl_object_typed_new (UCL_INT), "size", 0, false);
+			ucl_object_insert_key (cbdata->cur,
+					ucl_object_fromstring (cbdata->elt->ctx->stcf->symbol),
+					"symbol", 0, false);
+			ucl_object_insert_key (cbdata->cur, ucl_object_fromstring ("redis"),
+					"type", 0, false);
+			ucl_object_insert_key (cbdata->cur, ucl_object_fromint (0),
+					"languages", 0, false);
+			ucl_object_insert_key (cbdata->cur, ucl_object_fromint (processed),
+					"users", 0, false);
+
+			rspamd_upstream_ok (cbdata->selected);
+
+			if (cbdata->inflight == 0) {
+				rspamd_redis_async_cbdata_cleanup (cbdata);
+				redis_elt->cbdata = NULL;
+			}
 		}
 	}
 	else {
@@ -1029,7 +1051,7 @@ rspamd_redis_async_stat_cb (struct rspamd_stat_async_elt *elt, gpointer d)
 	/* Get keys in redis that match our symbol */
 	rspamd_redis_maybe_auth (ctx, cbdata->redis);
 	redisAsyncCommand (cbdata->redis, rspamd_redis_stat_keys, redis_elt,
-			"SMEMBERS %s_keys",
+			"SSCAN %s_keys 0 COUNT 1000",
 			ctx->stcf->symbol);
 }
 
