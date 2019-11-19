@@ -512,9 +512,12 @@ rspamd_mime_headers_process (struct rspamd_task *task,
 }
 
 static void
-rspamd_mime_header_maybe_save_token (rspamd_mempool_t *pool, GString *out,
-		GByteArray *token, GByteArray *decoded_token,
-		rspamd_ftok_t *old_charset, rspamd_ftok_t *new_charset)
+rspamd_mime_header_maybe_save_token (rspamd_mempool_t *pool,
+									 GString *out,
+									 GByteArray *token,
+									 GByteArray *decoded_token,
+									 rspamd_ftok_t *old_charset,
+									 rspamd_ftok_t *new_charset)
 {
 	if (new_charset->len == 0) {
 		g_assert_not_reached ();
@@ -538,14 +541,22 @@ rspamd_mime_header_maybe_save_token (rspamd_mempool_t *pool, GString *out,
 	}
 
 	/* We need to flush and decode old token to out string */
-	if (rspamd_mime_to_utf8_byte_array (token, decoded_token,
+	if (rspamd_mime_to_utf8_byte_array (token, decoded_token, pool,
 			rspamd_mime_detect_charset (new_charset, pool))) {
 		g_string_append_len (out, decoded_token->data, decoded_token->len);
 	}
 
 	/* We also reset buffer */
 	g_byte_array_set_size (token, 0);
-	/* Propagate charset */
+	/*
+	 * Propagate charset
+	 *
+	 * Here are dragons: we save the original charset to allow buffers concat
+	 * in the condition at the beginning of the function.
+	 * However, it will likely cause unnecessary calls for
+	 * `rspamd_mime_detect_charset` which could be relatively expensive.
+	 * But we ignore that for now...
+	 */
 	memcpy (old_charset, new_charset, sizeof (*old_charset));
 }
 

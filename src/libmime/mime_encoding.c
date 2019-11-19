@@ -135,7 +135,10 @@ rspamd_converter_to_uchars (struct rspamd_charset_converter *cnv,
 
 
 struct rspamd_charset_converter *
-rspamd_mime_get_converter_cached (const gchar *enc, UErrorCode *err)
+rspamd_mime_get_converter_cached (const gchar *enc,
+								  rspamd_mempool_t *pool,
+								  gboolean is_canon,
+								  UErrorCode *err)
 {
 	const gchar *canon_name;
 	static rspamd_lru_hash_t *cache;
@@ -147,7 +150,19 @@ rspamd_mime_get_converter_cached (const gchar *enc, UErrorCode *err)
 				rspamd_str_equal);
 	}
 
-	canon_name = ucnv_getStandardName (enc, "IANA", err);
+	if (enc == NULL) {
+		return NULL;
+	}
+
+	if (!is_canon) {
+		rspamd_ftok_t cset_tok;
+
+		RSPAMD_FTOK_FROM_STR (&cset_tok, enc);
+		canon_name = rspamd_mime_detect_charset (&cset_tok, pool);
+	}
+	else {
+		canon_name = enc;
+	}
 
 	if (canon_name == NULL) {
 		return NULL;
@@ -306,7 +321,7 @@ rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 	UConverter *utf8_converter;
 	struct rspamd_charset_converter *conv;
 
-	conv = rspamd_mime_get_converter_cached (in_enc, &uc_err);
+	conv = rspamd_mime_get_converter_cached (in_enc, pool, TRUE, &uc_err);
 	utf8_converter = rspamd_get_utf8_converter ();
 
 	if (conv == NULL) {
@@ -370,7 +385,8 @@ rspamd_mime_text_part_utf8_convert (struct rspamd_task *task,
 	UConverter *utf8_converter;
 	struct rspamd_charset_converter *conv;
 
-	conv = rspamd_mime_get_converter_cached (charset, &uc_err);
+	conv = rspamd_mime_get_converter_cached (charset, task->task_pool,
+			TRUE, &uc_err);
 	utf8_converter = rspamd_get_utf8_converter ();
 
 	if (conv == NULL) {
@@ -429,6 +445,7 @@ rspamd_mime_text_part_utf8_convert (struct rspamd_task *task,
 gboolean
 rspamd_mime_to_utf8_byte_array (GByteArray *in,
 		GByteArray *out,
+		rspamd_mempool_t *pool,
 		const gchar *enc)
 {
 	gint32 r, clen, dlen;
@@ -437,6 +454,24 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 	UConverter *utf8_converter;
 	struct rspamd_charset_converter *conv;
 	rspamd_ftok_t charset_tok;
+
+	if (in == NULL || in->len == 0) {
+		return FALSE;
+	}
+
+	if (enc == NULL) {
+		/* Assume utf ? */
+		if (rspamd_fast_utf8_validate (in->data, in->len) == 0) {
+			g_byte_array_set_size (out, in->len);
+			memcpy (out->data, in->data, out->len);
+
+			return TRUE;
+		}
+		else {
+			/* Bad stuff, keep out */
+			return FALSE;
+		}
+	}
 
 	RSPAMD_FTOK_FROM_STR (&charset_tok, enc);
 
@@ -449,7 +484,7 @@ rspamd_mime_to_utf8_byte_array (GByteArray *in,
 	}
 
 	utf8_converter = rspamd_get_utf8_converter ();
-	conv = rspamd_mime_get_converter_cached (enc, &uc_err);
+	conv = rspamd_mime_get_converter_cached (enc, pool, TRUE, &uc_err);
 
 	if (conv == NULL) {
 		return FALSE;

@@ -67,7 +67,8 @@ rspamd_archive_file_try_utf (struct rspamd_task *task,
 		struct rspamd_charset_converter *conv;
 		UConverter *utf8_converter;
 
-		conv = rspamd_mime_get_converter_cached (charset, &uc_err);
+		conv = rspamd_mime_get_converter_cached (charset, task->task_pool,
+				FALSE, &uc_err);
 		utf8_converter = rspamd_get_utf8_converter ();
 
 		if (conv == NULL) {

@@ -47,7 +47,7 @@ const gchar *rspamd_mime_detect_charset (const rspamd_ftok_t *in,
  * @param pool
  * @param input
  * @param len
- * @param in_enc
+ * @param in_enc canon charset
  * @param olen
  * @param err
  * @return
@@ -57,14 +57,20 @@ gchar *rspamd_mime_text_to_utf8 (rspamd_mempool_t *pool,
 								 gsize *olen, GError **err);
 
 /**
- * Converts data from `in` to `out`, returns `FALSE` if `enc` is not a valid iconv charset
+ * Converts data from `in` to `out`,
+ * returns `FALSE` if `enc` is not a valid iconv charset
+ *
+ * This function, in fact, copies `in` from `out` replacing out content in
+ * total.
  * @param in
  * @param out
- * @param enc
+ * @param enc validated canonical charset name. If NULL, then utf8 check is done only
  * @return
  */
 gboolean rspamd_mime_to_utf8_byte_array (GByteArray *in,
-										 GByteArray *out, const gchar *enc);
+										 GByteArray *out,
+										 rspamd_mempool_t *pool,
+										 const gchar *enc);
 
 /**
  * Maybe convert part to utf-8
@@ -83,7 +89,8 @@ void rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
  * @return
  */
 gboolean rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
-										gchar *in, gsize len, gboolean content_check);
+										gchar *in, gsize len,
+										gboolean content_check);
 
 /**
  * Ensure that all characters in string are valid utf8 chars or replace them
@@ -93,14 +100,18 @@ gboolean rspamd_mime_charset_utf_check (rspamd_ftok_t *charset,
  */
 void rspamd_mime_charset_utf_enforce (gchar *in, gsize len);
 
-/**
- * Gets cached converter
- * @param enc
- * @param err
- * @return
- */
+ /**
+  * Gets cached converter
+  * @param enc input encoding
+  * @param pool pool to use for temporary normalisation
+  * @param is_canon TRUE if normalisation is needed
+  * @param err output error
+  * @return converter
+  */
 struct rspamd_charset_converter *rspamd_mime_get_converter_cached (
 		const gchar *enc,
+		rspamd_mempool_t *pool,
+		gboolean is_canon,
 		UErrorCode *err);
 
 /**
