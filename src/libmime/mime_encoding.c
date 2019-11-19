@@ -284,7 +284,7 @@ rspamd_mime_detect_charset (const rspamd_ftok_t *in, rspamd_mempool_t *pool)
 	s = g_hash_table_lookup (sub_hash, ret);
 
 	if (s) {
-		return ucnv_getCanonicalName (s->canon, "MIME", &uc_err);
+		ret = (char *)s->canon;
 	}
 
 	/* Just fucking stupid */
