@@ -1005,7 +1005,7 @@ rspamd_mime_preprocess_cb (struct rspamd_multipattern *mp,
 					bend++;
 
 					/* \r\n */
-					if (*bend == '\n') {
+					if (bend < end && *bend == '\n') {
 						bend++;
 					}
 				}
