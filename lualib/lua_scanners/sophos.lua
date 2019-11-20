@@ -141,8 +141,8 @@ local function sophos_check(task, content, digest, rule)
             conn:add_read(sophos_callback)
           elseif string.find(data, 'FAIL 0212') then
             rspamd_logger.warnx(task, 'Message is encrypted (FAIL 0212): %s', data)
-            common.yield_result(task, rule, 'SAVDI: Message is encrypted (FAIL 0212)', 0.0, 'fail')
-            cached = 'ENCRYPTED'
+            common.yield_result(task, rule, 'SAVDI: Message is encrypted (FAIL 0212)', 0.0, 'encrypted')
+            cached = 'encrypted'
           elseif string.find(data, 'REJ 4') then
             rspamd_logger.warnx(task, 'Message is oversized (REJ 4): %s', data)
             common.yield_result(task, rule, 'SAVDI: Message oversized (REJ 4)', 0.0, 'fail')
