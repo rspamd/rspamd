@@ -68,4 +68,6 @@ Magic detections bundle 1
   Should Contain  ${result.stdout}  MAGIC_SYM_JAR_52
   Should Contain  ${result.stdout}  MAGIC_SYM_APK_53
   Should Contain  ${result.stdout}  MAGIC_SYM_BAT_54
+  Should Contain  ${result.stdout}  MAGIC_SYM_ICS_55
+  Should Contain  ${result.stdout}  MAGIC_SYM_VCF_56
 
