@@ -4131,7 +4131,7 @@ lua_task_get_images (lua_State *L)
 				lua_createtable (L, MESSAGE_FIELD (task, parts)->len, 0);
 
 				PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-					if (part->flags & RSPAMD_MIME_PART_IMAGE) {
+					if (part->part_type == RSPAMD_MIME_PART_IMAGE) {
 						pimg = lua_newuserdata (L, sizeof (struct rspamd_image *));
 						rspamd_lua_setclass (L, "rspamd{image}", -1);
 						*pimg = part->specific.img;
@@ -4168,7 +4168,7 @@ lua_task_get_archives (lua_State *L)
 				lua_createtable (L, MESSAGE_FIELD (task, parts)->len, 0);
 
 				PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-					if (part->flags & RSPAMD_MIME_PART_ARCHIVE) {
+					if (part->part_type == RSPAMD_MIME_PART_ARCHIVE) {
 						parch = lua_newuserdata (L, sizeof (struct rspamd_archive *));
 						rspamd_lua_setclass (L, "rspamd{archive}", -1);
 						*parch = part->specific.arch;

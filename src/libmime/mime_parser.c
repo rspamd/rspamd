@@ -508,7 +508,7 @@ rspamd_mime_parse_normal_part (struct rspamd_task *task,
 			}
 		}
 
-		if (IS_CT_TEXT (part->ct)) {
+		if (part->ct && (part->ct->flags & RSPAMD_CONTENT_TYPE_TEXT)) {
 			/* Need to copy text as we have couple of in-place change functions */
 			parsed = rspamd_fstring_sized_new (part->raw_data.len);
 			parsed->len = part->raw_data.len;
@@ -720,6 +720,7 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	if (sel->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
 		st->nesting ++;
 		g_ptr_array_add (st->stack, npart);
+		npart->part_type = RSPAMD_MIME_PART_MULTIPART;
 		npart->specific.mp = rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (struct rspamd_mime_multipart));
 		memcpy (&npart->specific.mp->boundary, &sel->orig_boundary,
@@ -729,6 +730,7 @@ rspamd_mime_process_multipart_node (struct rspamd_task *task,
 	else if (sel->flags & RSPAMD_CONTENT_TYPE_MESSAGE) {
 		st->nesting ++;
 		g_ptr_array_add (st->stack, npart);
+		npart->part_type = RSPAMD_MIME_PART_MESSAGE;
 
 		if ((ret = rspamd_mime_parse_normal_part (task, npart, st, err))
 				== RSPAMD_MIME_PARSE_OK) {
@@ -1366,6 +1368,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 	if (sel->flags & RSPAMD_CONTENT_TYPE_MULTIPART) {
 		g_ptr_array_add (nst->stack, npart);
 		nst->nesting ++;
+		npart->part_type = RSPAMD_MIME_PART_MULTIPART;
 		npart->specific.mp = rspamd_mempool_alloc0 (task->task_pool,
 				sizeof (struct rspamd_mime_multipart));
 		memcpy (&npart->specific.mp->boundary, &sel->orig_boundary,
@@ -1375,6 +1378,7 @@ rspamd_mime_parse_message (struct rspamd_task *task,
 	else if (sel->flags & RSPAMD_CONTENT_TYPE_MESSAGE) {
 		if ((ret = rspamd_mime_parse_normal_part (task, npart, nst, err))
 			== RSPAMD_MIME_PARSE_OK) {
+			npart->part_type = RSPAMD_MIME_PART_MESSAGE;
 			ret = rspamd_mime_parse_message (task, npart, nst, err);
 		}
 	}

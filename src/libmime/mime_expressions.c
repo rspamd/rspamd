@@ -1480,7 +1480,7 @@ rspamd_compare_transfer_encoding (struct rspamd_task * task,
 	}
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-		if (IS_CT_TEXT (part->ct)) {
+		if (IS_PART_TEXT (part)) {
 			if (part->cte == cte) {
 				return TRUE;
 			}
@@ -1800,7 +1800,7 @@ rspamd_content_type_compare_param (struct rspamd_task * task,
 			 * If user did not specify argument, let's assume that he wants
 			 * recursive search if mime part is multipart/mixed
 			 */
-			if (IS_CT_MULTIPART (cur_part->ct)) {
+			if (IS_PART_MULTIPART (cur_part)) {
 				recursive = TRUE;
 			}
 		}
@@ -1880,7 +1880,7 @@ rspamd_content_type_has_param (struct rspamd_task * task,
 			 * If user did not specify argument, let's assume that he wants
 			 * recursive search if mime part is multipart/mixed
 			 */
-			if (IS_CT_MULTIPART (cur_part->ct)) {
+			if (IS_PART_MULTIPART (cur_part)) {
 				recursive = TRUE;
 			}
 		}
@@ -1955,7 +1955,7 @@ rspamd_content_type_check (struct rspamd_task *task,
 			 * If user did not specify argument, let's assume that he wants
 			 * recursive search if mime part is multipart/mixed
 			 */
-			if (IS_CT_MULTIPART (ct)) {
+			if (IS_PART_MULTIPART (cur_part)) {
 				recursive = TRUE;
 			}
 		}

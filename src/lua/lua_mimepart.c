@@ -1564,14 +1564,14 @@ lua_mimepart_get_boundary (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (IS_CT_MULTIPART (part->ct)) {
+	if (IS_PART_MULTIPART (part)) {
 		lua_pushlstring (L, part->specific.mp->boundary.begin,
 				part->specific.mp->boundary.len);
 	}
 	else {
 		parent = part->parent_part;
 
-		if (!parent || !IS_CT_MULTIPART (parent->ct)) {
+		if (!parent || !IS_PART_MULTIPART (parent)) {
 			lua_pushnil (L);
 		}
 		else {
@@ -1670,7 +1670,7 @@ lua_mimepart_is_image (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushboolean (L, (part->flags & RSPAMD_MIME_PART_IMAGE) ? true : false);
+	lua_pushboolean (L, part->part_type == RSPAMD_MIME_PART_IMAGE);
 
 	return 1;
 }
@@ -1685,7 +1685,7 @@ lua_mimepart_is_archive (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushboolean (L, (part->flags & RSPAMD_MIME_PART_ARCHIVE) ? true : false);
+	lua_pushboolean (L, part->part_type == RSPAMD_MIME_PART_ARCHIVE);
 
 	return 1;
 }
@@ -1700,7 +1700,7 @@ lua_mimepart_is_multipart (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushboolean (L, IS_CT_MULTIPART (part->ct) ? true : false);
+	lua_pushboolean (L, IS_PART_MULTIPART (part) ? true : false);
 
 	return 1;
 }
@@ -1715,7 +1715,7 @@ lua_mimepart_is_message (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushboolean (L, IS_CT_MESSAGE (part->ct) ? true : false);
+	lua_pushboolean (L, IS_PART_MESSAGE (part) ? true : false);
 
 	return 1;
 }
@@ -1730,7 +1730,7 @@ lua_mimepart_is_attachment (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (!(part->flags & (RSPAMD_MIME_PART_IMAGE))) {
+	if (part->part_type != RSPAMD_MIME_PART_IMAGE) {
 		if (part->cd && part->cd->type == RSPAMD_CT_ATTACHMENT) {
 			lua_pushboolean (L, true);
 		}
@@ -1761,7 +1761,7 @@ lua_mimepart_is_text (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	lua_pushboolean (L, (part->flags & RSPAMD_MIME_PART_TEXT) ? true : false);
+	lua_pushboolean (L, part->part_type == RSPAMD_MIME_PART_TEXT);
 
 	return 1;
 }
@@ -1798,7 +1798,7 @@ lua_mimepart_get_image (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (!(part->flags & RSPAMD_MIME_PART_IMAGE) || part->specific.img == NULL) {
+	if (part->part_type != RSPAMD_MIME_PART_IMAGE || part->specific.img == NULL) {
 		lua_pushnil (L);
 	}
 	else {
@@ -1821,7 +1821,7 @@ lua_mimepart_get_archive (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (!(part->flags & RSPAMD_MIME_PART_ARCHIVE) || part->specific.arch == NULL) {
+	if (part->part_type != RSPAMD_MIME_PART_ARCHIVE || part->specific.arch == NULL) {
 		lua_pushnil (L);
 	}
 	else {
@@ -1845,7 +1845,7 @@ lua_mimepart_get_children (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (!IS_CT_MULTIPART (part->ct) || part->specific.mp->children == NULL) {
+	if (!IS_PART_MULTIPART (part) || part->specific.mp->children == NULL) {
 		lua_pushnil (L);
 	}
 	else {
@@ -1897,7 +1897,7 @@ lua_mimepart_get_text (lua_State * L)
 		return luaL_error (L, "invalid arguments");
 	}
 
-	if (!(part->flags & RSPAMD_MIME_PART_TEXT) || part->specific.txt == NULL) {
+	if (part->part_type != RSPAMD_MIME_PART_TEXT || part->specific.txt == NULL) {
 		lua_pushnil (L);
 	}
 	else {

@@ -278,7 +278,7 @@ rspamd_archive_process_zip (struct rspamd_task *task,
 		cd += fname_len + comment_len + extra_len + cd_basic_len;
 	}
 
-	part->flags |= RSPAMD_MIME_PART_ARCHIVE;
+	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
 
 	if (part->cd) {
@@ -510,7 +510,7 @@ rspamd_archive_process_rar_v4 (struct rspamd_task *task, const guchar *start,
 	}
 
 end:
-	part->flags |= RSPAMD_MIME_PART_ARCHIVE;
+	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
 	arch->archive_name = &part->cd->filename;
 	arch->size = part->parsed_data.len;
@@ -734,7 +734,7 @@ rspamd_archive_process_rar (struct rspamd_task *task,
 	}
 
 end:
-part->flags |= RSPAMD_MIME_PART_ARCHIVE;
+	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
 	if (part->cd != NULL) {
 		arch->archive_name = &part->cd->filename;
@@ -1674,7 +1674,7 @@ rspamd_archive_process_7zip (struct rspamd_task *task,
 
 	while ((p = rspamd_7zip_read_next_section (task, p, end, arch)) != NULL);
 
-	part->flags |= RSPAMD_MIME_PART_ARCHIVE;
+	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
 	if (part->cd != NULL) {
 		arch->archive_name = &part->cd->filename;
@@ -1824,7 +1824,7 @@ rspamd_archive_process_gzip (struct rspamd_task *task,
 
 set:
 	/* Set archive data */
-	part->flags |= RSPAMD_MIME_PART_ARCHIVE;
+	part->part_type = RSPAMD_MIME_PART_ARCHIVE;
 	part->specific.arch = arch;
 
 	if (part->cd) {
@@ -1918,7 +1918,7 @@ rspamd_archives_process (struct rspamd_task *task)
 	const guchar gz_magic[] = {0x1F, 0x8B};
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-		if (!(part->flags & (RSPAMD_MIME_PART_TEXT|RSPAMD_MIME_PART_IMAGE))) {
+		if (part->part_type == RSPAMD_MIME_PART_UNDEFINED) {
 			if (part->parsed_data.len > 0) {
 				if (rspamd_archive_cheat_detect (part, "zip",
 						zip_magic, sizeof (zip_magic))) {
@@ -1935,17 +1935,6 @@ rspamd_archives_process (struct rspamd_task *task)
 				else if (rspamd_archive_cheat_detect (part, "gz",
 						gz_magic, sizeof (gz_magic))) {
 					rspamd_archive_process_gzip (task, part);
-				}
-
-				if (IS_CT_TEXT (part->ct) &&
-						(part->flags & RSPAMD_MIME_PART_ARCHIVE) &&
-						part->specific.arch) {
-					struct rspamd_archive *arch = part->specific.arch;
-
-					msg_info_task ("found %s archive with incorrect content-type: %T/%T",
-							rspamd_archive_type_str (arch->type),
-							&part->ct->type, &part->ct->subtype);
-					part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
 				}
 			}
 		}

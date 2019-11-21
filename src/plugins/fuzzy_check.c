@@ -2717,7 +2717,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 			io = NULL;
 
 			if (check_part) {
-				if (mime_part->flags & RSPAMD_MIME_PART_TEXT &&
+				if (mime_part->part_type == RSPAMD_MIME_PART_TEXT &&
 					!(flags & FUZZY_CHECK_FLAG_NOTEXT)) {
 					part = mime_part->specific.txt;
 
@@ -2730,7 +2730,7 @@ fuzzy_generate_commands (struct rspamd_task *task, struct fuzzy_rule *rule,
 							part,
 							mime_part);
 				}
-				else if (mime_part->flags & RSPAMD_MIME_PART_IMAGE &&
+				else if (mime_part->part_type == RSPAMD_MIME_PART_IMAGE &&
 					!(flags & FUZZY_CHECK_FLAG_NOIMAGES)) {
 					image = mime_part->specific.img;
 

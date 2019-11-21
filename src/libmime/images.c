@@ -52,7 +52,7 @@ rspamd_images_process (struct rspamd_task *task)
 	struct rspamd_mime_part *part;
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-		if (!(part->flags & (RSPAMD_MIME_PART_TEXT|RSPAMD_MIME_PART_ARCHIVE))) {
+		if (part->part_type == RSPAMD_MIME_PART_UNDEFINED) {
 			if (part->detected_type &&
 				strcmp (part->detected_type, "image") == 0 &&
 				part->parsed_data.len > 0) {
@@ -610,7 +610,7 @@ process_image (struct rspamd_task *task, struct rspamd_mime_part *part)
 
 		img->parent = part;
 
-		part->flags |= RSPAMD_MIME_PART_IMAGE;
+		part->part_type = RSPAMD_MIME_PART_IMAGE;
 		part->specific.img = img;
 	}
 }
@@ -715,7 +715,7 @@ rspamd_images_link (struct rspamd_task *task)
 	guint i;
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-		if (part->flags & RSPAMD_MIME_PART_IMAGE) {
+		if (part->part_type == RSPAMD_MIME_PART_IMAGE) {
 			rspamd_image_process_part (task, part);
 		}
 	}

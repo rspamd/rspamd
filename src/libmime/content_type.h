@@ -34,10 +34,6 @@ enum rspamd_content_type_flags {
 	RSPAMD_CONTENT_TYPE_MISSING = 1 << 5,
 };
 
-#define IS_CT_MULTIPART(ct) ((ct) && ((ct)->flags & RSPAMD_CONTENT_TYPE_MULTIPART))
-#define IS_CT_TEXT(ct) ((ct) && ((ct)->flags & RSPAMD_CONTENT_TYPE_TEXT))
-#define IS_CT_MESSAGE(ct) ((ct) &&((ct)->flags & RSPAMD_CONTENT_TYPE_MESSAGE))
-
 enum rspamd_content_param_flags {
 	RSPAMD_CONTENT_PARAM_NORMAL = 0,
 	RSPAMD_CONTENT_PARAM_RFC2231 = (1 << 0),

@@ -821,9 +821,10 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 	gboolean found_html = FALSE, found_txt = FALSE, straight_ct = FALSE;
 	enum rspamd_action_type act;
 
-	if ((IS_CT_TEXT (mime_part->ct) && (straight_ct = TRUE)) ||
-					(mime_part->detected_type &&
-						strcmp (mime_part->detected_type, "text") == 0)) {
+	if (((mime_part->ct && (mime_part->ct->flags & RSPAMD_CONTENT_TYPE_TEXT)) &&
+		 (straight_ct = TRUE)) ||
+		(mime_part->detected_type &&
+		 strcmp (mime_part->detected_type, "text") == 0)) {
 		found_txt = TRUE;
 
 		html_tok.begin = "html";
@@ -872,7 +873,7 @@ rspamd_message_process_text_part_maybe (struct rspamd_task *task,
 	}
 
 	g_ptr_array_add (MESSAGE_FIELD (task, text_parts), text_part);
-	mime_part->flags |= RSPAMD_MIME_PART_TEXT;
+	mime_part->part_type = RSPAMD_MIME_PART_TEXT;
 	mime_part->specific.txt = text_part;
 
 	act = rspamd_check_gtube (task, text_part);
@@ -1007,7 +1008,7 @@ rspamd_message_from_data (struct rspamd_task *task, const guchar *start,
 			}
 			else {
 				/* Check sanity */
-				if (IS_CT_TEXT (part->ct)) {
+				if (part->ct && (part->ct->flags & RSPAMD_CONTENT_TYPE_TEXT)) {
 					RSPAMD_FTOK_FROM_STR (&srch, "application");
 
 					if (rspamd_ftok_cmp (&ct->type, &srch) == 0) {
@@ -1062,10 +1063,16 @@ rspamd_message_dtor (struct rspamd_message *msg)
 			rspamd_message_headers_unref (p->raw_headers);
 		}
 
-		if (IS_CT_MULTIPART (p->ct)) {
+		if (IS_PART_MULTIPART (p)) {
 			if (p->specific.mp->children) {
 				g_ptr_array_free (p->specific.mp->children, TRUE);
 			}
+		}
+
+		if (p->part_type == RSPAMD_MIME_PART_CUSTOM_LUA && p->specific.lua_ref != -1) {
+			luaL_unref (msg->task->cfg->lua_state,
+					LUA_REGISTRYINDEX,
+					p->specific.lua_ref);
 		}
 	}
 
@@ -1104,6 +1111,7 @@ rspamd_message_new (struct rspamd_task *task)
 
 	msg->parts = g_ptr_array_sized_new (4);
 	msg->text_parts = g_ptr_array_sized_new (2);
+	msg->task = task;
 
 	REF_INIT_RETAIN (msg, rspamd_message_dtor);
 
@@ -1441,8 +1449,7 @@ rspamd_message_process (struct rspamd_task *task)
 			lua_settop (L, func_pos);
 		}
 
-		if (!(part->flags & (RSPAMD_MIME_PART_IMAGE|RSPAMD_MIME_PART_ARCHIVE)) &&
-				(!part->ct || !(part->ct->flags & (RSPAMD_CONTENT_TYPE_MULTIPART|RSPAMD_CONTENT_TYPE_MESSAGE)))) {
+		if (part->part_type == RSPAMD_MIME_PART_UNDEFINED) {
 			rspamd_message_process_text_part_maybe (task, part);
 		}
 	}
