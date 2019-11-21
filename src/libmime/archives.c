@@ -1936,6 +1936,17 @@ rspamd_archives_process (struct rspamd_task *task)
 						gz_magic, sizeof (gz_magic))) {
 					rspamd_archive_process_gzip (task, part);
 				}
+
+				if (part->ct && (part->ct->flags & RSPAMD_CONTENT_TYPE_TEXT) &&
+						part->part_type == RSPAMD_MIME_PART_ARCHIVE &&
+						part->specific.arch) {
+					struct rspamd_archive *arch = part->specific.arch;
+
+					msg_info_task ("found %s archive with incorrect content-type: %T/%T",
+							rspamd_archive_type_str (arch->type),
+							&part->ct->type, &part->ct->subtype);
+					part->ct->flags |= RSPAMD_CONTENT_TYPE_BROKEN;
+				}
 			}
 		}
 	}
