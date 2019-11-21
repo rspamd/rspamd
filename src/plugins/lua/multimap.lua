@@ -590,7 +590,7 @@ local function multimap_callback(task, rule)
 
 
     if opt then
-      task:insert_result(forced, symbol, score, opt)
+      task:insert_result(forced, symbol, score, tostring(opt))
     else
       task:insert_result(forced, symbol, score)
     end
