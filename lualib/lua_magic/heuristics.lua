@@ -61,18 +61,24 @@ local zip_patterns = {
 local txt_trie
 local txt_patterns = {
   html = {
-    [[(?i)\s*<html]],
-    [[(?i)\s*<\!DOCTYPE HTML]],
-    [[(?i)\s*<xml]],
-    [[(?i)\s*<body]],
-    [[(?i)\s*<table]],
-    [[(?i)\s*<a]],
-    [[(?i)\s*<p]],
-    [[(?i)\s*<div]],
-    [[(?i)\s*<span]],
+    {[[(?i)\s*<html]], 30},
+    {[[(?i)\s*<\!DOCTYPE HTML]], 30},
+    {[[(?i)\s*<xml]], 20},
+    {[[(?i)\s*<body]], 20},
+    {[[(?i)\s*<table]], 20},
+    {[[(?i)\s*<a]], 10},
+    {[[(?i)\s*<p]], 10},
+    {[[(?i)\s*<div]], 10},
+    {[[(?i)\s*<span]], 10},
   },
   csv = {
-    [[(?:[-a-zA-Z0-9_]+\s*,){2,}(?:[-a-zA-Z0-9_]+,?[ ]*[\r\n])]]
+    {[[(?:[-a-zA-Z0-9_]+\s*,){2,}(?:[-a-zA-Z0-9_]+,?[ ]*[\r\n])]], 20}
+  },
+  ics = {
+    {[[^BEGIN:VCALENDAR\r?\n]], 40},
+  },
+  vcf = {
+    {[[^BEGIN:VCARD\r?\n]], 40},
   },
 }
 
@@ -95,7 +101,7 @@ local function compile_tries()
       for _,pat in ipairs(pats) do
         -- These are utf16 strings in fact...
         strs[#strs + 1] = transform_func(pat)
-        indexes[#indexes + 1] = ext
+        indexes[#indexes + 1] = {ext, pat}
       end
     end
 
@@ -131,7 +137,7 @@ local function compile_tries()
         function(pat) return pat end)
     -- Text patterns at the initial fragment
     txt_trie = compile_pats(txt_patterns, txt_patterns_indexes,
-        function(pat) return pat end,
+        function(pat_tbl) return pat_tbl[1] end,
         bit.bor(rspamd_trie.flags.re,
             rspamd_trie.flags.dot_all,
             rspamd_trie.flags.no_start))
@@ -184,8 +190,8 @@ local function detect_ole_format(input, log_obj)
         for n,_ in pairs(matches) do
           if msoffice_clsid_indexes[n] then
             lua_util.debugm(N, log_obj, "found valid clsid for %s",
-                msoffice_clsid_indexes[n])
-            return true,msoffice_clsid_indexes[n]
+                msoffice_clsid_indexes[n][1])
+            return true,msoffice_clsid_indexes[n][1]
           end
         end
       end
@@ -195,7 +201,7 @@ local function detect_ole_format(input, log_obj)
       if matches then
         for n,_ in pairs(matches) do
           if msoffice_patterns_indexes[n] then
-            return true,msoffice_patterns_indexes[n]
+            return true,msoffice_patterns_indexes[n][1]
           end
         end
       end
@@ -295,8 +301,8 @@ local function detect_archive_flaw(part, arch, log_obj)
         for n,_ in pairs(matches) do
           if zip_patterns_indexes[n] then
             lua_util.debugm(N, log_obj, "found zip pattern for %s",
-                zip_patterns_indexes[n])
-            return zip_patterns_indexes[n],40
+                zip_patterns_indexes[n][1])
+            return zip_patterns_indexes[n][1],40
           end
         end
       end
@@ -392,11 +398,11 @@ exports.text_part_heuristic = function(part, log_obj)
       if matches then
         -- Require at least 2 occurrences of those patterns
         for n,positions in pairs(matches) do
-          local ext = txt_patterns_indexes[n]
+          local ext,weight = txt_patterns_indexes[n][1], txt_patterns_indexes[n][2][2]
           if ext then
-            res[ext] = (res[ext] or 0) + 20 * #positions
+            res[ext] = (res[ext] or 0) + weight * #positions
             lua_util.debugm(N, log_obj, "found txt pattern for %s: %s, total: %s",
-                ext, #positions, res[ext])
+                ext, weight * #positions, res[ext])
           end
         end
 

@@ -282,6 +282,16 @@ local types = {
     ct = 'text/csv',
     av_check = false,
   },
+  ics = {
+    type = 'text',
+    ct = 'text/calendar',
+    av_check = false,
+  },
+  vcf = {
+    type = 'text',
+    ct = 'text/vcard',
+    av_check = false,
+  },
   eml = {
     type = 'message',
     ct = 'message/rfc822',
