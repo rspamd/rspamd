@@ -590,7 +590,12 @@ local function multimap_callback(task, rule)
 
 
     if opt then
-      task:insert_result(forced, symbol, score, tostring(opt))
+      if type(opt) == 'table' then
+        task:insert_result(forced, symbol, score, fun.totable(fun.map(tostring, opt)))
+      else
+        task:insert_result(forced, symbol, score, tostring(opt))
+      end
+
     else
       task:insert_result(forced, symbol, score)
     end
