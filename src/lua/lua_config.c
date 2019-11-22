@@ -578,7 +578,7 @@ rspamd_config:add_on_load(function(cfg, ev_base)
 	rspamd_config:add_periodic(ev_base, 1.0, function(cfg, ev_base)
 		local logger = require "rspamd_logger"
 		logger.infox(cfg, "periodic function")
-		return true -- if return false, then the periodic event is removed
+		return true -- if return numeric, a new interval is set. if return false, then the periodic event is removed
 	end)
 end)
  */
