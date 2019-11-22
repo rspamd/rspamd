@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <src/libmime/message.h>
 #include "lua_common.h"
 #include "libmime/message.h"
 #include "libmime/lang_detection.h"
@@ -522,6 +523,26 @@ LUA_FUNCTION_DEF (mimepart, headers_foreach);
  */
 LUA_FUNCTION_DEF (mimepart, get_parent);
 
+/***
+ * @method mime_part:get_specific()
+ * Returns specific lua content for this part
+ * @return {any} specific lua content
+ */
+LUA_FUNCTION_DEF (mimepart, get_specific);
+
+/***
+ * @method mime_part:set_specific(<any>)
+ * Sets a specific content for this part
+ * @return {any} previous specific lua content (or nil)
+ */
+LUA_FUNCTION_DEF (mimepart, set_specific);
+
+/***
+ * @method mime_part:is_specific(<any>)
+ * Returns true if part has specific lua content
+ * @return {boolean} flag
+ */
+LUA_FUNCTION_DEF (mimepart, is_specific);
 
 static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_content),
@@ -555,6 +576,9 @@ static const struct luaL_reg mimepartlib_m[] = {
 	LUA_INTERFACE_DEF (mimepart, get_digest),
 	LUA_INTERFACE_DEF (mimepart, get_id),
 	LUA_INTERFACE_DEF (mimepart, headers_foreach),
+	LUA_INTERFACE_DEF (mimepart, get_specific),
+	LUA_INTERFACE_DEF (mimepart, set_specific),
+	LUA_INTERFACE_DEF (mimepart, is_specific),
 	{"__tostring", rspamd_lua_class_tostring},
 	{NULL, NULL}
 };
@@ -2023,6 +2047,99 @@ lua_mimepart_headers_foreach (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+lua_mimepart_get_specific (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (part->part_type != RSPAMD_MIME_PART_CUSTOM_LUA) {
+		lua_pushnil (L);
+	}
+	else {
+		lua_rawgeti (L, LUA_REGISTRYINDEX, part->specific.lua_specific.cbref);
+	}
+
+	return 1;
+}
+
+static gint
+lua_mimepart_is_specific (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, part->part_type == RSPAMD_MIME_PART_CUSTOM_LUA);
+
+	return 1;
+}
+
+static gint
+lua_mimepart_set_specific (lua_State * L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_mime_part *part = lua_check_mimepart (L);
+
+	if (part == NULL || lua_isnil (L, 2)) {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	if (part->part_type != RSPAMD_MIME_PART_UNDEFINED &&
+			part->part_type != RSPAMD_MIME_PART_CUSTOM_LUA) {
+		msg_warn ("internal error: trying to set specific lua content on part of type %d",
+				part->part_type);
+	}
+
+	if (part->part_type == RSPAMD_MIME_PART_CUSTOM_LUA) {
+		/* Push old specific data */
+		lua_rawgeti (L, LUA_REGISTRYINDEX, part->specific.lua_specific.cbref);
+		luaL_unref (L, LUA_REGISTRYINDEX, part->specific.lua_specific.cbref);
+	}
+	else {
+		lua_pushnil (L);
+	}
+
+	/* Now, we push argument on the position 2 and save its reference */
+	lua_pushvalue (L, 2);
+	part->specific.lua_specific.cbref = luaL_ref (L, LUA_REGISTRYINDEX);
+	/* Now stack has just a return value as luaL_ref removes value from stack */
+
+	gint ltype = lua_type (L, 2);
+
+	switch (ltype) {
+	case LUA_TTABLE:
+		part->specific.lua_specific.type = RSPAMD_LUA_PART_TABLE;
+		break;
+	case LUA_TSTRING:
+		part->specific.lua_specific.type = RSPAMD_LUA_PART_STRING;
+		break;
+	case LUA_TUSERDATA:
+		if (rspamd_lua_check_udata_maybe (L, 2, "rspamd{text}")) {
+			part->specific.lua_specific.type = RSPAMD_LUA_PART_TEXT;
+		}
+		else {
+			part->specific.lua_specific.type = RSPAMD_LUA_PART_UNKNOWN;
+		}
+		break;
+	case LUA_TFUNCTION:
+		part->specific.lua_specific.type = RSPAMD_LUA_PART_FUNCTION;
+		break;
+	default:
+		part->specific.lua_specific.type = RSPAMD_LUA_PART_UNKNOWN;
+		break;
+	}
+
+	return 1;
 }
 
 void
