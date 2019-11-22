@@ -65,6 +65,19 @@ struct rspamd_mime_multipart {
 	rspamd_ftok_t boundary;
 };
 
+enum rspamd_lua_specific_type {
+	RSPAMD_LUA_PART_TEXT,
+	RSPAMD_LUA_PART_STRING,
+	RSPAMD_LUA_PART_TABLE,
+	RSPAMD_LUA_PART_FUNCTION,
+	RSPAMD_LUA_PART_UNKNOWN,
+};
+
+struct rspamd_lua_specific_part {
+	gint cbref;
+	enum rspamd_lua_specific_type type;
+};
+
 struct rspamd_mime_part {
 	struct rspamd_content_type *ct;
 	struct rspamd_content_type *detected_ct;
@@ -91,7 +104,7 @@ struct rspamd_mime_part {
 		struct rspamd_mime_text_part *txt;
 		struct rspamd_image *img;
 		struct rspamd_archive *arch;
-		gint lua_ref;
+		struct rspamd_lua_specific_part lua_specific;
 	} specific;
 
 	guchar digest[rspamd_cryptobox_HASHBYTES];

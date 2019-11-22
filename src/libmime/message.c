@@ -1069,10 +1069,11 @@ rspamd_message_dtor (struct rspamd_message *msg)
 			}
 		}
 
-		if (p->part_type == RSPAMD_MIME_PART_CUSTOM_LUA && p->specific.lua_ref != -1) {
+		if (p->part_type == RSPAMD_MIME_PART_CUSTOM_LUA &&
+				p->specific.lua_specific.cbref != -1) {
 			luaL_unref (msg->task->cfg->lua_state,
 					LUA_REGISTRYINDEX,
-					p->specific.lua_ref);
+					p->specific.lua_specific.cbref);
 		}
 	}
 
