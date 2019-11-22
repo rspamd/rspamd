@@ -21,9 +21,9 @@
         "id-length": ["error", { "min": 1 }],
         "indent": ["error", 4, { "SwitchCase": 1 }],
         // "max-len": ["error", { "code": 120 }],
-        "key-spacing": ["error", {
-            "singleLine": { "afterColon": false }
-        }],
+        // "key-spacing": ["error", {
+        //     "singleLine": { "afterColon": false }
+        // }],
         "line-comment-position": "off",
         "max-params": ["warn", 6],
         "max-statements": ["warn", 44],
@@ -63,10 +63,12 @@
         // Temporarily disabled rules
         "func-style": "off",
         "function-paren-newline": "off",
+        "key-spacing": "off",
         "max-len": "off",
         "max-lines": "off",
         "max-lines-per-function": "off",
         "no-invalid-this": "off",
+        "prefer-exponentiation-operator": "off",
         "sort-keys": "off",
         "sort-vars": "off"
     }
