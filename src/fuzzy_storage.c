@@ -1599,7 +1599,7 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 		keystat = rspamd_mempool_alloc0 (pool, sizeof (*keystat));
 		/* Hash of ip -> fuzzy_key_stat */
 		keystat->last_ips = rspamd_lru_hash_new_full (1024,
-				(GDestroyNotify) rspamd_inet_address_free, fuzzy_key_stat_dtor,
+				(GDestroyNotify) rspamd_inet_address_free, g_free,
 				rspamd_inet_address_hash, rspamd_inet_address_equal);
 		key->stat = keystat;
 		pk = rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_PK,
