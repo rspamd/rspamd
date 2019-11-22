@@ -866,6 +866,12 @@ local function multimap_callback(task, rule)
         end
       end
     end,
+    user = function()
+      local user = task:get_user()
+      if user then
+        match_rule(rule, user)
+      end
+    end,
     filename = function()
       local parts = task:get_parts()
 
@@ -1037,6 +1043,7 @@ local function add_multimap_rule(key, newrule)
     symbol_options = true,
     filename = true,
     url = true,
+    user = true,
     content = true,
     hostname = true,
     asn = true,
