@@ -112,6 +112,7 @@ struct fuzzy_key_stat {
 	guint64 deleted;
 	guint64 errors;
 	rspamd_lru_hash_t *last_ips;
+	ref_entry_t ref;
 };
 
 struct rspamd_fuzzy_mirror {
@@ -380,6 +381,16 @@ fuzzy_key_stat_dtor (gpointer p)
 	if (st->last_ips) {
 		rspamd_lru_hash_destroy (st->last_ips);
 	}
+
+	g_free (st);
+}
+
+static void
+fuzzy_key_stat_unref (gpointer p)
+{
+	struct fuzzy_key_stat *st = p;
+
+	REF_RELEASE (st);
 }
 
 static void
@@ -387,8 +398,12 @@ fuzzy_key_dtor (gpointer p)
 {
 	struct fuzzy_key *key = p;
 
-	if (key->stat) {
-		fuzzy_key_stat_dtor (key->stat);
+	if (key) {
+		if (key->stat) {
+			REF_RELEASE (key->stat);
+		}
+
+		g_free (key);
 	}
 }
 
@@ -886,10 +901,12 @@ rspamd_fuzzy_process_command (struct fuzzy_session *session)
 		if (ip_stat == NULL) {
 			naddr = rspamd_inet_address_copy (session->addr);
 			ip_stat = g_malloc0 (sizeof (*ip_stat));
+			REF_INIT_RETAIN (ip_stat, fuzzy_key_stat_dtor);
 			rspamd_lru_hash_insert (session->key_stat->last_ips,
 					naddr, ip_stat, -1, 0);
 		}
 
+		REF_RETAIN (ip_stat);
 		session->ip_stat = ip_stat;
 	}
 
@@ -1169,6 +1186,11 @@ fuzzy_session_destroy (gpointer d)
 	rspamd_inet_address_free (session->addr);
 	rspamd_explicit_memzero (session->nm, sizeof (session->nm));
 	session->worker->nconns--;
+
+	if (session->ip_stat) {
+		REF_RELEASE (session->ip_stat);
+	}
+
 	g_free (session);
 }
 
@@ -1594,12 +1616,14 @@ fuzzy_parse_keypair (rspamd_mempool_t *pool,
 			return FALSE;
 		}
 
-		key = rspamd_mempool_alloc0 (pool, sizeof (*key));
+		key = g_malloc0 (sizeof (*key));
 		key->key = kp;
-		keystat = rspamd_mempool_alloc0 (pool, sizeof (*keystat));
+		keystat = g_malloc0 (sizeof (*keystat));
+		REF_INIT_RETAIN (keystat, fuzzy_key_stat_dtor);
 		/* Hash of ip -> fuzzy_key_stat */
 		keystat->last_ips = rspamd_lru_hash_new_full (1024,
-				(GDestroyNotify) rspamd_inet_address_free, g_free,
+				(GDestroyNotify) rspamd_inet_address_free,
+				fuzzy_key_stat_unref,
 				rspamd_inet_address_hash, rspamd_inet_address_equal);
 		key->stat = keystat;
 		pk = rspamd_keypair_component (kp, RSPAMD_KEYPAIR_COMPONENT_PK,
