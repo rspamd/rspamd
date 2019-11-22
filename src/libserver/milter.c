@@ -955,6 +955,8 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 		if (r == -1) {
 			if (errno == EAGAIN || errno == EINTR) {
 				rspamd_milter_plan_io (session, priv, EV_READ);
+
+				return TRUE;
 			}
 			else {
 				/* Fatal IO error */
@@ -964,6 +966,10 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 				priv->err_cb (priv->fd, session, priv->ud, err);
 				REF_RELEASE (session);
 				g_error_free (err);
+
+				REF_RELEASE (session);
+
+				return FALSE;
 			}
 		}
 		else if (r == 0) {
@@ -973,6 +979,10 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 			priv->err_cb (priv->fd, session, priv->ud, err);
 			REF_RELEASE (session);
 			g_error_free (err);
+
+			REF_RELEASE (session);
+
+			return FALSE;
 		}
 		else {
 			priv->parser.buf->len += r;
@@ -1023,6 +1033,8 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 						REF_RELEASE (session);
 						g_error_free (err);
 
+						REF_RELEASE (session);
+
 						return FALSE;
 					}
 				}
@@ -1033,6 +1045,8 @@ rspamd_milter_handle_session (struct rspamd_milter_session *session,
 					priv->err_cb (priv->fd, session, priv->ud, err);
 					REF_RELEASE (session);
 					g_error_free (err);
+
+					REF_RELEASE (session);
 
 					return FALSE;
 				}
