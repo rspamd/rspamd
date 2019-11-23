@@ -2095,6 +2095,10 @@ start_fuzzy (struct rspamd_worker *worker)
 		rspamd_keypair_cache_destroy (ctx->keypair_cache);
 	}
 
+	if (ctx->ratelimit_buckets) {
+		rspamd_lru_hash_destroy (ctx->ratelimit_buckets);
+	}
+
 	REF_RELEASE (ctx->cfg);
 	rspamd_log_close (worker->srv->logger, TRUE);
 
