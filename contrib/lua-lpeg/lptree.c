@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <limits.h>
 #include <string.h>
+#include <src/lua/lua_common.h>
 
 
 #include "lua.h"
@@ -1155,9 +1156,25 @@ static int lp_match (lua_State *L) {
 #endif
   const char *r;
   size_t l;
+  const char *s;
+
   Pattern *p = (getpatt(L, 1, NULL), getpattern(L, 1));
   Instruction *code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
-  const char *s = luaL_checklstring(L, SUBJIDX, &l);
+
+  if (lua_type (L, SUBJIDX) == LUA_TSTRING) {
+	  s = luaL_checklstring (L, SUBJIDX, &l);
+  }
+  else if (lua_type (L, SUBJIDX) == LUA_TUSERDATA) {
+  	struct rspamd_lua_text *t = lua_check_text (L, SUBJIDX);
+  	if (!t) {
+		return luaL_error (L, "invalid argument (not a text)");
+  	}
+  	s = t->start;
+  	l = t->len;
+  }
+  else {
+  	return luaL_error (L, "invalid argument");
+  }
   size_t i = initposition(L, l);
   int ptop = lua_gettop(L), rs;
   lua_pushnil(L);  /* initialize subscache */
