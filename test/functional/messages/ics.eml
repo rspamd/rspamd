@@ -1,0 +1,53 @@
+Return-Path: <root@srv.example.com>
+To: test@example.com
+From: root@srv.example.com
+Subject: test Sat, 26 Jan 2019 12:04:58 +0100
+Message-Id: <20190126120458.015328@srv.example.com>
+Date: Sat, 26 Jan 2019 12:04:58 +0100
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="_----------=_1574345186400022"
+
+--_----------=_1574345186400022
+Content-Type: multipart/alternative; boundary="_----------=_1574345186400023"
+
+This is a multi-part message in MIME format.
+
+--_----------=_1574345186400023
+Content-Disposition: inline
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/plain; charset="utf-8"; format="flowed"
+
+
+
+--_----------=_1574345186400023
+Content-Disposition: inline
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/html; charset="utf-8"
+
+<div><br data-mce-bogus=3D"1"></div>=
+
+--_----------=_1574345186400023--
+
+--_----------=_1574345186400022
+Content-Disposition: attachment; filename="test2.ics"
+Content-Transfer-Encoding: base64
+Content-Type: text/calendar; name="test.ics"
+
+QkVHSU46VkNBTEVOREFSDQpNRVRIT0Q6UFVCTElTSA0KVkVSU0lPTjoyLjANClgt
+V1ItQ0FMTkFNRTp0ZXN0DQpQUk9ESUQ6LS8vQXBwbGUgSW5jLi8vTWFjIE9TIFgg
+MTAuMTQuMy8vRU4NClgtQVBQTEUtQ0FMRU5EQVItQ09MT1I6IzFEOUJGNg0KWC1X
+Ui1USU1FWk9ORTpFdXJvcGUvTW9zY293DQpDQUxTQ0FMRTpHUkVHT1JJQU4NCkJF
+R0lOOlZUSU1FWk9ORQ0KVFpJRDpFdXJvcGUvTW9zY293DQpCRUdJTjpTVEFOREFS
+RA0KVFpPRkZTRVRGUk9NOiswMjMwMTcNCkRUU1RBUlQ6MjAwMTAxMDFUMDAwMDAw
+DQpUWk5BTUU6R01UKzMNClRaT0ZGU0VUVE86KzAyMzAxNw0KRU5EOlNUQU5EQVJE
+DQpFTkQ6VlRJTUVaT05FDQpCRUdJTjpWRVZFTlQNCkNSRUFURUQ6MjAxOTExMjRU
+MTA0ODE3Wg0KVUlEOkU3QUIxQkY2LTkyOTctNDJFNS05Njc4LTA1Nzk3QzM0OEVF
+NA0KRFRFTkQ7VFpJRD1FdXJvcGUvTW9zY293OjIwMTkxMTIyVDEwMDAwMA0KVFJB
+TlNQOk9QQVFVRQ0KWC1BUFBMRS1UUkFWRUwtQURWSVNPUlktQkVIQVZJT1I6QVVU
+T01BVElDDQpTVU1NQVJZOmh0dHA6Ly90ZXN0LmNvbQ0KTEFTVC1NT0RJRklFRDoy
+MDE5MTEyNFQxMDQ4MzFaDQpEVFNUQU1QOjIwMTkxMTI0VDEwNDgzMVoNCkRUU1RB
+UlQ7VFpJRD1FdXJvcGUvTW9zY293OjIwMTkxMTIyVDA5MDAwMA0KU0VRVUVOQ0U6
+MA0KRU5EOlZFVkVOVA0KRU5EOlZDQUxFTkRBUg0K
+
+
+--_----------=_1574345186400022--
