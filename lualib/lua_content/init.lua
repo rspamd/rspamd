@@ -18,3 +18,74 @@ limitations under the License.
 -- @module lua_content
 -- This module contains content processing logic
 --]]
+
+
+local exports = {}
+local N = "lua_content"
+local lua_util = require "lua_util"
+
+local content_modules = {
+  ical = {
+    mime_type = "text/calendar",
+    module = require "lua_content/ical",
+    extensions = {'ical'},
+    output = "text"
+  },
+}
+
+local modules_by_mime_type
+local modules_by_extension
+
+local function init()
+  modules_by_mime_type = {}
+  modules_by_extension = {}
+  for k,v in pairs(content_modules) do
+    if v.mime_type then
+      modules_by_mime_type[v.mime_type] = {k, v}
+    end
+    if v.extensions then
+      for _,ext in ipairs(v.extensions) do
+        modules_by_extension[ext] = {k, v}
+      end
+    end
+  end
+end
+
+exports.maybe_process_mime_part = function(part, log_obj)
+  if not modules_by_mime_type then
+    init()
+  end
+
+  local ctype, csubtype = part:get_type()
+  local mt = string.format("%s/%s", ctype or 'application',
+      csubtype or 'octet-stream')
+  local pair = modules_by_mime_type[mt]
+
+  if not pair then
+    local ext = part:get_detected_ext()
+
+    if ext then
+      pair = modules_by_extension[ext]
+    end
+  end
+
+  if pair then
+    lua_util.debugm(N, log_obj, "found known content of type %s: %s",
+        mt, pair[1])
+
+    local data = pair[2].module.process(part:get_content(), part, log_obj)
+
+    if data then
+      lua_util.debugm(N, log_obj, "extracted content from %s: %s type",
+          pair[1], type(data))
+      part:set_specific(data)
+    else
+      lua_util.debugm(N, log_obj, "failed to extract anything from %s",
+          pair[1])
+    end
+  end
+
+end
+
+
+return exports

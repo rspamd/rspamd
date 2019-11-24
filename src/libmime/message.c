@@ -694,71 +694,8 @@ rspamd_message_process_plain_text_part (struct rspamd_task *task,
 	rspamd_mime_text_part_maybe_convert (task, text_part);
 
 	if (text_part->utf_raw_content != NULL) {
-		/* Check for ical */
-		rspamd_ftok_t cal_ct;
-
-		/*
-		 * TODO: If we want to process more than that, we need
-		 * to create some generic framework that accepts a part
-		 * and returns a processed data
-		 */
-		RSPAMD_FTOK_ASSIGN (&cal_ct, "calendar");
-
-		if (rspamd_ftok_casecmp (&cal_ct, &text_part->mime_part->ct->subtype) == 0) {
-			lua_State *L = task->cfg->lua_state;
-			gint err_idx;
-
-			lua_pushcfunction (L, &rspamd_lua_traceback);
-			err_idx = lua_gettop (L);
-
-			/* Obtain function */
-			if (!rspamd_lua_require_function (L, "lua_ical", "ical_txt_values")) {
-				msg_err_task ("cannot require lua_ical.ical_txt_values");
-				lua_settop (L, err_idx - 1);
-
-				return FALSE;
-			}
-
-			lua_pushlstring (L, text_part->utf_raw_content->data,
-					text_part->utf_raw_content->len);
-
-			if (lua_pcall (L, 1, 1, err_idx) != 0) {
-				msg_err_task ("cannot call lua lua_ical.ical_txt_values: %s",
-						lua_tostring (L, -1));
-				lua_settop (L, err_idx - 1);
-
-				return FALSE;
-			}
-
-			if (lua_type (L, -1) == LUA_TSTRING) {
-				const char *ndata;
-				gsize nsize;
-
-				ndata = lua_tolstring (L, -1, &nsize);
-				text_part->utf_content = g_byte_array_sized_new (nsize);
-				g_byte_array_append (text_part->utf_content, ndata, nsize);
-				rspamd_mempool_add_destructor (task->task_pool,
-						(rspamd_mempool_destruct_t) free_byte_array_callback,
-						text_part->utf_content);
-			}
-			else if (lua_type (L, -1) == LUA_TNIL) {
-				msg_info_task ("cannot convert text/calendar to plain text");
-				text_part->utf_content = text_part->utf_raw_content;
-			}
-			else {
-				msg_err_task ("invalid return type when calling lua_ical.ical_txt_values: %s",
-						lua_typename (L, lua_type (L, -1)));
-				lua_settop (L, err_idx - 1);
-
-				return FALSE;
-			}
-
-			lua_settop (L, err_idx - 1);
-		}
-		else {
-			/* Just have the same content */
-			text_part->utf_content = text_part->utf_raw_content;
-		}
+		/* Just have the same content */
+		text_part->utf_content = text_part->utf_raw_content;
 	}
 	else {
 		/*
@@ -1378,7 +1315,7 @@ rspamd_message_process (struct rspamd_task *task)
 	guint tw, *ptw, dw;
 	struct rspamd_mime_part *part;
 	lua_State *L = NULL;
-	gint func_pos = -1;
+	gint magic_func_pos = -1, content_func_pos = -1, old_top = -1;
 
 	if (task->cfg) {
 		L = task->cfg->lua_state;
@@ -1386,20 +1323,32 @@ rspamd_message_process (struct rspamd_task *task)
 
 	rspamd_archives_process (task);
 
+	if (L) {
+		old_top = lua_gettop (L);
+	}
+
 	if (L && rspamd_lua_require_function (L,
 			"lua_magic", "detect_mime_part")) {
-		func_pos = lua_gettop (L);
+		magic_func_pos = lua_gettop (L);
 	}
 	else {
 		msg_err_task ("cannot require lua_magic.detect_mime_part");
 	}
 
+	if (L && rspamd_lua_require_function (L,
+			"lua_content", "maybe_process_mime_part")) {
+		content_func_pos = lua_gettop (L);
+	}
+	else {
+		msg_err_task ("cannot require lua_content.maybe_process_mime_part");
+	}
+
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
-		if (func_pos != -1 && part->parsed_data.len > 0) {
+		if (magic_func_pos != -1 && part->parsed_data.len > 0) {
 			struct rspamd_mime_part **pmime;
 			struct rspamd_task **ptask;
 
-			lua_pushvalue (L, func_pos);
+			lua_pushvalue (L, magic_func_pos);
 			pmime = lua_newuserdata (L, sizeof (struct rspamd_mime_part *));
 			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
 			*pmime = part;
@@ -1447,7 +1396,27 @@ rspamd_message_process (struct rspamd_task *task)
 				}
 			}
 
-			lua_settop (L, func_pos);
+			lua_settop (L, magic_func_pos);
+		}
+
+		/* Now detect content */
+		if (content_func_pos != -1 && part->parsed_data.len > 0) {
+			struct rspamd_mime_part **pmime;
+			struct rspamd_task **ptask;
+
+			lua_pushvalue (L, content_func_pos);
+			pmime = lua_newuserdata (L, sizeof (struct rspamd_mime_part *));
+			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
+			*pmime = part;
+			ptask = lua_newuserdata (L, sizeof (struct rspamd_task *));
+			rspamd_lua_setclass (L, "rspamd{task}", -1);
+			*ptask = task;
+
+			if (lua_pcall (L, 2, 2, 0) != 0) {
+				msg_err_task ("cannot detect content: %s", lua_tostring (L, -1));
+			}
+
+			lua_settop (L, magic_func_pos);
 		}
 
 		if (part->part_type == RSPAMD_MIME_PART_UNDEFINED) {
@@ -1455,8 +1424,8 @@ rspamd_message_process (struct rspamd_task *task)
 		}
 	}
 
-	if (func_pos != -1) {
-		lua_settop (L, func_pos - 1);
+	if (old_top != -1) {
+		lua_settop (L, old_top);
 	}
 
 	/* Calculate average words length and number of short words */

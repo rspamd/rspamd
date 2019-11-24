@@ -15,6 +15,7 @@ limitations under the License.
 ]]--
 
 local l = require 'lpeg'
+local rspamd_text = require "rspamd_text"
 
 local wsp = l.P" "
 local crlf = l.P"\r"^-1 * l.P"\n"
@@ -25,7 +26,7 @@ local elt = name * ":" * wsp^0 * value * eol
 
 local exports = {}
 
-local function ical_txt_values(input)
+local function process_ical(input, _, _)
   local control={n='\n', r='\r'}
   local escaper = l.Ct((elt / function(_,b) return (b:gsub("\\(.)", control)) end)^1)
 
@@ -35,13 +36,13 @@ local function ical_txt_values(input)
     return nil
   end
 
-  return table.concat(values, "\n")
+  return rspamd_text.fromtable(values, "\n")
 end
 
 --[[[
--- @function lua_ical.ical_txt_values(input)
+-- @function lua_ical.process(input)
 -- Returns all values from ical as a plain text. Names are completely ignored.
 --]]
-exports.ical_txt_values = ical_txt_values
+exports.process = process_ical
 
 return exports
