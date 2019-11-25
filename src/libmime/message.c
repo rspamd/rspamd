@@ -1315,7 +1315,7 @@ rspamd_message_process (struct rspamd_task *task)
 	guint tw, *ptw, dw;
 	struct rspamd_mime_part *part;
 	lua_State *L = NULL;
-	gint magic_func_pos = -1, content_func_pos = -1, old_top = -1;
+	gint magic_func_pos = -1, content_func_pos = -1, old_top = -1, funcs_top = -1;
 
 	if (task->cfg) {
 		L = task->cfg->lua_state;
@@ -1343,11 +1343,15 @@ rspamd_message_process (struct rspamd_task *task)
 		msg_err_task ("cannot require lua_content.maybe_process_mime_part");
 	}
 
+	funcs_top = lua_gettop (L);
+
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		if (magic_func_pos != -1 && part->parsed_data.len > 0) {
 			struct rspamd_mime_part **pmime;
 			struct rspamd_task **ptask;
 
+			lua_pushcfunction (L, &rspamd_lua_traceback);
+			gint err_idx = lua_gettop (L);
 			lua_pushvalue (L, magic_func_pos);
 			pmime = lua_newuserdata (L, sizeof (struct rspamd_mime_part *));
 			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
@@ -1356,7 +1360,7 @@ rspamd_message_process (struct rspamd_task *task)
 			rspamd_lua_setclass (L, "rspamd{task}", -1);
 			*ptask = task;
 
-			if (lua_pcall (L, 2, 2, 0) != 0) {
+			if (lua_pcall (L, 2, 2, err_idx) != 0) {
 				msg_err_task ("cannot detect type: %s", lua_tostring (L, -1));
 			}
 			else {
@@ -1396,7 +1400,7 @@ rspamd_message_process (struct rspamd_task *task)
 				}
 			}
 
-			lua_settop (L, magic_func_pos);
+			lua_settop (L, funcs_top);
 		}
 
 		/* Now detect content */
@@ -1404,6 +1408,8 @@ rspamd_message_process (struct rspamd_task *task)
 			struct rspamd_mime_part **pmime;
 			struct rspamd_task **ptask;
 
+			lua_pushcfunction (L, &rspamd_lua_traceback);
+			gint err_idx = lua_gettop (L);
 			lua_pushvalue (L, content_func_pos);
 			pmime = lua_newuserdata (L, sizeof (struct rspamd_mime_part *));
 			rspamd_lua_setclass (L, "rspamd{mimepart}", -1);
@@ -1412,11 +1418,11 @@ rspamd_message_process (struct rspamd_task *task)
 			rspamd_lua_setclass (L, "rspamd{task}", -1);
 			*ptask = task;
 
-			if (lua_pcall (L, 2, 2, 0) != 0) {
+			if (lua_pcall (L, 2, 0, err_idx) != 0) {
 				msg_err_task ("cannot detect content: %s", lua_tostring (L, -1));
 			}
 
-			lua_settop (L, magic_func_pos);
+			lua_settop (L, funcs_top);
 		}
 
 		if (part->part_type == RSPAMD_MIME_PART_UNDEFINED) {

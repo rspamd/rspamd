@@ -25,6 +25,10 @@ ${FREEMAIL_CC}  ${TESTDIR}/messages/freemailcc.eml
 ${URL_ICS}      ${TESTDIR}/messages/ics.eml
 
 *** Test Cases ***
+URL_ICS
+  ${result} =  Scan Message With Rspamc  ${URL_ICS}
+  Check Rspamc  ${result}  Urls: ["test.com"]
+
 MAP - DNSBL HIT
   ${result} =  Scan Message With Rspamc  ${MESSAGE}  -i  127.0.0.2
   Check Rspamc  ${result}  DNSBL_MAP
@@ -327,9 +331,7 @@ FREEMAIL_CC
   ${result} =  Scan Message With Rspamc  ${FREEMAIL_CC}
   Check Rspamc  ${result}  FREEMAIL_CC (19.00)[test.com, test1.com, test2.com, test3.com, test4.com, test5.com, test6.com, test7.com, test8.com, test9.com, test10.com, test11.com, test12.com, test13.com, test14.com]
 
-URL_ICS
-  ${result} =  Scan Message With Rspamc  ${URL_ICS}
-  Check Rspamc  ${result}  Urls: ["test.com"]
+
 
 *** Keywords ***
 Multimap Setup

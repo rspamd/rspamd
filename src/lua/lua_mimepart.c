@@ -2106,6 +2106,7 @@ lua_mimepart_set_specific (lua_State * L)
 		luaL_unref (L, LUA_REGISTRYINDEX, part->specific.lua_specific.cbref);
 	}
 	else {
+		part->part_type = RSPAMD_MIME_PART_CUSTOM_LUA;
 		lua_pushnil (L);
 	}
 
