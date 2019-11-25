@@ -1343,7 +1343,9 @@ rspamd_message_process (struct rspamd_task *task)
 		msg_err_task ("cannot require lua_content.maybe_process_mime_part");
 	}
 
-	funcs_top = lua_gettop (L);
+	if (L) {
+		funcs_top = lua_gettop (L);
+	}
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, parts), i, part) {
 		if (magic_func_pos != -1 && part->parsed_data.len > 0) {
