@@ -17,18 +17,37 @@ limitations under the License.
 local l = require 'lpeg'
 local rspamd_text = require "rspamd_text"
 
-local wsp = l.P" "
-local crlf = l.P"\r"^-1 * l.P"\n"
-local eol = (crlf * #crlf) + (crlf - (crlf^-1 * wsp))
-local name = l.C((l.P(1) - (l.P":"))^1) / function(v) return (v:gsub("[\n\r]+%s","")) end
-local value = l.C((l.P(1) - eol)^0) / function(v) return (v:gsub("[\n\r]+%s","")) end
-local elt = name * ":" * wsp^0 * value * eol
+local ical_grammar
+
+local function gen_grammar()
+  if not ical_grammar then
+    local wsp = l.P" "
+    local crlf = l.P"\r"^-1 * l.P"\n"
+    local eol = (crlf * #crlf) + (crlf - (crlf^-1 * wsp))
+    local name = l.C((l.P(1) - (l.P":"))^1) / function(v) return (v:gsub("[\n\r]+%s","")) end
+    local value = l.C((l.P(1) - eol)^0) / function(v) return (v:gsub("[\n\r]+%s","")) end
+    ical_grammar = name * ":" * wsp^0 * value * eol
+  end
+
+  return ical_grammar
+end
 
 local exports = {}
 
-local function process_ical(input, _, _)
+local function process_ical(input, _, task)
   local control={n='\n', r='\r'}
-  local escaper = l.Ct((elt / function(_,b) return (b:gsub("\\(.)", control)) end)^1)
+  local rspamd_url = require "rspamd_url"
+  local escaper = l.Ct((gen_grammar() / function(_, value)
+    value = value:gsub("\\(.)", control)
+    local local_urls = rspamd_url.all(task:get_mempool(), value)
+
+    if local_urls and #local_urls > 0 then
+      for _,u in ipairs(local_urls) do
+        task:inject_url(u)
+      end
+    end
+    return value
+  end)^1)
 
   local values = escaper:match(input)
 

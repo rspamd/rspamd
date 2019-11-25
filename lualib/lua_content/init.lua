@@ -51,7 +51,7 @@ local function init()
   end
 end
 
-exports.maybe_process_mime_part = function(part, log_obj)
+exports.maybe_process_mime_part = function(part, task)
   if not modules_by_mime_type then
     init()
   end
@@ -70,17 +70,17 @@ exports.maybe_process_mime_part = function(part, log_obj)
   end
 
   if pair then
-    lua_util.debugm(N, log_obj, "found known content of type %s: %s",
+    lua_util.debugm(N, task, "found known content of type %s: %s",
         mt, pair[1])
 
-    local data = pair[2].module.process(part:get_content(), part, log_obj)
+    local data = pair[2].module.process(part:get_content(), part, task)
 
     if data then
-      lua_util.debugm(N, log_obj, "extracted content from %s: %s type",
+      lua_util.debugm(N, task, "extracted content from %s: %s type",
           pair[1], type(data))
       part:set_specific(data)
     else
-      lua_util.debugm(N, log_obj, "failed to extract anything from %s",
+      lua_util.debugm(N, task, "failed to extract anything from %s",
           pair[1])
     end
   end
