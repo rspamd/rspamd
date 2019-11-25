@@ -789,9 +789,7 @@ lua_url_table_inserter (struct rspamd_url *url, gsize start_offset,
 	lua_url = lua_newuserdata (L, sizeof (struct rspamd_lua_url));
 	rspamd_lua_setclass (L, "rspamd{url}", -1);
 	lua_url->url = url;
-	lua_pushinteger (L, n + 1);
-	lua_pushlstring (L, url->string, url->urllen);
-	lua_settable (L, -3);
+	lua_rawseti (L, -2, n + 1);
 
 	return TRUE;
 }
