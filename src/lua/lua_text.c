@@ -75,6 +75,13 @@ LUA_FUNCTION_DEF (text, save_in_file);
  */
 LUA_FUNCTION_DEF (text, span);
 /***
+ * @method rspamd_text:lines([stringify])
+ * Returns an iter over all lines as rspamd_text objects or as strings if `stringify` is true
+ * @param {boolean} stringify stringify lines
+ * @return {iterator} iterator triplet
+ */
+LUA_FUNCTION_DEF (text, lines);
+/***
  * @method rspamd_text:at(pos)
  * Returns a byte at the position `pos`
  * @param {integer} pos index
@@ -104,6 +111,7 @@ static const struct luaL_reg textlib_m[] = {
 		LUA_INTERFACE_DEF (text, take_ownership),
 		LUA_INTERFACE_DEF (text, save_in_file),
 		LUA_INTERFACE_DEF (text, span),
+		LUA_INTERFACE_DEF (text, lines),
 		LUA_INTERFACE_DEF (text, at),
 		LUA_INTERFACE_DEF (text, bytes),
 		{"write", lua_text_save_in_file},
@@ -123,25 +131,31 @@ lua_check_text (lua_State * L, gint pos)
 }
 
 struct rspamd_lua_text *
-lua_new_text (lua_State *L, const gchar *start, gsize len, guint flags)
+lua_new_text (lua_State *L, const gchar *start, gsize len, gboolean own)
 {
 	struct rspamd_lua_text *t;
 
 	t = lua_newuserdata (L, sizeof (*t));
+	t->flags = 0;
 
-	if (len > 0 && (flags & RSPAMD_TEXT_FLAG_OWN)) {
+	if (own) {
 		gchar *storage;
 
-		storage = g_malloc (len);
-		memcpy (storage, start, len);
-		t->start = storage;
+		if (len > 0) {
+			storage = g_malloc (len);
+			memcpy (storage, start, len);
+			t->start = storage;
+			t->flags = RSPAMD_TEXT_FLAG_OWN;
+		}
+		else {
+			t->start = "";
+		}
 	}
 	else {
 		t->start = start;
 	}
 
 	t->len = len;
-	t->flags = flags;
 	rspamd_lua_setclass (L, "rspamd{text}", -1);
 
 	return t;
@@ -163,7 +177,7 @@ lua_text_fromstring (lua_State *L)
 			transparent = lua_toboolean (L, 2);
 		}
 
-		lua_new_text (L, str, l, transparent ? 0 : RSPAMD_TEXT_FLAG_OWN);
+		lua_new_text (L, str, l, !transparent);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
@@ -355,7 +369,116 @@ lua_text_span (lua_State *L)
 			return luaL_error (L, "invalid length");
 		}
 
-		lua_new_text (L, t->start + (start - 1), len, 0);
+		lua_new_text (L, t->start + (start - 1), len, FALSE);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint64
+rspamd_lua_text_push_line (lua_State *L,
+						   struct rspamd_lua_text *t,
+						   gint64 start_offset,
+						   const gchar *sep_pos,
+						   gboolean stringify)
+{
+	const gchar *start;
+	gsize len;
+	gint64 ret;
+
+	start = t->start + start_offset;
+	len = sep_pos ? (sep_pos - start) : (t->len - start_offset);
+	ret = start_offset + len;
+
+	/* Trim line */
+	while (len > 0) {
+		if (start[len - 1] == '\r' || start[len - 1] == '\n') {
+			len --;
+		}
+		else {
+			break;
+		}
+	}
+
+	if (stringify) {
+		lua_pushlstring (L, start, len);
+	}
+	else {
+		struct rspamd_lua_text *ntext;
+
+		ntext = lua_newuserdata (L, sizeof (*ntext));
+		ntext->start = start;
+		ntext->len = len;
+		ntext->flags = 0; /* Not own as it must be owned by a top object */
+	}
+
+	return ret;
+}
+
+static gint
+rspamd_lua_text_readline (lua_State *L)
+{
+	struct rspamd_lua_text *t = lua_touserdata (L, lua_upvalueindex (1));
+	gboolean stringify = lua_toboolean (L, lua_upvalueindex (2));
+	gint64 pos = lua_tointeger (L, lua_upvalueindex (3));
+
+	if (pos < 0) {
+		return luaL_error (L, "invalid pos: %d", (gint)pos);
+	}
+
+	if (pos >= t->len) {
+		/* We are done */
+		return 0;
+	}
+
+	const gchar *sep_pos;
+
+	/* We look just for `\n` ignoring `\r` as it is very rare nowadays */
+	sep_pos = memchr (t->start + pos, '\n', t->len - pos);
+
+	if (sep_pos == NULL) {
+		/* Either last `\n` or `\r` separated text */
+		sep_pos = memchr (t->start + pos, '\r', t->len - pos);
+	}
+
+	pos = rspamd_lua_text_push_line (L, t, pos, sep_pos, stringify);
+
+	/* Skip separators */
+	while (pos < t->len) {
+		if (t->start[pos] == '\n' || t->start[pos] == '\r') {
+			pos ++;
+		}
+		else {
+			break;
+		}
+	}
+
+	/* Update pos */
+	lua_pushinteger (L, pos);
+	lua_replace (L, lua_upvalueindex (3));
+
+	return 1;
+}
+
+static gint
+lua_text_lines (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_lua_text *t = lua_check_text (L, 1);
+	gboolean stringify = FALSE;
+
+	if (t) {
+		if (lua_isboolean (L, 2)) {
+			stringify = lua_toboolean (L, 2);
+		}
+
+		lua_pushvalue (L, 1);
+		lua_pushboolean (L, stringify);
+		lua_pushinteger (L, 0); /* Current pos */
+		lua_pushcclosure (L, rspamd_lua_text_readline, 3);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
