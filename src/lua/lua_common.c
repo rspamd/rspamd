@@ -2112,11 +2112,14 @@ gboolean
 rspamd_lua_require_function (lua_State *L, const gchar *modname,
 		const gchar *funcname)
 {
-	gint table_pos;
+	gint table_pos, err_pos;
 
+	lua_pushcfunction (L, &rspamd_lua_traceback);
+	err_pos = lua_gettop (L);
 	lua_getglobal (L, "require");
 
 	if (lua_isnil (L, -1)) {
+		lua_remove (L, err_pos);
 		lua_pop (L, 1);
 
 		return FALSE;
@@ -2126,13 +2129,21 @@ rspamd_lua_require_function (lua_State *L, const gchar *modname,
 
 	/* Now try to call */
 	if (lua_pcall (L, 1, 1, 0) != 0) {
+		lua_remove (L, err_pos);
+		msg_warn ("require of %s.%s failed: %s", modname,
+				funcname, lua_tostring (L, -1));
 		lua_pop (L, 1);
 
 		return FALSE;
 	}
 
+	lua_remove (L, err_pos);
+
 	/* Now we should have a table with results */
 	if (!lua_istable (L, -1)) {
+		msg_warn ("require of %s.%s failed: not a table but %s", modname,
+				funcname, lua_typename (L, lua_type (L, -1)));
+
 		lua_pop (L, 1);
 
 		return FALSE;
@@ -2147,6 +2158,10 @@ rspamd_lua_require_function (lua_State *L, const gchar *modname,
 		lua_remove (L, table_pos);
 
 		return TRUE;
+	}
+	else {
+		msg_warn ("require of %s.%s failed: not a function but %s", modname,
+				funcname, lua_typename (L, lua_type (L, -1)));
 	}
 
 	lua_pop (L, 2);

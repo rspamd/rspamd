@@ -355,7 +355,7 @@ lua_text_span (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_lua_text *t = lua_check_text (L, 1);
-	gint start = lua_tointeger (L, 2), len = -1;
+	gint64 start = lua_tointeger (L, 2), len = -1;
 
 	if (t && start >= 1 && start <= t->len) {
 		if (lua_isnumber (L, 3)) {
@@ -372,7 +372,13 @@ lua_text_span (lua_State *L)
 		lua_new_text (L, t->start + (start - 1), len, FALSE);
 	}
 	else {
-		return luaL_error (L, "invalid arguments");
+		if (!t) {
+			return luaL_error (L, "invalid arguments, text required");
+		}
+		else {
+			return luaL_error (L, "invalid arguments: start offset %d "
+						 "is larger than text len %d", (int)start, (int)t->len);
+		}
 	}
 
 	return 1;
