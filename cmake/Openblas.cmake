@@ -1,4 +1,4 @@
-option (ENABLE_OPENBLAS    "Enable openblas for fast neural network processing [default: OFF]" OFF)
+option (ENABLE_BLAS    "Enable openblas for fast neural network processing [default: OFF]" OFF)
 
 IF(ENABLE_BLAS MATCHES "ON")
     ProcessPackage(BLAS OPTIONAL_INCLUDE LIBRARY openblas blas
