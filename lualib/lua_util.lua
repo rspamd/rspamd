@@ -423,6 +423,30 @@ end
 exports.list_to_hash = list_to_hash
 
 --[[[
+-- @function lua_util.nkeys(table|gen, param, state)
+-- Returns number of keys in a table (i.e. from both the array and hash parts combined)
+-- @param {table} list numerically-indexed table or string, which is treated as a one-element list
+-- @return {number} number of keys
+-- @example
+-- print(lua_util.nkeys({}))  -- 0
+-- print(lua_util.nkeys({ "a", nil, "b" }))  -- 2
+-- print(lua_util.nkeys({ dog = 3, cat = 4, bird = nil }))  -- 2
+-- print(lua_util.nkeys({ "a", dog = 3, cat = 4 }))  -- 3
+--
+--]]
+local function nkeys(gen, param, state)
+  local n = 0
+  if not param then
+    for _,_ in pairs(gen) do n = n + 1 end
+  else
+    for _,_ in fun.iter(gen, param, state) do n = n + 1 end
+  end
+  return n
+end
+
+exports.nkeys = nkeys
+
+--[[[
 -- @function lua_util.parse_time_interval(str)
 -- Parses human readable time interval
 -- Accepts 's' for seconds, 'm' for minutes, 'h' for hours, 'd' for days,
