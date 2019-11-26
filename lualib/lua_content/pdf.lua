@@ -71,11 +71,18 @@ end
 -- Call immediately on require
 compile_tries()
 
+local function extract_text_data(specific)
+  return nil -- NYI
+end
+
 local function process_pdf(input, _, task)
   local matches = pdf_trie:match(input)
-  local pdf_output = {}
 
   if matches then
+    local pdf_output = {
+      tag = 'pdf',
+      extract_text = extract_text_data,
+    }
     local grouped_processors = {}
     for npat,matched_positions in pairs(matches) do
       local index = pdf_indexes[npat]

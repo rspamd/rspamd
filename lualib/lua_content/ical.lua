@@ -15,7 +15,8 @@ limitations under the License.
 ]]--
 
 local l = require 'lpeg'
-local rspamd_text = require "rspamd_text"
+local lua_util = require "lua_util"
+local N = "lua_content"
 
 local ical_grammar
 
@@ -34,28 +35,44 @@ end
 
 local exports = {}
 
+local function extract_text_data(specific)
+  local fun = require "fun"
+
+  local tbl = fun.totable(fun.map(function(e) return e[2]:lower() end, specific.elts))
+  return table.concat(tbl, '\n')
+end
+
 local function process_ical(input, _, task)
-  local control={n='\n', r='\r'}
+  local control={n='\n', r=''}
   local rspamd_url = require "rspamd_url"
-  local escaper = l.Ct((gen_grammar() / function(_, value)
+  local escaper = l.Ct((gen_grammar() / function(key, value)
     value = value:gsub("\\(.)", control)
+    key = key:lower()
     local local_urls = rspamd_url.all(task:get_mempool(), value)
 
     if local_urls and #local_urls > 0 then
       for _,u in ipairs(local_urls) do
+        lua_util.debugm(N, task, 'ical: found URL in ical %s',
+            tostring(u))
         task:inject_url(u)
       end
     end
-    return value
+    lua_util.debugm(N, task, 'ical: ical key %s = "%s"',
+        key, value)
+    return {key, value}
   end)^1)
 
-  local values = escaper:match(input)
+  local elts = escaper:match(input)
 
-  if not values then
+  if not elts then
     return nil
   end
 
-  return rspamd_text.fromtable(values, "\n")
+  return {
+    tag = 'ical',
+    extract_text = extract_text_data,
+    elts = elts
+  }
 end
 
 --[[[
