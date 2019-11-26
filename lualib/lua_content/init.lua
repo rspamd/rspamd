@@ -31,6 +31,12 @@ local content_modules = {
     extensions = {'ical'},
     output = "text"
   },
+  pdf = {
+    mime_type = "application/pdf",
+    module = require "lua_content/pdf",
+    extensions = {'pdf'},
+    output = "table"
+  },
 }
 
 local modules_by_mime_type
