@@ -454,6 +454,15 @@ LUA_FUNCTION_DEF (config, get_symbol_parent);
 LUA_FUNCTION_DEF (config, get_group_symbols);
 
 /***
+ * @method rspamd_config:get_groups([need_private])
+ * Returns list of all groups defined
+ * @param {boolean} need_private optional flag to include private groups
+ * @available 2.3+
+ * @return {list|table} list of all groups
+ */
+LUA_FUNCTION_DEF (config, get_groups);
+
+/***
  * @method rspamd_config:register_settings_id(name, symbols_enabled, symbols_disabled)
  * Register new static settings id in config
  * @param {string} name id name (not numeric!)
@@ -871,6 +880,7 @@ static const struct luaL_reg configlib_m[] = {
 	LUA_INTERFACE_DEF (config, get_symbols_counters),
 	{"get_symbols_scores", lua_config_get_symbols},
 	LUA_INTERFACE_DEF (config, get_symbols),
+	LUA_INTERFACE_DEF (config, get_groups),
 	LUA_INTERFACE_DEF (config, get_symbol_callback),
 	LUA_INTERFACE_DEF (config, set_symbol_callback),
 	LUA_INTERFACE_DEF (config, get_symbol_stat),
@@ -3647,6 +3657,53 @@ lua_config_get_group_symbols (lua_State *L)
 				lua_pushstring (L, k);
 				lua_rawseti (L, -2, i);
 				i ++;
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+static gint
+lua_config_get_groups (lua_State *L)
+{
+	LUA_TRACE_POINT;
+	struct rspamd_config *cfg = lua_check_config (L, 1);
+	gboolean need_private;
+	struct rspamd_symbols_group *gr;
+	GHashTableIter it;
+	gpointer k, v;
+
+	if (cfg) {
+		if (lua_isboolean (L, 2)) {
+			need_private = lua_toboolean (L, 2);
+		}
+		else {
+			need_private = !(cfg->public_groups_only);
+		}
+
+		lua_createtable (L, 0, g_hash_table_size (cfg->groups));
+		g_hash_table_iter_init (&it, cfg->groups);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			gr = (struct rspamd_symbols_group *)v;
+
+			if (need_private || (gr->flags & RSPAMD_SYMBOL_GROUP_PUBLIC)) {
+				lua_createtable (L, 0, 4);
+
+				lua_pushstring (L, gr->description);
+				lua_setfield (L, -2, "description");
+				lua_pushnumber (L, gr->max_score);
+				lua_setfield (L, -2, "max_score");
+				lua_pushboolean (L, (gr->flags & RSPAMD_SYMBOL_GROUP_PUBLIC) != 0);
+				lua_setfield (L, -2, "is_public");
+				/* TODO: maybe push symbols as well */
+
+				/* Parent table indexed by group name */
+				lua_setfield (L, -2, gr->name);
 			}
 		}
 	}
