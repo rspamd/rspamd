@@ -32,8 +32,14 @@ local pdf_patterns = {
   },
   javascript = {
     patterns = {
-      [[\s/JS]],
-      [[\s/JavaScript]],
+      [[\s|>/JS]],
+      [[\s|>/JavaScript]],
+    }
+  },
+  suspicious = {
+    patterns = {
+      [[netsh\s]],
+      [[echo\s]],
     }
   }
 }
@@ -137,6 +143,11 @@ end
 processors.javascript = function(_, task, _, output)
   lua_util.debugm(N, task, "pdf: found javascript tag")
   output.javascript = true
+end
+
+processors.suspicious = function(_, task, _, output)
+  lua_util.debugm(N, task, "pdf: found a suspicious pattern")
+  output.suspicious = true
 end
 
 exports.process = process_pdf
