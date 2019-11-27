@@ -29,6 +29,12 @@ local pdf_patterns = {
     patterns = {
       [[\ntrailer\r?\n]]
     }
+  },
+  javascript = {
+    patterns = {
+      [[\s/JS]],
+      [[\s/JavaScript]],
+    }
   }
 }
 
@@ -126,6 +132,11 @@ processors.trailer = function(input, task, positions, output)
       output.encrypted = true
     end
   end
+end
+
+processors.javascript = function(_, task, _, output)
+  lua_util.debugm(N, task, "pdf: found javascript tag")
+  output.javascript = true
 end
 
 exports.process = process_pdf
