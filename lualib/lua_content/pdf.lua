@@ -32,14 +32,21 @@ local pdf_patterns = {
   },
   javascript = {
     patterns = {
-      [[\s|>/JS]],
-      [[\s|>/JavaScript]],
+      [[/JS(?:[\s/><])]],
+      [[/JavaScript(?:[\s/><])]],
+    }
+  },
+  openaction = {
+    patterns = {
+      [[/OpenAction(?:[\s/><])]],
+      [[/AA(?:[\s/><])]],
     }
   },
   suspicious = {
     patterns = {
       [[netsh\s]],
       [[echo\s]],
+      [[/[A-Za-z]*#\d\d]], -- Hex encode obfuscation
     }
   }
 }
@@ -143,6 +150,11 @@ end
 processors.javascript = function(_, task, _, output)
   lua_util.debugm(N, task, "pdf: found javascript tag")
   output.javascript = true
+end
+
+processors.openaction = function(_, task, _, output)
+  lua_util.debugm(N, task, "pdf: found openaction tag")
+  output.openaction = true
 end
 
 processors.suspicious = function(_, task, _, output)
