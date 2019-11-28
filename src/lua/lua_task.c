@@ -2111,7 +2111,7 @@ lua_task_append_message (lua_State * L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	const gchar *message = luaL_checkstring (L, 2), *category;
+	const gchar *category;
 
 	if (task != NULL) {
 		if (lua_type (L, 3) == LUA_TSTRING) {
@@ -2122,7 +2122,7 @@ lua_task_append_message (lua_State * L)
 		}
 
 		ucl_object_insert_key (task->messages,
-				ucl_object_fromstring_common (message, 0, UCL_STRING_RAW),
+				ucl_object_lua_import (L, 2),
 				category, 0,
 				true);
 	}
