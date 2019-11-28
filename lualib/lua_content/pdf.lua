@@ -46,7 +46,7 @@ local pdf_patterns = {
     patterns = {
       [[netsh\s]],
       [[echo\s]],
-      [[/[A-Za-z]*#\d\d]], -- Hex encode obfuscation
+      [[/[A-Za-z]*#\d\d(?:[#A-Za-z<>/\s])]], -- Hex encode obfuscation
     }
   }
 }
