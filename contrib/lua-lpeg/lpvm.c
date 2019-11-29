@@ -306,27 +306,39 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
         continue;
       }
       case IChar: {
-        if ((byte)*s == p->i.aux && s < e) { p++; s++; }
+        if (s < e && (byte)*s == p->i.aux) { p++; s++; }
         else goto fail;
         continue;
       }
       case ITestChar: {
-        if ((byte)*s == p->i.aux && s < e) p += 2;
+        if (s < e && (byte)*s == p->i.aux) p += 2;
         else p += getoffset(p);
         continue;
       }
       case ISet: {
-        int c = (byte)*s;
-        if (testchar((p+1)->buff, c) && s < e)
-          { p += CHARSETINSTSIZE; s++; }
-        else goto fail;
+      	if (s < e) {
+			int c = (byte) *s;
+			if (testchar((p + 1)->buff, c)) {
+				p += CHARSETINSTSIZE;
+				s++;
+			}
+			else goto fail;
+		}
+      	else {
+      		goto fail;
+      	}
         continue;
       }
       case ITestSet: {
-        int c = (byte)*s;
-        if (testchar((p + 2)->buff, c) && s < e)
-          p += 1 + CHARSETINSTSIZE;
-        else p += getoffset(p);
+      	if (s < e) {
+			int c = (byte) *s;
+			if (testchar((p + 2)->buff, c))
+				p += 1 + CHARSETINSTSIZE;
+			else p += getoffset(p);
+		}
+      	else {
+			p += getoffset(p);
+      	}
         continue;
       }
       case IBehind: {
