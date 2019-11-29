@@ -232,3 +232,24 @@ lua_spf_record_dtor (lua_State *L)
 
 	return 0;
 }
+
+/***
+ * @function rspamd_spf.config(object)
+ * Configures SPF library according to the UCL config
+ * @param {table} object configuration object
+*/
+gint
+lua_spf_config (lua_State * L)
+{
+	ucl_object_t *config_obj = ucl_object_lua_import (L, 1);
+
+	if (config_obj) {
+		spf_library_config (config_obj);
+		ucl_object_unref (config_obj); /* As we copy data all the time */
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 0;
+}
