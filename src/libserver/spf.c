@@ -198,6 +198,11 @@ spf_library_config (const ucl_object_t *obj)
 		}
 	}
 
+	if (spf_lib_ctx->spf_hash) {
+		rspamd_lru_hash_destroy (spf_lib_ctx->spf_hash);
+		spf_lib_ctx->spf_hash = NULL;
+	}
+
 	if ((value = ucl_object_find_key (obj, "spf_cache_size")) != NULL) {
 		if (ucl_object_toint_safe (value, &ival) && ival > 0) {
 			spf_lib_ctx->spf_hash = rspamd_lru_hash_new (
