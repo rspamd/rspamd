@@ -67,6 +67,7 @@ struct rspamd_spf_library_ctx {
 	guint max_dns_requests;
 	guint min_cache_ttl;
 	gboolean disable_ipv6;
+	rspamd_lru_hash_t *spf_hash;
 };
 
 struct rspamd_spf_library_ctx *spf_lib_ctx = NULL;
@@ -149,6 +150,9 @@ RSPAMD_CONSTRUCTOR(rspamd_spf_lib_ctx_ctor) {
 }
 
 RSPAMD_DESTRUCTOR(rspamd_spf_lib_ctx_dtor) {
+	if (spf_lib_ctx->spf_hash) {
+		rspamd_lru_hash_destroy (spf_lib_ctx->spf_hash);
+	}
 	g_free (spf_lib_ctx);
 	spf_lib_ctx = NULL;
 }
@@ -188,6 +192,27 @@ spf_library_config (const ucl_object_t *obj)
 		}
 	}
 
+	if ((value = ucl_object_find_key (obj, "disable_ipv6")) != NULL) {
+		if (ucl_object_toboolean_safe (value, &bval)) {
+			spf_lib_ctx->disable_ipv6 = bval;
+		}
+	}
+
+	if ((value = ucl_object_find_key (obj, "spf_cache_size")) != NULL) {
+		if (ucl_object_toint_safe (value, &ival) && ival > 0) {
+			spf_lib_ctx->spf_hash = rspamd_lru_hash_new (
+					ival,
+					NULL,
+					(GDestroyNotify) spf_record_unref);
+		}
+	}
+	else {
+		/* Preserve compatibility */
+		spf_lib_ctx->spf_hash = rspamd_lru_hash_new (
+				2048,
+				NULL,
+				(GDestroyNotify) spf_record_unref);
+	}
 }
 
 static gboolean start_spf_parse (struct spf_record *rec,
@@ -554,10 +579,29 @@ static void
 rspamd_spf_maybe_return (struct spf_record *rec)
 {
 	struct spf_resolved *flat;
+	struct rspamd_task *task = rec->task;
 
 	if (rec->requests_inflight == 0 && !rec->done) {
 		flat = rspamd_spf_record_flatten (rec);
 		rspamd_spf_record_postprocess (flat, rec->task);
+
+		if (flat->ttl > 0 && flat->flags == 0) {
+
+			if (spf_lib_ctx->spf_hash) {
+				rspamd_lru_hash_insert (spf_lib_ctx->spf_hash,
+						flat->domain, spf_record_ref (flat),
+						flat->timestamp, flat->ttl);
+
+				msg_info_task ("stored record for %s (0x%xuL) in LRU cache for %d seconds, "
+							   "%d/%d elements in the cache",
+						flat->domain,
+						flat->digest,
+						flat->ttl,
+						rspamd_lru_hash_size (spf_lib_ctx->spf_hash),
+						rspamd_lru_hash_capacity (spf_lib_ctx->spf_hash));
+			}
+		}
+
 		rec->callback (flat, rec->task, rec->cbdata);
 		REF_RELEASE (flat);
 		rec->done = TRUE;
@@ -2293,13 +2337,7 @@ spf_dns_callback (struct rdns_reply *reply, gpointer arg)
 	rspamd_spf_maybe_return (rec);
 }
 
-struct rspamd_spf_cred {
-	gchar *local_part;
-	gchar *domain;
-	gchar *sender;
-};
-
-struct rspamd_spf_cred *
+static struct rspamd_spf_cred *
 rspamd_spf_cache_domain (struct rspamd_task *task)
 {
 	struct rspamd_email_address *addr;
@@ -2344,10 +2382,9 @@ rspamd_spf_cache_domain (struct rspamd_task *task)
 	return cred;
 }
 
-const gchar *
-rspamd_spf_get_domain (struct rspamd_task *task)
+struct rspamd_spf_cred *
+rspamd_spf_get_cred (struct rspamd_task *task)
 {
-	gchar *domain = NULL;
 	struct rspamd_spf_cred *cred;
 
 	cred = rspamd_mempool_get_variable (task->task_pool,
@@ -2356,6 +2393,17 @@ rspamd_spf_get_domain (struct rspamd_task *task)
 	if (!cred) {
 		cred = rspamd_spf_cache_domain (task);
 	}
+
+	return cred;
+}
+
+const gchar *
+rspamd_spf_get_domain (struct rspamd_task *task)
+{
+	gchar *domain = NULL;
+	struct rspamd_spf_cred *cred;
+
+	cred = rspamd_spf_get_cred (task);
 
 	if (cred) {
 		domain = cred->domain;
@@ -2366,21 +2414,30 @@ rspamd_spf_get_domain (struct rspamd_task *task)
 
 gboolean
 rspamd_spf_resolve (struct rspamd_task *task, spf_cb_t callback,
-		gpointer cbdata)
+		gpointer cbdata, struct rspamd_spf_cred *cred)
 {
 	struct spf_record *rec;
-	struct rspamd_spf_cred *cred;
-
-	cred = rspamd_mempool_get_variable (task->task_pool,
-			RSPAMD_MEMPOOL_SPF_DOMAIN);
-
-	if (!cred) {
-		cred = rspamd_spf_cache_domain (task);
-	}
 
 	if (!cred || !cred->domain) {
 		return FALSE;
 	}
+
+	/* First lookup in the hash */
+	if (spf_lib_ctx->spf_hash) {
+		struct spf_resolved *cached;
+
+		cached = rspamd_lru_hash_lookup (spf_lib_ctx->spf_hash, cred->domain,
+				task->task_timestamp);
+
+		if (cached) {
+			cached->flags |= RSPAMD_SPF_FLAG_CACHED;
+		}
+
+		callback (cached, task, cbdata);
+
+		return TRUE;
+	}
+
 
 	rec = rspamd_mempool_alloc0 (task->task_pool, sizeof (struct spf_record));
 	rec->task = task;

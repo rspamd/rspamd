@@ -45,6 +45,7 @@ typedef enum spf_action_e {
 #define RSPAMD_SPF_FLAG_NA (1u << 9u)
 #define RSPAMD_SPF_FLAG_PERMFAIL (1u << 10u)
 #define RSPAMD_SPF_FLAG_RESOLVED (1u << 11u)
+#define RSPAMD_SPF_FLAG_CACHED (1u << 12u)
 
 /** Default SPF limits for avoiding abuse **/
 #define SPF_MAX_NESTING 10
@@ -84,19 +85,26 @@ struct spf_resolved {
 	ref_entry_t ref; /* Refcounting */
 };
 
+struct rspamd_spf_cred {
+	gchar *local_part;
+	gchar *domain;
+	gchar *sender;
+};
 
 /*
  * Resolve spf record for specified task and call a callback after resolution fails/succeed
  */
-gboolean rspamd_spf_resolve (struct rspamd_task *task, spf_cb_t callback,
-							 gpointer cbdata);
+gboolean rspamd_spf_resolve (struct rspamd_task *task,
+							 spf_cb_t callback,
+							 gpointer cbdata,
+							 struct rspamd_spf_cred *cred);
 
 /*
  * Get a domain for spf for specified task
  */
 const gchar *rspamd_spf_get_domain (struct rspamd_task *task);
 
-
+struct rspamd_spf_cred *rspamd_spf_get_cred (struct rspamd_task *task);
 /*
  * Increase refcount
  */
