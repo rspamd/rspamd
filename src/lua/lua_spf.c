@@ -26,16 +26,12 @@
 
 LUA_FUNCTION_DEF (spf, resolve);
 LUA_FUNCTION_DEF (spf, config);
-LUA_FUNCTION_DEF (spf, set_credentials);
-LUA_FUNCTION_DEF (spf, get_domain);
 LUA_FUNCTION_DEF (spf_record, check_ip);
 LUA_FUNCTION_DEF (spf_record, dtor);
 
 static luaL_reg rspamd_spf_f[] = {
 		LUA_INTERFACE_DEF (spf, resolve),
 		LUA_INTERFACE_DEF (spf, config),
-		LUA_INTERFACE_DEF (spf, set_credentials),
-		LUA_INTERFACE_DEF (spf, get_domain),
 		{NULL, NULL},
 };
 
@@ -231,6 +227,132 @@ lua_spf_record_dtor (lua_State *L)
 	}
 
 	return 0;
+}
+
+static gint
+spf_check_element (lua_State *L, struct spf_resolved *rec, struct spf_addr *addr,
+				   struct rspamd_lua_ip *ip)
+{
+	gboolean res = FALSE;
+	const guint8 *s, *d;
+	guint af, mask, bmask, addrlen;
+
+
+	if (addr->flags & RSPAMD_SPF_FLAG_TEMPFAIL) {
+		/* Ignore failed addresses */
+		lua_pushboolean (L, false);
+		lua_pushinteger (L, RSPAMD_SPF_FLAG_TEMPFAIL);
+		lua_pushstring (L, "temp failed");
+
+		return 3;
+	}
+
+	af = rspamd_inet_address_get_af (ip->addr);
+	/* Basic comparing algorithm */
+	if (((addr->flags & RSPAMD_SPF_FLAG_IPV6) && af == AF_INET6) ||
+		((addr->flags & RSPAMD_SPF_FLAG_IPV4) && af == AF_INET)) {
+		d = rspamd_inet_address_get_hash_key (ip->addr, &addrlen);
+
+		if (af == AF_INET6) {
+			s = (const guint8 *)addr->addr6;
+			mask = addr->m.dual.mask_v6;
+		}
+		else {
+			s = (const guint8 *)addr->addr4;
+			mask = addr->m.dual.mask_v4;
+		}
+
+		/* Compare the first bytes */
+		bmask = mask / CHAR_BIT;
+		if (mask > addrlen * CHAR_BIT) {
+			/* XXX: add logging */
+		}
+		else if (memcmp (s, d, bmask) == 0) {
+			if (bmask * CHAR_BIT < mask) {
+				/* Compare the remaining bits */
+				s += bmask;
+				d += bmask;
+				mask = (0xff << (CHAR_BIT - (mask - bmask * 8))) & 0xff;
+
+				if ((*s & mask) == (*d & mask)) {
+					res = TRUE;
+				}
+			}
+			else {
+				res = TRUE;
+			}
+		}
+	}
+	else {
+		if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
+			res = TRUE;
+		}
+		else {
+			res = FALSE;
+		}
+	}
+
+	if (res) {
+		if (addr->flags & RSPAMD_SPF_FLAG_ANY) {
+			if (rec->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED) {
+				lua_pushboolean (L, false);
+				lua_pushinteger (L, RSPAMD_SPF_RESOLVED_PERM_FAILED);
+				lua_pushstring (L, addr->spf_string);
+			}
+			else if (rec->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED) {
+				lua_pushboolean (L, false);
+				lua_pushinteger (L, RSPAMD_SPF_RESOLVED_TEMP_FAILED);
+				lua_pushstring (L, addr->spf_string);
+			}
+		}
+		else {
+			lua_pushboolean (L, true);
+			lua_pushinteger (L, addr->mech);
+			lua_pushstring (L, addr->spf_string);
+		}
+
+		return 3;
+	}
+
+	return -1;
+}
+
+/***
+ * @method rspamd_spf_record:check_ip(ip)
+ * Checks the processed record versus a specific IP address. This function
+ * returns 3 values normally:
+ * 1. Boolean check result
+ * 2. If result is `false` then the second value is the error flag (e.g. rspamd_spf.flags.temp_fail), otherwise it will be an SPF method
+ * 3. If result is `false` then this will be an error string, otherwise - an SPF string (e.g. `mx` or `ip4:x.y.z.1`)
+ * @param {rspamd_ip} ip address
+ * @return {result,flag_or_policy,error_or_addr} - triplet
+*/
+static gint
+lua_spf_record_check_ip (lua_State *L)
+{
+	struct spf_resolved *record =
+			* (struct spf_resolved **)rspamd_lua_check_udata (L, 1,
+					SPF_RECORD_CLASS);
+	struct rspamd_lua_ip *ip = lua_check_ip (L, 2);
+	gint nres = 0;
+
+	if (record && ip && ip->addr) {
+		for (guint i = 0; i < record->elts->len; i ++) {
+			struct spf_addr *addr = &g_array_index (record->elts, struct spf_addr, i);
+			if ((nres = spf_check_element (L, record, addr, ip)) > 0) {
+				return nres;
+			}
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	lua_pushboolean (L, false);
+	lua_pushinteger (L, RSPAMD_SPF_RESOLVED_NA);
+	lua_pushstring (L, "no result");
+
+	return 3;
 }
 
 /***
