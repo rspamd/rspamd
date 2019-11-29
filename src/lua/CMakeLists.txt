@@ -30,6 +30,7 @@ SET(LUASRC			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_common.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_udp.c
 					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_text.c
 		 			  ${CMAKE_CURRENT_SOURCE_DIR}/lua_worker.c
-					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_kann.c)
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_kann.c
+					  ${CMAKE_CURRENT_SOURCE_DIR}/lua_spf.c)
 
 SET(RSPAMD_LUA ${LUASRC} PARENT_SCOPE)
