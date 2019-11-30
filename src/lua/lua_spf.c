@@ -453,6 +453,64 @@ lua_spf_record_get_digest (lua_State *L)
 }
 
 /***
+ * @method rspamd_spf_record:get_elts()
+ * Returns a list of all elements in an SPF record. Each element is a table with the
+ * following fields:
+ *
+ * - result - mech flag from rspamd_spf.results
+ * - flags - all flags
+ * - addr - address and mask as a string
+ * - str - string representation (if available)
+*/
+static gint
+lua_spf_record_get_elts (lua_State *L)
+{
+	struct spf_resolved *record =
+			*(struct spf_resolved **) rspamd_lua_check_udata (L, 1,
+					SPF_RECORD_CLASS);
+
+	if (record) {
+		guint i;
+		struct spf_addr *addr;
+
+		lua_createtable (L, record->elts->len, 0);
+
+		for (i = 0; i < record->elts->len; i ++) {
+			gchar *addr_mask;
+
+			addr = (struct spf_addr *)&g_array_index (record->elts,
+					struct spf_addr, i);
+			lua_createtable (L, 0, 4);
+
+			lua_pushinteger (L, addr->mech);
+			lua_setfield (L, -2, "result");
+			lua_pushinteger (L, addr->flags);
+			lua_setfield (L, -2, "flags");
+
+			if (addr->spf_string) {
+				lua_pushstring (L, addr->spf_string);
+				lua_setfield (L, -2, "str");
+			}
+
+			addr_mask = spf_addr_mask_to_string (addr);
+
+			if (addr_mask) {
+				lua_pushstring (L, addr_mask);
+				lua_setfield (L, -2, "addr");
+				g_free (addr_mask);
+			}
+
+			lua_rawseti (L, -2, i + 1);
+		}
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
  * @function rspamd_spf.config(object)
  * Configures SPF library according to the UCL config
  * @param {table} object configuration object
