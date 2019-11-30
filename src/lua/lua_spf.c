@@ -74,7 +74,7 @@ lua_load_spf (lua_State * L)
 	lua_pushinteger (L, SPF_SOFT_FAIL);
 	lua_setfield (L, -2, "soft_fail");
 
-	lua_setfield (L, -2, "results");
+	lua_setfield (L, -2, "policy");
 
 	/* Flags stuff */
 	lua_newtable (L);
@@ -239,6 +239,32 @@ lua_spf_record_dtor (lua_State *L)
 	return 0;
 }
 
+static void
+lua_spf_push_spf_addr (lua_State *L, struct spf_addr *addr)
+{
+	gchar *addr_mask;
+
+	lua_createtable (L, 0, 4);
+
+	lua_pushinteger (L, addr->mech);
+	lua_setfield (L, -2, "result");
+	lua_pushinteger (L, addr->flags);
+	lua_setfield (L, -2, "flags");
+
+	if (addr->spf_string) {
+		lua_pushstring (L, addr->spf_string);
+		lua_setfield (L, -2, "str");
+	}
+
+	addr_mask = spf_addr_mask_to_string (addr);
+
+	if (addr_mask) {
+		lua_pushstring (L, addr_mask);
+		lua_setfield (L, -2, "addr");
+		g_free (addr_mask);
+	}
+}
+
 static gint
 spf_check_element (lua_State *L, struct spf_resolved *rec, struct spf_addr *addr,
 				   struct rspamd_lua_ip *ip)
@@ -307,18 +333,18 @@ spf_check_element (lua_State *L, struct spf_resolved *rec, struct spf_addr *addr
 			if (rec->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED) {
 				lua_pushboolean (L, false);
 				lua_pushinteger (L, RSPAMD_SPF_RESOLVED_PERM_FAILED);
-				lua_pushstring (L, addr->spf_string);
+				lua_spf_push_spf_addr (L, addr);
 			}
 			else if (rec->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED) {
 				lua_pushboolean (L, false);
 				lua_pushinteger (L, RSPAMD_SPF_RESOLVED_TEMP_FAILED);
-				lua_pushstring (L, addr->spf_string);
+				lua_spf_push_spf_addr (L, addr);
 			}
 		}
 		else {
 			lua_pushboolean (L, true);
 			lua_pushinteger (L, addr->mech);
-			lua_pushstring (L, addr->spf_string);
+			lua_spf_push_spf_addr (L, addr);
 		}
 
 		return 3;
@@ -476,29 +502,9 @@ lua_spf_record_get_elts (lua_State *L)
 		lua_createtable (L, record->elts->len, 0);
 
 		for (i = 0; i < record->elts->len; i ++) {
-			gchar *addr_mask;
-
 			addr = (struct spf_addr *)&g_array_index (record->elts,
 					struct spf_addr, i);
-			lua_createtable (L, 0, 4);
-
-			lua_pushinteger (L, addr->mech);
-			lua_setfield (L, -2, "result");
-			lua_pushinteger (L, addr->flags);
-			lua_setfield (L, -2, "flags");
-
-			if (addr->spf_string) {
-				lua_pushstring (L, addr->spf_string);
-				lua_setfield (L, -2, "str");
-			}
-
-			addr_mask = spf_addr_mask_to_string (addr);
-
-			if (addr_mask) {
-				lua_pushstring (L, addr_mask);
-				lua_setfield (L, -2, "addr");
-				g_free (addr_mask);
-			}
+			lua_spf_push_spf_addr (L, addr);
 
 			lua_rawseti (L, -2, i + 1);
 		}
