@@ -17,7 +17,6 @@ limitations under the License.
 
 local argparse = require "argparse"
 local rspamd_logger = require "rspamd_logger"
-local lua_util = require "lua_util"
 local ansicolors = require "ansicolors"
 
 local parser = argparse()
@@ -84,14 +83,16 @@ local function load_config(opts)
 end
 
 local function spf_handler(opts)
-  local lua_spf = require("lua_ffi").spf
+  local rspamd_spf = require "rspamd_spf"
   local rspamd_task = require "rspamd_task"
+  local rspamd_ip = require "rspamd_ip"
 
   local task = rspamd_task:create(rspamd_config, rspamadm_ev_base)
   task:set_session(rspamadm_session)
   task:set_resolver(rspamadm_dns_resolver)
 
   if opts.ip then
+    opts.ip = rspamd_ip.fromstring(opts.ip)
     task:set_from_ip(opts.ip)
   end
 
@@ -106,41 +107,58 @@ local function spf_handler(opts)
 
   local function display_spf_results(elt, colored)
     local dec = function(e) return e end
+    local policy_decode = function(e)
+      if e == rspamd_spf.policy.fail then
+        return 'reject'
+      elseif e == rspamd_spf.policy.pass then
+        return 'pass'
+      elseif e == rspamd_spf.policy.soft_fail then
+        return 'soft fail'
+      elseif e == rspamd_spf.policy.neutral then
+        return 'neutral'
+      end
+
+      return 'unknown'
+    end
 
     if colored then
       dec = function(e) return highlight(e) end
 
-      if elt.res == 'pass' then
+      if elt.result == rspamd_spf.policy.pass  then
         dec = function(e) return green(e) end
-      elseif elt.res == 'fail' then
+      elseif elt.result  == rspamd_spf.policy.fail then
         dec = function(e) return red(e) end
       end
 
     end
-    printf('%s: %s', highlight('Result'), dec(elt.res))
-    printf('%s: %s', highlight('Network'), dec(elt.ipnet))
+    printf('%s: %s', highlight('Policy'), dec(policy_decode(elt.result)))
+    printf('%s: %s', highlight('Network'), dec(elt.addr))
 
-    if elt.spf_str then
-      printf('%s: %s', highlight('Original'), elt.spf_str)
+    if elt.str then
+      printf('%s: %s', highlight('Original'), elt.str)
     end
   end
 
-  local function cb(success, res, matched)
-    if success then
+  local function cb(record, flags, err)
+    if record then
+      local result, flag_or_policy, error_or_addr
+      if opts.ip then
+        result, flag_or_policy, error_or_addr = record:check_ip(opts.ip)
+      end
       if opts.ip and not opts.all then
-        if matched then
-          display_spf_results(matched, true)
+        if result then
+          display_spf_results(error_or_addr, true)
         else
-          printf('Not matched')
+          printf('Not matched: %s', error_or_addr)
         end
 
         os.exit(0)
       end
 
       printf('SPF record for %s; digest: %s',
-          highlight(opts.domain or opts.from), highlight(res.digest))
-      for _,elt in ipairs(res.addrs) do
-        if lua_util.table_cmp(elt, matched) then
+          highlight(opts.domain or opts.from), highlight(record:get_digest()))
+      for _,elt in ipairs(record:get_elts()) do
+        if result and error_or_addr and elt.str and elt.str == error_or_addr.str then
           printf("%s", highlight('*** Matched ***'))
           display_spf_results(elt, true)
           printf('------')
@@ -150,10 +168,10 @@ local function spf_handler(opts)
         end
       end
     else
-      printf('Cannot get SPF record: %s', res)
+      printf('Cannot get SPF record: %s', err)
     end
   end
-  lua_spf.spf_resolve(task, cb)
+  rspamd_spf.resolve(task, cb)
 end
 
 local function handler(args)
