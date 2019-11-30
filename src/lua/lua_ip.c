@@ -187,6 +187,8 @@ static const struct luaL_reg iplib_m[] = {
 
 static const struct luaL_reg iplib_f[] = {
 	LUA_INTERFACE_DEF (ip, from_string),
+	{"fromstring", lua_ip_from_string},
+	{"fromip", lua_ip_copy},
 	{"from_ip", lua_ip_copy},
 	{NULL, NULL}
 };
