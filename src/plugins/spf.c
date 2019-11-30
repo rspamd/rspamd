@@ -237,7 +237,6 @@ spf_module_config (struct rspamd_config *cfg)
 {
 	const ucl_object_t *value;
 	gint res = TRUE, cb_id;
-	guint cache_size;
 	struct spf_ctx *spf_module_ctx = spf_get_context (cfg);
 
 	if (!rspamd_config_is_module_enabled (cfg, "spf")) {
@@ -641,9 +640,14 @@ spf_symbol_callback (struct rspamd_task *task,
 	}
 
 	spf_cred = rspamd_spf_get_cred (task);
+	/* Refcount = 1 */
 	rspamd_symcache_item_async_inc (task, item, M);
 
 	if (spf_cred && spf_cred->domain) {
+		/* Refcount = 2 */
+		rspamd_symcache_item_async_inc (task, item, M);
+
+		/* spf_plugin_callback can be called immediately */
 		if (!rspamd_spf_resolve (task, spf_plugin_callback, item, spf_cred)) {
 			msg_info_task ("cannot make spf request for %s", spf_cred->domain);
 			rspamd_task_insert_result (task,
@@ -652,9 +656,15 @@ spf_symbol_callback (struct rspamd_task *task,
 					"(SPF): spf DNS fail");
 		}
 		else {
+			/* Refcount is either 2 or 1, so it'll be 3 or 2 upon increase */
 			rspamd_symcache_item_async_inc (task, item, M);
 		}
+
+		/* Refcount 3 or 2 */
+		rspamd_symcache_item_async_dec_check (task, item, M);
+		/* Refcount 2 or 1 */
 	}
 
+	/* Refcount 1 or 0 */
 	rspamd_symcache_item_async_dec_check (task, item, M);
 }
