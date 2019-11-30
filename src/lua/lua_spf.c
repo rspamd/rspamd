@@ -26,8 +26,14 @@
 
 LUA_FUNCTION_DEF (spf, resolve);
 LUA_FUNCTION_DEF (spf, config);
+
 LUA_FUNCTION_DEF (spf_record, check_ip);
 LUA_FUNCTION_DEF (spf_record, dtor);
+LUA_FUNCTION_DEF (spf_record, get_domain);
+LUA_FUNCTION_DEF (spf_record, get_elts);
+LUA_FUNCTION_DEF (spf_record, get_ttl);
+LUA_FUNCTION_DEF (spf_record, get_timestamp);
+LUA_FUNCTION_DEF (spf_record, get_digest);
 
 static luaL_reg rspamd_spf_f[] = {
 		LUA_INTERFACE_DEF (spf, resolve),
@@ -37,6 +43,10 @@ static luaL_reg rspamd_spf_f[] = {
 
 static luaL_reg rspamd_spf_record_m[] = {
 		LUA_INTERFACE_DEF (spf_record, check_ip),
+		LUA_INTERFACE_DEF (spf_record, get_domain),
+		LUA_INTERFACE_DEF (spf_record, get_ttl),
+		LUA_INTERFACE_DEF (spf_record, get_digest),
+		LUA_INTERFACE_DEF (spf_record, get_elts),
 		{"__gc", lua_spf_record_dtor},
 		{NULL, NULL},
 };
@@ -353,6 +363,93 @@ lua_spf_record_check_ip (lua_State *L)
 	lua_pushstring (L, "no result");
 
 	return 3;
+}
+
+/***
+ * @method rspamd_spf_record:get_domain()
+ * Returns domain for the specific spf record
+*/
+static gint
+lua_spf_record_get_domain (lua_State *L)
+{
+	struct spf_resolved *record =
+			*(struct spf_resolved **) rspamd_lua_check_udata (L, 1,
+					SPF_RECORD_CLASS);
+
+	if (record) {
+		lua_pushstring (L, record->domain);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @method rspamd_spf_record:get_ttl()
+ * Returns ttl for the specific spf record
+*/
+static gint
+lua_spf_record_get_ttl (lua_State *L)
+{
+	struct spf_resolved *record =
+			*(struct spf_resolved **) rspamd_lua_check_udata (L, 1,
+					SPF_RECORD_CLASS);
+
+	if (record) {
+		lua_pushinteger (L, record->ttl);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @method rspamd_spf_record:get_timestamp()
+ * Returns ttl for the specific spf record
+*/
+static gint
+lua_spf_record_get_timestamp (lua_State *L)
+{
+	struct spf_resolved *record =
+			*(struct spf_resolved **) rspamd_lua_check_udata (L, 1,
+					SPF_RECORD_CLASS);
+
+	if (record) {
+		lua_pushnumber (L, record->timestamp);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
+}
+
+/***
+ * @method rspamd_spf_record:get_digest()
+ * Returns string hex representation of the record digest (fast hash function)
+*/
+static gint
+lua_spf_record_get_digest (lua_State *L)
+{
+	struct spf_resolved *record =
+			*(struct spf_resolved **) rspamd_lua_check_udata (L, 1,
+					SPF_RECORD_CLASS);
+
+	if (record) {
+		gchar hexbuf[64];
+
+		rspamd_snprintf (hexbuf, sizeof (hexbuf), "%xuL", record->digest);
+		lua_pushstring (L, hexbuf);
+	}
+	else {
+		return luaL_error (L, "invalid arguments");
+	}
+
+	return 1;
 }
 
 /***
