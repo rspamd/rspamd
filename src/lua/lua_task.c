@@ -3938,28 +3938,47 @@ lua_task_set_from_ip (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct rspamd_task *task = lua_check_task (L, 1);
-	gsize len;
-	const gchar *ip_str = luaL_checklstring (L, 2, &len);
 	rspamd_inet_addr_t *addr = NULL;
 
-	if (!task || !ip_str) {
-		lua_pushstring (L, "invalid parameters");
-		return lua_error (L);
+	if (!task) {
+		return luaL_error (L, "no task");
 	}
 	else {
-		if (!rspamd_parse_inet_address (&addr,
-				ip_str,
-				len,
-				RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
-			msg_warn_task ("cannot get IP from received header: '%s'",
-					ip_str);
+		if (lua_type (L, 2) == LUA_TSTRING) {
+			gsize len;
+			const gchar *ip_str = lua_tolstring (L, 2, &len);
+
+			if (!rspamd_parse_inet_address (&addr,
+					ip_str,
+					len,
+					RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+				return luaL_error (L, "invalid IP string: %s", ip_str);
+			}
+			else {
+				if (task->from_addr) {
+					rspamd_inet_address_free (task->from_addr);
+				}
+
+				task->from_addr = addr;
+			}
+		}
+		else if (lua_type (L, 2) == LUA_TUSERDATA) {
+			struct rspamd_lua_ip *ip = lua_check_ip (L, 2);
+
+			if (ip && ip->addr) {
+				if (task->from_addr) {
+					rspamd_inet_address_free (task->from_addr);
+				}
+
+				task->from_addr = rspamd_inet_address_copy (ip->addr);
+			}
+			else {
+				return luaL_error (L, "invalid IP object");
+			}
 		}
 		else {
-			if (task->from_addr) {
-				rspamd_inet_address_free (task->from_addr);
-			}
-
-			task->from_addr = addr;
+			return luaL_error (L, "invalid IP argument type: %s", lua_typename (L,
+					lua_type (L, 2)));
 		}
 	}
 
