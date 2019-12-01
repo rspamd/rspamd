@@ -18,6 +18,7 @@ limitations under the License.
 local argparse = require "argparse"
 local rspamd_logger = require "rspamd_logger"
 local ansicolors = require "ansicolors"
+local bit = require "bit"
 
 local parser = argparse()
     :name "rspamadm dns_tool"
@@ -105,6 +106,18 @@ local function spf_handler(opts)
     os.exit(1)
   end
 
+  local function flag_to_str(fl)
+    if bit.band(fl, rspamd_spf.flags.temp_fail) ~= 0 then
+      return "temporary failure"
+    elseif bit.band(fl, rspamd_spf.flags.perm_fail) ~= 0 then
+      return "permanent failure"
+    elseif bit.band(fl, rspamd_spf.flags.na) ~= 0 then
+      return "no spf record"
+    end
+
+    return "unknown flag: " .. tostring(fl)
+  end
+
   local function display_spf_results(elt, colored)
     local dec = function(e) return e end
     local policy_decode = function(e)
@@ -155,17 +168,22 @@ local function spf_handler(opts)
         os.exit(0)
       end
 
-      printf('SPF record for %s; digest: %s',
-          highlight(opts.domain or opts.from), highlight(record:get_digest()))
-      for _,elt in ipairs(record:get_elts()) do
-        if result and error_or_addr and elt.str and elt.str == error_or_addr.str then
-          printf("%s", highlight('*** Matched ***'))
-          display_spf_results(elt, true)
-          printf('------')
-        else
-          display_spf_results(elt, false)
-          printf('------')
+      if result then
+        printf('SPF record for %s; digest: %s',
+            highlight(opts.domain or opts.from), highlight(record:get_digest()))
+        for _,elt in ipairs(record:get_elts()) do
+          if result and error_or_addr and elt.str and elt.str == error_or_addr.str then
+            printf("%s", highlight('*** Matched ***'))
+            display_spf_results(elt, true)
+            printf('------')
+          else
+            display_spf_results(elt, false)
+            printf('------')
+          end
         end
+      else
+        printf('Error getting SPF record: %s (%s flag)', err,
+            flag_to_str(flag_or_policy))
       end
     else
       printf('Cannot get SPF record: %s', err)
