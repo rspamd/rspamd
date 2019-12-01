@@ -340,6 +340,11 @@ spf_check_element (lua_State *L, struct spf_resolved *rec, struct spf_addr *addr
 				lua_pushinteger (L, RSPAMD_SPF_RESOLVED_TEMP_FAILED);
 				lua_spf_push_spf_addr (L, addr);
 			}
+			else {
+				lua_pushboolean (L, true);
+				lua_pushinteger (L, addr->mech);
+				lua_spf_push_spf_addr (L, addr);
+			}
 		}
 		else {
 			lua_pushboolean (L, true);
