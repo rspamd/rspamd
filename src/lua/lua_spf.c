@@ -212,9 +212,16 @@ lua_spf_resolve (lua_State * L)
 		REF_INIT_RETAIN (cbd, lua_spf_dtor);
 
 		if (!rspamd_spf_resolve (task, spf_lua_lib_callback, cbd, spf_cred)) {
-			msg_info_task ("cannot make spf request for %s", spf_cred->domain);
-			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED,
-					NULL, "DNS failed");
+			msg_info_task ("cannot make spf request for %s",
+					spf_cred ? spf_cred->domain : "empty domain");
+			if (spf_cred) {
+				lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED,
+						NULL, "DNS failed");
+			}
+			else {
+				lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_NA,
+						NULL, "No domain");
+			}
 			REF_RELEASE (cbd);
 		}
 	}
