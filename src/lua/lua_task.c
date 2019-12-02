@@ -4889,14 +4889,19 @@ lua_task_get_timeval (lua_State *L)
 	struct timeval tv;
 
 	if (task != NULL) {
-		double_to_tv (task->task_timestamp, &tv);
-		lua_createtable (L, 0, 2);
-		lua_pushstring (L, "tv_sec");
-		lua_pushinteger (L, (lua_Integer)tv.tv_sec);
-		lua_settable (L, -3);
-		lua_pushstring (L, "tv_usec");
-		lua_pushinteger (L, (lua_Integer)tv.tv_usec);
-		lua_settable (L, -3);
+		if (lua_isboolean (L, 2) && !!lua_toboolean (L, 2)) {
+			lua_pushnumber (L, task->task_timestamp);
+		}
+		else {
+			double_to_tv (task->task_timestamp, &tv);
+			lua_createtable (L, 0, 2);
+			lua_pushstring (L, "tv_sec");
+			lua_pushinteger (L, (lua_Integer) tv.tv_sec);
+			lua_settable (L, -3);
+			lua_pushstring (L, "tv_usec");
+			lua_pushinteger (L, (lua_Integer) tv.tv_usec);
+			lua_settable (L, -3);
+		}
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
