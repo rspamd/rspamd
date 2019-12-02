@@ -96,11 +96,10 @@ SET(RSPAMDSRC	controller.c
 SET(PLUGINSSRC  plugins/regexp.c
 				plugins/chartable.c
 				plugins/fuzzy_check.c
-				plugins/spf.c
 				plugins/dkim_check.c
 				libserver/rspamd_control.c)
 
-SET(MODULES_LIST regexp chartable fuzzy_check spf dkim)
+SET(MODULES_LIST regexp chartable fuzzy_check dkim)
 SET(WORKERS_LIST normal controller fuzzy rspamd_proxy)
 IF (ENABLE_HYPERSCAN MATCHES "ON")
 	LIST(APPEND WORKERS_LIST "hs_helper")

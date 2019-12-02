@@ -1121,7 +1121,8 @@ dkim_symbol_callback (struct rspamd_task *task,
 	GError *err = NULL;
 	struct rspamd_mime_header *rh, *rh_cur;
 	struct dkim_check_result *res = NULL, *cur;
-	guint checked = 0, *dmarc_checks;
+	guint checked = 0;
+	gdouble *dmarc_checks;
 	struct dkim_ctx *dkim_module_ctx = dkim_get_context (task->cfg);
 
 	/* Allow dmarc */

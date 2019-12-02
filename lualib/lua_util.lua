@@ -1293,4 +1293,62 @@ exports.toboolean = function(v)
   end
 end
 
+---[[[
+-- @function lua_util.config_check_local_or_authed(config, modname)
+-- Reads check_local and check_authed from the config as this is used in many modules
+-- @param {rspamd_config} config `rspamd_config` global
+-- @param {name} module name
+-- @return {boolean} v converted to boolean
+--]]]
+exports.config_check_local_or_authed = function(rspamd_config, modname, def_local, def_authed)
+  local check_local = def_local or false
+  local check_authed = def_authed or false
+
+  local function try_section(where)
+    local ret = false
+    local opts = rspamd_config:get_all_opt(where)
+    if type(opts) == 'table' then
+      if type(opts['check_local']) == 'boolean' then
+        check_local = opts['check_local']
+        ret = true
+      end
+      if type(opts['check_authed']) == 'boolean' then
+        check_authed = opts['check_authed']
+        ret = true
+      end
+    end
+
+    return ret
+  end
+
+  if not try_section(modname) then
+    try_section('options')
+  end
+
+  return {check_local, check_authed}
+end
+
+---[[[
+-- @function lua_util.is_skip_local_or_authed(task, conf[, ip])
+-- Returns `true` if local or authenticated task should be skipped for this module
+-- @param {rspamd_task} task
+-- @param {table} conf table returned from `config_check_local_or_authed`
+-- @param {rspamd_ip} ip optional ip address (can be obtained from a task)
+-- @return {boolean} true if check should be skipped
+--]]]
+exports.is_skip_local_or_authed = function(task, conf, ip)
+  if not ip then
+    ip = task:get_from_ip()
+  end
+  if not conf then
+    conf = {false, false}
+  end
+  if ((not conf[2] and task:get_user()) or
+      (not conf[1] and type(ip) == 'userdata' and ip:is_local())) then
+    return true
+  end
+
+  return false
+end
+
 return exports

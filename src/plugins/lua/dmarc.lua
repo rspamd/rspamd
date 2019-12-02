@@ -23,8 +23,7 @@ local rspamd_url = require "rspamd_url"
 local rspamd_util = require "rspamd_util"
 local rspamd_redis = require "lua_redis"
 local lua_util = require "lua_util"
-local check_local = false
-local check_authed = false
+local auth_and_local_conf
 
 if confighelp then
   return
@@ -559,7 +558,7 @@ local function dmarc_callback(task)
   local hfromdom = ((from or E)[1] or E).domain
   local dmarc_domain
   local ip_addr = task:get_ip()
-  local dmarc_checks = task:get_mempool():get_variable('dmarc_checks', 'int') or 0
+  local dmarc_checks = task:get_mempool():get_variable('dmarc_checks', 'double') or 0
   local seen_invalid = false
 
   if dmarc_checks ~= 2 then
@@ -567,8 +566,7 @@ local function dmarc_callback(task)
     return
   end
 
-  if ((not check_authed and task:get_user()) or
-      (not check_local and ip_addr and ip_addr:is_local())) then
+  if lua_util.is_skip_local_or_authed(task, auth_and_local_conf, ip_addr) then
     rspamd_logger.infox(task, "skip DMARC checks for local networks and authorized users")
     return
   end
@@ -709,29 +707,14 @@ local function dmarc_callback(task)
 end
 
 
-local function try_opts(where)
-  local ret = false
-  local opts = rspamd_config:get_all_opt(where)
-  if type(opts) == 'table' then
-    if type(opts['check_local']) == 'boolean' then
-      check_local = opts['check_local']
-      ret = true
-    end
-    if type(opts['check_authed']) == 'boolean' then
-      check_authed = opts['check_authed']
-      ret = true
-    end
-  end
-
-  return ret
-end
-
-if not try_opts(N) then try_opts('options') end
-
 local opts = rspamd_config:get_all_opt('dmarc')
 if not opts or type(opts) ~= 'table' then
   return
 end
+
+auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, N,
+    false, false)
+
 no_sampling_domains = rspamd_map_add(N, 'no_sampling_domains', 'map', 'Domains not to apply DMARC sampling to')
 no_reporting_domains = rspamd_map_add(N, 'no_reporting_domains', 'map', 'Domains not to apply DMARC reporting to')
 

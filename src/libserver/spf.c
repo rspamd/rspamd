@@ -2436,11 +2436,10 @@ rspamd_spf_resolve (struct rspamd_task *task, spf_cb_t callback,
 
 		if (cached) {
 			cached->flags |= RSPAMD_SPF_FLAG_CACHED;
+			callback (cached, task, cbdata);
+
+			return TRUE;
 		}
-
-		callback (cached, task, cbdata);
-
-		return TRUE;
 	}
 
 

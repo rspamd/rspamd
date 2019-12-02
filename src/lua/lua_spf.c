@@ -54,6 +54,7 @@ static luaL_reg rspamd_spf_record_m[] = {
 struct rspamd_lua_spf_cbdata {
 	struct rspamd_task *task;
 	lua_State *L;
+	struct rspamd_symcache_item *item;
 	gint cbref;
 	ref_entry_t ref;
 };
@@ -153,6 +154,10 @@ lua_spf_dtor (struct rspamd_lua_spf_cbdata *cbd)
 {
 	if (cbd) {
 		luaL_unref (cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
+		if (cbd->item) {
+			rspamd_symcache_item_async_dec_check (cbd->task, cbd->item,
+					"lua_spf");
+		}
 	}
 }
 
@@ -162,26 +167,36 @@ spf_lua_lib_callback (struct spf_resolved *record, struct rspamd_task *task,
 {
 	struct rspamd_lua_spf_cbdata *cbd = (struct rspamd_lua_spf_cbdata *)ud;
 
-	if (record && (record->flags & RSPAMD_SPF_RESOLVED_NA)) {
-		lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_NA, record,
-				"no record found");
+	if (record) {
+		if ((record->flags & RSPAMD_SPF_RESOLVED_NA)) {
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_NA, NULL,
+					"no record found");
+		}
+		else if (record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED)) {
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED, NULL,
+					"temporary resolution error");
+		}
+		else if (record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED)) {
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
+					"permanent resolution error");
+		}
+		else if (record->elts->len == 0) {
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
+					"record is empty");
+		}
+		else if (record->domain) {
+			spf_record_ref (record);
+			lua_spf_push_result (cbd, record->flags, record, NULL);
+			spf_record_unref (record);
+		}
+		else {
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
+					"internal error: non empty record for no domain");
+		}
 	}
-	else if (record && record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED)) {
-		lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED, record,
-				"temporary resolution error");
-	}
-	else if (record && record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED)) {
-		lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, record,
-				"permanent resolution error");
-	}
-	else if (record && record->elts->len == 0) {
-		lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, record,
-				"record is empty");
-	}
-	else if (record && record->domain) {
-		spf_record_ref (record);
-		lua_spf_push_result (cbd, record->flags, record, NULL);
-		spf_record_unref (record);
+	else {
+		lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
+				"internal error: no record");
 	}
 
 	REF_RELEASE (cbd);
@@ -209,12 +224,21 @@ lua_spf_resolve (lua_State * L)
 		cbd->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 		/* TODO: make it as an optional parameter */
 		spf_cred = rspamd_spf_get_cred (task);
+		cbd->item = rspamd_symcache_get_cur_item (task);
+		rspamd_symcache_item_async_inc (task, cbd->item, "lua_spf");
 		REF_INIT_RETAIN (cbd, lua_spf_dtor);
 
 		if (!rspamd_spf_resolve (task, spf_lua_lib_callback, cbd, spf_cred)) {
-			msg_info_task ("cannot make spf request for %s", spf_cred->domain);
-			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED,
-					NULL, "DNS failed");
+			msg_info_task ("cannot make spf request for %s",
+					spf_cred ? spf_cred->domain : "empty domain");
+			if (spf_cred) {
+				lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED,
+						NULL, "DNS failed");
+			}
+			else {
+				lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_NA,
+						NULL, "No domain");
+			}
 			REF_RELEASE (cbd);
 		}
 	}
@@ -276,11 +300,8 @@ spf_check_element (lua_State *L, struct spf_resolved *rec, struct spf_addr *addr
 
 	if (addr->flags & RSPAMD_SPF_FLAG_TEMPFAIL) {
 		/* Ignore failed addresses */
-		lua_pushboolean (L, false);
-		lua_pushinteger (L, RSPAMD_SPF_FLAG_TEMPFAIL);
-		lua_pushstring (L, "temp failed");
 
-		return 3;
+		return -1;
 	}
 
 	af = rspamd_inet_address_get_af (ip->addr);
@@ -333,12 +354,12 @@ spf_check_element (lua_State *L, struct spf_resolved *rec, struct spf_addr *addr
 			if (rec->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED) {
 				lua_pushboolean (L, false);
 				lua_pushinteger (L, RSPAMD_SPF_RESOLVED_PERM_FAILED);
-				lua_spf_push_spf_addr (L, addr);
+				lua_pushstring (L, "any perm fail");
 			}
 			else if (rec->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED) {
 				lua_pushboolean (L, false);
 				lua_pushinteger (L, RSPAMD_SPF_RESOLVED_TEMP_FAILED);
-				lua_spf_push_spf_addr (L, addr);
+				lua_pushfstring (L, "any temp fail");
 			}
 			else {
 				lua_pushboolean (L, true);
@@ -365,7 +386,7 @@ spf_check_element (lua_State *L, struct spf_resolved *rec, struct spf_addr *addr
  * 1. Boolean check result
  * 2. If result is `false` then the second value is the error flag (e.g. rspamd_spf.flags.temp_fail), otherwise it will be an SPF method
  * 3. If result is `false` then this will be an error string, otherwise - an SPF string (e.g. `mx` or `ip4:x.y.z.1`)
- * @param {rspamd_ip} ip address
+ * @param {rspamd_ip|string} ip address
  * @return {result,flag_or_policy,error_or_addr} - triplet
 */
 static gint
@@ -374,8 +395,29 @@ lua_spf_record_check_ip (lua_State *L)
 	struct spf_resolved *record =
 			* (struct spf_resolved **)rspamd_lua_check_udata (L, 1,
 					SPF_RECORD_CLASS);
-	struct rspamd_lua_ip *ip = lua_check_ip (L, 2);
+	struct rspamd_lua_ip *ip = NULL;
 	gint nres = 0;
+	gboolean need_free_ip = FALSE;
+
+	if (lua_type (L, 2) == LUA_TUSERDATA) {
+		ip = lua_check_ip (L, 2);
+	}
+	else if (lua_type (L, 2) == LUA_TSTRING) {
+		const gchar *ip_str;
+		gsize iplen;
+
+		ip = g_malloc0 (sizeof (struct rspamd_lua_ip));
+		ip_str = lua_tolstring (L, 2, &iplen);
+
+		if (!rspamd_parse_inet_address (&ip->addr,
+				ip_str, iplen, RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+			g_free (ip);
+			ip = NULL;
+		}
+		else {
+			need_free_ip = TRUE;
+		}
+	}
 
 	if (record && ip && ip->addr) {
 		for (guint i = 0; i < record->elts->len; i ++) {
@@ -387,6 +429,10 @@ lua_spf_record_check_ip (lua_State *L)
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
+	}
+
+	if (need_free_ip) {
+		g_free (ip);
 	}
 
 	lua_pushboolean (L, false);
