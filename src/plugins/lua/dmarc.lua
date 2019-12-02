@@ -559,7 +559,7 @@ local function dmarc_callback(task)
   local hfromdom = ((from or E)[1] or E).domain
   local dmarc_domain
   local ip_addr = task:get_ip()
-  local dmarc_checks = task:get_mempool():get_variable('dmarc_checks', 'int') or 0
+  local dmarc_checks = task:get_mempool():get_variable('dmarc_checks', 'double') or 0
   local seen_invalid = false
 
   if dmarc_checks ~= 2 then

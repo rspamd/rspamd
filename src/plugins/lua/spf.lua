@@ -126,6 +126,10 @@ local function spf_check_callback(task)
       local sym = flag_to_symbol(flags)
       task:insert_result(sym, 1.0, err)
     end
+
+    local dmarc_checks = task:get_mempool():get_variable('dmarc_checks', 'double') or 0
+    dmarc_checks = dmarc_checks + 1
+    task:get_mempool():set_variable('dmarc_checks', dmarc_checks)
   end
 
   rspamd_spf.resolve(task, spf_resolved_cb)
