@@ -18,6 +18,7 @@ local N = "spf"
 local lua_util = require "lua_util"
 local rspamd_spf = require "rspamd_spf"
 local bit = require "bit"
+local rspamd_logger = require "rspamd_logger"
 
 if confighelp then
   rspamd_config:add_example(nil, N,
@@ -66,6 +67,8 @@ local default_config = {
 }
 
 local local_config = rspamd_config:get_all_opt('spf')
+local auth_and_local_conf = lua_util.config_check_local_or_authed(rspamd_config, N,
+    false, false)
 
 if local_config then
   local_config = lua_util.override_defaults(default_config, local_config)
@@ -74,6 +77,9 @@ else
 end
 
 local function spf_check_callback(task)
+
+  local ip = task:get_from_ip()
+
   local function flag_to_symbol(fl)
     if bit.band(fl, rspamd_spf.flags.temp_fail) ~= 0 then
       return local_config.symbols.dnsfail
@@ -103,8 +109,8 @@ local function spf_check_callback(task)
   local function spf_resolved_cb(record, flags, err)
     lua_util.debugm(N, task, 'got spf results: %s flags, %s err',
         flags, err)
+
     if record then
-      local ip = task:get_from_ip()
       local result, flag_or_policy, error_or_addr = record:check_ip(ip)
 
       lua_util.debugm(N, task,
@@ -116,6 +122,12 @@ local function spf_check_callback(task)
         local opt = string.format('%s%s', code, error_or_addr.str or '???')
         if bit.band(flags, rspamd_spf.flags.cached) ~= 0 then
           opt = opt .. ':c'
+          rspamd_logger.infox(task,
+              "use cached record for %s (0x%s) in LRU cache for %s seconds",
+              record:get_domain(),
+              record:get_digest(),
+              record:get_ttl() - math.floor(task:get_timeval(true) -
+                  record:get_timestamp()));
         end
         task:insert_result(sym, 1.0, opt)
       else
@@ -126,13 +138,32 @@ local function spf_check_callback(task)
       local sym = flag_to_symbol(flags)
       task:insert_result(sym, 1.0, err)
     end
-
-    local dmarc_checks = task:get_mempool():get_variable('dmarc_checks', 'double') or 0
-    dmarc_checks = dmarc_checks + 1
-    task:get_mempool():set_variable('dmarc_checks', dmarc_checks)
   end
 
-  rspamd_spf.resolve(task, spf_resolved_cb)
+  if ip then
+    if local_config.whitelist and ip and local_config.whitelist:get_key(ip) then
+      rspamd_logger.infox(task, 'whitelisted SPF checks from %s',
+          tostring(ip))
+      return
+    end
+
+    if lua_util.is_skip_local_or_authed(task, auth_and_local_conf, ip) then
+      rspamd_logger.infox(task, 'skip SPF checks for local networks and authorized users')
+      return
+    end
+
+    rspamd_spf.resolve(task, spf_resolved_cb)
+  else
+    lua_util.debugm(N, task, "spf checks are not possible as no source IP address is defined")
+  end
+
+  -- FIXME: we actually need to set this variable when we really checked SPF
+  -- However, the old C module has set it all the times
+  -- Hence, we follow the same rule for now. It should be better designed at some day
+  local mpool = task:get_mempool()
+  local dmarc_checks = mpool:get_variable('dmarc_checks', 'double') or 0
+  dmarc_checks = dmarc_checks + 1
+  mpool:set_variable('dmarc_checks', dmarc_checks)
 end
 
 -- Register all symbols and init rspamd_spf library
@@ -145,6 +176,13 @@ local sym_id = rspamd_config:register_symbol{
   score = 0.0,
   callback = spf_check_callback
 }
+
+if local_config.whitelist then
+  local lua_maps = require "lua_maps"
+
+  local_config.whitelist = lua_maps.map_add_from_ucl(local_config.whitelist,
+      "radix", "SPF whitelist map")
+end
 
 for _,sym in pairs(local_config.symbols) do
   rspamd_config:register_symbol{
