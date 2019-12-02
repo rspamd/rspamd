@@ -54,6 +54,7 @@ static luaL_reg rspamd_spf_record_m[] = {
 struct rspamd_lua_spf_cbdata {
 	struct rspamd_task *task;
 	lua_State *L;
+	struct rspamd_symcache_item *item;
 	gint cbref;
 	ref_entry_t ref;
 };
@@ -153,6 +154,10 @@ lua_spf_dtor (struct rspamd_lua_spf_cbdata *cbd)
 {
 	if (cbd) {
 		luaL_unref (cbd->L, LUA_REGISTRYINDEX, cbd->cbref);
+		if (cbd->item) {
+			rspamd_symcache_item_async_dec_check (cbd->task, cbd->item,
+					"lua_spf");
+		}
 	}
 }
 
@@ -162,26 +167,36 @@ spf_lua_lib_callback (struct spf_resolved *record, struct rspamd_task *task,
 {
 	struct rspamd_lua_spf_cbdata *cbd = (struct rspamd_lua_spf_cbdata *)ud;
 
-	if (record && (record->flags & RSPAMD_SPF_RESOLVED_NA)) {
-		lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_NA, record,
-				"no record found");
+	if (record) {
+		if ((record->flags & RSPAMD_SPF_RESOLVED_NA)) {
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_NA, record,
+					"no record found");
+		}
+		else if (record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED)) {
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED, record,
+					"temporary resolution error");
+		}
+		else if (record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED)) {
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, record,
+					"permanent resolution error");
+		}
+		else if (record->elts->len == 0) {
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, record,
+					"record is empty");
+		}
+		else if (record->domain) {
+			spf_record_ref (record);
+			lua_spf_push_result (cbd, record->flags, record, NULL);
+			spf_record_unref (record);
+		}
+		else {
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, record,
+					"internal error: non empty record for no domain");
+		}
 	}
-	else if (record && record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED)) {
-		lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED, record,
-				"temporary resolution error");
-	}
-	else if (record && record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED)) {
-		lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, record,
-				"permanent resolution error");
-	}
-	else if (record && record->elts->len == 0) {
-		lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, record,
-				"record is empty");
-	}
-	else if (record && record->domain) {
-		spf_record_ref (record);
-		lua_spf_push_result (cbd, record->flags, record, NULL);
-		spf_record_unref (record);
+	else {
+		lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
+				"internal error: no record");
 	}
 
 	REF_RELEASE (cbd);
@@ -209,6 +224,8 @@ lua_spf_resolve (lua_State * L)
 		cbd->cbref = luaL_ref (L, LUA_REGISTRYINDEX);
 		/* TODO: make it as an optional parameter */
 		spf_cred = rspamd_spf_get_cred (task);
+		cbd->item = rspamd_symcache_get_cur_item (task);
+		rspamd_symcache_item_async_inc (task, cbd->item, "lua_spf");
 		REF_INIT_RETAIN (cbd, lua_spf_dtor);
 
 		if (!rspamd_spf_resolve (task, spf_lua_lib_callback, cbd, spf_cred)) {

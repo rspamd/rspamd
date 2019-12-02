@@ -101,8 +101,15 @@ local function spf_check_callback(task)
   end
 
   local function spf_resolved_cb(record, flags, err)
+    lua_util.debugm(N, task, 'got spf results: %s flags, %s err',
+        flags, err)
     if record then
-      local result, flag_or_policy, error_or_addr = record:check_ip(task:get_from_ip())
+      local ip = task:get_from_ip()
+      local result, flag_or_policy, error_or_addr = record:check_ip(ip)
+
+      lua_util.debugm(N, task,
+          'checked ip %s: result=%s, flag_or_policy=%s, error_or_addr=%s',
+          ip, flags, err, error_or_addr)
 
       if result then
         local sym,code = policy_decode(flag_or_policy)
