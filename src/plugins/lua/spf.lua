@@ -41,6 +41,8 @@ spf {
   min_cache_ttl = 5m;
   # Disable all IPv6 lookups
   disable_ipv6 = false;
+  # Use IP address from a received header produced by this relay (using by attribute)
+  external_relay = "192.168.1.1";
 }
   ]])
   return
@@ -63,7 +65,8 @@ local default_config = {
   whitelist = nil,
   min_cache_ttl = 60 * 5,
   disable_ipv6 = false,
-  symbols = symbols
+  symbols = symbols,
+  external_relay = nil,
 }
 
 local local_config = rspamd_config:get_all_opt('spf')
@@ -78,7 +81,38 @@ end
 
 local function spf_check_callback(task)
 
-  local ip = task:get_from_ip()
+  local ip
+
+  if local_config.external_relay then
+    -- Search received headers to get header produced by an external relay
+    local rh = task:get_received_headers() or {}
+    local found = false
+
+    for i,hdr in ipairs(rh) do
+      if hdr.real_ip and hdr.real_ip == local_config.external_relay then
+        -- We can use the next header as a source of IP address
+        if rh[i + 1] then
+          local nhdr = rh[i + 1]
+          lua_util.debugm(N, task, 'found external relay %s at received header %s -> %s',
+              local_config.external_relay, hdr, nhdr.real_ip)
+
+          if nhdr.real_ip then
+            ip = nhdr.real_ip
+            found = true
+          end
+        end
+
+        break
+      end
+    end
+    if not found then
+      rspamd_logger.warnx(task, "cannot find external relay with IP %s",
+          local_config.external_relay)
+      ip = task:get_from_ip()
+    end
+  else
+    ip = task:get_from_ip()
+  end
 
   local function flag_to_symbol(fl)
     if bit.band(fl, rspamd_spf.flags.temp_fail) ~= 0 then

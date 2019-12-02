@@ -1344,7 +1344,7 @@ exports.is_skip_local_or_authed = function(task, conf, ip)
     conf = {false, false}
   end
   if ((not conf[2] and task:get_user()) or
-      (not conf[1] and ip and ip:is_local())) then
+      (not conf[1] and type(ip) == 'userdata' and ip:is_local())) then
     return true
   end
 
