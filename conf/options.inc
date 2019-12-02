@@ -13,7 +13,7 @@
 #
 # Relevant documentation: https://rspamd.com/doc/configuration/options.html
 
-filters = "chartable,dkim,spf,regexp,fuzzy_check";
+filters = "chartable,dkim,regexp,fuzzy_check";
 raw_mode = false;
 one_shot = false;
 cache_file = "$DBDIR/symbols.cache";
