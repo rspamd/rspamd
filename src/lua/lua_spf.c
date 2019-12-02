@@ -386,7 +386,7 @@ spf_check_element (lua_State *L, struct spf_resolved *rec, struct spf_addr *addr
  * 1. Boolean check result
  * 2. If result is `false` then the second value is the error flag (e.g. rspamd_spf.flags.temp_fail), otherwise it will be an SPF method
  * 3. If result is `false` then this will be an error string, otherwise - an SPF string (e.g. `mx` or `ip4:x.y.z.1`)
- * @param {rspamd_ip} ip address
+ * @param {rspamd_ip|string} ip address
  * @return {result,flag_or_policy,error_or_addr} - triplet
 */
 static gint
@@ -395,8 +395,29 @@ lua_spf_record_check_ip (lua_State *L)
 	struct spf_resolved *record =
 			* (struct spf_resolved **)rspamd_lua_check_udata (L, 1,
 					SPF_RECORD_CLASS);
-	struct rspamd_lua_ip *ip = lua_check_ip (L, 2);
+	struct rspamd_lua_ip *ip = NULL;
 	gint nres = 0;
+	gboolean need_free_ip = FALSE;
+
+	if (lua_type (L, 2) == LUA_TUSERDATA) {
+		ip = lua_check_ip (L, 2);
+	}
+	else if (lua_type (L, 2) == LUA_TSTRING) {
+		const gchar *ip_str;
+		gsize iplen;
+
+		ip = g_malloc0 (sizeof (struct rspamd_lua_ip));
+		ip_str = lua_tolstring (L, 2, &iplen);
+
+		if (!rspamd_parse_inet_address (&ip->addr,
+				ip_str, iplen, RSPAMD_INET_ADDRESS_PARSE_DEFAULT)) {
+			g_free (ip);
+			ip = NULL;
+		}
+		else {
+			need_free_ip = TRUE;
+		}
+	}
 
 	if (record && ip && ip->addr) {
 		for (guint i = 0; i < record->elts->len; i ++) {
@@ -408,6 +429,10 @@ lua_spf_record_check_ip (lua_State *L)
 	}
 	else {
 		return luaL_error (L, "invalid arguments");
+	}
+
+	if (need_free_ip) {
+		g_free (ip);
 	}
 
 	lua_pushboolean (L, false);
