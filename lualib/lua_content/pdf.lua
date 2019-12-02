@@ -32,21 +32,21 @@ local pdf_patterns = {
   },
   javascript = {
     patterns = {
-      [[/JS(?:[\s/><])]],
-      [[/JavaScript(?:[\s/><])]],
+      [[\/JS(?:[\s/><])]],
+      [[\/JavaScript(?:[\s/><])]],
     }
   },
   openaction = {
     patterns = {
-      [[/OpenAction(?:[\s/><])]],
-      [[/AA(?:[\s/><])]],
+      [[\/OpenAction(?:[\s/><])]],
+      [[\/AA(?:[\s/><])]],
     }
   },
   suspicious = {
     patterns = {
       [[netsh\s]],
       [[echo\s]],
-      [[/[A-Za-z]*#\d\d(?:[#A-Za-z<>/\s])]], -- Hex encode obfuscation
+      [[\/[A-Za-z]*#\d\d(?:[#A-Za-z<>/\s])]], -- Hex encode obfuscation
     }
   }
 }
