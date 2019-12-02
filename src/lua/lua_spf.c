@@ -169,19 +169,19 @@ spf_lua_lib_callback (struct spf_resolved *record, struct rspamd_task *task,
 
 	if (record) {
 		if ((record->flags & RSPAMD_SPF_RESOLVED_NA)) {
-			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_NA, record,
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_NA, NULL,
 					"no record found");
 		}
 		else if (record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED)) {
-			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED, record,
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED, NULL,
 					"temporary resolution error");
 		}
 		else if (record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED)) {
-			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, record,
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
 					"permanent resolution error");
 		}
 		else if (record->elts->len == 0) {
-			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, record,
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
 					"record is empty");
 		}
 		else if (record->domain) {
@@ -190,7 +190,7 @@ spf_lua_lib_callback (struct spf_resolved *record, struct rspamd_task *task,
 			spf_record_unref (record);
 		}
 		else {
-			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, record,
+			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
 					"internal error: non empty record for no domain");
 		}
 	}
@@ -300,11 +300,8 @@ spf_check_element (lua_State *L, struct spf_resolved *rec, struct spf_addr *addr
 
 	if (addr->flags & RSPAMD_SPF_FLAG_TEMPFAIL) {
 		/* Ignore failed addresses */
-		lua_pushboolean (L, false);
-		lua_pushinteger (L, RSPAMD_SPF_FLAG_TEMPFAIL);
-		lua_pushstring (L, "temp failed");
 
-		return 3;
+		return -1;
 	}
 
 	af = rspamd_inet_address_get_af (ip->addr);
@@ -357,12 +354,12 @@ spf_check_element (lua_State *L, struct spf_resolved *rec, struct spf_addr *addr
 			if (rec->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED) {
 				lua_pushboolean (L, false);
 				lua_pushinteger (L, RSPAMD_SPF_RESOLVED_PERM_FAILED);
-				lua_spf_push_spf_addr (L, addr);
+				lua_pushstring (L, "any perm fail");
 			}
 			else if (rec->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED) {
 				lua_pushboolean (L, false);
 				lua_pushinteger (L, RSPAMD_SPF_RESOLVED_TEMP_FAILED);
-				lua_spf_push_spf_addr (L, addr);
+				lua_pushfstring (L, "any temp fail");
 			}
 			else {
 				lua_pushboolean (L, true);
