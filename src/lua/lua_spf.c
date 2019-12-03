@@ -47,6 +47,7 @@ static luaL_reg rspamd_spf_record_m[] = {
 		LUA_INTERFACE_DEF (spf_record, get_ttl),
 		LUA_INTERFACE_DEF (spf_record, get_digest),
 		LUA_INTERFACE_DEF (spf_record, get_elts),
+		LUA_INTERFACE_DEF (spf_record, get_timestamp),
 		{"__gc", lua_spf_record_dtor},
 		{NULL, NULL},
 };
