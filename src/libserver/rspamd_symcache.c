@@ -99,12 +99,12 @@ struct rspamd_symcache_id_list {
 
 struct rspamd_symcache_item {
 	/* This block is likely shared */
-	struct item_stat *st;
+	struct rspamd_symcache_item_stat *st;
 
 	guint64 last_count;
 	struct rspamd_counter_data *cd;
 	gchar *symbol;
-	enum rspamd_symbol_type type;
+	gint type;
 
 	/* Callback data */
 	union {
@@ -115,6 +115,7 @@ struct rspamd_symcache_item {
 		} normal;
 		struct {
 			gint parent;
+			struct rspamd_symcache_item *parent_item;
 		} virtual;
 	} specific;
 
@@ -142,17 +143,6 @@ struct rspamd_symcache_item {
 
 	/* Container */
 	GPtrArray *container;
-};
-
-struct item_stat {
-	struct rspamd_counter_data time_counter;
-	gdouble avg_time;
-	gdouble weight;
-	guint hits;
-	guint64 total_hits;
-	struct rspamd_counter_data frequency_counter;
-	gdouble avg_frequency;
-	gdouble stddev_frequency;
 };
 
 struct rspamd_symcache {
@@ -324,8 +314,7 @@ rspamd_symcache_find_filter (struct rspamd_symcache *cache,
 	if (item != NULL) {
 
 		if (resolve_parent && item->is_virtual && !(item->type & SYMBOL_TYPE_GHOST)) {
-			item = g_ptr_array_index (cache->items_by_id,
-					item->specific.virtual.parent);
+			item =item->specific.virtual.parent_item;
 		}
 
 		return item;
@@ -338,7 +327,7 @@ const gchar *
 rspamd_symcache_get_parent (struct rspamd_symcache *cache,
 										 const gchar *symbol)
 {
-	struct rspamd_symcache_item *item;
+	struct rspamd_symcache_item *item, *parent;
 
 	g_assert (cache != NULL);
 
@@ -351,8 +340,15 @@ rspamd_symcache_get_parent (struct rspamd_symcache *cache,
 	if (item != NULL) {
 
 		if (item->is_virtual && !(item->type & SYMBOL_TYPE_GHOST)) {
-			item = g_ptr_array_index (cache->items_by_id,
-					item->specific.virtual.parent);
+			parent = item->specific.virtual.parent_item;
+
+			if (!parent) {
+				item->specific.virtual.parent_item = g_ptr_array_index (cache->items_by_id,
+						item->specific.virtual.parent);
+				parent = item->specific.virtual.parent_item;
+			}
+
+			item = parent;
 		}
 
 		return item->symbol;
@@ -893,6 +889,7 @@ rspamd_symcache_load_items (struct rspamd_symcache *cache, const gchar *name)
 				g_assert (item->specific.virtual.parent < (gint)cache->items_by_id->len);
 				parent = g_ptr_array_index (cache->items_by_id,
 						item->specific.virtual.parent);
+				item->specific.virtual.parent_item = parent;
 
 				if (parent->st->weight < item->st->weight) {
 					parent->st->weight = item->st->weight;
@@ -1428,6 +1425,7 @@ rspamd_symcache_validate_cb (gpointer k, gpointer v, gpointer ud)
 			g_assert (item->specific.virtual.parent < (gint) cache->items_by_id->len);
 			parent = g_ptr_array_index (cache->items_by_id,
 					item->specific.virtual.parent);
+			item->specific.virtual.parent_item = parent;
 
 			if (fabs (parent->st->weight) < fabs (item->st->weight)) {
 				parent->st->weight = item->st->weight;
@@ -2939,7 +2937,7 @@ rspamd_symcache_disable_symbol (struct rspamd_task *task,
 
 void
 rspamd_symcache_foreach (struct rspamd_symcache *cache,
-						 void (*func) (gint, const gchar *, gint, gpointer),
+						 void (*func) (struct rspamd_symcache_item *, gpointer),
 						 gpointer ud)
 {
 	struct rspamd_symcache_item *item;
@@ -2950,7 +2948,7 @@ rspamd_symcache_foreach (struct rspamd_symcache *cache,
 
 	while (g_hash_table_iter_next (&it, &k, &v)) {
 		item = (struct rspamd_symcache_item *)v;
-		func (item->id, item->symbol, item->type, ud);
+		func (item, ud);
 	}
 }
 
@@ -3514,7 +3512,7 @@ rspamd_symcache_process_settings_elt (struct rspamd_symcache *cache,
 	}
 }
 
-enum rspamd_symbol_type
+gint
 rspamd_symcache_item_flags (struct rspamd_symcache_item *item)
 {
 	if (item) {
@@ -3522,4 +3520,80 @@ rspamd_symcache_item_flags (struct rspamd_symcache_item *item)
 	}
 
 	return 0;
+}
+
+const gchar*
+rspamd_symcache_item_name (struct rspamd_symcache_item *item)
+{
+	return item ? item->symbol : NULL;
+}
+
+const struct rspamd_symcache_item_stat *
+rspamd_symcache_item_stat (struct rspamd_symcache_item *item)
+{
+	return item ? item->st : NULL;
+}
+
+gboolean
+rspamd_symcache_item_is_enabled (struct rspamd_symcache_item *item)
+{
+	if (item) {
+		if (!item->enabled) {
+			return FALSE;
+		}
+
+		if (item->is_virtual && item->specific.virtual.parent_item != NULL) {
+			return rspamd_symcache_item_is_enabled (item->specific.virtual.parent_item);
+		}
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+struct rspamd_symcache_item * rspamd_symcache_item_get_parent (
+		struct rspamd_symcache_item *item)
+{
+	if (item && item->is_virtual && item->specific.virtual.parent_item != NULL) {
+		return item->specific.virtual.parent_item;
+	}
+
+	return NULL;
+}
+
+const GPtrArray*
+rspamd_symcache_item_get_deps (struct rspamd_symcache_item *item)
+{
+	struct rspamd_symcache_item *parent;
+
+	if (item) {
+		parent = rspamd_symcache_item_get_parent (item);
+
+		if (parent) {
+			item = parent;
+		}
+
+		return item->deps;
+	}
+
+	return NULL;
+}
+
+const GPtrArray*
+rspamd_symcache_item_get_rdeps (struct rspamd_symcache_item *item)
+{
+	struct rspamd_symcache_item *parent;
+
+	if (item) {
+		parent = rspamd_symcache_item_get_parent (item);
+
+		if (parent) {
+			item = parent;
+		}
+
+		return item->rdeps;
+	}
+
+	return NULL;
 }
