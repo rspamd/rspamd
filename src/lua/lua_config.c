@@ -431,9 +431,10 @@ LUA_FUNCTION_DEF (config, add_condition);
 LUA_FUNCTION_DEF (config, enable_symbol);
 
 /***
- * @method rspamd_config:disable_symbol(symbol)
+ * @method rspamd_config:disable_symbol(symbol, [disable_parent=true])
  * Disables execution for the specified symbol
  * @param {string} symbol symbol's name
+ * @param {boolean} disable_parent if true then disable parent execution in case of a virtual symbol
  */
 LUA_FUNCTION_DEF (config, disable_symbol);
 
@@ -2898,9 +2899,14 @@ lua_config_disable_symbol (lua_State *L)
 	LUA_TRACE_POINT;
 	struct rspamd_config *cfg = lua_check_config (L, 1);
 	const gchar *sym = luaL_checkstring (L, 2);
+	gboolean disable_parent = TRUE;
 
 	if (cfg && sym) {
-		rspamd_symcache_disable_symbol_perm (cfg->cache, sym);
+		if (lua_isboolean (L, 3)) {
+			disable_parent = lua_toboolean (L, 3);
+		}
+
+		rspamd_symcache_disable_symbol_perm (cfg->cache, sym, disable_parent);
 	}
 	else {
 		return luaL_error (L, "invalid arguments");

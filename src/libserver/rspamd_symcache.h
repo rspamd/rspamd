@@ -242,7 +242,8 @@ void rspamd_symcache_add_delayed_dependency (struct rspamd_symcache *cache,
  * @param symbol
  */
 void rspamd_symcache_disable_symbol_perm (struct rspamd_symcache *cache,
-										  const gchar *symbol);
+										  const gchar *symbol,
+										  gboolean resolve_parent);
 
 /**
  * Enable specific symbol in the cache

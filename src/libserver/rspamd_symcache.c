@@ -1598,14 +1598,18 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 {
 	const gchar *what = "execution";
 
+	if (!exec_only) {
+		what = "symbol insertion";
+	}
+
 	/* Static checks */
 	if (!item->enabled ||
 		(RSPAMD_TASK_IS_EMPTY (task) && !(item->type & SYMBOL_TYPE_EMPTY)) ||
 		(item->type & SYMBOL_TYPE_MIME_ONLY && !RSPAMD_TASK_IS_MIME(task))) {
 
 		if (!item->enabled) {
-			msg_debug_cache_task ("skipping check of %s as it is permanently disabled",
-					item->symbol);
+			msg_debug_cache_task ("skipping %s of %s as it is permanently disabled",
+					what, item->symbol);
 
 			return FALSE;
 		}
@@ -1621,10 +1625,6 @@ rspamd_symcache_is_item_allowed (struct rspamd_task *task,
 				return FALSE;
 			}
 		}
-	}
-
-	if (!exec_only) {
-		what = "symbol insertion";
 	}
 
 	/* Settings checks */
@@ -2760,14 +2760,15 @@ rspamd_symcache_is_checked (struct rspamd_task *task,
 
 void
 rspamd_symcache_disable_symbol_perm (struct rspamd_symcache *cache,
-									 const gchar *symbol)
+									 const gchar *symbol,
+									 gboolean resolve_parent)
 {
 	struct rspamd_symcache_item *item;
 
 	g_assert (cache != NULL);
 	g_assert (symbol != NULL);
 
-	item = rspamd_symcache_find_filter (cache, symbol, true);
+	item = rspamd_symcache_find_filter (cache, symbol, resolve_parent);
 
 	if (item) {
 		item->enabled = FALSE;
