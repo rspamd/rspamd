@@ -1157,6 +1157,8 @@ rspamd_symcache_add_symbol (struct rspamd_symcache *cache,
 		else {
 			item->is_virtual = TRUE;
 			item->specific.virtual.parent = parent;
+			item->specific.virtual.parent_item =
+					g_ptr_array_index (cache->items_by_id, parent);
 			item->id = cache->virtual->len;
 			g_ptr_array_add (cache->virtual, item);
 			item->container = cache->virtual;
