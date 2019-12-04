@@ -4637,10 +4637,15 @@ struct tokens_foreach_cbdata {
 };
 
 static void
-tokens_foreach_cb (gint id, const gchar *sym, gint flags, gpointer ud)
+tokens_foreach_cb (struct rspamd_symcache_item *item, gpointer ud)
 {
 	struct tokens_foreach_cbdata *cbd = ud;
 	struct rspamd_symbol_result *s;
+	gint flags;
+	const gchar *sym;
+
+	sym = rspamd_symcache_item_name (item);
+	flags = rspamd_symcache_item_flags (item);
 
 	if (flags & SYMBOL_TYPE_NOSTAT) {
 		return;
