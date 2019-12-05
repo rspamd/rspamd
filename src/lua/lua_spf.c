@@ -171,12 +171,12 @@ spf_lua_lib_callback (struct spf_resolved *record, struct rspamd_task *task,
 	if (record) {
 		if ((record->flags & RSPAMD_SPF_RESOLVED_NA)) {
 			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_NA, NULL,
-					"no record found");
+					"no SPF record found");
 		}
 		else if (record->elts->len == 0) {
 			if (record->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED) {
 				lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
-			"permanent resolution error");
+			"bad SPF record");
 			}
 			else if ((record->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED)) {
 				lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED, NULL,
