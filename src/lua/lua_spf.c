@@ -173,17 +173,19 @@ spf_lua_lib_callback (struct spf_resolved *record, struct rspamd_task *task,
 			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_NA, NULL,
 					"no record found");
 		}
-		else if (record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED)) {
-			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED, NULL,
-					"temporary resolution error");
-		}
-		else if (record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED)) {
-			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
-					"permanent resolution error");
-		}
 		else if (record->elts->len == 0) {
-			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
-					"record is empty");
+			if (record->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED) {
+				lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
+			"permanent resolution error");
+			}
+			else if ((record->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED)) {
+				lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED, NULL,
+						"temporary resolution error");
+			}
+			else {
+				lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
+						"record is empty");
+			}
 		}
 		else if (record->domain) {
 			spf_record_ref (record);

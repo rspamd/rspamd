@@ -125,7 +125,7 @@ SPF PTRS
 SPF PERMFAIL REDIRECT WITHOUT SPF
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim4.eml
   ...  -i  192.0.2.1  -F  a@fail1.org.org.za
-  Check Rspamc  ${result}  R_SPF_PERMFAIL
+  Check Rspamc  ${result}  R_SPF_DNSFAIL
 
 *** Keywords ***
 SPF Setup
