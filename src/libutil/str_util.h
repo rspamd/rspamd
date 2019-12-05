@@ -561,7 +561,8 @@ gchar ** rspamd_string_len_split (const gchar *in, gsize len,
 #define IS_ZERO_WIDTH_SPACE(uc) ((uc) == 0x200B || \
                                 (uc) == 0x200C || \
                                 (uc) == 0x200D || \
-                                (uc) == 0xFEFF)
+                                (uc) == 0xFEFF || \
+								(uc) == 0x00AD)
 #define IS_OBSCURED_CHAR(uc) (((uc) >= 0x200B && (uc) <= 0x200F) || \
                                 ((uc) >= 0x2028 && (uc) <= 0x202F) || \
                                 ((uc) >= 0x205F && (uc) <= 0x206F) || \
