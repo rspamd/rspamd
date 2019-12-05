@@ -122,6 +122,11 @@ SPF PTRS
   #...  -i  98.138.91.168  -F  foo@crazyspf.cacophony.za.org
   #Check Rspamc  ${result}  R_SPF_ALLOW
 
+SPF PERMFAIL REDIRECT WITHOUT SPF
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim4.eml
+  ...  -i  192.0.2.1  -F  a@fail1.org.org.za
+  Check Rspamc  ${result}  R_SPF_PERMFAIL
+
 *** Keywords ***
 SPF Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/dmarc.conf
