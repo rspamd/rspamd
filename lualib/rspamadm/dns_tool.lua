@@ -183,7 +183,7 @@ local function spf_handler(opts)
         end
       else
         printf('Error getting SPF record: %s (%s flag)', err,
-            flag_to_str(flag_or_policy))
+            flag_to_str(flag_or_policy or flags))
       end
     else
       printf('Cannot get SPF record: %s', err)
