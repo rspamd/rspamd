@@ -1368,6 +1368,42 @@ rspamd_conditional_debug_fast (rspamd_logger_t *rspamd_log,
 	}
 }
 
+void
+rspamd_conditional_debug_fast_num_id (rspamd_logger_t *rspamd_log,
+							   rspamd_inet_addr_t *addr,
+							   guint mod_id, const gchar *module, guint64 id,
+							   const gchar *function, const gchar *fmt, ...)
+{
+	static gchar logbuf[LOGBUF_LEN], idbuf[64];
+	va_list vp;
+	gchar *end;
+
+	if (rspamd_log == NULL) {
+		rspamd_log = default_logger;
+	}
+
+	if (rspamd_logger_need_log (rspamd_log, G_LOG_LEVEL_DEBUG, mod_id) ||
+		rspamd_log->is_debug) {
+		if (rspamd_log->debug_ip && addr != NULL) {
+			if (rspamd_match_radix_map_addr (rspamd_log->debug_ip, addr)
+				== NULL) {
+				return;
+			}
+		}
+
+		rspamd_snprintf (idbuf, sizeof (idbuf), "%XuL", id);
+		va_start (vp, fmt);
+		end = rspamd_vsnprintf (logbuf, sizeof (logbuf), fmt, vp);
+		*end = '\0';
+		va_end (vp);
+		rspamd_log->log_func (module, idbuf,
+				function,
+				G_LOG_LEVEL_DEBUG | RSPAMD_LOG_FORCED,
+				logbuf,
+				rspamd_log);
+	}
+}
+
 /**
  * Wrapper for glib logger
  */

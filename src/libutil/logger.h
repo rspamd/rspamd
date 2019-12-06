@@ -133,7 +133,13 @@ void rspamd_conditional_debug (rspamd_logger_t *logger,
 
 void rspamd_conditional_debug_fast (rspamd_logger_t *logger,
 									rspamd_inet_addr_t *addr,
-									guint mod_id, const gchar *module, const gchar *id,
+									guint mod_id,
+									const gchar *module, const gchar *id,
+									const gchar *function, const gchar *fmt, ...);
+void rspamd_conditional_debug_fast_num_id (rspamd_logger_t *logger,
+									rspamd_inet_addr_t *addr,
+									guint mod_id,
+									const gchar *module, guint64 id,
 									const gchar *function, const gchar *fmt, ...);
 
 /**
