@@ -219,7 +219,7 @@ spf_library_config (const ucl_object_t *obj)
 		if (ucl_object_toint_safe (value, &ival) && ival > 0) {
 			spf_lib_ctx->spf_hash = rspamd_lru_hash_new (
 					ival,
-					NULL,
+					g_free,
 					spf_record_cached_unref_dtor);
 		}
 	}
@@ -227,7 +227,7 @@ spf_library_config (const ucl_object_t *obj)
 		/* Preserve compatibility */
 		spf_lib_ctx->spf_hash = rspamd_lru_hash_new (
 				2048,
-				NULL,
+				g_free,
 				spf_record_cached_unref_dtor);
 	}
 }
@@ -606,7 +606,8 @@ rspamd_spf_maybe_return (struct spf_record *rec)
 
 			if (spf_lib_ctx->spf_hash) {
 				rspamd_lru_hash_insert (spf_lib_ctx->spf_hash,
-						flat->domain, spf_record_ref (flat),
+						g_strdup (flat->domain),
+						spf_record_ref (flat),
 						flat->timestamp, flat->ttl);
 
 				msg_info_task ("stored record for %s (0x%xuL) in LRU cache for %d seconds, "
