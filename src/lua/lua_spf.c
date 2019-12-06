@@ -228,7 +228,10 @@ lua_spf_resolve (lua_State * L)
 		/* TODO: make it as an optional parameter */
 		spf_cred = rspamd_spf_get_cred (task);
 		cbd->item = rspamd_symcache_get_cur_item (task);
-		rspamd_symcache_item_async_inc (task, cbd->item, "lua_spf");
+
+		if (cbd->item) {
+			rspamd_symcache_item_async_inc (task, cbd->item, "lua_spf");
+		}
 		REF_INIT_RETAIN (cbd, lua_spf_dtor);
 
 		if (!rspamd_spf_resolve (task, spf_lua_lib_callback, cbd, spf_cred)) {
