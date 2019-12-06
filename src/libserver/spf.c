@@ -111,6 +111,10 @@ struct rspamd_spf_library_ctx *spf_lib_ctx = NULL;
         rspamd_spf_log_id, "spf", rec->task->task_pool->tag.uid, \
         G_STRFUNC, \
         __VA_ARGS__)
+#define msg_debug_spf_flatten(...)  rspamd_conditional_debug_fast_num_id (NULL, NULL, \
+        rspamd_spf_log_id, "spf", (flat)->digest, \
+        G_STRFUNC, \
+        __VA_ARGS__)
 
 INIT_LOG_MODULE(spf)
 
@@ -155,6 +159,14 @@ RSPAMD_DESTRUCTOR(rspamd_spf_lib_ctx_dtor) {
 	}
 	g_free (spf_lib_ctx);
 	spf_lib_ctx = NULL;
+}
+
+static void
+spf_record_cached_unref_dtor (gpointer p)
+{
+	struct spf_resolved *flat = (struct spf_resolved *)p;
+
+	_spf_record_unref (flat, "LRU cache");
 }
 
 void
@@ -207,16 +219,16 @@ spf_library_config (const ucl_object_t *obj)
 		if (ucl_object_toint_safe (value, &ival) && ival > 0) {
 			spf_lib_ctx->spf_hash = rspamd_lru_hash_new (
 					ival,
-					NULL,
-					(GDestroyNotify) spf_record_unref);
+					g_free,
+					spf_record_cached_unref_dtor);
 		}
 	}
 	else {
 		/* Preserve compatibility */
 		spf_lib_ctx->spf_hash = rspamd_lru_hash_new (
 				2048,
-				NULL,
-				(GDestroyNotify) spf_record_unref);
+				g_free,
+				spf_record_cached_unref_dtor);
 	}
 }
 
@@ -594,7 +606,8 @@ rspamd_spf_maybe_return (struct spf_record *rec)
 
 			if (spf_lib_ctx->spf_hash) {
 				rspamd_lru_hash_insert (spf_lib_ctx->spf_hash,
-						flat->domain, spf_record_ref (flat),
+						g_strdup (flat->domain),
+						spf_record_ref (flat),
 						flat->timestamp, flat->ttl);
 
 				msg_info_task ("stored record for %s (0x%xuL) in LRU cache for %d seconds, "
@@ -608,7 +621,7 @@ rspamd_spf_maybe_return (struct spf_record *rec)
 		}
 
 		rec->callback (flat, rec->task, rec->cbdata);
-		REF_RELEASE (flat);
+		spf_record_unref (flat);
 		rec->done = TRUE;
 	}
 }
@@ -2471,16 +2484,18 @@ rspamd_spf_resolve (struct rspamd_task *task, spf_cb_t callback,
 }
 
 struct spf_resolved *
-spf_record_ref (struct spf_resolved *rec)
+_spf_record_ref (struct spf_resolved *flat, const gchar *loc)
 {
-	REF_RETAIN (rec);
-	return rec;
+	msg_debug_spf_flatten ("record ref %s; refcount=%d++", loc, flat->ref.refcount);
+	REF_RETAIN (flat);
+	return flat;
 }
 
 void
-spf_record_unref (struct spf_resolved *rec)
+_spf_record_unref (struct spf_resolved *flat, const gchar *loc)
 {
-	REF_RELEASE (rec);
+	msg_debug_spf_flatten ("record unref %s; refcount=%d--", loc, flat->ref.refcount);
+	REF_RELEASE (flat);
 }
 
 gchar *

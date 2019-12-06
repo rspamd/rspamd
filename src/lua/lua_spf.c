@@ -171,19 +171,21 @@ spf_lua_lib_callback (struct spf_resolved *record, struct rspamd_task *task,
 	if (record) {
 		if ((record->flags & RSPAMD_SPF_RESOLVED_NA)) {
 			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_NA, NULL,
-					"no record found");
-		}
-		else if (record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED)) {
-			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED, NULL,
-					"temporary resolution error");
-		}
-		else if (record->elts->len == 0 && (record->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED)) {
-			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
-					"permanent resolution error");
+					"no SPF record found");
 		}
 		else if (record->elts->len == 0) {
-			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
-					"record is empty");
+			if (record->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED) {
+				lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
+			"bad SPF record");
+			}
+			else if ((record->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED)) {
+				lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED, NULL,
+						"temporary resolution error");
+			}
+			else {
+				lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
+						"record is empty");
+			}
 		}
 		else if (record->domain) {
 			spf_record_ref (record);
@@ -226,7 +228,10 @@ lua_spf_resolve (lua_State * L)
 		/* TODO: make it as an optional parameter */
 		spf_cred = rspamd_spf_get_cred (task);
 		cbd->item = rspamd_symcache_get_cur_item (task);
-		rspamd_symcache_item_async_inc (task, cbd->item, "lua_spf");
+
+		if (cbd->item) {
+			rspamd_symcache_item_async_inc (task, cbd->item, "lua_spf");
+		}
 		REF_INIT_RETAIN (cbd, lua_spf_dtor);
 
 		if (!rspamd_spf_resolve (task, spf_lua_lib_callback, cbd, spf_cred)) {
