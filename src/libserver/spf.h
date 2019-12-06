@@ -108,12 +108,15 @@ struct rspamd_spf_cred *rspamd_spf_get_cred (struct rspamd_task *task);
 /*
  * Increase refcount
  */
-struct spf_resolved *spf_record_ref (struct spf_resolved *rec);
-
+struct spf_resolved *_spf_record_ref (struct spf_resolved *rec, const gchar *loc);
+#define spf_record_ref(rec) \
+    _spf_record_ref ((rec), G_STRLOC)
 /*
  * Decrease refcount
  */
-void spf_record_unref (struct spf_resolved *rec);
+void _spf_record_unref (struct spf_resolved *rec, const gchar *loc);
+#define spf_record_unref(rec) \
+    _spf_record_unref((rec), G_STRLOC)
 
 /**
  * Prints address + mask in a freshly allocated string (must be freed)
