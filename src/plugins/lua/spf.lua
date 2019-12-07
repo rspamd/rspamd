@@ -93,8 +93,8 @@ local function spf_check_callback(task)
         -- We can use the next header as a source of IP address
         if rh[i + 1] then
           local nhdr = rh[i + 1]
-          lua_util.debugm(N, task, 'found external relay %s at received header %s -> %s',
-              local_config.external_relay, hdr, nhdr.real_ip)
+          lua_util.debugm(N, task, 'found external relay %s at received header number %s -> %s',
+              local_config.external_relay, i, nhdr.real_ip)
 
           if nhdr.real_ip then
             ip = nhdr.real_ip
@@ -216,6 +216,19 @@ if local_config.whitelist then
 
   local_config.whitelist = lua_maps.map_add_from_ucl(local_config.whitelist,
       "radix", "SPF whitelist map")
+end
+
+if local_config.external_relay then
+  local rspamd_ip = require "rspamd_ip"
+  local ip = rspamd_ip.from_string(local_config.external_relay)
+
+  if not ip or not ip:is_valid() then
+    rspamd_logger.errx(rspamd_config, "invalid external relay IP: %s",
+        local_config.external_relay)
+    local_config.external_relay = nil
+  else
+    local_config.external_relay = ip
+  end
 end
 
 for _,sym in pairs(local_config.symbols) do
