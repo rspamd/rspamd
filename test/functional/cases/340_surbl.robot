@@ -141,6 +141,10 @@ SURBL IDN Punycode domain
   Should Not Contain  ${result.stdout}  DBL_PHISH
   Should Not Contain  ${result.stdout}  URIBL_BLACK
 
+SURBL html entity &shy
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/url10.eml
+  Should Contain  ${result.stdout}  RSPAMD_URIBL
+  Should Contain  ${result.stdout}  DBL_SPAM
 
 *** Keywords ***
 Surbl Setup

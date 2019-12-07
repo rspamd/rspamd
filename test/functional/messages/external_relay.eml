@@ -1,0 +1,16 @@
+Return-path: root@external.com
+Received: from trusted.com (trusted.com [192.168.1.1]) by
+ example.com with LMTP id MJX+NoRd5F2caAAAzslS3g for <test@example.com>;
+ Thu, 5 Dec 2019 18:22:18 +0300
+Received: from external.com (external.com [37.48.67.26]) by
+ trusted.com (Postfix) with ESMTP id C018DA00021;
+ Thu, 5 Dec 2019 18:22:18 +0300
+To: test@example.com
+From: root@external.com
+Subject: test Sat, 26 Jan 2019 12:04:58 +0100
+Message-Id: <20190126120458.015328@srv.example.com>
+Date: Sat, 26 Jan 2019 12:04:58 +0100
+MIME-Version: 1.0
+Content-Type: multipart/mixed
+
+dsadas

@@ -127,6 +127,10 @@ SPF PERMFAIL REDIRECT WITHOUT SPF
   ...  -i  192.0.2.1  -F  a@fail1.org.org.za
   Check Rspamc  ${result}  R_SPF_DNSFAIL
 
+SPF EXTERNAL RELAY
+  ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/external_relay.eml
+  Should contain  ${result.stdout}  R_SPF_ALLOW (1.00)[+ip4:37.48.67.26]
+
 *** Keywords ***
 SPF Setup
   ${PLUGIN_CONFIG} =  Get File  ${TESTDIR}/configs/dmarc.conf
