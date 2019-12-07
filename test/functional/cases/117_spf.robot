@@ -129,8 +129,7 @@ SPF PERMFAIL REDIRECT WITHOUT SPF
 
 SPF EXTERNAL RELAY
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/external_relay.eml
-  ...  -F  root@trusted.client
-  Check Rspamc  ${result}  R_SPF_PERMFAIL
+  Should contain  ${result.stdout}  R_SPF_ALLOW (1.00)[+ip4:37.48.67.26]
 
 *** Keywords ***
 SPF Setup

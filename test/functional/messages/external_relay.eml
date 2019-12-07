@@ -1,12 +1,12 @@
-Received: from trusted.relay (192.168.1.1) by
- example.com (37.98.67.26) with Microsoft SMTP
- Server id for <test@example.com>
- 15.1.1847.3; Thu, 5 Dec 2019 18:22:18 +0300
-Received: from external.client (37.48.67.26) by
- trusted.relay (192.168.1.1) with Microsoft SMTP
- Server id 15.1.1847.3 via Frontend Transport; Thu, 5 Dec 2019 18:22:18 +0300
+Return-path: root@external.com
+Received: from trusted.com (trusted.com [192.168.1.1]) by
+ example.com with LMTP id MJX+NoRd5F2caAAAzslS3g for <test@example.com>;
+ Thu, 5 Dec 2019 18:22:18 +0300
+Received: from external.com (external.com [37.48.67.26]) by
+ trusted.com (Postfix) with ESMTP id C018DA00021;
+ Thu, 5 Dec 2019 18:22:18 +0300
 To: test@example.com
-From: root@external.client
+From: root@external.com
 Subject: test Sat, 26 Jan 2019 12:04:58 +0100
 Message-Id: <20190126120458.015328@srv.example.com>
 Date: Sat, 26 Jan 2019 12:04:58 +0100
@@ -14,5 +14,3 @@ MIME-Version: 1.0
 Content-Type: multipart/mixed
 
 dsadas
-
-fail6.org.org.za
