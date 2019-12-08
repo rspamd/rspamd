@@ -2860,7 +2860,13 @@ lua_task_get_received_headers (lua_State * L)
 	const gchar *proto;
 	guint k = 1;
 
-	if (task && task->message) {
+	if (task) {
+		if (!task->message) {
+			/* No message - no received */
+			lua_newtable (L);
+			return 1;
+		}
+
 		if (!lua_task_get_cached (L, task, "received")) {
 			lua_createtable (L, 0, 0);
 
