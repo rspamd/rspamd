@@ -448,6 +448,30 @@ rspamd_mime_part_get_cd (struct rspamd_task *task, struct rspamd_mime_part *part
 						cd->lc_data, &cd->filename);
 				break;
 			}
+			else if (part->ct) {
+				/*
+				 * Even in case of malformed Content-Disposition, we can still
+				 * fall back to Content-Type
+				 */
+				cd = rspamd_mempool_alloc0 (task->task_pool, sizeof (*cd));
+				cd->type = RSPAMD_CT_INLINE;
+
+				/* We can also have content dispositon definitions in Content-Type */
+				if (part->ct->attrs) {
+					RSPAMD_FTOK_ASSIGN (&srch, "name");
+					found = g_hash_table_lookup (part->ct->attrs, &srch);
+
+					if (!found) {
+						RSPAMD_FTOK_ASSIGN (&srch, "filename");
+						found = g_hash_table_lookup (part->ct->attrs, &srch);
+					}
+
+					if (found) {
+						cd->type = RSPAMD_CT_ATTACHMENT;
+						memcpy (&cd->filename, &found->value, sizeof (cd->filename));
+					}
+				}
+			}
 		}
 	}
 
