@@ -2486,7 +2486,6 @@ rspamd_spf_resolve (struct rspamd_task *task, spf_cb_t callback,
 struct spf_resolved *
 _spf_record_ref (struct spf_resolved *flat, const gchar *loc)
 {
-	msg_debug_spf_flatten ("record ref %s; refcount=%d++", loc, flat->ref.refcount);
 	REF_RETAIN (flat);
 	return flat;
 }
@@ -2494,7 +2493,6 @@ _spf_record_ref (struct spf_resolved *flat, const gchar *loc)
 void
 _spf_record_unref (struct spf_resolved *flat, const gchar *loc)
 {
-	msg_debug_spf_flatten ("record unref %s; refcount=%d--", loc, flat->ref.refcount);
 	REF_RELEASE (flat);
 }
 
