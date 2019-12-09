@@ -1896,6 +1896,12 @@ lua_task_insert_result (lua_State * L)
 
 					lua_pop (L, 1);
 				}
+				else if (ltype == LUA_TNIL) {
+					/* We have received a NULL option, it is not good but not a fatal error */
+					msg_info_task ("nil option when adding symbol %s at pos %d",
+							s->name, i);
+					continue;
+				}
 				else {
 					const gchar *tname = lua_typename (L, ltype);
 
