@@ -1812,16 +1812,36 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 				len += INET6_ADDRSTRLEN - 1;
 				break;
 			case 's':
-				len += strlen (rec->sender);
+				if (rec->sender) {
+					len += strlen (rec->sender);
+				}
+				else {
+					len += sizeof ("unknown") - 1;
+				}
 				break;
 			case 'l':
-				len += strlen (rec->local_part);
+				if (rec->local_part) {
+					len += strlen (rec->local_part);
+				}
+				else {
+					len += sizeof ("unknown") - 1;
+				}
 				break;
 			case 'o':
-				len += strlen (rec->sender_domain);
+				if (rec->sender_domain) {
+					len += strlen (rec->sender_domain);
+				}
+				else {
+					len += sizeof ("unknown") - 1;
+				}
 				break;
 			case 'd':
-				len += strlen (resolved->cur_domain);
+				if (resolved->cur_domain) {
+					len += strlen (resolved->cur_domain);
+				}
+				else {
+					len += sizeof ("unknown") - 1;
+				}
 				break;
 			case 'v':
 				len += sizeof ("in-addr") - 1;
@@ -1829,6 +1849,9 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 			case 'h':
 				if (task->helo) {
 					len += strlen (task->helo);
+				}
+				else {
+					len += sizeof ("unknown") - 1;
 				}
 				break;
 			default:
