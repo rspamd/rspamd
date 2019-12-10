@@ -116,7 +116,7 @@ local function yield_result(task, rule, vname, dyn_weight, is_fail)
         lua_util.template(rule.message or 'Rejected', {
           SCANNER = rule.name,
           VIRUS = threat_table,
-        }), rule.name)
+        }), rule.name, nil, nil, 'least')
   end
 end
 
