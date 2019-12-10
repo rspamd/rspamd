@@ -1872,8 +1872,25 @@ retry:
 			goto err;
 		}
 
-		session->master_conn->up = rspamd_upstream_get (backend->u,
-				RSPAMD_UPSTREAM_ROUND_ROBIN, NULL, 0);
+		/* Provide hash key if hashing based on source address is desired */
+		guint hash_len;
+		gpointer hash_key = rspamd_inet_address_get_hash_key (session->client_addr,
+				&hash_len);
+
+		if (session->ctx->max_retries > 1 &&
+			session->retries == session->ctx->max_retries) {
+
+			session->master_conn->up = rspamd_upstream_get_except (backend->u,
+					session->master_conn->up,
+					RSPAMD_UPSTREAM_ROUND_ROBIN,
+					hash_key, hash_len);
+		}
+		else {
+			session->master_conn->up = rspamd_upstream_get (backend->u,
+					RSPAMD_UPSTREAM_ROUND_ROBIN,
+					hash_key, hash_len);
+		}
+
 		session->master_conn->timeout = backend->timeout;
 
 		if (session->master_conn->up == NULL) {
