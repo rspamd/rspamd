@@ -54,7 +54,13 @@ local transform_function = {
       ['list'] = true,
     },
     ['process'] = function(inp, t)
-      return fun.nth(#inp, inp),pure_type(t)
+      local gen,param,state = fun.iter(inp)
+      local prev_state
+      repeat
+        prev_state = state
+        state = gen(param, state)
+      until state == nil
+      return prev_state,pure_type(t)
     end,
     ['description'] = 'Returns the last element',
   },
