@@ -141,7 +141,17 @@ context("Selectors test", function()
 
     ["received by hostname"] = {
                 selector = "received:by_hostname",
-                expect = {{"server.chat-met-vreemden.nl"}}},
+                expect = {{"server1.chat-met-vreemden.nl", "server2.chat-met-vreemden.nl"}}},
+
+    ["received by hostname last"] = {
+      selector = "received:by_hostname.last",
+      expect = {"server2.chat-met-vreemden.nl"}
+    },
+
+    ["received by hostname first"] = {
+      selector = "received:by_hostname.first",
+      expect = {"server1.chat-met-vreemden.nl"}
+    },
 
     ["urls"] = {
                 selector = "urls",
@@ -247,6 +257,10 @@ context("Selectors test", function()
                 selector = "rcpts.nth(2).lower",
                 expect = {'no-one@example.com'}},
 
+    ["transformation last"] = {
+      selector = "rcpts.last.lower",
+      expect = {'no-one@example.com'}},
+
     ["transformation substring"] = {
                 selector = "header(Subject, strong).substring(6)",
                 expect = {'subject'}},
@@ -305,8 +319,12 @@ end)
 
 --[=========[ *******************  message  ******************* ]=========]
 msg = [[
-Received: from ca-18-193-131.service.infuturo.it ([151.18.193.131] helo=User)
-    by server.chat-met-vreemden.nl with esmtpa (Exim 4.76)
+Received: from ca-18-193-131.service1.infuturo.it ([151.18.193.131] helo=User)
+    by server1.chat-met-vreemden.nl with esmtpa (Exim 4.76)
+    (envelope-from <upwest201diana@outlook.com>)
+    id 1ZC1sl-0006b4-TU; Mon, 06 Jul 2015 10:36:08 +0200
+Received: from ca-18-193-131.service2.infuturo.it ([151.18.193.132] helo=User)
+    by server2.chat-met-vreemden.nl with esmtpa (Exim 4.76)
     (envelope-from <upwest201diana@outlook.com>)
     id 1ZC1sl-0006b4-TU; Mon, 06 Jul 2015 10:36:08 +0200
 From: <whoknows@nowhere.com>
