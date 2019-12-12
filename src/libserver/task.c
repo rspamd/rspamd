@@ -1544,6 +1544,18 @@ rspamd_task_log_variable (struct rspamd_task *task,
 			var.len = sizeof (undef) - 1;
 		}
 		break;
+	case RSPAMD_LOG_MEMPOOL_SIZE:
+		var.len = rspamd_snprintf (numbuf, sizeof (numbuf),
+				"%Hz",
+				task->task_pool->used_memory);
+		var.begin = numbuf;
+		break;
+	case RSPAMD_LOG_MEMPOOL_WASTE:
+		var.len = rspamd_snprintf (numbuf, sizeof (numbuf),
+				"%Hz",
+				task->task_pool->wasted_memory);
+		var.begin = numbuf;
+		break;
 	default:
 		var = rspamd_task_log_metric_res (task, lf);
 		break;

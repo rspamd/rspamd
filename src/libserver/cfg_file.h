@@ -262,6 +262,8 @@ enum rspamd_log_format_type {
 	RSPAMD_LOG_SETTINGS_ID,
 	RSPAMD_LOG_GROUPS,
 	RSPAMD_LOG_PUBLIC_GROUPS,
+	RSPAMD_LOG_MEMPOOL_SIZE,
+	RSPAMD_LOG_MEMPOOL_WASTE,
 };
 
 enum rspamd_log_format_flags {

@@ -518,6 +518,12 @@ rspamd_config_process_var (struct rspamd_config *cfg, const rspamd_ftok_t *var,
 	else if (rspamd_ftok_cstr_equal (&tok, "settings_id", TRUE)) {
 		type = RSPAMD_LOG_SETTINGS_ID;
 	}
+	else if (rspamd_ftok_cstr_equal (&tok, "mempool_size", TRUE)) {
+		type = RSPAMD_LOG_MEMPOOL_SIZE;
+	}
+	else if (rspamd_ftok_cstr_equal (&tok, "mempool_waste", TRUE)) {
+		type = RSPAMD_LOG_MEMPOOL_WASTE;
+	}
 	else {
 		msg_err_config ("unknown log variable: %T", &tok);
 		return FALSE;
