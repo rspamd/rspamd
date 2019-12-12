@@ -1309,6 +1309,19 @@ struct addr_list {
 	guint addrlen;
 };
 
+static gint
+addr_list_cmp_func (const void *a, const void *b)
+{
+	const struct addr_list *addra = (struct addr_list *)a,
+			*addrb = (struct addr_list *)b;
+
+	if (addra->addrlen != addrb->addrlen) {
+		return addra->addrlen - addrb->addrlen;
+	}
+
+	return memcmp (addra->addr, addrb->addr, addra->addrlen);
+}
+
 #define COMPARE_RCPT_LEN 3
 #define MIN_RCPT_TO_COMPARE 7
 
@@ -1320,7 +1333,7 @@ rspamd_recipients_distance (struct rspamd_task *task, GArray * args,
 	struct rspamd_email_address *cur;
 	double threshold;
 	struct addr_list *ar;
-	gint num, i, j, hits = 0, total = 0;
+	gint num, i, hits = 0;
 
 	if (args == NULL) {
 		msg_warn_task ("no parameters to function");
@@ -1356,27 +1369,31 @@ rspamd_recipients_distance (struct rspamd_task *task, GArray * args,
 	ar = rspamd_mempool_alloc0 (task->task_pool, num * sizeof (struct addr_list));
 
 	/* Fill array */
+	num = 0;
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, rcpt_mime), i, cur) {
-		ar[i].name = cur->addr;
-		ar[i].namelen = cur->addr_len;
-		ar[i].addr = cur->domain;
-		ar[i].addrlen = cur->domain_len;
-	}
-
-	/* Cycle all elements in array */
-	for (i = 0; i < num; i++) {
-		for (j = i + 1; j < num; j++) {
-			if (ar[i].namelen >= COMPARE_RCPT_LEN && ar[j].namelen >= COMPARE_RCPT_LEN &&
-				rspamd_lc_cmp (ar[i].name, ar[j].name, COMPARE_RCPT_LEN) == 0) {
-				/* Common name part */
-				hits++;
-			}
-
-			total++;
+		if (cur->addr_len > COMPARE_RCPT_LEN) {
+			ar[num].name = cur->addr;
+			ar[num].namelen = cur->addr_len;
+			ar[num].addr = cur->domain;
+			ar[num].addrlen = cur->domain_len;
+			num ++;
 		}
 	}
 
-	if ((hits * num / 2.) / (double)total >= threshold) {
+	qsort (ar, num, sizeof (*ar), addr_list_cmp_func);
+
+	/* Cycle all elements in array */
+	for (i = 0; i < num; i++) {
+		if (i < num - 1) {
+			if (ar[i].namelen == ar[i + 1].namelen) {
+				if (rspamd_lc_cmp (ar[i].name, ar[i + 1].name, COMPARE_RCPT_LEN) == 0) {
+					hits++;
+				}
+			}
+		}
+	}
+
+	if ((hits * num / 2.) / (double)num >= threshold) {
 		return TRUE;
 	}
 
