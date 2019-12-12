@@ -152,7 +152,7 @@ local function whitelist_cb(symbol, rule, task)
         local tld = rspamd_util.get_tld(helo)
 
         if tld then
-          find_domain(tld)
+          find_domain(tld, 'spf')
         end
       end
     end
