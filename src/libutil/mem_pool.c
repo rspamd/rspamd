@@ -393,6 +393,8 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 
 	if (pool) {
 		POOL_MTX_LOCK ();
+		pool->used_memory += size;
+
 		if (always_malloc && pool_type != RSPAMD_MEMPOOL_SHARED) {
 			void *ptr;
 
@@ -416,6 +418,10 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 		}
 
 		if (cur == NULL || free < size) {
+			if (free < size) {
+				pool->wasted_memory += free;
+			}
+
 			/* Allocate new chain element */
 			if (pool->elt_len >= size + MIN_MEM_ALIGNMENT) {
 				pool->entry->elts[pool->entry->cur_elts].fragmentation += size;

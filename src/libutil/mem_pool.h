@@ -127,6 +127,8 @@ typedef struct memory_pool_s {
 	GPtrArray *trash_stack;
 	GHashTable *variables;                  /**< private memory pool variables			*/
 	gsize elt_len;                            /**< size of an element						*/
+	gsize used_memory;
+	gsize wasted_memory;
 	struct rspamd_mempool_entry_point *entry;
 	struct rspamd_mempool_tag tag;          /**< memory pool tag						*/
 } rspamd_mempool_t;
