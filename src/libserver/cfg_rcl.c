@@ -2229,6 +2229,12 @@ rspamd_rcl_config_init (struct rspamd_config *cfg, GHashTable *skip_sections)
 				RSPAMD_CL_FLAG_INT_32,
 				"Maximum number of Blas threads for learning neural networks (default: 1)");
 		rspamd_rcl_add_default_handler (sub,
+				"max_opts_len",
+				rspamd_rcl_parse_struct_integer,
+				G_STRUCT_OFFSET (struct rspamd_config, max_opts_len),
+				RSPAMD_CL_FLAG_INT_32,
+				"Maximum size of all options for a single symbol (default: 4096)");
+		rspamd_rcl_add_default_handler (sub,
 				"events_backend",
 				rspamd_rcl_parse_struct_string,
 				G_STRUCT_OFFSET (struct rspamd_config, events_backend),

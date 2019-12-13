@@ -197,6 +197,7 @@ rspamd_config_new (enum rspamd_config_init_flags flags)
 	cfg->cache_reload_time = 30.0;
 	cfg->max_lua_urls = 1024;
 	cfg->max_blas_threads = 1;
+	cfg->max_opts_len = 4096;
 
 	/* Default log line */
 	cfg->log_format_str = "id: <$mid>,$if_qid{ qid: <$>,}$if_ip{ ip: $,}"

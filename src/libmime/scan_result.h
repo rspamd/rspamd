@@ -39,6 +39,7 @@ struct rspamd_symbol_result {
 	struct rspamd_symbol_option *opts_head;        /**< head of linked list of options			*/
 	const gchar *name;
 	struct rspamd_symbol *sym;                     /**< symbol configuration					*/
+	gssize opts_len; /**< total size of all options (negative if truncated option is added) */
 	guint nshots;
 	enum rspamd_symbol_result_flags flags;
 };

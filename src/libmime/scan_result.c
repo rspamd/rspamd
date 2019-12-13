@@ -523,11 +523,27 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 	gint r;
 
 	if (s && val) {
+		if (s->opts_len < 0) {
+			/* Cannot add more options, give up */
+			msg_debug_task ("cannot add more options to symbol %s when adding option %s",
+					s->name, val);
+			return FALSE;
+		}
+
 		if (!s->options) {
 			s->options = kh_init (rspamd_options_hash);
 		}
 
 		vlen = strlen (val);
+
+		if (vlen + s->opts_len > task->cfg->max_opts_len) {
+			/* Add truncated option */
+			msg_info_task ("cannot add more options to symbol %s when adding option %s",
+					s->name, val);
+			val = "...";
+			vlen = 3;
+			s->opts_len = -1;
+		}
 
 		if (rspamd_fast_utf8_validate (val, vlen) != 0) {
 			opt_cpy = rspamd_str_make_utf_valid (val, vlen, &vlen,
@@ -570,6 +586,10 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 			DL_APPEND (s->opts_head, opt);
 
 			ret = TRUE;
+		}
+
+		if (ret && s->opts_len >= 0) {
+			s->opts_len += vlen;
 		}
 	}
 	else if (!val) {
