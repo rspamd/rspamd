@@ -1,6 +1,6 @@
 # Project Authors and Contributors
 
-Rspamd was created by [Vsevolod Stakhov](https://github.com/vstakov) while working in [Rambler Mail](https://mail.rambler.ru/)
+Rspamd was created by [Vsevolod Stakhov](https://github.com/vstakov).
 
 ## Authors
 
@@ -26,5 +26,4 @@ Rspamd was created by [Vsevolod Stakhov](https://github.com/vstakov) while worki
 ## Special thanks to
 
 * [Mimecast](https://mimecast.com)
-* [Rambler Mail](https://mail.rambler.ru/)
 * [Locaweb](https://locaweb.com.br)
