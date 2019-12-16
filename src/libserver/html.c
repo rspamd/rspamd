@@ -60,7 +60,7 @@ static struct html_tag_def tag_defs[] = {
 	TAG_DEF(Tag_APPLET, "applet", (CM_OBJECT | CM_IMG | CM_INLINE | CM_PARAM)),
 	TAG_DEF(Tag_AREA, "area", (CM_BLOCK | CM_EMPTY | FL_HREF)),
 	TAG_DEF(Tag_B, "b", (CM_INLINE|FL_BLOCK)),
-	TAG_DEF(Tag_BASE, "base", (CM_HEAD | CM_EMPTY | FL_HREF)),
+	TAG_DEF(Tag_BASE, "base", (CM_HEAD | CM_EMPTY)),
 	TAG_DEF(Tag_BASEFONT, "basefont", (CM_INLINE | CM_EMPTY)),
 	TAG_DEF(Tag_BDO, "bdo", (CM_INLINE)),
 	TAG_DEF(Tag_BIG, "big", (CM_INLINE)),
@@ -3031,27 +3031,19 @@ rspamd_html_process_part_full (rspamd_mempool_t *pool, struct html_content *hc,
 					}
 				}
 				else if (cur_tag->id == Tag_BASE && !(cur_tag->flags & (FL_CLOSING))) {
-					struct html_tag *prev_tag = NULL;
-
-					if (cur_level && cur_level->parent) {
-						prev_tag = cur_level->parent->data;
-					}
-
 					/*
-					 * Base is allowed only within head tag but we slightly
-					 * relax that
+					 * Base is allowed only within head tag but HTML is retarded
 					 */
-					if (!prev_tag || prev_tag->id == Tag_HEAD ||
-						prev_tag->id == Tag_HTML) {
+					if (hc->base_url == NULL) {
 						url = rspamd_html_process_url_tag (pool, cur_tag, hc);
 
 						if (url != NULL) {
-							if (hc->base_url == NULL) {
-								/* We have a base tag available */
-								hc->base_url = url;
-							}
-
+							msg_debug_html ("got valid base tag");
+							hc->base_url = url;
 							cur_tag->extra = url;
+						}
+						else {
+							msg_debug_html ("got invalid base tag!");
 						}
 					}
 				}
