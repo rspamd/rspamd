@@ -290,6 +290,7 @@ local function create_and_push_key(opts, domain, existing)
     url = uri,
     method = 'put',
     headers = {
+      ['Content-Type'] = 'application/json',
       ['X-Vault-Token'] = opts.token
     },
     body = {
@@ -493,6 +494,7 @@ local function roll_handler(opts, domain)
     url = uri,
     method = 'put',
     headers = {
+      ['Content-Type'] = 'application/json',
       ['X-Vault-Token'] = opts.token
     },
     body = {
