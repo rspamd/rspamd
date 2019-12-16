@@ -696,7 +696,7 @@ lua_html_tag_get_extra (lua_State *L)
 
 	if (tag) {
 		if (tag->extra) {
-			if (tag->flags & FL_HREF) {
+			if ((tag->flags & FL_HREF) || tag->id == Tag_BASE) {
 				/* For A that's URL */
 				purl = lua_newuserdata (L, sizeof (gpointer));
 				*purl = tag->extra;
