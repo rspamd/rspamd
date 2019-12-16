@@ -438,7 +438,9 @@ rspamd_spf_process_reference (struct spf_resolved *target,
 			continue;
 		}
 		if (cur->flags & RSPAMD_SPF_FLAG_PERMFAIL) {
-			target->flags |= RSPAMD_SPF_RESOLVED_PERM_FAILED;
+			if (cur->flags & RSPAMD_SPF_FLAG_REDIRECT) {
+				target->flags |= RSPAMD_SPF_RESOLVED_PERM_FAILED;
+			}
 			continue;
 		}
 		if (cur->flags & RSPAMD_SPF_FLAG_NA) {
