@@ -555,6 +555,43 @@ rdns_process_retransmit (int fd, void *arg)
 	}
 }
 
+struct rdns_server *
+rdns_select_request_upstream (struct rdns_resolver *resolver,
+							  struct rdns_request *req,
+							  bool is_retransmit,
+							  struct rdns_server *prev_serv)
+{
+	struct rdns_server *serv = NULL;
+
+	if (resolver->ups) {
+		struct rdns_upstream_elt *elt;
+
+		if (is_retransmit && prev_serv) {
+			elt = resolver->ups->select_retransmit (req->requested_names[0].name,
+					req->requested_names[0].len,
+					prev_serv->ups_elt,
+					resolver->ups->data);
+		}
+		else {
+			elt = resolver->ups->select (req->requested_names[0].name,
+					req->requested_names[0].len, resolver->ups->data);
+		}
+
+		if (elt) {
+			serv = elt->server;
+			serv->ups_elt = elt;
+		}
+		else {
+			UPSTREAM_SELECT_ROUND_ROBIN (resolver->servers, serv);
+		}
+	}
+	else {
+		UPSTREAM_SELECT_ROUND_ROBIN (resolver->servers, serv);
+	}
+
+	return serv;
+}
+
 #define align_ptr(p, a)                                                   \
     (guint8 *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
 
@@ -741,30 +778,14 @@ rdns_make_request_full (
 		/* Add EDNS RR */
 		rdns_add_edns0 (req);
 
-		req->retransmits = repeats;
+		req->retransmits = repeats ? repeats : 1;
 		req->timeout = timeout;
 		req->state = RDNS_REQUEST_NEW;
 	}
 
 	req->async = resolver->async;
 
-	if (resolver->ups) {
-		struct rdns_upstream_elt *elt;
-
-		elt = resolver->ups->select (req->requested_names[0].name,
-				req->requested_names[0].len, resolver->ups->data);
-
-		if (elt) {
-			serv = elt->server;
-			serv->ups_elt = elt;
-		}
-		else {
-			UPSTREAM_SELECT_ROUND_ROBIN (resolver->servers, serv);
-		}
-	}
-	else {
-		UPSTREAM_SELECT_ROUND_ROBIN (resolver->servers, serv);
-	}
+	serv = rdns_select_request_upstream (resolver, req, false, NULL);
 
 	if (serv == NULL) {
 		rdns_warn ("cannot find suitable server for request");
@@ -780,25 +801,54 @@ rdns_make_request_full (
 				req->io->sock, req);
 	}
 	else {
-		req->io->uses++;
-
 		/* Now send request to server */
-		r = rdns_send_request (req, req->io->sock, true);
+		do {
+			r = rdns_send_request (req, req->io->sock, true);
 
-		if (r == -1) {
-			rdns_info ("cannot send DNS request: %s", strerror (errno));
-			REF_RELEASE (req);
+			if (r == -1) {
+				req->retransmits --; /* It must be > 0 */
 
-			if (resolver->ups && serv->ups_elt) {
-				resolver->ups->fail (serv->ups_elt, resolver->ups->data,
-						"send IO error");
+				if (req->retransmits > 0) {
+					if (resolver->ups && serv->ups_elt) {
+						resolver->ups->fail (serv->ups_elt, resolver->ups->data,
+								"send IO error");
+					}
+					else {
+						UPSTREAM_FAIL (serv, time (NULL));
+					}
+
+					serv = rdns_select_request_upstream (resolver, req,
+							true, serv);
+
+					if (serv == NULL) {
+						rdns_warn ("cannot find suitable server for request");
+						REF_RELEASE (req);
+						return NULL;
+					}
+
+					req->io = serv->io_channels[ottery_rand_uint32 () % serv->io_cnt];
+				}
+				else {
+					rdns_info ("cannot send DNS request: %s", strerror (errno));
+					REF_RELEASE (req);
+
+					if (resolver->ups && serv->ups_elt) {
+						resolver->ups->fail (serv->ups_elt, resolver->ups->data,
+								"send IO error");
+					}
+					else {
+						UPSTREAM_FAIL (serv, time (NULL));
+					}
+
+					return NULL;
+				}
 			}
 			else {
-				UPSTREAM_FAIL (serv, time (NULL));
+				/* All good */
+				req->io->uses++;
+				break;
 			}
-
-			return NULL;
-		}
+		} while (req->retransmits > 0);
 	}
 
 	REF_RETAIN (req->io);
