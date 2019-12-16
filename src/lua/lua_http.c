@@ -467,6 +467,11 @@ static void
 lua_http_dns_handler (struct rdns_reply *reply, gpointer ud)
 {
 	struct lua_http_cbdata *cbd = (struct lua_http_cbdata *)ud;
+	struct rspamd_symcache_item *item;
+	struct rspamd_task *task;
+
+	task = cbd->task;
+	item = cbd->item;
 
 	if (reply->code != RDNS_RC_NOERROR) {
 		lua_http_push_error (cbd, "unable to resolve host");
@@ -497,8 +502,8 @@ lua_http_dns_handler (struct rdns_reply *reply, gpointer ud)
 		REF_RELEASE (cbd);
 	}
 
-	if (cbd->item) {
-		rspamd_symcache_item_async_dec_check (cbd->task, cbd->item, M);
+	if (item) {
+		rspamd_symcache_item_async_dec_check (task, item, M);
 	}
 }
 
