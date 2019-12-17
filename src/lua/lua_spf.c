@@ -171,7 +171,7 @@ spf_lua_lib_callback (struct spf_resolved *record, struct rspamd_task *task,
 	if (record) {
 		if ((record->flags & RSPAMD_SPF_RESOLVED_NA)) {
 			lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_NA, NULL,
-					"no SPF record found");
+					"no SPF record");
 		}
 		else if (record->elts->len == 0) {
 			if (record->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED) {
@@ -180,11 +180,11 @@ spf_lua_lib_callback (struct spf_resolved *record, struct rspamd_task *task,
 			}
 			else if ((record->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED)) {
 				lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_TEMP_FAILED, NULL,
-						"temporary resolution error");
+						"temporary DNS error");
 			}
 			else {
 				lua_spf_push_result (cbd, RSPAMD_SPF_RESOLVED_PERM_FAILED, NULL,
-						"record is empty");
+						"empty SPF record");
 			}
 		}
 		else if (record->domain) {
