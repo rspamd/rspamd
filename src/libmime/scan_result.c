@@ -290,19 +290,9 @@ insert_metric_result (struct rspamd_task *task,
 			single = TRUE;
 		}
 
-		/* Now check for the duplicate options */
-		if (opt && s->options) {
-			k = kh_get (rspamd_options_hash, s->options, opt);
+		s->nshots ++;
 
-			if (k == kh_end (s->options)) {
-				rspamd_task_add_result_option (task, s, opt);
-			}
-			else {
-				s->nshots ++;
-			}
-		}
-		else {
-			s->nshots ++;
+		if (opt) {
 			rspamd_task_add_result_option (task, s, opt);
 		}
 
@@ -573,19 +563,8 @@ rspamd_task_add_result_option (struct rspamd_task *task,
 			}
 		}
 		else {
-			opt = rspamd_mempool_alloc0 (task->task_pool, sizeof (*opt));
-
-			if (opt_cpy == NULL) {
-				opt_cpy = rspamd_mempool_strdup (task->task_pool, val);
-			}
-
-			k = kh_put (rspamd_options_hash, s->options, opt_cpy, &r);
-
-			kh_value (s->options, k) = opt;
-			opt->option = opt_cpy;
-			DL_APPEND (s->opts_head, opt);
-
-			ret = TRUE;
+			/* Skip addition */
+			ret = FALSE;
 		}
 
 		if (ret && s->opts_len >= 0) {
