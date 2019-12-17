@@ -429,11 +429,19 @@ lua_spf_record_check_ip (lua_State *L)
 		for (guint i = 0; i < record->elts->len; i ++) {
 			struct spf_addr *addr = &g_array_index (record->elts, struct spf_addr, i);
 			if ((nres = spf_check_element (L, record, addr, ip)) > 0) {
+				if (need_free_ip) {
+					g_free (ip);
+				}
+
 				return nres;
 			}
 		}
 	}
 	else {
+		if (need_free_ip) {
+			g_free (ip);
+		}
+
 		return luaL_error (L, "invalid arguments");
 	}
 
@@ -441,9 +449,20 @@ lua_spf_record_check_ip (lua_State *L)
 		g_free (ip);
 	}
 
-	lua_pushboolean (L, false);
-	lua_pushinteger (L, RSPAMD_SPF_RESOLVED_NA);
-	lua_pushstring (L, "no result");
+	/* If we are here it means that there is no ALL record */
+	/*
+	 * According to https://tools.ietf.org/html/rfc7208#section-4.7 it means
+	 * SPF neutral
+	 */
+	struct spf_addr fake_all;
+
+	fake_all.mech = SPF_NEUTRAL;
+	fake_all.flags = RSPAMD_SPF_FLAG_ANY;
+	fake_all.spf_string = "all";
+
+	lua_pushboolean (L, true);
+	lua_pushinteger (L, SPF_NEUTRAL);
+	lua_spf_push_spf_addr (L, &fake_all);
 
 	return 3;
 }
