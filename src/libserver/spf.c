@@ -2221,10 +2221,8 @@ spf_process_element (struct spf_record *rec,
 							begin, rec->sender_domain);
 
 					/* Pop the current addr as it is ignored */
-					g_free (addr->spf_string);
 					g_ptr_array_remove_index_fast (resolved->elts,
 							resolved->elts->len - 1);
-					g_free (addr);
 
 					return TRUE;
 				}
