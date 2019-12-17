@@ -2100,8 +2100,10 @@ expand_spf_macro (struct spf_record *rec, struct spf_resolved_element *resolved,
 
 /* Read current element and try to parse record */
 static gboolean
-parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
-		const gchar *elt)
+spf_process_element (struct spf_record *rec,
+					 struct spf_resolved_element *resolved,
+					 const gchar *elt,
+					 const gchar **elts)
 {
 	struct spf_addr *addr = NULL;
 	gboolean res = FALSE;
@@ -2197,7 +2199,35 @@ parse_spf_record (struct spf_record *rec, struct spf_resolved_element *resolved,
 			/* redirect */
 			if (g_ascii_strncasecmp (begin, SPF_REDIRECT,
 					sizeof (SPF_REDIRECT) - 1) == 0) {
-				res = parse_spf_redirect (rec, resolved, addr);
+				/*
+				 * According to https://tools.ietf.org/html/rfc7208#section-6.1
+				 * There must be no ALL element anywhere in the record,
+				 * redirect must be ignored
+				 */
+				gboolean ignore_redirect = FALSE;
+
+				for (const gchar **tmp = elts; *tmp != NULL; tmp ++) {
+					if (g_ascii_strcasecmp ((*tmp) + 1, "all") == 0) {
+						ignore_redirect = TRUE;
+						break;
+					}
+				}
+
+				if (!ignore_redirect) {
+					res = parse_spf_redirect (rec, resolved, addr);
+				}
+				else {
+					msg_info_spf ("ignore SPF redirect (%s) for domain %s as there is also all element",
+							begin, rec->sender_domain);
+
+					/* Pop the current addr as it is ignored */
+					g_free (addr->spf_string);
+					g_ptr_array_remove_index_fast (resolved->elts,
+							resolved->elts->len - 1);
+					g_free (addr);
+
+					return TRUE;
+				}
 			}
 			else {
 				msg_info_spf ("spf error for domain %s: bad spf command %s",
@@ -2306,7 +2336,7 @@ start_spf_parse (struct spf_record *rec, struct spf_resolved_element *resolved,
 		cur_elt = elts;
 
 		while (*cur_elt) {
-			parse_spf_record (rec, resolved, *cur_elt);
+			spf_process_element (rec, resolved, *cur_elt, (const gchar **)elts);
 			cur_elt++;
 		}
 
