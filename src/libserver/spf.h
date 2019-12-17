@@ -22,6 +22,21 @@ typedef enum spf_mech_e {
 	SPF_NEUTRAL
 } spf_mech_t;
 
+static inline gchar spf_mech_char (spf_mech_t mech)
+{
+	switch (mech) {
+	case SPF_FAIL:
+		return '-';
+	case SPF_SOFT_FAIL:
+		return '~';
+	case SPF_PASS:
+		return '+';
+	case SPF_NEUTRAL:
+	default:
+		return '?';
+	}
+}
+
 typedef enum spf_action_e {
 	SPF_RESOLVE_MX,
 	SPF_RESOLVE_A,

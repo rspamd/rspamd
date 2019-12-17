@@ -360,12 +360,12 @@ spf_check_element (lua_State *L, struct spf_resolved *rec, struct spf_addr *addr
 			if (rec->flags & RSPAMD_SPF_RESOLVED_PERM_FAILED) {
 				lua_pushboolean (L, false);
 				lua_pushinteger (L, RSPAMD_SPF_RESOLVED_PERM_FAILED);
-				lua_pushstring (L, "any perm fail");
+				lua_pushfstring (L, "%cany", spf_mech_char (addr->mech));
 			}
 			else if (rec->flags & RSPAMD_SPF_RESOLVED_TEMP_FAILED) {
 				lua_pushboolean (L, false);
 				lua_pushinteger (L, RSPAMD_SPF_RESOLVED_TEMP_FAILED);
-				lua_pushfstring (L, "any temp fail");
+				lua_pushfstring (L, "%cany", spf_mech_char (addr->mech));
 			}
 			else {
 				lua_pushboolean (L, true);
