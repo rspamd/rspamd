@@ -2020,8 +2020,6 @@ rspamd_re_cache_compile_timer_cb (EV_P_ ev_timer *w, int revents )
 		g_free (hs_flags);
 	}
 
-	fsync (fd);
-
 	/* Now rename temporary file to the new .hs file */
 	rspamd_snprintf (npath, sizeof (path), "%s%c%s.hs", cbdata->cache_dir,
 			G_DIR_SEPARATOR, re_class->hash);
