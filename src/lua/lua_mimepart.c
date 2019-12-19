@@ -2096,7 +2096,8 @@ lua_mimepart_set_specific (lua_State * L)
 
 	if (part->part_type != RSPAMD_MIME_PART_UNDEFINED &&
 			part->part_type != RSPAMD_MIME_PART_CUSTOM_LUA) {
-		msg_warn ("internal error: trying to set specific lua content on part of type %d",
+		return luaL_error (L,
+				"internal error: trying to set specific lua content on part of type %d",
 				part->part_type);
 	}
 
