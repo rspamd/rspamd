@@ -1629,12 +1629,12 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 	gdouble wait_time;
 	const gint max_tries = 10;
 	gint tries = 0, rc;
+	void (*old_hdl)(int);
 
 	wait_time = max_time / max_tries;
 	/* We need to restore SIGCHLD processing */
-	signal (SIGCHLD, SIG_DFL);
+	old_hdl = signal (SIGCHLD, SIG_DFL);
 	cld = fork ();
-	g_assert (cld != -1);
 
 	if (cld == 0) {
 		/* Try to compile pattern */
@@ -1653,7 +1653,7 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 
 		exit (EXIT_SUCCESS);
 	}
-	else {
+	else if (cld > 0) {
 		double_to_ts (wait_time, &ts);
 
 		while ((rc = waitpid (cld, &status, WNOHANG)) == 0 && tries ++ < max_tries) {
@@ -1663,7 +1663,7 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 		/* Child has been terminated */
 		if (rc > 0) {
 			/* Forget about SIGCHLD after this point */
-			signal (SIGCHLD, SIG_IGN);
+			signal (SIGCHLD, old_hdl);
 
 			if (WIFEXITED (status) && WEXITSTATUS (status) == EXIT_SUCCESS) {
 				return TRUE;
@@ -1683,8 +1683,14 @@ rspamd_re_cache_is_finite (struct rspamd_re_cache *cache,
 			msg_err_re_cache (
 					"cannot approximate %s to hyperscan: timeout waiting",
 					rspamd_regexp_get_pattern (re));
-			signal (SIGCHLD, SIG_IGN);
+			signal (SIGCHLD, old_hdl);
 		}
+	}
+	else {
+		msg_err_re_cache (
+				"cannot approximate %s to hyperscan: fork failed: %s",
+				rspamd_regexp_get_pattern (re), strerror (errno));
+		signal (SIGCHLD, old_hdl);
 	}
 
 	return FALSE;
