@@ -2124,6 +2124,21 @@ rspamd_url_parse (struct rspamd_url *uri,
 				}
 			}
 		}
+
+		/* Replace stupid '\' with '/' after schema */
+		if (uri->protocol & (PROTOCOL_HTTP|PROTOCOL_HTTPS|PROTOCOL_FTP) &&
+			uri->protocollen > 0 && uri->urllen > uri->protocollen + 2) {
+
+			gchar *pos = &uri->string[uri->protocollen], *host_start = uri->host;
+
+			while (pos < host_start) {
+				if (*pos == '\\') {
+					*pos = '/';
+					uri->flags |= RSPAMD_URL_FLAG_OBSCURED;
+				}
+				pos ++;
+			}
+		}
 	}
 	else if (uri->protocol & PROTOCOL_TELEPHONE) {
 		/* We need to normalise phone number: remove all spaces and braces */
