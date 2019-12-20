@@ -1,15 +1,21 @@
 option (ENABLE_FAST_MATH     "Build rspamd with fast math compiler flag [default: ON]" ON)
 
-SET (COMPILER_FAST_MATH "")
-if (ENABLE_FAST_MATH MATCHES "ON")
-    SET (COMPILER_FAST_MATH "-ffast-math")
-endif ()
-
 if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     SET (COMPILER_GCC 1)
 elseif(CMAKE_C_COMPILER_ID MATCHES "Clang|AppleClang")
     SET (COMPILER_CLANG 1)
 endif()
+
+SET (COMPILER_FAST_MATH "")
+if (ENABLE_FAST_MATH MATCHES "ON")
+    # We need to keep nans and infinities, so cannot keep all fast math there
+    IF (COMPILER_CLANG)
+        SET (COMPILER_FAST_MATH "-fassociative-math -freciprocal-math -fno-signed-zeros -ffp-contract=fast")
+    ELSE()
+        SET (COMPILER_FAST_MATH "-funsafe-math-optimizations -fno-math-errno")
+    ENDIF ()
+endif ()
+
 if (CMAKE_GENERATOR STREQUAL "Ninja")
     # Turn on colored output. https://github.com/ninja-build/ninja/wiki/FAQ
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fdiagnostics-color=always")
