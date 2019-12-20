@@ -11,10 +11,10 @@ ${RSPAMD_SCOPE}  Suite
 ${URL_TLD}       ${TESTDIR}/../../contrib/publicsuffix/effective_tld_names.dat
 
 *** Test Cases ***
-SPF PERMFAIL UNRESOLVEABLE INCLUDE
+SPF FAIL UNRESOLVEABLE INCLUDE
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  -i  37.48.67.26  -F  x@fail3.org.org.za
-  Check Rspamc  ${result}  R_SPF_PERMFAIL
+  Check Rspamc  ${result}  R_SPF_FAIL
 
 SPF DNSFAIL FAILED INCLUDE UNALIGNED
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
@@ -72,15 +72,15 @@ SPF FAIL
   ...  -i  8.8.8.8  -F  x@example.net
   Check Rspamc  ${result}  R_SPF_FAIL
 
-SPF PERMFAIL UNRESOLVEABLE MX
+SPF FAIL UNRESOLVEABLE MX
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  -i  1.2.3.4  -F  x@fail6.org.org.za
-  Check Rspamc  ${result}  R_SPF_PERMFAIL
+  Check Rspamc  ${result}  R_SPF_FAIL
 
-SPF PERMFAIL UNRESOLVEABLE A
+SPF FAIL UNRESOLVEABLE A
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
   ...  -i  1.2.3.4  -F  x@fail7.org.org.za
-  Check Rspamc  ${result}  R_SPF_PERMFAIL
+  Check Rspamc  ${result}  R_SPF_FAIL
 
 SPF DNSFAIL FAILED A
   ${result} =  Scan Message With Rspamc  ${TESTDIR}/messages/dmarc/bad_dkim1.eml
@@ -108,7 +108,7 @@ SPF PTRS
   Check Rspamc  ${result}  R_SPF_ALLOW
   ${result} =  Scan Message With Rspamc  /dev/null
   ...  -i  128.66.0.1  -F  foo@crazyspf.cacophony.za.org
-  Check Rspamc  ${result}  R_SPF_PERMFAIL
+  Check Rspamc  ${result}  R_SPF_FAIL
   ${result} =  Scan Message With Rspamc  /dev/null
   ...  -i  209.85.216.182  -F  foo@crazyspf.cacophony.za.org
   Check Rspamc  ${result}  R_SPF_FAIL
