@@ -151,7 +151,7 @@ if (COMPILER_GCC)
 else ()
     # Clang flags
     if (LINKER_NAME MATCHES "lld")
-        set (COMPILER_DEBUG_FLAGS "-g -glldb -gdwarf-aranges -gembed-source -grecord-command-line -gdwarf-5")
+        set (COMPILER_DEBUG_FLAGS "-g -glldb -gdwarf-aranges -gdwarf-5")
     else ()
         set (COMPILER_DEBUG_FLAGS "-g -glldb -gdwarf-aranges -gdwarf-4")
     endif ()
