@@ -1,3 +1,10 @@
+option (ENABLE_FAST_MATH     "Build rspamd with fast math compiler flag [default: ON]" ON)
+
+SET (COMPILER_FAST_MATH "")
+if (ENABLE_FAST_MATH MATCHES "ON")
+    SET (COMPILER_FAST_MATH "-ffast-math")
+endif ()
+
 if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     SET (COMPILER_GCC 1)
 elseif(CMAKE_C_COMPILER_ID MATCHES "Clang|AppleClang")
@@ -121,26 +128,37 @@ endif()
 
 string(TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UC)
 message (STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE_UC}")
-set(CMAKE_C_FLAGS_COVERAGE             "${CMAKE_C_FLAGS} -O1 --coverage -fno-inline -fno-default-inline -fno-inline-small-functions")
-set(CMAKE_CXX_FLAGS_COVERAGE           "${CMAKE_CXX_FLAGS} -O1 --coverage -fno-inline -fno-default-inline -fno-inline-small-functions")
-if (COMPILER_GCC)
-    set (CMAKE_C_FLAGS_DEBUG           "${CMAKE_C_FLAGS_DEBUG} -Og -g -ggdb -g3 -ggdb3")
-    set (CMAKE_CXX_FLAGS_DEBUG         "${CMAKE_CXX_FLAGS_DEBUG} -Og -g -ggdb -g3 -ggdb3")
-else ()
-    set (CMAKE_C_FLAGS_DEBUG           "${CMAKE_C_FLAGS_DEBUG} -O1 -g -gdwarf-aranges")
-    set (CMAKE_CXX_FLAGS_DEBUG         "${CMAKE_CXX_FLAGS_DEBUG} -O1 -g -gdwarf-aranges")
-endif()
+set(CMAKE_C_FLAGS_COVERAGE             "${CMAKE_C_FLAGS} -O1 --coverage -fno-inline -fno-default-inline -fno-inline-small-functions ${COMPILER_FAST_MATH}")
+set(CMAKE_CXX_FLAGS_COVERAGE           "${CMAKE_CXX_FLAGS} -O1 --coverage -fno-inline -fno-default-inline -fno-inline-small-functions ${COMPILER_FAST_MATH}")
 
 if (COMPILER_GCC)
-    set (CMAKE_C_FLAGS_RELEASE         "${CMAKE_C_FLAGS_RELEASE} -O3 -fomit-frame-pointer")
-    set (CMAKE_CXX_FLAGS_RELEASE       "${CMAKE_CXX_FLAGS_RELEASE} -O3 -fomit-frame-pointer")
-else ()
-    set (CMAKE_C_FLAGS_RELEASE         "${CMAKE_C_FLAGS_RELEASE} -O2 -fomit-frame-pointer")
-    set (CMAKE_CXX_FLAGS_RELEASE       "${CMAKE_CXX_FLAGS_RELEASE} -O2 -fomit-frame-pointer")
+    # GCC flags
+    set (COMPILER_DEBUG_FLAGS "-g -ggdb -g3 -ggdb3")
+    set (CMAKE_C_FLAGS_RELWITHDEBINFO      "${CMAKE_C_FLAGS_RELEASE} -O2 ${COMPILER_FAST_MATH} ${COMPILER_DEBUG_FLAGS}")
+    set (CMAKE_CXX_FLAGS_RELWITHDEBINFO    "${CMAKE_CXX_FLAGS_RELEASE} -O2 ${COMPILER_FAST_MATH} ${COMPILER_DEBUG_FLAGS}")
 
+    set (CMAKE_C_FLAGS_RELEASE         "${CMAKE_C_FLAGS_RELEASE} -O3 ${COMPILER_FAST_MATH} -fomit-frame-pointer")
+    set (CMAKE_CXX_FLAGS_RELEASE       "${CMAKE_CXX_FLAGS_RELEASE} -O3 v -fomit-frame-pointer")
+
+    set (CMAKE_C_FLAGS_DEBUG           "${CMAKE_C_FLAGS_DEBUG} -Og ${COMPILER_FAST_MATH} ${COMPILER_DEBUG_FLAGS}")
+    set (CMAKE_CXX_FLAGS_DEBUG         "${CMAKE_CXX_FLAGS_DEBUG} -Og ${COMPILER_FAST_MATH} ${COMPILER_DEBUG_FLAGS}")
+else ()
+    # Clang flags
+    if (LINKER_NAME MATCHES "lldb")
+        set (COMPILER_DEBUG_FLAGS "-g -glldb -gdwarf-aranges -gembed-source -grecord-command-line -gdwarf-5")
+    else ()
+        set (COMPILER_DEBUG_FLAGS "-g -glldb -gdwarf-aranges -gdwarf-4")
+    endif ()
+    set (CMAKE_C_FLAGS_RELEASE         "${CMAKE_C_FLAGS_RELEASE} -O2 -fomit-frame-pointer ${COMPILER_FAST_MATH}")
+    set (CMAKE_CXX_FLAGS_RELEASE       "${CMAKE_CXX_FLAGS_RELEASE} -O2 -fomit-frame-pointer ${COMPILER_FAST_MATH}")
+
+    set (CMAKE_C_FLAGS_RELWITHDEBINFO      "${CMAKE_C_FLAGS_RELEASE} -O2 ${COMPILER_FAST_MATH} ${COMPILER_DEBUG_FLAGS}")
+    set (CMAKE_CXX_FLAGS_RELWITHDEBINFO    "${CMAKE_CXX_FLAGS_RELEASE} -O2 ${COMPILER_FAST_MATH} ${COMPILER_DEBUG_FLAGS}")
+
+    set (CMAKE_C_FLAGS_DEBUG           "${CMAKE_C_FLAGS_DEBUG} -O1 ${COMPILER_FAST_MATH} ${COMPILER_DEBUG_FLAGS}")
+    set (CMAKE_CXX_FLAGS_DEBUG         "${CMAKE_CXX_FLAGS_DEBUG} -O1 ${COMPILER_FAST_MATH} ${COMPILER_DEBUG_FLAGS}")
 endif()
-set (CMAKE_C_FLAGS_RELWITHDEBINFO      "${CMAKE_C_FLAGS_RELEASE} -O2")
-set (CMAKE_CXX_FLAGS_RELWITHDEBINFO    "${CMAKE_CXX_FLAGS_RELEASE} -O2")
+
 
 if (CMAKE_BUILD_TYPE_UC MATCHES "COVERAGE")
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
