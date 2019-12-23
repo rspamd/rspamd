@@ -22,7 +22,7 @@
  */
 
 #define align_ptr(p, a)                                                   \
-    (guint8 *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
+	((guint8 *) ((uintptr_t) (p) + ((-(intptr_t)(p)) & ((a) - 1))))
 
 enum rspamd_mempool_chain_type {
 	RSPAMD_MEMPOOL_NORMAL = 0,
