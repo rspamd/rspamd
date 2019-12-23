@@ -725,6 +725,20 @@ rspamd_mempool_destructors_enforce (rspamd_mempool_t *pool)
 	POOL_MTX_UNLOCK ();
 }
 
+struct mempool_debug_elt {
+	gsize sz;
+	const gchar *loc;
+};
+
+static gint
+rspamd_mempool_debug_elt_cmp (const void *a, const void *b)
+{
+	const struct mempool_debug_elt *e1 = a, *e2 = b;
+
+	/* Inverse order */
+	return (gint)((gssize)e2->sz) - ((gssize)e1->sz);
+}
+
 void
 rspamd_mempool_delete (rspamd_mempool_t * pool)
 {
@@ -755,14 +769,29 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 
 		GHashTableIter it;
 		gpointer k, v;
+		GArray *sorted_debug_size = g_array_sized_new (FALSE, FALSE,
+				sizeof (struct mempool_debug_elt),
+				g_hash_table_size (debug_tbl));
 
 		g_hash_table_iter_init (&it, debug_tbl);
 
 		while (g_hash_table_iter_next (&it, &k, &v)) {
-			msg_info_pool ("allocated %Hz from %s", GPOINTER_TO_SIZE (v),
-					(const gchar *)k);
+			struct mempool_debug_elt e;
+			e.loc = (const gchar *)k;
+			e.sz = GPOINTER_TO_SIZE (v);
+			g_array_append_val (sorted_debug_size, e);
 		}
 
+		g_array_sort (sorted_debug_size, rspamd_mempool_debug_elt_cmp);
+
+		for (guint _i = 0; _i < sorted_debug_size->len; _i ++) {
+			struct mempool_debug_elt *e;
+
+			e = &g_array_index (sorted_debug_size, struct mempool_debug_elt, _i);
+			msg_info_pool ("allocated %Hz from %s", e->sz, e->loc);
+		}
+
+		g_array_free (sorted_debug_size, TRUE);
 		g_hash_table_unref (debug_tbl);
 	}
 
