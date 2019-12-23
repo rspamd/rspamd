@@ -423,7 +423,7 @@ lua_worker_add_control_handler (lua_State *L)
 		}
 
 		rspamd_mempool_t *pool = rspamd_mempool_new (
-				rspamd_mempool_suggest_size (), "lua_control");
+				rspamd_mempool_suggest_size (), "lua_control", 0);
 		cbd = rspamd_mempool_alloc0 (pool, sizeof (*cbd));
 		cbd->pool = pool;
 		cbd->event_loop = event_loop;

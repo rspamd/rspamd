@@ -1186,7 +1186,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main = (struct rspamd_main *) g_malloc0 (sizeof (struct rspamd_main));
 
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-			"main");
+			"main", 0);
 	rspamd_main->stat = rspamd_mempool_alloc0_shared (rspamd_main->server_pool,
 			sizeof (struct rspamd_stat));
 	rspamd_main->cfg = rspamd_config_new (RSPAMD_CONFIG_INIT_DEFAULT);

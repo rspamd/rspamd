@@ -20,7 +20,7 @@ rspamd_mem_pool_test_func ()
 	pid_t pid;
 	int ret;
 
-	pool = rspamd_mempool_new (sizeof (TEST_BUF), NULL);
+	pool = rspamd_mempool_new (sizeof (TEST_BUF), NULL, 0);
 	tmp = rspamd_mempool_alloc (pool, sizeof (TEST_BUF));
 	tmp2 = rspamd_mempool_alloc (pool, sizeof (TEST_BUF) * 2);
 	tmp3 = rspamd_mempool_alloc_shared (pool, sizeof (TEST_BUF));
@@ -32,8 +32,8 @@ rspamd_mem_pool_test_func ()
 	g_assert (strncmp (tmp, TEST_BUF, sizeof (TEST_BUF)) == 0);
 	g_assert (strncmp (tmp2, TEST2_BUF, sizeof (TEST2_BUF)) == 0);
 	g_assert (strncmp (tmp3, TEST_BUF, sizeof (TEST_BUF)) == 0);
-	
+
 	rspamd_mempool_delete (pool);
 	rspamd_mempool_stat (&st);
-	
+
 }

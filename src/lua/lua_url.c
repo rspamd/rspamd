@@ -731,7 +731,7 @@ lua_url_create (lua_State *L)
 	}
 	else {
 		own_pool = TRUE;
-		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "url");
+		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "url", 0);
 		text = luaL_checklstring (L, 1, &length);
 	}
 

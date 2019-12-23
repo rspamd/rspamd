@@ -618,7 +618,8 @@ fuzzy_check_module_init (struct rspamd_config *cfg, struct module_ctx **ctx)
 	fuzzy_module_ctx = rspamd_mempool_alloc0 (cfg->cfg_pool,
 			sizeof (struct fuzzy_ctx));
 
-	fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+	fuzzy_module_ctx->fuzzy_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+			NULL, 0);
 	/* TODO: this should match rules count actually */
 	fuzzy_module_ctx->keypairs_cache = rspamd_keypair_cache_new (32);
 	fuzzy_module_ctx->fuzzy_rules = g_ptr_array_new ();

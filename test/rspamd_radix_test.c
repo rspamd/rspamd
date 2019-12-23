@@ -148,7 +148,7 @@ rspamd_btrie_test_vec (void)
 	gsize i;
 	gpointer val;
 
-	pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "btrie");
+	pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "btrie", 0);
 	tree = btrie_init (pool);
 
 	while (t->ip != NULL) {
@@ -238,7 +238,7 @@ rspamd_radix_test_func (void)
 		addrs[i].mask6 = ottery_rand_range(128);
 	}
 
-	pool = rspamd_mempool_new (65536, "btrie");
+	pool = rspamd_mempool_new (65536, "btrie", 0);
 	btrie = btrie_init (pool);
 	msg_notice ("btrie performance (%z elts)", nelts);
 

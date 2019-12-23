@@ -60,7 +60,8 @@ rspamd_task_quark (void)
  * Create new task
  */
 struct rspamd_task *
-rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
+rspamd_task_new (struct rspamd_worker *worker,
+				 struct rspamd_config *cfg,
 				 rspamd_mempool_t *pool,
 				 struct rspamd_lang_detector *lang_det,
 				 struct ev_loop *event_loop)
@@ -70,7 +71,7 @@ rspamd_task_new (struct rspamd_worker *worker, struct rspamd_config *cfg,
 	guint flags = 0;
 
 	if (pool == NULL) {
-		task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "task");
+		task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "task", 0);
 		flags |= RSPAMD_TASK_FLAG_OWN_POOL;
 	}
 	else {

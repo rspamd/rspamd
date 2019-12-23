@@ -631,11 +631,11 @@ rspamd_map_helper_new_hash (struct rspamd_map *map)
 
 	if (map) {
 		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-				map->tag);
+				map->tag, 0);
 	}
 	else {
 		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-				NULL);
+				NULL, 0);
 	}
 
 	htb = rspamd_mempool_alloc0 (pool, sizeof (*htb));
@@ -688,11 +688,11 @@ rspamd_map_helper_new_radix (struct rspamd_map *map)
 
 	if (map) {
 		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-				map->tag);
+				map->tag, 0);
 	}
 	else {
 		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-				NULL);
+				NULL, 0);
 	}
 
 	r = rspamd_mempool_alloc0 (pool, sizeof (*r));
@@ -746,7 +746,7 @@ rspamd_map_helper_new_regexp (struct rspamd_map *map,
 	rspamd_mempool_t *pool;
 
 	pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-			map->tag);
+			map->tag, 0);
 
 	re_map = rspamd_mempool_alloc0 (pool, sizeof (*re_map));
 	re_map->pool = pool;

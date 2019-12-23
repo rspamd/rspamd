@@ -137,9 +137,11 @@ typedef struct memory_pool_stat_s {
  * @param size size of pool's page
  * @return new memory pool object
  */
-rspamd_mempool_t *rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc);
+rspamd_mempool_t *rspamd_mempool_new_ (gsize size, const gchar *tag, gint flags,
+		const gchar *loc);
 
-#define rspamd_mempool_new(size, tag) rspamd_mempool_new_((size), (tag), G_STRLOC)
+#define rspamd_mempool_new(size, tag, flags) \
+	rspamd_mempool_new_((size), (tag), (flags), G_STRLOC)
 
 /**
  * Get memory from pool
@@ -147,8 +149,10 @@ rspamd_mempool_t *rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar
  * @param size bytes to allocate
  * @return pointer to allocated object
  */
-void *rspamd_mempool_alloc (rspamd_mempool_t *pool, gsize size)
+void *rspamd_mempool_alloc_ (rspamd_mempool_t *pool, gsize size, const gchar *loc)
 RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
+#define rspamd_mempool_alloc(pool, size) \
+	rspamd_mempool_alloc_((pool), (size), G_STRLOC)
 
 /**
  * Get memory and set it to zero
@@ -156,8 +160,10 @@ RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR
  * @param size bytes to allocate
  * @return pointer to allocated object
  */
-void *rspamd_mempool_alloc0 (rspamd_mempool_t *pool, gsize size)
+void *rspamd_mempool_alloc0_ (rspamd_mempool_t *pool, gsize size, const gchar *loc)
 RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
+#define rspamd_mempool_alloc0(pool, size) \
+	rspamd_mempool_alloc0_((pool), (size), G_STRLOC)
 
 /**
  * Make a copy of string in pool
@@ -165,8 +171,10 @@ RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR
  * @param src source string
  * @return pointer to newly created string that is copy of src
  */
-gchar *rspamd_mempool_strdup (rspamd_mempool_t *pool, const gchar *src)
+gchar *rspamd_mempool_strdup_ (rspamd_mempool_t *pool, const gchar *src, const gchar *loc)
 RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
+#define rspamd_mempool_strdup(pool, src) \
+	rspamd_mempool_strdup_ ((pool), (src), G_STRLOC)
 
 /**
  * Make a copy of fixed string in pool as null terminated string
@@ -174,8 +182,12 @@ RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
  * @param src source string
  * @return pointer to newly created string that is copy of src
  */
-gchar *rspamd_mempool_fstrdup (rspamd_mempool_t *pool,
-							   const struct f_str_s *src) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
+gchar *rspamd_mempool_fstrdup_ (rspamd_mempool_t *pool,
+								const struct f_str_s *src,
+								const gchar *loc)
+RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
+#define rspamd_mempool_fstrdup(pool, src) \
+	rspamd_mempool_fstrdup_ ((pool), (src), G_STRLOC)
 
 struct f_str_tok;
 
@@ -185,19 +197,27 @@ struct f_str_tok;
  * @param src source string
  * @return pointer to newly created string that is copy of src
  */
-gchar *rspamd_mempool_ftokdup (rspamd_mempool_t *pool,
-							   const struct f_str_tok *src) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
+gchar *rspamd_mempool_ftokdup_ (rspamd_mempool_t *pool,
+								const struct f_str_tok *src,
+								const gchar *loc)
+RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT);
+#define rspamd_mempool_ftokdup(pool, src) \
+	rspamd_mempool_ftokdup_ ((pool), (src), G_STRLOC)
 
 /**
  * Allocate piece of shared memory
  * @param pool memory pool object
  * @param size bytes to allocate
  */
-void *rspamd_mempool_alloc_shared (rspamd_mempool_t *pool, gsize size)
+void *rspamd_mempool_alloc_shared_ (rspamd_mempool_t *pool, gsize size, const gchar *loc)
 RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
+#define rspamd_mempool_alloc_shared(pool, size) \
+	rspamd_mempool_alloc_shared_((pool), (size), G_STRLOC)
 
-void *rspamd_mempool_alloc0_shared (rspamd_mempool_t *pool, gsize size)
+void *rspamd_mempool_alloc0_shared_ (rspamd_mempool_t *pool, gsize size, const gchar *loc)
 RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
+#define rspamd_mempool_alloc0_shared(pool, size) \
+	rspamd_mempool_alloc0_shared_((pool), (size), G_STRLOC)
 
 /**
  * Add destructor callback to pool

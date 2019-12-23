@@ -258,7 +258,7 @@ rspamd_upstreams_library_init (void)
 	ctx = g_malloc0 (sizeof (*ctx));
 	memcpy (&ctx->limits, &default_limits, sizeof (ctx->limits));
 	ctx->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-			"upstreams");
+			"upstreams", 0);
 
 	ctx->upstreams = g_queue_new ();
 	REF_INIT_RETAIN (ctx, rspamd_upstream_ctx_dtor);

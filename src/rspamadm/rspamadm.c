@@ -396,7 +396,7 @@ main (gint argc, gchar **argv, gchar **env)
 	rspamd_main->pid = getpid ();
 	rspamd_main->type = process_quark;
 	rspamd_main->server_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-			"rspamadm");
+			"rspamadm", 0);
 
 	rspamadm_fill_internal_commands (all_commands);
 	help_command.command_data = all_commands;

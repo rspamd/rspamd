@@ -1319,7 +1319,7 @@ rspamd_symcache_new (struct rspamd_config *cfg)
 
 	cache = g_malloc0 (sizeof (struct rspamd_symcache));
 	cache->static_pool =
-			rspamd_mempool_new (rspamd_mempool_suggest_size (), "symcache");
+			rspamd_mempool_new (rspamd_mempool_suggest_size (), "symcache", 0);
 	cache->items_by_symbol = g_hash_table_new (rspamd_str_hash,
 			rspamd_str_equal);
 	cache->items_by_id = g_ptr_array_new ();

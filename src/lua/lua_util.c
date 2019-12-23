@@ -1386,7 +1386,7 @@ lua_util_parse_html (lua_State *L)
 	}
 
 	if (start != NULL) {
-		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL);
+		pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), NULL, 0);
 		hc = rspamd_mempool_alloc0 (pool, sizeof (*hc));
 		in = g_byte_array_sized_new (len);
 		g_byte_array_append (in, start, len);
@@ -1456,7 +1456,8 @@ lua_util_parse_addr (lua_State *L)
 			}
 		}
 		else {
-			pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "lua util");
+			pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+					"lua util", 0);
 			own_pool = TRUE;
 		}
 
@@ -1660,7 +1661,8 @@ lua_util_parse_mail_address (lua_State *L)
 			}
 		}
 		else {
-			pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "lua util");
+			pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+					"lua util", 0);
 			own_pool = TRUE;
 		}
 

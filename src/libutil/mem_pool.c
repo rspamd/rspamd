@@ -272,7 +272,7 @@ rspamd_mempool_append_chain (rspamd_mempool_t * pool,
  * @return new memory pool object
  */
 rspamd_mempool_t *
-rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
+rspamd_mempool_new_ (gsize size, const gchar *tag, gint flags, const gchar *loc)
 {
 	rspamd_mempool_t *new_pool;
 	gpointer map;
@@ -345,6 +345,7 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
 	/*
 	 * Memory layout:
 	 * struct rspamd_mempool_t
+	 * <optional debug hash table>
 	 * struct rspamd_mempool_specific
 	 * struct _pool_chain
 	 * alignment (if needed)
@@ -353,6 +354,7 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
 	guchar *mem_chunk;
 	gint ret = posix_memalign ((void **)&mem_chunk, MIN_MEM_ALIGNMENT,
 			total_size);
+	gsize priv_offset;
 
 	if (ret != 0 || mem_chunk == NULL) {
 		g_error ("%s: failed to allocate %"G_GSIZE_FORMAT" bytes: %d - %s",
@@ -362,14 +364,26 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
 
 	/* Set memory layout */
 	new_pool = (rspamd_mempool_t *)mem_chunk;
+	if (flags & RSPAMD_MEMPOOL_DEBUG) {
+		/* Allocate debug table */
+		GHashTable *debug_tbl = (GHashTable *)(mem_chunk + sizeof (rspamd_mempool_t));
+
+		debug_tbl = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+		priv_offset = sizeof (rspamd_mempool_t) + sizeof (GHashTable *);
+	}
+	else {
+		priv_offset = sizeof (rspamd_mempool_t);
+	}
+
 	new_pool->priv = (struct rspamd_mempool_specific *)(mem_chunk +
-			sizeof (rspamd_mempool_t));
-	/* Zere memory for specific and for the first chain */
+			priv_offset);
+	/* Zero memory for specific and for the first chain */
 	memset (new_pool->priv, 0, sizeof (struct rspamd_mempool_specific) +
 			sizeof (struct _pool_chain));
 
 	new_pool->priv->entry = entry;
 	new_pool->priv->elt_len = size;
+	new_pool->priv->flags = flags;
 
 	if (tag) {
 		rspamd_strlcpy (new_pool->tag.tagname, tag, sizeof (new_pool->tag.tagname));
@@ -393,11 +407,11 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
 
 	nchain = (struct _pool_chain *)
 			(mem_chunk +
-			sizeof (rspamd_mempool_t) +
-			sizeof (struct rspamd_mempool_specific));
+			 priv_offset +
+			 sizeof (struct rspamd_mempool_specific));
 
 	guchar *unaligned = mem_chunk +
-						sizeof (rspamd_mempool_t) +
+						priv_offset +
 						sizeof (struct rspamd_mempool_specific) +
 						sizeof (struct _pool_chain);
 
@@ -418,12 +432,13 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
 
 static void *
 memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
-						  enum rspamd_mempool_chain_type pool_type)
+						  enum rspamd_mempool_chain_type pool_type,
+						  const gchar *loc)
 RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 
 static void *
 memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
-		enum rspamd_mempool_chain_type pool_type)
+		enum rspamd_mempool_chain_type pool_type, const gchar *loc)
 {
 	guint8 *tmp;
 	struct _pool_chain *new, *cur;
@@ -497,22 +512,21 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 
 
 void *
-rspamd_mempool_alloc (rspamd_mempool_t * pool, gsize size)
+rspamd_mempool_alloc_ (rspamd_mempool_t * pool, gsize size, const gchar *loc)
 {
-	return memory_pool_alloc_common (pool, size, RSPAMD_MEMPOOL_NORMAL);
+	return memory_pool_alloc_common (pool, size, RSPAMD_MEMPOOL_NORMAL, loc);
 }
 
 void *
-rspamd_mempool_alloc0 (rspamd_mempool_t * pool, gsize size)
+rspamd_mempool_alloc0_ (rspamd_mempool_t * pool, gsize size, const gchar *loc)
 {
-	void *pointer = rspamd_mempool_alloc (pool, size);
-
+	void *pointer = rspamd_mempool_alloc_ (pool, size, loc);
 	memset (pointer, 0, size);
 
 	return pointer;
 }
 void *
-rspamd_mempool_alloc0_shared (rspamd_mempool_t * pool, gsize size)
+rspamd_mempool_alloc0_shared_ (rspamd_mempool_t * pool, gsize size, const gchar *loc)
 {
 	void *pointer = rspamd_mempool_alloc_shared (pool, size);
 
@@ -521,14 +535,14 @@ rspamd_mempool_alloc0_shared (rspamd_mempool_t * pool, gsize size)
 }
 
 void *
-rspamd_mempool_alloc_shared (rspamd_mempool_t * pool, gsize size)
+rspamd_mempool_alloc_shared_ (rspamd_mempool_t * pool, gsize size, const gchar *loc)
 {
-	return memory_pool_alloc_common (pool, size, RSPAMD_MEMPOOL_SHARED);
+	return memory_pool_alloc_common (pool, size, RSPAMD_MEMPOOL_SHARED, loc);
 }
 
 
 gchar *
-rspamd_mempool_strdup (rspamd_mempool_t * pool, const gchar *src)
+rspamd_mempool_strdup_ (rspamd_mempool_t * pool, const gchar *src, const gchar *loc)
 {
 	gsize len;
 	gchar *newstr;
@@ -538,7 +552,7 @@ rspamd_mempool_strdup (rspamd_mempool_t * pool, const gchar *src)
 	}
 
 	len = strlen (src);
-	newstr = rspamd_mempool_alloc (pool, len + 1);
+	newstr = rspamd_mempool_alloc_ (pool, len + 1, loc);
 	memcpy (newstr, src, len);
 	newstr[len] = '\0';
 
@@ -546,7 +560,8 @@ rspamd_mempool_strdup (rspamd_mempool_t * pool, const gchar *src)
 }
 
 gchar *
-rspamd_mempool_fstrdup (rspamd_mempool_t * pool, const struct f_str_s *src)
+rspamd_mempool_fstrdup_ (rspamd_mempool_t * pool, const struct f_str_s *src,
+		const gchar *loc)
 {
 	gchar *newstr;
 
@@ -554,7 +569,7 @@ rspamd_mempool_fstrdup (rspamd_mempool_t * pool, const struct f_str_s *src)
 		return NULL;
 	}
 
-	newstr = rspamd_mempool_alloc (pool, src->len + 1);
+	newstr = rspamd_mempool_alloc_ (pool, src->len + 1, loc);
 	memcpy (newstr, src->str, src->len);
 	newstr[src->len] = '\0';
 
@@ -562,7 +577,8 @@ rspamd_mempool_fstrdup (rspamd_mempool_t * pool, const struct f_str_s *src)
 }
 
 gchar *
-rspamd_mempool_ftokdup (rspamd_mempool_t *pool, const rspamd_ftok_t *src)
+rspamd_mempool_ftokdup_ (rspamd_mempool_t *pool, const rspamd_ftok_t *src,
+		const gchar *loc)
 {
 	gchar *newstr;
 
@@ -570,7 +586,7 @@ rspamd_mempool_ftokdup (rspamd_mempool_t *pool, const rspamd_ftok_t *src)
 		return NULL;
 	}
 
-	newstr = rspamd_mempool_alloc (pool, src->len + 1);
+	newstr = rspamd_mempool_alloc_ (pool, src->len + 1, loc);
 	memcpy (newstr, src->begin, src->len);
 	newstr[src->len] = '\0';
 
@@ -587,7 +603,7 @@ rspamd_mempool_add_destructor_full (rspamd_mempool_t * pool,
 	struct _pool_destructors *cur;
 
 	POOL_MTX_LOCK ();
-	cur = rspamd_mempool_alloc (pool, sizeof (*cur));
+	cur = rspamd_mempool_alloc_ (pool, sizeof (*cur), line);
 	cur->func = func;
 	cur->data = data;
 	cur->function = function;

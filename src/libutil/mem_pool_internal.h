@@ -60,10 +60,11 @@ struct rspamd_mempool_specific {
 	struct _pool_destructors *dtors_head, *dtors_tail;
 	GPtrArray *trash_stack;
 	GHashTable *variables;                  /**< private memory pool variables			*/
+	struct rspamd_mempool_entry_point *entry;
 	gsize elt_len;                            /**< size of an element						*/
 	gsize used_memory;
-	gsize wasted_memory;
-	struct rspamd_mempool_entry_point *entry;
+	guint wasted_memory;
+	gint flags;
 };
 
 /**

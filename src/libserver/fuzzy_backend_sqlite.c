@@ -431,7 +431,8 @@ rspamd_fuzzy_backend_sqlite_open_db (const gchar *path, GError **err)
 	bk = g_malloc0 (sizeof (*bk));
 	bk->path = g_strdup (path);
 	bk->expired = 0;
-	bk->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "fuzzy_backend");
+	bk->pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+			"fuzzy_backend", 0);
 	bk->db = rspamd_sqlite3_open_or_create (bk->pool, bk->path,
 			create_tables_sql, 1, err);
 

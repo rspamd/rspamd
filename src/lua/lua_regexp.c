@@ -891,7 +891,7 @@ luaopen_regexp (lua_State * L)
 {
 	if (!regexp_static_pool) {
 		regexp_static_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
-				"regexp_lua_pool");
+				"regexp_lua_pool", 0);
 	}
 
 	rspamd_lua_new_class (L, "rspamd{regexp}", regexplib_m);

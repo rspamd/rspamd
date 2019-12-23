@@ -154,7 +154,7 @@ lua_mempool_create (lua_State *L)
 {
 	LUA_TRACE_POINT;
 	struct memory_pool_s *mempool = rspamd_mempool_new (
-			rspamd_mempool_suggest_size (), "lua"), **pmempool;
+			rspamd_mempool_suggest_size (), "lua", 0), **pmempool;
 
 	if (mempool) {
 		pmempool = lua_newuserdata (L, sizeof (struct memory_pool_s *));
