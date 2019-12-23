@@ -29,7 +29,7 @@ context("RFC2047 decoding", function()
 
   ffi.cdef[[
     const char * rspamd_mime_header_decode (void *pool, const char *in, size_t inlen);
-    void * rspamd_mempool_new_ (size_t sz, const char *name, const char *strloc);
+    void * rspamd_mempool_new_ (size_t sz, const char *name, int flags, const char *strloc);
     void rspamd_mempool_delete (void *pool);
   ]]
 
@@ -46,7 +46,7 @@ context("RFC2047 decoding", function()
       {"=?windows-1251?B?xO7q8+zl7fIuc2NyLnV1ZQ==?=", "Документ.scr.uue"},
     }
 
-    local pool = ffi.C.rspamd_mempool_new_(4096, "lua", "rfc2047.lua:49")
+    local pool = ffi.C.rspamd_mempool_new_(4096, "lua", 0, "rfc2047.lua:49")
 
     for _,c in ipairs(cases) do
       local res = ffi.C.rspamd_mime_header_decode(pool, c[1], #c[1])
@@ -60,7 +60,7 @@ context("RFC2047 decoding", function()
   end)
   test("Fuzz test for rfc2047 tokens", function()
     local util = require("rspamd_util")
-    local pool = ffi.C.rspamd_mempool_new_(4096, "lua", "rfc2047.lua:63")
+    local pool = ffi.C.rspamd_mempool_new_(4096, "lua", 0, "rfc2047.lua:63")
     local str = "Тест Тест Тест Тест Тест"
 
     for i = 0,1000 do

@@ -332,7 +332,7 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, gint flags, const gchar *loc)
 	struct rspamd_mempool_entry_point *entry = rspamd_mempool_get_entry (loc);
 	gsize total_size;
 
-	if (size == 0) {
+	if (size == 0 && entry) {
 		size = entry->cur_suggestion;
 	}
 
