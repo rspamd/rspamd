@@ -3044,6 +3044,17 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 	}
 
 	if (target_tbl) {
+		/* Also check max urls */
+		if (cbd->task->cfg && cbd->task->cfg->max_lua_urls > 0) {
+			if (g_hash_table_size (target_tbl) > cbd->task->cfg->max_lua_urls) {
+				msg_err_task ("part has too many URLs, we cannot process more: "
+							  "%z urls extracted ",
+						g_hash_table_size (target_tbl));
+
+				return FALSE;
+			}
+		}
+
 		if ((existing = g_hash_table_lookup (target_tbl, url)) == NULL) {
 			url->flags |= RSPAMD_URL_FLAG_FROM_TEXT;
 			g_hash_table_insert (target_tbl, url, url);
