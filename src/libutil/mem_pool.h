@@ -155,6 +155,16 @@ RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR
 	rspamd_mempool_alloc_((pool), (size), G_STRLOC)
 
 /**
+ * Notify external memory usage for memory pool
+ * @param pool
+ * @param size
+ * @param loc
+ */
+void rspamd_mempool_notify_alloc_ (rspamd_mempool_t *pool, gsize size, const gchar *loc);
+#define rspamd_mempool_notify_alloc(pool, size) \
+	rspamd_mempool_notify_alloc_((pool), (size), G_STRLOC)
+
+/**
  * Get memory and set it to zero
  * @param pool memory pool object
  * @param size bytes to allocate

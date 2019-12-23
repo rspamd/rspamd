@@ -441,6 +441,27 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 						  const gchar *loc)
 RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR_RETURNS_NONNUL;
 
+
+void
+rspamd_mempool_notify_alloc_ (rspamd_mempool_t *pool, gsize size, const gchar *loc)
+{
+	GHashTable *debug_tbl = *(GHashTable **)(((guchar *)pool + sizeof (*pool)));
+	gpointer ptr;
+
+	if (G_UNLIKELY (pool->priv->flags & RSPAMD_MEMPOOL_DEBUG)) {
+		ptr = g_hash_table_lookup (debug_tbl, loc);
+
+		if (ptr) {
+			ptr = GSIZE_TO_POINTER (GPOINTER_TO_SIZE (ptr) + size);
+		}
+		else {
+			ptr = GSIZE_TO_POINTER (size);
+		}
+
+		g_hash_table_insert (debug_tbl, (gpointer) loc, ptr);
+	}
+}
+
 static void *
 memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 		enum rspamd_mempool_chain_type pool_type, const gchar *loc)
@@ -454,19 +475,7 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 		pool->priv->used_memory += size;
 
 		if (G_UNLIKELY (pool->priv->flags & RSPAMD_MEMPOOL_DEBUG)) {
-			GHashTable *debug_tbl = *(GHashTable **)(((guchar *)pool + sizeof (*pool)));
-			gpointer ptr;
-
-			ptr = g_hash_table_lookup (debug_tbl, loc);
-
-			if (ptr) {
-				ptr = GSIZE_TO_POINTER (GPOINTER_TO_SIZE (ptr) + size);
-			}
-			else {
-				ptr = GSIZE_TO_POINTER (size);
-			}
-
-			g_hash_table_insert (debug_tbl, (gpointer)loc, ptr);
+			rspamd_mempool_notify_alloc_ (pool, size, loc);
 		}
 
 		if (always_malloc && pool_type != RSPAMD_MEMPOOL_SHARED) {
