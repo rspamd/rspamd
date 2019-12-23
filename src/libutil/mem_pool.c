@@ -342,6 +342,9 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, gint flags, const gchar *loc)
 				 sizeof (struct _pool_chain) +
 				 size;
 
+	if (G_UNLIKELY (flags & RSPAMD_MEMPOOL_DEBUG)) {
+		total_size += sizeof (GHashTable *);
+	}
 	/*
 	 * Memory layout:
 	 * struct rspamd_mempool_t
@@ -364,11 +367,13 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, gint flags, const gchar *loc)
 
 	/* Set memory layout */
 	new_pool = (rspamd_mempool_t *)mem_chunk;
-	if (flags & RSPAMD_MEMPOOL_DEBUG) {
+	if (G_UNLIKELY (flags & RSPAMD_MEMPOOL_DEBUG)) {
 		/* Allocate debug table */
-		GHashTable *debug_tbl = (GHashTable *)(mem_chunk + sizeof (rspamd_mempool_t));
+		GHashTable *debug_tbl;
 
 		debug_tbl = g_hash_table_new (rspamd_str_hash, rspamd_str_equal);
+		memcpy (mem_chunk + sizeof (rspamd_mempool_t), &debug_tbl,
+				sizeof (GHashTable *));
 		priv_offset = sizeof (rspamd_mempool_t) + sizeof (GHashTable *);
 	}
 	else {
@@ -447,6 +452,22 @@ memory_pool_alloc_common (rspamd_mempool_t * pool, gsize size,
 	if (pool) {
 		POOL_MTX_LOCK ();
 		pool->priv->used_memory += size;
+
+		if (G_UNLIKELY (pool->priv->flags & RSPAMD_MEMPOOL_DEBUG)) {
+			GHashTable *debug_tbl = *(GHashTable **)(((guchar *)pool + sizeof (*pool)));
+			gpointer ptr;
+
+			ptr = g_hash_table_lookup (debug_tbl, loc);
+
+			if (ptr) {
+				ptr = GSIZE_TO_POINTER (GPOINTER_TO_SIZE (ptr) + size);
+			}
+			else {
+				ptr = GSIZE_TO_POINTER (size);
+			}
+
+			g_hash_table_insert (debug_tbl, (gpointer)loc, ptr);
+		}
 
 		if (always_malloc && pool_type != RSPAMD_MEMPOOL_SHARED) {
 			void *ptr;
@@ -716,6 +737,34 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 	POOL_MTX_LOCK ();
 
 	cur = pool->priv->pools[RSPAMD_MEMPOOL_NORMAL];
+
+	if (G_UNLIKELY (pool->priv->flags & RSPAMD_MEMPOOL_DEBUG)) {
+		GHashTable *debug_tbl = *(GHashTable **)(((guchar *)pool) + sizeof (*pool));
+		/* Show debug info */
+		gsize ndtor = 0;
+		LL_COUNT (pool->priv->dtors_head, destructor, ndtor);
+		msg_info_pool ("destructing of the memory pool %p; elt size = %z; "
+					   "used memory = %Hz; wasted memory = %Hd; "
+					   "vars = %z; destructors = %z",
+				pool,
+				pool->priv->elt_len,
+				pool->priv->used_memory,
+				pool->priv->wasted_memory,
+				pool->priv->variables ? g_hash_table_size (pool->priv->variables) : (gsize)0,
+				ndtor);
+
+		GHashTableIter it;
+		gpointer k, v;
+
+		g_hash_table_iter_init (&it, debug_tbl);
+
+		while (g_hash_table_iter_next (&it, &k, &v)) {
+			msg_info_pool ("allocated %Hz from %s", GPOINTER_TO_SIZE (v),
+					(const gchar *)k);
+		}
+
+		g_hash_table_unref (debug_tbl);
+	}
 
 	if (cur && mempool_entries) {
 		pool->priv->entry->elts[pool->priv->entry->cur_elts].leftover =
