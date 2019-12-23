@@ -3048,8 +3048,8 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 		if (cbd->task->cfg && cbd->task->cfg->max_lua_urls > 0) {
 			if (g_hash_table_size (target_tbl) > cbd->task->cfg->max_lua_urls) {
 				msg_err_task ("part has too many URLs, we cannot process more: "
-							  "%z urls extracted ",
-						g_hash_table_size (target_tbl));
+							  "%d urls extracted ",
+						(guint)g_hash_table_size (target_tbl));
 
 				return FALSE;
 			}
