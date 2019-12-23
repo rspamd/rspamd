@@ -64,14 +64,16 @@ rspamd_task_new (struct rspamd_worker *worker,
 				 struct rspamd_config *cfg,
 				 rspamd_mempool_t *pool,
 				 struct rspamd_lang_detector *lang_det,
-				 struct ev_loop *event_loop)
+				 struct ev_loop *event_loop,
+				 gboolean debug_mem)
 {
 	struct rspamd_task *new_task;
 	rspamd_mempool_t *task_pool;
 	guint flags = 0;
 
 	if (pool == NULL) {
-		task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (), "task", 0);
+		task_pool = rspamd_mempool_new (rspamd_mempool_suggest_size (),
+				"task", debug_mem ? RSPAMD_MEMPOOL_DEBUG : 0);
 		flags |= RSPAMD_TASK_FLAG_OWN_POOL;
 	}
 	else {

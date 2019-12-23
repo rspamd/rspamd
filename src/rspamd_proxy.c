@@ -1754,7 +1754,7 @@ rspamd_proxy_self_scan (struct rspamd_proxy_session *session)
 	msg = session->client_message;
 	task = rspamd_task_new (session->worker, session->ctx->cfg,
 			session->pool, session->ctx->lang_det,
-			session->ctx->event_loop);
+			session->ctx->event_loop, FALSE);
 	task->flags |= RSPAMD_TASK_FLAG_MIME;
 
 	if (session->ctx->milter) {

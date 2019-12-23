@@ -1615,7 +1615,7 @@ lua_task_load_from_file (lua_State * L)
 				}
 			}
 
-			task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
+			task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL, FALSE);
 			task->msg.begin = data->str;
 			task->msg.len = data->len;
 			rspamd_mempool_add_destructor (task->task_pool,
@@ -1629,7 +1629,7 @@ lua_task_load_from_file (lua_State * L)
 			if (!map) {
 				err = strerror (errno);
 			} else {
-				task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
+				task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL, FALSE);
 				task->msg.begin = map;
 				task->msg.len = sz;
 				rspamd_mempool_add_destructor (task->task_pool,
@@ -1683,7 +1683,7 @@ lua_task_load_from_string (lua_State * L)
 			}
 		}
 
-		task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL);
+		task = rspamd_task_new (NULL, cfg, NULL, NULL, NULL, FALSE);
 		task->msg.begin = g_malloc (message_len);
 		memcpy ((gchar *)task->msg.begin, str_message, message_len);
 		task->msg.len  = message_len;
@@ -1729,7 +1729,7 @@ lua_task_create (lua_State * L)
 		}
 	}
 
-	task = rspamd_task_new (NULL, cfg, NULL, NULL, ev_base);
+	task = rspamd_task_new (NULL, cfg, NULL, NULL, ev_base, FALSE);
 	task->flags |= RSPAMD_TASK_FLAG_EMPTY;
 
 	ptask = lua_newuserdata (L, sizeof (*ptask));

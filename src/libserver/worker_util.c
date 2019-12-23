@@ -143,7 +143,7 @@ rspamd_worker_call_finish_handlers (struct rspamd_worker *worker)
 	if (cfg->on_term_scripts) {
 		ctx = (struct rspamd_abstract_worker_ctx *)worker->ctx;
 		/* Create a fake task object for async events */
-		task = rspamd_task_new (worker, cfg, NULL, NULL, ctx->event_loop);
+		task = rspamd_task_new (worker, cfg, NULL, NULL, ctx->event_loop, FALSE);
 		task->resolver = ctx->resolver;
 		task->flags |= RSPAMD_TASK_FLAG_PROCESSING;
 		task->s = rspamd_session_create (task->task_pool,

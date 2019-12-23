@@ -1514,7 +1514,7 @@ rspamd_controller_handle_lua_history (lua_State *L,
 
 			if (lua_isfunction (L, -1)) {
 				task = rspamd_task_new (session->ctx->worker, session->cfg,
-						session->pool, ctx->lang_det, ctx->event_loop);
+						session->pool, ctx->lang_det, ctx->event_loop, FALSE);
 
 				task->resolver = ctx->resolver;
 				task->s = rspamd_session_create (session->pool,
@@ -1811,7 +1811,7 @@ rspamd_controller_handle_lua (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
-			ctx->lang_det, ctx->event_loop);
+			ctx->lang_det, ctx->event_loop, FALSE);
 
 	task->resolver = ctx->resolver;
 	task->s = rspamd_session_create (session->pool,
@@ -1996,7 +1996,7 @@ rspamd_controller_handle_learn_common (
 	}
 
 	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
-			session->ctx->lang_det, ctx->event_loop);
+			session->ctx->lang_det, ctx->event_loop, FALSE);
 
 	task->resolver = ctx->resolver;
 	task->s = rspamd_session_create (session->pool,
@@ -2095,7 +2095,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 	}
 
 	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
-			ctx->lang_det, ctx->event_loop);
+			ctx->lang_det, ctx->event_loop, FALSE);
 
 	task->resolver = ctx->resolver;
 	task->s = rspamd_session_create (session->pool,
@@ -2584,7 +2584,7 @@ rspamd_controller_handle_stat_common (
 	ctx = session->ctx;
 
 	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
-			ctx->lang_det, ctx->event_loop);
+			ctx->lang_det, ctx->event_loop, FALSE);
 	task->resolver = ctx->resolver;
 	cbdata = rspamd_mempool_alloc0 (session->pool, sizeof (*cbdata));
 	cbdata->conn_ent = conn_ent;
@@ -2986,7 +2986,7 @@ rspamd_controller_handle_lua_plugin (struct rspamd_http_connection_entry *conn_e
 	}
 
 	task = rspamd_task_new (session->ctx->worker, session->cfg, session->pool,
-			ctx->lang_det, ctx->event_loop);
+			ctx->lang_det, ctx->event_loop, FALSE);
 
 	task->resolver = ctx->resolver;
 	task->s = rspamd_session_create (session->pool,
