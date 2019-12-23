@@ -2877,7 +2877,7 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 	pool = cb->pool;
 
 	if ((matcher->flags & URL_FLAG_NOHTML) && cb->how == RSPAMD_URL_FIND_STRICT) {
-		/* Do not try to match non-html like urls in html texts */
+		/* Do not try to match non-html like urls in html texts, continue matching */
 		return 0;
 	}
 
@@ -2903,6 +2903,7 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 	}
 
 	if (!rspamd_url_trie_is_match (matcher, pos, text + len, newline_pos)) {
+		/* Mismatch, continue */
 		return 0;
 	}
 
@@ -2949,7 +2950,8 @@ rspamd_url_trie_generic_callback_common (struct rspamd_multipattern *mp,
 			if (cb->func) {
 				if (!cb->func (url, cb->start - text, (m.m_begin + m.m_len) - text,
 						cb->funcd)) {
-					return FALSE;
+					/* We need to stop here in any case! */
+					return -1;
 				}
 			}
 		}
@@ -3024,9 +3026,10 @@ rspamd_url_text_part_callback (struct rspamd_url *url, gsize start_offset,
 
 	if (cbd->part->utf_stripped_content &&
 			cbd->url_len > cbd->part->utf_stripped_content->len * 10) {
-		/* Absurdic case, stop here now */
-		msg_err_task ("part has too many URLs, we cannot process more: %z",
-				cbd->url_len);
+		/* Absurd case, stop here now */
+		msg_err_task ("part has too many URLs, we cannot process more: %z url len; "
+				"%d stripped content length",
+				cbd->url_len, cbd->part->utf_stripped_content->len);
 
 		return FALSE;
 	}
