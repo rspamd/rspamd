@@ -234,7 +234,6 @@ rspamd_mempool_chain_new (gsize size, enum rspamd_mempool_chain_type pool_type)
 
 	chain->pos = align_ptr (chain->begin, MIN_MEM_ALIGNMENT);
 	chain->slice_size = total_size - sizeof (struct _pool_chain);
-	chain->lock = NULL;
 
 	return chain;
 }
@@ -365,11 +364,11 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
 	new_pool = (rspamd_mempool_t *)mem_chunk;
 	new_pool->priv = (struct rspamd_mempool_specific *)(mem_chunk +
 			sizeof (rspamd_mempool_t));
+	/* Zere memory for specific and for the first chain */
 	memset (new_pool->priv, 0, sizeof (struct rspamd_mempool_specific) +
 			sizeof (struct _pool_chain));
 
-	new_pool->priv->entry = rspamd_mempool_get_entry (loc);
-
+	new_pool->priv->entry = entry;
 	new_pool->priv->elt_len = size;
 
 	if (tag) {
@@ -392,18 +391,20 @@ rspamd_mempool_new_ (gsize size, const gchar *tag, const gchar *loc)
 	/* Now we can attach one chunk to speed up simple allocations */
 	struct _pool_chain *nchain;
 
-	nchain = (struct _pool_chain *)mem_chunk + sizeof (rspamd_mempool_t) +
-			sizeof (struct rspamd_mempool_specific);
-	nchain->slice_size = size;
+	nchain = (struct _pool_chain *)
+			(mem_chunk +
+			sizeof (rspamd_mempool_t) +
+			sizeof (struct rspamd_mempool_specific));
 
 	guchar *unaligned = mem_chunk +
 						sizeof (rspamd_mempool_t) +
 						sizeof (struct rspamd_mempool_specific) +
 						sizeof (struct _pool_chain);
 
-	nchain->begin = align_ptr (unaligned, MIN_MEM_ALIGNMENT);
 	nchain->slice_size = size;
-	nchain->pos = nchain->begin;
+	nchain->begin = unaligned;
+	nchain->slice_size = size;
+	nchain->pos = align_ptr (unaligned, MIN_MEM_ALIGNMENT);
 	new_pool->priv->pools[RSPAMD_MEMPOOL_NORMAL] = nchain;
 	new_pool->priv->used_memory = size;
 
@@ -698,11 +699,7 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 
 	POOL_MTX_LOCK ();
 
-	cur = NULL;
-
-	if (pool->priv->pools[RSPAMD_MEMPOOL_NORMAL] != NULL) {
-		cur = pool->priv->pools[RSPAMD_MEMPOOL_NORMAL];
-	}
+	cur = pool->priv->pools[RSPAMD_MEMPOOL_NORMAL];
 
 	if (cur && mempool_entries) {
 		pool->priv->entry->elts[pool->priv->entry->cur_elts].leftover =
@@ -737,7 +734,10 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 					munmap ((void *)cur, len);
 				}
 				else {
-					free (cur); /* Not g_free as we use system allocator */
+					/* The last pool is special, it is a part of the initial chunk */
+					if (cur->next != NULL) {
+						free (cur); /* Not g_free as we use system allocator */
+					}
 				}
 			}
 		}
@@ -758,7 +758,7 @@ rspamd_mempool_delete (rspamd_mempool_t * pool)
 
 	g_atomic_int_inc (&mem_pool_stat->pools_freed);
 	POOL_MTX_UNLOCK ();
-	g_free (pool);
+	free (pool); /* allocated by posix_memalign */
 }
 
 void

@@ -72,8 +72,7 @@ struct rspamd_mempool_specific {
 struct _pool_chain {
 	guint8 *begin;                  /**< begin of pool chain block              */
 	guint8 *pos;                    /**< current start of free space in block   */
-	gsize slice_size;                      /**< length of block                        */
-	rspamd_mempool_mutex_t *lock;
+	gsize slice_size;               /**< length of block                        */
 	struct _pool_chain *next;
 };
 
