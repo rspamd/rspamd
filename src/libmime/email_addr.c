@@ -110,6 +110,7 @@ rspamd_email_address_add (rspamd_mempool_t *pool,
 	guint nlen;
 
 	elt = g_malloc0 (sizeof (*elt));
+	rspamd_mempool_notify_alloc (pool, sizeof (*elt));
 
 	if (addr != NULL) {
 		memcpy (elt, addr, sizeof (*addr));
@@ -132,6 +133,7 @@ rspamd_email_address_add (rspamd_mempool_t *pool,
 		/* We need to unquote addr */
 		nlen = elt->domain_len + elt->user_len + 2;
 		elt->addr = g_malloc (nlen + 1);
+		rspamd_mempool_notify_alloc (pool, nlen + 1);
 		elt->addr_len = rspamd_snprintf ((char *)elt->addr, nlen, "%*s@%*s",
 				(gint)elt->user_len, elt->user,
 				(gint)elt->domain_len, elt->domain);
@@ -143,6 +145,7 @@ rspamd_email_address_add (rspamd_mempool_t *pool,
 		elt->name = rspamd_mime_header_decode (pool, name->str, name->len, NULL);
 	}
 
+	rspamd_mempool_notify_alloc (pool, name->len);
 	g_ptr_array_add (ar, elt);
 }
 
@@ -481,6 +484,7 @@ rspamd_email_address_from_mime (rspamd_mempool_t *pool,
 		break;
 	}
 
+	rspamd_mempool_notify_alloc (pool, cpy->len);
 	g_string_free (ns, TRUE);
 
 	return res;

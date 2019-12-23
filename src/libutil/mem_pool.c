@@ -445,10 +445,10 @@ RSPAMD_ATTR_ALLOC_SIZE(2) RSPAMD_ATTR_ALLOC_ALIGN(MIN_MEM_ALIGNMENT) RSPAMD_ATTR
 void
 rspamd_mempool_notify_alloc_ (rspamd_mempool_t *pool, gsize size, const gchar *loc)
 {
-	GHashTable *debug_tbl = *(GHashTable **)(((guchar *)pool + sizeof (*pool)));
-	gpointer ptr;
+	if (pool && G_UNLIKELY (pool->priv->flags & RSPAMD_MEMPOOL_DEBUG)) {
+		GHashTable *debug_tbl = *(GHashTable **)(((guchar *)pool + sizeof (*pool)));
+		gpointer ptr;
 
-	if (G_UNLIKELY (pool->priv->flags & RSPAMD_MEMPOOL_DEBUG)) {
 		ptr = g_hash_table_lookup (debug_tbl, loc);
 
 		if (ptr) {

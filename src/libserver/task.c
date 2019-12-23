@@ -1158,6 +1158,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 			rspamd_mempool_add_destructor (task->task_pool,
 					(rspamd_mempool_destruct_t)rspamd_fstring_free,
 					symbuf);
+			rspamd_mempool_notify_alloc (task->task_pool, symbuf->len);
 			res.begin = symbuf->str;
 			res.len = symbuf->len;
 			break;
@@ -1203,6 +1204,7 @@ rspamd_task_log_metric_res (struct rspamd_task *task,
 			rspamd_mempool_add_destructor (task->task_pool,
 					(rspamd_mempool_destruct_t) rspamd_fstring_free,
 					symbuf);
+			rspamd_mempool_notify_alloc (task->task_pool, symbuf->len);
 			res.begin = symbuf->str;
 			res.len = symbuf->len;
 			break;

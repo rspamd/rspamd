@@ -1801,6 +1801,7 @@ rspamd_html_process_img_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 
 	if (hc->images == NULL) {
 		hc->images = g_ptr_array_sized_new (4);
+		rspamd_mempool_notify_alloc (pool, 4 * sizeof (gpointer) + sizeof (GPtrArray));
 		rspamd_mempool_add_destructor (pool, rspamd_ptr_array_free_hard,
 				hc->images);
 	}
@@ -2370,6 +2371,7 @@ rspamd_html_process_block_tag (rspamd_mempool_t *pool, struct html_tag *tag,
 
 	if (hc->blocks == NULL) {
 		hc->blocks = g_ptr_array_sized_new (64);
+		rspamd_mempool_notify_alloc (pool, 64 * sizeof (gpointer) + sizeof (GPtrArray));
 		rspamd_mempool_add_destructor (pool, rspamd_ptr_array_free_hard,
 				hc->blocks);
 	}

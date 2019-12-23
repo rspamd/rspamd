@@ -787,6 +787,7 @@ rspamd_mime_header_decode (rspamd_mempool_t *pool, const gchar *in,
 	g_byte_array_free (token, TRUE);
 	g_byte_array_free (decoded, TRUE);
 	rspamd_mime_header_sanity_check (out);
+	rspamd_mempool_notify_alloc (pool, out->len);
 	ret = g_string_free (out, FALSE);
 	rspamd_mempool_add_destructor (pool, g_free, ret);
 

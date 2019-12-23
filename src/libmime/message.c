@@ -549,6 +549,8 @@ rspamd_normalize_text_part (struct rspamd_task *task,
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) free_byte_array_callback,
 			part->utf_stripped_content);
+	rspamd_mempool_notify_alloc (task->task_pool,
+			part->utf_stripped_content->len);
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t) rspamd_ptr_array_free_hard,
 			part->newlines);

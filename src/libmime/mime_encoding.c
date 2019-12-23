@@ -672,6 +672,8 @@ rspamd_mime_text_part_maybe_convert (struct rspamd_task *task,
 	part_content = g_byte_array_sized_new (text_part->parsed.len);
 	memcpy (part_content->data, text_part->parsed.begin, text_part->parsed.len);
 	part_content->len = text_part->parsed.len;
+	rspamd_mempool_notify_alloc (task->task_pool,
+			part_content->len);
 	rspamd_mempool_add_destructor (task->task_pool,
 			(rspamd_mempool_destruct_t)g_byte_array_unref, part_content);
 

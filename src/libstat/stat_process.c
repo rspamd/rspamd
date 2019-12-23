@@ -142,6 +142,7 @@ rspamd_stat_process_tokenize (struct rspamd_stat_ctx *st_ctx,
 	task->tokens = g_ptr_array_sized_new (reserved_len);
 	rspamd_mempool_add_destructor (task->task_pool,
 			rspamd_ptr_array_free_hard, task->tokens);
+	rspamd_mempool_notify_alloc (task->task_pool, reserved_len * sizeof (gpointer));
 	pdiff = rspamd_mempool_get_variable (task->task_pool, "parts_distance");
 
 	PTR_ARRAY_FOREACH (MESSAGE_FIELD (task, text_parts), i, part) {
