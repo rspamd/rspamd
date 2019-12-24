@@ -102,127 +102,6 @@ reduce_tasks_count (gpointer arg)
 	}
 }
 
-void
-rspamd_task_timeout (EV_P_ ev_timer *w, int revents)
-{
-	struct rspamd_task *task = (struct rspamd_task *)w->data;
-
-	if (!(task->processed_stages & RSPAMD_TASK_STAGE_FILTERS)) {
-		ev_now_update_if_cheap (task->event_loop);
-		msg_info_task ("processing of task time out: %.1f (%.1f limit) second spent; "
-				 "forced processing",
-				ev_now (task->event_loop) - task->task_timestamp,
-				task->cfg->task_timeout);
-
-		if (task->cfg->soft_reject_on_timeout) {
-			struct rspamd_action *action, *soft_reject;
-
-			action = rspamd_check_action_metric (task);
-
-			if (action->action_type != METRIC_ACTION_REJECT) {
-				soft_reject = rspamd_config_get_action_by_type (task->cfg,
-						METRIC_ACTION_SOFT_REJECT);
-				rspamd_add_passthrough_result (task,
-						soft_reject,
-						0,
-						NAN,
-						"timeout processing message",
-						"task timeout",
-						0);
-
-				ucl_object_replace_key (task->messages,
-						ucl_object_fromstring_common ("timeout processing message",
-								0, UCL_STRING_RAW),
-						"smtp_message", 0,
-						false);
-			}
-		}
-
-		ev_timer_again (EV_A_ w);
-		task->processed_stages |= RSPAMD_TASK_STAGE_FILTERS;
-		rspamd_session_cleanup (task->s);
-		rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
-		rspamd_session_pending (task->s);
-	}
-	else {
-		/* Postprocessing timeout */
-		msg_info_task ("post-processing of task time out: %.1f second spent; forced processing",
-				ev_now (task->event_loop) - task->task_timestamp);
-
-		if (task->cfg->soft_reject_on_timeout) {
-			struct rspamd_action *action, *soft_reject;
-
-			action = rspamd_check_action_metric (task);
-
-			if (action->action_type != METRIC_ACTION_REJECT) {
-				soft_reject = rspamd_config_get_action_by_type (task->cfg,
-						METRIC_ACTION_SOFT_REJECT);
-				rspamd_add_passthrough_result (task,
-						soft_reject,
-						0,
-						NAN,
-						"timeout post-processing message",
-						"task timeout",
-						0);
-
-				ucl_object_replace_key (task->messages,
-						ucl_object_fromstring_common ("timeout post-processing message",
-								0, UCL_STRING_RAW),
-						"smtp_message", 0,
-						false);
-			}
-		}
-
-		ev_timer_stop (EV_A_ w);
-		task->processed_stages |= RSPAMD_TASK_STAGE_DONE;
-		rspamd_session_cleanup (task->s);
-		rspamd_task_process (task, RSPAMD_TASK_PROCESS_ALL);
-		rspamd_session_pending (task->s);
-	}
-}
-
-void
-rspamd_worker_guard_handler (EV_P_ ev_io *w, int revents)
-{
-	struct rspamd_task *task = (struct rspamd_task *)w->data;
-	gchar fake_buf[1024];
-	gssize r;
-
-	r = read (w->fd, fake_buf, sizeof (fake_buf));
-
-	if (r > 0) {
-		msg_warn_task ("received extra data after task is loaded, ignoring");
-	}
-	else {
-		if (r == 0) {
-			/*
-			 * Poor man approach, that might break things in case of
-			 * shutdown (SHUT_WR) but sockets are so bad that there's no
-			 * reliable way to distinguish between shutdown(SHUT_WR) and
-			 * close.
-			 */
-			if (task->cmd != CMD_CHECK_V2 && task->cfg->enable_shutdown_workaround) {
-				msg_info_task ("workaround for shutdown enabled, please update "
-						"your client, this support might be removed in future");
-				shutdown (w->fd, SHUT_RD);
-				ev_io_stop (task->event_loop, &task->guard_ev);
-			}
-			else {
-				msg_err_task ("the peer has closed connection unexpectedly");
-				rspamd_session_destroy (task->s);
-			}
-		}
-		else if (errno != EAGAIN) {
-			msg_err_task ("the peer has closed connection unexpectedly: %s",
-					strerror (errno));
-			rspamd_session_destroy (task->s);
-		}
-		else {
-			return;
-		}
-	}
-}
-
 static gint
 rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 	struct rspamd_http_message *msg,
@@ -312,6 +191,7 @@ rspamd_worker_body_handler (struct rspamd_http_connection *conn,
 		ev_timer_init (&task->timeout_ev, rspamd_task_timeout,
 				ctx->task_timeout,
 				ctx->task_timeout);
+		ev_set_priority (&task->timeout_ev, EV_MAXPRI);
 		ev_timer_start (task->event_loop, &task->timeout_ev);
 	}
 

@@ -375,6 +375,16 @@ gboolean rspamd_task_set_finish_time (struct rspamd_task *task);
  */
 const gchar *rspamd_task_stage_name (enum rspamd_task_stage stg);
 
+/*
+ * Called on forced timeout
+ */
+void rspamd_task_timeout (EV_P_ ev_timer *w, int revents);
+
+/*
+ * Called on unexpected IO error (e.g. ECONNRESET)
+ */
+void rspamd_worker_guard_handler (EV_P_ ev_io *w, int revents);
+
 #ifdef  __cplusplus
 }
 #endif

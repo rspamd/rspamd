@@ -65,16 +65,6 @@ void rspamd_worker_init_scanner (struct rspamd_worker *worker,
 								 struct rspamd_dns_resolver *resolver,
 								 struct rspamd_lang_detector **plang_det);
 
-/*
- * Called on forced timeout
- */
-void rspamd_task_timeout (EV_P_ ev_timer *w, int revents);
-
-/*
- * Called on unexpected IO error (e.g. ECONNRESET)
- */
-void rspamd_worker_guard_handler (EV_P_ ev_io *w, int revents);
-
 #ifdef  __cplusplus
 }
 #endif
