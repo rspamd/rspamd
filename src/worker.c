@@ -108,8 +108,11 @@ rspamd_task_timeout (EV_P_ ev_timer *w, int revents)
 	struct rspamd_task *task = (struct rspamd_task *)w->data;
 
 	if (!(task->processed_stages & RSPAMD_TASK_STAGE_FILTERS)) {
-		msg_info_task ("processing of task time out: %.1f second spent; forced processing",
-				ev_now (task->event_loop) - task->task_timestamp);
+		ev_now_update_if_cheap (task->event_loop);
+		msg_info_task ("processing of task time out: %.1f (%.1f limit) second spent; "
+				 "forced processing",
+				ev_now (task->event_loop) - task->task_timestamp,
+				task->cfg->task_timeout);
 
 		if (task->cfg->soft_reject_on_timeout) {
 			struct rspamd_action *action, *soft_reject;
