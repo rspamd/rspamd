@@ -2126,6 +2126,7 @@ rspamd_controller_handle_scan (struct rspamd_http_connection_entry *conn_ent,
 		ev_timer_init (&task->timeout_ev, rspamd_task_timeout,
 				ctx->task_timeout, ctx->task_timeout);
 		ev_timer_start (task->event_loop, &task->timeout_ev);
+		ev_set_priority (&task->timeout_ev, EV_MAXPRI);
 	}
 
 end:

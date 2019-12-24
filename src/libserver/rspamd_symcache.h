@@ -569,6 +569,11 @@ const GPtrArray* rspamd_symcache_item_get_rdeps (
 		struct rspamd_symcache_item *item);
 
 
+/**
+ * Enable profiling for task (e.g. when a slow rule has been found)
+ * @param task
+ */
+void rspamd_symcache_enable_profile (struct rspamd_task *task);
 #ifdef  __cplusplus
 }
 #endif
