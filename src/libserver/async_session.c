@@ -240,7 +240,9 @@ rspamd_session_remove_event_full (struct rspamd_async_session *session,
 	kh_del (rspamd_events_hash, session->events, k);
 
 	/* Remove event */
-	fin (ud);
+	if (fin) {
+		fin (ud);
+	}
 
 	rspamd_session_pending (session);
 }

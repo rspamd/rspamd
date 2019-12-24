@@ -2072,6 +2072,11 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 
 			if (!CHECK_START_BIT (checkpoint, dyn_item) &&
 				!CHECK_FINISH_BIT (checkpoint, dyn_item)) {
+
+				if (checkpoint->has_slow) {
+					/* Delay */
+					return FALSE;
+				}
 				/* Check priorities */
 				if (saved_priority == G_MININT) {
 					saved_priority = item->priority;
@@ -2111,6 +2116,11 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 			if (!CHECK_START_BIT (checkpoint, dyn_item) &&
 				!CHECK_FINISH_BIT (checkpoint, dyn_item)) {
 				/* Check priorities */
+				if (checkpoint->has_slow) {
+					/* Delay */
+					return FALSE;
+				}
+
 				if (saved_priority == G_MININT) {
 					saved_priority = item->priority;
 				}
@@ -2163,6 +2173,11 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 
 				rspamd_symcache_check_symbol (task, cache, item,
 						checkpoint);
+
+				if (checkpoint->has_slow) {
+					/* Delay */
+					return FALSE;
+				}
 			}
 
 			if (!(item->type & SYMBOL_TYPE_FINE)) {
@@ -2197,6 +2212,11 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 				/* Check priorities */
 				all_done = FALSE;
 
+				if (checkpoint->has_slow) {
+					/* Delay */
+					return FALSE;
+				}
+
 				if (saved_priority == G_MININT) {
 					saved_priority = item->priority;
 				}
@@ -2230,6 +2250,11 @@ rspamd_symcache_process_symbols (struct rspamd_task *task,
 			if (!CHECK_START_BIT (checkpoint, dyn_item) &&
 				!CHECK_FINISH_BIT (checkpoint, dyn_item)) {
 				/* Check priorities */
+				if (checkpoint->has_slow) {
+					/* Delay */
+					return FALSE;
+				}
+
 				if (saved_priority == G_MININT) {
 					saved_priority = item->priority;
 				}
@@ -2993,6 +3018,7 @@ rspamd_symcache_set_cur_item (struct rspamd_task *task,
 struct rspamd_symcache_delayed_cbdata {
 	struct rspamd_symcache_item *item;
 	struct rspamd_task *task;
+	struct rspamd_async_event *event;
 	struct ev_timer tm;
 };
 
@@ -3037,6 +3063,8 @@ rspamd_symcache_delayed_item_cb (EV_P_ ev_timer *w, int what)
 			}
 		}
 	}
+
+	rspamd_session_remove_event (task->s, NULL, cbd);
 }
 
 static void
@@ -3113,14 +3141,28 @@ rspamd_symcache_finalize_item (struct rspamd_task *task,
 		/* Add timer to allow something else to be executed */
 		ev_timer *tm = &cbd->tm;
 
-		ev_timer_init (tm, rspamd_symcache_delayed_item_cb, 0.1, 0.0);
-		ev_set_priority (tm, EV_MINPRI);
-		rspamd_mempool_add_destructor (task->task_pool,
-				rspamd_delayed_timer_dtor, cbd);
-		cbd->task = task;
-		cbd->item = item;
-		tm->data = cbd;
-		ev_timer_start (task->event_loop, tm);
+		cbd->event = rspamd_session_add_event (task->s, NULL, cbd,
+				"symcache");
+
+		/*
+		 * If no event could be added, then we are already in the destruction
+		 * phase. So the main issue is to deal with has slow here
+		 */
+		if (cbd->event) {
+			ev_timer_init (tm, rspamd_symcache_delayed_item_cb, 0.1, 0.0);
+			ev_set_priority (tm, EV_MINPRI);
+			rspamd_mempool_add_destructor (task->task_pool,
+					rspamd_delayed_timer_dtor, cbd);
+
+			cbd->task = task;
+			cbd->item = item;
+			tm->data = cbd;
+			ev_timer_start (task->event_loop, tm);
+		}
+		else {
+			/* Just reset as no timer is added */
+			checkpoint->has_slow = FALSE;
+		}
 
 		return;
 	}
