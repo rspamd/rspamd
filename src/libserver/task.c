@@ -727,14 +727,6 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 	case RSPAMD_TASK_STAGE_FILTERS:
 		all_done = rspamd_symcache_process_symbols (task, task->cfg->cache, st);
 		break;
-	case RSPAMD_TASK_STAGE_IDEMPOTENT:
-		/* Stop task timeout */
-		if (ev_can_stop (&task->timeout_ev)) {
-			ev_timer_stop (task->event_loop, &task->timeout_ev);
-		}
-
-		all_done = rspamd_symcache_process_symbols (task, task->cfg->cache, st);
-		break;
 
 	case RSPAMD_TASK_STAGE_PROCESS_MESSAGE:
 		if (!(task->flags & RSPAMD_TASK_FLAG_SKIP_PROCESS)) {
@@ -815,6 +807,15 @@ rspamd_task_process (struct rspamd_task *task, guint stages)
 	case RSPAMD_TASK_STAGE_COMPOSITES_POST:
 		/* Second run of composites processing before idempotent filters */
 		rspamd_make_composites (task);
+		break;
+
+	case RSPAMD_TASK_STAGE_IDEMPOTENT:
+		/* Stop task timeout */
+		if (ev_can_stop (&task->timeout_ev)) {
+			ev_timer_stop (task->event_loop, &task->timeout_ev);
+		}
+
+		all_done = rspamd_symcache_process_symbols (task, task->cfg->cache, st);
 		break;
 
 	case RSPAMD_TASK_STAGE_DONE:
