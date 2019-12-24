@@ -33,6 +33,7 @@
 #include "unix-std.h"
 #include <signal.h>
 #include <stdalign.h>
+#include <math.h>
 #include "contrib/libev/ev.h"
 
 #ifndef WITH_PCRE2
@@ -538,7 +539,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 	const gchar *start = NULL, *end = NULL;
 	guint max_hits = rspamd_regexp_get_maxhits (re);
 	guint64 id = rspamd_regexp_get_cache_id (re);
-	gdouble t1, t2, pr;
+	gdouble t1 = NAN, t2, pr;
 	const gdouble slow_time = 1e8;
 
 	if (in == NULL) {
@@ -587,7 +588,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 			rt->stat.regexp_matched += r;
 		}
 
-		if (pr > 0.9) {
+		if (!isnan (t1)) {
 			t2 = rspamd_get_ticks (TRUE);
 
 			if (t2 - t1 > slow_time) {
