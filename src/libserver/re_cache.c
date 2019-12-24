@@ -30,6 +30,8 @@
 
 #ifdef WITH_HYPERSCAN
 #include "hs.h"
+#endif
+
 #include "unix-std.h"
 #include <signal.h>
 #include <stdalign.h>
@@ -46,8 +48,6 @@
 
 #ifdef HAVE_SYS_WAIT_H
 #include <sys/wait.h>
-#endif
-
 #endif
 
 #define msg_err_re_cache(...) rspamd_default_log_function (G_LOG_LEVEL_CRITICAL, \
