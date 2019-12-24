@@ -591,6 +591,7 @@ rspamd_re_cache_process_pcre (struct rspamd_re_runtime *rt,
 			t2 = rspamd_get_ticks (TRUE);
 
 			if (t2 - t1 > slow_time) {
+				rspamd_symcache_enable_profile (task);
 				msg_info_task ("regexp '%16s' took %.0f ticks to execute",
 						rspamd_regexp_get_pattern (re), t2 - t1);
 			}
